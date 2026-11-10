@@ -17,11 +17,11 @@ export function SiteHeader({ hub = false }: { hub?: boolean }) {
         <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-4 px-4">
           <nav aria-label="Site" className="flex min-w-0 items-center gap-2.5">
             <a href="/experiments/" className="group shrink-0 text-ink hover:text-accent" aria-label="Experiments home">
-              <Flask className="h-8 w-8" />
+              <Flask className="h-7 w-7" />
             </a>
-            {/* items-baseline keeps both words on one baseline; the 2px nudge centres the serif capitals on the flask */}
-            <p className="flex min-w-0 translate-y-[2px] items-baseline gap-1.5 truncate leading-none">
-              <a href="https://mattblack.space/" className="font-serif text-lg font-medium text-ink hover:text-accent">
+            <p className="flex min-w-0 items-baseline gap-1.5 truncate leading-none">
+              {/* The portfolio header's name: Archivo, semibold, 15px (mb-portfolio Header.jsx) */}
+              <a href="https://mattblack.space/" className="font-sans text-[0.9375rem] font-semibold text-ink hover:text-accent">
                 Matt Black
               </a>
               <span aria-hidden className="text-ink-faint">/</span>
