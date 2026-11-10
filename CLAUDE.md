@@ -7,7 +7,7 @@ production domain. See README for the why behind the choices.
 ## Commands
 - `npm run dev`, `npm run build` (runs hosting:check + tsc first), `npm run preview` (production headers)
 - `npm test` — unit tests for the pixel pipeline (node --test, no GPU)
-- `npm run build && npm run verify` — real Chromium against dist with vercel.json headers; screenshots in verify-shots/
+- `npm run build && npm run verify` — real Chromium against dist with vercel.json headers, plus axe; screenshots in verify-shots/
 
 ## Load-bearing
 - Vite `base: '/experiments/'`, `outDir: 'dist/experiments'`; files live at the same path on both domains. `hosting:check` enforces it.
