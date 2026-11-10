@@ -3,6 +3,7 @@ import { Engine, FRAME_SHARE, meshFromBuilder, meshFromBytes, type View } from '
 import { PRESETS } from './presets.ts'
 import { PALETTES } from './palettes.ts'
 import { baseline, packSheet, processFrames, shotsFor, tinkerkitSheet, type Layout, type PixelSettings, type Stages } from './sheet.ts'
+import { SiteHeader } from '../shared/SiteHeader.tsx'
 import { countColours, countSolid, rgbToHex, type Frame } from './pixel.ts'
 
 const CAMERAS: { id: string; name: string; view: Partial<View>; note: string }[] = [
@@ -50,7 +51,7 @@ export function App() {
   const [layout, setLayout] = useState<Layout>('dir4')
 
   const [stages, setStages] = useState<Stages | null>(null)
-  const [sheet, setSheet] = useState<{ url: string; frames: Frame[]; cols: number; rows: number; json: object; layout: Layout } | null>(null)
+  const [sheet, setSheet] = useState<Sheet | null>(null)
   const [baking, setBaking] = useState<{ done: number; total: number } | null>(null)
   const [bakeError, setBakeError] = useState<string | null>(null)
 
@@ -61,6 +62,8 @@ export function App() {
     }),
     [size, supersample, cut, autoColours, dither, strays, outlineMode, palette],
   )
+  // Everything a bake depends on, so the page can say when the sheet on show is out of date
+  const bakeKey = JSON.stringify([settings, view, stdDev, crop, upright, layout, source.kind, source.id])
 
   // --- engine lifecycle ------------------------------------------------------
   useEffect(() => {
@@ -189,6 +192,7 @@ export function App() {
     const total = rows.reduce((n, r) => n + r.shots.length, 0)
     setBaking({ done: 0, total })
     setBakeError(null)
+    const key = bakeKey
     try {
       const raws: Uint8Array[] = []
       for (const row of rows) {
@@ -202,7 +206,7 @@ export function App() {
       const image = `${slug(source.name)}.png`
       const json = tinkerkitSheet(source.name, image, layout, size, packed.cols, packed.rows, Math.max(...frames.map(baseline)))
       const blob: Blob = await new Promise((r) => packed.canvas.toBlob((b) => r(b!), 'image/png'))
-      setSheet({ url: URL.createObjectURL(blob), frames, cols: packed.cols, rows: packed.rows, json, layout })
+      setSheet({ url: URL.createObjectURL(blob), frames, cols: packed.cols, rows: packed.rows, json, layout, key })
     } catch (err) {
       console.warn(err)
       setBakeError('The sheet could not be baked. Try a smaller sprite size or fewer samples per pixel.')
@@ -223,180 +227,226 @@ export function App() {
     CAMERAS.find((c) => c.view.azimuth !== undefined && c.view.elevation === view.elevation && c.view.azimuth === view.azimuth) ??
     CAMERAS.find((c) => c.view.azimuth === undefined && c.view.elevation === view.elevation)
 
+  const pixelsSummary = `${size}px · ${supersample * supersample} samples`
+  const colourSummary = palette === 'auto' ? `Auto · ${autoColours}` : palette === 'none' ? 'Full colour' : PALETTES.find((p) => p.id === palette)!.name
+
   return (
     <div className="min-h-dvh">
-      <header className="mx-auto flex max-w-7xl flex-wrap items-baseline justify-between gap-x-6 gap-y-2 px-4 pt-8 pb-4">
-        <div>
-          <p className="text-xs uppercase tracking-[0.12em] text-ink-faint">
-            <a className="hover:text-accent" href="https://mattblack.space/">Matt Black</a> /{' '}
-            <a className="hover:text-accent" href="/experiments/">Experiments</a>
+      <SiteHeader />
+
+      <main id="main" className="mx-auto max-w-7xl px-4 pb-16">
+        <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-2 pt-8 pb-6">
+          <h1 className="font-serif text-4xl sm:text-5xl">Splat to Sprite</h1>
+          <p className="max-w-xl font-serif text-lg text-ink-muted">
+            A Gaussian splat is a 3D object made only of soft, see-through blobs. Frame one like a game camera, and bake it into
+            pixel art.
           </p>
-          <h1 className="mt-1 font-serif text-4xl sm:text-5xl">Splat to Sprite</h1>
         </div>
-        <p className="max-w-xl font-serif text-lg text-ink-muted">
-          A Gaussian splat is a 3D object made only of soft, see-through blobs. Frame one like a game camera, and bake it into
-          pixel art.
-        </p>
-      </header>
 
-      <main className="mx-auto grid max-w-7xl gap-6 px-4 pb-16 lg:grid-cols-[minmax(0,1.35fr)_minmax(340px,1fr)] lg:grid-rows-[auto_1fr]">
-        {/* ------------------------------------------------------------ 3D side */}
-        <section aria-label="3D view" className="min-w-0 space-y-4 lg:col-start-1 lg:row-start-1">
-          <div
-            className={`relative aspect-[4/3] overflow-hidden rounded-lg border bg-paper-sunk ${dragOver ? 'border-accent' : 'border-rule'}`}
-            onDragOver={(ev) => { ev.preventDefault(); setDragOver(true) }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={(ev) => {
-              ev.preventDefault()
-              setDragOver(false)
-              const f = ev.dataTransfer.files[0]
-              if (f) openFile(f)
-            }}
-          >
-            <canvas
-              ref={canvasRef}
-              className="absolute inset-0 h-full w-full cursor-grab touch-none active:cursor-grabbing"
-              onPointerDown={onPointerDown}
-              onPointerMove={onPointerMove}
-              onPointerUp={onPointerUp}
-              onPointerCancel={onPointerUp}
-              role="img"
-              aria-label="3D view of the splat. Drag to turn the camera and scroll to zoom, or use the Camera sliders."
-              data-testid="viewport"
-            />
-            {/* The sprite frame: what's inside this square becomes the sprite. */}
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(340px,1fr)]">
+          {/* ------------------------------------------------------------ 3D side */}
+          <section aria-label="3D view" className="min-w-0 space-y-4">
             <div
-              aria-hidden
-              className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border border-dashed border-accent/80"
-              style={{ height: `${FRAME_SHARE * 100}%`, aspectRatio: '1 / 1' }}
+              className={`relative aspect-[4/3] overflow-hidden rounded-lg border bg-paper-sunk ${dragOver ? 'border-accent' : 'border-rule'}`}
+              onDragOver={(ev) => { ev.preventDefault(); setDragOver(true) }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(ev) => {
+                ev.preventDefault()
+                setDragOver(false)
+                const f = ev.dataTransfer.files[0]
+                if (f) openFile(f)
+              }}
             >
-              <span className="absolute -top-6 left-0 text-xs text-accent">sprite frame · {size}×{size}</span>
-            </div>
-            <div aria-live="polite" className={loading ? 'absolute inset-0 grid place-items-center text-ink-muted' : 'sr-only'}>
-              {loading ? 'Loading splats…' : `${splatCount.toLocaleString()} splats loaded`}
-            </div>
-            {error && <div role="alert" className="absolute inset-x-4 bottom-4 rounded bg-paper p-3 text-sm text-ink">{error}</div>}
-            <p className="pointer-events-none absolute right-3 bottom-2 text-xs text-ink-faint">drag to orbit · scroll to zoom</p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Splat to load">
-            {PRESETS.map((p) => (
-              <Chip
-                key={p.id}
-                active={source.kind === 'preset' && source.id === p.id}
-                onClick={() => load(meshFromBuilder(p.build), false, { kind: 'preset', id: p.id, name: p.name })}
+              <canvas
+                ref={canvasRef}
+                className="absolute inset-0 h-full w-full cursor-grab touch-none active:cursor-grabbing"
+                onPointerDown={onPointerDown}
+                onPointerMove={onPointerMove}
+                onPointerUp={onPointerUp}
+                onPointerCancel={onPointerUp}
+                role="img"
+                aria-label="3D view of the splat. Drag to turn the camera and scroll to zoom, or use the Camera sliders."
+                data-testid="viewport"
+              />
+              {/* The sprite frame: what's inside this square becomes the sprite. */}
+              <div
+                aria-hidden
+                className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border border-dashed border-accent/80"
+                style={{ height: `${FRAME_SHARE * 100}%`, aspectRatio: '1 / 1' }}
               >
-                {p.name}
-              </Chip>
-            ))}
-            <Chip active={source.kind === 'file'} onClick={() => fileInput.current?.click()}>
-              {source.kind === 'file' ? source.name : 'Open your own splat…'}
-            </Chip>
-            <input ref={fileInput} type="file" className="hidden" accept=".ply,.spz,.splat,.ksplat,.sog,.zip" onChange={(ev) => ev.target.files?.[0] && openFile(ev.target.files[0])} />
-            <span className="ml-auto text-sm text-ink-faint" data-testid="splat-count">{splatCount.toLocaleString()} splats</span>
-          </div>
-          {source.kind === 'file' ? (
-            <div className="flex flex-wrap gap-x-6 gap-y-3 text-sm">
-              <Toggle label="Flip upright" checked={upright} onChange={(v) => { setUpright(v); engineRef.current?.setUpright(v) }} />
-              <Slider label="Crop to object" value={crop} min={0.6} max={3} step={0.05} onChange={setCrop} format={(v) => (v >= 3 ? 'off' : `${v.toFixed(2)}× radius`)} />
+                <span className="absolute -top-6 left-0 text-xs text-accent">sprite frame · {size}×{size}</span>
+              </div>
+              <div aria-live="polite" className={loading ? 'absolute inset-0 grid place-items-center text-ink-muted' : 'sr-only'}>
+                {loading ? 'Loading splats…' : `${splatCount.toLocaleString()} splats loaded`}
+              </div>
+              {error && <div role="alert" className="absolute inset-x-4 bottom-4 rounded bg-paper p-3 text-sm text-ink">{error}</div>}
+              <p className="pointer-events-none absolute right-3 bottom-2 text-xs text-ink-faint">drag to orbit · scroll to zoom</p>
             </div>
-          ) : (
-            <p className="text-sm text-ink-faint">
-              The samples are built in code, blob by blob. For a real object, scan one with a free phone app such as Scaniverse or
-              Polycam, export a .ply or .spz, and drop it on the view. It stays in your browser.
-            </p>
-          )}
 
-        </section>
-
-        {/* --------------------------------------------------------- controls */}
-        <section aria-label="Sprite settings" className="min-w-0 space-y-5 lg:col-start-2 lg:row-span-2 lg:row-start-1">
-          <div className="flex items-start gap-4">
-            <div className="checker grid aspect-square w-48 shrink-0 place-items-center overflow-hidden rounded-lg border border-rule sm:w-56">
-              {stages && <FrameImage frame={stages.final} className="h-full w-full" testId="sprite-preview" label={`Sprite preview, ${size} by ${size} pixels`} />}
-            </div>
-            <div className="min-w-0 text-sm text-ink-muted">
-              <p className="font-medium text-ink">Your sprite</p>
-              {stages && (
-                <ul className="mt-2 space-y-1 tabular-nums">
-                  <li>{size}×{size} pixels</li>
-                  <li>{countSolid(stages.final)} filled</li>
-                  <li>{countColours(stages.final)} colours</li>
-                </ul>
-              )}
-              {stages && stages.palette.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-0.5" role="img" aria-label={`Palette in use: ${stages.palette.length} colours`}>
-                  {stages.palette.map((c, i) => <span key={i} title={rgbToHex(c)} aria-hidden className="h-3.5 w-3.5 rounded-[2px]" style={{ background: rgbToHex(c) }} />)}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <Group title="Camera" note={activeCamera?.note ?? 'Orbit freely; the sprite is whatever sits inside the dashed square.'}>
-            <div className="flex flex-wrap gap-2" role="group" aria-label="Camera presets">
-              {CAMERAS.map((c) => (
-                <Chip key={c.id} active={activeCamera?.id === c.id} onClick={() => setView((v) => ({ ...v, ...c.view }))}>{c.name}</Chip>
+            <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Splat to load">
+              {PRESETS.map((p) => (
+                <Chip
+                  key={p.id}
+                  active={source.kind === 'preset' && source.id === p.id}
+                  onClick={() => load(meshFromBuilder(p.build), false, { kind: 'preset', id: p.id, name: p.name })}
+                >
+                  {p.name}
+                </Chip>
               ))}
+              <Chip active={source.kind === 'file'} onClick={() => fileInput.current?.click()}>
+                {source.kind === 'file' ? source.name : 'Open your own splat…'}
+              </Chip>
+              <input ref={fileInput} type="file" className="hidden" accept=".ply,.spz,.splat,.ksplat,.sog,.zip" onChange={(ev) => ev.target.files?.[0] && openFile(ev.target.files[0])} />
+              <span className="ml-auto text-sm text-ink-faint" data-testid="splat-count">{splatCount.toLocaleString()} splats</span>
             </div>
-            <Slider label="Height" value={view.elevation} min={-30} max={90} step={1} onChange={(elevation) => setView((v) => ({ ...v, elevation }))} format={(v) => `${v}°`} />
-            <Slider label="Turn" value={Math.round(view.azimuth)} min={-180} max={180} step={1} onChange={(azimuth) => setView((v) => ({ ...v, azimuth }))} format={(v) => `${v}°`} />
-            <Slider label="Zoom" value={view.zoom} min={0.4} max={4} step={0.01} onChange={(zoom) => setView((v) => ({ ...v, zoom }))} format={(v) => `${v.toFixed(2)}×`} />
-            <Slider label="Nudge up/down" value={view.offsetY} min={-0.5} max={0.5} step={0.01} onChange={(offsetY) => setView((v) => ({ ...v, offsetY }))} format={(v) => v.toFixed(2)} />
-            <Toggle label="Perspective (off = flat, like pixel-art games)" checked={!view.ortho} onChange={(p) => setView((v) => ({ ...v, ortho: !p }))} />
-          </Group>
-
-          <Group title="Pixels" note="Each sprite pixel is the average of a little grid of render samples. More samples means smoother edges before the cut.">
-            <Field label="Sprite size">
-              <div className="flex flex-wrap gap-1.5">
-                {SIZES.map((s) => <Chip key={s} small active={size === s} onClick={() => setSize(s)}>{s}</Chip>)}
+            {source.kind === 'file' ? (
+              <div className="flex flex-wrap gap-x-6 gap-y-3 text-sm">
+                <Toggle label="Flip upright" checked={upright} onChange={(v) => { setUpright(v); engineRef.current?.setUpright(v) }} />
+                <Slider label="Crop to object" value={crop} min={0.6} max={3} step={0.05} onChange={setCrop} format={(v) => (v >= 3 ? 'off' : `${v.toFixed(2)}× radius`)} />
               </div>
-            </Field>
-            <Field label="Samples per pixel">
-              <div className="flex flex-wrap gap-1.5">
-                {[1, 2, 4, 8].map((s) => <Chip key={s} small active={supersample === s} onClick={() => setSupersample(s)}>{s * s}</Chip>)}
-              </div>
-            </Field>
-            <Slider label="Solid at coverage" value={cut} min={0.05} max={0.95} step={0.01} onChange={setCut} format={(v) => `${Math.round(v * 100)}%`} />
-            <Slider label="Blob reach" value={stdDev} min={0.5} max={Math.sqrt(8)} step={0.01} onChange={setStdDev} format={(v) => `${v.toFixed(2)}σ`} hint="How far out each Gaussian is drawn, in standard deviations. Turn it down to see the individual blobs." />
-          </Group>
+            ) : (
+              <p className="text-sm text-ink-faint">
+                The samples are built in code, blob by blob. For a real object, scan one with a free phone app such as Scaniverse or
+                Polycam, export a .ply or .spz, and drop it on the view. It stays in your browser.
+              </p>
+            )}
+          </section>
 
-          <Group title="Colour" note="Pixel art uses a small fixed palette. Every pixel snaps to its nearest colour, measured in OKLab so it matches what your eye would pick.">
-            <Field label="Palette">
-              <select aria-label="Palette" className="w-full rounded border border-rule bg-paper px-2 py-1.5" value={palette} onChange={(e) => setPalette(e.target.value)}>
-                <option value="auto">Auto: picked from the splat</option>
-                {PALETTES.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.colors.length})</option>)}
-                <option value="none">Full colour (no palette)</option>
+          {/* --------------------------------------------------------- controls */}
+          <section aria-label="Sprite settings" className="min-w-0 space-y-5">
+            <div className="flex items-start gap-4">
+              <div className="checker grid aspect-square w-40 shrink-0 place-items-center overflow-hidden rounded-lg border border-rule sm:w-48">
+                {stages && <FrameImage frame={stages.final} className="h-full w-full" testId="sprite-preview" label={`Sprite preview, ${size} by ${size} pixels`} />}
+              </div>
+              <div className="min-w-0 text-sm text-ink-muted">
+                <p className="font-medium text-ink">Your sprite</p>
+                {stages && (
+                  <ul className="mt-2 space-y-1 tabular-nums">
+                    <li>{size}×{size} pixels</li>
+                    <li>{countSolid(stages.final)} filled</li>
+                    <li>{countColours(stages.final)} colours</li>
+                  </ul>
+                )}
+                {stages && stages.palette.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-0.5" role="img" aria-label={`Palette in use: ${stages.palette.length} colours`}>
+                    {stages.palette.map((c, i) => <span key={i} title={rgbToHex(c)} aria-hidden className="h-3.5 w-3.5 rounded-[2px]" style={{ background: rgbToHex(c) }} />)}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <Tabs
+              label="Sprite settings"
+              tabs={[
+                {
+                  id: 'camera',
+                  label: 'Camera',
+                  summary: activeCamera?.name ?? `${view.elevation}° · ${Math.round(view.azimuth)}°`,
+                  content: (
+                    <Panel note={activeCamera?.note ?? 'Orbit freely; the sprite is whatever sits inside the dashed square.'}>
+                      <div className="flex flex-wrap gap-2" role="group" aria-label="Camera presets">
+                        {CAMERAS.map((c) => (
+                          <Chip key={c.id} active={activeCamera?.id === c.id} onClick={() => setView((v) => ({ ...v, ...c.view }))}>{c.name}</Chip>
+                        ))}
+                      </div>
+                      <Slider label="Height" value={view.elevation} min={-30} max={90} step={1} onChange={(elevation) => setView((v) => ({ ...v, elevation }))} format={(v) => `${v}°`} />
+                      <Slider label="Turn" value={Math.round(view.azimuth)} min={-180} max={180} step={1} onChange={(azimuth) => setView((v) => ({ ...v, azimuth }))} format={(v) => `${v}°`} />
+                      <Slider label="Zoom" value={view.zoom} min={0.4} max={4} step={0.01} onChange={(zoom) => setView((v) => ({ ...v, zoom }))} format={(v) => `${v.toFixed(2)}×`} />
+                      <Slider label="Nudge up/down" value={view.offsetY} min={-0.5} max={0.5} step={0.01} onChange={(offsetY) => setView((v) => ({ ...v, offsetY }))} format={(v) => v.toFixed(2)} />
+                      <Toggle label="Perspective (off = flat, like pixel-art games)" checked={!view.ortho} onChange={(p) => setView((v) => ({ ...v, ortho: !p }))} />
+                    </Panel>
+                  ),
+                },
+                {
+                  id: 'pixels',
+                  label: 'Pixels',
+                  summary: pixelsSummary,
+                  content: (
+                    <Panel note="Each sprite pixel is the average of a little grid of render samples. More samples means smoother edges before the cut.">
+                      <Field label="Sprite size">
+                        <div className="flex flex-wrap gap-1.5">
+                          {SIZES.map((s) => <Chip key={s} small active={size === s} onClick={() => setSize(s)}>{s}</Chip>)}
+                        </div>
+                      </Field>
+                      <Field label="Samples per pixel">
+                        <div className="flex flex-wrap gap-1.5">
+                          {[1, 2, 4, 8].map((s) => <Chip key={s} small active={supersample === s} onClick={() => setSupersample(s)}>{s * s}</Chip>)}
+                        </div>
+                      </Field>
+                      <Slider label="Solid at coverage" value={cut} min={0.05} max={0.95} step={0.01} onChange={setCut} format={(v) => `${Math.round(v * 100)}%`} />
+                      <Slider label="Blob reach" value={stdDev} min={0.5} max={Math.sqrt(8)} step={0.01} onChange={setStdDev} format={(v) => `${v.toFixed(2)}σ`} hint="How far out each Gaussian is drawn, in standard deviations. Turn it down to see the individual blobs." />
+                    </Panel>
+                  ),
+                },
+                {
+                  id: 'colour',
+                  label: 'Colour',
+                  summary: colourSummary,
+                  content: (
+                    <Panel note="Pixel art uses a small fixed palette. Every pixel snaps to its nearest colour, measured in OKLab so it matches what your eye would pick.">
+                      <Field label="Palette">
+                        <select aria-label="Palette" className="w-full rounded border border-rule bg-paper px-2 py-1.5" value={palette} onChange={(e) => setPalette(e.target.value)}>
+                          <option value="auto">Auto: picked from the splat</option>
+                          {PALETTES.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.colors.length})</option>)}
+                          <option value="none">Full colour (no palette)</option>
+                        </select>
+                      </Field>
+                      {palette === 'auto' && <Slider label="Colours" value={autoColours} min={2} max={32} step={1} onChange={setAutoColours} format={(v) => `${v}`} />}
+                      <Slider label="Dither" value={dither} min={0} max={1} step={0.05} onChange={setDither} format={(v) => (v === 0 ? 'off' : `${Math.round(v * 100)}%`)} />
+                      <Field label="Outline">
+                        <div className="flex flex-wrap gap-1.5">
+                          {(['none', 'darkest', 'black'] as const).map((o) => <Chip key={o} small active={outlineMode === o} onClick={() => setOutlineMode(o)}>{o === 'darkest' ? 'darkest colour' : o}</Chip>)}
+                        </div>
+                      </Field>
+                      <Toggle label="Remove stray pixels" checked={strays} onChange={setStrays} />
+                    </Panel>
+                  ),
+                },
+              ]}
+            />
+          </section>
+        </div>
+
+        {/* ------------------------------------------------------ the sheet */}
+        <section aria-labelledby="sheet-title" className="mt-10 border-t border-rule pt-8">
+          <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
+            <div className="max-w-2xl">
+              <h2 id="sheet-title" className="font-serif text-3xl">Sprite sheet</h2>
+              <p className="mt-1 text-sm leading-relaxed text-ink-muted">
+                The camera circles the object for each frame, using the settings above. Four directions go one per row in
+                Tinkerkit's order: down, left, right, up.
+              </p>
+            </div>
+            <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto">
+              <select
+                className="min-w-0 flex-1 rounded border border-rule bg-paper px-3 py-2 sm:flex-none"
+                value={layout}
+                onChange={(e) => setLayout(e.target.value as Layout)}
+                aria-label="Sheet layout"
+              >
+                {LAYOUTS.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
               </select>
-            </Field>
-            {palette === 'auto' && <Slider label="Colours" value={autoColours} min={2} max={32} step={1} onChange={setAutoColours} format={(v) => `${v}`} />}
-            <Slider label="Dither" value={dither} min={0} max={1} step={0.05} onChange={setDither} format={(v) => (v === 0 ? 'off' : `${Math.round(v * 100)}%`)} />
-            <Field label="Outline">
-              <div className="flex flex-wrap gap-1.5">
-                {(['none', 'darkest', 'black'] as const).map((o) => <Chip key={o} small active={outlineMode === o} onClick={() => setOutlineMode(o)}>{o === 'darkest' ? 'darkest colour' : o}</Chip>)}
-              </div>
-            </Field>
-            <Toggle label="Remove stray pixels" checked={strays} onChange={setStrays} />
-          </Group>
-
-          <Group title="Sheet" note="The camera circles the object for each frame. Four directions go one per row in Tinkerkit's order: down, left, right, up.">
-            <select className="w-full rounded border border-rule bg-paper px-2 py-1.5" value={layout} onChange={(e) => setLayout(e.target.value as Layout)} aria-label="Sheet layout">
-              {LAYOUTS.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-            </select>
-            <button
-              type="button"
-              onClick={bake}
-              disabled={!!baking || loading}
-              className="w-full rounded bg-accent px-4 py-2 font-medium text-paper disabled:opacity-50"
-            >
-              {baking ? `Baking frame ${Math.min(baking.done + 1, baking.total)} of ${baking.total}…` : 'Bake sprite sheet'}
-            </button>
-            {bakeError && <p role="alert" className="text-sm text-accent-ink">{bakeError}</p>}
-            {sheet && <SheetView sheet={sheet} name={slug(source.name)} onJson={downloadJson} />}
-          </Group>
+              <button
+                type="button"
+                onClick={bake}
+                disabled={!!baking || loading}
+                className="rounded bg-accent px-5 py-2 font-medium text-paper disabled:opacity-50"
+              >
+                {baking ? `Baking frame ${Math.min(baking.done + 1, baking.total)} of ${baking.total}…` : 'Bake sprite sheet'}
+              </button>
+            </div>
+          </div>
+          {bakeError && <p role="alert" className="mt-3 text-sm text-accent-ink">{bakeError}</p>}
+          <div className="mt-5 rounded-xl border border-rule bg-paper-sunk p-4 sm:p-6">
+            {sheet ? (
+              <SheetView sheet={sheet} name={slug(source.name)} onJson={downloadJson} stale={sheet.key !== bakeKey} baking={baking} />
+            ) : (
+              <SheetPlaceholder layout={layout} size={size} baking={baking} />
+            )}
+          </div>
         </section>
 
-        {/* Below the controls on a phone, so the sprite sits right under the 3D view */}
-        <section aria-label="How it works" className="min-w-0 lg:col-start-1 lg:row-start-2">
+        <section aria-label="How it works" className="mt-12">
           <Pipeline stages={stages} size={size} supersample={supersample} />
         </section>
       </main>
@@ -416,7 +466,7 @@ function Pipeline({ stages, size, supersample }: { stages: Stages | null; size: 
   return (
     <div>
       <h2 className="font-serif text-2xl">How a splat becomes pixels</h2>
-      <ol className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <ol className="mt-3 grid max-w-5xl grid-cols-2 gap-4 sm:grid-cols-4">
         {steps.map((s) => (
           <li key={s.key} className="min-w-0">
             <div className="checker aspect-square overflow-hidden rounded border border-rule">
@@ -431,31 +481,182 @@ function Pipeline({ stages, size, supersample }: { stages: Stages | null; size: 
   )
 }
 
-function SheetView({ sheet, name, onJson }: { sheet: { url: string; frames: Frame[]; cols: number; rows: number; layout: Layout }; name: string; onJson: () => void }) {
+
+type Sheet = { url: string; frames: Frame[]; cols: number; rows: number; json: object; layout: Layout; key: string }
+
+/** One label per frame, in the order the frames are packed. */
+function frameLabels(layout: Layout) {
+  return shotsFor(layout).rows.flatMap((r) => r.shots.map((s) => (r.name === 'spin' ? `${Math.round(s.turn)}°` : s.name)))
+}
+
+function BakeProgress({ baking }: { baking: { done: number; total: number } }) {
+  return (
+    <div className="mb-5 flex items-center gap-3 text-sm text-ink-muted">
+      <progress className="bake-progress h-1.5 flex-1" value={baking.done} max={baking.total} aria-label="Baking the sheet" />
+      <span className="tabular-nums">{baking.done} of {baking.total}</span>
+    </div>
+  )
+}
+
+function SheetPlaceholder({ layout, size, baking }: { layout: Layout; size: number; baking: { done: number; total: number } | null }) {
+  const labels = frameLabels(layout)
+  return (
+    <div data-testid="sheet-empty">
+      {baking && <BakeProgress baking={baking} />}
+      <ul className="flex flex-wrap gap-3" aria-label={`${labels.length} frames to bake`}>
+        {labels.map((l, i) => (
+          <li key={i} className="w-20 sm:w-24">
+            <div className={`grid aspect-square place-items-center rounded border border-dashed text-xs ${baking && i < baking.done ? 'border-accent bg-accent/10 text-accent-ink' : 'border-rule text-ink-faint'}`}>
+              {size}×{size}
+            </div>
+            <p className="mt-1 truncate text-center text-xs text-ink-faint">{l}</p>
+          </li>
+        ))}
+      </ul>
+      {!baking && (
+        <p className="mt-5 text-sm text-ink-muted">
+          Bake to shoot each frame and pack them into one PNG, with a matching Tinkerkit sheet (.json).
+        </p>
+      )}
+    </div>
+  )
+}
+
+function SheetView({ sheet, name, onJson, stale, baking }: { sheet: Sheet; name: string; onJson: () => void; stale: boolean; baking: { done: number; total: number } | null }) {
   const [i, setI] = useState(0)
-  const animate = !reducedMotion()
-  const { rows } = shotsFor(sheet.layout)
-  const isSpin = rows[0].name === 'spin'
+  const [playing, setPlaying] = useState(() => !reducedMotion())
+  const labels = frameLabels(sheet.layout)
+  const isSpin = shotsFor(sheet.layout).rows[0].name === 'spin'
+  const n = sheet.frames.length
   // Play the spin, or step through the directions
   useEffect(() => {
-    if (!animate) return
-    const t = setInterval(() => setI((x) => (x + 1) % sheet.frames.length), isSpin ? 100 : 600)
+    if (!playing || n < 2) return
+    const t = setInterval(() => setI((x) => (x + 1) % n), isSpin ? 100 : 600)
     return () => clearInterval(t)
-  }, [animate, sheet.frames.length, isSpin])
+  }, [playing, n, isSpin])
+  const fw = sheet.frames[0].width
+  const fh = sheet.frames[0].height
+  const w = sheet.cols * fw
+  const h = sheet.rows * fh
+  const scale = Math.max(1, Math.min(4, Math.floor(256 / Math.max(w, h))))
+  const current = i % n
   return (
-    <div className="space-y-3" data-testid="sheet">
-      <div className="flex items-start gap-3">
-        <div className="checker w-fit max-w-full min-w-0 overflow-auto rounded border border-rule p-2">
-          <img src={sheet.url} alt={`Sprite sheet, ${sheet.cols} by ${sheet.rows} frames`} className="pixelated" style={{ width: sheet.cols * sheet.frames[0].width * 2 }} />
+    <div data-testid="sheet">
+      {baking && <BakeProgress baking={baking} />}
+      {stale && !baking && (
+        <p role="status" className="mb-5 rounded border border-accent/40 bg-accent/10 px-3 py-2 text-sm text-accent-ink">
+          The settings have changed since this sheet was baked. Bake again to update it.
+        </p>
+      )}
+      <div className="grid gap-8 md:grid-cols-[auto_minmax(0,1fr)] xl:grid-cols-[auto_minmax(0,1fr)_auto]">
+        {/* the sheet, playing */}
+        <div className="w-full max-w-64 md:w-56 lg:w-64">
+          <div className="checker aspect-square overflow-hidden rounded-lg border border-rule">
+            <FrameImage frame={sheet.frames[current]} className="h-full w-full" label="Animated preview of the sheet" />
+          </div>
+          <div className="mt-2 flex items-center justify-between gap-2 text-sm">
+            <span className="text-ink-muted tabular-nums">{n > 1 ? `${current + 1} / ${n} · ${labels[current]}` : labels[0]}</span>
+            {n > 1 && (
+              <button type="button" onClick={() => setPlaying((p) => !p)} className="rounded border border-rule px-2.5 py-1 text-xs hover:border-accent">
+                {playing ? 'Pause' : 'Play'}
+              </button>
+            )}
+          </div>
         </div>
-        <div className="checker grid w-24 shrink-0 place-items-center rounded border border-rule">
-          <FrameImage frame={sheet.frames[i % sheet.frames.length]} className="h-24 w-24" label="Animated preview of the sheet" />
+
+        {/* every frame, labelled */}
+        <div className="min-w-0">
+          <h3 className="text-sm font-medium">Frames</h3>
+          <ol className="mt-2 flex flex-wrap gap-3">
+            {sheet.frames.map((f, k) => (
+              <li key={k} className="w-20 sm:w-28">
+                <button
+                  type="button"
+                  onClick={() => { setI(k); setPlaying(false) }}
+                  aria-label={`Show frame ${k + 1}, ${labels[k]}`}
+                  aria-pressed={k === current}
+                  className={`checker block aspect-square w-full overflow-hidden rounded border ${k === current ? 'border-accent' : 'border-rule hover:border-ink-faint'}`}
+                >
+                  <FrameImage frame={f} className="h-full w-full" />
+                </button>
+                <p aria-hidden className="mt-1 truncate text-center text-xs text-ink-faint">{labels[k]}</p>
+              </li>
+            ))}
+          </ol>
+        </div>
+
+        {/* the file itself */}
+        <div className="min-w-0 md:col-span-2 xl:col-span-1 xl:w-72">
+          <h3 className="text-sm font-medium">The file</h3>
+          <div className="checker mt-2 w-fit max-w-full overflow-auto rounded border border-rule p-2">
+            <img src={sheet.url} alt={`Sprite sheet, ${sheet.cols} by ${sheet.rows} frames`} className="pixelated max-w-none" style={{ width: w * scale, height: h * scale }} />
+          </div>
+          <p className="mt-2 text-xs text-ink-faint tabular-nums">{name}.png · {w}×{h} px · {n} {n === 1 ? 'frame' : 'frames'}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <a href={sheet.url} download={`${name}.png`} className="rounded bg-accent px-3 py-1.5 text-sm font-medium text-paper hover:opacity-90">Download PNG</a>
+            <button type="button" onClick={onJson} className="rounded border border-rule px-3 py-1.5 text-sm hover:border-accent">Download Tinkerkit sheet (.json)</button>
+          </div>
         </div>
       </div>
-      <div className="flex flex-wrap gap-2">
-        <a href={sheet.url} download={`${name}.png`} className="rounded border border-rule px-3 py-1.5 text-sm hover:border-accent">Download PNG</a>
-        <button type="button" onClick={onJson} className="rounded border border-rule px-3 py-1.5 text-sm hover:border-accent">Download Tinkerkit sheet (.json)</button>
+    </div>
+  )
+}
+
+/**
+ * Accessible tabs (WAI-ARIA tabs pattern): arrow keys, Home and End move
+ * between tabs; every panel stays mounted so its state and labels survive.
+ */
+function Tabs({ label, tabs }: { label: string; tabs: { id: string; label: string; summary: string; content: ReactNode }[] }) {
+  const [active, setActive] = useState(tabs[0].id)
+  const base = useId()
+  const refs = useRef<(HTMLButtonElement | null)[]>([])
+  const onKeyDown = (ev: React.KeyboardEvent, i: number) => {
+    const n = tabs.length
+    const to = ev.key === 'ArrowRight' ? (i + 1) % n : ev.key === 'ArrowLeft' ? (i - 1 + n) % n : ev.key === 'Home' ? 0 : ev.key === 'End' ? n - 1 : -1
+    if (to < 0) return
+    ev.preventDefault()
+    setActive(tabs[to].id)
+    refs.current[to]?.focus()
+  }
+  return (
+    <div>
+      <div role="tablist" aria-label={label} className="grid grid-flow-col auto-cols-fr border-b border-rule">
+        {tabs.map((t, i) => {
+          const on = t.id === active
+          return (
+            <button
+              key={t.id}
+              ref={(el) => { refs.current[i] = el }}
+              type="button"
+              role="tab"
+              id={`${base}-tab-${t.id}`}
+              aria-controls={`${base}-panel-${t.id}`}
+              aria-selected={on}
+              tabIndex={on ? 0 : -1}
+              onClick={() => setActive(t.id)}
+              onKeyDown={(ev) => onKeyDown(ev, i)}
+              className={`-mb-px min-w-0 border-b-2 px-2 pt-2 pb-2.5 text-left sm:px-3 ${on ? 'border-accent' : 'border-transparent hover:border-rule'}`}
+            >
+              <span className={`block font-serif text-lg ${on ? 'text-ink' : 'text-ink-muted'}`}>{t.label}</span>
+              <span className="block truncate text-xs text-ink-faint">{t.summary}</span>
+            </button>
+          )
+        })}
       </div>
+      {tabs.map((t) => (
+        <div key={t.id} role="tabpanel" id={`${base}-panel-${t.id}`} aria-labelledby={`${base}-tab-${t.id}`} hidden={t.id !== active} className="pt-4">
+          {t.content}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function Panel({ note, children }: { note: string; children: ReactNode }) {
+  return (
+    <div className="space-y-3">
+      <p className="text-xs leading-relaxed text-ink-faint">{note}</p>
+      {children}
     </div>
   )
 }
@@ -472,15 +673,6 @@ function FrameImage({ frame, className, smooth, testId, label }: { frame: Frame;
   return <canvas ref={ref} className={`${smooth ? '' : 'pixelated'} ${className ?? ''}`} data-testid={testId} role={label ? 'img' : undefined} aria-label={label} aria-hidden={label ? undefined : true} />
 }
 
-function Group({ title, note, children }: { title: string; note: string; children: ReactNode }) {
-  return (
-    <fieldset className="space-y-3 border-t border-rule pt-4">
-      <legend className="float-left mb-1 w-full font-serif text-xl">{title}</legend>
-      <p className="clear-both text-xs leading-relaxed text-ink-faint">{note}</p>
-      {children}
-    </fieldset>
-  )
-}
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   const id = useId()

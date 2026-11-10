@@ -74,7 +74,14 @@ const solidPixels = (page, sel) => page.evaluate((sel) => {
   if (!csp.includes('wasm-unsafe-eval')) fails.push('test server is not sending the production CSP')
   if (!(await page.getByRole('link', { name: /Splat to Sprite/ }).count())) fails.push('hub does not link to splat-to-sprite')
   else ok('hub lists splat-to-sprite under the production CSP')
+  if (!(await page.getByRole('banner').getByRole('link', { name: 'Matt Black' }).count())) fails.push('hub has no site header')
   await axe(page, 'hub')
+  // The theme switch flips the palette and remembers it under the portfolio's key
+  await page.getByRole('button', { name: /Switch to (light|dark) theme/ }).click()
+  const flipped = await page.evaluate(() => [document.documentElement.dataset.theme, localStorage.getItem('mb-theme')])
+  if (flipped[0] !== flipped[1] || !flipped[0]) fails.push(`theme switch gave ${flipped.join(' / ')}`)
+  else ok(`theme switch flips to ${flipped[0]} and stores it`)
+  await axe(page, 'hub, theme switched')
   await ctx.close()
 }
 
@@ -98,6 +105,23 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   if (overflow > 0) fails.push(`${label}: page scrolls sideways by ${overflow}px`)
   await axe(page, label)
   if (label === 'desktop') {
+    // Settings sit in tabs: arrow keys move between them, and only one panel shows
+    await page.getByRole('tab', { name: /Camera/ }).focus()
+    await page.keyboard.press('ArrowRight')
+    await page.keyboard.press('ArrowRight')
+    const colourOn = (await page.getByRole('tab', { name: /Colour/ }).getAttribute('aria-selected')) === 'true'
+    const paletteShows = await page.getByRole('combobox', { name: 'Palette' }).isVisible()
+    const turnHidden = !(await page.getByRole('slider', { name: 'Turn' }).isVisible())
+    if (!colourOn || !paletteShows || !turnHidden) fails.push(`tabs: colour selected ${colourOn}, palette visible ${paletteShows}, camera hidden ${turnHidden}`)
+    else ok('arrow keys move through the settings tabs')
+    await axe(page, 'desktop colour tab')
+    await page.getByRole('tab', { name: /Camera/ }).click()
+    // The header stays on screen once the page scrolls
+    await page.evaluate(() => window.scrollTo(0, 900))
+    const top = await page.getByRole('banner').evaluate((h) => h.getBoundingClientRect().top)
+    if (top !== 0) fails.push(`header scrolled away (top ${top})`)
+    else ok('header stays stuck to the top while scrolling')
+    await page.evaluate(() => window.scrollTo(0, 0))
     await page.getByRole('button', { name: 'Isometric' }).click()
     if ((await page.getByRole('button', { name: 'Isometric' }).getAttribute('aria-pressed')) !== 'true') fails.push('Isometric preset does not show as selected')
     else ok('Isometric preset shows as selected')
@@ -112,6 +136,13 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     })
     if (dims[0] !== 32 || dims[1] !== 128) fails.push(`4-direction sheet is ${dims.join('×')}, expected 32×128`)
     else ok('baked a 4-direction 32×128 sheet')
+    const frames = await page.locator('[data-testid=sheet] ol li').count()
+    if (frames !== 4) fails.push(`sheet shows ${frames} frames, expected 4`)
+    else ok('sheet shows its 4 frames, labelled')
+    await axe(page, 'desktop baked')
+    await page.getByRole('slider', { name: 'Turn' }).fill('60')
+    if (!(await page.getByRole('status').filter({ hasText: 'changed since' }).count())) fails.push('changing a setting does not mark the sheet out of date')
+    else ok('changing a setting marks the sheet out of date')
   }
   await page.waitForTimeout(500)
   await page.screenshot({ path: join(shots, `splat-to-sprite-${label}.png`), fullPage: true })
