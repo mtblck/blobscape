@@ -385,7 +385,7 @@ export function App() {
                   content: (
                     <Panel note="Pixel art uses a small fixed palette. Every pixel snaps to its nearest colour, measured in OKLab so it matches what your eye would pick.">
                       <Field label="Palette">
-                        <select aria-label="Palette" className="w-full rounded border border-rule bg-paper px-2 py-1.5" value={palette} onChange={(e) => setPalette(e.target.value)}>
+                        <select aria-label="Palette" className="w-full rounded border border-rule bg-paper py-1.5 pr-9 pl-2.5" value={palette} onChange={(e) => setPalette(e.target.value)}>
                           <option value="auto">Auto: picked from the splat</option>
                           {PALETTES.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.colors.length})</option>)}
                           <option value="none">Full colour (no palette)</option>
@@ -419,7 +419,7 @@ export function App() {
             </div>
             <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto">
               <select
-                className="min-w-0 flex-1 rounded border border-rule bg-paper px-3 py-2 sm:flex-none"
+                className="min-w-0 flex-1 rounded border border-rule bg-paper py-2 pr-10 pl-3 sm:flex-none"
                 value={layout}
                 onChange={(e) => setLayout(e.target.value as Layout)}
                 aria-label="Sheet layout"
@@ -635,10 +635,10 @@ function Tabs({ label, tabs }: { label: string; tabs: { id: string; label: strin
               tabIndex={on ? 0 : -1}
               onClick={() => setActive(t.id)}
               onKeyDown={(ev) => onKeyDown(ev, i)}
-              className={`-mb-px min-w-0 border-b-2 px-2 pt-2 pb-2.5 text-left sm:px-3 ${on ? 'border-accent' : 'border-transparent hover:border-rule'}`}
+              className={`group/tab -mb-px min-w-0 cursor-pointer rounded-t-md border-b-2 px-2 pt-2 pb-2.5 text-left transition-colors hover:bg-paper-sunk sm:px-3 ${on ? 'border-accent' : 'border-transparent hover:border-ink-faint'}`}
             >
-              <span className={`block font-serif text-lg ${on ? 'text-ink' : 'text-ink-muted'}`}>{t.label}</span>
-              <span className="block truncate text-xs text-ink-faint">{t.summary}</span>
+              <span className={`block font-serif text-lg transition-colors ${on ? 'text-ink' : 'text-ink-muted group-hover/tab:text-ink'}`}>{t.label}</span>
+              <span className="block truncate text-xs text-ink-faint transition-colors group-hover/tab:text-ink-muted">{t.summary}</span>
             </button>
           )
         })}
@@ -719,7 +719,7 @@ function Chip({ active, onClick, children, small }: { active?: boolean; onClick:
       type="button"
       aria-pressed={active}
       onClick={onClick}
-      className={`rounded-full border ${small ? 'px-2.5 py-0.5 text-xs' : 'px-3 py-1 text-sm'} ${active ? 'border-accent bg-accent/15 text-accent-ink' : 'border-rule text-ink-muted hover:border-ink-faint'}`}
+      className={`rounded-full border transition-colors ${small ? 'px-2.5 py-0.5 text-xs' : 'px-3 py-1 text-sm'} ${active ? 'border-accent bg-accent/15 text-accent-ink hover:bg-accent/25' : 'border-rule text-ink-muted hover:border-ink-faint hover:bg-paper-sunk hover:text-ink'}`}
     >
       {children}
     </button>
