@@ -123,21 +123,32 @@ export class Engine {
     this.invalidate()
   }
 
-  async setSplats(make: () => SplatMesh, upright: boolean) {
+  private loadSeq = 0
+
+  /** Resolves false when a newer load started meanwhile, so a slow file can't replace a later pick. */
+  async setSplats(make: () => SplatMesh, upright: boolean): Promise<boolean> {
+    const seq = ++this.loadSeq
     const mesh = make()
-    await mesh.initialized
-    if (this.disposed) { mesh.dispose(); return }
+    try {
+      await mesh.initialized
+    } catch (err) {
+      mesh.dispose()
+      throw err
+    }
+    if (this.disposed || seq !== this.loadSeq) { mesh.dispose(); return false }
     if (this.mesh) {
       this.scene.remove(this.mesh)
       this.mesh.dispose()
     }
     this.mesh = mesh
+    if (this.crop) this.scene.remove(this.crop.edit)
     this.crop = undefined
     this.setUpright(upright)
     this.scene.add(mesh)
     this.framing = measure(mesh)
     this.addCrop()
     this.invalidate(30)
+    return true
   }
 
   /** Most trained captures come out upside down (the COLMAP convention is y-down). */

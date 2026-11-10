@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Engine, FRAME_SHARE, meshFromBuilder, meshFromBytes, type View } from './engine.ts'
 import { PRESETS } from './presets.ts'
 import { PALETTES } from './palettes.ts'
@@ -22,6 +22,7 @@ const LAYOUTS: { id: Layout; name: string }[] = [
 ]
 
 type PaletteChoice = 'auto' | 'none' | string
+type Source = { kind: 'preset' | 'file'; id: string; name: string }
 
 const reducedMotion = () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
@@ -30,7 +31,7 @@ export function App() {
   const engineRef = useRef<Engine | null>(null)
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [source, setSource] = useState<{ kind: 'preset' | 'file'; id: string; name: string }>({ kind: 'preset', id: 'mushroom', name: 'Toadstool' })
+  const [source, setSource] = useState<Source>({ kind: 'preset', id: 'mushroom', name: 'Toadstool' })
   const [loading, setLoading] = useState(true)
   const [splatCount, setSplatCount] = useState(0)
   const [upright, setUpright] = useState(false)
@@ -50,7 +51,8 @@ export function App() {
 
   const [stages, setStages] = useState<Stages | null>(null)
   const [sheet, setSheet] = useState<{ url: string; frames: Frame[]; cols: number; rows: number; json: object; layout: Layout } | null>(null)
-  const [baking, setBaking] = useState(false)
+  const [baking, setBaking] = useState<{ done: number; total: number } | null>(null)
+  const [bakeError, setBakeError] = useState<string | null>(null)
 
   const settings: PixelSettings = useMemo(
     () => ({
@@ -74,13 +76,16 @@ export function App() {
     }
   }, [])
 
-  const load = useCallback(async (make: () => ReturnType<ReturnType<typeof meshFromBuilder>>, flip: boolean) => {
+  const load = useCallback(async (make: () => ReturnType<ReturnType<typeof meshFromBuilder>>, flip: boolean, next: Source) => {
     const e = engineRef.current
     if (!e) return
     setLoading(true)
     setSheet(null)
     try {
-      await e.setSplats(make, flip)
+      // A newer pick won the race: leave the state to that load.
+      if (!(await e.setSplats(make, flip))) return
+      // Name the source only once it has loaded, so a bad file doesn't relabel the object on screen.
+      setSource(next)
       e.setCrop(crop)
       setSplatCount(e.splatCount)
       setUpright(flip)
@@ -98,7 +103,7 @@ export function App() {
   useEffect(() => {
     if (!ready) return
     const p = PRESETS.find((x) => x.id === 'mushroom')!
-    load(meshFromBuilder(p.build), false)
+    load(meshFromBuilder(p.build), false, { kind: 'preset', id: p.id, name: p.name })
   }, [ready, load])
 
   useEffect(() => { if (engineRef.current) engineRef.current.view = view }, [view])
@@ -152,16 +157,27 @@ export function App() {
     setView((v) => ({ ...v, azimuth: ((az % 360) + 540) % 360 - 180, elevation: Math.round(el) }))
   }
   const onPointerUp = () => { drag.current = null }
-  const onWheel = (ev: React.WheelEvent) => {
-    setView((v) => ({ ...v, zoom: Math.max(0.4, Math.min(4, v.zoom * (ev.deltaY < 0 ? 1.08 : 1 / 1.08))) }))
-  }
+  // A native, non-passive listener: React's onWheel is passive, so the page would scroll while you zoom.
+  useEffect(() => {
+    const c = canvasRef.current
+    if (!c) return
+    const onWheel = (ev: WheelEvent) => {
+      ev.preventDefault()
+      setView((v) => ({ ...v, zoom: Math.max(0.4, Math.min(4, v.zoom * (ev.deltaY < 0 ? 1.08 : 1 / 1.08))) }))
+    }
+    c.addEventListener('wheel', onWheel, { passive: false })
+    return () => c.removeEventListener('wheel', onWheel)
+  }, [])
+
+  // Free each sheet's PNG once it's replaced or the page goes away
+  const sheetUrl = sheet?.url
+  useEffect(() => () => { if (sheetUrl) URL.revokeObjectURL(sheetUrl) }, [sheetUrl])
 
   // --- files ----------------------------------------------------------------
   const fileInput = useRef<HTMLInputElement>(null)
   const openFile = async (file: File) => {
     const bytes = await file.arrayBuffer()
-    setSource({ kind: 'file', id: file.name, name: file.name.replace(/\.[^.]+$/, '') })
-    load(meshFromBytes(bytes, file.name), true)
+    load(meshFromBytes(bytes, file.name), true, { kind: 'file', id: file.name, name: file.name.replace(/\.[^.]+$/, '') })
   }
   const [dragOver, setDragOver] = useState(false)
 
@@ -169,24 +185,29 @@ export function App() {
   const bake = async () => {
     const e = engineRef.current
     if (!e) return
-    setBaking(true)
+    const { rows } = shotsFor(layout)
+    const total = rows.reduce((n, r) => n + r.shots.length, 0)
+    setBaking({ done: 0, total })
+    setBakeError(null)
     try {
-      const { rows } = shotsFor(layout)
       const raws: Uint8Array[] = []
       for (const row of rows) {
-        for (const shot of row.shots) raws.push(await e.shoot(size * supersample, { azimuth: view.azimuth + shot.turn }))
+        for (const shot of row.shots) {
+          raws.push(await e.shoot(size * supersample, { azimuth: view.azimuth + shot.turn }))
+          setBaking({ done: raws.length, total })
+        }
       }
       const frames = processFrames(raws, settings, true).map((s) => s.final)
       const packed = packSheet(frames, layout)
       const image = `${slug(source.name)}.png`
       const json = tinkerkitSheet(source.name, image, layout, size, packed.cols, packed.rows, Math.max(...frames.map(baseline)))
-      if (sheet) URL.revokeObjectURL(sheet.url)
       const blob: Blob = await new Promise((r) => packed.canvas.toBlob((b) => r(b!), 'image/png'))
       setSheet({ url: URL.createObjectURL(blob), frames, cols: packed.cols, rows: packed.rows, json, layout })
     } catch (err) {
-      console.error('bake failed', err)
+      console.warn(err)
+      setBakeError('The sheet could not be baked. Try a smaller sprite size or fewer samples per pixel.')
     } finally {
-      setBaking(false)
+      setBaking(null)
     }
   }
 
@@ -197,7 +218,10 @@ export function App() {
     setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
 
-  const activeCamera = CAMERAS.find((c) => c.view.elevation === view.elevation && (c.view.azimuth === undefined || c.view.azimuth === view.azimuth))
+  // A preset that pins the turn too (isometric) wins over one that only sets the height (the ¾ view is also 30°).
+  const activeCamera =
+    CAMERAS.find((c) => c.view.azimuth !== undefined && c.view.elevation === view.elevation && c.view.azimuth === view.azimuth) ??
+    CAMERAS.find((c) => c.view.azimuth === undefined && c.view.elevation === view.elevation)
 
   return (
     <div className="min-h-dvh">
@@ -236,8 +260,8 @@ export function App() {
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
               onPointerCancel={onPointerUp}
-              onWheel={onWheel}
-              aria-label="Splat viewport. Drag to turn the camera, scroll to zoom."
+              role="img"
+              aria-label="3D view of the splat. Drag to turn the camera and scroll to zoom, or use the Camera sliders."
               data-testid="viewport"
             />
             {/* The sprite frame: what's inside this square becomes the sprite. */}
@@ -248,17 +272,19 @@ export function App() {
             >
               <span className="absolute -top-6 left-0 text-xs text-accent">sprite frame · {size}×{size}</span>
             </div>
-            {loading && <div className="absolute inset-0 grid place-items-center text-ink-muted">Loading splats…</div>}
+            <div aria-live="polite" className={loading ? 'absolute inset-0 grid place-items-center text-ink-muted' : 'sr-only'}>
+              {loading ? 'Loading splats…' : `${splatCount.toLocaleString()} splats loaded`}
+            </div>
             {error && <div role="alert" className="absolute inset-x-4 bottom-4 rounded bg-paper p-3 text-sm text-ink">{error}</div>}
             <p className="pointer-events-none absolute right-3 bottom-2 text-xs text-ink-faint">drag to orbit · scroll to zoom</p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Splat to load">
             {PRESETS.map((p) => (
               <Chip
                 key={p.id}
                 active={source.kind === 'preset' && source.id === p.id}
-                onClick={() => { setSource({ kind: 'preset', id: p.id, name: p.name }); load(meshFromBuilder(p.build), false) }}
+                onClick={() => load(meshFromBuilder(p.build), false, { kind: 'preset', id: p.id, name: p.name })}
               >
                 {p.name}
               </Chip>
@@ -287,7 +313,7 @@ export function App() {
         <section aria-label="Sprite settings" className="min-w-0 space-y-5 lg:col-start-2 lg:row-span-2 lg:row-start-1">
           <div className="flex items-start gap-4">
             <div className="checker grid aspect-square w-48 shrink-0 place-items-center overflow-hidden rounded-lg border border-rule sm:w-56">
-              {stages && <FrameImage frame={stages.final} className="h-full w-full" testId="sprite-preview" />}
+              {stages && <FrameImage frame={stages.final} className="h-full w-full" testId="sprite-preview" label={`Sprite preview, ${size} by ${size} pixels`} />}
             </div>
             <div className="min-w-0 text-sm text-ink-muted">
               <p className="font-medium text-ink">Your sprite</p>
@@ -299,15 +325,15 @@ export function App() {
                 </ul>
               )}
               {stages && stages.palette.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-0.5" aria-label="Palette in use">
-                  {stages.palette.map((c, i) => <span key={i} title={rgbToHex(c)} className="h-3.5 w-3.5 rounded-[2px]" style={{ background: rgbToHex(c) }} />)}
+                <div className="mt-3 flex flex-wrap gap-0.5" role="img" aria-label={`Palette in use: ${stages.palette.length} colours`}>
+                  {stages.palette.map((c, i) => <span key={i} title={rgbToHex(c)} aria-hidden className="h-3.5 w-3.5 rounded-[2px]" style={{ background: rgbToHex(c) }} />)}
                 </div>
               )}
             </div>
           </div>
 
           <Group title="Camera" note={activeCamera?.note ?? 'Orbit freely; the sprite is whatever sits inside the dashed square.'}>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Camera presets">
               {CAMERAS.map((c) => (
                 <Chip key={c.id} active={activeCamera?.id === c.id} onClick={() => setView((v) => ({ ...v, ...c.view }))}>{c.name}</Chip>
               ))}
@@ -336,7 +362,7 @@ export function App() {
 
           <Group title="Colour" note="Pixel art uses a small fixed palette. Every pixel snaps to its nearest colour, measured in OKLab so it matches what your eye would pick.">
             <Field label="Palette">
-              <select className="w-full rounded border border-rule bg-paper px-2 py-1.5" value={palette} onChange={(e) => setPalette(e.target.value)}>
+              <select aria-label="Palette" className="w-full rounded border border-rule bg-paper px-2 py-1.5" value={palette} onChange={(e) => setPalette(e.target.value)}>
                 <option value="auto">Auto: picked from the splat</option>
                 {PALETTES.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.colors.length})</option>)}
                 <option value="none">Full colour (no palette)</option>
@@ -359,11 +385,12 @@ export function App() {
             <button
               type="button"
               onClick={bake}
-              disabled={baking || loading}
+              disabled={!!baking || loading}
               className="w-full rounded bg-accent px-4 py-2 font-medium text-paper disabled:opacity-50"
             >
-              {baking ? 'Baking…' : 'Bake sprite sheet'}
+              {baking ? `Baking frame ${Math.min(baking.done + 1, baking.total)} of ${baking.total}…` : 'Bake sprite sheet'}
             </button>
+            {bakeError && <p role="alert" className="text-sm text-accent-ink">{bakeError}</p>}
             {sheet && <SheetView sheet={sheet} name={slug(source.name)} onJson={downloadJson} />}
           </Group>
         </section>
@@ -422,7 +449,7 @@ function SheetView({ sheet, name, onJson }: { sheet: { url: string; frames: Fram
           <img src={sheet.url} alt={`Sprite sheet, ${sheet.cols} by ${sheet.rows} frames`} className="pixelated" style={{ width: sheet.cols * sheet.frames[0].width * 2 }} />
         </div>
         <div className="checker grid w-24 shrink-0 place-items-center rounded border border-rule">
-          <FrameImage frame={sheet.frames[i % sheet.frames.length]} className="h-24 w-24" />
+          <FrameImage frame={sheet.frames[i % sheet.frames.length]} className="h-24 w-24" label="Animated preview of the sheet" />
         </div>
       </div>
       <div className="flex flex-wrap gap-2">
@@ -433,7 +460,7 @@ function SheetView({ sheet, name, onJson }: { sheet: { url: string; frames: Fram
   )
 }
 
-function FrameImage({ frame, className, smooth, testId }: { frame: Frame; className?: string; smooth?: boolean; testId?: string }) {
+function FrameImage({ frame, className, smooth, testId, label }: { frame: Frame; className?: string; smooth?: boolean; testId?: string; label?: string }) {
   const ref = useRef<HTMLCanvasElement>(null)
   useEffect(() => {
     const c = ref.current!
@@ -441,7 +468,8 @@ function FrameImage({ frame, className, smooth, testId }: { frame: Frame; classN
     c.height = frame.height
     c.getContext('2d')!.putImageData(new ImageData(new Uint8ClampedArray(frame.data), frame.width, frame.height), 0, 0)
   }, [frame])
-  return <canvas ref={ref} className={`${smooth ? '' : 'pixelated'} ${className ?? ''}`} data-testid={testId} />
+  // Labelled frames are images; unlabelled ones sit beside a caption that already says what they show.
+  return <canvas ref={ref} className={`${smooth ? '' : 'pixelated'} ${className ?? ''}`} data-testid={testId} role={label ? 'img' : undefined} aria-label={label} aria-hidden={label ? undefined : true} />
 }
 
 function Group({ title, note, children }: { title: string; note: string; children: ReactNode }) {
@@ -455,21 +483,32 @@ function Group({ title, note, children }: { title: string; note: string; childre
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
+  const id = useId()
   return (
-    <div className="grid gap-1.5 text-sm sm:grid-cols-[8.5rem_1fr] sm:items-center">
-      <span className="text-ink-muted">{label}</span>
+    <div role="group" aria-labelledby={id} className="grid gap-1.5 text-sm sm:grid-cols-[8.5rem_1fr] sm:items-center">
+      <span id={id} className="text-ink-muted">{label}</span>
       <div className="min-w-0">{children}</div>
     </div>
   )
 }
 
 function Slider({ label, value, min, max, step, onChange, format, hint }: { label: string; value: number; min: number; max: number; step: number; onChange: (v: number) => void; format: (v: number) => string; hint?: string }) {
+  const id = useId()
   return (
-    <label className="grid gap-1 text-sm sm:grid-cols-[8.5rem_1fr_4.5rem] sm:items-center sm:gap-3" title={hint}>
-      <span className="text-ink-muted">{label}</span>
-      <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} className="w-full accent-[var(--c-accent)]" />
-      <span className="tabular-nums text-ink-faint sm:text-right">{format(value)}</span>
-    </label>
+    <div className="text-sm">
+      <label className="grid gap-1 sm:grid-cols-[8.5rem_1fr_4.5rem] sm:items-center sm:gap-3">
+        <span className="text-ink-muted">{label}</span>
+        <input
+          type="range" min={min} max={max} step={step} value={value}
+          onChange={(e) => onChange(Number(e.target.value))}
+          aria-valuetext={format(value)}
+          aria-describedby={hint ? id : undefined}
+          className="w-full accent-[var(--c-accent)]"
+        />
+        <span aria-hidden className="tabular-nums text-ink-faint sm:text-right">{format(value)}</span>
+      </label>
+      {hint && <p id={id} className="mt-1 text-xs leading-relaxed text-ink-faint sm:pl-[9.25rem]">{hint}</p>}
+    </div>
   )
 }
 

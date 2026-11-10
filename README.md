@@ -12,7 +12,7 @@ npm install
 npm run dev            # http://localhost:5173/experiments/
 npm test               # pixel pipeline unit tests
 npm run build          # hosting check, typecheck, build to dist/experiments
-npm run verify         # Chromium against dist, under the production CSP
+npm run verify         # Chromium against dist, under the production CSP, with axe
 ```
 
 ## Splat to Sprite

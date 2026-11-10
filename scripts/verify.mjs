@@ -5,6 +5,7 @@
  *   node scripts/verify.mjs [baseUrl]   (default: serves ./dist on :4181)
  */
 import { chromium } from 'playwright-core'
+import { AxeBuilder } from '@axe-core/playwright'
 import { createServer } from 'node:http'
 import { readFileSync, existsSync, mkdirSync, statSync } from 'node:fs'
 import { join, extname, dirname } from 'node:path'
@@ -49,6 +50,13 @@ async function open(path, opts = {}) {
   return { page, res, ctx }
 }
 
+// axe-core on the rendered page; any violation fails the run
+async function axe(page, label) {
+  const { violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice']).analyze()
+  for (const v of violations) fails.push(`${label} axe ${v.id} (${v.impact}): ${v.help} — ${v.nodes.slice(0, 3).map((n) => n.target.join(' ')).join(', ')}`)
+  if (!violations.length) ok(`${label}: no axe violations`)
+}
+
 const solidPixels = (page, sel) => page.evaluate((sel) => {
   const c = document.querySelector(sel)
   if (!c || !c.width) return 0
@@ -66,6 +74,7 @@ const solidPixels = (page, sel) => page.evaluate((sel) => {
   if (!csp.includes('wasm-unsafe-eval')) fails.push('test server is not sending the production CSP')
   if (!(await page.getByRole('link', { name: /Splat to Sprite/ }).count())) fails.push('hub does not link to splat-to-sprite')
   else ok('hub lists splat-to-sprite under the production CSP')
+  await axe(page, 'hub')
   await ctx.close()
 }
 
@@ -87,7 +96,13 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   else ok(`${label}: sprite preview has ${n} solid pixels`)
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
   if (overflow > 0) fails.push(`${label}: page scrolls sideways by ${overflow}px`)
+  await axe(page, label)
   if (label === 'desktop') {
+    await page.getByRole('button', { name: 'Isometric' }).click()
+    if ((await page.getByRole('button', { name: 'Isometric' }).getAttribute('aria-pressed')) !== 'true') fails.push('Isometric preset does not show as selected')
+    else ok('Isometric preset shows as selected')
+    await page.getByRole('button', { name: '¾ view' }).click()
+    await page.getByRole('slider', { name: 'Turn' }).fill('30')
     await page.getByRole('button', { name: 'Bake sprite sheet' }).click()
     await page.waitForSelector('[data-testid=sheet] img', { timeout: 60000 })
     const dims = await page.evaluate(async () => {
@@ -127,6 +142,13 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     if (solid < 100) fails.push(`.ply sprite has only ${solid} solid pixels`)
     else ok(`a dropped .ply loads (2,000 splats) and makes a ${solid}-pixel sprite`)
   }
+  // A file that isn't a splat: an error shows, and the object on screen keeps its name
+  await page.setInputFiles('input[type=file]', { name: 'junk.ply', mimeType: 'application/octet-stream', buffer: Buffer.from('not a splat at all') })
+  const alert = await page.getByRole('alert').textContent({ timeout: 15000 }).catch(() => '')
+  const stillBall = await page.getByRole('button', { name: 'ball' }).count()
+  if (!alert.includes("didn't load")) fails.push(`bad file: no error shown (got "${alert}")`)
+  else if (!stillBall) fails.push('bad file relabelled the loaded object')
+  else ok('a bad file shows an error and keeps the loaded object and its name')
   await page.screenshot({ path: join(shots, 'splat-to-sprite-ply.png') })
   await ctx.close()
 }
@@ -138,6 +160,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   if (theme !== 'dark') fails.push(`dark preference gave theme ${theme}`)
   else ok('dark preference applied before first paint')
   await page.waitForTimeout(2500)
+  await axe(page, 'dark')
   await page.screenshot({ path: join(shots, 'splat-to-sprite-dark.png') })
   await ctx.close()
 }
