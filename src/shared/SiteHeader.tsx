@@ -1,7 +1,7 @@
 import { useState } from 'react'
 
 /**
- * The sticky header every experiment page shares: the beaker mark, then
+ * The sticky header every experiment page shares: the flask mark, then
  * "Matt Black / Experiments", and a theme switch on the right.
  */
 export function SiteHeader({ hub = false }: { hub?: boolean }) {
@@ -17,9 +17,10 @@ export function SiteHeader({ hub = false }: { hub?: boolean }) {
         <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-4 px-4">
           <nav aria-label="Site" className="flex min-w-0 items-center gap-2.5">
             <a href="/experiments/" className="group shrink-0 text-ink hover:text-accent" aria-label="Experiments home">
-              <Beaker className="h-8 w-8" />
+              <Flask className="h-8 w-8" />
             </a>
-            <p className="flex min-w-0 items-baseline gap-1.5 truncate text-[0.95rem]">
+            {/* items-baseline keeps both words on one baseline; the 2px nudge centres the serif capitals on the flask */}
+            <p className="flex min-w-0 translate-y-[2px] items-baseline gap-1.5 truncate leading-none">
               <a href="https://mattblack.space/" className="font-serif text-lg font-medium text-ink hover:text-accent">
                 Matt Black
               </a>
@@ -40,31 +41,30 @@ export function SiteHeader({ hub = false }: { hub?: boolean }) {
   )
 }
 
-/** A lab beaker with liquid in it. The bubbles rise when you hover the mark. */
-export function Beaker({ className }: { className?: string }) {
+/** An Erlenmeyer flask with liquid in it. The bubbles rise when you hover the mark. */
+export function Flask({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 32 32" className={className} aria-hidden fill="none">
-      {/* liquid, with a wavy surface, clipped to the inside of the glass */}
+      {/* liquid, with a wavy surface, filling the cone */}
       <path
-        d="M7.5 16c1.9-1.1 3.8-1.1 5.67 0s3.8 1.1 5.67 0 3.8-1.1 5.66 0V24a4 4 0 0 1-4 4h-9a4 4 0 0 1-4-4z"
+        d="M9.23 18c1.5-.9 3-.9 4.5 0s3 .9 4.5 0 3-.9 4.54 0l4.53 6.6a2.5 2.5 0 0 1-2.1 3.9H7.3a2.5 2.5 0 0 1-2.1-3.9z"
         fill="var(--c-accent)"
         opacity="0.9"
       />
       <g fill="var(--c-paper)" opacity="0.85">
-        <circle className="beaker-bubble" cx="12.5" cy="23" r="1.4" />
-        <circle className="beaker-bubble beaker-bubble-2" cx="18.5" cy="20.5" r="1" />
+        <circle className="flask-bubble" cx="13" cy="24.5" r="1.4" />
+        <circle className="flask-bubble flask-bubble-2" cx="18.5" cy="22" r="1" />
       </g>
-      <circle className="beaker-bubble beaker-bubble-3" cx="15.5" cy="11.5" r="0.9" fill="var(--c-accent)" />
-      {/* the glass: a lipped rim with a pouring spout, straight walls, round foot */}
+      <circle className="flask-bubble flask-bubble-3" cx="16" cy="14.5" r="0.9" fill="var(--c-accent)" />
+      {/* the glass: a lipped neck opening into a cone with a flat, rounded foot */}
       <path
-        d="M5.5 5.5c1.3 0 2 .7 2 2V24a4 4 0 0 0 4 4h9a4 4 0 0 0 4-4V5.5h1.2"
-        strokeLinecap="round"
+        d="M13.5 3.5V11L5.2 24.6a2.5 2.5 0 0 0 2.1 3.9h17.4a2.5 2.5 0 0 0 2.1-3.9L18.5 11V3.5"
         stroke="currentColor"
         strokeWidth="2"
         strokeLinejoin="round"
+        strokeLinecap="round"
       />
-      {/* measuring marks */}
-      <path d="M20.5 9.5h4M22 12.5h2.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M11.5 3.5h9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
   )
 }
