@@ -1,7 +1,8 @@
 /**
  * Real-browser check of the production build under the production headers.
  * Fails on console errors, page errors and CSP violations, and checks the
- * splat actually renders into a sprite and a sheet. Run `npm run build` first.
+ * splat actually renders into a sprite and a sheet, and that Fit a Picture
+ * trains. Run `npm run build` first.
  *   node scripts/verify.mjs [baseUrl]   (default: serves ./dist on :4181)
  */
 import { chromium } from 'playwright-core'
@@ -74,6 +75,8 @@ const solidPixels = (page, sel) => page.evaluate((sel) => {
   if (!csp.includes('wasm-unsafe-eval')) fails.push('test server is not sending the production CSP')
   if (!(await page.getByRole('link', { name: /Splat to Sprite/ }).count())) fails.push('hub does not link to splat-to-sprite')
   else ok('hub lists splat-to-sprite under the production CSP')
+  if (!(await page.getByRole('link', { name: /Fit a Picture/ }).count())) fails.push('hub does not link to fit-a-picture')
+  else ok('hub lists fit-a-picture')
   if (!(await page.getByRole('banner').getByRole('link', { name: 'Matt Black' }).count())) fails.push('hub has no site header')
   await axe(page, 'hub')
   // The theme switch flips the palette and remembers it under the portfolio's key
@@ -193,6 +196,96 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   await page.waitForTimeout(2500)
   await axe(page, 'dark')
   await page.screenshot({ path: join(shots, 'splat-to-sprite-dark.png') })
+  await ctx.close()
+}
+
+// 5. Fit a Picture: trains in a worker, graphs the loss, views, pause/step, adding blobs, own pictures
+const stepNow = (page) => page.textContent('[data-testid=step]').then((t) => Number(t.replace(/,/g, '')))
+const blobsNow = (page) => page.textContent('[data-testid=blob-count]').then((t) => Number(t.replace(/\D/g, '')))
+for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000 } }], ['phone', { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }]]) {
+  const { page, ctx } = await open('/experiments/fit-a-picture/', opts)
+  await page.waitForFunction(() => Number(document.querySelector('[data-testid=step]')?.textContent?.replace(/,/g, '')) > 30, null, { timeout: 30000 }).catch(() => {})
+  const steps = await stepNow(page)
+  if (steps <= 30) fails.push(`fit ${label}: training stuck at step ${steps}`)
+  else ok(`fit ${label}: training runs in the worker (step ${steps})`)
+  const points = Number(await page.getAttribute('[data-testid=loss-graph]', 'data-points'))
+  if (points < 30) fails.push(`fit ${label}: loss graph has ${points} points`)
+  else ok(`fit ${label}: loss graph has ${points} points`)
+  const lit = await page.evaluate(() => {
+    const c = document.querySelector('[data-testid=fit]')
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data
+    let sum = 0
+    for (let i = 0; i < d.length; i += 4) sum += d[i] + d[i + 1] + d[i + 2]
+    return sum / (d.length / 4) / 3
+  })
+  if (lit < 20) fails.push(`fit ${label}: the fit canvas is blank (mean ${lit.toFixed(1)})`)
+  else ok(`fit ${label}: the fit canvas is drawn (mean level ${lit.toFixed(0)})`)
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
+  if (overflow > 0) fails.push(`fit ${label}: page scrolls sideways by ${overflow}px`)
+  await axe(page, `fit ${label}`)
+  if (label === 'desktop') {
+    // Pause holds the step; Step once moves it by exactly one
+    await page.getByRole('button', { name: 'Pause' }).click()
+    await page.waitForTimeout(300)
+    const held = await stepNow(page)
+    await page.waitForTimeout(500)
+    if ((await stepNow(page)) !== held) fails.push('fit: pause does not stop training')
+    await page.getByRole('button', { name: 'Step once' }).click()
+    await page.waitForFunction((h) => Number(document.querySelector('[data-testid=step]').textContent.replace(/,/g, '')) === h + 1, held, { timeout: 5000 }).catch(() => {})
+    if ((await stepNow(page)) !== held + 1) fails.push(`fit: step once went from ${held} to ${await stepNow(page)}`)
+    else ok('fit: pause holds, step once moves one step')
+    // A click on the fit adds blobs there
+    const before = await blobsNow(page)
+    await page.getByTestId('fit').click({ position: { x: 100, y: 80 } })
+    await page.waitForFunction((b) => Number(document.querySelector('[data-testid=blob-count]').textContent.replace(/\D/g, '')) > b, before, { timeout: 5000 }).catch(() => {})
+    const after = await blobsNow(page)
+    if (after <= before) fails.push(`fit: clicking did not add blobs (${before} → ${after})`)
+    else ok(`fit: a click adds blobs (${before} → ${after})`)
+    // Views, through the tabs
+    await page.getByRole('tab', { name: /View/ }).click()
+    for (const v of ['Blobs', 'Error']) {
+      await page.getByRole('button', { name: v, exact: true }).click()
+      await page.waitForTimeout(400)
+      if ((await page.getByRole('button', { name: v, exact: true }).getAttribute('aria-pressed')) !== 'true') fails.push(`fit: ${v} view not selected`)
+      await page.screenshot({ path: join(shots, `fit-a-picture-${v.toLowerCase()}.png`) })
+    }
+    ok('fit: blobs and error views switch')
+    await axe(page, 'fit error view')
+    await page.getByRole('button', { name: 'Fit', exact: true }).click()
+    await page.getByRole('button', { name: 'Resume' }).click()
+    // Prune now and add 100, from the Blobs tab
+    await page.getByRole('tab', { name: /Blobs/ }).click()
+    const b0 = await blobsNow(page)
+    await page.getByRole('button', { name: "Add 100 where it's wrong" }).click()
+    await page.waitForTimeout(600)
+    if ((await blobsNow(page)) < b0 + 50) fails.push(`fit: add 100 went ${b0} → ${await blobsNow(page)}`)
+    else ok('fit: "Add 100 where it\'s wrong" adds blobs')
+    await page.getByRole('button', { name: 'Prune now' }).click()
+    await page.waitForFunction(() => /prune/i.test(document.querySelector('[data-testid=log]').textContent), null, { timeout: 5000 }).catch(() => {})
+    if (!/prune/i.test(await page.textContent('[data-testid=log]'))) fails.push('fit: prune now leaves no log line')
+    else ok('fit: prune now is logged')
+    await axe(page, 'fit blobs tab')
+    // The user's own picture: a PNG made from a screenshot, then a file that isn't a picture
+    const png = await page.screenshot({ clip: { x: 0, y: 0, width: 300, height: 200 } })
+    await page.setInputFiles('input[type=file]', { name: 'mine.png', mimeType: 'image/png', buffer: png })
+    await page.waitForFunction(() => /mine/.test(document.body.textContent), null, { timeout: 10000 }).catch(() => {})
+    if (!(await page.getByRole('button', { name: 'mine' }).count())) fails.push('fit: own picture did not load')
+    else ok('fit: an own picture loads and the fit restarts')
+    await page.setInputFiles('input[type=file]', { name: 'junk.png', mimeType: 'image/png', buffer: Buffer.from('not a picture') })
+    const alert = await page.getByRole('alert').textContent({ timeout: 5000 }).catch(() => '')
+    if (!alert.includes("didn't open")) fails.push(`fit: bad file shows "${alert}"`)
+    else ok('fit: a bad file shows an error')
+    await page.getByRole('button', { name: 'Marbles' }).click()
+  }
+  await page.waitForTimeout(3000)
+  await page.screenshot({ path: join(shots, `fit-a-picture-${label}.png`), fullPage: true })
+  await ctx.close()
+}
+{
+  const { page, ctx } = await open('/experiments/fit-a-picture/', { colorScheme: 'dark', viewport: { width: 1280, height: 900 } })
+  await page.waitForTimeout(2500)
+  await axe(page, 'fit dark')
+  await page.screenshot({ path: join(shots, 'fit-a-picture-dark.png') })
   await ctx.close()
 }
 

@@ -6,7 +6,8 @@
   "redirects": [
     { "source": "/", "destination": "/experiments/", "permanent": false },
     { "source": "/experiments", "destination": "/experiments/", "permanent": true },
-    { "source": "/experiments/splat-to-sprite", "destination": "/experiments/splat-to-sprite/", "permanent": true }
+    { "source": "/experiments/splat-to-sprite", "destination": "/experiments/splat-to-sprite/", "permanent": true },
+    { "source": "/experiments/fit-a-picture", "destination": "/experiments/fit-a-picture/", "permanent": true }
   ],
   "headers": [
     {

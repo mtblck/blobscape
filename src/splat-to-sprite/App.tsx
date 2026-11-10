@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Engine, FRAME_SHARE, meshFromBuilder, meshFromBytes, type View } from './engine.ts'
 import { PRESETS } from './presets.ts'
 import { PALETTES } from './palettes.ts'
 import { baseline, packSheet, processFrames, shotsFor, tinkerkitSheet, type Layout, type PixelSettings, type Stages } from './sheet.ts'
 import { SiteHeader } from '../shared/SiteHeader.tsx'
+import { Chip, Field, Panel, Slider, Tabs, Toggle } from '../shared/ui.tsx'
 import { countColours, countSolid, rgbToHex, type Frame } from './pixel.ts'
 
 const CAMERAS: { id: string; name: string; view: Partial<View>; note: string }[] = [
@@ -602,65 +603,6 @@ function SheetView({ sheet, name, onJson, stale, baking }: { sheet: Sheet; name:
   )
 }
 
-/**
- * Accessible tabs (WAI-ARIA tabs pattern): arrow keys, Home and End move
- * between tabs; every panel stays mounted so its state and labels survive.
- */
-function Tabs({ label, tabs }: { label: string; tabs: { id: string; label: string; summary: string; content: ReactNode }[] }) {
-  const [active, setActive] = useState(tabs[0].id)
-  const base = useId()
-  const refs = useRef<(HTMLButtonElement | null)[]>([])
-  const onKeyDown = (ev: React.KeyboardEvent, i: number) => {
-    const n = tabs.length
-    const to = ev.key === 'ArrowRight' ? (i + 1) % n : ev.key === 'ArrowLeft' ? (i - 1 + n) % n : ev.key === 'Home' ? 0 : ev.key === 'End' ? n - 1 : -1
-    if (to < 0) return
-    ev.preventDefault()
-    setActive(tabs[to].id)
-    refs.current[to]?.focus()
-  }
-  return (
-    <div>
-      <div role="tablist" aria-label={label} className="grid grid-flow-col auto-cols-fr border-b border-rule">
-        {tabs.map((t, i) => {
-          const on = t.id === active
-          return (
-            <button
-              key={t.id}
-              ref={(el) => { refs.current[i] = el }}
-              type="button"
-              role="tab"
-              id={`${base}-tab-${t.id}`}
-              aria-controls={`${base}-panel-${t.id}`}
-              aria-selected={on}
-              tabIndex={on ? 0 : -1}
-              onClick={() => setActive(t.id)}
-              onKeyDown={(ev) => onKeyDown(ev, i)}
-              className={`group/tab -mb-px min-w-0 cursor-pointer rounded-t-md border-b-2 px-2 pt-2 pb-2.5 text-left transition-colors hover:bg-paper-sunk sm:px-3 ${on ? 'border-accent' : 'border-transparent hover:border-ink-faint'}`}
-            >
-              <span className={`block font-serif text-lg transition-colors ${on ? 'text-ink' : 'text-ink-muted group-hover/tab:text-ink'}`}>{t.label}</span>
-              <span className="block truncate text-xs text-ink-faint transition-colors group-hover/tab:text-ink-muted">{t.summary}</span>
-            </button>
-          )
-        })}
-      </div>
-      {tabs.map((t) => (
-        <div key={t.id} role="tabpanel" id={`${base}-panel-${t.id}`} aria-labelledby={`${base}-tab-${t.id}`} hidden={t.id !== active} className="pt-4">
-          {t.content}
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function Panel({ note, children }: { note: string; children: ReactNode }) {
-  return (
-    <div className="space-y-3">
-      <p className="text-xs leading-relaxed text-ink-faint">{note}</p>
-      {children}
-    </div>
-  )
-}
-
 function FrameImage({ frame, className, smooth, testId, label }: { frame: Frame; className?: string; smooth?: boolean; testId?: string; label?: string }) {
   const ref = useRef<HTMLCanvasElement>(null)
   useEffect(() => {
@@ -673,58 +615,6 @@ function FrameImage({ frame, className, smooth, testId, label }: { frame: Frame;
   return <canvas ref={ref} className={`${smooth ? '' : 'pixelated'} ${className ?? ''}`} data-testid={testId} role={label ? 'img' : undefined} aria-label={label} aria-hidden={label ? undefined : true} />
 }
 
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  const id = useId()
-  return (
-    <div role="group" aria-labelledby={id} className="grid gap-1.5 text-sm sm:grid-cols-[8.5rem_1fr] sm:items-center">
-      <span id={id} className="text-ink-muted">{label}</span>
-      <div className="min-w-0">{children}</div>
-    </div>
-  )
-}
-
-function Slider({ label, value, min, max, step, onChange, format, hint }: { label: string; value: number; min: number; max: number; step: number; onChange: (v: number) => void; format: (v: number) => string; hint?: string }) {
-  const id = useId()
-  return (
-    <div className="text-sm">
-      <label className="grid gap-1 sm:grid-cols-[8.5rem_1fr_4.5rem] sm:items-center sm:gap-3">
-        <span className="text-ink-muted">{label}</span>
-        <input
-          type="range" min={min} max={max} step={step} value={value}
-          onChange={(e) => onChange(Number(e.target.value))}
-          aria-valuetext={format(value)}
-          aria-describedby={hint ? id : undefined}
-          className="w-full accent-[var(--c-accent)]"
-        />
-        <span aria-hidden className="tabular-nums text-ink-faint sm:text-right">{format(value)}</span>
-      </label>
-      {hint && <p id={id} className="mt-1 text-xs leading-relaxed text-ink-faint sm:pl-[9.25rem]">{hint}</p>}
-    </div>
-  )
-}
-
-function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <label className="flex items-center gap-2 text-sm text-ink-muted">
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="accent-[var(--c-accent)]" />
-      {label}
-    </label>
-  )
-}
-
-function Chip({ active, onClick, children, small }: { active?: boolean; onClick: () => void; children: ReactNode; small?: boolean }) {
-  return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={onClick}
-      className={`rounded-full border transition-colors ${small ? 'px-2.5 py-0.5 text-xs' : 'px-3 py-1 text-sm'} ${active ? 'border-accent bg-accent/15 text-accent-ink hover:bg-accent/25' : 'border-rule text-ink-muted hover:border-ink-faint hover:bg-paper-sunk hover:text-ink'}`}
-    >
-      {children}
-    </button>
-  )
-}
 
 function slug(s: string) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'sprite'

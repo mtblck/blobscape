@@ -9,6 +9,12 @@ const experiments = [
     blurb:
       'Load a 3D Gaussian splat, frame it like a game camera, and bake it into palette-locked pixel-art sprite sheets for Tinkerkit.',
   },
+  {
+    slug: 'fit-a-picture',
+    title: 'Fit a Picture',
+    blurb:
+      'Watch a few hundred 2D Gaussians start as noise and learn to paint a picture, using the training loop behind every splat capture.',
+  },
 ]
 
 function Hub() {
