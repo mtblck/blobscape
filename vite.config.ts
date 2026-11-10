@@ -26,6 +26,7 @@ export default defineConfig({
       input: {
         hub: resolve(__dirname, 'index.html'),
         'splat-to-sprite': resolve(__dirname, 'splat-to-sprite/index.html'),
+        'fit-a-picture': resolve(__dirname, 'fit-a-picture/index.html'),
       },
     },
   },

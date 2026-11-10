@@ -6,11 +6,12 @@ Small interactive things, built to learn how something works by poking at it. Se
 | Experiment | What it is |
 | --- | --- |
 | [Splat to Sprite](https://mattblack.space/experiments/splat-to-sprite/) | Turn a 3D Gaussian splat into pixel-art sprites and Tinkerkit sprite sheets |
+| [Fit a Picture](https://mattblack.space/experiments/fit-a-picture/) | Watch 2D Gaussians start as noise and learn a picture, the way a splat is trained |
 
 ```sh
 npm install
 npm run dev            # http://localhost:5173/experiments/
-npm test               # pixel pipeline unit tests
+npm test               # unit tests (pixel pipeline, Gaussian fitter)
 npm run build          # hosting check, typecheck, build to dist/experiments
 npm run verify         # Chromium against dist, under the production CSP, with axe
 ```
@@ -53,3 +54,31 @@ document (format 71), with the anchor on the object's lowest pixel.
 - Measured in headless Chromium with SwiftShader (software GL): a shot of the 22k-splat sample
   takes about 5 s there, so a 4-direction bake takes about 20 s. Expect much less on a real GPU,
   but that hasn't been measured yet.
+
+## Fit a Picture
+
+Training a splat is a loop: render the blobs, compare with a photo, work out which way to nudge every
+number on every blob to shrink the difference (backpropagation), take a small step (Adam), and every
+so often prune blobs that have faded out and add new ones where the picture is still wrong. This
+experiment runs that loop against one flat picture so you can watch it: a few hundred 2D Gaussians
+start as random noise and settle into the image, with the loss graphed live.
+
+### Design notes
+
+- **Additive, not sorted.** In 3D, blobs are sorted by depth and alpha-blended front to back. A flat
+  picture has no depth, so each pixel is just the sum of opacity × colour × falloff over the blobs,
+  as in GaussianImage (Zhang et al., 2024). The rest is the 3DGS loop: Adam with per-group step
+  sizes, a warm-up, then prune and grow every 100 steps.
+- **CPU in a worker, not WebGPU.** Each blob is drawn only inside its own 3.5σ box, so a step costs
+  about the total area of the blobs, not pixels × blobs. At 192 px with a few hundred to 1,500 blobs
+  that is 5–20 ms a step in plain TypeScript, fast enough to watch and too fast to follow at full
+  speed. It works in every browser, and the same code runs in Node for the tests. WebGPU would buy
+  bigger pictures and more blobs; worth it if this grows past ~5,000 blobs.
+- **Hand-written gradients.** `fit.ts` derives every partial (centre, log scales, angle, colour,
+  opacity) by hand; `fit.test.ts` checks them against finite differences.
+- **Growth is error-driven.** 3DGS densifies blobs with large positional gradients by cloning or
+  splitting them. Here new blobs go where the squared error is largest, which shows the same idea
+  more directly. New blobs get one round (100 steps) before they can be pruned.
+- **Your picture stays put.** It is decoded with `createImageBitmap`, shrunk to the training size on
+  a canvas, and handed to the worker. Nothing is uploaded.
+
