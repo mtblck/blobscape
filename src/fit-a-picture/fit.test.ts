@@ -64,3 +64,13 @@ test('fitSize keeps the long side and the aspect', () => {
   assert.deepEqual(fitSize(4 / 3, 192), { width: 192, height: 144 })
   assert.deepEqual(fitSize(0.5, 128), { width: 64, height: 128 })
 })
+
+test('loss history stays bounded and keeps the mean', async () => {
+  const { HISTORY_CAP, newHistory, record } = await import('./history.ts')
+  const h = newHistory()
+  for (let i = 0; i < HISTORY_CAP * 3; i++) record(h, i % 2 ? 1 : 3)
+  assert.ok(h.length <= HISTORY_CAP)
+  assert.equal(h.steps, HISTORY_CAP * 3)
+  assert.equal(h.length * h.stride + h.n, h.steps)
+  for (let i = 0; i < h.length; i++) assert.equal(h.data[i], 2)
+})

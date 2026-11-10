@@ -1,4 +1,6 @@
-import { useId, useRef, useState, type ReactNode } from 'react'
+import { useId, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react'
+
+/** Shared controls for every experiment, so hover, cursor and focus states match across pages. */
 
 /**
  * Accessible tabs (WAI-ARIA tabs pattern): arrow keys, Home and End move
@@ -91,7 +93,7 @@ export function Slider({ label, value, min, max, step, onChange, format, hint }:
 
 export function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
-    <label className="flex items-center gap-2 text-sm text-ink-muted">
+    <label className="flex cursor-pointer items-center gap-2 text-sm text-ink-muted hover:text-ink">
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="accent-[var(--c-accent)]" />
       {label}
     </label>
@@ -109,4 +111,13 @@ export function Chip({ active, onClick, children, small }: { active?: boolean; o
       {children}
     </button>
   )
+}
+
+/** A plain button: `primary` is the filled accent one, the default is outlined. */
+export function Button({ primary, small, className, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { primary?: boolean; small?: boolean }) {
+  const size = small ? 'px-3 py-1.5 text-sm' : primary ? 'px-4 py-2 font-medium' : 'px-3 py-2 text-sm'
+  const look = primary
+    ? 'bg-accent text-paper hover:bg-accent-ink'
+    : 'border border-rule hover:border-ink-faint hover:bg-paper-sunk'
+  return <button type="button" className={`rounded transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${size} ${look} ${className ?? ''}`} {...rest} />
 }

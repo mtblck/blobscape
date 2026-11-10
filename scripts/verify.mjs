@@ -241,6 +241,19 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     const after = await blobsNow(page)
     if (after <= before) fails.push(`fit: clicking did not add blobs (${before} → ${after})`)
     else ok(`fit: a click adds blobs (${before} → ${after})`)
+    // Keyboard: focus the fit, aim with the arrows, Enter adds
+    await page.getByTestId('fit').focus()
+    await page.keyboard.press('ArrowLeft')
+    await page.keyboard.press('Enter')
+    await page.waitForFunction((b) => Number(document.querySelector('[data-testid=blob-count]').textContent.replace(/\D/g, '')) > b, after, { timeout: 5000 }).catch(() => {})
+    if ((await blobsNow(page)) <= after) fails.push('fit: Enter on the focused fit does not add blobs')
+    else ok('fit: keyboard adds blobs (arrows aim, Enter adds)')
+    // The loss graph reads out values from the keyboard
+    await page.getByTestId('loss-graph').locator('svg').focus()
+    await page.keyboard.press('Home')
+    const said = await page.getByTestId('loss-graph').locator('[aria-live]').textContent()
+    if (!/^Step \d/.test(said)) fails.push(`fit: loss graph keyboard readout is "${said}"`)
+    else ok(`fit: loss graph reads out from the keyboard ("${said}")`)
     // Views, through the tabs
     await page.getByRole('tab', { name: /View/ }).click()
     for (const v of ['Blobs', 'Error']) {

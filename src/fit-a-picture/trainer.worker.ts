@@ -63,6 +63,7 @@ self.onmessage = (e: MessageEvent<ToWorker>) => {
     case 'add': {
       if (!fitter || !settings) return
       const f = fitter
+      f.loss() // colour the new blobs from the picture as it is now
       const s = Math.max(1.5, Math.sqrt((f.width * f.height) / Math.max(50, f.count)) * 0.5)
       // A cluster, so one click visibly lands
       let n = 0
@@ -76,7 +77,7 @@ self.onmessage = (e: MessageEvent<ToWorker>) => {
     }
     case 'grow': {
       if (!fitter) return
-      if (fitter.iteration === 0) fitter.loss() // densify reads the last render's error
+      fitter.loss() // densify reads the error of the picture as it is now
       const n = fitter.densify(m.n, random)
       if (n) events.push({ kind: 'grow', n, at: fitter.iteration })
       if (!running) post()
@@ -121,8 +122,8 @@ function train() {
 
 function prune(manual: boolean) {
   const f = fitter!
-  // New blobs get one round to settle before they can be judged weak
-  const gone = f.prune(settings!.pruneBelow, EVERY)
+  // New blobs get one round to settle before training judges them weak; "Prune now" judges everyone
+  const gone = f.prune(settings!.pruneBelow, manual ? 0 : EVERY)
   if (gone.length || manual) events.push({ kind: 'prune', n: gone.length, at: f.iteration })
   for (const b of gone) pruned.push(b.x / f.width, b.y / f.height, b.sx / f.width, b.sy / f.height, b.angle)
 }
@@ -155,6 +156,8 @@ function post(reset = false) {
   const f = fitter
   if (!f || !settings) return
   const scale = Math.max(1, DISPLAY_LONG / Math.max(f.width, f.height))
+  // While paused, add/grow/prune changed the blobs since the last step: redraw so the error view is current
+  if (!running && settings.view === 'error') f.loss()
   let image: Uint8ClampedArray
   let w: number, h: number
   if (settings.view === 'error') {
