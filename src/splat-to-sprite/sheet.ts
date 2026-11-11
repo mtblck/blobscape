@@ -1,7 +1,7 @@
 import {
   alphaCut, autoPalette, darkest, downsample, outline, quantize, removeStrays,
   type Frame, type Rgb,
-} from './pixel.ts'
+} from '../splat-core/pixel.ts'
 
 export interface PixelSettings {
   size: number

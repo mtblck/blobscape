@@ -15,7 +15,8 @@ const {
   Discard, EPSILON, Fn, If, atan, cameraProjectionMatrix, cameraViewport, cameraViewMatrix, cos, dot, exp, float, instanceIndex,
   length, max, min, normalize, positionGeometry, select, sin, sqrt, storage, uint, uniform, unpackUnorm4x8, varyingProperty, vec2, vec3, vec4,
 } = TSL
-import { skinBlob, type Skeleton, type Skin, type SkinMode } from './rig.ts'
+import { packWeights, skinBlob, type Skeleton, type Skin, type SkinMode } from './rig.ts'
+import { srgbToLinear } from '../splat-core/colour.ts'
 
 /**
  * Blobscape's splat engine: one mesh that draws every blob of every object in a
@@ -202,15 +203,21 @@ export class SplatWorld extends Mesh {
     this.lastSortKey = key
   }
 
-  /** The CPU twin of the deform pass, for the WebGL backend and for checking the GPU. */
+  /**
+   * The CPU twin of the deform pass, for the WebGL backend and for checking the
+   * GPU. It reads the same byte weights the GPU does, so the two agree.
+   */
   deformCPU(out = this.buf) {
     let i = 0
+    const w = new Float32Array(4)
     for (let a = 0; a < this.actors.length; a++) {
       const { blobs, skin, skeleton } = this.actors[a]
       for (let k = 0; k < blobs.count; k++, i++) {
+        const word = this.buf.skinWords[i * 2 + 1]
+        for (let j = 0; j < 4; j++) w[j] = ((word >>> (j * 8)) & 255) / 255
         skinBlob(
           blobs.centre.subarray(k * 3, k * 3 + 3), blobs.scale.subarray(k * 3, k * 3 + 3), blobs.quat.subarray(k * 4, k * 4 + 4),
-          skin.joints.subarray(k * 4, k * 4 + 4), skin.weights.subarray(k * 4, k * 4 + 4), skeleton, this.mode,
+          skin.joints.subarray(k * 4, k * 4 + 4), w, skeleton, this.mode,
           out.cpuCentre, i * 4, out.cpuCov, i * 6,
         )
         out.cpuCentre[i * 4 + 3] = 1
@@ -274,7 +281,6 @@ function bump(a: StorageBufferAttribute) {
   if (pbo) pbo.needsUpdate = true
 }
 
-function srgbToLinear(c: number) { return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4 }
 
 function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones: number) {
   const n = Math.max(1, count)
@@ -296,10 +302,7 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
       colour[i] = (byte(srgbToLinear(blobs.colour[k * 3])) | (byte(srgbToLinear(blobs.colour[k * 3 + 1])) << 8) |
         (byte(srgbToLinear(blobs.colour[k * 3 + 2])) << 16) | (byte(blobs.opacity[k]) << 24)) >>> 0
       skinWords[i * 2] = (skin.joints[k * 4] | (skin.joints[k * 4 + 1] << 8) | (skin.joints[k * 4 + 2] << 16) | (skin.joints[k * 4 + 3] << 24)) >>> 0
-      // weights to bytes, keeping the sum at exactly 255 so a blob never shrinks
-      const w = [0, 1, 2, 3].map((j) => Math.round(skin.weights[k * 4 + j] * 255))
-      w[0] += 255 - w.reduce((s, x) => s + x, 0)
-      skinWords[i * 2 + 1] = (w[0] | (w[1] << 8) | (w[2] << 16) | (w[3] << 24)) >>> 0
+      skinWords[i * 2 + 1] = packWeights(skin.weights, k * 4)
     }
   })
   const attr = (a: Float32Array | Uint32Array, size: number) => new StorageBufferAttribute(a, size)
@@ -313,6 +316,7 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
   const covBAttr = new StorageBufferAttribute(new Float32Array(n * 4), 4)
   return {
     count: n,
+    skinWords,
     boneData, boneAttr, worldCentreAttr, covAAttr, covBAttr, colourAttr,
     cpuCentre: new Float32Array(n * 4), cpuCov: new Float32Array(n * 6),
     srcCentre: storage(centreAttr, 'vec4', n).toReadOnly(),

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { Skeleton, axisAngle, emptySkin, setWeights, skinBlob } from './rig.ts'
+import { Skeleton, axisAngle, emptySkin, packWeights, setWeights, skinBlob } from './rig.ts'
 
 const near = (a: number, b: number, eps = 1e-5) => Math.abs(a - b) < eps
 
@@ -69,4 +69,12 @@ test('root scale grows the whole creature from its root', () => {
   skinBlob([2, 0, 0], [0.1, 0.1, 0.1], [0, 0, 0, 1], [1, 0, 0, 0], [1, 0, 0, 0], sk, 'quat', c, 0, v, 0)
   assert.ok(near(c[0], 4), `${c}`)
   assert.ok(near(v[0], 0.04))
+})
+
+test('packed byte weights always sum to 255, even from a file that does not normalise them', () => {
+  for (const w of [[0, 0.5, 0.5, 0], [0.2, 0.2, 0.2, 0.2], [1, 0, 0, 0], [0, 0, 0, 0], [3, 1, 0, 0]]) {
+    const word = packWeights(w, 0)
+    const bytes = [0, 8, 16, 24].map((s) => (word >>> s) & 255)
+    assert.equal(bytes.reduce((a, b) => a + b, 0), 255, `${w} → ${bytes}`)
+  }
 })

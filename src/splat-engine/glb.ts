@@ -235,6 +235,10 @@ export function readRiggedGlb(bytes: Uint8Array): Rigged {
   const prim = json.meshes[json.nodes[meshNode].mesh].primitives[0]
   if (!prim.extensions?.[SPLATS]) throw new GlbError('The mesh is not a Gaussian splat')
   const at = prim.attributes
+  for (const name of ['POSITION', `${SPLATS}:SCALE`, `${SPLATS}:ROTATION`, `${SPLATS}:OPACITY`, `${SPLATS}:SH_DEGREE_0_COEF_0`]) {
+    if (at[name] === undefined) throw new GlbError(`The splat is missing ${name}`)
+    if (json.accessors[at[name]].componentType !== FLOAT) throw new GlbError(`Quantised ${name} isn't supported yet`)
+  }
   const pos = read(at.POSITION, Float32Array) as Float32Array
   const n = pos.length / 3
   const scale = read(at[`${SPLATS}:SCALE`], Float32Array) as Float32Array
@@ -277,7 +281,12 @@ export function readRiggedGlb(bytes: Uint8Array): Rigged {
     skeleton = new Skeleton(bones)
     const jt = json.accessors[at.JOINTS_0].componentType === UBYTE ? read(at.JOINTS_0, Uint8Array) : read(at.JOINTS_0, Uint16Array)
     skin.joints.set(Array.from(jt, (j) => Math.min(255, j)))
-    skin.weights.set(read(at.WEIGHTS_0, Float32Array))
+    // weights may be floats, or bytes/shorts normalised to 0–1
+    const wa = json.accessors[at.WEIGHTS_0]
+    if (wa.componentType === FLOAT) skin.weights.set(read(at.WEIGHTS_0, Float32Array))
+    else if (wa.componentType === UBYTE) skin.weights.set(Array.from(read(at.WEIGHTS_0, Uint8Array), (x) => x / 255))
+    else if (wa.componentType === 5123) skin.weights.set(Array.from(read(at.WEIGHTS_0, Uint16Array), (x) => x / 65535))
+    else throw new GlbError('Unknown weight format')
   } else {
     skeleton = new Skeleton([{ name: 'root', parent: -1, head: [0, 0, 0] }])
     for (let i = 0; i < n; i++) skin.weights[i * 4] = 1

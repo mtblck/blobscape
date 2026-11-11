@@ -6,18 +6,22 @@ import { placeCamera, type Orbit } from '../splat-core/view.ts'
 import { SplatWorld } from '../splat-engine/engine.ts'
 import { makeCreature, poseWalk, type Creature } from '../splat-engine/creature.ts'
 import type { SkinMode } from '../splat-engine/rig.ts'
+import { LINEAR_TO_SRGB_4K, srgbToLinear } from '../splat-core/colour.ts'
 
 /**
- * The engine test bench. One canvas, one creature, three ways to draw it:
+ * The engine test bench. One canvas, one creature, two ways to draw it:
  *
  * - 'engine': Blobscape's engine (WebGPU, or WebGL with `forceWebGL`), which can walk;
- * - 'three': three.js's built-in GaussianSplat, standing still (it has no bones);
- * - 'spark': Spark with its own skinning, walking — see spark.ts.
+ * - 'three': three.js's built-in GaussianSplat, standing still (it has no bones).
+ *
+ * Spark isn't here yet: it draws through the older WebGLRenderer, so timing it
+ * fairly needs its own page.
  *
  * `bench()` draws a fixed number of frames and reports the time per frame,
  * so the same numbers come out of a phone and of verify.
  */
 export type Which = 'engine' | 'three'
+export const WHICH: Which[] = ['engine', 'three']
 
 export interface LabOptions {
   which: Which
@@ -46,6 +50,8 @@ export interface Lab {
   dispose(): void
   /** Renders one frame at time t (seconds) and waits for the GPU. */
   frame(t: number): Promise<void>
+  /** Runs `job` with the live view paused, so it can use the renderer on its own. */
+  exclusive<T>(job: () => Promise<T>): Promise<T>
 }
 
 export interface BenchResult {
@@ -132,9 +138,20 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
   const present = async () => {
     if (!target) return
     const px = await renderer.readRenderTargetPixelsAsync(target, 0, 0, target.width, target.height) as Uint8Array
-    const img = new ImageData(target.width, target.height)
-    // the target holds linear colour; the page wants sRGB, as a canvas would have shown it
-    for (let i = 0; i < px.length; i++) img.data[i] = (i & 3) === 3 ? px[i] : TO_SRGB[px[i]]
+    const { width: w, height: h } = target
+    const img = new ImageData(w, h)
+    // The target holds linear, premultiplied colour; ImageData wants sRGB, straight.
+    // WebGPU reads rows top-down, WebGL bottom-up.
+    const flip = backend === 'webgl'
+    for (let y = 0; y < h; y++) {
+      const src = (flip ? h - 1 - y : y) * w * 4, dst = y * w * 4
+      for (let x = 0; x < w * 4; x += 4) {
+        const a = px[src + x + 3]
+        img.data[dst + x + 3] = a
+        if (!a) continue
+        for (let c = 0; c < 3; c++) img.data[dst + x + c] = Math.round(255 * LINEAR_TO_SRGB_4K[Math.round(Math.min(1, px[src + x + c] / a) * 4095)])
+      }
+    }
     display.getContext('2d')!.putImageData(img, 0, 0)
   }
 
@@ -182,18 +199,25 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
     setWalk(on) { walk = on; pose(0) },
     setMode(m) { mode = m; if (world) { world.mode = m; world.markPosed() } },
     frame: show,
-    async bench(frames) {
+    async exclusive(job) {
       busy = true
+      try { return await job() } finally { busy = false }
+    },
+    async bench(frames) {
       const times: number[] = [], cpu: number[] = []
-      // warm up: first frames compile shaders
-      for (let i = 0; i < 3; i++) await frame(i / 30)
-      for (let i = 0; i < frames; i++) {
-        const s = performance.now()
-        await frame((i + 3) / 30)
-        times.push(performance.now() - s)
-        cpu.push(world?.cpuMs ?? 0)
+      busy = true
+      try {
+        // warm up: first frames compile shaders
+        for (let i = 0; i < 3; i++) await frame(i / 30)
+        for (let i = 0; i < frames; i++) {
+          const s = performance.now()
+          await frame((i + 3) / 30)
+          times.push(performance.now() - s)
+          cpu.push(world?.cpuMs ?? 0)
+        }
+      } finally {
+        busy = false
       }
-      busy = false
       const q = (a: number[], p: number) => [...a].sort((x, y) => x - y)[Math.min(a.length - 1, Math.floor(a.length * p))]
       const size = target ?? canvas
       return { which: o.which, backend, blobs, frames, median: q(times, 0.5), p90: q(times, 0.9), cpu: q(cpu, 0.5), width: size.width, height: size.height }
@@ -215,9 +239,3 @@ async function settle(renderer: THREE.WebGPURenderer) {
   else if (backend.gl) { const px = new Uint8Array(4); backend.gl.readPixels(0, 0, 1, 1, backend.gl.RGBA, backend.gl.UNSIGNED_BYTE, px) }
 }
 
-const TO_SRGB = Uint8Array.from({ length: 256 }, (_, i) => {
-  const c = i / 255
-  return Math.round(255 * (c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055))
-})
-
-function srgbToLinear(c: number) { return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4 }

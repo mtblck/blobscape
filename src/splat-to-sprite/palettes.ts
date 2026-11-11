@@ -1,4 +1,4 @@
-import { hexToRgb, type Rgb } from './pixel.ts'
+import { hexToRgb, type Rgb } from '../splat-core/pixel.ts'
 
 export interface PaletteDef {
   id: string

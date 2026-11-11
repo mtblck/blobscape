@@ -1,8 +1,8 @@
 import * as THREE from 'three/webgpu'
-import { processFrames, type PixelSettings } from '../splat-to-sprite/sheet.ts'
-import type { Frame } from '../splat-to-sprite/pixel.ts'
+import { alphaCut, autoPalette, darkest, downsample, outline, removeStrays, quantize, type Frame, type Rgb } from '../splat-core/pixel.ts'
+import { LINEAR_TO_SRGB_4K } from '../splat-core/colour.ts'
 import { SplatWorld } from './engine.ts'
-import { makeCreature, poseWalk } from './creature.ts'
+import { makeCreature, poseWalk, type Creature } from './creature.ts'
 
 /**
  * Splats to pixels, with motion: the fox's trot rendered from four sides,
@@ -24,17 +24,26 @@ export interface WalkSheet {
 
 const DIRS = [['down', 0], ['left', 90], ['right', -90], ['up', 180]] as const
 const STRIDE = 1 / 1.4
+const SUPERSAMPLE = 4
 
-export async function makeWalkSheet(renderer: THREE.WebGPURenderer, opts: { size?: number; frames?: number; blobs?: number; settings?: Partial<PixelSettings> } = {}): Promise<WalkSheet> {
+/** One fox and its world per renderer, kept between sheets so their GPU buffers are made once. */
+const stages = new WeakMap<object, { fox: Creature; world: SplatWorld; scene: THREE.Scene }>()
+
+export async function makeWalkSheet(renderer: THREE.WebGPURenderer, opts: { size?: number; frames?: number; colours?: number } = {}): Promise<WalkSheet> {
   const size = opts.size ?? 48
   const n = opts.frames ?? 8
-  const settings: PixelSettings = { size, supersample: 4, alphaCut: 0.5, palette: 'auto', autoColours: 12, dither: 0, strays: true, outline: 'darkest', ...opts.settings }
-  const big = size * settings.supersample
+  const big = size * SUPERSAMPLE
 
-  const fox = makeCreature(opts.blobs ?? 20000)
-  const world = new SplatWorld([fox])
-  const scene = new THREE.Scene()
-  scene.add(world)
+  let stage = stages.get(renderer)
+  if (!stage) {
+    const fox = makeCreature(20000)
+    const world = new SplatWorld([fox])
+    const scene = new THREE.Scene()
+    scene.add(world)
+    stage = { fox, world, scene }
+    stages.set(renderer, stage)
+  }
+  const { fox, world, scene } = stage
   const camera = new THREE.PerspectiveCamera(10, 1, 1, 40)
   const target = new THREE.RenderTarget(big, big)
   const webgl = (renderer.backend as unknown as { isWebGLBackend?: boolean }).isWebGLBackend === true
@@ -59,19 +68,20 @@ export async function makeWalkSheet(renderer: THREE.WebGPURenderer, opts: { size
         renderer.clear()
         renderer.render(scene, camera)
         const px = (await renderer.readRenderTargetPixelsAsync(target, 0, 0, big, big)) as Uint8Array
-        raws.push(toDisplay(px, big, !webgl))
+        raws.push(toBottomUpSrgb(px, big, !webgl))
       }
     }
   } finally {
     renderer.setRenderTarget(prevTarget)
     renderer.setClearAlpha(prevClear)
     target.dispose()
-    world.dispose()
   }
 
-  // processFrames expects WebGL's bottom-up rows; toDisplay hands them over that way
-  const stages = processFrames(raws, settings, true)
-  const frames = stages.map((s) => s.final)
+  // Splat to Sprite's pixel pipeline: average down, cut the alpha, one palette for the whole sheet, tidy, outline
+  const cut = raws.map((r) => alphaCut(downsample(r, big, SUPERSAMPLE, { premultiplied: true, flipY: true }), 0.5))
+  const palette = autoPalette(cut, opts.colours ?? 12)
+  const ink: Rgb = darkest(palette)
+  const frames = cut.map((f) => outline(removeStrays(quantize(f, palette, 0)), ink))
   const cols = n, rows = DIRS.length
 
   return {
@@ -101,17 +111,12 @@ export async function makeWalkSheet(renderer: THREE.WebGPURenderer, opts: { size
   }
 }
 
-const TO_SRGB = Float32Array.from({ length: 4096 }, (_, i) => {
-  const c = i / 4095
-  return c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055
-})
-
 /**
  * The render target holds linear, premultiplied colour. The pixel pipeline
  * wants display (sRGB) colour, still premultiplied, with rows bottom-up as
  * WebGL reads them. WebGPU reads top-down, so those get flipped here.
  */
-function toDisplay(px: Uint8Array, size: number, topDown: boolean): Uint8Array {
+function toBottomUpSrgb(px: Uint8Array, size: number, topDown: boolean): Uint8Array {
   const out = new Uint8Array(size * size * 4)
   for (let y = 0; y < size; y++) {
     const src = (topDown ? size - 1 - y : y) * size * 4
@@ -123,7 +128,7 @@ function toDisplay(px: Uint8Array, size: number, topDown: boolean): Uint8Array {
       const k = a / 255
       for (let c = 0; c < 3; c++) {
         const lin = Math.min(1, px[src + x + c] / 255 / k)
-        out[dst + x + c] = Math.round(TO_SRGB[Math.round(lin * 4095)] * k * 255)
+        out[dst + x + c] = Math.round(LINEAR_TO_SRGB_4K[Math.round(lin * 4095)] * k * 255)
       }
     }
   }

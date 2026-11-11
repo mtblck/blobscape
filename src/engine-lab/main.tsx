@@ -3,8 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import '../shared/theme.css'
 import { SiteHeader } from '../shared/SiteHeader.tsx'
 import { Button, Chip, Field, Toggle } from '../shared/ui.tsx'
-import { startLab, type BenchResult, type Lab, type LabOptions, type Which } from './lab.ts'
-import type { SkinMode } from '../splat-engine/rig.ts'
+import { WHICH, startLab, type BenchResult, type Lab, type LabOptions, type Which } from './lab.ts'
 import { makeCreature, poseWalk } from '../splat-engine/creature.ts'
 import { recordClip, writeRiggedGlb } from '../splat-engine/glb.ts'
 
@@ -35,10 +34,10 @@ async function downloadGlb(count: number) {
  */
 const params = new URLSearchParams(location.search)
 const initial: LabOptions = {
-  which: (params.get('which') as Which) || 'engine',
-  count: Number(params.get('n')) || 20000,
+  which: WHICH.includes(params.get('which') as Which) ? (params.get('which') as Which) : 'engine',
+  count: Math.max(1000, Math.min(2e6, Number(params.get('n')) || 20000)),
   walk: params.get('walk') !== '0',
-  mode: (params.get('mode') as SkinMode) || 'quat',
+  mode: params.get('mode') === 'linear' ? 'linear' : 'quat',
   webgl: params.get('webgl') === '1',
   herd: Math.max(1, Math.min(12, Number(params.get('herd')) || 1)),
   offscreen: params.get('offscreen') === '1',
@@ -93,7 +92,7 @@ function App() {
     setMaking(true)
     try {
       const { makeWalkSheet } = await import('../splat-engine/walkSheet.ts')
-      const s = await makeWalkSheet(lab.renderer)
+      const s = await lab.exclusive(() => makeWalkSheet(lab.renderer))
       const png = await s.png()
       if (sheet) URL.revokeObjectURL(sheet.url)
       setSheet({ url: URL.createObjectURL(png), json: JSON.stringify(s.json('blob-fox.png'), null, 2) })
@@ -114,9 +113,14 @@ function App() {
   const time = async () => {
     if (!lab) return
     setTiming(true)
-    const r = await lab.bench(60)
-    setResults((rs) => [r, ...rs].slice(0, 12))
-    setTiming(false)
+    try {
+      const r = await lab.bench(60)
+      setResults((rs) => [r, ...rs].slice(0, 12))
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setTiming(false)
+    }
   }
 
   return (
@@ -128,7 +132,7 @@ function App() {
           <p className="mt-1 max-w-[65ch] text-ink-muted">A blob fox, drawn by Blobscape's own engine or by three.js's built-in splat renderer, and timed. Open it on a phone and press Time it.</p>
         </div>
         <div className="case relative aspect-[4/3] w-full overflow-hidden rounded-xl bg-[#14110e] sm:aspect-[16/9]">
-          <canvas ref={canvas} className="h-full w-full touch-none" aria-label="A blob fox trotting on the spot" />
+          <canvas key={`${opts.which}-${opts.webgl}-${opts.count}-${opts.herd}`} ref={canvas} className="h-full w-full touch-none" aria-label="A blob fox trotting on the spot" />
           <p className="absolute bottom-2.5 left-3 text-sm text-white/70" aria-live="polite">{error ? `Couldn't start: ${error}` : lab ? lab.info : 'Starting…'}</p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

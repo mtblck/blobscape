@@ -133,6 +133,21 @@ export function setWeights(skin: Skin, i: number, pairs: [bone: number, weight: 
   if (!top.length) skin.weights[i * 4] = 1
 }
 
+/**
+ * Four weights to four bytes summing to exactly 255, so a blob never shrinks
+ * or grows from rounding: normalised first (files may not be), and whatever
+ * rounding leaves over goes to the largest weight. All zero means the first bone.
+ */
+export function packWeights(w: ArrayLike<number>, o: number): number {
+  const v = [0, 1, 2, 3].map((j) => Math.max(0, Number.isFinite(w[o + j]) ? w[o + j] : 0))
+  const sum = v[0] + v[1] + v[2] + v[3]
+  if (!(sum > 0)) return 255
+  const b = v.map((x) => Math.round((x / sum) * 255))
+  const big = b.indexOf(Math.max(...b))
+  b[big] += 255 - (b[0] + b[1] + b[2] + b[3])
+  return (b[0] | (b[1] << 8) | (b[2] << 16) | (b[3] << 24)) >>> 0
+}
+
 export type SkinMode = 'linear' | 'quat'
 
 /**
