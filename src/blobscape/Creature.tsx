@@ -1,46 +1,46 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Orbit } from '../splat-core/view.ts'
-import { COATS, makeCreature, poseIdle, poseWalk, type Coat, type Creature as Fox } from '../splat-engine/creature.ts'
+import type { Creature as Body } from '../splat-engine/body.ts'
 import { GlbError, readRiggedGlb, recordClip, writeRiggedGlb, writeRiggedMeshGlb, type Clip } from '../splat-engine/glb.ts'
 import { blobsToMesh } from '../splat-engine/mesh.ts'
 import type { SkinMode } from '../splat-engine/rig.ts'
+import { ZOO, type Species } from '../splat-engine/zoo/index.ts'
 import { Button, Chip, Field, Slider } from '../shared/ui.tsx'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
 import { Mark } from '../shared/Logo.tsx'
 import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitDrag } from './Viewport.tsx'
 import { download, kb } from './files.ts'
 import { LESSONS, href } from './routes.ts'
-import type { CreatureStage } from './creature/stage.ts'
+import type { CreatureStage, Show } from './creature/stage.ts'
 
-const START: Orbit = { target: [0, 0.72, 0], distance: 4.2, azimuth: 40, elevation: 12 }
-const DETAIL = [5000, 20000, 100000, 200000]
-const COAT_NAMES: Record<keyof typeof COATS, string> = { red: 'Red', arctic: 'Arctic', silver: 'Silver' }
-const STRIDE = 1 / 1.4
-/** What a clip is called on its chip: ours get friendly names, a file's keep their own. */
-const clipLabel = (name: string) => ({ trot: 'Trot', idle: 'Stand' })[name] ?? name
 const STILL = 'still'
 const MAX_FILE = 200 * 1024 * 1024
 const RIG_LESSONS = LESSONS.filter((l) => ['one-bone', 'weights', 'twist', 'walk', 'model'].includes(l.id))
+const SHOW: { id: Show; label: string }[] = [{ id: 'blobs', label: 'Blobs' }, { id: 'bones', label: 'Bones' }, { id: 'both', label: 'Both' }]
+const DEFAULT = 'fox'
 
-interface Shown { name: string; fox: Fox; clips: Clip[]; fromFile: boolean }
+interface Shown { name: string; body: Body; clips: Clip[]; species?: Species }
 
-/** The fox and its two clips, recorded once per creature. */
-function build(count: number, coat: Coat): Shown {
-  const fox = makeCreature(count, 7, coat)
-  const trot = recordClip('trot', fox.skeleton, poseWalk, STRIDE, 24)
-  const idle = recordClip('idle', fox.skeleton, poseIdle, 4, 12)
-  fox.skeleton.reset()
-  fox.skeleton.update()
-  return { name: 'blob fox', fox, clips: [trot, idle], fromFile: false }
+/** A creature and its moves, each recorded into a clip once, when it's made. */
+function build(sp: Species, count: number, look: string): Shown {
+  const body = sp.make(count, look)
+  const clips = sp.moves.map((m) => recordClip(m.name, body.skeleton, m.pose, m.seconds, m.fps ?? 24))
+  body.skeleton.reset()
+  body.skeleton.update()
+  return { name: `blob ${sp.name}`, body, clips, species: sp }
 }
 
+const speciesOf = (id: string | null) => ZOO.find((s) => s.id === id) ?? ZOO.find((s) => s.id === DEFAULT)!
+const kilo = (n: number) => (n >= 1000 ? `${n / 1000}k` : String(n))
+
 declare global {
-  interface Window { __creature?: { stage: CreatureStage; blobs: () => number; glb: () => Uint8Array; mesh: (cells: number) => Uint8Array } }
+  interface Window { __creature?: { stage: CreatureStage; blobs: () => number; bones: () => number; glb: () => Uint8Array; mesh: (cells: number) => Uint8Array } }
 }
 
 /**
- * Creature: a procedural blob fox, rigged, that walks on Blobscape's own
- * splat engine and leaves as a 3D model, as rigged splats in a .glb and as a
+ * Creature: procedural blob creatures (a frog, a fox, an elf and a dragon),
+ * rigged, moving on Blobscape's own splat engine, with their bones on show if
+ * you like. Each leaves as a 3D model, as rigged splats in a .glb and as a
  * solid mesh with the same bones and clips.
  */
 export function Creature() {
@@ -50,30 +50,50 @@ export function Creature() {
   // The engine's code, the graphics device and the first frame's shaders take a moment: show that it's coming
   const [drawn, setDrawn] = useState(false)
   const [failed, setFailed] = useState<string>()
-  const [count, setCount] = useState(20000)
-  const [coat, setCoat] = useState<keyof typeof COATS>('red')
-  const [move, setMove] = useState<string>('trot')
+  const offscreen = useMemo(() => new URLSearchParams(location.search).get('offscreen') === '1', [])
+  // which creature is in the address (?creature=dragon), so a link can show one
+  const [species, setSpecies] = useState<Species>(() => speciesOf(new URLSearchParams(location.search).get('creature')))
+  const [count, setCount] = useState(species.start)
+  const [look, setLook] = useState(species.looks[0].id)
+  const [move, setMove] = useState<string>(species.moves[0].name)
+  const [show, setShow] = useState<Show>('blobs')
   const [speed, setSpeed] = useState(1)
   const [mode, setMode] = useState<SkinMode>('quat')
-  const [orbit, setOrbit] = useState<Orbit>(START)
+  const [orbit, setOrbit] = useState<Orbit>(species.view)
   const [loaded, setLoaded] = useState<Shown>()
   const [fileNote, setFileNote] = useState<string>()
   const [busy, setBusy] = useState<string>()
   const [cells, setCells] = useState(64)
-  const offscreen = useMemo(() => new URLSearchParams(location.search).get('offscreen') === '1', [])
 
-  // Building a big fox takes a moment, so it happens after a note has painted, not during a render
-  const [made, setMade] = useState<Shown>(() => build(count, COATS[coat]))
-  const madeFor = useRef({ count, coat })
+  const pick = (sp: Species) => {
+    setLoaded(undefined)
+    setFileNote(undefined)
+    if (sp === species) return
+    setSpecies(sp)
+    setCount(sp.start)
+    setLook(sp.looks[0].id)
+    setMove(sp.moves[0].name)
+    setOrbit(sp.view)
+    const url = new URL(location.href)
+    if (sp.id === DEFAULT) url.searchParams.delete('creature')
+    else url.searchParams.set('creature', sp.id)
+    history.replaceState(history.state, '', url)
+  }
+
+  // Building a big creature takes a moment, so it happens after a note has painted, not during a render
+  const [made, setMade] = useState<Shown>(() => build(species, count, look))
+  const madeFor = useRef({ species, count, look })
   useEffect(() => {
-    if (madeFor.current.count === count && madeFor.current.coat === coat) return
-    madeFor.current = { count, coat }
-    setBusy(`Making a fox of ${count.toLocaleString()} blobs…`)
-    const t = setTimeout(() => { setMade(build(count, COATS[coat])); setBusy(undefined) }, 30)
+    const was = madeFor.current
+    if (was.species === species && was.count === count && was.look === look) return
+    madeFor.current = { species, count, look }
+    setBusy(`Making a ${species.name} of ${count.toLocaleString()} blobs…`)
+    const t = setTimeout(() => { setMade(build(species, count, look)); setBusy(undefined) }, 30)
     return () => clearTimeout(t)
-  }, [count, coat])
+  }, [species, count, look])
   const shown = loaded ?? made
   const clip = move === STILL ? undefined : shown.clips.find((c) => c.name === move) ?? shown.clips[0]
+  const moveOf = (c: Clip) => shown.species?.moves.find((m) => m.name === c.name)
 
   useEffect(() => {
     let live: CreatureStage | undefined, gone = false
@@ -88,19 +108,21 @@ export function Creature() {
     return () => { gone = true; live?.dispose() }
   }, [offscreen])
 
-  useEffect(() => { stage?.setActor(shown.fox, clip) }, [stage, shown]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { stage?.setActor(shown.body, clip) }, [stage, shown]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { stage?.setClip(clip) }, [stage, clip])
   useEffect(() => { if (stage) stage.speed = speed }, [stage, speed])
   useEffect(() => { stage?.setMode(mode) }, [stage, mode])
+  useEffect(() => { stage?.setShow(show) }, [stage, show])
+  useEffect(() => { stage?.setFloor(Math.max(8, 2 * Math.round(species.view.distance))) }, [stage, species])
   useEffect(() => { if (stage) { stage.orbit = orbit; stage.invalidate() } }, [stage, orbit])
 
-  const splatGlb = () => writeRiggedGlb({ name: shown.name, ...shown.fox, clips: shown.clips })
-  const meshGlb = (c: number) => writeRiggedMeshGlb({ name: shown.name, mesh: blobsToMesh(shown.fox.blobs, shown.fox.skin, { cells: c, level: 1 }), skeleton: shown.fox.skeleton, clips: shown.clips })
+  const splatGlb = () => writeRiggedGlb({ name: shown.name, ...shown.body, clips: shown.clips })
+  const meshGlb = (c: number) => writeRiggedMeshGlb({ name: shown.name, mesh: blobsToMesh(shown.body.blobs, shown.body.skin, { cells: c, level: 1 }), skeleton: shown.body.skeleton, clips: shown.clips })
 
   // For verify: the page's stage and its files, without clicking through downloads
   useEffect(() => {
     if (!stage) return
-    window.__creature = { stage, blobs: () => stage.blobCount, glb: splatGlb, mesh: meshGlb }
+    window.__creature = { stage, blobs: () => stage.blobCount, bones: () => shown.body.skeleton.count, glb: splatGlb, mesh: meshGlb }
     return () => { delete window.__creature }
   })
 
@@ -123,7 +145,7 @@ export function Creature() {
     try {
       const r = readRiggedGlb(new Uint8Array(await file.arrayBuffer()))
       if (r.skeleton.count > 255) throw new GlbError('More than 255 bones')
-      setLoaded({ name: r.name || file.name.replace(/\.glb$/i, ''), fox: r, clips: r.clips, fromFile: true })
+      setLoaded({ name: r.name || file.name.replace(/\.glb$/i, ''), body: r, clips: r.clips })
       setMove(r.clips[0]?.name ?? STILL)
       setFileNote(`Opened ${file.name}: ${r.blobs.count.toLocaleString()} blobs, ${r.skeleton.count} bones, ${r.clips.length} clip${r.clips.length === 1 ? '' : 's'}.`)
     } catch (e) {
@@ -136,8 +158,10 @@ export function Creature() {
   const pointers = useRef(new Map<number, { x: number; y: number }>())
   useWheelZoom(canvas, setOrbit)
 
-  const moveLabel = !clip ? 'standing still' : clip.name === 'idle' ? 'standing and looking round' : clip.name === 'trot' ? 'trotting on the spot' : `playing ${clip.name}`
-  const clipNames = shown.clips.map((c) => clipLabel(c.name).toLowerCase())
+  const moveLabel = !clip ? 'standing still' : moveOf(clip)?.doing ?? `playing ${clip.name}`
+  const clipLabel = (c: Clip) => moveOf(c)?.label ?? c.name
+  const clipNames = shown.clips.map((c) => clipLabel(c).toLowerCase())
+  const showing = show === 'bones' ? ', showing only its bones' : show === 'both' ? ', with its bones drawn over the blobs' : ''
 
   return (
     <div className="pb-4">
@@ -146,8 +170,8 @@ export function Creature() {
         <header className="lg:col-span-5">
           <h1 ref={h1} tabIndex={-1} className="font-display text-4xl leading-tight outline-none lg:text-5xl">Creature</h1>
           <p className="mt-2 max-w-[44ch] text-lg leading-snug text-ink-muted">
-            A fox made of blobs, with fourteen bones, a trot and a look round. Make it big or small, then take it away as a 3D model that
-            Blender and game engines open.
+            Creatures made of blobs, from a frog to a fire-breathing dragon. Watch one move, take its blobs away to see the bones
+            underneath, then take it home as a 3D model that Blender and game engines open.
           </p>
         </header>
         <p className="text-sm text-ink-faint lg:col-span-7 lg:self-end lg:pb-1 lg:text-right">
@@ -161,7 +185,7 @@ export function Creature() {
                 ref={canvas}
                 role="application"
                 aria-roledescription="3D view"
-                aria-label={`${shown.name}, ${shown.fox.blobs.count.toLocaleString()} blobs, ${moveLabel}. Drag or use the arrow keys to orbit; scroll, pinch or press plus and minus to zoom.`}
+                aria-label={`${shown.name}, ${shown.body.blobs.count.toLocaleString()} blobs, ${moveLabel}${showing}. Drag or use the arrow keys to orbit; scroll, pinch or press plus and minus to zoom.`}
                 tabIndex={0}
                 data-testid="creature-view"
                 className="absolute inset-0 h-full w-full cursor-grab touch-none outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset active:cursor-grabbing"
@@ -183,16 +207,19 @@ export function Creature() {
                   setOrbit((o) => orbitKey(ev, o) ?? o)
                 }}
               />
-              {!failed && (!drawn || busy?.startsWith('Making')) && <Loading label={drawn ? busy! : stage ? 'Waking the fox…' : 'Starting the splat engine…'} />}
-              <p role="status" className="sr-only">{!failed && !drawn ? (stage ? 'Waking the fox…' : 'Starting the splat engine…') : ''}</p>
+              {!failed && (!drawn || busy?.startsWith('Making')) && <Loading label={drawn ? busy! : stage ? `Waking the ${species.name}…` : 'Starting the splat engine…'} />}
+              <p role="status" className="sr-only">{!failed && !drawn ? (stage ? `Waking the ${species.name}…` : 'Starting the splat engine…') : ''}</p>
               {failed && <div role="alert" className="absolute inset-4 grid place-items-center text-center text-sm text-ink">{failed}</div>}
-              <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => setOrbit(START)} />
+              <div role="group" aria-label="Show" data-testid="show" className="absolute top-3 left-3 flex gap-1.5 max-sm:top-2 max-sm:left-2">
+                {SHOW.map((v) => <Chip small key={v.id} active={show === v.id} onClick={() => setShow(v.id)}>{v.label}</Chip>)}
+              </div>
+              <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => setOrbit(species.view)} />
               <p aria-hidden className="pointer-events-none absolute right-14 bottom-2 left-3 text-right text-xs text-ink-faint">{typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches ? 'drag to orbit · pinch to zoom' : 'drag to orbit · scroll to zoom'}</p>
             </div>
             <div className="border-t border-rule-soft px-4 py-2 text-xs leading-relaxed text-ink-muted sm:text-sm">
-              <span className="tabular-nums text-ink" data-testid="blob-count">{shown.fox.blobs.count.toLocaleString()}</span> blobs on{' '}
-              <span className="tabular-nums text-ink">{shown.fox.skeleton.count}</span> bones{clipNames.length ? <>, with {clipNames.length === 1 ? 'one clip' : `${clipNames.length} clips`}: {clipNames.join(' and ')}</> : ''}.
-              {loaded && <> From your file. <button type="button" className="underline hover:text-accent" onClick={() => { setLoaded(undefined); setMove('trot'); setFileNote(undefined) }}>Back to the fox</button></>}
+              <span className="tabular-nums text-ink" data-testid="blob-count">{shown.body.blobs.count.toLocaleString()}</span> blobs on{' '}
+              <span className="tabular-nums text-ink">{shown.body.skeleton.count}</span> bones{clipNames.length ? <>, with {clipNames.length === 1 ? 'one clip' : `${clipNames.length} clips`}: {clipNames.join(' and ')}</> : ''}.
+              {loaded && <> From your file. <button type="button" className="underline hover:text-accent" onClick={() => { setLoaded(undefined); setMove(species.moves[0].name); setFileNote(undefined) }}>Back to the {species.name}</button></>}
             </div>
           </div>
         </section>
@@ -200,18 +227,24 @@ export function Creature() {
         <section aria-label="Controls" className="rounded-2xl border border-rule bg-paper-sunk/60 px-4 pt-4 pb-4 lg:col-span-12 lg:px-5">
           <div className="stack-controls grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             <div role="group" aria-labelledby="g-make">
-              <h2 id="g-make" className="mb-2 text-sm font-bold">The fox</h2>
+              <h2 id="g-make" className="mb-2 text-sm font-bold">The creature</h2>
               <div className="grid gap-3">
+                <div role="group" aria-label="Which creature" className="flex flex-wrap gap-1.5" data-testid="species">
+                  {ZOO.map((sp) => <Chip key={sp.id} active={!loaded && species === sp} onClick={() => pick(sp)}>{sp.name[0].toUpperCase() + sp.name.slice(1)}</Chip>)}
+                </div>
+                <p className="text-xs text-ink-faint">{species.blurb}</p>
                 <Field label="Blobs">
                   <div className="flex flex-wrap gap-1.5">
-                    {DETAIL.map((n) => <Chip key={n} active={!loaded && count === n} onClick={() => { setLoaded(undefined); setCount(n) }}>{n >= 1000 ? `${n / 1000}k` : n}</Chip>)}
+                    {species.detail.map((n) => <Chip key={n} active={!loaded && count === n} onClick={() => { setLoaded(undefined); setCount(n) }}>{kilo(n)}</Chip>)}
                   </div>
                 </Field>
-                <Field label="Coat">
-                  <div className="flex flex-wrap gap-1.5">
-                    {(Object.keys(COATS) as (keyof typeof COATS)[]).map((c) => <Chip key={c} active={!loaded && coat === c} onClick={() => { setLoaded(undefined); setCoat(c) }}>{COAT_NAMES[c]}</Chip>)}
-                  </div>
-                </Field>
+                {species.looks.length > 1 && (
+                  <Field label="Look">
+                    <div className="flex flex-wrap gap-1.5">
+                      {species.looks.map((l) => <Chip key={l.id} active={!loaded && look === l.id} onClick={() => { setLoaded(undefined); setLook(l.id) }}>{l.label}</Chip>)}
+                    </div>
+                  </Field>
+                )}
               </div>
             </div>
             <div role="group" aria-labelledby="g-move">
@@ -219,7 +252,7 @@ export function Creature() {
               <div className="grid gap-3">
                 <Field label="Clip">
                   <div className="flex flex-wrap gap-1.5">
-                    {shown.clips.map((c, k) => <Chip key={`${k}-${c.name}`} active={clip === c} onClick={() => setMove(c.name)}>{clipLabel(c.name)}</Chip>)}
+                    {shown.clips.map((c, k) => <Chip key={`${k}-${c.name}`} active={clip === c} onClick={() => setMove(c.name)}>{clipLabel(c)}</Chip>)}
                     <Chip active={!clip} onClick={() => setMove(STILL)}>Still</Chip>
                   </div>
                 </Field>
@@ -239,7 +272,7 @@ export function Creature() {
               <div className="grid gap-3">
                 <Button small onClick={() => save('splats')}>Download as splats</Button>
                 <Button small onClick={() => save('mesh')}>Download as a mesh</Button>
-                <div role="group" aria-label="Mesh grid, cells along the fox" className="flex flex-wrap items-center gap-1.5">
+                <div role="group" aria-label={`Mesh grid, cells along the ${loaded ? 'creature' : species.name}`} className="flex flex-wrap items-center gap-1.5">
                   <span className="mr-1 text-xs text-ink-faint">Mesh grid</span>
                   {[48, 64, 96].map((c) => <Chip small key={c} active={cells === c} onClick={() => setCells(c)}>{c}</Chip>)}
                 </div>
@@ -257,17 +290,18 @@ export function Creature() {
       <section aria-labelledby="files-title" className="mt-14 border-t border-rule pt-10 lg:grid lg:grid-cols-12 lg:gap-x-5 lg:pt-14">
         <div className="lg:col-span-5">
           <p className="text-sm text-ink-faint">What you take away</p>
-          <h2 id="files-title" className="mt-1 max-w-[16ch] font-display text-4xl leading-[1.05] text-balance sm:text-5xl">One fox, two files</h2>
+          <h2 id="files-title" className="mt-1 max-w-[16ch] font-display text-4xl leading-[1.05] text-balance sm:text-5xl">One creature, two files</h2>
         </div>
         <div className="mt-8 max-w-[36em] space-y-4 text-lg leading-relaxed text-ink-muted lg:col-span-7 lg:mt-0 lg:text-xl">
           <p>
             <b className="font-sans text-base font-semibold text-ink">As splats</b>, the .glb holds every blob with the KHR_gaussian_splatting
-            standard, the fourteen bones and both clips as ordinary glTF, and a note (our BLOBSCAPE_gaussian_skinning extension) on how a
-            skinned blob turns. three.js and other splat viewers open it as a still fox; this page plays it.
+            standard, its bones and every clip as ordinary glTF, and a note (our BLOBSCAPE_gaussian_skinning extension) on how a
+            skinned blob turns. The frog's tongue and the dragon's fire are bones that grow, which glTF keys as scale. three.js and
+            other splat viewers open it as a still creature; this page plays it.
           </p>
           <p>
             <b className="font-sans text-base font-semibold text-ink">As a mesh</b>, it's a solid skin wrapped round the blobs, coloured from
-            them, with the same bones and clips. It loses the soft fur but walks in Blender, Godot, Unity or three.js.
+            them, with the same bones and clips. It loses the soft edges (and thin things like wings can come out holey) but moves in Blender, Godot, Unity or three.js.
           </p>
           <p>
             How it all works is in the lessons:{' '}

@@ -28,8 +28,10 @@ export interface Clip {
   times: Float32Array
   /** Per bone, a rotation key per time (x, y, z, w). */
   rotations: Float32Array[]
-  /** Offset of the root (bone 0) per time, on top of its rest position. */
-  rootOffset?: Float32Array
+  /** Per bone that moves, an offset key per time (x, y, z) on top of its rest place; missing for bones that never move. */
+  offsets?: (Float32Array | undefined)[]
+  /** Per bone that grows or shrinks, a uniform scale key per time; missing for bones that keep their size. */
+  sizes?: (Float32Array | undefined)[]
 }
 
 export interface Rigged {
@@ -40,25 +42,43 @@ export interface Rigged {
   clips: Clip[]
 }
 
-/** Records a clip by posing the skeleton at `fps` across `seconds`. Leaves it posed at the end. */
+/**
+ * Records a clip by posing the skeleton at `fps` across `seconds`. Rotations
+ * are kept for every bone; offsets and sizes only for bones that use them.
+ * Leaves the skeleton posed at the end.
+ */
 export function recordClip(name: string, sk: Skeleton, pose: (sk: Skeleton, t: number) => void, seconds: number, fps = 24): Clip {
   const n = Math.max(2, Math.round(seconds * fps) + 1)
+  const nb = sk.count
   const times = new Float32Array(n)
   const rotations = sk.bones.map(() => new Float32Array(n * 4))
-  const rootOffset = new Float32Array(n * 3)
+  const offsets = sk.bones.map(() => new Float32Array(n * 3))
+  const sizes = sk.bones.map(() => new Float32Array(n))
+  const moved = new Array<boolean>(nb).fill(false), grew = new Array<boolean>(nb).fill(false)
   for (let f = 0; f < n; f++) {
     const t = (f / (n - 1)) * seconds
     times[f] = t
     pose(sk, t)
-    sk.bones.forEach((_, b) => rotations[b].set(sk.rotation.subarray(b * 4, b * 4 + 4), f * 4))
-    rootOffset.set(sk.offset.subarray(0, 3), f * 3)
+    for (let b = 0; b < nb; b++) {
+      rotations[b].set(sk.rotation.subarray(b * 4, b * 4 + 4), f * 4)
+      offsets[b].set(sk.offset.subarray(b * 3, b * 3 + 3), f * 3)
+      sizes[b][f] = sk.size[b] * (b === 0 ? sk.rootScale : 1)
+      moved[b] ||= sk.offset[b * 3] !== 0 || sk.offset[b * 3 + 1] !== 0 || sk.offset[b * 3 + 2] !== 0
+      grew[b] ||= sizes[b][f] !== 1
+    }
   }
   // neighbouring keys on the same hemisphere, so linear interpolation takes the short way
   for (const r of rotations) for (let f = 1; f < n; f++) {
     const d = r[f * 4] * r[f * 4 - 4] + r[f * 4 + 1] * r[f * 4 - 3] + r[f * 4 + 2] * r[f * 4 - 2] + r[f * 4 + 3] * r[f * 4 - 1]
     if (d < 0) for (let k = 0; k < 4; k++) r[f * 4 + k] = -r[f * 4 + k]
   }
-  return { name, times, rotations, rootOffset }
+  // the root always gets an offset track, so a clip that bobs it is never read back as one that doesn't
+  moved[0] = true
+  return {
+    name, times, rotations,
+    offsets: offsets.map((o, b) => (moved[b] ? o : undefined)),
+    ...(grew.some(Boolean) ? { sizes: sizes.map((s, b) => (grew[b] ? s : undefined)) } : {}),
+  }
 }
 
 /** Poses the skeleton from a clip at time t (looping), interpolating keys. */
@@ -74,7 +94,11 @@ export function sampleClip(clip: Clip, sk: Skeleton, t: number) {
     const q = [0, 1, 2, 3].map((k) => r[f * 4 + k] * (1 - a) + r[(f + 1) * 4 + k] * a)
     sk.setRotation(b, norm4(q))
   })
-  if (clip.rootOffset) for (let k = 0; k < 3; k++) sk.offset[k] = clip.rootOffset[f * 3 + k] * (1 - a) + clip.rootOffset[(f + 1) * 3 + k] * a
+  sk.offset.fill(0)
+  clip.offsets?.forEach((o, b) => { if (o) for (let k = 0; k < 3; k++) sk.offset[b * 3 + k] = o[f * 3 + k] * (1 - a) + o[(f + 1) * 3 + k] * a })
+  sk.size.fill(1)
+  sk.rootScale = 1
+  clip.sizes?.forEach((s, b) => { if (s) sk.size[b] = s[f] * (1 - a) + s[f + 1] * a })
   sk.update()
 }
 
@@ -156,18 +180,26 @@ export function writeRiggedGlb(r: Rigged): Uint8Array {
   return packGlb(json, bin)
 }
 
+/** A bone's place relative to its parent's head (its glTF node translation) in the rest pose. */
+function restTranslation(skeleton: Skeleton, i: number): Vec3 {
+  const b = skeleton.bones[i]
+  if (b.parent < 0) return [b.head[0], b.head[1], b.head[2]]
+  const p = skeleton.bones[b.parent].head
+  return [b.head[0] - p[0], b.head[1] - p[1], b.head[2] - p[2]]
+}
+
 /**
  * The rig, shared by both writers: node 0 is the mesh, node 1 + i is bone i,
  * placed by its offset from its parent's head (no rest rotation), with an
  * inverse bind matrix per bone, and each clip as rotation channels on the
- * bone nodes plus the root's translation.
+ * bone nodes, plus translation and scale channels on the bones that move or grow.
  */
 function writeRig(w: BinWriter, name: string, skeleton: Skeleton, clips: Clip[]) {
   const nb = skeleton.count
   const ibm = new Float32Array(nb * 16)
   const nodes: Record<string, unknown>[] = [{ name, mesh: 0, skin: 0 }]
   skeleton.bones.forEach((b, i) => {
-    const t: Vec3 = b.parent < 0 ? b.head : [b.head[0] - skeleton.bones[b.parent].head[0], b.head[1] - skeleton.bones[b.parent].head[1], b.head[2] - skeleton.bones[b.parent].head[2]]
+    const t = restTranslation(skeleton, i)
     const children = skeleton.bones.map((c, j) => (c.parent === i ? j + 1 : -1)).filter((j) => j >= 0)
     nodes.push({ name: b.name, translation: [...t], ...(children.length ? { children } : {}) })
     ibm.set([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -b.head[0], -b.head[1], -b.head[2], 1], i * 16)
@@ -183,13 +215,21 @@ function writeRig(w: BinWriter, name: string, skeleton: Skeleton, clips: Clip[])
       samplers.push({ input, output: w.add(rot, FLOAT, 'VEC4', clip.times.length), interpolation: 'LINEAR' })
       channels.push({ sampler: samplers.length - 1, target: { node: b + 1, path: 'rotation' } })
     })
-    if (clip.rootOffset) {
-      const root = skeleton.bones[0].head
+    clip.offsets?.forEach((off, b) => {
+      if (!off) return
+      const rest = restTranslation(skeleton, b)
       const tr = new Float32Array(clip.times.length * 3)
-      for (let f = 0; f < clip.times.length; f++) for (let k = 0; k < 3; k++) tr[f * 3 + k] = root[k] + clip.rootOffset[f * 3 + k]
+      for (let f = 0; f < clip.times.length; f++) for (let k = 0; k < 3; k++) tr[f * 3 + k] = rest[k] + off[f * 3 + k]
       samplers.push({ input, output: w.add(tr, FLOAT, 'VEC3', clip.times.length), interpolation: 'LINEAR' })
-      channels.push({ sampler: samplers.length - 1, target: { node: 1, path: 'translation' } })
-    }
+      channels.push({ sampler: samplers.length - 1, target: { node: b + 1, path: 'translation' } })
+    })
+    clip.sizes?.forEach((size, b) => {
+      if (!size) return
+      const sc = new Float32Array(clip.times.length * 3)
+      for (let f = 0; f < clip.times.length; f++) sc.fill(size[f], f * 3, f * 3 + 3)
+      samplers.push({ input, output: w.add(sc, FLOAT, 'VEC3', clip.times.length), interpolation: 'LINEAR' })
+      channels.push({ sampler: samplers.length - 1, target: { node: b + 1, path: 'scale' } })
+    })
     return { name: clip.name, samplers, channels }
   })
   return {
@@ -371,19 +411,28 @@ export function readRiggedGlb(bytes: Uint8Array): Rigged {
       for (let f = 0; f < times.length; f++) r[f * 4 + 3] = 1
       return r
     })
-    let rootOffset: Float32Array | undefined
+    const offsets: (Float32Array | undefined)[] = skeleton.bones.map(() => undefined)
+    const sizes: (Float32Array | undefined)[] = skeleton.bones.map(() => undefined)
     for (const ch of anim.channels) {
       const b = jointOf.get(ch.target.node)
       if (b === undefined) continue
       const s = anim.samplers[ch.sampler]
       const out = read(s.output, Float32Array) as Float32Array
       if (ch.target.path === 'rotation' && out.length === times.length * 4) rotations[b] = new Float32Array(out)
-      if (ch.target.path === 'translation' && b === 0 && out.length === times.length * 3) {
-        rootOffset = new Float32Array(out.length)
-        for (let f = 0; f < times.length; f++) for (let k = 0; k < 3; k++) rootOffset[f * 3 + k] = out[f * 3 + k] - skeleton.bones[0].head[k]
+      if (ch.target.path === 'translation' && out.length === times.length * 3) {
+        const rest = restTranslation(skeleton, b)
+        const o = new Float32Array(out.length)
+        for (let f = 0; f < times.length; f++) for (let k = 0; k < 3; k++) o[f * 3 + k] = out[f * 3 + k] - rest[k]
+        offsets[b] = o
+      }
+      if (ch.target.path === 'scale' && out.length === times.length * 3) {
+        // our bones scale evenly: a file's uneven scale is read as its average
+        const o = new Float32Array(times.length)
+        for (let f = 0; f < times.length; f++) o[f] = (out[f * 3] + out[f * 3 + 1] + out[f * 3 + 2]) / 3
+        sizes[b] = o
       }
     }
-    return { name: anim.name ?? `clip${ai}`, times, rotations, rootOffset }
+    return { name: anim.name ?? `clip${ai}`, times, rotations, offsets, ...(sizes.some(Boolean) ? { sizes } : {}) }
   })
   return { name: json.nodes[meshNode].name ?? '', blobs, skin, skeleton, clips }
 }
