@@ -184,3 +184,10 @@
   transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
 .zoom-btn:hover { border-color: var(--c-ink-faint); transform: translateY(-1px); box-shadow: 0 3px 6px -2px rgb(0 0 0 / 0.35); }
+
+/* tipjar's floating support button, in the site's colours */
+:root {
+  --tipjar-bg: var(--c-accent);
+  --tipjar-label: var(--c-paper);
+  --tipjar-ring: var(--c-paper);
+}

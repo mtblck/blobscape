@@ -3,6 +3,7 @@ import { COMING, LESSONS, LESSON_GOALS, href, useRoute } from './routes.ts'
 import { doneGoals, resetProgress } from './progress.ts'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
 import { Landing } from './Landing.tsx'
+import { Footer, Menu, TipButton, usePageMeta } from './Chrome.tsx'
 import { OneBlob } from './lessons/OneBlob.tsx'
 import { Footprint } from './lessons/Footprint.tsx'
 import { Order } from './lessons/Order.tsx'
@@ -20,13 +21,16 @@ export function App() {
   const route = useRoute()
   const key = route.page === 'lesson' ? route.id : route.page
   const Lesson = route.page === 'lesson' ? PAGES[route.id] : null
+  usePageMeta(route)
   return (
-    <div className="min-h-dvh">
-      <SiteHeader />
+    <div className="flex min-h-dvh flex-col">
+      <SiteHeader menu={<Menu route={route} />} />
       {/* Keyed by page, so each one mounts fresh: its own view, its own state */}
-      <main id="main" key={key} className="mx-auto max-w-7xl px-4 pb-16">
+      <main id="main" key={key} className="mx-auto w-full max-w-7xl flex-1 px-4 pb-16">
         {route.page === 'sandbox' ? <Sandbox /> : Lesson ? <Lesson /> : route.page === 'lessons' ? <LessonList /> : <Landing />}
       </main>
+      <Footer />
+      {(route.page === 'home' || route.page === 'lessons') && <TipButton key={`tip-${route.page}`} />}
     </div>
   )
 }

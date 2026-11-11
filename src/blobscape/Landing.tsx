@@ -1,26 +1,10 @@
 import { LESSONS, LESSON_GOALS, href } from './routes.ts'
 import { doneGoals } from './progress.ts'
 import { useFocusHeading } from './Shell.tsx'
+import { EXPERIMENTS } from './site.ts'
 import { AnyAngleDiagram, BlobDefs, FitDiagram, HeroDiagram, LessonGlyph, PhotosDiagram, SANDBOX_COUNTS, SandboxDiagram, SpriteDiagram, TrainDiagram } from './diagrams.tsx'
 
-/**
- * The other splat experiments. Same domain for now, so plain paths; if
- * Blobscape moves to its own domain these become full mattblack.space links.
- */
-const EXPERIMENTS = [
-  {
-    title: 'Fit a Picture',
-    url: '/experiments/fit-a-picture/',
-    body: 'Watch a few hundred blobs start as noise and train themselves into a picture, live in your browser. It is the same loop that turns photos into a splat, in 2D.',
-    picture: <FitDiagram />,
-  },
-  {
-    title: 'Splat to Sprite',
-    url: '/experiments/splat-to-sprite/',
-    body: 'Frame a splat like a game camera and bake it into palette-locked pixel-art sprite sheets, walking in four directions.',
-    picture: <SpriteDiagram />,
-  },
-]
+const PICTURES: Record<(typeof EXPERIMENTS)[number]['id'], React.ReactNode> = { fit: <FitDiagram />, sprite: <SpriteDiagram /> }
 
 const PROMISES = ['Eight hands-on lessons', 'A sandbox for real captures', 'Runs in your browser', 'Free, no account']
 
@@ -168,7 +152,7 @@ export function Landing() {
           {EXPERIMENTS.map((e) => (
             <li key={e.title}>
               <a href={e.url} className="group flex h-full flex-col gap-4 rounded-2xl border border-rule bg-paper p-4 no-underline transition-colors hover:border-ink-faint">
-                {e.picture}
+                {PICTURES[e.id]}
                 <span className="font-serif text-2xl text-ink group-hover:text-accent">{e.title} →</span>
                 <span className="text-ink-muted">{e.body}</span>
               </a>

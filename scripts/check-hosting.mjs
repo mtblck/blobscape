@@ -18,6 +18,7 @@ for (const p of pages) {
 }
 for (const f of ['index.html', ...pages.map((p) => `${p}/index.html`)]) {
   const html = readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
-  if (/<script(?![^>]*\bsrc=)[^>]*>/.test(html)) fail(`${f} has an inline script; the CSP is script-src 'self'`)
+  // JSON-LD is data, not code, so the CSP doesn't apply to it
+  if (/<script(?![^>]*\bsrc=)(?![^>]*type="application\/ld\+json")[^>]*>/.test(html)) fail(`${f} has an inline script; the CSP is script-src 'self'`)
 }
 console.log('hosting:check ok')
