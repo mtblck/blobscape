@@ -192,36 +192,41 @@ function App() {
           </section>
         )}
         {steps.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <caption className="mb-2 text-left text-ink-muted">
-                Milliseconds per step of a walking frame, each waited for on its own (median of 20).
-                Move, project and sort run on the GPU with WebGPU; with WebGL each blob is moved as it's drawn, and the CPU moves centres and sorts.
-              </caption>
+          <section aria-labelledby="steps-title" className="flex flex-col gap-2">
+            <h2 id="steps-title" className="text-lg font-semibold text-ink">Each step</h2>
+            <p className="text-sm text-ink-muted">
+              Milliseconds per step of a walking frame, each waited for on its own (median of 20).
+              Move, project and sort run on the GPU with WebGPU; with WebGL each blob is moved as it's drawn, and the CPU moves centres and sorts.
+            </p>
+            <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm" aria-labelledby="steps-title">
               <thead><tr className="text-ink-faint"><th className="py-1 pr-3 font-medium">Renderer</th><th className="pr-3 font-medium">Blobs</th><th className="pr-3 font-medium">Move</th><th className="pr-3 font-medium">Project</th><th className="pr-3 font-medium">Sort</th><th className="pr-3 font-medium">Draw</th><th className="font-medium">CPU (move, sort)</th></tr></thead>
               <tbody>
                 {steps.map((r, i) => (
                   <tr key={i} className="border-t border-rule">
                     <td className="py-1 pr-3">{r.which === 'three' ? 'three.js' : 'Ours'} · {r.backend}</td>
                     <td className="pr-3">{r.blobs.toLocaleString()}</td>
-                    <td className="pr-3">{r.deform.toFixed(1)}</td>
-                    <td className="pr-3">{r.project.toFixed(1)}</td>
-                    <td className="pr-3">{r.order.toFixed(1)}</td>
+                    <td className="pr-3">{r.backend === 'webgpu' && r.which === 'engine' ? r.deform.toFixed(1) : '–'}</td>
+                    <td className="pr-3">{r.backend === 'webgpu' && r.which === 'engine' ? r.project.toFixed(1) : '–'}</td>
+                    <td className="pr-3">{r.backend === 'webgpu' && r.which === 'engine' ? r.order.toFixed(1) : '–'}</td>
                     <td className="pr-3">{r.draw.toFixed(1)}</td>
-                    <td>{r.cpuSkin.toFixed(1)}, {r.cpuSort.toFixed(1)}</td>
+                    <td>{r.backend === 'webgl' && r.which === 'engine' ? `${r.cpuSkin.toFixed(1)}, ${r.cpuSort.toFixed(1)}` : '–'}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>
+          </section>
         )}
         {results.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <caption className="mb-2 text-left text-ink-muted">
-                Frames per second and milliseconds between frames over 120 live frames; your screen caps this at its refresh rate (60 Hz is 16.7 ms).
-                Dropped counts frames that missed a refresh. Alone is one frame drawn and waited for by itself, which stops the CPU and GPU overlapping, so it overstates the cost.
-              </caption>
+          <section aria-labelledby="frames-title" className="flex flex-col gap-2">
+            <h2 id="frames-title" className="text-lg font-semibold text-ink">Frames</h2>
+            <p className="text-sm text-ink-muted">
+              Frames per second and milliseconds between frames over 120 live frames; your screen caps this at its refresh rate (60 Hz is 16.7 ms).
+              Dropped counts frames that missed a refresh. Alone is one frame drawn and waited for by itself, which stops the CPU and GPU overlapping, so it overstates the cost.
+            </p>
+            <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm" aria-labelledby="frames-title">
               <thead><tr className="text-ink-faint"><th className="py-1 pr-3 font-medium">Renderer</th><th className="pr-3 font-medium">Blobs</th><th className="pr-3 font-medium">fps</th><th className="pr-3 font-medium">Dropped</th><th className="pr-3 font-medium">ms between frames (median / slowest 10%)</th><th className="pr-3 font-medium">ms alone</th><th className="font-medium">ms CPU</th></tr></thead>
               <tbody>
                 {results.map((r, i) => (
@@ -237,7 +242,8 @@ function App() {
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>
+          </section>
         )}
       </main>
     </>
