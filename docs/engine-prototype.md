@@ -78,3 +78,14 @@ Our extra cost per frame is the deform pass and one shared sort: about 5 ms at 2
 | Ours, WebGL, walking | 500k | 30 | 93% | 87.5, CPU 28.5 |
 
 At 200k, walking now costs about the same as three.js drawing the fox standing still. The WebGL fox didn't move in this run: three.js swaps a padded copy in for a storage buffer it reads through a texture, so the bone data went to the old array. Fixed, and verify now checks that posing reaches the draw on both backends. The WebGL timings still count the same work, since the GPU moved every blob each frame, just with the first frame's bones.
+
+### Fourth phone run, WebGL fixed (Matt, 2026-11-11)
+
+| Renderer | Blobs | fps | Dropped | ms alone | ms CPU |
+|---|---|---|---|---|---|
+| Ours, WebGPU, walking | 200k | 60 | 0% | 12.4 | 0 |
+| Ours, WebGPU, walking | 500k | 52 | 18% | 21.1 | 0 |
+| Ours, WebGL, walking | 200k | 60 | 0% | 48.2 | 7.0 |
+| Ours, WebGL, walking | 500k | 27–33 | 66–98% | ~90 | 20–28 |
+
+A walking 500k fox on WebGPU now costs 21.1 ms alone, against 19.3 ms for three.js drawing 500k standing still. Animation adds about 2 ms a frame, so what's left at 500k is mostly drawing. Getting there needs fewer pixels or fewer blobs drawn (level of detail), not faster skinning. On WebGL, the GPU moves every blob four times a frame (once per corner), which is what holds 500k at about 30 fps.
