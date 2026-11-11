@@ -27,3 +27,9 @@ production domain. See README for the why behind the choices.
 - Blobs add up (no sorting): pixel = Σ opacity·colour·falloff. Params are log scales, angle, and sigmoid colour/opacity.
 - The worker posts a frame ~30×/s with the display image, new losses and events; the page keeps losses in a ref buffer, not state.
 
+## Blobscape
+- One page, hash routes (`#/lesson/<id>`, `#/sandbox`), kept liftable: `blobscape/`, `src/blobscape/`, `src/splat-core/`, `src/shared/`. Matt may move it to blobscape.dev.
+- `src/splat-core/` is shared with Splat to Sprite (render loop, presets, framing). `Blobs` (typed arrays) is the source of truth; `SplatView.sync(blobs, from)` uploads to Spark.
+- Lesson goals live in `routes.ts` (`LESSON_GOALS`); each lesson's `useGoals` checks are keyed by those ids.
+- The Order lesson draws with `cpuSplat.ts`, because Spark can't be made to sort wrongly.
+
