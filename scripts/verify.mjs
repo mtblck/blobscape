@@ -361,7 +361,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   await page.goto(base + B + '#/lesson/many')
   await page.waitForTimeout(800)
   const lessonCount = await count(page)
-  await page.getByRole('button', { name: 'Open in the sandbox' }).click()
+  await page.getByRole('button', { name: 'Open this scene in the sandbox' }).click()
   await page.waitForTimeout(800)
   if ((await count(page)) !== lessonCount) fails.push(`blobscape: sandbox got ${await count(page)} blobs from a ${lessonCount}-blob lesson`)
   else ok(`blobscape: "Open in the sandbox" carries the lesson's ${lessonCount} blobs`)

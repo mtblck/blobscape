@@ -50,7 +50,7 @@ export function Order() {
       id="order"
       intro={<p>See-through things blend correctly only when drawn from the back forward. Here the same three blobs are drawn twice: once in the right order, once in yours.</p>}
       view={
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-2 gap-2 sm:gap-3">
           <SoftView blobs={blobs} orbit={orbit} setOrbit={turn} order={right} title="Back to front" testId="view-sorted" />
           <SoftView blobs={blobs} orbit={orbit} setOrbit={turn} order={yours} title={MODES.find((m) => m.id === mode)!.name} testId="view-yours" warn={!same} />
         </div>

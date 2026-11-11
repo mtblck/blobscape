@@ -118,3 +118,14 @@
 .group:focus-visible .flask-bubble-3 { animation-delay: 0.7s; }
 
 .bake-progress { accent-color: var(--c-accent); }
+
+/*
+ * Narrow control panels (a lesson's side panel) stack each slider: label and
+ * value on one line, the track full width under them, so tracks stay long
+ * and every row lines up on the panel's left edge.
+ */
+.stack-controls .slider-row { grid-template-columns: minmax(0, 1fr) auto; }
+.stack-controls .slider-row > input { grid-column: 1 / -1; grid-row: 2; }
+.stack-controls .slider-row > .slider-value { text-align: right; }
+.stack-controls .slider-hint { padding-left: 0; }
+.stack-controls .field-row { grid-template-columns: minmax(0, 1fr); }
