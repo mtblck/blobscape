@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react'
 import type { Goal } from './progress.ts'
 
 /**
- * Pages live in the URL hash (#/lesson/one-blob, #/sandbox), so the whole
+ * Pages live in the URL hash (#/lessons, #/lesson/one-blob, #/sandbox), so the whole
  * thing is one static page: no server routes, and it can move to its own
  * domain by copying the folder.
  */
-export type Route = { page: 'home' } | { page: 'lesson'; id: string } | { page: 'sandbox' }
+export type Route = { page: 'home' } | { page: 'lessons' } | { page: 'lesson'; id: string } | { page: 'sandbox' }
 
 export const LESSONS = [
   { id: 'one-blob', title: 'One blob', summary: 'Five kinds of number, 14 in all, make one Gaussian. Pull each one and see what it does.' },
@@ -76,12 +76,14 @@ export function parse(hash: string): Route {
   const m = hash.replace(/^#\/?/, '').split('/')
   if (m[0] === 'lesson' && LESSONS.some((l) => l.id === m[1])) return { page: 'lesson', id: m[1] }
   if (m[0] === 'sandbox') return { page: 'sandbox' }
+  if (m[0] === 'lessons') return { page: 'lessons' }
   return { page: 'home' }
 }
 
 export function href(r: Route): string {
   if (r.page === 'lesson') return `#/lesson/${r.id}`
   if (r.page === 'sandbox') return '#/sandbox'
+  if (r.page === 'lessons') return '#/lessons'
   return '#/'
 }
 

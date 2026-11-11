@@ -157,6 +157,9 @@
 .desk-group { grid-template-columns: minmax(0, 1fr); }
 @media (min-width: 64rem) { .desk-group { grid-template-columns: repeat(var(--cols, 1), minmax(0, 1fr)); } }
 
+/* Blobscape's front page: a dashed selection ring that marches */
+@keyframes bs-march { to { stroke-dashoffset: -22; } }
+
 /* Blobscape's zoom bar: a vertical slider on the inside right of a view */
 .zoom-range {
   writing-mode: vertical-lr;

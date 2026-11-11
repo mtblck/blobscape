@@ -318,8 +318,9 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     if (lessons < 8) fails.push(`blobscape ${label}: home lists ${lessons} lessons`)
     else ok(`blobscape ${label}: home lists the lessons`)
     await axe(page, `blobscape ${label} home`)
-    for (const id of ['one-blob', 'footprint', 'order', 'many', 'angle', 'paint', 'formats', 'break', 'sandbox']) {
-      await page.goto(base + B + (id === 'sandbox' ? '#/sandbox' : `#/lesson/${id}`))
+    await page.screenshot({ path: join(shots, `blobscape-home-${label}.png`), fullPage: true })
+    for (const id of ['lessons', 'one-blob', 'footprint', 'order', 'many', 'angle', 'paint', 'formats', 'break', 'sandbox']) {
+      await page.goto(base + B + (id === 'sandbox' || id === 'lessons' ? `#/${id}` : `#/lesson/${id}`))
       await page.waitForTimeout(1500)
       const focused = await page.evaluate(() => document.activeElement?.tagName)
       if (focused !== 'H1') fails.push(`blobscape ${label} ${id}: focus is on ${focused}, not the heading`)
@@ -473,6 +474,9 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   await dark.page.waitForTimeout(1500)
   await axe(dark.page, 'blobscape dark footprint')
   await dark.page.screenshot({ path: join(shots, 'blobscape-footprint-dark.png') })
+  await dark.page.goto(base + B + '#/')
+  await dark.page.waitForTimeout(800)
+  await axe(dark.page, 'blobscape dark home')
   await dark.page.goto(base + B + '#/lesson/angle')
   await dark.page.waitForTimeout(1500)
   await axe(dark.page, 'blobscape dark angle')
