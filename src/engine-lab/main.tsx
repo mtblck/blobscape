@@ -5,6 +5,27 @@ import { SiteHeader } from '../shared/SiteHeader.tsx'
 import { Button, Chip, Field, Toggle } from '../shared/ui.tsx'
 import { startLab, type BenchResult, type Lab, type LabOptions, type Which } from './lab.ts'
 import type { SkinMode } from '../splat-engine/rig.ts'
+import { makeCreature, poseWalk } from '../splat-engine/creature.ts'
+import { recordClip, writeRiggedGlb } from '../splat-engine/glb.ts'
+
+/** The fox as a rigged .glb with its trot: what Creature will export. */
+function foxGlb(count: number) {
+  const fox = makeCreature(count)
+  const trot = recordClip('trot', fox.skeleton, poseWalk, 1 / 1.4, 24)
+  fox.skeleton.reset()
+  fox.skeleton.update()
+  return writeRiggedGlb({ name: 'fox', ...fox, clips: [trot] })
+}
+
+async function downloadGlb(count: number) {
+  const bytes = foxGlb(count)
+  const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'model/gltf-binary' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'blob-fox.glb'
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
 
 /**
  * Unlisted page for trying the engine on any device: pick a renderer and a blob
@@ -24,8 +45,15 @@ const initial: LabOptions = {
 }
 const COUNTS = [20000, 100000, 200000, 500000]
 
+// For verify: write the fox, read it back with three.js's own loader
+window.__glbCheck = async () => {
+  const bytes = foxGlb(5000)
+  const { loadWithThree } = await import('./glbCheck.ts')
+  return { bytes: bytes.byteLength, ...(await loadWithThree(bytes)) }
+}
+
 declare global {
-  interface Window { __lab?: Lab; __labError?: string }
+  interface Window { __lab?: Lab; __labError?: string; __glbCheck?: () => Promise<unknown> }
 }
 
 function App() {
@@ -100,6 +128,7 @@ function App() {
           <div className="flex flex-col gap-3">
             <Toggle label="Walk" checked={opts.walk} onChange={(v) => { set({ walk: v }); lab?.setWalk(v) }} />
             <Button primary disabled={!lab || timing} onClick={time}>{timing ? 'Timing…' : 'Time it'}</Button>
+            <Button onClick={() => downloadGlb(20000)}>Download the fox (.glb)</Button>
           </div>
         </div>
         {results.length > 0 && (
