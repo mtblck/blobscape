@@ -45,6 +45,8 @@ interface Props {
   bare?: boolean
   /** Where the reset button takes the camera; the view it opened with when omitted. */
   home?: () => Orbit
+  /** Leave out the zoom bar (a page showing two views shares one). */
+  noZoom?: boolean
 }
 
 /** Degrees of turn per pixel dragged, shared by every view so they all feel the same. */
@@ -77,7 +79,7 @@ export const clampOrbit = (o: Orbit): Orbit => ({
  * canvas on top draws whatever the page wants over them. Drag (or arrow keys)
  * to orbit, scroll, pinch or +/− to zoom.
  */
-export function Viewport({ blobs, version, orbit, setOrbit, reach, overlay, takeSync, tool, label, hint, children, onView, className, bare, home }: Props) {
+export function Viewport({ blobs, version, orbit, setOrbit, reach, overlay, takeSync, tool, label, hint, children, onView, className, bare, home, noZoom }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const overlayRef = useRef<HTMLCanvasElement>(null)
   const viewRef = useRef<SplatView | null>(null)
@@ -225,8 +227,8 @@ export function Viewport({ blobs, version, orbit, setOrbit, reach, overlay, take
         </div>
       )}
       {children}
-      <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => setOrbit(() => clampOrbit(home ? home() : start))} />
-      {hint && <p aria-hidden className="pointer-events-none absolute right-14 bottom-2 left-3 text-right text-xs text-ink-faint">{coarse ? hint.replace('scroll to zoom', 'pinch to zoom') : hint}</p>}
+      {!noZoom && <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => setOrbit(() => clampOrbit(home ? home() : start))} />}
+      {hint && <p aria-hidden className={`pointer-events-none absolute ${noZoom ? 'right-3' : 'right-14'} bottom-2 left-3 text-right text-xs text-ink-faint`}>{coarse ? hint.replace('scroll to zoom', 'pinch to zoom') : hint}</p>}
     </div>
   )
 }

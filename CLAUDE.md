@@ -34,5 +34,7 @@ production domain. See README for the why behind the choices.
 - Lessons use the exhibit layout in `Shell.tsx`: question + goal cards, an always-dark display case (`.case` in theme.css re-declares the dark tokens, so overlays call `themeColour(name, ctx.canvas)`), a desk of control `groups`, then the explanation spread. Views inside the case pass `bare`.
 - The Order lesson draws with `cpuSplat.ts`, because Spark can't be made to sort wrongly.
 - Effects: GLSL (`effectStatements`, a dyno `objectModifier`) and TS (`applyEffectOne`) must stay in step; both hash the GPU slot. Change one, change both, and check "baked matches preview" in verify.
+- Colour by angle evaluates spherical harmonics on the CPU (`splat-core/sh.ts`, tested) and re-uploads per orbit; its goal uses the stored highlight's peak as a share of the real one, which falls as shine sharpens (a whole-ball error doesn't).
+- Splat files encodes .ply/.splat with our writers and .spz with Spark's `writeSpz`, then reads each back through `readSplatFile`, so what you see is what the file holds. Break it uses its own scatter, not the shared Explode: a radial push on a dense scene just looks like a bigger object.
 - The overlay canvas is `willReadFrequently` (CPU): a GPU 2D canvas in headless Chromium kept showing an old frame after a clear.
 

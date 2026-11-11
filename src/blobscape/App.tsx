@@ -6,10 +6,14 @@ import { OneBlob } from './lessons/OneBlob.tsx'
 import { Footprint } from './lessons/Footprint.tsx'
 import { Order } from './lessons/Order.tsx'
 import { Many } from './lessons/Many.tsx'
+import { Angle } from './lessons/Angle.tsx'
+import { Paint } from './lessons/Paint.tsx'
+import { Formats } from './lessons/Formats.tsx'
+import { Break } from './lessons/Break.tsx'
 import { Sandbox } from './Sandbox.tsx'
 import { useState } from 'react'
 
-const PAGES: Record<string, () => React.JSX.Element> = { 'one-blob': OneBlob, footprint: Footprint, order: Order, many: Many }
+const PAGES: Record<string, () => React.JSX.Element> = { 'one-blob': OneBlob, footprint: Footprint, order: Order, many: Many, angle: Angle, paint: Paint, formats: Formats, break: Break }
 
 export function App() {
   const route = useRoute()

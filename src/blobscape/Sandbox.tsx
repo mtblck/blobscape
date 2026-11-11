@@ -3,9 +3,10 @@ import { Blobs, hexToRgb, pick, projectPoint, quatFacing, quatToMat, rgbToHex, t
 import type { Orbit, SplatView } from '../splat-core/view.ts'
 import { PRESETS } from '../splat-core/presets.ts'
 import { blobsFromPreset, blobsFromSamples, sampleShape } from '../splat-core/shapes.ts'
-import { Selection, centroid, flipUpright, inPolygon, meanColour, scaleGroup, selectByColour, sitOnFloor, translate, turnY } from '../splat-core/ops.ts'
+import { Selection, bounds, centroid, flipUpright, frame, inPolygon, meanColour, scaleGroup, selectByColour, sitOnFloor, translate, turnY } from '../splat-core/ops.ts'
 import { EFFECTS, bakeEffect, type EffectFrame, type EffectId, type EffectParams } from '../splat-core/effects.ts'
 import { writePly } from '../splat-core/ply.ts'
+import { ImportError, readSplatFile } from '../splat-core/importer.ts'
 import { Button, Chip, Field, Panel, Slider, Tabs, Toggle } from '../shared/ui.tsx'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
 import { Viewport, type ToolHandlers } from './Viewport.tsx'
@@ -35,27 +36,6 @@ const OUTLINE_LIMIT = 1500
 const SELECT_OUTLINES = 3000
 const FILE_TYPES = '.ply,.spz,.splat,.ksplat,.sog'
 const PLAY_SECONDS = 2.5
-
-/** Bounding box of the scene, or of the selection when one is given (sampled for big scenes). */
-function bounds(b: Blobs, sel: Selection | null) {
-  const lo: Vec3 = [Infinity, Infinity, Infinity], hi: Vec3 = [-Infinity, -Infinity, -Infinity]
-  const useSel = !!sel && sel.count > 0
-  const stride = useSel ? 1 : Math.max(1, Math.floor(b.count / 20000))
-  for (let i = 0; i < b.count; i += stride) {
-    if (useSel && !sel!.has(i)) continue
-    for (let a = 0; a < 3; a++) { lo[a] = Math.min(lo[a], b.centre[i * 3 + a]); hi[a] = Math.max(hi[a], b.centre[i * 3 + a]) }
-  }
-  return lo[0] <= hi[0] ? { lo, hi } : null
-}
-
-/** Centre and size of a scene, for pointing the camera at it. */
-function frame(b: Blobs): Pick<Orbit, 'target' | 'distance'> {
-  const bb = bounds(b, null)
-  if (!bb) return { target: [0, 0.5, 0], distance: 4 }
-  const { lo, hi } = bb
-  const r = Math.max(0.3, Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2)
-  return { target: [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2], distance: r * 3.2 }
-}
 
 /** Where an effect works from: the middle, size and floor of what it acts on. */
 function effectFrame(b: Blobs, sel: Selection | null): EffectFrame {
@@ -189,7 +169,6 @@ export function Sandbox() {
         setError(`${file.name} is ${(file.size / 1e9).toFixed(1)} GB, more than this device can open here (${(maxFileBytes / 1e9).toFixed(1)} GB). A compressed .spz or .sog of the same scene is much smaller.`)
         return
       }
-      const { readSplatFile } = await import('../splat-core/importer.ts')
       const bytes = await file.arrayBuffer()
       decoded = true
       const { blobs: b, step: n, dropped } = await readSplatFile(bytes, file.name, maxBlobs)
@@ -205,7 +184,6 @@ export function Sandbox() {
     } catch (err) {
       console.warn(err)
       setMessage('')
-      const { ImportError } = await import('../splat-core/importer.ts')
       const why = err instanceof ImportError ? err.message : err instanceof RangeError ? 'This file is too big for this device.' : 'The sandbox reads Gaussian splat files: .ply, .spz, .splat, .ksplat and .sog.'
       // Spark's decoder can stop working after a file it chokes on; checked files never get that far
       const stuck = decoded && !(err instanceof ImportError && (err.kind === 'mesh' || (err.kind === 'damaged' && /header/.test(err.message))))
