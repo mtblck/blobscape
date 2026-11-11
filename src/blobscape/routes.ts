@@ -54,7 +54,7 @@ export const LESSON_GOALS: Record<(typeof LESSONS)[number]['id'], Goal[]> = {
   ],
   'paint': [
     { id: 'cover', label: 'Cover the square', hint: 'Drag across the square to spray.', where: 'view', why: 'Overlap enough soft patches and a surface appears.' },
-    { id: 'few', label: 'Cover it again with fewer than 150 blobs', hint: 'Clear it, then change how big each blob is.', where: 'brush', why: 'Big blobs cover more ground with fewer of them, but blur any detail inside each one.' },
+    { id: 'few', label: 'Cover it again with fewer than 150 blobs', hint: 'Erase or clear what you have, then change how big each blob is.', where: 'brush', why: 'Big blobs cover more ground with fewer of them, but blur any detail inside each one.' },
     { id: 'balls', label: 'Paint with round balls, then look edge-on', hint: 'Switch off flat discs, spray, then lower the camera.', where: 'kind', why: 'Round blobs bulge up out of the floor. Flat discs are what make a surface look thin.' },
   ],
   'formats': [

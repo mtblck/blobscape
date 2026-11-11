@@ -382,6 +382,15 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   const covered = Number((await page.textContent('[data-testid=coverage]')).replace(/\D/g, ''))
   if (covered < 90) fails.push(`blobscape paint: spraying covered ${covered}%`)
   else ok(`blobscape paint: spraying covers ${covered}% of the square`)
+  const painted = await count(page)
+  await page.getByRole('button', { name: 'Erase', exact: true }).click()
+  await page.mouse.move(pbox.x + pbox.width * 0.4, pbox.y + pbox.height * 0.45)
+  await page.mouse.down()
+  for (let k = 0; k <= 10; k++) await page.mouse.move(pbox.x + pbox.width * (0.4 + k * 0.02), pbox.y + pbox.height * 0.45)
+  await page.mouse.up()
+  const erased = await count(page)
+  if (!(erased < painted)) fails.push(`blobscape paint: erasing went ${painted} → ${erased} blobs`)
+  else ok(`blobscape paint: the eraser rubs out ${painted - erased} blobs`)
 
   // Splat files: .spz is the smallest of the three and is read back
   await page.goto(base + B + '#/lesson/formats')

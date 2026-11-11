@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { Blobs, quatFacing, type Vec3 } from '../../splat-core/blobs.ts'
 import type { Orbit, SplatView } from '../../splat-core/view.ts'
-import { Button, Slider, Toggle } from '../../shared/ui.tsx'
+import { Button, Chip, Slider, Toggle } from '../../shared/ui.tsx'
 import { LessonShell } from '../Shell.tsx'
 import { LESSON_GOALS } from '../routes.ts'
 import { Viewport, type ToolHandlers } from '../Viewport.tsx'
@@ -56,6 +56,16 @@ function coverage(b: Blobs): number {
   return covered / T.length
 }
 
+/** Removes every blob within the brush of `at` on the floor, keeping the round flags in step. */
+function erase(b: Blobs, round: Uint8Array, at: Vec3) {
+  let w = 0
+  return b.filter((i) => {
+    const keep = Math.hypot(b.centre[i * 3] - at[0], b.centre[i * 3 + 2] - at[2]) > BRUSH
+    if (keep) round[w++] = round[i]
+    return keep
+  })
+}
+
 function startingScene() {
   const b = new Blobs(MAX)
   const round = new Uint8Array(MAX)
@@ -69,6 +79,7 @@ export function Paint() {
   const [size, setSize] = useState(0.07)
   const [perDab, setPerDab] = useState(12)
   const [flat, setFlat] = useState(true)
+  const [erasing, setErasing] = useState(false)
   const [view, setView] = useState<SplatView | null>(null)
   const scene = useRef(startingScene())
   const rand = useRef(rng(5))
@@ -93,7 +104,9 @@ export function Paint() {
     const t = -o.y / d.y
     const at: Vec3 = [o.x + d.x * t, 0, o.z + d.z * t]
     if (Math.abs(at[0]) > 3 || Math.abs(at[2]) > 3) return
-    dab(b, scene.current.round, at, perDab, size, flat, rand.current)
+    if (erasing) {
+      if (!erase(b, scene.current.round, at)) return
+    } else dab(b, scene.current.round, at, perDab, size, flat, rand.current)
     setVersion((v) => v + 1)
   }
 
@@ -129,8 +142,8 @@ export function Paint() {
           setOrbit={setOrbit}
           onView={(v) => { setView(v); v.setFloor(true, '#8a8070') }}
           tool={tool}
-          label="A floor with a square marked on it. Drag to spray blobs, or press Enter to spray in the middle. Right-drag, the arrow keys or the camera sliders turn the view."
-          hint="drag to spray · right-drag to orbit"
+          label={`A floor with a square marked on it. Drag to ${erasing ? 'erase' : 'spray'} blobs, or press Enter to ${erasing ? 'erase' : 'spray'} in the middle. Right-drag, the arrow keys or the camera sliders turn the view.`}
+          hint={`drag to ${erasing ? 'erase' : 'spray'} · right-drag to orbit`}
           overlay={(ctx, lens) => {
             const corners = [[-HALF, 0, -HALF], [HALF, 0, -HALF], [HALF, 0, HALF], [-HALF, 0, HALF]].map((p) => toScreen(p, lens))
             if (corners.some((c) => !c)) return
@@ -149,18 +162,24 @@ export function Paint() {
         <p>
           <span className="tabular-nums text-ink" data-testid="blob-count">{b.count.toLocaleString()}</span> blobs cover{' '}
           <span className="tabular-nums text-ink" data-testid="coverage">{Math.round(covered * 100)}%</span> of the dashed square.
-          {b.count >= MAX && ' That is as many as this lesson holds: clear it to start again.'}
+          {b.count >= MAX && ' That is as many as this lesson holds: erase some or clear the floor.'}
         </p>
       }
       groups={[
         {
           id: 'brush',
           title: 'Brush',
-          note: 'what each dab puts down',
+          note: 'spray blobs on, or rub them out',
           span: 2,
           cols: 2,
           content: (
             <>
+              <div className="col-span-full flex flex-wrap items-center gap-2" role="group" aria-label="Brush mode">
+                <Chip small active={!erasing} onClick={() => setErasing(false)}>Spray</Chip>
+                <Chip small active={erasing} onClick={() => setErasing(true)}>Erase</Chip>
+                <span className="grow" />
+                <Button small onClick={clear}>Clear the floor</Button>
+              </div>
               <Slider label="Blob size" value={size} min={0.02} max={0.35} step={0.005} onChange={setSize} format={(v) => v.toFixed(3)} />
               <Slider label="Blobs per dab" value={perDab} min={1} max={30} step={1} onChange={setPerDab} format={(v) => `${v}`} />
             </>
@@ -169,13 +188,8 @@ export function Paint() {
         {
           id: 'kind',
           title: 'Blobs',
-          note: 'and starting over',
-          content: (
-            <>
-              <Toggle label="Flat discs on the floor" checked={flat} onChange={setFlat} />
-              <div><Button small onClick={clear}>Clear the floor</Button></div>
-            </>
-          ),
+          note: 'what shape each one is',
+          content: <Toggle label="Flat discs on the floor" checked={flat} onChange={setFlat} />,
         },
         {
           id: 'camera',
