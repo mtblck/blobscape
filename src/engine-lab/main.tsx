@@ -114,7 +114,7 @@ function App() {
     if (!lab) return
     setTiming(true)
     try {
-      const r = await lab.bench(60)
+      const r = await lab.bench(120)
       setResults((rs) => [r, ...rs].slice(0, 12))
     } catch (e) {
       setError(String(e))
@@ -140,7 +140,7 @@ function App() {
             <div className="flex flex-wrap gap-2">
               <Chip active={opts.which === 'engine' && !opts.webgl} onClick={() => set({ which: 'engine', webgl: false })}>Ours, WebGPU</Chip>
               <Chip active={opts.which === 'engine' && opts.webgl} onClick={() => set({ which: 'engine', webgl: true })}>Ours, WebGL</Chip>
-              <Chip active={opts.which === 'three'} onClick={() => set({ which: 'three', webgl: false })}>three.js</Chip>
+              <Chip active={opts.which === 'three'} onClick={() => set({ which: 'three', webgl: false })}>three.js (can't walk)</Chip>
             </div>
           </Field>
           <Field label="Blobs">
@@ -173,17 +173,28 @@ function App() {
           </section>
         )}
         {results.length > 0 && (
-          <table className="w-full text-left text-sm">
-            <caption className="mb-2 text-left text-ink-muted">Milliseconds per frame over 60 frames, including waiting for the GPU</caption>
-            <thead><tr className="text-ink-faint"><th className="py-1 font-medium">Renderer</th><th className="font-medium">Blobs</th><th className="font-medium">Median</th><th className="font-medium">Slowest 10%</th><th className="font-medium">CPU</th><th className="font-medium">Canvas</th></tr></thead>
-            <tbody>
-              {results.map((r, i) => (
-                <tr key={i} className="border-t border-rule">
-                  <td className="py-1">{r.which} · {r.backend}</td><td>{r.blobs.toLocaleString()}</td><td>{r.median.toFixed(1)}</td><td>{r.p90.toFixed(1)}</td><td>{r.cpu.toFixed(1)}</td><td>{r.width}×{r.height}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <caption className="mb-2 text-left text-ink-muted">
+                Frames per second and milliseconds between frames over 120 live frames; your screen caps this at its refresh rate (60 Hz is 16.7 ms).
+                Dropped counts frames that missed a refresh. Alone is one frame drawn and waited for by itself, which stops the CPU and GPU overlapping, so it overstates the cost.
+              </caption>
+              <thead><tr className="text-ink-faint"><th className="py-1 pr-3 font-medium">Renderer</th><th className="pr-3 font-medium">Blobs</th><th className="pr-3 font-medium">fps</th><th className="pr-3 font-medium">Dropped</th><th className="pr-3 font-medium">ms between frames (median / slowest 10%)</th><th className="pr-3 font-medium">ms alone</th><th className="font-medium">ms CPU</th></tr></thead>
+              <tbody>
+                {results.map((r, i) => (
+                  <tr key={i} className="border-t border-rule">
+                    <td className="py-1 pr-3">{r.which === 'three' ? 'three.js' : 'Ours'} · {r.backend} · {r.moving ? 'walking' : 'standing still'}</td>
+                    <td className="pr-3">{r.blobs.toLocaleString()}</td>
+                    <td className="pr-3">{r.fps ? r.fps.toFixed(0) : '–'}</td>
+                    <td className="pr-3">{r.fps ? `${Math.round(r.dropped * 100)}%` : '–'}</td>
+                    <td className="pr-3">{r.fps ? `${r.median.toFixed(1)} / ${r.p90.toFixed(1)}` : '–'}</td>
+                    <td className="pr-3">{r.alone.toFixed(1)}</td>
+                    <td>{r.cpu.toFixed(1)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </main>
     </>

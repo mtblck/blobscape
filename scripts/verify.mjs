@@ -658,8 +658,8 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     if (orange < 2000) fails.push(`engine lab ${label}: only ${orange} fox-orange pixels`)
     else ok(`engine lab ${label}: draws the foxes (${orange} orange pixels)`)
     const bench = await page.evaluate(() => window.__lab.bench(3))
-    if (!(bench.median > 0)) fails.push(`engine lab ${label}: bench ${JSON.stringify(bench)}`)
-    else ok(`engine lab ${label}: times frames (${bench.median.toFixed(0)} ms in software)`)
+    if (!(bench.alone > 0)) fails.push(`engine lab ${label}: bench ${JSON.stringify(bench)}`)
+    else ok(`engine lab ${label}: times frames (${bench.alone.toFixed(0)} ms in software)`)
     await page.screenshot({ path: join(shots, `engine-lab-${label}.png`) })
     if (!webgl) {
       // our rigged .glb opens in three.js's own loader as a still splat, with its animation

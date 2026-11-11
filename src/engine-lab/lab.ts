@@ -17,8 +17,13 @@ import { LINEAR_TO_SRGB_4K, srgbToLinear } from '../splat-core/colour.ts'
  * Spark isn't here yet: it draws through the older WebGLRenderer, so timing it
  * fairly needs its own page.
  *
- * `bench()` draws a fixed number of frames and reports the time per frame,
- * so the same numbers come out of a phone and of verify.
+ * `bench()` measures two things. First, how often the live view actually
+ * draws: the gap between animation frames, which is what you see as
+ * smoothness and is capped by the screen's refresh rate. Then, the cost of
+ * one frame on its own: draw, then wait until the GPU has finished, which
+ * stops the CPU and GPU from overlapping and so overstates the cost of a
+ * frame in normal use. Headless verify has no live view and gets only the
+ * second.
  */
 export type Which = 'engine' | 'three'
 export const WHICH: Which[] = ['engine', 'three']
@@ -56,12 +61,20 @@ export interface Lab {
 
 export interface BenchResult {
   which: string
+  /** Whether the blobs were moving: three.js has no bones, so it always stands still. */
+  moving: boolean
   backend: string
   blobs: number
   frames: number
-  /** Wall-clock milliseconds per frame, median and 90th percentile, including waiting for the GPU. */
+  /** Milliseconds between live frames, median and 90th percentile (0 when there is no live view). */
   median: number
   p90: number
+  /** Frames per second over the live run. */
+  fps: number
+  /** Share of live frames that took longer than 1.5 screen refreshes, i.e. visibly dropped. */
+  dropped: number
+  /** Milliseconds for one frame drawn and waited for on its own, median. */
+  alone: number
   /** Milliseconds per frame the CPU spent skinning and sorting (WebGL path), median. */
   cpu: number
   width: number
@@ -177,8 +190,11 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
 
   let raf = 0, stopped = false, busy = false
   const t0 = performance.now()
-  const tick = () => {
+  let onTick: ((now: number) => void) | undefined
+  let cancelRun: (() => void) | undefined
+  const tick = (now: number) => {
     if (stopped) return
+    onTick?.(now)
     if (o.offscreen) {
       // headless: draw only on request (frame/show), never on a timer
     } else if (!busy) {
@@ -191,7 +207,7 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
   raf = requestAnimationFrame(tick)
 
   return {
-    info: `${o.which} · ${backend} · ${blobs.toLocaleString()} blobs`,
+    info: `${o.which === 'three' ? 'three.js (standing still: it has no bones)' : 'ours'} · ${backend} · ${blobs.toLocaleString()} blobs`,
     world,
     renderer,
     get orbit() { return orbit },
@@ -204,26 +220,52 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
       try { return await job() } finally { busy = false }
     },
     async bench(frames) {
-      const times: number[] = [], cpu: number[] = []
+      const q = (a: number[], p: number) => a.length ? [...a].sort((x, y) => x - y)[Math.min(a.length - 1, Math.floor(a.length * p))] : 0
+      const gaps: number[] = [], cpu: number[] = [], alone: number[] = []
+      // 1. The live view as it runs: gaps between animation frames.
+      if (!o.offscreen) {
+        await new Promise<void>((done, fail) => {
+          cancelRun = () => fail(new Error('the lab was closed'))
+          let last = 0, skip = 10 // let shaders compile and the sort settle
+          onTick = (now) => {
+            if (skip-- > 0) { last = now; return }
+            gaps.push(now - last)
+            cpu.push(world?.cpuMs ?? 0)
+            last = now
+            if (gaps.length >= frames) { onTick = cancelRun = undefined; done() }
+          }
+        })
+      }
+      // 2. One frame at a time, each waited for.
       busy = true
       try {
-        // warm up: first frames compile shaders
         for (let i = 0; i < 3; i++) await frame(i / 30)
-        for (let i = 0; i < frames; i++) {
+        for (let i = 0; i < Math.min(frames, 30); i++) {
           const s = performance.now()
           await frame((i + 3) / 30)
-          times.push(performance.now() - s)
-          cpu.push(world?.cpuMs ?? 0)
+          alone.push(performance.now() - s)
+          if (o.offscreen) cpu.push(world?.cpuMs ?? 0)
         }
       } finally {
         busy = false
       }
-      const q = (a: number[], p: number) => [...a].sort((x, y) => x - y)[Math.min(a.length - 1, Math.floor(a.length * p))]
+      // The screen's refresh interval: the shortest gap we saw (120 Hz ≈ 8.3 ms),
+      // but never longer than 60 Hz's, in case no frame kept up at all.
+      const refresh = gaps.length ? Math.max(4, Math.min(1000 / 60, ...gaps)) : 0
+      const span = gaps.reduce((a, b) => a + b, 0)
       const size = target ?? canvas
-      return { which: o.which, backend, blobs, frames, median: q(times, 0.5), p90: q(times, 0.9), cpu: q(cpu, 0.5), width: size.width, height: size.height }
+      return {
+        which: o.which, moving: !!world && walk, backend, blobs, frames: gaps.length || alone.length,
+        median: q(gaps, 0.5), p90: q(gaps, 0.9),
+        fps: span ? (gaps.length * 1000) / span : 0,
+        dropped: gaps.length ? gaps.filter((g) => g > refresh * 1.5).length / gaps.length : 0,
+        alone: q(alone, 0.5), cpu: q(cpu, 0.5), width: size.width, height: size.height,
+      }
     },
     dispose() {
       stopped = true
+      onTick = undefined
+      cancelRun?.()
       cancelAnimationFrame(raf)
       world?.dispose()
       target?.dispose()
