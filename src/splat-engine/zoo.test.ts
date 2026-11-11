@@ -92,3 +92,15 @@ test('aim turns a bone to point where it is told, under a turned parent', () => 
   const want = dir([0.3, 1, 0.4])
   for (let k = 0; k < 3; k++) assert.ok(near(now[k], want[k], 1e-5), `${now} vs ${want}`)
 })
+
+test('a file whose scale keys are not numbers is read without them, so it cannot poison the pose', () => {
+  const sp = ZOO.find((s) => s.id === 'frog')!
+  const c = sp.make(sp.detail[0], sp.looks[0].id)
+  const tongue = sp.moves.find((m) => m.name === 'tongue')!
+  const clip = recordClip('tongue', c.skeleton, tongue.pose, tongue.seconds, 12)
+  clip.sizes![c.skeleton.index('tongue1')]![3] = NaN
+  const back = readRiggedGlb(writeRiggedGlb({ name: 'frog', ...c, clips: [clip] }))
+  assert.equal(back.clips[0].sizes?.[c.skeleton.index('tongue1')], undefined)
+  sampleClip(back.clips[0], back.skeleton, 0.3)
+  assert.ok(back.skeleton.matrix.every(Number.isFinite))
+})

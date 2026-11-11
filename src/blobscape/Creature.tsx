@@ -68,19 +68,19 @@ export function Creature() {
   const pick = (sp: Species) => {
     setLoaded(undefined)
     setFileNote(undefined)
+    setMove(sp.moves[0].name)
     if (sp === species) return
     setSpecies(sp)
     setCount(sp.start)
     setLook(sp.looks[0].id)
-    setMove(sp.moves[0].name)
-    setOrbit(sp.view)
     const url = new URL(location.href)
     if (sp.id === DEFAULT) url.searchParams.delete('creature')
     else url.searchParams.set('creature', sp.id)
     history.replaceState(history.state, '', url)
   }
 
-  // Building a big creature takes a moment, so it happens after a note has painted, not during a render
+  // Building a big creature takes a moment, so a change happens after a note has painted, not during a render
+  // (the first is built in the first render: a few hundred milliseconds at most, for the dragon)
   const [made, setMade] = useState<Shown>(() => build(species, count, look))
   const madeFor = useRef({ species, count, look })
   useEffect(() => {
@@ -92,6 +92,14 @@ export function Creature() {
     return () => clearTimeout(t)
   }, [species, count, look])
   const shown = loaded ?? made
+  // the camera and floor follow the creature once it's built, so a frog never sits on the dragon's floor
+  const framed = useRef(made.species)
+  useEffect(() => {
+    if (framed.current === made.species || !made.species) return
+    framed.current = made.species
+    setOrbit(made.species.view)
+  }, [made])
+  const scaleOf = shown.species ?? made.species ?? species
   const clip = move === STILL ? undefined : shown.clips.find((c) => c.name === move) ?? shown.clips[0]
   const moveOf = (c: Clip) => shown.species?.moves.find((m) => m.name === c.name)
 
@@ -113,7 +121,7 @@ export function Creature() {
   useEffect(() => { if (stage) stage.speed = speed }, [stage, speed])
   useEffect(() => { stage?.setMode(mode) }, [stage, mode])
   useEffect(() => { stage?.setShow(show) }, [stage, show])
-  useEffect(() => { stage?.setFloor(Math.max(8, 2 * Math.round(species.view.distance))) }, [stage, species])
+  useEffect(() => { stage?.setFloor(Math.max(8, 2 * Math.round(scaleOf.view.distance))) }, [stage, scaleOf])
   useEffect(() => { if (stage) { stage.orbit = orbit; stage.invalidate() } }, [stage, orbit])
 
   const splatGlb = () => writeRiggedGlb({ name: shown.name, ...shown.body, clips: shown.clips })
@@ -210,10 +218,10 @@ export function Creature() {
               {!failed && (!drawn || busy?.startsWith('Making')) && <Loading label={drawn ? busy! : stage ? `Waking the ${species.name}…` : 'Starting the splat engine…'} />}
               <p role="status" className="sr-only">{!failed && !drawn ? (stage ? `Waking the ${species.name}…` : 'Starting the splat engine…') : ''}</p>
               {failed && <div role="alert" className="absolute inset-4 grid place-items-center text-center text-sm text-ink">{failed}</div>}
-              <div role="group" aria-label="Show" data-testid="show" className="absolute top-3 left-3 flex gap-1.5 max-sm:top-2 max-sm:left-2">
+              <div role="group" aria-label="Show in the view" data-testid="show" className="absolute top-3 left-3 flex gap-1.5 max-sm:top-2 max-sm:left-2">
                 {SHOW.map((v) => <Chip small key={v.id} active={show === v.id} onClick={() => setShow(v.id)}>{v.label}</Chip>)}
               </div>
-              <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => setOrbit(species.view)} />
+              <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => setOrbit(scaleOf.view)} />
               <p aria-hidden className="pointer-events-none absolute right-14 bottom-2 left-3 text-right text-xs text-ink-faint">{typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches ? 'drag to orbit · pinch to zoom' : 'drag to orbit · scroll to zoom'}</p>
             </div>
             <div className="border-t border-rule-soft px-4 py-2 text-xs leading-relaxed text-ink-muted sm:text-sm">

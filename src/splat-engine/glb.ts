@@ -418,6 +418,8 @@ export function readRiggedGlb(bytes: Uint8Array): Rigged {
       if (b === undefined) continue
       const s = anim.samplers[ch.sampler]
       const out = read(s.output, Float32Array) as Float32Array
+      // a key that isn't a number would poison every pose after it: skip the whole channel
+      if (!out.every(Number.isFinite)) continue
       if (ch.target.path === 'rotation' && out.length === times.length * 4) rotations[b] = new Float32Array(out)
       if (ch.target.path === 'translation' && out.length === times.length * 3) {
         const rest = restTranslation(skeleton, b)
@@ -428,7 +430,7 @@ export function readRiggedGlb(bytes: Uint8Array): Rigged {
       if (ch.target.path === 'scale' && out.length === times.length * 3) {
         // our bones scale evenly: a file's uneven scale is read as its average
         const o = new Float32Array(times.length)
-        for (let f = 0; f < times.length; f++) o[f] = (out[f * 3] + out[f * 3 + 1] + out[f * 3 + 2]) / 3
+        for (let f = 0; f < times.length; f++) o[f] = Math.min(1000, Math.max(0, (out[f * 3] + out[f * 3 + 1] + out[f * 3 + 2]) / 3))
         sizes[b] = o
       }
     }

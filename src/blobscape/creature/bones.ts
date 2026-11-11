@@ -7,8 +7,7 @@ import { posedPoint, type Skeleton } from '../../splat-engine/rig.ts'
  * from its head to its tail, fat near the head, with a ball at each joint.
  * Posed from the skeleton every time the creature moves.
  *
- * Over the blobs it draws on top of everything (`onTop`), so the bones show
- * through the body; on its own it draws with depth, so near bones hide far ones.
+ * Over the blobs it draws after them (`onTop`), so the bones show through the body.
  */
 export class BoneView extends THREE.Group {
   private readonly spindles: THREE.InstancedMesh
@@ -42,9 +41,13 @@ export class BoneView extends THREE.Group {
     this.update()
   }
 
-  /** Draw over the blobs (true) or among them (false). */
+  /**
+   * Draw over the blobs (true) or on their own (false). Blobs write no depth,
+   * so drawing the rig after them (in the transparent pass, by render order)
+   * puts it on top while near bones still hide far ones.
+   */
   set onTop(v: boolean) {
-    for (const m of this.materials) { m.depthTest = !v; m.depthWrite = !v; m.transparent = v; m.needsUpdate = true }
+    for (const m of this.materials) { m.transparent = v; m.needsUpdate = true }
   }
 
   /** Moves every bone to the skeleton's current pose. */
