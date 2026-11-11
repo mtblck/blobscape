@@ -386,6 +386,21 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   await page.keyboard.press('Control+z')
   if ((await count(page)) !== sprayed) fails.push('blobscape sandbox: Ctrl+Z did not bring the deleted blobs back')
   else ok('blobscape sandbox: select all, delete, Ctrl+Z')
+  // Keyboard: Enter on the focused view uses the tool at its centre
+  await page.getByRole('button', { name: 'Add', exact: true }).click()
+  const beforeKey = await count(page)
+  await page.getByTestId('viewport').focus()
+  await page.keyboard.press('Enter')
+  if ((await count(page)) !== beforeKey + 1) fails.push(`blobscape sandbox: Enter with Add went ${beforeKey} → ${await count(page)}`)
+  else ok('blobscape sandbox: Enter on the view adds a blob at the centre')
+  // The skip link jumps to the content without leaving the page
+  await page.keyboard.press('Shift+Tab')
+  await page.goto(base + B + '#/lesson/footprint')
+  await page.keyboard.press('Tab')
+  await page.getByRole('link', { name: 'Skip to content' }).press('Enter')
+  await page.waitForTimeout(300)
+  if (!(await page.getByRole('heading', { level: 1, name: /Footprint/ }).count())) fails.push('blobscape: the skip link left the lesson')
+  else ok('blobscape: the skip link stays on the lesson')
   await axe(page, 'blobscape sandbox after edits')
   await ctx.close()
 

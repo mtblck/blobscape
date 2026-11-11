@@ -60,7 +60,7 @@ export function OneBlob() {
       caption={
         <p>
           {xray ? (
-            <>The rings are where the blob fades to 61% and 14% of its strength (1σ and 2σ). The coloured lines are its own <span style={{ color: '#e5484d' }}>x</span>, <span style={{ color: '#30a46c' }}>y</span> and <span style={{ color: '#3e63dd' }}>z</span> axes.</>
+            <>The rings are where the blob fades to 61% and 14% of its strength (1σ and 2σ). The labelled lines are its own x, y and z axes, each as long as one standard deviation.</>
           ) : 'Turn on x-ray to see the outline of the Gaussian.'}
         </p>
       }
@@ -84,9 +84,9 @@ export function OneBlob() {
               summary: scale.map((s) => s.toFixed(2)).join(' × '),
               content: (
                 <div className="space-y-3">
-                  <Slider label="Size along x" value={sx} min={-5} max={1} step={0.05} onChange={setSx} format={logFmt} />
-                  <Slider label="Size along y" value={sy} min={-5} max={1} step={0.05} onChange={setSy} format={logFmt} />
-                  <Slider label="Size along z" value={sz} min={-5} max={1} step={0.05} onChange={setSz} format={logFmt} hint="Each is one standard deviation along the blob's own axis. Three of them make an ellipsoid." />
+                  <Slider label="Size along x" value={sx} min={-5} max={2} step={0.05} onChange={setSx} format={logFmt} />
+                  <Slider label="Size along y" value={sy} min={-5} max={2} step={0.05} onChange={setSy} format={logFmt} />
+                  <Slider label="Size along z" value={sz} min={-5} max={2} step={0.05} onChange={setSz} format={logFmt} hint="Each is one standard deviation along the blob's own axis. Three of them make an ellipsoid." />
                 </div>
               ),
             },

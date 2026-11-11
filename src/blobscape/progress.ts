@@ -10,8 +10,12 @@ type Store = Record<string, string[]>
 
 function read(): Store {
   try {
-    const v = JSON.parse(localStorage.getItem(KEY) ?? '{}')
-    return v && typeof v === 'object' ? v : {}
+    const v: unknown = JSON.parse(localStorage.getItem(KEY) ?? '{}')
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return {}
+    // Keep only lists of goal ids: anything else in storage is ignored, not trusted
+    const out: Store = {}
+    for (const [k, ids] of Object.entries(v)) if (Array.isArray(ids)) out[k] = ids.filter((x): x is string => typeof x === 'string')
+    return out
   } catch {
     return {}
   }

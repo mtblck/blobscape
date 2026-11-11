@@ -32,7 +32,7 @@ export function Footprint() {
   const done = useGoals('footprint', {
     round: !!f && ratio < 1.15,
     line: !!f && ratio > 8,
-    hard: reach <= 1.1,
+    hard: reach <= 1.0,
   })
 
   return (

@@ -44,8 +44,22 @@ function Home() {
 
       <section aria-labelledby="lessons-title">
         <div className="flex items-baseline justify-between">
-          <h2 id="lessons-title" className="font-serif text-3xl">Lessons</h2>
-          {any && <button type="button" onClick={() => { resetProgress(); refresh((n) => n + 1) }} className="text-sm text-ink-faint hover:text-accent">Reset progress</button>}
+          <h2 id="lessons-title" tabIndex={-1} className="font-serif text-3xl outline-none">Lessons</h2>
+          {any && (
+            <button
+              type="button"
+              onClick={() => {
+                if (!window.confirm('Clear every ticked goal in this browser?')) return
+                resetProgress()
+                refresh((n) => n + 1)
+                // The button goes away, so give focus somewhere sensible
+                document.getElementById('lessons-title')?.focus()
+              }}
+              className="text-sm text-ink-faint hover:text-accent"
+            >
+              Reset progress
+            </button>
+          )}
         </div>
         <ol className="mt-4">
           {LESSONS.map((l, i) => (

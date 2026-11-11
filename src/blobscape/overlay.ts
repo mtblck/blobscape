@@ -55,6 +55,13 @@ function drawAxes(ctx: CanvasRenderingContext2D, b: Blobs, i: number, lens: Lens
     ctx.moveTo(cx, cy)
     ctx.lineTo(p[0], p[1])
     ctx.stroke()
+    // Letters as well as colours, so the axes don't rely on telling red from green
+    const dx = p[0] - cx, dy = p[1] - cy, l = Math.hypot(dx, dy) || 1
+    ctx.font = '600 12px "Archivo Variable", system-ui, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillStyle = themeColour('ink')
+    ctx.fillText('xyz'[a], p[0] + (dx / l) * 10, p[1] + (dy / l) * 10)
   }
 }
 

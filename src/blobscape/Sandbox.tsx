@@ -92,15 +92,15 @@ export function Sandbox() {
     bump()
   }
   const edit = (fn: (b: Blobs) => void) => {
-    history.current.record(blobsRef.current)
+    history.current.record(blobsRef.current, source)
     fn(blobsRef.current)
     bump()
   }
-  const undo = () => { const b = history.current.undo(blobsRef.current); if (b) { replace(b); setMessage('Undone') } }
-  const redo = () => { const b = history.current.redo(blobsRef.current); if (b) { replace(b); setMessage('Redone') } }
+  const undo = () => { const b = history.current.undo({ blobs: blobsRef.current, source }); if (b) { replace(b.blobs, b.source); setMessage('Undone') } }
+  const redo = () => { const b = history.current.redo({ blobs: blobsRef.current, source }); if (b) { replace(b.blobs, b.source); setMessage('Redone') } }
 
   const start = (s: (typeof STARTS)[number]) => {
-    history.current.record(blobsRef.current)
+    history.current.record(blobsRef.current, source)
     const b = s.make()
     replace(b, s.name)
     setOrbit((o) => ({ ...o, ...frame(b) }))
@@ -210,7 +210,7 @@ export function Sandbox() {
   const selectAt = (x: number, y: number, add: boolean) => {
     if (!view) return
     const { origin, dir } = view.ray(x, y)
-    const hit = pick(blobsRef.current, [origin.x, origin.y, origin.z], [dir.x, dir.y, dir.z], 2)
+    const hit = pick(blobsRef.current, [origin.x, origin.y, origin.z], [dir.x, dir.y, dir.z], 2, 0) // faded blobs stay selectable
     setSelected((s) => {
       if (hit.index < 0) return add ? s : new Set()
       const next = new Set(add ? s : [])
@@ -224,7 +224,7 @@ export function Sandbox() {
   // A stroke's "before" picture goes into the history only once the stroke changes something
   const before = useRef<Blobs | null>(null)
   const changed = (from = 0) => {
-    if (before.current) { history.current.keep(before.current); before.current = null }
+    if (before.current) { history.current.keep({ blobs: before.current, source }); before.current = null }
     bump(from)
   }
   const handlers: ToolHandlers | undefined = tool === 'orbit' ? undefined : {
@@ -247,6 +247,16 @@ export function Sandbox() {
       else if (tool === 'erase' && view) eraseAt(x, y, view.lens())
     },
     up: () => { last.current = null; before.current = null },
+    // Enter or Space on the focused view uses the tool at the centre (a keyboard stand-in for a click)
+    activate: (x, y, shift) => {
+      if (tool === 'select') { selectAt(x, y, shift); return }
+      before.current = blobsRef.current.clone()
+      if (tool === 'add') { const from = blobsRef.current.count; if (place(blobsRef.current, land(x, y), 0)) changed(from) }
+      else if (tool === 'spray') sprayAt(x, y)
+      else if (tool === 'erase' && view) eraseAt(x, y, view.lens())
+      before.current = null
+      hover.current = { x, y }
+    },
     hover: (x, y) => {
       hover.current = x === null || y === null ? null : { x, y }
       view?.invalidate(1)
@@ -284,7 +294,7 @@ export function Sandbox() {
     }
   }
 
-  const toolNote = TOOLS.find((t) => t.id === tool)!.note
+  const toolNote = tool === 'orbit' && coarse ? 'Drag to orbit, pinch to zoom. Pick another tool to change the scene, then come back here to turn it.' : TOOLS.find((t) => t.id === tool)!.note
 
   return (
     <>
@@ -313,7 +323,7 @@ export function Sandbox() {
             tool={handlers}
             overlay={overlay}
             takeSyncFrom={takeSyncFrom}
-            label={`Sandbox scene with ${blobs.count.toLocaleString()} blobs. Drag or use the arrow keys to orbit${tool !== 'orbit' ? `; with the ${TOOLS.find((t) => t.id === tool)!.name} tool, click or drag to use it` : ''}.`}
+            label={`Sandbox scene with ${blobs.count.toLocaleString()} blobs. Drag or use the arrow keys to orbit, plus and minus to zoom${tool !== 'orbit' ? `; with the ${TOOLS.find((t) => t.id === tool)!.name} tool, click or drag, or press Enter to use it at the centre` : ''}.`}
             hint={coarse ? (tool === 'orbit' ? 'drag to orbit · pinch to zoom' : 'pinch to zoom · pick Look to orbit') : tool === 'orbit' ? 'drag to orbit · scroll to zoom' : 'right-drag to orbit · scroll to zoom'}
           />
           <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm text-ink-muted">

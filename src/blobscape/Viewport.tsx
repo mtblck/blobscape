@@ -11,6 +11,8 @@ export interface ToolHandlers {
   up?: () => void
   /** Pointer moving with no button down, for brush previews. */
   hover?: (x: number | null, y: number | null) => void
+  /** Enter or Space on the focused view: use the tool at the centre. */
+  activate?: (x: number, y: number, shift: boolean) => void
   cursor?: string
 }
 
@@ -172,6 +174,12 @@ export function Viewport({ blobs, version, orbit, setOrbit, reach, overlay, take
   }, [setOrbit])
 
   const onKeyDown = (ev: React.KeyboardEvent) => {
+    if ((ev.key === 'Enter' || ev.key === ' ') && tool?.activate) {
+      ev.preventDefault()
+      const c = ev.currentTarget as HTMLElement
+      tool.activate(c.clientWidth / 2, c.clientHeight / 2, ev.shiftKey)
+      return
+    }
     if (!orbitKey(ev, orbit)) return
     ev.preventDefault()
     setOrbit((o) => orbitKey(ev, o) ?? o)
@@ -182,7 +190,9 @@ export function Viewport({ blobs, version, orbit, setOrbit, reach, overlay, take
       <canvas ref={canvasRef} aria-hidden className="absolute inset-0 h-full w-full" />
       <canvas
         ref={overlayRef}
-        role="img"
+        // An application, not an image: screen readers then pass the arrow keys through to it
+        role="application"
+        aria-roledescription="3D view"
         aria-label={label}
         tabIndex={0}
         data-testid="viewport"

@@ -2,7 +2,7 @@
  * A list of Gaussian blobs, kept as flat typed arrays (one entry per blob) so a
  * scene of tens of thousands stays cheap to copy, undo and hand to the GPU.
  *
- * Each blob is the seven kinds of number a 3D Gaussian splat is made of:
+ * Each blob is the five kinds of number (14 values) a 3D Gaussian splat is made of:
  * a centre, three scales (standard deviations along its own axes), a rotation
  * (unit quaternion x, y, z, w), a colour and an opacity. Colours are stored as
  * given to Spark (0–1 per channel), which draws them as sRGB.

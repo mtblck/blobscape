@@ -28,6 +28,9 @@ export function Order() {
   const [orbit, setOrbit] = useState<Orbit>({ target: [0, 0, 0], distance: 5, azimuth: 0, elevation: 10 })
   const [opacity, setOpacity] = useState(0.8)
   const [mode, setMode] = useState<DrawMode>('list')
+  // "See it get it wrong" only counts once you've looked: turned the view or picked an order
+  const [touched, setTouched] = useState(false)
+  const turn = (f: (o: Orbit) => Orbit) => { setTouched(true); setOrbit(f) }
   const blobs = useMemo(() => scene(opacity), [opacity])
 
   const lens = orbitLens(orbit, 400, 300)
@@ -36,7 +39,7 @@ export function Order() {
   const same = right.every((v, i) => v === yours[i])
 
   const done = useGoals('order', {
-    wrong: mode === 'list' && !same,
+    wrong: touched && mode === 'list' && !same,
     luck: mode === 'list' && same,
     reversed: mode === 'reversed',
     opaque: opacity >= 0.99 && !same,
@@ -47,24 +50,28 @@ export function Order() {
       id="order"
       intro={<p>See-through things blend correctly only when drawn from the back forward. Here the same three blobs are drawn twice: once in the right order, once in yours.</p>}
       view={
-        <div className="grid grid-cols-2 gap-3">
-          <SoftView blobs={blobs} orbit={orbit} setOrbit={setOrbit} order={right} title="Back to front" testId="view-sorted" />
-          <SoftView blobs={blobs} orbit={orbit} setOrbit={setOrbit} order={yours} title={MODES.find((m) => m.id === mode)!.name} testId="view-yours" warn={!same} />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <SoftView blobs={blobs} orbit={orbit} setOrbit={turn} order={right} title="Back to front" testId="view-sorted" />
+          <SoftView blobs={blobs} orbit={orbit} setOrbit={turn} order={yours} title={MODES.find((m) => m.id === mode)!.name} testId="view-yours" warn={!same} />
         </div>
       }
       caption={
-        <div className="grid grid-cols-2 gap-3" aria-live="polite">
-          <OrderList order={right} blobs={blobs} label="Right order" />
-          <OrderList order={yours} blobs={blobs} label={same ? 'Your order: right by luck' : 'Your order: wrong'} />
-        </div>
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <OrderList order={right} blobs={blobs} label="Right order" />
+            <OrderList order={yours} blobs={blobs} label={same ? 'Your order: right by luck' : 'Your order: wrong'} />
+          </div>
+          {/* Only the verdict is announced, and only when it flips, not every step of a turn */}
+          <p aria-live="polite" className="sr-only">{same ? 'Your order is right.' : 'Your order is wrong.'}</p>
+        </>
       }
       controls={
         <>
           <div className="flex flex-wrap gap-2" role="group" aria-label="Your drawing order">
-            {MODES.map((m) => <Chip key={m.id} active={mode === m.id} onClick={() => setMode(m.id)}>{m.name}</Chip>)}
+            {MODES.map((m) => <Chip key={m.id} active={mode === m.id} onClick={() => { setTouched(true); setMode(m.id) }}>{m.name}</Chip>)}
           </div>
           <p className="text-sm text-ink-faint">{MODES.find((m) => m.id === mode)!.note}</p>
-          <Slider label="Turn" value={Math.round(orbit.azimuth)} min={-180} max={180} step={1} onChange={(azimuth) => setOrbit((o) => ({ ...o, azimuth }))} format={(v) => `${v}°`} />
+          <Slider label="Turn" value={Math.round(orbit.azimuth)} min={-180} max={180} step={1} onChange={(azimuth) => turn((o) => ({ ...o, azimuth }))} format={(v) => `${v}°`} />
           <Slider label="Opacity" value={opacity} min={0.1} max={1} step={0.01} onChange={setOpacity} format={(v) => `${Math.round(v * 100)}%`} hint="Every blob's opacity at its centre." />
         </>
       }
@@ -137,7 +144,8 @@ function SoftView({ blobs, orbit, setOrbit, order, title, testId, warn }: { blob
       <div className={`relative aspect-[4/3] overflow-hidden rounded-lg border bg-paper-sunk ${warn ? 'border-accent' : 'border-rule'}`}>
         <canvas
           ref={ref}
-          role="img"
+          role="application"
+          aria-roledescription="3D view"
           aria-label={`${title}: the three blobs drawn ${order.map((i) => NAMES[i]).join(', then ')}. Drag or use the arrow keys to turn.`}
           tabIndex={0}
           data-testid={testId}
