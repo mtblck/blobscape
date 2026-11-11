@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useId, useRef, useState, type ReactNode } from 'react'
 
 /**
  * The sticky header every experiment page shares: the flask mark, then
- * "Matt Black / Experiments", and a theme switch on the right.
+ * "Matt Black / Experiments", and a theme switch on the right. A page that
+ * passes `menu` gets a menu button there instead, and the theme choice moves
+ * into the menu.
  */
-export function SiteHeader({ hub = false }: { hub?: boolean }) {
+export function SiteHeader({ hub = false, menu }: { hub?: boolean; menu?: ReactNode }) {
   return (
     <>
       <a
@@ -34,7 +36,7 @@ export function SiteHeader({ hub = false }: { hub?: boolean }) {
               </a>
             </p>
           </nav>
-          <ThemeSwitch />
+          {menu ? <SiteMenu>{menu}</SiteMenu> : <ThemeSwitch />}
         </div>
       </header>
     </>
@@ -66,6 +68,75 @@ export function Flask({ className }: { className?: string }) {
       />
       <path d="M11.5 3.5h9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
+  )
+}
+
+/**
+ * A menu button and its panel. The panel is a native popover, so Escape and a
+ * click outside close it and it sits above everything; following a link in it
+ * closes it too.
+ */
+function SiteMenu({ children }: { children: ReactNode }) {
+  const id = useId()
+  const panel = useRef<HTMLDivElement>(null)
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <button
+        type="button"
+        popoverTarget={id}
+        aria-expanded={open}
+        aria-controls={id}
+        className="flex h-9 shrink-0 items-center gap-2 rounded-full border border-rule px-3 text-sm text-ink-muted hover:border-ink-faint hover:text-ink"
+      >
+        <svg viewBox="0 0 24 24" className="h-4.5 w-4.5" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+          {open ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
+        </svg>
+        Menu
+      </button>
+      <div
+        ref={panel}
+        id={id}
+        popover="auto"
+        aria-label="Menu"
+        role="dialog"
+        onToggle={(e) => setOpen((e as unknown as ToggleEvent).newState === 'open')}
+        onClick={(e) => { if ((e.target as HTMLElement).closest('a')) panel.current?.hidePopover() }}
+        className="max-h-[calc(100dvh-5rem)] w-[min(26rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-rule bg-paper p-5 text-ink shadow-xl"
+        style={{ inset: 'auto', top: '4rem', right: 'max(1rem, calc((100vw - 80rem) / 2 + 1rem))', margin: 0 }}
+      >
+        {children}
+      </div>
+    </>
+  )
+}
+
+/** Light and dark as two buttons, for inside a menu. */
+export function ThemeChoice() {
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => (document.documentElement.dataset.theme === 'light' ? 'light' : 'dark'))
+  const pick = (t: 'light' | 'dark') => {
+    document.documentElement.dataset.theme = t
+    try {
+      localStorage.setItem('mb-theme', t)
+    } catch {
+      /* private mode: the choice still applies to this page */
+    }
+    setTheme(t)
+  }
+  return (
+    <div role="group" aria-label="Theme" className="flex gap-1.5">
+      {(['light', 'dark'] as const).map((t) => (
+        <button
+          key={t}
+          type="button"
+          aria-pressed={theme === t}
+          onClick={() => pick(t)}
+          className={`rounded-full border px-3 py-1.5 text-sm capitalize ${theme === t ? 'border-accent bg-accent/15 text-accent-ink' : 'border-rule text-ink-muted hover:border-ink-faint hover:text-ink'}`}
+        >
+          {t}
+        </button>
+      ))}
+    </div>
   )
 }
 

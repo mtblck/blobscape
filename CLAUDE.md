@@ -28,11 +28,16 @@ production domain. See README for the why behind the choices.
 - The worker posts a frame ~30×/s with the display image, new losses and events; the page keeps losses in a ref buffer, not state.
 
 ## Blobscape
-- One page, hash routes (`#/lesson/<id>`, `#/sandbox`), kept liftable: `blobscape/`, `src/blobscape/`, `src/splat-core/`, `src/shared/`. Matt may move it to blobscape.dev.
+- One page, hash routes (`#/` front page, `#/lessons`, `#/lesson/<id>`, `#/sandbox`), kept liftable: `blobscape/`, `src/blobscape/`, `src/splat-core/`, `src/shared/`. Matt may move it to blobscape.dev.
 - `src/splat-core/` is shared with Splat to Sprite (render loop, presets, framing). `Blobs` (typed arrays) is the source of truth; `SplatView.sync(blobs, from)` uploads to Spark.
 - Lesson goals live in `routes.ts` (`LESSON_GOALS`); each lesson's `useGoals` checks are keyed by those ids. Each goal has a `hint` (points, never answers), a `why` (shown once it ticks) and a `where` (a control group id, or 'view', to light up).
 - Lessons use the exhibit layout in `Shell.tsx`: question + goal cards, an always-dark display case (`.case` in theme.css re-declares the dark tokens, so overlays call `themeColour(name, ctx.canvas)`), a desk of control `groups`, then the explanation spread. Views inside the case pass `bare`.
 - The Order lesson draws with `cpuSplat.ts`, because Spark can't be made to sort wrongly.
 - Effects: GLSL (`effectStatements`, a dyno `objectModifier`) and TS (`applyEffectOne`) must stay in step; both hash the GPU slot. Change one, change both, and check "baked matches preview" in verify.
+- Colour by angle evaluates spherical harmonics on the CPU (`splat-core/sh.ts`, tested) and re-uploads per orbit; its goal uses the stored highlight's peak as a share of the real one, which falls as shine sharpens (a whole-ball error doesn't).
+- Splat files encodes .ply/.splat with our writers and .spz with Spark's `writeSpz`, then reads each back through `readSplatFile`, so what you see is what the file holds. Break it uses its own scatter, not the shared Explode: a radial push on a dense scene just looks like a bigger object.
+- The front page (`Landing.tsx`) is the home for every splat experiment: lessons, sandbox, then the other tools (`EXPERIMENTS`). Its pictures (`diagrams.tsx`) are SVG blobs filled with shared radial gradients (`BlobDefs`, ids `bs-<colour>`), so don't reuse a `bs-` id elsewhere.
+- Header menu (pages only; lessons are one "Lessons" link so new lessons need no menu change), footer, tip button and page titles live in `Chrome.tsx`; site facts (origin, Ko-fi link, the other experiments) in `site.ts`. The tip button shows only on the front page and lesson list (it would cover lesson controls) and tucks away at the footer.
+- SEO: `blobscape/index.html` carries the canonical, Open Graph/Twitter tags, JSON-LD (allowed past hosting:check because it's data) and a `<noscript>` lesson list; `public/blobscape/og.png` is the share image. Hash routes are one URL to Google, so moving to blobscape.dev should switch to path routes with a prerendered page per lesson, and update `SITE.origin` and the canonical/og URLs.
 - The overlay canvas is `willReadFrequently` (CPU): a GPU 2D canvas in headless Chromium kept showing an old frame after a clear.
 

@@ -111,7 +111,7 @@ export function LessonShell({ id, intro, view, caption, groups, goals, done, sce
           <p className="text-sm text-ink-faint">
             <a href={href({ page: 'home' })} className="text-ink-muted underline decoration-rule underline-offset-2 hover:text-accent">Blobscape</a>
             <span aria-hidden className="px-1.5">·</span>
-            Lesson {i + 1} of {TOTAL}
+            <a href={href({ page: 'lessons' })} className="underline decoration-rule underline-offset-2 hover:text-accent">Lesson {i + 1} of {TOTAL}</a>
           </p>
           <h1 ref={h1} tabIndex={-1} className="mt-1 font-serif text-4xl leading-tight outline-none lg:text-[2.6rem]">{lesson.title}</h1>
           <div className="mt-2 max-w-[38ch] font-serif text-lg leading-snug text-ink-muted max-lg:max-w-[60ch]">{intro}</div>

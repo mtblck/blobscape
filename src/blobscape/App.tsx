@@ -1,32 +1,42 @@
 import { SiteHeader } from '../shared/SiteHeader.tsx'
 import { COMING, LESSONS, LESSON_GOALS, href, useRoute } from './routes.ts'
 import { doneGoals, resetProgress } from './progress.ts'
-import { useFocusHeading } from './Shell.tsx'
+import { Crumbs, useFocusHeading } from './Shell.tsx'
+import { Landing } from './Landing.tsx'
+import { Footer, Menu, TipButton, usePageMeta } from './Chrome.tsx'
 import { OneBlob } from './lessons/OneBlob.tsx'
 import { Footprint } from './lessons/Footprint.tsx'
 import { Order } from './lessons/Order.tsx'
 import { Many } from './lessons/Many.tsx'
+import { Angle } from './lessons/Angle.tsx'
+import { Paint } from './lessons/Paint.tsx'
+import { Formats } from './lessons/Formats.tsx'
+import { Break } from './lessons/Break.tsx'
 import { Sandbox } from './Sandbox.tsx'
 import { useState } from 'react'
 
-const PAGES: Record<string, () => React.JSX.Element> = { 'one-blob': OneBlob, footprint: Footprint, order: Order, many: Many }
+const PAGES: Record<string, () => React.JSX.Element> = { 'one-blob': OneBlob, footprint: Footprint, order: Order, many: Many, angle: Angle, paint: Paint, formats: Formats, break: Break }
 
 export function App() {
   const route = useRoute()
   const key = route.page === 'lesson' ? route.id : route.page
   const Lesson = route.page === 'lesson' ? PAGES[route.id] : null
+  usePageMeta(route)
   return (
-    <div className="min-h-dvh">
-      <SiteHeader />
+    <div className="flex min-h-dvh flex-col">
+      <SiteHeader menu={<Menu route={route} />} />
       {/* Keyed by page, so each one mounts fresh: its own view, its own state */}
-      <main id="main" key={key} className="mx-auto max-w-7xl px-4 pb-16">
-        {route.page === 'sandbox' ? <Sandbox /> : Lesson ? <Lesson /> : <Home />}
+      <main id="main" key={key} className="mx-auto w-full max-w-7xl flex-1 px-4 pb-16">
+        {route.page === 'sandbox' ? <Sandbox /> : Lesson ? <Lesson /> : route.page === 'lessons' ? <LessonList /> : <Landing />}
       </main>
+      <Footer />
+      {(route.page === 'home' || route.page === 'lessons') && <TipButton key={`tip-${route.page}`} />}
     </div>
   )
 }
 
-function Home() {
+/** Every lesson with its progress: where "See all eight lessons" and each lesson's kicker lead. */
+function LessonList() {
   const h1 = useFocusHeading()
   const [, refresh] = useState(0)
   // Only goals that still exist count, in case a lesson's goals change
@@ -34,8 +44,9 @@ function Home() {
   const any = progress.some((n) => n > 0)
   return (
     <div className="max-w-3xl">
-      <div className="pt-10 pb-8">
-        <h1 ref={h1} tabIndex={-1} className="font-serif text-5xl outline-none">Blobscape</h1>
+      <Crumbs here="Lessons" />
+      <div className="pt-6 pb-8">
+        <h1 ref={h1} tabIndex={-1} className="font-serif text-5xl outline-none">Lessons</h1>
         <p className="mt-4 font-serif text-xl leading-relaxed text-ink-muted">
           A Gaussian splat is a 3D scene made of nothing but soft, see-through, coloured blobs. Start with one, learn what each of its
           numbers does, then pile up thousands and play with them in the sandbox.
@@ -44,7 +55,7 @@ function Home() {
 
       <section aria-labelledby="lessons-title">
         <div className="flex items-baseline justify-between">
-          <h2 id="lessons-title" tabIndex={-1} className="font-serif text-3xl outline-none">Lessons</h2>
+          <h2 id="lessons-title" tabIndex={-1} className="font-serif text-3xl outline-none">All eight</h2>
           {any && (
             <button
               type="button"

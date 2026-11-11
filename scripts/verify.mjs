@@ -315,11 +315,12 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000 } }], ['phone', { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }]]) {
     const { page, ctx } = await open(B, opts)
     const lessons = await page.locator('a[href^="#/lesson/"]').count()
-    if (lessons < 4) fails.push(`blobscape ${label}: home lists ${lessons} lessons`)
+    if (lessons < 8) fails.push(`blobscape ${label}: home lists ${lessons} lessons`)
     else ok(`blobscape ${label}: home lists the lessons`)
     await axe(page, `blobscape ${label} home`)
-    for (const id of ['one-blob', 'footprint', 'order', 'many', 'sandbox']) {
-      await page.goto(base + B + (id === 'sandbox' ? '#/sandbox' : `#/lesson/${id}`))
+    await page.screenshot({ path: join(shots, `blobscape-home-${label}.png`), fullPage: true })
+    for (const id of ['lessons', 'one-blob', 'footprint', 'order', 'many', 'angle', 'paint', 'formats', 'break', 'sandbox']) {
+      await page.goto(base + B + (id === 'sandbox' || id === 'lessons' ? `#/${id}` : `#/lesson/${id}`))
       await page.waitForTimeout(1500)
       const focused = await page.evaluate(() => document.activeElement?.tagName)
       if (focused !== 'H1') fails.push(`blobscape ${label} ${id}: focus is on ${focused}, not the heading`)
@@ -355,6 +356,92 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   await page.getByRole('slider', { name: 'Turn' }).fill('180')
   if (!(await page.getByText('Your order: right by luck').count())) fails.push('blobscape order: list order not right from behind')
   else ok('blobscape order: list order is wrong from the front and right from behind')
+
+  // Front page chrome: the menu, the footer, the tip button and the search metadata
+  await page.goto(base + B + '#/')
+  await page.waitForTimeout(800)
+  await page.getByRole('button', { name: 'Menu' }).click()
+  const menuLinks = await page.locator('[popover] a').count()
+  if (!(await page.locator('[popover]:popover-open').count()) || menuLinks < 6) fails.push(`blobscape menu: open ${await page.locator('[popover]:popover-open').count()}, ${menuLinks} links`)
+  else ok(`blobscape menu: opens with ${menuLinks} links`)
+  await axe(page, 'blobscape menu open')
+  await page.screenshot({ path: join(shots, 'blobscape-menu.png') })
+  await page.keyboard.press('Escape')
+  if (await page.locator('[popover]:popover-open').count()) fails.push('blobscape menu: Escape left it open')
+  if (!(await page.locator('a.tipjar').count())) fails.push('blobscape: no tip button on the front page')
+  const ld = await page.evaluate(() => { try { return JSON.parse(document.querySelector('script[type="application/ld+json"]').textContent)['@graph'].length } catch { return 0 } })
+  const og = await page.getAttribute('meta[property="og:image"]', 'content')
+  if (!ld || !og) fails.push(`blobscape seo: structured data ${ld}, og:image ${og}`)
+  else ok('blobscape seo: structured data parses and the share image is set')
+  const shareImage = await page.request.get(base + B + 'og.png')
+  if (!shareImage.ok()) fails.push(`blobscape seo: og.png gave ${shareImage.status()}`)
+  await page.locator('footer').scrollIntoViewIfNeeded()
+  await page.waitForTimeout(600)
+  if (!(await page.locator('a.tipjar[data-tucked]').count())) fails.push('blobscape: the tip button stays over the footer')
+  else ok('blobscape: the tip button tucks away at the footer')
+  await page.goto(base + B + '#/lesson/paint')
+  await page.waitForTimeout(500)
+  if (!(await page.title()).startsWith('Paint · Lesson 6')) fails.push(`blobscape: lesson title is "${await page.title()}"`)
+  else ok('blobscape: each page sets its own title')
+  if (await page.locator('a.tipjar').count()) fails.push('blobscape: the tip button covers a lesson')
+
+  // Colour by angle: degree 3 keeps up with a soft shine and falls behind a sharp one
+  const goalCount = () => page.textContent('[data-testid=goal-count]')
+  await page.goto(base + B + '#/lesson/angle')
+  await page.waitForTimeout(800)
+  const peakAt = async (d, s) => {
+    await page.getByRole('slider', { name: 'Degree' }).fill(String(d))
+    await page.getByRole('slider', { name: 'Sharpness' }).fill(String(s))
+    return Number((await page.textContent('[data-testid=sh-readout]')).match(/(\d+)% as bright/)[1])
+  }
+  const soft = await peakAt(3, 8), sharp = await peakAt(3, 120), low = await peakAt(1, 120)
+  if (!(soft > 90 && sharp < 70 && low < sharp)) fails.push(`blobscape angle: stored highlight ${soft}% / ${sharp}% / ${low}%`)
+  else ok(`blobscape angle: degree 3 keeps ${soft}% of a soft shine, ${sharp}% of a sharp one, degree 1 ${low}%`)
+
+  // Paint: spraying the square covers it
+  await page.goto(base + B + '#/lesson/paint')
+  await page.waitForTimeout(800)
+  const pbox = await page.getByTestId('viewport').boundingBox()
+  for (let row = 0; row < 8; row++) {
+    await page.mouse.move(pbox.x + pbox.width * 0.3, pbox.y + pbox.height * (0.3 + row * 0.06))
+    await page.mouse.down()
+    for (let k = 0; k <= 20; k++) await page.mouse.move(pbox.x + pbox.width * (0.3 + k * 0.02), pbox.y + pbox.height * (0.3 + row * 0.06))
+    await page.mouse.up()
+  }
+  const covered = Number((await page.textContent('[data-testid=coverage]')).replace(/\D/g, ''))
+  if (covered < 90) fails.push(`blobscape paint: spraying covered ${covered}%`)
+  else ok(`blobscape paint: spraying covers ${covered}% of the square`)
+  const painted = await count(page)
+  await page.getByRole('button', { name: 'Erase', exact: true }).click()
+  await page.mouse.move(pbox.x + pbox.width * 0.4, pbox.y + pbox.height * 0.45)
+  await page.mouse.down()
+  for (let k = 0; k <= 10; k++) await page.mouse.move(pbox.x + pbox.width * (0.4 + k * 0.02), pbox.y + pbox.height * 0.45)
+  await page.mouse.up()
+  const erased = await count(page)
+  if (!(erased < painted)) fails.push(`blobscape paint: erasing went ${painted} → ${erased} blobs`)
+  else ok(`blobscape paint: the eraser rubs out ${painted - erased} blobs`)
+
+  // Splat files: .spz is the smallest of the three and is read back
+  await page.goto(base + B + '#/lesson/formats')
+  await page.waitForFunction(() => /\.spz \d/.test(document.body.textContent), null, { timeout: 15000 }).catch(() => {})
+  await page.getByRole('button', { name: /^\.spz/ }).click()
+  await page.waitForFunction(() => /as \.spz:/.test(document.querySelector('[data-testid=file-readout]')?.textContent ?? ''), null, { timeout: 15000 }).catch(() => {})
+  const fileText = await page.textContent('[data-testid=file-readout]')
+  const perBlob = Number(fileText.match(/([\d.]+) bytes each/)?.[1])
+  if (!(perBlob > 4 && perBlob < 20)) fails.push(`blobscape formats: .spz readout "${fileText}"`)
+  else ok(`blobscape formats: .spz is ${perBlob} bytes per blob, read back and shown`)
+
+  // Break it: shrink, explode, and put it back
+  await page.goto(base + B + '#/lesson/break')
+  await page.evaluate(() => localStorage.clear())
+  await page.reload()
+  await page.waitForTimeout(800)
+  await page.getByRole('slider', { name: 'Size' }).fill('0.1')
+  await page.getByRole('slider', { name: 'Explode' }).fill('0.8')
+  await page.getByRole('slider', { name: 'Explode' }).fill('0')
+  await page.getByRole('slider', { name: 'Size' }).fill('1')
+  if (!(await goalCount()).startsWith('3 of')) fails.push(`blobscape break: goals show "${await goalCount()}"`)
+  else ok('blobscape break: shrink, explode and put back tick all three goals')
 
   // Lesson → sandbox carries the scene
   await page.goto(base + B + '#/lesson/many')
@@ -415,6 +502,13 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   await dark.page.waitForTimeout(1500)
   await axe(dark.page, 'blobscape dark footprint')
   await dark.page.screenshot({ path: join(shots, 'blobscape-footprint-dark.png') })
+  await dark.page.goto(base + B + '#/')
+  await dark.page.waitForTimeout(800)
+  await axe(dark.page, 'blobscape dark home')
+  await dark.page.goto(base + B + '#/lesson/angle')
+  await dark.page.waitForTimeout(1500)
+  await axe(dark.page, 'blobscape dark angle')
+  await dark.page.screenshot({ path: join(shots, 'blobscape-angle-dark.png') })
   await dark.ctx.close()
 }
 

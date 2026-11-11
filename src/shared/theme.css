@@ -157,6 +157,9 @@
 .desk-group { grid-template-columns: minmax(0, 1fr); }
 @media (min-width: 64rem) { .desk-group { grid-template-columns: repeat(var(--cols, 1), minmax(0, 1fr)); } }
 
+/* Blobscape's front page: a dashed selection ring that marches */
+@keyframes bs-march { to { stroke-dashoffset: -22; } }
+
 /* Blobscape's zoom bar: a vertical slider on the inside right of a view */
 .zoom-range {
   writing-mode: vertical-lr;
@@ -181,3 +184,10 @@
   transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
 .zoom-btn:hover { border-color: var(--c-ink-faint); transform: translateY(-1px); box-shadow: 0 3px 6px -2px rgb(0 0 0 / 0.35); }
+
+/* tipjar's floating support button, in the site's colours */
+:root {
+  --tipjar-bg: var(--c-accent);
+  --tipjar-label: var(--c-paper);
+  --tipjar-ring: var(--c-paper);
+}

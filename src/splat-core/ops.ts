@@ -181,3 +181,24 @@ export function thin(b: Blobs, max: number): number {
   for (let i = 0; i < b.count * 3; i++) b.scale[i] *= k
   return n
 }
+
+/** Bounding box of the scene, or of the selection when one is given (sampled for big scenes). */
+export function bounds(b: Blobs, sel: Selection | null) {
+  const lo: Vec3 = [Infinity, Infinity, Infinity], hi: Vec3 = [-Infinity, -Infinity, -Infinity]
+  const useSel = !!sel && sel.count > 0
+  const stride = useSel ? 1 : Math.max(1, Math.floor(b.count / 20000))
+  for (let i = 0; i < b.count; i += stride) {
+    if (useSel && !sel!.has(i)) continue
+    for (let a = 0; a < 3; a++) { lo[a] = Math.min(lo[a], b.centre[i * 3 + a]); hi[a] = Math.max(hi[a], b.centre[i * 3 + a]) }
+  }
+  return lo[0] <= hi[0] ? { lo, hi } : null
+}
+
+/** Centre and size of a scene, for pointing the camera at it. */
+export function frame(b: Blobs): { target: Vec3; distance: number } {
+  const bb = bounds(b, null)
+  if (!bb) return { target: [0, 0.5, 0], distance: 4 }
+  const { lo, hi } = bb
+  const r = Math.max(0.3, Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2)
+  return { target: [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2], distance: r * 3.2 }
+}
