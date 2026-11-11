@@ -6,29 +6,8 @@
   "trailingSlash": true,
   "redirects": [
     {
-      "source": "/experiments",
-      "has": [
-        {
-          "type": "host",
-          "value": "experiments-theta-inky.vercel.app"
-        }
-      ],
-      "destination": "https://blobscape.dev/experiments/",
-      "permanent": true
-    },
-    {
       "source": "/experiments/blobscape/:path*",
       "destination": "https://blobscape.dev/",
-      "permanent": true
-    },
-    {
-      "source": "/experiments/fit-a-picture/:path*",
-      "destination": "https://blobscape.dev/tools/fit-a-picture/",
-      "permanent": true
-    },
-    {
-      "source": "/experiments/splat-to-sprite/:path*",
-      "destination": "https://blobscape.dev/tools/splat-to-sprite/",
       "permanent": true
     },
     {
@@ -37,25 +16,56 @@
       "permanent": true
     },
     {
-      "source": "/experiments/:path*",
-      "has": [
+      "source": "/experiments",
+      "missing": [
         {
           "type": "host",
-          "value": "experiments-theta-inky.vercel.app"
+          "value": ".*blobscape.*"
         }
       ],
       "destination": "https://blobscape.dev/experiments/",
       "permanent": true
     },
     {
-      "source": "/tools",
-      "destination": "/experiments/",
-      "permanent": false
+      "source": "/experiments/:path*",
+      "missing": [
+        {
+          "type": "host",
+          "value": ".*blobscape.*"
+        }
+      ],
+      "destination": "https://blobscape.dev/experiments/:path*",
+      "permanent": true
     },
     {
-      "source": "/tools/",
+      "source": "/creature",
+      "destination": "/experiments/creature/",
+      "permanent": true
+    },
+    {
+      "source": "/creature/:path*",
+      "destination": "/experiments/creature/",
+      "permanent": true
+    },
+    {
+      "source": "/tools/fit-a-picture/:path*",
+      "destination": "/experiments/fit-a-picture/",
+      "permanent": true
+    },
+    {
+      "source": "/tools/splat-to-sprite/:path*",
+      "destination": "/experiments/splat-to-sprite/",
+      "permanent": true
+    },
+    {
+      "source": "/tools",
       "destination": "/experiments/",
-      "permanent": false
+      "permanent": true
+    },
+    {
+      "source": "/tools/:path*",
+      "destination": "/experiments/",
+      "permanent": true
     }
   ],
   "headers": [

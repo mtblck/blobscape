@@ -314,7 +314,7 @@ export function App() {
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <SiteHeader here="/tools/fit-a-picture/" />
+      <SiteHeader here="/experiments/fit-a-picture/" />
 
       <main id="main" className="mx-auto w-full max-w-7xl flex-1 px-4 pb-16">
         <Crumbs here="Fit a Picture" parent={{ label: 'Experiments', href: '/experiments/' }} />
