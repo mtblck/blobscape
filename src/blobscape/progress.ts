@@ -33,7 +33,16 @@ export function resetProgress() {
   try { localStorage.removeItem(KEY) } catch { /* nothing kept anyway */ }
 }
 
-export interface Goal { id: string; label: string; hint?: string }
+export interface Goal {
+  id: string
+  label: string
+  /** Where to look or what to change, never the answer. Shown only while it's the current goal. */
+  hint?: string
+  /** One line on what the learner just saw, shown once the goal ticks. */
+  why?: string
+  /** The control group (its id) or 'view' to light up while this is the current goal. */
+  where?: string
+}
 
 /**
  * Ticks goals off as their checks come true. A goal stays ticked once

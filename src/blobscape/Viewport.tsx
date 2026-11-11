@@ -41,6 +41,10 @@ interface Props {
   children?: ReactNode
   onView?: (v: SplatView) => void
   className?: string
+  /** No frame of its own: it fills a lesson's display case. */
+  bare?: boolean
+  /** Where the reset button takes the camera; the view it opened with when omitted. */
+  home?: () => Orbit
 }
 
 /** Degrees of turn per pixel dragged, shared by every view so they all feel the same. */
@@ -73,12 +77,13 @@ export const clampOrbit = (o: Orbit): Orbit => ({
  * canvas on top draws whatever the page wants over them. Drag (or arrow keys)
  * to orbit, scroll, pinch or +/− to zoom.
  */
-export function Viewport({ blobs, version, orbit, setOrbit, reach, overlay, takeSync, tool, label, hint, children, onView, className }: Props) {
+export function Viewport({ blobs, version, orbit, setOrbit, reach, overlay, takeSync, tool, label, hint, children, onView, className, bare, home }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const overlayRef = useRef<HTMLCanvasElement>(null)
   const viewRef = useRef<SplatView | null>(null)
   const [failed, setFailed] = useState(false)
   const coarse = useRef(typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches).current
+  const start = useRef(orbit).current
   const drawRef = useRef(overlay)
   drawRef.current = overlay
 
@@ -191,7 +196,7 @@ export function Viewport({ blobs, version, orbit, setOrbit, reach, overlay, take
   }
 
   return (
-    <div className={`relative overflow-hidden rounded-lg border border-rule bg-paper-sunk ${className ?? 'aspect-[4/3]'}`}>
+    <div className={`relative overflow-hidden ${bare ? 'h-full' : `rounded-lg border border-rule bg-paper-sunk ${className ?? 'aspect-[4/3]'}`}`}>
       <canvas ref={canvasRef} aria-hidden className="absolute inset-0 h-full w-full" />
       <canvas
         ref={overlayRef}
@@ -220,7 +225,43 @@ export function Viewport({ blobs, version, orbit, setOrbit, reach, overlay, take
         </div>
       )}
       {children}
-      {hint && <p aria-hidden className="pointer-events-none absolute right-3 bottom-2 left-3 text-right text-xs text-ink-faint">{coarse ? hint.replace('scroll to zoom', 'pinch to zoom') : hint}</p>}
+      <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => setOrbit(() => clampOrbit(home ? home() : start))} />
+      {hint && <p aria-hidden className="pointer-events-none absolute right-14 bottom-2 left-3 text-right text-xs text-ink-faint">{coarse ? hint.replace('scroll to zoom', 'pinch to zoom') : hint}</p>}
+    </div>
+  )
+}
+
+const ZOOM = { near: Math.log(0.6), far: Math.log(40) }
+
+/**
+ * A vertical zoom slider along the inside right edge of a view, with a reset
+ * button under it. Up is closer. The slider is on a log scale, so each notch
+ * feels the same at any distance.
+ */
+export function ZoomBar({ orbit, setOrbit, onReset }: { orbit: Orbit; setOrbit: (fn: (o: Orbit) => Orbit) => void; onReset: () => void }) {
+  // 0 = furthest, 1 = closest
+  const t = (ZOOM.far - Math.log(orbit.distance)) / (ZOOM.far - ZOOM.near)
+  return (
+    <div className="absolute top-3 right-2.5 bottom-3 flex w-8 flex-col items-center gap-1.5 max-sm:top-2 max-sm:bottom-2">
+      <button type="button" aria-label="Zoom in" onClick={() => setOrbit((o) => clampOrbit({ ...o, distance: o.distance / 1.15 }))} className="zoom-btn">+</button>
+      <input
+        type="range"
+        min={0}
+        max={1}
+        step={0.001}
+        value={Math.min(1, Math.max(0, t))}
+        onChange={(e) => {
+          const v = Number(e.target.value)
+          setOrbit((o) => clampOrbit({ ...o, distance: Math.exp(ZOOM.far - v * (ZOOM.far - ZOOM.near)) }))
+        }}
+        aria-label="Zoom"
+        aria-valuetext={`${orbit.distance.toFixed(1)} units away`}
+        className="zoom-range min-h-0 flex-1"
+      />
+      <button type="button" aria-label="Zoom out" onClick={() => setOrbit((o) => clampOrbit({ ...o, distance: o.distance * 1.15 }))} className="zoom-btn">−</button>
+      <button type="button" aria-label="Reset the view" title="Reset the view" onClick={onReset} className="zoom-btn mt-1">
+        <svg viewBox="0 0 16 16" aria-hidden className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 8a5 5 0 1 0 1.5-3.6" /><path d="M3 2.5v2.8h2.8" /></svg>
+      </button>
     </div>
   )
 }

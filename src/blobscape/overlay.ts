@@ -1,8 +1,9 @@
 import { project, projectPoint, quatToMat, rgbToHex, type Blobs, type Lens } from '../splat-core/blobs.ts'
 
 /** Theme colours, read live so the overlay follows the light/dark switch. */
-export function themeColour(name: 'accent' | 'ink' | 'ink-faint' | 'paper') {
-  return getComputedStyle(document.documentElement).getPropertyValue(`--c-${name}`).trim() || '#888'
+export function themeColour(name: 'accent' | 'ink' | 'ink-faint' | 'paper', from: Element = document.documentElement) {
+  // Read from the canvas itself where possible: a lesson's display case is always dark, whatever the page theme
+  return getComputedStyle(from).getPropertyValue(`--c-${name}`).trim() || '#888'
 }
 
 export interface OutlineOptions {
@@ -60,7 +61,7 @@ function drawAxes(ctx: CanvasRenderingContext2D, b: Blobs, i: number, lens: Lens
     ctx.font = '600 12px "Archivo Variable", system-ui, sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillStyle = themeColour('ink')
+    ctx.fillStyle = themeColour('ink', ctx.canvas as HTMLCanvasElement)
     ctx.fillText('xyz'[a], p[0] + (dx / l) * 10, p[1] + (dy / l) * 10)
   }
 }

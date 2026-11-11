@@ -684,6 +684,7 @@ export function Sandbox() {
             overlay={overlay}
             takeSync={takeSync}
             label={`Sandbox scene with ${blobs.count.toLocaleString()} blobs. ${tool === 'move' ? 'With the Move tool, the arrow keys slide the selection (Shift for bigger steps)' : 'Drag or use the arrow keys to orbit'}, plus and minus to zoom${toolKeyNote[tool] ?? ''}.`}
+            home={() => ({ ...frame(blobsRef.current), azimuth: 30, elevation: 22 })}
             hint={coarse ? (tool === 'orbit' ? 'drag to orbit · pinch to zoom' : 'pinch to zoom · pick Look to orbit') : tool === 'orbit' ? 'drag to orbit · scroll to zoom' : 'right-drag to orbit · scroll to zoom'}
           >
             {dragOver && (

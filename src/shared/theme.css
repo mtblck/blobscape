@@ -33,6 +33,7 @@
   --c-selection:  rgb(242 166 90 / 0.3);
   --c-checker-a:  #221d18;
   --c-checker-b:  #2c261f;
+  --c-done:       #6fcf97;
   --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23cfc6b8' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5'/%3E%3C/svg%3E");
 }
 
@@ -50,6 +51,7 @@
   --c-selection:  rgb(156 74 12 / 0.2);
   --c-checker-a:  #f1ebe1;
   --c-checker-b:  #e6ddcf;
+  --c-done:       #1e7a46;
   --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%234a4238' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5'/%3E%3C/svg%3E");
 }
 
@@ -63,6 +65,10 @@
   --color-rule-soft:  var(--c-rule-soft);
   --color-accent:     var(--c-accent);
   --color-accent-ink: var(--c-accent-ink);
+  --color-done:       var(--c-done);
+  --color-placard:      #ffd04a;
+  --color-placard-edge: #e9b417;
+  --color-placard-ink:  #1f1a0c;
   --font-serif: "Newsreader Variable", Georgia, serif;
   --font-sans: "Archivo Variable", ui-sans-serif, system-ui, sans-serif;
 }
@@ -118,3 +124,60 @@
 .group:focus-visible .flask-bubble-3 { animation-delay: 0.7s; }
 
 .bake-progress { accent-color: var(--c-accent); }
+
+/*
+ * Narrow control panels (a lesson's side panel) stack each slider: label and
+ * value on one line, the track full width under them, so tracks stay long
+ * and every row lines up on the panel's left edge.
+ */
+.stack-controls .slider-row { grid-template-columns: minmax(0, 1fr) auto; }
+.stack-controls .slider-row > input { grid-column: 1 / -1; grid-row: 2; }
+.stack-controls .slider-row > .slider-value { text-align: right; }
+.stack-controls .slider-hint { padding-left: 0; }
+.stack-controls .field-row { grid-template-columns: minmax(0, 1fr); }
+
+/* Blobscape's display case: always dark, in either theme, so the blobs glow the
+   same way everywhere. It redefines the dark tokens, so overlays drawn with
+   themeColour(name, canvas) and any text inside read as on a dark page. */
+.case {
+  color-scheme: dark;
+  --c-paper:      #16130f;
+  --c-paper-sunk: #221d18;
+  --c-ink:        #ede6da;
+  --c-ink-muted:  #cfc6b8;
+  --c-ink-faint:  #a89f92;
+  --c-rule:       #3a332b;
+  --c-rule-soft:  #2a251f;
+  --c-accent:     #f2a65a;
+  --c-accent-ink: #ffd3a6;
+  background: #0e0c09;
+  color: var(--c-ink);
+}
+/* A control group's own columns, on a laptop only */
+.desk-group { grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 64rem) { .desk-group { grid-template-columns: repeat(var(--cols, 1), minmax(0, 1fr)); } }
+
+/* Blobscape's zoom bar: a vertical slider on the inside right of a view */
+.zoom-range {
+  writing-mode: vertical-lr;
+  direction: rtl;
+  width: 1.25rem;
+  margin: 0;
+  accent-color: var(--c-accent);
+  cursor: grab;
+}
+.zoom-btn {
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex: none;
+  border-radius: 9999px;
+  border: 1px solid color-mix(in srgb, var(--c-ink-faint) 40%, transparent);
+  background: color-mix(in srgb, var(--c-paper) 80%, transparent);
+  color: var(--c-ink);
+  font-size: 1rem;
+  line-height: 1;
+  transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.zoom-btn:hover { border-color: var(--c-ink-faint); transform: translateY(-1px); box-shadow: 0 3px 6px -2px rgb(0 0 0 / 0.35); }
