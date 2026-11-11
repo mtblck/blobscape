@@ -53,7 +53,7 @@ window.__glbCheck = async () => {
 }
 
 declare global {
-  interface Window { __lab?: Lab; __labError?: string; __glbCheck?: () => Promise<unknown> }
+  interface Window { __lab?: Lab; __labError?: string; __glbCheck?: () => Promise<unknown>; __sheet?: () => Promise<{ cols: number; rows: number; size: number; solid: number[] }> }
 }
 
 function App() {
@@ -63,6 +63,8 @@ function App() {
   const [error, setError] = useState<string>()
   const [results, setResults] = useState<BenchResult[]>([])
   const [timing, setTiming] = useState(false)
+  const [sheet, setSheet] = useState<{ url: string; json: string }>()
+  const [making, setMaking] = useState(false)
 
   useEffect(() => {
     let live: Lab | undefined, gone = false
@@ -85,6 +87,29 @@ function App() {
   }, [opts.which, opts.count, opts.webgl, opts.herd])
 
   const set = (p: Partial<LabOptions>) => setOpts((o) => ({ ...o, ...p }))
+
+  const makeSheet = async () => {
+    if (!lab) return null
+    setMaking(true)
+    try {
+      const { makeWalkSheet } = await import('../splat-engine/walkSheet.ts')
+      const s = await makeWalkSheet(lab.renderer)
+      const png = await s.png()
+      if (sheet) URL.revokeObjectURL(sheet.url)
+      setSheet({ url: URL.createObjectURL(png), json: JSON.stringify(s.json('blob-fox.png'), null, 2) })
+      return s
+    } finally {
+      setMaking(false)
+    }
+  }
+
+  useEffect(() => {
+    window.__sheet = async () => {
+      const s = await makeSheet()
+      if (!s) throw new Error('lab not ready')
+      return { cols: s.cols, rows: s.rows, size: s.size, solid: s.frames.map((f) => { let k = 0; for (let i = 3; i < f.data.length; i += 4) if (f.data[i]) k++; return k }) }
+    }
+  })
 
   const time = async () => {
     if (!lab) return
@@ -129,8 +154,20 @@ function App() {
             <Toggle label="Walk" checked={opts.walk} onChange={(v) => { set({ walk: v }); lab?.setWalk(v) }} />
             <Button primary disabled={!lab || timing} onClick={time}>{timing ? 'Timing…' : 'Time it'}</Button>
             <Button onClick={() => downloadGlb(20000)}>Download the fox (.glb)</Button>
+            <Button disabled={!lab || making} onClick={makeSheet}>{making ? 'Drawing…' : 'Make a walk sprite sheet'}</Button>
           </div>
         </div>
+        {sheet && (
+          <section aria-label="Walk sprite sheet" className="flex flex-col gap-2">
+            <h2 className="text-lg font-semibold text-ink">Walk sprite sheet</h2>
+            <p className="text-sm text-ink-muted">Four rows (down, left, right, up), eight frames per stride, in Tinkerkit's format.</p>
+            <img src={sheet.url} alt="The blob fox's trot, eight frames from each of four sides, as pixel art" className="w-full max-w-xl rounded border border-rule bg-[#14110e] p-2 [image-rendering:pixelated]" />
+            <div className="flex gap-2">
+              <a href={sheet.url} download="blob-fox.png" className="text-accent underline">Download PNG</a>
+              <a href={`data:application/json,${encodeURIComponent(sheet.json)}`} download="blob-fox.json" className="text-accent underline">Download JSON</a>
+            </div>
+          </section>
+        )}
         {results.length > 0 && (
           <table className="w-full text-left text-sm">
             <caption className="mb-2 text-left text-ink-muted">Milliseconds per frame over 60 frames, including waiting for the GPU</caption>
