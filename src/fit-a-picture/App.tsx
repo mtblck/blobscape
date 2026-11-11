@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { SiteHeader } from '../shared/SiteHeader.tsx'
+import { Footer } from '../shared/Footer.tsx'
+import { Crumbs } from '../blobscape/Shell.tsx'
 import { Button, Chip, Field, Panel, Slider, Tabs, Toggle } from '../shared/ui.tsx'
 import { SAMPLES, drawSample, fitSize, type Sample } from './samples.ts'
 import { psnr } from './fit.ts'
@@ -311,13 +313,14 @@ export function App() {
   const sourceName = source.kind === 'sample' ? source.sample.name : source.name
 
   return (
-    <div className="min-h-dvh">
-      <SiteHeader />
+    <div className="flex min-h-dvh flex-col">
+      <SiteHeader here="/tools/fit-a-picture/" />
 
-      <main id="main" className="mx-auto max-w-7xl px-4 pb-16">
-        <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-2 pt-8 pb-6">
-          <h1 className="font-serif text-4xl sm:text-5xl">Fit a Picture</h1>
-          <p className="max-w-xl font-serif text-lg text-ink-muted">
+      <main id="main" className="mx-auto w-full max-w-7xl flex-1 px-4 pb-16">
+        <Crumbs here="Fit a Picture" />
+        <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-2 pt-4 pb-6">
+          <h1 className="font-display text-4xl sm:text-5xl">Fit a Picture</h1>
+          <p className="max-w-xl text-lg text-ink-muted">
             A few hundred soft blobs start as noise and learn to paint a picture, using the same training loop that turns photos
             into a 3D Gaussian splat. Here it's flat, so you can watch every step.
           </p>
@@ -344,7 +347,7 @@ export function App() {
                 <figcaption className="mt-1.5 text-xs text-ink-faint">The picture · {sourceName}</figcaption>
               </figure>
               <figure className="min-w-0">
-                <div className={`relative overflow-hidden rounded-lg border border-rule ${settings.view === 'blobs' ? 'bg-[#0d0b09]' : 'bg-paper-sunk'}`} style={{ aspectRatio: aspect }}>
+                <div className={`relative overflow-hidden rounded-lg border border-rule ${settings.view === 'blobs' ? 'bg-[#0d0f16]' : 'bg-paper-sunk'}`} style={{ aspectRatio: aspect }}>
                   <canvas
                     ref={fitCanvas}
                     className={`absolute inset-0 block h-full w-full cursor-crosshair ${settings.view === 'blobs' ? 'opacity-20' : ''}`}
@@ -500,7 +503,7 @@ export function App() {
         </div>
 
         <section aria-labelledby="how" className="mt-12 border-t border-rule pt-8">
-          <h2 id="how" className="font-serif text-3xl">How a splat learns</h2>
+          <h2 id="how" className="font-display text-3xl">How a splat learns</h2>
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-ink-muted">
             A real capture starts from a rough cloud of 3D blobs and photos of the scene from many angles. It runs the loop below tens
             of thousands of times, with one photo per step. This page runs the same loop against one flat picture. The one thing
@@ -522,6 +525,7 @@ export function App() {
           </ol>
         </section>
       </main>
+      <Footer />
     </div>
   )
 }

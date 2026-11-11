@@ -1,58 +1,87 @@
 @import "tailwindcss";
+/* The prerendered pages (scripts/prerender.ts) use these classes before the app starts */
+@source "../../scripts/prerender.ts";
 
-/* Tokens copied from mb-portfolio/src/index.css so the experiments read as part
-   of the same site. Dark is the default, like the portfolio. */
+/* Blobscape's brand (brand kit web/palette.css), as the hex tokens the site and
+   its canvases read. Light by default; dark follows the system unless the menu's
+   theme choice puts data-theme on <html>. Text tokens all clear 4.5:1 on paper
+   and paper-sunk. Blob coral (#f2553a) is for the mark and big shapes only,
+   never small text (3.2:1 on paper). */
 
 @font-face {
-  font-family: 'Newsreader Variable';
+  font-family: 'Fredoka Variable';
   font-style: normal;
   font-display: swap;
-  font-weight: 200 800;
-  src: url('./fonts/newsreader-latin-wght-normal.woff2') format('woff2-variations');
+  font-weight: 300 700;
+  src: url('./fonts/fredoka-latin-wght-normal.woff2') format('woff2-variations');
 }
 @font-face {
-  font-family: 'Archivo Variable';
+  font-family: 'Figtree Variable';
   font-style: normal;
   font-display: swap;
-  font-weight: 100 900;
-  src: url('./fonts/archivo-latin-wght-normal.woff2') format('woff2-variations');
+  font-weight: 300 900;
+  src: url('./fonts/figtree-latin-wght-normal.woff2') format('woff2-variations');
 }
 
-:root,
+:root {
+  color-scheme: light;
+  --c-paper:      #fbf6ee;
+  --c-paper-sunk: #f4efe7;
+  --c-ink:        #1d2440;
+  --c-ink-muted:  #454c69;
+  --c-ink-faint:  #596280;
+  --c-rule:       #d8d3ca;
+  --c-rule-soft:  #e6e1d9;
+  --c-accent:     #b3250a;
+  --c-accent-ink: #8a1b06;
+  --c-selection:  rgb(242 85 58 / 0.22);
+  --c-checker-a:  #f4efe7;
+  --c-checker-b:  #e6e1d9;
+  --c-done:       #007650;
+  --c-logo-ink:   #1d2440;
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23454c69' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5'/%3E%3C/svg%3E");
+}
+
+/* Dark: the system's choice unless the page is forced light, or forced dark.
+   The same block three times (here, forced, and the display case) because CSS
+   can't name a set of declarations; keep them in step. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+  color-scheme: dark;
+  --c-paper:      #14161f;
+  --c-paper-sunk: #1e2130;
+  --c-ink:        #ebeef8;
+  --c-ink-muted:  #bdc3db;
+  --c-ink-faint:  #9197b2;
+  --c-rule:       #373a47;
+  --c-rule-soft:  #252730;
+  --c-accent:     #ff6449;
+  --c-accent-ink: #ffac9a;
+  --c-selection:  rgb(255 100 73 / 0.3);
+  --c-checker-a:  #191b24;
+  --c-checker-b:  #252730;
+  --c-done:       #6ddeab;
+  --c-logo-ink:   #fbf6ee;
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23bdc3db' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5'/%3E%3C/svg%3E");
+  }
+}
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --c-paper:      #16130f;
-  --c-paper-sunk: #221d18;
-  --c-ink:        #ede6da;
-  --c-ink-muted:  #cfc6b8;
-  --c-ink-faint:  #a89f92;
-  --c-rule:       #3a332b;
-  --c-rule-soft:  #2a251f;
-  --c-accent:     #f2a65a;
-  --c-accent-ink: #ffd3a6;
-  --c-selection:  rgb(242 166 90 / 0.3);
-  --c-checker-a:  #221d18;
-  --c-checker-b:  #2c261f;
-  --c-done:       #6fcf97;
-  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23cfc6b8' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5'/%3E%3C/svg%3E");
-}
-
-:root[data-theme="light"] {
-  color-scheme: light;
-  --c-paper:      #faf6ef;
-  --c-paper-sunk: #f1ebe1;
-  --c-ink:        #1f1a14;
-  --c-ink-muted:  #4a4238;
-  --c-ink-faint:  #665d52;
-  --c-rule:       #d9cfc0;
-  --c-rule-soft:  #e8e0d3;
-  --c-accent:     #9c4a0c;
-  --c-accent-ink: #6e3407;
-  --c-selection:  rgb(156 74 12 / 0.2);
-  --c-checker-a:  #f1ebe1;
-  --c-checker-b:  #e6ddcf;
-  --c-done:       #1e7a46;
-  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%234a4238' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5'/%3E%3C/svg%3E");
+  --c-paper:      #14161f;
+  --c-paper-sunk: #1e2130;
+  --c-ink:        #ebeef8;
+  --c-ink-muted:  #bdc3db;
+  --c-ink-faint:  #9197b2;
+  --c-rule:       #373a47;
+  --c-rule-soft:  #252730;
+  --c-accent:     #ff6449;
+  --c-accent-ink: #ffac9a;
+  --c-selection:  rgb(255 100 73 / 0.3);
+  --c-checker-a:  #191b24;
+  --c-checker-b:  #252730;
+  --c-done:       #6ddeab;
+  --c-logo-ink:   #fbf6ee;
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23bdc3db' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5'/%3E%3C/svg%3E");
 }
 
 @theme inline {
@@ -66,11 +95,14 @@
   --color-accent:     var(--c-accent);
   --color-accent-ink: var(--c-accent-ink);
   --color-done:       var(--c-done);
-  --color-placard:      #ffd04a;
-  --color-placard-edge: #e9b417;
-  --color-placard-ink:  #1f1a0c;
-  --font-serif: "Newsreader Variable", Georgia, serif;
-  --font-sans: "Archivo Variable", ui-sans-serif, system-ui, sans-serif;
+  /* The current goal's placard: Haze, edged in Blob, Deep ink, in both themes */
+  --color-placard:      #fde4dc;
+  --color-placard-edge: #f2553a;
+  --color-placard-ink:  #1d2440;
+  --color-blob:         #f2553a;
+  --color-deep:         #1d2440;
+  --font-display: "Fredoka Variable", ui-rounded, system-ui, sans-serif;
+  --font-sans: "Figtree Variable", ui-sans-serif, system-ui, sans-serif;
 }
 
 @layer base {
@@ -81,6 +113,8 @@
     -webkit-font-smoothing: antialiased;
   }
   ::selection { background: var(--c-selection); }
+  /* Fredoka is the display face: semibold, a little tight (brand guidelines) */
+  .font-display { font-weight: 600; letter-spacing: -0.01em; }
   /* Tailwind v4 leaves buttons on the default arrow; everything clickable gets the hand */
   button:not(:disabled), [role="button"]:not([aria-disabled="true"]), select { cursor: pointer; }
   /* Sliders: an open hand over the control, a closed one while dragging */
@@ -111,18 +145,6 @@
 }
 .pixelated { image-rendering: pixelated; }
 
-/* The header's flask: bubbles drift up while you hover it */
-@keyframes flask-rise {
-  0%   { transform: translateY(0); opacity: 0.9; }
-  100% { transform: translateY(-7px); opacity: 0; }
-}
-.group:hover .flask-bubble,
-.group:focus-visible .flask-bubble { animation: flask-rise 1.1s ease-in infinite; }
-.group:hover .flask-bubble-2,
-.group:focus-visible .flask-bubble-2 { animation-delay: 0.35s; }
-.group:hover .flask-bubble-3,
-.group:focus-visible .flask-bubble-3 { animation-delay: 0.7s; }
-
 .bake-progress { accent-color: var(--c-accent); }
 
 /*
@@ -141,16 +163,22 @@
    themeColour(name, canvas) and any text inside read as on a dark page. */
 .case {
   color-scheme: dark;
-  --c-paper:      #16130f;
-  --c-paper-sunk: #221d18;
-  --c-ink:        #ede6da;
-  --c-ink-muted:  #cfc6b8;
-  --c-ink-faint:  #a89f92;
-  --c-rule:       #3a332b;
-  --c-rule-soft:  #2a251f;
-  --c-accent:     #f2a65a;
-  --c-accent-ink: #ffd3a6;
-  background: #0e0c09;
+  --c-paper:      #14161f;
+  --c-paper-sunk: #1e2130;
+  --c-ink:        #ebeef8;
+  --c-ink-muted:  #bdc3db;
+  --c-ink-faint:  #9197b2;
+  --c-rule:       #373a47;
+  --c-rule-soft:  #252730;
+  --c-accent:     #ff6449;
+  --c-accent-ink: #ffac9a;
+  --c-selection:  rgb(255 100 73 / 0.3);
+  --c-checker-a:  #191b24;
+  --c-checker-b:  #252730;
+  --c-done:       #6ddeab;
+  --c-logo-ink:   #fbf6ee;
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23bdc3db' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5'/%3E%3C/svg%3E");
+  background: #0d0f16;
   color: var(--c-ink);
 }
 /* A control group's own columns, on a laptop only */

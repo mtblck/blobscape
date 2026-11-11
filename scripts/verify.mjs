@@ -27,7 +27,7 @@ if (!base) {
     const url = req.url.split('?')[0]
     let file = join(dist, url)
     if (existsSync(file) && statSync(file).isDirectory()) file = join(file, 'index.html')
-    if (!existsSync(file)) { res.statusCode = 404; return res.end('not found') }
+    if (!existsSync(file)) { res.statusCode = 404; res.setHeader('Content-Type', 'text/html'); return res.end(readFileSync(join(dist, '404.html'))) }
     res.setHeader('Content-Type', types[extname(file)] || 'application/octet-stream')
     for (const h of headersFor(url)) res.setHeader(h.key, h.value)
     res.end(readFileSync(file))
@@ -67,32 +67,74 @@ const solidPixels = (page, sel) => page.evaluate((sel) => {
   return n
 }, sel)
 
-// 1. Hub
+// 1. The site: every page is its own prerendered file, the chrome works, old links land
 {
-  const { page, res, ctx } = await open('/experiments/')
-  if (res.status() !== 200) fails.push(`hub status ${res.status()}`)
+  // Prerendered: each page's HTML carries its own title, canonical and content before any script runs
+  for (const [path, title] of [['/', 'Blobscape: learn'], ['/lessons/', 'Lessons ·'], ['/lessons/order/', 'Order matters · Lesson 3'], ['/sandbox/', 'Sandbox ·'], ['/creature/', 'Creature ·']]) {
+    const html = await (await fetch(base + path)).text()
+    if (!html.includes(`<title>${title}`)) fails.push(`${path}: prerendered title is not "${title}…"`)
+    else if (!html.includes(`<link rel="canonical" href="https://blobscape.dev${path}"`)) fails.push(`${path}: prerendered canonical is wrong`)
+    else if (!/<main id="main"[^>]*>[\s\S]*<h1/.test(html)) fails.push(`${path}: prerendered page has no content`)
+    else ok(`${path} is prerendered with its own title, canonical and content`)
+  }
+  const missing = await fetch(base + '/no-such-page/')
+  if (missing.status !== 404 || !(await missing.text()).includes('noindex')) fails.push('an unknown page is not a noindex 404')
+  else ok('unknown pages get the noindex 404 page')
+  const sitemap = await (await fetch(base + '/sitemap.xml')).text()
+  if (!sitemap.includes('https://blobscape.dev/lessons/model/') || !sitemap.includes('/tools/fit-a-picture/')) fails.push('sitemap.xml is missing pages')
+  else ok('sitemap.xml lists the lessons and tools')
+
+  const { page, res, ctx } = await open('/')
+  if (res.status() !== 200) fails.push(`front page status ${res.status()}`)
   const csp = res.headers()['content-security-policy'] ?? ''
   if (!csp.includes('wasm-unsafe-eval')) fails.push('test server is not sending the production CSP')
-  if (!(await page.getByRole('link', { name: /Splat to Sprite/ }).count())) fails.push('hub does not link to splat-to-sprite')
-  else ok('hub lists splat-to-sprite under the production CSP')
-  if (!(await page.getByRole('link', { name: /Fit a Picture/ }).count())) fails.push('hub does not link to fit-a-picture')
-  else ok('hub lists fit-a-picture')
-  if (!(await page.getByRole('link', { name: /Blobscape/ }).count())) fails.push('hub does not link to blobscape')
-  else ok('hub lists blobscape')
-  if (!(await page.getByRole('banner').getByRole('link', { name: 'Matt Black' }).count())) fails.push('hub has no site header')
-  await axe(page, 'hub')
-  // The theme switch flips the palette and remembers it under the portfolio's key
-  await page.getByRole('button', { name: /Switch to (light|dark) theme/ }).click()
-  const flipped = await page.evaluate(() => [document.documentElement.dataset.theme, localStorage.getItem('mb-theme')])
-  if (flipped[0] !== flipped[1] || !flipped[0]) fails.push(`theme switch gave ${flipped.join(' / ')}`)
-  else ok(`theme switch flips to ${flipped[0]} and stores it`)
-  await axe(page, 'hub, theme switched')
+  if (!(await page.getByRole('banner').getByRole('link', { name: 'Blobscape home' }).count())) fails.push('no Blobscape logo link in the header')
+  else ok('header has the Blobscape logo')
+  for (const name of ['Fit a Picture', 'Splat to Sprite']) {
+    if (!(await page.locator('main').getByRole('link', { name: new RegExp(name) }).count())) fails.push(`front page does not link to ${name}`)
+  }
+  // Links between pages swap the page in place: no reload, focus on the new heading
+  await page.evaluate(() => { window.__stayed = true })
+  await page.locator('main').getByRole('link', { name: /See all .* lessons/ }).click()
+  await page.waitForURL('**/lessons/')
+  if (!(await page.evaluate(() => window.__stayed))) fails.push('following a link reloaded the page')
+  else if ((await page.title()) !== 'Lessons · Blobscape') fails.push(`after navigating, the title is ${await page.title()}`)
+  else ok('links between pages navigate in place and update the title')
+  await page.goBack()
+  await page.waitForURL(base + '/')
+  if (!(await page.getByRole('heading', { level: 1, name: /Learn 3D splats/ }).count())) fails.push('Back did not return to the front page')
+  else ok('Back returns to the front page')
+  // The theme lives in the menu: system, light or dark, stored under Blobscape's own key
+  await page.getByRole('button', { name: 'Menu' }).click()
+  await page.getByRole('button', { name: /^dark$/i }).click()
+  const picked = await page.evaluate(() => [document.documentElement.dataset.theme, localStorage.getItem('blobscape-theme')])
+  if (picked[0] !== 'dark' || picked[1] !== 'dark') fails.push(`theme choice gave ${picked.join(' / ')}`)
+  else ok('the menu sets and stores the theme')
+  await page.waitForTimeout(600) // let colour transitions (the tip button's) finish before measuring contrast
+  await axe(page, 'front page, menu open, dark')
+  await page.getByRole('button', { name: /^system$/i }).click()
+  if (await page.evaluate(() => document.documentElement.dataset.theme || localStorage.getItem('blobscape-theme'))) fails.push('System did not clear the theme')
   await ctx.close()
+
+  // A link to a section of the front page (where /tools/ redirects) lands on that section
+  const tools = await open('/#experiments')
+  await tools.page.waitForTimeout(800)
+  const top = await tools.page.evaluate(() => document.getElementById('experiments')?.getBoundingClientRect().top ?? -1)
+  if (top < 0 || top > 200) fails.push(`/#experiments: the section is ${top}px down, not in view`)
+  else ok('/#experiments opens at the experiments section')
+  await tools.ctx.close()
+
+  // Old #/ links (from mattblack.space/experiments/blobscape/#/…) land on the page they meant
+  const old = await open('/#/lesson/order')
+  await old.page.waitForTimeout(500)
+  if (new URL(old.page.url()).pathname !== '/lessons/order/') fails.push(`#/lesson/order went to ${old.page.url()}`)
+  else ok('an old #/lesson/ link lands on its lesson page')
+  await old.ctx.close()
 }
 
 // 2. Splat to Sprite: renders, previews, bakes
 for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000 } }], ['phone', { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }]]) {
-  const { page, ctx } = await open('/experiments/splat-to-sprite/', opts)
+  const { page, ctx } = await open('/tools/splat-to-sprite/', opts)
   await page.waitForFunction(() => /[1-9]/.test(document.querySelector('[data-testid=splat-count]')?.textContent ?? ''), null, { timeout: 30000 })
   ok(`${label}: ${await page.textContent('[data-testid=splat-count]')} loaded`)
   await page.waitForFunction(() => {
@@ -170,7 +212,7 @@ function ballPly(n = 2000) {
 // 3. The .ply in Splat to Sprite
 {
   const buf = ballPly()
-  const { page, ctx } = await open('/experiments/splat-to-sprite/', { viewport: { width: 1280, height: 900 } })
+  const { page, ctx } = await open('/tools/splat-to-sprite/', { viewport: { width: 1280, height: 900 } })
   await page.waitForFunction(() => /[1-9]/.test(document.querySelector('[data-testid=splat-count]')?.textContent ?? ''), null, { timeout: 30000 })
   await page.setInputFiles('input[type=file]', { name: 'ball.ply', mimeType: 'application/octet-stream', buffer: buf })
   await page.waitForFunction(() => document.querySelector('[data-testid=splat-count]')?.textContent?.startsWith('2,000'), null, { timeout: 30000 }).catch(() => {})
@@ -195,9 +237,10 @@ function ballPly(n = 2000) {
 
 // 4. Dark theme renders with the dark palette
 {
-  const { page, ctx } = await open('/experiments/splat-to-sprite/', { colorScheme: 'dark', viewport: { width: 1280, height: 900 } })
-  const theme = await page.evaluate(() => document.documentElement.dataset.theme)
-  if (theme !== 'dark') fails.push(`dark preference gave theme ${theme}`)
+  const { page, ctx } = await open('/tools/splat-to-sprite/', { colorScheme: 'dark', viewport: { width: 1280, height: 900 } })
+  // Nothing stored: the page follows the system, so a dark preference gives the dark paper
+  const paper = await page.evaluate(() => getComputedStyle(document.body).backgroundColor)
+  if (paper !== 'rgb(20, 22, 31)') fails.push(`dark preference gave a ${paper} page`)
   else ok('dark preference applied before first paint')
   await page.waitForTimeout(2500)
   await axe(page, 'dark')
@@ -209,7 +252,7 @@ function ballPly(n = 2000) {
 const stepNow = (page) => page.textContent('[data-testid=step]').then((t) => Number(t.replace(/,/g, '')))
 const blobsNow = (page) => page.textContent('[data-testid=blob-count]').then((t) => Number(t.replace(/\D/g, '')))
 for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000 } }], ['phone', { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }]]) {
-  const { page, ctx } = await open('/experiments/fit-a-picture/', opts)
+  const { page, ctx } = await open('/tools/fit-a-picture/', opts)
   await page.waitForFunction(() => Number(document.querySelector('[data-testid=step]')?.textContent?.replace(/,/g, '')) > 30, null, { timeout: 30000 }).catch(() => {})
   const steps = await stepNow(page)
   if (steps <= 30) fails.push(`fit ${label}: training stuck at step ${steps}`)
@@ -301,7 +344,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   await ctx.close()
 }
 {
-  const { page, ctx } = await open('/experiments/fit-a-picture/', { colorScheme: 'dark', viewport: { width: 1280, height: 900 } })
+  const { page, ctx } = await open('/tools/fit-a-picture/', { colorScheme: 'dark', viewport: { width: 1280, height: 900 } })
   await page.waitForTimeout(2500)
   await axe(page, 'fit dark')
   await page.screenshot({ path: join(shots, 'fit-a-picture-dark.png') })
@@ -310,18 +353,18 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
 
 // 6. Blobscape: lessons render and tick goals, the order lesson draws in software, the sandbox edits and undoes
 {
-  const B = '/experiments/blobscape/'
+  const B = '/'
   const count = (page) => page.textContent('[data-testid=blob-count]').then((t) => Number(t.replace(/\D/g, '')))
   for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000 } }], ['phone', { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }]]) {
     const { page, ctx } = await open(B, opts)
-    const lessons = await page.locator('a[href^="#/lesson/"]').count()
+    const lessons = await page.locator('main a[href^="/lessons/"]:not([href="/lessons/"])').evaluateAll((as) => new Set(as.map((a) => a.getAttribute('href'))).size)
     if (lessons < 13) fails.push(`blobscape ${label}: home lists ${lessons} lessons`)
     else ok(`blobscape ${label}: home lists the lessons`)
     await axe(page, `blobscape ${label} home`)
     await page.screenshot({ path: join(shots, `blobscape-home-${label}.png`), fullPage: true })
     for (const id of ['lessons', 'one-blob', 'footprint', 'order', 'many', 'angle', 'paint', 'formats', 'break', 'one-bone', 'weights', 'twist', 'walk', 'model', 'sandbox', 'creature']) {
       // headless WebGPU can't present to a canvas, so Creature draws off-screen here
-      await page.goto(base + B + (id === 'creature' ? '?offscreen=1#/creature' : ['sandbox', 'lessons'].includes(id) ? `#/${id}` : `#/lesson/${id}`))
+      await page.goto(base + (id === 'creature' ? '/creature/?offscreen=1' : ['sandbox', 'lessons'].includes(id) ? `/${id}/` : `/lessons/${id}/`))
       await page.waitForTimeout(1500)
       const focused = await page.evaluate(() => document.activeElement?.tagName)
       if (focused !== 'H1') fails.push(`blobscape ${label} ${id}: focus is on ${focused}, not the heading`)
@@ -333,7 +376,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     await ctx.close()
   }
 
-  const { page, ctx } = await open(B + '#/lesson/one-blob', { viewport: { width: 1440, height: 1000 } })
+  const { page, ctx } = await open('/lessons/one-blob/', { viewport: { width: 1440, height: 1000 } })
   await page.evaluate(() => localStorage.clear())
   await page.reload()
   await page.getByRole('button', { name: 'Pancake' }).click()
@@ -348,7 +391,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   else ok('blobscape: goals are kept in this browser')
 
   // Order: the software views draw something, and list order is reported wrong at the start
-  await page.goto(base + B + '#/lesson/order')
+  await page.goto(base + '/lessons/order/')
   await page.waitForTimeout(800)
   const lit = await solidPixels(page, '[data-testid=view-yours]')
   if (lit < 1000) fails.push(`blobscape order: software view has ${lit} lit pixels`)
@@ -359,7 +402,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   else ok('blobscape order: list order is wrong from the front and right from behind')
 
   // Front page chrome: the menu, the footer, the tip button and the search metadata
-  await page.goto(base + B + '#/')
+  await page.goto(base + '/')
   await page.waitForTimeout(800)
   await page.getByRole('button', { name: 'Menu' }).click()
   const menuLinks = await page.locator('[popover] a').count()
@@ -380,7 +423,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   await page.waitForTimeout(600)
   if (!(await page.locator('a.tipjar[data-tucked]').count())) fails.push('blobscape: the tip button stays over the footer')
   else ok('blobscape: the tip button tucks away at the footer')
-  await page.goto(base + B + '#/lesson/paint')
+  await page.goto(base + '/lessons/paint/')
   await page.waitForTimeout(500)
   if (!(await page.title()).startsWith('Paint · Lesson 6')) fails.push(`blobscape: lesson title is "${await page.title()}"`)
   else ok('blobscape: each page sets its own title')
@@ -388,7 +431,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
 
   // Colour by angle: degree 3 keeps up with a soft shine and falls behind a sharp one
   const goalCount = () => page.textContent('[data-testid=goal-count]')
-  await page.goto(base + B + '#/lesson/angle')
+  await page.goto(base + '/lessons/angle/')
   await page.waitForTimeout(800)
   const peakAt = async (d, s) => {
     await page.getByRole('slider', { name: 'Degree' }).fill(String(d))
@@ -400,7 +443,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   else ok(`blobscape angle: degree 3 keeps ${soft}% of a soft shine, ${sharp}% of a sharp one, degree 1 ${low}%`)
 
   // Paint: spraying the square covers it
-  await page.goto(base + B + '#/lesson/paint')
+  await page.goto(base + '/lessons/paint/')
   await page.waitForTimeout(800)
   const pbox = await page.getByTestId('viewport').boundingBox()
   for (let row = 0; row < 8; row++) {
@@ -423,7 +466,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   else ok(`blobscape paint: the eraser rubs out ${painted - erased} blobs`)
 
   // Splat files: .spz is the smallest of the three and is read back
-  await page.goto(base + B + '#/lesson/formats')
+  await page.goto(base + '/lessons/formats/')
   await page.waitForFunction(() => /\.spz \d/.test(document.body.textContent), null, { timeout: 15000 }).catch(() => {})
   await page.getByRole('button', { name: /^\.spz/ }).click()
   await page.waitForFunction(() => /as \.spz:/.test(document.querySelector('[data-testid=file-readout]')?.textContent ?? ''), null, { timeout: 15000 }).catch(() => {})
@@ -433,7 +476,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   else ok(`blobscape formats: .spz is ${perBlob} bytes per blob, read back and shown`)
 
   // Break it: shrink, explode, and put it back
-  await page.goto(base + B + '#/lesson/break')
+  await page.goto(base + '/lessons/break/')
   await page.evaluate(() => localStorage.clear())
   await page.reload()
   await page.waitForTimeout(800)
@@ -449,7 +492,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     await page.waitForFunction((k) => document.querySelector('[data-testid=goal-count]')?.textContent.startsWith(`${k} of`), n, { timeout: 8000 }).catch(() => {})
     return goalCount()
   }
-  const fresh = async (id) => { await page.goto(base + B + `#/lesson/${id}`); await page.evaluate(() => localStorage.clear()); await page.reload(); await page.waitForTimeout(800) }
+  const fresh = async (id) => { await page.goto(base + `/lessons/${id}/`); await page.evaluate(() => localStorage.clear()); await page.reload(); await page.waitForTimeout(800) }
   const slider = (name) => page.getByRole('slider', { name, exact: true })
   await fresh('one-bone')
   await slider('Lift').fill('60')
@@ -513,7 +556,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
 
   // Creature: our engine draws the fox off-screen; both files come out
   {
-    const c = await open(B + '?offscreen=1#/creature', { viewport: { width: 1280, height: 900 } })
+    const c = await open('/creature/?offscreen=1', { viewport: { width: 1280, height: 900 } })
     await c.page.waitForFunction(() => window.__creature, null, { timeout: 60000 }).catch(() => {})
     const orange = await c.page.evaluate(async () => {
       const cr = window.__creature
@@ -546,7 +589,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   }
 
   // Lesson → sandbox carries the scene
-  await page.goto(base + B + '#/lesson/many')
+  await page.goto(base + '/lessons/many/')
   await page.waitForTimeout(800)
   const lessonCount = await count(page)
   await page.getByRole('button', { name: 'Open this scene in the sandbox' }).click()
@@ -587,7 +630,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   else ok('blobscape sandbox: Enter on the view adds a blob at the centre')
   // The skip link jumps to the content without leaving the page
   await page.keyboard.press('Shift+Tab')
-  await page.goto(base + B + '#/lesson/footprint')
+  await page.goto(base + '/lessons/footprint/')
   await page.keyboard.press('Tab')
   await page.getByRole('link', { name: 'Skip to content' }).press('Enter')
   await page.waitForTimeout(300)
@@ -596,18 +639,18 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   await axe(page, 'blobscape sandbox after edits')
   await ctx.close()
 
-  const dark = await open(B + '#/sandbox', { colorScheme: 'dark', viewport: { width: 1280, height: 900 } })
+  const dark = await open('/sandbox/', { colorScheme: 'dark', viewport: { width: 1280, height: 900 } })
   await dark.page.waitForTimeout(2500)
   await axe(dark.page, 'blobscape dark sandbox')
   await dark.page.screenshot({ path: join(shots, 'blobscape-dark.png') })
-  await dark.page.goto(base + B + '#/lesson/footprint')
+  await dark.page.goto(base + '/lessons/footprint/')
   await dark.page.waitForTimeout(1500)
   await axe(dark.page, 'blobscape dark footprint')
   await dark.page.screenshot({ path: join(shots, 'blobscape-footprint-dark.png') })
-  await dark.page.goto(base + B + '#/')
+  await dark.page.goto(base + '/')
   await dark.page.waitForTimeout(800)
   await axe(dark.page, 'blobscape dark home')
-  await dark.page.goto(base + B + '#/lesson/angle')
+  await dark.page.goto(base + '/lessons/angle/')
   await dark.page.waitForTimeout(1500)
   await axe(dark.page, 'blobscape dark angle')
   await dark.page.screenshot({ path: join(shots, 'blobscape-angle-dark.png') })
@@ -616,8 +659,8 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
 
 // 7. Blobscape sandbox tools: open a file, box and lasso select, move, a live effect, bake, save
 {
-  const B = '/experiments/blobscape/'
-  const { page, ctx } = await open(B + '#/sandbox', { viewport: { width: 1280, height: 900 }, acceptDownloads: true })
+  const B = '/'
+  const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 900 }, acceptDownloads: true })
   await page.waitForTimeout(1500)
   const count = async () => Number((await page.textContent('[data-testid=blob-count]')).replace(/\D/g, ''))
   const selected = async () => Number(((await page.textContent('[data-testid=selected-count]').catch(() => '0')) ?? '0').replace(/\D/g, ''))
@@ -736,7 +779,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   console.log('engine lab')
   for (const webgl of [false, true]) {
     const label = webgl ? 'webgl' : 'webgpu'
-    const { page, ctx } = await open(`/experiments/engine-lab/?which=engine&n=12000&walk=0&herd=2&offscreen=1${webgl ? '&webgl=1' : ''}`, { viewport: { width: 1000, height: 1000 } })
+    const { page, ctx } = await open(`/engine-lab/?which=engine&n=12000&walk=0&herd=2&offscreen=1${webgl ? '&webgl=1' : ''}`, { viewport: { width: 1000, height: 1000 } })
     await page.waitForFunction(() => window.__lab || window.__labError, null, { timeout: 60000 })
     const err = await page.evaluate(() => window.__labError)
     if (err) { fails.push(`engine lab ${label}: ${err}`); await ctx.close(); continue }

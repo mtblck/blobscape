@@ -5,11 +5,14 @@ import type { Goal } from './progress.ts'
 import { handOff } from './handoff.ts'
 import type { Blobs } from '../splat-core/blobs.ts'
 
-/** Moves focus to the page's heading when a new page shows, so screen readers announce it. */
+/** Moves focus to the page's heading when a new page shows, so screen readers announce it, and scrolls to the top or to the #section asked for. */
 export function useFocusHeading() {
   const ref = useRef<HTMLHeadingElement>(null)
   useEffect(() => {
-    window.scrollTo(0, 0)
+    // A link to a section of the page (/#experiments) goes to that section; anything else starts at the top
+    const target = window.location.hash.length > 1 ? document.getElementById(decodeURIComponent(window.location.hash.slice(1))) : null
+    if (target) target.scrollIntoView()
+    else window.scrollTo(0, 0)
     ref.current?.focus({ preventScroll: true })
   }, [])
   return ref
@@ -113,8 +116,8 @@ export function LessonShell({ id, intro, view, caption, groups, goals, done, sce
             <span aria-hidden className="px-1.5">·</span>
             <a href={href({ page: 'lessons' })} className="underline decoration-rule underline-offset-2 hover:text-accent">Lesson {i + 1} of {TOTAL}</a>
           </p>
-          <h1 ref={h1} tabIndex={-1} className="mt-1 font-serif text-4xl leading-tight outline-none lg:text-[2.6rem]">{lesson.title}</h1>
-          <div className="mt-2 max-w-[38ch] font-serif text-lg leading-snug text-ink-muted max-lg:max-w-[60ch]">{intro}</div>
+          <h1 ref={h1} tabIndex={-1} className="mt-1 font-display text-4xl leading-tight outline-none lg:text-[2.6rem]">{lesson.title}</h1>
+          <div className="mt-2 max-w-[38ch] text-lg leading-snug text-ink-muted max-lg:max-w-[60ch]">{intro}</div>
           {finished && (
             <p role="status" className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-ink px-3.5 py-2 text-sm font-medium text-paper">
               <span>✓ All {goals.length} done.</span>
@@ -136,7 +139,7 @@ export function LessonShell({ id, intro, view, caption, groups, goals, done, sce
                   data-done={ok}
                   aria-current={now ? 'step' : undefined}
                   className={`flex min-h-[8.5rem] flex-col gap-1.5 rounded-xl border px-3.5 pt-3 pb-3.5 transition-colors max-sm:min-h-0 ${
-                    now ? 'border-placard-edge bg-placard text-placard-ink shadow-[0_10px_24px_-16px_rgb(120_90_0/0.7)]' : ok ? 'border-done bg-paper-sunk' : 'border-rule bg-paper-sunk'
+                    now ? 'border-placard-edge bg-placard text-placard-ink shadow-[0_10px_24px_-16px_rgb(242_85_58/0.6)]' : ok ? 'border-done bg-paper-sunk' : 'border-rule bg-paper-sunk'
                   }`}
                 >
                   <span className={`flex items-center gap-2 text-xs ${now ? 'text-placard-ink/80' : ok ? 'font-medium text-done' : 'text-ink-faint'}`}>
@@ -147,8 +150,8 @@ export function LessonShell({ id, intro, view, caption, groups, goals, done, sce
                     <span className="sr-only">{ok ? 'Done: ' : now ? 'Try now: ' : 'Later: '}</span>
                     {g.label}
                   </span>
-                  {now && g.hint && <span className="font-serif text-[0.95rem] leading-snug"><span className="sr-only">Hint: </span>{g.hint}</span>}
-                  {ok && g.why && <span className="font-serif text-[0.95rem] leading-snug text-ink-muted">{g.why}</span>}
+                  {now && g.hint && <span className="text-[0.95rem] leading-snug"><span className="sr-only">Hint: </span>{g.hint}</span>}
+                  {ok && g.why && <span className="text-[0.95rem] leading-snug text-ink-muted">{g.why}</span>}
                 </li>
               )
             })}
@@ -156,7 +159,7 @@ export function LessonShell({ id, intro, view, caption, groups, goals, done, sce
         </section>
 
         <section aria-label="Experiment" className="sticky top-[57px] z-10 -mx-4 bg-paper px-4 pt-1 pb-2 max-lg:shadow-[0_10px_14px_-14px_rgb(0_0_0/0.5)] lg:static lg:col-span-12 lg:mx-0 lg:px-0 lg:pt-0 lg:pb-0">
-          <div className={`case relative flex flex-col overflow-hidden rounded-2xl transition-shadow ${where === 'view' ? 'ring-[3px] ring-placard' : 'ring-1 ring-rule'}`}>
+          <div className={`case relative flex flex-col overflow-hidden rounded-2xl transition-shadow ${where === 'view' ? 'ring-[3px] ring-placard-edge' : 'ring-1 ring-rule'}`}>
             <div className="relative h-[min(30dvh,250px)] min-h-[180px] lg:h-[clamp(300px,calc(100dvh-33rem),640px)]">
               {view}
               {where === 'view' && <span aria-hidden className="pointer-events-none absolute top-3 right-14 rounded-full bg-placard px-3 py-1 text-xs font-semibold text-placard-ink">Look here</span>}
@@ -166,11 +169,11 @@ export function LessonShell({ id, intro, view, caption, groups, goals, done, sce
           {current ? (
             <div className="mt-2 rounded-xl bg-placard px-3 py-2 text-placard-ink sm:hidden" aria-hidden>
               {latest?.why && done.has(latest.id) && (
-                <p className="mb-1.5 border-b border-placard-ink/25 pb-1.5 font-serif text-sm leading-snug"><b className="font-sans text-xs">✓ {latest.label}.</b> {latest.why}</p>
+                <p className="mb-1.5 border-b border-placard-ink/25 pb-1.5 text-sm leading-snug"><b className="font-sans text-xs">✓ {latest.label}.</b> {latest.why}</p>
               )}
               <p className="flex items-center gap-2 text-xs"><span>Goal {goals.indexOf(current) + 1} of {goals.length}</span></p>
               <p className="text-[0.95rem] leading-tight font-semibold">{current.label}</p>
-              {current.hint && <p className="font-serif text-sm leading-snug">{current.hint}</p>}
+              {current.hint && <p className="text-sm leading-snug">{current.hint}</p>}
             </div>
           ) : (
             <div className="mt-2 rounded-xl bg-ink px-3 py-2 text-sm text-paper sm:hidden">
@@ -225,26 +228,26 @@ export function LessonShell({ id, intro, view, caption, groups, goals, done, sce
       <section aria-labelledby="explain" className="mt-14 border-t border-rule pt-10 lg:grid lg:grid-cols-12 lg:gap-x-5 lg:pt-14">
         <div className="lg:col-span-5">
           <p className="text-sm text-ink-faint">What you just saw</p>
-          <h2 id="explain" tabIndex={-1} className="mt-1 max-w-[16ch] font-serif text-4xl leading-[1.05] text-balance outline-none sm:text-5xl">{explainTitle}</h2>
+          <h2 id="explain" tabIndex={-1} className="mt-1 max-w-[16ch] font-display text-4xl leading-[1.05] text-balance outline-none sm:text-5xl">{explainTitle}</h2>
           {formula && (
             <figure className="mt-8 border-t-2 border-ink pt-5">
-              <div className="font-serif text-3xl leading-tight sm:text-5xl">{formula.eq}</div>
+              <div className="text-3xl leading-tight sm:text-5xl">{formula.eq}</div>
               <figcaption className="mt-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm text-ink-muted">
                 {formula.terms.map(([sym, meaning], k) => (
-                  <span key={k} className="contents"><b className="font-serif text-base font-medium text-ink italic">{sym}</b><span>{meaning}</span></span>
+                  <span key={k} className="contents"><b className="text-base font-medium text-ink italic">{sym}</b><span>{meaning}</span></span>
                 ))}
               </figcaption>
             </figure>
           )}
         </div>
-        <div className="mt-8 max-w-[36em] space-y-4 font-serif text-lg leading-relaxed text-ink-muted lg:col-span-7 lg:mt-0 lg:text-xl">{explain}</div>
+        <div className="mt-8 max-w-[36em] space-y-4 text-lg leading-relaxed text-ink-muted lg:col-span-7 lg:mt-0 lg:text-xl">{explain}</div>
       </section>
 
       <nav aria-label="Lessons" className="mt-14 grid grid-cols-2 items-center gap-4 border-t border-rule pt-6 sm:grid-cols-3">
         {prev ? (
           <a href={href({ page: 'lesson', id: prev.id })} className="group -m-3 rounded-lg p-3 transition-colors hover:bg-paper-sunk">
             <span className="block text-xs text-ink-faint">Previous</span>
-            <span className="font-serif text-lg text-ink-muted group-hover:text-ink">← {i}. {prev.title}</span>
+            <span className="font-display text-lg text-ink-muted group-hover:text-ink">← {i}. {prev.title}</span>
           </a>
         ) : <span className="text-sm text-ink-faint">This is the first lesson</span>}
         <div className="col-span-2 row-start-2 sm:col-span-1 sm:row-start-auto sm:text-center">
@@ -252,7 +255,7 @@ export function LessonShell({ id, intro, view, caption, groups, goals, done, sce
         </div>
         <a href={nextHref} className={`group -m-3 rounded-lg p-3 text-right transition-colors hover:bg-paper-sunk ${finished ? 'bg-accent/10' : ''}`}>
           <span className="block text-xs text-ink-faint">{next ? 'Next' : 'Then'}</span>
-          <span className="font-serif text-lg text-ink group-hover:text-accent-ink">{next ? `${i + 2}. ${next.title}` : 'The sandbox'} →</span>
+          <span className="font-display text-lg text-ink group-hover:text-accent-ink">{next ? `${i + 2}. ${next.title}` : 'The sandbox'} →</span>
         </a>
       </nav>
     </>

@@ -1,15 +1,31 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Experiments · Matt Black</title>
-    <meta name="description" content="Small interactive experiments by Matt Black." />
-    <link rel="icon" href="/experiments/favicon.svg" type="image/svg+xml" />
-    <script src="/experiments/theme.js"></script>
+    <title>Blobscape: learn 3D Gaussian splats by taking them apart</title>
+    <meta name="description" content="Learn how 3D Gaussian splats work by pulling one blob apart, then thousands, then rigging them to walk: thirteen hands-on lessons, a sandbox for real captures and a creature to take away as a 3D model, free in your browser." />
+    <link rel="canonical" href="https://blobscape.dev/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Blobscape" />
+    <meta property="og:title" content="Blobscape: learn 3D Gaussian splats by taking them apart" />
+    <meta property="og:description" content="Learn how 3D Gaussian splats work by pulling one blob apart, then thousands, then rigging them to walk: thirteen hands-on lessons, a sandbox for real captures and a creature to take away as a 3D model, free in your browser." />
+    <meta property="og:url" content="https://blobscape.dev/" />
+    <meta property="og:image" content="https://blobscape.dev/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="The Blobscape logo, a coral blob with two eyes sitting on a line, and the words: Small experiments with Gaussian splats." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="theme-color" content="#fbf6ee" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#14161f" media="(prefers-color-scheme: dark)" />
+    <script src="/theme.js"></script>
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/hub/main.tsx"></script>
+    <div id="root"><noscript>Blobscape needs JavaScript and WebGL to draw the blobs.</noscript></div>
+    <script type="module" src="/src/blobscape/main.tsx"></script>
   </body>
 </html>
