@@ -15,6 +15,12 @@ export const SITE = {
 /** The other splat experiments, shown on the front page and in the menu and footer. */
 export const EXPERIMENTS = [
   {
+    id: 'creature',
+    title: 'Creature',
+    url: '#/creature',
+    body: 'A fox made of blobs that trots on our own splat engine. Make it big or small, then take it away as a rigged 3D model for Blender or a game engine.',
+  },
+  {
     id: 'fit',
     title: 'Fit a Picture',
     url: '/experiments/fit-a-picture/',

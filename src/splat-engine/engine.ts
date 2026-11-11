@@ -332,6 +332,9 @@ export class SplatWorld extends Mesh {
   dispose() {
     this.geometry.dispose()
     ;(this.material as NodeMaterial).dispose()
+    // storage buffers belong to no geometry: their dispose event frees them on the GPU
+    for (const a of this.buf.attrs) a.dispose()
+    this.sort.dispose()
   }
 }
 
@@ -384,6 +387,8 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
   const splatBAttr = new StorageBufferAttribute(new Float32Array(n * 4), 4)
   return {
     count: n,
+    /** Every GPU buffer, so dispose can free them. */
+    attrs: [centreAttr, scaleAttr, quatAttr, colourAttr, skinAttr, boneAttr, worldCentreAttr, covAAttr, covBAttr, splatAAttr, splatBAttr],
     skinWords, srcCentreData: centre,
     boneData, boneAttr, worldCentreAttr, covAAttr, covBAttr, colourAttr,
     srcCentre: storage(centreAttr, 'vec4', n).toReadOnly(),

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { tipjar, tuck } from 'tipjar'
 import 'tipjar/style.css'
 import { ThemeChoice } from '../shared/SiteHeader.tsx'
-import { LESSONS, href, type Route } from './routes.ts'
+import { LESSONS, LESSON_COUNT, href, type Route } from './routes.ts'
 import { ALL_EXPERIMENTS_URL, EXPERIMENTS, SITE } from './site.ts'
 
 const LINK = 'block rounded-md px-2 py-1.5 text-ink no-underline hover:bg-paper-sunk hover:text-accent aria-[current=page]:text-accent'
@@ -96,7 +96,7 @@ export function TipButton() {
   return <aside ref={holder} aria-label="Support Blobscape" dangerouslySetInnerHTML={{ __html: html }} />
 }
 
-const DESCRIPTION = 'Learn how 3D Gaussian splats work by pulling one blob apart, then thousands: eight hands-on lessons and a sandbox for real captures, free in your browser.'
+const DESCRIPTION = `Learn how 3D Gaussian splats work by pulling one blob apart, then thousands, then rigging them to walk: ${LESSON_COUNT} hands-on lessons, a sandbox for real captures and a creature to take away as a 3D model, free in your browser.`
 
 /** Each page's title and description, so a tab, a bookmark and a search result say where they lead. */
 export function usePageMeta(route: Route) {
@@ -105,10 +105,13 @@ export function usePageMeta(route: Route) {
     let description: string = DESCRIPTION
     if (route.page === 'lessons') {
       title = `Lessons · ${SITE.name}`
-      description = `Eight short, hands-on lessons on Gaussian splats: ${LESSONS.map((l) => l.title.toLowerCase()).join(', ')}.`
+      description = `${LESSON_COUNT[0].toUpperCase()}${LESSON_COUNT.slice(1)} short, hands-on lessons on Gaussian splats: ${LESSONS.map((l) => l.title.toLowerCase()).join(', ')}.`
     } else if (route.page === 'sandbox') {
       title = `Sandbox · ${SITE.name}`
       description = 'Spray, select, move, recolour and explode Gaussian splats, or open your own .ply, .spz, .splat, .ksplat or .sog capture. Nothing is uploaded.'
+    } else if (route.page === 'creature') {
+      title = `Creature · ${SITE.name}`
+      description = 'A blob fox that walks on its own splat engine. Make it, then download it as a rigged, animated .glb: as Gaussian splats or as a mesh for Blender and game engines.'
     } else if (route.page === 'lesson') {
       const i = LESSONS.findIndex((l) => l.id === route.id)
       title = `${LESSONS[i].title} · Lesson ${i + 1} · ${SITE.name}`

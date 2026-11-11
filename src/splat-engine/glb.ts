@@ -1,6 +1,7 @@
-import { SH_C0 } from '../splat-core/colour.ts'
+import { SH_C0, srgbToLinear } from '../splat-core/colour.ts'
 import { Blobs, type Vec3 } from '../splat-core/blobs.ts'
-import { Skeleton, norm4, type Bone, type Skin } from './rig.ts'
+import { Skeleton, norm4, packWeights, type Bone, type Skin } from './rig.ts'
+import type { SplatMesh } from './mesh.ts'
 
 /**
  * Rigged splats in a .glb.
@@ -87,7 +88,7 @@ class BinWriter {
   views: { buffer: 0; byteOffset: number; byteLength: number }[] = []
   accessors: Accessor[] = []
 
-  add(data: Float32Array | Uint8Array | Uint16Array, componentType: number, type: string, count: number, extra: Partial<Accessor> = {}) {
+  add(data: Float32Array | Uint8Array | Uint16Array | Uint32Array, componentType: number, type: string, count: number, extra: Partial<Accessor> = {}) {
     const bytes = new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
     const pad = (4 - (this.length % 4)) % 4
     if (pad) { this.chunks.push(new Uint8Array(pad)); this.length += pad }
@@ -106,7 +107,7 @@ class BinWriter {
   }
 }
 
-const FLOAT = 5126, UBYTE = 5121
+const FLOAT = 5126, UBYTE = 5121, USHORT = 5123, UINT = 5125
 
 export function writeRiggedGlb(r: Rigged): Uint8Array {
   const { blobs, skin, skeleton } = r
@@ -128,10 +129,43 @@ export function writeRiggedGlb(r: Rigged): Uint8Array {
     WEIGHTS_0: w.add(weights, FLOAT, 'VEC4', n),
   }
 
-  // joints: node 1 + bone index; rest pose = translation from the parent's head, no rotation
+  const rig = writeRig(w, r.name, skeleton, r.clips)
+
+  const bin = w.bytes()
+  const json = {
+    asset: { version: '2.0', generator: 'Blobscape' },
+    extensionsUsed: [SPLATS, SKIN_EXTENSION],
+    scene: 0,
+    scenes: [{ nodes: rig.sceneNodes }],
+    nodes: rig.nodes,
+    meshes: [{
+      name: r.name,
+      primitives: [{
+        mode: 0,
+        attributes,
+        extensions: { [SPLATS]: { kernel: 'ellipse', colorSpace: 'srgb_rec709_display', projection: 'perspective', sortingMethod: 'cameraDistance' } },
+      }],
+    }],
+    skins: [rig.skin],
+    animations: rig.animations,
+    extensions: { [SKIN_EXTENSION]: { rotationBlend: 'quaternionAverage', scaleBlend: 'weightedAverage' } },
+    buffers: [{ byteLength: bin.byteLength }],
+    bufferViews: w.views,
+    accessors: w.accessors,
+  }
+  return packGlb(json, bin)
+}
+
+/**
+ * The rig, shared by both writers: node 0 is the mesh, node 1 + i is bone i,
+ * placed by its offset from its parent's head (no rest rotation), with an
+ * inverse bind matrix per bone, and each clip as rotation channels on the
+ * bone nodes plus the root's translation.
+ */
+function writeRig(w: BinWriter, name: string, skeleton: Skeleton, clips: Clip[]) {
   const nb = skeleton.count
   const ibm = new Float32Array(nb * 16)
-  const nodes: Record<string, unknown>[] = [{ name: r.name, mesh: 0, skin: 0 }]
+  const nodes: Record<string, unknown>[] = [{ name, mesh: 0, skin: 0 }]
   skeleton.bones.forEach((b, i) => {
     const t: Vec3 = b.parent < 0 ? b.head : [b.head[0] - skeleton.bones[b.parent].head[0], b.head[1] - skeleton.bones[b.parent].head[1], b.head[2] - skeleton.bones[b.parent].head[2]]
     const children = skeleton.bones.map((c, j) => (c.parent === i ? j + 1 : -1)).filter((j) => j >= 0)
@@ -141,7 +175,7 @@ export function writeRiggedGlb(r: Rigged): Uint8Array {
   const ibmAcc = w.add(ibm, FLOAT, 'MAT4', nb)
   const roots = skeleton.bones.map((b, i) => (b.parent < 0 ? i + 1 : -1)).filter((i) => i >= 0)
 
-  const animations = r.clips.map((clip) => {
+  const animations = clips.map((clip) => {
     const input = w.add(clip.times, FLOAT, 'SCALAR', clip.times.length, { min: [clip.times[0]], max: [clip.times[clip.times.length - 1]] })
     const samplers: Record<string, unknown>[] = []
     const channels: Record<string, unknown>[] = []
@@ -158,25 +192,60 @@ export function writeRiggedGlb(r: Rigged): Uint8Array {
     }
     return { name: clip.name, samplers, channels }
   })
+  return {
+    nodes,
+    sceneNodes: [0, ...roots],
+    skin: { joints: skeleton.bones.map((_, i) => i + 1), inverseBindMatrices: ibmAcc, skeleton: roots[0] },
+    animations,
+  }
+}
 
+/**
+ * A solid, skinned triangle mesh with the same bones and clips: what Blender,
+ * Godot, Unity and three.js open as an ordinary animated model. Colours are
+ * per vertex (glTF wants them linear, so they're converted from the blobs'
+ * display colour); the material is marked unlit, since the blobs' colours
+ * already have their lighting baked in. Viewers that don't know
+ * KHR_materials_unlit light it as a plain matte surface.
+ */
+export function writeRiggedMeshGlb(r: { name: string; mesh: SplatMesh; skeleton: Skeleton; clips: Clip[] }): Uint8Array {
+  const { mesh, skeleton } = r
+  const n = mesh.vertexCount
+  // glTF needs at least one of everything; an empty mesh is no file
+  if (!n || !mesh.triangleCount) throw new GlbError('The mesh is empty: lower the level or use a finer grid')
+  const w = new BinWriter()
+  const pos = mesh.positions
+  const min = [0, 1, 2].map((k) => { let m = Infinity; for (let i = 0; i < n; i++) m = Math.min(m, pos[i * 3 + k]); return n ? m : 0 })
+  const max = [0, 1, 2].map((k) => { let m = -Infinity; for (let i = 0; i < n; i++) m = Math.max(m, pos[i * 3 + k]); return n ? m : 0 })
+  const colour = new Uint8Array(n * 4)
+  for (let i = 0; i < n; i++) {
+    for (let k = 0; k < 3; k++) colour[i * 4 + k] = Math.round(Math.min(1, Math.max(0, srgbToLinear(mesh.colours[i * 3 + k]))) * 255)
+    colour[i * 4 + 3] = 255
+  }
+  const weights = new Uint8Array(n * 4)
+  const dv = new DataView(weights.buffer)
+  for (let i = 0; i < n; i++) dv.setUint32(i * 4, packWeights(mesh.weights, i * 4), true)
+  const big = n > 65535
+  const attributes = {
+    POSITION: w.add(pos, FLOAT, 'VEC3', n, { min, max }),
+    NORMAL: w.add(mesh.normals, FLOAT, 'VEC3', n),
+    COLOR_0: w.add(colour, UBYTE, 'VEC4', n, { normalized: true }),
+    JOINTS_0: w.add(mesh.joints, UBYTE, 'VEC4', n),
+    WEIGHTS_0: w.add(weights, UBYTE, 'VEC4', n, { normalized: true }),
+  }
+  const indices = w.add(big ? mesh.indices : Uint16Array.from(mesh.indices), big ? UINT : USHORT, 'SCALAR', mesh.indices.length)
+  const rig = writeRig(w, r.name, skeleton, r.clips)
   const bin = w.bytes()
   const json = {
     asset: { version: '2.0', generator: 'Blobscape' },
-    extensionsUsed: [SPLATS, SKIN_EXTENSION],
+    extensionsUsed: ['KHR_materials_unlit'],
     scene: 0,
-    scenes: [{ nodes: [0, ...roots] }],
-    nodes,
-    meshes: [{
-      name: r.name,
-      primitives: [{
-        mode: 0,
-        attributes,
-        extensions: { [SPLATS]: { kernel: 'ellipse', colorSpace: 'srgb_rec709_display', projection: 'perspective', sortingMethod: 'cameraDistance' } },
-      }],
-    }],
-    skins: [{ joints: skeleton.bones.map((_, i) => i + 1), inverseBindMatrices: ibmAcc, skeleton: roots[0] }],
-    animations,
-    extensions: { [SKIN_EXTENSION]: { rotationBlend: 'quaternionAverage', scaleBlend: 'weightedAverage' } },
+    scenes: [{ nodes: rig.sceneNodes }],
+    nodes: rig.nodes,
+    materials: [{ name: 'baked colour', pbrMetallicRoughness: { baseColorFactor: [1, 1, 1, 1], metallicFactor: 0, roughnessFactor: 1 }, extensions: { KHR_materials_unlit: {} } }],
+    meshes: [{ name: r.name, primitives: [{ mode: 4, attributes, indices, material: 0 }] }],
+    skins: [rig.skin],
+    animations: rig.animations,
     buffers: [{ byteLength: bin.byteLength }],
     bufferViews: w.views,
     accessors: w.accessors,
@@ -316,5 +385,5 @@ export function readRiggedGlb(bytes: Uint8Array): Rigged {
     }
     return { name: anim.name ?? `clip${ai}`, times, rotations, rootOffset }
   })
-  return { name: json.nodes[meshNode].name ?? 'splat', blobs, skin, skeleton, clips }
+  return { name: json.nodes[meshNode].name ?? '', blobs, skin, skeleton, clips }
 }

@@ -39,6 +39,7 @@ production domain. See README for the why behind the choices.
 - The front page (`Landing.tsx`) is the home for every splat experiment: lessons, sandbox, then the other tools (`EXPERIMENTS`). Its pictures (`diagrams.tsx`) are SVG blobs filled with shared radial gradients (`BlobDefs`, ids `bs-<colour>`), so don't reuse a `bs-` id elsewhere.
 - Header menu (pages only; lessons are one "Lessons" link so new lessons need no menu change), footer, tip button and page titles live in `Chrome.tsx`; site facts (origin, Ko-fi link, the other experiments) in `site.ts`. The tip button shows only on the front page and lesson list (it would cover lesson controls) and tucks away at the footer.
 - SEO: `blobscape/index.html` carries the canonical, Open Graph/Twitter tags, JSON-LD (allowed past hosting:check because it's data) and a `<noscript>` lesson list; `public/blobscape/og.png` is the share image. Hash routes are one URL to Google, so moving to blobscape.dev should switch to path routes with a prerendered page per lesson, and update `SITE.origin` and the canonical/og URLs.
+- Rigs lessons (9–13: one-bone, weights, twist, walk, model) pose on the CPU with `splat-engine/pose.ts` `poseBlobs` and hand Spark the result; parts of the lesson list come from `PARTS` in routes.ts. Creature (`#/creature`) draws with our engine (`creature/stage.ts`, lazy-loaded); verify loads it with `?offscreen=1`.
 - The overlay canvas is `willReadFrequently` (CPU): a GPU 2D canvas in headless Chromium kept showing an old frame after a clear.
 
 

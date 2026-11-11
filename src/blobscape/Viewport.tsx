@@ -74,6 +74,44 @@ export const clampOrbit = (o: Orbit): Orbit => ({
   distance: Math.max(0.6, Math.min(40, o.distance)),
 })
 
+
+/** One drag on a view: where it started, or the finger gap and distance a pinch started from. */
+export interface OrbitDrag { x: number; y: number; az: number; el: number; pinch?: number; dist: number }
+type Points = Map<number, { x: number; y: number }>
+
+/** Starts a drag (one pointer) or a pinch (the second), from the current orbit. */
+export function beginOrbitDrag(pointers: Points, ev: { clientX: number; clientY: number }, o: Orbit): OrbitDrag {
+  if (pointers.size === 2) {
+    const [a, b] = [...pointers.values()]
+    return { x: 0, y: 0, az: o.azimuth, el: o.elevation, pinch: Math.hypot(a.x - b.x, a.y - b.y), dist: o.distance }
+  }
+  return { x: ev.clientX, y: ev.clientY, az: o.azimuth, el: o.elevation, dist: o.distance }
+}
+
+/** The orbit a drag or pinch has reached. */
+export function dragOrbit(d: OrbitDrag, pointers: Points, ev: { clientX: number; clientY: number }) {
+  if (d.pinch !== undefined && pointers.size >= 2) {
+    const [a, b] = [...pointers.values()]
+    const now = Math.hypot(a.x - b.x, a.y - b.y)
+    return (o: Orbit) => clampOrbit({ ...o, distance: d.dist * (d.pinch! / Math.max(now, 1)) })
+  }
+  return (o: Orbit) => clampOrbit({ ...o, azimuth: d.az - (ev.clientX - d.x) * DRAG.azimuth, elevation: d.el + (ev.clientY - d.y) * DRAG.elevation })
+}
+
+/** Scroll to zoom. A native, non-passive listener: React's onWheel is passive, so the page would scroll while you zoom. */
+export function useWheelZoom(ref: { current: HTMLElement | null }, setOrbit: (fn: (o: Orbit) => Orbit) => void) {
+  useEffect(() => {
+    const c = ref.current
+    if (!c) return
+    const onWheel = (ev: WheelEvent) => {
+      ev.preventDefault()
+      setOrbit((o) => clampOrbit({ ...o, distance: o.distance * (ev.deltaY > 0 ? 1.08 : 1 / 1.08) }))
+    }
+    c.addEventListener('wheel', onWheel, { passive: false })
+    return () => c.removeEventListener('wheel', onWheel)
+  }, [ref, setOrbit])
+}
+
 /**
  * The 3D view every lesson and the sandbox share: Spark draws the blobs, a 2D
  * canvas on top draws whatever the page wants over them. Drag (or arrow keys)
@@ -133,7 +171,7 @@ export function Viewport({ blobs, version, orbit, setOrbit, reach, overlay, take
 
   // --- pointers: one finger orbits (or uses the tool), two fingers pinch-zoom
   const pointers = useRef(new Map<number, { x: number; y: number }>())
-  const drag = useRef<{ x: number; y: number; az: number; el: number; pinch?: number; dist: number; tool: boolean } | null>(null)
+  const drag = useRef<(OrbitDrag & { tool: boolean }) | null>(null)
   const local = (ev: React.PointerEvent) => {
     const r = (ev.currentTarget as HTMLElement).getBoundingClientRect()
     return [ev.clientX - r.left, ev.clientY - r.top] as const
@@ -144,27 +182,20 @@ export function Viewport({ blobs, version, orbit, setOrbit, reach, overlay, take
     if (pointers.current.size === 2) {
       // A second finger: stop the tool stroke and pinch instead
       if (drag.current?.tool) tool?.up?.()
-      const [a, b] = [...pointers.current.values()]
-      drag.current = { x: 0, y: 0, az: orbit.azimuth, el: orbit.elevation, pinch: Math.hypot(a.x - b.x, a.y - b.y), dist: orbit.distance, tool: false }
+      drag.current = { ...beginOrbitDrag(pointers.current, ev, orbit), tool: false }
       return
     }
     // Right/middle button or a held modifier orbits even with a tool picked
     const useTool = !!tool && ev.button === 0 && !ev.altKey
-    drag.current = { x: ev.clientX, y: ev.clientY, az: orbit.azimuth, el: orbit.elevation, dist: orbit.distance, tool: useTool }
+    drag.current = { ...beginOrbitDrag(pointers.current, ev, orbit), tool: useTool }
     if (useTool) tool!.down(...local(ev), ev)
   }
   const onPointerMove = (ev: React.PointerEvent) => {
     if (pointers.current.has(ev.pointerId)) pointers.current.set(ev.pointerId, { x: ev.clientX, y: ev.clientY })
     const d = drag.current
     if (!d) { if (ev.pointerType === 'mouse') tool?.hover?.(...local(ev)); return }
-    if (d.pinch !== undefined && pointers.current.size >= 2) {
-      const [a, b] = [...pointers.current.values()]
-      const now = Math.hypot(a.x - b.x, a.y - b.y)
-      setOrbit((o) => clampOrbit({ ...o, distance: d.dist * (d.pinch! / Math.max(now, 1)) }))
-      return
-    }
-    if (d.tool) { tool?.move?.(...local(ev), ev); tool?.hover?.(...local(ev)); return }
-    setOrbit((o) => clampOrbit({ ...o, azimuth: d.az - (ev.clientX - d.x) * DRAG.azimuth, elevation: d.el + (ev.clientY - d.y) * DRAG.elevation }))
+    if (d.tool && d.pinch === undefined) { tool?.move?.(...local(ev), ev); tool?.hover?.(...local(ev)); return }
+    setOrbit(dragOrbit(d, pointers.current, ev))
   }
   const onPointerUp = (ev: React.PointerEvent) => {
     pointers.current.delete(ev.pointerId)
@@ -172,17 +203,7 @@ export function Viewport({ blobs, version, orbit, setOrbit, reach, overlay, take
     drag.current = null
   }
 
-  // A native, non-passive listener: React's onWheel is passive, so the page would scroll while you zoom.
-  useEffect(() => {
-    const c = overlayRef.current
-    if (!c) return
-    const onWheel = (ev: WheelEvent) => {
-      ev.preventDefault()
-      setOrbit((o) => clampOrbit({ ...o, distance: o.distance * (ev.deltaY > 0 ? 1.08 : 1 / 1.08) }))
-    }
-    c.addEventListener('wheel', onWheel, { passive: false })
-    return () => c.removeEventListener('wheel', onWheel)
-  }, [setOrbit])
+  useWheelZoom(overlayRef, setOrbit)
 
   const onKeyDown = (ev: React.KeyboardEvent) => {
     if (tool?.key?.(ev)) { ev.preventDefault(); return }

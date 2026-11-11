@@ -1,12 +1,12 @@
-import { LESSONS, LESSON_GOALS, href } from './routes.ts'
+import { LESSONS, LESSON_COUNT, LESSON_GOALS, href } from './routes.ts'
 import { doneGoals } from './progress.ts'
 import { useFocusHeading } from './Shell.tsx'
 import { EXPERIMENTS } from './site.ts'
-import { AnyAngleDiagram, BlobDefs, FitDiagram, HeroDiagram, LessonGlyph, PhotosDiagram, SANDBOX_COUNTS, SandboxDiagram, SpriteDiagram, TrainDiagram } from './diagrams.tsx'
+import { AnyAngleDiagram, BlobDefs, CreatureDiagram, FitDiagram, HeroDiagram, LessonGlyph, PhotosDiagram, SANDBOX_COUNTS, SandboxDiagram, SpriteDiagram, TrainDiagram } from './diagrams.tsx'
 
-const PICTURES: Record<(typeof EXPERIMENTS)[number]['id'], React.ReactNode> = { fit: <FitDiagram />, sprite: <SpriteDiagram /> }
+const PICTURES: Record<(typeof EXPERIMENTS)[number]['id'], React.ReactNode> = { creature: <CreatureDiagram />, fit: <FitDiagram />, sprite: <SpriteDiagram /> }
 
-const PROMISES = ['Eight hands-on lessons', 'A sandbox for real captures', 'Runs in your browser', 'Free, no account']
+const PROMISES = [`${LESSON_COUNT[0].toUpperCase()}${LESSON_COUNT.slice(1)} hands-on lessons`, 'A sandbox for real captures', 'Runs in your browser', 'Free, no account']
 
 const STEPS = [
   { title: 'Photograph something from all round', body: 'A capture starts as a few hundred ordinary photos or a phone video.', picture: <PhotosDiagram /> },
@@ -93,7 +93,7 @@ export function Landing() {
       <section id="lessons" aria-labelledby="lessons-title" className={`${WIDTH} grid scroll-mt-20 items-center gap-10 py-16 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-16 lg:py-20`}>
         <div className="flex flex-col gap-4">
           <span className={CHIP}>Lessons</span>
-          <h2 id="lessons-title" className="font-serif text-4xl leading-tight text-balance">Eight lessons, from one blob to a whole scene</h2>
+          <h2 id="lessons-title" className="font-serif text-4xl leading-tight text-balance">{LESSON_COUNT[0].toUpperCase()}{LESSON_COUNT.slice(1)} lessons, from one blob to a walking creature</h2>
           <p className="max-w-[48ch] text-lg text-ink-muted">
             Each lesson asks one question and hands you the controls to answer it. Goals tick off as you find things out, and the
             explanation waits until you've seen it for yourself.
@@ -103,7 +103,7 @@ export function Landing() {
               <li key={p} className="flex items-baseline gap-3"><Dot />{p}</li>
             ))}
           </ul>
-          <a href={href({ page: 'lessons' })} className={`${QUIET} mt-2 self-start`}>See all eight lessons</a>
+          <a href={href({ page: 'lessons' })} className={`${QUIET} mt-2 self-start`}>See all {LESSON_COUNT} lessons</a>
         </div>
         <LessonMockup />
       </section>
@@ -158,14 +158,6 @@ export function Landing() {
               </a>
             </li>
           ))}
-          <li className="flex min-h-48 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-rule p-6 text-center text-ink-faint">
-            <svg aria-hidden viewBox="0 0 40 40" className="size-10">
-              <ellipse cx="20" cy="20" rx="16" ry="11" fill="url(#bs-orange)" />
-              <path d="M 20 13 V 27 M 13 20 H 27" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            </svg>
-            <span className="font-serif text-xl text-ink-muted">Next experiment</span>
-            <span className="text-sm">In the works.</span>
-          </li>
         </ul>
       </section>
 
