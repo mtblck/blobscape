@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Engine, FRAME_SHARE, meshFromBuilder, meshFromBytes, type View } from './engine.ts'
-import { PRESETS } from './presets.ts'
+import { PRESETS } from '../splat-core/presets.ts'
 import { PALETTES } from './palettes.ts'
 import { baseline, packSheet, processFrames, shotsFor, tinkerkitSheet, type Layout, type PixelSettings, type Stages } from './sheet.ts'
 import { SiteHeader } from '../shared/SiteHeader.tsx'

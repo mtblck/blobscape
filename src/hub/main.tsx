@@ -15,6 +15,12 @@ const experiments = [
     blurb:
       'Watch a few hundred 2D Gaussians start as noise and learn to paint a picture, using the training loop behind every splat capture.',
   },
+  {
+    slug: 'blobscape',
+    title: 'Blobscape',
+    blurb:
+      'Learn what a splat is made of, one blob at a time, then spray, select and pick apart thousands of them in a sandbox.',
+  },
 ]
 
 function Hub() {

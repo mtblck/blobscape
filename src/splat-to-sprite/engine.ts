@@ -8,6 +8,8 @@ import {
   SplatEditSdfType,
   SplatMesh,
 } from '@sparkjsdev/spark'
+import { RenderLoop } from '../splat-core/loop.ts'
+import { measure, type Framing } from '../splat-core/framing.ts'
 
 /**
  * The 3D half: a three.js scene with one SplatMesh, drawn live in the viewport
@@ -32,12 +34,6 @@ export interface View {
   offsetY: number
 }
 
-export interface Framing {
-  centre: THREE.Vector3
-  radius: number
-  count: number
-}
-
 const FOV = 30
 /** The sprite frame takes this share of the viewport's short side. */
 export const FRAME_SHARE = 0.78
@@ -58,14 +54,12 @@ export class Engine {
   private _view: View = { azimuth: 30, elevation: 30, zoom: 1, ortho: true, offsetY: 0 }
   get view() { return this._view }
   set view(v: View) { this._view = v; this.invalidate() }
-  private raf = 0
+  private loop!: RenderLoop
   private disposed = false
-  private framesLeft = 10
-  private shooting = 0
 
   /** Asks for a few more viewport frames, enough for Spark's background sort to land. */
   invalidate(frames = 12) {
-    this.framesLeft = Math.max(this.framesLeft, frames)
+    this.loop?.invalidate(frames)
   }
 
   constructor(readonly canvas: HTMLCanvasElement) {
@@ -77,24 +71,12 @@ export class Engine {
     // the GPU free while a sheet is being baked.
     this.spark = new SparkRenderer({ renderer: this.renderer, onDirty: () => this.invalidate() })
     this.scene.add(this.spark)
-    const loop = () => {
-      if (this.disposed) return
-      if (this.resize()) this.framesLeft = Math.max(this.framesLeft, 2)
-      // Keep drawing while Spark is mid-sort too: it only picks up a finished
-      // sort (or a newly loaded mesh) on the next render.
-      const busy = this.spark.dirty || this.spark.sorting || this.spark.sortDirty
-      if ((this.framesLeft > 0 || busy) && this.shooting === 0) {
-        this.framesLeft = Math.max(0, this.framesLeft - 1)
-        this.renderer.render(this.scene, this.cameraFor(false, this.aspect()))
-      }
-      this.raf = requestAnimationFrame(loop)
-    }
-    this.raf = requestAnimationFrame(loop)
+    this.loop = new RenderLoop(this.renderer, this.spark, () => this.renderer.render(this.scene, this.cameraFor(false, this.aspect())))
   }
 
   dispose() {
     this.disposed = true
-    cancelAnimationFrame(this.raf)
+    this.loop.stop()
     this.mesh?.dispose()
     this.capture?.dispose()
     this.spark.dispose()
@@ -104,16 +86,6 @@ export class Engine {
   private aspect() {
     const { clientWidth: w, clientHeight: h } = this.canvas
     return h > 0 ? w / h : 1
-  }
-
-  private resize(): boolean {
-    const { clientWidth: w, clientHeight: h } = this.canvas
-    const size = this.renderer.getSize(new THREE.Vector2())
-    if (w && h && (size.x !== w || size.y !== h)) {
-      this.renderer.setSize(w, h, false)
-      return true
-    }
-    return false
   }
 
   /** Splat sharpness: how many standard deviations of each Gaussian get drawn. Lower = harder, smaller blobs. */
@@ -235,7 +207,7 @@ export class Engine {
    */
   shoot(size: number, view?: Partial<View>): Promise<Uint8Array> {
     const run = async () => {
-      this.shooting++
+      this.loop.hold++
       if (!this.capture || this.captureSize !== size) {
         this.capture?.dispose()
         this.capture = new SparkRenderer({
@@ -259,7 +231,7 @@ export class Engine {
         this.renderer.readRenderTargetPixels(target, 0, 0, size, size, px)
         return px
       } finally {
-        this.shooting--
+        this.loop.hold--
         this.invalidate()
       }
     }
@@ -271,36 +243,6 @@ export class Engine {
   get splatCount() {
     return this.framing.count
   }
-}
-
-/**
- * Finds the object's centre and size from its splat centres, ignoring the
- * faint and far-off ones: captures always have floaters, and a plain bounding
- * box would frame those instead of the object.
- */
-function measure(mesh: SplatMesh): Framing {
-  const xs: number[] = [], ys: number[] = [], zs: number[] = []
-  let count = 0
-  const total = mesh.packedSplats?.numSplats ?? 0
-  const stride = Math.max(1, Math.floor(total / 150000))
-  const m = mesh.matrixWorld
-  const p = new THREE.Vector3()
-  mesh.forEachSplat((i, centre, _s, _q, opacity) => {
-    count++
-    if (i % stride || opacity < 0.2) return
-    p.copy(centre).applyMatrix4(m)
-    xs.push(p.x); ys.push(p.y); zs.push(p.z)
-  })
-  if (!xs.length) return { centre: new THREE.Vector3(), radius: 1, count }
-  const q = (a: number[], t: number) => {
-    const s = [...a].sort((x, y) => x - y)
-    return s[Math.min(s.length - 1, Math.floor(t * s.length))]
-  }
-  // Centre on the middle of the 2nd–98th percentile box, not the mean: one cluster of floaters drags a mean around.
-  const centre = new THREE.Vector3((q(xs, 0.02) + q(xs, 0.98)) / 2, (q(ys, 0.02) + q(ys, 0.98)) / 2, (q(zs, 0.02) + q(zs, 0.98)) / 2)
-  const d = xs.map((x, i) => Math.hypot(x - centre.x, ys[i] - centre.y, zs[i] - centre.z))
-  const radius = Math.max(1e-3, q(d, 0.97))
-  return { centre, radius, count }
 }
 
 export function meshFromBytes(bytes: ArrayBuffer, fileName: string) {
