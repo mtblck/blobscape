@@ -632,8 +632,8 @@ export function Sandbox() {
     <>
       <Crumbs here="Sandbox" />
       <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-2 pt-2 pb-6">
-        <h1 ref={h1} tabIndex={-1} className="font-serif text-4xl outline-none sm:text-5xl">Sandbox</h1>
-        <p className="max-w-xl font-serif text-lg text-ink-muted">Every tool from the lessons, on any scene. Spray blobs into space, open a real capture, pick it apart, blow it up.</p>
+        <h1 ref={h1} tabIndex={-1} className="font-display text-4xl outline-none sm:text-5xl">Sandbox</h1>
+        <p className="max-w-xl text-lg text-ink-muted">Every tool from the lessons, on any scene. Spray blobs into space, open a real capture, pick it apart, blow it up.</p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(320px,1fr)]">

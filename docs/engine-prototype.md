@@ -21,7 +21,7 @@ All three bars are met. The engine works on WebGPU and WebGL. It skins every blo
 
 ## What was built
 
-All of it is in `src/splat-engine/`, with the test page at `/experiments/engine-lab/` (unlisted, `noindex`).
+All of it is in `src/splat-engine/`, with the test page at `/engine-lab/` (unlisted, `noindex`).
 
 - `rig.ts`: skeleton, skin weights, and `skinBlob`, the CPU reference for moving one blob by its bones. There are two rules for a blob's shape. `quat` averages the bone rotations (sign-aligned, normalised), so blobs only turn. `linear` pushes the covariance through the blended matrix, so blobs squash on a twist. The tests show `quat` keeping volume on a half-twist where `linear` collapses, which is lesson 15 in one assertion.
 - `engine.ts`: `SplatWorld`, a three.js `Mesh` that holds every blob of every actor. Each frame runs a deform compute pass (bones → world centre and covariance), a project pass (each blob onto the screen once, writing its sort key), one counting sort over the whole scene (16,384 depth bins, `sort.ts`), then an instanced draw that only places quads. A still object is one bone. On WebGL, which has no compute, the vertex shader moves and projects each blob as it draws it, and the CPU only moves centres and sorts.
@@ -46,7 +46,7 @@ Added with the Rigs and 3D models lessons (2026-11-11):
 
 ## How to get the phone numbers
 
-Open the preview's `/experiments/engine-lab/?which=engine&n=200000&walk=1` on the phone and press **Time it**. The table shows frames per second over 120 live frames, the share of frames that missed a screen refresh, and the gap between frames. 60 fps with almost no dropped frames at 200k walking means bar 1 is met.
+Open the preview's `/engine-lab/?which=engine&n=200000&walk=1` on the phone and press **Time it**. The table shows frames per second over 120 live frames, the share of frames that missed a screen refresh, and the gap between frames. 60 fps with almost no dropped frames at 200k walking means bar 1 is met.
 
 The first version of the lab timed each frame on its own: draw, then wait for the GPU to finish before starting the next. That stops the CPU and GPU working side by side, so it overstated the cost of a frame (Matt's phone showed 16.9 ms at 200k while the fox looked smooth at 500k). That number is still in the table as "alone", as an upper bound.
 

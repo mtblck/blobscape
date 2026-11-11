@@ -117,7 +117,7 @@ export function HeroDiagram() {
             </li>
           ))}
         </ul>
-        <p className="border-t border-rule-soft pt-3 font-serif text-2xl text-ink">14 numbers</p>
+        <p className="border-t border-rule-soft pt-3 text-2xl text-ink">14 numbers</p>
         <p className="-mt-2 text-xs text-ink-faint">The toadstool is {TOADSTOOL.length} of them. A real capture, a few million.</p>
       </div>
     </div>
@@ -132,7 +132,7 @@ function Case({ label, viewBox, children, className }: { label?: string; viewBox
       role={label ? 'img' : undefined}
       aria-label={label}
       aria-hidden={label ? undefined : true}
-      className={`block h-auto w-full rounded-xl bg-[#16130f] ring-1 ring-rule ${className ?? ''}`}
+      className={`block h-auto w-full rounded-xl bg-[#14161f] ring-1 ring-rule ${className ?? ''}`}
     >
       {children}
     </svg>
@@ -142,9 +142,9 @@ function Case({ label, viewBox, children, className }: { label?: string; viewBox
 function Camera({ x, y, a }: { x: number; y: number; a: number }) {
   return (
     <g transform={`translate(${x} ${y}) rotate(${a})`}>
-      <path d="M 14 0 L 70 -22 M 14 0 L 70 22" stroke="#a89f92" strokeWidth="1" strokeDasharray="2 3" />
-      <rect x="-12" y="-9" width="24" height="18" rx="3" fill="#2c261f" stroke="#cfc6b8" strokeWidth="1.5" />
-      <circle cx="12" cy="0" r="5" fill="#16130f" stroke="#cfc6b8" strokeWidth="1.5" />
+      <path d="M 14 0 L 70 -22 M 14 0 L 70 22" stroke="#9197b2" strokeWidth="1" strokeDasharray="2 3" />
+      <rect x="-12" y="-9" width="24" height="18" rx="3" fill="#2c261f" stroke="#bdc3db" strokeWidth="1.5" />
+      <circle cx="12" cy="0" r="5" fill="#14161f" stroke="#bdc3db" strokeWidth="1.5" />
     </g>
   )
 }
@@ -181,7 +181,7 @@ export function TrainDiagram() {
       <g transform="translate(168 40)">
         <path d="M 0 0 V 70 H 60" stroke="#665d52" fill="none" strokeWidth="1" />
         <path d="M 2 6 C 12 40 20 52 30 58 S 50 64 58 65" stroke={COLOURS.orange} fill="none" strokeWidth="2" />
-        <text x="4" y="-6" fill="#a89f92" fontSize="9" fontFamily="var(--font-sans)">error</text>
+        <text x="4" y="-6" fill="#9197b2" fontSize="9" fontFamily="var(--font-sans)">error</text>
       </g>
     </Case>
   )
@@ -191,7 +191,7 @@ export function TrainDiagram() {
 export function AnyAngleDiagram() {
   return (
     <Case viewBox="0 0 240 150" label="The finished toadstool of blobs, with a dashed orbit round it showing it can be seen from anywhere">
-      <ellipse cx="120" cy="104" rx="96" ry="26" fill="none" stroke="#a89f92" strokeWidth="1" strokeDasharray="3 4" />
+      <ellipse cx="120" cy="104" rx="96" ry="26" fill="none" stroke="#9197b2" strokeWidth="1" strokeDasharray="3 4" />
       <Toadstool x={120} y={112} s={0.32} />
       <path d="M 200 116 l 10 -2 l -4 9" stroke={COLOURS.sun} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
       <circle cx="40" cy="120" r="5" fill={COLOURS.sun} />
@@ -210,7 +210,7 @@ export function LessonGlyph({ id }: { id: string }) {
       </>)
     case 'footprint':
       return g(<>
-        <ellipse cx="60" cy="58" rx="34" ry="7" fill="none" stroke="#a89f92" strokeDasharray="3 3" />
+        <ellipse cx="60" cy="58" rx="34" ry="7" fill="none" stroke="#9197b2" strokeDasharray="3 3" />
         <Blob x={60} y={30} rx={14} ry={22} r={25} c="violet" />
         <path d="M 48 40 L 36 56 M 72 22 L 88 56" stroke="#665d52" strokeWidth="1" strokeDasharray="2 3" />
       </>)
@@ -218,8 +218,8 @@ export function LessonGlyph({ id }: { id: string }) {
       return g(<>
         <Blob x={48} y={36} rx={26} ry={22} r={0} c="blue" />
         <Blob x={72} y={36} rx={26} ry={22} r={0} c="red" />
-        <text x="30" y="66" fill="#cfc6b8" fontSize="10" fontFamily="var(--font-sans)">1</text>
-        <text x="86" y="66" fill="#cfc6b8" fontSize="10" fontFamily="var(--font-sans)">2</text>
+        <text x="30" y="66" fill="#bdc3db" fontSize="10" fontFamily="var(--font-sans)">1</text>
+        <text x="86" y="66" fill="#bdc3db" fontSize="10" fontFamily="var(--font-sans)">2</text>
       </>)
     case 'many': {
       const rand = rng(9)
@@ -242,15 +242,15 @@ export function LessonGlyph({ id }: { id: string }) {
       return g(<>
         <path d="M 22 52 L 60 62 L 98 52 L 60 42 Z" fill="none" stroke={COLOURS.orange} strokeDasharray="3 3" />
         {Array.from({ length: 22 }, (_, k) => <Blob key={k} x={30 + rand() * 50} y={48 + rand() * 10} rx={7} ry={3} r={0} c="green" o={0.85} />)}
-        <path d="M 84 14 l 10 -6 l 4 7 l -10 6 z" fill="#cfc6b8" />
-        {[0, 1, 2].map((k) => <circle key={k} cx={78 - k * 5} cy={24 + k * 6} r="1.4" fill="#cfc6b8" />)}
+        <path d="M 84 14 l 10 -6 l 4 7 l -10 6 z" fill="#bdc3db" />
+        {[0, 1, 2].map((k) => <circle key={k} cx={78 - k * 5} cy={24 + k * 6} r="1.4" fill="#bdc3db" />)}
       </>)
     }
     case 'formats':
       return g(<>
         {([['.ply', 76, 'red'], ['.splat', 46, 'orange'], ['.spz', 16, 'sun']] as const).map(([n, w, c], k) => (
           <g key={n}>
-            <text x="12" y={22 + k * 18} fill="#cfc6b8" fontSize="10" fontFamily="var(--font-sans)">{n}</text>
+            <text x="12" y={22 + k * 18} fill="#bdc3db" fontSize="10" fontFamily="var(--font-sans)">{n}</text>
             <rect x="42" y={14 + k * 18} width={w * 0.85} height="9" rx="2" fill={COLOURS[c]} />
           </g>
         ))}
@@ -297,7 +297,7 @@ export function LessonGlyph({ id }: { id: string }) {
           <g key={k} transform={`translate(${16 + k * 26} 0)`} opacity={k === 1 ? 1 : 0.55}>
             <Blob x={10} y={34} rx={10} ry={6} r={0} c="orange" />
             <Blob x={19} y={28} rx={4} ry={4} r={0} c="orange" />
-            <path d={k % 2 ? 'M 5 38 L 5 61 M 15 38 L 13 50 L 17 54' : 'M 5 38 L 0 61 M 15 38 L 20 61'} stroke="#cfc6b8" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+            <path d={k % 2 ? 'M 5 38 L 5 61 M 15 38 L 13 50 L 17 54' : 'M 5 38 L 0 61 M 15 38 L 20 61'} stroke="#bdc3db" strokeWidth="1.6" fill="none" strokeLinecap="round" />
           </g>
         ))}
       </>)
@@ -332,8 +332,8 @@ export function CreatureDiagram() {
       <Blob x={38} y={52} rx={18} ry={8} r={-25} c="orange" />
       <Blob x={24} y={44} rx={8} ry={6} r={-25} c="cream" />
       <path d="M 166 66 H 184 m -6 -5 l 6 5 l -6 5" stroke={COLOURS.sun} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M 194 40 h 24 l 10 10 v 40 h -34 z" fill="#2a241e" stroke="#cfc6b8" strokeWidth="1.5" strokeLinejoin="round" />
-      <path d="M 218 40 v 10 h 10" fill="none" stroke="#cfc6b8" strokeWidth="1.5" />
+      <path d="M 194 40 h 24 l 10 10 v 40 h -34 z" fill="#2a241e" stroke="#bdc3db" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M 218 40 v 10 h 10" fill="none" stroke="#bdc3db" strokeWidth="1.5" />
       <text x="200" y="76" fill={COLOURS.sun} fontSize="11" fontFamily="var(--font-sans)">.glb</text>
     </Case>
   )
@@ -349,7 +349,7 @@ export function SandboxDiagram() {
     <svg viewBox="0 0 400 300" aria-hidden className="block h-auto w-full">
       <Toadstool x={190} y={278} s={0.92} tint={(b) => (lassoed(b) ? (b.c === 'cream' ? 'white' : 'blue') : null)} />
       <path d={lasso} fill="rgb(255 208 74 / 0.06)" stroke={COLOURS.sun} strokeWidth="1.5" strokeDasharray="5 4" className="motion-safe:animate-[bs-march_1.6s_linear_infinite]" />
-      <path d="M 300 182 l 18 14 m 0 0 l -2 -9 m 2 9 l -9 -1" stroke="#cfc6b8" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+      <path d="M 300 182 l 18 14 m 0 0 l -2 -9 m 2 9 l -9 -1" stroke="#bdc3db" strokeWidth="1.5" fill="none" strokeLinecap="round" />
     </svg>
   )
 }
@@ -375,7 +375,7 @@ export function SpriteDiagram() {
       {[0, 1, 2].map((col) =>
         [0, 1, 2].map((row) => (
           <g key={`${col}${row}`} transform={`translate(${138 + col * 32} ${20 + row * 32})`}>
-            <rect width="28" height="28" fill="#221d18" />
+            <rect width="28" height="28" fill="#1e2130" />
             {SPRITE.flatMap((line, y) =>
               [...line].map((ch, x) => (ch === '.' ? null : <rect key={`${x}-${y}`} x={2 + (row === 1 ? 7 - x : x) * 3} y={2 + y * 3} width="3" height="3" fill={fill[ch]} opacity={col === 1 && y < 4 ? 0.85 : 1} />)),
             )}
@@ -403,7 +403,7 @@ export function FitDiagram() {
       <path d="M 12 90 Q 50 66 102 84 V 110 H 12 Z" fill={COLOURS.green} />
       <path d="M 110 66 H 128 m -6 -5 l 6 5 l -6 5" stroke={COLOURS.sun} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
       <g clipPath="url(#bs-fit-clip)">
-        <rect x="138" y="20" width="90" height="90" fill="#16130f" />
+        <rect x="138" y="20" width="90" height="90" fill="#14161f" />
         {Array.from({ length: 26 }, (_, k) => <Blob key={`s${k}`} x={140 + rand() * 90} y={20 + rand() * 50} rx={16} ry={10} r={rand() * 180} c={rand() < 0.5 ? 'blue' : 'sky'} o={0.75} />)}
         {Array.from({ length: 10 }, (_, k) => <Blob key={`o${k}`} x={140 + rand() * 90} y={70 + rand() * 14} rx={16} ry={8} r={0} c="orange" o={0.7} />)}
         <Blob x={196} y={50} rx={13} ry={13} r={0} c="sun" />

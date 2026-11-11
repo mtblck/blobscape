@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react'
 import type { Goal } from './progress.ts'
 
 /**
- * Pages live in the URL hash (#/lessons, #/lesson/one-blob, #/sandbox), so the whole
- * thing is one static page: no server routes, and it can move to its own
- * domain by copying the folder.
+ * Pages are real paths (/lessons/one-blob/), each prerendered to its own HTML
+ * file at build time (scripts/prerender.ts) so search engines and link
+ * previews see every page. In the browser it's still one app: links between
+ * these pages swap the page without a reload (useLinkNavigation).
  */
-export type Route = { page: 'home' } | { page: 'lessons' } | { page: 'lesson'; id: string } | { page: 'sandbox' } | { page: 'creature' }
+export type Route = { page: 'home' } | { page: 'lessons' } | { page: 'lesson'; id: string } | { page: 'sandbox' } | { page: 'creature' } | { page: 'notfound' }
 
 export const LESSONS = [
   { id: 'one-blob', title: 'One blob', summary: 'Five kinds of number, 14 in all, make one Gaussian. Pull each one and see what it does.' },
@@ -115,8 +116,21 @@ export const LESSON_GOALS: Record<(typeof LESSONS)[number]['id'], Goal[]> = {
 /** Lessons still to come, shown greyed out on the home page. */
 export const COMING: { title: string; summary: string }[] = []
 
-export function parse(hash: string): Route {
-  const m = hash.replace(/^#\/?/, '').split('/')
+/** The page at a path, or null when the path isn't one of Blobscape's (a tool, the engine lab, a typo). */
+export function parsePath(pathname: string): Route | null {
+  const m = pathname.replace(/^\/+|\/+$/g, '').split('/')
+  if (m.length === 1 && m[0] === '') return { page: 'home' }
+  if (m[0] === 'lessons' && m.length === 1) return { page: 'lessons' }
+  if (m[0] === 'lessons' && m.length === 2 && LESSONS.some((l) => l.id === m[1])) return { page: 'lesson', id: m[1] }
+  if (m.length === 1 && m[0] === 'sandbox') return { page: 'sandbox' }
+  if (m.length === 1 && m[0] === 'creature') return { page: 'creature' }
+  return null
+}
+
+/** Old links used the hash (#/lesson/one-blob); they still land on the right page. */
+export function parseLegacyHash(hash: string): Route | null {
+  if (!hash.startsWith('#/')) return null
+  const m = hash.slice(2).split('/')
   if (m[0] === 'lesson' && LESSONS.some((l) => l.id === m[1])) return { page: 'lesson', id: m[1] }
   if (m[0] === 'sandbox') return { page: 'sandbox' }
   if (m[0] === 'creature') return { page: 'creature' }
@@ -125,28 +139,69 @@ export function parse(hash: string): Route {
 }
 
 export function href(r: Route): string {
-  if (r.page === 'lesson') return `#/lesson/${r.id}`
-  if (r.page === 'sandbox') return '#/sandbox'
-  if (r.page === 'creature') return '#/creature'
-  if (r.page === 'lessons') return '#/lessons'
-  return '#/'
+  if (r.page === 'lesson') return `/lessons/${r.id}/`
+  if (r.page === 'sandbox') return '/sandbox/'
+  if (r.page === 'creature') return '/creature/'
+  if (r.page === 'lessons') return '/lessons/'
+  return '/'
+}
+
+const NAVIGATE = 'blobscape:navigate'
+
+/** Goes to a page without reloading (or to any URL of this site, keeping its query). */
+export function navigate(url: string) {
+  window.history.pushState(null, '', url)
+  window.dispatchEvent(new Event(NAVIGATE))
 }
 
 export function go(r: Route) {
-  window.location.hash = href(r)
+  navigate(href(r))
+}
+
+function current(): Route {
+  return parsePath(window.location.pathname) ?? { page: 'notfound' }
 }
 
 export function useRoute(): Route {
-  const [route, setRoute] = useState(() => parse(window.location.hash))
+  const [route, setRoute] = useState<Route>(() => {
+    const legacy = window.location.pathname === '/' ? parseLegacyHash(window.location.hash) : null
+    if (legacy) window.history.replaceState(null, '', href(legacy) + window.location.search)
+    return current()
+  })
   useEffect(() => {
-    const on = () => {
-      const h = window.location.hash
-      // In-page anchors such as the skip link's #main aren't pages: stay where we are
-      if (h && h !== '#' && !h.startsWith('#/')) return
-      setRoute(parse(h))
+    const on = () => setRoute((was) => {
+      const now = current()
+      // Same page (a query or #anchor change): keep the object so nothing remounts
+      return href(now) === href(was) && now.page === was.page ? was : now
+    })
+    window.addEventListener('popstate', on)
+    window.addEventListener(NAVIGATE, on)
+    return () => {
+      window.removeEventListener('popstate', on)
+      window.removeEventListener(NAVIGATE, on)
     }
-    window.addEventListener('hashchange', on)
-    return () => window.removeEventListener('hashchange', on)
   }, [])
   return route
+}
+
+/**
+ * Plain left-clicks on links to Blobscape's own pages change the page in
+ * place instead of reloading it. Everything else (new tab, downloads, the
+ * tools, other sites, #anchors on this page) is left to the browser.
+ */
+export function useLinkNavigation() {
+  useEffect(() => {
+    const on = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+      const a = e.target instanceof Element ? e.target.closest('a') : null
+      if (!a || !a.href || (a.target && a.target !== '_self') || a.hasAttribute('download')) return
+      const url = new URL(a.href)
+      if (url.origin !== window.location.origin || !parsePath(url.pathname)) return
+      if (url.pathname === window.location.pathname && url.search === window.location.search && url.hash) return
+      e.preventDefault()
+      navigate(url.pathname + url.search + url.hash)
+    }
+    document.addEventListener('click', on)
+    return () => document.removeEventListener('click', on)
+  }, [])
 }

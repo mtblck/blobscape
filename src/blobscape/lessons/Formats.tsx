@@ -192,7 +192,7 @@ export function Formats() {
         <>
           <p>
             A real capture starts as a few hundred photos of a place. Training scatters blobs, renders them, compares the picture with
-            each photo and nudges every blob's numbers until they match: the same loop <a href="/experiments/fit-a-picture/" className="text-ink underline underline-offset-2 hover:text-accent">Fit a Picture</a> runs on a single image.
+            each photo and nudges every blob's numbers until they match: the same loop <a href="/tools/fit-a-picture/" className="text-ink underline underline-offset-2 hover:text-accent">Fit a Picture</a> runs on a single image.
           </p>
           <p>
             What comes out is just the list: each blob's 14 numbers, plus 45 more for colour by angle. A .ply stores every one as a

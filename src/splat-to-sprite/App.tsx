@@ -4,6 +4,8 @@ import { PRESETS } from '../splat-core/presets.ts'
 import { PALETTES } from './palettes.ts'
 import { baseline, packSheet, processFrames, shotsFor, tinkerkitSheet, type Layout, type PixelSettings, type Stages } from './sheet.ts'
 import { SiteHeader } from '../shared/SiteHeader.tsx'
+import { Footer } from '../blobscape/Chrome.tsx'
+import { Crumbs } from '../blobscape/Shell.tsx'
 import { Chip, Field, Panel, Slider, Tabs, Toggle } from '../shared/ui.tsx'
 import { countColours, countSolid, rgbToHex, type Frame } from '../splat-core/pixel.ts'
 
@@ -232,13 +234,14 @@ export function App() {
   const colourSummary = palette === 'auto' ? `Auto · ${autoColours}` : palette === 'none' ? 'Full colour' : PALETTES.find((p) => p.id === palette)!.name
 
   return (
-    <div className="min-h-dvh">
-      <SiteHeader />
+    <div className="flex min-h-dvh flex-col">
+      <SiteHeader here="/tools/splat-to-sprite/" />
 
-      <main id="main" className="mx-auto max-w-7xl px-4 pb-16">
-        <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-2 pt-8 pb-6">
-          <h1 className="font-serif text-4xl sm:text-5xl">Splat to Sprite</h1>
-          <p className="max-w-xl font-serif text-lg text-ink-muted">
+      <main id="main" className="mx-auto w-full max-w-7xl flex-1 px-4 pb-16">
+        <Crumbs here="Splat to Sprite" />
+        <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-2 pt-4 pb-6">
+          <h1 className="font-display text-4xl sm:text-5xl">Splat to Sprite</h1>
+          <p className="max-w-xl text-lg text-ink-muted">
             A Gaussian splat is a 3D object made only of soft, see-through blobs. Frame one like a game camera, and bake it into
             pixel art.
           </p>
@@ -412,7 +415,7 @@ export function App() {
         <section aria-labelledby="sheet-title" className="mt-10 border-t border-rule pt-8">
           <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
             <div className="max-w-2xl">
-              <h2 id="sheet-title" className="font-serif text-3xl">Sprite sheet</h2>
+              <h2 id="sheet-title" className="font-display text-3xl">Sprite sheet</h2>
               <p className="mt-1 text-sm leading-relaxed text-ink-muted">
                 The camera circles the object for each frame, using the settings above. Four directions go one per row in
                 Tinkerkit's order: down, left, right, up.
@@ -451,6 +454,7 @@ export function App() {
           <Pipeline stages={stages} size={size} supersample={supersample} />
         </section>
       </main>
+      <Footer />
     </div>
   )
 }
@@ -466,7 +470,7 @@ function Pipeline({ stages, size, supersample }: { stages: Stages | null; size: 
   ] as const
   return (
     <div>
-      <h2 className="font-serif text-2xl">How a splat becomes pixels</h2>
+      <h2 className="font-display text-2xl">How a splat becomes pixels</h2>
       <ol className="mt-3 grid max-w-5xl grid-cols-2 gap-4 sm:grid-cols-4">
         {steps.map((s) => (
           <li key={s.key} className="min-w-0">

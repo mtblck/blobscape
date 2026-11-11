@@ -157,10 +157,10 @@ function App() {
       <SiteHeader />
       <main id="main" className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-6">
         <div>
-          <h1 className="font-serif text-3xl text-ink">Engine lab</h1>
+          <h1 className="font-display text-3xl text-ink">Engine lab</h1>
           <p className="mt-1 max-w-[65ch] text-ink-muted">A blob fox, drawn by Blobscape's own engine or by three.js's built-in splat renderer, and timed. Open it on a phone and press Time it.</p>
         </div>
-        <div className="case relative aspect-[4/3] w-full overflow-hidden rounded-xl bg-[#14110e] sm:aspect-[16/9]">
+        <div className="case relative aspect-[4/3] w-full overflow-hidden rounded-xl bg-[#0d0f16] sm:aspect-[16/9]">
           <canvas key={`${opts.which}-${opts.webgl}-${opts.count}-${opts.herd}`} ref={canvas} className="h-full w-full touch-none" aria-label="A blob fox trotting on the spot" />
           <p className="absolute bottom-2.5 left-3 text-sm text-white/70" aria-live="polite">{error ? `Couldn't start: ${error}` : lab ? lab.info : 'Starting…'}</p>
         </div>
@@ -195,7 +195,7 @@ function App() {
           <section aria-label="Walk sprite sheet" className="flex flex-col gap-2">
             <h2 className="text-lg font-semibold text-ink">Walk sprite sheet</h2>
             <p className="text-sm text-ink-muted">Four rows (down, left, right, up), eight frames per stride, in Tinkerkit's format.</p>
-            <img src={sheet.url} alt="The blob fox's trot, eight frames from each of four sides, as pixel art" className="w-full max-w-xl rounded border border-rule bg-[#14110e] p-2 [image-rendering:pixelated]" />
+            <img src={sheet.url} alt="The blob fox's trot, eight frames from each of four sides, as pixel art" className="w-full max-w-xl rounded border border-rule bg-[#0d0f16] p-2 [image-rendering:pixelated]" />
             <div className="flex gap-2">
               <a href={sheet.url} download="blob-fox.png" className="text-accent underline">Download PNG</a>
               <a href={`data:application/json,${encodeURIComponent(sheet.json)}`} download="blob-fox.json" className="text-accent underline">Download JSON</a>

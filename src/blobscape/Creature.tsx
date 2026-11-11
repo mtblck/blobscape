@@ -140,8 +140,8 @@ export function Creature() {
       <Crumbs here="Creature" />
       <div className="flex flex-col gap-4 pt-4 lg:grid lg:grid-cols-12 lg:gap-x-5">
         <header className="lg:col-span-5">
-          <h1 ref={h1} tabIndex={-1} className="font-serif text-4xl leading-tight outline-none lg:text-5xl">Creature</h1>
-          <p className="mt-2 max-w-[44ch] font-serif text-lg leading-snug text-ink-muted">
+          <h1 ref={h1} tabIndex={-1} className="font-display text-4xl leading-tight outline-none lg:text-5xl">Creature</h1>
+          <p className="mt-2 max-w-[44ch] text-lg leading-snug text-ink-muted">
             A fox made of blobs, with fourteen bones, a trot and a look round. Make it big or small, then take it away as a 3D model that
             Blender and game engines open.
           </p>
@@ -251,9 +251,9 @@ export function Creature() {
       <section aria-labelledby="files-title" className="mt-14 border-t border-rule pt-10 lg:grid lg:grid-cols-12 lg:gap-x-5 lg:pt-14">
         <div className="lg:col-span-5">
           <p className="text-sm text-ink-faint">What you take away</p>
-          <h2 id="files-title" className="mt-1 max-w-[16ch] font-serif text-4xl leading-[1.05] text-balance sm:text-5xl">One fox, two files</h2>
+          <h2 id="files-title" className="mt-1 max-w-[16ch] font-display text-4xl leading-[1.05] text-balance sm:text-5xl">One fox, two files</h2>
         </div>
-        <div className="mt-8 max-w-[36em] space-y-4 font-serif text-lg leading-relaxed text-ink-muted lg:col-span-7 lg:mt-0 lg:text-xl">
+        <div className="mt-8 max-w-[36em] space-y-4 text-lg leading-relaxed text-ink-muted lg:col-span-7 lg:mt-0 lg:text-xl">
           <p>
             <b className="font-sans text-base font-semibold text-ink">As splats</b>, the .glb holds every blob with the KHR_gaussian_splatting
             standard, the fourteen bones and both clips as ordinary glTF, and a note (our BLOBSCAPE_gaussian_skinning extension) on how a

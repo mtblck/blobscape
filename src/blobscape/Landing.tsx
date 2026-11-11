@@ -44,10 +44,10 @@ export function Landing() {
       <section aria-labelledby="hero-title" className={`${WIDTH} grid items-center gap-10 pt-10 pb-14 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:pt-16 lg:pb-20`}>
         <div className="flex flex-col gap-6">
           <p className="text-sm font-semibold tracking-wider text-accent uppercase">Blobscape</p>
-          <h1 ref={h1} tabIndex={-1} id="hero-title" className="font-serif text-5xl leading-[1.05] text-balance outline-none sm:text-6xl">
+          <h1 ref={h1} tabIndex={-1} id="hero-title" className="font-display text-5xl leading-[1.05] text-balance outline-none sm:text-6xl">
             Learn 3D splats by taking them apart
           </h1>
-          <p className="max-w-[44ch] font-serif text-xl leading-relaxed text-ink-muted">
+          <p className="max-w-[44ch] text-xl leading-relaxed text-ink-muted">
             A Gaussian splat is a 3D scene made of nothing but soft, coloured, see-through blobs. Learn what one blob is, then pile up
             thousands and pull real scenes to pieces.
           </p>
@@ -73,13 +73,13 @@ export function Landing() {
       </div>
 
       <section aria-labelledby="what-title" className={`${WIDTH} py-16 lg:py-20`}>
-        <h2 id="what-title" className="max-w-[24ch] font-serif text-4xl leading-tight text-balance">Where splats come from, in three steps</h2>
+        <h2 id="what-title" className="max-w-[24ch] font-display text-4xl leading-tight text-balance">Where splats come from, in three steps</h2>
         <ol className="mt-8 grid gap-8 md:grid-cols-3">
           {STEPS.map((s, i) => (
             <li key={s.title} className="flex flex-col gap-3">
               {s.picture}
               <span className="flex items-baseline gap-3">
-                <span aria-hidden className="font-serif text-2xl text-ink-faint">{i + 1}</span>
+                <span aria-hidden className="font-display text-2xl text-ink-faint">{i + 1}</span>
                 <span>
                   <h3 className="text-lg font-semibold">{s.title}</h3>
                   <p className="mt-1 text-ink-muted">{s.body}</p>
@@ -93,7 +93,7 @@ export function Landing() {
       <section id="lessons" aria-labelledby="lessons-title" className={`${WIDTH} grid scroll-mt-20 items-center gap-10 py-16 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-16 lg:py-20`}>
         <div className="flex flex-col gap-4">
           <span className={CHIP}>Lessons</span>
-          <h2 id="lessons-title" className="font-serif text-4xl leading-tight text-balance">{LESSON_COUNT[0].toUpperCase()}{LESSON_COUNT.slice(1)} lessons, from one blob to a walking creature</h2>
+          <h2 id="lessons-title" className="font-display text-4xl leading-tight text-balance">{LESSON_COUNT[0].toUpperCase()}{LESSON_COUNT.slice(1)} lessons, from one blob to a walking creature</h2>
           <p className="max-w-[48ch] text-lg text-ink-muted">
             Each lesson asks one question and hands you the controls to answer it. Goals tick off as you find things out, and the
             explanation waits until you've seen it for yourself.
@@ -116,8 +116,8 @@ export function Landing() {
               <a href={href({ page: 'lesson', id: l.id })} className="group flex h-full flex-col gap-2 rounded-xl p-2 no-underline transition-colors hover:bg-paper-sunk">
                 <LessonGlyph id={l.id} />
                 <span className="flex items-baseline gap-2 px-1">
-                  <span aria-hidden className="font-serif text-lg text-ink-faint">{i + 1}</span>
-                  <span className="font-serif text-lg leading-tight text-ink group-hover:text-accent">{l.title}</span>
+                  <span aria-hidden className="font-display text-lg text-ink-faint">{i + 1}</span>
+                  <span className="font-display text-lg leading-tight text-ink group-hover:text-accent">{l.title}</span>
                 </span>
                 <span className="px-1 text-xs text-ink-faint tabular-nums">
                   {progress[i] === total ? 'Done' : progress[i] ? `${progress[i]} of ${total} goals` : `${total} goals`}
@@ -131,7 +131,7 @@ export function Landing() {
       <section id="sandbox" aria-labelledby="sandbox-title" className={`${WIDTH} grid scroll-mt-20 items-center gap-10 py-16 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:gap-16 lg:py-24`}>
         <div className="flex flex-col gap-4 lg:order-2">
           <span className={CHIP}>Sandbox</span>
-          <h2 id="sandbox-title" className="font-serif text-4xl leading-tight text-balance">Then get your hands on a whole scene</h2>
+          <h2 id="sandbox-title" className="font-display text-4xl leading-tight text-balance">Then get your hands on a whole scene</h2>
           <p className="max-w-[48ch] text-lg text-ink-muted">
             The sandbox is every tool from the lessons, on any scene you like. Grab a corner of a capture, drag it off, recolour it and
             see what it was hiding.
@@ -146,14 +146,14 @@ export function Landing() {
 
       <section id="experiments" aria-labelledby="experiments-title" className={`${WIDTH} scroll-mt-20 py-16 lg:py-20`}>
         <span className={CHIP}>More experiments</span>
-        <h2 id="experiments-title" className="mt-4 max-w-[26ch] font-serif text-4xl leading-tight text-balance">Other ways to play with splats</h2>
+        <h2 id="experiments-title" className="mt-4 max-w-[26ch] font-display text-4xl leading-tight text-balance">Other ways to play with splats</h2>
         <p className="mt-3 max-w-[56ch] text-lg text-ink-muted">Smaller tools built from the same blobs. New ones land here as they're made.</p>
         <ul className="mt-8 grid gap-6 md:grid-cols-3">
           {EXPERIMENTS.map((e) => (
             <li key={e.title}>
               <a href={e.url} className="group flex h-full flex-col gap-4 rounded-2xl border border-rule bg-paper p-4 no-underline transition-colors hover:border-ink-faint">
                 {PICTURES[e.id]}
-                <span className="font-serif text-2xl text-ink group-hover:text-accent">{e.title} →</span>
+                <span className="font-display text-2xl text-ink group-hover:text-accent">{e.title} →</span>
                 <span className="text-ink-muted">{e.body}</span>
               </a>
             </li>
@@ -164,7 +164,7 @@ export function Landing() {
       <section aria-labelledby="start-title" className={`${WIDTH} pt-4 pb-8`}>
         <div className="case grid items-center gap-6 rounded-3xl p-8 sm:p-12 md:grid-cols-[minmax(0,1fr)_auto]" style={{ background: 'var(--c-paper)' }}>
           <div>
-            <h2 id="start-title" className="font-serif text-4xl text-ink">Start with one blob</h2>
+            <h2 id="start-title" className="font-display text-4xl text-ink">Start with one blob</h2>
             <p className="mt-3 max-w-[50ch] text-lg text-ink-muted">Fourteen numbers, five kinds. Pull each one and the rest of splatting starts to make sense.</p>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -195,11 +195,11 @@ function LessonMockup() {
           <p className="mt-1 font-semibold">Make it a ghost</p>
         </div>
       </div>
-      <div className="case mt-3 overflow-hidden rounded-xl ring-[3px] ring-placard" style={{ background: 'var(--c-paper)' }}>
+      <div className="case mt-3 overflow-hidden rounded-xl ring-[3px] ring-placard-edge" style={{ background: 'var(--c-paper)' }}>
         <svg viewBox="0 0 320 150" className="block h-auto w-full">
-          <path d="M 0 120 H 320 M 40 150 L 100 100 M 160 150 V 100 M 280 150 L 220 100" stroke="#2a251f" />
+          <path d="M 0 120 H 320 M 40 150 L 100 100 M 160 150 V 100 M 280 150 L 220 100" stroke="#252730" />
           <ellipse cx="160" cy="76" rx="80" ry="22" transform="rotate(-8 160 76)" fill="url(#bs-blue)" />
-          <path d="M 160 76 L 238 64 M 160 76 L 160 46 M 160 76 L 130 96" stroke="#ffd04a" strokeWidth="1.5" strokeLinecap="round" />
+          <path d="M 160 76 L 238 64 M 160 76 L 160 46 M 160 76 L 130 96" stroke="#f2553a" strokeWidth="1.5" strokeLinecap="round" />
         </svg>
         <p className="border-t border-rule-soft px-3 py-1.5 text-[11px] text-ink-muted">Width 2.40 · Height 0.18 · Depth 1.10</p>
       </div>

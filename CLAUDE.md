@@ -1,18 +1,20 @@
-# experiments
+# Blobscape
 
-Small interactive experiments served at `mattblack.space/experiments/<name>/`. One Vite multi-page app,
-one Vercel project; the portfolio (mtblck/mb-portfolio) proxies `/experiments/(.*)` to this project's
-production domain. See README for the why behind the choices.
+Blobscape (blobscape.dev): lessons, a sandbox and small experiments with Gaussian splats. One Vite
+multi-page React app, one Vercel project, served from the root. See README for the why behind the choices.
 
 ## Commands
-- `npm run dev`, `npm run build` (runs hosting:check + tsc first), `npm run preview` (production headers)
+- `npm run dev`, `npm run build` (hosting:check + tsc, vite build, then `scripts/prerender.ts`), `npm run preview` (production headers)
 - `npm test` — unit tests for the pixel pipeline and the Gaussian fitter (node --test, no GPU)
 - `npm run build && npm run verify` — real Chromium against dist with vercel.json headers, plus axe; screenshots in verify-shots/
 
 ## Load-bearing
-- Vite `base: '/experiments/'`, `outDir: 'dist/experiments'`; files live at the same path on both domains. `hosting:check` enforces it.
+- Vite `base: '/'`, `outDir: 'dist'`, Vercel `trailingSlash: true` (every page is a folder with an index.html). `hosting:check` enforces it.
+- Blobscape's pages are paths (`/`, `/lessons/`, `/lessons/<id>/`, `/sandbox/`, `/creature/`), parsed in `routes.ts`. `scripts/prerender.ts` writes each one's HTML (title, description, canonical, og, JSON-LD, readable content) from the built `dist/index.html`, plus 404.html, sitemap.xml, robots.txt. A new page needs a case in `routes.ts`, `meta.ts` and `prerender.ts`.
+- `useLinkNavigation` turns plain clicks on links to Blobscape pages into in-app navigation; tools and other sites load normally. Old `#/…` links are rewritten to paths on load.
 - CSP needs `'wasm-unsafe-eval'` and `worker-src blob:` (Spark decodes in WASM, sorts in a blob worker).
-- Add a new experiment: `<name>/index.html` + `src/<name>/`, an input in vite.config.ts, a redirect in vercel.json, a card in src/hub. Every page renders `SiteHeader` (src/shared) first and puts its content in `<main id="main">` for the skip link.
+- Add a new tool: `tools/<name>/index.html` + `src/<name>/`, an input in vite.config.ts, an entry in `EXPERIMENTS` (src/blobscape/site.ts: front page, menu, footer) and the sitemap list in prerender.ts. Every page renders `SiteHeader` (src/shared) first, puts its content in `<main id="main">` for the skip link, and ends with `Footer`.
+- Brand: colours are hex tokens in `src/shared/theme.css` (light default, dark three times: system, forced, `.case`; keep them in step). Blob coral `#f2553a` (`blob`) is for the logo and big shapes, never small text; `accent` is the text-safe coral. Headings `font-display` (Fredoka 600), text Figtree. Logo shapes in `src/shared/logoPaths.ts`; don't recolour, stretch or add effects. The theme choice is stored as `blobscape-theme`.
   Tabs, sliders, chips and toggles live in `src/shared/ui.tsx`; reuse them so every experiment shares the same hover and cursor states.
 
 ## Splat to Sprite
@@ -28,7 +30,7 @@ production domain. See README for the why behind the choices.
 - The worker posts a frame ~30×/s with the display image, new losses and events; the page keeps losses in a ref buffer, not state.
 
 ## Blobscape
-- One page, hash routes (`#/` front page, `#/lessons`, `#/lesson/<id>`, `#/sandbox`), kept liftable: `blobscape/`, `src/blobscape/`, `src/splat-core/`, `src/splat-engine/`, `src/shared/`. Matt may move it to blobscape.dev.
+- One app at the site root (`index.html`, `src/blobscape/`), on `src/splat-core/`, `src/splat-engine/` and `src/shared/`.
 - `src/splat-core/` is shared with Splat to Sprite (render loop, presets, framing). `Blobs` (typed arrays) is the source of truth; `SplatView.sync(blobs, from)` uploads to Spark.
 - Lesson goals live in `routes.ts` (`LESSON_GOALS`); each lesson's `useGoals` checks are keyed by those ids. Each goal has a `hint` (points, never answers), a `why` (shown once it ticks) and a `where` (a control group id, or 'view', to light up).
 - Lessons use the exhibit layout in `Shell.tsx`: question + goal cards, an always-dark display case (`.case` in theme.css re-declares the dark tokens, so overlays call `themeColour(name, ctx.canvas)`), a desk of control `groups`, then the explanation spread. Views inside the case pass `bare`.
@@ -37,13 +39,13 @@ production domain. See README for the why behind the choices.
 - Colour by angle evaluates spherical harmonics on the CPU (`splat-core/sh.ts`, tested) and re-uploads per orbit; its goal uses the stored highlight's peak as a share of the real one, which falls as shine sharpens (a whole-ball error doesn't).
 - Splat files encodes .ply/.splat with our writers and .spz with Spark's `writeSpz`, then reads each back through `readSplatFile`, so what you see is what the file holds. Break it uses its own scatter, not the shared Explode: a radial push on a dense scene just looks like a bigger object.
 - The front page (`Landing.tsx`) is the home for every splat experiment: lessons, sandbox, then the other tools (`EXPERIMENTS`). Its pictures (`diagrams.tsx`) are SVG blobs filled with shared radial gradients (`BlobDefs`, ids `bs-<colour>`), so don't reuse a `bs-` id elsewhere.
-- Header menu (pages only; lessons are one "Lessons" link so new lessons need no menu change), footer, tip button and page titles live in `Chrome.tsx`; site facts (origin, Ko-fi link, the other experiments) in `site.ts`. The tip button shows only on the front page and lesson list (it would cover lesson controls) and tucks away at the footer.
-- SEO: `blobscape/index.html` carries the canonical, Open Graph/Twitter tags, JSON-LD (allowed past hosting:check because it's data) and a `<noscript>` lesson list; `public/blobscape/og.png` is the share image. Hash routes are one URL to Google, so moving to blobscape.dev should switch to path routes with a prerendered page per lesson, and update `SITE.origin` and the canonical/og URLs.
-- Rigs lessons (9–13: one-bone, weights, twist, walk, model) pose on the CPU with `splat-engine/pose.ts` `poseBlobs` and hand Spark the result; parts of the lesson list come from `PARTS` in routes.ts. Creature (`#/creature`) draws with our engine (`creature/stage.ts`, lazy-loaded); verify loads it with `?offscreen=1`.
+- Header and menu (pages only; lessons are one "Lessons" link so new lessons need no menu change) in `shared/SiteHeader.tsx`; footer and tip button in `Chrome.tsx`; page titles and descriptions in `meta.ts`; site facts (origin, Ko-fi link, the experiments) in `site.ts`. The tip button shows only on the front page and lesson list (it would cover lesson controls) and tucks away at the footer.
+- SEO: every page's HTML is prerendered (see Load-bearing); JSON-LD is allowed past hosting:check because it's data. `public/og.png` is the share image (brand kit `social/og-image.png`).
+- Rigs lessons (9–13: one-bone, weights, twist, walk, model) pose on the CPU with `splat-engine/pose.ts` `poseBlobs` and hand Spark the result; parts of the lesson list come from `PARTS` in routes.ts. Creature (`/creature/`) draws with our engine (`creature/stage.ts`, lazy-loaded); verify loads it with `?offscreen=1`.
 - The overlay canvas is `willReadFrequently` (CPU): a GPU 2D canvas in headless Chromium kept showing an old frame after a clear.
 
 
-## Splat engine (prototype, `src/splat-engine/`, test page `/experiments/engine-lab/`)
+## Splat engine (prototype, `src/splat-engine/`, test page `/engine-lab/`)
 - The engine lab is deliberately unlisted (noindex, no hub card): it's a test bench, not an experiment.
 - `Skeleton.place` is where an actor stands; poses (`offset`, `rotation`, `reset()`) never touch it.
 - Our own renderer for animated splats, on three.js's WebGPURenderer (TSL). `SplatWorld` holds every blob of every actor. WebGPU, per frame: deform compute (bones → world centre + covariance), project compute (→ screen centre + ellipse axes, writes sort keys and histogram), `DepthSort` prefix + scatter (`sort.ts`, one counting sort over the whole scene), then a lean instanced draw. Projection/shading follow three's `GaussianSplat` (MIT). A still object is one bone.

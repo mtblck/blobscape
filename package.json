@@ -1,13 +1,14 @@
 {
-  "name": "experiments",
+  "name": "blobscape",
   "version": "1.0.0",
   "scripts": {
     "dev": "vite",
-    "build": "npm run hosting:check && tsc && vite build",
+    "build": "npm run hosting:check && tsc && vite build && npm run prerender",
     "preview": "vite preview",
     "hosting:check": "node scripts/check-hosting.mjs",
     "test": "node --test --experimental-strip-types src/**/*.test.ts",
-    "verify": "node scripts/verify.mjs"
+    "verify": "node scripts/verify.mjs",
+    "prerender": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/prerender.ts"
   },
   "dependencies": {
     "@sparkjsdev/spark": "^2.4.0",

@@ -1,21 +1,39 @@
-# Experiments
+# Blobscape
 
-Small interactive things, built to learn how something works by poking at it. Served at
-[mattblack.space/experiments/](https://mattblack.space/experiments/).
+Small experiments with Gaussian splats: learn how 3D splats work by taking them apart, one blob at
+a time. Served at [blobscape.dev](https://blobscape.dev/).
 
-| Experiment | What it is |
+| Page | What it is |
 | --- | --- |
-| [Splat to Sprite](https://mattblack.space/experiments/splat-to-sprite/) | Turn a 3D Gaussian splat into pixel-art sprites and Tinkerkit sprite sheets |
-| [Fit a Picture](https://mattblack.space/experiments/fit-a-picture/) | Watch 2D Gaussians start as noise and learn a picture, the way a splat is trained |
-| [Blobscape](https://mattblack.space/experiments/blobscape/) | Learn what a splat is made of, one blob at a time, then play with thousands in a sandbox |
+| [Lessons](https://blobscape.dev/lessons/) | Thirteen hands-on lessons, from one blob to a walking creature |
+| [Sandbox](https://blobscape.dev/sandbox/) | Spray, select, recolour and explode blobs, or open your own capture |
+| [Creature](https://blobscape.dev/creature/) | A blob fox on our own splat engine, exported as a rigged .glb |
+| [Fit a Picture](https://blobscape.dev/tools/fit-a-picture/) | Watch 2D Gaussians start as noise and learn a picture, the way a splat is trained |
+| [Splat to Sprite](https://blobscape.dev/tools/splat-to-sprite/) | Turn a 3D Gaussian splat into pixel-art sprites and Tinkerkit sprite sheets |
 
 ```sh
 npm install
-npm run dev            # http://localhost:5173/experiments/
-npm test               # unit tests (pixel pipeline, Gaussian fitter)
-npm run build          # hosting check, typecheck, build to dist/experiments
+npm run dev            # http://localhost:5173/
+npm test               # unit tests (pixel pipeline, Gaussian fitter, splat engine)
+npm run build          # hosting check, typecheck, build to dist, prerender every page
 npm run verify         # Chromium against dist, under the production CSP, with axe
 ```
+
+## The site
+
+- **Vite and React, not Next.** Every page draws in the browser with WebGL or WebGPU, so a server
+  would render nothing useful. Instead each page is a real path (`/lessons/one-blob/`) and
+  `scripts/prerender.ts` writes it out as its own HTML file after the build: its title,
+  description, canonical link, share tags, JSON-LD and a readable version of the page, plus
+  `404.html`, `sitemap.xml` and `robots.txt`. In the browser it is still one app, and links between
+  Blobscape's pages swap the page without a reload. Old `#/lesson/<id>` links land on their page.
+- **The brand** comes from the Blobscape brand kit: the logo (`src/shared/logoPaths.ts`, drawn by
+  `Logo.tsx` so it follows the theme), Fredoka for headings and Figtree for text (self-hosted), the
+  light and dark palette as hex tokens in `src/shared/theme.css`, and the icons and share image in
+  `public/`. Light is the default; dark follows the system unless the menu sets it.
+- **Hosting:** one Vercel project serving `dist` from the root, `trailingSlash: true` (every page is
+  a folder). `npm run build` fails if the hosting shape or the CSP drifts (`scripts/check-hosting.mjs`).
+  Old `/experiments/...` addresses redirect to their new home.
 
 ## Splat to Sprite
 
@@ -105,9 +123,6 @@ captures, breaking a scene) are planned.
   use them, so they match what Spark draws.
 - **One custom renderer, on purpose.** Spark always sorts correctly, so the Order lesson uses a
   ~60-line software splatter (`cpuSplat.ts`) that can draw in any order.
-- **Hash routes, one page.** `#/lesson/<id>` and `#/sandbox`, so there are no server routes and the
-  folder can move to its own domain (blobscape.dev) by copying `blobscape/`, `src/blobscape/`,
-  `src/splat-core/` and `src/shared/`.
 - **Nothing leaves the browser.** Goal progress is kept in localStorage (`blobscape-progress`); the
   lesson-to-sandbox hand-off is in memory.
 - **Spray picks once per dab.** It finds the surface under the ring once, then scatters the dab's
