@@ -41,6 +41,8 @@ interface Props {
   children?: ReactNode
   onView?: (v: SplatView) => void
   className?: string
+  /** No frame of its own: it fills a lesson's display case. */
+  bare?: boolean
 }
 
 /** Degrees of turn per pixel dragged, shared by every view so they all feel the same. */
@@ -73,7 +75,7 @@ export const clampOrbit = (o: Orbit): Orbit => ({
  * canvas on top draws whatever the page wants over them. Drag (or arrow keys)
  * to orbit, scroll, pinch or +/− to zoom.
  */
-export function Viewport({ blobs, version, orbit, setOrbit, reach, overlay, takeSync, tool, label, hint, children, onView, className }: Props) {
+export function Viewport({ blobs, version, orbit, setOrbit, reach, overlay, takeSync, tool, label, hint, children, onView, className, bare }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const overlayRef = useRef<HTMLCanvasElement>(null)
   const viewRef = useRef<SplatView | null>(null)
@@ -191,7 +193,7 @@ export function Viewport({ blobs, version, orbit, setOrbit, reach, overlay, take
   }
 
   return (
-    <div className={`relative overflow-hidden rounded-lg border border-rule bg-paper-sunk ${className ?? 'aspect-[4/3]'}`}>
+    <div className={`relative overflow-hidden ${bare ? 'h-full' : `rounded-lg border border-rule bg-paper-sunk ${className ?? 'aspect-[4/3]'}`}`}>
       <canvas ref={canvasRef} aria-hidden className="absolute inset-0 h-full w-full" />
       <canvas
         ref={overlayRef}

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Blobs, hexToRgb, quatFromEuler } from '../../splat-core/blobs.ts'
 import type { Orbit } from '../../splat-core/view.ts'
-import { Chip, Field, Slider, Tabs, Toggle } from '../../shared/ui.tsx'
+import { Chip, Field, Slider, Toggle } from '../../shared/ui.tsx'
 import { LessonShell } from '../Shell.tsx'
 import { LESSON_GOALS } from '../routes.ts'
 import { Viewport } from '../Viewport.tsx'
@@ -45,88 +45,85 @@ export function OneBlob() {
   return (
     <LessonShell
       id="one-blob"
-      intro={<p>Every splat scene, however detailed, is made of this one thing: a soft, coloured, see-through blob. Here's a single one.</p>}
+      intro={<p>Every splat scene, however detailed, is made of this one thing: a soft, coloured, see-through blob. What can a single one do?</p>}
       view={
         <Viewport
+          bare
           blobs={blobs}
           version={0}
           orbit={orbit}
           setOrbit={setOrbit}
           label="A single Gaussian blob. Drag or use the arrow keys to orbit; scroll or press plus and minus to zoom."
           hint="drag to orbit · scroll to zoom"
-          overlay={xray ? (ctx, lens) => drawOutlines(ctx, blobs, lens, { sigmas: [1, 2], colour: themeColour('ink-faint'), axes: true }) : undefined}
+          overlay={xray ? (ctx, lens) => drawOutlines(ctx, blobs, lens, { sigmas: [1, 2], colour: themeColour('ink-faint', ctx.canvas), axes: true }) : undefined}
         />
       }
       caption={
         <p>
-          {xray ? (
-            <>The rings are where the blob fades to 61% and 14% of its strength (1σ and 2σ). The labelled lines are its own x, y and z axes, each as long as one standard deviation.</>
-          ) : 'Turn on x-ray to see the outline of the Gaussian.'}
+          <span className="tabular-nums text-ink">{scale.map((s) => s.toFixed(2)).join(' × ')}</span>
+          {xray ? ' · The rings are where it fades to 61% and 14% (1σ and 2σ); the lines are its own x, y and z axes.' : ' · Turn on x-ray to see its outline.'}
         </p>
       }
-      controls={
-        <>
-        <div className="flex flex-wrap items-center gap-2">
-          <Toggle label="X-ray" checked={xray} onChange={setXray} />
-          <span aria-hidden className="mx-1 h-4 w-px bg-rule" />
-          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Quick shapes">
-            <Chip small onClick={() => { setSx(-1); setSy(-1); setSz(-1) }}>Round</Chip>
-            <Chip small onClick={() => { setSx(-0.5); setSy(-0.5); setSz(-4) }}>Pancake</Chip>
-            <Chip small onClick={() => { setSx(0.3); setSy(-3.5); setSz(-3.5) }}>Needle</Chip>
-          </div>
-        </div>
-        <Tabs
-          label="Blob settings"
-          tabs={[
-            {
-              id: 'shape',
-              label: 'Size',
-              summary: scale.map((s) => s.toFixed(2)).join(' × '),
-              content: (
-                <div className="space-y-3">
-                  <Slider label="Size along x" value={sx} min={-5} max={2} step={0.05} onChange={setSx} format={logFmt} />
-                  <Slider label="Size along y" value={sy} min={-5} max={2} step={0.05} onChange={setSy} format={logFmt} />
-                  <Slider label="Size along z" value={sz} min={-5} max={2} step={0.05} onChange={setSz} format={logFmt} hint="Each is one standard deviation along the blob's own axis. Three of them make an ellipsoid." />
+      groups={[
+        {
+          id: 'shape',
+          title: 'Shape',
+          note: 'one size along each of its own axes',
+          span: 5,
+          cols: 3,
+          content: (
+            <>
+              <Slider label="Size along x" value={sx} min={-5} max={2} step={0.05} onChange={setSx} format={logFmt} />
+              <Slider label="Size along y" value={sy} min={-5} max={2} step={0.05} onChange={setSy} format={logFmt} />
+              <Slider label="Size along z" value={sz} min={-5} max={2} step={0.05} onChange={setSz} format={logFmt} />
+              <div className="flex flex-wrap items-center gap-1.5 lg:col-span-3" role="group" aria-label="Start from">
+                <span className="mr-1 text-xs text-ink-faint">Start from</span>
+                <Chip small onClick={() => { setSx(-1); setSy(-1); setSz(-1) }}>Round</Chip>
+                <Chip small onClick={() => { setSx(-0.5); setSy(-0.5); setSz(-4) }}>Pancake</Chip>
+                <Chip small onClick={() => { setSx(0.3); setSy(-3.5); setSz(-3.5) }}>Needle</Chip>
+              </div>
+            </>
+          ),
+        },
+        {
+          id: 'turn',
+          title: 'Turn',
+          note: 'stored as a quaternion',
+          span: 4,
+          cols: 2,
+          content: (
+            <>
+              <Slider label="Tip forward (x)" value={rx} min={-180} max={180} step={1} onChange={setRx} format={(v) => `${v}°`} />
+              <Slider label="Spin (y)" value={ry} min={-180} max={180} step={1} onChange={setRy} format={(v) => `${v}°`} />
+              <Slider label="Roll (z)" value={rz} min={-180} max={180} step={1} onChange={setRz} format={(v) => `${v}°`} />
+            </>
+          ),
+        },
+        {
+          id: 'look',
+          title: 'Look',
+          note: 'colour and see-through',
+          span: 4,
+          content: (
+            <>
+              <Field label="Colour">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {SWATCHES.map((c) => (
+                    <button key={c} type="button" aria-label={`Colour ${c}`} aria-pressed={colour === c} onClick={() => setColour(c)} className={`h-6 w-6 rounded-full border-2 transition-transform hover:scale-110 ${colour === c ? 'border-ink' : 'border-transparent'}`} style={{ background: c }} />
+                  ))}
+                  <input type="color" aria-label="Any colour" value={colour} onChange={(e) => setColour(e.target.value)} className="h-6 w-8 cursor-pointer rounded border border-rule bg-transparent" />
                 </div>
-              ),
-            },
-            {
-              id: 'turn',
-              label: 'Turn',
-              summary: `${rx}° ${ry}° ${rz}°`,
-              content: (
-                <div className="space-y-3">
-                  <Slider label="Tip forward (x)" value={rx} min={-180} max={180} step={1} onChange={setRx} format={(v) => `${v}°`} />
-                  <Slider label="Spin (y)" value={ry} min={-180} max={180} step={1} onChange={setRy} format={(v) => `${v}°`} />
-                  <Slider label="Roll (z)" value={rz} min={-180} max={180} step={1} onChange={setRz} format={(v) => `${v}°`} hint="Stored as a quaternion: four numbers that describe any rotation without the gimbal problems of angles." />
-                </div>
-              ),
-            },
-            {
-              id: 'look',
-              label: 'Look',
-              summary: `${Math.round(opacity * 100)}% opaque`,
-              content: (
-                <div className="space-y-3">
-                  <Field label="Colour">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {SWATCHES.map((c) => (
-                        <button key={c} type="button" aria-label={`Colour ${c}`} aria-pressed={colour === c} onClick={() => setColour(c)} className={`h-7 w-7 rounded-full border-2 transition-transform hover:scale-110 ${colour === c ? 'border-ink' : 'border-transparent'}`} style={{ background: c }} />
-                      ))}
-                      <input type="color" aria-label="Any colour" value={colour} onChange={(e) => setColour(e.target.value)} className="h-7 w-9 cursor-pointer rounded border border-rule bg-transparent" />
-                    </div>
-                  </Field>
-                  <Slider label="Opacity" value={opacity} min={0} max={1} step={0.01} onChange={setOpacity} format={(v) => `${Math.round(v * 100)}%`} hint="How much of what's behind it the blob covers at its very centre. It fades out from there." />
-                </div>
-              ),
-            },
-          ]}
-        />
-        </>
-      }
+              </Field>
+              <Slider label="Opacity" value={opacity} min={0} max={1} step={0.01} onChange={setOpacity} format={(v) => `${Math.round(v * 100)}%`} />
+              <Toggle label="X-ray outline" checked={xray} onChange={setXray} />
+            </>
+          ),
+        },
+      ]}
       goals={LESSON_GOALS['one-blob']}
       done={done}
       scene={() => blobs}
+      explainTitle="Fourteen numbers make a blob"
       explain={
         <>
           <p>

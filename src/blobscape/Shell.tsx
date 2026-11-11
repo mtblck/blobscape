@@ -1,6 +1,6 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Button } from '../shared/ui.tsx'
-import { LESSONS, href } from './routes.ts'
+import { COMING, LESSONS, href } from './routes.ts'
 import type { Goal } from './progress.ts'
 import { handOff } from './handoff.ts'
 import type { Blobs } from '../splat-core/blobs.ts'
@@ -18,40 +18,62 @@ export function useFocusHeading() {
 export function Crumbs({ here }: { here: string }) {
   return (
     <nav aria-label="Breadcrumb" className="pt-6 text-sm text-ink-faint">
-      <a href={href({ page: 'home' })} className="text-ink-muted hover:text-accent">Blobscape</a>
+      <a href={href({ page: 'home' })} className="text-ink-muted underline decoration-rule underline-offset-2 hover:text-accent">Blobscape</a>
       <span aria-hidden className="px-1.5">/</span>
       <span aria-current="page">{here}</span>
     </nav>
   )
 }
 
+/** One group of controls on the desk under the view. */
+export interface ControlGroup {
+  /** Goals point at a group by this id (Goal.where) to light it up. */
+  id: string
+  title: string
+  /** A few words after the title: what the group changes. */
+  note?: string
+  content: ReactNode
+  /** Share of the desk's width on a laptop (default 1). */
+  span?: number
+  /** Columns for the controls inside, on a laptop (default 1). */
+  cols?: number
+}
+
 interface Props {
   id: string
   intro: ReactNode
+  /** The live model. It fills the display case, so give it h-full. */
   view: ReactNode
-  /** Under the view: a short caption or readout. */
+  /** A readout along the bottom of the case, next to what it measures. */
   caption?: ReactNode
-  controls: ReactNode
+  groups: ControlGroup[]
   goals: Goal[]
   done: Set<string>
   /** The scene to carry into the sandbox. */
   scene: () => Blobs
+  /** The explanation's heading: the idea in a few words. */
+  explainTitle: string
+  /** At most one formula, with each symbol said in words. */
+  formula?: { eq: ReactNode; terms: [ReactNode, string][] }
   explain: ReactNode
 }
 
+const TOTAL = LESSONS.length + COMING.length
+
 /**
- * One lesson page, on one grid so every block lines up:
+ * One lesson page, laid out like a museum exhibit bench:
  *
- *   title, and the question the lesson answers (left edge shared with the stage)
- *   stage (the view; sticks while you work the panel) | panel: Try this, then Adjust
- *   what's going on (the explanation, at reading width)
- *   previous / next
+ *   the question            | the goal cards (the current one is the yellow placard)
+ *   the display case: the live view, full width, with its readout along the bottom
+ *   the desk: every control group side by side
+ *   the explanation spread: the idea and its formula | the prose
+ *   previous · open in the sandbox · next
  *
- * The task comes before the knobs, so you know what you're adjusting for. On
- * a phone the stage sticks under the site header while the panel scrolls, so
- * you can see what each control does.
+ * The current goal's `where` lights up the group (or the view) to look at.
+ * On a phone the case and the current goal stick under the site header, the
+ * desk becomes one group at a time, and the goal cards follow as a list.
  */
-export function LessonShell({ id, intro, view, caption, controls, goals, done, scene, explain }: Props) {
+export function LessonShell({ id, intro, view, caption, groups, goals, done, scene, explainTitle, formula, explain }: Props) {
   const h1 = useFocusHeading()
   const i = LESSONS.findIndex((l) => l.id === id)
   const lesson = LESSONS[i]
@@ -60,79 +82,175 @@ export function LessonShell({ id, intro, view, caption, controls, goals, done, s
   const count = goals.filter((g) => done.has(g.id)).length
   const finished = count === goals.length
   // The first goal not yet done is the one to try now: it alone shows its hint
-  const current = goals.find((g) => !done.has(g.id))?.id
+  const current = goals.find((g) => !done.has(g.id))
+  const where = current?.where
   const nextHref = next ? href({ page: 'lesson', id: next.id }) : href({ page: 'sandbox' })
-  const nextLabel = next ? `Next: ${next.title}` : 'On to the sandbox'
+  const nextTitle = next ? next.title : 'The sandbox'
+
+  // The goal that ticked most recently, so its "why" can show in the phone's goal card and be announced
+  const [latest, setLatest] = useState<Goal | null>(null)
+  const seen = useRef(done)
+  useEffect(() => {
+    const fresh = goals.find((g) => done.has(g.id) && !seen.current.has(g.id))
+    seen.current = done
+    if (fresh) setLatest(fresh)
+  }, [done, goals])
+
+  // Phone: one group at a time; follow the current goal to the group it needs
+  const [tab, setTab] = useState(groups[0]?.id)
+  useEffect(() => {
+    if (where && groups.some((g) => g.id === where)) setTab(where)
+    // groups is rebuilt every render; only the goal moving on should switch the tab
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [where])
+
   return (
     <>
-      <Crumbs here={`Lesson ${i + 1}`} />
-      <header className="max-w-[44rem] pt-2 pb-8">
-        <h1 ref={h1} tabIndex={-1} className="font-serif text-4xl outline-none sm:text-5xl">
-          <span className="text-ink-faint">{i + 1}.</span> {lesson.title}
-        </h1>
-        <div className="mt-3 font-serif text-lg leading-relaxed text-ink-muted sm:text-xl">{intro}</div>
-      </header>
+      <div className="flex flex-col gap-4 pt-5 lg:grid lg:grid-cols-12 lg:gap-x-5 lg:pt-7">
+        <header className="lg:col-span-4 lg:self-end lg:pb-1">
+          <p className="text-sm text-ink-faint">
+            <a href={href({ page: 'home' })} className="text-ink-muted underline decoration-rule underline-offset-2 hover:text-accent">Blobscape</a>
+            <span aria-hidden className="px-1.5">·</span>
+            Lesson {i + 1} of {TOTAL}
+          </p>
+          <h1 ref={h1} tabIndex={-1} className="mt-1 font-serif text-4xl leading-tight outline-none lg:text-[2.6rem]">{lesson.title}</h1>
+          <div className="mt-2 max-w-[38ch] font-serif text-lg leading-snug text-ink-muted max-lg:max-w-[60ch]">{intro}</div>
+          {finished && (
+            <p role="status" className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-ink px-3.5 py-2 text-sm font-medium text-paper">
+              <span>✓ All {goals.length} done.</span>
+              <a href="#explain" className="underline underline-offset-2 hover:no-underline">Read why it works</a>
+              <a href={nextHref} className="underline underline-offset-2 hover:no-underline">Next: {nextTitle} →</a>
+            </p>
+          )}
+        </header>
 
-      <div className="grid gap-x-10 gap-y-6 lg:grid-cols-[minmax(0,1fr)_23rem]">
-        <section aria-label="View" className="sticky top-[57px] z-10 -mx-4 min-w-0 space-y-2 bg-paper px-4 pt-2 pb-3 lg:top-[73px] lg:mx-0 lg:self-start lg:px-0 lg:pt-0">
-          {view}
-          {caption && <div className="text-sm text-ink-muted">{caption}</div>}
+        <section aria-labelledby="try" className="order-4 lg:order-none lg:col-span-8">
+          <h2 id="try" className="sr-only">Things to try</h2>
+          <ol className={`grid gap-2.5 ${goals.length >= 4 ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-3'}`}>
+            {goals.map((g, k) => {
+              const ok = done.has(g.id)
+              const now = g.id === current?.id
+              return (
+                <li
+                  key={g.id}
+                  data-done={ok}
+                  aria-current={now ? 'step' : undefined}
+                  className={`flex min-h-[8.5rem] flex-col gap-1.5 rounded-xl border px-3.5 pt-3 pb-3.5 transition-colors max-sm:min-h-0 ${
+                    now ? 'border-placard-edge bg-placard text-placard-ink shadow-[0_10px_24px_-16px_rgb(120_90_0/0.7)]' : ok ? 'border-done bg-paper-sunk' : 'border-rule bg-paper-sunk'
+                  }`}
+                >
+                  <span className={`flex items-center gap-2 text-xs ${now ? 'text-placard-ink/80' : ok ? 'font-medium text-done' : 'text-ink-faint'}`}>
+                    <span aria-hidden className={`grid h-5 w-5 place-items-center rounded-full border-[1.5px] text-[0.68rem] font-bold ${ok ? 'border-done bg-done text-paper' : 'border-current'}`}>{ok ? '✓' : k + 1}</span>
+                    {ok ? 'Done' : now ? 'Try now' : 'Up next'}
+                  </span>
+                  <span className={`text-[0.95rem] leading-snug font-semibold ${now ? '' : ok ? 'text-ink-muted' : 'text-ink-faint'}`}>
+                    <span className="sr-only">{ok ? 'Done: ' : now ? 'Try now: ' : 'Later: '}</span>
+                    {g.label}
+                  </span>
+                  {now && g.hint && <span className="font-serif text-[0.95rem] leading-snug"><span className="sr-only">Hint: </span>{g.hint}</span>}
+                  {ok && g.why && <span className="font-serif text-[0.95rem] leading-snug text-ink-muted">{g.why}</span>}
+                </li>
+              )
+            })}
+          </ol>
         </section>
 
-        <section aria-label="Lesson panel" className="stack-controls min-w-0 space-y-6">
-          <div className="rounded-lg border border-rule">
-            <h2 className="flex items-baseline justify-between border-b border-rule px-4 py-3 font-serif text-xl">
-              Try this <span className="font-sans text-sm text-ink-faint" data-testid="goal-count">{count} of {goals.length}</span>
-            </h2>
-            <ol className="divide-y divide-rule">
-              {goals.map((g) => {
-                const ok = done.has(g.id)
-                const now = g.id === current
-                return (
-                  <li key={g.id} data-done={ok} aria-current={now ? 'step' : undefined} className={`flex gap-3 px-4 py-2.5 text-sm ${now ? 'bg-accent/10' : ''}`}>
-                    <span aria-hidden className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full border text-[0.6rem] ${ok ? 'border-accent bg-accent text-paper' : now ? 'border-accent' : 'border-ink-faint'}`}>{ok ? '✓' : ''}</span>
-                    <span className={ok ? 'text-ink-muted' : 'text-ink'}>
-                      <span className="sr-only">{ok ? 'Done: ' : now ? 'Try now: ' : 'Later: '}</span>
-                      {g.label}
-                      {g.hint && now && <span className="mt-0.5 block text-xs text-ink-muted">{g.hint}</span>}
-                    </span>
-                  </li>
-                )
-              })}
-            </ol>
-            {finished && (
-              <div className="border-t border-rule px-4 py-3 text-sm">
-                <p className="text-ink">All done. Read what was going on below, or move on.</p>
+        <section aria-label="Experiment" className="sticky top-[57px] z-10 -mx-4 bg-paper px-4 pt-1 pb-2 max-lg:shadow-[0_10px_14px_-14px_rgb(0_0_0/0.5)] lg:static lg:col-span-12 lg:mx-0 lg:px-0 lg:pt-0 lg:pb-0">
+          <div className={`case relative flex flex-col overflow-hidden rounded-2xl transition-shadow ${where === 'view' ? 'ring-[3px] ring-placard' : 'ring-1 ring-rule'}`}>
+            <div className="relative h-[min(30dvh,250px)] min-h-[180px] lg:h-[clamp(300px,calc(100dvh-33rem),640px)]">
+              {view}
+              {where === 'view' && <span aria-hidden className="pointer-events-none absolute top-3 right-3 rounded-full bg-placard px-3 py-1 text-xs font-semibold text-placard-ink">Look here</span>}
+            </div>
+            {caption && <div className="border-t border-rule-soft px-4 py-2 text-xs leading-relaxed text-ink-muted sm:text-sm">{caption}</div>}
+          </div>
+          {current ? (
+            <div className="mt-2 rounded-xl bg-placard px-3 py-2 text-placard-ink sm:hidden" aria-hidden>
+              {latest?.why && done.has(latest.id) && (
+                <p className="mb-1.5 border-b border-placard-ink/25 pb-1.5 font-serif text-sm leading-snug"><b className="font-sans text-xs">✓ {latest.label}.</b> {latest.why}</p>
+              )}
+              <p className="flex items-center gap-2 text-xs"><span>Goal {goals.indexOf(current) + 1} of {goals.length}</span></p>
+              <p className="text-[0.95rem] leading-tight font-semibold">{current.label}</p>
+              {current.hint && <p className="font-serif text-sm leading-snug">{current.hint}</p>}
+            </div>
+          ) : (
+            <div className="mt-2 rounded-xl bg-ink px-3 py-2 text-sm text-paper sm:hidden">
+              ✓ All done. <a href="#explain" className="underline">Read why it works</a>
+            </div>
+          )}
+          <p aria-live="polite" className="sr-only">
+            {latest && done.has(latest.id) ? `Done: ${latest.label}. ${latest.why ?? ''} ` : ''}
+            {finished ? 'All goals done.' : `${count} of ${goals.length} goals done.`}
+          </p>
+          <span data-testid="goal-count" aria-hidden className="sr-only">{count} of {goals.length}</span>
+        </section>
+
+        <section aria-label="Controls" className="stack-controls order-3 rounded-2xl border border-rule bg-paper-sunk/60 px-4 pt-1 pb-4 lg:order-none lg:col-span-12 lg:px-5 lg:pt-4">
+          {groups.length > 1 && (
+            <div role="group" aria-label="Show controls for" className="-mx-4 mb-3 flex border-b border-rule px-2 sm:hidden">
+              {groups.map((g) => (
+                <button
+                  key={g.id}
+                  type="button"
+                  aria-pressed={tab === g.id}
+                  onClick={() => setTab(g.id)}
+                  className={`-mb-px flex-1 border-b-[3px] px-1 pt-2.5 pb-2 text-sm font-semibold transition-colors ${tab === g.id ? 'border-accent text-ink' : 'border-transparent text-ink-faint hover:text-ink'}`}
+                >
+                  {g.title}
+                  {where === g.id && <span aria-hidden className="ml-1.5 inline-block h-2 w-2 rounded-full bg-placard align-[2px] ring-1 ring-ink" />}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="flex flex-col gap-5 sm:grid sm:grid-cols-2 lg:flex lg:flex-row lg:gap-6">
+            {groups.map((g) => (
+              <div
+                key={g.id}
+                role="group"
+                aria-labelledby={`group-${g.id}`}
+                style={{ flexGrow: g.span ?? 1, flexBasis: 0 }}
+                className={`min-w-0 rounded-xl transition-shadow sm:-m-2 sm:p-2 ${tab === g.id ? '' : 'max-sm:hidden'} ${where === g.id ? 'sm:bg-placard/10 sm:ring-[3px] sm:ring-placard' : ''}`}
+              >
+                <h3 id={`group-${g.id}`} className="mb-2 flex items-baseline gap-2 text-sm font-bold max-sm:sr-only">
+                  {g.title} {g.note && <small className="text-xs font-normal text-ink-faint">{g.note}</small>}
+                </h3>
+                <div className="desk-group grid gap-x-5 gap-y-3" style={{ ['--cols' as string]: g.cols ?? 1 }}>
+                  {g.content}
+                </div>
               </div>
-            )}
-            <p aria-live="polite" className="sr-only">{finished ? 'All goals done.' : `${count} of ${goals.length} goals done.`}</p>
-          </div>
-
-          <div className="space-y-4">
-            <h2 className="font-serif text-xl">Adjust</h2>
-            {controls}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3 border-t border-rule pt-4">
-            {finished && <a href={nextHref} className="rounded bg-accent px-4 py-2 font-medium text-paper transition-colors hover:bg-accent-ink">{nextLabel} →</a>}
-            <Button onClick={() => handOff(`Lesson ${i + 1}: ${lesson.title}`, scene())}>Open this scene in the sandbox</Button>
+            ))}
           </div>
         </section>
       </div>
 
-      <section aria-labelledby="explain" className="mt-14 max-w-[44rem]">
-        <h2 id="explain" className="font-serif text-3xl">What's going on</h2>
-        <div className="prose-like mt-4 space-y-4 text-[1.05rem] leading-relaxed text-ink-muted">{explain}</div>
+      <section aria-labelledby="explain" className="mt-14 border-t border-rule pt-10 lg:grid lg:grid-cols-12 lg:gap-x-5 lg:pt-14">
+        <div className="lg:col-span-5">
+          <p className="text-sm text-ink-faint">What you just saw</p>
+          <h2 id="explain" tabIndex={-1} className="mt-1 max-w-[16ch] font-serif text-4xl leading-[1.05] text-balance outline-none sm:text-5xl">{explainTitle}</h2>
+          {formula && (
+            <figure className="mt-8 border-t-2 border-ink pt-5">
+              <div className="font-serif text-3xl leading-tight sm:text-5xl">{formula.eq}</div>
+              <figcaption className="mt-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm text-ink-muted">
+                {formula.terms.map(([sym, meaning], k) => (
+                  <span key={k} className="contents"><b className="font-serif text-base font-medium text-ink italic">{sym}</b><span>{meaning}</span></span>
+                ))}
+              </figcaption>
+            </figure>
+          )}
+        </div>
+        <div className="mt-8 max-w-[36em] space-y-4 font-serif text-lg leading-relaxed text-ink-muted lg:col-span-7 lg:mt-0 lg:text-xl">{explain}</div>
       </section>
 
-      <nav aria-label="Lessons" className="mt-14 grid grid-cols-2 gap-4 border-t border-rule pt-6">
+      <nav aria-label="Lessons" className="mt-14 grid grid-cols-2 items-center gap-4 border-t border-rule pt-6 sm:grid-cols-3">
         {prev ? (
-          <a href={href({ page: 'lesson', id: prev.id })} className="group rounded-lg p-3 -m-3 transition-colors hover:bg-paper-sunk">
+          <a href={href({ page: 'lesson', id: prev.id })} className="group -m-3 rounded-lg p-3 transition-colors hover:bg-paper-sunk">
             <span className="block text-xs text-ink-faint">Previous</span>
             <span className="font-serif text-lg text-ink-muted group-hover:text-ink">← {i}. {prev.title}</span>
           </a>
-        ) : <span />}
-        <a href={nextHref} className="group -m-3 rounded-lg p-3 text-right transition-colors hover:bg-paper-sunk">
+        ) : <span className="text-sm text-ink-faint">This is the first lesson</span>}
+        <div className="col-span-2 row-start-2 sm:col-span-1 sm:row-start-auto sm:text-center">
+          <Button onClick={() => handOff(`Lesson ${i + 1}: ${lesson.title}`, scene())}>Open this scene in the sandbox</Button>
+        </div>
+        <a href={nextHref} className={`group -m-3 rounded-lg p-3 text-right transition-colors hover:bg-paper-sunk ${finished ? 'bg-accent/10' : ''}`}>
           <span className="block text-xs text-ink-faint">{next ? 'Next' : 'Then'}</span>
           <span className="font-serif text-lg text-ink group-hover:text-accent-ink">{next ? `${i + 2}. ${next.title}` : 'The sandbox'} →</span>
         </a>

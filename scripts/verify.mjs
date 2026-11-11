@@ -335,7 +335,6 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   await page.evaluate(() => localStorage.clear())
   await page.reload()
   await page.getByRole('button', { name: 'Pancake' }).click()
-  await page.getByRole('tab', { name: /Turn/ }).click()
   await page.getByRole('slider', { name: 'Roll (z)' }).fill('40')
   await page.waitForFunction(() => document.querySelector('[data-testid=goal-count]')?.textContent.startsWith('2 of'), null, { timeout: 5000 }).catch(() => {})
   const goals = await page.textContent('[data-testid=goal-count]')

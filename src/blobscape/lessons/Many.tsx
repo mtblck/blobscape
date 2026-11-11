@@ -40,9 +40,10 @@ export function Many() {
   return (
     <LessonShell
       id="many"
-      intro={<p>No blob knows what shape it's part of. Put enough of them in the right places and a solid object appears.</p>}
+      intro={<p>No blob knows what shape it's part of. So how many does it take before a pile of them looks like a solid thing?</p>}
       view={
         <Viewport
+          bare
           blobs={blobs}
           version={0}
           orbit={orbit}
@@ -52,8 +53,8 @@ export function Many() {
           overlay={
             xray
               ? (ctx, lens) => {
-                  if (blobs.count <= OUTLINE_LIMIT) drawOutlines(ctx, blobs, lens, { sigmas: [2], colour: themeColour('ink-faint') })
-                  else drawCentres(ctx, blobs, lens, themeColour('ink'))
+                  if (blobs.count <= OUTLINE_LIMIT) drawOutlines(ctx, blobs, lens, { sigmas: [2], colour: themeColour('ink-faint', ctx.canvas) })
+                  else drawCentres(ctx, blobs, lens, themeColour('ink', ctx.canvas))
                 }
               : undefined
           }
@@ -66,22 +67,46 @@ export function Many() {
           {xray && (count <= OUTLINE_LIMIT ? ' X-ray shows each footprint.' : ' X-ray shows centres only: past 600 blobs the outlines are just a scribble.')}
         </p>
       }
-      controls={
-        <>
-          <div className="flex flex-wrap gap-2" role="group" aria-label="Shape">
-            {SHAPES.map((s) => <Chip key={s.id} active={shape === s.id} onClick={() => setShape(s.id)}>{s.name}</Chip>)}
-          </div>
-          <Slider label="Blobs" value={logCount} min={0} max={Math.log10(MAX)} step={0.01} onChange={setLogCount} format={(v) => toCount(v).toLocaleString()} />
-          <Slider label="Blob size" value={sizeMul} min={0.15} max={3} step={0.01} onChange={setSizeMul} format={(v) => `${v.toFixed(2)}×`} hint="1× sizes the blobs to cover the surface about once." />
-          <div className="flex flex-wrap gap-x-6 gap-y-2">
-            <Toggle label="Flat discs on the surface" checked={flat} onChange={setFlat} />
-            <Toggle label="X-ray" checked={xray} onChange={setXray} />
-          </div>
-        </>
-      }
+      groups={[
+        {
+          id: 'shape',
+          title: 'Shape',
+          note: 'what the blobs are scattered over',
+          content: (
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Shape">
+              {SHAPES.map((s) => <Chip key={s.id} active={shape === s.id} onClick={() => setShape(s.id)}>{s.name}</Chip>)}
+            </div>
+          ),
+        },
+        {
+          id: 'count',
+          title: 'How many',
+          note: 'and how big',
+          span: 2,
+          cols: 2,
+          content: (
+            <>
+              <Slider label="Blobs" value={logCount} min={0} max={Math.log10(MAX)} step={0.01} onChange={setLogCount} format={(v) => toCount(v).toLocaleString()} />
+              <Slider label="Blob size" value={sizeMul} min={0.15} max={3} step={0.01} onChange={setSizeMul} format={(v) => `${v.toFixed(2)}×`} hint="1× sizes the blobs to cover the surface about once." />
+            </>
+          ),
+        },
+        {
+          id: 'blobs',
+          title: 'Blobs',
+          note: 'their kind',
+          content: (
+            <>
+              <Toggle label="Flat discs on the surface" checked={flat} onChange={setFlat} />
+              <Toggle label="X-ray" checked={xray} onChange={setXray} />
+            </>
+          ),
+        },
+      ]}
       goals={LESSON_GOALS['many']}
       done={done}
       scene={() => blobs}
+      explainTitle="The shape is only where they are"
       explain={
         <>
           <p>

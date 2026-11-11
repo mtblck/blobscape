@@ -38,9 +38,10 @@ export function Footprint() {
   return (
     <LessonShell
       id="footprint"
-      intro={<p>The renderer never draws a 3D blob. It works out the flat ellipse the blob would cast on the screen, and fills that.</p>}
+      intro={<p>The screen is flat, so a 3D blob has to land on it as a flat shape. What shape does one flat blob make as you walk round it?</p>}
       view={
         <Viewport
+          bare
           blobs={blobs}
           version={0}
           orbit={orbit}
@@ -50,9 +51,9 @@ export function Footprint() {
           label="A flat blob and the ellipse it covers on screen. Drag or use the arrow keys to orbit."
           hint="drag to orbit · scroll to zoom"
           overlay={(ctx, lens) => {
-            drawOutlines(ctx, blobs, lens, { sigmas: [1, 2], colour: themeColour('ink-faint') })
+            drawOutlines(ctx, blobs, lens, { sigmas: [1, 2], colour: themeColour('ink-faint', ctx.canvas) })
             ctx.setLineDash([5, 4])
-            drawOutlines(ctx, blobs, lens, { sigmas: [reach], colour: themeColour('accent'), width: 1.5 })
+            drawOutlines(ctx, blobs, lens, { sigmas: [reach], colour: themeColour('accent', ctx.canvas), width: 1.5 })
             ctx.setLineDash([])
           }}
         />
@@ -65,36 +66,62 @@ export function Footprint() {
           </p>
         )
       }
-      controls={
-        <>
-          <div className="flex flex-wrap gap-2" role="group" aria-label="Look from">
-            {VIEWS.map((v) => (
-              <Chip key={v.name} onClick={() => setOrbit((o) => ({ ...o, azimuth: v.azimuth, elevation: v.elevation }))}>{v.name}</Chip>
-            ))}
-          </div>
-          <Slider label="Turn" value={Math.round(orbit.azimuth)} min={-180} max={180} step={1} onChange={(azimuth) => setOrbit((o) => ({ ...o, azimuth }))} format={(v) => `${v}°`} />
-          <Slider label="Height" value={Math.round(orbit.elevation)} min={-85} max={85} step={1} onChange={(elevation) => setOrbit((o) => ({ ...o, elevation }))} format={(v) => `${v}°`} />
-          <Slider
-            label="Reach"
-            value={reach}
-            min={0.5}
-            max={3}
-            step={0.01}
-            onChange={setReach}
-            format={(v) => `${v.toFixed(2)}σ`}
-            hint="How far out each blob gets drawn before the renderer gives up. Real renderers stop around 3σ, where the Gaussian is under 1%."
-          />
-        </>
-      }
+      groups={[
+        {
+          id: 'camera',
+          title: 'Camera',
+          note: 'or drag the view',
+          span: 2,
+          cols: 2,
+          content: (
+            <>
+              <Slider label="Turn" value={Math.round(orbit.azimuth)} min={-180} max={180} step={1} onChange={(azimuth) => setOrbit((o) => ({ ...o, azimuth }))} format={(v) => `${v}°`} />
+              <Slider label="Height" value={Math.round(orbit.elevation)} min={-85} max={85} step={1} onChange={(elevation) => setOrbit((o) => ({ ...o, elevation }))} format={(v) => `${v}°`} />
+              <div className="flex flex-wrap items-center gap-1.5 lg:col-span-2" role="group" aria-label="Look from">
+                <span className="mr-1 text-xs text-ink-faint">Jump to</span>
+                {VIEWS.map((v) => (
+                  <Chip small key={v.name} onClick={() => setOrbit((o) => ({ ...o, azimuth: v.azimuth, elevation: v.elevation }))}>{v.name}</Chip>
+                ))}
+              </div>
+            </>
+          ),
+        },
+        {
+          id: 'reach',
+          title: 'Reach',
+          note: 'where drawing stops',
+          content: (
+            <Slider
+              label="Reach"
+              value={reach}
+              min={0.5}
+              max={3}
+              step={0.01}
+              onChange={setReach}
+              format={(v) => `${v.toFixed(2)}σ`}
+              hint="Real renderers stop around 3σ, where the Gaussian is under 1%."
+            />
+          ),
+        },
+      ]}
       goals={LESSON_GOALS['footprint']}
       done={done}
       scene={() => blobs}
+      explainTitle="The screen only sees a shadow"
+      formula={{
+        eq: <>Σ′ = J W Σ W<sup className="font-sans text-[0.4em]">T</sup> J<sup className="font-sans text-[0.4em]">T</sup></>,
+        terms: [
+          ['Σ', "the blob's 3D shape: its sizes and rotation from the last lesson, multiplied together (its covariance)"],
+          ['W', 'turns the world to face the camera'],
+          ['J', 'how perspective stretches things at that spot on screen'],
+          ['Σ′', 'the flat 2D ellipse that actually gets drawn'],
+        ],
+      }}
       explain={
         <>
           <p>
-            Every frame, each blob's 3D shape (its covariance: the size and rotation from the last lesson, multiplied together) is
-            squashed onto the screen. Mathematically it's Σ′ = J W Σ Wᵀ Jᵀ, where W turns the world to face the camera and J is how
-            perspective stretches things at that spot. The result is always an ellipse, so the GPU only ever draws flat, soft ovals.
+            Every frame, each blob's 3D shape is squashed onto the screen. The result is always an ellipse, so the GPU only ever draws
+            flat, soft ovals. When you looked at the face, that oval was a circle; edge on, it was a line. Same Σ, different view.
           </p>
           <p>
             That's why a flat pancake works so well as a piece of surface: face-on it covers a wide area, edge-on it nearly disappears,

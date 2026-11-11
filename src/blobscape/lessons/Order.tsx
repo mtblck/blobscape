@@ -48,9 +48,9 @@ export function Order() {
   return (
     <LessonShell
       id="order"
-      intro={<p>See-through things blend correctly only when drawn from the back forward. Here the same three blobs are drawn twice: once in the right order, once in yours.</p>}
+      intro={<p>The same three see-through blobs, drawn twice: once in the right order and once in yours. Does the order you draw them in matter?</p>}
       view={
-        <div className="grid grid-cols-2 gap-2 sm:gap-3">
+        <div className="grid h-full grid-cols-2 divide-x divide-rule-soft">
           <SoftView blobs={blobs} orbit={orbit} setOrbit={turn} order={right} title="Back to front" testId="view-sorted" />
           <SoftView blobs={blobs} orbit={orbit} setOrbit={turn} order={yours} title={MODES.find((m) => m.id === mode)!.name} testId="view-yours" warn={!same} />
         </div>
@@ -65,25 +65,51 @@ export function Order() {
           <p aria-live="polite" className="sr-only">{same ? 'Your order is right.' : 'Your order is wrong.'}</p>
         </>
       }
-      controls={
-        <>
-          <div className="flex flex-wrap gap-2" role="group" aria-label="Your drawing order">
-            {MODES.map((m) => <Chip key={m.id} active={mode === m.id} onClick={() => { setTouched(true); setMode(m.id) }}>{m.name}</Chip>)}
-          </div>
-          <p className="text-sm text-ink-faint">{MODES.find((m) => m.id === mode)!.note}</p>
-          <Slider label="Turn" value={Math.round(orbit.azimuth)} min={-180} max={180} step={1} onChange={(azimuth) => turn((o) => ({ ...o, azimuth }))} format={(v) => `${v}°`} />
-          <Slider label="Opacity" value={opacity} min={0.1} max={1} step={0.01} onChange={setOpacity} format={(v) => `${Math.round(v * 100)}%`} hint="Every blob's opacity at its centre." />
-        </>
-      }
+      groups={[
+        {
+          id: 'order',
+          title: 'Your order',
+          note: 'how the right-hand view is drawn',
+          span: 2,
+          content: (
+            <>
+              <div className="flex flex-wrap gap-2" role="group" aria-label="Your drawing order">
+                {MODES.map((m) => <Chip key={m.id} active={mode === m.id} onClick={() => { setTouched(true); setMode(m.id) }}>{m.name}</Chip>)}
+              </div>
+              <p className="text-sm text-ink-faint">{MODES.find((m) => m.id === mode)!.note}</p>
+            </>
+          ),
+        },
+        {
+          id: 'camera',
+          title: 'Camera',
+          note: 'or drag either view',
+          content: <Slider label="Turn" value={Math.round(orbit.azimuth)} min={-180} max={180} step={1} onChange={(azimuth) => turn((o) => ({ ...o, azimuth }))} format={(v) => `${v}°`} />,
+        },
+        {
+          id: 'look',
+          title: 'Look',
+          note: 'every blob at once',
+          content: <Slider label="Opacity" value={opacity} min={0.1} max={1} step={0.01} onChange={setOpacity} format={(v) => `${Math.round(v * 100)}%`} />,
+        },
+      ]}
       goals={LESSON_GOALS['order']}
       done={done}
       scene={() => blobs}
+      explainTitle="Back to front, every frame"
+      formula={{
+        eq: <>new = blob · α + old · (1 − α)</>,
+        terms: [
+          ['blob', "the colour of the blob being drawn"],
+          ['α', 'its opacity at that pixel, from 0 (clear) to 1 (solid)'],
+          ['old', "what's already been drawn there"],
+        ],
+      }}
       explain={
         <>
           <p>
-            Each blob is blended onto what's already been drawn: <em>new colour = blob × α + old colour × (1 − α)</em>. That formula
-            assumes the blob is in front of everything before it. Draw a far blob last and it gets painted over the near one, so things
-            seem to swap places.
+            Each blob is blended onto what's already been drawn. That formula assumes the blob is in front of everything before it.
+            When list order drew the far blob last, it got painted over the near one, so the blobs seemed to swap places.
           </p>
           <p>
             So every frame, a splat renderer sorts all its blobs by distance from the camera, which for millions of blobs is most of the
@@ -123,8 +149,9 @@ function SoftView({ blobs, orbit, setOrbit, order, title, testId, warn }: { blob
     const c = ref.current!
     const ro = new ResizeObserver(() => {
       // Render at CSS size (capped): the Gaussians are soft, so extra pixels add little
+      // Keep the box's shape, so the blobs aren't stretched
       const w = Math.min(480, Math.max(80, Math.round(c.clientWidth)))
-      setSize({ w, h: Math.round((w * 3) / 4) })
+      setSize({ w, h: Math.max(60, Math.round((c.clientHeight / Math.max(1, c.clientWidth)) * w)) })
     })
     ro.observe(c)
     return () => ro.disconnect()
@@ -140,8 +167,8 @@ function SoftView({ blobs, orbit, setOrbit, order, title, testId, warn }: { blob
 
   const drag = useRef<{ x: number; y: number; az: number; el: number } | null>(null)
   return (
-    <figure className="min-w-0">
-      <div className={`relative aspect-[4/3] overflow-hidden rounded-lg border bg-paper-sunk ${warn ? 'border-accent' : 'border-rule'}`}>
+    <figure className="relative h-full min-w-0">
+      <div className={`absolute inset-0 ${warn ? 'ring-2 ring-accent ring-inset' : ''}`}>
         <canvas
           ref={ref}
           role="application"
@@ -164,7 +191,7 @@ function SoftView({ blobs, orbit, setOrbit, order, title, testId, warn }: { blob
           }}
         />
       </div>
-      <figcaption className="mt-1.5 text-sm text-ink-muted">{title}</figcaption>
+      <figcaption className="pointer-events-none absolute top-2.5 left-3 text-xs font-medium text-ink-muted sm:text-sm">{title}</figcaption>
     </figure>
   )
 }

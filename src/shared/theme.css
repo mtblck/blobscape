@@ -33,6 +33,7 @@
   --c-selection:  rgb(242 166 90 / 0.3);
   --c-checker-a:  #221d18;
   --c-checker-b:  #2c261f;
+  --c-done:       #6fcf97;
   --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23cfc6b8' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5'/%3E%3C/svg%3E");
 }
 
@@ -50,6 +51,7 @@
   --c-selection:  rgb(156 74 12 / 0.2);
   --c-checker-a:  #f1ebe1;
   --c-checker-b:  #e6ddcf;
+  --c-done:       #1e7a46;
   --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%234a4238' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5'/%3E%3C/svg%3E");
 }
 
@@ -63,6 +65,10 @@
   --color-rule-soft:  var(--c-rule-soft);
   --color-accent:     var(--c-accent);
   --color-accent-ink: var(--c-accent-ink);
+  --color-done:       var(--c-done);
+  --color-placard:      #ffd04a;
+  --color-placard-edge: #e9b417;
+  --color-placard-ink:  #1f1a0c;
   --font-serif: "Newsreader Variable", Georgia, serif;
   --font-sans: "Archivo Variable", ui-sans-serif, system-ui, sans-serif;
 }
@@ -129,3 +135,24 @@
 .stack-controls .slider-row > .slider-value { text-align: right; }
 .stack-controls .slider-hint { padding-left: 0; }
 .stack-controls .field-row { grid-template-columns: minmax(0, 1fr); }
+
+/* Blobscape's display case: always dark, in either theme, so the blobs glow the
+   same way everywhere. It redefines the dark tokens, so overlays drawn with
+   themeColour(name, canvas) and any text inside read as on a dark page. */
+.case {
+  color-scheme: dark;
+  --c-paper:      #16130f;
+  --c-paper-sunk: #221d18;
+  --c-ink:        #ede6da;
+  --c-ink-muted:  #cfc6b8;
+  --c-ink-faint:  #a89f92;
+  --c-rule:       #3a332b;
+  --c-rule-soft:  #2a251f;
+  --c-accent:     #f2a65a;
+  --c-accent-ink: #ffd3a6;
+  background: #0e0c09;
+  color: var(--c-ink);
+}
+/* A control group's own columns, on a laptop only */
+.desk-group { grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 64rem) { .desk-group { grid-template-columns: repeat(var(--cols, 1), minmax(0, 1fr)); } }
