@@ -3,7 +3,6 @@ import {
   type Camera, type Renderer,
 } from 'three/webgpu'
 import * as TSLTyped from 'three/tsl'
-import { CountingSort } from 'three/addons/gpgpu/CountingSort.js'
 import type { Blobs } from '../splat-core/blobs.ts'
 
 // TSL's typings model each node type closely, and the shader code below mixes
@@ -15,7 +14,8 @@ const {
   Discard, EPSILON, Fn, If, atan, cameraProjectionMatrix, cameraViewport, cameraViewMatrix, cos, dot, exp, float, instanceIndex,
   length, max, min, normalize, positionGeometry, select, sin, sqrt, storage, uint, uniform, unpackUnorm4x8, varyingProperty, vec2, vec3, vec4,
 } = TSL
-import { packWeights, skinBlob, type Skeleton, type Skin, type SkinMode } from './rig.ts'
+import { packWeights, skinBlob, skinCentres, type Skeleton, type Skin, type SkinMode } from './rig.ts'
+import { DepthSort } from './sort.ts'
 import { srgbToLinear } from '../splat-core/colour.ts'
 
 /**
@@ -64,26 +64,33 @@ export class SplatWorld extends Mesh {
   mode: SkinMode
   /** Set by the WebGL backend path, read by tests: did the last frame skin on the CPU? */
   cpuPath = false
-  /** Milliseconds the CPU spent in the last frame's deform + sort (WebGL path only). */
+  /** Milliseconds the CPU spent in the last frame (WebGL path only): moving centres, sorting, both. */
   cpuMs = 0
+  cpuSkinMs = 0
+  cpuSortMs = 0
+  /** While true, rendering draws the last frame's blobs without moving or sorting them (for timing the draw alone). */
+  hold = false
 
   private readonly boneOffset: number[]
   private readonly boneRadius: Float32Array
   private readonly buf: ReturnType<typeof makeBuffers>
-  private readonly sort: CountingSort
+  private readonly sort: DepthSort
   private readonly deformNodes: Record<SkinMode, ReturnType<typeof makeDeform>>
-  private readonly view = uniform(new Matrix4())
-  private readonly depthRange = uniform(new Vector2(0, 1))
+  private readonly projectNode: ReturnType<typeof makeProject>
+  private readonly cam: CameraUniforms
   private readonly bins: number
+  private readonly cpuCentres: Float32Array
+  private builtFor = ''
   private posed = false
   private bonesDirty = true
   private lastSortKey = ''
+  private readonly size = new Vector2()
   readonly bounds = new Sphere()
 
   constructor(actors: Actor[], { bins = 16384, mode = 'quat' }: EngineOptions = {}) {
     const count = actors.reduce((s, a) => s + a.blobs.count, 0)
     const geometry = new InstancedBufferGeometry()
-    geometry.setAttribute('position', new BufferAttribute(new Float32Array([-2, -2, 0, 2, -2, 0, 2, 2, 0, -2, 2, 0]), 3))
+    geometry.setAttribute('position', new BufferAttribute(new Float32Array([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0]), 3))
     geometry.setIndex([0, 1, 2, 0, 2, 3])
     geometry.instanceCount = count
 
@@ -91,7 +98,7 @@ export class SplatWorld extends Mesh {
     let bones = 0
     for (const a of actors) { boneOffset.push(bones); bones += a.skeleton.count }
     const buf = makeBuffers(actors, boneOffset, count, bones)
-    const sort = new CountingSort(Math.max(1, count), { binCount: bins, workgroupSize: WORKGROUP })
+    const sort = new DepthSort(count, bins, WORKGROUP)
     const material = new NodeMaterial()
     material.transparent = true
     material.depthWrite = false
@@ -109,24 +116,13 @@ export class SplatWorld extends Mesh {
     this.bins = bins
     this.mode = mode
     this.frustumCulled = false
+    this.cpuCentres = new Float32Array(Math.max(1, count) * 3)
 
     this.boneRadius = boneRadii(actors, boneOffset, bones)
     this.deformNodes = { quat: makeDeform(buf, 'quat'), linear: makeDeform(buf, 'linear') }
-
-    const viewU = this.view
-    const rangeU = this.depthRange
-    const bins1 = bins - 1
-    sort.setBinNode(() => {
-      const c = buf.worldCentre.element(instanceIndex).xyz
-      const depth = viewU.mul(vec4(c, 1)).z.negate()
-      const span = max(rangeU.y.sub(rangeU.x), 0.0001)
-      const t = depth.sub(rangeU.x).div(span).clamp(0, 1)
-      return uint(bins1).sub(uint(t.mul(bins1)))
-    })
-
-    const { vertexNode, fragmentNode } = makeMaterialNodes(buf, sort)
-    material.vertexNode = vertexNode as never
-    material.colorNode = fragmentNode as never
+    this.cam = { view: uniform(new Matrix4()), proj: uniform(new Matrix4()), viewport: uniform(new Vector2(1, 1)), depthRange: uniform(new Vector2(0, 1)) }
+    this.projectNode = makeProject(buf, sort, this.cam, bins)
+    material.colorNode = makeFragment() as never
 
     this.onBeforeRender = (renderer, _scene, camera) => this.prepare(renderer as unknown as Renderer, camera)
   }
@@ -136,6 +132,21 @@ export class SplatWorld extends Mesh {
 
   private isWebGL(renderer: Renderer) {
     return (renderer as unknown as { backend?: { isWebGLBackend?: boolean } }).backend?.isWebGLBackend === true
+  }
+
+  /** Picks the draw for the backend: WebGPU reads projected blobs, WebGL moves and projects each blob as it draws it. */
+  private build(webgl: boolean) {
+    const key = webgl ? `webgl-${this.mode}` : 'webgpu'
+    if (key === this.builtFor) return
+    const material = this.material as NodeMaterial
+    if (webgl) {
+      enableWebGL(this.buf, this.sort)
+      material.vertexNode = makeVertexWebGL(this.buf, this.sort, this.mode) as never
+    } else {
+      material.vertexNode = makeVertexWebGPU(this.buf, this.sort) as never
+    }
+    material.needsUpdate = true
+    this.builtFor = key
   }
 
   private uploadBones() {
@@ -148,7 +159,7 @@ export class SplatWorld extends Mesh {
         data.set(sk.quat.subarray(b * 4, b * 4 + 4), g * 20 + 16)
       }
     }
-    this.buf.boneAttr.needsUpdate = true
+    bump(this.buf.boneAttr)
   }
 
   /** A sphere around every posed blob, from the bones and how far their blobs reach. */
@@ -168,35 +179,49 @@ export class SplatWorld extends Mesh {
     this.bounds.set(c, Math.hypot(maxv[0] - min[0], maxv[1] - min[1], maxv[2] - min[2]) / 2)
   }
 
-  private prepare(renderer: Renderer, camera: Camera) {
-    const webgl = this.isWebGL(renderer)
-    this.cpuPath = webgl
-    const deformed = this.bonesDirty || !this.posed
-    if (deformed) {
-      this.uploadBones()
-      this.updateBounds()
-    }
-    // depth range from the bounds, in the camera's view
+  /** Sets the camera uniforms for the frame; returns a key that changes whenever the sort must rerun. */
+  private setView(renderer: Renderer, camera: Camera) {
     camera.updateMatrixWorld()
     const e = camera.matrixWorldInverse.elements
     const c = this.bounds.center
     const d = -(e[2] * c.x + e[6] * c.y + e[10] * c.z + e[14])
     const near = Math.max((camera as unknown as { near?: number }).near ?? 0.01, d - this.bounds.radius)
     const far = Math.max(near + 0.0001, d + this.bounds.radius)
-    this.view.value.copy(camera.matrixWorldInverse)
-    this.depthRange.value.set(near, far)
-    const key = e.join(',')
-    const needsSort = deformed || key !== this.lastSortKey
+    const r = renderer as unknown as { getRenderTarget(): { width: number; height: number } | null; getDrawingBufferSize(v: Vector2): Vector2 }
+    const target = r.getRenderTarget()
+    if (target) this.size.set(target.width, target.height)
+    else r.getDrawingBufferSize(this.size)
+    this.cam.view.value.copy(camera.matrixWorldInverse)
+    this.cam.proj.value.copy(camera.projectionMatrix)
+    this.cam.viewport.value.copy(this.size)
+    this.cam.depthRange.value.set(near, far)
+    return `${e.join(',')}|${camera.projectionMatrix.elements.join(',')}|${this.size.x}x${this.size.y}`
+  }
 
+  private prepare(renderer: Renderer, camera: Camera) {
+    if (this.hold) return
+    const webgl = this.isWebGL(renderer)
+    this.cpuPath = webgl
+    this.build(webgl)
+    const deformed = this.bonesDirty || !this.posed
+    if (deformed) {
+      this.uploadBones()
+      this.updateBounds()
+    }
+    const key = this.setView(renderer, camera)
+    const needsSort = deformed || key !== this.lastSortKey
     if (webgl) {
-      enableWebGL(this.buf, this.sort)
       const t0 = performance.now()
-      if (deformed) this.deformCPU()
-      if (needsSort) this.sortCPU(e, near, far)
-      this.cpuMs = performance.now() - t0
+      if (deformed) skinCentres(this.buf.srcCentreData, this.buf.skinWords, this.buf.boneData, this.count, this.cpuCentres)
+      const t1 = performance.now()
+      if (needsSort) this.sortCPU()
+      const t2 = performance.now()
+      this.cpuSkinMs = t1 - t0
+      this.cpuSortMs = t2 - t1
+      this.cpuMs = t2 - t0
     } else {
-      if (deformed) renderer.compute(this.deformNodes[this.mode] as never)
-      if (needsSort) this.sort.compute(renderer as never)
+      if (deformed) this.deform(renderer)
+      if (needsSort) this.project(renderer)
     }
     this.posed = true
     this.bonesDirty = false
@@ -204,10 +229,44 @@ export class SplatWorld extends Mesh {
   }
 
   /**
-   * The CPU twin of the deform pass, for the WebGL backend and for checking the
-   * GPU. It reads the same byte weights the GPU does, so the two agree.
+   * The frame's GPU work in stages, so a timer can wait between them. Each
+   * assumes the ones before it ran: deform (bones → world), then project
+   * (world → screen, plus sort keys), then order (the sort itself).
    */
-  deformCPU(out = this.buf) {
+  stages(renderer: Renderer, camera: Camera) {
+    return {
+      deform: () => { this.uploadBones(); this.updateBounds(); this.deform(renderer) },
+      project: () => { this.setView(renderer, camera); renderer.compute(this.projectNode as never) },
+      order: () => this.sort.order(renderer as never),
+    }
+  }
+
+  private deform(renderer: Renderer) { renderer.compute(this.deformNodes[this.mode] as never) }
+  private project(renderer: Renderer) {
+    renderer.compute(this.projectNode as never)
+    this.sort.order(renderer as never)
+  }
+
+  private sortCPU() {
+    const c = this.cpuCentres
+    const v = this.cam.view.value.elements
+    const [near, far] = [this.cam.depthRange.value.x, this.cam.depthRange.value.y]
+    const scale = (this.bins - 1) / Math.max(far - near, 0.0001)
+    const top = this.bins - 1
+    const keys = this.sort.keysAttr.array as Uint32Array
+    for (let i = 0; i < this.count; i++) {
+      const d = -(v[2] * c[i * 3] + v[6] * c[i * 3 + 1] + v[10] * c[i * 3 + 2] + v[14])
+      keys[i] = top - Math.min(top, Math.max(0, Math.floor((d - near) * scale)))
+    }
+    this.sort.sortCPU(keys)
+  }
+
+  /**
+   * The CPU twin of the deform pass: every blob's world centre (4 floats) and
+   * covariance (6). It reads the same byte weights the GPU does, so the two agree.
+   */
+  deformCPU() {
+    const centre = new Float32Array(this.count * 4), cov = new Float32Array(this.count * 6)
     let i = 0
     const w = new Float32Array(4)
     for (let a = 0; a < this.actors.length; a++) {
@@ -217,30 +276,12 @@ export class SplatWorld extends Mesh {
         for (let j = 0; j < 4; j++) w[j] = ((word >>> (j * 8)) & 255) / 255
         skinBlob(
           blobs.centre.subarray(k * 3, k * 3 + 3), blobs.scale.subarray(k * 3, k * 3 + 3), blobs.quat.subarray(k * 4, k * 4 + 4),
-          skin.joints.subarray(k * 4, k * 4 + 4), w, skeleton, this.mode,
-          out.cpuCentre, i * 4, out.cpuCov, i * 6,
+          skin.joints.subarray(k * 4, k * 4 + 4), w, skeleton, this.mode, centre, i * 4, cov, i * 6,
         )
-        out.cpuCentre[i * 4 + 3] = 1
+        centre[i * 4 + 3] = 1
       }
     }
-    const wc = out.worldCentreAttr.array as Float32Array, ca = out.covAAttr.array as Float32Array, cb = out.covBAttr.array as Float32Array
-    wc.set(out.cpuCentre)
-    for (let j = 0; j < this.count; j++) {
-      const v = out.cpuCov.subarray(j * 6, j * 6 + 6)
-      ca[j * 4] = v[0]; ca[j * 4 + 1] = v[1]; ca[j * 4 + 2] = v[2]; ca[j * 4 + 3] = v[3]
-      cb[j * 4] = v[4]; cb[j * 4 + 1] = v[5]
-    }
-    for (const a of [out.worldCentreAttr, out.covAAttr, out.covBAttr]) bump(a)
-  }
-
-  private sortCPU(view: ArrayLike<number>, near: number, far: number) {
-    const c = this.buf.worldCentreAttr.array as Float32Array
-    const scale = (this.bins - 1) / Math.max(far - near, 0.0001)
-    const top = this.bins - 1
-    this.sort.computeCPU((i: number) => {
-      const d = -(view[2] * c[i * 4] + view[6] * c[i * 4 + 1] + view[10] * c[i * 4 + 2] + view[14])
-      return top - Math.min(top, Math.max(0, Math.floor((d - near) * scale)))
-    })
+    return { centre, cov }
   }
 
   /**
@@ -252,27 +293,46 @@ export class SplatWorld extends Mesh {
     const gpuCentre = new Float32Array(await r.getArrayBufferAsync(this.buf.worldCentreAttr))
     const gpuA = new Float32Array(await r.getArrayBufferAsync(this.buf.covAAttr))
     const gpuB = new Float32Array(await r.getArrayBufferAsync(this.buf.covBAttr))
-    const cpu = { ...this.buf, worldCentreAttr: new StorageBufferAttribute(new Float32Array(this.count * 4), 4), covAAttr: new StorageBufferAttribute(new Float32Array(this.count * 4), 4), covBAttr: new StorageBufferAttribute(new Float32Array(this.count * 4), 4), cpuCentre: new Float32Array(this.count * 4), cpuCov: new Float32Array(this.count * 6) }
-    this.deformCPU(cpu)
+    const cpu = this.deformCPU()
     let centre = 0, cov = 0, scale = 0
     for (let i = 0; i < this.count; i++) {
-      for (let k = 0; k < 3; k++) centre = Math.max(centre, Math.abs(gpuCentre[i * 4 + k] - cpu.cpuCentre[i * 4 + k]))
+      for (let k = 0; k < 3; k++) centre = Math.max(centre, Math.abs(gpuCentre[i * 4 + k] - cpu.centre[i * 4 + k]))
       const g = [gpuA[i * 4], gpuA[i * 4 + 1], gpuA[i * 4 + 2], gpuA[i * 4 + 3], gpuB[i * 4], gpuB[i * 4 + 1]]
       for (let k = 0; k < 6; k++) {
-        cov = Math.max(cov, Math.abs(g[k] - cpu.cpuCov[i * 6 + k]))
-        scale = Math.max(scale, Math.abs(cpu.cpuCov[i * 6 + k]))
+        cov = Math.max(cov, Math.abs(g[k] - cpu.cov[i * 6 + k]))
+        scale = Math.max(scale, Math.abs(cpu.cov[i * 6 + k]))
       }
     }
     return { centre, cov, covScale: scale }
   }
 
-  /** The order the last sort produced, front-to-back reversed (drawn first is farthest). Only up to date on the CPU path. */
-  get order() { return this.sort.orderAttribute.array as Uint32Array }
+  /** Reads back the GPU sort and checks it: every blob drawn once, farthest first. */
+  async checkSort(renderer: Renderer) {
+    const r = renderer as unknown as { getArrayBufferAsync: (a: StorageBufferAttribute) => Promise<ArrayBuffer> }
+    const order = new Uint32Array(await r.getArrayBufferAsync(this.sort.orderAttr))
+    const keys = new Uint32Array(await r.getArrayBufferAsync(this.sort.keysAttr))
+    const seen = new Uint8Array(this.count)
+    let missing = this.count, outOfOrder = 0
+    for (let i = 0; i < this.count; i++) {
+      const j = order[i]
+      if (j < this.count && !seen[j]) { seen[j] = 1; missing-- }
+      if (i && keys[order[i - 1]] > keys[j]) outOfOrder++
+    }
+    return { missing, outOfOrder }
+  }
+
+  /** The order the last sort produced (drawn first is farthest). Only up to date on the CPU path. */
+  get order() { return this.sort.orderAttr.array as Uint32Array }
 
   dispose() {
     this.geometry.dispose()
     ;(this.material as NodeMaterial).dispose()
   }
+}
+
+interface CameraUniforms {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  view: any; proj: any; viewport: any; depthRange: any
 }
 
 function bump(a: StorageBufferAttribute) {
@@ -314,11 +374,13 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
   const worldCentreAttr = new StorageBufferAttribute(new Float32Array(n * 4), 4)
   const covAAttr = new StorageBufferAttribute(new Float32Array(n * 4), 4)
   const covBAttr = new StorageBufferAttribute(new Float32Array(n * 4), 4)
+  // what the project pass writes: screen centre, depth and opacity factor; the two screen axes
+  const splatAAttr = new StorageBufferAttribute(new Float32Array(n * 4), 4)
+  const splatBAttr = new StorageBufferAttribute(new Float32Array(n * 4), 4)
   return {
     count: n,
-    skinWords,
+    skinWords, srcCentreData: centre,
     boneData, boneAttr, worldCentreAttr, covAAttr, covBAttr, colourAttr,
-    cpuCentre: new Float32Array(n * 4), cpuCov: new Float32Array(n * 6),
     srcCentre: storage(centreAttr, 'vec4', n).toReadOnly(),
     srcScale: storage(scaleAttr, 'vec4', n).toReadOnly(),
     srcQuat: storage(quatAttr, 'vec4', n).toReadOnly(),
@@ -331,15 +393,19 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
     worldCentre: storage(worldCentreAttr, 'vec4', n).toReadOnly(),
     covA: storage(covAAttr, 'vec4', n).toReadOnly(),
     covB: storage(covBAttr, 'vec4', n).toReadOnly(),
+    splatAW: storage(splatAAttr, 'vec4', n),
+    splatBW: storage(splatBAttr, 'vec4', n),
+    splatA: storage(splatAAttr, 'vec4', n).toReadOnly(),
+    splatB: storage(splatBAttr, 'vec4', n).toReadOnly(),
     webgl: false,
   }
 }
 
-function enableWebGL(buf: ReturnType<typeof makeBuffers>, sort: CountingSort) {
+/** On WebGL, storage is read through textures that the CPU fills; the draw reads the blobs' rest data and the bones. */
+function enableWebGL(buf: ReturnType<typeof makeBuffers>, sort: DepthSort) {
   if (buf.webgl) return
-  for (const a of [buf.worldCentreAttr, buf.covAAttr, buf.covBAttr]) a.setUsage(DynamicDrawUsage)
-  for (const r of [buf.worldCentre, buf.covA, buf.covB, buf.colour]) (r as unknown as { setPBO: (b: boolean) => void }).setPBO(true)
-  sort.enableWebGLBuffers()
+  for (const r of [buf.srcCentre, buf.srcScale, buf.srcQuat, buf.skin, buf.bones, buf.colour]) (r as unknown as { setPBO: (b: boolean) => void }).setPBO(true)
+  sort.enableWebGL()
   buf.webgl = true
 }
 
@@ -381,134 +447,186 @@ function quatMul(a: N, b: N) {
   )
 }
 
+/** One blob through its bones: world centre and the six covariance terms, as `skinBlob` does on the CPU. */
+function deformBlob(buf: ReturnType<typeof makeBuffers>, i: N, mode: SkinMode) {
+  const src = buf.srcCentre.element(i).toVar()
+  const base = uint(src.w).toVar()
+  const jw = buf.skin.element(i.mul(2)).toVar()
+  const w = unpackUnorm4x8(buf.skin.element(i.mul(2).add(1))).toVar()
+  const js = [0, 8, 16, 24].map((s) => base.add(jw.shiftRight(s).bitAnd(255)).mul(5).toVar())
+  const ws = [w.x, w.y, w.z, w.w]
+  const col = (k: number, c: number) => buf.bones.element(js[k].add(c))
+  const c0 = vec3(0).toVar(), c1 = vec3(0).toVar(), c2 = vec3(0).toVar(), c3 = vec3(0).toVar()
+  const Q = vec4(0).toVar()
+  const S = float(0).toVar()
+  const q0 = col(0, 4).toVar()
+  for (let k = 0; k < 4; k++) {
+    const wk = ws[k]
+    const a0 = col(k, 0).xyz
+    c0.addAssign(a0.mul(wk))
+    c1.addAssign(col(k, 1).xyz.mul(wk))
+    c2.addAssign(col(k, 2).xyz.mul(wk))
+    c3.addAssign(col(k, 3).xyz.mul(wk))
+    const qk = col(k, 4)
+    const sign = select(dot(qk, q0).lessThan(0), float(-1), float(1))
+    Q.addAssign(qk.mul(sign.mul(wk)))
+    S.addAssign(length(a0).mul(wk))
+  }
+  const p = src.xyz
+  const world = c0.mul(p.x).add(c1.mul(p.y)).add(c2.mul(p.z)).add(c3).toVar()
+
+  const s = buf.srcScale.element(i).xyz.toVar()
+  const lq = normalize(buf.srcQuat.element(i)).toVar()
+  let A: N[]
+  if (mode === 'quat') {
+    const q = quatMul(normalize(Q), lq).toVar()
+    const R = quatColumns(q as never)
+    A = [R[0].mul(s.x.mul(S)), R[1].mul(s.y.mul(S)), R[2].mul(s.z.mul(S))]
+  } else {
+    const R = quatColumns(lq as never)
+    const blend = (v: N) => c0.mul(v.x).add(c1.mul(v.y)).add(c2.mul(v.z))
+    A = [blend(R[0]).mul(s.x), blend(R[1]).mul(s.y), blend(R[2]).mul(s.z)]
+  }
+  const a0 = A[0].toVar(), a1 = A[1].toVar(), a2 = A[2].toVar()
+  const e = (r: 'x' | 'y' | 'z', c: 'x' | 'y' | 'z') => a0[r].mul(a0[c]).add(a1[r].mul(a1[c])).add(a2[r].mul(a2[c]))
+  return { world, covA: vec4(e('x', 'x'), e('x', 'y'), e('x', 'z'), e('y', 'y')).toVar(), covB: vec4(e('y', 'z'), e('z', 'z'), 0, 0).toVar() }
+}
+
 function makeDeform(buf: ReturnType<typeof makeBuffers>, mode: SkinMode) {
   return Fn(() => {
     const i = instanceIndex
-    const src = buf.srcCentre.element(i).toVar()
-    const base = uint(src.w).toVar()
-    const jw = buf.skin.element(i.mul(2)).toVar()
-    const w = unpackUnorm4x8(buf.skin.element(i.mul(2).add(1))).toVar()
-    const js = [0, 8, 16, 24].map((s) => base.add(jw.shiftRight(s).bitAnd(255)).mul(5).toVar())
-    const ws = [w.x, w.y, w.z, w.w]
-    const col = (k: number, c: number) => buf.bones.element(js[k].add(c))
-    const c0 = vec3(0).toVar(), c1 = vec3(0).toVar(), c2 = vec3(0).toVar(), c3 = vec3(0).toVar()
-    const Q = vec4(0).toVar()
-    const S = float(0).toVar()
-    const q0 = col(0, 4).toVar()
-    for (let k = 0; k < 4; k++) {
-      const wk = ws[k]
-      const a0 = col(k, 0).xyz
-      c0.addAssign(a0.mul(wk))
-      c1.addAssign(col(k, 1).xyz.mul(wk))
-      c2.addAssign(col(k, 2).xyz.mul(wk))
-      c3.addAssign(col(k, 3).xyz.mul(wk))
-      const qk = col(k, 4)
-      const sign = select(dot(qk, q0).lessThan(0), float(-1), float(1))
-      Q.addAssign(qk.mul(sign.mul(wk)))
-      S.addAssign(length(a0).mul(wk))
-    }
-    const p = src.xyz
-    const world = c0.mul(p.x).add(c1.mul(p.y)).add(c2.mul(p.z)).add(c3)
-    buf.worldCentreW.element(i).assign(vec4(world, 1))
-
-    const s = buf.srcScale.element(i).xyz.toVar()
-    const lq = normalize(buf.srcQuat.element(i)).toVar()
-    let A: N[]
-    if (mode === 'quat') {
-      const q = quatMul(normalize(Q), lq).toVar()
-      const R = quatColumns(q as never)
-      A = [R[0].mul(s.x.mul(S)), R[1].mul(s.y.mul(S)), R[2].mul(s.z.mul(S))]
-    } else {
-      const R = quatColumns(lq as never)
-      const blend = (v: N) => c0.mul(v.x).add(c1.mul(v.y)).add(c2.mul(v.z))
-      A = [blend(R[0]).mul(s.x), blend(R[1]).mul(s.y), blend(R[2]).mul(s.z)]
-    }
-    const a0 = A[0].toVar(), a1 = A[1].toVar(), a2 = A[2].toVar()
-    const e = (r: 'x' | 'y' | 'z', c: 'x' | 'y' | 'z') => a0[r].mul(a0[c]).add(a1[r].mul(a1[c])).add(a2[r].mul(a2[c]))
-    buf.covAW.element(i).assign(vec4(e('x', 'x'), e('x', 'y'), e('x', 'z'), e('y', 'y')))
-    buf.covBW.element(i).assign(vec4(e('y', 'z'), e('z', 'z'), 0, 0))
+    const d = deformBlob(buf, i, mode)
+    buf.worldCentreW.element(i).assign(vec4(d.world, 1))
+    buf.covAW.element(i).assign(d.covA)
+    buf.covBW.element(i).assign(d.covB)
   })().compute(buf.count, [WORKGROUP]).setName(`SplatWorldDeform_${mode}`)
 }
 
-function makeMaterialNodes(buf: ReturnType<typeof makeBuffers>, sort: CountingSort) {
-  const splatUv = varyingProperty('vec2', 'vSplatUv')
-  const splatColour = varyingProperty('vec4', 'vSplatColour')
+/**
+ * EWA splatting: a blob's 3D covariance seen through the camera becomes a 2D
+ * ellipse on screen. Returns the screen centre (NDC) and depth, the ellipse's
+ * two axes in NDC (already scaled by their standard deviations), a factor for
+ * the opacity (0 when the blob is off screen or behind the camera) and the
+ * blob's distance in front of the camera.
+ */
+function projectSplat(centre: N, covA: N, covB: N, view: N, proj: N, viewport: N) {
+  const viewCentre4 = view.mul(vec4(centre, 1)).toVar()
+  const viewCentre = viewCentre4.xyz.toVar()
+  const centreClip = proj.mul(viewCentre4).toVar()
 
-  const vertexNode = Fn(() => {
+  const r0 = vec3(view[0].x, view[1].x, view[2].x).toVar()
+  const r1 = vec3(view[0].y, view[1].y, view[2].y).toVar()
+  const r2 = vec3(view[0].z, view[1].z, view[2].z).toVar()
+  const cov0 = vec3(covA.x, covA.y, covA.z).toVar()
+  const cov1 = vec3(covA.y, covA.w, covB.x).toVar()
+  const cov2 = vec3(covA.z, covB.x, covB.y).toVar()
+  const vc0 = vec3(dot(r0, cov0), dot(r0, cov1), dot(r0, cov2)).toVar()
+  const vc1 = vec3(dot(r1, cov0), dot(r1, cov1), dot(r1, cov2)).toVar()
+  const vc2 = vec3(dot(r2, cov0), dot(r2, cov1), dot(r2, cov2)).toVar()
+  const c00 = dot(vc0, r0).toVar(), c01 = dot(vc0, r1).toVar(), c02 = dot(vc0, r2).toVar()
+  const c11 = dot(vc1, r1).toVar(), c12 = dot(vc1, r2).toVar(), c22 = dot(vc2, r2).toVar()
+
+  const z = min(viewCentre.z, -0.01).toVar()
+  const invZ = float(1).div(z).toVar()
+  const invZ2 = invZ.mul(invZ).toVar()
+  const focal = viewport.mul(0.5).mul(vec2(proj[0].x, proj[1].y)).toVar()
+  const j00 = focal.x.negate().mul(invZ).toVar()
+  const j11 = focal.y.negate().mul(invZ).toVar()
+  const j02 = focal.x.mul(viewCentre.x).mul(invZ2).toVar()
+  const j12 = focal.y.mul(viewCentre.y).mul(invZ2).toVar()
+
+  const aBase = j00.mul(j00).mul(c00).add(j00.mul(j02).mul(c02).mul(2)).add(j02.mul(j02).mul(c22)).toVar()
+  const b = j00.mul(j11).mul(c01).add(j00.mul(j12).mul(c02)).add(j02.mul(j11).mul(c12)).add(j02.mul(j12).mul(c22)).toVar()
+  const cBase = j11.mul(j11).mul(c11).add(j11.mul(j12).mul(c12).mul(2)).add(j12.mul(j12).mul(c22)).toVar()
+  const a = aBase.add(KERNEL_2D).toVar()
+  const c = cBase.add(KERNEL_2D).toVar()
+  const detBase = aBase.mul(cBase).sub(b.mul(b)).toVar()
+  const det = a.mul(c).sub(b.mul(b)).toVar()
+  const alphaScale = sqrt(max(detBase.div(max(det, EPSILON)), 0)).toVar()
+
+  const halfTrace = a.add(c).mul(0.5).toVar()
+  const radius = sqrt(max(a.sub(c).mul(0.5).pow2().add(b.mul(b)), EPSILON)).toVar()
+  const lambda1 = max(halfTrace.add(radius), EPSILON).toVar()
+  const lambda2 = max(halfTrace.sub(radius), EPSILON).toVar()
+  const axis1 = vec2(1, 0).toVar()
+  If(radius.greaterThan(0.00001), () => {
+    const angle = atan(b.mul(2), a.sub(c)).mul(0.5).toVar()
+    axis1.assign(vec2(cos(angle), sin(angle)))
+  })
+  const axis2 = vec2(axis1.y.negate(), axis1.x).toVar()
+  const toNdc = vec2(2).div(viewport).toVar()
+  const ax1 = axis1.mul(min(sqrt(lambda1), MAX_SPLAT_PX)).mul(toNdc).toVar()
+  const ax2 = axis2.mul(min(sqrt(lambda2), MAX_SPLAT_PX)).mul(toNdc).toVar()
+  const w = centreClip.w.toVar()
+  const lim = w.mul(CLIP_XY).toVar()
+  If(viewCentre.z.greaterThanEqual(-0.01)
+    .or(centreClip.z.greaterThan(w))
+    .or(centreClip.x.abs().greaterThan(lim))
+    .or(centreClip.y.abs().greaterThan(lim)), () => {
+    alphaScale.assign(0)
+  })
+  const ndc = centreClip.xyz.div(max(w, 0.0001)).toVar()
+  return { ndc, axes: vec4(ax1, ax2), alphaScale, depth: viewCentre.z.negate() }
+}
+
+/** WebGPU: project every blob once (not once per corner), and write its sort key. */
+function makeProject(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, cam: CameraUniforms, bins: number) {
+  const bins1 = bins - 1
+  return Fn(() => {
+    const i = instanceIndex
+    const p = projectSplat(buf.worldCentre.element(i).xyz, buf.covA.element(i), buf.covB.element(i), cam.view, cam.proj, cam.viewport)
+    buf.splatAW.element(i).assign(vec4(p.ndc, p.alphaScale))
+    buf.splatBW.element(i).assign(p.axes)
+    const span = max(cam.depthRange.y.sub(cam.depthRange.x), 0.0001)
+    const t = p.depth.sub(cam.depthRange.x).div(span).clamp(0, 1)
+    const key = uint(bins1).sub(uint(t.mul(bins1))).toVar()
+    sort.keysW.element(i).assign(key)
+    TSL.atomicAdd(sort.histogram.element(key), uint(1))
+  })().compute(buf.count, [WORKGROUP]).setName('SplatWorldProject')
+}
+
+const splatUv = () => varyingProperty('vec2', 'vSplatUv')
+const splatColour = () => varyingProperty('vec4', 'vSplatColour')
+
+/**
+ * A quad around the blob, only as big as it is visible: a faint blob fades
+ * below 1/255 sooner than two standard deviations out, so its quad shrinks and
+ * covers fewer pixels.
+ */
+function placeQuad(ndc: N, axes: N, rgba: N) {
+  const alpha = rgba.a
+  const reach = sqrt(max(TSL.log(alpha.mul(255)).mul(2), 0)).min(2).toVar()
+  const uv = positionGeometry.xy.mul(reach).toVar()
+  splatUv().assign(uv)
+  splatColour().assign(rgba)
+  return vec4(ndc.xy.add(axes.xy.mul(uv.x)).add(axes.zw.mul(uv.y)), ndc.z, 1)
+}
+
+function makeVertexWebGPU(buf: ReturnType<typeof makeBuffers>, sort: DepthSort) {
+  return Fn(() => {
     const idx = sort.orderRead.element(instanceIndex).toVar()
-    const centre = buf.worldCentre.element(idx).xyz.toVar()
-    const covA = buf.covA.element(idx).toVar()
-    const covB = buf.covB.element(idx).toVar()
+    const A = buf.splatA.element(idx).toVar()
     const colour = unpackUnorm4x8(buf.colour.element(idx)).toVar()
-    splatUv.assign(positionGeometry.xy)
-
-    const viewCentre4 = cameraViewMatrix.mul(vec4(centre, 1)).toVar()
-    const viewCentre = viewCentre4.xyz.toVar()
-    const centreClip = cameraProjectionMatrix.mul(viewCentre4).toVar()
-
-    const m = cameraViewMatrix
-    const r0 = vec3(m[0].x, m[1].x, m[2].x).toVar()
-    const r1 = vec3(m[0].y, m[1].y, m[2].y).toVar()
-    const r2 = vec3(m[0].z, m[1].z, m[2].z).toVar()
-    const cov0 = vec3(covA.x, covA.y, covA.z).toVar()
-    const cov1 = vec3(covA.y, covA.w, covB.x).toVar()
-    const cov2 = vec3(covA.z, covB.x, covB.y).toVar()
-    const vc0 = vec3(dot(r0, cov0), dot(r0, cov1), dot(r0, cov2)).toVar()
-    const vc1 = vec3(dot(r1, cov0), dot(r1, cov1), dot(r1, cov2)).toVar()
-    const vc2 = vec3(dot(r2, cov0), dot(r2, cov1), dot(r2, cov2)).toVar()
-    const c00 = dot(vc0, r0).toVar(), c01 = dot(vc0, r1).toVar(), c02 = dot(vc0, r2).toVar()
-    const c11 = dot(vc1, r1).toVar(), c12 = dot(vc1, r2).toVar(), c22 = dot(vc2, r2).toVar()
-
-    const z = min(viewCentre.z, -0.01).toVar()
-    const invZ = float(1).div(z).toVar()
-    const invZ2 = invZ.mul(invZ).toVar()
-    const focal = cameraViewport.zw.mul(0.5).mul(vec2(cameraProjectionMatrix[0].x, cameraProjectionMatrix[1].y)).toVar()
-    const j00 = focal.x.negate().mul(invZ).toVar()
-    const j11 = focal.y.negate().mul(invZ).toVar()
-    const j02 = focal.x.mul(viewCentre.x).mul(invZ2).toVar()
-    const j12 = focal.y.mul(viewCentre.y).mul(invZ2).toVar()
-
-    const aBase = j00.mul(j00).mul(c00).add(j00.mul(j02).mul(c02).mul(2)).add(j02.mul(j02).mul(c22)).toVar()
-    const b = j00.mul(j11).mul(c01).add(j00.mul(j12).mul(c02)).add(j02.mul(j11).mul(c12)).add(j02.mul(j12).mul(c22)).toVar()
-    const cBase = j11.mul(j11).mul(c11).add(j11.mul(j12).mul(c12).mul(2)).add(j12.mul(j12).mul(c22)).toVar()
-    const a = aBase.add(KERNEL_2D).toVar()
-    const c = cBase.add(KERNEL_2D).toVar()
-    const detBase = aBase.mul(cBase).sub(b.mul(b)).toVar()
-    const det = a.mul(c).sub(b.mul(b)).toVar()
-    const alphaScale = sqrt(max(detBase.div(max(det, EPSILON)), 0)).toVar()
-    splatColour.assign(vec4(colour.rgb, colour.a.mul(alphaScale)))
-
-    const halfTrace = a.add(c).mul(0.5).toVar()
-    const radius = sqrt(max(a.sub(c).mul(0.5).pow2().add(b.mul(b)), EPSILON)).toVar()
-    const lambda1 = max(halfTrace.add(radius), EPSILON).toVar()
-    const lambda2 = max(halfTrace.sub(radius), EPSILON).toVar()
-    const axis1 = vec2(1, 0).toVar()
-    If(radius.greaterThan(0.00001), () => {
-      const angle = atan(b.mul(2), a.sub(c)).mul(0.5).toVar()
-      axis1.assign(vec2(cos(angle), sin(angle)))
-    })
-    const axis2 = vec2(axis1.y.negate(), axis1.x).toVar()
-    const scale1 = min(sqrt(lambda1), MAX_SPLAT_PX).toVar()
-    const scale2 = min(sqrt(lambda2), MAX_SPLAT_PX).toVar()
-    const offsetPx = axis1.mul(positionGeometry.x).mul(scale1).add(axis2.mul(positionGeometry.y).mul(scale2)).toVar()
-    const offsetNdc = offsetPx.mul(2).div(cameraViewport.zw).toVar()
-    const clip = centreClip.add(vec4(offsetNdc.mul(centreClip.w), 0, 0)).toVar()
-    const lim = centreClip.w.mul(CLIP_XY).toVar()
-    If(viewCentre.z.greaterThanEqual(-0.01)
-      .or(centreClip.z.lessThan(centreClip.w.negate()))
-      .or(centreClip.z.greaterThan(centreClip.w))
-      .or(centreClip.x.lessThan(lim.negate())).or(centreClip.x.greaterThan(lim))
-      .or(centreClip.y.lessThan(lim.negate())).or(centreClip.y.greaterThan(lim)), () => {
-      clip.assign(vec4(2, 2, 2, 1))
-    })
-    return clip
+    return placeQuad(A.xyz, buf.splatB.element(idx), vec4(colour.rgb, colour.a.mul(A.w)))
   })()
+}
 
-  const fragmentNode = Fn(() => {
-    const r2 = dot(splatUv, splatUv).toVar()
+/** WebGL has no compute: each corner moves its blob through the bones and projects it, like a skinned mesh. */
+function makeVertexWebGL(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, mode: SkinMode) {
+  return Fn(() => {
+    const idx = sort.orderRead.element(instanceIndex).toVar()
+    const d = deformBlob(buf, idx, mode)
+    const p = projectSplat(d.world, d.covA, d.covB, cameraViewMatrix, cameraProjectionMatrix, cameraViewport.zw)
+    const colour = unpackUnorm4x8(buf.colour.element(idx)).toVar()
+    return placeQuad(p.ndc, p.axes, vec4(colour.rgb, colour.a.mul(p.alphaScale)))
+  })()
+}
+
+function makeFragment() {
+  return Fn(() => {
+    const uv = splatUv()
+    const r2 = dot(uv, uv).toVar()
     If(r2.greaterThan(4), () => { Discard() })
-    return vec4(splatColour.rgb, exp(r2.mul(-0.5)).mul(splatColour.a))
+    return vec4(splatColour().rgb, exp(r2.mul(-0.5)).mul(splatColour().a))
   })()
-
-  return { vertexNode, fragmentNode }
 }

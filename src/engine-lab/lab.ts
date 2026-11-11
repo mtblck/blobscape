@@ -53,6 +53,8 @@ export interface Lab {
   setWalk(on: boolean): void
   setMode(m: SkinMode): void
   dispose(): void
+  /** Times each step of a walking frame on its own, waiting for the GPU after each. */
+  profile(frames: number): Promise<StepTimes>
   /** Renders one frame at time t (seconds) and waits for the GPU. */
   frame(t: number): Promise<void>
   /** Runs `job` with the live view paused, so it can use the renderer on its own. */
@@ -79,6 +81,24 @@ export interface BenchResult {
   cpu: number
   width: number
   height: number
+}
+
+/** Milliseconds per step, median. GPU steps are 0 on WebGL (no compute there) and CPU steps 0 on WebGPU. */
+export interface StepTimes {
+  which: string
+  backend: string
+  blobs: number
+  /** GPU: blobs through their bones. */
+  deform: number
+  /** GPU: blobs onto the screen, plus their sort keys. */
+  project: number
+  /** GPU: the sort itself. */
+  order: number
+  /** Drawing (on WebGL this includes moving each blob, which happens as it's drawn). */
+  draw: number
+  /** CPU (WebGL): moving centres for the sort, and sorting. */
+  cpuSkin: number
+  cpuSort: number
 }
 
 export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promise<Lab> {
@@ -261,6 +281,36 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
         dropped: gaps.length ? gaps.filter((g) => g > refresh * 1.5).length / gaps.length : 0,
         alone: q(alone, 0.5), cpu: q(cpu, 0.5), width: size.width, height: size.height,
       }
+    },
+    async profile(frames) {
+      const rows: number[][] = []
+      busy = true
+      try {
+        for (let i = 0; i < frames + 2; i++) {
+          resize()
+          pose(i / 30)
+          const t: number[] = [performance.now()]
+          const mark = async () => { await settle(renderer); t.push(performance.now()) }
+          if (world && backend === 'webgpu') {
+            const st = world.stages(renderer as never, camera)
+            st.deform(); await mark()
+            st.project(); await mark()
+            st.order(); await mark()
+            world.hold = true
+            try { renderer.render(scene, camera); await mark() } finally { world.hold = false }
+            world.markPosed() // the held frame skipped the bookkeeping; redo it next frame
+            if (i >= 2) rows.push([t[1] - t[0], t[2] - t[1], t[3] - t[2], t[4] - t[3], 0, 0])
+          } else {
+            renderer.render(scene, camera); await mark()
+            const cs = world?.cpuSkinMs ?? 0, co = world?.cpuSortMs ?? 0
+            if (i >= 2) rows.push([0, 0, 0, Math.max(0, t[1] - t[0] - cs - co), cs, co])
+          }
+        }
+      } finally {
+        busy = false
+      }
+      const med = (k: number) => [...rows.map((r) => r[k])].sort((a, b) => a - b)[Math.floor(rows.length / 2)] ?? 0
+      return { which: o.which, backend, blobs, deform: med(0), project: med(1), order: med(2), draw: med(3), cpuSkin: med(4), cpuSort: med(5) }
     },
     dispose() {
       stopped = true

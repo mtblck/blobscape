@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { Skeleton, axisAngle, emptySkin, packWeights, setWeights, skinBlob } from './rig.ts'
+import { Skeleton, axisAngle, emptySkin, packWeights, setWeights, skinBlob, skinCentres } from './rig.ts'
 
 const near = (a: number, b: number, eps = 1e-5) => Math.abs(a - b) < eps
 
@@ -77,4 +77,30 @@ test('packed byte weights always sum to 255, even from a file that does not norm
     const bytes = [0, 8, 16, 24].map((s) => (word >>> s) & 255)
     assert.equal(bytes.reduce((a, b) => a + b, 0), 255, `${w} → ${bytes}`)
   }
+})
+
+test('the fast centre skinning lands every blob where skinBlob does', () => {
+  const sk = arm()
+  sk.setRotation(1, axisAngle([0, 0, 1], 1.1))
+  sk.rootScale = 1.3
+  sk.update()
+  const blobs = [[2, 0.1, 0], [0.5, -0.2, 0.3], [1.2, 0.4, -0.1]]
+  const weights = [[0, 1, 0, 0], [1, 0, 0, 0], [0.4, 0.6, 0, 0]]
+  const src = new Float32Array(blobs.length * 4), skin = new Uint32Array(blobs.length * 2)
+  const bones = new Float32Array(sk.count * 20)
+  for (let b = 0; b < sk.count; b++) bones.set(sk.matrix.subarray(b * 16, b * 16 + 16), b * 20)
+  blobs.forEach((c, i) => {
+    src.set([...c, 0], i * 4)
+    skin[i * 2] = 0 | (1 << 8)
+    skin[i * 2 + 1] = packWeights(weights[i], 0)
+  })
+  const out = new Float32Array(blobs.length * 3)
+  skinCentres(src, skin, bones, blobs.length, out)
+  blobs.forEach((c, i) => {
+    const word = skin[i * 2 + 1]
+    const w = [0, 8, 16, 24].map((s) => ((word >>> s) & 255) / 255)
+    const ref = new Float32Array(3), v = new Float32Array(6)
+    skinBlob(c, [0.1, 0.1, 0.1], [0, 0, 0, 1], [0, 1, 0, 0], w, sk, 'quat', ref, 0, v, 0)
+    for (let k = 0; k < 3; k++) assert.ok(near(out[i * 3 + k], ref[k]), `blob ${i}: ${out.subarray(i * 3, i * 3 + 3)} vs ${ref}`)
+  })
 })

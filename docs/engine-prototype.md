@@ -24,14 +24,14 @@ All three bars are met. The engine works on WebGPU and WebGL. It skins every blo
 All of it is in `src/splat-engine/`, with the test page at `/experiments/engine-lab/` (unlisted, `noindex`).
 
 - `rig.ts`: skeleton, skin weights, and `skinBlob`, the CPU reference for moving one blob by its bones. There are two rules for a blob's shape. `quat` averages the bone rotations (sign-aligned, normalised), so blobs only turn. `linear` pushes the covariance through the blended matrix, so blobs squash on a twist. The tests show `quat` keeping volume on a half-twist where `linear` collapses, which is lesson 15 in one assertion.
-- `engine.ts`: `SplatWorld`, a three.js `Mesh` that holds every blob of every actor. Each frame runs a deform compute pass (bones → world centre and covariance), then one counting sort over the whole scene (16,384 depth bins), then an instanced draw. A still object is one bone. The WebGL backend runs the CPU twin and uploads the result.
+- `engine.ts`: `SplatWorld`, a three.js `Mesh` that holds every blob of every actor. Each frame runs a deform compute pass (bones → world centre and covariance), a project pass (each blob onto the screen once, writing its sort key), one counting sort over the whole scene (16,384 depth bins, `sort.ts`), then an instanced draw that only places quads. A still object is one bone. On WebGL, which has no compute, the vertex shader moves and projects each blob as it draws it, and the CPU only moves centres and sorts.
 - `creature.ts`: a procedural fox, 14 bones, with blobs weighted by distance to their body part's bones and a trot cycle.
 - `glb.ts`: writes and reads rigged splats as glTF. Blobs use `KHR_gaussian_splatting`, the rig uses standard skins and animations, and `BLOBSCAPE_gaussian_skinning` (used, not required) states the rotation rule.
 - `walkSheet.ts`: renders the trot from four sides into a Tinkerkit sheet.
 
 ## Known gaps
 
-- **The WebGL fallback is slow for big creatures.** The CPU deform and sort take about 200 ms a frame at 100k blobs on this machine. It's fine around 10k. The next step is a worker and fewer allocations in `skinBlob`.
+- **The WebGL fallback moves blobs four times each** (once per quad corner), since WebGL can't run a compute pass first. Its CPU work is now about 10 ms at 100k on this machine (it was 200 ms).
 - **The sort is a counting sort with 16k bins.** Blobs in the same bin draw in arbitrary order and can shimmer on large scenes. A two-pass radix sort with 32-bit keys is the upgrade.
 - **Not supported yet:** spherical harmonics, level of detail, and cleanup of storage buffers on dispose. The sprite sheet keeps one world per renderer, so nothing leaks per click.
 - **Joint quality vs Spark's dual quaternions** hasn't been compared side by side.
@@ -59,3 +59,11 @@ By eye: our WebGPU engine walks smoothly even at 500k blobs. Our WebGL fallback 
 | three.js, WebGPU, standing still | 500k | 60 | 1% | 16.7 / 16.8 | 19.3 |
 
 Our extra cost per frame is the deform pass and one shared sort: about 5 ms at 200k and 12 ms at 500k ("alone" minus three.js's). Ideas for cutting it: skip the deform for blobs whose bones didn't move, sort every other frame while the camera is still, and draw fewer blobs when a creature is small on screen.
+
+## Speed pass (2026-11-11, after the phone run)
+
+- **Project once per blob.** The screen-space ellipse used to be worked out in the vertex shader for each of a quad's four corners. It's now a compute pass that runs once per blob and also writes the sort key, so the sort no longer works the depth out twice.
+- **Our own sort passes** (`sort.ts`). three.js's `CountingSort` sums its 16,384 bins in a single GPU thread. Ours does it with 256 threads, and clears the histogram as it goes, which removes a pass.
+- **Smaller quads for faint blobs.** Each quad reaches only as far as its blob stays visible (above 1/255), up to two standard deviations, so faint blobs cover fewer pixels.
+- **WebGL skins on the GPU.** The vertex shader moves each blob through its bones, like a skinned mesh. The CPU only moves blob centres for the sort, without allocating. At 100k blobs on this machine: 7.7 ms moving centres and 2 ms sorting, against about 200 ms before.
+- **Time each step** in the lab splits a frame into move, project, sort and draw (WebGPU), or CPU move, CPU sort and draw (WebGL). Software WebGPU here can't say which step dominates on a phone, because it draws on the CPU.

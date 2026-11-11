@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import '../shared/theme.css'
 import { SiteHeader } from '../shared/SiteHeader.tsx'
 import { Button, Chip, Field, Toggle } from '../shared/ui.tsx'
-import { WHICH, startLab, type BenchResult, type Lab, type LabOptions, type Which } from './lab.ts'
+import { WHICH, startLab, type BenchResult, type Lab, type LabOptions, type StepTimes, type Which } from './lab.ts'
 import { makeCreature, poseWalk } from '../splat-engine/creature.ts'
 import { recordClip, writeRiggedGlb } from '../splat-engine/glb.ts'
 
@@ -62,6 +62,7 @@ function App() {
   const [error, setError] = useState<string>()
   const [results, setResults] = useState<BenchResult[]>([])
   const [timing, setTiming] = useState(false)
+  const [steps, setSteps] = useState<StepTimes[]>([])
   const [sheet, setSheet] = useState<{ url: string; json: string }>()
   const [making, setMaking] = useState(false)
 
@@ -110,6 +111,19 @@ function App() {
     }
   })
 
+  const timeSteps = async () => {
+    if (!lab) return
+    setTiming(true)
+    try {
+      const r = await lab.profile(20)
+      setSteps((rs) => [r, ...rs].slice(0, 12))
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setTiming(false)
+    }
+  }
+
   const time = async () => {
     if (!lab) return
     setTiming(true)
@@ -157,6 +171,7 @@ function App() {
           <div className="flex flex-col gap-3">
             <Toggle label="Walk" checked={opts.walk} onChange={(v) => { set({ walk: v }); lab?.setWalk(v) }} />
             <Button primary disabled={!lab || timing} onClick={time}>{timing ? 'Timing…' : 'Time it'}</Button>
+            <Button disabled={!lab || timing} onClick={timeSteps}>Time each step</Button>
             <Button onClick={() => downloadGlb(20000)}>Download the fox (.glb)</Button>
             <Button disabled={!lab || making} onClick={makeSheet}>{making ? 'Drawing…' : 'Make a walk sprite sheet'}</Button>
           </div>
@@ -171,6 +186,30 @@ function App() {
               <a href={`data:application/json,${encodeURIComponent(sheet.json)}`} download="blob-fox.json" className="text-accent underline">Download JSON</a>
             </div>
           </section>
+        )}
+        {steps.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <caption className="mb-2 text-left text-ink-muted">
+                Milliseconds per step of a walking frame, each waited for on its own (median of 20).
+                Move, project and sort run on the GPU with WebGPU; with WebGL each blob is moved as it's drawn, and the CPU moves centres and sorts.
+              </caption>
+              <thead><tr className="text-ink-faint"><th className="py-1 pr-3 font-medium">Renderer</th><th className="pr-3 font-medium">Blobs</th><th className="pr-3 font-medium">Move</th><th className="pr-3 font-medium">Project</th><th className="pr-3 font-medium">Sort</th><th className="pr-3 font-medium">Draw</th><th className="font-medium">CPU (move, sort)</th></tr></thead>
+              <tbody>
+                {steps.map((r, i) => (
+                  <tr key={i} className="border-t border-rule">
+                    <td className="py-1 pr-3">{r.which === 'three' ? 'three.js' : 'Ours'} · {r.backend}</td>
+                    <td className="pr-3">{r.blobs.toLocaleString()}</td>
+                    <td className="pr-3">{r.deform.toFixed(1)}</td>
+                    <td className="pr-3">{r.project.toFixed(1)}</td>
+                    <td className="pr-3">{r.order.toFixed(1)}</td>
+                    <td className="pr-3">{r.draw.toFixed(1)}</td>
+                    <td>{r.cpuSkin.toFixed(1)}, {r.cpuSort.toFixed(1)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
         {results.length > 0 && (
           <div className="overflow-x-auto">

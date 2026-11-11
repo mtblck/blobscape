@@ -648,6 +648,14 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
         else ok(`engine lab: GPU skinning matches the CPU (${mode}, centre ±${r.centre.toExponential(1)})`)
       }
     }
+    if (!webgl) {
+      const so = await page.evaluate(async () => { const l = window.__lab; await l.frame(0.3); return l.world.checkSort(l.renderer) })
+      if (so.missing || so.outOfOrder) fails.push(`engine lab: GPU sort ${JSON.stringify(so)}`)
+      else ok('engine lab: GPU sort draws every blob once, farthest first')
+    }
+    const steps = await page.evaluate(() => window.__lab.profile(2))
+    if (!(steps.draw > 0) || (!webgl && !(steps.deform > 0 && steps.project > 0 && steps.order > 0))) fails.push(`engine lab ${label}: step times ${JSON.stringify(steps)}`)
+    else ok(`engine lab ${label}: times each step (move ${steps.deform.toFixed(0)}, project ${steps.project.toFixed(0)}, sort ${steps.order.toFixed(0)}, draw ${steps.draw.toFixed(0)} ms; CPU ${steps.cpuSkin.toFixed(0)}+${steps.cpuSort.toFixed(0)})`)
     // it draws something fox-coloured in the middle of the frame
     await page.evaluate(() => window.__lab.frame(0.2))
     const orange = await page.evaluate(() => {

@@ -254,3 +254,31 @@ export function quatMat3(q: ArrayLike<number>): number[] {
     2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y),
   ]
 }
+
+/**
+ * Moves only the centres of many blobs, fast: what the sort needs on the CPU
+ * when the GPU does the rest of the skinning. No allocation per blob.
+ *
+ * - `src`: rest centres as vec4s, with each blob's first bone (its actor's
+ *   offset into `bones`) in w;
+ * - `skin`: two words per blob, four joint bytes then four weight bytes summing to 255;
+ * - `bones`: 20 floats per bone, the first 16 its column-major skin matrix.
+ *
+ * Writes xyz into `out` (3 floats per blob). Matches `skinBlob`'s centre.
+ */
+export function skinCentres(src: Float32Array, skin: Uint32Array, bones: Float32Array, count: number, out: Float32Array) {
+  for (let i = 0; i < count; i++) {
+    const x = src[i * 4], y = src[i * 4 + 1], z = src[i * 4 + 2], base = src[i * 4 + 3]
+    const jw = skin[i * 2], ww = skin[i * 2 + 1]
+    let ox = 0, oy = 0, oz = 0
+    for (let k = 0; k < 4; k++) {
+      const w = ((ww >>> (k * 8)) & 255) / 255
+      if (!w) continue
+      const m = (base + ((jw >>> (k * 8)) & 255)) * 20
+      ox += w * (bones[m] * x + bones[m + 4] * y + bones[m + 8] * z + bones[m + 12])
+      oy += w * (bones[m + 1] * x + bones[m + 5] * y + bones[m + 9] * z + bones[m + 13])
+      oz += w * (bones[m + 2] * x + bones[m + 6] * y + bones[m + 10] * z + bones[m + 14])
+    }
+    out[i * 3] = ox; out[i * 3 + 1] = oy; out[i * 3 + 2] = oz
+  }
+}
