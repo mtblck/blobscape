@@ -11,6 +11,9 @@ export const SITE = {
   tip: 'https://ko-fi.com/mtblck',
 } as const
 
+/** The Experiments page's intro, shared with its prerendered HTML so the page doesn't shift when the app takes over. */
+export const EXPERIMENTS_INTRO = "Small tools built from the same blobs as the lessons: a creature that walks on our own splat engine, the training loop that makes a splat, and a way to turn one into pixel art. New ones land here as they're made."
+
 /** The splat experiments: the Experiments page, the front page, the menu and the footer. `needs` is what the browser must have. */
 export const EXPERIMENTS = [
   {

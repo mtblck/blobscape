@@ -12,7 +12,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { LESSONS, LESSON_COUNT, LESSON_GOALS, PARTS, href, type Route } from '../src/blobscape/routes.ts'
-import { EXPERIMENTS, SITE } from '../src/blobscape/site.ts'
+import { EXPERIMENTS, EXPERIMENTS_INTRO, SITE } from '../src/blobscape/site.ts'
 import { DESCRIPTION, pageMeta } from '../src/blobscape/meta.ts'
 import { AXIS, BLOB, WORD } from '../src/shared/logoPaths.ts'
 
@@ -81,9 +81,10 @@ ${PARTS.map((p, i) => `<h2 class="mt-10 font-display text-2xl">Part ${i + 1}: ${
       return `<div class="max-w-3xl">${crumbs(title, route.page === 'creature' ? ['Experiments', '/experiments/'] : undefined)}<h1 class="pt-6 font-display text-5xl">${title}</h1><p class="mt-4 text-xl leading-relaxed text-ink-muted">${esc(pageMeta(route).description)}</p><p class="mt-6 text-sm text-ink-faint">It runs in your browser, with JavaScript and WebGL${route.page === 'creature' ? ' or WebGPU' : ''}.</p></div>`
     }
     case 'experiments':
-      return `<div class="max-w-3xl">${crumbs('Experiments')}<h1 class="pt-6 font-display text-5xl">Experiments</h1>
-<p class="mt-4 text-xl leading-relaxed text-ink-muted">Small tools built from the same blobs as the lessons. New ones land here as they're made.</p>
-<ul class="mt-8 flex flex-col gap-6">${EXPERIMENTS.map((e) => `<li><a href="${e.url}" class="font-display text-2xl ${LINK}">${esc(e.title)}</a><p class="mt-1 text-ink-muted">${esc(e.body)}</p><p class="mt-1 text-sm text-ink-faint">Needs ${esc(e.needs)}.</p></li>`).join('')}</ul></div>`
+      return `${crumbs('Experiments')}<div class="max-w-3xl pt-6 pb-8"><h1 class="font-display text-5xl">Experiments</h1>
+<p class="mt-4 text-xl leading-relaxed text-ink-muted">${esc(EXPERIMENTS_INTRO)}</p></div>
+<ul class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">${EXPERIMENTS.map((e) => `<li><a href="${e.url}" class="group flex h-full flex-col gap-4 rounded-2xl border border-rule bg-paper p-4 no-underline transition-colors hover:border-ink-faint"><span aria-hidden="true" class="block aspect-[240/130] w-full rounded-xl bg-[#14161f] ring-1 ring-rule"></span><span class="font-display text-2xl text-ink group-hover:text-accent">${esc(e.title)} →</span><span class="flex-1 text-ink-muted">${esc(e.body)}</span><span class="text-sm text-ink-faint">Needs ${esc(e.needs)}. Runs in your browser; nothing is uploaded.</span></a></li>`).join('')}</ul>
+<p class="mt-10 text-ink-muted">New to splats? The <a href="/lessons/" class="text-ink underline underline-offset-2 hover:text-accent">lessons</a> start with a single blob.</p>`
     case 'notfound':
       return `<div class="max-w-2xl py-16"><h1 class="font-display text-5xl">That page isn’t here</h1><p class="mt-4 text-xl leading-relaxed text-ink-muted">The link may be old, or mistyped. Every lesson is on the lesson list.</p><p class="mt-8"><a href="/lessons/" class="${BUTTON}">See the lessons</a></p></div>`
   }

@@ -184,6 +184,7 @@ export function Creature() {
                 }}
               />
               {!failed && (!drawn || busy?.startsWith('Making')) && <Loading label={drawn ? busy! : stage ? 'Waking the fox…' : 'Starting the splat engine…'} />}
+              <p role="status" className="sr-only">{!failed && !drawn ? (stage ? 'Waking the fox…' : 'Starting the splat engine…') : ''}</p>
               {failed && <div role="alert" className="absolute inset-4 grid place-items-center text-center text-sm text-ink">{failed}</div>}
               <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => setOrbit(START)} />
               <p aria-hidden className="pointer-events-none absolute right-14 bottom-2 left-3 text-right text-xs text-ink-faint">{typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches ? 'drag to orbit · pinch to zoom' : 'drag to orbit · scroll to zoom'}</p>
@@ -283,8 +284,8 @@ export function Creature() {
 /** Over the view while the engine starts or a new fox is made: the Blobscape mark breathing, and what's happening. */
 function Loading({ label }: { label: string }) {
   return (
-    <div role="status" data-testid="creature-loading" className="pointer-events-none absolute inset-0 grid place-items-center">
-      <div className="flex flex-col items-center gap-3 rounded-2xl bg-[#0d0f16]/70 px-6 py-5 backdrop-blur-sm">
+    <div aria-hidden data-testid="creature-loading" className="pointer-events-none absolute inset-0 grid place-items-center">
+      <div className="flex flex-col items-center gap-3 rounded-2xl bg-paper/70 px-6 py-5 backdrop-blur-sm">
         <Mark className="creature-loading-mark h-10 w-auto" />
         <p className="text-sm text-ink">{label}</p>
       </div>

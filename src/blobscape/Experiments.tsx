@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { href } from './routes.ts'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
-import { EXPERIMENTS } from './site.ts'
+import { EXPERIMENTS, EXPERIMENTS_INTRO } from './site.ts'
 import { BlobDefs, CreatureDiagram, FitDiagram, SpriteDiagram } from './diagrams.tsx'
 
 /** Each experiment's picture, on this page and the front page. */
@@ -16,10 +16,7 @@ export function Experiments() {
       <Crumbs here="Experiments" />
       <div className="max-w-3xl pt-6 pb-8">
         <h1 ref={h1} tabIndex={-1} className="font-display text-5xl outline-none">Experiments</h1>
-        <p className="mt-4 text-xl leading-relaxed text-ink-muted">
-          Small tools built from the same blobs as the lessons: a creature that walks on our own splat engine, the training loop that
-          makes a splat, and a way to turn one into pixel art. New ones land here as they're made.
-        </p>
+        <p className="mt-4 text-xl leading-relaxed text-ink-muted">{EXPERIMENTS_INTRO}</p>
       </div>
       <ul className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {EXPERIMENTS.map((e) => (

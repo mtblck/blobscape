@@ -190,7 +190,9 @@
   0%, 60%, 100% { transform: translateY(0); }
   30%           { transform: translateY(-14px); }
 }
-.creature-loading-mark > g > path:first-child { animation: bs-hop 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: no-preference) {
+  .creature-loading-mark > g > path:first-child { animation: bs-hop 1.2s ease-in-out infinite; }
+}
 
 /* Blobscape's front page: a dashed selection ring that marches */
 @keyframes bs-march { to { stroke-dashoffset: -22; } }
