@@ -29,11 +29,18 @@ All of it is in `src/splat-engine/`, with the test page at `/experiments/engine-
 - `glb.ts`: writes and reads rigged splats as glTF. Blobs use `KHR_gaussian_splatting`, the rig uses standard skins and animations, and `BLOBSCAPE_gaussian_skinning` (used, not required) states the rotation rule.
 - `walkSheet.ts`: renders the trot from four sides into a Tinkerkit sheet.
 
+Added with the Rigs and 3D models lessons (2026-11-11):
+
+- `pose.ts`: `poseBlobs`, the whole-blob CPU twin of `skinBlob` (centre, scale and rotation, both rules), which the lessons use to pose a few thousand blobs for Spark. Tested against `skinBlob`.
+- `models.ts`: the lesson rigs (caterpillar, arm, wrist), `walk.ts`: the fox's trot as four key poses with hold/in-between and foot speed.
+- `mesh.ts`: `blobsToMesh` turns blobs into a closed, skinned triangle mesh (density grid, shell, flood fill, signed distance pulled back to the blobs' surface, surface nets), `skinMesh` poses it on the CPU, `meshError` measures how far it strays. `glb.ts` `writeRiggedMeshGlb` saves it with the same bones and clips, unlit vertex colours; three.js opens it as a `SkinnedMesh` with its animation (verify checks).
+- The Creature page (`src/blobscape/Creature.tsx`, `#/creature`) is the engine's first public use: `SplatWorld` on WebGPU (WebGL fallback), up to 200k blobs, splat and mesh `.glb` downloads, and opening rigged `.glb` files.
+
 ## Known gaps
 
 - **The WebGL fallback moves blobs four times each** (once per quad corner), since WebGL can't run a compute pass first. Its CPU work is now about 10 ms at 100k on this machine (it was 200 ms).
 - **The sort is a counting sort with 16k bins.** Blobs in the same bin draw in arbitrary order and can shimmer on large scenes. A two-pass radix sort with 32-bit keys is the upgrade.
-- **Not supported yet:** spherical harmonics, level of detail, and cleanup of storage buffers on dispose. The sprite sheet keeps one world per renderer, so nothing leaks per click.
+- **Not supported yet:** spherical harmonics and level of detail. `SplatWorld.dispose` now frees its storage buffers too, since the Creature page swaps worlds on every fox change.
 - **Joint quality vs Spark's dual quaternions** hasn't been compared side by side.
 - **The `.glb` reader** takes only float splat attributes and bones without a rest rotation. It handles our own files and simple ones from elsewhere.
 

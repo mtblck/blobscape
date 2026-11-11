@@ -5,7 +5,8 @@ import { SiteHeader } from '../shared/SiteHeader.tsx'
 import { Button, Chip, Field, Toggle } from '../shared/ui.tsx'
 import { WHICH, startLab, type BenchResult, type Lab, type LabOptions, type StepTimes, type Which } from './lab.ts'
 import { makeCreature, poseWalk } from '../splat-engine/creature.ts'
-import { recordClip, writeRiggedGlb } from '../splat-engine/glb.ts'
+import { recordClip, writeRiggedGlb, writeRiggedMeshGlb } from '../splat-engine/glb.ts'
+import { blobsToMesh } from '../splat-engine/mesh.ts'
 
 /** The fox as a rigged .glb with its trot: what Creature will export. */
 function foxGlb(count: number) {
@@ -50,9 +51,19 @@ window.__glbCheck = async () => {
   const { loadWithThree } = await import('./glbCheck.ts')
   return { bytes: bytes.byteLength, ...(await loadWithThree(bytes)) }
 }
+/** The same fox as a solid mesh .glb, opened by three.js: a skinned mesh with the trot. */
+window.__meshGlbCheck = async () => {
+  const fox = makeCreature(5000)
+  const trot = recordClip('trot', fox.skeleton, poseWalk, 1 / 1.4, 24)
+  fox.skeleton.reset()
+  fox.skeleton.update()
+  const bytes = writeRiggedMeshGlb({ name: 'fox', mesh: blobsToMesh(fox.blobs, fox.skin, { cells: 48, level: 1 }), skeleton: fox.skeleton, clips: [trot] })
+  const { loadWithThree } = await import('./glbCheck.ts')
+  return { bytes: bytes.byteLength, ...(await loadWithThree(bytes)) }
+}
 
 declare global {
-  interface Window { __lab?: Lab; __labError?: string; __glbCheck?: () => Promise<unknown>; __sheet?: () => Promise<{ cols: number; rows: number; size: number; solid: number[] }> }
+  interface Window { __lab?: Lab; __labError?: string; __glbCheck?: () => Promise<unknown>; __meshGlbCheck?: () => Promise<unknown>; __sheet?: () => Promise<{ cols: number; rows: number; size: number; solid: number[] }> }
 }
 
 function App() {

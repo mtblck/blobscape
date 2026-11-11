@@ -6,7 +6,7 @@ import type { Goal } from './progress.ts'
  * thing is one static page: no server routes, and it can move to its own
  * domain by copying the folder.
  */
-export type Route = { page: 'home' } | { page: 'lessons' } | { page: 'lesson'; id: string } | { page: 'sandbox' }
+export type Route = { page: 'home' } | { page: 'lessons' } | { page: 'lesson'; id: string } | { page: 'sandbox' } | { page: 'creature' }
 
 export const LESSONS = [
   { id: 'one-blob', title: 'One blob', summary: 'Five kinds of number, 14 in all, make one Gaussian. Pull each one and see what it does.' },
@@ -17,6 +17,21 @@ export const LESSONS = [
   { id: 'paint', title: 'Paint', summary: 'Spray blobs onto the floor by hand, and trade blob size against how many you need.' },
   { id: 'formats', title: 'Splat files', summary: 'The same scene saved three ways: what a splat file holds, and how small it can get.' },
   { id: 'break', title: 'Break it', summary: 'Shrink every blob to a dot, blow the scene apart, and put it back exactly.' },
+  { id: 'one-bone', title: 'One bone', summary: 'A bone moves blobs it never touches. Bend a caterpillar and find out which ones follow.' },
+  { id: 'weights', title: 'Weights', summary: 'Bend an arm and the elbow tears. Fix it without moving a bone.' },
+  { id: 'twist', title: 'Twist without tearing', summary: 'Turn a wrist over two ways, and see why one of them squashes the blobs flat.' },
+  { id: 'walk', title: 'Walk cycle', summary: 'Four poses and some timing make a walk. Find the ones that matter, and stop the feet sliding.' },
+  { id: 'model', title: 'Blobs to a model', summary: 'Save the walking fox as splats and as a solid mesh, and see what each one keeps.' },
+] as const
+
+const WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty']
+/** How many lessons there are, in words ("thirteen"), for headings and links. */
+export const LESSON_COUNT = WORDS[LESSONS.length] ?? String(LESSONS.length)
+
+/** Lessons come in parts, shown as groups on the lesson list. `from` is the index of each part's first lesson. */
+export const PARTS = [
+  { title: 'One object', from: 0, summary: 'What a blob is, and how thousands of them make a thing you can look at from anywhere.' },
+  { title: 'Rigs and 3D models', from: 8, summary: 'Bones that move blobs, a walk cycle, and a creature that leaves as a model Blender opens.' },
 ] as const
 
 /**
@@ -67,6 +82,34 @@ export const LESSON_GOALS: Record<(typeof LESSONS)[number]['id'], Goal[]> = {
     { id: 'apart', label: 'Blow it apart', where: 'explode', why: 'Each blob flies on its own: nothing holds them together.' },
     { id: 'back', label: 'Put it back together exactly', hint: 'Undo both: no explosion, blobs at full size.', where: 'explode', why: 'Nothing was lost. A splat is a list of blobs, not a surface.' },
   ],
+  'one-bone': [
+    { id: 'lift', label: "Lift the caterpillar's head with the bone", hint: 'Turn the bone well up, and watch which blobs go with it.', where: 'bend', why: 'Every blob hung on the bone turns about the joint with it, though the bone touches none of them.' },
+    { id: 'tear', label: 'Tear the caterpillar open', hint: 'Change which blobs hang on the bone, not how far it turns.', where: 'hang', why: 'Blobs between the joint and the cut stay with the body bone, so the body splits at the cut, not at the joint.' },
+    { id: 'swing', label: 'Make blobs behind the joint swing up with the head', hint: 'Hang more of the body on the bone.', where: 'hang', why: 'A blob follows its bone wherever it sits: hung on the head bone, the middle swings round the joint and through the floor.' },
+    { id: 'seam', label: 'Put the cut back at the joint, bend it hard, and find the seam that\'s left', hint: 'Look along the top of the bend.', where: 'view', why: 'With one bone per blob, the outside of a bend always opens a little. The next lesson lets a blob follow two.' },
+  ],
+  'weights': [
+    { id: 'crack', label: 'Bend the elbow until the arm tears open', hint: 'Look at the outside of the elbow.', where: 'bend', why: 'Each blob follows one bone or the other, so the outside of the joint pulls apart and the inside piles up.' },
+    { id: 'smooth', label: 'Bend it past 80° with no tear', hint: 'Let blobs near the elbow follow both bones.', where: 'blend', why: 'Blobs near the joint follow both bones a little, so they land between the two and fill the gap.' },
+    { id: 'rubber', label: 'Spread the blend so wide the arm goes rubbery', where: 'blend', why: 'The middle of the forearm half-follows the upper arm, so the whole arm curves like a hose.' },
+    { id: 'offset', label: 'Move the blend off the elbow and watch where it creases', where: 'blend', why: "Weights don't know where the joint is: put the blend elsewhere and the arm creases there." },
+  ],
+  'twist': [
+    { id: 'flat', label: 'Turn the hand right over and compare the two wrists', hint: 'Look down on the wrists from above.', where: 'twist', why: 'Halfway between facing up and facing down is flat: blended matrices squash the wrist blobs into slivers.' },
+    { id: 'small', label: 'Find a twist small enough that blended matrices get away with it', where: 'twist', why: 'A small turn barely squashes. The flattening grows with the angle, so it hides until a wrist turns right over.' },
+    { id: 'hard', label: 'Stop the left wrist flattening without changing the twist', hint: 'The squashed blobs are the ones that follow both bones.', where: 'blend', why: 'With no blobs shared, nothing flattens, but the wrist tears instead. Blended matrices can’t have both; averaged turns can.' },
+  ],
+  'walk': [
+    { id: 'two', label: 'Play the walk from the two contact poses only, and watch the feet', hint: 'Fewer keys.', where: 'keys', why: 'Nothing lifts a foot between two contacts: each one swings forward through the floor. Passing poses pick the feet up.' },
+    { id: 'hold', label: 'Play it slowly with every key held, no in-betweens', where: 'keys', why: 'Without in-betweens the fox snaps from pose to pose. The blended frames between keys are most of what you see.' },
+    { id: 'grip', label: 'Make the feet stop sliding on the ground', hint: 'The ground slides under a walk on the spot. Match it to the feet.', where: 'ground', why: 'A planted foot must move back exactly as fast as the ground, or it skates.' },
+    { id: 'run', label: 'Speed it up to a run, and keep the feet planted', hint: 'A step of under half a second.', where: 'timing', why: 'Half the step time, twice the foot speed: the same stride covers ground twice as fast.' },
+  ],
+  'model': [
+    { id: 'pieces', label: 'Raise the surface level until the fox falls apart', where: 'surface', why: 'The mesh wraps only where blobs are dense enough. Thin legs and ears thin out first, so they break off.' },
+    { id: 'coarse', label: 'Make the grid so coarse the mesh strays 8 cm from the blobs', where: 'grid', why: 'A grid can’t hold anything smaller than a cell: ears and toes melt into lumps.' },
+    { id: 'keep', label: 'Make a mesh in one piece, within 5 cm of the blobs, under 300 KB', hint: 'Watch the size as you change the grid.', where: 'grid', why: 'Each finer grid roughly quadruples the triangles. The trick is the coarsest grid that keeps what matters.' },
+  ],
 }
 
 /** Lessons still to come, shown greyed out on the home page. */
@@ -76,6 +119,7 @@ export function parse(hash: string): Route {
   const m = hash.replace(/^#\/?/, '').split('/')
   if (m[0] === 'lesson' && LESSONS.some((l) => l.id === m[1])) return { page: 'lesson', id: m[1] }
   if (m[0] === 'sandbox') return { page: 'sandbox' }
+  if (m[0] === 'creature') return { page: 'creature' }
   if (m[0] === 'lessons') return { page: 'lessons' }
   return { page: 'home' }
 }
@@ -83,6 +127,7 @@ export function parse(hash: string): Route {
 export function href(r: Route): string {
   if (r.page === 'lesson') return `#/lesson/${r.id}`
   if (r.page === 'sandbox') return '#/sandbox'
+  if (r.page === 'creature') return '#/creature'
   if (r.page === 'lessons') return '#/lessons'
   return '#/'
 }

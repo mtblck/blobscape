@@ -264,9 +264,79 @@ export function LessonGlyph({ id }: { id: string }) {
         })}
       </>)
     }
+    case 'one-bone': {
+      // a caterpillar lifting its head about a joint, the bone drawn through it
+      const body = Array.from({ length: 9 }, (_, k) => {
+        const t = k / 8
+        const lift = t > 0.5 ? (t - 0.5) * 2 : 0
+        return { x: 22 + t * 70 - lift * 10, y: 50 - lift * 26 }
+      })
+      return g(<>
+        {body.map((p, k) => <Blob key={k} x={p.x} y={p.y} rx={9} ry={8} r={0} c={k === 8 ? 'red' : 'green'} />)}
+        <path d={`M 22 50 L ${body[4].x} ${body[4].y} L ${body[8].x} ${body[8].y}`} stroke={COLOURS.sun} strokeWidth="1.5" fill="none" />
+        <circle cx={body[4].x} cy={body[4].y} r="3" fill="none" stroke={COLOURS.sun} strokeWidth="1.5" />
+      </>)
+    }
+    case 'weights':
+      return g(<>
+        {Array.from({ length: 6 }, (_, k) => <Blob key={`u${k}`} x={14 + k * 8} y={50} rx={8} ry={10} r={0} c="blue" />)}
+        {Array.from({ length: 6 }, (_, k) => <Blob key={`f${k}`} x={60 + k * 5} y={46 - k * 6} rx={8} ry={10} r={-40} c={k < 2 ? 'violet' : 'orange'} />)}
+        <path d="M 14 50 L 58 50 L 86 16" stroke={COLOURS.sun} strokeWidth="1.5" fill="none" />
+      </>)
+    case 'twist':
+      return g(<>
+        {Array.from({ length: 7 }, (_, k) => <Blob key={k} x={16 + k * 7} y={36} rx={6} ry={11} r={0} c="red" />)}
+        <Blob x={68} y={36} rx={4} ry={3} r={0} c="red" />
+        {Array.from({ length: 5 }, (_, k) => <Blob key={`h${k}`} x={76 + k * 7} y={36} rx={6} ry={13 - k} r={0} c="cream" />)}
+        <path d="M 66 18 A 10 18 0 1 1 64 54" stroke={COLOURS.sun} strokeWidth="1.5" fill="none" strokeDasharray="3 3" />
+      </>)
+    case 'walk':
+      return g(<>
+        <path d="M 10 62 H 110" stroke="#665d52" strokeDasharray="4 4" />
+        {[0, 1, 2, 3].map((k) => (
+          <g key={k} transform={`translate(${16 + k * 26} 0)`} opacity={k === 1 ? 1 : 0.55}>
+            <Blob x={10} y={34} rx={10} ry={6} r={0} c="orange" />
+            <Blob x={19} y={28} rx={4} ry={4} r={0} c="orange" />
+            <path d={k % 2 ? 'M 5 38 L 5 61 M 15 38 L 13 50 L 17 54' : 'M 5 38 L 0 61 M 15 38 L 20 61'} stroke="#cfc6b8" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+          </g>
+        ))}
+      </>)
+    case 'model':
+      return g(<>
+        {Array.from({ length: 14 }, (_, k) => <Blob key={k} x={18 + (k % 5) * 7} y={24 + Math.floor(k / 5) * 11} rx={7} ry={6} r={0} c="orange" o={0.85} />)}
+        <path d="M 58 36 H 68 m -4 -4 l 4 4 l -4 4" stroke={COLOURS.sun} strokeWidth="1.5" fill="none" strokeLinecap="round" />
+        <path d="M 76 20 L 104 20 L 108 34 L 100 52 L 80 52 L 74 36 Z M 76 20 L 90 36 L 104 20 M 74 36 L 90 36 L 108 34 M 90 36 L 80 52 M 90 36 L 100 52" fill="rgb(242 166 90 / 0.25)" stroke={COLOURS.orange} strokeWidth="1" strokeLinejoin="round" />
+      </>)
     default:
       return g(null)
   }
+}
+
+/** Creature: a blob fox mid-trot, and the .glb it leaves as. */
+export function CreatureDiagram() {
+  const rand = rng(31)
+  const body = Array.from({ length: 26 }, () => {
+    const t = rand()
+    return { x: 50 + t * 70, y: 62 - Math.sin(t * Math.PI) * 6 + (rand() - 0.5) * 14 }
+  })
+  return (
+    <Case viewBox="0 0 240 130" label="A fox made of orange blobs trotting, an arrow, then a file labelled .glb">
+      <path d="M 20 112 H 160" stroke="#665d52" strokeDasharray="4 4" />
+      {[[58, 76, 48, 110], [72, 76, 80, 110], [104, 76, 96, 110], [116, 76, 126, 102]].map(([x1, y1, x2, y2], k) => (
+        <path key={k} d={`M ${x1} ${y1} L ${x2} ${y2}`} stroke={k % 3 ? COLOURS.orange : '#4a3226'} strokeWidth="7" strokeLinecap="round" opacity="0.9" />
+      ))}
+      {body.map((b, k) => <Blob key={k} x={b.x} y={b.y} rx={12} ry={9} r={rand() * 60 - 30} c="orange" o={0.85} />)}
+      <Blob x={130} y={48} rx={14} ry={11} r={0} c="orange" />
+      <Blob x={142} y={52} rx={8} ry={5} r={0} c="cream" />
+      <path d="M 124 40 L 128 26 L 134 38 Z M 134 38 L 140 25 L 142 40 Z" fill={COLOURS.orange} />
+      <Blob x={38} y={52} rx={18} ry={8} r={-25} c="orange" />
+      <Blob x={24} y={44} rx={8} ry={6} r={-25} c="cream" />
+      <path d="M 166 66 H 184 m -6 -5 l 6 5 l -6 5" stroke={COLOURS.sun} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M 194 40 h 24 l 10 10 v 40 h -34 z" fill="#2a241e" stroke="#cfc6b8" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M 218 40 v 10 h 10" fill="none" stroke="#cfc6b8" strokeWidth="1.5" />
+      <text x="200" y="76" fill={COLOURS.sun} fontSize="11" fontFamily="var(--font-sans)">.glb</text>
+    </Case>
+  )
 }
 
 const lassoed = (b: B) => b.x > 30 && b.y < -125

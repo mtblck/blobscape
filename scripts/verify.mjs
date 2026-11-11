@@ -315,12 +315,13 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000 } }], ['phone', { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }]]) {
     const { page, ctx } = await open(B, opts)
     const lessons = await page.locator('a[href^="#/lesson/"]').count()
-    if (lessons < 8) fails.push(`blobscape ${label}: home lists ${lessons} lessons`)
+    if (lessons < 13) fails.push(`blobscape ${label}: home lists ${lessons} lessons`)
     else ok(`blobscape ${label}: home lists the lessons`)
     await axe(page, `blobscape ${label} home`)
     await page.screenshot({ path: join(shots, `blobscape-home-${label}.png`), fullPage: true })
-    for (const id of ['lessons', 'one-blob', 'footprint', 'order', 'many', 'angle', 'paint', 'formats', 'break', 'sandbox']) {
-      await page.goto(base + B + (id === 'sandbox' || id === 'lessons' ? `#/${id}` : `#/lesson/${id}`))
+    for (const id of ['lessons', 'one-blob', 'footprint', 'order', 'many', 'angle', 'paint', 'formats', 'break', 'one-bone', 'weights', 'twist', 'walk', 'model', 'sandbox', 'creature']) {
+      // headless WebGPU can't present to a canvas, so Creature draws off-screen here
+      await page.goto(base + B + (id === 'creature' ? '?offscreen=1#/creature' : ['sandbox', 'lessons'].includes(id) ? `#/${id}` : `#/lesson/${id}`))
       await page.waitForTimeout(1500)
       const focused = await page.evaluate(() => document.activeElement?.tagName)
       if (focused !== 'H1') fails.push(`blobscape ${label} ${id}: focus is on ${focused}, not the heading`)
@@ -442,6 +443,107 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   await page.getByRole('slider', { name: 'Size' }).fill('1')
   if (!(await goalCount()).startsWith('3 of')) fails.push(`blobscape break: goals show "${await goalCount()}"`)
   else ok('blobscape break: shrink, explode and put back tick all three goals')
+
+  // Rigs: each new lesson's goals tick from the model's state
+  const goalsAt = async (n) => {
+    await page.waitForFunction((k) => document.querySelector('[data-testid=goal-count]')?.textContent.startsWith(`${k} of`), n, { timeout: 8000 }).catch(() => {})
+    return goalCount()
+  }
+  const fresh = async (id) => { await page.goto(base + B + `#/lesson/${id}`); await page.evaluate(() => localStorage.clear()); await page.reload(); await page.waitForTimeout(800) }
+  const slider = (name) => page.getByRole('slider', { name, exact: true })
+  await fresh('one-bone')
+  await slider('Lift').fill('60')
+  await slider('Cut').fill('0.5')
+  await slider('Cut').fill('-0.5')
+  await slider('Cut').fill('0')
+  if (!(await goalsAt(4)).startsWith('4 of')) fails.push(`blobscape one bone: goals show "${await goalCount()}"`)
+  else ok('blobscape one bone: lift, tear, swing and seam tick')
+
+  await fresh('weights')
+  await slider('Bend').fill('90')
+  const gapText = await page.textContent('[data-testid=gap]')
+  await slider('Blend over').fill('0.4')
+  const smoothText = await page.textContent('[data-testid=gap]')
+  await slider('Blend over').fill('2')
+  await slider('Blend over').fill('0.4')
+  await slider('Centred at').fill('0.5')
+  if (!(await goalsAt(4)).startsWith('4 of')) fails.push(`blobscape weights: goals show "${await goalCount()}" (hard: ${gapText} / blended: ${smoothText})`)
+  else ok('blobscape weights: crack, smooth, rubber and offset tick')
+
+  await fresh('twist')
+  await slider('Twist').fill('170')
+  await slider('Twist').fill('30')
+  await slider('Blend over').fill('0')
+  await slider('Twist').fill('170')
+  if (!(await goalsAt(3)).startsWith('3 of')) fails.push(`blobscape twist: goals show "${await goalCount()}" (${await page.textContent('[data-testid=kept]')})`)
+  else ok('blobscape twist: flat, small and hard tick')
+  const kept = await page.textContent('[data-testid=kept]')
+  const [plainPct, avgPct] = [...kept.matchAll(/(\d+)%/g)].map((m) => Number(m[1]))
+  await slider('Blend over').fill('0.5')
+  const [p2, a2] = [...(await page.textContent('[data-testid=kept]')).matchAll(/(\d+)%/g)].map((m) => Number(m[1]))
+  if (!(p2 < 10 && a2 > 80)) fails.push(`blobscape twist: at 170° blended matrices keep ${p2}%, averaged turns ${a2}%`)
+  else ok(`blobscape twist: at 170° blended matrices keep ${p2}% of a blob, averaged turns ${a2}% (hard weights ${plainPct}/${avgPct}%)`)
+
+  await fresh('walk')
+  await page.getByRole('button', { name: '2: contacts only' }).click()
+  await page.waitForTimeout(2000)
+  await page.getByRole('button', { name: '4: with passing' }).click()
+  await page.getByLabel('Hold each key (no in-betweens)').check()
+  await slider('Step time').fill('1.5')
+  await page.waitForTimeout(2000)
+  await page.getByLabel('Hold each key (no in-betweens)').uncheck()
+  await slider('Step time').fill('0.9')
+  const feet = Number((await page.textContent('[data-testid=slip]')).match(/([\d.]+) m\/s/)[1])
+  await slider('Speed').fill(String(Math.round(feet * 20) / 20))
+  await page.waitForTimeout(300)
+  await slider('Step time').fill('0.45')
+  await slider('Speed').fill(String(Math.round(feet * 2 * 20) / 20))
+  if (!(await goalsAt(4)).startsWith('4 of')) fails.push(`blobscape walk: goals show "${await goalCount()}" (${await page.textContent('[data-testid=slip]')})`)
+  else ok(`blobscape walk: two keys, held keys, grip and run tick (feet at ${feet} m/s)`)
+
+  await fresh('model')
+  await slider('Level').fill('8')
+  await page.waitForTimeout(600)
+  await slider('Level').fill('1')
+  await page.getByRole('button', { name: '16', exact: true }).click()
+  await page.waitForTimeout(600)
+  await page.getByRole('button', { name: '48', exact: true }).click()
+  if (!(await goalsAt(3)).startsWith('3 of')) fails.push(`blobscape model: goals show "${await goalCount()}" (${await page.textContent('[data-testid=mesh-readout]')})`)
+  else ok(`blobscape model: falls apart, goes lumpy and keeps a good mesh (${await page.textContent('[data-testid=mesh-readout]')})`)
+
+  // Creature: our engine draws the fox off-screen; both files come out
+  {
+    const c = await open(B + '?offscreen=1#/creature', { viewport: { width: 1280, height: 900 } })
+    await c.page.waitForFunction(() => window.__creature, null, { timeout: 60000 }).catch(() => {})
+    const orange = await c.page.evaluate(async () => {
+      const cr = window.__creature
+      if (!cr) return -1
+      await cr.stage.frame(0.3)
+      const cv = document.querySelector('[data-testid=creature-view]')
+      const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+      let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i] > 150 && d[i + 1] > 50 && d[i + 1] < 140 && d[i + 2] < 80) n++
+      return n
+    })
+    if (orange < 2000) fails.push(`blobscape creature: ${orange} fox-orange pixels`)
+    else ok(`blobscape creature: our engine draws the fox (${orange} orange pixels)`)
+    const sizes = await c.page.evaluate(() => ({ splats: window.__creature?.glb().byteLength, mesh: window.__creature?.mesh(48).byteLength }))
+    if (!(sizes.splats > 100000 && sizes.mesh > 10000)) fails.push(`blobscape creature: files ${JSON.stringify(sizes)}`)
+    else ok(`blobscape creature: writes splats (${Math.round(sizes.splats / 1024)} KB) and mesh (${Math.round(sizes.mesh / 1024)} KB) .glb`)
+    // a new fox replaces the old one, freeing its GPU buffers, and still draws
+    await c.page.getByRole('button', { name: '5k', exact: true }).click()
+    await c.page.waitForFunction(() => window.__creature?.blobs() < 6000, null, { timeout: 30000 }).catch(() => {})
+    const again = await c.page.evaluate(async () => {
+      await window.__creature.stage.frame(0.5)
+      const cv = document.querySelector('[data-testid=creature-view]')
+      const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+      let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i] > 150 && d[i + 1] > 50 && d[i + 1] < 140 && d[i + 2] < 80) n++
+      return { n, blobs: window.__creature.blobs() }
+    })
+    if (!(again.blobs < 6000 && again.n > 2000)) fails.push(`blobscape creature: after switching to 5k, ${JSON.stringify(again)}`)
+    else ok(`blobscape creature: swaps to a ${again.blobs}-blob fox and draws it`)
+    await c.page.screenshot({ path: join(shots, 'blobscape-creature-offscreen.png') })
+    await c.ctx.close()
+  }
 
   // Lesson → sandbox carries the scene
   await page.goto(base + B + '#/lesson/many')
@@ -688,6 +790,9 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
       const g = await page.evaluate(() => window.__glbCheck())
       if (!(g.splats > 4000 && g.animations === 1)) fails.push(`engine lab glb: ${JSON.stringify(g)}`)
       else ok(`engine lab: three.js opens our rigged .glb (${g.splats} splats, ${g.animations} animation)`)
+      const m = await page.evaluate(() => window.__meshGlbCheck())
+      if (!(m.skinned && m.triangles > 1000 && m.animations === 1)) fails.push(`engine lab mesh glb: ${JSON.stringify(m)}`)
+      else ok(`engine lab: three.js opens our mesh .glb as a skinned mesh (${m.triangles} triangles, ${m.animations} animation)`)
       // the walk sheet: 4 rows × 8 frames, every frame drawn, side views wider than front views
       const s = await page.evaluate(() => window.__sheet())
       const side = s.solid.slice(8, 24), front = s.solid.slice(0, 8)

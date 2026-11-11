@@ -26,6 +26,7 @@ export class DepthSort {
   readonly bins: number
   readonly keysAttr: StorageBufferAttribute
   readonly orderAttr: StorageBufferAttribute
+  private readonly attrs: StorageBufferAttribute[]
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   readonly keysW: any; readonly histogram: any; readonly orderRead: any
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -44,6 +45,7 @@ export class DepthSort {
     this.orderAttr = new StorageBufferAttribute(order, 1)
     const histAttr = new StorageBufferAttribute(new Uint32Array(bins), 1)
     const offsetAttr = new StorageBufferAttribute(new Uint32Array(bins), 1)
+    this.attrs = [this.keysAttr, this.orderAttr, histAttr, offsetAttr]
     this.cpuCounts = new Uint32Array(bins)
 
     this.keysW = storage(this.keysAttr, 'uint', n)
@@ -115,5 +117,10 @@ export class DepthSort {
     this.orderAttr.setUsage(DynamicDrawUsage)
     this.orderRead.setPBO(true)
     this.webgl = true
+  }
+
+  /** Frees the sort's GPU buffers. */
+  dispose() {
+    for (const a of this.attrs) a.dispose()
   }
 }

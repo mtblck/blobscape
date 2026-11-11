@@ -31,7 +31,7 @@ const BONES: Bone[] = [
 ]
 
 /** Where each bone's segment ends, for weighting by distance. */
-const TAILS: Record<string, Vec3> = {
+export const TAILS: Record<string, Vec3> = {
   hips: [0, 0.82, 0.38], chest: [0, 0.95, 0.62], neck: [0, 1.2, 0.86], head: [0, 1.2, 1.25],
   tail1: [0, 0.98, -1.05], tail2: [0, 1.0, -1.5],
   flUpper: [0.2, 0.36, 0.4], flLower: [0.2, 0.0, 0.42], frUpper: [-0.2, 0.36, 0.4], frLower: [-0.2, 0.0, 0.42],
@@ -41,25 +41,30 @@ const TAILS: Record<string, Vec3> = {
 interface Part {
   /** Capsule from a to b with radius ra → rb. */
   a: Vec3; b: Vec3; ra: number; rb: number
-  colour: (p: Vec3, n: Vec3) => Vec3
+  colour: (p: Vec3, n: Vec3, c: Coat) => Vec3
   bones: string[]
 }
 
-const ORANGE: Vec3 = [0.88, 0.42, 0.13]
-const CREAM: Vec3 = [0.96, 0.88, 0.74]
-const DARK: Vec3 = [0.18, 0.12, 0.1]
+/** The fox's three colours: its fur, its pale chest and tail tip, and its dark socks, ear tips and nose. */
+export interface Coat { fur: Vec3; pale: Vec3; dark: Vec3 }
 
-const furry = (_p: Vec3, n: Vec3): Vec3 => (n[1] < -0.35 ? CREAM : ORANGE)
-const sock = (top: number) => (p: Vec3, _n: Vec3): Vec3 => (p[1] < top ? DARK : ORANGE)
+export const COATS = {
+  red: { fur: [0.88, 0.42, 0.13], pale: [0.96, 0.88, 0.74], dark: [0.18, 0.12, 0.1] },
+  arctic: { fur: [0.9, 0.92, 0.95], pale: [0.99, 0.99, 1], dark: [0.25, 0.27, 0.32] },
+  silver: { fur: [0.32, 0.33, 0.36], pale: [0.82, 0.83, 0.86], dark: [0.08, 0.08, 0.1] },
+} satisfies Record<string, Coat>
+
+const furry = (_p: Vec3, n: Vec3, c: Coat): Vec3 => (n[1] < -0.35 ? c.pale : c.fur)
+const sock = (top: number) => (p: Vec3, _n: Vec3, c: Coat): Vec3 => (p[1] < top ? c.dark : c.fur)
 
 const PARTS: Part[] = [
   { a: [0, 0.78, -0.55], b: [0, 0.84, 0.5], ra: 0.25, rb: 0.27, colour: furry, bones: ['hips', 'chest'] },
   { a: [0, 0.9, 0.55], b: [0, 1.15, 0.84], ra: 0.17, rb: 0.15, colour: furry, bones: ['chest', 'neck', 'head'] },
-  { a: [0, 1.2, 0.8], b: [0, 1.16, 1.02], ra: 0.19, rb: 0.16, colour: (p, n) => (n[1] < -0.2 || p[2] > 1.0 ? CREAM : ORANGE), bones: ['head'] },
-  { a: [0, 1.13, 1.0], b: [0, 1.1, 1.28], ra: 0.09, rb: 0.035, colour: (p) => (p[2] > 1.25 ? DARK : CREAM), bones: ['head'] },
-  { a: [0.1, 1.33, 0.85], b: [0.13, 1.52, 0.83], ra: 0.06, rb: 0.01, colour: (p) => (p[1] > 1.45 ? DARK : ORANGE), bones: ['head'] },
-  { a: [-0.1, 1.33, 0.85], b: [-0.13, 1.52, 0.83], ra: 0.06, rb: 0.01, colour: (p) => (p[1] > 1.45 ? DARK : ORANGE), bones: ['head'] },
-  { a: [0, 0.86, -0.6], b: [0, 1.0, -1.5], ra: 0.1, rb: 0.16, colour: (p) => (p[2] < -1.38 ? CREAM : ORANGE), bones: ['hips', 'tail1', 'tail2'] },
+  { a: [0, 1.2, 0.8], b: [0, 1.16, 1.02], ra: 0.19, rb: 0.16, colour: (p, n, c) => (n[1] < -0.2 || p[2] > 1.0 ? c.pale : c.fur), bones: ['head'] },
+  { a: [0, 1.13, 1.0], b: [0, 1.1, 1.28], ra: 0.09, rb: 0.035, colour: (p, _n, c) => (p[2] > 1.25 ? c.dark : c.pale), bones: ['head'] },
+  { a: [0.1, 1.33, 0.85], b: [0.13, 1.52, 0.83], ra: 0.06, rb: 0.01, colour: (p, _n, c) => (p[1] > 1.45 ? c.dark : c.fur), bones: ['head'] },
+  { a: [-0.1, 1.33, 0.85], b: [-0.13, 1.52, 0.83], ra: 0.06, rb: 0.01, colour: (p, _n, c) => (p[1] > 1.45 ? c.dark : c.fur), bones: ['head'] },
+  { a: [0, 0.86, -0.6], b: [0, 1.0, -1.5], ra: 0.1, rb: 0.16, colour: (p, _n, c) => (p[2] < -1.38 ? c.pale : c.fur), bones: ['hips', 'tail1', 'tail2'] },
   ...(['fl', 'fr', 'bl', 'br'] as const).map((leg): Part => {
     const up = BONES.find((b) => b.name === `${leg}Upper`)!
     const top: Vec3 = [up.head[0], up.head[1] + 0.06, up.head[2]]
@@ -80,7 +85,7 @@ function rng(seed: number) {
 
 const LIGHT: Vec3 = [-0.45, 0.75, 0.5]
 
-export function makeCreature(count = 20000, seed = 7): Creature {
+export function makeCreature(count = 20000, seed = 7, coat: Coat = COATS.red): Creature {
   const total = PARTS.reduce((s, p) => s + area(p), 0)
   const blobs = new Blobs(count + 16)
   const rand = rng(seed)
@@ -121,7 +126,7 @@ export function makeCreature(count = 20000, seed = 7): Creature {
         nn = norm(add3(nn, scale3(d, (part.ra - part.rb) / len)))
         p = add3(add3(part.a, scale3(d, t * len)), add3(scale3(e1, Math.cos(ang) * r), scale3(e2, Math.sin(ang) * r)))
       }
-      const base = part.colour(p, nn)
+      const base = part.colour(p, nn, coat)
       const lit = 0.5 + 0.5 * Math.max(0, dot(nn, norm(LIGHT)) * 0.5 + 0.5)
       const k = lit * (0.9 + rand() * 0.2)
       const j = 0.75 + rand() * 0.5
@@ -180,6 +185,24 @@ export function poseWalk(sk: Skeleton, t: number, speed = 1) {
   sk.setRotation(sk.index('head'), axisAngle(X, -0.08 * bob))
   sk.setRotation(sk.index('tail1'), mulQ(axisAngle([0, 1, 0], 0.35 * Math.sin(ph)), axisAngle(X, 0.15)))
   sk.setRotation(sk.index('tail2'), axisAngle([0, 1, 0], 0.4 * Math.sin(ph - 0.8)))
+  sk.update()
+}
+
+/**
+ * The fox standing: breathing, the tail swishing, the head looking round now
+ * and then. Loops every four seconds.
+ */
+export function poseIdle(sk: Skeleton, t: number) {
+  sk.reset()
+  const X: Vec3 = [1, 0, 0], Y: Vec3 = [0, 1, 0]
+  const breath = Math.sin(t * Math.PI)
+  const look = Math.sin((t * Math.PI) / 2)
+  sk.offset.set([0, 0.008 * breath, 0], 0)
+  sk.setRotation(sk.index('chest'), axisAngle(X, -0.02 * breath))
+  sk.setRotation(sk.index('neck'), axisAngle(Y, 0.25 * look))
+  sk.setRotation(sk.index('head'), mulQ(axisAngle(Y, 0.2 * look), axisAngle([0, 0, 1], 0.1 * Math.sin((t * Math.PI) / 2 + 1))))
+  sk.setRotation(sk.index('tail1'), mulQ(axisAngle(Y, 0.3 * Math.sin(t * Math.PI * 1.5)), axisAngle(X, 0.1)))
+  sk.setRotation(sk.index('tail2'), axisAngle(Y, 0.35 * Math.sin(t * Math.PI * 1.5 - 0.9)))
   sk.update()
 }
 

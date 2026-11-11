@@ -122,6 +122,14 @@ export class SplatView {
     this.invalidate()
   }
 
+  /** Slides the floor grid along z (wrapping every square), for a walk on the spot over moving ground. */
+  setFloorShift(z: number) {
+    if (!this.floor) return
+    const cell = 0.5
+    this.floor.position.z = ((z % cell) + cell) % cell
+    this.invalidate(1)
+  }
+
   /** A world-space ray through a point on the canvas (CSS pixels). */
   ray(x: number, y: number): { origin: THREE.Vector3; dir: THREE.Vector3 } {
     this.place()

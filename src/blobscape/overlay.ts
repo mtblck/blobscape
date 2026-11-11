@@ -81,3 +81,48 @@ export function drawCentres(ctx: CanvasRenderingContext2D, b: Blobs, lens: Lens,
     if (p) ctx.fillRect(p[0] - 0.75, p[1] - 0.75, 1.5, 1.5)
   }
 }
+
+/** A point carried by bone `bone`'s current pose: where its rest position `p` has moved to. */
+export function posedPoint(sk: { matrix: ArrayLike<number> }, bone: number, p: ArrayLike<number>): [number, number, number] {
+  const m = sk.matrix, o = bone * 16
+  return [
+    m[o] * p[0] + m[o + 4] * p[1] + m[o + 8] * p[2] + m[o + 12],
+    m[o + 1] * p[0] + m[o + 5] * p[1] + m[o + 9] * p[2] + m[o + 13],
+    m[o + 2] * p[0] + m[o + 6] * p[1] + m[o + 10] * p[2] + m[o + 14],
+  ]
+}
+
+/**
+ * Bones as an x-ray: each one a tapered line from its head to its end, with a
+ * ring at the joint, drawn over the blobs so you can see what moves what.
+ */
+export function drawBones(ctx: CanvasRenderingContext2D, bones: { from: ArrayLike<number>; to: ArrayLike<number> }[], lens: Lens, colour: string) {
+  ctx.strokeStyle = colour
+  ctx.fillStyle = colour
+  for (const b of bones) {
+    const a = toScreen(b.from, lens), z = toScreen(b.to, lens)
+    if (!a || !z) continue
+    const dx = z[0] - a[0], dy = z[1] - a[1]
+    const len = Math.hypot(dx, dy)
+    if (len > 1) {
+      // a long thin diamond, wide near the head like a bone in a 3D app
+      const nx = (-dy / len) * Math.min(6, len * 0.12), ny = (dx / len) * Math.min(6, len * 0.12)
+      const k = 0.18
+      ctx.globalAlpha = 0.3
+      ctx.beginPath()
+      ctx.moveTo(a[0], a[1])
+      ctx.lineTo(a[0] + dx * k + nx, a[1] + dy * k + ny)
+      ctx.lineTo(z[0], z[1])
+      ctx.lineTo(a[0] + dx * k - nx, a[1] + dy * k - ny)
+      ctx.closePath()
+      ctx.fill()
+      ctx.globalAlpha = 1
+      ctx.lineWidth = 1.5
+      ctx.stroke()
+    }
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    ctx.arc(a[0], a[1], 4.5, 0, Math.PI * 2)
+    ctx.stroke()
+  }
+}

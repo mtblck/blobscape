@@ -6,16 +6,16 @@ import { GLTFGaussianSplatLoaderExtension } from 'three/addons/loaders/GLTFGauss
  * KHR_gaussian_splatting plugin, which know nothing of our skinning extension:
  * the "does it open somewhere else" check. Returns how many splats it found.
  */
-export async function loadWithThree(bytes: Uint8Array): Promise<{ splats: number; skinned: boolean; animations: number }> {
+export async function loadWithThree(bytes: Uint8Array): Promise<{ splats: number; skinned: boolean; triangles: number; animations: number }> {
   const loader = new GLTFLoader()
   loader.register((parser) => new GLTFGaussianSplatLoaderExtension(parser as never) as never)
   const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
   const gltf = await loader.parseAsync(buffer, '')
-  let splats = 0, skinned = false
+  let splats = 0, skinned = false, triangles = 0
   gltf.scene.traverse((o) => {
-    const g = o as unknown as { isGaussianSplat?: boolean; splatGeometry?: { getAttribute: (n: string) => { count: number } }; isSkinnedMesh?: boolean }
+    const g = o as unknown as { isGaussianSplat?: boolean; splatGeometry?: { getAttribute: (n: string) => { count: number } }; isSkinnedMesh?: boolean; geometry?: { index?: { count: number } | null } }
     if (g.isGaussianSplat && g.splatGeometry) splats += g.splatGeometry.getAttribute('position').count
-    if (g.isSkinnedMesh) skinned = true
+    if (g.isSkinnedMesh) { skinned = true; triangles += (g.geometry?.index?.count ?? 0) / 3 }
   })
-  return { splats, skinned, animations: gltf.animations.length }
+  return { splats, skinned, triangles, animations: gltf.animations.length }
 }
