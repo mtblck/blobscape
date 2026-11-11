@@ -170,7 +170,10 @@ export function useRoute(): Route {
   const [route, setRoute] = useState<Route>(() => {
     const legacy = window.location.pathname === '/' ? parseLegacyHash(window.location.hash) : null
     if (legacy) window.history.replaceState(null, '', href(legacy) + window.location.search)
-    return current()
+    // The old /creature/ address (Vercel redirects it; this covers dev and anywhere without the redirect)
+    const now = current()
+    if (now.page === 'creature' && window.location.pathname !== href(now)) window.history.replaceState(null, '', href(now) + window.location.search + window.location.hash)
+    return now
   })
   useEffect(() => {
     const on = () => setRoute((was) => {

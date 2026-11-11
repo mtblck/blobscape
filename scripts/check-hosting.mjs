@@ -16,6 +16,8 @@ if (!/worker-src [^;]*blob:/.test(csp)) fail('CSP needs worker-src blob: (Spark 
 // Old mattblack.space/experiments/ addresses reach this repo through the portfolio's proxy to the old
 // `experiments` project. Any host that isn't Blobscape's sends them on to blobscape.dev, absolute so the visitor
 // lands on blobscape.dev; on Blobscape's own hosts /experiments/ is the Experiments page and must not redirect.
+// Blobscape's hosts: blobscape.dev, www, and the `blobscape` Vercel project's *.vercel.app URLs (previews
+// included), which all contain "blobscape". Renaming that project would make its previews redirect.
 const NOT_BLOBSCAPE = (r) => r.missing?.some((h) => h.type === 'host' && h.value === '.*blobscape.*') && !r.has
 for (const [src, dest] of [['/experiments', 'https://blobscape.dev/experiments/'], ['/experiments/:path*', 'https://blobscape.dev/experiments/:path*']]) {
   if (!v.redirects?.some((r) => r.source === src && r.destination === dest && NOT_BLOBSCAPE(r))) fail(`vercel.json needs ${src} -> ${dest} on hosts that aren't Blobscape's`)
