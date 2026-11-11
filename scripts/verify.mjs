@@ -362,7 +362,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   await page.waitForTimeout(800)
   await page.getByRole('button', { name: 'Menu' }).click()
   const menuLinks = await page.locator('[popover] a').count()
-  if (!(await page.locator('[popover]:popover-open').count()) || menuLinks < 12) fails.push(`blobscape menu: open ${await page.locator('[popover]:popover-open').count()}, ${menuLinks} links`)
+  if (!(await page.locator('[popover]:popover-open').count()) || menuLinks < 6) fails.push(`blobscape menu: open ${await page.locator('[popover]:popover-open').count()}, ${menuLinks} links`)
   else ok(`blobscape menu: opens with ${menuLinks} links`)
   await axe(page, 'blobscape menu open')
   await page.screenshot({ path: join(shots, 'blobscape-menu.png') })

@@ -102,7 +102,7 @@ function SiteMenu({ children }: { children: ReactNode }) {
         role="dialog"
         onToggle={(e) => setOpen((e as unknown as ToggleEvent).newState === 'open')}
         onClick={(e) => { if ((e.target as HTMLElement).closest('a')) panel.current?.hidePopover() }}
-        className="max-h-[calc(100dvh-5rem)] w-[min(36rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-rule bg-paper p-5 text-ink shadow-xl"
+        className="max-h-[calc(100dvh-5rem)] w-[min(26rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-rule bg-paper p-5 text-ink shadow-xl"
         style={{ inset: 'auto', top: '4rem', right: 'max(1rem, calc((100vw - 80rem) / 2 + 1rem))', margin: 0 }}
       >
         {children}

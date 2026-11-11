@@ -2,8 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { tipjar, tuck } from 'tipjar'
 import 'tipjar/style.css'
 import { ThemeChoice } from '../shared/SiteHeader.tsx'
-import { LESSONS, LESSON_GOALS, href, type Route } from './routes.ts'
-import { doneGoals } from './progress.ts'
+import { LESSONS, href, type Route } from './routes.ts'
 import { ALL_EXPERIMENTS_URL, EXPERIMENTS, SITE } from './site.ts'
 
 const LINK = 'block rounded-md px-2 py-1.5 text-ink no-underline hover:bg-paper-sunk hover:text-accent aria-[current=page]:text-accent'
@@ -11,47 +10,34 @@ const HEAD = 'px-2 text-xs font-semibold tracking-wider text-ink-faint uppercase
 
 const current = (route: Route, r: Route) => (href(route) === href(r) ? ('page' as const) : undefined)
 
-/** What the header's menu holds: every page, then the other experiments, then the theme. */
+/**
+ * What the header's menu holds: Blobscape's pages, the other experiments and
+ * the theme. Lessons are one page here, not a list, so new ones need no menu change.
+ */
 export function Menu({ route }: { route: Route }) {
+  const pages: [string, Route][] = [['Front page', { page: 'home' }], ['Lessons', { page: 'lessons' }], ['Sandbox', { page: 'sandbox' }]]
   return (
-    <nav aria-label="Blobscape" className="grid gap-5 sm:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+    <nav aria-label="Blobscape" className="grid gap-5 sm:grid-cols-2">
       <div>
-        <p className={HEAD}>Lessons</p>
-        <ol className="mt-1.5">
-          {LESSONS.map((l, i) => {
-            const done = LESSON_GOALS[l.id].every((g) => doneGoals(l.id).has(g.id))
-            return (
-              <li key={l.id}>
-                <a href={href({ page: 'lesson', id: l.id })} aria-current={current(route, { page: 'lesson', id: l.id })} className={`${LINK} flex items-baseline gap-2.5`}>
-                  <span aria-hidden className="w-4 font-serif text-ink-faint">{i + 1}</span>
-                  <span className="flex-1">{l.title}</span>
-                  {done && <span className="text-xs text-done">Done</span>}
-                </a>
-              </li>
-            )
-          })}
-        </ol>
-        <a href={href({ page: 'lessons' })} aria-current={current(route, { page: 'lessons' })} className={`${LINK} mt-1 text-sm text-ink-muted`}>All lessons and progress</a>
+        <p className={HEAD}>Blobscape</p>
+        <ul className="mt-1.5">
+          {pages.map(([label, r]) => (
+            <li key={label}>
+              <a href={href(r)} aria-current={current(route, r) ?? (r.page === 'lessons' && route.page === 'lesson' ? 'page' : undefined)} className={LINK}>{label}</a>
+            </li>
+          ))}
+        </ul>
       </div>
-      <div className="flex flex-col gap-5">
-        <div>
-          <p className={HEAD}>Blobscape</p>
-          <ul className="mt-1.5">
-            <li><a href={href({ page: 'home' })} aria-current={current(route, { page: 'home' })} className={LINK}>Front page</a></li>
-            <li><a href={href({ page: 'sandbox' })} aria-current={current(route, { page: 'sandbox' })} className={LINK}>Sandbox</a></li>
-          </ul>
-        </div>
-        <div>
-          <p className={HEAD}>More experiments</p>
-          <ul className="mt-1.5">
-            {EXPERIMENTS.map((e) => <li key={e.id}><a href={e.url} className={LINK}>{e.title}</a></li>)}
-            <li><a href={ALL_EXPERIMENTS_URL} className={`${LINK} text-sm text-ink-muted`}>Every experiment</a></li>
-          </ul>
-        </div>
-        <div>
-          <p className={`${HEAD} mb-2`}>Theme</p>
-          <div className="px-2"><ThemeChoice /></div>
-        </div>
+      <div>
+        <p className={HEAD}>More experiments</p>
+        <ul className="mt-1.5">
+          {EXPERIMENTS.map((e) => <li key={e.id}><a href={e.url} className={LINK}>{e.title}</a></li>)}
+          <li><a href={ALL_EXPERIMENTS_URL} className={`${LINK} text-sm text-ink-muted`}>Every experiment</a></li>
+        </ul>
+      </div>
+      <div className="border-t border-rule pt-4 sm:col-span-2">
+        <p className={`${HEAD} mb-2`}>Theme</p>
+        <div className="px-2"><ThemeChoice /></div>
       </div>
     </nav>
   )
