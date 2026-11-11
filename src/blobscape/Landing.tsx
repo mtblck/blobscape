@@ -2,9 +2,8 @@ import { LESSONS, LESSON_COUNT, LESSON_GOALS, href } from './routes.ts'
 import { doneGoals } from './progress.ts'
 import { useFocusHeading } from './Shell.tsx'
 import { EXPERIMENTS } from './site.ts'
-import { AnyAngleDiagram, BlobDefs, CreatureDiagram, FitDiagram, HeroDiagram, LessonGlyph, PhotosDiagram, SANDBOX_COUNTS, SandboxDiagram, SpriteDiagram, TrainDiagram } from './diagrams.tsx'
-
-const PICTURES: Record<(typeof EXPERIMENTS)[number]['id'], React.ReactNode> = { creature: <CreatureDiagram />, fit: <FitDiagram />, sprite: <SpriteDiagram /> }
+import { PICTURES } from './Experiments.tsx'
+import { AnyAngleDiagram, BlobDefs, HeroDiagram, LessonGlyph, PhotosDiagram, SANDBOX_COUNTS, SandboxDiagram, TrainDiagram } from './diagrams.tsx'
 
 const PROMISES = [`${LESSON_COUNT[0].toUpperCase()}${LESSON_COUNT.slice(1)} hands-on lessons`, 'A sandbox for real captures', 'Runs in your browser', 'Free, no account']
 
@@ -159,6 +158,7 @@ export function Landing() {
             </li>
           ))}
         </ul>
+        <a href={href({ page: 'experiments' })} className={`${QUIET} mt-8`}>See every experiment</a>
       </section>
 
       <section aria-labelledby="start-title" className={`${WIDTH} pt-4 pb-8`}>

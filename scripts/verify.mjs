@@ -70,7 +70,7 @@ const solidPixels = (page, sel) => page.evaluate((sel) => {
 // 1. The site: every page is its own prerendered file, the chrome works, old links land
 {
   // Prerendered: each page's HTML carries its own title, canonical and content before any script runs
-  for (const [path, title] of [['/', 'Blobscape: learn'], ['/lessons/', 'Lessons ·'], ['/lessons/order/', 'Order matters · Lesson 3'], ['/sandbox/', 'Sandbox ·'], ['/creature/', 'Creature ·']]) {
+  for (const [path, title] of [['/', 'Blobscape: learn'], ['/lessons/', 'Lessons ·'], ['/lessons/order/', 'Order matters · Lesson 3'], ['/sandbox/', 'Sandbox ·'], ['/creature/', 'Creature ·'], ['/experiments/', 'Experiments ·']]) {
     const html = await (await fetch(base + path)).text()
     if (!html.includes(`<title>${title}`)) fails.push(`${path}: prerendered title is not "${title}…"`)
     else if (!html.includes(`<link rel="canonical" href="https://blobscape.dev${path}"`)) fails.push(`${path}: prerendered canonical is wrong`)
@@ -116,7 +116,20 @@ const solidPixels = (page, sel) => page.evaluate((sel) => {
   if (await page.evaluate(() => document.documentElement.dataset.theme || localStorage.getItem('blobscape-theme'))) fails.push('System did not clear the theme')
   await ctx.close()
 
-  // A link to a section of the front page (where /tools/ redirects) lands on that section
+  // Experiments page: every experiment listed, reached from the header, which marks it current
+  {
+    const ex = await open('/lessons/')
+    await ex.page.getByRole('banner').getByRole('link', { name: 'Experiments', exact: true }).click()
+    await ex.page.waitForURL('**/experiments/')
+    const cards = ex.page.locator('main').getByRole('link', { name: /Creature|Fit a Picture|Splat to Sprite/ })
+    if ((await cards.count()) < 3) fails.push('experiments page does not list every experiment')
+    else if ((await ex.page.getByRole('banner').getByRole('link', { name: 'Experiments', exact: true }).getAttribute('aria-current')) !== 'page') fails.push('header does not mark Experiments as the current page')
+    else ok('header Experiments link opens the experiments page, which lists every experiment')
+    await axe(ex.page, 'experiments page')
+    await ex.ctx.close()
+  }
+
+  // A link to a section of the front page lands on that section
   const tools = await open('/#experiments')
   await tools.page.waitForTimeout(800)
   const top = await tools.page.evaluate(() => document.getElementById('experiments')?.getBoundingClientRect().top ?? -1)

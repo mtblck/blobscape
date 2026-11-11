@@ -34,7 +34,7 @@ const BUTTON = 'inline-flex min-h-11 items-center rounded-lg bg-accent px-5 font
  * jumps when the app takes over.
  */
 function shell(main: string): string {
-  const nav = [['Lessons', '/lessons/'], ['Sandbox', '/sandbox/'], ['Creature', '/creature/']]
+  const nav = [['Lessons', '/lessons/'], ['Sandbox', '/sandbox/'], ['Experiments', '/experiments/']]
     .map(([label, path]) => `<li><a href="${path}" class="rounded-full px-3 py-1.5 text-[0.9375rem] font-medium text-ink-muted no-underline hover:text-ink">${label}</a></li>`)
     .join('')
   return `<div class="flex min-h-dvh flex-col"><a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded focus:bg-paper focus:px-3 focus:py-2 focus:text-sm">Skip to content</a><header class="sticky top-0 z-30 border-b border-rule bg-paper"><div class="mx-auto flex h-14 max-w-7xl items-center justify-between gap-4 px-4"><a href="/" class="-mx-1 shrink-0 rounded-md px-1 py-1.5">${LOGO}</a><div class="flex items-center gap-1"><nav aria-label="Main" class="max-md:hidden"><ul class="flex items-center gap-1">${nav}</ul></nav><span aria-hidden="true" class="invisible flex h-9 items-center gap-2 rounded-full border px-3 text-sm font-medium"><span class="h-4.5 w-4.5"></span>Menu</span></div></div></header><main id="main" class="mx-auto w-full max-w-7xl flex-1 px-4 pb-16">${main}</main></div>`
@@ -46,8 +46,9 @@ function lessonList(from: number = 0, to: number = LESSONS.length): string {
     .join('')}</ol>`
 }
 
-function crumbs(here: string): string {
-  return `<nav aria-label="Breadcrumb" class="pt-6 text-sm text-ink-faint"><a href="/" class="${LINK}">Blobscape</a><span aria-hidden="true" class="px-1.5">/</span><span aria-current="page">${esc(here)}</span></nav>`
+function crumbs(here: string, parent?: [string, string]): string {
+  const up = parent ? `<a href="${parent[1]}" class="${LINK}">${esc(parent[0])}</a><span aria-hidden="true" class="px-1.5">/</span>` : ''
+  return `<nav aria-label="Breadcrumb" class="pt-6 text-sm text-ink-faint"><a href="/" class="${LINK}">Blobscape</a><span aria-hidden="true" class="px-1.5">/</span>${up}<span aria-current="page">${esc(here)}</span></nav>`
 }
 
 function content(route: Route): string {
@@ -58,7 +59,7 @@ function content(route: Route): string {
 <p class="mt-6"><a href="${href({ page: 'lesson', id: LESSONS[0].id })}" class="${BUTTON}">Start with one blob</a></p>
 <h2 class="mt-12 font-display text-3xl">${cap(LESSON_COUNT)} lessons, from one blob to a walking creature</h2>${lessonList()}
 <h2 class="mt-12 font-display text-3xl">Sandbox</h2><p class="mt-2 text-ink-muted">Spray, select, move, recolour and explode blobs, or open your own .ply, .spz, .splat, .ksplat or .sog capture. <a href="/sandbox/" class="${LINK}">Open the sandbox</a></p>
-<h2 id="experiments" class="mt-12 scroll-mt-20 font-display text-3xl">Other ways to play with splats</h2><ul class="mt-3 flex flex-col gap-4">${EXPERIMENTS.map((e) => `<li><a href="${e.url}" class="font-display text-xl ${LINK}">${esc(e.title)}</a><p class="mt-1 text-ink-muted">${esc(e.body)}</p></li>`).join('')}</ul></div>`
+<h2 id="experiments" class="mt-12 scroll-mt-20 font-display text-3xl">Other ways to play with splats</h2><ul class="mt-3 flex flex-col gap-4">${EXPERIMENTS.map((e) => `<li><a href="${e.url}" class="font-display text-xl ${LINK}">${esc(e.title)}</a><p class="mt-1 text-ink-muted">${esc(e.body)}</p></li>`).join('')}</ul><p class="mt-6"><a href="/experiments/" class="${LINK}">See every experiment</a></p></div>`
     case 'lessons':
       return `<div class="max-w-3xl">${crumbs('Lessons')}<h1 class="pt-6 font-display text-5xl">Lessons</h1>
 <p class="mt-4 text-xl leading-relaxed text-ink-muted">A Gaussian splat is a 3D scene made of nothing but soft, see-through, coloured blobs. Start with one, learn what each of its numbers does, pile up thousands, then give them bones and make them walk.</p>
@@ -77,8 +78,12 @@ ${PARTS.map((p, i) => `<h2 class="mt-10 font-display text-2xl">Part ${i + 1}: ${
     case 'sandbox':
     case 'creature': {
       const title = route.page === 'sandbox' ? 'Sandbox' : 'Creature'
-      return `<div class="max-w-3xl">${crumbs(title)}<h1 class="pt-6 font-display text-5xl">${title}</h1><p class="mt-4 text-xl leading-relaxed text-ink-muted">${esc(pageMeta(route).description)}</p><p class="mt-6 text-sm text-ink-faint">It runs in your browser, with JavaScript and WebGL${route.page === 'creature' ? ' or WebGPU' : ''}.</p></div>`
+      return `<div class="max-w-3xl">${crumbs(title, route.page === 'creature' ? ['Experiments', '/experiments/'] : undefined)}<h1 class="pt-6 font-display text-5xl">${title}</h1><p class="mt-4 text-xl leading-relaxed text-ink-muted">${esc(pageMeta(route).description)}</p><p class="mt-6 text-sm text-ink-faint">It runs in your browser, with JavaScript and WebGL${route.page === 'creature' ? ' or WebGPU' : ''}.</p></div>`
     }
+    case 'experiments':
+      return `<div class="max-w-3xl">${crumbs('Experiments')}<h1 class="pt-6 font-display text-5xl">Experiments</h1>
+<p class="mt-4 text-xl leading-relaxed text-ink-muted">Small tools built from the same blobs as the lessons. New ones land here as they're made.</p>
+<ul class="mt-8 flex flex-col gap-6">${EXPERIMENTS.map((e) => `<li><a href="${e.url}" class="font-display text-2xl ${LINK}">${esc(e.title)}</a><p class="mt-1 text-ink-muted">${esc(e.body)}</p><p class="mt-1 text-sm text-ink-faint">Needs ${esc(e.needs)}.</p></li>`).join('')}</ul></div>`
     case 'notfound':
       return `<div class="max-w-2xl py-16"><h1 class="font-display text-5xl">That page isn’t here</h1><p class="mt-4 text-xl leading-relaxed text-ink-muted">The link may be old, or mistyped. Every lesson is on the lesson list.</p><p class="mt-8"><a href="/lessons/" class="${BUTTON}">See the lessons</a></p></div>`
   }
@@ -118,8 +123,14 @@ function structured(route: Route): object[] {
       ]
     }
     case 'sandbox':
+      return [breadcrumbs([home, ['Sandbox', href(route)]])]
+    case 'experiments':
+      return [
+        { '@type': 'ItemList', name: 'Blobscape experiments', itemListElement: EXPERIMENTS.map((e, i) => ({ '@type': 'ListItem', position: i + 1, name: e.title, url: url(e.url) })) },
+        breadcrumbs([home, ['Experiments', '/experiments/']]),
+      ]
     case 'creature':
-      return [breadcrumbs([home, [route.page === 'sandbox' ? 'Sandbox' : 'Creature', href(route)]])]
+      return [breadcrumbs([home, ['Experiments', '/experiments/'], ['Creature', href(route)]])]
     default:
       return []
   }
@@ -163,7 +174,7 @@ function write(path: string, html: string) {
 }
 
 const template = readFileSync(join(DIST, 'index.html'), 'utf8')
-const routes: Route[] = [{ page: 'home' }, { page: 'lessons' }, ...LESSONS.map((l) => ({ page: 'lesson' as const, id: l.id })), { page: 'sandbox' }, { page: 'creature' }]
+const routes: Route[] = [{ page: 'home' }, { page: 'lessons' }, ...LESSONS.map((l) => ({ page: 'lesson' as const, id: l.id })), { page: 'sandbox' }, { page: 'experiments' }, { page: 'creature' }]
 for (const r of routes) write(join(DIST, href(r), 'index.html'), render(template, r))
 write(join(DIST, '404.html'), render(template, { page: 'notfound' }))
 

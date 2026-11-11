@@ -317,7 +317,7 @@ export function App() {
       <SiteHeader here="/tools/fit-a-picture/" />
 
       <main id="main" className="mx-auto w-full max-w-7xl flex-1 px-4 pb-16">
-        <Crumbs here="Fit a Picture" />
+        <Crumbs here="Fit a Picture" parent={{ label: 'Experiments', href: '/experiments/' }} />
         <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-2 pt-4 pb-6">
           <h1 className="font-display text-4xl sm:text-5xl">Fit a Picture</h1>
           <p className="max-w-xl text-lg text-ink-muted">

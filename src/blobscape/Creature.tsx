@@ -141,7 +141,7 @@ export function Creature() {
 
   return (
     <div className="pb-4">
-      <Crumbs here="Creature" />
+      <Crumbs here="Creature" parent={{ label: 'Experiments', href: href({ page: 'experiments' }) }} />
       <div className="flex flex-col gap-4 pt-4 lg:grid lg:grid-cols-12 lg:gap-x-5">
         <header className="lg:col-span-5">
           <h1 ref={h1} tabIndex={-1} className="font-display text-4xl leading-tight outline-none lg:text-5xl">Creature</h1>

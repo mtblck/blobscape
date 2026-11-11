@@ -18,11 +18,15 @@ export function useFocusHeading() {
   return ref
 }
 
-export function Crumbs({ here }: { here: string }) {
+const CRUMB = 'text-ink-muted underline decoration-rule underline-offset-2 hover:text-accent'
+
+/** Blobscape / (an optional parent page) / this page. */
+export function Crumbs({ here, parent }: { here: string; parent?: { label: string; href: string } }) {
   return (
     <nav aria-label="Breadcrumb" className="pt-6 text-sm text-ink-faint">
-      <a href={href({ page: 'home' })} className="text-ink-muted underline decoration-rule underline-offset-2 hover:text-accent">Blobscape</a>
+      <a href={href({ page: 'home' })} className={CRUMB}>Blobscape</a>
       <span aria-hidden className="px-1.5">/</span>
+      {parent && <><a href={parent.href} className={CRUMB}>{parent.label}</a><span aria-hidden className="px-1.5">/</span></>}
       <span aria-current="page">{here}</span>
     </nav>
   )
