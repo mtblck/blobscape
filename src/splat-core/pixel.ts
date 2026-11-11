@@ -1,3 +1,4 @@
+import { srgbToLinear } from './colour.ts'
 /**
  * The 2D half of Splat to Sprite: everything that happens after the splat has
  * been rendered. Pure functions on RGBA byte arrays so they can be unit tested
@@ -74,10 +75,7 @@ export function alphaCut(f: Frame, threshold: number): Frame {
 
 // --- colour ---------------------------------------------------------------
 
-const toLinear = (c: number) => {
-  const v = c / 255
-  return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4
-}
+const toLinear = (c: number) => srgbToLinear(c / 255)
 
 /** OKLab, so "nearest palette colour" matches what an eye would pick, not raw RGB distance. */
 export function oklab(r: number, g: number, b: number): Rgb {

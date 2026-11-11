@@ -5,7 +5,7 @@ import { PALETTES } from './palettes.ts'
 import { baseline, packSheet, processFrames, shotsFor, tinkerkitSheet, type Layout, type PixelSettings, type Stages } from './sheet.ts'
 import { SiteHeader } from '../shared/SiteHeader.tsx'
 import { Chip, Field, Panel, Slider, Tabs, Toggle } from '../shared/ui.tsx'
-import { countColours, countSolid, rgbToHex, type Frame } from './pixel.ts'
+import { countColours, countSolid, rgbToHex, type Frame } from '../splat-core/pixel.ts'
 
 const CAMERAS: { id: string; name: string; view: Partial<View>; note: string }[] = [
   { id: 'rpg', name: 'Top-down RPG', view: { elevation: 45, ortho: true }, note: 'Looking down at 45°, like most top-down adventures.' },

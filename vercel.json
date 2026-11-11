@@ -8,7 +8,8 @@
     { "source": "/experiments", "destination": "/experiments/", "permanent": true },
     { "source": "/experiments/splat-to-sprite", "destination": "/experiments/splat-to-sprite/", "permanent": true },
     { "source": "/experiments/fit-a-picture", "destination": "/experiments/fit-a-picture/", "permanent": true },
-    { "source": "/experiments/blobscape", "destination": "/experiments/blobscape/", "permanent": true }
+    { "source": "/experiments/blobscape", "destination": "/experiments/blobscape/", "permanent": true },
+    { "source": "/experiments/engine-lab", "destination": "/experiments/engine-lab/", "permanent": true }
   ],
   "headers": [
     {

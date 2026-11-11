@@ -1,3 +1,4 @@
+import { SH_C0 } from './colour.ts'
 import { Blobs } from './blobs.ts'
 
 /**
@@ -7,7 +8,6 @@ import { Blobs } from './blobs.ts'
  * sigmoid, log scales, and the rotation as w, x, y, z.
  */
 const PROPS = ['x', 'y', 'z', 'f_dc_0', 'f_dc_1', 'f_dc_2', 'opacity', 'scale_0', 'scale_1', 'scale_2', 'rot_0', 'rot_1', 'rot_2', 'rot_3'] as const
-const SH_C0 = 0.28209479177387814
 
 export function writePly(b: Blobs): Uint8Array {
   const header = `ply\nformat binary_little_endian 1.0\ncomment made in Blobscape\nelement vertex ${b.count}\n${PROPS.map((p) => `property float ${p}`).join('\n')}\nend_header\n`
