@@ -37,7 +37,7 @@ export function Tabs({ label, tabs }: { label: string; tabs: { id: string; label
               onKeyDown={(ev) => onKeyDown(ev, i)}
               className={`group/tab -mb-px min-w-0 cursor-pointer rounded-t-md border-b-2 px-2 pt-2 pb-2.5 text-left transition-colors hover:bg-paper-sunk sm:px-3 ${on ? 'border-accent' : 'border-transparent hover:border-ink-faint'}`}
             >
-              <span className={`block font-serif text-lg transition-colors ${on ? 'text-ink' : 'text-ink-muted group-hover/tab:text-ink'}`}>{t.label}</span>
+              <span className={`block truncate font-serif text-lg transition-colors ${on ? 'text-ink' : 'text-ink-muted group-hover/tab:text-ink'}`}>{t.label}</span>
               <span className="block truncate text-xs text-ink-faint transition-colors group-hover/tab:text-ink-muted">{t.summary}</span>
             </button>
           )

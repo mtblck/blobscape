@@ -92,7 +92,8 @@ a shape** (from one blob to 20,000). Every lesson can open its scene in the **Sa
 sprays and erases blobs; selects them by click, box, lasso or colour; moves, turns, scales,
 recolours and fades the selection; runs live effects (explode, melt, wind, twist, wave, dissolve)
 on the whole scene or the selection; opens .ply, .spz, .splat, .ksplat and .sog captures; and saves
-a standard 3DGS .ply. Everything is undoable. More lessons (colour by angle, painting, real
+a 3DGS .ply (base colour only: no `f_rest_*` terms, so it opens in viewers such as SuperSplat
+and Spark but not in the original training code). Everything is undoable. More lessons (colour by angle, painting, real
 captures, breaking a scene) are planned.
 
 ### Design notes

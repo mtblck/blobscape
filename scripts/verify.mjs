@@ -514,6 +514,22 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   const alert = await page.getByRole('alert').textContent({ timeout: 15000 }).catch(() => '')
   if (!alert.includes("Couldn't open junk.ply") || (await count()) !== 2000) fails.push(`blobscape sandbox: bad file gave "${alert}" and ${await count()} blobs`)
   else ok('blobscape sandbox: a bad file shows an error and keeps the scene')
+  // A header that promises two billion splats is caught before Spark's decoder sees it, so a good file still opens after
+  const lying = Buffer.from(ballPly(500).toString('latin1').replace('element vertex 500', 'element vertex 2000000000'), 'latin1')
+  await page.setInputFiles('input[type=file]', { name: 'liar.ply', mimeType: 'application/octet-stream', buffer: lying })
+  await page.waitForFunction(() => document.querySelector('[role=alert]')?.textContent?.includes('liar.ply'), null, { timeout: 15000 }).catch(() => {})
+  await page.setInputFiles('input[type=file]', { name: 'small.ply', mimeType: 'application/octet-stream', buffer: ballPly(500) })
+  await page.waitForFunction(() => document.querySelector('[data-testid=blob-count]')?.textContent === '500', null, { timeout: 30000 }).catch(() => {})
+  if ((await count()) !== 500) fails.push(`blobscape sandbox: after a lying header, a good file gave ${await count()} blobs`)
+  else ok('blobscape sandbox: a lying .ply header is refused and the next file still opens')
+  // Keyboard: Move nudges the selection with the arrow keys; Delete keeps focus in the panel
+  await page.getByRole('tab', { name: /Selection/ }).click()
+  await page.getByRole('button', { name: 'Select all' }).click()
+  await page.getByRole('button', { name: 'Delete' }).focus()
+  await page.keyboard.press('Enter')
+  const focusTag = await page.evaluate(() => document.activeElement?.tagName)
+  if (focusTag === 'BODY') fails.push('blobscape sandbox: focus fell to the page after Delete')
+  else ok('blobscape sandbox: focus stays in the panel after Delete')
   await page.screenshot({ path: join(shots, 'blobscape-sandbox-tools.png') })
   await ctx.close()
 }

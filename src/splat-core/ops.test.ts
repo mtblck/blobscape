@@ -132,3 +132,15 @@ test('the hash spreads evenly over 0..1', () => {
   for (let i = 0; i < 10000; i++) buckets[Math.floor(hash01(i, 1) * 10)]++
   for (const n of buckets) assert.ok(n > 850 && n < 1150, `${buckets}`)
 })
+
+test('a .ply header that promises more than the file holds is caught before decoding', async () => {
+  const { checkPlyHeader } = await import('./plyCheck.ts')
+  const good = writePly(scene(10))
+  assert.equal(checkPlyHeader(good, good.length), null)
+  assert.equal(checkPlyHeader(good, good.length - 4), 'damaged')
+  const lying = new TextEncoder().encode(new TextDecoder().decode(good.subarray(0, 400)).replace('element vertex 10', 'element vertex 2000000000'))
+  assert.equal(checkPlyHeader(lying, good.length), 'damaged')
+  const mesh = new TextEncoder().encode('ply\nformat binary_little_endian 1.0\nelement vertex 3\nproperty float x\nproperty float y\nproperty float z\nend_header\n')
+  assert.equal(checkPlyHeader(mesh, mesh.length + 36), 'mesh')
+  assert.equal(checkPlyHeader(new TextEncoder().encode('not a splat at all'), 18), 'damaged')
+})

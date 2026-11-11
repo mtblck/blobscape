@@ -3,7 +3,7 @@ import { Blobs, hexToRgb, pick, projectPoint, quatFacing, quatToMat, rgbToHex, t
 import type { Orbit, SplatView } from '../splat-core/view.ts'
 import { PRESETS } from '../splat-core/presets.ts'
 import { blobsFromPreset, blobsFromSamples, sampleShape } from '../splat-core/shapes.ts'
-import { Selection, centroid, flipUpright, inPolygon, meanColour, scaleGroup, selectByColour, sitOnFloor, thin, translate, turnY } from '../splat-core/ops.ts'
+import { Selection, centroid, flipUpright, inPolygon, meanColour, scaleGroup, selectByColour, sitOnFloor, translate, turnY } from '../splat-core/ops.ts'
 import { EFFECTS, bakeEffect, type EffectFrame, type EffectId, type EffectParams } from '../splat-core/effects.ts'
 import { writePly } from '../splat-core/ply.ts'
 import { Button, Chip, Field, Panel, Slider, Tabs, Toggle } from '../shared/ui.tsx'
@@ -85,6 +85,8 @@ export function Sandbox() {
     setVersion((v) => v + 1)
   }, [])
   const [source, setSource] = useState(handed ? handed.name : STARTS[0].name)
+  const sourceRef = useRef(source)
+  sourceRef.current = source
   const [orbit, setOrbit] = useState<Orbit>(() => ({ ...frame(blobsRef.current), azimuth: 30, elevation: 22 }))
   const [view, setView] = useState<SplatView | null>(null)
   // Imports can be big; a few snapshots of a large scene is all undo keeps
@@ -113,6 +115,7 @@ export function Sandbox() {
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const opening = useRef(false)
 
   // Effects
   const [effect, setEffect] = useState<EffectId | null>(null)
@@ -135,6 +138,7 @@ export function Sandbox() {
   const clearSel = () => { if (sel.count) { sel.clear(); selChanged() } }
   const replace = (next: Blobs, name?: string) => {
     blobsRef.current = next
+    setError('')
     clearSel()
     if (name) setSource(name)
     bump()
@@ -171,30 +175,54 @@ export function Sandbox() {
   // --- opening and saving files ----------------------------------------------
   const fileInput = useRef<HTMLInputElement>(null)
   const [upright, setUpright] = useState(true)
+  const maxFileBytes = coarse ? 400e6 : 1.5e9
   const openFile = async (file: File) => {
+    // One at a time: two big files decoding at once could run the tab out of memory
+    if (opening.current) return
+    opening.current = true
     setError('')
     setBusy(true)
     setMessage(`Opening ${file.name}…`)
+    let decoded = false
     try {
+      if (file.size > maxFileBytes) {
+        setError(`${file.name} is ${(file.size / 1e9).toFixed(1)} GB, more than this device can open here (${(maxFileBytes / 1e9).toFixed(1)} GB). A compressed .spz or .sog of the same scene is much smaller.`)
+        return
+      }
       const { readSplatFile } = await import('../splat-core/importer.ts')
-      const b = await readSplatFile(await file.arrayBuffer(), file.name)
+      const bytes = await file.arrayBuffer()
+      decoded = true
+      const { blobs: b, step: n, dropped } = await readSplatFile(bytes, file.name, maxBlobs)
       if (!b.count) throw new Error('empty')
-      const n = thin(b, maxBlobs)
       if (upright) flipUpright(b)
       sitOnFloor(b)
-      history.current.record(blobsRef.current, source)
+      // The scene's name now, not when the file started opening
+      history.current.record(blobsRef.current, sourceRef.current)
       replace(b, file.name)
       setOrbit((o) => ({ ...o, ...frame(b) }))
-      setMessage(n > 1 ? `Opened ${file.name}, keeping 1 blob in ${n} (${b.count.toLocaleString()})` : `Opened ${file.name}: ${b.count.toLocaleString()} blobs`)
+      const skipped = dropped ? `, skipping ${dropped.toLocaleString()} broken ones` : ''
+      setMessage(n > 1 ? `Opened ${file.name}, keeping 1 blob in ${n} (${b.count.toLocaleString()})${skipped}` : `Opened ${file.name}: ${b.count.toLocaleString()} blobs${skipped}`)
     } catch (err) {
       console.warn(err)
       setMessage('')
-      setError(`Couldn't open ${file.name}. The sandbox reads Gaussian splat files: .ply, .spz, .splat, .ksplat and .sog.`)
+      const { ImportError } = await import('../splat-core/importer.ts')
+      const why = err instanceof ImportError ? err.message : err instanceof RangeError ? 'This file is too big for this device.' : 'The sandbox reads Gaussian splat files: .ply, .spz, .splat, .ksplat and .sog.'
+      // Spark's decoder can stop working after a file it chokes on; checked files never get that far
+      const stuck = decoded && !(err instanceof ImportError && (err.kind === 'mesh' || (err.kind === 'damaged' && /header/.test(err.message))))
+      setError(`Couldn't open ${file.name}. ${why}${stuck ? ' If other files stop opening too, reload the page.' : ''}`)
     } finally {
       setBusy(false)
+      opening.current = false
     }
   }
   const [dragOver, setDragOver] = useState(false)
+  // A file dropped just outside the view would otherwise make the browser open it and lose the scene
+  useEffect(() => {
+    const stop = (ev: DragEvent) => { if (ev.dataTransfer?.types.includes('Files')) ev.preventDefault() }
+    window.addEventListener('dragover', stop)
+    window.addEventListener('drop', stop)
+    return () => { window.removeEventListener('dragover', stop); window.removeEventListener('drop', stop) }
+  }, [])
   const onDrop = (ev: React.DragEvent) => {
     ev.preventDefault()
     setDragOver(false)
@@ -211,7 +239,7 @@ export function Sandbox() {
     document.body.append(a)
     a.click()
     a.remove()
-    setTimeout(() => URL.revokeObjectURL(url), 1000)
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
     setMessage(`Saved ${blobsRef.current.count.toLocaleString()} blobs`)
   }
 
@@ -310,11 +338,16 @@ export function Sandbox() {
     return pick(blobsRef.current, [origin.x, origin.y, origin.z], [dir.x, dir.y, dir.z], 2, 0).index
   }
 
+  /** Says how many are selected, for everyone, and for screen readers through the live status line. */
+  const announce = (prefix = '') => {
+    selChanged()
+    setMessage(`${prefix}${sel.count ? `${sel.count.toLocaleString()} selected` : 'Nothing selected'}`)
+  }
   const selectAt = (x: number, y: number, add: boolean) => {
     const hit = blobAt(x, y)
     if (!add) sel.clear()
     if (hit >= 0) sel.set(hit, !(add && sel.has(hit)))
-    selChanged()
+    announce(hit < 0 ? 'No blob there. ' : '')
   }
 
   /** Selects every blob whose centre lands inside a screen polygon (x, y pairs). */
@@ -324,26 +357,42 @@ export function Sandbox() {
     if (!add) sel.clear()
     let xmin = Infinity, xmax = -Infinity, ymin = Infinity, ymax = -Infinity
     for (let k = 0; k < poly.length; k += 2) { xmin = Math.min(xmin, poly[k]); xmax = Math.max(xmax, poly[k]); ymin = Math.min(ymin, poly[k + 1]); ymax = Math.max(ymax, poly[k + 1]) }
+    const at = [0, 0, 0]
     for (let i = 0; i < b.count; i++) {
-      const p = projectPoint(b.centre.subarray(i * 3, i * 3 + 3), lens)
+      at[0] = b.centre[i * 3]; at[1] = b.centre[i * 3 + 1]; at[2] = b.centre[i * 3 + 2]
+      const p = projectPoint(at, lens)
       if (!p || p.x < xmin || p.x > xmax || p.y < ymin || p.y > ymax) continue
       if (inPolygon(p.x, p.y, poly)) sel.set(i, true)
     }
-    selChanged()
+    announce()
   }
 
+  /**
+   * A Move drag: the selection's depth and its first index, worked out once
+   * on pointer-down, and whether the scene has been copied for undo yet.
+   */
+  const grab = useRef<{ depth: number; from: number; copied: boolean } | null>(null)
+  const startMove = () => {
+    if (!view || !sel.count) { grab.current = null; return }
+    const b = blobsRef.current
+    let from = 0
+    while (from < b.count && !sel.has(from)) from++
+    grab.current = { depth: projectPoint(centroid(b, sel), view.lens())?.depth ?? orbit.distance, from, copied: false }
+  }
   /** Slides the selection by a screen-space drag, at the depth of its centre. */
   const moveBy = (dx: number, dy: number) => {
-    if (!view || !sel.count) return
+    const g = grab.current
+    if (!view || !g || (!dx && !dy)) return
+    // Copy for undo only once something actually moves
+    if (!g.copied) { before.current = blobsRef.current.clone(); g.copied = true }
     const b = blobsRef.current, lens = view.lens()
-    const c = centroid(b, sel)
-    const depth = projectPoint(c, lens)?.depth ?? orbit.distance
     const V = lens.view
     // The view matrix's rows are the camera's right and up directions in the world
     const right: Vec3 = [V[0], V[4], V[8]], up: Vec3 = [V[1], V[5], V[9]]
-    const kx = (dx * depth) / lens.fx, ky = (-dy * depth) / lens.fy
+    const kx = (dx * g.depth) / lens.fx, ky = (-dy * g.depth) / lens.fy
     translate(b, sel, [right[0] * kx + up[0] * ky, right[1] * kx + up[1] * ky, right[2] * kx + up[2] * ky])
-    changed()
+    // Only blobs from the first selected one on need re-sending
+    changed(g.from)
   }
 
   const last = useRef<{ x: number; y: number; shift: boolean; x0: number; y0: number } | null>(null)
@@ -360,11 +409,13 @@ export function Sandbox() {
       last.current = { x, y, shift, x0: x, y0: y }
       if (tool === 'select') return
       if (tool === 'lasso') { marquee.current = { kind: 'lasso', pts: [x, y] }; return }
-      before.current = blobsRef.current.clone()
       if (tool === 'move') {
         if (!sel.count) { const hit = blobAt(x, y); if (hit >= 0) { sel.set(hit, true); selChanged() } }
+        startMove()
+        return
       }
-      else if (tool === 'add') { const from = blobsRef.current.count; if (place(blobsRef.current, land(x, y), 0)) changed(from) }
+      before.current = blobsRef.current.clone()
+      if (tool === 'add') { const from = blobsRef.current.count; if (place(blobsRef.current, land(x, y), 0)) changed(from) }
       else if (tool === 'spray') sprayAt(x, y)
       else if (tool === 'erase' && view) eraseAt(x, y, view.lens())
     },
@@ -398,8 +449,18 @@ export function Sandbox() {
       last.current = null
       before.current = null
       marquee.current = null
+      grab.current = null
     },
     // Enter or Space on the focused view uses the tool at the centre (a keyboard stand-in for a click)
+    // With Move, the arrow keys slide the selection instead of orbiting (Shift for bigger steps)
+    key: tool === 'move' ? (ev) => {
+      const step = ev.shiftKey ? 40 : 10
+      const d = ({ ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] } as Record<string, [number, number]>)[ev.key]
+      if (!d) return false
+      if (!sel.count) setMessage('Select some blobs first')
+      else nudge(d[0], d[1])
+      return true
+    } : undefined,
     activate: (x, y, shift) => {
       if (tool === 'select' || tool === 'lasso') { selectAt(x, y, shift); return }
       if (tool === 'move') return
@@ -420,17 +481,23 @@ export function Sandbox() {
   const recolourSelected = () => {
     const rgb = hexToRgb(colour)
     edit((b) => { for (let i = 0; i < b.count; i++) if (sel.has(i)) b.colour.set(rgb, i * 3) })
+    setMessage('Painted')
   }
-  const eachSelected = (fn: (b: Blobs, i: number) => void) => edit((b) => { for (let i = 0; i < b.count; i++) if (sel.has(i)) fn(b, i) })
-  const resizeSelected = (k: number) => eachSelected((b, i) => { for (let a = 0; a < 3; a++) b.scale[i * 3 + a] *= k })
-  const fadeSelected = (k: number) => eachSelected((b, i) => { b.opacity[i] = Math.max(0.02, Math.min(1, b.opacity[i] * k)) })
-  const turnSelected = (deg: number) => edit((b) => turnY(b, sel, centroid(b, sel), deg))
-  const scaleSelected = (k: number) => edit((b) => scaleGroup(b, sel, centroid(b, sel), k))
-  const selectAll = () => { sel.all(blobsRef.current.count); selChanged() }
-  const invertSel = () => { sel.invert(blobsRef.current.count); selChanged() }
+  const eachSelected = (fn: (b: Blobs, i: number) => void, done: string) => {
+    edit((b) => { for (let i = 0; i < b.count; i++) if (sel.has(i)) fn(b, i) })
+    setMessage(done)
+  }
+  const resizeSelected = (k: number, done: string) => eachSelected((b, i) => { for (let a = 0; a < 3; a++) b.scale[i * 3 + a] *= k }, done)
+  const fadeSelected = (k: number, done: string) => eachSelected((b, i) => { b.opacity[i] = Math.max(0.02, Math.min(1, b.opacity[i] * k)) }, done)
+  const turnSelected = (deg: number) => { edit((b) => turnY(b, sel, centroid(b, sel), deg)); setMessage(`Turned ${Math.abs(deg)}° ${deg < 0 ? 'left' : 'right'}`) }
+  const scaleSelected = (k: number) => { edit((b) => scaleGroup(b, sel, centroid(b, sel), k)); setMessage(k > 1 ? 'Spread out' : 'Pulled together') }
+  const nudge = (dx: number, dy: number) => { startMove(); moveBy(dx, dy); grab.current = null; setMessage('Moved') }
+  const selectAll = () => { sel.all(blobsRef.current.count); announce() }
+  const invertSel = () => { sel.invert(blobsRef.current.count); announce() }
+  const selectNone = () => { clearSel(); announce() }
   const selectColour = () => {
     selectByColour(blobsRef.current, sel, hexToRgb(colour), tolerance)
-    selChanged()
+    announce()
   }
   const takeColour = () => { const c = meanColour(blobsRef.current, sel); if (c) setColour(rgbToHex(c)) }
 
@@ -458,14 +525,16 @@ export function Sandbox() {
     lastOrder.current = orderKey
     const f = syncFrom.current
     syncFrom.current = Infinity
-    if (ordered) return { from: 0, order: selRef.current.selectedFirst(blobsRef.current.count) }
+    // Appended blobs are unselected, so they land at the end in list order: same order, only they need sending
+    if (ordered) return { from: was === orderKey ? f : 0, order: selRef.current.selectedFirst(blobsRef.current.count) }
     return { from: was !== 'list' ? 0 : f }
   }, [ordered, orderKey])
 
   // The latest effect settings, for the animation loop to read without restarting
   const live = useRef({ params, fxCount })
   live.current = { params, fxCount }
-  useEffect(() => { void view?.setEffect(params(), fxCount) })
+  // Until the selection is first on the GPU, the first fxCount slots are the wrong blobs: hold the effect back
+  useEffect(() => { void view?.setEffect(params(), ordered && lastOrder.current !== orderKey ? 0 : fxCount) })
 
   const chooseEffect = (id: EffectId | null) => {
     setEffect(id)
@@ -514,7 +583,8 @@ export function Sandbox() {
       if (b.count <= OUTLINE_LIMIT) drawOutlines(ctx, b, lens, { sigmas: [2] })
       else drawCentres(ctx, b, lens, themeColour('ink'))
     }
-    if (sel.count) {
+    // While an effect moves blobs on the GPU, outlines at their real places would float in the wrong spot
+    if (sel.count && !effect) {
       const accent = themeColour('accent')
       if (sel.count <= SELECT_OUTLINES) drawOutlines(ctx, b, lens, { indices: sel.indices(b.count), sigmas: [2], colour: accent, width: 1.5 })
       else {
@@ -540,6 +610,17 @@ export function Sandbox() {
       ctx.stroke()
       ctx.setLineDash([])
     }
+    // Keyboard users aim at the centre: mark it while the view has focus
+    const c = ctx.canvas
+    if (tool !== 'orbit' && c.matches(':focus-visible')) {
+      const cx = c.clientWidth / 2, cy = c.clientHeight / 2
+      ctx.strokeStyle = themeColour('accent')
+      ctx.lineWidth = 1.5
+      ctx.beginPath()
+      ctx.moveTo(cx - 9, cy); ctx.lineTo(cx - 3, cy); ctx.moveTo(cx + 3, cy); ctx.lineTo(cx + 9, cy)
+      ctx.moveTo(cx, cy - 9); ctx.lineTo(cx, cy - 3); ctx.moveTo(cx, cy + 3); ctx.lineTo(cx, cy + 9)
+      ctx.stroke()
+    }
     const h = hover.current
     if (h && (tool === 'spray' || tool === 'erase')) {
       ctx.strokeStyle = themeColour(tool === 'erase' ? 'ink' : 'accent')
@@ -553,6 +634,21 @@ export function Sandbox() {
 
   const toolNote = tool === 'orbit' && coarse ? 'Drag to orbit, pinch to zoom. Pick another tool to change the scene, then come back here to turn it.' : TOOLS.find((t) => t.id === tool)!.note
   const none = !sel.count
+  // A button that disables itself (Delete, Make it permanent) would drop focus to the page: keep it in the panel
+  const lastFocus = useRef<HTMLElement | null>(null)
+  useEffect(() => {
+    const el = lastFocus.current
+    if (!el || !(el as HTMLButtonElement).disabled || (document.activeElement && document.activeElement !== document.body)) return
+    el.closest('[role=tabpanel]')?.querySelector<HTMLElement>('button:not(:disabled), input:not([type=file]):not(:disabled)')?.focus()
+  })
+  // What Enter does on the focused view, per tool
+  const toolKeyNote: Partial<Record<ToolId, string>> = {
+    add: '; press Enter to add a blob at the centre',
+    spray: '; press Enter to spray at the centre',
+    erase: '; press Enter to erase at the centre',
+    select: '; press Enter to select the blob at the centre, Shift+Enter to add it',
+    lasso: '; press Enter to select the blob at the centre, Shift+Enter to add it',
+  }
 
   return (
     <>
@@ -587,7 +683,7 @@ export function Sandbox() {
             tool={handlers}
             overlay={overlay}
             takeSync={takeSync}
-            label={`Sandbox scene with ${blobs.count.toLocaleString()} blobs. Drag or use the arrow keys to orbit, plus and minus to zoom${tool !== 'orbit' && tool !== 'move' ? `; with the ${TOOLS.find((t) => t.id === tool)!.name} tool, click or drag, or press Enter to use it at the centre` : ''}.`}
+            label={`Sandbox scene with ${blobs.count.toLocaleString()} blobs. ${tool === 'move' ? 'With the Move tool, the arrow keys slide the selection (Shift for bigger steps)' : 'Drag or use the arrow keys to orbit'}, plus and minus to zoom${toolKeyNote[tool] ?? ''}.`}
             hint={coarse ? (tool === 'orbit' ? 'drag to orbit · pinch to zoom' : 'pinch to zoom · pick Look to orbit') : tool === 'orbit' ? 'drag to orbit · scroll to zoom' : 'right-drag to orbit · scroll to zoom'}
           >
             {dragOver && (
@@ -596,7 +692,7 @@ export function Sandbox() {
               </div>
             )}
           </Viewport>
-          {error && <p role="alert" className="text-sm text-accent-ink">{error}</p>}
+          <p role="alert" className="text-sm text-accent-ink empty:hidden">{error}</p>
           <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm text-ink-muted">
             <span><span className="tabular-nums text-ink" data-testid="blob-count">{blobs.count.toLocaleString()}</span> blobs</span>
             {sel.count > 0 && <span><span className="tabular-nums text-accent-ink" data-testid="selected-count">{sel.count.toLocaleString()}</span> selected</span>}
@@ -606,7 +702,7 @@ export function Sandbox() {
           <p className="text-sm text-ink-faint">{toolNote}</p>
         </section>
 
-        <section aria-label="Sandbox settings" className="min-w-0">
+        <section aria-label="Sandbox settings" className="min-w-0" onFocus={(ev) => { lastFocus.current = ev.target as HTMLElement }}>
           <Tabs
             label="Sandbox settings"
             tabs={[
@@ -640,16 +736,16 @@ export function Sandbox() {
                   <Panel note="Pick blobs with Select or Lasso, or by colour here. Edits apply to every selected blob and can be undone.">
                     <div className="flex flex-wrap gap-2">
                       <Button small onClick={selectAll} disabled={!blobs.count}>Select all</Button>
-                      <Button small onClick={clearSel} disabled={none}>Select none</Button>
+                      <Button small onClick={selectNone} disabled={none}>Select none</Button>
                       <Button small onClick={invertSel} disabled={!blobs.count}>Invert</Button>
                     </div>
                     <Field label="By colour">
                       <div className="flex flex-wrap gap-2">
                         <Button small onClick={selectColour} disabled={!blobs.count}>
                           <span aria-hidden className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: colour }} />
-                          Add blobs near the brush colour
+                          Select blobs near the brush colour
                         </Button>
-                        <Button small onClick={takeColour} disabled={none}>Brush from selection</Button>
+                        <Button small onClick={takeColour} disabled={none}>Use their colour for the brush</Button>
                       </div>
                     </Field>
                     <Slider label="Colour tolerance" value={tolerance} min={0.02} max={0.5} step={0.01} onChange={setTolerance} format={(v) => `${Math.round(v * 100)}%`} />
@@ -657,8 +753,12 @@ export function Sandbox() {
                       <div className="flex flex-wrap gap-2">
                         <Button small onClick={() => turnSelected(-15)} disabled={none}>Turn left</Button>
                         <Button small onClick={() => turnSelected(15)} disabled={none}>Turn right</Button>
-                        <Button small onClick={() => scaleSelected(1.2)} disabled={none}>Bigger</Button>
-                        <Button small onClick={() => scaleSelected(1 / 1.2)} disabled={none}>Smaller</Button>
+                        <Button small onClick={() => nudge(-20, 0)} disabled={none}>Slide left</Button>
+                        <Button small onClick={() => nudge(20, 0)} disabled={none}>Slide right</Button>
+                        <Button small onClick={() => nudge(0, -20)} disabled={none}>Slide up</Button>
+                        <Button small onClick={() => nudge(0, 20)} disabled={none}>Slide down</Button>
+                        <Button small onClick={() => scaleSelected(1.2)} disabled={none}>Spread out</Button>
+                        <Button small onClick={() => scaleSelected(1 / 1.2)} disabled={none}>Pull together</Button>
                       </div>
                     </Field>
                     <Field label="Change each blob">
@@ -667,11 +767,11 @@ export function Sandbox() {
                           <span aria-hidden className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: colour }} />
                           Paint with brush colour
                         </Button>
-                        <Button small onClick={() => resizeSelected(1.25)} disabled={none}>Grow</Button>
-                        <Button small onClick={() => resizeSelected(0.8)} disabled={none}>Shrink</Button>
-                        <Button small onClick={() => resizeSelected(0.05)} disabled={none}>To dots</Button>
-                        <Button small onClick={() => fadeSelected(1.25)} disabled={none}>More opaque</Button>
-                        <Button small onClick={() => fadeSelected(0.6)} disabled={none}>Fade</Button>
+                        <Button small onClick={() => resizeSelected(1.25, 'Grown')} disabled={none}>Grow</Button>
+                        <Button small onClick={() => resizeSelected(0.8, 'Shrunk')} disabled={none}>Shrink</Button>
+                        <Button small onClick={() => resizeSelected(0.05, 'Turned to dots')} disabled={none}>To dots</Button>
+                        <Button small onClick={() => fadeSelected(1.25, 'More opaque')} disabled={none}>More opaque</Button>
+                        <Button small onClick={() => fadeSelected(0.6, 'Faded')} disabled={none}>Fade</Button>
                         <Button small onClick={deleteSelected} disabled={none}>Delete</Button>
                       </div>
                     </Field>
@@ -696,7 +796,7 @@ export function Sandbox() {
                     </div>
                     {onSelection && none && effect && <p className="text-sm text-ink-faint">Nothing is selected, so nothing moves.</p>}
                     <div className="flex flex-wrap gap-2">
-                      <Button small onClick={() => setRunning((r) => !r)} disabled={!fx}>{running ? (fx?.loops ? 'Pause' : 'Stop') : 'Play'}</Button>
+                      <Button small onClick={() => setRunning((r) => !r)} disabled={!fx} aria-pressed={fx?.loops ? running : undefined}>{running ? (fx?.loops ? 'Pause' : 'Stop') : 'Play'}</Button>
                       <Button small primary onClick={bake} disabled={!fx || !fxCount}>Make it permanent</Button>
                     </div>
                   </Panel>
@@ -714,13 +814,14 @@ export function Sandbox() {
                     <Field label="Your own splats">
                       <div className="space-y-2">
                         <div className="flex flex-wrap gap-2">
-                          <Button small onClick={() => fileInput.current?.click()} disabled={busy}>{busy ? 'Opening…' : 'Open a splat file…'}</Button>
+                          <Button small onClick={() => { if (!busy) fileInput.current?.click() }} aria-disabled={busy}>{busy ? 'Opening…' : 'Open a splat file…'}</Button>
                           <Button small onClick={exportPly} disabled={!blobs.count}>Save as .ply</Button>
                         </div>
                         <input ref={fileInput} type="file" accept={FILE_TYPES} className="sr-only" tabIndex={-1} aria-hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void openFile(f) }} />
                         <p className="text-xs text-ink-faint">
                           .ply, .spz, .splat, .ksplat or .sog, or drop one on the view. It stays on your device. Scenes over {maxBlobs.toLocaleString()} blobs are thinned to fit. Saved files open in most splat viewers.
                         </p>
+                        {error && <p className="text-sm text-accent-ink">{error}</p>}
                         <Toggle label="Turn captures the right way up on opening" checked={upright} onChange={setUpright} />
                       </div>
                     </Field>

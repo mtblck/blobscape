@@ -11,6 +11,8 @@ export interface ToolHandlers {
   up?: () => void
   /** Pointer moving with no button down, for brush previews. */
   hover?: (x: number | null, y: number | null) => void
+  /** A key on the focused view; return true if the tool used it (it then doesn't orbit). */
+  key?: (ev: React.KeyboardEvent) => boolean
   /** Enter or Space on the focused view: use the tool at the centre. */
   activate?: (x: number, y: number, shift: boolean) => void
   cursor?: string
@@ -176,6 +178,7 @@ export function Viewport({ blobs, version, orbit, setOrbit, reach, overlay, take
   }, [setOrbit])
 
   const onKeyDown = (ev: React.KeyboardEvent) => {
+    if (tool?.key?.(ev)) { ev.preventDefault(); return }
     if ((ev.key === 'Enter' || ev.key === ' ') && tool?.activate) {
       ev.preventDefault()
       const c = ev.currentTarget as HTMLElement
@@ -207,6 +210,9 @@ export function Viewport({ blobs, version, orbit, setOrbit, reach, overlay, take
         onPointerLeave={() => tool?.hover?.(null, null)}
         onContextMenu={(ev) => ev.preventDefault()}
         onKeyDown={onKeyDown}
+        // The overlay can mark the centre for keyboard aiming while the view has focus
+        onFocus={() => viewRef.current?.invalidate(1)}
+        onBlur={() => viewRef.current?.invalidate(1)}
       />
       {failed && (
         <div role="alert" className="absolute inset-4 grid place-items-center text-center text-sm text-ink">

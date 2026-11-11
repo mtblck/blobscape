@@ -136,7 +136,7 @@ export class SplatView {
    * Sends the blobs to the GPU, rewriting Spark's packed array in place from
    * index `from` on (pass the old count after appending, 0 after anything else).
    * With `order`, GPU slot g holds blob order[g]: effects use it to put the
-   * blobs they touch first (and then everything is rewritten).
+   * blobs they touch first. Pass 0 for `from` whenever the order changes.
    */
   async sync(blobs: Blobs, from = 0, order: ArrayLike<number> | null = null) {
     // Two syncs in a row must share one mesh, so the first one's setup is awaited by both.
@@ -153,8 +153,8 @@ export class SplatView {
     if (this.disposed || !this.mesh) return
     const p = this.packed!
     const c = new THREE.Vector3(), s = new THREE.Vector3(), q = new THREE.Quaternion(), col = new THREE.Color()
-    // Appending (a spray stroke) only needs the new blobs written
-    const start = order ? 0 : Math.max(0, Math.min(from, blobs.count))
+    // Appending (a spray stroke) only needs the new blobs written. With an order, the caller passes 0 whenever the order changed.
+    const start = Math.max(0, Math.min(from, blobs.count))
     for (let g = start; g < blobs.count; g++) {
       const i = order ? order[g] : g
       c.fromArray(blobs.centre, i * 3)
