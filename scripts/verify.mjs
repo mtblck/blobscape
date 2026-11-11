@@ -116,6 +116,14 @@ const solidPixels = (page, sel) => page.evaluate((sel) => {
   if (await page.evaluate(() => document.documentElement.dataset.theme || localStorage.getItem('blobscape-theme'))) fails.push('System did not clear the theme')
   await ctx.close()
 
+  // A link to a section of the front page (where /tools/ redirects) lands on that section
+  const tools = await open('/#experiments')
+  await tools.page.waitForTimeout(800)
+  const top = await tools.page.evaluate(() => document.getElementById('experiments')?.getBoundingClientRect().top ?? -1)
+  if (top < 0 || top > 200) fails.push(`/#experiments: the section is ${top}px down, not in view`)
+  else ok('/#experiments opens at the experiments section')
+  await tools.ctx.close()
+
   // Old #/ links (from mattblack.space/experiments/blobscape/#/…) land on the page they meant
   const old = await open('/#/lesson/order')
   await old.page.waitForTimeout(500)
