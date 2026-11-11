@@ -5,11 +5,14 @@ import type { Goal } from './progress.ts'
 import { handOff } from './handoff.ts'
 import type { Blobs } from '../splat-core/blobs.ts'
 
-/** Moves focus to the page's heading when a new page shows, so screen readers announce it. */
+/** Moves focus to the page's heading when a new page shows, so screen readers announce it, and scrolls to the top or to the #section asked for. */
 export function useFocusHeading() {
   const ref = useRef<HTMLHeadingElement>(null)
   useEffect(() => {
-    window.scrollTo(0, 0)
+    // A link to a section of the page (/#experiments) goes to that section; anything else starts at the top
+    const target = window.location.hash.length > 1 ? document.getElementById(decodeURIComponent(window.location.hash.slice(1))) : null
+    if (target) target.scrollIntoView()
+    else window.scrollTo(0, 0)
     ref.current?.focus({ preventScroll: true })
   }, [])
   return ref

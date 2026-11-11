@@ -197,9 +197,12 @@ export function useLinkNavigation() {
       if (!a || !a.href || (a.target && a.target !== '_self') || a.hasAttribute('download')) return
       const url = new URL(a.href)
       if (url.origin !== window.location.origin || !parsePath(url.pathname)) return
-      if (url.pathname === window.location.pathname && url.search === window.location.search && url.hash) return
+      const samePage = url.pathname === window.location.pathname && url.search === window.location.search
+      if (samePage && url.hash) return
       e.preventDefault()
-      navigate(url.pathname + url.search + url.hash)
+      // A link to the page you're on goes back to its top, without a new history entry
+      if (samePage) window.scrollTo(0, 0)
+      else navigate(url.pathname + url.search + url.hash)
     }
     document.addEventListener('click', on)
     return () => document.removeEventListener('click', on)

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { SiteHeader } from '../shared/SiteHeader.tsx'
-import { Footer } from '../blobscape/Chrome.tsx'
+import { Footer } from '../shared/Footer.tsx'
 import { Crumbs } from '../blobscape/Shell.tsx'
 import { Button, Chip, Field, Panel, Slider, Tabs, Toggle } from '../shared/ui.tsx'
 import { SAMPLES, drawSample, fitSize, type Sample } from './samples.ts'

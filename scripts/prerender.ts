@@ -28,12 +28,16 @@ const LOGO = `<svg viewBox="0 0 1155.48 187.2" class="h-6 w-auto sm:h-7" role="i
 const LINK = 'text-ink underline decoration-rule underline-offset-2 hover:text-accent'
 const BUTTON = 'inline-flex min-h-11 items-center rounded-lg bg-accent px-5 font-medium text-paper no-underline transition-colors hover:bg-accent-ink'
 
-/** The same header the app draws, so nothing jumps when it takes over. */
+/**
+ * The app's header, as near as static HTML gets: the main links hide on a
+ * phone and an invisible stand-in holds the Menu button's place, so nothing
+ * jumps when the app takes over.
+ */
 function shell(main: string): string {
   const nav = [['Lessons', '/lessons/'], ['Sandbox', '/sandbox/'], ['Creature', '/creature/']]
     .map(([label, path]) => `<li><a href="${path}" class="rounded-full px-3 py-1.5 text-[0.9375rem] font-medium text-ink-muted no-underline hover:text-ink">${label}</a></li>`)
     .join('')
-  return `<div class="flex min-h-dvh flex-col"><header class="sticky top-0 z-30 border-b border-rule bg-paper"><div class="mx-auto flex h-14 max-w-7xl items-center justify-between gap-4 px-4"><a href="/" class="-mx-1 shrink-0 rounded-md px-1 py-1.5">${LOGO}</a><nav aria-label="Main"><ul class="flex items-center gap-1">${nav}</ul></nav></div></header><main id="main" class="mx-auto w-full max-w-7xl flex-1 px-4 pb-16">${main}</main></div>`
+  return `<div class="flex min-h-dvh flex-col"><a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded focus:bg-paper focus:px-3 focus:py-2 focus:text-sm">Skip to content</a><header class="sticky top-0 z-30 border-b border-rule bg-paper"><div class="mx-auto flex h-14 max-w-7xl items-center justify-between gap-4 px-4"><a href="/" class="-mx-1 shrink-0 rounded-md px-1 py-1.5">${LOGO}</a><div class="flex items-center gap-1"><nav aria-label="Main" class="max-md:hidden"><ul class="flex items-center gap-1">${nav}</ul></nav><span aria-hidden="true" class="invisible flex h-9 items-center gap-2 rounded-full border px-3 text-sm font-medium"><span class="h-4.5 w-4.5"></span>Menu</span></div></div></header><main id="main" class="mx-auto w-full max-w-7xl flex-1 px-4 pb-16">${main}</main></div>`
 }
 
 function lessonList(from: number = 0, to: number = LESSONS.length): string {
@@ -54,7 +58,7 @@ function content(route: Route): string {
 <p class="mt-6"><a href="${href({ page: 'lesson', id: LESSONS[0].id })}" class="${BUTTON}">Start with one blob</a></p>
 <h2 class="mt-12 font-display text-3xl">${cap(LESSON_COUNT)} lessons, from one blob to a walking creature</h2>${lessonList()}
 <h2 class="mt-12 font-display text-3xl">Sandbox</h2><p class="mt-2 text-ink-muted">Spray, select, move, recolour and explode blobs, or open your own .ply, .spz, .splat, .ksplat or .sog capture. <a href="/sandbox/" class="${LINK}">Open the sandbox</a></p>
-<h2 class="mt-12 font-display text-3xl">Other ways to play with splats</h2><ul class="mt-3 flex flex-col gap-4">${EXPERIMENTS.map((e) => `<li><a href="${e.url}" class="font-display text-xl ${LINK}">${esc(e.title)}</a><p class="mt-1 text-ink-muted">${esc(e.body)}</p></li>`).join('')}</ul></div>`
+<h2 id="experiments" class="mt-12 scroll-mt-20 font-display text-3xl">Other ways to play with splats</h2><ul class="mt-3 flex flex-col gap-4">${EXPERIMENTS.map((e) => `<li><a href="${e.url}" class="font-display text-xl ${LINK}">${esc(e.title)}</a><p class="mt-1 text-ink-muted">${esc(e.body)}</p></li>`).join('')}</ul></div>`
     case 'lessons':
       return `<div class="max-w-3xl">${crumbs('Lessons')}<h1 class="pt-6 font-display text-5xl">Lessons</h1>
 <p class="mt-4 text-xl leading-relaxed text-ink-muted">A Gaussian splat is a 3D scene made of nothing but soft, see-through, coloured blobs. Start with one, learn what each of its numbers does, pile up thousands, then give them bones and make them walk.</p>
@@ -124,12 +128,13 @@ function structured(route: Route): object[] {
 /** Swaps one tag's attribute value, failing loudly if the template lost the tag. */
 function setAttr(html: string, tag: RegExp, value: string): string {
   if (!tag.test(html)) throw new Error(`prerender: the built page has no ${tag}`)
-  return html.replace(tag, (m) => m.replace(/(content|href)="[^"]*"/, `$1="${esc(value)}"`))
+  // Function replacements throughout, so a $ in a title can't be read as a replacement pattern
+  return html.replace(tag, (m) => m.replace(/(content|href)="[^"]*"/, (_, attr) => `${attr}="${esc(value)}"`))
 }
 
 function render(template: string, route: Route): string {
   const meta = pageMeta(route)
-  let html = template.replace(/<title>[^<]*<\/title>/, `<title>${esc(meta.title)}</title>`)
+  let html = template.replace(/<title>[^<]*<\/title>/, () => `<title>${esc(meta.title)}</title>`)
   html = setAttr(html, /<meta name="description"[^>]*>/, meta.description)
   html = setAttr(html, /<meta property="og:title"[^>]*>/, meta.title)
   html = setAttr(html, /<meta property="og:description"[^>]*>/, meta.description)
@@ -145,11 +150,11 @@ function render(template: string, route: Route): string {
   if (data.length) {
     // JSON-LD is data, so the CSP's script-src doesn't apply; escape < so it can't close the tag
     const json = JSON.stringify({ '@context': 'https://schema.org', '@graph': data }).replace(/</g, '\\u003c')
-    html = html.replace('</head>', `  <script type="application/ld+json">${json}</script>\n  </head>`)
+    html = html.replace('</head>', () => `  <script type="application/ld+json">${json}</script>\n  </head>`)
   }
   const root = /<div id="root">[\s\S]*?<\/div>(?=\s*<\/body>|\s*<script)/
   if (!root.test(html)) throw new Error('prerender: the built page has no #root')
-  return html.replace(root, `<div id="root">${shell(content(route))}</div>`)
+  return html.replace(root, () => `<div id="root">${shell(content(route))}</div>`)
 }
 
 function write(path: string, html: string) {
@@ -168,5 +173,6 @@ write(
   join(DIST, 'sitemap.xml'),
   `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${paths.map((p) => `  <url><loc>${url(p)}</loc><lastmod>${today}</lastmod></url>`).join('\n')}\n</urlset>\n`,
 )
-write(join(DIST, 'robots.txt'), `User-agent: *\nDisallow: /engine-lab/\n\nSitemap: ${url('/sitemap.xml')}\n`)
+// Nothing disallowed: the engine lab carries its own noindex, which crawlers only see if they may fetch it
+write(join(DIST, 'robots.txt'), `User-agent: *\nAllow: /\n\nSitemap: ${url('/sitemap.xml')}\n`)
 console.log(`prerender: ${routes.length} pages, 404.html, sitemap.xml (${paths.length} URLs), robots.txt`)
