@@ -6,7 +6,7 @@ import { placeCamera, type Orbit } from '../splat-core/view.ts'
 import { SplatWorld } from '../splat-engine/engine.ts'
 import { makeCreature, poseWalk, type Creature } from '../splat-engine/creature.ts'
 import type { SkinMode } from '../splat-engine/rig.ts'
-import { LINEAR_TO_SRGB_4K, srgbToLinear } from '../splat-core/colour.ts'
+import { readbackToSrgb, srgbToLinear } from '../splat-core/colour.ts'
 
 /**
  * The engine test bench. One canvas, one creature, two ways to draw it:
@@ -119,9 +119,9 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
   const foxes: Creature[] = []
   for (let k = 0; k < Math.max(1, o.herd); k++) {
     const c = makeCreature(Math.round(o.count / Math.max(1, o.herd)), 7 + k)
-    // place the herd in a loose row, each fox as the root bone's offset
+    // place the herd in a loose row
     const x = (k - (o.herd - 1) / 2) * 0.8, z = (k % 2) * 0.6 - 0.3
-    c.skeleton.offset.set([x, 0, z], 0)
+    c.skeleton.place.set([x, 0, z])
     c.skeleton.update()
     foxes.push(c)
   }
@@ -152,9 +152,11 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
   const blobs = foxes.reduce((s, f) => s + f.blobs.count, 0)
 
   let target: THREE.RenderTarget | undefined
+  let lastW = 0, lastH = 0
   const resize = () => {
     const w = display.clientWidth, h = display.clientHeight
-    if (w && h) renderer.setSize(w, h, false)
+    // setSize resets the canvas (and on WebGPU its swap chain), so only when the size changed
+    if (w && h && (w !== lastW || h !== lastH)) { renderer.setSize(w, h, false); lastW = w; lastH = h }
     placeCamera(camera as never, orbit, h > 0 ? w / h : 1)
     if (o.offscreen && w && h) {
       const pw = Math.floor(w * renderer.getPixelRatio()), ph = Math.floor(h * renderer.getPixelRatio())
@@ -173,29 +175,17 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
     const px = await renderer.readRenderTargetPixelsAsync(target, 0, 0, target.width, target.height) as Uint8Array
     const { width: w, height: h } = target
     const img = new ImageData(w, h)
-    // The target holds linear, premultiplied colour; ImageData wants sRGB, straight.
-    // WebGPU reads rows top-down, WebGL bottom-up.
-    const flip = backend === 'webgl'
-    for (let y = 0; y < h; y++) {
-      const src = (flip ? h - 1 - y : y) * w * 4, dst = y * w * 4
-      for (let x = 0; x < w * 4; x += 4) {
-        const a = px[src + x + 3]
-        img.data[dst + x + 3] = a
-        if (!a) continue
-        for (let c = 0; c < 3; c++) img.data[dst + x + c] = Math.round(255 * LINEAR_TO_SRGB_4K[Math.round(Math.min(1, px[src + x + c] / a) * 4095)])
-      }
-    }
+    // the target holds linear, premultiplied colour; ImageData wants sRGB, straight. WebGPU reads rows top-down, WebGL bottom-up.
+    readbackToSrgb(px, w, h, { flip: backend === 'webgl', premultiplied: false }, img.data)
     display.getContext('2d')!.putImageData(img, 0, 0)
   }
 
   const pose = (t: number) => {
     if (!world) return
     for (const f of foxes) {
-      const off = [...f.skeleton.offset.subarray(0, 3)]
-      if (walk) poseWalk(f.skeleton, t + off[0])
-      else { f.skeleton.reset(); }
-      f.skeleton.offset[0] = off[0]; f.skeleton.offset[2] = off[2]
-      f.skeleton.update()
+      // each fox a little out of step with its neighbours
+      if (walk) poseWalk(f.skeleton, t + f.skeleton.place[0])
+      else { f.skeleton.reset(); f.skeleton.update() }
     }
     world.markPosed()
   }
@@ -208,7 +198,7 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
   }
   const show = async (t: number) => { await frame(t); await present() }
 
-  let raf = 0, stopped = false, busy = false
+  let raf = 0, stopped = false, busy = 0 // jobs using the renderer; the live view pauses while any run
   const t0 = performance.now()
   let onTick: ((now: number) => void) | undefined
   let cancelRun: (() => void) | undefined
@@ -236,8 +226,8 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
     setMode(m) { mode = m; if (world) { world.mode = m; world.markPosed() } },
     frame: show,
     async exclusive(job) {
-      busy = true
-      try { return await job() } finally { busy = false }
+      busy++
+      try { return await job() } finally { busy-- }
     },
     async bench(frames) {
       const q = (a: number[], p: number) => a.length ? [...a].sort((x, y) => x - y)[Math.min(a.length - 1, Math.floor(a.length * p))] : 0
@@ -257,7 +247,7 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
         })
       }
       // 2. One frame at a time, each waited for.
-      busy = true
+      busy++
       try {
         for (let i = 0; i < 3; i++) await frame(i / 30)
         for (let i = 0; i < Math.min(frames, 30); i++) {
@@ -267,7 +257,7 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
           if (o.offscreen) cpu.push(world?.cpuMs ?? 0)
         }
       } finally {
-        busy = false
+        busy--
       }
       // The screen's refresh interval: the shortest gap we saw (120 Hz ≈ 8.3 ms),
       // but never longer than 60 Hz's, in case no frame kept up at all.
@@ -284,7 +274,7 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
     },
     async profile(frames) {
       const rows: number[][] = []
-      busy = true
+      busy++
       try {
         for (let i = 0; i < frames + 2; i++) {
           resize()
@@ -307,7 +297,7 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
           }
         }
       } finally {
-        busy = false
+        busy--
       }
       const med = (k: number) => [...rows.map((r) => r[k])].sort((a, b) => a - b)[Math.floor(rows.length / 2)] ?? 0
       return { which: o.which, backend, blobs, deform: med(0), project: med(1), order: med(2), draw: med(3), cpuSkin: med(4), cpuSort: med(5) }

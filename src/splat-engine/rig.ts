@@ -24,6 +24,8 @@ export class Skeleton {
   readonly offset: Float32Array
   /** Pose: uniform scale of the root (bone 0) only. */
   rootScale = 1
+  /** Where the actor stands: added to every root bone, and kept by `reset()` (a pose isn't a placement). */
+  readonly place = new Float32Array(3)
 
   /** Output, per bone: skin matrix (16), skin rotation quaternion (4), skin uniform scale (1). */
   readonly matrix: Float32Array
@@ -78,7 +80,7 @@ export class Skeleton {
         const s = i === 0 ? this.rootScale : 1
         ws[i] = s
         wq.set(norm4(lq), i * 4)
-        wp.set([b.head[0] + off[0], b.head[1] + off[1], b.head[2] + off[2]], i * 3)
+        wp.set([b.head[0] + off[0] + this.place[0], b.head[1] + off[1] + this.place[1], b.head[2] + off[2] + this.place[2]], i * 3)
       } else {
         const p = b.parent
         const ph = this.bones[p].head

@@ -88,7 +88,10 @@ function App() {
 
   const set = (p: Partial<LabOptions>) => setOpts((o) => ({ ...o, ...p }))
 
-  const makeSheet = async () => {
+  // one job at a time: timing and drawing the sheet share the renderer
+  const working = timing || making
+
+  const sheetJob = async () => {
     if (!lab) return null
     setMaking(true)
     try {
@@ -102,10 +105,11 @@ function App() {
       setMaking(false)
     }
   }
+  const makeSheet = () => sheetJob().catch((e: unknown) => { setError(`Couldn't draw the sheet: ${e}`); return null })
 
   useEffect(() => {
     window.__sheet = async () => {
-      const s = await makeSheet()
+      const s = await sheetJob()
       if (!s) throw new Error('lab not ready')
       return { cols: s.cols, rows: s.rows, size: s.size, solid: s.frames.map((f) => { let k = 0; for (let i = 3; i < f.data.length; i += 4) if (f.data[i]) k++; return k }) }
     }
@@ -170,10 +174,10 @@ function App() {
           </Field>
           <div className="flex flex-col gap-3">
             <Toggle label="Walk" checked={opts.walk} onChange={(v) => { set({ walk: v }); lab?.setWalk(v) }} />
-            <Button primary disabled={!lab || timing} onClick={time}>{timing ? 'Timing…' : 'Time it'}</Button>
-            <Button disabled={!lab || timing} onClick={timeSteps}>Time each step</Button>
+            <Button primary disabled={!lab || working} onClick={time}>{timing ? 'Timing…' : 'Time it'}</Button>
+            <Button disabled={!lab || working} onClick={timeSteps}>Time each step</Button>
             <Button onClick={() => downloadGlb(20000)}>Download the fox (.glb)</Button>
-            <Button disabled={!lab || making} onClick={makeSheet}>{making ? 'Drawing…' : 'Make a walk sprite sheet'}</Button>
+            <Button disabled={!lab || working} onClick={makeSheet}>{making ? 'Drawing…' : 'Make a walk sprite sheet'}</Button>
           </div>
         </div>
         {sheet && (

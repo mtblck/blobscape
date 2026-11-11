@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu'
 import { alphaCut, autoPalette, darkest, downsample, outline, removeStrays, quantize, type Frame, type Rgb } from '../splat-core/pixel.ts'
-import { LINEAR_TO_SRGB_4K } from '../splat-core/colour.ts'
+import { readbackToSrgb } from '../splat-core/colour.ts'
 import { SplatWorld } from './engine.ts'
 import { makeCreature, poseWalk, type Creature } from './creature.ts'
 
@@ -68,7 +68,8 @@ export async function makeWalkSheet(renderer: THREE.WebGPURenderer, opts: { size
         renderer.clear()
         renderer.render(scene, camera)
         const px = (await renderer.readRenderTargetPixelsAsync(target, 0, 0, big, big)) as Uint8Array
-        raws.push(toBottomUpSrgb(px, big, !webgl))
+        // the pixel pipeline wants sRGB, still premultiplied, rows bottom-up as WebGL reads them
+        raws.push(new Uint8Array(readbackToSrgb(px, big, big, { flip: !webgl, premultiplied: true }).buffer))
       }
     }
   } finally {
@@ -109,28 +110,4 @@ export async function makeWalkSheet(renderer: THREE.WebGPURenderer, opts: { size
       }
     },
   }
-}
-
-/**
- * The render target holds linear, premultiplied colour. The pixel pipeline
- * wants display (sRGB) colour, still premultiplied, with rows bottom-up as
- * WebGL reads them. WebGPU reads top-down, so those get flipped here.
- */
-function toBottomUpSrgb(px: Uint8Array, size: number, topDown: boolean): Uint8Array {
-  const out = new Uint8Array(size * size * 4)
-  for (let y = 0; y < size; y++) {
-    const src = (topDown ? size - 1 - y : y) * size * 4
-    const dst = y * size * 4
-    for (let x = 0; x < size * 4; x += 4) {
-      const a = px[src + x + 3]
-      out[dst + x + 3] = a
-      if (!a) continue
-      const k = a / 255
-      for (let c = 0; c < 3; c++) {
-        const lin = Math.min(1, px[src + x + c] / 255 / k)
-        out[dst + x + c] = Math.round(LINEAR_TO_SRGB_4K[Math.round(lin * 4095)] * k * 255)
-      }
-    }
-  }
-  return out
 }

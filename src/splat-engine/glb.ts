@@ -1,3 +1,4 @@
+import { SH_C0 } from '../splat-core/colour.ts'
 import { Blobs, type Vec3 } from '../splat-core/blobs.ts'
 import { Skeleton, norm4, type Bone, type Skin } from './rig.ts'
 
@@ -19,7 +20,6 @@ import { Skeleton, norm4, type Bone, type Skin } from './rig.ts'
  */
 export const SKIN_EXTENSION = 'BLOBSCAPE_gaussian_skinning'
 const SPLATS = 'KHR_gaussian_splatting'
-const SH_C0 = 0.28209479177387814
 
 export interface Clip {
   name: string
@@ -280,7 +280,9 @@ export function readRiggedGlb(bytes: Uint8Array): Rigged {
     })
     skeleton = new Skeleton(bones)
     const jt = json.accessors[at.JOINTS_0].componentType === UBYTE ? read(at.JOINTS_0, Uint8Array) : read(at.JOINTS_0, Uint16Array)
-    skin.joints.set(Array.from(jt, (j) => Math.min(255, j)))
+    if (joints.length > 256) throw new GlbError('More than 256 bones is not supported')
+    for (const j of jt) if (j >= joints.length) throw new GlbError(`A blob names bone ${j}, but the skin has ${joints.length}`)
+    skin.joints.set(jt)
     // weights may be floats, or bytes/shorts normalised to 0–1
     const wa = json.accessors[at.WEIGHTS_0]
     if (wa.componentType === FLOAT) skin.weights.set(read(at.WEIGHTS_0, Float32Array))

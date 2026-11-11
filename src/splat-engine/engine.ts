@@ -238,6 +238,7 @@ export class SplatWorld extends Mesh {
    * (world → screen, plus sort keys), then order (the sort itself).
    */
   stages(renderer: Renderer, camera: Camera) {
+    this.build(this.isWebGL(renderer))
     return {
       deform: () => { this.uploadBones(); this.updateBounds(); this.deform(renderer) },
       project: () => { this.setView(renderer, camera); renderer.compute(this.projectNode as never) },
@@ -418,7 +419,11 @@ function boneRadii(actors: Actor[], boneOffset: number[], bones: number) {
   actors.forEach((a, ai) => {
     const { blobs, skin, skeleton } = a
     for (let k = 0; k < blobs.count; k++) {
-      const b = skin.joints[k * 4]
+      // the blob's main bone: its heaviest weight (a file need not list it first)
+      let m = 0
+      for (let j = 1; j < 4; j++) if (skin.weights[k * 4 + j] > skin.weights[k * 4 + m]) m = j
+      const b = skin.joints[k * 4 + m]
+      if (b >= skeleton.count) throw new Error(`blob ${k} names bone ${b}, but the skeleton has ${skeleton.count}`)
       const h = skeleton.bones[b].head
       const s = Math.max(blobs.scale[k * 3], blobs.scale[k * 3 + 1], blobs.scale[k * 3 + 2]) * 2
       const d = Math.hypot(blobs.centre[k * 3] - h[0], blobs.centre[k * 3 + 1] - h[1], blobs.centre[k * 3 + 2] - h[2]) + s

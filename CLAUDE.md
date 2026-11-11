@@ -43,6 +43,8 @@ production domain. See README for the why behind the choices.
 
 
 ## Splat engine (prototype, `src/splat-engine/`, test page `/experiments/engine-lab/`)
+- The engine lab is deliberately unlisted (noindex, no hub card): it's a test bench, not an experiment.
+- `Skeleton.place` is where an actor stands; poses (`offset`, `rotation`, `reset()`) never touch it.
 - Our own renderer for animated splats, on three.js's WebGPURenderer (TSL). `SplatWorld` holds every blob of every actor. WebGPU, per frame: deform compute (bones → world centre + covariance), project compute (→ screen centre + ellipse axes, writes sort keys and histogram), `DepthSort` prefix + scatter (`sort.ts`, one counting sort over the whole scene), then a lean instanced draw. Projection/shading follow three's `GaussianSplat` (MIT). A still object is one bone.
 - WebGL has no compute: the vertex shader runs `deformBlob` + `projectSplat` per corner (like a skinned mesh), and the CPU only moves centres (`skinCentres`) and sorts. Both backends share those TSL helpers, so change them once.
 - Quads shrink with opacity (`placeQuad`): a blob's quad reaches only as far as it stays above 1/255.
@@ -50,5 +52,5 @@ production domain. See README for the why behind the choices.
 - A compute stage may bind only 8 storage buffers on many phones: joints+weights share one buffer for that reason.
 - Headless software WebGPU renders but can't present to a canvas: the lab's `offscreen=1` draws to a target and copies frames to the page; verify uses it.
 - Rigged files: `glb.ts` writes KHR_gaussian_splatting + standard glTF skins/animation + `BLOBSCAPE_gaussian_skinning` (used, not required). three.js's loader opens them as a still splat (verify checks).
-- The pixel pipeline lives in `src/splat-core/pixel.ts` (shared by Splat to Sprite and the engine's walk sheet); colour transfer functions in `splat-core/colour.ts`.
+- The pixel pipeline lives in `src/splat-core/pixel.ts` (shared by Splat to Sprite and the engine's walk sheet); colour transfer functions, `SH_C0` and the render-target readback (`readbackToSrgb`) in `splat-core/colour.ts`.
 - Status and gaps: `docs/engine-prototype.md`.
