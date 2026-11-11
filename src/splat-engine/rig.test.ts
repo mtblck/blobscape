@@ -104,3 +104,20 @@ test('the fast centre skinning lands every blob where skinBlob does', () => {
     for (let k = 0; k < 3; k++) assert.ok(near(out[i * 3 + k], ref[k]), `blob ${i}: ${out.subarray(i * 3, i * 3 + 3)} vs ${ref}`)
   })
 })
+
+test('a bone that grows carries its children with it, and blobs grow with their bone', () => {
+  const sk = arm()
+  sk.size[1] = 2
+  sk.update()
+  const c = new Float32Array(3), v = new Float32Array(6)
+  // a blob 1 along bone 1 (head at x = 1) ends up 2 along it, twice the size
+  skinBlob([2, 0, 0], [0.1, 0.1, 0.1], [0, 0, 0, 1], [1, 0, 0, 0], [1, 0, 0, 0], sk, 'quat', c, 0, v, 0)
+  assert.ok(near(c[0], 3), `${c}`)
+  assert.ok(near(v[0], 0.04))
+  assert.ok(near(sk.scale[1], 2))
+  // the root didn't grow
+  skinBlob([0.5, 0, 0], [0.1, 0.1, 0.1], [0, 0, 0, 1], [0, 0, 0, 0], [1, 0, 0, 0], sk, 'quat', c, 0, v, 0)
+  assert.ok(near(c[0], 0.5))
+  sk.reset()
+  assert.equal(sk.size[1], 1)
+})

@@ -8,12 +8,15 @@ import type { Quat, Vec3 } from '../splat-core/blobs.ts'
  *
  * `update()` turns the pose into what the skinning pass needs per bone: the skin
  * matrix (posed world × inverse rest, column-major 4×4), its rotation as a
- * quaternion, and its uniform scale.
+ * quaternion, and its uniform scale. A bone's scale carries down to its
+ * children, as in glTF.
  */
 export interface Bone {
   name: string
   parent: number
   head: Vec3
+  /** Where the bone ends in the rest pose, for drawing it. A bone with children points at its first child when this is missing. */
+  tail?: Vec3
 }
 
 export class Skeleton {
@@ -22,7 +25,9 @@ export class Skeleton {
   readonly rotation: Float32Array
   /** Pose: local offset per bone, added to its rest offset from the parent. */
   readonly offset: Float32Array
-  /** Pose: uniform scale of the root (bone 0) only. */
+  /** Pose: local uniform scale per bone, about its head; children inherit it. */
+  readonly size: Float32Array
+  /** Pose: uniform scale of the root (bone 0), on top of its `size`. */
   rootScale = 1
   /** Where the actor stands: added to every root bone, and kept by `reset()` (a pose isn't a placement). */
   readonly place = new Float32Array(3)
@@ -41,6 +46,7 @@ export class Skeleton {
     this.rotation = new Float32Array(n * 4)
     for (let i = 0; i < n; i++) this.rotation[i * 4 + 3] = 1
     this.offset = new Float32Array(n * 3)
+    this.size = new Float32Array(n).fill(1)
     this.matrix = new Float32Array(n * 16)
     this.quat = new Float32Array(n * 4)
     this.scale = new Float32Array(n)
@@ -63,6 +69,7 @@ export class Skeleton {
     this.rotation.fill(0)
     for (let i = 0; i < this.count; i++) this.rotation[i * 4 + 3] = 1
     this.offset.fill(0)
+    this.size.fill(1)
     this.rootScale = 1
   }
 
@@ -77,7 +84,7 @@ export class Skeleton {
       const lq = this.rotation.subarray(i * 4, i * 4 + 4)
       const off = this.offset.subarray(i * 3, i * 3 + 3)
       if (b.parent < 0) {
-        const s = i === 0 ? this.rootScale : 1
+        const s = (i === 0 ? this.rootScale : 1) * this.size[i]
         ws[i] = s
         wq.set(norm4(lq), i * 4)
         wp.set([b.head[0] + off[0] + this.place[0], b.head[1] + off[1] + this.place[1], b.head[2] + off[2] + this.place[2]], i * 3)
@@ -87,7 +94,7 @@ export class Skeleton {
         const pq = wq.subarray(p * 4, p * 4 + 4)
         const rel: Vec3 = [b.head[0] - ph[0] + off[0], b.head[1] - ph[1] + off[1], b.head[2] - ph[2] + off[2]]
         const r = rotate(pq, rel)
-        ws[i] = ws[p]
+        ws[i] = ws[p] * this.size[i]
         wp.set([wp[p * 3] + r[0] * ws[p], wp[p * 3 + 1] + r[1] * ws[p], wp[p * 3 + 2] + r[2] * ws[p]], i * 3)
         wq.set(mulQ(pq, norm4(lq)), i * 4)
       }

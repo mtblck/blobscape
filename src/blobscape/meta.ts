@@ -25,7 +25,7 @@ export function pageMeta(route: Route): PageMeta {
     case 'sandbox':
       return { path, title: `Sandbox · ${SITE.name}`, description: 'Spray, select, move, recolour and explode Gaussian splats, or open your own .ply, .spz, .splat, .ksplat or .sog capture. Nothing is uploaded.' }
     case 'creature':
-      return { path, title: `Creature · ${SITE.name}`, description: 'A blob fox that walks on its own splat engine. Make it, then download it as a rigged, animated .glb: as Gaussian splats or as a mesh for Blender and game engines.' }
+      return { path, title: `Creature · ${SITE.name}`, description: 'A frog, a fox, an elf and an ice dragon made of blobs, moving on their own splat engine: a jump, a tongue flick, a walk, wing beats and fire. See the bones under the blobs, then download one as a rigged, animated .glb: as Gaussian splats or as a mesh for Blender and game engines.' }
     case 'experiments':
       return { path, title: `Experiments · ${SITE.name}`, description: `Small tools built from Gaussian splats: ${EXPERIMENTS.map((e) => e.title).join(', ')}. Free, in your browser.` }
     case 'lesson': {

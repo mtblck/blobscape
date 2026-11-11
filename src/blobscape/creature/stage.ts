@@ -5,6 +5,7 @@ import { SplatWorld } from '../../splat-engine/engine.ts'
 import { sampleClip, type Clip } from '../../splat-engine/glb.ts'
 import type { Skeleton, Skin, SkinMode } from '../../splat-engine/rig.ts'
 import type { Blobs } from '../../splat-core/blobs.ts'
+import { BoneView } from './bones.ts'
 
 /**
  * The Creature page's view: Blobscape's own splat engine (src/splat-engine)
@@ -19,6 +20,9 @@ import type { Blobs } from '../../splat-core/blobs.ts'
  */
 export interface Actor { blobs: Blobs; skin: Skin; skeleton: Skeleton }
 
+/** What the view shows: the blobs, the bones that move them, or both (bones on top). */
+export type Show = 'blobs' | 'bones' | 'both'
+
 export interface StageOptions {
   offscreen?: boolean
 }
@@ -29,6 +33,9 @@ export class CreatureStage {
   private readonly scene = new THREE.Scene()
   private readonly camera = new THREE.PerspectiveCamera(40, 1, 0.05, 100)
   private world?: SplatWorld
+  private rig?: BoneView
+  private floor?: THREE.GridHelper
+  private show: Show = 'blobs'
   private actor?: Actor
   private clip?: Clip
   private target?: THREE.RenderTarget
@@ -51,9 +58,7 @@ export class CreatureStage {
   private constructor(private readonly display: HTMLCanvasElement, private readonly opts: StageOptions, renderer: THREE.WebGPURenderer) {
     this.renderer = renderer
     this.backend = (renderer.backend as unknown as { isWebGPUBackend?: boolean }).isWebGPUBackend ? 'webgpu' : 'webgl'
-    const floor = new THREE.GridHelper(8, 16, 0x8a8a8a, 0x5a5a5a)
-    floor.renderOrder = -1
-    this.scene.add(floor)
+    this.setFloor(8)
     if (!opts.offscreen) {
       const tick = (now: number) => {
         if (this.stopped) return
@@ -92,9 +97,13 @@ export class CreatureStage {
   /** Shows a creature, replacing the last one, and plays `clip` on it. */
   setActor(actor: Actor, clip?: Clip) {
     if (this.world) { this.scene.remove(this.world); this.world.dispose() }
+    if (this.rig) { this.scene.remove(this.rig); this.rig.dispose() }
     this.actor = actor
     this.world = new SplatWorld([actor], { mode: this.mode })
     this.scene.add(this.world)
+    this.rig = new BoneView(actor.skeleton)
+    this.scene.add(this.rig)
+    this.setShow(this.show)
     this.setClip(clip)
   }
 
@@ -109,6 +118,24 @@ export class CreatureStage {
     this.invalidate()
   }
 
+  /** A floor `size` across in half-unit squares, so the grid shows how big each creature is. */
+  setFloor(size: number) {
+    if (this.floor?.userData.size === size) return
+    if (this.floor) { this.scene.remove(this.floor); this.floor.dispose() }
+    this.floor = new THREE.GridHelper(size, size * 2, 0x8a8a8a, 0x5a5a5a)
+    this.floor.userData.size = size
+    this.floor.renderOrder = -1
+    this.scene.add(this.floor)
+    this.invalidate()
+  }
+
+  setShow(s: Show) {
+    this.show = s
+    if (this.world) this.world.visible = s !== 'bones'
+    if (this.rig) { this.rig.visible = s !== 'blobs'; this.rig.onTop = s === 'both'; this.rig.update() }
+    this.invalidate()
+  }
+
   invalidate(frames = 2) { this.pending = Math.max(this.pending, frames) }
 
   private pose() {
@@ -117,6 +144,7 @@ export class CreatureStage {
     if (this.clip) sampleClip(this.clip, sk, this.t)
     else { sk.reset(); sk.update() }
     this.world.markPosed()
+    if (this.rig?.visible) this.rig.update()
     this.invalidate()
   }
 
@@ -157,6 +185,7 @@ export class CreatureStage {
     this.stopped = true
     cancelAnimationFrame(this.raf)
     this.world?.dispose()
+    this.rig?.dispose()
     this.target?.dispose()
     this.renderer.dispose()
   }

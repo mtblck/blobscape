@@ -141,7 +141,8 @@ export function makeCreature(count = 20000, seed = 7, coat: Coat = COATS.red): C
     }
   })
 
-  const skeleton = new Skeleton(BONES)
+  // tails are only for drawing the rig
+  const skeleton = new Skeleton(BONES.map((b) => ({ ...b, tail: TAILS[b.name] })))
   const skin = emptySkin(blobs.count)
   for (let i = 0; i < blobs.count; i++) {
     const part = PARTS[parts[i]]

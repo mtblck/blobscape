@@ -604,6 +604,61 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     if (!(again.blobs < 6000 && again.n > 2000)) fails.push(`blobscape creature: after switching to 5k, ${JSON.stringify(again)}`)
     else ok(`blobscape creature: swaps to a ${again.blobs}-blob fox and draws it`)
     await c.page.screenshot({ path: join(shots, 'blobscape-creature-offscreen.png') })
+    // pixels in the view that pass a test, after drawing `t` seconds into the clip
+    const pixels = (t, kind) => c.page.evaluate(async ([t, kind]) => {
+      await window.__creature.stage.frame(t)
+      const cv = document.querySelector('[data-testid=creature-view]')
+      const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+      const test = {
+        fox: (r, g, b) => r > 150 && g > 50 && g < 140 && b < 80,
+        bone: (r, g, b) => r > 190 && g > 190 && b > 195 && Math.abs(r - b) < 30,
+        frog: (r, g, b) => g > 120 && g > r * 1.4 && b < 110,
+        elf: (r, g, b) => g > 90 && g > r * 1.5 && g > b * 1.3,
+        fire: (r, g, b) => r > 200 && g > 70 && g < 210 && b < 120,
+      }[kind]
+      let n = 0; for (let i = 0; i < d.length; i += 4) if (test(d[i], d[i + 1], d[i + 2])) n++
+      return n
+    }, [t, kind])
+    const FOX = 'fox', BONE = 'bone'
+    // the bones view hides every blob and draws the rig
+    await c.page.getByRole('button', { name: 'Bones', exact: true }).click()
+    await c.page.waitForTimeout(100)
+    const bones = { fox: await pixels(0.5, FOX), bone: await pixels(0.5, BONE) }
+    // the joints are coral, which reads as a little fox-orange; the fox itself is thousands
+    if (!(bones.fox < 2000 && bones.bone > 300)) fails.push(`blobscape creature: bones view ${JSON.stringify(bones)}`)
+    else ok(`blobscape creature: Bones hides the blobs and draws the rig (${bones.bone} bone pixels)`)
+    await c.page.screenshot({ path: join(shots, 'blobscape-creature-bones.png') })
+    await c.page.getByRole('button', { name: 'Both', exact: true }).click()
+    await c.page.waitForTimeout(100)
+    const both = { fox: await pixels(0.5, FOX), bone: await pixels(0.5, BONE) }
+    if (!(both.fox > 1000 && both.bone > 300)) fails.push(`blobscape creature: both view ${JSON.stringify(both)}`)
+    else ok('blobscape creature: Both draws the bones over the blobs')
+    await c.page.getByRole('button', { name: 'Blobs', exact: true }).click()
+    // every other creature builds, draws, and has its own clips
+    for (const [name, bonesWanted, colour, clip, t] of [
+      ['Frog', 20, 'frog', 'Tongue', 1.15],
+      ['Elf', 29, 'elf', 'Wave', 1],
+      ['Dragon', 43, 'fire', 'Breathe fire', 2],
+    ]) {
+      await c.page.getByRole('button', { name, exact: true }).click()
+      await c.page.waitForFunction((n) => window.__creature?.bones() === n && !document.querySelector('[data-testid=creature-loading]'), bonesWanted, { timeout: 60000 }).catch(() => {})
+      await c.page.getByRole('button', { name: clip, exact: true }).click()
+      await c.page.waitForTimeout(150)
+      const got = { bones: await c.page.evaluate(() => window.__creature?.bones()), n: await pixels(t, colour), url: new URL(c.page.url()).searchParams.get('creature') }
+      if (!(got.bones === bonesWanted && got.n > 1500 && got.url === name.toLowerCase())) fails.push(`blobscape creature: ${name} ${JSON.stringify(got)}`)
+      else ok(`blobscape creature: the ${name.toLowerCase()} draws on ${got.bones} bones, playing ${clip.toLowerCase()} (${got.n} pixels of its colour)`)
+      await c.page.screenshot({ path: join(shots, `blobscape-creature-${name.toLowerCase()}.png`) })
+    }
+    // the dragon's flame is bones that grow: it leaves in the file as scale keys, and comes back
+    const fire = await c.page.evaluate(() => {
+      const bytes = window.__creature.glb()
+      const len = new DataView(bytes.buffer, bytes.byteOffset).getUint32(12, true)
+      const json = JSON.parse(new TextDecoder().decode(bytes.subarray(20, 20 + len)))
+      const anim = json.animations.find((a) => a.name === 'fire')
+      return { scales: anim?.channels.filter((ch) => ch.target.path === 'scale').length, kb: Math.round(bytes.byteLength / 1024) }
+    })
+    if (fire.scales !== 6) fails.push(`blobscape creature: dragon file ${JSON.stringify(fire)}`)
+    else ok(`blobscape creature: the dragon's .glb keys its fire as scale on six bones (${fire.kb} KB)`)
     await c.ctx.close()
   }
 

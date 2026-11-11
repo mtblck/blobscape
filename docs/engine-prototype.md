@@ -35,6 +35,7 @@ Added with the Rigs and 3D models lessons (2026-11-11):
 - `models.ts`: the lesson rigs (caterpillar, arm, wrist), `walk.ts`: the fox's trot as four key poses with hold/in-between and foot speed.
 - `mesh.ts`: `blobsToMesh` turns blobs into a closed, skinned triangle mesh (density grid, shell, flood fill, signed distance pulled back to the blobs' surface, surface nets), `skinMesh` poses it on the CPU, `meshError` measures how far it strays. `glb.ts` `writeRiggedMeshGlb` saves it with the same bones and clips, unlit vertex colours; three.js opens it as a `SkinnedMesh` with its animation (verify checks).
 - The Creature page (`src/blobscape/Creature.tsx`, `#/creature`) is the engine's first public use: `SplatWorld` on WebGPU (WebGL fallback), up to 200k blobs, splat and mesh `.glb` downloads, and opening rigged `.glb` files.
+- Since then it has four creatures (`zoo/`: frog 20 bones, fox 14, elf 29, dragon 43, up to 400k blobs), a bones view, and bones that grow and slide: per-bone uniform `size` (children inherit it) and an `offset` on any bone, both keyed in clips and written to .glb as scale and translation channels. The GPU passes needed no change, since a bone's scale is already in its skin matrix.
 
 ## Known gaps
 
