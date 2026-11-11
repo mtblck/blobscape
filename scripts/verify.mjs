@@ -37,7 +37,7 @@ if (!base) {
 }
 
 const executablePath = process.env.CHROME_PATH || (existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : undefined)
-const browser = await chromium.launch({ executablePath, args: ['--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--ignore-gpu-blocklist'] })
+const browser = await chromium.launch({ executablePath, args: ['--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--ignore-gpu-blocklist', '--enable-unsafe-webgpu'] })
 const fails = []
 const ok = (m) => console.log(`  ok  ${m}`)
 
@@ -625,6 +625,56 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   else ok('blobscape sandbox: focus stays in the panel after Delete')
   await page.screenshot({ path: join(shots, 'blobscape-sandbox-tools.png') })
   await ctx.close()
+}
+
+// Engine lab (unlisted): the splat engine on WebGPU and on WebGL. Headless
+// software WebGPU can render but not present to a canvas, so the lab draws
+// off-screen and copies frames to the page.
+{
+  console.log('engine lab')
+  for (const webgl of [false, true]) {
+    const label = webgl ? 'webgl' : 'webgpu'
+    const { page, ctx } = await open(`/experiments/engine-lab/?which=engine&n=12000&walk=0&herd=2&offscreen=1${webgl ? '&webgl=1' : ''}`, { viewport: { width: 1000, height: 1000 } })
+    await page.waitForFunction(() => window.__lab || window.__labError, null, { timeout: 60000 })
+    const err = await page.evaluate(() => window.__labError)
+    if (err) { fails.push(`engine lab ${label}: ${err}`); await ctx.close(); continue }
+    const backend = await page.evaluate(() => window.__lab.info)
+    if (!backend.includes(label)) fails.push(`engine lab: asked for ${label}, got ${backend}`)
+    // GPU deform matches the CPU twin, both ways of turning blobs (WebGPU only; WebGL deforms on the CPU)
+    if (!webgl) {
+      for (const mode of ['quat', 'linear']) {
+        const r = await page.evaluate(async (m) => { const l = window.__lab; l.setWalk(true); l.setMode(m); await l.frame(0.37); return l.world.checkAgainstCPU(l.renderer) }, mode)
+        if (!(r.centre < 1e-3 && r.cov < r.covScale * 0.01)) fails.push(`engine lab ${mode}: GPU and CPU differ ${JSON.stringify(r)}`)
+        else ok(`engine lab: GPU skinning matches the CPU (${mode}, centre ±${r.centre.toExponential(1)})`)
+      }
+    }
+    // it draws something fox-coloured in the middle of the frame
+    await page.evaluate(() => window.__lab.frame(0.2))
+    const orange = await page.evaluate(() => {
+      const c = document.querySelector('canvas'); const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data
+      let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i] > 150 && d[i + 1] > 50 && d[i + 1] < 140 && d[i + 2] < 80) n++
+      return n
+    })
+    if (orange < 2000) fails.push(`engine lab ${label}: only ${orange} fox-orange pixels`)
+    else ok(`engine lab ${label}: draws the foxes (${orange} orange pixels)`)
+    const bench = await page.evaluate(() => window.__lab.bench(3))
+    if (!(bench.median > 0)) fails.push(`engine lab ${label}: bench ${JSON.stringify(bench)}`)
+    else ok(`engine lab ${label}: times frames (${bench.median.toFixed(0)} ms in software)`)
+    await page.screenshot({ path: join(shots, `engine-lab-${label}.png`) })
+    if (!webgl) {
+      // our rigged .glb opens in three.js's own loader as a still splat, with its animation
+      const g = await page.evaluate(() => window.__glbCheck())
+      if (!(g.splats > 4000 && g.animations === 1)) fails.push(`engine lab glb: ${JSON.stringify(g)}`)
+      else ok(`engine lab: three.js opens our rigged .glb (${g.splats} splats, ${g.animations} animation)`)
+      // the walk sheet: 4 rows × 8 frames, every frame drawn, side views wider than front views
+      const s = await page.evaluate(() => window.__sheet())
+      const side = s.solid.slice(8, 24), front = s.solid.slice(0, 8)
+      if (s.cols !== 8 || s.rows !== 4 || s.solid.some((k) => k < 100) || Math.min(...side) <= Math.max(...front)) fails.push(`engine lab sheet: ${JSON.stringify(s)}`)
+      else ok('engine lab: walk sheet has 32 drawn frames, side views wider than front')
+      await axe(page, 'engine lab')
+    }
+    await ctx.close()
+  }
 }
 
 await browser.close()
