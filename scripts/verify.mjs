@@ -557,6 +557,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   // Creature: our engine draws the fox off-screen; both files come out
   {
     const c = await open('/creature/?offscreen=1', { viewport: { width: 1280, height: 900 } })
+    if (!(await c.page.locator('[data-testid=creature-loading]').count())) fails.push('blobscape creature: no loading note while the engine starts')
     await c.page.waitForFunction(() => window.__creature, null, { timeout: 60000 }).catch(() => {})
     const orange = await c.page.evaluate(async () => {
       const cr = window.__creature
@@ -569,6 +570,9 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     })
     if (orange < 2000) fails.push(`blobscape creature: ${orange} fox-orange pixels`)
     else ok(`blobscape creature: our engine draws the fox (${orange} orange pixels)`)
+    await c.page.waitForTimeout(100)
+    if (await c.page.locator('[data-testid=creature-loading]').count()) fails.push('blobscape creature: the loading note stays after the fox is drawn')
+    else ok('blobscape creature: a loading note shows until the first frame, then goes')
     const sizes = await c.page.evaluate(() => ({ splats: window.__creature?.glb().byteLength, mesh: window.__creature?.mesh(48).byteLength }))
     if (!(sizes.splats > 100000 && sizes.mesh > 10000)) fails.push(`blobscape creature: files ${JSON.stringify(sizes)}`)
     else ok(`blobscape creature: writes splats (${Math.round(sizes.splats / 1024)} KB) and mesh (${Math.round(sizes.mesh / 1024)} KB) .glb`)

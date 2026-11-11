@@ -43,6 +43,9 @@ export class CreatureStage {
   orbit: Orbit = { target: [0, 0.72, 0], distance: 4.2, azimuth: 40, elevation: 12 }
   playing = true
   speed = 1
+  /** Called once, after the first frame with a creature in it has been drawn. */
+  onFirstFrame?: () => void
+  private drawn = false
   mode: SkinMode = 'quat'
 
   private constructor(private readonly display: HTMLCanvasElement, private readonly opts: StageOptions, renderer: THREE.WebGPURenderer) {
@@ -61,6 +64,7 @@ export class CreatureStage {
           this.pending = Math.max(0, this.pending - 1)
           this.resize()
           this.renderer.render(this.scene, this.camera)
+          if (this.actor) this.firstFrame()
         }
         this.raf = requestAnimationFrame(tick)
       }
@@ -75,6 +79,12 @@ export class CreatureStage {
     renderer.setClearColor(0x000000, 0)
     await renderer.init()
     return new CreatureStage(display, opts, renderer)
+  }
+
+  private firstFrame() {
+    if (this.drawn) return
+    this.drawn = true
+    this.onFirstFrame?.()
   }
 
   get blobCount() { return this.actor?.blobs.count ?? 0 }
@@ -133,6 +143,7 @@ export class CreatureStage {
     this.pose()
     this.resize()
     this.renderer.render(this.scene, this.camera)
+    if (this.actor) this.firstFrame()
     if (!this.target) return
     const px = await this.renderer.readRenderTargetPixelsAsync(this.target, 0, 0, this.target.width, this.target.height) as Uint8Array
     const { width: w, height: h } = this.target

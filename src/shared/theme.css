@@ -185,6 +185,13 @@
 .desk-group { grid-template-columns: minmax(0, 1fr); }
 @media (min-width: 64rem) { .desk-group { grid-template-columns: repeat(var(--cols, 1), minmax(0, 1fr)); } }
 
+/* Creature's loading mark: the blob hops on its axis. It moves, never stretches (brand rule), and stills under reduced motion */
+@keyframes bs-hop {
+  0%, 60%, 100% { transform: translateY(0); }
+  30%           { transform: translateY(-14px); }
+}
+.creature-loading-mark > g > path:first-child { animation: bs-hop 1.2s ease-in-out infinite; }
+
 /* Blobscape's front page: a dashed selection ring that marches */
 @keyframes bs-march { to { stroke-dashoffset: -22; } }
 
