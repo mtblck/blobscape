@@ -123,8 +123,10 @@ export function parsePath(pathname: string): Route | null {
   if (m[0] === 'lessons' && m.length === 1) return { page: 'lessons' }
   if (m[0] === 'lessons' && m.length === 2 && LESSONS.some((l) => l.id === m[1])) return { page: 'lesson', id: m[1] }
   if (m.length === 1 && m[0] === 'sandbox') return { page: 'sandbox' }
-  if (m.length === 1 && m[0] === 'creature') return { page: 'creature' }
   if (m.length === 1 && m[0] === 'experiments') return { page: 'experiments' }
+  if (m.length === 2 && m[0] === 'experiments' && m[1] === 'creature') return { page: 'creature' }
+  // The old address, before every experiment moved under /experiments/ (Vercel redirects it too)
+  if (m.length === 1 && m[0] === 'creature') return { page: 'creature' }
   return null
 }
 
@@ -142,7 +144,7 @@ export function parseLegacyHash(hash: string): Route | null {
 export function href(r: Route): string {
   if (r.page === 'lesson') return `/lessons/${r.id}/`
   if (r.page === 'sandbox') return '/sandbox/'
-  if (r.page === 'creature') return '/creature/'
+  if (r.page === 'creature') return '/experiments/creature/'
   if (r.page === 'experiments') return '/experiments/'
   if (r.page === 'lessons') return '/lessons/'
   return '/'
@@ -168,7 +170,10 @@ export function useRoute(): Route {
   const [route, setRoute] = useState<Route>(() => {
     const legacy = window.location.pathname === '/' ? parseLegacyHash(window.location.hash) : null
     if (legacy) window.history.replaceState(null, '', href(legacy) + window.location.search)
-    return current()
+    // The old /creature/ address (Vercel redirects it; this covers dev and anywhere without the redirect)
+    const now = current()
+    if (now.page === 'creature' && window.location.pathname !== href(now)) window.history.replaceState(null, '', href(now) + window.location.search + window.location.hash)
+    return now
   })
   useEffect(() => {
     const on = () => setRoute((was) => {

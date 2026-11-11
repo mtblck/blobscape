@@ -235,7 +235,7 @@ export function App() {
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <SiteHeader here="/tools/splat-to-sprite/" />
+      <SiteHeader here="/experiments/splat-to-sprite/" />
 
       <main id="main" className="mx-auto w-full max-w-7xl flex-1 px-4 pb-16">
         <Crumbs here="Splat to Sprite" parent={{ label: 'Experiments', href: '/experiments/' }} />

@@ -12,7 +12,7 @@ const PAGES = [
 
 /** True when `path` is the page we're on, or the list it belongs to (a lesson under Lessons, an experiment under Experiments). */
 const isHere = (here: string | undefined, path: string) =>
-  !!here && (here === path || (path === '/lessons/' && here.startsWith('/lessons/')) || (path === '/experiments/' && EXPERIMENTS.some((e) => e.url === here)))
+  !!here && (here === path || (path === '/lessons/' && here.startsWith('/lessons/')) || (path === '/experiments/' && here.startsWith('/experiments/')))
 
 /**
  * The sticky header every page shares: the Blobscape logo, the main pages

@@ -17,7 +17,7 @@ import { DESCRIPTION, pageMeta } from '../src/blobscape/meta.ts'
 import { AXIS, BLOB, WORD } from '../src/shared/logoPaths.ts'
 
 const DIST = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist')
-const TOOLS = ['/tools/fit-a-picture/', '/tools/splat-to-sprite/']
+const TOOLS = ['/experiments/fit-a-picture/', '/experiments/splat-to-sprite/']
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 const url = (path: string) => SITE.origin + path

@@ -13,17 +13,22 @@ const block = v.headers?.find((h) => h.source === '/(.*)')
 const csp = block?.headers.find((h) => h.key === 'Content-Security-Policy')?.value ?? ''
 if (!csp.includes("'wasm-unsafe-eval'")) fail("CSP script-src needs 'wasm-unsafe-eval' (Spark decodes splats in WASM)")
 if (!/worker-src [^;]*blob:/.test(csp)) fail('CSP needs worker-src blob: (Spark sorts splats in a blob worker)')
-// Old mattblack.space/experiments/ addresses (proxied here by the portfolio) go to blobscape.dev.
-// Absolute, so the redirect reaches the visitor as blobscape.dev, not as a path on mattblack.space
-// mattblack.space/experiments/ (the old hub, via the portfolio's proxy to the old project's host) goes to the
-// Experiments page; only for that host, so blobscape.dev's own /experiments/ page isn't caught
-const OLD_HOST = 'experiments-theta-inky.vercel.app'
-for (const p of ['/experiments', '/experiments/:path*']) {
-  if (!v.redirects?.some((r) => r.source === p && r.has?.some((h) => h.type === 'host' && h.value === OLD_HOST) && r.destination === 'https://blobscape.dev/experiments/')) fail(`vercel.json needs a redirect from ${p} on ${OLD_HOST} to https://blobscape.dev/experiments/`)
+// Old mattblack.space/experiments/ addresses reach this repo through the portfolio's proxy to the old
+// `experiments` project. Any host that isn't Blobscape's sends them on to blobscape.dev, absolute so the visitor
+// lands on blobscape.dev; on Blobscape's own hosts /experiments/ is the Experiments page and must not redirect.
+// Blobscape's hosts: blobscape.dev, www, and the `blobscape` Vercel project's *.vercel.app URLs (previews
+// included), which all contain "blobscape". Renaming that project would make its previews redirect.
+const NOT_BLOBSCAPE = (r) => r.missing?.some((h) => h.type === 'host' && h.value === '.*blobscape.*') && !r.has
+for (const [src, dest] of [['/experiments', 'https://blobscape.dev/experiments/'], ['/experiments/:path*', 'https://blobscape.dev/experiments/:path*']]) {
+  if (!v.redirects?.some((r) => r.source === src && r.destination === dest && NOT_BLOBSCAPE(r))) fail(`vercel.json needs ${src} -> ${dest} on hosts that aren't Blobscape's`)
 }
-if (v.redirects?.some((r) => (r.source === '/experiments' || r.source === '/experiments/:path*') && !r.has)) fail('an /experiments catch-all without a host condition would hide the Experiments page')
-for (const p of ['/experiments/blobscape/:path*', '/experiments/fit-a-picture/:path*', '/experiments/splat-to-sprite/:path*']) {
-  if (!v.redirects?.some((r) => r.source === p && r.destination.startsWith('https://blobscape.dev/'))) fail(`vercel.json needs a redirect from ${p} to https://blobscape.dev/…`)
+for (const r of v.redirects ?? []) {
+  const hidesPage = r.source === '/experiments' || r.source.startsWith('/experiments/:') || ['/experiments/creature', '/experiments/fit-a-picture', '/experiments/splat-to-sprite'].some((p) => r.source.startsWith(p))
+  if (hidesPage && !NOT_BLOBSCAPE(r)) fail(`redirect from ${r.source} would hide a page on blobscape.dev; limit it to other hosts`)
+}
+// Addresses from before every experiment moved under /experiments/
+for (const p of ['/creature/:path*', '/tools/fit-a-picture/:path*', '/tools/splat-to-sprite/:path*']) {
+  if (!v.redirects?.some((r) => r.source === p && r.destination.startsWith('/experiments/'))) fail(`vercel.json needs a redirect from ${p} into /experiments/`)
 }
 // Every page: no inline scripts
 const pages = [...vite.matchAll(/resolve\(import.meta.dirname, '([\w/-]+\.html)'\)/g)].map((m) => m[1])

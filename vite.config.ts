@@ -25,8 +25,8 @@ export default defineConfig({
     rollupOptions: {
       input: {
         blobscape: resolve(import.meta.dirname, 'index.html'),
-        'fit-a-picture': resolve(import.meta.dirname, 'tools/fit-a-picture/index.html'),
-        'splat-to-sprite': resolve(import.meta.dirname, 'tools/splat-to-sprite/index.html'),
+        'fit-a-picture': resolve(import.meta.dirname, 'experiments/fit-a-picture/index.html'),
+        'splat-to-sprite': resolve(import.meta.dirname, 'experiments/splat-to-sprite/index.html'),
         'engine-lab': resolve(import.meta.dirname, 'engine-lab/index.html'),
       },
     },
