@@ -89,8 +89,12 @@ Lessons and a sandbox in one page. Each lesson is one idea you can poke at, with
 as you reach them: **One blob** (the 14 numbers of a Gaussian), **Footprint** (how a 3D blob lands
 on screen as a 2D ellipse), **Order matters** (why every frame sorts back to front), and **Many make
 a shape** (from one blob to 20,000). Every lesson can open its scene in the **Sandbox**, which adds,
-sprays, selects, erases, recolours and resizes blobs, with an x-ray view and undo. More lessons
-(colour by angle, painting, real captures, breaking a scene) and sandbox effects are planned.
+sprays and erases blobs; selects them by click, box, lasso or colour; moves, turns, scales,
+recolours and fades the selection; runs live effects (explode, melt, wind, twist, wave, dissolve)
+on the whole scene or the selection; opens .ply, .spz, .splat, .ksplat and .sog captures; and saves
+a 3DGS .ply (base colour only: no `f_rest_*` terms, so it opens in viewers such as SuperSplat
+and Spark but not in the original training code). Everything is undoable. More lessons (colour by angle, painting, real
+captures, breaking a scene) are planned.
 
 ### Design notes
 
@@ -108,4 +112,14 @@ sprays, selects, erases, recolours and resizes blobs, with an x-ray view and und
   lesson-to-sandbox hand-off is in memory.
 - **Spray picks once per dab.** It finds the surface under the ring once, then scatters the dab's
   blobs over that surface's tangent plane, so a stroke stays cheap on a 200k-blob scene.
+- **Effects run twice, identically.** Each effect is GLSL in a Spark dyno modifier (a live preview
+  that costs only uniforms per frame) and the same maths in TypeScript (`effects.ts`) for "Make it
+  permanent". Both seed their randomness from an integer hash of the blob's GPU slot, so a bake
+  matches the preview pixel for pixel. An effect on the selection puts the selected blobs first on
+  the GPU and only touches the first `count`.
+- **Files stay on the device.** Imports are decoded by Spark (WASM) in the page and copied into
+  `Blobs` (base colour only, no view-dependent shading); scenes over a million blobs (400k on
+  phones) are thinned evenly, with the survivors widened to cover. Captures are turned upright on
+  opening, since COLMAP-trained scenes come out upside down. Edits are plain functions in `ops.ts`
+  with tests.
 

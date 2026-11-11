@@ -11,6 +11,8 @@ export interface ToolHandlers {
   up?: () => void
   /** Pointer moving with no button down, for brush previews. */
   hover?: (x: number | null, y: number | null) => void
+  /** A key on the focused view; return true if the tool used it (it then doesn't orbit). */
+  key?: (ev: React.KeyboardEvent) => boolean
   /** Enter or Space on the focused view: use the tool at the centre. */
   activate?: (x: number, y: number, shift: boolean) => void
   cursor?: string
@@ -28,9 +30,10 @@ interface Props {
   /**
    * Called when the blobs are about to be sent to the GPU: returns the first
    * index that changed (the old count after an append), so only new blobs are
-   * rewritten. Without it, every sync rewrites them all.
+   * rewritten, and optionally a GPU order (see SplatView.sync). Without it,
+   * every sync rewrites them all in list order.
    */
-  takeSyncFrom?: () => number
+  takeSync?: () => { from: number; order?: ArrayLike<number> | null }
   tool?: ToolHandlers
   label: string
   /** Shown in the corner: how to drive the view. */
@@ -70,7 +73,7 @@ export const clampOrbit = (o: Orbit): Orbit => ({
  * canvas on top draws whatever the page wants over them. Drag (or arrow keys)
  * to orbit, scroll, pinch or +/− to zoom.
  */
-export function Viewport({ blobs, version, orbit, setOrbit, reach, overlay, takeSyncFrom, tool, label, hint, children, onView, className }: Props) {
+export function Viewport({ blobs, version, orbit, setOrbit, reach, overlay, takeSync, tool, label, hint, children, onView, className }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const overlayRef = useRef<HTMLCanvasElement>(null)
   const viewRef = useRef<SplatView | null>(null)
@@ -102,7 +105,8 @@ export function Viewport({ blobs, version, orbit, setOrbit, reach, overlay, take
     const { clientWidth: w, clientHeight: h } = c
     const dpr = Math.min(2, window.devicePixelRatio || 1)
     if (c.width !== Math.floor(w * dpr) || c.height !== Math.floor(h * dpr)) { c.width = Math.floor(w * dpr); c.height = Math.floor(h * dpr) }
-    const ctx = c.getContext('2d')!
+    // A CPU-backed canvas: in Chrome a GPU one could keep showing an old frame after a clear that draws nothing new
+    const ctx = c.getContext('2d', { willReadFrequently: true })!
     ctx.setTransform(1, 0, 0, 1, 0, 0)
     ctx.clearRect(0, 0, c.width, c.height)
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
@@ -110,9 +114,9 @@ export function Viewport({ blobs, version, orbit, setOrbit, reach, overlay, take
   }
 
   useEffect(() => {
-    const from = takeSyncFrom?.() ?? 0
-    viewRef.current?.sync(blobs, Number.isFinite(from) ? from : 0)
-    // takeSyncFrom is read at sync time, not a trigger
+    const { from, order } = takeSync?.() ?? { from: 0 }
+    viewRef.current?.sync(blobs, Number.isFinite(from) ? from : 0, order ?? null)
+    // takeSync is read at sync time, not a trigger
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blobs, version])
   useEffect(() => { if (viewRef.current) viewRef.current.orbit = orbit }, [orbit])
@@ -174,6 +178,7 @@ export function Viewport({ blobs, version, orbit, setOrbit, reach, overlay, take
   }, [setOrbit])
 
   const onKeyDown = (ev: React.KeyboardEvent) => {
+    if (tool?.key?.(ev)) { ev.preventDefault(); return }
     if ((ev.key === 'Enter' || ev.key === ' ') && tool?.activate) {
       ev.preventDefault()
       const c = ev.currentTarget as HTMLElement
@@ -205,6 +210,9 @@ export function Viewport({ blobs, version, orbit, setOrbit, reach, overlay, take
         onPointerLeave={() => tool?.hover?.(null, null)}
         onContextMenu={(ev) => ev.preventDefault()}
         onKeyDown={onKeyDown}
+        // The overlay can mark the centre for keyboard aiming while the view has focus
+        onFocus={() => viewRef.current?.invalidate(1)}
+        onBlur={() => viewRef.current?.invalidate(1)}
       />
       {failed && (
         <div role="alert" className="absolute inset-4 grid place-items-center text-center text-sm text-ink">

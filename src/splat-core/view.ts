@@ -1,5 +1,6 @@
 import * as THREE from 'three'
-import { PackedSplats, SparkRenderer, SplatMesh } from '@sparkjsdev/spark'
+import { PackedSplats, SparkRenderer, SplatMesh, dyno } from '@sparkjsdev/spark'
+import { EFFECT_GLSL_GLOBALS, EFFECT_INDEX, effectStatements, type EffectParams } from './effects.ts'
 import { RenderLoop } from './loop.ts'
 import type { Blobs, Lens } from './blobs.ts'
 
@@ -110,6 +111,8 @@ export class SplatView {
       const m = this.floor.material as THREE.Material
       m.transparent = true
       m.opacity = 0.35
+      // Drawn before the splats, which blend over it: they don't write depth, so drawn after it would show through them
+      this.floor.renderOrder = -1
       this.scene.add(this.floor)
     } else if (!on && this.floor) {
       this.scene.remove(this.floor)
@@ -132,8 +135,10 @@ export class SplatView {
   /**
    * Sends the blobs to the GPU, rewriting Spark's packed array in place from
    * index `from` on (pass the old count after appending, 0 after anything else).
+   * With `order`, GPU slot g holds blob order[g]: effects use it to put the
+   * blobs they touch first. Pass 0 for `from` whenever the order changes.
    */
-  async sync(blobs: Blobs, from = 0) {
+  async sync(blobs: Blobs, from = 0, order: ArrayLike<number> | null = null) {
     // Two syncs in a row must share one mesh, so the first one's setup is awaited by both.
     this.ready ??= (async () => {
       this.packed = new PackedSplats({ maxSplats: Math.max(1024, blobs.count) })
@@ -148,13 +153,15 @@ export class SplatView {
     if (this.disposed || !this.mesh) return
     const p = this.packed!
     const c = new THREE.Vector3(), s = new THREE.Vector3(), q = new THREE.Quaternion(), col = new THREE.Color()
-    // Appending (a spray stroke) only needs the new blobs written
-    for (let i = Math.max(0, Math.min(from, blobs.count)); i < blobs.count; i++) {
+    // Appending (a spray stroke) only needs the new blobs written. With an order, the caller passes 0 whenever the order changed.
+    const start = Math.max(0, Math.min(from, blobs.count))
+    for (let g = start; g < blobs.count; g++) {
+      const i = order ? order[g] : g
       c.fromArray(blobs.centre, i * 3)
       s.fromArray(blobs.scale, i * 3)
       q.fromArray(blobs.quat, i * 4)
       col.setRGB(blobs.colour[i * 3], blobs.colour[i * 3 + 1], blobs.colour[i * 3 + 2])
-      p.setSplat(i, c, s, q, blobs.opacity[i], col)
+      p.setSplat(g, c, s, q, blobs.opacity[i], col)
     }
     p.numSplats = blobs.count
     p.needsUpdate = true
@@ -162,6 +169,54 @@ export class SplatView {
     this.mesh.visible = blobs.count > 0
     this.mesh.updateVersion()
     this.invalidate(30)
+  }
+
+  private fx?: { kind: dyno.DynoFloat<string>; amount: dyno.DynoFloat<string>; time: dyno.DynoFloat<string>; radius: dyno.DynoFloat<string>; floor: dyno.DynoFloat<string>; count: dyno.DynoFloat<string>; centre: dyno.DynoVec3<THREE.Vector3, string> }
+  private fxOn = false
+
+  /**
+   * Runs a live effect on the GPU (see effects.ts) for the first `count`
+   * blobs in GPU order, or turns it off with null. Cheap to call every frame:
+   * it only changes uniforms.
+   */
+  async setEffect(p: EffectParams | null, count: number) {
+    await this.ready
+    const mesh = this.mesh
+    if (!mesh || this.disposed) return
+    if (!p) {
+      if (this.fxOn) { mesh.objectModifier = undefined; mesh.updateGenerator(); this.fxOn = false; this.invalidate() }
+      return
+    }
+    if (!this.fx) {
+      this.fx = {
+        kind: dyno.dynoFloat(0), amount: dyno.dynoFloat(0), time: dyno.dynoFloat(0), radius: dyno.dynoFloat(1),
+        floor: dyno.dynoFloat(0), count: dyno.dynoFloat(0), centre: dyno.dynoVec3(new THREE.Vector3()),
+      }
+    }
+    const u = this.fx
+    if (!this.fxOn) {
+      const node = new dyno.Dyno({
+        inTypes: { gsplat: dyno.Gsplat, kind: 'float', amount: 'float', time: 'float', radius: 'float', floor: 'float', count: 'float', centre: 'vec3' },
+        outTypes: { gsplat: dyno.Gsplat },
+        globals: () => [EFFECT_GLSL_GLOBALS],
+        statements: ({ inputs, outputs }) => {
+          const i = inputs as Record<string, string>
+          return effectStatements(i.gsplat, String(outputs.gsplat), { kind: i.kind, amount: i.amount, time: i.time, radius: i.radius, floor: i.floor, count: i.count, centre: i.centre }).split('\n')
+        },
+      })
+      mesh.objectModifier = dyno.dynoBlock({ gsplat: dyno.Gsplat }, { gsplat: dyno.Gsplat }, ({ gsplat }) => ({ gsplat: node.apply({ gsplat, ...u }).gsplat }))
+      mesh.updateGenerator()
+      this.fxOn = true
+    }
+    u.kind.value = EFFECT_INDEX[p.kind]
+    u.amount.value = p.amount
+    u.time.value = p.time
+    u.radius.value = p.radius
+    u.floor.value = p.floor
+    u.count.value = count
+    u.centre.value.set(p.centre[0], p.centre[1], p.centre[2])
+    mesh.updateVersion()
+    this.invalidate(2)
   }
 
   dispose() {

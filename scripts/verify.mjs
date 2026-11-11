@@ -154,9 +154,8 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   await ctx.close()
 }
 
-// 3. A user's own .ply: the standard 3DGS layout, 2,000 splats on a sphere
-{
-  const n = 2000
+// A user's own .ply: the standard 3DGS layout, 2,000 splats on a sphere
+function ballPly(n = 2000) {
   const props = ['x', 'y', 'z', 'f_dc_0', 'f_dc_1', 'f_dc_2', 'opacity', 'scale_0', 'scale_1', 'scale_2', 'rot_0', 'rot_1', 'rot_2', 'rot_3']
   const header = `ply\nformat binary_little_endian 1.0\nelement vertex ${n}\n${props.map((p) => `property float ${p}`).join('\n')}\nend_header\n`
   const body = new Float32Array(n * props.length)
@@ -165,7 +164,12 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     // SH DC term: colour = 0.5 + 0.28209 * f_dc; opacity and scale are stored pre-activation
     body.set([Math.cos(t) * r, y, Math.sin(t) * r, 1.5, -1.2, -1.2, 4, -3, -3, -3, 1, 0, 0, 0], i * props.length)
   }
-  const buf = Buffer.concat([Buffer.from(header), Buffer.from(body.buffer)])
+  return Buffer.concat([Buffer.from(header), Buffer.from(body.buffer)])
+}
+
+// 3. The .ply in Splat to Sprite
+{
+  const buf = ballPly()
   const { page, ctx } = await open('/experiments/splat-to-sprite/', { viewport: { width: 1280, height: 900 } })
   await page.waitForFunction(() => /[1-9]/.test(document.querySelector('[data-testid=splat-count]')?.textContent ?? ''), null, { timeout: 30000 })
   await page.setInputFiles('input[type=file]', { name: 'ball.ply', mimeType: 'application/octet-stream', buffer: buf })
@@ -413,6 +417,121 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   await axe(dark.page, 'blobscape dark footprint')
   await dark.page.screenshot({ path: join(shots, 'blobscape-footprint-dark.png') })
   await dark.ctx.close()
+}
+
+// 7. Blobscape sandbox tools: open a file, box and lasso select, move, a live effect, bake, save
+{
+  const B = '/experiments/blobscape/'
+  const { page, ctx } = await open(B + '#/sandbox', { viewport: { width: 1280, height: 900 }, acceptDownloads: true })
+  await page.waitForTimeout(1500)
+  const count = async () => Number((await page.textContent('[data-testid=blob-count]')).replace(/\D/g, ''))
+  const selected = async () => Number(((await page.textContent('[data-testid=selected-count]').catch(() => '0')) ?? '0').replace(/\D/g, ''))
+  const shot = async () => page.getByTestId('viewport').screenshot()
+  // Pixels that changed clearly (any channel by more than 24), decoded in the page
+  const differs = (a, b) => page.evaluate(async ([a, b]) => {
+    const px = async (s) => { const i = await createImageBitmap(new Blob([Uint8Array.from(atob(s), (ch) => ch.charCodeAt(0))], { type: 'image/png' })); const c = new OffscreenCanvas(i.width, i.height); const x = c.getContext('2d'); x.drawImage(i, 0, 0); return x.getImageData(0, 0, i.width, i.height).data }
+    const [p, q] = await Promise.all([px(a), px(b)])
+    let n = 0
+    for (let k = 0; k < p.length; k += 4) if (Math.abs(p[k] - q[k]) > 24 || Math.abs(p[k + 1] - q[k + 1]) > 24 || Math.abs(p[k + 2] - q[k + 2]) > 24) n++
+    return n
+  }, [a.toString('base64'), b.toString('base64')])
+
+  await page.getByRole('tab', { name: /Scene/ }).click()
+  await page.setInputFiles('input[type=file]', { name: 'ball.ply', mimeType: 'application/octet-stream', buffer: ballPly() })
+  await page.waitForFunction(() => document.querySelector('[data-testid=blob-count]')?.textContent === '2,000', null, { timeout: 30000 }).catch(() => {})
+  if ((await count()) !== 2000) fails.push(`blobscape sandbox: opening ball.ply gave ${await count()} blobs`)
+  else ok('blobscape sandbox: opens a .ply (2,000 blobs)')
+  await page.waitForTimeout(1200)
+
+  // Box select the middle of the view, then lasso the left half
+  await page.getByRole('button', { name: 'Select', exact: true }).click()
+  const box = await page.getByTestId('viewport').boundingBox()
+  const at = (fx, fy) => [box.x + box.width * fx, box.y + box.height * fy]
+  await page.mouse.move(...at(0.3, 0.2)); await page.mouse.down()
+  for (let k = 1; k <= 8; k++) await page.mouse.move(...at(0.3 + k * 0.05, 0.2 + k * 0.075))
+  await page.mouse.up()
+  const boxed = await selected()
+  if (boxed < 50 || boxed >= 2000) fails.push(`blobscape sandbox: box select picked ${boxed}`)
+  else ok(`blobscape sandbox: box select picks ${boxed} blobs`)
+  await page.getByRole('button', { name: 'Lasso', exact: true }).click()
+  const ring = [[0.15, 0.1], [0.5, 0.1], [0.5, 0.95], [0.15, 0.95]]
+  await page.mouse.move(...at(...ring[0])); await page.mouse.down()
+  for (const [i, j] of [[0, 1], [1, 2], [2, 3], [3, 0]]) for (let k = 1; k <= 6; k++) await page.mouse.move(...at(ring[i][0] + (ring[j][0] - ring[i][0]) * k / 6, ring[i][1] + (ring[j][1] - ring[i][1]) * k / 6))
+  await page.mouse.up()
+  const lassoed = await selected()
+  if (lassoed < 200 || lassoed >= 2000) fails.push(`blobscape sandbox: lasso picked ${lassoed}`)
+  else ok(`blobscape sandbox: lasso picks ${lassoed} blobs`)
+
+  // Move the selection: the picture changes, and Undo puts it back
+  const still = await shot()
+  await page.getByRole('button', { name: 'Move', exact: true }).click()
+  await page.mouse.move(...at(0.3, 0.5)); await page.mouse.down(); await page.mouse.move(...at(0.2, 0.5), { steps: 5 }); await page.mouse.up()
+  await page.waitForTimeout(600)
+  const moved = await differs(still, await shot())
+  if (moved < 300) fails.push(`blobscape sandbox: moving the selection changed ${moved} pixels`)
+  else ok('blobscape sandbox: Move slides the selection')
+  await page.getByRole('button', { name: 'Undo' }).click()
+
+  // A live effect on the GPU: explode the whole scene
+  await page.getByRole('tab', { name: /Effects/ }).click()
+  const calm = await shot()
+  await page.getByRole('button', { name: 'Explode', exact: true }).click()
+  await page.getByRole('slider', { name: 'Amount' }).focus()
+  await page.keyboard.press('End')
+  // Software WebGL is slow to re-run the effect and re-sort; a real GPU does it within a frame
+  await page.waitForTimeout(2500)
+  const blown = await shot()
+  const changed = await differs(calm, blown)
+  if (changed < 2000) fails.push(`blobscape sandbox: Explode changed ${changed} pixels`)
+  else ok('blobscape sandbox: Explode runs on the GPU')
+  await page.screenshot({ path: join(shots, 'blobscape-explode.png') })
+  await axe(page, 'blobscape sandbox effects')
+  // Make it permanent: the preview turns off and the blobs keep the look
+  await page.getByRole('button', { name: 'Make it permanent' }).click()
+  await page.waitForTimeout(2500)
+  const baked = await differs(blown, await shot())
+  const noneOn = await page.getByRole('group', { name: 'Effect' }).getByRole('button', { name: 'None' }).getAttribute('aria-pressed')
+  if (noneOn !== 'true') fails.push('blobscape sandbox: effect still on after making it permanent')
+  else if (baked > changed / 50) fails.push(`blobscape sandbox: baked picture differs from the preview in ${baked} pixels (the effect changed ${changed})`)
+  else ok(`blobscape sandbox: a baked effect matches its preview (${baked} of ${changed} changed pixels differ)`)
+  // Wave loops on its own clock
+  await page.getByRole('button', { name: 'Wave', exact: true }).click()
+  const w1 = await shot(); await page.waitForTimeout(500); const w2 = await shot()
+  if ((await differs(w1, w2)) < 200) fails.push('blobscape sandbox: Wave does not animate')
+  else ok('blobscape sandbox: Wave animates')
+  await page.getByRole('button', { name: 'None', exact: true }).click()
+
+  // Save as .ply: a standard header and every blob
+  await page.getByRole('tab', { name: /Scene/ }).click()
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Save as .ply' }).click()])
+  const saved = readFileSync(await download.path())
+  const head = saved.subarray(0, 400).toString('latin1')
+  if (download.suggestedFilename() !== 'ball.ply' || !head.includes('element vertex 2000') || !head.includes('property float rot_3')) fails.push(`blobscape sandbox: saved ${download.suggestedFilename()} with header ${JSON.stringify(head.slice(0, 120))}`)
+  else ok('blobscape sandbox: saves a standard .ply')
+
+  // A file that isn't a splat: an error, and the scene stays
+  await page.setInputFiles('input[type=file]', { name: 'junk.ply', mimeType: 'application/octet-stream', buffer: Buffer.from('not a splat at all') })
+  const alert = await page.getByRole('alert').textContent({ timeout: 15000 }).catch(() => '')
+  if (!alert.includes("Couldn't open junk.ply") || (await count()) !== 2000) fails.push(`blobscape sandbox: bad file gave "${alert}" and ${await count()} blobs`)
+  else ok('blobscape sandbox: a bad file shows an error and keeps the scene')
+  // A header that promises two billion splats is caught before Spark's decoder sees it, so a good file still opens after
+  const lying = Buffer.from(ballPly(500).toString('latin1').replace('element vertex 500', 'element vertex 2000000000'), 'latin1')
+  await page.setInputFiles('input[type=file]', { name: 'liar.ply', mimeType: 'application/octet-stream', buffer: lying })
+  await page.waitForFunction(() => document.querySelector('[role=alert]')?.textContent?.includes('liar.ply'), null, { timeout: 15000 }).catch(() => {})
+  await page.setInputFiles('input[type=file]', { name: 'small.ply', mimeType: 'application/octet-stream', buffer: ballPly(500) })
+  await page.waitForFunction(() => document.querySelector('[data-testid=blob-count]')?.textContent === '500', null, { timeout: 30000 }).catch(() => {})
+  if ((await count()) !== 500) fails.push(`blobscape sandbox: after a lying header, a good file gave ${await count()} blobs`)
+  else ok('blobscape sandbox: a lying .ply header is refused and the next file still opens')
+  // Keyboard: Move nudges the selection with the arrow keys; Delete keeps focus in the panel
+  await page.getByRole('tab', { name: /Selection/ }).click()
+  await page.getByRole('button', { name: 'Select all' }).click()
+  await page.getByRole('button', { name: 'Delete' }).focus()
+  await page.keyboard.press('Enter')
+  const focusTag = await page.evaluate(() => document.activeElement?.tagName)
+  if (focusTag === 'BODY') fails.push('blobscape sandbox: focus fell to the page after Delete')
+  else ok('blobscape sandbox: focus stays in the panel after Delete')
+  await page.screenshot({ path: join(shots, 'blobscape-sandbox-tools.png') })
+  await ctx.close()
 }
 
 await browser.close()
