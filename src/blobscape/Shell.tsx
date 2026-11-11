@@ -159,7 +159,7 @@ export function LessonShell({ id, intro, view, caption, groups, goals, done, sce
           <div className={`case relative flex flex-col overflow-hidden rounded-2xl transition-shadow ${where === 'view' ? 'ring-[3px] ring-placard' : 'ring-1 ring-rule'}`}>
             <div className="relative h-[min(30dvh,250px)] min-h-[180px] lg:h-[clamp(300px,calc(100dvh-33rem),640px)]">
               {view}
-              {where === 'view' && <span aria-hidden className="pointer-events-none absolute top-3 right-3 rounded-full bg-placard px-3 py-1 text-xs font-semibold text-placard-ink">Look here</span>}
+              {where === 'view' && <span aria-hidden className="pointer-events-none absolute top-3 right-14 rounded-full bg-placard px-3 py-1 text-xs font-semibold text-placard-ink">Look here</span>}
             </div>
             {caption && <div className="border-t border-rule-soft px-4 py-2 text-xs leading-relaxed text-ink-muted sm:text-sm">{caption}</div>}
           </div>

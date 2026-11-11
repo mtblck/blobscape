@@ -4,7 +4,7 @@ import { orbitLens, type Orbit } from '../../splat-core/view.ts'
 import { Chip, Slider } from '../../shared/ui.tsx'
 import { LessonShell } from '../Shell.tsx'
 import { LESSON_GOALS } from '../routes.ts'
-import { DRAG, clampOrbit, orbitKey } from '../Viewport.tsx'
+import { DRAG, ZoomBar, clampOrbit, orbitKey } from '../Viewport.tsx'
 import { drawOrder, rasterise, toImageData, type Order as DrawMode } from '../cpuSplat.ts'
 import { useGoals } from '../progress.ts'
 
@@ -19,13 +19,15 @@ function scene(opacity: number) {
   return b
 }
 
+const START: Orbit = { target: [0, 0, 0], distance: 5, azimuth: 0, elevation: 10 }
+
 const MODES: { id: DrawMode; name: string; note: string }[] = [
   { id: 'list', name: 'List order', note: 'Red, green, blue, the order they happen to be stored in, whichever way you look.' },
   { id: 'reversed', name: 'Front to back', note: 'Nearest first. The opposite of what the blend needs.' },
 ]
 
 export function Order() {
-  const [orbit, setOrbit] = useState<Orbit>({ target: [0, 0, 0], distance: 5, azimuth: 0, elevation: 10 })
+  const [orbit, setOrbit] = useState<Orbit>(START)
   const [opacity, setOpacity] = useState(0.8)
   const [mode, setMode] = useState<DrawMode>('list')
   // "See it get it wrong" only counts once you've looked: turned the view or picked an order
@@ -50,9 +52,12 @@ export function Order() {
       id="order"
       intro={<p>The same three see-through blobs, drawn twice: once in the right order and once in yours. Does the order you draw them in matter?</p>}
       view={
-        <div className="grid h-full grid-cols-2 divide-x divide-rule-soft">
-          <SoftView blobs={blobs} orbit={orbit} setOrbit={turn} order={right} title="Back to front" testId="view-sorted" />
-          <SoftView blobs={blobs} orbit={orbit} setOrbit={turn} order={yours} title={MODES.find((m) => m.id === mode)!.name} testId="view-yours" warn={!same} />
+        <div className="relative h-full">
+          <div className="grid h-full grid-cols-2 divide-x divide-rule-soft">
+            <SoftView blobs={blobs} orbit={orbit} setOrbit={turn} order={right} title="Back to front" testId="view-sorted" />
+            <SoftView blobs={blobs} orbit={orbit} setOrbit={turn} order={yours} title={MODES.find((m) => m.id === mode)!.name} testId="view-yours" warn={!same} />
+          </div>
+          <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => setOrbit(() => START)} />
         </div>
       }
       caption={

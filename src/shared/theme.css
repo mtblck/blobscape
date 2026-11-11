@@ -156,3 +156,28 @@
 /* A control group's own columns, on a laptop only */
 .desk-group { grid-template-columns: minmax(0, 1fr); }
 @media (min-width: 64rem) { .desk-group { grid-template-columns: repeat(var(--cols, 1), minmax(0, 1fr)); } }
+
+/* Blobscape's zoom bar: a vertical slider on the inside right of a view */
+.zoom-range {
+  writing-mode: vertical-lr;
+  direction: rtl;
+  width: 1.25rem;
+  margin: 0;
+  accent-color: var(--c-accent);
+  cursor: grab;
+}
+.zoom-btn {
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex: none;
+  border-radius: 9999px;
+  border: 1px solid color-mix(in srgb, var(--c-ink-faint) 40%, transparent);
+  background: color-mix(in srgb, var(--c-paper) 80%, transparent);
+  color: var(--c-ink);
+  font-size: 1rem;
+  line-height: 1;
+  transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.zoom-btn:hover { border-color: var(--c-ink-faint); transform: translateY(-1px); box-shadow: 0 3px 6px -2px rgb(0 0 0 / 0.35); }
