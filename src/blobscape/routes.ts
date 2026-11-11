@@ -7,7 +7,7 @@ import type { Goal } from './progress.ts'
  * previews see every page. In the browser it's still one app: links between
  * these pages swap the page without a reload (useLinkNavigation).
  */
-export type Route = { page: 'home' } | { page: 'lessons' } | { page: 'lesson'; id: string } | { page: 'sandbox' } | { page: 'creature' } | { page: 'notfound' }
+export type Route = { page: 'home' } | { page: 'lessons' } | { page: 'lesson'; id: string } | { page: 'sandbox' } | { page: 'creature' } | { page: 'experiments' } | { page: 'notfound' }
 
 export const LESSONS = [
   { id: 'one-blob', title: 'One blob', summary: 'Five kinds of number, 14 in all, make one Gaussian. Pull each one and see what it does.' },
@@ -124,6 +124,7 @@ export function parsePath(pathname: string): Route | null {
   if (m[0] === 'lessons' && m.length === 2 && LESSONS.some((l) => l.id === m[1])) return { page: 'lesson', id: m[1] }
   if (m.length === 1 && m[0] === 'sandbox') return { page: 'sandbox' }
   if (m.length === 1 && m[0] === 'creature') return { page: 'creature' }
+  if (m.length === 1 && m[0] === 'experiments') return { page: 'experiments' }
   return null
 }
 
@@ -142,6 +143,7 @@ export function href(r: Route): string {
   if (r.page === 'lesson') return `/lessons/${r.id}/`
   if (r.page === 'sandbox') return '/sandbox/'
   if (r.page === 'creature') return '/creature/'
+  if (r.page === 'experiments') return '/experiments/'
   if (r.page === 'lessons') return '/lessons/'
   return '/'
 }

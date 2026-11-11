@@ -70,7 +70,7 @@ const solidPixels = (page, sel) => page.evaluate((sel) => {
 // 1. The site: every page is its own prerendered file, the chrome works, old links land
 {
   // Prerendered: each page's HTML carries its own title, canonical and content before any script runs
-  for (const [path, title] of [['/', 'Blobscape: learn'], ['/lessons/', 'Lessons ·'], ['/lessons/order/', 'Order matters · Lesson 3'], ['/sandbox/', 'Sandbox ·'], ['/creature/', 'Creature ·']]) {
+  for (const [path, title] of [['/', 'Blobscape: learn'], ['/lessons/', 'Lessons ·'], ['/lessons/order/', 'Order matters · Lesson 3'], ['/sandbox/', 'Sandbox ·'], ['/creature/', 'Creature ·'], ['/experiments/', 'Experiments ·']]) {
     const html = await (await fetch(base + path)).text()
     if (!html.includes(`<title>${title}`)) fails.push(`${path}: prerendered title is not "${title}…"`)
     else if (!html.includes(`<link rel="canonical" href="https://blobscape.dev${path}"`)) fails.push(`${path}: prerendered canonical is wrong`)
@@ -97,6 +97,7 @@ const solidPixels = (page, sel) => page.evaluate((sel) => {
   await page.evaluate(() => { window.__stayed = true })
   await page.locator('main').getByRole('link', { name: /See all .* lessons/ }).click()
   await page.waitForURL('**/lessons/')
+  await page.waitForFunction(() => document.title.startsWith('Lessons'), null, { timeout: 3000 }).catch(() => {})
   if (!(await page.evaluate(() => window.__stayed))) fails.push('following a link reloaded the page')
   else if ((await page.title()) !== 'Lessons · Blobscape') fails.push(`after navigating, the title is ${await page.title()}`)
   else ok('links between pages navigate in place and update the title')
@@ -116,7 +117,21 @@ const solidPixels = (page, sel) => page.evaluate((sel) => {
   if (await page.evaluate(() => document.documentElement.dataset.theme || localStorage.getItem('blobscape-theme'))) fails.push('System did not clear the theme')
   await ctx.close()
 
-  // A link to a section of the front page (where /tools/ redirects) lands on that section
+  // Experiments page: every experiment listed, reached from the header, which marks it current
+  {
+    const ex = await open('/lessons/')
+    await ex.page.getByRole('banner').getByRole('link', { name: 'Experiments', exact: true }).click()
+    await ex.page.waitForURL('**/experiments/')
+    await ex.page.getByRole('heading', { level: 1, name: 'Experiments' }).waitFor({ timeout: 5000 }).catch(() => {})
+    const cards = ex.page.locator('main').getByRole('link', { name: /Creature|Fit a Picture|Splat to Sprite/ })
+    if ((await cards.count()) < 3) fails.push('experiments page does not list every experiment')
+    else if ((await ex.page.getByRole('banner').getByRole('link', { name: 'Experiments', exact: true }).getAttribute('aria-current')) !== 'page') fails.push('header does not mark Experiments as the current page')
+    else ok('header Experiments link opens the experiments page, which lists every experiment')
+    await axe(ex.page, 'experiments page')
+    await ex.ctx.close()
+  }
+
+  // A link to a section of the front page lands on that section
   const tools = await open('/#experiments')
   await tools.page.waitForTimeout(800)
   const top = await tools.page.evaluate(() => document.getElementById('experiments')?.getBoundingClientRect().top ?? -1)
@@ -557,6 +572,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   // Creature: our engine draws the fox off-screen; both files come out
   {
     const c = await open('/creature/?offscreen=1', { viewport: { width: 1280, height: 900 } })
+    if (!(await c.page.locator('[data-testid=creature-loading]').count())) fails.push('blobscape creature: no loading note while the engine starts')
     await c.page.waitForFunction(() => window.__creature, null, { timeout: 60000 }).catch(() => {})
     const orange = await c.page.evaluate(async () => {
       const cr = window.__creature
@@ -569,6 +585,9 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     })
     if (orange < 2000) fails.push(`blobscape creature: ${orange} fox-orange pixels`)
     else ok(`blobscape creature: our engine draws the fox (${orange} orange pixels)`)
+    await c.page.waitForTimeout(100)
+    if (await c.page.locator('[data-testid=creature-loading]').count()) fails.push('blobscape creature: the loading note stays after the fox is drawn')
+    else ok('blobscape creature: a loading note shows until the first frame, then goes')
     const sizes = await c.page.evaluate(() => ({ splats: window.__creature?.glb().byteLength, mesh: window.__creature?.mesh(48).byteLength }))
     if (!(sizes.splats > 100000 && sizes.mesh > 10000)) fails.push(`blobscape creature: files ${JSON.stringify(sizes)}`)
     else ok(`blobscape creature: writes splats (${Math.round(sizes.splats / 1024)} KB) and mesh (${Math.round(sizes.mesh / 1024)} KB) .glb`)

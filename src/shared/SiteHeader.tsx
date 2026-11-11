@@ -7,11 +7,12 @@ import { LESSONS } from '../blobscape/routes.ts'
 const PAGES = [
   { label: 'Lessons', path: '/lessons/' },
   { label: 'Sandbox', path: '/sandbox/' },
-  { label: 'Creature', path: '/creature/' },
+  { label: 'Experiments', path: '/experiments/' },
 ] as const
 
-/** True when `path` is the page we're on, or (for /lessons/) a lesson under it. */
-const isHere = (here: string | undefined, path: string) => !!here && (here === path || (path === '/lessons/' && here.startsWith('/lessons/')))
+/** True when `path` is the page we're on, or the list it belongs to (a lesson under Lessons, an experiment under Experiments). */
+const isHere = (here: string | undefined, path: string) =>
+  !!here && (here === path || (path === '/lessons/' && here.startsWith('/lessons/')) || (path === '/experiments/' && EXPERIMENTS.some((e) => e.url === here)))
 
 /**
  * The sticky header every page shares: the Blobscape logo, the main pages
@@ -111,6 +112,7 @@ function SiteMenu({ here }: { here?: string }) {
           <div>
             <p className={HEAD}>Experiments</p>
             <ul className="mt-1.5">
+              <li><a href="/experiments/" aria-current={here === '/experiments/' ? 'page' : undefined} className={LINK}>All experiments</a></li>
               {EXPERIMENTS.map((e) => <li key={e.id}><a href={e.url} aria-current={here === e.url ? 'page' : undefined} className={LINK}>{e.title}</a></li>)}
             </ul>
           </div>

@@ -1,5 +1,5 @@
 import { LESSONS, LESSON_COUNT, href, type Route } from './routes.ts'
-import { SITE } from './site.ts'
+import { EXPERIMENTS, SITE } from './site.ts'
 
 /**
  * Each page's title and description. The app sets them as you move around
@@ -26,6 +26,8 @@ export function pageMeta(route: Route): PageMeta {
       return { path, title: `Sandbox · ${SITE.name}`, description: 'Spray, select, move, recolour and explode Gaussian splats, or open your own .ply, .spz, .splat, .ksplat or .sog capture. Nothing is uploaded.' }
     case 'creature':
       return { path, title: `Creature · ${SITE.name}`, description: 'A blob fox that walks on its own splat engine. Make it, then download it as a rigged, animated .glb: as Gaussian splats or as a mesh for Blender and game engines.' }
+    case 'experiments':
+      return { path, title: `Experiments · ${SITE.name}`, description: `Small tools built from Gaussian splats: ${EXPERIMENTS.map((e) => e.title).join(', ')}. Free, in your browser.` }
     case 'lesson': {
       const i = LESSONS.findIndex((l) => l.id === route.id)
       return { path, title: `${LESSONS[i].title} · Lesson ${i + 1} · ${SITE.name}`, description: LESSONS[i].summary }

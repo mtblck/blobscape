@@ -6,6 +6,7 @@ import { blobsToMesh } from '../splat-engine/mesh.ts'
 import type { SkinMode } from '../splat-engine/rig.ts'
 import { Button, Chip, Field, Slider } from '../shared/ui.tsx'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
+import { Mark } from '../shared/Logo.tsx'
 import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitDrag } from './Viewport.tsx'
 import { download, kb } from './files.ts'
 import { LESSONS, href } from './routes.ts'
@@ -46,6 +47,8 @@ export function Creature() {
   const h1 = useFocusHeading()
   const canvas = useRef<HTMLCanvasElement>(null)
   const [stage, setStage] = useState<CreatureStage>()
+  // The engine's code, the graphics device and the first frame's shaders take a moment: show that it's coming
+  const [drawn, setDrawn] = useState(false)
   const [failed, setFailed] = useState<string>()
   const [count, setCount] = useState(20000)
   const [coat, setCoat] = useState<keyof typeof COATS>('red')
@@ -79,6 +82,7 @@ export function Creature() {
       .then((s) => {
         if (gone) { s.dispose(); return }
         live = s
+        s.onFirstFrame = () => setDrawn(true)
         setStage(s)
       }, (e: unknown) => { console.warn(e); setFailed('This browser could not start WebGPU or WebGL 2, which the creature needs.') })
     return () => { gone = true; live?.dispose() }
@@ -137,7 +141,7 @@ export function Creature() {
 
   return (
     <div className="pb-4">
-      <Crumbs here="Creature" />
+      <Crumbs here="Creature" parent={{ label: 'Experiments', href: href({ page: 'experiments' }) }} />
       <div className="flex flex-col gap-4 pt-4 lg:grid lg:grid-cols-12 lg:gap-x-5">
         <header className="lg:col-span-5">
           <h1 ref={h1} tabIndex={-1} className="font-display text-4xl leading-tight outline-none lg:text-5xl">Creature</h1>
@@ -179,6 +183,8 @@ export function Creature() {
                   setOrbit((o) => orbitKey(ev, o) ?? o)
                 }}
               />
+              {!failed && (!drawn || busy?.startsWith('Making')) && <Loading label={drawn ? busy! : stage ? 'Waking the fox…' : 'Starting the splat engine…'} />}
+              <p role="status" className="sr-only">{!failed && !drawn ? (stage ? 'Waking the fox…' : 'Starting the splat engine…') : ''}</p>
               {failed && <div role="alert" className="absolute inset-4 grid place-items-center text-center text-sm text-ink">{failed}</div>}
               <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => setOrbit(START)} />
               <p aria-hidden className="pointer-events-none absolute right-14 bottom-2 left-3 text-right text-xs text-ink-faint">{typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches ? 'drag to orbit · pinch to zoom' : 'drag to orbit · scroll to zoom'}</p>
@@ -271,6 +277,18 @@ export function Creature() {
           </p>
         </div>
       </section>
+    </div>
+  )
+}
+
+/** Over the view while the engine starts or a new fox is made: the Blobscape mark breathing, and what's happening. */
+function Loading({ label }: { label: string }) {
+  return (
+    <div aria-hidden data-testid="creature-loading" className="pointer-events-none absolute inset-0 grid place-items-center">
+      <div className="flex flex-col items-center gap-3 rounded-2xl bg-paper/70 px-6 py-5 backdrop-blur-sm">
+        <Mark className="creature-loading-mark h-10 w-auto" />
+        <p className="text-sm text-ink">{label}</p>
+      </div>
     </div>
   )
 }

@@ -23,6 +23,7 @@ export function Footer() {
         </nav>
         <nav aria-label="Experiments" className="flex flex-col gap-1">
           <p className="mb-1 font-display text-base text-ink">Experiments</p>
+          <a href={href({ page: 'experiments' })} className={FOOT_LINK}>All experiments</a>
           {EXPERIMENTS.map((e) => <a key={e.id} href={e.url} className={FOOT_LINK}>{e.title}</a>)}
         </nav>
         <nav aria-label="About" className="flex flex-col gap-1">

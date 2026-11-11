@@ -7,7 +7,13 @@
   "redirects": [
     {
       "source": "/experiments",
-      "destination": "https://blobscape.dev/",
+      "has": [
+        {
+          "type": "host",
+          "value": "experiments-theta-inky.vercel.app"
+        }
+      ],
+      "destination": "https://blobscape.dev/experiments/",
       "permanent": true
     },
     {
@@ -32,17 +38,23 @@
     },
     {
       "source": "/experiments/:path*",
-      "destination": "https://blobscape.dev/",
+      "has": [
+        {
+          "type": "host",
+          "value": "experiments-theta-inky.vercel.app"
+        }
+      ],
+      "destination": "https://blobscape.dev/experiments/",
       "permanent": true
     },
     {
       "source": "/tools",
-      "destination": "/#experiments",
+      "destination": "/experiments/",
       "permanent": false
     },
     {
       "source": "/tools/",
-      "destination": "/#experiments",
+      "destination": "/experiments/",
       "permanent": false
     }
   ],

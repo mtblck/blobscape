@@ -15,6 +15,13 @@ if (!csp.includes("'wasm-unsafe-eval'")) fail("CSP script-src needs 'wasm-unsafe
 if (!/worker-src [^;]*blob:/.test(csp)) fail('CSP needs worker-src blob: (Spark sorts splats in a blob worker)')
 // Old mattblack.space/experiments/ addresses (proxied here by the portfolio) go to blobscape.dev.
 // Absolute, so the redirect reaches the visitor as blobscape.dev, not as a path on mattblack.space
+// mattblack.space/experiments/ (the old hub, via the portfolio's proxy to the old project's host) goes to the
+// Experiments page; only for that host, so blobscape.dev's own /experiments/ page isn't caught
+const OLD_HOST = 'experiments-theta-inky.vercel.app'
+for (const p of ['/experiments', '/experiments/:path*']) {
+  if (!v.redirects?.some((r) => r.source === p && r.has?.some((h) => h.type === 'host' && h.value === OLD_HOST) && r.destination === 'https://blobscape.dev/experiments/')) fail(`vercel.json needs a redirect from ${p} on ${OLD_HOST} to https://blobscape.dev/experiments/`)
+}
+if (v.redirects?.some((r) => (r.source === '/experiments' || r.source === '/experiments/:path*') && !r.has)) fail('an /experiments catch-all without a host condition would hide the Experiments page')
 for (const p of ['/experiments/blobscape/:path*', '/experiments/fit-a-picture/:path*', '/experiments/splat-to-sprite/:path*']) {
   if (!v.redirects?.some((r) => r.source === p && r.destination.startsWith('https://blobscape.dev/'))) fail(`vercel.json needs a redirect from ${p} to https://blobscape.dev/…`)
 }
