@@ -211,6 +211,8 @@ function writeRig(w: BinWriter, name: string, skeleton: Skeleton, clips: Clip[])
 export function writeRiggedMeshGlb(r: { name: string; mesh: SplatMesh; skeleton: Skeleton; clips: Clip[] }): Uint8Array {
   const { mesh, skeleton } = r
   const n = mesh.vertexCount
+  // glTF needs at least one of everything; an empty mesh is no file
+  if (!n || !mesh.triangleCount) throw new GlbError('The mesh is empty: lower the level or use a finer grid')
   const w = new BinWriter()
   const pos = mesh.positions
   const min = [0, 1, 2].map((k) => { let m = Infinity; for (let i = 0; i < n; i++) m = Math.min(m, pos[i * 3 + k]); return n ? m : 0 })
@@ -383,5 +385,5 @@ export function readRiggedGlb(bytes: Uint8Array): Rigged {
     }
     return { name: anim.name ?? `clip${ai}`, times, rotations, rootOffset }
   })
-  return { name: json.nodes[meshNode].name ?? 'splat', blobs, skin, skeleton, clips }
+  return { name: json.nodes[meshNode].name ?? '', blobs, skin, skeleton, clips }
 }

@@ -1,6 +1,6 @@
 import type { Vec3 } from '../splat-core/blobs.ts'
 import { TAILS } from './creature.ts'
-import { axisAngle, mulQ, type Skeleton } from './rig.ts'
+import { axisAngle, mulQ, posedPoint, type Skeleton } from './rig.ts'
 
 /**
  * The fox's trot as four key poses, the way an animator blocks a walk:
@@ -89,11 +89,7 @@ export function poseKeys(sk: Skeleton, t: number, timing: WalkTiming) {
 
 /** Where each foot is now (posed skeleton), in the order fl, fr, bl, br. */
 export function feet(sk: Skeleton): Vec3[] {
-  return (['fl', 'fr', 'bl', 'br'] as const).map((leg) => {
-    const m = sk.matrix.subarray(sk.index(`${leg}Lower`) * 16)
-    const p = TAILS[`${leg}Lower`]
-    return [m[0] * p[0] + m[4] * p[1] + m[8] * p[2] + m[12], m[1] * p[0] + m[5] * p[1] + m[9] * p[2] + m[13], m[2] * p[0] + m[6] * p[1] + m[10] * p[2] + m[14]]
-  })
+  return (['fl', 'fr', 'bl', 'br'] as const).map((leg) => posedPoint(sk, sk.index(`${leg}Lower`), TAILS[`${leg}Lower`]))
 }
 
 /**

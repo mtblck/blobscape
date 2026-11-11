@@ -2,13 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Orbit, SplatView } from '../../splat-core/view.ts'
 import { TAILS, makeCreature } from '../../splat-engine/creature.ts'
 import { poseBlobs } from '../../splat-engine/pose.ts'
-import { Skeleton } from '../../splat-engine/rig.ts'
+import { Skeleton, posedPoint } from '../../splat-engine/rig.ts'
 import { KEYS, footSpeed, keyPose, keysUsed, poseKeys, type WalkTiming } from '../../splat-engine/walk.ts'
 import { Button, Chip, Field, Slider, Toggle } from '../../shared/ui.tsx'
 import { LessonShell } from '../Shell.tsx'
 import { LESSON_GOALS } from '../routes.ts'
 import { Viewport } from '../Viewport.tsx'
-import { drawBones, posedPoint, themeColour } from '../overlay.ts'
+import { drawBones, themeColour } from '../overlay.ts'
 import { useGoals } from '../progress.ts'
 
 const START: Orbit = { target: [0, 0.65, 0], distance: 4.4, azimuth: 72, elevation: 12 }
@@ -71,15 +71,18 @@ export function Walk() {
   useEffect(() => { if (!playing) show(live.current.phase) }, [keys, hold, playing]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Seconds played with each setting, so a goal needs you to have watched it, not just flicked a switch
-  const watched = useRef({ two: 0, hold: 0, at: performance.now() })
+  // (time since the last render counts for the settings it was played with, so a pause counts for nothing)
+  const watched = useRef({ two: 0, hold: 0, at: performance.now(), was: { playing, keys, hold, cycle } })
   useEffect(() => {
     const w = watched.current
     const now = performance.now()
     const dt = (now - w.at) / 1000
+    const p = w.was
     w.at = now
-    if (!playing) return
-    if (keys === 2) w.two += dt
-    if (keys === 4 && hold && cycle >= 1.2) w.hold += dt
+    w.was = { playing, keys, hold, cycle }
+    if (!p.playing) return
+    if (p.keys === 2) w.two += dt
+    if (p.keys === 4 && p.hold && p.cycle >= 1.2) w.hold += dt
   })
 
   const before = useRef(new Set<string>())

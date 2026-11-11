@@ -53,7 +53,7 @@ export function Model() {
 
   const mesh = useMemo(() => blobsToMesh(fox.blobs, fox.skin, { cells, level: meshLevel }), [fox, cells, meshLevel])
   const error = useMemo(() => meshError(mesh, fox.blobs), [mesh, fox])
-  const meshGlb = useMemo(() => writeRiggedMeshGlb({ name: 'blob fox', mesh, skeleton: fox.skeleton, clips: [trot] }), [mesh, fox, trot])
+  const meshGlb = useMemo(() => (mesh.triangleCount ? writeRiggedMeshGlb({ name: 'blob fox', mesh, skeleton: fox.skeleton, clips: [trot] }) : null), [mesh, fox, trot])
 
   // The mesh lives in the right-hand view's scene, next to its (empty) splat
   const meshView = useRef<SplatView | null>(null)
@@ -104,7 +104,7 @@ export function Model() {
   const done = useGoals('model', {
     pieces: mesh.pieces >= 3,
     coarse: error >= 0.08 && mesh.pieces >= 1,
-    keep: mesh.pieces === 1 && Math.round(error * 100) <= 5 && meshGlb.byteLength <= 300 * 1024,
+    keep: mesh.pieces === 1 && Math.round(error * 100) <= 5 && !!meshGlb && meshGlb.byteLength <= 300 * 1024,
   })
 
   const half = (title: string, testId: string, node: React.ReactNode) => (
@@ -139,7 +139,7 @@ export function Model() {
         <p data-testid="mesh-readout">
           The mesh is <span className="tabular-nums text-ink">{mesh.pieces}</span> piece{mesh.pieces === 1 ? '' : 's'}, on average{' '}
           <span className="tabular-nums text-ink">{Math.round(error * 100)} cm</span> from the blobs, and{' '}
-          <span className="tabular-nums text-ink">{kb(meshGlb.byteLength)}</span> as a .glb. The splats are {kb(splatGlb.byteLength)}.
+          <span className="tabular-nums text-ink">{meshGlb ? kb(meshGlb.byteLength) : 'nothing'}</span> as a .glb. The splats are {kb(splatGlb.byteLength)}.
         </p>
       }
       groups={[
@@ -178,7 +178,7 @@ export function Model() {
           content: (
             <div className="flex flex-wrap gap-2">
               <Button small onClick={() => download(splatGlb, 'blob-fox-splats.glb')}>Splats .glb ({kb(splatGlb.byteLength)})</Button>
-              <Button small onClick={() => download(meshGlb, 'blob-fox-mesh.glb')}>Mesh .glb ({kb(meshGlb.byteLength)})</Button>
+              <Button small disabled={!meshGlb} onClick={() => meshGlb && download(meshGlb, 'blob-fox-mesh.glb')}>{meshGlb ? `Mesh .glb (${kb(meshGlb.byteLength)})` : 'No mesh to save'}</Button>
             </div>
           ),
         },

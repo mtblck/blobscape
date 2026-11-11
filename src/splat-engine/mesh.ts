@@ -50,14 +50,18 @@ const PULL_BACK = 0.45
 export function blobsToMesh(blobs: Blobs, skin: Skin | null, o: MeshOptions): SplatMesh {
   const n = blobs.count
   const c = blobs.centre, s = blobs.scale
-  // bounds, padded by the widest blob and two cells
+  if (!n) return empty()
+  // bounds, padded by the widest blob and two cells. A captured scene can hold a
+  // few huge floaters, so "widest" is the 99th percentile and bigger blobs are
+  // spread as if they were four times that: one stray can't blow up the grid.
   const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity]
-  let widest = 0
+  const sizes = new Float32Array(n)
   for (let i = 0; i < n; i++) {
     for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], c[i * 3 + k]); hi[k] = Math.max(hi[k], c[i * 3 + k]) }
-    widest = Math.max(widest, s[i * 3], s[i * 3 + 1], s[i * 3 + 2])
+    sizes[i] = Math.max(s[i * 3], s[i * 3 + 1], s[i * 3 + 2], 1e-6)
   }
-  if (!n) return empty()
+  const widest = sizes.sort()[Math.min(n - 1, Math.floor(n * 0.99))]
+  const biggest = widest * 4
   const span = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2], 1e-3)
   const h = span / Math.max(4, o.cells)
   const pad = Math.max(widest * 2.5, h) + h * 2
@@ -72,7 +76,7 @@ export function blobsToMesh(blobs: Blobs, skin: Skin | null, o: MeshOptions): Sp
   const best = new Float32Array(N)
   const bestBlob = new Int32Array(N).fill(-1)
   for (let i = 0; i < n; i++) {
-    const own = Math.max(s[i * 3], s[i * 3 + 1], s[i * 3 + 2], 1e-6)
+    const own = Math.min(biggest, Math.max(s[i * 3], s[i * 3 + 1], s[i * 3 + 2], 1e-6))
     const sig = Math.max(own, h * 0.6)
     // the same total amount whatever the grid: a wider spread is a fainter one
     const amp = blobs.opacity[i] * (own * own) / (sig * sig)
@@ -225,6 +229,8 @@ export function blobsToMesh(blobs: Blobs, skin: Skin | null, o: MeshOptions): Sp
     boneSum.clear()
     for (let r = 1; r <= 4 && wsum < 1e-4; r++) {
       for (let z = Math.max(0, gz - r); z <= Math.min(nz - 1, gz + r); z++) for (let y = Math.max(0, gy - r); y <= Math.min(ny - 1, gy + r); y++) for (let x = Math.max(0, gx - r); x <= Math.min(nx - 1, gx + r); x++) {
+        // each ring adds only its new outer shell
+        if (r > 1 && Math.max(Math.abs(x - gx), Math.abs(y - gy), Math.abs(z - gz)) < r) continue
         const g = at(x, y, z)
         const w = dens[g]
         if (w <= 0) continue

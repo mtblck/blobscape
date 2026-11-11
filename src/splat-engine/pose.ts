@@ -55,7 +55,7 @@ export function poseBlobs(rest: Blobs, skin: Skin, rig: Skeleton, mode: SkinMode
       continue
     }
     // A = Mblend(3×3) · R_rest · S_rest, Σ = A Aᵀ, then Σ = V diag(λ) Vᵀ
-    const Rr = quatMat3(rq)
+    const Rr = quatMat3(norm4(rq))
     for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
       A[r * 3 + c] = (M[r] * Rr[c] + M[3 + r] * Rr[3 + c] + M[6 + r] * Rr[6 + c]) * rest.scale[i * 3 + c]
     }

@@ -5,6 +5,9 @@ import { RenderLoop } from './loop.ts'
 import type { Blobs, Lens } from './blobs.ts'
 
 /** Where the orbit camera is: it circles `target` at `distance`, looking at it. */
+/** The ground grid: 6 m across in 12 squares. */
+const FLOOR_SIZE = 6, FLOOR_CELLS = 12
+
 export interface Orbit {
   target: [number, number, number]
   distance: number
@@ -107,7 +110,7 @@ export class SplatView {
   /** A faint grid on the ground (y = 0). Drawn in the scene, so blobs in front of it hide it. */
   setFloor(on: boolean, colour = '#888888') {
     if (on && !this.floor) {
-      this.floor = new THREE.GridHelper(6, 12, colour, colour)
+      this.floor = new THREE.GridHelper(FLOOR_SIZE, FLOOR_CELLS, colour, colour)
       const m = this.floor.material as THREE.Material
       m.transparent = true
       m.opacity = 0.35
@@ -125,7 +128,7 @@ export class SplatView {
   /** Slides the floor grid along z (wrapping every square), for a walk on the spot over moving ground. */
   setFloorShift(z: number) {
     if (!this.floor) return
-    const cell = 0.5
+    const cell = FLOOR_SIZE / FLOOR_CELLS
     this.floor.position.z = ((z % cell) + cell) % cell
     this.invalidate(1)
   }

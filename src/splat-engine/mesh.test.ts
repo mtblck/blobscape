@@ -95,3 +95,20 @@ test('the mesh .glb is valid glTF with a skin, a walk and an unlit material', ()
   const w = bytes.subarray(20 + len + 8 + wv.byteOffset, 20 + len + 8 + wv.byteOffset + wv.byteLength)
   for (let i = 0; i < mesh.vertexCount; i++) assert.equal(w[i * 4] + w[i * 4 + 1] + w[i * 4 + 2] + w[i * 4 + 3], 255)
 })
+
+test('one huge stray blob does not blow up the grid', () => {
+  const fox = makeCreature(3000)
+  const b = fox.blobs.clone()
+  b.scale.set([6, 6, 6], 0) // a 6 m floater, as captures have
+  const t = performance.now()
+  const m = blobsToMesh(b, fox.skin, { cells: 64, level: 1 })
+  assert.ok(performance.now() - t < 5000, 'meshing took too long')
+  assert.ok(m.triangleCount > 1000)
+})
+
+test('an empty mesh is refused, not written as broken glTF', () => {
+  const fox = makeCreature(500)
+  const m = blobsToMesh(fox.blobs, fox.skin, { cells: 24, level: 1000 })
+  assert.equal(m.triangleCount, 0)
+  assert.throws(() => writeRiggedMeshGlb({ name: 'x', mesh: m, skeleton: fox.skeleton, clips: [] }), /empty/)
+})

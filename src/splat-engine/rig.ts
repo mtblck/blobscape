@@ -284,3 +284,13 @@ export function skinCentres(src: Float32Array, skin: Uint32Array, bones: Float32
     out[i * 3] = ox; out[i * 3 + 1] = oy; out[i * 3 + 2] = oz
   }
 }
+
+/** A point carried by bone `bone`'s current pose: where its rest position `p` has moved to. */
+export function posedPoint(sk: { matrix: ArrayLike<number> }, bone: number, p: ArrayLike<number>): [number, number, number] {
+  const m = sk.matrix, o = bone * 16
+  return [
+    m[o] * p[0] + m[o + 4] * p[1] + m[o + 8] * p[2] + m[o + 12],
+    m[o + 1] * p[0] + m[o + 5] * p[1] + m[o + 9] * p[2] + m[o + 13],
+    m[o + 2] * p[0] + m[o + 6] * p[1] + m[o + 10] * p[2] + m[o + 14],
+  ]
+}

@@ -6,7 +6,7 @@ import { blobsToMesh } from '../splat-engine/mesh.ts'
 import type { SkinMode } from '../splat-engine/rig.ts'
 import { Button, Chip, Field, Slider } from '../shared/ui.tsx'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
-import { DRAG, ZoomBar, clampOrbit, orbitKey } from './Viewport.tsx'
+import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitDrag } from './Viewport.tsx'
 import { download, kb } from './files.ts'
 import { LESSONS, href } from './routes.ts'
 import type { CreatureStage } from './creature/stage.ts'
@@ -59,7 +59,16 @@ export function Creature() {
   const [cells, setCells] = useState(64)
   const offscreen = useMemo(() => new URLSearchParams(location.search).get('offscreen') === '1', [])
 
-  const made = useMemo(() => build(count, COATS[coat]), [count, coat])
+  // Building a big fox takes a moment, so it happens after a note has painted, not during a render
+  const [made, setMade] = useState<Shown>(() => build(count, COATS[coat]))
+  const madeFor = useRef({ count, coat })
+  useEffect(() => {
+    if (madeFor.current.count === count && madeFor.current.coat === coat) return
+    madeFor.current = { count, coat }
+    setBusy(`Making a fox of ${count.toLocaleString()} blobs…`)
+    const t = setTimeout(() => { setMade(build(count, COATS[coat])); setBusy(undefined) }, 30)
+    return () => clearTimeout(t)
+  }, [count, coat])
   const shown = loaded ?? made
   const clip = move === STILL ? undefined : shown.clips.find((c) => c.name === move) ?? shown.clips[0]
 
@@ -119,15 +128,9 @@ export function Creature() {
   }
 
   // --- orbiting: drag, arrow keys, wheel and pinch
-  const drag = useRef<{ x: number; y: number; az: number; el: number; pinch?: number; dist: number } | null>(null)
+  const drag = useRef<OrbitDrag | null>(null)
   const pointers = useRef(new Map<number, { x: number; y: number }>())
-  useEffect(() => {
-    const c = canvas.current
-    if (!c) return
-    const onWheel = (ev: WheelEvent) => { ev.preventDefault(); setOrbit((o) => clampOrbit({ ...o, distance: o.distance * (ev.deltaY > 0 ? 1.08 : 1 / 1.08) })) }
-    c.addEventListener('wheel', onWheel, { passive: false })
-    return () => c.removeEventListener('wheel', onWheel)
-  }, [])
+  useWheelZoom(canvas, setOrbit)
 
   const moveLabel = !clip ? 'standing still' : clip.name === 'idle' ? 'standing and looking round' : clip.name === 'trot' ? 'trotting on the spot' : `playing ${clip.name}`
   const clipNames = shown.clips.map((c) => clipLabel(c.name).toLowerCase())
@@ -161,19 +164,12 @@ export function Creature() {
                 onPointerDown={(ev) => {
                   ev.currentTarget.setPointerCapture(ev.pointerId)
                   pointers.current.set(ev.pointerId, { x: ev.clientX, y: ev.clientY })
-                  if (pointers.current.size === 2) {
-                    const [a, b] = [...pointers.current.values()]
-                    drag.current = { x: 0, y: 0, az: orbit.azimuth, el: orbit.elevation, pinch: Math.hypot(a.x - b.x, a.y - b.y), dist: orbit.distance }
-                  } else drag.current = { x: ev.clientX, y: ev.clientY, az: orbit.azimuth, el: orbit.elevation, dist: orbit.distance }
+                  drag.current = beginOrbitDrag(pointers.current, ev, orbit)
                 }}
                 onPointerMove={(ev) => {
                   if (pointers.current.has(ev.pointerId)) pointers.current.set(ev.pointerId, { x: ev.clientX, y: ev.clientY })
                   const d = drag.current
-                  if (!d) return
-                  if (d.pinch !== undefined && pointers.current.size >= 2) {
-                    const [a, b] = [...pointers.current.values()]
-                    setOrbit((o) => clampOrbit({ ...o, distance: d.dist * (d.pinch! / Math.max(1, Math.hypot(a.x - b.x, a.y - b.y))) }))
-                  } else setOrbit((o) => clampOrbit({ ...o, azimuth: d.az - (ev.clientX - d.x) * DRAG.azimuth, elevation: d.el + (ev.clientY - d.y) * DRAG.elevation }))
+                  if (d) setOrbit(dragOrbit(d, pointers.current, ev))
                 }}
                 onPointerUp={(ev) => { pointers.current.delete(ev.pointerId); drag.current = null }}
                 onPointerCancel={(ev) => { pointers.current.delete(ev.pointerId); drag.current = null }}

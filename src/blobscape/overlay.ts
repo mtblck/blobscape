@@ -82,16 +82,6 @@ export function drawCentres(ctx: CanvasRenderingContext2D, b: Blobs, lens: Lens,
   }
 }
 
-/** A point carried by bone `bone`'s current pose: where its rest position `p` has moved to. */
-export function posedPoint(sk: { matrix: ArrayLike<number> }, bone: number, p: ArrayLike<number>): [number, number, number] {
-  const m = sk.matrix, o = bone * 16
-  return [
-    m[o] * p[0] + m[o + 4] * p[1] + m[o + 8] * p[2] + m[o + 12],
-    m[o + 1] * p[0] + m[o + 5] * p[1] + m[o + 9] * p[2] + m[o + 13],
-    m[o + 2] * p[0] + m[o + 6] * p[1] + m[o + 10] * p[2] + m[o + 14],
-  ]
-}
-
 /**
  * Bones as an x-ray: each one a tapered line from its head to its end, with a
  * ring at the joint, drawn over the blobs so you can see what moves what.
