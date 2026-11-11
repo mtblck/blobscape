@@ -106,7 +106,8 @@ export function Chip({ active, onClick, children, small }: { active?: boolean; o
       type="button"
       aria-pressed={active}
       onClick={onClick}
-      className={`rounded-full border transition-colors ${small ? 'px-2.5 py-0.5 text-xs' : 'px-3 py-1 text-sm'} ${active ? 'border-accent bg-accent/15 text-accent-ink hover:bg-accent/25' : 'border-rule text-ink-muted hover:border-ink-faint hover:bg-paper-sunk hover:text-ink'}`}
+      // Filled at rest so it reads as a button; hovering lifts it and darkens the outline
+      className={`rounded-full border shadow-[0_1px_0_rgb(0_0_0/0.12)] transition-[transform,box-shadow,background-color,border-color,color] hover:-translate-y-px hover:shadow-[0_3px_6px_-2px_rgb(0_0_0/0.25)] active:translate-y-0 active:shadow-none ${small ? 'px-2.5 py-0.5 text-xs' : 'px-3 py-1 text-sm'} ${active ? 'border-accent bg-accent/20 font-medium text-accent-ink hover:bg-accent/25' : 'border-ink-faint/30 bg-rule text-ink hover:border-ink-faint'}`}
     >
       {children}
     </button>
