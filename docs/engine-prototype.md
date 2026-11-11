@@ -4,11 +4,11 @@ November 2026. This covers the two-week prototype from the Blobscape roadmap, bu
 
 ## Recommendation: go
 
-Two of the three bars are met, and the phone run says the third looks met too. The engine works on WebGPU and WebGL. It skins every blob on the GPU, matching our CPU maths to within 2.4e-7. It sorts every object's blobs together and draws through three.js. The open question is speed on a real phone. The engine lab exists so that question can be answered by opening a link.
+All three bars are met. The engine works on WebGPU and WebGL. It skins every blob on the GPU, matching our CPU maths to within 2.4e-7. It sorts every object's blobs together and draws through three.js. On a phone it walks 200k blobs at 60 fps. Above that, the deform and sort start to cost frames, which is where the next speed work goes.
 
 | Bar | Result |
 |---|---|
-| A 200k-blob creature walks at 60 fps on a mid-range phone | **Looks met, confirming.** On Matt's phone the WebGPU engine walks smoothly even at 500k blobs. The lab's first timer waited for the GPU after every frame and overstated the cost, so it now counts real frames per second; one re-run confirms the number. |
+| A 200k-blob creature walks at 60 fps on a mid-range phone | **Met.** On Matt's phone (60 Hz screen, WebGPU) the 200k fox walks at 60 fps with no dropped frames. At 500k it walks at 41 fps with 38% of frames dropped, while three.js holds 60 fps at 500k standing still. |
 | A rigged .glb we write and read back, which opens as a still splat elsewhere | **Met.** Round trip tested. three.js's own glTF loader opens it as a 5,001-splat still with one animation. |
 | A walk cycle exported as a sprite sheet | **Met.** 4 directions × 8 frames, through Splat to Sprite's pixel pipeline, in Tinkerkit's format with `walk-*` animations. |
 
@@ -48,3 +48,14 @@ three.js's `GaussianSplat` has no bones, so in the lab it always stands still an
 ### First phone run (Matt, 2026-11-11)
 
 By eye: our WebGPU engine walks smoothly even at 500k blobs. Our WebGL fallback is smooth at 20k and laggy above it (422 ms of CPU per frame at 200k). Timed alone, the engine took 16.9 ms a frame at 200k walking and 11.6 ms at 20k; three.js took 10.1 ms at 200k standing still.
+
+### Second phone run, with the fixed timer (Matt, 2026-11-11)
+
+| Renderer | Blobs | fps | Dropped | ms between frames (median / slowest 10%) | ms alone |
+|---|---|---|---|---|---|
+| Ours, WebGPU, walking | 200k | 60 | 0% | 16.7 / 16.7 | 17.8 |
+| Ours, WebGPU, walking | 500k | 41 | 38% | 16.7 / 33.3 | 31.2 |
+| three.js, WebGPU, standing still | 200k | 60 | 0% | 16.7 / 16.7 | 12.3 |
+| three.js, WebGPU, standing still | 500k | 60 | 1% | 16.7 / 16.8 | 19.3 |
+
+Our extra cost per frame is the deform pass and one shared sort: about 5 ms at 200k and 12 ms at 500k ("alone" minus three.js's). Ideas for cutting it: skip the deform for blobs whose bones didn't move, sort every other frame while the camera is still, and draw fewer blobs when a creature is small on screen.
