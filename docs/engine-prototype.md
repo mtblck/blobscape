@@ -67,3 +67,14 @@ Our extra cost per frame is the deform pass and one shared sort: about 5 ms at 2
 - **Smaller quads for faint blobs.** Each quad reaches only as far as its blob stays visible (above 1/255), up to two standard deviations, so faint blobs cover fewer pixels.
 - **WebGL skins on the GPU.** The vertex shader moves each blob through its bones, like a skinned mesh. The CPU only moves blob centres for the sort, without allocating. At 100k blobs on this machine: 7.7 ms moving centres and 2 ms sorting, against about 200 ms before.
 - **Time each step** in the lab splits a frame into move, project, sort and draw (WebGPU), or CPU move, CPU sort and draw (WebGL). Software WebGPU here can't say which step dominates on a phone, because it draws on the CPU.
+
+### Third phone run, after the speed pass (Matt, 2026-11-11)
+
+| Renderer | Blobs | fps | Dropped | ms alone (before → after) |
+|---|---|---|---|---|
+| Ours, WebGPU, walking | 200k | 60 | 0% | 17.8 → 12.6 (three.js standing still: 12.3) |
+| Ours, WebGPU, walking | 500k | 46 (was 41) | 51% | 31.2 → 25.2 |
+| Ours, WebGL, walking | 200k | 60 | 0% | 49.1, CPU 7.0 (CPU was 422) |
+| Ours, WebGL, walking | 500k | 30 | 93% | 87.5, CPU 28.5 |
+
+At 200k, walking now costs about the same as three.js drawing the fox standing still. The WebGL fox didn't move in this run: three.js swaps a padded copy in for a storage buffer it reads through a texture, so the bone data went to the old array. Fixed, and verify now checks that posing reaches the draw on both backends. The WebGL timings still count the same work, since the GPU moved every blob each frame, just with the first frame's bones.

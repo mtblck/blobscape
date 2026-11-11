@@ -159,6 +159,10 @@ export class SplatWorld extends Mesh {
         data.set(sk.quat.subarray(b * 4, b * 4 + 4), g * 20 + 16)
       }
     }
+    // On WebGL, three.js pads a storage buffer to fill a texture and swaps in
+    // the padded copy as the attribute's array, so copy into whatever it holds now.
+    const live = this.buf.boneAttr.array as Float32Array
+    if (live !== data) live.set(data)
     bump(this.buf.boneAttr)
   }
 

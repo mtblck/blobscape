@@ -665,6 +665,20 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     })
     if (orange < 2000) fails.push(`engine lab ${label}: only ${orange} fox-orange pixels`)
     else ok(`engine lab ${label}: draws the foxes (${orange} orange pixels)`)
+    // the bones reach the GPU every frame: growing the foxes from their roots makes them bigger on screen
+    const grown = await page.evaluate(async () => {
+      const l = window.__lab
+      l.setWalk(true) // standing still resets the pose, root scale included
+      for (const a of l.world.actors) a.skeleton.rootScale = 1.5
+      await l.frame(0.2)
+      const c = document.querySelector('canvas'); const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data
+      let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i] > 150 && d[i + 1] > 50 && d[i + 1] < 140 && d[i + 2] < 80) n++
+      for (const a of l.world.actors) a.skeleton.rootScale = 1
+      await l.frame(0.2)
+      return n
+    })
+    if (!(grown > orange * 1.5)) fails.push(`engine lab ${label}: posing doesn't reach the draw (${orange} → ${grown} orange pixels at 1.5× size)`)
+    else ok(`engine lab ${label}: posing reaches the draw (${orange} → ${grown} orange pixels at 1.5× size)`)
     const bench = await page.evaluate(() => window.__lab.bench(3))
     if (!(bench.alone > 0)) fails.push(`engine lab ${label}: bench ${JSON.stringify(bench)}`)
     else ok(`engine lab ${label}: times frames (${bench.alone.toFixed(0)} ms in software)`)
