@@ -28,9 +28,10 @@ interface Props {
   /**
    * Called when the blobs are about to be sent to the GPU: returns the first
    * index that changed (the old count after an append), so only new blobs are
-   * rewritten. Without it, every sync rewrites them all.
+   * rewritten, and optionally a GPU order (see SplatView.sync). Without it,
+   * every sync rewrites them all in list order.
    */
-  takeSyncFrom?: () => number
+  takeSync?: () => { from: number; order?: ArrayLike<number> | null }
   tool?: ToolHandlers
   label: string
   /** Shown in the corner: how to drive the view. */
@@ -70,7 +71,7 @@ export const clampOrbit = (o: Orbit): Orbit => ({
  * canvas on top draws whatever the page wants over them. Drag (or arrow keys)
  * to orbit, scroll, pinch or +/− to zoom.
  */
-export function Viewport({ blobs, version, orbit, setOrbit, reach, overlay, takeSyncFrom, tool, label, hint, children, onView, className }: Props) {
+export function Viewport({ blobs, version, orbit, setOrbit, reach, overlay, takeSync, tool, label, hint, children, onView, className }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const overlayRef = useRef<HTMLCanvasElement>(null)
   const viewRef = useRef<SplatView | null>(null)
@@ -102,7 +103,8 @@ export function Viewport({ blobs, version, orbit, setOrbit, reach, overlay, take
     const { clientWidth: w, clientHeight: h } = c
     const dpr = Math.min(2, window.devicePixelRatio || 1)
     if (c.width !== Math.floor(w * dpr) || c.height !== Math.floor(h * dpr)) { c.width = Math.floor(w * dpr); c.height = Math.floor(h * dpr) }
-    const ctx = c.getContext('2d')!
+    // A CPU-backed canvas: in Chrome a GPU one could keep showing an old frame after a clear that draws nothing new
+    const ctx = c.getContext('2d', { willReadFrequently: true })!
     ctx.setTransform(1, 0, 0, 1, 0, 0)
     ctx.clearRect(0, 0, c.width, c.height)
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
@@ -110,9 +112,9 @@ export function Viewport({ blobs, version, orbit, setOrbit, reach, overlay, take
   }
 
   useEffect(() => {
-    const from = takeSyncFrom?.() ?? 0
-    viewRef.current?.sync(blobs, Number.isFinite(from) ? from : 0)
-    // takeSyncFrom is read at sync time, not a trigger
+    const { from, order } = takeSync?.() ?? { from: 0 }
+    viewRef.current?.sync(blobs, Number.isFinite(from) ? from : 0, order ?? null)
+    // takeSync is read at sync time, not a trigger
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blobs, version])
   useEffect(() => { if (viewRef.current) viewRef.current.orbit = orbit }, [orbit])

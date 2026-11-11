@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Blobs, hexToRgb, pick, quatFacing, quatToMat, type Lens, type Vec3 } from '../splat-core/blobs.ts'
+import { Blobs, hexToRgb, pick, projectPoint, quatFacing, quatToMat, rgbToHex, type Lens, type Vec3 } from '../splat-core/blobs.ts'
 import type { Orbit, SplatView } from '../splat-core/view.ts'
 import { PRESETS } from '../splat-core/presets.ts'
 import { blobsFromPreset, blobsFromSamples, sampleShape } from '../splat-core/shapes.ts'
+import { Selection, centroid, flipUpright, inPolygon, meanColour, scaleGroup, selectByColour, sitOnFloor, thin, translate, turnY } from '../splat-core/ops.ts'
+import { EFFECTS, bakeEffect, type EffectFrame, type EffectId, type EffectParams } from '../splat-core/effects.ts'
+import { writePly } from '../splat-core/ply.ts'
 import { Button, Chip, Field, Panel, Slider, Tabs, Toggle } from '../shared/ui.tsx'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
 import { Viewport, type ToolHandlers } from './Viewport.tsx'
@@ -10,12 +13,14 @@ import { drawCentres, drawOutlines, themeColour, toScreen } from './overlay.ts'
 import { History } from './history.ts'
 import { takeHandOff } from './handoff.ts'
 
-type ToolId = 'orbit' | 'add' | 'spray' | 'select' | 'erase'
+type ToolId = 'orbit' | 'add' | 'spray' | 'select' | 'lasso' | 'move' | 'erase'
 const TOOLS: { id: ToolId; name: string; note: string }[] = [
   { id: 'orbit', name: 'Look', note: 'Drag to orbit, scroll or pinch to zoom. With a mouse, right-drag (or Alt-drag) orbits whatever tool is picked.' },
   { id: 'add', name: 'Add', note: 'Click to place one blob, on the floor or on the surface of whatever you click.' },
   { id: 'spray', name: 'Spray', note: 'Drag to spray blobs inside the ring. They stick to whatever is under them, so you can build up layers.' },
-  { id: 'select', name: 'Select', note: 'Click a blob to select it; Shift-click adds to the selection. Then change it in the Selection tab.' },
+  { id: 'select', name: 'Select', note: 'Click a blob to select it, or drag a box around many. Hold Shift to add to the selection. Then change it in the Selection tab.' },
+  { id: 'lasso', name: 'Lasso', note: 'Draw round the blobs you want. Hold Shift to add to the selection.' },
+  { id: 'move', name: 'Move', note: 'Drag to slide the selection across the screen. With nothing selected, it grabs the blob under the pointer.' },
   { id: 'erase', name: 'Erase', note: 'Drag to remove every blob whose centre is inside the ring.' },
 ]
 
@@ -27,19 +32,44 @@ const STARTS = [
 
 const SWATCHES = ['#e5484d', '#f2a65a', '#f5d90a', '#30a46c', '#3e9be0', '#8e4ec6', '#f4ede1', '#2b2620']
 const OUTLINE_LIMIT = 1500
-const MAX_BLOBS = 200000
+const SELECT_OUTLINES = 3000
+const FILE_TYPES = '.ply,.spz,.splat,.ksplat,.sog'
+const PLAY_SECONDS = 2.5
+
+/** Bounding box of the scene, or of the selection when one is given (sampled for big scenes). */
+function bounds(b: Blobs, sel: Selection | null) {
+  const lo: Vec3 = [Infinity, Infinity, Infinity], hi: Vec3 = [-Infinity, -Infinity, -Infinity]
+  const useSel = !!sel && sel.count > 0
+  const stride = useSel ? 1 : Math.max(1, Math.floor(b.count / 20000))
+  for (let i = 0; i < b.count; i += stride) {
+    if (useSel && !sel!.has(i)) continue
+    for (let a = 0; a < 3; a++) { lo[a] = Math.min(lo[a], b.centre[i * 3 + a]); hi[a] = Math.max(hi[a], b.centre[i * 3 + a]) }
+  }
+  return lo[0] <= hi[0] ? { lo, hi } : null
+}
 
 /** Centre and size of a scene, for pointing the camera at it. */
 function frame(b: Blobs): Pick<Orbit, 'target' | 'distance'> {
-  if (!b.count) return { target: [0, 0.5, 0], distance: 4 }
-  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity]
-  const stride = Math.max(1, Math.floor(b.count / 20000))
-  for (let i = 0; i < b.count; i += stride) for (let a = 0; a < 3; a++) {
-    lo[a] = Math.min(lo[a], b.centre[i * 3 + a]); hi[a] = Math.max(hi[a], b.centre[i * 3 + a])
-  }
+  const bb = bounds(b, null)
+  if (!bb) return { target: [0, 0.5, 0], distance: 4 }
+  const { lo, hi } = bb
   const r = Math.max(0.3, Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2)
   return { target: [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2], distance: r * 3.2 }
 }
+
+/** Where an effect works from: the middle, size and floor of what it acts on. */
+function effectFrame(b: Blobs, sel: Selection | null): EffectFrame {
+  const bb = bounds(b, sel)
+  if (!bb) return { centre: [0, 0.5, 0], radius: 1, floor: 0 }
+  const { lo, hi } = bb
+  return {
+    centre: [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2],
+    radius: Math.max(0.05, Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2),
+    floor: lo[1],
+  }
+}
+
+type Marquee = { kind: 'box'; x0: number; y0: number; x1: number; y1: number } | { kind: 'lasso'; pts: number[] }
 
 export function Sandbox() {
   const h1 = useFocusHeading()
@@ -54,14 +84,17 @@ export function Sandbox() {
     syncFrom.current = Math.min(syncFrom.current, from)
     setVersion((v) => v + 1)
   }, [])
-  const takeSyncFrom = useCallback(() => { const f = syncFrom.current; syncFrom.current = Infinity; return f }, [])
   const [source, setSource] = useState(handed ? handed.name : STARTS[0].name)
   const [orbit, setOrbit] = useState<Orbit>(() => ({ ...frame(blobsRef.current), azimuth: 30, elevation: 22 }))
   const [view, setView] = useState<SplatView | null>(null)
-  const history = useRef(new History())
+  // Imports can be big; a few snapshots of a large scene is all undo keeps
+  const history = useRef(new History(160 * 1024 * 1024))
 
   // On a touchscreen one finger can't both orbit and paint, so start in Look there
   const coarse = useMemo(() => window.matchMedia('(pointer: coarse)').matches, [])
+  const reducedMotion = useMemo(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches, [])
+  // Phones run out of memory sooner
+  const maxBlobs = coarse ? 400_000 : 1_000_000
   const [tool, setTool] = useState<ToolId>(coarse ? 'orbit' : 'spray')
   const [colour, setColour] = useState('#f2a65a')
   const [size, setSize] = useState(Math.log2(0.05))
@@ -71,11 +104,25 @@ export function Sandbox() {
   const [opacity, setOpacity] = useState(0.9)
   const [xray, setXray] = useState(false)
   const [reach, setReach] = useState(Math.sqrt(8))
-  const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [tolerance, setTolerance] = useState(0.12)
+  const selRef = useRef(new Selection())
+  const [selVersion, setSelVersion] = useState(0)
+  const selChanged = () => setSelVersion((v) => v + 1)
   const hover = useRef<{ x: number; y: number } | null>(null)
+  const marquee = useRef<Marquee | null>(null)
   const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  // Effects
+  const [effect, setEffect] = useState<EffectId | null>(null)
+  const [amount, setAmount] = useState(0.5)
+  const [target, setTarget] = useState<'all' | 'selection'>('all')
+  const [running, setRunning] = useState(false)
+  const time = useRef(0)
 
   const blobs = blobsRef.current
+  const sel = selRef.current
   const blobSize = 2 ** size
   // Status messages ("Undone") fade after a moment
   useEffect(() => {
@@ -85,9 +132,10 @@ export function Sandbox() {
   }, [message])
 
   // --- edits ---------------------------------------------------------------
+  const clearSel = () => { if (sel.count) { sel.clear(); selChanged() } }
   const replace = (next: Blobs, name?: string) => {
     blobsRef.current = next
-    setSelected(new Set())
+    clearSel()
     if (name) setSource(name)
     bump()
   }
@@ -114,11 +162,58 @@ export function Sandbox() {
       const mod = ev.metaKey || ev.ctrlKey
       if (mod && ev.key.toLowerCase() === 'z') { ev.preventDefault(); if (ev.shiftKey) redo(); else undo() }
       else if (mod && ev.key.toLowerCase() === 'y') { ev.preventDefault(); redo() }
-      else if ((ev.key === 'Delete' || ev.key === 'Backspace') && selected.size && t.closest('[data-testid=viewport]')) { ev.preventDefault(); deleteSelected() }
+      else if ((ev.key === 'Delete' || ev.key === 'Backspace') && sel.count && t.closest('[data-testid=viewport]')) { ev.preventDefault(); deleteSelected() }
     }
     window.addEventListener('keydown', on)
     return () => window.removeEventListener('keydown', on)
   })
+
+  // --- opening and saving files ----------------------------------------------
+  const fileInput = useRef<HTMLInputElement>(null)
+  const [upright, setUpright] = useState(true)
+  const openFile = async (file: File) => {
+    setError('')
+    setBusy(true)
+    setMessage(`Opening ${file.name}…`)
+    try {
+      const { readSplatFile } = await import('../splat-core/importer.ts')
+      const b = await readSplatFile(await file.arrayBuffer(), file.name)
+      if (!b.count) throw new Error('empty')
+      const n = thin(b, maxBlobs)
+      if (upright) flipUpright(b)
+      sitOnFloor(b)
+      history.current.record(blobsRef.current, source)
+      replace(b, file.name)
+      setOrbit((o) => ({ ...o, ...frame(b) }))
+      setMessage(n > 1 ? `Opened ${file.name}, keeping 1 blob in ${n} (${b.count.toLocaleString()})` : `Opened ${file.name}: ${b.count.toLocaleString()} blobs`)
+    } catch (err) {
+      console.warn(err)
+      setMessage('')
+      setError(`Couldn't open ${file.name}. The sandbox reads Gaussian splat files: .ply, .spz, .splat, .ksplat and .sog.`)
+    } finally {
+      setBusy(false)
+    }
+  }
+  const [dragOver, setDragOver] = useState(false)
+  const onDrop = (ev: React.DragEvent) => {
+    ev.preventDefault()
+    setDragOver(false)
+    const f = ev.dataTransfer.files[0]
+    if (f) void openFile(f)
+  }
+
+  const exportPly = () => {
+    const bytes = writePly(blobsRef.current)
+    const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/octet-stream' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${source.replace(/\.[^.]+$/, '').replace(/[^\w-]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'blobscape'}.ply`
+    document.body.append(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+    setMessage(`Saved ${blobsRef.current.count.toLocaleString()} blobs`)
+  }
 
   // --- placing blobs ---------------------------------------------------------
   /** Where a screen point lands: on the nearest blob, else the floor, else a plane through the target. */
@@ -150,7 +245,7 @@ export function Sandbox() {
   }
 
   const place = (b: Blobs, at: { p: Vec3; n: Vec3 } | null, jitter: number) => {
-    if (b.count >= MAX_BLOBS) { setMessage(`The sandbox holds up to ${MAX_BLOBS.toLocaleString()} blobs`); return false }
+    if (b.count >= maxBlobs) { setMessage(`The sandbox holds up to ${maxBlobs.toLocaleString()} blobs`); return false }
     if (!at) return false
     const rgb = hexToRgb(colour)
     const s = blobSize * (1 - jitter / 2 + Math.random() * jitter)
@@ -197,30 +292,61 @@ export function Sandbox() {
       const p = toScreen(b.centre.subarray(i * 3, i * 3 + 3), lens)
       return !p || (p[0] - x) ** 2 + (p[1] - y) ** 2 > r2
     })
-    if (removed) { setSelected(new Set()); changed() }
+    if (removed) { clearSel(); changed() }
   }
 
   const deleteSelected = () => {
-    const sel = selected
+    const n = sel.count
     edit((b) => b.filter((i) => !sel.has(i)))
-    setMessage(`Deleted ${sel.size.toLocaleString()} blobs`)
-    setSelected(new Set())
+    setMessage(`Deleted ${n.toLocaleString()} blobs`)
+    sel.clear()
+    selChanged()
+  }
+
+  /** The blob under a screen point, or -1. Faded blobs stay pickable. */
+  const blobAt = (x: number, y: number) => {
+    if (!view) return -1
+    const { origin, dir } = view.ray(x, y)
+    return pick(blobsRef.current, [origin.x, origin.y, origin.z], [dir.x, dir.y, dir.z], 2, 0).index
   }
 
   const selectAt = (x: number, y: number, add: boolean) => {
-    if (!view) return
-    const { origin, dir } = view.ray(x, y)
-    const hit = pick(blobsRef.current, [origin.x, origin.y, origin.z], [dir.x, dir.y, dir.z], 2, 0) // faded blobs stay selectable
-    setSelected((s) => {
-      if (hit.index < 0) return add ? s : new Set()
-      const next = new Set(add ? s : [])
-      if (add && s.has(hit.index)) next.delete(hit.index)
-      else next.add(hit.index)
-      return next
-    })
+    const hit = blobAt(x, y)
+    if (!add) sel.clear()
+    if (hit >= 0) sel.set(hit, !(add && sel.has(hit)))
+    selChanged()
   }
 
-  const last = useRef<{ x: number; y: number } | null>(null)
+  /** Selects every blob whose centre lands inside a screen polygon (x, y pairs). */
+  const selectInPolygon = (poly: number[], add: boolean) => {
+    if (!view || poly.length < 6) return
+    const lens = view.lens(), b = blobsRef.current
+    if (!add) sel.clear()
+    let xmin = Infinity, xmax = -Infinity, ymin = Infinity, ymax = -Infinity
+    for (let k = 0; k < poly.length; k += 2) { xmin = Math.min(xmin, poly[k]); xmax = Math.max(xmax, poly[k]); ymin = Math.min(ymin, poly[k + 1]); ymax = Math.max(ymax, poly[k + 1]) }
+    for (let i = 0; i < b.count; i++) {
+      const p = projectPoint(b.centre.subarray(i * 3, i * 3 + 3), lens)
+      if (!p || p.x < xmin || p.x > xmax || p.y < ymin || p.y > ymax) continue
+      if (inPolygon(p.x, p.y, poly)) sel.set(i, true)
+    }
+    selChanged()
+  }
+
+  /** Slides the selection by a screen-space drag, at the depth of its centre. */
+  const moveBy = (dx: number, dy: number) => {
+    if (!view || !sel.count) return
+    const b = blobsRef.current, lens = view.lens()
+    const c = centroid(b, sel)
+    const depth = projectPoint(c, lens)?.depth ?? orbit.distance
+    const V = lens.view
+    // The view matrix's rows are the camera's right and up directions in the world
+    const right: Vec3 = [V[0], V[4], V[8]], up: Vec3 = [V[1], V[5], V[9]]
+    const kx = (dx * depth) / lens.fx, ky = (-dy * depth) / lens.fy
+    translate(b, sel, [right[0] * kx + up[0] * ky, right[1] * kx + up[1] * ky, right[2] * kx + up[2] * ky])
+    changed()
+  }
+
+  const last = useRef<{ x: number; y: number; shift: boolean; x0: number; y0: number } | null>(null)
   // A stroke's "before" picture goes into the history only once the stroke changes something
   const before = useRef<Blobs | null>(null)
   const changed = (from = 0) => {
@@ -228,28 +354,55 @@ export function Sandbox() {
     bump(from)
   }
   const handlers: ToolHandlers | undefined = tool === 'orbit' ? undefined : {
-    cursor: tool === 'select' ? 'pointer' : 'crosshair',
+    cursor: tool === 'select' ? 'pointer' : tool === 'move' ? 'move' : 'crosshair',
     down: (x, y, ev) => {
-      if (tool === 'select') { selectAt(x, y, ev.shiftKey || ev.metaKey || ev.ctrlKey); return }
+      const shift = ev.shiftKey || ev.metaKey || ev.ctrlKey
+      last.current = { x, y, shift, x0: x, y0: y }
+      if (tool === 'select') return
+      if (tool === 'lasso') { marquee.current = { kind: 'lasso', pts: [x, y] }; return }
       before.current = blobsRef.current.clone()
-      last.current = { x, y }
-      if (tool === 'add') { const from = blobsRef.current.count; if (place(blobsRef.current, land(x, y), 0)) changed(from) }
+      if (tool === 'move') {
+        if (!sel.count) { const hit = blobAt(x, y); if (hit >= 0) { sel.set(hit, true); selChanged() } }
+      }
+      else if (tool === 'add') { const from = blobsRef.current.count; if (place(blobsRef.current, land(x, y), 0)) changed(from) }
       else if (tool === 'spray') sprayAt(x, y)
       else if (tool === 'erase' && view) eraseAt(x, y, view.lens())
     },
     move: (x, y) => {
       const l = last.current
-      if (!l || tool === 'add' || tool === 'select') return
+      if (!l || tool === 'add') return
+      if (tool === 'select') {
+        if (marquee.current || Math.hypot(x - l.x0, y - l.y0) > 4) marquee.current = { kind: 'box', x0: l.x0, y0: l.y0, x1: x, y1: y }
+        view?.invalidate(1)
+        return
+      }
+      if (tool === 'lasso') {
+        const m = marquee.current
+        if (m?.kind === 'lasso' && Math.hypot(x - l.x, y - l.y) >= 3) { m.pts.push(x, y); last.current = { ...l, x, y }; view?.invalidate(1) }
+        return
+      }
+      if (tool === 'move') { moveBy(x - l.x, y - l.y); last.current = { ...l, x, y }; return }
       // Space the dabs out so a slow drag doesn't pile blobs up in one spot
       if (Math.hypot(x - l.x, y - l.y) < Math.max(4, spread / 3)) return
-      last.current = { x, y }
+      last.current = { ...l, x, y }
       if (tool === 'spray') sprayAt(x, y)
       else if (tool === 'erase' && view) eraseAt(x, y, view.lens())
     },
-    up: () => { last.current = null; before.current = null },
+    up: () => {
+      const l = last.current, m = marquee.current
+      if (l && tool === 'select') {
+        if (m?.kind === 'box') selectInPolygon([m.x0, m.y0, m.x1, m.y0, m.x1, m.y1, m.x0, m.y1], l.shift)
+        else selectAt(l.x0, l.y0, l.shift)
+      } else if (l && tool === 'lasso' && m?.kind === 'lasso') selectInPolygon(m.pts, l.shift)
+      if (m) view?.invalidate(1)
+      last.current = null
+      before.current = null
+      marquee.current = null
+    },
     // Enter or Space on the focused view uses the tool at the centre (a keyboard stand-in for a click)
     activate: (x, y, shift) => {
-      if (tool === 'select') { selectAt(x, y, shift); return }
+      if (tool === 'select' || tool === 'lasso') { selectAt(x, y, shift); return }
+      if (tool === 'move') return
       before.current = blobsRef.current.clone()
       if (tool === 'add') { const from = blobsRef.current.count; if (place(blobsRef.current, land(x, y), 0)) changed(from) }
       else if (tool === 'spray') sprayAt(x, y)
@@ -266,11 +419,93 @@ export function Sandbox() {
   // --- selection edits --------------------------------------------------------
   const recolourSelected = () => {
     const rgb = hexToRgb(colour)
-    edit((b) => { for (const i of selected) b.colour.set(rgb, i * 3) })
+    edit((b) => { for (let i = 0; i < b.count; i++) if (sel.has(i)) b.colour.set(rgb, i * 3) })
   }
-  const resizeSelected = (k: number) => edit((b) => { for (const i of selected) for (let a = 0; a < 3; a++) b.scale[i * 3 + a] *= k })
-  const fadeSelected = (k: number) => edit((b) => { for (const i of selected) b.opacity[i] = Math.max(0.02, Math.min(1, b.opacity[i] * k)) })
-  const selectAll = () => setSelected(new Set(Array.from({ length: blobsRef.current.count }, (_, i) => i)))
+  const eachSelected = (fn: (b: Blobs, i: number) => void) => edit((b) => { for (let i = 0; i < b.count; i++) if (sel.has(i)) fn(b, i) })
+  const resizeSelected = (k: number) => eachSelected((b, i) => { for (let a = 0; a < 3; a++) b.scale[i * 3 + a] *= k })
+  const fadeSelected = (k: number) => eachSelected((b, i) => { b.opacity[i] = Math.max(0.02, Math.min(1, b.opacity[i] * k)) })
+  const turnSelected = (deg: number) => edit((b) => turnY(b, sel, centroid(b, sel), deg))
+  const scaleSelected = (k: number) => edit((b) => scaleGroup(b, sel, centroid(b, sel), k))
+  const selectAll = () => { sel.all(blobsRef.current.count); selChanged() }
+  const invertSel = () => { sel.invert(blobsRef.current.count); selChanged() }
+  const selectColour = () => {
+    selectByColour(blobsRef.current, sel, hexToRgb(colour), tolerance)
+    selChanged()
+  }
+  const takeColour = () => { const c = meanColour(blobsRef.current, sel); if (c) setColour(rgbToHex(c)) }
+
+  // --- effects -----------------------------------------------------------------
+  const fx = effect ? EFFECTS.find((e) => e.id === effect)! : null
+  const onSelection = target === 'selection'
+  const fxCount = !effect ? 0 : onSelection ? sel.count : blobs.count
+  const fxFrame = useMemo(
+    () => effectFrame(blobsRef.current, onSelection ? selRef.current : null),
+    // The blobs and selection are mutable: their version numbers are what change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [version, selVersion, onSelection],
+  )
+  const params = (a = amount): EffectParams | null => (effect ? { ...fxFrame, kind: effect, amount: a, time: time.current } : null)
+
+  // An effect on the selection needs the selected blobs first on the GPU: changing that order means a full upload
+  const ordered = !!effect && onSelection
+  const orderKey = ordered ? `sel-${selVersion}` : 'list'
+  const lastOrder = useRef('list')
+  useEffect(() => {
+    if (orderKey !== lastOrder.current) bump()
+  }, [orderKey, bump])
+  const takeSync = useCallback(() => {
+    const was = lastOrder.current
+    lastOrder.current = orderKey
+    const f = syncFrom.current
+    syncFrom.current = Infinity
+    if (ordered) return { from: 0, order: selRef.current.selectedFirst(blobsRef.current.count) }
+    return { from: was !== 'list' ? 0 : f }
+  }, [ordered, orderKey])
+
+  // The latest effect settings, for the animation loop to read without restarting
+  const live = useRef({ params, fxCount })
+  live.current = { params, fxCount }
+  useEffect(() => { void view?.setEffect(params(), fxCount) })
+
+  const chooseEffect = (id: EffectId | null) => {
+    setEffect(id)
+    const loops = id ? EFFECTS.find((e) => e.id === id)!.loops : false
+    setRunning(loops && !reducedMotion)
+    if (id && !loops && amount === 0) setAmount(0.5)
+  }
+  // Looping effects run on a clock; one-shot effects play their amount from 0 to 1
+  useEffect(() => {
+    if (!running || !view || !fx) return
+    let raf = 0, prev = performance.now()
+    const t0 = prev
+    const tick = (now: number) => {
+      const dt = Math.min(0.1, (now - prev) / 1000)
+      prev = now
+      if (fx.loops) {
+        time.current += dt
+        const p = live.current.params()
+        if (p) void view.setEffect(p, live.current.fxCount)
+      } else {
+        const a = Math.min(1, (now - t0) / 1000 / PLAY_SECONDS)
+        setAmount(a)
+        if (a >= 1) { setRunning(false); return }
+      }
+      raf = requestAnimationFrame(tick)
+    }
+    if (!fx.loops) setAmount(0)
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [running, view, fx])
+
+  const bake = () => {
+    const p = params()
+    if (!p || !fxCount) return
+    const order = ordered ? sel.selectedFirst(blobsRef.current.count) : null
+    edit((b) => bakeEffect(b, p, order, fxCount))
+    setRunning(false)
+    setEffect(null)
+    setMessage(`${fx!.name} made permanent`)
+  }
 
   // --- overlay -----------------------------------------------------------------
   const overlay = (ctx: CanvasRenderingContext2D, lens: Lens) => {
@@ -279,9 +514,31 @@ export function Sandbox() {
       if (b.count <= OUTLINE_LIMIT) drawOutlines(ctx, b, lens, { sigmas: [2] })
       else drawCentres(ctx, b, lens, themeColour('ink'))
     }
-    if (selected.size) {
-      const list = selected.size > 3000 ? [...selected].slice(0, 3000) : selected
-      drawOutlines(ctx, b, lens, { indices: list, sigmas: [2], colour: themeColour('accent'), width: 1.5 })
+    if (sel.count) {
+      const accent = themeColour('accent')
+      if (sel.count <= SELECT_OUTLINES) drawOutlines(ctx, b, lens, { indices: sel.indices(b.count), sigmas: [2], colour: accent, width: 1.5 })
+      else {
+        // Too many to outline: a dot on each selected centre
+        ctx.fillStyle = accent
+        const stride = Math.max(1, Math.ceil(sel.count / 30000))
+        let k = 0
+        for (let i = 0; i < b.count; i++) {
+          if (!sel.has(i) || k++ % stride) continue
+          const p = toScreen(b.centre.subarray(i * 3, i * 3 + 3), lens)
+          if (p) ctx.fillRect(p[0] - 1, p[1] - 1, 2, 2)
+        }
+      }
+    }
+    const m = marquee.current
+    if (m) {
+      ctx.strokeStyle = themeColour('accent')
+      ctx.lineWidth = 1.5
+      ctx.setLineDash([5, 4])
+      ctx.beginPath()
+      if (m.kind === 'box') ctx.rect(Math.min(m.x0, m.x1), Math.min(m.y0, m.y1), Math.abs(m.x1 - m.x0), Math.abs(m.y1 - m.y0))
+      else { ctx.moveTo(m.pts[0], m.pts[1]); for (let k = 2; k < m.pts.length; k += 2) ctx.lineTo(m.pts[k], m.pts[k + 1]); ctx.closePath() }
+      ctx.stroke()
+      ctx.setLineDash([])
     }
     const h = hover.current
     if (h && (tool === 'spray' || tool === 'erase')) {
@@ -295,17 +552,24 @@ export function Sandbox() {
   }
 
   const toolNote = tool === 'orbit' && coarse ? 'Drag to orbit, pinch to zoom. Pick another tool to change the scene, then come back here to turn it.' : TOOLS.find((t) => t.id === tool)!.note
+  const none = !sel.count
 
   return (
     <>
       <Crumbs here="Sandbox" />
       <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-2 pt-2 pb-6">
         <h1 ref={h1} tabIndex={-1} className="font-serif text-4xl outline-none sm:text-5xl">Sandbox</h1>
-        <p className="max-w-xl font-serif text-lg text-ink-muted">Every tool from the lessons, on any scene. Spray blobs into space, pick them apart, and see what they're made of.</p>
+        <p className="max-w-xl font-serif text-lg text-ink-muted">Every tool from the lessons, on any scene. Spray blobs into space, open a real capture, pick it apart, blow it up.</p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(320px,1fr)]">
-        <section aria-label="Scene" className="min-w-0 space-y-3">
+        <section
+          aria-label="Scene"
+          className="min-w-0 space-y-3"
+          onDragOver={(ev) => { if (ev.dataTransfer.types.includes('Files')) { ev.preventDefault(); setDragOver(true) } }}
+          onDragLeave={(ev) => { if (!ev.currentTarget.contains(ev.relatedTarget as Node)) setDragOver(false) }}
+          onDrop={onDrop}
+        >
           <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Tool">
             {TOOLS.map((t) => <Chip key={t.id} active={tool === t.id} onClick={() => setTool(t.id)}>{t.name}</Chip>)}
             <span className="ml-auto flex gap-1.5">
@@ -322,14 +586,21 @@ export function Sandbox() {
             onView={(v) => { setView(v); v.setFloor(true, themeColour('ink-faint')) }}
             tool={handlers}
             overlay={overlay}
-            takeSyncFrom={takeSyncFrom}
-            label={`Sandbox scene with ${blobs.count.toLocaleString()} blobs. Drag or use the arrow keys to orbit, plus and minus to zoom${tool !== 'orbit' ? `; with the ${TOOLS.find((t) => t.id === tool)!.name} tool, click or drag, or press Enter to use it at the centre` : ''}.`}
+            takeSync={takeSync}
+            label={`Sandbox scene with ${blobs.count.toLocaleString()} blobs. Drag or use the arrow keys to orbit, plus and minus to zoom${tool !== 'orbit' && tool !== 'move' ? `; with the ${TOOLS.find((t) => t.id === tool)!.name} tool, click or drag, or press Enter to use it at the centre` : ''}.`}
             hint={coarse ? (tool === 'orbit' ? 'drag to orbit · pinch to zoom' : 'pinch to zoom · pick Look to orbit') : tool === 'orbit' ? 'drag to orbit · scroll to zoom' : 'right-drag to orbit · scroll to zoom'}
-          />
+          >
+            {dragOver && (
+              <div aria-hidden className="pointer-events-none absolute inset-2 grid place-items-center rounded-md border-2 border-dashed border-accent bg-paper/70 text-sm text-ink">
+                Drop a splat file to open it
+              </div>
+            )}
+          </Viewport>
+          {error && <p role="alert" className="text-sm text-accent-ink">{error}</p>}
           <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm text-ink-muted">
             <span><span className="tabular-nums text-ink" data-testid="blob-count">{blobs.count.toLocaleString()}</span> blobs</span>
-            {selected.size > 0 && <span><span className="tabular-nums text-accent-ink" data-testid="selected-count">{selected.size.toLocaleString()}</span> selected</span>}
-            <span className="text-ink-faint">Started from: {source}</span>
+            {sel.count > 0 && <span><span className="tabular-nums text-accent-ink" data-testid="selected-count">{sel.count.toLocaleString()}</span> selected</span>}
+            <span className="min-w-0 truncate text-ink-faint">Started from: {source}</span>
             <span aria-live="polite" className="ml-auto text-ink-faint">{message}</span>
           </div>
           <p className="text-sm text-ink-faint">{toolNote}</p>
@@ -348,7 +619,7 @@ export function Sandbox() {
                     <Field label="Colour">
                       <div className="flex flex-wrap items-center gap-1.5">
                         {SWATCHES.map((c) => (
-                          <button key={c} type="button" aria-label={`Colour ${c}`} aria-pressed={colour === c} onClick={() => setColour(c)} className={`h-7 w-7 rounded-full border-2 transition-transform hover:scale-110 ${colour === c ? 'border-ink' : 'border-rule'}`} style={{ background: c }} />
+                          <button key={c} type="button" aria-label={`Colour ${c}`} aria-pressed={colour === c} onClick={() => setColour(c)} className={`h-7 w-7 cursor-pointer rounded-full border-2 transition-transform hover:scale-110 ${colour === c ? 'border-ink' : 'border-rule'}`} style={{ background: c }} />
                         ))}
                         <input type="color" aria-label="Any colour" value={colour} onChange={(e) => setColour(e.target.value)} className="h-7 w-9 cursor-pointer rounded border border-rule bg-transparent" />
                       </div>
@@ -364,24 +635,69 @@ export function Sandbox() {
               {
                 id: 'selection',
                 label: 'Selection',
-                summary: selected.size ? `${selected.size.toLocaleString()} blobs` : 'None',
+                summary: sel.count ? `${sel.count.toLocaleString()} blobs` : 'None',
                 content: (
-                  <Panel note="Pick blobs with the Select tool. Edits apply to every selected blob and can be undone.">
+                  <Panel note="Pick blobs with Select or Lasso, or by colour here. Edits apply to every selected blob and can be undone.">
                     <div className="flex flex-wrap gap-2">
                       <Button small onClick={selectAll} disabled={!blobs.count}>Select all</Button>
-                      <Button small onClick={() => setSelected(new Set())} disabled={!selected.size}>Select none</Button>
+                      <Button small onClick={clearSel} disabled={none}>Select none</Button>
+                      <Button small onClick={invertSel} disabled={!blobs.count}>Invert</Button>
                     </div>
+                    <Field label="By colour">
+                      <div className="flex flex-wrap gap-2">
+                        <Button small onClick={selectColour} disabled={!blobs.count}>
+                          <span aria-hidden className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: colour }} />
+                          Add blobs near the brush colour
+                        </Button>
+                        <Button small onClick={takeColour} disabled={none}>Brush from selection</Button>
+                      </div>
+                    </Field>
+                    <Slider label="Colour tolerance" value={tolerance} min={0.02} max={0.5} step={0.01} onChange={setTolerance} format={(v) => `${Math.round(v * 100)}%`} />
+                    <Field label="Arrange">
+                      <div className="flex flex-wrap gap-2">
+                        <Button small onClick={() => turnSelected(-15)} disabled={none}>Turn left</Button>
+                        <Button small onClick={() => turnSelected(15)} disabled={none}>Turn right</Button>
+                        <Button small onClick={() => scaleSelected(1.2)} disabled={none}>Bigger</Button>
+                        <Button small onClick={() => scaleSelected(1 / 1.2)} disabled={none}>Smaller</Button>
+                      </div>
+                    </Field>
+                    <Field label="Change each blob">
+                      <div className="flex flex-wrap gap-2">
+                        <Button small onClick={recolourSelected} disabled={none}>
+                          <span aria-hidden className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: colour }} />
+                          Paint with brush colour
+                        </Button>
+                        <Button small onClick={() => resizeSelected(1.25)} disabled={none}>Grow</Button>
+                        <Button small onClick={() => resizeSelected(0.8)} disabled={none}>Shrink</Button>
+                        <Button small onClick={() => resizeSelected(0.05)} disabled={none}>To dots</Button>
+                        <Button small onClick={() => fadeSelected(1.25)} disabled={none}>More opaque</Button>
+                        <Button small onClick={() => fadeSelected(0.6)} disabled={none}>Fade</Button>
+                        <Button small onClick={deleteSelected} disabled={none}>Delete</Button>
+                      </div>
+                    </Field>
+                  </Panel>
+                ),
+              },
+              {
+                id: 'effects',
+                label: 'Effects',
+                summary: fx ? fx.name : 'None',
+                content: (
+                  <Panel note="Effects run on the GPU, so they work on a million blobs. They're a preview until you make them permanent.">
+                    <div className="flex flex-wrap gap-2" role="group" aria-label="Effect">
+                      <Chip active={!effect} onClick={() => chooseEffect(null)}>None</Chip>
+                      {EFFECTS.map((e) => <Chip key={e.id} active={effect === e.id} onClick={() => chooseEffect(e.id)}>{e.name}</Chip>)}
+                    </div>
+                    {fx && <p className="text-sm text-ink-faint">{fx.note}</p>}
+                    <Slider label="Amount" value={amount} min={0} max={1} step={0.01} onChange={(v) => { if (!fx?.loops) setRunning(false); setAmount(v) }} format={(v) => `${Math.round(v * 100)}%`} />
+                    <div className="flex flex-wrap gap-2" role="group" aria-label="Apply to">
+                      <Chip active={!onSelection} onClick={() => setTarget('all')}>Whole scene</Chip>
+                      <Chip active={onSelection} onClick={() => setTarget('selection')}>Selection only</Chip>
+                    </div>
+                    {onSelection && none && effect && <p className="text-sm text-ink-faint">Nothing is selected, so nothing moves.</p>}
                     <div className="flex flex-wrap gap-2">
-                      <Button small onClick={recolourSelected} disabled={!selected.size}>
-                        <span aria-hidden className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: colour }} />
-                        Paint with brush colour
-                      </Button>
-                      <Button small onClick={() => resizeSelected(1.25)} disabled={!selected.size}>Grow</Button>
-                      <Button small onClick={() => resizeSelected(0.8)} disabled={!selected.size}>Shrink</Button>
-                      <Button small onClick={() => resizeSelected(0.05)} disabled={!selected.size}>To dots</Button>
-                      <Button small onClick={() => fadeSelected(1.25)} disabled={!selected.size}>More opaque</Button>
-                      <Button small onClick={() => fadeSelected(0.6)} disabled={!selected.size}>Fade</Button>
-                      <Button small onClick={deleteSelected} disabled={!selected.size}>Delete</Button>
+                      <Button small onClick={() => setRunning((r) => !r)} disabled={!fx}>{running ? (fx?.loops ? 'Pause' : 'Stop') : 'Play'}</Button>
+                      <Button small primary onClick={bake} disabled={!fx || !fxCount}>Make it permanent</Button>
                     </div>
                   </Panel>
                 ),
@@ -391,14 +707,31 @@ export function Sandbox() {
                 label: 'Scene',
                 summary: source,
                 content: (
-                  <Panel note="Start again from a sample. The current scene can still be brought back with Undo.">
+                  <Panel note="Start again from a sample or open a capture of your own. The current scene can still be brought back with Undo.">
                     <div className="flex flex-wrap gap-2" role="group" aria-label="Start from">
                       {STARTS.map((s) => <Chip key={s.id} active={source === s.name} onClick={() => start(s)}>{s.name}</Chip>)}
+                    </div>
+                    <Field label="Your own splats">
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap gap-2">
+                          <Button small onClick={() => fileInput.current?.click()} disabled={busy}>{busy ? 'Opening…' : 'Open a splat file…'}</Button>
+                          <Button small onClick={exportPly} disabled={!blobs.count}>Save as .ply</Button>
+                        </div>
+                        <input ref={fileInput} type="file" accept={FILE_TYPES} className="sr-only" tabIndex={-1} aria-hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void openFile(f) }} />
+                        <p className="text-xs text-ink-faint">
+                          .ply, .spz, .splat, .ksplat or .sog, or drop one on the view. It stays on your device. Scenes over {maxBlobs.toLocaleString()} blobs are thinned to fit. Saved files open in most splat viewers.
+                        </p>
+                        <Toggle label="Turn captures the right way up on opening" checked={upright} onChange={setUpright} />
+                      </div>
+                    </Field>
+                    <div className="flex flex-wrap gap-2">
+                      <Button small onClick={() => { edit(flipUpright); setOrbit((o) => ({ ...o, ...frame(blobsRef.current) })) }} disabled={!blobs.count}>Flip upside down</Button>
+                      <Button small onClick={() => { edit(sitOnFloor); setOrbit((o) => ({ ...o, ...frame(blobsRef.current) })) }} disabled={!blobs.count}>Sit on the floor</Button>
+                      <Button small onClick={() => setOrbit((o) => ({ ...o, ...frame(blobsRef.current) }))}>Frame the scene</Button>
                     </div>
                     <Toggle label="X-ray" checked={xray} onChange={setXray} />
                     <p className="text-xs text-ink-faint">X-ray outlines every blob up to {OUTLINE_LIMIT.toLocaleString()}; past that it shows centres as dots.</p>
                     <Slider label="Reach" value={reach} min={0.5} max={3} step={0.01} onChange={setReach} format={(v) => `${v.toFixed(2)}σ`} hint="How far out each blob is drawn. Turn it down to see the individual blobs in a dense scene." />
-                    <Button small onClick={() => setOrbit((o) => ({ ...o, ...frame(blobsRef.current) }))}>Frame the scene</Button>
                   </Panel>
                 ),
               },
