@@ -3,7 +3,8 @@ import { Blobs, rgbToHex } from '../../splat-core/blobs.ts'
 import { orbitLens, type Orbit } from '../../splat-core/view.ts'
 import { Chip, Slider } from '../../shared/ui.tsx'
 import { LessonShell } from '../Shell.tsx'
-import { clampOrbit } from '../Viewport.tsx'
+import { LESSON_GOALS } from '../routes.ts'
+import { DRAG, clampOrbit, orbitKey } from '../Viewport.tsx'
 import { drawOrder, rasterise, toImageData, type Order as DrawMode } from '../cpuSplat.ts'
 import { useGoals } from '../progress.ts'
 
@@ -67,12 +68,7 @@ export function Order() {
           <Slider label="Opacity" value={opacity} min={0.1} max={1} step={0.01} onChange={setOpacity} format={(v) => `${Math.round(v * 100)}%`} hint="Every blob's opacity at its centre." />
         </>
       }
-      goals={[
-        { id: 'wrong', label: 'See list order get it wrong', hint: 'Compare the two views: which blob looks in front?' },
-        { id: 'luck', label: 'Turn the camera until list order happens to be right', hint: 'Go round the back.' },
-        { id: 'reversed', label: 'Draw front to back' },
-        { id: 'opaque', label: 'Make the blobs fully opaque while the order is wrong', hint: 'Now the wrong blob hides the right one completely.' },
-      ]}
+      goals={LESSON_GOALS['order']}
       done={done}
       scene={() => blobs}
       explain={
@@ -149,16 +145,14 @@ function SoftView({ blobs, orbit, setOrbit, order, title, testId, warn }: { blob
           onPointerDown={(ev) => { ev.currentTarget.setPointerCapture(ev.pointerId); drag.current = { x: ev.clientX, y: ev.clientY, az: orbit.azimuth, el: orbit.elevation } }}
           onPointerMove={(ev) => {
             const d = drag.current
-            if (d) setOrbit((o) => clampOrbit({ ...o, azimuth: d.az - (ev.clientX - d.x) * 0.6, elevation: d.el + (ev.clientY - d.y) * 0.4 }))
+            if (d) setOrbit((o) => clampOrbit({ ...o, azimuth: d.az - (ev.clientX - d.x) * DRAG.azimuth, elevation: d.el + (ev.clientY - d.y) * DRAG.elevation }))
           }}
           onPointerUp={() => { drag.current = null }}
           onPointerCancel={() => { drag.current = null }}
           onKeyDown={(ev) => {
-            const step = ev.shiftKey ? 15 : 5
-            const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, step], ArrowDown: [0, -step] }[ev.key]
-            if (!d) return
+            if (!orbitKey(ev, orbit)) return
             ev.preventDefault()
-            setOrbit((o) => clampOrbit({ ...o, azimuth: o.azimuth + d[0], elevation: o.elevation + d[1] }))
+            setOrbit((o) => orbitKey(ev, o) ?? o)
           }}
         />
       </div>

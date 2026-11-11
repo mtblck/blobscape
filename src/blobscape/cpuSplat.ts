@@ -16,7 +16,8 @@ export type Order = 'sorted' | 'reversed' | 'list'
 export function drawOrder(b: Blobs, lens: Lens, order: Order): number[] {
   const idx = Array.from({ length: b.count }, (_, i) => i)
   if (order === 'list') return idx
-  const depth = idx.map((i) => project(b, i, lens)?.depth ?? -Infinity)
+  // Behind the camera counts as nearest (drawn last); a finite stand-in keeps the comparator consistent
+  const depth = idx.map((i) => project(b, i, lens)?.depth ?? -1e30)
   idx.sort((x, y) => depth[y] - depth[x]) // far first
   return order === 'sorted' ? idx : idx.reverse()
 }

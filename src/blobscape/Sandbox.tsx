@@ -43,10 +43,18 @@ function frame(b: Blobs): Pick<Orbit, 'target' | 'distance'> {
 
 export function Sandbox() {
   const h1 = useFocusHeading()
-  const handed = useMemo(() => takeHandOff(), [])
-  const blobsRef = useRef<Blobs>(handed?.blobs ?? STARTS[0].make())
+  const [handed] = useState(takeHandOff)
+  // Built once: a useRef argument would be rebuilt (and thrown away) on every render
+  const [initial] = useState(() => handed?.blobs ?? STARTS[0].make())
+  const blobsRef = useRef<Blobs>(initial)
   const [version, setVersion] = useState(0)
-  const bump = useCallback(() => setVersion((v) => v + 1), [])
+  // The first blob index changed since the last sync, so a spray stroke only uploads its new blobs
+  const syncFrom = useRef(0)
+  const bump = useCallback((from = 0) => {
+    syncFrom.current = Math.min(syncFrom.current, from)
+    setVersion((v) => v + 1)
+  }, [])
+  const takeSyncFrom = useCallback(() => { const f = syncFrom.current; syncFrom.current = Infinity; return f }, [])
   const [source, setSource] = useState(handed ? handed.name : STARTS[0].name)
   const [orbit, setOrbit] = useState<Orbit>(() => ({ ...frame(blobsRef.current), azimuth: 30, elevation: 22 }))
   const [view, setView] = useState<SplatView | null>(null)
@@ -141,9 +149,8 @@ export function Sandbox() {
     return t > 0 ? { p: [o[0] + d[0] * t, o[1] + d[1] * t, o[2] + d[2] * t], n: [-d[0], -d[1], -d[2]] } : null
   }
 
-  const place = (b: Blobs, x: number, y: number, jitter: number) => {
+  const place = (b: Blobs, at: { p: Vec3; n: Vec3 } | null, jitter: number) => {
     if (b.count >= MAX_BLOBS) { setMessage(`The sandbox holds up to ${MAX_BLOBS.toLocaleString()} blobs`); return false }
-    const at = land(x, y)
     if (!at) return false
     const rgb = hexToRgb(colour)
     const s = blobSize * (1 - jitter / 2 + Math.random() * jitter)
@@ -158,14 +165,29 @@ export function Sandbox() {
     return true
   }
 
+  /**
+   * One dab: find the surface under the ring's centre once, then scatter the
+   * dab's blobs over that surface's tangent plane, sized so the scatter
+   * matches the ring on screen. One pick per dab, not one per blob.
+   */
   const sprayAt = (x: number, y: number) => {
     const b = blobsRef.current
-    let n = 0
+    const at = land(x, y)
+    if (!at || !view) return
+    const lens = view.lens()
+    const depth = Math.max(0.01, Math.hypot(at.p[0] - view.camera.position.x, at.p[1] - view.camera.position.y, at.p[2] - view.camera.position.z))
+    const radius = (spread * depth) / lens.fx
+    // Two directions across the surface
+    const n = at.n
+    const helper: Vec3 = Math.abs(n[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0]
+    const u = norm(cross(helper, n)), v = cross(n, u)
+    const from = b.count
     for (let k = 0; k < density; k++) {
-      const r = spread * Math.sqrt(Math.random()), a = Math.random() * Math.PI * 2
-      if (place(b, x + Math.cos(a) * r, y + Math.sin(a) * r, 0.5)) n++
+      const r = radius * Math.sqrt(Math.random()), a = Math.random() * Math.PI * 2
+      const cu = Math.cos(a) * r, cv = Math.sin(a) * r
+      place(b, { p: [at.p[0] + u[0] * cu + v[0] * cv, at.p[1] + u[1] * cu + v[1] * cv, at.p[2] + u[2] * cu + v[2] * cv], n }, 0.5)
     }
-    if (n) changed()
+    if (b.count > from) changed(from)
   }
 
   const eraseAt = (x: number, y: number, lens: Lens) => {
@@ -201,9 +223,9 @@ export function Sandbox() {
   const last = useRef<{ x: number; y: number } | null>(null)
   // A stroke's "before" picture goes into the history only once the stroke changes something
   const before = useRef<Blobs | null>(null)
-  const changed = () => {
+  const changed = (from = 0) => {
     if (before.current) { history.current.keep(before.current); before.current = null }
-    bump()
+    bump(from)
   }
   const handlers: ToolHandlers | undefined = tool === 'orbit' ? undefined : {
     cursor: tool === 'select' ? 'pointer' : 'crosshair',
@@ -211,7 +233,7 @@ export function Sandbox() {
       if (tool === 'select') { selectAt(x, y, ev.shiftKey || ev.metaKey || ev.ctrlKey); return }
       before.current = blobsRef.current.clone()
       last.current = { x, y }
-      if (tool === 'add') { if (place(blobsRef.current, x, y, 0)) changed() }
+      if (tool === 'add') { const from = blobsRef.current.count; if (place(blobsRef.current, land(x, y), 0)) changed(from) }
       else if (tool === 'spray') sprayAt(x, y)
       else if (tool === 'erase' && view) eraseAt(x, y, view.lens())
     },
@@ -290,7 +312,7 @@ export function Sandbox() {
             onView={(v) => { setView(v); v.setFloor(true, themeColour('ink-faint')) }}
             tool={handlers}
             overlay={overlay}
-            overlayKey={[xray, selected, tool, spread, version]}
+            takeSyncFrom={takeSyncFrom}
             label={`Sandbox scene with ${blobs.count.toLocaleString()} blobs. Drag or use the arrow keys to orbit${tool !== 'orbit' ? `; with the ${TOOLS.find((t) => t.id === tool)!.name} tool, click or drag to use it` : ''}.`}
             hint={coarse ? (tool === 'orbit' ? 'drag to orbit · pinch to zoom' : 'pinch to zoom · pick Look to orbit') : tool === 'orbit' ? 'drag to orbit · scroll to zoom' : 'right-drag to orbit · scroll to zoom'}
           />
@@ -377,3 +399,6 @@ export function Sandbox() {
     </>
   )
 }
+
+const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+const norm = (a: Vec3): Vec3 => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l] }

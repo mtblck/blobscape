@@ -7,6 +7,7 @@ Small interactive things, built to learn how something works by poking at it. Se
 | --- | --- |
 | [Splat to Sprite](https://mattblack.space/experiments/splat-to-sprite/) | Turn a 3D Gaussian splat into pixel-art sprites and Tinkerkit sprite sheets |
 | [Fit a Picture](https://mattblack.space/experiments/fit-a-picture/) | Watch 2D Gaussians start as noise and learn a picture, the way a splat is trained |
+| [Blobscape](https://mattblack.space/experiments/blobscape/) | Learn what a splat is made of, one blob at a time, then play with thousands in a sandbox |
 
 ```sh
 npm install
@@ -81,4 +82,30 @@ start as random noise and settle into the image, with the loss graphed live.
   more directly. New blobs get one round (100 steps) before they can be pruned.
 - **Your picture stays put.** It is decoded with `createImageBitmap`, shrunk to the training size on
   a canvas, and handed to the worker. Nothing is uploaded.
+
+## Blobscape
+
+Lessons and a sandbox in one page. Each lesson is one idea you can poke at, with goals that tick off
+as you reach them: **One blob** (the 14 numbers of a Gaussian), **Footprint** (how a 3D blob lands
+on screen as a 2D ellipse), **Order matters** (why every frame sorts back to front), and **Many make
+a shape** (from one blob to 20,000). Every lesson can open its scene in the **Sandbox**, which adds,
+sprays, selects, erases, recolours and resizes blobs, with an x-ray view and undo. More lessons
+(colour by angle, painting, real captures, breaking a scene) and sandbox effects are planned.
+
+### Design notes
+
+- **Spark draws, our code owns the blobs.** The scene is a `Blobs` list of flat typed arrays
+  (`src/splat-core/blobs.ts`) synced into a Spark `PackedSplats`; after an append only the new blobs
+  are rewritten. Projection (Σ′ = J W Σ Wᵀ Jᵀ) and ray picking against each blob's ellipsoid are
+  plain functions, tested against sampling in `blobs.test.ts`; the x-ray outlines and lesson read-outs
+  use them, so they match what Spark draws.
+- **One custom renderer, on purpose.** Spark always sorts correctly, so the Order lesson uses a
+  ~60-line software splatter (`cpuSplat.ts`) that can draw in any order.
+- **Hash routes, one page.** `#/lesson/<id>` and `#/sandbox`, so there are no server routes and the
+  folder can move to its own domain (blobscape.dev) by copying `blobscape/`, `src/blobscape/`,
+  `src/splat-core/` and `src/shared/`.
+- **Nothing leaves the browser.** Goal progress is kept in localStorage (`blobscape-progress`); the
+  lesson-to-sandbox hand-off is in memory.
+- **Spray picks once per dab.** It finds the surface under the ring once, then scatters the dab's
+  blobs over that surface's tangent plane, so a stroke stays cheap on a 200k-blob scene.
 

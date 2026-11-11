@@ -3,6 +3,7 @@ import { Blobs, hexToRgb, quatFromEuler } from '../../splat-core/blobs.ts'
 import type { Orbit } from '../../splat-core/view.ts'
 import { Chip, Field, Slider, Tabs, Toggle } from '../../shared/ui.tsx'
 import { LessonShell } from '../Shell.tsx'
+import { LESSON_GOALS } from '../routes.ts'
 import { Viewport } from '../Viewport.tsx'
 import { drawOutlines, themeColour } from '../overlay.ts'
 import { useGoals } from '../progress.ts'
@@ -53,7 +54,6 @@ export function OneBlob() {
           setOrbit={setOrbit}
           label="A single Gaussian blob. Drag or use the arrow keys to orbit; scroll or press plus and minus to zoom."
           hint="drag to orbit · scroll to zoom"
-          overlayKey={xray}
           overlay={xray ? (ctx, lens) => drawOutlines(ctx, blobs, lens, { sigmas: [1, 2], colour: themeColour('ink-faint'), axes: true }) : undefined}
         />
       }
@@ -124,12 +124,7 @@ export function OneBlob() {
         />
         </>
       }
-      goals={[
-        { id: 'pancake', label: 'Squash it into a pancake', hint: 'Make one size much smaller than the other two.' },
-        { id: 'needle', label: 'Stretch it into a needle', hint: 'Make one size much bigger than the other two.' },
-        { id: 'tilt', label: 'Turn it' },
-        { id: 'ghost', label: 'Make it a ghost', hint: 'Turn the opacity right down, but not to nothing.' },
-      ]}
+      goals={LESSON_GOALS['one-blob']}
       done={done}
       scene={() => blobs}
       explain={

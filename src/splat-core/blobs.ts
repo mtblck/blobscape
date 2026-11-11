@@ -176,6 +176,17 @@ export interface Footprint {
   cov: [number, number, number]
 }
 
+/** A world point to CSS pixels (y down) and its depth in front of the camera, or null behind a perspective camera. */
+export function projectPoint(p: ArrayLike<number>, lens: Lens): { x: number; y: number; depth: number; tx: number; ty: number } | null {
+  const V = lens.view
+  const tx = V[0] * p[0] + V[4] * p[1] + V[8] * p[2] + V[12]
+  const ty = V[1] * p[0] + V[5] * p[1] + V[9] * p[2] + V[13]
+  const depth = -(V[2] * p[0] + V[6] * p[1] + V[10] * p[2] + V[14])
+  if (lens.ortho) return { x: lens.width / 2 + lens.fx * tx, y: lens.height / 2 - lens.fy * ty, depth, tx, ty }
+  if (depth <= 1e-4) return null
+  return { x: lens.width / 2 + (lens.fx * tx) / depth, y: lens.height / 2 - (lens.fy * ty) / depth, depth, tx, ty }
+}
+
 /**
  * Projects blob i to its screen footprint, the same way 3DGS renderers do:
  * Σ' = J W Σ Wᵀ Jᵀ, with J the Jacobian of the projection at the blob's centre.
@@ -183,24 +194,13 @@ export interface Footprint {
  */
 export function project(b: Blobs, i: number, lens: Lens): Footprint | null {
   const V = lens.view
-  const [px, py, pz] = b.centre.subarray(i * 3, i * 3 + 3)
-  const tx = V[0] * px + V[4] * py + V[8] * pz + V[12]
-  const ty = V[1] * px + V[5] * py + V[9] * pz + V[13]
-  const tz = V[2] * px + V[6] * py + V[10] * pz + V[14]
-  const depth = -tz
-  if (!lens.ortho && depth <= 1e-4) return null
+  const c = projectPoint(b.centre.subarray(i * 3, i * 3 + 3), lens)
+  if (!c) return null
+  const { x, y, depth, tx, ty } = c
   // Jacobian rows (screen u right, v down) w.r.t. camera-space x, y, z
-  let J: number[]
-  let x: number, y: number
-  if (lens.ortho) {
-    J = [lens.fx, 0, 0, 0, -lens.fy, 0]
-    x = lens.width / 2 + lens.fx * tx
-    y = lens.height / 2 - lens.fy * ty
-  } else {
-    J = [lens.fx / depth, 0, (lens.fx * tx) / (depth * depth), 0, -lens.fy / depth, (-lens.fy * ty) / (depth * depth)]
-    x = lens.width / 2 + (lens.fx * tx) / depth
-    y = lens.height / 2 - (lens.fy * ty) / depth
-  }
+  const J = lens.ortho
+    ? [lens.fx, 0, 0, 0, -lens.fy, 0]
+    : [lens.fx / depth, 0, (lens.fx * tx) / (depth * depth), 0, -lens.fy / depth, (-lens.fy * ty) / (depth * depth)]
   // T = J · W (2×3), W the rotation part of the view matrix
   const W = [V[0], V[4], V[8], V[1], V[5], V[9], V[2], V[6], V[10]]
   const T = [0, 1].flatMap((r) => [0, 1, 2].map((c) => J[r * 3] * W[c] + J[r * 3 + 1] * W[3 + c] + J[r * 3 + 2] * W[6 + c]))
@@ -230,16 +230,21 @@ export function eigen2(a: number, b: number, d: number) {
  * ellipsoid is a unit sphere.
  */
 export function rayHit(b: Blobs, i: number, o: ArrayLike<number>, dir: ArrayLike<number>, k = 2): number {
-  const R = quatToMat(b.quat.subarray(i * 4, i * 4 + 4))
-  const c = b.centre.subarray(i * 3, i * 3 + 3)
-  const s = b.scale.subarray(i * 3, i * 3 + 3)
-  const rel = [o[0] - c[0], o[1] - c[1], o[2] - c[2]]
-  // Rᵀ · v, then divide by k·scale per axis
-  const lo = [0, 1, 2].map((a) => (R[a] * rel[0] + R[3 + a] * rel[1] + R[6 + a] * rel[2]) / (k * Math.max(s[a], 1e-6)))
-  const ld = [0, 1, 2].map((a) => (R[a] * dir[0] + R[3 + a] * dir[1] + R[6 + a] * dir[2]) / (k * Math.max(s[a], 1e-6)))
-  const A = ld[0] ** 2 + ld[1] ** 2 + ld[2] ** 2
-  const B = 2 * (lo[0] * ld[0] + lo[1] * ld[1] + lo[2] * ld[2])
-  const C = lo[0] ** 2 + lo[1] ** 2 + lo[2] ** 2 - 1
+  // Runs once per blob per pick, so it works on plain numbers: no arrays allocated.
+  const q = b.quat, i4 = i * 4, i3 = i * 3
+  const x = q[i4], y = q[i4 + 1], z = q[i4 + 2], w = q[i4 + 3]
+  // Columns of the rotation matrix are the blob's axes in world space
+  const ax0 = 1 - 2 * (y * y + z * z), ay0 = 2 * (x * y + z * w), az0 = 2 * (x * z - y * w)
+  const ax1 = 2 * (x * y - z * w), ay1 = 1 - 2 * (x * x + z * z), az1 = 2 * (y * z + x * w)
+  const ax2 = 2 * (x * z + y * w), ay2 = 2 * (y * z - x * w), az2 = 1 - 2 * (x * x + y * y)
+  const rx = o[0] - b.centre[i3], ry = o[1] - b.centre[i3 + 1], rz = o[2] - b.centre[i3 + 2]
+  const s0 = 1 / (k * Math.max(b.scale[i3], 1e-6)), s1 = 1 / (k * Math.max(b.scale[i3 + 1], 1e-6)), s2 = 1 / (k * Math.max(b.scale[i3 + 2], 1e-6))
+  // Rᵀ · v, divided by k·scale per axis: in this frame the ellipsoid is a unit sphere
+  const lo0 = (ax0 * rx + ay0 * ry + az0 * rz) * s0, lo1 = (ax1 * rx + ay1 * ry + az1 * rz) * s1, lo2 = (ax2 * rx + ay2 * ry + az2 * rz) * s2
+  const ld0 = (ax0 * dir[0] + ay0 * dir[1] + az0 * dir[2]) * s0, ld1 = (ax1 * dir[0] + ay1 * dir[1] + az1 * dir[2]) * s1, ld2 = (ax2 * dir[0] + ay2 * dir[1] + az2 * dir[2]) * s2
+  const A = ld0 * ld0 + ld1 * ld1 + ld2 * ld2
+  const B = 2 * (lo0 * ld0 + lo1 * ld1 + lo2 * ld2)
+  const C = lo0 * lo0 + lo1 * lo1 + lo2 * lo2 - 1
   const disc = B * B - 4 * A * C
   if (disc < 0 || A === 0) return -1
   const sq = Math.sqrt(disc)

@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
-import { Blobs, project, quatFromEuler } from '../../splat-core/blobs.ts'
-import type { Orbit, SplatView } from '../../splat-core/view.ts'
+import { Blobs, project } from '../../splat-core/blobs.ts'
+import { orbitLens, type Orbit, type SplatView } from '../../splat-core/view.ts'
 import { Chip, Slider } from '../../shared/ui.tsx'
 import { LessonShell } from '../Shell.tsx'
+import { LESSON_GOALS } from '../routes.ts'
 import { Viewport } from '../Viewport.tsx'
 import { drawOutlines, themeColour } from '../overlay.ts'
 import { useGoals } from '../progress.ts'
@@ -18,16 +19,15 @@ export function Footprint() {
   const [reach, setReach] = useState(Math.sqrt(8))
   const [view, setView] = useState<SplatView | null>(null)
 
-  // A pancake: wide in x, a little less in y, thin in z, facing +Z
+  // A round pancake: wide in x and y, thin in z, facing +Z (the "Face on" view)
   const blobs = useMemo(() => {
     const b = new Blobs(1)
-    b.push({ centre: [0, 0, 0], scale: [0.6, 0.35, 0.04], quat: quatFromEuler(0, 0, 15), colour: [0.24, 0.6, 0.88], opacity: 0.95 })
+    b.push({ centre: [0, 0, 0], scale: [0.5, 0.5, 0.04], quat: [0, 0, 0, 1], colour: [0.24, 0.6, 0.88], opacity: 0.95 })
     return b
   }, [])
 
-  // orbit is a dependency of the lens even though it isn't read here directly
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const f = useMemo(() => (view ? project(blobs, 0, view.lens()) : null), [view, orbit, blobs])
+  // Worked out from the orbit in state, not the view's camera, which only catches up after this render
+  const f = view ? project(blobs, 0, orbitLens(orbit, view.canvas.clientWidth, view.canvas.clientHeight)) : null
   const ratio = f && f.b > 0 ? f.a / f.b : 1
   const done = useGoals('footprint', {
     round: !!f && ratio < 1.15,
@@ -49,7 +49,6 @@ export function Footprint() {
           onView={setView}
           label="A flat blob and the ellipse it covers on screen. Drag or use the arrow keys to orbit."
           hint="drag to orbit · scroll to zoom"
-          overlayKey={reach}
           overlay={(ctx, lens) => {
             drawOutlines(ctx, blobs, lens, { sigmas: [1, 2], colour: themeColour('ink-faint') })
             ctx.setLineDash([5, 4])
@@ -87,11 +86,7 @@ export function Footprint() {
           />
         </>
       }
-      goals={[
-        { id: 'round', label: 'Find an angle where the footprint is round', hint: 'Look straight at the flat face.' },
-        { id: 'line', label: 'Make the footprint a thin line', hint: 'Look at it edge-on.' },
-        { id: 'hard', label: 'Cut the reach to 1σ or less and see the hard edge' },
-      ]}
+      goals={LESSON_GOALS['footprint']}
       done={done}
       scene={() => blobs}
       explain={

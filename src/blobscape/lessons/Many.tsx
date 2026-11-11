@@ -3,6 +3,7 @@ import type { Orbit } from '../../splat-core/view.ts'
 import { SHAPES, blobsFromSamples, sampleShape, type ShapeId } from '../../splat-core/shapes.ts'
 import { Chip, Slider, Toggle } from '../../shared/ui.tsx'
 import { LessonShell } from '../Shell.tsx'
+import { LESSON_GOALS } from '../routes.ts'
 import { Viewport } from '../Viewport.tsx'
 import { drawCentres, drawOutlines, themeColour } from '../overlay.ts'
 import { useGoals } from '../progress.ts'
@@ -48,7 +49,6 @@ export function Many() {
           setOrbit={setOrbit}
           label={`A ${SHAPES.find((s) => s.id === shape)!.name.toLowerCase()} made of ${count.toLocaleString()} blobs. Drag or use the arrow keys to orbit.`}
           hint="drag to orbit · scroll to zoom"
-          overlayKey={xray}
           overlay={
             xray
               ? (ctx, lens) => {
@@ -79,12 +79,7 @@ export function Many() {
           </div>
         </>
       }
-      goals={[
-        { id: 'few', label: 'Go below 30 blobs and watch the shape fall apart' },
-        { id: 'lots', label: 'Go past 5,000 blobs' },
-        { id: 'balls', label: 'Swap the flat discs for round balls', hint: 'Look at the outline: round blobs make a lumpier edge.' },
-        { id: 'gaps', label: 'Shrink the blobs until you can see through the gaps' },
-      ]}
+      goals={LESSON_GOALS['many']}
       done={done}
       scene={() => blobs}
       explain={

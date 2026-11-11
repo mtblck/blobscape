@@ -1,5 +1,4 @@
-import { project, quatToMat, type Blobs, type Lens } from '../splat-core/blobs.ts'
-import { rgbToHex } from '../splat-core/blobs.ts'
+import { project, projectPoint, quatToMat, rgbToHex, type Blobs, type Lens } from '../splat-core/blobs.ts'
 
 /** Theme colours, read live so the overlay follows the light/dark switch. */
 export function themeColour(name: 'accent' | 'ink' | 'ink-faint' | 'paper') {
@@ -61,12 +60,8 @@ function drawAxes(ctx: CanvasRenderingContext2D, b: Blobs, i: number, lens: Lens
 
 /** World point to CSS pixels (y down), or null behind the camera. */
 export function toScreen(p: ArrayLike<number>, lens: Lens): [number, number] | null {
-  const V = lens.view
-  const tx = V[0] * p[0] + V[4] * p[1] + V[8] * p[2] + V[12]
-  const ty = V[1] * p[0] + V[5] * p[1] + V[9] * p[2] + V[13]
-  const tz = V[2] * p[0] + V[6] * p[1] + V[10] * p[2] + V[14]
-  if (-tz <= 1e-4) return null
-  return [lens.width / 2 + (lens.fx * tx) / -tz, lens.height / 2 - (lens.fy * ty) / -tz]
+  const s = projectPoint(p, lens)
+  return s ? [s.x, s.y] : null
 }
 
 /** Blob centres as dots, for scenes too big to outline every blob. */

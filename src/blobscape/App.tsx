@@ -1,5 +1,5 @@
 import { SiteHeader } from '../shared/SiteHeader.tsx'
-import { COMING, LESSONS, href, useRoute } from './routes.ts'
+import { COMING, LESSONS, LESSON_GOALS, href, useRoute } from './routes.ts'
 import { doneGoals, resetProgress } from './progress.ts'
 import { useFocusHeading } from './Shell.tsx'
 import { OneBlob } from './lessons/OneBlob.tsx'
@@ -10,7 +10,6 @@ import { Sandbox } from './Sandbox.tsx'
 import { useState } from 'react'
 
 const PAGES: Record<string, () => React.JSX.Element> = { 'one-blob': OneBlob, footprint: Footprint, order: Order, many: Many }
-const GOALS: Record<string, number> = { 'one-blob': 4, footprint: 3, order: 4, many: 4 }
 
 export function App() {
   const route = useRoute()
@@ -30,7 +29,8 @@ export function App() {
 function Home() {
   const h1 = useFocusHeading()
   const [, refresh] = useState(0)
-  const progress = LESSONS.map((l) => doneGoals(l.id).size)
+  // Only goals that still exist count, in case a lesson's goals change
+  const progress = LESSONS.map((l) => LESSON_GOALS[l.id].filter((g) => doneGoals(l.id).has(g.id)).length)
   const any = progress.some((n) => n > 0)
   return (
     <div className="max-w-3xl">
@@ -55,7 +55,7 @@ function Home() {
                 <span className="min-w-0 flex-1">
                   <span className="flex flex-wrap items-baseline justify-between gap-x-4">
                     <span className="font-serif text-2xl group-hover:text-accent">{l.title} →</span>
-                    <span className="text-xs tabular-nums text-ink-faint">{progress[i]} of {GOALS[l.id]} goals</span>
+                    <span className="text-xs tabular-nums text-ink-faint">{progress[i]} of {LESSON_GOALS[l.id].length} goals</span>
                   </span>
                   <span className="mt-1 block text-ink-muted">{l.summary}</span>
                 </span>

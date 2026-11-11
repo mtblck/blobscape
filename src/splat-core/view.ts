@@ -130,22 +130,26 @@ export class SplatView {
   }
 
   /**
-   * Sends the blobs to the GPU. Cheap enough to call after every edit for a
-   * few tens of thousands of blobs: it rewrites Spark's packed array in place.
+   * Sends the blobs to the GPU, rewriting Spark's packed array in place from
+   * index `from` on (pass the old count after appending, 0 after anything else).
    */
-  async sync(blobs: Blobs) {
+  async sync(blobs: Blobs, from = 0) {
     // Two syncs in a row must share one mesh, so the first one's setup is awaited by both.
     this.ready ??= (async () => {
       this.packed = new PackedSplats({ maxSplats: Math.max(1024, blobs.count) })
-      this.mesh = new SplatMesh({ packedSplats: this.packed })
-      await this.mesh.initialized
-      this.scene.add(this.mesh)
+      const mesh = new SplatMesh({ packedSplats: this.packed })
+      await mesh.initialized
+      // The view may have closed while Spark was starting up
+      if (this.disposed) { mesh.dispose(); return }
+      this.mesh = mesh
+      this.scene.add(mesh)
     })()
     await this.ready
     if (this.disposed || !this.mesh) return
     const p = this.packed!
     const c = new THREE.Vector3(), s = new THREE.Vector3(), q = new THREE.Quaternion(), col = new THREE.Color()
-    for (let i = 0; i < blobs.count; i++) {
+    // Appending (a spray stroke) only needs the new blobs written
+    for (let i = Math.max(0, Math.min(from, blobs.count)); i < blobs.count; i++) {
       c.fromArray(blobs.centre, i * 3)
       s.fromArray(blobs.scale, i * 3)
       q.fromArray(blobs.quat, i * 4)

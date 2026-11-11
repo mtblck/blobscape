@@ -23,8 +23,12 @@ interface Props {
   reach?: number
   /** Draws over the splats after every frame (x-ray outlines, brush rings). */
   overlay?: Draw
-  /** Anything that changes what `overlay` draws, so it redraws. */
-  overlayKey?: unknown
+  /**
+   * Called when the blobs are about to be sent to the GPU: returns the first
+   * index that changed (the old count after an append), so only new blobs are
+   * rewritten. Without it, every sync rewrites them all.
+   */
+  takeSyncFrom?: () => number
   tool?: ToolHandlers
   label: string
   /** Shown in the corner: how to drive the view. */
@@ -32,6 +36,24 @@ interface Props {
   children?: ReactNode
   onView?: (v: SplatView) => void
   className?: string
+}
+
+/** Degrees of turn per pixel dragged, shared by every view so they all feel the same. */
+export const DRAG = { azimuth: 0.5, elevation: 0.4 }
+
+/** Arrow keys orbit (Shift for bigger steps), + and − zoom. Returns the new orbit, or null for other keys. */
+export function orbitKey(ev: { key: string; shiftKey: boolean }, o: Orbit): Orbit | null {
+  const step = ev.shiftKey ? 15 : 5
+  const next: Partial<Orbit> | undefined = {
+    ArrowLeft: { azimuth: o.azimuth - step },
+    ArrowRight: { azimuth: o.azimuth + step },
+    ArrowUp: { elevation: o.elevation + step },
+    ArrowDown: { elevation: o.elevation - step },
+    '+': { distance: o.distance / 1.15 },
+    '=': { distance: o.distance / 1.15 },
+    '-': { distance: o.distance * 1.15 },
+  }[ev.key]
+  return next ? clampOrbit({ ...o, ...next }) : null
 }
 
 export const clampOrbit = (o: Orbit): Orbit => ({
@@ -46,7 +68,7 @@ export const clampOrbit = (o: Orbit): Orbit => ({
  * canvas on top draws whatever the page wants over them. Drag (or arrow keys)
  * to orbit, scroll, pinch or +/− to zoom.
  */
-export function Viewport({ blobs, version, orbit, setOrbit, reach, overlay, overlayKey, tool, label, hint, children, onView, className }: Props) {
+export function Viewport({ blobs, version, orbit, setOrbit, reach, overlay, takeSyncFrom, tool, label, hint, children, onView, className }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const overlayRef = useRef<HTMLCanvasElement>(null)
   const viewRef = useRef<SplatView | null>(null)
@@ -85,10 +107,16 @@ export function Viewport({ blobs, version, orbit, setOrbit, reach, overlay, over
     drawRef.current?.(ctx, v.lens(), v)
   }
 
-  useEffect(() => { viewRef.current?.sync(blobs) }, [blobs, version])
+  useEffect(() => {
+    const from = takeSyncFrom?.() ?? 0
+    viewRef.current?.sync(blobs, Number.isFinite(from) ? from : 0)
+    // takeSyncFrom is read at sync time, not a trigger
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blobs, version])
   useEffect(() => { if (viewRef.current) viewRef.current.orbit = orbit }, [orbit])
   useEffect(() => { if (viewRef.current && reach !== undefined) viewRef.current.reach = reach }, [reach])
-  useEffect(() => { viewRef.current?.invalidate(2) }, [overlay, overlayKey])
+  // A new overlay function (a re-render with new settings) means it may draw something different
+  useEffect(() => { viewRef.current?.invalidate(2) }, [overlay])
 
   // --- pointers: one finger orbits (or uses the tool), two fingers pinch-zoom
   const pointers = useRef(new Map<number, { x: number; y: number }>())
@@ -123,7 +151,7 @@ export function Viewport({ blobs, version, orbit, setOrbit, reach, overlay, over
       return
     }
     if (d.tool) { tool?.move?.(...local(ev), ev); tool?.hover?.(...local(ev)); return }
-    setOrbit((o) => clampOrbit({ ...o, azimuth: d.az - (ev.clientX - d.x) * 0.5, elevation: d.el + (ev.clientY - d.y) * 0.4 }))
+    setOrbit((o) => clampOrbit({ ...o, azimuth: d.az - (ev.clientX - d.x) * DRAG.azimuth, elevation: d.el + (ev.clientY - d.y) * DRAG.elevation }))
   }
   const onPointerUp = (ev: React.PointerEvent) => {
     pointers.current.delete(ev.pointerId)
@@ -144,20 +172,9 @@ export function Viewport({ blobs, version, orbit, setOrbit, reach, overlay, over
   }, [setOrbit])
 
   const onKeyDown = (ev: React.KeyboardEvent) => {
-    const step = ev.shiftKey ? 15 : 5
-    const map: Record<string, (o: Orbit) => Orbit> = {
-      ArrowLeft: (o) => ({ ...o, azimuth: o.azimuth - step }),
-      ArrowRight: (o) => ({ ...o, azimuth: o.azimuth + step }),
-      ArrowUp: (o) => ({ ...o, elevation: o.elevation + step }),
-      ArrowDown: (o) => ({ ...o, elevation: o.elevation - step }),
-      '+': (o) => ({ ...o, distance: o.distance / 1.15 }),
-      '=': (o) => ({ ...o, distance: o.distance / 1.15 }),
-      '-': (o) => ({ ...o, distance: o.distance * 1.15 }),
-    }
-    const f = map[ev.key]
-    if (!f) return
+    if (!orbitKey(ev, orbit)) return
     ev.preventDefault()
-    setOrbit((o) => clampOrbit(f(o)))
+    setOrbit((o) => orbitKey(ev, o) ?? o)
   }
 
   return (
