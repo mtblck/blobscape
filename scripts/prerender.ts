@@ -77,8 +77,9 @@ ${PARTS.map((p, i) => `<h2 class="mt-10 font-display text-2xl">Part ${i + 1}: ${
     }
     case 'sandbox':
     case 'creature':
-    case 'forest': {
-      const title = route.page === 'sandbox' ? 'Sandbox' : route.page === 'creature' ? 'Splat Creatures' : 'Forest Walk'
+    case 'forest':
+    case 'clockwork': {
+      const title = route.page === 'sandbox' ? 'Sandbox' : route.page === 'creature' ? 'Splat Creatures' : route.page === 'clockwork' ? 'Clockwork' : 'Forest Walk'
       const tool = route.page !== 'sandbox'
       return `<div class="max-w-3xl">${crumbs(title, tool ? ['Experiments', '/experiments/'] : undefined)}<h1 class="pt-6 font-display text-5xl">${title}</h1><p class="mt-4 text-xl leading-relaxed text-ink-muted">${esc(pageMeta(route).description)}</p><p class="mt-6 text-sm text-ink-faint">It runs in your browser, with JavaScript and WebGL${tool ? ' or WebGPU' : ''}.</p></div>`
     }
@@ -136,6 +137,8 @@ function structured(route: Route): object[] {
       return [breadcrumbs([home, ['Experiments', '/experiments/'], ['Splat Creatures', href(route)]])]
     case 'forest':
       return [breadcrumbs([home, ['Experiments', '/experiments/'], ['Forest Walk', href(route)]])]
+    case 'clockwork':
+      return [breadcrumbs([home, ['Experiments', '/experiments/'], ['Clockwork', href(route)]])]
     default:
       return []
   }
@@ -179,7 +182,7 @@ function write(path: string, html: string) {
 }
 
 const template = readFileSync(join(DIST, 'index.html'), 'utf8')
-const routes: Route[] = [{ page: 'home' }, { page: 'lessons' }, ...LESSONS.map((l) => ({ page: 'lesson' as const, id: l.id })), { page: 'sandbox' }, { page: 'experiments' }, { page: 'creature' }, { page: 'forest' }]
+const routes: Route[] = [{ page: 'home' }, { page: 'lessons' }, ...LESSONS.map((l) => ({ page: 'lesson' as const, id: l.id })), { page: 'sandbox' }, { page: 'experiments' }, { page: 'creature' }, { page: 'forest' }, { page: 'clockwork' }]
 for (const r of routes) write(join(DIST, href(r), 'index.html'), render(template, r))
 write(join(DIST, '404.html'), render(template, { page: 'notfound' }))
 

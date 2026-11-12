@@ -62,6 +62,11 @@ multi-page React app, one Vercel project, served from the root. See README for t
 - Status and gaps: `docs/engine-prototype.md`.
 - Rigged-splat file rule (spec draft, sample files): `docs/rigged-splats.md`; the skinning extension object sits inside the primitive's `KHR_gaussian_splatting` object. The lab's `?which=spark` runs the same fox on Spark's `SplatSkinning` (bones rest at the origin; see `sparkBones.ts`).
 
+## Clockwork (`/experiments/clockwork/`, `src/blobscape/Clockwork.tsx`, `src/splat-engine/clockwork.ts`)
+- A watch movement on the Creature page's `CreatureStage`, posed from the time with `setPoser(poseClock, seconds)` instead of a clip (it never loops); `setFloor(0)` hides the floor.
+- Every turning part is one bone about z. `anglesAt(s)` drives the whole train from the escape wheel's beats (5 a second, half a tooth each) by real tooth counts (`TEETH`); `layout()` places arbors at exactly the meshing pitch radii and `meshes()` sets tooth phases so teeth stay in gaps (tested in `clockwork.test.ts`). Change a tooth count and the layout, phases and hands follow.
+- Fine parts (teeth, pinion leaves, hairspring) use small `size` and high `density`; the plate is dark and sparse so the gold reads.
+
 ## Forest Walk (`/experiments/forest-walk/`, `src/blobscape/forest/`)
 - The elf and the whole forest are one `SplatWorld`, built once; walking only re-poses. Changing detail, season or the elf's look rebuilds it.
 - The path is a ring of `RING` tiles; `pathX` repeats every `PERIOD` so tile i always reuses ring slot i % RING (its ground moves by whole periods). Plants per tile are fixed per kind (`PER_TILE`), and `layout(i, seed)` says which stand where, so walking back finds the same forest.

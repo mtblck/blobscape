@@ -40,6 +40,8 @@ export class CreatureStage {
   private show: Show = 'blobs'
   private actor?: Actor
   private clip?: Clip
+  /** Poses the actor straight from the time, for motion that never loops (a watch keeping time): used instead of a clip. */
+  private poser?: (sk: Skeleton, t: number) => void
   private target?: THREE.RenderTarget
   private raf = 0
   private stopped = false
@@ -69,8 +71,8 @@ export class CreatureStage {
         if (this.stopped) return
         const dt = this.last ? Math.min(0.1, (now - this.last) / 1000) : 0
         this.last = now
-        if (this.playing && this.clip && !this.baking) { this.t += dt * this.speed; this.pose() }
-        if (!this.baking && (this.pending > 0 || (this.playing && this.clip))) {
+        if (this.playing && (this.clip || this.poser) && !this.baking) { this.t += dt * this.speed; this.pose() }
+        if (!this.baking && (this.pending > 0 || (this.playing && (this.clip || this.poser)))) {
           this.pending = Math.max(0, this.pending - 1)
           this.resize()
           this.renderer.render(this.scene, this.camera)
@@ -111,6 +113,8 @@ export class CreatureStage {
     this.rig = new BoneView(actor.skeleton)
     this.scene.add(this.rig)
     this.setShow(this.show)
+    // a new actor plays its clip; a caller that poses from the time sets its poser again after
+    this.poser = undefined
     this.setClip(clip)
   }
 
@@ -118,6 +122,16 @@ export class CreatureStage {
     this.clip = clip
     this.pose()
   }
+
+  /** Poses from the time instead of a clip; `t` starts at `from` seconds. */
+  setPoser(poser?: (sk: Skeleton, t: number) => void, from = this.t) {
+    this.poser = poser
+    this.t = from
+    this.pose()
+  }
+
+  /** Seconds into the clip, or the time a poser is showing. */
+  get time() { return this.t }
 
   setMode(m: SkinMode) {
     this.mode = m
@@ -130,7 +144,9 @@ export class CreatureStage {
   /** A floor `size` across in half-unit squares, so the grid shows how big each creature is. */
   setFloor(size: number) {
     if (this.floor?.userData.size === size) return
-    if (this.floor) { this.scene.remove(this.floor); this.floor.dispose() }
+    if (this.floor) { this.scene.remove(this.floor); this.floor.dispose(); this.floor = undefined }
+    // no floor at all: a watch on show has nothing to stand on
+    if (size <= 0) { this.invalidate(); return }
     this.floor = new THREE.GridHelper(size, size * 2, 0x8a8a8a, 0x5a5a5a)
     this.floor.userData.size = size
     this.floor.renderOrder = -1
@@ -152,7 +168,8 @@ export class CreatureStage {
   private pose() {
     if (!this.actor || !this.world) return
     const sk = this.actor.skeleton
-    if (this.clip) sampleClip(this.clip, sk, this.t)
+    if (this.poser) this.poser(sk, this.t)
+    else if (this.clip) sampleClip(this.clip, sk, this.t)
     else { sk.reset(); sk.update() }
     this.world.markPosed()
     if (this.rig?.visible) this.rig.update()
