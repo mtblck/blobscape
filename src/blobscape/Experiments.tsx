@@ -1,18 +1,18 @@
-import type { ReactNode } from 'react'
 import { href } from './routes.ts'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
 import { EXPERIMENTS, EXPERIMENTS_INTRO } from './site.ts'
-import { BlobDefs, CreatureDiagram, FitDiagram, ForestDiagram, SpriteDiagram } from './diagrams.tsx'
 
-/** Each experiment's picture, on this page and the front page. */
-export const PICTURES: Record<(typeof EXPERIMENTS)[number]['id'], ReactNode> = { creature: <CreatureDiagram />, forest: <ForestDiagram />, fit: <FitDiagram />, sprite: <SpriteDiagram /> }
+/** Each experiment's cover picture (a 16:10 still from it), on this page and the front page. */
+export function Cover({ e }: { e: (typeof EXPERIMENTS)[number] }) {
+  // the card's title names the link, so the picture stays out of the way of screen readers
+  return <img src={e.cover} alt="" width={1200} height={750} loading="lazy" decoding="async" className="block aspect-[16/10] h-auto w-full rounded-xl object-cover ring-1 ring-rule" />
+}
 
 /** Every experiment, like the lesson list is every lesson: where the header's Experiments link leads. */
 export function Experiments() {
   const h1 = useFocusHeading()
   return (
     <div>
-      <BlobDefs />
       <Crumbs here="Experiments" />
       <div className="max-w-3xl pt-6 pb-8">
         <h1 ref={h1} tabIndex={-1} className="font-display text-5xl outline-none">Experiments</h1>
@@ -22,7 +22,7 @@ export function Experiments() {
         {EXPERIMENTS.map((e) => (
           <li key={e.id}>
             <a href={e.url} className="group flex h-full flex-col gap-4 rounded-2xl border border-rule bg-paper p-4 no-underline transition-colors hover:border-ink-faint">
-              {PICTURES[e.id]}
+              <Cover e={e} />
               <span className="font-display text-2xl text-ink group-hover:text-accent">{e.title} →</span>
               <span className="flex-1 text-ink-muted">{e.body}</span>
               <span className="text-sm text-ink-faint">Needs {e.needs}. Runs in your browser; nothing is uploaded.</span>

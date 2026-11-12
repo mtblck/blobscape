@@ -18,7 +18,7 @@ const shots = join(root, 'verify-shots')
 mkdirSync(shots, { recursive: true })
 const blocks = JSON.parse(readFileSync(join(root, 'vercel.json'), 'utf8')).headers
 const headersFor = (url) => blocks.filter((b) => new RegExp(`^${b.source}$`).test(url)).flatMap((b) => b.headers)
-const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.png': 'image/png', '.json': 'application/json' }
+const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.png': 'image/png', '.webp': 'image/webp', '.json': 'application/json' }
 
 let base = process.argv[2]
 let server
