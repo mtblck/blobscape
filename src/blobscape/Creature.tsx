@@ -85,7 +85,10 @@ export function Creature() {
     history.replaceState(history.state, '', url)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  /** The Monster chip brings back the last one made, not a new one. */
+  const lastMonster = useRef<Species | undefined>(species.seed ? species : undefined)
   const pick = (sp: Species) => {
+    if (sp.seed) lastMonster.current = sp
     setLoaded(undefined)
     setFileNote(undefined)
     setMove(sp.moves[0].name)
@@ -101,18 +104,16 @@ export function Creature() {
     history.replaceState(history.state, '', url)
   }
 
-  // Building a big creature takes a moment, so a change happens after a note has painted, not during a render
-  // (the first is built in the first render: a few hundred milliseconds at most, for the dragon)
+  // Built in an effect, not during a render; it's quick (a few hundred milliseconds at most, for the dragon), so no note
   const [made, setMade] = useState<Shown>(() => build(species, count, look))
   const madeFor = useRef({ species, count, look })
   useEffect(() => {
     const was = madeFor.current
     if (was.species === species && was.count === count && was.look === look) return
     madeFor.current = { species, count, look }
-    setBusy(`Making a ${species.name} of ${count.toLocaleString()} blobs…`)
+    setMade(build(species, count, look))
     // a new monster is announced as what it is, since nobody can see what came out
-    const t = setTimeout(() => { setMade(build(species, count, look)); setBusy(undefined); if (species.seed && was.species !== species) setFileNote(`Made ${species.blurb.replace(/^A /, 'a ').split(', made up')[0]}.`) }, 30)
-    return () => clearTimeout(t)
+    if (species.seed && was.species !== species) setFileNote(`Made ${species.blurb.replace(/^A /, 'a ').split(', made up')[0]}.`)
   }, [species, count, look])
   const shown = loaded ?? made
   // the camera and floor follow the creature once it's built, so a frog never sits on the dragon's floor
@@ -236,7 +237,7 @@ export function Creature() {
                   setOrbit((o) => orbitKey(ev, o) ?? o)
                 }}
               />
-              {!failed && (!drawn || busy?.startsWith('Making')) && <Loading label={drawn ? busy! : stage ? `Waking the ${species.name}…` : 'Starting the splat engine…'} />}
+              {!failed && !drawn && <Loading label={stage ? `Waking the ${species.name}…` : 'Starting the splat engine…'} />}
               <p role="status" className="sr-only">{!failed && !drawn ? (stage ? `Waking the ${species.name}…` : 'Starting the splat engine…') : ''}</p>
               {failed && <div role="alert" className="absolute inset-4 grid place-items-center text-center text-sm text-ink">{failed}</div>}
               <div role="group" aria-label="Show in the view" data-testid="show" className="absolute top-3 left-3 flex gap-1.5 max-sm:top-2 max-sm:left-2">
@@ -253,29 +254,37 @@ export function Creature() {
           </div>
         </section>
 
+        <section aria-labelledby="g-make" className="rounded-2xl border border-rule bg-paper-sunk/60 px-4 pt-4 pb-4 lg:col-span-12 lg:px-5" data-testid="creature-pick">
+          <h2 id="g-make" className="mb-3 text-sm font-bold">The creature</h2>
+          <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-[auto_auto_minmax(0,1fr)] lg:items-start">
+            <Field label="Type">
+              <div role="group" aria-label="Which creature" className="flex flex-wrap gap-1.5" data-testid="species">
+                {ZOO.map((sp) => <Chip key={sp.id} active={!loaded && species === sp} onClick={() => pick(sp)}>{sp.name[0].toUpperCase() + sp.name.slice(1)}</Chip>)}
+                <Chip active={!loaded && !!species.seed} onClick={() => pick(lastMonster.current ?? monsterSpecies(newSeed()))}>Monster</Chip>
+              </div>
+            </Field>
+            <Field label="Look">
+              {species.seed ? (
+                <Button small data-testid="make-monster" onClick={() => pick(monsterSpecies(newSeed()))}>Generate a new monster</Button>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {species.looks.map((l) => <Chip key={l.id} active={!loaded && look === l.id} onClick={() => { setLoaded(undefined); setLook(l.id) }}>{l.label}</Chip>)}
+                </div>
+              )}
+            </Field>
+            <p className="text-xs leading-relaxed text-ink-faint sm:col-span-2 lg:col-span-1 lg:max-w-[46ch] lg:justify-self-end">{species.blurb}</p>
+          </div>
+        </section>
+
         <section aria-label="Controls" className="rounded-2xl border border-rule bg-paper-sunk/60 px-4 pt-4 pb-4 lg:col-span-12 lg:px-5">
           <div className="stack-controls grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            <div role="group" aria-labelledby="g-make">
-              <h2 id="g-make" className="mb-2 text-sm font-bold">The creature</h2>
-              <div className="grid gap-3">
-                <div role="group" aria-label="Which creature" className="flex flex-wrap gap-1.5" data-testid="species">
-                  {ZOO.map((sp) => <Chip key={sp.id} active={!loaded && species === sp} onClick={() => pick(sp)}>{sp.name[0].toUpperCase() + sp.name.slice(1)}</Chip>)}
+            <div role="group" aria-labelledby="g-detail">
+              <h2 id="g-detail" className="mb-2 text-sm font-bold">Detail</h2>
+              <Field label="Blobs">
+                <div className="flex flex-wrap gap-1.5">
+                  {species.detail.map((n) => <Chip key={n} active={!loaded && count === n} onClick={() => { setLoaded(undefined); setCount(n) }}>{kilo(n)}</Chip>)}
                 </div>
-                <Button small data-testid="make-monster" onClick={() => pick(monsterSpecies(newSeed()))}>{species.seed && !loaded ? 'Another monster' : 'Make me a monster'}</Button>
-                <p className="text-xs text-ink-faint">{species.blurb}</p>
-                <Field label="Blobs">
-                  <div className="flex flex-wrap gap-1.5">
-                    {species.detail.map((n) => <Chip key={n} active={!loaded && count === n} onClick={() => { setLoaded(undefined); setCount(n) }}>{kilo(n)}</Chip>)}
-                  </div>
-                </Field>
-                {species.looks.length > 1 && (
-                  <Field label="Look">
-                    <div className="flex flex-wrap gap-1.5">
-                      {species.looks.map((l) => <Chip key={l.id} active={!loaded && look === l.id} onClick={() => { setLoaded(undefined); setLook(l.id) }}>{l.label}</Chip>)}
-                    </div>
-                  </Field>
-                )}
-              </div>
+              </Field>
             </div>
             <div role="group" aria-labelledby="g-move">
               <h2 id="g-move" className="mb-2 text-sm font-bold">Move</h2>
