@@ -307,6 +307,22 @@ export function LessonGlyph({ id }: { id: string }) {
         <path d="M 58 36 H 68 m -4 -4 l 4 4 l -4 4" stroke={COLOURS.sun} strokeWidth="1.5" fill="none" strokeLinecap="round" />
         <path d="M 76 20 L 104 20 L 108 34 L 100 52 L 80 52 L 74 36 Z M 76 20 L 90 36 L 104 20 M 74 36 L 90 36 L 108 34 M 90 36 L 80 52 M 90 36 L 100 52" fill="rgb(242 166 90 / 0.25)" stroke={COLOURS.orange} strokeWidth="1" strokeLinejoin="round" />
       </>)
+    case 'shoot':
+      return g(<>
+        {/* A toy bird of blobs, with cameras round it and their lines of sight */}
+        <path d="M 22 20 L 50 34 M 98 20 L 70 34 M 60 66 L 60 52" stroke="#665d52" strokeWidth="1" strokeDasharray="2 3" />
+        <Blob x={60} y={42} rx={13} ry={11} r={0} c="sun" />
+        <Blob x={64} y={28} rx={8} ry={8} r={0} c="sun" />
+        <Blob x={50} y={44} rx={6} ry={4} r={-20} c="blue" />
+        <Blob x={73} y={29} rx={3} ry={2} r={0} c="orange" />
+        <Blob x={46} y={36} rx={4} ry={3} r={-30} c="red" />
+        {[[16, 16], [92, 16], [54, 60]].map(([x, y], k) => (
+          <g key={k} transform={`translate(${x} ${y})`}>
+            <path d="M0 3 h4 l1.5 -2.5 h5 l1.5 2.5 h4 v9 h-16 z" fill="#2b3150" stroke="#bdc3db" strokeWidth="1" strokeLinejoin="round" />
+            <circle cx="8" cy="7.5" r="2.6" fill="none" stroke={COLOURS.sun} strokeWidth="1.2" />
+          </g>
+        ))}
+      </>)
     default:
       return g(null)
   }

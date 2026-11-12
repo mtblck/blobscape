@@ -57,7 +57,7 @@ function content(route: Route): string {
       return `<div class="max-w-3xl py-12"><h1 class="font-display text-5xl leading-[1.05]">Learn 3D splats by taking them apart</h1>
 <p class="mt-6 text-xl leading-relaxed text-ink-muted">A Gaussian splat is a 3D scene made of nothing but soft, coloured, see-through blobs. Learn what one blob is, then pile up thousands and pull real scenes to pieces.</p>
 <p class="mt-6"><a href="${href({ page: 'lesson', id: LESSONS[0].id })}" class="${BUTTON}">Start with one blob</a></p>
-<h2 class="mt-12 font-display text-3xl">${cap(LESSON_COUNT)} lessons, from one blob to a walking creature</h2>${lessonList()}
+<h2 class="mt-12 font-display text-3xl">${cap(LESSON_COUNT)} lessons, from one blob to a walking creature and a real photo shoot</h2>${lessonList()}
 <h2 class="mt-12 font-display text-3xl">Sandbox</h2><p class="mt-2 text-ink-muted">Spray, select, move, recolour and explode blobs, or open your own .ply, .spz, .splat, .ksplat or .sog capture. <a href="/sandbox/" class="${LINK}">Open the sandbox</a></p>
 <h2 id="experiments" class="mt-12 scroll-mt-20 font-display text-3xl">Other ways to play with splats</h2><ul class="mt-3 flex flex-col gap-4">${EXPERIMENTS.map((e) => `<li><a href="${e.url}" class="font-display text-xl ${LINK}">${esc(e.title)}</a><p class="mt-1 text-ink-muted">${esc(e.body)}</p></li>`).join('')}</ul><p class="mt-6"><a href="/experiments/" class="${LINK}">See every experiment</a></p></div>`
     case 'lessons':

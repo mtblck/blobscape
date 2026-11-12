@@ -23,6 +23,7 @@ export const LESSONS = [
   { id: 'twist', title: 'Twist without tearing', summary: 'Turn a wrist over two ways, and see why one of them squashes the blobs flat.' },
   { id: 'walk', title: 'Walk cycle', summary: 'Four poses and some timing make a walk. Find the ones that matter, and stop the feet sliding.' },
   { id: 'model', title: 'Blobs to a model', summary: 'Save the walking fox as splats and as a solid mesh, and see what each one keeps.' },
+  { id: 'shoot', title: 'Photo shoot', summary: 'Photograph a toy bird and train blobs to match. How many photos does it take to get every side right?' },
 ] as const
 
 const WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty']
@@ -33,6 +34,7 @@ export const LESSON_COUNT = WORDS[LESSONS.length] ?? String(LESSONS.length)
 export const PARTS = [
   { title: 'One object', from: 0, summary: 'What a blob is, and how thousands of them make a thing you can look at from anywhere.' },
   { title: 'Rigs and 3D models', from: 8, summary: 'Bones that move blobs, a walk cycle, and a creature that leaves as a model Blender opens.' },
+  { title: 'Real things from photos', from: 13, summary: 'Where splats really shine: capturing real objects and places from photos, and what a capture can and can’t do.' },
 ] as const
 
 /**
@@ -110,6 +112,12 @@ export const LESSON_GOALS: Record<(typeof LESSONS)[number]['id'], Goal[]> = {
     { id: 'pieces', label: 'Raise the surface level until the fox falls apart', where: 'surface', why: 'The mesh wraps only where blobs are dense enough. Thin legs and ears thin out first, so they break off.' },
     { id: 'coarse', label: 'Make the grid so coarse the mesh strays 8 cm from the blobs', where: 'grid', why: 'A grid can’t hold anything smaller than a cell: ears and toes melt into lumps.' },
     { id: 'keep', label: 'Make a mesh in one piece, within 5 cm of the blobs, under 300 KB', hint: 'Watch the size as you change the grid.', where: 'grid', why: 'Each finer grid roughly quadruples the triangles. The trick is the coarsest grid that keeps what matters.' },
+  ],
+  'shoot': [
+    { id: 'back', label: 'Train from photos of the front only, then look at the back', hint: 'Keep every camera near the front, wait for training, then turn the view round.', where: 'look', why: 'No photo saw the back, so nothing told those blobs what to be. They only had to look right from the front.' },
+    { id: 'floaters', label: 'Match your photos almost perfectly while every side stays under 65%', hint: 'Two or more photos, all from nearly the same place.', where: 'cameras', why: 'Blobs floating in the air can add up to the right photo. Seen from anywhere else, they are floaters.' },
+    { id: 'few', label: 'Get every side above 92% with four photos or fewer', where: 'cameras', why: 'Spread out, each photo pins down blobs the others can’t see. Bunched up, they mostly agree with each other.' },
+    { id: 'round', label: 'Get every side above 97%', where: 'cameras', why: 'Every new angle rules out blobs that only fit the others. Real captures use hundreds of photos for this.' },
   ],
 }
 
