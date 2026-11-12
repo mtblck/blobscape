@@ -170,6 +170,7 @@ export class SplatView {
     this.invalidate(30)
   }
 
+  private layerMesh?: SplatMesh
   private layer?: Promise<{ mesh: SplatMesh; packed: PackedSplats } | undefined>
 
   /**
@@ -185,11 +186,13 @@ export class SplatView {
       const mesh = new SplatMesh({ packedSplats: packed })
       await mesh.initialized
       if (this.disposed) { mesh.dispose(); return undefined }
+      this.layerMesh = mesh
       this.scene.add(mesh)
       return { mesh, packed }
     })()
     const l = await this.layer
     if (!l || this.disposed) return
+    this.layerMesh = l.mesh
     const n = blobs?.count ?? 0
     if (n) writeSplats(l.packed, blobs!, 0, null)
     l.mesh.visible = n > 0
@@ -249,7 +252,8 @@ export class SplatView {
     this.disposed = true
     this.loop.stop()
     this.mesh?.dispose()
-    void this.layer?.then((l) => l?.mesh.dispose())
+    // Freed before the renderer; one still starting up frees itself when it sees `disposed`
+    this.layerMesh?.dispose()
     this.spark.dispose()
     this.renderer.dispose()
     // Lessons each open their own view; give the context back straight away.

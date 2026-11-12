@@ -20,7 +20,7 @@ export function Tabs({ label, tabs }: { label: string; tabs: { id: string; label
   }
   return (
     <div>
-      <div role="tablist" aria-label={label} className={`grid border-b border-rule ${tabs.length > 4 ? 'grid-cols-3 sm:grid-flow-col sm:auto-cols-fr sm:grid-cols-none' : 'grid-flow-col auto-cols-fr'}`}>
+      <div role="tablist" aria-label={label} className={`grid ${tabs.length > 4 ? 'grid-cols-3 sm:grid-flow-col sm:auto-cols-fr sm:grid-cols-none sm:border-b sm:border-rule' : 'grid-flow-col auto-cols-fr border-b border-rule'}`}>
         {tabs.map((t, i) => {
           const on = t.id === active
           return (
@@ -35,7 +35,7 @@ export function Tabs({ label, tabs }: { label: string; tabs: { id: string; label
               tabIndex={on ? 0 : -1}
               onClick={() => setActive(t.id)}
               onKeyDown={(ev) => onKeyDown(ev, i)}
-              className={`group/tab -mb-px min-w-0 cursor-pointer rounded-t-md border-b-2 px-2 pt-2 pb-2.5 text-left transition-colors hover:bg-paper-sunk sm:px-3 ${on ? 'border-accent' : 'border-transparent hover:border-ink-faint'}`}
+              className={`group/tab -mb-px min-w-0 cursor-pointer rounded-t-md border-b-2 px-2 pt-2 pb-2.5 text-left transition-colors hover:bg-paper-sunk sm:px-3 ${on ? 'border-accent' : `${tabs.length > 4 ? 'max-sm:border-rule' : ''} border-transparent hover:border-ink-faint`}`}
             >
               <span className={`block truncate font-display ${tabs.length > 4 ? 'text-base' : 'text-lg'} transition-colors ${on ? 'text-ink' : 'text-ink-muted group-hover/tab:text-ink'}`}>{t.label}</span>
               <span className="block truncate text-xs text-ink-faint transition-colors group-hover/tab:text-ink-muted">{t.summary}</span>

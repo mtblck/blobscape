@@ -85,11 +85,6 @@ export function remake(a: Actor, look: string, detail: number): Actor {
   return { ...makeActor(a.species, { look, detail, at: a.at, height: a.height, yaw: a.yaw, move: a.move, speed: a.speed }), key: a.key }
 }
 
-/** How big each creature is next to the others when added to an empty scene: a frog is small, a dragon isn't. */
-export function naturalHeight(sp: Species) {
-  return Math.max(0.15, sp.view.distance * 0.22)
-}
-
 /** Placement: scale about the rest footprint, turn about the vertical, stand on `at`. */
 export interface Placing { k: number; c: number; s: number; qy: number; qw: number; foot: Vec3; at: Vec3 }
 export function placingOf(a: Actor): Placing {

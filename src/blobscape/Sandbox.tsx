@@ -467,8 +467,10 @@ export function Sandbox() {
       const step = ev.shiftKey ? 40 : 10
       const d = ({ ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] } as Record<string, [number, number]>)[ev.key]
       if (!d) return false
-      if (!sel.count) setMessage('Select some blobs first')
-      else nudge(d[0], d[1])
+      const c = actorsRef.current.find((a) => a.key === currentKey) ?? actorsRef.current[actorsRef.current.length - 1]
+      if (sel.count) nudge(d[0], d[1])
+      else if (c) stepActor(c, d[0], d[1])
+      else setMessage('Select some blobs first')
       return true
     } : undefined,
     activate: (x, y, shift) => {
@@ -595,26 +597,44 @@ export function Sandbox() {
     void view.syncLayer(list.length && showRef.current !== 'bones' ? drawn.current : null)
     view.invalidate(2)
   }, [view])
-  useEffect(() => { drawActors() }, [drawActors, actors, showRig])
+  // After an add, the camera takes in everything once the newcomer has been posed
+  const frameNext = useRef(false)
+  useEffect(() => {
+    drawActors()
+    if (frameNext.current) { frameNext.current = false; setOrbit((o) => ({ ...o, ...frameAll() })) }
+  }, [drawActors, actors, showRig]) // eslint-disable-line react-hooks/exhaustive-deps
   const anyActors = actors.length > 0
   useEffect(() => {
     if (!view || !playing || !anyActors) return
     let raf = 0, prev = performance.now()
     const tick = (now: number) => {
+      raf = requestAnimationFrame(tick)
+      // Phones pose at most 30 times a second; still creatures are drawn when they change, not every frame
+      if (coarse && now - prev < 30) return
       const dt = Math.max(0, Math.min(0.1, (now - prev) / 1000))
       prev = now
-      for (const a of actorsRef.current) clocks.current.set(a.key, (clocks.current.get(a.key) ?? 0) + dt * a.speed)
-      drawActors()
-      raf = requestAnimationFrame(tick)
+      const list = actorsRef.current
+      for (const a of list) clocks.current.set(a.key, (clocks.current.get(a.key) ?? 0) + dt * a.speed)
+      if (list.some((a) => a.move !== STILL)) drawActors()
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [view, playing, anyActors, drawActors])
+  }, [view, playing, anyActors, drawActors, coarse])
 
   /** A change to the list of creatures that Undo can take back. */
-  const recordActors = () => history.current.record(blobsRef.current, source, actorsRef.current)
+  const recordActors = () => { lastRun.current = ''; history.current.record(blobsRef.current, source, actorsRef.current) }
   /** A change to one creature (place, size, move) that isn't worth an undo step. */
   const changeActor = (key: number, fn: (a: Actor) => Actor) => setActors((list) => list.map((a) => (a.key === key ? fn(a) : a)))
+  /**
+   * The same, as an undo step: one per click, and one per run of a slider
+   * (`run` names it; moving the same slider again keeps adding to that step).
+   */
+  const lastRun = useRef('')
+  const tweak = (key: number, fn: (a: Actor) => Actor, run = '') => {
+    if (!run || lastRun.current !== `${key}:${run}`) recordActors()
+    lastRun.current = run && `${key}:${run}`
+    changeActor(key, fn)
+  }
 
   /** The ground under the middle of the view: where the scene's lowest blobs are, else y = 0. */
   const floorY = () => bounds(blobsRef.current, null)?.lo[1] ?? 0
@@ -642,6 +662,7 @@ export function Sandbox() {
     clocks.current.set(added.key, 0)
     setActors([...list, added])
     setCurrentKey(added.key)
+    frameNext.current = true
     setMessage(`Added ${aOr(sp.name)}`)
   }
   const removeActor = (a: Actor) => {
@@ -651,7 +672,7 @@ export function Sandbox() {
   }
   /** Turns a creature, as it stands now, into ordinary blobs every tool can work on. */
   const freezeActor = (a: Actor) => {
-    const k = actorsRef.current.indexOf(a)
+    const k = actorsRef.current.findIndex((x) => x.key === a.key)
     if (k < 0) return
     const from = blobsRef.current.count
     if (from + a.body.blobs.count > maxBlobs) { setMessage(`The sandbox holds up to ${maxBlobs.toLocaleString()} blobs`); return }
@@ -663,10 +684,21 @@ export function Sandbox() {
     setMessage(`Froze the ${a.species.name} into the scene: ${a.body.blobs.count.toLocaleString()} blobs`)
   }
   const reshape = (a: Actor, look: string, detail: number) => {
-    if (actorBlobs(actorsRef.current) - a.detail + detail > maxActorBlobs) { setMessage(`Creatures can have ${maxActorBlobs.toLocaleString()} blobs between them here`); return }
-    changeActor(a.key, (x) => remake(x, look, detail))
+    if (actorBlobs(actorsRef.current) - a.body.blobs.count + detail > maxActorBlobs) { setMessage(`Creatures can have ${maxActorBlobs.toLocaleString()} blobs between them here`); return }
+    tweak(a.key, (x) => remake(x, look, detail))
   }
-  const bringHere = (a: Actor) => changeActor(a.key, (x) => ({ ...x, at: [orbit.target[0], floorY(), orbit.target[2]] }))
+  const bringHere = (a: Actor) => tweak(a.key, (x) => ({ ...x, at: [orbit.target[0], floorY(), orbit.target[2]] }))
+
+  /** Walks a creature across the floor by a screen-space step (the arrow keys with Move and nothing selected). */
+  const stepActor = (a: Actor, dx: number, dy: number) => {
+    const az = (orbit.azimuth * Math.PI) / 180
+    // A tenth of the arrow key's pixels as a share of the camera distance: 2% a press, 8% with Shift
+    const k = orbit.distance * 0.002
+    const right = [Math.cos(az), -Math.sin(az)], away = [-Math.sin(az), -Math.cos(az)]
+    const sx = dx * k, sy = -dy * k
+    tweak(a.key, (x) => ({ ...x, at: [x.at[0] + right[0] * sx + away[0] * sy, x.at[1], x.at[2] + right[1] * sx + away[1] * sy] }), 'step')
+    setMessage(`Moved the ${a.species.name}`)
+  }
 
   /** A creature drag with Move: the ground plane it slides on, and where on it the pointer took hold. */
   const actorGrab = useRef<{ key: number; y: number; dx: number; dz: number; recorded: boolean } | null>(null)
@@ -817,7 +849,7 @@ export function Sandbox() {
             tool={handlers}
             overlay={overlay}
             takeSync={takeSync}
-            label={`Sandbox scene with ${blobs.count.toLocaleString()} blobs${actors.length ? ` and ${actors.length === 1 ? 'a' : actors.length} creature${actors.length === 1 ? '' : 's'}: ${actors.map((a) => a.species.name).join(', ')}` : ''}. ${tool === 'move' ? 'With the Move tool, the arrow keys slide the selection (Shift for bigger steps)' : 'Drag or use the arrow keys to orbit'}, plus and minus to zoom${toolKeyNote[tool] ?? ''}.`}
+            label={`Sandbox scene with ${blobs.count.toLocaleString()} blobs${actors.length ? ` and ${actors.length === 1 ? 'a' : actors.length} creature${actors.length === 1 ? '' : 's'}: ${actors.map((a) => a.species.name).join(', ')}` : ''}. ${tool === 'move' ? `With the Move tool, the arrow keys slide the selection${actors.length ? `, or with nothing selected walk the ${current.species.name}` : ''} (Shift for bigger steps)` : 'Drag or use the arrow keys to orbit'}, plus and minus to zoom${toolKeyNote[tool] ?? ''}.`}
             home={() => ({ ...frameAll(), azimuth: 30, elevation: 22 })}
             hint={coarse ? (tool === 'orbit' ? 'drag to orbit · pinch to zoom' : 'pinch to zoom · pick Look to orbit') : tool === 'orbit' ? 'drag to orbit · scroll to zoom' : 'right-drag to orbit · scroll to zoom'}
           >
@@ -917,14 +949,18 @@ export function Sandbox() {
               {
                 id: 'creatures',
                 label: 'Creatures',
-                summary: actors.length ? `${actors.length} in the scene` : 'None',
+                summary: actors.length ? `${actors.length} added` : 'None',
                 content: (
-                  <Panel note="Creatures from the Creature page, moving in your scene. Drag one with the Move tool to put it somewhere else. Brushes, selections and effects leave them alone until you freeze one into ordinary blobs.">
+                  <Panel note="Creatures from the Creature page, moving in your scene. Drag one with the Move tool (or, with nothing selected, use the arrow keys on the view) to put it somewhere else. Brushes, selections and effects leave them alone until you freeze one into ordinary blobs.">
                     <Field label="Add">
                       <div className="flex flex-wrap gap-1.5" data-testid="add-creature">
-                        {ZOO.map((sp) => <Button small key={sp.id} aria-label={`Add ${aOr(sp.name)}`} onClick={() => addActor(sp)} disabled={actors.length >= MAX_ACTORS}>{cap(sp.name)}</Button>)}
+                        {ZOO.map((sp) => <Button small key={sp.id} aria-label={`Add ${aOr(sp.name)}`} onClick={() => addActor(sp)} disabled={actors.length >= MAX_ACTORS || actorCount + detailsOf(sp)[0] > maxActorBlobs}>{cap(sp.name)}</Button>)}
                       </div>
                     </Field>
+                    {actorCount > 0 && ZOO.every((sp) => actorCount + detailsOf(sp)[0] > maxActorBlobs) && actors.length < MAX_ACTORS && (
+                      <p className="text-xs text-ink-faint">That's as many blobs as creatures can have between them here ({maxActorBlobs.toLocaleString()}). Remove or freeze one to add another.</p>
+                    )}
+                    {actors.length >= MAX_ACTORS && <p className="text-xs text-ink-faint">That's {MAX_ACTORS} creatures, the most the sandbox holds. Remove or freeze one to add another.</p>}
                     {current && (
                       <>
                         {actors.length > 1 && (
@@ -936,13 +972,13 @@ export function Sandbox() {
                         )}
                         <Field label="Move">
                           <div className="flex flex-wrap gap-1.5">
-                            {current.species.moves.map((m) => <Chip key={m.name} active={current.move === m.name} onClick={() => changeActor(current.key, (a) => ({ ...a, move: m.name }))}>{m.label}</Chip>)}
-                            <Chip active={current.move === STILL} onClick={() => changeActor(current.key, (a) => ({ ...a, move: STILL }))}>Still</Chip>
+                            {current.species.moves.map((m) => <Chip key={m.name} active={current.move === m.name} onClick={() => tweak(current.key, (a) => ({ ...a, move: m.name }))}>{m.label}</Chip>)}
+                            <Chip active={current.move === STILL} onClick={() => tweak(current.key, (a) => ({ ...a, move: STILL }))}>Still</Chip>
                           </div>
                         </Field>
-                        <Slider label="Speed" value={current.speed} min={0.1} max={2} step={0.05} onChange={(v) => changeActor(current.key, (a) => ({ ...a, speed: v }))} format={(v) => `×${v.toFixed(2)}`} />
-                        <Slider label="Size" value={Math.log2(current.height)} min={-5} max={4} step={0.05} onChange={(v) => changeActor(current.key, (a) => ({ ...a, height: 2 ** v }))} format={(v) => `${(2 ** v).toFixed(2)} tall`} />
-                        <Slider label="Facing" value={((current.yaw % 360) + 360) % 360} min={0} max={359} step={1} onChange={(v) => changeActor(current.key, (a) => ({ ...a, yaw: v }))} format={(v) => `${Math.round(v)}°`} />
+                        <Slider label="Speed" value={current.speed} min={0.1} max={2} step={0.05} onChange={(v) => tweak(current.key, (a) => ({ ...a, speed: v }), 'speed')} format={(v) => `×${v.toFixed(2)}`} />
+                        <Slider label="Size" value={Math.log2(current.height)} min={-5} max={4} step={0.05} onChange={(v) => tweak(current.key, (a) => ({ ...a, height: 2 ** v }), 'size')} format={(v) => `${(2 ** v).toFixed(2)} tall`} />
+                        <Slider label="Facing" value={((current.yaw % 360) + 360) % 360} min={0} max={359} step={1} onChange={(v) => tweak(current.key, (a) => ({ ...a, yaw: v }), 'facing')} format={(v) => `${Math.round(v)}°`} />
                         {current.species.looks.length > 1 && (
                           <Field label="Look">
                             <div className="flex flex-wrap gap-1.5">
@@ -952,7 +988,7 @@ export function Sandbox() {
                         )}
                         <Field label="Blobs">
                           <div className="flex flex-wrap gap-1.5">
-                            {detailsOf(current.species).map((n) => <Chip key={n} active={current.detail === n} onClick={() => reshape(current, current.look, n)}>{kilo(n)}</Chip>)}
+                            {detailsOf(current.species).filter((n) => n === current.detail || actorCount - current.body.blobs.count + n <= maxActorBlobs).map((n) => <Chip key={n} active={current.detail === n} onClick={() => reshape(current, current.look, n)}>{kilo(n)}</Chip>)}
                           </div>
                         </Field>
                         <div className="flex flex-wrap gap-2">
@@ -964,8 +1000,8 @@ export function Sandbox() {
                     )}
                     {anyActors && (
                       <>
-                        <Field label="Show">
-                          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Show creatures as">
+                        <Field label="Show creatures as">
+                          <div className="flex flex-wrap gap-1.5">
                             {SHOW_RIG.map((v) => <Chip key={v.id} active={showRig === v.id} onClick={() => setShowRig(v.id)}>{v.label}</Chip>)}
                           </div>
                         </Field>
@@ -1017,7 +1053,7 @@ export function Sandbox() {
                       <div className="space-y-2">
                         <div className="flex flex-wrap gap-2">
                           <Button small onClick={() => { if (!busy) fileInput.current?.click() }} aria-disabled={busy}>{busy ? 'Opening…' : 'Open a splat file…'}</Button>
-                          <Button small onClick={exportPly} disabled={!blobs.count}>Save as .ply</Button>
+                          <Button small onClick={exportPly} disabled={!blobs.count && !actors.length}>Save as .ply</Button>
                         </div>
                         <input ref={fileInput} type="file" accept={FILE_TYPES} className="sr-only" tabIndex={-1} aria-hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void openFile(f) }} />
                         <p className="text-xs text-ink-faint">
