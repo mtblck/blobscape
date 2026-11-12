@@ -2,10 +2,10 @@ import type { ReactNode } from 'react'
 import { href } from './routes.ts'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
 import { EXPERIMENTS, EXPERIMENTS_INTRO } from './site.ts'
-import { BlobDefs, CreatureDiagram, FitDiagram, SpriteDiagram } from './diagrams.tsx'
+import { BlobDefs, CreatureDiagram, FitDiagram, ForestDiagram, SpriteDiagram } from './diagrams.tsx'
 
 /** Each experiment's picture, on this page and the front page. */
-export const PICTURES: Record<(typeof EXPERIMENTS)[number]['id'], ReactNode> = { creature: <CreatureDiagram />, fit: <FitDiagram />, sprite: <SpriteDiagram /> }
+export const PICTURES: Record<(typeof EXPERIMENTS)[number]['id'], ReactNode> = { creature: <CreatureDiagram />, forest: <ForestDiagram />, fit: <FitDiagram />, sprite: <SpriteDiagram /> }
 
 /** Every experiment, like the lesson list is every lesson: where the header's Experiments link leads. */
 export function Experiments() {

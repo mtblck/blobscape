@@ -12,7 +12,7 @@ export const SITE = {
 } as const
 
 /** The Experiments page's intro, shared with its prerendered HTML so the page doesn't shift when the app takes over. */
-export const EXPERIMENTS_INTRO = "Small tools built from the same blobs as the lessons: creatures that move on our own splat engine, the training loop that makes a splat, and a way to turn one into pixel art. New ones land here as they're made."
+export const EXPERIMENTS_INTRO = "Small tools built from the same blobs as the lessons: creatures that move on our own splat engine, a forest that grows as you walk it, the training loop that makes a splat, and a way to turn one into pixel art. New ones land here as they're made."
 
 /** The splat experiments: the Experiments page, the front page, the menu and the footer. `needs` is what the browser must have. */
 export const EXPERIMENTS = [
@@ -22,6 +22,13 @@ export const EXPERIMENTS = [
     url: '/experiments/creature/',
     needs: 'WebGPU or WebGL 2',
     body: 'A frog, a fox, an elf and a fire-breathing ice dragon, made of blobs and moving on our own splat engine. See their bones, then take one away as a rigged 3D model for Blender or a game engine.',
+  },
+  {
+    id: 'forest',
+    title: 'Forest Walk',
+    url: '/experiments/forest-walk/',
+    needs: 'WebGPU or WebGL 2',
+    body: 'Walk the elf down a forest path that never ends, while trees, ferns, flowers and mushrooms made of blobs grow out of the ground as you come.',
   },
   {
     id: 'fit',

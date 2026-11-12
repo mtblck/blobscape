@@ -70,7 +70,7 @@ const solidPixels = (page, sel) => page.evaluate((sel) => {
 // 1. The site: every page is its own prerendered file, the chrome works, old links land
 {
   // Prerendered: each page's HTML carries its own title, canonical and content before any script runs
-  for (const [path, title] of [['/', 'Blobscape: learn'], ['/lessons/', 'Lessons ·'], ['/lessons/order/', 'Order matters · Lesson 3'], ['/sandbox/', 'Sandbox ·'], ['/experiments/creature/', 'Creature ·'], ['/experiments/', 'Experiments ·']]) {
+  for (const [path, title] of [['/', 'Blobscape: learn'], ['/lessons/', 'Lessons ·'], ['/lessons/order/', 'Order matters · Lesson 3'], ['/sandbox/', 'Sandbox ·'], ['/experiments/creature/', 'Creature ·'], ['/experiments/forest-walk/', 'Forest Walk ·'], ['/experiments/', 'Experiments ·']]) {
     const html = await (await fetch(base + path)).text()
     if (!html.includes(`<title>${title}`)) fails.push(`${path}: prerendered title is not "${title}…"`)
     else if (!html.includes(`<link rel="canonical" href="https://blobscape.dev${path}"`)) fails.push(`${path}: prerendered canonical is wrong`)
@@ -81,7 +81,7 @@ const solidPixels = (page, sel) => page.evaluate((sel) => {
   if (missing.status !== 404 || !(await missing.text()).includes('noindex')) fails.push('an unknown page is not a noindex 404')
   else ok('unknown pages get the noindex 404 page')
   const sitemap = await (await fetch(base + '/sitemap.xml')).text()
-  if (!sitemap.includes('https://blobscape.dev/lessons/model/') || !sitemap.includes('/experiments/fit-a-picture/') || !sitemap.includes('/experiments/creature/')) fails.push('sitemap.xml is missing pages')
+  if (!sitemap.includes('https://blobscape.dev/lessons/model/') || !sitemap.includes('/experiments/fit-a-picture/') || !sitemap.includes('/experiments/creature/') || !sitemap.includes('/experiments/forest-walk/')) fails.push('sitemap.xml is missing pages')
   else ok('sitemap.xml lists the lessons and tools')
 
   const { page, res, ctx } = await open('/')
@@ -123,8 +123,8 @@ const solidPixels = (page, sel) => page.evaluate((sel) => {
     await ex.page.getByRole('banner').getByRole('link', { name: 'Experiments', exact: true }).click()
     await ex.page.waitForURL('**/experiments/')
     await ex.page.getByRole('heading', { level: 1, name: 'Experiments' }).waitFor({ timeout: 5000 }).catch(() => {})
-    const cards = ex.page.locator('main').getByRole('link', { name: /Creature|Fit a Picture|Splat to Sprite/ })
-    if ((await cards.count()) < 3) fails.push('experiments page does not list every experiment')
+    const cards = ex.page.locator('main').getByRole('link', { name: /Creature|Forest Walk|Fit a Picture|Splat to Sprite/ })
+    if ((await cards.count()) < 4) fails.push('experiments page does not list every experiment')
     else if ((await ex.page.getByRole('banner').getByRole('link', { name: 'Experiments', exact: true }).getAttribute('aria-current')) !== 'page') fails.push('header does not mark Experiments as the current page')
     else ok('header Experiments link opens the experiments page, which lists every experiment')
     await axe(ex.page, 'experiments page')
@@ -377,9 +377,9 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     else ok(`blobscape ${label}: home lists the lessons`)
     await axe(page, `blobscape ${label} home`)
     await page.screenshot({ path: join(shots, `blobscape-home-${label}.png`), fullPage: true })
-    for (const id of ['lessons', 'one-blob', 'footprint', 'order', 'many', 'angle', 'paint', 'formats', 'break', 'one-bone', 'weights', 'twist', 'walk', 'model', 'sandbox', 'creature']) {
-      // headless WebGPU can't present to a canvas, so Creature draws off-screen here
-      await page.goto(base + (id === 'creature' ? '/experiments/creature/?offscreen=1' : ['sandbox', 'lessons'].includes(id) ? `/${id}/` : `/lessons/${id}/`))
+    for (const id of ['lessons', 'one-blob', 'footprint', 'order', 'many', 'angle', 'paint', 'formats', 'break', 'one-bone', 'weights', 'twist', 'walk', 'model', 'sandbox', 'creature', 'forest-walk']) {
+      // headless WebGPU can't present to a canvas, so Creature and Forest Walk draw off-screen here
+      await page.goto(base + (['creature', 'forest-walk'].includes(id) ? `/experiments/${id}/?offscreen=1` : ['sandbox', 'lessons'].includes(id) ? `/${id}/` : `/lessons/${id}/`))
       await page.waitForTimeout(1500)
       const focused = await page.evaluate(() => document.activeElement?.tagName)
       if (focused !== 'H1') fails.push(`blobscape ${label} ${id}: focus is on ${focused}, not the heading`)
@@ -660,6 +660,42 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     if (fire.scales !== 6) fails.push(`blobscape creature: dragon file ${JSON.stringify(fire)}`)
     else ok(`blobscape creature: the dragon's .glb keys its fire as scale on six bones (${fire.kb} KB)`)
     await c.ctx.close()
+  }
+
+  // Forest Walk: the elf walks down the path, tiles move on ahead, plants grow round it
+  {
+    const f = await open('/experiments/forest-walk/?offscreen=1', { viewport: { width: 1280, height: 900 } })
+    if (!(await f.page.locator('[data-testid=forest-loading]').count())) fails.push('blobscape forest: no loading note while the engine starts')
+    await f.page.waitForFunction(() => window.__forest?.stage.forest, null, { timeout: 90000 }).catch(() => {})
+    // green of leaves and grass, brown of the path, the elf's tunic (from behind)
+    const look = (seconds, forward, turn = 0) => f.page.evaluate(async ([s, fw, t]) => {
+      await window.__forest.stage.frame(s, { forward: fw, turn: t })
+      const cv = document.querySelector('[data-testid=forest-view]')
+      const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+      let green = 0, path = 0
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i + 1] > d[i] + 25 && d[i + 1] > d[i + 2] + 25) green++
+        if (d[i] > 100 && d[i] > d[i + 1] + 20 && d[i + 1] > d[i + 2] + 15) path++
+      }
+      const fo = window.__forest.stage.forest
+      return { green, path, z: fo.walker.z, growing: fo.growing, tiles: fo.tiles }
+    }, [seconds, forward, turn])
+    const start = await look(0.1, 0)
+    const walked = await look(12, 1)
+    if (!(start.green > 20000 && start.path > 5000)) fails.push(`blobscape forest: first frame ${JSON.stringify(start)}`)
+    else ok(`blobscape forest: grass, path and plants draw (${start.green} green, ${start.path} path pixels)`)
+    if (!(walked.z > 12 && walked.growing > 30 && walked.green > 20000 && Math.min(...walked.tiles) > Math.min(...start.tiles))) fails.push(`blobscape forest: after walking ${JSON.stringify(walked)}`)
+    else ok(`blobscape forest: the elf walks ${walked.z.toFixed(1)} m, tiles move on ahead and ${walked.growing} plants grow round it`)
+    if (await f.page.locator('[data-testid=forest-loading]').count()) fails.push('blobscape forest: the loading note stays after the forest is drawn')
+    await f.page.screenshot({ path: join(shots, 'blobscape-forest.png') })
+    // a new season rebuilds the forest and keeps the elf where it was
+    await f.page.getByRole('button', { name: 'Autumn', exact: true }).first().click()
+    await f.page.waitForFunction(() => window.__forest?.stage.forest?.opts.season === 'autumn', null, { timeout: 30000 }).catch(() => {})
+    const autumn = await look(1.5, 0)
+    if (!(Math.abs(autumn.z - walked.z) < 0.5 && autumn.growing > 20)) fails.push(`blobscape forest: autumn ${JSON.stringify(autumn)}`)
+    else ok(`blobscape forest: autumn regrows ${autumn.growing} plants round the elf where it stood`)
+    await f.page.screenshot({ path: join(shots, 'blobscape-forest-autumn.png') })
+    await f.ctx.close()
   }
 
   // Lesson → sandbox carries the scene

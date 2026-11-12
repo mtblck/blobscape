@@ -76,9 +76,11 @@ ${PARTS.map((p, i) => `<h2 class="mt-10 font-display text-2xl">Part ${i + 1}: ${
 <nav aria-label="Lessons" class="mt-8 flex flex-wrap gap-6">${prev ? `<a href="${href({ page: 'lesson', id: prev.id })}" class="${LINK}">← ${i}. ${esc(prev.title)}</a>` : ''}<a href="/lessons/" class="${LINK}">All lessons</a>${next ? `<a href="${href({ page: 'lesson', id: next.id })}" class="${LINK}">${i + 2}. ${esc(next.title)} →</a>` : ''}</nav></div>`
     }
     case 'sandbox':
-    case 'creature': {
-      const title = route.page === 'sandbox' ? 'Sandbox' : 'Creature'
-      return `<div class="max-w-3xl">${crumbs(title, route.page === 'creature' ? ['Experiments', '/experiments/'] : undefined)}<h1 class="pt-6 font-display text-5xl">${title}</h1><p class="mt-4 text-xl leading-relaxed text-ink-muted">${esc(pageMeta(route).description)}</p><p class="mt-6 text-sm text-ink-faint">It runs in your browser, with JavaScript and WebGL${route.page === 'creature' ? ' or WebGPU' : ''}.</p></div>`
+    case 'creature':
+    case 'forest': {
+      const title = route.page === 'sandbox' ? 'Sandbox' : route.page === 'creature' ? 'Creature' : 'Forest Walk'
+      const tool = route.page !== 'sandbox'
+      return `<div class="max-w-3xl">${crumbs(title, tool ? ['Experiments', '/experiments/'] : undefined)}<h1 class="pt-6 font-display text-5xl">${title}</h1><p class="mt-4 text-xl leading-relaxed text-ink-muted">${esc(pageMeta(route).description)}</p><p class="mt-6 text-sm text-ink-faint">It runs in your browser, with JavaScript and WebGL${tool ? ' or WebGPU' : ''}.</p></div>`
     }
     case 'experiments':
       return `${crumbs('Experiments')}<div class="max-w-3xl pt-6 pb-8"><h1 class="font-display text-5xl">Experiments</h1>
@@ -132,6 +134,8 @@ function structured(route: Route): object[] {
       ]
     case 'creature':
       return [breadcrumbs([home, ['Experiments', '/experiments/'], ['Creature', href(route)]])]
+    case 'forest':
+      return [breadcrumbs([home, ['Experiments', '/experiments/'], ['Forest Walk', href(route)]])]
     default:
       return []
   }
@@ -175,7 +179,7 @@ function write(path: string, html: string) {
 }
 
 const template = readFileSync(join(DIST, 'index.html'), 'utf8')
-const routes: Route[] = [{ page: 'home' }, { page: 'lessons' }, ...LESSONS.map((l) => ({ page: 'lesson' as const, id: l.id })), { page: 'sandbox' }, { page: 'experiments' }, { page: 'creature' }]
+const routes: Route[] = [{ page: 'home' }, { page: 'lessons' }, ...LESSONS.map((l) => ({ page: 'lesson' as const, id: l.id })), { page: 'sandbox' }, { page: 'experiments' }, { page: 'creature' }, { page: 'forest' }]
 for (const r of routes) write(join(DIST, href(r), 'index.html'), render(template, r))
 write(join(DIST, '404.html'), render(template, { page: 'notfound' }))
 
