@@ -18,7 +18,7 @@ export const EXPERIMENTS_INTRO = "Small tools built from the same blobs as the l
 export const EXPERIMENTS = [
   {
     id: 'creature',
-    title: 'Creature',
+    title: 'Splat Creatures',
     url: '/experiments/creature/',
     needs: 'WebGPU or WebGL 2',
     body: 'A frog, a fox, an elf and a fire-breathing ice dragon, made of blobs and moving on our own splat engine. See their bones, then take one away as a rigged 3D model for Blender or a game engine.',

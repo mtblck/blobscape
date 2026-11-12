@@ -1011,7 +1011,7 @@ export function Sandbox() {
                       </>
                     )}
                     <p className="text-xs text-ink-faint">
-                      They're posed on your device's processor each frame, so here they come in their lighter sizes. Bigger ones, and taking one away as a 3D model, are on the <a href={href({ page: 'creature' })} className="underline hover:text-accent">Creature</a> page.
+                      They're posed on your device's processor each frame, so here they come in their lighter sizes. Bigger ones, and taking one away as a 3D model, are on the <a href={href({ page: 'creature' })} className="underline hover:text-accent">Splat Creatures</a> page.
                     </p>
                   </Panel>
                 ),
