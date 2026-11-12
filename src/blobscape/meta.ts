@@ -28,6 +28,8 @@ export function pageMeta(route: Route): PageMeta {
       return { path, title: `Splat Creatures · ${SITE.name}`, description: 'A frog, a fox, an elf and an ice dragon made of blobs, moving on their own splat engine: a jump, a tongue flick, a walk, wing beats and fire. See the bones under the blobs, then download one as a rigged, animated .glb (as Gaussian splats or as a mesh for Blender and game engines) or as a pixel-art sprite sheet from 4 or 8 sides.' }
     case 'forest':
       return { path, title: `Forest Walk · ${SITE.name}`, description: 'Walk an elf made of blobs down an endless forest path, from behind, while trees, ferns, flowers and mushrooms grow out of the ground as you come. Every plant is a rig of Gaussian splats on our own splat engine.' }
+    case 'dungeon':
+      return { path, title: `Dungeon Run · ${SITE.name}`, description: 'Fight slimes in a torchlit dungeon with a sword and magic. The hero, the hall and five colours of slime are all Gaussian splats on our own splat engine, with health and magic bars, waves, and slimes that burst into splats.' }
     case 'clockwork':
       return { path, title: `Clockwork · ${SITE.name}`, description: 'A watch movement made of Gaussian splats, keeping the real time: barrel, going train, escape wheel, pallet fork and a balance swinging five times a second, every wheel a bone turning by a real watch\'s ratios. Slow it down to see one tick, or speed it up to watch the hours go.' }
     case 'experiments':

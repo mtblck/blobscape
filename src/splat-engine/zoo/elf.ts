@@ -116,6 +116,11 @@ function spec(c: Colours): BodySpec {
   return { bones: BONES, parts, blend: 0.07 }
 }
 
+/** The elf's bones and parts in a look, for building something on top of it (Dungeon Run's hero adds a sword). */
+export function elfSpec(look = 'forest'): BodySpec {
+  return spec(LOOKS[look] ?? LOOKS.forest)
+}
+
 export function makeElf(count = 40000, look = 'forest') {
   const b = buildBody(spec(LOOKS[look] ?? LOOKS.forest), count, 5)
   return { blobs: b.blobs, skin: b.skin, skeleton: b.skeleton }

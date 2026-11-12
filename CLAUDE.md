@@ -73,3 +73,9 @@ multi-page React app, one Vercel project, served from the root. See README for t
 - Growing is bone `size` from 0 (`sprung`), swaying is a turn on upper bones; hidden plants have `rootScale` 0 and stand at the elf so they don't stretch the scene bounds.
 - Mist: `SplatWorld.setFog` (both backends, by view depth) and the floor plane's own fade must use the same colour and distances.
 - `world.ts`/`forest.ts` are pure and tested in Node; verify drives `stage.frame(seconds, input)` with `?offscreen=1`.
+
+## Dungeon Run (`/experiments/dungeon-run/`, `src/blobscape/DungeonRun.tsx`, `src/blobscape/dungeon/`)
+- `game.ts` is the whole game in plain numbers (hero, slimes, bolts, waves; circles on the floor for every hit and push), stepped by `step(dt, input)` and tested in Node. `dungeon.ts` builds every actor once and poses them from the game; nothing is rebuilt mid-fight.
+- Slimes are pooled per colour (`RULES[kind].pool`; colours are baked into blobs, so a slime can't change colour). A pool slot not in use is hidden with `rootScale` 0 at the hero. Each slime carries 16 shard bones at size 0 that become the burst.
+- The hero is the elf's spec (`elfSpec`) plus a `sword` bone on the right hand and an `orb` bone on the left; swings and casts are `aim`s layered on the idle/run blend.
+- Torchlight is baked into the hall's colours (`torchLight`); the flames are bones. Verify drives `stage.frame(seconds, input)` with `?offscreen=1`.
