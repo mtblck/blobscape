@@ -373,11 +373,11 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000 } }], ['phone', { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }]]) {
     const { page, ctx } = await open(B, opts)
     const lessons = await page.locator('main a[href^="/lessons/"]:not([href="/lessons/"])').evaluateAll((as) => new Set(as.map((a) => a.getAttribute('href'))).size)
-    if (lessons < 16) fails.push(`blobscape ${label}: home lists ${lessons} lessons`)
+    if (lessons < 17) fails.push(`blobscape ${label}: home lists ${lessons} lessons`)
     else ok(`blobscape ${label}: home lists the lessons`)
     await axe(page, `blobscape ${label} home`)
     await page.screenshot({ path: join(shots, `blobscape-home-${label}.png`), fullPage: true })
-    for (const id of ['lessons', 'one-blob', 'footprint', 'order', 'many', 'angle', 'paint', 'formats', 'break', 'one-bone', 'weights', 'twist', 'walk', 'model', 'shoot', 'fuzzy', 'floaters', 'sandbox', 'creature', 'forest-walk', 'clockwork', 'dungeon-run', 'scan-studio']) {
+    for (const id of ['lessons', 'one-blob', 'footprint', 'order', 'many', 'angle', 'paint', 'formats', 'break', 'one-bone', 'weights', 'twist', 'walk', 'model', 'shoot', 'fuzzy', 'floaters', 'lighting', 'sandbox', 'creature', 'forest-walk', 'clockwork', 'dungeon-run', 'scan-studio']) {
       // headless WebGPU can't present to a canvas, so Creature and Forest Walk draw off-screen here
       await page.goto(base + (['creature', 'forest-walk', 'clockwork', 'dungeon-run', 'scan-studio'].includes(id) ? `/experiments/${id}/?offscreen=1` : ['sandbox', 'lessons'].includes(id) ? `/${id}/` : `/lessons/${id}/`))
       await page.waitForTimeout(1500)
@@ -533,6 +533,21 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   const [rawRound] = sides(await floatersText())
   if (!(cleanedQuick > rawQuick && rawRound > cleanedQuick + 15)) fails.push(`blobscape floaters: quick ${rawQuick}% → ${cleanedQuick}% cleaned, eight photos ${rawRound}%`)
   else ok(`blobscape floaters: cleanup lifts two photos from ${rawQuick}% to ${cleanedQuick}%, eight photos give ${rawRound}%`)
+
+  // Lighting is baked: moving the lamp leaves the scan behind; taking the old light out with the shape known catches up
+  await page.goto(base + '/lessons/lighting/')
+  await page.waitForTimeout(1500)
+  await page.getByRole('slider', { name: 'Lamp', exact: true }).fill('125')
+  await page.waitForTimeout(300)
+  const lightingScore = async () => Number((await page.textContent('[data-testid=lighting-readout]')).match(/(\d+)%/)?.[1])
+  const stuck = await lightingScore()
+  await page.getByRole('button', { name: 'Take the old light out' }).click()
+  await page.getByRole('slider', { name: 'Where the capture’s lamp was' }).fill('-55')
+  await page.getByLabel('Know the scene’s shape').check()
+  await page.waitForTimeout(300)
+  const relitScore = await lightingScore()
+  if (!(stuck <= 5 && relitScore >= 95)) fails.push(`blobscape lighting: as captured ${stuck}%, relit with the shape ${relitScore}%`)
+  else ok(`blobscape lighting: the scan stays at ${stuck}% when the lamp moves, ${relitScore}% once the old light and shadows come out`)
 
   // Break it: shrink, explode, and put it back
   await page.goto(base + '/lessons/break/')

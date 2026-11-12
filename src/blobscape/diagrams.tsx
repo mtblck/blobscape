@@ -339,6 +339,15 @@ export function LessonGlyph({ id }: { id: string }) {
         {[[22, 20, 5], [96, 16, 4], [100, 52, 6], [28, 58, 4], [86, 34, 3]].map(([x, y, r], k) => <Blob key={k} x={x} y={y} rx={r} ry={r} r={0} c="white" o={0.55} />)}
         <path d="M 91 47 L 109 57 M 109 47 L 91 57" stroke={COLOURS.red} strokeWidth="1.8" strokeLinecap="round" />
       </>)
+    case 'lighting':
+      return g(<>
+        {/* A lamp, a lit ball, and its shadow painted on the table */}
+        <ellipse cx="72" cy="60" rx="22" ry="5" fill="rgb(0 0 0 / 0.35)" />
+        <Blob x={56} y={44} rx={14} ry={14} r={0} c="orange" />
+        <Blob x={20} y={16} rx={6} ry={6} r={0} c="sun" />
+        <path d="M 27 21 L 44 33 M 24 26 L 36 40 M 30 17 L 50 26" stroke={COLOURS.sun} strokeWidth="1.2" strokeLinecap="round" opacity="0.8" />
+        <path d="M 96 18 L 104 26 M 104 18 L 96 26" stroke="#9197b2" strokeWidth="1.5" strokeLinecap="round" />
+      </>)
     default:
       return g(null)
   }
