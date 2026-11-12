@@ -322,7 +322,7 @@ export function DungeonRun() {
                     {VIEWS.map((v) => <Chip key={v.id} active={view === v.id} onClick={() => setView(v.id)}>{v.label}</Chip>)}
                   </div>
                 </Field>
-                <Field label="Light">
+                <Field label="Lighting">
                   <div className="flex flex-wrap gap-1.5">
                     {LIGHTS.map((l) => <Chip key={l.id} active={light === l.id} onClick={() => setLight(l.id)}>{l.label}</Chip>)}
                   </div>
@@ -362,8 +362,9 @@ export function DungeonRun() {
             Light comes two ways. Baked, the torchlight is worked into the stone's colour when the hall is built, so it costs
             nothing to draw. Live, every blob is lit afresh each frame by up to sixteen lights: the eight torches, flickering with
             their flames, the orb in the hero's hand (dimmer as the magic runs down), each bolt as it flies, and a flash of colour
-            as a slime bursts. A blob is a flat disc, so it knows which way it faces: its thinnest axis. Light reaches the side that
-            turns towards it and falls away with distance. Bones are the subject of the <a href={href({ page: 'lesson', id: 'one-bone' })} className="underline decoration-rule underline-offset-2 hover:text-accent">rigs lessons</a>,
+            as a slime bursts. A blob is a flat disc, so it knows which way it lies: its thinnest axis. Light is strongest where a
+            disc turns square to it and falls away with distance. A disc doesn't know which face is its outside, so both faces
+            catch the light, which is right for floors and walls and a little soft on round things. Bones are the subject of the <a href={href({ page: 'lesson', id: 'one-bone' })} className="underline decoration-rule underline-offset-2 hover:text-accent">rigs lessons</a>,
             and the slimes' colours come from blobs adding up, which is <a href={href({ page: 'lesson', id: 'order' })} className="underline decoration-rule underline-offset-2 hover:text-accent">Order matters</a>.
           </p>
         </div>

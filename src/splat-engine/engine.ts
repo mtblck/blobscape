@@ -63,7 +63,7 @@ export interface PointLight {
   position: [number, number, number]
   /** Linear RGB, times its strength: [1, 0.6, 0.3] is a torch at full strength. */
   colour: [number, number, number]
-  /** Distance at which it has fallen to half; it's gone by twice this. */
+  /** Its reach: about a quarter strength at this distance, and gone by twice it. */
   range: number
 }
 
@@ -109,6 +109,7 @@ export class SplatWorld extends Mesh {
   /** Live lighting, when the world was made with `lights: true`. */
   readonly lighting?: Lighting
   private lightNode?: ReturnType<typeof makeLight>
+  private lightsDirty = true
 
   constructor(actors: Actor[], { bins = 16384, mode = 'quat', lights = false }: EngineOptions = {}) {
     const count = actors.reduce((s, a) => s + a.blobs.count, 0)
@@ -171,6 +172,8 @@ export class SplatWorld extends Mesh {
     const L = this.lighting
     if (!L) return
     L.ambient.value = ambient
+    L.count.value = Math.min(MAX_LIGHTS, lights.length)
+    this.lightsDirty = true
     for (let k = 0; k < MAX_LIGHTS; k++) {
       const l = lights[k]
       ;(L.pos.array[k] as Vector4).set(l?.position[0] ?? 0, l?.position[1] ?? 0, l?.position[2] ?? 0, l ? Math.max(1e-3, l.range) : 1)
@@ -276,8 +279,8 @@ export class SplatWorld extends Mesh {
       this.cpuMs = t2 - t0
     } else {
       if (deformed) this.deform(renderer)
-      // lights move on their own, so the lit colours are redone every frame
-      if (this.lightNode) renderer.compute(this.lightNode as never)
+      // lights move on their own: the lit colours are redone whenever they or the blobs moved
+      if (this.lightNode && (deformed || this.lightsDirty)) { renderer.compute(this.lightNode as never); this.lightsDirty = false }
       if (needsSort) this.project(renderer)
     }
     this.posed = true
@@ -293,7 +296,7 @@ export class SplatWorld extends Mesh {
   stages(renderer: Renderer, camera: Camera) {
     this.build(this.isWebGL(renderer))
     return {
-      deform: () => { this.uploadBones(); this.updateBounds(); this.deform(renderer) },
+      deform: () => { this.uploadBones(); this.updateBounds(); this.deform(renderer); if (this.lightNode) renderer.compute(this.lightNode as never) },
       project: () => { this.setView(renderer, camera); renderer.compute(this.projectNode as never) },
       order: () => this.sort.order(renderer as never),
     }
@@ -654,14 +657,16 @@ function makeProject(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, cam: 
 
 interface Fog { colour: N; range: N }
 
-interface Lighting { pos: N; col: N; ambient: N; attr: StorageBufferAttribute; litW: N; lit: N }
+interface Lighting { pos: N; col: N; ambient: N; count: N; attr: StorageBufferAttribute; litW: N; lit: N }
 
 function makeLighting(n: number): Lighting {
-  const attr = new StorageBufferAttribute(new Float32Array(n * 4), 4)
+  // written only by the GPU, so no copy of it on the CPU
+  const attr = new StorageBufferAttribute(n, 4)
   return {
     pos: uniformArray(Array.from({ length: MAX_LIGHTS }, () => new Vector4(0, 0, 0, 1)), 'vec4'),
     col: uniformArray(Array.from({ length: MAX_LIGHTS }, () => new Vector4()), 'vec4'),
     ambient: uniform(1),
+    count: uniform(0, 'int'),
     attr,
     litW: storage(attr, 'vec4', n),
     lit: storage(attr, 'vec4', n).toReadOnly(),
@@ -672,7 +677,9 @@ function makeLighting(n: number): Lighting {
  * A blob's normal from its covariance: for a flat blob (two long axes, one
  * short) the adjugate is dominated by n·nᵀ, so its longest column points
  * along the normal. Round blobs get some direction, which the soft wrap in
- * `lit` makes harmless. Either sign: a surface blob doesn't know its outside.
+ * `lit` makes harmless. Either sign: a surface blob doesn't know its outside,
+ * so a light reaches both faces (right for floors and walls, softer than real
+ * on round things lit from behind).
  */
 function blobNormal(covA: N, covB: N) {
   const a = covA.x, b = covA.y, c = covA.z, d = covA.w, e = covB.x, f = covB.y
@@ -688,17 +695,18 @@ function blobNormal(covA: N, covB: N) {
 function lit(rgb: N, world: N, covA: N, covB: N, L: Lighting) {
   const n = blobNormal(covA, covB).toVar()
   const sum = vec3(L.ambient).toVar()
-  for (let k = 0; k < MAX_LIGHTS; k++) {
-    const P = L.pos.element(k), C = L.col.element(k)
+  // only the lights in use: the loop stops at the count
+  TSL.Loop(L.count, ({ i }: { i: N }) => {
+    const P = L.pos.element(i), C = L.col.element(i)
     const to = P.xyz.sub(world).toVar()
     const d2 = dot(to, to).toVar()
     const r2 = P.w.mul(P.w)
-    // half strength at `range`, fading to nothing by twice it
+    // a quarter strength at `range`, gone by twice it
     const fade = max(float(1).sub(d2.div(r2.mul(4))), 0)
     const fall = fade.mul(fade).div(float(1).add(d2.div(r2)))
     const facing = abs(dot(n, to.mul(TSL.inverseSqrt(max(d2, 1e-6))))).mul(0.65).add(0.35)
     sum.addAssign(C.xyz.mul(fall.mul(facing)))
-  }
+  })
   return rgb.mul(sum)
 }
 

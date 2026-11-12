@@ -1,6 +1,6 @@
 import { srgbToLinear } from '../../splat-core/colour.ts'
 import type { Creature } from '../../splat-engine/body.ts'
-import type { PointLight } from '../../splat-engine/engine.ts'
+import { MAX_LIGHTS, type PointLight } from '../../splat-engine/engine.ts'
 import { BOLT_POP, BOLTS, Game, KINDS, MAX_MP, RULES, hopPeriod, type Difficulty, type Input, type SlimeKind } from './game.ts'
 import { TORCHES, flicker, makeFloor, makePillars, makeTorches, makeWalls, poseTorches } from './hall.ts'
 import { makeBolt, makeHero, poseBolt, poseHero, type HeroClock } from './hero.ts'
@@ -91,22 +91,29 @@ export class Dungeon {
    */
   lights(): PointLight[] {
     const g = this.game
+    const calm = !this.clock.flicker
     const out: PointLight[] = TORCHES.map((t, i) => {
-      const f = flicker(g.time, i)
+      // under reduced motion the torches burn steady
+      const f = calm ? 0.9 : flicker(g.time, i)
       return { position: [t[0], t[1] + 0.1, t[2]], colour: [2.4 * f, 1.0 * f, 0.32 * f], range: 2.9 * (0.8 + 0.2 * f) }
     })
     const sk = this.hero.skeleton, orb = sk.index('orb')
     const k = 0.25 + 0.75 * (g.hero.mp / MAX_MP) + (g.hero.castT >= 0 ? 0.8 : 0)
     out.push({ position: [sk.posedHead[orb * 3], sk.posedHead[orb * 3 + 1] + 0.05, sk.posedHead[orb * 3 + 2]], colour: [0.4 * k, 0.7 * k, 1.6 * k], range: 1.4 })
+    // bolts and bursts, nearest the hero first, as many as the engine has room for
+    const extra: PointLight[] = []
     for (const b of g.bolts) {
-      const k = b.popped ? 2.2 * (1 - b.t / BOLT_POP) : 1.3
-      out.push({ position: [b.x, 1, b.z], colour: [0.6 * k, 0.9 * k, 2 * k], range: b.popped ? 2.4 : 2 })
+      const k = b.popped ? (calm ? 1.3 : 2.2) * (1 - b.t / BOLT_POP) : 1.3
+      extra.push({ position: [b.x, 1, b.z], colour: [0.6 * k, 0.9 * k, 2 * k], range: b.popped ? 2.4 : 2 })
     }
     for (const s of g.slimes) {
       if (s.phase !== 'burst' || s.t > 0.5) continue
-      const c = lin(COLOURS[s.kind].skin), k = 2.5 * (1 - s.t / 0.5)
-      out.push({ position: [s.x, 0.5, s.z], colour: [c[0] * k, c[1] * k, c[2] * k], range: 1.8 })
+      // a flash of the slime's colour, gentler under reduced motion
+      const c = lin(COLOURS[s.kind].skin), k = (calm ? 0.9 : 2.5) * (1 - s.t / 0.5)
+      extra.push({ position: [s.x, 0.5, s.z], colour: [c[0] * k, c[1] * k, c[2] * k], range: 1.8 })
     }
-    return out
+    const far = (l: PointLight) => Math.hypot(l.position[0] - g.hero.x, l.position[2] - g.hero.z)
+    extra.sort((a, b) => far(a) - far(b))
+    return [...out, ...extra].slice(0, MAX_LIGHTS)
   }
 }
