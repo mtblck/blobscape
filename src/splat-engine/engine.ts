@@ -643,7 +643,9 @@ function makeVertexWebGPU(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, 
     const idx = sort.orderRead.element(instanceIndex).toVar()
     const A = buf.splatA.element(idx).toVar()
     const colour = unpackUnorm4x8(buf.colour.element(idx)).toVar()
-    const depth = cameraViewMatrix.mul(vec4(buf.worldCentre.element(idx).xyz, 1)).z.negate()
+    // depth in front of the camera from the screen depth the project pass wrote, so the draw binds no extra buffer:
+    // ndc z = −(P22·z + P32) / z for a perspective camera, so −z = P32 / (ndc z + P22)
+    const depth = cameraProjectionMatrix[3].z.div(A.z.add(cameraProjectionMatrix[2].z))
     return placeQuad(A.xyz, buf.splatB.element(idx), vec4(fogged(colour.rgb, depth, fog), colour.a.mul(A.w)))
   })()
 }
