@@ -615,6 +615,8 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
         frog: (r, g, b) => g > 120 && g > r * 1.4 && b < 110,
         elf: (r, g, b) => g > 90 && g > r * 1.5 && g > b * 1.3,
         fire: (r, g, b) => r > 200 && g > 70 && g < 210 && b < 120,
+        // a monster's colours come from its seed: anything bright and saturated
+        colourful: (r, g, b) => Math.max(r, g, b) > 110 && Math.max(r, g, b) - Math.min(r, g, b) > 50,
       }[kind]
       let n = 0; for (let i = 0; i < d.length; i += 4) if (test(d[i], d[i + 1], d[i + 2])) n++
       return n
@@ -675,6 +677,30 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     if (after < 1500) fails.push(`blobscape creature sprites: the view is empty after drawing a sheet (${after} frog pixels)`)
     else ok('blobscape creature sprites: the live view comes back after the sheet')
     await c.page.locator('[data-testid=sprites]').screenshot({ path: join(shots, 'blobscape-creature-sprites.png') })
+    // Make me a monster: a new creature from a seed, in the address so the link makes it again, with its own sprite sheet
+    const monster = async () => {
+      await c.page.waitForFunction(() => new URL(location.href).searchParams.get('creature') === 'monster' && !document.querySelector('[data-testid=creature-loading]'), null, { timeout: 30000 }).catch(() => {})
+      await c.page.waitForTimeout(200)
+      return { seed: new URL(c.page.url()).searchParams.get('seed'), bones: await c.page.evaluate(() => window.__creature?.bones()), n: await pixels(0.3, 'colourful'), label: await c.page.getByTestId('make-monster').textContent() }
+    }
+    await c.page.getByTestId('make-monster').click()
+    const m1 = await monster()
+    await c.page.getByTestId('make-monster').click()
+    await c.page.waitForFunction((s) => new URL(location.href).searchParams.get('seed') !== s, m1.seed, { timeout: 10000 }).catch(() => {})
+    const m2 = await monster()
+    if (!(m1.seed && m2.seed && m1.seed !== m2.seed && m1.bones >= 14 && m1.n > 1500 && m2.n > 1500 && m2.label === 'Another monster')) fails.push(`blobscape creature monster: ${JSON.stringify({ m1, m2 })}`)
+    else ok(`blobscape creature monster: seeds ${m1.seed} and ${m2.seed} make two monsters (${m1.bones} and ${m2.bones} bones) that draw`)
+    await c.page.screenshot({ path: join(shots, 'blobscape-creature-monster.png') })
+    const mSheet = await c.page.evaluate(() => window.__sprites({ moves: ['walk', 'roar'], directions: 4, size: 32, frames: 6, colours: 16, outline: true }))
+    if (mSheet.rows !== 8 || mSheet.solid.some((k) => k < 20)) fails.push(`blobscape creature monster sprites: ${JSON.stringify({ ...mSheet, solid: mSheet.solid.slice(0, 8) })}`)
+    else ok('blobscape creature monster sprites: the monster walks and roars from 4 sides as a sheet')
+    // the address makes the same monster again
+    const relink = await open(`/experiments/creature/?offscreen=1&creature=monster&seed=${m2.seed}`, { viewport: { width: 1280, height: 900 } })
+    await relink.page.waitForFunction(() => window.__creature && !document.querySelector('[data-testid=creature-loading]'), null, { timeout: 60000 }).catch(() => {})
+    const same = { bones: await relink.page.evaluate(() => window.__creature?.bones()), seed: new URL(relink.page.url()).searchParams.get('seed') }
+    if (same.bones !== m2.bones || same.seed !== m2.seed) fails.push(`blobscape creature monster link: ${JSON.stringify(same)} vs ${JSON.stringify(m2)}`)
+    else ok(`blobscape creature monster: the link with seed ${m2.seed} opens the same monster`)
+    await relink.ctx.close()
     await axe(c.page, 'blobscape creature sprites')
     await c.ctx.close()
   }
