@@ -20,6 +20,7 @@ import { Walk } from './lessons/Walk.tsx'
 import { Model } from './lessons/Model.tsx'
 import { Sandbox } from './Sandbox.tsx'
 import { Creature } from './Creature.tsx'
+import { ForestWalk } from './ForestWalk.tsx'
 import { Experiments } from './Experiments.tsx'
 import { useState } from 'react'
 
@@ -36,7 +37,7 @@ export function App() {
       <SiteHeader here={route.page === 'notfound' ? undefined : href(route)} />
       {/* Keyed by page, so each one mounts fresh: its own view, its own state */}
       <main id="main" key={key} className="mx-auto w-full max-w-7xl flex-1 px-4 pb-16">
-        {route.page === 'sandbox' ? <Sandbox /> : route.page === 'creature' ? <Creature /> : Lesson ? <Lesson /> : route.page === 'lessons' ? <LessonList /> : route.page === 'experiments' ? <Experiments /> : route.page === 'notfound' ? <NotFound /> : <Landing />}
+        {route.page === 'sandbox' ? <Sandbox /> : route.page === 'creature' ? <Creature /> : route.page === 'forest' ? <ForestWalk /> : Lesson ? <Lesson /> : route.page === 'lessons' ? <LessonList /> : route.page === 'experiments' ? <Experiments /> : route.page === 'notfound' ? <NotFound /> : <Landing />}
       </main>
       <Footer />
       {(route.page === 'home' || route.page === 'lessons') && <TipButton key={`tip-${route.page}`} />}

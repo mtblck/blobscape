@@ -339,6 +339,35 @@ export function CreatureDiagram() {
   )
 }
 
+/** Forest Walk: a path running away between blob trees, flowers popping up at its edges, the elf from behind. */
+export function ForestDiagram() {
+  const rand = rng(12)
+  // trees either side, smaller towards the far end of the path
+  const trees = [[38, 70, 1], [200, 72, 1], [70, 52, 0.62], [172, 54, 0.66], [92, 42, 0.42], [150, 43, 0.44], [18, 86, 1.25], [224, 90, 1.2]].map(([x, y, s]) => ({ x, y, s, pine: rand() < 0.5 }))
+  return (
+    <Case viewBox="0 0 240 130" label="A path running away between trees made of blobs, flowers sprouting along its edges, and an elf walking down it">
+      <path d="M 104 40 L 136 40 L 196 130 L 44 130 Z" fill="#6b5236" opacity="0.85" />
+      {trees.map((t, k) => (
+        <g key={k}>
+          <path d={`M ${t.x} ${t.y} V ${t.y + 30 * t.s}`} stroke="#4a3226" strokeWidth={5 * t.s} strokeLinecap="round" />
+          {t.pine
+            ? [0, 1, 2].map((j) => <Blob key={j} x={t.x} y={t.y + 8 * t.s - j * 13 * t.s} rx={(16 - j * 4) * t.s} ry={9 * t.s} r={0} c="green" />)
+            : [[-9, 0], [9, 2], [0, -10], [0, 4]].map(([dx, dy], j) => <Blob key={j} x={t.x + dx * t.s} y={t.y + dy * t.s - 6 * t.s} rx={13 * t.s} ry={11 * t.s} r={0} c="green" />)}
+        </g>
+      ))}
+      {[[98, 60, 'violet', 0.6], [142, 62, 'sun', 0.7], [84, 84, 'red', 0.85], [158, 88, 'violet', 0.9], [68, 108, 'sun', 1.1], [176, 112, 'red', 1.15]].map(([x, y, c, s], k) => (
+        <g key={k} className="motion-safe:animate-[bs-pop_2.4s_ease-out_infinite]" style={{ animationDelay: `${k * 0.3}s`, transformOrigin: `${x}px ${(y as number) + 6}px` }}>
+          <path d={`M ${x} ${(y as number) + 7 * (s as number)} V ${y}`} stroke={COLOURS.green} strokeWidth="1.5" />
+          <Blob x={x as number} y={y as number} rx={5 * (s as number)} ry={4 * (s as number)} r={0} c={c as Colour} />
+        </g>
+      ))}
+      <Blob x={120} y={106} rx={9} ry={13} r={0} c="green" />
+      <Blob x={120} y={88} rx={6} ry={6} r={0} c="sun" />
+      <path d="M 116 118 L 114 128 M 124 118 L 126 128" stroke="#4a3226" strokeWidth="3" strokeLinecap="round" />
+    </Case>
+  )
+}
+
 const lassoed = (b: B) => b.x > 30 && b.y < -125
 export const SANDBOX_COUNTS = { all: TOADSTOOL.length, selected: TOADSTOOL.filter(lassoed).length }
 

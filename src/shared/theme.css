@@ -194,6 +194,14 @@
   .creature-loading-mark > g > path:first-child { animation: bs-hop 1.2s ease-in-out infinite; }
 }
 
+/* Forest Walk's picture: flowers grow up out of the ground, hold, and start again */
+@keyframes bs-pop {
+  0%       { transform: scale(0); }
+  25%      { transform: scale(1.15); }
+  35%, 90% { transform: scale(1); }
+  100%     { transform: scale(0); }
+}
+
 /* Blobscape's front page: a dashed selection ring that marches */
 @keyframes bs-march { to { stroke-dashoffset: -22; } }
 

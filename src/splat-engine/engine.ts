@@ -86,6 +86,12 @@ export class SplatWorld extends Mesh {
   private lastSortKey = ''
   private readonly size = new Vector2()
   readonly bounds = new Sphere()
+  /**
+   * Distance fog: blobs fade towards `colour` (linear RGB) from `near` to `far`
+   * in front of the camera, so a scene can end in mist instead of an edge.
+   * Off while `far` is 0.
+   */
+  readonly fog: Fog
 
   constructor(actors: Actor[], { bins = 16384, mode = 'quat' }: EngineOptions = {}) {
     const count = actors.reduce((s, a) => s + a.blobs.count, 0)
@@ -121,10 +127,17 @@ export class SplatWorld extends Mesh {
     this.boneRadius = boneRadii(actors, boneOffset, bones)
     this.deformNodes = { quat: makeDeform(buf, 'quat'), linear: makeDeform(buf, 'linear') }
     this.cam = { view: uniform(new Matrix4()), proj: uniform(new Matrix4()), viewport: uniform(new Vector2(1, 1)), depthRange: uniform(new Vector2(0, 1)) }
+    this.fog = { colour: uniform(new Vector3(0, 0, 0)), range: uniform(new Vector2(0, 0)) }
     this.projectNode = makeProject(buf, sort, this.cam, bins)
     material.colorNode = makeFragment() as never
 
     this.onBeforeRender = (renderer, _scene, camera) => this.prepare(renderer as unknown as Renderer, camera)
+  }
+
+  /** Fades blobs to `colour` (linear RGB, 0–1) between `near` and `far` units from the camera; `far` 0 turns it off. */
+  setFog(colour: [number, number, number], near: number, far: number) {
+    this.fog.colour.value.set(colour[0], colour[1], colour[2])
+    this.fog.range.value.set(near, far)
   }
 
   /** Call after posing any skeleton. */
@@ -141,9 +154,9 @@ export class SplatWorld extends Mesh {
     const material = this.material as NodeMaterial
     if (webgl) {
       enableWebGL(this.buf, this.sort)
-      material.vertexNode = makeVertexWebGL(this.buf, this.sort, this.mode) as never
+      material.vertexNode = makeVertexWebGL(this.buf, this.sort, this.mode, this.fog) as never
     } else {
-      material.vertexNode = makeVertexWebGPU(this.buf, this.sort) as never
+      material.vertexNode = makeVertexWebGPU(this.buf, this.sort, this.fog) as never
     }
     material.needsUpdate = true
     this.builtFor = key
@@ -599,6 +612,15 @@ function makeProject(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, cam: 
   })().compute(buf.count, [WORKGROUP]).setName('SplatWorldProject')
 }
 
+interface Fog { colour: N; range: N }
+
+/** The blob's colour after distance fog: none while the fog's far distance is 0. */
+function fogged(rgb: N, depth: N, fog: Fog) {
+  const span = max(fog.range.y.sub(fog.range.x), 0.0001)
+  const f = select(fog.range.y.greaterThan(0), depth.sub(fog.range.x).div(span).clamp(0, 1), float(0)).toVar()
+  return rgb.add(fog.colour.sub(rgb).mul(f))
+}
+
 const splatUv = () => varyingProperty('vec2', 'vSplatUv')
 const splatColour = () => varyingProperty('vec4', 'vSplatColour')
 
@@ -616,23 +638,26 @@ function placeQuad(ndc: N, axes: N, rgba: N) {
   return vec4(ndc.xy.add(axes.xy.mul(uv.x)).add(axes.zw.mul(uv.y)), ndc.z, 1)
 }
 
-function makeVertexWebGPU(buf: ReturnType<typeof makeBuffers>, sort: DepthSort) {
+function makeVertexWebGPU(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, fog: Fog) {
   return Fn(() => {
     const idx = sort.orderRead.element(instanceIndex).toVar()
     const A = buf.splatA.element(idx).toVar()
     const colour = unpackUnorm4x8(buf.colour.element(idx)).toVar()
-    return placeQuad(A.xyz, buf.splatB.element(idx), vec4(colour.rgb, colour.a.mul(A.w)))
+    // depth in front of the camera from the screen depth the project pass wrote, so the draw binds no extra buffer:
+    // ndc z = −(P22·z + P32) / z for a perspective camera, so −z = P32 / (ndc z + P22)
+    const depth = cameraProjectionMatrix[3].z.div(A.z.add(cameraProjectionMatrix[2].z))
+    return placeQuad(A.xyz, buf.splatB.element(idx), vec4(fogged(colour.rgb, depth, fog), colour.a.mul(A.w)))
   })()
 }
 
 /** WebGL has no compute: each corner moves its blob through the bones and projects it, like a skinned mesh. */
-function makeVertexWebGL(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, mode: SkinMode) {
+function makeVertexWebGL(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, mode: SkinMode, fog: Fog) {
   return Fn(() => {
     const idx = sort.orderRead.element(instanceIndex).toVar()
     const d = deformBlob(buf, idx, mode)
     const p = projectSplat(d.world, d.covA, d.covB, cameraViewMatrix, cameraProjectionMatrix, cameraViewport.zw)
     const colour = unpackUnorm4x8(buf.colour.element(idx)).toVar()
-    return placeQuad(p.ndc, p.axes, vec4(colour.rgb, colour.a.mul(p.alphaScale)))
+    return placeQuad(p.ndc, p.axes, vec4(fogged(colour.rgb, p.depth, fog), colour.a.mul(p.alphaScale)))
   })()
 }
 
