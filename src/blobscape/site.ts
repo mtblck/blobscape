@@ -41,6 +41,14 @@ export const EXPERIMENTS = [
     body: 'The elf takes a sword and a hand full of magic into a torchlit dungeon. Slimes in five colours hop in, wave after wave, and burst into splats.',
   },
   {
+    id: 'scan',
+    title: 'Scan Studio',
+    url: '/experiments/scan-studio/',
+    cover: '/covers/scan-studio.webp',
+    needs: 'WebGPU or WebGL 2',
+    body: 'Bring in a splat scan of an object from your phone, cut away the table and the stray floaters, relight it with live lamps, and take it into the sandbox.',
+  },
+  {
     id: 'clockwork',
     title: 'Clockwork',
     url: '/experiments/clockwork/',

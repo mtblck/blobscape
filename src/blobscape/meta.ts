@@ -30,6 +30,8 @@ export function pageMeta(route: Route): PageMeta {
       return { path, title: `Forest Walk · ${SITE.name}`, description: 'Walk an elf made of blobs down an endless forest path, from behind, while trees, ferns, flowers and mushrooms grow out of the ground as you come. Every plant is a rig of Gaussian splats on our own splat engine.' }
     case 'dungeon':
       return { path, title: `Dungeon Run · ${SITE.name}`, description: 'Fight slimes in a torchlit dungeon with a sword and magic. The hero, the hall and five colours of slime are all Gaussian splats on our own splat engine, with health and magic bars, waves, and slimes that burst into splats.' }
+    case 'scan':
+      return { path, title: `Scan Studio · ${SITE.name}`, description: 'Open a Gaussian splat scan of an object from your phone (Scaniverse, Polycam and others export .ply or .spz), find the table and turn it level, cut away the floor and the floaters, relight it with live lights, then take it into the sandbox or save it. Everything stays on your device.' }
     case 'clockwork':
       return { path, title: `Clockwork · ${SITE.name}`, description: 'A watch movement made of Gaussian splats, keeping the real time: barrel, going train, escape wheel, pallet fork and a balance swinging five times a second, every wheel a bone turning by a real watch\'s ratios. Slow it down to see one tick, or speed it up to watch the hours go.' }
     case 'experiments':

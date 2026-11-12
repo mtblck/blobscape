@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu'
 import { placeCamera, type Orbit } from '../../splat-core/view.ts'
 import { readbackToSrgb } from '../../splat-core/colour.ts'
-import { SplatWorld } from '../../splat-engine/engine.ts'
+import { SplatWorld, type PointLight } from '../../splat-engine/engine.ts'
 import { sampleClip, type Clip } from '../../splat-engine/glb.ts'
 import type { Skeleton, Skin, SkinMode } from '../../splat-engine/rig.ts'
 import type { Blobs } from '../../splat-core/blobs.ts'
@@ -27,6 +27,8 @@ export type Show = 'blobs' | 'bones' | 'both'
 
 export interface StageOptions {
   offscreen?: boolean
+  /** Builds each world with live lights (`setLights`), as Scan Studio does. */
+  lights?: boolean
 }
 
 export class CreatureStage {
@@ -61,6 +63,7 @@ export class CreatureStage {
   private baking = false
   private queued?: { actor: Actor; clip?: Clip }
   mode: SkinMode = 'quat'
+  private lit: { lights: PointLight[]; ambient: number } = { lights: [], ambient: 1 }
 
   private constructor(private readonly display: HTMLCanvasElement, private readonly opts: StageOptions, renderer: THREE.WebGPURenderer) {
     this.renderer = renderer
@@ -108,7 +111,8 @@ export class CreatureStage {
     if (this.world) { this.scene.remove(this.world); this.world.dispose() }
     if (this.rig) { this.scene.remove(this.rig); this.rig.dispose() }
     this.actor = actor
-    this.world = new SplatWorld([actor], { mode: this.mode })
+    this.world = new SplatWorld([actor], { mode: this.mode, lights: this.opts.lights })
+    if (this.opts.lights) this.world.setLights(this.lit.lights, this.lit.ambient)
     this.scene.add(this.world)
     this.rig = new BoneView(actor.skeleton)
     this.scene.add(this.rig)
@@ -138,6 +142,13 @@ export class CreatureStage {
     // a sheet being drawn keeps one rule throughout; the new one applies when it's done
     if (this.baking) return
     if (this.world) { this.world.mode = m; this.world.markPosed() }
+    this.invalidate()
+  }
+
+  /** Live lights on the world (needs the `lights` option); kept for the next actor too. */
+  setLights(lights: PointLight[], ambient = 1) {
+    this.lit = { lights, ambient }
+    this.world?.setLights(lights, ambient)
     this.invalidate()
   }
 
