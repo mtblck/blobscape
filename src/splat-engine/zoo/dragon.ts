@@ -77,18 +77,24 @@ function bones(): Bone[] {
   return out
 }
 
-const BODY: Vec3 = [0.46, 0.68, 0.88], DARK: Vec3 = [0.2, 0.34, 0.58], BELLY: Vec3 = [0.86, 0.93, 0.99], FROST: Vec3 = [0.93, 0.98, 1]
-const MEMBRANE: Vec3 = [0.52, 0.74, 0.94], CLAW: Vec3 = [0.16, 0.2, 0.28], GUM: Vec3 = [0.45, 0.12, 0.2], EYE: Vec3 = [0.55, 0.97, 1]
+interface Palette { label: string; body: Vec3; dark: Vec3; belly: Vec3; frost: Vec3; membrane: Vec3; claw: Vec3; gum: Vec3; eye: Vec3 }
+
+/** The dragon's looks. The fire is the same in every one; `frost` is the pale trim: spikes, horns, frills and the flecks in the hide. */
+const LOOKS: Record<string, Palette> = {
+  ice: { label: 'Ice', body: [0.46, 0.68, 0.88], dark: [0.2, 0.34, 0.58], belly: [0.86, 0.93, 0.99], frost: [0.93, 0.98, 1], membrane: [0.52, 0.74, 0.94], claw: [0.16, 0.2, 0.28], gum: [0.45, 0.12, 0.2], eye: [0.55, 0.97, 1] },
+  ember: { label: 'Ember', body: [0.62, 0.12, 0.08], dark: [0.16, 0.06, 0.06], belly: [0.98, 0.72, 0.32], frost: [1, 0.84, 0.42], membrane: [0.86, 0.3, 0.12], claw: [0.08, 0.06, 0.06], gum: [0.3, 0.05, 0.06], eye: [1, 0.78, 0.2] },
+  jade: { label: 'Jade', body: [0.2, 0.55, 0.38], dark: [0.07, 0.24, 0.2], belly: [0.93, 0.86, 0.58], frost: [0.95, 0.8, 0.4], membrane: [0.46, 0.76, 0.5], claw: [0.14, 0.12, 0.08], gum: [0.42, 0.12, 0.16], eye: [0.98, 0.9, 0.3] },
+}
 
 /** The ridge along the top, neck to tail, where the spikes grow. */
 const RIDGE: Vec3[] = [[0, 3.2, 1.9], [0, 2.6, 1.62], [0, 2.18, 1.25], [0, 2.3, 0.7], [0, 2.22, -0.1], [0, 2.02, -0.85], [0, 1.82, -1.35], [0, 1.6, -2.0], [0, 1.36, -2.7], [0, 1.12, -3.35], [0, 0.92, -3.95], [0, 0.8, -4.45]]
 
-function spec(): BodySpec {
+function spec(c: Palette): BodySpec {
   const hide = (p: Vec3, n: Vec3): Vec3 => {
-    if (n[1] < -0.4) return Math.sin(p[2] * 16) > 0.75 ? mix(BELLY, BODY, 0.35) : BELLY
+    if (n[1] < -0.4) return Math.sin(p[2] * 16) > 0.75 ? mix(c.belly, c.body, 0.35) : c.belly
     const top = Math.max(0, n[1])
-    const base = mix(BODY, DARK, Math.min(1, top * 0.8 + (spots(p, 9) - 0.5) * 0.8))
-    return spots(p, 46, 2) > 0.8 ? mix(base, FROST, 0.55) : base
+    const base = mix(c.body, c.dark, Math.min(1, top * 0.8 + (spots(p, 9) - 0.5) * 0.8))
+    return spots(p, 46, 2) > 0.8 ? mix(base, c.frost, 0.55) : base
   }
   const spine = ['hips', 'spine', 'chest', 'neck1', 'neck2', 'neck3', 'head', 'tail1', 'tail2', 'tail3', 'tail4', 'tail5']
   const parts: Part[] = [
@@ -99,12 +105,12 @@ function spec(): BodySpec {
     // the head: skull, snout, jaw, and the inside of the mouth
     { shape: { ball: [0, 3.0, 2.05], r: [0.3, 0.27, 0.36] }, colour: hide, bones: ['head'], density: 1.5 },
     { shape: { tube: [[0, 2.98, 2.2], [0, 2.9, 2.8]], r: [0.2, 0.12], flat: 0.72 }, colour: hide, bones: ['head'], density: 1.5 },
-    { shape: { tube: [[0, 2.79, 2.12], [0, 2.73, 2.74]], r: [0.16, 0.09], flat: 0.55 }, colour: (p, n) => (n[1] < -0.3 ? BELLY : hide(p, n)), bones: ['jaw'], density: 1.5 },
-    { shape: { ball: [0, 2.83, 2.42], r: [0.12, 0.035, 0.3] }, colour: GUM, bones: ['head'], density: 2 },
+    { shape: { tube: [[0, 2.79, 2.12], [0, 2.73, 2.74]], r: [0.16, 0.09], flat: 0.55 }, colour: (p, n) => (n[1] < -0.3 ? c.belly : hide(p, n)), bones: ['jaw'], density: 1.5 },
+    { shape: { ball: [0, 2.83, 2.42], r: [0.12, 0.035, 0.3] }, colour: c.gum, bones: ['head'], density: 2 },
     // a frill of ice down the back of the jaw
-    { shape: { sheet: [[[0.22, 2.9, 1.9], [0.45, 2.75, 1.55], [0.2, 2.75, 2.15]], [[-0.22, 2.9, 1.9], [-0.45, 2.75, 1.55], [-0.2, 2.75, 2.15]]] }, colour: FROST, bones: ['head'], opacity: 0.85 },
+    { shape: { sheet: [[[0.22, 2.9, 1.9], [0.45, 2.75, 1.55], [0.2, 2.75, 2.15]], [[-0.22, 2.9, 1.9], [-0.45, 2.75, 1.55], [-0.2, 2.75, 2.15]]] }, colour: c.frost, bones: ['head'], opacity: 0.85 },
     // a spade at the end of the tail
-    { shape: { sheet: [[[0, 0.73, -4.4], [0.32, 0.76, -4.75], [0, 0.7, -5.15]], [[0, 0.73, -4.4], [0, 0.7, -5.15], [-0.32, 0.76, -4.75]]] }, colour: FROST, bones: ['tail5'], opacity: 0.9 },
+    { shape: { sheet: [[[0, 0.73, -4.4], [0.32, 0.76, -4.75], [0, 0.7, -5.15]], [[0, 0.73, -4.4], [0, 0.7, -5.15], [-0.32, 0.76, -4.75]]] }, colour: c.frost, bones: ['tail5'], opacity: 0.9 },
   ]
   // the tail, tapering
   const tail: [Vec3, number][] = [[[0, 1.52, -1.0], 0.42], [[0, 1.35, -2.0], 0.31], [[0, 1.15, -2.7], 0.23], [[0, 0.95, -3.35], 0.16], [[0, 0.8, -3.95], 0.1], [[0, 0.72, -4.55], 0.05]]
@@ -117,22 +123,22 @@ function spec(): BodySpec {
       const p = mix(RIDGE[k], RIDGE[k + 1], f)
       const s = (k + f) / (RIDGE.length - 1)
       const h = 0.34 * Math.sin(Math.PI * Math.min(1, s * 1.15 + 0.08)) + 0.06
-      parts.push({ shape: { tube: [p, [p[0], p[1] + h, p[2] - h * 0.65]], r: [0.07 * (h / 0.3 + 0.3), 0.008] }, colour: FROST, bones: spine, density: 2 })
+      parts.push({ shape: { tube: [p, [p[0], p[1] + h, p[2] - h * 0.65]], r: [0.07 * (h / 0.3 + 0.3), 0.008] }, colour: c.frost, bones: spine, density: 2 })
     }
   }
   for (const [s, x] of SIDES) {
     parts.push(
       // horns, two a side, swept back
-      { shape: { tube: [sided(x, [0.14, 3.16, 1.92]), sided(x, [0.36, 3.5, 1.4])], r: [0.075, 0.008] }, colour: FROST, bones: ['head'], density: 2 },
-      { shape: { tube: [sided(x, [0.22, 3.04, 1.86]), sided(x, [0.5, 3.12, 1.52])], r: [0.05, 0.006] }, colour: FROST, bones: ['head'], density: 2 },
+      { shape: { tube: [sided(x, [0.14, 3.16, 1.92]), sided(x, [0.36, 3.5, 1.4])], r: [0.075, 0.008] }, colour: c.frost, bones: ['head'], density: 2 },
+      { shape: { tube: [sided(x, [0.22, 3.04, 1.86]), sided(x, [0.5, 3.12, 1.52])], r: [0.05, 0.006] }, colour: c.frost, bones: ['head'], density: 2 },
       // eyes that glow, with a slit
-      { shape: { ball: sided(x, [0.2, 3.06, 2.22]), r: [0.06, 0.04, 0.065] }, colour: (p) => (Math.abs(p[2] - sided(x, [0.2, 3.06, 2.22])[2] - 0.01) < 0.012 ? [0.05, 0.1, 0.2] : EYE), bones: ['head'], density: 4, glow: true },
+      { shape: { ball: sided(x, [0.2, 3.06, 2.22]), r: [0.06, 0.04, 0.065] }, colour: (p) => (Math.abs(p[2] - sided(x, [0.2, 3.06, 2.22])[2] - 0.01) < 0.012 ? [0.05, 0.1, 0.2] : c.eye), bones: ['head'], density: 4, glow: true },
       { shape: { ball: sided(x, [0.07, 2.97, 2.79]), r: [0.028, 0.02, 0.02] }, colour: [0.08, 0.1, 0.16], bones: ['head'], density: 4 },
     )
     // teeth along the upper jaw
     for (let k = 0; k < 6; k++) {
       const z = 2.3 + k * 0.08, w = 0.13 - k * 0.012
-      parts.push({ shape: { tube: [sided(x, [w, 2.87, z]), sided(x, [w, 2.78, z + 0.01])], r: [0.022, 0.003] }, colour: FROST, bones: ['head'], density: 4 })
+      parts.push({ shape: { tube: [sided(x, [w, 2.87, z]), sided(x, [w, 2.78, z + 0.01])], r: [0.022, 0.003] }, colour: c.frost, bones: ['head'], density: 4 })
     }
     // legs
     const fl = { top: sided(x, [0.42, 1.62, 0.85]), elbow: sided(x, [0.45, 0.9, 1.05]), wrist: sided(x, [0.45, 0.22, 0.95]), toe: sided(x, [0.47, 0.08, 1.3]) }
@@ -148,8 +154,8 @@ function spec(): BodySpec {
     )
     for (const dx of [-0.08, 0, 0.08]) {
       parts.push(
-        { shape: { tube: [sided(x, [0.47 + dx, 0.08, 1.3]), sided(x, [0.47 + dx * 1.4, 0.0, 1.48])], r: [0.045, 0.005] }, colour: CLAW, bones: [`${s}Hand`], density: 3 },
-        { shape: { tube: [sided(x, [0.53 + dx, 0.06, -0.2]), sided(x, [0.53 + dx * 1.4, 0.0, -0.02])], r: [0.04, 0.005] }, colour: CLAW, bones: [`${s}Foot`], density: 3 },
+        { shape: { tube: [sided(x, [0.47 + dx, 0.08, 1.3]), sided(x, [0.47 + dx * 1.4, 0.0, 1.48])], r: [0.045, 0.005] }, colour: c.claw, bones: [`${s}Hand`], density: 3 },
+        { shape: { tube: [sided(x, [0.53 + dx, 0.06, -0.2]), sided(x, [0.53 + dx * 1.4, 0.0, -0.02])], r: [0.04, 0.005] }, colour: c.claw, bones: [`${s}Foot`], density: 3 },
       )
     }
     // the wing: bones you can see along its leading edge and fingers, and the membrane between them
@@ -160,14 +166,14 @@ function spec(): BodySpec {
     parts.push(
       { shape: { tube: [S, E], r: [0.11, 0.07] }, colour: hide, bones: ['chest', `${s}Wing1`, `${s}Wing2`] },
       { shape: { tube: [E, W], r: [0.07, 0.05] }, colour: hide, bones: [`${s}Wing1`, `${s}Wing2`, `${s}Wing3`] },
-      ...[T1, T2, T3].map((T, k): Part => ({ shape: { tube: [W, T], r: [0.045, 0.015] }, colour: DARK, bones: [`${s}Wing3`, `${s}Finger${k + 1}`], density: 1.5 })),
-      { shape: { ball: W, r: [0.07, 0.07, 0.07] }, colour: FROST, bones: [`${s}Wing2`, `${s}Wing3`] },
+      ...[T1, T2, T3].map((T, k): Part => ({ shape: { tube: [W, T], r: [0.045, 0.015] }, colour: c.dark, bones: [`${s}Wing3`, `${s}Finger${k + 1}`], density: 1.5 })),
+      { shape: { ball: W, r: [0.07, 0.07, 0.07] }, colour: c.frost, bones: [`${s}Wing2`, `${s}Wing3`] },
       {
         shape: { sheet: [[S, E, W], [S, W, T3], [S, T3, B], [W, T1, T2], [W, T2, T3]] },
         // veins fan out from the wrist
         colour: (p) => {
           const v = [T1, T2, T3].some((T) => segDist(p, W, T) < 0.035) || segDist(p, W, B) < 0.03
-          return v ? mix(MEMBRANE, DARK, 0.5) : mix(MEMBRANE, BELLY, Math.max(0, Math.min(1, (p[1] - 1.6) * 0.4)))
+          return v ? mix(c.membrane, c.dark, 0.5) : mix(c.membrane, c.belly, Math.max(0, Math.min(1, (p[1] - 1.6) * 0.4)))
         },
         bones: wingBones, opacity: 0.78, density: 1.1, size: 1.25, blend: 0.55,
       },
@@ -194,8 +200,8 @@ function spec(): BodySpec {
   return { bones: bones(), parts, blend: 0.22 }
 }
 
-export function makeDragon(count = 100000) {
-  const sp = spec()
+export function makeDragon(count = 100000, look = 'ice') {
+  const sp = spec(LOOKS[look] ?? LOOKS.ice)
   const b = buildBody(sp, count, 3)
   // shrink the flame into the mouth: its blobs and bones, about the mouth
   const fire = sp.parts.length - 1
@@ -319,11 +325,11 @@ export function dragonFire(sk: Skeleton, t: number) {
 export const DRAGON: Species = {
   id: 'dragon',
   name: 'dragon',
-  blurb: 'An ice dragon of forty-three bones, with wings that are sheets of blobs between finger bones, and fire made of bones too.',
+  blurb: 'A dragon of forty-three bones, in ice, ember or jade, with wings that are sheets of blobs between finger bones, and fire made of bones too.',
   detail: [30000, 100000, 200000, 400000],
   start: 100000,
-  looks: [{ id: 'ice', label: 'Ice' }],
-  make: (count) => makeDragon(count),
+  looks: Object.entries(LOOKS).map(([id, l]) => ({ id, label: l.label })),
+  make: (count, look) => makeDragon(count, look),
   moves: [
     { name: 'flap', label: 'Flap', doing: 'hovering on beating wings', seconds: FLAP, fps: 30, pose: dragonFlap },
     { name: 'fire', label: 'Breathe fire', doing: 'breathing fire', seconds: BREATH, fps: 30, pose: dragonFire },

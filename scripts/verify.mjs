@@ -660,6 +660,20 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
       const anim = json.animations.find((a) => a.name === 'fire')
       return { scales: anim?.channels.filter((ch) => ch.target.path === 'scale').length, kb: Math.round(bytes.byteLength / 1024) }
     })
+    // the dragon's other looks: ember is red, not ice blue
+    await c.page.getByRole('button', { name: 'Ember', exact: true }).click()
+    await c.page.waitForTimeout(300)
+    const ember = await c.page.evaluate(async () => {
+      await window.__creature.stage.frame(0.5)
+      const cv = document.querySelector('[data-testid=creature-view]')
+      const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+      let red = 0, ice = 0
+      for (let i = 0; i < d.length; i += 4) { if (d[i] > 120 && d[i] > d[i + 2] * 1.8 && d[i] > d[i + 1] * 1.6) red++; if (d[i + 2] > 150 && d[i + 2] > d[i] * 1.4) ice++ }
+      return { red, ice }
+    })
+    if (!(ember.red > 2000 && ember.red > ember.ice)) fails.push(`blobscape creature: ember dragon ${JSON.stringify(ember)}`)
+    else ok(`blobscape creature: the ember dragon is red (${ember.red} red, ${ember.ice} ice-blue pixels)`)
+    await c.page.screenshot({ path: join(shots, 'blobscape-creature-ember.png') })
     if (fire.scales !== 6) fails.push(`blobscape creature: dragon file ${JSON.stringify(fire)}`)
     else ok(`blobscape creature: the dragon's .glb keys its fire as scale on six bones (${fire.kb} KB)`)
     // the Sprites panel: the frog's tongue flick and its still pose from 8 sides, as 32 px pixel art
@@ -681,14 +695,14 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     const monster = async () => {
       await c.page.waitForFunction(() => new URL(location.href).searchParams.get('creature') === 'monster' && !document.querySelector('[data-testid=creature-loading]'), null, { timeout: 30000 }).catch(() => {})
       await c.page.waitForTimeout(200)
-      return { seed: new URL(c.page.url()).searchParams.get('seed'), bones: await c.page.evaluate(() => window.__creature?.bones()), n: await pixels(0.3, 'colourful'), label: await c.page.getByTestId('make-monster').textContent() }
+      return { seed: new URL(c.page.url()).searchParams.get('seed'), bones: await c.page.evaluate(() => window.__creature?.bones()), n: await pixels(0.3, 'colourful'), label: await c.page.getByTestId('make-monster').textContent(), note: await c.page.getByTestId('creature-note').textContent() }
     }
-    await c.page.getByTestId('make-monster').click()
+    await c.page.getByTestId('species').getByRole('button', { name: 'Monster', exact: true }).click()
     const m1 = await monster()
     await c.page.getByTestId('make-monster').click()
     await c.page.waitForFunction((s) => new URL(location.href).searchParams.get('seed') !== s, m1.seed, { timeout: 10000 }).catch(() => {})
     const m2 = await monster()
-    if (!(m1.seed && m2.seed && m1.seed !== m2.seed && m1.bones >= 14 && m1.n > 1500 && m2.n > 1500 && m2.label === 'Another monster')) fails.push(`blobscape creature monster: ${JSON.stringify({ m1, m2 })}`)
+    if (!(m1.seed && m2.seed && m1.seed !== m2.seed && m1.bones >= 14 && m1.n > 1500 && m2.n > 1500 && m2.label === 'Generate a new monster' && /^Made a .*legged/.test(m2.note))) fails.push(`blobscape creature monster: ${JSON.stringify({ m1, m2 })}`)
     else ok(`blobscape creature monster: seeds ${m1.seed} and ${m2.seed} make two monsters (${m1.bones} and ${m2.bones} bones) that draw`)
     await c.page.screenshot({ path: join(shots, 'blobscape-creature-monster.png') })
     const mSheet = await c.page.evaluate(() => window.__sprites({ moves: ['walk', 'roar'], directions: 4, size: 32, frames: 6, colours: 16, outline: true }))
