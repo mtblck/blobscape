@@ -4,6 +4,7 @@ import type { BakedSheet } from '../../splat-engine/bakeSheet.ts'
 import { asepriteJson, planSheet, tinkerkitJson, type SheetMove } from '../../splat-engine/spriteSheet.ts'
 import { Button, Chip, Field, Toggle } from '../../shared/ui.tsx'
 import { download, kb } from '../files.ts'
+import { CARD, CARD_SUB, CARD_TITLE } from './card.ts'
 import type { CreatureStage } from './stage.ts'
 
 /** Picks are clip positions (a file may have two clips of one name, or one called "still"), plus this for the rest pose. */
@@ -136,19 +137,16 @@ export function Sprites({ stage, name, clips, labelOf, current }: { stage?: Crea
 
   const w = plan.cols * size, h = plan.rows.length * size
   return (
-    <section aria-labelledby="sprites-title" className="rounded-2xl border border-rule bg-paper-sunk/60 px-4 pt-4 pb-4 lg:col-span-12 lg:px-5" data-testid="sprites">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h2 id="sprites-title" className="text-sm font-bold">Sprite sheet <small className="text-xs font-normal text-ink-faint">pixel art for 2D games</small></h2>
-        <p className="text-xs text-ink-faint">Every frame is the same creature from the same distance, so nothing wobbles between frames or sides.</p>
-      </div>
-      <div className="mt-3 grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-        <div className="grid content-start gap-3">
-          <Field label="Moves">
+    <section aria-labelledby="sprites-title" className={CARD} data-testid="sprites">
+      <h2 id="sprites-title" className={CARD_TITLE}>Sprite sheet <small className={CARD_SUB}>pixel art for 2D games</small></h2>
+      <div className="grid gap-x-10 gap-y-6 lg:grid-cols-2">
+        <div className="stack-controls grid content-start items-start gap-x-6 gap-y-4 sm:grid-cols-2">
+          <div className="sm:col-span-2"><Field label="Moves">
             <div className="flex flex-wrap gap-1.5">
               {clips.map((c, k) => <Chip key={`${k}-${c.name}`} active={chosen.includes(k)} onClick={() => toggle(k)}>{labelOf(c)}</Chip>)}
               <Chip active={chosen.includes(STILL)} onClick={() => toggle(STILL)}>Still</Chip>
             </div>
-          </Field>
+          </Field></div>
           <Field label="Directions">
             <div className="flex flex-wrap gap-1.5">
               <Chip active={directions === 4} onClick={() => setDirections(4)}>4</Chip>
@@ -167,15 +165,16 @@ export function Sprites({ stage, name, clips, labelOf, current }: { stage?: Crea
           <Field label="Edges">
             <Toggle label="Dark outline" checked={outline} onChange={setOutline} />
           </Field>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
             <Button primary disabled={!stage || !moves.length || drawing} onClick={() => void make()}>{made ? 'Draw again' : 'Draw the sheet'}</Button>
             <p className="text-xs text-ink-faint">
               {moves.length ? <>{count} frames, {w} × {h} px</> : 'Pick at least one move.'}
             </p>
           </div>
-          <p aria-hidden className="text-xs text-ink-faint tabular-nums">{progress ?? ''}</p>
+          <p aria-hidden className="text-xs text-ink-faint tabular-nums sm:col-span-2 empty:hidden">{progress ?? ''}</p>
+          <p className="text-xs leading-relaxed text-ink-faint sm:col-span-2">Every frame is the same creature from the same distance, so nothing wobbles between frames or sides.</p>
           <p aria-live="polite" className="sr-only" data-testid="sprites-note">{note}</p>
-          {error && <p role="alert" className="text-sm text-ink">{error}</p>}
+          {error && <p role="alert" className="text-sm text-ink sm:col-span-2">{error}</p>}
         </div>
         <div className="min-w-0">
           {made ? (
