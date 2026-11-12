@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { Blobs } from '../../splat-core/blobs.ts'
+import { useEffect, useRef, useState } from 'react'
 import type { Orbit } from '../../splat-core/view.ts'
 import { Button, Slider } from '../../shared/ui.tsx'
 import { LessonShell } from '../Shell.tsx'
 import { LESSON_GOALS } from '../routes.ts'
-import { DRAG, ZoomBar, clampOrbit, orbitKey } from '../Viewport.tsx'
+import { ZoomBar, clampOrbit } from '../Viewport.tsx'
 import { useGoals } from '../progress.ts'
-import { DISTANCE, PHOTO, orbitCam, render, sigmoid, type Model } from '../shoot/train3d.ts'
+import { DISTANCE, type Model } from '../shoot/train3d.ts'
+import { CpuView, Thumb, toBlobs } from '../shoot/views.tsx'
 import { subject } from '../shoot/subject.ts'
 import type { FromShoot, ToShoot } from '../shoot/shoot.worker.ts'
 
@@ -174,42 +174,6 @@ export function Shoot() {
   )
 }
 
-/** The trained blobs as a scene for the sandbox. */
-function toBlobs(m: Model): Blobs {
-  const b = new Blobs(m.count)
-  for (let i = 0; i < m.count; i++) {
-    const s = Math.exp(m.logS[i])
-    b.push({
-      centre: [m.pos[i * 3], m.pos[i * 3 + 1], m.pos[i * 3 + 2]],
-      scale: [s, s, s],
-      quat: [0, 0, 0, 1],
-      colour: [sigmoid(m.col[i * 3]), sigmoid(m.col[i * 3 + 1]), sigmoid(m.col[i * 3 + 2])],
-      opacity: sigmoid(m.op[i]),
-    })
-  }
-  return b
-}
-
-function toImage(px: Float64Array, w: number, h: number): ImageData {
-  const bytes = new Uint8ClampedArray(w * h * 4)
-  for (let k = 0, j = 0; k < px.length; k += 3, j += 4) {
-    bytes[j] = px[k] * 255
-    bytes[j + 1] = px[k + 1] * 255
-    bytes[j + 2] = px[k + 2] * 255
-    bytes[j + 3] = 255
-  }
-  return new ImageData(bytes, w, h)
-}
-
-/** One photo, small. */
-function Thumb({ photo }: { photo: Float64Array }) {
-  const ref = useRef<HTMLCanvasElement>(null)
-  useEffect(() => {
-    ref.current!.getContext('2d')!.putImageData(toImage(photo, PHOTO, PHOTO), 0, 0)
-  }, [photo])
-  return <canvas ref={ref} width={PHOTO} height={PHOTO} className="h-8 w-8 rounded-sm ring-1 ring-rule" />
-}
-
 /**
  * The twelve camera spots round a top-down bird (front at the bottom), as
  * toggle buttons, with a marker for where you're looking from now.
@@ -252,58 +216,5 @@ function SpotRing({ spots, toggle, looking }: { spots: number[]; toggle: (deg: n
         )
       })}
     </div>
-  )
-}
-
-/** A software-rendered view of round blobs. Drag or arrow keys orbit. */
-function CpuView({ model, orbit, setOrbit, title, testId, label }: { model: Model | null; orbit: Orbit; setOrbit: (f: Orbit | ((o: Orbit) => Orbit)) => void; title: string; testId: string; label: string }) {
-  const ref = useRef<HTMLCanvasElement>(null)
-  const [size, setSize] = useState({ w: 200, h: 150 })
-  useEffect(() => {
-    const c = ref.current!
-    const ro = new ResizeObserver(() => {
-      // Soft blobs need few pixels: render small and let the browser scale it up
-      const w = Math.min(220, Math.max(60, Math.round(c.clientWidth / 1.5)))
-      setSize({ w, h: Math.max(45, Math.round((c.clientHeight / Math.max(1, c.clientWidth)) * w)) })
-    })
-    ro.observe(c)
-    return () => ro.disconnect()
-  }, [])
-  const cam = useMemo(() => orbitCam(orbit.azimuth, orbit.elevation, size.w, size.h, orbit.distance), [orbit, size])
-  useEffect(() => {
-    const c = ref.current!
-    c.width = size.w
-    c.height = size.h
-    const ctx = c.getContext('2d')!
-    if (!model) { ctx.clearRect(0, 0, size.w, size.h); return }
-    ctx.putImageData(toImage(render(model, cam), size.w, size.h), 0, 0)
-  }, [model, cam, size])
-
-  const drag = useRef<{ x: number; y: number; az: number; el: number } | null>(null)
-  return (
-    <figure className="relative h-full min-w-0">
-      <canvas
-        ref={ref}
-        role="application"
-        aria-roledescription="3D view"
-        aria-label={`${title}. ${label} Drag or use the arrow keys to turn.`}
-        tabIndex={0}
-        data-testid={testId}
-        className="absolute inset-0 h-full w-full cursor-grab touch-none outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset active:cursor-grabbing"
-        onPointerDown={(ev) => { ev.currentTarget.setPointerCapture(ev.pointerId); drag.current = { x: ev.clientX, y: ev.clientY, az: orbit.azimuth, el: orbit.elevation } }}
-        onPointerMove={(ev) => {
-          const d = drag.current
-          if (d) setOrbit((o) => clampOrbit({ ...o, azimuth: d.az - (ev.clientX - d.x) * DRAG.azimuth, elevation: d.el + (ev.clientY - d.y) * DRAG.elevation }))
-        }}
-        onPointerUp={() => { drag.current = null }}
-        onPointerCancel={() => { drag.current = null }}
-        onKeyDown={(ev) => {
-          if (!orbitKey(ev, orbit)) return
-          ev.preventDefault()
-          setOrbit((o) => orbitKey(ev, o) ?? o)
-        }}
-      />
-      <figcaption className="pointer-events-none absolute top-2.5 left-3 text-xs font-medium text-ink-muted sm:text-sm">{title}</figcaption>
-    </figure>
   )
 }

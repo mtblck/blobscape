@@ -373,11 +373,11 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000 } }], ['phone', { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }]]) {
     const { page, ctx } = await open(B, opts)
     const lessons = await page.locator('main a[href^="/lessons/"]:not([href="/lessons/"])').evaluateAll((as) => new Set(as.map((a) => a.getAttribute('href'))).size)
-    if (lessons < 15) fails.push(`blobscape ${label}: home lists ${lessons} lessons`)
+    if (lessons < 16) fails.push(`blobscape ${label}: home lists ${lessons} lessons`)
     else ok(`blobscape ${label}: home lists the lessons`)
     await axe(page, `blobscape ${label} home`)
     await page.screenshot({ path: join(shots, `blobscape-home-${label}.png`), fullPage: true })
-    for (const id of ['lessons', 'one-blob', 'footprint', 'order', 'many', 'angle', 'paint', 'formats', 'break', 'one-bone', 'weights', 'twist', 'walk', 'model', 'shoot', 'fuzzy', 'sandbox', 'creature', 'forest-walk', 'clockwork', 'dungeon-run', 'scan-studio']) {
+    for (const id of ['lessons', 'one-blob', 'footprint', 'order', 'many', 'angle', 'paint', 'formats', 'break', 'one-bone', 'weights', 'twist', 'walk', 'model', 'shoot', 'fuzzy', 'floaters', 'sandbox', 'creature', 'forest-walk', 'clockwork', 'dungeon-run', 'scan-studio']) {
       // headless WebGPU can't present to a canvas, so Creature and Forest Walk draw off-screen here
       await page.goto(base + (['creature', 'forest-walk', 'clockwork', 'dungeon-run', 'scan-studio'].includes(id) ? `/experiments/${id}/?offscreen=1` : ['sandbox', 'lessons'].includes(id) ? `/${id}/` : `/lessons/${id}/`))
       await page.waitForTimeout(1500)
@@ -517,6 +517,22 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   const fluffText = await page.textContent('[data-testid=fuzzy-readout]')
   if (!/splats 28 of 28, mesh 0 of 28/.test(grassText) || !/splats [1-9]\d%, mesh (0%|no fluff left)/.test(fluffText)) fails.push(`blobscape fuzzy: "${grassText}" / "${fluffText}"`)
   else ok('blobscape fuzzy: splats keep every blade and let light through the fluff; the mesh does neither')
+
+  // Floaters: a two-photo capture trains, the floater cut lifts every side a little, eight photos lift it a lot
+  await page.goto(base + '/lessons/floaters/')
+  const floatersText = async () => {
+    await page.waitForFunction(() => /Every side/.test(document.querySelector('[data-testid=floaters-readout]')?.textContent ?? ''), null, { timeout: 60000 }).catch(() => {})
+    await page.waitForTimeout(600)
+    return page.textContent('[data-testid=floaters-readout]')
+  }
+  const sides = (t) => t.match(/Every side (\d+)% → (\d+)%/)?.slice(1).map(Number) ?? []
+  const [rawQuick] = sides(await floatersText())
+  await page.getByRole('slider', { name: 'Floaters' }).fill('0.8')
+  const [, cleanedQuick] = sides(await floatersText())
+  await page.getByRole('button', { name: 'Eight all round' }).click()
+  const [rawRound] = sides(await floatersText())
+  if (!(cleanedQuick > rawQuick && rawRound > cleanedQuick + 15)) fails.push(`blobscape floaters: quick ${rawQuick}% → ${cleanedQuick}% cleaned, eight photos ${rawRound}%`)
+  else ok(`blobscape floaters: cleanup lifts two photos from ${rawQuick}% to ${cleanedQuick}%, eight photos give ${rawRound}%`)
 
   // Break it: shrink, explode, and put it back
   await page.goto(base + '/lessons/break/')

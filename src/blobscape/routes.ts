@@ -25,6 +25,7 @@ export const LESSONS = [
   { id: 'model', title: 'Blobs to a model', summary: 'Save the walking fox as splats and as a solid mesh, and see what each one keeps.' },
   { id: 'shoot', title: 'Photo shoot', summary: 'Photograph a toy bird and train blobs to match. How many photos does it take to get every side right?' },
   { id: 'fuzzy', title: 'Fuzzy things', summary: 'Grass, a dandelion clock and a wooden block, kept as splats and as a mesh. Which keeps what, and for how many bytes?' },
+  { id: 'floaters', title: 'Floaters and cleanup', summary: 'A rushed capture leaves blobs hanging in the air. Cut them away, and find what no cut can fix.' },
 ] as const
 
 const WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty']
@@ -119,6 +120,12 @@ export const LESSON_GOALS: Record<(typeof LESSONS)[number]['id'], Goal[]> = {
     { id: 'floaters', label: 'Match your photos almost perfectly while every side stays under 65%', hint: 'Two or more photos, all from nearly the same place.', where: 'cameras', why: 'Blobs floating in the air can add up to the right photo. Seen from anywhere else, they are floaters.' },
     { id: 'few', label: 'Get every side above 92% with four photos or fewer', where: 'cameras', why: 'Spread out, each photo pins down blobs the others can’t see. Bunched up, they mostly agree with each other.' },
     { id: 'round', label: 'Get every side above 97%', where: 'cameras', why: 'Every new angle rules out blobs that only fit the others. Real captures use hundreds of photos for this.' },
+  ],
+  'floaters': [
+    { id: 'free', label: 'Cut a third of the blobs without changing what you see', hint: 'Some blobs are nearly invisible.', where: 'cuts', why: 'Blobs faded almost to nothing still cost bytes. Cutting them is free: nothing you can see changes.' },
+    { id: 'clear', label: 'Raise every side by 5 points, keeping your photos above 98%', hint: 'Go after the strays and smudges in the air.', where: 'cuts', why: 'Clearing junk out of the air helps, but only where the junk was. The far side stays a guess.' },
+    { id: 'far', label: 'Cut until your photos drop below 95%', where: 'cuts', why: 'A cut sees one number per blob, not a bird. Push it too far and it takes the real thing.' },
+    { id: 'retake', label: 'Beat your best cleanup without cutting anything', hint: 'Look at how the bird was captured.', where: 'capture', why: 'Eight photos all round beat any cut. Cleanup tidies a good capture; it can’t rescue a bad one.' },
   ],
   'fuzzy': [
     { id: 'blades', label: 'Give the grass mesh its finest grid, and count the blade tips it keeps', where: 'mesh', why: 'None. A blade is thinner than a grid cell, so the skin can’t close round it and the blades melt into the clump.' },
