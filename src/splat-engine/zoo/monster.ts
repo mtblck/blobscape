@@ -53,9 +53,20 @@ function hsl(h: number, s: number, l: number): Vec3 {
   return [f(0), f(8), f(4)]
 }
 
-const START = ['gr', 'sn', 'bl', 'pl', 'fl', 'gl', 'sk', 'w', 'm', 'z', 'b', 'qu', 'tr', 'cr', 'v', 'h']
+const START = ['gr', 'sn', 'bl', 'pl', 'fl', 'gl', 'sk', 'w', 'm', 'z', 'b', 'qu', 'tr', 'cr', 'v', 'dr']
 const MIDDLE = ['o', 'u', 'a', 'i', 'oo', 'ee', 'au', 'y']
-const END = ['mble', 'rk', 'zzle', 'nk', 'b', 'rp', 'ggle', 'mp', 'x', 'lch', 'rt', 'ff', 'mpus', 'nkle']
+const END = ['mble', 'rk', 'zzle', 'nch', 'b', 'rp', 'ggle', 'mp', 'x', 'lch', 'rt', 'ff', 'mpus', 'ndle']
+
+/** Names that read as rude, a slur or a politician: a monster never gets one. */
+const AVOID = /boob|moob|queer|quim|grundle|trump|wank|skank|cum|tit|fag|nig|spic/
+
+/** A made-up name; one that reads as something else is drawn again (from the same seed, so it stays the same). */
+function nameOf(r: () => number) {
+  for (;;) {
+    const n = pick(r, START) + pick(r, MIDDLE) + pick(r, END)
+    if (!AVOID.test(n)) return n
+  }
+}
 
 /** The seed's plan: everything about the monster before any blob is placed. */
 export function planMonster(seed: number): Plan {
@@ -70,7 +81,7 @@ export function planMonster(seed: number): Plan {
   const belly = hsl((hue + between(r, -0.06, 0.06) + 1) % 1, between(r, 0.25, 0.5), between(r, 0.7, 0.85))
   const accent = hsl((hue + pick(r, [0.33, 0.5, 0.67])) % 1, between(r, 0.6, 0.9), between(r, 0.4, 0.55))
   const iris = hsl(r(), 0.85, 0.5)
-  const name = pick(r, START) + pick(r, MIDDLE) + pick(r, END)
+  const name = nameOf(r)
   return {
     seed, legs, hip, length, girth,
     chest: between(r, 0.8, 1.3),
@@ -368,5 +379,8 @@ export function monsterSpecies(seed: number): Species {
   }
 }
 
+/** Seeds run from 1 to this; the button picks one and a link may name any. */
+export const MAX_SEED = 99999
+
 /** A fresh seed for the button. */
-export const newSeed = () => 1 + Math.floor(Math.random() * 99998)
+export const newSeed = () => 1 + Math.floor(Math.random() * MAX_SEED)

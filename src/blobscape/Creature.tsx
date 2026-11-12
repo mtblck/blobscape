@@ -5,7 +5,7 @@ import { GlbError, readRiggedGlb, recordClip, writeRiggedGlb, writeRiggedMeshGlb
 import { blobsToMesh } from '../splat-engine/mesh.ts'
 import type { SkinMode } from '../splat-engine/rig.ts'
 import { ZOO, type Species } from '../splat-engine/zoo/index.ts'
-import { monsterSpecies, newSeed } from '../splat-engine/zoo/monster.ts'
+import { MAX_SEED, monsterSpecies, newSeed } from '../splat-engine/zoo/monster.ts'
 import { Button, Chip, Field, Slider } from '../shared/ui.tsx'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
 import { Mark } from '../shared/Logo.tsx'
@@ -36,8 +36,8 @@ function build(sp: Species, count: number, look: string): Shown {
 function speciesOf(params: URLSearchParams): Species {
   const id = params.get('creature')
   if (id === 'monster') {
-    const seed = Math.floor(Number(params.get('seed')))
-    return monsterSpecies(seed > 0 && seed < 1e9 ? seed : newSeed())
+    const seed = Number(params.get('seed'))
+    return monsterSpecies(Number.isInteger(seed) && seed >= 1 && seed <= MAX_SEED ? seed : newSeed())
   }
   return ZOO.find((s) => s.id === id) ?? ZOO.find((s) => s.id === DEFAULT)!
 }
@@ -75,6 +75,16 @@ export function Creature() {
   const [busy, setBusy] = useState<string>()
   const [cells, setCells] = useState(64)
 
+  // the address says what's shown: a monster's seed (one made up for a bad or missing seed too), nothing extra for the zoo
+  useEffect(() => {
+    const url = new URL(location.href)
+    const want = species.seed ? String(species.seed) : null
+    if (url.searchParams.get('seed') === want) return
+    if (want) url.searchParams.set('seed', want)
+    else url.searchParams.delete('seed')
+    history.replaceState(history.state, '', url)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   const pick = (sp: Species) => {
     setLoaded(undefined)
     setFileNote(undefined)
@@ -100,7 +110,8 @@ export function Creature() {
     if (was.species === species && was.count === count && was.look === look) return
     madeFor.current = { species, count, look }
     setBusy(`Making a ${species.name} of ${count.toLocaleString()} blobs…`)
-    const t = setTimeout(() => { setMade(build(species, count, look)); setBusy(undefined) }, 30)
+    // a new monster is announced as what it is, since nobody can see what came out
+    const t = setTimeout(() => { setMade(build(species, count, look)); setBusy(undefined); if (species.seed && was.species !== species) setFileNote(`Made ${species.blurb.replace(/^A /, 'a ').split(', made up')[0]}.`) }, 30)
     return () => clearTimeout(t)
   }, [species, count, look])
   const shown = loaded ?? made
