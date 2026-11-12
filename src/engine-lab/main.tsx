@@ -251,7 +251,7 @@ function App() {
                     <td className="pr-3">{r.fps ? `${Math.round(r.dropped * 100)}%` : '–'}</td>
                     <td className="pr-3">{r.fps ? `${r.median.toFixed(1)} / ${r.p90.toFixed(1)}` : '–'}</td>
                     <td className="pr-3">{r.alone.toFixed(1)}</td>
-                    <td>{r.cpu.toFixed(1)}</td>
+                    <td>{r.which === 'spark' ? '–' : r.cpu.toFixed(1)}</td>
                   </tr>
                 ))}
               </tbody>
