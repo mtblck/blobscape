@@ -70,7 +70,7 @@ const solidPixels = (page, sel) => page.evaluate((sel) => {
 // 1. The site: every page is its own prerendered file, the chrome works, old links land
 {
   // Prerendered: each page's HTML carries its own title, canonical and content before any script runs
-  for (const [path, title] of [['/', 'Blobscape: learn'], ['/lessons/', 'Lessons ·'], ['/lessons/order/', 'Order matters · Lesson 3'], ['/sandbox/', 'Sandbox ·'], ['/experiments/creature/', 'Splat Creatures ·'], ['/experiments/forest-walk/', 'Forest Walk ·'], ['/experiments/', 'Experiments ·']]) {
+  for (const [path, title] of [['/', 'Blobscape: learn'], ['/lessons/', 'Lessons ·'], ['/lessons/order/', 'Order matters · Lesson 3'], ['/sandbox/', 'Sandbox ·'], ['/experiments/creature/', 'Splat Creatures ·'], ['/experiments/forest-walk/', 'Forest Walk ·'], ['/experiments/clockwork/', 'Clockwork ·'], ['/experiments/', 'Experiments ·']]) {
     const html = await (await fetch(base + path)).text()
     if (!html.includes(`<title>${title}`)) fails.push(`${path}: prerendered title is not "${title}…"`)
     else if (!html.includes(`<link rel="canonical" href="https://blobscape.dev${path}"`)) fails.push(`${path}: prerendered canonical is wrong`)
@@ -81,7 +81,7 @@ const solidPixels = (page, sel) => page.evaluate((sel) => {
   if (missing.status !== 404 || !(await missing.text()).includes('noindex')) fails.push('an unknown page is not a noindex 404')
   else ok('unknown pages get the noindex 404 page')
   const sitemap = await (await fetch(base + '/sitemap.xml')).text()
-  if (!sitemap.includes('https://blobscape.dev/lessons/model/') || !sitemap.includes('/experiments/fit-a-picture/') || !sitemap.includes('/experiments/creature/') || !sitemap.includes('/experiments/forest-walk/')) fails.push('sitemap.xml is missing pages')
+  if (!sitemap.includes('https://blobscape.dev/lessons/model/') || !sitemap.includes('/experiments/fit-a-picture/') || !sitemap.includes('/experiments/creature/') || !sitemap.includes('/experiments/forest-walk/') || !sitemap.includes('/experiments/clockwork/')) fails.push('sitemap.xml is missing pages')
   else ok('sitemap.xml lists the lessons and tools')
 
   const { page, res, ctx } = await open('/')
@@ -377,9 +377,9 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     else ok(`blobscape ${label}: home lists the lessons`)
     await axe(page, `blobscape ${label} home`)
     await page.screenshot({ path: join(shots, `blobscape-home-${label}.png`), fullPage: true })
-    for (const id of ['lessons', 'one-blob', 'footprint', 'order', 'many', 'angle', 'paint', 'formats', 'break', 'one-bone', 'weights', 'twist', 'walk', 'model', 'sandbox', 'creature', 'forest-walk']) {
+    for (const id of ['lessons', 'one-blob', 'footprint', 'order', 'many', 'angle', 'paint', 'formats', 'break', 'one-bone', 'weights', 'twist', 'walk', 'model', 'sandbox', 'creature', 'forest-walk', 'clockwork']) {
       // headless WebGPU can't present to a canvas, so Creature and Forest Walk draw off-screen here
-      await page.goto(base + (['creature', 'forest-walk'].includes(id) ? `/experiments/${id}/?offscreen=1` : ['sandbox', 'lessons'].includes(id) ? `/${id}/` : `/lessons/${id}/`))
+      await page.goto(base + (['creature', 'forest-walk', 'clockwork'].includes(id) ? `/experiments/${id}/?offscreen=1` : ['sandbox', 'lessons'].includes(id) ? `/${id}/` : `/lessons/${id}/`))
       await page.waitForTimeout(1500)
       const focused = await page.evaluate(() => document.activeElement?.tagName)
       if (focused !== 'H1') fails.push(`blobscape ${label} ${id}: focus is on ${focused}, not the heading`)
@@ -717,6 +717,39 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     await relink.ctx.close()
     await axe(c.page, 'blobscape creature sprites')
     await c.ctx.close()
+  }
+
+  // Clockwork: the watch draws, its gold train turns by the right amount, and the hands read the time it's set to
+  {
+    const k = await open('/experiments/clockwork/?offscreen=1', { viewport: { width: 1280, height: 900 } })
+    await k.page.waitForFunction(() => window.__clock, null, { timeout: 90000 }).catch(() => {})
+    const shot = (s) => k.page.evaluate(async (s) => {
+      await window.__clock.stage.frame(s)
+      const cv = document.querySelector('[data-testid=clock-view]')
+      const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+      let gold = 0, blue = 0
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i] > 170 && d[i + 1] > 110 && d[i + 2] < 120 && d[i] > d[i + 2] * 1.8) gold++
+        if (d[i + 2] > 110 && d[i + 2] > d[i] * 2 && d[i + 2] > d[i + 1] * 1.6) blue++
+      }
+      return { gold, blue, d: Array.from(d) }
+    }, s)
+    await k.page.getByRole('button', { name: 'Dial', exact: true }).click()
+    const a = await shot(3 * 3600 + 41 * 60 + 17), b = await shot(3 * 3600 + 41 * 60 + 47)
+    let moved = 0
+    for (let i = 0; i < a.d.length; i += 4) if (Math.abs(a.d[i] - b.d[i]) + Math.abs(a.d[i + 1] - b.d[i + 1]) > 60) moved++
+    const bones = await k.page.evaluate(() => window.__clock.bones())
+    if (!(a.gold > 8000 && a.blue > 300 && moved > 500 && bones === 9)) fails.push(`blobscape clockwork: ${JSON.stringify({ gold: a.gold, blue: a.blue, moved, bones })}`)
+    else ok(`blobscape clockwork: the movement draws (${a.gold} gold, ${a.blue} blued pixels) on ${bones} bones, and ${moved} pixels change in thirty seconds`)
+    await k.page.waitForFunction(() => /\d+:\d\d:\d\d/.test(document.querySelector('[data-testid=clock-reading]')?.textContent ?? ''), null, { timeout: 5000 }).catch(() => {})
+    const read = await k.page.getByTestId('clock-reading').textContent()
+    if (!/^(1[0-2]|[1-9]):[0-5]\d:[0-5]\d$/.test(read ?? '')) fails.push(`blobscape clockwork: the reading is "${read}"`)
+    else ok(`blobscape clockwork: the hands' reading shows (${read})`)
+    await k.page.getByRole('button', { name: 'Escapement', exact: true }).click()
+    await shot(100.02)
+    await k.page.screenshot({ path: join(shots, 'blobscape-clockwork.png') })
+    await axe(k.page, 'blobscape clockwork')
+    await k.ctx.close()
   }
 
   // Forest Walk: the elf walks down the path, tiles move on ahead, plants grow round it

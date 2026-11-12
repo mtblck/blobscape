@@ -7,7 +7,7 @@ import type { Goal } from './progress.ts'
  * previews see every page. In the browser it's still one app: links between
  * these pages swap the page without a reload (useLinkNavigation).
  */
-export type Route = { page: 'home' } | { page: 'lessons' } | { page: 'lesson'; id: string } | { page: 'sandbox' } | { page: 'creature' } | { page: 'forest' } | { page: 'experiments' } | { page: 'notfound' }
+export type Route = { page: 'home' } | { page: 'lessons' } | { page: 'lesson'; id: string } | { page: 'sandbox' } | { page: 'creature' } | { page: 'forest' } | { page: 'clockwork' } | { page: 'experiments' } | { page: 'notfound' }
 
 export const LESSONS = [
   { id: 'one-blob', title: 'One blob', summary: 'Five kinds of number, 14 in all, make one Gaussian. Pull each one and see what it does.' },
@@ -126,6 +126,7 @@ export function parsePath(pathname: string): Route | null {
   if (m.length === 1 && m[0] === 'experiments') return { page: 'experiments' }
   if (m.length === 2 && m[0] === 'experiments' && m[1] === 'creature') return { page: 'creature' }
   if (m.length === 2 && m[0] === 'experiments' && m[1] === 'forest-walk') return { page: 'forest' }
+  if (m.length === 2 && m[0] === 'experiments' && m[1] === 'clockwork') return { page: 'clockwork' }
   // The old address, before every experiment moved under /experiments/ (Vercel redirects it too)
   if (m.length === 1 && m[0] === 'creature') return { page: 'creature' }
   return null
@@ -147,6 +148,7 @@ export function href(r: Route): string {
   if (r.page === 'sandbox') return '/sandbox/'
   if (r.page === 'creature') return '/experiments/creature/'
   if (r.page === 'forest') return '/experiments/forest-walk/'
+  if (r.page === 'clockwork') return '/experiments/clockwork/'
   if (r.page === 'experiments') return '/experiments/'
   if (r.page === 'lessons') return '/lessons/'
   return '/'
