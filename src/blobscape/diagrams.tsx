@@ -330,6 +330,15 @@ export function LessonGlyph({ id }: { id: string }) {
         <path d="M 58 36 H 66 m -3 -3 l 3 3 l -3 3" stroke={COLOURS.sun} strokeWidth="1.5" fill="none" strokeLinecap="round" />
         <path d="M 76 62 L 74 52 L 80 44 L 88 46 L 94 40 L 100 48 L 104 54 L 102 62 Z" fill="rgb(63 143 74 / 0.35)" stroke={COLOURS.green} strokeWidth="1" strokeLinejoin="round" />
       </>)
+    case 'floaters':
+      return g(<>
+        {/* A blob bird with stray blobs round it, one struck out */}
+        <Blob x={60} y={42} rx={14} ry={12} r={0} c="sun" />
+        <Blob x={64} y={27} rx={8} ry={8} r={0} c="sun" />
+        <Blob x={50} y={44} rx={6} ry={4} r={-20} c="blue" />
+        {[[22, 20, 5], [96, 16, 4], [100, 52, 6], [28, 58, 4], [86, 34, 3]].map(([x, y, r], k) => <Blob key={k} x={x} y={y} rx={r} ry={r} r={0} c="white" o={0.55} />)}
+        <path d="M 91 47 L 109 57 M 109 47 L 91 57" stroke={COLOURS.red} strokeWidth="1.8" strokeLinecap="round" />
+      </>)
     default:
       return g(null)
   }
