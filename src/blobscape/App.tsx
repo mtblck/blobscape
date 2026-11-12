@@ -19,6 +19,7 @@ import { Twist } from './lessons/Twist.tsx'
 import { Walk } from './lessons/Walk.tsx'
 import { Model } from './lessons/Model.tsx'
 import { Shoot } from './lessons/Shoot.tsx'
+import { Fuzzy } from './lessons/Fuzzy.tsx'
 import { Sandbox } from './Sandbox.tsx'
 import { Creature } from './Creature.tsx'
 import { ForestWalk } from './ForestWalk.tsx'
@@ -28,7 +29,7 @@ import { DungeonRun } from './DungeonRun.tsx'
 import { Experiments } from './Experiments.tsx'
 import { useState } from 'react'
 
-const PAGES: Record<string, () => React.JSX.Element> = { 'one-blob': OneBlob, footprint: Footprint, order: Order, many: Many, angle: Angle, paint: Paint, formats: Formats, break: Break, 'one-bone': OneBone, weights: Weights, twist: Twist, walk: Walk, model: Model, shoot: Shoot }
+const PAGES: Record<string, () => React.JSX.Element> = { 'one-blob': OneBlob, footprint: Footprint, order: Order, many: Many, angle: Angle, paint: Paint, formats: Formats, break: Break, 'one-bone': OneBone, weights: Weights, twist: Twist, walk: Walk, model: Model, shoot: Shoot, fuzzy: Fuzzy }
 
 export function App() {
   const route = useRoute()

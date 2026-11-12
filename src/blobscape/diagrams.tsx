@@ -323,6 +323,13 @@ export function LessonGlyph({ id }: { id: string }) {
           </g>
         ))}
       </>)
+    case 'fuzzy':
+      return g(<>
+        {/* Grass blades as splats on the left; the same tuft as a lumpy mesh on the right */}
+        {[-14, -7, 0, 7, 14].map((dx, k) => <Blob key={k} x={30 + dx * 0.8} y={40 - Math.abs(dx) * 0.3} rx={2} ry={20} r={dx * 1.6} c="green" />)}
+        <path d="M 58 36 H 66 m -3 -3 l 3 3 l -3 3" stroke={COLOURS.sun} strokeWidth="1.5" fill="none" strokeLinecap="round" />
+        <path d="M 76 62 L 74 52 L 80 44 L 88 46 L 94 40 L 100 48 L 104 54 L 102 62 Z" fill="rgb(63 143 74 / 0.35)" stroke={COLOURS.green} strokeWidth="1" strokeLinejoin="round" />
+      </>)
     default:
       return g(null)
   }

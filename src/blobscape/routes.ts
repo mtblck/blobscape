@@ -24,6 +24,7 @@ export const LESSONS = [
   { id: 'walk', title: 'Walk cycle', summary: 'Four poses and some timing make a walk. Find the ones that matter, and stop the feet sliding.' },
   { id: 'model', title: 'Blobs to a model', summary: 'Save the walking fox as splats and as a solid mesh, and see what each one keeps.' },
   { id: 'shoot', title: 'Photo shoot', summary: 'Photograph a toy bird and train blobs to match. How many photos does it take to get every side right?' },
+  { id: 'fuzzy', title: 'Fuzzy things', summary: 'Grass, a dandelion clock and a wooden block, kept as splats and as a mesh. Which keeps what, and for how many bytes?' },
 ] as const
 
 const WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty']
@@ -118,6 +119,12 @@ export const LESSON_GOALS: Record<(typeof LESSONS)[number]['id'], Goal[]> = {
     { id: 'floaters', label: 'Match your photos almost perfectly while every side stays under 65%', hint: 'Two or more photos, all from nearly the same place.', where: 'cameras', why: 'Blobs floating in the air can add up to the right photo. Seen from anywhere else, they are floaters.' },
     { id: 'few', label: 'Get every side above 92% with four photos or fewer', where: 'cameras', why: 'Spread out, each photo pins down blobs the others can’t see. Bunched up, they mostly agree with each other.' },
     { id: 'round', label: 'Get every side above 97%', where: 'cameras', why: 'Every new angle rules out blobs that only fit the others. Real captures use hundreds of photos for this.' },
+  ],
+  'fuzzy': [
+    { id: 'blades', label: 'Give the grass mesh its finest grid, and count the blade tips it keeps', where: 'mesh', why: 'None. A blade is thinner than a grid cell, so the skin can’t close round it and the blades melt into the clump.' },
+    { id: 'tiny', label: 'Keep every blade tip as splats in 10 KB or less', hint: 'Fewer blobs, but not too few.', where: 'splats', why: 'One flat blob can be a whole stretch of blade, so a few hundred keep the lot.' },
+    { id: 'fluff', label: 'Find out how much light gets through the dandelion clock', hint: 'Change the thing, then read under the view.', where: 'thing', why: 'Faint blobs let light through the way the seed head does. A mesh is solid or nothing: wrapped round this cloud, the fluff is gone.' },
+    { id: 'block', label: 'Shrink the block’s mesh to a twentieth of its splats’ size, with sharp edges', hint: 'Look for a way to tidy the mesh’s flat faces.', where: 'mesh', why: 'A few dozen triangles keep every edge and stripe sharp. Hard, flat things are what meshes are for.' },
   ],
 }
 
