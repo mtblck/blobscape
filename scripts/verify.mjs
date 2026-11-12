@@ -642,7 +642,8 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     ]) {
       await c.page.getByRole('button', { name, exact: true }).click()
       await c.page.waitForFunction((n) => window.__creature?.bones() === n && !document.querySelector('[data-testid=creature-loading]'), bonesWanted, { timeout: 60000 }).catch(() => {})
-      await c.page.getByRole('button', { name: clip, exact: true }).click()
+      // the Sprites panel has a chip per move too: pick the one that plays it
+      await c.page.getByRole('region', { name: 'Controls' }).getByRole('button', { name: clip, exact: true }).click()
       await c.page.waitForTimeout(150)
       const got = { bones: await c.page.evaluate(() => window.__creature?.bones()), n: await pixels(t, colour), url: new URL(c.page.url()).searchParams.get('creature') }
       if (!(got.bones === bonesWanted && got.n > 1500 && got.url === name.toLowerCase())) fails.push(`blobscape creature: ${name} ${JSON.stringify(got)}`)
@@ -659,6 +660,22 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     })
     if (fire.scales !== 6) fails.push(`blobscape creature: dragon file ${JSON.stringify(fire)}`)
     else ok(`blobscape creature: the dragon's .glb keys its fire as scale on six bones (${fire.kb} KB)`)
+    // the Sprites panel: the frog's tongue flick and its still pose from 8 sides, as 32 px pixel art
+    await c.page.getByRole('button', { name: 'Frog', exact: true }).click()
+    await c.page.waitForFunction(() => window.__creature?.bones() === 20 && !document.querySelector('[data-testid=creature-loading]'), null, { timeout: 60000 }).catch(() => {})
+    const sheet = await c.page.evaluate(() => window.__sprites({ moves: ['tongue', 'still'], directions: 8, size: 32, frames: 6, colours: 16, outline: true }))
+    const tongueLeft = Math.max(...sheet.solid.slice(12, 18)), stillLeft = sheet.solid[50]
+    if (sheet.cols !== 6 || sheet.rows !== 16 || sheet.solid.length !== 56 || sheet.solid.some((k) => k < 20)) fails.push(`blobscape creature sprites: ${JSON.stringify({ ...sheet, solid: sheet.solid.slice(0, 8) })}`)
+    else if (!(tongueLeft > stillLeft * 1.05)) fails.push(`blobscape creature sprites: the tongue doesn't show from the side (${tongueLeft} vs ${stillLeft} solid pixels)`)
+    else ok(`blobscape creature sprites: 16 rows of the frog from 8 sides, every frame drawn, tongue out from the side (${tongueLeft} vs ${stillLeft} solid pixels)`)
+    await c.page.locator('[data-testid=sprites] img').waitFor({ timeout: 10000 }).catch(() => {})
+    if (!(await c.page.locator('[data-testid=sprites] img').count())) fails.push('blobscape creature sprites: no sheet preview')
+    // the live view comes back after drawing the sheet
+    const after = await pixels(0.4, 'frog')
+    if (after < 1500) fails.push(`blobscape creature sprites: the view is empty after drawing a sheet (${after} frog pixels)`)
+    else ok('blobscape creature sprites: the live view comes back after the sheet')
+    await c.page.locator('[data-testid=sprites]').screenshot({ path: join(shots, 'blobscape-creature-sprites.png') })
+    await axe(c.page, 'blobscape creature sprites')
     await c.ctx.close()
   }
 

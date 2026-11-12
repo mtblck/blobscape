@@ -6,6 +6,8 @@ import { sampleClip, type Clip } from '../../splat-engine/glb.ts'
 import type { Skeleton, Skin, SkinMode } from '../../splat-engine/rig.ts'
 import type { Blobs } from '../../splat-core/blobs.ts'
 import { BoneView } from './bones.ts'
+import type { BakeOptions, BakedSheet } from '../../splat-engine/bakeSheet.ts'
+import type { SheetMove } from '../../splat-engine/spriteSheet.ts'
 
 /**
  * The Creature page's view: Blobscape's own splat engine (src/splat-engine)
@@ -53,6 +55,9 @@ export class CreatureStage {
   /** Called once, after the first frame with a creature in it has been drawn. */
   onFirstFrame?: () => void
   private drawn = false
+  /** While a sprite sheet is being drawn, the live view leaves the renderer alone. */
+  private baking = false
+  private queued?: { actor: Actor; clip?: Clip }
   mode: SkinMode = 'quat'
 
   private constructor(private readonly display: HTMLCanvasElement, private readonly opts: StageOptions, renderer: THREE.WebGPURenderer) {
@@ -64,8 +69,8 @@ export class CreatureStage {
         if (this.stopped) return
         const dt = this.last ? Math.min(0.1, (now - this.last) / 1000) : 0
         this.last = now
-        if (this.playing && this.clip) { this.t += dt * this.speed; this.pose() }
-        if (this.pending > 0 || (this.playing && this.clip)) {
+        if (this.playing && this.clip && !this.baking) { this.t += dt * this.speed; this.pose() }
+        if (!this.baking && (this.pending > 0 || (this.playing && this.clip))) {
           this.pending = Math.max(0, this.pending - 1)
           this.resize()
           this.renderer.render(this.scene, this.camera)
@@ -96,6 +101,8 @@ export class CreatureStage {
 
   /** Shows a creature, replacing the last one, and plays `clip` on it. */
   setActor(actor: Actor, clip?: Clip) {
+    // a sheet being drawn holds on to the current world; swap once it's done
+    if (this.baking) { this.queued = { actor, clip }; return }
     if (this.world) { this.scene.remove(this.world); this.world.dispose() }
     if (this.rig) { this.scene.remove(this.rig); this.rig.dispose() }
     this.actor = actor
@@ -114,6 +121,8 @@ export class CreatureStage {
 
   setMode(m: SkinMode) {
     this.mode = m
+    // a sheet being drawn keeps one rule throughout; the new one applies when it's done
+    if (this.baking) return
     if (this.world) { this.world.mode = m; this.world.markPosed() }
     this.invalidate()
   }
@@ -125,12 +134,14 @@ export class CreatureStage {
     this.floor = new THREE.GridHelper(size, size * 2, 0x8a8a8a, 0x5a5a5a)
     this.floor.userData.size = size
     this.floor.renderOrder = -1
+    this.floor.visible = !this.baking
     this.scene.add(this.floor)
     this.invalidate()
   }
 
   setShow(s: Show) {
     this.show = s
+    if (this.baking) return
     if (this.world) this.world.visible = s !== 'bones'
     if (this.rig) { this.rig.visible = s !== 'blobs'; this.rig.onTop = s === 'both'; this.rig.update() }
     this.invalidate()
@@ -179,6 +190,32 @@ export class CreatureStage {
     // the target holds linear, premultiplied colour; ImageData wants sRGB, straight. WebGPU reads rows top-down, WebGL bottom-up.
     readbackToSrgb(px, w, h, { flip: this.backend === 'webgl', premultiplied: false }, img.data)
     this.display.getContext('2d')!.putImageData(img, 0, 0)
+  }
+
+  /**
+   * Draws the creature on show as a pixel-art sprite sheet (bakeSheet.ts), with
+   * the floor and bones out of the picture and the live view paused, then puts
+   * the view back as it was.
+   */
+  async bake(moves: SheetMove[], opts: BakeOptions, progress?: (done: number, total: number) => void): Promise<BakedSheet> {
+    const { actor, world } = this
+    if (!actor || !world) throw new Error('No creature to draw')
+    if (this.baking) throw new Error('Already drawing a sheet')
+    this.baking = true
+    if (this.floor) this.floor.visible = false
+    if (this.rig) this.rig.visible = false
+    world.visible = true
+    try {
+      const { bakeSheet } = await import('../../splat-engine/bakeSheet.ts')
+      return await bakeSheet({ renderer: this.renderer, scene: this.scene, actor, posed: () => world.markPosed() }, moves, opts, progress)
+    } finally {
+      this.baking = false
+      if (this.floor) this.floor.visible = true
+      const next = this.queued
+      this.queued = undefined
+      if (next) this.setActor(next.actor, next.clip)
+      else { this.setMode(this.mode); this.setShow(this.show); this.pose() }
+    }
   }
 
   dispose() {
