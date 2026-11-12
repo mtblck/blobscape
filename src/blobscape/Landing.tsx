@@ -2,7 +2,7 @@ import { LESSONS, LESSON_COUNT, LESSON_GOALS, href } from './routes.ts'
 import { doneGoals } from './progress.ts'
 import { useFocusHeading } from './Shell.tsx'
 import { EXPERIMENTS } from './site.ts'
-import { PICTURES } from './Experiments.tsx'
+import { Cover } from './Experiments.tsx'
 import { AnyAngleDiagram, BlobDefs, HeroDiagram, LessonGlyph, PhotosDiagram, SANDBOX_COUNTS, SandboxDiagram, TrainDiagram } from './diagrams.tsx'
 
 const PROMISES = [`${LESSON_COUNT[0].toUpperCase()}${LESSON_COUNT.slice(1)} hands-on lessons`, 'A sandbox for real captures', 'Runs in your browser', 'Free, no account']
@@ -151,7 +151,7 @@ export function Landing() {
           {EXPERIMENTS.map((e) => (
             <li key={e.title}>
               <a href={e.url} className="group flex h-full flex-col gap-4 rounded-2xl border border-rule bg-paper p-4 no-underline transition-colors hover:border-ink-faint">
-                {PICTURES[e.id]}
+                <Cover e={e} />
                 <span className="font-display text-2xl text-ink group-hover:text-accent">{e.title} →</span>
                 <span className="text-ink-muted">{e.body}</span>
               </a>

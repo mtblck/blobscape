@@ -312,62 +312,6 @@ export function LessonGlyph({ id }: { id: string }) {
   }
 }
 
-/** Creature: a blob fox mid-trot, and the .glb it leaves as. */
-export function CreatureDiagram() {
-  const rand = rng(31)
-  const body = Array.from({ length: 26 }, () => {
-    const t = rand()
-    return { x: 50 + t * 70, y: 62 - Math.sin(t * Math.PI) * 6 + (rand() - 0.5) * 14 }
-  })
-  return (
-    <Case viewBox="0 0 240 130" label="A fox made of orange blobs trotting, an arrow, then a file labelled .glb">
-      <path d="M 20 112 H 160" stroke="#665d52" strokeDasharray="4 4" />
-      {[[58, 76, 48, 110], [72, 76, 80, 110], [104, 76, 96, 110], [116, 76, 126, 102]].map(([x1, y1, x2, y2], k) => (
-        <path key={k} d={`M ${x1} ${y1} L ${x2} ${y2}`} stroke={k % 3 ? COLOURS.orange : '#4a3226'} strokeWidth="7" strokeLinecap="round" opacity="0.9" />
-      ))}
-      {body.map((b, k) => <Blob key={k} x={b.x} y={b.y} rx={12} ry={9} r={rand() * 60 - 30} c="orange" o={0.85} />)}
-      <Blob x={130} y={48} rx={14} ry={11} r={0} c="orange" />
-      <Blob x={142} y={52} rx={8} ry={5} r={0} c="cream" />
-      <path d="M 124 40 L 128 26 L 134 38 Z M 134 38 L 140 25 L 142 40 Z" fill={COLOURS.orange} />
-      <Blob x={38} y={52} rx={18} ry={8} r={-25} c="orange" />
-      <Blob x={24} y={44} rx={8} ry={6} r={-25} c="cream" />
-      <path d="M 166 66 H 184 m -6 -5 l 6 5 l -6 5" stroke={COLOURS.sun} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M 194 40 h 24 l 10 10 v 40 h -34 z" fill="#2a241e" stroke="#bdc3db" strokeWidth="1.5" strokeLinejoin="round" />
-      <path d="M 218 40 v 10 h 10" fill="none" stroke="#bdc3db" strokeWidth="1.5" />
-      <text x="200" y="76" fill={COLOURS.sun} fontSize="11" fontFamily="var(--font-sans)">.glb</text>
-    </Case>
-  )
-}
-
-/** Forest Walk: a path running away between blob trees, flowers popping up at its edges, the elf from behind. */
-export function ForestDiagram() {
-  const rand = rng(12)
-  // trees either side, smaller towards the far end of the path
-  const trees = [[38, 70, 1], [200, 72, 1], [70, 52, 0.62], [172, 54, 0.66], [92, 42, 0.42], [150, 43, 0.44], [18, 86, 1.25], [224, 90, 1.2]].map(([x, y, s]) => ({ x, y, s, pine: rand() < 0.5 }))
-  return (
-    <Case viewBox="0 0 240 130" label="A path running away between trees made of blobs, flowers sprouting along its edges, and an elf walking down it">
-      <path d="M 104 40 L 136 40 L 196 130 L 44 130 Z" fill="#6b5236" opacity="0.85" />
-      {trees.map((t, k) => (
-        <g key={k}>
-          <path d={`M ${t.x} ${t.y} V ${t.y + 30 * t.s}`} stroke="#4a3226" strokeWidth={5 * t.s} strokeLinecap="round" />
-          {t.pine
-            ? [0, 1, 2].map((j) => <Blob key={j} x={t.x} y={t.y + 8 * t.s - j * 13 * t.s} rx={(16 - j * 4) * t.s} ry={9 * t.s} r={0} c="green" />)
-            : [[-9, 0], [9, 2], [0, -10], [0, 4]].map(([dx, dy], j) => <Blob key={j} x={t.x + dx * t.s} y={t.y + dy * t.s - 6 * t.s} rx={13 * t.s} ry={11 * t.s} r={0} c="green" />)}
-        </g>
-      ))}
-      {[[98, 60, 'violet', 0.6], [142, 62, 'sun', 0.7], [84, 84, 'red', 0.85], [158, 88, 'violet', 0.9], [68, 108, 'sun', 1.1], [176, 112, 'red', 1.15]].map(([x, y, c, s], k) => (
-        <g key={k} className="motion-safe:animate-[bs-pop_2.4s_ease-out_infinite]" style={{ animationDelay: `${k * 0.3}s`, transformOrigin: `${x}px ${(y as number) + 6}px` }}>
-          <path d={`M ${x} ${(y as number) + 7 * (s as number)} V ${y}`} stroke={COLOURS.green} strokeWidth="1.5" />
-          <Blob x={x as number} y={y as number} rx={5 * (s as number)} ry={4 * (s as number)} r={0} c={c as Colour} />
-        </g>
-      ))}
-      <Blob x={120} y={106} rx={9} ry={13} r={0} c="green" />
-      <Blob x={120} y={88} rx={6} ry={6} r={0} c="sun" />
-      <path d="M 116 118 L 114 128 M 124 118 L 126 128" stroke="#4a3226" strokeWidth="3" strokeLinecap="round" />
-    </Case>
-  )
-}
-
 const lassoed = (b: B) => b.x > 30 && b.y < -125
 export const SANDBOX_COUNTS = { all: TOADSTOOL.length, selected: TOADSTOOL.filter(lassoed).length }
 
@@ -380,64 +324,5 @@ export function SandboxDiagram() {
       <path d={lasso} fill="rgb(255 208 74 / 0.06)" stroke={COLOURS.sun} strokeWidth="1.5" strokeDasharray="5 4" className="motion-safe:animate-[bs-march_1.6s_linear_infinite]" />
       <path d="M 300 182 l 18 14 m 0 0 l -2 -9 m 2 9 l -9 -1" stroke="#bdc3db" strokeWidth="1.5" fill="none" strokeLinecap="round" />
     </svg>
-  )
-}
-
-const SPRITE = [
-  '..rrrr..',
-  '.rrwrrr.',
-  'rrrrrwrr',
-  'rwrrrrrr',
-  '..cccc..',
-  '...cc...',
-  '...cc...',
-  '.gggggg.',
-]
-
-/** Splat to Sprite: the toadstool baked into a sheet of pixel-art frames. */
-export function SpriteDiagram() {
-  const fill: Record<string, string> = { r: COLOURS.red, w: COLOURS.cream, c: '#e8d6b0', g: COLOURS.green }
-  return (
-    <Case viewBox="0 0 240 130" label="A toadstool of blobs, an arrow, then a sheet of small pixel-art toadstool frames">
-      <Toadstool x={58} y={104} s={0.27} />
-      <path d="M 106 66 H 126 m -6 -5 l 6 5 l -6 5" stroke={COLOURS.sun} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-      {[0, 1, 2].map((col) =>
-        [0, 1, 2].map((row) => (
-          <g key={`${col}${row}`} transform={`translate(${138 + col * 32} ${20 + row * 32})`}>
-            <rect width="28" height="28" fill="#1e2130" />
-            {SPRITE.flatMap((line, y) =>
-              [...line].map((ch, x) => (ch === '.' ? null : <rect key={`${x}-${y}`} x={2 + (row === 1 ? 7 - x : x) * 3} y={2 + y * 3} width="3" height="3" fill={fill[ch]} opacity={col === 1 && y < 4 ? 0.85 : 1} />)),
-            )}
-          </g>
-        )),
-      )}
-    </Case>
-  )
-}
-
-/** Fit a Picture: a picture, and the same picture rebuilt from blobs. */
-export function FitDiagram() {
-  const rand = rng(21)
-  return (
-    <Case viewBox="0 0 240 130" label="A small landscape picture with a sun and a hill, an arrow, then the same picture rebuilt from soft blobs">
-      <defs>
-        <linearGradient id="bs-fit-sky" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#4f8fe0" />
-          <stop offset="1" stopColor="#f2a65a" />
-        </linearGradient>
-        <clipPath id="bs-fit-clip"><rect x="138" y="20" width="90" height="90" rx="4" /></clipPath>
-      </defs>
-      <rect x="12" y="20" width="90" height="90" rx="4" fill="url(#bs-fit-sky)" />
-      <circle cx="70" cy="50" r="12" fill={COLOURS.sun} />
-      <path d="M 12 90 Q 50 66 102 84 V 110 H 12 Z" fill={COLOURS.green} />
-      <path d="M 110 66 H 128 m -6 -5 l 6 5 l -6 5" stroke={COLOURS.sun} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-      <g clipPath="url(#bs-fit-clip)">
-        <rect x="138" y="20" width="90" height="90" fill="#14161f" />
-        {Array.from({ length: 26 }, (_, k) => <Blob key={`s${k}`} x={140 + rand() * 90} y={20 + rand() * 50} rx={16} ry={10} r={rand() * 180} c={rand() < 0.5 ? 'blue' : 'sky'} o={0.75} />)}
-        {Array.from({ length: 10 }, (_, k) => <Blob key={`o${k}`} x={140 + rand() * 90} y={70 + rand() * 14} rx={16} ry={8} r={0} c="orange" o={0.7} />)}
-        <Blob x={196} y={50} rx={13} ry={13} r={0} c="sun" />
-        {Array.from({ length: 14 }, (_, k) => <Blob key={`g${k}`} x={140 + k * 7} y={98 - Math.sin((k / 13) * Math.PI) * 6} rx={14} ry={10} r={0} c="green" />)}
-      </g>
-    </Case>
   )
 }
