@@ -5,10 +5,14 @@ import { aim, dir, restDir, worldQuat } from './posing.ts'
 import { rotate, skinBlob } from './rig.ts'
 import { FLAME, makeDragon } from './zoo/dragon.ts'
 import { ZOO } from './zoo/index.ts'
+import { makeMonster, monsterSpecies, planMonster } from './zoo/monster.ts'
 
 const near = (a: number, b: number, e = 1e-4) => Math.abs(a - b) < e
 
-for (const sp of ZOO) {
+// made-up monsters go through the same checks as the zoo, across a spread of seeds
+const MONSTERS = [1, 2, 3, 42, 777, 4821, 31337, 99999].map(monsterSpecies)
+
+for (const sp of [...ZOO, ...MONSTERS]) {
   test(`the ${sp.name} is made with about as many blobs as asked, every one hung on real bones`, () => {
     const c = sp.make(sp.detail[0], sp.looks[0].id)
     const n = c.blobs.count
@@ -103,4 +107,16 @@ test('a file whose scale keys are not numbers is read without them, so it cannot
   assert.equal(back.clips[0].sizes?.[c.skeleton.index('tongue1')], undefined)
   sampleClip(back.clips[0], back.skeleton, 0.3)
   assert.ok(back.skeleton.matrix.every(Number.isFinite))
+})
+
+test('a seed makes the same monster every time, and different seeds make different ones', () => {
+  const a = makeMonster(42, 3000), b = makeMonster(42, 3000)
+  assert.deepEqual(Array.from(a.blobs.centre), Array.from(b.blobs.centre))
+  assert.deepEqual(Array.from(a.blobs.colour), Array.from(b.blobs.colour))
+  const plans = Array.from({ length: 60 }, (_, k) => planMonster(k + 1))
+  assert.deepEqual(new Set(plans.map((p) => p.legs)), new Set([2, 4, 6]))
+  assert.ok(new Set(plans.map((p) => p.eyes)).size === 3)
+  assert.ok(new Set(plans.map((p) => p.top)).size >= 3)
+  assert.ok(new Set(plans.map((p) => p.name)).size > 50, 'names mostly differ')
+  assert.equal(monsterSpecies(42).name, monsterSpecies(42).name)
 })

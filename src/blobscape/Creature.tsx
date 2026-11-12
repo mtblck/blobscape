@@ -5,6 +5,7 @@ import { GlbError, readRiggedGlb, recordClip, writeRiggedGlb, writeRiggedMeshGlb
 import { blobsToMesh } from '../splat-engine/mesh.ts'
 import type { SkinMode } from '../splat-engine/rig.ts'
 import { ZOO, type Species } from '../splat-engine/zoo/index.ts'
+import { monsterSpecies, newSeed } from '../splat-engine/zoo/monster.ts'
 import { Button, Chip, Field, Slider } from '../shared/ui.tsx'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
 import { Mark } from '../shared/Logo.tsx'
@@ -31,7 +32,15 @@ function build(sp: Species, count: number, look: string): Shown {
   return { name: `blob ${sp.name}`, body, clips, species: sp }
 }
 
-const speciesOf = (id: string | null) => ZOO.find((s) => s.id === id) ?? ZOO.find((s) => s.id === DEFAULT)!
+/** The creature a link asks for: one of the zoo, or a made-up monster (?creature=monster&seed=123). */
+function speciesOf(params: URLSearchParams): Species {
+  const id = params.get('creature')
+  if (id === 'monster') {
+    const seed = Math.floor(Number(params.get('seed')))
+    return monsterSpecies(seed > 0 && seed < 1e9 ? seed : newSeed())
+  }
+  return ZOO.find((s) => s.id === id) ?? ZOO.find((s) => s.id === DEFAULT)!
+}
 const kilo = (n: number) => (n >= 1000 ? `${n / 1000}k` : String(n))
 
 declare global {
@@ -53,7 +62,7 @@ export function Creature() {
   const [failed, setFailed] = useState<string>()
   const offscreen = useMemo(() => new URLSearchParams(location.search).get('offscreen') === '1', [])
   // which creature is in the address (?creature=dragon), so a link can show one
-  const [species, setSpecies] = useState<Species>(() => speciesOf(new URLSearchParams(location.search).get('creature')))
+  const [species, setSpecies] = useState<Species>(() => speciesOf(new URLSearchParams(location.search)))
   const [count, setCount] = useState(species.start)
   const [look, setLook] = useState(species.looks[0].id)
   const [move, setMove] = useState<string>(species.moves[0].name)
@@ -77,6 +86,8 @@ export function Creature() {
     const url = new URL(location.href)
     if (sp.id === DEFAULT) url.searchParams.delete('creature')
     else url.searchParams.set('creature', sp.id)
+    if (sp.seed) url.searchParams.set('seed', String(sp.seed))
+    else url.searchParams.delete('seed')
     history.replaceState(history.state, '', url)
   }
 
@@ -239,6 +250,7 @@ export function Creature() {
                 <div role="group" aria-label="Which creature" className="flex flex-wrap gap-1.5" data-testid="species">
                   {ZOO.map((sp) => <Chip key={sp.id} active={!loaded && species === sp} onClick={() => pick(sp)}>{sp.name[0].toUpperCase() + sp.name.slice(1)}</Chip>)}
                 </div>
+                <Button small data-testid="make-monster" onClick={() => pick(monsterSpecies(newSeed()))}>{species.seed && !loaded ? 'Another monster' : 'Make me a monster'}</Button>
                 <p className="text-xs text-ink-faint">{species.blurb}</p>
                 <Field label="Blobs">
                   <div className="flex flex-wrap gap-1.5">

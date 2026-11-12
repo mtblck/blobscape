@@ -32,4 +32,6 @@ export interface Species {
   moves: Move[]
   /** Where the camera starts. */
   view: Orbit
+  /** For a made-up monster, the seed that makes it again. */
+  seed?: number
 }
