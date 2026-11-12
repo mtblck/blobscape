@@ -59,3 +59,10 @@ multi-page React app, one Vercel project, served from the root. See README for t
 - Rigged files: `glb.ts` writes KHR_gaussian_splatting + standard glTF skins/animation + `BLOBSCAPE_gaussian_skinning` (used, not required). three.js's loader opens them as a still splat (verify checks).
 - The pixel pipeline lives in `src/splat-core/pixel.ts` (shared by Splat to Sprite and the engine's walk sheet); colour transfer functions, `SH_C0` and the render-target readback (`readbackToSrgb`) in `splat-core/colour.ts`.
 - Status and gaps: `docs/engine-prototype.md`.
+
+## Forest Walk (`/experiments/forest-walk/`, `src/blobscape/forest/`)
+- The elf and the whole forest are one `SplatWorld`, built once; walking only re-poses. Changing detail, season or the elf's look rebuilds it.
+- The path is a ring of `RING` tiles; `pathX` repeats every `PERIOD` so tile i always reuses ring slot i % RING (its ground moves by whole periods). Plants per tile are fixed per kind (`PER_TILE`), and `layout(i, seed)` says which stand where, so walking back finds the same forest.
+- Growing is bone `size` from 0 (`sprung`), swaying is a turn on upper bones; hidden plants have `rootScale` 0 and stand at the elf so they don't stretch the scene bounds.
+- Mist: `SplatWorld.setFog` (both backends, by view depth) and the floor plane's own fade must use the same colour and distances.
+- `world.ts`/`forest.ts` are pure and tested in Node; verify drives `stage.frame(seconds, input)` with `?offscreen=1`.
