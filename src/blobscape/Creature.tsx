@@ -173,20 +173,18 @@ export function Creature() {
 
   return (
     <div className="pb-4">
-      <Crumbs here="Creature" parent={{ label: 'Experiments', href: href({ page: 'experiments' }) }} />
-      <div className="flex flex-col gap-4 pt-4 lg:grid lg:grid-cols-12 lg:gap-x-5">
-        <header className="lg:col-span-5">
-          <h1 ref={h1} tabIndex={-1} className="font-display text-4xl leading-tight outline-none lg:text-5xl">Creature</h1>
-          <p className="mt-2 max-w-[44ch] text-lg leading-snug text-ink-muted">
-            Creatures made of blobs, from a frog to a fire-breathing dragon. Watch one move, take its blobs away to see the bones
-            underneath, then take it home as a 3D model that Blender and game engines open.
-          </p>
-        </header>
-        <p className="text-sm text-ink-faint lg:col-span-7 lg:self-end lg:pb-1 lg:text-right">
-          Drawn by Blobscape's own splat engine on {stage ? (stage.backend === 'webgpu' ? 'WebGPU' : 'WebGL 2') : '…'}: every blob moved by its bones on the graphics card.
+      <Crumbs here="Splat Creatures" parent={{ label: 'Experiments', href: href({ page: 'experiments' }) }} />
+      {/* the same header as every experiment: name on the left, what it is on the right */}
+      <header className="flex flex-wrap items-end justify-between gap-x-8 gap-y-2 pt-4 pb-6">
+        <h1 ref={h1} tabIndex={-1} className="font-display text-4xl outline-none sm:text-5xl">Splat Creatures</h1>
+        <p className="max-w-xl text-lg text-ink-muted">
+          Creatures made of blobs, from a frog to a fire-breathing dragon. Watch one move, take its blobs away to see the bones
+          underneath, then take it home as a 3D model that Blender and game engines open.
         </p>
+      </header>
+      <div className="flex flex-col gap-4 lg:grid lg:grid-cols-12 lg:gap-x-5">
 
-        <section aria-label="Creature" className="lg:col-span-12">
+        <section aria-label="Splat Creatures" className="lg:col-span-12">
           <div className="case relative overflow-hidden rounded-2xl ring-1 ring-rule">
             <div className="relative h-[min(42dvh,360px)] min-h-[220px] lg:h-[clamp(320px,calc(100dvh-26rem),620px)]">
               <canvas
@@ -310,6 +308,10 @@ export function Creature() {
           <p>
             <b className="font-sans text-base font-semibold text-ink">As a mesh</b>, it's a solid skin wrapped round the blobs, coloured from
             them, with the same bones and clips. It loses the soft edges (and thin things like wings can come out holey) but moves in Blender, Godot, Unity or three.js.
+          </p>
+          <p>
+            On this page the creatures move on Blobscape's own splat engine, running here
+            on {stage ? (stage.backend === 'webgpu' ? 'WebGPU' : 'WebGL 2') : 'WebGPU or WebGL 2'}: every blob is moved by its bones on the graphics card.
           </p>
           <p>
             How it all works is in the lessons:{' '}

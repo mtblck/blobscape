@@ -124,24 +124,22 @@ export function ForestWalk() {
     return () => { delete window.__forest }
   }, [stage, offscreen])
 
+  const backend = stage ? (stage.backend === 'webgpu' ? 'WebGPU' : 'WebGL 2') : 'WebGPU or WebGL 2'
   const loading = !failed && (!drawn || !!busy)
   const loadingLabel = busy ?? (stage ? 'Planting the forest…' : 'Starting the splat engine…')
 
   return (
     <div className="pb-4">
       <Crumbs here="Forest Walk" parent={{ label: 'Experiments', href: href({ page: 'experiments' }) }} />
-      <div className="flex flex-col gap-4 pt-4 lg:grid lg:grid-cols-12 lg:gap-x-5">
-        <header className="lg:col-span-6">
-          <h1 ref={h1} tabIndex={-1} className="font-display text-4xl leading-tight outline-none lg:text-5xl">Forest Walk</h1>
-          <p className="mt-2 max-w-[46ch] text-lg leading-snug text-ink-muted">
-            Walk the elf down a forest path that never ends. Trees, ferns, flowers and mushrooms grow out of the ground as you come,
-            all of them made of blobs.
-          </p>
-        </header>
-        <p className="text-sm text-ink-faint lg:col-span-6 lg:self-end lg:pb-1 lg:text-right">
-          Drawn by Blobscape's own splat engine on {stage ? (stage.backend === 'webgpu' ? 'WebGPU' : 'WebGL 2') : '…'}: the elf and every plant sorted together, blob by blob.
+      {/* the same header as every experiment: name on the left, what it is on the right */}
+      <header className="flex flex-wrap items-end justify-between gap-x-8 gap-y-2 pt-4 pb-6">
+        <h1 ref={h1} tabIndex={-1} className="font-display text-4xl outline-none sm:text-5xl">Forest Walk</h1>
+        <p className="max-w-xl text-lg text-ink-muted">
+          Walk the elf down a forest path that never ends. Trees, ferns, flowers and mushrooms grow out of the ground as you come,
+          all of them made of blobs.
         </p>
-
+      </header>
+      <div className="flex flex-col gap-4 lg:grid lg:grid-cols-12 lg:gap-x-5">
         <section aria-label="Forest" className="lg:col-span-12">
           <div className="case relative overflow-hidden rounded-2xl ring-1 ring-rule">
             <div className="relative h-[min(58dvh,460px)] min-h-[280px] lg:h-[clamp(360px,calc(100dvh-24rem),640px)]">
@@ -203,7 +201,7 @@ export function ForestWalk() {
                   </div>
                 </Field>
                 <p className="text-xs text-ink-faint">
-                  The same elf as on the <a href={href({ page: 'creature' })} className="underline hover:text-accent">Creature</a> page, blending from standing into its walk as it speeds up,
+                  The same elf as in <a href={href({ page: 'creature' })} className="underline hover:text-accent">Splat Creatures</a>, blending from standing into its walk as it speeds up,
                   with the walk played at the pace of its feet.
                 </p>
               </div>
@@ -242,8 +240,8 @@ export function ForestWalk() {
           <p>
             Every plant is a small rig of bones. Growing is just its bones going from no size to full size, the trunk first, then
             branches, fronds unrolling and flowers opening, and the wind is a slow turn on the upper bones. Nothing is rebuilt as you
-            walk: the graphics card moves every blob by its bones each frame, then sorts the elf and the whole forest together, so
-            the elf can walk behind a trunk and through the ferns.
+            walk. Blobscape's own splat engine, running here on {backend}, moves every blob by its bones each frame, then sorts
+            the elf and the whole forest together, blob by blob, so the elf can walk behind a trunk and through the ferns.
           </p>
           <p>
             Bones are the subject of the <a href={href({ page: 'lesson', id: 'one-bone' })} className="underline decoration-rule underline-offset-2 hover:text-accent">rigs lessons</a>,
