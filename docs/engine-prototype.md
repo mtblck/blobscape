@@ -116,6 +116,21 @@ To time it on a phone, open these and press **Time it** on each:
 - `/engine-lab/?which=spark&n=200000&walk=1&mode=linear`
 - the same three with `n=500000`
 
-Software rendering here can't stand in for a phone GPU, so no timings are recorded yet.
+### Phone run (Matt, 2026-11-12, 60 Hz screen)
+
+| Renderer | Blobs | fps | Dropped | ms between frames (median / slowest 10%) | ms alone |
+|---|---|---|---|---|---|
+| Ours, WebGPU, walking | 200k | 60 | 0% | 16.7 / 16.7 | 12.0 |
+| Spark, dual quaternions, walking | 200k | 60 | 0% | 16.7 / 16.7 | 14.1 |
+| Ours, WebGL, walking | 200k | 60 | 0% | 16.7 / 16.7 | 47.7 |
+| three.js, standing still | 200k | 60 | 0% | 16.7 / 16.7 | 11.1 |
+| Ours, WebGPU, walking | 500k | 51 | 19% | 16.7 / 33.3 | 22.0 |
+| Spark, dual quaternions, walking | 500k | 48 | 31% | 16.7 / 33.3 | 27.7 |
+| Ours, WebGL, walking | 500k | 30 | 96% | 33.3 / 41.7 | 90.6 |
+| three.js, standing still | 500k | 60 | 0% | 16.7 / 16.7 | 18.9 |
+
+- **Ours on WebGPU is level with Spark at 200k and a little ahead at 500k** (51 against 48 fps, 19% against 31% dropped). Spark's "alone" leaves out its sort, which runs in a worker, so the real gap in cost is a bit wider than 22 against 27.7 ms. Speed is not a headline, though: the two are close.
+- **Spark's WebGL beats our WebGL fallback** at 500k (48 against 30 fps). On a device without WebGPU, Spark is the faster way to draw a walking creature.
+- Spark's linear blend wasn't timed in this run.
 
 The file format the comparison is about is written up in [rigged-splats.md](rigged-splats.md).
