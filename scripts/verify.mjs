@@ -791,6 +791,17 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     const after = await meters()
     if (!(over === 1 && hurt.Health === 0 && after.Health === 100)) fails.push(`blobscape dungeon down: ${JSON.stringify({ over, hurt, after })}`)
     else ok('blobscape dungeon: a slime takes the last health, the hero goes down, and Try again starts over at full health')
+    // light: live where WebGPU runs (each blob lit by the torches and the orb), and the Baked chip rebuilds the hall with it worked in
+    const was = await k.page.evaluate(() => ({ light: window.__dungeon.stage.dungeon.opts.light, backend: window.__dungeon.stage.backend }))
+    await run(0.1, { forward: 0, turn: 0 })
+    const liveLook = await look()
+    await k.page.getByRole('button', { name: 'Baked', exact: true }).click()
+    await k.page.waitForFunction(() => window.__dungeon.stage.dungeon.opts.light === 'baked', null, { timeout: 30000 }).catch(() => {})
+    await run(0.1, { forward: 0, turn: 0 })
+    const bakedLook = await look()
+    const want = was.backend === 'webgpu' ? 'live' : 'baked'
+    if (!(was.light === want && bakedLook.warm > 20000 && liveLook.warm > 5000 && liveLook.warm !== bakedLook.warm)) fails.push(`blobscape dungeon light: ${JSON.stringify({ was, live: liveLook, baked: bakedLook })}`)
+    else ok(`blobscape dungeon: starts with ${want} light on ${was.backend}; live and baked both draw (${liveLook.warm} and ${bakedLook.warm} torchlit pixels)`)
     await k.ctx.close()
   }
 

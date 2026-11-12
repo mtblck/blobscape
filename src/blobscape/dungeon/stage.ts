@@ -2,7 +2,7 @@ import * as THREE from 'three/webgpu'
 import { mix, positionView, smoothstep, uniform } from 'three/tsl'
 import { readbackToSrgb, srgbToLinear } from '../../splat-core/colour.ts'
 import { SplatWorld } from '../../splat-engine/engine.ts'
-import { Dungeon, type DungeonOptions } from './dungeon.ts'
+import { Dungeon, LIVE_AMBIENT, type DungeonOptions } from './dungeon.ts'
 import { HALF, type GameEvent, type Input } from './game.ts'
 
 /**
@@ -24,7 +24,11 @@ const CAMERAS: Record<CameraView, { back: number; up: number; look: number; look
 const GLOOM = 0x0d0b12, FLOOR = 0x1b1916
 const GLOOM_NEAR = 7, GLOOM_FAR = 19
 
-export interface StageOptions { offscreen?: boolean }
+export interface StageOptions {
+  offscreen?: boolean
+  /** Draw with the WebGL backend even where WebGPU runs (for testing that path). */
+  webgl?: boolean
+}
 
 export class DungeonStage {
   readonly renderer: THREE.WebGPURenderer
@@ -88,7 +92,7 @@ export class DungeonStage {
 
   static async start(display: HTMLCanvasElement, opts: StageOptions = {}) {
     const canvas = opts.offscreen ? document.createElement('canvas') : display
-    const renderer = new THREE.WebGPURenderer({ canvas, antialias: false, alpha: false })
+    const renderer = new THREE.WebGPURenderer({ canvas, antialias: false, alpha: false, forceWebGL: !!opts.webgl })
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1))
     await renderer.init()
     return new DungeonStage(display, opts, renderer)
@@ -99,7 +103,8 @@ export class DungeonStage {
     const d = new Dungeon(opts, this.dungeon?.game)
     if (this.world) { this.scene.remove(this.world); this.world.dispose() }
     this.dungeon = d
-    this.world = new SplatWorld(d.actors, { bins: 32768 })
+    this.world = new SplatWorld(d.actors, { bins: 32768, lights: opts.light === 'live' })
+    this.light()
     this.scene.add(this.world)
     const lin = [(GLOOM >> 16) & 255, (GLOOM >> 8) & 255, GLOOM & 255].map((c) => srgbToLinear(c / 255)) as [number, number, number]
     this.world.setFog(lin, GLOOM_NEAR, GLOOM_FAR)
@@ -118,8 +123,13 @@ export class DungeonStage {
     this.taps = { swing: false, cast: false }
     this.dungeon.update(dt, input)
     this.world.markPosed()
+    this.light()
     if (this.dungeon.game.events.length) this.onEvents?.(this.dungeon.game.events)
     this.follow(dt)
+  }
+
+  private light() {
+    if (this.dungeon?.opts.light === 'live') this.world?.setLights(this.dungeon.lights(), LIVE_AMBIENT)
   }
 
   /** The chase camera: behind the hero, swinging round after it, never outside the walls. */

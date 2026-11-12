@@ -60,6 +60,7 @@ multi-page React app, one Vercel project, served from the root. See README for t
 - Rigged files: `glb.ts` writes KHR_gaussian_splatting + standard glTF skins/animation + `BLOBSCAPE_gaussian_skinning` (used, not required). three.js's loader opens them as a still splat (verify checks).
 - The pixel pipeline lives in `src/splat-core/pixel.ts` (shared by Splat to Sprite and the engine's walk sheet); colour transfer functions, `SH_C0` and the render-target readback (`readbackToSrgb`) in `splat-core/colour.ts`.
 - Status and gaps: `docs/engine-prototype.md`.
+- Live lights: `new SplatWorld(actors, { lights: true })` then `setLights(lights, ambient)` (up to `MAX_LIGHTS` point lights). Colour = baked colour × (ambient + Σ lights by distance and facing); a blob's normal is its covariance's thinnest axis (`blobNormal`, from the adjugate). WebGPU runs one light pass per frame into its own buffer, which the draw reads in place of the packed colour (no extra draw bindings); WebGL lights per corner in the vertex shader. Off by default.
 - Rigged-splat file rule (spec draft, sample files): `docs/rigged-splats.md`; the skinning extension object sits inside the primitive's `KHR_gaussian_splatting` object. The lab's `?which=spark` runs the same fox on Spark's `SplatSkinning` (bones rest at the origin; see `sparkBones.ts`).
 
 ## Clockwork (`/experiments/clockwork/`, `src/blobscape/Clockwork.tsx`, `src/splat-engine/clockwork.ts`)
@@ -78,5 +79,5 @@ multi-page React app, one Vercel project, served from the root. See README for t
 - `game.ts` is the whole game in plain numbers (hero, slimes, bolts, waves; circles on the floor for every hit and push), stepped by `step(dt, input)` and tested in Node. `dungeon.ts` builds every actor once and poses them from the game; nothing is rebuilt mid-fight.
 - Slimes are pooled per colour (`RULES[kind].pool`; colours are baked into blobs, so a slime can't change colour). A pool slot not in use is hidden with `rootScale` 0 at the hero. Each slime carries 16 shard bones at size 0 that become the burst.
 - The hero is the elf's spec (`elfSpec`) plus a `sword` bone on the right hand and an `orb` bone on the left; swings and casts are `aim`s layered on the idle/run blend.
-- Torchlight is baked into the hall's colours (`torchLight`); the flames are bones. Verify drives `stage.frame(seconds, input)` with `?offscreen=1`.
+- Light is Baked (torchlight in the hall's colours, `torchLight`) or Live (the engine's lights: torches, the orb, bolts, bursts, from `Dungeon.lights()`; the hall is built unlit). Live is the default on WebGPU, Baked on WebGL. `?webgl=1` forces the WebGL backend for testing. The flames are bones. Verify drives `stage.frame(seconds, input)` with `?offscreen=1`.
 - The sandbox's Creatures tab also adds `PROPS` (`src/blobscape/props.ts`): Dungeon Run's slime and Clockwork's watch, written as `Species` (the watch's move ignores its clock and shows the time now).

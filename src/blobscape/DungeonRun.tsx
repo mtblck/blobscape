@@ -9,6 +9,7 @@ import { GOLD_HEAL, MAX_HP, MAX_MP, SPELL_COST, type Difficulty, type GameEvent 
 const LOOKS = [{ id: 'forest', label: 'Forest' }, { id: 'dusk', label: 'Dusk' }, { id: 'autumn', label: 'Autumn' }]
 const VIEWS: { id: CameraView; label: string }[] = [{ id: 'close', label: 'Close' }, { id: 'far', label: 'Far' }, { id: 'high', label: 'High' }]
 const DETAIL = [{ id: 0.35, label: 'Light' }, { id: 1, label: 'Full' }, { id: 1.8, label: 'Fine' }]
+const LIGHTS = [{ id: 'live', label: 'Live' }, { id: 'baked', label: 'Baked' }] as const
 const DIFFICULTY: { id: Difficulty; label: string }[] = [{ id: 'gentle', label: 'Gentle' }, { id: 'normal', label: 'Normal' }, { id: 'hard', label: 'Hard' }]
 
 declare global {
@@ -42,9 +43,11 @@ export function DungeonRun() {
   const [failed, setFailed] = useState<string>()
   const [busy, setBusy] = useState<string>()
   const offscreen = useMemo(() => new URLSearchParams(location.search).get('offscreen') === '1', [])
+  const webgl = useMemo(() => new URLSearchParams(location.search).get('webgl') === '1', [])
   const [look, setLook] = useState('forest')
   const [detail, setDetail] = useState<number>()
   const [view, setView] = useState<CameraView>('close')
+  const [light, setLight] = useState<'live' | 'baked'>()
   const [difficulty, setDifficulty] = useState<Difficulty>('normal')
   const [paused, setPaused] = useState(false)
   const [hud, setHud] = useState<Hud>(START)
@@ -56,7 +59,7 @@ export function DungeonRun() {
   useEffect(() => {
     let live: DungeonStage | undefined, gone = false
     import('./dungeon/stage.ts')
-      .then(({ DungeonStage }) => DungeonStage.start(canvas.current!, { offscreen }))
+      .then(({ DungeonStage }) => DungeonStage.start(canvas.current!, { offscreen, webgl }))
       .then((s) => {
         if (gone) { s.dispose(); return }
         live = s
@@ -82,22 +85,24 @@ export function DungeonRun() {
         }
         setStage(s)
         setDetail((d) => d ?? (s.backend === 'webgpu' ? 1 : 0.35))
+        // live lights cost a pass on WebGPU, but every corner of every blob on WebGL: there they start baked
+        setLight((l) => l ?? (s.backend === 'webgpu' ? 'live' : 'baked'))
       }, (e: unknown) => { console.warn(e); setFailed('This browser could not start WebGPU or WebGL 2, which the dungeon needs.') })
     return () => { gone = true; live?.dispose() }
-  }, [offscreen])
+  }, [offscreen, webgl])
 
   // Building the hall takes a moment: let the note paint first
   useEffect(() => {
-    if (!stage || detail === undefined) return
+    if (!stage || detail === undefined || !light) return
     setBusy('Lighting the torches…')
     const t = setTimeout(() => {
-      stage.setDungeon({ detail, look, difficulty })
+      stage.setDungeon({ detail, look, difficulty, light })
       stage.dungeon!.flicker = !calm
       setHud((h) => ({ ...h, blobs: stage.blobCount }))
       setBusy(undefined)
     }, 30)
     return () => clearTimeout(t)
-  }, [stage, detail, look]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [stage, detail, look, light]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (stage?.dungeon) stage.dungeon.game.difficulty = difficulty }, [stage, difficulty, busy])
   useEffect(() => { if (stage) stage.view = view }, [stage, view])
   useEffect(() => { if (stage) stage.paused = paused }, [stage, paused])
@@ -317,6 +322,11 @@ export function DungeonRun() {
                     {VIEWS.map((v) => <Chip key={v.id} active={view === v.id} onClick={() => setView(v.id)}>{v.label}</Chip>)}
                   </div>
                 </Field>
+                <Field label="Light">
+                  <div className="flex flex-wrap gap-1.5">
+                    {LIGHTS.map((l) => <Chip key={l.id} active={light === l.id} onClick={() => setLight(l.id)}>{l.label}</Chip>)}
+                  </div>
+                </Field>
                 <Field label="Detail">
                   <div className="flex flex-wrap gap-1.5">
                     {DETAIL.map((d) => <Chip key={d.id} active={detail === d.id} onClick={() => setDetail(d.id)}>{d.label}</Chip>)}
@@ -349,8 +359,11 @@ export function DungeonRun() {
             hall together.
           </p>
           <p>
-            The torchlight is baked into the stone's colour when the hall is built, so it costs nothing to draw. The flames are bones
-            too, which flicker. Bones are the subject of the <a href={href({ page: 'lesson', id: 'one-bone' })} className="underline decoration-rule underline-offset-2 hover:text-accent">rigs lessons</a>,
+            Light comes two ways. Baked, the torchlight is worked into the stone's colour when the hall is built, so it costs
+            nothing to draw. Live, every blob is lit afresh each frame by up to sixteen lights: the eight torches, flickering with
+            their flames, the orb in the hero's hand (dimmer as the magic runs down), each bolt as it flies, and a flash of colour
+            as a slime bursts. A blob is a flat disc, so it knows which way it faces: its thinnest axis. Light reaches the side that
+            turns towards it and falls away with distance. Bones are the subject of the <a href={href({ page: 'lesson', id: 'one-bone' })} className="underline decoration-rule underline-offset-2 hover:text-accent">rigs lessons</a>,
             and the slimes' colours come from blobs adding up, which is <a href={href({ page: 'lesson', id: 'order' })} className="underline decoration-rule underline-offset-2 hover:text-accent">Order matters</a>.
           </p>
         </div>
