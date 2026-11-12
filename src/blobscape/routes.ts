@@ -26,6 +26,7 @@ export const LESSONS = [
   { id: 'shoot', title: 'Photo shoot', summary: 'Photograph a toy bird and train blobs to match. How many photos does it take to get every side right?' },
   { id: 'fuzzy', title: 'Fuzzy things', summary: 'Grass, a dandelion clock and a wooden block, kept as splats and as a mesh. Which keeps what, and for how many bytes?' },
   { id: 'floaters', title: 'Floaters and cleanup', summary: 'A rushed capture leaves blobs hanging in the air. Cut them away, and find what no cut can fix.' },
+  { id: 'lighting', title: 'Lighting is baked', summary: 'A scan keeps the light it was shot in. Move the lamp, and try three ways to make the scan keep up.' },
 ] as const
 
 const WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty']
@@ -126,6 +127,12 @@ export const LESSON_GOALS: Record<(typeof LESSONS)[number]['id'], Goal[]> = {
     { id: 'clear', label: 'Raise every side by 5 points, keeping your photos above 98%', hint: 'Go after the strays and smudges in the air.', where: 'cuts', why: 'Clearing junk out of the air helps, but only where the junk was. The far side stays a guess.' },
     { id: 'far', label: 'Cut until your photos drop below 95%', where: 'cuts', why: 'A cut sees one number per blob, not a bird. Push it too far and it takes the real thing.' },
     { id: 'retake', label: 'Beat your best cleanup without cutting anything', hint: 'Look at how the bird was captured.', where: 'capture', why: 'Eight photos all round beat any cut. Cleanup tidies a good capture; it can’t rescue a bad one.' },
+  ],
+  'lighting': [
+    { id: 'stuck', label: 'Swing the lamp round to the other side and compare', where: 'lamp', why: 'The real table changes and the scan doesn’t. Its light and shadows are part of its colour now.' },
+    { id: 'double', label: 'Add a live light from the other side', hint: 'Keep the lamp well away from where it was.', where: 'relight', why: 'The old light is still painted on, so the scan ends up lit from both sides and the score barely moves.' },
+    { id: 'guess', label: 'Take the old light out and get past 55% with the lamp moved', hint: 'Work out where the capture’s lamp stood from the scan’s shading.', where: 'old', why: 'Divide out the old light and the ball and box relight well. The shadows still sit where they were.' },
+    { id: 'shape', label: 'Get the table within 2% with the lamp moved', hint: 'The old shadows have to go. What would you need to know to move them?', where: 'old', why: 'Shadows need the scene’s shape: what blocked the light. With it, both the light and the shadows move.' },
   ],
   'fuzzy': [
     { id: 'blades', label: 'Give the grass mesh its finest grid, and count the blade tips it keeps', where: 'mesh', why: 'None. A blade is thinner than a grid cell, so the skin can’t close round it and the blades melt into the clump.' },

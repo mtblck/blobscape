@@ -21,6 +21,7 @@ import { Model } from './lessons/Model.tsx'
 import { Shoot } from './lessons/Shoot.tsx'
 import { Fuzzy } from './lessons/Fuzzy.tsx'
 import { Floaters } from './lessons/Floaters.tsx'
+import { Lighting } from './lessons/Lighting.tsx'
 import { Sandbox } from './Sandbox.tsx'
 import { Creature } from './Creature.tsx'
 import { ForestWalk } from './ForestWalk.tsx'
@@ -30,7 +31,7 @@ import { DungeonRun } from './DungeonRun.tsx'
 import { Experiments } from './Experiments.tsx'
 import { useState } from 'react'
 
-const PAGES: Record<string, () => React.JSX.Element> = { 'one-blob': OneBlob, footprint: Footprint, order: Order, many: Many, angle: Angle, paint: Paint, formats: Formats, break: Break, 'one-bone': OneBone, weights: Weights, twist: Twist, walk: Walk, model: Model, shoot: Shoot, fuzzy: Fuzzy, floaters: Floaters }
+const PAGES: Record<string, () => React.JSX.Element> = { 'one-blob': OneBlob, footprint: Footprint, order: Order, many: Many, angle: Angle, paint: Paint, formats: Formats, break: Break, 'one-bone': OneBone, weights: Weights, twist: Twist, walk: Walk, model: Model, shoot: Shoot, fuzzy: Fuzzy, floaters: Floaters, lighting: Lighting }
 
 export function App() {
   const route = useRoute()
