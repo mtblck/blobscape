@@ -1045,6 +1045,34 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   }
 }
 
+// Engine lab, Spark's run: the same fox walked by Spark 2.4's own SplatSkinning, both joint rules.
+{
+  for (const mode of ['quat', 'linear']) {
+    const label = `spark ${mode === 'quat' ? 'dual quaternions' : 'linear blend'}`
+    const { page, ctx } = await open(`/engine-lab/?which=spark&n=12000&walk=1&herd=2&mode=${mode}&offscreen=1`, { viewport: { width: 1000, height: 1000 } })
+    await page.waitForFunction(() => window.__lab || window.__labError, null, { timeout: 60000 })
+    const err = await page.evaluate(() => window.__labError)
+    if (err) { fails.push(`engine lab ${label}: ${err}`); await ctx.close(); continue }
+    const look = (t) => page.evaluate(async (t) => {
+      await window.__lab.frame(t)
+      const c = document.querySelector('canvas'); const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data
+      let n = 0; const on = new Uint8Array(d.length / 4)
+      for (let i = 0; i < d.length; i += 4) if (d[i] > 150 && d[i + 1] > 50 && d[i + 1] < 140 && d[i + 2] < 80) { n++; on[i / 4] = 1 }
+      return { n, on: Array.from(on) }
+    }, t)
+    const a = await look(0.1), b = await look(0.45)
+    const moved = a.on.reduce((s, v, i) => s + (v !== b.on[i] ? 1 : 0), 0)
+    if (a.n < 2000) fails.push(`engine lab ${label}: only ${a.n} fox-orange pixels`)
+    else if (moved < a.n / 20) fails.push(`engine lab ${label}: the foxes don't move (${moved} pixels changed)`)
+    else ok(`engine lab ${label}: Spark draws the foxes and walks them (${a.n} orange pixels, ${moved} change mid-stride)`)
+    const bench = await page.evaluate(() => window.__lab.bench(3))
+    if (!(bench.alone > 0)) fails.push(`engine lab ${label}: bench ${JSON.stringify(bench)}`)
+    else ok(`engine lab ${label}: times frames (${bench.alone.toFixed(0)} ms in software)`)
+    await page.screenshot({ path: join(shots, `engine-lab-spark-${mode}.png`) })
+    await ctx.close()
+  }
+}
+
 await browser.close()
 server?.close()
 if (fails.length) {

@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { makeCreature, poseWalk } from './creature.ts'
-import { SKIN_EXTENSION, readRiggedGlb, recordClip, sampleClip, writeRiggedGlb } from './glb.ts'
+import { SKIN_EXTENSION, SKIN_RULE, readRiggedGlb, recordClip, sampleClip, writeRiggedGlb } from './glb.ts'
 import { skinBlob } from './rig.ts'
 
 const fox = () => {
@@ -52,6 +52,9 @@ test('the file declares splats and our skinning rule, without requiring either',
   assert.equal(json.extensionsRequired, undefined)
   assert.equal(json.meshes[0].primitives[0].mode, 0)
   assert.ok(json.meshes[0].primitives[0].attributes.JOINTS_0 !== undefined)
+  // inside the splat extension's own object, where KHR_gaussian_splatting says extensions of it go
+  assert.deepEqual(json.meshes[0].primitives[0].extensions.KHR_gaussian_splatting.extensions[SKIN_EXTENSION], SKIN_RULE)
+  assert.equal(json.extensions, undefined)
   assert.equal(json.skins[0].joints.length, 14)
   assert.equal(bytes.byteLength % 4, 0)
 })

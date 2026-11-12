@@ -59,6 +59,7 @@ multi-page React app, one Vercel project, served from the root. See README for t
 - Rigged files: `glb.ts` writes KHR_gaussian_splatting + standard glTF skins/animation + `BLOBSCAPE_gaussian_skinning` (used, not required). three.js's loader opens them as a still splat (verify checks).
 - The pixel pipeline lives in `src/splat-core/pixel.ts` (shared by Splat to Sprite and the engine's walk sheet); colour transfer functions, `SH_C0` and the render-target readback (`readbackToSrgb`) in `splat-core/colour.ts`.
 - Status and gaps: `docs/engine-prototype.md`.
+- Rigged-splat file rule (spec draft, sample files): `docs/rigged-splats.md`; the skinning extension object sits inside the primitive's `KHR_gaussian_splatting` object. The lab's `?which=spark` runs the same fox on Spark's `SplatSkinning` (bones rest at the origin; see `sparkBones.ts`).
 
 ## Forest Walk (`/experiments/forest-walk/`, `src/blobscape/forest/`)
 - The elf and the whole forest are one `SplatWorld`, built once; walking only re-poses. Changing detail, season or the elf's look rebuilds it.

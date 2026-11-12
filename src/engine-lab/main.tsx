@@ -44,6 +44,7 @@ const initial: LabOptions = {
   offscreen: params.get('offscreen') === '1',
 }
 const COUNTS = [20000, 100000, 200000, 500000]
+const NAMES: Record<Which, string> = { engine: 'Ours', three: 'three.js', spark: 'Spark' }
 
 // For verify: write the fox, read it back with three.js's own loader
 window.__glbCheck = async () => {
@@ -93,9 +94,9 @@ function App() {
       setError(String(e))
     })
     return () => { gone = true; live?.dispose() }
-    // walk and mode change live, without a rebuild
+    // walk and mode change live, without a rebuild (except on Spark, whose two joint rules need different meshes)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [opts.which, opts.count, opts.webgl, opts.herd])
+  }, [opts.which, opts.count, opts.webgl, opts.herd, opts.which === 'spark' ? opts.mode : ''])
 
   const set = (p: Partial<LabOptions>) => setOpts((o) => ({ ...o, ...p }))
 
@@ -103,11 +104,12 @@ function App() {
   const working = timing || making
 
   const sheetJob = async () => {
-    if (!lab) return null
+    if (!lab?.renderer) return null
+    const renderer = lab.renderer
     setMaking(true)
     try {
       const { makeWalkSheet } = await import('../splat-engine/walkSheet.ts')
-      const s = await lab.exclusive(() => makeWalkSheet(lab.renderer))
+      const s = await lab.exclusive(() => makeWalkSheet(renderer))
       const png = await s.png()
       if (sheet) URL.revokeObjectURL(sheet.url)
       setSheet({ url: URL.createObjectURL(png), json: JSON.stringify(s.json('blob-fox.png'), null, 2) })
@@ -158,10 +160,10 @@ function App() {
       <main id="main" className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-6">
         <div>
           <h1 className="font-display text-3xl text-ink">Engine lab</h1>
-          <p className="mt-1 max-w-[65ch] text-ink-muted">A blob fox, drawn by Blobscape's own engine or by three.js's built-in splat renderer, and timed. Open it on a phone and press Time it.</p>
+          <p className="mt-1 max-w-[65ch] text-ink-muted">A blob fox, drawn by Blobscape's own engine, by three.js's built-in splat renderer or by Spark with its own skinning, and timed. Open it on a phone and press Time it.</p>
         </div>
         <div className="case relative aspect-[4/3] w-full overflow-hidden rounded-xl bg-[#0d0f16] sm:aspect-[16/9]">
-          <canvas key={`${opts.which}-${opts.webgl}-${opts.count}-${opts.herd}`} ref={canvas} className="h-full w-full touch-none" aria-label="A blob fox trotting on the spot" />
+          <canvas key={`${opts.which}-${opts.webgl}-${opts.count}-${opts.herd}-${opts.which === 'spark' ? opts.mode : ''}`} ref={canvas} className="h-full w-full touch-none" aria-label="A blob fox trotting on the spot" />
           <p className="absolute bottom-2.5 left-3 text-sm text-white/70" aria-live="polite">{error ? `Couldn't start: ${error}` : lab ? lab.info : 'Starting…'}</p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -170,6 +172,7 @@ function App() {
               <Chip active={opts.which === 'engine' && !opts.webgl} onClick={() => set({ which: 'engine', webgl: false })}>Ours, WebGPU</Chip>
               <Chip active={opts.which === 'engine' && opts.webgl} onClick={() => set({ which: 'engine', webgl: true })}>Ours, WebGL</Chip>
               <Chip active={opts.which === 'three'} onClick={() => set({ which: 'three', webgl: false })}>three.js (can't walk)</Chip>
+              <Chip active={opts.which === 'spark'} onClick={() => set({ which: 'spark', webgl: true })}>Spark 2.4</Chip>
             </div>
           </Field>
           <Field label="Blobs">
@@ -188,7 +191,7 @@ function App() {
             <Button primary disabled={!lab || working} onClick={time}>{timing ? 'Timing…' : 'Time it'}</Button>
             <Button disabled={!lab || working} onClick={timeSteps}>Time each step</Button>
             <Button onClick={() => downloadGlb(20000)}>Download the fox (.glb)</Button>
-            <Button disabled={!lab || working} onClick={makeSheet}>{making ? 'Drawing…' : 'Make a walk sprite sheet'}</Button>
+            <Button disabled={!lab?.renderer || working} onClick={makeSheet}>{making ? 'Drawing…' : 'Make a walk sprite sheet'}</Button>
           </div>
         </div>
         {sheet && (
@@ -215,7 +218,7 @@ function App() {
               <tbody>
                 {steps.map((r, i) => (
                   <tr key={i} className="border-t border-rule">
-                    <td className="py-1 pr-3">{r.which === 'three' ? 'three.js' : 'Ours'} · {r.backend}</td>
+                    <td className="py-1 pr-3">{NAMES[r.which as Which] ?? r.which} · {r.backend}</td>
                     <td className="pr-3">{r.blobs.toLocaleString()}</td>
                     <td className="pr-3">{r.backend === 'webgpu' && r.which === 'engine' ? r.deform.toFixed(1) : '–'}</td>
                     <td className="pr-3">{r.backend === 'webgpu' && r.which === 'engine' ? r.project.toFixed(1) : '–'}</td>
@@ -242,7 +245,7 @@ function App() {
               <tbody>
                 {results.map((r, i) => (
                   <tr key={i} className="border-t border-rule">
-                    <td className="py-1 pr-3">{r.which === 'three' ? 'three.js' : 'Ours'} · {r.backend} · {r.moving ? 'walking' : 'standing still'}</td>
+                    <td className="py-1 pr-3">{NAMES[r.which as Which] ?? r.which} · {r.backend} · {r.moving ? 'walking' : 'standing still'}</td>
                     <td className="pr-3">{r.blobs.toLocaleString()}</td>
                     <td className="pr-3">{r.fps ? r.fps.toFixed(0) : '–'}</td>
                     <td className="pr-3">{r.fps ? `${Math.round(r.dropped * 100)}%` : '–'}</td>

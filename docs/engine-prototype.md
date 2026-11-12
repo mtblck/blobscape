@@ -42,7 +42,7 @@ Added with the Rigs and 3D models lessons (2026-11-11):
 - **The WebGL fallback moves blobs four times each** (once per quad corner), since WebGL can't run a compute pass first. Its CPU work is now about 10 ms at 100k on this machine (it was 200 ms).
 - **The sort is a counting sort with 16k bins.** Blobs in the same bin draw in arbitrary order and can shimmer on large scenes. A two-pass radix sort with 32-bit keys is the upgrade.
 - **Not supported yet:** spherical harmonics and level of detail. `SplatWorld.dispose` now frees its storage buffers too, since the Creature page swaps worlds on every fox change.
-- **Joint quality vs Spark's dual quaternions** hasn't been compared side by side.
+- **Joint quality vs Spark's dual quaternions:** see "Spark side by side" below.
 - **The `.glb` reader** takes only float splat attributes and bones without a rest rotation. It handles our own files and simple ones from elsewhere.
 
 ## How to get the phone numbers
@@ -97,3 +97,25 @@ At 200k, walking now costs about the same as three.js drawing the fox standing s
 | Ours, WebGL, walking | 500k | 27–33 | 66–98% | ~90 | 20–28 |
 
 A walking 500k fox on WebGPU now costs 21.1 ms alone, against 19.3 ms for three.js drawing 500k standing still. Animation adds about 2 ms a frame, so what's left at 500k is mostly drawing. Getting there needs fewer pixels or fewer blobs drawn (level of detail), not faster skinning. On WebGL, the GPU moves every blob four times a frame (once per corner), which is what holds 500k at about 30 fps.
+
+## Spark side by side (2026-11-12)
+
+The lab can now draw the same fox with Spark 2.4's own `SplatSkinning` (`?which=spark`, `sparkLab.ts`): the same blobs, bones, weights and trot. "Turn blobs" uses Spark's dual quaternions and "Blend matrices" its linear blend, which needs covariance splats (`ExtSplats`, `covSplats` and `accumExtSplats`).
+
+What we found before timing anything:
+
+- **The motion matches.** Fed our skin transforms, Spark's linear blend puts every blob within 1e-4 m of ours. Its dual quaternions agree exactly on blobs held by one bone and stay within 6 mm on blended joints (`sparkSkinning.test.ts` mirrors Spark's GLSL over the data its JavaScript writes).
+- **Spark's rest pose only works as the identity.** `setRestQuatPos` and `setRestMatrix` compose rest and pose in an order that turns a bone about the origin instead of its head. The lab rests every bone at the origin and passes the finished skin transform, which sidesteps it. The test pins Spark 2.4's behaviour, so it will fail if Spark changes it. This looks like a bug worth reporting upstream.
+- **Dual quaternions carry no scale** (`setBoneQuatPosScale` throws in that mode), so a bone that grows (the frog's tongue, the dragon's fire, every Forest Walk plant) needs Spark's linear blend, which flattens blobs on a twist.
+- **Spark sorts in a worker**, a frame or more behind, and gathers every mesh into one list, so its herds also sort together.
+
+To time it on a phone, open these and press **Time it** on each:
+
+- `/engine-lab/?which=engine&n=200000&walk=1`
+- `/engine-lab/?which=spark&n=200000&walk=1&mode=quat`
+- `/engine-lab/?which=spark&n=200000&walk=1&mode=linear`
+- the same three with `n=500000`
+
+Software rendering here can't stand in for a phone GPU, so no timings are recorded yet.
+
+The file format the comparison is about is written up in [rigged-splats.md](rigged-splats.md).
