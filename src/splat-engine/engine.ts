@@ -691,7 +691,7 @@ function blobNormal(covA: N, covB: N) {
   return normalize(best.add(vec3(0, 1e-12, 0)))
 }
 
-/** The blob's colour under the lights: ambient times its own, plus each light by distance and by how its face turns to it. */
+/** The blob's colour under the lights: ambient times its own, plus each light by distance and by how its face turns to it. CPU twin: `light.ts` (change both). */
 function lit(rgb: N, world: N, covA: N, covB: N, L: Lighting) {
   const n = blobNormal(covA, covB).toVar()
   const sum = vec3(L.ambient).toVar()
