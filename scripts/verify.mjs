@@ -373,11 +373,11 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000 } }], ['phone', { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }]]) {
     const { page, ctx } = await open(B, opts)
     const lessons = await page.locator('main a[href^="/lessons/"]:not([href="/lessons/"])').evaluateAll((as) => new Set(as.map((a) => a.getAttribute('href'))).size)
-    if (lessons < 13) fails.push(`blobscape ${label}: home lists ${lessons} lessons`)
+    if (lessons < 14) fails.push(`blobscape ${label}: home lists ${lessons} lessons`)
     else ok(`blobscape ${label}: home lists the lessons`)
     await axe(page, `blobscape ${label} home`)
     await page.screenshot({ path: join(shots, `blobscape-home-${label}.png`), fullPage: true })
-    for (const id of ['lessons', 'one-blob', 'footprint', 'order', 'many', 'angle', 'paint', 'formats', 'break', 'one-bone', 'weights', 'twist', 'walk', 'model', 'sandbox', 'creature', 'forest-walk', 'clockwork', 'dungeon-run', 'scan-studio']) {
+    for (const id of ['lessons', 'one-blob', 'footprint', 'order', 'many', 'angle', 'paint', 'formats', 'break', 'one-bone', 'weights', 'twist', 'walk', 'model', 'shoot', 'sandbox', 'creature', 'forest-walk', 'clockwork', 'dungeon-run', 'scan-studio']) {
       // headless WebGPU can't present to a canvas, so Creature and Forest Walk draw off-screen here
       await page.goto(base + (['creature', 'forest-walk', 'clockwork', 'dungeon-run', 'scan-studio'].includes(id) ? `/experiments/${id}/?offscreen=1` : ['sandbox', 'lessons'].includes(id) ? `/${id}/` : `/lessons/${id}/`))
       await page.waitForTimeout(1500)
@@ -489,6 +489,24 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   const perBlob = Number(fileText.match(/([\d.]+) bytes each/)?.[1])
   if (!(perBlob > 4 && perBlob < 20)) fails.push(`blobscape formats: .spz readout "${fileText}"`)
   else ok(`blobscape formats: .spz is ${perBlob} bytes per blob, read back and shown`)
+
+  // Photo shoot: one front photo fits only the front; four round it fit every side, and the back goal ticks
+  await page.goto(base + '/lessons/shoot/')
+  await page.evaluate(() => localStorage.clear())
+  await page.reload()
+  const shootScore = async () => {
+    await page.waitForFunction(() => /Every side/.test(document.querySelector('[data-testid=shoot-score]')?.textContent ?? ''), null, { timeout: 60000 }).catch(() => {})
+    return Number((await page.textContent('[data-testid=shoot-score]')).match(/Every side: (\d+)%/)?.[1])
+  }
+  const oneSide = await shootScore()
+  await page.getByRole('slider', { name: 'Turn' }).fill('180')
+  await page.waitForTimeout(300)
+  const backDone = await page.textContent('[data-testid=goal-count]')
+  for (const deg of [90, 180, 270]) await page.getByRole('button', { name: new RegExp(`\\(${deg}°\\)`) }).click()
+  await page.waitForTimeout(600)
+  const allSides = await shootScore()
+  if (!(oneSide < 40 && allSides > 90 && /^1 of/.test(backDone))) fails.push(`blobscape shoot: front photo ${oneSide}%, four round ${allSides}%, goals after the back ${backDone}`)
+  else ok(`blobscape shoot: one front photo fits ${oneSide}% of every side, four round it ${allSides}%`)
 
   // Break it: shrink, explode, and put it back
   await page.goto(base + '/lessons/break/')

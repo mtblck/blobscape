@@ -92,7 +92,7 @@ export function Landing() {
       <section id="lessons" aria-labelledby="lessons-title" className={`${WIDTH} grid scroll-mt-20 items-center gap-10 py-16 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-16 lg:py-20`}>
         <div className="flex flex-col gap-4">
           <span className={CHIP}>Lessons</span>
-          <h2 id="lessons-title" className="font-display text-4xl leading-tight text-balance">{LESSON_COUNT[0].toUpperCase()}{LESSON_COUNT.slice(1)} lessons, from one blob to a walking creature</h2>
+          <h2 id="lessons-title" className="font-display text-4xl leading-tight text-balance">{LESSON_COUNT[0].toUpperCase()}{LESSON_COUNT.slice(1)} lessons, from one blob to a walking creature and a real photo shoot</h2>
           <p className="max-w-[48ch] text-lg text-ink-muted">
             Each lesson asks one question and hands you the controls to answer it. Goals tick off as you find things out, and the
             explanation waits until you've seen it for yourself.
