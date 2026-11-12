@@ -12,6 +12,7 @@ import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitD
 import { download, kb } from './files.ts'
 import { LESSONS, href } from './routes.ts'
 import type { CreatureStage, Show } from './creature/stage.ts'
+import { Sprites } from './creature/Sprites.tsx'
 
 const STILL = 'still'
 const MAX_FILE = 200 * 1024 * 1024
@@ -179,7 +180,7 @@ export function Creature() {
         <h1 ref={h1} tabIndex={-1} className="font-display text-4xl outline-none sm:text-5xl">Splat Creatures</h1>
         <p className="max-w-xl text-lg text-ink-muted">
           Creatures made of blobs, from a frog to a fire-breathing dragon. Watch one move, take its blobs away to see the bones
-          underneath, then take it home as a 3D model that Blender and game engines open.
+          underneath, then take it home as a 3D model that Blender and game engines open, or as pixel-art sprites for a 2D game.
         </p>
       </header>
       <div className="flex flex-col gap-4 lg:grid lg:grid-cols-12 lg:gap-x-5">
@@ -291,12 +292,14 @@ export function Creature() {
             </div>
           </div>
         </section>
+
+        <Sprites stage={stage} name={shown.name} clips={shown.clips} labelOf={clipLabel} current={clip} />
       </div>
 
       <section aria-labelledby="files-title" className="mt-14 border-t border-rule pt-10 lg:grid lg:grid-cols-12 lg:gap-x-5 lg:pt-14">
         <div className="lg:col-span-5">
           <p className="text-sm text-ink-faint">What you take away</p>
-          <h2 id="files-title" className="mt-1 max-w-[16ch] font-display text-4xl leading-[1.05] text-balance sm:text-5xl">One creature, two files</h2>
+          <h2 id="files-title" className="mt-1 max-w-[16ch] font-display text-4xl leading-[1.05] text-balance sm:text-5xl">One creature, three ways out</h2>
         </div>
         <div className="mt-8 max-w-[36em] space-y-4 text-lg leading-relaxed text-ink-muted lg:col-span-7 lg:mt-0 lg:text-xl">
           <p>
@@ -308,6 +311,11 @@ export function Creature() {
           <p>
             <b className="font-sans text-base font-semibold text-ink">As a mesh</b>, it's a solid skin wrapped round the blobs, coloured from
             them, with the same bones and clips. It loses the soft edges (and thin things like wings can come out holey) but moves in Blender, Godot, Unity or three.js.
+          </p>
+          <p>
+            <b className="font-sans text-base font-semibold text-ink">As pixel art</b>, it's a sprite sheet: each move you pick, drawn from 4 or 8 sides,
+            squeezed down to a few colours and outlined, the way <a href="/experiments/splat-to-sprite/" className="underline decoration-rule underline-offset-2 hover:text-accent">Splat to Sprite</a> does it. The JSON beside it names every animation, in
+            Tinkerkit's format or the one Aseprite and Phaser read.
           </p>
           <p>
             On this page the creatures move on Blobscape's own splat engine, running here

@@ -44,6 +44,7 @@ multi-page React app, one Vercel project, served from the root. See README for t
 - Rigs lessons (9–13: one-bone, weights, twist, walk, model) pose on the CPU with `splat-engine/pose.ts` `poseBlobs` and hand Spark the result; parts of the lesson list come from `PARTS` in routes.ts. Splat Creatures (`/experiments/creature/`, still `creature` in code) draws with our engine (`creature/stage.ts`, lazy-loaded); verify loads it with `?offscreen=1`.
 - Creatures are `Species` in `splat-engine/zoo/` (frog, fox, elf, dragon; `?creature=<id>` picks one). New ones are written with `body.ts` (tubes, balls, sheets, filled cones, weighted by distance to named bones) and posed with `posing.ts` (`aim`, `env`, `ramp`). A clip must loop: a move that calls another (fire calls idle) maps its time onto that one's period. `creature/bones.ts` draws the rig (Blobs / Bones / Both).
 - Bones can grow (`Skeleton.size`, inherited by children, as glTF scale) and slide (`offset` on any bone); clips record offsets and sizes only for bones that use them. The frog's tongue and the dragon's fire are built small inside the mouth at rest and grown out, so a file opened elsewhere shows them hidden.
+- Sprite sheets on Splat Creatures (`creature/Sprites.tsx`): `stage.bake` pauses the live view and holds creature/mode/show changes until done; `splat-engine/bakeSheet.ts` draws (one camera distance from `frameAll` for every frame) and runs Splat to Sprite's `processFrames`; `spriteSheet.ts` (pure, tested) plans rows (move × direction, `shotsFor` order) and writes the Tinkerkit and Aseprite JSON. The engine lab's walk sheet uses the same baker.
 - The overlay canvas is `willReadFrequently` (CPU): a GPU 2D canvas in headless Chromium kept showing an old frame after a clear.
 
 
@@ -59,6 +60,7 @@ multi-page React app, one Vercel project, served from the root. See README for t
 - Rigged files: `glb.ts` writes KHR_gaussian_splatting + standard glTF skins/animation + `BLOBSCAPE_gaussian_skinning` (used, not required). three.js's loader opens them as a still splat (verify checks).
 - The pixel pipeline lives in `src/splat-core/pixel.ts` (shared by Splat to Sprite and the engine's walk sheet); colour transfer functions, `SH_C0` and the render-target readback (`readbackToSrgb`) in `splat-core/colour.ts`.
 - Status and gaps: `docs/engine-prototype.md`.
+- Rigged-splat file rule (spec draft, sample files): `docs/rigged-splats.md`; the skinning extension object sits inside the primitive's `KHR_gaussian_splatting` object. The lab's `?which=spark` runs the same fox on Spark's `SplatSkinning` (bones rest at the origin; see `sparkBones.ts`).
 
 ## Forest Walk (`/experiments/forest-walk/`, `src/blobscape/forest/`)
 - The elf and the whole forest are one `SplatWorld`, built once; walking only re-poses. Changing detail, season or the elf's look rebuilds it.

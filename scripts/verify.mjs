@@ -642,7 +642,8 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     ]) {
       await c.page.getByRole('button', { name, exact: true }).click()
       await c.page.waitForFunction((n) => window.__creature?.bones() === n && !document.querySelector('[data-testid=creature-loading]'), bonesWanted, { timeout: 60000 }).catch(() => {})
-      await c.page.getByRole('button', { name: clip, exact: true }).click()
+      // the Sprites panel has a chip per move too: pick the one that plays it
+      await c.page.getByRole('region', { name: 'Controls' }).getByRole('button', { name: clip, exact: true }).click()
       await c.page.waitForTimeout(150)
       const got = { bones: await c.page.evaluate(() => window.__creature?.bones()), n: await pixels(t, colour), url: new URL(c.page.url()).searchParams.get('creature') }
       if (!(got.bones === bonesWanted && got.n > 1500 && got.url === name.toLowerCase())) fails.push(`blobscape creature: ${name} ${JSON.stringify(got)}`)
@@ -659,6 +660,22 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     })
     if (fire.scales !== 6) fails.push(`blobscape creature: dragon file ${JSON.stringify(fire)}`)
     else ok(`blobscape creature: the dragon's .glb keys its fire as scale on six bones (${fire.kb} KB)`)
+    // the Sprites panel: the frog's tongue flick and its still pose from 8 sides, as 32 px pixel art
+    await c.page.getByRole('button', { name: 'Frog', exact: true }).click()
+    await c.page.waitForFunction(() => window.__creature?.bones() === 20 && !document.querySelector('[data-testid=creature-loading]'), null, { timeout: 60000 }).catch(() => {})
+    const sheet = await c.page.evaluate(() => window.__sprites({ moves: ['tongue', 'still'], directions: 8, size: 32, frames: 6, colours: 16, outline: true }))
+    const tongueLeft = Math.max(...sheet.solid.slice(12, 18)), stillLeft = sheet.solid[50]
+    if (sheet.cols !== 6 || sheet.rows !== 16 || sheet.solid.length !== 56 || sheet.solid.some((k) => k < 20)) fails.push(`blobscape creature sprites: ${JSON.stringify({ ...sheet, solid: sheet.solid.slice(0, 8) })}`)
+    else if (!(tongueLeft > stillLeft * 1.05)) fails.push(`blobscape creature sprites: the tongue doesn't show from the side (${tongueLeft} vs ${stillLeft} solid pixels)`)
+    else ok(`blobscape creature sprites: 16 rows of the frog from 8 sides, every frame drawn, tongue out from the side (${tongueLeft} vs ${stillLeft} solid pixels)`)
+    await c.page.locator('[data-testid=sprites] img').waitFor({ timeout: 10000 }).catch(() => {})
+    if (!(await c.page.locator('[data-testid=sprites] img').count())) fails.push('blobscape creature sprites: no sheet preview')
+    // the live view comes back after drawing the sheet
+    const after = await pixels(0.4, 'frog')
+    if (after < 1500) fails.push(`blobscape creature sprites: the view is empty after drawing a sheet (${after} frog pixels)`)
+    else ok('blobscape creature sprites: the live view comes back after the sheet')
+    await c.page.locator('[data-testid=sprites]').screenshot({ path: join(shots, 'blobscape-creature-sprites.png') })
+    await axe(c.page, 'blobscape creature sprites')
     await c.ctx.close()
   }
 
@@ -1041,6 +1058,34 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
       else ok('engine lab: walk sheet has 32 drawn frames, side views wider than front')
       await axe(page, 'engine lab')
     }
+    await ctx.close()
+  }
+}
+
+// Engine lab, Spark's run: the same fox walked by Spark 2.4's own SplatSkinning, both joint rules.
+{
+  for (const mode of ['quat', 'linear']) {
+    const label = `spark ${mode === 'quat' ? 'dual quaternions' : 'linear blend'}`
+    const { page, ctx } = await open(`/engine-lab/?which=spark&n=12000&walk=1&herd=2&mode=${mode}&offscreen=1`, { viewport: { width: 1000, height: 1000 } })
+    await page.waitForFunction(() => window.__lab || window.__labError, null, { timeout: 60000 })
+    const err = await page.evaluate(() => window.__labError)
+    if (err) { fails.push(`engine lab ${label}: ${err}`); await ctx.close(); continue }
+    const look = (t) => page.evaluate(async (t) => {
+      await window.__lab.frame(t)
+      const c = document.querySelector('canvas'); const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data
+      let n = 0; const on = new Uint8Array(d.length / 4)
+      for (let i = 0; i < d.length; i += 4) if (d[i] > 150 && d[i + 1] > 50 && d[i + 1] < 140 && d[i + 2] < 80) { n++; on[i / 4] = 1 }
+      return { n, on: Array.from(on) }
+    }, t)
+    const a = await look(0.1), b = await look(0.45)
+    const moved = a.on.reduce((s, v, i) => s + (v !== b.on[i] ? 1 : 0), 0)
+    if (a.n < 2000) fails.push(`engine lab ${label}: only ${a.n} fox-orange pixels`)
+    else if (moved < a.n / 20) fails.push(`engine lab ${label}: the foxes don't move (${moved} pixels changed)`)
+    else ok(`engine lab ${label}: Spark draws the foxes and walks them (${a.n} orange pixels, ${moved} change mid-stride)`)
+    const bench = await page.evaluate(() => window.__lab.bench(3))
+    if (!(bench.alone > 0)) fails.push(`engine lab ${label}: bench ${JSON.stringify(bench)}`)
+    else ok(`engine lab ${label}: times frames (${bench.alone.toFixed(0)} ms in software)`)
+    await page.screenshot({ path: join(shots, `engine-lab-spark-${mode}.png`) })
     await ctx.close()
   }
 }

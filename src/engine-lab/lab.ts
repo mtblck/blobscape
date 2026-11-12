@@ -12,10 +12,9 @@ import { readbackToSrgb, srgbToLinear } from '../splat-core/colour.ts'
  * The engine test bench. One canvas, one creature, two ways to draw it:
  *
  * - 'engine': Blobscape's engine (WebGPU, or WebGL with `forceWebGL`), which can walk;
- * - 'three': three.js's built-in GaussianSplat, standing still (it has no bones).
- *
- * Spark isn't here yet: it draws through the older WebGLRenderer, so timing it
- * fairly needs its own page.
+ * - 'three': three.js's built-in GaussianSplat, standing still (it has no bones);
+ * - 'spark': Spark 2.4 with its own SplatSkinning, walking the same trot
+ *   (`sparkLab.ts`, through three.js's WebGLRenderer, loaded only when picked).
  *
  * `bench()` measures two things. First, how often the live view actually
  * draws: the gap between animation frames, which is what you see as
@@ -25,8 +24,8 @@ import { readbackToSrgb, srgbToLinear } from '../splat-core/colour.ts'
  * frame in normal use. Headless verify has no live view and gets only the
  * second.
  */
-export type Which = 'engine' | 'three'
-export const WHICH: Which[] = ['engine', 'three']
+export type Which = 'engine' | 'three' | 'spark'
+export const WHICH: Which[] = ['engine', 'three', 'spark']
 
 export interface LabOptions {
   which: Which
@@ -47,7 +46,8 @@ export interface LabOptions {
 export interface Lab {
   readonly info: string
   readonly world?: SplatWorld
-  readonly renderer: THREE.WebGPURenderer
+  /** Ours and three.js's; Spark's runs have none (it draws through WebGLRenderer). */
+  readonly renderer?: THREE.WebGPURenderer
   bench(frames: number): Promise<BenchResult>
   orbit: Orbit
   setWalk(on: boolean): void
@@ -102,6 +102,7 @@ export interface StepTimes {
 }
 
 export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promise<Lab> {
+  if (o.which === 'spark') return (await import('./sparkLab.ts')).startSparkLab(display, o)
   const canvas = o.offscreen ? document.createElement('canvas') : display
   const renderer = new THREE.WebGPURenderer({ canvas, antialias: false, alpha: true, forceWebGL: o.webgl })
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1))

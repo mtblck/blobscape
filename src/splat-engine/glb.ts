@@ -17,10 +17,13 @@ import type { SplatMesh } from './mesh.ts'
  * BLOBSCAPE_gaussian_skinning, says so: blob centres follow the usual linear
  * blend, and each blob's rotation is the weighted average of its bones'
  * rotations. It's listed as used, not required, so viewers that don't know it
- * still load the file, and most will show the creature standing still.
+ * still load the file, and most will show the creature standing still. The
+ * full rule is written up in docs/rigged-splats.md.
  */
 export const SKIN_EXTENSION = 'BLOBSCAPE_gaussian_skinning'
 const SPLATS = 'KHR_gaussian_splatting'
+/** How a skinned blob turns and grows: the spec is docs/rigged-splats.md. */
+export const SKIN_RULE = { rotationBlend: 'quaternionAverage', scaleBlend: 'weightedAverage' } as const
 
 export interface Clip {
   name: string
@@ -167,12 +170,17 @@ export function writeRiggedGlb(r: Rigged): Uint8Array {
       primitives: [{
         mode: 0,
         attributes,
-        extensions: { [SPLATS]: { kernel: 'ellipse', colorSpace: 'srgb_rec709_display', projection: 'perspective', sortingMethod: 'cameraDistance' } },
+        extensions: {
+          [SPLATS]: {
+            kernel: 'ellipse', colorSpace: 'srgb_rec709_display', projection: 'perspective', sortingMethod: 'cameraDistance',
+            // KHR_gaussian_splatting asks extensions that build on it to sit inside its own object (docs/rigged-splats.md)
+            extensions: { [SKIN_EXTENSION]: SKIN_RULE },
+          },
+        },
       }],
     }],
     skins: [rig.skin],
     animations: rig.animations,
-    extensions: { [SKIN_EXTENSION]: { rotationBlend: 'quaternionAverage', scaleBlend: 'weightedAverage' } },
     buffers: [{ byteLength: bin.byteLength }],
     bufferViews: w.views,
     accessors: w.accessors,
