@@ -10,9 +10,13 @@ import { ImportError, readSplatFile } from '../splat-core/importer.ts'
 import { Button, Chip, Field, Panel, Slider, Tabs, Toggle } from '../shared/ui.tsx'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
 import { Viewport, type ToolHandlers } from './Viewport.tsx'
-import { drawCentres, drawOutlines, themeColour, toScreen } from './overlay.ts'
+import { drawBones, drawCentres, drawOutlines, themeColour, toScreen } from './overlay.ts'
 import { History } from './history.ts'
 import { takeHandOff } from './handoff.ts'
+import { STILL, actorAt, actorBlobs, actorBones, detailsOf, freezeInto, makeActor, poseAll, remake, type Actor } from './actors.ts'
+import { ZOO } from '../splat-engine/zoo/index.ts'
+import type { Creature as Body } from '../splat-engine/body.ts'
+import { href } from './routes.ts'
 
 type ToolId = 'orbit' | 'add' | 'spray' | 'select' | 'lasso' | 'move' | 'erase'
 const TOOLS: { id: ToolId; name: string; note: string }[] = [
@@ -21,7 +25,7 @@ const TOOLS: { id: ToolId; name: string; note: string }[] = [
   { id: 'spray', name: 'Spray', note: 'Drag to spray blobs inside the ring. They stick to whatever is under them, so you can build up layers.' },
   { id: 'select', name: 'Select', note: 'Click a blob to select it, or drag a box around many. Hold Shift to add to the selection. Then change it in the Selection tab.' },
   { id: 'lasso', name: 'Lasso', note: 'Draw round the blobs you want. Hold Shift to add to the selection.' },
-  { id: 'move', name: 'Move', note: 'Drag to slide the selection across the screen. With nothing selected, it grabs the blob under the pointer.' },
+  { id: 'move', name: 'Move', note: 'Drag to slide the selection across the screen. With nothing selected, it grabs the blob or creature under the pointer. Drag a creature to walk it somewhere else.' },
   { id: 'erase', name: 'Erase', note: 'Drag to remove every blob whose centre is inside the ring.' },
 ]
 
@@ -36,6 +40,12 @@ const OUTLINE_LIMIT = 1500
 const SELECT_OUTLINES = 3000
 const FILE_TYPES = '.ply,.spz,.splat,.ksplat,.sog'
 const PLAY_SECONDS = 2.5
+const MAX_ACTORS = 8
+type ShowRig = 'blobs' | 'bones' | 'both'
+const SHOW_RIG: { id: ShowRig; label: string }[] = [{ id: 'blobs', label: 'Blobs' }, { id: 'bones', label: 'Bones' }, { id: 'both', label: 'Both' }]
+const cap = (s: string) => s[0].toUpperCase() + s.slice(1)
+const aOr = (s: string) => `${/^[aeiou]/i.test(s) ? 'an' : 'a'} ${s}`
+const kilo = (n: number) => (n >= 1000 ? `${n / 1000}k` : String(n))
 
 /** Where an effect works from: the middle, size and floor of what it acts on. */
 function effectFrame(b: Blobs, sel: Selection | null): EffectFrame {
@@ -104,6 +114,24 @@ export function Sandbox() {
   const [running, setRunning] = useState(false)
   const time = useRef(0)
 
+  // Creatures: kept beside the scene and posed every frame into their own layer (actors.ts)
+  const [actors, setActors] = useState<readonly Actor[]>([])
+  const actorsRef = useRef(actors)
+  actorsRef.current = actors
+  const [currentKey, setCurrentKey] = useState<number | null>(null)
+  const current = actors.find((a) => a.key === currentKey) ?? actors[actors.length - 1]
+  const [playing, setPlaying] = useState(!reducedMotion)
+  const [showRig, setShowRig] = useState<ShowRig>('blobs')
+  const showRef = useRef(showRig)
+  showRef.current = showRig
+  const clocks = useRef(new Map<number, number>())
+  // Every creature as drawn this frame, one after another, and where each starts
+  const drawn = useRef(new Blobs())
+  const starts = useRef<number[]>([])
+  const scratch = useRef(new WeakMap<Body, Blobs>())
+  const maxActorBlobs = coarse ? 40_000 : 100_000
+  const actorCount = actorBlobs(actors)
+
   const blobs = blobsRef.current
   const sel = selRef.current
   const blobSize = 2 ** size
@@ -124,15 +152,16 @@ export function Sandbox() {
     bump()
   }
   const edit = (fn: (b: Blobs) => void) => {
-    history.current.record(blobsRef.current, source)
+    history.current.record(blobsRef.current, source, actorsRef.current)
     fn(blobsRef.current)
     bump()
   }
-  const undo = () => { const b = history.current.undo({ blobs: blobsRef.current, source }); if (b) { replace(b.blobs, b.source); setMessage('Undone') } }
-  const redo = () => { const b = history.current.redo({ blobs: blobsRef.current, source }); if (b) { replace(b.blobs, b.source); setMessage('Redone') } }
+  const now = () => ({ blobs: blobsRef.current, source, actors: actorsRef.current })
+  const undo = () => { const b = history.current.undo(now()); if (b) { replace(b.blobs, b.source); setActors(b.actors ?? []); setMessage('Undone') } }
+  const redo = () => { const b = history.current.redo(now()); if (b) { replace(b.blobs, b.source); setActors(b.actors ?? []); setMessage('Redone') } }
 
   const start = (s: (typeof STARTS)[number]) => {
-    history.current.record(blobsRef.current, source)
+    history.current.record(blobsRef.current, source, actorsRef.current)
     const b = s.make()
     replace(b, s.name)
     setOrbit((o) => ({ ...o, ...frame(b) }))
@@ -176,7 +205,7 @@ export function Sandbox() {
       if (upright) flipUpright(b)
       sitOnFloor(b)
       // The scene's name now, not when the file started opening
-      history.current.record(blobsRef.current, sourceRef.current)
+      history.current.record(blobsRef.current, sourceRef.current, actorsRef.current)
       replace(b, file.name)
       setOrbit((o) => ({ ...o, ...frame(b) }))
       const skipped = dropped ? `, skipping ${dropped.toLocaleString()} broken ones` : ''
@@ -209,7 +238,8 @@ export function Sandbox() {
   }
 
   const exportPly = () => {
-    const bytes = writePly(blobsRef.current)
+    const all = everything()
+    const bytes = writePly(all)
     const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/octet-stream' }))
     const a = document.createElement('a')
     a.href = url
@@ -218,7 +248,7 @@ export function Sandbox() {
     a.click()
     a.remove()
     setTimeout(() => URL.revokeObjectURL(url), 60_000)
-    setMessage(`Saved ${blobsRef.current.count.toLocaleString()} blobs`)
+    setMessage(`Saved ${all.count.toLocaleString()} blobs${all !== blobsRef.current ? ', creatures as they stand now' : ''}`)
   }
 
   // --- placing blobs ---------------------------------------------------------
@@ -377,7 +407,7 @@ export function Sandbox() {
   // A stroke's "before" picture goes into the history only once the stroke changes something
   const before = useRef<Blobs | null>(null)
   const changed = (from = 0) => {
-    if (before.current) { history.current.keep({ blobs: before.current, source }); before.current = null }
+    if (before.current) { history.current.keep({ blobs: before.current, source, actors: actorsRef.current }); before.current = null }
     bump(from)
   }
   const handlers: ToolHandlers | undefined = tool === 'orbit' ? undefined : {
@@ -388,6 +418,7 @@ export function Sandbox() {
       if (tool === 'select') return
       if (tool === 'lasso') { marquee.current = { kind: 'lasso', pts: [x, y] }; return }
       if (tool === 'move') {
+        if (!sel.count && grabActor(x, y)) return
         if (!sel.count) { const hit = blobAt(x, y); if (hit >= 0) { sel.set(hit, true); selChanged() } }
         startMove()
         return
@@ -410,7 +441,7 @@ export function Sandbox() {
         if (m?.kind === 'lasso' && Math.hypot(x - l.x, y - l.y) >= 3) { m.pts.push(x, y); last.current = { ...l, x, y }; view?.invalidate(1) }
         return
       }
-      if (tool === 'move') { moveBy(x - l.x, y - l.y); last.current = { ...l, x, y }; return }
+      if (tool === 'move') { if (actorGrab.current) dragActor(x, y); else moveBy(x - l.x, y - l.y); last.current = { ...l, x, y }; return }
       // Space the dabs out so a slow drag doesn't pile blobs up in one spot
       if (Math.hypot(x - l.x, y - l.y) < Math.max(4, spread / 3)) return
       last.current = { ...l, x, y }
@@ -428,6 +459,7 @@ export function Sandbox() {
       before.current = null
       marquee.current = null
       grab.current = null
+      actorGrab.current = null
     },
     // Enter or Space on the focused view uses the tool at the centre (a keyboard stand-in for a click)
     // With Move, the arrow keys slide the selection instead of orbiting (Shift for bigger steps)
@@ -554,9 +586,133 @@ export function Sandbox() {
     setMessage(`${fx!.name} made permanent`)
   }
 
+  // --- creatures ---------------------------------------------------------------
+  /** Poses every creature at its own clock and sends the layer to the view. */
+  const drawActors = useCallback(() => {
+    const list = actorsRef.current
+    starts.current = poseAll(list, (a) => clocks.current.get(a.key) ?? 0, drawn.current, scratch.current)
+    if (!view) return
+    void view.syncLayer(list.length && showRef.current !== 'bones' ? drawn.current : null)
+    view.invalidate(2)
+  }, [view])
+  useEffect(() => { drawActors() }, [drawActors, actors, showRig])
+  const anyActors = actors.length > 0
+  useEffect(() => {
+    if (!view || !playing || !anyActors) return
+    let raf = 0, prev = performance.now()
+    const tick = (now: number) => {
+      const dt = Math.max(0, Math.min(0.1, (now - prev) / 1000))
+      prev = now
+      for (const a of actorsRef.current) clocks.current.set(a.key, (clocks.current.get(a.key) ?? 0) + dt * a.speed)
+      drawActors()
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [view, playing, anyActors, drawActors])
+
+  /** A change to the list of creatures that Undo can take back. */
+  const recordActors = () => history.current.record(blobsRef.current, source, actorsRef.current)
+  /** A change to one creature (place, size, move) that isn't worth an undo step. */
+  const changeActor = (key: number, fn: (a: Actor) => Actor) => setActors((list) => list.map((a) => (a.key === key ? fn(a) : a)))
+
+  /** The ground under the middle of the view: where the scene's lowest blobs are, else y = 0. */
+  const floorY = () => bounds(blobsRef.current, null)?.lo[1] ?? 0
+  const addActor = (sp: (typeof ZOO)[number]) => {
+    const list = actorsRef.current
+    if (list.length >= MAX_ACTORS) { setMessage(`The sandbox holds up to ${MAX_ACTORS} creatures`); return }
+    const detail = detailsOf(sp)[0]
+    if (actorBlobs(list) + detail > maxActorBlobs) { setMessage(`Creatures can have ${maxActorBlobs.toLocaleString()} blobs between them here. Remove or freeze one first.`); return }
+    // Sized to the scene, keeping the zoo's sizes to each other: a fox comes up about half way up a sample
+    const bb = bounds(blobsRef.current, null)
+    const fit = Math.min(4, Math.max(0.2, bb ? (bb.hi[1] - bb.lo[1]) / 2.4 : 0.5))
+    // Beside the scene, taking turns right and left of it along the camera's right, a little in front
+    const az = (orbit.azimuth * Math.PI) / 180
+    const right: Vec3 = [Math.cos(az), 0, -Math.sin(az)], ahead: Vec3 = [Math.sin(az), 0, Math.cos(az)]
+    const n = list.length
+    const across = bb ? Math.min(orbit.distance * 0.3, Math.hypot(bb.hi[0] - bb.lo[0], bb.hi[2] - bb.lo[2]) / 2) : 0
+    const gap = Math.max(0.25, orbit.distance * 0.12)
+    const step = (n % 2 ? -1 : 1) * (across + gap * (0.5 + Math.floor(n / 2)))
+    const out = across * 0.3
+    const at: Vec3 = [orbit.target[0] + right[0] * step + ahead[0] * out, floorY(), orbit.target[2] + right[2] * step + ahead[2] * out]
+    // Turned three-quarters to the camera, so a walk shows its legs
+    const a = makeActor(sp, { detail, at, height: 1, yaw: orbit.azimuth - 40 })
+    const added = { ...a, height: a.rest.height * fit }
+    recordActors()
+    clocks.current.set(added.key, 0)
+    setActors([...list, added])
+    setCurrentKey(added.key)
+    setMessage(`Added ${aOr(sp.name)}`)
+  }
+  const removeActor = (a: Actor) => {
+    recordActors()
+    setActors(actorsRef.current.filter((x) => x.key !== a.key))
+    setMessage(`Removed the ${a.species.name}`)
+  }
+  /** Turns a creature, as it stands now, into ordinary blobs every tool can work on. */
+  const freezeActor = (a: Actor) => {
+    const k = actorsRef.current.indexOf(a)
+    if (k < 0) return
+    const from = blobsRef.current.count
+    if (from + a.body.blobs.count > maxBlobs) { setMessage(`The sandbox holds up to ${maxBlobs.toLocaleString()} blobs`); return }
+    drawActors()
+    recordActors()
+    freezeInto(drawn.current, starts.current[k], a.body.blobs.count, blobsRef.current)
+    setActors(actorsRef.current.filter((x) => x.key !== a.key))
+    bump(from)
+    setMessage(`Froze the ${a.species.name} into the scene: ${a.body.blobs.count.toLocaleString()} blobs`)
+  }
+  const reshape = (a: Actor, look: string, detail: number) => {
+    if (actorBlobs(actorsRef.current) - a.detail + detail > maxActorBlobs) { setMessage(`Creatures can have ${maxActorBlobs.toLocaleString()} blobs between them here`); return }
+    changeActor(a.key, (x) => remake(x, look, detail))
+  }
+  const bringHere = (a: Actor) => changeActor(a.key, (x) => ({ ...x, at: [orbit.target[0], floorY(), orbit.target[2]] }))
+
+  /** A creature drag with Move: the ground plane it slides on, and where on it the pointer took hold. */
+  const actorGrab = useRef<{ key: number; y: number; dx: number; dz: number; recorded: boolean } | null>(null)
+  const groundAt = (x: number, y: number, h: number): [number, number] | null => {
+    if (!view) return null
+    const { origin: o, dir: d } = view.ray(x, y)
+    if (Math.abs(d.y) < 1e-4) return null
+    const t = (h - o.y) / d.y
+    return t > 0 && t < orbit.distance * 20 ? [o.x + d.x * t, o.z + d.z * t] : null
+  }
+  /** Takes hold of the creature under the pointer, if it's nearer than any scene blob there. */
+  const grabActor = (x: number, y: number) => {
+    if (!view || !actorsRef.current.length || showRef.current === 'bones') return false
+    const { origin, dir } = view.ray(x, y)
+    const o = [origin.x, origin.y, origin.z], d = [dir.x, dir.y, dir.z]
+    const hit = actorAt(drawn.current, starts.current, o, d)
+    if (hit.index < 0) return false
+    const scene = blobsRef.current.count ? pick(blobsRef.current, o, d, 1.5, 0.2) : { index: -1, t: Infinity }
+    if (scene.index >= 0 && scene.t < hit.t) return false
+    const a = actorsRef.current[hit.index]
+    const g = groundAt(x, y, a.at[1])
+    actorGrab.current = { key: a.key, y: a.at[1], dx: g ? a.at[0] - g[0] : 0, dz: g ? a.at[2] - g[1] : 0, recorded: false }
+    setCurrentKey(a.key)
+    return true
+  }
+  const dragActor = (x: number, y: number) => {
+    const g = actorGrab.current
+    const p = g && groundAt(x, y, g.y)
+    if (!g || !p) return
+    if (!g.recorded) { recordActors(); g.recorded = true }
+    changeActor(g.key, (a) => ({ ...a, at: [p[0] + g.dx, g.y, p[1] + g.dz] }))
+  }
+
+  /** The scene and its creatures together: what Frame looks at and what Save writes. */
+  const everything = () => {
+    if (!drawn.current.count || !actorsRef.current.length) return blobsRef.current
+    const all = blobsRef.current.clone()
+    freezeInto(drawn.current, 0, drawn.current.count, all)
+    return all
+  }
+  const frameAll = () => frame(everything())
+
   // --- overlay -----------------------------------------------------------------
   const overlay = (ctx: CanvasRenderingContext2D, lens: Lens) => {
     const b = blobsRef.current
+    if (showRig !== 'blobs') for (const a of actorsRef.current) drawBones(ctx, actorBones(a), lens, themeColour('accent', ctx.canvas))
     if (xray) {
       if (b.count <= OUTLINE_LIMIT) drawOutlines(ctx, b, lens, { sigmas: [2] })
       else drawCentres(ctx, b, lens, themeColour('ink'))
@@ -661,8 +817,8 @@ export function Sandbox() {
             tool={handlers}
             overlay={overlay}
             takeSync={takeSync}
-            label={`Sandbox scene with ${blobs.count.toLocaleString()} blobs. ${tool === 'move' ? 'With the Move tool, the arrow keys slide the selection (Shift for bigger steps)' : 'Drag or use the arrow keys to orbit'}, plus and minus to zoom${toolKeyNote[tool] ?? ''}.`}
-            home={() => ({ ...frame(blobsRef.current), azimuth: 30, elevation: 22 })}
+            label={`Sandbox scene with ${blobs.count.toLocaleString()} blobs${actors.length ? ` and ${actors.length === 1 ? 'a' : actors.length} creature${actors.length === 1 ? '' : 's'}: ${actors.map((a) => a.species.name).join(', ')}` : ''}. ${tool === 'move' ? 'With the Move tool, the arrow keys slide the selection (Shift for bigger steps)' : 'Drag or use the arrow keys to orbit'}, plus and minus to zoom${toolKeyNote[tool] ?? ''}.`}
+            home={() => ({ ...frameAll(), azimuth: 30, elevation: 22 })}
             hint={coarse ? (tool === 'orbit' ? 'drag to orbit · pinch to zoom' : 'pinch to zoom · pick Look to orbit') : tool === 'orbit' ? 'drag to orbit · scroll to zoom' : 'right-drag to orbit · scroll to zoom'}
           >
             {dragOver && (
@@ -674,6 +830,7 @@ export function Sandbox() {
           <p role="alert" className="text-sm text-accent-ink empty:hidden">{error}</p>
           <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm text-ink-muted">
             <span><span className="tabular-nums text-ink" data-testid="blob-count">{blobs.count.toLocaleString()}</span> blobs</span>
+            {actors.length > 0 && <span>+ <span className="tabular-nums text-ink" data-testid="creature-blob-count">{actorCount.toLocaleString()}</span> in {actors.length === 1 ? 'a creature' : `${actors.length} creatures`}</span>}
             {sel.count > 0 && <span><span className="tabular-nums text-accent-ink" data-testid="selected-count">{sel.count.toLocaleString()}</span> selected</span>}
             <span className="min-w-0 truncate text-ink-faint">Started from: {source}</span>
             <span aria-live="polite" className="ml-auto text-ink-faint">{message}</span>
@@ -758,6 +915,72 @@ export function Sandbox() {
                 ),
               },
               {
+                id: 'creatures',
+                label: 'Creatures',
+                summary: actors.length ? `${actors.length} in the scene` : 'None',
+                content: (
+                  <Panel note="Creatures from the Creature page, moving in your scene. Drag one with the Move tool to put it somewhere else. Brushes, selections and effects leave them alone until you freeze one into ordinary blobs.">
+                    <Field label="Add">
+                      <div className="flex flex-wrap gap-1.5" data-testid="add-creature">
+                        {ZOO.map((sp) => <Button small key={sp.id} aria-label={`Add ${aOr(sp.name)}`} onClick={() => addActor(sp)} disabled={actors.length >= MAX_ACTORS}>{cap(sp.name)}</Button>)}
+                      </div>
+                    </Field>
+                    {current && (
+                      <>
+                        {actors.length > 1 && (
+                          <Field label="Working on">
+                            <div className="flex flex-wrap gap-1.5">
+                              {actors.map((a, k) => <Chip key={a.key} active={a === current} onClick={() => setCurrentKey(a.key)}>{cap(a.species.name)}{actors.filter((x) => x.species === a.species).length > 1 ? ` ${actors.filter((x, j) => x.species === a.species && j <= k).length}` : ''}</Chip>)}
+                            </div>
+                          </Field>
+                        )}
+                        <Field label="Move">
+                          <div className="flex flex-wrap gap-1.5">
+                            {current.species.moves.map((m) => <Chip key={m.name} active={current.move === m.name} onClick={() => changeActor(current.key, (a) => ({ ...a, move: m.name }))}>{m.label}</Chip>)}
+                            <Chip active={current.move === STILL} onClick={() => changeActor(current.key, (a) => ({ ...a, move: STILL }))}>Still</Chip>
+                          </div>
+                        </Field>
+                        <Slider label="Speed" value={current.speed} min={0.1} max={2} step={0.05} onChange={(v) => changeActor(current.key, (a) => ({ ...a, speed: v }))} format={(v) => `×${v.toFixed(2)}`} />
+                        <Slider label="Size" value={Math.log2(current.height)} min={-5} max={4} step={0.05} onChange={(v) => changeActor(current.key, (a) => ({ ...a, height: 2 ** v }))} format={(v) => `${(2 ** v).toFixed(2)} tall`} />
+                        <Slider label="Facing" value={((current.yaw % 360) + 360) % 360} min={0} max={359} step={1} onChange={(v) => changeActor(current.key, (a) => ({ ...a, yaw: v }))} format={(v) => `${Math.round(v)}°`} />
+                        {current.species.looks.length > 1 && (
+                          <Field label="Look">
+                            <div className="flex flex-wrap gap-1.5">
+                              {current.species.looks.map((l) => <Chip key={l.id} active={current.look === l.id} onClick={() => reshape(current, l.id, current.detail)}>{l.label}</Chip>)}
+                            </div>
+                          </Field>
+                        )}
+                        <Field label="Blobs">
+                          <div className="flex flex-wrap gap-1.5">
+                            {detailsOf(current.species).map((n) => <Chip key={n} active={current.detail === n} onClick={() => reshape(current, current.look, n)}>{kilo(n)}</Chip>)}
+                          </div>
+                        </Field>
+                        <div className="flex flex-wrap gap-2">
+                          <Button small onClick={() => bringHere(current)}>Bring to the middle of the view</Button>
+                          <Button small onClick={() => freezeActor(current)}>Freeze into the scene</Button>
+                          <Button small onClick={() => removeActor(current)}>Remove</Button>
+                        </div>
+                      </>
+                    )}
+                    {anyActors && (
+                      <>
+                        <Field label="Show">
+                          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Show creatures as">
+                            {SHOW_RIG.map((v) => <Chip key={v.id} active={showRig === v.id} onClick={() => setShowRig(v.id)}>{v.label}</Chip>)}
+                          </div>
+                        </Field>
+                        <div className="flex flex-wrap gap-2">
+                          <Button small onClick={() => setPlaying((p) => !p)}>{playing ? 'Pause them' : 'Play them'}</Button>
+                        </div>
+                      </>
+                    )}
+                    <p className="text-xs text-ink-faint">
+                      They're posed on your device's processor each frame, so here they come in their lighter sizes. Bigger ones, and taking one away as a 3D model, are on the <a href={href({ page: 'creature' })} className="underline hover:text-accent">Creature</a> page.
+                    </p>
+                  </Panel>
+                ),
+              },
+              {
                 id: 'effects',
                 label: 'Effects',
                 summary: fx ? fx.name : 'None',
@@ -807,7 +1030,7 @@ export function Sandbox() {
                     <div className="flex flex-wrap gap-2">
                       <Button small onClick={() => { edit(flipUpright); setOrbit((o) => ({ ...o, ...frame(blobsRef.current) })) }} disabled={!blobs.count}>Flip upside down</Button>
                       <Button small onClick={() => { edit(sitOnFloor); setOrbit((o) => ({ ...o, ...frame(blobsRef.current) })) }} disabled={!blobs.count}>Sit on the floor</Button>
-                      <Button small onClick={() => setOrbit((o) => ({ ...o, ...frame(blobsRef.current) }))}>Frame the scene</Button>
+                      <Button small onClick={() => setOrbit((o) => ({ ...o, ...frameAll() }))}>Frame the scene</Button>
                     </div>
                     <Toggle label="X-ray" checked={xray} onChange={setXray} />
                     <p className="text-xs text-ink-faint">X-ray outlines every blob up to {OUTLINE_LIMIT.toLocaleString()}; past that it shows centres as dots.</p>
