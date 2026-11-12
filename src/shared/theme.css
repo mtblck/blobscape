@@ -100,6 +100,9 @@
   --color-placard-edge: #f2553a;
   --color-placard-ink:  #1d2440;
   --color-blob:         #f2553a;
+  /* Dungeon Run's bars: health is the blob coral (a big shape, not text), magic a sky blue */
+  --color-health:       #f2553a;
+  --color-magic:        #62a8ff;
   --color-deep:         #1d2440;
   --font-display: "Fredoka Variable", ui-rounded, system-ui, sans-serif;
   --font-sans: "Figtree Variable", ui-sans-serif, system-ui, sans-serif;

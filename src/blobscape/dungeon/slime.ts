@@ -85,8 +85,8 @@ export function hideSlime(sk: Skeleton, at: Vec3) {
   sk.update()
 }
 
-/** Poses a slime from the game's state of it, at game time `time` (for the wobble). */
-export function poseSlime(sk: Skeleton, s: Slime, hasteHop: number) {
+/** Poses a slime from the game's state of it; `period` is its hop's length in seconds. */
+export function poseSlime(sk: Skeleton, s: Slime, period: number) {
   sk.reset()
   const rule = RULES[s.kind]
   sk.place.set([s.x, 0, s.z])
@@ -100,7 +100,7 @@ export function poseSlime(sk: Skeleton, s: Slime, hasteHop: number) {
     sk.size[BODY_I] = Math.max(0.001, 1 - Math.cos(u * Math.PI * 1.5) * Math.exp(-u * 3.5) * (1 - u) - (1 - u) ** 3)
     squash = 0.3 * Math.sin(u * 9) * (1 - u)
   } else if (s.phase === 'live') {
-    const hop = hopShape(s.hopT, hasteHop)
+    const hop = hopShape(s.hopT, period)
     squash = hop.squash
     y = hop.y
     // struck: a hard wobble that dies away
@@ -141,6 +141,6 @@ function burst(sk: Skeleton, t: number) {
     const y = y0 + vy * tt - 0.5 * g * tt * tt
     sk.offset.set([(out[0] / l) * sp * tt, y - y0, (out[2] / l) * sp * tt], b * 3)
     // landed: a splat, flattened as far as one size can (wider, so it reads as spread)
-    sk.size[b] = Math.max(0, (t >= land ? 1.35 : 1) * fade)
+    sk.size[b] = Math.max(0, (t >= land ? 1.35 : 1) * fade * Math.min(1, t / 0.08))
   }
 }

@@ -52,6 +52,8 @@ export interface HeroClock {
   walk: number
   /** Seconds since the hero went down, or −1. */
   down: number
+  /** Blink while the hero can't be hurt (off under reduced motion, where it only staggers). */
+  flicker: boolean
 }
 
 const STRIDE_METRES = 1.5, STRIDE_SECONDS = 1.1
@@ -118,8 +120,8 @@ export function poseHero(sk: Skeleton, h: Hero, clock: HeroClock, dt: number) {
   sk.setRotation(0, mulQ(facing, sk.rotation.subarray(0, 4)))
   sk.offset.set(rotate(axisAngle(Y, h.heading), sk.offset.subarray(0, 3)), 0)
   sk.place.set([h.x, 0, h.z])
-  // the grace after a hurt shows as a flicker
-  sk.rootScale = h.hurt > 0 && clock.down < 0 && Math.floor(h.hurt * 12) % 3 === 0 ? 0.0001 : 1
+  // the grace after a hurt shows as a slow blink: off for 0.12 s in every 0.45 s, about two blinks, well under three flashes a second
+  sk.rootScale = clock.flicker && h.hurt > 0 && clock.down < 0 && h.hurt % 0.45 < 0.12 ? 0.0001 : 1
   sk.update()
 }
 

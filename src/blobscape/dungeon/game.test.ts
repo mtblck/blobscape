@@ -109,8 +109,8 @@ test('waves come through the doors, never more of a colour than its pool, and th
 })
 
 test('the hop squashes on landing, stretches in the air and is on the floor otherwise', () => {
-  const land = hopShape(0, 1)
-  assert.ok(land.squash > 0.3 && land.y === 0 && !land.air)
+  const land = hopShape(0.04, 1)
+  assert.ok(land.squash > 0.15 && land.y === 0 && !land.air)
   const mid = hopShape(0.55 + 0.45 / 2, 1)
   assert.ok(mid.air && mid.y > 0.3 && mid.squash < 0)
   for (let t = 0; t < 1; t += 0.01) assert.ok(hopShape(t, 1).y >= 0)
@@ -121,4 +121,18 @@ test('keepIn pushes out of pillars and walls', () => {
   assert.ok(Math.hypot(x - PILLARS[0].x, z - PILLARS[0].z) >= PILLARS[0].r + 0.3 - 1e-9)
   const [x2] = keepIn(HALF + 3, 0, slimeR({ kind: 'purple' }))
   assert.ok(x2 < HALF - slimeR({ kind: 'purple' }))
+})
+
+test('once the hero is down, a bolt still in flight bursts nothing and gives nothing back', () => {
+  const g = new Game()
+  g.hold()
+  const s = g.place('gold', 0, 2)
+  g.step(1 / 30, { ...idle, cast: true })
+  run(g, 0.25)
+  g.state = 'down'
+  g.hero.hp = 0
+  run(g, 1)
+  assert.equal(g.score, 0)
+  assert.equal(g.hero.hp, 0)
+  assert.equal(s.hp, RULES.gold.hp)
 })

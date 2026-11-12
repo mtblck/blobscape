@@ -290,7 +290,7 @@ export class Game {
     const h = this.hero
     let best: Slime | null = null, bd = Infinity
     for (const s of this.slimes) {
-      if (s.phase === 'burst') continue
+      if (s.phase !== 'live') continue
       const dx = s.x - h.x, dz = s.z - h.z, d = Math.hypot(dx, dz)
       if (d > range || Math.abs(angleTo(h.heading, Math.atan2(dx, dz))) > cone) continue
       if (d < bd) { bd = d; best = s }
@@ -324,7 +324,7 @@ export class Game {
       }
       b.x += Math.sin(b.heading) * BOLT_SPEED * dt
       b.z += Math.cos(b.heading) * BOLT_SPEED * dt
-      const hit = this.slimes.find((s) => s.phase !== 'burst' && Math.hypot(s.x - b.x, s.z - b.z) < slimeR(s) + 0.2)
+      const hit = this.slimes.find((s) => s.phase === 'live' && Math.hypot(s.x - b.x, s.z - b.z) < slimeR(s) + 0.2)
       const wall = Math.abs(b.x) > HALF - 0.2 || Math.abs(b.z) > HALF - 0.2 || PILLARS.some((p) => Math.hypot(p.x - b.x, p.z - b.z) < p.r + 0.1)
       if (hit) this.damage(hit, 2, 'magic', Math.sin(b.heading), Math.cos(b.heading))
       if (hit || wall || b.t > BOLT_LIFE) { b.popped = true; b.t = 0 }
@@ -333,6 +333,8 @@ export class Game {
   }
 
   private damage(s: Slime, n: number, by: 'sword' | 'magic', dx: number, dz: number) {
+    // a bolt still in flight when the hero goes down hits nothing that counts
+    if (this.state !== 'playing') return
     s.hp -= n
     s.struck = 0
     const push = by === 'magic' ? 3 : 4.5
@@ -506,7 +508,7 @@ export function hopShape(t: number, period: number): { y: number; squash: number
   if (u < up) {
     // on the ground: settle from the landing, then crouch for the next jump
     const g = u / up
-    const settle = Math.exp(-g * 6) * Math.cos(g * 14) * 0.5
+    const settle = Math.min(1, g * 14) * Math.exp(-g * 6) * Math.cos(g * 14) * 0.6
     const crouch = Math.max(0, (g - 0.7) / 0.3) ** 2 * 0.6
     return { y: 0, squash: settle + crouch, air: false }
   }

@@ -29,7 +29,7 @@ export class Dungeon {
   readonly bolts: Creature[]
   /** Every actor for the SplatWorld. */
   readonly actors: Creature[]
-  private clock: HeroClock = { idle: 0, walk: 0, down: -1 }
+  private clock: HeroClock = { idle: 0, walk: 0, down: -1, flicker: true }
   readonly opts: DungeonOptions
 
   constructor(opts: DungeonOptions, game?: Game) {
@@ -46,6 +46,9 @@ export class Dungeon {
     this.actors = [this.hero, makeFloor(d), makeWalls(d), makePillars(d), this.torches, ...KINDS.flatMap((k) => slimes[k]), ...this.bolts]
     this.update(0, { forward: 0, turn: 0 })
   }
+
+  /** Whether the hero blinks after a hurt (the page turns it off under reduced motion). */
+  set flicker(on: boolean) { this.clock.flicker = on }
 
   get blobCount() { return this.actors.reduce((s, a) => s + a.blobs.count, 0) }
 

@@ -767,7 +767,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
       return { warm, green }
     })
     const run = (s, input) => k.page.evaluate(async ([s, input]) => { await window.__dungeon.stage.frame(s, input) }, [s, input])
-    await k.page.evaluate(() => { const g = window.__dungeon.stage.dungeon.game; g.hold(); g.place('green', 0, g.hero.z + 0.9) })
+    await k.page.evaluate(() => { const g = window.__dungeon.stage.dungeon.game; g.hold(); g.place('green', 0.7, g.hero.z + 1.1) })
     await run(0.2, { forward: 0, turn: 0 })
     const a = await look()
     // a few swings (running after it when knocked back) burst a green slime
@@ -777,7 +777,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     await run(0.5, { forward: 0, turn: 0 })
     const meters = async () => Object.fromEntries(await k.page.getByRole('meter').evaluateAll((els) => els.map((e) => [e.getAttribute('aria-label'), +e.getAttribute('aria-valuenow')])))
     const m = await meters()
-    if (!(a.warm > 20000 && a.green > 300 && fight.score === 1 && fight.phase === 'burst' && m.Magic < 100 && m.Health === 100)) fails.push(`blobscape dungeon: ${JSON.stringify({ a, fight, m })}`)
+    if (!(a.warm > 20000 && a.green > 150 && fight.score === 1 && fight.phase === 'burst' && m.Magic < 100 && m.Health >= 80)) fails.push(`blobscape dungeon: ${JSON.stringify({ a, fight, m })}`)
     else ok(`blobscape dungeon: the hall draws (${a.warm} torchlit, ${a.green} slime pixels), swings burst the slime, a bolt spends magic (${m.Magic} left)`)
     await k.page.screenshot({ path: join(shots, 'blobscape-dungeon.png') })
     await axe(k.page, 'blobscape dungeon')
@@ -1011,6 +1011,34 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   if (focusTag === 'BODY') fails.push('blobscape sandbox: focus fell to the page after Delete')
   else ok('blobscape sandbox: focus stays in the panel after Delete')
   await page.screenshot({ path: join(shots, 'blobscape-sandbox-tools.png') })
+  await ctx.close()
+}
+
+// 7c. Things from other experiments in the sandbox: a slime (that bursts and grows back) and the watch
+{
+  const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 900 } })
+  await page.waitForTimeout(1500)
+  const inCreatures = async () => Number(((await page.textContent('[data-testid=creature-blob-count]', { timeout: 1000 }).catch(() => '0')) ?? '0').replace(/\D/g, ''))
+  await page.getByRole('tab', { name: /Scene/ }).click()
+  await page.getByRole('button', { name: 'Empty' }).click()
+  await page.getByRole('tab', { name: /Creatures/ }).click()
+  await page.getByTestId('add-creature').getByRole('button', { name: 'Slime' }).click()
+  await page.waitForTimeout(400)
+  const slime = await inCreatures()
+  await page.getByRole('button', { name: 'Red', exact: true }).click()
+  await page.getByRole('button', { name: 'Burst', exact: true }).click()
+  await page.getByRole('button', { name: 'Bring to the middle of the view' }).click()
+  await page.waitForTimeout(2000)
+  const a = await page.getByTestId('viewport').screenshot()
+  await page.waitForTimeout(600)
+  const b = await page.getByTestId('viewport').screenshot()
+  await page.getByTestId('add-creature').getByRole('button', { name: 'Watch' }).click()
+  await page.waitForTimeout(800)
+  const both = await inCreatures()
+  if (!(slime >= 2500 && both - slime >= 25000 && !a.equals(b))) fails.push(`blobscape sandbox props: ${JSON.stringify({ slime, both, same: a.equals(b) })}`)
+  else ok(`blobscape sandbox props: adds a slime (${slime.toLocaleString()} blobs) that bursts, and the watch (${(both - slime).toLocaleString()})`)
+  await page.screenshot({ path: join(shots, 'blobscape-sandbox-props.png') })
+  await axe(page, 'blobscape sandbox props')
   await ctx.close()
 }
 

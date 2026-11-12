@@ -79,3 +79,4 @@ multi-page React app, one Vercel project, served from the root. See README for t
 - Slimes are pooled per colour (`RULES[kind].pool`; colours are baked into blobs, so a slime can't change colour). A pool slot not in use is hidden with `rootScale` 0 at the hero. Each slime carries 16 shard bones at size 0 that become the burst.
 - The hero is the elf's spec (`elfSpec`) plus a `sword` bone on the right hand and an `orb` bone on the left; swings and casts are `aim`s layered on the idle/run blend.
 - Torchlight is baked into the hall's colours (`torchLight`); the flames are bones. Verify drives `stage.frame(seconds, input)` with `?offscreen=1`.
+- The sandbox's Creatures tab also adds `PROPS` (`src/blobscape/props.ts`): Dungeon Run's slime and Clockwork's watch, written as `Species` (the watch's move ignores its clock and shows the time now).

@@ -70,9 +70,13 @@ export function DungeonRun() {
         }
         s.onEvents = (events) => {
           for (const e of events) {
-            if (e.type === 'hurt') setHurts((n) => n + 1)
+            if (e.type === 'hurt') {
+              setHurts((n) => n + 1)
+              const hp = s.dungeon?.game.hero.hp ?? 0
+              if (hp > 0 && hp < 30 && hp + e.damage >= 30) announce('Health low.')
+            }
             const line = say(e)
-            if (line) setSaid(line)
+            if (line) announce(line)
             if (e.type === 'cleared' || e.type === 'down') setBest((b) => Math.max(b, e.type === 'cleared' ? e.wave : e.wave - 1))
           }
         }
@@ -88,6 +92,7 @@ export function DungeonRun() {
     setBusy('Lighting the torches…')
     const t = setTimeout(() => {
       stage.setDungeon({ detail, look, difficulty })
+      stage.dungeon!.flicker = !calm
       setHud((h) => ({ ...h, blobs: stage.blobCount }))
       setBusy(undefined)
     }, 30)
@@ -96,12 +101,6 @@ export function DungeonRun() {
   useEffect(() => { if (stage?.dungeon) stage.dungeon.game.difficulty = difficulty }, [stage, difficulty, busy])
   useEffect(() => { if (stage) stage.view = view }, [stage, view])
   useEffect(() => { if (stage) stage.paused = paused }, [stage, paused])
-
-  const restart = () => {
-    stage?.dungeon?.game.restart()
-    setPaused(false)
-    setSaid('Wave 1. Here they come.')
-  }
 
   // --- input: keys, the thumb stick and the two buttons all feed one input
   const keys = useRef(new Set<string>())
@@ -122,6 +121,17 @@ export function DungeonRun() {
   }
   const pausedRef = useRef(paused)
   pausedRef.current = paused
+  const calm = useMemo(() => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches, [])
+  // the game was set by keys, so give focus back to the view after an overlay
+  const resume = () => { setPaused(false); canvas.current?.focus({ preventScroll: true }) }
+  const restart = () => {
+    stageRef.current?.dungeon?.game.restart()
+    resume()
+    announce('Wave 1. Here they come.')
+  }
+  // the same line twice is read twice: alternate an invisible mark on the end
+  const said2 = useRef(0)
+  const announce = (line: string) => { said2.current++; setSaid(line + (said2.current % 2 ? '\u200b' : '')) }
   useEffect(() => {
     const KEYS: Record<string, string> = {
       ArrowUp: 'f', KeyW: 'f', ArrowDown: 'b', KeyS: 'b', ArrowLeft: 'l', KeyA: 'l', ArrowRight: 'r', KeyD: 'r',
@@ -131,13 +141,22 @@ export function DungeonRun() {
     const mine = (e: KeyboardEvent) => {
       const t = e.target
       if (!(t instanceof HTMLElement)) return true
-      if (t.isContentEditable || t.closest('input, textarea, select, [role=tab], [role=slider]')) return false
+      // not in the site's own header, menu and footer, nor where a key already means something
+      if (t.isContentEditable || t.closest('input, textarea, select, [role=tab], [role=slider], nav, [role=dialog], footer')) return false
       return !((e.code === 'Space' || e.code === 'Enter') && t.closest('button, a'))
     }
     const down = (e: KeyboardEvent) => {
+      // a held Space or Enter mustn't press a button that takes focus mid-fight (Try again)
+      if (e.repeat && (e.code === 'Space' || e.code === 'Enter')) { e.preventDefault(); return }
       if (e.metaKey || e.ctrlKey || e.altKey || !mine(e)) return
       const stage = stageRef.current
-      if (e.code === 'KeyP' || (e.code === 'Escape' && !pausedRef.current)) { e.preventDefault(); setPaused((p) => !p); return }
+      if (e.code === 'KeyP' || e.code === 'Escape') {
+        if (stage?.dungeon?.game.state === 'down') return
+        e.preventDefault()
+        if (pausedRef.current) resume()
+        else setPaused(true)
+        return
+      }
       if (e.code === 'KeyR' && stage?.dungeon?.game.state === 'down') { restart(); return }
       const k = KEYS[e.code]
       if (!k) return
@@ -149,16 +168,18 @@ export function DungeonRun() {
     }
     const up = (e: KeyboardEvent) => { const k = KEYS[e.code]; if (k && keys.current.delete(k)) push() }
     const clear = () => { keys.current.clear(); stick.current = { forward: 0, turn: 0 }; held.current = { swing: false, cast: false }; push() }
-    // leaving the tab or window pauses, so the slimes don't win while you're away
-    const away = () => { clear(); if (document.hidden) setPaused(true) }
+    // leaving the tab or the window pauses, so the slimes don't win while you're away
+    const playing = () => stageRef.current?.dungeon?.game.state === 'playing'
+    const leave = () => { clear(); if (playing()) setPaused(true) }
+    const away = () => { clear(); if (document.hidden && playing()) setPaused(true) }
     window.addEventListener('keydown', down)
     window.addEventListener('keyup', up)
-    window.addEventListener('blur', clear)
+    window.addEventListener('blur', leave)
     document.addEventListener('visibilitychange', away)
     return () => {
       window.removeEventListener('keydown', down)
       window.removeEventListener('keyup', up)
-      window.removeEventListener('blur', clear)
+      window.removeEventListener('blur', leave)
       document.removeEventListener('visibilitychange', away)
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -244,8 +265,8 @@ export function DungeonRun() {
               )}
               {paused && !hud.down && !loading && (
                 <Overlay title="Paused">
-                  <Button primary onClick={() => setPaused(false)} autoFocus>Carry on</Button>
-                  <p className="text-xs text-ink-faint">or press P</p>
+                  <Button primary onClick={resume} autoFocus>Carry on</Button>
+                  <p className="text-xs text-ink-faint">or press P or Escape</p>
                 </Overlay>
               )}
             </div>
@@ -268,7 +289,7 @@ export function DungeonRun() {
                   </div>
                 </Field>
                 <div className="flex flex-wrap gap-2">
-                  <Button small onClick={() => setPaused((p) => !p)} disabled={hud.down}>{paused ? 'Carry on' : 'Pause'}</Button>
+                  <Button small onClick={() => (paused ? resume() : setPaused(true))} disabled={hud.down}>{paused ? 'Carry on' : 'Pause'}</Button>
                   <Button small onClick={restart}>Start again</Button>
                 </div>
                 <p className="text-xs text-ink-faint">Gold slimes are rare and quick. Bursting one gives back {GOLD_HEAL} health and some magic.</p>
@@ -354,10 +375,10 @@ function say(e: GameEvent): string | null {
 function Bars({ hp, mp }: { hp: number; mp: number }) {
   return (
     <div className="pointer-events-none absolute top-3 left-3 grid w-[min(46%,15rem)] gap-1.5" data-testid="dungeon-bars">
-      <Bar label="Health" value={hp} max={MAX_HP} colour="#f2553a" low={hp < 30}>
+      <Bar label="Health" value={hp} max={MAX_HP} colour="var(--color-health)" low={hp < 30}>
         <path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.6 4.5c2.1 0 3.6 1.2 5.4 3.2 1.8-2 3.3-3.2 5.4-3.2 3.6 0 5.7 3.9 4.2 7.3C19.5 16.4 12 21 12 21z" />
       </Bar>
-      <Bar label="Magic" value={mp} max={MAX_MP} colour="#62a8ff">
+      <Bar label="Magic" value={mp} max={MAX_MP} colour="var(--color-magic)">
         <path d="M12 2l2.2 6.3L20.5 9l-5 4.1L17 20l-5-3.7L7 20l1.5-6.9L3.5 9l6.3-.7z" />
       </Bar>
     </div>
@@ -396,7 +417,6 @@ function ActionButton({ label, sub, tone, big, disabled, onHold, children }: { l
       onClick={(e) => { if (e.detail === 0) { onHold(true); onHold(false) } }}
     >
       <svg aria-hidden viewBox="0 0 24 24" className={big ? 'size-8' : 'size-6'} fill="currentColor">{children}</svg>
-      <span className="sr-only">{label}</span>
     </button>
   )
 }
@@ -404,7 +424,7 @@ function ActionButton({ label, sub, tone, big, disabled, onHold, children }: { l
 function Overlay({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="absolute inset-0 grid place-items-center bg-black/45 backdrop-blur-[2px]" data-testid="dungeon-overlay">
-      <div role="dialog" aria-label={title} className="flex max-w-xs flex-col items-center gap-3 rounded-2xl bg-paper/90 px-6 py-5 text-center shadow-xl">
+      <div role="group" aria-label={title} className="flex max-w-xs flex-col items-center gap-3 rounded-2xl bg-paper/90 px-6 py-5 text-center shadow-xl">
         <p className="font-display text-2xl text-ink">{title}</p>
         {children}
       </div>
@@ -428,6 +448,10 @@ function Stick({ onChange }: { onChange: (v: { forward: number; turn: number }) 
     onChange({ forward: dead(-dy), turn: dead(dx) })
   }
   const end = () => { id.current = null; setKnob([0, 0]); onChange({ forward: 0, turn: 0 }) }
+  // let go if it goes away mid-push (the hall being rebuilt), so the hero doesn't keep running
+  const last = useRef(onChange)
+  last.current = onChange
+  useEffect(() => () => last.current({ forward: 0, turn: 0 }), [])
   return (
     <div
       ref={pad}
