@@ -15,6 +15,7 @@ import { History } from './history.ts'
 import { takeHandOff } from './handoff.ts'
 import { STILL, actorAt, actorBlobs, actorBones, detailsOf, freezeInto, makeActor, poseAll, remake, type Actor } from './actors.ts'
 import { ZOO } from '../splat-engine/zoo/index.ts'
+import { PROPS } from './props.ts'
 import type { Creature as Body } from '../splat-engine/body.ts'
 import { href } from './routes.ts'
 
@@ -41,6 +42,8 @@ const SELECT_OUTLINES = 3000
 const FILE_TYPES = '.ply,.spz,.splat,.ksplat,.sog'
 const PLAY_SECONDS = 2.5
 const MAX_ACTORS = 8
+/** What the Creatures tab can add: the zoo, then things from the other experiments (a slime, the watch). */
+const ADDABLE = [...ZOO, ...PROPS]
 type ShowRig = 'blobs' | 'bones' | 'both'
 const SHOW_RIG: { id: ShowRig; label: string }[] = [{ id: 'blobs', label: 'Blobs' }, { id: 'bones', label: 'Bones' }, { id: 'both', label: 'Both' }]
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1)
@@ -638,7 +641,7 @@ export function Sandbox() {
 
   /** The ground under the middle of the view: where the scene's lowest blobs are, else y = 0. */
   const floorY = () => bounds(blobsRef.current, null)?.lo[1] ?? 0
-  const addActor = (sp: (typeof ZOO)[number]) => {
+  const addActor = (sp: (typeof ADDABLE)[number]) => {
     const list = actorsRef.current
     if (list.length >= MAX_ACTORS) { setMessage(`The sandbox holds up to ${MAX_ACTORS} creatures`); return }
     const detail = detailsOf(sp)[0]
@@ -951,13 +954,13 @@ export function Sandbox() {
                 label: 'Creatures',
                 summary: actors.length ? `${actors.length} added` : 'None',
                 content: (
-                  <Panel note="Creatures from the Creature page, moving in your scene. Drag one with the Move tool (or, with nothing selected, use the arrow keys on the view) to put it somewhere else. Brushes, selections and effects leave them alone until you freeze one into ordinary blobs.">
+                  <Panel note="Creatures from Splat Creatures, a slime from Dungeon Run and the watch from Clockwork, moving in your scene. Drag one with the Move tool (or, with nothing selected, use the arrow keys on the view) to put it somewhere else. Brushes, selections and effects leave them alone until you freeze one into ordinary blobs.">
                     <Field label="Add">
                       <div className="flex flex-wrap gap-1.5" data-testid="add-creature">
-                        {ZOO.map((sp) => <Button small key={sp.id} aria-label={`Add ${aOr(sp.name)}`} onClick={() => addActor(sp)} disabled={actors.length >= MAX_ACTORS || actorCount + detailsOf(sp)[0] > maxActorBlobs}>{cap(sp.name)}</Button>)}
+                        {ADDABLE.map((sp) => <Button small key={sp.id} aria-label={`Add ${aOr(sp.name)}`} onClick={() => addActor(sp)} disabled={actors.length >= MAX_ACTORS || actorCount + detailsOf(sp)[0] > maxActorBlobs}>{cap(sp.name)}</Button>)}
                       </div>
                     </Field>
-                    {actorCount > 0 && ZOO.every((sp) => actorCount + detailsOf(sp)[0] > maxActorBlobs) && actors.length < MAX_ACTORS && (
+                    {actorCount > 0 && ADDABLE.every((sp) => actorCount + detailsOf(sp)[0] > maxActorBlobs) && actors.length < MAX_ACTORS && (
                       <p className="text-xs text-ink-faint">That's as many blobs as creatures can have between them here ({maxActorBlobs.toLocaleString()}). Remove or freeze one to add another.</p>
                     )}
                     {actors.length >= MAX_ACTORS && <p className="text-xs text-ink-faint">That's {MAX_ACTORS} creatures, the most the sandbox holds. Remove or freeze one to add another.</p>}

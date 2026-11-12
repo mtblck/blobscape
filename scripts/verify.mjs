@@ -70,7 +70,7 @@ const solidPixels = (page, sel) => page.evaluate((sel) => {
 // 1. The site: every page is its own prerendered file, the chrome works, old links land
 {
   // Prerendered: each page's HTML carries its own title, canonical and content before any script runs
-  for (const [path, title] of [['/', 'Blobscape: learn'], ['/lessons/', 'Lessons ·'], ['/lessons/order/', 'Order matters · Lesson 3'], ['/sandbox/', 'Sandbox ·'], ['/experiments/creature/', 'Splat Creatures ·'], ['/experiments/forest-walk/', 'Forest Walk ·'], ['/experiments/clockwork/', 'Clockwork ·'], ['/experiments/', 'Experiments ·']]) {
+  for (const [path, title] of [['/', 'Blobscape: learn'], ['/lessons/', 'Lessons ·'], ['/lessons/order/', 'Order matters · Lesson 3'], ['/sandbox/', 'Sandbox ·'], ['/experiments/creature/', 'Splat Creatures ·'], ['/experiments/forest-walk/', 'Forest Walk ·'], ['/experiments/clockwork/', 'Clockwork ·'], ['/experiments/dungeon-run/', 'Dungeon Run ·'], ['/experiments/', 'Experiments ·']]) {
     const html = await (await fetch(base + path)).text()
     if (!html.includes(`<title>${title}`)) fails.push(`${path}: prerendered title is not "${title}…"`)
     else if (!html.includes(`<link rel="canonical" href="https://blobscape.dev${path}"`)) fails.push(`${path}: prerendered canonical is wrong`)
@@ -81,7 +81,7 @@ const solidPixels = (page, sel) => page.evaluate((sel) => {
   if (missing.status !== 404 || !(await missing.text()).includes('noindex')) fails.push('an unknown page is not a noindex 404')
   else ok('unknown pages get the noindex 404 page')
   const sitemap = await (await fetch(base + '/sitemap.xml')).text()
-  if (!sitemap.includes('https://blobscape.dev/lessons/model/') || !sitemap.includes('/experiments/fit-a-picture/') || !sitemap.includes('/experiments/creature/') || !sitemap.includes('/experiments/forest-walk/') || !sitemap.includes('/experiments/clockwork/')) fails.push('sitemap.xml is missing pages')
+  if (!sitemap.includes('https://blobscape.dev/lessons/model/') || !sitemap.includes('/experiments/fit-a-picture/') || !sitemap.includes('/experiments/creature/') || !sitemap.includes('/experiments/forest-walk/') || !sitemap.includes('/experiments/clockwork/') || !sitemap.includes('/experiments/dungeon-run/')) fails.push('sitemap.xml is missing pages')
   else ok('sitemap.xml lists the lessons and tools')
 
   const { page, res, ctx } = await open('/')
@@ -377,9 +377,9 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     else ok(`blobscape ${label}: home lists the lessons`)
     await axe(page, `blobscape ${label} home`)
     await page.screenshot({ path: join(shots, `blobscape-home-${label}.png`), fullPage: true })
-    for (const id of ['lessons', 'one-blob', 'footprint', 'order', 'many', 'angle', 'paint', 'formats', 'break', 'one-bone', 'weights', 'twist', 'walk', 'model', 'sandbox', 'creature', 'forest-walk', 'clockwork']) {
+    for (const id of ['lessons', 'one-blob', 'footprint', 'order', 'many', 'angle', 'paint', 'formats', 'break', 'one-bone', 'weights', 'twist', 'walk', 'model', 'sandbox', 'creature', 'forest-walk', 'clockwork', 'dungeon-run']) {
       // headless WebGPU can't present to a canvas, so Creature and Forest Walk draw off-screen here
-      await page.goto(base + (['creature', 'forest-walk', 'clockwork'].includes(id) ? `/experiments/${id}/?offscreen=1` : ['sandbox', 'lessons'].includes(id) ? `/${id}/` : `/lessons/${id}/`))
+      await page.goto(base + (['creature', 'forest-walk', 'clockwork', 'dungeon-run'].includes(id) ? `/experiments/${id}/?offscreen=1` : ['sandbox', 'lessons'].includes(id) ? `/${id}/` : `/lessons/${id}/`))
       await page.waitForTimeout(1500)
       const focused = await page.evaluate(() => document.activeElement?.tagName)
       if (focused !== 'H1') fails.push(`blobscape ${label} ${id}: focus is on ${focused}, not the heading`)
@@ -752,6 +752,48 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     await k.ctx.close()
   }
 
+  // Dungeon Run: the hall draws, a swing bursts a slime into splats, a bolt costs magic, a touch takes health off the bar, and down shows Try again
+  {
+    const k = await open('/experiments/dungeon-run/?offscreen=1', { viewport: { width: 1280, height: 900 } })
+    await k.page.waitForFunction(() => window.__dungeon?.stage.dungeon, null, { timeout: 90000 }).catch(() => {})
+    const look = () => k.page.evaluate(() => {
+      const cv = document.querySelector('[data-testid=dungeon-view]')
+      const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+      let warm = 0, green = 0
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i] > 90 && d[i] > d[i + 2] * 1.4 && d[i + 1] > d[i + 2]) warm++
+        if (d[i + 1] > 120 && d[i + 1] > d[i] * 1.4 && d[i + 1] > d[i + 2] * 1.4) green++
+      }
+      return { warm, green }
+    })
+    const run = (s, input) => k.page.evaluate(async ([s, input]) => { await window.__dungeon.stage.frame(s, input) }, [s, input])
+    await k.page.evaluate(() => { const g = window.__dungeon.stage.dungeon.game; g.hold(); g.place('green', 0.7, g.hero.z + 1.1) })
+    await run(0.2, { forward: 0, turn: 0 })
+    const a = await look()
+    // a few swings (running after it when knocked back) burst a green slime
+    for (let i = 0; i < 5 && !(await k.page.evaluate(() => window.__dungeon.stage.dungeon.game.score)); i++) { await run(0.05, { forward: 0, turn: 0, swing: true }); await run(0.5, { forward: 0.6, turn: 0 }) }
+    const fight = await k.page.evaluate(() => { const g = window.__dungeon.stage.dungeon.game; return { score: g.score, phase: g.slimes[0]?.phase } })
+    await run(0.15, { forward: 0, turn: 0, cast: true })
+    await run(0.5, { forward: 0, turn: 0 })
+    const meters = async () => Object.fromEntries(await k.page.getByRole('meter').evaluateAll((els) => els.map((e) => [e.getAttribute('aria-label'), +e.getAttribute('aria-valuenow')])))
+    const m = await meters()
+    if (!(a.warm > 20000 && a.green > 150 && fight.score === 1 && fight.phase === 'burst' && m.Magic < 100 && m.Health >= 80)) fails.push(`blobscape dungeon: ${JSON.stringify({ a, fight, m })}`)
+    else ok(`blobscape dungeon: the hall draws (${a.warm} torchlit, ${a.green} slime pixels), swings burst the slime, a bolt spends magic (${m.Magic} left)`)
+    await k.page.screenshot({ path: join(shots, 'blobscape-dungeon.png') })
+    await axe(k.page, 'blobscape dungeon')
+    // a red slime at the hero's feet with health nearly gone: down, and Try again starts over
+    await k.page.evaluate(() => { const g = window.__dungeon.stage.dungeon.game; g.hero.hp = 4; g.place('red', 0, g.hero.z + 0.5) })
+    await run(2, { forward: 0, turn: 0 })
+    const over = await k.page.getByRole('button', { name: 'Try again' }).count()
+    const hurt = await meters()
+    if (over) await k.page.getByRole('button', { name: 'Try again' }).click()
+    await run(0.1, { forward: 0, turn: 0 })
+    const after = await meters()
+    if (!(over === 1 && hurt.Health === 0 && after.Health === 100)) fails.push(`blobscape dungeon down: ${JSON.stringify({ over, hurt, after })}`)
+    else ok('blobscape dungeon: a slime takes the last health, the hero goes down, and Try again starts over at full health')
+    await k.ctx.close()
+  }
+
   // Forest Walk: the elf walks down the path, tiles move on ahead, plants grow round it
   {
     const f = await open('/experiments/forest-walk/?offscreen=1', { viewport: { width: 1280, height: 900 } })
@@ -969,6 +1011,34 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   if (focusTag === 'BODY') fails.push('blobscape sandbox: focus fell to the page after Delete')
   else ok('blobscape sandbox: focus stays in the panel after Delete')
   await page.screenshot({ path: join(shots, 'blobscape-sandbox-tools.png') })
+  await ctx.close()
+}
+
+// 7c. Things from other experiments in the sandbox: a slime (that bursts and grows back) and the watch
+{
+  const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 900 } })
+  await page.waitForTimeout(1500)
+  const inCreatures = async () => Number(((await page.textContent('[data-testid=creature-blob-count]', { timeout: 1000 }).catch(() => '0')) ?? '0').replace(/\D/g, ''))
+  await page.getByRole('tab', { name: /Scene/ }).click()
+  await page.getByRole('button', { name: 'Empty' }).click()
+  await page.getByRole('tab', { name: /Creatures/ }).click()
+  await page.getByTestId('add-creature').getByRole('button', { name: 'Slime' }).click()
+  await page.waitForTimeout(400)
+  const slime = await inCreatures()
+  await page.getByRole('button', { name: 'Red', exact: true }).click()
+  await page.getByRole('button', { name: 'Burst', exact: true }).click()
+  await page.getByRole('button', { name: 'Bring to the middle of the view' }).click()
+  await page.waitForTimeout(2000)
+  const a = await page.getByTestId('viewport').screenshot()
+  await page.waitForTimeout(600)
+  const b = await page.getByTestId('viewport').screenshot()
+  await page.getByTestId('add-creature').getByRole('button', { name: 'Watch' }).click()
+  await page.waitForTimeout(800)
+  const both = await inCreatures()
+  if (!(slime >= 2500 && both - slime >= 25000 && !a.equals(b))) fails.push(`blobscape sandbox props: ${JSON.stringify({ slime, both, same: a.equals(b) })}`)
+  else ok(`blobscape sandbox props: adds a slime (${slime.toLocaleString()} blobs) that bursts, and the watch (${(both - slime).toLocaleString()})`)
+  await page.screenshot({ path: join(shots, 'blobscape-sandbox-props.png') })
+  await axe(page, 'blobscape sandbox props')
   await ctx.close()
 }
 
