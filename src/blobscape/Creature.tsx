@@ -13,6 +13,7 @@ import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitD
 import { download, kb } from './files.ts'
 import { LESSONS, href } from './routes.ts'
 import type { CreatureStage, Show } from './creature/stage.ts'
+import { CARD, CARD_SUB, CARD_TITLE } from './creature/card.ts'
 import { Sprites } from './creature/Sprites.tsx'
 
 const STILL = 'still'
@@ -254,9 +255,9 @@ export function Creature() {
           </div>
         </section>
 
-        <section aria-labelledby="g-make" className="rounded-2xl border border-rule bg-paper-sunk/60 px-4 pt-4 pb-4 lg:col-span-12 lg:px-5" data-testid="creature-pick">
-          <h2 id="g-make" className="mb-3 text-sm font-bold">The creature</h2>
-          <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-[auto_auto_minmax(0,1fr)] lg:items-start">
+        <section aria-labelledby="g-make" className={CARD} data-testid="creature-pick">
+          <h2 id="g-make" className={CARD_TITLE}>The creature</h2>
+          <div className="stack-controls grid items-start gap-x-10 gap-y-4 sm:grid-cols-2 lg:grid-cols-[auto_auto_minmax(0,1fr)]">
             <Field label="Type">
               <div role="group" aria-label="Which creature" className="flex flex-wrap gap-1.5" data-testid="species">
                 {ZOO.map((sp) => <Chip key={sp.id} active={!loaded && species === sp} onClick={() => pick(sp)}>{sp.name[0].toUpperCase() + sp.name.slice(1)}</Chip>)}
@@ -265,30 +266,22 @@ export function Creature() {
             </Field>
             <Field label="Look">
               {species.seed ? (
-                <Button small data-testid="make-monster" onClick={() => pick(monsterSpecies(newSeed()))}>Generate a new monster</Button>
+                <div><Button small data-testid="make-monster" onClick={() => pick(monsterSpecies(newSeed()))}>Generate a new monster</Button></div>
               ) : (
                 <div className="flex flex-wrap gap-1.5">
                   {species.looks.map((l) => <Chip key={l.id} active={!loaded && look === l.id} onClick={() => { setLoaded(undefined); setLook(l.id) }}>{l.label}</Chip>)}
                 </div>
               )}
             </Field>
-            <p className="text-xs leading-relaxed text-ink-faint sm:col-span-2 lg:col-span-1 lg:max-w-[46ch] lg:justify-self-end">{species.blurb}</p>
+            <p className="max-w-[52ch] self-end text-xs leading-relaxed text-ink-faint sm:col-span-2 lg:col-span-1">{species.blurb}</p>
           </div>
         </section>
 
-        <section aria-label="Controls" className="rounded-2xl border border-rule bg-paper-sunk/60 px-4 pt-4 pb-4 lg:col-span-12 lg:px-5">
-          <div className="stack-controls grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            <div role="group" aria-labelledby="g-detail">
-              <h2 id="g-detail" className="mb-2 text-sm font-bold">Detail</h2>
-              <Field label="Blobs">
-                <div className="flex flex-wrap gap-1.5">
-                  {species.detail.map((n) => <Chip key={n} active={!loaded && count === n} onClick={() => { setLoaded(undefined); setCount(n) }}>{kilo(n)}</Chip>)}
-                </div>
-              </Field>
-            </div>
+        <section aria-label="Controls" className={CARD}>
+          <div className="stack-controls grid items-start gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
             <div role="group" aria-labelledby="g-move">
-              <h2 id="g-move" className="mb-2 text-sm font-bold">Move</h2>
-              <div className="grid gap-3">
+              <h2 id="g-move" className={CARD_TITLE}>Move</h2>
+              <div className="grid gap-4">
                 <Field label="Clip">
                   <div className="flex flex-wrap gap-1.5">
                     {shown.clips.map((c, k) => <Chip key={`${k}-${c.name}`} active={clip === c} onClick={() => setMove(c.name)}>{clipLabel(c)}</Chip>)}
@@ -298,28 +291,42 @@ export function Creature() {
                 <Slider label="Speed" value={speed} min={0.1} max={2} step={0.05} onChange={setSpeed} format={(v) => `×${v.toFixed(2)}`} />
               </div>
             </div>
-            <div role="group" aria-labelledby="g-joints">
-              <h2 id="g-joints" className="mb-2 text-sm font-bold">Joints <small className="text-xs font-normal text-ink-faint">how a blob turns</small></h2>
-              <div className="flex flex-wrap gap-1.5">
-                <Chip active={mode === 'quat'} onClick={() => setMode('quat')}>Average the turns</Chip>
-                <Chip active={mode === 'linear'} onClick={() => setMode('linear')}>Blend the matrices</Chip>
+            <div role="group" aria-labelledby="g-detail">
+              <h2 id="g-detail" className={CARD_TITLE}>Detail</h2>
+              <div className="grid gap-4">
+                <Field label="Blobs">
+                  <div className="flex flex-wrap gap-1.5">
+                    {species.detail.map((n) => <Chip key={n} active={!loaded && count === n} onClick={() => { setLoaded(undefined); setCount(n) }}>{kilo(n)}</Chip>)}
+                  </div>
+                </Field>
+                <Field label="Joints: how a blob turns">
+                  <div className="flex flex-wrap gap-1.5">
+                    <Chip active={mode === 'quat'} onClick={() => setMode('quat')}>Average the turns</Chip>
+                    <Chip active={mode === 'linear'} onClick={() => setMode('linear')}>Blend the matrices</Chip>
+                  </div>
+                  <p className="mt-1.5 text-xs text-ink-faint">From <a href={href({ page: 'lesson', id: 'twist' })} className="underline hover:text-accent">Twist without tearing</a>. Watch the tail.</p>
+                </Field>
               </div>
-              <p className="mt-2 text-xs text-ink-faint">From <a href={href({ page: 'lesson', id: 'twist' })} className="underline hover:text-accent">Twist without tearing</a>. Watch the tail.</p>
             </div>
-            <div role="group" aria-labelledby="g-save">
-              <h2 id="g-save" className="mb-2 text-sm font-bold">Take it away <small className="text-xs font-normal text-ink-faint">.glb, bones and clips</small></h2>
-              <div className="grid gap-3">
-                <Button small onClick={() => save('splats')}>Download as splats</Button>
-                <Button small onClick={() => save('mesh')}>Download as a mesh</Button>
-                <div role="group" aria-label={`Mesh grid, cells along the ${loaded ? 'creature' : species.name}`} className="flex flex-wrap items-center gap-1.5">
-                  <span className="mr-1 text-xs text-ink-faint">Mesh grid</span>
-                  {[48, 64, 96].map((c) => <Chip small key={c} active={cells === c} onClick={() => setCells(c)}>{c}</Chip>)}
-                </div>
-                <label className="text-sm text-ink-muted">
-                  <span className="mb-1 block">Open a rigged splat .glb</span>
-                  <input type="file" accept=".glb,model/gltf-binary" onChange={(e) => { void open(e.target.files?.[0]); e.target.value = '' }} className="block w-full text-xs file:mr-2 file:cursor-pointer file:rounded-md file:border file:border-rule file:bg-paper file:px-2 file:py-1 file:text-ink hover:file:border-ink-faint" />
+            <div role="group" aria-labelledby="g-save" className="sm:col-span-2 lg:col-span-1">
+              <h2 id="g-save" className={CARD_TITLE}>Take it away <small className={CARD_SUB}>.glb, bones and clips</small></h2>
+              <div className="grid items-start gap-x-10 gap-y-4 sm:grid-cols-3 lg:grid-cols-1">
+                <Field label="Download">
+                  <div className="flex flex-wrap gap-1.5">
+                    <Button small onClick={() => save('splats')}>As splats</Button>
+                    <Button small onClick={() => save('mesh')}>As a mesh</Button>
+                  </div>
+                </Field>
+                <Field label={`Mesh grid: cells along the ${loaded ? 'creature' : species.name}`}>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[48, 64, 96].map((c) => <Chip key={c} active={cells === c} onClick={() => setCells(c)}>{c}</Chip>)}
+                  </div>
+                </Field>
+                <label className="grid gap-1.5 text-sm">
+                  <span className="text-ink-muted">Open a rigged splat .glb</span>
+                  <input type="file" accept=".glb,model/gltf-binary" onChange={(e) => { void open(e.target.files?.[0]); e.target.value = '' }} className="block w-full text-xs text-ink-faint file:mr-2 file:cursor-pointer file:rounded file:border file:border-rule file:bg-paper file:px-3 file:py-1.5 file:text-sm file:text-ink hover:file:border-ink-faint" />
                 </label>
-                <p aria-live="polite" className="text-xs text-ink-faint" data-testid="creature-note">{busy ?? fileNote ?? ''}</p>
+                <p aria-live="polite" className="text-xs text-ink-faint sm:col-span-3 lg:col-span-1" data-testid="creature-note">{busy ?? fileNote ?? ''}</p>
               </div>
             </div>
           </div>
