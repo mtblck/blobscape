@@ -1,5 +1,5 @@
 import {
-  BufferAttribute, DynamicDrawUsage, InstancedBufferGeometry, Matrix4, Mesh, NodeMaterial, Sphere, StorageBufferAttribute, Vector2, Vector3,
+  BufferAttribute, DynamicDrawUsage, InstancedBufferGeometry, Matrix4, Mesh, NodeMaterial, Sphere, StorageBufferAttribute, Vector2, Vector3, Vector4,
   type Camera, type Renderer,
 } from 'three/webgpu'
 import * as TSLTyped from 'three/tsl'
@@ -12,7 +12,7 @@ import type { Blobs } from '../splat-core/blobs.ts'
 const TSL = TSLTyped as unknown as Record<string, any>
 const {
   Discard, EPSILON, Fn, If, atan, cameraProjectionMatrix, cameraViewport, cameraViewMatrix, cos, dot, exp, float, instanceIndex,
-  length, max, min, normalize, positionGeometry, select, sin, sqrt, storage, uint, uniform, unpackUnorm4x8, varyingProperty, vec2, vec3, vec4,
+  abs, length, max, min, normalize, positionGeometry, select, sin, sqrt, storage, uint, uniform, uniformArray, unpackUnorm4x8, varyingProperty, vec2, vec3, vec4,
 } = TSL
 import { packWeights, skinBlob, skinCentres, type Skeleton, type Skin, type SkinMode } from './rig.ts'
 import { DepthSort } from './sort.ts'
@@ -54,7 +54,21 @@ export interface EngineOptions {
   /** Depth buckets for the sort. More buckets, fewer ties between blobs that are close in depth. */
   bins?: number
   mode?: SkinMode
+  /** Live lights (`setLights`): each blob is lit every frame from its normal. Off unless asked for, as it costs a pass. */
+  lights?: boolean
 }
+
+/** A point light for `setLights`. */
+export interface PointLight {
+  position: [number, number, number]
+  /** Linear RGB, times its strength: [1, 0.6, 0.3] is a torch at full strength. */
+  colour: [number, number, number]
+  /** Its reach: about a quarter strength at this distance, and gone by twice it. */
+  range: number
+}
+
+/** How many lights `setLights` takes; the rest are dropped. */
+export const MAX_LIGHTS = 16
 
 export class SplatWorld extends Mesh {
   readonly isSplatWorld = true
@@ -92,8 +106,12 @@ export class SplatWorld extends Mesh {
    * Off while `far` is 0.
    */
   readonly fog: Fog
+  /** Live lighting, when the world was made with `lights: true`. */
+  readonly lighting?: Lighting
+  private lightNode?: ReturnType<typeof makeLight>
+  private lightsDirty = true
 
-  constructor(actors: Actor[], { bins = 16384, mode = 'quat' }: EngineOptions = {}) {
+  constructor(actors: Actor[], { bins = 16384, mode = 'quat', lights = false }: EngineOptions = {}) {
     const count = actors.reduce((s, a) => s + a.blobs.count, 0)
     const geometry = new InstancedBufferGeometry()
     geometry.setAttribute('position', new BufferAttribute(new Float32Array([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0]), 3))
@@ -129,6 +147,11 @@ export class SplatWorld extends Mesh {
     this.cam = { view: uniform(new Matrix4()), proj: uniform(new Matrix4()), viewport: uniform(new Vector2(1, 1)), depthRange: uniform(new Vector2(0, 1)) }
     this.fog = { colour: uniform(new Vector3(0, 0, 0)), range: uniform(new Vector2(0, 0)) }
     this.projectNode = makeProject(buf, sort, this.cam, bins)
+    if (lights) {
+      this.lighting = makeLighting(buf.count)
+      buf.attrs.push(this.lighting.attr)
+      this.lightNode = makeLight(buf, this.lighting)
+    }
     material.colorNode = makeFragment() as never
 
     this.onBeforeRender = (renderer, _scene, camera) => this.prepare(renderer as unknown as Renderer, camera)
@@ -138,6 +161,24 @@ export class SplatWorld extends Mesh {
   setFog(colour: [number, number, number], near: number, far: number) {
     this.fog.colour.value.set(colour[0], colour[1], colour[2])
     this.fog.range.value.set(near, far)
+  }
+
+  /**
+   * Lights the blobs with up to MAX_LIGHTS point lights, on top of `ambient`
+   * times their own (baked) colour. Each blob's normal is its flattest axis, so
+   * a light reaches the side of a surface that faces it. Needs `lights: true`.
+   */
+  setLights(lights: PointLight[], ambient = 1) {
+    const L = this.lighting
+    if (!L) return
+    L.ambient.value = ambient
+    L.count.value = Math.min(MAX_LIGHTS, lights.length)
+    this.lightsDirty = true
+    for (let k = 0; k < MAX_LIGHTS; k++) {
+      const l = lights[k]
+      ;(L.pos.array[k] as Vector4).set(l?.position[0] ?? 0, l?.position[1] ?? 0, l?.position[2] ?? 0, l ? Math.max(1e-3, l.range) : 1)
+      ;(L.col.array[k] as Vector4).set(l?.colour[0] ?? 0, l?.colour[1] ?? 0, l?.colour[2] ?? 0, 0)
+    }
   }
 
   /** Call after posing any skeleton. */
@@ -154,9 +195,9 @@ export class SplatWorld extends Mesh {
     const material = this.material as NodeMaterial
     if (webgl) {
       enableWebGL(this.buf, this.sort)
-      material.vertexNode = makeVertexWebGL(this.buf, this.sort, this.mode, this.fog) as never
+      material.vertexNode = makeVertexWebGL(this.buf, this.sort, this.mode, this.fog, this.lighting) as never
     } else {
-      material.vertexNode = makeVertexWebGPU(this.buf, this.sort, this.fog) as never
+      material.vertexNode = makeVertexWebGPU(this.buf, this.sort, this.fog, this.lighting) as never
     }
     material.needsUpdate = true
     this.builtFor = key
@@ -238,6 +279,8 @@ export class SplatWorld extends Mesh {
       this.cpuMs = t2 - t0
     } else {
       if (deformed) this.deform(renderer)
+      // lights move on their own: the lit colours are redone whenever they or the blobs moved
+      if (this.lightNode && (deformed || this.lightsDirty)) { renderer.compute(this.lightNode as never); this.lightsDirty = false }
       if (needsSort) this.project(renderer)
     }
     this.posed = true
@@ -253,7 +296,7 @@ export class SplatWorld extends Mesh {
   stages(renderer: Renderer, camera: Camera) {
     this.build(this.isWebGL(renderer))
     return {
-      deform: () => { this.uploadBones(); this.updateBounds(); this.deform(renderer) },
+      deform: () => { this.uploadBones(); this.updateBounds(); this.deform(renderer); if (this.lightNode) renderer.compute(this.lightNode as never) },
       project: () => { this.setView(renderer, camera); renderer.compute(this.projectNode as never) },
       order: () => this.sort.order(renderer as never),
     }
@@ -614,6 +657,68 @@ function makeProject(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, cam: 
 
 interface Fog { colour: N; range: N }
 
+interface Lighting { pos: N; col: N; ambient: N; count: N; attr: StorageBufferAttribute; litW: N; lit: N }
+
+function makeLighting(n: number): Lighting {
+  // written only by the GPU, so no copy of it on the CPU
+  const attr = new StorageBufferAttribute(n, 4)
+  return {
+    pos: uniformArray(Array.from({ length: MAX_LIGHTS }, () => new Vector4(0, 0, 0, 1)), 'vec4'),
+    col: uniformArray(Array.from({ length: MAX_LIGHTS }, () => new Vector4()), 'vec4'),
+    ambient: uniform(1),
+    count: uniform(0, 'int'),
+    attr,
+    litW: storage(attr, 'vec4', n),
+    lit: storage(attr, 'vec4', n).toReadOnly(),
+  }
+}
+
+/**
+ * A blob's normal from its covariance: for a flat blob (two long axes, one
+ * short) the adjugate is dominated by n·nᵀ, so its longest column points
+ * along the normal. Round blobs get some direction, which the soft wrap in
+ * `lit` makes harmless. Either sign: a surface blob doesn't know its outside,
+ * so a light reaches both faces (right for floors and walls, softer than real
+ * on round things lit from behind).
+ */
+function blobNormal(covA: N, covB: N) {
+  const a = covA.x, b = covA.y, c = covA.z, d = covA.w, e = covB.x, f = covB.y
+  const c0 = vec3(d.mul(f).sub(e.mul(e)), c.mul(e).sub(b.mul(f)), b.mul(e).sub(c.mul(d))).toVar()
+  const c1 = vec3(c.mul(e).sub(b.mul(f)), a.mul(f).sub(c.mul(c)), b.mul(c).sub(a.mul(e))).toVar()
+  const c2 = vec3(b.mul(e).sub(c.mul(d)), b.mul(c).sub(a.mul(e)), a.mul(d).sub(b.mul(b))).toVar()
+  const l0 = dot(c0, c0), l1 = dot(c1, c1), l2 = dot(c2, c2)
+  const best = select(l0.greaterThan(l1), select(l0.greaterThan(l2), c0, c2), select(l1.greaterThan(l2), c1, c2))
+  return normalize(best.add(vec3(0, 1e-12, 0)))
+}
+
+/** The blob's colour under the lights: ambient times its own, plus each light by distance and by how its face turns to it. */
+function lit(rgb: N, world: N, covA: N, covB: N, L: Lighting) {
+  const n = blobNormal(covA, covB).toVar()
+  const sum = vec3(L.ambient).toVar()
+  // only the lights in use: the loop stops at the count
+  TSL.Loop(L.count, ({ i }: { i: N }) => {
+    const P = L.pos.element(i), C = L.col.element(i)
+    const to = P.xyz.sub(world).toVar()
+    const d2 = dot(to, to).toVar()
+    const r2 = P.w.mul(P.w)
+    // a quarter strength at `range`, gone by twice it
+    const fade = max(float(1).sub(d2.div(r2.mul(4))), 0)
+    const fall = fade.mul(fade).div(float(1).add(d2.div(r2)))
+    const facing = abs(dot(n, to.mul(TSL.inverseSqrt(max(d2, 1e-6))))).mul(0.65).add(0.35)
+    sum.addAssign(C.xyz.mul(fall.mul(facing)))
+  })
+  return rgb.mul(sum)
+}
+
+/** WebGPU: every blob's lit colour, once a frame (after the deform, before the draw). */
+function makeLight(buf: ReturnType<typeof makeBuffers>, L: Lighting) {
+  return Fn(() => {
+    const i = instanceIndex
+    const colour = unpackUnorm4x8(buf.colour.element(i)).toVar()
+    L.litW.element(i).assign(vec4(lit(colour.rgb, buf.worldCentre.element(i).xyz, buf.covA.element(i), buf.covB.element(i), L), colour.a))
+  })().compute(buf.count, [WORKGROUP]).setName('SplatWorldLight')
+}
+
 /** The blob's colour after distance fog: none while the fog's far distance is 0. */
 function fogged(rgb: N, depth: N, fog: Fog) {
   const span = max(fog.range.y.sub(fog.range.x), 0.0001)
@@ -638,11 +743,12 @@ function placeQuad(ndc: N, axes: N, rgba: N) {
   return vec4(ndc.xy.add(axes.xy.mul(uv.x)).add(axes.zw.mul(uv.y)), ndc.z, 1)
 }
 
-function makeVertexWebGPU(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, fog: Fog) {
+function makeVertexWebGPU(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, fog: Fog, L?: Lighting) {
   return Fn(() => {
     const idx = sort.orderRead.element(instanceIndex).toVar()
     const A = buf.splatA.element(idx).toVar()
-    const colour = unpackUnorm4x8(buf.colour.element(idx)).toVar()
+    // lit: the light pass's colour, in place of the packed one (so the draw binds no more buffers than before)
+    const colour = (L ? L.lit.element(idx) : unpackUnorm4x8(buf.colour.element(idx))).toVar()
     // depth in front of the camera from the screen depth the project pass wrote, so the draw binds no extra buffer:
     // ndc z = −(P22·z + P32) / z for a perspective camera, so −z = P32 / (ndc z + P22)
     const depth = cameraProjectionMatrix[3].z.div(A.z.add(cameraProjectionMatrix[2].z))
@@ -651,13 +757,14 @@ function makeVertexWebGPU(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, 
 }
 
 /** WebGL has no compute: each corner moves its blob through the bones and projects it, like a skinned mesh. */
-function makeVertexWebGL(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, mode: SkinMode, fog: Fog) {
+function makeVertexWebGL(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, mode: SkinMode, fog: Fog, L?: Lighting) {
   return Fn(() => {
     const idx = sort.orderRead.element(instanceIndex).toVar()
     const d = deformBlob(buf, idx, mode)
     const p = projectSplat(d.world, d.covA, d.covB, cameraViewMatrix, cameraProjectionMatrix, cameraViewport.zw)
     const colour = unpackUnorm4x8(buf.colour.element(idx)).toVar()
-    return placeQuad(p.ndc, p.axes, vec4(fogged(colour.rgb, p.depth, fog), colour.a.mul(p.alphaScale)))
+    const rgb = L ? lit(colour.rgb, d.world, d.covA, d.covB, L) : colour.rgb
+    return placeQuad(p.ndc, p.axes, vec4(fogged(rgb, p.depth, fog), colour.a.mul(p.alphaScale)))
   })()
 }
 

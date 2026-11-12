@@ -32,10 +32,16 @@ export function torchLight(p: Vec3, n: Vec3 = [0, 1, 0]): Vec3 {
   return [AMBIENT[0] + FLAME[0] * k, AMBIENT[1] + FLAME[1] * k, AMBIENT[2] + FLAME[2] * k]
 }
 
-const lit = (c: Vec3, p: Vec3, n?: Vec3): Vec3 => {
-  const l = torchLight(p, n)
+/**
+ * How the hall's stone is coloured when built: with the torchlight baked in,
+ * or (for live lights, which light it each frame) as the stone itself, a
+ * little lifted so the shadows aren't black.
+ */
+const lighter = (live: boolean) => (c: Vec3, p: Vec3, n?: Vec3): Vec3 => {
+  const l = live ? LIVE_STONE : torchLight(p, n)
   return [Math.min(1, c[0] * l[0]), Math.min(1, c[1] * l[1]), Math.min(1, c[2] * l[2])]
 }
+const LIVE_STONE: Vec3 = [1.1, 1.08, 1.15]
 
 const STONE: Vec3[] = [[0.5, 0.48, 0.45], [0.44, 0.43, 0.42], [0.55, 0.5, 0.44], [0.4, 0.41, 0.44]]
 const GROUT: Vec3 = [0.12, 0.11, 0.1]
@@ -51,7 +57,8 @@ function still(blobs: Blobs): Creature {
 }
 
 /** Flagstones: a grid of slabs, each its own shade, with dark grout between and moss in the cracks. */
-export function makeFloor(detail: number): Creature {
+export function makeFloor(detail: number, live = false): Creature {
+  const lit = lighter(live)
   const n = Math.max(4000, Math.round(26000 * detail))
   const rand = rng(41)
   const blobs = new Blobs(n)
@@ -80,7 +87,8 @@ export function makeFloor(detail: number): Creature {
 }
 
 /** The four walls, in staggered brick, with an arched doorway where each door is. */
-export function makeWalls(detail: number): Creature {
+export function makeWalls(detail: number, live = false): Creature {
+  const lit = lighter(live)
   const n = Math.max(6000, Math.round(38000 * detail))
   const rand = rng(77)
   const blobs = new Blobs(n)
@@ -130,7 +138,8 @@ export function makeWalls(detail: number): Creature {
  * a wider capital (sampled by hand: the body builder's tubes are capsules,
  * which made them look like mushrooms), with rubble at their feet.
  */
-export function makePillars(detail: number): Creature {
+export function makePillars(detail: number, live = false): Creature {
+  const lit = lighter(live)
   const n = Math.max(3000, Math.round(16000 * detail))
   const rand = rng(9)
   const blobs = new Blobs(n)
@@ -182,7 +191,8 @@ function concat(a: Blobs, b: Blobs): Blobs {
 }
 
 /** The torches: an iron bracket and a cup on the wall, and a flame on its own bone so it can flicker. */
-export function makeTorches(detail: number): Creature {
+export function makeTorches(detail: number, live = false): Creature {
+  const lit = lighter(live)
   const bones = [{ name: 'root', parent: -1, head: [0, 0, 0] as Vec3 }]
   const parts: Part[] = []
   const IRON: Vec3 = [0.16, 0.14, 0.13]
@@ -208,12 +218,14 @@ export function makeTorches(detail: number): Creature {
   return { blobs: b.blobs, skin: b.skin, skeleton: b.skeleton }
 }
 
+/** How tall torch i's flame is at time t (about 0.7–1.06): its own rhythm, and the strength of its light when lights are live. */
+export const flicker = (t: number, i: number) => 0.88 + 0.08 * Math.sin(t * 13 + i * 2.1) + 0.06 * Math.sin(t * 23.7 + i * 5.3) + 0.04 * Math.sin(t * 41 + i)
+
 /** Flames flickering: each its own rhythm, stretching and leaning. */
 export function poseTorches(sk: Skeleton, t: number) {
   for (let i = 0; i < TORCHES.length; i++) {
     const b = i + 1
-    const f = 0.88 + 0.08 * Math.sin(t * 13 + i * 2.1) + 0.06 * Math.sin(t * 23.7 + i * 5.3) + 0.04 * Math.sin(t * 41 + i)
-    sk.size[b] = f
+    sk.size[b] = flicker(t, i)
     const lean = 0.08 * Math.sin(t * 5.1 + i * 1.7) + 0.05 * Math.sin(t * 11 + i * 3)
     sk.setRotation(b, mulQ(axisAngle([1, 0, 0], lean), axisAngle([0, 0, 1], 0.6 * lean)))
   }
