@@ -846,6 +846,94 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   await ctx.close()
 }
 
+// 7b. Creatures in the sandbox: add, play, drag with Move, bones, freeze, undo, save
+{
+  const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 900 }, acceptDownloads: true })
+  await page.waitForTimeout(1500)
+  const count = async () => Number((await page.textContent('[data-testid=blob-count]')).replace(/\D/g, ''))
+  const inCreatures = async () => Number(((await page.textContent('[data-testid=creature-blob-count]', { timeout: 1000 }).catch(() => '0')) ?? '0').replace(/\D/g, ''))
+  const shot = async () => page.getByTestId('viewport').screenshot()
+  const differs = (a, b) => page.evaluate(async ([a, b]) => {
+    const px = async (s) => { const i = await createImageBitmap(new Blob([Uint8Array.from(atob(s), (ch) => ch.charCodeAt(0))], { type: 'image/png' })); const c = new OffscreenCanvas(i.width, i.height); const x = c.getContext('2d'); x.drawImage(i, 0, 0); return x.getImageData(0, 0, i.width, i.height).data }
+    const [p, q] = await Promise.all([px(a), px(b)])
+    let n = 0
+    for (let k = 0; k < p.length; k += 4) if (Math.abs(p[k] - q[k]) > 24 || Math.abs(p[k + 1] - q[k + 1]) > 24 || Math.abs(p[k + 2] - q[k + 2]) > 24) n++
+    return n
+  }, [a.toString('base64'), b.toString('base64')])
+
+  await page.getByRole('tab', { name: /Scene/ }).click()
+  await page.getByRole('button', { name: 'Empty' }).click()
+  await page.getByRole('tab', { name: /Creatures/ }).click()
+  await page.getByTestId('add-creature').getByRole('button', { name: 'Fox' }).click()
+  await page.waitForTimeout(400)
+  const foxBlobs = await inCreatures()
+  if (foxBlobs < 4000) fails.push(`blobscape sandbox creatures: a fox added ${foxBlobs} blobs`)
+  else ok(`blobscape sandbox creatures: adds a fox of ${foxBlobs.toLocaleString()} blobs beside the scene`)
+  await page.getByRole('button', { name: 'Bring to the middle of the view' }).click()
+  await page.waitForTimeout(2500)
+  // It moves on its own
+  const a = await shot()
+  await page.waitForTimeout(700)
+  const moving = await differs(a, await shot())
+  if (moving < 200) fails.push(`blobscape sandbox creatures: the fox didn't move (${moving} px)`)
+  else ok(`blobscape sandbox creatures: the fox trots (${moving} px changed)`)
+  // Still, then a drag with Move takes it across the floor
+  await page.getByRole('button', { name: 'Still', exact: true }).click()
+  await page.waitForTimeout(1500)
+  const still = await shot()
+  await page.getByRole('button', { name: 'Move', exact: true }).click()
+  const box = await page.getByTestId('viewport').boundingBox()
+  const cx = box.x + box.width / 2, cy = box.y + box.height / 2
+  let grabbed = false
+  for (const dy of [-10, -25, -45, 5]) {
+    await page.mouse.move(cx, cy + dy)
+    await page.mouse.down()
+    await page.mouse.move(cx + 80, cy + dy, { steps: 4 })
+    await page.mouse.move(cx + 160, cy + dy, { steps: 4 })
+    await page.mouse.up()
+    await page.waitForTimeout(1500)
+    if ((await differs(still, await shot())) > 500) { grabbed = true; break }
+  }
+  if (!grabbed) fails.push('blobscape sandbox creatures: dragging with Move did not move the fox')
+  else ok('blobscape sandbox creatures: Move drags the fox across the floor')
+  if ((await count()) !== 0) fails.push(`blobscape sandbox creatures: dragging the fox added ${await count()} scene blobs`)
+  // Bones over the blobs
+  const blobsOnly = await shot()
+  await page.getByRole('group', { name: 'Show creatures as' }).getByRole('button', { name: 'Bones' }).click()
+  await page.waitForTimeout(1200)
+  if ((await differs(blobsOnly, await shot())) < 500) fails.push('blobscape sandbox creatures: Bones looks the same as Blobs')
+  else ok('blobscape sandbox creatures: shows the bones instead of the blobs')
+  await page.getByRole('group', { name: 'Show creatures as' }).getByRole('button', { name: 'Blobs' }).click()
+  // Saved files hold the creature as it stands
+  const [dl] = await Promise.all([page.waitForEvent('download'), (async () => { await page.getByRole('tab', { name: /Scene/ }).click(); await page.getByRole('button', { name: 'Save as .ply' }).click() })()])
+  const saved = readFileSync(await dl.path(), 'latin1').match(/element vertex (\d+)/)?.[1]
+  if (Number(saved) !== foxBlobs) fails.push(`blobscape sandbox creatures: saved .ply has ${saved} blobs, expected the fox's ${foxBlobs}`)
+  else ok('blobscape sandbox creatures: Save as .ply includes the fox')
+  // Freeze: its blobs join the scene; Undo brings the creature back
+  await page.getByRole('tab', { name: /Creatures/ }).click()
+  await page.getByRole('button', { name: 'Freeze into the scene' }).click()
+  await page.waitForTimeout(500)
+  if ((await count()) !== foxBlobs || (await inCreatures()) !== 0) fails.push(`blobscape sandbox creatures: freezing gave ${await count()} scene blobs and ${await inCreatures()} in creatures`)
+  else ok('blobscape sandbox creatures: Freeze turns the fox into ordinary blobs')
+  await page.getByRole('button', { name: 'Undo' }).click()
+  await page.waitForTimeout(500)
+  if ((await count()) !== 0 || (await inCreatures()) !== foxBlobs) fails.push(`blobscape sandbox creatures: undoing the freeze gave ${await count()} / ${await inCreatures()}`)
+  else ok('blobscape sandbox creatures: Undo brings the live fox back')
+  for (const n of ['Frog', 'Elf', 'Dragon']) await page.getByTestId('add-creature').getByRole('button', { name: n }).click()
+  await page.waitForTimeout(2500)
+  await page.screenshot({ path: join(shots, 'blobscape-sandbox-creatures.png') })
+  await axe(page, 'blobscape sandbox with creatures')
+  await ctx.close()
+  const phone = await open('/sandbox/', { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+  await phone.page.waitForTimeout(1500)
+  await phone.page.getByRole('tab', { name: /Creatures/ }).click()
+  await phone.page.getByTestId('add-creature').getByRole('button', { name: 'Frog' }).click()
+  await phone.page.waitForTimeout(2000)
+  await phone.page.screenshot({ path: join(shots, 'blobscape-sandbox-creatures-phone.png'), fullPage: true })
+  await axe(phone.page, 'blobscape phone sandbox with creatures')
+  await phone.ctx.close()
+}
+
 // Engine lab (unlisted): the splat engine on WebGPU and on WebGL. Headless
 // software WebGPU can render but not present to a canvas, so the lab draws
 // off-screen and copies frames to the page.

@@ -162,24 +162,42 @@ export class SplatView {
     })()
     await this.ready
     if (this.disposed || !this.mesh) return
-    const p = this.packed!
-    const c = new THREE.Vector3(), s = new THREE.Vector3(), q = new THREE.Quaternion(), col = new THREE.Color()
     // Appending (a spray stroke) only needs the new blobs written. With an order, the caller passes 0 whenever the order changed.
-    const start = Math.max(0, Math.min(from, blobs.count))
-    for (let g = start; g < blobs.count; g++) {
-      const i = order ? order[g] : g
-      c.fromArray(blobs.centre, i * 3)
-      s.fromArray(blobs.scale, i * 3)
-      q.fromArray(blobs.quat, i * 4)
-      col.setRGB(blobs.colour[i * 3], blobs.colour[i * 3 + 1], blobs.colour[i * 3 + 2])
-      p.setSplat(g, c, s, q, blobs.opacity[i], col)
-    }
-    p.numSplats = blobs.count
-    p.needsUpdate = true
+    writeSplats(this.packed!, blobs, Math.max(0, Math.min(from, blobs.count)), order)
     // Spark can't draw an empty list, so an empty scene just hides the mesh.
     this.mesh.visible = blobs.count > 0
     this.mesh.updateVersion()
     this.invalidate(30)
+  }
+
+  private layerMesh?: SplatMesh
+  private layer?: Promise<{ mesh: SplatMesh; packed: PackedSplats } | undefined>
+
+  /**
+   * A second list of blobs drawn with the first and sorted with it, but kept
+   * apart from it: no effect touches it and `sync` never rewrites it. The
+   * sandbox's creatures live here, rewritten whole every frame they move.
+   * Null (or an empty list) hides it.
+   */
+  async syncLayer(blobs: Blobs | null) {
+    if (!blobs?.count && !this.layer) return
+    this.layer ??= (async () => {
+      const packed = new PackedSplats({ maxSplats: Math.max(1024, blobs?.count ?? 0) })
+      const mesh = new SplatMesh({ packedSplats: packed })
+      await mesh.initialized
+      if (this.disposed) { mesh.dispose(); return undefined }
+      this.layerMesh = mesh
+      this.scene.add(mesh)
+      return { mesh, packed }
+    })()
+    const l = await this.layer
+    if (!l || this.disposed) return
+    this.layerMesh = l.mesh
+    const n = blobs?.count ?? 0
+    if (n) writeSplats(l.packed, blobs!, 0, null)
+    l.mesh.visible = n > 0
+    l.mesh.updateVersion()
+    this.invalidate(2)
   }
 
   private fx?: { kind: dyno.DynoFloat<string>; amount: dyno.DynoFloat<string>; time: dyno.DynoFloat<string>; radius: dyno.DynoFloat<string>; floor: dyno.DynoFloat<string>; count: dyno.DynoFloat<string>; centre: dyno.DynoVec3<THREE.Vector3, string> }
@@ -234,9 +252,27 @@ export class SplatView {
     this.disposed = true
     this.loop.stop()
     this.mesh?.dispose()
+    // Freed before the renderer; one still starting up frees itself when it sees `disposed`
+    this.layerMesh?.dispose()
     this.spark.dispose()
     this.renderer.dispose()
     // Lessons each open their own view; give the context back straight away.
     this.renderer.forceContextLoss()
   }
+}
+
+const c3 = new THREE.Vector3(), s3 = new THREE.Vector3(), q4 = new THREE.Quaternion(), col = new THREE.Color()
+
+/** Writes blobs into Spark's packed array from GPU slot `start` on (slot g holds blob order[g] with an order). */
+function writeSplats(p: PackedSplats, blobs: Blobs, start: number, order: ArrayLike<number> | null) {
+  for (let g = start; g < blobs.count; g++) {
+    const i = order ? order[g] : g
+    c3.fromArray(blobs.centre, i * 3)
+    s3.fromArray(blobs.scale, i * 3)
+    q4.fromArray(blobs.quat, i * 4)
+    col.setRGB(blobs.colour[i * 3], blobs.colour[i * 3 + 1], blobs.colour[i * 3 + 2])
+    p.setSplat(g, c3, s3, q4, blobs.opacity[i], col)
+  }
+  p.numSplats = blobs.count
+  p.needsUpdate = true
 }

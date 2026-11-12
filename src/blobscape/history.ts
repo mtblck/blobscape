@@ -1,7 +1,8 @@
 import type { Blobs } from '../splat-core/blobs.ts'
+import type { Actor } from './actors.ts'
 
-/** A scene as it was: its blobs and the name of what it started from. */
-export interface Snapshot { blobs: Blobs; source: string }
+/** A scene as it was: its blobs, the name of what it started from, and the creatures in it (values, never changed in place). */
+export interface Snapshot { blobs: Blobs; source: string; actors?: readonly Actor[] }
 
 /**
  * Undo and redo as whole snapshots of the blob list. Simple and exact; a
@@ -19,8 +20,8 @@ export class History {
   }
 
   /** Call before an edit, with the scene as it was. */
-  record(blobs: Blobs, source: string) {
-    this.keep({ blobs: blobs.clone(), source })
+  record(blobs: Blobs, source: string, actors?: readonly Actor[]) {
+    this.keep({ blobs: blobs.clone(), source, actors })
   }
 
   /** Like `record`, for a snapshot the caller already copied and won't touch again. */
@@ -34,14 +35,14 @@ export class History {
   undo(current: Snapshot): Snapshot | null {
     const prev = this.past.pop()
     if (!prev) return null
-    this.future.push({ blobs: current.blobs.clone(), source: current.source })
+    this.future.push({ ...current, blobs: current.blobs.clone() })
     return prev
   }
 
   redo(current: Snapshot): Snapshot | null {
     const next = this.future.pop()
     if (!next) return null
-    this.past.push({ blobs: current.blobs.clone(), source: current.source })
+    this.past.push({ ...current, blobs: current.blobs.clone() })
     return next
   }
 
