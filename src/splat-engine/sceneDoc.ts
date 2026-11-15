@@ -80,6 +80,8 @@ export type PaintDoc =
   | { kind: 'bands'; axis: 'x' | 'y' | 'z'; size: number; colours: string[] }
   /** Courses of bricks, tiles or planks: `size` is [length, height], `line` the colour between them. */
   | { kind: 'bricks'; size: [number, number]; colours: string[]; line: string }
+  /** Six-sided cells `size` across, as honeycomb, scales or paving: each cell picks a colour (earlier ones commoner), with `line` between cells and, if given, `deep` in the middle of each, which reads as a hollow. */
+  | { kind: 'hex'; size: number; colours: string[]; line: string; deep?: string }
   /** Small flecks: each cell of `size` picks one colour; earlier colours are commoner. */
   | { kind: 'speckle'; size: number; colours: string[] }
   /** Soft-edged patches `size` across, as moss on rock or light on water. */
@@ -247,6 +249,7 @@ export function checkScene(doc: unknown): string[] {
     switch (p.kind) {
       case 'bands': axis(p.axis, `${at}.axis`); num(p.size, `${at}.size`, 0.005, REACH); hexes(p.colours, `${at}.colours`, 2, 8); break
       case 'bricks': vec(p.size, `${at}.size`, 0.01, REACH, 2); hexes(p.colours, `${at}.colours`, 1, 8); hex(p.line, `${at}.line`); break
+      case 'hex': num(p.size, `${at}.size`, 0.03, REACH); hexes(p.colours, `${at}.colours`, 1, 8); hex(p.line, `${at}.line`); if (p.deep !== undefined) hex(p.deep, `${at}.deep`); break
       case 'speckle': case 'patches': num(p.size, `${at}.size`, 0.005, REACH); hexes(p.colours, `${at}.colours`, 2, 8); break
       case 'faces':
         paint(p.side, `${at}.side`, depth + 1)
@@ -254,7 +257,7 @@ export function checkScene(doc: unknown): string[] {
         if (p.under !== undefined) paint(p.under, `${at}.under`, depth + 1)
         break
       case 'split': axis(p.axis, `${at}.axis`); num(p.at, `${at}.at`, -REACH, REACH); paint(p.below, `${at}.below`, depth + 1); paint(p.above, `${at}.above`, depth + 1); break
-      default: bad(`${at}.kind`, `${show(p.kind)} is not a paint (bands, bricks, speckle, patches, faces, split)`)
+      default: bad(`${at}.kind`, `${show(p.kind)} is not a paint (bands, bricks, hex, speckle, patches, faces, split)`)
     }
   }
   if (!Array.isArray(doc.parts) || !doc.parts.length || doc.parts.length > MAX_PARTS) bad('parts', `must be a list of 1 to ${MAX_PARTS} parts`)
@@ -375,6 +378,29 @@ function toPaint(p: PaintDoc, cell: number): Paint {
         const along = u / w + (row & 1) * 0.5, col = Math.floor(along), fx = along - col
         if (fy < Math.min(0.4, cell / h) || fx < Math.min(0.3, (cell * 0.8) / w)) return line
         return cs[Math.floor(hash(row, col, 1) * cs.length)]
+      }
+    }
+    case 'hex': {
+      const cs = p.colours.map(unit), line = unit(p.line), deep = p.deep === undefined ? undefined : unit(p.deep)
+      // wide enough that the line, the cell and its hollow each get a grid cell
+      const w = Math.max(p.size, cell * (deep ? 5 : 3.5)), dy = w * 0.8660254
+      const edge = 1 - Math.min(0.45, (cell * 1.1) / (w / 2))
+      return (q, n) => {
+        // on a floor the cells lie in x and z; on a wall, along the wall and up
+        const flat = Math.abs(n[1]) > 0.6
+        const u = flat ? q[0] : Math.abs(n[0]) > Math.abs(n[2]) ? q[2] : q[0], v = flat ? q[2] : q[1]
+        let best = Infinity, col = 0, row = 0, du = 0, dv = 0
+        const r0 = Math.round(v / dy)
+        for (let r = r0 - 1; r <= r0 + 1; r++) {
+          const shift = (r & 1) * 0.5, c = Math.round(u / w - shift)
+          const x = u - (c + shift) * w, y = v - r * dy, d = x * x + y * y
+          if (d < best) { best = d; col = c; row = r; du = Math.abs(x); dv = Math.abs(y) }
+        }
+        // 0 in the middle of the cell, 1 on its rim
+        const m = Math.max(du, du * 0.5 + dv * 0.8660254) / (w / 2)
+        if (m > edge) return line
+        if (deep && m < 0.42) return deep
+        return cs[Math.floor(hash(col, row, 2) ** 2 * cs.length)]
       }
     }
     case 'speckle': {

@@ -840,7 +840,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   }
 
   // the scenes written as descriptions: each opens by its address, draws in its own palette, and moves
-  for (const id of ['campfire', 'windmill']) {
+  for (const id of ['campfire', 'hive', 'windmill']) {
     const d = await open(`/experiments/pixel-diorama/?offscreen=1&scene=${id}`, { viewport: { width: 1280, height: 900 } })
     const label = `blobscape pixel diorama ${id}`
     if (!await d.page.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).then(() => true, () => false)) {

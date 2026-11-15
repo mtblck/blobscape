@@ -7,6 +7,7 @@ import { compileScene, type SceneDoc } from '../../splat-engine/sceneDoc.ts'
 import { buildVoxels } from '../../splat-engine/voxel.ts'
 import { LOOP, PALETTES, lampLights, makeDiorama, poseDiorama } from './scene.ts'
 import { CAMPFIRE } from './scenes/campfire.ts'
+import { HIVE } from './scenes/hive.ts'
 import { WINDMILL } from './scenes/windmill.ts'
 
 /** A scene Pixel Diorama can show: how to build it, move it and light it, and how it asks to be drawn. */
@@ -78,5 +79,6 @@ export function described(id: string, doc: SceneDoc, about: string): Diorama {
 export const DIORAMAS: Diorama[] = [
   LIGHTHOUSE,
   described('campfire', CAMPFIRE, 'A camp in a clearing among pines at night, with a flickering fire throwing sparks, a tent, a lantern, fireflies and the moon'),
+  described('hive', HIVE, 'A giant bee hovering inside a honeycomb hive, with fluttering pale wings, little bees, glowing pools of honey and honey dripping from the comb'),
   described('windmill', WINDMILL, 'A windmill on a farm by day, with turning sails, sheep, a duck on a pond, a wheat field, trees, clouds and birds'),
 ]
