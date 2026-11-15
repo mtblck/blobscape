@@ -53,6 +53,11 @@ const LIGHTHOUSE: Diorama = {
   lights: lampLights,
 }
 
+const night = (palette: Rgb[]): [Rgb, Rgb] => {
+  const dark = [...palette].sort((a, b) => a[0] + a[1] + a[2] - (b[0] + b[1] + b[2]))
+  return dark.length > 1 ? [dark[0], dark[1]] : [[9, 13, 32], [60, 94, 164]]
+}
+
 /** A scene written as a description (splat-engine/sceneDoc.ts), made ready for the page. */
 export function described(id: string, doc: SceneDoc, about: string): Diorama {
   const c = compileScene(doc)
@@ -62,7 +67,8 @@ export function described(id: string, doc: SceneDoc, about: string): Diorama {
     about,
     loop: c.loop,
     palette: { label: 'Its own', colours: c.palette },
-    sky: c.look.sky ?? [[9, 13, 32], [60, 94, 164]],
+    // with no sky of its own, the switch gives it a night made of its two darkest colours
+    sky: c.look.sky ?? night(c.palette),
     finish: { dither: c.look.dither, glow: c.look.glow, outline: !!c.look.outline, edges: !!c.look.edges, sky: !!c.look.sky },
     views: [
       { id: 'start', label: 'From the front', orbit: c.orbit },

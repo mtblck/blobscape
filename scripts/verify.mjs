@@ -797,7 +797,14 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
       }
       return { backend: stage.backend, w: f.art.width, h: f.art.height, solid, off, soft, small: Array.from(f.small.data), art: Array.from(f.art.data), look: look() }
     }, t)
-    const a = await shot(2), b = await shot(5)
+    // a view that swings stands at the same angle at t and at half a loop less t, so what changes between those is the scene itself
+    const swings = id === 'dragon'
+    const a = await shot(2), b = await shot(swings ? 6 : 5)
+    if (swings) {
+      const c = await shot(4)
+      if (Math.abs(a.turned - b.turned) > 0.01 || Math.abs(c.turned - a.turned) < 1) fails.push(`${label}: the view should swing and come back: ${JSON.stringify([a.turned, c.turned, b.turned])}`)
+      else ok(`${label}: the view swings (${a.turned.toFixed(1)}° at 2 s, ${c.turned.toFixed(1)}° at 4 s) and the bones move on their own`)
+    }
     // the same frame through the CPU twin (the page's own module isn't reachable from a production build, so it runs here)
     const { pixelArt } = await import('../src/splat-core/pixel.ts')
     const want = pixelArt({ width: a.w, height: a.h, data: Uint8ClampedArray.from(a.small) }, a.look)
@@ -814,8 +821,8 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     // dither sits pixels on the line between two colours, where 8-bit rounding can tip them either way
     if (!(alpha === 0 && colour < a.solid * 0.05)) fails.push(`${label}: the pixel pass and its CPU twin differ (${alpha} in shape, ${colour} of ${a.solid} in colour)`)
     else ok(`${label}: the pixel pass matches its CPU twin (same shape, ${colour} of ${a.solid} pixels a neighbouring colour)`)
-    if (!(moved > 150)) fails.push(`${label}: only ${moved} pixels change in three seconds`)
-    else ok(`${label}: ${moved} pixels change in three seconds`)
+    if (!(moved > 150)) fails.push(`${label}: only ${moved} pixels change in a few seconds`)
+    else ok(`${label}: ${moved} pixels change in a few seconds`)
     if (!q) {
       // pixels off: the same scene as blobs, in far more colours
       await d.page.getByRole('button', { name: 'Blobs', exact: true }).click()
@@ -862,14 +869,21 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
         if (!pal.has(c)) off++
         used.add(c)
       }
-      return { off, used: used.size, bones: bones(), art: Array.from(f.art.data) }
+      return { off, used: used.size, bones: bones(), turned: stage.orbit.azimuth, art: Array.from(f.art.data) }
     }, t)
-    const a = await shot(2), b = await shot(5)
+    // a view that swings stands at the same angle at t and at half a loop less t, so what changes between those is the scene itself
+    const swings = id === 'dragon'
+    const a = await shot(2), b = await shot(swings ? 6 : 5)
+    if (swings) {
+      const c = await shot(4)
+      if (Math.abs(a.turned - b.turned) > 0.01 || Math.abs(c.turned - a.turned) < 1) fails.push(`${label}: the view should swing and come back: ${JSON.stringify([a.turned, c.turned, b.turned])}`)
+      else ok(`${label}: the view swings (${a.turned.toFixed(1)}° at 2 s, ${c.turned.toFixed(1)}° at 4 s) and the bones move on their own`)
+    }
     let moved = 0
     for (let i = 0; i < a.art.length; i += 4) if (a.art[i] !== b.art[i] || a.art[i + 1] !== b.art[i + 1] || a.art[i + 2] !== b.art[i + 2]) moved++
     const chip = await d.page.getByRole('button', { name, exact: true }).getAttribute('aria-pressed')
     if (!(a.off === 0 && a.used >= 12 && a.bones > 10 && moved > 100 && chip === 'true')) fails.push(`${label}: ${JSON.stringify({ offPalette: a.off, colours: a.used, bones: a.bones, moved, chip })}`)
-    else ok(`${label}: built from its description (${a.bones} bones), ${a.used} palette colours in the picture, ${moved} pixels change in three seconds`)
+    else ok(`${label}: built from its description (${a.bones} bones), ${a.used} palette colours in the picture, ${moved} pixels change in a few seconds`)
     await d.page.screenshot({ path: join(shots, `blobscape-pixel-diorama-${id}.png`) })
     await d.ctx.close()
   }

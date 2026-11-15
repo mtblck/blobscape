@@ -19,8 +19,8 @@ declare global {
   interface Window { __diorama?: { stage: CreatureStage; blobs: () => number; bones: () => number; look: () => PixelLook } }
 }
 
-/** The view `orbit`, rocked to where scene `d` has it at `t` seconds. */
-const swung = (orbit: Orbit, d: Diorama, t: number): Orbit => (d.swing ? { ...orbit, azimuth: orbit.azimuth + Math.sin((t / d.loop) * Math.PI * 2) * d.swing } : orbit)
+/** The view `orbit`, rocked `swing` degrees to either side once every `loop` seconds, as it is at `t`. */
+const swung = (orbit: Orbit, swing: number, loop: number, t: number): Orbit => (swing ? { ...orbit, azimuth: orbit.azimuth + Math.sin((t / loop) * Math.PI * 2) * swing } : orbit)
 
 /** A frame as a PNG, each art pixel `scale` across. */
 async function toPng(f: Frame, scale: number): Promise<Uint8Array> {
@@ -115,6 +115,7 @@ export function PixelDiorama() {
     stage.setActor(scene.built)
     // lights move with the bones (the lamp's beam with its lens, the fire's glow with its flames), so both are set from the same time
     const d = scene.of
+    posed.current = d
     // a new scene brings its own palette, finish and view, now that it is the one in the view
     if (dressed.current !== d.id) {
       dressed.current = d.id
@@ -126,14 +127,21 @@ export function PixelDiorama() {
       d.pose(sk, t)
       stage.setLights(d.lights(t), 1)
       // a scene that asks for it rocks the view gently as it plays, about wherever the view has been turned to
-      if (d.swing) stage.orbit = swung(orbitNow.current, d, t)
+      if (d.swing && !calm) stage.orbit = swung(orbitNow.current, d.swing, d.loop, t)
     }, from)
-  }, [stage, scene])
+  }, [stage, scene, calm])
   useEffect(() => { stage?.setPixels(pixels ? look : undefined, size) }, [stage, pixels, look, size])
   useEffect(() => { if (stage) stage.playing = playing }, [stage, playing])
   const orbitNow = useRef(orbit)
+  const posed = useRef<Diorama | undefined>(undefined)
   orbitNow.current = orbit
-  useEffect(() => { if (stage) { stage.orbit = swung(orbit, shown, stage.time); stage.invalidate() } }, [stage, orbit, shown])
+  // the scene being posed, which is the one whose swing applies: a scene just picked is not in the view until it is cut
+  useEffect(() => {
+    if (!stage) return
+    const d = posed.current
+    stage.orbit = d && !calm ? swung(orbit, d.swing, d.loop, stage.time) : orbit
+    stage.invalidate()
+  }, [stage, orbit, scene, calm])
   // the art's size follows the view's; read it now and then for the caption (it's text, not every frame)
   useEffect(() => {
     if (!stage) return

@@ -17,7 +17,7 @@ The point is that Claude can write one from a sentence. A scene that is data can
 | `sky` | Top and bottom colours of the backdrop. |
 | `light` | The baked sun: where it is, how much light reaches everywhere, how dark shadows are. |
 | `look` | Dither, glow, outline, edge lines. |
-| `camera` | Where the view starts, and optionally a `swing`: degrees it rocks to either side as the scene plays. |
+| `camera` | Where the view starts, and optionally a `swing`: degrees (0 to 60) it rocks to either side, once a loop, as the scene plays. |
 | `bones` | Things that move, each with the point it turns about. Parts with no bone stand still. |
 | `parts` | A shape, a paint, and optionally a bone, `glow` or `noShadow`. |
 | `moves` | spin, sway, bob, drift, pulse. Each names a bone and a whole number of `times` per loop; a bone takes up to six. |
@@ -38,7 +38,7 @@ Paints: a colour, or `bands`, `bricks`, `hex` (honeycomb, scales, paving), `spec
 7. **Join only what is close together.** A `join` is searched as one box, so joining far-apart shapes (every star in the sky) is slow. Make them separate parts.
 8. **A cone has round ends.** It reaches `r` past both ends. For a flat-bottomed cone (a pine tier, a spire) use a `cylinder` with a small `rTop`.
 9. **Thin is fine.** Anything thinner than the grid is fattened to one cell, so a rope or a star still shows at every detail level.
-10. **Detail comes from parts and paint.** Sixty to ninety parts make a full scene. Give big surfaces a paint with texture (`patches` on grass, `bricks` on walls, `bands` on planks and tiles), and scatter small things: stones, flowers, mushrooms.
+10. **Detail comes from parts and paint.** Sixty to ninety parts make a full scene, and a showpiece can take about 150. Give big surfaces a paint with texture (`patches` on grass, `bricks` on walls, `bands` on planks and tiles), and scatter small things: stones, flowers, mushrooms.
 
 ## Getting the look of a showpiece
 
