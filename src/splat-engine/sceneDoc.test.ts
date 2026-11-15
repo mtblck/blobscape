@@ -16,7 +16,7 @@ const sound = (): SceneDoc => ({
     { shape: { kind: 'box', at: [0.15, 0.5, 0], half: [0.15, 0.03, 0.03] }, paint: { kind: 'bricks', size: [0.1, 0.05], colours: ['#f4f1e4'], line: '#101018' }, bone: 'arm' },
     { shape: { kind: 'sphere', at: [0.3, 0.5, 0], r: 0.005 }, paint: '#ffd166', bone: 'hand', glow: true },
     { shape: { kind: 'rough', shape: { kind: 'join', shapes: [{ kind: 'ball', at: [0, 1, 0], r: [0.1, 0.05, 0.1] }, { kind: 'cone', from: [0, 1, 0], to: [0.1, 1.1, 0], r: 0.04 }] }, by: 0.01 }, paint: { kind: 'split', axis: 'y', at: 1, below: '#101018', above: { kind: 'speckle', size: 0.05, colours: ['#f4f1e4', '#ffd166'] } }, bone: 'puff', noShadow: true },
-    { shape: { kind: 'cut', shape: { kind: 'roof', at: [-0.5, 0, 0], half: [0.2, 0.2], height: 0.3 }, hole: { kind: 'ring', at: [-0.5, 0.1, 0], r: 0.1, tube: 0.03 } }, paint: { kind: 'bands', axis: 'x', size: 0.05, colours: ['#f4f1e4', '#ffd166'] } },
+    { shape: { kind: 'cut', shape: { kind: 'roof', at: [-0.5, 0, 0], half: [0.2, 0.2], height: 0.3 }, hole: { kind: 'ring', at: [-0.5, 0.1, 0], r: 0.1, tube: 0.03 } }, paint: { kind: 'faces', top: { kind: 'bands', axis: 'x', size: 0.05, colours: ['#f4f1e4', '#ffd166'] }, side: { kind: 'hex', size: 0.1, colours: ['#f4f1e4', '#ffd166'], line: '#101018', deep: '#3f7a45' } } },
   ],
   moves: [
     { kind: 'spin', bone: 'arm', axis: 'y', times: 2 },

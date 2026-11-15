@@ -25,7 +25,7 @@ The point is that Claude can write one from a sentence. A scene that is data can
 
 Shapes: `sphere`, `ball` (stretched), `box`, `cylinder` (can taper), `cone` (a round-ended stick), `ring`, `roof`, and `join`, `cut`, `rough` to combine them.
 
-Paints: a colour, or `bands`, `bricks`, `speckle`, `patches`, `faces` (top, side, under), `split` (one paint below a height, another above). Paints nest.
+Paints: a colour, or `bands`, `bricks`, `hex` (honeycomb, scales, paving), `speckle`, `patches`, `faces` (top, side, under), `split` (one paint below a height, another above). Paints nest.
 
 ## Rules that make a scene work
 
