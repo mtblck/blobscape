@@ -839,6 +839,39 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     await d.ctx.close()
   }
 
+  // the scenes written as descriptions: each opens by its address, draws in its own palette, and moves
+  for (const id of ['campfire', 'windmill']) {
+    const d = await open(`/experiments/pixel-diorama/?offscreen=1&scene=${id}`, { viewport: { width: 1280, height: 900 } })
+    const label = `blobscape pixel diorama ${id}`
+    if (!await d.page.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).then(() => true, () => false)) {
+      fails.push(`${label}: the scene never started`)
+      await d.ctx.close()
+      continue
+    }
+    const shot = (t) => d.page.evaluate(async (t) => {
+      const { stage, look, bones } = window.__diorama
+      await stage.frame(t)
+      const f = await stage.pixelFrames()
+      const pal = new Set([...look().palette, look().outline].filter(Boolean).map((c) => (c[0] << 16) | (c[1] << 8) | c[2]))
+      let off = 0
+      const used = new Set()
+      for (let i = 0; i < f.art.data.length; i += 4) {
+        const c = (f.art.data[i] << 16) | (f.art.data[i + 1] << 8) | f.art.data[i + 2]
+        if (!f.art.data[i + 3] || !pal.has(c)) off++
+        used.add(c)
+      }
+      return { off, used: used.size, bones: bones(), art: Array.from(f.art.data) }
+    }, t)
+    const a = await shot(2), b = await shot(5)
+    let moved = 0
+    for (let i = 0; i < a.art.length; i += 4) if (a.art[i] !== b.art[i] || a.art[i + 1] !== b.art[i + 1] || a.art[i + 2] !== b.art[i + 2]) moved++
+    const chip = await d.page.getByRole('button', { name: id[0].toUpperCase() + id.slice(1), exact: true }).getAttribute('aria-pressed')
+    if (!(a.off === 0 && a.used >= 12 && a.bones > 10 && moved > 100 && chip === 'true')) fails.push(`${label}: ${JSON.stringify({ offPalette: a.off, colours: a.used, bones: a.bones, moved, chip })}`)
+    else ok(`${label}: built from its description (${a.bones} bones), ${a.used} palette colours in the picture, ${moved} pixels change in three seconds`)
+    await d.page.screenshot({ path: join(shots, `blobscape-pixel-diorama-${id}.png`) })
+    await d.ctx.close()
+  }
+
   // Clockwork: the watch draws, its gold train turns by the right amount, and the hands read the time it's set to
   {
     const k = await open('/experiments/clockwork/?offscreen=1', { viewport: { width: 1280, height: 900 } })

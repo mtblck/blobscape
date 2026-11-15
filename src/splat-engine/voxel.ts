@@ -132,6 +132,15 @@ export function torus(c: Vec3, R: number, r: number): Shape {
   }
 }
 
+/** A roof: a ridge along x at `top`, sloping down to `y0` at `hz` either side. */
+export function roof(c: [x: number, z: number], y0: number, top: number, hx: number, hz: number): Shape {
+  const k = (top - y0) / hz, len = Math.hypot(1, k)
+  return {
+    sdf: (x, y, z) => Math.max((Math.abs(z - c[1]) * k + (y - top)) / len, y0 - y, Math.abs(x - c[0]) - hx),
+    min: [c[0] - hx, y0, c[1] - hz], max: [c[0] + hx, top, c[1] + hz],
+  }
+}
+
 export function union(...s: Shape[]): Shape {
   return {
     sdf: (x, y, z) => { let d = Infinity; for (const k of s) d = Math.min(d, k.sdf(x, y, z)); return d },

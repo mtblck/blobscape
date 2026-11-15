@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Orbit } from '../splat-core/view.ts'
-import { darkest, type Frame, type PixelLook, type Rgb } from '../splat-core/pixel.ts'
+import { darkest, type Frame, type PixelLook } from '../splat-core/pixel.ts'
 import type { Built } from '../splat-engine/body.ts'
 import { Button, Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
 import { Mark } from '../shared/Logo.tsx'
@@ -10,20 +10,11 @@ import { href } from './routes.ts'
 import { download } from './files.ts'
 import type { CreatureStage } from './creature/stage.ts'
 import { CARD, CARD_SUB, CARD_TITLE } from './creature/card.ts'
-import { DETAIL, LOOP, PALETTES, lampLights, makeDiorama, poseDiorama } from './diorama/scene.ts'
+import { DETAIL, PALETTES } from './diorama/scene.ts'
+import { DIORAMAS, type Diorama } from './diorama/scenes.ts'
 import type { Skeleton } from '../splat-engine/rig.ts'
 
 const SIZES = [2, 3, 4, 6]
-/** The dusk sky behind the scene, top and bottom; the palette in use turns it into its own bands. */
-const SKY: [Rgb, Rgb] = [[9, 13, 32], [60, 94, 164]]
-const VIEWS: { id: string; label: string; orbit: Orbit }[] = [
-  { id: 'shore', label: 'From the shore', orbit: { target: [0.1, 0.95, 0.1], distance: 4.3, azimuth: 28, elevation: 10 } },
-  { id: 'above', label: 'From above', orbit: { target: [0, 0.7, 0], distance: 6.2, azimuth: 40, elevation: 38 } },
-  { id: 'lamp', label: 'The lamp', orbit: { target: [0.05, 1.35, -0.05], distance: 2.0, azimuth: 20, elevation: 6 } },
-  { id: 'cottage', label: 'The cottage', orbit: { target: [-0.3, 0.4, 0.15], distance: 2.0, azimuth: 10, elevation: 14 } },
-  { id: 'boat', label: 'The boat', orbit: { target: [0.85, 0.2, 0.75], distance: 2.0, azimuth: 55, elevation: 16 } },
-]
-
 declare global {
   interface Window { __diorama?: { stage: CreatureStage; blobs: () => number; bones: () => number; look: () => PixelLook } }
 }
@@ -61,31 +52,39 @@ export function PixelDiorama() {
   const webgl = useMemo(() => new URLSearchParams(location.search).get('webgl') === '1', [])
   const calm = useMemo(() => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches, [])
   const coarse = useMemo(() => typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches, [])
+  // ?scene=campfire opens on that scene
+  const [which, setWhich] = useState(() => DIORAMAS.find((d) => d.id === new URLSearchParams(location.search).get('scene'))?.id ?? DIORAMAS[0].id)
+  const diorama = DIORAMAS.find((d) => d.id === which)!
+  /** The scene whose palette, finish and view are set. */
+  const dressed = useRef(which)
   const [playing, setPlaying] = useState(!calm)
   const [detail, setDetail] = useState<string>(coarse ? DETAIL[1].id : DETAIL[2].id)
   const [pixels, setPixels] = useState(true)
-  const [palette, setPalette] = useState(PALETTES[0].id)
+  const [palette, setPalette] = useState('own')
   const [size, setSize] = useState(2)
-  const [dither, setDither] = useState(0.1)
-  const [glow, setGlow] = useState(1.5)
-  const [outline, setOutline] = useState(true)
-  const [edges, setEdges] = useState(true)
+  const [dither, setDither] = useState(diorama.finish.dither)
+  const [glow, setGlow] = useState(diorama.finish.glow)
+  const [outline, setOutline] = useState(diorama.finish.outline)
+  const [edges, setEdges] = useState(diorama.finish.edges)
   const [sky, setSky] = useState(true)
-  const [view, setView] = useState(VIEWS[0].id)
-  const [orbit, setOrbit] = useState<Orbit>(VIEWS[0].orbit)
+  const [view, setView] = useState(diorama.views[0].id)
+  const [orbit, setOrbit] = useState<Orbit>(diorama.views[0].orbit)
   const [art, setArt] = useState<{ width: number; height: number }>()
   const [saving, setSaving] = useState(false)
   const [note, setNote] = useState('')
 
   // built after a paint, so the loading note shows first
-  const [scene, setScene] = useState<Built>()
+  const [made, setScene] = useState<{ built: Built; of: Diorama }>()
+  const scene = made?.of === diorama ? made : undefined
+  // what is in the view now: the last scene built, which lags the one picked while it is being cut
+  const shown = made?.of ?? diorama
   useEffect(() => {
     const spacing = DETAIL.find((d) => d.id === detail)!.spacing
     // the old scene stays in the view; clearing this one brings the loading note (and its announcement) back while the new one is cut
     setScene(undefined)
-    const t = setTimeout(() => setScene(makeDiorama(spacing)), 30)
+    const t = setTimeout(() => setScene({ built: diorama.make(spacing), of: diorama }), 30)
     return () => clearTimeout(t)
-  }, [detail])
+  }, [detail, diorama])
 
   useEffect(() => {
     let live: CreatureStage | undefined, gone = false
@@ -101,16 +100,26 @@ export function PixelDiorama() {
     return () => { gone = true; live?.dispose() }
   }, [offscreen, webgl])
 
-  const colours = PALETTES.find((p) => p.id === palette)!.colours
-  const look = useMemo<PixelLook>(() => ({ palette: colours, dither, outline: outline ? (colours.length ? darkest(colours) : [11, 16, 38]) : null, glow, edges: edges ? 1 : 0, sky: sky ? SKY : undefined }), [colours, dither, outline, glow, edges, sky])
+  // the scene's own palette first, then the shared ones
+  const palettes = useMemo(() => [{ id: 'own', ...shown.palette }, ...PALETTES.slice(1)], [shown])
+  const colours = (palettes.find((p) => p.id === palette) ?? palettes[0]).colours
+  const look = useMemo<PixelLook>(() => ({ palette: colours, dither, outline: outline ? (colours.length ? darkest(colours) : [11, 16, 38]) : null, glow, edges: edges ? 1 : 0, sky: sky ? shown.sky : undefined }), [colours, dither, outline, glow, edges, sky, shown])
 
   // a new level of detail keeps the moment it was showing
   useEffect(() => {
     if (!stage || !scene) return
     const from = stage.time
-    stage.setActor(scene)
-    // the lamp's light sweeps with its lens, so both are set from the same time
-    stage.setPoser((sk: Skeleton, t: number) => { poseDiorama(sk, t); stage.setLights(lampLights(t), 1) }, from)
+    stage.setActor(scene.built)
+    // lights move with the bones (the lamp's beam with its lens, the fire's glow with its flames), so both are set from the same time
+    const d = scene.of
+    // a new scene brings its own palette, finish and view, now that it is the one in the view
+    if (dressed.current !== d.id) {
+      dressed.current = d.id
+      setPalette('own')
+      setDither(d.finish.dither); setGlow(d.finish.glow); setOutline(d.finish.outline); setEdges(d.finish.edges)
+      setView(d.views[0].id); setOrbit(d.views[0].orbit)
+    }
+    stage.setPoser((sk: Skeleton, t: number) => { d.pose(sk, t); stage.setLights(d.lights(t), 1) }, from)
   }, [stage, scene])
   useEffect(() => { stage?.setPixels(pixels ? look : undefined, size) }, [stage, pixels, look, size])
   useEffect(() => { if (stage) stage.playing = playing }, [stage, playing])
@@ -127,7 +136,7 @@ export function PixelDiorama() {
   // For verify: the stage and the look in use, without clicking
   useEffect(() => {
     if (!stage || !scene) return
-    window.__diorama = { stage, blobs: () => stage.blobCount, bones: () => scene.skeleton.count, look: () => look }
+    window.__diorama = { stage, blobs: () => stage.blobCount, bones: () => scene.built.skeleton.count, look: () => look }
     return () => { delete window.__diorama }
   }, [stage, scene, look])
 
@@ -138,7 +147,7 @@ export function PixelDiorama() {
     try {
       const frames = await stage.pixelFrames()
       if (!frames) return
-      download(await toPng(frames.art, 4), 'pixel-diorama.png', 'image/png')
+      download(await toPng(frames.art, 4), `pixel-diorama-${shown.id}.png`, 'image/png')
       setNote(`Saved a ${frames.art.width * 4} × ${frames.art.height * 4} PNG.`)
     } catch (e) {
       console.warn(e)
@@ -151,7 +160,19 @@ export function PixelDiorama() {
   const drag = useRef<OrbitDrag | null>(null)
   const pointers = useRef(new Map<number, { x: number; y: number }>())
   useWheelZoom(canvas, setOrbit)
-  const pick = (id: string) => { setView(id); setOrbit(VIEWS.find((v) => v.id === id)!.orbit) }
+  const pick = (id: string) => { setView(id); setOrbit((shown.views.find((v) => v.id === id) ?? shown.views[0]).orbit) }
+  /** Another scene. It is cut first; its palette, finish and view follow when it reaches the view. */
+  const show = (id: string) => {
+    if (id === which) return
+    setWhich(id)
+    setPixels(true)
+    setNote('')
+    // the address names the scene, so a reload or a shared link opens the same one
+    const url = new URL(location.href)
+    if (id === DIORAMAS[0].id) url.searchParams.delete('scene')
+    else url.searchParams.set('scene', id)
+    history.replaceState(history.state, '', url)
+  }
   const backend = stage ? (stage.backend === 'webgpu' ? 'WebGPU' : 'WebGL 2') : 'WebGPU or WebGL 2'
   const loading = !failed && (!drawn || !scene)
   const loadingLabel = stage ? 'Cutting the scene into blobs…' : 'Starting the splat engine…'
@@ -162,9 +183,9 @@ export function PixelDiorama() {
       <header className="flex flex-wrap items-end justify-between gap-x-8 gap-y-2 pt-4 pb-6">
         <h1 ref={h1} tabIndex={-1} className="font-display text-4xl outline-none sm:text-5xl">Pixel Diorama</h1>
         <p className="max-w-xl text-lg text-ink-muted">
-          A lighthouse at dusk, made of blobs and drawn as pixel art while it moves. The scene is real 3D, so you can turn it,
-          and every frame is cut down to a few colours on a coarse grid of pixels. Change the palette and the pixel size, or
-          switch the pixels off to see the blobs underneath.
+          Small scenes made of blobs and drawn as pixel art while they move. Each one is real 3D, so you can turn it,
+          and every frame is cut down to a few colours on a coarse grid of pixels. Pick a scene, change the palette and
+          the pixel size, or switch the pixels off to see the blobs underneath.
         </p>
       </header>
       <div className="flex flex-col gap-4 lg:grid lg:grid-cols-12 lg:gap-x-5">
@@ -175,7 +196,7 @@ export function PixelDiorama() {
                 ref={canvas}
                 role="application"
                 aria-roledescription="3D view"
-                aria-label={`A lighthouse and a cottage on a rock in the sea at dusk, with a turning lamp, pines, a jetty, a small boat, gulls and clouds, ${pixels ? 'drawn as pixel art' : 'drawn as blobs'}, ${failed ? 'not drawn' : playing ? 'moving' : 'paused'}. Drag or use the arrow keys to orbit; scroll, pinch or press plus and minus to zoom.`}
+                aria-label={`${shown.about}, ${pixels ? 'drawn as pixel art' : 'drawn as blobs'}, ${failed ? 'not drawn' : playing ? 'moving' : 'paused'}. Drag or use the arrow keys to orbit; scroll, pinch or press plus and minus to zoom.`}
                 tabIndex={0}
                 data-testid="diorama-view"
                 className="absolute inset-0 h-full w-full cursor-grab touch-none outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset active:cursor-grabbing"
@@ -208,7 +229,7 @@ export function PixelDiorama() {
               <p aria-hidden className="pointer-events-none absolute right-14 bottom-2 rounded bg-paper/80 px-1.5 py-0.5 text-xs text-ink-muted">{coarse ? 'drag to orbit · pinch to zoom' : 'drag to orbit · scroll to zoom'}</p>
             </div>
             <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-t border-rule-soft px-4 py-2 text-xs leading-relaxed text-ink-muted sm:text-sm">
-              <span>{scene ? <><span className="tabular-nums text-ink" data-testid="diorama-blobs">{scene.blobs.count.toLocaleString()}</span> blobs on <span className="tabular-nums text-ink">{scene.skeleton.count}</span> bones.</> : loadingLabel}</span>
+              <span>{scene ? <><span className="tabular-nums text-ink" data-testid="diorama-blobs">{scene.built.blobs.count.toLocaleString()}</span> blobs on <span className="tabular-nums text-ink">{scene.built.skeleton.count}</span> bones.</> : loadingLabel}</span>
               <span data-testid="diorama-art">{pixels && art ? <>Drawn at <span className="tabular-nums text-ink">{art.width} × {art.height}</span> pixels{colours.length ? <> in <span className="tabular-nums text-ink">{colours.length}</span> colours</> : ''}.</> : 'Drawn as blobs, at full size.'}</span>
             </div>
           </div>
@@ -221,7 +242,7 @@ export function PixelDiorama() {
               <div className="grid gap-4">
                 <Field label="Palette">
                   <div className="flex flex-wrap gap-1.5">
-                    {PALETTES.map((p) => <Chip key={p.id} active={palette === p.id} onClick={() => { setPalette(p.id); setPixels(true) }}>{p.label}</Chip>)}
+                    {palettes.map((p) => <Chip key={p.id} active={palette === p.id} onClick={() => { setPalette(p.id); setPixels(true) }}>{p.label}</Chip>)}
                   </div>
                   <div aria-hidden className="mt-2 flex h-3 overflow-hidden rounded ring-1 ring-rule">
                     {colours.length ? colours.map((c, i) => <span key={i} className="flex-1" style={{ background: `rgb(${c[0]} ${c[1]} ${c[2]})` }} />) : <span className="flex-1 bg-paper-sunk" />}
@@ -245,11 +266,16 @@ export function PixelDiorama() {
               </div>
             </div>
             <div role="group" aria-labelledby="d-scene" className="sm:col-span-2 lg:col-span-1">
-              <h2 id="d-scene" className={CARD_TITLE}>Scene <small className={CARD_SUB}>repeats every {LOOP} seconds</small></h2>
+              <h2 id="d-scene" className={CARD_TITLE}>Scene <small className={CARD_SUB}>repeats every {shown.loop} seconds</small></h2>
               <div className="grid gap-4">
+                <Field label="Scene">
+                  <div className="flex flex-wrap gap-1.5">
+                    {DIORAMAS.map((d) => <Chip key={d.id} active={which === d.id} onClick={() => show(d.id)}>{d.label}</Chip>)}
+                  </div>
+                </Field>
                 <Field label="View">
                   <div className="flex flex-wrap gap-1.5">
-                    {VIEWS.map((v) => <Chip key={v.id} active={view === v.id} onClick={() => pick(v.id)}>{v.label}</Chip>)}
+                    {shown.views.map((v) => <Chip key={v.id} active={view === v.id} onClick={() => pick(v.id)}>{v.label}</Chip>)}
                   </div>
                 </Field>
                 <Field label="Blobs">
@@ -275,7 +301,7 @@ export function PixelDiorama() {
         </div>
         <div className="mt-8 max-w-[36em] space-y-4 text-lg leading-relaxed text-ink-muted lg:col-span-7 lg:mt-0 lg:text-xl">
           <p>
-            Nothing here was drawn or scanned. The rock, the tower, the cottage and the boat are written as simple shapes in code, and so are the bricks, the roof tiles and the planks: each is a rule for what colour a point on the shape should be. The scene is
+            Nothing here was drawn or scanned. In the lighthouse scene, the rock, the tower, the cottage and the boat are written as simple shapes in code, and so are the bricks, the roof tiles and the planks: each is a rule for what colour a point on the shape should be. The scene is
             cut into a grid, and every grid cell on a shape's surface becomes one small, solid blob. The moonlight and the shadows
             are worked out once and painted into the blobs' colours.
           </p>
@@ -284,6 +310,11 @@ export function PixelDiorama() {
             scene is drawn very small, every pixel is snapped to the nearest colour of the palette, bright pixels spill a little
             light, a dark line is drawn where one colour meets a much lighter one, and the result is scaled up in whole pixels with no smoothing. Switch to Blobs to see the same frame before
             that last step.
+          </p>
+          <p>
+            The campfire and the windmill go one step further: each is only a description, a list of shapes, paints, bones
+            and moves with no code of its own, which is the kind of thing Claude can write from a sentence. The engine checks
+            the description, then builds and plays it the same way.
           </p>
           <p>
             Blobscape's own splat engine draws it here on {backend}. The same steps turn creatures into sprite sheets
