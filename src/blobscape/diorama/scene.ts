@@ -3,7 +3,7 @@ import type { Rgb } from '../../splat-core/pixel.ts'
 import type { Built } from '../../splat-engine/body.ts'
 import type { PointLight } from '../../splat-engine/engine.ts'
 import { axisAngle, mulQ, type Bone, type Skeleton } from '../../splat-engine/rig.ts'
-import { box, buildVoxels, cone, cut, cylinder, displace, ellipsoid, sphere, torus, union, type Shape, type VoxelPart, type VoxelSpec } from '../../splat-engine/voxel.ts'
+import { box, buildVoxels, cone, cut, cylinder, displace, ellipsoid, roof, sphere, torus, union, type VoxelPart, type VoxelSpec } from '../../splat-engine/voxel.ts'
 
 /**
  * Pixel Diorama's scene: a lighthouse and its keeper's cottage on a rock at dusk, written as shapes for
@@ -60,15 +60,6 @@ export function dioramaBones(): Bone[] {
 /** A repeatable number in 0..1 for a pair of whole numbers: which brick is chipped, which flower is red. */
 const hash = (a: number, b: number) => { const v = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return v - Math.floor(v) }
 const shade = (c: Vec3, k: number): Vec3 => [c[0] * k, c[1] * k, c[2] * k]
-
-/** A roof: a ridge along x at `top`, sloping down to `y0` at `hz` either side. */
-function roof(c: [x: number, z: number], y0: number, top: number, hx: number, hz: number): Shape {
-  const k = (top - y0) / hz, len = Math.hypot(1, k)
-  return {
-    sdf: (x, y, z) => Math.max((Math.abs(z - c[1]) * k + (y - top)) / len, y0 - y, Math.abs(x - c[0]) - hx),
-    min: [c[0] - hx, y0, c[1] - hz], max: [c[0] + hx, top, c[1] + hz],
-  }
-}
 
 /** The scene as shapes, on a grid of `spacing`: smaller cells, finer pixels of scene and more blobs. */
 export function dioramaSpec(spacing = 0.03): VoxelSpec {

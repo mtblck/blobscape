@@ -42,7 +42,8 @@ Added for pixel-art scenes (2026-11-15, issues #33, #35, #36, #37):
 - `voxel.ts`: shapes as distance functions (sphere, ellipsoid, box, cone, cylinder, torus, union, cut, displace) cut into a grid, one solid disc per surface cell, each part on one bone, with baked sun and cast shadows.
 - `pixelPass.ts`: pixel mode. The scene is drawn small, then one pass snaps it to a palette (OKLab, Bayer dither), adds glow from bright pixels, edge lines where a colour meets a much lighter one, a silhouette outline and an optional sky gradient, and scales it up in whole pixels. Its CPU twin is `pixelArt` in `splat-core/pixel.ts`.
 - Pixel Diorama (`/experiments/pixel-diorama/`) is the test page: a lighthouse, cottage, pines and jetty of about 74,000 blobs (40,000 on phones) on 27 bones, with surface texture (bricks, tiles, planks, strata) written as colour rules.
-- Not done yet: edge lines go by colour alone, so two parts of one colour get none (that needs depth or part ids from the draw); pixels that hold still under a moving camera (#40), a scene description Claude can fill in (#41).
+- `sceneDoc.ts`: a scene as data (shapes, paints, bones, moves, lights, palette, camera), with a checker and a builder, so a scene can be written by hand or by Claude from a prompt (#41, `docs/scene-descriptions.md`). The campfire and windmill scenes on Pixel Diorama are written this way.
+- Not done yet: edge lines go by colour alone, so two parts of one colour get none (that needs depth or part ids from the draw); pixels that hold still under a moving camera (#40).
 
 ## Known gaps
 
