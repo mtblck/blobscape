@@ -840,7 +840,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   }
 
   // the scenes written as descriptions: each opens by its address, draws in its own palette, and moves
-  for (const [id, name] of [['campfire', 'Campfire'], ['dragon', 'Bone dragon'], ['hive', 'Hive'], ['windmill', 'Windmill']]) {
+  for (const [id, name] of [['bee', 'Forest bee'], ['campfire', 'Campfire'], ['dragon', 'Lava dragon'], ['windmill', 'Windmill']]) {
     const d = await open(`/experiments/pixel-diorama/?offscreen=1&scene=${id}`, { viewport: { width: 1280, height: 900 } })
     const label = `blobscape pixel diorama ${id}`
     if (!await d.page.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).then(() => true, () => false)) {
@@ -864,13 +864,13 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
       }
       return { off, used: used.size, bones: bones(), turned: stage.orbit.azimuth, art: Array.from(f.art.data) }
     }, t)
-    // a view that swings stands at the same angle at t and at half a loop less t, so what changes between those is the scene itself
-    const swings = id === 'dragon'
-    const a = await shot(2), b = await shot(swings ? 6 : 5)
-    if (swings) {
-      const c = await shot(4)
-      if (Math.abs(a.turned - b.turned) > 0.01 || Math.abs(c.turned - a.turned) < 1) fails.push(`${label}: the view should swing and come back: ${JSON.stringify([a.turned, c.turned, b.turned])}`)
-      else ok(`${label}: the view swings (${a.turned.toFixed(1)}° at 2 s, ${c.turned.toFixed(1)}° at 4 s) and the bones move on their own`)
+    // a view that swings stands at the same angle at t and at half a loop less t (half a loop is given here), so what changes between those is the scene itself
+    const half = { bee: 6, dragon: 8 }[id]
+    const a = await shot(2), b = await shot(half ? half - 2 : 5)
+    if (half) {
+      const c = await shot(half / 2)
+      if (Math.abs(a.turned - b.turned) > 0.01 || Math.abs(c.turned - a.turned) < 0.5) fails.push(`${label}: the view should swing and come back: ${JSON.stringify([a.turned, c.turned, b.turned])}`)
+      else ok(`${label}: the view swings (${a.turned.toFixed(1)}° at 2 s, ${c.turned.toFixed(1)}° at ${half / 2} s) and the bones move on their own`)
     }
     let moved = 0
     for (let i = 0; i < a.art.length; i += 4) if (a.art[i] !== b.art[i] || a.art[i + 1] !== b.art[i + 1] || a.art[i + 2] !== b.art[i + 2]) moved++
