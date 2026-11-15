@@ -3,13 +3,14 @@ import assert from 'node:assert/strict'
 import { DIORAMAS } from './scenes.ts'
 import { DETAIL } from './scene.ts'
 import { CAMPFIRE } from './scenes/campfire.ts'
+import { DRAGON } from './scenes/dragon.ts'
 import { HIVE } from './scenes/hive.ts'
 import { WINDMILL } from './scenes/windmill.ts'
 import { checkScene } from '../../splat-engine/sceneDoc.ts'
 import { MAX_PALETTE_SIZE } from '../../splat-core/pixel.ts'
 
 test('the described scenes are sound, and are data alone', () => {
-  for (const doc of [CAMPFIRE, HIVE, WINDMILL]) {
+  for (const doc of [CAMPFIRE, DRAGON, HIVE, WINDMILL]) {
     assert.deepEqual(checkScene(doc), [], doc.name)
     // nothing but what a .json file could hold
     assert.deepEqual(JSON.parse(JSON.stringify(doc)), doc, doc.name)

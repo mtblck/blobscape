@@ -19,6 +19,9 @@ declare global {
   interface Window { __diorama?: { stage: CreatureStage; blobs: () => number; bones: () => number; look: () => PixelLook } }
 }
 
+/** The view `orbit`, rocked to where scene `d` has it at `t` seconds. */
+const swung = (orbit: Orbit, d: Diorama, t: number): Orbit => (d.swing ? { ...orbit, azimuth: orbit.azimuth + Math.sin((t / d.loop) * Math.PI * 2) * d.swing } : orbit)
+
 /** A frame as a PNG, each art pixel `scale` across. */
 async function toPng(f: Frame, scale: number): Promise<Uint8Array> {
   const one = document.createElement('canvas')
@@ -66,7 +69,7 @@ export function PixelDiorama() {
   const [glow, setGlow] = useState(diorama.finish.glow)
   const [outline, setOutline] = useState(diorama.finish.outline)
   const [edges, setEdges] = useState(diorama.finish.edges)
-  const [sky, setSky] = useState(true)
+  const [sky, setSky] = useState(diorama.finish.sky)
   const [view, setView] = useState(diorama.views[0].id)
   const [orbit, setOrbit] = useState<Orbit>(diorama.views[0].orbit)
   const [art, setArt] = useState<{ width: number; height: number }>()
@@ -116,14 +119,21 @@ export function PixelDiorama() {
     if (dressed.current !== d.id) {
       dressed.current = d.id
       setPalette('own')
-      setDither(d.finish.dither); setGlow(d.finish.glow); setOutline(d.finish.outline); setEdges(d.finish.edges)
+      setDither(d.finish.dither); setGlow(d.finish.glow); setOutline(d.finish.outline); setEdges(d.finish.edges); setSky(d.finish.sky)
       setView(d.views[0].id); setOrbit(d.views[0].orbit)
     }
-    stage.setPoser((sk: Skeleton, t: number) => { d.pose(sk, t); stage.setLights(d.lights(t), 1) }, from)
+    stage.setPoser((sk: Skeleton, t: number) => {
+      d.pose(sk, t)
+      stage.setLights(d.lights(t), 1)
+      // a scene that asks for it rocks the view gently as it plays, about wherever the view has been turned to
+      if (d.swing) stage.orbit = swung(orbitNow.current, d, t)
+    }, from)
   }, [stage, scene])
   useEffect(() => { stage?.setPixels(pixels ? look : undefined, size) }, [stage, pixels, look, size])
   useEffect(() => { if (stage) stage.playing = playing }, [stage, playing])
-  useEffect(() => { if (stage) { stage.orbit = orbit; stage.invalidate() } }, [stage, orbit])
+  const orbitNow = useRef(orbit)
+  orbitNow.current = orbit
+  useEffect(() => { if (stage) { stage.orbit = swung(orbit, shown, stage.time); stage.invalidate() } }, [stage, orbit, shown])
   // the art's size follows the view's; read it now and then for the caption (it's text, not every frame)
   useEffect(() => {
     if (!stage) return
@@ -312,7 +322,7 @@ export function PixelDiorama() {
             that last step.
           </p>
           <p>
-            The campfire, the hive and the windmill go one step further: each is only a description, a list of shapes, paints, bones
+            The campfire, the dragon, the hive and the windmill go one step further: each is only a description, a list of shapes, paints, bones
             and moves with no code of its own, which is the kind of thing Claude can write from a sentence. The engine checks
             the description, then builds and plays it the same way.
           </p>

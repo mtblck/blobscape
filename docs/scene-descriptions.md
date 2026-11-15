@@ -17,7 +17,7 @@ The point is that Claude can write one from a sentence. A scene that is data can
 | `sky` | Top and bottom colours of the backdrop. |
 | `light` | The baked sun: where it is, how much light reaches everywhere, how dark shadows are. |
 | `look` | Dither, glow, outline, edge lines. |
-| `camera` | Where the view starts. |
+| `camera` | Where the view starts, and optionally a `swing`: degrees it rocks to either side as the scene plays. |
 | `bones` | Things that move, each with the point it turns about. Parts with no bone stand still. |
 | `parts` | A shape, a paint, and optionally a bone, `glow` or `noShadow`. |
 | `moves` | spin, sway, bob, drift, pulse. Each names a bone and a whole number of `times` per loop; a bone takes up to six. |
@@ -39,6 +39,17 @@ Paints: a colour, or `bands`, `bricks`, `hex` (honeycomb, scales, paving), `spec
 8. **A cone has round ends.** It reaches `r` past both ends. For a flat-bottomed cone (a pine tier, a spire) use a `cylinder` with a small `rTop`.
 9. **Thin is fine.** Anything thinner than the grid is fattened to one cell, so a rope or a star still shows at every detail level.
 10. **Detail comes from parts and paint.** Sixty to ninety parts make a full scene. Give big surfaces a paint with texture (`patches` on grass, `bricks` on walls, `bands` on planks and tiles), and scatter small things: stones, flowers, mushrooms.
+
+## Getting the look of a showpiece
+
+The dragon scene (`scenes/dragon.ts`) follows a few habits that make a scene read as a single strong image:
+
+- **No sky.** Leave `sky` out and the subject sits on the dark of the page.
+- **One ramp and one accent.** Ten steps of one hue from near-black to near-white, plus two or three steps of one warm accent used only on light sources.
+- **One big subject.** Build it from many small parts (the dragon is about 150, mostly cones) and let it fill the frame.
+- **A chain of bones for anything that bends.** Each neck bone has the one before as its `parent` and sways a few degrees; the turns add up along the chain, so the head sweeps wide while each joint barely moves. A jaw is a child of the head with one `sway`.
+- **Dust.** A dozen tiny `glow` parts with slow `drift` moves give the air depth.
+- **A slow swing of the camera** shows that the scene is solid.
 
 ## Prompting for one
 
