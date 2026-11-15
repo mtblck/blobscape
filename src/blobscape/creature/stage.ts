@@ -8,6 +8,8 @@ import type { Blobs } from '../../splat-core/blobs.ts'
 import { BoneView } from './bones.ts'
 import type { BakeOptions, BakedSheet } from '../../splat-engine/bakeSheet.ts'
 import type { SheetMove } from '../../splat-engine/spriteSheet.ts'
+import { PixelPass } from '../../splat-engine/pixelPass.ts'
+import { lookColours, snapColours, type Frame, type PixelLook } from '../../splat-core/pixel.ts'
 
 /**
  * The Creature page's view: Blobscape's own splat engine (src/splat-engine)
@@ -29,6 +31,8 @@ export interface StageOptions {
   offscreen?: boolean
   /** Builds each world with live lights (`setLights`), as Scan Studio does. */
   lights?: boolean
+  /** Uses the WebGL 2 backend even where WebGPU would start: for testing the fallback. */
+  webgl?: boolean
 }
 
 export class CreatureStage {
@@ -64,6 +68,11 @@ export class CreatureStage {
   private queued?: { actor: Actor; clip?: Clip }
   mode: SkinMode = 'quat'
   private lit: { lights: PointLight[]; ambient: number } = { lights: [], ambient: 1 }
+  /** Pixel mode: the scene drawn small and turned into pixel art (pixelPass.ts). */
+  private pixel?: PixelPass
+  /** How many CSS pixels across one art pixel is. */
+  private pixelSize = 4
+  private readonly buffer = new THREE.Vector2()
 
   private constructor(private readonly display: HTMLCanvasElement, private readonly opts: StageOptions, renderer: THREE.WebGPURenderer) {
     this.renderer = renderer
@@ -78,7 +87,7 @@ export class CreatureStage {
         if (!this.baking && (this.pending > 0 || (this.playing && (this.clip || this.poser)))) {
           this.pending = Math.max(0, this.pending - 1)
           this.resize()
-          this.renderer.render(this.scene, this.camera)
+          this.draw()
           if (this.actor) this.firstFrame()
         }
         this.raf = requestAnimationFrame(tick)
@@ -89,7 +98,7 @@ export class CreatureStage {
 
   static async start(display: HTMLCanvasElement, opts: StageOptions = {}) {
     const canvas = opts.offscreen ? document.createElement('canvas') : display
-    const renderer = new THREE.WebGPURenderer({ canvas, antialias: false, alpha: true })
+    const renderer = new THREE.WebGPURenderer({ canvas, antialias: false, alpha: true, forceWebGL: !!opts.webgl })
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1))
     renderer.setClearColor(0x000000, 0)
     await renderer.init()
@@ -174,6 +183,55 @@ export class CreatureStage {
     this.invalidate()
   }
 
+  /**
+   * Pixel mode on (with a look) or off. `size` is how many CSS pixels across
+   * one art pixel is; the art is that many times smaller than the view.
+   */
+  setPixels(look?: PixelLook, size = 4) {
+    this.pixelSize = size
+    if (!look) { this.pixel?.dispose(); this.pixel = undefined }
+    else if (this.pixel) this.pixel.setLook(look)
+    else this.pixel = new PixelPass(look)
+    this.invalidate()
+  }
+
+  /** Pixel mode's art size in pixels, once a frame has been drawn. */
+  get artSize() { return this.pixel && this.pixel.width > 1 ? { width: this.pixel.width, height: this.pixel.height } : undefined }
+
+  /** Device pixels per art pixel: whole, so every art pixel is the same size on screen. */
+  private get pixelScale() { return Math.max(1, Math.round(this.pixelSize * this.renderer.getPixelRatio())) }
+
+  private draw() {
+    if (!this.pixel) { this.renderer.render(this.scene, this.camera); return }
+    const scale = this.pixelScale
+    if (this.target) {
+      this.pixel.setSize(Math.ceil(this.target.width / scale), Math.ceil(this.target.height / scale))
+      this.pixel.render(this.renderer, this.scene, this.camera)
+      return
+    }
+    const { x, y } = this.renderer.getDrawingBufferSize(this.buffer)
+    this.pixel.setSize(Math.ceil(x / scale), Math.ceil(y / scale))
+    this.pixel.render(this.renderer, this.scene, this.camera, { width: x, height: y, scale })
+  }
+
+  private async read(target: THREE.RenderTarget): Promise<Frame> {
+    const { width, height } = target
+    const px = await this.renderer.readRenderTargetPixelsAsync(target, 0, 0, width, height) as Uint8Array
+    // a target holds linear, premultiplied colour; a frame is sRGB, straight, top row first. WebGPU reads rows top-down, WebGL bottom-up.
+    return { width, height, data: readbackToSrgb(px, width, height, { flip: this.backend === 'webgl', premultiplied: false }) }
+  }
+
+  /** Pixel mode's last frame as it was drawn small, and as finished art (exactly in the look's colours): for tests and for saving. */
+  async pixelFrames(): Promise<{ small: Frame; art: Frame } | undefined> {
+    // a sheet being drawn has the renderer to itself
+    if (!this.pixel || this.baking) return
+    // pixel mode can be switched off, or the view resized, while the reads are out: hold the pass and start both reads now
+    const pass = this.pixel
+    if (!this.target) pass.render(this.renderer, this.scene, this.camera)
+    const [small, art] = await Promise.all([this.read(pass.small), this.read(pass.art)])
+    return { small, art: snapColours(art, lookColours(pass.look)) }
+  }
+
   invalidate(frames = 2) { this.pending = Math.max(this.pending, frames) }
 
   private pose() {
@@ -209,15 +267,24 @@ export class CreatureStage {
     this.t = t
     this.pose()
     this.resize()
-    this.renderer.render(this.scene, this.camera)
+    this.draw()
     if (this.actor) this.firstFrame()
     if (!this.target) return
-    const px = await this.renderer.readRenderTargetPixelsAsync(this.target, 0, 0, this.target.width, this.target.height) as Uint8Array
-    const { width: w, height: h } = this.target
-    const img = new ImageData(w, h)
-    // the target holds linear, premultiplied colour; ImageData wants sRGB, straight. WebGPU reads rows top-down, WebGL bottom-up.
-    readbackToSrgb(px, w, h, { flip: this.backend === 'webgl', premultiplied: false }, img.data)
-    this.display.getContext('2d')!.putImageData(img, 0, 0)
+    const ctx = this.display.getContext('2d')!
+    if (this.pixel) {
+      // the art, scaled up in whole pixels
+      const art = await this.read(this.pixel.art)
+      const c = document.createElement('canvas')
+      c.width = art.width
+      c.height = art.height
+      c.getContext('2d')!.putImageData(new ImageData(new Uint8ClampedArray(art.data), art.width, art.height), 0, 0)
+      ctx.imageSmoothingEnabled = false
+      ctx.clearRect(0, 0, this.display.width, this.display.height)
+      ctx.drawImage(c, 0, 0, art.width * this.pixelScale, art.height * this.pixelScale)
+      return
+    }
+    const f = await this.read(this.target)
+    ctx.putImageData(new ImageData(new Uint8ClampedArray(f.data), f.width, f.height), 0, 0)
   }
 
   /**
@@ -252,6 +319,7 @@ export class CreatureStage {
     this.world?.dispose()
     this.rig?.dispose()
     this.target?.dispose()
+    this.pixel?.dispose()
     this.renderer.dispose()
   }
 }

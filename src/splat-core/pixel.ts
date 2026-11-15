@@ -110,7 +110,7 @@ function nearest(lab: Rgb, paletteLab: Rgb[]): number {
 }
 
 /** 4×4 Bayer matrix, values 0..15. */
-const BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5]
+export const BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5]
 
 /**
  * Snaps every solid pixel to the palette. `dither` (0..1) nudges each pixel by
@@ -238,4 +238,106 @@ export function countColours(f: Frame): number {
   const s = new Set<number>()
   for (let i = 0; i < f.data.length; i += 4) if (f.data[i + 3] > 0) s.add((f.data[i] << 16) | (f.data[i + 1] << 8) | f.data[i + 2])
   return s.size
+}
+
+// --- whole scenes ----------------------------------------------------------
+
+/** How a scene is turned into pixel art, live (splat-engine/pixelPass.ts) or here on the CPU. */
+export interface PixelLook {
+  /** The colours every pixel snaps to; empty keeps the scene's own colours. */
+  palette: Rgb[]
+  /** 0..1, as for `quantize`. */
+  dither: number
+  /** A 1-pixel line round the scene's silhouette, or none. */
+  outline: Rgb | null
+  /** How far bright pixels spill light onto their neighbours: 0 is none. */
+  glow: number
+}
+
+/** The most colours a look's palette can hold (the live pass keeps them in a fixed list). */
+export const MAX_PALETTE_SIZE = 32
+/** Coverage at or over this is a solid pixel. */
+export const PIXEL_CUT = 0.5
+/** Where a neighbour's light is gathered from, in pixels: a small diamond. */
+export const GLOW_TAPS: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1], [2, 0], [-2, 0], [0, 2], [0, -2], [1, 1], [1, -1], [-1, 1], [-1, -1]]
+/** A pixel gives off light once its brightest channel passes this (0..1), fully by 1. */
+export const GLOW_FROM = 0.92
+/** Light spilled onto an empty pixel shows once its brightest channel passes this (0..255). */
+export const GLOW_SHOWS = 16
+
+const smooth = (a: number, b: number, x: number) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t) }
+
+/**
+ * One frame of a scene to pixel art, the CPU twin of the live pixel pass
+ * (change one, change both). `f` is the scene drawn small: straight sRGB.
+ *
+ *   alpha cut → glow (bright pixels light their neighbours, and empty pixels
+ *   beside them) → palette + dither → outline on the empty pixels that touch
+ *   the scene
+ */
+export function pixelArt(f: Frame, look: PixelLook): Frame {
+  const { width: w, height: h } = f
+  const out = makeFrame(w, h)
+  const cut = PIXEL_CUT * 255
+  const solid = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h && f.data[(y * w + x) * 4 + 3] >= cut
+  const pl = look.palette.map((c) => oklab(...c))
+  const amp = look.dither * 48
+  const g: Rgb = [0, 0, 0]
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4
+      g[0] = g[1] = g[2] = 0
+      if (look.glow > 0) {
+        for (const [dx, dy] of GLOW_TAPS) {
+          if (!solid(x + dx, y + dy)) continue
+          const j = ((y + dy) * w + x + dx) * 4
+          const k = smooth(GLOW_FROM, 1, Math.max(f.data[j], f.data[j + 1], f.data[j + 2]) / 255) * look.glow / GLOW_TAPS.length
+          g[0] += f.data[j] * k; g[1] += f.data[j + 1] * k; g[2] += f.data[j + 2] * k
+        }
+      }
+      let r: number, gg: number, b: number
+      if (solid(x, y)) { r = f.data[i] + g[0]; gg = f.data[i + 1] + g[1]; b = f.data[i + 2] + g[2] }
+      else if (look.outline && N4.some(([dx, dy]) => solid(x + dx, y + dy))) {
+        out.data[i] = look.outline[0]; out.data[i + 1] = look.outline[1]; out.data[i + 2] = look.outline[2]; out.data[i + 3] = 255
+        continue
+      } else if (Math.max(g[0], g[1], g[2]) > GLOW_SHOWS) { r = g[0]; gg = g[1]; b = g[2] }
+      else continue
+      r = Math.min(255, r); gg = Math.min(255, gg); b = Math.min(255, b)
+      if (pl.length) {
+        const off = amp > 0 ? (BAYER4[(y & 3) * 4 + (x & 3)] / 16 - 0.5) * amp : 0
+        const c = look.palette[nearest(oklab(Math.max(0, r + off), Math.max(0, gg + off), Math.max(0, b + off)), pl)]
+        r = c[0]; gg = c[1]; b = c[2]
+      }
+      out.data[i] = r; out.data[i + 1] = gg; out.data[i + 2] = b; out.data[i + 3] = 255
+    }
+  }
+  return out
+}
+
+/**
+ * The colours a look can put in a frame: its palette and its outline. Empty
+ * when the look has no palette (then any colour can appear).
+ */
+export function lookColours(look: PixelLook): Rgb[] {
+  if (!look.palette.length) return []
+  return look.outline ? [...look.palette, look.outline] : look.palette
+}
+
+/**
+ * Moves every solid pixel onto the closest of `colours`, in place. Art read
+ * back from the GPU has been through 8-bit linear colour, which leaves each
+ * channel a level or two off the palette; this puts it back exactly.
+ */
+export function snapColours(f: Frame, colours: Rgb[]): Frame {
+  if (!colours.length) return f
+  for (let i = 0; i < f.data.length; i += 4) {
+    if (!f.data[i + 3]) continue
+    let best = colours[0], bestD = Infinity
+    for (const c of colours) {
+      const d = (f.data[i] - c[0]) ** 2 + (f.data[i + 1] - c[1]) ** 2 + (f.data[i + 2] - c[2]) ** 2
+      if (d < bestD) { bestD = d; best = c }
+    }
+    f.data[i] = best[0]; f.data[i + 1] = best[1]; f.data[i + 2] = best[2]
+  }
+  return f
 }

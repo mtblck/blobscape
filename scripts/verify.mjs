@@ -70,7 +70,7 @@ const solidPixels = (page, sel) => page.evaluate((sel) => {
 // 1. The site: every page is its own prerendered file, the chrome works, old links land
 {
   // Prerendered: each page's HTML carries its own title, canonical and content before any script runs
-  for (const [path, title] of [['/', 'Blobscape: learn'], ['/lessons/', 'Lessons ·'], ['/lessons/order/', 'Order matters · Lesson 3'], ['/sandbox/', 'Sandbox ·'], ['/experiments/creature/', 'Splat Creatures ·'], ['/experiments/forest-walk/', 'Forest Walk ·'], ['/experiments/clockwork/', 'Clockwork ·'], ['/experiments/dungeon-run/', 'Dungeon Run ·'], ['/experiments/scan-studio/', 'Scan Studio ·'], ['/experiments/', 'Experiments ·']]) {
+  for (const [path, title] of [['/', 'Blobscape: learn'], ['/lessons/', 'Lessons ·'], ['/lessons/order/', 'Order matters · Lesson 3'], ['/sandbox/', 'Sandbox ·'], ['/experiments/creature/', 'Splat Creatures ·'], ['/experiments/forest-walk/', 'Forest Walk ·'], ['/experiments/clockwork/', 'Clockwork ·'], ['/experiments/pixel-diorama/', 'Pixel Diorama ·'], ['/experiments/dungeon-run/', 'Dungeon Run ·'], ['/experiments/scan-studio/', 'Scan Studio ·'], ['/experiments/', 'Experiments ·']]) {
     const html = await (await fetch(base + path)).text()
     if (!html.includes(`<title>${title}`)) fails.push(`${path}: prerendered title is not "${title}…"`)
     else if (!html.includes(`<link rel="canonical" href="https://blobscape.dev${path}"`)) fails.push(`${path}: prerendered canonical is wrong`)
@@ -81,7 +81,7 @@ const solidPixels = (page, sel) => page.evaluate((sel) => {
   if (missing.status !== 404 || !(await missing.text()).includes('noindex')) fails.push('an unknown page is not a noindex 404')
   else ok('unknown pages get the noindex 404 page')
   const sitemap = await (await fetch(base + '/sitemap.xml')).text()
-  if (!sitemap.includes('https://blobscape.dev/lessons/model/') || !sitemap.includes('/experiments/fit-a-picture/') || !sitemap.includes('/experiments/creature/') || !sitemap.includes('/experiments/forest-walk/') || !sitemap.includes('/experiments/clockwork/') || !sitemap.includes('/experiments/dungeon-run/') || !sitemap.includes('/experiments/scan-studio/')) fails.push('sitemap.xml is missing pages')
+  if (!sitemap.includes('https://blobscape.dev/lessons/model/') || !sitemap.includes('/experiments/fit-a-picture/') || !sitemap.includes('/experiments/creature/') || !sitemap.includes('/experiments/forest-walk/') || !sitemap.includes('/experiments/clockwork/') || !sitemap.includes('/experiments/pixel-diorama/') || !sitemap.includes('/experiments/dungeon-run/') || !sitemap.includes('/experiments/scan-studio/')) fails.push('sitemap.xml is missing pages')
   else ok('sitemap.xml lists the lessons and tools')
 
   const { page, res, ctx } = await open('/')
@@ -377,9 +377,9 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     else ok(`blobscape ${label}: home lists the lessons`)
     await axe(page, `blobscape ${label} home`)
     await page.screenshot({ path: join(shots, `blobscape-home-${label}.png`), fullPage: true })
-    for (const id of ['lessons', 'one-blob', 'footprint', 'order', 'many', 'angle', 'paint', 'formats', 'break', 'one-bone', 'weights', 'twist', 'walk', 'model', 'shoot', 'fuzzy', 'floaters', 'lighting', 'sandbox', 'creature', 'forest-walk', 'clockwork', 'dungeon-run', 'scan-studio']) {
+    for (const id of ['lessons', 'one-blob', 'footprint', 'order', 'many', 'angle', 'paint', 'formats', 'break', 'one-bone', 'weights', 'twist', 'walk', 'model', 'shoot', 'fuzzy', 'floaters', 'lighting', 'sandbox', 'creature', 'forest-walk', 'clockwork', 'pixel-diorama', 'dungeon-run', 'scan-studio']) {
       // headless WebGPU can't present to a canvas, so Creature and Forest Walk draw off-screen here
-      await page.goto(base + (['creature', 'forest-walk', 'clockwork', 'dungeon-run', 'scan-studio'].includes(id) ? `/experiments/${id}/?offscreen=1` : ['sandbox', 'lessons'].includes(id) ? `/${id}/` : `/lessons/${id}/`))
+      await page.goto(base + (['creature', 'forest-walk', 'clockwork', 'pixel-diorama', 'dungeon-run', 'scan-studio'].includes(id) ? `/experiments/${id}/?offscreen=1` : ['sandbox', 'lessons'].includes(id) ? `/${id}/` : `/lessons/${id}/`))
       await page.waitForTimeout(1500)
       const focused = await page.evaluate(() => document.activeElement?.tagName)
       if (focused !== 'H1') fails.push(`blobscape ${label} ${id}: focus is on ${focused}, not the heading`)
@@ -776,6 +776,67 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     await relink.ctx.close()
     await axe(c.page, 'blobscape creature sprites')
     await c.ctx.close()
+  }
+
+  // Pixel Diorama: the scene draws as pixel art in the palette's colours, the GPU pass agrees with its CPU twin on both backends, and it moves
+  for (const q of ['', '&webgl=1']) {
+    const d = await open(`/experiments/pixel-diorama/?offscreen=1${q}`, { viewport: { width: 1280, height: 900 } })
+    await d.page.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).catch(() => {})
+    const shot = (t) => d.page.evaluate(async (t) => {
+      const { stage, look } = window.__diorama
+      await stage.frame(t)
+      const f = await stage.pixelFrames()
+      const pal = new Set([...look().palette, look().outline].map((c) => (c[0] << 16) | (c[1] << 8) | c[2]))
+      let solid = 0, off = 0, soft = 0
+      for (let i = 0; i < f.art.data.length; i += 4) {
+        const a = f.art.data[i + 3]
+        if (a !== 0 && a !== 255) soft++
+        if (!a) continue
+        solid++
+        if (!pal.has((f.art.data[i] << 16) | (f.art.data[i + 1] << 8) | f.art.data[i + 2])) off++
+      }
+      return { backend: stage.backend, w: f.art.width, h: f.art.height, solid, off, soft, small: Array.from(f.small.data), art: Array.from(f.art.data), look: look() }
+    }, t)
+    const a = await shot(2), b = await shot(5)
+    // the same frame through the CPU twin (the page's own module isn't reachable from a production build, so it runs here)
+    const { pixelArt } = await import('../src/splat-core/pixel.ts')
+    const want = pixelArt({ width: a.w, height: a.h, data: Uint8ClampedArray.from(a.small) }, a.look)
+    let alpha = 0, colour = 0, moved = 0
+    for (let i = 0; i < want.data.length; i += 4) {
+      if (want.data[i + 3] !== a.art[i + 3]) alpha++
+      else if (Math.abs(want.data[i] - a.art[i]) + Math.abs(want.data[i + 1] - a.art[i + 1]) + Math.abs(want.data[i + 2] - a.art[i + 2]) > 6) colour++
+      if (a.art[i] !== b.art[i] || a.art[i + 1] !== b.art[i + 1] || a.art[i + 3] !== b.art[i + 3]) moved++
+    }
+    const label = `blobscape pixel diorama (${a.backend})`
+    if ((q ? 'webgl' : 'webgpu') !== a.backend) fails.push(`${label}: wanted the ${q ? 'webgl' : 'webgpu'} backend`)
+    if (!(a.solid > 3000 && a.off === 0 && a.soft === 0)) fails.push(`${label}: ${JSON.stringify({ solid: a.solid, offPalette: a.off, soft: a.soft })}`)
+    else ok(`${label}: ${a.w}×${a.h} art, ${a.solid} solid pixels, every one a palette colour, none half transparent`)
+    // dither sits pixels on the line between two colours, where 8-bit rounding can tip them either way
+    if (!(alpha === 0 && colour < a.solid * 0.05)) fails.push(`${label}: the pixel pass and its CPU twin differ (${alpha} in shape, ${colour} of ${a.solid} in colour)`)
+    else ok(`${label}: the pixel pass matches its CPU twin (same shape, ${colour} of ${a.solid} pixels a neighbouring colour)`)
+    if (!(moved > 150)) fails.push(`${label}: only ${moved} pixels change in three seconds`)
+    else ok(`${label}: ${moved} pixels change in three seconds`)
+    if (!q) {
+      // pixels off: the same scene as blobs, in far more colours
+      await d.page.getByRole('button', { name: 'Blobs', exact: true }).click()
+      await d.page.waitForFunction(() => !window.__diorama.stage.artSize)
+      const colours = await d.page.evaluate(async () => {
+        await window.__diorama.stage.frame(2)
+        const cv = document.querySelector('[data-testid=diorama-view]')
+        const px = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+        const s = new Set()
+        for (let i = 0; i < px.length; i += 4) if (px[i + 3] > 200) s.add((px[i] << 16) | (px[i + 1] << 8) | px[i + 2])
+        return s.size
+      })
+      if (!(colours > 500)) fails.push(`${label}: as blobs it shows only ${colours} colours`)
+      else ok(`${label}: with pixels off it draws the blobs (${colours} colours)`)
+      await d.page.getByRole('button', { name: 'Pixel art', exact: true }).click()
+      // offscreen draws only when asked: draw until pixel mode is back on
+      await d.page.waitForFunction(async () => { await window.__diorama.stage.frame(4.5); return !!window.__diorama.stage.artSize })
+      await d.page.screenshot({ path: join(shots, 'blobscape-pixel-diorama.png') })
+      await axe(d.page, 'blobscape pixel diorama')
+    }
+    await d.ctx.close()
   }
 
   // Clockwork: the watch draws, its gold train turns by the right amount, and the hands read the time it's set to

@@ -34,6 +34,8 @@ export function pageMeta(route: Route): PageMeta {
       return { path, title: `Scan Studio · ${SITE.name}`, description: 'Open a Gaussian splat scan of an object from your phone (Scaniverse, Polycam and others export .ply or .spz), find the table and turn it level, cut away the floor and the floaters, relight it with live lights, then take it into the sandbox or save it. Everything stays on your device.' }
     case 'clockwork':
       return { path, title: `Clockwork · ${SITE.name}`, description: 'A watch movement made of Gaussian splats, keeping the real time: barrel, going train, escape wheel, pallet fork and a balance swinging five times a second, every wheel a bone turning by a real watch\'s ratios. Slow it down to see one tick, or speed it up to watch the hours go.' }
+    case 'diorama':
+      return { path, title: `Pixel Diorama · ${SITE.name}`, description: 'A lighthouse at dusk made of Gaussian splats and drawn as moving pixel art: shapes written in code, cut into a grid of solid blobs, moved by bones, then rendered small and snapped to a palette. Turn the scene, change the palette, pixel size, dither and glow, or switch the pixels off to see the blobs.' }
     case 'experiments':
       return { path, title: `Experiments · ${SITE.name}`, description: `Small tools built from Gaussian splats: ${EXPERIMENTS.map((e) => e.title).join(', ')}. Free, in your browser.` }
     case 'lesson': {

@@ -37,6 +37,13 @@ Added with the Rigs and 3D models lessons (2026-11-11):
 - The Creature page (`src/blobscape/Creature.tsx`, `#/creature`) is the engine's first public use: `SplatWorld` on WebGPU (WebGL fallback), up to 200k blobs, splat and mesh `.glb` downloads, and opening rigged `.glb` files.
 - Since then it has four creatures (`zoo/`: frog 20 bones, fox 14, elf 29, dragon 43, up to 400k blobs), a bones view, and bones that grow and slide: per-bone uniform `size` (children inherit it) and an `offset` on any bone, both keyed in clips and written to .glb as scale and translation channels. The GPU passes needed no change, since a bone's scale is already in its skin matrix.
 
+Added for pixel-art scenes (2026-11-15, issues #33, #35, #36, #37):
+
+- `voxel.ts`: shapes as distance functions (sphere, ellipsoid, box, cone, cylinder, torus, union, cut, displace) cut into a grid, one solid disc per surface cell, each part on one bone, with baked sun and cast shadows.
+- `pixelPass.ts`: pixel mode. The scene is drawn small, then one pass snaps it to a palette (OKLab, Bayer dither), adds glow from bright pixels and a silhouette outline, and scales it up in whole pixels. Its CPU twin is `pixelArt` in `splat-core/pixel.ts`.
+- Pixel Diorama (`/experiments/pixel-diorama/`) is the test page: a lighthouse of about 37,000 blobs on 20 bones.
+- Not done yet: outlines inside the scene (needs depth or part ids from the draw), pixels that hold still under a moving camera (#40), a scene description Claude can fill in (#41).
+
 ## Known gaps
 
 - **The WebGL fallback moves blobs four times each** (once per quad corner), since WebGL can't run a compute pass first. Its CPU work is now about 10 ms at 100k on this machine (it was 200 ms).
