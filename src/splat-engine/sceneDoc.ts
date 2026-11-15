@@ -26,7 +26,8 @@ export interface SceneDoc {
   /** The sky behind, top and bottom. Left out, the background is clear. */
   sky?: [string, string]
   look?: { dither?: number; glow?: number; outline?: boolean; edges?: boolean }
-  camera: Orbit
+  /** Where the view starts. `swing` rocks it gently from side to side by that many degrees, once a loop. */
+  camera: Orbit & { swing?: number }
   /** Things that move. The land itself needs none: parts with no bone stand still. */
   bones?: BoneDoc[]
   parts: PartDoc[]
@@ -203,6 +204,7 @@ export function checkScene(doc: unknown): string[] {
     num(doc.camera.distance, 'camera.distance', 0.5, 20)
     num(doc.camera.azimuth, 'camera.azimuth', -360, 360)
     num(doc.camera.elevation, 'camera.elevation', -10, 89)
+    opt(doc.camera.swing, 'camera.swing', 0, 60)
   }
 
   const names = new Set<string>()
@@ -427,6 +429,8 @@ export interface CompiledScene {
   name: string
   loop: number
   orbit: Orbit
+  /** Degrees the view rocks to either side, once a loop: 0 holds still. */
+  swing: number
   /** The pixel look the scene asks for. */
   look: PixelLook
   palette: Rgb[]
@@ -453,7 +457,8 @@ export function compileScene(doc: SceneDoc): CompiledScene {
   return {
     name: doc.name,
     loop: doc.loop,
-    orbit: doc.camera,
+    orbit: { target: doc.camera.target, distance: doc.camera.distance, azimuth: doc.camera.azimuth, elevation: doc.camera.elevation },
+    swing: doc.camera.swing ?? 0,
     palette,
     bones,
     look: {

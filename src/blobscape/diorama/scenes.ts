@@ -7,6 +7,7 @@ import { compileScene, type SceneDoc } from '../../splat-engine/sceneDoc.ts'
 import { buildVoxels } from '../../splat-engine/voxel.ts'
 import { LOOP, PALETTES, lampLights, makeDiorama, poseDiorama } from './scene.ts'
 import { CAMPFIRE } from './scenes/campfire.ts'
+import { DRAGON } from './scenes/dragon.ts'
 import { HIVE } from './scenes/hive.ts'
 import { WINDMILL } from './scenes/windmill.ts'
 
@@ -22,8 +23,10 @@ export interface Diorama {
   palette: { label: string; colours: Rgb[] }
   sky: [Rgb, Rgb]
   /** How it starts out: the Finish controls. */
-  finish: { dither: number; glow: number; outline: boolean; edges: boolean }
+  finish: { dither: number; glow: number; outline: boolean; edges: boolean; sky: boolean }
   views: { id: string; label: string; orbit: Orbit }[]
+  /** Degrees the view rocks to either side while it plays, once a loop. */
+  swing: number
   make(spacing: number): Built
   pose(sk: Skeleton, t: number): void
   lights(t: number): PointLight[]
@@ -36,7 +39,7 @@ const LIGHTHOUSE: Diorama = {
   loop: LOOP,
   palette: { label: PALETTES[0].label, colours: PALETTES[0].colours },
   sky: [[9, 13, 32], [60, 94, 164]],
-  finish: { dither: 0.1, glow: 1.5, outline: true, edges: true },
+  finish: { dither: 0.1, glow: 1.5, outline: true, edges: true, sky: true },
   views: [
     { id: 'shore', label: 'From the shore', orbit: { target: [0.1, 0.95, 0.1], distance: 4.3, azimuth: 28, elevation: 10 } },
     { id: 'above', label: 'From above', orbit: { target: [0, 0.7, 0], distance: 6.2, azimuth: 40, elevation: 38 } },
@@ -44,9 +47,15 @@ const LIGHTHOUSE: Diorama = {
     { id: 'cottage', label: 'The cottage', orbit: { target: [-0.3, 0.4, 0.15], distance: 2.0, azimuth: 10, elevation: 14 } },
     { id: 'boat', label: 'The boat', orbit: { target: [0.85, 0.2, 0.75], distance: 2.0, azimuth: 55, elevation: 16 } },
   ],
+  swing: 0,
   make: makeDiorama,
   pose: poseDiorama,
   lights: lampLights,
+}
+
+const night = (palette: Rgb[]): [Rgb, Rgb] => {
+  const dark = [...palette].sort((a, b) => a[0] + a[1] + a[2] - (b[0] + b[1] + b[2]))
+  return dark.length > 1 ? [dark[0], dark[1]] : [[9, 13, 32], [60, 94, 164]]
 }
 
 /** A scene written as a description (splat-engine/sceneDoc.ts), made ready for the page. */
@@ -58,13 +67,15 @@ export function described(id: string, doc: SceneDoc, about: string): Diorama {
     about,
     loop: c.loop,
     palette: { label: 'Its own', colours: c.palette },
-    sky: c.look.sky ?? [[9, 13, 32], [60, 94, 164]],
-    finish: { dither: c.look.dither, glow: c.look.glow, outline: !!c.look.outline, edges: !!c.look.edges },
+    // with no sky of its own, the switch gives it a night made of its two darkest colours
+    sky: c.look.sky ?? night(c.palette),
+    finish: { dither: c.look.dither, glow: c.look.glow, outline: !!c.look.outline, edges: !!c.look.edges, sky: !!c.look.sky },
     views: [
       { id: 'start', label: 'From the front', orbit: c.orbit },
       { id: 'above', label: 'From above', orbit: { ...c.orbit, elevation: 40, distance: c.orbit.distance * 1.25 } },
       { id: 'close', label: 'Close up', orbit: { ...c.orbit, target: [c.orbit.target[0], c.orbit.target[1] * 0.6, c.orbit.target[2]], distance: c.orbit.distance * 0.55 } },
     ],
+    swing: c.swing,
     make: (spacing) => {
       const built = buildVoxels(c.spec(spacing))
       const empty = c.empty(built)
@@ -79,6 +90,7 @@ export function described(id: string, doc: SceneDoc, about: string): Diorama {
 export const DIORAMAS: Diorama[] = [
   LIGHTHOUSE,
   described('campfire', CAMPFIRE, 'A camp in a clearing among pines at night, with a flickering fire throwing sparks, a tent, a lantern, fireflies and the moon'),
+  described('dragon', DRAGON, 'The pale skeleton of a great dragon bent over a glowing pool in a dark cave, its claws on the rim, its neck swaying, its head turning and its jaw opening, with candles and drifting dust'),
   described('hive', HIVE, 'A giant bee hovering inside a honeycomb hive, with fluttering pale wings, little bees, glowing pools of honey and honey dripping from the comb'),
   described('windmill', WINDMILL, 'A windmill on a farm by day, with turning sails, sheep, a duck on a pond, a wheat field, trees, clouds and birds'),
 ]
