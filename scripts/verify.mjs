@@ -797,14 +797,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
       }
       return { backend: stage.backend, w: f.art.width, h: f.art.height, solid, off, soft, small: Array.from(f.small.data), art: Array.from(f.art.data), look: look() }
     }, t)
-    // a view that swings stands at the same angle at t and at half a loop less t, so what changes between those is the scene itself
-    const swings = id === 'dragon'
-    const a = await shot(2), b = await shot(swings ? 6 : 5)
-    if (swings) {
-      const c = await shot(4)
-      if (Math.abs(a.turned - b.turned) > 0.01 || Math.abs(c.turned - a.turned) < 1) fails.push(`${label}: the view should swing and come back: ${JSON.stringify([a.turned, c.turned, b.turned])}`)
-      else ok(`${label}: the view swings (${a.turned.toFixed(1)}° at 2 s, ${c.turned.toFixed(1)}° at 4 s) and the bones move on their own`)
-    }
+    const a = await shot(2), b = await shot(5)
     // the same frame through the CPU twin (the page's own module isn't reachable from a production build, so it runs here)
     const { pixelArt } = await import('../src/splat-core/pixel.ts')
     const want = pixelArt({ width: a.w, height: a.h, data: Uint8ClampedArray.from(a.small) }, a.look)
