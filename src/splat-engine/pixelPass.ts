@@ -1,6 +1,6 @@
 import { NearestFilter, NoBlending, NodeMaterial, QuadMesh, RenderTarget, Vector2, Vector3, type Camera, type Object3D, type WebGPURenderer } from 'three/webgpu'
 import * as TSLTyped from 'three/tsl'
-import { BAYER4, GLOW_FROM, GLOW_SHOWS, GLOW_TAPS, MAX_PALETTE_SIZE, PIXEL_CUT, oklab, type PixelLook } from '../splat-core/pixel.ts'
+import { BAYER4, EDGE_DARK, EDGE_JUMP, GLOW_FROM, GLOW_SHOWS, GLOW_TAPS, MAX_PALETTE_SIZE, PIXEL_CUT, SKY_DITHER, oklab, type PixelLook } from '../splat-core/pixel.ts'
 import { srgbToLinear } from '../splat-core/colour.ts'
 
 // As in engine.ts: the shader builders use TSL untyped.
@@ -16,8 +16,8 @@ const MAX_PALETTE = MAX_PALETTE_SIZE
  *
  * The pass is the GPU twin of `pixelArt` in splat-core/pixel.ts (change one,
  * change both): alpha cut, glow from bright pixels, nearest palette colour in
- * OKLab with a Bayer dither, and an outline on the empty pixels that touch the
- * scene. It runs per art pixel: every screen pixel inside one art pixel asks
+ * OKLab with a Bayer dither, edge lines inside the scene, an outline on the
+ * empty pixels that touch it, and a sky behind. It runs per art pixel: every screen pixel inside one art pixel asks
  * the same question and gets the same answer.
  */
 export class PixelPass {
@@ -33,8 +33,13 @@ export class PixelPass {
   private readonly count = uniform(0)
   private readonly dither = uniform(0)
   private readonly glow = uniform(0)
+  private readonly edges = uniform(0)
   private readonly lined = uniform(0)
   private readonly line = uniform(new Vector3())
+  private readonly skied = uniform(0)
+  /** The sky at the top and bottom of the picture, sRGB 0–255. */
+  private readonly skyTop = uniform(new Vector3())
+  private readonly skyLow = uniform(new Vector3())
   private readonly palLab = Array.from({ length: MAX_PALETTE }, () => new Vector3())
   private readonly palLinear = Array.from({ length: MAX_PALETTE }, () => new Vector3())
 
@@ -61,7 +66,10 @@ export class PixelPass {
     this.count.value = n
     this.dither.value = look.dither
     this.glow.value = look.glow
+    this.edges.value = look.edges ?? 0
     this.lined.value = look.outline ? 1 : 0
+    this.skied.value = look.sky ? 1 : 0
+    if (look.sky) { this.skyTop.value.set(...look.sky[0]); this.skyLow.value.set(...look.sky[1]) }
     if (look.outline) this.line.value.set(srgbToLinear(look.outline[0] / 255), srgbToLinear(look.outline[1] / 255), srgbToLinear(look.outline[2] / 255))
   }
 
@@ -107,11 +115,25 @@ export class PixelPass {
     const toLinear = (c: unknown) => select(float(c).lessThanEqual(0.04045), float(c).div(12.92), pow(float(c).add(0.055).div(1.055), 2.4))
     const each = (v: { x: unknown; y: unknown; z: unknown }, f: (c: unknown) => unknown) => vec3(f(v.x), f(v.y), f(v.z))
     const cbrt = (x: unknown) => pow(max(x, 0), 1 / 3)
+    /** OKLab of an sRGB colour, 0–255 per channel: `oklab` in pixel.ts. */
+    const toLab = (c: unknown) => {
+      const lin = each(max(c, 0).div(255), toLinear)
+      const l = cbrt(dot(lin, vec3(0.4122214708, 0.5363325363, 0.0514459929)))
+      const m = cbrt(dot(lin, vec3(0.2119034982, 0.6806995451, 0.1073969566)))
+      const s = cbrt(dot(lin, vec3(0.0883024619, 0.2817188376, 0.6299787005)))
+      return vec3(
+        l.mul(0.2104542553).add(m.mul(0.793617785)).sub(s.mul(0.0040720468)),
+        l.mul(1.9779984951).sub(m.mul(2.428592205)).add(s.mul(0.4505937099)),
+        l.mul(0.0259040371).add(m.mul(0.7827717662)).sub(s.mul(0.808675766)),
+      )
+    }
 
     return Fn(() => {
-      // which art pixel this is, counted from the top left
+      // which art pixel this is, counted from the left and from the bottom of the picture
       const st = uv()
       const cell = floor(vec2(st.x, float(1).sub(st.y)).mul(cells)).toVar()
+      // the picture's row, from its top: what the dither and the sky go by (the CPU twin's y)
+      const row = res.y.sub(1).sub(cell.y).toVar()
       /** The small render at an art pixel `dx, dy` away: straight sRGB (0–255) and whether it is solid. */
       const at = (dx: number, dy: number) => {
         const c = cell.add(vec2(dx, dy))
@@ -131,28 +153,41 @@ export class PixelPass {
           spill.addAssign(t.rgb.mul(select(t.solid, bright, 0)).mul(this.glow.div(GLOW_TAPS.length)))
         }
       })
-      const beside = at(1, 0).solid.or(at(-1, 0).solid).or(at(0, 1).solid).or(at(0, -1).solid)
+      const sides = [at(1, 0), at(-1, 0), at(0, 1), at(0, -1)]
+      const beside = sides[0].solid.or(sides[1].solid).or(sides[2].solid).or(sides[3].solid)
 
       const out = vec4(0).toVar()
       const colour = vec3(0).toVar()
       const shown = float(0).toVar()
-      If(here.solid, () => { colour.assign(here.rgb.add(spill)); shown.assign(1) })
+      const spread = float(this.dither).toVar()
+      If(here.solid, () => {
+        colour.assign(here.rgb.add(spill))
+        shown.assign(1)
+        // a line on the darker side of a jump in colour
+        If(this.edges.greaterThan(0), () => {
+          const a = toLab(here.rgb).toVar()
+          const jump = float(0).toVar()
+          for (const n of sides) {
+            const b = toLab(n.rgb)
+            const d = b.sub(a)
+            jump.assign(max(jump, select(n.solid.and(b.x.greaterThan(a.x)).and(dot(d, d).greaterThan(EDGE_JUMP * EDGE_JUMP)), 1, 0)))
+          }
+          colour.mulAssign(float(1).sub(jump.mul(this.edges).mul(EDGE_DARK)))
+        })
+      })
         .ElseIf(this.lined.greaterThan(0).and(beside), () => { out.assign(vec4(this.line, 1)) })
+        .ElseIf(this.skied.greaterThan(0), () => {
+          colour.assign(this.skyTop.add(this.skyLow.sub(this.skyTop).mul(row.add(0.5).div(res.y))).add(spill))
+          spread.assign(max(this.dither, SKY_DITHER))
+          shown.assign(1)
+        })
         .ElseIf(max(spill.x, max(spill.y, spill.z)).greaterThan(GLOW_SHOWS), () => { colour.assign(spill); shown.assign(1) })
 
       If(shown.greaterThan(0), () => {
         colour.assign(min(colour, 255))
         If(this.count.greaterThan(0), () => {
-          const off = bayer.element(int(mod(cell.y, 4).mul(4).add(mod(cell.x, 4)))).div(16).sub(0.5).mul(this.dither.mul(48))
-          const lin = each(max(colour.add(off), 0).div(255), toLinear)
-          const l = cbrt(dot(lin, vec3(0.4122214708, 0.5363325363, 0.0514459929)))
-          const m = cbrt(dot(lin, vec3(0.2119034982, 0.6806995451, 0.1073969566)))
-          const s = cbrt(dot(lin, vec3(0.0883024619, 0.2817188376, 0.6299787005)))
-          const lab = vec3(
-            l.mul(0.2104542553).add(m.mul(0.793617785)).sub(s.mul(0.0040720468)),
-            l.mul(1.9779984951).sub(m.mul(2.428592205)).add(s.mul(0.4505937099)),
-            l.mul(0.0259040371).add(m.mul(0.7827717662)).sub(s.mul(0.808675766)),
-          ).toVar()
+          const off = bayer.element(int(mod(row, 4).mul(4).add(mod(cell.x, 4)))).div(16).sub(0.5).mul(spread.mul(48))
+          const lab = toLab(colour.add(off)).toVar()
           const best = float(1e9).toVar()
           const pick = vec3(0).toVar()
           Loop(MAX_PALETTE, ({ i }: { i: unknown }) => {

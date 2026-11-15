@@ -25,7 +25,7 @@ test('the scene loops: the pose after one loop is the pose at the start, and it 
   poseDiorama(sk, 1.3 + LOOP)
   for (let i = 0; i < a.length; i++) assert.ok(Math.abs(a[i] - sk.matrix[i]) < 1e-4, `matrix ${i}`)
   poseDiorama(sk, 2.1)
-  for (const name of ['lamp', 'boat', 'gull0', 'gull0L', 'cloud0', 'foam0']) {
+  for (const name of ['lamp', 'boat', 'gull0', 'gull0L', 'cloud0', 'foam0', 'tree0', 'buoy', 'smoke0']) {
     const b = sk.index(name)
     let moved = 0
     for (let k = 0; k < 16; k++) moved += Math.abs(a[b * 16 + k] - sk.matrix[b * 16 + k])

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Orbit } from '../splat-core/view.ts'
-import { darkest, type Frame, type PixelLook } from '../splat-core/pixel.ts'
+import { darkest, type Frame, type PixelLook, type Rgb } from '../splat-core/pixel.ts'
 import type { Built } from '../splat-engine/body.ts'
 import { Button, Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
 import { Mark } from '../shared/Logo.tsx'
@@ -14,11 +14,14 @@ import { DETAIL, LOOP, PALETTES, lampLights, makeDiorama, poseDiorama } from './
 import type { Skeleton } from '../splat-engine/rig.ts'
 
 const SIZES = [2, 3, 4, 6]
+/** The dusk sky behind the scene, top and bottom; the palette in use turns it into its own bands. */
+const SKY: [Rgb, Rgb] = [[9, 13, 32], [60, 94, 164]]
 const VIEWS: { id: string; label: string; orbit: Orbit }[] = [
-  { id: 'shore', label: 'From the shore', orbit: { target: [0, 1.0, 0], distance: 4.7, azimuth: 28, elevation: 8 } },
+  { id: 'shore', label: 'From the shore', orbit: { target: [0.1, 0.95, 0.1], distance: 4.3, azimuth: 28, elevation: 10 } },
   { id: 'above', label: 'From above', orbit: { target: [0, 0.7, 0], distance: 6.2, azimuth: 40, elevation: 38 } },
-  { id: 'lamp', label: 'The lamp', orbit: { target: [0.05, 1.35, -0.05], distance: 2.6, azimuth: 20, elevation: 6 } },
-  { id: 'boat', label: 'The boat', orbit: { target: [1.0, 0.2, 0.75], distance: 2.2, azimuth: 55, elevation: 16 } },
+  { id: 'lamp', label: 'The lamp', orbit: { target: [0.05, 1.35, -0.05], distance: 2.0, azimuth: 20, elevation: 6 } },
+  { id: 'cottage', label: 'The cottage', orbit: { target: [-0.3, 0.4, 0.15], distance: 2.0, azimuth: 10, elevation: 14 } },
+  { id: 'boat', label: 'The boat', orbit: { target: [0.85, 0.2, 0.75], distance: 2.0, azimuth: 55, elevation: 16 } },
 ]
 
 declare global {
@@ -59,13 +62,15 @@ export function PixelDiorama() {
   const calm = useMemo(() => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches, [])
   const coarse = useMemo(() => typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches, [])
   const [playing, setPlaying] = useState(!calm)
-  const [detail, setDetail] = useState<string>(coarse ? DETAIL[0].id : DETAIL[1].id)
+  const [detail, setDetail] = useState<string>(coarse ? DETAIL[1].id : DETAIL[2].id)
   const [pixels, setPixels] = useState(true)
   const [palette, setPalette] = useState(PALETTES[0].id)
-  const [size, setSize] = useState(3)
+  const [size, setSize] = useState(2)
   const [dither, setDither] = useState(0.1)
   const [glow, setGlow] = useState(1.5)
   const [outline, setOutline] = useState(true)
+  const [edges, setEdges] = useState(true)
+  const [sky, setSky] = useState(true)
   const [view, setView] = useState(VIEWS[0].id)
   const [orbit, setOrbit] = useState<Orbit>(VIEWS[0].orbit)
   const [art, setArt] = useState<{ width: number; height: number }>()
@@ -97,7 +102,7 @@ export function PixelDiorama() {
   }, [offscreen, webgl])
 
   const colours = PALETTES.find((p) => p.id === palette)!.colours
-  const look = useMemo<PixelLook>(() => ({ palette: colours, dither, outline: outline ? (colours.length ? darkest(colours) : [11, 16, 38]) : null, glow }), [colours, dither, outline, glow])
+  const look = useMemo<PixelLook>(() => ({ palette: colours, dither, outline: outline ? (colours.length ? darkest(colours) : [11, 16, 38]) : null, glow, edges: edges ? 1 : 0, sky: sky ? SKY : undefined }), [colours, dither, outline, glow, edges, sky])
 
   // a new level of detail keeps the moment it was showing
   useEffect(() => {
@@ -170,7 +175,7 @@ export function PixelDiorama() {
                 ref={canvas}
                 role="application"
                 aria-roledescription="3D view"
-                aria-label={`A lighthouse on a rock in the sea at dusk, with a turning lamp, a small boat, gulls and clouds, ${pixels ? 'drawn as pixel art' : 'drawn as blobs'}, ${failed ? 'not drawn' : playing ? 'moving' : 'paused'}. Drag or use the arrow keys to orbit; scroll, pinch or press plus and minus to zoom.`}
+                aria-label={`A lighthouse and a cottage on a rock in the sea at dusk, with a turning lamp, pines, a jetty, a small boat, gulls and clouds, ${pixels ? 'drawn as pixel art' : 'drawn as blobs'}, ${failed ? 'not drawn' : playing ? 'moving' : 'paused'}. Drag or use the arrow keys to orbit; scroll, pinch or press plus and minus to zoom.`}
                 tabIndex={0}
                 data-testid="diorama-view"
                 className="absolute inset-0 h-full w-full cursor-grab touch-none outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset active:cursor-grabbing"
@@ -232,9 +237,11 @@ export function PixelDiorama() {
             <div role="group" aria-labelledby="d-finish">
               <h2 id="d-finish" className={CARD_TITLE}>Finish</h2>
               <div className="grid gap-4">
-                <Slider label="Dither" value={dither} min={0} max={1} step={0.05} onChange={setDither} format={(v) => `${Math.round(v * 100)}%`} hint={!pixels ? 'Applies to Pixel art.' : colours.length ? 'Checkers two palette colours to fake the ones between.' : 'Needs a palette: Scene colours has none to mix.'} />
+                <Slider label="Dither" value={dither} min={0} max={1} step={0.05} onChange={setDither} format={(v) => `${Math.round(v * 100)}%`} hint={!pixels ? 'Applies to Pixel art.' : colours.length ? (sky ? 'Checkers two palette colours to fake the ones between. The sky is always dithered, so its bands blend.' : 'Checkers two palette colours to fake the ones between.') : 'Needs a palette: Scene colours has none to mix.'} />
                 <Slider label="Glow" value={glow} min={0} max={4} step={0.25} onChange={setGlow} format={(v) => (v ? `${v.toFixed(2)}×` : 'off')} hint={pixels ? 'Bright pixels light the ones beside them.' : 'Applies to Pixel art.'} />
                 <Toggle label={pixels ? 'Outline the scene' : 'Outline the scene (in Pixel art)'} checked={outline} onChange={setOutline} />
+                <Toggle label={pixels ? 'Lines where colours meet' : 'Lines where colours meet (in Pixel art)'} checked={edges} onChange={setEdges} />
+                <Toggle label={pixels ? 'Sky behind' : 'Sky behind (in Pixel art)'} checked={sky} onChange={setSky} />
               </div>
             </div>
             <div role="group" aria-labelledby="d-scene" className="sm:col-span-2 lg:col-span-1">
@@ -268,14 +275,14 @@ export function PixelDiorama() {
         </div>
         <div className="mt-8 max-w-[36em] space-y-4 text-lg leading-relaxed text-ink-muted lg:col-span-7 lg:mt-0 lg:text-xl">
           <p>
-            Nothing here was drawn or scanned. The rock, the tower and the boat are written as simple shapes in code. The scene is
+            Nothing here was drawn or scanned. The rock, the tower, the cottage and the boat are written as simple shapes in code, and so are the bricks, the roof tiles and the planks: each is a rule for what colour a point on the shape should be. The scene is
             cut into a grid, and every grid cell on a shape's surface becomes one small, solid blob. The moonlight and the shadows
             are worked out once and painted into the blobs' colours.
           </p>
           <p>
-            Each moving part hangs on a bone: the lamp turns, the boat rocks, the gulls circle and beat their wings. Each frame the
+            Each moving part hangs on a bone: the lamp turns, the boat rocks, the pines lean, smoke rises and the gulls circle and beat their wings. Each frame the
             scene is drawn very small, every pixel is snapped to the nearest colour of the palette, bright pixels spill a little
-            light, and the result is scaled up in whole pixels with no smoothing. Switch to Blobs to see the same frame before
+            light, a dark line is drawn where one colour meets a much lighter one, and the result is scaled up in whole pixels with no smoothing. Switch to Blobs to see the same frame before
             that last step.
           </p>
           <p>

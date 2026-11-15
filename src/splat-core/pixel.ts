@@ -252,6 +252,10 @@ export interface PixelLook {
   outline: Rgb | null
   /** How far bright pixels spill light onto their neighbours: 0 is none. */
   glow: number
+  /** Lines inside the scene, where one colour meets a much lighter one: 0 (or left out) is none, 1 the darkest line. */
+  edges?: number
+  /** A backdrop behind the scene: its colour at the top and at the bottom of the picture, blended between and dithered into the palette. Left out, empty pixels stay clear. */
+  sky?: [top: Rgb, bottom: Rgb]
 }
 
 /** The most colours a look's palette can hold (the live pass keeps them in a fixed list). */
@@ -262,6 +266,12 @@ export const PIXEL_CUT = 0.5
 export const GLOW_TAPS: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1], [2, 0], [-2, 0], [0, 2], [0, -2], [1, 1], [1, -1], [-1, 1], [-1, -1]]
 /** A pixel gives off light once its brightest channel passes this (0..1), fully by 1. */
 export const GLOW_FROM = 0.92
+/** Two neighbouring pixels are on either side of an edge when their colours are this far apart in OKLab. */
+export const EDGE_JUMP = 0.11
+/** How much of its light a pixel on an edge loses at `edges` 1. */
+export const EDGE_DARK = 0.62
+/** The least dither the sky gets, so its bands blend however crisp the scene is kept. */
+export const SKY_DITHER = 0.6
 /** Light spilled onto an empty pixel shows once its brightest channel passes this (0..255). */
 export const GLOW_SHOWS = 16
 
@@ -272,8 +282,9 @@ const smooth = (a: number, b: number, x: number) => { const t = Math.min(1, Math
  * (change one, change both). `f` is the scene drawn small: straight sRGB.
  *
  *   alpha cut → glow (bright pixels light their neighbours, and empty pixels
- *   beside them) → palette + dither → outline on the empty pixels that touch
- *   the scene
+ *   beside them) → edge lines (the darker side of a jump in colour) →
+ *   palette + dither → outline on the empty pixels that touch the scene →
+ *   sky on the rest, if the look has one
  */
 export function pixelArt(f: Frame, look: PixelLook): Frame {
   const { width: w, height: h } = f
@@ -282,6 +293,7 @@ export function pixelArt(f: Frame, look: PixelLook): Frame {
   const solid = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h && f.data[(y * w + x) * 4 + 3] >= cut
   const pl = look.palette.map((c) => oklab(...c))
   const amp = look.dither * 48
+  const edges = look.edges ?? 0
   const g: Rgb = [0, 0, 0]
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
@@ -296,15 +308,33 @@ export function pixelArt(f: Frame, look: PixelLook): Frame {
         }
       }
       let r: number, gg: number, b: number
-      if (solid(x, y)) { r = f.data[i] + g[0]; gg = f.data[i + 1] + g[1]; b = f.data[i + 2] + g[2] }
+      let spread = amp
+      if (solid(x, y)) {
+        r = f.data[i] + g[0]; gg = f.data[i + 1] + g[1]; b = f.data[i + 2] + g[2]
+        if (edges > 0) {
+          // a line on the darker side of a jump: one pixel wide, and never on the light thing itself
+          const a = oklab(f.data[i], f.data[i + 1], f.data[i + 2])
+          const jump = N4.some(([dx, dy]) => {
+            if (!solid(x + dx, y + dy)) return false
+            const j = ((y + dy) * w + x + dx) * 4
+            const n = oklab(f.data[j], f.data[j + 1], f.data[j + 2])
+            return n[0] > a[0] && Math.hypot(n[0] - a[0], n[1] - a[1], n[2] - a[2]) > EDGE_JUMP
+          })
+          if (jump) { const k = 1 - EDGE_DARK * edges; r *= k; gg *= k; b *= k }
+        }
+      }
       else if (look.outline && N4.some(([dx, dy]) => solid(x + dx, y + dy))) {
         out.data[i] = look.outline[0]; out.data[i + 1] = look.outline[1]; out.data[i + 2] = look.outline[2]; out.data[i + 3] = 255
         continue
+      } else if (look.sky) {
+        const [top, low] = look.sky, t = (y + 0.5) / h
+        r = top[0] + (low[0] - top[0]) * t + g[0]; gg = top[1] + (low[1] - top[1]) * t + g[1]; b = top[2] + (low[2] - top[2]) * t + g[2]
+        spread = Math.max(look.dither, SKY_DITHER) * 48
       } else if (Math.max(g[0], g[1], g[2]) > GLOW_SHOWS) { r = g[0]; gg = g[1]; b = g[2] }
       else continue
       r = Math.min(255, r); gg = Math.min(255, gg); b = Math.min(255, b)
       if (pl.length) {
-        const off = amp > 0 ? (BAYER4[(y & 3) * 4 + (x & 3)] / 16 - 0.5) * amp : 0
+        const off = spread > 0 ? (BAYER4[(y & 3) * 4 + (x & 3)] / 16 - 0.5) * spread : 0
         const c = look.palette[nearest(oklab(Math.max(0, r + off), Math.max(0, gg + off), Math.max(0, b + off)), pl)]
         r = c[0]; gg = c[1]; b = c[2]
       }

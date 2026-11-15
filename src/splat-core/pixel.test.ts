@@ -100,3 +100,33 @@ test('snapColours puts pixels a level or two off back on the palette, and leaves
   assert.equal(lookColours(look).length, 4)
   assert.equal(lookColours({ ...look, palette: [] }).length, 0)
 })
+
+test('pixelArt edge lines darken the dark side of a jump in colour, one pixel wide, and nothing else', () => {
+  const f = makeFrame(6, 1)
+  for (let x = 0; x < 6; x++) f.data.set(x < 3 ? [40, 60, 120, 255] : [230, 220, 200, 255], x * 4)
+  const art = pixelArt(f, { palette: [], dither: 0, outline: null, glow: 0, edges: 1 })
+  const at = (x: number) => [...art.data.subarray(x * 4, x * 4 + 3)]
+  assert.deepEqual(at(1), [40, 60, 120])
+  assert.ok(at(2)[2] < 60, `the dark pixel on the edge: ${at(2)}`)
+  assert.deepEqual(at(3), [230, 220, 200])
+  // close colours make no line
+  const g = makeFrame(2, 1)
+  g.data.set([40, 60, 120, 255, 48, 66, 126, 255])
+  assert.deepEqual([...pixelArt(g, { palette: [], dither: 0, outline: null, glow: 0, edges: 1 }).data], [...g.data])
+})
+
+test('pixelArt fills the empty pixels with the sky, top colour to bottom, in palette colours, and leaves the scene and its outline alone', () => {
+  const f = makeFrame(5, 16)
+  f.data.set([200, 40, 40, 255], (8 * 5 + 2) * 4)
+  const sky: [Rgb, Rgb] = [[20, 16, 24], [250, 240, 200]]
+  const art = pixelArt(f, { palette: PAL, dither: 0, outline: [1, 2, 3], glow: 0, sky })
+  const at = (x: number, y: number) => [...art.data.subarray((y * 5 + x) * 4, (y * 5 + x) * 4 + 4)]
+  assert.equal(countSolid(art), 5 * 16)
+  assert.deepEqual(at(2, 8), [200, 40, 40, 255])
+  assert.deepEqual(at(1, 8), [1, 2, 3, 255])
+  // the sky dithers even when the scene doesn't, so both end colours show somewhere and the top is mostly the top colour
+  const dark = (y: number) => [0, 1, 2, 3, 4].filter((x) => at(x, y)[0] === 20).length
+  assert.ok(dark(0) >= 4 && dark(15) === 0, `${dark(0)} dark at the top, ${dark(15)} at the bottom`)
+  // without a sky the same pixels stay clear
+  assert.equal(countSolid(pixelArt(f, { palette: PAL, dither: 0, outline: null, glow: 0 })), 1)
+})
