@@ -237,7 +237,7 @@ export function PixelDiorama() {
             <div role="group" aria-labelledby="d-finish">
               <h2 id="d-finish" className={CARD_TITLE}>Finish</h2>
               <div className="grid gap-4">
-                <Slider label="Dither" value={dither} min={0} max={1} step={0.05} onChange={setDither} format={(v) => `${Math.round(v * 100)}%`} hint={!pixels ? 'Applies to Pixel art.' : colours.length ? 'Checkers two palette colours to fake the ones between.' : 'Needs a palette: Scene colours has none to mix.'} />
+                <Slider label="Dither" value={dither} min={0} max={1} step={0.05} onChange={setDither} format={(v) => `${Math.round(v * 100)}%`} hint={!pixels ? 'Applies to Pixel art.' : colours.length ? (sky ? 'Checkers two palette colours to fake the ones between. The sky is always dithered, so its bands blend.' : 'Checkers two palette colours to fake the ones between.') : 'Needs a palette: Scene colours has none to mix.'} />
                 <Slider label="Glow" value={glow} min={0} max={4} step={0.25} onChange={setGlow} format={(v) => (v ? `${v.toFixed(2)}×` : 'off')} hint={pixels ? 'Bright pixels light the ones beside them.' : 'Applies to Pixel art.'} />
                 <Toggle label={pixels ? 'Outline the scene' : 'Outline the scene (in Pixel art)'} checked={outline} onChange={setOutline} />
                 <Toggle label={pixels ? 'Lines where colours meet' : 'Lines where colours meet (in Pixel art)'} checked={edges} onChange={setEdges} />

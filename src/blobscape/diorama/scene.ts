@@ -280,7 +280,8 @@ export function dioramaSpec(spacing = 0.03): VoxelSpec {
     bone: 'land', glow: true,
   })
   const stars: Vec3[] = [[-0.6, 2.6, -1.6], [0.2, 2.75, -1.6], [1.3, 2.55, -1.6], [-1.6, 1.7, -1.3], [1.6, 1.9, -1.5], [0.6, 2.05, -1.7], [-0.2, 2.2, -1.7], [1.05, 2.9, -1.4], [-1.0, 2.9, -1.5], [-1.65, 2.5, -0.6], [1.7, 2.6, -0.5], [-1.2, 2.2, -1.6], [0.9, 1.6, -1.7], [-0.9, 1.5, -1.7], [1.7, 1.3, -1.2], [-1.7, 1.1, -0.9], [0.4, 3.0, -1.2], [-0.3, 1.7, -1.75]]
-  parts.push({ shape: union(...stars.map((p) => sphere(p, thin))), colour: (p) => (hash(Math.floor(p[0] * 10), Math.floor(p[1] * 10)) > 0.6 ? [0.8, 0.88, 0.9] : [1, 1, 0.9]), bone: 'land', glow: true })
+  // one part each: a union's box would span the whole sky, and the builder walks every cell of it
+  stars.forEach((p, i) => parts.push({ shape: sphere(p, s * 0.9), colour: hash(i, 2) > 0.6 ? [0.8, 0.88, 0.9] : [1, 1, 0.9], bone: 'land', glow: true }))
 
   // foam: flat patches that swell and fade as they drift (poseDiorama)
   FOAM.forEach((f, i) => {
