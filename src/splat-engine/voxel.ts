@@ -56,9 +56,10 @@ export interface VoxelSpec {
 }
 
 /**
- * The brightest a lit surface gets, as a share of its colour. Only `glow`
- * parts go above it, so pixel mode can tell a lamp from a white wall in the
- * sun (GLOW_FROM in splat-core/pixel.ts sits just over it).
+ * The brightest the baked sun makes a surface, as a share of its colour. Only
+ * `glow` parts are built brighter, so pixel mode can tell a lamp from a white
+ * wall in the sun (GLOW_FROM in splat-core/pixel.ts sits just over it). Live
+ * lights add on top: a surface under a strong one does pass the line and glow.
  */
 export const LIT_MAX = 0.9
 

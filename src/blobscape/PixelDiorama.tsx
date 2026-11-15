@@ -76,6 +76,8 @@ export function PixelDiorama() {
   const [scene, setScene] = useState<Built>()
   useEffect(() => {
     const spacing = DETAIL.find((d) => d.id === detail)!.spacing
+    // the old scene stays in the view; clearing this one brings the loading note (and its announcement) back while the new one is cut
+    setScene(undefined)
     const t = setTimeout(() => setScene(makeDiorama(spacing)), 30)
     return () => clearTimeout(t)
   }, [detail])
@@ -168,7 +170,7 @@ export function PixelDiorama() {
                 ref={canvas}
                 role="application"
                 aria-roledescription="3D view"
-                aria-label={`A lighthouse on a rock in the sea at dusk, with a turning lamp, a small boat, gulls and clouds, ${pixels ? 'drawn as pixel art' : 'drawn as blobs'}, ${playing ? 'moving' : 'paused'}. Drag or use the arrow keys to orbit; scroll, pinch or press plus and minus to zoom.`}
+                aria-label={`A lighthouse on a rock in the sea at dusk, with a turning lamp, a small boat, gulls and clouds, ${pixels ? 'drawn as pixel art' : 'drawn as blobs'}, ${failed ? 'not drawn' : playing ? 'moving' : 'paused'}. Drag or use the arrow keys to orbit; scroll, pinch or press plus and minus to zoom.`}
                 tabIndex={0}
                 data-testid="diorama-view"
                 className="absolute inset-0 h-full w-full cursor-grab touch-none outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset active:cursor-grabbing"
@@ -198,7 +200,7 @@ export function PixelDiorama() {
                 <Chip small active={!pixels} onClick={() => setPixels(false)}>Blobs</Chip>
               </div>
               <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => pick(view)} />
-              <p aria-hidden className="pointer-events-none absolute right-14 bottom-2 left-3 text-right text-xs text-ink-faint">{coarse ? 'drag to orbit · pinch to zoom' : 'drag to orbit · scroll to zoom'}</p>
+              <p aria-hidden className="pointer-events-none absolute right-14 bottom-2 rounded bg-paper/80 px-1.5 py-0.5 text-xs text-ink-muted">{coarse ? 'drag to orbit · pinch to zoom' : 'drag to orbit · scroll to zoom'}</p>
             </div>
             <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-t border-rule-soft px-4 py-2 text-xs leading-relaxed text-ink-muted sm:text-sm">
               <span>{scene ? <><span className="tabular-nums text-ink" data-testid="diorama-blobs">{scene.blobs.count.toLocaleString()}</span> blobs on <span className="tabular-nums text-ink">{scene.skeleton.count}</span> bones.</> : loadingLabel}</span>
@@ -230,9 +232,9 @@ export function PixelDiorama() {
             <div role="group" aria-labelledby="d-finish">
               <h2 id="d-finish" className={CARD_TITLE}>Finish</h2>
               <div className="grid gap-4">
-                <Slider label="Dither" value={dither} min={0} max={1} step={0.05} onChange={setDither} format={(v) => `${Math.round(v * 100)}%`} hint="Checkers two palette colours to fake the ones between." />
-                <Slider label="Glow" value={glow} min={0} max={4} step={0.25} onChange={setGlow} format={(v) => (v ? `${v.toFixed(2)}×` : 'off')} hint="Bright pixels light the ones beside them." />
-                <Toggle label="Outline the scene" checked={outline} onChange={setOutline} />
+                <Slider label="Dither" value={dither} min={0} max={1} step={0.05} onChange={setDither} format={(v) => `${Math.round(v * 100)}%`} hint={!pixels ? 'Applies to Pixel art.' : colours.length ? 'Checkers two palette colours to fake the ones between.' : 'Needs a palette: Scene colours has none to mix.'} />
+                <Slider label="Glow" value={glow} min={0} max={4} step={0.25} onChange={setGlow} format={(v) => (v ? `${v.toFixed(2)}×` : 'off')} hint={pixels ? 'Bright pixels light the ones beside them.' : 'Applies to Pixel art.'} />
+                <Toggle label={pixels ? 'Outline the scene' : 'Outline the scene (in Pixel art)'} checked={outline} onChange={setOutline} />
               </div>
             </div>
             <div role="group" aria-labelledby="d-scene" className="sm:col-span-2 lg:col-span-1">
