@@ -55,6 +55,8 @@ export function PixelDiorama() {
   // ?scene=campfire opens on that scene
   const [which, setWhich] = useState(() => DIORAMAS.find((d) => d.id === new URLSearchParams(location.search).get('scene'))?.id ?? DIORAMAS[0].id)
   const diorama = DIORAMAS.find((d) => d.id === which)!
+  /** The scene whose palette, finish and view are set. */
+  const dressed = useRef(which)
   const [playing, setPlaying] = useState(!calm)
   const [detail, setDetail] = useState<string>(coarse ? DETAIL[1].id : DETAIL[2].id)
   const [pixels, setPixels] = useState(true)
@@ -74,6 +76,8 @@ export function PixelDiorama() {
   // built after a paint, so the loading note shows first
   const [made, setScene] = useState<{ built: Built; of: Diorama }>()
   const scene = made?.of === diorama ? made : undefined
+  // what is in the view now: the last scene built, which lags the one picked while it is being cut
+  const shown = made?.of ?? diorama
   useEffect(() => {
     const spacing = DETAIL.find((d) => d.id === detail)!.spacing
     // the old scene stays in the view; clearing this one brings the loading note (and its announcement) back while the new one is cut
@@ -97,9 +101,9 @@ export function PixelDiorama() {
   }, [offscreen, webgl])
 
   // the scene's own palette first, then the shared ones
-  const palettes = useMemo(() => [{ id: 'own', ...diorama.palette }, ...PALETTES.slice(1)], [diorama])
-  const colours = palettes.find((p) => p.id === palette)!.colours
-  const look = useMemo<PixelLook>(() => ({ palette: colours, dither, outline: outline ? (colours.length ? darkest(colours) : [11, 16, 38]) : null, glow, edges: edges ? 1 : 0, sky: sky ? diorama.sky : undefined }), [colours, dither, outline, glow, edges, sky, diorama])
+  const palettes = useMemo(() => [{ id: 'own', ...shown.palette }, ...PALETTES.slice(1)], [shown])
+  const colours = (palettes.find((p) => p.id === palette) ?? palettes[0]).colours
+  const look = useMemo<PixelLook>(() => ({ palette: colours, dither, outline: outline ? (colours.length ? darkest(colours) : [11, 16, 38]) : null, glow, edges: edges ? 1 : 0, sky: sky ? shown.sky : undefined }), [colours, dither, outline, glow, edges, sky, shown])
 
   // a new level of detail keeps the moment it was showing
   useEffect(() => {
@@ -108,6 +112,13 @@ export function PixelDiorama() {
     stage.setActor(scene.built)
     // lights move with the bones (the lamp's beam with its lens, the fire's glow with its flames), so both are set from the same time
     const d = scene.of
+    // a new scene brings its own palette, finish and view, now that it is the one in the view
+    if (dressed.current !== d.id) {
+      dressed.current = d.id
+      setPalette('own')
+      setDither(d.finish.dither); setGlow(d.finish.glow); setOutline(d.finish.outline); setEdges(d.finish.edges)
+      setView(d.views[0].id); setOrbit(d.views[0].orbit)
+    }
     stage.setPoser((sk: Skeleton, t: number) => { d.pose(sk, t); stage.setLights(d.lights(t), 1) }, from)
   }, [stage, scene])
   useEffect(() => { stage?.setPixels(pixels ? look : undefined, size) }, [stage, pixels, look, size])
@@ -136,7 +147,7 @@ export function PixelDiorama() {
     try {
       const frames = await stage.pixelFrames()
       if (!frames) return
-      download(await toPng(frames.art, 4), `pixel-diorama-${diorama.id}.png`, 'image/png')
+      download(await toPng(frames.art, 4), `pixel-diorama-${shown.id}.png`, 'image/png')
       setNote(`Saved a ${frames.art.width * 4} × ${frames.art.height * 4} PNG.`)
     } catch (e) {
       console.warn(e)
@@ -149,17 +160,18 @@ export function PixelDiorama() {
   const drag = useRef<OrbitDrag | null>(null)
   const pointers = useRef(new Map<number, { x: number; y: number }>())
   useWheelZoom(canvas, setOrbit)
-  const pick = (id: string) => { setView(id); setOrbit(diorama.views.find((v) => v.id === id)!.orbit) }
-  /** Another scene: it brings its own palette, finish and view. */
+  const pick = (id: string) => { setView(id); setOrbit((shown.views.find((v) => v.id === id) ?? shown.views[0]).orbit) }
+  /** Another scene. It is cut first; its palette, finish and view follow when it reaches the view. */
   const show = (id: string) => {
-    const d = DIORAMAS.find((k) => k.id === id)!
-    if (d.id === which) return
-    setWhich(d.id)
-    setPalette('own')
+    if (id === which) return
+    setWhich(id)
     setPixels(true)
-    setDither(d.finish.dither); setGlow(d.finish.glow); setOutline(d.finish.outline); setEdges(d.finish.edges)
-    setView(d.views[0].id); setOrbit(d.views[0].orbit)
     setNote('')
+    // the address names the scene, so a reload or a shared link opens the same one
+    const url = new URL(location.href)
+    if (id === DIORAMAS[0].id) url.searchParams.delete('scene')
+    else url.searchParams.set('scene', id)
+    history.replaceState(history.state, '', url)
   }
   const backend = stage ? (stage.backend === 'webgpu' ? 'WebGPU' : 'WebGL 2') : 'WebGPU or WebGL 2'
   const loading = !failed && (!drawn || !scene)
@@ -184,7 +196,7 @@ export function PixelDiorama() {
                 ref={canvas}
                 role="application"
                 aria-roledescription="3D view"
-                aria-label={`${diorama.about}, ${pixels ? 'drawn as pixel art' : 'drawn as blobs'}, ${failed ? 'not drawn' : playing ? 'moving' : 'paused'}. Drag or use the arrow keys to orbit; scroll, pinch or press plus and minus to zoom.`}
+                aria-label={`${shown.about}, ${pixels ? 'drawn as pixel art' : 'drawn as blobs'}, ${failed ? 'not drawn' : playing ? 'moving' : 'paused'}. Drag or use the arrow keys to orbit; scroll, pinch or press plus and minus to zoom.`}
                 tabIndex={0}
                 data-testid="diorama-view"
                 className="absolute inset-0 h-full w-full cursor-grab touch-none outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset active:cursor-grabbing"
@@ -254,7 +266,7 @@ export function PixelDiorama() {
               </div>
             </div>
             <div role="group" aria-labelledby="d-scene" className="sm:col-span-2 lg:col-span-1">
-              <h2 id="d-scene" className={CARD_TITLE}>Scene <small className={CARD_SUB}>repeats every {diorama.loop} seconds</small></h2>
+              <h2 id="d-scene" className={CARD_TITLE}>Scene <small className={CARD_SUB}>repeats every {shown.loop} seconds</small></h2>
               <div className="grid gap-4">
                 <Field label="Scene">
                   <div className="flex flex-wrap gap-1.5">
@@ -263,7 +275,7 @@ export function PixelDiorama() {
                 </Field>
                 <Field label="View">
                   <div className="flex flex-wrap gap-1.5">
-                    {diorama.views.map((v) => <Chip key={v.id} active={view === v.id} onClick={() => pick(v.id)}>{v.label}</Chip>)}
+                    {shown.views.map((v) => <Chip key={v.id} active={view === v.id} onClick={() => pick(v.id)}>{v.label}</Chip>)}
                   </div>
                 </Field>
                 <Field label="Blobs">

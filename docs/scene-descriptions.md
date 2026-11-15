@@ -6,7 +6,7 @@ The point is that Claude can write one from a sentence. A scene that is data can
 
 - The type, with a comment on every field: `src/splat-engine/sceneDoc.ts` (`SceneDoc`).
 - `checkScene(doc)` returns what is wrong, each as `where: what` (`parts[12].shape.r: must be a number`). Empty means sound.
-- `compileScene(doc)` gives the builder's spec, the poser, the lights and the pixel look. It throws on an unsound description.
+- `compileScene(doc)` gives the builder's spec, the poser, the lights and the pixel look. It throws on an unsound description. Its `empty(built)` lists parts that came out with no blobs (a hole that swallows its shape), which the checker can't see; the page warns in the console.
 
 ## What a description holds
 
@@ -20,7 +20,7 @@ The point is that Claude can write one from a sentence. A scene that is data can
 | `camera` | Where the view starts. |
 | `bones` | Things that move, each with the point it turns about. Parts with no bone stand still. |
 | `parts` | A shape, a paint, and optionally a bone, `glow` or `noShadow`. |
-| `moves` | spin, sway, bob, drift, pulse. Each names a bone and a whole number of `times` per loop. |
+| `moves` | spin, sway, bob, drift, pulse. Each names a bone and a whole number of `times` per loop; a bone takes up to six. |
 | `lights` | Up to four live lights, which can flicker or go round a circle. |
 
 Shapes: `sphere`, `ball` (stretched), `box`, `cylinder` (can taper), `cone` (a round-ended stick), `ring`, `roof`, and `join`, `cut`, `rough` to combine them.
@@ -29,7 +29,7 @@ Paints: a colour, or `bands`, `bricks`, `speckle`, `patches`, `faces` (top, side
 
 ## Rules that make a scene work
 
-1. **Units.** About 1 is a small house. y is up and the ground is y = 0. The camera starts on the +z side, so put the interesting face toward +z. Keep everything within 6 of the middle.
+1. **Units.** About 1 is a small house. y is up and the ground is y = 0. The camera starts on the +z side, so put the interesting face toward +z. Keep everything within 4 of the middle, and a whole scene about 4 across: the checker turns down parts over about 3 across and scenes with too much surface, because they take seconds to build.
 2. **Paint in palette colours.** Baked light darkens a colour, and the picture then snaps to the nearest palette colour. So the palette needs a darker step for each main colour (three or four greens, not one), and neutral greys if there is stone. Without them, shade snaps to something odd, like brown.
 3. **Glow is for light sources.** `glow: true` parts take no light and spill light on their neighbours: flames, lamps, windows, stars, the moon. Small bright things that must stay readable (flowers, birds) can use it too.
 4. **Every move loops.** `times` is a whole number, so the scene repeats exactly. Use different `times` and `phase` on similar things (trees, fireflies) so they don't move in step.

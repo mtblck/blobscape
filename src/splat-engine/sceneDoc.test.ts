@@ -46,7 +46,12 @@ test('checkScene points at each mistake', () => {
     ['a move that would not loop', (d) => { d.moves[0].times = 1.5 }, /^moves\[0\]\.times: must be a whole number/],
     ['an unknown move', (d) => { d.moves[1].kind = 'wiggle' }, /^moves\[1\]\.kind: 'wiggle' is not a move/],
     ['a light too strong', (d) => { d.lights[0].strength = 50 }, /^lights\[0\]\.strength: must be from 0 to 8/],
-    ['a far-off part', (d) => { d.parts[0].shape.at = [0, 0, 40] }, /^parts\[0\]\.shape\.at\[2\]: must be from -6 to 6/],
+    ['a far-off part', (d) => { d.parts[0].shape.at = [0, 0, 40] }, /^parts\[0\]\.shape\.at\[2\]: must be from -4 to 4/],
+    ['a part too big to build', (d) => { d.parts[0].shape = { kind: 'box', at: [0, 0, 0], half: [3, 3, 3] } }, /^parts\[0\]\.shape: is too big/],
+    ['too much surface in all', (d) => { for (let i = 0; i < 12; i++) d.parts.push({ shape: { kind: 'box', at: [0, 0, 0], half: [1.2, 1.2, 1.2] }, paint: '#101018' }) }, /^parts: have too much surface/],
+    ['too many moves on a bone', (d) => { for (let i = 0; i < 8; i++) d.moves.push({ kind: 'pulse', bone: 'puff', size: [4, 4], times: 1 }) }, /'puff' has more than 6 moves/],
+    ['a kind that is not text', (d) => { d.parts[1].shape.kind = { toString: 1 } }, /^parts\[1\]\.shape\.kind: a object is not a shape/],
+    ['a bone that is not text', (d) => { d.parts[1].bone = { toString: 1 }; d.moves[0].bone = [1]; d.bones[1].parent = { valueOf: 1 } }, /^parts\[1\]\.bone: a object is not one of the bones/],
     ['no camera', (d) => { delete d.camera }, /^camera: must be an object/],
   ]
   for (const [what, spoil, want] of cases) {
@@ -73,6 +78,13 @@ test('a compiled scene builds with every part, however small, at any detail', ()
     const b = buildVoxels(c.spec(spacing))
     assert.equal(new Set(b.partOf).size, 5, `spacing ${spacing}`)
   }
+  // a hole that swallows its shape leaves a part with nothing: the check can't see it, the build can
+  const hollow = sound()
+  hollow.parts[2] = { shape: { kind: 'cut', shape: { kind: 'sphere', at: [0, 0.5, 0], r: 0.1 }, hole: { kind: 'sphere', at: [0, 0.5, 0], r: 0.3 } }, paint: '#ffd166' }
+  assert.deepEqual(checkScene(hollow), [])
+  const h = compileScene(hollow)
+  assert.deepEqual(h.empty(buildVoxels(h.spec(0.03))), [2])
+  assert.deepEqual(c.empty(buildVoxels(c.spec(0.03))), [])
   assert.equal(c.bones.length, 4)
   assert.equal(c.bones[2].parent, 1)
   assert.equal(c.look.palette.length, 4)

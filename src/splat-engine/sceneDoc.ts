@@ -12,7 +12,7 @@ import { box, cone, cut, cylinder, displace, ellipsoid, roof, sphere, torus, uni
  * `compileScene` turns a sound one into what the voxel builder, the bones and
  * pixel mode need.
  *
- * Units: about 1 is a small house. y is up, the ground is y = 0, and the
+ * Units: about 1 is a small house, and a whole scene is about 4 across. y is up, the ground is y = 0, and the
  * camera starts on the +z side. Colours are '#rrggbb'.
  */
 export interface SceneDoc {
@@ -119,11 +119,32 @@ export interface LightDoc {
 
 const HEX = /^#[0-9a-f]{6}$/i
 const AXES = ['x', 'y', 'z']
-const REACH = 6
+const REACH = 4
 const MAX_PARTS = 240
 const MAX_BONES = 64
 const MAX_DEPTH = 6
 const MAX_SCENE_LIGHTS = 4
+/** Simple shapes in the whole scene, however they are joined. */
+const MAX_SHAPES = 600
+/** The most surface a scene's parts may have between them, by their boxes, in square units: a few times the fullest scene we ship. Past it the build takes seconds and the blobs run to millions. */
+const MAX_SURFACE = 150
+const MAX_MOVES_PER_BONE = 6
+/** A value for a message: only what is safe to print (anything can arrive from a prompt). */
+const show = (v: unknown) => (typeof v === 'string' ? `'${v.slice(0, 40)}'` : typeof v === 'number' || typeof v === 'boolean' ? String(v) : v === undefined ? 'nothing' : `a ${Array.isArray(v) ? 'list' : typeof v}`)
+/** Half the size of a sound shape's box, near enough: for adding up how much surface a scene has. */
+function halfSize(s: ShapeDoc): Vec3 {
+  switch (s.kind) {
+    case 'sphere': return [s.r, s.r, s.r]
+    case 'ball': return s.r
+    case 'box': return s.half
+    case 'cylinder': { const r = Math.max(s.r, s.rTop ?? 0); return [r, s.height / 2, r] }
+    case 'cone': { const r = Math.max(s.r, s.rTo ?? 0); return [Math.abs(s.to[0] - s.from[0]) / 2 + r, Math.abs(s.to[1] - s.from[1]) / 2 + r, Math.abs(s.to[2] - s.from[2]) / 2 + r] }
+    case 'ring': return [s.r + s.tube, s.tube, s.r + s.tube]
+    case 'roof': return [s.half[0], s.height / 2, s.half[1]]
+    case 'join': return s.shapes.map(halfSize).reduce((a, b) => [Math.max(a[0], b[0]), Math.max(a[1], b[1]), Math.max(a[2], b[2])])
+    case 'cut': case 'rough': return halfSize(s.shape)
+  }
+}
 
 /**
  * Everything wrong with a scene description, each as `where: what`. Empty when
@@ -131,7 +152,9 @@ const MAX_SCENE_LIGHTS = 4
  */
 export function checkScene(doc: unknown): string[] {
   const errs: string[] = []
-  const bad = (at: string, what: string) => { if (errs.length < 40) errs.push(`${at}: ${what}`) }
+  // every mistake is counted, though only the first 40 are listed
+  let found = 0
+  const bad = (at: string, what: string) => { found++; if (errs.length < 40) errs.push(`${at}: ${what}`) }
   const obj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
   const num = (v: unknown, at: string, min: number, max: number) => {
     if (typeof v !== 'number' || !Number.isFinite(v)) { bad(at, 'must be a number'); return false }
@@ -189,14 +212,16 @@ export function checkScene(doc: unknown): string[] {
       if (typeof b.name !== 'string' || !b.name || b.name === 'land') bad(`${at}.name`, "must be a name (not 'land', which is the ground itself)")
       else if (names.has(b.name)) bad(`${at}.name`, `'${b.name}' is used twice`)
       vec(b.at, `${at}.at`)
-      if (b.parent !== undefined && !names.has(b.parent as string)) bad(`${at}.parent`, `'${String(b.parent)}' is not a bone named earlier in the list`)
+      if (b.parent !== undefined && !names.has(b.parent as string)) bad(`${at}.parent`, `${show(b.parent)} is not a bone named earlier in the list`)
       if (typeof b.name === 'string') names.add(b.name)
     })
   }
-  const bone = (v: unknown, at: string) => { if (typeof v !== 'string' || !names.has(v)) bad(at, `'${String(v)}' is not one of the bones`) }
+  const bone = (v: unknown, at: string) => { if (typeof v !== 'string' || !names.has(v)) bad(at, `${show(v)} is not one of the bones`) }
 
+  let shapes = 0, surface = 0
   const shape = (s: unknown, at: string, depth: number) => {
     if (!obj(s)) { bad(at, 'must be a shape'); return }
+    shapes++
     if (depth > MAX_DEPTH) { bad(at, 'shapes are nested too deep'); return }
     switch (s.kind) {
       case 'sphere': vec(s.at, `${at}.at`); num(s.r, `${at}.r`, 0.001, REACH); break
@@ -212,7 +237,7 @@ export function checkScene(doc: unknown): string[] {
         break
       case 'cut': shape(s.shape, `${at}.shape`, depth + 1); shape(s.hole, `${at}.hole`, depth + 1); break
       case 'rough': shape(s.shape, `${at}.shape`, depth + 1); num(s.by, `${at}.by`, 0, 0.3); opt(s.scale, `${at}.scale`, 0.02, REACH); break
-      default: bad(`${at}.kind`, `'${String(s.kind)}' is not a shape (sphere, ball, box, cylinder, cone, ring, roof, join, cut, rough)`)
+      default: bad(`${at}.kind`, `${show(s.kind)} is not a shape (sphere, ball, box, cylinder, cone, ring, roof, join, cut, rough)`)
     }
   }
   const paint = (p: unknown, at: string, depth: number) => {
@@ -229,25 +254,39 @@ export function checkScene(doc: unknown): string[] {
         if (p.under !== undefined) paint(p.under, `${at}.under`, depth + 1)
         break
       case 'split': axis(p.axis, `${at}.axis`); num(p.at, `${at}.at`, -REACH, REACH); paint(p.below, `${at}.below`, depth + 1); paint(p.above, `${at}.above`, depth + 1); break
-      default: bad(`${at}.kind`, `'${String(p.kind)}' is not a paint (bands, bricks, speckle, patches, faces, split)`)
+      default: bad(`${at}.kind`, `${show(p.kind)} is not a paint (bands, bricks, speckle, patches, faces, split)`)
     }
   }
   if (!Array.isArray(doc.parts) || !doc.parts.length || doc.parts.length > MAX_PARTS) bad('parts', `must be a list of 1 to ${MAX_PARTS} parts`)
   else doc.parts.forEach((p: unknown, i: number) => {
     const at = `parts[${i}]`
     if (!obj(p)) { bad(at, 'must be an object'); return }
+    const before = found
     shape(p.shape, `${at}.shape`, 0)
+    if (found === before) {
+      // a sound shape: add its box's surface, and catch one so big it would take seconds to cut
+      const [a, b, c] = halfSize(p.shape as ShapeDoc)
+      const area = 8 * (a * b + b * c + c * a)
+      if (area > MAX_SURFACE / 2) bad(`${at}.shape`, 'is too big: keep a part within about 3 units across')
+      surface += area
+    }
     paint(p.paint, `${at}.paint`, 0)
     if (p.bone !== undefined) bone(p.bone, `${at}.bone`)
     for (const k of ['glow', 'noShadow']) if (p[k] !== undefined && typeof p[k] !== 'boolean') bad(`${at}.${k}`, 'must be true or false')
   })
 
+  if (shapes > MAX_SHAPES) bad('parts', `hold ${shapes} shapes between them; the most is ${MAX_SHAPES}`)
+  if (surface > MAX_SURFACE) bad('parts', 'have too much surface between them to build quickly: make the scene smaller or use fewer big parts')
+
+  const perBone = new Map<unknown, number>()
   if (doc.moves !== undefined) {
     if (!Array.isArray(doc.moves) || doc.moves.length > 200) bad('moves', 'must be a list of at most 200')
     else doc.moves.forEach((m: unknown, i: number) => {
       const at = `moves[${i}]`
       if (!obj(m)) { bad(at, 'must be an object'); return }
       bone(m.bone, `${at}.bone`)
+      perBone.set(m.bone, (perBone.get(m.bone) ?? 0) + 1)
+      if (perBone.get(m.bone) === MAX_MOVES_PER_BONE + 1) bad(`${at}.bone`, `${show(m.bone)} has more than ${MAX_MOVES_PER_BONE} moves`)
       whole(m.times, `${at}.times`)
       opt(m.phase, `${at}.phase`, -1, 1)
       switch (m.kind) {
@@ -256,11 +295,11 @@ export function checkScene(doc: unknown): string[] {
         case 'bob': vec(m.by, `${at}.by`); break
         case 'drift':
           vec(m.by, `${at}.by`)
-          if (m.grow !== undefined) vec(m.grow, `${at}.grow`, 0, 8, 2)
+          if (m.grow !== undefined) vec(m.grow, `${at}.grow`, 0, 4, 2)
           if (typeof m.times === 'number' && m.times < 0) bad(`${at}.times`, 'must be over 0 for a drift')
           break
-        case 'pulse': vec(m.size, `${at}.size`, 0, 8, 2); break
-        default: bad(`${at}.kind`, `'${String(m.kind)}' is not a move (spin, sway, bob, drift, pulse)`)
+        case 'pulse': vec(m.size, `${at}.size`, 0, 4, 2); break
+        default: bad(`${at}.kind`, `${show(m.kind)} is not a move (spin, sway, bob, drift, pulse)`)
       }
     })
   }
@@ -368,6 +407,8 @@ export interface CompiledScene {
   bones: Bone[]
   /** The shapes on a grid of `spacing`. */
   spec(spacing: number): VoxelSpec
+  /** The parts (by their place in the list) that came out with no blobs at all, such as a shape whose hole swallows it: `checkScene` can't see those. */
+  empty(built: { partOf: ArrayLike<number> }): number[]
   /** Poses the bones for `t` seconds. */
   pose(sk: Skeleton, t: number): void
   lights(t: number): PointLight[]
@@ -406,6 +447,11 @@ export function compileScene(doc: SceneDoc): CompiledScene {
       if (doc.light?.ambient !== undefined) light.ambient = doc.light.ambient
       if (doc.light?.shadow !== undefined) light.shadow = doc.light.shadow
       return { bones, parts, spacing, light }
+    },
+    empty(built) {
+      const seen = new Set<number>()
+      for (let i = 0; i < built.partOf.length; i++) seen.add(built.partOf[i])
+      return doc.parts.map((_, i) => i).filter((i) => !seen.has(i))
     },
     pose(sk, t) {
       sk.reset()

@@ -64,7 +64,12 @@ export function described(id: string, doc: SceneDoc, about: string): Diorama {
       { id: 'above', label: 'From above', orbit: { ...c.orbit, elevation: 40, distance: c.orbit.distance * 1.25 } },
       { id: 'close', label: 'Close up', orbit: { ...c.orbit, target: [c.orbit.target[0], c.orbit.target[1] * 0.6, c.orbit.target[2]], distance: c.orbit.distance * 0.55 } },
     ],
-    make: (spacing) => buildVoxels(c.spec(spacing)),
+    make: (spacing) => {
+      const built = buildVoxels(c.spec(spacing))
+      const empty = c.empty(built)
+      if (empty.length) console.warn(`${c.name}: parts ${empty.join(', ')} have no blobs at this detail`)
+      return built
+    },
     pose: c.pose,
     lights: c.lights,
   }
