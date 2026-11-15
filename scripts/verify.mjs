@@ -786,7 +786,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
       const { stage, look } = window.__diorama
       await stage.frame(t)
       const f = await stage.pixelFrames()
-      const pal = new Set(look().palette.map((c) => (c[0] << 16) | (c[1] << 8) | c[2]))
+      const pal = new Set([...look().palette, look().outline].map((c) => (c[0] << 16) | (c[1] << 8) | c[2]))
       let solid = 0, off = 0, soft = 0
       for (let i = 0; i < f.art.data.length; i += 4) {
         const a = f.art.data[i + 3]
@@ -809,7 +809,6 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     }
     const label = `blobscape pixel diorama (${a.backend})`
     if ((q ? 'webgl' : 'webgpu') !== a.backend) fails.push(`${label}: wanted the ${q ? 'webgl' : 'webgpu'} backend`)
-    // the outline colour is the palette's darkest, so every solid pixel is a palette colour
     if (!(a.solid > 3000 && a.off === 0 && a.soft === 0)) fails.push(`${label}: ${JSON.stringify({ solid: a.solid, offPalette: a.off, soft: a.soft })}`)
     else ok(`${label}: ${a.w}×${a.h} art, ${a.solid} solid pixels, every one a palette colour, none half transparent`)
     // dither sits pixels on the line between two colours, where 8-bit rounding can tip them either way

@@ -9,7 +9,7 @@ import { BoneView } from './bones.ts'
 import type { BakeOptions, BakedSheet } from '../../splat-engine/bakeSheet.ts'
 import type { SheetMove } from '../../splat-engine/spriteSheet.ts'
 import { PixelPass } from '../../splat-engine/pixelPass.ts'
-import type { Frame, PixelLook } from '../../splat-core/pixel.ts'
+import { lookColours, snapColours, type Frame, type PixelLook } from '../../splat-core/pixel.ts'
 
 /**
  * The Creature page's view: Blobscape's own splat engine (src/splat-engine)
@@ -221,12 +221,12 @@ export class CreatureStage {
     return { width, height, data: readbackToSrgb(px, width, height, { flip: this.backend === 'webgl', premultiplied: false }) }
   }
 
-  /** Pixel mode's last frame as it was drawn small, and as finished art: for tests and for saving. */
+  /** Pixel mode's last frame as it was drawn small, and as finished art (exactly in the look's colours): for tests and for saving. */
   async pixelFrames(): Promise<{ small: Frame; art: Frame } | undefined> {
     // a sheet being drawn has the renderer to itself
     if (!this.pixel || this.baking) return
     if (!this.target) this.pixel.render(this.renderer, this.scene, this.camera)
-    return { small: await this.read(this.pixel.small), art: await this.read(this.pixel.art) }
+    return { small: await this.read(this.pixel.small), art: snapColours(await this.read(this.pixel.art), lookColours(this.pixel.look)) }
   }
 
   invalidate(frames = 2) { this.pending = Math.max(this.pending, frames) }

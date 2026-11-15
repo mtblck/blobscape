@@ -47,7 +47,11 @@ export class PixelPass {
     this.setLook(look)
   }
 
+  /** The look in use. */
+  look!: PixelLook
+
   setLook(look: PixelLook) {
+    this.look = look
     const n = Math.min(MAX_PALETTE, look.palette.length)
     for (let i = 0; i < n; i++) {
       const c = look.palette[i]

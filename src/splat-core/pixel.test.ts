@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { alphaCut, autoPalette, downsample, makeFrame, outline, pixelArt, quantize, removeStrays, countSolid, type Rgb } from './pixel.ts'
+import { alphaCut, autoPalette, downsample, makeFrame, outline, pixelArt, quantize, lookColours, snapColours, removeStrays, countSolid, type Rgb } from './pixel.ts'
 
 const solid = (w: number, h: number, on: (x: number, y: number) => boolean, rgb = [200, 40, 40]) => {
   const f = makeFrame(w, h)
@@ -90,4 +90,13 @@ test('pixelArt glow lights the pixels round a bright one, empty ones too, and le
   const dull = pixelArt(solid(9, 9, (_x, y) => y >= 6, [60, 50, 70]), look)
   assert.equal(countSolid(dull), 27)
   assert.deepEqual([...dull.data.subarray(8 * 9 * 4, 8 * 9 * 4 + 3)], [60, 50, 70])
+})
+
+test('snapColours puts pixels a level or two off back on the palette, and leaves empty ones alone', () => {
+  const f = solid(2, 1, (x) => x === 0, [198, 42, 39])
+  const look = { palette: PAL, dither: 0, outline: [1, 2, 3] as Rgb, glow: 0 }
+  snapColours(f, lookColours(look))
+  assert.deepEqual([...f.data], [200, 40, 40, 255, 0, 0, 0, 0])
+  assert.equal(lookColours(look).length, 4)
+  assert.equal(lookColours({ ...look, palette: [] }).length, 0)
 })

@@ -313,3 +313,31 @@ export function pixelArt(f: Frame, look: PixelLook): Frame {
   }
   return out
 }
+
+/**
+ * The colours a look can put in a frame: its palette and its outline. Empty
+ * when the look has no palette (then any colour can appear).
+ */
+export function lookColours(look: PixelLook): Rgb[] {
+  if (!look.palette.length) return []
+  return look.outline ? [...look.palette, look.outline] : look.palette
+}
+
+/**
+ * Moves every solid pixel onto the closest of `colours`, in place. Art read
+ * back from the GPU has been through 8-bit linear colour, which leaves each
+ * channel a level or two off the palette; this puts it back exactly.
+ */
+export function snapColours(f: Frame, colours: Rgb[]): Frame {
+  if (!colours.length) return f
+  for (let i = 0; i < f.data.length; i += 4) {
+    if (!f.data[i + 3]) continue
+    let best = colours[0], bestD = Infinity
+    for (const c of colours) {
+      const d = (f.data[i] - c[0]) ** 2 + (f.data[i + 1] - c[1]) ** 2 + (f.data[i + 2] - c[2]) ** 2
+      if (d < bestD) { bestD = d; best = c }
+    }
+    f.data[i] = best[0]; f.data[i + 1] = best[1]; f.data[i + 2] = best[2]
+  }
+  return f
+}
