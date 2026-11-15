@@ -7,8 +7,8 @@ import { compileScene, type SceneDoc } from '../../splat-engine/sceneDoc.ts'
 import { buildVoxels } from '../../splat-engine/voxel.ts'
 import { LOOP, PALETTES, lampLights, makeDiorama, poseDiorama } from './scene.ts'
 import { CAMPFIRE } from './scenes/campfire.ts'
+import { BEE } from './scenes/bee.ts'
 import { DRAGON } from './scenes/dragon.ts'
-import { HIVE } from './scenes/hive.ts'
 import { WINDMILL } from './scenes/windmill.ts'
 
 /** A scene Pixel Diorama can show: how to build it, move it and light it, and how it asks to be drawn. */
@@ -90,7 +90,7 @@ export function described(id: string, doc: SceneDoc, about: string): Diorama {
 export const DIORAMAS: Diorama[] = [
   LIGHTHOUSE,
   described('campfire', CAMPFIRE, 'A camp in a clearing among pines at night, with a flickering fire throwing sparks, a tent, a lantern, fireflies and the moon'),
-  described('dragon', DRAGON, 'The pale skeleton of a great dragon bent over a glowing pool in a dark cave, its claws on the rim, its neck swaying, its head turning and its jaw opening, with candles and drifting dust'),
-  described('hive', HIVE, 'A giant bee hovering inside a honeycomb hive, with fluttering pale wings, little bees, glowing pools of honey and honey dripping from the comb'),
+  described('dragon', DRAGON, 'A red dragon bent over a glowing pool of lava in a dark cave, its claws on the rim, its neck swaying, its head turning, its jaw opening and its wings shifting, with embers rising'),
+  described('bee', BEE, 'A giant bee hovering at a pink flower in a forest clearing, with fluttering pale wings, little bees, butterflies, mushrooms, ferns and drifting pollen'),
   described('windmill', WINDMILL, 'A windmill on a farm by day, with turning sails, sheep, a duck on a pond, a wheat field, trees, clouds and birds'),
 ]

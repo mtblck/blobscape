@@ -1,8 +1,8 @@
 # Scene descriptions
 
-A pixel-art scene can be written as data alone: a list of shapes, paints, bones and moves, with no code. The engine checks it, cuts it into blobs, and plays it in pixel mode. Two of Pixel Diorama's scenes are written this way: `src/blobscape/diorama/scenes/campfire.ts` and `windmill.ts`.
+A pixel-art scene can be written as data alone: a list of shapes, paints, bones and moves, with no code. The engine checks it, cuts it into blobs, and plays it in pixel mode. Every Pixel Diorama scene but the lighthouse is written this way: see `src/blobscape/diorama/scenes/` (`campfire.ts` is a good first read).
 
-The point is that Claude can write one from a sentence. A scene that is data can be checked before it runs, built in a second, and changed one line at a time, so "make eight, pick one, refine it" is cheap.
+The point is that Claude can write one from a sentence. A scene that is data can be checked before it runs, built in a second or two, and changed one line at a time, so "make eight, pick one, refine it" is cheap.
 
 - The type, with a comment on every field: `src/splat-engine/sceneDoc.ts` (`SceneDoc`).
 - `checkScene(doc)` returns what is wrong, each as `where: what` (`parts[12].shape.r: must be a number`). Empty means sound.
@@ -45,10 +45,11 @@ Paints: a colour, or `bands`, `bricks`, `hex` (honeycomb, scales, paving), `spec
 The dragon scene (`scenes/dragon.ts`) follows a few habits that make a scene read as a single strong image:
 
 - **No sky.** Leave `sky` out and the subject sits on the dark of the page.
-- **One ramp and one accent.** Ten steps of one hue from near-black to near-white, plus two or three steps of one warm accent used only on light sources.
-- **One big subject.** Build it from many small parts (the dragon is about 150, mostly cones) and let it fill the frame.
+- **Few hues.** A dark ramp for the setting, one hue ramp for the subject, and two or three steps of a warm accent used only on light sources.
+- **One big subject.** Build it from many small parts (the dragon is about 140, mostly cones) and let it fill the frame.
 - **A chain of bones for anything that bends.** Each neck bone has the one before as its `parent` and sways a few degrees; the turns add up along the chain, so the head sweeps wide while each joint barely moves. A jaw is a child of the head with one `sway`.
-- **Dust.** A dozen tiny `glow` parts with slow `drift` moves give the air depth.
+- **Embers or dust.** A dozen or so tiny `glow` parts with slow `drift` moves give the air depth.
+- **Small parts cast no shadow.** Mark fronds, petals, legs and the like `noShadow`: every shadow caster is checked for every lit cell, so a hundred small ones double the build time for shadows nobody sees.
 - **A slow swing of the camera** shows that the scene is solid.
 
 ## Prompting for one
