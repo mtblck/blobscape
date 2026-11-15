@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { alphaCut, autoPalette, downsample, makeFrame, outline, quantize, removeStrays, countSolid } from './pixel.ts'
+import { alphaCut, autoPalette, downsample, makeFrame, outline, pixelArt, quantize, removeStrays, countSolid, type Rgb } from './pixel.ts'
 
 const solid = (w: number, h: number, on: (x: number, y: number) => boolean, rgb = [200, 40, 40]) => {
   const f = makeFrame(w, h)
@@ -62,4 +62,32 @@ test('outline rings the silhouette with 4-neighbours', () => {
   const f = solid(3, 3, (x, y) => x === 1 && y === 1)
   const o = outline(f, [0, 0, 0])
   assert.equal(countSolid(o), 5)
+})
+
+const PAL: Rgb[] = [[20, 16, 24], [200, 40, 40], [250, 240, 200]]
+
+test('pixelArt with no glow is the alpha cut, palette and outline steps in one', () => {
+  const f = solid(8, 8, (x, y) => x >= 2 && x < 6 && y >= 2 && y < 6, [190, 60, 50])
+  // a faint pixel is cut away
+  f.data.set([190, 60, 50, 90], (1 * 8 + 3) * 4)
+  const got = pixelArt(f, { palette: PAL, dither: 0.4, outline: PAL[0], glow: 0 })
+  const want = outline(quantize(alphaCut(f, 0.5), PAL, 0.4), PAL[0])
+  assert.deepEqual([...got.data], [...want.data])
+})
+
+test('pixelArt glow lights the pixels round a bright one, empty ones too, and leaves dull scenes alone', () => {
+  const f = solid(9, 9, (_x, y) => y >= 6, [60, 50, 70])
+  f.data.set([255, 240, 180, 255], (3 * 9 + 4) * 4)
+  const look = { palette: [], dither: 0, outline: null, glow: 3 }
+  const lit = pixelArt(f, look)
+  // beside the lamp: empty before, lit now, in the lamp's colour
+  const i = (3 * 9 + 5) * 4
+  assert.equal(lit.data[i + 3], 255)
+  assert.ok(lit.data[i] > lit.data[i + 2])
+  // far from it: still empty
+  assert.equal(lit.data[(0 * 9 + 0) * 4 + 3], 0)
+  // the floor is too dull to glow
+  const dull = pixelArt(solid(9, 9, (_x, y) => y >= 6, [60, 50, 70]), look)
+  assert.equal(countSolid(dull), 27)
+  assert.deepEqual([...dull.data.subarray(8 * 9 * 4, 8 * 9 * 4 + 3)], [60, 50, 70])
 })

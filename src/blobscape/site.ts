@@ -57,6 +57,14 @@ export const EXPERIMENTS = [
     body: 'A watch movement made of blobs, keeping the real time: every wheel turns by a real watch\'s ratios and the balance ticks five times a second. Slow it down to see one tick.',
   },
   {
+    id: 'diorama',
+    title: 'Pixel Diorama',
+    url: '/experiments/pixel-diorama/',
+    cover: '/covers/pixel-diorama.webp',
+    needs: 'WebGPU or WebGL 2',
+    body: 'A lighthouse at dusk, built from shapes in code and drawn as moving pixel art. It is real 3D underneath, so you can turn it, swap the palette, or switch the pixels off to see the blobs.',
+  },
+  {
     id: 'fit',
     title: 'Fit a Picture',
     url: '/experiments/fit-a-picture/',

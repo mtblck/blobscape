@@ -1,0 +1,98 @@
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { LIT_MAX, box, buildVoxels, cone, cut, sphere, union, type VoxelSpec } from './voxel.ts'
+import { posedPoint, axisAngle } from './rig.ts'
+
+const ROOT = { name: 'root', parent: -1, head: [0, 0, 0] as [number, number, number] }
+
+test('a ball becomes one layer of cells on its surface, about its area over a cell', () => {
+  const s = 0.05, r = 1
+  const { blobs } = buildVoxels({ bones: [ROOT], parts: [{ shape: sphere([0, 0, 0], r), colour: [1, 1, 1], bone: 'root' }], spacing: s })
+  for (let i = 0; i < blobs.count; i++) {
+    const d = Math.hypot(blobs.centre[i * 3], blobs.centre[i * 3 + 1], blobs.centre[i * 3 + 2])
+    assert.ok(d <= r + 1e-6 && d > r - s - 1e-6, `cell at ${d}`)
+    // on the shared grid
+    assert.ok(Math.abs(blobs.centre[i * 3] / s - Math.round(blobs.centre[i * 3] / s)) < 1e-4)
+  }
+  const expected = (4 * Math.PI * r * r) / (s * s)
+  assert.ok(blobs.count > expected * 0.7 && blobs.count < expected * 1.3, `${blobs.count} vs ${expected}`)
+})
+
+test('the same spec gives the same blobs', () => {
+  const spec: VoxelSpec = { bones: [ROOT], parts: [{ shape: cut(box([0, 0, 0], [0.5, 0.3, 0.4], 0.05), sphere([0.3, 0.3, 0], 0.25)), colour: (p) => [p[0] + 0.5, 0.5, 0.5], bone: 'root' }], spacing: 0.04 }
+  const a = buildVoxels(spec), b = buildVoxels(spec)
+  assert.ok(a.blobs.count > 500)
+  assert.equal(a.blobs.count, b.blobs.count)
+  assert.deepEqual(a.blobs.colour.subarray(0, a.blobs.count * 3), b.blobs.colour.subarray(0, b.blobs.count * 3))
+})
+
+test('a ball over a floor casts a shadow where the sun is blocked, and nowhere else', () => {
+  const spec: VoxelSpec = {
+    bones: [ROOT], spacing: 0.05,
+    light: { dir: [0, 1, 0], ambient: 0.3, shadow: 1 },
+    parts: [
+      { shape: box([0, -0.1, 0], [2, 0.1, 2]), colour: [1, 1, 1], bone: 'root' },
+      { shape: sphere([0, 1, 0], 0.4), colour: [1, 0, 0], bone: 'root' },
+    ],
+  }
+  const { blobs, partOf } = buildVoxels(spec)
+  let under = 0, open = 0, nu = 0, no = 0
+  for (let i = 0; i < blobs.count; i++) {
+    // the floor's top face only
+    if (partOf[i] !== 0 || blobs.centre[i * 3 + 1] < -0.01) continue
+    const r = Math.hypot(blobs.centre[i * 3], blobs.centre[i * 3 + 2])
+    if (r < 0.2) { under += blobs.colour[i * 3]; nu++ } else if (r > 1 && r < 1.8) { open += blobs.colour[i * 3]; no++ }
+  }
+  assert.ok(nu > 10 && no > 100)
+  assert.ok(Math.abs(under / nu - 0.3 * LIT_MAX) < 0.02, `under the ball ${under / nu}`)
+  assert.ok(Math.abs(open / no - LIT_MAX) < 0.02, `in the open ${open / no}`)
+})
+
+test('glow parts keep their colour and cast no shadow', () => {
+  const spec: VoxelSpec = {
+    bones: [ROOT], spacing: 0.05, light: { dir: [0, 1, 0], ambient: 0.3, shadow: 1 },
+    parts: [
+      { shape: box([0, -0.1, 0], [1, 0.1, 1]), colour: [1, 1, 1], bone: 'root' },
+      { shape: sphere([0, 1, 0], 0.4), colour: [0.9, 0.8, 0.2], bone: 'root', glow: true },
+    ],
+  }
+  const { blobs, partOf } = buildVoxels(spec)
+  for (let i = 0; i < blobs.count; i++) {
+    if (partOf[i] === 1) assert.ok(Math.abs(blobs.colour[i * 3] - 0.9) < 1e-6)
+    else if (blobs.centre[i * 3 + 1] > -0.01 && Math.max(Math.abs(blobs.centre[i * 3]), Math.abs(blobs.centre[i * 3 + 2])) < 0.9) assert.ok(blobs.colour[i * 3] > LIT_MAX - 0.02, 'the floor under a lamp is lit')
+  }
+})
+
+test('cells buried in a neighbour on the same bone are left out; on another bone they stay', () => {
+  const a = sphere([0, 0, 0], 0.5), b = sphere([0.3, 0, 0], 0.5)
+  const bones = [ROOT, { name: 'arm', parent: 0, head: [0.3, 0, 0] as [number, number, number] }]
+  const count = (bone: string) => buildVoxels({ bones, spacing: 0.05, parts: [{ shape: a, colour: [1, 1, 1], bone: 'root' }, { shape: b, colour: [1, 1, 1], bone }] }).blobs.count
+  const apart = count('arm'), merged = count('root')
+  assert.ok(merged < apart * 0.85, `${merged} vs ${apart}`)
+  // and a union is the same surface as the merged parts, give or take the seam
+  const one = buildVoxels({ bones, spacing: 0.05, parts: [{ shape: union(a, b), colour: [1, 1, 1], bone: 'root' }] }).blobs.count
+  assert.ok(Math.abs(one - merged) < merged * 0.1, `${one} vs ${merged}`)
+})
+
+test('each part hangs wholly on its bone, and turns with it', () => {
+  const bones = [ROOT, { name: 'lamp', parent: 0, head: [0, 1, 0] as [number, number, number] }]
+  const { blobs, skin, skeleton, partOf } = buildVoxels({
+    bones, spacing: 0.05,
+    parts: [
+      { shape: box([0, 0, 0], [0.3, 0.3, 0.3]), colour: [1, 1, 1], bone: 'root' },
+      { shape: cone([0, 1, 0], [1, 1, 0], 0.05, 0.2), colour: [1, 1, 0], bone: 'lamp', glow: true },
+    ],
+  })
+  const lamp = skeleton.index('lamp')
+  let tip = -1
+  for (let i = 0; i < blobs.count; i++) {
+    assert.equal(skin.joints[i * 4], partOf[i] === 1 ? lamp : 0)
+    assert.equal(skin.weights[i * 4], 1)
+    if (partOf[i] === 1 && (tip < 0 || blobs.centre[i * 3] > blobs.centre[tip * 3])) tip = i
+  }
+  // a quarter turn about y swings the beam from +x to -z
+  skeleton.setRotation(lamp, axisAngle([0, 1, 0], Math.PI / 2))
+  skeleton.update()
+  const p = posedPoint(skeleton, lamp, blobs.centre.subarray(tip * 3, tip * 3 + 3))
+  assert.ok(p[2] < -0.9 && Math.abs(p[0]) < 0.3, `${p}`)
+})
