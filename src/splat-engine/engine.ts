@@ -196,6 +196,23 @@ export class SplatWorld extends Mesh {
   /** Call after posing any skeleton. */
   markPosed() { this.bonesDirty = true }
 
+  /**
+   * Takes the actors' blobs again after they were changed in place: centers, shapes, colors and opacities, for blobs
+   * that something other than a bone moves (a shape shift). The counts, the bones and the weights must be as they were.
+   */
+  refresh() {
+    const b = this.buf
+    if (this.actors.reduce((s, a) => s + a.blobs.count, 0) !== this.count) throw new Error('refresh: the number of blobs changed')
+    // on WebGL three.js swaps in a padded copy as each attribute's array (see uploadBones): write into whatever it holds now
+    const center = b.centerAttr.array as Float32Array
+    packBlobs(this.actors, this.boneOffset, center, b.scaleAttr.array as Float32Array, b.quatAttr.array as Float32Array, b.colorAttr.array as Uint32Array)
+    // the WebGL path moves centers on the CPU from its own copy
+    if (center !== b.srcCenterData) b.srcCenterData.set(center.subarray(0, b.srcCenterData.length))
+    for (const a of [b.centerAttr, b.scaleAttr, b.quatAttr, b.colorAttr]) bump(a)
+    this.boneRadius.set(boneRadii(this.actors, this.boneOffset, this.boneCount))
+    this.bonesDirty = true
+  }
+
   private isWebGL(renderer: Renderer) {
     return (renderer as unknown as { backend?: { isWebGLBackend?: boolean } }).backend?.isWebGLBackend === true
   }
@@ -428,6 +445,23 @@ function bump(a: StorageBufferAttribute) {
 }
 
 
+/** The blobs' own numbers as the GPU holds them: center (with the actor's first bone), scale, facing, and color with opacity in one word. */
+function packBlobs(actors: Actor[], boneOffset: number[], center: Float32Array, scale: Float32Array, quat: Float32Array, color: Uint32Array) {
+  const byte = (v: number) => Math.max(0, Math.min(255, Math.round(v * 255)))
+  let i = 0
+  actors.forEach((a, ai) => {
+    const { blobs } = a
+    for (let k = 0; k < blobs.count; k++, i++) {
+      center[i * 4] = blobs.center[k * 3]; center[i * 4 + 1] = blobs.center[k * 3 + 1]; center[i * 4 + 2] = blobs.center[k * 3 + 2]
+      center[i * 4 + 3] = boneOffset[ai]
+      scale[i * 4] = blobs.scale[k * 3]; scale[i * 4 + 1] = blobs.scale[k * 3 + 1]; scale[i * 4 + 2] = blobs.scale[k * 3 + 2]
+      quat[i * 4] = blobs.quat[k * 4]; quat[i * 4 + 1] = blobs.quat[k * 4 + 1]; quat[i * 4 + 2] = blobs.quat[k * 4 + 2]; quat[i * 4 + 3] = blobs.quat[k * 4 + 3]
+      color[i] = (byte(srgbToLinear(blobs.color[k * 3])) | (byte(srgbToLinear(blobs.color[k * 3 + 1])) << 8) |
+        (byte(srgbToLinear(blobs.color[k * 3 + 2])) << 16) | (byte(blobs.opacity[k]) << 24)) >>> 0
+    }
+  })
+}
+
 function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones: number) {
   const n = Math.max(1, count)
   const center = new Float32Array(n * 4)
@@ -438,17 +472,11 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
   const part = new Uint32Array(n)
   // joints and weights interleaved, two words per blob: a compute stage may only bind 8 storage buffers on many phones
   const skinWords = new Uint32Array(n * 2)
+  packBlobs(actors, boneOffset, center, scale, quat, color)
   let i = 0
   actors.forEach((a, ai) => {
     const { blobs, skin } = a
     for (let k = 0; k < blobs.count; k++, i++) {
-      center.set(blobs.center.subarray(k * 3, k * 3 + 3), i * 4)
-      center[i * 4 + 3] = boneOffset[ai]
-      scale.set(blobs.scale.subarray(k * 3, k * 3 + 3), i * 4)
-      quat.set(blobs.quat.subarray(k * 4, k * 4 + 4), i * 4)
-      const byte = (v: number) => Math.max(0, Math.min(255, Math.round(v * 255)))
-      color[i] = (byte(srgbToLinear(blobs.color[k * 3])) | (byte(srgbToLinear(blobs.color[k * 3 + 1])) << 8) |
-        (byte(srgbToLinear(blobs.color[k * 3 + 2])) << 16) | (byte(blobs.opacity[k]) << 24)) >>> 0
       const p = Math.min(65535, (a.partOf?.[k] ?? 0) + 1), who = Math.min(255, ai + 1)
       part[i] = ((p & 255) | ((p >> 8) << 8) | (who << 16)) >>> 0
       skinWords[i * 2] = (skin.joints[k * 4] | (skin.joints[k * 4 + 1] << 8) | (skin.joints[k * 4 + 2] << 16) | (skin.joints[k * 4 + 3] << 24)) >>> 0
@@ -472,7 +500,7 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
     /** Every GPU buffer, so dispose can free them. */
     attrs: [centerAttr, scaleAttr, quatAttr, colorAttr, partAttr, skinAttr, boneAttr, worldCenterAttr, covAAttr, covBAttr, splatAAttr, splatBAttr],
     skinWords, srcCenterData: center,
-    boneData, boneAttr, worldCenterAttr, covAAttr, covBAttr, colorAttr,
+    boneData, boneAttr, worldCenterAttr, covAAttr, covBAttr, colorAttr, centerAttr, scaleAttr, quatAttr,
     srcCenter: storage(centerAttr, 'vec4', n).toReadOnly(),
     srcScale: storage(scaleAttr, 'vec4', n).toReadOnly(),
     srcQuat: storage(quatAttr, 'vec4', n).toReadOnly(),

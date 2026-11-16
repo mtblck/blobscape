@@ -27,6 +27,7 @@ import { Sandbox } from './Sandbox.tsx'
 import { Creature } from './Creature.tsx'
 import { ForestWalk } from './ForestWalk.tsx'
 import { Clockwork } from './Clockwork.tsx'
+import { ShapeShifter } from './ShapeShifter.tsx'
 import { PixelDiorama } from './PixelDiorama.tsx'
 import { ScanStudio } from './ScanStudio.tsx'
 import { DungeonRun } from './DungeonRun.tsx'
@@ -52,7 +53,7 @@ export function App() {
       <SiteHeader here={route.page === 'notfound' ? undefined : href(route)} />
       {/* Keyed by page, so each one mounts fresh: its own view, its own state */}
       <main id="main" key={key} className="mx-auto w-full max-w-7xl flex-1 px-4 pb-16">
-        {route.page === 'sandbox' ? <Sandbox /> : route.page === 'creature' ? <Creature /> : route.page === 'forest' ? <ForestWalk /> : route.page === 'clockwork' ? <Clockwork /> : route.page === 'diorama' ? <PixelDiorama /> : route.page === 'scan' ? <ScanStudio /> : route.page === 'dungeon' ? <DungeonRun /> : Lesson ? <Lesson /> : route.page === 'lessons' ? <LessonList /> : route.page === 'experiments' ? <Experiments /> : route.page === 'engine' ? <Engine /> : route.page === 'spec' ? <Spec /> : route.page === 'contact' ? <Contact /> : route.page === 'notfound' ? <NotFound /> : <Landing />}
+        {route.page === 'sandbox' ? <Sandbox /> : route.page === 'creature' ? <Creature /> : route.page === 'forest' ? <ForestWalk /> : route.page === 'clockwork' ? <Clockwork /> : route.page === 'shift' ? <ShapeShifter /> : route.page === 'diorama' ? <PixelDiorama /> : route.page === 'scan' ? <ScanStudio /> : route.page === 'dungeon' ? <DungeonRun /> : Lesson ? <Lesson /> : route.page === 'lessons' ? <LessonList /> : route.page === 'experiments' ? <Experiments /> : route.page === 'engine' ? <Engine /> : route.page === 'spec' ? <Spec /> : route.page === 'contact' ? <Contact /> : route.page === 'notfound' ? <NotFound /> : <Landing />}
       </main>
       <Footer />
       <Toaster />

@@ -139,6 +139,13 @@ captures, breaking a scene) are planned.
   with tests.
 
 
+## Thanks
+
+Pixel Diorama was inspired by the pixel-art Gaussian splat scenes that
+[Silicon Jungle](https://x.com/JungleSilicon) shared: the idea of drawing voxel scenes as small solid
+blobs and cutting them to a palette, and the themes of several scenes. The scenes, the engine and the
+code here are our own.
+
 ## License
 
 [MIT](LICENSE).
