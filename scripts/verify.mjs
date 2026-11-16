@@ -1333,7 +1333,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   for (const gl of ['', '&webgl=1']) {
     const k = await open(`/experiments/shape-shifter/?offscreen=1&from=frog&to=fox${gl}`, { viewport: { width: 1280, height: 900 } })
     await k.page.waitForFunction(() => window.__shift && window.__shift.blobs() > 0, null, { timeout: 120000 }).catch(() => {})
-    // green pixels (the frog) and orange ones (the fox: slim and furred, so fewer than the frog, and fewer still halfway, where thin fur strands are part green); the loop holds 0.8 s on each creature and takes 3 s between
+    // green pixels (the frog) and orange ones (the fox: slim and furred, so fewer than the frog, and fewer still halfway, where thin fur strands are part green; the frog's yellow flank counts as a little orange too, so halfway is judged by the green it has lost); the loop holds 0.8 s on each creature and takes 3 s between
     const shot = (t) => k.page.evaluate(async (t) => {
       await window.__shift.stage.frame(t)
       const cv = document.querySelector('[data-testid=shift-view]')
@@ -1349,7 +1349,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     const on = await k.page.evaluate(() => window.__shift.stage.backend)
     const trip = (await k.page.getByTestId('shift-trip').textContent()) ?? ''
     const [near, wild] = [...trip.matchAll(/(\d+\.\d+)/g)].map((m) => Number(m[1]))
-    if (!(a.amount === 0 && b.amount === 1 && Math.abs(mid.amount - 0.5) < 1e-6 && a.green > 4000 && a.orange < a.green / 4 && b.orange > 2500 && b.green < b.orange / 4 && mid.green > 300 && mid.orange > 150 && mid.orange > a.orange * 3 && near < wild * 0.8) || (gl && on !== 'webgl')) {
+    if (!(a.amount === 0 && b.amount === 1 && Math.abs(mid.amount - 0.5) < 1e-6 && a.green > 4000 && a.orange < a.green / 4 && b.orange > 2500 && b.green < b.orange / 4 && mid.green > 300 && mid.orange > 150 && mid.green < a.green * 0.7 && near < wild * 0.8) || (gl && on !== 'webgl')) {
       fails.push(`blobscape shape shifter (${on}): ${JSON.stringify({ a, mid, b, trip })}`)
     } else ok(`blobscape shape shifter (${on}): frog (${a.green} green pixels) to fox (${b.orange} orange), both halfway (${mid.green}, ${mid.orange}); blobs travel ${near} paired by place, ${wild} at random`)
     if (!gl) {
