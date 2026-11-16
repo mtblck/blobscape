@@ -114,6 +114,6 @@ test('the pufferfish: a tail with one target shrinks on its way round, and in-be
   const fish = makePuffer()
   assert.deepEqual(TAIL_STEPS, [1, 2, 4])
   const least = fish.tails.map((t) => shortestTail(fish, t))
-  assert.ok(least[0] < 0.6 && least[1] > 0.85 && least[1] < 0.9 && least[2] > 0.96, `least ${least}`)
+  assert.ok(least[0] < 0.75 && least[0] > 0.65 && least[1] > 0.9 && least[1] < 0.95 && least[2] > 0.97, `least ${least}`)
   for (const t of fish.tails) { assert.ok(Math.abs(tailLength(fish, t, 0) - 1) < 1e-6); assert.ok(Math.abs(tailLength(fish, t, 1) - 1) < 1e-4) }
 })

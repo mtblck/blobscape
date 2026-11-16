@@ -24,9 +24,9 @@ const PUFFED: Vec3 = [0.8, 0.78, 0.78]
 /** A spike is built at full length, then kept as a nub this share of it. */
 const NUB = 0.14
 const SPIKE = 0.26
-/** Where the tail turns, and how far. */
-const TAIL_ROOT: Vec3 = [-0.52, 1, 0]
-export const TAIL_TURN = (115 * Math.PI) / 180
+/** Where the tail turns (the very end of the body, so a swung tail stays clear of it), and how far: a quarter turn. */
+const TAIL_ROOT: Vec3 = [-0.6, 1, 0]
+export const TAIL_TURN = (90 * Math.PI) / 180
 /** The choices of shapes for the tail's swing, counting the last. */
 export const TAIL_STEPS = [1, 2, 4] as const
 
@@ -105,8 +105,8 @@ export function makePuffer(spacing = 0.028): Puffer {
         },
       },
       ...riders.map((r) => r.part),
-      { shape: cone([-0.45, 1, 0], [-0.82, 1, 0], 0.17, 0.07), bone: 'tail', color: [0.96, 0.74, 0.28] },
-      { shape: ellipsoid([-0.98, 1, 0], [0.2, 0.27, 0.05]), bone: 'tail', color: [0.95, 0.6, 0.22] },
+      { shape: cone([-0.5, 1, 0], [-0.84, 1, 0], 0.15, 0.07), bone: 'tail', color: [0.96, 0.74, 0.28] },
+      { shape: ellipsoid([-1.0, 1, 0], [0.2, 0.27, 0.05]), bone: 'tail', color: [0.95, 0.6, 0.22] },
     ],
   })
   const partOf = built.partOf
@@ -144,7 +144,7 @@ export function makePuffer(spacing = 0.028): Puffer {
   const flank = onBody([0.1, 0.5, 1])
   const flankPairs = neighborPairs(rest, (i) => partOf[i] === 0 && Math.hypot(rest.center[i * 3] - flank[0], rest.center[i * 3 + 1] - flank[1], rest.center[i * 3 + 2] - flank[2]) < 0.16)
   const tip: number[] = []
-  for (let i = 0; i < rest.count; i++) if (isTail(i) && rest.center[i * 3] < -1.05) tip.push(i)
+  for (let i = 0; i < rest.count; i++) if (isTail(i) && rest.center[i * 3] < -1.08) tip.push(i)
   return { body, puff, spikes: grow, tails, flankPairs, tip }
 }
 
