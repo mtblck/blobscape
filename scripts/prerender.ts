@@ -15,9 +15,12 @@ import { LESSONS, LESSON_COUNT, LESSON_GOALS, PARTS, href, type Route } from '..
 import { CARD_LINK, EXPERIMENTS, EXPERIMENTS_INTRO, CONTACT_INTRO, SITE, byPublished, experimentAt, longDate, type Experiment } from '../src/blobscape/site.ts'
 import { DESCRIPTION, pageMeta } from '../src/blobscape/meta.ts'
 import { BESIDE, BUILT_ON, DEMOS, DOORS, ENGINE, ENGINE_BUILT, FEATURES } from '../src/blobscape/engineCopy.ts'
+import { SPEC, specHtml, specTitle } from '../src/blobscape/specCopy.ts'
 import { AXIS, BLOB, WORD } from '../src/shared/logoPaths.ts'
 
 const DIST = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist')
+/** The rigged-splat spec, which its page shows (Spec.tsx reads the same file through Vite). */
+const SPEC_MD = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'docs', 'rigged-splats.md'), 'utf8')
 const TOOLS = ['/experiments/fit-a-picture/', '/experiments/splat-to-sprite/']
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -106,6 +109,8 @@ ${PARTS.map((p, i) => `<h2 class="mt-10 font-display text-2xl">Part ${i + 1}: ${
 <h2 class="mt-12 font-display text-3xl">${esc(BESIDE.title)}</h2><p class="mt-4 text-ink-muted">${esc(BESIDE.intro)}</p>${[BESIDE.ours, BESIDE.spark].map((s) => `<h3 class="mt-4 font-display text-xl">${esc(s.title)}</h3><ul class="mt-2 list-disc pl-5 text-ink-muted">${s.items.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>`).join('')}<p class="mt-4 text-ink-muted">${esc(BESIDE.note)}</p>
 <h2 class="mt-12 font-display text-3xl">Three ways to use it</h2><ol class="mt-4 flex flex-col gap-4">${DOORS.map((d) => `<li><h3 class="font-display text-xl">${esc(d.title)}</h3><p class="mt-1 text-ink-muted">${esc(d.body)} <a href="${d.link.href}" class="${LINK}">${esc(d.link.label)}</a></p></li>`).join('')}</ol>
 <h2 class="mt-12 font-display text-3xl">Built on it</h2><ul class="mt-4 flex flex-col gap-2">${EXPERIMENTS.filter((e) => ENGINE_BUILT.includes(e.id)).map((e) => `<li><a href="${e.url}" class="${LINK}">${esc(e.title)}</a></li>`).join('')}</ul>`
+    case 'spec':
+      return `<article class="max-w-3xl pb-8">${crumbs(SPEC.crumb, ['Engine', '/engine/'])}<h1 class="pt-6 font-display text-5xl">${esc(specTitle(SPEC_MD))}</h1><div class="spec">${specHtml(SPEC_MD)}</div></article>`
     case 'contact':
       return `<div class="max-w-2xl">${crumbs('Get in touch')}<div class="pt-6 pb-8"><h1 class="font-display text-5xl">Get in touch</h1><p class="mt-4 text-xl leading-relaxed text-ink-muted">${esc(CONTACT_INTRO)}</p></div></div>`
     case 'notfound':
@@ -176,6 +181,11 @@ function structured(route: Route): object[] {
         { '@type': 'SoftwareApplication', name: ENGINE.title, description: pageMeta(route).description, url: url(href(route)), applicationCategory: 'DeveloperApplication', operatingSystem: 'Any (web browser)', isAccessibleForFree: true, author: PERSON },
         breadcrumbs([home, ['Engine', href(route)]]),
       ]
+    case 'spec':
+      return [
+        { '@type': 'TechArticle', headline: specTitle(SPEC_MD), description: SPEC.description, url: url(href(route)), author: PERSON },
+        breadcrumbs([home, ['Engine', '/engine/'], [SPEC.crumb, href(route)]]),
+      ]
     case 'contact':
       return [{ '@type': 'ContactPage', name: `Get in touch · ${SITE.name}`, url: url(href(route)) }, breadcrumbs([home, ['Get in touch', href(route)]])]
     default:
@@ -221,7 +231,7 @@ function write(path: string, html: string) {
 }
 
 const template = readFileSync(join(DIST, 'index.html'), 'utf8')
-const routes: Route[] = [{ page: 'home' }, { page: 'lessons' }, ...LESSONS.map((l) => ({ page: 'lesson' as const, id: l.id })), { page: 'sandbox' }, { page: 'experiments' }, { page: 'creature' }, { page: 'forest' }, { page: 'clockwork' }, { page: 'diorama' }, { page: 'dungeon' }, { page: 'scan' }, { page: 'engine' }, { page: 'contact' }]
+const routes: Route[] = [{ page: 'home' }, { page: 'lessons' }, ...LESSONS.map((l) => ({ page: 'lesson' as const, id: l.id })), { page: 'sandbox' }, { page: 'experiments' }, { page: 'creature' }, { page: 'forest' }, { page: 'clockwork' }, { page: 'diorama' }, { page: 'dungeon' }, { page: 'scan' }, { page: 'engine' }, { page: 'spec' }, { page: 'contact' }]
 for (const r of routes) write(join(DIST, href(r), 'index.html'), render(template, r))
 write(join(DIST, '404.html'), render(template, { page: 'notfound' }))
 

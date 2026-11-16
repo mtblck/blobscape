@@ -40,9 +40,13 @@ export interface Plan {
   spikes: boolean
   arms: boolean
   coat: 'spots' | 'stripes' | 'plain'
+  /** How it looks at you: no brows at all, level, worried (inner ends up), surprised (raised) or cross (inner ends down). */
+  brow: Brow
   colors: { back: Vec3; belly: Vec3; accent: Vec3; iris: Vec3 }
   name: string
 }
+
+export type Brow = 'none' | 'level' | 'worried' | 'raised' | 'cross'
 
 const pick = <T,>(r: () => number, xs: readonly T[]): T => xs[Math.floor(r() * xs.length) % xs.length]
 const between = (r: () => number, a: number, b: number) => a + (b - a) * r()
@@ -84,6 +88,7 @@ export function planMonster(seed: number): Plan {
   const accent = hsl((hue + pick(r, [0.33, 0.5, 0.67])) % 1, between(r, 0.6, 0.9), between(r, 0.4, 0.55))
   const iris = hsl(r(), 0.85, 0.5)
   const name = nameOf(r)
+  // (anything new is drawn last, below, so the seeds people have shared keep their monsters)
   return {
     seed, legs, hip, length, girth,
     chest: between(r, 0.8, 1.3),
@@ -97,6 +102,7 @@ export function planMonster(seed: number): Plan {
     spikes: r() < 0.45,
     arms: legs === 2 && r() < 0.8,
     coat: pick(r, ['spots', 'stripes', 'plain'] as const),
+    brow: pick(r, ['none', 'level', 'level', 'worried', 'raised', 'raised', 'cross'] as const),
     colors: { back, belly, accent, iris },
     name,
   }
@@ -165,6 +171,14 @@ export function layout(p: Plan): Layout {
         { name: `${s}Arm`, parent: 1, head: shoulder },
         { name: `${s}Forearm`, parent: a, head: elbow, tail: hand },
       )
+    }
+  }
+  // ears and feelers get a bone each, so they can bounce and flick (horns are stiff)
+  if (p.top === 'ears' || p.top === 'feelers') {
+    for (const [s, x] of SIDES) {
+      const root = side(x, [p.head * 0.55, headC[1] + p.head * 0.6, headC[2] - p.head * 0.15])
+      const tip = p.top === 'ears' ? side(x, [p.head * 0.95, headC[1] + p.head * 1.4, headC[2] - p.head * 0.3]) : side(x, [p.head * 0.9, headC[1] + p.head * 1.9, headC[2] + p.head * 0.4])
+      bones.push({ name: `${s}Top`, parent: 3, head: root, tail: tip })
     }
   }
   return { bones, hips, chest, neckTop, headC, legPairs: spots.length }
@@ -266,10 +280,15 @@ function spec(p: Plan, s: number): SculptSpec {
     })
     const sx = Math.sign(at[0])
     const brow = (dx: number, dy: number): Vec3 => [at[0] + dx * er * (sx || 1), at[1] + er * dy, at[2] + er * 0.45]
-    parts.push({ shape: cone(brow(-1.05, sx ? 0.75 : 1.05), brow(1.05, 1.05), fat(er * 0.3), fat(er * 0.22)), color: mix(back, dark, 0.6), bones: ['head'], noShadow: true })
+    // the brow sets the mood: its inner end (toward the middle of the face) sits lower when cross, higher when worried
+    if (p.brow !== 'none') {
+      const lift = p.brow === 'raised' ? 0.35 : 0
+      const inner = (p.brow === 'cross' ? 0.75 : p.brow === 'worried' ? 1.35 : 1.08) + lift, outer = (p.brow === 'worried' ? 0.95 : 1.08) + lift
+      parts.push({ shape: cone(brow(-1.05, sx ? inner : outer), brow(1.05, outer), fat(er * 0.3), fat(er * 0.22)), color: mix(back, dark, 0.6), bones: ['head'], noShadow: true })
+    }
   }
   // on top of the head
-  for (const [, x] of SIDES) {
+  for (const [sd, x] of SIDES) {
     const root = side(x, [hr * 0.55, hc[1] + hr * 0.6, hc[2] - hr * 0.15])
     if (p.top === 'horns') {
       const mid = side(x, [hr * 0.95, hc[1] + hr * 1.05, hc[2] - hr * 0.5]), end = side(x, [hr * 1.0, hc[1] + hr * 1.6, hc[2] - hr * 0.45])
@@ -285,12 +304,12 @@ function spec(p: Plan, s: number): SculptSpec {
     }
     if (p.top === 'ears') {
       const up = side(x, [hr * 0.95, hc[1] + hr * 1.4, hc[2] - hr * 0.3]), rear = side(x, [hr * 0.2, hc[1] + hr * 0.95, hc[2] - hr * 0.35])
-      parts.push({ shape: membrane([[root, up, rear]], fat(hr * 0.06)), color: (_q, n) => (n[2] > 0.3 ? mix(accent, belly, 0.55) : accent), bones: ['head'] })
+      parts.push({ shape: membrane([[root, up, rear]], fat(hr * 0.06)), color: (_q, n) => (n[2] > 0.3 ? mix(accent, belly, 0.55) : accent), bones: ['head', `${sd}Top`], blend: hr * 0.12 })
     }
     if (p.top === 'feelers') {
       const end = side(x, [hr * 0.9, hc[1] + hr * 1.9, hc[2] + hr * 0.4])
-      parts.push({ shape: cone(root, end, fat(hr * 0.06), fat(hr * 0.035)), color: dark, bones: ['head'], noShadow: true })
-      parts.push({ shape: sphere(end, fat(hr * 0.15)), color: accent, bones: ['head'], glow: true, noShadow: true })
+      parts.push({ shape: cone(root, end, fat(hr * 0.06), fat(hr * 0.035)), color: dark, bones: ['head', `${sd}Top`], blend: hr * 0.12, noShadow: true })
+      parts.push({ shape: sphere(end, fat(hr * 0.15)), color: accent, bones: [`${sd}Top`], glow: true, noShadow: true })
     }
   }
   // spikes down the back, and smaller ones down the tail
@@ -343,7 +362,7 @@ function spec(p: Plan, s: number): SculptSpec {
       claws([hand[0], hand[1] - ar * 0.5, hand[2] + ar * 0.5], ar, [0, -0.8, 0.6], [`${sd}Forearm`])
     }
   }
-  return { bones: L.bones, parts, blend: Math.max(0.025, p.girth * 0.25), light: { ambient: 0.66, shadow: 0.5 } }
+  return { bones: L.bones, parts, blend: Math.max(0.03, p.girth * 0.42), light: { ambient: 0.66, shadow: 0.5 } }
 }
 
 export function makeMonster(seed: number, count = 15000) {
@@ -362,67 +381,103 @@ function legPhase(p: Plan, i: number, left: boolean): number {
   return (i % 2 === 0) === left ? 0 : Math.PI
 }
 
-/** Walking on the spot: legs swing, knees lift the swinging foot, the body bobs, tail and head sway against it. */
+const TAU = Math.PI * 2
+const tops = (p: Plan) => p.top === 'ears' || p.top === 'feelers'
+
+/**
+ * Walking on the spot. The legs swing and lift, and the rest of the body answers them: the hips roll and (on four or
+ * six legs) the spine snakes from side to side, the chest turns the other way so the head stays ahead, the head nods
+ * a beat behind the bounce, the tail whips in a wave that travels down it, and ears or feelers bounce after the head.
+ */
 export function monsterWalk(p: Plan) {
   const T = strideOf(p)
+  const upright = p.legs === 2
   return (sk: Skeleton, t: number) => {
     sk.reset()
-    const ph = (t / T) * Math.PI * 2
+    const ph = (t / T) * TAU
     const pairs = legSpots(p).length
     for (let i = 0; i < pairs; i++) {
       for (const [s] of SIDES) {
         const a = ph + legPhase(p, i, s === 'l')
-        set(sk, `${s}Thigh${i}`, X, -0.45 * Math.sin(a))
-        set(sk, `${s}Shin${i}`, X, 0.8 * Math.max(0, Math.cos(a)))
-        set(sk, `${s}Foot${i}`, X, -0.3 * Math.max(0, Math.cos(a)))
+        set(sk, `${s}Thigh${i}`, X, -0.6 * Math.sin(a))
+        set(sk, `${s}Shin${i}`, X, 1.0 * Math.max(0, Math.cos(a)))
+        set(sk, `${s}Foot${i}`, X, -0.4 * Math.max(0, Math.cos(a)))
       }
     }
     const bob = Math.sin(ph * 2)
-    sk.offset.set([0, 0.015 * bob, 0], 0)
-    set(sk, 'body', Z, (p.legs === 2 ? 0.06 : 0.03) * Math.sin(ph))
-    set(sk, 'chest', Z, -0.04 * Math.sin(ph))
-    set(sk, 'neck', X, 0.06 * bob)
-    set(sk, 'head', X, -0.08 * bob)
-    if (p.arms) for (const [s, x] of SIDES) { set(sk, `${s}Arm`, X, 0.5 * Math.sin(ph) * x); set(sk, `${s}Forearm`, X, -0.35 - 0.15 * Math.cos(ph)) }
-    if (p.tail > 0) for (let k = 1; k <= 3; k++) set(sk, `tail${k}`, Y, 0.25 * Math.sin(ph - k * 0.7))
+    sk.offset.set([0, p.hip * 0.07 * bob, 0], 0)
+    set(sk, 'body', Z, (upright ? 0.1 : 0.05) * Math.sin(ph))
+    turn(sk, 'body', Y, (upright ? 0.12 : 0.1) * Math.sin(ph + 0.4))
+    turn(sk, 'body', X, 0.04 * bob)
+    set(sk, 'chest', Z, -0.07 * Math.sin(ph))
+    turn(sk, 'chest', Y, -0.16 * Math.sin(ph + 0.4))
+    set(sk, 'neck', X, 0.1 * Math.sin(ph * 2 - 0.6))
+    set(sk, 'head', X, -0.13 * Math.sin(ph * 2 - 1.1))
+    turn(sk, 'head', Z, 0.07 * Math.sin(ph - 0.5))
+    set(sk, 'jaw', X, 0.05 + 0.05 * Math.max(0, Math.sin(ph * 2 - 1.6)))
+    if (p.arms) for (const [s, x] of SIDES) { set(sk, `${s}Arm`, X, 0.7 * Math.sin(ph) * x); turn(sk, `${s}Arm`, Z, -0.12 * x); set(sk, `${s}Forearm`, X, -0.55 - 0.3 * Math.cos(ph + (x > 0 ? 0 : Math.PI))) }
+    if (p.tail > 0) for (let k = 1; k <= 3; k++) { set(sk, `tail${k}`, Y, (0.22 + 0.1 * k) * Math.sin(ph - k * 0.9)); turn(sk, `tail${k}`, X, 0.1 * Math.sin(ph * 2 - k * 0.8)) }
+    if (tops(p)) for (const [s, x] of SIDES) set(sk, `${s}Top`, X, -0.1 + 0.22 * Math.sin(ph * 2 - 1.9 - (x > 0 ? 0 : 0.5)))
     sk.update()
   }
 }
 
 const IDLE = 4
 
-/** Standing: breathing, looking round now and then, the tail swishing. Loops every four seconds. */
+/**
+ * Standing: it breathes (the chest swells), shifts its weight from side to side, looks round with a tilt of the
+ * head, swishes its tail and now and then flicks an ear or a feeler. Loops every four seconds.
+ */
 export function monsterIdle(p: Plan) {
   return (sk: Skeleton, t: number) => {
     sk.reset()
     const u = (t % IDLE) / IDLE
-    const breath = Math.sin(u * Math.PI * 2 * 2)
-    sk.offset.set([0, 0.006 * breath, 0], 0)
-    set(sk, 'chest', X, -0.02 * breath)
-    set(sk, 'head', Y, 0.5 * (env(u, 0.15, 0.3, 0.4, 0.5) - env(u, 0.55, 0.7, 0.8, 0.95)))
-    set(sk, 'jaw', X, 0.04 + 0.03 * breath)
-    if (p.arms) for (const [s] of SIDES) set(sk, `${s}Forearm`, X, -0.3 - 0.05 * breath)
-    if (p.tail > 0) for (let k = 1; k <= 3; k++) set(sk, `tail${k}`, Y, 0.18 * Math.sin(u * Math.PI * 2 - k * 0.6))
+    const breath = Math.sin(u * TAU * 2)
+    const shift = Math.sin(u * TAU)
+    const look = env(u, 0.12, 0.26, 0.4, 0.5) - env(u, 0.55, 0.68, 0.8, 0.93)
+    sk.offset.set([p.girth * 0.12 * shift, p.hip * 0.025 * breath, 0], 0)
+    set(sk, 'body', Z, -0.05 * shift)
+    set(sk, 'chest', X, -0.04 * breath)
+    turn(sk, 'chest', Z, 0.04 * shift)
+    sk.size[sk.index('chest')] = 1 + 0.025 * breath
+    set(sk, 'neck', X, 0.05 * Math.sin(u * TAU + 1))
+    turn(sk, 'neck', Y, 0.2 * look)
+    set(sk, 'head', Y, 0.4 * look)
+    turn(sk, 'head', Z, 0.16 * look)
+    turn(sk, 'head', X, 0.05 * Math.sin(u * TAU * 2 + 0.5))
+    set(sk, 'jaw', X, 0.04 + 0.04 * breath)
+    if (p.arms) for (const [s, x] of SIDES) { set(sk, `${s}Arm`, Z, -0.06 * x * (1 + breath)); set(sk, `${s}Forearm`, X, -0.35 - 0.1 * breath) }
+    if (p.tail > 0) for (let k = 1; k <= 3; k++) { set(sk, `tail${k}`, Y, (0.2 + 0.08 * k) * Math.sin(u * TAU - k * 0.8)); turn(sk, `tail${k}`, X, 0.08 * Math.sin(u * TAU * 2 - k)) }
+    if (tops(p)) {
+      set(sk, 'lTop', X, -0.5 * env(u, 0.3, 0.33, 0.35, 0.42) + 0.04 * breath)
+      set(sk, 'rTop', X, -0.5 * env(u, 0.72, 0.75, 0.77, 0.84) + 0.04 * breath)
+    }
     sk.update()
   }
 }
 
 const ROAR = 2
 
-/** It rears back, then throws its head forward with the jaw wide open, and settles. */
+/** It rears back, then throws its head forward with the jaw wide open, shaking with it, and settles. */
 export function monsterRoar(p: Plan) {
   return (sk: Skeleton, t: number) => {
     const u = (t % ROAR) / ROAR
     monsterIdle(p)(sk, u * IDLE)
     const rear = env(u, 0.1, 0.3, 0.32, 0.42)
     const roar = env(u, 0.32, 0.42, 0.7, 0.85)
-    set(sk, 'chest', X, -0.25 * rear + 0.12 * roar)
-    set(sk, 'neck', X, -0.3 * rear + 0.15 * roar)
-    turn(sk, 'head', X, -0.4 * roar)
-    set(sk, 'jaw', X, 0.05 + 0.75 * roar)
-    if (p.arms) for (const [s, x] of SIDES) { set(sk, `${s}Arm`, Z, -0.9 * roar * x); set(sk, `${s}Forearm`, X, -0.3 - 0.8 * roar) }
-    if (p.tail > 0) for (let k = 1; k <= 3; k++) turn(sk, `tail${k}`, X, -0.2 * roar)
-    sk.offset.set([0, 0.02 * rear, 0], 0)
+    // a shake that fits a whole number of times into the clip, and is nothing at either end
+    const shake = Math.sin(u * TAU * 16) * roar
+    turn(sk, 'body', X, -0.1 * rear + 0.12 * roar)
+    set(sk, 'chest', X, -0.3 * rear + 0.15 * roar)
+    sk.size[sk.index('chest')] = 1 + 0.06 * rear - 0.03 * roar
+    set(sk, 'neck', X, -0.35 * rear + 0.2 * roar)
+    turn(sk, 'head', X, -0.45 * roar)
+    turn(sk, 'head', Z, 0.05 * shake)
+    set(sk, 'jaw', X, 0.05 + 0.8 * roar + 0.04 * shake)
+    if (p.arms) for (const [s, x] of SIDES) { set(sk, `${s}Arm`, Z, -1.0 * roar * x); set(sk, `${s}Forearm`, X, -0.3 - 0.9 * roar) }
+    if (p.tail > 0) for (let k = 1; k <= 3; k++) { turn(sk, `tail${k}`, X, -0.3 * roar); turn(sk, `tail${k}`, Y, 0.06 * shake) }
+    if (tops(p)) for (const [s] of SIDES) set(sk, `${s}Top`, X, -0.6 * roar + 0.1 * shake)
+    sk.offset.set([0.006 * shake, p.hip * 0.08 * rear - p.hip * 0.04 * roar, 0], 0)
     sk.update()
   }
 }

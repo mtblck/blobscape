@@ -91,8 +91,8 @@ Joints may animate a positive uniform `scale`, which is what lets a tongue or a 
 
 Here, written by `scripts/rigged-samples.ts`:
 
-- [`fox.glb`](rigged-splats/fox.glb): 4,000 splats, 14 bones, `trot` and `idle`.
-- [`frog.glb`](rigged-splats/frog.glb): 4,145 splats, 20 bones, `jump`, `tongue` and `idle`. The tongue is a bone that grows from scale 0, so it's hidden at rest.
+- [`fox.glb`](../public/rigged-splats/fox.glb): 4,000 splats, 14 bones, `trot` and `idle`.
+- [`frog.glb`](../public/rigged-splats/frog.glb): 4,145 splats, 20 bones, `jump`, `tongue` and `idle`. The tongue is a bone that grows from scale 0, so it's hidden at rest.
 
 Larger ones (up to 400k splats, and the 43-bone dragon) come from the Download button on [Splat Creatures](https://blobscape.dev/experiments/creature/).
 
