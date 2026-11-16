@@ -320,7 +320,7 @@ export function PixelDiorama() {
         <div className="mt-8 max-w-[36em] space-y-4 text-lg leading-relaxed text-ink-muted lg:col-span-7 lg:mt-0 lg:text-xl">
           <p>
             Nothing here was drawn or scanned. In the lighthouse scene, the rock, the tower, the cottage and the boat are written as simple shapes in code, and so are the bricks, the roof tiles and the planks: each is a rule for what colour a point on the shape should be. The scene is
-            cut into a grid, and every grid cell on a shape's surface becomes one small, solid blob. The moonlight and the shadows
+            cut into a grid, and every grid cell on a shape's surface becomes one small, solid blob. The light and the shadows
             are worked out once and painted into the blobs' colours.
           </p>
           <p>

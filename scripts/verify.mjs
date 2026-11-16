@@ -820,6 +820,17 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     else ok(`${label}: the pixel pass matches its CPU twin (same shape, ${colour} of ${a.solid} pixels a neighbouring colour)`)
     if (!(moved > 150)) fails.push(`${label}: only ${moved} pixels change in a few seconds`)
     else ok(`${label}: ${moved} pixels change in a few seconds`)
+    // the same moment drawn twice is the same picture: blobs at one depth keep one order, so edges (a window in its frame) do not flicker
+    const twice = await d.page.evaluate(async () => {
+      const { stage } = window.__diorama
+      const grab = async () => { await stage.frame(2); return (await stage.pixelFrames()).small.data }
+      const x = await grab(), y = await grab()
+      let n = 0
+      for (let i = 0; i < x.length; i += 4) if (x[i] !== y[i] || x[i + 1] !== y[i + 1] || x[i + 2] !== y[i + 2]) n++
+      return n
+    })
+    if (twice > 40) fails.push(`${label}: one moment drawn twice differs in ${twice} pixels (blobs at one depth are changing order)`)
+    else ok(`${label}: one moment drawn twice is the same picture (${twice} pixels differ)`)
     if (!q) {
       // pixels off: the same scene as blobs, in far more colours
       await d.page.getByRole('button', { name: 'Blobs', exact: true }).click()
@@ -1390,8 +1401,8 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     }
     if (!webgl) {
       const so = await page.evaluate(async () => { const l = window.__lab; await l.frame(0.3); return l.world.checkSort(l.renderer) })
-      if (so.missing || so.outOfOrder) fails.push(`engine lab: GPU sort ${JSON.stringify(so)}`)
-      else ok('engine lab: GPU sort draws every blob once, farthest first')
+      if (so.missing || so.outOfOrder || so.unsettled) fails.push(`engine lab: GPU sort ${JSON.stringify(so)}`)
+      else ok(`engine lab: GPU sort draws every blob once, farthest first, and blobs at one depth in index order (at most ${so.biggest} at one depth)`)
     }
     const steps = await page.evaluate(() => window.__lab.profile(2))
     if (!(steps.draw > 0) || (!webgl && !(steps.deform > 0 && steps.project > 0 && steps.order > 0))) fails.push(`engine lab ${label}: step times ${JSON.stringify(steps)}`)

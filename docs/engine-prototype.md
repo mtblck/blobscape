@@ -41,14 +41,14 @@ Added for pixel-art scenes (2026-11-15, issues #33, #35, #36, #37):
 
 - `voxel.ts`: shapes as distance functions (sphere, ellipsoid, box, cone, cylinder, torus, union, cut, displace) cut into a grid, one solid disc per surface cell, each part on one bone, with baked sun and cast shadows.
 - `pixelPass.ts`: pixel mode. The scene is drawn small, then one pass snaps it to a palette (OKLab, Bayer dither), adds glow from bright pixels, edge lines where a colour meets a much lighter one, a silhouette outline and an optional sky gradient, and scales it up in whole pixels. Its CPU twin is `pixelArt` in `splat-core/pixel.ts`.
-- Pixel Diorama (`/experiments/pixel-diorama/`) is the test page: a lighthouse, cottage, pines and jetty of about 74,000 blobs (40,000 on phones) on 27 bones, with surface texture (bricks, tiles, planks, strata) written as colour rules.
+- Pixel Diorama (`/experiments/pixel-diorama/`) is the test page: a lighthouse, cottage, pines and jetty of about 93,000 blobs (50,000 on phones) on 27 bones, with surface texture (bricks, tiles, planks, strata) written as colour rules.
 - `sceneDoc.ts`: a scene as data (shapes, paints, bones, moves, lights, palette, camera), with a checker and a builder, so a scene can be written by hand or by Claude from a prompt (#41, `docs/scene-descriptions.md`). Every scene on Pixel Diorama but the lighthouse is written this way.
 - Not done yet: edge lines go by colour alone, so two parts of one colour get none (that needs depth or part ids from the draw); pixels that hold still under a moving camera (#40).
 
 ## Known gaps
 
 - **The WebGL fallback moves blobs four times each** (once per quad corner), since WebGL can't run a compute pass first. Its CPU work is now about 10 ms at 100k on this machine (it was 200 ms).
-- **The sort is a counting sort with 16k bins.** Blobs in the same bin draw in arbitrary order and can shimmer on large scenes. A two-pass radix sort with 32-bit keys is the upgrade.
+- **The sort is a counting sort with 65,536 bins.** On WebGPU the threads race for slots in a bin, so a settle pass (`sort.ts`) puts each bin of up to 48 blobs in index order, as the CPU sort does, and the bins have a fixed width anchored in depth so they hold still under a still camera. Without those two, blobs at one depth changed order every frame and hard edges flickered (the lighthouse's windows). Bins of more than 48 (a flat wall seen dead on) are still left as they fall; a two-pass radix sort with 32-bit keys would be the full answer.
 - **Not supported yet:** spherical harmonics and level of detail. `SplatWorld.dispose` now frees its storage buffers too, since the Creature page swaps worlds on every fox change.
 - **Joint quality vs Spark's dual quaternions:** see "Spark side by side" below.
 - **The `.glb` reader** takes only float splat attributes and bones without a rest rotation. It handles our own files and simple ones from elsewhere.
