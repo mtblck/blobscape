@@ -168,6 +168,25 @@ export function PixelDiorama() {
     return () => clearInterval(id)
   }, [stage, pixels, size])
 
+  // the picture's own size: the frame on screen written out as a PNG, one image pixel per art pixel. Reading a frame
+  // back costs a little, so it is measured every few seconds, not every frame, and not while the tab is hidden
+  const [png, setPng] = useState<number>()
+  useEffect(() => {
+    setPng(undefined)
+    if (!stage || !scene || !pixels) return
+    let gone = false, busy = false
+    const measure = async () => {
+      if (busy || document.hidden) return
+      busy = true
+      try {
+        const frames = await stage.pixelFrames()
+        if (frames && !gone) { const bytes = (await toPng(frames.art, 1)).length; if (!gone) setPng(bytes) }
+      } catch (e) { console.warn(e) } finally { busy = false }
+    }
+    const first = setTimeout(measure, 500), id = setInterval(measure, 3000)
+    return () => { gone = true; clearTimeout(first); clearInterval(id) }
+  }, [stage, scene, pixels, size, look])
+
   // For verify: the stage and the look in use, without clicking
   useEffect(() => {
     if (!stage || !scene) return
@@ -262,8 +281,8 @@ export function PixelDiorama() {
               <p aria-hidden className="pointer-events-none absolute right-14 bottom-2 rounded bg-paper/80 px-1.5 py-0.5 text-xs text-ink-muted">{coarse ? 'drag to orbit · pinch to zoom' : 'drag to orbit · scroll to zoom'}</p>
         </>}
         status={<>
-              <span>{scene ? <><span className="tabular-nums text-ink" data-testid="diorama-blobs">{scene.built.blobs.count.toLocaleString()}</span> blobs on <span className="tabular-nums text-ink">{scene.built.skeleton.count}</span> bones, <span className="tabular-nums text-ink" data-testid="diorama-size">{kilobytes(scene.built.blobs.count * BLOB_BYTES)}</span> of splats{scene.of.bytes ? <>, built from <span className="tabular-nums text-ink" data-testid="diorama-doc-size">{kilobytes(scene.of.bytes)}</span> of description</> : ''}.</> : loadingLabel}</span>
-              <span data-testid="diorama-art">{pixels && art ? <>Drawn at <span className="tabular-nums text-ink">{art.width} × {art.height}</span> pixels{colors.length ? <> in <span className="tabular-nums text-ink">{colors.length}</span> colors</> : ''}.</> : 'Drawn as blobs, at full size.'}</span>
+              <span>{scene ? <><span className="tabular-nums text-ink" data-testid="diorama-blobs">{scene.built.blobs.count.toLocaleString()}</span> blobs on <span className="tabular-nums text-ink">{scene.built.skeleton.count}</span> bones (<span className="tabular-nums text-ink" data-testid="diorama-size">{kilobytes(scene.built.blobs.count * BLOB_BYTES)}</span> of splats){scene.of.bytes ? <>, built from <span className="tabular-nums text-ink" data-testid="diorama-doc-size">{kilobytes(scene.of.bytes)}</span> of description</> : ''}.</> : loadingLabel}</span>
+              <span data-testid="diorama-art">{pixels && art ? <>Drawn at <span className="tabular-nums text-ink">{art.width} × {art.height}</span> pixels{colors.length ? <> in <span className="tabular-nums text-ink">{colors.length}</span> colors</> : ''}{png ? <>: this frame is <span className="tabular-nums text-ink" data-testid="diorama-png-size">{kilobytes(png)}</span> as a PNG</> : ''}.</> : 'Drawn as blobs, at full size.'}</span>
         </>}
         tabsLabel="Options"
         tabs={[
