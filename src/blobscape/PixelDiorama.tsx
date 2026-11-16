@@ -285,7 +285,7 @@ export function PixelDiorama() {
                   <div className="flex flex-wrap gap-1.5">
                     {palettes.map((p) => <Chip key={p.id} active={palette === p.id} onClick={() => { setPalette(p.id); setPixels(true) }}>{p.label}</Chip>)}
                   </div>
-                  <div aria-hidden className="mt-2 flex h-3 overflow-hidden rounded ring-1 ring-rule">
+                  <div aria-hidden className="mt-4 flex h-3 overflow-hidden rounded ring-1 ring-rule">
                     {colours.length ? colours.map((c, i) => <span key={i} className="flex-1" style={{ background: `rgb(${c[0]} ${c[1]} ${c[2]})` }} />) : <span className="flex-1 bg-paper-sunk" />}
                   </div>
                 </Field>
