@@ -256,7 +256,7 @@ export interface PixelLook {
   edges?: number
   /**
    * A backdrop behind the scene: its colour at the top and at the bottom of the picture, blended between and dithered into the palette.
-   * `reach` is how far down the picture the blend runs before it is all the bottom colour (0–1, the whole way when left out).
+   * `reach` is how far down the picture the blend runs before it is all the bottom colour (above 0, up to 1; the whole way when left out or not a sound number: `skyReach`).
    * Left out, empty pixels stay clear.
    */
   sky?: [top: Rgb, bottom: Rgb, reach?: number]
@@ -274,6 +274,9 @@ export const GLOW_FROM = 0.92
 export const EDGE_JUMP = 0.11
 /** How much of its light a pixel on an edge loses at `edges` 1. */
 export const EDGE_DARK = 0.62
+/** How far down the picture a sky's blend runs: its third value when that is a sound share of the picture, else the whole way. Both twins go by this. */
+export const skyReach = (sky: NonNullable<PixelLook['sky']>): number => { const r = sky[2]; return typeof r === 'number' && r > 0 && r <= 1 ? r : 1 }
+
 /** The least dither the sky gets, so its bands blend however crisp the scene is kept. */
 export const SKY_DITHER = 0.6
 /** Light spilled onto an empty pixel shows once its brightest channel passes this (0..255). */
@@ -331,7 +334,7 @@ export function pixelArt(f: Frame, look: PixelLook): Frame {
         out.data[i] = look.outline[0]; out.data[i + 1] = look.outline[1]; out.data[i + 2] = look.outline[2]; out.data[i + 3] = 255
         continue
       } else if (look.sky) {
-        const [top, low, reach = 1] = look.sky, t = Math.min(1, (y + 0.5) / h / reach)
+        const [top, low] = look.sky, reach = skyReach(look.sky), t = Math.min(1, (y + 0.5) / h / reach)
         r = top[0] + (low[0] - top[0]) * t + g[0]; gg = top[1] + (low[1] - top[1]) * t + g[1]; b = top[2] + (low[2] - top[2]) * t + g[2]
         // a sky that stops short eases its dither away over the last quarter of the blend, so it ends flat with no seam
         spread = Math.max(look.dither, SKY_DITHER * (reach < 1 ? Math.min(1, (1 - t) * 4) : 1)) * 48

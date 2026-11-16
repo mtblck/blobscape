@@ -1,6 +1,6 @@
 import { NearestFilter, NoBlending, NodeMaterial, QuadMesh, RenderTarget, Vector2, Vector3, type Camera, type Object3D, type WebGPURenderer } from 'three/webgpu'
 import * as TSLTyped from 'three/tsl'
-import { BAYER4, EDGE_DARK, EDGE_JUMP, GLOW_FROM, GLOW_SHOWS, GLOW_TAPS, MAX_PALETTE_SIZE, PIXEL_CUT, SKY_DITHER, oklab, type PixelLook } from '../splat-core/pixel.ts'
+import { BAYER4, EDGE_DARK, EDGE_JUMP, GLOW_FROM, GLOW_SHOWS, GLOW_TAPS, MAX_PALETTE_SIZE, PIXEL_CUT, SKY_DITHER, oklab, skyReach, type PixelLook } from '../splat-core/pixel.ts'
 import { srgbToLinear } from '../splat-core/colour.ts'
 
 // As in engine.ts: the shader builders use TSL untyped.
@@ -40,7 +40,7 @@ export class PixelPass {
   /** The sky at the top and bottom of the picture, sRGB 0–255. */
   private readonly skyTop = uniform(new Vector3())
   private readonly skyLow = uniform(new Vector3())
-  /** How far down the picture the sky's blend runs (0–1). */
+  /** How far down the picture the sky's blend runs (above 0, up to 1). */
   private readonly skyReach = uniform(1)
   private readonly palLab = Array.from({ length: MAX_PALETTE }, () => new Vector3())
   private readonly palLinear = Array.from({ length: MAX_PALETTE }, () => new Vector3())
@@ -71,7 +71,7 @@ export class PixelPass {
     this.edges.value = look.edges ?? 0
     this.lined.value = look.outline ? 1 : 0
     this.skied.value = look.sky ? 1 : 0
-    if (look.sky) { this.skyTop.value.set(...look.sky[0]); this.skyLow.value.set(...look.sky[1]); this.skyReach.value = look.sky[2] ?? 1 }
+    if (look.sky) { this.skyTop.value.set(...look.sky[0]); this.skyLow.value.set(...look.sky[1]); this.skyReach.value = skyReach(look.sky) }
     if (look.outline) this.line.value.set(srgbToLinear(look.outline[0] / 255), srgbToLinear(look.outline[1] / 255), srgbToLinear(look.outline[2] / 255))
   }
 

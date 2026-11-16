@@ -44,7 +44,7 @@ Paints: a colour, or `bands`, `bricks`, `hex` (honeycomb, scales, paving), `spec
 
 The dragon scene (`scenes/dragon.ts`) follows a few habits that make a scene read as a single strong image:
 
-- **No sky.** Leave `sky` out and the subject sits on the dark of the page.
+- **A backdrop that stays out of the way.** Leave `sky` out and the subject sits on the dark of the page, or give it a dark `sky` with a short `skyReach`, so most of the picture is the darkest colour and only the top glows.
 - **Few hues.** A dark ramp for the setting, one hue ramp for the subject, and two or three steps of a warm accent used only on light sources.
 - **One big subject.** Build it from many small parts (the dragon is about 140, mostly cones) and let it fill the frame.
 - **A chain of bones for anything that bends.** Each neck bone has the one before as its `parent` and sways a few degrees; the turns add up along the chain, so the head sweeps wide while each joint barely moves. A jaw is a child of the head with one `sway`.
