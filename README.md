@@ -10,7 +10,7 @@
 <h3 align="center">Learn 3D Gaussian splats by taking them apart.</h3>
 
 <p align="center">
-  Eighteen hands-on lessons, a sandbox, and a shelf of experiments on our own animated-splat engine.<br />
+  Nineteen hands-on lessons, a sandbox, and a shelf of experiments on our own animated-splat engine.<br />
   All of it runs in your browser. Free, no account.
 </p>
 
