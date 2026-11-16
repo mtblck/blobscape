@@ -366,8 +366,9 @@ export function App() {
                     />
                     <canvas ref={overlay} aria-hidden className="pointer-events-none absolute inset-0 h-full w-full" />
                   </div>
-                <figcaption className="max-w-full truncate text-center text-xs text-ink-faint">The blobs · click or tap to add some</figcaption>
+                <figcaption className="max-w-full truncate text-center text-xs text-ink-faint"><span className="max-sm:hidden">The blobs · click or tap to add some</span><span className="sm:hidden">Tap to add blobs</span></figcaption>
               </figure>
+              {error && <div role="alert" className="absolute inset-x-4 top-4 rounded bg-paper-sunk p-3 text-sm text-ink ring-1 ring-rule">{error}</div>}
               <div className="absolute right-3 bottom-3 flex items-center gap-1.5 max-sm:right-2 max-sm:bottom-2">
                 <Button small primary onClick={toggleRunning} className="min-w-16">
                   {running ? 'Pause' : frame.iteration ? 'Resume' : 'Train'}
@@ -413,7 +414,6 @@ export function App() {
                         }}
                       />
                     </div>
-                    {error && <p role="alert" className="text-sm text-accent-ink">{error}</p>}
                     <p className="text-xs leading-relaxed text-ink-faint">
                       The samples are drawn in code. Drop in any picture of your own: it is shrunk to {detail} pixels across and never
                       leaves your browser.

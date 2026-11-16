@@ -231,7 +231,6 @@ export function App() {
     CAMERAS.find((c) => c.view.azimuth !== undefined && c.view.elevation === view.elevation && c.view.azimuth === view.azimuth) ??
     CAMERAS.find((c) => c.view.azimuth === undefined && c.view.elevation === view.elevation)
 
-
   return (
     <div className="flex min-h-dvh flex-col">
       <SiteHeader here="/experiments/splat-to-sprite/" />
@@ -280,7 +279,7 @@ export function App() {
                 <span className="absolute -top-6 left-0 text-xs whitespace-nowrap text-accent">sprite frame · {size}×{size}</span>
               </div>
               {/* The sprite itself, live, in the corner: every option acts on it. */}
-              <figure className="pointer-events-none absolute top-3 right-3 w-20 max-sm:top-2 max-sm:right-2 sm:w-28 lg:w-36">
+              <figure className="pointer-events-none absolute top-3 right-3 w-14 max-sm:top-2 max-sm:right-2 sm:w-24 lg:w-28 xl:w-36">
                 <div className="checker aspect-square overflow-hidden rounded-lg border border-rule">
                   {stages && <FrameImage frame={stages.final} className="h-full w-full" testId="sprite-preview" label={`Sprite preview, ${size} by ${size} pixels`} />}
                 </div>

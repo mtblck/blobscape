@@ -279,7 +279,8 @@ export function DungeonRun() {
         status={<div data-testid="dungeon-stats">
               <span className="tabular-nums text-ink">{hud.blobs.toLocaleString()}</span> blobs,{' '}
               <span className="tabular-nums text-ink">{hud.alive}</span> slime{hud.alive === 1 ? '' : 's'} in the hall
-              {hud.fps > 0 && <span className="text-ink-faint">, {Math.round(hud.fps)} fps</span>}.
+              {hud.fps > 0 && <span className="text-ink-faint">, {Math.round(hud.fps)} fps</span>}.{' '}
+              <span aria-live="polite">{busy ?? ''}</span>
         </div>}
         tabsLabel="Options"
         tabs={[
@@ -332,7 +333,7 @@ export function DungeonRun() {
                     {DETAIL.map((d) => <Chip key={d.id} active={detail === d.id} onClick={() => setDetail(d.id)}>{d.label}</Chip>)}
                   </div>
                 </Field>
-                <p aria-live="polite" className="text-xs text-ink-faint">{busy ?? 'Lighter detail runs smoother on older phones.'}</p>
+                <p className="text-xs text-ink-faint">Lighter detail runs smoother on older phones.</p>
               </div>
             ),
           },

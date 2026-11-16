@@ -29,11 +29,11 @@ export function Workbench({ viewLabel, view, status, tabsLabel, tabs, footer, fu
   const { full, toggle } = useFullScreen(frame)
   return (
     <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:items-start lg:gap-x-5">
-      <section aria-label={viewLabel} className="sticky top-14 z-20 lg:top-[4.5rem]">
+      <section aria-label={viewLabel} className={`sticky top-14 lg:top-[4.5rem] max-lg:[@media(max-height:560px)]:static ${full === 'window' ? 'z-50' : 'z-20'}`}>
         <div ref={frame} data-full={full || undefined} className={`case flex flex-col overflow-hidden bg-paper ring-1 ring-rule ${full === 'window' ? 'fixed inset-0 z-50' : 'relative rounded-2xl'}`}>
           <div className={`relative ${full ? 'min-h-0 flex-1' : 'h-[45dvh] min-h-[240px] lg:aspect-[4/3] lg:h-auto lg:max-h-[calc(100dvh-9rem)] lg:w-full'}`}>
             {view}
-            <button type="button" aria-pressed={!!full} aria-label={full ? 'Leave full screen' : 'Full screen'} title={full ? 'Leave full screen' : 'Full screen'} onClick={toggle} data-testid="full-screen" className={`zoom-btn absolute ${fullScreenAt}`}>
+            <button type="button" aria-label={full ? 'Leave full screen' : 'Full screen'} title={full ? 'Leave full screen' : 'Full screen'} onClick={toggle} data-testid="full-screen" className={`zoom-btn absolute ${fullScreenAt}`}>
               <svg viewBox="0 0 16 16" aria-hidden className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                 {full ? <path d="M6 2.5V6H2.5M10 2.5V6h3.5M6 13.5V10H2.5M10 13.5V10h3.5" /> : <path d="M2.5 6V2.5H6M13.5 6V2.5H10M2.5 10v3.5H6M13.5 10v3.5H10" />}
               </svg>
@@ -42,7 +42,7 @@ export function Workbench({ viewLabel, view, status, tabsLabel, tabs, footer, fu
           {status && <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-t border-rule-soft px-4 py-2 text-xs leading-relaxed text-ink-muted sm:text-sm">{status}</div>}
         </div>
       </section>
-      <section aria-label="Options" className="stack-controls rounded-2xl border border-rule bg-paper-sunk/60 px-4 pt-2 pb-5 sm:px-5">
+      <section aria-label="Options" inert={full === 'window'} className="stack-controls rounded-2xl border border-rule bg-paper-sunk/60 px-4 pt-2 pb-5 sm:px-5">
         <Tabs label={tabsLabel} tabs={tabs} />
         {footer && <div className="mt-5 border-t border-rule pt-5">{footer}</div>}
       </section>

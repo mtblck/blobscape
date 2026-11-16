@@ -53,10 +53,14 @@ async function open(path, opts = {}) {
 
 /** Options sit in tabs: open the tab that holds a control, then click the control. */
 async function tabClick(control) {
-  await control.first().evaluate((el) => {
-    const panel = el.closest('[role=tabpanel][hidden]')
-    if (panel) document.getElementById(panel.getAttribute('aria-labelledby'))?.click()
-  })
+  const shows = () => control.first().isVisible().catch(() => false)
+  if (!(await shows())) {
+    // a control in a closed tab is hidden from every query, so try each tab until it shows
+    for (const tab of await control.page().locator('section[aria-label=Options] [role=tab]').all()) {
+      await tab.click()
+      if (await shows()) break
+    }
+  }
   await control.click()
 }
 

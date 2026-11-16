@@ -289,7 +289,7 @@ export function ScanStudio() {
                 <Chip small active={showCut} onClick={() => setShowCut(true)}>Kept and cut</Chip>
               </div>
               <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={reframe} />
-              <p aria-hidden className="pointer-events-none absolute right-14 bottom-2 left-3 text-right text-xs text-ink-faint">{coarse ? 'drag to orbit · pinch to zoom' : 'drag to orbit · scroll to zoom · drop a scan here'}</p>
+              <p aria-hidden className="pointer-events-none absolute right-14 bottom-2 left-12 text-right text-xs text-ink-faint">{coarse ? 'drag to orbit · pinch to zoom' : 'drag to orbit · scroll to zoom · drop a scan here'}</p>
           </div>
         )}
         status={<>
@@ -310,8 +310,6 @@ export function ScanStudio() {
                   <input ref={fileInput} type="file" accept={FILE_TYPES} className="sr-only" tabIndex={-1} aria-hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void openFile(f) }} />
                 </div>
                 <p className="text-xs leading-relaxed text-ink-faint">Your file stays on this device: it's opened here in the browser and never uploaded.</p>
-                <p role="status" className="text-xs text-ink-muted empty:-mt-3">{message}</p>
-                {error && <p role="alert" className="text-xs text-accent-ink">{error}</p>}
                 </div>
               </div>
             ),
@@ -367,6 +365,8 @@ export function ScanStudio() {
                 </div>
                 {light !== 'scanned' && <Toggle label="Keep the lighting in its colours" checked={keepLight} onChange={setKeepLight} />}
                 <p className="text-xs leading-relaxed text-ink-faint">The kept blobs, stood on the floor and sized to sit beside the sandbox's own scenes.</p>
+                <p role="status" className="text-xs text-ink-muted empty:-mt-3">{message}</p>
+                {error && <p role="alert" className="text-xs text-accent-ink">{error}</p>}
           </div>
         )}
       />

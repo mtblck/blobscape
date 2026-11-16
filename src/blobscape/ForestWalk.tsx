@@ -168,7 +168,8 @@ export function ForestWalk() {
               <span className="tabular-nums text-ink">{stats.blobs.toLocaleString()}</span> blobs,{' '}
               <span className="tabular-nums text-ink">{stats.growing}</span> plants up,{' '}
               <span className="tabular-nums text-ink">{Math.round(stats.walked)}</span> m walked
-              {stats.fps > 0 && <span className="text-ink-faint">, {Math.round(stats.fps)} fps</span>}.
+              {stats.fps > 0 && <span className="text-ink-faint">, {Math.round(stats.fps)} fps</span>}.{' '}
+              <span aria-live="polite">{busy ?? ''}</span>
         </div>}
         tabsLabel="Options"
         tabs={[
@@ -219,7 +220,7 @@ export function ForestWalk() {
                     {DETAIL.map((d) => <Chip key={d.id} active={detail === d.id} onClick={() => setDetail(d.id)}>{d.label}</Chip>)}
                   </div>
                 </Field>
-                <p aria-live="polite" className="text-xs text-ink-faint">{busy ?? 'Lighter detail walks smoother on older phones.'}</p>
+                <p className="text-xs text-ink-faint">Lighter detail walks smoother on older phones.</p>
               </div>
             ),
           },

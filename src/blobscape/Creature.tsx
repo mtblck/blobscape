@@ -245,11 +245,12 @@ export function Creature() {
               <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => setOrbit(scaleOf.view)} />
               <p aria-hidden className="pointer-events-none absolute right-14 bottom-2 left-3 text-right text-xs text-ink-faint">{typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches ? 'drag to orbit · pinch to zoom' : 'drag to orbit · scroll to zoom'}</p>
         </>}
-        status={<div>
+        status={<><div>
               <span className="tabular-nums text-ink" data-testid="blob-count">{shown.body.blobs.count.toLocaleString()}</span> blobs on{' '}
               <span className="tabular-nums text-ink">{shown.body.skeleton.count}</span> bones{clipNames.length ? <>, with {clipNames.length === 1 ? 'one clip' : `${clipNames.length} clips`}: {clipNames.join(' and ')}</> : ''}.
               {loaded && <> From your file. <button type="button" className="underline hover:text-accent" onClick={() => { setLoaded(undefined); setMove(species.moves[0].name); setFileNote(undefined) }}>Back to the {species.name}</button></>}
-        </div>}
+        </div>
+              <span aria-live="polite" data-testid="creature-note">{busy ?? fileNote ?? ''}</span></>}
         tabsLabel="Options"
         tabs={[
           {
@@ -318,7 +319,6 @@ export function Creature() {
                   <span className="text-ink-muted">Open a rigged splat .glb</span>
                   <input type="file" accept=".glb,model/gltf-binary" onChange={(e) => { void open(e.target.files?.[0]); e.target.value = '' }} className="block w-full text-xs text-ink-faint file:mr-2 file:cursor-pointer file:rounded file:border file:border-rule file:bg-paper file:px-3 file:py-1.5 file:text-sm file:text-ink hover:file:border-ink-faint" />
                 </label>
-                <p aria-live="polite" className="text-xs text-ink-faint empty:hidden" data-testid="creature-note">{busy ?? fileNote ?? ''}</p>
               </div>
             ),
           },
