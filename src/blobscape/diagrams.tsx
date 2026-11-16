@@ -79,7 +79,7 @@ function Toadstool({ x = 0, y = 0, s = 1, pick, tint }: { x?: number; y?: number
   )
 }
 
-/** Hero: a toadstool of blobs, one of them circled, with its 14 numbers set out beside it. */
+/** Hero: a toadstool of blobs, one of them circled, with its 5 attributes (14 values) set out beside it. */
 export function HeroDiagram() {
   const p = TOADSTOOL[PICKED]
   const S = 1.05, X = 190, Y = 360
@@ -94,7 +94,7 @@ export function HeroDiagram() {
   return (
     <div
       role="img"
-      aria-label="A toadstool drawn entirely from soft, overlapping coloured blobs. One blob on its cap is circled, and a card beside it lists the 14 numbers that make it: 3 for where it is, 3 for its size, 4 for its turn, 3 for its colour and 1 for how solid it is."
+      aria-label="A toadstool drawn entirely from soft, overlapping coloured blobs. One blob on its cap is circled, and a card beside it lists its 14 values in 5 attributes: 3 for where it is, 3 for its size, 4 for its turn, 3 for its colour and 1 for how solid it is."
       className="case relative grid overflow-hidden rounded-2xl ring-1 ring-rule sm:grid-cols-[minmax(0,1fr)_15rem]"
       style={{ background: 'var(--c-paper)' }}
     >
@@ -103,7 +103,7 @@ export function HeroDiagram() {
         <path d={`M ${px + p.rx + 10} ${py} H 400`} stroke={COLOURS.sun} strokeWidth="1.5" strokeDasharray="3 4" className="max-sm:hidden" />
       </svg>
       <div className="flex flex-col justify-center gap-3 border-rule-soft p-5 max-sm:border-t sm:border-l">
-        <p className="text-xs font-semibold tracking-wider text-ink-faint uppercase">This one blob is</p>
+        <p className="text-xs font-semibold tracking-wider text-ink-faint uppercase">Construction of a blob</p>
         <ul className="flex flex-col gap-2 text-sm">
           {rows.map(([what, detail, n]) => (
             <li key={what} className="flex items-baseline gap-3">
@@ -117,8 +117,8 @@ export function HeroDiagram() {
             </li>
           ))}
         </ul>
-        <p className="border-t border-rule-soft pt-3 text-2xl text-ink">14 numbers</p>
-        <p className="-mt-2 text-xs text-ink-faint">The toadstool is {TOADSTOOL.length} of them. A real capture, a few million.</p>
+        <p className="border-t border-rule-soft pt-3 text-2xl text-ink">5 attributes, 14 values</p>
+        <p className="-mt-2 text-xs text-ink-faint">This toadstool is made up of {TOADSTOOL.length} blobs. A real capture is made up of millions.</p>
       </div>
     </div>
   )

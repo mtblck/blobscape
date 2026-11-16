@@ -42,7 +42,6 @@ export function Landing() {
 
       <section aria-labelledby="hero-title" className={`${WIDTH} grid items-center gap-10 pt-10 pb-14 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:pt-16 lg:pb-20`}>
         <div className="flex flex-col gap-6">
-          <p className="text-sm font-semibold tracking-wider text-accent uppercase">Blobscape</p>
           <h1 ref={h1} tabIndex={-1} id="hero-title" className="font-display text-5xl leading-[1.05] text-balance outline-none sm:text-6xl">
             Learn 3D splats by taking them apart
           </h1>
@@ -165,7 +164,7 @@ export function Landing() {
         <div className="case grid items-center gap-6 rounded-3xl p-8 sm:p-12 md:grid-cols-[minmax(0,1fr)_auto]" style={{ background: 'var(--c-paper)' }}>
           <div>
             <h2 id="start-title" className="font-display text-4xl text-ink">Start with one blob</h2>
-            <p className="mt-3 max-w-[50ch] text-lg text-ink-muted">Fourteen numbers, five kinds. Pull each one and the rest of splatting starts to make sense.</p>
+            <p className="mt-3 max-w-[50ch] text-lg text-ink-muted">Five attributes, fourteen values. Pull each one and the rest of splatting starts to make sense.</p>
           </div>
           <div className="flex flex-wrap gap-3">
             <a href={href({ page: 'lesson', id: LESSONS[0].id })} className={PRIMARY}>Lesson 1: {LESSONS[0].title}</a>

@@ -38,6 +38,8 @@ export function pageMeta(route: Route): PageMeta {
       return { path, title: `Pixel Diorama · ${SITE.name}`, description: 'A lighthouse at dusk made of Gaussian splats and drawn as moving pixel art: shapes written in code, cut into a grid of solid blobs, moved by bones, then rendered small and snapped to a palette. Turn the scene, change the palette, pixel size, dither and glow, or switch the pixels off to see the blobs.' }
     case 'experiments':
       return { path, title: `Experiments · ${SITE.name}`, description: `Small tools built from Gaussian splats: ${EXPERIMENTS.map((e) => e.title).join(', ')}. Free, in your browser.` }
+    case 'contact':
+      return { path, title: `Get in touch · ${SITE.name}`, description: `Send ${SITE.author.name} a note about ${SITE.name}: a question, a bug, an idea for a lesson or an experiment.` }
     case 'lesson': {
       const i = LESSONS.findIndex((l) => l.id === route.id)
       return { path, title: `${LESSONS[i].title} · Lesson ${i + 1} · ${SITE.name}`, description: LESSONS[i].summary }
