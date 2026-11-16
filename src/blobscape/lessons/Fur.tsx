@@ -29,8 +29,7 @@ export function Fur() {
   const o = all[thing]
   const set = (patch: Partial<CoatOptions>) => setAll((a) => ({ ...a, [thing]: { ...a[thing], ...patch } }))
 
-  const version = useRef(0)
-  const coat = useMemo(() => { version.current++; return growCoat(thing, o) }, [thing, o])
+  const { coat, version } = useMemo(() => ({ coat: growCoat(thing, o), version: Math.random() }), [thing, o])
   const light = useMemo(() => (thing === 'critter' ? lightThrough(coat.blobs) : 0), [thing, coat])
   const ground = useMemo(() => (thing === 'lawn' ? groundShowing(coat.blobs) : 0), [thing, coat])
 
@@ -59,7 +58,7 @@ export function Fur() {
       intro={<p>A fox’s coat has millions of hairs and a lawn millions of blades. A splat can’t afford a blob for every one. How few blobs make fur, and what does a strand need to bend?</p>}
       view={
         <div className="relative h-full">
-          <Viewport bare noZoom blobs={coat.blobs} version={version.current} orbit={orbit} setOrbit={setOrbit} label={label}
+          <Viewport bare noZoom blobs={coat.blobs} version={version} orbit={orbit} setOrbit={setOrbit} label={label}
             onView={(v) => { view.current = v; v.setFloor(true, '#8a8a8a') }} />
           <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => setOrbit(start(thing))} />
         </div>

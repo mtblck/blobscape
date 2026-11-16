@@ -6,7 +6,7 @@ import type { Orbit, SplatView } from '../../splat-core/view.ts'
 import { blobsToMesh, meshError, type SplatMesh } from '../../splat-engine/mesh.ts'
 import { Chip, Field, Slider, Toggle } from '../../shared/ui.tsx'
 import { LessonShell } from '../Shell.tsx'
-import { LESSON_GOALS } from '../routes.ts'
+import { LESSON_GOALS, href } from '../routes.ts'
 import { Viewport, ZoomBar } from '../Viewport.tsx'
 import { useGoals } from '../progress.ts'
 import { kb } from '../files.ts'
@@ -176,7 +176,7 @@ export function Fuzzy() {
           <p>
             Fluff is worse for a mesh. Each blob carries its own opacity, so a cloud of faint ones lets some light through, the way the
             real seed head does. The skin round the same cloud is either solid or nothing at all, and here the fluff is simply gone. Hair, fur, foliage,
-            smoke and frosted glass all go the same way, which is why scans of them are where splats look most like a photo.
+            smoke and frosted glass all go the same way, which is why scans of them are where splats look most like a photo. Growing fur and grass from scratch, a strand at a time, is <a href={href({ page: 'lesson', id: 'fur' })} className="text-accent underline underline-offset-2">Fur and grass</a>.
           </p>
           <p>
             The block is the other way round. Flat faces and sharp corners are exactly what triangles are for: merge the flat faces, as

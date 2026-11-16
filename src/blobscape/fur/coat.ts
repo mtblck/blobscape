@@ -270,7 +270,7 @@ export function lightThrough(blobs: Blobs): number {
   return THROUGH.reduce((a, [p, q]) => a + lightThroughSplats(blobs, p, q), 0) / THROUGH.length
 }
 
-/** Looking down on the lawn from the lesson's camera (azimuth 25°, up 30°). */
+/** Looking down on the lawn from the lesson's camera (azimuth 25°, up about 30°). */
 const LOOK: Vec3 = norm([Math.sin((25 * Math.PI) / 180) * Math.cos(Math.PI / 6), Math.sin(Math.PI / 6), Math.cos((25 * Math.PI) / 180) * Math.cos(Math.PI / 6)])
 
 /** Share of the lawn's earth you can see between the blades from the lesson's camera, sampled on a grid in its middle. */
