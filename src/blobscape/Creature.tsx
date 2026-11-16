@@ -4,7 +4,8 @@ import type { Creature as Body } from '../splat-engine/body.ts'
 import { GlbError, readRiggedGlb, recordClip, writeRiggedGlb, writeRiggedMeshGlb, type Clip } from '../splat-engine/glb.ts'
 import { blobsToMesh } from '../splat-engine/mesh.ts'
 import type { SkinMode } from '../splat-engine/rig.ts'
-import { ZOO, type Species } from '../splat-engine/zoo/index.ts'
+import type { Species } from '../splat-engine/zoo/index.ts'
+import { CREATURES } from './creature/fromScenes.ts'
 import { MAX_SEED, monsterSpecies, newSeed } from '../splat-engine/zoo/monster.ts'
 import { LoadingMark } from '../shared/BlobLoader.tsx'
 import { Button, Chip, Field, Slider } from '../shared/ui.tsx'
@@ -40,7 +41,7 @@ function speciesOf(params: URLSearchParams): Species {
     const seed = Number(params.get('seed'))
     return monsterSpecies(Number.isInteger(seed) && seed >= 1 && seed <= MAX_SEED ? seed : newSeed())
   }
-  return ZOO.find((s) => s.id === id) ?? ZOO.find((s) => s.id === DEFAULT)!
+  return CREATURES.find((s) => s.id === id) ?? CREATURES.find((s) => s.id === DEFAULT)!
 }
 const kilo = (n: number) => (n >= 1000 ? `${n / 1000}k` : String(n))
 
@@ -49,7 +50,7 @@ declare global {
 }
 
 /**
- * Creature: procedural blob creatures (a frog, a fox, an elf and a dragon),
+ * Creature: procedural blob creatures (three from the pixel scenes, then a frog, a fox, an elf and a dragon),
  * rigged, moving on Blobscape's own splat engine, with their bones on show if
  * you like. Each leaves as a 3D model, as rigged splats in a .glb and as a
  * solid mesh with the same bones and clips.
@@ -224,7 +225,7 @@ export function Creature() {
       <header className="flex flex-wrap items-end justify-between gap-x-8 gap-y-2 pt-4 pb-6">
         <h1 ref={h1} tabIndex={-1} className="font-display text-4xl outline-none sm:text-5xl">Splat Creatures</h1>
         <p className="max-w-xl text-lg text-ink-muted">
-          Creatures made of blobs, from a frog to a fire-breathing dragon. Watch one move, take its blobs away to see the bones
+          Creatures made of blobs, from a jellyfish to a fire-breathing dragon. Watch one move, take its blobs away to see the bones
           underneath, then take it home as a 3D model that Blender and game engines open, or as pixel-art sprites for a 2D game.
         </p>
       </header>
@@ -279,7 +280,7 @@ export function Creature() {
               <div className={TAB_SECTIONS} data-testid="creature-pick">
             <Field label="Type">
               <div role="group" aria-label="Which creature" className="flex flex-wrap gap-1.5" data-testid="species">
-                {ZOO.map((sp) => <Chip key={sp.id} active={!loaded && species === sp} onClick={() => pick(sp)}>{sp.name[0].toUpperCase() + sp.name.slice(1)}</Chip>)}
+                {CREATURES.map((sp) => <Chip key={sp.id} active={!loaded && species === sp} onClick={() => pick(sp)}>{sp.name[0].toUpperCase() + sp.name.slice(1)}</Chip>)}
                 <Chip active={!loaded && !!species.seed} onClick={() => pick(lastMonster.current ?? monsterSpecies(newSeed()))}>Monster</Chip>
               </div>
             </Field>

@@ -264,3 +264,20 @@
 .toast-out { animation: bs-toast-out 0.2s ease-in both; }
 @keyframes bs-toast-in { from { opacity: 0; transform: translateY(-120%); } to { opacity: 1; transform: none; } }
 @keyframes bs-toast-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-120%); } }
+
+/* A document shown as a page (the rigged-splat spec): markdown.ts writes plain tags, styled here. */
+.spec { margin-top: 1rem; color: var(--c-ink-muted); line-height: 1.7; overflow-wrap: break-word; }
+.spec > * + * { margin-top: 1rem; }
+.spec > p:first-child { font-size: 1.125rem; color: var(--c-ink-faint); }
+.spec h2, .spec h3 { font-family: var(--font-display); font-weight: 600; letter-spacing: -0.01em; color: var(--c-ink); line-height: 1.2; scroll-margin-top: 5rem; }
+.spec h2 { font-size: 1.875rem; margin-top: 3rem; }
+.spec h3 { font-size: 1.25rem; margin-top: 2rem; }
+.spec strong { color: var(--c-ink); font-weight: 600; }
+.spec a { color: var(--c-ink); text-decoration: underline; text-underline-offset: 2px; }
+.spec a:hover { color: var(--c-accent); }
+.spec code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.875em; background: var(--c-paper-sunk); border: 1px solid var(--c-rule-soft); border-radius: 0.375rem; padding: 0.05em 0.3em; color: var(--c-ink); }
+.spec pre { background: var(--c-paper-sunk); border: 1px solid var(--c-rule); border-radius: 0.75rem; padding: 1rem; overflow-x: auto; line-height: 1.5; }
+.spec pre code { background: none; border: 0; padding: 0; font-size: 0.8125rem; }
+.spec ul { list-style: disc; padding-left: 1.25rem; }
+.spec li + li { margin-top: 0.5rem; }
+.spec blockquote { border-left: 3px solid var(--c-rule); padding-left: 1rem; color: var(--c-ink); font-size: 1.0625rem; overflow-x: auto; }

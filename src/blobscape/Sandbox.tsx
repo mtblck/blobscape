@@ -14,7 +14,7 @@ import { drawBones, drawCenters, drawOutlines, themeColor, toScreen } from './ov
 import { History } from './history.ts'
 import { takeHandOff } from './handoff.ts'
 import { STILL, actorAt, actorBlobs, actorBones, detailsOf, freezeInto, makeActor, poseAll, remake, type Actor } from './actors.ts'
-import { ZOO } from '../splat-engine/zoo/index.ts'
+import { CREATURES } from './creature/fromScenes.ts'
 import { PROPS } from './props.ts'
 import type { Creature as Body } from '../splat-engine/body.ts'
 import { href } from './routes.ts'
@@ -43,7 +43,7 @@ const FILE_TYPES = '.ply,.spz,.splat,.ksplat,.sog'
 const PLAY_SECONDS = 2.5
 const MAX_ACTORS = 8
 /** What the Creatures tab can add: the zoo, then things from the other experiments (a slime, the watch). */
-const ADDABLE = [...ZOO, ...PROPS]
+const ADDABLE = [...CREATURES, ...PROPS]
 type ShowRig = 'blobs' | 'bones' | 'both'
 const SHOW_RIG: { id: ShowRig; label: string }[] = [{ id: 'blobs', label: 'Blobs' }, { id: 'bones', label: 'Bones' }, { id: 'both', label: 'Both' }]
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1)

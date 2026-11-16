@@ -82,14 +82,18 @@ export function buildSculpt(spec: SculptSpec, spacing: number): Sculpted {
  * parts can be kept at least a cell thick.
  */
 export function sculptToCount(make: (spacing: number) => SculptSpec, count: number, probe = 0.08): Sculpted {
+  return toCount((spacing) => buildSculpt(make(spacing), spacing), count, probe)
+}
+
+/** `cut` at the spacing that gives about `count` blobs, for anything cut on a grid (a sculpt, a scene's creature). */
+export function toCount<T extends { blobs: Blobs }>(cut: (spacing: number) => T, count: number, probe: number): T {
   const guess = (at: number, cells: number) => at * Math.sqrt(cells / count)
-  const near = guess(probe, buildSculpt(make(probe), probe).blobs.count) * 1.5
-  const spacing = guess(near, buildSculpt(make(near), near).blobs.count)
-  const cut = buildSculpt(make(spacing), spacing)
+  const near = guess(probe, cut(probe).blobs.count) * 1.5
+  const spacing = guess(near, cut(near).blobs.count)
+  const made = cut(spacing)
   // close enough nearly every time; when it is not (many thin parts), one more cut from right beside the answer
-  if (Math.abs(cut.blobs.count / count - 1) < 0.05) return cut
-  const again = guess(spacing, cut.blobs.count)
-  return buildSculpt(make(again), again)
+  if (Math.abs(made.blobs.count / count - 1) < 0.05) return made
+  return cut(guess(spacing, made.blobs.count))
 }
 
 /** One creature from two builds on the same bones (a sculpted body and a fuzzy flame, say): `b`'s blobs follow `a`'s. */

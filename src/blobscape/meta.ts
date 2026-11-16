@@ -1,5 +1,6 @@
 import { LESSONS, LESSON_COUNT, href, type Route } from './routes.ts'
 import { EXPERIMENTS, SITE } from './site.ts'
+import { SPEC } from './specCopy.ts'
 
 /**
  * Each page's title and description. The app sets them as you move around
@@ -25,7 +26,7 @@ export function pageMeta(route: Route): PageMeta {
     case 'sandbox':
       return { path, title: `Sandbox · ${SITE.name}`, description: 'Spray, select, move, recolor and explode Gaussian splats, or open your own .ply, .spz, .splat, .ksplat or .sog capture. Nothing is uploaded.' }
     case 'creature':
-      return { path, title: `Splat Creatures · ${SITE.name}`, description: 'A frog, a fox, an elf and an ice dragon made of blobs, moving on their own splat engine: a jump, a tongue flick, a walk, wing beats and fire. See the bones under the blobs, then download one as a rigged, animated .glb (as Gaussian splats or as a mesh for Blender and game engines) or as a pixel-art sprite sheet from 4 or 8 sides.' }
+      return { path, title: `Splat Creatures · ${SITE.name}`, description: 'A crocodile, a jellyfish, an owl, a frog, a fox, an elf and an ice dragon made of blobs, moving on their own splat engine: a walk, a swim, a jump, a tongue flick, wing beats and fire. See the bones under the blobs, then download one as a rigged, animated .glb (as Gaussian splats or as a mesh for Blender and game engines) or as a pixel-art sprite sheet from 4 or 8 sides.' }
     case 'forest':
       return { path, title: `Forest Walk · ${SITE.name}`, description: 'Walk an elf made of blobs down an endless forest path, from behind, while trees, ferns, flowers and mushrooms grow out of the ground as you come. Every plant is a rig of Gaussian splats on our own splat engine.' }
     case 'dungeon':
@@ -40,6 +41,8 @@ export function pageMeta(route: Route): PageMeta {
       return { path, title: `Experiments · ${SITE.name}`, description: `Small tools built from Gaussian splats: ${EXPERIMENTS.map((e) => e.title).join(', ')}. Free, in your browser.` }
     case 'engine':
       return { path, title: `The Blobscape engine · ${SITE.name}`, description: 'A small engine for Gaussian splats that move, built on three.js: creatures on bones, whole worlds in one sort, live lights, pixel art from 3D and rigged splats saved as .glb. Three live demos, what it does, and how to use it.' }
+    case 'spec':
+      return { path, title: `Rigged Gaussian splats in glTF · ${SITE.name}`, description: SPEC.description }
     case 'contact':
       return { path, title: `Get in touch · ${SITE.name}`, description: `Send ${SITE.author.name} a note about ${SITE.name}: a question, a bug, an idea for a lesson or an experiment.` }
     case 'lesson': {

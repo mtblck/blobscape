@@ -7,7 +7,7 @@ import type { Goal } from './progress.ts'
  * previews see every page. In the browser it's still one app: links between
  * these pages swap the page without a reload (useLinkNavigation).
  */
-export type Route = { page: 'home' } | { page: 'lessons' } | { page: 'lesson'; id: string } | { page: 'sandbox' } | { page: 'creature' } | { page: 'forest' } | { page: 'clockwork' } | { page: 'diorama' } | { page: 'dungeon' } | { page: 'scan' } | { page: 'experiments' } | { page: 'engine' } | { page: 'contact' } | { page: 'notfound' }
+export type Route = { page: 'home' } | { page: 'lessons' } | { page: 'lesson'; id: string } | { page: 'sandbox' } | { page: 'creature' } | { page: 'forest' } | { page: 'clockwork' } | { page: 'diorama' } | { page: 'dungeon' } | { page: 'scan' } | { page: 'experiments' } | { page: 'engine' } | { page: 'spec' } | { page: 'contact' } | { page: 'notfound' }
 
 export const LESSONS = [
   { id: 'one-blob', title: 'One blob', summary: 'Five kinds of number, 14 in all, make one Gaussian. Pull each one and see what it does.' },
@@ -154,6 +154,7 @@ export function parsePath(pathname: string): Route | null {
   if (m.length === 1 && m[0] === 'sandbox') return { page: 'sandbox' }
   if (m.length === 1 && m[0] === 'experiments') return { page: 'experiments' }
   if (m.length === 1 && m[0] === 'engine') return { page: 'engine' }
+  if (m.length === 2 && m[0] === 'engine' && m[1] === 'rigged-splats') return { page: 'spec' }
   if (m.length === 1 && m[0] === 'contact') return { page: 'contact' }
   if (m.length === 2 && m[0] === 'experiments' && m[1] === 'creature') return { page: 'creature' }
   if (m.length === 2 && m[0] === 'experiments' && m[1] === 'forest-walk') return { page: 'forest' }
@@ -188,6 +189,7 @@ export function href(r: Route): string {
   if (r.page === 'dungeon') return '/experiments/dungeon-run/'
   if (r.page === 'experiments') return '/experiments/'
   if (r.page === 'engine') return '/engine/'
+  if (r.page === 'spec') return '/engine/rigged-splats/'
   if (r.page === 'contact') return '/contact/'
   if (r.page === 'lessons') return '/lessons/'
   return '/'

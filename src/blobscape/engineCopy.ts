@@ -59,7 +59,7 @@ export const BESIDE = {
 /** Three ways in, from no code to code. */
 export const DOORS = [
   { title: 'Use the tools', body: 'No code. Make a creature, a monster or a pixel scene in the experiments and take it away as a model, a sprite sheet or a picture.', link: { label: 'See the experiments', href: '/experiments/' } },
-  { title: 'Use the files', body: 'Download a rigged creature as a .glb from Splat Creatures and open it in your own three.js project. The file rule is written up as a draft spec.', link: { label: 'Read the rigged-splat spec', href: 'https://github.com/mtblck/blobscape/blob/main/docs/rigged-splats.md' } },
+  { title: 'Use the files', body: 'Download a rigged creature as a .glb from Splat Creatures and open it in your own three.js project. The file rule is written up as a draft spec.', link: { label: 'Read the rigged-splat spec', href: '/engine/rigged-splats/' } },
   { title: 'Use the code', body: 'A package for three.js is planned, with guides and an API reference. It is not published yet. If you would like to try it early, say so.', link: { label: 'Get in touch', href: '/contact/' } },
 ] as const
 

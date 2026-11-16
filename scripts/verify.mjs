@@ -83,7 +83,7 @@ const solidPixels = (page, sel) => page.evaluate((sel) => {
 // 1. The site: every page is its own prerendered file, the chrome works, old links land
 {
   // Prerendered: each page's HTML carries its own title, canonical and content before any script runs
-  for (const [path, title] of [['/', 'Blobscape: learn'], ['/lessons/', 'Lessons ·'], ['/lessons/order/', 'Order matters · Lesson 3'], ['/sandbox/', 'Sandbox ·'], ['/experiments/creature/', 'Splat Creatures ·'], ['/experiments/forest-walk/', 'Forest Walk ·'], ['/experiments/clockwork/', 'Clockwork ·'], ['/experiments/pixel-diorama/', 'Pixel Diorama ·'], ['/experiments/dungeon-run/', 'Dungeon Run ·'], ['/experiments/scan-studio/', 'Scan Studio ·'], ['/experiments/', 'Experiments ·'], ['/engine/', 'The Blobscape engine ·']]) {
+  for (const [path, title] of [['/', 'Blobscape: learn'], ['/lessons/', 'Lessons ·'], ['/lessons/order/', 'Order matters · Lesson 3'], ['/sandbox/', 'Sandbox ·'], ['/experiments/creature/', 'Splat Creatures ·'], ['/experiments/forest-walk/', 'Forest Walk ·'], ['/experiments/clockwork/', 'Clockwork ·'], ['/experiments/pixel-diorama/', 'Pixel Diorama ·'], ['/experiments/dungeon-run/', 'Dungeon Run ·'], ['/experiments/scan-studio/', 'Scan Studio ·'], ['/experiments/', 'Experiments ·'], ['/engine/', 'The Blobscape engine ·'], ['/engine/rigged-splats/', 'Rigged Gaussian splats in glTF ·']]) {
     const html = await (await fetch(base + path)).text()
     if (!html.includes(`<title>${title}`)) fails.push(`${path}: prerendered title is not "${title}…"`)
     else if (!html.includes(`<link rel="canonical" href="https://blobscape.dev${path}"`)) fails.push(`${path}: prerendered canonical is wrong`)
@@ -774,6 +774,10 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     await tabClick(c.page.getByRole('button', { name: 'Blobs', exact: true }))
     // every other creature builds, draws, and has its own clips
     for (const [name, bonesWanted, color, clip, t] of [
+      // the three taken from the pixel scenes come first on the page
+      ['Crocodile', 27, 'colorful', 'Walk', 0.5],
+      ['Jellyfish', 26, 'colorful', 'Swim', 0.5],
+      ['Owl', 8, 'colorful', 'Walk', 0.4],
       ['Frog', 20, 'frog', 'Tongue', 1.15],
       ['Elf', 29, 'elf', 'Wave', 1],
       ['Dragon', 43, 'fire', 'Breathe fire', 2],
@@ -1607,6 +1611,27 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   if (link !== '/engine/' || !html.includes('data-testid="built-on"')) fails.push(`an engine experiment's link to the engine page: ${link}, prerendered ${html.includes('data-testid="built-on"')}`)
   else ok('an experiment built on the engine links to the engine page, in its prerendered HTML too')
   await x.ctx.close()
+}
+
+// The rigged-splat spec as a page: the document's sections, its sample files, and the engine page's link to it
+{
+  console.log('spec page')
+  const s = await open('/engine/rigged-splats/', { viewport: { width: 390, height: 800 } })
+  await s.page.waitForSelector('[data-testid=spec] h2', { timeout: 20000 }).catch(() => {})
+  const got = await s.page.evaluate(async () => {
+    const spec = document.querySelector('[data-testid=spec]')
+    const file = spec?.querySelector('a[download]')?.getAttribute('href')
+    const res = file ? await fetch(file) : null
+    return { h1: document.querySelector('h1')?.textContent, sections: spec?.querySelectorAll('h2').length, file, bytes: res?.ok ? (await res.arrayBuffer()).byteLength : 0, raw: /\*\*|\]\(/.test(spec?.textContent.replace(/\{[\s\S]*\}/, '') ?? ''), wide: document.documentElement.scrollWidth - window.innerWidth }
+  })
+  if (!(got.h1 === 'Rigged Gaussian splats in glTF' && got.sections >= 6 && got.file === '/rigged-splats/fox.glb' && got.bytes > 100000 && !got.raw && got.wide <= 0)) fails.push(`spec page: ${JSON.stringify(got)}`)
+  else ok(`spec page: ${got.sections} sections, the sample fox downloads (${Math.round(got.bytes / 1024)} KB), fits a phone`)
+  await axe(s.page, 'spec page')
+  const html = await (await fetch(base + '/engine/rigged-splats/')).text()
+  const door = (await (await fetch(base + '/engine/')).text()).includes('href="/engine/rigged-splats/"')
+  if (!html.includes('id="the-rule"') || !door) fails.push(`spec page: prerendered rule ${html.includes('id="the-rule"')}, linked from the engine page ${door}`)
+  else ok('spec page: its text is in the prerendered HTML, and the engine page links to it')
+  await s.ctx.close()
 }
 
 // Engine lab (unlisted): the splat engine on WebGPU and on WebGL. Headless

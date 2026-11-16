@@ -82,7 +82,7 @@ export const EXPERIMENTS = [
     needs: 'WebGPU or WebGL 2',
     published: '2026-11-11',
     updated: '2026-11-16',
-    body: 'A frog, a fox, an elf and a fire-breathing ice dragon, made of blobs and moving on our own splat engine. See their bones, then take one away as a rigged 3D model for Blender or a game engine, or as a pixel-art sprite sheet.',
+    body: 'A crocodile, a jellyfish, an owl, a fox, an elf and a fire-breathing ice dragon, made of blobs and moving on our own splat engine. See their bones, then take one away as a rigged 3D model for Blender or a game engine, or as a pixel-art sprite sheet.',
   },
   {
     id: 'fit',

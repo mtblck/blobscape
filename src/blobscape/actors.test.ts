@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { Blobs, covariance } from '../splat-core/blobs.ts'
 import { ZOO } from '../splat-engine/zoo/index.ts'
+import { CREATURES } from './creature/fromScenes.ts'
 import { STILL, actorAt, actorBones, freezeInto, makeActor, placeInto, placingOf, poseAll, remake, type Actor } from './actors.ts'
 import type { Creature } from '../splat-engine/body.ts'
 
@@ -43,7 +44,7 @@ test('turning a creature turns each blob with it: covariances rotate, not just c
 })
 
 test('every creature moves when playing, and loops its move', () => {
-  for (const sp of ZOO) {
+  for (const sp of CREATURES) {
     const a = makeActor(sp, { at: [0, 0, 0], height: 1 })
     const m = sp.moves[0]
     const scratch = new WeakMap<Creature, Blobs>()
