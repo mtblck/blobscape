@@ -16,6 +16,8 @@ import { OWL } from './scenes/owl.ts'
 import { REEF } from './scenes/reef.ts'
 import { CROC } from './scenes/croc.ts'
 import { GROVE } from './scenes/grove.ts'
+import { HARVEST } from './scenes/harvest.ts'
+import { LAB } from './scenes/lab.ts'
 import { HUT } from './scenes/hut.ts'
 import { SNAIL } from './scenes/snail.ts'
 import { SPIDER } from './scenes/spider.ts'
@@ -113,6 +115,8 @@ export const DIORAMAS: Diorama[] = [
   described('octopus', OCTOPUS, 'A purple octopus riding a bell buoy through a storm at night, holding up a glowing lantern in one arm while its other arms curl and the bell swings, in falling rain'),
   described('owl', OWL, 'A great owl in a starry wizard hat perched on a stump, turning its head to watch a cauldron of glowing pink potion that stirs itself over a fire, among candles, bottles, books and mushrooms'),
   described('isles', ISLES, 'Snowy islands of rock adrift in a night sky, joined by rope bridges: a cabin with lit windows and a smoking chimney among pines, a frozen waterfall, a crown of glowing ice crystals, a beacon, and falling snow'),
+  described('harvest', HARVEST, 'A pumpkin patch under a huge moon, kept by a scarecrow with a carved pumpkin head and a lantern, with crows on its arm, a wind pump turning behind, corn and drifting leaves.'),
+  described('lab', LAB, 'A laboratory at night where sprouts grow in three tall jars of glowing liquid, with rising bubbles, a steaming flask, blinking dials, a swaying lamp and a cat keeping watch.'),
   described('croc', CROC, 'A crocodile basking on a sandbar in a sunny pond, yawning, with flowers growing along its back, a small bird riding on it and butterflies overhead.'),
   described('grove', GROVE, 'A grove of birches in the snow at night, their faces lit from inside like lanterns, with paper lamps on the branches, a fox asleep below and ribbons of light in the sky.'),
   described('hut', HUT, 'A fishing hut on stilts over a mangrove lagoon at dawn, with a lantern, drying nets, a rowing boat, and a heron in the shallows.'),

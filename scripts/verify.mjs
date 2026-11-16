@@ -998,7 +998,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   }
 
   // the scenes written as descriptions: each opens by its address, draws in its own palette, and moves
-  for (const [id, name] of [['bee', 'Forest bee'], ['campfire', 'Campfire'], ['croc', 'Garden crocodile'], ['dragon', 'Lava dragon'], ['grove', 'Lantern grove'], ['hand', 'Stone hand'], ['hut', 'Heron hut'], ['isles', 'Sky islands'], ['octopus', 'Storm octopus'], ['owl', 'Owl and cauldron'], ['reef', 'Jellyfish reef'], ['snail', 'Snail house'], ['spider', 'Lantern spider'], ['window', 'Sunrise window'], ['windmill', 'Windmill']]) {
+  for (const [id, name] of [['bee', 'Forest bee'], ['campfire', 'Campfire'], ['croc', 'Garden crocodile'], ['dragon', 'Lava dragon'], ['grove', 'Lantern grove'], ['hand', 'Stone hand'], ['harvest', 'Pumpkin watch'], ['hut', 'Heron hut'], ['isles', 'Sky islands'], ['lab', 'Sprout lab'], ['octopus', 'Storm octopus'], ['owl', 'Owl and cauldron'], ['reef', 'Jellyfish reef'], ['snail', 'Snail house'], ['spider', 'Lantern spider'], ['window', 'Sunrise window'], ['windmill', 'Windmill']]) {
     const d = await open(`/experiments/pixel-diorama/?offscreen=1&scene=${id}`, { viewport: { width: 1280, height: 900 } })
     const label = `blobscape pixel diorama ${id}`
     if (!await d.page.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).then(() => true, () => false)) {
