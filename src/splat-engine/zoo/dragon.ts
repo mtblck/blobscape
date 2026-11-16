@@ -107,7 +107,7 @@ function spec(c: Palette, s: number): SculptSpec {
     }
     // darker along the back, in bands that run down the flanks
     const band = 0.5 + 0.5 * Math.sin(p[2] * 5.2 + Math.abs(p[0]) * 2.4)
-    let base = mix(c.body, c.dark, Math.max(0, Math.min(0.85, n[1] * 0.45 + band * band * 0.5 * Math.max(0, n[1] + 0.35))))
+    let base = mix(c.body, c.dark, Math.max(0, Math.min(0.7, n[1] * 0.3 + band * band * 0.4 * Math.max(0, n[1] + 0.35))))
     if (sc.id > 0.86) base = mix(base, c.frost, 0.6)
     else if (sc.id < 0.22) base = mix(base, c.dark, 0.3)
     else if (sc.id > 0.6) base = mix(base, c.belly, 0.12)
@@ -219,7 +219,7 @@ function spec(c: Palette, s: number): SculptSpec {
       },
     )
   }
-  return { bones: bones(), parts, blend: 0.22, light: { ambient: 0.5, shadow: 0.55 } }
+  return { bones: bones(), parts, blend: 0.22, light: { ambient: 0.62, shadow: 0.5 } }
 }
 
 /** The flame, as body.ts makes it: a solid cone of glowing blobs, white-hot at its heart, thinning to red at its edges and end. */
