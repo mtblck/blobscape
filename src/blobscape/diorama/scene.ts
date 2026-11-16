@@ -19,9 +19,9 @@ const LAMP_Y = 1.4
 const GULLS = [
   { r: 0.62, y: 1.72, phase: 0, way: 1 },
   { r: 0.95, y: 1.5, phase: 2.2, way: -1 },
-  { r: 0.8, y: 1.95, phase: 4.1, way: 1 },
+  { r: 0.7, y: 1.85, phase: 4.1, way: 1 },
 ]
-const CLOUDS: Vec3[] = [[-0.9, 1.9, -0.7], [0.95, 2.05, -1.0]]
+const CLOUDS: Vec3[] = [[-0.9, 1.9, -0.85], [0.95, 1.95, -1.0]]
 const FOAM: Vec3[] = [[-0.9, 0.0, 0.85], [0.3, 0.0, 1.15], [1.15, 0.0, -0.35], [-0.45, 0.0, -1.1], [-1.15, 0.0, -0.2], [0.75, 0.0, 0.25]]
 /** The sea is a round dish this wide: small enough that the grid's cells go to the island, not to open water. */
 const SEA = 1.42
@@ -94,7 +94,7 @@ export function dioramaSpec(spacing = 0.03): VoxelSpec {
       // wave lines lying along x, a cell or two thick: short bright glints on the crests, longer mid-blue runs between
       const line = Math.sin(p[2] * 40 + Math.sin(p[0] * 5) * 2.2)
       const run = hash(Math.floor(p[0] * 3 + p[2] * 9), Math.floor(p[2] * 6.4))
-      if (line > 0.88 && run > 0.5) return [0.3, 0.52, 0.74]
+      if (line > Math.cos(Math.min(0.9, 20 * s)) && run > 0.5) return [0.3, 0.52, 0.74]
       if (line < -0.8 && run < 0.6) return [0.14, 0.3, 0.55]
       return [0.1, 0.22, 0.45]
     },
@@ -119,7 +119,7 @@ export function dioramaSpec(spacing = 0.03): VoxelSpec {
     },
     bone: 'land',
   })
-  for (const [x, z, r] of [[-1.1, 0.5, 0.14], [0.9, -0.8, 0.18], [1.12, -0.5, 0.1], [-0.95, -0.75, 0.12], [0.2, 1.2, 0.08], [-0.2, -1.15, 0.11]] as const) {
+  for (const [x, z, r] of [[-1.1, 0.5, 0.14], [0.87, -0.78, 0.18], [1.12, -0.5, 0.1], [-0.95, -0.75, 0.12], [0.2, 1.2, 0.08], [-0.2, -1.15, 0.11]] as const) {
     parts.push({
       shape: displace(ellipsoid([x, 0, z], [r, r * 1.25, r * 0.9]), (a, b, c) => wobble(a * 3, b * 3, c * 3) * 0.02, 0.02),
       colour: (p, n) => (p[1] < 0.03 ? [0.3, 0.28, 0.32] : n[1] > 0.75 ? [0.56, 0.52, 0.5] : Math.floor(p[1] / 0.045) % 2 ? [0.45, 0.41, 0.42] : [0.38, 0.35, 0.38]),
@@ -128,14 +128,16 @@ export function dioramaSpec(spacing = 0.03): VoxelSpec {
   }
 
   // the tower: brick in red and white bands on a stone foot, a railed gallery, the lamp room and its cap
-  const course = Math.max(0.05, s * 2.2)
+  // a course is a whole number of grid rows and its mortar exactly one of them, so no line drops out between rows
+  const rows = Math.max(2, Math.round(Math.max(0.05, s * 2.2) / s))
+  const course = rows * s
   const bricks = (p: Vec3): Vec3 => {
     const base = Math.floor((p[1] - 0.2) / 0.21) % 2 === 0 ? WHITE : RED
-    const row = Math.floor(p[1] / course), fy = p[1] / course - row
-    const round = (Math.atan2(p[2] - tz, p[0] - tx) / TAU) * 12 + (row % 2) * 0.5
-    const col = Math.floor(round), fx = round - col
-    // mortar: a thin line under each course (and between bricks, once the grid is fine enough to draw one); one brick in six is a shade darker
-    if (fy < 0.22 || (fx < 0.1 && s < 0.02)) return shade(base, 0.8)
+    const up = (p[1] + s / 2) / course
+    const row = Math.floor(up), fy = up - row
+    const col = Math.floor((Math.atan2(p[2] - tz, p[0] - tx) / TAU) * 12 + (row % 2) * 0.5)
+    // mortar under each course; one brick in six is a shade darker, which is what marks the bricks apart
+    if (fy < 1 / rows) return shade(base, 0.8)
     return hash(row, col) > 0.84 ? shade(base, 0.86) : base
   }
   parts.push({ shape: cylinder(TOWER, 0.2, 1.25, 0.21, 0.135), colour: bricks, bone: 'land' })
@@ -268,7 +270,7 @@ export function dioramaSpec(spacing = 0.03): VoxelSpec {
     const puff = union(ellipsoid(c, [0.34, 0.1, 0.16]), sphere([c[0] - 0.12, c[1] + 0.07, c[2]], 0.13), sphere([c[0] + 0.1, c[1] + 0.09, c[2]], 0.15), sphere([c[0] + 0.26, c[1] + 0.03, c[2]], 0.09))
     parts.push({ shape: puff, colour: (p) => (p[1] > c[1] + 0.1 ? [0.88, 0.9, 0.89] : p[1] > c[1] + 0.02 ? [0.81, 0.9, 0.91] : [0.44, 0.64, 0.85]), bone: `cloud${i}`, glow: true })
   })
-  const moon: Vec3 = [-1.75, 2.1, -1.0]
+  const moon: Vec3 = [-1.95, 2.15, -1.0]
   parts.push({
     shape: sphere(moon, 0.17),
     colour: (p) => ([[0.05, 0.04, 0.06], [-0.07, -0.05, 0.05], [0.02, -0.09, 0.04]].some(([a, b, r]) => Math.hypot(p[0] - moon[0] - a, p[1] - moon[1] - b) < r) ? [0.8, 0.84, 0.9] : MOON),
@@ -276,7 +278,7 @@ export function dioramaSpec(spacing = 0.03): VoxelSpec {
   })
   const stars: Vec3[] = [[-0.6, 2.6, -1.6], [0.2, 2.75, -1.6], [1.3, 2.55, -1.6], [-1.6, 1.7, -1.3], [1.6, 1.9, -1.5], [0.6, 2.05, -1.7], [-0.2, 2.2, -1.7], [1.05, 2.9, -1.4], [-1.0, 2.9, -1.5], [-1.65, 2.5, -0.6], [1.7, 2.6, -0.5], [-1.2, 2.2, -1.6], [0.9, 1.6, -1.7], [-0.9, 1.5, -1.7], [1.7, 1.3, -1.2], [-1.7, 1.1, -0.9], [0.4, 3.0, -1.2], [-0.3, 1.7, -1.75]]
   // one part each: a union's box would span the whole sky, and the builder walks every cell of it
-  stars.forEach((p, i) => parts.push({ shape: sphere(p, s * 0.9), colour: hash(i, 2) > 0.6 ? [0.8, 0.88, 0.9] : [1, 1, 0.9], bone: 'land', glow: true }))
+  stars.forEach((p, i) => parts.push({ shape: sphere(p, Math.max(0.016, s * 0.9)), colour: hash(i, 2) > 0.6 ? [0.8, 0.88, 0.9] : [1, 1, 0.9], bone: 'land', glow: true }))
 
   // foam: thin streaks that swell and fade as they drift (poseDiorama)
   FOAM.forEach((f, i) => {

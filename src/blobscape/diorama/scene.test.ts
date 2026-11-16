@@ -9,7 +9,7 @@ test('the scene builds at every detail, finer cells giving more blobs, each part
     const t0 = performance.now()
     const b = makeDiorama(d.spacing)
     assert.ok(b.blobs.count > last, `${d.id}: ${b.blobs.count}`)
-    assert.ok(b.blobs.count < 240000, `${d.id}: ${b.blobs.count}`)
+    assert.ok(b.blobs.count < 190000, `${d.id}: ${b.blobs.count}`)
     assert.ok(performance.now() - t0 < 8000, `${d.id} took ${performance.now() - t0} ms`)
     const seen = new Set(b.partOf)
     assert.equal(seen.size, b.partOf.reduce((m, p) => Math.max(m, p), 0) + 1, `${d.id}: a part caught no grid cell`)
