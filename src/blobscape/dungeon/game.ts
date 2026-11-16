@@ -29,6 +29,29 @@ export const DOORS: { x: number; z: number; heading: number }[] = [
   { x: -HALF + 0.4, z: 1.5, heading: Math.PI / 2 },
 ]
 
+/**
+ * Things standing about the hall that break: a crate takes two blows and has a little health in it, an urn takes one
+ * and holds magic, and a barrel is full of oil, so breaking it sets the floor alight and throws back the slimes near
+ * it. Whole, each is a circle nothing walks through; fire on the floor burns crates and barrels like anything else.
+ */
+export type PropKind = 'crate' | 'urn' | 'barrel'
+export const PROP_RULES: Record<PropKind, { label: string; hp: number; r: number; burns: boolean }> = {
+  crate: { label: 'crate', hp: 2, r: 0.33, burns: true },
+  urn: { label: 'urn', hp: 1, r: 0.22, burns: false },
+  barrel: { label: 'barrel', hp: 2, r: 0.3, burns: true },
+}
+/** Where they stand: by the pillars and in the corners, clear of the doors and the middle of the hall, and no barrel within a swing of anything else. */
+export const PROPS: { kind: PropKind; x: number; z: number }[] = [
+  { kind: 'crate', x: 4.25, z: 3.3 }, { kind: 'urn', x: -4.15, z: 3.5 }, { kind: 'barrel', x: -3.3, z: -4.2 },
+  { kind: 'urn', x: 2.5, z: -3.6 }, { kind: 'crate', x: -5.9, z: -5.8 }, { kind: 'barrel', x: 6.1, z: -1.2 },
+  { kind: 'crate', x: 5.7, z: 5.9 }, { kind: 'urn', x: 6.1, z: -5.2 }, { kind: 'barrel', x: -6.0, z: 5.6 },
+]
+/** What breaking one gives: a crate's health, an urn's magic, and how far a barrel's blast reaches and what it takes off a slime. */
+export const CRATE_HEAL = 10
+export const URN_MAGIC = 25
+export const BARREL_BLAST = 1.5
+export const BARREL_HARM = 2
+
 export const KINDS = ['green', 'blue', 'red', 'purple', 'gold'] as const
 export type SlimeKind = (typeof KINDS)[number]
 
@@ -164,6 +187,27 @@ export interface Slime {
   burn: number
 }
 
+export interface Prop {
+  /** Its place in `PROPS`, and the actor that draws it. */
+  slot: number
+  kind: PropKind
+  x: number
+  z: number
+  hp: number
+  phase: 'whole' | 'broken'
+  /** Seconds into the phase: a prop put back grows in, a broken one's pieces fly and settle. */
+  t: number
+  /** The swing that last hit it. */
+  hitBy: number
+  /** Seconds since it was last hit (for a wobble), large when never. */
+  struck: number
+  /** The way the last blow was going, so the pieces fly on from it. */
+  dx: number
+  dz: number
+  /** Seconds until fire underfoot burns it again. */
+  burn: number
+}
+
 export interface Bolt {
   /** Pool index. */
   slot: number
@@ -179,7 +223,9 @@ export interface Bolt {
 
 export type GameEvent =
   | { type: 'swing' } | { type: 'cast' } | { type: 'fizzle' }
-  | { type: 'hit'; kind: SlimeKind; by: 'sword' | 'magic' | 'fire' }
+  | { type: 'hit'; kind: SlimeKind; by: 'sword' | 'magic' | 'fire' | 'blast' }
+  /** A prop was struck; a prop broke. */
+  | { type: 'knock'; kind: PropKind } | { type: 'break'; kind: PropKind }
   /** A bolt landed and the floor caught; the hero stood in fire. */
   | { type: 'lit'; element: Element } | { type: 'scorch'; damage: number }
   | { type: 'burst'; kind: SlimeKind }
@@ -190,6 +236,8 @@ export class Game {
   hero: Hero = newHero()
   slimes: Slime[] = []
   bolts: Bolt[] = []
+  /** Everything that can break, in `PROPS` order. */
+  props: Prop[] = newProps()
   /** The floor: what burns and what is frozen. */
   readonly ground: Ground
   wave = 0
@@ -222,6 +270,7 @@ export class Game {
     this.hero = newHero()
     this.slimes = []
     this.bolts = []
+    this.props = newProps()
     this.ground.clear()
     this.score = 0
     this.state = 'playing'
@@ -235,6 +284,13 @@ export class Game {
     this.toSpawn = Math.min(20, 3 + 2 * (w - 1))
     this.spawnAt = this.time + 1.2
     this.nextWaveAt = 0
+    // a new wave finds the hall set out again: whatever was broken is back, unless someone is standing there
+    for (const p of this.props) {
+      if (p.phase !== 'broken') continue
+      const near = (x: number, z: number, r: number) => Math.hypot(x - p.x, z - p.z) < PROP_RULES[p.kind].r + r + 0.15
+      if (near(this.hero.x, this.hero.z, HERO_R) || this.slimes.some((s) => s.phase !== 'burst' && near(s.x, s.z, slimeR(s)))) continue
+      Object.assign(p, { hp: PROP_RULES[p.kind].hp, phase: 'whole', t: 0, hitBy: -1, struck: 99, burn: 0.25 })
+    }
     this.banner = { text: `Wave ${w}`, until: this.time + 2 }
     this.events.push({ type: 'wave', wave: w })
   }
@@ -254,6 +310,7 @@ export class Game {
     this.lastCast = !!input.cast
     this.lastFrost = !!input.frost
     this.ground.step(dt)
+    this.stepProps(dt)
     this.moveBolts(dt)
     this.moveSlimes(dt)
     this.spawn()
@@ -273,7 +330,7 @@ export class Game {
     h.vz *= fade
     h.x += (Math.sin(h.heading) * h.speed + h.vx) * dt
     h.z += (Math.cos(h.heading) * h.speed + h.vz) * dt
-    ;[h.x, h.z] = keepIn(h.x, h.z, HERO_R)
+    ;[h.x, h.z] = this.keep(h.x, h.z, HERO_R)
     h.hurt = Math.max(0, h.hurt - dt)
     h.mp = Math.min(MAX_MP, h.mp + MP_REGEN * dt)
     // the hero's own fire burns too: a little, often, with no knock-back and no grace
@@ -324,6 +381,14 @@ export class Game {
           if (d < SWORD_REACH + slimeR(s) && off < SWORD_ARC) {
             s.hitBy = h.swingN
             this.damage(s, 1, 'sword', dx / (d || 1), dz / (d || 1))
+          }
+        }
+        for (const p of this.props) {
+          if (p.phase !== 'whole' || p.hitBy === h.swingN) continue
+          const dx = p.x - h.x, dz = p.z - h.z, d = Math.hypot(dx, dz)
+          if (d < SWORD_REACH + PROP_RULES[p.kind].r && Math.abs(angleTo(h.heading, Math.atan2(dx, dz))) < SWORD_ARC) {
+            p.hitBy = h.swingN
+            this.strike(p, 1, dx / (d || 1), dz / (d || 1))
           }
         }
       }
@@ -382,7 +447,9 @@ export class Game {
         this.damage(hit, BOLT_HARM[b.element], 'magic', Math.sin(b.heading), Math.cos(b.heading))
         if (b.element === 'frost') hit.chill = CHILL
       }
-      if (hit || wall || b.t > BOLT_LIFE) {
+      const prop = hit ? undefined : this.props.find((p) => p.phase === 'whole' && Math.hypot(p.x - b.x, p.z - b.z) < PROP_RULES[p.kind].r + 0.15)
+      if (prop) this.strike(prop, BOLT_HARM[b.element], Math.sin(b.heading), Math.cos(b.heading))
+      if (hit || prop || wall || b.t > BOLT_LIFE) {
         b.popped = true
         b.t = 0
         // where it lands, the floor catches
@@ -393,12 +460,59 @@ export class Game {
     this.bolts = this.bolts.filter((b) => !(b.popped && b.t > BOLT_POP))
   }
 
-  private damage(s: Slime, n: number, by: 'sword' | 'magic' | 'fire', dx: number, dz: number) {
+  /** Inside the walls and out of the pillars and whatever props still stand. */
+  private keep(x: number, z: number, r: number): [number, number] {
+    for (const p of this.props) {
+      if (p.phase !== 'whole') continue
+      const dx = x - p.x, dz = z - p.z, d = Math.hypot(dx, dz), min = PROP_RULES[p.kind].r + r
+      if (d < min && d > 1e-6) { x = p.x + (dx / d) * min; z = p.z + (dz / d) * min }
+    }
+    return keepIn(x, z, r)
+  }
+
+  /** Props age, and fire on the floor burns the ones that can burn. */
+  private stepProps(dt: number) {
+    for (const p of this.props) {
+      p.t += dt
+      p.struck += dt
+      if (p.phase !== 'whole' || !PROP_RULES[p.kind].burns || this.state !== 'playing') continue
+      if (this.ground.at(p.x, p.z).fire > 0.5) {
+        p.burn -= dt
+        if (p.burn <= 0) { p.burn = BURN_EVERY; this.strike(p, 1, 0, 0) }
+      } else p.burn = 0.25
+    }
+  }
+
+  /** A blow to a prop going the way (dx, dz); at no health it breaks and gives what it holds. */
+  private strike(p: Prop, n: number, dx: number, dz: number) {
+    if (this.state !== 'playing' || p.phase !== 'whole') return
+    p.hp -= n
+    p.struck = 0
+    p.dx = dx
+    p.dz = dz
+    if (p.hp > 0) { this.events.push({ type: 'knock', kind: p.kind }); return }
+    p.phase = 'broken'
+    p.t = 0
+    this.events.push({ type: 'break', kind: p.kind })
+    if (p.kind === 'crate') this.hero.hp = Math.min(MAX_HP, this.hero.hp + CRATE_HEAL)
+    else if (p.kind === 'urn') this.hero.mp = Math.min(MAX_MP, this.hero.mp + URN_MAGIC)
+    else {
+      // oil: the floor catches where it stood, and the slimes close by are thrown back
+      this.ground.light(p.x, p.z, 'fire')
+      for (const s of this.slimes) {
+        if (s.phase !== 'live') continue
+        const sx = s.x - p.x, sz = s.z - p.z, d = Math.hypot(sx, sz)
+        if (d < BARREL_BLAST + slimeR(s)) this.damage(s, BARREL_HARM, 'blast', sx / (d || 1), sz / (d || 1))
+      }
+    }
+  }
+
+  private damage(s: Slime, n: number, by: 'sword' | 'magic' | 'fire' | 'blast', dx: number, dz: number) {
     // a bolt still in flight when the hero goes down hits nothing that counts
     if (this.state !== 'playing') return
     s.hp -= n
     s.struck = 0
-    const push = by === 'magic' ? 3 : by === 'fire' ? 0 : 4.5
+    const push = by === 'magic' ? 3 : by === 'fire' ? 0 : by === 'blast' ? 6 : 4.5
     s.vx += dx * push
     s.vz += dz * push
     this.events.push({ type: 'hit', kind: s.kind, by })
@@ -464,7 +578,7 @@ export class Game {
         b.x += (dx / d) * push; b.z += (dz / d) * push
       }
     }
-    for (const s of live) [s.x, s.z] = keepIn(s.x, s.z, slimeR(s))
+    for (const s of live) [s.x, s.z] = this.keep(s.x, s.z, slimeR(s))
     // touching the hero hurts, unless the hero was just hurt
     if (this.state !== 'playing') return
     for (const s of live) {
@@ -559,6 +673,10 @@ export function angleTo(a: number, b: number) {
 }
 
 /** Pushes a body of radius r out of the pillars and back inside the walls. */
+function newProps(): Prop[] {
+  return PROPS.map((p, slot) => ({ slot, kind: p.kind, x: p.x, z: p.z, hp: PROP_RULES[p.kind].hp, phase: 'whole', t: 99, hitBy: -1, struck: 99, dx: 0, dz: 1, burn: 0.25 }))
+}
+
 export function keepIn(x: number, z: number, r: number): [number, number] {
   for (const p of PILLARS) {
     const dx = x - p.x, dz = z - p.z, d = Math.hypot(dx, dz), min = p.r + r

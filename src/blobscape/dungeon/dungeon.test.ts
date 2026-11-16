@@ -1,7 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { Dungeon } from './dungeon.ts'
-import { BURST, KINDS, MAX_MP, RULES } from './game.ts'
+import { BURST, KINDS, MAX_MP, PROPS, RULES } from './game.ts'
+import { PIECES, pieceFlight } from './breakables.ts'
 import { CRYSTALS, FLAMES, paintFloor } from './elements.ts'
 import { Ground } from './ground.ts'
 import { Blobs } from '../../splat-core/blobs.ts'
@@ -131,4 +132,34 @@ test('a frost bolt grows ice on the floor and turns it pale blue, dimmer where b
   assert.ok(two.color[5] < two.color[2] * 0.6, `dim ${two.color[5]} against bright ${two.color[2]}`)
   paintFloor(two, base, g, true)
   assert.ok(two.color[5] > 0.5, 'with live lights the frost is its own color and the lights dim it')
+})
+
+test('a prop stands whole with its pieces hidden; broken, the body is gone and the pieces fly on from the blow and lie flat on the floor', () => {
+  const d = new Dungeon({ detail: 0.3, look: 'forest', difficulty: 'normal', light: 'baked' })
+  const idle = { forward: 0, turn: 0 }
+  d.game.hold()
+  d.update(1 / 30, idle)
+  assert.equal(d.props.length, PROPS.length)
+  for (const kind of ['crate', 'urn', 'barrel'] as const) {
+    const p = d.game.props.find((p) => p.kind === kind)!
+    const sk = d.props[p.slot].skeleton
+    assert.ok(sk.scale[1] > 0.9, `${kind} stands`)
+    for (let i = 0; i < PIECES; i++) assert.equal(sk.scale[2 + i], 0)
+    // a blow going +x
+    Object.assign(p, { phase: 'broken', hp: 0, t: 0, dx: 1, dz: 0 })
+    for (let t = 0; t < 1.5; t += 1 / 30) d.update(1 / 30, idle)
+    assert.ok(sk.scale[1] < 1e-6, `${kind}'s body is gone`)
+    let sum = 0
+    for (let i = 0; i < PIECES; i++) {
+      const b = 2 + i
+      assert.ok(sk.scale[b] > 0.9)
+      const y = sk.posedHead[b * 3 + 1]
+      assert.ok(y >= 0 && y < 0.08, `${kind} piece ${i} lies at ${y}`)
+      sum += sk.posedHead[b * 3] - p.x
+      // a piece landed is the same however long ago it broke
+      assert.ok(pieceFlight(kind, i, 1, 0, 1.5).landed)
+      assert.deepEqual(pieceFlight(kind, i, 1, 0, 1.5).at, pieceFlight(kind, i, 1, 0, 9).at)
+    }
+    assert.ok(sum / PIECES > 0.5, `${kind}'s pieces went the blow's way: ${sum / PIECES}`)
+  }
 })
