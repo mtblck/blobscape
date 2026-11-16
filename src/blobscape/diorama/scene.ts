@@ -381,5 +381,5 @@ export const PALETTES: Palette[] = [
   { id: 'ember', label: 'Ember', colours: hex('#120a06', '#2b1608', '#4d260b', '#7a3d0d', '#a85d12', '#d98a1f', '#f5b83d', '#ffe08a', '#fff6d6', '#cfe9f2') },
   { id: 'pocket', label: 'Pocket', colours: hex('#0f2a1d', '#2f5d3a', '#7fae5a', '#d8e8a0') },
   { id: 'ink', label: 'Ink', colours: hex('#101018', '#3a3a52', '#8a8aa6', '#e8e6f0') },
-  { id: 'none', label: 'Scene colours', colours: [] },
+  { id: 'none', label: 'Full color', colours: [] },
 ]

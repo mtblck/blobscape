@@ -294,6 +294,11 @@ export function PixelDiorama() {
                   <div data-testid="palette-strip" aria-hidden className="mt-5 flex h-3 overflow-hidden rounded ring-1 ring-rule">
                     {colours.length ? colours.map((c, i) => <span key={i} className="flex-1" style={{ background: `rgb(${c[0]} ${c[1]} ${c[2]})` }} />) : <span className="flex-1 bg-paper-sunk" />}
                   </div>
+                  <p className="mt-2 text-xs text-ink-faint">
+                    {!colours.length ? 'No palette: every pixel keeps the color the scene gives it, in as many colors as it takes.'
+                      : palette === 'own' ? `The ${colours.length} colors chosen for this scene. Every pixel snaps to the closest one.`
+                        : `A borrowed palette of ${colours.length} colors. Every pixel snaps to the closest one.`}
+                  </p>
                 </Field>
                 <Field label="Pixel size">
                   <div className="flex flex-wrap gap-1.5">
@@ -311,7 +316,7 @@ export function PixelDiorama() {
           {
             id: 'finish', label: 'Finish', content: (
               <div className={TAB_SECTIONS}>
-                <Slider label="Dither" value={dither} min={0} max={1} step={0.05} onChange={setDither} format={(v) => `${Math.round(v * 100)}%`} hint={!pixels ? 'Applies to Pixel art.' : colours.length ? (sky ? 'Checkers two palette colours to fake the ones between. The sky is always dithered, so its bands blend.' : 'Checkers two palette colours to fake the ones between.') : 'Needs a palette: Scene colours has none to mix.'} />
+                <Slider label="Dither" value={dither} min={0} max={1} step={0.05} onChange={setDither} format={(v) => `${Math.round(v * 100)}%`} hint={!pixels ? 'Applies to Pixel art.' : colours.length ? (sky ? 'Checkers two palette colours to fake the ones between. The sky is always dithered, so its bands blend.' : 'Checkers two palette colours to fake the ones between.') : 'Needs a palette: Full color has none to mix.'} />
                 <Slider label="Glow" value={glow} min={0} max={4} step={0.25} onChange={setGlow} format={(v) => (v ? `${v.toFixed(2)}×` : 'off')} hint={pixels ? 'Bright pixels light the ones beside them.' : 'Applies to Pixel art.'} />
                 <div className="grid gap-3">
                 <Toggle label={pixels ? 'Outline the scene' : 'Outline the scene (in Pixel art)'} checked={outline} onChange={setOutline} />

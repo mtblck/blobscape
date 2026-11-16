@@ -43,12 +43,15 @@ export interface Diorama {
   lights(t: number): PointLight[]
 }
 
+/** The name of the palette chosen for a scene, on its chip. */
+const OWN_PALETTE = 'Made for it'
+
 const LIGHTHOUSE: Diorama = {
   id: 'lighthouse',
   label: 'Lighthouse',
   about: 'A lighthouse and a cottage on a rock in the sea at dusk, with a turning lamp, pines, a jetty, a small boat, gulls and clouds',
   loop: LOOP,
-  palette: { label: PALETTES[0].label, colours: PALETTES[0].colours },
+  palette: { label: OWN_PALETTE, colours: PALETTES[0].colours },
   sky: [[9, 13, 32], [60, 94, 164]],
   finish: { dither: 0.05, glow: 1.5, outline: true, edges: true, sky: true },
   views: [
@@ -70,6 +73,8 @@ const night = (palette: Rgb[]): [Rgb, Rgb] => {
 }
 
 /** A scene written as a description (splat-engine/sceneDoc.ts), made ready for the page. */
+/** What the page calls the palette a scene was made with. */
+
 export function described(id: string, doc: SceneDoc, about: string): Diorama {
   const c = compileScene(doc)
   return {
@@ -77,7 +82,7 @@ export function described(id: string, doc: SceneDoc, about: string): Diorama {
     label: c.name,
     about,
     loop: c.loop,
-    palette: { label: 'Its own', colours: c.palette },
+    palette: { label: OWN_PALETTE, colours: c.palette },
     // with no sky of its own, the switch gives it a night made of its two darkest colours
     sky: c.look.sky ?? night(c.palette),
     finish: { dither: c.look.dither, glow: c.look.glow, outline: !!c.look.outline, edges: !!c.look.edges, sky: !!c.look.sky },
