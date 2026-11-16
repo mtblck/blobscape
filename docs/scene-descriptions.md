@@ -49,6 +49,7 @@ The dragon scene (`scenes/dragon.ts`) follows a few habits that make a scene rea
 - **One big subject.** Build it from many small parts (the dragon is about 140, mostly cones) and let it fill the frame.
 - **A chain of bones for anything that bends.** Each neck bone has the one before as its `parent` and sways a few degrees; the turns add up along the chain, so the head sweeps wide while each joint barely moves. A jaw is a child of the head with one `sway`.
 - **Embers or dust.** A dozen or so tiny `glow` parts with slow `drift` moves give the air depth.
+- **Line a big dark body.** A part is one layer of blobs, and a little of what is behind shows through it: bright things behind a dark part spoil it. Put the same shape, a little smaller, inside it on a still bone of its own (parts on one bone drop cells buried in each other), in a dark colour, with `noShadow`.
 - **Small parts cast no shadow.** Mark fronds, petals, legs and the like `noShadow`: every shadow caster is checked for every lit cell, so a hundred small ones double the build time for shadows nobody sees.
 - **A slow swing of the camera** shows that the scene is solid.
 

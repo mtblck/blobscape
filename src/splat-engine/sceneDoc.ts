@@ -131,8 +131,8 @@ const MAX_DEPTH = 6
 const MAX_SCENE_LIGHTS = 4
 /** Simple shapes in the whole scene, however they are joined. */
 const MAX_SHAPES = 600
-/** The most surface a scene's parts may have between them, by their boxes, in square units: a few times the fullest scene we ship. Past it the build takes seconds and the blobs run to millions. */
-const MAX_SURFACE = 150
+/** The most surface a scene's parts may have between them, by their boxes, in square units: a third over the fullest scene we ship (the dragon, about 160). Past it the build takes seconds and the blobs run to millions. */
+const MAX_SURFACE = 200
 const MAX_MOVES_PER_BONE = 6
 /** A value for a message: only what is safe to print (anything can arrive from a prompt). */
 const show = (v: unknown) => (typeof v === 'string' ? `'${v.slice(0, 40)}'` : typeof v === 'number' || typeof v === 'boolean' ? String(v) : v === undefined ? 'nothing' : `a ${Array.isArray(v) ? 'list' : typeof v}`)
