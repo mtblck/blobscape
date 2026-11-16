@@ -6,7 +6,8 @@ import { baseline, packSheet, processFrames, shotsFor, tinkerkitSheet, type Layo
 import { SiteHeader } from '../shared/SiteHeader.tsx'
 import { Footer } from '../shared/Footer.tsx'
 import { Crumbs } from '../blobscape/Shell.tsx'
-import { Chip, Field, Panel, Slider, Tabs, Toggle } from '../shared/ui.tsx'
+import { Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
+import { TAB_SECTIONS, Workbench } from '../shared/Workbench.tsx'
 import { countColours, countSolid, rgbToHex, type Frame } from '../splat-core/pixel.ts'
 
 const CAMERAS: { id: string; name: string; view: Partial<View>; note: string }[] = [
@@ -230,9 +231,6 @@ export function App() {
     CAMERAS.find((c) => c.view.azimuth !== undefined && c.view.elevation === view.elevation && c.view.azimuth === view.azimuth) ??
     CAMERAS.find((c) => c.view.azimuth === undefined && c.view.elevation === view.elevation)
 
-  const pixelsSummary = `${size}px · ${supersample * supersample} samples`
-  const colourSummary = palette === 'auto' ? `Auto · ${autoColours}` : palette === 'none' ? 'Full colour' : PALETTES.find((p) => p.id === palette)!.name
-
   return (
     <div className="flex min-h-dvh flex-col">
       <SiteHeader here="/experiments/splat-to-sprite/" />
@@ -247,11 +245,11 @@ export function App() {
           </p>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(340px,1fr)]">
-          {/* ------------------------------------------------------------ 3D side */}
-          <section aria-label="3D view" className="min-w-0 space-y-4">
+        <Workbench
+          viewLabel="3D view"
+          view={
             <div
-              className={`relative aspect-[4/3] overflow-hidden rounded-lg border bg-paper-sunk ${dragOver ? 'border-accent' : 'border-rule'}`}
+              className={`absolute inset-0 ${dragOver ? 'ring-2 ring-accent ring-inset' : ''}`}
               onDragOver={(ev) => { ev.preventDefault(); setDragOver(true) }}
               onDragLeave={() => setDragOver(false)}
               onDrop={(ev) => {
@@ -269,7 +267,7 @@ export function App() {
                 onPointerUp={onPointerUp}
                 onPointerCancel={onPointerUp}
                 role="img"
-                aria-label="3D view of the splat. Drag to turn the camera and scroll to zoom, or use the Camera sliders."
+                aria-label="3D view of the splat. Drag to turn the camera and scroll to zoom, or use the sliders in the View tab."
                 data-testid="viewport"
               />
               {/* The sprite frame: what's inside this square becomes the sprite. */}
@@ -278,144 +276,158 @@ export function App() {
                 className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border border-dashed border-accent/80"
                 style={{ height: `${FRAME_SHARE * 100}%`, aspectRatio: '1 / 1' }}
               >
-                <span className="absolute -top-6 left-0 text-xs text-accent">sprite frame · {size}×{size}</span>
+                <span className="absolute -top-6 left-0 text-xs whitespace-nowrap text-accent">sprite frame · {size}×{size}</span>
               </div>
+              {/* The sprite itself, live, in the corner: every option acts on it. */}
+              <figure className="pointer-events-none absolute top-3 right-3 w-14 max-sm:top-2 max-sm:right-2 sm:w-24 lg:w-28 xl:w-36">
+                <div className="checker aspect-square overflow-hidden rounded-lg border border-rule">
+                  {stages && <FrameImage frame={stages.final} className="h-full w-full" testId="sprite-preview" label={`Sprite preview, ${size} by ${size} pixels`} />}
+                </div>
+                <figcaption className="mt-1 text-center text-xs text-ink-faint">your sprite</figcaption>
+              </figure>
               <div aria-live="polite" className={loading ? 'absolute inset-0 grid place-items-center text-ink-muted' : 'sr-only'}>
                 {loading ? 'Loading splats…' : `${splatCount.toLocaleString()} splats loaded`}
               </div>
-              {error && <div role="alert" className="absolute inset-x-4 bottom-4 rounded bg-paper p-3 text-sm text-ink">{error}</div>}
-              <p className="pointer-events-none absolute right-3 bottom-2 text-xs text-ink-faint">drag to orbit · scroll to zoom</p>
+              {error && <div role="alert" className="absolute inset-x-4 bottom-12 rounded bg-paper p-3 text-sm text-ink">{error}</div>}
+              <p aria-hidden className="pointer-events-none absolute right-3 bottom-2 text-xs text-ink-faint">drag to orbit · scroll to zoom</p>
             </div>
-
-            <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Splat to load">
-              {PRESETS.map((p) => (
-                <Chip
-                  key={p.id}
-                  active={source.kind === 'preset' && source.id === p.id}
-                  onClick={() => load(meshFromBuilder(p.build), false, { kind: 'preset', id: p.id, name: p.name })}
-                >
-                  {p.name}
-                </Chip>
-              ))}
-              <Chip active={source.kind === 'file'} onClick={() => fileInput.current?.click()}>
-                {source.kind === 'file' ? source.name : 'Open your own splat…'}
-              </Chip>
-              <input ref={fileInput} type="file" className="hidden" accept=".ply,.spz,.splat,.ksplat,.sog,.zip" onChange={(ev) => ev.target.files?.[0] && openFile(ev.target.files[0])} />
-              <span className="ml-auto text-sm text-ink-faint" data-testid="splat-count">{splatCount.toLocaleString()} splats</span>
-            </div>
-            {source.kind === 'file' ? (
-              <div className="flex flex-wrap gap-x-6 gap-y-3 text-sm">
-                <Toggle label="Flip upright" checked={upright} onChange={(v) => { setUpright(v); engineRef.current?.setUpright(v) }} />
-                <Slider label="Crop to object" value={crop} min={0.6} max={3} step={0.05} onChange={setCrop} format={(v) => (v >= 3 ? 'off' : `${v.toFixed(2)}× radius`)} />
-              </div>
-            ) : (
-              <p className="text-sm text-ink-faint">
-                The samples are built in code, blob by blob. For a real object, scan one with a free phone app such as Scaniverse or
-                Polycam, export a .ply or .spz, and drop it on the view. It stays in your browser.
-              </p>
-            )}
-          </section>
-
-          {/* --------------------------------------------------------- controls */}
-          <section aria-label="Sprite settings" className="min-w-0 space-y-5">
-            <div className="flex items-start gap-4">
-              <div className="checker grid aspect-square w-40 shrink-0 place-items-center overflow-hidden rounded-lg border border-rule sm:w-48">
-                {stages && <FrameImage frame={stages.final} className="h-full w-full" testId="sprite-preview" label={`Sprite preview, ${size} by ${size} pixels`} />}
-              </div>
-              <div className="min-w-0 text-sm text-ink-muted">
-                <p className="font-medium text-ink">Your sprite</p>
-                {stages && (
-                  <ul className="mt-2 space-y-1 tabular-nums">
-                    <li>{size}×{size} pixels</li>
-                    <li>{countSolid(stages.final)} filled</li>
-                    <li>{countColours(stages.final)} colours</li>
-                  </ul>
-                )}
-                {stages && stages.palette.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-0.5" role="img" aria-label={`Palette in use: ${stages.palette.length} colours`}>
-                    {stages.palette.map((c, i) => <span key={i} title={rgbToHex(c)} aria-hidden className="h-3.5 w-3.5 rounded-[2px]" style={{ background: rgbToHex(c) }} />)}
+          }
+          status={<>
+            <span><span className="text-ink tabular-nums" data-testid="splat-count">{splatCount.toLocaleString()} splats</span> in {source.name}</span>
+            {stages && <span className="tabular-nums">Sprite: {size}×{size} pixels, {countSolid(stages.final)} filled, {countColours(stages.final)} colours</span>}
+          </>}
+          tabsLabel="Sprite settings"
+          tabs={[
+            {
+              id: 'prop',
+              label: 'Prop Type',
+              content: (
+                <div className={TAB_SECTIONS}>
+                  <div className="grid gap-3">
+                    <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Splat to load">
+                      {PRESETS.map((p) => (
+                        <Chip
+                          key={p.id}
+                          active={source.kind === 'preset' && source.id === p.id}
+                          onClick={() => load(meshFromBuilder(p.build), false, { kind: 'preset', id: p.id, name: p.name })}
+                        >
+                          {p.name}
+                        </Chip>
+                      ))}
+                    </div>
+                    <p className="text-xs leading-relaxed text-ink-faint">The samples are built in code, blob by blob.</p>
                   </div>
-                )}
-              </div>
-            </div>
-
-            <Tabs
-              label="Sprite settings"
-              tabs={[
-                {
-                  id: 'camera',
-                  label: 'Camera',
-                  summary: activeCamera?.name ?? `${view.elevation}° · ${Math.round(view.azimuth)}°`,
-                  content: (
-                    <Panel note={activeCamera?.note ?? 'Orbit freely; the sprite is whatever sits inside the dashed square.'}>
-                      <div className="flex flex-wrap gap-2" role="group" aria-label="Camera presets">
-                        {CAMERAS.map((c) => (
-                          <Chip key={c.id} active={activeCamera?.id === c.id} onClick={() => setView((v) => ({ ...v, ...c.view }))}>{c.name}</Chip>
-                        ))}
+                  <div className="grid gap-3">
+                    <div>
+                      <Chip active={source.kind === 'file'} onClick={() => fileInput.current?.click()}>
+                        {source.kind === 'file' ? source.name : 'Open your own splat…'}
+                      </Chip>
+                      <input ref={fileInput} type="file" className="hidden" accept=".ply,.spz,.splat,.ksplat,.sog,.zip" onChange={(ev) => ev.target.files?.[0] && openFile(ev.target.files[0])} />
+                    </div>
+                    {source.kind === 'file' ? (
+                      <>
+                        <Toggle label="Flip upright" checked={upright} onChange={(v) => { setUpright(v); engineRef.current?.setUpright(v) }} />
+                        <Slider label="Crop to object" value={crop} min={0.6} max={3} step={0.05} onChange={setCrop} format={(v) => (v >= 3 ? 'off' : `${v.toFixed(2)}× radius`)} />
+                      </>
+                    ) : (
+                      <p className="text-xs leading-relaxed text-ink-faint">
+                        For a real object, scan one with a free phone app such as Scaniverse or Polycam, export a .ply or .spz, and
+                        drop it on the view. It stays in your browser.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ),
+            },
+            {
+              id: 'pixels',
+              label: 'Pixels',
+              content: (
+                <div className={TAB_SECTIONS}>
+                  <div className="grid gap-3">
+                    <Field label="Sprite size">
+                      <div className="flex flex-wrap gap-1.5">
+                        {SIZES.map((s) => <Chip key={s} small active={size === s} onClick={() => setSize(s)}>{s}</Chip>)}
                       </div>
-                      <Slider label="Height" value={view.elevation} min={-30} max={90} step={1} onChange={(elevation) => setView((v) => ({ ...v, elevation }))} format={(v) => `${v}°`} />
-                      <Slider label="Turn" value={Math.round(view.azimuth)} min={-180} max={180} step={1} onChange={(azimuth) => setView((v) => ({ ...v, azimuth }))} format={(v) => `${v}°`} />
-                      <Slider label="Zoom" value={view.zoom} min={0.4} max={4} step={0.01} onChange={(zoom) => setView((v) => ({ ...v, zoom }))} format={(v) => `${v.toFixed(2)}×`} />
-                      <Slider label="Nudge up/down" value={view.offsetY} min={-0.5} max={0.5} step={0.01} onChange={(offsetY) => setView((v) => ({ ...v, offsetY }))} format={(v) => v.toFixed(2)} />
-                      <Toggle label="Perspective (off = flat, like pixel-art games)" checked={!view.ortho} onChange={(p) => setView((v) => ({ ...v, ortho: !p }))} />
-                    </Panel>
-                  ),
-                },
-                {
-                  id: 'pixels',
-                  label: 'Pixels',
-                  summary: pixelsSummary,
-                  content: (
-                    <Panel note="Each sprite pixel is the average of a little grid of render samples. More samples means smoother edges before the cut.">
-                      <Field label="Sprite size">
-                        <div className="flex flex-wrap gap-1.5">
-                          {SIZES.map((s) => <Chip key={s} small active={size === s} onClick={() => setSize(s)}>{s}</Chip>)}
-                        </div>
-                      </Field>
-                      <Field label="Samples per pixel">
-                        <div className="flex flex-wrap gap-1.5">
-                          {[1, 2, 4, 8].map((s) => <Chip key={s} small active={supersample === s} onClick={() => setSupersample(s)}>{s * s}</Chip>)}
-                        </div>
-                      </Field>
-                      <Slider label="Solid at coverage" value={cut} min={0.05} max={0.95} step={0.01} onChange={setCut} format={(v) => `${Math.round(v * 100)}%`} />
-                      <Slider label="Blob reach" value={stdDev} min={0.5} max={Math.sqrt(8)} step={0.01} onChange={setStdDev} format={(v) => `${v.toFixed(2)}σ`} hint="How far out each Gaussian is drawn, in standard deviations. Turn it down to see the individual blobs." />
-                    </Panel>
-                  ),
-                },
-                {
-                  id: 'colour',
-                  label: 'Colour',
-                  summary: colourSummary,
-                  content: (
-                    <Panel note="Pixel art uses a small fixed palette. Every pixel snaps to its nearest colour, measured in OKLab so it matches what your eye would pick.">
-                      <Field label="Palette">
-                        <select aria-label="Palette" className="w-full rounded border border-rule bg-paper py-1.5 pr-9 pl-2.5" value={palette} onChange={(e) => setPalette(e.target.value)}>
-                          <option value="auto">Auto: picked from the splat</option>
-                          {PALETTES.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.colors.length})</option>)}
-                          <option value="none">Full colour (no palette)</option>
-                        </select>
-                      </Field>
-                      {palette === 'auto' && <Slider label="Colours" value={autoColours} min={2} max={32} step={1} onChange={setAutoColours} format={(v) => `${v}`} />}
-                      <Slider label="Dither" value={dither} min={0} max={1} step={0.05} onChange={setDither} format={(v) => (v === 0 ? 'off' : `${Math.round(v * 100)}%`)} />
-                      <Field label="Outline">
-                        <div className="flex flex-wrap gap-1.5">
-                          {(['none', 'darkest', 'black'] as const).map((o) => <Chip key={o} small active={outlineMode === o} onClick={() => setOutlineMode(o)}>{o === 'darkest' ? 'darkest colour' : o}</Chip>)}
-                        </div>
-                      </Field>
-                      <Toggle label="Remove stray pixels" checked={strays} onChange={setStrays} />
-                    </Panel>
-                  ),
-                },
-              ]}
-            />
-          </section>
-        </div>
+                    </Field>
+                    <Field label="Samples per pixel">
+                      <div className="flex flex-wrap gap-1.5">
+                        {[1, 2, 4, 8].map((s) => <Chip key={s} small active={supersample === s} onClick={() => setSupersample(s)}>{s * s}</Chip>)}
+                      </div>
+                    </Field>
+                    <p className="text-xs leading-relaxed text-ink-faint">Each sprite pixel is the average of a little grid of render samples. More samples means smoother edges before the cut.</p>
+                  </div>
+                  <div className="grid gap-3">
+                    <Slider label="Solid at coverage" value={cut} min={0.05} max={0.95} step={0.01} onChange={setCut} format={(v) => `${Math.round(v * 100)}%`} />
+                    <Slider label="Blob reach" value={stdDev} min={0.5} max={Math.sqrt(8)} step={0.01} onChange={setStdDev} format={(v) => `${v.toFixed(2)}σ`} hint="How far out each Gaussian is drawn, in standard deviations. Turn it down to see the individual blobs." />
+                  </div>
+                </div>
+              ),
+            },
+            {
+              id: 'finish',
+              label: 'Finish',
+              content: (
+                <div className={TAB_SECTIONS}>
+                  <div className="grid gap-3">
+                    <Field label="Palette">
+                      <select aria-label="Palette" className="w-full rounded border border-rule bg-paper py-1.5 pr-9 pl-2.5" value={palette} onChange={(e) => setPalette(e.target.value)}>
+                        <option value="auto">Auto: picked from the splat</option>
+                        {PALETTES.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.colors.length})</option>)}
+                        <option value="none">Full colour (no palette)</option>
+                      </select>
+                    </Field>
+                    {palette === 'auto' && <Slider label="Colours" value={autoColours} min={2} max={32} step={1} onChange={setAutoColours} format={(v) => `${v}`} />}
+                    {stages && stages.palette.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-0.5" role="img" aria-label={`Palette in use: ${stages.palette.length} colours`}>
+                        {stages.palette.map((c, i) => <span key={i} title={rgbToHex(c)} aria-hidden className="h-3.5 w-3.5 rounded-[2px]" style={{ background: rgbToHex(c) }} />)}
+                      </div>
+                    )}
+                    <p className="text-xs leading-relaxed text-ink-faint">Every pixel snaps to its nearest palette colour, measured in OKLab so it matches what your eye would pick.</p>
+                  </div>
+                  <Slider label="Dither" value={dither} min={0} max={1} step={0.05} onChange={setDither} format={(v) => (v === 0 ? 'off' : `${Math.round(v * 100)}%`)} />
+                  <div className="grid gap-3">
+                    <Field label="Outline">
+                      <div className="flex flex-wrap gap-1.5">
+                        {(['none', 'darkest', 'black'] as const).map((o) => <Chip key={o} small active={outlineMode === o} onClick={() => setOutlineMode(o)}>{o === 'darkest' ? 'darkest colour' : o}</Chip>)}
+                      </div>
+                    </Field>
+                    <Toggle label="Remove stray pixels" checked={strays} onChange={setStrays} />
+                  </div>
+                </div>
+              ),
+            },
+            {
+              id: 'view',
+              label: 'View',
+              content: (
+                <div className={TAB_SECTIONS}>
+                  <div className="grid gap-3">
+                    <div className="flex flex-wrap gap-2" role="group" aria-label="Camera presets">
+                      {CAMERAS.map((c) => (
+                        <Chip key={c.id} active={activeCamera?.id === c.id} onClick={() => setView((v) => ({ ...v, ...c.view }))}>{c.name}</Chip>
+                      ))}
+                    </div>
+                    <p className="text-xs leading-relaxed text-ink-faint">{activeCamera?.note ?? 'Orbit freely; the sprite is whatever sits inside the dashed square.'}</p>
+                  </div>
+                  <div className="grid gap-3">
+                    <Slider label="Height" value={view.elevation} min={-30} max={90} step={1} onChange={(elevation) => setView((v) => ({ ...v, elevation }))} format={(v) => `${v}°`} />
+                    <Slider label="Turn" value={Math.round(view.azimuth)} min={-180} max={180} step={1} onChange={(azimuth) => setView((v) => ({ ...v, azimuth }))} format={(v) => `${v}°`} />
+                    <Slider label="Zoom" value={view.zoom} min={0.4} max={4} step={0.01} onChange={(zoom) => setView((v) => ({ ...v, zoom }))} format={(v) => `${v.toFixed(2)}×`} />
+                    <Slider label="Nudge up/down" value={view.offsetY} min={-0.5} max={0.5} step={0.01} onChange={(offsetY) => setView((v) => ({ ...v, offsetY }))} format={(v) => v.toFixed(2)} />
+                  </div>
+                  <Toggle label="Perspective (off = flat, like pixel-art games)" checked={!view.ortho} onChange={(p) => setView((v) => ({ ...v, ortho: !p }))} />
+                </div>
+              ),
+            },
+          ]}
+        />
 
         {/* ------------------------------------------------------ the sheet */}
-        <section aria-labelledby="sheet-title" className="mt-10 border-t border-rule pt-8">
+        <section aria-labelledby="sheet-title" className="mt-10 rounded-2xl border border-rule bg-paper-sunk/60 p-4 sm:p-6">
           <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
             <div className="max-w-2xl">
-              <h2 id="sheet-title" className="font-display text-3xl">Sprite sheet</h2>
+              <h2 id="sheet-title" className="font-display text-2xl">Sprite sheet</h2>
               <p className="mt-1 text-sm leading-relaxed text-ink-muted">
                 The camera circles the object for each frame, using the settings above. Four directions go one per row in
                 Tinkerkit's order: down, left, right, up.
@@ -441,7 +453,7 @@ export function App() {
             </div>
           </div>
           {bakeError && <p role="alert" className="mt-3 text-sm text-accent-ink">{bakeError}</p>}
-          <div className="mt-5 rounded-xl border border-rule bg-paper-sunk p-4 sm:p-6">
+          <div className="mt-5 border-t border-rule-soft pt-5">
             {sheet ? (
               <SheetView sheet={sheet} name={slug(source.name)} onJson={downloadJson} stale={sheet.key !== bakeKey} baking={baking} />
             ) : (

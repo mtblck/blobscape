@@ -6,9 +6,11 @@ import { useId, useRef, useState, type ButtonHTMLAttributes, type ReactNode } fr
  * Accessible tabs (WAI-ARIA tabs pattern): arrow keys, Home and End move
  * between tabs; every panel stays mounted so its state and labels survive.
  */
-export function Tabs({ label, tabs }: { label: string; tabs: { id: string; label: string; summary: string; content: ReactNode }[] }) {
+export function Tabs({ label, tabs }: { label: string; tabs: { id: string; label: string; summary?: string; content: ReactNode }[] }) {
   const [active, setActive] = useState(tabs[0].id)
   const base = useId()
+  // tabs with only a name are as wide as the name needs, so four fit a narrow panel
+  const plain = tabs.length <= 4 && tabs.every((t) => !t.summary)
   const refs = useRef<(HTMLButtonElement | null)[]>([])
   const onKeyDown = (ev: React.KeyboardEvent, i: number) => {
     const n = tabs.length
@@ -20,7 +22,7 @@ export function Tabs({ label, tabs }: { label: string; tabs: { id: string; label
   }
   return (
     <div>
-      <div role="tablist" aria-label={label} className={`grid ${tabs.length > 4 ? 'grid-cols-3 sm:grid-flow-col sm:auto-cols-fr sm:grid-cols-none sm:border-b sm:border-rule' : 'grid-flow-col auto-cols-fr border-b border-rule'}`}>
+      <div role="tablist" aria-label={label} className={`${plain ? '' : 'grid'} ${tabs.length > 4 ? 'grid-cols-3 sm:grid-flow-col sm:auto-cols-fr sm:grid-cols-none sm:border-b sm:border-rule' : plain ? 'flex border-b border-rule' : 'grid-flow-col auto-cols-fr border-b border-rule'}`}>
         {tabs.map((t, i) => {
           const on = t.id === active
           return (
@@ -35,10 +37,10 @@ export function Tabs({ label, tabs }: { label: string; tabs: { id: string; label
               tabIndex={on ? 0 : -1}
               onClick={() => setActive(t.id)}
               onKeyDown={(ev) => onKeyDown(ev, i)}
-              className={`group/tab -mb-px min-w-0 cursor-pointer rounded-t-md border-b-2 px-2 pt-2 pb-2.5 text-left transition-colors hover:bg-paper-sunk sm:px-3 ${on ? 'border-accent' : `${tabs.length > 4 ? 'max-sm:border-rule' : ''} border-transparent hover:border-ink-faint`}`}
+              className={`group/tab -mb-px min-w-0 cursor-pointer rounded-t-md border-b-2 px-2 pt-2 pb-2.5 text-left transition-colors hover:bg-paper-sunk sm:px-3 ${plain ? 'flex flex-auto items-end' : ''} ${on ? 'border-accent' : `${tabs.length > 4 ? 'max-sm:border-rule' : ''} border-transparent hover:border-ink-faint`}`}
             >
-              <span className={`block truncate font-display ${tabs.length > 4 ? 'text-base' : 'text-lg'} transition-colors ${on ? 'text-ink' : 'text-ink-muted group-hover/tab:text-ink'}`}>{t.label}</span>
-              <span className="block truncate text-xs text-ink-faint transition-colors group-hover/tab:text-ink-muted">{t.summary}</span>
+              <span className={`block ${plain ? 'leading-tight text-balance' : 'truncate'} font-display ${tabs.length > 4 ? 'text-base' : tabs.length > 3 ? 'text-[0.9375rem] sm:text-base' : 'text-lg'} transition-colors ${on ? 'text-ink' : 'text-ink-muted group-hover/tab:text-ink'}`}>{t.label}</span>
+              {t.summary && <span className="block truncate text-xs text-ink-faint transition-colors group-hover/tab:text-ink-muted">{t.summary}</span>}
             </button>
           )
         })}

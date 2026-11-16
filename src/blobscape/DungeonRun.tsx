@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode
 import { Button, Chip, Field } from '../shared/ui.tsx'
 import { Mark } from '../shared/Logo.tsx'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
+import { TAB_SECTIONS, Workbench } from '../shared/Workbench.tsx'
 import { href } from './routes.ts'
 import type { CameraView, DungeonStage } from './dungeon/stage.ts'
 import { GOLD_HEAL, MAX_HP, MAX_MP, SPELL_COST, type Difficulty, type GameEvent } from './dungeon/game.ts'
@@ -215,10 +216,10 @@ export function DungeonRun() {
           and burst into splats when you win.
         </p>
       </header>
-      <div className="flex flex-col gap-4 lg:grid lg:grid-cols-12 lg:gap-x-5">
-        <section aria-label="Dungeon" className="lg:col-span-12">
-          <div className="case relative overflow-hidden rounded-2xl ring-1 ring-rule">
-            <div className="relative h-[min(62dvh,480px)] min-h-[300px] lg:h-[clamp(380px,calc(100dvh-24rem),660px)]">
+      <Workbench
+        viewLabel="Dungeon"
+        fullScreenAt="top-[4.75rem] left-3"
+        view={<>
               <canvas
                 ref={canvas}
                 role="application"
@@ -274,20 +275,18 @@ export function DungeonRun() {
                   <p className="text-xs text-ink-faint">or press P or Escape</p>
                 </Overlay>
               )}
-            </div>
-            <div className="border-t border-rule-soft px-4 py-2 text-xs leading-relaxed text-ink-muted sm:text-sm" data-testid="dungeon-stats">
+        </>}
+        status={<div data-testid="dungeon-stats">
               <span className="tabular-nums text-ink">{hud.blobs.toLocaleString()}</span> blobs,{' '}
               <span className="tabular-nums text-ink">{hud.alive}</span> slime{hud.alive === 1 ? '' : 's'} in the hall
-              {hud.fps > 0 && <span className="text-ink-faint">, {Math.round(hud.fps)} fps</span>}.
-            </div>
-          </div>
-        </section>
-
-        <section aria-label="Controls" className="rounded-2xl border border-rule bg-paper-sunk/60 px-4 pt-4 pb-4 lg:col-span-12 lg:px-5">
-          <div className="stack-controls grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            <div role="group" aria-labelledby="g-game">
-              <h2 id="g-game" className="mb-2 text-sm font-bold">The fight</h2>
-              <div className="grid gap-3">
+              {hud.fps > 0 && <span className="text-ink-faint">, {Math.round(hud.fps)} fps</span>}.{' '}
+              <span aria-live="polite">{busy ?? ''}</span>
+        </div>}
+        tabsLabel="Options"
+        tabs={[
+          {
+            id: 'game', label: 'Game Settings', content: (
+              <div className={TAB_SECTIONS}>
                 <Field label="Difficulty">
                   <div className="flex flex-wrap gap-1.5">
                     {DIFFICULTY.map((d) => <Chip key={d.id} active={difficulty === d.id} onClick={() => setDifficulty(d.id)}>{d.label}</Chip>)}
@@ -299,10 +298,11 @@ export function DungeonRun() {
                 </div>
                 <p className="text-xs text-ink-faint">Gold slimes are rare and quick. Bursting one gives back {GOLD_HEAL} health and some magic.</p>
               </div>
-            </div>
-            <div role="group" aria-labelledby="g-hero">
-              <h2 id="g-hero" className="mb-2 text-sm font-bold">The hero</h2>
-              <div className="grid gap-3">
+            ),
+          },
+          {
+            id: 'hero', label: 'Character Style', content: (
+              <div className={TAB_SECTIONS}>
                 <Field label="Look">
                   <div className="flex flex-wrap gap-1.5">
                     {LOOKS.map((l) => <Chip key={l.id} active={look === l.id} onClick={() => setLook(l.id)}>{l.label}</Chip>)}
@@ -313,10 +313,11 @@ export function DungeonRun() {
                   one for the sword, so the blade can lead a swing, and one for the orb of magic, which shrinks as the magic runs down.
                 </p>
               </div>
-            </div>
-            <div role="group" aria-labelledby="g-view">
-              <h2 id="g-view" className="mb-2 text-sm font-bold">View</h2>
-              <div className="grid gap-3">
+            ),
+          },
+          {
+            id: 'view', label: 'View', content: (
+              <div className={TAB_SECTIONS}>
                 <Field label="Camera">
                   <div className="flex flex-wrap gap-1.5">
                     {VIEWS.map((v) => <Chip key={v.id} active={view === v.id} onClick={() => setView(v.id)}>{v.label}</Chip>)}
@@ -332,12 +333,12 @@ export function DungeonRun() {
                     {DETAIL.map((d) => <Chip key={d.id} active={detail === d.id} onClick={() => setDetail(d.id)}>{d.label}</Chip>)}
                   </div>
                 </Field>
-                <p aria-live="polite" className="text-xs text-ink-faint">{busy ?? 'Lighter detail runs smoother on older phones.'}</p>
+                <p className="text-xs text-ink-faint">Lighter detail runs smoother on older phones.</p>
               </div>
-            </div>
-          </div>
-        </section>
-      </div>
+            ),
+          },
+        ]}
+      />
 
       <section aria-labelledby="how-title" className="mt-14 border-t border-rule pt-10 lg:grid lg:grid-cols-12 lg:gap-x-5 lg:pt-14">
         <div className="lg:col-span-5">

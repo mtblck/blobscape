@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button, Chip, Field, Slider } from '../shared/ui.tsx'
 import { Mark } from '../shared/Logo.tsx'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
+import { TAB_SECTIONS, Workbench } from '../shared/Workbench.tsx'
 import { href } from './routes.ts'
 import type { CameraView, ForestStage } from './forest/stage.ts'
 import { SEASONS, type Season } from './forest/plants.ts'
@@ -139,10 +140,10 @@ export function ForestWalk() {
           all of them made of blobs.
         </p>
       </header>
-      <div className="flex flex-col gap-4 lg:grid lg:grid-cols-12 lg:gap-x-5">
-        <section aria-label="Forest" className="lg:col-span-12">
-          <div className="case relative overflow-hidden rounded-2xl ring-1 ring-rule">
-            <div className="relative h-[min(58dvh,460px)] min-h-[280px] lg:h-[clamp(360px,calc(100dvh-24rem),640px)]">
+      <Workbench
+        viewLabel="Forest"
+        fullScreenAt="top-3 left-3 max-sm:top-2 max-sm:left-2"
+        view={<>
               <canvas
                 ref={canvas}
                 role="application"
@@ -162,21 +163,19 @@ export function ForestWalk() {
               <p aria-hidden className="pointer-events-none absolute top-2 right-2 rounded-full bg-paper/80 px-2.5 py-0.5 text-xs text-ink backdrop-blur-sm">
                 {coarse ? 'drag the stick to walk' : 'arrow keys or WASD to walk · E to wave'}
               </p>
-            </div>
-            <div className="border-t border-rule-soft px-4 py-2 text-xs leading-relaxed text-ink-muted sm:text-sm" data-testid="forest-stats">
+        </>}
+        status={<div data-testid="forest-stats">
               <span className="tabular-nums text-ink">{stats.blobs.toLocaleString()}</span> blobs,{' '}
               <span className="tabular-nums text-ink">{stats.growing}</span> plants up,{' '}
               <span className="tabular-nums text-ink">{Math.round(stats.walked)}</span> m walked
-              {stats.fps > 0 && <span className="text-ink-faint">, {Math.round(stats.fps)} fps</span>}.
-            </div>
-          </div>
-        </section>
-
-        <section aria-label="Controls" className="rounded-2xl border border-rule bg-paper-sunk/60 px-4 pt-4 pb-4 lg:col-span-12 lg:px-5">
-          <div className="stack-controls grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            <div role="group" aria-labelledby="g-forest">
-              <h2 id="g-forest" className="mb-2 text-sm font-bold">The forest</h2>
-              <div className="grid gap-3">
+              {stats.fps > 0 && <span className="text-ink-faint">, {Math.round(stats.fps)} fps</span>}.{' '}
+              <span aria-live="polite">{busy ?? ''}</span>
+        </div>}
+        tabsLabel="Options"
+        tabs={[
+          {
+            id: 'forest', label: 'Forest Type', content: (
+              <div className={TAB_SECTIONS}>
                 <Field label="Season">
                   <div className="flex flex-wrap gap-1.5">
                     {SEASONS.map((s) => <Chip key={s.id} active={season === s.id} onClick={() => setSeason(s.id)}>{s.label}</Chip>)}
@@ -191,10 +190,11 @@ export function ForestWalk() {
                 <Slider label="Wind" value={wind} min={0} max={3} step={0.1} onChange={setWind} format={(v) => (v === 0 ? 'still' : `×${v.toFixed(1)}`)} />
                 <div><Button small onClick={() => setSeed((s) => s + 1)}>Plant a new forest</Button></div>
               </div>
-            </div>
-            <div role="group" aria-labelledby="g-elf">
-              <h2 id="g-elf" className="mb-2 text-sm font-bold">The elf</h2>
-              <div className="grid gap-3">
+            ),
+          },
+          {
+            id: 'elf', label: 'Character Style', content: (
+              <div className={TAB_SECTIONS}>
                 <Field label="Look">
                   <div className="flex flex-wrap gap-1.5">
                     {LOOKS.map((l) => <Chip key={l.id} active={look === l.id} onClick={() => setLook(l.id)}>{l.label}</Chip>)}
@@ -205,10 +205,11 @@ export function ForestWalk() {
                   with the walk played at the pace of its feet.
                 </p>
               </div>
-            </div>
-            <div role="group" aria-labelledby="g-view">
-              <h2 id="g-view" className="mb-2 text-sm font-bold">View</h2>
-              <div className="grid gap-3">
+            ),
+          },
+          {
+            id: 'view', label: 'View', content: (
+              <div className={TAB_SECTIONS}>
                 <Field label="Camera">
                   <div className="flex flex-wrap gap-1.5">
                     {VIEWS.map((v) => <Chip key={v.id} active={view === v.id} onClick={() => setView(v.id)}>{v.label}</Chip>)}
@@ -219,12 +220,12 @@ export function ForestWalk() {
                     {DETAIL.map((d) => <Chip key={d.id} active={detail === d.id} onClick={() => setDetail(d.id)}>{d.label}</Chip>)}
                   </div>
                 </Field>
-                <p aria-live="polite" className="text-xs text-ink-faint">{busy ?? 'Lighter detail walks smoother on older phones.'}</p>
+                <p className="text-xs text-ink-faint">Lighter detail walks smoother on older phones.</p>
               </div>
-            </div>
-          </div>
-        </section>
-      </div>
+            ),
+          },
+        ]}
+      />
 
       <section aria-labelledby="how-title" className="mt-14 border-t border-rule pt-10 lg:grid lg:grid-cols-12 lg:gap-x-5 lg:pt-14">
         <div className="lg:col-span-5">
