@@ -12,7 +12,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { LESSONS, LESSON_COUNT, LESSON_GOALS, PARTS, href, type Route } from '../src/blobscape/routes.ts'
-import { EXPERIMENTS, EXPERIMENTS_INTRO, SITE, byPublished, experimentAt, longDate, type Experiment } from '../src/blobscape/site.ts'
+import { CARD_LINK, EXPERIMENTS, EXPERIMENTS_INTRO, SITE, byPublished, experimentAt, longDate, type Experiment } from '../src/blobscape/site.ts'
 import { DESCRIPTION, pageMeta } from '../src/blobscape/meta.ts'
 import { AXIS, BLOB, WORD } from '../src/shared/logoPaths.ts'
 
@@ -91,12 +91,12 @@ ${PARTS.map((p, i) => `<h2 class="mt-10 font-display text-2xl">Part ${i + 1}: ${
     case 'dungeon': {
       const title = route.page === 'sandbox' ? 'Sandbox' : route.page === 'creature' ? 'Splat Creatures' : route.page === 'clockwork' ? 'Clockwork' : route.page === 'diorama' ? 'Pixel Diorama' : route.page === 'scan' ? 'Scan Studio' : route.page === 'dungeon' ? 'Dungeon Run' : 'Forest Walk'
       const tool = route.page !== 'sandbox'
-      return `<div class="max-w-3xl">${crumbs(title, tool ? ['Experiments', '/experiments/'] : undefined)}<h1 class="pt-6 font-display text-5xl">${title}</h1><p class="mt-4 text-xl leading-relaxed text-ink-muted">${esc(pageMeta(route).description)}</p><p class="mt-6 text-sm text-ink-faint">It runs in your browser, with JavaScript and WebGL${tool ? ' or WebGPU' : ''}.</p></div>`
+      return `${crumbs(title, tool ? ['Experiments', '/experiments/'] : undefined)}<div class="max-w-3xl"><h1 class="pt-6 font-display text-5xl">${title}</h1><p class="mt-4 text-xl leading-relaxed text-ink-muted">${esc(pageMeta(route).description)}</p><p class="mt-6 text-sm text-ink-faint">It runs in your browser, with JavaScript and WebGL${tool ? ' or WebGPU' : ''}.</p></div>`
     }
     case 'experiments':
       return `${crumbs('Experiments')}<div class="flex flex-wrap items-end justify-between gap-x-8 gap-y-5 pt-6 pb-8"><div class="max-w-3xl"><h1 class="font-display text-5xl">Experiments</h1>
-<p class="mt-4 text-xl leading-relaxed text-ink-muted">${esc(EXPERIMENTS_INTRO)}</p></div></div>
-<ul class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">${byPublished('newest').map((e) => `<li class="relative flex flex-col gap-4 rounded-2xl border border-rule bg-paper p-4"><img src="${e.cover}" alt="" width="1200" height="750" loading="lazy" decoding="async" class="block aspect-[16/10] h-auto w-full rounded-xl object-cover ring-1 ring-rule">${dates(e)}<a href="${e.url}" class="-mt-2 font-display text-2xl text-ink no-underline after:absolute after:inset-0 after:rounded-2xl hover:text-accent">${esc(e.title)} →</a><p class="flex-1 text-ink-muted">${esc(e.body)}</p><p class="text-sm text-ink-faint">Needs ${esc(e.needs)}. Runs in your browser; nothing is uploaded.</p></li>`).join('')}</ul>
+<p class="mt-4 text-xl leading-relaxed text-ink-muted">${esc(EXPERIMENTS_INTRO)}</p></div><div aria-hidden="true" class="invisible flex gap-1.5"><span class="rounded-full border px-2.5 py-0.5 text-xs font-medium">Newest first</span><span class="rounded-full border px-2.5 py-0.5 text-xs">Oldest first</span></div></div>
+<ul class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">${byPublished('newest').map((e) => `<li class="relative flex flex-col gap-4 rounded-2xl border border-rule bg-paper p-4 transition-colors hover:border-ink-faint"><img src="${e.cover}" alt="" width="1200" height="750" loading="lazy" decoding="async" class="block aspect-[16/10] h-auto w-full rounded-xl object-cover ring-1 ring-rule">${dates(e)}<a href="${e.url}" class="${CARD_LINK}">${esc(e.title)} →</a><p class="flex-1 text-ink-muted">${esc(e.body)}</p><p class="text-sm text-ink-faint">Needs ${esc(e.needs)}. Runs in your browser; nothing is uploaded.</p></li>`).join('')}</ul>
 <p class="mt-10 text-ink-muted">New to splats? The <a href="/lessons/" class="text-ink underline underline-offset-2 hover:text-accent">lessons</a> start with a single blob.</p>`
     case 'notfound':
       return `<div class="max-w-2xl py-16"><h1 class="font-display text-5xl">That page isn’t here</h1><p class="mt-4 text-xl leading-relaxed text-ink-muted">The link may be old, or mistyped. Every lesson is on the lesson list.</p><p class="mt-8"><a href="/lessons/" class="${BUTTON}">See the lessons</a></p></div>`
@@ -123,7 +123,8 @@ function breadcrumbs(items: [string, string][]) {
 
 /** An experiment as a dated piece of work, so a search engine can read it like a post. */
 function work(e: Experiment) {
-  return { '@type': 'WebApplication', name: e.title, description: e.body, url: url(e.url), image: url(e.cover), datePublished: e.published, dateModified: e.updated, applicationCategory: 'EducationalApplication', operatingSystem: 'Any', isAccessibleForFree: true, inLanguage: 'en', author: PERSON }
+  // a plain creative work: the app types want prices and ratings, which a free toy will never have
+  return { '@type': 'CreativeWork', '@id': `${url(e.url)}#work`, name: e.title, description: e.body, url: url(e.url), image: url(e.cover), datePublished: e.published, dateModified: e.updated, learningResourceType: 'interactive experiment', isAccessibleForFree: true, inLanguage: 'en', author: PERSON }
 }
 
 function structured(route: Route): object[] {
@@ -145,7 +146,7 @@ function structured(route: Route): object[] {
       return [breadcrumbs([home, ['Sandbox', href(route)]])]
     case 'experiments':
       return [
-        { '@type': 'ItemList', name: 'Blobscape experiments', itemListElement: byPublished('newest').map((e, i) => ({ '@type': 'ListItem', position: i + 1, item: work(e) })) },
+        { '@type': 'ItemList', name: 'Blobscape experiments', itemListElement: byPublished('newest').map((e, i) => ({ '@type': 'ListItem', position: i + 1, name: e.title, url: url(e.url) })) },
         breadcrumbs([home, ['Experiments', '/experiments/']]),
       ]
     case 'creature':

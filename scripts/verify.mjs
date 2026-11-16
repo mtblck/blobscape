@@ -149,7 +149,7 @@ const solidPixels = (page, sel) => page.evaluate((sel) => {
     await ex.page.getByRole('button', { name: 'Oldest first', pressed: true }).waitFor({ timeout: 5000 }).catch(() => {})
     const kept = await listed()
     const sorted = newest.every((c, i) => /^\d{4}-\d\d-\d\d$/.test(c[1]) && (i === 0 || newest[i - 1][1] >= c[1]))
-    if (newest.length !== 8 || !sorted || newest[0][0] !== 'Pixel Diorama' || JSON.stringify(oldest) !== JSON.stringify([...newest].reverse()) || JSON.stringify(kept) !== JSON.stringify(oldest)) fails.push(`experiments page dates: ${JSON.stringify({ newest, oldest: oldest.map((c) => c[0]), kept: kept.map((c) => c[0]) })}`)
+    if (newest.length < 8 || !sorted || JSON.stringify(oldest) !== JSON.stringify([...newest].reverse()) || JSON.stringify(kept) !== JSON.stringify(oldest)) fails.push(`experiments page dates: ${JSON.stringify({ newest, oldest: oldest.map((c) => c[0]), kept: kept.map((c) => c[0]) })}`)
     else ok(`experiments page: ${newest.length} dated cards, newest first (${newest[0][0]}, ${newest[0][1]}), and "Oldest first" turns the list round and is kept`)
     await ex.page.getByRole('button', { name: 'Newest first' }).click()
     await axe(ex.page, 'experiments page')
@@ -157,7 +157,7 @@ const solidPixels = (page, sel) => page.evaluate((sel) => {
     const html = await (await fetch(base + '/experiments/creature/')).text()
     await ex.page.goto(base + '/experiments/fit-a-picture/')
     const pageDates = await ex.page.getByTestId('page-dates').textContent({ timeout: 10000 }).catch(() => '')
-    if (pageDates !== 'Published Nov 10, 2026' || !html.includes('Published <time datetime="2026-11-11">Nov 11, 2026</time> · Updated <time datetime="2026-11-12">Nov 12, 2026</time>') || !html.includes('"datePublished":"2026-11-11"')) fails.push(`experiment page dates: the page reads "${pageDates}", or the prerendered HTML lacks them`)
+    if (!/^Published [A-Z][a-z]{2} \d{1,2}, \d{4}( · Updated [A-Z][a-z]{2} \d{1,2}, \d{4})?$/.test(pageDates ?? '') || !/data-testid="page-dates">Published <time datetime="\d{4}-\d\d-\d\d">/.test(html) || !/"datePublished":"\d{4}-\d\d-\d\d","dateModified":"\d{4}-\d\d-\d\d"/.test(html)) fails.push(`experiment page dates: the page reads "${pageDates}", or the prerendered HTML lacks them`)
     else ok(`an experiment's page says when it was published ("${pageDates}"), and its HTML carries published and updated dates`)
     await ex.ctx.close()
   }

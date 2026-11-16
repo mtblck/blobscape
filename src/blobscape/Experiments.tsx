@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { href } from './routes.ts'
 import { Crumbs, Dates, useFocusHeading } from './Shell.tsx'
-import { EXPERIMENTS_INTRO, byPublished, type Experiment } from './site.ts'
+import { CARD_LINK, EXPERIMENTS_INTRO, byPublished, type Experiment } from './site.ts'
 import { Chip } from '../shared/ui.tsx'
 
 /** Each experiment's cover picture (a 16:10 still from it), on this page and the front page. */
@@ -17,13 +17,14 @@ const ORDERS: { id: Order; label: string }[] = [{ id: 'newest', label: 'Newest f
 /** Every experiment, listed like posts: each with the day it was published, newest first unless you turn the list round. */
 export function Experiments() {
   const h1 = useFocusHeading()
-  // the page is prerendered newest first, so it starts that way and takes up a kept choice once it is running
-  const [order, setOrder] = useState<Order>('newest')
-  useEffect(() => {
-    try { if (localStorage.getItem(ORDER_KEY) === 'oldest') setOrder('oldest') } catch { /* storage blocked: newest first */ }
-  }, [])
+  const [order, setOrder] = useState<Order>(() => {
+    try { return localStorage.getItem(ORDER_KEY) === 'oldest' ? 'oldest' : 'newest' } catch { return 'newest' /* storage blocked */ }
+  })
+  // said aloud only once the order has been changed by hand
+  const [said, setSaid] = useState('')
   const choose = (o: Order) => {
     setOrder(o)
+    setSaid(o === 'newest' ? 'Showing the newest first.' : 'Showing the oldest first.')
     try { if (o === 'newest') localStorage.removeItem(ORDER_KEY); else localStorage.setItem(ORDER_KEY, o) } catch { /* the choice just isn't kept */ }
   }
   return (
@@ -37,6 +38,7 @@ export function Experiments() {
         <div role="group" aria-label="Order by the day published" className="flex gap-1.5">
           {ORDERS.map((o) => <Chip small key={o.id} active={order === o.id} onClick={() => choose(o.id)}>{o.label}</Chip>)}
         </div>
+        <p role="status" className="sr-only">{said}</p>
       </div>
       <ul className="grid gap-6 md:grid-cols-2 lg:grid-cols-3" data-testid="experiment-list">
         {byPublished(order).map((e) => (
@@ -44,7 +46,7 @@ export function Experiments() {
             <Cover e={e} />
             <Dates e={e} />
             {/* the link covers the whole card, and its name is the title alone */}
-            <a href={e.url} className="group -mt-2 font-display text-2xl text-ink no-underline after:absolute after:inset-0 after:rounded-2xl hover:text-accent">{e.title} →</a>
+            <a href={e.url} className={CARD_LINK}>{e.title} →</a>
             <p className="flex-1 text-ink-muted">{e.body}</p>
             <p className="text-sm text-ink-faint">Needs {e.needs}. Runs in your browser; nothing is uploaded.</p>
           </li>

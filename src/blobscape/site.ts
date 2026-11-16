@@ -105,6 +105,9 @@ export const EXPERIMENTS = [
 
 export type Experiment = (typeof EXPERIMENTS)[number]
 
+/** A card's title link on the Experiments page (shared with its prerendered HTML): it covers the whole card, and the focus ring goes round the card with it. */
+export const CARD_LINK = '-mt-2 font-display text-2xl text-ink no-underline after:absolute after:inset-0 after:rounded-2xl hover:text-accent focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-accent'
+
 /** Experiments by the day they were published. Ones from the same day keep the list's order (newest first), turned round with the rest. */
 export function byPublished(order: 'newest' | 'oldest'): Experiment[] {
   const newest = EXPERIMENTS.map((e, i) => ({ e, i })).sort((a, b) => (a.e.published < b.e.published ? 1 : a.e.published > b.e.published ? -1 : a.i - b.i)).map((x) => x.e)
