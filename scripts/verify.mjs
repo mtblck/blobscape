@@ -408,7 +408,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     else ok(`blobscape ${label}: home lists the lessons`)
     await axe(page, `blobscape ${label} home`)
     await page.screenshot({ path: join(shots, `blobscape-home-${label}.png`), fullPage: true })
-    for (const id of ['lessons', 'one-blob', 'footprint', 'order', 'many', 'angle', 'paint', 'formats', 'break', 'one-bone', 'weights', 'twist', 'walk', 'model', 'morphs', 'shoot', 'fuzzy', 'floaters', 'lighting', 'sandbox', 'creature', 'forest-walk', 'clockwork', 'shape-shifter', 'pixel-diorama', 'dungeon-run', 'scan-studio', 'contact']) {
+    for (const id of ['lessons', 'one-blob', 'footprint', 'order', 'many', 'angle', 'paint', 'formats', 'break', 'one-bone', 'weights', 'twist', 'walk', 'model', 'morphs', 'fur', 'shoot', 'fuzzy', 'floaters', 'lighting', 'sandbox', 'creature', 'forest-walk', 'clockwork', 'shape-shifter', 'pixel-diorama', 'dungeon-run', 'scan-studio', 'contact']) {
       // headless WebGPU can't present to a canvas, so Creature and Forest Walk draw off-screen here
       await page.goto(base + (['creature', 'forest-walk', 'clockwork', 'shape-shifter', 'pixel-diorama', 'dungeon-run', 'scan-studio'].includes(id) ? `/experiments/${id}/?offscreen=1` : ['sandbox', 'lessons', 'contact'].includes(id) ? `/${id}/` : `/lessons/${id}/`))
       await page.waitForTimeout(1500)
@@ -674,6 +674,21 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   const spread = Number(puffed.match(/sit ([\d.]+)×/)?.[1]), tail = Number(swung.match(/tail is (\d+)%/)?.[1])
   if (!(await goalsAt(3)).startsWith('3 of') || !(spread >= 1.4 && tail >= 110)) fails.push(`blobscape morphs: goals show "${await goalCount()}" (${puffed} / ${swung})`)
   else ok(`blobscape morphs: spikes, thin and past tick (body blobs ${spread}× apart puffed, tail ${tail}% of its length swung past its shape)`)
+
+  await fresh('fur')
+  await slider('Width').fill('0.4')
+  await slider('Width').fill('0.07')
+  await page.getByRole('checkbox', { name: 'Skin under the strands' }).uncheck()
+  await slider('Lift').fill('0')
+  await slider('Length').fill('0.2')
+  const hollow = await page.textContent('[data-testid=fur-readout]')
+  await page.getByRole('button', { name: 'Lawn', exact: true }).click()
+  await slider('Breeze').fill('1')
+  await slider('Blobs per strand').fill('5')
+  await slider('Blobs per strand').fill('2')
+  const lawn = await page.textContent('[data-testid=fur-readout]')
+  if (!(await goalsAt(4)).startsWith('4 of')) fails.push(`blobscape fur: goals show "${await goalCount()}" (${hollow} / ${lawn})`)
+  else ok(`blobscape fur: felt, skin, bend and budget tick (${lawn.trim()})`)
 
   await fresh('twist')
   await slider('Twist').fill('170')

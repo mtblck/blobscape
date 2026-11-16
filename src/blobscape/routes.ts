@@ -24,6 +24,7 @@ export const LESSONS = [
   { id: 'walk', title: 'Walk cycle', summary: 'Four poses and some timing make a walk. Find the ones that matter, and stop the feet sliding.' },
   { id: 'model', title: 'Blobs to a model', summary: 'Save the walking fox as splats and as a solid mesh, and see what each one keeps.' },
   { id: 'morphs', title: 'Morphs', summary: 'A pufferfish with no moving bones that swells, bristles and swings its tail. Move its blobs, and find out why moving them is not enough.' },
+  { id: 'fur', title: 'Fur and grass', summary: 'A coat of five thousand strands and a lawn in the wind, each strand one stretched blob. Find what holds a coat together, and what a blade needs to bend.' },
   { id: 'shoot', title: 'Photo shoot', summary: 'Photograph a toy bird and train blobs to match. How many photos does it take to get every side right?' },
   { id: 'fuzzy', title: 'Fuzzy things', summary: 'Grass, a dandelion clock and a wooden block, kept as splats and as a mesh. Which keeps what, and for how many bytes?' },
   { id: 'floaters', title: 'Floaters and cleanup', summary: 'A rushed capture leaves blobs hanging in the air. Cut them away, and find what no cut can fix.' },
@@ -37,8 +38,8 @@ export const LESSON_COUNT = WORDS[LESSONS.length] ?? String(LESSONS.length)
 /** Lessons come in parts, shown as groups on the lesson list. `from` is the index of each part's first lesson. */
 export const PARTS = [
   { title: 'One object', from: 0, summary: 'What a blob is, and how thousands of them make a thing you can look at from anywhere.' },
-  { title: 'Rigs and 3D models', from: 8, summary: 'Bones that move blobs, a walk cycle, a creature that leaves as a model Blender opens, and a pufferfish that moves with no bones.' },
-  { title: 'Real things from photos', from: 14, summary: 'Where splats really shine: capturing real objects and places from photos, and what a capture can and can’t do.' },
+  { title: 'Rigs and 3D models', from: 8, summary: 'Bones that move blobs, a walk cycle, a creature that leaves as a model Blender opens, a pufferfish that moves with no bones, and fur.' },
+  { title: 'Real things from photos', from: 15, summary: 'Where splats really shine: capturing real objects and places from photos, and what a capture can and can’t do.' },
 ] as const
 
 /**
@@ -121,6 +122,12 @@ export const LESSON_GOALS: Record<(typeof LESSONS)[number]['id'], Goal[]> = {
     { id: 'spikes', label: 'Grow the spikes right out and compare the two fish', hint: 'Look closely at one spike.', where: 'body', why: 'A spike grows to seven times its length. Move only the centers and its few blobs become a dotted line. Each blob has to stretch along the spike.' },
     { id: 'thin', label: 'Make the fish thinner than it was built, though it has no thin shape', hint: 'A morph is a change, and a change has a direction.', where: 'body', why: 'A morph stores a direction for every blob, not a place to end up. A negative amount runs the puff backward, for no extra numbers.' },
     { id: 'past', label: 'Swing the tail further than its shape goes, and watch what it does instead of curling', hint: 'Nothing stops a slider at 100%.', where: 'tail', why: 'A morph moves each blob along a straight line, and past its shape it keeps going. The tail cannot curl further round, so it grows. Turning is a bone’s job.' },
+  ],
+  'fur': [
+    { id: 'felt', label: 'Turn the critter’s fur into felt', hint: 'What makes a blob look like a hair?', where: 'strand', why: 'A hair is many times longer than it is wide. Widen the blobs and they blur into one soft surface: a strand reads as fur only while it stays thin.' },
+    { id: 'skin', label: 'Take the skin away and keep the critter solid, under 2% light through, without widening a strand', hint: 'The skin’s blobs become strands. Where must the strands lie to hide the body on their own?', where: 'strand', why: 'Without skin, strands have to cover the body by overlapping like shingles: laid flat and long. A short, fluffy coat can’t, which is why the fox keeps a skin under its fur, a shade darker.' },
+    { id: 'bend', label: 'Make the grass bend in a breeze instead of tipping over like sticks', hint: 'One blob is always straight.', where: 'bend', why: 'A blob can stretch and turn but never curve. Two or more blobs end to end, each a straight piece of the blade, make the curve.' },
+    { id: 'budget', label: 'Bend the lawn in a full breeze and keep 2,000 blades or more', hint: 'The budget is fixed. Count what each extra blob costs.', where: 'bend', why: 'Every blob in a blade is one blade fewer. Long grass gets just enough pieces to bend, and short fur, which never bends much, stays one blob a strand.' },
   ],
   'shoot': [
     { id: 'back', label: 'Train from photos of the front only, then look at the back', hint: 'Keep every camera near the front, wait for training, then turn the view round.', where: 'look', why: 'No photo saw the back, so nothing told those blobs what to be. They only had to look right from the front.' },
