@@ -77,15 +77,15 @@ export function PixelDiorama() {
   const [note, setNote] = useState('')
 
   // built after a paint, so the loading note shows first
-  const [made, setScene] = useState<{ built: Built; of: Diorama }>()
-  const scene = made?.of === diorama ? made : undefined
-  // what is in the view now: the last scene built, which lags the one picked while it is being cut
+  const [made, setScene] = useState<{ built: Built; of: Diorama; detail: string }>()
+  // the scene asked for, once it is cut: until then the loading note (and its announcement) shows
+  const scene = made?.of === diorama && made.detail === detail ? made : undefined
+  // what is in the view now: the last scene built, which lags the one picked while it is being cut.
+  // It is kept until the new one replaces it, so the old scene never wears the new one's palette or sky.
   const shown = made?.of ?? diorama
   useEffect(() => {
     const spacing = DETAIL.find((d) => d.id === detail)!.spacing
-    // the old scene stays in the view; clearing this one brings the loading note (and its announcement) back while the new one is cut
-    setScene(undefined)
-    const t = setTimeout(() => setScene({ built: diorama.make(spacing), of: diorama }), 30)
+    const t = setTimeout(() => setScene({ built: diorama.make(spacing), of: diorama, detail }), 30)
     return () => clearTimeout(t)
   }, [detail, diorama])
 
@@ -119,6 +119,7 @@ export function PixelDiorama() {
     // a new scene brings its own palette, finish and view, now that it is the one in the view
     if (dressed.current !== d.id) {
       dressed.current = d.id
+      setPixels(true)
       setPalette('own')
       setDither(d.finish.dither); setGlow(d.finish.glow); setOutline(d.finish.outline); setEdges(d.finish.edges); setSky(d.finish.sky)
       setView(d.views[0].id); setOrbit(d.views[0].orbit)
@@ -183,7 +184,6 @@ export function PixelDiorama() {
   const show = (id: string) => {
     if (id === which) return
     setWhich(id)
-    setPixels(true)
     setNote('')
     // the address names the scene, so a reload or a shared link opens the same one
     const url = new URL(location.href)
@@ -285,7 +285,7 @@ export function PixelDiorama() {
                   <div className="flex flex-wrap gap-1.5">
                     {palettes.map((p) => <Chip key={p.id} active={palette === p.id} onClick={() => { setPalette(p.id); setPixels(true) }}>{p.label}</Chip>)}
                   </div>
-                  <div aria-hidden className="mt-5 flex h-3 overflow-hidden rounded ring-1 ring-rule">
+                  <div data-testid="palette-strip" aria-hidden className="mt-5 flex h-3 overflow-hidden rounded ring-1 ring-rule">
                     {colours.length ? colours.map((c, i) => <span key={i} className="flex-1" style={{ background: `rgb(${c[0]} ${c[1]} ${c[2]})` }} />) : <span className="flex-1 bg-paper-sunk" />}
                   </div>
                 </Field>
