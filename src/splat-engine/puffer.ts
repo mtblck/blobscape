@@ -1,6 +1,6 @@
 import { Blobs, type Vec3 } from '../splat-core/blobs.ts'
 import type { Built } from './body.ts'
-import { applyMorphs, shares, targetFrom, type Morph } from './morph.ts'
+import { applyMorphs, targetFrom, type Morph } from './morph.ts'
 import { neighborPairs, stretch } from './pose.ts'
 import { buildVoxels, cone, ellipsoid, sphere, type VoxelPart } from './voxel.ts'
 
@@ -10,9 +10,9 @@ import { buildVoxels, cone, ellipsoid, sphere, type VoxelPart } from './voxel.ts
  *
  * - puff: the body swells from an egg into a ball. Run backward it goes thin.
  * - spikes: every spike grows from a nub to its full length, many times over.
- * - tail: the tail swings round to one side. A morph is a straight line, so
- *   with one target the tail takes the short cut and shrinks on the way;
- *   in-between targets (`TAIL_STEPS`) carry it round.
+ * - tail left, tail right: the tail bends along its length to one side, from
+ *   a base that stays put in the body. A morph is a straight line, so pushed
+ *   past its shape the tail does not curl further: it grows (`tailLength`).
  *
  * The eyes, mouth, fins and spikes ride on the body: a morph of the body
  * shifts each as a whole from where it is fixed, and does not stretch it.
@@ -24,11 +24,12 @@ const PUFFED: Vec3 = [0.8, 0.78, 0.78]
 /** A spike is built at full length, then kept as a nub this share of it. */
 const NUB = 0.14
 const SPIKE = 0.26
-/** Where the tail turns (the very end of the body, so a swung tail stays clear of it), and how far: a quarter turn. */
+/** Where the tail is fixed to the body: it goes where this point of the skin goes when the body puffs. */
 const TAIL_ROOT: Vec3 = [-0.6, 1, 0]
-export const TAIL_TURN = (90 * Math.PI) / 180
-/** The choices of shapes for the tail's swing, counting the last. */
-export const TAIL_STEPS = [1, 2, 4] as const
+/** The tail bends from here (just inside the body) to its tip, a length `TAIL_LONG` behind, where it has turned `TAIL_TURN`. */
+const TAIL_BASE = -0.55
+const TAIL_LONG = 0.65
+export const TAIL_TURN = (60 * Math.PI) / 180
 
 const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
 const unit = (v: Vec3): Vec3 => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l] }
@@ -58,12 +59,10 @@ export interface Puffer {
   body: Built
   puff: Morph
   spikes: Morph
-  /** The tail's swing with 1, 2 and 4 targets (pick one). */
-  tails: Morph[]
+  /** The tail bent to its left (+z) and to its right: one slider drives both with `tailWeights`. */
+  tails: [Morph, Morph]
   /** Neighboring blobs on the body's flank, for measuring how far a puff pulls them apart. */
   flankPairs: Uint32Array
-  /** The blobs at the tail's tip. */
-  tip: number[]
 }
 
 export function makePuffer(spacing = 0.028): Puffer {
@@ -132,20 +131,18 @@ export function makePuffer(spacing = 0.028): Puffer {
     })],
   }
   const grow: Morph = { name: 'spikes', targets: [targetFrom(rest, (p, i) => { const s = spikeOf(i); return s ? along(p, s, 1 / NUB) : null })] }
-  const swing = (p: Vec3, a: number): Vec3 => {
-    const x = p[0] - TAIL_ROOT[0], z = p[2] - TAIL_ROOT[2], c = Math.cos(a), s = Math.sin(a)
-    return [TAIL_ROOT[0] + c * x + s * z, p[1], TAIL_ROOT[2] - s * x + c * z]
+  // the tail's middle line curls into an arc of the same length, and every point keeps its place across it
+  const bend = (p: Vec3, side: number): Vec3 => {
+    const along = TAIL_BASE - p[0]
+    if (along <= 0) return p
+    const k = TAIL_TURN / TAIL_LONG, a = k * along
+    return [TAIL_BASE - Math.sin(a) / k + side * p[2] * Math.sin(a), p[1], (side * (1 - Math.cos(a))) / k + p[2] * Math.cos(a)]
   }
-  const tails = TAIL_STEPS.map((steps): Morph => ({
-    name: 'tail',
-    targets: Array.from({ length: steps }, (_, k) => targetFrom(rest, (p, i) => (isTail(i) ? swing(p, (TAIL_TURN * (k + 1)) / steps) : null))),
-  }))
+  const tails = [1, -1].map((side): Morph => ({ name: side > 0 ? 'tail left' : 'tail right', targets: [targetFrom(rest, (p, i) => (isTail(i) ? bend(p, side) : null))] })) as [Morph, Morph]
 
   const flank = onBody([0.1, 0.5, 1])
   const flankPairs = neighborPairs(rest, (i) => partOf[i] === 0 && Math.hypot(rest.center[i * 3] - flank[0], rest.center[i * 3 + 1] - flank[1], rest.center[i * 3 + 2] - flank[2]) < 0.16)
-  const tip: number[] = []
-  for (let i = 0; i < rest.count; i++) if (isTail(i) && rest.center[i * 3] < -1.08) tip.push(i)
-  return { body, puff, spikes: grow, tails, flankPairs, tip }
+  return { body, puff, spikes: grow, tails, flankPairs }
 }
 
 /** How far apart a pose has pulled the blobs of the flank: 1 is as built, 2 is twice the spacing. */
@@ -158,25 +155,21 @@ export function spikeLength(w: number) {
   return Math.max(0, 1 + w * (1 / NUB - 1))
 }
 
-/**
- * How long the tail is with its swing at `w`, as a share of its real length
- * (root to tip): 1 all the way round. A tail moving in a straight line between
- * two shapes cuts the corner, and is shorter in the middle.
- */
-export function tailLength(fish: Puffer, tail: Morph, w: number) {
-  const [a, b, u] = shares(tail.targets.length, w)
-  const rest = fish.body.blobs.center
-  let sum = 0
-  for (const i of fish.tip) {
-    const p = [0, 1, 2].map((k) => rest[i * 3 + k] + (a >= 0 ? tail.targets[a].delta[i * 3 + k] * (1 - u) : 0) + tail.targets[b].delta[i * 3 + k] * u)
-    sum += Math.hypot(p[0] - TAIL_ROOT[0], p[1] - TAIL_ROOT[1], p[2] - TAIL_ROOT[2]) / Math.hypot(rest[i * 3] - TAIL_ROOT[0], rest[i * 3 + 1] - TAIL_ROOT[1], rest[i * 3 + 2] - TAIL_ROOT[2])
-  }
-  return fish.tip.length ? sum / fish.tip.length : 1
+/** The weights of the two tail morphs for one swing, −1 (right) to 1 (left) and past either. */
+export function tailWeights(swing: number): [number, number] {
+  return [Math.max(0, swing), Math.max(0, -swing)]
 }
 
-/** The shortest the tail gets anywhere on its way round. */
-export function shortestTail(fish: Puffer, tail: Morph) {
-  let least = 1
-  for (let k = 0; k <= 32; k++) least = Math.min(least, tailLength(fish, tail, k / 32))
-  return least
+/**
+ * How long the tail's middle line is with its swing at `w`, as a share of its
+ * real length. It is exactly 1 at rest and at the full bend. A morph moves
+ * every point in a straight line, so in between the tail is a little short,
+ * and pushed past its shape it grows instead of curling further.
+ */
+export function tailLength(w: number) {
+  const k = TAIL_TURN / TAIL_LONG, m = Math.abs(w), n = 64
+  const at = (s: number) => [-s + m * (s - Math.sin(k * s) / k), (m * (1 - Math.cos(k * s))) / k]
+  let sum = 0, a = at(0)
+  for (let i = 1; i <= n; i++) { const b = at((i / n) * TAIL_LONG); sum += Math.hypot(b[0] - a[0], b[1] - a[1]); a = b }
+  return sum / TAIL_LONG
 }

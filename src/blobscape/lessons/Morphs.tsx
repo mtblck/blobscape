@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react'
 import type { Blobs } from '../../splat-core/blobs.ts'
 import type { Orbit } from '../../splat-core/view.ts'
 import { applyMorphs } from '../../splat-engine/morph.ts'
-import { TAIL_STEPS, flankSpread, makePuffer, shortestTail, spikeLength, tailLength } from '../../splat-engine/puffer.ts'
-import { Chip, Field, Slider } from '../../shared/ui.tsx'
+import { flankSpread, makePuffer, spikeLength, tailLength, tailWeights } from '../../splat-engine/puffer.ts'
+import { Slider } from '../../shared/ui.tsx'
 import { LessonShell } from '../Shell.tsx'
 import { LESSON_GOALS } from '../routes.ts'
 import { Viewport, ZoomBar } from '../Viewport.tsx'
@@ -13,33 +13,29 @@ const START: Orbit = { target: [-0.15, 1, 0], distance: 3.8, azimuth: 35, elevat
 /** Each half is narrow on a phone, so stand further back to fit the fish. */
 const start = (): Orbit => (typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches ? { ...START, distance: 5.6 } : START)
 
-const STEP_LABEL: Record<number, string> = { 1: '1: swung only', 2: '2', 4: '4: three in between' }
-
 export function Morphs() {
   const [orbit, setOrbit] = useState<Orbit>(start)
   const [puff, setPuff] = useState(0)
   const [spikes, setSpikes] = useState(0)
   const [swing, setSwing] = useState(0)
-  const [steps, setSteps] = useState<number>(4)
 
   const fish = useMemo(() => makePuffer(), [])
   const rest = fish.body.blobs
   const moved = useMemo(() => rest.clone(), [rest])
   const shaped = useMemo(() => rest.clone(), [rest])
-  const tail = fish.tails[TAIL_STEPS.indexOf(steps as (typeof TAIL_STEPS)[number])]
-  const { version, spread, length, least } = useMemo(() => {
-    const morphs = [fish.puff, fish.spikes, tail]
-    const weights = [puff, spikes, swing]
+  const { version, spread } = useMemo(() => {
+    const morphs = [fish.puff, fish.spikes, ...fish.tails]
+    const weights = [puff, spikes, ...tailWeights(swing)]
     applyMorphs(rest, morphs, weights, moved, 'centers')
     applyMorphs(rest, morphs, weights, shaped, 'shape')
-    return { version: Math.random(), spread: flankSpread(fish, moved), length: tailLength(fish, tail, swing), least: shortestTail(fish, tail) }
-  }, [fish, rest, moved, shaped, tail, puff, spikes, swing])
+    return { version: Math.random(), spread: flankSpread(fish, moved) }
+  }, [fish, rest, moved, shaped, puff, spikes, swing])
+  const length = tailLength(swing)
 
-  const half = swing >= 0.3 && swing <= 0.7
   const done = useGoals('morphs', {
     spikes: spikes >= 0.9,
     thin: puff <= -0.4,
-    tail: steps === 1 && half && length < 0.78,
+    past: Math.abs(swing) >= 1.4 && length > 1.08,
   })
 
   const view = (blobs: Blobs, label: string, title: string, testId: string) => (
@@ -49,7 +45,7 @@ export function Morphs() {
     </figure>
   )
   const pct = (v: number) => `${Math.round(v * 100)}%`
-  const doing = `${puff > 0.05 ? 'puffed up' : puff < -0.05 ? 'sucked thin' : 'at rest'}${spikes > 0.05 ? ', spikes out' : ''}${swing > 0.05 ? ', tail swung round' : ''}`
+  const doing = `${puff > 0.05 ? 'puffed up' : puff < -0.05 ? 'sucked thin' : 'at rest'}${spikes > 0.05 ? ', spikes out' : ''}${swing > 0.05 ? ', tail bent to its left' : swing < -0.05 ? ', tail bent to its right' : ''}`
 
   return (
     <LessonShell
@@ -68,8 +64,7 @@ export function Morphs() {
         <p data-testid="morph-readout">
           Blobs on the body sit <span className="tabular-nums text-ink">{spread.toFixed(1)}×</span> as far apart as built, and along a spike{' '}
           <span className="tabular-nums text-ink">{spikeLength(spikes).toFixed(1)}×</span>.
-          The tail is <span className="tabular-nums text-ink">{pct(length)}</span> of its length now, and{' '}
-          <span className="tabular-nums text-ink">{pct(least)}</span> at the shortest point of its swing.
+          The tail is <span className="tabular-nums text-ink">{pct(length)}</span> of its real length.
         </p>
       }
       groups={[
@@ -87,15 +82,10 @@ export function Morphs() {
         {
           id: 'tail',
           title: 'Tail',
-          note: 'it swings round to one side',
+          note: 'it bends from its base, to either side',
           content: (
             <div className="flex flex-col gap-3">
-              <Slider label="Swing" value={swing} min={0} max={1} step={0.05} onChange={setSwing} format={(v) => pct(v)} />
-              <Field label="Shapes for the swing">
-                <div className="flex flex-wrap gap-1.5">
-                  {TAIL_STEPS.map((n) => <Chip key={n} active={steps === n} onClick={() => setSteps(n)}>{STEP_LABEL[n]}</Chip>)}
-                </div>
-              </Field>
+              <Slider label="Swing" value={swing} min={-1.5} max={1.5} step={0.05} onChange={setSwing} format={(v) => (v ? `${pct(Math.abs(v))} ${v > 0 ? 'left' : 'right'}` : 'straight')} />
             </div>
           ),
         },
@@ -125,10 +115,11 @@ export function Morphs() {
             blob also keeps how the surface round it stretches and turns, and reshapes itself to match: the right fish.
           </p>
           <p>
-            A morph is a straight line from one shape to the other. That suits a swelling body, and it fails a tail, which has to
-            swing round in an arc. With only its swung shape the tail takes the short cut and shrinks on the way. The swing here
-            starts with four shapes, which bend the path round, each at the price of another full set of numbers. A bone would turn
-            the tail exactly, which is why creatures use both.
+            The tail has two morphs, a bend to each side, and its base stays in the body because those blobs are told not to
+            move. Its blobs turn as well as move, so on the left fish the fin's flat blobs still face the way they were built. A
+            morph is a straight line from one shape to the other, which suits a swelling body and only roughly suits a bend:
+            halfway there the tail is a little short, and pushed past its shape it grows instead of curling further. A bone would
+            turn the tail exactly, which is why creatures use both.
           </p>
         </>
       }
