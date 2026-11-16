@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { Blobs } from '../../splat-core/blobs.ts'
 import type { Orbit } from '../../splat-core/view.ts'
 import { BLINK_STEPS, cheekSpread, lidDip, makeFace, worstLidDip } from '../../splat-engine/face.ts'
@@ -13,14 +13,14 @@ const START: Orbit = { target: [0, 1, 0], distance: 3.4, azimuth: 28, elevation:
 /** Each half is narrow on a phone, so stand further back to fit the face. */
 const start = (): Orbit => (typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches ? { ...START, distance: 5 } : START)
 
-const STEP_LABEL: Record<number, string> = { 1: '1: shut only', 2: '2', 4: '4' }
+const STEP_LABEL: Record<number, string> = { 1: '1: shut only', 2: '2', 4: '4: three in between' }
 
 export function Morphs() {
   const [orbit, setOrbit] = useState<Orbit>(start)
   const [smile, setSmile] = useState(0)
   const [puff, setPuff] = useState(0)
   const [blink, setBlink] = useState(0)
-  const [steps, setSteps] = useState<number>(1)
+  const [steps, setSteps] = useState<number>(4)
 
   const face = useMemo(() => makeFace(), [])
   const rest = face.body.blobs
@@ -35,14 +35,11 @@ export function Morphs() {
     return { version: Math.random(), spread: cheekSpread(face, moved), dip: lidDip(face, lid, blink), worst: worstLidDip(face, lid) }
   }, [face, rest, moved, shaped, lid, smile, puff, blink])
 
-  // the lid goal wants the fault seen first: half shut, sunk into the eye
-  const sunk = useRef(false)
   const half = blink >= 0.3 && blink <= 0.7
-  if (half && dip > 0.1) sunk.current = true
   const done = useGoals('morphs', {
     gaps: puff >= 0.9 && spread >= 1.5,
     frown: smile <= -0.5,
-    lids: sunk.current && half && worst < 0.03,
+    lids: steps === 1 && half && dip > 0.1,
   })
 
   const view = (blobs: Blobs, label: string, title: string, testId: string) => (
@@ -124,12 +121,15 @@ export function Morphs() {
           <p>
             On a mesh a morph only moves points, and the triangles between them stretch for free. Blobs have no triangles. Move just
             the centers and a swelling cheek is the same small blobs spread thinner, which is the left face. So each blob also keeps
-            how the surface round it stretches and turns, and reshapes itself to match: the right face.
+            how the surface round it stretches and turns, and reshapes itself to match: the right face. A small change hides the
+            fault, because blobs overlap enough to cover a little stretch. That is why the smile looks the same on both sides
+            and the puff does not.
           </p>
           <p>
             A morph is a straight line from one shape to the other. That suits a cheek, and it fails a lid, which has to travel
-            round a ball. In-between shapes bend the path, each at the price of another full set of numbers. A bone would turn the
-            lid exactly, which is why faces in games use both.
+            round a ball. With only its shut shape the lid cuts straight through the eye and comes out the front. The blink here
+            starts with four shapes, which bend the path round, each at the price of another full set of numbers. A bone would
+            turn the lid exactly, which is why faces in games use both.
           </p>
         </>
       }

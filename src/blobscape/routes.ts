@@ -120,7 +120,7 @@ export const LESSON_GOALS: Record<(typeof LESSONS)[number]['id'], Goal[]> = {
   'morphs': [
     { id: 'gaps', label: 'Puff the cheeks right out and compare the two faces', hint: 'Look at a cheek from the side.', where: 'face', why: 'Moving only the centers spreads the same small blobs over a bigger cheek, so it goes thin. A blob has to stretch with the skin under it.' },
     { id: 'frown', label: 'Make the face frown, though it has no frown shape', hint: 'A morph is a change, and a change has a direction.', where: 'face', why: 'A morph stores a direction for every blob, not a place to end up. A negative amount runs the smile backward into a frown, for no extra numbers.' },
-    { id: 'lids', label: 'Half close the eyes without the lids sinking into the eyeballs', hint: 'A morph moves each blob in a straight line. A lid has to go round.', where: 'eyes', why: 'One shape gives a straight path, which cuts through the ball. In-between shapes bend it, each costing another full set of numbers.' },
+    { id: 'lids', label: 'Take the in-between shapes away from the blink, and half close the eyes', hint: 'Watch where the lids go on their way down.', where: 'eyes', why: 'A morph moves each blob in a straight line. With one shape the lid cuts through the eyeball instead of going round it. In-between shapes bend the path.' },
   ],
   'shoot': [
     { id: 'back', label: 'Train from photos of the front only, then look at the back', hint: 'Keep every camera near the front, wait for training, then turn the view round.', where: 'look', why: 'No photo saw the back, so nothing told those blobs what to be. They only had to look right from the front.' },
