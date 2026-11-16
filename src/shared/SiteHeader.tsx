@@ -5,8 +5,8 @@ import { SITE } from '../blobscape/site.ts'
 /** Blobscape's own pages, in the header (from a tablet up) and the menu. */
 const PAGES = [
   { label: 'Lessons', path: '/lessons/' },
-  { label: 'Sandbox', path: '/sandbox/' },
   { label: 'Experiments', path: '/experiments/' },
+  { label: 'Sandbox', path: '/sandbox/' },
 ] as const
 
 /** True when `path` is the page we're on, or the list it belongs to (a lesson under Lessons, an experiment under Experiments). */
@@ -56,17 +56,18 @@ export function SiteHeader({ here }: { here?: string }) {
   )
 }
 
-const LINK = 'block rounded-lg px-3 py-2.5 text-lg font-medium text-ink no-underline transition-colors hover:bg-paper-sunk hover:text-accent aria-[current=page]:text-accent'
+const LINK = 'block rounded-lg px-3 py-2 text-base font-medium text-ink no-underline transition-colors hover:bg-paper-sunk hover:text-accent aria-[current=page]:text-accent'
 
-/** The menu: every page, in Matt's order, then Support (Ko-fi, after a rule) and the theme. */
+/**
+ * The menu: every page, in Matt's order, then Support (Ko-fi, after a rule) and the theme. From a tablet up the
+ * header already shows Home (the logo) and the main pages, so the menu keeps only what the header lacks.
+ */
 const MENU = [
-  { label: 'Home', path: '/' },
-  { label: 'Lessons', path: '/lessons/' },
-  { label: 'Experiments', path: '/experiments/' },
-  { label: 'Sandbox', path: '/sandbox/' },
-  { label: 'Get in touch', path: '/contact/' },
-] as const
-const HEAD = 'px-2 text-xs font-semibold tracking-wider text-ink-faint uppercase'
+  { label: 'Home', path: '/', inHeader: true },
+  ...PAGES.map((p) => ({ ...p, inHeader: true })),
+  { label: 'Get in touch', path: '/contact/', inHeader: false },
+]
+const HEAD = 'text-xs font-semibold tracking-wider text-ink-faint uppercase'
 
 /**
  * The menu button and its panel. The panel is a native popover, so Escape and
@@ -97,28 +98,28 @@ function SiteMenu({ here }: { here?: string }) {
         popover="auto"
         onToggle={(e) => setOpen((e as unknown as ToggleEvent).newState === 'open')}
         onClick={(e) => { if ((e.target as HTMLElement).closest('a')) panel.current?.hidePopover() }}
-        className="max-h-[calc(100dvh-5rem)] w-[min(20rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-rule bg-paper p-5 text-ink shadow-xl"
+        className="max-h-[calc(100dvh-5rem)] w-[min(16rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-rule bg-paper p-2 text-ink shadow-xl"
         style={{ inset: 'auto', top: '4rem', right: 'max(1rem, calc((100vw - 80rem) / 2 + 1rem))', margin: 0 }}
       >
         <nav aria-label={SITE.name}>
           <ul className="flex flex-col">
             {MENU.map((p) => (
-              <li key={p.path}>
+              <li key={p.path} className={p.inHeader ? 'md:hidden' : undefined}>
                 <a href={p.path} aria-current={isHere(here, p.path) ? 'page' : undefined} className={LINK}>{p.label}</a>
               </li>
             ))}
-            <li className="mt-1 border-t border-rule pt-1">
-              <a href={SITE.tip} target="_blank" rel="noopener" className={`${LINK} flex items-center gap-2.5`}>
-                <svg viewBox="0 0 24 24" className="size-4.5 text-accent" aria-hidden fill="currentColor"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.2 0 3.6 1.2 4.3 2.5h2c.7-1.3 2.1-2.5 4.3-2.5 3.7 0 5.8 3.9 4.3 7.3C19.5 16.4 12 21 12 21z" /></svg>
+            <li className="mt-2 border-t border-rule pt-2">
+              <a href={SITE.tip} target="_blank" rel="noopener" className={`${LINK} flex items-center gap-2`}>
+                <svg viewBox="0 0 24 24" className="size-4 shrink-0 text-accent" aria-hidden fill="currentColor"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.2 0 3.6 1.2 4.3 2.5h2c.7-1.3 2.1-2.5 4.3-2.5 3.7 0 5.8 3.9 4.3 7.3C19.5 16.4 12 21 12 21z" /></svg>
                 Support<span className="sr-only"> Blobscape on Ko-fi (opens in a new tab)</span>
                 <svg viewBox="0 0 24 24" className="ml-auto size-4 text-ink-faint" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></svg>
               </a>
             </li>
           </ul>
         </nav>
-        <div className="mt-4 border-t border-rule pt-4">
+        <div className="mt-2 border-t border-rule px-3 pt-3 pb-1">
           <p className={`${HEAD} mb-2`}>Theme</p>
-          <div className="px-2"><ThemeChoice /></div>
+          <ThemeChoice />
         </div>
       </div>
     </>
