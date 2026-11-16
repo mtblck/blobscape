@@ -53,6 +53,8 @@ export interface VoxelSpec {
   /** Grid cell size in world units: one blob per surface cell. */
   spacing: number
   light?: Partial<VoxelLight>
+  /** Skip blocks of cells far from a surface: much quicker for big smooth shapes, sound only for honest distance functions (sculpt.ts). */
+  blocks?: boolean
 }
 
 /**
@@ -168,7 +170,12 @@ const norm = (v: Vec3): Vec3 => { const l = Math.hypot(v[0], v[1], v[2]) || 1; r
 
 /** Distance from a point to a shape's box: never more than the distance to the shape. */
 function boxDistance(s: Shape, x: number, y: number, z: number) {
-  return Math.hypot(Math.max(s.min[0] - x, 0, x - s.max[0]), Math.max(s.min[1] - y, 0, y - s.max[1]), Math.max(s.min[2] - z, 0, z - s.max[2]))
+  // written out plainly: this runs for every caster at every step of every cell's march to the sun
+  const a = s.min, b = s.max
+  const dx = x < a[0] ? a[0] - x : x > b[0] ? x - b[0] : 0
+  const dy = y < a[1] ? a[1] - y : y > b[1] ? y - b[1] : 0
+  const dz = z < a[2] ? a[2] - z : z > b[2] ? z - b[2] : 0
+  return dx === 0 && dy === 0 && dz === 0 ? 0 : Math.sqrt(dx * dx + dy * dy + dz * dz)
 }
 
 /**
@@ -218,33 +225,43 @@ export function buildVoxels(spec: VoxelSpec): Built {
     const i0 = Math.floor(min[0] / s), i1 = Math.ceil(max[0] / s)
     const j0 = Math.floor(min[1] / s), j1 = Math.ceil(max[1] / s)
     const k0 = Math.floor(min[2] / s), k1 = Math.ceil(max[2] / s)
-    for (let j = j0; j <= j1; j++) {
-      const y = j * s
-      for (let k = k0; k <= k1; k++) {
-        const z = k * s
-        for (let i = i0; i <= i1; i++) {
-          const x = i * s
-          const d = sdf(x, y, z)
-          // the outermost layer of cells inside the shape
-          if (d > 0 || d <= -s) continue
-          if (same.some((q) => boxDistance(q, x, y, z) === 0 && q.sdf(x, y, z) < -s)) continue
-          const n = norm([sdf(x + e, y, z) - sdf(x - e, y, z), sdf(x, y + e, z) - sdf(x, y - e, z), sdf(x, y, z + e) - sdf(x, y, z - e)])
-          const p: Vec3 = [x, y, z]
-          const base = typeof part.color === 'function' ? part.color(p, n) : part.color
-          let shade = 1
-          if (!part.glow) {
-            const facing = Math.max(0, n[0] * L[0] + n[1] * L[1] + n[2] * L[2])
-            const sun = facing > 0 ? 1 - light.shadow * (1 - sunlight(casters, [x + n[0] * s, y + n[1] * s, z + n[2] * s], L, s, far)) : 0
-            shade = (light.ambient + (1 - light.ambient) * facing * sun) * LIT_MAX
+    const cell = (x: number, y: number, z: number) => {
+      const d = sdf(x, y, z)
+      // the outermost layer of cells inside the shape
+      if (d > 0 || d <= -s) return
+      if (same.some((q) => boxDistance(q, x, y, z) === 0 && q.sdf(x, y, z) < -s)) return
+      const n = norm([sdf(x + e, y, z) - sdf(x - e, y, z), sdf(x, y + e, z) - sdf(x, y - e, z), sdf(x, y, z + e) - sdf(x, y, z - e)])
+      const p: Vec3 = [x, y, z]
+      const base = typeof part.color === 'function' ? part.color(p, n) : part.color
+      let shade = 1
+      if (!part.glow) {
+        const facing = Math.max(0, n[0] * L[0] + n[1] * L[1] + n[2] * L[2])
+        const sun = facing > 0 ? 1 - light.shadow * (1 - sunlight(casters, [x + n[0] * s, y + n[1] * s, z + n[2] * s], L, s, far)) : 0
+        shade = (light.ambient + (1 - light.ambient) * facing * sun) * LIT_MAX
+      }
+      blobs.push({
+        // a disc lying on the surface: flat along the normal, which is what live lights read as the way it faces
+        center: p, scale: [s * 0.55, s * 0.55, s * 0.3], quat: quatFacing(n),
+        color: [base[0] * shade, base[1] * shade, base[2] * shade], opacity: part.opacity ?? 0.96,
+      })
+      parts.push(pi)
+    }
+    if (spec.blocks) {
+      // Whole blocks of cells well clear of the surface are passed over on one reading at their middle.
+      // That is only sound for shapes whose `sdf` never overstates the distance by much, hence the slack.
+      const B = 4
+      const reach = B * s * 0.87 * 1.5 + s
+      for (let j = j0; j <= j1; j += B) {
+        for (let k = k0; k <= k1; k += B) {
+          for (let i = i0; i <= i1; i += B) {
+            const d = sdf((i + (B - 1) / 2) * s, (j + (B - 1) / 2) * s, (k + (B - 1) / 2) * s)
+            if (d > reach || d < -reach - s) continue
+            for (let jj = j; jj < j + B && jj <= j1; jj++) for (let kk = k; kk < k + B && kk <= k1; kk++) for (let ii = i; ii < i + B && ii <= i1; ii++) cell(ii * s, jj * s, kk * s)
           }
-          blobs.push({
-            // a disc lying on the surface: flat along the normal, which is what live lights read as the way it faces
-            center: p, scale: [s * 0.55, s * 0.55, s * 0.3], quat: quatFacing(n),
-            color: [base[0] * shade, base[1] * shade, base[2] * shade], opacity: part.opacity ?? 0.96,
-          })
-          parts.push(pi)
         }
       }
+    } else {
+      for (let j = j0; j <= j1; j++) for (let k = k0; k <= k1; k++) for (let i = i0; i <= i1; i++) cell(i * s, j * s, k * s)
     }
   })
 
