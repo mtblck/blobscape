@@ -110,7 +110,8 @@ export function PixelDiorama() {
 
   // the scene's own palette first, then the shared ones
   const palettes = useMemo(() => [{ id: 'own', ...shown.palette }, ...PALETTES.slice(1)], [shown])
-  const colours = (palettes.find((p) => p.id === palette) ?? palettes[0]).colours
+  const picked = palettes.find((p) => p.id === palette) ?? palettes[0]
+  const colours = picked.colours
   const look = useMemo<PixelLook>(() => ({ palette: colours, dither, outline: outline ? (colours.length ? darkest(colours) : [11, 16, 38]) : null, glow, edges: edges ? 1 : 0, parts, sky: sky ? shown.sky : undefined, steady: steady ? STEADY : 0 }), [colours, dither, outline, glow, edges, parts, sky, shown, steady])
 
   // a new level of detail keeps the moment it was showing
@@ -297,7 +298,7 @@ export function PixelDiorama() {
                   <p className="mt-2 text-xs text-ink-faint">
                     {!colours.length ? 'No palette: every pixel keeps the color the scene gives it, in as many colors as it takes.'
                       : palette === 'own' ? `The ${colours.length} colors chosen for this scene. Every pixel snaps to the closest one.`
-                        : `A borrowed palette of ${colours.length} colors. Every pixel snaps to the closest one.`}
+                        : `${('note' in picked && picked.note) || `A borrowed palette of ${colours.length} colors.`} Every pixel snaps to the closest one.`}
                   </p>
                 </Field>
                 <Field label="Pixel size">
