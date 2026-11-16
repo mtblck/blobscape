@@ -1591,8 +1591,9 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     }
     await e.ctx.close()
   }
-  const p = await open('/engine/', { viewport: { width: 390, height: 800 } })
-  await p.page.waitForSelector('[data-testid=engine-built] a', { timeout: 20000 }).catch(() => {})
+  const p = await open('/engine/?offscreen=1', { viewport: { width: 390, height: 800 } })
+  // closing a page while its engine is still starting loses the device mid-start, so wait for the demo
+  await p.page.waitForFunction(() => window.__engine?.blobs() > 0 && !document.querySelector('[data-testid=engine-loading]'), null, { timeout: 120000 }).catch(() => {})
   const wide = await p.page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
   const cards = await p.page.locator('[data-testid=engine-built] a').count()
   if (wide > 0 || cards !== 6) fails.push(`engine page on a phone: ${wide}px wider than the screen, ${cards} experiments listed`)
