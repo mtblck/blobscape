@@ -1,6 +1,7 @@
 import type { Vec3 } from '../../splat-core/blobs.ts'
 import { mix } from '../body.ts'
 import { COATS, foxBones, poseIdle, poseWalk, type Coat } from '../creature.ts'
+import { axisAngle, type Skeleton } from '../rig.ts'
 import { growFur, type FurryPart } from '../fur.ts'
 import { flatten, sculptToCount, smooth, type SculptSpec } from '../sculpt.ts'
 import { cone, ellipsoid } from '../voxel.ts'
@@ -103,22 +104,60 @@ function spec(c: Coat, s: number): SculptSpec & { parts: FurryPart[] } {
       { shape: flatten(ellipsoid(eye, [0.026, 0.02, 0.03]), 0.7, eye[2]), color: (p) => (Math.abs(p[0] - eye[0]) < Math.max(0.007, s * 0.45) && Math.abs(p[1] - eye[1]) < 0.012 ? [0.04, 0.03, 0.03] : [0.95, 0.62, 0.12]), bones: ['head'], group: 'eyes', glow: true },
     )
   }
-  // legs: an orange haunch or shoulder running into a slim dark leg and a small paw
+  // Legs as a fox's are: in front, a shoulder down to the elbow, a straight forearm and a short pastern that folds
+  // back at the wrist; behind, a thigh forward to the knee, a shank slanting back to a high hock, and a long foot
+  // slanting forward to the paw. Thigh and shoulder ride the body; the two bones of each leg start at the elbow or
+  // the knee, so the wrist and hock are the joints that fold.
   for (const leg of ['fl', 'fr', 'bl', 'br'] as const) {
-    const up = bone(`${leg}Upper`).head, knee = bone(`${leg}Lower`).head, foot = bone(`${leg}Lower`).tail!
     const front = leg[0] === 'f'
+    const x = (leg[1] === 'l' ? 1 : -1) * (front ? 0.15 : 0.16)
+    const top: Vec3 = front ? [x * 0.9, 0.84, 0.44] : [x * 0.9, 0.8, -0.44]
+    const j1: Vec3 = front ? [x, 0.6, 0.33] : [x, 0.5, -0.28]
+    const j2: Vec3 = front ? [x, 0.13, 0.37] : [x, 0.22, -0.52]
+    const foot: Vec3 = front ? [x, 0.0, 0.41] : [x, 0.0, -0.45]
+    const upper = bone(`${leg}Upper`), lower = bone(`${leg}Lower`)
+    upper.head = j1
+    upper.tail = j2
+    lower.head = [...j2]
+    lower.tail = foot
     // the black stockings reach the elbow in front, the hock behind
-    const top = front ? 0.5 : 0.36
+    const dark = front ? 0.48 : 0.3
     parts.push(
       {
-        shape: smooth(0.06, ellipsoid([up[0] * 0.85, up[1] + 0.05, up[2] + (front ? 0 : -0.02)], front ? [0.085, 0.15, 0.1] : [0.11, 0.2, 0.15]), cone([up[0], up[1] + 0.04, up[2]], knee, 0.07, 0.048), cone(knee, [foot[0], foot[1] + 0.05, foot[2]], 0.045, 0.04)),
-        color: (p, n) => (p[1] < top ? c.dark : p[1] < top + 0.06 ? mix(c.dark, coat(p, n), (p[1] - top) / 0.06) : coat(p, n)), bones: [front ? 'chest' : 'hips', `${leg}Upper`, `${leg}Lower`],
-        fur: { length: 0.025, flow: [0, -1, 0], lift: 0.2, wild: 0.3, long: (p) => (p[1] > top + 0.05 ? 1.6 : 1) },
+        shape: smooth(0.05,
+          front ? ellipsoid([top[0], 0.72, 0.38], [0.085, 0.15, 0.1]) : ellipsoid([top[0] * 1.05, 0.68, -0.36], [0.1, 0.18, 0.15]),
+          cone(top, j1, front ? 0.07 : 0.085, front ? 0.055 : 0.06), cone(j1, j2, front ? 0.045 : 0.05, front ? 0.038 : 0.042), cone(j2, [foot[0], foot[1] + 0.04, foot[2] - (front ? 0.01 : 0.02)], front ? 0.036 : 0.04, 0.035)),
+        color: (p, n) => (p[1] < dark ? c.dark : p[1] < dark + 0.06 ? mix(c.dark, coat(p, n), (p[1] - dark) / 0.06) : coat(p, n)), bones: [front ? 'chest' : 'hips', `${leg}Upper`, `${leg}Lower`],
+        blend: 0.06,
+        fur: { length: 0.025, flow: [0, -1, 0], lift: 0.2, wild: 0.3, long: (p) => (p[1] > dark + 0.05 ? 1.6 : 1) },
       },
       { shape: flatten(ellipsoid([foot[0], 0.035, foot[2] + 0.035], [0.05, 0.04, 0.08]), 1), color: c.dark, bones: [`${leg}Lower`] },
     )
   }
   return { bones, parts, blend: 0.1, skirt: Math.max(0.03, s * 2), light: { ambient: 0.62, shadow: 0.45 } }
+}
+
+/**
+ * The trot: the first fox's (creature.ts), with legs that fold the way a fox's do. Diagonal pairs swing together;
+ * a paw pushes back while it is down and comes forward lifted, the front paw folded back at the wrist and the
+ * hind one tucked up at the hock.
+ */
+export function trot(sk: Skeleton, t: number) {
+  poseWalk(sk, t)
+  const ph = t * Math.PI * 2 * 1.4
+  const X: Vec3 = [1, 0, 0]
+  for (const [leg, off] of [['fl', 0], ['br', 0], ['fr', Math.PI], ['bl', Math.PI]] as const) {
+    // the swing: the paw goes back while down (sin rising, cos above 0) and forward while lifted
+    const swing = Math.sin(ph + off), lift = Math.max(0, -Math.cos(ph + off))
+    if (leg[0] === 'f') {
+      sk.setRotation(sk.index(`${leg}Upper`), axisAngle(X, 0.4 * swing - 0.25 * lift))
+      sk.setRotation(sk.index(`${leg}Lower`), axisAngle(X, 1.5 * lift))
+    } else {
+      sk.setRotation(sk.index(`${leg}Upper`), axisAngle(X, 0.35 * swing + 0.25 * lift))
+      sk.setRotation(sk.index(`${leg}Lower`), axisAngle(X, -0.8 * lift))
+    }
+  }
+  sk.update()
 }
 
 export function makeFox(count = 20000, look = 'red') {
@@ -137,7 +176,7 @@ export const FOX: Species = {
   looks: (Object.keys(COATS) as (keyof typeof COATS)[]).map((id) => ({ id, label: LABELS[id] })),
   make: makeFox,
   moves: [
-    { name: 'trot', label: 'Trot', doing: 'trotting on the spot', seconds: 1 / 1.4, fps: 24, pose: poseWalk },
+    { name: 'trot', label: 'Trot', doing: 'trotting on the spot', seconds: 1 / 1.4, fps: 24, pose: trot },
     { name: 'idle', label: 'Stand', doing: 'standing and looking round', seconds: 4, fps: 12, pose: poseIdle },
   ],
   view: { target: [0, 0.72, 0], distance: 4.2, azimuth: 40, elevation: 12 },
