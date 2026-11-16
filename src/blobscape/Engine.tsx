@@ -12,7 +12,9 @@ import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitD
 import type { CreatureStage } from './creature/stage.ts'
 import { DETAIL } from './diorama/scene.ts'
 import { DIORAMAS } from './diorama/scenes.ts'
-import { BESIDE, DEMOS, DOORS, ENGINE, ENGINE_BUILT, FEATURES, type DemoId } from './engineCopy.ts'
+import { BESIDE, DEMOS, DOORS, ENGINE, ENGINE_BUILT, FEATURES, PIXEL_STRIP, type DemoId } from './engineCopy.ts'
+import { Gallery } from './diorama/Gallery.tsx'
+import { ENGINE_LOOPS } from './diorama/loops.ts'
 import type { ForestStage } from './forest/stage.ts'
 import { pathX } from './forest/world.ts'
 import { CARD_LINK, EXPERIMENTS } from './site.ts'
@@ -225,6 +227,13 @@ export function Engine() {
         <p className="mt-3 text-ink-faint">{ENGINE.note}</p>
       </header>
       <Demos />
+
+      <section aria-labelledby="pixel-title" className="pt-16 lg:pt-20">
+        <h2 id="pixel-title" className={H2}>{PIXEL_STRIP.title}</h2>
+        <p className="mt-4 max-w-3xl text-lg leading-relaxed text-ink-muted">{PIXEL_STRIP.body}</p>
+        <div className="mt-8"><Gallery ids={ENGINE_LOOPS} testId="engine-loops" /></div>
+        <p className="mt-5"><a href={PIXEL_STRIP.link.href} className={LINK}>{PIXEL_STRIP.link.label} →</a></p>
+      </section>
 
       <section aria-labelledby="does-title" className="pt-16 lg:pt-20">
         <h2 id="does-title" className={H2}>What it does</h2>

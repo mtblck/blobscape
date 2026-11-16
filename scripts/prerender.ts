@@ -221,6 +221,17 @@ const routes: Route[] = [{ page: 'home' }, { page: 'lessons' }, ...LESSONS.map((
 for (const r of routes) write(join(DIST, href(r), 'index.html'), render(template, r))
 write(join(DIST, '404.html'), render(template, { page: 'notfound' }))
 
+// The two tools are pages of their own (not the app), built by Vite: give each the same dated JSON-LD as the app's experiments
+for (const path of TOOLS) {
+  const file = join(DIST, path, 'index.html')
+  const e = experimentAt(path)
+  if (!e) throw new Error(`prerender: ${path} is not in EXPERIMENTS`)
+  const html = readFileSync(file, 'utf8')
+  if (html.includes('application/ld+json')) continue
+  const json = JSON.stringify({ '@context': 'https://schema.org', '@graph': [work(e), breadcrumbs([[SITE.name, '/'], ['Experiments', '/experiments/'], [e.title, path]])] }).replace(/</g, '\\u003c')
+  write(file, html.replace('</head>', () => `  <script type="application/ld+json">${json}</script>\n  </head>`))
+}
+
 const today = new Date().toISOString().slice(0, 10)
 const paths = [...routes.map(href), ...TOOLS]
 write(
