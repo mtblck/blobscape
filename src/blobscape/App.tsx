@@ -19,6 +19,7 @@ import { Twist } from './lessons/Twist.tsx'
 import { Morphs } from './lessons/Morphs.tsx'
 import { Fur } from './lessons/Fur.tsx'
 import { Walk } from './lessons/Walk.tsx'
+import { FeetOnTheGround } from './lessons/Feet.tsx'
 import { Model } from './lessons/Model.tsx'
 import { Shoot } from './lessons/Shoot.tsx'
 import { Fuzzy } from './lessons/Fuzzy.tsx'
@@ -39,7 +40,7 @@ import { Contact } from './Contact.tsx'
 import { Engine } from './Engine.tsx'
 import { Spec } from './Spec.tsx'
 
-const PAGES: Record<string, () => React.JSX.Element> = { 'one-blob': OneBlob, footprint: Footprint, order: Order, many: Many, angle: Angle, paint: Paint, formats: Formats, break: Break, 'one-bone': OneBone, weights: Weights, twist: Twist, walk: Walk, model: Model, morphs: Morphs, fur: Fur, shoot: Shoot, fuzzy: Fuzzy, floaters: Floaters, lighting: Lighting }
+const PAGES: Record<string, () => React.JSX.Element> = { 'one-blob': OneBlob, footprint: Footprint, order: Order, many: Many, angle: Angle, paint: Paint, formats: Formats, break: Break, 'one-bone': OneBone, weights: Weights, twist: Twist, walk: Walk, feet: FeetOnTheGround, model: Model, morphs: Morphs, fur: Fur, shoot: Shoot, fuzzy: Fuzzy, floaters: Floaters, lighting: Lighting }
 
 /** The whole site. `route` is only for prerendering (scripts/prerender.ts), where there is no address bar to read. */
 export function App({ route: at }: { route?: Route } = {}) {

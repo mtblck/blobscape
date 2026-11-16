@@ -38,6 +38,8 @@ export class BoneView extends THREE.Group {
       mesh.renderOrder = 10
       this.add(mesh)
     }
+    // colors per bone from the start, so lighting one up later needs no new shader
+    this.setHighlight()
     this.update()
   }
 
@@ -48,6 +50,13 @@ export class BoneView extends THREE.Group {
    */
   set onTop(v: boolean) {
     for (const m of this.materials) { m.transparent = v; m.needsUpdate = true }
+  }
+
+  /** Draws one bone in coral, the rest in white (or all white). */
+  setHighlight(bone?: number) {
+    const white = new THREE.Color(1, 1, 1), coral = new THREE.Color(0xf2553a)
+    for (let i = 0; i < this.sk.count; i++) this.spindles.setColorAt(i, i === bone ? coral : white)
+    if (this.spindles.instanceColor) this.spindles.instanceColor.needsUpdate = true
   }
 
   /** Moves every bone to the skeleton's current pose. */

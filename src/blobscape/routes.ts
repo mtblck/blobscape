@@ -22,6 +22,7 @@ export const LESSONS = [
   { id: 'weights', title: 'Weights', summary: 'Bend an arm and the elbow tears. Fix it without moving a bone.' },
   { id: 'twist', title: 'Twist without tearing', summary: 'Turn a wrist over two ways, and see why one of them squashes the blobs flat.' },
   { id: 'walk', title: 'Walk cycle', summary: 'Four poses and some timing make a walk. Find the ones that matter, and stop the feet sliding.' },
+  { id: 'feet', title: 'Feet on the ground', summary: 'A walk made on flat ground, put on steps, a slope and rocks. Bend the legs to fit, and find what a leg can’t reach.' },
   { id: 'model', title: 'Blobs to a model', summary: 'Save the walking fox as splats and as a solid mesh, and see what each one keeps.' },
   { id: 'morphs', title: 'Morphs', summary: 'A pufferfish with no moving bones that swells, bristles and swings its tail. Move its blobs, and find out why moving them is not enough.' },
   { id: 'fur', title: 'Fur and grass', summary: 'A coat of five thousand strands and a lawn in the wind, each strand one stretched blob. Find what holds a coat together, and what a blade needs to bend.' },
@@ -38,8 +39,8 @@ export const LESSON_COUNT = WORDS[LESSONS.length] ?? String(LESSONS.length)
 /** Lessons come in parts, shown as groups on the lesson list. `from` is the index of each part's first lesson. */
 export const PARTS = [
   { title: 'One object', from: 0, summary: 'What a blob is, and how thousands of them make a thing you can look at from anywhere.' },
-  { title: 'Rigs and 3D models', from: 8, summary: 'Bones that move blobs, a walk cycle, a creature that leaves as a model Blender opens, a pufferfish that moves with no bones, and fur.' },
-  { title: 'Real things from photos', from: 15, summary: 'Where splats really shine: capturing real objects and places from photos, and what a capture can and can’t do.' },
+  { title: 'Rigs and 3D models', from: 8, summary: 'Bones that move blobs, a walk cycle and feet that find the ground, a creature that leaves as a model Blender opens, a pufferfish that moves with no bones, and fur.' },
+  { title: 'Real things from photos', from: 16, summary: 'Where splats really shine: capturing real objects and places from photos, and what a capture can and can’t do.' },
 ] as const
 
 /**
@@ -122,6 +123,12 @@ export const LESSON_GOALS: Record<(typeof LESSONS)[number]['id'], Goal[]> = {
     { id: 'spikes', label: 'Grow the spikes right out and compare the two fish', hint: 'Look closely at one spike.', where: 'body', why: 'A spike grows to seven times its length. Move only the centers and its few blobs become a dotted line. Each blob has to stretch along the spike.' },
     { id: 'thin', label: 'Make the fish thinner than it was built, though it has no thin shape', hint: 'A morph is a change, and a change has a direction.', where: 'body', why: 'A morph stores a direction for every blob, not a place to end up. A negative amount runs the puff backward, for no extra numbers.' },
     { id: 'past', label: 'Swing the tail further than its shape goes, and watch what it does instead of curling', hint: 'Nothing stops a slider at 100%.', where: 'tail', why: 'A morph moves each blob along a straight line, and past its shape it keeps going. The tail cannot curl further round, so it grows. Turning is a bone’s job.' },
+  ],
+  'feet': [
+    { id: 'sink', label: 'Put the elf on uneven ground and find a foot sunk into it', hint: 'Leave the legs as the walk made them.', where: 'ground', why: 'The walk was made on flat ground, so every foot is exactly as wrong as the height of the ground under it: inside a step, or over a dip.' },
+    { id: 'plant', label: 'Walk the elf on steps with its feet on different treads, every foot on its own tread', hint: 'Stand it where a step’s edge falls between its feet, then let the legs bend.', where: 'feet', why: 'Each ankle aims for its own patch of ground plus whatever lift the walk gave it, so a stepping foot still steps. Hip, knee and ankle make a triangle with known sides, so the knee has one place to go.' },
+    { id: 'reach', label: 'Find a step down a leg can’t reach, then fix it without changing the step', hint: 'Hold the hips still and make the steps deeper.', where: 'feet', why: 'A leg is only so long. Sink the hips by whatever the lower foot needs and every leg reaches; that is why game characters crouch a little on stairs.' },
+    { id: 'tilt', label: 'Stand the elf on a slope of 15° or more with its soles flat on it', hint: 'Bending the legs moves the ankles. What turns the feet?', where: 'feet', why: 'The foot is a bone of its own. After the leg is bent it is turned by the slope under it, worked out from the ground’s height either side of it.' },
   ],
   'fur': [
     { id: 'felt', label: 'Turn the critter’s fur into felt', hint: 'What makes a blob look like a hair?', where: 'strand', why: 'A hair is many times longer than it is wide. Widen the blobs and they blur into one soft surface: a strand reads as fur only while it stays thin.' },
