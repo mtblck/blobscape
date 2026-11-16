@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Orbit } from '../splat-core/view.ts'
 import { layout, makeClock, poseClock, secondsOf } from '../splat-engine/clockwork.ts'
 import type { Built } from '../splat-engine/body.ts'
+import { LoadingMark } from '../shared/BlobLoader.tsx'
 import { Button, Chip, Field } from '../shared/ui.tsx'
-import { Mark } from '../shared/Logo.tsx'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
 import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitDrag } from './Viewport.tsx'
 import { href } from './routes.ts'
@@ -174,7 +174,7 @@ export function Clockwork() {
                   setOrbit((o) => orbitKey(ev, o) ?? o)
                 }}
               />
-              {!failed && (!drawn || !clock) && <Loading label={stage ? 'Winding the watch…' : 'Starting the splat engine…'} />}
+              {!failed && (!drawn || !clock) && <LoadingMark testid="clock-loading" />}
               <p role="status" className="sr-only">{!failed && (!drawn || !clock) ? (stage ? 'Winding the watch…' : 'Starting the splat engine…') : ''}</p>
               {failed && <div role="alert" className="absolute inset-4 grid place-items-center text-center text-sm text-ink">{failed}</div>}
               <div role="group" aria-label="Show in the view" className="absolute top-3 left-3 flex gap-1.5 max-sm:top-2 max-sm:left-2">
@@ -258,17 +258,6 @@ export function Clockwork() {
           </p>
         </div>
       </section>
-    </div>
-  )
-}
-
-function Loading({ label }: { label: string }) {
-  return (
-    <div aria-hidden data-testid="clock-loading" className="pointer-events-none absolute inset-0 grid place-items-center">
-      <div className="flex flex-col items-center gap-3 rounded-2xl bg-paper/70 px-6 py-5 backdrop-blur-sm">
-        <Mark className="creature-loading-mark h-10 w-auto" />
-        <p className="text-sm text-ink">{label}</p>
-      </div>
     </div>
   )
 }

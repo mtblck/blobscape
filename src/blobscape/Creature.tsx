@@ -6,9 +6,9 @@ import { blobsToMesh } from '../splat-engine/mesh.ts'
 import type { SkinMode } from '../splat-engine/rig.ts'
 import { ZOO, type Species } from '../splat-engine/zoo/index.ts'
 import { MAX_SEED, monsterSpecies, newSeed } from '../splat-engine/zoo/monster.ts'
+import { LoadingMark } from '../shared/BlobLoader.tsx'
 import { Button, Chip, Field, Slider } from '../shared/ui.tsx'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
-import { Mark } from '../shared/Logo.tsx'
 import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitDrag } from './Viewport.tsx'
 import { download, kb } from './files.ts'
 import { LESSONS, href } from './routes.ts'
@@ -236,7 +236,7 @@ export function Creature() {
                   setOrbit((o) => orbitKey(ev, o) ?? o)
                 }}
               />
-              {!failed && !drawn && <Loading label={stage ? `Waking the ${species.name}…` : 'Starting the splat engine…'} />}
+              {!failed && !drawn && <LoadingMark testid="creature-loading" />}
               <p role="status" className="sr-only">{!failed && !drawn ? (stage ? `Waking the ${species.name}…` : 'Starting the splat engine…') : ''}</p>
               {failed && <div role="alert" className="absolute inset-4 grid place-items-center text-center text-sm text-ink">{failed}</div>}
               <div role="group" aria-label="Show in the view" data-testid="show" className="absolute top-3 left-3 flex gap-1.5 max-sm:top-2 max-sm:left-2">
@@ -361,18 +361,6 @@ export function Creature() {
           </p>
         </div>
       </section>
-    </div>
-  )
-}
-
-/** Over the view while the engine starts or a new fox is made: the Blobscape mark breathing, and what's happening. */
-function Loading({ label }: { label: string }) {
-  return (
-    <div aria-hidden data-testid="creature-loading" className="pointer-events-none absolute inset-0 grid place-items-center">
-      <div className="flex flex-col items-center gap-3 rounded-2xl bg-paper/70 px-6 py-5 backdrop-blur-sm">
-        <Mark className="creature-loading-mark h-10 w-auto" />
-        <p className="text-sm text-ink">{label}</p>
-      </div>
     </div>
   )
 }

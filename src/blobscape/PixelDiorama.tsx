@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Orbit } from '../splat-core/view.ts'
 import { STEADY, darkest, type Frame, type PixelLook } from '../splat-core/pixel.ts'
 import type { Built } from '../splat-engine/body.ts'
-import { BlobLoader } from '../shared/BlobLoader.tsx'
+import { LoadingMark } from '../shared/BlobLoader.tsx'
 import { Button, Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
 import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitDrag } from './Viewport.tsx'
@@ -81,7 +81,7 @@ export function PixelDiorama() {
   const [saving, setSaving] = useState(false)
   const [note, setNote] = useState('')
 
-  // built after a paint, so the loading note shows first
+  // built after a paint, so the waiting mark shows first
   const [made, setScene] = useState<{ built: Built; of: Diorama; detail: string }>()
   // the scene asked for, once it is cut: until then the loading note (and its announcement) shows
   const scene = made?.of === diorama && made.detail === detail ? made : undefined
@@ -90,8 +90,13 @@ export function PixelDiorama() {
   const shown = made?.of ?? diorama
   useEffect(() => {
     const spacing = DETAIL.find((d) => d.id === detail)!.spacing
-    const t = setTimeout(() => setScene({ built: diorama.make(spacing), of: diorama, detail }), 30)
-    return () => clearTimeout(t)
+    // Cutting holds the main thread for the whole wait, so the waiting mark has to be drawn and its
+    // animation handed to the compositor first: two frames, then a beat, before the cut starts.
+    let t: ReturnType<typeof setTimeout> | undefined
+    let raf = requestAnimationFrame(() => {
+      raf = requestAnimationFrame(() => { t = setTimeout(() => setScene({ built: diorama.make(spacing), of: diorama, detail }), 60) })
+    })
+    return () => { cancelAnimationFrame(raf); clearTimeout(t) }
   }, [detail, diorama])
 
   useEffect(() => {
@@ -242,7 +247,7 @@ export function PixelDiorama() {
                   setOrbit((o) => orbitKey(ev, o) ?? o)
                 }}
               />
-              {loading && <Loading />}
+              {loading && <LoadingMark testid="diorama-loading" />}
               <p role="status" className="sr-only">{loading ? loadingLabel : ''}</p>
               {failed && <div role="alert" className="absolute inset-4 grid place-items-center text-center text-sm text-ink">{failed}</div>}
               <div role="group" aria-label="Draw the scene as" className="absolute top-3 left-3 flex gap-1.5 max-sm:top-2 max-sm:left-2">
@@ -368,17 +373,6 @@ export function PixelDiorama() {
           </p>
         </div>
       </section>
-    </div>
-  )
-}
-
-/** Scenes swap in a moment, so waiting is a small mark over the view, not a note: the status line beside it says what for. */
-function Loading() {
-  return (
-    <div aria-hidden data-testid="diorama-loading" className="pointer-events-none absolute inset-0 grid place-items-center">
-      <div className="rounded-full bg-paper/70 px-3 py-2 backdrop-blur-sm">
-        <BlobLoader className="h-7 w-16" />
-      </div>
     </div>
   )
 }
