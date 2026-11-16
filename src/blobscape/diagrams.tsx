@@ -307,6 +307,18 @@ export function LessonGlyph({ id }: { id: string }) {
         <path d="M 58 36 H 68 m -4 -4 l 4 4 l -4 4" stroke={COLORS.sun} strokeWidth="1.5" fill="none" strokeLinecap="round" />
         <path d="M 76 20 L 104 20 L 108 34 L 100 52 L 80 52 L 74 36 Z M 76 20 L 90 36 L 104 20 M 74 36 L 90 36 L 108 34 M 90 36 L 80 52 M 90 36 L 100 52" fill="rgb(242 166 90 / 0.25)" stroke={COLORS.orange} strokeWidth="1" strokeLinejoin="round" />
       </>)
+    case 'morphs':
+      return g(<>
+        {/* The same face twice: at rest, then smiling with a puffed cheek */}
+        <Blob x={32} y={36} rx={20} ry={20} r={0} c="cream" />
+        <Blob x={25} y={30} rx={3} ry={3} r={0} c="blue" /><Blob x={39} y={30} rx={3} ry={3} r={0} c="blue" />
+        <path d="M 24 44 H 40" stroke="#6b1f24" strokeWidth="2" fill="none" strokeLinecap="round" />
+        <path d="M 56 36 H 66 m -4 -4 l 4 4 l -4 4" stroke={COLORS.sun} strokeWidth="1.5" fill="none" strokeLinecap="round" />
+        <Blob x={90} y={36} rx={20} ry={20} r={0} c="cream" />
+        <Blob x={105} y={42} rx={9} ry={8} r={0} c="cream" />
+        <Blob x={83} y={30} rx={3} ry={3} r={0} c="blue" /><Blob x={97} y={30} rx={3} ry={3} r={0} c="blue" />
+        <path d="M 81 42 Q 90 51 99 42" stroke="#6b1f24" strokeWidth="2" fill="none" strokeLinecap="round" />
+      </>)
     case 'shoot':
       return g(<>
         {/* A toy bird of blobs, with cameras round it and their lines of sight */}

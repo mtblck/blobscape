@@ -408,7 +408,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     else ok(`blobscape ${label}: home lists the lessons`)
     await axe(page, `blobscape ${label} home`)
     await page.screenshot({ path: join(shots, `blobscape-home-${label}.png`), fullPage: true })
-    for (const id of ['lessons', 'one-blob', 'footprint', 'order', 'many', 'angle', 'paint', 'formats', 'break', 'one-bone', 'weights', 'twist', 'walk', 'model', 'shoot', 'fuzzy', 'floaters', 'lighting', 'sandbox', 'creature', 'forest-walk', 'clockwork', 'pixel-diorama', 'dungeon-run', 'scan-studio', 'contact']) {
+    for (const id of ['lessons', 'one-blob', 'footprint', 'order', 'many', 'angle', 'paint', 'formats', 'break', 'one-bone', 'weights', 'twist', 'walk', 'model', 'morphs', 'shoot', 'fuzzy', 'floaters', 'lighting', 'sandbox', 'creature', 'forest-walk', 'clockwork', 'pixel-diorama', 'dungeon-run', 'scan-studio', 'contact']) {
       // headless WebGPU can't present to a canvas, so Creature and Forest Walk draw off-screen here
       await page.goto(base + (['creature', 'forest-walk', 'clockwork', 'pixel-diorama', 'dungeon-run', 'scan-studio'].includes(id) ? `/experiments/${id}/?offscreen=1` : ['sandbox', 'lessons', 'contact'].includes(id) ? `/${id}/` : `/lessons/${id}/`))
       await page.waitForTimeout(1500)
@@ -663,6 +663,17 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   await slider('Centerd at').fill('0.5')
   if (!(await goalsAt(4)).startsWith('4 of')) fails.push(`blobscape weights: goals show "${await goalCount()}" (hard: ${gapText} / blended: ${smoothText})`)
   else ok('blobscape weights: crack, smooth, rubber and offset tick')
+
+  await fresh('morphs')
+  await slider('Puff').fill('1')
+  const puffed = await page.textContent('[data-testid=morph-readout]')
+  await slider('Smile').fill('-1')
+  await slider('Blink').fill('0.5')
+  const sunkAt = await page.textContent('[data-testid=morph-readout]')
+  await page.getByRole('button', { name: '4', exact: true }).click()
+  const spread = Number(puffed.match(/sit ([\d.]+)×/)?.[1]), sunk = Number(sunkAt.match(/sunk (\d+)%/)?.[1])
+  if (!(await goalsAt(3)).startsWith('3 of') || !(spread >= 1.5 && sunk >= 15)) fails.push(`blobscape morphs: goals show "${await goalCount()}" (${puffed} / ${sunkAt})`)
+  else ok(`blobscape morphs: gaps, frown and lids tick (cheek blobs ${spread}× apart, lids sunk ${sunk}% with one shape)`)
 
   await fresh('twist')
   await slider('Twist').fill('170')

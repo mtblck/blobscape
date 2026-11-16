@@ -5,7 +5,7 @@ a time. Served at [blobscape.dev](https://blobscape.dev/).
 
 | Page | What it is |
 | --- | --- |
-| [Lessons](https://blobscape.dev/lessons/) | Thirteen hands-on lessons, from one blob to a walking creature |
+| [Lessons](https://blobscape.dev/lessons/) | Eighteen hands-on lessons, from one blob to a walking creature and a real photo shoot |
 | [Sandbox](https://blobscape.dev/sandbox/) | Spray, select, recolor and explode blobs, or open your own capture |
 | [Splat Creatures](https://blobscape.dev/experiments/creature/) | A frog, fox, elf and ice dragon on our own splat engine, with a bones view, exported as rigged .glb |
 | [Fit a Picture](https://blobscape.dev/experiments/fit-a-picture/) | Watch 2D Gaussians start as noise and learn a picture, the way a splat is trained |

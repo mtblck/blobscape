@@ -105,4 +105,4 @@ Larger ones (up to 400k splats, and the 43-bone dragon) come from the Download b
 
 - **Name.** `BLOBSCAPE_` is not a registered vendor prefix. If another implementation takes this up, it should become `EXT_gaussian_splatting_skinning`.
 - **A `dualQuaternion` value** for `rotationBlend`, so a file can say "play me the way Spark does".
-- **Morph targets.** glTF morph targets on `POSITION` would work, but there's nothing yet for morphing a splat's shape.
+- **Morph targets.** Not in files yet. glTF morph targets on `POSITION` move a splat's center, but a splat moved without its shape leaves gaps where a surface stretches. The rule we are trying, in Blobscape's [Morphs lesson](https://blobscape.dev/lessons/morphs/) (`src/splat-engine/morph.ts`): each target also carries, per splat, the change in the morph's local 3×3 map, **G** = **J** − **I**. With weights *w*, **J** = **I** + Σ *w*<sub>k</sub> **G**<sub>k</sub> and the covariance becomes **J** Σ **J**ᵀ, before skinning. It adds up like `POSITION` deltas do, it is a real covariance for any weights, and it costs nine numbers per splat per target. Whether that belongs in this extension or one of its own is open.
