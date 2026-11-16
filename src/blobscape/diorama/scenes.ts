@@ -14,6 +14,9 @@ import { ISLES } from './scenes/isles.ts'
 import { OCTOPUS } from './scenes/octopus.ts'
 import { OWL } from './scenes/owl.ts'
 import { REEF } from './scenes/reef.ts'
+import { CROC } from './scenes/croc.ts'
+import { GROVE } from './scenes/grove.ts'
+import { HUT } from './scenes/hut.ts'
 import { SNAIL } from './scenes/snail.ts'
 import { SPIDER } from './scenes/spider.ts'
 import { WINDOW } from './scenes/window.ts'
@@ -40,12 +43,15 @@ export interface Diorama {
   lights(t: number): PointLight[]
 }
 
+/** The name of the palette chosen for a scene, on its chip. */
+const OWN_PALETTE = 'Made for it'
+
 const LIGHTHOUSE: Diorama = {
   id: 'lighthouse',
   label: 'Lighthouse',
   about: 'A lighthouse and a cottage on a rock in the sea at dusk, with a turning lamp, pines, a jetty, a small boat, gulls and clouds',
   loop: LOOP,
-  palette: { label: PALETTES[0].label, colours: PALETTES[0].colours },
+  palette: { label: OWN_PALETTE, colours: PALETTES[0].colours },
   sky: [[9, 13, 32], [60, 94, 164]],
   finish: { dither: 0.05, glow: 1.5, outline: true, edges: true, sky: true },
   views: [
@@ -67,6 +73,8 @@ const night = (palette: Rgb[]): [Rgb, Rgb] => {
 }
 
 /** A scene written as a description (splat-engine/sceneDoc.ts), made ready for the page. */
+/** What the page calls the palette a scene was made with. */
+
 export function described(id: string, doc: SceneDoc, about: string): Diorama {
   const c = compileScene(doc)
   return {
@@ -74,7 +82,7 @@ export function described(id: string, doc: SceneDoc, about: string): Diorama {
     label: c.name,
     about,
     loop: c.loop,
-    palette: { label: 'Its own', colours: c.palette },
+    palette: { label: OWN_PALETTE, colours: c.palette },
     // with no sky of its own, the switch gives it a night made of its two darkest colours
     sky: c.look.sky ?? night(c.palette),
     finish: { dither: c.look.dither, glow: c.look.glow, outline: !!c.look.outline, edges: !!c.look.edges, sky: !!c.look.sky },
@@ -105,6 +113,9 @@ export const DIORAMAS: Diorama[] = [
   described('octopus', OCTOPUS, 'A purple octopus riding a bell buoy through a storm at night, holding up a glowing lantern in one arm while its other arms curl and the bell swings, in falling rain'),
   described('owl', OWL, 'A great owl in a starry wizard hat perched on a stump, turning its head to watch a cauldron of glowing pink potion that stirs itself over a fire, among candles, bottles, books and mushrooms'),
   described('isles', ISLES, 'Snowy islands of rock adrift in a night sky, joined by rope bridges: a cabin with lit windows and a smoking chimney among pines, a frozen waterfall, a crown of glowing ice crystals, a beacon, and falling snow'),
+  described('croc', CROC, 'A crocodile basking on a sandbar in a sunny pond, yawning, with flowers growing along its back, a small bird riding on it and butterflies overhead.'),
+  described('grove', GROVE, 'A grove of birches in the snow at night, their faces lit from inside like lanterns, with paper lamps on the branches, a fox asleep below and ribbons of light in the sky.'),
+  described('hut', HUT, 'A fishing hut on stilts over a mangrove lagoon at dawn, with a lantern, drying nets, a rowing boat, and a heron in the shallows.'),
   described('window', WINDOW, 'A round stained glass window with turning rings of panes, in the last wall of a ruined library at sunrise, with shelves, piles of books and a tree grown over the wall.'),
   described('spider', SPIDER, 'A wind-up brass spider with a lantern for a body, on its web between two bare trees, with moths circling the light.'),
   described('snail', SNAIL, 'A giant snail whose shell is a little house, with lit windows, a smoking chimney, a deck with a flag and a swinging lantern, inching through a wood of tall glowing mushrooms with ferns and fireflies'),
