@@ -120,7 +120,7 @@ export const LESSON_GOALS: Record<(typeof LESSONS)[number]['id'], Goal[]> = {
   'morphs': [
     { id: 'spikes', label: 'Grow the spikes right out and compare the two fish', hint: 'Look closely at one spike.', where: 'body', why: 'A spike grows to seven times its length. Move only the centers and its few blobs become a dotted line. Each blob has to stretch along the spike.' },
     { id: 'thin', label: 'Make the fish thinner than it was built, though it has no thin shape', hint: 'A morph is a change, and a change has a direction.', where: 'body', why: 'A morph stores a direction for every blob, not a place to end up. A negative amount runs the puff backward, for no extra numbers.' },
-    { id: 'tail', label: 'Take the in-between shapes away from the tail, and swing it halfway', hint: 'Watch how long the tail is on its way round.', where: 'tail', why: 'A morph moves each blob in a straight line. With one shape the tail cuts the corner and shrinks instead of swinging round. In-between shapes bend the path.' },
+    { id: 'past', label: 'Swing the tail further than its shape goes, and watch what it does instead of curling', hint: 'Nothing stops a slider at 100%.', where: 'tail', why: 'A morph moves each blob along a straight line, and past its shape it keeps going. The tail cannot curl further round, so it grows. Turning is a bone’s job.' },
   ],
   'shoot': [
     { id: 'back', label: 'Train from photos of the front only, then look at the back', hint: 'Keep every camera near the front, wait for training, then turn the view round.', where: 'look', why: 'No photo saw the back, so nothing told those blobs what to be. They only had to look right from the front.' },
