@@ -229,6 +229,8 @@ export function buildVoxels(spec: VoxelSpec): Built {
   // far enough to cross the whole scene
   const far = Math.hypot(...[0, 1, 2].map((i) => Math.max(...spec.parts.map((p) => p.shape.max[i])) - Math.min(...spec.parts.map((p) => p.shape.min[i]))))
 
+  const disc = spec.disc ?? 0.55
+  const buried = -Math.max(s, spec.keepBuried ?? 0)
   const blobs = new Blobs(4096)
   const parts: number[] = []
   const e = s * 0.5
@@ -239,16 +241,14 @@ export function buildVoxels(spec: VoxelSpec): Built {
     const i0 = Math.floor(min[0] / s), i1 = Math.ceil(max[0] / s)
     const j0 = Math.floor(min[1] / s), j1 = Math.ceil(max[1] / s)
     const k0 = Math.floor(min[2] / s), k1 = Math.ceil(max[2] / s)
-  const disc = spec.disc ?? 0.55
-  const buried = -Math.max(s, spec.keepBuried ?? 0)
     const cell = (x: number, y: number, z: number) => {
       const d = sdf(x, y, z)
       // the outermost layer of cells inside the shape
       if (d > 0 || d <= -s * (spec.trueShell ? 4 : 1)) return
+      if (same.some((q) => boxDistance(q, x, y, z) === 0 && q.sdf(x, y, z) < buried)) return
       const g: Vec3 = [sdf(x + e, y, z) - sdf(x - e, y, z), sdf(x, y + e, z) - sdf(x, y - e, z), sdf(x, y, z + e) - sdf(x, y, z - e)]
       // the distance in world units, from how fast the shape's distance changes here
       if (spec.trueShell && (d * s) / (Math.hypot(g[0], g[1], g[2]) || s) <= -s) return
-      if (same.some((q) => boxDistance(q, x, y, z) === 0 && q.sdf(x, y, z) < buried)) return
       const n = norm(g)
       const p: Vec3 = [x, y, z]
       const base = typeof part.color === 'function' ? part.color(p, n) : part.color
