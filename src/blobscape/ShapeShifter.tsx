@@ -38,7 +38,7 @@ declare global {
 }
 
 /** What the two creatures and the pairing come to: the shift on show, and how far blobs would travel paired the other way. */
-interface Pair { shift: Shift; other: number; out: Blobs }
+interface Pair { shift: Shift; other: number; out: Blobs; key: string }
 
 /** A view that holds both creatures, whatever their sizes. */
 function fit(s: Shift): Orbit {
@@ -95,10 +95,11 @@ export function ShapeShifter() {
   // each creature is cut once per level of detail, a moment apart so the loading mark keeps moving
   const cut = useRef(new Map<string, Blobs>())
   const [pair, setPair] = useState<Pair>()
-  const [building, setBuilding] = useState(true)
+  // the pair on show belongs to the choices it was made from: until the new one is ready, the page says it is being cut
+  const wanted = `${from}>${to}:${count}:${pairing}`
+  const building = pair?.key !== wanted
   useEffect(() => {
     let gone = false
-    setBuilding(true)
     const make = (id: string) => {
       const key = `${id}:${count}`
       if (!cut.current.has(key)) { const s = named(id); cut.current.set(key, sized(s.make(count, s.looks[0].id).blobs, SIZE)) }
@@ -112,8 +113,7 @@ export function ShapeShifter() {
         later(() => {
           const shift = pairUp(a, b, pairing)
           const other = pairUp(a, b, pairing === 'place' ? 'random' : 'place').trip
-          setPair({ shift, other, out: new Blobs(shift.count) })
-          setBuilding(false)
+          setPair({ shift, other, out: new Blobs(shift.count), key: `${from}>${to}:${count}:${pairing}` })
         })
       })
     })

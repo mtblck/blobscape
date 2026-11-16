@@ -853,6 +853,8 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     const m1 = await monster()
     await tabClick(c.page.getByTestId('make-monster'))
     await c.page.waitForFunction((s) => new URL(location.href).searchParams.get('seed') !== s, m1.seed, { timeout: 10000 }).catch(() => {})
+    // the address changes at once and the new monster is cut a moment later: its note is what says it is on show
+    await c.page.waitForFunction((n) => (document.querySelector('[data-testid=creature-note]')?.textContent ?? '') !== n, m1.note, { timeout: 30000 }).catch(() => {})
     const m2 = await monster()
     if (!(m1.seed && m2.seed && m1.seed !== m2.seed && m1.bones >= 14 && m1.n > 1500 && m2.n > 1500 && m2.label === 'Generate a new monster' && /^Made a .*legged/.test(m2.note))) fails.push(`blobscape creature monster: ${JSON.stringify({ m1, m2 })}`)
     else ok(`blobscape creature monster: seeds ${m1.seed} and ${m2.seed} make two monsters (${m1.bones} and ${m2.bones} bones) that draw`)
@@ -1652,7 +1654,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   await p.page.waitForFunction(() => window.__engine?.blobs() > 0 && !document.querySelector('[data-testid=engine-loading]'), null, { timeout: 120000 }).catch(() => {})
   const wide = await p.page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
   const cards = await p.page.locator('[data-testid=engine-built] a').count()
-  if (wide > 0 || cards !== 6) fails.push(`engine page on a phone: ${wide}px wider than the screen, ${cards} experiments listed`)
+  if (wide > 0 || cards !== 7) fails.push(`engine page on a phone: ${wide}px wider than the screen, ${cards} experiments listed`)
   else ok('engine page: fits a phone and lists the six experiments built on the engine')
   await axe(p.page, 'engine page on a phone')
   await p.ctx.close()
