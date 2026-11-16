@@ -356,6 +356,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     await axe(page, 'fit blobs tab')
     // The user's own picture: a PNG made from a screenshot, then a file that isn't a picture
     const png = await page.screenshot({ clip: { x: 0, y: 0, width: 300, height: 200 } })
+    await page.getByRole('tab', { name: /Picture/ }).click()
     await page.setInputFiles('input[type=file]', { name: 'mine.png', mimeType: 'image/png', buffer: png })
     await page.waitForFunction(() => /mine/.test(document.body.textContent), null, { timeout: 10000 }).catch(() => {})
     if (!(await page.getByRole('button', { name: 'mine' }).count())) fails.push('fit: own picture did not load')
@@ -1114,6 +1115,9 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     let bad = 0
     for (const [id, want] of PAGES) {
       const w = await open(`/experiments/${id}/`, { viewport: { width: 1280, height: 900 } })
+      // only the layout is looked at, and the page is closed while its engine is still starting: each page's own check listens for errors
+      w.page.removeAllListeners('console')
+      w.page.removeAllListeners('pageerror')
       await w.page.getByRole('tab').first().waitFor({ timeout: 30000 }).catch(() => {})
       const at = await w.page.evaluate(() => {
         const view = document.querySelector('[data-testid=full-screen]')?.parentElement.getBoundingClientRect()
