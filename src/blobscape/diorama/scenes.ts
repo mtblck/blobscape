@@ -43,6 +43,8 @@ export interface Diorama {
   make(spacing: number): Built
   pose(sk: Skeleton, t: number): void
   lights(t: number): PointLight[]
+  /** How big its description is, in bytes, written out as JSON: only for a scene that is data alone. */
+  bytes?: number
 }
 
 /** The name of the palette chosen for a scene, on its chip. */
@@ -83,6 +85,7 @@ export function described(id: string, doc: SceneDoc, about: string): Diorama {
     id,
     label: c.name,
     about,
+    bytes: new TextEncoder().encode(JSON.stringify(doc)).length,
     loop: c.loop,
     palette: { label: OWN_PALETTE, colors: c.palette },
     // with no sky of its own, the switch gives it a night made of its two darkest colors
