@@ -311,7 +311,7 @@ export function PixelDiorama() {
                 <div className="flex flex-wrap items-center gap-1.5">
                   <Button small disabled={!pixels || !drawn || saving} onClick={save}>{saving ? 'Saving…' : 'Save this frame'}</Button>
                 </div>
-                <p role="status" className="min-h-4 text-xs text-ink-faint">{pixels ? note : 'Switch back to Pixel art to save a frame.'}</p>
+                <p role="status" className="text-xs text-ink-faint empty:-mt-2">{pixels ? note : 'Switch back to Pixel art to save a frame.'}</p>
                 </div>
               </div>
             ),
