@@ -1,7 +1,7 @@
 import type { Vec3 } from '../../splat-core/blobs.ts'
 import { mirror, mix, spots } from '../body.ts'
-import { membrane, scales, sculptToCount, smooth, type SculptPart, type SculptSpec } from '../sculpt.ts'
-import { cone, displace, ellipsoid, sphere, type Shape } from '../voxel.ts'
+import { membrane, sculptToCount, smooth, type SculptPart, type SculptSpec } from '../sculpt.ts'
+import { cone, ellipsoid, sphere } from '../voxel.ts'
 import type { Bone, Skeleton } from '../rig.ts'
 import { X, aim, dir, env, ramp, set, turn } from '../posing.ts'
 import type { Species } from './species.ts'
@@ -17,69 +17,123 @@ const SIDES = [['l', 1], ['r', -1]] as const
 const sided = (x: number, p: Vec3): Vec3 => (x > 0 ? p : mirror(p))
 
 const BONES: Bone[] = [
-  { name: 'body', parent: -1, head: [0, 0.13, -0.12], tail: [0, 0.2, 0.07] },
+  { name: 'body', parent: -1, head: [0, 0.1, -0.13], tail: [0, 0.19, 0.07] },
   { name: 'head', parent: 0, head: [0, 0.21, 0.07], tail: [0, 0.22, 0.27] },
   { name: 'jaw', parent: 1, head: [0, 0.185, 0.06], tail: [0, 0.165, 0.25] },
   { name: 'tongue1', parent: 2, head: [0, 0.18, 0.22], tail: [0, 0.185, 0.17] },
   { name: 'tongue2', parent: 3, head: [0, 0.185, 0.17], tail: [0, 0.19, 0.12] },
   { name: 'tongue3', parent: 4, head: [0, 0.19, 0.12], tail: [0, 0.195, 0.08] },
 ]
+// The arm: out and down to an elbow that points back, then down and forward to a hand turned in.
+const SHOULDER: Vec3 = [0.082, 0.155, 0.075], ELBOW: Vec3 = [0.128, 0.088, 0.062], WRIST: Vec3 = [0.108, 0.02, 0.118]
 for (const [s, x] of SIDES) {
   const hand = BONES.length
   BONES.push(
-    { name: `${s}Arm`, parent: 0, head: sided(x, [0.075, 0.15, 0.07]) },
-    { name: `${s}Forearm`, parent: hand, head: sided(x, [0.11, 0.08, 0.11]) },
-    { name: `${s}Hand`, parent: hand + 1, head: sided(x, [0.11, 0.018, 0.125]), tail: sided(x, [0.115, 0.006, 0.19]) },
+    { name: `${s}Arm`, parent: 0, head: sided(x, SHOULDER) },
+    { name: `${s}Forearm`, parent: hand, head: sided(x, ELBOW) },
+    { name: `${s}Hand`, parent: hand + 1, head: sided(x, WRIST), tail: sided(x, [0.1, 0.006, 0.18]) },
   )
 }
+// The leg, folded as a sitting frog's is: the thigh forward along the flank to the knee, the shin back to the heel
+// beside the rump, and the long foot forward again along the ground.
+const HIP: Vec3 = [0.062, 0.095, -0.15], KNEE: Vec3 = [0.158, 0.098, 0.0], HEEL: Vec3 = [0.142, 0.04, -0.172], SOLE: Vec3 = [0.172, 0.014, -0.045]
 for (const [s, x] of SIDES) {
   const thigh = BONES.length
   BONES.push(
-    { name: `${s}Thigh`, parent: 0, head: sided(x, [0.085, 0.12, -0.12]) },
-    { name: `${s}Shin`, parent: thigh, head: sided(x, [0.2, 0.1, 0.0]) },
-    { name: `${s}Foot`, parent: thigh + 1, head: sided(x, [0.17, 0.045, -0.15]) },
-    { name: `${s}Toes`, parent: thigh + 2, head: sided(x, [0.2, 0.012, -0.02]), tail: sided(x, [0.23, 0.005, 0.08]) },
+    { name: `${s}Thigh`, parent: 0, head: sided(x, HIP) },
+    { name: `${s}Shin`, parent: thigh, head: sided(x, KNEE) },
+    { name: `${s}Foot`, parent: thigh + 1, head: sided(x, HEEL) },
+    { name: `${s}Toes`, parent: thigh + 2, head: sided(x, SOLE), tail: sided(x, [0.2, 0.005, 0.06]) },
   )
 }
 
-interface Skin { back: Vec3; spot: Vec3; belly: Vec3 }
-const LOOKS: Record<string, Skin & { label: string }> = {
-  green: { label: 'Green', back: [0.32, 0.62, 0.2], spot: [0.12, 0.3, 0.08], belly: [0.94, 0.9, 0.66] },
-  blue: { label: 'Dart blue', back: [0.1, 0.36, 0.86], spot: [0.03, 0.04, 0.08], belly: [0.25, 0.55, 0.95] },
-  tomato: { label: 'Tomato', back: [0.9, 0.32, 0.12], spot: [0.62, 0.16, 0.05], belly: [1, 0.74, 0.4] },
+interface Skin {
+  back: Vec3
+  /** The darker shade the back is clouded with. */
+  cloud: Vec3
+  /** Stripes, spots and the line of the mouth. */
+  mark: Vec3
+  belly: Vec3
+  /** The flank under the stripe, and the inside of the thighs. */
+  flank: Vec3
+  pad: Vec3
+  /** `stripe`: a dark band from the nostril through the eye and down the flank. `spots`: round spots all over. */
+  marks: 'stripe' | 'spots'
 }
-const MOUTH: Vec3 = [0.62, 0.2, 0.26], TONGUE: Vec3 = [0.96, 0.46, 0.56], GOLD: Vec3 = [0.9, 0.68, 0.16], PUPIL: Vec3 = [0.03, 0.03, 0.03]
+const LOOKS: Record<string, Skin & { label: string }> = {
+  green: { label: 'Green', marks: 'stripe', back: [0.36, 0.7, 0.16], cloud: [0.2, 0.52, 0.12], mark: [0.16, 0.13, 0.08], belly: [0.95, 0.93, 0.78], flank: [0.86, 0.82, 0.3], pad: [0.86, 0.8, 0.5] },
+  blue: { label: 'Dart blue', marks: 'spots', back: [0.12, 0.42, 0.92], cloud: [0.06, 0.24, 0.74], mark: [0.02, 0.03, 0.07], belly: [0.3, 0.6, 0.97], flank: [0.08, 0.2, 0.62], pad: [0.4, 0.62, 0.95] },
+  tomato: { label: 'Tomato', marks: 'stripe', back: [0.93, 0.3, 0.1], cloud: [0.74, 0.17, 0.06], mark: [0.25, 0.07, 0.04], belly: [1, 0.86, 0.5], flank: [0.98, 0.58, 0.16], pad: [1, 0.72, 0.42] },
+}
+const MOUTH: Vec3 = [0.62, 0.2, 0.26], TONGUE: Vec3 = [0.96, 0.46, 0.56], GOLD: Vec3 = [0.93, 0.66, 0.12], PUPIL: Vec3 = [0.03, 0.03, 0.03]
+
+const step = (a: number, b: number, v: number) => { const t = Math.max(0, Math.min(1, (v - a) / (b - a))); return t * t * (3 - 2 * t) }
+/** Toward the light a wet skin throws back: between the baked sun and the usual view. */
+const SHINE = dir([-0.2, 0.82, 0.54])
+const HEAD: [Vec3, Vec3] = [[0, 0.225, 0.15], [0.115, 0.058, 0.105]], JAW: [Vec3, Vec3] = [[0, 0.178, 0.155], [0.107, 0.034, 0.095]]
+/** Where p is in an ellipsoid: under 1 inside, 1 on its surface. */
+const within = (p: Vec3, [c, r]: [Vec3, Vec3]) => ((p[0] - c[0]) / r[0]) ** 2 + ((p[1] - c[1]) / r[1]) ** 2 + ((p[2] - c[2]) / r[2]) ** 2
 
 function spec(c: Skin, s: number): SculptSpec {
   /** No thinner than the grid can catch. */
   const fat = (r: number) => Math.max(r, s * 0.6)
-  const WART = 0.021
-  // blotches with a dark rim on top and the sides, pale underneath, two pale ridges down the back
-  const hide = (p: Vec3, n: Vec3): Vec3 => {
-    if (n[1] < -0.35) return mix(c.belly, c.back, 0.08 * scales(p, 0.012).id)
-    if (n[1] > 0.45 && Math.abs(Math.abs(p[0]) - 0.052) < 0.007 && p[2] < 0.12) return mix(c.back, c.belly, 0.6)
-    const blot = spots(p, 46)
-    const base = blot > 0.7 ? c.spot : blot > 0.62 ? mix(c.back, c.spot, 0.55) : mix(c.back, c.belly, 0.14 * scales(p, WART).id)
-    return n[1] < -0.05 ? mix(base, c.belly, Math.min(1, (-0.05 - n[1]) * 3)) : base
+  /** Wet skin: a soft highlight where it faces the light. */
+  const wet = (col: Vec3, n: Vec3, much = 0.5): Vec3 => {
+    const d = Math.max(0, n[0] * SHINE[0] + n[1] * SHINE[1] + n[2] * SHINE[2])
+    return mix(col, [1, 1, 0.92], much * d ** 14)
   }
-  // bands across the legs
-  const legHide = (p: Vec3, n: Vec3): Vec3 => (n[1] < -0.4 ? mix(c.belly, c.back, 0.35) : Math.sin(Math.hypot(p[0], p[2] + 0.02) * 95) > 0.35 ? c.spot : mix(c.back, c.belly, 0.1 * scales(p, WART).id))
-  /** Warts: every cell of the pattern a low bump. */
-  const warty = (shape: Shape, h = 0.0035) => displace(shape, (x, y, z) => h * (1 - scales([x, y, z], WART).out), h)
-  // the mouth is pink only where the head and the jaw close on each other, so no lip shows at the seam
-  const inHead = (p: Vec3) => (p[0] / 0.115) ** 2 + ((p[1] - 0.225) / 0.058) ** 2 + ((p[2] - 0.15) / 0.105) ** 2 < 0.92
-  const inJaw = (p: Vec3) => (p[0] / 0.108) ** 2 + ((p[1] - 0.178) / 0.034) ** 2 + ((p[2] - 0.155) / 0.095) ** 2 < 0.92
+  /** How high the stripe runs at z: level along the head, then down the flank to the groin. */
+  const stripeAt = (z: number) => (z > 0.07 ? 0.229 : 0.229 - (0.07 - z) * 0.62)
+  // the skin of the head and body: a clouded back, the look's marks, a pale underside
+  const hide = (p: Vec3, n: Vec3): Vec3 => {
+    let col = mix(c.back, c.cloud, step(0.5, 0.72, spots(p, 34)) * 0.75)
+    const under = step(0.1, -0.5, n[1])
+    if (c.marks === 'spots') {
+      if (spots(p, 52, 1.3) > 0.69) col = c.mark
+      col = mix(col, c.flank, under * 0.6)
+    } else {
+      const side = Math.abs(n[0]) > 0.3 || p[2] > 0.2
+      const off = p[1] - stripeAt(p[2])
+      // the stripe thins out toward the groin, with a pale line along its lower edge
+      const wide = p[2] > 0.07 ? 0.011 : 0.011 * step(-0.13, 0.0, p[2]) + 0.003
+      if (side && p[2] > -0.12 && Math.abs(off) < wide) col = c.mark
+      else if (side && p[2] > -0.12 && off < 0 && off > -wide - 0.007) col = mix(c.belly, c.flank, 0.3)
+      else if (off < 0) col = mix(col, c.flank, step(0, -0.03, off) * (1 - under))
+      col = mix(col, c.belly, under)
+    }
+    return wet(col, n)
+  }
+  // the limbs: bands across them (spots on a spotted frog), paler underneath
+  const limb = (from: Vec3) => (p: Vec3, n: Vec3): Vec3 => {
+    const d = Math.hypot(p[0] - from[0], p[1] - from[1], p[2] - from[2])
+    let col = mix(c.back, c.cloud, step(0.5, 0.72, spots(p, 34)) * 0.75)
+    if (c.marks === 'spots') col = spots(p, 60, 2.2) > 0.66 ? c.mark : mix(col, c.flank, 0.55)
+    else col = mix(col, c.cloud, 0.85 * step(0.25, 0.6, Math.sin(d * 120)))
+    return wet(mix(col, c.marks === 'spots' ? c.flank : c.belly, step(0, -0.55, n[1])), n, 0.4)
+  }
+  const pad = (tip: Vec3, r: number): SculptPart['shape'] => ellipsoid(tip, [r, fat(r * 0.62), r])
   const parts: SculptPart[] = [
-    // body and skull as one skin, with a brow over each eye
+    // The body and skull as one skin: a chest held up on the arms, a back that slopes down over the hips to a rump
+    // on the ground, a wide flat head, and a lid over each eye.
     {
-      shape: warty(smooth(0.03,
-        ellipsoid([0, 0.15, -0.045], [0.112, 0.088, 0.14]), ellipsoid([0, 0.225, 0.15], [0.115, 0.058, 0.105]),
+      shape: smooth(0.035,
+        ellipsoid([0, 0.158, 0.015], [0.106, 0.084, 0.105]), ellipsoid([0, 0.092, -0.115], [0.098, 0.08, 0.1]), ellipsoid(...HEAD),
         ellipsoid([0.068, 0.262, 0.16], [0.042, 0.03, 0.042]), ellipsoid([-0.068, 0.262, 0.16], [0.042, 0.03, 0.042]),
-      )),
-      // the roof of the mouth, seen when the jaw drops
-      color: (p, n) => (n[1] < -0.3 && inJaw(p) ? MOUTH : hide(p, n)), bones: ['body', 'head'],
+      ),
+      // the roof of the mouth, seen when the jaw drops; the lip stays the back's color down to the mouth's line
+      color: (p, n) => (n[1] < -0.3 && within(p, JAW) < 0.92 ? MOUTH : p[2] > 0.07 && p[1] > 0.185 && c.marks !== 'spots' && n[1] < 0.1 && Math.abs(p[1] - 0.229) > 0.011 ? wet(mix(c.back, c.cloud, 0.3), n) : hide(p, n)),
+      bones: ['body', 'head'],
     },
-    { shape: ellipsoid([0, 0.178, 0.155], [0.108, 0.034, 0.095]), color: (p, n) => (inHead(p) ? MOUTH : n[1] < 0.1 ? c.belly : hide(p, n)), bones: ['jaw'], group: 'jaw' },
+    // the jaw and throat: pale, with a dark line where the lips meet
+    {
+      shape: ellipsoid(...JAW), bones: ['jaw'], group: 'jaw',
+      color: (p, n) => {
+        const h = within(p, HEAD)
+        if (h < 0.92) return MOUTH
+        if (h < 1.05 && n[1] > -0.2) return c.mark
+        return wet(c.marks === 'spots' ? mix(c.belly, c.flank, 0.3) : c.belly, n, 0.3)
+      },
+    },
     { shape: smooth(0.006, cone([0, 0.181, 0.215], [0, 0.192, 0.085], fat(0.009), fat(0.012)), ellipsoid([0, 0.193, 0.08], [0.02, fat(0.015), 0.017])), color: TONGUE, bones: ['tongue1', 'tongue2', 'tongue3'], group: 'tongue' },
   ]
   for (const [side, x] of SIDES) {
@@ -87,46 +141,50 @@ function spec(c: Skin, s: number): SculptSpec {
     const eye = at([0.073, 0.272, 0.172])
     const out = dir([0.62 * x, 0.35, 0.7])
     parts.push(
-      // the eye: gold, with a wide pupil lying level and a glint
+      // the eye: gold in a dark rim, with a wide pupil lying level and a glint
       {
         shape: ellipsoid(eye, [0.036, 0.034, 0.034]), bones: ['head'], group: 'eyes', glow: true,
         color: (_p, n) => {
           const d = n[0] * out[0] + n[1] * out[1] + n[2] * out[2]
           if (d > 0.9 && n[1] > out[1] + 0.12) return [1, 1, 0.95]
           if (d > 0.62 && Math.abs(n[1] - out[1]) < 0.17) return PUPIL
-          return d > 0.3 ? mix(GOLD, [0.5, 0.3, 0.05], Math.max(0, 0.9 - d)) : c.back
+          if (d > 0.36) return mix(GOLD, [0.55, 0.3, 0.04], step(0.95, 0.4, d))
+          return d > 0.24 ? c.mark : mix(c.back, c.cloud, 0.3)
         },
       },
       // a nostril, and the round drum of the ear behind the eye
-      { shape: sphere(at([0.03, 0.235, 0.247]), fat(0.006)), color: c.spot, bones: ['head'] },
-      { shape: ellipsoid(at([0.106, 0.222, 0.105]), [fat(0.008), 0.022, 0.022]), color: (p) => (Math.hypot(p[1] - 0.222, p[2] - 0.105) < 0.012 ? mix(c.spot, c.back, 0.5) : c.spot), bones: ['head'] },
-      { shape: warty(smooth(0.012, cone(at([0.075, 0.15, 0.07]), at([0.11, 0.08, 0.11]), 0.032, 0.024), cone(at([0.11, 0.08, 0.11]), at([0.11, 0.018, 0.125]), 0.024, 0.018)), 0.002), color: legHide, bones: ['body', `${side}Arm`, `${side}Forearm`, `${side}Hand`] },
+      { shape: sphere(at([0.03, 0.238, 0.246]), fat(0.005)), color: c.mark, bones: ['head'] },
+      { shape: ellipsoid(at([0.107, 0.225, 0.1]), [fat(0.007), 0.019, 0.019]), color: (p) => (Math.hypot(p[1] - 0.225, p[2] - 0.1) < 0.011 ? mix(c.mark, c.back, 0.45) : c.mark), bones: ['head'] },
+      // the arm: a slim upper arm and a forearm that thickens to the wrist
+      { shape: smooth(0.012, cone(at(SHOULDER), at(ELBOW), 0.027, 0.02), cone(at(ELBOW), at(WRIST), 0.019, 0.016)), color: limb(at(SHOULDER)), bones: ['body', `${side}Arm`, `${side}Forearm`, `${side}Hand`] },
     )
-    // four fingers with round pads
-    for (const tip of [[0.075, 0.008, 0.175], [0.105, 0.008, 0.195], [0.14, 0.008, 0.185], [0.16, 0.008, 0.15]] as Vec3[]) {
+    // four fingers turned in, each ending in a round pad
+    const palm = at([WRIST[0], 0.013, WRIST[2] + 0.004])
+    for (const tip of [[0.05, 0.008, 0.158], [0.08, 0.008, 0.18], [0.118, 0.008, 0.182], [0.15, 0.008, 0.156]] as Vec3[]) {
       parts.push(
-        { shape: cone(at([0.11, 0.014, 0.13]), at(tip), fat(0.011), fat(0.007)), color: c.back, bones: [`${side}Hand`] },
-        { shape: ellipsoid(at(tip), [0.013, fat(0.008), 0.013]), color: mix(c.belly, c.back, 0.25), bones: [`${side}Hand`] },
+        { shape: cone(palm, at(tip), fat(0.009), fat(0.0055)), color: (_p, n) => wet(c.back, n, 0.3), bones: [`${side}Hand`] },
+        { shape: pad(at(tip), 0.0115), color: (_p, n) => wet(c.pad, n, 0.35), bones: [`${side}Hand`] },
       )
     }
-    const knee = at([0.2, 0.1, 0.0]), ankle = at([0.17, 0.045, -0.15]), base = at([0.2, 0.014, -0.02])
+    // the leg: a full thigh, a long shin and a thin foot, folded against the body
+    const knee = at(KNEE), heel = at(HEEL), sole = at(SOLE)
     parts.push({
-      shape: warty(smooth(0.014, cone(at([0.07, 0.12, -0.12]), knee, 0.06, 0.04), cone(knee, ankle, 0.04, 0.026), cone(ankle, base, 0.024, 0.016)), 0.0025),
-      color: legHide, bones: ['body', `${side}Thigh`, `${side}Shin`, `${side}Foot`, `${side}Toes`],
+      shape: smooth(0.016, cone(at(HIP), knee, 0.052, 0.036), cone(knee, heel, 0.034, 0.021), cone(heel, sole, 0.02, 0.014)),
+      color: limb(at(HIP)), bones: ['body', `${side}Thigh`, `${side}Shin`, `${side}Foot`, `${side}Toes`],
     })
-    // long toes with pads, and webbing between them
-    const tips: Vec3[] = ([[0.16, 0.008, 0.075], [0.205, 0.008, 0.1], [0.255, 0.008, 0.085], [0.285, 0.008, 0.035]] as Vec3[]).map(at)
+    // five long toes with pads, and webbing between them
+    const tips: Vec3[] = ([[0.118, 0.008, 0.035], [0.158, 0.008, 0.07], [0.2, 0.008, 0.082], [0.24, 0.008, 0.06], [0.262, 0.008, 0.012]] as Vec3[]).map(at)
     const web: Vec3[][] = []
-    for (let k = 0; k < tips.length - 1; k++) web.push([base, mix(base, tips[k], 0.82), mix(base, tips[k + 1], 0.82)])
-    parts.push({ shape: membrane(web, fat(0.003)), color: (p) => (Math.sin(Math.hypot(p[0] - base[0], p[2] - base[2]) * 260) > 0.6 ? mix(c.back, c.spot, 0.4) : mix(c.back, c.belly, 0.45)), bones: [`${side}Toes`], group: `${side}Web`, opacity: 0.9, noShadow: true })
+    for (let k = 0; k < tips.length - 1; k++) web.push([sole, mix(sole, tips[k], 0.74), mix(sole, tips[k + 1], 0.74)])
+    parts.push({ shape: membrane(web, fat(0.003)), color: (_p, n) => wet(mix(c.flank, c.back, 0.35), n, 0.3), bones: [`${side}Toes`], group: `${side}Web`, opacity: 0.9, noShadow: true })
     for (const tip of tips) {
       parts.push(
-        { shape: cone(base, tip, fat(0.01), fat(0.007)), color: c.back, bones: [`${side}Foot`, `${side}Toes`] },
-        { shape: ellipsoid(tip, [0.012, fat(0.007), 0.012]), color: mix(c.belly, c.back, 0.25), bones: [`${side}Toes`] },
+        { shape: cone(sole, tip, fat(0.009), fat(0.0055)), color: (_p, n) => wet(c.back, n, 0.3), bones: [`${side}Foot`, `${side}Toes`] },
+        { shape: pad(tip, 0.011), color: (_p, n) => wet(c.pad, n, 0.35), bones: [`${side}Toes`] },
       )
     }
   }
-  return { bones: BONES, parts, blend: 0.03, light: { ambient: 0.66, shadow: 0.45 } }
+  return { bones: BONES, parts, blend: 0.03, light: { ambient: 0.62, shadow: 0.5 } }
 }
 
 export function makeFrog(count = 10000, look = 'green') {
@@ -196,9 +254,9 @@ export function frogTongue(sk: Skeleton, t: number) {
 export const FROG: Species = {
   id: 'frog',
   name: 'frog',
-  blurb: 'A warty frog of twenty bones, blotched and banded, that jumps, and flicks a tongue that lives folded in its mouth.',
+  blurb: 'A tree frog of twenty bones in wet skin, striped or spotted by its look, that jumps, and flicks a tongue that lives folded in its mouth.',
   detail: [5000, 15000, 40000, 80000],
-  start: 15000,
+  start: 40000,
   looks: Object.entries(LOOKS).map(([id, l]) => ({ id, label: l.label })),
   make: makeFrog,
   moves: [
