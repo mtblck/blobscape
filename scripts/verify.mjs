@@ -1003,6 +1003,24 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   {
     const d = await open('/experiments/pixel-diorama/?offscreen=1&scene=campfire', { viewport: { width: 1280, height: 900 } })
     await d.page.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).catch(() => {})
+    // the details panel: one short line under the view, and Full details opens a dialog with the scene's numbers that Escape closes
+    {
+      await d.page.evaluate(async () => { await window.__diorama.stage.frame(0.5) })
+      await d.page.waitForSelector('[data-testid=diorama-png-size]', { timeout: 30000 }).catch(() => {})
+      const line = await d.page.locator('[data-testid=diorama-blobs]').locator('xpath=ancestor::div[1]').innerText().catch(() => '')
+      await d.page.locator('[data-testid=diorama-details-open]').click()
+      const dialog = d.page.locator('[data-testid=diorama-details]')
+      const shown = await dialog.evaluate((el) => el.open && el.matches(':modal')).catch(() => false)
+      const sizes = await Promise.all(['description', 'picture', 'splats'].map((k) => d.page.locator(`[data-testid=details-${k}]`).innerText().catch(() => '')))
+      const tiles = await dialog.locator('dt').allInnerTexts()
+      if (shown) await axe(d.page, 'blobscape pixel diorama details')
+      await d.page.keyboard.press('Escape')
+      const closed = await dialog.evaluate((el) => !el.open)
+      const back = await d.page.evaluate(() => document.activeElement?.getAttribute('data-testid'))
+      const kb = (t) => parseFloat(t.replace(/,/g, ''))
+      if (!(/blobs, drawn at \d+ × \d+, [\d.,]+\sKB a frame/.test(line) && shown && sizes.every((t) => /KB$/.test(t)) && kb(sizes[0]) < kb(sizes[2]) && kb(sizes[1]) < kb(sizes[2]) && tiles.length >= 10 && closed && back === 'diorama-details-open')) fails.push(`blobscape pixel diorama details: ${JSON.stringify({ line, shown, sizes, tiles, closed, back })}`)
+      else ok(`blobscape pixel diorama: Full details opens a panel of ${tiles.length} readouts (description ${sizes[0]}, picture ${sizes[1]}, splats ${sizes[2]}), and Escape closes it and gives focus back`)
+    }
     const strip = () => [...document.querySelectorAll('[data-testid=palette-strip] span')].map((e) => e.style.background).join()
     const before = await d.page.evaluate(strip)
     const justAfter = await d.page.evaluate(() => {
