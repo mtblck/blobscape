@@ -34,7 +34,7 @@ export function Gallery({ ids, onPick, current, testId }: { ids?: readonly strin
         <li key={l.id} className={`${TILE} ${current === l.id ? 'border-accent' : 'border-rule'}`}>
           <Loop id={l.id} />
           {onPick ? (
-            <button type="button" aria-pressed={current === l.id} onClick={() => onPick(l.id)} className={`${NAME} cursor-pointer px-1 text-left`}>
+            <button type="button" aria-label={`${l.label}, open in the view above`} aria-pressed={current === l.id} onClick={() => onPick(l.id)} className={`${NAME} cursor-pointer px-1 text-left`}>
               {l.label}
             </button>
           ) : (

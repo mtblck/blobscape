@@ -1045,6 +1045,13 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     const changed = await d.page.waitForFunction((was) => { const now = [...document.querySelectorAll('[data-testid=palette-strip] span')].map((e) => e.style.background).join(); return !!window.__diorama && now !== was }, before, { timeout: 90000 }).then(() => true, () => false)
     if (!before || justAfter !== before || !changed) fails.push(`blobscape pixel diorama: on picking another scene the palette ${justAfter !== before ? 'changed before the scene did' : 'never changed'}`)
     else ok('blobscape pixel diorama: a newly picked scene brings its palette only when it reaches the view')
+    // the gallery of recorded loops: every tile's loop loads, and a tile opens its scene in the view
+    await d.page.getByTestId('diorama-loops').scrollIntoViewIfNeeded()
+    const loops = await d.page.waitForFunction(() => { const im = [...document.querySelectorAll('[data-testid=diorama-loops] img')]; return im.length && im.every((i) => i.complete && i.naturalWidth) ? im.length : 0 }, null, { timeout: 30000 }).then((h) => h.jsonValue(), () => 0)
+    await d.page.getByTestId('diorama-loops').getByRole('button', { name: 'Snail house, open in the view above' }).click()
+    const picked = await d.page.waitForFunction(() => location.search.includes('scene=snail') && scrollY < 50 && document.activeElement?.dataset.testid === 'diorama-view', null, { timeout: 5000 }).then(() => true, () => false)
+    if (loops < 18 || !picked) fails.push(`blobscape pixel diorama gallery: ${loops} loops loaded, picking a tile ${picked ? 'worked' : 'did not open the scene above'}`)
+    else ok(`blobscape pixel diorama: the gallery's ${loops} loops load, and a tile opens its scene in the view`)
     await d.ctx.close()
   }
 
