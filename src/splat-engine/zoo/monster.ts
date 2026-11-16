@@ -1,6 +1,6 @@
 import type { Vec3 } from '../../splat-core/blobs.ts'
 import { mirror, mix, rng, spots } from '../body.ts'
-import type { Bone, Skeleton } from '../rig.ts'
+import { Skeleton, posedPoint, type Bone } from '../rig.ts'
 import { X, Y, Z, env, set, turn } from '../posing.ts'
 import { growFur, type Fur, type FurryPart } from '../fur.ts'
 import { membrane, scales, sculptToCount, smooth, type SculptSpec } from '../sculpt.ts'
@@ -126,6 +126,9 @@ function legSpots(p: Plan): number[] {
 /** Whether the pair of legs at `u` (0 hips, 1 chest) bends at an elbow, pointing back, not at a knee. */
 const elbowed = (p: Plan, u: number) => p.legs !== 2 && u > 0.5
 
+/** How thick a leg is at the top; it thins to 0.6 of this at the ankle. */
+export const legRadius = (p: Plan) => Math.max(0.025, p.girth * (p.legs === 6 ? 0.28 : 0.38))
+
 export interface Layout { bones: Bone[]; hips: Vec3; chest: Vec3; neckTop: Vec3; headC: Vec3; legPairs: number }
 
 /** The skeleton, from the plan: every point the parts hang on. */
@@ -156,13 +159,15 @@ export function layout(p: Plan): Layout {
   spots.forEach((u, i) => {
     const base = along(hips, chest, u)
     for (const [s, x] of SIDES) {
-      const top = side(x, [p.girth * 0.75, base[1] - p.girth * 0.2, base[2]])
+      const top = side(x, [p.girth * 0.75 + (p.legs === 6 && i === 1 ? legRadius(p) : 0), base[1] - p.girth * 0.2, base[2]])
       const footY = 0.02
       // a knee points forward; the front legs of a four- or six-legged monster bend at an elbow, which points back
       const kneeZ = (elbowed(p, u) ? -1 : 1) * Math.max(0.03, (top[1] - footY) * (upright ? 0.1 : 0.16))
-      const knee = side(x, [p.girth * 0.8, (top[1] + footY) / 2, base[2] + kneeZ])
-      const ankle = side(x, [p.girth * 0.8, footY + 0.025, base[2] - kneeZ * 0.5])
-      const toe = side(x, [p.girth * 0.8, 0.01, base[2] + 0.07 + p.girth * 0.2])
+      // the middle pair of six stands wider, as an insect's does, so it steps past the pairs in front and behind
+      const out = p.girth * 0.8 + (p.legs === 6 && i === 1 ? legRadius(p) * 3.2 : 0)
+      const knee = side(x, [out, (top[1] + footY) / 2, base[2] + kneeZ])
+      const ankle = side(x, [out, footY + 0.025, base[2] - kneeZ * 0.5])
+      const toe = side(x, [out, 0.01, base[2] + 0.07 + p.girth * 0.2])
       const t = bones.length
       bones.push(
         { name: `${s}Thigh${i}`, parent: u > 0.5 ? 1 : 0, head: top },
@@ -374,7 +379,7 @@ function spec(p: Plan, s: number): SculptSpec & { parts: FurryPart[] } {
   for (let i = 0; i < L.legPairs; i++) {
     for (const [sd] of SIDES) {
       const th = L.bones.find((b) => b.name === `${sd}Thigh${i}`)!, sh = L.bones.find((b) => b.name === `${sd}Shin${i}`)!, ft = L.bones.find((b) => b.name === `${sd}Foot${i}`)!
-      const lr = Math.max(0.025, p.girth * (p.legs === 6 ? 0.28 : 0.38))
+      const lr = legRadius(p)
       const body = p.legs === 2 || i === 0 ? (L.bones[th.parent].name) : 'body'
       parts.push({
         shape: hide(smooth(lr * 0.5, ellipsoid(th.head, [lr * 1.2, lr * 1.5, lr * 1.4]), cone(th.head, sh.head, lr, lr * 0.75), cone(sh.head, ft.head, lr * 0.75, lr * 0.6)), A * 0.1),
@@ -413,11 +418,68 @@ export function makeMonster(seed: number, count = 15000) {
 /** One stride, in seconds: little monsters step quicker. */
 export const strideOf = (p: Plan) => Math.max(0.55, Math.min(1.1, p.hip * 2.2))
 
-/** Each leg's place in the gait, as a phase: two legs alternate, four trot (diagonals together), six walk in tripods. */
-function legPhase(p: Plan, i: number, left: boolean): number {
-  if (p.legs === 2) return left ? 0 : Math.PI
-  if (p.legs === 4) return (i === 0) === left ? 0 : Math.PI
-  return (i % 2 === 0) === left ? 0 : Math.PI
+/**
+ * How a monster steps: `lag` is how far each pair of legs trails the pair in front of it, as a phase (π is a trot on
+ * four legs and tripods on six, 0 is a pace, with both legs of a side swinging together), and `reach` scales the swing.
+ */
+export interface Gait { lag: number; reach: number }
+
+/** Each leg's place in the gait, as a phase: left and right alternate, and each pair trails the one in front. */
+function legPhase(p: Plan, g: Gait, i: number, left: boolean): number {
+  return (left ? 0 : Math.PI) + (p.legs === 2 ? 0 : i * g.lag)
+}
+
+/**
+ * The least room between any two legs on one side of a posed monster (under 0: one passes through the other). Each
+ * leg is its three bones, as thick as it is cut.
+ */
+export function legRoom(p: Plan, sk: Skeleton): number {
+  const lr = legRadius(p), n = legSpots(p).length
+  const leg = (s: string, i: number) => {
+    const th = sk.index(`${s}Thigh${i}`), sh = sk.index(`${s}Shin${i}`), ft = sk.index(`${s}Foot${i}`)
+    const at = (b: number): Vec3 => [sk.posedHead[b * 3], sk.posedHead[b * 3 + 1], sk.posedHead[b * 3 + 2]]
+    const a = at(th), b = at(sh), c = at(ft), d = posedPoint(sk, ft, sk.bones[ft].tail!)
+    const out: [Vec3, number][] = []
+    for (let k = 0; k <= 6; k++) {
+      const t = k / 6
+      out.push([mix(a, b, t), lr * (1 - 0.25 * t)], [mix(b, c, t), lr * (0.75 - 0.15 * t)], [mix(c, d, t), lr * 0.8])
+    }
+    return out
+  }
+  let room = Infinity
+  for (const [s] of SIDES) {
+    const legs = Array.from({ length: n }, (_, i) => leg(s, i))
+    for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+      for (const [q, r] of legs[i]) for (const [q2, r2] of legs[j]) room = Math.min(room, Math.hypot(q[0] - q2[0], q[1] - q2[1], q[2] - q2[2]) - r - r2)
+    }
+  }
+  return room
+}
+
+/** The gaits a monster tries, best first: a full trot, then pairs closer in step or a shorter swing. */
+const GAITS: Gait[] = [[1, 1], [0.75, 1], [1, 0.8], [0.5, 1], [0.75, 0.8], [0.5, 0.8], [0.25, 1], [0.25, 0.8], [0, 1], [0, 0.8], [0, 0.6], [0, 0.4]]
+  .map(([lag, reach]) => ({ lag: lag * Math.PI, reach }))
+const gaits = new Map<number, Gait>()
+
+/**
+ * The gait for this monster: the first of `GAITS` in which no leg passes through another at any point of the stride.
+ * Long legs on a short body can't trot (the hind foot swings forward into the front one swinging back), so, like a
+ * camel, they bring the two legs of a side into step.
+ */
+export function gaitOf(p: Plan): Gait {
+  if (p.legs === 2) return GAITS[0]
+  let g = gaits.get(p.seed)
+  if (g) return g
+  const sk = new Skeleton(layout(p).bones), T = strideOf(p), need = legRadius(p) * 0.4
+  g = GAITS[GAITS.length - 1]
+  for (const c of GAITS) {
+    const walk = monsterWalk(p, c)
+    let room = Infinity
+    for (let k = 0; k < 32 && room > need; k++) { walk(sk, (k / 32) * T); sk.update(); room = Math.min(room, legRoom(p, sk)) }
+    if (room > need) { g = c; break }
+  }
+  gaits.set(p.seed, g)
+  return g
 }
 
 const TAU = Math.PI * 2
@@ -428,25 +490,26 @@ const tops = (p: Plan) => p.top === 'ears' || p.top === 'feelers'
  * six legs) the spine snakes from side to side, the chest turns the other way so the head stays ahead, the head nods
  * a beat behind the bounce, the tail whips in a wave that travels down it, and ears or feelers bounce after the head.
  */
-export function monsterWalk(p: Plan) {
+export function monsterWalk(p: Plan, gait?: Gait) {
   const T = strideOf(p)
   const upright = p.legs === 2
+  const g = gait ?? gaitOf(p)
   return (sk: Skeleton, t: number) => {
     sk.reset()
     const ph = (t / T) * TAU
     const pairs = legSpots(p)
     for (let i = 0; i < pairs.length; i++) {
       for (const [s] of SIDES) {
-        const a = ph + legPhase(p, i, s === 'l')
+        const a = ph + legPhase(p, g, i, s === 'l')
         const lift = Math.max(0, Math.cos(a))
         if (elbowed(p, pairs[i])) {
           // a front leg: the elbow draws back and up, the forearm folds forward under it and the paw hangs back
-          set(sk, `${s}Thigh${i}`, X, -0.5 * Math.sin(a) + 0.35 * lift)
+          set(sk, `${s}Thigh${i}`, X, -0.5 * g.reach * Math.sin(a) + 0.35 * lift)
           set(sk, `${s}Shin${i}`, X, -0.9 * lift)
           set(sk, `${s}Foot${i}`, X, 0.8 * lift)
         } else {
           // a hind leg, or a leg of two: the knee comes forward and the shin folds back behind it
-          set(sk, `${s}Thigh${i}`, X, -0.6 * Math.sin(a) - 0.15 * lift)
+          set(sk, `${s}Thigh${i}`, X, -0.6 * g.reach * Math.sin(a) - 0.15 * lift)
           set(sk, `${s}Shin${i}`, X, 1.0 * lift)
           set(sk, `${s}Foot${i}`, X, -0.4 * lift)
         }

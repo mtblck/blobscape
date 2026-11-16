@@ -6,7 +6,7 @@ import { Skeleton, posedPoint, rotate, skinBlob } from './rig.ts'
 import { FLAME, makeDragon } from './zoo/dragon.ts'
 import { ELF_BONES, clearCloak } from './zoo/elf.ts'
 import { ZOO } from './zoo/index.ts'
-import { makeMonster, monsterSpecies, planMonster } from './zoo/monster.ts'
+import { gaitOf, layout, legRoom, makeMonster, monsterSpecies, planMonster } from './zoo/monster.ts'
 
 const near = (a: number, b: number, e = 1e-4) => Math.abs(a - b) < e
 
@@ -160,4 +160,24 @@ test("the elf's legs stay in front of the cloak through the whole walk, and a ha
     clearCloak(sk)
     assert.ok(clearance() > 0, `through the cloak on a kick (${clearance()})`)
   }
+})
+
+test('no leg of a four- or six-legged monster passes through another, in any move', () => {
+  let trots = 0, others = 0
+  for (let seed = 1; seed <= 120; seed++) {
+    const p = planMonster(seed)
+    if (p.legs === 2) continue
+    const sk = new Skeleton(layout(p).bones)
+    assert.ok(legRoom(p, sk) > 0, `seed ${seed}: legs touch standing at rest`)
+    for (const m of monsterSpecies(seed).moves) {
+      for (let k = 0; k < 60; k++) {
+        m.pose(sk, (k / 60) * m.seconds)
+        sk.update()
+        assert.ok(legRoom(p, sk) > 0, `seed ${seed}: legs pass through each other ${k / 60} of the way through ${m.name}`)
+      }
+    }
+    if (gaitOf(p).lag === Math.PI) trots++; else others++
+  }
+  // most can still trot; the long-legged, short-bodied ones bring a side's legs into step
+  assert.ok(trots > others && others > 0, `${trots} trot, ${others} do not`)
 })
