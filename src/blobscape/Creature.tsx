@@ -19,7 +19,7 @@ import { Sprites } from './creature/Sprites.tsx'
 
 const STILL = 'still'
 const MAX_FILE = 200 * 1024 * 1024
-const RIG_LESSONS = LESSONS.filter((l) => ['one-bone', 'weights', 'twist', 'walk', 'model', 'morphs'].includes(l.id))
+const RIG_LESSONS = LESSONS.filter((l) => ['one-bone', 'weights', 'twist', 'walk', 'model', 'morphs', 'fur'].includes(l.id))
 const SHOW: { id: Show; label: string }[] = [{ id: 'blobs', label: 'Blobs' }, { id: 'bones', label: 'Bones' }, { id: 'both', label: 'Both' }]
 const DEFAULT = 'fox'
 

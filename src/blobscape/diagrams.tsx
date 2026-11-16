@@ -318,6 +318,18 @@ export function LessonGlyph({ id }: { id: string }) {
         <Blob x={92} y={38} rx={21} ry={21} r={0} c="sun" />
         <circle cx="101" cy="32" r="2.2" fill="#1d2440" />
       </>)
+    case 'fur':
+      return g(<>
+        {/* A furry ball of thin blobs beside blades of grass bending in the wind */}
+        <Blob x={36} y={42} rx={20} ry={18} r={0} c="orange" />
+        {Array.from({ length: 14 }, (_, k) => {
+          const a = (k / 14) * Math.PI * 2
+          return <Blob key={k} x={36 + Math.cos(a) * 21} y={42 + Math.sin(a) * 19} rx={7} ry={1.6} r={(a * 180) / Math.PI + 25} c="orange" />
+        })}
+        <circle cx="31" cy="38" r="2" fill="#1d2440" />
+        <circle cx="42" cy="38" r="2" fill="#1d2440" />
+        <path d="M 74 64 C 74 50 78 40 88 34 M 84 64 C 85 50 90 42 100 38 M 94 64 C 96 52 101 46 110 44 M 104 64 C 106 56 110 52 116 50" stroke={COLORS.green} strokeWidth="2.5" fill="none" strokeLinecap="round" />
+      </>)
     case 'shoot':
       return g(<>
         {/* A toy bird of blobs, with cameras round it and their lines of sight */}
