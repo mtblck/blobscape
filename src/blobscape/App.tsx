@@ -33,6 +33,7 @@ import { Experiments } from './Experiments.tsx'
 import { useEffect, useState } from 'react'
 import { Toaster, clearToasts } from '../shared/Toast.tsx'
 import { Contact } from './Contact.tsx'
+import { Engine } from './Engine.tsx'
 
 const PAGES: Record<string, () => React.JSX.Element> = { 'one-blob': OneBlob, footprint: Footprint, order: Order, many: Many, angle: Angle, paint: Paint, formats: Formats, break: Break, 'one-bone': OneBone, weights: Weights, twist: Twist, walk: Walk, model: Model, shoot: Shoot, fuzzy: Fuzzy, floaters: Floaters, lighting: Lighting }
 
@@ -49,7 +50,7 @@ export function App() {
       <SiteHeader here={route.page === 'notfound' ? undefined : href(route)} />
       {/* Keyed by page, so each one mounts fresh: its own view, its own state */}
       <main id="main" key={key} className="mx-auto w-full max-w-7xl flex-1 px-4 pb-16">
-        {route.page === 'sandbox' ? <Sandbox /> : route.page === 'creature' ? <Creature /> : route.page === 'forest' ? <ForestWalk /> : route.page === 'clockwork' ? <Clockwork /> : route.page === 'diorama' ? <PixelDiorama /> : route.page === 'scan' ? <ScanStudio /> : route.page === 'dungeon' ? <DungeonRun /> : Lesson ? <Lesson /> : route.page === 'lessons' ? <LessonList /> : route.page === 'experiments' ? <Experiments /> : route.page === 'contact' ? <Contact /> : route.page === 'notfound' ? <NotFound /> : <Landing />}
+        {route.page === 'sandbox' ? <Sandbox /> : route.page === 'creature' ? <Creature /> : route.page === 'forest' ? <ForestWalk /> : route.page === 'clockwork' ? <Clockwork /> : route.page === 'diorama' ? <PixelDiorama /> : route.page === 'scan' ? <ScanStudio /> : route.page === 'dungeon' ? <DungeonRun /> : Lesson ? <Lesson /> : route.page === 'lessons' ? <LessonList /> : route.page === 'experiments' ? <Experiments /> : route.page === 'engine' ? <Engine /> : route.page === 'contact' ? <Contact /> : route.page === 'notfound' ? <NotFound /> : <Landing />}
       </main>
       <Footer />
       <Toaster />
