@@ -24,7 +24,8 @@ const SKIN = 0.36
  */
 function spec(c: Coat, s: number): SculptSpec & { parts: FurryPart[] } {
   const fat = (r: number) => Math.max(r, s * 0.6)
-  const fur = c.fur
+  // a shade brighter than the lessons' coat, as the old Creature-page fox was: the undercoat and strands darken it
+  const fur: Vec3 = [Math.min(1, c.fur[0] * 1.12), Math.min(1, c.fur[1] * 1.12), Math.min(1, c.fur[2] * 1.12)]
   const deep: Vec3 = mix(c.fur, c.dark, 0.28)
   const bones = foxBones()
   const bone = (name: string) => bones.find((b) => b.name === name)!
