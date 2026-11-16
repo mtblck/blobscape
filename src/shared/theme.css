@@ -188,25 +188,23 @@
 .desk-group { grid-template-columns: minmax(0, 1fr); }
 @media (min-width: 64rem) { .desk-group { grid-template-columns: repeat(var(--cols, 1), minmax(0, 1fr)); } }
 
-/* Creature's loading mark: the blob hops on its axis. It moves, never stretches (brand rule), and stills under reduced motion */
-@keyframes bs-hop {
-  0%, 60%, 100% { transform: translateY(0); }
-  30%           { transform: translateY(-14px); }
+/* The waiting mark (shared/BlobLoader.tsx): three soft blobs slide into one and apart. Only `transform` moves, on
+   elements of their own, so it keeps going while the main thread is busy building. Still, it rests apart. */
+.blob-loader { position: relative; display: block; width: 3.5rem; height: 1.25rem; }
+.blob-loader > span {
+  position: absolute; left: 50%; top: 50%; width: 1rem; height: 1rem; margin: -0.5rem 0 0 -0.5rem; border-radius: 50%;
+  background: radial-gradient(circle, var(--color-blob) 0 42%, color-mix(in srgb, var(--color-blob) 55%, transparent) 58%, transparent 72%);
+  will-change: transform;
 }
+.blob-loader-left { transform: translateX(-1.1rem); }
+.blob-loader-right { transform: translateX(1.1rem); }
+@keyframes bs-blob-left { 0%, 15%, 100% { transform: translateX(-1.1rem); } 50%, 62% { transform: translateX(0) scale(1.15); } }
+@keyframes bs-blob-right { 0%, 15%, 100% { transform: translateX(1.1rem); } 50%, 62% { transform: translateX(0) scale(1.15); } }
+@keyframes bs-blob-mid { 0%, 15%, 100% { transform: scale(1); } 50%, 62% { transform: scale(1.45); } }
 @media (prefers-reduced-motion: no-preference) {
-  .creature-loading-mark > g > path:first-child { animation: bs-hop 1.2s ease-in-out infinite; }
-}
-
-/* The waiting mark (shared/BlobLoader.tsx): a blob splits in three and comes back. Still, it rests split. */
-.blob-loader-left { transform: translateX(-18px); }
-.blob-loader-right { transform: translateX(18px); }
-@keyframes bs-split-left { 0%, 100% { transform: translateX(0); } 45%, 60% { transform: translateX(-18px); } }
-@keyframes bs-split-right { 0%, 100% { transform: translateX(0); } 45%, 60% { transform: translateX(18px); } }
-@keyframes bs-split-mid { 0%, 100% { transform: scale(1.25); } 45%, 60% { transform: scale(0.85); } }
-@media (prefers-reduced-motion: no-preference) {
-  .blob-loader-left { animation: bs-split-left 1.3s cubic-bezier(0.6, 0, 0.3, 1) infinite; }
-  .blob-loader-right { animation: bs-split-right 1.3s cubic-bezier(0.6, 0, 0.3, 1) infinite; }
-  .blob-loader-mid { transform-origin: 32px 14px; animation: bs-split-mid 1.3s cubic-bezier(0.6, 0, 0.3, 1) infinite; }
+  .blob-loader-left { animation: bs-blob-left 1.2s cubic-bezier(0.6, 0, 0.3, 1) infinite; }
+  .blob-loader-right { animation: bs-blob-right 1.2s cubic-bezier(0.6, 0, 0.3, 1) infinite; }
+  .blob-loader-mid { animation: bs-blob-mid 1.2s cubic-bezier(0.6, 0, 0.3, 1) infinite; }
 }
 
 /* Blobscape's front page: a dashed selection ring that marches */

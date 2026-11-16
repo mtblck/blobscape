@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { LoadingMark } from '../shared/BlobLoader.tsx'
 import { Button, Chip, Field, Slider } from '../shared/ui.tsx'
-import { Mark } from '../shared/Logo.tsx'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
 import { TAB_SECTIONS, Workbench } from '../shared/Workbench.tsx'
 import { href } from './routes.ts'
@@ -153,7 +153,7 @@ export function ForestWalk() {
                 data-testid="forest-view"
                 className="absolute inset-0 h-full w-full outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
               />
-              {loading && <Loading label={loadingLabel} />}
+              {loading && <LoadingMark testid="forest-loading" />}
               <p role="status" className="sr-only">{loading ? loadingLabel : ''}</p>
               {failed && <div role="alert" className="absolute inset-4 grid place-items-center text-center text-sm text-ink">{failed}</div>}
               <Stick onChange={(v) => { stick.current = v; push() }} />
@@ -289,18 +289,6 @@ function Stick({ onChange }: { onChange: (v: Input) => void }) {
         className="pointer-events-none absolute top-1/2 left-1/2 size-11 rounded-full border border-white/50 bg-white/35 shadow"
         style={{ transform: `translate(calc(-50% + ${knob[0] * 2.5}rem), calc(-50% + ${knob[1] * 2.5}rem))` }}
       />
-    </div>
-  )
-}
-
-/** Over the view while the engine starts or the forest is planted. */
-function Loading({ label }: { label: string }) {
-  return (
-    <div aria-hidden data-testid="forest-loading" className="pointer-events-none absolute inset-0 grid place-items-center">
-      <div className="flex flex-col items-center gap-3 rounded-2xl bg-paper/70 px-6 py-5 backdrop-blur-sm">
-        <Mark className="creature-loading-mark h-10 w-auto" />
-        <p className="text-sm text-ink">{label}</p>
-      </div>
     </div>
   )
 }

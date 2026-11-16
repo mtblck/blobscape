@@ -1,22 +1,29 @@
 /**
- * A small waiting mark: one blob that splits into three and comes back together.
+ * The waiting mark: three soft blobs that slide together into one and apart again.
  * Decoration only: the page says what it is waiting for in its own status line.
- * The pieces melt into each other through the `blob-loader-goo` filter (a blur, then a hard alpha cut).
+ *
+ * Each blob is its own element moved only by `transform` (keyframes in theme.css), so the browser
+ * animates it off the main thread: cutting a scene keeps that thread busy for the whole wait, and
+ * anything animated on it (an SVG's inner shapes, a filter) would stand still. It rests apart, so a
+ * mark that cannot move still reads as three blobs.
  */
 export function BlobLoader({ className = '' }: { className?: string }) {
   return (
-    <svg aria-hidden viewBox="0 0 64 28" className={`blob-loader ${className}`}>
-      <defs>
-        <filter id="blob-loader-goo" x="-20%" y="-40%" width="140%" height="180%">
-          <feGaussianBlur in="SourceGraphic" stdDeviation="2.6" result="soft" />
-          <feColorMatrix in="soft" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -9" />
-        </filter>
-      </defs>
-      <g filter="url(#blob-loader-goo)" fill="var(--color-blob)">
-        <circle className="blob-loader-left" cx="32" cy="14" r="5.5" />
-        <circle className="blob-loader-mid" cx="32" cy="14" r="6.5" />
-        <circle className="blob-loader-right" cx="32" cy="14" r="5.5" />
-      </g>
-    </svg>
+    <span aria-hidden className={`blob-loader ${className}`}>
+      <span className="blob-loader-left" />
+      <span className="blob-loader-mid" />
+      <span className="blob-loader-right" />
+    </span>
+  )
+}
+
+/** The mark in the middle of an experiment's view, on a small pad so it shows over any scene. */
+export function LoadingMark({ testid }: { testid: string }) {
+  return (
+    <div aria-hidden data-testid={testid} className="pointer-events-none absolute inset-0 grid place-items-center">
+      <div className="rounded-full bg-paper/70 px-4 py-3 backdrop-blur-sm">
+        <BlobLoader />
+      </div>
+    </div>
   )
 }
