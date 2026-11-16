@@ -8,14 +8,15 @@
  * Run with node --experimental-strip-types (no JSX here: the content is plain
  * strings, and the Tailwind classes it uses are scanned via @source in theme.css).
  */
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { createServer } from 'vite'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { LESSONS, LESSON_COUNT, LESSON_GOALS, PARTS, href, type Route } from '../src/blobscape/routes.ts'
-import { CARD_LINK, EXPERIMENTS, EXPERIMENTS_INTRO, CONTACT_INTRO, SITE, byPublished, experimentAt, longDate, type Experiment } from '../src/blobscape/site.ts'
+import { LESSONS, LESSON_GOALS, href, type Route } from '../src/blobscape/routes.ts'
+import { EXPERIMENTS, SITE, byPublished, experimentAt, longDate, type Experiment } from '../src/blobscape/site.ts'
 import { DESCRIPTION, pageMeta } from '../src/blobscape/meta.ts'
-import { BESIDE, BUILT_ON, DEMOS, DOORS, ENGINE, ENGINE_BUILT, FEATURES } from '../src/blobscape/engineCopy.ts'
-import { SPEC, specHtml, specTitle } from '../src/blobscape/specCopy.ts'
+import { BUILT_ON, ENGINE, ENGINE_BUILT } from '../src/blobscape/engineCopy.ts'
+import { SPEC, specTitle } from '../src/blobscape/specCopy.ts'
 import { AXIS, BLOB, WORD } from '../src/shared/logoPaths.ts'
 
 const DIST = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist')
@@ -25,12 +26,10 @@ const TOOLS = ['/experiments/fit-a-picture/', '/experiments/splat-to-sprite/']
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 const url = (path: string) => SITE.origin + path
-const cap = (s: string) => s[0].toUpperCase() + s.slice(1)
 
 const LOGO = `<svg viewBox="0 0 1155.48 187.2" class="h-6 w-auto sm:h-7" role="img" aria-label="Blobscape home"><g transform="translate(-4 -80)"><path d="${BLOB}" fill="#f2553a" fill-rule="evenodd"/><path d="${AXIS}" fill="var(--c-logo-ink)"/></g><path d="${WORD}" fill="var(--c-logo-ink)"/></svg>`
 
 const LINK = 'text-ink underline decoration-rule underline-offset-2 hover:text-accent'
-const BUTTON = 'inline-flex min-h-11 items-center rounded-lg bg-accent px-5 font-medium text-paper no-underline transition-colors hover:bg-accent-ink'
 
 /**
  * The app's header, as near as static HTML gets: the main links hide on a
@@ -42,12 +41,6 @@ function shell(main: string): string {
     .map(([label, path]) => `<li><a href="${path}" class="rounded-full px-3 py-1.5 text-[0.9375rem] font-medium text-ink-muted no-underline hover:text-ink">${label}</a></li>`)
     .join('')
   return `<div class="flex min-h-dvh flex-col"><a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded focus:bg-paper focus:px-3 focus:py-2 focus:text-sm">Skip to content</a><header class="sticky top-0 z-30 border-b border-rule bg-paper"><div class="mx-auto flex h-14 max-w-7xl items-center justify-between gap-4 px-4"><a href="/" class="-mx-1 shrink-0 rounded-md px-1 py-1.5">${LOGO}</a><div class="flex items-center gap-1"><nav aria-label="Main" class="max-md:hidden"><ul class="flex items-center gap-1">${nav}</ul></nav><span aria-hidden="true" class="invisible flex h-9 items-center gap-2 rounded-full border px-3 text-sm font-medium"><span class="h-4.5 w-4.5"></span>Menu</span></div></div></header><main id="main" class="mx-auto w-full max-w-7xl flex-1 px-4 pb-16">${main}</main></div>`
-}
-
-function lessonList(from: number = 0, to: number = LESSONS.length): string {
-  return `<ol start="${from + 1}" class="mt-3 flex flex-col gap-4">${LESSONS.slice(from, to)
-    .map((l) => `<li><a href="${href({ page: 'lesson', id: l.id })}" class="font-display text-xl ${LINK}">${esc(l.title)}</a><p class="mt-1 text-ink-muted">${esc(l.summary)}</p></li>`)
-    .join('')}</ol>`
 }
 
 /** When an experiment was published, and when it last changed if that was another day (as `Dates` in Shell.tsx). */
@@ -62,19 +55,9 @@ function crumbs(here: string, parent?: [string, string]): string {
   return `<div class="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 pt-6 text-sm text-ink-faint"><nav aria-label="Breadcrumb"><a href="/" class="${LINK}">Blobscape</a><span aria-hidden="true" class="px-1.5">/</span>${up}<span aria-current="page">${esc(here)}</span></nav>${dated ? `<div class="flex flex-wrap items-baseline gap-x-4 gap-y-1">${ENGINE_BUILT.includes(dated.id) ? `<a href="/engine/" class="${LINK}" data-testid="built-on">${BUILT_ON}</a>` : ''}${dates(dated, 'page-dates')}</div>` : ''}</div>`
 }
 
+/** A readable stand-in for a page that draws in WebGL, under the same header; the app replaces it. */
 function content(route: Route): string {
   switch (route.page) {
-    case 'home':
-      return `<div class="max-w-3xl py-12"><h1 class="font-display text-5xl leading-[1.05]">Learn 3D splats by taking them apart</h1>
-<p class="mt-6 text-xl leading-relaxed text-ink-muted">A Gaussian splat is a 3D scene made of nothing but soft, colored, see-through blobs. Learn what one blob is, then pile up thousands and pull real scenes to pieces.</p>
-<p class="mt-6"><a href="${href({ page: 'lesson', id: LESSONS[0].id })}" class="${BUTTON}">Start with one blob</a></p>
-<h2 class="mt-12 font-display text-3xl">${cap(LESSON_COUNT)} lessons, from one blob to a walking creature and a real photo shoot</h2>${lessonList()}
-<h2 class="mt-12 font-display text-3xl">Sandbox</h2><p class="mt-2 text-ink-muted">Spray, select, move, recolor and explode blobs, or open your own .ply, .spz, .splat, .ksplat or .sog capture. <a href="/sandbox/" class="${LINK}">Open the sandbox</a></p>
-<h2 id="experiments" class="mt-12 scroll-mt-20 font-display text-3xl">Other ways to play with splats</h2><ul class="mt-3 flex flex-col gap-4">${EXPERIMENTS.map((e) => `<li><a href="${e.url}" class="font-display text-xl ${LINK}">${esc(e.title)}</a><p class="mt-1 text-ink-muted">${esc(e.body)}</p></li>`).join('')}</ul><p class="mt-6"><a href="/experiments/" class="${LINK}">See every experiment</a></p></div>`
-    case 'lessons':
-      return `<div class="max-w-3xl">${crumbs('Lessons')}<h1 class="pt-6 font-display text-5xl">Lessons</h1>
-<p class="mt-4 text-xl leading-relaxed text-ink-muted">A Gaussian splat is a 3D scene made of nothing but soft, see-through, colored blobs. Start with one, learn what each of its numbers does, pile up thousands, then give them bones and make them walk.</p>
-${PARTS.map((p, i) => `<h2 class="mt-10 font-display text-2xl">Part ${i + 1}: ${esc(p.title)}</h2><p class="mt-1 text-ink-muted">${esc(p.summary)}</p>${lessonList(p.from, PARTS[i + 1]?.from ?? LESSONS.length)}`).join('')}</div>`
     case 'lesson': {
       const i = LESSONS.findIndex((l) => l.id === route.id)
       const l = LESSONS[i]
@@ -98,24 +81,9 @@ ${PARTS.map((p, i) => `<h2 class="mt-10 font-display text-2xl">Part ${i + 1}: ${
       const tool = route.page !== 'sandbox'
       return `${crumbs(title, tool ? ['Experiments', '/experiments/'] : undefined)}<div class="max-w-3xl"><h1 class="pt-6 font-display text-5xl">${title}</h1><p class="mt-4 text-xl leading-relaxed text-ink-muted">${esc(pageMeta(route).description)}</p><p class="mt-6 text-sm text-ink-faint">It runs in your browser, with JavaScript and WebGL${tool ? ' or WebGPU' : ''}.</p></div>`
     }
-    case 'experiments':
-      return `${crumbs('Experiments')}<div class="flex flex-wrap items-end justify-between gap-x-8 gap-y-5 pt-6 pb-8"><div class="max-w-3xl"><h1 class="font-display text-5xl">Experiments</h1>
-<p class="mt-4 text-xl leading-relaxed text-ink-muted">${esc(EXPERIMENTS_INTRO)}</p></div><div aria-hidden="true" class="invisible flex gap-1.5"><span class="rounded-full border px-2.5 py-0.5 text-xs font-medium">Newest first</span><span class="rounded-full border px-2.5 py-0.5 text-xs">Oldest first</span></div></div>
-<ul class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">${byPublished('newest').map((e) => `<li class="relative flex flex-col gap-4 rounded-2xl border border-rule bg-paper p-4 transition-colors hover:border-ink-faint"><img src="${e.cover}" alt="" width="1200" height="750" loading="lazy" decoding="async" class="block aspect-[16/10] h-auto w-full rounded-xl object-cover ring-1 ring-rule">${dates(e)}<a href="${e.url}" class="${CARD_LINK}">${esc(e.title)} →</a><p class="flex-1 text-ink-muted">${esc(e.body)}</p><p class="text-sm text-ink-faint">Needs ${esc(e.needs)}. Runs in your browser; nothing is uploaded.</p></li>`).join('')}</ul>
-<p class="mt-10 text-ink-muted">New to splats? The <a href="/lessons/" class="text-ink underline underline-offset-2 hover:text-accent">lessons</a> start with a single blob.</p>`
-    case 'engine':
-      return `${crumbs('Engine')}<header class="max-w-3xl pt-6 pb-8"><h1 class="font-display text-5xl">${esc(ENGINE.title)}</h1><p class="mt-4 text-xl leading-relaxed text-ink-muted">${esc(ENGINE.lede)}</p><p class="mt-3 text-ink-faint">${esc(ENGINE.note)}</p></header>
-<h2 class="font-display text-3xl">Three live demos</h2><ul class="mt-4 flex flex-col gap-4">${DEMOS.map((d) => `<li><h3 class="font-display text-xl">${esc(d.title)}</h3><p class="mt-1 text-ink-muted">${esc(d.body)} <a href="${d.link.href}" class="${LINK}">${esc(d.link.label)}</a></p></li>`).join('')}</ul>
-<h2 class="mt-12 font-display text-3xl">What it does</h2><ul class="mt-4 flex flex-col gap-4">${FEATURES.map((f) => `<li><h3 class="font-display text-xl">${esc(f.title)}</h3><p class="mt-1 text-ink-muted">${esc(f.body)}</p></li>`).join('')}</ul>
-<h2 class="mt-12 font-display text-3xl">${esc(BESIDE.title)}</h2><p class="mt-4 text-ink-muted">${esc(BESIDE.intro)}</p>${[BESIDE.ours, BESIDE.spark].map((s) => `<h3 class="mt-4 font-display text-xl">${esc(s.title)}</h3><ul class="mt-2 list-disc pl-5 text-ink-muted">${s.items.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>`).join('')}<p class="mt-4 text-ink-muted">${esc(BESIDE.note)}</p>
-<h2 class="mt-12 font-display text-3xl">Three ways to use it</h2><ol class="mt-4 flex flex-col gap-4">${DOORS.map((d) => `<li><h3 class="font-display text-xl">${esc(d.title)}</h3><p class="mt-1 text-ink-muted">${esc(d.body)} <a href="${d.link.href}" class="${LINK}">${esc(d.link.label)}</a></p></li>`).join('')}</ol>
-<h2 class="mt-12 font-display text-3xl">Built on it</h2><ul class="mt-4 flex flex-col gap-2">${EXPERIMENTS.filter((e) => ENGINE_BUILT.includes(e.id)).map((e) => `<li><a href="${e.url}" class="${LINK}">${esc(e.title)}</a></li>`).join('')}</ul>`
-    case 'spec':
-      return `<article class="max-w-3xl pb-8">${crumbs(SPEC.crumb, ['Engine', '/engine/'])}<h1 class="pt-6 font-display text-5xl">${esc(specTitle(SPEC_MD))}</h1><div class="spec">${specHtml(SPEC_MD)}</div></article>`
-    case 'contact':
-      return `<div class="max-w-2xl">${crumbs('Get in touch')}<div class="pt-6 pb-8"><h1 class="font-display text-5xl">Get in touch</h1><p class="mt-4 text-xl leading-relaxed text-ink-muted">${esc(CONTACT_INTRO)}</p></div></div>`
-    case 'notfound':
-      return `<div class="max-w-2xl py-16"><h1 class="font-display text-5xl">That page isn’t here</h1><p class="mt-4 text-xl leading-relaxed text-ink-muted">The link may be old, or mistyped. Every lesson is on the lesson list.</p><p class="mt-8"><a href="/lessons/" class="${BUTTON}">See the lessons</a></p></div>`
+    default:
+      // the rest are drawn by the app itself (FROM_APP)
+      throw new Error(`prerender: no stand-in for ${route.page}`)
   }
 }
 
@@ -225,6 +193,9 @@ function render(template: string, route: Route): string {
   }
   const root = /<div id="root">[\s\S]*?<\/div>(?=\s*<\/body>|\s*<script)/
   if (!root.test(html)) throw new Error('prerender: the built page has no #root')
+  // Pages the app draws without WebGL are prerendered from the app itself, so its first frame matches this one;
+  // the rest get a readable stand-in under the same header
+  if (FROM_APP.has(route.page)) return html.replace(root, () => `<div id="root" data-ssr>${renderPage(route)}</div>`)
   return html.replace(root, () => `<div id="root">${shell(content(route))}</div>`)
 }
 
@@ -233,7 +204,19 @@ function write(path: string, html: string) {
   writeFileSync(path, html)
 }
 
-const template = readFileSync(join(DIST, 'index.html'), 'utf8')
+// The app, loaded the way Vite would for a server, to draw the pages in FROM_APP
+const FROM_APP = new Set<Route['page']>(['home', 'lessons', 'experiments', 'contact', 'engine', 'spec', 'notfound'])
+const vite = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'error' })
+const { renderPage } = (await vite.ssrLoadModule('/src/blobscape/ssr.tsx')) as typeof import('../src/blobscape/ssr.tsx')
+
+// Both fonts start loading with the page instead of after the CSS, so text is drawn once, in its own font,
+// rather than in a fallback that reflows when they arrive
+const fonts = readdirSync(join(DIST, 'assets')).filter((f) => f.endsWith('.woff2'))
+if (fonts.length !== 2) throw new Error(`prerender: expected the two fonts in dist/assets, found ${fonts.length}`)
+const preloads = fonts.map((f) => `<link rel="preload" href="/assets/${f}" as="font" type="font/woff2" crossorigin>`).join('\n    ')
+const built = readFileSync(join(DIST, 'index.html'), 'utf8')
+if (!built.includes('<link rel="stylesheet"')) throw new Error('prerender: the built page has no stylesheet link')
+const template = built.replace('<link rel="stylesheet"', () => `${preloads}\n    <link rel="stylesheet"`)
 const routes: Route[] = [{ page: 'home' }, { page: 'lessons' }, ...LESSONS.map((l) => ({ page: 'lesson' as const, id: l.id })), { page: 'sandbox' }, { page: 'experiments' }, { page: 'creature' }, { page: 'forest' }, { page: 'clockwork' }, { page: 'shift' }, { page: 'diorama' }, { page: 'dungeon' }, { page: 'scan' }, { page: 'engine' }, { page: 'spec' }, { page: 'contact' }]
 for (const r of routes) write(join(DIST, href(r), 'index.html'), render(template, r))
 write(join(DIST, '404.html'), render(template, { page: 'notfound' }))
@@ -247,3 +230,4 @@ write(
 // Nothing disallowed: the engine lab carries its own noindex, which crawlers only see if they may fetch it
 write(join(DIST, 'robots.txt'), `User-agent: *\nAllow: /\n\nSitemap: ${url('/sitemap.xml')}\n`)
 console.log(`prerender: ${routes.length} pages, 404.html, sitemap.xml (${paths.length} URLs), robots.txt`)
+await vite.close()

@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { Logo } from './Logo.tsx'
 import { SITE } from '../blobscape/site.ts'
 
@@ -132,10 +132,13 @@ const THEME_KEY = 'blobscape-theme'
 
 /** System, light or dark, as three buttons. theme.js applies a saved choice before first paint. */
 export function ThemeChoice() {
-  const [theme, setTheme] = useState<Theme>(() => {
+  // Starts on System, as in the prerendered page (which can't know the choice), then reads the saved one: reading it
+  // while the page is picked up would leave the prerendered buttons showing System
+  const [theme, setTheme] = useState<Theme>('system')
+  useEffect(() => {
     const t = document.documentElement.dataset.theme
-    return t === 'light' || t === 'dark' ? t : 'system'
-  })
+    if (t === 'light' || t === 'dark') setTheme(t)
+  }, [])
   const pick = (t: Theme) => {
     if (t === 'system') delete document.documentElement.dataset.theme
     else document.documentElement.dataset.theme = t

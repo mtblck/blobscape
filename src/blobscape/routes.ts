@@ -219,8 +219,10 @@ function current(): Route {
   return parsePath(window.location.pathname) ?? { page: 'notfound' }
 }
 
-export function useRoute(): Route {
+/** The page in the address bar, kept up to date. `at` fixes the first one, for prerendering a page outside a browser. */
+export function useRoute(at?: Route): Route {
   const [route, setRoute] = useState<Route>(() => {
+    if (at) return at
     const legacy = window.location.pathname === '/' ? parseLegacyHash(window.location.hash) : null
     if (legacy) window.history.replaceState(null, '', href(legacy) + window.location.search)
     // The old /creature/ address (Vercel redirects it; this covers dev and anywhere without the redirect)
