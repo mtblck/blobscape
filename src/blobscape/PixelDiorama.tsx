@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Orbit } from '../splat-core/view.ts'
 import { STEADY, darkest, type Frame, type PixelLook } from '../splat-core/pixel.ts'
 import type { Built } from '../splat-engine/body.ts'
+import { BlobLoader } from '../shared/BlobLoader.tsx'
 import { Button, Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
-import { Mark } from '../shared/Logo.tsx'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
 import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitDrag } from './Viewport.tsx'
 import { href } from './routes.ts'
@@ -242,7 +242,7 @@ export function PixelDiorama() {
                   setOrbit((o) => orbitKey(ev, o) ?? o)
                 }}
               />
-              {loading && <Loading label={loadingLabel} />}
+              {loading && <Loading />}
               <p role="status" className="sr-only">{loading ? loadingLabel : ''}</p>
               {failed && <div role="alert" className="absolute inset-4 grid place-items-center text-center text-sm text-ink">{failed}</div>}
               <div role="group" aria-label="Draw the scene as" className="absolute top-3 left-3 flex gap-1.5 max-sm:top-2 max-sm:left-2">
@@ -372,12 +372,12 @@ export function PixelDiorama() {
   )
 }
 
-function Loading({ label }: { label: string }) {
+/** Scenes swap in a moment, so waiting is a small mark over the view, not a note: the status line beside it says what for. */
+function Loading() {
   return (
     <div aria-hidden data-testid="diorama-loading" className="pointer-events-none absolute inset-0 grid place-items-center">
-      <div className="flex flex-col items-center gap-3 rounded-2xl bg-paper/70 px-6 py-5 backdrop-blur-sm">
-        <Mark className="creature-loading-mark h-10 w-auto" />
-        <p className="text-sm text-ink">{label}</p>
+      <div className="rounded-full bg-paper/70 px-3 py-2 backdrop-blur-sm">
+        <BlobLoader className="h-7 w-16" />
       </div>
     </div>
   )
