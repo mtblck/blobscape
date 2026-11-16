@@ -197,6 +197,18 @@
   .creature-loading-mark > g > path:first-child { animation: bs-hop 1.2s ease-in-out infinite; }
 }
 
+/* The waiting mark (shared/BlobLoader.tsx): a blob splits in three and comes back. Still, it rests split. */
+.blob-loader-left { transform: translateX(-18px); }
+.blob-loader-right { transform: translateX(18px); }
+@keyframes bs-split-left { 0%, 100% { transform: translateX(0); } 45%, 60% { transform: translateX(-18px); } }
+@keyframes bs-split-right { 0%, 100% { transform: translateX(0); } 45%, 60% { transform: translateX(18px); } }
+@keyframes bs-split-mid { 0%, 100% { transform: scale(1.25); } 45%, 60% { transform: scale(0.85); } }
+@media (prefers-reduced-motion: no-preference) {
+  .blob-loader-left { animation: bs-split-left 1.3s cubic-bezier(0.6, 0, 0.3, 1) infinite; }
+  .blob-loader-right { animation: bs-split-right 1.3s cubic-bezier(0.6, 0, 0.3, 1) infinite; }
+  .blob-loader-mid { transform-origin: 32px 14px; animation: bs-split-mid 1.3s cubic-bezier(0.6, 0, 0.3, 1) infinite; }
+}
+
 /* Blobscape's front page: a dashed selection ring that marches */
 @keyframes bs-march { to { stroke-dashoffset: -22; } }
 
