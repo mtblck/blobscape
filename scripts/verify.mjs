@@ -435,6 +435,10 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   const shareImage = await page.request.get(base + B + 'og.png')
   if (!shareImage.ok()) fails.push(`blobscape seo: og.png gave ${shareImage.status()}`)
   await page.locator('footer').scrollIntoViewIfNeeded()
+  // the footer's Experiments column stays short: the three newest, then the way to the rest
+  const footLinks = await page.locator('footer nav[aria-label="Experiments"] a').evaluateAll((as) => as.map((a) => [a.textContent, a.getAttribute('href')]))
+  if (footLinks.length !== 4 || footLinks[3][0] !== 'All experiments' || footLinks[3][1] !== '/experiments/') fails.push(`blobscape footer: expected three experiments and "All experiments", got ${JSON.stringify(footLinks)}`)
+  else ok(`blobscape footer: lists ${footLinks.slice(0, 3).map((l) => l[0]).join(', ')} and a link to all experiments`)
   await page.waitForTimeout(600)
   if (!(await page.locator('a.tipjar[data-tucked]').count())) fails.push('blobscape: the tip button stays over the footer')
   else ok('blobscape: the tip button tucks away at the footer')
