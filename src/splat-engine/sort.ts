@@ -3,9 +3,11 @@ import * as TSLTyped from 'three/tsl'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const TSL = TSLTyped as unknown as Record<string, any>
-const { Fn, Loop, atomicAdd, atomicLoad, atomicStore, instanceIndex, invocationLocalIndex, select, storage, uint, workgroupArray, workgroupBarrier } = TSL
+const { Break, Fn, If, Loop, atomicAdd, atomicLoad, atomicStore, instanceIndex, invocationLocalIndex, select, storage, uint, workgroupArray, workgroupBarrier } = TSL
 
 const SCAN = 256
+/** Bins holding up to this many blobs are put in index order after the scatter (see `settleNode`). */
+const SETTLE = 48
 
 /**
  * A counting sort over depth keys, in three passes that the engine drives:
@@ -15,7 +17,12 @@ const SCAN = 256
  *    already knows the depth);
  * 2. prefix: one workgroup of 256 threads turns the histogram into each bin's
  *    first slot, and clears the histogram for next frame;
- * 3. scatter: each blob takes the next slot in its bin.
+ * 3. scatter: each blob takes the next slot in its bin;
+ * 4. settle: threads race for those slots, so blobs that share a bin would
+ *    come out in a different order every frame, and where two colours meet at
+ *    one depth (a window in its frame) the edge flickers. This pass puts each
+ *    bin of up to `SETTLE` blobs in index order, as the CPU sort does. Bigger
+ *    bins (a wall seen dead on) are left as they fell.
  *
  * three.js's `CountingSort` does the prefix in a single thread looping over
  * every bin, and works the key out twice; on a phone the serial loop is a
@@ -30,7 +37,7 @@ export class DepthSort {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   readonly keysW: any; readonly histogram: any; readonly orderRead: any
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  readonly prefixNode: any; readonly scatterNode: any
+  readonly prefixNode: any; readonly scatterNode: any; readonly settleNode: any
   private readonly cpuCounts: Uint32Array
   private webgl = false
 
@@ -45,7 +52,9 @@ export class DepthSort {
     this.orderAttr = new StorageBufferAttribute(order, 1)
     const histAttr = new StorageBufferAttribute(new Uint32Array(bins), 1)
     const offsetAttr = new StorageBufferAttribute(new Uint32Array(bins), 1)
-    this.attrs = [this.keysAttr, this.orderAttr, histAttr, offsetAttr]
+    // where the scatter drops each blob, before the settle pass writes the final order
+    const scatterAttr = new StorageBufferAttribute(new Uint32Array(n), 1)
+    this.attrs = [this.keysAttr, this.orderAttr, histAttr, offsetAttr, scatterAttr]
     this.cpuCounts = new Uint32Array(bins)
 
     this.keysW = storage(this.keysAttr, 'uint', n)
@@ -53,6 +62,8 @@ export class DepthSort {
     this.histogram = storage(histAttr, 'uint', bins).toAtomic()
     const offsets = storage(offsetAttr, 'uint', bins).toAtomic()
     const orderW = storage(this.orderAttr, 'uint', n)
+    const fellW = storage(scatterAttr, 'uint', n)
+    const fellR = storage(scatterAttr, 'uint', n).toReadOnly()
     this.orderRead = storage(this.orderAttr, 'uint', n).toReadOnly()
 
     const per = bins / SCAN
@@ -86,14 +97,45 @@ export class DepthSort {
 
     this.scatterNode = Fn(() => {
       const slot = atomicAdd(offsets.element(keysR.element(instanceIndex)), uint(1))
-      orderW.element(slot).assign(instanceIndex)
+      fellW.element(slot).assign(instanceIndex)
     })().compute(n, [workgroup]).setName('DepthSortScatter')
+
+    this.settleNode = Fn(() => {
+      const j = instanceIndex
+      const id = fellR.element(j).toVar()
+      const key = keysR.element(id).toVar()
+      // how many of this bin lie before and after this slot (a bin is a run of equal keys)
+      const before = uint(0).toVar(), after = uint(0).toVar()
+      Loop({ start: uint(1), end: uint(SETTLE + 1), type: 'uint', condition: '<' }, ({ i }: { i: unknown }) => {
+        If(j.lessThan(i), () => { Break() })
+        If(keysR.element(fellR.element(j.sub(i))).notEqual(key), () => { Break() })
+        before.addAssign(1)
+      })
+      Loop({ start: uint(1), end: uint(SETTLE + 1), type: 'uint', condition: '<' }, ({ i }: { i: unknown }) => {
+        If(j.add(i).greaterThanEqual(uint(n)), () => { Break() })
+        If(keysR.element(fellR.element(j.add(i))).notEqual(key), () => { Break() })
+        after.addAssign(1)
+      })
+      const size = before.add(after).add(1).toVar()
+      const slot = j.toVar()
+      // every blob of a small bin sees the whole bin, so they agree on its size and each takes a different slot
+      If(size.lessThanEqual(uint(SETTLE)), () => {
+        const first = j.sub(before).toVar()
+        const rank = uint(0).toVar()
+        Loop({ start: uint(0), end: size, type: 'uint', condition: '<' }, ({ i }: { i: unknown }) => {
+          If(fellR.element(first.add(i)).lessThan(id), () => { rank.addAssign(1) })
+        })
+        slot.assign(first.add(rank))
+      })
+      orderW.element(slot).assign(id)
+    })().compute(n, [workgroup]).setName('DepthSortSettle')
   }
 
-  /** Runs the prefix and scatter passes (the keys and histogram must already be written). */
+  /** Runs the prefix, scatter and settle passes (the keys and histogram must already be written). */
   order(renderer: { compute: (n: never) => void }) {
     renderer.compute(this.prefixNode as never)
     renderer.compute(this.scatterNode as never)
+    renderer.compute(this.settleNode as never)
   }
 
   /** The same sort on the CPU, from keys already in `keysAttr`. Stable: equal keys keep index order. */

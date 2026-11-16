@@ -111,7 +111,7 @@ export class SplatWorld extends Mesh {
   private lightNode?: ReturnType<typeof makeLight>
   private lightsDirty = true
 
-  constructor(actors: Actor[], { bins = 16384, mode = 'quat', lights = false }: EngineOptions = {}) {
+  constructor(actors: Actor[], { bins = 65536, mode = 'quat', lights = false }: EngineOptions = {}) {
     const count = actors.reduce((s, a) => s + a.blobs.count, 0)
     const geometry = new InstancedBufferGeometry()
     geometry.setAttribute('position', new BufferAttribute(new Float32Array([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0]), 3))
@@ -243,8 +243,14 @@ export class SplatWorld extends Mesh {
     const e = camera.matrixWorldInverse.elements
     const c = this.bounds.center
     const d = -(e[2] * c.x + e[6] * c.y + e[10] * c.z + e[14])
-    const near = Math.max((camera as unknown as { near?: number }).near ?? 0.01, d - this.bounds.radius)
-    const far = Math.max(near + 0.0001, d + this.bounds.radius)
+    const lo = Math.max((camera as unknown as { near?: number }).near ?? 0.01, d - this.bounds.radius)
+    // Depth bins of a fixed width, starting on a multiple of it. The bounds breathe as bones move, and if the bins
+    // moved with them, two blobs at nearly one depth would share a bin on one frame (drawn in index order) and not
+    // on the next (drawn in depth order): under a still camera, their overlap would flicker.
+    const span = 2 ** Math.ceil(Math.log2(Math.max(d + this.bounds.radius - lo, 0.0001)))
+    const width = span / this.bins
+    const near = Math.floor(lo / width) * width
+    const far = near + span
     const r = renderer as unknown as { getRenderTarget(): { width: number; height: number } | null; getDrawingBufferSize(v: Vector2): Vector2 }
     const target = r.getRenderTarget()
     if (target) this.size.set(target.width, target.height)
@@ -373,13 +379,17 @@ export class SplatWorld extends Mesh {
     const order = new Uint32Array(await r.getArrayBufferAsync(this.sort.orderAttr))
     const keys = new Uint32Array(await r.getArrayBufferAsync(this.sort.keysAttr))
     const seen = new Uint8Array(this.count)
-    let missing = this.count, outOfOrder = 0
+    // `unsettled`: neighbours in one depth bin that are not in index order (only bins too big to settle may have any);
+    // `biggest`: the most blobs in one bin
+    let missing = this.count, outOfOrder = 0, unsettled = 0, biggest = 0, run = 0
     for (let i = 0; i < this.count; i++) {
       const j = order[i]
       if (j < this.count && !seen[j]) { seen[j] = 1; missing-- }
       if (i && keys[order[i - 1]] > keys[j]) outOfOrder++
+      if (i && keys[order[i - 1]] === keys[j]) { run++; if (order[i - 1] > j) unsettled++ } else run = 1
+      biggest = Math.max(biggest, run)
     }
-    return { missing, outOfOrder }
+    return { missing, outOfOrder, unsettled, biggest }
   }
 
   /** The order the last sort produced (drawn first is farthest). Only up to date on the CPU path. */

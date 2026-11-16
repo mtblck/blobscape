@@ -48,7 +48,7 @@ Added for pixel-art scenes (2026-11-15, issues #33, #35, #36, #37):
 ## Known gaps
 
 - **The WebGL fallback moves blobs four times each** (once per quad corner), since WebGL can't run a compute pass first. Its CPU work is now about 10 ms at 100k on this machine (it was 200 ms).
-- **The sort is a counting sort with 16k bins.** Blobs in the same bin draw in arbitrary order and can shimmer on large scenes. A two-pass radix sort with 32-bit keys is the upgrade.
+- **The sort is a counting sort with 65,536 bins.** On WebGPU the threads race for slots in a bin, so a settle pass (`sort.ts`) puts each bin of up to 48 blobs in index order, as the CPU sort does, and the bins have a fixed width anchored in depth so they hold still under a still camera. Without those two, blobs at one depth changed order every frame and hard edges flickered (the lighthouse's windows). Bins of more than 48 (a flat wall seen dead on) are still left as they fall; a two-pass radix sort with 32-bit keys would be the full answer.
 - **Not supported yet:** spherical harmonics and level of detail. `SplatWorld.dispose` now frees its storage buffers too, since the Creature page swaps worlds on every fox change.
 - **Joint quality vs Spark's dual quaternions:** see "Spark side by side" below.
 - **The `.glb` reader** takes only float splat attributes and bones without a rest rotation. It handles our own files and simple ones from elsewhere.
