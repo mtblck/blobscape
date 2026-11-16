@@ -673,7 +673,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   await page.getByRole('button', { name: '1: swung only', exact: true }).click()
   const swung = await page.textContent('[data-testid=morph-readout]')
   const spread = Number(puffed.match(/sit ([\d.]+)×/)?.[1]), tail = Number(swung.match(/tail is (\d+)%/)?.[1])
-  if (!(await goalsAt(3)).startsWith('3 of') || !(spread >= 1.4 && tail <= 65)) fails.push(`blobscape morphs: goals show "${await goalCount()}" (${puffed} / ${swung})`)
+  if (!(await goalsAt(3)).startsWith('3 of') || !(spread >= 1.4 && tail <= 75)) fails.push(`blobscape morphs: goals show "${await goalCount()}" (${puffed} / ${swung})`)
   else ok(`blobscape morphs: spikes, thin and tail tick (body blobs ${spread}× apart puffed, tail ${tail}% of its length with one shape)`)
 
   await fresh('twist')

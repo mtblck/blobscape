@@ -39,7 +39,7 @@ export function Morphs() {
   const done = useGoals('morphs', {
     spikes: spikes >= 0.9,
     thin: puff <= -0.4,
-    tail: steps === 1 && half && length < 0.7,
+    tail: steps === 1 && half && length < 0.78,
   })
 
   const view = (blobs: Blobs, label: string, title: string, testId: string) => (
