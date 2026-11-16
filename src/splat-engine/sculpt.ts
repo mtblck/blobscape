@@ -75,13 +75,16 @@ export function buildSculpt(spec: SculptSpec, spacing: number): Sculpted {
 }
 
 /**
- * Cuts the creature at the spacing that gives about `count` blobs: one coarse
- * cut to measure its surface, then the real one (cells go as 1 / spacing²).
- * `make` is handed the spacing so thin parts can be kept at least a cell thick.
+ * Cuts the creature at the spacing that gives about `count` blobs. Cells go
+ * roughly as 1 / spacing², but not exactly (thin parts are fattened to the
+ * grid), so it measures twice: a coarse cut, then one nearer the answer, each
+ * a fraction of the final cut's cost. `make` is handed the spacing so thin
+ * parts can be kept at least a cell thick.
  */
 export function sculptToCount(make: (spacing: number) => SculptSpec, count: number, probe = 0.08): Sculpted {
-  const rough = buildSculpt(make(probe), probe)
-  const spacing = probe * Math.sqrt(rough.blobs.count / count)
+  const guess = (at: number) => at * Math.sqrt(buildSculpt(make(at), at).blobs.count / count)
+  const near = guess(probe) * 1.5
+  const spacing = guess(near)
   return buildSculpt(make(spacing), spacing)
 }
 
@@ -114,6 +117,14 @@ export function smooth(k: number, ...s: Shape[]): Shape {
     },
     min: [0, 1, 2].map((i) => Math.min(...s.map((q) => q.min[i])) - k) as Vec3,
     max: [0, 1, 2].map((i) => Math.max(...s.map((q) => q.max[i])) + k) as Vec3,
+  }
+}
+
+/** A shape squashed front to back (along z) about z = `at`, to `f` of its depth: a chest, a foot. */
+export function flatten(s: Shape, f: number, at = 0): Shape {
+  return {
+    sdf: (x, y, z) => s.sdf(x, y, at + (z - at) / f) * f,
+    min: [s.min[0], s.min[1], at + (s.min[2] - at) * f], max: [s.max[0], s.max[1], at + (s.max[2] - at) * f],
   }
 }
 

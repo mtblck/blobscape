@@ -38,6 +38,9 @@ export const TAILS: Record<string, Vec3> = {
   blUpper: [0.2, 0.34, -0.46], blLower: [0.2, 0.0, -0.4], brUpper: [-0.2, 0.34, -0.46], brLower: [-0.2, 0.0, -0.4],
 }
 
+/** The fox's bones with their ends, for building another body on the same rig (zoo/fox.ts). */
+export const foxBones = (): Bone[] => BONES.map((b) => ({ ...b, tail: TAILS[b.name] }))
+
 interface Part {
   /** Capsule from a to b with radius ra → rb. */
   a: Vec3; b: Vec3; ra: number; rb: number
