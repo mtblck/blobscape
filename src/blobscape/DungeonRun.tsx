@@ -225,7 +225,7 @@ export function DungeonRun() {
                 ref={canvas}
                 role="application"
                 aria-roledescription="3D game"
-                aria-label="The elf in a torchlit dungeon hall, seen from behind. Arrow keys or W, A, S and D run and turn; Space or J swings the sword; K or E throws fire, which spreads over the floor and burns; L or Q throws frost, which spreads and slows; P pauses."
+                aria-label="The elf in a torchlit dungeon hall, seen from behind. Arrow keys or W, A, S and D run and turn; Space or J swings the sword, which also breaks crates, urns and barrels; K or E throws fire, which spreads over the floor and burns; L or Q throws frost, which spreads and slows; P pauses."
                 tabIndex={0}
                 data-testid="dungeon-view"
                 className="absolute inset-0 h-full w-full outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
@@ -306,6 +306,10 @@ export function DungeonRun() {
                   Fire spreads over the floor for a moment and burns whatever stands in it, you included, then leaves the stone
                   scorched. Frost spreads further, lies longer and slows whatever crosses it. Where the two meet they cancel.
                 </p>
+                <p className="text-xs text-ink-faint">
+                  Crates, urns and barrels break. A crate has a little health in it and an urn has magic. A barrel is full of oil:
+                  break one and the floor catches, and the slimes beside it are thrown back. They are all back for the next wave.
+                </p>
                 <p className="text-xs text-ink-faint">Gold slimes are rare and quick. Bursting one gives back {GOLD_HEAL} health and some magic.</p>
               </div>
             ),
@@ -378,6 +382,12 @@ export function DungeonRun() {
             once and kept at no size, are stood on the hottest and coldest cells.
           </p>
           <p>
+            The crates, urns and barrels break the way a slime bursts. Each is a body on one bone and ten pieces on bones of
+            their own, hidden at no size. A blow that takes the last of it swaps them over: the body goes, and the planks or
+            shards fly on the way the blow was going, tumble, and come to rest flat on the floor. Where each lands follows from
+            the blow alone, so nothing has to be remembered while they lie there.
+          </p>
+          <p>
             Light comes two ways. Baked, the torchlight is worked into the stone's color when the hall is built, so it costs
             nothing to draw. Live, every blob is lit afresh each frame by up to sixteen lights: the eight torches, flickering with
             their flames, the orb in the hero's hand (dimmer as the magic runs down), each bolt as it flies, the flames on the
@@ -401,6 +411,7 @@ function say(e: GameEvent): string | null {
     case 'burst': return e.kind === 'gold' ? 'A gold slime burst: health and magic back.' : null
     case 'fizzle': return 'Not enough magic.'
     case 'scorch': return 'You are standing in fire.'
+    case 'break': return e.kind === 'crate' ? 'A crate broke: some health back.' : e.kind === 'urn' ? 'An urn broke: some magic back.' : 'A barrel burst into fire.'
     default: return null
   }
 }

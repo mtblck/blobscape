@@ -1150,7 +1150,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     await k.ctx.close()
   }
 
-  // Dungeon Run: the hall draws, a swing bursts a slime into splats, a bolt costs magic, a touch takes health off the bar, down shows Try again, and fire and frost spread on the floor
+  // Dungeon Run: the hall draws, a swing bursts a slime into splats, a bolt costs magic, a touch takes health off the bar, down shows Try again, a crate breaks, and fire and frost spread on the floor
   {
     const k = await open('/experiments/dungeon-run/?offscreen=1', { viewport: { width: 1280, height: 900 } })
     await k.page.waitForFunction(() => window.__dungeon?.stage.dungeon, null, { timeout: 90000 }).catch(() => {})
@@ -1235,6 +1235,19 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
         frozen.frost > 12 && frozen.ice > clean.ice + 2000
       if (!good) fails.push(`${name}: ${JSON.stringify({ before, burning, out, clean, frozen })}`)
       else ok(`${name}: a fire bolt sets ${burning.fire} cells alight (${burning.ember} glowing pixels), it burns out and leaves the stone scorched, and a frost bolt freezes ${frozen.frost} cells (${frozen.ice} icy pixels)`)
+    }
+    // props: two swings break a crate, which gives health and leaves its pieces on the floor
+    {
+      const run = (s, input = { forward: 0, turn: 0 }) => k.page.evaluate(async ([s, input]) => { await window.__dungeon.stage.frame(s, input) }, [s, input])
+      await k.page.evaluate(() => { const g = window.__dungeon.stage.dungeon.game; g.restart(); g.hold(); const p = g.props.find((p) => p.kind === 'crate'); g.hero.x = p.x; g.hero.z = p.z - 1; g.hero.heading = 0; g.hero.hp = 50 })
+      const crate = () => k.page.evaluate(() => { const d = window.__dungeon.stage.dungeon, p = d.game.props.find((p) => p.kind === 'crate'), sk = d.props[p.slot].skeleton; return { phase: p.phase, hp: d.game.hero.hp, body: sk.scale[1], piece: sk.scale[2], y: sk.posedHead[7] } })
+      await run(0.1)
+      const whole = await crate()
+      for (let i = 0; i < 2; i++) { await run(0.05, { forward: 0, turn: 0, swing: true }); await run(0.6) }
+      await run(1)
+      const broken = await crate()
+      if (!(whole.phase === 'whole' && whole.body > 0.9 && whole.piece === 0 && broken.phase === 'broken' && broken.body < 0.01 && broken.piece > 0.9 && broken.y < 0.1 && broken.hp === 60)) fails.push(`blobscape dungeon props: ${JSON.stringify({ whole, broken })}`)
+      else ok('blobscape dungeon: two swings break a crate into pieces that lie on the floor, and it gives health back')
     }
     await elements(k.page, 'blobscape dungeon fire and frost')
     await k.page.screenshot({ path: join(shots, 'blobscape-dungeon-frost.png') })
