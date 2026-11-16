@@ -2,7 +2,8 @@ import type { Vec3 } from '../../splat-core/blobs.ts'
 import { buildBody, mix, type Creature, type Part } from '../../splat-engine/body.ts'
 import { X, Y, aim, dir, env, ramp, turn } from '../../splat-engine/posing.ts'
 import { axisAngle, mulQ, rotate, type Bone, type Skeleton } from '../../splat-engine/rig.ts'
-import { elfIdle, elfSpec, elfWalk } from '../../splat-engine/zoo/elf.ts'
+import { joinBuilt } from '../../splat-engine/sculpt.ts'
+import { ELF_BONES, clearCloak, elfIdle, elfWalk, makeElf } from '../../splat-engine/zoo/elf.ts'
 import { blendPose } from '../forest/forest.ts'
 import { BOLT_POP, CAST, RUN_SPEED, SWING, type Bolt, type Element, type Hero } from './game.ts'
 
@@ -15,21 +16,21 @@ import { BOLT_POP, CAST, RUN_SPEED, SWING, type Bolt, type Element, type Hero } 
 
 const STEEL: Vec3 = [0.78, 0.82, 0.88]
 const ARCANE: Vec3 = [0.55, 0.78, 1]
+/** The share of the hero's blobs that are the sword and the orb. */
+const HELD = 0.09
 
 export function makeHero(count: number, look = 'forest'): Creature {
-  const base = elfSpec(look)
-  const rHand = base.bones.findIndex((b) => b.name === 'rHand')
-  const lHand = base.bones.findIndex((b) => b.name === 'lHand')
+  const rHand = ELF_BONES.findIndex((b) => b.name === 'rHand')
+  const lHand = ELF_BONES.findIndex((b) => b.name === 'lHand')
   const grip: Vec3 = [-0.315, 0.9, 0.02]
   const orb: Vec3 = [0.325, 0.84, 0.07]
   const bones: Bone[] = [
-    ...base.bones,
+    ...ELF_BONES,
     { name: 'sword', parent: rHand, head: grip, tail: [grip[0], grip[1], 0.86] },
     { name: 'orb', parent: lHand, head: orb },
   ]
   const g = (z: number): Vec3 => [grip[0], grip[1], z]
   const parts: Part[] = [
-    ...base.parts,
     // grip, guard, pommel and a long blade, its edge catching the light
     { shape: { tube: [g(-0.07), g(0.08)], r: [0.017, 0.017] }, color: [0.3, 0.17, 0.08], bones: ['sword'], density: 4 },
     { shape: { ball: g(-0.085), r: [0.026, 0.026, 0.026] }, color: [0.86, 0.68, 0.3], bones: ['sword'], density: 5 },
@@ -42,8 +43,11 @@ export function makeHero(count: number, look = 'forest'): Creature {
     { shape: { ball: orb, r: [0.04, 0.04, 0.04] }, color: [0.85, 0.95, 1], glow: true, bones: ['orb'], density: 8, opacity: 0.95 },
     { shape: { ball: orb, r: [0.085, 0.085, 0.085] }, color: ARCANE, glow: true, bones: ['orb'], density: 3, opacity: 0.22, size: 1.6 },
   ]
-  const b = buildBody({ bones, parts, blend: base.blend }, count, 5)
-  return { blobs: b.blobs, skin: b.skin, skeleton: b.skeleton }
+  // the elf itself, on the longer list of bones, and what it carries as a build of its own on the same bones
+  const held = buildBody({ bones, parts, blend: 0.07 }, Math.round(count * HELD), 5)
+  const elf = makeElf(count - held.blobs.count, look, bones)
+  const b = joinBuilt(elf, held)
+  return { blobs: b.blobs, skin: b.skin, skeleton: elf.skeleton }
 }
 
 /** What the stage keeps between frames for posing the hero. */
@@ -73,6 +77,7 @@ export function poseHero(sk: Skeleton, h: Hero, clock: HeroClock, dt: number) {
   if (w > 0) {
     elfWalk(sk, ((clock.walk % STRIDE_SECONDS) + STRIDE_SECONDS) % STRIDE_SECONDS)
     blendPose(sk, rest, w)
+    clearCloak(sk)
   }
   const swinging = h.swingT >= 0 ? h.swingT / SWING : -1
   const casting = h.castT >= 0 ? h.castT / CAST : -1

@@ -1,6 +1,6 @@
 import type { Creature } from '../../splat-engine/body.ts'
 import { axisAngle, mulQ, norm4, rotate, type Skeleton } from '../../splat-engine/rig.ts'
-import { elfIdle, elfWalk, elfWave, makeElf } from '../../splat-engine/zoo/elf.ts'
+import { clearCloak, elfIdle, elfWalk, elfWave, makeElf } from '../../splat-engine/zoo/elf.ts'
 import { makeGround } from './ground.ts'
 import { makePlant, type Plant, type Season } from './plants.ts'
 import { KINDS, PER_TILE, RING, RULES, TILE, WALK_SPEED, layout, obstacles, slotOf, stepWalker, tileWindow, type Input, type Kind, type Placed, type Walker } from './world.ts'
@@ -156,6 +156,8 @@ export class Forest {
     if (w > 0) {
       elfWalk(sk, ((this.walkT % STRIDE_SECONDS) + STRIDE_SECONDS) % STRIDE_SECONDS)
       blendPose(sk, rest, w)
+      // a blend of two poses is neither: hold the cloak clear of the legs as they are now
+      clearCloak(sk)
     } else {
       sk.rotation.set(rest.rotation)
       sk.offset.set(rest.offset)

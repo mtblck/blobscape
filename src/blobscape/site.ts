@@ -81,7 +81,7 @@ export const EXPERIMENTS = [
     cover: '/covers/forest-walk.webp',
     needs: 'WebGPU or WebGL 2',
     published: '2026-11-11',
-    updated: '2026-11-11',
+    updated: '2026-11-16',
     body: 'Walk the elf down a forest path that never ends, while trees, ferns, flowers and mushrooms made of blobs grow out of the ground as you come.',
   },
   {
