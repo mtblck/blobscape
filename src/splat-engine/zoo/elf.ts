@@ -74,7 +74,7 @@ function spec(c: Colors): BodySpec {
     { shape: { tube: [[-0.02, 1.638, 0.112], [0.02, 1.638, 0.112]], r: [0.008, 0.008] }, color: LIPS, bones: ['head'], density: 4 },
     { shape: { ball: [0, 1.81, -0.02], r: [0.1, 0.05, 0.11] }, color: c.hair, bones: ['head'] },
     { shape: { tube: [[0, 1.7, -0.1], [0, 1.24, -0.14]], r: [0.06, 0.025], flat: 0.7 }, color: (p) => (Math.sin(p[1] * 70) > 0.6 ? mix(c.hair, [0, 0, 0], 0.18) : c.hair), bones: ['head', 'hair1', 'hair2'] },
-    { shape: { tube: [[0, 1.55, 0], [0, 1.43, 0]], r: [0.045, 0.055] }, color: c.skin, bones: ['neck', 'chest'] },
+    { shape: { tube: [[0, 1.64, 0.005], [0, 1.43, 0]], r: [0.044, 0.055] }, color: c.skin, bones: ['head', 'neck', 'chest'] },
     // body: a tunic belted at the waist, flaring to a skirt
     { shape: { tube: [[0, 1.03, 0], [0, 1.38, 0]], r: [0.125, 0.16], flat: 0.62 }, color: tunic, bones: ['hips', 'spine', 'chest'] },
     { shape: { tube: [[0, 1.0, 0], [0, 1.045, 0]], r: [0.13, 0.132], flat: 0.7 }, color: (_p, n) => (n[2] > 0.85 ? c.trim : LEATHER), bones: ['hips', 'spine'], density: 1.5 },
@@ -178,7 +178,8 @@ function fine(c: Colors, s: number): SculptSpec {
     ...plait.map((q, k): SculptPart => ({ shape: ellipsoid(q, [0.046 - k * 0.0035, 0.044, 0.038 - k * 0.003]), color: (p) => (Math.sin((p[0] + p[1]) * 260) > 0.3 ? shadeHair : c.hair), bones: ['head', 'hair1', 'hair2'] })),
     { shape: cone([0, 1.215, -0.142], [0, 1.19, -0.143], 0.03), color: c.trim, bones: ['hair2'] },
     { shape: cone([0, 1.19, -0.143], [0, 1.13, -0.146], 0.024, fat(0.008)), color: hair, bones: ['hair2'] },
-    { shape: cone([0, 1.55, 0], [0, 1.43, 0], 0.045, 0.055), color: c.skin, bones: ['neck', 'chest'] },
+    // the neck runs up inside the skull, so it never shows a rounded end under the jaw
+    { shape: cone([0, 1.66, 0.005], [0, 1.43, 0], 0.044, 0.055), color: c.skin, bones: ['head', 'neck', 'chest'] },
     // body: the tunic, belted at the waist and flaring to a skirt
     { shape: flatten(cone([0, 1.03, 0], [0, 1.38, 0], 0.125, 0.16), 0.66), color: tunic, bones: ['hips', 'spine', 'chest'] },
     { shape: flatten(cone([0, 1.0, 0], [0, 1.045, 0], 0.135, 0.137), 0.72), color: (p) => (Math.sin(Math.atan2(p[0], p[2]) * 30) > 0.9 ? DARK_LEATHER : LEATHER), bones: ['hips', 'spine'] },

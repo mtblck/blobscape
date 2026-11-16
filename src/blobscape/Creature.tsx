@@ -105,16 +105,29 @@ export function Creature() {
     history.replaceState(history.state, '', url)
   }
 
-  // Built in an effect, not during a render; it's quick (a few hundred milliseconds at most, for the dragon), so no note
-  const [made, setMade] = useState<Shown>(() => build(species, count, look))
-  const madeFor = useRef({ species, count, look })
+  // A detailed creature takes a second or more to cut, and cutting holds the main thread. So the page opens on the
+  // lightest cut (quick, and enough for the options to describe the creature), and the one asked for is cut after the
+  // waiting mark has been painted and handed to the compositor: two frames, then a beat (as Pixel Diorama does).
+  const [made, setMade] = useState<Shown>(() => build(species, species.detail[0], look))
+  const madeFor = useRef({ species, count: species.detail[0], look })
+  const [building, setBuilding] = useState(count !== species.detail[0])
   useEffect(() => {
     const was = madeFor.current
-    if (was.species === species && was.count === count && was.look === look) return
-    madeFor.current = { species, count, look }
-    setMade(build(species, count, look))
-    // a new monster is announced as what it is, since nobody can see what came out
-    if (species.seed && was.species !== species) setFileNote(`Made ${species.blurb.replace(/^A /, 'a ').split(', made up')[0]}.`)
+    if (was.species === species && was.count === count && was.look === look) { setBuilding(false); return }
+    setBuilding(true)
+    let t: ReturnType<typeof setTimeout> | undefined
+    let raf = requestAnimationFrame(() => {
+      raf = requestAnimationFrame(() => {
+        t = setTimeout(() => {
+          madeFor.current = { species, count, look }
+          setMade(build(species, count, look))
+          setBuilding(false)
+          // a new monster is announced as what it is, since nobody can see what came out
+          if (species.seed && was.species !== species) setFileNote(`Made ${species.blurb.replace(/^A /, 'a ').split(', made up')[0]}.`)
+        }, 60)
+      })
+    })
+    return () => { cancelAnimationFrame(raf); clearTimeout(t) }
   }, [species, count, look])
   const shown = loaded ?? made
   // the camera and floor follow the creature once it's built, so a frog never sits on the dragon's floor
@@ -141,7 +154,15 @@ export function Creature() {
     return () => { gone = true; live?.dispose() }
   }, [offscreen])
 
-  useEffect(() => { stage?.setActor(shown.body, clip) }, [stage, shown]) // eslint-disable-line react-hooks/exhaustive-deps
+  // the placeholder cut is never shown: the view waits for the creature asked for
+  const first = useRef(true)
+  const inView = useRef<Body | undefined>(undefined)
+  useEffect(() => {
+    if (!stage || (first.current && building && !loaded) || inView.current === shown.body) return
+    first.current = false
+    inView.current = shown.body
+    stage.setActor(shown.body, clip)
+  }, [stage, shown, building]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { stage?.setClip(clip) }, [stage, clip])
   useEffect(() => { if (stage) stage.speed = speed }, [stage, speed])
   useEffect(() => { stage?.setMode(mode) }, [stage, mode])
@@ -236,8 +257,8 @@ export function Creature() {
                   setOrbit((o) => orbitKey(ev, o) ?? o)
                 }}
               />
-              {!failed && !drawn && <LoadingMark testid="creature-loading" />}
-              <p role="status" className="sr-only">{!failed && !drawn ? (stage ? `Waking the ${species.name}…` : 'Starting the splat engine…') : ''}</p>
+              {!failed && (!drawn || (building && !loaded)) && <LoadingMark testid="creature-loading" />}
+              <p role="status" className="sr-only">{failed ? '' : !stage ? 'Starting the splat engine…' : !drawn || (building && !loaded) ? `Making the ${species.name}…` : ''}</p>
               {failed && <div role="alert" className="absolute inset-4 grid place-items-center text-center text-sm text-ink">{failed}</div>}
               <div role="group" aria-label="Show in the view" data-testid="show" className="absolute top-3 left-3 flex gap-1.5 max-sm:top-2 max-sm:left-2">
                 {SHOW.map((v) => <Chip small key={v.id} active={show === v.id} onClick={() => setShow(v.id)}>{v.label}</Chip>)}

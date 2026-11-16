@@ -799,6 +799,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     // the dragon's other looks: ember is red, not ice blue
     await tabClick(c.page.getByRole('button', { name: 'Ember', exact: true }))
     await c.page.waitForTimeout(300)
+    await c.page.waitForFunction(() => !document.querySelector('[data-testid=creature-loading]'), null, { timeout: 60000 }).catch(() => {})
     const ember = await c.page.evaluate(async () => {
       await window.__creature.stage.frame(0.5)
       const cv = document.querySelector('[data-testid=creature-view]')
