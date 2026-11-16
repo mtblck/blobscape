@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Tabs } from './ui.tsx'
 
+/** For the box inside a tab: its sections (each direct child) stand apart, with a light rule between them. */
+export const TAB_SECTIONS = 'grid gap-5 pt-1 [&>*+*]:border-t [&>*+*]:border-rule-soft [&>*+*]:pt-5'
+
 /**
  * The layout every experiment shares: the preview on the left, staying in sight as the page scrolls,
  * and one panel of options on the right, split into tabs. On a narrow screen the preview sits on top

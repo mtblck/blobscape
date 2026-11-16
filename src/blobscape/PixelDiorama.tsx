@@ -9,7 +9,7 @@ import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitD
 import { href } from './routes.ts'
 import { download } from './files.ts'
 import type { CreatureStage } from './creature/stage.ts'
-import { Workbench } from '../shared/Workbench.tsx'
+import { TAB_SECTIONS, Workbench } from '../shared/Workbench.tsx'
 import { DETAIL, PALETTES } from './diorama/scene.ts'
 import { DIORAMAS, type Diorama } from './diorama/scenes.ts'
 import type { Skeleton } from '../splat-engine/rig.ts'
@@ -253,7 +253,7 @@ export function PixelDiorama() {
         tabs={[
           {
             id: 'scene', label: 'Scene', content: (
-              <div className="grid gap-4">
+              <div className={TAB_SECTIONS}>
                 <Field label="Scene">
                   <div className="flex flex-wrap gap-1.5">
                     {DIORAMAS.map((d) => <Chip key={d.id} active={which === d.id} onClick={() => show(d.id)}>{d.label}</Chip>)}
@@ -269,16 +269,18 @@ export function PixelDiorama() {
                     {DETAIL.map((d) => <Chip key={d.id} active={detail === d.id} onClick={() => setDetail(d.id)}>{d.label}</Chip>)}
                   </div>
                 </Field>
+                <div className="grid gap-2">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <Button small onClick={() => setPlaying((p) => !p)}>{playing ? 'Pause' : 'Play'}</Button>
                 </div>
                 <p className="text-xs text-ink-faint">The scene repeats every {shown.loop} seconds.</p>
+                </div>
               </div>
             ),
           },
           {
             id: 'pixels', label: 'Pixels', content: (
-              <div className="grid gap-4">
+              <div className={TAB_SECTIONS}>
                 <Field label="Palette">
                   <div className="flex flex-wrap gap-1.5">
                     {palettes.map((p) => <Chip key={p.id} active={palette === p.id} onClick={() => { setPalette(p.id); setPixels(true) }}>{p.label}</Chip>)}
@@ -297,16 +299,20 @@ export function PixelDiorama() {
           },
           {
             id: 'finish', label: 'Finish', content: (
-              <div className="grid gap-4">
+              <div className={TAB_SECTIONS}>
                 <Slider label="Dither" value={dither} min={0} max={1} step={0.05} onChange={setDither} format={(v) => `${Math.round(v * 100)}%`} hint={!pixels ? 'Applies to Pixel art.' : colours.length ? (sky ? 'Checkers two palette colours to fake the ones between. The sky is always dithered, so its bands blend.' : 'Checkers two palette colours to fake the ones between.') : 'Needs a palette: Scene colours has none to mix.'} />
                 <Slider label="Glow" value={glow} min={0} max={4} step={0.25} onChange={setGlow} format={(v) => (v ? `${v.toFixed(2)}×` : 'off')} hint={pixels ? 'Bright pixels light the ones beside them.' : 'Applies to Pixel art.'} />
+                <div className="grid gap-3">
                 <Toggle label={pixels ? 'Outline the scene' : 'Outline the scene (in Pixel art)'} checked={outline} onChange={setOutline} />
                 <Toggle label={pixels ? 'Lines where colours meet' : 'Lines where colours meet (in Pixel art)'} checked={edges} onChange={setEdges} />
                 <Toggle label={pixels ? 'Sky behind' : 'Sky behind (in Pixel art)'} checked={sky} onChange={setSky} />
+                </div>
+                <div className="grid gap-2">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <Button small disabled={!pixels || !drawn || saving} onClick={save}>{saving ? 'Saving…' : 'Save this frame'}</Button>
                 </div>
                 <p role="status" className="min-h-4 text-xs text-ink-faint">{pixels ? note : 'Switch back to Pixel art to save a frame.'}</p>
+                </div>
               </div>
             ),
           },
