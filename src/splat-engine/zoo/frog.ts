@@ -3,14 +3,14 @@ import { mirror, mix, spots } from '../body.ts'
 import { membrane, sculptToCount, smooth, type SculptPart, type SculptSpec } from '../sculpt.ts'
 import { cone, ellipsoid, sphere } from '../voxel.ts'
 import type { Bone, Skeleton } from '../rig.ts'
-import { X, aim, dir, env, ramp, set, turn } from '../posing.ts'
+import { X, aim, dir, env, ramp, set } from '../posing.ts'
 import type { Species } from './species.ts'
 
 /**
  * A frog, sitting, facing +z: twenty bones, including a jaw and a tongue of
- * three. The tongue lies folded back along the floor of the mouth, tip
- * toward the throat, as a real frog's does; flicking it turns it over the
- * jaw and out, and grows it, so it never stretches its blobs thin.
+ * three. The tongue lies along the floor of the mouth, rooted at the back;
+ * flicking it grows it straight out between the jaws, so it never stretches
+ * its blobs thin.
  */
 
 const SIDES = [['l', 1], ['r', -1]] as const
@@ -20,9 +20,9 @@ const BONES: Bone[] = [
   { name: 'body', parent: -1, head: [0, 0.1, -0.13], tail: [0, 0.19, 0.07] },
   { name: 'head', parent: 0, head: [0, 0.21, 0.07], tail: [0, 0.22, 0.27] },
   { name: 'jaw', parent: 1, head: [0, 0.185, 0.06], tail: [0, 0.165, 0.25] },
-  { name: 'tongue1', parent: 2, head: [0, 0.18, 0.22], tail: [0, 0.185, 0.17] },
-  { name: 'tongue2', parent: 3, head: [0, 0.185, 0.17], tail: [0, 0.19, 0.12] },
-  { name: 'tongue3', parent: 4, head: [0, 0.19, 0.12], tail: [0, 0.195, 0.08] },
+  { name: 'tongue1', parent: 2, head: [0, 0.172, 0.08] },
+  { name: 'tongue2', parent: 3, head: [0, 0.175, 0.125] },
+  { name: 'tongue3', parent: 4, head: [0, 0.178, 0.17], tail: [0, 0.18, 0.215] },
 ]
 // The arm: out and down to an elbow that points back, then down and forward to a hand turned in.
 const SHOULDER: Vec3 = [0.082, 0.155, 0.075], ELBOW: Vec3 = [0.128, 0.088, 0.062], WRIST: Vec3 = [0.108, 0.02, 0.118]
@@ -134,7 +134,8 @@ function spec(c: Skin, s: number): SculptSpec {
         return wet(c.marks === 'spots' ? mix(c.belly, c.flank, 0.3) : c.belly, n, 0.3)
       },
     },
-    { shape: smooth(0.006, cone([0, 0.181, 0.215], [0, 0.192, 0.085], fat(0.009), fat(0.012)), ellipsoid([0, 0.193, 0.08], [0.02, fat(0.015), 0.017])), color: TONGUE, bones: ['tongue1', 'tongue2', 'tongue3'], group: 'tongue' },
+    // the tongue: thin, with a sticky bulb at its tip, rooted at the back of the mouth
+    { shape: smooth(0.006, cone([0, 0.172, 0.08], [0, 0.18, 0.21], fat(0.0065), fat(0.0075)), ellipsoid([0, 0.18, 0.212], [0.013, fat(0.009), 0.012])), color: TONGUE, bones: ['tongue1', 'tongue2', 'tongue3'], group: 'tongue' },
   ]
   for (const [side, x] of SIDES) {
     const at = (p: Vec3) => sided(x, p)
@@ -235,26 +236,27 @@ export function frogJump(sk: Skeleton, t: number) {
 
 const FLICK = 2
 
-/** The jaw drops, the tongue flips over it and out at a fly, and snaps back. */
+/**
+ * The mouth opens wide and the tongue shoots straight out of the back of it at a fly, and back in. It only grows
+ * along the way it points, between the roof of the mouth and the dropped jaw, so it never passes through the head.
+ */
 export function frogTongue(sk: Skeleton, t: number) {
   const u = (t % FLICK) / FLICK
   frogIdle(sk, u * 3)
-  const open = env(u, 0.18, 0.26, 0.5, 0.62)
-  const out = env(u, 0.24, 0.32, 0.44, 0.54)
-  set(sk, 'head', X, -0.12 * open)
-  set(sk, 'jaw', X, 0.6 * open)
-  // over the top of the jaw and out, aiming a little up: the jaw is already turned down by 0.6
-  set(sk, 'tongue1', X, (Math.PI - 0.85) * out)
-  turn(sk, 'tongue2', X, -0.35 * (1 - out) * ramp(u, 0.24, 0.3))
-  turn(sk, 'tongue3', X, -0.2 * Math.sin(u * 40) * out)
-  sk.size[sk.index('tongue1')] = 1 + 1.9 * out
+  const open = env(u, 0.16, 0.26, 0.52, 0.64)
+  const out = env(u, 0.27, 0.34, 0.42, 0.5)
+  set(sk, 'head', X, -0.2 * open)
+  set(sk, 'jaw', X, 0.78 * open)
+  // level, whatever the jaw under it is doing
+  aim(sk, 'tongue1', dir([0, -0.05, 1]), ramp(open, 0.3, 0.9))
+  sk.size[sk.index('tongue1')] = 1 + 2.5 * out
   sk.update()
 }
 
 export const FROG: Species = {
   id: 'frog',
   name: 'frog',
-  blurb: 'A tree frog of twenty bones in wet skin, striped or spotted by its look, that jumps, and flicks a tongue that lives folded in its mouth.',
+  blurb: 'A tree frog of twenty bones in wet skin, striped or spotted by its look, that jumps, and shoots its tongue straight out.',
   detail: [5000, 15000, 40000, 80000],
   start: 40000,
   looks: Object.entries(LOOKS).map(([id, l]) => ({ id, label: l.label })),
