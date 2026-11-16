@@ -83,7 +83,7 @@ const solidPixels = (page, sel) => page.evaluate((sel) => {
 // 1. The site: every page is its own prerendered file, the chrome works, old links land
 {
   // Prerendered: each page's HTML carries its own title, canonical and content before any script runs
-  for (const [path, title] of [['/', 'Blobscape: learn'], ['/lessons/', 'Lessons ·'], ['/lessons/order/', 'Order matters · Lesson 3'], ['/sandbox/', 'Sandbox ·'], ['/experiments/creature/', 'Splat Creatures ·'], ['/experiments/forest-walk/', 'Forest Walk ·'], ['/experiments/clockwork/', 'Clockwork ·'], ['/experiments/pixel-diorama/', 'Pixel Diorama ·'], ['/experiments/dungeon-run/', 'Dungeon Run ·'], ['/experiments/scan-studio/', 'Scan Studio ·'], ['/experiments/', 'Experiments ·'], ['/engine/', 'The Blobscape engine ·'], ['/engine/rigged-splats/', 'Rigged Gaussian splats in glTF ·']]) {
+  for (const [path, title] of [['/', 'Blobscape: learn'], ['/lessons/', 'Lessons ·'], ['/lessons/order/', 'Order matters · Lesson 3'], ['/sandbox/', 'Sandbox ·'], ['/experiments/creature/', 'Splat Creatures ·'], ['/experiments/forest-walk/', 'Forest Walk ·'], ['/experiments/clockwork/', 'Clockwork ·'], ['/experiments/shape-shifter/', 'Shape Shifter ·'], ['/experiments/pixel-diorama/', 'Pixel Diorama ·'], ['/experiments/dungeon-run/', 'Dungeon Run ·'], ['/experiments/scan-studio/', 'Scan Studio ·'], ['/experiments/', 'Experiments ·'], ['/engine/', 'The Blobscape engine ·'], ['/engine/rigged-splats/', 'Rigged Gaussian splats in glTF ·']]) {
     const html = await (await fetch(base + path)).text()
     if (!html.includes(`<title>${title}`)) fails.push(`${path}: prerendered title is not "${title}…"`)
     else if (!html.includes(`<link rel="canonical" href="https://blobscape.dev${path}"`)) fails.push(`${path}: prerendered canonical is wrong`)
@@ -94,7 +94,7 @@ const solidPixels = (page, sel) => page.evaluate((sel) => {
   if (missing.status !== 404 || !(await missing.text()).includes('noindex')) fails.push('an unknown page is not a noindex 404')
   else ok('unknown pages get the noindex 404 page')
   const sitemap = await (await fetch(base + '/sitemap.xml')).text()
-  if (!sitemap.includes('https://blobscape.dev/lessons/model/') || !sitemap.includes('/experiments/fit-a-picture/') || !sitemap.includes('/experiments/creature/') || !sitemap.includes('/experiments/forest-walk/') || !sitemap.includes('/experiments/clockwork/') || !sitemap.includes('/experiments/pixel-diorama/') || !sitemap.includes('/experiments/dungeon-run/') || !sitemap.includes('/experiments/scan-studio/')) fails.push('sitemap.xml is missing pages')
+  if (!sitemap.includes('https://blobscape.dev/lessons/model/') || !sitemap.includes('/experiments/fit-a-picture/') || !sitemap.includes('/experiments/creature/') || !sitemap.includes('/experiments/forest-walk/') || !sitemap.includes('/experiments/clockwork/') || !sitemap.includes('/experiments/shape-shifter/') || !sitemap.includes('/experiments/pixel-diorama/') || !sitemap.includes('/experiments/dungeon-run/') || !sitemap.includes('/experiments/scan-studio/')) fails.push('sitemap.xml is missing pages')
   else ok('sitemap.xml lists the lessons and tools')
 
   const { page, res, ctx } = await open('/')
@@ -408,9 +408,9 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     else ok(`blobscape ${label}: home lists the lessons`)
     await axe(page, `blobscape ${label} home`)
     await page.screenshot({ path: join(shots, `blobscape-home-${label}.png`), fullPage: true })
-    for (const id of ['lessons', 'one-blob', 'footprint', 'order', 'many', 'angle', 'paint', 'formats', 'break', 'one-bone', 'weights', 'twist', 'walk', 'model', 'morphs', 'shoot', 'fuzzy', 'floaters', 'lighting', 'sandbox', 'creature', 'forest-walk', 'clockwork', 'pixel-diorama', 'dungeon-run', 'scan-studio', 'contact']) {
+    for (const id of ['lessons', 'one-blob', 'footprint', 'order', 'many', 'angle', 'paint', 'formats', 'break', 'one-bone', 'weights', 'twist', 'walk', 'model', 'morphs', 'shoot', 'fuzzy', 'floaters', 'lighting', 'sandbox', 'creature', 'forest-walk', 'clockwork', 'shape-shifter', 'pixel-diorama', 'dungeon-run', 'scan-studio', 'contact']) {
       // headless WebGPU can't present to a canvas, so Creature and Forest Walk draw off-screen here
-      await page.goto(base + (['creature', 'forest-walk', 'clockwork', 'pixel-diorama', 'dungeon-run', 'scan-studio'].includes(id) ? `/experiments/${id}/?offscreen=1` : ['sandbox', 'lessons', 'contact'].includes(id) ? `/${id}/` : `/lessons/${id}/`))
+      await page.goto(base + (['creature', 'forest-walk', 'clockwork', 'shape-shifter', 'pixel-diorama', 'dungeon-run', 'scan-studio'].includes(id) ? `/experiments/${id}/?offscreen=1` : ['sandbox', 'lessons', 'contact'].includes(id) ? `/${id}/` : `/lessons/${id}/`))
       await page.waitForTimeout(1500)
       const focused = await page.evaluate(() => document.activeElement?.tagName)
       if (focused !== 'H1') fails.push(`blobscape ${label} ${id}: focus is on ${focused}, not the heading`)
@@ -1237,11 +1237,51 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     await f.ctx.close()
   }
 
+  // Shape Shifter: it starts as the first creature and ends as the second, in between is neither, and the engine redraws blobs changed on the CPU (both backends)
+  for (const gl of ['', '&webgl=1']) {
+    const k = await open(`/experiments/shape-shifter/?offscreen=1&from=frog&to=fox${gl}`, { viewport: { width: 1280, height: 900 } })
+    await k.page.waitForFunction(() => window.__shift && window.__shift.blobs() > 0, null, { timeout: 120000 }).catch(() => {})
+    // green pixels (the frog) and orange ones (the fox); the loop holds 0.8 s on each creature and takes 3 s between
+    const shot = (t) => k.page.evaluate(async (t) => {
+      await window.__shift.stage.frame(t)
+      const cv = document.querySelector('[data-testid=shift-view]')
+      const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+      let green = 0, orange = 0
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i + 1] > 90 && d[i + 1] > d[i] * 1.3 && d[i + 1] > d[i + 2] * 1.5) green++
+        if (d[i] > 150 && d[i] > d[i + 1] * 1.4 && d[i + 1] > d[i + 2] * 1.3) orange++
+      }
+      return { green, orange, amount: window.__shift.amount() }
+    }, t)
+    const a = await shot(0.2), mid = await shot(0.8 + 1.5), b = await shot(0.8 + 3 + 0.3)
+    const on = await k.page.evaluate(() => window.__shift.stage.backend)
+    const trip = (await k.page.getByTestId('shift-trip').textContent()) ?? ''
+    const [near, wild] = [...trip.matchAll(/(\d+\.\d+)/g)].map((m) => Number(m[1]))
+    if (!(a.amount === 0 && b.amount === 1 && Math.abs(mid.amount - 0.5) < 1e-6 && a.green > 4000 && a.orange < a.green / 4 && b.orange > 4000 && b.green < b.orange / 4 && mid.green > 300 && mid.orange > 300 && near < wild * 0.8) || (gl && on !== 'webgl')) {
+      fails.push(`blobscape shape shifter (${on}): ${JSON.stringify({ a, mid, b, trip })}`)
+    } else ok(`blobscape shape shifter (${on}): frog (${a.green} green pixels) to fox (${b.orange} orange), both halfway (${mid.green}, ${mid.orange}); blobs travel ${near} paired by place, ${wild} at random`)
+    if (!gl) {
+      // the slider stops the loop and shows that amount; random partners make the trips longer
+      await tabClick(k.page.getByRole('slider', { name: 'Shift', exact: true }))
+      await k.page.getByRole('slider', { name: 'Shift', exact: true }).fill('0.25')
+      await k.page.waitForTimeout(300)
+      const held = await k.page.evaluate(() => window.__shift.amount())
+      await tabClick(k.page.getByRole('button', { name: 'At random', exact: true }))
+      await k.page.waitForFunction(() => /paired by place it would be/.test(document.querySelector('[data-testid=shift-trip]')?.textContent ?? ''), null, { timeout: 60000 }).catch(() => {})
+      const swapped = [...((await k.page.getByTestId('shift-trip').textContent()) ?? '').matchAll(/(\d+\.\d+)/g)].map((m) => Number(m[1]))
+      if (!(held === 0.25 && swapped[0] === wild && swapped[1] === near && await k.page.getByRole('button', { name: 'Play', exact: true }).count() === 1)) fails.push(`blobscape shape shifter: slider holds ${held}, random trips ${swapped} (were ${near}, ${wild})`)
+      else ok(`blobscape shape shifter: the slider stops the loop at 25%, and random partners travel ${swapped[0]}`)
+      await k.page.screenshot({ path: join(shots, 'blobscape-shape-shifter.png') })
+      await axe(k.page, 'blobscape shape shifter')
+    }
+    await k.ctx.close()
+  }
+
   // Every experiment shares one layout: the same two columns, the page's own tabs, a preview that stays in sight on a phone
   {
     const PAGES = [
       ['pixel-diorama', 'Scene,Pixels,Finish'], ['creature', 'Creature Type,Movement & Details,Export & Import'], ['forest-walk', 'Forest Type,Character Style,View'],
-      ['dungeon-run', 'Game Settings,Character Style,View'], ['scan-studio', 'Import,Level & Crop,Clean,Lighting'], ['clockwork', 'Time,View'],
+      ['dungeon-run', 'Game Settings,Character Style,View'], ['scan-studio', 'Import,Level & Crop,Clean,Lighting'], ['clockwork', 'Time,View'], ['shape-shifter', 'Shift,Creatures'],
       ['fit-a-picture', 'Picture,Training'], ['splat-to-sprite', 'Prop Type,Pixels,Finish,View'],
     ]
     const sizes = new Set()

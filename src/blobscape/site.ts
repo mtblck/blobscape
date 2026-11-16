@@ -25,6 +25,16 @@ export const EXPERIMENTS_INTRO = "Small tools built from the same blobs as the l
  */
 export const EXPERIMENTS = [
   {
+    id: 'shift',
+    title: 'Shape Shifter',
+    url: '/experiments/shape-shifter/',
+    cover: '/covers/shape-shifter.webp',
+    needs: 'WebGPU or WebGL 2',
+    published: '2026-11-16',
+    updated: '2026-11-16',
+    body: 'One creature turns into another: a frog into a dragon, an owl into a crocodile. Every blob finds a partner and travels to it, straight, in a swirl, through a puddle or out in a burst.',
+  },
+  {
     id: 'diorama',
     title: 'Pixel Diorama',
     url: '/experiments/pixel-diorama/',

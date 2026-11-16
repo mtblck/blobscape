@@ -82,6 +82,11 @@ multi-page React app, one Vercel project, served from the root. See README for t
 - Every turning part is one bone about z. `anglesAt(s)` drives the whole train from the escape wheel's beats (5 a second, half a tooth each) by real tooth counts (`TEETH`); `layout()` places arbors at exactly the meshing pitch radii and `meshes()` sets tooth phases so teeth stay in gaps (tested in `clockwork.test.ts`). Change a tooth count and the layout, phases and hands follow.
 - Fine parts (teeth, pinion leaves, hairspring) use small `size` and high `density`; the plate is dark and sparse so the gold reads.
 
+## Shape Shifter (`/experiments/shape-shifter/`, `src/blobscape/ShapeShifter.tsx`, `src/splat-engine/shift.ts`)
+- One creature turning into another (`?from=<id>&to=<id>`, from `CREATURES`). `shift.ts` is pure and tested: `sized` brings each creature to one size on the floor, `pairUp` gives every blob a partner (by place: both lists halved by rank across the longest way of the two together, again and again; the creature with fewer blobs lends some twice; 'random' is there to show what place is for), `shiftBlobs` blends each pair (center along the path, sizes by ratio, facing by the short way, color and opacity straight; paths straight, swirl, melt, burst; orders together, rise, scatter), and `amountAt`/`timeAt` are the there-and-back loop.
+- No bone moves: the blobs are blended on the CPU into one `Blobs` on a still bone, and the poser calls `CreatureStage.refresh` (`SplatWorld.refresh`), which packs the actors' blobs into the GPU buffers again. The counts must not change. The poser skips frames where nothing changed (the holds at each end).
+- Creatures are cut once per detail level and kept (`cut`), a moment apart so `LoadingMark` keeps moving. Verify drives `window.__shift.stage.frame(seconds)` with `?offscreen=1`, on both backends.
+
 ## Forest Walk (`/experiments/forest-walk/`, `src/blobscape/forest/`)
 - The elf and the whole forest are one `SplatWorld`, built once; walking only re-poses. Changing detail, season or the elf's look rebuilds it.
 - The path is a ring of `RING` tiles; `pathX` repeats every `PERIOD` so tile i always reuses ring slot i % RING (its ground moves by whole periods). Plants per tile are fixed per kind (`PER_TILE`), and `layout(i, seed)` says which stand where, so walking back finds the same forest.

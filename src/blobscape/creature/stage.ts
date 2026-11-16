@@ -155,6 +155,12 @@ export class CreatureStage {
     this.pose()
   }
 
+  /** After the actor's blobs were changed in place (a poser may do it each frame): the engine takes them again. */
+  refresh() {
+    this.world?.refresh()
+    this.invalidate()
+  }
+
   /** Seconds into the clip, or the time a poser is showing. */
   get time() { return this.step > 0 ? Math.floor(this.t / this.step + 1e-6) * this.step : this.t }
 
