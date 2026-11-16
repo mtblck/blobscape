@@ -138,3 +138,7 @@ captures, breaking a scene) are planned.
   opening, since COLMAP-trained scenes come out upside down. Edits are plain functions in `ops.ts`
   with tests.
 
+
+## License
+
+[MIT](LICENSE).

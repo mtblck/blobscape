@@ -33,5 +33,6 @@
     "vite": "^8.3.7"
   },
   "private": true,
+  "license": "MIT",
   "type": "module"
 }
