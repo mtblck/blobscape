@@ -11,7 +11,7 @@ import { href } from './routes.ts'
 import { handOff } from './handoff.ts'
 import { download, kb } from './files.ts'
 import type { CreatureStage } from './creature/stage.ts'
-import { CARD, CARD_SUB, CARD_TITLE } from './creature/card.ts'
+import { TAB_SECTIONS, Workbench } from '../shared/Workbench.tsx'
 import { about, extent, keepOnly } from './scan/clean.ts'
 import { sampleScan } from './scan/sample.ts'
 import { DEFAULT_CLEAN, LIGHTS, UNTURNED, autoOrient, cleaner, finish, lightsFor, preview, stillActor, tip, working, type Clean, type LightId, type Orient } from './scan/studio.ts'
@@ -246,15 +246,15 @@ export function ScanStudio() {
           away with the stray blobs every capture leaves floating round. Then light it with a lamp or a candle, and take it into the sandbox.
         </p>
       </header>
-      <div className="flex flex-col gap-4 lg:grid lg:grid-cols-12 lg:gap-x-5">
-        <section aria-label="The scan" className="lg:col-span-12">
+      <Workbench
+        viewLabel="The scan"
+        view={(
           <div
-            className={`case relative overflow-hidden rounded-2xl ring-1 ${dragOver ? 'ring-2 ring-accent' : 'ring-rule'}`}
+            className={`absolute inset-0 ${dragOver ? 'ring-2 ring-accent ring-inset' : ''}`}
             onDragOver={(ev) => { if (ev.dataTransfer.types.includes('Files')) { ev.preventDefault(); setDragOver(true) } }}
             onDragLeave={(ev) => { if (!ev.currentTarget.contains(ev.relatedTarget as Node | null)) setDragOver(false) }}
             onDrop={(ev) => { ev.preventDefault(); setDragOver(false); const f = ev.dataTransfer.files[0]; if (f) void openFile(f) }}
           >
-            <div className="relative h-[min(56dvh,460px)] min-h-[260px] lg:h-[clamp(360px,calc(100dvh-22rem),680px)]">
               <canvas
                 ref={canvas}
                 role="application"
@@ -290,19 +290,19 @@ export function ScanStudio() {
               </div>
               <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={reframe} />
               <p aria-hidden className="pointer-events-none absolute right-14 bottom-2 left-3 text-right text-xs text-ink-faint">{coarse ? 'drag to orbit · pinch to zoom' : 'drag to orbit · scroll to zoom · drop a scan here'}</p>
-            </div>
-            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-t border-rule-soft px-4 py-2 text-xs leading-relaxed text-ink-muted sm:text-sm">
+          </div>
+        )}
+        status={<>
               <span aria-live="polite">{masks ? <>Keeping <span className="tabular-nums text-ink" data-testid="scan-kept">{masks.kept.toLocaleString()}</span> of <span className="tabular-nums text-ink">{total.toLocaleString()}</span> blobs{showCut ? ', the cut ones in red' : ''}.</> : 'Setting up the scan…'}</span>
               <span data-testid="scan-level">{levelNote}</span>
-            </div>
-          </div>
-        </section>
-
-        <section aria-label="Controls" className={CARD}>
-          <div className="stack-controls grid items-start gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
-            <div role="group" aria-labelledby="s-open">
-              <h2 id="s-open" className={CARD_TITLE}>1. Scan <small className={CARD_SUB}>.ply, .spz, .splat, .ksplat or .sog</small></h2>
-              <div className="grid gap-3">
+        </>}
+        tabsLabel="Steps"
+        tabs={[
+          {
+            id: 'import', label: 'Import', content: (
+              <div className={TAB_SECTIONS}>
+                <div className="grid gap-3">
+                  <p className="text-xs text-ink-faint">A scan from your phone: .ply, .spz, .splat, .ksplat or .sog.</p>
                 <p className="text-sm text-ink-muted"><b className="font-semibold text-ink">{scan?.name ?? 'Nothing yet'}</b>{scan ? `: ${scan.note}` : ''}</p>
                 <div className="flex flex-wrap gap-1.5">
                   <Button small primary disabled={busy} onClick={() => fileInput.current?.click()}>Open a scan…</Button>
@@ -310,14 +310,15 @@ export function ScanStudio() {
                   <input ref={fileInput} type="file" accept={FILE_TYPES} className="sr-only" tabIndex={-1} aria-hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void openFile(f) }} />
                 </div>
                 <p className="text-xs leading-relaxed text-ink-faint">Your file stays on this device: it's opened here in the browser and never uploaded.</p>
-                <p role="status" className="text-xs text-ink-muted">{message}</p>
+                <p role="status" className="text-xs text-ink-muted empty:-mt-3">{message}</p>
                 {error && <p role="alert" className="text-xs text-accent-ink">{error}</p>}
+                </div>
               </div>
-            </div>
-
-            <div role="group" aria-labelledby="s-level">
-              <h2 id="s-level" className={CARD_TITLE}>2. Level and crop</h2>
-              <div className="grid gap-4">
+            ),
+          },
+          {
+            id: 'level', label: 'Level & Crop', content: (
+              <div className={TAB_SECTIONS}>
                 <div className="flex flex-wrap gap-1.5">
                   <Button small onClick={level}>Find the table</Button>
                   <Button small onClick={() => turnBy(about([1, 0, 0], 180))}>Flip over</Button>
@@ -328,45 +329,47 @@ export function ScanStudio() {
                 <Slider label="Crop round" value={clean.radius ?? RADIUS_OFF} min={0.1} max={RADIUS_OFF} step={0.02} onChange={(v) => set({ radius: v >= RADIUS_OFF ? null : v })} format={(v) => (v >= RADIUS_OFF ? 'Off' : cm(v))} hint="Keeps only what's within this distance of the middle." />
                 <Slider label="Crop height" value={clean.top ?? TOP_OFF} min={0.1} max={TOP_OFF} step={0.02} onChange={(v) => set({ top: v >= TOP_OFF ? null : v })} format={(v) => (v >= TOP_OFF ? 'Off' : cm(v))} />
               </div>
-            </div>
-
-            <div role="group" aria-labelledby="s-clean">
-              <h2 id="s-clean" className={CARD_TITLE}>3. Clean</h2>
-              <div className="grid gap-4">
+            ),
+          },
+          {
+            id: 'clean', label: 'Clean', content: (
+              <div className={TAB_SECTIONS}>
                 <Slider label="Floaters" value={clean.floaters} min={0} max={1} step={0.05} onChange={(v) => set({ floaters: v })} format={(v) => (v ? (v < 0.35 ? 'Gentle' : v < 0.7 ? 'Medium' : 'Strong') : 'Off')} hint="Stray blobs off on their own, away from the object." />
                 <Slider label="Faint blobs" value={clean.faint} min={0} max={0.5} step={0.01} onChange={(v) => set({ faint: v })} format={(v) => (v ? `< ${Math.round(v * 100)}%` : 'Off')} hint="Blobs you can barely see through." />
                 <Slider label="Huge blobs" value={clean.huge ?? HUGE_OFF} min={0.01} max={HUGE_OFF} step={0.01} onChange={(v) => set({ huge: v >= HUGE_OFF ? null : v })} format={(v) => (v >= HUGE_OFF ? 'Off' : `> ${Math.round(v * 100)}%`)} hint="Big blurry blobs where the room behind was half seen, by size against the object." />
               </div>
-            </div>
-
-            <div role="group" aria-labelledby="s-light">
-              <h2 id="s-light" className={CARD_TITLE}>4. Light <small className={CARD_SUB}>live, on {backend}</small></h2>
-              <div className="grid gap-4">
+            ),
+          },
+          {
+            id: 'light', label: 'Lighting', content: (
+              <div className={TAB_SECTIONS}>
+                <p className="text-xs text-ink-faint">Live lights, drawn on {backend}.</p>
+                <div className="grid gap-3">
                 <div className="flex flex-wrap gap-1.5">
                   {LIGHTS.map((l) => <Chip key={l.id} active={light === l.id} onClick={() => { setLight(l.id); setAmbient(l.ambient) }}>{l.label}</Chip>)}
                 </div>
                 <p className="text-xs text-ink-faint">{lightNote}</p>
+                </div>
                 {light !== 'scanned' && <>
                   <Slider label="Light from" value={angle} min={0} max={359} step={1} onChange={setAngle} format={(v) => `${v}°`} />
                   <Slider label="Room light" value={ambient} min={0} max={1} step={0.01} onChange={setAmbient} format={(v) => `${Math.round(v * 100)}%`} hint="How bright it is away from the light." />
                 </>}
               </div>
-            </div>
-
-            <div role="group" aria-labelledby="s-take" className="sm:col-span-2 lg:col-span-1">
-              <h2 id="s-take" className={CARD_TITLE}>5. Take it</h2>
-              <div className="grid gap-3">
+            ),
+          },
+        ]}
+        footer={(
+          <div role="group" aria-labelledby="s-take" className="grid gap-3">
+            <h2 id="s-take" className="text-sm font-bold">Take it</h2>
                 <div className="flex flex-wrap gap-1.5">
                   <Button small primary disabled={!masks?.kept || busy} onClick={() => void toSandbox()}>Open in the sandbox</Button>
                   <Button small disabled={!masks?.kept || busy} onClick={() => void save()}>Download .ply</Button>
                 </div>
                 {light !== 'scanned' && <Toggle label="Keep the lighting in its colours" checked={keepLight} onChange={setKeepLight} />}
                 <p className="text-xs leading-relaxed text-ink-faint">The kept blobs, stood on the floor and sized to sit beside the sandbox's own scenes.</p>
-              </div>
-            </div>
           </div>
-        </section>
-      </div>
+        )}
+      />
 
       <section aria-labelledby="how-title" className="mt-14 border-t border-rule pt-10 lg:grid lg:grid-cols-12 lg:gap-x-5 lg:pt-14">
         <div className="lg:col-span-5">

@@ -8,7 +8,7 @@ import { Crumbs, useFocusHeading } from './Shell.tsx'
 import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitDrag } from './Viewport.tsx'
 import { href } from './routes.ts'
 import type { CreatureStage, Show } from './creature/stage.ts'
-import { CARD, CARD_SUB, CARD_TITLE } from './creature/card.ts'
+import { TAB_SECTIONS, Workbench } from '../shared/Workbench.tsx'
 
 const SHOW: { id: Show; label: string }[] = [{ id: 'blobs', label: 'Blobs' }, { id: 'bones', label: 'Bones' }, { id: 'both', label: 'Both' }]
 const SPEEDS = [
@@ -145,10 +145,9 @@ export function Clockwork() {
           stay meshed, and the balance swings five times a second. Slow it down to see one tick, or speed it up to watch the hours go.
         </p>
       </header>
-      <div className="flex flex-col gap-4 lg:grid lg:grid-cols-12 lg:gap-x-5">
-        <section aria-label="The watch" className="lg:col-span-12">
-          <div className="case relative overflow-hidden rounded-2xl ring-1 ring-rule">
-            <div className="relative h-[min(56dvh,460px)] min-h-[260px] lg:h-[clamp(360px,calc(100dvh-22rem),680px)]">
+      <Workbench
+        viewLabel="The watch"
+        view={<>
               <canvas
                 ref={canvas}
                 role="application"
@@ -183,19 +182,16 @@ export function Clockwork() {
               </div>
               <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => pick(view)} />
               <p aria-hidden className="pointer-events-none absolute right-14 bottom-2 left-3 text-right text-xs text-ink-faint">{typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches ? 'drag to orbit · pinch to zoom' : 'drag to orbit · scroll to zoom'}</p>
-            </div>
-            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-t border-rule-soft px-4 py-2 text-xs leading-relaxed text-ink-muted sm:text-sm">
+        </>}
+        status={<>
               <span>{clock ? <><span className="tabular-nums text-ink" data-testid="clock-blobs">{clock.blobs.count.toLocaleString()}</span> blobs on <span className="tabular-nums text-ink">{clock.skeleton.count}</span> bones, one for each turning part.</> : 'Winding the watch…'}</span>
               <span>The hands read <span className="tabular-nums text-ink" data-testid="clock-reading">{reading(shows)}</span></span>
-            </div>
-          </div>
-        </section>
-
-        <section aria-label="Controls" className={CARD}>
-          <div className="stack-controls grid items-start gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
-            <div role="group" aria-labelledby="c-time">
-              <h2 id="c-time" className={CARD_TITLE}>Time</h2>
-              <div className="grid gap-4">
+        </>}
+        tabsLabel="Options"
+        tabs={[
+          {
+            id: 'time', label: 'Time', content: (
+              <div className={TAB_SECTIONS}>
                 <Field label="Speed">
                   <div className="flex flex-wrap gap-1.5">
                     {SPEEDS.map((s) => <Chip key={s.id} active={speed === s.id} onClick={() => { if (s.id !== 1) live.current = false; setSpeed(s.id); setPlaying(true) }}>{s.label}</Chip>)}
@@ -206,11 +202,22 @@ export function Clockwork() {
                   <Button small onClick={() => { live.current = false; setPlaying((p) => !p) }}>{playing ? 'Stop' : 'Start'}</Button>
                   <Button small onClick={now}>Set to now</Button>
                 </div>
+                <div role="group" aria-labelledby="c-train">
+                  <h2 id="c-train" className="mb-2 text-sm font-bold">The train <small className="ml-1 text-xs font-normal text-ink-faint">teeth, from the spring to the balance</small></h2>
+              <ol className="grid gap-1 text-sm text-ink-muted">
+                <li><b className="font-semibold text-ink">Barrel</b>, 72 teeth: the mainspring's drum, about a turn every seven hours.</li>
+                <li><b className="font-semibold text-ink">Centre wheel</b>, 64 on a 10-leaf pinion: once an hour, the minute hand.</li>
+                <li><b className="font-semibold text-ink">Third wheel</b>, 60 on 8: eight turns an hour.</li>
+                <li><b className="font-semibold text-ink">Fourth wheel</b>, 80 on 8: once a minute, the small seconds.</li>
+                <li><b className="font-semibold text-ink">Escape wheel</b>, 15 on 8: half a tooth a beat.</li>
+              </ol>
+                </div>
               </div>
-            </div>
-            <div role="group" aria-labelledby="c-look">
-              <h2 id="c-look" className={CARD_TITLE}>Look</h2>
-              <div className="grid gap-4">
+            ),
+          },
+          {
+            id: 'view', label: 'View', content: (
+              <div className={TAB_SECTIONS}>
                 <Field label="View">
                   <div className="flex flex-wrap gap-1.5">
                     {VIEWS.map((v) => <Chip key={v.id} active={view === v.id} onClick={() => pick(v.id)}>{v.label}</Chip>)}
@@ -222,20 +229,10 @@ export function Clockwork() {
                   </div>
                 </Field>
               </div>
-            </div>
-            <div role="group" aria-labelledby="c-train" className="sm:col-span-2 lg:col-span-1">
-              <h2 id="c-train" className={CARD_TITLE}>The train <small className={CARD_SUB}>teeth, from the spring to the balance</small></h2>
-              <ol className="grid gap-1 text-sm text-ink-muted">
-                <li><b className="font-semibold text-ink">Barrel</b>, 72 teeth: the mainspring's drum, about a turn every seven hours.</li>
-                <li><b className="font-semibold text-ink">Centre wheel</b>, 64 on a 10-leaf pinion: once an hour, the minute hand.</li>
-                <li><b className="font-semibold text-ink">Third wheel</b>, 60 on 8: eight turns an hour.</li>
-                <li><b className="font-semibold text-ink">Fourth wheel</b>, 80 on 8: once a minute, the small seconds.</li>
-                <li><b className="font-semibold text-ink">Escape wheel</b>, 15 on 8: half a tooth a beat.</li>
-              </ol>
-            </div>
-          </div>
-        </section>
-      </div>
+            ),
+          },
+        ]}
+      />
 
       <section aria-labelledby="how-title" className="mt-14 border-t border-rule pt-10 lg:grid lg:grid-cols-12 lg:gap-x-5 lg:pt-14">
         <div className="lg:col-span-5">

@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { SiteHeader } from '../shared/SiteHeader.tsx'
 import { Footer } from '../shared/Footer.tsx'
 import { Crumbs } from '../blobscape/Shell.tsx'
-import { Button, Chip, Field, Panel, Slider, Tabs, Toggle } from '../shared/ui.tsx'
+import { Button, Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
+import { TAB_SECTIONS, Workbench } from '../shared/Workbench.tsx'
 import { SAMPLES, drawSample, fitSize, type Sample } from './samples.ts'
 import { psnr } from './fit.ts'
 import { LossGraph } from './LossGraph.tsx'
@@ -326,11 +327,11 @@ export function App() {
           </p>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(340px,1fr)]">
-          {/* ------------------------------------------------------------ the pictures */}
-          <section aria-label="The picture and the fit" className="min-w-0 space-y-4">
+        <Workbench
+          viewLabel="The picture and the fit"
+          view={
             <div
-              className={`grid gap-3 rounded-lg outline-offset-4 sm:grid-cols-2 ${dragOver ? 'outline-2 outline-dashed outline-accent' : ''}`}
+              className={`absolute inset-0 grid grid-cols-2 gap-2 p-2 pb-12 sm:gap-3 sm:p-3 sm:pb-14 ${dragOver ? 'ring-2 ring-accent ring-inset' : ''}`}
               onDragOver={(ev) => { ev.preventDefault(); setDragOver(true) }}
               onDragLeave={() => setDragOver(false)}
               onDrop={(ev) => {
@@ -340,155 +341,160 @@ export function App() {
                 if (f) openFile(f)
               }}
             >
-              <figure className="min-w-0">
-                <div className="overflow-hidden rounded-lg border border-rule bg-paper-sunk" style={{ aspectRatio: aspect }}>
-                  <canvas ref={targetCanvas} className="block h-full w-full" role="img" aria-label={`The picture to fit: ${sourceName}`} />
-                </div>
-                <figcaption className="mt-1.5 text-xs text-ink-faint">The picture · {sourceName}</figcaption>
+              <figure className="flex min-h-0 min-w-0 flex-col items-center justify-center gap-1.5 [container-type:size]">
+                  <div className="overflow-hidden rounded-lg border border-rule bg-paper-sunk" style={{ aspectRatio: aspect, width: `min(100cqw, (100cqh - 1.5rem) * ${aspect})` }}>
+                    <canvas ref={targetCanvas} className="block h-full w-full" role="img" aria-label={`The picture to fit: ${sourceName}`} />
+                  </div>
+                <figcaption className="max-w-full truncate text-center text-xs text-ink-faint">The picture · {sourceName}</figcaption>
               </figure>
-              <figure className="min-w-0">
-                <div className={`relative overflow-hidden rounded-lg border border-rule ${settings.view === 'blobs' ? 'bg-[#0d0f16]' : 'bg-paper-sunk'}`} style={{ aspectRatio: aspect }}>
-                  <canvas
-                    ref={fitCanvas}
-                    className={`absolute inset-0 block h-full w-full cursor-crosshair ${settings.view === 'blobs' ? 'opacity-20' : ''}`}
-                    onPointerDown={(ev) => { tap.current = ev.button === 0 ? { x: ev.clientX, y: ev.clientY } : null }}
-                    onPointerUp={onPointerUp}
-                    onPointerCancel={() => { tap.current = null }}
-                    onKeyDown={onKeyDown}
-                    onFocus={() => { reticle.current.on = true; drawOverlay() }}
-                    onBlur={() => { reticle.current.on = false; drawOverlay() }}
-                    tabIndex={0}
-                    role="img"
-                    aria-roledescription="canvas"
-                    aria-label={`The fit so far, ${view.name.toLowerCase()} view. Click to add blobs, or use the arrow keys to aim and Enter to add.`}
-                    data-testid="fit"
-                  />
-                  <canvas ref={overlay} aria-hidden className="pointer-events-none absolute inset-0 h-full w-full" />
-                </div>
-                <figcaption className="mt-1.5 flex items-center justify-between gap-2 text-xs text-ink-faint">
-                  <span>The blobs · click or tap to add some</span>
-                  <span className="tabular-nums" data-testid="blob-count">{frame.count.toLocaleString()} blobs</span>
-                </figcaption>
+              <figure className="flex min-h-0 min-w-0 flex-col items-center justify-center gap-1.5 [container-type:size]">
+                  <div className={`relative overflow-hidden rounded-lg border border-rule ${settings.view === 'blobs' ? 'bg-[#0d0f16]' : 'bg-paper-sunk'}`} style={{ aspectRatio: aspect, width: `min(100cqw, (100cqh - 1.5rem) * ${aspect})` }}>
+                    <canvas
+                      ref={fitCanvas}
+                      className={`absolute inset-0 block h-full w-full cursor-crosshair ${settings.view === 'blobs' ? 'opacity-20' : ''}`}
+                      onPointerDown={(ev) => { tap.current = ev.button === 0 ? { x: ev.clientX, y: ev.clientY } : null }}
+                      onPointerUp={onPointerUp}
+                      onPointerCancel={() => { tap.current = null }}
+                      onKeyDown={onKeyDown}
+                      onFocus={() => { reticle.current.on = true; drawOverlay() }}
+                      onBlur={() => { reticle.current.on = false; drawOverlay() }}
+                      tabIndex={0}
+                      role="img"
+                      aria-roledescription="canvas"
+                      aria-label={`The fit so far, ${view.name.toLowerCase()} view. Click to add blobs, or use the arrow keys to aim and Enter to add.`}
+                      data-testid="fit"
+                    />
+                    <canvas ref={overlay} aria-hidden className="pointer-events-none absolute inset-0 h-full w-full" />
+                  </div>
+                <figcaption className="max-w-full truncate text-center text-xs text-ink-faint">The blobs · click or tap to add some</figcaption>
               </figure>
+              <div className="absolute right-3 bottom-3 flex items-center gap-1.5 max-sm:right-2 max-sm:bottom-2">
+                <Button small primary onClick={toggleRunning} className="min-w-16">
+                  {running ? 'Pause' : frame.iteration ? 'Resume' : 'Train'}
+                </Button>
+                <Button small onClick={stepOnce} title="Pauses training and takes one step">Step once</Button>
+                <Button small onClick={restart} title="Restart from noise">Restart</Button>
+              </div>
             </div>
+          }
+          status={<>
+            <span className="tabular-nums">
+              Step <span className="text-ink" data-testid="step">{frame.iteration.toLocaleString()}</span>
+              {loss !== null && <> · loss {loss.toPrecision(2)} · quality <span className="text-ink">{psnr(loss).toFixed(1)} dB</span></>}
+            </span>
+            <span className="text-ink tabular-nums" data-testid="blob-count">{frame.count.toLocaleString()} blobs</span>
+          </>}
+          tabsLabel="Options"
+          tabs={[
+            {
+              id: 'picture',
+              label: 'Picture',
+              content: (
+                <div className={TAB_SECTIONS}>
+                  <div className="grid gap-3">
+                    <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Picture to fit">
+                      {SAMPLES.map((s) => (
+                        <Chip key={s.id} active={source.kind === 'sample' && source.sample.id === s.id} onClick={() => pickSample(s)}>
+                          {s.name}
+                        </Chip>
+                      ))}
+                      <Chip active={source.kind === 'file'} onClick={() => fileInput.current?.click()}>
+                        {source.kind === 'file' ? source.name : 'Open your own picture…'}
+                      </Chip>
+                      <input
+                        ref={fileInput}
+                        type="file"
+                        className="hidden"
+                        accept="image/*"
+                        onChange={(ev) => {
+                          const f = ev.target.files?.[0]
+                          if (f) openFile(f)
+                          ev.target.value = ''
+                        }}
+                      />
+                    </div>
+                    {error && <p role="alert" className="text-sm text-accent-ink">{error}</p>}
+                    <p className="text-xs leading-relaxed text-ink-faint">
+                      The samples are drawn in code. Drop in any picture of your own: it is shrunk to {detail} pixels across and never
+                      leaves your browser.
+                    </p>
+                  </div>
+                  <div className="grid gap-3">
+                    <Field label="Picture size">
+                      <div className="flex flex-wrap gap-1.5">
+                        {DETAILS.map((d) => <Chip key={d} small active={detail === d} onClick={() => { setDetail(d); setAnnounce(`Restarted at ${d} pixels across.`) }}>{d} px</Chip>)}
+                      </div>
+                    </Field>
+                    <p className="text-xs leading-relaxed text-ink-faint">Changing the size restarts the fit. Bigger pictures need more blobs and more steps.</p>
+                  </div>
+                  <div className="grid gap-3">
+                    <Field label="Show">
+                      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Show">
+                        {VIEWS.map((v) => (
+                          <Chip key={v.id} small active={settings.view === v.id} onClick={() => set('view', v.id)}>{v.name}</Chip>
+                        ))}
+                      </div>
+                    </Field>
+                    <p className="text-xs leading-relaxed text-ink-faint">{view.note}</p>
+                  </div>
+                </div>
+              ),
+            },
+            {
+              id: 'training',
+              label: 'Training',
+              content: (
+                <div className={TAB_SECTIONS}>
+                  <div className="grid gap-3">
+                    <Field label="Speed">
+                      <div className="flex flex-wrap gap-1.5">
+                        {SPEEDS.map((s) => <Chip key={s.id} small active={settings.speed === s.id} onClick={() => set('speed', s.id)}>{s.name}</Chip>)}
+                      </div>
+                    </Field>
+                    <Slider label="Learning rate" value={settings.rate} min={0.25} max={4} step={0.25} onChange={(v) => set('rate', v)} format={(v) => `${v}×`} hint="Higher learns faster but jitters; too high and blobs overshoot." />
+                    <p className="text-xs leading-relaxed text-ink-faint">Each step nudges every blob's position, size, angle, colour and opacity downhill on the loss, using Adam, the standard optimiser that real splat training uses too.</p>
+                  </div>
+                  <div className="grid gap-3">
+                    <Slider label="Start with" value={settings.start} min={20} max={2000} step={10} onChange={(v) => set('start', v)} format={(v) => `${v}`} hint="Used when you restart." />
+                    <p className="text-xs leading-relaxed text-ink-faint">Training starts from blobs scattered at random.</p>
+                  </div>
+                  <div className="grid gap-3">
+                    <Toggle label="Grow where it's wrong, every 100 steps" checked={settings.grow} onChange={(v) => set('grow', v)} />
+                    <Slider label="Grow up to" value={settings.budget} min={100} max={6000} step={50} onChange={(v) => set('budget', v)} format={(v) => `${v}`} />
+                    <div>
+                      <Button small onClick={() => { send({ type: 'grow', n: 100 }); setAnnounce('Adding 100 blobs where the picture is most wrong.') }}>
+                        Add 100 where it's wrong
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="grid gap-3">
+                    <Toggle label="Prune weak blobs, every 100 steps" checked={settings.prune} onChange={(v) => set('prune', v)} />
+                    <Slider label="Weak means under" value={settings.pruneBelow} min={0.005} max={0.15} step={0.005} onChange={(v) => set('pruneBelow', v)} format={(v) => `${(v * 100).toFixed(1)}%`} hint="Opacity. Pruned blobs flash as dashed rings as they go." />
+                    <div>
+                      <Button small onClick={() => { send({ type: 'prune' }); setAnnounce('Pruning weak blobs.') }}>
+                        Prune now
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ),
+            },
+          ]}
+        />
+        <p aria-live="polite" className="sr-only">{announce}</p>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <Button primary onClick={toggleRunning} className="min-w-24">
-                {running ? 'Pause' : frame.iteration ? 'Resume' : 'Train'}
-              </Button>
-              <Button onClick={stepOnce} title="Pauses training and takes one step">Step once</Button>
-              <Button onClick={restart}>Restart from noise</Button>
-            </div>
-
-            <div>
-              <dl className="grid grid-cols-3 gap-3 text-sm" aria-label="Training so far">
-                <Stat label="Step" value={frame.iteration.toLocaleString()} testId="step" />
-                <Stat label="Loss" value={loss === null ? '–' : loss.toPrecision(2)} />
-                <Stat label="Quality" value={loss === null ? '–' : `${psnr(loss).toFixed(1)} dB`} />
-              </dl>
-              <p className="mt-2 text-xs leading-relaxed text-ink-faint">
+        <section aria-labelledby="so-far" className="mt-10 rounded-2xl border border-rule bg-paper-sunk/60 p-4 sm:p-6">
+          <h2 id="so-far" className="font-display text-2xl">Training so far</h2>
+          <div className="mt-4 grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+            <div className="min-w-0">
+              <LossGraph history={history.current} version={historyVersion} />
+              <p className="mt-3 text-xs leading-relaxed text-ink-faint">
                 Loss is the average squared difference from the picture; lower is better. Quality is the same thing in decibels
                 (PSNR): higher is closer, and about 30 dB looks right at a glance.
               </p>
             </div>
-
-            <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Picture to fit">
-              {SAMPLES.map((s) => (
-                <Chip key={s.id} active={source.kind === 'sample' && source.sample.id === s.id} onClick={() => pickSample(s)}>
-                  {s.name}
-                </Chip>
-              ))}
-              <Chip active={source.kind === 'file'} onClick={() => fileInput.current?.click()}>
-                {source.kind === 'file' ? source.name : 'Open your own picture…'}
-              </Chip>
-              <input
-                ref={fileInput}
-                type="file"
-                className="hidden"
-                accept="image/*"
-                onChange={(ev) => {
-                  const f = ev.target.files?.[0]
-                  if (f) openFile(f)
-                  ev.target.value = ''
-                }}
-              />
-            </div>
-            {error && <p role="alert" className="text-sm text-accent-ink">{error}</p>}
-            <p className="text-sm text-ink-faint">
-              The samples are drawn in code. Drop in any picture of your own: it is shrunk to {detail} pixels across and never leaves
-              your browser.
-            </p>
-          </section>
-
-          {/* ------------------------------------------------------------ training */}
-          <section aria-label="Training" className="min-w-0 space-y-5">
-            <LossGraph history={history.current} version={historyVersion} />
-
-            <Tabs
-              label="Training settings"
-              tabs={[
-                {
-                  id: 'view',
-                  label: 'View',
-                  summary: view.name,
-                  content: (
-                    <Panel note={view.note}>
-                      <div className="flex flex-wrap gap-2" role="group" aria-label="Show">
-                        {VIEWS.map((v) => (
-                          <Chip key={v.id} active={settings.view === v.id} onClick={() => set('view', v.id)}>{v.name}</Chip>
-                        ))}
-                      </div>
-                      <Field label="Speed">
-                        <div className="flex flex-wrap gap-1.5">
-                          {SPEEDS.map((s) => <Chip key={s.id} small active={settings.speed === s.id} onClick={() => set('speed', s.id)}>{s.name}</Chip>)}
-                        </div>
-                      </Field>
-                    </Panel>
-                  ),
-                },
-                {
-                  id: 'blobs',
-                  label: 'Blobs',
-                  summary: `${settings.start} → ${settings.budget}`,
-                  content: (
-                    <Panel note="Training starts from blobs scattered at random. Growing adds small ones where the picture is still most wrong; pruning removes the ones training has faded out.">
-                      <Slider label="Start with" value={settings.start} min={20} max={2000} step={10} onChange={(v) => set('start', v)} format={(v) => `${v}`} hint="Used when you restart." />
-                      <Toggle label="Grow where it's wrong, every 100 steps" checked={settings.grow} onChange={(v) => set('grow', v)} />
-                      <Slider label="Grow up to" value={settings.budget} min={100} max={6000} step={50} onChange={(v) => set('budget', v)} format={(v) => `${v}`} />
-                      <Toggle label="Prune weak blobs, every 100 steps" checked={settings.prune} onChange={(v) => set('prune', v)} />
-                      <Slider label="Weak means under" value={settings.pruneBelow} min={0.005} max={0.15} step={0.005} onChange={(v) => set('pruneBelow', v)} format={(v) => `${(v * 100).toFixed(1)}%`} hint="Opacity. Pruned blobs flash as dashed rings as they go." />
-                      <div className="flex flex-wrap gap-2 pt-1">
-                        <Button small onClick={() => { send({ type: 'grow', n: 100 }); setAnnounce('Adding 100 blobs where the picture is most wrong.') }}>
-                          Add 100 where it's wrong
-                        </Button>
-                        <Button small onClick={() => { send({ type: 'prune' }); setAnnounce('Pruning weak blobs.') }}>
-                          Prune now
-                        </Button>
-                      </div>
-                    </Panel>
-                  ),
-                },
-                {
-                  id: 'learning',
-                  label: 'Learning',
-                  summary: `${settings.rate}× · ${detail}px`,
-                  content: (
-                    <Panel note="Each step nudges every blob's position, size, angle, colour and opacity downhill on the loss, using Adam, the standard optimiser that real splat training uses too.">
-                      <Slider label="Learning rate" value={settings.rate} min={0.25} max={4} step={0.25} onChange={(v) => set('rate', v)} format={(v) => `${v}×`} hint="Higher learns faster but jitters; too high and blobs overshoot." />
-                      <Field label="Picture size">
-                        <div className="flex flex-wrap gap-1.5">
-                          {DETAILS.map((d) => <Chip key={d} small active={detail === d} onClick={() => { setDetail(d); setAnnounce(`Restarted at ${d} pixels across.`) }}>{d} px</Chip>)}
-                        </div>
-                      </Field>
-                      <p className="text-xs leading-relaxed text-ink-faint">Changing the size restarts the fit. Bigger pictures need more blobs and more steps.</p>
-                    </Panel>
-                  ),
-                },
-              ]}
-            />
-
-            <div>
-              <h2 className="text-sm font-medium">What just happened</h2>
+            <div className="min-w-0">
+              <h3 className="text-sm font-medium">What just happened</h3>
               <ol className="mt-2 space-y-1 text-sm text-ink-muted" data-testid="log">
                 {log.length ? log.map((l, i) => (
                   <li key={`${l.at}-${i}`} className="flex gap-3">
@@ -498,9 +504,8 @@ export function App() {
                 )) : <li className="text-ink-faint">Nothing yet.</li>}
               </ol>
             </div>
-            <p aria-live="polite" className="sr-only">{announce}</p>
-          </section>
-        </div>
+          </div>
+        </section>
 
         <section aria-labelledby="how" className="mt-12 border-t border-rule pt-8">
           <h2 id="how" className="font-display text-3xl">How a splat learns</h2>
@@ -526,15 +531,6 @@ export function App() {
         </section>
       </main>
       <Footer />
-    </div>
-  )
-}
-
-function Stat({ label, value, testId }: { label: string; value: string; testId?: string }) {
-  return (
-    <div className="rounded border border-rule px-3 py-2">
-      <dt className="text-xs text-ink-faint">{label}</dt>
-      <dd className="mt-0.5 font-medium tabular-nums" data-testid={testId}>{value}</dd>
     </div>
   )
 }

@@ -13,7 +13,7 @@ import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitD
 import { download, kb } from './files.ts'
 import { LESSONS, href } from './routes.ts'
 import type { CreatureStage, Show } from './creature/stage.ts'
-import { CARD, CARD_SUB, CARD_TITLE } from './creature/card.ts'
+import { TAB_SECTIONS, Workbench } from '../shared/Workbench.tsx'
 import { Sprites } from './creature/Sprites.tsx'
 
 const STILL = 'still'
@@ -207,11 +207,9 @@ export function Creature() {
           underneath, then take it home as a 3D model that Blender and game engines open, or as pixel-art sprites for a 2D game.
         </p>
       </header>
-      <div className="flex flex-col gap-4 lg:grid lg:grid-cols-12 lg:gap-x-5">
-
-        <section aria-label="Splat Creatures" className="lg:col-span-12">
-          <div className="case relative overflow-hidden rounded-2xl ring-1 ring-rule">
-            <div className="relative h-[min(42dvh,360px)] min-h-[220px] lg:h-[clamp(320px,calc(100dvh-26rem),620px)]">
+      <Workbench
+        viewLabel="Splat Creatures"
+        view={<>
               <canvas
                 ref={canvas}
                 role="application"
@@ -246,18 +244,17 @@ export function Creature() {
               </div>
               <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => setOrbit(scaleOf.view)} />
               <p aria-hidden className="pointer-events-none absolute right-14 bottom-2 left-3 text-right text-xs text-ink-faint">{typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches ? 'drag to orbit · pinch to zoom' : 'drag to orbit · scroll to zoom'}</p>
-            </div>
-            <div className="border-t border-rule-soft px-4 py-2 text-xs leading-relaxed text-ink-muted sm:text-sm">
+        </>}
+        status={<div>
               <span className="tabular-nums text-ink" data-testid="blob-count">{shown.body.blobs.count.toLocaleString()}</span> blobs on{' '}
               <span className="tabular-nums text-ink">{shown.body.skeleton.count}</span> bones{clipNames.length ? <>, with {clipNames.length === 1 ? 'one clip' : `${clipNames.length} clips`}: {clipNames.join(' and ')}</> : ''}.
               {loaded && <> From your file. <button type="button" className="underline hover:text-accent" onClick={() => { setLoaded(undefined); setMove(species.moves[0].name); setFileNote(undefined) }}>Back to the {species.name}</button></>}
-            </div>
-          </div>
-        </section>
-
-        <section aria-labelledby="g-make" className={CARD} data-testid="creature-pick">
-          <h2 id="g-make" className={CARD_TITLE}>The creature</h2>
-          <div className="stack-controls grid items-start gap-x-10 gap-y-4 sm:grid-cols-2 lg:grid-cols-[auto_auto_minmax(0,1fr)]">
+        </div>}
+        tabsLabel="Options"
+        tabs={[
+          {
+            id: 'type', label: 'Creature Type', content: (
+              <div className={TAB_SECTIONS} data-testid="creature-pick">
             <Field label="Type">
               <div role="group" aria-label="Which creature" className="flex flex-wrap gap-1.5" data-testid="species">
                 {ZOO.map((sp) => <Chip key={sp.id} active={!loaded && species === sp} onClick={() => pick(sp)}>{sp.name[0].toUpperCase() + sp.name.slice(1)}</Chip>)}
@@ -273,15 +270,13 @@ export function Creature() {
                 </div>
               )}
             </Field>
-            <p className="max-w-[52ch] self-end text-xs leading-relaxed text-ink-faint sm:col-span-2 lg:col-span-1">{species.blurb}</p>
-          </div>
-        </section>
-
-        <section aria-label="Controls" className={CARD}>
-          <div className="stack-controls grid items-start gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
-            <div role="group" aria-labelledby="g-move">
-              <h2 id="g-move" className={CARD_TITLE}>Move</h2>
-              <div className="grid gap-4">
+            <p className="text-xs leading-relaxed text-ink-faint">{species.blurb}</p>
+              </div>
+            ),
+          },
+          {
+            id: 'move', label: 'Movement & Details', content: (
+              <div className={TAB_SECTIONS}>
                 <Field label="Clip">
                   <div className="flex flex-wrap gap-1.5">
                     {shown.clips.map((c, k) => <Chip key={`${k}-${c.name}`} active={clip === c} onClick={() => setMove(c.name)}>{clipLabel(c)}</Chip>)}
@@ -289,11 +284,6 @@ export function Creature() {
                   </div>
                 </Field>
                 <Slider label="Speed" value={speed} min={0.1} max={2} step={0.05} onChange={setSpeed} format={(v) => `×${v.toFixed(2)}`} />
-              </div>
-            </div>
-            <div role="group" aria-labelledby="g-detail">
-              <h2 id="g-detail" className={CARD_TITLE}>Detail</h2>
-              <div className="grid gap-4">
                 <Field label="Blobs">
                   <div className="flex flex-wrap gap-1.5">
                     {species.detail.map((n) => <Chip key={n} active={!loaded && count === n} onClick={() => { setLoaded(undefined); setCount(n) }}>{kilo(n)}</Chip>)}
@@ -307,10 +297,12 @@ export function Creature() {
                   <p className="mt-1.5 text-xs text-ink-faint">From <a href={href({ page: 'lesson', id: 'twist' })} className="underline hover:text-accent">Twist without tearing</a>. Watch the tail.</p>
                 </Field>
               </div>
-            </div>
-            <div role="group" aria-labelledby="g-save" className="sm:col-span-2 lg:col-span-1">
-              <h2 id="g-save" className={CARD_TITLE}>Take it away <small className={CARD_SUB}>.glb, bones and clips</small></h2>
-              <div className="grid items-start gap-x-10 gap-y-4 sm:grid-cols-3 lg:grid-cols-1">
+            ),
+          },
+          {
+            id: 'files', label: 'Export & Import', content: (
+              <div className={TAB_SECTIONS}>
+                <p className="text-xs leading-relaxed text-ink-faint">A .glb file with the creature, its bones and its clips.</p>
                 <Field label="Download">
                   <div className="flex flex-wrap gap-1.5">
                     <Button small onClick={() => save('splats')}>As splats</Button>
@@ -326,12 +318,13 @@ export function Creature() {
                   <span className="text-ink-muted">Open a rigged splat .glb</span>
                   <input type="file" accept=".glb,model/gltf-binary" onChange={(e) => { void open(e.target.files?.[0]); e.target.value = '' }} className="block w-full text-xs text-ink-faint file:mr-2 file:cursor-pointer file:rounded file:border file:border-rule file:bg-paper file:px-3 file:py-1.5 file:text-sm file:text-ink hover:file:border-ink-faint" />
                 </label>
-                <p aria-live="polite" className="text-xs text-ink-faint sm:col-span-3 lg:col-span-1" data-testid="creature-note">{busy ?? fileNote ?? ''}</p>
+                <p aria-live="polite" className="text-xs text-ink-faint empty:hidden" data-testid="creature-note">{busy ?? fileNote ?? ''}</p>
               </div>
-            </div>
-          </div>
-        </section>
-
+            ),
+          },
+        ]}
+      />
+      <div className="mt-4">
         <Sprites stage={stage} name={shown.name} clips={shown.clips} labelOf={clipLabel} current={clip} />
       </div>
 

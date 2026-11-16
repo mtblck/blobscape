@@ -51,6 +51,15 @@ async function open(path, opts = {}) {
   return { page, res, ctx }
 }
 
+/** Options sit in tabs: open the tab that holds a control, then click the control. */
+async function tabClick(control) {
+  await control.first().evaluate((el) => {
+    const panel = el.closest('[role=tabpanel][hidden]')
+    if (panel) document.getElementById(panel.getAttribute('aria-labelledby'))?.click()
+  })
+  await control.click()
+}
+
 // axe-core on the rendered page; any violation fails the run
 async function axe(page, label) {
   const { violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice']).analyze()
@@ -168,28 +177,28 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   await axe(page, label)
   if (label === 'desktop') {
     // Settings sit in tabs: arrow keys move between them, and only one panel shows
-    await page.getByRole('tab', { name: /Camera/ }).focus()
+    await page.getByRole('tab', { name: /Prop Type/ }).focus()
     await page.keyboard.press('ArrowRight')
     await page.keyboard.press('ArrowRight')
-    const colourOn = (await page.getByRole('tab', { name: /Colour/ }).getAttribute('aria-selected')) === 'true'
+    const colourOn = (await page.getByRole('tab', { name: /Finish/ }).getAttribute('aria-selected')) === 'true'
     const paletteShows = await page.getByRole('combobox', { name: 'Palette' }).isVisible()
     const turnHidden = !(await page.getByRole('slider', { name: 'Turn' }).isVisible())
     if (!colourOn || !paletteShows || !turnHidden) fails.push(`tabs: colour selected ${colourOn}, palette visible ${paletteShows}, camera hidden ${turnHidden}`)
     else ok('arrow keys move through the settings tabs')
     await axe(page, 'desktop colour tab')
-    await page.getByRole('tab', { name: /Camera/ }).click()
+    await page.getByRole('tab', { name: /View/ }).click()
     // The header stays on screen once the page scrolls
     await page.evaluate(() => window.scrollTo(0, 900))
     const top = await page.getByRole('banner').evaluate((h) => h.getBoundingClientRect().top)
     if (top !== 0) fails.push(`header scrolled away (top ${top})`)
     else ok('header stays stuck to the top while scrolling')
     await page.evaluate(() => window.scrollTo(0, 0))
-    await page.getByRole('button', { name: 'Isometric' }).click()
+    await tabClick(page.getByRole('button', { name: 'Isometric' }))
     if ((await page.getByRole('button', { name: 'Isometric' }).getAttribute('aria-pressed')) !== 'true') fails.push('Isometric preset does not show as selected')
     else ok('Isometric preset shows as selected')
-    await page.getByRole('button', { name: '¾ view' }).click()
+    await tabClick(page.getByRole('button', { name: '¾ view' }))
     await page.getByRole('slider', { name: 'Turn' }).fill('30')
-    await page.getByRole('button', { name: 'Bake sprite sheet' }).click()
+    await tabClick(page.getByRole('button', { name: 'Bake sprite sheet' }))
     await page.waitForSelector('[data-testid=sheet] img', { timeout: 60000 })
     const dims = await page.evaluate(async () => {
       const img = document.querySelector('[data-testid=sheet] img')
@@ -289,12 +298,12 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   await axe(page, `fit ${label}`)
   if (label === 'desktop') {
     // Pause holds the step; Step once moves it by exactly one
-    await page.getByRole('button', { name: 'Pause' }).click()
+    await tabClick(page.getByRole('button', { name: 'Pause' }))
     await page.waitForTimeout(300)
     const held = await stepNow(page)
     await page.waitForTimeout(500)
     if ((await stepNow(page)) !== held) fails.push('fit: pause does not stop training')
-    await page.getByRole('button', { name: 'Step once' }).click()
+    await tabClick(page.getByRole('button', { name: 'Step once' }))
     await page.waitForFunction((h) => Number(document.querySelector('[data-testid=step]').textContent.replace(/,/g, '')) === h + 1, held, { timeout: 5000 }).catch(() => {})
     if ((await stepNow(page)) !== held + 1) fails.push(`fit: step once went from ${held} to ${await stepNow(page)}`)
     else ok('fit: pause holds, step once moves one step')
@@ -318,26 +327,25 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     const said = await page.getByTestId('loss-graph').locator('[aria-live]').textContent()
     if (!/^Step \d/.test(said)) fails.push(`fit: loss graph keyboard readout is "${said}"`)
     else ok(`fit: loss graph reads out from the keyboard ("${said}")`)
-    // Views, through the tabs
-    await page.getByRole('tab', { name: /View/ }).click()
+    // Views, from the Picture tab
     for (const v of ['Blobs', 'Error']) {
-      await page.getByRole('button', { name: v, exact: true }).click()
+      await tabClick(page.getByRole('button', { name: v, exact: true }))
       await page.waitForTimeout(400)
       if ((await page.getByRole('button', { name: v, exact: true }).getAttribute('aria-pressed')) !== 'true') fails.push(`fit: ${v} view not selected`)
       await page.screenshot({ path: join(shots, `fit-a-picture-${v.toLowerCase()}.png`) })
     }
     ok('fit: blobs and error views switch')
     await axe(page, 'fit error view')
-    await page.getByRole('button', { name: 'Fit', exact: true }).click()
-    await page.getByRole('button', { name: 'Resume' }).click()
-    // Prune now and add 100, from the Blobs tab
-    await page.getByRole('tab', { name: /Blobs/ }).click()
+    await tabClick(page.getByRole('button', { name: 'Fit', exact: true }))
+    await tabClick(page.getByRole('button', { name: 'Resume' }))
+    // Prune now and add 100, from the Training tab
+    await page.getByRole('tab', { name: /Training/ }).click()
     const b0 = await blobsNow(page)
-    await page.getByRole('button', { name: "Add 100 where it's wrong" }).click()
+    await tabClick(page.getByRole('button', { name: "Add 100 where it's wrong" }))
     await page.waitForTimeout(600)
     if ((await blobsNow(page)) < b0 + 50) fails.push(`fit: add 100 went ${b0} → ${await blobsNow(page)}`)
     else ok('fit: "Add 100 where it\'s wrong" adds blobs')
-    await page.getByRole('button', { name: 'Prune now' }).click()
+    await tabClick(page.getByRole('button', { name: 'Prune now' }))
     await page.waitForFunction(() => /prune/i.test(document.querySelector('[data-testid=log]').textContent), null, { timeout: 5000 }).catch(() => {})
     if (!/prune/i.test(await page.textContent('[data-testid=log]'))) fails.push('fit: prune now leaves no log line')
     else ok('fit: prune now is logged')
@@ -352,7 +360,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     const alert = await page.getByRole('alert').textContent({ timeout: 5000 }).catch(() => '')
     if (!alert.includes("didn't open")) fails.push(`fit: bad file shows "${alert}"`)
     else ok('fit: a bad file shows an error')
-    await page.getByRole('button', { name: 'Marbles' }).click()
+    await tabClick(page.getByRole('button', { name: 'Marbles' }))
   }
   await page.waitForTimeout(3000)
   await page.screenshot({ path: join(shots, `fit-a-picture-${label}.png`), fullPage: true })
@@ -655,7 +663,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     if (!(sizes.splats > 100000 && sizes.mesh > 10000)) fails.push(`blobscape creature: files ${JSON.stringify(sizes)}`)
     else ok(`blobscape creature: writes splats (${Math.round(sizes.splats / 1024)} KB) and mesh (${Math.round(sizes.mesh / 1024)} KB) .glb`)
     // a new fox replaces the old one, freeing its GPU buffers, and still draws
-    await c.page.getByRole('button', { name: '5k', exact: true }).click()
+    await tabClick(c.page.getByRole('button', { name: '5k', exact: true }))
     await c.page.waitForFunction(() => window.__creature?.blobs() < 6000, null, { timeout: 30000 }).catch(() => {})
     const again = await c.page.evaluate(async () => {
       await window.__creature.stage.frame(0.5)
@@ -686,29 +694,29 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     }, [t, kind])
     const FOX = 'fox', BONE = 'bone'
     // the bones view hides every blob and draws the rig
-    await c.page.getByRole('button', { name: 'Bones', exact: true }).click()
+    await tabClick(c.page.getByRole('button', { name: 'Bones', exact: true }))
     await c.page.waitForTimeout(100)
     const bones = { fox: await pixels(0.5, FOX), bone: await pixels(0.5, BONE) }
     // the joints are coral, which reads as a little fox-orange; the fox itself is thousands
     if (!(bones.fox < 2000 && bones.bone > 300)) fails.push(`blobscape creature: bones view ${JSON.stringify(bones)}`)
     else ok(`blobscape creature: Bones hides the blobs and draws the rig (${bones.bone} bone pixels)`)
     await c.page.screenshot({ path: join(shots, 'blobscape-creature-bones.png') })
-    await c.page.getByRole('button', { name: 'Both', exact: true }).click()
+    await tabClick(c.page.getByRole('button', { name: 'Both', exact: true }))
     await c.page.waitForTimeout(100)
     const both = { fox: await pixels(0.5, FOX), bone: await pixels(0.5, BONE) }
     if (!(both.fox > 1000 && both.bone > 300)) fails.push(`blobscape creature: both view ${JSON.stringify(both)}`)
     else ok('blobscape creature: Both draws the bones over the blobs')
-    await c.page.getByRole('button', { name: 'Blobs', exact: true }).click()
+    await tabClick(c.page.getByRole('button', { name: 'Blobs', exact: true }))
     // every other creature builds, draws, and has its own clips
     for (const [name, bonesWanted, colour, clip, t] of [
       ['Frog', 20, 'frog', 'Tongue', 1.15],
       ['Elf', 29, 'elf', 'Wave', 1],
       ['Dragon', 43, 'fire', 'Breathe fire', 2],
     ]) {
-      await c.page.getByRole('button', { name, exact: true }).click()
+      await tabClick(c.page.getByRole('button', { name, exact: true }))
       await c.page.waitForFunction((n) => window.__creature?.bones() === n && !document.querySelector('[data-testid=creature-loading]'), bonesWanted, { timeout: 60000 }).catch(() => {})
       // the Sprites panel has a chip per move too: pick the one that plays it
-      await c.page.getByRole('region', { name: 'Controls' }).getByRole('button', { name: clip, exact: true }).click()
+      await tabClick(c.page.getByRole('region', { name: 'Options' }).getByRole('button', { name: clip, exact: true }))
       await c.page.waitForTimeout(150)
       const got = { bones: await c.page.evaluate(() => window.__creature?.bones()), n: await pixels(t, colour), url: new URL(c.page.url()).searchParams.get('creature') }
       if (!(got.bones === bonesWanted && got.n > 1500 && got.url === name.toLowerCase())) fails.push(`blobscape creature: ${name} ${JSON.stringify(got)}`)
@@ -724,7 +732,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
       return { scales: anim?.channels.filter((ch) => ch.target.path === 'scale').length, kb: Math.round(bytes.byteLength / 1024) }
     })
     // the dragon's other looks: ember is red, not ice blue
-    await c.page.getByRole('button', { name: 'Ember', exact: true }).click()
+    await tabClick(c.page.getByRole('button', { name: 'Ember', exact: true }))
     await c.page.waitForTimeout(300)
     const ember = await c.page.evaluate(async () => {
       await window.__creature.stage.frame(0.5)
@@ -740,7 +748,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     if (fire.scales !== 6) fails.push(`blobscape creature: dragon file ${JSON.stringify(fire)}`)
     else ok(`blobscape creature: the dragon's .glb keys its fire as scale on six bones (${fire.kb} KB)`)
     // the Sprites panel: the frog's tongue flick and its still pose from 8 sides, as 32 px pixel art
-    await c.page.getByRole('button', { name: 'Frog', exact: true }).click()
+    await tabClick(c.page.getByRole('button', { name: 'Frog', exact: true }))
     await c.page.waitForFunction(() => window.__creature?.bones() === 20 && !document.querySelector('[data-testid=creature-loading]'), null, { timeout: 60000 }).catch(() => {})
     const sheet = await c.page.evaluate(() => window.__sprites({ moves: ['tongue', 'still'], directions: 8, size: 32, frames: 6, colours: 16, outline: true }))
     const tongueLeft = Math.max(...sheet.solid.slice(12, 18)), stillLeft = sheet.solid[50]
@@ -760,9 +768,9 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
       await c.page.waitForTimeout(200)
       return { seed: new URL(c.page.url()).searchParams.get('seed'), bones: await c.page.evaluate(() => window.__creature?.bones()), n: await pixels(0.3, 'colourful'), label: await c.page.getByTestId('make-monster').textContent(), note: await c.page.getByTestId('creature-note').textContent() }
     }
-    await c.page.getByTestId('species').getByRole('button', { name: 'Monster', exact: true }).click()
+    await tabClick(c.page.getByTestId('species').getByRole('button', { name: 'Monster', exact: true }))
     const m1 = await monster()
-    await c.page.getByTestId('make-monster').click()
+    await tabClick(c.page.getByTestId('make-monster'))
     await c.page.waitForFunction((s) => new URL(location.href).searchParams.get('seed') !== s, m1.seed, { timeout: 10000 }).catch(() => {})
     const m2 = await monster()
     if (!(m1.seed && m2.seed && m1.seed !== m2.seed && m1.bones >= 14 && m1.n > 1500 && m2.n > 1500 && m2.label === 'Generate a new monster' && /^Made a .*legged/.test(m2.note))) fails.push(`blobscape creature monster: ${JSON.stringify({ m1, m2 })}`)
@@ -833,7 +841,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     else ok(`${label}: one moment drawn twice is the same picture (${twice} pixels differ)`)
     if (!q) {
       // pixels off: the same scene as blobs, in far more colours
-      await d.page.getByRole('button', { name: 'Blobs', exact: true }).click()
+      await tabClick(d.page.getByRole('button', { name: 'Blobs', exact: true }))
       await d.page.waitForFunction(() => !window.__diorama.stage.artSize)
       const colours = await d.page.evaluate(async () => {
         await window.__diorama.stage.frame(2)
@@ -845,7 +853,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
       })
       if (!(colours > 500)) fails.push(`${label}: as blobs it shows only ${colours} colours`)
       else ok(`${label}: with pixels off it draws the blobs (${colours} colours)`)
-      await d.page.getByRole('button', { name: 'Pixel art', exact: true }).click()
+      await tabClick(d.page.getByRole('button', { name: 'Pixel art', exact: true }))
       // offscreen draws only when asked: draw until pixel mode is back on
       await d.page.waitForFunction(async () => { await window.__diorama.stage.frame(4.5); return !!window.__diorama.stage.artSize })
       await d.page.screenshot({ path: join(shots, 'blobscape-pixel-diorama.png') })
@@ -936,7 +944,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
       }
       return { gold, blue, d: Array.from(d) }
     }, s)
-    await k.page.getByRole('button', { name: 'Dial', exact: true }).click()
+    await tabClick(k.page.getByRole('button', { name: 'Dial', exact: true }))
     const a = await shot(3 * 3600 + 41 * 60 + 17), b = await shot(3 * 3600 + 41 * 60 + 47)
     let moved = 0
     for (let i = 0; i < a.d.length; i += 4) if (Math.abs(a.d[i] - b.d[i]) + Math.abs(a.d[i + 1] - b.d[i + 1]) > 60) moved++
@@ -947,7 +955,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     const read = await k.page.getByTestId('clock-reading').textContent()
     if (!/^(1[0-2]|[1-9]):[0-5]\d:[0-5]\d$/.test(read ?? '')) fails.push(`blobscape clockwork: the reading is "${read}"`)
     else ok(`blobscape clockwork: the hands' reading shows (${read})`)
-    await k.page.getByRole('button', { name: 'Escapement', exact: true }).click()
+    await tabClick(k.page.getByRole('button', { name: 'Escapement', exact: true }))
     await shot(100.02)
     await k.page.screenshot({ path: join(shots, 'blobscape-clockwork.png') })
     await axe(k.page, 'blobscape clockwork')
@@ -975,10 +983,10 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     const a = await look()
     if (!(st.level === true && st.kept > 0.45 * st.total && st.kept < 0.7 * st.total && a.teal > 20000 && a.red < 500)) fails.push(`blobscape scan: sample ${JSON.stringify({ ...st, ...a })}`)
     else ok(`blobscape scan: the sample's table is found and the clean keeps ${st.kept.toLocaleString()} of ${st.total.toLocaleString()} blobs (${a.teal} mug pixels)`)
-    await k.page.getByRole('button', { name: 'Kept and cut' }).click()
+    await tabClick(k.page.getByRole('button', { name: 'Kept and cut' }))
     const b = await look()
-    await k.page.getByRole('button', { name: 'Kept', exact: true }).click()
-    await k.page.getByRole('button', { name: 'Lamp' }).click()
+    await tabClick(k.page.getByRole('button', { name: 'Kept', exact: true }))
+    await tabClick(k.page.getByRole('button', { name: 'Lamp' }))
     const c = await look()
     if (!(b.red > 50000 && Math.abs(c.sum - a.sum) > a.sum * 0.03)) fails.push(`blobscape scan: cut/lamp ${JSON.stringify({ red: b.red, before: a.sum, lamp: c.sum })}`)
     else ok(`blobscape scan: cut blobs show red (${b.red} pixels) and the lamp relights the mug (brightness ${Math.round((100 * c.sum) / a.sum)}%)`)
@@ -987,14 +995,14 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     const [dl] = await Promise.all([k.page.waitForEvent('download'), k.page.getByRole('button', { name: 'Download .ply' }).click()])
     const file = join(shots, 'scan-clean.ply')
     await dl.saveAs(file)
-    await k.page.getByRole('button', { name: 'As scanned' }).click()
+    await tabClick(k.page.getByRole('button', { name: 'As scanned' }))
     await k.page.locator('input[type=file]').setInputFiles(file)
     await k.page.waitForFunction(() => /Opened scan-clean/.test(document.body.innerText), null, { timeout: 60000 }).catch(() => {})
     const back = await k.page.evaluate(() => window.__scan.total())
     if (back !== st.kept) fails.push(`blobscape scan: the saved .ply holds ${back} blobs, not ${st.kept}`)
     else ok(`blobscape scan: the saved .ply opens again with all ${back.toLocaleString()} kept blobs`)
     const kept = await k.page.evaluate(() => window.__scan.kept())
-    await k.page.getByRole('button', { name: 'Open in the sandbox' }).click()
+    await tabClick(k.page.getByRole('button', { name: 'Open in the sandbox' }))
     await k.page.waitForURL('**/sandbox/', { timeout: 30000 }).catch(() => {})
     const count = (await k.page.getByTestId('blob-count').textContent({ timeout: 30000 }).catch(() => '')) ?? ''
     if (Number(count.replace(/\D/g, '')) !== kept) fails.push(`blobscape scan: the sandbox shows "${count}" for ${kept} kept blobs`)
@@ -1036,7 +1044,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     await run(2, { forward: 0, turn: 0 })
     const over = await k.page.getByRole('button', { name: 'Try again' }).count()
     const hurt = await meters()
-    if (over) await k.page.getByRole('button', { name: 'Try again' }).click()
+    if (over) await tabClick(k.page.getByRole('button', { name: 'Try again' }))
     await run(0.1, { forward: 0, turn: 0 })
     const after = await meters()
     if (!(over === 1 && hurt.Health === 0 && after.Health === 100)) fails.push(`blobscape dungeon down: ${JSON.stringify({ over, hurt, after })}`)
@@ -1045,7 +1053,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     const was = await k.page.evaluate(() => ({ light: window.__dungeon.stage.dungeon.opts.light, backend: window.__dungeon.stage.backend }))
     await run(0.1, { forward: 0, turn: 0 })
     const liveLook = await look()
-    await k.page.getByRole('button', { name: 'Baked', exact: true }).click()
+    await tabClick(k.page.getByRole('button', { name: 'Baked', exact: true }))
     await k.page.waitForFunction(() => window.__dungeon.stage.dungeon.opts.light === 'baked', null, { timeout: 30000 }).catch(() => {})
     await run(0.1, { forward: 0, turn: 0 })
     const bakedLook = await look()
@@ -1082,13 +1090,49 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     if (await f.page.locator('[data-testid=forest-loading]').count()) fails.push('blobscape forest: the loading note stays after the forest is drawn')
     await f.page.screenshot({ path: join(shots, 'blobscape-forest.png') })
     // a new season rebuilds the forest and keeps the elf where it was
-    await f.page.getByRole('button', { name: 'Autumn', exact: true }).first().click()
+    await tabClick(f.page.getByRole('button', { name: 'Autumn', exact: true }).first())
     await f.page.waitForFunction(() => window.__forest?.stage.forest?.opts.season === 'autumn', null, { timeout: 30000 }).catch(() => {})
     const autumn = await look(1.5, 0)
     if (!(Math.abs(autumn.z - walked.z) < 0.5 && autumn.growing > 20)) fails.push(`blobscape forest: autumn ${JSON.stringify(autumn)}`)
     else ok(`blobscape forest: autumn regrows ${autumn.growing} plants round the elf where it stood`)
     await f.page.screenshot({ path: join(shots, 'blobscape-forest-autumn.png') })
     await f.ctx.close()
+  }
+
+  // Every experiment shares one layout: the same two columns, the page's own tabs, a preview that stays in sight on a phone
+  {
+    const PAGES = [
+      ['pixel-diorama', 'Scene,Pixels,Finish'], ['creature', 'Creature Type,Movement & Details,Export & Import'], ['forest-walk', 'Forest Type,Character Style,View'],
+      ['dungeon-run', 'Game Settings,Character Style,View'], ['scan-studio', 'Import,Level & Crop,Clean,Lighting'], ['clockwork', 'Time,View'],
+      ['fit-a-picture', 'Picture,Training'], ['splat-to-sprite', 'Prop Type,Pixels,Finish,View'],
+    ]
+    const sizes = new Set()
+    let bad = 0
+    for (const [id, want] of PAGES) {
+      const w = await open(`/experiments/${id}/`, { viewport: { width: 1280, height: 900 } })
+      await w.page.getByRole('tab').first().waitFor({ timeout: 30000 }).catch(() => {})
+      const at = await w.page.evaluate(() => {
+        const view = document.querySelector('[data-testid=full-screen]')?.parentElement.getBoundingClientRect()
+        const panel = document.querySelector('section[aria-label=Options]')?.getBoundingClientRect()
+        return {
+          tabs: [...document.querySelectorAll('section[aria-label=Options] [role=tab]')].map((t) => t.textContent).join(),
+          cut: [...document.querySelectorAll('section[aria-label=Options] [role=tab] span')].filter((e) => e.scrollWidth > e.clientWidth).length,
+          view: view ? `${Math.round(view.width)}×${Math.round(view.height)}` : 'none', panel: panel ? Math.round(panel.width) : 0, beside: !!view && !!panel && panel.left > view.right,
+        }
+      })
+      await w.page.setViewportSize({ width: 390, height: 700 })
+      await w.page.evaluate(() => window.scrollTo(0, 420))
+      await w.page.waitForTimeout(150)
+      const phone = await w.page.evaluate(() => {
+        const r = document.querySelector('[data-testid=full-screen]')?.parentElement.getBoundingClientRect()
+        return { stuck: !!r && r.top >= 0 && r.bottom <= innerHeight && r.height > 200, wide: document.documentElement.scrollWidth - innerWidth }
+      })
+      sizes.add(`${at.view}+${at.panel}`)
+      if (at.tabs !== want || at.cut || !at.beside || !phone.stuck || phone.wide > 0) { bad++; fails.push(`layout ${id}: ${JSON.stringify({ ...at, ...phone })}`) }
+      await w.ctx.close()
+    }
+    if (sizes.size !== 1) fails.push(`layout: the columns differ between experiments (${[...sizes].join(', ')})`)
+    else if (!bad) ok(`layout: all ${PAGES.length} experiments have their tabs beside a preview of the same size (${[...sizes][0]}), which stays in sight on a phone`)
   }
 
   // Lesson → sandbox carries the scene
