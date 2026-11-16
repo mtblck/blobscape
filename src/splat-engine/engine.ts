@@ -43,9 +43,13 @@ export interface Actor {
   blobs: Blobs
   skin: Skin
   skeleton: Skeleton
+  /** Which part of the actor each blob belongs to (as `buildBody` and `voxelBody` give it): what `SplatWorld.parts` draws. Left out, the actor is one part. */
+  partOf?: ArrayLike<number>
 }
 
 const WORKGROUP = 256
+/** In a map of parts, a blob is solid out to where it has faded to this. */
+const PART_CUT = 0.15
 const KERNEL_2D = 0.3
 const MAX_SPLAT_PX = 1024
 const CLIP_XY = 1.4
@@ -84,6 +88,14 @@ export class SplatWorld extends Mesh {
   cpuSortMs = 0
   /** While true, rendering draws the last frame's blobs without moving or sorting them (for timing the draw alone). */
   hold = false
+  private readonly flat = uniform(0)
+  /**
+   * While true, the draw is a map of parts, not a picture: every blob is a hard disc in its part's own flat colour
+   * (red and green hold the part's number plus one, blue the actor's), with no light, fog or soft edge, so where two
+   * parts meet the colour changes exactly. Pixel mode draws it for the lines between parts.
+   */
+  get parts() { return this.flat.value > 0 }
+  set parts(on: boolean) { this.flat.value = on ? 1 : 0 }
 
   private readonly boneOffset: number[]
   private readonly boneRadius: Float32Array
@@ -152,7 +164,7 @@ export class SplatWorld extends Mesh {
       buf.attrs.push(this.lighting.attr)
       this.lightNode = makeLight(buf, this.lighting)
     }
-    material.colorNode = makeFragment() as never
+    material.colorNode = makeFragment(this.flat) as never
 
     this.onBeforeRender = (renderer, _scene, camera) => this.prepare(renderer as unknown as Renderer, camera)
   }
@@ -195,9 +207,9 @@ export class SplatWorld extends Mesh {
     const material = this.material as NodeMaterial
     if (webgl) {
       enableWebGL(this.buf, this.sort)
-      material.vertexNode = makeVertexWebGL(this.buf, this.sort, this.mode, this.fog, this.lighting) as never
+      material.vertexNode = makeVertexWebGL(this.buf, this.sort, this.mode, this.fog, this.flat, this.lighting) as never
     } else {
-      material.vertexNode = makeVertexWebGPU(this.buf, this.sort, this.fog, this.lighting) as never
+      material.vertexNode = makeVertexWebGPU(this.buf, this.sort, this.fog, this.flat, this.lighting) as never
     }
     material.needsUpdate = true
     this.builtFor = key
@@ -422,6 +434,8 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
   const scale = new Float32Array(n * 4)
   const quat = new Float32Array(n * 4)
   const colour = new Uint32Array(n)
+  // each blob's part as a colour: see `SplatWorld.parts`
+  const part = new Uint32Array(n)
   // joints and weights interleaved, two words per blob: a compute stage may only bind 8 storage buffers on many phones
   const skinWords = new Uint32Array(n * 2)
   let i = 0
@@ -435,13 +449,15 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
       const byte = (v: number) => Math.max(0, Math.min(255, Math.round(v * 255)))
       colour[i] = (byte(srgbToLinear(blobs.colour[k * 3])) | (byte(srgbToLinear(blobs.colour[k * 3 + 1])) << 8) |
         (byte(srgbToLinear(blobs.colour[k * 3 + 2])) << 16) | (byte(blobs.opacity[k]) << 24)) >>> 0
+      const p = (a.partOf?.[k] ?? 0) + 1
+      part[i] = ((p & 255) | (((p >> 8) & 255) << 8) | (((ai + 1) & 255) << 16) | (byte(blobs.opacity[k]) << 24)) >>> 0
       skinWords[i * 2] = (skin.joints[k * 4] | (skin.joints[k * 4 + 1] << 8) | (skin.joints[k * 4 + 2] << 16) | (skin.joints[k * 4 + 3] << 24)) >>> 0
       skinWords[i * 2 + 1] = packWeights(skin.weights, k * 4)
     }
   })
   const attr = (a: Float32Array | Uint32Array, size: number) => new StorageBufferAttribute(a, size)
   const centreAttr = attr(centre, 4), scaleAttr = attr(scale, 4), quatAttr = attr(quat, 4)
-  const colourAttr = attr(colour, 1), skinAttr = attr(skinWords, 1)
+  const colourAttr = attr(colour, 1), skinAttr = attr(skinWords, 1), partAttr = attr(part, 1)
   const boneData = new Float32Array(Math.max(1, bones) * 20)
   const boneAttr = new StorageBufferAttribute(boneData, 4)
   boneAttr.setUsage(DynamicDrawUsage)
@@ -454,7 +470,7 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
   return {
     count: n,
     /** Every GPU buffer, so dispose can free them. */
-    attrs: [centreAttr, scaleAttr, quatAttr, colourAttr, skinAttr, boneAttr, worldCentreAttr, covAAttr, covBAttr, splatAAttr, splatBAttr],
+    attrs: [centreAttr, scaleAttr, quatAttr, colourAttr, partAttr, skinAttr, boneAttr, worldCentreAttr, covAAttr, covBAttr, splatAAttr, splatBAttr],
     skinWords, srcCentreData: centre,
     boneData, boneAttr, worldCentreAttr, covAAttr, covBAttr, colourAttr,
     srcCentre: storage(centreAttr, 'vec4', n).toReadOnly(),
@@ -463,6 +479,7 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
     skin: storage(skinAttr, 'uint', n * 2).toReadOnly(),
     bones: storage(boneAttr, 'vec4', Math.max(1, bones) * 5).toReadOnly(),
     colour: storage(colourAttr, 'uint', n).toReadOnly(),
+    part: storage(partAttr, 'uint', n).toReadOnly(),
     worldCentreW: storage(worldCentreAttr, 'vec4', n),
     covAW: storage(covAAttr, 'vec4', n),
     covBW: storage(covBAttr, 'vec4', n),
@@ -480,7 +497,7 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
 /** On WebGL, storage is read through textures that the CPU fills; the draw reads the blobs' rest data and the bones. */
 function enableWebGL(buf: ReturnType<typeof makeBuffers>, sort: DepthSort) {
   if (buf.webgl) return
-  for (const r of [buf.srcCentre, buf.srcScale, buf.srcQuat, buf.skin, buf.bones, buf.colour]) (r as unknown as { setPBO: (b: boolean) => void }).setPBO(true)
+  for (const r of [buf.srcCentre, buf.srcScale, buf.srcQuat, buf.skin, buf.bones, buf.colour, buf.part]) (r as unknown as { setPBO: (b: boolean) => void }).setPBO(true)
   sort.enableWebGL()
   buf.webgl = true
 }
@@ -753,7 +770,7 @@ function placeQuad(ndc: N, axes: N, rgba: N) {
   return vec4(ndc.xy.add(axes.xy.mul(uv.x)).add(axes.zw.mul(uv.y)), ndc.z, 1)
 }
 
-function makeVertexWebGPU(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, fog: Fog, L?: Lighting) {
+function makeVertexWebGPU(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, fog: Fog, flat: N, L?: Lighting) {
   return Fn(() => {
     const idx = sort.orderRead.element(instanceIndex).toVar()
     const A = buf.splatA.element(idx).toVar()
@@ -762,27 +779,36 @@ function makeVertexWebGPU(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, 
     // depth in front of the camera from the screen depth the project pass wrote, so the draw binds no extra buffer:
     // ndc z = −(P22·z + P32) / z for a perspective camera, so −z = P32 / (ndc z + P22)
     const depth = cameraProjectionMatrix[3].z.div(A.z.add(cameraProjectionMatrix[2].z))
-    return placeQuad(A.xyz, buf.splatB.element(idx), vec4(fogged(colour.rgb, depth, fog), colour.a.mul(A.w)))
+    const part = unpackUnorm4x8(buf.part.element(idx))
+    return placeQuad(A.xyz, buf.splatB.element(idx), vec4(select(flat.greaterThan(0), part.rgb, fogged(colour.rgb, depth, fog)), colour.a.mul(A.w)))
   })()
 }
 
 /** WebGL has no compute: each corner moves its blob through the bones and projects it, like a skinned mesh. */
-function makeVertexWebGL(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, mode: SkinMode, fog: Fog, L?: Lighting) {
+function makeVertexWebGL(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, mode: SkinMode, fog: Fog, flat: N, L?: Lighting) {
   return Fn(() => {
     const idx = sort.orderRead.element(instanceIndex).toVar()
     const d = deformBlob(buf, idx, mode)
     const p = projectSplat(d.world, d.covA, d.covB, cameraViewMatrix, cameraProjectionMatrix, cameraViewport.zw)
     const colour = unpackUnorm4x8(buf.colour.element(idx)).toVar()
     const rgb = L ? lit(colour.rgb, d.world, d.covA, d.covB, L) : colour.rgb
-    return placeQuad(p.ndc, p.axes, vec4(fogged(rgb, p.depth, fog), colour.a.mul(p.alphaScale)))
+    const part = unpackUnorm4x8(buf.part.element(idx))
+    return placeQuad(p.ndc, p.axes, vec4(select(flat.greaterThan(0), part.rgb, fogged(rgb, p.depth, fog)), colour.a.mul(p.alphaScale)))
   })()
 }
 
-function makeFragment() {
+function makeFragment(flat: N) {
   return Fn(() => {
     const uv = splatUv()
     const r2 = dot(uv, uv).toVar()
     If(r2.greaterThan(4), () => { Discard() })
-    return vec4(splatColour().rgb, exp(r2.mul(-0.5)).mul(splatColour().a))
+    const alpha = exp(r2.mul(-0.5)).mul(splatColour().a).toVar()
+    // a map of parts: all of the blob or none of it, so the nearest part's colour is left whole
+    If(flat.greaterThan(0), () => {
+      // well out from the middle, so the discs of one surface close up and nothing behind shows between them
+      If(alpha.lessThan(PART_CUT), () => { Discard() })
+      alpha.assign(1)
+    })
+    return vec4(splatColour().rgb, alpha)
   })()
 }

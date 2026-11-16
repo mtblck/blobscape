@@ -255,6 +255,11 @@ export interface PixelLook {
   /** Lines inside the scene, where one colour meets a much lighter one: 0 (or left out) is none, 1 the darkest line. */
   edges?: number
   /**
+   * With `edges`: a line where one part of the scene meets another as well, whatever their colours (two things of one colour, one in front of the other).
+   * Needs a map of the parts drawn beside the scene (`pixelArt`'s `parts`; the live pass draws its own).
+   */
+  parts?: boolean
+  /**
    * A backdrop behind the scene: its colour at the top and at the bottom of the picture, blended between and dithered into the palette.
    * `reach` is how far down the picture the blend runs before it is all the bottom colour (above 0, up to 1; the whole way when left out or not a sound number: `skyReach`).
    * Left out, empty pixels stay clear.
@@ -280,6 +285,8 @@ export const GLOW_TAPS: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1], 
 export const GLOW_FROM = 0.92
 /** Two neighbouring pixels are on either side of an edge when their colours are this far apart in OKLab. */
 export const EDGE_JUMP = 0.11
+/** Two pixels this close in OKLab lightness count as equally light when a line between parts picks its side. */
+export const PART_TIE = 0.01
 /** How much of its light a pixel on an edge loses at `edges` 1. */
 export const EDGE_DARK = 0.62
 /** How far down the picture a sky's blend runs: its third value when that is a sound share of the picture, else the whole way. Both twins go by this. */
@@ -303,9 +310,10 @@ const smooth = (a: number, b: number, x: number) => { const t = Math.min(1, Math
  *
  * `before` is the art of the frame before, for a look with `steady`: where it
  * holds a palette colour that is nearly as close as the best one, that pixel
- * keeps it.
+ * keeps it. `parts` is the scene's map of parts for a look with `parts`: the
+ * same view with every part in its own flat colour (alpha 0 where there is none).
  */
-export function pixelArt(f: Frame, look: PixelLook, before?: Frame): Frame {
+export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Frame): Frame {
   const { width: w, height: h } = f
   const out = makeFrame(w, h)
   const cut = PIXEL_CUT * 255
@@ -313,6 +321,7 @@ export function pixelArt(f: Frame, look: PixelLook, before?: Frame): Frame {
   const pl = look.palette.map((c) => oklab(...c))
   const amp = look.dither * 48
   const edges = look.edges ?? 0
+  const map = look.parts && parts && parts.width === w && parts.height === h ? parts.data : undefined
   const steady = before && before.width === w && before.height === h ? look.steady ?? 0 : 0
   const slot = new Map(look.palette.map((c, k) => [(c[0] << 16) | (c[1] << 8) | c[2], k]))
   const g: Rgb = [0, 0, 0]
@@ -339,7 +348,11 @@ export function pixelArt(f: Frame, look: PixelLook, before?: Frame): Frame {
             if (!solid(x + dx, y + dy)) return false
             const j = ((y + dy) * w + x + dx) * 4
             const n = oklab(f.data[j], f.data[j + 1], f.data[j + 2])
-            return n[0] > a[0] && Math.hypot(n[0] - a[0], n[1] - a[1], n[2] - a[2]) > EDGE_JUMP
+            if (n[0] > a[0] && Math.hypot(n[0] - a[0], n[1] - a[1], n[2] - a[2]) > EDGE_JUMP) return true
+            // and where another part begins, whatever its colour: on the darker of the two, or by the parts' numbers when they are as light as each other
+            if (!map || map[i + 3] < 128 || map[j + 3] < 128) return false
+            const mine = map[i] | (map[i + 1] << 8) | (map[i + 2] << 16), other = map[j] | (map[j + 1] << 8) | (map[j + 2] << 16)
+            return mine !== other && (n[0] > a[0] + PART_TIE || (Math.abs(n[0] - a[0]) <= PART_TIE && mine < other))
           })
           if (jump) { const k = 1 - EDGE_DARK * edges; r *= k; gg *= k; b *= k }
         }

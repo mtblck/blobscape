@@ -234,15 +234,15 @@ export class CreatureStage {
   }
 
   /** Pixel mode's last frame as it was drawn small, and as finished art (exactly in the look's colours): for tests and for saving. */
-  async pixelFrames(): Promise<{ small: Frame; art: Frame; before?: Frame } | undefined> {
+  async pixelFrames(): Promise<{ small: Frame; art: Frame; before?: Frame; parts?: Frame } | undefined> {
     // a sheet being drawn has the renderer to itself
     if (!this.pixel || this.baking) return
     // pixel mode can be switched off, or the view resized, while the reads are out: hold the pass and start every read now
     const pass = this.pixel
     if (!this.target) pass.render(this.renderer, this.scene, this.camera)
     const colours = lookColours(pass.look)
-    const [small, art, before] = await Promise.all([this.read(pass.small), this.read(pass.art, true), pass.before ? this.read(pass.before, true) : undefined])
-    return { small, art: snapColours(art, colours), before: before && snapColours(before, colours) }
+    const [small, art, before, parts] = await Promise.all([this.read(pass.small), this.read(pass.art, true), pass.before ? this.read(pass.before, true) : undefined, pass.look.parts ? this.read(pass.ids, true) : undefined])
+    return { small, art: snapColours(art, colours), before: before && snapColours(before, colours), parts }
   }
 
   invalidate(frames = 2) { this.pending = Math.max(this.pending, frames) }

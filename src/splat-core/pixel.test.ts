@@ -173,3 +173,25 @@ test('pixelArt with steady keeps a pixel on the colour it had when the other is 
   const sky = pixelArt(f, { ...look, sky: [[140, 140, 140], [140, 140, 140]] }, before)
   assert.deepEqual(px(sky, 2), [140, 140, 140, 255])
 })
+
+test('pixelArt with parts draws a line where one part meets another of the same colour, on one side only, and none without the map', () => {
+  // one flat colour, left half one part and right half another
+  const f = solid(6, 3, () => true, [120, 90, 60])
+  const map = makeFrame(6, 3)
+  for (let y = 0; y < 3; y++) for (let x = 0; x < 6; x++) map.data.set([x < 3 ? 1 : 2, 0, 1, 255], (y * 6 + x) * 4)
+  const look = { palette: [], dither: 0, outline: null, glow: 0, edges: 1, parts: true }
+  const art = pixelArt(f, look, undefined, map)
+  const dark = (a: { data: Uint8ClampedArray }) => [0, 1, 2, 3, 4, 5].map((x) => a.data[(6 + x) * 4] < 120)
+  assert.deepEqual(dark(art), [false, false, true, false, false, false], 'the lower-numbered part carries the line, one pixel wide')
+  assert.deepEqual(dark(pixelArt(f, look)), [false, false, false, false, false, false], 'no map, no line')
+  assert.deepEqual(dark(pixelArt(f, { ...look, parts: false }, undefined, map)), [false, false, false, false, false, false], 'switched off, no line')
+  // a lighter part beside a darker one: the line is on the darker, whatever their numbers
+  const g = solid(6, 3, () => true, [120, 90, 60])
+  for (let y = 0; y < 3; y++) for (let x = 0; x < 3; x++) g.data.set([150, 115, 80, 255], (y * 6 + x) * 4)
+  const lit = pixelArt(g, look, undefined, map)
+  assert.equal(lit.data[(6 + 2) * 4], 150, 'the lighter side is left alone')
+  assert.ok(lit.data[(6 + 3) * 4] < 120, 'the darker side takes the line')
+  // where the map has nothing (alpha 0), there is no part to end
+  for (let y = 0; y < 3; y++) map.data[(y * 6 + 3) * 4 + 3] = 0
+  assert.deepEqual(dark(pixelArt(f, look, undefined, map)), [false, false, false, false, false, false])
+})
