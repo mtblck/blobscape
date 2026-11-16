@@ -29,6 +29,7 @@ export function Footer() {
         <nav aria-label="About" className="flex flex-col gap-1">
           <p className="mb-1 font-display text-base text-ink">About</p>
           <a href={SITE.author.url} className={FOOT_LINK}>Made by {SITE.author.name}</a>
+          <a href="/engine/" className={FOOT_LINK}>The engine</a>
           <a href="/contact/" className={FOOT_LINK}>Get in touch</a>
           <a href={SITE.tip} target="_blank" rel="noopener" className={`${FOOT_BASE} gap-2 font-medium text-accent hover:text-accent-ink`}>
             <svg viewBox="0 0 24 24" className="size-4" aria-hidden fill="currentColor"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.2 0 3.6 1.2 4.3 2.5h2c.7-1.3 2.1-2.5 4.3-2.5 3.7 0 5.8 3.9 4.3 7.3C19.5 16.4 12 21 12 21z" /></svg>

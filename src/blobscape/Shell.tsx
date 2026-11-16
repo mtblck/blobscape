@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { EXPERIMENTS, longDate, type Experiment } from './site.ts'
 import { Button } from '../shared/ui.tsx'
 import { COMING, LESSONS, href } from './routes.ts'
+import { BUILT_ON, ENGINE_BUILT } from './engineCopy.ts'
 import type { Goal } from './progress.ts'
 import { handOff } from './handoff.ts'
 import type { Blobs } from '../splat-core/blobs.ts'
@@ -34,7 +35,12 @@ export function Crumbs({ here, parent }: { here: string; parent?: { label: strin
         {parent && <><a href={parent.href} className={CRUMB}>{parent.label}</a><span aria-hidden className="px-1.5">/</span></>}
         <span aria-current="page">{here}</span>
       </nav>
-      {dated && <Dates e={dated} testId="page-dates" />}
+      {dated && (
+        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+          {ENGINE_BUILT.includes(dated.id) && <a href={href({ page: 'engine' })} className={CRUMB} data-testid="built-on">{BUILT_ON}</a>}
+          <Dates e={dated} testId="page-dates" />
+        </div>
+      )}
     </div>
   )
 }

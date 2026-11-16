@@ -10,7 +10,7 @@ multi-page React app, one Vercel project, served from the root. See README for t
 
 ## Load-bearing
 - Vite `base: '/'`, `outDir: 'dist'`, Vercel `trailingSlash: true` (every page is a folder with an index.html). `hosting:check` enforces it.
-- Blobscape's pages are paths (`/`, `/lessons/`, `/lessons/<id>/`, `/sandbox/`, `/experiments/`, `/experiments/creature/`, `/contact/`), parsed in `routes.ts`. `scripts/prerender.ts` writes each one's HTML (title, description, canonical, og, JSON-LD, readable content) from the built `dist/index.html`, plus 404.html, sitemap.xml, robots.txt. A new page needs a case in `routes.ts`, `meta.ts` and `prerender.ts`.
+- Blobscape's pages are paths (`/`, `/lessons/`, `/lessons/<id>/`, `/sandbox/`, `/experiments/`, `/experiments/creature/`, `/engine/`, `/contact/`), parsed in `routes.ts`. `scripts/prerender.ts` writes each one's HTML (title, description, canonical, og, JSON-LD, readable content) from the built `dist/index.html`, plus 404.html, sitemap.xml, robots.txt. A new page needs a case in `routes.ts`, `meta.ts` and `prerender.ts`.
 - `useLinkNavigation` turns plain clicks on links to Blobscape pages into in-app navigation; tools and other sites load normally. Old `#/…` links are rewritten to paths on load.
 - CSP needs `'wasm-unsafe-eval'` and `worker-src blob:` (Spark decodes in WASM, sorts in a blob worker).
 - Every experiment lives under `/experiments/` (old `/creature/` and `/tools/*` addresses redirect there). Add a new tool: `experiments/<name>/index.html` + `src/<name>/`, an input in vite.config.ts, an entry first in `EXPERIMENTS` (src/blobscape/site.ts: front page, menu, the Experiments page; newest first) with its `published` and `updated` days (the footer's `NEWEST_EXPERIMENTS` and the Experiments page's order come from `published`; bump `updated` only for a change a visitor would see, not site-wide work; the dates show on the cards, on each experiment's crumb line via `Crumbs`, in its JSON-LD and as its sitemap lastmod) and the sitemap list in prerender.ts. Every page renders `SiteHeader` (src/shared) first, puts its content in `<main id="main">` for the skip link, and ends with `Footer` (src/shared).
@@ -54,6 +54,11 @@ multi-page React app, one Vercel project, served from the root. See README for t
 - Sprite sheets on Splat Creatures (`creature/Sprites.tsx`): `stage.bake` pauses the live view and holds creature/mode/show changes until done; `splat-engine/bakeSheet.ts` draws (one camera distance from `frameAll` for every frame) and runs Splat to Sprite's `processFrames`; `spriteSheet.ts` (pure, tested) plans rows (move × direction, `shotsFor` order) and writes the Tinkerkit and Aseprite JSON. The engine lab's walk sheet uses the same baker.
 - The overlay canvas is `willReadFrequently` (CPU): a GPU 2D canvas in headless Chromium kept showing an old frame after a clear.
 
+
+## Engine page (`/engine/`, `src/blobscape/Engine.tsx`)
+- The showcase for "the Blobscape engine" (the name until the package ships). Its words live in `engineCopy.ts` as data, shared with the prerendered HTML; change them there.
+- One preview, three chips (`?demo=creature|world|pixel`): only the demo picked runs, so a phone holds one world at a time. The creature and the pixel scene are `CreatureStage` (the dragon breathing fire; the owl in pixel mode), the world is `ForestStage` with the elf steered down the path. Verify drives `window.__engine` with `?offscreen=1`.
+- `ENGINE_BUILT` (engineCopy.ts) lists the experiments drawn by the engine: the page lists them, and each one's crumb line carries a "Built on the Blobscape engine" link (`Crumbs` and its prerender twin). A new engine experiment goes in that list.
 
 ## Splat engine (prototype, `src/splat-engine/`, test page `/engine-lab/`)
 - The engine lab is deliberately unlisted (noindex, no hub card): it's a test bench, not an experiment.

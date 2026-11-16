@@ -7,6 +7,7 @@ const PAGES = [
   { label: 'Lessons', path: '/lessons/' },
   { label: 'Experiments', path: '/experiments/' },
   { label: 'Sandbox', path: '/sandbox/' },
+  { label: 'Engine', path: '/engine/' },
 ] as const
 
 /** True when `path` is the page we're on, or the list it belongs to (a lesson under Lessons, an experiment under Experiments). */

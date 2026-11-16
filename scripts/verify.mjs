@@ -83,7 +83,7 @@ const solidPixels = (page, sel) => page.evaluate((sel) => {
 // 1. The site: every page is its own prerendered file, the chrome works, old links land
 {
   // Prerendered: each page's HTML carries its own title, canonical and content before any script runs
-  for (const [path, title] of [['/', 'Blobscape: learn'], ['/lessons/', 'Lessons ·'], ['/lessons/order/', 'Order matters · Lesson 3'], ['/sandbox/', 'Sandbox ·'], ['/experiments/creature/', 'Splat Creatures ·'], ['/experiments/forest-walk/', 'Forest Walk ·'], ['/experiments/clockwork/', 'Clockwork ·'], ['/experiments/pixel-diorama/', 'Pixel Diorama ·'], ['/experiments/dungeon-run/', 'Dungeon Run ·'], ['/experiments/scan-studio/', 'Scan Studio ·'], ['/experiments/', 'Experiments ·']]) {
+  for (const [path, title] of [['/', 'Blobscape: learn'], ['/lessons/', 'Lessons ·'], ['/lessons/order/', 'Order matters · Lesson 3'], ['/sandbox/', 'Sandbox ·'], ['/experiments/creature/', 'Splat Creatures ·'], ['/experiments/forest-walk/', 'Forest Walk ·'], ['/experiments/clockwork/', 'Clockwork ·'], ['/experiments/pixel-diorama/', 'Pixel Diorama ·'], ['/experiments/dungeon-run/', 'Dungeon Run ·'], ['/experiments/scan-studio/', 'Scan Studio ·'], ['/experiments/', 'Experiments ·'], ['/engine/', 'The Blobscape engine ·']]) {
     const html = await (await fetch(base + path)).text()
     if (!html.includes(`<title>${title}`)) fails.push(`${path}: prerendered title is not "${title}…"`)
     else if (!html.includes(`<link rel="canonical" href="https://blobscape.dev${path}"`)) fails.push(`${path}: prerendered canonical is wrong`)
@@ -1558,6 +1558,54 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   await phone.page.screenshot({ path: join(shots, 'blobscape-sandbox-creatures-phone.png'), fullPage: true })
   await axe(phone.page, 'blobscape phone sandbox with creatures')
   await phone.ctx.close()
+}
+
+// The engine page: each of its three live demos draws, and an experiment built on the engine links to it
+{
+  console.log('engine page')
+  for (const demo of ['creature', 'world', 'pixel']) {
+    const e = await open(`/engine/?offscreen=1&demo=${demo}`, { viewport: { width: 1280, height: 900 } })
+    await e.page.waitForFunction(() => window.__engine?.blobs() > 0 && !document.querySelector('[data-testid=engine-loading]'), null, { timeout: 120000 }).catch(() => {})
+    const got = await e.page.evaluate(async () => {
+      const en = window.__engine
+      if (!en) return null
+      await en.stage.frame(en.demo === 'world' ? 2 : 0.7, { forward: 1, turn: 0 })
+      const cv = document.querySelector('[data-testid=engine-view]')
+      const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+      // anything brighter than the case behind it
+      let lit = 0
+      for (let i = 0; i < d.length; i += 4) if (d[i] + d[i + 1] + d[i + 2] > 150) lit++
+      return { demo: en.demo, blobs: en.blobs(), lit, status: document.querySelector('[data-testid=engine-status]').textContent, pressed: document.querySelector('[data-testid=engine-demos] [aria-pressed=true]')?.textContent }
+    })
+    if (!got || got.demo !== demo || !(got.blobs > 5000) || !(got.lit > 5000) || !/blobs, drawn live on Web/.test(got.status)) fails.push(`engine page ${demo}: ${JSON.stringify(got)}`)
+    else ok(`engine page: "${got.pressed}" draws ${got.blobs} blobs (${got.lit} lit pixels)`)
+    if (demo === 'creature') {
+      await e.page.screenshot({ path: join(shots, 'engine-page.png') })
+      await axe(e.page, 'engine page')
+      // the chips swap the demo in the same view
+      await e.page.getByRole('button', { name: 'A pixel scene' }).click()
+      await e.page.waitForFunction(() => window.__engine?.demo === 'pixel' && window.__engine.blobs() > 0, null, { timeout: 120000 }).catch(() => {})
+      const now = await e.page.evaluate(() => window.__engine?.demo)
+      if (now !== 'pixel') fails.push(`engine page: picking "A pixel scene" left the demo as ${now}`)
+      else ok('engine page: the chips swap the demo')
+    }
+    await e.ctx.close()
+  }
+  const p = await open('/engine/?offscreen=1', { viewport: { width: 390, height: 800 } })
+  // closing a page while its engine is still starting loses the device mid-start, so wait for the demo
+  await p.page.waitForFunction(() => window.__engine?.blobs() > 0 && !document.querySelector('[data-testid=engine-loading]'), null, { timeout: 120000 }).catch(() => {})
+  const wide = await p.page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
+  const cards = await p.page.locator('[data-testid=engine-built] a').count()
+  if (wide > 0 || cards !== 6) fails.push(`engine page on a phone: ${wide}px wider than the screen, ${cards} experiments listed`)
+  else ok('engine page: fits a phone and lists the six experiments built on the engine')
+  await axe(p.page, 'engine page on a phone')
+  await p.ctx.close()
+  const x = await open('/experiments/clockwork/?offscreen=1', { viewport: { width: 1280, height: 900 } })
+  const link = await x.page.getByTestId('built-on').getAttribute('href', { timeout: 10000 }).catch(() => null)
+  const html = await (await fetch(base + '/experiments/clockwork/')).text()
+  if (link !== '/engine/' || !html.includes('data-testid="built-on"')) fails.push(`an engine experiment's link to the engine page: ${link}, prerendered ${html.includes('data-testid="built-on"')}`)
+  else ok('an experiment built on the engine links to the engine page, in its prerendered HTML too')
+  await x.ctx.close()
 }
 
 // Engine lab (unlisted): the splat engine on WebGPU and on WebGL. Headless
