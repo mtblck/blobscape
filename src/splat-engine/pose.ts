@@ -5,7 +5,7 @@ import { mulQ, norm4, quatMat3, type Skeleton, type Skin, type SkinMode } from '
  * Skinning on the CPU into an ordinary `Blobs` list, so a small rigged model
  * (a lesson's caterpillar or arm, a few thousand blobs) can be drawn by any
  * renderer that takes blobs, Spark included. It is `skinBlob` (rig.ts) written
- * without allocation and turned back into a centre, three scales and a
+ * without allocation and turned back into a center, three scales and a
  * rotation instead of a covariance. Change one, change both: the tests check
  * they give the same covariance.
  *
@@ -15,8 +15,8 @@ import { mulQ, norm4, quatMat3, type Skeleton, type Skin, type SkinMode } from '
  *   into axes and sizes (an eigen decomposition). On a twisting joint that
  *   blended matrix squashes, and so does the blob.
  *
- * Writes centres, scales and rotations of `out` (which must hold as many
- * blobs as `rest`); colours and opacities are left as they are.
+ * Writes centers, scales and rotations of `out` (which must hold as many
+ * blobs as `rest`); colors and opacities are left as they are.
  */
 export function poseBlobs(rest: Blobs, skin: Skin, rig: Skeleton, mode: SkinMode, out: Blobs) {
   const n = rest.count
@@ -42,10 +42,10 @@ export function poseBlobs(rest: Blobs, skin: Skin, rig: Skeleton, mode: SkinMode
       for (let c = 0; c < 4; c++) Q[c] += sign * rig.quat[j * 4 + c]
       S += w * rig.scale[j]
     }
-    const x = rest.centre[i * 3], y = rest.centre[i * 3 + 1], z = rest.centre[i * 3 + 2]
-    out.centre[i * 3] = M[0] * x + M[3] * y + M[6] * z + M[9]
-    out.centre[i * 3 + 1] = M[1] * x + M[4] * y + M[7] * z + M[10]
-    out.centre[i * 3 + 2] = M[2] * x + M[5] * y + M[8] * z + M[11]
+    const x = rest.center[i * 3], y = rest.center[i * 3 + 1], z = rest.center[i * 3 + 2]
+    out.center[i * 3] = M[0] * x + M[3] * y + M[6] * z + M[9]
+    out.center[i * 3 + 1] = M[1] * x + M[4] * y + M[7] * z + M[10]
+    out.center[i * 3 + 2] = M[2] * x + M[5] * y + M[8] * z + M[11]
     const rq = rest.quat.subarray(i * 4, i * 4 + 4)
 
     if (mode === 'quat') {
@@ -149,10 +149,10 @@ export function volumeKept(rest: Blobs, posed: Blobs, i: number) {
  * pulls the surface apart. Brute force: meant for a few hundred blobs round
  * one joint.
  */
-export function neighbourPairs(b: Blobs, near: (i: number) => boolean, k = 4): Uint32Array {
+export function neighborPairs(b: Blobs, near: (i: number) => boolean, k = 4): Uint32Array {
   const ids: number[] = []
   for (let i = 0; i < b.count; i++) if (near(i)) ids.push(i)
-  const c = b.centre
+  const c = b.center
   const out: number[] = []
   const best: [number, number][] = []
   for (const i of ids) {
@@ -169,14 +169,14 @@ export function neighbourPairs(b: Blobs, near: (i: number) => boolean, k = 4): U
 }
 
 /**
- * How far a pose has pulled neighbouring blobs apart: for each pair, its posed
+ * How far a pose has pulled neighboring blobs apart: for each pair, its posed
  * distance over its rest distance, and the ratio that a share `q` of the pairs
  * stay under (0.995: all but the worst half percent, so one stray pair can't
  * decide it). 1 is untouched; 3 means gaps three times the usual spacing.
  */
 export function stretch(pairs: Uint32Array, rest: Blobs, posed: Blobs, q = 0.995) {
   const r: number[] = []
-  const a = rest.centre, p = posed.centre
+  const a = rest.center, p = posed.center
   for (let k = 0; k < pairs.length; k += 2) {
     const i = pairs[k] * 3, j = pairs[k + 1] * 3
     const d0 = Math.hypot(a[i] - a[j], a[i + 1] - a[j + 1], a[i + 2] - a[j + 2])

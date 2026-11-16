@@ -5,7 +5,7 @@ import { Chip, Slider } from '../../shared/ui.tsx'
 import { LessonShell } from '../Shell.tsx'
 import { LESSON_GOALS } from '../routes.ts'
 import { DRAG, ZoomBar, clampOrbit, orbitKey } from '../Viewport.tsx'
-import { drawOrder, rasterise, toImageData, type Order as DrawMode } from '../cpuSplat.ts'
+import { drawOrder, rasterize, toImageData, type Order as DrawMode } from '../cpuSplat.ts'
 import { useGoals } from '../progress.ts'
 
 const NAMES = ['red', 'green', 'blue']
@@ -13,9 +13,9 @@ const NAMES = ['red', 'green', 'blue']
 /** Three overlapping blobs in a row front to back (from the starting view): red nearest, blue furthest. */
 function scene(opacity: number) {
   const b = new Blobs(3)
-  b.push({ centre: [-0.4, 0.1, 0.9], scale: [0.32, 0.32, 0.32], quat: [0, 0, 0, 1], colour: [0.9, 0.22, 0.25], opacity })
-  b.push({ centre: [0.05, -0.05, 0], scale: [0.38, 0.38, 0.38], quat: [0, 0, 0, 1], colour: [0.2, 0.7, 0.35], opacity })
-  b.push({ centre: [0.5, 0.1, -0.9], scale: [0.45, 0.45, 0.45], quat: [0, 0, 0, 1], colour: [0.25, 0.45, 0.95], opacity })
+  b.push({ center: [-0.4, 0.1, 0.9], scale: [0.32, 0.32, 0.32], quat: [0, 0, 0, 1], color: [0.9, 0.22, 0.25], opacity })
+  b.push({ center: [0.05, -0.05, 0], scale: [0.38, 0.38, 0.38], quat: [0, 0, 0, 1], color: [0.2, 0.7, 0.35], opacity })
+  b.push({ center: [0.5, 0.1, -0.9], scale: [0.45, 0.45, 0.45], quat: [0, 0, 0, 1], color: [0.25, 0.45, 0.95], opacity })
   return b
 }
 
@@ -105,7 +105,7 @@ export function Order() {
       formula={{
         eq: <>new = blob · α + old · (1 − α)</>,
         terms: [
-          ['blob', "the colour of the blob being drawn"],
+          ['blob', "the color of the blob being drawn"],
           ['α', 'its opacity at that pixel, from 0 (clear) to 1 (solid)'],
           ['old', "what's already been drawn there"],
         ],
@@ -121,7 +121,7 @@ export function Order() {
             work. Spark, the renderer the rest of these lessons use, does it in a background worker and re-sorts whenever you move. It
             can't be told to sort wrongly, so these two views are drawn by a tiny software renderer written for this page.
           </p>
-          <p>Sorting by each blob's centre is still an approximation. Where two big blobs pass through each other, no single order is right, which is one source of the popping you sometimes see when turning a splat scene.</p>
+          <p>Sorting by each blob's center is still an approximation. Where two big blobs pass through each other, no single order is right, which is one source of the popping you sometimes see when turning a splat scene.</p>
         </>
       }
     />
@@ -137,7 +137,7 @@ function OrderList({ order, blobs, label }: { order: number[]; blobs: Blobs; lab
         {order.map((i, k) => (
           <span key={i} className="inline-flex items-center gap-1">
             {k > 0 && <span aria-hidden className="text-ink-faint">→</span>}
-            <span aria-hidden className="h-2.5 w-2.5 rounded-full" style={{ background: rgbToHex(blobs.colour.subarray(i * 3, i * 3 + 3)) }} />
+            <span aria-hidden className="h-2.5 w-2.5 rounded-full" style={{ background: rgbToHex(blobs.color.subarray(i * 3, i * 3 + 3)) }} />
             {NAMES[i]}
           </span>
         ))}
@@ -166,7 +166,7 @@ function SoftView({ blobs, orbit, setOrbit, order, title, testId, warn }: { blob
     c.width = size.w
     c.height = size.h
     const lens = orbitLens(orbit, size.w, size.h)
-    const px = rasterise(blobs, lens, order, size.w, size.h)
+    const px = rasterize(blobs, lens, order, size.w, size.h)
     c.getContext('2d')!.putImageData(toImageData(px, size.w, size.h), 0, 0)
   }, [blobs, orbit, order, size])
 

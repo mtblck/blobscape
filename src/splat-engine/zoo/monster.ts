@@ -38,14 +38,14 @@ export interface Plan {
   spikes: boolean
   arms: boolean
   coat: 'spots' | 'stripes' | 'plain'
-  colours: { back: Vec3; belly: Vec3; accent: Vec3; iris: Vec3 }
+  colors: { back: Vec3; belly: Vec3; accent: Vec3; iris: Vec3 }
   name: string
 }
 
 const pick = <T,>(r: () => number, xs: readonly T[]): T => xs[Math.floor(r() * xs.length) % xs.length]
 const between = (r: () => number, a: number, b: number) => a + (b - a) * r()
 
-/** HSL (0–1 each) to linear-ish RGB in 0–1, the way the zoo writes colours. */
+/** HSL (0–1 each) to linear-ish RGB in 0–1, the way the zoo writes colors. */
 function hsl(h: number, s: number, l: number): Vec3 {
   const k = (n: number) => (n + h * 12) % 12
   const a = s * Math.min(l, 1 - l)
@@ -95,7 +95,7 @@ export function planMonster(seed: number): Plan {
     spikes: r() < 0.45,
     arms: legs === 2 && r() < 0.8,
     coat: pick(r, ['spots', 'stripes', 'plain'] as const),
-    colours: { back, belly, accent, iris },
+    colors: { back, belly, accent, iris },
     name,
   }
 }
@@ -170,7 +170,7 @@ export function layout(p: Plan): Layout {
 
 function spec(p: Plan): BodySpec {
   const L = layout(p)
-  const { back, belly, accent, iris } = p.colours
+  const { back, belly, accent, iris } = p.colors
   const dark = mix(back, [0.04, 0.03, 0.05], 0.55)
   const coat = (q: Vec3, n: Vec3): Vec3 => {
     if (n[1] < -0.35) return belly
@@ -182,19 +182,19 @@ function spec(p: Plan): BodySpec {
   const parts: Part[] = []
   const hipR = p.girth, chestR = p.girth * p.chest
   // body, neck, head
-  parts.push({ shape: { tube: [L.hips, L.chest], r: [hipR, chestR], flat: 0.88 }, colour: coat, bones: ['body', 'chest'] })
-  parts.push({ shape: { tube: [L.chest, L.neckTop], r: [Math.min(chestR, p.head) * 0.75, p.head * 0.6] }, colour: coat, bones: ['chest', 'neck', 'head'] })
+  parts.push({ shape: { tube: [L.hips, L.chest], r: [hipR, chestR], flat: 0.88 }, color: coat, bones: ['body', 'chest'] })
+  parts.push({ shape: { tube: [L.chest, L.neckTop], r: [Math.min(chestR, p.head) * 0.75, p.head * 0.6] }, color: coat, bones: ['chest', 'neck', 'head'] })
   const hc = L.headC, hr = p.head
-  parts.push({ shape: { ball: hc, r: [hr, hr * 0.9, hr * 1.05] }, colour: coat, bones: ['head'] })
+  parts.push({ shape: { ball: hc, r: [hr, hr * 0.9, hr * 1.05] }, color: coat, bones: ['head'] })
   if (p.snout > 0.15) {
     const tip: Vec3 = [0, hc[1] - hr * 0.15, hc[2] + hr * (0.8 + p.snout * 0.9)]
-    parts.push({ shape: { tube: [[0, hc[1] - hr * 0.05, hc[2] + hr * 0.3], tip], r: [hr * 0.6, hr * 0.38], flat: 0.8 }, colour: coat, bones: ['head'] })
-    parts.push({ shape: { ball: [0, tip[1] + hr * 0.12, tip[2] + hr * 0.3], r: [hr * 0.12, hr * 0.09, hr * 0.08] }, colour: dark, bones: ['head'], density: 4 })
+    parts.push({ shape: { tube: [[0, hc[1] - hr * 0.05, hc[2] + hr * 0.3], tip], r: [hr * 0.6, hr * 0.38], flat: 0.8 }, color: coat, bones: ['head'] })
+    parts.push({ shape: { ball: [0, tip[1] + hr * 0.12, tip[2] + hr * 0.3], r: [hr * 0.12, hr * 0.09, hr * 0.08] }, color: dark, bones: ['head'], density: 4 })
   }
   // the jaw and the inside of the mouth, seen when it roars
   const jawTip: Vec3 = [0, hc[1] - hr * 0.5, hc[2] + hr * (0.75 + p.snout * 0.8)]
-  parts.push({ shape: { tube: [[0, hc[1] - hr * 0.45, hc[2] - hr * 0.1], jawTip], r: [hr * 0.55, hr * 0.32], flat: 0.55 }, colour: (q, n) => (n[1] < 0 ? belly : coat(q, n)), bones: ['jaw'] })
-  parts.push({ shape: { ball: [0, hc[1] - hr * 0.32, hc[2] + hr * 0.45], r: [hr * 0.45, hr * 0.08, hr * 0.5 + p.snout * hr * 0.4] }, colour: [0.45, 0.08, 0.12], bones: ['head'], density: 1.5 })
+  parts.push({ shape: { tube: [[0, hc[1] - hr * 0.45, hc[2] - hr * 0.1], jawTip], r: [hr * 0.55, hr * 0.32], flat: 0.55 }, color: (q, n) => (n[1] < 0 ? belly : coat(q, n)), bones: ['jaw'] })
+  parts.push({ shape: { ball: [0, hc[1] - hr * 0.32, hc[2] + hr * 0.45], r: [hr * 0.45, hr * 0.08, hr * 0.5 + p.snout * hr * 0.4] }, color: [0.45, 0.08, 0.12], bones: ['head'], density: 1.5 })
   // eyes, looking ahead
   const er = hr * p.eye
   const eyeAt: Vec3[] = p.eyes === 1 ? [[0, hc[1] + hr * 0.45, hc[2] + hr * 0.7]]
@@ -206,7 +206,7 @@ function spec(p: Plan): BodySpec {
     const o: Vec3 = [out[0] / ol, out[1] / ol, out[2] / ol]
     parts.push({
       shape: { ball: at, r: [er, er, er * 0.9] }, bones: ['head'], density: 6,
-      colour: (_q, n) => {
+      color: (_q, n) => {
         const d = n[0] * o[0] + n[1] * o[1] + n[2] * o[2]
         if (d > 0.95 && n[1] > o[1] + 0.08) return [1, 1, 0.97]
         return d > 0.86 ? [0.03, 0.03, 0.04] : d > 0.6 ? iris : [0.96, 0.95, 0.9]
@@ -216,12 +216,12 @@ function spec(p: Plan): BodySpec {
   // on top of the head
   for (const [, x] of SIDES) {
     const root = side(x, [hr * 0.55, hc[1] + hr * 0.6, hc[2] - hr * 0.15])
-    if (p.top === 'horns') parts.push({ shape: { tube: [root, side(x, [hr * 1.1, hc[1] + hr * 1.45, hc[2] - hr * 0.7])], r: [hr * 0.18, hr * 0.03] }, colour: (_q, _n, u) => mix([0.92, 0.88, 0.76], [0.35, 0.3, 0.25], u), bones: ['head'], density: 2 })
-    if (p.top === 'ears') parts.push({ shape: { sheet: [[root, side(x, [hr * 0.95, hc[1] + hr * 1.35, hc[2] - hr * 0.3]), side(x, [hr * 0.2, hc[1] + hr * 0.95, hc[2] - hr * 0.35])]] }, colour: accent, bones: ['head'], density: 2, opacity: 0.9 })
+    if (p.top === 'horns') parts.push({ shape: { tube: [root, side(x, [hr * 1.1, hc[1] + hr * 1.45, hc[2] - hr * 0.7])], r: [hr * 0.18, hr * 0.03] }, color: (_q, _n, u) => mix([0.92, 0.88, 0.76], [0.35, 0.3, 0.25], u), bones: ['head'], density: 2 })
+    if (p.top === 'ears') parts.push({ shape: { sheet: [[root, side(x, [hr * 0.95, hc[1] + hr * 1.35, hc[2] - hr * 0.3]), side(x, [hr * 0.2, hc[1] + hr * 0.95, hc[2] - hr * 0.35])]] }, color: accent, bones: ['head'], density: 2, opacity: 0.9 })
     if (p.top === 'feelers') {
       const tip = side(x, [hr * 0.9, hc[1] + hr * 1.9, hc[2] + hr * 0.4])
-      parts.push({ shape: { tube: [root, tip], r: [hr * 0.05, hr * 0.03] }, colour: dark, bones: ['head'], density: 3 })
-      parts.push({ shape: { ball: tip, r: [hr * 0.13, hr * 0.13, hr * 0.13] }, colour: accent, bones: ['head'], density: 4, glow: true })
+      parts.push({ shape: { tube: [root, tip], r: [hr * 0.05, hr * 0.03] }, color: dark, bones: ['head'], density: 3 })
+      parts.push({ shape: { ball: tip, r: [hr * 0.13, hr * 0.13, hr * 0.13] }, color: accent, bones: ['head'], density: 4, glow: true })
     }
   }
   // tail
@@ -230,7 +230,7 @@ function spec(p: Plan): BodySpec {
     tb.forEach((b, k) => {
       const r0 = hipR * 0.55 * (1 - k / 3), r1 = hipR * 0.55 * (1 - (k + 1) / 3) + 0.008
       const names = [b.name, ...(k > 0 ? [tb[k - 1].name] : ['body']), ...(k < 2 ? [tb[k + 1].name] : [])]
-      parts.push({ shape: { tube: [b.head, b.tail!], r: [r0, r1] }, colour: coat, bones: names })
+      parts.push({ shape: { tube: [b.head, b.tail!], r: [r0, r1] }, color: coat, bones: names })
     })
   }
   // spikes down the back
@@ -241,7 +241,7 @@ function spec(p: Plan): BodySpec {
       const c = along(L.hips, L.chest, t)
       const r = hipR + (chestR - hipR) * t
       const base: Vec3 = [0, c[1] + r * 0.82, c[2]]
-      parts.push({ shape: { tube: [base, [0, base[1] + r * 0.55, base[2] - r * 0.25]], r: [r * 0.16, 0.004] }, colour: accent, bones: ['body', 'chest'], density: 2 })
+      parts.push({ shape: { tube: [base, [0, base[1] + r * 0.55, base[2] - r * 0.25]], r: [r * 0.16, 0.004] }, color: accent, bones: ['body', 'chest'], density: 2 })
     }
   }
   // legs and feet
@@ -250,18 +250,18 @@ function spec(p: Plan): BodySpec {
       const th = L.bones.find((b) => b.name === `${s}Thigh${i}`)!, sh = L.bones.find((b) => b.name === `${s}Shin${i}`)!, ft = L.bones.find((b) => b.name === `${s}Foot${i}`)!
       const lr = Math.max(0.025, p.girth * (p.legs === 6 ? 0.28 : 0.38))
       const body = p.legs === 2 || i === 0 ? (L.bones[th.parent].name) : 'body'
-      parts.push({ shape: { tube: [th.head, sh.head], r: [lr, lr * 0.75] }, colour: coat, bones: [body, `${s}Thigh${i}`, `${s}Shin${i}`] })
-      parts.push({ shape: { tube: [sh.head, ft.head], r: [lr * 0.75, lr * 0.55] }, colour: coat, bones: [`${s}Thigh${i}`, `${s}Shin${i}`, `${s}Foot${i}`] })
-      parts.push({ shape: { tube: [ft.head, ft.tail!], r: [lr * 0.6, lr * 0.45], flat: 0.5 }, colour: mix(coat(ft.head, [0, 1, 0]), dark, 0.3), bones: [`${s}Shin${i}`, `${s}Foot${i}`] })
+      parts.push({ shape: { tube: [th.head, sh.head], r: [lr, lr * 0.75] }, color: coat, bones: [body, `${s}Thigh${i}`, `${s}Shin${i}`] })
+      parts.push({ shape: { tube: [sh.head, ft.head], r: [lr * 0.75, lr * 0.55] }, color: coat, bones: [`${s}Thigh${i}`, `${s}Shin${i}`, `${s}Foot${i}`] })
+      parts.push({ shape: { tube: [ft.head, ft.tail!], r: [lr * 0.6, lr * 0.45], flat: 0.5 }, color: mix(coat(ft.head, [0, 1, 0]), dark, 0.3), bones: [`${s}Shin${i}`, `${s}Foot${i}`] })
     }
   }
   if (p.arms && bone('lArm')) {
     for (const [s] of SIDES) {
       const a = L.bones.find((b) => b.name === `${s}Arm`)!, f = L.bones.find((b) => b.name === `${s}Forearm`)!
       const ar = Math.max(0.02, p.girth * 0.28)
-      parts.push({ shape: { tube: [a.head, f.head], r: [ar, ar * 0.8] }, colour: coat, bones: ['chest', `${s}Arm`, `${s}Forearm`] })
-      parts.push({ shape: { tube: [f.head, f.tail!], r: [ar * 0.8, ar * 0.6] }, colour: coat, bones: [`${s}Arm`, `${s}Forearm`] })
-      parts.push({ shape: { ball: f.tail!, r: [ar, ar * 0.8, ar] }, colour: mix(back, dark, 0.3), bones: [`${s}Forearm`] })
+      parts.push({ shape: { tube: [a.head, f.head], r: [ar, ar * 0.8] }, color: coat, bones: ['chest', `${s}Arm`, `${s}Forearm`] })
+      parts.push({ shape: { tube: [f.head, f.tail!], r: [ar * 0.8, ar * 0.6] }, color: coat, bones: [`${s}Arm`, `${s}Forearm`] })
+      parts.push({ shape: { ball: f.tail!, r: [ar, ar * 0.8, ar] }, color: mix(back, dark, 0.3), bones: [`${s}Forearm`] })
     }
   }
   return { bones: L.bones, parts, blend: Math.max(0.025, p.girth * 0.25) }
@@ -368,7 +368,7 @@ export function monsterSpecies(seed: number): Species {
     blurb: `A ${bits} ${p.name}${w}, made up from seed ${seed}. Every seed makes a different monster.`,
     detail: [3000, 10000, 30000, 60000],
     start: 10000,
-    looks: [{ id: 'own', label: 'Its own colours' }],
+    looks: [{ id: 'own', label: 'Its own colors' }],
     make: (count) => makeMonster(seed, count),
     moves: [
       { name: 'walk', label: 'Walk', doing: 'walking on the spot', seconds: strideOf(p), fps: 24, pose: monsterWalk(p) },

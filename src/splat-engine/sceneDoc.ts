@@ -13,7 +13,7 @@ import { box, cone, cut, cylinder, displace, ellipsoid, roof, sphere, torus, uni
  * pixel mode need.
  *
  * Units: about 1 is a small house, and a whole scene is about 4 across. y is up, the ground is y = 0, and the
- * camera starts on the +z side. Colours are '#rrggbb'.
+ * camera starts on the +z side. Colors are '#rrggbb'.
  */
 export interface SceneDoc {
   name: string
@@ -21,11 +21,11 @@ export interface SceneDoc {
   loop: number
   /** The baked sun: `from` points toward it. */
   light?: { from?: Vec3; ambient?: number; shadow?: number }
-  /** The colours the picture is drawn in, 2 to 32. */
+  /** The colors the picture is drawn in, 2 to 32. */
   palette: string[]
   /** The sky behind, top and bottom. Left out, the background is clear. */
   sky?: [string, string]
-  /** How far down the picture the sky's blend runs before it is all the bottom colour: 0.05 to 1, the whole way when left out. */
+  /** How far down the picture the sky's blend runs before it is all the bottom color: 0.05 to 1, the whole way when left out. */
   skyReach?: number
   look?: { dither?: number; glow?: number; outline?: boolean; edges?: boolean }
   /** Where the view starts. `swing` rocks it gently from side to side by that many degrees, once a loop. */
@@ -79,16 +79,16 @@ export type ShapeDoc =
 
 export type PaintDoc =
   | string
-  /** Stripes across an axis, `size` thick, taking the colours in turn. */
-  | { kind: 'bands'; axis: 'x' | 'y' | 'z'; size: number; colours: string[] }
-  /** Courses of bricks, tiles or planks: `size` is [length, height], `line` the colour between them. */
-  | { kind: 'bricks'; size: [number, number]; colours: string[]; line: string }
-  /** Six-sided cells `size` across, as honeycomb, scales or paving: each cell picks a colour (earlier ones commoner), with `line` between cells and, if given, `deep` in the middle of each, which reads as a hollow. */
-  | { kind: 'hex'; size: number; colours: string[]; line: string; deep?: string }
-  /** Small flecks: each cell of `size` picks one colour; earlier colours are commoner. */
-  | { kind: 'speckle'; size: number; colours: string[] }
+  /** Stripes across an axis, `size` thick, taking the colors in turn. */
+  | { kind: 'bands'; axis: 'x' | 'y' | 'z'; size: number; colors: string[] }
+  /** Courses of bricks, tiles or planks: `size` is [length, height], `line` the color between them. */
+  | { kind: 'bricks'; size: [number, number]; colors: string[]; line: string }
+  /** Six-sided cells `size` across, as honeycomb, scales or paving: each cell picks a color (earlier ones commoner), with `line` between cells and, if given, `deep` in the middle of each, which reads as a hollow. */
+  | { kind: 'hex'; size: number; colors: string[]; line: string; deep?: string }
+  /** Small flecks: each cell of `size` picks one color; earlier colors are commoner. */
+  | { kind: 'speckle'; size: number; colors: string[] }
   /** Soft-edged patches `size` across, as moss on rock or light on water. */
-  | { kind: 'patches'; size: number; colours: string[] }
+  | { kind: 'patches'; size: number; colors: string[] }
   /** One paint where the surface faces up, another on the sides, another underneath. */
   | { kind: 'faces'; top?: PaintDoc; side: PaintDoc; under?: PaintDoc }
   /** One paint under a height (or left of x, or behind z), another over it. */
@@ -109,7 +109,7 @@ export type MoveDoc =
 
 export interface LightDoc {
   at: Vec3
-  colour: string
+  color: string
   /** 1 is a torch; 3 lights dark ground brightly. */
   strength: number
   /** How far it reaches. */
@@ -171,9 +171,9 @@ export function checkScene(doc: unknown): string[] {
     if (!Array.isArray(v) || v.length !== n) { bad(at, `must be ${n} numbers`); return false }
     return v.map((c, i) => num(c, `${at}[${i}]`, min, max)).every(Boolean)
   }
-  const hex = (v: unknown, at: string) => { if (typeof v !== 'string' || !HEX.test(v)) bad(at, "must be a colour like '#a37a52'") }
+  const hex = (v: unknown, at: string) => { if (typeof v !== 'string' || !HEX.test(v)) bad(at, "must be a color like '#a37a52'") }
   const hexes = (v: unknown, at: string, min: number, max: number) => {
-    if (!Array.isArray(v) || v.length < min || v.length > max) { bad(at, `must be ${min} to ${max} colours`); return }
+    if (!Array.isArray(v) || v.length < min || v.length > max) { bad(at, `must be ${min} to ${max} colors`); return }
     v.forEach((c, i) => hex(c, `${at}[${i}]`))
   }
   const axis = (v: unknown, at: string) => { if (!AXES.includes(v as string)) bad(at, "must be 'x', 'y' or 'z'") }
@@ -249,13 +249,13 @@ export function checkScene(doc: unknown): string[] {
   }
   const paint = (p: unknown, at: string, depth: number) => {
     if (typeof p === 'string') { hex(p, at); return }
-    if (!obj(p)) { bad(at, 'must be a colour or a paint'); return }
+    if (!obj(p)) { bad(at, 'must be a color or a paint'); return }
     if (depth > MAX_DEPTH) { bad(at, 'paints are nested too deep'); return }
     switch (p.kind) {
-      case 'bands': axis(p.axis, `${at}.axis`); num(p.size, `${at}.size`, 0.005, REACH); hexes(p.colours, `${at}.colours`, 2, 8); break
-      case 'bricks': vec(p.size, `${at}.size`, 0.01, REACH, 2); hexes(p.colours, `${at}.colours`, 1, 8); hex(p.line, `${at}.line`); break
-      case 'hex': num(p.size, `${at}.size`, 0.03, REACH); hexes(p.colours, `${at}.colours`, 1, 8); hex(p.line, `${at}.line`); if (p.deep !== undefined) hex(p.deep, `${at}.deep`); break
-      case 'speckle': case 'patches': num(p.size, `${at}.size`, 0.005, REACH); hexes(p.colours, `${at}.colours`, 2, 8); break
+      case 'bands': axis(p.axis, `${at}.axis`); num(p.size, `${at}.size`, 0.005, REACH); hexes(p.colors, `${at}.colors`, 2, 8); break
+      case 'bricks': vec(p.size, `${at}.size`, 0.01, REACH, 2); hexes(p.colors, `${at}.colors`, 1, 8); hex(p.line, `${at}.line`); break
+      case 'hex': num(p.size, `${at}.size`, 0.03, REACH); hexes(p.colors, `${at}.colors`, 1, 8); hex(p.line, `${at}.line`); if (p.deep !== undefined) hex(p.deep, `${at}.deep`); break
+      case 'speckle': case 'patches': num(p.size, `${at}.size`, 0.005, REACH); hexes(p.colors, `${at}.colors`, 2, 8); break
       case 'faces':
         paint(p.side, `${at}.side`, depth + 1)
         if (p.top !== undefined) paint(p.top, `${at}.top`, depth + 1)
@@ -316,7 +316,7 @@ export function checkScene(doc: unknown): string[] {
     else doc.lights.forEach((l: unknown, i: number) => {
       const at = `lights[${i}]`
       if (!obj(l)) { bad(at, 'must be an object'); return }
-      vec(l.at, `${at}.at`); hex(l.colour, `${at}.colour`); num(l.strength, `${at}.strength`, 0, 8); num(l.range, `${at}.range`, 0.05, REACH)
+      vec(l.at, `${at}.at`); hex(l.color, `${at}.color`); num(l.strength, `${at}.strength`, 0, 8); num(l.range, `${at}.range`, 0.05, REACH)
       if (l.flicker !== undefined) {
         if (!obj(l.flicker)) bad(`${at}.flicker`, 'must be an object')
         else { num(l.flicker.by, `${at}.flicker.by`, 0, 1); whole(l.flicker.times, `${at}.flicker.times`) }
@@ -370,11 +370,11 @@ function toPaint(p: PaintDoc, cell: number): Paint {
   if (typeof p === 'string') { const c = unit(p); return () => c }
   switch (p.kind) {
     case 'bands': {
-      const cs = p.colours.map(unit), i = IDX[p.axis], size = Math.max(p.size, cell)
+      const cs = p.colors.map(unit), i = IDX[p.axis], size = Math.max(p.size, cell)
       return (q) => cs[((Math.floor(q[i] / size) % cs.length) + cs.length) % cs.length]
     }
     case 'bricks': {
-      const cs = p.colours.map(unit), line = unit(p.line)
+      const cs = p.colors.map(unit), line = unit(p.line)
       const w = Math.max(p.size[0], cell * 2.5), h = Math.max(p.size[1], cell * 2.2)
       return (q, n) => {
         // along the wall: whichever of x and z the surface runs along (round a tower, the angle would be better, but this holds up)
@@ -386,7 +386,7 @@ function toPaint(p: PaintDoc, cell: number): Paint {
       }
     }
     case 'hex': {
-      const cs = p.colours.map(unit), line = unit(p.line), deep = p.deep === undefined ? undefined : unit(p.deep)
+      const cs = p.colors.map(unit), line = unit(p.line), deep = p.deep === undefined ? undefined : unit(p.deep)
       // wide enough that the line, the cell and its hollow each get a grid cell
       const w = Math.max(p.size, cell * (deep ? 5 : 3.5)), dy = w * 0.8660254
       const edge = 1 - Math.min(0.45, (cell * 1.1) / (w / 2))
@@ -409,12 +409,12 @@ function toPaint(p: PaintDoc, cell: number): Paint {
       }
     }
     case 'speckle': {
-      const cs = p.colours.map(unit), size = Math.max(p.size, cell)
-      // squared, so the first colour is the commonest
+      const cs = p.colors.map(unit), size = Math.max(p.size, cell)
+      // squared, so the first color is the commonest
       return (q) => cs[Math.floor(hash(Math.floor(q[0] / size), Math.floor(q[1] / size), Math.floor(q[2] / size)) ** 2 * cs.length)]
     }
     case 'patches': {
-      const cs = p.colours.map(unit), k = 0.5 / Math.max(p.size, cell * 2)
+      const cs = p.colors.map(unit), k = 0.5 / Math.max(p.size, cell * 2)
       return (q) => cs[Math.min(cs.length - 1, Math.floor(((wobble(q[0] * k, q[1] * k, q[2] * k) + 1) / 2) * cs.length))]
     }
     case 'faces': {
@@ -474,7 +474,7 @@ export function compileScene(doc: SceneDoc): CompiledScene {
     },
     spec(spacing) {
       const thin = spacing * 0.75
-      const parts: VoxelPart[] = doc.parts.map((p) => ({ shape: toShape(p.shape, thin), colour: toPaint(p.paint, spacing), bone: p.bone ?? 'land', glow: p.glow, noShadow: p.noShadow }))
+      const parts: VoxelPart[] = doc.parts.map((p) => ({ shape: toShape(p.shape, thin), color: toPaint(p.paint, spacing), bone: p.bone ?? 'land', glow: p.glow, noShadow: p.noShadow }))
       // only what the scene sets: a key left undefined would wipe the builder's default
       const light: VoxelSpec['light'] = {}
       if (doc.light?.from) light.dir = doc.light.from
@@ -512,11 +512,11 @@ export function compileScene(doc: SceneDoc): CompiledScene {
     lights(t) {
       const u = t / doc.loop
       return lights.map((l) => {
-        const c = unit(l.colour)
+        const c = unit(l.color)
         // two flickers out of step, so it doesn't beat like a clock, but still loops
         const k = l.strength * (l.flicker ? 1 + l.flicker.by * (0.6 * Math.sin(u * l.flicker.times * TAU) + 0.4 * Math.sin(u * l.flicker.times * 3 * TAU + 1.3)) : 1)
         const a = l.circle ? u * l.circle.times * TAU : 0, r = l.circle?.r ?? 0
-        return { position: [l.at[0] + Math.cos(a) * r, l.at[1], l.at[2] - Math.sin(a) * r], colour: [linear(c[0]) * k, linear(c[1]) * k, linear(c[2]) * k], range: l.range }
+        return { position: [l.at[0] + Math.cos(a) * r, l.at[1], l.at[2] - Math.sin(a) * r], color: [linear(c[0]) * k, linear(c[1]) * k, linear(c[2]) * k], range: l.range }
       })
     },
   }

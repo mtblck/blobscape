@@ -21,7 +21,7 @@ interface TubeOptions {
   /** Height of the tube's axis. */
   y: number
   count: number
-  colour: (x: number, angle: number, n: Vec3) => Vec3
+  color: (x: number, angle: number, n: Vec3) => Vec3
   seed?: number
 }
 
@@ -69,15 +69,15 @@ export function tube(o: TubeOptions, into = new Blobs(o.count + 8)): Blobs {
       p = [x, o.y + Math.cos(ang) * ry, Math.sin(ang) * rz]
       n = norm([0, Math.cos(ang) / ry, Math.sin(ang) / rz])
     }
-    const base = o.colour(x, ang, n)
+    const base = o.color(x, ang, n)
     const lit = 0.62 + 0.38 * Math.max(0, n[0] * LIGHT[0] + n[1] * LIGHT[1] + n[2] * LIGHT[2])
     const k = lit * (0.94 + rand() * 0.12)
     const j = 0.8 + rand() * 0.4
     into.push({
-      centre: p,
+      center: p,
       scale: [size * j, size * j * (0.75 + rand() * 0.5), size * 0.22],
       quat: quatFacing(n),
-      colour: [Math.min(1, base[0] * k), Math.min(1, base[1] * k), Math.min(1, base[2] * k)],
+      color: [Math.min(1, base[0] * k), Math.min(1, base[1] * k), Math.min(1, base[2] * k)],
       opacity: 0.94,
     })
   }
@@ -86,20 +86,20 @@ export function tube(o: TubeOptions, into = new Blobs(o.count + 8)): Blobs {
 
 /**
  * Two-bone weights from a blob's rest x: 0 means it follows bone 0 only, 1
- * bone 1 only. `centre` is where the switch happens and `width` how far it is
+ * bone 1 only. `center` is where the switch happens and `width` how far it is
  * spread (0 is a hard cut). A smoothstep, so the blend has no corners.
  */
-export function blendAt(x: number, centre: number, width: number) {
-  if (width <= 1e-4) return x >= centre ? 1 : 0
-  const t = Math.min(1, Math.max(0, (x - (centre - width / 2)) / width))
+export function blendAt(x: number, center: number, width: number) {
+  if (width <= 1e-4) return x >= center ? 1 : 0
+  const t = Math.min(1, Math.max(0, (x - (center - width / 2)) / width))
   return t * t * (3 - 2 * t)
 }
 
 /** Rewrites every blob's weights between bones 0 and 1 by its rest x. */
-export function weightByX(m: RigModel, centre: number, width: number) {
+export function weightByX(m: RigModel, center: number, width: number) {
   const { blobs, skin } = m
   for (let i = 0; i < blobs.count; i++) {
-    const w = blendAt(blobs.centre[i * 3], centre, width)
+    const w = blendAt(blobs.center[i * 3], center, width)
     skin.joints[i * 4] = 0; skin.joints[i * 4 + 1] = 1; skin.joints[i * 4 + 2] = 0; skin.joints[i * 4 + 3] = 0
     skin.weights[i * 4] = 1 - w; skin.weights[i * 4 + 1] = w; skin.weights[i * 4 + 2] = 0; skin.weights[i * 4 + 3] = 0
   }
@@ -129,7 +129,7 @@ export function caterpillar(count = 2600): RigModel {
       const r = R * (0.86 + 0.14 * seg(x)) * (x > 0.75 ? 1.05 : 1) * (x < -0.9 ? 0.85 + (x + 1.15) * 0.6 : 1)
       return [r, r * 1.05]
     },
-    colour: (x, _a, n) => {
+    color: (x, _a, n) => {
       if (x > 0.82) {
         // the head: red, with two dark eyes facing forward
         const eye = n[0] > 0.55 && Math.abs(Math.abs(n[2]) - 0.42) < 0.17 && n[1] > 0.05
@@ -159,7 +159,7 @@ export function arm(count = 3200): RigModel {
       const r = x < 0 ? 0.24 - 0.03 * ((x + 1.2) / 1.2) : x < 0.85 ? 0.21 - 0.04 * (x / 0.85) : 0.2
       return [r, r]
     },
-    colour: (x) => (x > 0.85 ? SKIN : Math.abs(((x + 1.3) / 0.2) % 2) < 1 ? SLEEVE : STRIPE),
+    color: (x) => (x > 0.85 ? SKIN : Math.abs(((x + 1.3) / 0.2) % 2) < 1 ? SLEEVE : STRIPE),
   })
   const skin = emptySkin(blobs.count)
   const skeleton = twoBones(['upper', 'fore'], 0.9, -1.2)
@@ -182,7 +182,7 @@ export function wrist(count = 3200): RigModel {
       const t = Math.min(1, (x + 0.05) / 0.3)
       return [0.2 - 0.1 * t, 0.2 + 0.12 * t]
     },
-    colour: (x, ang, n) => {
+    color: (x, ang, n) => {
       if (x < -0.05) return Math.abs(Math.sin(ang)) < 0.28 && n[1] > 0 ? LINE : SLEEVE
       return n[1] > 0.3 ? (Math.abs(n[2]) < 0.25 ? LINE : SKIN) : PALM
     },

@@ -12,7 +12,7 @@ test('the slime and the watch go into a sandbox scene like any creature', () => 
     for (const m of sp.moves) {
       poseAll([{ ...a, move: m.name }], () => 0.37, out, new WeakMap())
       assert.equal(out.count, a.body.blobs.count)
-      for (let i = 0; i < out.count * 3; i++) assert.ok(Number.isFinite(out.centre[i]), `${sp.id} ${m.name}`)
+      for (let i = 0; i < out.count * 3; i++) assert.ok(Number.isFinite(out.center[i]), `${sp.id} ${m.name}`)
     }
   }
 })

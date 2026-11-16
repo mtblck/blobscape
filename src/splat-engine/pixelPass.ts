@@ -9,7 +9,7 @@ const { Fn, If, Loop, abs, dot, float, floor, int, max, min, mod, pow, select, s
 
 const SIDES: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]]
 
-/** A stored pixel is taken for a palette colour when it is this close to it in OKLab: the art keeps palette colours exactly, so this only allows for rounding. */
+/** A stored pixel is taken for a palette color when it is this close to it in OKLab: the art keeps palette colors exactly, so this only allows for rounding. */
 const SAME = 0.004
 
 const MAX_PALETTE = MAX_PALETTE_SIZE
@@ -19,18 +19,18 @@ const MAX_PALETTE = MAX_PALETTE_SIZE
  * turns it into pixel art and scales it up in whole pixels, with no smoothing.
  *
  * The pass is the GPU twin of `pixelArt` in splat-core/pixel.ts (change one,
- * change both): alpha cut, glow from bright pixels, nearest palette colour in
+ * change both): alpha cut, glow from bright pixels, nearest palette color in
  * OKLab with a Bayer dither, edge lines inside the scene, an outline on the
  * empty pixels that touch it, and a sky behind. It runs once per art pixel,
- * into `art`, which keeps display (sRGB) colour so a palette colour is stored
+ * into `art`, which keeps display (sRGB) color so a palette color is stored
  * exactly; the screen then gets a plain copy, scaled up. The art of the frame
  * before is kept too: a look with `steady` reads it so a pixel between two
- * palette colours does not flip from frame to frame.
+ * palette colors does not flip from frame to frame.
  */
 export class PixelPass {
   /** The scene, drawn small. Linear and premultiplied, as any render target. */
   readonly small = new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter })
-  /** The scene's parts, drawn small (`SplatWorld.parts`): where the colour changes, one part ends and another begins. Only drawn for a look with `parts`. */
+  /** The scene's parts, drawn small (`SplatWorld.parts`): where the color changes, one part ends and another begins. Only drawn for a look with `parts`. */
   readonly ids = new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter })
   private readonly parted = uniform(0)
   /** The art of this frame and of the one before: each frame is drawn into the older of the two. */
@@ -80,7 +80,7 @@ export class PixelPass {
     this.setLook(look)
   }
 
-  /** The finished art at its own size, in display colour, for reading back (tests, saving) and for the screen. */
+  /** The finished art at its own size, in display color, for reading back (tests, saving) and for the screen. */
   get art() { return this.frames[this.now] }
   /** The art of the frame before, when this frame was drawn against it (a look with `steady`): what `pixelArt` needs to give the same answer. */
   get before() { return this.used ? this.frames[1 - this.now] : undefined }
@@ -160,7 +160,7 @@ export class PixelPass {
     const toLinear = (c: unknown) => select(float(c).lessThanEqual(0.04045), float(c).div(12.92), pow(float(c).add(0.055).div(1.055), 2.4))
     const each = (v: { x: unknown; y: unknown; z: unknown }, f: (c: unknown) => unknown) => vec3(f(v.x), f(v.y), f(v.z))
     const cbrt = (x: unknown) => pow(max(x, 0), 1 / 3)
-    /** OKLab of an sRGB colour, 0–255 per channel: `oklab` in pixel.ts. */
+    /** OKLab of an sRGB color, 0–255 per channel: `oklab` in pixel.ts. */
     const toLab = (c: unknown) => {
       const lin = each(max(c, 0).div(255), toLinear)
       const l = cbrt(dot(lin, vec3(0.4122214708, 0.5363325363, 0.0514459929)))
@@ -207,13 +207,13 @@ export class PixelPass {
       const beside = sides[0].solid.or(sides[1].solid).or(sides[2].solid).or(sides[3].solid)
 
       const out = vec4(0).toVar()
-      const colour = vec3(0).toVar()
+      const color = vec3(0).toVar()
       const shown = float(0).toVar()
       const spread = float(this.dither).toVar()
       If(here.solid, () => {
-        colour.assign(here.rgb.add(spill))
+        color.assign(here.rgb.add(spill))
         shown.assign(1)
-        // a line on the darker side of a jump in colour
+        // a line on the darker side of a jump in color
         If(this.edges.greaterThan(0).or(this.parted.greaterThan(0)), () => {
           const a = toLab(here.rgb).toVar()
           const jump = float(0).toVar()
@@ -224,7 +224,7 @@ export class PixelPass {
             const d = b.sub(a)
             const far = dot(d, d).greaterThan(EDGE_JUMP * EDGE_JUMP)
             jump.assign(max(jump, select(this.edges.greaterThan(0).and(n.solid).and(b.x.greaterThan(a.x)).and(far), 1, 0)))
-            // and where another part begins in a colour too close for that: on the lower-numbered part, so the line keeps its side as lights flicker
+            // and where another part begins in a color too close for that: on the lower-numbered part, so the line keeps its side as lights flicker
             If(this.parted.greaterThan(0), () => {
               const other = partAt(dx, dy).toVar()
               const gap = abs(other.rgb.sub(part.rgb))
@@ -233,27 +233,27 @@ export class PixelPass {
               jump.assign(max(jump, select(n.solid.and(differ).and(far.not()).and(number(part).lessThan(number(other))), 1, 0)))
             })
           })
-          colour.mulAssign(float(1).sub(jump.mul(select(this.edges.greaterThan(0), this.edges, 1)).mul(EDGE_DARK)))
+          color.mulAssign(float(1).sub(jump.mul(select(this.edges.greaterThan(0), this.edges, 1)).mul(EDGE_DARK)))
         })
       })
         .ElseIf(this.lined.greaterThan(0).and(beside), () => { out.assign(vec4(this.line, 1)) })
         .ElseIf(this.skied.greaterThan(0), () => {
           const t = min(row.add(0.5).div(res.y).div(this.skyReach), 1).toVar()
-          colour.assign(this.skyTop.add(this.skyLow.sub(this.skyTop).mul(t)).add(spill))
+          color.assign(this.skyTop.add(this.skyLow.sub(this.skyTop).mul(t)).add(spill))
           // a sky that stops short eases its dither away over the last quarter of the blend, so it ends flat with no seam
           spread.assign(max(this.dither, select(this.skyReach.lessThan(1), min(float(1).sub(t).mul(4), 1), 1).mul(SKY_DITHER)))
           shown.assign(1)
         })
-        .ElseIf(max(spill.x, max(spill.y, spill.z)).greaterThan(GLOW_SHOWS), () => { colour.assign(spill); shown.assign(1) })
+        .ElseIf(max(spill.x, max(spill.y, spill.z)).greaterThan(GLOW_SHOWS), () => { color.assign(spill); shown.assign(1) })
 
       If(shown.greaterThan(0), () => {
-        colour.assign(min(colour, 255))
+        color.assign(min(color, 255))
         If(this.count.greaterThan(0), () => {
           const off = bayer.element(int(mod(row, 4).mul(4).add(mod(cell.x, 4)))).div(16).sub(0.5).mul(spread.mul(48))
-          const lab = toLab(colour.add(off)).toVar()
+          const lab = toLab(color.add(off)).toVar()
           const best = float(1e9).toVar()
           const pick = vec3(0).toVar()
-          // steady pixels: the palette colour this pixel had the frame before, and how far that is from what it wants now
+          // steady pixels: the palette color this pixel had the frame before, and how far that is from what it wants now
           const was = this.beforeTex.sample(vec2(cell.x.add(0.5).div(res.x), float(1).sub(cell.y.add(0.5).div(res.y))))
           const wasLab = toLab(was.rgb.mul(255)).toVar()
           const wasOff = float(1e9).toVar()
@@ -272,7 +272,7 @@ export class PixelPass {
           If(this.sticky.greaterThan(0).and(here.solid).and(was.a.greaterThan(0.5)).and(wasOff.lessThan(SAME * SAME)).and(sqrt(wasFar).lessThanEqual(sqrt(best).add(this.sticky))), () => { pick.assign(wasPick) })
           out.assign(vec4(pick, 1))
         }).Else(() => {
-          out.assign(vec4(colour.div(255), 1))
+          out.assign(vec4(color.div(255), 1))
         })
       })
       return out
@@ -302,7 +302,7 @@ export class PixelPass {
     }
   }
 
-  /** The art onto the output: every screen pixel inside one art pixel takes that pixel's colour. */
+  /** The art onto the output: every screen pixel inside one art pixel takes that pixel's color. */
   private toScreen() {
     const toLinear = (c: unknown) => select(float(c).lessThanEqual(0.04045), float(c).div(12.92), pow(float(c).add(0.055).div(1.055), 2.4))
     return Fn(() => {

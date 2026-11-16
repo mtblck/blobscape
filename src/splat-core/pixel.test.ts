@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { alphaCut, autoPalette, downsample, makeFrame, outline, pixelArt, quantize, lookColours, snapColours, removeStrays, countSolid, type Rgb } from './pixel.ts'
+import { alphaCut, autoPalette, downsample, makeFrame, outline, pixelArt, quantize, lookColors, snapColors, removeStrays, countSolid, type Rgb } from './pixel.ts'
 
 const solid = (w: number, h: number, on: (x: number, y: number) => boolean, rgb = [200, 40, 40]) => {
   const f = makeFrame(w, h)
@@ -8,11 +8,11 @@ const solid = (w: number, h: number, on: (x: number, y: number) => boolean, rgb 
   return f
 }
 
-test('downsample averages colour by coverage, so a half-covered pixel keeps its colour', () => {
+test('downsample averages color by coverage, so a half-covered pixel keeps its color', () => {
   // 2x2 block: two red opaque samples, two empty
   const src = new Uint8Array([255, 0, 0, 255, 255, 0, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0])
   const f = downsample(src, 2, 2, { premultiplied: false, flipY: false })
-  // colour stays pure red; coverage is 2 of 4 samples = 510/4, rounded → 128
+  // color stays pure red; coverage is 2 of 4 samples = 510/4, rounded → 128
   assert.deepEqual([...f.data], [255, 0, 0, 128])
 })
 
@@ -38,13 +38,13 @@ test('alphaCut makes alpha binary', () => {
   assert.equal(c.data[7], 255)
 })
 
-test('quantize snaps to the nearest palette colour', () => {
+test('quantize snaps to the nearest palette color', () => {
   const f = solid(1, 1, () => true, [250, 10, 10])
   const q = quantize(f, [[0, 0, 0], [255, 0, 0], [0, 0, 255]], 0)
   assert.deepEqual([...q.data.slice(0, 3)], [255, 0, 0])
 })
 
-test('autoPalette finds the two colours of a two-colour image', () => {
+test('autoPalette finds the two colors of a two-color image', () => {
   const f = solid(8, 8, () => true)
   for (let i = 0; i < 32; i++) f.data.set([20, 120, 220, 255], i * 4)
   const p = autoPalette([f], 2)
@@ -58,7 +58,7 @@ test('removeStrays drops lone pixels but keeps shapes', () => {
   assert.equal(countSolid(removeStrays(f)), 4)
 })
 
-test('outline rings the silhouette with 4-neighbours', () => {
+test('outline rings the silhouette with 4-neighbors', () => {
   const f = solid(3, 3, (x, y) => x === 1 && y === 1)
   const o = outline(f, [0, 0, 0])
   assert.equal(countSolid(o), 5)
@@ -80,7 +80,7 @@ test('pixelArt glow lights the pixels round a bright one, empty ones too, and le
   f.data.set([255, 240, 180, 255], (3 * 9 + 4) * 4)
   const look = { palette: [], dither: 0, outline: null, glow: 3 }
   const lit = pixelArt(f, look)
-  // beside the lamp: empty before, lit now, in the lamp's colour
+  // beside the lamp: empty before, lit now, in the lamp's color
   const i = (3 * 9 + 5) * 4
   assert.equal(lit.data[i + 3], 255)
   assert.ok(lit.data[i] > lit.data[i + 2])
@@ -92,16 +92,16 @@ test('pixelArt glow lights the pixels round a bright one, empty ones too, and le
   assert.deepEqual([...dull.data.subarray(8 * 9 * 4, 8 * 9 * 4 + 3)], [60, 50, 70])
 })
 
-test('snapColours puts pixels a level or two off back on the palette, and leaves empty ones alone', () => {
+test('snapColors puts pixels a level or two off back on the palette, and leaves empty ones alone', () => {
   const f = solid(2, 1, (x) => x === 0, [198, 42, 39])
   const look = { palette: PAL, dither: 0, outline: [1, 2, 3] as Rgb, glow: 0 }
-  snapColours(f, lookColours(look))
+  snapColors(f, lookColors(look))
   assert.deepEqual([...f.data], [200, 40, 40, 255, 0, 0, 0, 0])
-  assert.equal(lookColours(look).length, 4)
-  assert.equal(lookColours({ ...look, palette: [] }).length, 0)
+  assert.equal(lookColors(look).length, 4)
+  assert.equal(lookColors({ ...look, palette: [] }).length, 0)
 })
 
-test('pixelArt edge lines darken the dark side of a jump in colour, one pixel wide, and nothing else', () => {
+test('pixelArt edge lines darken the dark side of a jump in color, one pixel wide, and nothing else', () => {
   const f = makeFrame(6, 1)
   for (let x = 0; x < 6; x++) f.data.set(x < 3 ? [40, 60, 120, 255] : [230, 220, 200, 255], x * 4)
   const art = pixelArt(f, { palette: [], dither: 0, outline: null, glow: 0, edges: 1 })
@@ -109,13 +109,13 @@ test('pixelArt edge lines darken the dark side of a jump in colour, one pixel wi
   assert.deepEqual(at(1), [40, 60, 120])
   assert.ok(at(2)[2] < 60, `the dark pixel on the edge: ${at(2)}`)
   assert.deepEqual(at(3), [230, 220, 200])
-  // close colours make no line
+  // close colors make no line
   const g = makeFrame(2, 1)
   g.data.set([40, 60, 120, 255, 48, 66, 126, 255])
   assert.deepEqual([...pixelArt(g, { palette: [], dither: 0, outline: null, glow: 0, edges: 1 }).data], [...g.data])
 })
 
-test('pixelArt fills the empty pixels with the sky, top colour to bottom, in palette colours, and leaves the scene and its outline alone', () => {
+test('pixelArt fills the empty pixels with the sky, top color to bottom, in palette colors, and leaves the scene and its outline alone', () => {
   const f = makeFrame(5, 16)
   f.data.set([200, 40, 40, 255], (8 * 5 + 2) * 4)
   const sky: [Rgb, Rgb] = [[20, 16, 24], [250, 240, 200]]
@@ -124,14 +124,14 @@ test('pixelArt fills the empty pixels with the sky, top colour to bottom, in pal
   assert.equal(countSolid(art), 5 * 16)
   assert.deepEqual(at(2, 8), [200, 40, 40, 255])
   assert.deepEqual(at(1, 8), [1, 2, 3, 255])
-  // the sky dithers even when the scene doesn't, so both end colours show somewhere and the top is mostly the top colour
+  // the sky dithers even when the scene doesn't, so both end colors show somewhere and the top is mostly the top color
   const dark = (y: number) => [0, 1, 2, 3, 4].filter((x) => at(x, y)[0] === 20).length
   assert.ok(dark(0) >= 4 && dark(15) === 0, `${dark(0)} dark at the top, ${dark(15)} at the bottom`)
   // without a sky the same pixels stay clear
   assert.equal(countSolid(pixelArt(f, { palette: PAL, dither: 0, outline: null, glow: 0 })), 1)
 })
 
-test('a sky with a reach is all its bottom colour below that share of the picture', () => {
+test('a sky with a reach is all its bottom color below that share of the picture', () => {
   const f = makeFrame(4, 16)
   const art = pixelArt(f, { palette: PAL, dither: 0, outline: null, glow: 0, sky: [[250, 240, 200], [20, 16, 24], 0.5] })
   const at = (x: number, y: number) => [...art.data.subarray((y * 4 + x) * 4, (y * 4 + x) * 4 + 3)]
@@ -140,7 +140,7 @@ test('a sky with a reach is all its bottom colour below that share of the pictur
 })
 
 test('a sky that stops short ends flat: its dither is gone by the end of the blend, and a bad reach means the whole way', () => {
-  // a near neighbour of the bottom colour, which the sky's own dither would flip some pixels to
+  // a near neighbor of the bottom color, which the sky's own dither would flip some pixels to
   const pal: Rgb[] = [[20, 16, 24], [30, 26, 34], [250, 240, 200]]
   const f = makeFrame(8, 32)
   const sky = (reach?: number) => pixelArt(f, { palette: pal, dither: 0, outline: null, glow: 0, sky: [[250, 240, 200], [20, 16, 24], reach] })
@@ -150,32 +150,32 @@ test('a sky that stops short ends flat: its dither is gone by the end of the ble
   for (const bad of [0, -1, NaN, 2]) assert.deepEqual(sky(bad).data, whole.data)
 })
 
-test('pixelArt with steady keeps a pixel on the colour it had when the other is only a little closer, and lets a clear change through', () => {
+test('pixelArt with steady keeps a pixel on the color it had when the other is only a little closer, and lets a clear change through', () => {
   const pal: Rgb[] = [[100, 100, 100], [140, 140, 140], [250, 240, 200]]
   const look = { palette: pal, dither: 0, outline: null, glow: 0, steady: 0.04 }
-  // three pixels: just on the light side of the line between the two greys, far on the light side, and empty
+  // three pixels: just on the light side of the line between the two grays, far on the light side, and empty
   const f = makeFrame(3, 1)
   f.data.set([122, 122, 122, 255, 139, 139, 139, 255, 0, 0, 0, 0])
   const before = makeFrame(3, 1)
   before.data.set([100, 100, 100, 255, 100, 100, 100, 255, 100, 100, 100, 255])
   const px = (a: { data: Uint8ClampedArray }, x: number) => [...a.data.subarray(x * 4, x * 4 + 4)]
-  assert.deepEqual(px(pixelArt(f, look), 0), [140, 140, 140, 255], 'with no frame before, the closest colour')
+  assert.deepEqual(px(pixelArt(f, look), 0), [140, 140, 140, 255], 'with no frame before, the closest color')
   const art = pixelArt(f, look, before)
   assert.deepEqual(px(art, 0), [100, 100, 100, 255], 'nearly as close: it stays')
   assert.deepEqual(px(art, 1), [140, 140, 140, 255], 'clearly closer: it changes')
   assert.deepEqual(px(art, 2), [0, 0, 0, 0], 'an empty pixel takes nothing from the frame before')
-  // off, or a frame before of another size, or a colour before that is not in the palette: as if there were none
+  // off, or a frame before of another size, or a color before that is not in the palette: as if there were none
   assert.deepEqual(px(pixelArt(f, { ...look, steady: 0 }, before), 0), [140, 140, 140, 255])
   assert.deepEqual(px(pixelArt(f, look, makeFrame(2, 1)), 0), [140, 140, 140, 255])
   before.data.set([101, 100, 100, 255])
   assert.deepEqual(px(pixelArt(f, look, before), 0), [140, 140, 140, 255])
-  // the sky is the same every frame: it never takes the colour a pixel had
+  // the sky is the same every frame: it never takes the color a pixel had
   const sky = pixelArt(f, { ...look, sky: [[140, 140, 140], [140, 140, 140]] }, before)
   assert.deepEqual(px(sky, 2), [140, 140, 140, 255])
 })
 
-test('pixelArt with parts draws a line where one part meets another of the same colour, on one side only, and none without the map', () => {
-  // one flat colour, left half one part and right half another
+test('pixelArt with parts draws a line where one part meets another of the same color, on one side only, and none without the map', () => {
+  // one flat color, left half one part and right half another
   const f = solid(6, 3, () => true, [120, 90, 60])
   const map = makeFrame(6, 3)
   for (let y = 0; y < 3; y++) for (let x = 0; x < 6; x++) map.data.set([x < 3 ? 1 : 2, 0, 1, 255], (y * 6 + x) * 4)
@@ -185,13 +185,13 @@ test('pixelArt with parts draws a line where one part meets another of the same 
   assert.deepEqual(dark(art), [false, false, true, false, false, false], 'the lower-numbered part carries the line, one pixel wide')
   assert.deepEqual(dark(pixelArt(f, look)), [false, false, false, false, false, false], 'no map, no line')
   assert.deepEqual(dark(pixelArt(f, { ...look, parts: false }, undefined, map)), [false, false, false, false, false, false], 'switched off, no line')
-  // a much lighter part beside a darker one: the colour line on the darker side is the only line, whatever the parts' numbers
+  // a much lighter part beside a darker one: the color line on the darker side is the only line, whatever the parts' numbers
   const g = solid(6, 3, () => true, [120, 90, 60])
   for (let y = 0; y < 3; y++) for (let x = 0; x < 3; x++) g.data.set([235, 205, 150, 255], (y * 6 + x) * 4)
   const lit = pixelArt(g, look, undefined, map)
   assert.equal(lit.data[(6 + 2) * 4], 235, 'the lighter side is left alone')
   assert.ok(lit.data[(6 + 3) * 4] < 120, 'the darker side takes the line')
-  // and with colour lines off, parts that far apart in colour need no line of their own; parts of one colour still get theirs
+  // and with color lines off, parts that far apart in color need no line of their own; parts of one color still get theirs
   const only = { ...look, edges: 0 }
   assert.equal(pixelArt(g, only, undefined, map).data[(6 + 3) * 4], 120)
   assert.deepEqual(dark(pixelArt(f, only, undefined, map)), [false, false, true, false, false, false])

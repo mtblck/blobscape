@@ -1,4 +1,4 @@
-import { SH_C0, srgbToLinear } from '../splat-core/colour.ts'
+import { SH_C0, srgbToLinear } from '../splat-core/color.ts'
 import { Blobs, type Vec3 } from '../splat-core/blobs.ts'
 import { Skeleton, norm4, packWeights, type Bone, type Skin } from './rig.ts'
 import type { SplatMesh } from './mesh.ts'
@@ -7,14 +7,14 @@ import type { SplatMesh } from './mesh.ts'
  * Rigged splats in a .glb.
  *
  * The blobs are a KHR_gaussian_splatting primitive (POINTS, with SCALE,
- * ROTATION, OPACITY and the degree-0 colour as extra attributes), so any
+ * ROTATION, OPACITY and the degree-0 color as extra attributes), so any
  * viewer that knows that extension shows the creature. The rig uses only
  * standard glTF: JOINTS_0 and WEIGHTS_0 on the same primitive, a skin, joint
  * nodes, and animation channels on those nodes.
  *
  * What glTF doesn't say is how a skinned *splat* turns, since a blob has a
  * rotation and a shape as well as a position. Our extension,
- * BLOBSCAPE_gaussian_skinning, says so: blob centres follow the usual linear
+ * BLOBSCAPE_gaussian_skinning, says so: blob centers follow the usual linear
  * blend, and each blob's rotation is the weighted average of its bones'
  * rotations. It's listed as used, not required, so viewers that don't know it
  * still load the file, and most will show the creature standing still. The
@@ -70,7 +70,7 @@ export function recordClip(name: string, sk: Skeleton, pose: (sk: Skeleton, t: n
       grew[b] ||= sizes[b][f] !== 1
     }
   }
-  // neighbouring keys on the same hemisphere, so linear interpolation takes the short way
+  // neighboring keys on the same hemisphere, so linear interpolation takes the short way
   for (const r of rotations) for (let f = 1; f < n; f++) {
     const d = r[f * 4] * r[f * 4 - 4] + r[f * 4 + 1] * r[f * 4 - 3] + r[f * 4 + 2] * r[f * 4 - 2] + r[f * 4 + 3] * r[f * 4 - 1]
     if (d < 0) for (let k = 0; k < 4; k++) r[f * 4 + k] = -r[f * 4 + k]
@@ -140,11 +140,11 @@ export function writeRiggedGlb(r: Rigged): Uint8Array {
   const { blobs, skin, skeleton } = r
   const n = blobs.count
   const w = new BinWriter()
-  const pos = blobs.centre.slice(0, n * 3)
+  const pos = blobs.center.slice(0, n * 3)
   const min = [0, 1, 2].map((k) => { let m = Infinity; for (let i = 0; i < n; i++) m = Math.min(m, pos[i * 3 + k]); return m })
   const max = [0, 1, 2].map((k) => { let m = -Infinity; for (let i = 0; i < n; i++) m = Math.max(m, pos[i * 3 + k]); return m })
   const sh0 = new Float32Array(n * 3)
-  for (let i = 0; i < n * 3; i++) sh0[i] = (blobs.colour[i] - 0.5) / SH_C0
+  for (let i = 0; i < n * 3; i++) sh0[i] = (blobs.color[i] - 0.5) / SH_C0
   const weights = skin.weights.slice(0, n * 4)
   const attributes: Record<string, number> = {
     POSITION: w.add(pos, FLOAT, 'VEC3', n, { min, max }),
@@ -250,9 +250,9 @@ function writeRig(w: BinWriter, name: string, skeleton: Skeleton, clips: Clip[])
 
 /**
  * A solid, skinned triangle mesh with the same bones and clips: what Blender,
- * Godot, Unity and three.js open as an ordinary animated model. Colours are
+ * Godot, Unity and three.js open as an ordinary animated model. Colors are
  * per vertex (glTF wants them linear, so they're converted from the blobs'
- * display colour); the material is marked unlit, since the blobs' colours
+ * display color); the material is marked unlit, since the blobs' colors
  * already have their lighting baked in. Viewers that don't know
  * KHR_materials_unlit light it as a plain matte surface.
  */
@@ -265,10 +265,10 @@ export function writeRiggedMeshGlb(r: { name: string; mesh: SplatMesh; skeleton:
   const pos = mesh.positions
   const min = [0, 1, 2].map((k) => { let m = Infinity; for (let i = 0; i < n; i++) m = Math.min(m, pos[i * 3 + k]); return n ? m : 0 })
   const max = [0, 1, 2].map((k) => { let m = -Infinity; for (let i = 0; i < n; i++) m = Math.max(m, pos[i * 3 + k]); return n ? m : 0 })
-  const colour = new Uint8Array(n * 4)
+  const color = new Uint8Array(n * 4)
   for (let i = 0; i < n; i++) {
-    for (let k = 0; k < 3; k++) colour[i * 4 + k] = Math.round(Math.min(1, Math.max(0, srgbToLinear(mesh.colours[i * 3 + k]))) * 255)
-    colour[i * 4 + 3] = 255
+    for (let k = 0; k < 3; k++) color[i * 4 + k] = Math.round(Math.min(1, Math.max(0, srgbToLinear(mesh.colors[i * 3 + k]))) * 255)
+    color[i * 4 + 3] = 255
   }
   const weights = new Uint8Array(n * 4)
   const dv = new DataView(weights.buffer)
@@ -277,7 +277,7 @@ export function writeRiggedMeshGlb(r: { name: string; mesh: SplatMesh; skeleton:
   const attributes = {
     POSITION: w.add(pos, FLOAT, 'VEC3', n, { min, max }),
     NORMAL: w.add(mesh.normals, FLOAT, 'VEC3', n),
-    COLOR_0: w.add(colour, UBYTE, 'VEC4', n, { normalized: true }),
+    COLOR_0: w.add(color, UBYTE, 'VEC4', n, { normalized: true }),
     JOINTS_0: w.add(mesh.joints, UBYTE, 'VEC4', n),
     WEIGHTS_0: w.add(weights, UBYTE, 'VEC4', n, { normalized: true }),
   }
@@ -290,7 +290,7 @@ export function writeRiggedMeshGlb(r: { name: string; mesh: SplatMesh; skeleton:
     scene: 0,
     scenes: [{ nodes: rig.sceneNodes }],
     nodes: rig.nodes,
-    materials: [{ name: 'baked colour', pbrMetallicRoughness: { baseColorFactor: [1, 1, 1, 1], metallicFactor: 0, roughnessFactor: 1 }, extensions: { KHR_materials_unlit: {} } }],
+    materials: [{ name: 'baked color', pbrMetallicRoughness: { baseColorFactor: [1, 1, 1, 1], metallicFactor: 0, roughnessFactor: 1 }, extensions: { KHR_materials_unlit: {} } }],
     meshes: [{ name: r.name, primitives: [{ mode: 4, attributes, indices, material: 0 }] }],
     skins: [rig.skin],
     animations: rig.animations,
@@ -354,7 +354,7 @@ export function readRiggedGlb(bytes: Uint8Array): Rigged {
   const at = prim.attributes
   for (const name of ['POSITION', `${SPLATS}:SCALE`, `${SPLATS}:ROTATION`, `${SPLATS}:OPACITY`, `${SPLATS}:SH_DEGREE_0_COEF_0`]) {
     if (at[name] === undefined) throw new GlbError(`The splat is missing ${name}`)
-    if (json.accessors[at[name]].componentType !== FLOAT) throw new GlbError(`Quantised ${name} isn't supported yet`)
+    if (json.accessors[at[name]].componentType !== FLOAT) throw new GlbError(`Quantized ${name} isn't supported yet`)
   }
   const pos = read(at.POSITION, Float32Array) as Float32Array
   const n = pos.length / 3
@@ -365,10 +365,10 @@ export function readRiggedGlb(bytes: Uint8Array): Rigged {
   const blobs = new Blobs(n)
   for (let i = 0; i < n; i++) {
     blobs.push({
-      centre: [pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]],
+      center: [pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]],
       scale: [scale[i * 3], scale[i * 3 + 1], scale[i * 3 + 2]],
       quat: [rot[i * 4], rot[i * 4 + 1], rot[i * 4 + 2], rot[i * 4 + 3]],
-      colour: [0, 1, 2].map((k) => Math.min(1, Math.max(0, 0.5 + SH_C0 * sh0[i * 3 + k]))) as Vec3,
+      color: [0, 1, 2].map((k) => Math.min(1, Math.max(0, 0.5 + SH_C0 * sh0[i * 3 + k]))) as Vec3,
       opacity: op[i],
     })
   }
@@ -400,7 +400,7 @@ export function readRiggedGlb(bytes: Uint8Array): Rigged {
     if (joints.length > 256) throw new GlbError('More than 256 bones is not supported')
     for (const j of jt) if (j >= joints.length) throw new GlbError(`A blob names bone ${j}, but the skin has ${joints.length}`)
     skin.joints.set(jt)
-    // weights may be floats, or bytes/shorts normalised to 0–1
+    // weights may be floats, or bytes/shorts normalized to 0–1
     const wa = json.accessors[at.WEIGHTS_0]
     if (wa.componentType === FLOAT) skin.weights.set(read(at.WEIGHTS_0, Float32Array))
     else if (wa.componentType === UBYTE) skin.weights.set(Array.from(read(at.WEIGHTS_0, Uint8Array), (x) => x / 255))

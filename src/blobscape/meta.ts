@@ -23,13 +23,13 @@ export function pageMeta(route: Route): PageMeta {
     case 'lessons':
       return { path, title: `Lessons · ${SITE.name}`, description: `${cap(LESSON_COUNT)} short, hands-on lessons on Gaussian splats: ${LESSONS.map((l) => l.title.toLowerCase()).join(', ')}.` }
     case 'sandbox':
-      return { path, title: `Sandbox · ${SITE.name}`, description: 'Spray, select, move, recolour and explode Gaussian splats, or open your own .ply, .spz, .splat, .ksplat or .sog capture. Nothing is uploaded.' }
+      return { path, title: `Sandbox · ${SITE.name}`, description: 'Spray, select, move, recolor and explode Gaussian splats, or open your own .ply, .spz, .splat, .ksplat or .sog capture. Nothing is uploaded.' }
     case 'creature':
       return { path, title: `Splat Creatures · ${SITE.name}`, description: 'A frog, a fox, an elf and an ice dragon made of blobs, moving on their own splat engine: a jump, a tongue flick, a walk, wing beats and fire. See the bones under the blobs, then download one as a rigged, animated .glb (as Gaussian splats or as a mesh for Blender and game engines) or as a pixel-art sprite sheet from 4 or 8 sides.' }
     case 'forest':
       return { path, title: `Forest Walk · ${SITE.name}`, description: 'Walk an elf made of blobs down an endless forest path, from behind, while trees, ferns, flowers and mushrooms grow out of the ground as you come. Every plant is a rig of Gaussian splats on our own splat engine.' }
     case 'dungeon':
-      return { path, title: `Dungeon Run · ${SITE.name}`, description: 'Fight slimes in a torchlit dungeon with a sword and magic. The hero, the hall and five colours of slime are all Gaussian splats on our own splat engine, with health and magic bars, waves, and slimes that burst into splats.' }
+      return { path, title: `Dungeon Run · ${SITE.name}`, description: 'Fight slimes in a torchlit dungeon with a sword and magic. The hero, the hall and five colors of slime are all Gaussian splats on our own splat engine, with health and magic bars, waves, and slimes that burst into splats.' }
     case 'scan':
       return { path, title: `Scan Studio · ${SITE.name}`, description: 'Open a Gaussian splat scan of an object from your phone (Scaniverse, Polycam and others export .ply or .spz), find the table and turn it level, cut away the floor and the floaters, relight it with live lights, then take it into the sandbox or save it. Everything stays on your device.' }
     case 'clockwork':

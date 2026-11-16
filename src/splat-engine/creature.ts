@@ -41,11 +41,11 @@ export const TAILS: Record<string, Vec3> = {
 interface Part {
   /** Capsule from a to b with radius ra → rb. */
   a: Vec3; b: Vec3; ra: number; rb: number
-  colour: (p: Vec3, n: Vec3, c: Coat) => Vec3
+  color: (p: Vec3, n: Vec3, c: Coat) => Vec3
   bones: string[]
 }
 
-/** The fox's three colours: its fur, its pale chest and tail tip, and its dark socks, ear tips and nose. */
+/** The fox's three colors: its fur, its pale chest and tail tip, and its dark socks, ear tips and nose. */
 export interface Coat { fur: Vec3; pale: Vec3; dark: Vec3 }
 
 export const COATS = {
@@ -58,17 +58,17 @@ const furry = (_p: Vec3, n: Vec3, c: Coat): Vec3 => (n[1] < -0.35 ? c.pale : c.f
 const sock = (top: number) => (p: Vec3, _n: Vec3, c: Coat): Vec3 => (p[1] < top ? c.dark : c.fur)
 
 const PARTS: Part[] = [
-  { a: [0, 0.78, -0.55], b: [0, 0.84, 0.5], ra: 0.25, rb: 0.27, colour: furry, bones: ['hips', 'chest'] },
-  { a: [0, 0.9, 0.55], b: [0, 1.15, 0.84], ra: 0.17, rb: 0.15, colour: furry, bones: ['chest', 'neck', 'head'] },
-  { a: [0, 1.2, 0.8], b: [0, 1.16, 1.02], ra: 0.19, rb: 0.16, colour: (p, n, c) => (n[1] < -0.2 || p[2] > 1.0 ? c.pale : c.fur), bones: ['head'] },
-  { a: [0, 1.13, 1.0], b: [0, 1.1, 1.28], ra: 0.09, rb: 0.035, colour: (p, _n, c) => (p[2] > 1.25 ? c.dark : c.pale), bones: ['head'] },
-  { a: [0.1, 1.33, 0.85], b: [0.13, 1.52, 0.83], ra: 0.06, rb: 0.01, colour: (p, _n, c) => (p[1] > 1.45 ? c.dark : c.fur), bones: ['head'] },
-  { a: [-0.1, 1.33, 0.85], b: [-0.13, 1.52, 0.83], ra: 0.06, rb: 0.01, colour: (p, _n, c) => (p[1] > 1.45 ? c.dark : c.fur), bones: ['head'] },
-  { a: [0, 0.86, -0.6], b: [0, 1.0, -1.5], ra: 0.1, rb: 0.16, colour: (p, _n, c) => (p[2] < -1.38 ? c.pale : c.fur), bones: ['hips', 'tail1', 'tail2'] },
+  { a: [0, 0.78, -0.55], b: [0, 0.84, 0.5], ra: 0.25, rb: 0.27, color: furry, bones: ['hips', 'chest'] },
+  { a: [0, 0.9, 0.55], b: [0, 1.15, 0.84], ra: 0.17, rb: 0.15, color: furry, bones: ['chest', 'neck', 'head'] },
+  { a: [0, 1.2, 0.8], b: [0, 1.16, 1.02], ra: 0.19, rb: 0.16, color: (p, n, c) => (n[1] < -0.2 || p[2] > 1.0 ? c.pale : c.fur), bones: ['head'] },
+  { a: [0, 1.13, 1.0], b: [0, 1.1, 1.28], ra: 0.09, rb: 0.035, color: (p, _n, c) => (p[2] > 1.25 ? c.dark : c.pale), bones: ['head'] },
+  { a: [0.1, 1.33, 0.85], b: [0.13, 1.52, 0.83], ra: 0.06, rb: 0.01, color: (p, _n, c) => (p[1] > 1.45 ? c.dark : c.fur), bones: ['head'] },
+  { a: [-0.1, 1.33, 0.85], b: [-0.13, 1.52, 0.83], ra: 0.06, rb: 0.01, color: (p, _n, c) => (p[1] > 1.45 ? c.dark : c.fur), bones: ['head'] },
+  { a: [0, 0.86, -0.6], b: [0, 1.0, -1.5], ra: 0.1, rb: 0.16, color: (p, _n, c) => (p[2] < -1.38 ? c.pale : c.fur), bones: ['hips', 'tail1', 'tail2'] },
   ...(['fl', 'fr', 'bl', 'br'] as const).map((leg): Part => {
     const up = BONES.find((b) => b.name === `${leg}Upper`)!
     const top: Vec3 = [up.head[0], up.head[1] + 0.06, up.head[2]]
-    return { a: top, b: TAILS[`${leg}Lower`], ra: 0.085, rb: 0.055, colour: sock(0.24), bones: [leg[0] === 'f' ? 'chest' : 'hips', `${leg}Upper`, `${leg}Lower`] }
+    return { a: top, b: TAILS[`${leg}Lower`], ra: 0.085, rb: 0.055, color: sock(0.24), bones: [leg[0] === 'f' ? 'chest' : 'hips', `${leg}Upper`, `${leg}Lower`] }
   }),
 ]
 
@@ -126,15 +126,15 @@ export function makeCreature(count = 20000, seed = 7, coat: Coat = COATS.red): C
         nn = norm(add3(nn, scale3(d, (part.ra - part.rb) / len)))
         p = add3(add3(part.a, scale3(d, t * len)), add3(scale3(e1, Math.cos(ang) * r), scale3(e2, Math.sin(ang) * r)))
       }
-      const base = part.colour(p, nn, coat)
+      const base = part.color(p, nn, coat)
       const lit = 0.5 + 0.5 * Math.max(0, dot(nn, norm(LIGHT)) * 0.5 + 0.5)
       const k = lit * (0.9 + rand() * 0.2)
       const j = 0.75 + rand() * 0.5
       blobs.push({
-        centre: p,
+        center: p,
         scale: [size * j, size * j * (0.7 + rand() * 0.6), size * 0.2],
         quat: quatFacing(nn),
-        colour: [Math.min(1, base[0] * k), Math.min(1, base[1] * k), Math.min(1, base[2] * k)],
+        color: [Math.min(1, base[0] * k), Math.min(1, base[1] * k), Math.min(1, base[2] * k)],
         opacity: 0.92,
       })
       parts.push(pi)
@@ -146,7 +146,7 @@ export function makeCreature(count = 20000, seed = 7, coat: Coat = COATS.red): C
   const skin = emptySkin(blobs.count)
   for (let i = 0; i < blobs.count; i++) {
     const part = PARTS[parts[i]]
-    const p = blobs.centre.subarray(i * 3, i * 3 + 3)
+    const p = blobs.center.subarray(i * 3, i * 3 + 3)
     const pairs: [number, number][] = part.bones.map((name) => {
       const b = skeleton.index(name)
       const dist = segDist(p, BONES[b].head, TAILS[name])

@@ -14,9 +14,9 @@ const {
   Discard, EPSILON, Fn, If, atan, cameraProjectionMatrix, cameraViewport, cameraViewMatrix, cos, dot, exp, float, instanceIndex,
   abs, length, max, min, normalize, positionGeometry, select, sin, sqrt, storage, uint, uniform, uniformArray, unpackUnorm4x8, varyingProperty, vec2, vec3, vec4,
 } = TSL
-import { packWeights, skinBlob, skinCentres, type Skeleton, type Skin, type SkinMode } from './rig.ts'
+import { packWeights, skinBlob, skinCenters, type Skeleton, type Skin, type SkinMode } from './rig.ts'
 import { DepthSort } from './sort.ts'
-import { srgbToLinear } from '../splat-core/colour.ts'
+import { srgbToLinear } from '../splat-core/color.ts'
 
 /**
  * Blobscape's splat engine: one mesh that draws every blob of every object in a
@@ -26,7 +26,7 @@ import { srgbToLinear } from '../splat-core/colour.ts'
  * Every blob hangs on bones. A still object is one bone; a creature is a
  * skeleton. Each frame:
  *
- * 1. deform (compute): each blob's centre and shape go from its rest pose to the
+ * 1. deform (compute): each blob's center and shape go from its rest pose to the
  *    world through its bones, as `skinBlob` in rig.ts does on the CPU;
  * 2. sort (compute): every blob in the scene by depth, one counting sort;
  * 3. draw: one instanced quad per blob, projected and shaded as in 3DGS.
@@ -66,7 +66,7 @@ export interface EngineOptions {
 export interface PointLight {
   position: [number, number, number]
   /** Linear RGB, times its strength: [1, 0.6, 0.3] is a torch at full strength. */
-  colour: [number, number, number]
+  color: [number, number, number]
   /** Its reach: about a quarter strength at this distance, and gone by twice it. */
   range: number
 }
@@ -82,7 +82,7 @@ export class SplatWorld extends Mesh {
   mode: SkinMode
   /** Set by the WebGL backend path, read by tests: did the last frame skin on the CPU? */
   cpuPath = false
-  /** Milliseconds the CPU spent in the last frame (WebGL path only): moving centres, sorting, both. */
+  /** Milliseconds the CPU spent in the last frame (WebGL path only): moving centers, sorting, both. */
   cpuMs = 0
   cpuSkinMs = 0
   cpuSortMs = 0
@@ -90,9 +90,9 @@ export class SplatWorld extends Mesh {
   hold = false
   private readonly flat = uniform(0)
   /**
-   * While true, the draw is a map of parts, not a picture: every blob is a hard disc in its part's own flat colour
+   * While true, the draw is a map of parts, not a picture: every blob is a hard disc in its part's own flat color
    * (red and green hold the part's number plus one, blue the actor's), with no light, fog or soft edge, so where two
-   * parts meet the colour changes exactly. Pixel mode draws it for the lines between parts.
+   * parts meet the color changes exactly. Pixel mode draws it for the lines between parts.
    */
   get parts() { return this.flat.value > 0 }
   set parts(on: boolean) { this.flat.value = on ? 1 : 0 }
@@ -105,7 +105,7 @@ export class SplatWorld extends Mesh {
   private readonly projectNode: ReturnType<typeof makeProject>
   private readonly cam: CameraUniforms
   private readonly bins: number
-  private readonly cpuCentres: Float32Array
+  private readonly cpuCenters: Float32Array
   private builtFor = ''
   private posed = false
   private bonesDirty = true
@@ -113,7 +113,7 @@ export class SplatWorld extends Mesh {
   private readonly size = new Vector2()
   readonly bounds = new Sphere()
   /**
-   * Distance fog: blobs fade towards `colour` (linear RGB) from `near` to `far`
+   * Distance fog: blobs fade toward `color` (linear RGB) from `near` to `far`
    * in front of the camera, so a scene can end in mist instead of an edge.
    * Off while `far` is 0.
    */
@@ -152,12 +152,12 @@ export class SplatWorld extends Mesh {
     this.bins = bins
     this.mode = mode
     this.frustumCulled = false
-    this.cpuCentres = new Float32Array(Math.max(1, count) * 3)
+    this.cpuCenters = new Float32Array(Math.max(1, count) * 3)
 
     this.boneRadius = boneRadii(actors, boneOffset, bones)
     this.deformNodes = { quat: makeDeform(buf, 'quat'), linear: makeDeform(buf, 'linear') }
     this.cam = { view: uniform(new Matrix4()), proj: uniform(new Matrix4()), viewport: uniform(new Vector2(1, 1)), depthRange: uniform(new Vector2(0, 1)) }
-    this.fog = { colour: uniform(new Vector3(0, 0, 0)), range: uniform(new Vector2(0, 0)) }
+    this.fog = { color: uniform(new Vector3(0, 0, 0)), range: uniform(new Vector2(0, 0)) }
     this.projectNode = makeProject(buf, sort, this.cam, bins)
     if (lights) {
       this.lighting = makeLighting(buf.count)
@@ -169,15 +169,15 @@ export class SplatWorld extends Mesh {
     this.onBeforeRender = (renderer, _scene, camera) => this.prepare(renderer as unknown as Renderer, camera)
   }
 
-  /** Fades blobs to `colour` (linear RGB, 0–1) between `near` and `far` units from the camera; `far` 0 turns it off. */
-  setFog(colour: [number, number, number], near: number, far: number) {
-    this.fog.colour.value.set(colour[0], colour[1], colour[2])
+  /** Fades blobs to `color` (linear RGB, 0–1) between `near` and `far` units from the camera; `far` 0 turns it off. */
+  setFog(color: [number, number, number], near: number, far: number) {
+    this.fog.color.value.set(color[0], color[1], color[2])
     this.fog.range.value.set(near, far)
   }
 
   /**
    * Lights the blobs with up to MAX_LIGHTS point lights, on top of `ambient`
-   * times their own (baked) colour. Each blob's normal is its flattest axis, so
+   * times their own (baked) color. Each blob's normal is its flattest axis, so
    * a light reaches the side of a surface that faces it. Needs `lights: true`.
    */
   setLights(lights: PointLight[], ambient = 1) {
@@ -189,7 +189,7 @@ export class SplatWorld extends Mesh {
     for (let k = 0; k < MAX_LIGHTS; k++) {
       const l = lights[k]
       ;(L.pos.array[k] as Vector4).set(l?.position[0] ?? 0, l?.position[1] ?? 0, l?.position[2] ?? 0, l ? Math.max(1e-3, l.range) : 1)
-      ;(L.col.array[k] as Vector4).set(l?.colour[0] ?? 0, l?.colour[1] ?? 0, l?.colour[2] ?? 0, 0)
+      ;(L.col.array[k] as Vector4).set(l?.color[0] ?? 0, l?.color[1] ?? 0, l?.color[2] ?? 0, 0)
     }
   }
 
@@ -288,7 +288,7 @@ export class SplatWorld extends Mesh {
     const needsSort = deformed || key !== this.lastSortKey
     if (webgl) {
       const t0 = performance.now()
-      if (deformed) skinCentres(this.buf.srcCentreData, this.buf.skinWords, this.buf.boneData, this.count, this.cpuCentres)
+      if (deformed) skinCenters(this.buf.srcCenterData, this.buf.skinWords, this.buf.boneData, this.count, this.cpuCenters)
       const t1 = performance.now()
       if (needsSort) this.sortCPU()
       const t2 = performance.now()
@@ -297,7 +297,7 @@ export class SplatWorld extends Mesh {
       this.cpuMs = t2 - t0
     } else {
       if (deformed) this.deform(renderer)
-      // lights move on their own: the lit colours are redone whenever they or the blobs moved
+      // lights move on their own: the lit colors are redone whenever they or the blobs moved
       if (this.lightNode && (deformed || this.lightsDirty)) { renderer.compute(this.lightNode as never); this.lightsDirty = false }
       if (needsSort) this.project(renderer)
     }
@@ -327,7 +327,7 @@ export class SplatWorld extends Mesh {
   }
 
   private sortCPU() {
-    const c = this.cpuCentres
+    const c = this.cpuCenters
     const v = this.cam.view.value.elements
     const [near, far] = [this.cam.depthRange.value.x, this.cam.depthRange.value.y]
     const scale = (this.bins - 1) / Math.max(far - near, 0.0001)
@@ -341,11 +341,11 @@ export class SplatWorld extends Mesh {
   }
 
   /**
-   * The CPU twin of the deform pass: every blob's world centre (4 floats) and
+   * The CPU twin of the deform pass: every blob's world center (4 floats) and
    * covariance (6). It reads the same byte weights the GPU does, so the two agree.
    */
   deformCPU() {
-    const centre = new Float32Array(this.count * 4), cov = new Float32Array(this.count * 6)
+    const center = new Float32Array(this.count * 4), cov = new Float32Array(this.count * 6)
     let i = 0
     const w = new Float32Array(4)
     for (let a = 0; a < this.actors.length; a++) {
@@ -354,35 +354,35 @@ export class SplatWorld extends Mesh {
         const word = this.buf.skinWords[i * 2 + 1]
         for (let j = 0; j < 4; j++) w[j] = ((word >>> (j * 8)) & 255) / 255
         skinBlob(
-          blobs.centre.subarray(k * 3, k * 3 + 3), blobs.scale.subarray(k * 3, k * 3 + 3), blobs.quat.subarray(k * 4, k * 4 + 4),
-          skin.joints.subarray(k * 4, k * 4 + 4), w, skeleton, this.mode, centre, i * 4, cov, i * 6,
+          blobs.center.subarray(k * 3, k * 3 + 3), blobs.scale.subarray(k * 3, k * 3 + 3), blobs.quat.subarray(k * 4, k * 4 + 4),
+          skin.joints.subarray(k * 4, k * 4 + 4), w, skeleton, this.mode, center, i * 4, cov, i * 6,
         )
-        centre[i * 4 + 3] = 1
+        center[i * 4 + 3] = 1
       }
     }
-    return { centre, cov }
+    return { center, cov }
   }
 
   /**
    * Reads back what the GPU deform wrote and compares it with the CPU twin.
-   * Returns the largest differences in centre (world units) and covariance.
+   * Returns the largest differences in center (world units) and covariance.
    */
   async checkAgainstCPU(renderer: Renderer) {
     const r = renderer as unknown as { getArrayBufferAsync: (a: StorageBufferAttribute) => Promise<ArrayBuffer> }
-    const gpuCentre = new Float32Array(await r.getArrayBufferAsync(this.buf.worldCentreAttr))
+    const gpuCenter = new Float32Array(await r.getArrayBufferAsync(this.buf.worldCenterAttr))
     const gpuA = new Float32Array(await r.getArrayBufferAsync(this.buf.covAAttr))
     const gpuB = new Float32Array(await r.getArrayBufferAsync(this.buf.covBAttr))
     const cpu = this.deformCPU()
-    let centre = 0, cov = 0, scale = 0
+    let center = 0, cov = 0, scale = 0
     for (let i = 0; i < this.count; i++) {
-      for (let k = 0; k < 3; k++) centre = Math.max(centre, Math.abs(gpuCentre[i * 4 + k] - cpu.centre[i * 4 + k]))
+      for (let k = 0; k < 3; k++) center = Math.max(center, Math.abs(gpuCenter[i * 4 + k] - cpu.center[i * 4 + k]))
       const g = [gpuA[i * 4], gpuA[i * 4 + 1], gpuA[i * 4 + 2], gpuA[i * 4 + 3], gpuB[i * 4], gpuB[i * 4 + 1]]
       for (let k = 0; k < 6; k++) {
         cov = Math.max(cov, Math.abs(g[k] - cpu.cov[i * 6 + k]))
         scale = Math.max(scale, Math.abs(cpu.cov[i * 6 + k]))
       }
     }
-    return { centre, cov, covScale: scale }
+    return { center, cov, covScale: scale }
   }
 
   /** Reads back the GPU sort and checks it: every blob drawn once, farthest first. */
@@ -391,7 +391,7 @@ export class SplatWorld extends Mesh {
     const order = new Uint32Array(await r.getArrayBufferAsync(this.sort.orderAttr))
     const keys = new Uint32Array(await r.getArrayBufferAsync(this.sort.keysAttr))
     const seen = new Uint8Array(this.count)
-    // `unsettled`: neighbours in one depth bin that are not in index order (only bins too big to settle may have any);
+    // `unsettled`: neighbors in one depth bin that are not in index order (only bins too big to settle may have any);
     // `biggest`: the most blobs in one bin
     let missing = this.count, outOfOrder = 0, unsettled = 0, biggest = 0, run = 0
     for (let i = 0; i < this.count; i++) {
@@ -430,11 +430,11 @@ function bump(a: StorageBufferAttribute) {
 
 function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones: number) {
   const n = Math.max(1, count)
-  const centre = new Float32Array(n * 4)
+  const center = new Float32Array(n * 4)
   const scale = new Float32Array(n * 4)
   const quat = new Float32Array(n * 4)
-  const colour = new Uint32Array(n)
-  // each blob's part as a colour: see `SplatWorld.parts`
+  const color = new Uint32Array(n)
+  // each blob's part as a color: see `SplatWorld.parts`
   const part = new Uint32Array(n)
   // joints and weights interleaved, two words per blob: a compute stage may only bind 8 storage buffers on many phones
   const skinWords = new Uint32Array(n * 2)
@@ -442,13 +442,13 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
   actors.forEach((a, ai) => {
     const { blobs, skin } = a
     for (let k = 0; k < blobs.count; k++, i++) {
-      centre.set(blobs.centre.subarray(k * 3, k * 3 + 3), i * 4)
-      centre[i * 4 + 3] = boneOffset[ai]
+      center.set(blobs.center.subarray(k * 3, k * 3 + 3), i * 4)
+      center[i * 4 + 3] = boneOffset[ai]
       scale.set(blobs.scale.subarray(k * 3, k * 3 + 3), i * 4)
       quat.set(blobs.quat.subarray(k * 4, k * 4 + 4), i * 4)
       const byte = (v: number) => Math.max(0, Math.min(255, Math.round(v * 255)))
-      colour[i] = (byte(srgbToLinear(blobs.colour[k * 3])) | (byte(srgbToLinear(blobs.colour[k * 3 + 1])) << 8) |
-        (byte(srgbToLinear(blobs.colour[k * 3 + 2])) << 16) | (byte(blobs.opacity[k]) << 24)) >>> 0
+      color[i] = (byte(srgbToLinear(blobs.color[k * 3])) | (byte(srgbToLinear(blobs.color[k * 3 + 1])) << 8) |
+        (byte(srgbToLinear(blobs.color[k * 3 + 2])) << 16) | (byte(blobs.opacity[k]) << 24)) >>> 0
       const p = Math.min(65535, (a.partOf?.[k] ?? 0) + 1), who = Math.min(255, ai + 1)
       part[i] = ((p & 255) | ((p >> 8) << 8) | (who << 16)) >>> 0
       skinWords[i * 2] = (skin.joints[k * 4] | (skin.joints[k * 4 + 1] << 8) | (skin.joints[k * 4 + 2] << 16) | (skin.joints[k * 4 + 3] << 24)) >>> 0
@@ -456,34 +456,34 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
     }
   })
   const attr = (a: Float32Array | Uint32Array, size: number) => new StorageBufferAttribute(a, size)
-  const centreAttr = attr(centre, 4), scaleAttr = attr(scale, 4), quatAttr = attr(quat, 4)
-  const colourAttr = attr(colour, 1), skinAttr = attr(skinWords, 1), partAttr = attr(part, 1)
+  const centerAttr = attr(center, 4), scaleAttr = attr(scale, 4), quatAttr = attr(quat, 4)
+  const colorAttr = attr(color, 1), skinAttr = attr(skinWords, 1), partAttr = attr(part, 1)
   const boneData = new Float32Array(Math.max(1, bones) * 20)
   const boneAttr = new StorageBufferAttribute(boneData, 4)
   boneAttr.setUsage(DynamicDrawUsage)
-  const worldCentreAttr = new StorageBufferAttribute(new Float32Array(n * 4), 4)
+  const worldCenterAttr = new StorageBufferAttribute(new Float32Array(n * 4), 4)
   const covAAttr = new StorageBufferAttribute(new Float32Array(n * 4), 4)
   const covBAttr = new StorageBufferAttribute(new Float32Array(n * 4), 4)
-  // what the project pass writes: screen centre, depth and opacity factor; the two screen axes
+  // what the project pass writes: screen center, depth and opacity factor; the two screen axes
   const splatAAttr = new StorageBufferAttribute(new Float32Array(n * 4), 4)
   const splatBAttr = new StorageBufferAttribute(new Float32Array(n * 4), 4)
   return {
     count: n,
     /** Every GPU buffer, so dispose can free them. */
-    attrs: [centreAttr, scaleAttr, quatAttr, colourAttr, partAttr, skinAttr, boneAttr, worldCentreAttr, covAAttr, covBAttr, splatAAttr, splatBAttr],
-    skinWords, srcCentreData: centre,
-    boneData, boneAttr, worldCentreAttr, covAAttr, covBAttr, colourAttr,
-    srcCentre: storage(centreAttr, 'vec4', n).toReadOnly(),
+    attrs: [centerAttr, scaleAttr, quatAttr, colorAttr, partAttr, skinAttr, boneAttr, worldCenterAttr, covAAttr, covBAttr, splatAAttr, splatBAttr],
+    skinWords, srcCenterData: center,
+    boneData, boneAttr, worldCenterAttr, covAAttr, covBAttr, colorAttr,
+    srcCenter: storage(centerAttr, 'vec4', n).toReadOnly(),
     srcScale: storage(scaleAttr, 'vec4', n).toReadOnly(),
     srcQuat: storage(quatAttr, 'vec4', n).toReadOnly(),
     skin: storage(skinAttr, 'uint', n * 2).toReadOnly(),
     bones: storage(boneAttr, 'vec4', Math.max(1, bones) * 5).toReadOnly(),
-    colour: storage(colourAttr, 'uint', n).toReadOnly(),
+    color: storage(colorAttr, 'uint', n).toReadOnly(),
     part: storage(partAttr, 'uint', n).toReadOnly(),
-    worldCentreW: storage(worldCentreAttr, 'vec4', n),
+    worldCenterW: storage(worldCenterAttr, 'vec4', n),
     covAW: storage(covAAttr, 'vec4', n),
     covBW: storage(covBAttr, 'vec4', n),
-    worldCentre: storage(worldCentreAttr, 'vec4', n).toReadOnly(),
+    worldCenter: storage(worldCenterAttr, 'vec4', n).toReadOnly(),
     covA: storage(covAAttr, 'vec4', n).toReadOnly(),
     covB: storage(covBAttr, 'vec4', n).toReadOnly(),
     splatAW: storage(splatAAttr, 'vec4', n),
@@ -497,7 +497,7 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
 /** On WebGL, storage is read through textures that the CPU fills; the draw reads the blobs' rest data and the bones. */
 function enableWebGL(buf: ReturnType<typeof makeBuffers>, sort: DepthSort) {
   if (buf.webgl) return
-  for (const r of [buf.srcCentre, buf.srcScale, buf.srcQuat, buf.skin, buf.bones, buf.colour, buf.part]) (r as unknown as { setPBO: (b: boolean) => void }).setPBO(true)
+  for (const r of [buf.srcCenter, buf.srcScale, buf.srcQuat, buf.skin, buf.bones, buf.color, buf.part]) (r as unknown as { setPBO: (b: boolean) => void }).setPBO(true)
   sort.enableWebGL()
   buf.webgl = true
 }
@@ -514,7 +514,7 @@ function boneRadii(actors: Actor[], boneOffset: number[], bones: number) {
       if (b >= skeleton.count) throw new Error(`blob ${k} names bone ${b}, but the skeleton has ${skeleton.count}`)
       const h = skeleton.bones[b].head
       const s = Math.max(blobs.scale[k * 3], blobs.scale[k * 3 + 1], blobs.scale[k * 3 + 2]) * 2
-      const d = Math.hypot(blobs.centre[k * 3] - h[0], blobs.centre[k * 3 + 1] - h[1], blobs.centre[k * 3 + 2] - h[2]) + s
+      const d = Math.hypot(blobs.center[k * 3] - h[0], blobs.center[k * 3 + 1] - h[1], blobs.center[k * 3 + 2] - h[2]) + s
       const g = boneOffset[ai] + b
       if (d > r[g]) r[g] = d
     }
@@ -544,9 +544,9 @@ function quatMul(a: N, b: N) {
   )
 }
 
-/** One blob through its bones: world centre and the six covariance terms, as `skinBlob` does on the CPU. */
+/** One blob through its bones: world center and the six covariance terms, as `skinBlob` does on the CPU. */
 function deformBlob(buf: ReturnType<typeof makeBuffers>, i: N, mode: SkinMode) {
-  const src = buf.srcCentre.element(i).toVar()
+  const src = buf.srcCenter.element(i).toVar()
   const base = uint(src.w).toVar()
   const jw = buf.skin.element(i.mul(2)).toVar()
   const w = unpackUnorm4x8(buf.skin.element(i.mul(2).add(1))).toVar()
@@ -593,7 +593,7 @@ function makeDeform(buf: ReturnType<typeof makeBuffers>, mode: SkinMode) {
   return Fn(() => {
     const i = instanceIndex
     const d = deformBlob(buf, i, mode)
-    buf.worldCentreW.element(i).assign(vec4(d.world, 1))
+    buf.worldCenterW.element(i).assign(vec4(d.world, 1))
     buf.covAW.element(i).assign(d.covA)
     buf.covBW.element(i).assign(d.covB)
   })().compute(buf.count, [WORKGROUP]).setName(`SplatWorldDeform_${mode}`)
@@ -601,15 +601,15 @@ function makeDeform(buf: ReturnType<typeof makeBuffers>, mode: SkinMode) {
 
 /**
  * EWA splatting: a blob's 3D covariance seen through the camera becomes a 2D
- * ellipse on screen. Returns the screen centre (NDC) and depth, the ellipse's
+ * ellipse on screen. Returns the screen center (NDC) and depth, the ellipse's
  * two axes in NDC (already scaled by their standard deviations), a factor for
  * the opacity (0 when the blob is off screen or behind the camera) and the
  * blob's distance in front of the camera.
  */
-function projectSplat(centre: N, covA: N, covB: N, view: N, proj: N, viewport: N) {
-  const viewCentre4 = view.mul(vec4(centre, 1)).toVar()
-  const viewCentre = viewCentre4.xyz.toVar()
-  const centreClip = proj.mul(viewCentre4).toVar()
+function projectSplat(center: N, covA: N, covB: N, view: N, proj: N, viewport: N) {
+  const viewCenter4 = view.mul(vec4(center, 1)).toVar()
+  const viewCenter = viewCenter4.xyz.toVar()
+  const centerClip = proj.mul(viewCenter4).toVar()
 
   const r0 = vec3(view[0].x, view[1].x, view[2].x).toVar()
   const r1 = vec3(view[0].y, view[1].y, view[2].y).toVar()
@@ -623,14 +623,14 @@ function projectSplat(centre: N, covA: N, covB: N, view: N, proj: N, viewport: N
   const c00 = dot(vc0, r0).toVar(), c01 = dot(vc0, r1).toVar(), c02 = dot(vc0, r2).toVar()
   const c11 = dot(vc1, r1).toVar(), c12 = dot(vc1, r2).toVar(), c22 = dot(vc2, r2).toVar()
 
-  const z = min(viewCentre.z, -0.01).toVar()
+  const z = min(viewCenter.z, -0.01).toVar()
   const invZ = float(1).div(z).toVar()
   const invZ2 = invZ.mul(invZ).toVar()
   const focal = viewport.mul(0.5).mul(vec2(proj[0].x, proj[1].y)).toVar()
   const j00 = focal.x.negate().mul(invZ).toVar()
   const j11 = focal.y.negate().mul(invZ).toVar()
-  const j02 = focal.x.mul(viewCentre.x).mul(invZ2).toVar()
-  const j12 = focal.y.mul(viewCentre.y).mul(invZ2).toVar()
+  const j02 = focal.x.mul(viewCenter.x).mul(invZ2).toVar()
+  const j12 = focal.y.mul(viewCenter.y).mul(invZ2).toVar()
 
   const aBase = j00.mul(j00).mul(c00).add(j00.mul(j02).mul(c02).mul(2)).add(j02.mul(j02).mul(c22)).toVar()
   const b = j00.mul(j11).mul(c01).add(j00.mul(j12).mul(c02)).add(j02.mul(j11).mul(c12)).add(j02.mul(j12).mul(c22)).toVar()
@@ -654,16 +654,16 @@ function projectSplat(centre: N, covA: N, covB: N, view: N, proj: N, viewport: N
   const toNdc = vec2(2).div(viewport).toVar()
   const ax1 = axis1.mul(min(sqrt(lambda1), MAX_SPLAT_PX)).mul(toNdc).toVar()
   const ax2 = axis2.mul(min(sqrt(lambda2), MAX_SPLAT_PX)).mul(toNdc).toVar()
-  const w = centreClip.w.toVar()
+  const w = centerClip.w.toVar()
   const lim = w.mul(CLIP_XY).toVar()
-  If(viewCentre.z.greaterThanEqual(-0.01)
-    .or(centreClip.z.greaterThan(w))
-    .or(centreClip.x.abs().greaterThan(lim))
-    .or(centreClip.y.abs().greaterThan(lim)), () => {
+  If(viewCenter.z.greaterThanEqual(-0.01)
+    .or(centerClip.z.greaterThan(w))
+    .or(centerClip.x.abs().greaterThan(lim))
+    .or(centerClip.y.abs().greaterThan(lim)), () => {
     alphaScale.assign(0)
   })
-  const ndc = centreClip.xyz.div(max(w, 0.0001)).toVar()
-  return { ndc, axes: vec4(ax1, ax2), alphaScale, depth: viewCentre.z.negate() }
+  const ndc = centerClip.xyz.div(max(w, 0.0001)).toVar()
+  return { ndc, axes: vec4(ax1, ax2), alphaScale, depth: viewCenter.z.negate() }
 }
 
 /** WebGPU: project every blob once (not once per corner), and write its sort key. */
@@ -671,7 +671,7 @@ function makeProject(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, cam: 
   const bins1 = bins - 1
   return Fn(() => {
     const i = instanceIndex
-    const p = projectSplat(buf.worldCentre.element(i).xyz, buf.covA.element(i), buf.covB.element(i), cam.view, cam.proj, cam.viewport)
+    const p = projectSplat(buf.worldCenter.element(i).xyz, buf.covA.element(i), buf.covB.element(i), cam.view, cam.proj, cam.viewport)
     buf.splatAW.element(i).assign(vec4(p.ndc, p.alphaScale))
     buf.splatBW.element(i).assign(p.axes)
     const span = max(cam.depthRange.y.sub(cam.depthRange.x), 0.0001)
@@ -682,7 +682,7 @@ function makeProject(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, cam: 
   })().compute(buf.count, [WORKGROUP]).setName('SplatWorldProject')
 }
 
-interface Fog { colour: N; range: N }
+interface Fog { color: N; range: N }
 
 interface Lighting { pos: N; col: N; ambient: N; count: N; attr: StorageBufferAttribute; litW: N; lit: N }
 
@@ -718,7 +718,7 @@ function blobNormal(covA: N, covB: N) {
   return normalize(best.add(vec3(0, 1e-12, 0)))
 }
 
-/** The blob's colour under the lights: ambient times its own, plus each light by distance and by how its face turns to it. CPU twin: `light.ts` (change both). */
+/** The blob's color under the lights: ambient times its own, plus each light by distance and by how its face turns to it. CPU twin: `light.ts` (change both). */
 function lit(rgb: N, world: N, covA: N, covB: N, L: Lighting) {
   const n = blobNormal(covA, covB).toVar()
   const sum = vec3(L.ambient).toVar()
@@ -737,24 +737,24 @@ function lit(rgb: N, world: N, covA: N, covB: N, L: Lighting) {
   return rgb.mul(sum)
 }
 
-/** WebGPU: every blob's lit colour, once a frame (after the deform, before the draw). */
+/** WebGPU: every blob's lit color, once a frame (after the deform, before the draw). */
 function makeLight(buf: ReturnType<typeof makeBuffers>, L: Lighting) {
   return Fn(() => {
     const i = instanceIndex
-    const colour = unpackUnorm4x8(buf.colour.element(i)).toVar()
-    L.litW.element(i).assign(vec4(lit(colour.rgb, buf.worldCentre.element(i).xyz, buf.covA.element(i), buf.covB.element(i), L), colour.a))
+    const color = unpackUnorm4x8(buf.color.element(i)).toVar()
+    L.litW.element(i).assign(vec4(lit(color.rgb, buf.worldCenter.element(i).xyz, buf.covA.element(i), buf.covB.element(i), L), color.a))
   })().compute(buf.count, [WORKGROUP]).setName('SplatWorldLight')
 }
 
-/** The blob's colour after distance fog: none while the fog's far distance is 0. */
+/** The blob's color after distance fog: none while the fog's far distance is 0. */
 function fogged(rgb: N, depth: N, fog: Fog) {
   const span = max(fog.range.y.sub(fog.range.x), 0.0001)
   const f = select(fog.range.y.greaterThan(0), depth.sub(fog.range.x).div(span).clamp(0, 1), float(0)).toVar()
-  return rgb.add(fog.colour.sub(rgb).mul(f))
+  return rgb.add(fog.color.sub(rgb).mul(f))
 }
 
 const splatUv = () => varyingProperty('vec2', 'vSplatUv')
-const splatColour = () => varyingProperty('vec4', 'vSplatColour')
+const splatColor = () => varyingProperty('vec4', 'vSplatColor')
 
 /**
  * A quad around the blob, only as big as it is visible: a faint blob fades
@@ -766,7 +766,7 @@ function placeQuad(ndc: N, axes: N, rgba: N) {
   const reach = sqrt(max(TSL.log(alpha.mul(255)).mul(2), 0)).min(2).toVar()
   const uv = positionGeometry.xy.mul(reach).toVar()
   splatUv().assign(uv)
-  splatColour().assign(rgba)
+  splatColor().assign(rgba)
   return vec4(ndc.xy.add(axes.xy.mul(uv.x)).add(axes.zw.mul(uv.y)), ndc.z, 1)
 }
 
@@ -774,13 +774,13 @@ function makeVertexWebGPU(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, 
   return Fn(() => {
     const idx = sort.orderRead.element(instanceIndex).toVar()
     const A = buf.splatA.element(idx).toVar()
-    // lit: the light pass's colour, in place of the packed one (so the draw binds no more buffers than before)
-    const colour = (L ? L.lit.element(idx) : unpackUnorm4x8(buf.colour.element(idx))).toVar()
+    // lit: the light pass's color, in place of the packed one (so the draw binds no more buffers than before)
+    const color = (L ? L.lit.element(idx) : unpackUnorm4x8(buf.color.element(idx))).toVar()
     // depth in front of the camera from the screen depth the project pass wrote, so the draw binds no extra buffer:
     // ndc z = −(P22·z + P32) / z for a perspective camera, so −z = P32 / (ndc z + P22)
     const depth = cameraProjectionMatrix[3].z.div(A.z.add(cameraProjectionMatrix[2].z))
     const part = unpackUnorm4x8(buf.part.element(idx))
-    return placeQuad(A.xyz, buf.splatB.element(idx), vec4(select(flat.greaterThan(0), part.rgb, fogged(colour.rgb, depth, fog)), colour.a.mul(A.w)))
+    return placeQuad(A.xyz, buf.splatB.element(idx), vec4(select(flat.greaterThan(0), part.rgb, fogged(color.rgb, depth, fog)), color.a.mul(A.w)))
   })()
 }
 
@@ -790,10 +790,10 @@ function makeVertexWebGL(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, m
     const idx = sort.orderRead.element(instanceIndex).toVar()
     const d = deformBlob(buf, idx, mode)
     const p = projectSplat(d.world, d.covA, d.covB, cameraViewMatrix, cameraProjectionMatrix, cameraViewport.zw)
-    const colour = unpackUnorm4x8(buf.colour.element(idx)).toVar()
-    const rgb = L ? lit(colour.rgb, d.world, d.covA, d.covB, L) : colour.rgb
+    const color = unpackUnorm4x8(buf.color.element(idx)).toVar()
+    const rgb = L ? lit(color.rgb, d.world, d.covA, d.covB, L) : color.rgb
     const part = unpackUnorm4x8(buf.part.element(idx))
-    return placeQuad(p.ndc, p.axes, vec4(select(flat.greaterThan(0), part.rgb, fogged(rgb, p.depth, fog)), colour.a.mul(p.alphaScale)))
+    return placeQuad(p.ndc, p.axes, vec4(select(flat.greaterThan(0), part.rgb, fogged(rgb, p.depth, fog)), color.a.mul(p.alphaScale)))
   })()
 }
 
@@ -802,13 +802,13 @@ function makeFragment(flat: N) {
     const uv = splatUv()
     const r2 = dot(uv, uv).toVar()
     If(r2.greaterThan(4), () => { Discard() })
-    const alpha = exp(r2.mul(-0.5)).mul(splatColour().a).toVar()
-    // a map of parts: all of the blob or none of it, so the nearest part's colour is left whole
+    const alpha = exp(r2.mul(-0.5)).mul(splatColor().a).toVar()
+    // a map of parts: all of the blob or none of it, so the nearest part's color is left whole
     If(flat.greaterThan(0), () => {
       // well out from the middle, so the discs of one surface close up and nothing behind shows between them
       If(alpha.lessThan(PART_CUT), () => { Discard() })
       alpha.assign(1)
     })
-    return vec4(splatColour().rgb, alpha)
+    return vec4(splatColor().rgb, alpha)
   })()
 }

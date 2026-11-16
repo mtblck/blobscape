@@ -52,7 +52,7 @@ export const EXPERIMENTS = [
     needs: 'WebGPU or WebGL 2',
     published: '2026-11-12',
     updated: '2026-11-12',
-    body: 'The elf takes a sword and a hand full of magic into a torchlit dungeon. Slimes in five colours hop in, wave after wave, and burst into splats.',
+    body: 'The elf takes a sword and a hand full of magic into a torchlit dungeon. Slimes in five colors hop in, wave after wave, and burst into splats.',
   },
   {
     id: 'clockwork',

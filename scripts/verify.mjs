@@ -124,7 +124,7 @@ const solidPixels = (page, sel) => page.evaluate((sel) => {
   const picked = await page.evaluate(() => [document.documentElement.dataset.theme, localStorage.getItem('blobscape-theme')])
   if (picked[0] !== 'dark' || picked[1] !== 'dark') fails.push(`theme choice gave ${picked.join(' / ')}`)
   else ok('the menu sets and stores the theme')
-  await page.waitForTimeout(600) // let colour transitions (the tip button's) finish before measuring contrast
+  await page.waitForTimeout(600) // let color transitions (the tip button's) finish before measuring contrast
   await axe(page, 'front page, menu open, dark')
   await page.getByRole('button', { name: /^system$/i }).click()
   if (await page.evaluate(() => document.documentElement.dataset.theme || localStorage.getItem('blobscape-theme'))) fails.push('System did not clear the theme')
@@ -202,12 +202,12 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     await page.getByRole('tab', { name: /Prop Type/ }).focus()
     await page.keyboard.press('ArrowRight')
     await page.keyboard.press('ArrowRight')
-    const colourOn = (await page.getByRole('tab', { name: /Finish/ }).getAttribute('aria-selected')) === 'true'
+    const colorOn = (await page.getByRole('tab', { name: /Finish/ }).getAttribute('aria-selected')) === 'true'
     const paletteShows = await page.getByRole('combobox', { name: 'Palette' }).isVisible()
     const turnHidden = !(await page.getByRole('slider', { name: 'Turn' }).isVisible())
-    if (!colourOn || !paletteShows || !turnHidden) fails.push(`tabs: colour selected ${colourOn}, palette visible ${paletteShows}, camera hidden ${turnHidden}`)
+    if (!colorOn || !paletteShows || !turnHidden) fails.push(`tabs: color selected ${colorOn}, palette visible ${paletteShows}, camera hidden ${turnHidden}`)
     else ok('arrow keys move through the settings tabs')
-    await axe(page, 'desktop colour tab')
+    await axe(page, 'desktop color tab')
     await page.getByRole('tab', { name: /View/ }).click()
     // The header stays on screen once the page scrolls
     await page.evaluate(() => window.scrollTo(0, 900))
@@ -231,7 +231,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     else ok('baked a 4-direction 32×128 sheet')
     const frames = await page.locator('[data-testid=sheet] ol li').count()
     if (frames !== 4) fails.push(`sheet shows ${frames} frames, expected 4`)
-    else ok('sheet shows its 4 frames, labelled')
+    else ok('sheet shows its 4 frames, labeled')
     await axe(page, 'desktop baked')
     await page.getByRole('slider', { name: 'Turn' }).fill('60')
     if (!(await page.getByRole('status').filter({ hasText: 'changed since' }).count())) fails.push('changing a setting does not mark the sheet out of date')
@@ -249,7 +249,7 @@ function ballPly(n = 2000) {
   const body = new Float32Array(n * props.length)
   for (let i = 0; i < n; i++) {
     const y = 1 - (i / (n - 1)) * 2, r = Math.sqrt(1 - y * y), t = i * 2.39996
-    // SH DC term: colour = 0.5 + 0.28209 * f_dc; opacity and scale are stored pre-activation
+    // SH DC term: color = 0.5 + 0.28209 * f_dc; opacity and scale are stored pre-activation
     body.set([Math.cos(t) * r, y, Math.sin(t) * r, 1.5, -1.2, -1.2, 4, -3, -3, -3, 1, 0, 0, 0], i * props.length)
   }
   return Buffer.concat([Buffer.from(header), Buffer.from(body.buffer)])
@@ -275,7 +275,7 @@ function ballPly(n = 2000) {
   const alert = await page.getByRole('alert').textContent({ timeout: 15000 }).catch(() => '')
   const stillBall = await page.getByRole('button', { name: 'ball' }).count()
   if (!alert.includes("didn't load")) fails.push(`bad file: no error shown (got "${alert}")`)
-  else if (!stillBall) fails.push('bad file relabelled the loaded object')
+  else if (!stillBall) fails.push('bad file relabeled the loaded object')
   else ok('a bad file shows an error and keeps the loaded object and its name')
   await page.screenshot({ path: join(shots, 'splat-to-sprite-ply.png') })
   await ctx.close()
@@ -521,7 +521,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   else ok('blobscape: each page sets its own title')
   if (await page.locator('a.tipjar').count()) fails.push('blobscape: the tip button covers a lesson')
 
-  // Colour by angle: degree 3 keeps up with a soft shine and falls behind a sharp one
+  // Color by angle: degree 3 keeps up with a soft shine and falls behind a sharp one
   const goalCount = () => page.textContent('[data-testid=goal-count]')
   await page.goto(base + '/lessons/angle/')
   await page.waitForTimeout(800)
@@ -660,7 +660,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   const smoothText = await page.textContent('[data-testid=gap]')
   await slider('Blend over').fill('2')
   await slider('Blend over').fill('0.4')
-  await slider('Centred at').fill('0.5')
+  await slider('Centerd at').fill('0.5')
   if (!(await goalsAt(4)).startsWith('4 of')) fails.push(`blobscape weights: goals show "${await goalCount()}" (hard: ${gapText} / blended: ${smoothText})`)
   else ok('blobscape weights: crack, smooth, rubber and offset tick')
 
@@ -751,8 +751,8 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
         frog: (r, g, b) => g > 120 && g > r * 1.4 && b < 110,
         elf: (r, g, b) => g > 90 && g > r * 1.5 && g > b * 1.3,
         fire: (r, g, b) => r > 200 && g > 70 && g < 210 && b < 120,
-        // a monster's colours come from its seed: anything bright and saturated
-        colourful: (r, g, b) => Math.max(r, g, b) > 110 && Math.max(r, g, b) - Math.min(r, g, b) > 50,
+        // a monster's colors come from its seed: anything bright and saturated
+        colorful: (r, g, b) => Math.max(r, g, b) > 110 && Math.max(r, g, b) - Math.min(r, g, b) > 50,
       }[kind]
       let n = 0; for (let i = 0; i < d.length; i += 4) if (test(d[i], d[i + 1], d[i + 2])) n++
       return n
@@ -773,7 +773,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     else ok('blobscape creature: Both draws the bones over the blobs')
     await tabClick(c.page.getByRole('button', { name: 'Blobs', exact: true }))
     // every other creature builds, draws, and has its own clips
-    for (const [name, bonesWanted, colour, clip, t] of [
+    for (const [name, bonesWanted, color, clip, t] of [
       ['Frog', 20, 'frog', 'Tongue', 1.15],
       ['Elf', 29, 'elf', 'Wave', 1],
       ['Dragon', 43, 'fire', 'Breathe fire', 2],
@@ -783,9 +783,9 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
       // the Sprites panel has a chip per move too: pick the one that plays it
       await tabClick(c.page.getByRole('region', { name: 'Options' }).getByRole('button', { name: clip, exact: true }))
       await c.page.waitForTimeout(150)
-      const got = { bones: await c.page.evaluate(() => window.__creature?.bones()), n: await pixels(t, colour), url: new URL(c.page.url()).searchParams.get('creature') }
+      const got = { bones: await c.page.evaluate(() => window.__creature?.bones()), n: await pixels(t, color), url: new URL(c.page.url()).searchParams.get('creature') }
       if (!(got.bones === bonesWanted && got.n > 1500 && got.url === name.toLowerCase())) fails.push(`blobscape creature: ${name} ${JSON.stringify(got)}`)
-      else ok(`blobscape creature: the ${name.toLowerCase()} draws on ${got.bones} bones, playing ${clip.toLowerCase()} (${got.n} pixels of its colour)`)
+      else ok(`blobscape creature: the ${name.toLowerCase()} draws on ${got.bones} bones, playing ${clip.toLowerCase()} (${got.n} pixels of its color)`)
       await c.page.screenshot({ path: join(shots, `blobscape-creature-${name.toLowerCase()}.png`) })
     }
     // the dragon's flame is bones that grow: it leaves in the file as scale keys, and comes back
@@ -815,7 +815,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     // the Sprites panel: the frog's tongue flick and its still pose from 8 sides, as 32 px pixel art
     await tabClick(c.page.getByRole('button', { name: 'Frog', exact: true }))
     await c.page.waitForFunction(() => window.__creature?.bones() === 20 && !document.querySelector('[data-testid=creature-loading]'), null, { timeout: 60000 }).catch(() => {})
-    const sheet = await c.page.evaluate(() => window.__sprites({ moves: ['tongue', 'still'], directions: 8, size: 32, frames: 6, colours: 16, outline: true }))
+    const sheet = await c.page.evaluate(() => window.__sprites({ moves: ['tongue', 'still'], directions: 8, size: 32, frames: 6, colors: 16, outline: true }))
     const tongueLeft = Math.max(...sheet.solid.slice(12, 18)), stillLeft = sheet.solid[50]
     if (sheet.cols !== 6 || sheet.rows !== 16 || sheet.solid.length !== 56 || sheet.solid.some((k) => k < 20)) fails.push(`blobscape creature sprites: ${JSON.stringify({ ...sheet, solid: sheet.solid.slice(0, 8) })}`)
     else if (!(tongueLeft > stillLeft * 1.05)) fails.push(`blobscape creature sprites: the tongue doesn't show from the side (${tongueLeft} vs ${stillLeft} solid pixels)`)
@@ -831,7 +831,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     const monster = async () => {
       await c.page.waitForFunction(() => new URL(location.href).searchParams.get('creature') === 'monster' && !document.querySelector('[data-testid=creature-loading]'), null, { timeout: 30000 }).catch(() => {})
       await c.page.waitForTimeout(200)
-      return { seed: new URL(c.page.url()).searchParams.get('seed'), bones: await c.page.evaluate(() => window.__creature?.bones()), n: await pixels(0.3, 'colourful'), label: await c.page.getByTestId('make-monster').textContent(), note: await c.page.getByTestId('creature-note').textContent() }
+      return { seed: new URL(c.page.url()).searchParams.get('seed'), bones: await c.page.evaluate(() => window.__creature?.bones()), n: await pixels(0.3, 'colorful'), label: await c.page.getByTestId('make-monster').textContent(), note: await c.page.getByTestId('creature-note').textContent() }
     }
     await tabClick(c.page.getByTestId('species').getByRole('button', { name: 'Monster', exact: true }))
     const m1 = await monster()
@@ -841,7 +841,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     if (!(m1.seed && m2.seed && m1.seed !== m2.seed && m1.bones >= 14 && m1.n > 1500 && m2.n > 1500 && m2.label === 'Generate a new monster' && /^Made a .*legged/.test(m2.note))) fails.push(`blobscape creature monster: ${JSON.stringify({ m1, m2 })}`)
     else ok(`blobscape creature monster: seeds ${m1.seed} and ${m2.seed} make two monsters (${m1.bones} and ${m2.bones} bones) that draw`)
     await c.page.screenshot({ path: join(shots, 'blobscape-creature-monster.png') })
-    const mSheet = await c.page.evaluate(() => window.__sprites({ moves: ['walk', 'roar'], directions: 4, size: 32, frames: 6, colours: 16, outline: true }))
+    const mSheet = await c.page.evaluate(() => window.__sprites({ moves: ['walk', 'roar'], directions: 4, size: 32, frames: 6, colors: 16, outline: true }))
     if (mSheet.rows !== 8 || mSheet.solid.some((k) => k < 20)) fails.push(`blobscape creature monster sprites: ${JSON.stringify({ ...mSheet, solid: mSheet.solid.slice(0, 8) })}`)
     else ok('blobscape creature monster sprites: the monster walks and roars from 4 sides as a sheet')
     // the address makes the same monster again
@@ -855,7 +855,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     await c.ctx.close()
   }
 
-  // Pixel Diorama: the scene draws as pixel art in the palette's colours, the GPU pass agrees with its CPU twin on both backends, and it moves
+  // Pixel Diorama: the scene draws as pixel art in the palette's colors, the GPU pass agrees with its CPU twin on both backends, and it moves
   for (const q of ['', '&webgl=1']) {
     const d = await open(`/experiments/pixel-diorama/?offscreen=1${q}`, { viewport: { width: 1280, height: 900 } })
     await d.page.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).catch(() => {})
@@ -879,19 +879,19 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     const { pixelArt } = await import('../src/splat-core/pixel.ts')
     const frame = (data) => data && { width: a.w, height: a.h, data: Uint8ClampedArray.from(data) }
     const want = pixelArt(frame(a.small), a.look, frame(a.before), frame(a.parts))
-    let alpha = 0, colour = 0, moved = 0
+    let alpha = 0, color = 0, moved = 0
     for (let i = 0; i < want.data.length; i += 4) {
       if (want.data[i + 3] !== a.art[i + 3]) alpha++
-      else if (Math.abs(want.data[i] - a.art[i]) + Math.abs(want.data[i + 1] - a.art[i + 1]) + Math.abs(want.data[i + 2] - a.art[i + 2]) > 6) colour++
+      else if (Math.abs(want.data[i] - a.art[i]) + Math.abs(want.data[i + 1] - a.art[i + 1]) + Math.abs(want.data[i + 2] - a.art[i + 2]) > 6) color++
       if (a.art[i] !== b.art[i] || a.art[i + 1] !== b.art[i + 1] || a.art[i + 3] !== b.art[i + 3]) moved++
     }
     const label = `blobscape pixel diorama (${a.backend})`
     if ((q ? 'webgl' : 'webgpu') !== a.backend) fails.push(`${label}: wanted the ${q ? 'webgl' : 'webgpu'} backend`)
     if (!(a.solid > 3000 && a.off === 0 && a.soft === 0)) fails.push(`${label}: ${JSON.stringify({ solid: a.solid, offPalette: a.off, soft: a.soft })}`)
-    else ok(`${label}: ${a.w}×${a.h} art, ${a.solid} solid pixels, every one a palette colour, none half transparent`)
-    // dither sits pixels on the line between two colours, where 8-bit rounding can tip them either way
-    if (!(alpha === 0 && colour < a.solid * 0.05)) fails.push(`${label}: the pixel pass and its CPU twin differ (${alpha} in shape, ${colour} of ${a.solid} in colour)`)
-    else ok(`${label}: the pixel pass matches its CPU twin (same shape, ${colour} of ${a.solid} pixels a neighbouring colour)`)
+    else ok(`${label}: ${a.w}×${a.h} art, ${a.solid} solid pixels, every one a palette color, none half transparent`)
+    // dither sits pixels on the line between two colors, where 8-bit rounding can tip them either way
+    if (!(alpha === 0 && color < a.solid * 0.05)) fails.push(`${label}: the pixel pass and its CPU twin differ (${alpha} in shape, ${color} of ${a.solid} in color)`)
+    else ok(`${label}: the pixel pass matches its CPU twin (same shape, ${color} of ${a.solid} pixels a neighboring color)`)
     // lines between parts: the pass drew a map of the scene's parts beside the picture, and the lines it adds are the ones the twin adds
     {
       const none = pixelArt(frame(a.small), { ...a.look, parts: false }, frame(a.before))
@@ -902,7 +902,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
         if (want.data[i] !== none.data[i] || want.data[i + 1] !== none.data[i + 1] || want.data[i + 2] !== none.data[i + 2]) lines++
       }
       if (!(a.look.parts && ids.size > 20 && lines > 200)) fails.push(`${label}: lines between parts: ${JSON.stringify({ on: a.look.parts, parts: ids.size, lines })}`)
-      else ok(`${label}: lines between parts: a map of ${ids.size} parts, ${lines} pixels of line that colour alone would not draw`)
+      else ok(`${label}: lines between parts: a map of ${ids.size} parts, ${lines} pixels of line that color alone would not draw`)
     }
     if (!(moved > 150)) fails.push(`${label}: only ${moved} pixels change in a few seconds`)
     else ok(`${label}: ${moved} pixels change in a few seconds`)
@@ -917,7 +917,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
         if (plain.data[i] !== again.data[i] || plain.data[i + 1] !== again.data[i + 1] || plain.data[i + 2] !== again.data[i + 2]) held++
       }
       if (!(c.look.steady > 0 && c.before && differ < a.solid * 0.05 && held > 20)) fails.push(`${label}: steady pixels: ${JSON.stringify({ steady: c.look.steady, before: !!c.before, differ, held })}`)
-      else ok(`${label}: steady pixels: drawn against the frame before as the CPU twin is (${differ} pixels a neighbouring colour), ${held} pixels keep their colour that would have flipped`)
+      else ok(`${label}: steady pixels: drawn against the frame before as the CPU twin is (${differ} pixels a neighboring color), ${held} pixels keep their color that would have flipped`)
     }
     // held frames: with a step, the scene only moves on every step, so two moments inside one step are one picture
     {
@@ -946,10 +946,10 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     if (twice > 40) fails.push(`${label}: one moment drawn twice differs in ${twice} pixels (blobs at one depth are changing order)`)
     else ok(`${label}: one moment drawn twice is the same picture (${twice} pixels differ)`)
     if (!q) {
-      // pixels off: the same scene as blobs, in far more colours
+      // pixels off: the same scene as blobs, in far more colors
       await tabClick(d.page.getByRole('button', { name: 'Blobs', exact: true }))
       await d.page.waitForFunction(() => !window.__diorama.stage.artSize)
-      const colours = await d.page.evaluate(async () => {
+      const colors = await d.page.evaluate(async () => {
         await window.__diorama.stage.frame(2)
         const cv = document.querySelector('[data-testid=diorama-view]')
         const px = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
@@ -957,8 +957,8 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
         for (let i = 0; i < px.length; i += 4) if (px[i + 3] > 200) s.add((px[i] << 16) | (px[i + 1] << 8) | px[i + 2])
         return s.size
       })
-      if (!(colours > 500)) fails.push(`${label}: as blobs it shows only ${colours} colours`)
-      else ok(`${label}: with pixels off it draws the blobs (${colours} colours)`)
+      if (!(colors > 500)) fails.push(`${label}: as blobs it shows only ${colors} colors`)
+      else ok(`${label}: with pixels off it draws the blobs (${colors} colors)`)
       await tabClick(d.page.getByRole('button', { name: 'Pixel art', exact: true }))
       // offscreen draws only when asked: draw until pixel mode is back on
       await d.page.waitForFunction(async () => { await window.__diorama.stage.frame(4.5); return !!window.__diorama.stage.artSize })
@@ -1034,19 +1034,19 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
       // the one scene whose sky stops short: that path of the pass against its CPU twin
       const { pixelArt } = await import('../src/splat-core/pixel.ts')
       const want = pixelArt({ width: a.w, height: a.h, data: Uint8ClampedArray.from(a.small) }, a.look, a.before && { width: a.w, height: a.h, data: Uint8ClampedArray.from(a.before) }, a.parts && { width: a.w, height: a.h, data: Uint8ClampedArray.from(a.parts) })
-      let alpha = 0, colour = 0
+      let alpha = 0, color = 0
       for (let i = 0; i < want.data.length; i += 4) {
         if (want.data[i + 3] !== a.art[i + 3]) alpha++
-        else if (Math.abs(want.data[i] - a.art[i]) + Math.abs(want.data[i + 1] - a.art[i + 1]) + Math.abs(want.data[i + 2] - a.art[i + 2]) > 6) colour++
+        else if (Math.abs(want.data[i] - a.art[i]) + Math.abs(want.data[i + 1] - a.art[i + 1]) + Math.abs(want.data[i + 2] - a.art[i + 2]) > 6) color++
       }
-      if (!(a.look.sky?.[2] < 1 && alpha === 0 && colour < a.w * a.h * 0.05)) fails.push(`${label}: with a sky that stops short, the pixel pass and its CPU twin differ (${alpha} in shape, ${colour} of ${a.w * a.h} in colour, reach ${a.look.sky?.[2]})`)
-      else ok(`${label}: with a sky that stops short, the pixel pass matches its CPU twin (${colour} of ${a.w * a.h} pixels a neighbouring colour)`)
+      if (!(a.look.sky?.[2] < 1 && alpha === 0 && color < a.w * a.h * 0.05)) fails.push(`${label}: with a sky that stops short, the pixel pass and its CPU twin differ (${alpha} in shape, ${color} of ${a.w * a.h} in color, reach ${a.look.sky?.[2]})`)
+      else ok(`${label}: with a sky that stops short, the pixel pass matches its CPU twin (${color} of ${a.w * a.h} pixels a neighboring color)`)
     }
     let moved = 0
     for (let i = 0; i < a.art.length; i += 4) if (a.art[i] !== b.art[i] || a.art[i + 1] !== b.art[i + 1] || a.art[i + 2] !== b.art[i + 2]) moved++
     const chip = await d.page.getByRole('button', { name, exact: true }).getAttribute('aria-pressed')
-    if (!(a.off === 0 && a.used >= 12 && a.bones > 10 && moved > 100 && chip === 'true')) fails.push(`${label}: ${JSON.stringify({ offPalette: a.off, colours: a.used, bones: a.bones, moved, chip })}`)
-    else ok(`${label}: built from its description (${a.bones} bones), ${a.used} palette colours in the picture, ${moved} pixels change in a few seconds`)
+    if (!(a.off === 0 && a.used >= 12 && a.bones > 10 && moved > 100 && chip === 'true')) fails.push(`${label}: ${JSON.stringify({ offPalette: a.off, colors: a.used, bones: a.bones, moved, chip })}`)
+    else ok(`${label}: built from its description (${a.bones} bones), ${a.used} palette colors in the picture, ${moved} pixels change in a few seconds`)
     await d.page.screenshot({ path: join(shots, `blobscape-pixel-diorama-${id}.png`) })
     await d.ctx.close()
   }
@@ -1084,7 +1084,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     await k.ctx.close()
   }
 
-  // Scan Studio: the sample scan is levelled and cleaned, cut blobs show red, a lamp relights it, the .ply round-trips, and the sandbox gets it
+  // Scan Studio: the sample scan is leveled and cleaned, cut blobs show red, a lamp relights it, the .ply round-trips, and the sandbox gets it
   {
     const k = await open('/experiments/scan-studio/?offscreen=1', { viewport: { width: 1280, height: 900 } })
     await k.page.waitForFunction(() => window.__scan?.kept() > 0, null, { timeout: 90000 }).catch(() => {})
@@ -1293,13 +1293,13 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   await page.keyboard.press('Control+z')
   if ((await count(page)) !== sprayed) fails.push('blobscape sandbox: Ctrl+Z did not bring the deleted blobs back')
   else ok('blobscape sandbox: select all, delete, Ctrl+Z')
-  // Keyboard: Enter on the focused view uses the tool at its centre
+  // Keyboard: Enter on the focused view uses the tool at its center
   await page.getByRole('button', { name: 'Add', exact: true }).click()
   const beforeKey = await count(page)
   await page.getByTestId('viewport').focus()
   await page.keyboard.press('Enter')
   if ((await count(page)) !== beforeKey + 1) fails.push(`blobscape sandbox: Enter with Add went ${beforeKey} → ${await count(page)}`)
-  else ok('blobscape sandbox: Enter on the view adds a blob at the centre')
+  else ok('blobscape sandbox: Enter on the view adds a blob at the center')
   // The skip link jumps to the content without leaving the page
   await page.keyboard.press('Shift+Tab')
   await page.goto(base + '/lessons/footprint/')
@@ -1577,8 +1577,8 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     if (!webgl) {
       for (const mode of ['quat', 'linear']) {
         const r = await page.evaluate(async (m) => { const l = window.__lab; l.setWalk(true); l.setMode(m); await l.frame(0.37); return l.world.checkAgainstCPU(l.renderer) }, mode)
-        if (!(r.centre < 1e-3 && r.cov < r.covScale * 0.01)) fails.push(`engine lab ${mode}: GPU and CPU differ ${JSON.stringify(r)}`)
-        else ok(`engine lab: GPU skinning matches the CPU (${mode}, centre ±${r.centre.toExponential(1)})`)
+        if (!(r.center < 1e-3 && r.cov < r.covScale * 0.01)) fails.push(`engine lab ${mode}: GPU and CPU differ ${JSON.stringify(r)}`)
+        else ok(`engine lab: GPU skinning matches the CPU (${mode}, center ±${r.center.toExponential(1)})`)
       }
     }
     if (!webgl) {
@@ -1589,7 +1589,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     const steps = await page.evaluate(() => window.__lab.profile(2))
     if (!(steps.draw > 0) || (!webgl && !(steps.deform > 0 && steps.project > 0 && steps.order > 0))) fails.push(`engine lab ${label}: step times ${JSON.stringify(steps)}`)
     else ok(`engine lab ${label}: times each step (move ${steps.deform.toFixed(0)}, project ${steps.project.toFixed(0)}, sort ${steps.order.toFixed(0)}, draw ${steps.draw.toFixed(0)} ms; CPU ${steps.cpuSkin.toFixed(0)}+${steps.cpuSort.toFixed(0)})`)
-    // it draws something fox-coloured in the middle of the frame
+    // it draws something fox-colored in the middle of the frame
     await page.evaluate(() => window.__lab.frame(0.2))
     const orange = await page.evaluate(() => {
       const c = document.querySelector('canvas'); const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data

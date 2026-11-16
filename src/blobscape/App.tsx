@@ -71,7 +71,7 @@ function LessonList() {
       <div className="pt-6 pb-8">
         <h1 ref={h1} tabIndex={-1} className="font-display text-5xl outline-none">Lessons</h1>
         <p className="mt-4 text-xl leading-relaxed text-ink-muted">
-          A Gaussian splat is a 3D scene made of nothing but soft, see-through, coloured blobs. Start with one, learn what each of its
+          A Gaussian splat is a 3D scene made of nothing but soft, see-through, colored blobs. Start with one, learn what each of its
           numbers does, pile up thousands, then give them bones and make them walk.
         </p>
       </div>
@@ -138,7 +138,7 @@ function LessonList() {
 
       <section aria-labelledby="sandbox-title" className="mt-10 rounded-lg border border-rule bg-paper-sunk p-6">
         <h2 id="sandbox-title" className="font-display text-3xl">Sandbox</h2>
-        <p className="mt-2 text-ink-muted">Spray blobs into space, select and recolour them, rip holes in a sample object, and switch on x-ray to see what it's really made of. Every lesson can open its scene here too.</p>
+        <p className="mt-2 text-ink-muted">Spray blobs into space, select and recolor them, rip holes in a sample object, and switch on x-ray to see what it's really made of. Every lesson can open its scene here too.</p>
         <a href={href({ page: 'sandbox' })} className="mt-4 inline-block rounded bg-accent px-4 py-2 font-medium text-paper transition-colors hover:bg-accent-ink">Open the sandbox →</a>
       </section>
     </div>

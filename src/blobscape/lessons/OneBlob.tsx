@@ -5,7 +5,7 @@ import { Chip, Field, Slider, Toggle } from '../../shared/ui.tsx'
 import { LessonShell } from '../Shell.tsx'
 import { LESSON_GOALS } from '../routes.ts'
 import { Viewport } from '../Viewport.tsx'
-import { drawOutlines, themeColour } from '../overlay.ts'
+import { drawOutlines, themeColor } from '../overlay.ts'
 import { useGoals } from '../progress.ts'
 
 const SWATCHES = ['#e5484d', '#f2a65a', '#f5d90a', '#30a46c', '#3e9be0', '#8e4ec6', '#f4ede1']
@@ -21,18 +21,18 @@ export function OneBlob() {
   const [ry, setRy] = useState(0)
   const [rz, setRz] = useState(0)
   const [opacity, setOpacity] = useState(0.9)
-  const [colour, setColour] = useState('#f2a65a')
+  const [color, setColor] = useState('#f2a65a')
   const [xray, setXray] = useState(true)
   const [orbit, setOrbit] = useState<Orbit>({ target: [0, 0, 0], distance: 4, azimuth: 30, elevation: 20 })
 
   const scale = [2 ** sx, 2 ** sy, 2 ** sz]
   const blobs = useMemo(() => {
     const b = new Blobs(1)
-    b.push({ centre: [0, 0, 0], scale: [scale[0], scale[1], scale[2]], quat: quatFromEuler(rx, ry, rz), colour: hexToRgb(colour), opacity })
+    b.push({ center: [0, 0, 0], scale: [scale[0], scale[1], scale[2]], quat: quatFromEuler(rx, ry, rz), color: hexToRgb(color), opacity })
     return b
     // scale is derived from sx/sy/sz
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sx, sy, sz, rx, ry, rz, opacity, colour])
+  }, [sx, sy, sz, rx, ry, rz, opacity, color])
 
   const sorted = [...scale].sort((a, b) => a - b)
   const done = useGoals('one-blob', {
@@ -45,7 +45,7 @@ export function OneBlob() {
   return (
     <LessonShell
       id="one-blob"
-      intro={<p>Every splat scene, however detailed, is made of this one thing: a soft, coloured, see-through blob. What can a single one do?</p>}
+      intro={<p>Every splat scene, however detailed, is made of this one thing: a soft, colored, see-through blob. What can a single one do?</p>}
       view={
         <Viewport
           bare
@@ -55,7 +55,7 @@ export function OneBlob() {
           setOrbit={setOrbit}
           label="A single Gaussian blob. Drag or use the arrow keys to orbit; scroll or press plus and minus to zoom."
           hint="drag to orbit · scroll to zoom"
-          overlay={xray ? (ctx, lens) => drawOutlines(ctx, blobs, lens, { sigmas: [1, 2], colour: themeColour('ink-faint', ctx.canvas), axes: true }) : undefined}
+          overlay={xray ? (ctx, lens) => drawOutlines(ctx, blobs, lens, { sigmas: [1, 2], color: themeColor('ink-faint', ctx.canvas), axes: true }) : undefined}
         />
       }
       caption={
@@ -102,16 +102,16 @@ export function OneBlob() {
         {
           id: 'look',
           title: 'Look',
-          note: 'colour and see-through',
+          note: 'color and see-through',
           span: 4,
           content: (
             <>
-              <Field label="Colour">
+              <Field label="Color">
                 <div className="flex flex-wrap items-center gap-1.5">
                   {SWATCHES.map((c) => (
-                    <button key={c} type="button" aria-label={`Colour ${c}`} aria-pressed={colour === c} onClick={() => setColour(c)} className={`h-6 w-6 rounded-full border-2 transition-transform hover:scale-110 ${colour === c ? 'border-ink' : 'border-transparent'}`} style={{ background: c }} />
+                    <button key={c} type="button" aria-label={`Color ${c}`} aria-pressed={color === c} onClick={() => setColor(c)} className={`h-6 w-6 rounded-full border-2 transition-transform hover:scale-110 ${color === c ? 'border-ink' : 'border-transparent'}`} style={{ background: c }} />
                   ))}
-                  <input type="color" aria-label="Any colour" value={colour} onChange={(e) => setColour(e.target.value)} className="h-6 w-8 cursor-pointer rounded border border-rule bg-transparent" />
+                  <input type="color" aria-label="Any color" value={color} onChange={(e) => setColor(e.target.value)} className="h-6 w-8 cursor-pointer rounded border border-rule bg-transparent" />
                 </div>
               </Field>
               <Slider label="Opacity" value={opacity} min={0} max={1} step={0.01} onChange={setOpacity} format={(v) => `${Math.round(v * 100)}%`} />
@@ -129,10 +129,10 @@ export function OneBlob() {
           <p>
             A Gaussian splat is a cloud of these. Each one is described by a handful of numbers: a <strong className="text-ink">position</strong> (3),
             a <strong className="text-ink">size</strong> along each of its own axes (3), a <strong className="text-ink">rotation</strong> (4, as a quaternion),
-            a <strong className="text-ink">colour</strong> (3) and an <strong className="text-ink">opacity</strong> (1). That's 14 numbers, or about 56 bytes.
+            a <strong className="text-ink">color</strong> (3) and an <strong className="text-ink">opacity</strong> (1). That's 14 numbers, or about 56 bytes.
           </p>
           <p>
-            It's called Gaussian because its strength falls off like the bell curve: full at the centre, about 61% one standard deviation
+            It's called Gaussian because its strength falls off like the bell curve: full at the center, about 61% one standard deviation
             out, 14% at two, and practically nothing past three. There's no hard edge, which is why splat scenes look soft and photographic
             rather than polygonal.
           </p>

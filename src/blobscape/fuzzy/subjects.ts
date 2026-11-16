@@ -1,13 +1,13 @@
-import { Blobs, normalise, type Quat } from '../../splat-core/blobs.ts'
+import { Blobs, normalize, type Quat } from '../../splat-core/blobs.ts'
 
 /**
  * Three things to capture, each as a splat of any size (blob count): what a
  * trainer would give you at that budget. Fewer blobs means each one is bigger.
- * Light is baked into the colours, as it is in a real capture, so a mesh
+ * Light is baked into the colors, as it is in a real capture, so a mesh
  * wrapped round the blobs inherits the same shading.
  *
  *   grass  thin blades: a needle-shaped blob can be a whole blade segment
- *   fluff  a dandelion clock: see-through seed fluff round a solid centre
+ *   fluff  a dandelion clock: see-through seed fluff round a solid center
  *   block  a painted wooden block: flat faces and sharp corners
  */
 export type SubjectId = 'grass' | 'fluff' | 'block'
@@ -20,7 +20,7 @@ export interface Subject {
   tips: V3[]
 }
 
-/** A light from the upper front left, and some sky, baked into a colour by the surface's facing. */
+/** A light from the upper front left, and some sky, baked into a color by the surface's facing. */
 export function shade(c: V3, n: V3, ambient = 0.55): V3 {
   const l = [-0.45, 0.75, 0.5]
   const ll = Math.hypot(l[0], l[1], l[2])
@@ -47,7 +47,7 @@ function quatFromBasis(x: V3, y: V3, z: V3): Quat {
     const s = Math.sqrt(1 + m22 - m00 - m11) * 2
     q = [(m02 + m20) / s, (m12 + m21) / s, s / 4, (m10 - m01) / s]
   }
-  return normalise(q)
+  return normalize(q)
 }
 
 const norm = (v: V3): V3 => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l] }
@@ -79,7 +79,7 @@ export function grass(count: number): Subject {
     const h = 0.55 + r() * 0.45
     const width = 0.022 + r() * 0.01
     const green: V3 = [0.25 + r() * 0.15, 0.55 + r() * 0.2, 0.15 + r() * 0.08]
-    // The blade's centre line: up, curving outward
+    // The blade's center line: up, curving outward
     const at = (t: number): V3 => [base[0] + Math.cos(a) * lean * t * t * h, h * t * (1 - 0.25 * t * t * lean), base[2] + Math.sin(a) * lean * t * t * h]
     tips.push(at(1))
     const side: V3 = [-Math.sin(a), 0, Math.cos(a)]
@@ -93,10 +93,10 @@ export function grass(count: number): Subject {
       const seg = (h / per) * 0.6
       const tone = 0.7 + 0.45 * t
       b.push({
-        centre: p,
+        center: p,
         scale: [w * 0.5, seg, 0.0015],
         quat: quatFromBasis(sideways, along, normal),
-        colour: shade([green[0] * tone, green[1] * tone, green[2] * tone], normal, 0.6),
+        color: shade([green[0] * tone, green[1] * tone, green[2] * tone], normal, 0.6),
         opacity: 0.95,
       })
     }
@@ -104,7 +104,7 @@ export function grass(count: number): Subject {
   return { blobs: b, tips }
 }
 
-/** A dandelion clock: a stem, a small solid centre, and a ball of faint seed fluff. */
+/** A dandelion clock: a stem, a small solid center, and a ball of faint seed fluff. */
 export function fluff(count: number): Subject {
   const r = rng(23)
   const head: V3 = [0, 0.72, 0]
@@ -114,22 +114,22 @@ export function fluff(count: number): Subject {
   const b = new Blobs(stemN + coreN + fluffN)
   for (let j = 0; j < stemN; j++) {
     const t = (j + 0.5) / stemN
-    b.push({ centre: [0.03 * Math.sin(t * 2), t * 0.68, 0], scale: [0.009, (0.68 / stemN) * 0.7, 0.009], quat: [0, 0, 0, 1], colour: shade([0.35, 0.55, 0.25], [1, 0, 0]), opacity: 0.95 })
+    b.push({ center: [0.03 * Math.sin(t * 2), t * 0.68, 0], scale: [0.009, (0.68 / stemN) * 0.7, 0.009], quat: [0, 0, 0, 1], color: shade([0.35, 0.55, 0.25], [1, 0, 0]), opacity: 0.95 })
   }
   for (let j = 0; j < coreN; j++) {
     const n = sphere(j, coreN, r)
-    b.push({ centre: [head[0] + n[0] * 0.05, head[1] + n[1] * 0.05, head[2] + n[2] * 0.05], scale: [0.02, 0.02, 0.02], quat: [0, 0, 0, 1], colour: shade([0.75, 0.68, 0.45], n), opacity: 0.95 })
+    b.push({ center: [head[0] + n[0] * 0.05, head[1] + n[1] * 0.05, head[2] + n[2] * 0.05], scale: [0.02, 0.02, 0.02], quat: [0, 0, 0, 1], color: shade([0.75, 0.68, 0.45], n), opacity: 0.95 })
   }
-  // Each seed: a fine thread out from the centre ending in a pale, see-through tuft
+  // Each seed: a fine thread out from the center ending in a pale, see-through tuft
   const big = Math.min(0.05, 0.03 * Math.sqrt(400 / fluffN))
   for (let j = 0; j < fluffN; j++) {
     const n = sphere(j, fluffN, r)
     const d = 0.08 + 0.17 * Math.pow(r(), 0.35)
     b.push({
-      centre: [head[0] + n[0] * d, head[1] + n[1] * d, head[2] + n[2] * d],
+      center: [head[0] + n[0] * d, head[1] + n[1] * d, head[2] + n[2] * d],
       scale: [big, big, big],
       quat: [0, 0, 0, 1],
-      colour: shade([0.97, 0.96, 0.92], n, 0.8),
+      color: shade([0.97, 0.96, 0.92], n, 0.8),
       opacity: 0.05 + 0.06 * r(),
     })
   }
@@ -166,7 +166,7 @@ export function block(count: number): Subject {
     for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
       const s = (i + 0.5) / n - 0.5, t = (j + 0.5) / n - 0.5
       const p: V3 = [f.normal[0] * half + f.u[0] * s * side + f.v[0] * t * side, half + f.normal[1] * half + f.u[1] * s * side + f.v[1] * t * side, f.normal[2] * half + f.u[2] * s * side + f.v[2] * t * side]
-      b.push({ centre: p, scale: [cell * 0.6, cell * 0.6, 0.002], quat: quatFromBasis(f.u, f.v, f.normal), colour: shade(paint(f.normal, s, t), f.normal), opacity: 0.98 })
+      b.push({ center: p, scale: [cell * 0.6, cell * 0.6, 0.002], quat: quatFromBasis(f.u, f.v, f.normal), color: shade(paint(f.normal, s, t), f.normal), opacity: 0.98 })
     }
   }
   return { blobs: b, tips: [] }

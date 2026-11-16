@@ -14,7 +14,7 @@ export class ImportError extends Error {
 /**
  * Reads any splat file Spark understands (.ply, .spz, .splat, .ksplat, .sog)
  * into a `Blobs` list. Spark does the decoding (in WASM); we copy out the
- * base colour of each blob. View-dependent colour (spherical harmonics) is
+ * base color of each blob. View-dependent color (spherical harmonics) is
  * left behind, so shiny things look a little flatter in the sandbox.
  *
  * Files with more than `max` splats keep every nth one, widened by √n (as
@@ -47,7 +47,7 @@ export async function readSplatFile(bytes: ArrayBuffer, fileName: string, max = 
       if (i % step) return
       const v = [c.x, c.y, c.z, s.x, s.y, s.z, q.x, q.y, q.z, q.w, opacity, col.r, col.g, col.b]
       if (!v.every(Number.isFinite)) { dropped++; return }
-      b.push({ centre: [c.x, c.y, c.z], scale: [s.x * k, s.y * k, s.z * k], quat: [q.x, q.y, q.z, q.w], colour: [col.r, col.g, col.b], opacity })
+      b.push({ center: [c.x, c.y, c.z], scale: [s.x * k, s.y * k, s.z * k], quat: [q.x, q.y, q.z, q.w], color: [col.r, col.g, col.b], opacity })
     })
     return { blobs: b, step, dropped }
   } finally {

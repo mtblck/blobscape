@@ -3,7 +3,7 @@ import { BLOCK_FACES, BLOCK_SIDE, paint, shade } from './subjects.ts'
 
 /**
  * The block as a tidied mesh: what decimation does to flat faces, or a
- * modeller would make by hand. Each face is cut only where its paint changes,
+ * modeler would make by hand. Each face is cut only where its paint changes,
  * so every edge and every stripe stays sharp in a few dozen triangles.
  */
 export function tidyBlock(): SplatMesh {
@@ -33,7 +33,7 @@ export function tidyBlock(): SplatMesh {
   return {
     positions: Float32Array.from(pos),
     normals: Float32Array.from(nrm),
-    colours: Float32Array.from(col),
+    colors: Float32Array.from(col),
     indices: Uint32Array.from(idx),
     joints: new Uint8Array(vertexCount * 4),
     weights: new Float32Array(vertexCount * 4),

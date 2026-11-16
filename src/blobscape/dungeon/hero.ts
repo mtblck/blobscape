@@ -31,16 +31,16 @@ export function makeHero(count: number, look = 'forest'): Creature {
   const parts: Part[] = [
     ...base.parts,
     // grip, guard, pommel and a long blade, its edge catching the light
-    { shape: { tube: [g(-0.07), g(0.08)], r: [0.017, 0.017] }, colour: [0.3, 0.17, 0.08], bones: ['sword'], density: 4 },
-    { shape: { ball: g(-0.085), r: [0.026, 0.026, 0.026] }, colour: [0.86, 0.68, 0.3], bones: ['sword'], density: 5 },
-    { shape: { tube: [[grip[0] - 0.09, grip[1], 0.09], [grip[0] + 0.09, grip[1], 0.09]], r: [0.016, 0.016] }, colour: [0.86, 0.68, 0.3], bones: ['sword'], density: 5 },
+    { shape: { tube: [g(-0.07), g(0.08)], r: [0.017, 0.017] }, color: [0.3, 0.17, 0.08], bones: ['sword'], density: 4 },
+    { shape: { ball: g(-0.085), r: [0.026, 0.026, 0.026] }, color: [0.86, 0.68, 0.3], bones: ['sword'], density: 5 },
+    { shape: { tube: [[grip[0] - 0.09, grip[1], 0.09], [grip[0] + 0.09, grip[1], 0.09]], r: [0.016, 0.016] }, color: [0.86, 0.68, 0.3], bones: ['sword'], density: 5 },
     {
       shape: { tube: [g(0.1), g(0.84)], r: [0.03, 0.006], flat: 0.25 },
-      colour: (_p, n, u) => mix(STEEL, [1, 1, 1], Math.abs(n[0]) > 0.8 ? 0.6 : 0.1 * u), glow: true, bones: ['sword'], density: 5, opacity: 0.97,
+      color: (_p, n, u) => mix(STEEL, [1, 1, 1], Math.abs(n[0]) > 0.8 ? 0.6 : 0.1 * u), glow: true, bones: ['sword'], density: 5, opacity: 0.97,
     },
     // the orb: a bright core in a soft halo
-    { shape: { ball: orb, r: [0.04, 0.04, 0.04] }, colour: [0.85, 0.95, 1], glow: true, bones: ['orb'], density: 8, opacity: 0.95 },
-    { shape: { ball: orb, r: [0.085, 0.085, 0.085] }, colour: ARCANE, glow: true, bones: ['orb'], density: 3, opacity: 0.22, size: 1.6 },
+    { shape: { ball: orb, r: [0.04, 0.04, 0.04] }, color: [0.85, 0.95, 1], glow: true, bones: ['orb'], density: 8, opacity: 0.95 },
+    { shape: { ball: orb, r: [0.085, 0.085, 0.085] }, color: ARCANE, glow: true, bones: ['orb'], density: 3, opacity: 0.22, size: 1.6 },
   ]
   const b = buildBody({ bones, parts, blend: base.blend }, count, 5)
   return { blobs: b.blobs, skin: b.skin, skeleton: b.skeleton }
@@ -56,7 +56,7 @@ export interface HeroClock {
   flicker: boolean
 }
 
-const STRIDE_METRES = 1.5, STRIDE_SECONDS = 1.1
+const STRIDE_METERS = 1.5, STRIDE_SECONDS = 1.1
 
 /**
  * Poses the hero from the game: standing blending into a run with the
@@ -66,7 +66,7 @@ const STRIDE_METRES = 1.5, STRIDE_SECONDS = 1.1
  */
 export function poseHero(sk: Skeleton, h: Hero, clock: HeroClock, dt: number) {
   clock.idle += dt
-  clock.walk += (dt * h.speed * STRIDE_SECONDS) / STRIDE_METRES
+  clock.walk += (dt * h.speed * STRIDE_SECONDS) / STRIDE_METERS
   elfIdle(sk, clock.idle)
   const rest = { rotation: sk.rotation.slice(), offset: sk.offset.slice() }
   const w = Math.min(1, Math.abs(h.speed) / (RUN_SPEED * 0.35))
@@ -158,12 +158,12 @@ export function makeBolt(count = 900): Creature {
     ...Array.from({ length: SPARKS }, (_, i): Bone => ({ name: `spark${i}`, parent: 0, head: [0, 0, 0] })),
   ]
   const parts: Part[] = [
-    { shape: { ball: [0, 0, 0], r: [0.07, 0.07, 0.07] }, colour: [1, 1, 1], glow: true, bones: ['orb'], opacity: 1, density: 3 },
-    { shape: { ball: [0, 0, 0], r: [0.13, 0.13, 0.13] }, colour: [0.45, 0.7, 1], glow: true, bones: ['orb'], opacity: 0.55, density: 1.5 },
-    { shape: { ball: [0, 0, 0], r: [0.24, 0.24, 0.24] }, colour: [0.35, 0.4, 1], glow: true, bones: ['orb'], opacity: 0.2, size: 2 },
+    { shape: { ball: [0, 0, 0], r: [0.07, 0.07, 0.07] }, color: [1, 1, 1], glow: true, bones: ['orb'], opacity: 1, density: 3 },
+    { shape: { ball: [0, 0, 0], r: [0.13, 0.13, 0.13] }, color: [0.45, 0.7, 1], glow: true, bones: ['orb'], opacity: 0.55, density: 1.5 },
+    { shape: { ball: [0, 0, 0], r: [0.24, 0.24, 0.24] }, color: [0.35, 0.4, 1], glow: true, bones: ['orb'], opacity: 0.2, size: 2 },
     // a tail streaming out behind
-    { shape: { fill: [[0, 0, -0.05], [0, 0, -0.75]], r: [0.09, 0.0] }, colour: (_p, _n, u) => mix([0.75, 0.9, 1], [0.35, 0.35, 1], u), glow: true, opacity: (_p, u) => 0.6 * (1 - u), bones: ['orb'], size: 0.7 },
-    ...Array.from({ length: SPARKS }, (_, i): Part => ({ shape: { ball: [0, 0, 0], r: [0.035, 0.035, 0.035] }, colour: i % 2 ? ARCANE : [1, 1, 1], glow: true, bones: [`spark${i}`], opacity: 0.9, density: 2 })),
+    { shape: { fill: [[0, 0, -0.05], [0, 0, -0.75]], r: [0.09, 0.0] }, color: (_p, _n, u) => mix([0.75, 0.9, 1], [0.35, 0.35, 1], u), glow: true, opacity: (_p, u) => 0.6 * (1 - u), bones: ['orb'], size: 0.7 },
+    ...Array.from({ length: SPARKS }, (_, i): Part => ({ shape: { ball: [0, 0, 0], r: [0.035, 0.035, 0.035] }, color: i % 2 ? ARCANE : [1, 1, 1], glow: true, bones: [`spark${i}`], opacity: 0.9, density: 2 })),
   ]
   const b = buildBody({ bones, parts, blend: 0.05 }, count, 17)
   return { blobs: b.blobs, skin: b.skin, skeleton: b.skeleton }

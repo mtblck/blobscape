@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu'
 import { mix, positionView, smoothstep, uniform } from 'three/tsl'
-import { readbackToSrgb, srgbToLinear } from '../../splat-core/colour.ts'
+import { readbackToSrgb, srgbToLinear } from '../../splat-core/color.ts'
 import { SplatWorld } from '../../splat-engine/engine.ts'
 import { Forest, type ForestOptions } from './forest.ts'
 import type { Season } from './plants.ts'

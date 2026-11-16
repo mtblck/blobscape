@@ -1,7 +1,7 @@
 import { Blobs, quatFacing, type Vec3 } from './blobs.ts'
 import type { Preset } from './presets.ts'
 
-/** A point on a surface with its outward normal and colour. */
+/** A point on a surface with its outward normal and color. */
 export interface Sample { p: Vec3; n: Vec3; c: Vec3 }
 
 export type ShapeId = 'sphere' | 'torus' | 'cube'
@@ -51,15 +51,15 @@ export function sampleShape(id: ShapeId, n: number): Sample[] {
       p[(axis + 1) % 3] = (fu * 2 - 1) * s
       p[(axis + 2) % 3] = (fv * 2 - 1) * s
       p[1] += 0.8
-      const faceColours: Vec3[] = [[0.9, 0.35, 0.3], [0.35, 0.75, 0.45], [0.95, 0.8, 0.3]]
-      out.push({ p, n: nn, c: shade(faceColours[axis], nn) })
+      const faceColors: Vec3[] = [[0.9, 0.35, 0.3], [0.35, 0.75, 0.45], [0.95, 0.8, 0.3]]
+      out.push({ p, n: nn, c: shade(faceColors[axis], nn) })
     }
   }
   return out
 }
 
 const LIGHT: Vec3 = [-0.45, 0.75, 0.5]
-/** Half-Lambert shading baked into the colour, as a capture would have it. */
+/** Half-Lambert shading baked into the color, as a capture would have it. */
 function shade(c: Vec3, n: Vec3): Vec3 {
   const l = Math.hypot(...LIGHT)
   const d = (n[0] * LIGHT[0] + n[1] * LIGHT[1] + n[2] * LIGHT[2]) / l
@@ -74,7 +74,7 @@ function shade(c: Vec3, n: Vec3): Vec3 {
 export function blobsFromSamples(samples: Sample[], size: number, flat: boolean, opacity = 0.95): Blobs {
   const b = new Blobs(samples.length)
   for (const s of samples) {
-    b.push({ centre: s.p, scale: [size, size, flat ? size * 0.15 : size], quat: quatFacing(s.n), colour: s.c, opacity })
+    b.push({ center: s.p, scale: [size, size, flat ? size * 0.15 : size], quat: quatFacing(s.n), color: s.c, opacity })
   }
   return b
 }
@@ -85,7 +85,7 @@ export function blobsFromPreset(preset: Preset): Blobs {
   // The presets only ever call pushSplat, so a stand-in collects them.
   const sink = {
     pushSplat(c: { x: number; y: number; z: number }, s: { x: number; y: number; z: number }, q: { x: number; y: number; z: number; w: number }, opacity: number, col: { r: number; g: number; b: number }) {
-      b.push({ centre: [c.x, c.y, c.z], scale: [s.x, s.y, s.z], quat: [q.x, q.y, q.z, q.w], colour: [col.r, col.g, col.b], opacity })
+      b.push({ center: [c.x, c.y, c.z], scale: [s.x, s.y, s.z], quat: [q.x, q.y, q.z, q.w], color: [col.r, col.g, col.b], opacity })
     },
   }
   preset.build(sink as never)

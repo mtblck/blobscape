@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { Blobs } from '../../splat-core/blobs.ts'
-import { srgbToLinear } from '../../splat-core/colour.ts'
+import { srgbToLinear } from '../../splat-core/color.ts'
 import type { Orbit, SplatView } from '../../splat-core/view.ts'
 import { makeCreature, poseWalk } from '../../splat-engine/creature.ts'
 import { recordClip, writeRiggedGlb, writeRiggedMeshGlb } from '../../splat-engine/glb.ts'
@@ -20,12 +20,12 @@ const GRIDS = [16, 24, 32, 48, 64, 96]
 const STRIDE = 1 / 1.4
 const NONE = new Blobs(1)
 
-/** A three.js mesh for a SplatMesh, with colours made linear as three.js expects. */
+/** A three.js mesh for a SplatMesh, with colors made linear as three.js expects. */
 function toThree(m: SplatMesh) {
   const g = new THREE.BufferGeometry()
   g.setAttribute('position', new THREE.BufferAttribute(m.positions.slice(), 3))
   g.setAttribute('normal', new THREE.BufferAttribute(m.normals.slice(), 3))
-  g.setAttribute('color', new THREE.BufferAttribute(m.colours.map(srgbToLinear), 3))
+  g.setAttribute('color', new THREE.BufferAttribute(m.colors.map(srgbToLinear), 3))
   g.setIndex(new THREE.BufferAttribute(m.indices, 1))
   g.computeBoundingSphere()
   return g
@@ -195,7 +195,7 @@ export function Model() {
             bytes, so a good mesh is the coarsest one that keeps what matters.
           </p>
           <p>
-            Either way the mesh loses what made the fox a splat: soft edges, see-through fur, the colour of every single blob. The
+            Either way the mesh loses what made the fox a splat: soft edges, see-through fur, the color of every single blob. The
             splat .glb keeps all of that, using the KHR_gaussian_splatting standard, with the bones and trot in standard glTF and a
             small extension of ours saying how a skinned blob turns. Today most viewers show it standing still. The mesh walks in
             any of them. That's why Creature, next door, saves both.

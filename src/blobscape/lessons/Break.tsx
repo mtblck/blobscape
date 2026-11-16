@@ -11,12 +11,12 @@ import { Viewport } from '../Viewport.tsx'
 import { useGoals } from '../progress.ts'
 
 const START: Orbit = { target: [0, 0.55, 0], distance: 4.6, azimuth: 25, elevation: 18 }
-const CENTRE = [0, 0.5, 0]
+const CENTER = [0, 0.5, 0]
 
 /** Throws blob i out from the middle, partly in a random direction so the cloud fills a volume and gaps open (a purely radial push just looks like a bigger toadstool). */
 function scatter(b: Blobs, i: number, amount: number) {
-  const c = b.centre, k = i * 3
-  let rx = c[k] - CENTRE[0], ry = c[k + 1] - CENTRE[1], rz = c[k + 2] - CENTRE[2]
+  const c = b.center, k = i * 3
+  let rx = c[k] - CENTER[0], ry = c[k + 1] - CENTER[1], rz = c[k + 2] - CENTER[2]
   const r = Math.hypot(rx, ry, rz) || 1
   // Uniform random direction from two hashes
   const u = hash01(i, 11) * 2 - 1, t = hash01(i, 12) * Math.PI * 2, q = Math.sqrt(1 - u * u)
@@ -34,16 +34,16 @@ export function Break() {
   const shown = useMemo(() => {
     const b = new Blobs(base.count)
     b.count = base.count
-    b.centre.set(base.centre.subarray(0, base.count * 3))
+    b.center.set(base.center.subarray(0, base.count * 3))
     b.quat.set(base.quat.subarray(0, base.count * 4))
-    b.colour.set(base.colour.subarray(0, base.count * 3))
+    b.color.set(base.color.subarray(0, base.count * 3))
     b.opacity.set(base.opacity.subarray(0, base.count))
     return b
   }, [base])
   // Rewritten from the untouched original every time, so nothing drifts
   const version = useMemo(() => {
     const n = base.count
-    for (let k = 0; k < n * 3; k++) { shown.scale[k] = base.scale[k] * size; shown.centre[k] = base.centre[k] }
+    for (let k = 0; k < n * 3; k++) { shown.scale[k] = base.scale[k] * size; shown.center[k] = base.center[k] }
     if (explode > 0) for (let i = 0; i < n; i++) scatter(shown, i, explode)
     return size * 1000 + explode
   }, [base, shown, size, explode])
@@ -104,7 +104,7 @@ export function Break() {
           </p>
           <p>
             And when you put the sliders back, the toadstool came back exactly. Every blob still had its own 14 numbers. A splat is a
-            list, and anything you can do to a list, you can do to a scene: filter it, move part of it, recolour it, animate it.
+            list, and anything you can do to a list, you can do to a scene: filter it, move part of it, recolor it, animate it.
           </p>
           <p>
             That's what the sandbox is for. It has every tool from these lessons, any scene you like and effects that bend whole

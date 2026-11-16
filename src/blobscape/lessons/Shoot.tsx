@@ -154,8 +154,8 @@ export function Shoot() {
       explain={
         <>
           <p>
-            Training starts from a random grey cloud. Each step it draws the blobs from one photo's camera, compares that with the photo,
-            and nudges every blob's place, size, colour and opacity a little in whichever direction shrinks the error. Blobs that fade to
+            Training starts from a random gray cloud. Each step it draws the blobs from one photo's camera, compares that with the photo,
+            and nudges every blob's place, size, color and opacity a little in whichever direction shrinks the error. Blobs that fade to
             nothing are moved next to busy ones, so blobs pile up where there's detail. After a few hundred steps the cloud looks like the photos.
           </p>
           <p>
@@ -188,7 +188,7 @@ function SpotRing({ spots, toggle, looking }: { spots: number[]; toggle: (deg: n
     <div role="group" aria-label="Camera spots round the bird" className="relative h-44 w-44 shrink-0">
       <svg viewBox="-50 -50 100 100" aria-hidden className="absolute inset-0 h-full w-full">
         <circle r={R} fill="none" className="stroke-rule" strokeDasharray="2 3" />
-        {/* The bird from above: body, head towards the front (down), beak, tail at the back */}
+        {/* The bird from above: body, head toward the front (down), beak, tail at the back */}
         <ellipse cx="0" cy="-2" rx="11" ry="13" fill="#f5bd29" />
         <circle cx="0" cy="8" r="7" fill="#f5bd29" />
         <path d="M-2.5 14 L2.5 14 L0 19 Z" fill="#fa7f1a" />

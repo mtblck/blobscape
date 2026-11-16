@@ -5,7 +5,7 @@ import { Chip, Slider } from '../../shared/ui.tsx'
 import { LessonShell } from '../Shell.tsx'
 import { LESSON_GOALS } from '../routes.ts'
 import { Viewport } from '../Viewport.tsx'
-import { drawOutlines, themeColour } from '../overlay.ts'
+import { drawOutlines, themeColor } from '../overlay.ts'
 import { useGoals } from '../progress.ts'
 
 const VIEWS: { name: string; azimuth: number; elevation: number }[] = [
@@ -22,7 +22,7 @@ export function Footprint() {
   // A round pancake: wide in x and y, thin in z, facing +Z (the "Face on" view)
   const blobs = useMemo(() => {
     const b = new Blobs(1)
-    b.push({ centre: [0, 0, 0], scale: [0.5, 0.5, 0.04], quat: [0, 0, 0, 1], colour: [0.24, 0.6, 0.88], opacity: 0.95 })
+    b.push({ center: [0, 0, 0], scale: [0.5, 0.5, 0.04], quat: [0, 0, 0, 1], color: [0.24, 0.6, 0.88], opacity: 0.95 })
     return b
   }, [])
 
@@ -51,9 +51,9 @@ export function Footprint() {
           label="A flat blob and the ellipse it covers on screen. Drag or use the arrow keys to orbit."
           hint="drag to orbit · scroll to zoom"
           overlay={(ctx, lens) => {
-            drawOutlines(ctx, blobs, lens, { sigmas: [1, 2], colour: themeColour('ink-faint', ctx.canvas) })
+            drawOutlines(ctx, blobs, lens, { sigmas: [1, 2], color: themeColor('ink-faint', ctx.canvas) })
             ctx.setLineDash([5, 4])
-            drawOutlines(ctx, blobs, lens, { sigmas: [reach], colour: themeColour('accent', ctx.canvas), width: 1.5 })
+            drawOutlines(ctx, blobs, lens, { sigmas: [reach], color: themeColor('accent', ctx.canvas), width: 1.5 })
             ctx.setLineDash([])
           }}
         />

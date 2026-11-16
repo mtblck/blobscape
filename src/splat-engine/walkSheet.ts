@@ -24,7 +24,7 @@ const STRIDE = 1 / 1.4
 /** One fox and its world per renderer, kept between sheets so their GPU buffers are made once. */
 const stages = new WeakMap<object, { fox: Creature; world: SplatWorld; scene: THREE.Scene }>()
 
-export async function makeWalkSheet(renderer: THREE.WebGPURenderer, opts: { size?: number; frames?: number; colours?: number } = {}): Promise<WalkSheet> {
+export async function makeWalkSheet(renderer: THREE.WebGPURenderer, opts: { size?: number; frames?: number; colors?: number } = {}): Promise<WalkSheet> {
   let stage = stages.get(renderer)
   if (!stage) {
     const fox = makeCreature(20000)
@@ -36,7 +36,7 @@ export async function makeWalkSheet(renderer: THREE.WebGPURenderer, opts: { size
   }
   const { fox, world, scene } = stage
   const walk = { name: 'walk', clip: recordClip('walk', fox.skeleton, poseWalk, STRIDE, 24), frames: opts.frames ?? 8 }
-  const s = await bakeSheet({ renderer, scene, actor: fox, posed: () => world.markPosed() }, [walk], { directions: 4, size: opts.size ?? 48, colours: opts.colours ?? 12, outline: true })
+  const s = await bakeSheet({ renderer, scene, actor: fox, posed: () => world.markPosed() }, [walk], { directions: 4, size: opts.size ?? 48, colors: opts.colors ?? 12, outline: true })
   return {
     frames: s.frames, cols: s.plan.cols, rows: s.plan.rows.length, size: s.size, png: s.png,
     json: (image: string) => tinkerkitJson('Blob fox', image, s.plan, s.size, s.anchorY),

@@ -8,9 +8,9 @@ export interface PixelSettings {
   /** Render this many times bigger, then average down. */
   supersample: number
   alphaCut: number
-  /** 'auto' builds one from the frames; 'none' keeps every colour. */
+  /** 'auto' builds one from the frames; 'none' keeps every color. */
   palette: Rgb[] | 'auto' | 'none'
-  autoColours: number
+  autoColors: number
   dither: number
   strays: boolean
   outline: 'none' | 'darkest' | 'black'
@@ -30,7 +30,7 @@ export function processFrames(raws: Uint8Array[], s: PixelSettings, premultiplie
   const raw = raws.map((r) => downsample(r, big, 1, { premultiplied, flipY: true }))
   const shrunk = raws.map((r) => downsample(r, big, s.supersample, { premultiplied, flipY: true }))
   const cut = shrunk.map((f) => alphaCut(f, s.alphaCut))
-  const palette = s.palette === 'auto' ? autoPalette(cut, s.autoColours) : s.palette === 'none' ? [] : s.palette
+  const palette = s.palette === 'auto' ? autoPalette(cut, s.autoColors) : s.palette === 'none' ? [] : s.palette
   const snapped = cut.map((f) => quantize(f, palette, s.dither))
   const ink: Rgb = s.outline === 'black' ? [0, 0, 0] : darkest(palette.length ? palette : sample(snapped))
   const final = snapped.map((f) => {

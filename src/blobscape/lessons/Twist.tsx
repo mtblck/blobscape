@@ -17,7 +17,7 @@ const start = (): Orbit => (typeof window !== 'undefined' && window.matchMedia('
 /** The thinnest blob near the wrist, as a share of its rest volume. */
 function thinnest(rest: Blobs, posed: Blobs) {
   let m = 1
-  for (let i = 0; i < rest.count; i++) if (Math.abs(rest.centre[i * 3]) < 0.4) m = Math.min(m, volumeKept(rest, posed, i))
+  for (let i = 0; i < rest.count; i++) if (Math.abs(rest.center[i * 3]) < 0.4) m = Math.min(m, volumeKept(rest, posed, i))
   return m
 }
 
@@ -110,8 +110,8 @@ export function Twist() {
             fault makes the "candy wrapper" in 3D characters.
           </p>
           <p>
-            The right wrist averages the turns themselves (as quaternions), so each blob turns halfway and keeps its size. The centres
-            still crowd towards the middle on a big twist, which is why rigs add twist bones along the forearm. Our engine averages
+            The right wrist averages the turns themselves (as quaternions), so each blob turns halfway and keeps its size. The centers
+            still crowd toward the middle on a big twist, which is why rigs add twist bones along the forearm. Our engine averages
             turns, and saves that rule into its files. Next: making bones move on their own.
           </p>
         </>

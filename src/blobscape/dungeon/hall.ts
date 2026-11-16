@@ -6,7 +6,7 @@ import { DOORS, HALF, PILLARS } from './game.ts'
 /**
  * The hall the fight happens in: a flagstone floor, brick walls with three
  * dark doorways, four pillars and eight torches. Torchlight is baked into
- * the stone's colour (warm near a torch, cold and dim between), and the
+ * the stone's color (warm near a torch, cold and dim between), and the
  * torch flames are bones that flicker.
  */
 
@@ -33,7 +33,7 @@ export function torchLight(p: Vec3, n: Vec3 = [0, 1, 0]): Vec3 {
 }
 
 /**
- * How the hall's stone is coloured when built: with the torchlight baked in,
+ * How the hall's stone is colored when built: with the torchlight baked in,
  * or (for live lights, which light it each frame) as the stone itself, a
  * little lifted so the shadows aren't black.
  */
@@ -81,7 +81,7 @@ export function makeFloor(detail: number, live = false): Creature {
     const s = (edge < 0.035 ? 0.045 : 0.075 + rand() * 0.04) * k
     const a = rand() * Math.PI
     const q: Quat = mulQ([0, Math.sin(a / 2), 0, Math.cos(a / 2)], quatFacing(up))
-    blobs.push({ centre: [x, edge < 0.035 ? -0.004 : 0, z], scale: [s, s * (0.6 + rand() * 0.4), s * 0.12], quat: q, colour: lit(shade(c, rand), p), opacity: 0.97 })
+    blobs.push({ center: [x, edge < 0.035 ? -0.004 : 0, z], scale: [s, s * (0.6 + rand() * 0.4), s * 0.12], quat: q, color: lit(shade(c, rand), p), opacity: 0.97 })
   }
   return still(blobs)
 }
@@ -127,8 +127,8 @@ export function makeWalls(detail: number, live = false): Creature {
     if (y < 0.5) c = mix(c, spots(p, 3, 2) > 0.6 ? MOSS : [0.2, 0.19, 0.18], (1 - y / 0.5) * 0.6)
     const sz = (edge < 0.032 ? 0.03 : 0.055 + rand() * 0.03) * k
     const off = (rand() * 0.02) * (edge < 0.032 ? -1 : 1)
-    const centre: Vec3 = [p[0] + side.n[0] * off, p[1], p[2] + side.n[2] * off]
-    blobs.push({ centre, scale: [sz, sz * (0.6 + rand() * 0.4), sz * 0.15], quat: quatFacing(side.n), colour: lit(shade(c, rand), centre, side.n), opacity: 0.98 })
+    const center: Vec3 = [p[0] + side.n[0] * off, p[1], p[2] + side.n[2] * off]
+    blobs.push({ center, scale: [sz, sz * (0.6 + rand() * 0.4), sz * 0.15], quat: quatFacing(side.n), color: lit(shade(c, rand), center, side.n), opacity: 0.98 })
   }
   return still(blobs)
 }
@@ -147,7 +147,7 @@ export function makePillars(detail: number, live = false): Creature {
   const COURSE = 0.42, BASE = 0.24, CAP = 0.26
   // a point on a drum's side (radius r, from y0 to y1), or on its flat top or bottom ring (r0 to r)
   const put = (c: Vec3, p: Vec3, nn: Vec3, s: number) =>
-    blobs.push({ centre: p, scale: [s, s * (0.6 + rand() * 0.4), s * 0.15], quat: quatFacing(nn), colour: lit(shade(c, rand), p, nn), opacity: 0.98 })
+    blobs.push({ center: p, scale: [s, s * (0.6 + rand() * 0.4), s * 0.15], quat: quatFacing(nn), color: lit(shade(c, rand), p, nn), opacity: 0.98 })
   while (blobs.count < n) {
     const pl = PILLARS[Math.floor(rand() * PILLARS.length)]
     const a = rand() * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a)
@@ -178,7 +178,7 @@ export function makePillars(detail: number, live = false): Creature {
   const stone = (p: Vec3, nn: Vec3): Vec3 => lit(mix([0.5, 0.48, 0.46], [0.34, 0.33, 0.33], spots(p, 6, 1) * 0.7), p, nn)
   for (const pl of PILLARS) for (let j = 0; j < 4; j++) {
     const a = rand() * Math.PI * 2, d = pl.r + 0.3 + rand() * 0.4, s = 0.05 + rand() * 0.08
-    parts.push({ shape: { ball: [pl.x + Math.cos(a) * d, s * 0.5, pl.z + Math.sin(a) * d], r: [s * 1.3, s * 0.8, s] }, colour: stone, bones: ['still'] })
+    parts.push({ shape: { ball: [pl.x + Math.cos(a) * d, s * 0.5, pl.z + Math.sin(a) * d], r: [s * 1.3, s * 0.8, s] }, color: stone, bones: ['still'] })
   }
   const rubble = buildBody({ bones: [{ name: 'still', parent: -1, head: [0, 0, 0] }], parts, blend: 1 }, Math.round(1500 * Math.max(0.4, detail)), 13)
   return still(concat(blobs, rubble.blobs))
@@ -203,15 +203,15 @@ export function makeTorches(detail: number, live = false): Creature {
     const cup: Vec3 = [t[0], t[1] - 0.1, t[2]]
     bones.push({ name: `flame${i}`, parent: 0, head: [t[0], t[1] - 0.08, t[2]] })
     parts.push(
-      { shape: { tube: [wall, [cup[0], cup[1] - 0.12, cup[2]]], r: [0.025, 0.02] }, colour: (p, n) => lit(IRON, p, n), bones: ['root'], density: 3 },
-      { shape: { tube: [[cup[0], cup[1] - 0.12, cup[2]], cup], r: [0.035, 0.07] }, colour: (p, n) => lit(IRON, p, n), bones: ['root'], density: 3 },
+      { shape: { tube: [wall, [cup[0], cup[1] - 0.12, cup[2]]], r: [0.025, 0.02] }, color: (p, n) => lit(IRON, p, n), bones: ['root'], density: 3 },
+      { shape: { tube: [[cup[0], cup[1] - 0.12, cup[2]], cup], r: [0.035, 0.07] }, color: (p, n) => lit(IRON, p, n), bones: ['root'], density: 3 },
       // the flame: white-yellow at the root, orange and thin at the tip
       {
         shape: { fill: [[t[0], t[1] - 0.1, t[2]], [t[0], t[1] + 0.32, t[2]]], r: [0.07, 0.01] },
-        colour: (_p, _n, u) => mix([1, 0.92, 0.55], [1, 0.38, 0.08], u), glow: true, opacity: (_p, u) => 0.85 * (1 - u * 0.6),
+        color: (_p, _n, u) => mix([1, 0.92, 0.55], [1, 0.38, 0.08], u), glow: true, opacity: (_p, u) => 0.85 * (1 - u * 0.6),
         bones: [`flame${i}`], density: 5, size: 0.7,
       },
-      { shape: { ball: [t[0], t[1] + 0.02, t[2]], r: [0.16, 0.2, 0.16] }, colour: [1, 0.5, 0.15], glow: true, opacity: 0.1, bones: [`flame${i}`], density: 0.6, size: 2 },
+      { shape: { ball: [t[0], t[1] + 0.02, t[2]], r: [0.16, 0.2, 0.16] }, color: [1, 0.5, 0.15], glow: true, opacity: 0.1, bones: [`flame${i}`], density: 0.6, size: 2 },
     )
   })
   const b = buildBody({ bones, parts, blend: 0.05 }, Math.max(1600, Math.round(5000 * detail)), 21)

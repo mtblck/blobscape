@@ -24,11 +24,11 @@ for (const sp of [...ZOO, ...MONSTERS]) {
         assert.ok(c.skin.joints[i * 4 + k] < c.skeleton.count)
       }
       assert.ok(near(sum, 1, 1e-3), `blob ${i} weights sum to ${sum}`)
-      for (let k = 0; k < 3; k++) assert.ok(Number.isFinite(c.blobs.centre[i * 3 + k]) && c.blobs.scale[i * 3 + k] > 0)
+      for (let k = 0; k < 3; k++) assert.ok(Number.isFinite(c.blobs.center[i * 3 + k]) && c.blobs.scale[i * 3 + k] > 0)
     }
     // standing on the floor, not under it
     let low = Infinity
-    for (let i = 0; i < n; i++) low = Math.min(low, c.blobs.centre[i * 3 + 1])
+    for (let i = 0; i < n; i++) low = Math.min(low, c.blobs.center[i * 3 + 1])
     assert.ok(low > -0.08 && low < 0.1, `lowest blob at y = ${low}`)
   })
 
@@ -50,7 +50,7 @@ for (const sp of [...ZOO, ...MONSTERS]) {
       const a = new Float32Array(3), b = new Float32Array(3), v = new Float32Array(6), w = new Float32Array(6)
       let worst = 0
       for (let i = 0; i < c.blobs.count; i += 11) {
-        const args = (x: typeof c) => [x.blobs.centre.subarray(i * 3, i * 3 + 3), x.blobs.scale.subarray(i * 3, i * 3 + 3), x.blobs.quat.subarray(i * 4, i * 4 + 4), x.skin.joints.subarray(i * 4, i * 4 + 4), x.skin.weights.subarray(i * 4, i * 4 + 4), x.skeleton] as const
+        const args = (x: typeof c) => [x.blobs.center.subarray(i * 3, i * 3 + 3), x.blobs.scale.subarray(i * 3, i * 3 + 3), x.blobs.quat.subarray(i * 4, i * 4 + 4), x.skin.joints.subarray(i * 4, i * 4 + 4), x.skin.weights.subarray(i * 4, i * 4 + 4), x.skeleton] as const
         skinBlob(...args(c), 'quat', a, 0, v, 0)
         skinBlob(...args(back), 'quat', b, 0, w, 0)
         worst = Math.max(worst, Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]))
@@ -64,7 +64,7 @@ test('the dragon keeps its fire in its mouth until it breathes, and the file kee
   const d = makeDragon(20000)
   const fire = d.skeleton.index('fire1')
   const head = d.skeleton.bones[d.skeleton.index('head')].head
-  // at rest every fire bone is within a few centimetres of the mouth, inside the head
+  // at rest every fire bone is within a few centimeters of the mouth, inside the head
   for (let k = 0; k < 6; k++) {
     const h = d.skeleton.bones[fire + k].head
     assert.ok(Math.hypot(h[0] - head[0], h[1] - head[1], h[2] - head[2]) < 0.8, `fire${k + 1}`)
@@ -74,7 +74,7 @@ test('the dragon keeps its fire in its mouth until it breathes, and the file kee
   // only the fire bones grow, so only they get scale keys
   const grown = (clip.sizes ?? []).map((s, b) => (s ? d.skeleton.bones[b].name : '')).filter(Boolean)
   assert.deepEqual(grown, ['fire1', 'fire2', 'fire3', 'fire4', 'fire5', 'fire6'])
-  // mid-breath the flame is life size: its end is metres out in front
+  // mid-breath the flame is life size: its end is meters out in front
   sampleClip(clip, d.skeleton, breath.seconds * 0.6)
   assert.ok(d.skeleton.scale[fire] > FLAME * 0.5, `fire1 at ${d.skeleton.scale[fire]}`)
   const tip = d.skeleton.posedHead.subarray((fire + 5) * 3, (fire + 5) * 3 + 3)
@@ -111,8 +111,8 @@ test('a file whose scale keys are not numbers is read without them, so it cannot
 
 test('a seed makes the same monster every time, and different seeds make different ones', () => {
   const a = makeMonster(42, 3000), b = makeMonster(42, 3000)
-  assert.deepEqual(Array.from(a.blobs.centre), Array.from(b.blobs.centre))
-  assert.deepEqual(Array.from(a.blobs.colour), Array.from(b.blobs.colour))
+  assert.deepEqual(Array.from(a.blobs.center), Array.from(b.blobs.center))
+  assert.deepEqual(Array.from(a.blobs.color), Array.from(b.blobs.color))
   const plans = Array.from({ length: 60 }, (_, k) => planMonster(k + 1))
   assert.deepEqual(new Set(plans.map((p) => p.legs)), new Set([2, 4, 6]))
   assert.ok(new Set(plans.map((p) => p.eyes)).size === 3)

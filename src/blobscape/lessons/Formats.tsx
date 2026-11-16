@@ -18,7 +18,7 @@ import { useGoals } from '../progress.ts'
 type Format = 'ply' | 'splat' | 'spz'
 const FORMATS: { id: Format; note: string }[] = [
   { id: 'ply', note: 'Every number as a full 4-byte float. Exact, and big.' },
-  { id: 'splat', note: 'Position and size as floats, colour and turn squeezed into a byte each. No colour by angle.' },
+  { id: 'splat', note: 'Position and size as floats, color and turn squeezed into a byte each. No color by angle.' },
   { id: 'spz', note: 'Every number packed into a byte or two, then the whole file compressed.' },
 ]
 const START: Orbit = { target: [0, 0.55, 0], distance: 2.3, azimuth: 25, elevation: 18 }
@@ -32,9 +32,9 @@ function writeSplat(b: Blobs): Uint8Array {
   const byte = (v: number) => Math.max(0, Math.min(255, Math.round(v)))
   for (let i = 0; i < b.count; i++) {
     const o = i * 32
-    for (let k = 0; k < 3; k++) dv.setFloat32(o + k * 4, b.centre[i * 3 + k], true)
+    for (let k = 0; k < 3; k++) dv.setFloat32(o + k * 4, b.center[i * 3 + k], true)
     for (let k = 0; k < 3; k++) dv.setFloat32(o + 12 + k * 4, b.scale[i * 3 + k], true)
-    for (let k = 0; k < 3; k++) out[o + 24 + k] = byte(b.colour[i * 3 + k] * 255)
+    for (let k = 0; k < 3; k++) out[o + 24 + k] = byte(b.color[i * 3 + k] * 255)
     out[o + 27] = byte(b.opacity[i] * 255)
     // w, x, y, z, each from −1..1 to a byte
     const q = [b.quat[i * 4 + 3], b.quat[i * 4], b.quat[i * 4 + 1], b.quat[i * 4 + 2]]
@@ -49,8 +49,8 @@ async function encode(b: Blobs, format: Format): Promise<Uint8Array> {
   const p = new PackedSplats({ maxSplats: Math.max(1, b.count) })
   const c = new THREE.Vector3(), s = new THREE.Vector3(), q = new THREE.Quaternion(), col = new THREE.Color()
   for (let i = 0; i < b.count; i++) {
-    c.fromArray(b.centre, i * 3); s.fromArray(b.scale, i * 3); q.fromArray(b.quat, i * 4)
-    col.setRGB(b.colour[i * 3], b.colour[i * 3 + 1], b.colour[i * 3 + 2])
+    c.fromArray(b.center, i * 3); s.fromArray(b.scale, i * 3); q.fromArray(b.quat, i * 4)
+    col.setRGB(b.color[i * 3], b.color[i * 3 + 1], b.color[i * 3 + 2])
     p.pushSplat(c, s, q, b.opacity[i], col)
   }
   const { fileBytes } = await writeSpz(p, { maxSh: 0 })
@@ -195,8 +195,8 @@ export function Formats() {
             each photo and nudges every blob's numbers until they match: the same loop <a href="/experiments/fit-a-picture/" className="text-ink underline underline-offset-2 hover:text-accent">Fit a Picture</a> runs on a single image.
           </p>
           <p>
-            What comes out is just the list: each blob's 14 numbers, plus 45 more for colour by angle. A .ply stores every one as a
-            4-byte float, so a full capture runs to 248 bytes a blob; this one skips colour by angle, so it's 56. The other formats squeeze
+            What comes out is just the list: each blob's 14 numbers, plus 45 more for color by angle. A .ply stores every one as a
+            4-byte float, so a full capture runs to 248 bytes a blob; this one skips color by angle, so it's 56. The other formats squeeze
             the numbers into bytes and compress them, which is how .spz got to about a tenth of the size and still looked the same.
           </p>
           <p>

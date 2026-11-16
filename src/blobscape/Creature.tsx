@@ -341,12 +341,12 @@ export function Creature() {
             other splat viewers open it as a still creature; this page plays it.
           </p>
           <p>
-            <b className="font-sans text-base font-semibold text-ink">As a mesh</b>, it's a solid skin wrapped round the blobs, coloured from
+            <b className="font-sans text-base font-semibold text-ink">As a mesh</b>, it's a solid skin wrapped round the blobs, colored from
             them, with the same bones and clips. It loses the soft edges (and thin things like wings can come out holey) but moves in Blender, Godot, Unity or three.js.
           </p>
           <p>
             <b className="font-sans text-base font-semibold text-ink">As pixel art</b>, it's a sprite sheet: each move you pick, drawn from 4 or 8 sides,
-            squeezed down to a few colours and outlined, the way <a href="/experiments/splat-to-sprite/" className="underline decoration-rule underline-offset-2 hover:text-accent">Splat to Sprite</a> does it. The JSON beside it names every animation, in
+            squeezed down to a few colors and outlined, the way <a href="/experiments/splat-to-sprite/" className="underline decoration-rule underline-offset-2 hover:text-accent">Splat to Sprite</a> does it. The JSON beside it names every animation, in
             Tinkerkit's format or the one Aseprite and Phaser read.
           </p>
           <p>

@@ -4,7 +4,7 @@ November 2026. This covers the two-week prototype from the Blobscape roadmap, bu
 
 ## Recommendation: go
 
-All three bars are met. The engine works on WebGPU and WebGL. It skins every blob on the GPU, matching our CPU maths to within 2.4e-7. It sorts every object's blobs together and draws through three.js. On a phone it walks 200k blobs at 60 fps. Above that, the deform and sort start to cost frames, which is where the next speed work goes.
+All three bars are met. The engine works on WebGPU and WebGL. It skins every blob on the GPU, matching our CPU math to within 2.4e-7. It sorts every object's blobs together and draws through three.js. On a phone it walks 200k blobs at 60 fps. Above that, the deform and sort start to cost frames, which is where the next speed work goes.
 
 | Bar | Result |
 |---|---|
@@ -23,27 +23,27 @@ All three bars are met. The engine works on WebGPU and WebGL. It skins every blo
 
 All of it is in `src/splat-engine/`, with the test page at `/engine-lab/` (unlisted, `noindex`).
 
-- `rig.ts`: skeleton, skin weights, and `skinBlob`, the CPU reference for moving one blob by its bones. There are two rules for a blob's shape. `quat` averages the bone rotations (sign-aligned, normalised), so blobs only turn. `linear` pushes the covariance through the blended matrix, so blobs squash on a twist. The tests show `quat` keeping volume on a half-twist where `linear` collapses, which is lesson 15 in one assertion.
-- `engine.ts`: `SplatWorld`, a three.js `Mesh` that holds every blob of every actor. Each frame runs a deform compute pass (bones → world centre and covariance), a project pass (each blob onto the screen once, writing its sort key), one counting sort over the whole scene (16,384 depth bins, `sort.ts`), then an instanced draw that only places quads. A still object is one bone. On WebGL, which has no compute, the vertex shader moves and projects each blob as it draws it, and the CPU only moves centres and sorts.
+- `rig.ts`: skeleton, skin weights, and `skinBlob`, the CPU reference for moving one blob by its bones. There are two rules for a blob's shape. `quat` averages the bone rotations (sign-aligned, normalized), so blobs only turn. `linear` pushes the covariance through the blended matrix, so blobs squash on a twist. The tests show `quat` keeping volume on a half-twist where `linear` collapses, which is lesson 15 in one assertion.
+- `engine.ts`: `SplatWorld`, a three.js `Mesh` that holds every blob of every actor. Each frame runs a deform compute pass (bones → world center and covariance), a project pass (each blob onto the screen once, writing its sort key), one counting sort over the whole scene (16,384 depth bins, `sort.ts`), then an instanced draw that only places quads. A still object is one bone. On WebGL, which has no compute, the vertex shader moves and projects each blob as it draws it, and the CPU only moves centers and sorts.
 - `creature.ts`: a procedural fox, 14 bones, with blobs weighted by distance to their body part's bones and a trot cycle.
 - `glb.ts`: writes and reads rigged splats as glTF. Blobs use `KHR_gaussian_splatting`, the rig uses standard skins and animations, and `BLOBSCAPE_gaussian_skinning` (used, not required) states the rotation rule.
 - `walkSheet.ts`: renders the trot from four sides into a Tinkerkit sheet.
 
 Added with the Rigs and 3D models lessons (2026-11-11):
 
-- `pose.ts`: `poseBlobs`, the whole-blob CPU twin of `skinBlob` (centre, scale and rotation, both rules), which the lessons use to pose a few thousand blobs for Spark. Tested against `skinBlob`.
+- `pose.ts`: `poseBlobs`, the whole-blob CPU twin of `skinBlob` (center, scale and rotation, both rules), which the lessons use to pose a few thousand blobs for Spark. Tested against `skinBlob`.
 - `models.ts`: the lesson rigs (caterpillar, arm, wrist), `walk.ts`: the fox's trot as four key poses with hold/in-between and foot speed.
-- `mesh.ts`: `blobsToMesh` turns blobs into a closed, skinned triangle mesh (density grid, shell, flood fill, signed distance pulled back to the blobs' surface, surface nets), `skinMesh` poses it on the CPU, `meshError` measures how far it strays. `glb.ts` `writeRiggedMeshGlb` saves it with the same bones and clips, unlit vertex colours; three.js opens it as a `SkinnedMesh` with its animation (verify checks).
+- `mesh.ts`: `blobsToMesh` turns blobs into a closed, skinned triangle mesh (density grid, shell, flood fill, signed distance pulled back to the blobs' surface, surface nets), `skinMesh` poses it on the CPU, `meshError` measures how far it strays. `glb.ts` `writeRiggedMeshGlb` saves it with the same bones and clips, unlit vertex colors; three.js opens it as a `SkinnedMesh` with its animation (verify checks).
 - The Creature page (`src/blobscape/Creature.tsx`, `#/creature`) is the engine's first public use: `SplatWorld` on WebGPU (WebGL fallback), up to 200k blobs, splat and mesh `.glb` downloads, and opening rigged `.glb` files.
 - Since then it has four creatures (`zoo/`: frog 20 bones, fox 14, elf 29, dragon 43, up to 400k blobs), a bones view, and bones that grow and slide: per-bone uniform `size` (children inherit it) and an `offset` on any bone, both keyed in clips and written to .glb as scale and translation channels. The GPU passes needed no change, since a bone's scale is already in its skin matrix.
 
 Added for pixel-art scenes (2026-11-15, issues #33, #35, #36, #37):
 
 - `voxel.ts`: shapes as distance functions (sphere, ellipsoid, box, cone, cylinder, torus, union, cut, displace) cut into a grid, one solid disc per surface cell, each part on one bone, with baked sun and cast shadows.
-- `pixelPass.ts`: pixel mode. The scene is drawn small, then one pass snaps it to a palette (OKLab, Bayer dither), adds glow from bright pixels, edge lines where a colour meets a much lighter one, a silhouette outline and an optional sky gradient, and scales it up in whole pixels. Its CPU twin is `pixelArt` in `splat-core/pixel.ts`.
-- Pixel Diorama (`/experiments/pixel-diorama/`) is the test page: a lighthouse, cottage, pines and jetty of about 93,000 blobs (50,000 on phones) on 27 bones, with surface texture (bricks, tiles, planks, strata) written as colour rules.
+- `pixelPass.ts`: pixel mode. The scene is drawn small, then one pass snaps it to a palette (OKLab, Bayer dither), adds glow from bright pixels, edge lines where a color meets a much lighter one, a silhouette outline and an optional sky gradient, and scales it up in whole pixels. Its CPU twin is `pixelArt` in `splat-core/pixel.ts`.
+- Pixel Diorama (`/experiments/pixel-diorama/`) is the test page: a lighthouse, cottage, pines and jetty of about 93,000 blobs (50,000 on phones) on 27 bones, with surface texture (bricks, tiles, planks, strata) written as color rules.
 - `sceneDoc.ts`: a scene as data (shapes, paints, bones, moves, lights, palette, camera), with a checker and a builder, so a scene can be written by hand or by Claude from a prompt (#41, `docs/scene-descriptions.md`). Every scene on Pixel Diorama but the lighthouse is written this way.
-- Lines between parts: `SplatWorld.parts` draws the blobs as a map of parts (hard discs in each part's flat colour), and the pass lines a pixel beside another part whose colour is too close for a colour line. Steady pixels (a pixel keeps its palette colour unless another is clearly closer) and held frames (`CreatureStage.step`) calm a moving scene (#40).
+- Lines between parts: `SplatWorld.parts` draws the blobs as a map of parts (hard discs in each part's flat color), and the pass lines a pixel beside another part whose color is too close for a color line. Steady pixels (a pixel keeps its palette color unless another is clearly closer) and held frames (`CreatureStage.step`) calm a moving scene (#40).
 - Not done yet: whole-pixel steps under a moving camera (the scenes orbit a perspective camera, which has no such step); a translucent part is a solid disc in the map of parts.
 
 ## Known gaps
@@ -82,7 +82,7 @@ Our extra cost per frame is the deform pass and one shared sort: about 5 ms at 2
 - **Project once per blob.** The screen-space ellipse used to be worked out in the vertex shader for each of a quad's four corners. It's now a compute pass that runs once per blob and also writes the sort key, so the sort no longer works the depth out twice.
 - **Our own sort passes** (`sort.ts`). three.js's `CountingSort` sums its 16,384 bins in a single GPU thread. Ours does it with 256 threads, and clears the histogram as it goes, which removes a pass.
 - **Smaller quads for faint blobs.** Each quad reaches only as far as its blob stays visible (above 1/255), up to two standard deviations, so faint blobs cover fewer pixels.
-- **WebGL skins on the GPU.** The vertex shader moves each blob through its bones, like a skinned mesh. The CPU only moves blob centres for the sort, without allocating. At 100k blobs on this machine: 7.7 ms moving centres and 2 ms sorting, against about 200 ms before.
+- **WebGL skins on the GPU.** The vertex shader moves each blob through its bones, like a skinned mesh. The CPU only moves blob centers for the sort, without allocating. At 100k blobs on this machine: 7.7 ms moving centers and 2 ms sorting, against about 200 ms before.
 - **Time each step** in the lab splits a frame into move, project, sort and draw (WebGPU), or CPU move, CPU sort and draw (WebGL). Software WebGPU here can't say which step dominates on a phone, because it draws on the CPU.
 
 ### Third phone run, after the speed pass (Matt, 2026-11-11)
@@ -114,7 +114,7 @@ The lab can now draw the same fox with Spark 2.4's own `SplatSkinning` (`?which=
 What we found before timing anything:
 
 - **The motion matches.** Fed our skin transforms, Spark's linear blend puts every blob within 1e-4 m of ours. Its dual quaternions agree exactly on blobs held by one bone and stay within 6 mm on blended joints (`sparkSkinning.test.ts` mirrors Spark's GLSL over the data its JavaScript writes).
-- **Spark's rest pose only works as the identity.** `setRestQuatPos` and `setRestMatrix` compose rest and pose in an order that turns a bone about the origin instead of its head. The lab rests every bone at the origin and passes the finished skin transform, which sidesteps it. The test pins Spark 2.4's behaviour, so it will fail if Spark changes it. This looks like a bug worth reporting upstream.
+- **Spark's rest pose only works as the identity.** `setRestQuatPos` and `setRestMatrix` compose rest and pose in an order that turns a bone about the origin instead of its head. The lab rests every bone at the origin and passes the finished skin transform, which sidesteps it. The test pins Spark 2.4's behavior, so it will fail if Spark changes it. This looks like a bug worth reporting upstream.
 - **Dual quaternions carry no scale** (`setBoneQuatPosScale` throws in that mode), so a bone that grows (the frog's tongue, the dragon's fire, every Forest Walk plant) needs Spark's linear blend, which flattens blobs on a twist.
 - **Spark sorts in a worker**, a frame or more behind, and gathers every mesh into one list, so its herds also sort together.
 

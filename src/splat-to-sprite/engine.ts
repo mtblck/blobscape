@@ -50,7 +50,7 @@ export class Engine {
   private viewPersp = new THREE.PerspectiveCamera(FOV, 1, 0.01, 100)
   private shotOrtho = new THREE.OrthographicCamera()
   private shotPersp = new THREE.PerspectiveCamera(FOV, 1, 0.01, 100)
-  framing: Framing = { centre: new THREE.Vector3(), radius: 1, count: 0 }
+  framing: Framing = { center: new THREE.Vector3(), radius: 1, count: 0 }
   private _view: View = { azimuth: 30, elevation: 30, zoom: 1, ortho: true, offsetY: 0 }
   get view() { return this._view }
   set view(v: View) { this._view = v; this.invalidate() }
@@ -153,7 +153,7 @@ export class Engine {
   private placeCrop() {
     if (!this.crop) return
     const { sdf } = this.crop
-    sdf.position.copy(this.framing.centre)
+    sdf.position.copy(this.framing.center)
     sdf.radius = this.cropScale >= 3 ? 1e6 : this.framing.radius * this.cropScale
     sdf.updateMatrixWorld(true)
     this.invalidate()
@@ -172,7 +172,7 @@ export class Engine {
     const el = THREE.MathUtils.degToRad(Math.min(89.9, elevation))
     const dir = new THREE.Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el))
     const dist = (span / 2 / Math.tan(THREE.MathUtils.degToRad(FOV / 2))) * 1.0
-    const target = this.framing.centre.clone()
+    const target = this.framing.center.clone()
     const cam = ortho ? (shot ? this.shotOrtho : this.viewCam) : shot ? this.shotPersp : this.viewPersp
     // Frame offset moves along the camera's own up vector, so "up" means up in the picture.
     cam.position.copy(target).addScaledVector(dir, ortho ? this.framing.radius * 6 + dist : dist)

@@ -2,7 +2,7 @@
  * Blobscape's logo, from the brand kit (svg/horizontal.svg and svg/mark.svg):
  * a Gaussian bell with eyes on its axis, then the wordmark. The axis and the
  * wordmark take --c-logo-ink (Deep on light, Paper on dark), so one inline
- * SVG covers both themes. Don't recolour the blob, stretch or add effects.
+ * SVG covers both themes. Don't recolor the blob, stretch or add effects.
  */
 
 import { AXIS, BLOB, WORD } from './logoPaths.ts'

@@ -13,8 +13,8 @@ The point is that Claude can write one from a sentence. A scene that is data can
 | Field | What it is |
 | --- | --- |
 | `name`, `loop` | A name, and the seconds before everything repeats. |
-| `palette` | 2 to 32 colours, `'#rrggbb'`. The picture uses only these. |
-| `sky` | Top and bottom colours of the backdrop. `skyReach` (0.05 to 1) is how far down the picture the blend runs before it is all the bottom colour. |
+| `palette` | 2 to 32 colors, `'#rrggbb'`. The picture uses only these. |
+| `sky` | Top and bottom colors of the backdrop. `skyReach` (0.05 to 1) is how far down the picture the blend runs before it is all the bottom color. |
 | `light` | The baked sun: where it is, how much light reaches everywhere, how dark shadows are. |
 | `look` | Dither, glow, outline, edge lines. |
 | `camera` | Where the view starts, and optionally a `swing`: degrees (0 to 60) it rocks to either side, once a loop, as the scene plays. |
@@ -25,13 +25,13 @@ The point is that Claude can write one from a sentence. A scene that is data can
 
 Shapes: `sphere`, `ball` (stretched), `box`, `cylinder` (can taper), `cone` (a round-ended stick), `ring`, `roof`, and `join`, `cut`, `rough` to combine them.
 
-Paints: a colour, or `bands`, `bricks`, `hex` (honeycomb, scales, paving), `speckle`, `patches`, `faces` (top, side, under), `split` (one paint below a height, another above). Paints nest.
+Paints: a color, or `bands`, `bricks`, `hex` (honeycomb, scales, paving), `speckle`, `patches`, `faces` (top, side, under), `split` (one paint below a height, another above). Paints nest.
 
 ## Rules that make a scene work
 
 1. **Units.** About 1 is a small house. y is up and the ground is y = 0. The camera starts on the +z side, so put the interesting face toward +z. Keep everything within 4 of the middle, and a whole scene about 4 across: the checker turns down parts over about 3 across and scenes with too much surface, because they take seconds to build.
-2. **Paint in palette colours.** Baked light darkens a colour, and the picture then snaps to the nearest palette colour. So the palette needs a darker step for each main colour (three or four greens, not one), and neutral greys if there is stone. Without them, shade snaps to something odd, like brown.
-3. **Glow is for light sources.** `glow: true` parts take no light and spill light on their neighbours: flames, lamps, windows, stars, the moon. Small bright things that must stay readable (flowers, birds) can use it too.
+2. **Paint in palette colors.** Baked light darkens a color, and the picture then snaps to the nearest palette color. So the palette needs a darker step for each main color (three or four greens, not one), and neutral grays if there is stone. Without them, shade snaps to something odd, like brown.
+3. **Glow is for light sources.** `glow: true` parts take no light and spill light on their neighbors: flames, lamps, windows, stars, the moon. Small bright things that must stay readable (flowers, birds) can use it too.
 4. **Every move loops.** `times` is a whole number, so the scene repeats exactly. Use different `times` and `phase` on similar things (trees, fireflies) so they don't move in step.
 5. **Particles are parts on their own bones.** Smoke, sparks and bubbles are small parts, each on a bone with a `drift` move, with `phase` spread from 0 to 1.
 6. **A bone turns about its `at`.** Put it at the hinge: the hub of a wheel, the foot of a tree. A child bone (`parent`) rides its parent, as a wing rides a circling bird.
@@ -44,14 +44,14 @@ Paints: a colour, or `bands`, `bricks`, `hex` (honeycomb, scales, paving), `spec
 
 The dragon scene (`scenes/dragon.ts`) follows a few habits that make a scene read as a single strong image:
 
-- **A backdrop that stays out of the way.** Leave `sky` out and the subject sits on the dark of the page, or give it a dark `sky` with a short `skyReach`, so most of the picture is the darkest colour and only the top glows.
+- **A backdrop that stays out of the way.** Leave `sky` out and the subject sits on the dark of the page, or give it a dark `sky` with a short `skyReach`, so most of the picture is the darkest color and only the top glows.
 - **Few hues.** A dark ramp for the setting, one hue ramp for the subject, and two or three steps of a warm accent used only on light sources.
 - **One big subject.** Build it from many small parts (the dragon is about 140, mostly cones) and let it fill the frame.
 - **A chain of bones for anything that bends.** Each neck bone has the one before as its `parent` and sways a few degrees; the turns add up along the chain, so the head sweeps wide while each joint barely moves. A jaw is a child of the head with one `sway`.
 - **Embers or dust.** A dozen or so tiny `glow` parts with slow `drift` moves give the air depth.
-- **Line a big dark body.** A part is one layer of blobs, and a little of what is behind shows through it: bright things behind a dark part spoil it. Put the same shape, a little smaller, inside it on a still bone of its own (parts on one bone drop cells buried in each other), in a dark colour, with `noShadow`.
+- **Line a big dark body.** A part is one layer of blobs, and a little of what is behind shows through it: bright things behind a dark part spoil it. Put the same shape, a little smaller, inside it on a still bone of its own (parts on one bone drop cells buried in each other), in a dark color, with `noShadow`.
 - **Small parts cast no shadow.** Mark fronds, petals, legs and the like `noShadow`: every shadow caster is checked for every lit cell, so a hundred small ones double the build time for shadows nobody sees.
-- **A shade for every hue.** A colour in shadow snaps to the nearest palette colour, which is a grey if its own hue has no darker step: give each hue at least two steps. A `glow` part whose colour is already pale goes white: fine for a spark or a bubble, but glow anything that should keep its colour (a crystal, a lamp) in a saturated middle colour.
+- **A shade for every hue.** A color in shadow snaps to the nearest palette color, which is a gray if its own hue has no darker step: give each hue at least two steps. A `glow` part whose color is already pale goes white: fine for a spark or a bubble, but glow anything that should keep its color (a crystal, a lamp) in a saturated middle color.
 - **A slow swing of the camera** shows that the scene is solid.
 
 ## Prompting for one

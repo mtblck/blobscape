@@ -3,17 +3,17 @@
 Written with the interactive-lesson-design skill before any code. Each lesson uses the exhibit
 layout (`src/blobscape/Shell.tsx`); goals tick on the model's state, never on a click alone.
 
-### Lesson 5: Colour by angle
-Target sentence: A blob can store a different colour for each direction it's seen from, and a few more numbers per blob buy sharper shine.
-Replaces the belief that: a splat's colour is painted on, so shine and reflections can't move.
+### Lesson 5: Color by angle
+Target sentence: A blob can store a different color for each direction it's seen from, and a few more numbers per blob buy sharper shine.
+Replaces the belief that: a splat's color is painted on, so shine and reflections can't move.
 Needs first: lesson 1 (the 14 numbers of a blob).
-Model: two views of the same shiny ball of blobs, side by side: "The real shine" (worked out exactly for every view) and "Stored" (each blob's colour kept as spherical harmonics of the chosen degree). Main control: Degree 0–3. Supporting: Shine (how sharp the highlight is). Readout: numbers per blob for that degree, and how bright the stored highlight is next to the real one.
+Model: two views of the same shiny ball of blobs, side by side: "The real shine" (worked out exactly for every view) and "Stored" (each blob's color kept as spherical harmonics of the chosen degree). Main control: Degree 0–3. Supporting: Shine (how sharp the highlight is). Readout: numbers per blob for that degree, and how bright the stored highlight is next to the real one.
 Start state: degree 2, a medium highlight, seen at an angle.
 Goals:
-1. Walk round the ball and watch the shine follow you: ticks when the camera has turned 60° from the start; hint: drag either view; why: the bright spot isn't painted on, each blob changes colour with where you look from.
-2. Find the degree where the shine disappears: ticks at degree 0; hint: fewer numbers per blob; why: degree 0 is one colour for every direction, so the shine averages away.
+1. Walk round the ball and watch the shine follow you: ticks when the camera has turned 60° from the start; hint: drag either view; why: the bright spot isn't painted on, each blob changes color with where you look from.
+2. Find the degree where the shine disappears: ticks at degree 0; hint: fewer numbers per blob; why: degree 0 is one color for every direction, so the shine averages away.
 3. Sharpen the shine until degree 3 can't keep up: ticks at degree 3 when the stored highlight is under 70% as bright as the real one; hint: compare the two views' highlights; why: sharp glints need more than 48 numbers, so captures blur mirror-like shine.
-Explanation: spherical harmonics as a colour that varies smoothly over directions, like a tune built from a few pure notes; degree = how many notes. Formula: colour(v) = Σ cₗₘ Yₗₘ(v).
+Explanation: spherical harmonics as a color that varies smoothly over directions, like a tune built from a few pure notes; degree = how many notes. Formula: color(v) = Σ cₗₘ Yₗₘ(v).
 Bridge: real captures store degree 3; the Fit a Picture blobs store degree 0.
 
 ### Lesson 6: Paint

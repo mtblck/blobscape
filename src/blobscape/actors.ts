@@ -47,7 +47,7 @@ export const detailsOf = (sp: Species) => sp.detail.slice(0, 2)
 export function restFootprint(b: Blobs): { foot: Vec3; height: number } {
   let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, z0 = Infinity, z1 = -Infinity
   for (let i = 0; i < b.count; i++) {
-    const x = b.centre[i * 3], y = b.centre[i * 3 + 1], z = b.centre[i * 3 + 2]
+    const x = b.center[i * 3], y = b.center[i * 3 + 1], z = b.center[i * 3 + 2]
     if (x < x0) x0 = x; if (x > x1) x1 = x
     if (y < y0) y0 = y; if (y > y1) y1 = y
     if (z < z0) z0 = z; if (z > z1) z1 = z
@@ -100,19 +100,19 @@ export function placePoint(p: ArrayLike<number>, P: Placing): Vec3 {
 }
 
 /**
- * Copies posed blobs into `out` from index `from`, placed: centres moved,
- * sizes scaled, rotations turned by the yaw. Colours and opacities copied.
+ * Copies posed blobs into `out` from index `from`, placed: centers moved,
+ * sizes scaled, rotations turned by the yaw. Colors and opacities copied.
  */
 export function placeInto(posed: Blobs, P: Placing, out: Blobs, from: number) {
   const n = posed.count
-  const pc = posed.centre, ps = posed.scale, pq = posed.quat
+  const pc = posed.center, ps = posed.scale, pq = posed.quat
   const { k, c, s, qy, qw, foot, at } = P
   for (let i = 0; i < n; i++) {
     const o = from + i
     const x = (pc[i * 3] - foot[0]) * k, y = (pc[i * 3 + 1] - foot[1]) * k, z = (pc[i * 3 + 2] - foot[2]) * k
-    out.centre[o * 3] = at[0] + x * c + z * s
-    out.centre[o * 3 + 1] = at[1] + y
-    out.centre[o * 3 + 2] = at[2] - x * s + z * c
+    out.center[o * 3] = at[0] + x * c + z * s
+    out.center[o * 3 + 1] = at[1] + y
+    out.center[o * 3 + 2] = at[2] - x * s + z * c
     out.scale[o * 3] = ps[i * 3] * k
     out.scale[o * 3 + 1] = ps[i * 3 + 1] * k
     out.scale[o * 3 + 2] = ps[i * 3 + 2] * k
@@ -123,7 +123,7 @@ export function placeInto(posed: Blobs, P: Placing, out: Blobs, from: number) {
     out.quat[o * 4 + 2] = qw * z1 - qy * x1
     out.quat[o * 4 + 3] = qw * w1 - qy * y1
   }
-  out.colour.set(posed.colour.subarray(0, n * 3), from * 3)
+  out.color.set(posed.color.subarray(0, n * 3), from * 3)
   out.opacity.set(posed.opacity.subarray(0, n), from)
 }
 
@@ -148,13 +148,13 @@ export function poseAll(actors: readonly Actor[], clock: (a: Actor) => number, o
   const total = actorBlobs(actors)
   if (out.capacity < total) {
     const bigger = new Blobs(Math.max(total, out.capacity * 2))
-    out.centre = bigger.centre; out.scale = bigger.scale; out.quat = bigger.quat; out.colour = bigger.colour; out.opacity = bigger.opacity
+    out.center = bigger.center; out.scale = bigger.scale; out.quat = bigger.quat; out.color = bigger.color; out.opacity = bigger.opacity
   }
   const starts: number[] = []
   let from = 0
   for (const a of actors) {
     const rest = a.body.blobs
-    // A clone keeps the rest colours and opacities, which posing leaves alone
+    // A clone keeps the rest colors and opacities, which posing leaves alone
     let posed = scratch.get(a.body)
     if (!posed) { posed = rest.clone(); scratch.set(a.body, posed) }
     poseActor(a, clock(a))

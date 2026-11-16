@@ -5,7 +5,7 @@ import { bakeLights, blobNormal, lightAt } from './light.ts'
 
 const disc = (n: [number, number, number]) => {
   const b = new Blobs()
-  b.push({ centre: [0, 0, 0], scale: [0.1, 0.1, 0.01], quat: quatFacing(n), colour: [0.5, 0.5, 0.5], opacity: 1 })
+  b.push({ center: [0, 0, 0], scale: [0.1, 0.1, 0.01], quat: quatFacing(n), color: [0.5, 0.5, 0.5], opacity: 1 })
   return b
 }
 
@@ -17,7 +17,7 @@ test('a flat blob\'s normal is its thin axis', () => {
 })
 
 test('light falls with distance, reaches both faces, and is gone by twice its range', () => {
-  const L = { position: [0, 1, 0] as [number, number, number], colour: [1, 1, 1] as [number, number, number], range: 1 }
+  const L = { position: [0, 1, 0] as [number, number, number], color: [1, 1, 1] as [number, number, number], range: 1 }
   const up = lightAt([0, 0, 0], [0, 1, 0], [L], 0)[0]
   const down = lightAt([0, 0, 0], [0, -1, 0], [L], 0)[0]
   const edge = lightAt([0, 0, 0], [1, 0, 0], [L], 0)[0]
@@ -27,10 +27,10 @@ test('light falls with distance, reaches both faces, and is gone by twice its ra
   assert.equal(lightAt([0, -1.01, 0], [0, 1, 0], [L], 0.2)[0], 0.2)
 })
 
-test('bakeLights with no lights and full ambient keeps the colours', () => {
+test('bakeLights with no lights and full ambient keeps the colors', () => {
   const b = disc([0, 1, 0])
   const out = bakeLights(b, [], 1)
-  assert.ok(Math.abs(out.colour[0] - 0.5) < 1e-6)
-  const lit = bakeLights(b, [{ position: [0, 1, 0], colour: [4, 0, 0], range: 1 }], 0.5)
-  assert.ok(lit.colour[0] > 0.5 && lit.colour[1] < 0.5)
+  assert.ok(Math.abs(out.color[0] - 0.5) < 1e-6)
+  const lit = bakeLights(b, [{ position: [0, 1, 0], color: [4, 0, 0], range: 1 }], 0.5)
+  assert.ok(lit.color[0] > 0.5 && lit.color[1] < 0.5)
 })

@@ -17,7 +17,7 @@ function slimeAt(kind: SlimeKind, phase: Slime['phase'], t: number, hopT = 0): S
   return { slot: 0, kind, phase, t, x: 0, z: 0, heading: 0, hp: 1, hopT, vx: 0, vz: 0, hitBy: -1, struck: 99 }
 }
 
-/** Every colour is the same body, so the kind for posing never matters: green stands in. */
+/** Every color is the same body, so the kind for posing never matters: green stands in. */
 export const SLIME: Species = {
   id: 'slime',
   name: 'slime',

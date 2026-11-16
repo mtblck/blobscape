@@ -82,7 +82,7 @@ export function sprung(t: number, start: number, d: number) {
   return Math.max(0, 1 + (c + 1) * v * v * v + c * v * v)
 }
 
-/** Leaves aren't one smooth colour: a fine mottle of darker and lighter patches. */
+/** Leaves aren't one smooth color: a fine mottle of darker and lighter patches. */
 function leafy(c: Vec3, p: Vec3): Vec3 {
   const k = 0.72 + 0.5 * spots(p, 26, 3)
   return [Math.min(1, c[0] * k), Math.min(1, c[1] * k), Math.min(1, c[2] * k)]
@@ -109,7 +109,7 @@ function pine(seed: number, count: number, pal: Palette): Plant {
   const bones: Bone[] = [root, { name: 'trunk', parent: 0, head: [0, 0.8, 0] }, { name: 'top', parent: 1, head: [0, H * 0.55, 0], tail: [0, H, 0] }]
   const green = vary(pick(rand, pal.pine), rand)
   const parts: Part[] = [
-    { shape: { tube: [[0, -0.1, 0], [0, H * 0.9, 0]], r: [rt, rt * 0.3] }, colour: (p) => mix(PINE_BARK, [0.2, 0.12, 0.08], spots(p, 30, seed)), bones: ['root', 'trunk', 'top'], density: 0.6 },
+    { shape: { tube: [[0, -0.1, 0], [0, H * 0.9, 0]], r: [rt, rt * 0.3] }, color: (p) => mix(PINE_BARK, [0.2, 0.12, 0.08], spots(p, 30, seed)), bones: ['root', 'trunk', 'top'], density: 0.6 },
   ]
   const tiers = 4 + Math.floor(rand() * 2)
   for (let k = 0; k < tiers; k++) {
@@ -118,7 +118,7 @@ function pine(seed: number, count: number, pal: Palette): Plant {
     const R = (1.35 - 1.05 * u) * (0.85 + rand() * 0.3) * (H / 4.4)
     parts.push({
       shape: { fill: [[0, y0, 0], [0, y0 + tall, 0]], r: [R, 0.06] },
-      colour: (p, _n, along) => leafy(mix(mix(green, [0.04, 0.12, 0.08], 0.45 * (1 - along)), [0.35, 0.55, 0.25], 0.25 * spots(p, 9, seed) * along), p),
+      color: (p, _n, along) => leafy(mix(mix(green, [0.04, 0.12, 0.08], 0.45 * (1 - along)), [0.35, 0.55, 0.25], 0.25 * spots(p, 9, seed) * along), p),
       bones: y0 > H * 0.5 ? ['trunk', 'top'] : ['trunk'],
       size: 1.25,
       opacity: 0.95,
@@ -154,19 +154,19 @@ function broadleaf(seed: number, count: number, pal: Palette): Plant {
   }
   const leaf = pick(rand, pal.leaves), leaf2 = pick(rand, pal.leaves)
   const parts: Part[] = [
-    { shape: { tube: [[0, -0.1, 0], fork], r: [0.2, 0.13] }, colour: (p) => mix(BARK, [0.18, 0.12, 0.08], spots(p, 22, seed)), bones: ['root', 'trunk', 'crown'], density: 0.6 },
+    { shape: { tube: [[0, -0.1, 0], fork], r: [0.2, 0.13] }, color: (p) => mix(BARK, [0.18, 0.12, 0.08], spots(p, 22, seed)), bones: ['root', 'trunk', 'crown'], density: 0.6 },
   ]
   tips.forEach((tip, b) => {
-    parts.push({ shape: { tube: [fork, tip], r: [0.08, 0.04] }, colour: BARK, bones: ['crown', `b${b}`], density: 0.5 })
+    parts.push({ shape: { tube: [fork, tip], r: [0.08, 0.04] }, color: BARK, bones: ['crown', `b${b}`], density: 0.5 })
     parts.push({
       shape: { ball: [tip[0], tip[1] + 0.25, tip[2]], r: [0.85 + rand() * 0.3, 0.65 + rand() * 0.2, 0.85 + rand() * 0.3] },
-      colour: (p, n) => leafy(mix(mix(leaf, leaf2, spots(p, 4, seed + b)), [0.03, 0.08, 0.03], 0.35 * Math.max(0, -n[1])), p),
+      color: (p, n) => leafy(mix(mix(leaf, leaf2, spots(p, 4, seed + b)), [0.03, 0.08, 0.03], 0.35 * Math.max(0, -n[1])), p),
       bones: [`b${b}`], size: 1.35, density: 1.3, opacity: 0.95,
     })
   })
   parts.push({
     shape: { ball: [lean, H * 0.9, 0], r: [1.05, 0.8, 1.05] },
-    colour: (p) => leafy(mix(leaf, leaf2, spots(p, 4, seed + 9)), p), bones: ['crown'], size: 1.35, density: 1.3, opacity: 0.95,
+    color: (p) => leafy(mix(leaf, leaf2, spots(p, 4, seed + 9)), p), bones: ['crown'], size: 1.35, density: 1.3, opacity: 0.95,
   })
   const body = buildBody({ bones, parts, blend: 0.5 }, count, seed)
   const phase = rand() * 6
@@ -195,7 +195,7 @@ function birch(seed: number, count: number, pal: Palette): Plant {
     {
       shape: { tube: [[0, -0.1, 0], [lx, H * 0.92, 0]], r: [0.1, 0.04] },
       // white bark with dark dashes running round the trunk
-      colour: (p) => (Math.sin(p[1] * 23 + Math.sin(p[0] * 40 + p[2] * 30) * 2) > 0.82 ? [0.12, 0.1, 0.1] : BIRCH_BARK),
+      color: (p) => (Math.sin(p[1] * 23 + Math.sin(p[0] * 40 + p[2] * 30) * 2) > 0.82 ? [0.12, 0.1, 0.1] : BIRCH_BARK),
       bones: ['root', 'trunk', 'top'], density: 1.2,
     },
   ]
@@ -204,7 +204,7 @@ function birch(seed: number, count: number, pal: Palette): Plant {
     const u = k / (clumps - 1), a = rand() * Math.PI * 2, r = 0.35 + (1 - Math.abs(u - 0.4)) * 0.35
     parts.push({
       shape: { ball: [lx * (0.5 + u * 0.5) + Math.cos(a) * r, H * (0.55 + u * 0.42), Math.sin(a) * r], r: [0.42 + rand() * 0.2, 0.34 + rand() * 0.15, 0.42 + rand() * 0.2] },
-      colour: (p) => leafy(mix(leaf, [0.85, 0.85, 0.4], 0.3 * spots(p, 7, seed + k)), p), bones: ['top'], size: 1.2, opacity: 0.9,
+      color: (p) => leafy(mix(leaf, [0.85, 0.85, 0.4], 0.3 * spots(p, 7, seed + k)), p), bones: ['top'], size: 1.2, opacity: 0.9,
     })
   }
   const body = buildBody({ bones, parts, blend: 0.6 }, count, seed)
@@ -231,12 +231,12 @@ function bush(seed: number, count: number, pal: Palette): Plant {
   for (let k = 0; k < n; k++) {
     const a = (k / n) * Math.PI * 2 + rand(), r = k ? 0.3 + rand() * 0.15 : 0
     const R = (k ? 0.32 : 0.45) + rand() * 0.12
-    parts.push({ shape: { ball: [Math.cos(a) * r, R * 0.75, Math.sin(a) * r], r: [R, R * 0.8, R] }, colour: (p, nn) => leafy(mix(mix(leaf, [0.5, 0.65, 0.25], 0.25 * spots(p, 9, seed)), [0.03, 0.08, 0.03], 0.4 * Math.max(0, -nn[1])), p), bones: ['top'], size: 1.2 })
+    parts.push({ shape: { ball: [Math.cos(a) * r, R * 0.75, Math.sin(a) * r], r: [R, R * 0.8, R] }, color: (p, nn) => leafy(mix(mix(leaf, [0.5, 0.65, 0.25], 0.25 * spots(p, 9, seed)), [0.03, 0.08, 0.03], 0.4 * Math.max(0, -nn[1])), p), bones: ['top'], size: 1.2 })
   }
   if (berries) {
     for (let k = 0; k < 6; k++) {
       const a = rand() * Math.PI * 2, y = 0.3 + rand() * 0.4, rr = 0.42 + rand() * 0.1
-      parts.push({ shape: { ball: [Math.cos(a) * rr, y, Math.sin(a) * rr], r: [0.035, 0.035, 0.035] }, colour: [0.8, 0.1, 0.15], bones: ['top'], density: 6, glow: true })
+      parts.push({ shape: { ball: [Math.cos(a) * rr, y, Math.sin(a) * rr], r: [0.035, 0.035, 0.035] }, color: [0.8, 0.1, 0.15], bones: ['top'], density: 6, glow: true })
     }
   }
   const body = buildBody({ bones, parts, blend: 0.4 }, count, seed)
@@ -273,7 +273,7 @@ function fern(seed: number, count: number, pal: Palette): Plant {
     parts.push({
       shape: { sheet: [[p0, at(q1, w), at(q1, -w)], [at(q1, w), at(mid, w), at(q1, -w)], [at(q1, -w), at(mid, w), at(mid, -w)], [at(mid, w), tip, at(mid, -w)]] },
       // a darker vein down the middle of each frond
-      colour: (p) => {
+      color: (p) => {
         const across = Math.abs(p[0] * side[0] + p[2] * side[2])
         return across < 0.012 ? mix(green, [0.1, 0.2, 0.05], 0.5) : mix(green, [0.7, 0.85, 0.35], 0.2 * Math.sin(Math.hypot(p[0], p[2]) * 60) ** 2)
       },
@@ -306,7 +306,7 @@ function fern(seed: number, count: number, pal: Palette): Plant {
 function flowers(seed: number, count: number, pal: Palette): Plant {
   const rand = rng(seed)
   const n = 3 + Math.floor(rand() * 3)
-  const colour = pick(rand, pal.petals)
+  const color = pick(rand, pal.petals)
   const bones: Bone[] = [root]
   const parts: Part[] = []
   const heads: number[] = []
@@ -317,8 +317,8 @@ function flowers(seed: number, count: number, pal: Palette): Plant {
     const s = bones.length
     bones.push({ name: `s${k}`, parent: 0, head: [x, 0, z] }, { name: `h${k}`, parent: s, head: top, tail: [top[0], top[1] + 0.05, top[2]] })
     heads.push(s + 1)
-    parts.push({ shape: { tube: [[x, 0, z], top], r: [0.008, 0.006] }, colour: STEM, bones: [`s${k}`], density: 3 })
-    const petal = vary(colour, rand, 0.15), petals = 5 + Math.floor(rand() * 2), R = 0.05 + rand() * 0.025
+    parts.push({ shape: { tube: [[x, 0, z], top], r: [0.008, 0.006] }, color: STEM, bones: [`s${k}`], density: 3 })
+    const petal = vary(color, rand, 0.15), petals = 5 + Math.floor(rand() * 2), R = 0.05 + rand() * 0.025
     const tri: Vec3[][] = []
     for (let p = 0; p < petals; p++) {
       const b0 = (p / petals) * Math.PI * 2, b1 = b0 + (Math.PI * 2) / petals
@@ -326,8 +326,8 @@ function flowers(seed: number, count: number, pal: Palette): Plant {
       tri.push([top, [top[0] + Math.cos(b0 + 0.2) * R * 0.7, top[1] + 0.01, top[2] + Math.sin(b0 + 0.2) * R * 0.7], [top[0] + Math.cos(mid) * R, top[1] + 0.02, top[2] + Math.sin(mid) * R]])
       tri.push([top, [top[0] + Math.cos(mid) * R, top[1] + 0.02, top[2] + Math.sin(mid) * R], [top[0] + Math.cos(b1 - 0.2) * R * 0.7, top[1] + 0.01, top[2] + Math.sin(b1 - 0.2) * R * 0.7]])
     }
-    parts.push({ shape: { sheet: tri }, colour: (p) => mix(petal, [1, 1, 1], 0.25 * (1 - Math.hypot(p[0] - top[0], p[2] - top[2]) / R)), bones: [`h${k}`], density: 4, glow: true, size: 0.9 })
-    parts.push({ shape: { ball: [top[0], top[1] + 0.015, top[2]], r: [0.014, 0.01, 0.014] }, colour: [0.95, 0.75, 0.15], bones: [`h${k}`], density: 6, glow: true })
+    parts.push({ shape: { sheet: tri }, color: (p) => mix(petal, [1, 1, 1], 0.25 * (1 - Math.hypot(p[0] - top[0], p[2] - top[2]) / R)), bones: [`h${k}`], density: 4, glow: true, size: 0.9 })
+    parts.push({ shape: { ball: [top[0], top[1] + 0.015, top[2]], r: [0.014, 0.01, 0.014] }, color: [0.95, 0.75, 0.15], bones: [`h${k}`], density: 6, glow: true })
   }
   const body = buildBody({ bones, parts, blend: 0.04 }, count, seed)
   const phase = rand() * 6
@@ -352,17 +352,17 @@ function mushrooms(seed: number, count: number): Plant {
   const rand = rng(seed)
   const n = 2 + Math.floor(rand() * 3)
   const red = rand() < 0.6
-  const capColour: Vec3 = red ? [0.82, 0.12, 0.1] : [0.62, 0.4, 0.22]
+  const capColor: Vec3 = red ? [0.82, 0.12, 0.1] : [0.62, 0.4, 0.22]
   const bones: Bone[] = [root]
   const parts: Part[] = []
   for (let k = 0; k < n; k++) {
     const a = rand() * Math.PI * 2, r = k ? 0.08 + rand() * 0.1 : 0
     const x = Math.cos(a) * r, z = Math.sin(a) * r, h = 0.08 + rand() * 0.1, R = 0.05 + rand() * 0.05
     bones.push({ name: `m${k}`, parent: 0, head: [x, 0, z], tail: [x, h, z] })
-    parts.push({ shape: { tube: [[x, 0, z], [x, h, z]], r: [R * 0.32, R * 0.26] }, colour: [0.92, 0.88, 0.78], bones: [`m${k}`], density: 2 })
+    parts.push({ shape: { tube: [[x, 0, z], [x, h, z]], r: [R * 0.32, R * 0.26] }, color: [0.92, 0.88, 0.78], bones: [`m${k}`], density: 2 })
     parts.push({
       shape: { ball: [x, h, z], r: [R, R * 0.55, R] },
-      colour: (p, nn) => (nn[1] < -0.2 ? [0.85, 0.8, 0.7] : red && spots(p, 90, k) > 0.72 ? [0.98, 0.96, 0.92] : capColour),
+      color: (p, nn) => (nn[1] < -0.2 ? [0.85, 0.8, 0.7] : red && spots(p, 90, k) > 0.72 ? [0.98, 0.96, 0.92] : capColor),
       bones: [`m${k}`], density: 3, glow: false,
     })
   }
@@ -387,7 +387,7 @@ function rock(seed: number, count: number): Plant {
     const R = (k ? 0.14 : 0.28) + rand() * 0.12, a = rand() * 6, r = k ? 0.3 : 0
     parts.push({
       shape: { ball: [Math.cos(a) * r, R * 0.35, Math.sin(a) * r], r: [R * (1 + rand() * 0.4), R * 0.7, R] },
-      colour: (p, nn) => (nn[1] > 0.55 && spots(p, 14, k) > 0.45 ? MOSS : mix(STONE, [0.35, 0.34, 0.33], spots(p, 25, seed + k))),
+      color: (p, nn) => (nn[1] > 0.55 && spots(p, 14, k) > 0.45 ? MOSS : mix(STONE, [0.35, 0.34, 0.33], spots(p, 25, seed + k))),
       bones: ['root'], density: 1, size: 1.2,
     })
   }

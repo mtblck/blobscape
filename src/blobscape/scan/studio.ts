@@ -1,7 +1,7 @@
 import { Blobs, type Quat, type Vec3 } from '../../splat-core/blobs.ts'
 import type { PointLight } from '../../splat-engine/engine.ts'
 import { Skeleton, emptySkin } from '../../splat-engine/rig.ts'
-import { both, coreBox, extent, faintMask, findFloor, floaterMask, floorMask, hugeMask, keepOnly, kept, levelling, mulQ, rotate, type Mask } from './clean.ts'
+import { both, coreBox, extent, faintMask, findFloor, floaterMask, floorMask, hugeMask, keepOnly, kept, leveling, mulQ, rotate, type Mask } from './clean.ts'
 
 /**
  * Scan Studio's whole pipeline in plain numbers, from the scan as opened to
@@ -26,7 +26,7 @@ export const UNTURNED: Orient = { q: [0, 0, 0, 1], floorY: null }
 export function autoOrient(raw: Blobs): Orient | null {
   const p = findFloor(raw)
   if (!p) return null
-  const { q, lift } = levelling(p)
+  const { q, lift } = leveling(p)
   return { q, floorY: -lift }
 }
 
@@ -44,7 +44,7 @@ export function working(raw: Blobs, o: Orient): { blobs: Blobs; scale: number } 
   const out = raw.clone()
   const q = o.q
   for (let i = 0; i < raw.count; i++) {
-    out.centre.set(rotate(q, raw.centre.subarray(i * 3, i * 3 + 3)), i * 3)
+    out.center.set(rotate(q, raw.center.subarray(i * 3, i * 3 + 3)), i * 3)
     out.quat.set(mulQ(q, raw.quat.subarray(i * 4, i * 4 + 4)), i * 4)
   }
   const floorY = o.floorY ?? coreBox(out, 0.98).lo[1]
@@ -54,9 +54,9 @@ export function working(raw: Blobs, o: Orient): { blobs: Blobs; scale: number } 
   const s = across > 0 ? WORK / across : 1
   const cx = (core.lo[0] + core.hi[0]) / 2, cz = (core.lo[2] + core.hi[2]) / 2
   for (let i = 0; i < out.count; i++) {
-    out.centre[i * 3] = (out.centre[i * 3] - cx) * s
-    out.centre[i * 3 + 1] = (out.centre[i * 3 + 1] - floorY) * s
-    out.centre[i * 3 + 2] = (out.centre[i * 3 + 2] - cz) * s
+    out.center[i * 3] = (out.center[i * 3] - cx) * s
+    out.center[i * 3 + 1] = (out.center[i * 3 + 1] - floorY) * s
+    out.center[i * 3 + 2] = (out.center[i * 3 + 2] - cz) * s
     for (let k = 0; k < 3; k++) out.scale[i * 3 + k] *= s
   }
   return { blobs: out, scale: s }
@@ -68,7 +68,7 @@ function objectBox(b: Blobs, floorY: number) {
   const rise = 0.015 * Math.max(all.hi[0] - all.lo[0], all.hi[1] - all.lo[1], all.hi[2] - all.lo[2])
   const m = new Uint8Array(b.count)
   let n = 0
-  for (let i = 0; i < b.count; i++) if (b.centre[i * 3 + 1] > floorY + rise) { m[i] = 1; n++ }
+  for (let i = 0; i < b.count; i++) if (b.center[i * 3 + 1] > floorY + rise) { m[i] = 1; n++ }
   return n > 200 ? coreBox(keepOnly(b, m), 0.9) : all
 }
 
@@ -127,8 +127,8 @@ export function cropMask(b: Blobs, radius: number, top: number): Mask {
   const m = new Uint8Array(b.count)
   const r2 = radius * radius
   for (let i = 0; i < b.count; i++) {
-    const x = b.centre[i * 3], z = b.centre[i * 3 + 2]
-    m[i] = x * x + z * z <= r2 && b.centre[i * 3 + 1] <= top ? 1 : 0
+    const x = b.center[i * 3], z = b.center[i * 3 + 2]
+    m[i] = x * x + z * z <= r2 && b.center[i * 3 + 1] <= top ? 1 : 0
   }
   return m
 }
@@ -143,7 +143,7 @@ export function preview(b: Blobs, mask: Mask | undefined, showCut: boolean): Blo
   const out = b.clone()
   for (let i = 0; i < b.count; i++) {
     if (mask[i]) continue
-    out.colour.set(CUT_RED, i * 3)
+    out.color.set(CUT_RED, i * 3)
     // faint, so the kept blobs still read through the haze of cut ones
     out.opacity[i] = Math.min(b.opacity[i] * 0.5, 0.22)
   }
@@ -153,7 +153,7 @@ export function preview(b: Blobs, mask: Mask | undefined, showCut: boolean): Blo
 /** The size the finished object is scaled to (its tallest or widest side), about the size of the sandbox's own scenes. */
 export const FINISHED = 1.6
 
-/** The kept blobs as an object of their own: standing on y = 0, centred, FINISHED units at its biggest. */
+/** The kept blobs as an object of their own: standing on y = 0, centerd, FINISHED units at its biggest. */
 export function finish(b: Blobs, mask: Mask | undefined): Blobs {
   const out = mask ? keepOnly(b, mask) : b.clone()
   if (!out.count) return out
@@ -162,9 +162,9 @@ export function finish(b: Blobs, mask: Mask | undefined): Blobs {
   const s = big > 0 ? FINISHED / big : 1
   const cx = (lo[0] + hi[0]) / 2, cz = (lo[2] + hi[2]) / 2
   for (let i = 0; i < out.count; i++) {
-    out.centre[i * 3] = (out.centre[i * 3] - cx) * s
-    out.centre[i * 3 + 1] = (out.centre[i * 3 + 1] - lo[1]) * s
-    out.centre[i * 3 + 2] = (out.centre[i * 3 + 2] - cz) * s
+    out.center[i * 3] = (out.center[i * 3] - cx) * s
+    out.center[i * 3 + 1] = (out.center[i * 3 + 1] - lo[1]) * s
+    out.center[i * 3 + 2] = (out.center[i * 3 + 2] - cz) * s
     for (let k = 0; k < 3; k++) out.scale[i * 3 + k] *= s
   }
   return out
@@ -173,11 +173,11 @@ export function finish(b: Blobs, mask: Mask | undefined): Blobs {
 export type LightId = 'scanned' | 'lamp' | 'daylight' | 'candle' | 'duo'
 
 export const LIGHTS: { id: LightId; label: string; ambient: number; note: string }[] = [
-  { id: 'scanned', label: 'As scanned', ambient: 1, note: 'The colours the phone saw, light and shade baked in.' },
+  { id: 'scanned', label: 'As scanned', ambient: 1, note: 'The colors the phone saw, light and shade baked in.' },
   { id: 'lamp', label: 'Lamp', ambient: 0.22, note: 'A warm lamp above and to one side.' },
   { id: 'daylight', label: 'Daylight', ambient: 0.5, note: 'Cool light from high up.' },
   { id: 'candle', label: 'Candle', ambient: 0.14, note: 'A low orange flame close by.' },
-  { id: 'duo', label: 'Two colours', ambient: 0.2, note: 'Magenta from one side, cyan from the other.' },
+  { id: 'duo', label: 'Two colors', ambient: 0.2, note: 'Magenta from one side, cyan from the other.' },
 ]
 
 /**
@@ -192,12 +192,12 @@ export function lightsFor(id: LightId, angle: number, lo: Vec3, hi: Vec3): Point
   const at = (out: number, up: number, turn = 0): [number, number, number] => [c[0] + Math.cos(a + turn) * out * r, c[1] + up * r, c[2] + Math.sin(a + turn) * out * r]
   switch (id) {
     case 'scanned': return []
-    case 'lamp': return [{ position: at(1.2, 1.0), colour: [5, 3.4, 1.9], range: 1.3 * r }]
-    case 'daylight': return [{ position: at(0.9, 2.2), colour: [2.4, 2.6, 3.1], range: 2.2 * r }]
-    case 'candle': return [{ position: at(0.95, -0.2), colour: [5, 2.2, 0.6], range: 0.9 * r }]
+    case 'lamp': return [{ position: at(1.2, 1.0), color: [5, 3.4, 1.9], range: 1.3 * r }]
+    case 'daylight': return [{ position: at(0.9, 2.2), color: [2.4, 2.6, 3.1], range: 2.2 * r }]
+    case 'candle': return [{ position: at(0.95, -0.2), color: [5, 2.2, 0.6], range: 0.9 * r }]
     case 'duo': return [
-      { position: at(1.2, 0.6), colour: [4.2, 0.6, 2.6], range: 1.1 * r },
-      { position: at(1.2, 0.6, Math.PI), colour: [0.5, 2.6, 4.2], range: 1.1 * r },
+      { position: at(1.2, 0.6), color: [4.2, 0.6, 2.6], range: 1.1 * r },
+      { position: at(1.2, 0.6, Math.PI), color: [0.5, 2.6, 4.2], range: 1.1 * r },
     ]
   }
 }

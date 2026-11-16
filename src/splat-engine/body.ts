@@ -10,7 +10,7 @@ import { Skeleton, emptySkin, setWeights, type Bone, type Skin } from './rig.ts'
  *
  * Blobs are spread by area, so a part gets its share of `count`; `density`
  * gives small parts (eyes, claws) more than their share. Lighting is baked into
- * the colour from a fixed light, as for the fox, unless a part is `glow`.
+ * the color from a fixed light, as for the fox, unless a part is `glow`.
  */
 export interface Creature {
   blobs: Blobs
@@ -30,17 +30,17 @@ export type Shape =
 
 export interface Part {
   shape: Shape
-  /** Colour at a point on the surface, given its outward normal and `u`, how far along a tube or fill (0–1). */
-  colour: Vec3 | ((p: Vec3, n: Vec3, u: number) => Vec3)
+  /** Color at a point on the surface, given its outward normal and `u`, how far along a tube or fill (0–1). */
+  color: Vec3 | ((p: Vec3, n: Vec3, u: number) => Vec3)
   /** The bones that move it, nearest first is not needed: each blob is weighted by its distance to each. */
   bones: string[]
   /** Blobs per unit area, relative to the rest. */
   density?: number
   /** Blob size, relative to the rest. */
   size?: number
-  /** Opacity, or opacity at a point given how far along it is (as for `colour`). */
+  /** Opacity, or opacity at a point given how far along it is (as for `color`). */
   opacity?: number | ((p: Vec3, u: number) => number)
-  /** Unlit: the colour as given, for eyes and fire. */
+  /** Unlit: the color as given, for eyes and fire. */
   glow?: boolean
   /** How far its weights spread from each bone, if not the creature's `blend`: wider for a sheet that must stretch smoothly. */
   blend?: number
@@ -116,7 +116,7 @@ export function buildBody(spec: BodySpec, count: number, seed = 7): Built {
     for (let i = 0; i < m; i++) {
       const [u, v] = r2(i + pi * 7919)
       const { p, n: nn, along } = sample(s, u, v, rand)
-      const base = typeof part.colour === 'function' ? part.colour(p, nn, along) : part.colour
+      const base = typeof part.color === 'function' ? part.color(p, nn, along) : part.color
       let k = 1
       if (!part.glow) {
         const facing = 'sheet' in s ? Math.abs(dot(nn, LIGHT)) : dot(nn, LIGHT)
@@ -126,10 +126,10 @@ export function buildBody(spec: BodySpec, count: number, seed = 7): Built {
       const op = typeof part.opacity === 'function' ? part.opacity(p, along) : part.opacity ?? 0.92
       const round = 'fill' in s
       blobs.push({
-        centre: p,
+        center: p,
         scale: round ? [size * j * 1.6, size * j * 1.6, size * j * 1.6] : [size * j, size * j * (0.7 + rand() * 0.6), size * 0.2 * (part.size ?? 1)],
         quat: quatFacing(nn),
-        colour: [Math.min(1, base[0] * k), Math.min(1, base[1] * k), Math.min(1, base[2] * k)],
+        color: [Math.min(1, base[0] * k), Math.min(1, base[1] * k), Math.min(1, base[2] * k)],
         opacity: op,
       })
       partOf[blobs.count - 1] = pi
@@ -143,7 +143,7 @@ export function buildBody(spec: BodySpec, count: number, seed = 7): Built {
   for (let i = 0; i < blobs.count; i++) {
     const part = spec.parts[partOf[i]]
     const sig2 = 2 * (part.blend ?? spec.blend) ** 2
-    const p = blobs.centre.subarray(i * 3, i * 3 + 3)
+    const p = blobs.center.subarray(i * 3, i * 3 + 3)
     const pairs: [number, number][] = part.bones.map((name) => {
       const b = index.get(name)
       if (b === undefined) throw new Error(`no bone ${name}`)

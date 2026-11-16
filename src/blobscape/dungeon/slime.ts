@@ -11,7 +11,7 @@ import { BURST, RULES, SPAWN, hopShape, type Slime, type SlimeKind } from './gam
  * bursts.
  */
 
-export const COLOURS: Record<SlimeKind, { skin: Vec3; deep: Vec3 }> = {
+export const COLORS: Record<SlimeKind, { skin: Vec3; deep: Vec3 }> = {
   green: { skin: [0.42, 0.9, 0.35], deep: [0.1, 0.45, 0.12] },
   blue: { skin: [0.35, 0.65, 1], deep: [0.08, 0.22, 0.6] },
   red: { skin: [1, 0.38, 0.3], deep: [0.55, 0.06, 0.08] },
@@ -42,33 +42,33 @@ const BONES: Bone[] = [
 const BODY = ['core', 'top', 'f', 'b', 'l', 'r']
 
 export function makeSlime(kind: SlimeKind, count = 2600): Creature {
-  const { skin, deep } = COLOURS[kind]
+  const { skin, deep } = COLORS[kind]
   const jelly = (p: Vec3, n: Vec3): Vec3 => {
-    // lighter at the top and towards the light, deeper underneath, with a faint mottle
+    // lighter at the top and toward the light, deeper underneath, with a faint mottle
     const t = Math.max(0, Math.min(1, (p[1] - 0.02) / (2 * H)))
     return mix(mix(deep, skin, 0.35 + 0.65 * t), [1, 1, 1], 0.12 * Math.max(0, n[1]) + 0.08 * spots(p, 18, 2))
   }
   const parts: Part[] = [
-    { shape: { ball: [0, CY, 0], r: [R, H, R] }, colour: jelly, bones: BODY, opacity: 0.55, size: 1.2 },
-    { shape: { ball: [0, CY - 0.02, 0], r: [R * 0.82, H * 0.78, R * 0.82] }, colour: (p) => mix(deep, skin, 0.3 + 0.3 * spots(p, 9, 1)), bones: BODY, opacity: 0.4, density: 0.5, size: 1.4 },
+    { shape: { ball: [0, CY, 0], r: [R, H, R] }, color: jelly, bones: BODY, opacity: 0.55, size: 1.2 },
+    { shape: { ball: [0, CY - 0.02, 0], r: [R * 0.82, H * 0.78, R * 0.82] }, color: (p) => mix(deep, skin, 0.3 + 0.3 * spots(p, 9, 1)), bones: BODY, opacity: 0.4, density: 0.5, size: 1.4 },
     // a darker heart, seen through the jelly
-    { shape: { ball: [0, CY - 0.02, -0.02], r: [0.12, 0.1, 0.12] }, colour: mix(deep, [0, 0, 0], 0.3), bones: ['core'], opacity: 0.8, density: 1.5 },
+    { shape: { ball: [0, CY - 0.02, -0.02], r: [0.12, 0.1, 0.12] }, color: mix(deep, [0, 0, 0], 0.3), bones: ['core'], opacity: 0.8, density: 1.5 },
     // the shine, high on the front
-    { shape: { ball: [0.13, CY + H * 0.72, 0.15], r: [0.07, 0.035, 0.05] }, colour: [1, 1, 1], glow: true, opacity: 0.85, bones: ['top', 'f'], density: 3 },
-    { shape: { ball: [0.2, CY + H * 0.45, 0.25], r: [0.025, 0.02, 0.02] }, colour: [1, 1, 1], glow: true, opacity: 0.7, bones: ['top', 'f', 'l'], density: 4 },
+    { shape: { ball: [0.13, CY + H * 0.72, 0.15], r: [0.07, 0.035, 0.05] }, color: [1, 1, 1], glow: true, opacity: 0.85, bones: ['top', 'f'], density: 3 },
+    { shape: { ball: [0.2, CY + H * 0.45, 0.25], r: [0.025, 0.02, 0.02] }, color: [1, 1, 1], glow: true, opacity: 0.7, bones: ['top', 'f', 'l'], density: 4 },
     // a little smile
-    { shape: { tube: [[-0.06, CY - 0.01, R * 1.0], [0.06, CY - 0.01, R * 1.0]], r: [0.014, 0.014], flat: 0.6 }, colour: [0.06, 0.04, 0.05], bones: ['f', 'core'], density: 5, opacity: 1 },
+    { shape: { tube: [[-0.06, CY - 0.01, R * 1.0], [0.06, CY - 0.01, R * 1.0]], r: [0.014, 0.014], flat: 0.6 }, color: [0.06, 0.04, 0.05], bones: ['f', 'core'], density: 5, opacity: 1 },
   ]
   for (const x of [-1, 1]) {
     parts.push(
-      { shape: { ball: [0.11 * x, CY + 0.09, R * 0.98], r: [0.045, 0.065, 0.025] }, colour: [0.04, 0.03, 0.05], bones: ['top', 'f'], density: 6, opacity: 1 },
-      { shape: { ball: [0.11 * x + 0.015, CY + 0.12, R * 1.04], r: [0.012, 0.015, 0.008] }, colour: [1, 1, 1], glow: true, bones: ['top', 'f'], density: 10, opacity: 1 },
+      { shape: { ball: [0.11 * x, CY + 0.09, R * 0.98], r: [0.045, 0.065, 0.025] }, color: [0.04, 0.03, 0.05], bones: ['top', 'f'], density: 6, opacity: 1 },
+      { shape: { ball: [0.11 * x + 0.015, CY + 0.12, R * 1.04], r: [0.012, 0.015, 0.008] }, color: [1, 1, 1], glow: true, bones: ['top', 'f'], density: 10, opacity: 1 },
     )
   }
   // the shards: drops of jelly, one per bone, hidden until it bursts
   for (let i = 0; i < SHARDS; i++) {
     const s = 0.045 + (i % 3) * 0.015
-    parts.push({ shape: { ball: shardHome(i), r: [s, s * 0.9, s] }, colour: (p, n) => jelly([p[0], CY + (p[1] - CY) * 0.5 + 0.15, p[2]], n), bones: [`shard${i}`], opacity: 0.8, density: 2.2 })
+    parts.push({ shape: { ball: shardHome(i), r: [s, s * 0.9, s] }, color: (p, n) => jelly([p[0], CY + (p[1] - CY) * 0.5 + 0.15, p[2]], n), bones: [`shard${i}`], opacity: 0.8, density: 2.2 })
   }
   const b = buildBody({ bones: BONES, parts, blend: 0.16 }, count, 3 + kind.length)
   return { blobs: b.blobs, skin: b.skin, skeleton: b.skeleton }

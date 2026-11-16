@@ -3,7 +3,7 @@ import { Blobs, type Vec3 } from './blobs.ts'
 /**
  * Live effects. Each one moves, turns, squashes or fades blobs as a function
  * of `amount` (0 = untouched, 1 = full effect), `time` (seconds, for the
- * looping ones) and a per-blob random number. The same maths exists twice:
+ * looping ones) and a per-blob random number. The same math exists twice:
  * as GLSL for Spark to run on the GPU every frame (`effectGlsl`), and in
  * TypeScript (`applyEffect`) so an effect can be baked into the blobs for
  * real, and tested. Both use an integer hash, so they agree blob for blob.
@@ -23,7 +23,7 @@ export const EFFECTS: { id: EffectId; name: string; note: string; loops: boolean
 export const EFFECT_INDEX: Record<EffectId, number> = { explode: 0, melt: 1, wind: 2, twist: 3, wave: 4, dissolve: 5 }
 
 /** Where the scene is: effects scale to it, so they look the same on a mug or a room. */
-export interface EffectFrame { centre: Vec3; radius: number; floor: number }
+export interface EffectFrame { center: Vec3; radius: number; floor: number }
 
 export interface EffectParams extends EffectFrame { kind: EffectId; amount: number; time: number }
 
@@ -43,11 +43,11 @@ const smooth = (e0: number, e1: number, x: number) => { const t = Math.max(0, Ma
  * position in the GPU's list, so a bake matches what was on screen.
  */
 export function applyEffectOne(b: Blobs, i: number, index: number, p: EffectParams) {
-  const { amount: a, time, centre: o, radius: R, floor } = p
+  const { amount: a, time, center: o, radius: R, floor } = p
   if (a <= 0 && p.kind !== 'wind' && p.kind !== 'wave') return
   const h = hash01(index, 1)
   const rx = hash01(index, 2) * 2 - 1, ry = hash01(index, 3) * 2 - 1, rz = hash01(index, 4) * 2 - 1
-  const c = b.centre, k = i * 3
+  const c = b.center, k = i * 3
   let x = c[k], y = c[k + 1], z = c[k + 2]
   switch (p.kind) {
     case 'explode': {
@@ -131,14 +131,14 @@ vec4 bsTurnY(vec4 q, float ang) {
 }
 `
 
-export function effectStatements(gin: string, g: string, u: { kind: string; amount: string; time: string; centre: string; radius: string; floor: string; count: string }) {
+export function effectStatements(gin: string, g: string, u: { kind: string; amount: string; time: string; center: string; radius: string; floor: string; count: string }) {
   return `
 ${g} = ${gin};
 if (${g}.index < int(${u.count})) {
   int idx = ${g}.index;
   float a = ${u.amount};
   float R = ${u.radius};
-  vec3 o = ${u.centre};
+  vec3 o = ${u.center};
   float h = bsHash(idx, 1);
   vec3 r = vec3(bsHash(idx, 2), bsHash(idx, 3), bsHash(idx, 4)) * 2.0 - 1.0;
   vec3 c = ${g}.center;

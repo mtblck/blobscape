@@ -7,7 +7,7 @@
  * Unlike Fit a Picture's flat blobs, these sit in 3D and are drawn front to
  * back, so a blob can hide the ones behind it:
  *   pixel = Σ cᵢ αᵢ Tᵢ + T·background,   Tᵢ = Π_{j<i} (1 − αⱼ)
- * Blobs are round (one size each) to keep the maths short: on screen each is a
+ * Blobs are round (one size each) to keep the math short: on screen each is a
  * circle of radius f·s/z pixels.
  *
  * The "real thing" is made of the same kind of blobs and drawn by the same
@@ -56,7 +56,7 @@ function norm(v: number[]): [number, number, number] {
 }
 
 /**
- * The trainable numbers. Sizes are stored as logs and colour/opacity as raw
+ * The trainable numbers. Sizes are stored as logs and color/opacity as raw
  * values through a sigmoid, so every number can roam freely and still mean
  * something valid.
  */
@@ -89,7 +89,7 @@ export function rng(seed: number) {
 
 /**
  * Where training starts: blobs scattered at random through a ball round the
- * object, grey and faint. Real trainers start from points a structure-from-
+ * object, gray and faint. Real trainers start from points a structure-from-
  * motion step found in the photos; with none, a random cloud still works.
  */
 export function randomStart(count: number, seed: number, radius = 1): Model {
@@ -114,7 +114,7 @@ const MAX_ALPHA = 0.99
 const MIN_ALPHA = 1 / 255
 const MIN_T = 1e-4
 
-/** Every blob as it lands in one camera: screen centre, depth, variance in pixels², opacity, colour. */
+/** Every blob as it lands in one camera: screen center, depth, variance in pixels², opacity, color. */
 interface Screen {
   /** Indices of blobs in front of the camera, nearest first. */
   order: Int32Array
@@ -344,7 +344,7 @@ export class Trainer {
   readonly cams: Cam[]
   readonly photos: Float64Array[]
 
-  /** How many steps the run will take: positions settle and blobs stop moving house towards the end. */
+  /** How many steps the run will take: positions settle and blobs stop moving house toward the end. */
   readonly total: number
 
   constructor(cams: Cam[], photos: Float64Array[], count: number, total: number, seed = 1) {

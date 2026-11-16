@@ -32,7 +32,7 @@ const START: Hud = { hp: MAX_HP, mp: MAX_MP, wave: 1, score: 0, alive: 0, banner
 
 /**
  * Dungeon Run: the elf, now with a sword and a hand full of magic, in a
- * torchlit hall that slimes of five colours hop into, wave after wave.
+ * torchlit hall that slimes of five colors hop into, wave after wave.
  * Health and magic show as bars over the view. One scene on Blobscape's own
  * splat engine; the slimes burst into splats.
  */
@@ -212,7 +212,7 @@ export function DungeonRun() {
       <header className="flex flex-wrap items-end justify-between gap-x-8 gap-y-2 pt-4 pb-6">
         <h1 ref={h1} tabIndex={-1} className="font-display text-4xl outline-none sm:text-5xl">Dungeon Run</h1>
         <p className="max-w-xl text-lg text-ink-muted">
-          The elf has a sword and a hand full of magic, and the dungeon has slimes. Five colours of them hop in, wave after wave,
+          The elf has a sword and a hand full of magic, and the dungeon has slimes. Five colors of them hop in, wave after wave,
           and burst into splats when you win.
         </p>
       </header>
@@ -360,13 +360,13 @@ export function DungeonRun() {
             hall together.
           </p>
           <p>
-            Light comes two ways. Baked, the torchlight is worked into the stone's colour when the hall is built, so it costs
+            Light comes two ways. Baked, the torchlight is worked into the stone's color when the hall is built, so it costs
             nothing to draw. Live, every blob is lit afresh each frame by up to sixteen lights: the eight torches, flickering with
-            their flames, the orb in the hero's hand (dimmer as the magic runs down), each bolt as it flies, and a flash of colour
+            their flames, the orb in the hero's hand (dimmer as the magic runs down), each bolt as it flies, and a flash of color
             as a slime bursts. A blob is a flat disc, so it knows which way it lies: its thinnest axis. Light is strongest where a
             disc turns square to it and falls away with distance. A disc doesn't know which face is its outside, so both faces
             catch the light, which is right for floors and walls and a little soft on round things. Bones are the subject of the <a href={href({ page: 'lesson', id: 'one-bone' })} className="underline decoration-rule underline-offset-2 hover:text-accent">rigs lessons</a>,
-            and the slimes' colours come from blobs adding up, which is <a href={href({ page: 'lesson', id: 'order' })} className="underline decoration-rule underline-offset-2 hover:text-accent">Order matters</a>.
+            and the slimes' colors come from blobs adding up, which is <a href={href({ page: 'lesson', id: 'order' })} className="underline decoration-rule underline-offset-2 hover:text-accent">Order matters</a>.
           </p>
         </div>
       </section>
@@ -390,23 +390,23 @@ function say(e: GameEvent): string | null {
 function Bars({ hp, mp }: { hp: number; mp: number }) {
   return (
     <div className="pointer-events-none absolute top-3 left-3 grid w-[min(46%,15rem)] gap-1.5" data-testid="dungeon-bars">
-      <Bar label="Health" value={hp} max={MAX_HP} colour="var(--color-health)" low={hp < 30}>
+      <Bar label="Health" value={hp} max={MAX_HP} color="var(--color-health)" low={hp < 30}>
         <path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.6 4.5c2.1 0 3.6 1.2 5.4 3.2 1.8-2 3.3-3.2 5.4-3.2 3.6 0 5.7 3.9 4.2 7.3C19.5 16.4 12 21 12 21z" />
       </Bar>
-      <Bar label="Magic" value={mp} max={MAX_MP} colour="var(--color-magic)">
+      <Bar label="Magic" value={mp} max={MAX_MP} color="var(--color-magic)">
         <path d="M12 2l2.2 6.3L20.5 9l-5 4.1L17 20l-5-3.7L7 20l1.5-6.9L3.5 9l6.3-.7z" />
       </Bar>
     </div>
   )
 }
 
-function Bar({ label, value, max, colour, low, children }: { label: string; value: number; max: number; colour: string; low?: boolean; children: ReactNode }) {
+function Bar({ label, value, max, color, low, children }: { label: string; value: number; max: number; color: string; low?: boolean; children: ReactNode }) {
   const v = Math.round(value)
   return (
     <div role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={max} aria-valuenow={v} aria-valuetext={`${v} of ${max}`} className="flex items-center gap-1.5">
-      <svg aria-hidden viewBox="0 0 24 24" className={`size-4 flex-none ${low ? 'dungeon-low' : ''}`} style={{ fill: colour }}>{children}</svg>
+      <svg aria-hidden viewBox="0 0 24 24" className={`size-4 flex-none ${low ? 'dungeon-low' : ''}`} style={{ fill: color }}>{children}</svg>
       <div className="relative h-3 flex-1 overflow-hidden rounded-full bg-black/55 ring-1 ring-white/25">
-        <div className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-150" style={{ width: `${(100 * Math.max(0, value)) / max}%`, background: colour }} />
+        <div className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-150" style={{ width: `${(100 * Math.max(0, value)) / max}%`, background: color }} />
       </div>
       <span className="w-7 text-right text-xs tabular-nums text-ink">{v}</span>
     </div>

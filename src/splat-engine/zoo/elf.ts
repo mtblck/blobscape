@@ -51,58 +51,58 @@ for (const [s, x] of SIDES) {
   )
 }
 
-interface Colours { tunic: Vec3; trim: Vec3; cape: Vec3; hair: Vec3; skin: Vec3 }
-const LOOKS: Record<string, Colours & { label: string }> = {
+interface Colors { tunic: Vec3; trim: Vec3; cape: Vec3; hair: Vec3; skin: Vec3 }
+const LOOKS: Record<string, Colors & { label: string }> = {
   forest: { label: 'Forest', tunic: [0.2, 0.46, 0.28], trim: [0.86, 0.7, 0.3], cape: [0.13, 0.3, 0.26], hair: [0.94, 0.84, 0.56], skin: [0.95, 0.79, 0.67] },
   dusk: { label: 'Dusk', tunic: [0.32, 0.25, 0.55], trim: [0.82, 0.84, 0.9], cape: [0.16, 0.14, 0.3], hair: [0.88, 0.9, 0.94], skin: [0.72, 0.56, 0.48] },
   autumn: { label: 'Autumn', tunic: [0.66, 0.3, 0.14], trim: [0.94, 0.78, 0.36], cape: [0.4, 0.2, 0.1], hair: [0.52, 0.22, 0.1], skin: [0.96, 0.82, 0.72] },
 }
 const LEATHER: Vec3 = [0.36, 0.22, 0.12], DARK_LEATHER: Vec3 = [0.2, 0.13, 0.08], LEGGINGS: Vec3 = [0.3, 0.27, 0.2], EYE: Vec3 = [0.1, 0.22, 0.3], WHITE: Vec3 = [0.95, 0.95, 0.92], LIPS: Vec3 = [0.75, 0.42, 0.4]
 
-function spec(c: Colours): BodySpec {
+function spec(c: Colors): BodySpec {
   const head: Vec3 = [0, 1.71, 0.015]
   // the face shows at the front; hair covers the top and back, swept behind the ears
   const scalp = (p: Vec3, n: Vec3): Vec3 => (n[2] > 0.35 && p[1] < 1.79 ? c.skin : n[1] > -0.1 || n[2] < 0.1 ? c.hair : c.skin)
   const tunic = (p: Vec3): Vec3 => (Math.abs(p[1] - 1.42) < 0.015 || Math.abs(p[1] - 0.74) < 0.02 ? c.trim : c.tunic)
   const parts: Part[] = [
     // head, face and features
-    { shape: { ball: head, r: [0.092, 0.115, 0.108] }, colour: scalp, bones: ['head'], density: 2 },
-    { shape: { ball: [0, 1.655, 0.045], r: [0.068, 0.06, 0.07] }, colour: c.skin, bones: ['head'], density: 2 },
-    { shape: { tube: [[0, 1.72, 0.105], [0, 1.68, 0.125]], r: [0.012, 0.016] }, colour: c.skin, bones: ['head'], density: 4 },
-    { shape: { tube: [[-0.02, 1.638, 0.112], [0.02, 1.638, 0.112]], r: [0.008, 0.008] }, colour: LIPS, bones: ['head'], density: 4 },
-    { shape: { ball: [0, 1.81, -0.02], r: [0.1, 0.05, 0.11] }, colour: c.hair, bones: ['head'] },
-    { shape: { tube: [[0, 1.7, -0.1], [0, 1.24, -0.14]], r: [0.06, 0.025], flat: 0.7 }, colour: (p) => (Math.sin(p[1] * 70) > 0.6 ? mix(c.hair, [0, 0, 0], 0.18) : c.hair), bones: ['head', 'hair1', 'hair2'] },
-    { shape: { tube: [[0, 1.55, 0], [0, 1.43, 0]], r: [0.045, 0.055] }, colour: c.skin, bones: ['neck', 'chest'] },
+    { shape: { ball: head, r: [0.092, 0.115, 0.108] }, color: scalp, bones: ['head'], density: 2 },
+    { shape: { ball: [0, 1.655, 0.045], r: [0.068, 0.06, 0.07] }, color: c.skin, bones: ['head'], density: 2 },
+    { shape: { tube: [[0, 1.72, 0.105], [0, 1.68, 0.125]], r: [0.012, 0.016] }, color: c.skin, bones: ['head'], density: 4 },
+    { shape: { tube: [[-0.02, 1.638, 0.112], [0.02, 1.638, 0.112]], r: [0.008, 0.008] }, color: LIPS, bones: ['head'], density: 4 },
+    { shape: { ball: [0, 1.81, -0.02], r: [0.1, 0.05, 0.11] }, color: c.hair, bones: ['head'] },
+    { shape: { tube: [[0, 1.7, -0.1], [0, 1.24, -0.14]], r: [0.06, 0.025], flat: 0.7 }, color: (p) => (Math.sin(p[1] * 70) > 0.6 ? mix(c.hair, [0, 0, 0], 0.18) : c.hair), bones: ['head', 'hair1', 'hair2'] },
+    { shape: { tube: [[0, 1.55, 0], [0, 1.43, 0]], r: [0.045, 0.055] }, color: c.skin, bones: ['neck', 'chest'] },
     // body: a tunic belted at the waist, flaring to a skirt
-    { shape: { tube: [[0, 1.03, 0], [0, 1.38, 0]], r: [0.125, 0.16], flat: 0.62 }, colour: tunic, bones: ['hips', 'spine', 'chest'] },
-    { shape: { tube: [[0, 1.0, 0], [0, 1.045, 0]], r: [0.13, 0.132], flat: 0.7 }, colour: (_p, n) => (n[2] > 0.85 ? c.trim : LEATHER), bones: ['hips', 'spine'], density: 1.5 },
-    { shape: { tube: [[0, 0.99, 0], [0, 0.72, 0]], r: [0.132, 0.2], flat: 0.75 }, colour: tunic, bones: ['hips', 'lThigh', 'rThigh'] },
+    { shape: { tube: [[0, 1.03, 0], [0, 1.38, 0]], r: [0.125, 0.16], flat: 0.62 }, color: tunic, bones: ['hips', 'spine', 'chest'] },
+    { shape: { tube: [[0, 1.0, 0], [0, 1.045, 0]], r: [0.13, 0.132], flat: 0.7 }, color: (_p, n) => (n[2] > 0.85 ? c.trim : LEATHER), bones: ['hips', 'spine'], density: 1.5 },
+    { shape: { tube: [[0, 0.99, 0], [0, 0.72, 0]], r: [0.132, 0.2], flat: 0.75 }, color: tunic, bones: ['hips', 'lThigh', 'rThigh'] },
     // a quiver slung across the back, with fletching
-    { shape: { tube: [[-0.12, 1.06, -0.13], [0.1, 1.5, -0.15]], r: [0.045, 0.05] }, colour: LEATHER, bones: ['chest', 'spine'] },
-    { shape: { ball: [0.12, 1.55, -0.15], r: [0.05, 0.035, 0.04] }, colour: WHITE, bones: ['chest'], density: 2 },
+    { shape: { tube: [[-0.12, 1.06, -0.13], [0.1, 1.5, -0.15]], r: [0.045, 0.05] }, color: LEATHER, bones: ['chest', 'spine'] },
+    { shape: { ball: [0.12, 1.55, -0.15], r: [0.05, 0.035, 0.04] }, color: WHITE, bones: ['chest'], density: 2 },
   ]
   for (const [s, x] of SIDES) {
     const elbow = sided(x, [0.27, 1.17, -0.02]), wrist = sided(x, [0.31, 0.94, 0.01])
     parts.push(
-      // eyes: white, then a coloured iris
-      { shape: { ball: sided(x, [0.033, 1.705, 0.111]), r: [0.017, 0.011, 0.008] }, colour: (_p, n) => (n[2] > 0.82 ? EYE : WHITE), bones: ['head'], density: 6 },
-      { shape: { tube: [sided(x, [0.012, 1.733, 0.12]), sided(x, [0.054, 1.737, 0.108])], r: [0.006, 0.004] }, colour: mix(c.hair, [0, 0, 0], 0.35), bones: ['head'], density: 6 },
+      // eyes: white, then a colored iris
+      { shape: { ball: sided(x, [0.033, 1.705, 0.111]), r: [0.017, 0.011, 0.008] }, color: (_p, n) => (n[2] > 0.82 ? EYE : WHITE), bones: ['head'], density: 6 },
+      { shape: { tube: [sided(x, [0.012, 1.733, 0.12]), sided(x, [0.054, 1.737, 0.108])], r: [0.006, 0.004] }, color: mix(c.hair, [0, 0, 0], 0.35), bones: ['head'], density: 6 },
       // long pointed ears, sweeping back
-      { shape: { tube: [sided(x, [0.085, 1.7, 0.0]), sided(x, [0.18, 1.8, -0.06])], r: [0.028, 0.004], flat: 0.45 }, colour: c.skin, bones: ['head'], density: 3 },
-      { shape: { ball: sided(x, [0.175, 1.43, -0.01]), r: [0.07, 0.065, 0.07] }, colour: c.tunic, bones: ['chest', `${s}Shoulder`, `${s}Arm`] },
-      { shape: { tube: [sided(x, [0.2, 1.42, -0.01]), elbow], r: [0.05, 0.042] }, colour: c.tunic, bones: [`${s}Arm`, `${s}Forearm`] },
-      { shape: { tube: [elbow, wrist], r: [0.044, 0.034] }, colour: (p) => (p[1] < 1.08 ? DARK_LEATHER : c.tunic), bones: [`${s}Arm`, `${s}Forearm`, `${s}Hand`] },
-      { shape: { ball: sided(x, [0.315, 0.905, 0.015]), r: [0.022, 0.045, 0.038] }, colour: c.skin, bones: [`${s}Hand`, `${s}Forearm`], density: 2 },
-      { shape: { tube: [sided(x, [0.325, 0.87, 0.02]), sided(x, [0.335, 0.795, 0.025])], r: [0.02, 0.012], flat: 0.6 }, colour: c.skin, bones: [`${s}Fingers`], density: 2 },
-      { shape: { tube: [sided(x, [0.31, 0.91, 0.04]), sided(x, [0.3, 0.86, 0.065])], r: [0.011, 0.008] }, colour: c.skin, bones: [`${s}Hand`], density: 3 },
+      { shape: { tube: [sided(x, [0.085, 1.7, 0.0]), sided(x, [0.18, 1.8, -0.06])], r: [0.028, 0.004], flat: 0.45 }, color: c.skin, bones: ['head'], density: 3 },
+      { shape: { ball: sided(x, [0.175, 1.43, -0.01]), r: [0.07, 0.065, 0.07] }, color: c.tunic, bones: ['chest', `${s}Shoulder`, `${s}Arm`] },
+      { shape: { tube: [sided(x, [0.2, 1.42, -0.01]), elbow], r: [0.05, 0.042] }, color: c.tunic, bones: [`${s}Arm`, `${s}Forearm`] },
+      { shape: { tube: [elbow, wrist], r: [0.044, 0.034] }, color: (p) => (p[1] < 1.08 ? DARK_LEATHER : c.tunic), bones: [`${s}Arm`, `${s}Forearm`, `${s}Hand`] },
+      { shape: { ball: sided(x, [0.315, 0.905, 0.015]), r: [0.022, 0.045, 0.038] }, color: c.skin, bones: [`${s}Hand`, `${s}Forearm`], density: 2 },
+      { shape: { tube: [sided(x, [0.325, 0.87, 0.02]), sided(x, [0.335, 0.795, 0.025])], r: [0.02, 0.012], flat: 0.6 }, color: c.skin, bones: [`${s}Fingers`], density: 2 },
+      { shape: { tube: [sided(x, [0.31, 0.91, 0.04]), sided(x, [0.3, 0.86, 0.065])], r: [0.011, 0.008] }, color: c.skin, bones: [`${s}Hand`], density: 3 },
     )
     const knee = sided(x, [0.105, 0.52, 0.015]), ankle = sided(x, [0.11, 0.09, -0.02])
     parts.push(
-      { shape: { tube: [sided(x, [0.09, 0.9, 0]), knee], r: [0.078, 0.055] }, colour: LEGGINGS, bones: ['hips', `${s}Thigh`, `${s}Shin`] },
+      { shape: { tube: [sided(x, [0.09, 0.9, 0]), knee], r: [0.078, 0.055] }, color: LEGGINGS, bones: ['hips', `${s}Thigh`, `${s}Shin`] },
       // boots to the knee, with a turned-down cuff
-      { shape: { tube: [knee, ankle], r: [0.06, 0.042] }, colour: (p) => (p[1] > 0.45 ? LEATHER : DARK_LEATHER), bones: [`${s}Thigh`, `${s}Shin`, `${s}Foot`] },
-      { shape: { tube: [sided(x, [0.11, 0.07, -0.05]), sided(x, [0.11, 0.04, 0.12])], r: [0.045, 0.038], flat: 0.7 }, colour: DARK_LEATHER, bones: [`${s}Shin`, `${s}Foot`, `${s}Toe`] },
-      { shape: { tube: [sided(x, [0.11, 0.035, 0.11]), sided(x, [0.11, 0.03, 0.18])], r: [0.036, 0.02], flat: 0.6 }, colour: DARK_LEATHER, bones: [`${s}Toe`] },
+      { shape: { tube: [knee, ankle], r: [0.06, 0.042] }, color: (p) => (p[1] > 0.45 ? LEATHER : DARK_LEATHER), bones: [`${s}Thigh`, `${s}Shin`, `${s}Foot`] },
+      { shape: { tube: [sided(x, [0.11, 0.07, -0.05]), sided(x, [0.11, 0.04, 0.12])], r: [0.045, 0.038], flat: 0.7 }, color: DARK_LEATHER, bones: [`${s}Shin`, `${s}Foot`, `${s}Toe`] },
+      { shape: { tube: [sided(x, [0.11, 0.035, 0.11]), sided(x, [0.11, 0.03, 0.18])], r: [0.036, 0.02], flat: 0.6 }, color: DARK_LEATHER, bones: [`${s}Toe`] },
     )
     // half the cape: from the shoulder down the back, weighted to its two bones so it sways
     const top = sided(x, [0.0, 1.43, -0.12]), shoulder = sided(x, [0.17, 1.44, -0.11])
@@ -110,7 +110,7 @@ function spec(c: Colours): BodySpec {
     const hem = [sided(x, [0.0, 0.62, -0.23]), sided(x, [0.27, 0.62, -0.2])] as const
     parts.push({
       shape: { sheet: [[top, shoulder, mid[1]], [top, mid[1], mid[0]], [mid[0], mid[1], hem[1]], [mid[0], hem[1], hem[0]]] },
-      colour: (p) => (p[1] < 0.66 ? c.trim : c.cape), bones: ['chest', `${s}Cape1`, `${s}Cape2`], opacity: 0.95,
+      color: (p) => (p[1] < 0.66 ? c.trim : c.cape), bones: ['chest', `${s}Cape1`, `${s}Cape2`], opacity: 0.95,
     })
   }
   return { bones: BONES, parts, blend: 0.07 }

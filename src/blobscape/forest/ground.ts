@@ -35,7 +35,7 @@ export function makeGround(slot: number, detail: number, season: Season): Creatu
   const lie = (p: Vec3, s: number, c: Vec3, o = 0.95) => {
     const a = rand() * Math.PI
     const q: Quat = [0, Math.sin(a / 2), 0, Math.cos(a / 2)]
-    blobs.push({ centre: p, scale: [s, s * (0.6 + rand() * 0.4), s * 0.12], quat: mulQ(q, quatFacing(up)), colour: c, opacity: o })
+    blobs.push({ center: p, scale: [s, s * (0.6 + rand() * 0.4), s * 0.12], quat: mulQ(q, quatFacing(up)), color: c, opacity: o })
   }
   const along = () => z0 - 0.1 + rand() * (TILE + 0.2)
 
@@ -66,7 +66,7 @@ export function makeGround(slot: number, detail: number, season: Season): Creatu
     const side = rand() < 0.5 ? -1 : 1
     const p: Vec3 = [mid + side * (half - 0.1 + (rand() - 0.5) * 0.35), 0.015, z]
     const s = 0.02 + rand() * 0.025
-    blobs.push({ centre: p, scale: [s * 1.3, s * 0.6, s], quat: [0, Math.sin(rand() * 3), 0, 1], colour: shade(mix(PEBBLE, [0.45, 0.43, 0.4], rand()), rand), opacity: 1 })
+    blobs.push({ center: p, scale: [s * 1.3, s * 0.6, s], quat: [0, Math.sin(rand() * 3), 0, 1], color: shade(mix(PEBBLE, [0.45, 0.43, 0.4], rand()), rand), opacity: 1 })
   }
   // blades standing up, thickest along the path, thinning out into the forest
   const blades = n - blobs.count - (season === 'autumn' ? Math.round(n * 0.04) : 0)
@@ -80,7 +80,7 @@ export function makeGround(slot: number, detail: number, season: Season): Creatu
     const q = mulQ([0, Math.sin(turn / 2), 0, Math.cos(turn / 2)], [Math.sin(lean / 2), 0, 0, Math.cos(lean / 2)])
     const tip = rand()
     const c = mix(mix(pal[1], [0.6, 0.7, 0.25], 0.35 * tip), pal[2], 0.3 * spots([x, 0, z], 3.1, 7))
-    blobs.push({ centre: [x, h * 0.9, z], scale: [0.012 * k, h, 0.006 * k], quat: q, colour: shade(c, rand), opacity: 0.95 })
+    blobs.push({ center: [x, h * 0.9, z], scale: [0.012 * k, h, 0.006 * k], quat: q, color: shade(c, rand), opacity: 0.95 })
   }
   // fallen leaves, mostly on the path and its edges
   while (blobs.count < n) {

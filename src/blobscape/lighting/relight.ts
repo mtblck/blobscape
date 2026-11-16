@@ -2,13 +2,13 @@ import { Blobs, quatFacing } from '../../splat-core/blobs.ts'
 
 /**
  * The Lighting is baked lesson's scene: a ball and a box on a table, "captured"
- * under one lamp. Every blob knows its true colour (albedo) and its surface
+ * under one lamp. Every blob knows its true color (albedo) and its surface
  * normal, so the page can show the real thing under any lamp and score each
  * way of relighting the capture against it.
  *
  * Light here is plain diffuse: ambient + the lamp's facing (n·l), with hard
  * shadows from the ball and the box. A capture stores albedo × that light at
- * the moment of capture: the light is baked into the colour.
+ * the moment of capture: the light is baked into the color.
  */
 
 type V3 = [number, number, number]
@@ -21,7 +21,7 @@ export const LAMP_HEIGHT = 2
 /** Where the lamp stood when the scene was captured (degrees round the circle). */
 export const CAPTURED_AT = -55
 
-const BALL = { centre: [-0.35, 0.36, 0.1] as V3, radius: 0.36 }
+const BALL = { center: [-0.35, 0.36, 0.1] as V3, radius: 0.36 }
 const BOX = { lo: [0.12, 0, -0.38] as V3, hi: [0.62, 0.5, 0.12] as V3 }
 
 export interface Scene {
@@ -64,8 +64,8 @@ export function buildScene(detail = 1): Scene {
   for (let k = 0; k < B; k++) {
     const y = 1 - (2 * (k + 0.5)) / B, ring = Math.sqrt(1 - y * y), phi = k * 2.399963
     const n: V3 = [ring * Math.cos(phi), y, ring * Math.sin(phi)]
-    if (BALL.centre[1] + n[1] * BALL.radius < 0.005) continue
-    add([BALL.centre[0] + n[0] * BALL.radius, BALL.centre[1] + n[1] * BALL.radius, BALL.centre[2] + n[2] * BALL.radius], n, [0.86, 0.42, 0.26], 0.03)
+    if (BALL.center[1] + n[1] * BALL.radius < 0.005) continue
+    add([BALL.center[0] + n[0] * BALL.radius, BALL.center[1] + n[1] * BALL.radius, BALL.center[2] + n[2] * BALL.radius], n, [0.86, 0.42, 0.26], 0.03)
   }
   // The box: pale blue, five faces (the bottom sits on the table)
   const F = Math.round(26 * Math.sqrt(detail))
@@ -79,19 +79,19 @@ export function buildScene(detail = 1): Scene {
   for (const f of faces) for (let i = 0; i < F; i++) for (let j = 0; j < F; j++) add(f.at((i + 0.5) / F, (j + 0.5) / F), f.n, [0.5, 0.66, 0.86], 0.5 / F / 1.3)
 
   const b = new Blobs(pos.length)
-  for (let i = 0; i < pos.length; i++) b.push({ centre: pos[i], scale: [size[i], size[i], size[i] * 0.15], quat: quatFacing(nrm[i]), colour: alb[i], opacity: 0.98 })
+  for (let i = 0; i < pos.length; i++) b.push({ center: pos[i], scale: [size[i], size[i], size[i] * 0.15], quat: quatFacing(nrm[i]), color: alb[i], opacity: 0.98 })
   return { blobs: b, normal: Float32Array.from(nrm.flat()), albedo: Float32Array.from(alb.flat()), table: Uint8Array.from(onTable) }
 }
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 
-/** Whether the segment from p towards the lamp is blocked by the ball or the box. */
+/** Whether the segment from p toward the lamp is blocked by the ball or the box. */
 function shadowed(p: ArrayLike<number>, lamp: V3): boolean {
   const d = [lamp[0] - p[0], lamp[1] - p[1], lamp[2] - p[2]]
   // Start a hair off the surface so a blob doesn't shadow itself
   const o = [p[0] + d[0] * 1e-3, p[1] + d[1] * 1e-3, p[2] + d[2] * 1e-3]
   // Ball: solve |o + t·d − c|² = r² for t in (0, 1)
-  const oc = [o[0] - BALL.centre[0], o[1] - BALL.centre[1], o[2] - BALL.centre[2]]
+  const oc = [o[0] - BALL.center[0], o[1] - BALL.center[1], o[2] - BALL.center[2]]
   const A = d[0] * d[0] + d[1] * d[1] + d[2] * d[2], Bq = 2 * (oc[0] * d[0] + oc[1] * d[1] + oc[2] * d[2])
   const C = oc[0] * oc[0] + oc[1] * oc[1] + oc[2] * oc[2] - BALL.radius * BALL.radius * 0.995
   const disc = Bq * Bq - 4 * A * C
@@ -115,7 +115,7 @@ function shadowed(p: ArrayLike<number>, lamp: V3): boolean {
 
 /** The light reaching blob i from a lamp: ambient plus facing, with or without the scene's shadows. */
 export function lightOn(s: Scene, i: number, lamp: V3, shadows: boolean): number {
-  const p = s.blobs.centre.subarray(i * 3, i * 3 + 3)
+  const p = s.blobs.center.subarray(i * 3, i * 3 + 3)
   const d = [lamp[0] - p[0], lamp[1] - p[1], lamp[2] - p[2]]
   const len = Math.hypot(d[0], d[1], d[2])
   const facing = Math.max(0, (s.normal[i * 3] * d[0] + s.normal[i * 3 + 1] * d[1] + s.normal[i * 3 + 2] * d[2]) / len)
@@ -153,8 +153,8 @@ export function capture(s: Scene): Float32Array {
 
 /**
  * The capture relit:
- *   captured  colours as stored, whatever the lamp does
- *   add       the stored colours times the new lamp, as live lights do (on top of the old light)
+ *   captured  colors as stored, whatever the lamp does
+ *   add       the stored colors times the new lamp, as live lights do (on top of the old light)
  *   remove    divide out a guess at the old light first, then light with the new one
  */
 export function relight(s: Scene, captured: Float32Array, o: RelightOptions): Float32Array {
@@ -164,7 +164,7 @@ export function relight(s: Scene, captured: Float32Array, o: RelightOptions): Fl
   for (let i = 0; i < s.blobs.count; i++) {
     let k: number
     if (o.mode === 'add') {
-      // Live lights brighten the stored colour by how much the new lamp faces it, round a mid grey
+      // Live lights brighten the stored color by how much the new lamp faces it, round a mid gray
       k = lightOn(s, i, L, false) / (AMBIENT + STRENGTH * 0.5)
     } else {
       k = lightOn(s, i, L, o.shape) / lightOn(s, i, G, o.shape)

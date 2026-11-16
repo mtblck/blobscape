@@ -5,7 +5,7 @@ import { Button, Chip, Slider, Toggle } from '../../shared/ui.tsx'
 import { LessonShell } from '../Shell.tsx'
 import { LESSON_GOALS } from '../routes.ts'
 import { Viewport, type ToolHandlers } from '../Viewport.tsx'
-import { themeColour, toScreen } from '../overlay.ts'
+import { themeColor, toScreen } from '../overlay.ts'
 import { useGoals } from '../progress.ts'
 
 const START: Orbit = { target: [0, 0, 0], distance: 4.2, azimuth: 20, elevation: 48 }
@@ -25,10 +25,10 @@ function dab(b: Blobs, round: Uint8Array, at: Vec3, count: number, size: number,
     const s = size * (0.8 + rand() * 0.4)
     const shade = 0.85 + rand() * 0.3
     const i = b.push({
-      centre: [at[0] + Math.cos(a) * r, flat ? 0.002 : s * 0.6, at[2] + Math.sin(a) * r],
+      center: [at[0] + Math.cos(a) * r, flat ? 0.002 : s * 0.6, at[2] + Math.sin(a) * r],
       scale: [s, s, flat ? s * 0.12 : s],
       quat: quatFacing([0, 1, 0]),
-      colour: [0.22 * shade, 0.62 * shade, 0.42 * shade],
+      color: [0.22 * shade, 0.62 * shade, 0.42 * shade],
       opacity: 0.9,
     })
     round[i] = flat ? 0 : 1
@@ -40,7 +40,7 @@ function coverage(b: Blobs): number {
   const T = new Float32Array(GRID * GRID).fill(1)
   const cell = (2 * HALF) / GRID
   for (let i = 0; i < b.count; i++) {
-    const cx = b.centre[i * 3], cz = b.centre[i * 3 + 2], s = b.scale[i * 3], a = b.opacity[i]
+    const cx = b.center[i * 3], cz = b.center[i * 3 + 2], s = b.scale[i * 3], a = b.opacity[i]
     const reach = 2.5 * s
     const x0 = Math.max(0, Math.floor((cx - reach + HALF) / cell)), x1 = Math.min(GRID - 1, Math.floor((cx + reach + HALF) / cell))
     const z0 = Math.max(0, Math.floor((cz - reach + HALF) / cell)), z1 = Math.min(GRID - 1, Math.floor((cz + reach + HALF) / cell))
@@ -60,7 +60,7 @@ function coverage(b: Blobs): number {
 function erase(b: Blobs, round: Uint8Array, at: Vec3) {
   let w = 0
   return b.filter((i) => {
-    const keep = Math.hypot(b.centre[i * 3] - at[0], b.centre[i * 3 + 2] - at[2]) > BRUSH
+    const keep = Math.hypot(b.center[i * 3] - at[0], b.center[i * 3 + 2] - at[2]) > BRUSH
     if (keep) round[w++] = round[i]
     return keep
   })
@@ -149,7 +149,7 @@ export function Paint() {
             if (corners.some((c) => !c)) return
             ctx.setLineDash([6, 5])
             ctx.lineWidth = 1.5
-            ctx.strokeStyle = themeColour('accent', ctx.canvas)
+            ctx.strokeStyle = themeColor('accent', ctx.canvas)
             ctx.beginPath()
             corners.forEach((c, k) => (k ? ctx.lineTo(c![0], c![1]) : ctx.moveTo(c![0], c![1])))
             ctx.closePath()
@@ -212,11 +212,11 @@ export function Paint() {
       explain={
         <>
           <p>
-            Each blob you sprayed is a soft patch that fades out from its centre. Where enough patches overlap, light can't get through,
+            Each blob you sprayed is a soft patch that fades out from its center. Where enough patches overlap, light can't get through,
             and you see a surface. The square was covered when almost every spot in it had several blobs on top.
           </p>
           <p>
-            Big blobs got there with fewer than 150, but each one is a single colour, so any detail smaller than a blob is gone. Real
+            Big blobs got there with fewer than 150, but each one is a single color, so any detail smaller than a blob is gone. Real
             captures make the other choice: hundreds of thousands of small blobs, packed most tightly where the detail is.
           </p>
           <p>

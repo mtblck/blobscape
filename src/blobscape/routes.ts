@@ -14,7 +14,7 @@ export const LESSONS = [
   { id: 'footprint', title: 'Footprint', summary: 'A 3D blob lands on screen as a 2D ellipse. Orbit it and watch the shadow it casts change.' },
   { id: 'order', title: 'Order matters', summary: 'See-through blobs only blend right when drawn back to front. Draw them in the wrong order.' },
   { id: 'many', title: 'Many make a shape', summary: 'From one blob to twenty thousand: when does a pile of blobs become a solid object?' },
-  { id: 'angle', title: 'Colour by angle', summary: 'A blob that changes colour as you walk round it, and how many numbers that takes.' },
+  { id: 'angle', title: 'Color by angle', summary: 'A blob that changes color as you walk round it, and how many numbers that takes.' },
   { id: 'paint', title: 'Paint', summary: 'Spray blobs onto the floor by hand, and trade blob size against how many you need.' },
   { id: 'formats', title: 'Splat files', summary: 'The same scene saved three ways: what a splat file holds, and how small it can get.' },
   { id: 'break', title: 'Break it', summary: 'Shrink every blob to a dot, blow the scene apart, and put it back exactly.' },
@@ -49,7 +49,7 @@ export const LESSON_GOALS: Record<(typeof LESSONS)[number]['id'], Goal[]> = {
     { id: 'pancake', label: 'Squash it into a pancake', hint: 'Make one size much smaller than the other two.', where: 'shape', why: 'Three sizes set the shape. Make one tiny and the blob goes flat.' },
     { id: 'needle', label: 'Stretch it into a needle', hint: 'Make one size much bigger than the other two.', where: 'shape', why: 'The same three numbers, set differently, give a completely different blob.' },
     { id: 'tilt', label: 'Turn it', where: 'turn', why: 'Turning changes which way the shape points, not the shape itself.' },
-    { id: 'ghost', label: 'Make it a ghost', hint: 'Turn the opacity right down, but not to nothing.', where: 'look', why: 'Opacity is how much the very centre covers. It always fades out towards the edge.' },
+    { id: 'ghost', label: 'Make it a ghost', hint: 'Turn the opacity right down, but not to nothing.', where: 'look', why: 'Opacity is how much the very center covers. It always fades out toward the edge.' },
   ],
   'footprint': [
     { id: 'round', label: 'Find an angle where the footprint is round', hint: 'Look straight at the flat face.', where: 'view', why: 'Face on, a flat blob covers the most screen it can: a full circle.' },
@@ -69,8 +69,8 @@ export const LESSON_GOALS: Record<(typeof LESSONS)[number]['id'], Goal[]> = {
     { id: 'gaps', label: 'Shrink the blobs until you can see through the gaps', where: 'count', why: 'Shrink them and the surface turns to dust: there is nothing between the blobs.' },
   ],
   'angle': [
-    { id: 'walk', label: 'Walk round the ball and watch the shine follow you', hint: 'Drag either view, or use the Walk round slider.', where: 'view', why: "The bright spot isn't painted on: each blob changes colour with where you look from." },
-    { id: 'flat', label: 'Find the degree where the shine disappears', hint: 'Give each blob fewer numbers.', where: 'degree', why: 'Degree 0 is one colour for every direction, so the shine can only average away.' },
+    { id: 'walk', label: 'Walk round the ball and watch the shine follow you', hint: 'Drag either view, or use the Walk round slider.', where: 'view', why: "The bright spot isn't painted on: each blob changes color with where you look from." },
+    { id: 'flat', label: 'Find the degree where the shine disappears', hint: 'Give each blob fewer numbers.', where: 'degree', why: 'Degree 0 is one color for every direction, so the shine can only average away.' },
     { id: 'sharp', label: "Sharpen the shine until degree 3 can't keep up", hint: "Compare the two highlights, and watch how bright the stored one gets.", where: 'shine', why: 'Sharp glints need finer patterns than 48 numbers can build, so captures blur mirror-like shine.' },
   ],
   'paint': [
@@ -129,7 +129,7 @@ export const LESSON_GOALS: Record<(typeof LESSONS)[number]['id'], Goal[]> = {
     { id: 'retake', label: 'Beat your best cleanup without cutting anything', hint: 'Look at how the bird was captured.', where: 'capture', why: 'Eight photos all round beat any cut. Cleanup tidies a good capture; it can’t rescue a bad one.' },
   ],
   'lighting': [
-    { id: 'stuck', label: 'Swing the lamp round to the other side and compare', where: 'lamp', why: 'The real table changes and the scan doesn’t. Its light and shadows are part of its colour now.' },
+    { id: 'stuck', label: 'Swing the lamp round to the other side and compare', where: 'lamp', why: 'The real table changes and the scan doesn’t. Its light and shadows are part of its color now.' },
     { id: 'double', label: 'Add a live light from the other side', hint: 'Keep the lamp well away from where it was.', where: 'relight', why: 'The old light is still painted on, so the scan ends up lit from both sides and the score barely moves.' },
     { id: 'guess', label: 'Take the old light out and get past 55% with the lamp moved', hint: 'Work out where the capture’s lamp stood from the scan’s shading.', where: 'old', why: 'Divide out the old light and the ball and box relight well. The shadows still sit where they were.' },
     { id: 'shape', label: 'Get the table within 2% with the lamp moved', hint: 'The old shadows have to go. What would you need to know to move them?', where: 'old', why: 'Shadows need the scene’s shape: what blocked the light. With it, both the light and the shadows move.' },
@@ -142,7 +142,7 @@ export const LESSON_GOALS: Record<(typeof LESSONS)[number]['id'], Goal[]> = {
   ],
 }
 
-/** Lessons still to come, shown greyed out on the home page. */
+/** Lessons still to come, shown grayed out on the home page. */
 export const COMING: { title: string; summary: string }[] = []
 
 /** The page at a path, or null when the path isn't one of Blobscape's (a tool, the engine lab, a typo). */

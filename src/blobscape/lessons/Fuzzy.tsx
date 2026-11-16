@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { Blobs } from '../../splat-core/blobs.ts'
-import { srgbToLinear } from '../../splat-core/colour.ts'
+import { srgbToLinear } from '../../splat-core/color.ts'
 import type { Orbit, SplatView } from '../../splat-core/view.ts'
 import { blobsToMesh, meshError, type SplatMesh } from '../../splat-engine/mesh.ts'
 import { Chip, Field, Slider, Toggle } from '../../shared/ui.tsx'
@@ -27,7 +27,7 @@ const KINDS: { id: SubjectId; name: string; what: string }[] = [
   { id: 'block', name: 'Wooden block', what: 'a painted wooden block' },
 ]
 
-/** Whether a mesh kept any of the dandelion's fluff: surface out past the solid centre, up in the head. */
+/** Whether a mesh kept any of the dandelion's fluff: surface out past the solid center, up in the head. */
 function hasFluff(m: SplatMesh) {
   for (let i = 0; i < m.vertexCount; i++) {
     const x = m.positions[i * 3], y = m.positions[i * 3 + 1] - 0.72, z = m.positions[i * 3 + 2]
@@ -36,14 +36,14 @@ function hasFluff(m: SplatMesh) {
   return false
 }
 
-/** A ray across the dandelion's fluff, above its solid centre, for measuring how much light gets through. */
+/** A ray across the dandelion's fluff, above its solid center, for measuring how much light gets through. */
 const RAY: [[number, number, number], [number, number, number]] = [[-0.6, 0.87, 0.03], [0.6, 0.87, 0.03]]
 
 function toThree(m: SplatMesh) {
   const g = new THREE.BufferGeometry()
   g.setAttribute('position', new THREE.BufferAttribute(m.positions.slice(), 3))
   g.setAttribute('normal', new THREE.BufferAttribute(m.normals.slice(), 3))
-  g.setAttribute('color', new THREE.BufferAttribute(m.colours.map(srgbToLinear), 3))
+  g.setAttribute('color', new THREE.BufferAttribute(m.colors.map(srgbToLinear), 3))
   g.setIndex(new THREE.BufferAttribute(m.indices, 1))
   g.computeBoundingSphere()
   return g
@@ -180,7 +180,7 @@ export function Fuzzy() {
           </p>
           <p>
             The block is the other way round. Flat faces and sharp corners are exactly what triangles are for: merge the flat faces, as
-            a modeller or a tidying tool would, and a few dozen triangles keep every edge and stripe sharp at a fraction of the splats'
+            a modeler or a tidying tool would, and a few dozen triangles keep every edge and stripe sharp at a fraction of the splats'
             size. It's a clean solid a game can light, collide with and edit. The splat block only ever has soft edges. So the honest rule is: scan fuzzy, thin and see-through things as splats; model hard, flat things as meshes.
           </p>
         </>

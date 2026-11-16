@@ -31,10 +31,10 @@ export function asBlobs(m: Model): Blobs {
   for (let i = 0; i < m.count; i++) {
     const s = Math.exp(m.logS[i])
     b.push({
-      centre: [m.pos[i * 3], m.pos[i * 3 + 1], m.pos[i * 3 + 2]],
+      center: [m.pos[i * 3], m.pos[i * 3 + 1], m.pos[i * 3 + 2]],
       scale: [s, s, s],
       quat: [0, 0, 0, 1],
-      colour: [sigmoid(m.col[i * 3]), sigmoid(m.col[i * 3 + 1]), sigmoid(m.col[i * 3 + 2])],
+      color: [sigmoid(m.col[i * 3]), sigmoid(m.col[i * 3 + 1]), sigmoid(m.col[i * 3 + 2])],
       opacity: sigmoid(m.op[i]),
     })
   }

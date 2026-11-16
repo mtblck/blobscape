@@ -17,11 +17,11 @@ test('working: level, the floor at 0, the object over the origin and about WORK 
   const { blobs } = working(sample.blobs, o)
   const mug = extent(blobs, sample.part.map((p) => (p === 0 ? 1 : 0)))
   const across = Math.max(mug.hi[0] - mug.lo[0], mug.hi[1] - mug.lo[1], mug.hi[2] - mug.lo[2])
-  // sized and centred by what stands on the table (the mug and the odd floater), not by the table
+  // sized and centerd by what stands on the table (the mug and the odd floater), not by the table
   assert.ok(across > 0.7 * WORK && across < 1.3 * WORK, `across ${across}`)
-  assert.ok(Math.hypot(mug.lo[0] + mug.hi[0], mug.lo[2] + mug.hi[2]) / 2 < 0.25 * WORK, `centre ${mug.lo} ${mug.hi}`)
+  assert.ok(Math.hypot(mug.lo[0] + mug.hi[0], mug.lo[2] + mug.hi[2]) / 2 < 0.25 * WORK, `center ${mug.lo} ${mug.hi}`)
   let table = 0, n = 0
-  for (let i = 0; i < blobs.count; i++) if (sample.part[i] === 1) { table += blobs.centre[i * 3 + 1]; n++ }
+  for (let i = 0; i < blobs.count; i++) if (sample.part[i] === 1) { table += blobs.center[i * 3 + 1]; n++ }
   assert.ok(Math.abs(table / n) < 0.02, `table at ${table / n}`)
 })
 
@@ -66,7 +66,7 @@ test('every light preset gives lights in range near the object', () => {
     for (const p of ls) {
       const d = Math.hypot(p.position[0], p.position[1] - 1, p.position[2])
       assert.ok(d < 2 * p.range, `${l.id}: ${d} vs range ${p.range}`)
-      assert.ok(p.colour.every((c) => c >= 0 && Number.isFinite(c)))
+      assert.ok(p.color.every((c) => c >= 0 && Number.isFinite(c)))
     }
   }
 })

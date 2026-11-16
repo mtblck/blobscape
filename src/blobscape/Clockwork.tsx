@@ -206,7 +206,7 @@ export function Clockwork() {
                   <h2 id="c-train" className="mb-2 text-sm font-bold">The train <small className="ml-1 text-xs font-normal text-ink-faint">teeth, from the spring to the balance</small></h2>
               <ol className="grid gap-1 text-sm text-ink-muted">
                 <li><b className="font-semibold text-ink">Barrel</b>, 72 teeth: the mainspring's drum, about a turn every seven hours.</li>
-                <li><b className="font-semibold text-ink">Centre wheel</b>, 64 on a 10-leaf pinion: once an hour, the minute hand.</li>
+                <li><b className="font-semibold text-ink">Center wheel</b>, 64 on a 10-leaf pinion: once an hour, the minute hand.</li>
                 <li><b className="font-semibold text-ink">Third wheel</b>, 60 on 8: eight turns an hour.</li>
                 <li><b className="font-semibold text-ink">Fourth wheel</b>, 80 on 8: once a minute, the small seconds.</li>
                 <li><b className="font-semibold text-ink">Escape wheel</b>, 15 on 8: half a tooth a beat.</li>

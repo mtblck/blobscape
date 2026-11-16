@@ -33,7 +33,7 @@ test('every scene builds at every detail with all of its parts, and loops', () =
     const a = Float32Array.from(sk.matrix)
     d.pose(sk, 0.9 + d.loop)
     for (let i = 0; i < a.length; i++) assert.ok(Math.abs(a[i] - sk.matrix[i]) < 1e-4, `${d.id}: matrix ${i}`)
-    assert.ok(d.palette.colours.length <= MAX_PALETTE_SIZE && d.views.length > 0, d.id)
+    assert.ok(d.palette.colors.length <= MAX_PALETTE_SIZE && d.views.length > 0, d.id)
     assert.equal(d.lights(0).length, d.lights(3).length)
   }
 })

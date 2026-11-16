@@ -1,7 +1,7 @@
 import { project, projectPoint, quatToMat, rgbToHex, type Blobs, type Lens } from '../splat-core/blobs.ts'
 
-/** Theme colours, read live so the overlay follows the light/dark switch. */
-export function themeColour(name: 'accent' | 'ink' | 'ink-faint' | 'paper', from: Element = document.documentElement) {
+/** Theme colors, read live so the overlay follows the light/dark switch. */
+export function themeColor(name: 'accent' | 'ink' | 'ink-faint' | 'paper', from: Element = document.documentElement) {
   // Read from the canvas itself where possible: a lesson's display case is always dark, whatever the page theme
   return getComputedStyle(from).getPropertyValue(`--c-${name}`).trim() || '#888'
 }
@@ -11,8 +11,8 @@ export interface OutlineOptions {
   indices?: Iterable<number>
   /** Rings to draw, in standard deviations. */
   sigmas?: number[]
-  /** A fixed stroke colour; otherwise each blob's own colour. */
-  colour?: string
+  /** A fixed stroke color; otherwise each blob's own color. */
+  color?: string
   width?: number
   /** Also draw the blob's three axes, projected. */
   axes?: boolean
@@ -29,7 +29,7 @@ export function drawOutlines(ctx: CanvasRenderingContext2D, b: Blobs, lens: Lens
   for (const i of list) {
     const f = project(b, i, lens)
     if (!f || f.depth <= 0) continue
-    ctx.strokeStyle = o.colour ?? rgbToHex(b.colour.subarray(i * 3, i * 3 + 3))
+    ctx.strokeStyle = o.color ?? rgbToHex(b.color.subarray(i * 3, i * 3 + 3))
     for (const k of sigmas) {
       ctx.beginPath()
       ctx.ellipse(f.x, f.y, Math.max(0.5, f.a * k), Math.max(0.5, f.b * k), f.angle, 0, Math.PI * 2)
@@ -39,29 +39,29 @@ export function drawOutlines(ctx: CanvasRenderingContext2D, b: Blobs, lens: Lens
   }
 }
 
-const AXIS_COLOURS = ['#e5484d', '#30a46c', '#3e63dd']
+const AXIS_COLORS = ['#e5484d', '#30a46c', '#3e63dd']
 
 /** The blob's own x, y and z axes, each as long as its scale (1σ), projected to the screen. */
 function drawAxes(ctx: CanvasRenderingContext2D, b: Blobs, i: number, lens: Lens, cx: number, cy: number) {
   const R = quatToMat(b.quat.subarray(i * 4, i * 4 + 4))
-  const c = b.centre.subarray(i * 3, i * 3 + 3)
+  const c = b.center.subarray(i * 3, i * 3 + 3)
   const s = b.scale.subarray(i * 3, i * 3 + 3)
   for (let a = 0; a < 3; a++) {
     const tip = [c[0] + R[a] * s[a], c[1] + R[3 + a] * s[a], c[2] + R[6 + a] * s[a]]
     const p = toScreen(tip, lens)
     if (!p) continue
-    ctx.strokeStyle = AXIS_COLOURS[a]
+    ctx.strokeStyle = AXIS_COLORS[a]
     ctx.lineWidth = 2
     ctx.beginPath()
     ctx.moveTo(cx, cy)
     ctx.lineTo(p[0], p[1])
     ctx.stroke()
-    // Letters as well as colours, so the axes don't rely on telling red from green
+    // Letters as well as colors, so the axes don't rely on telling red from green
     const dx = p[0] - cx, dy = p[1] - cy, l = Math.hypot(dx, dy) || 1
     ctx.font = '600 12px "Archivo Variable", system-ui, sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillStyle = themeColour('ink', ctx.canvas as HTMLCanvasElement)
+    ctx.fillStyle = themeColor('ink', ctx.canvas as HTMLCanvasElement)
     ctx.fillText('xyz'[a], p[0] + (dx / l) * 10, p[1] + (dy / l) * 10)
   }
 }
@@ -72,12 +72,12 @@ export function toScreen(p: ArrayLike<number>, lens: Lens): [number, number] | n
   return s ? [s.x, s.y] : null
 }
 
-/** Blob centres as dots, for scenes too big to outline every blob. */
-export function drawCentres(ctx: CanvasRenderingContext2D, b: Blobs, lens: Lens, colour: string, max = 30000) {
-  ctx.fillStyle = colour
+/** Blob centers as dots, for scenes too big to outline every blob. */
+export function drawCenters(ctx: CanvasRenderingContext2D, b: Blobs, lens: Lens, color: string, max = 30000) {
+  ctx.fillStyle = color
   const stride = Math.max(1, Math.ceil(b.count / max))
   for (let i = 0; i < b.count; i += stride) {
-    const p = toScreen(b.centre.subarray(i * 3, i * 3 + 3), lens)
+    const p = toScreen(b.center.subarray(i * 3, i * 3 + 3), lens)
     if (p) ctx.fillRect(p[0] - 0.75, p[1] - 0.75, 1.5, 1.5)
   }
 }
@@ -86,9 +86,9 @@ export function drawCentres(ctx: CanvasRenderingContext2D, b: Blobs, lens: Lens,
  * Bones as an x-ray: each one a tapered line from its head to its end, with a
  * ring at the joint, drawn over the blobs so you can see what moves what.
  */
-export function drawBones(ctx: CanvasRenderingContext2D, bones: { from: ArrayLike<number>; to: ArrayLike<number> }[], lens: Lens, colour: string) {
-  ctx.strokeStyle = colour
-  ctx.fillStyle = colour
+export function drawBones(ctx: CanvasRenderingContext2D, bones: { from: ArrayLike<number>; to: ArrayLike<number> }[], lens: Lens, color: string) {
+  ctx.strokeStyle = color
+  ctx.fillStyle = color
   for (const b of bones) {
     const a = toScreen(b.from, lens), z = toScreen(b.to, lens)
     if (!a || !z) continue

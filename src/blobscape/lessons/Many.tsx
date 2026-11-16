@@ -5,7 +5,7 @@ import { Chip, Slider, Toggle } from '../../shared/ui.tsx'
 import { LessonShell } from '../Shell.tsx'
 import { LESSON_GOALS } from '../routes.ts'
 import { Viewport } from '../Viewport.tsx'
-import { drawCentres, drawOutlines, themeColour } from '../overlay.ts'
+import { drawCenters, drawOutlines, themeColor } from '../overlay.ts'
 import { useGoals } from '../progress.ts'
 
 const MAX = 20000
@@ -53,8 +53,8 @@ export function Many() {
           overlay={
             xray
               ? (ctx, lens) => {
-                  if (blobs.count <= OUTLINE_LIMIT) drawOutlines(ctx, blobs, lens, { sigmas: [2], colour: themeColour('ink-faint', ctx.canvas) })
-                  else drawCentres(ctx, blobs, lens, themeColour('ink', ctx.canvas))
+                  if (blobs.count <= OUTLINE_LIMIT) drawOutlines(ctx, blobs, lens, { sigmas: [2], color: themeColor('ink-faint', ctx.canvas) })
+                  else drawCenters(ctx, blobs, lens, themeColor('ink', ctx.canvas))
                 }
               : undefined
           }
@@ -64,7 +64,7 @@ export function Many() {
         <p>
           <span className="tabular-nums text-ink" data-testid="blob-count">{count.toLocaleString()}</span> blobs, about{' '}
           <span className="tabular-nums">{Math.max(1, Math.round((count * 56) / 1024)).toLocaleString()} KB</span> of data.
-          {xray && (count <= OUTLINE_LIMIT ? ' X-ray shows each footprint.' : ' X-ray shows centres only: past 600 blobs the outlines are just a scribble.')}
+          {xray && (count <= OUTLINE_LIMIT ? ' X-ray shows each footprint.' : ' X-ray shows centers only: past 600 blobs the outlines are just a scribble.')}
         </p>
       }
       groups={[
@@ -110,7 +110,7 @@ export function Many() {
       explain={
         <>
           <p>
-            Each blob here sits at a point on the surface, and the shading is baked into its colour. The renderer has no idea it's
+            Each blob here sits at a point on the surface, and the shading is baked into its color. The renderer has no idea it's
             drawing a sphere: it just draws a few thousand ovals, sorted back to front. The shape only exists because of where they are.
           </p>
           <p>

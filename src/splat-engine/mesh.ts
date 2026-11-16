@@ -11,7 +11,7 @@ import type { Skin } from './rig.ts'
  *    reach is the inside, so the shell becomes a solid.
  * 4. Soften the solid a little and wrap a surface round it (surface nets: one
  *    vertex per grid cell the surface passes through, joined into quads).
- * 5. Give each vertex the colour of the blobs nearest it, and the skin weights
+ * 5. Give each vertex the color of the blobs nearest it, and the skin weights
  *    of the blob that counts most there, so the mesh walks with the same bones.
  *
  * A finer grid keeps thinner parts (ears, a tail tip); a higher level keeps
@@ -27,8 +27,8 @@ export interface MeshOptions {
 export interface SplatMesh {
   positions: Float32Array
   normals: Float32Array
-  /** 0–1 per channel, display (sRGB) colour like the blobs'. */
-  colours: Float32Array
+  /** 0–1 per channel, display (sRGB) color like the blobs'. */
+  colors: Float32Array
   indices: Uint32Array
   joints: Uint8Array
   weights: Float32Array
@@ -43,13 +43,13 @@ export interface SplatMesh {
 /**
  * How much of the shell's half-thickness to pull the surface back by. All of
  * it puts the surface through the blobs on a body, but eats thin legs and ears
- * on a coarse grid; none leaves the mesh a few centimetres fat everywhere.
+ * on a coarse grid; none leaves the mesh a few centimeters fat everywhere.
  */
 const PULL_BACK = 0.45
 
 export function blobsToMesh(blobs: Blobs, skin: Skin | null, o: MeshOptions): SplatMesh {
   const n = blobs.count
-  const c = blobs.centre, s = blobs.scale
+  const c = blobs.center, s = blobs.scale
   if (!n) return empty()
   // bounds, padded by the widest blob and two cells. A captured scene can hold a
   // few huge floaters, so "widest" is the 99th percentile and bigger blobs are
@@ -70,7 +70,7 @@ export function blobsToMesh(blobs: Blobs, skin: Skin | null, o: MeshOptions): Sp
   const N = nx * ny * nz
   const at = (x: number, y: number, z: number) => x + nx * (y + ny * z)
 
-  // 1. density, colour sums and the strongest blob at each point
+  // 1. density, color sums and the strongest blob at each point
   const dens = new Float32Array(N)
   const col = new Float32Array(N * 3)
   const best = new Float32Array(N)
@@ -93,7 +93,7 @@ export function blobsToMesh(blobs: Blobs, skin: Skin | null, o: MeshOptions): Sp
           if (w < 1e-5) continue
           const g = at(x, y, z)
           dens[g] += w
-          col[g * 3] += w * blobs.colour[i * 3]; col[g * 3 + 1] += w * blobs.colour[i * 3 + 1]; col[g * 3 + 2] += w * blobs.colour[i * 3 + 2]
+          col[g * 3] += w * blobs.color[i * 3]; col[g * 3 + 1] += w * blobs.color[i * 3 + 1]; col[g * 3 + 2] += w * blobs.color[i * 3 + 2]
           if (w > best[g]) { best[g] = w; bestBlob[g] = i }
         }
       }
@@ -216,8 +216,8 @@ export function blobsToMesh(blobs: Blobs, skin: Skin | null, o: MeshOptions): Sp
     normals[i * 3] /= l; normals[i * 3 + 1] /= l; normals[i * 3 + 2] /= l
   }
 
-  // 5. colour and skin from the nearest blobs, looking further out until some are found
-  const colours = new Float32Array(vc * 3)
+  // 5. color and skin from the nearest blobs, looking further out until some are found
+  const colors = new Float32Array(vc * 3)
   const joints = new Uint8Array(vc * 4)
   const weights = new Float32Array(vc * 4)
   const boneSum = new Map<number, number>()
@@ -242,21 +242,21 @@ export function blobsToMesh(blobs: Blobs, skin: Skin | null, o: MeshOptions): Sp
         }
       }
     }
-    if (wsum > 0) { colours[i * 3] = r0 / wsum; colours[i * 3 + 1] = g0 / wsum; colours[i * 3 + 2] = b0 / wsum }
-    else colours.fill(0.5, i * 3, i * 3 + 3)
+    if (wsum > 0) { colors[i * 3] = r0 / wsum; colors[i * 3 + 1] = g0 / wsum; colors[i * 3 + 2] = b0 / wsum }
+    else colors.fill(0.5, i * 3, i * 3 + 3)
     const top4 = [...boneSum].sort((a, b) => b[1] - a[1]).slice(0, 4)
     const tw = top4.reduce((a, p) => a + p[1], 0)
     if (!top4.length || !(tw > 0)) { weights[i * 4] = 1; continue }
     top4.forEach(([j, w], k) => { joints[i * 4 + k] = j; weights[i * 4 + k] = w / tw })
   }
 
-  return { positions, normals, colours, indices, joints, weights, vertexCount: vc, triangleCount: indices.length / 3, pieces: countPieces(vc, indices), top: vc ? top : 0 }
+  return { positions, normals, colors, indices, joints, weights, vertexCount: vc, triangleCount: indices.length / 3, pieces: countPieces(vc, indices), top: vc ? top : 0 }
 }
 
 /**
  * Distance from each grid point to the nearest point where `mask` is
  * `target`, in world units (0 at those points), by a two-pass chamfer over the
- * 26 neighbours: close to true distance, and fast.
+ * 26 neighbors: close to true distance, and fast.
  */
 function chamfer(mask: Uint8Array, target: number, nx: number, ny: number, nz: number, h: number) {
   const N = nx * ny * nz
@@ -264,7 +264,7 @@ function chamfer(mask: Uint8Array, target: number, nx: number, ny: number, nz: n
   for (let g = 0; g < N; g++) d[g] = mask[g] === target ? 0 : 1e9
   const offs: [number, number, number, number][] = []
   for (let z = -1; z <= 1; z++) for (let y = -1; y <= 1; y++) for (let x = -1; x <= 1; x++) {
-    // the neighbours already visited when scanning forwards
+    // the neighbors already visited when scanning forwards
     if (z < 0 || (z === 0 && (y < 0 || (y === 0 && x < 0)))) offs.push([x, y, z, Math.hypot(x, y, z) * h])
   }
   const pass = (dir: 1 | -1) => {
@@ -333,7 +333,7 @@ export function skinMesh(m: SplatMesh, rig: { matrix: ArrayLike<number> }, outPo
 
 /**
  * How closely a mesh follows the blobs: the average distance from a blob's
- * centre to the nearest mesh vertex, over up to `sample` blobs. Blobs lie on
+ * center to the nearest mesh vertex, over up to `sample` blobs. Blobs lie on
  * the surface, so a faithful mesh passes close to all of them.
  */
 export function meshError(m: SplatMesh, blobs: Blobs, sample = 1500) {
@@ -351,7 +351,7 @@ export function meshError(m: SplatMesh, blobs: Blobs, sample = 1500) {
   const step = Math.max(1, Math.floor(blobs.count / sample))
   let sum = 0, k = 0
   for (let b = 0; b < blobs.count; b += step) {
-    const x = blobs.centre[b * 3], y = blobs.centre[b * 3 + 1], z = blobs.centre[b * 3 + 2]
+    const x = blobs.center[b * 3], y = blobs.center[b * 3 + 1], z = blobs.center[b * 3 + 2]
     const cx = Math.floor(x / cell), cy = Math.floor(y / cell), cz = Math.floor(z / cell)
     let best = Infinity
     for (let r = 0; r <= 6 && best > (r - 1) * cell; r++) {
@@ -369,5 +369,5 @@ export function meshError(m: SplatMesh, blobs: Blobs, sample = 1500) {
 }
 
 function empty(): SplatMesh {
-  return { positions: new Float32Array(0), normals: new Float32Array(0), colours: new Float32Array(0), indices: new Uint32Array(0), joints: new Uint8Array(0), weights: new Float32Array(0), vertexCount: 0, triangleCount: 0, pieces: 0, top: 0 }
+  return { positions: new Float32Array(0), normals: new Float32Array(0), colors: new Float32Array(0), indices: new Uint32Array(0), joints: new Uint8Array(0), weights: new Float32Array(0), vertexCount: 0, triangleCount: 0, pieces: 0, top: 0 }
 }

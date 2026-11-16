@@ -210,7 +210,7 @@ function App() {
             <h2 id="steps-title" className="text-lg font-semibold text-ink">Each step</h2>
             <p className="text-sm text-ink-muted">
               Milliseconds per step of a walking frame, each waited for on its own (median of 20).
-              Move, project and sort run on the GPU with WebGPU; with WebGL each blob is moved as it's drawn, and the CPU moves centres and sorts.
+              Move, project and sort run on the GPU with WebGPU; with WebGL each blob is moved as it's drawn, and the CPU moves centers and sorts.
             </p>
             <div className="overflow-x-auto">
             <table className="w-full text-left text-sm" aria-labelledby="steps-title">

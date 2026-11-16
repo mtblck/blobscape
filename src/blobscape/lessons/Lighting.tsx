@@ -12,19 +12,19 @@ const START: Orbit = { target: [0, 0.3, 0], distance: 3.6, azimuth: 10, elevatio
 const start = (): Orbit => (typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches ? { ...START, distance: 5 } : START)
 
 const MODES: { id: Relight; name: string; note: string }[] = [
-  { id: 'captured', name: 'As captured', note: 'The colours as the camera saw them, whatever the lamp does.' },
-  { id: 'add', name: 'Add a live light', note: 'Brighten each blob by how much the new lamp faces it, on top of its stored colour.' },
+  { id: 'captured', name: 'As captured', note: 'The colors as the camera saw them, whatever the lamp does.' },
+  { id: 'add', name: 'Add a live light', note: 'Brighten each blob by how much the new lamp faces it, on top of its stored color.' },
   { id: 'remove', name: 'Take the old light out', note: 'Divide out a guess at the capture’s lamp first, then light with the new one.' },
 ]
 
 /** How far apart two lamp angles are, in degrees round the circle. */
 const apart = (a: number, b: number) => Math.abs((((a - b) % 360) + 540) % 360 - 180)
 
-/** The scene with these colours, plus a small bright blob where the lamp is. */
-function withColours(s: Scene, colours: Float32Array, lamp: number): Blobs {
+/** The scene with these colors, plus a small bright blob where the lamp is. */
+function withColors(s: Scene, colors: Float32Array, lamp: number): Blobs {
   const b = s.blobs.clone()
-  b.colour.set(colours)
-  b.push({ centre: lampAt(lamp), scale: [0.07, 0.07, 0.07], quat: [0, 0, 0, 1], colour: [1, 0.93, 0.6], opacity: 1 })
+  b.color.set(colors)
+  b.push({ center: lampAt(lamp), scale: [0.07, 0.07, 0.07], quat: [0, 0, 0, 1], color: [1, 0.93, 0.6], opacity: 1 })
   return b
 }
 
@@ -41,8 +41,8 @@ export function Lighting() {
   const relit = useMemo(() => relight(scene, captured, { lamp, mode, guess, shape }), [scene, captured, lamp, mode, guess, shape])
   const score = closeness(relit, real, captured)
   const table = tableError(scene, relit, real)
-  const realBlobs = useMemo(() => withColours(scene, real, lamp), [scene, real, lamp])
-  const relitBlobs = useMemo(() => withColours(scene, relit, lamp), [scene, relit, lamp])
+  const realBlobs = useMemo(() => withColors(scene, real, lamp), [scene, real, lamp])
+  const relitBlobs = useMemo(() => withColors(scene, relit, lamp), [scene, relit, lamp])
 
   const far = apart(lamp, CAPTURED_AT) >= 90
   const done = useGoals('lighting', {
@@ -63,7 +63,7 @@ export function Lighting() {
   return (
     <LessonShell
       id="lighting"
-      intro={<p>A scan keeps the colour the camera saw, light and shadows included. Move the lamp: what happens to the real table, and what can you do to the scan to keep up?</p>}
+      intro={<p>A scan keeps the color the camera saw, light and shadows included. Move the lamp: what happens to the real table, and what can you do to the scan to keep up?</p>}
       view={
         <div className="relative h-full">
           <div className="grid h-full grid-cols-2 divide-x divide-rule-soft">
@@ -122,24 +122,24 @@ export function Lighting() {
       scene={() => relitBlobs}
       explainTitle="The light is part of the paint"
       formula={{
-        eq: <>seen = colour × light</>,
+        eq: <>seen = color × light</>,
         terms: [
           ['seen', 'what the camera stores in each blob'],
-          ['colour', 'what the surface is really like'],
+          ['color', 'what the surface is really like'],
           ['light', 'how much light reached it at that moment'],
         ],
       }}
       explain={
         <>
           <p>
-            A scan only ever stores what the camera saw, and that's the surface's colour times the light on it. Move the lamp and the
+            A scan only ever stores what the camera saw, and that's the surface's color times the light on it. Move the lamp and the
             real table changes; the scan can't, because its light and shadows are paint now. Live lights, like the ones in this site's
             engine, can only brighten on top of that paint, so the old lighting stays and the new one piles on.
           </p>
           <p>
             To really relight a scan you have to divide the old light out first, which means knowing where it came from. A good guess
             gets you most of the way. But the shadows still don't move: knowing a shadow belongs to the ball needs the scene's shape,
-            not just its colours. With the shape, both come out right. Pulling colour, light and shape apart from photos is called
+            not just its colors. With the shape, both come out right. Pulling color, light and shape apart from photos is called
             inverse rendering, and relightable captures are still mostly research, which is why most scans are shot in soft, even light.
           </p>
         </>
