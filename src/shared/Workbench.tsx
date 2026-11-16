@@ -31,7 +31,7 @@ export function Workbench({ viewLabel, view, status, tabsLabel, tabs, footer, fu
     <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:items-start lg:gap-x-5">
       <section aria-label={viewLabel} className={`sticky top-14 lg:top-[4.5rem] max-lg:[@media(max-height:560px)]:static ${full === 'window' ? 'z-50' : 'z-20'}`}>
         <div ref={frame} data-full={full || undefined} className={`case flex flex-col overflow-hidden bg-paper ring-1 ring-rule ${full === 'window' ? 'fixed inset-0 z-50' : 'relative rounded-2xl'}`}>
-          <div className={`relative ${full ? 'min-h-0 flex-1' : 'h-[45dvh] min-h-[240px] lg:aspect-[4/3] lg:h-auto lg:max-h-[calc(100dvh-9rem)] lg:w-full'}`}>
+          <div className={`relative ${full ? 'min-h-0 flex-1' : 'h-[45svh] min-h-[240px] lg:aspect-[4/3] lg:h-auto lg:max-h-[calc(100dvh-9rem)] lg:w-full'}`}>
             {view}
             <button type="button" aria-label={full ? 'Leave full screen' : 'Full screen'} title={full ? 'Leave full screen' : 'Full screen'} onClick={toggle} data-testid="full-screen" className={`zoom-btn absolute ${fullScreenAt}`}>
               <svg viewBox="0 0 16 16" aria-hidden className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
