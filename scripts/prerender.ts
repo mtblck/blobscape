@@ -12,7 +12,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { LESSONS, LESSON_COUNT, LESSON_GOALS, PARTS, href, type Route } from '../src/blobscape/routes.ts'
-import { CARD_LINK, EXPERIMENTS, EXPERIMENTS_INTRO, SITE, byPublished, experimentAt, longDate, type Experiment } from '../src/blobscape/site.ts'
+import { CARD_LINK, EXPERIMENTS, EXPERIMENTS_INTRO, CONTACT_INTRO, SITE, byPublished, experimentAt, longDate, type Experiment } from '../src/blobscape/site.ts'
 import { DESCRIPTION, pageMeta } from '../src/blobscape/meta.ts'
 import { AXIS, BLOB, WORD } from '../src/shared/logoPaths.ts'
 
@@ -98,6 +98,8 @@ ${PARTS.map((p, i) => `<h2 class="mt-10 font-display text-2xl">Part ${i + 1}: ${
 <p class="mt-4 text-xl leading-relaxed text-ink-muted">${esc(EXPERIMENTS_INTRO)}</p></div><div aria-hidden="true" class="invisible flex gap-1.5"><span class="rounded-full border px-2.5 py-0.5 text-xs font-medium">Newest first</span><span class="rounded-full border px-2.5 py-0.5 text-xs">Oldest first</span></div></div>
 <ul class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">${byPublished('newest').map((e) => `<li class="relative flex flex-col gap-4 rounded-2xl border border-rule bg-paper p-4 transition-colors hover:border-ink-faint"><img src="${e.cover}" alt="" width="1200" height="750" loading="lazy" decoding="async" class="block aspect-[16/10] h-auto w-full rounded-xl object-cover ring-1 ring-rule">${dates(e)}<a href="${e.url}" class="${CARD_LINK}">${esc(e.title)} →</a><p class="flex-1 text-ink-muted">${esc(e.body)}</p><p class="text-sm text-ink-faint">Needs ${esc(e.needs)}. Runs in your browser; nothing is uploaded.</p></li>`).join('')}</ul>
 <p class="mt-10 text-ink-muted">New to splats? The <a href="/lessons/" class="text-ink underline underline-offset-2 hover:text-accent">lessons</a> start with a single blob.</p>`
+    case 'contact':
+      return `<div class="max-w-2xl">${crumbs('Get in touch')}<div class="pt-6 pb-8"><h1 class="font-display text-5xl">Get in touch</h1><p class="mt-4 text-xl leading-relaxed text-ink-muted">${esc(CONTACT_INTRO)}</p></div></div>`
     case 'notfound':
       return `<div class="max-w-2xl py-16"><h1 class="font-display text-5xl">That page isn’t here</h1><p class="mt-4 text-xl leading-relaxed text-ink-muted">The link may be old, or mistyped. Every lesson is on the lesson list.</p><p class="mt-8"><a href="/lessons/" class="${BUTTON}">See the lessons</a></p></div>`
   }
@@ -161,6 +163,8 @@ function structured(route: Route): object[] {
       return [work(experimentAt(href(route))!), breadcrumbs([home, ['Experiments', '/experiments/'], ['Scan Studio', href(route)]])]
     case 'dungeon':
       return [work(experimentAt(href(route))!), breadcrumbs([home, ['Experiments', '/experiments/'], ['Dungeon Run', href(route)]])]
+    case 'contact':
+      return [{ '@type': 'ContactPage', name: `Get in touch · ${SITE.name}`, url: url(href(route)) }, breadcrumbs([home, ['Get in touch', href(route)]])]
     default:
       return []
   }
@@ -204,7 +208,7 @@ function write(path: string, html: string) {
 }
 
 const template = readFileSync(join(DIST, 'index.html'), 'utf8')
-const routes: Route[] = [{ page: 'home' }, { page: 'lessons' }, ...LESSONS.map((l) => ({ page: 'lesson' as const, id: l.id })), { page: 'sandbox' }, { page: 'experiments' }, { page: 'creature' }, { page: 'forest' }, { page: 'clockwork' }, { page: 'diorama' }, { page: 'dungeon' }, { page: 'scan' }]
+const routes: Route[] = [{ page: 'home' }, { page: 'lessons' }, ...LESSONS.map((l) => ({ page: 'lesson' as const, id: l.id })), { page: 'sandbox' }, { page: 'experiments' }, { page: 'creature' }, { page: 'forest' }, { page: 'clockwork' }, { page: 'diorama' }, { page: 'dungeon' }, { page: 'scan' }, { page: 'contact' }]
 for (const r of routes) write(join(DIST, href(r), 'index.html'), render(template, r))
 write(join(DIST, '404.html'), render(template, { page: 'notfound' }))
 

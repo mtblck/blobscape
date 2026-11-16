@@ -11,6 +11,9 @@ export const SITE = {
   tip: 'https://ko-fi.com/mtblck',
 } as const
 
+/** The Get in touch page's intro, shared with its prerendered HTML. */
+export const CONTACT_INTRO = 'A question about splats, a bug, an idea for a lesson or an experiment, or just a hello: send a note and it comes straight to me.'
+
 /** The Experiments page's intro, shared with its prerendered HTML so the page doesn't shift when the app takes over. */
 export const EXPERIMENTS_INTRO = "Small tools built from the same blobs as the lessons: creatures that move on our own splat engine, a forest that grows as you walk it, a dungeon full of slimes, a watch that keeps time, the training loop that makes a splat, and a way to turn one into pixel art. New ones land here as they're made."
 

@@ -5,6 +5,7 @@ import { COMING, LESSONS, href } from './routes.ts'
 import type { Goal } from './progress.ts'
 import { handOff } from './handoff.ts'
 import type { Blobs } from '../splat-core/blobs.ts'
+import { toast } from '../shared/Toast.tsx'
 
 /** Moves focus to the page's heading when a new page shows, so screen readers announce it, and scrolls to the top or to the #section asked for. */
 export function useFocusHeading() {
@@ -110,22 +111,31 @@ export function LessonShell({ id, intro, view, caption, groups, goals, done, sce
   const nextHref = next ? href({ page: 'lesson', id: next.id }) : href({ page: 'sandbox' })
   const nextTitle = next ? next.title : 'The sandbox'
 
-  // The goal that ticked most recently, so its "why" can show in the phone's goal card and be announced
+  // A goal that ticks shows a toast with its "why", and finishing the lesson a bigger one. Toasts float over the page,
+  // so nothing moves under your finger. Goals done on an earlier visit are already in `done` and say nothing.
   const [latest, setLatest] = useState<Goal | null>(null)
   const seen = useRef(done)
   useEffect(() => {
-    const fresh = goals.find((g) => done.has(g.id) && !seen.current.has(g.id))
+    const fresh = goals.filter((g) => done.has(g.id) && !seen.current.has(g.id))
+    const wasFinished = goals.every((g) => seen.current.has(g.id))
     seen.current = done
-    if (fresh) setLatest(fresh)
-  }, [done, goals])
+    if (!fresh.length) return
+    setLatest(fresh[fresh.length - 1])
+    for (const g of fresh) toast({ kind: 'step', title: g.label, body: g.why })
+    if (!wasFinished && goals.every((g) => done.has(g.id))) {
+      toast({
+        kind: 'lesson',
+        title: `Lesson complete: ${lesson.title}`,
+        body: `All ${goals.length} goals done.`,
+        links: [{ label: 'Read why it works', href: '#explain' }, { label: `Next: ${nextTitle} →`, href: nextHref }],
+      })
+    }
+  }, [done, goals, lesson.title, nextHref, nextTitle])
 
-  // Phone: one group at a time; follow the current goal to the group it needs
-  const [tab, setTab] = useState(groups[0]?.id)
-  useEffect(() => {
-    if (where && groups.some((g) => g.id === where)) setTab(where)
-    // groups is rebuilt every render; only the goal moving on should switch the tab
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [where])
+  // Phone: one group at a time. It opens on the group the current goal needs, and after that only you change it:
+  // switching it as each goal ticks moved the controls out from under a finger still on a slider. The tab the
+  // next goal needs carries a dot instead.
+  const [tab, setTab] = useState(() => (where && groups.some((g) => g.id === where) ? where : groups[0]?.id))
 
   return (
     <>
@@ -138,13 +148,6 @@ export function LessonShell({ id, intro, view, caption, groups, goals, done, sce
           </p>
           <h1 ref={h1} tabIndex={-1} className="mt-1 font-display text-4xl leading-tight outline-none lg:text-[2.6rem]">{lesson.title}</h1>
           <div className="mt-2 max-w-[38ch] text-lg leading-snug text-ink-muted max-lg:max-w-[60ch]">{intro}</div>
-          {finished && (
-            <p role="status" className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-ink px-3.5 py-2 text-sm font-medium text-paper">
-              <span>✓ All {goals.length} done.</span>
-              <a href="#explain" className="underline underline-offset-2 hover:no-underline">Read why it works</a>
-              <a href={nextHref} className="underline underline-offset-2 hover:no-underline">Next: {nextTitle} →</a>
-            </p>
-          )}
         </header>
 
         <section aria-labelledby="try" className="order-4 lg:order-none lg:col-span-8">
@@ -170,8 +173,12 @@ export function LessonShell({ id, intro, view, caption, groups, goals, done, sce
                     <span className="sr-only">{ok ? 'Done: ' : now ? 'Try now: ' : 'Later: '}</span>
                     {g.label}
                   </span>
-                  {now && g.hint && <span className="text-[0.95rem] leading-snug"><span className="sr-only">Hint: </span>{g.hint}</span>}
-                  {ok && g.why && <span className="text-[0.95rem] leading-snug text-ink-muted">{g.why}</span>}
+                  {/* The hint and the "why" share one spot, the one not showing kept invisible, so a card is as tall before it ticks as after
+                      and nothing below it moves (on a phone the cards sit under the controls, so they just take the space they need) */}
+                  <span className="grid text-[0.95rem] leading-snug">
+                    {g.hint && <span aria-hidden={!now} className={`[grid-area:1/1] ${now ? '' : 'invisible max-sm:hidden'}`}><span className="sr-only">Hint: </span>{g.hint}</span>}
+                    {g.why && <span aria-hidden={!ok} className={`[grid-area:1/1] text-ink-muted ${ok ? '' : 'invisible max-sm:hidden'}`}>{g.why}</span>}
+                  </span>
                 </li>
               )
             })}
@@ -188,9 +195,6 @@ export function LessonShell({ id, intro, view, caption, groups, goals, done, sce
           </div>
           {current ? (
             <div className="mt-2 rounded-xl bg-placard px-3 py-2 text-placard-ink sm:hidden" aria-hidden>
-              {latest?.why && done.has(latest.id) && (
-                <p className="mb-1.5 border-b border-placard-ink/25 pb-1.5 text-sm leading-snug"><b className="font-sans text-xs">✓ {latest.label}.</b> {latest.why}</p>
-              )}
               <p className="flex items-center gap-2 text-xs"><span>Goal {goals.indexOf(current) + 1} of {goals.length}</span></p>
               <p className="text-[0.95rem] leading-tight font-semibold">{current.label}</p>
               {current.hint && <p className="text-sm leading-snug">{current.hint}</p>}

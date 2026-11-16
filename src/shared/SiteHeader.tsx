@@ -1,7 +1,6 @@
 import { useId, useRef, useState } from 'react'
 import { Logo } from './Logo.tsx'
-import { EXPERIMENTS, SITE } from '../blobscape/site.ts'
-import { LESSONS } from '../blobscape/routes.ts'
+import { SITE } from '../blobscape/site.ts'
 
 /** Blobscape's own pages, in the header (from a tablet up) and the menu. */
 const PAGES = [
@@ -57,7 +56,16 @@ export function SiteHeader({ here }: { here?: string }) {
   )
 }
 
-const LINK = 'block rounded-md px-2 py-1.5 text-ink no-underline hover:bg-paper-sunk hover:text-accent aria-[current=page]:text-accent'
+const LINK = 'block rounded-lg px-3 py-2.5 text-lg font-medium text-ink no-underline transition-colors hover:bg-paper-sunk hover:text-accent aria-[current=page]:text-accent'
+
+/** The menu: every page, in Matt's order, then Support (Ko-fi, after a rule) and the theme. */
+const MENU = [
+  { label: 'Home', path: '/' },
+  { label: 'Lessons', path: '/lessons/' },
+  { label: 'Experiments', path: '/experiments/' },
+  { label: 'Sandbox', path: '/sandbox/' },
+  { label: 'Get in touch', path: '/contact/' },
+] as const
 const HEAD = 'px-2 text-xs font-semibold tracking-wider text-ink-faint uppercase'
 
 /**
@@ -69,12 +77,6 @@ function SiteMenu({ here }: { here?: string }) {
   const id = useId()
   const panel = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false)
-  const learn = [
-    { label: 'Front page', path: '/' },
-    { label: 'Lessons', path: '/lessons/' },
-    { label: `Start with ${LESSONS[0].title.toLowerCase()}`, path: `/lessons/${LESSONS[0].id}/` },
-    { label: 'Sandbox', path: '/sandbox/' },
-  ]
   return (
     <>
       <button
@@ -95,32 +97,29 @@ function SiteMenu({ here }: { here?: string }) {
         popover="auto"
         onToggle={(e) => setOpen((e as unknown as ToggleEvent).newState === 'open')}
         onClick={(e) => { if ((e.target as HTMLElement).closest('a')) panel.current?.hidePopover() }}
-        className="max-h-[calc(100dvh-5rem)] w-[min(26rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-rule bg-paper p-5 text-ink shadow-xl"
+        className="max-h-[calc(100dvh-5rem)] w-[min(20rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-rule bg-paper p-5 text-ink shadow-xl"
         style={{ inset: 'auto', top: '4rem', right: 'max(1rem, calc((100vw - 80rem) / 2 + 1rem))', margin: 0 }}
       >
-        <nav aria-label={SITE.name} className="grid gap-5 sm:grid-cols-2">
-          <div>
-            <p className={HEAD}>Learn</p>
-            <ul className="mt-1.5">
-              {learn.map((p) => (
-                <li key={p.path}>
-                  <a href={p.path} aria-current={here === p.path ? 'page' : undefined} className={LINK}>{p.label}</a>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <p className={HEAD}>Experiments</p>
-            <ul className="mt-1.5">
-              <li><a href="/experiments/" aria-current={here === '/experiments/' ? 'page' : undefined} className={LINK}>All experiments</a></li>
-              {EXPERIMENTS.map((e) => <li key={e.id}><a href={e.url} aria-current={here === e.url ? 'page' : undefined} className={LINK}>{e.title}</a></li>)}
-            </ul>
-          </div>
-          <div className="border-t border-rule pt-4 sm:col-span-2">
-            <p className={`${HEAD} mb-2`}>Theme</p>
-            <div className="px-2"><ThemeChoice /></div>
-          </div>
+        <nav aria-label={SITE.name}>
+          <ul className="flex flex-col">
+            {MENU.map((p) => (
+              <li key={p.path}>
+                <a href={p.path} aria-current={isHere(here, p.path) ? 'page' : undefined} className={LINK}>{p.label}</a>
+              </li>
+            ))}
+            <li className="mt-1 border-t border-rule pt-1">
+              <a href={SITE.tip} target="_blank" rel="noopener" className={`${LINK} flex items-center gap-2.5`}>
+                <svg viewBox="0 0 24 24" className="size-4.5 text-accent" aria-hidden fill="currentColor"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.2 0 3.6 1.2 4.3 2.5h2c.7-1.3 2.1-2.5 4.3-2.5 3.7 0 5.8 3.9 4.3 7.3C19.5 16.4 12 21 12 21z" /></svg>
+                Support<span className="sr-only"> Blobscape on Ko-fi (opens in a new tab)</span>
+                <svg viewBox="0 0 24 24" className="ml-auto size-4 text-ink-faint" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></svg>
+              </a>
+            </li>
+          </ul>
         </nav>
+        <div className="mt-4 border-t border-rule pt-4">
+          <p className={`${HEAD} mb-2`}>Theme</p>
+          <div className="px-2"><ThemeChoice /></div>
+        </div>
       </div>
     </>
   )
