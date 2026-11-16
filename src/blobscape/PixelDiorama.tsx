@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Orbit } from '../splat-core/view.ts'
-import { darkest, type Frame, type PixelLook } from '../splat-core/pixel.ts'
+import { STEADY, darkest, type Frame, type PixelLook } from '../splat-core/pixel.ts'
 import type { Built } from '../splat-engine/body.ts'
 import { Button, Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
 import { Mark } from '../shared/Logo.tsx'
@@ -70,6 +70,7 @@ export function PixelDiorama() {
   const [outline, setOutline] = useState(diorama.finish.outline)
   const [edges, setEdges] = useState(diorama.finish.edges)
   const [sky, setSky] = useState(diorama.finish.sky)
+  const [steady, setSteady] = useState(() => typeof location === 'undefined' || new URLSearchParams(location.search).get('steady') !== '0')
   const [view, setView] = useState(diorama.views[0].id)
   const [orbit, setOrbit] = useState<Orbit>(diorama.views[0].orbit)
   const [art, setArt] = useState<{ width: number; height: number }>()
@@ -106,7 +107,7 @@ export function PixelDiorama() {
   // the scene's own palette first, then the shared ones
   const palettes = useMemo(() => [{ id: 'own', ...shown.palette }, ...PALETTES.slice(1)], [shown])
   const colours = (palettes.find((p) => p.id === palette) ?? palettes[0]).colours
-  const look = useMemo<PixelLook>(() => ({ palette: colours, dither, outline: outline ? (colours.length ? darkest(colours) : [11, 16, 38]) : null, glow, edges: edges ? 1 : 0, sky: sky ? shown.sky : undefined }), [colours, dither, outline, glow, edges, sky, shown])
+  const look = useMemo<PixelLook>(() => ({ palette: colours, dither, outline: outline ? (colours.length ? darkest(colours) : [11, 16, 38]) : null, glow, edges: edges ? 1 : 0, sky: sky ? shown.sky : undefined, steady: steady ? STEADY : 0 }), [colours, dither, outline, glow, edges, sky, shown, steady])
 
   // a new level of detail keeps the moment it was showing
   useEffect(() => {
@@ -306,6 +307,7 @@ export function PixelDiorama() {
                 <Toggle label={pixels ? 'Outline the scene' : 'Outline the scene (in Pixel art)'} checked={outline} onChange={setOutline} />
                 <Toggle label={pixels ? 'Lines where colours meet' : 'Lines where colours meet (in Pixel art)'} checked={edges} onChange={setEdges} />
                 <Toggle label={pixels ? 'Sky behind' : 'Sky behind (in Pixel art)'} checked={sky} onChange={setSky} />
+                <Toggle label={pixels ? 'Steady pixels' : 'Steady pixels (in Pixel art)'} checked={steady} onChange={setSteady} />
                 </div>
                 <div className="grid gap-2">
                 <div className="flex flex-wrap items-center gap-1.5">

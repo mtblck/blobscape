@@ -260,7 +260,15 @@ export interface PixelLook {
    * Left out, empty pixels stay clear.
    */
   sky?: [top: Rgb, bottom: Rgb, reach?: number]
+  /**
+   * Steady pixels: a pixel keeps the palette colour it had in the frame before unless another is closer by more than this (an OKLab distance; 0 or left out is off).
+   * Without it, a pixel that sits between two colours flips back and forth as lights flicker and the view turns.
+   */
+  steady?: number
 }
+
+/** A good `steady` for a moving scene: under the gap between neighbouring palette colours, so shapes still move freely. */
+export const STEADY = 0.04
 
 /** The most colours a look's palette can hold (the live pass keeps them in a fixed list). */
 export const MAX_PALETTE_SIZE = 32
@@ -292,8 +300,12 @@ const smooth = (a: number, b: number, x: number) => { const t = Math.min(1, Math
  *   beside them) → edge lines (the darker side of a jump in colour) →
  *   palette + dither → outline on the empty pixels that touch the scene →
  *   sky on the rest, if the look has one
+ *
+ * `before` is the art of the frame before, for a look with `steady`: where it
+ * holds a palette colour that is nearly as close as the best one, that pixel
+ * keeps it.
  */
-export function pixelArt(f: Frame, look: PixelLook): Frame {
+export function pixelArt(f: Frame, look: PixelLook, before?: Frame): Frame {
   const { width: w, height: h } = f
   const out = makeFrame(w, h)
   const cut = PIXEL_CUT * 255
@@ -301,6 +313,8 @@ export function pixelArt(f: Frame, look: PixelLook): Frame {
   const pl = look.palette.map((c) => oklab(...c))
   const amp = look.dither * 48
   const edges = look.edges ?? 0
+  const steady = before && before.width === w && before.height === h ? look.steady ?? 0 : 0
+  const slot = new Map(look.palette.map((c, k) => [(c[0] << 16) | (c[1] << 8) | c[2], k]))
   const g: Rgb = [0, 0, 0]
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
@@ -343,7 +357,15 @@ export function pixelArt(f: Frame, look: PixelLook): Frame {
       r = Math.min(255, r); gg = Math.min(255, gg); b = Math.min(255, b)
       if (pl.length) {
         const off = spread > 0 ? (BAYER4[(y & 3) * 4 + (x & 3)] / 16 - 0.5) * spread : 0
-        const c = look.palette[nearest(oklab(Math.max(0, r + off), Math.max(0, gg + off), Math.max(0, b + off)), pl)]
+        const lab = oklab(Math.max(0, r + off), Math.max(0, gg + off), Math.max(0, b + off))
+        let k = nearest(lab, pl)
+        // only the scene's own pixels: the sky is the same every frame, and a pixel the scene has left must not keep its colour
+        if (steady > 0 && solid(x, y) && before!.data[i + 3] === 255) {
+          const was = slot.get((before!.data[i] << 16) | (before!.data[i + 1] << 8) | before!.data[i + 2])
+          const far = (p: Rgb) => Math.hypot(lab[0] - p[0], lab[1] - p[1], lab[2] - p[2])
+          if (was !== undefined && was !== k && far(pl[was]) <= far(pl[k]) + steady) k = was
+        }
+        const c = look.palette[k]
         r = c[0]; gg = c[1]; b = c[2]
       }
       out.data[i] = r; out.data[i + 1] = gg; out.data[i + 2] = b; out.data[i + 3] = 255

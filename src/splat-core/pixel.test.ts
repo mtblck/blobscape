@@ -149,3 +149,27 @@ test('a sky that stops short ends flat: its dither is gone by the end of the ble
   const whole = sky()
   for (const bad of [0, -1, NaN, 2]) assert.deepEqual(sky(bad).data, whole.data)
 })
+
+test('pixelArt with steady keeps a pixel on the colour it had when the other is only a little closer, and lets a clear change through', () => {
+  const pal: Rgb[] = [[100, 100, 100], [140, 140, 140], [250, 240, 200]]
+  const look = { palette: pal, dither: 0, outline: null, glow: 0, steady: 0.04 }
+  // three pixels: just on the light side of the line between the two greys, far on the light side, and empty
+  const f = makeFrame(3, 1)
+  f.data.set([122, 122, 122, 255, 139, 139, 139, 255, 0, 0, 0, 0])
+  const before = makeFrame(3, 1)
+  before.data.set([100, 100, 100, 255, 100, 100, 100, 255, 100, 100, 100, 255])
+  const px = (a: { data: Uint8ClampedArray }, x: number) => [...a.data.subarray(x * 4, x * 4 + 4)]
+  assert.deepEqual(px(pixelArt(f, look), 0), [140, 140, 140, 255], 'with no frame before, the closest colour')
+  const art = pixelArt(f, look, before)
+  assert.deepEqual(px(art, 0), [100, 100, 100, 255], 'nearly as close: it stays')
+  assert.deepEqual(px(art, 1), [140, 140, 140, 255], 'clearly closer: it changes')
+  assert.deepEqual(px(art, 2), [0, 0, 0, 0], 'an empty pixel takes nothing from the frame before')
+  // off, or a frame before of another size, or a colour before that is not in the palette: as if there were none
+  assert.deepEqual(px(pixelArt(f, { ...look, steady: 0 }, before), 0), [140, 140, 140, 255])
+  assert.deepEqual(px(pixelArt(f, look, makeFrame(2, 1)), 0), [140, 140, 140, 255])
+  before.data.set([101, 100, 100, 255])
+  assert.deepEqual(px(pixelArt(f, look, before), 0), [140, 140, 140, 255])
+  // the sky is the same every frame: it never takes the colour a pixel had
+  const sky = pixelArt(f, { ...look, sky: [[140, 140, 140], [140, 140, 140]] }, before)
+  assert.deepEqual(px(sky, 2), [140, 140, 140, 255])
+})

@@ -214,22 +214,23 @@ export class CreatureStage {
     this.pixel.render(this.renderer, this.scene, this.camera, { width: x, height: y, scale })
   }
 
-  private async read(target: THREE.RenderTarget): Promise<Frame> {
+  private async read(target: THREE.RenderTarget, encoded = false): Promise<Frame> {
     const { width, height } = target
     const px = await this.renderer.readRenderTargetPixelsAsync(target, 0, 0, width, height) as Uint8Array
     // a target holds linear, premultiplied colour; a frame is sRGB, straight, top row first. WebGPU reads rows top-down, WebGL bottom-up.
-    return { width, height, data: readbackToSrgb(px, width, height, { flip: this.backend === 'webgl', premultiplied: false }) }
+    return { width, height, data: readbackToSrgb(px, width, height, { flip: this.backend === 'webgl', premultiplied: false, encoded }) }
   }
 
   /** Pixel mode's last frame as it was drawn small, and as finished art (exactly in the look's colours): for tests and for saving. */
-  async pixelFrames(): Promise<{ small: Frame; art: Frame } | undefined> {
+  async pixelFrames(): Promise<{ small: Frame; art: Frame; before?: Frame } | undefined> {
     // a sheet being drawn has the renderer to itself
     if (!this.pixel || this.baking) return
     // pixel mode can be switched off, or the view resized, while the reads are out: hold the pass and start both reads now
     const pass = this.pixel
     if (!this.target) pass.render(this.renderer, this.scene, this.camera)
-    const [small, art] = await Promise.all([this.read(pass.small), this.read(pass.art)])
-    return { small, art: snapColours(art, lookColours(pass.look)) }
+    const colours = lookColours(pass.look)
+    const [small, art, before] = await Promise.all([this.read(pass.small), this.read(pass.art, true), pass.before ? this.read(pass.before, true) : undefined])
+    return { small, art: snapColours(art, colours), before: before && snapColours(before, colours) }
   }
 
   invalidate(frames = 2) { this.pending = Math.max(this.pending, frames) }
@@ -273,7 +274,7 @@ export class CreatureStage {
     const ctx = this.display.getContext('2d')!
     if (this.pixel) {
       // the art, scaled up in whole pixels
-      const art = await this.read(this.pixel.art)
+      const art = await this.read(this.pixel.art, true)
       const c = document.createElement('canvas')
       c.width = art.width
       c.height = art.height
