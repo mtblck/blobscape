@@ -3,7 +3,6 @@ import type { Orbit } from '../splat-core/view.ts'
 import type { Creature as Body } from '../splat-engine/body.ts'
 import { GlbError, readRiggedGlb, recordClip, writeRiggedGlb, writeRiggedMeshGlb, type Clip } from '../splat-engine/glb.ts'
 import { blobsToMesh } from '../splat-engine/mesh.ts'
-import type { SkinMode } from '../splat-engine/rig.ts'
 import type { Species } from '../splat-engine/zoo/index.ts'
 import { CREATURES } from './creature/fromScenes.ts'
 import { MAX_SEED, monsterSpecies, newSeed } from '../splat-engine/zoo/monster.ts'
@@ -49,6 +48,12 @@ declare global {
   interface Window { __creature?: { stage: CreatureStage; blobs: () => number; bones: () => number; glb: () => Uint8Array; mesh: (cells: number) => Uint8Array } }
 }
 
+/** The creature's detail level nearest the count asked for (by ratio), or its own starting level when none was. */
+export function levelFor(sp: Pick<Species, 'detail' | 'start'>, asked?: number): number {
+  if (!asked) return sp.start
+  return sp.detail.reduce((best, n) => (Math.abs(Math.log(n / asked)) < Math.abs(Math.log(best / asked)) ? n : best))
+}
+
 /**
  * Creature: procedural blob creatures (three from the pixel scenes, then a frog, a fox, an elf and a dragon),
  * rigged, moving on Blobscape's own splat engine, with their bones on show if
@@ -70,7 +75,6 @@ export function Creature() {
   const [move, setMove] = useState<string>(species.moves[0].name)
   const [show, setShow] = useState<Show>('blobs')
   const [speed, setSpeed] = useState(1)
-  const [mode, setMode] = useState<SkinMode>('quat')
   const [orbit, setOrbit] = useState<Orbit>(species.view)
   const [loaded, setLoaded] = useState<Shown>()
   const [fileNote, setFileNote] = useState<string>()
@@ -89,6 +93,8 @@ export function Creature() {
 
   /** The Monster chip brings back the last one made, not a new one. */
   const lastMonster = useRef<Species | undefined>(species.seed ? species : undefined)
+  /** The blob count the visitor chose, kept from creature to creature (each takes its level nearest to it). */
+  const asked = useRef<number | undefined>(undefined)
   const pick = (sp: Species) => {
     if (sp.seed) lastMonster.current = sp
     setLoaded(undefined)
@@ -96,7 +102,7 @@ export function Creature() {
     setMove(sp.moves[0].name)
     if (sp === species) return
     setSpecies(sp)
-    setCount(sp.start)
+    setCount(levelFor(sp, asked.current))
     setLook(sp.looks[0].id)
     const url = new URL(location.href)
     if (sp.id === DEFAULT) url.searchParams.delete('creature')
@@ -166,7 +172,6 @@ export function Creature() {
   }, [stage, shown, building]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { stage?.setClip(clip) }, [stage, clip])
   useEffect(() => { if (stage) stage.speed = speed }, [stage, speed])
-  useEffect(() => { stage?.setMode(mode) }, [stage, mode])
   useEffect(() => { stage?.setShow(show) }, [stage, show])
   useEffect(() => { stage?.setFloor(Math.max(8, 2 * Math.round(scaleOf.view.distance))) }, [stage, scaleOf])
   useEffect(() => { if (stage) { stage.orbit = orbit; stage.invalidate() } }, [stage, orbit])
@@ -309,15 +314,8 @@ export function Creature() {
                 <Slider label="Speed" value={speed} min={0.1} max={2} step={0.05} onChange={setSpeed} format={(v) => `×${v.toFixed(2)}`} />
                 <Field label="Blobs">
                   <div className="flex flex-wrap gap-1.5">
-                    {species.detail.map((n) => <Chip key={n} active={!loaded && count === n} onClick={() => { setLoaded(undefined); setCount(n) }}>{kilo(n)}</Chip>)}
+                    {species.detail.map((n) => <Chip key={n} active={!loaded && count === n} onClick={() => { asked.current = n; setLoaded(undefined); setCount(n) }}>{kilo(n)}</Chip>)}
                   </div>
-                </Field>
-                <Field label="Joints: how a blob turns">
-                  <div className="flex flex-wrap gap-1.5">
-                    <Chip active={mode === 'quat'} onClick={() => setMode('quat')}>Average the turns</Chip>
-                    <Chip active={mode === 'linear'} onClick={() => setMode('linear')}>Blend the matrices</Chip>
-                  </div>
-                  <p className="mt-1.5 text-xs text-ink-faint">From <a href={href({ page: 'lesson', id: 'twist' })} className="underline hover:text-accent">Twist without tearing</a>. Watch the tail.</p>
                 </Field>
               </div>
             ),
