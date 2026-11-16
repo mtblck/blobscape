@@ -1,5 +1,5 @@
 import { SiteHeader } from '../shared/SiteHeader.tsx'
-import { COMING, LESSONS, LESSON_COUNT, LESSON_GOALS, PARTS, href, useLinkNavigation, useRoute } from './routes.ts'
+import { type Route, COMING, LESSONS, LESSON_COUNT, LESSON_GOALS, PARTS, href, useLinkNavigation, useRoute } from './routes.ts'
 import { doneGoals, resetProgress } from './progress.ts'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
 import { Landing } from './Landing.tsx'
@@ -40,8 +40,9 @@ import { Spec } from './Spec.tsx'
 
 const PAGES: Record<string, () => React.JSX.Element> = { 'one-blob': OneBlob, footprint: Footprint, order: Order, many: Many, angle: Angle, paint: Paint, formats: Formats, break: Break, 'one-bone': OneBone, weights: Weights, twist: Twist, walk: Walk, model: Model, morphs: Morphs, shoot: Shoot, fuzzy: Fuzzy, floaters: Floaters, lighting: Lighting }
 
-export function App() {
-  const route = useRoute()
+/** The whole site. `route` is only for prerendering (scripts/prerender.ts), where there is no address bar to read. */
+export function App({ route: at }: { route?: Route } = {}) {
+  const route = useRoute(at)
   const key = route.page === 'lesson' ? route.id : route.page
   const Lesson = route.page === 'lesson' ? PAGES[route.id] : null
   usePageMeta(route)
@@ -57,7 +58,8 @@ export function App() {
       </main>
       <Footer />
       <Toaster />
-      {(route.page === 'home' || route.page === 'lessons') && <TipButton key={`tip-${route.page}`} />}
+      {/* not in the prerendered HTML: it fades in once the app is running */}
+      {!at && (route.page === 'home' || route.page === 'lessons') && <TipButton key={`tip-${route.page}`} />}
     </div>
   )
 }

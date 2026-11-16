@@ -23,6 +23,81 @@
   src: url('./fonts/figtree-latin-wght-normal.woff2') format('woff2-variations');
 }
 
+/* Stand-ins drawn while the fonts load, sized per weight to take the same room (measured in Chromium: the same text, the same width), so the
+   page doesn't reflow when the real fonts arrive. Arial (or Liberation Sans, its twin on Linux) is on nearly every desktop; elsewhere the plain fallbacks apply. */
+@font-face {
+  font-family: 'Figtree Fallback';
+  font-weight: 400;
+  src: local('Arial'), local('ArialMT'), local('Liberation Sans');
+  size-adjust: 100.1%;
+  ascent-override: 94.9%;
+  descent-override: 25.0%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'Figtree Fallback';
+  font-weight: 500;
+  src: local('Arial'), local('ArialMT'), local('Liberation Sans');
+  size-adjust: 100.7%;
+  ascent-override: 94.4%;
+  descent-override: 24.8%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'Figtree Fallback';
+  font-weight: 600;
+  src: local('Arial Bold'), local('Arial-BoldMT'), local('Liberation Sans Bold');
+  size-adjust: 94.4%;
+  ascent-override: 100.7%;
+  descent-override: 26.5%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'Figtree Fallback';
+  font-weight: 700;
+  src: local('Arial Bold'), local('Arial-BoldMT'), local('Liberation Sans Bold');
+  size-adjust: 95.2%;
+  ascent-override: 99.8%;
+  descent-override: 26.3%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'Fredoka Fallback';
+  font-weight: 400;
+  src: local('Arial'), local('ArialMT'), local('Liberation Sans');
+  size-adjust: 100.0%;
+  ascent-override: 97.0%;
+  descent-override: 24.0%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'Fredoka Fallback';
+  font-weight: 500;
+  src: local('Arial'), local('ArialMT'), local('Liberation Sans');
+  size-adjust: 100.2%;
+  ascent-override: 96.9%;
+  descent-override: 24.0%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'Fredoka Fallback';
+  font-weight: 600;
+  src: local('Arial Bold'), local('Arial-BoldMT'), local('Liberation Sans Bold');
+  size-adjust: 93.2%;
+  ascent-override: 104.1%;
+  descent-override: 25.8%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'Fredoka Fallback';
+  font-weight: 700;
+  src: local('Arial Bold'), local('Arial-BoldMT'), local('Liberation Sans Bold');
+  size-adjust: 93.3%;
+  ascent-override: 104.0%;
+  descent-override: 25.7%;
+  line-gap-override: 0%;
+}
+
 :root {
   color-scheme: light;
   --c-paper:      #fbf6ee;
@@ -104,8 +179,8 @@
   --color-health:       #f2553a;
   --color-magic:        #62a8ff;
   --color-deep:         #1d2440;
-  --font-display: "Fredoka Variable", ui-rounded, system-ui, sans-serif;
-  --font-sans: "Figtree Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Fredoka Variable", "Fredoka Fallback", ui-rounded, system-ui, sans-serif;
+  --font-sans: "Figtree Variable", "Figtree Fallback", ui-sans-serif, system-ui, sans-serif;
 }
 
 @layer base {
