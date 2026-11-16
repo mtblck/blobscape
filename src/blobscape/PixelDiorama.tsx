@@ -371,6 +371,11 @@ export function PixelDiorama() {
             and <a href="/experiments/splat-to-sprite/" className="underline decoration-rule underline-offset-2 hover:text-accent">Splat to Sprite</a> does
             it for a splat file of your own.
           </p>
+          <p>
+            The idea of pixel art made from splats, and the themes of several scenes here, were inspired by the clips
+            that <a href="https://x.com/JungleSilicon" target="_blank" rel="noopener" className="underline decoration-rule underline-offset-2 hover:text-accent">Silicon Jungle</a> shared
+            of their own pixel-art splat scenes. The scenes, the engine and the code on this page are our own.
+          </p>
         </div>
       </section>
     </div>
