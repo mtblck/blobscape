@@ -95,6 +95,9 @@ const TURN_RATE = 2.6
 export const SWING = 0.42
 const HIT_FROM = 0.1, HIT_TO = 0.24
 export const SWORD_REACH = 1.25
+/** A swing turns the hero to a slime within this far, and steps in up to LUNGE meters to reach it. */
+export const LUNGE_RANGE = 2.4
+const LUNGE = 0.9
 const SWORD_ARC = 1.25
 /** Magic: a bolt costs SPELL_COST, leaves the hand CAST_AT into a cast of CAST seconds. */
 export const SPELL_COST = 25
@@ -356,9 +359,16 @@ export class Game {
     if (swing && h.swingT < 0 && h.castT < 0) {
       h.swingT = 0
       h.swingN++
-      // a little help: turn to face a slime that's nearly in front and close
-      const near = this.nearest(2.4, 0.9)
-      if (near) h.heading = Math.atan2(near.x - h.x, near.z - h.z)
+      // a little help: turn to face a slime that's roughly in front and close, and step in if the blade would fall short of it
+      const near = this.nearest(LUNGE_RANGE, 1.2)
+      if (near) {
+        const dx = near.x - h.x, dz = near.z - h.z, d = Math.hypot(dx, dz) || 1
+        h.heading = Math.atan2(dx, dz)
+        // the push fades at 6 a second (see moveHero): 8.5 × the gap covers the gap by the time the blade comes round,
+        // and carries on a little way after, still well short of the slime
+        const gap = d - (SWORD_REACH + slimeR(near) - 0.2)
+        if (gap > 0) { const v = 8.5 * Math.min(gap, LUNGE); h.vx += (dx / d) * v; h.vz += (dz / d) * v }
+      }
       this.events.push({ type: 'swing' })
     } else if (cast && h.castT < 0 && h.swingT < 0) {
       if (h.mp >= SPELL_COST) {

@@ -125,27 +125,39 @@ export function poseHero(sk: Skeleton, h: Hero, clock: HeroClock, dt: number) {
   sk.update()
 }
 
-/** A cut: wound up over the right shoulder, swept across in front to the left, and back. */
+/**
+ * A cut: drawn back low on the right, swept flat across in front at about knee height (slimes are low), and through to
+ * the left, the body bending into it. The blade is in front of the hero, low, for the whole time a swing can hit.
+ */
 function swing(sk: Skeleton, u: number) {
-  const WIND = { arm: dir([-0.7, 0.55, -0.15]), fore: dir([-0.35, 0.9, -0.25]), sword: dir([0.1, 0.5, -0.9]) }
-  const CUT = { arm: dir([0.35, -0.05, 1]), fore: dir([0.75, -0.2, 0.75]), sword: dir([0.95, -0.25, 0.2]) }
+  type Pose = { arm: Vec3; fore: Vec3; sword: Vec3 }
+  const WIND: Pose = { arm: dir([-0.75, -0.6, 0.05]), fore: dir([-0.85, -0.4, 0.2]), sword: dir([-1, -0.25, 0.05]) }
+  const FRONT: Pose = { arm: dir([-0.15, -0.45, 0.9]), fore: dir([0, -0.3, 1]), sword: dir([0.05, -0.2, 1]) }
+  const CUT: Pose = { arm: dir([0.4, -0.55, 0.75]), fore: dir([0.7, -0.4, 0.7]), sword: dir([0.9, -0.1, 0.75]) }
   const lerp = (a: Vec3, b: Vec3, t: number) => dir([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t])
-  let to: typeof WIND, amount: number
-  if (u < 0.25) { to = WIND; amount = ramp(u, 0, 0.22) }
-  else if (u < 0.55) {
-    const t = ramp(u, 0.25, 0.5)
-    to = { arm: lerp(WIND.arm, CUT.arm, t), fore: lerp(WIND.fore, CUT.fore, t), sword: lerp(WIND.sword, CUT.sword, t) }
+  const between = (a: Pose, b: Pose, t: number): Pose => ({ arm: lerp(a.arm, b.arm, t), fore: lerp(a.fore, b.fore, t), sword: lerp(a.sword, b.sword, t) })
+  let to: Pose, amount: number
+  if (u < 0.22) { to = WIND; amount = ramp(u, 0, 0.2) }
+  else if (u < 0.58) {
+    // right to front to left, quickest through the middle
+    const t = ramp(u, 0.22, 0.56)
+    to = t < 0.5 ? between(WIND, FRONT, t * 2) : between(FRONT, CUT, t * 2 - 1)
     amount = 1
-  } else { to = CUT; amount = 1 - ramp(u, 0.6, 1) }
+  } else { to = CUT; amount = 1 - ramp(u, 0.62, 1) }
   aim(sk, 'rArm', to.arm, amount)
   aim(sk, 'rForearm', to.fore, amount)
   aim(sk, 'rHand', to.fore, amount)
   aim(sk, 'sword', to.sword, amount)
-  // the body turns into the cut
-  const twist = u < 0.25 ? -0.45 * ramp(u, 0, 0.22) : u < 0.55 ? -0.45 + 1.05 * ramp(u, 0.25, 0.5) : 0.6 * (1 - ramp(u, 0.6, 1))
+  // the body turns into the cut and bends down to it
+  const twist = u < 0.22 ? -0.3 * ramp(u, 0, 0.2) : u < 0.58 ? -0.3 + 0.6 * ramp(u, 0.22, 0.56) : 0.3 * (1 - ramp(u, 0.62, 1))
+  const bend = LEAN * env(u, 0, 0.24, 0.6, 1)
   turn(sk, 'spine', Y, twist * 0.5)
   turn(sk, 'chest', Y, twist * 0.5)
+  turn(sk, 'spine', X, bend * 0.6)
+  turn(sk, 'chest', X, bend * 0.4)
 }
+/** How far the hero bends into a swing, radians. */
+const LEAN = 0.55
 
 // --- the bolt of magic
 
