@@ -898,6 +898,22 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     await d.ctx.close()
   }
 
+  // picking another scene: the one in the view keeps its own palette until the new scene has been cut and takes its place
+  {
+    const d = await open('/experiments/pixel-diorama/?offscreen=1&scene=campfire', { viewport: { width: 1280, height: 900 } })
+    await d.page.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).catch(() => {})
+    const strip = () => [...document.querySelectorAll('[data-testid=palette-strip] span')].map((e) => e.style.background).join()
+    const before = await d.page.evaluate(strip)
+    const justAfter = await d.page.evaluate(() => {
+      [...document.querySelectorAll('button')].find((b) => b.textContent === 'Windmill').click()
+      return [...document.querySelectorAll('[data-testid=palette-strip] span')].map((e) => e.style.background).join()
+    }).catch(() => '')
+    const changed = await d.page.waitForFunction((was) => { const now = [...document.querySelectorAll('[data-testid=palette-strip] span')].map((e) => e.style.background).join(); return !!window.__diorama && now !== was }, before, { timeout: 90000 }).then(() => true, () => false)
+    if (!before || justAfter !== before || !changed) fails.push(`blobscape pixel diorama: on picking another scene the palette ${justAfter !== before ? 'changed before the scene did' : 'never changed'}`)
+    else ok('blobscape pixel diorama: a newly picked scene brings its palette only when it reaches the view')
+    await d.ctx.close()
+  }
+
   // the scenes written as descriptions: each opens by its address, draws in its own palette, and moves
   for (const [id, name] of [['bee', 'Forest bee'], ['campfire', 'Campfire'], ['dragon', 'Lava dragon'], ['hand', 'Stone hand'], ['reef', 'Jellyfish reef'], ['windmill', 'Windmill']]) {
     const d = await open(`/experiments/pixel-diorama/?offscreen=1&scene=${id}`, { viewport: { width: 1280, height: 900 } })
