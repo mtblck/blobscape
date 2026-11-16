@@ -117,6 +117,14 @@ export function smooth(k: number, ...s: Shape[]): Shape {
   }
 }
 
+/** A shape squashed front to back (along z) about z = `at`, to `f` of its depth: a chest, a foot. */
+export function flatten(s: Shape, f: number, at = 0): Shape {
+  return {
+    sdf: (x, y, z) => s.sdf(x, y, at + (z - at) / f) * f,
+    min: [s.min[0], s.min[1], at + (s.min[2] - at) * f], max: [s.max[0], s.max[1], at + (s.max[2] - at) * f],
+  }
+}
+
 const sub = (a: ArrayLike<number>, b: ArrayLike<number>): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
 const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]

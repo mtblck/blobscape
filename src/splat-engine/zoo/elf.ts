@@ -2,6 +2,8 @@ import type { Vec3 } from '../../splat-core/blobs.ts'
 import { buildBody, mirror, mix, type BodySpec, type Part } from '../body.ts'
 import type { Bone, Skeleton } from '../rig.ts'
 import { X, Y, Z, aim, dir, env, set, turn } from '../posing.ts'
+import { flatten, membrane, sculptToCount, smooth, type SculptPart, type SculptSpec } from '../sculpt.ts'
+import { box, cone, cut, ellipsoid } from '../voxel.ts'
 import type { Species } from './species.ts'
 
 /**
@@ -126,6 +128,118 @@ export function makeElf(count = 40000, look = 'forest') {
   return { blobs: b.blobs, skin: b.skin, skeleton: b.skeleton }
 }
 
+/**
+ * The elf for the Creature page, cut the way the pixel scenes are (sculpt.ts)
+ * on the same bones: a face with features, strands in the hair and a plait
+ * tied at the end, a laced and embroidered tunic, a belt with a buckle and a
+ * pouch, strapped bracers, cuffed and laced boots, arrows in the quiver.
+ * Forest Walk and Dungeon Run keep the quick body.ts elf above, because they
+ * build it among a whole world and add to its parts.
+ */
+function fine(c: Colors, s: number): SculptSpec {
+  const fat = (r: number) => Math.max(r, s * 0.6)
+  const lit = (v: Vec3, k = 1.2): Vec3 => [Math.min(1, v[0] * k), Math.min(1, v[1] * k), Math.min(1, v[2] * k)]
+  const tunicC = lit(c.tunic), dark = mix(tunicC, [0, 0, 0], 0.3), shadeHair = mix(c.hair, [0, 0, 0], 0.22)
+  const hair = (p: Vec3): Vec3 => (Math.sin(p[0] * 210 + p[2] * 60) > 0.35 ? shadeHair : c.hair)
+  const face = (p: Vec3, n: Vec3): Vec3 => {
+    if (n[2] > 0.3 && p[1] < 1.79 && p[1] > 1.6) return p[1] < 1.675 && p[1] > 1.655 && Math.abs(p[0]) > 0.03 && n[2] > 0.5 ? mix(c.skin, LIPS, 0.16) : c.skin
+    return n[1] > -0.1 || n[2] < 0.1 ? hair(p) : c.skin
+  }
+  // the tunic: trimmed at the collar, open in a V at the neck, laced down the front, with a strap across for the quiver
+  const tunic = (p: Vec3, n: Vec3): Vec3 => {
+    if (Math.abs(p[1] - 1.415) < 0.014) return c.trim
+    if (n[2] > 0.3) {
+      if (p[1] > 1.3 && Math.abs(p[0]) < (p[1] - 1.3) * 0.42) return c.skin
+      if (p[1] > 1.12 && p[1] < 1.31 && Math.abs(p[0]) < 0.012) return dark
+      if (p[1] > 1.12 && p[1] < 1.31 && Math.abs(p[0]) < 0.034 && Math.sin(p[1] * 190) > 0.55) return c.trim
+    }
+    if (Math.abs(p[0] * 0.8 + (p[1] - 1.24) * 0.62) < 0.017) return LEATHER
+    return Math.sin(p[1] * 330) > 0.86 ? dark : tunicC
+  }
+  // the skirt of it: pleats, a hem in the trim color and a row of leaves stitched above the hem
+  const skirt = (p: Vec3): Vec3 => {
+    if (p[1] < 0.752) return c.trim
+    const a = Math.atan2(p[0], p[2])
+    if (p[1] > 0.775 && p[1] < 0.83 && Math.abs(Math.sin(a * 9)) > 1 - (0.83 - p[1]) * 9) return c.trim
+    return Math.sin(a * 22) > 0.72 ? dark : tunicC
+  }
+  const head: Vec3 = [0, 1.71, 0.015]
+  const plait: Vec3[] = Array.from({ length: 7 }, (_, k): Vec3 => [0.012 * (k % 2 ? 1 : -1), 1.66 - k * 0.066, -0.105 - k * 0.006])
+  const parts: SculptPart[] = [
+    // head: skull, jaw, cheeks and nose as one skin
+    {
+      shape: smooth(0.022, ellipsoid(head, [0.092, 0.115, 0.108]), ellipsoid([0, 1.655, 0.045], [0.068, 0.06, 0.07]), cone([0, 1.72, 0.108], [0, 1.682, 0.128], fat(0.011), fat(0.016)),
+        ellipsoid([0.045, 1.675, 0.078], [0.03, 0.025, 0.03]), ellipsoid([-0.045, 1.675, 0.078], [0.03, 0.025, 0.03])),
+      color: face, bones: ['head'],
+    },
+    { shape: cone([-0.02, 1.64, 0.113], [0.02, 1.64, 0.113], fat(0.008)), color: LIPS, bones: ['head'] },
+    // hair: a cap swept back, a fringe, and the plait as a row of knots tied off in the trim color
+    { shape: smooth(0.02, ellipsoid([0, 1.81, -0.02], [0.102, 0.052, 0.112]), ellipsoid([0, 1.73, -0.06], [0.098, 0.1, 0.07]), ellipsoid([0.035, 1.8, 0.075], [0.05, 0.022, 0.035]), ellipsoid([-0.04, 1.795, 0.072], [0.045, 0.02, 0.035])), color: hair, bones: ['head'] },
+    ...plait.map((q, k): SculptPart => ({ shape: ellipsoid(q, [0.046 - k * 0.0035, 0.044, 0.038 - k * 0.003]), color: (p) => (Math.sin((p[0] + p[1]) * 260) > 0.3 ? shadeHair : c.hair), bones: ['head', 'hair1', 'hair2'] })),
+    { shape: cone([0, 1.215, -0.142], [0, 1.19, -0.143], 0.03), color: c.trim, bones: ['hair2'] },
+    { shape: cone([0, 1.19, -0.143], [0, 1.13, -0.146], 0.024, fat(0.008)), color: hair, bones: ['hair2'] },
+    { shape: cone([0, 1.55, 0], [0, 1.43, 0], 0.045, 0.055), color: c.skin, bones: ['neck', 'chest'] },
+    // body: the tunic, belted at the waist and flaring to a skirt
+    { shape: flatten(cone([0, 1.03, 0], [0, 1.38, 0], 0.125, 0.16), 0.66), color: tunic, bones: ['hips', 'spine', 'chest'] },
+    { shape: flatten(cone([0, 1.0, 0], [0, 1.045, 0], 0.135, 0.137), 0.72), color: (p) => (Math.sin(Math.atan2(p[0], p[2]) * 30) > 0.9 ? DARK_LEATHER : LEATHER), bones: ['hips', 'spine'] },
+    { shape: box([0, 1.022, 0.1], [0.03, 0.026, fat(0.012)], 0.006), color: (p) => (Math.abs(p[0]) < 0.014 && Math.abs(p[1] - 1.022) < 0.011 ? DARK_LEATHER : c.trim), bones: ['hips', 'spine'] },
+    { shape: ellipsoid([0.135, 0.97, 0.03], [0.035, 0.05, 0.045]), color: (p) => (p[1] > 0.99 ? DARK_LEATHER : LEATHER), bones: ['hips'] },
+    { shape: cut(flatten(cone([0, 0.99, 0], [0, 0.72, 0], 0.132, 0.2), 0.78), box([0, 0.52, 0], [0.4, 0.21, 0.4])), color: (p, n) => (n[1] < -0.6 && p[1] < 0.745 ? mix(dark, [0, 0, 0], 0.4) : skirt(p)), bones: ['hips', 'lThigh', 'rThigh'] },
+    // a leaf brooch at the throat
+    { shape: ellipsoid([0, 1.405, 0.105], [0.018, 0.024, fat(0.008)]), color: [0.3, 0.9, 0.5], bones: ['chest'], glow: true },
+    // a quiver slung across the back, banded, with three arrows in it
+    { shape: cone([-0.12, 1.06, -0.13], [0.1, 1.5, -0.15], 0.045, 0.05), color: (p) => (Math.abs(p[1] - 1.12) < 0.012 || Math.abs(p[1] - 1.44) < 0.012 ? c.trim : Math.sin(p[1] * 150) > 0.8 ? DARK_LEATHER : LEATHER), bones: ['chest', 'spine'] },
+    ...[[-0.02, 0], [0.012, 0.018], [0.0, -0.02]].flatMap(([dx, dz], k): SculptPart[] => {
+      const a: Vec3 = [0.1 + dx, 1.5, -0.15 + dz], b: Vec3 = [0.14 + dx * 1.6, 1.6 + k * 0.012, -0.156 + dz * 1.6]
+      return [
+        { shape: cone(a, b, fat(0.006)), color: [0.8, 0.7, 0.5], bones: ['chest'], noShadow: true },
+        { shape: ellipsoid(mix(a, b, 0.72), [0.018, 0.034, fat(0.008)]), color: k === 1 ? [0.85, 0.25, 0.2] : WHITE, bones: ['chest'], noShadow: true },
+      ]
+    }),
+  ]
+  for (const [side, x] of SIDES) {
+    const at = (p: Vec3) => sided(x, p)
+    const elbow = at([0.27, 1.17, -0.02]), wrist = at([0.31, 0.94, 0.01])
+    const eye = at([0.033, 1.705, 0.108])
+    parts.push(
+      // eyes: white, a colored iris, a dark pupil; a brow over each
+      { shape: ellipsoid(eye, [0.018, 0.012, fat(0.01)]), color: (p) => { const d = Math.hypot(p[0] - eye[0], p[1] - eye[1]); return d < 0.004 ? [0.03, 0.03, 0.05] : d < 0.0095 ? EYE : WHITE }, bones: ['head'], group: 'eyes' },
+      { shape: cone(at([0.012, 1.734, 0.119]), at([0.056, 1.739, 0.106]), fat(0.006), fat(0.004)), color: mix(c.hair, [0, 0, 0], 0.4), bones: ['head'] },
+      // long pointed ears, sweeping back
+      { shape: flatten(cone(at([0.085, 1.7, 0.0]), at([0.19, 1.81, -0.06]), 0.03, fat(0.005)), 0.5, -0.03), color: (p) => (Math.abs(p[0]) > 0.1 && Math.abs(p[0]) < 0.15 && p[1] < 1.76 ? mix(c.skin, LIPS, 0.4) : c.skin), bones: ['head'] },
+      // shoulder, sleeve, and a bracer of leather with two straps
+      { shape: smooth(0.02, ellipsoid(at([0.175, 1.43, -0.01]), [0.07, 0.065, 0.07]), cone(at([0.2, 1.42, -0.01]), elbow, 0.05, 0.042)), color: (p) => (Math.abs(p[1] - 1.2) < 0.012 ? c.trim : Math.sin(p[1] * 330) > 0.86 ? dark : tunicC), bones: ['chest', `${side}Shoulder`, `${side}Arm`, `${side}Forearm`] },
+      { shape: cone(elbow, wrist, 0.045, 0.036), color: (p) => (p[1] >= 1.08 ? tunicC : Math.abs(p[1] - 1.05) < 0.008 || Math.abs(p[1] - 0.98) < 0.008 ? c.trim : Math.sin(p[1] * 400) > 0.6 ? LEATHER : DARK_LEATHER), bones: [`${side}Arm`, `${side}Forearm`, `${side}Hand`] },
+      { shape: smooth(0.008, ellipsoid(at([0.315, 0.905, 0.015]), [0.022, 0.045, 0.038]), cone(at([0.325, 0.87, 0.02]), at([0.335, 0.795, 0.025]), 0.019, 0.012)), color: (p) => (p[1] < 0.86 && Math.sin(p[2] * 520) > 0.75 ? mix(c.skin, [0, 0, 0], 0.25) : c.skin), bones: [`${side}Hand`, `${side}Fingers`] },
+      { shape: cone(at([0.31, 0.91, 0.04]), at([0.3, 0.86, 0.065]), fat(0.011), fat(0.008)), color: c.skin, bones: [`${side}Hand`] },
+    )
+    const knee = at([0.105, 0.52, 0.015]), ankle = at([0.11, 0.09, -0.02])
+    parts.push(
+      { shape: cone(at([0.09, 0.9, 0]), knee, 0.078, 0.055), color: (p) => (Math.sin(p[1] * 260) > 0.9 ? mix(LEGGINGS, [0, 0, 0], 0.3) : LEGGINGS), bones: ['hips', `${side}Thigh`, `${side}Shin`] },
+      // boots to the knee: a turned-down cuff, laces up the front, a darker foot and a sole
+      { shape: smooth(0.012, cone(knee, ankle, 0.06, 0.042), cone([knee[0], knee[1] - 0.005, knee[2]], [knee[0], knee[1] - 0.06, knee[2]], 0.07, 0.066)), color: (p, n) => (p[1] > 0.455 ? mix(LEATHER, c.trim, p[1] > 0.5 ? 0 : 0.5) : n[2] > 0.55 && Math.abs(Math.abs(p[0]) - 0.108) < 0.02 ? (Math.sin(p[1] * 150) > 0.4 ? c.trim : DARK_LEATHER) : LEATHER), bones: [`${side}Thigh`, `${side}Shin`, `${side}Foot`] },
+      { shape: flatten(smooth(0.012, cone(at([0.11, 0.07, -0.05]), at([0.11, 0.045, 0.12]), 0.046, 0.04), cone(at([0.11, 0.04, 0.11]), at([0.11, 0.034, 0.185]), 0.037, 0.022)), 1), color: (p) => (p[1] < 0.018 ? [0.1, 0.07, 0.05] : DARK_LEATHER), bones: [`${side}Shin`, `${side}Foot`, `${side}Toe`] },
+    )
+    // half the cape: from the shoulder down the back, weighted to its two bones so it sways
+    const top = at([0.0, 1.43, -0.12]), shoulder = at([0.17, 1.44, -0.11])
+    const mid = [at([0.0, 1.05, -0.18]), at([0.22, 1.05, -0.17])] as const
+    const hem = [at([0.0, 0.62, -0.23]), at([0.27, 0.62, -0.2])] as const
+    parts.push({
+      shape: membrane([[top, shoulder, mid[1]], [top, mid[1], mid[0]], [mid[0], mid[1], hem[1]], [mid[0], hem[1], hem[0]]], fat(0.012)),
+      color: (p) => (p[1] < 0.655 ? c.trim : p[1] < 0.72 && Math.sin(p[0] * 130) > 0.2 ? c.trim : Math.sin(p[0] * 75) > 0.8 ? mix(c.cape, [0, 0, 0], 0.3) : c.cape),
+      bones: ['chest', `${side}Cape1`, `${side}Cape2`], group: 'cape', noShadow: true,
+    })
+  }
+  return { bones: BONES, parts, blend: 0.07, light: { ambient: 0.68, shadow: 0.45 } }
+}
+
+/** The detailed elf of the Creature page. */
+export function makeFineElf(count = 40000, look = 'forest') {
+  const c = LOOKS[look] ?? LOOKS.forest
+  const b = sculptToCount((s) => fine(c, s), count, 0.03)
+  return { blobs: b.blobs, skin: b.skin, skeleton: b.skeleton }
+}
+
 /** The arms hang from an A-pose, so every clip starts by bringing them down to the sides. */
 function relax(sk: Skeleton) {
   for (const [s, x] of SIDES) {
@@ -216,11 +330,11 @@ export function elfWave(sk: Skeleton, t: number) {
 export const ELF: Species = {
   id: 'elf',
   name: 'elf',
-  blurb: 'An elf of twenty-nine bones: a spine, hands with fingers, feet with toes, a plait of hair and a cape that sways.',
+  blurb: 'An elf of twenty-nine bones, in a laced tunic with a belt, bracers and boots, with a plait of hair, arrows on the back and a cape that sways.',
   detail: [10000, 40000, 100000, 200000],
   start: 40000,
   looks: Object.entries(LOOKS).map(([id, l]) => ({ id, label: l.label })),
-  make: makeElf,
+  make: makeFineElf,
   moves: [
     { name: 'walk', label: 'Walk', doing: 'walking on the spot', seconds: STRIDE, fps: 30, pose: elfWalk },
     { name: 'wave', label: 'Wave', doing: 'waving', seconds: WAVE, fps: 24, pose: elfWave },
