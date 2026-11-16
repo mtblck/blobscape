@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Orbit } from '../splat-core/view.ts'
-import { STEADY, darkest, type Frame, type PixelLook } from '../splat-core/pixel.ts'
+import { STEADY, countColors, darkest, type Frame, type PixelLook } from '../splat-core/pixel.ts'
 import type { Built } from '../splat-engine/body.ts'
 import { LoadingMark } from '../shared/BlobLoader.tsx'
 import { Button, Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
@@ -12,6 +12,7 @@ import type { CreatureStage } from './creature/stage.ts'
 import { TAB_SECTIONS, Workbench } from '../shared/Workbench.tsx'
 import { DETAIL, PALETTES } from './diorama/scene.ts'
 import { DIORAMAS, type Diorama } from './diorama/scenes.ts'
+import { SceneDetails, kilobytes, type SceneFacts } from './diorama/SceneDetails.tsx'
 import type { Skeleton } from '../splat-engine/rig.ts'
 
 const SIZES = [2, 3, 4, 6]
@@ -49,7 +50,6 @@ async function toPng(f: Frame, scale: number): Promise<Uint8Array> {
  */
 /** What one blob holds: a center, three sizes, a facing, a color and an opacity, each number four bytes. */
 const BLOB_BYTES = (3 + 3 + 4 + 3 + 1) * 4
-const kilobytes = (bytes: number) => `${(bytes / 1024).toLocaleString(undefined, { maximumFractionDigits: bytes < 10240 ? 1 : 0 })}\u00a0KB`
 
 export function PixelDiorama() {
   const h1 = useFocusHeading()
@@ -170,7 +170,8 @@ export function PixelDiorama() {
 
   // the picture's own size: the frame on screen written out as a PNG, one image pixel per art pixel. Reading a frame
   // back costs a little, so it is measured every few seconds, not every frame, and not while the tab is hidden
-  const [png, setPng] = useState<number>()
+  const [png, setPng] = useState<{ bytes: number; used: number }>()
+  const [details, setDetails] = useState(false)
   useEffect(() => {
     setPng(undefined)
     if (!stage || !scene || !pixels) return
@@ -180,12 +181,23 @@ export function PixelDiorama() {
       busy = true
       try {
         const frames = await stage.pixelFrames()
-        if (frames && !gone) { const bytes = (await toPng(frames.art, 1)).length; if (!gone) setPng(bytes) }
+        if (frames && !gone) { const bytes = (await toPng(frames.art, 1)).length; if (!gone) setPng({ bytes, used: countColors(frames.art) }) }
       } catch (e) { console.warn(e) } finally { busy = false }
     }
     const first = setTimeout(measure, 500), id = setInterval(measure, 3000)
     return () => { gone = true; clearTimeout(first); clearInterval(id) }
   }, [stage, scene, pixels, size, look])
+
+  const facts = useMemo<SceneFacts | undefined>(() => {
+    if (!scene || !stage) return
+    const { built, of } = scene
+    return {
+      name: of.label, about: of.about, blobs: built.blobs.count, bones: built.skeleton.count, parts: new Set(built.partOf).size,
+      moves: of.moves, descriptionBytes: of.bytes, lights: of.lights(0).length, loop: of.loop, splatBytes: built.blobs.count * BLOB_BYTES,
+      detail: DETAIL.find((d) => d.id === scene.detail)?.label ?? scene.detail, backend: stage.backend,
+      picture: pixels && art ? { ...art, scale: size, palette: colors, paletteName: palettes.find((p) => p.id === palette)?.label ?? '', motion: rate ? `${rate} fps` : 'Smooth', pngBytes: png?.bytes, used: png?.used } : undefined,
+    }
+  }, [scene, stage, pixels, art, size, colors, palettes, palette, rate, png])
 
   // For verify: the stage and the look in use, without clicking
   useEffect(() => {
@@ -241,6 +253,7 @@ export function PixelDiorama() {
           the pixel size, or switch the pixels off to see the blobs underneath.
         </p>
       </header>
+      {facts && <SceneDetails open={details} onClose={() => setDetails(false)} facts={facts} />}
       <Workbench
         viewLabel="The scene"
         view={<>
@@ -281,8 +294,8 @@ export function PixelDiorama() {
               <p aria-hidden className="pointer-events-none absolute right-14 bottom-2 rounded bg-paper/80 px-1.5 py-0.5 text-xs text-ink-muted">{coarse ? 'drag to orbit · pinch to zoom' : 'drag to orbit · scroll to zoom'}</p>
         </>}
         status={<>
-              <span>{scene ? <><span className="tabular-nums text-ink" data-testid="diorama-blobs">{scene.built.blobs.count.toLocaleString()}</span> blobs on <span className="tabular-nums text-ink">{scene.built.skeleton.count}</span> bones (<span className="tabular-nums text-ink" data-testid="diorama-size">{kilobytes(scene.built.blobs.count * BLOB_BYTES)}</span> of splats){scene.of.bytes ? <>, built from <span className="tabular-nums text-ink" data-testid="diorama-doc-size">{kilobytes(scene.of.bytes)}</span> of description</> : ''}.</> : loadingLabel}</span>
-              <span data-testid="diorama-art">{pixels && art ? <>Drawn at <span className="tabular-nums text-ink">{art.width} × {art.height}</span> pixels{colors.length ? <> in <span className="tabular-nums text-ink">{colors.length}</span> colors</> : ''}{png ? <>: this frame is <span className="tabular-nums text-ink" data-testid="diorama-png-size">{kilobytes(png)}</span> as a PNG</> : ''}.</> : 'Drawn as blobs, at full size.'}</span>
+              <span>{scene ? <><span className="tabular-nums text-ink" data-testid="diorama-blobs">{scene.built.blobs.count.toLocaleString()}</span> blobs<span data-testid="diorama-art">{pixels && art ? <>, drawn at <span className="tabular-nums text-ink">{art.width} × {art.height}</span>{png ? <>, <span className="tabular-nums text-ink" data-testid="diorama-png-size">{kilobytes(png.bytes)}</span> a frame</> : ''}</> : ', drawn as blobs'}</span>.</> : loadingLabel}</span>
+              {facts && <button type="button" onClick={() => setDetails(true)} aria-haspopup="dialog" data-testid="diorama-details-open" className="cursor-pointer text-ink underline decoration-rule underline-offset-2 hover:text-accent">Full details</button>}
         </>}
         tabsLabel="Options"
         tabs={[
