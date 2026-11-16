@@ -47,6 +47,10 @@ async function toPng(f: Frame, scale: number): Promise<Uint8Array> {
  * by the engine's pixel mode (splat-engine/pixelPass.ts): the scene rendered
  * small, snapped to a palette, and scaled up in whole pixels.
  */
+/** What one blob holds: a center, three sizes, a facing, a color and an opacity, each number four bytes. */
+const BLOB_BYTES = (3 + 3 + 4 + 3 + 1) * 4
+const kilobytes = (bytes: number) => `${(bytes / 1024).toLocaleString(undefined, { maximumFractionDigits: bytes < 10240 ? 1 : 0 })}\u00a0KB`
+
 export function PixelDiorama() {
   const h1 = useFocusHeading()
   const canvas = useRef<HTMLCanvasElement>(null)
@@ -258,7 +262,7 @@ export function PixelDiorama() {
               <p aria-hidden className="pointer-events-none absolute right-14 bottom-2 rounded bg-paper/80 px-1.5 py-0.5 text-xs text-ink-muted">{coarse ? 'drag to orbit · pinch to zoom' : 'drag to orbit · scroll to zoom'}</p>
         </>}
         status={<>
-              <span>{scene ? <><span className="tabular-nums text-ink" data-testid="diorama-blobs">{scene.built.blobs.count.toLocaleString()}</span> blobs on <span className="tabular-nums text-ink">{scene.built.skeleton.count}</span> bones.</> : loadingLabel}</span>
+              <span>{scene ? <><span className="tabular-nums text-ink" data-testid="diorama-blobs">{scene.built.blobs.count.toLocaleString()}</span> blobs on <span className="tabular-nums text-ink">{scene.built.skeleton.count}</span> bones, <span className="tabular-nums text-ink" data-testid="diorama-size">{kilobytes(scene.built.blobs.count * BLOB_BYTES)}</span> of splats{scene.of.bytes ? <>, built from <span className="tabular-nums text-ink" data-testid="diorama-doc-size">{kilobytes(scene.of.bytes)}</span> of description</> : ''}.</> : loadingLabel}</span>
               <span data-testid="diorama-art">{pixels && art ? <>Drawn at <span className="tabular-nums text-ink">{art.width} × {art.height}</span> pixels{colors.length ? <> in <span className="tabular-nums text-ink">{colors.length}</span> colors</> : ''}.</> : 'Drawn as blobs, at full size.'}</span>
         </>}
         tabsLabel="Options"
