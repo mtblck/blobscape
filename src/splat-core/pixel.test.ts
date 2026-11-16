@@ -130,3 +130,22 @@ test('pixelArt fills the empty pixels with the sky, top colour to bottom, in pal
   // without a sky the same pixels stay clear
   assert.equal(countSolid(pixelArt(f, { palette: PAL, dither: 0, outline: null, glow: 0 })), 1)
 })
+
+test('a sky with a reach is all its bottom colour below that share of the picture', () => {
+  const f = makeFrame(4, 16)
+  const art = pixelArt(f, { palette: PAL, dither: 0, outline: null, glow: 0, sky: [[250, 240, 200], [20, 16, 24], 0.5] })
+  const at = (x: number, y: number) => [...art.data.subarray((y * 4 + x) * 4, (y * 4 + x) * 4 + 3)]
+  for (let y = 8; y < 16; y++) for (let x = 0; x < 4; x++) assert.deepEqual(at(x, y), [20, 16, 24])
+  assert.ok([0, 1, 2, 3].some((x) => at(x, 0)[0] === 250))
+})
+
+test('a sky that stops short ends flat: its dither is gone by the end of the blend, and a bad reach means the whole way', () => {
+  // a near neighbour of the bottom colour, which the sky's own dither would flip some pixels to
+  const pal: Rgb[] = [[20, 16, 24], [30, 26, 34], [250, 240, 200]]
+  const f = makeFrame(8, 32)
+  const sky = (reach?: number) => pixelArt(f, { palette: pal, dither: 0, outline: null, glow: 0, sky: [[250, 240, 200], [20, 16, 24], reach] })
+  const short = sky(0.5)
+  for (let y = 16; y < 32; y++) for (let x = 0; x < 8; x++) assert.deepEqual([...short.data.subarray((y * 8 + x) * 4, (y * 8 + x) * 4 + 3)], [20, 16, 24])
+  const whole = sky()
+  for (const bad of [0, -1, NaN, 2]) assert.deepEqual(sky(bad).data, whole.data)
+})

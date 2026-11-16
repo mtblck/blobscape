@@ -1,5 +1,5 @@
 import type { Orbit } from '../../splat-core/view.ts'
-import type { Rgb } from '../../splat-core/pixel.ts'
+import type { PixelLook, Rgb } from '../../splat-core/pixel.ts'
 import type { Built } from '../../splat-engine/body.ts'
 import type { PointLight } from '../../splat-engine/engine.ts'
 import type { Skeleton } from '../../splat-engine/rig.ts'
@@ -21,7 +21,7 @@ export interface Diorama {
   loop: number
   /** Its own palette, and what to call it. */
   palette: { label: string; colours: Rgb[] }
-  sky: [Rgb, Rgb]
+  sky: NonNullable<PixelLook['sky']>
   /** How it starts out: the Finish controls. */
   finish: { dither: number; glow: number; outline: boolean; edges: boolean; sky: boolean }
   views: { id: string; label: string; orbit: Orbit }[]

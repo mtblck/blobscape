@@ -89,7 +89,7 @@ test('a compiled scene builds with every part, however small, at any detail', ()
   assert.equal(c.bones[2].parent, 1)
   assert.equal(c.look.palette.length, 4)
   assert.deepEqual(c.look.outline, [16, 16, 24])
-  assert.deepEqual(c.look.sky, [[16, 16, 24], [63, 122, 69]])
+  assert.deepEqual(c.look.sky, [[16, 16, 24], [63, 122, 69], 1])
 })
 
 test('a compiled scene loops: bones and lights after one loop are where they began, and they move in between', () => {

@@ -25,6 +25,8 @@ export interface SceneDoc {
   palette: string[]
   /** The sky behind, top and bottom. Left out, the background is clear. */
   sky?: [string, string]
+  /** How far down the picture the sky's blend runs before it is all the bottom colour: 0.05 to 1, the whole way when left out. */
+  skyReach?: number
   look?: { dither?: number; glow?: number; outline?: boolean; edges?: boolean }
   /** Where the view starts. `swing` rocks it gently from side to side by that many degrees, once a loop. */
   camera: Orbit & { swing?: number }
@@ -129,8 +131,8 @@ const MAX_DEPTH = 6
 const MAX_SCENE_LIGHTS = 4
 /** Simple shapes in the whole scene, however they are joined. */
 const MAX_SHAPES = 600
-/** The most surface a scene's parts may have between them, by their boxes, in square units: a few times the fullest scene we ship. Past it the build takes seconds and the blobs run to millions. */
-const MAX_SURFACE = 150
+/** The most surface a scene's parts may have between them, by their boxes, in square units: a third over the fullest scene we ship (the dragon, about 160). Past it the build takes seconds and the blobs run to millions. */
+const MAX_SURFACE = 200
 const MAX_MOVES_PER_BONE = 6
 /** A value for a message: only what is safe to print (anything can arrive from a prompt). */
 const show = (v: unknown) => (typeof v === 'string' ? `'${v.slice(0, 40)}'` : typeof v === 'number' || typeof v === 'boolean' ? String(v) : v === undefined ? 'nothing' : `a ${Array.isArray(v) ? 'list' : typeof v}`)
@@ -190,6 +192,7 @@ export function checkScene(doc: unknown): string[] {
   }
   hexes(doc.palette, 'palette', 2, MAX_PALETTE_SIZE)
   if (doc.sky !== undefined) hexes(doc.sky, 'sky', 2, 2)
+  opt(doc.skyReach, 'skyReach', 0.05, 1)
   if (doc.look !== undefined) {
     if (!obj(doc.look)) bad('look', 'must be an object')
     else {
@@ -467,7 +470,7 @@ export function compileScene(doc: SceneDoc): CompiledScene {
       glow: doc.look?.glow ?? 1.5,
       outline: doc.look?.outline === false ? null : darkest(palette),
       edges: doc.look?.edges === false ? 0 : 1,
-      sky: doc.sky ? [rgb(doc.sky[0]), rgb(doc.sky[1])] : undefined,
+      sky: doc.sky ? [rgb(doc.sky[0]), rgb(doc.sky[1]), doc.skyReach ?? 1] : undefined,
     },
     spec(spacing) {
       const thin = spacing * 0.75

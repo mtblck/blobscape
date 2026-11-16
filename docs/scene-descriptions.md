@@ -14,7 +14,7 @@ The point is that Claude can write one from a sentence. A scene that is data can
 | --- | --- |
 | `name`, `loop` | A name, and the seconds before everything repeats. |
 | `palette` | 2 to 32 colours, `'#rrggbb'`. The picture uses only these. |
-| `sky` | Top and bottom colours of the backdrop. |
+| `sky` | Top and bottom colours of the backdrop. `skyReach` (0.05 to 1) is how far down the picture the blend runs before it is all the bottom colour. |
 | `light` | The baked sun: where it is, how much light reaches everywhere, how dark shadows are. |
 | `look` | Dither, glow, outline, edge lines. |
 | `camera` | Where the view starts, and optionally a `swing`: degrees (0 to 60) it rocks to either side, once a loop, as the scene plays. |
@@ -44,11 +44,12 @@ Paints: a colour, or `bands`, `bricks`, `hex` (honeycomb, scales, paving), `spec
 
 The dragon scene (`scenes/dragon.ts`) follows a few habits that make a scene read as a single strong image:
 
-- **No sky.** Leave `sky` out and the subject sits on the dark of the page.
+- **A backdrop that stays out of the way.** Leave `sky` out and the subject sits on the dark of the page, or give it a dark `sky` with a short `skyReach`, so most of the picture is the darkest colour and only the top glows.
 - **Few hues.** A dark ramp for the setting, one hue ramp for the subject, and two or three steps of a warm accent used only on light sources.
 - **One big subject.** Build it from many small parts (the dragon is about 140, mostly cones) and let it fill the frame.
 - **A chain of bones for anything that bends.** Each neck bone has the one before as its `parent` and sways a few degrees; the turns add up along the chain, so the head sweeps wide while each joint barely moves. A jaw is a child of the head with one `sway`.
 - **Embers or dust.** A dozen or so tiny `glow` parts with slow `drift` moves give the air depth.
+- **Line a big dark body.** A part is one layer of blobs, and a little of what is behind shows through it: bright things behind a dark part spoil it. Put the same shape, a little smaller, inside it on a still bone of its own (parts on one bone drop cells buried in each other), in a dark colour, with `noShadow`.
 - **Small parts cast no shadow.** Mark fronds, petals, legs and the like `noShadow`: every shadow caster is checked for every lit cell, so a hundred small ones double the build time for shadows nobody sees.
 - **A slow swing of the camera** shows that the scene is solid.
 
