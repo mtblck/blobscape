@@ -14,7 +14,7 @@ export const SITE = {
 /** The Experiments page's intro, shared with its prerendered HTML so the page doesn't shift when the app takes over. */
 export const EXPERIMENTS_INTRO = "Small tools built from the same blobs as the lessons: creatures that move on our own splat engine, a forest that grows as you walk it, a dungeon full of slimes, a watch that keeps time, the training loop that makes a splat, and a way to turn one into pixel art. New ones land here as they're made."
 
-/** The splat experiments: the Experiments page, the front page, the menu and the footer. `needs` is what the browser must have. */
+/** The splat experiments: the Experiments page, the front page and the menu (the footer lists only `NEWEST_EXPERIMENTS`). `needs` is what the browser must have. */
 export const EXPERIMENTS = [
   {
     id: 'creature',
@@ -82,3 +82,6 @@ export const EXPERIMENTS = [
   },
 ] as const
 
+/** The footer's short list: the three newest, newest first. The rest are one click away on the Experiments page (and in the menu and the sitemap), so the column stays the same length. A new experiment goes first and the last one drops off. */
+const NEWEST: (typeof EXPERIMENTS)[number]['id'][] = ['diorama', 'scan', 'dungeon']
+export const NEWEST_EXPERIMENTS = NEWEST.map((id) => EXPERIMENTS.find((e) => e.id === id)!)

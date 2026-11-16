@@ -330,7 +330,7 @@ export function PixelDiorama() {
             that last step.
           </p>
           <p>
-            The campfire, the dragon, the bee and the windmill go one step further: each is only a description, a list of shapes, paints, bones
+            The campfire, the dragon, the bee, the stone hand, the reef and the windmill go one step further: each is only a description, a list of shapes, paints, bones
             and moves with no code of its own, which is the kind of thing Claude can write from a sentence. The engine checks
             the description, then builds and plays it the same way.
           </p>

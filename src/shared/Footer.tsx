@@ -1,6 +1,6 @@
 import { Logo } from './Logo.tsx'
 import { LESSONS, href } from '../blobscape/routes.ts'
-import { EXPERIMENTS, SITE } from '../blobscape/site.ts'
+import { NEWEST_EXPERIMENTS, SITE } from '../blobscape/site.ts'
 
 const FOOT_BASE = 'inline-flex min-h-9 items-center no-underline hover:underline'
 const FOOT_LINK = `${FOOT_BASE} text-ink-muted hover:text-accent`
@@ -23,8 +23,8 @@ export function Footer() {
         </nav>
         <nav aria-label="Experiments" className="flex flex-col gap-1">
           <p className="mb-1 font-display text-base text-ink">Experiments</p>
+          {NEWEST_EXPERIMENTS.map((e) => <a key={e.id} href={e.url} className={FOOT_LINK}>{e.title}</a>)}
           <a href={href({ page: 'experiments' })} className={FOOT_LINK}>All experiments</a>
-          {EXPERIMENTS.map((e) => <a key={e.id} href={e.url} className={FOOT_LINK}>{e.title}</a>)}
         </nav>
         <nav aria-label="About" className="flex flex-col gap-1">
           <p className="mb-1 font-display text-base text-ink">About</p>

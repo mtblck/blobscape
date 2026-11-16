@@ -51,6 +51,7 @@ The dragon scene (`scenes/dragon.ts`) follows a few habits that make a scene rea
 - **Embers or dust.** A dozen or so tiny `glow` parts with slow `drift` moves give the air depth.
 - **Line a big dark body.** A part is one layer of blobs, and a little of what is behind shows through it: bright things behind a dark part spoil it. Put the same shape, a little smaller, inside it on a still bone of its own (parts on one bone drop cells buried in each other), in a dark colour, with `noShadow`.
 - **Small parts cast no shadow.** Mark fronds, petals, legs and the like `noShadow`: every shadow caster is checked for every lit cell, so a hundred small ones double the build time for shadows nobody sees.
+- **A shade for every hue.** A colour in shadow snaps to the nearest palette colour, which is a grey if its own hue has no darker step: give each hue at least two steps. A `glow` part whose colour is already pale goes white: fine for a spark or a bubble, but glow anything that should keep its colour (a crystal, a lamp) in a saturated middle colour.
 - **A slow swing of the camera** shows that the scene is solid.
 
 ## Prompting for one
