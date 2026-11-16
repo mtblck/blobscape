@@ -140,7 +140,25 @@ const solidPixels = (page, sel) => page.evaluate((sel) => {
     if ((await cards.count()) < 4) fails.push('experiments page does not list every experiment')
     else if ((await ex.page.getByRole('banner').getByRole('link', { name: 'Experiments', exact: true }).getAttribute('aria-current')) !== 'page') fails.push('header does not mark Experiments as the current page')
     else ok('header Experiments link opens the experiments page, which lists every experiment')
+    // listed like posts: each card dated, newest first, and the order can be turned round and is kept
+    const listed = () => ex.page.locator('[data-testid=experiment-list] > li').evaluateAll((lis) => lis.map((li) => [li.querySelector('a').textContent.replace(' →', ''), li.querySelector('time')?.dateTime ?? '']))
+    const newest = await listed()
+    await ex.page.getByRole('button', { name: 'Oldest first' }).click()
+    const oldest = await listed()
+    await ex.page.reload()
+    await ex.page.getByRole('button', { name: 'Oldest first', pressed: true }).waitFor({ timeout: 5000 }).catch(() => {})
+    const kept = await listed()
+    const sorted = newest.every((c, i) => /^\d{4}-\d\d-\d\d$/.test(c[1]) && (i === 0 || newest[i - 1][1] >= c[1]))
+    if (newest.length < 8 || !sorted || JSON.stringify(oldest) !== JSON.stringify([...newest].reverse()) || JSON.stringify(kept) !== JSON.stringify(oldest)) fails.push(`experiments page dates: ${JSON.stringify({ newest, oldest: oldest.map((c) => c[0]), kept: kept.map((c) => c[0]) })}`)
+    else ok(`experiments page: ${newest.length} dated cards, newest first (${newest[0][0]}, ${newest[0][1]}), and "Oldest first" turns the list round and is kept`)
+    await ex.page.getByRole('button', { name: 'Newest first' }).click()
     await axe(ex.page, 'experiments page')
+    // an experiment's own page carries the dates too: drawn by the app, and in the HTML a crawler reads
+    const html = await (await fetch(base + '/experiments/creature/')).text()
+    await ex.page.goto(base + '/experiments/fit-a-picture/')
+    const pageDates = await ex.page.getByTestId('page-dates').textContent({ timeout: 10000 }).catch(() => '')
+    if (!/^Published [A-Z][a-z]{2} \d{1,2}, \d{4}( · Updated [A-Z][a-z]{2} \d{1,2}, \d{4})?$/.test(pageDates ?? '') || !/data-testid="page-dates">Published <time datetime="\d{4}-\d\d-\d\d">/.test(html) || !/"datePublished":"\d{4}-\d\d-\d\d","dateModified":"\d{4}-\d\d-\d\d"/.test(html)) fails.push(`experiment page dates: the page reads "${pageDates}", or the prerendered HTML lacks them`)
+    else ok(`an experiment's page says when it was published ("${pageDates}"), and its HTML carries published and updated dates`)
     await ex.ctx.close()
   }
 
