@@ -309,15 +309,14 @@ export function LessonGlyph({ id }: { id: string }) {
       </>)
     case 'morphs':
       return g(<>
-        {/* The same face twice: at rest, then smiling with a puffed cheek */}
-        <Blob x={32} y={36} rx={20} ry={20} r={0} c="cream" />
-        <Blob x={25} y={30} rx={3} ry={3} r={0} c="blue" /><Blob x={39} y={30} rx={3} ry={3} r={0} c="blue" />
-        <path d="M 24 44 H 40" stroke="#6b1f24" strokeWidth="2" fill="none" strokeLinecap="round" />
-        <path d="M 56 36 H 66 m -4 -4 l 4 4 l -4 4" stroke={COLORS.sun} strokeWidth="1.5" fill="none" strokeLinecap="round" />
-        <Blob x={90} y={36} rx={20} ry={20} r={0} c="cream" />
-        <Blob x={105} y={42} rx={9} ry={8} r={0} c="cream" />
-        <Blob x={83} y={30} rx={3} ry={3} r={0} c="blue" /><Blob x={97} y={30} rx={3} ry={3} r={0} c="blue" />
-        <path d="M 81 42 Q 90 51 99 42" stroke="#6b1f24" strokeWidth="2" fill="none" strokeLinecap="round" />
+        {/* The same fish twice: at rest, then puffed up with its spikes out */}
+        <Blob x={14} y={38} rx={5} ry={8} r={0} c="orange" />
+        <Blob x={32} y={38} rx={15} ry={12} r={0} c="sun" />
+        <circle cx="40" cy="34" r="2" fill="#1d2440" />
+        <path d="M 54 38 H 64 m -4 -4 l 4 4 l -4 4" stroke={COLORS.sun} strokeWidth="1.5" fill="none" strokeLinecap="round" />
+        <path d="M 92 12 V 6 M 104 17 L 109 12 M 80 17 L 75 12 M 110 30 L 116 28 M 74 30 L 68 28 M 110 46 L 116 49 M 74 46 L 68 49 M 104 58 L 108 63 M 80 58 L 76 63 M 92 62 V 68" stroke={COLORS.cream} strokeWidth="2" strokeLinecap="round" />
+        <Blob x={92} y={38} rx={21} ry={21} r={0} c="sun" />
+        <circle cx="101" cy="32" r="2.2" fill="#1d2440" />
       </>)
     case 'shoot':
       return g(<>

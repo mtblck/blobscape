@@ -1,45 +1,45 @@
 import { useMemo, useState } from 'react'
 import type { Blobs } from '../../splat-core/blobs.ts'
 import type { Orbit } from '../../splat-core/view.ts'
-import { BLINK_STEPS, cheekSpread, lidDip, makeFace, worstLidDip } from '../../splat-engine/face.ts'
 import { applyMorphs } from '../../splat-engine/morph.ts'
+import { TAIL_STEPS, flankSpread, makePuffer, shortestTail, spikeLength, tailLength } from '../../splat-engine/puffer.ts'
 import { Chip, Field, Slider } from '../../shared/ui.tsx'
 import { LessonShell } from '../Shell.tsx'
 import { LESSON_GOALS } from '../routes.ts'
 import { Viewport, ZoomBar } from '../Viewport.tsx'
 import { useGoals } from '../progress.ts'
 
-const START: Orbit = { target: [0, 1, 0], distance: 3.4, azimuth: 28, elevation: 6 }
-/** Each half is narrow on a phone, so stand further back to fit the face. */
-const start = (): Orbit => (typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches ? { ...START, distance: 5 } : START)
+const START: Orbit = { target: [-0.15, 1, 0], distance: 3.8, azimuth: 35, elevation: 12 }
+/** Each half is narrow on a phone, so stand further back to fit the fish. */
+const start = (): Orbit => (typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches ? { ...START, distance: 5.6 } : START)
 
-const STEP_LABEL: Record<number, string> = { 1: '1: shut only', 2: '2', 4: '4: three in between' }
+const STEP_LABEL: Record<number, string> = { 1: '1: swung only', 2: '2', 4: '4: three in between' }
 
 export function Morphs() {
   const [orbit, setOrbit] = useState<Orbit>(start)
-  const [smile, setSmile] = useState(0)
   const [puff, setPuff] = useState(0)
-  const [blink, setBlink] = useState(0)
+  const [spikes, setSpikes] = useState(0)
+  const [swing, setSwing] = useState(0)
   const [steps, setSteps] = useState<number>(4)
 
-  const face = useMemo(() => makeFace(), [])
-  const rest = face.body.blobs
+  const fish = useMemo(() => makePuffer(), [])
+  const rest = fish.body.blobs
   const moved = useMemo(() => rest.clone(), [rest])
   const shaped = useMemo(() => rest.clone(), [rest])
-  const lid = face.blinks[BLINK_STEPS.indexOf(steps as (typeof BLINK_STEPS)[number])]
-  const { version, spread, dip, worst } = useMemo(() => {
-    const morphs = [face.smile, face.puff, lid]
-    const weights = [smile, puff, blink]
+  const tail = fish.tails[TAIL_STEPS.indexOf(steps as (typeof TAIL_STEPS)[number])]
+  const { version, spread, length, least } = useMemo(() => {
+    const morphs = [fish.puff, fish.spikes, tail]
+    const weights = [puff, spikes, swing]
     applyMorphs(rest, morphs, weights, moved, 'centers')
     applyMorphs(rest, morphs, weights, shaped, 'shape')
-    return { version: Math.random(), spread: cheekSpread(face, moved), dip: lidDip(face, lid, blink), worst: worstLidDip(face, lid) }
-  }, [face, rest, moved, shaped, lid, smile, puff, blink])
+    return { version: Math.random(), spread: flankSpread(fish, moved), length: tailLength(fish, tail, swing), least: shortestTail(fish, tail) }
+  }, [fish, rest, moved, shaped, tail, puff, spikes, swing])
 
-  const half = blink >= 0.3 && blink <= 0.7
+  const half = swing >= 0.3 && swing <= 0.7
   const done = useGoals('morphs', {
-    gaps: puff >= 0.9 && spread >= 1.5,
-    frown: smile <= -0.5,
-    lids: steps === 1 && half && dip > 0.1,
+    spikes: spikes >= 0.9,
+    thin: puff <= -0.4,
+    tail: steps === 1 && half && length < 0.7,
   })
 
   const view = (blobs: Blobs, label: string, title: string, testId: string) => (
@@ -49,50 +49,51 @@ export function Morphs() {
     </figure>
   )
   const pct = (v: number) => `${Math.round(v * 100)}%`
-  const doing = `${smile > 0.05 ? 'smiling' : smile < -0.05 ? 'frowning' : 'at rest'}${puff > 0.05 ? ', cheeks puffed' : ''}${blink > 0.05 ? ', eyes closing' : ''}`
+  const doing = `${puff > 0.05 ? 'puffed up' : puff < -0.05 ? 'sucked thin' : 'at rest'}${spikes > 0.05 ? ', spikes out' : ''}${swing > 0.05 ? ', tail swung round' : ''}`
 
   return (
     <LessonShell
       id="morphs"
-      intro={<p>A face has almost no joints, yet it smiles, puffs and blinks. Here is a head with no moving bones at all. What moves its blobs, and what goes wrong if only their centers move?</p>}
+      intro={<p>A pufferfish swells to twice its size and bristles with spikes, and no bone could do either. Here is one with no moving bones at all. What moves its blobs, and what goes wrong if only their centers move?</p>}
       view={
         <div className="relative h-full">
           <div className="grid h-full grid-cols-2 divide-x divide-rule-soft">
-            {view(moved, `A round face made of blobs, ${doing}. Only the blobs' centers have moved. Drag or use the arrow keys to orbit.`, 'Move the centers', 'moved-view')}
-            {view(shaped, `The same face, ${doing}. Each blob has also stretched and turned with the skin under it. Drag or use the arrow keys to orbit.`, 'Move and reshape', 'shaped-view')}
+            {view(moved, `A pufferfish made of blobs, ${doing}. Only the blobs' centers have moved. Drag or use the arrow keys to orbit.`, 'Move the centers', 'moved-view')}
+            {view(shaped, `The same pufferfish, ${doing}. Each blob has also stretched and turned with the skin under it. Drag or use the arrow keys to orbit.`, 'Move and reshape', 'shaped-view')}
           </div>
           <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => setOrbit(start)} />
         </div>
       }
       caption={
         <p data-testid="morph-readout">
-          Blobs on a cheek sit <span className="tabular-nums text-ink">{spread.toFixed(1)}×</span> as far apart as at rest.
-          The lids are sunk <span className="tabular-nums text-ink">{pct(dip)}</span> of the way into the eyes now, and{' '}
-          <span className="tabular-nums text-ink">{pct(worst)}</span> at the worst point of a blink.
+          Blobs on the body sit <span className="tabular-nums text-ink">{spread.toFixed(1)}×</span> as far apart as built, and along a spike{' '}
+          <span className="tabular-nums text-ink">{spikeLength(spikes).toFixed(1)}×</span>.
+          The tail is <span className="tabular-nums text-ink">{pct(length)}</span> of its length now, and{' '}
+          <span className="tabular-nums text-ink">{pct(least)}</span> at the shortest point of its swing.
         </p>
       }
       groups={[
         {
-          id: 'face',
-          title: 'Face',
+          id: 'body',
+          title: 'Body',
           note: 'each slider is one morph',
           content: (
             <div className="flex flex-col gap-3">
-              <Slider label="Smile" value={smile} min={-1} max={1} step={0.05} onChange={setSmile} format={(v) => pct(v)} />
-              <Slider label="Puff" value={puff} min={0} max={1} step={0.05} onChange={setPuff} format={(v) => pct(v)} />
+              <Slider label="Puff" value={puff} min={-0.5} max={1} step={0.05} onChange={setPuff} format={(v) => pct(v)} />
+              <Slider label="Spikes" value={spikes} min={0} max={1} step={0.05} onChange={setSpikes} format={(v) => pct(v)} />
             </div>
           ),
         },
         {
-          id: 'eyes',
-          title: 'Eyes',
-          note: 'the lids turn round the eyeballs',
+          id: 'tail',
+          title: 'Tail',
+          note: 'it swings round to one side',
           content: (
             <div className="flex flex-col gap-3">
-              <Slider label="Blink" value={blink} min={0} max={1} step={0.05} onChange={setBlink} format={(v) => pct(v)} />
-              <Field label="Shapes for the blink">
+              <Slider label="Swing" value={swing} min={0} max={1} step={0.05} onChange={setSwing} format={(v) => pct(v)} />
+              <Field label="Shapes for the swing">
                 <div className="flex flex-wrap gap-1.5">
-                  {BLINK_STEPS.map((n) => <Chip key={n} active={steps === n} onClick={() => setSteps(n)}>{STEP_LABEL[n]}</Chip>)}
+                  {TAIL_STEPS.map((n) => <Chip key={n} active={steps === n} onClick={() => setSteps(n)}>{STEP_LABEL[n]}</Chip>)}
                 </div>
               </Field>
             </div>
@@ -115,21 +116,19 @@ export function Morphs() {
         <>
           <p>
             A bone carries its blobs along rigidly. A morph gives every blob a small change of its own, and one slider scales all of
-            them together. Changes add up, so a smile and a puff mix freely, and a negative amount runs one backward: the frown is
-            the smile's numbers with a minus sign.
+            them together. Changes add up, so the puff and the spikes mix freely, and a negative amount runs one backward: the thin
+            fish is the puff's numbers with a minus sign.
           </p>
           <p>
             On a mesh a morph only moves points, and the triangles between them stretch for free. Blobs have no triangles. Move just
-            the centers and a swelling cheek is the same small blobs spread thinner, which is the left face. So each blob also keeps
-            how the surface round it stretches and turns, and reshapes itself to match: the right face. A small change hides the
-            fault, because blobs overlap enough to cover a little stretch. That is why the smile looks the same on both sides
-            and the puff does not.
+            the centers and a spike seven times as long is the same few small blobs in a dotted line, which is the left fish. So each
+            blob also keeps how the surface round it stretches and turns, and reshapes itself to match: the right fish.
           </p>
           <p>
-            A morph is a straight line from one shape to the other. That suits a cheek, and it fails a lid, which has to travel
-            round a ball. With only its shut shape the lid cuts straight through the eye and comes out the front. The blink here
-            starts with four shapes, which bend the path round, each at the price of another full set of numbers. A bone would
-            turn the lid exactly, which is why faces in games use both.
+            A morph is a straight line from one shape to the other. That suits a swelling body, and it fails a tail, which has to
+            swing round in an arc. With only its swung shape the tail takes the short cut and shrinks on the way. The swing here
+            starts with four shapes, which bend the path round, each at the price of another full set of numbers. A bone would turn
+            the tail exactly, which is why creatures use both.
           </p>
         </>
       }
