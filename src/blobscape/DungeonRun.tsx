@@ -31,7 +31,7 @@ interface Hud {
 const START: Hud = { hp: MAX_HP, mp: MAX_MP, wave: 1, score: 0, alive: 0, banner: null, down: false, blobs: 0, fps: 0 }
 
 /**
- * Dungeon Run: the elf, now with a sword and a hand full of magic, in a
+ * Dungeon Run: the elf, now with a sword and a hand full of fire and frost, in a
  * torchlit hall that slimes of five colors hop into, wave after wave.
  * Health and magic show as bars over the view. One scene on Blobscape's own
  * splat engine; the slimes burst into splats.
@@ -79,6 +79,7 @@ export function DungeonRun() {
               const hp = s.dungeon?.game.hero.hp ?? 0
               if (hp > 0 && hp < 30 && hp + e.damage >= 30) announce('Health low.')
             }
+            if (e.type === 'scorch') setHurts((n) => n + 1)
             const line = say(e)
             if (line) announce(line)
             if (e.type === 'cleared' || e.type === 'down') setBest((b) => Math.max(b, e.type === 'cleared' ? e.wave : e.wave - 1))
@@ -111,7 +112,7 @@ export function DungeonRun() {
   // --- input: keys, the thumb stick and the two buttons all feed one input
   const keys = useRef(new Set<string>())
   const stick = useRef({ forward: 0, turn: 0 })
-  const held = useRef({ swing: false, cast: false })
+  const held = useRef({ swing: false, cast: false, frost: false })
   const stageRef = useRef(stage)
   stageRef.current = stage
   const push = () => {
@@ -122,7 +123,7 @@ export function DungeonRun() {
     const turn = (k.has('r') ? 1 : 0) - (k.has('l') ? 1 : 0) + stick.current.turn
     stage.input = {
       forward: Math.max(-1, Math.min(1, forward)), turn: Math.max(-1, Math.min(1, turn)),
-      swing: k.has('swing') || held.current.swing, cast: k.has('cast') || held.current.cast,
+      swing: k.has('swing') || held.current.swing, cast: k.has('cast') || held.current.cast, frost: k.has('frost') || held.current.frost,
     }
   }
   const pausedRef = useRef(paused)
@@ -141,7 +142,7 @@ export function DungeonRun() {
   useEffect(() => {
     const KEYS: Record<string, string> = {
       ArrowUp: 'f', KeyW: 'f', ArrowDown: 'b', KeyS: 'b', ArrowLeft: 'l', KeyA: 'l', ArrowRight: 'r', KeyD: 'r',
-      Space: 'swing', KeyJ: 'swing', KeyK: 'cast', KeyE: 'cast',
+      Space: 'swing', KeyJ: 'swing', KeyK: 'cast', KeyE: 'cast', KeyL: 'frost', KeyQ: 'frost',
     }
     // keys play from anywhere on the page, except where they already mean something (typing, sliders, tabs, a focused button for Space)
     const mine = (e: KeyboardEvent) => {
@@ -168,12 +169,12 @@ export function DungeonRun() {
       if (!k) return
       e.preventDefault()
       if (pausedRef.current) return
-      if (k === 'swing' || k === 'cast') stage?.tap(k)
+      if (k === 'swing' || k === 'cast' || k === 'frost') stage?.tap(k)
       keys.current.add(k)
       push()
     }
     const up = (e: KeyboardEvent) => { const k = KEYS[e.code]; if (k && keys.current.delete(k)) push() }
-    const clear = () => { keys.current.clear(); stick.current = { forward: 0, turn: 0 }; held.current = { swing: false, cast: false }; push() }
+    const clear = () => { keys.current.clear(); stick.current = { forward: 0, turn: 0 }; held.current = { swing: false, cast: false, frost: false }; push() }
     // leaving the tab or the window pauses, so the slimes don't win while you're away
     const playing = () => stageRef.current?.dungeon?.game.state === 'playing'
     const leave = () => { clear(); if (playing()) setPaused(true) }
@@ -200,7 +201,7 @@ export function DungeonRun() {
   const backend = stage ? (stage.backend === 'webgpu' ? 'WebGPU' : 'WebGL 2') : 'WebGPU or WebGL 2'
   const loading = !failed && (!drawn || !!busy)
   const loadingLabel = busy ?? (stage ? 'Lighting the torches…' : 'Starting the splat engine…')
-  const hold = (what: 'swing' | 'cast', on: boolean) => {
+  const hold = (what: 'swing' | 'cast' | 'frost', on: boolean) => {
     held.current[what] = on
     if (on) stage?.tap(what)
     push()
@@ -212,8 +213,8 @@ export function DungeonRun() {
       <header className="flex flex-wrap items-end justify-between gap-x-8 gap-y-2 pt-4 pb-6">
         <h1 ref={h1} tabIndex={-1} className="font-display text-4xl outline-none sm:text-5xl">Dungeon Run</h1>
         <p className="max-w-xl text-lg text-ink-muted">
-          The elf has a sword and a hand full of magic, and the dungeon has slimes. Five colors of them hop in, wave after wave,
-          and burst into splats when you win.
+          The elf has a sword and a hand full of fire and frost, and the dungeon has slimes. Five colors of them hop in, wave
+          after wave, and burst into splats when you win.
         </p>
       </header>
       <Workbench
@@ -224,7 +225,7 @@ export function DungeonRun() {
                 ref={canvas}
                 role="application"
                 aria-roledescription="3D game"
-                aria-label="The elf in a torchlit dungeon hall, seen from behind. Arrow keys or W, A, S and D run and turn; Space or J swings the sword; K or E casts magic; P pauses."
+                aria-label="The elf in a torchlit dungeon hall, seen from behind. Arrow keys or W, A, S and D run and turn; Space or J swings the sword; K or E throws fire, which spreads over the floor and burns; L or Q throws frost, which spreads and slows; P pauses."
                 tabIndex={0}
                 data-testid="dungeon-view"
                 className="absolute inset-0 h-full w-full outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
@@ -246,16 +247,21 @@ export function DungeonRun() {
                 <>
                   <Stick onChange={(v) => { stick.current = v; push() }} />
                   <div className="absolute right-3 bottom-3 flex items-end gap-2.5">
-                    <ActionButton label="Magic" sub={`${SPELL_COST} magic`} tone="magic" onHold={(on) => hold('cast', on)} disabled={hud.mp < SPELL_COST}>
-                      <path d="M12 2l2.2 6.3L20.5 9l-5 4.1L17 20l-5-3.7L7 20l1.5-6.9L3.5 9l6.3-.7z" />
-                    </ActionButton>
+                    <div className="grid gap-2">
+                      <ActionButton label="Frost" sub={`${SPELL_COST} magic`} tone="frost" onHold={(on) => hold('frost', on)} disabled={hud.mp < SPELL_COST}>
+                        {[0, 60, 120].map((a) => <path key={a} transform={`rotate(${a} 12 12)`} d="M11 2h2v2.6l1.8-1.8 1.4 1.4L13 7.4v9.2l3.2 3.2-1.4 1.4-1.8-1.8V22h-2v-2.6l-1.8 1.8-1.4-1.4L11 16.6V7.4L7.8 4.2l1.4-1.4L11 4.6z" />)}
+                      </ActionButton>
+                      <ActionButton label="Fire" sub={`${SPELL_COST} magic`} tone="fire" onHold={(on) => hold('cast', on)} disabled={hud.mp < SPELL_COST}>
+                        <path d="M12 2c1 4 6 6.5 6 12a6 6 0 0 1-12 0c0-2.5 1.2-4.3 2.5-5.8.300 1.7 1 2.6 2 3C10.3 8 10.8 5 12 2z" />
+                      </ActionButton>
+                    </div>
                     <ActionButton label="Sword" tone="sword" big onHold={(on) => hold('swing', on)}>
                       <path d="M19 2h3v3L10.5 16.5l-3-3zM6.3 13.7l4 4-1.4 1.4-1.3-1.3-2.8 2.8-1.4-1.4 2.8-2.8-1.3-1.3z" />
                     </ActionButton>
                   </div>
                   {!coarse && (
                     <p aria-hidden className="pointer-events-none absolute bottom-3 left-1/2 hidden -translate-x-1/2 rounded-full bg-paper/80 px-2.5 py-0.5 text-xs text-ink backdrop-blur-sm md:block">
-                      WASD to run · Space to swing · K for magic · P to pause
+                      WASD to run · Space to swing · K for fire · L for frost · P to pause
                     </p>
                   )}
                 </>
@@ -296,6 +302,10 @@ export function DungeonRun() {
                   <Button small onClick={() => (paused ? resume() : setPaused(true))} disabled={hud.down}>{paused ? 'Carry on' : 'Pause'}</Button>
                   <Button small onClick={restart}>Start again</Button>
                 </div>
+                <p className="text-xs text-ink-faint">
+                  Fire spreads over the floor for a moment and burns whatever stands in it, you included, then leaves the stone
+                  scorched. Frost spreads further, lies longer and slows whatever crosses it. Where the two meet they cancel.
+                </p>
                 <p className="text-xs text-ink-faint">Gold slimes are rare and quick. Bursting one gives back {GOLD_HEAL} health and some magic.</p>
               </div>
             ),
@@ -348,8 +358,8 @@ export function DungeonRun() {
         <div className="mt-8 max-w-[36em] space-y-4 text-lg leading-relaxed text-ink-muted lg:col-span-7 lg:mt-0 lg:text-xl">
           <p>
             Under the blobs the game is flat and simple. The hero, each slime and each pillar is a circle on the floor. A sword
-            swing hits any slime whose circle comes within reach in a wedge in front of the hero, and a bolt of magic hits the
-            first circle it flies into. Slimes push each other apart, so they crowd round you instead of piling up. None of this
+            swing hits any slime whose circle comes within reach in a wedge in front of the hero, and a bolt of fire or frost hits
+            the first circle it flies into. Slimes push each other apart, so they crowd round you instead of piling up. None of this
             looks at a single blob, which is why it stays quick with a hundred thousand of them on screen.
           </p>
           <p>
@@ -360,10 +370,18 @@ export function DungeonRun() {
             hall together.
           </p>
           <p>
+            The floor is a grid of half-meter cells, each of which can burn or freeze. Where a bolt lands a patch catches, and
+            ten times a second each lit cell may pass it on to a neighbor, a few cells out and no further. Fire burns for a
+            couple of seconds and leaves the stone scorched, so it can't catch again for a while; frost lies for longer and then
+            melts; where they meet, one puts the other out. The game only asks what a circle is standing on. To show it, the
+            flagstones' own blobs are recolored whenever the grid changes, and a dozen flames and a few clumps of ice, built
+            once and kept at no size, are stood on the hottest and coldest cells.
+          </p>
+          <p>
             Light comes two ways. Baked, the torchlight is worked into the stone's color when the hall is built, so it costs
             nothing to draw. Live, every blob is lit afresh each frame by up to sixteen lights: the eight torches, flickering with
-            their flames, the orb in the hero's hand (dimmer as the magic runs down), each bolt as it flies, and a flash of color
-            as a slime bursts. A blob is a flat disc, so it knows which way it lies: its thinnest axis. Light is strongest where a
+            their flames, the orb in the hero's hand (dimmer as the magic runs down), each bolt as it flies, the flames on the
+            floor, and a flash of color as a slime bursts. A blob is a flat disc, so it knows which way it lies: its thinnest axis. Light is strongest where a
             disc turns square to it and falls away with distance. A disc doesn't know which face is its outside, so both faces
             catch the light, which is right for floors and walls and a little soft on round things. Bones are the subject of the <a href={href({ page: 'lesson', id: 'one-bone' })} className="underline decoration-rule underline-offset-2 hover:text-accent">rigs lessons</a>,
             and the slimes' colors come from blobs adding up, which is <a href={href({ page: 'lesson', id: 'order' })} className="underline decoration-rule underline-offset-2 hover:text-accent">Order matters</a>.
@@ -382,6 +400,7 @@ function say(e: GameEvent): string | null {
     case 'down': return `You were slimed on wave ${e.wave}. Press R to try again.`
     case 'burst': return e.kind === 'gold' ? 'A gold slime burst: health and magic back.' : null
     case 'fizzle': return 'Not enough magic.'
+    case 'scorch': return 'You are standing in fire.'
     default: return null
   }
 }
@@ -414,7 +433,7 @@ function Bar({ label, value, max, color, low, children }: { label: string; value
 }
 
 /** A round button over the view for touch (and mouse): press and hold to keep swinging. Keys do the same. */
-function ActionButton({ label, sub, tone, big, disabled, onHold, children }: { label: string; sub?: string; tone: 'sword' | 'magic'; big?: boolean; disabled?: boolean; onHold: (on: boolean) => void; children: ReactNode }) {
+function ActionButton({ label, sub, tone, big, disabled, onHold, children }: { label: string; sub?: string; tone: 'sword' | 'fire' | 'frost'; big?: boolean; disabled?: boolean; onHold: (on: boolean) => void; children: ReactNode }) {
   const id = useRef<number | null>(null)
   const end = (e: PointerEvent) => { if (id.current === e.pointerId) { id.current = null; onHold(false) } }
   return (
@@ -423,8 +442,8 @@ function ActionButton({ label, sub, tone, big, disabled, onHold, children }: { l
       aria-label={sub ? `${label} (costs ${sub})` : label}
       aria-disabled={disabled || undefined}
       data-testid={`dungeon-${tone}`}
-      className={`grid touch-none place-items-center rounded-full border shadow-lg backdrop-blur-sm transition-transform select-none active:scale-95 ${big ? 'size-20' : 'size-16'} ${
-        tone === 'sword' ? 'border-white/40 bg-white/20 text-white hover:bg-white/30' : 'border-sky-200/50 bg-sky-400/25 text-sky-100 hover:bg-sky-400/35'
+      className={`grid touch-none place-items-center rounded-full border shadow-lg backdrop-blur-sm transition-transform select-none active:scale-95 ${big ? 'size-20' : 'size-14'} ${
+        tone === 'sword' ? 'border-white/40 bg-white/20 text-white hover:bg-white/30' : tone === 'fire' ? 'border-orange-200/50 bg-orange-500/30 text-orange-100 hover:bg-orange-500/40' : 'border-sky-200/50 bg-sky-400/25 text-sky-100 hover:bg-sky-400/35'
       } ${disabled ? 'opacity-50' : 'cursor-pointer'}`}
       onPointerDown={(e) => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); id.current = e.pointerId; onHold(true) }}
       onPointerUp={end}

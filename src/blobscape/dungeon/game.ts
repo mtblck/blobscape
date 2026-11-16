@@ -1,9 +1,14 @@
 import { rng } from '../../splat-engine/body.ts'
+import { Ground, type Element } from './ground.ts'
+
+export type { Element } from './ground.ts'
 
 /**
  * Dungeon Run's rules, without any drawing: a square hall with four pillars
  * and three doors, a hero who runs, swings a sword and casts bolts of magic,
  * and slimes that come through the doors in waves and hop toward the hero.
+ * A bolt is fire or frost, and where it lands the floor catches and spreads
+ * (ground.ts): fire burns whatever stands in it, frost slows it.
  * Everything is plain numbers, stepped by `step(dt, input)`, so it runs in
  * Node tests; the stage poses the blobs from what it finds here.
  *
@@ -77,6 +82,17 @@ export const BOLT_SPEED = 9
 const BOLT_LIFE = 1.5
 export const BOLT_POP = 0.45
 export const BOLTS = 4
+/** What a bolt takes off the slime it hits: fire hits harder, frost chills. */
+export const BOLT_HARM: Record<Element, number> = { fire: 2, frost: 1 }
+/** Seconds a slime stays chilled after a frost bolt or leaving frozen floor, and how much of its speed it keeps. */
+export const CHILL = 3
+export const CHILL_SPEED = 0.4
+/** Standing in fire: a slime loses a point of health this often; the hero loses HERO_BURN health this often. */
+export const BURN_EVERY = 0.7
+export const HERO_BURN = 4
+const HERO_BURN_EVERY = 0.5
+/** The share of its speed the hero keeps on frozen floor. */
+const ICE_SPEED = 0.65
 /** Seconds a slime takes to grow in at a door, and to burst. */
 export const SPAWN = 0.6
 export const BURST = 1.6
@@ -94,7 +110,10 @@ export interface Input {
   turn: number
   /** Held or tapped since the last step: start a swing / a cast when free. */
   swing?: boolean
+  /** A bolt of fire. */
   cast?: boolean
+  /** A bolt of frost. */
+  frost?: boolean
 }
 
 export interface Hero {
@@ -112,8 +131,12 @@ export interface Hero {
   /** Counts swings, so a slime is hit once per swing. */
   swingN: number
   castT: number
+  /** What the cast under way (or the last one) throws. */
+  spell: Element
   /** Seconds of grace left after being hurt. */
   hurt: number
+  /** Seconds until fire underfoot burns again. */
+  burn: number
 }
 
 export interface Slime {
@@ -135,6 +158,10 @@ export interface Slime {
   hitBy: number
   /** Seconds since it was last hit (for a wobble), large when never. */
   struck: number
+  /** Seconds of chill left: it moves slowly while above 0. */
+  chill: number
+  /** Seconds until fire underfoot burns it again. */
+  burn: number
 }
 
 export interface Bolt {
@@ -147,11 +174,14 @@ export interface Bolt {
   t: number
   popped: boolean
   target: Slime | null
+  element: Element
 }
 
 export type GameEvent =
   | { type: 'swing' } | { type: 'cast' } | { type: 'fizzle' }
-  | { type: 'hit'; kind: SlimeKind; by: 'sword' | 'magic' }
+  | { type: 'hit'; kind: SlimeKind; by: 'sword' | 'magic' | 'fire' }
+  /** A bolt landed and the floor caught; the hero stood in fire. */
+  | { type: 'lit'; element: Element } | { type: 'scorch'; damage: number }
   | { type: 'burst'; kind: SlimeKind }
   | { type: 'hurt'; kind: SlimeKind; damage: number }
   | { type: 'wave'; wave: number } | { type: 'cleared'; wave: number } | { type: 'down'; wave: number }
@@ -160,6 +190,8 @@ export class Game {
   hero: Hero = newHero()
   slimes: Slime[] = []
   bolts: Bolt[] = []
+  /** The floor: what burns and what is frozen. */
+  readonly ground: Ground
   wave = 0
   /** Slimes burst, all told. */
   score = 0
@@ -174,12 +206,14 @@ export class Game {
   private rand: () => number
   private lastSwing = false
   private lastCast = false
+  private lastFrost = false
   /** What happened in the last step, for sounds, words and effects. */
   events: GameEvent[] = []
 
   constructor(difficulty: Difficulty = 'normal', seed = 1) {
     this.difficulty = difficulty
     this.rand = rng(seed * 7919 + 1)
+    this.ground = new Ground(HALF, PILLARS, 0.5, seed)
     this.startWave(1)
   }
 
@@ -188,6 +222,7 @@ export class Game {
     this.hero = newHero()
     this.slimes = []
     this.bolts = []
+    this.ground.clear()
     this.score = 0
     this.state = 'playing'
     this.startWave(1)
@@ -217,6 +252,8 @@ export class Game {
     }
     this.lastSwing = !!input.swing
     this.lastCast = !!input.cast
+    this.lastFrost = !!input.frost
+    this.ground.step(dt)
     this.moveBolts(dt)
     this.moveSlimes(dt)
     this.spawn()
@@ -228,7 +265,8 @@ export class Game {
     // turning is slower mid-swing, so a swing commits
     const busy = h.swingT >= 0 ? 0.45 : 1
     h.heading -= input.turn * TURN_RATE * dt * busy
-    const want = (input.forward >= 0 ? input.forward * RUN_SPEED : input.forward * BACK_SPEED) * (h.swingT >= 0 || h.castT >= 0 ? 0.4 : 1)
+    const under = this.ground.at(h.x, h.z)
+    const want = (input.forward >= 0 ? input.forward * RUN_SPEED : input.forward * BACK_SPEED) * (h.swingT >= 0 || h.castT >= 0 ? 0.4 : 1) * (under.frost > 0.4 ? ICE_SPEED : 1)
     h.speed += (want - h.speed) * (1 - Math.exp(-dt * 8))
     const fade = Math.exp(-dt * 6)
     h.vx *= fade
@@ -238,13 +276,26 @@ export class Game {
     ;[h.x, h.z] = keepIn(h.x, h.z, HERO_R)
     h.hurt = Math.max(0, h.hurt - dt)
     h.mp = Math.min(MAX_MP, h.mp + MP_REGEN * dt)
+    // the hero's own fire burns too: a little, often, with no knock-back and no grace
+    if (under.fire > 0.5) {
+      h.burn -= dt
+      if (h.burn <= 0) {
+        h.burn = HERO_BURN_EVERY
+        const dmg = Math.max(1, Math.round(HERO_BURN * HARM[this.difficulty]))
+        h.hp = Math.max(0, h.hp - dmg)
+        this.events.push({ type: 'scorch', damage: dmg })
+        if (h.hp <= 0) { this.state = 'down'; this.banner = null; this.events.push({ type: 'down', wave: this.wave }) }
+      }
+    } else h.burn = 0.25
   }
 
   private attack(dt: number, input: Input) {
     const h = this.hero
     // a fresh press starts a swing at once; held, it swings again as soon as the last one ends
     const swing = input.swing && (!this.lastSwing || h.swingT < 0)
-    const cast = input.cast && (!this.lastCast || h.castT < 0)
+    // fire and frost share the casting hand: whichever is pressed (fire, if both)
+    const fire = !!input.cast && (!this.lastCast || h.castT < 0), ice = !!input.frost && (!this.lastFrost || h.castT < 0)
+    const cast = fire || ice
     if (swing && h.swingT < 0 && h.castT < 0) {
       h.swingT = 0
       h.swingN++
@@ -255,11 +306,12 @@ export class Game {
     } else if (cast && h.castT < 0 && h.swingT < 0) {
       if (h.mp >= SPELL_COST) {
         h.castT = 0
+        h.spell = fire ? 'fire' : 'frost'
         h.mp -= SPELL_COST
         const near = this.nearest(12, 0.7)
         if (near) h.heading = Math.atan2(near.x - h.x, near.z - h.z)
         this.events.push({ type: 'cast' })
-      } else if (!this.lastCast) this.events.push({ type: 'fizzle' })
+      } else if (fire ? !this.lastCast : !this.lastFrost) this.events.push({ type: 'fizzle' })
     }
     if (h.swingT >= 0) {
       const was = h.swingT
@@ -309,7 +361,7 @@ export class Game {
       slot = old.slot
     }
     const s = Math.sin(h.heading), c = Math.cos(h.heading)
-    this.bolts.push({ slot, x: h.x + s * 0.5, z: h.z + c * 0.5, heading: h.heading, t: 0, popped: false, target: this.nearest(12, 0.7) })
+    this.bolts.push({ slot, x: h.x + s * 0.5, z: h.z + c * 0.5, heading: h.heading, t: 0, popped: false, target: this.nearest(12, 0.7), element: h.spell })
   }
 
   private moveBolts(dt: number) {
@@ -326,18 +378,27 @@ export class Game {
       b.z += Math.cos(b.heading) * BOLT_SPEED * dt
       const hit = this.slimes.find((s) => s.phase === 'live' && Math.hypot(s.x - b.x, s.z - b.z) < slimeR(s) + 0.2)
       const wall = Math.abs(b.x) > HALF - 0.2 || Math.abs(b.z) > HALF - 0.2 || PILLARS.some((p) => Math.hypot(p.x - b.x, p.z - b.z) < p.r + 0.1)
-      if (hit) this.damage(hit, 2, 'magic', Math.sin(b.heading), Math.cos(b.heading))
-      if (hit || wall || b.t > BOLT_LIFE) { b.popped = true; b.t = 0 }
+      if (hit) {
+        this.damage(hit, BOLT_HARM[b.element], 'magic', Math.sin(b.heading), Math.cos(b.heading))
+        if (b.element === 'frost') hit.chill = CHILL
+      }
+      if (hit || wall || b.t > BOLT_LIFE) {
+        b.popped = true
+        b.t = 0
+        // where it lands, the floor catches
+        this.ground.light(b.x, b.z, b.element)
+        this.events.push({ type: 'lit', element: b.element })
+      }
     }
     this.bolts = this.bolts.filter((b) => !(b.popped && b.t > BOLT_POP))
   }
 
-  private damage(s: Slime, n: number, by: 'sword' | 'magic', dx: number, dz: number) {
+  private damage(s: Slime, n: number, by: 'sword' | 'magic' | 'fire', dx: number, dz: number) {
     // a bolt still in flight when the hero goes down hits nothing that counts
     if (this.state !== 'playing') return
     s.hp -= n
     s.struck = 0
-    const push = by === 'magic' ? 3 : 4.5
+    const push = by === 'magic' ? 3 : by === 'fire' ? 0 : 4.5
     s.vx += dx * push
     s.vz += dz * push
     this.events.push({ type: 'hit', kind: s.kind, by })
@@ -366,12 +427,25 @@ export class Game {
       }
       const r = RULES[s.kind]
       const period = hopPeriod(s.kind, this.difficulty)
-      s.hopT = (s.hopT + dt) % period
+      // what it stands on: frost chills it for as long as it stays and a little after, fire burns it again and again
+      const under = this.ground.at(s.x, s.z)
+      s.chill = under.frost > 0.4 ? Math.max(s.chill, 0.6) : Math.max(0, s.chill - dt)
+      if (under.fire > 0.5 && this.state === 'playing') {
+        s.burn -= dt
+        if (s.burn <= 0) {
+          s.burn = BURN_EVERY
+          this.damage(s, 1, 'fire', 0, 0)
+          if (s.phase !== 'live') continue
+        }
+      } else s.burn = 0.25
+      const slow = s.chill > 0 ? CHILL_SPEED : 1
+      // a chilled slime hops more slowly as well as less far
+      s.hopT = (s.hopT + dt * (s.chill > 0 ? 0.6 : 1)) % period
       const air = hopShape(s.hopT, period).air
       // face the hero while on the ground (turning slowly), and go that way while in the air
       const want = Math.atan2(h.x - s.x, h.z - s.z)
       s.heading += angleTo(s.heading, want) * (1 - Math.exp(-dt * (air ? 1.5 : 5)))
-      const v = air ? (r.speed * haste) / AIR_SHARE : 0
+      const v = air ? (r.speed * haste * slow) / AIR_SHARE : 0
       const fade = Math.exp(-dt * 5)
       s.vx *= fade
       s.vz *= fade
@@ -443,7 +517,7 @@ export class Game {
     const door = [...DOORS].sort((a, b) => Math.hypot(b.x - this.hero.x, b.z - this.hero.z) - Math.hypot(a.x - this.hero.x, a.z - this.hero.z))[this.rand() < 0.7 ? 0 : 1]
     this.slimes.push({
       slot: this.free(kind), kind, phase: 'spawn', t: 0, x: door.x, z: door.z, heading: door.heading,
-      hp: RULES[kind].hp, hopT: this.rand() * RULES[kind].hop, vx: 0, vz: 0, hitBy: -1, struck: 99,
+      hp: RULES[kind].hp, hopT: this.rand() * RULES[kind].hop, vx: 0, vz: 0, hitBy: -1, struck: 99, chill: 0, burn: 0.25,
     })
     this.toSpawn--
     this.spawnAt = this.time + 1.1
@@ -460,7 +534,7 @@ export class Game {
   place(kind: SlimeKind, x: number, z: number) {
     const slot = this.free(kind)
     if (slot < 0) throw new Error(`no ${kind} slime free`)
-    const s: Slime = { slot, kind, phase: 'live', t: 0, x, z, heading: 0, hp: RULES[kind].hp, hopT: 0, vx: 0, vz: 0, hitBy: -1, struck: 99 }
+    const s: Slime = { slot, kind, phase: 'live', t: 0, x, z, heading: 0, hp: RULES[kind].hp, hopT: 0, vx: 0, vz: 0, hitBy: -1, struck: 99, chill: 0, burn: 0.25 }
     this.slimes.push(s)
     return s
   }
@@ -470,7 +544,7 @@ export class Game {
 }
 
 function newHero(): Hero {
-  return { x: 0, z: -2.5, heading: 0, speed: 0, hp: MAX_HP, mp: MAX_MP, vx: 0, vz: 0, swingT: -1, swingN: 0, castT: -1, hurt: 0 }
+  return { x: 0, z: -2.5, heading: 0, speed: 0, hp: MAX_HP, mp: MAX_MP, vx: 0, vz: 0, swingT: -1, swingN: 0, castT: -1, spell: 'fire', hurt: 0, burn: 0.25 }
 }
 
 /** Seconds from one hop to the next for this color at this difficulty. */

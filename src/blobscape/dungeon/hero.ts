@@ -4,7 +4,7 @@ import { X, Y, aim, dir, env, ramp, turn } from '../../splat-engine/posing.ts'
 import { axisAngle, mulQ, rotate, type Bone, type Skeleton } from '../../splat-engine/rig.ts'
 import { elfIdle, elfSpec, elfWalk } from '../../splat-engine/zoo/elf.ts'
 import { blendPose } from '../forest/forest.ts'
-import { BOLT_POP, CAST, RUN_SPEED, SWING, type Bolt, type Hero } from './game.ts'
+import { BOLT_POP, CAST, RUN_SPEED, SWING, type Bolt, type Element, type Hero } from './game.ts'
 
 /**
  * The hero: Forest Walk's elf with a sword in the right hand (on its own
@@ -151,19 +151,26 @@ function swing(sk: Skeleton, u: number) {
 
 export const SPARKS = 12
 
-export function makeBolt(count = 900): Creature {
+/** A bolt's colors: its core, the glow round it, its haze, the tail from root to tip, and every other spark. */
+const BOLT_LOOK: Record<Element, { core: Vec3; glow: Vec3; haze: Vec3; tail: [Vec3, Vec3]; spark: Vec3 }> = {
+  fire: { core: [1, 0.95, 0.7], glow: [1, 0.6, 0.18], haze: [1, 0.32, 0.08], tail: [[1, 0.8, 0.4], [0.95, 0.25, 0.05]], spark: [1, 0.55, 0.15] },
+  frost: { core: [1, 1, 1], glow: [0.45, 0.7, 1], haze: [0.35, 0.4, 1], tail: [[0.75, 0.9, 1], [0.35, 0.35, 1]], spark: ARCANE },
+}
+
+export function makeBolt(count = 900, element: Element = 'frost'): Creature {
+  const look = BOLT_LOOK[element]
   const bones: Bone[] = [
     { name: 'root', parent: -1, head: [0, 0, 0] },
     { name: 'orb', parent: 0, head: [0, 0, 0] },
     ...Array.from({ length: SPARKS }, (_, i): Bone => ({ name: `spark${i}`, parent: 0, head: [0, 0, 0] })),
   ]
   const parts: Part[] = [
-    { shape: { ball: [0, 0, 0], r: [0.07, 0.07, 0.07] }, color: [1, 1, 1], glow: true, bones: ['orb'], opacity: 1, density: 3 },
-    { shape: { ball: [0, 0, 0], r: [0.13, 0.13, 0.13] }, color: [0.45, 0.7, 1], glow: true, bones: ['orb'], opacity: 0.55, density: 1.5 },
-    { shape: { ball: [0, 0, 0], r: [0.24, 0.24, 0.24] }, color: [0.35, 0.4, 1], glow: true, bones: ['orb'], opacity: 0.2, size: 2 },
+    { shape: { ball: [0, 0, 0], r: [0.07, 0.07, 0.07] }, color: look.core, glow: true, bones: ['orb'], opacity: 1, density: 3 },
+    { shape: { ball: [0, 0, 0], r: [0.13, 0.13, 0.13] }, color: look.glow, glow: true, bones: ['orb'], opacity: 0.55, density: 1.5 },
+    { shape: { ball: [0, 0, 0], r: [0.24, 0.24, 0.24] }, color: look.haze, glow: true, bones: ['orb'], opacity: 0.2, size: 2 },
     // a tail streaming out behind
-    { shape: { fill: [[0, 0, -0.05], [0, 0, -0.75]], r: [0.09, 0.0] }, color: (_p, _n, u) => mix([0.75, 0.9, 1], [0.35, 0.35, 1], u), glow: true, opacity: (_p, u) => 0.6 * (1 - u), bones: ['orb'], size: 0.7 },
-    ...Array.from({ length: SPARKS }, (_, i): Part => ({ shape: { ball: [0, 0, 0], r: [0.035, 0.035, 0.035] }, color: i % 2 ? ARCANE : [1, 1, 1], glow: true, bones: [`spark${i}`], opacity: 0.9, density: 2 })),
+    { shape: { fill: [[0, 0, -0.05], [0, 0, -0.75]], r: [0.09, 0.0] }, color: (_p, _n, u) => mix(look.tail[0], look.tail[1], u), glow: true, opacity: (_p, u) => 0.6 * (1 - u), bones: ['orb'], size: 0.7 },
+    ...Array.from({ length: SPARKS }, (_, i): Part => ({ shape: { ball: [0, 0, 0], r: [0.035, 0.035, 0.035] }, color: i % 2 ? look.spark : look.core, glow: true, bones: [`spark${i}`], opacity: 0.9, density: 2 })),
   ]
   const b = buildBody({ bones, parts, blend: 0.05 }, count, 17)
   return { blobs: b.blobs, skin: b.skin, skeleton: b.skeleton }
