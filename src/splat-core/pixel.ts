@@ -255,6 +255,11 @@ export interface PixelLook {
   /** Lines inside the scene, where one colour meets a much lighter one: 0 (or left out) is none, 1 the darkest line. */
   edges?: number
   /**
+   * A line where one part of the scene meets another whose colour is too close for `edges` to draw one (two things of one colour, one in front of the other), at `edges`' strength or full strength without it.
+   * Needs a map of the parts drawn beside the scene (`pixelArt`'s `parts`; the live pass draws its own).
+   */
+  parts?: boolean
+  /**
    * A backdrop behind the scene: its colour at the top and at the bottom of the picture, blended between and dithered into the palette.
    * `reach` is how far down the picture the blend runs before it is all the bottom colour (above 0, up to 1; the whole way when left out or not a sound number: `skyReach`).
    * Left out, empty pixels stay clear.
@@ -303,9 +308,10 @@ const smooth = (a: number, b: number, x: number) => { const t = Math.min(1, Math
  *
  * `before` is the art of the frame before, for a look with `steady`: where it
  * holds a palette colour that is nearly as close as the best one, that pixel
- * keeps it.
+ * keeps it. `parts` is the scene's map of parts for a look with `parts`: the
+ * same view with every part in its own flat colour (alpha 0 where there is none).
  */
-export function pixelArt(f: Frame, look: PixelLook, before?: Frame): Frame {
+export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Frame): Frame {
   const { width: w, height: h } = f
   const out = makeFrame(w, h)
   const cut = PIXEL_CUT * 255
@@ -313,6 +319,7 @@ export function pixelArt(f: Frame, look: PixelLook, before?: Frame): Frame {
   const pl = look.palette.map((c) => oklab(...c))
   const amp = look.dither * 48
   const edges = look.edges ?? 0
+  const map = look.parts && parts && parts.width === w && parts.height === h ? parts.data : undefined
   const steady = before && before.width === w && before.height === h ? look.steady ?? 0 : 0
   const slot = new Map(look.palette.map((c, k) => [(c[0] << 16) | (c[1] << 8) | c[2], k]))
   const g: Rgb = [0, 0, 0]
@@ -332,16 +339,20 @@ export function pixelArt(f: Frame, look: PixelLook, before?: Frame): Frame {
       let spread = amp
       if (solid(x, y)) {
         r = f.data[i] + g[0]; gg = f.data[i + 1] + g[1]; b = f.data[i + 2] + g[2]
-        if (edges > 0) {
+        if (edges > 0 || map) {
           // a line on the darker side of a jump: one pixel wide, and never on the light thing itself
           const a = oklab(f.data[i], f.data[i + 1], f.data[i + 2])
           const jump = N4.some(([dx, dy]) => {
             if (!solid(x + dx, y + dy)) return false
             const j = ((y + dy) * w + x + dx) * 4
             const n = oklab(f.data[j], f.data[j + 1], f.data[j + 2])
-            return n[0] > a[0] && Math.hypot(n[0] - a[0], n[1] - a[1], n[2] - a[2]) > EDGE_JUMP
+            const far = Math.hypot(n[0] - a[0], n[1] - a[1], n[2] - a[2]) > EDGE_JUMP
+            if (edges > 0 && far && n[0] > a[0]) return true
+            // and where another part begins in a colour too close for that: on the lower-numbered part, so the line keeps its side as lights flicker
+            if (far || !map || map[i + 3] < 128 || map[j + 3] < 128) return false
+            return (map[i] | (map[i + 1] << 8) | (map[i + 2] << 16)) < (map[j] | (map[j + 1] << 8) | (map[j + 2] << 16))
           })
-          if (jump) { const k = 1 - EDGE_DARK * edges; r *= k; gg *= k; b *= k }
+          if (jump) { const k = 1 - EDGE_DARK * (edges > 0 ? edges : 1); r *= k; gg *= k; b *= k }
         }
       }
       else if (look.outline && N4.some(([dx, dy]) => solid(x + dx, y + dy))) {

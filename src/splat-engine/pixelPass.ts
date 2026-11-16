@@ -5,7 +5,9 @@ import { BAYER4, EDGE_DARK, EDGE_JUMP, GLOW_FROM, GLOW_SHOWS, GLOW_TAPS, MAX_PAL
 // As in engine.ts: the shader builders use TSL untyped.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const TSL = TSLTyped as unknown as Record<string, any>
-const { Fn, If, Loop, dot, float, floor, int, max, min, mod, pow, select, smoothstep, sqrt, texture, uniform, uniformArray, uv, vec2, vec3, vec4 } = TSL
+const { Fn, If, Loop, abs, dot, float, floor, int, max, min, mod, pow, select, smoothstep, sqrt, texture, uniform, uniformArray, uv, vec2, vec3, vec4 } = TSL
+
+const SIDES: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]]
 
 /** A stored pixel is taken for a palette colour when it is this close to it in OKLab: the art keeps palette colours exactly, so this only allows for rounding. */
 const SAME = 0.004
@@ -28,6 +30,9 @@ const MAX_PALETTE = MAX_PALETTE_SIZE
 export class PixelPass {
   /** The scene, drawn small. Linear and premultiplied, as any render target. */
   readonly small = new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter })
+  /** The scene's parts, drawn small (`SplatWorld.parts`): where the colour changes, one part ends and another begins. Only drawn for a look with `parts`. */
+  readonly ids = new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter })
+  private readonly parted = uniform(0)
   /** The art of this frame and of the one before: each frame is drawn into the older of the two. */
   private readonly frames = [0, 1].map(() => new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter, depthBuffer: false }))
   private now = 0
@@ -99,6 +104,7 @@ export class PixelPass {
     this.dither.value = look.dither
     this.glow.value = look.glow
     this.edges.value = look.edges ?? 0
+    this.parted.value = look.parts ? 1 : 0
     this.lined.value = look.outline ? 1 : 0
     this.skied.value = look.sky ? 1 : 0
     if (look.sky) { this.skyTop.value.set(...look.sky[0]); this.skyLow.value.set(...look.sky[1]); this.skyReach.value = skyReach(look.sky) }
@@ -110,6 +116,7 @@ export class PixelPass {
     const w = Math.max(1, Math.round(width)), h = Math.max(1, Math.round(height))
     if (this.small.width === w && this.small.height === h) return
     this.small.setSize(w, h)
+    this.ids.setSize(w, h)
     for (const f of this.frames) f.setSize(w, h)
     this.kept = false
     this.res.value.set(w, h)
@@ -128,6 +135,7 @@ export class PixelPass {
     renderer.setRenderTarget(this.small)
     renderer.clear()
     renderer.render(scene, camera)
+    if (this.look.parts) this.drawParts(renderer, scene, camera)
     // the art, into the older target, against the newer one
     this.used = this.kept && (this.look.steady ?? 0) > 0
     this.sticky.value = this.used ? this.look.steady! : 0
@@ -144,7 +152,7 @@ export class PixelPass {
   }
 
   private fragment() {
-    const small = this.small.texture
+    const small = this.small.texture, ids = this.ids.texture
     const { res } = this
     const palLab = uniformArray(this.palLab, 'vec3'), palShown = uniformArray(this.palShown, 'vec3')
     const bayer = uniformArray(BAYER4, 'float')
@@ -181,6 +189,11 @@ export class PixelPass {
         return { rgb, solid }
       }
 
+      /** The part at an art pixel `dx, dy` away, as the part map has it (alpha 0 where it has none). */
+      const partAt = (dx: number, dy: number) => {
+        const c = cell.add(vec2(dx, dy))
+        return texture(ids, vec2(c.x.add(0.5).div(res.x), float(1).sub(c.y.add(0.5).div(res.y))))
+      }
       const here = at(0, 0)
       const spill = vec3(0).toVar()
       If(this.glow.greaterThan(0), () => {
@@ -190,7 +203,7 @@ export class PixelPass {
           spill.addAssign(t.rgb.mul(select(t.solid, bright, 0)).mul(this.glow.div(GLOW_TAPS.length)))
         }
       })
-      const sides = [at(1, 0), at(-1, 0), at(0, 1), at(0, -1)]
+      const sides = SIDES.map(([dx, dy]) => at(dx, dy))
       const beside = sides[0].solid.or(sides[1].solid).or(sides[2].solid).or(sides[3].solid)
 
       const out = vec4(0).toVar()
@@ -201,15 +214,26 @@ export class PixelPass {
         colour.assign(here.rgb.add(spill))
         shown.assign(1)
         // a line on the darker side of a jump in colour
-        If(this.edges.greaterThan(0), () => {
+        If(this.edges.greaterThan(0).or(this.parted.greaterThan(0)), () => {
           const a = toLab(here.rgb).toVar()
           const jump = float(0).toVar()
-          for (const n of sides) {
-            const b = toLab(n.rgb)
+          const part = partAt(0, 0).toVar()
+          SIDES.forEach(([dx, dy], k) => {
+            const n = sides[k]
+            const b = toLab(n.rgb).toVar()
             const d = b.sub(a)
-            jump.assign(max(jump, select(n.solid.and(b.x.greaterThan(a.x)).and(dot(d, d).greaterThan(EDGE_JUMP * EDGE_JUMP)), 1, 0)))
-          }
-          colour.mulAssign(float(1).sub(jump.mul(this.edges).mul(EDGE_DARK)))
+            const far = dot(d, d).greaterThan(EDGE_JUMP * EDGE_JUMP)
+            jump.assign(max(jump, select(this.edges.greaterThan(0).and(n.solid).and(b.x.greaterThan(a.x)).and(far), 1, 0)))
+            // and where another part begins in a colour too close for that: on the lower-numbered part, so the line keeps its side as lights flicker
+            If(this.parted.greaterThan(0), () => {
+              const other = partAt(dx, dy).toVar()
+              const gap = abs(other.rgb.sub(part.rgb))
+              const differ = part.a.greaterThan(0.5).and(other.a.greaterThan(0.5)).and(max(gap.x, max(gap.y, gap.z)).greaterThan(0.5 / 255))
+              const number = (p: { x: unknown; y: unknown; z: unknown }) => float(p.x).add(float(p.y).mul(256)).add(float(p.z).mul(65536))
+              jump.assign(max(jump, select(n.solid.and(differ).and(far.not()).and(number(part).lessThan(number(other))), 1, 0)))
+            })
+          })
+          colour.mulAssign(float(1).sub(jump.mul(select(this.edges.greaterThan(0), this.edges, 1)).mul(EDGE_DARK)))
         })
       })
         .ElseIf(this.lined.greaterThan(0).and(beside), () => { out.assign(vec4(this.line, 1)) })
@@ -255,6 +279,29 @@ export class PixelPass {
     })()
   }
 
+  /** The same view as a map of parts: only the blobs, as they were just drawn (nothing is moved or sorted again). */
+  private drawParts(renderer: WebGPURenderer, scene: Object3D, camera: Camera) {
+    type World = Object3D & { isSplatWorld?: boolean; parts: boolean; hold: boolean }
+    const worlds: { w: World; hold: boolean }[] = []
+    const hidden: Object3D[] = []
+    scene.traverse((o) => {
+      const w = o as World
+      if (w.isSplatWorld) { worlds.push({ w, hold: w.hold }); w.parts = true; w.hold = true }
+      else {
+        const d = o as { isMesh?: boolean; isLine?: boolean; isPoints?: boolean }
+        if ((d.isMesh || d.isLine || d.isPoints) && o.visible) { o.visible = false; hidden.push(o) }
+      }
+    })
+    try {
+      renderer.setRenderTarget(this.ids)
+      renderer.clear()
+      renderer.render(scene, camera)
+    } finally {
+      for (const { w, hold } of worlds) { w.parts = false; w.hold = hold }
+      for (const o of hidden) o.visible = true
+    }
+  }
+
   /** The art onto the output: every screen pixel inside one art pixel takes that pixel's colour. */
   private toScreen() {
     const toLinear = (c: unknown) => select(float(c).lessThanEqual(0.04045), float(c).div(12.92), pow(float(c).add(0.055).div(1.055), 2.4))
@@ -268,6 +315,7 @@ export class PixelPass {
 
   dispose() {
     this.small.dispose()
+    this.ids.dispose()
     for (const f of this.frames) f.dispose()
     this.material.dispose()
     this.copy.dispose()
