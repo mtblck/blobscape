@@ -1,6 +1,6 @@
 import { NearestFilter, NoBlending, NodeMaterial, QuadMesh, RenderTarget, Vector2, Vector3, type Camera, type Object3D, type WebGPURenderer } from 'three/webgpu'
 import * as TSLTyped from 'three/tsl'
-import { BAYER4, EDGE_DARK, EDGE_JUMP, PART_TIE, GLOW_FROM, GLOW_SHOWS, GLOW_TAPS, MAX_PALETTE_SIZE, PIXEL_CUT, SKY_DITHER, oklab, skyReach, type PixelLook } from '../splat-core/pixel.ts'
+import { BAYER4, EDGE_DARK, EDGE_JUMP, GLOW_FROM, GLOW_SHOWS, GLOW_TAPS, MAX_PALETTE_SIZE, PIXEL_CUT, SKY_DITHER, oklab, skyReach, type PixelLook } from '../splat-core/pixel.ts'
 
 // As in engine.ts: the shader builders use TSL untyped.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -214,7 +214,7 @@ export class PixelPass {
         colour.assign(here.rgb.add(spill))
         shown.assign(1)
         // a line on the darker side of a jump in colour
-        If(this.edges.greaterThan(0), () => {
+        If(this.edges.greaterThan(0).or(this.parted.greaterThan(0)), () => {
           const a = toLab(here.rgb).toVar()
           const jump = float(0).toVar()
           const part = partAt(0, 0).toVar()
@@ -222,18 +222,18 @@ export class PixelPass {
             const n = sides[k]
             const b = toLab(n.rgb).toVar()
             const d = b.sub(a)
-            jump.assign(max(jump, select(n.solid.and(b.x.greaterThan(a.x)).and(dot(d, d).greaterThan(EDGE_JUMP * EDGE_JUMP)), 1, 0)))
-            // and where another part begins, whatever its colour: on the darker of the two, or by the parts' numbers when they are as light as each other
+            const far = dot(d, d).greaterThan(EDGE_JUMP * EDGE_JUMP)
+            jump.assign(max(jump, select(this.edges.greaterThan(0).and(n.solid).and(b.x.greaterThan(a.x)).and(far), 1, 0)))
+            // and where another part begins in a colour too close for that: on the lower-numbered part, so the line keeps its side as lights flicker
             If(this.parted.greaterThan(0), () => {
               const other = partAt(dx, dy).toVar()
               const gap = abs(other.rgb.sub(part.rgb))
               const differ = part.a.greaterThan(0.5).and(other.a.greaterThan(0.5)).and(max(gap.x, max(gap.y, gap.z)).greaterThan(0.5 / 255))
               const number = (p: { x: unknown; y: unknown; z: unknown }) => float(p.x).add(float(p.y).mul(256)).add(float(p.z).mul(65536))
-              const mine = b.x.greaterThan(a.x.add(PART_TIE)).or(abs(b.x.sub(a.x)).lessThanEqual(PART_TIE).and(number(part).lessThan(number(other))))
-              jump.assign(max(jump, select(n.solid.and(differ).and(mine), 1, 0)))
+              jump.assign(max(jump, select(n.solid.and(differ).and(far.not()).and(number(part).lessThan(number(other))), 1, 0)))
             })
           })
-          colour.mulAssign(float(1).sub(jump.mul(this.edges).mul(EDGE_DARK)))
+          colour.mulAssign(float(1).sub(jump.mul(select(this.edges.greaterThan(0), this.edges, 1)).mul(EDGE_DARK)))
         })
       })
         .ElseIf(this.lined.greaterThan(0).and(beside), () => { out.assign(vec4(this.line, 1)) })
@@ -287,15 +287,19 @@ export class PixelPass {
     scene.traverse((o) => {
       const w = o as World
       if (w.isSplatWorld) { worlds.push({ w, hold: w.hold }); w.parts = true; w.hold = true }
-      else if ((o as { isMesh?: boolean; isLine?: boolean; isPoints?: boolean }).isMesh || (o as { isLine?: boolean }).isLine || (o as { isPoints?: boolean }).isPoints) {
-        if (o.visible) { o.visible = false; hidden.push(o) }
+      else {
+        const d = o as { isMesh?: boolean; isLine?: boolean; isPoints?: boolean }
+        if ((d.isMesh || d.isLine || d.isPoints) && o.visible) { o.visible = false; hidden.push(o) }
       }
     })
-    renderer.setRenderTarget(this.ids)
-    renderer.clear()
-    renderer.render(scene, camera)
-    for (const { w, hold } of worlds) { w.parts = false; w.hold = hold }
-    for (const o of hidden) o.visible = true
+    try {
+      renderer.setRenderTarget(this.ids)
+      renderer.clear()
+      renderer.render(scene, camera)
+    } finally {
+      for (const { w, hold } of worlds) { w.parts = false; w.hold = hold }
+      for (const o of hidden) o.visible = true
+    }
   }
 
   /** The art onto the output: every screen pixel inside one art pixel takes that pixel's colour. */

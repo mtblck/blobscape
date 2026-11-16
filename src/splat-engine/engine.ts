@@ -86,7 +86,7 @@ export class SplatWorld extends Mesh {
   cpuMs = 0
   cpuSkinMs = 0
   cpuSortMs = 0
-  /** While true, rendering draws the last frame's blobs without moving or sorting them (for timing the draw alone). */
+  /** While true, rendering draws the last frame's blobs without moving or sorting them (for timing the draw alone, and for a second draw of the same frame such as the map of parts). */
   hold = false
   private readonly flat = uniform(0)
   /**
@@ -449,8 +449,8 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
       const byte = (v: number) => Math.max(0, Math.min(255, Math.round(v * 255)))
       colour[i] = (byte(srgbToLinear(blobs.colour[k * 3])) | (byte(srgbToLinear(blobs.colour[k * 3 + 1])) << 8) |
         (byte(srgbToLinear(blobs.colour[k * 3 + 2])) << 16) | (byte(blobs.opacity[k]) << 24)) >>> 0
-      const p = (a.partOf?.[k] ?? 0) + 1
-      part[i] = ((p & 255) | (((p >> 8) & 255) << 8) | (((ai + 1) & 255) << 16) | (byte(blobs.opacity[k]) << 24)) >>> 0
+      const p = Math.min(65535, (a.partOf?.[k] ?? 0) + 1), who = Math.min(255, ai + 1)
+      part[i] = ((p & 255) | ((p >> 8) << 8) | (who << 16)) >>> 0
       skinWords[i * 2] = (skin.joints[k * 4] | (skin.joints[k * 4 + 1] << 8) | (skin.joints[k * 4 + 2] << 16) | (skin.joints[k * 4 + 3] << 24)) >>> 0
       skinWords[i * 2 + 1] = packWeights(skin.weights, k * 4)
     }

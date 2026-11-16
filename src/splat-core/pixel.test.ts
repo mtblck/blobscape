@@ -185,12 +185,16 @@ test('pixelArt with parts draws a line where one part meets another of the same 
   assert.deepEqual(dark(art), [false, false, true, false, false, false], 'the lower-numbered part carries the line, one pixel wide')
   assert.deepEqual(dark(pixelArt(f, look)), [false, false, false, false, false, false], 'no map, no line')
   assert.deepEqual(dark(pixelArt(f, { ...look, parts: false }, undefined, map)), [false, false, false, false, false, false], 'switched off, no line')
-  // a lighter part beside a darker one: the line is on the darker, whatever their numbers
+  // a much lighter part beside a darker one: the colour line on the darker side is the only line, whatever the parts' numbers
   const g = solid(6, 3, () => true, [120, 90, 60])
-  for (let y = 0; y < 3; y++) for (let x = 0; x < 3; x++) g.data.set([150, 115, 80, 255], (y * 6 + x) * 4)
+  for (let y = 0; y < 3; y++) for (let x = 0; x < 3; x++) g.data.set([235, 205, 150, 255], (y * 6 + x) * 4)
   const lit = pixelArt(g, look, undefined, map)
-  assert.equal(lit.data[(6 + 2) * 4], 150, 'the lighter side is left alone')
+  assert.equal(lit.data[(6 + 2) * 4], 235, 'the lighter side is left alone')
   assert.ok(lit.data[(6 + 3) * 4] < 120, 'the darker side takes the line')
+  // and with colour lines off, parts that far apart in colour need no line of their own; parts of one colour still get theirs
+  const only = { ...look, edges: 0 }
+  assert.equal(pixelArt(g, only, undefined, map).data[(6 + 3) * 4], 120)
+  assert.deepEqual(dark(pixelArt(f, only, undefined, map)), [false, false, true, false, false, false])
   // where the map has nothing (alpha 0), there is no part to end
   for (let y = 0; y < 3; y++) map.data[(y * 6 + 3) * 4 + 3] = 0
   assert.deepEqual(dark(pixelArt(f, look, undefined, map)), [false, false, false, false, false, false])

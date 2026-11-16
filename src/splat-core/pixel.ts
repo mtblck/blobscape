@@ -255,7 +255,7 @@ export interface PixelLook {
   /** Lines inside the scene, where one colour meets a much lighter one: 0 (or left out) is none, 1 the darkest line. */
   edges?: number
   /**
-   * With `edges`: a line where one part of the scene meets another as well, whatever their colours (two things of one colour, one in front of the other).
+   * A line where one part of the scene meets another whose colour is too close for `edges` to draw one (two things of one colour, one in front of the other), at `edges`' strength or full strength without it.
    * Needs a map of the parts drawn beside the scene (`pixelArt`'s `parts`; the live pass draws its own).
    */
   parts?: boolean
@@ -285,8 +285,6 @@ export const GLOW_TAPS: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1], 
 export const GLOW_FROM = 0.92
 /** Two neighbouring pixels are on either side of an edge when their colours are this far apart in OKLab. */
 export const EDGE_JUMP = 0.11
-/** Two pixels this close in OKLab lightness count as equally light when a line between parts picks its side. */
-export const PART_TIE = 0.01
 /** How much of its light a pixel on an edge loses at `edges` 1. */
 export const EDGE_DARK = 0.62
 /** How far down the picture a sky's blend runs: its third value when that is a sound share of the picture, else the whole way. Both twins go by this. */
@@ -341,20 +339,20 @@ export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Fram
       let spread = amp
       if (solid(x, y)) {
         r = f.data[i] + g[0]; gg = f.data[i + 1] + g[1]; b = f.data[i + 2] + g[2]
-        if (edges > 0) {
+        if (edges > 0 || map) {
           // a line on the darker side of a jump: one pixel wide, and never on the light thing itself
           const a = oklab(f.data[i], f.data[i + 1], f.data[i + 2])
           const jump = N4.some(([dx, dy]) => {
             if (!solid(x + dx, y + dy)) return false
             const j = ((y + dy) * w + x + dx) * 4
             const n = oklab(f.data[j], f.data[j + 1], f.data[j + 2])
-            if (n[0] > a[0] && Math.hypot(n[0] - a[0], n[1] - a[1], n[2] - a[2]) > EDGE_JUMP) return true
-            // and where another part begins, whatever its colour: on the darker of the two, or by the parts' numbers when they are as light as each other
-            if (!map || map[i + 3] < 128 || map[j + 3] < 128) return false
-            const mine = map[i] | (map[i + 1] << 8) | (map[i + 2] << 16), other = map[j] | (map[j + 1] << 8) | (map[j + 2] << 16)
-            return mine !== other && (n[0] > a[0] + PART_TIE || (Math.abs(n[0] - a[0]) <= PART_TIE && mine < other))
+            const far = Math.hypot(n[0] - a[0], n[1] - a[1], n[2] - a[2]) > EDGE_JUMP
+            if (edges > 0 && far && n[0] > a[0]) return true
+            // and where another part begins in a colour too close for that: on the lower-numbered part, so the line keeps its side as lights flicker
+            if (far || !map || map[i + 3] < 128 || map[j + 3] < 128) return false
+            return (map[i] | (map[i + 1] << 8) | (map[i + 2] << 16)) < (map[j] | (map[j + 1] << 8) | (map[j + 2] << 16))
           })
-          if (jump) { const k = 1 - EDGE_DARK * edges; r *= k; gg *= k; b *= k }
+          if (jump) { const k = 1 - EDGE_DARK * (edges > 0 ? edges : 1); r *= k; gg *= k; b *= k }
         }
       }
       else if (look.outline && N4.some(([dx, dy]) => solid(x + dx, y + dy))) {

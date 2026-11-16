@@ -43,7 +43,8 @@ Added for pixel-art scenes (2026-11-15, issues #33, #35, #36, #37):
 - `pixelPass.ts`: pixel mode. The scene is drawn small, then one pass snaps it to a palette (OKLab, Bayer dither), adds glow from bright pixels, edge lines where a colour meets a much lighter one, a silhouette outline and an optional sky gradient, and scales it up in whole pixels. Its CPU twin is `pixelArt` in `splat-core/pixel.ts`.
 - Pixel Diorama (`/experiments/pixel-diorama/`) is the test page: a lighthouse, cottage, pines and jetty of about 93,000 blobs (50,000 on phones) on 27 bones, with surface texture (bricks, tiles, planks, strata) written as colour rules.
 - `sceneDoc.ts`: a scene as data (shapes, paints, bones, moves, lights, palette, camera), with a checker and a builder, so a scene can be written by hand or by Claude from a prompt (#41, `docs/scene-descriptions.md`). Every scene on Pixel Diorama but the lighthouse is written this way.
-- Not done yet: edge lines go by colour alone, so two parts of one colour get none (that needs depth or part ids from the draw); pixels that hold still under a moving camera (#40).
+- Lines between parts: `SplatWorld.parts` draws the blobs as a map of parts (hard discs in each part's flat colour), and the pass lines a pixel beside another part whose colour is too close for a colour line. Steady pixels (a pixel keeps its palette colour unless another is clearly closer) and held frames (`CreatureStage.step`) calm a moving scene (#40).
+- Not done yet: whole-pixel steps under a moving camera (the scenes orbit a perspective camera, which has no such step); a translucent part is a solid disc in the map of parts.
 
 ## Known gaps
 
