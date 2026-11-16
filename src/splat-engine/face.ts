@@ -17,9 +17,9 @@ import { buildVoxels, sphere, type Shape } from './voxel.ts'
  */
 const C: Vec3 = [0, 1, 0]
 const R = 0.75
-const EYE_R = 0.16
-const LID_R = EYE_R * 1.15
-const EYES: Vec3[] = [[-0.26, 1.15, 0.66], [0.26, 1.15, 0.66]]
+const EYE_R = 0.2
+const LID_R = EYE_R * 1.22
+const EYES: Vec3[] = [[-0.29, 1.16, 0.62], [0.29, 1.16, 0.62]]
 const MOUTH: Vec3 = [0, 0.7, 0.68]
 const MOUTH_HALF = 0.26
 /** The open lid is a cap on the eye's ball, centered this far up from straight ahead, reaching `LID_REACH` each way. */
@@ -31,7 +31,7 @@ export const LID_TURN = (80 * Math.PI) / 180
 export const BLINK_STEPS = [1, 2, 4] as const
 
 const SKIN: Vec3 = [0.98, 0.78, 0.6]
-const LID: Vec3 = [0.8, 0.5, 0.42]
+const LID: Vec3 = [0.84, 0.56, 0.45]
 const cheek = (side: number): Vec3 => {
   const d: Vec3 = [side * 0.62, -0.08, 0.5], l = Math.hypot(...d)
   return [C[0] + (d[0] / l) * R, C[1] + (d[1] / l) * R, C[2] + (d[2] / l) * R]
@@ -40,7 +40,7 @@ const CHEEKS = [cheek(-1), cheek(1)]
 
 /** A lid: a thin shell over the top of the eye's ball, so there is nothing of it inside the eye. */
 function lidShape(e: Vec3, spacing: number): Shape {
-  const uy = Math.sin(LID_UP), uz = Math.cos(LID_UP), edge = LID_R * Math.cos(LID_REACH), inner = LID_R - spacing * 1.5
+  const uy = Math.sin(LID_UP), uz = Math.cos(LID_UP), edge = LID_R * Math.cos(LID_REACH), inner = LID_R - spacing * 1.6
   return {
     sdf: (x, y, z) => { const d = Math.hypot(x - e[0], y - e[1], z - e[2]); return Math.max(d - LID_R, inner - d, edge - ((y - e[1]) * uy + (z - e[2]) * uz)) },
     min: [e[0] - LID_R, e[1] - LID_R, e[2] - LID_R], max: [e[0] + LID_R, e[1] + LID_R, e[2] + LID_R],
@@ -64,7 +64,7 @@ function smileAt(p: Vec3): Vec3 {
   const d2 = (p[0] - MOUTH[0]) ** 2 + (p[1] - MOUTH[1]) ** 2 + (p[2] - MOUTH[2]) ** 2
   const fall = Math.exp(-d2 / (2 * 0.3 * 0.3))
   const x = p[0] / MOUTH_HALF
-  return [p[0] + Math.tanh(x) * 0.035 * fall, p[1] + 0.15 * (x * x - 0.35) * fall, p[2]]
+  return [p[0] + Math.tanh(x) * 0.07 * fall, p[1] + 0.2 * (x * x - 0.35) * fall, p[2]]
 }
 
 /** Where the puff takes it: out from the head's middle, most at each cheek. */
@@ -97,7 +97,7 @@ export function makeFace(spacing = 0.028): Face {
         shape: sphere(e, EYE_R), bone: 'head',
         color: (_p: Vec3, n: Vec3): Vec3 => (n[2] > 0.9 ? [0.06, 0.06, 0.1] : n[2] > 0.72 ? [0.2, 0.45, 0.75] : [0.97, 0.97, 0.95]),
       })),
-      { shape: sphere([0, 0.99, 0.76], 0.075), bone: 'head', color: [0.95, 0.66, 0.52] as Vec3 },
+      { shape: sphere([0, 0.95, 0.76], 0.075), bone: 'head', color: [0.95, 0.66, 0.52] as Vec3 },
       ...EYES.map((e) => ({ shape: lidShape(e, spacing), bone: 'lids', color: LID })),
     ],
   })
