@@ -2,7 +2,8 @@ import type { Vec3 } from '../../splat-core/blobs.ts'
 import { mirror, mix, rng, spots } from '../body.ts'
 import type { Bone, Skeleton } from '../rig.ts'
 import { X, Y, Z, env, set, turn } from '../posing.ts'
-import { membrane, scales, sculptToCount, smooth, type SculptPart, type SculptSpec } from '../sculpt.ts'
+import { growFur, type Fur, type FurryPart } from '../fur.ts'
+import { membrane, scales, sculptToCount, smooth, type SculptSpec } from '../sculpt.ts'
 import { cone, displace, ellipsoid, sphere, type Shape } from '../voxel.ts'
 import type { Species } from './species.ts'
 
@@ -10,7 +11,8 @@ import type { Species } from './species.ts'
  * Make me a monster: a creature drawn up from a seed. The seed picks a body
  * plan (two, four or six legs; how long, how round, how tall), a head (one to
  * three eyes, a snout, horns, ears or feelers), a tail, back spikes and a
- * coat, then cuts it with sculpt.ts like the hand-made zoo. Every monster can
+ * coat and what its hide is (fur in strands, scales, or smooth wet skin), then
+ * cuts it with sculpt.ts like the hand-made zoo. Every monster can
  * walk on the spot, stand and breathe, and roar, and the same seed always
  * makes the same monster, so a link can share one.
  *
@@ -42,11 +44,14 @@ export interface Plan {
   coat: 'spots' | 'stripes' | 'plain'
   /** How it looks at you: no brows at all, level, worried (inner ends up), surprised (raised) or cross (inner ends down). */
   brow: Brow
+  /** What covers it: strands of fur (fur.ts), a hide of small scales, or smooth wet skin. */
+  hide: Hide
   colors: { back: Vec3; belly: Vec3; accent: Vec3; iris: Vec3 }
   name: string
 }
 
 export type Brow = 'none' | 'level' | 'worried' | 'raised' | 'cross'
+export type Hide = 'fur' | 'scales' | 'smooth'
 
 const pick = <T,>(r: () => number, xs: readonly T[]): T => xs[Math.floor(r() * xs.length) % xs.length]
 const between = (r: () => number, a: number, b: number) => a + (b - a) * r()
@@ -103,6 +108,7 @@ export function planMonster(seed: number): Plan {
     arms: legs === 2 && r() < 0.8,
     coat: pick(r, ['spots', 'stripes', 'plain'] as const),
     brow: pick(r, ['none', 'level', 'level', 'worried', 'raised', 'raised', 'cross'] as const),
+    hide: pick(r, ['fur', 'fur', 'fur', 'scales', 'smooth'] as const),
     colors: { back, belly, accent, iris },
     name,
   }
@@ -116,6 +122,9 @@ const along = (a: Vec3, b: Vec3, t: number): Vec3 => mix(a, b, t)
 function legSpots(p: Plan): number[] {
   return p.legs === 6 ? [1, 0.5, 0] : p.legs === 4 ? [1, 0] : [0]
 }
+
+/** Whether the pair of legs at `u` (0 hips, 1 chest) bends at an elbow, pointing back, not at a knee. */
+const elbowed = (p: Plan, u: number) => p.legs !== 2 && u > 0.5
 
 export interface Layout { bones: Bone[]; hips: Vec3; chest: Vec3; neckTop: Vec3; headC: Vec3; legPairs: number }
 
@@ -149,7 +158,8 @@ export function layout(p: Plan): Layout {
     for (const [s, x] of SIDES) {
       const top = side(x, [p.girth * 0.75, base[1] - p.girth * 0.2, base[2]])
       const footY = 0.02
-      const kneeZ = upright ? 0.03 : (u > 0.5 ? -1 : 1) * 0.04
+      // a knee points forward; the front legs of a four- or six-legged monster bend at an elbow, which points back
+      const kneeZ = (elbowed(p, u) ? -1 : 1) * Math.max(0.03, (top[1] - footY) * (upright ? 0.1 : 0.16))
       const knee = side(x, [p.girth * 0.8, (top[1] + footY) / 2, base[2] + kneeZ])
       const ankle = side(x, [p.girth * 0.8, footY + 0.025, base[2] - kneeZ * 0.5])
       const toe = side(x, [p.girth * 0.8, 0.01, base[2] + 0.07 + p.girth * 0.2])
@@ -188,42 +198,60 @@ const HORN: Vec3 = [0.92, 0.88, 0.76]
 const MOUTH: Vec3 = [0.55, 0.1, 0.14]
 const TONGUE: Vec3 = [0.86, 0.42, 0.46]
 
+/** Toward the light a wet skin throws back (as the frog's). */
+const SHINE: Vec3 = [-0.22, 0.83, 0.51]
+
 /**
- * The monster as shapes to cut (sculpt.ts), at a grid of `s`: a hide of
- * scales in the seed's coat, a ribbed belly, a mouth with teeth, a tongue and
- * two tusks, eyes under brows, clawed feet and hands.
+ * The monster as shapes to cut (sculpt.ts), at a grid of `s`: a hide in the
+ * seed's coat (furred parts say how their fur lies, for fur.ts), a mouth with
+ * teeth, a tongue and two tusks, eyes under brows, clawed feet and hands.
  */
-function spec(p: Plan, s: number): SculptSpec {
+function spec(p: Plan, s: number): SculptSpec & { parts: FurryPart[] } {
   const L = layout(p)
   const { back, belly, accent, iris } = p.colors
   const dark = mix(back, [0.04, 0.03, 0.05], 0.55)
   const fat = (r: number) => Math.max(r, s * 0.6)
-  const A = Math.max(0.028, p.girth * 0.3)
-  /** The hide stands in scales: each a low bump. */
-  const hide = (shape: Shape, h = A * 0.16) => displace(shape, (x, y, z) => h * (1 - scales([x, y, z], A).out), h)
+  const scaly = p.hide === 'scales', furry = p.hide === 'fur'
+  const A = Math.max(0.018, p.girth * 0.17)
+  /** A scaly hide stands in scales, each a low bump; fur and smooth skin leave the shape as it is. */
+  const hide = (shape: Shape, h = A * 0.16) => (scaly ? displace(shape, (x, y, z) => h * (1 - scales([x, y, z], A).out), h) : shape)
   const coat = (q: Vec3, n: Vec3): Vec3 => {
-    if (n[1] < -0.5) {
-      const f = q[2] / (A * 0.9)
+    if (scaly && n[1] < -0.5) {
+      // the plates of a scaly belly
+      const f = q[2] / (A * 1.6)
       return f - Math.floor(f) < 0.2 ? mix(belly, dark, 0.3) : belly
     }
-    const t = scales(q, A)
     let base = back
     if (p.coat === 'spots' && spots(q, 30, p.seed % 7) > 0.72) base = accent
     else if (p.coat === 'stripes' && Math.sin(q[2] * (16 / p.length) + q[1] * 8) > 0.4) base = dark
     else if (p.coat === 'plain' && n[1] > 0.7) base = mix(back, dark, 0.3)
-    base = t.id > 0.72 ? mix(base, [1, 1, 1], 0.14) : t.id < 0.25 ? mix(base, dark, 0.22) : base
-    if (t.out > 0.86) base = mix(base, dark, 0.3)
-    return n[1] < -0.2 ? mix(base, belly, (-0.2 - n[1]) / 0.3) : base
+    if (scaly) {
+      const t = scales(q, A)
+      base = t.id > 0.72 ? mix(base, [1, 1, 1], 0.1) : t.id < 0.25 ? mix(base, dark, 0.16) : base
+      if (t.out > 0.86) base = mix(base, dark, 0.25)
+    } else base = mix(base, dark, 0.12 * spots(q, 19, 3))
+    base = n[1] < -0.2 ? mix(base, belly, Math.min(1, (-0.2 - n[1]) / 0.3)) : base
+    // smooth skin is wet: a soft highlight where it faces the light
+    return p.hide === 'smooth' ? mix(base, [1, 1, 0.94], 0.45 * Math.max(0, n[0] * SHINE[0] + n[1] * SHINE[1] + n[2] * SHINE[2]) ** 14) : base
   }
-  const parts: SculptPart[] = []
+  /** Fur for a part, lying along `flow`, as long as `long` of the body's. */
+  const fur = (flow: Fur['flow'], long = 1, more: Partial<Fur> = {}): Pick<FurryPart, 'fur'> =>
+    (furry ? { fur: { length: Math.max(0.03, p.girth * 0.27) * long, flow, lift: 0.4, wild: 0.5, ...more } } : {})
+  const parts: FurryPart[] = []
   const hipR = p.girth, chestR = p.girth * p.chest
   const hc = L.headC, hr = p.head
   // body, neck and tail as one hide
   const tb = L.bones.filter((b) => b.name.startsWith('tail'))
   const trunk = [cone(L.hips, L.chest, hipR, chestR), cone(L.chest, L.neckTop, Math.min(chestR, hr) * 0.75, hr * 0.6)]
   tb.forEach((b, k) => trunk.push(cone(b.head, b.tail!, fat(hipR * 0.55 * (1 - k / 3)), fat(hipR * 0.55 * (1 - (k + 1) / 3) + 0.008))))
-  parts.push({ shape: hide(smooth(p.girth * 0.3, ...trunk)), color: coat, bones: ['body', 'chest', 'neck', 'head', ...tb.map((b) => b.name)] })
-  if (tb.length) parts.push({ shape: sphere(tb[tb.length - 1].tail!, fat(hipR * 0.2)), color: accent, bones: [tb[tb.length - 1].name] })
+  // the coat lies back along the body and tail, hangs longer under the belly, and stands in a mane down the neck
+  const upright = p.legs === 2
+  parts.push({
+    shape: hide(smooth(p.girth * 0.3, ...trunk)), color: coat, bones: ['body', 'chest', 'neck', 'head', ...tb.map((b) => b.name)],
+    ...fur(upright ? (q) => [q[0] * 0.5, -1, q[2] < L.hips[2] ? -0.8 : -0.25] : [0, -0.35, -1], 1, { long: (q, n) => (n[1] < -0.3 ? 1.3 : q[2] > L.chest[2] && n[1] > 0.3 ? 1.5 : 1) }),
+  })
+  // a tuft at the end of the tail
+  if (tb.length) parts.push({ shape: sphere(tb[tb.length - 1].tail!, fat(hipR * 0.2)), color: accent, bones: [tb[tb.length - 1].name], ...fur([0, 0.1, -1], 1.5, { lift: 0.7, wild: 0.9, density: 2 }) })
   // the head, and the jaw under it: a chin that drops when it roars
   const snouted = p.snout > 0.15
   const tip: Vec3 = [0, hc[1] - hr * 0.15, hc[2] + hr * (0.8 + p.snout * 0.9)]
@@ -234,8 +262,15 @@ function spec(p: Plan, s: number): SculptSpec {
   const jawC: Vec3 = [0, hc[1] - hr * 0.56, (hc[2] - hr * 0.2 + front) / 2]
   const jawR: Vec3 = [hr * 0.58, hr * 0.3, (front - hc[2] + hr * 0.2) / 2 + hr * 0.1]
   const jaw = ellipsoid(jawC, jawR)
+  // where the eyes sit: the face's fur keeps clear of them
+  const er = hr * p.eye
+  const eyeAt: Vec3[] = p.eyes === 1 ? [[0, hc[1] + hr * 0.45, hc[2] + hr * 0.7]]
+    : p.eyes === 2 ? SIDES.map(([, x]) => side(x, [hr * 0.48, hc[1] + hr * 0.4, hc[2] + hr * 0.68]))
+      : [[0, hc[1] + hr * 0.62, hc[2] + hr * 0.6], ...SIDES.map(([, x]) => side(x, [hr * 0.55, hc[1] + hr * 0.28, hc[2] + hr * 0.7]))]
   parts.push({
     shape: hide(head, A * 0.1), bones: ['head'],
+    // short on the face, lying back from the nose
+    ...fur((q) => [q[0], 0.2, -1], 0.42, { lift: 0.22, wild: 0.35, long: (q) => (eyeAt.some((e) => Math.hypot(q[0] - e[0], q[1] - e[1], q[2] - e[2]) < er * 1.7) ? 0 : q[2] > hc[2] + hr * 0.5 ? 0.6 : 1) }),
     color: (q, n) => {
       const d = jaw.sdf(q[0], q[1], q[2])
       if (d < 0) return n[1] < -0.2 ? MOUTH : coat(q, n)
@@ -247,6 +282,8 @@ function spec(p: Plan, s: number): SculptSpec {
   parts.push({
     shape: jaw, bones: ['jaw'], group: 'jaw',
     color: (q, n) => (head.sdf(q[0], q[1], q[2]) < 0 ? (n[1] > 0.5 && Math.abs(q[0]) < hr * 0.24 ? TONGUE : MOUTH) : n[1] < -0.1 ? belly : coat(q, n)),
+    // a beard under the chin, clear of the mouth
+    ...fur([0, -1, -0.3], 0.6, { lift: 0.3, long: (q, n) => (head.sdf(q[0], q[1], q[2]) < hr * 0.12 || n[1] > 0 ? 0 : 1) }),
   })
   // teeth round the jaw, and two tusks from the lip above
   const TEETH = 9
@@ -260,10 +297,6 @@ function spec(p: Plan, s: number): SculptSpec {
     parts.push({ shape: cone(at, [at[0], at[1] - hr * 0.3, at[2] + hr * 0.04], fat(hr * 0.065), fat(hr * 0.015)), color: HORN, bones: ['head'], noShadow: true })
   }
   // eyes, looking ahead, each under a brow
-  const er = hr * p.eye
-  const eyeAt: Vec3[] = p.eyes === 1 ? [[0, hc[1] + hr * 0.45, hc[2] + hr * 0.7]]
-    : p.eyes === 2 ? SIDES.map(([, x]) => side(x, [hr * 0.48, hc[1] + hr * 0.4, hc[2] + hr * 0.68]))
-      : [[0, hc[1] + hr * 0.62, hc[2] + hr * 0.6], ...SIDES.map(([, x]) => side(x, [hr * 0.55, hc[1] + hr * 0.28, hc[2] + hr * 0.7]))]
   for (const at of eyeAt) {
     const out: Vec3 = [at[0] * 0.6 / hr, 0.15, 1]
     const ol = Math.hypot(...out)
@@ -346,6 +379,8 @@ function spec(p: Plan, s: number): SculptSpec {
       parts.push({
         shape: hide(smooth(lr * 0.5, ellipsoid(th.head, [lr * 1.2, lr * 1.5, lr * 1.4]), cone(th.head, sh.head, lr, lr * 0.75), cone(sh.head, ft.head, lr * 0.75, lr * 0.6)), A * 0.1),
         color: coat, bones: [body, `${sd}Thigh${i}`, `${sd}Shin${i}`, `${sd}Foot${i}`],
+        // down the leg, shaggier over the haunch
+        ...fur([0, -1, -0.2], 0.7, { lift: 0.3, long: (q) => (q[1] > sh.head[1] ? 1.2 : 0.75) }),
       })
       const toe = ft.tail!
       const fy = Math.max(lr * 0.5, 0.02)
@@ -358,16 +393,20 @@ function spec(p: Plan, s: number): SculptSpec {
       const a = L.bones.find((b) => b.name === `${sd}Arm`)!, f = L.bones.find((b) => b.name === `${sd}Forearm`)!
       const ar = Math.max(0.02, p.girth * 0.28)
       const hand = f.tail!
-      parts.push({ shape: hide(smooth(ar * 0.4, sphere(a.head, ar * 1.25), cone(a.head, f.head, ar, ar * 0.8), cone(f.head, hand, ar * 0.8, ar * 0.65), sphere(hand, ar)), A * 0.1), color: (q, n) => (q[1] < hand[1] + ar * 0.6 ? mix(coat(q, n), dark, 0.4) : coat(q, n)), bones: ['chest', `${sd}Arm`, `${sd}Forearm`] })
+      parts.push({ shape: hide(smooth(ar * 0.4, sphere(a.head, ar * 1.25), cone(a.head, f.head, ar, ar * 0.8), cone(f.head, hand, ar * 0.8, ar * 0.65), sphere(hand, ar)), A * 0.1), color: (q, n) => (q[1] < hand[1] + ar * 0.6 ? mix(coat(q, n), dark, 0.4) : coat(q, n)), bones: ['chest', `${sd}Arm`, `${sd}Forearm`], ...fur([0, -1, -0.1], 0.6, { lift: 0.3, long: (q) => (q[1] < hand[1] + ar * 0.6 ? 0.4 : 1) }) })
       claws([hand[0], hand[1] - ar * 0.5, hand[2] + ar * 0.5], ar, [0, -0.8, 0.6], [`${sd}Forearm`])
     }
   }
   return { bones: L.bones, parts, blend: Math.max(0.03, p.girth * 0.42), light: { ambient: 0.66, shadow: 0.5 } }
 }
 
+/** The share of a furry monster's blobs that are its skin; the rest are strands. */
+const SKIN = 0.4
+
 export function makeMonster(seed: number, count = 15000) {
   const p = planMonster(seed)
-  const b = sculptToCount((s) => spec(p, s), count, 0.03)
+  const skin = sculptToCount((s) => spec(p, s), p.hide === 'fur' ? count * SKIN : count, 0.03)
+  const b = p.hide === 'fur' ? growFur(skin, spec(p, skin.spacing).parts, count) : skin
   return { blobs: b.blobs, skin: b.skin, skeleton: b.skeleton }
 }
 
@@ -395,13 +434,22 @@ export function monsterWalk(p: Plan) {
   return (sk: Skeleton, t: number) => {
     sk.reset()
     const ph = (t / T) * TAU
-    const pairs = legSpots(p).length
-    for (let i = 0; i < pairs; i++) {
+    const pairs = legSpots(p)
+    for (let i = 0; i < pairs.length; i++) {
       for (const [s] of SIDES) {
         const a = ph + legPhase(p, i, s === 'l')
-        set(sk, `${s}Thigh${i}`, X, -0.6 * Math.sin(a))
-        set(sk, `${s}Shin${i}`, X, 1.0 * Math.max(0, Math.cos(a)))
-        set(sk, `${s}Foot${i}`, X, -0.4 * Math.max(0, Math.cos(a)))
+        const lift = Math.max(0, Math.cos(a))
+        if (elbowed(p, pairs[i])) {
+          // a front leg: the elbow draws back and up, the forearm folds forward under it and the paw hangs back
+          set(sk, `${s}Thigh${i}`, X, -0.5 * Math.sin(a) + 0.35 * lift)
+          set(sk, `${s}Shin${i}`, X, -0.9 * lift)
+          set(sk, `${s}Foot${i}`, X, 0.8 * lift)
+        } else {
+          // a hind leg, or a leg of two: the knee comes forward and the shin folds back behind it
+          set(sk, `${s}Thigh${i}`, X, -0.6 * Math.sin(a) - 0.15 * lift)
+          set(sk, `${s}Shin${i}`, X, 1.0 * lift)
+          set(sk, `${s}Foot${i}`, X, -0.4 * lift)
+        }
       }
     }
     const bob = Math.sin(ph * 2)
@@ -490,6 +538,7 @@ export function monsterSpecies(seed: number): Species {
   const height = layout(p).headC[1] + p.head
   const reach = Math.max(height, p.length * (1 + p.tail * 0.6) + p.head * 2)
   const bits = [
+    p.hide === 'fur' ? 'furry' : p.hide === 'scales' ? 'scaly' : 'smooth-skinned',
     `${NUMBERS[p.legs]}-legged`,
     p.eyes === 2 ? '' : `${NUMBERS[p.eyes]}-eyed`,
   ].filter(Boolean).join(', ')
