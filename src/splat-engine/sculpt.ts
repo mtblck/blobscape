@@ -34,6 +34,11 @@ export interface SculptSpec {
   /** How far (in world units) a cell's weight spreads from a bone. */
   blend: number
   light?: Partial<VoxelLight>
+  /**
+   * How deep (world units) a part's skin goes on inside a neighbor of its group. 0 cuts it off at the neighbor's
+   * surface; a little keeps a neck closed where it meets a turning head.
+   */
+  skirt?: number
 }
 
 export interface Sculpted extends Creature {
@@ -41,13 +46,19 @@ export interface Sculpted extends Creature {
   spacing: number
 }
 
+/**
+ * A creature's discs are wider than a scene's (voxel.ts `disc`): a creature is seen as blobs, without pixel mode's
+ * alpha cut, and at the scene's size its far side showed through between them.
+ */
+export const DISC = 0.75
+
 /** Cuts the creature on a grid of `spacing`. */
 export function buildSculpt(spec: SculptSpec, spacing: number): Sculpted {
   // the cutter culls between parts on one bone, so each group borrows a bone of its own for the cut
   const groups = [...new Set(spec.parts.map((p) => p.group ?? ''))]
   if (groups.length > spec.bones.length) throw new Error('more groups than bones')
   const built = buildVoxels({
-    bones: spec.bones, spacing, light: spec.light, blocks: true,
+    bones: spec.bones, spacing, light: spec.light, blocks: true, trueShell: true, keepBuried: spec.skirt, disc: DISC,
     parts: spec.parts.map((p) => ({ shape: p.shape, color: p.color, bone: spec.bones[groups.indexOf(p.group ?? '')].name, glow: p.glow, opacity: p.opacity, noShadow: p.noShadow })),
   })
   const index = new Map(spec.bones.map((b, i) => [b.name, i]))

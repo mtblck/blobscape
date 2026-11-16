@@ -55,6 +55,20 @@ export interface VoxelSpec {
   light?: Partial<VoxelLight>
   /** Skip blocks of cells far from a surface: much quicker for big smooth shapes, sound only for honest distance functions (sculpt.ts). */
   blocks?: boolean
+  /**
+   * Keep the outermost layer one cell thick in true distance, not in the shape's own units. A shape pushed in and
+   * out (`displace`) can have a distance that changes faster than one unit per unit; read raw, its layer comes out
+   * thinner than a cell and leaves holes you see the far side through. Creatures (sculpt.ts) turn this on.
+   */
+  trueShell?: boolean
+  /** How deep (world units) a cell may sit inside a neighbor on its bone and still be made: a skirt that keeps a joint closed as parts move. */
+  keepBuried?: number
+  /**
+   * A disc's radius (its blob's scale across the surface) as a share of `spacing`. The default leaves the grid
+   * crisp for pixel mode, which cuts alpha; drawn smooth, discs that small let about a tenth of what lies behind
+   * show between them, so a creature seen as blobs wants them wider.
+   */
+  disc?: number
 }
 
 /**
@@ -225,12 +239,17 @@ export function buildVoxels(spec: VoxelSpec): Built {
     const i0 = Math.floor(min[0] / s), i1 = Math.ceil(max[0] / s)
     const j0 = Math.floor(min[1] / s), j1 = Math.ceil(max[1] / s)
     const k0 = Math.floor(min[2] / s), k1 = Math.ceil(max[2] / s)
+  const disc = spec.disc ?? 0.55
+  const buried = -Math.max(s, spec.keepBuried ?? 0)
     const cell = (x: number, y: number, z: number) => {
       const d = sdf(x, y, z)
       // the outermost layer of cells inside the shape
-      if (d > 0 || d <= -s) return
-      if (same.some((q) => boxDistance(q, x, y, z) === 0 && q.sdf(x, y, z) < -s)) return
-      const n = norm([sdf(x + e, y, z) - sdf(x - e, y, z), sdf(x, y + e, z) - sdf(x, y - e, z), sdf(x, y, z + e) - sdf(x, y, z - e)])
+      if (d > 0 || d <= -s * (spec.trueShell ? 4 : 1)) return
+      const g: Vec3 = [sdf(x + e, y, z) - sdf(x - e, y, z), sdf(x, y + e, z) - sdf(x, y - e, z), sdf(x, y, z + e) - sdf(x, y, z - e)]
+      // the distance in world units, from how fast the shape's distance changes here
+      if (spec.trueShell && (d * s) / (Math.hypot(g[0], g[1], g[2]) || s) <= -s) return
+      if (same.some((q) => boxDistance(q, x, y, z) === 0 && q.sdf(x, y, z) < buried)) return
+      const n = norm(g)
       const p: Vec3 = [x, y, z]
       const base = typeof part.color === 'function' ? part.color(p, n) : part.color
       let shade = 1
@@ -241,7 +260,7 @@ export function buildVoxels(spec: VoxelSpec): Built {
       }
       blobs.push({
         // a disc lying on the surface: flat along the normal, which is what live lights read as the way it faces
-        center: p, scale: [s * 0.55, s * 0.55, s * 0.3], quat: quatFacing(n),
+        center: p, scale: [s * disc, s * disc, s * 0.3], quat: quatFacing(n),
         color: [base[0] * shade, base[1] * shade, base[2] * shade], opacity: part.opacity ?? 0.96,
       })
       parts.push(pi)
