@@ -15,6 +15,8 @@ import { DIORAMAS, type Diorama } from './diorama/scenes.ts'
 import type { Skeleton } from '../splat-engine/rig.ts'
 
 const SIZES = [2, 3, 4, 6]
+/** Frames a second the scene moves at: 0 is every frame the screen shows. */
+const RATES = [0, 12, 8]
 declare global {
   interface Window { __diorama?: { stage: CreatureStage; blobs: () => number; bones: () => number; look: () => PixelLook } }
 }
@@ -70,7 +72,8 @@ export function PixelDiorama() {
   const [outline, setOutline] = useState(diorama.finish.outline)
   const [edges, setEdges] = useState(diorama.finish.edges)
   const [sky, setSky] = useState(diorama.finish.sky)
-  const [steady, setSteady] = useState(() => typeof location === 'undefined' || new URLSearchParams(location.search).get('steady') !== '0')
+  const [steady, setSteady] = useState(() => new URLSearchParams(location.search).get('steady') !== '0')
+  const [rate, setRate] = useState(0)
   const [view, setView] = useState(diorama.views[0].id)
   const [orbit, setOrbit] = useState<Orbit>(diorama.views[0].orbit)
   const [art, setArt] = useState<{ width: number; height: number }>()
@@ -134,6 +137,7 @@ export function PixelDiorama() {
   }, [stage, scene, calm])
   useEffect(() => { stage?.setPixels(pixels ? look : undefined, size) }, [stage, pixels, look, size])
   useEffect(() => { if (stage) stage.playing = playing }, [stage, playing])
+  useEffect(() => { if (stage) { stage.step = pixels && rate ? 1 / rate : 0; stage.invalidate() } }, [stage, pixels, rate])
   const orbitNow = useRef(orbit)
   const posed = useRef<Diorama | undefined>(undefined)
   orbitNow.current = orbit
@@ -293,6 +297,11 @@ export function PixelDiorama() {
                 <Field label="Pixel size">
                   <div className="flex flex-wrap gap-1.5">
                     {SIZES.map((n) => <Chip key={n} active={size === n} onClick={() => { setSize(n); setPixels(true) }}>{n}×</Chip>)}
+                  </div>
+                </Field>
+                <Field label="Motion">
+                  <div className="flex flex-wrap gap-1.5">
+                    {RATES.map((n) => <Chip key={n} active={rate === n} onClick={() => { setRate(n); setPixels(true) }}>{n ? `${n} a second` : 'Smooth'}</Chip>)}
                   </div>
                 </Field>
               </div>

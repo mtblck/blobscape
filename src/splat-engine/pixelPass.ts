@@ -7,8 +7,8 @@ import { BAYER4, EDGE_DARK, EDGE_JUMP, GLOW_FROM, GLOW_SHOWS, GLOW_TAPS, MAX_PAL
 const TSL = TSLTyped as unknown as Record<string, any>
 const { Fn, If, Loop, dot, float, floor, int, max, min, mod, pow, select, smoothstep, sqrt, texture, uniform, uniformArray, uv, vec2, vec3, vec4 } = TSL
 
-/** A stored pixel is taken for a palette colour when it is this close to it in OKLab (it has been through 8 bits). */
-const SAME = 0.02
+/** A stored pixel is taken for a palette colour when it is this close to it in OKLab: the art keeps palette colours exactly, so this only allows for rounding. */
+const SAME = 0.004
 
 const MAX_PALETTE = MAX_PALETTE_SIZE
 
@@ -29,10 +29,12 @@ export class PixelPass {
   /** The scene, drawn small. Linear and premultiplied, as any render target. */
   readonly small = new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter })
   /** The art of this frame and of the one before: each frame is drawn into the older of the two. */
-  private readonly frames = [0, 1].map(() => new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter }))
+  private readonly frames = [0, 1].map(() => new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter, depthBuffer: false }))
   private now = 0
   /** Whether the other target holds the frame before (not after a new size or look). */
   private kept = false
+  /** Whether the last frame was drawn against the one before. */
+  private used = false
   private readonly quad: QuadMesh
   private readonly material = new NodeMaterial()
   private readonly copy = new NodeMaterial()
@@ -41,7 +43,7 @@ export class PixelPass {
   private readonly artTex = texture(this.frames[0].texture)
   private readonly sticky = uniform(0)
   private readonly res = uniform(new Vector2(1, 1))
-  /** How many art pixels fit across and down the output: `res` when drawing the art itself, a fraction more on a screen. */
+  /** How many art pixels fit across and down the screen: the art's size or a fraction under it, as the last one may be cut off. */
   private readonly cells = uniform(new Vector2(1, 1))
   private readonly count = uniform(0)
   private readonly dither = uniform(0)
@@ -77,7 +79,9 @@ export class PixelPass {
   get art() { return this.frames[this.now] }
   /** The art of the frame before, when this frame was drawn against it (a look with `steady`): what `pixelArt` needs to give the same answer. */
   get before() { return this.used ? this.frames[1 - this.now] : undefined }
-  private used = false
+
+  /** Forgets the frame before: for when what is being drawn is swapped for something else. */
+  reset() { this.kept = false }
 
   /** The look in use. */
   look!: PixelLook

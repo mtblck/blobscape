@@ -20,7 +20,8 @@ export const SH_C0 = 0.28209479177387814
 /**
  * Pixels read back from a render target are linear and premultiplied by
  * alpha. Converts them to display (sRGB) colour, either straight (for an
- * ImageData) or still premultiplied (for the pixel pipeline), and flips the
+ * ImageData) or still premultiplied (for the pixel pipeline; `encoded` skips
+ * the conversion for a target that already holds sRGB), and flips the
  * rows when `flip` is set (WebGPU reads top-down, WebGL bottom-up).
  */
 export function readbackToSrgb(px: Uint8Array, w: number, h: number, { flip, premultiplied, encoded }: { flip: boolean; premultiplied: boolean; /** The target already holds straight sRGB (pixel mode's art): only the rows need turning. */ encoded?: boolean }, out = new Uint8ClampedArray(w * h * 4)) {

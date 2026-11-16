@@ -865,6 +865,21 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
       if (!(c.look.steady > 0 && c.before && differ < a.solid * 0.05 && held > 20)) fails.push(`${label}: steady pixels: ${JSON.stringify({ steady: c.look.steady, before: !!c.before, differ, held })}`)
       else ok(`${label}: steady pixels: drawn against the frame before as the CPU twin is (${differ} pixels a neighbouring colour), ${held} pixels keep their colour that would have flipped`)
     }
+    // held frames: with a step, the scene only moves on every step, so two moments inside one step are one picture
+    {
+      const held = await d.page.evaluate(async () => {
+        const { stage } = window.__diorama
+        const grab = async (t) => { await stage.frame(t); return (await stage.pixelFrames()).art.data }
+        stage.step = 1 / 8
+        const x = await grab(3.01), y = await grab(3.1), z = await grab(3.26)
+        const at = stage.time
+        stage.step = 0
+        const differ = (p, q) => { let n = 0; for (let i = 0; i < p.length; i += 4) if (p[i] !== q[i] || p[i + 1] !== q[i + 1] || p[i + 2] !== q[i + 2]) n++; return n }
+        return { same: differ(x, y), next: differ(x, z), at }
+      })
+      if (!(held.same === 0 && held.next > 20 && Math.abs(held.at - 3.25) < 1e-6)) fails.push(`${label}: held frames: ${JSON.stringify(held)}`)
+      else ok(`${label}: held frames: two moments inside one eighth of a second are the same picture, the next eighth moves ${held.next} pixels`)
+    }
     // the same moment drawn twice is the same picture: blobs at one depth keep one order, so edges (a window in its frame) do not flicker
     const twice = await d.page.evaluate(async () => {
       const { stage } = window.__diorama

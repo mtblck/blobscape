@@ -384,9 +384,10 @@ export function lookColours(look: PixelLook): Rgb[] {
 }
 
 /**
- * Moves every solid pixel onto the closest of `colours`, in place. Art read
- * back from the GPU has been through 8-bit linear colour, which leaves each
- * channel a level or two off the palette; this puts it back exactly.
+ * Moves every solid pixel onto the closest of `colours`, in place. Colour that
+ * has been through 8-bit linear storage comes back a level or two off the
+ * palette; this puts it back exactly. (The live pass now keeps its art in
+ * sRGB, where a palette colour is stored as it is, so there it changes nothing.)
  */
 export function snapColours(f: Frame, colours: Rgb[]): Frame {
   if (!colours.length) return f
