@@ -14,7 +14,7 @@ The point is that Claude can write one from a sentence. A scene that is data can
 | --- | --- |
 | `name`, `loop` | A name, and the seconds before everything repeats. |
 | `palette` | 2 to 32 colours, `'#rrggbb'`. The picture uses only these. |
-| `sky` | Top and bottom colours of the backdrop. |
+| `sky` | Top and bottom colours of the backdrop. `skyReach` (0.05 to 1) is how far down the picture the blend runs before it is all the bottom colour. |
 | `light` | The baked sun: where it is, how much light reaches everywhere, how dark shadows are. |
 | `look` | Dither, glow, outline, edge lines. |
 | `camera` | Where the view starts, and optionally a `swing`: degrees (0 to 60) it rocks to either side, once a loop, as the scene plays. |

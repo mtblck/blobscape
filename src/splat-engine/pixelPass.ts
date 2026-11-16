@@ -40,6 +40,8 @@ export class PixelPass {
   /** The sky at the top and bottom of the picture, sRGB 0–255. */
   private readonly skyTop = uniform(new Vector3())
   private readonly skyLow = uniform(new Vector3())
+  /** How far down the picture the sky's blend runs (0–1). */
+  private readonly skyReach = uniform(1)
   private readonly palLab = Array.from({ length: MAX_PALETTE }, () => new Vector3())
   private readonly palLinear = Array.from({ length: MAX_PALETTE }, () => new Vector3())
 
@@ -69,7 +71,7 @@ export class PixelPass {
     this.edges.value = look.edges ?? 0
     this.lined.value = look.outline ? 1 : 0
     this.skied.value = look.sky ? 1 : 0
-    if (look.sky) { this.skyTop.value.set(...look.sky[0]); this.skyLow.value.set(...look.sky[1]) }
+    if (look.sky) { this.skyTop.value.set(...look.sky[0]); this.skyLow.value.set(...look.sky[1]); this.skyReach.value = look.sky[2] ?? 1 }
     if (look.outline) this.line.value.set(srgbToLinear(look.outline[0] / 255), srgbToLinear(look.outline[1] / 255), srgbToLinear(look.outline[2] / 255))
   }
 
@@ -177,8 +179,10 @@ export class PixelPass {
       })
         .ElseIf(this.lined.greaterThan(0).and(beside), () => { out.assign(vec4(this.line, 1)) })
         .ElseIf(this.skied.greaterThan(0), () => {
-          colour.assign(this.skyTop.add(this.skyLow.sub(this.skyTop).mul(row.add(0.5).div(res.y))).add(spill))
-          spread.assign(max(this.dither, SKY_DITHER))
+          const t = min(row.add(0.5).div(res.y).div(this.skyReach), 1).toVar()
+          colour.assign(this.skyTop.add(this.skyLow.sub(this.skyTop).mul(t)).add(spill))
+          // a sky that stops short eases its dither away over the last quarter of the blend, so it ends flat with no seam
+          spread.assign(max(this.dither, select(this.skyReach.lessThan(1), min(float(1).sub(t).mul(4), 1), 1).mul(SKY_DITHER)))
           shown.assign(1)
         })
         .ElseIf(max(spill.x, max(spill.y, spill.z)).greaterThan(GLOW_SHOWS), () => { colour.assign(spill); shown.assign(1) })

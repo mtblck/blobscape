@@ -25,6 +25,8 @@ export interface SceneDoc {
   palette: string[]
   /** The sky behind, top and bottom. Left out, the background is clear. */
   sky?: [string, string]
+  /** How far down the picture the sky's blend runs before it is all the bottom colour: 0.05 to 1, the whole way when left out. */
+  skyReach?: number
   look?: { dither?: number; glow?: number; outline?: boolean; edges?: boolean }
   /** Where the view starts. `swing` rocks it gently from side to side by that many degrees, once a loop. */
   camera: Orbit & { swing?: number }
@@ -190,6 +192,7 @@ export function checkScene(doc: unknown): string[] {
   }
   hexes(doc.palette, 'palette', 2, MAX_PALETTE_SIZE)
   if (doc.sky !== undefined) hexes(doc.sky, 'sky', 2, 2)
+  opt(doc.skyReach, 'skyReach', 0.05, 1)
   if (doc.look !== undefined) {
     if (!obj(doc.look)) bad('look', 'must be an object')
     else {
@@ -467,7 +470,7 @@ export function compileScene(doc: SceneDoc): CompiledScene {
       glow: doc.look?.glow ?? 1.5,
       outline: doc.look?.outline === false ? null : darkest(palette),
       edges: doc.look?.edges === false ? 0 : 1,
-      sky: doc.sky ? [rgb(doc.sky[0]), rgb(doc.sky[1])] : undefined,
+      sky: doc.sky ? [rgb(doc.sky[0]), rgb(doc.sky[1]), doc.skyReach ?? 1] : undefined,
     },
     spec(spacing) {
       const thin = spacing * 0.75

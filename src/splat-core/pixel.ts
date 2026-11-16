@@ -254,8 +254,12 @@ export interface PixelLook {
   glow: number
   /** Lines inside the scene, where one colour meets a much lighter one: 0 (or left out) is none, 1 the darkest line. */
   edges?: number
-  /** A backdrop behind the scene: its colour at the top and at the bottom of the picture, blended between and dithered into the palette. Left out, empty pixels stay clear. */
-  sky?: [top: Rgb, bottom: Rgb]
+  /**
+   * A backdrop behind the scene: its colour at the top and at the bottom of the picture, blended between and dithered into the palette.
+   * `reach` is how far down the picture the blend runs before it is all the bottom colour (0–1, the whole way when left out).
+   * Left out, empty pixels stay clear.
+   */
+  sky?: [top: Rgb, bottom: Rgb, reach?: number]
 }
 
 /** The most colours a look's palette can hold (the live pass keeps them in a fixed list). */
@@ -327,9 +331,10 @@ export function pixelArt(f: Frame, look: PixelLook): Frame {
         out.data[i] = look.outline[0]; out.data[i + 1] = look.outline[1]; out.data[i + 2] = look.outline[2]; out.data[i + 3] = 255
         continue
       } else if (look.sky) {
-        const [top, low] = look.sky, t = (y + 0.5) / h
+        const [top, low, reach = 1] = look.sky, t = Math.min(1, (y + 0.5) / h / reach)
         r = top[0] + (low[0] - top[0]) * t + g[0]; gg = top[1] + (low[1] - top[1]) * t + g[1]; b = top[2] + (low[2] - top[2]) * t + g[2]
-        spread = Math.max(look.dither, SKY_DITHER) * 48
+        // a sky that stops short eases its dither away over the last quarter of the blend, so it ends flat with no seam
+        spread = Math.max(look.dither, SKY_DITHER * (reach < 1 ? Math.min(1, (1 - t) * 4) : 1)) * 48
       } else if (Math.max(g[0], g[1], g[2]) > GLOW_SHOWS) { r = g[0]; gg = g[1]; b = g[2] }
       else continue
       r = Math.min(255, r); gg = Math.min(255, gg); b = Math.min(255, b)

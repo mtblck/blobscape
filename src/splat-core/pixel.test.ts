@@ -130,3 +130,11 @@ test('pixelArt fills the empty pixels with the sky, top colour to bottom, in pal
   // without a sky the same pixels stay clear
   assert.equal(countSolid(pixelArt(f, { palette: PAL, dither: 0, outline: null, glow: 0 })), 1)
 })
+
+test('a sky with a reach is all its bottom colour below that share of the picture', () => {
+  const f = makeFrame(4, 16)
+  const art = pixelArt(f, { palette: PAL, dither: 0, outline: null, glow: 0, sky: [[250, 240, 200], [20, 16, 24], 0.5] })
+  const at = (x: number, y: number) => [...art.data.subarray((y * 4 + x) * 4, (y * 4 + x) * 4 + 3)]
+  for (let y = 8; y < 16; y++) for (let x = 0; x < 4; x++) assert.deepEqual(at(x, y), [20, 16, 24])
+  assert.ok([0, 1, 2, 3].some((x) => at(x, 0)[0] === 250))
+})
