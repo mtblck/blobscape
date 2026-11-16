@@ -16,6 +16,7 @@ import { Break } from './lessons/Break.tsx'
 import { OneBone } from './lessons/OneBone.tsx'
 import { Weights } from './lessons/Weights.tsx'
 import { Twist } from './lessons/Twist.tsx'
+import { Morphs } from './lessons/Morphs.tsx'
 import { Walk } from './lessons/Walk.tsx'
 import { Model } from './lessons/Model.tsx'
 import { Shoot } from './lessons/Shoot.tsx'
@@ -36,7 +37,7 @@ import { Contact } from './Contact.tsx'
 import { Engine } from './Engine.tsx'
 import { Spec } from './Spec.tsx'
 
-const PAGES: Record<string, () => React.JSX.Element> = { 'one-blob': OneBlob, footprint: Footprint, order: Order, many: Many, angle: Angle, paint: Paint, formats: Formats, break: Break, 'one-bone': OneBone, weights: Weights, twist: Twist, walk: Walk, model: Model, shoot: Shoot, fuzzy: Fuzzy, floaters: Floaters, lighting: Lighting }
+const PAGES: Record<string, () => React.JSX.Element> = { 'one-blob': OneBlob, footprint: Footprint, order: Order, many: Many, angle: Angle, paint: Paint, formats: Formats, break: Break, 'one-bone': OneBone, weights: Weights, twist: Twist, walk: Walk, model: Model, morphs: Morphs, shoot: Shoot, fuzzy: Fuzzy, floaters: Floaters, lighting: Lighting }
 
 export function App() {
   const route = useRoute()
