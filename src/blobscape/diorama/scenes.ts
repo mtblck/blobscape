@@ -14,6 +14,9 @@ import { ISLES } from './scenes/isles.ts'
 import { OCTOPUS } from './scenes/octopus.ts'
 import { OWL } from './scenes/owl.ts'
 import { REEF } from './scenes/reef.ts'
+import { SNAIL } from './scenes/snail.ts'
+import { SPIDER } from './scenes/spider.ts'
+import { WINDOW } from './scenes/window.ts'
 import { WINDMILL } from './scenes/windmill.ts'
 
 /** A scene Pixel Diorama can show: how to build it, move it and light it, and how it asks to be drawn. */
@@ -102,5 +105,8 @@ export const DIORAMAS: Diorama[] = [
   described('octopus', OCTOPUS, 'A purple octopus riding a bell buoy through a storm at night, holding up a glowing lantern in one arm while its other arms curl and the bell swings, in falling rain'),
   described('owl', OWL, 'A great owl in a starry wizard hat perched on a stump, turning its head to watch a cauldron of glowing pink potion that stirs itself over a fire, among candles, bottles, books and mushrooms'),
   described('isles', ISLES, 'Snowy islands of rock adrift in a night sky, joined by rope bridges: a cabin with lit windows and a smoking chimney among pines, a frozen waterfall, a crown of glowing ice crystals, a beacon, and falling snow'),
+  described('window', WINDOW, 'A round stained glass window with turning rings of panes, in the last wall of a ruined library at sunrise, with shelves, piles of books and a tree grown over the wall.'),
+  described('spider', SPIDER, 'A wind-up brass spider with a lantern for a body, on its web between two bare trees, with moths circling the light.'),
+  described('snail', SNAIL, 'A giant snail whose shell is a little house, with lit windows, a smoking chimney, a deck with a flag and a swinging lantern, inching through a wood of tall glowing mushrooms with ferns and fireflies'),
   described('windmill', WINDMILL, 'A windmill on a farm by day, with turning sails, sheep, a duck on a pond, a wheat field, trees, clouds and birds'),
 ]
