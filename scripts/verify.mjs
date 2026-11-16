@@ -1150,7 +1150,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     await k.ctx.close()
   }
 
-  // Dungeon Run: the hall draws, a swing bursts a slime into splats, a bolt costs magic, a touch takes health off the bar, and down shows Try again
+  // Dungeon Run: the hall draws, a swing bursts a slime into splats, a bolt costs magic, a touch takes health off the bar, down shows Try again, and fire and frost spread on the floor
   {
     const k = await open('/experiments/dungeon-run/?offscreen=1', { viewport: { width: 1280, height: 900 } })
     await k.page.waitForFunction(() => window.__dungeon?.stage.dungeon, null, { timeout: 90000 }).catch(() => {})
@@ -1200,7 +1200,51 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     const want = was.backend === 'webgpu' ? 'live' : 'baked'
     if (!(was.light === want && bakedLook.warm > 20000 && liveLook.warm > 5000 && liveLook.warm !== bakedLook.warm)) fails.push(`blobscape dungeon light: ${JSON.stringify({ was, live: liveLook, baked: bakedLook })}`)
     else ok(`blobscape dungeon: starts with ${want} light on ${was.backend}; live and baked both draw (${liveLook.warm} and ${bakedLook.warm} torchlit pixels)`)
+    // fire and frost: a bolt lights the floor where it lands, the floor's blobs change color, and fire burns out. Once here, once on WebGL.
+    const elements = async (page, name) => {
+      const run = (s, input = { forward: 0, turn: 0 }) => page.evaluate(async ([s, input]) => { await window.__dungeon.stage.frame(s, input) }, [s, input])
+      const see = () => page.evaluate(() => {
+        const cv = document.querySelector('[data-testid=dungeon-view]')
+        const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+        let ember = 0, ice = 0
+        // only the lower half: the floor, not the torches
+        for (let i = d.length / 2; i < d.length; i += 4) {
+          if (d[i] > 200 && d[i + 1] > 70 && d[i + 1] < 190 && d[i + 2] < 100) ember++
+          if (d[i + 2] > 150 && d[i + 2] > d[i] * 1.12 && d[i + 1] > 120) ice++
+        }
+        const g = window.__dungeon.stage.dungeon.game.ground
+        return { ember, ice, fire: g.count('fire'), frost: g.count('frost'), stained: window.__dungeon.stage.dungeon.stainedBlobs }
+      })
+      await page.evaluate(() => { const g = window.__dungeon.stage.dungeon.game; g.restart(); g.hold(); g.place('purple', 0, g.hero.z + 3) })
+      await run(0.2)
+      const before = await see()
+      await run(0.05, { forward: 0, turn: 0, cast: true })
+      await run(1.4)
+      const burning = await see()
+      await run(6)
+      const out = await see()
+      // frost on clean stone (on the scorched patch it would be too dark to tell from the picture)
+      const scorched = out.stained
+      await page.evaluate(() => { const g = window.__dungeon.stage.dungeon.game; g.restart(); g.hold(); g.place('purple', 0, g.hero.z + 3) })
+      await run(0.2)
+      const clean = await see()
+      await run(0.05, { forward: 0, turn: 0, frost: true })
+      await run(3)
+      const frozen = await see()
+      const good = before.fire === 0 && before.stained === 0 && burning.fire > 8 && burning.ember > before.ember + 2000 && out.fire === 0 && out.ember < burning.ember / 4 && scorched > 100 && clean.stained === 0 &&
+        frozen.frost > 12 && frozen.ice > clean.ice + 2000
+      if (!good) fails.push(`${name}: ${JSON.stringify({ before, burning, out, clean, frozen })}`)
+      else ok(`${name}: a fire bolt sets ${burning.fire} cells alight (${burning.ember} glowing pixels), it burns out and leaves the stone scorched, and a frost bolt freezes ${frozen.frost} cells (${frozen.ice} icy pixels)`)
+    }
+    await elements(k.page, 'blobscape dungeon fire and frost')
+    await k.page.screenshot({ path: join(shots, 'blobscape-dungeon-frost.png') })
+    const fire = await k.page.getByRole('button', { name: /^Fire/ }).count(), frost = await k.page.getByRole('button', { name: /^Frost/ }).count()
+    if (fire !== 1 || frost !== 1) fails.push(`blobscape dungeon: ${fire} Fire and ${frost} Frost buttons`)
     await k.ctx.close()
+    const gl = await open('/experiments/dungeon-run/?offscreen=1&webgl=1', { viewport: { width: 1280, height: 900 } })
+    await gl.page.waitForFunction(() => window.__dungeon?.stage.dungeon, null, { timeout: 90000 }).catch(() => {})
+    await elements(gl.page, 'blobscape dungeon fire and frost on WebGL')
+    await gl.ctx.close()
   }
 
   // Forest Walk: the elf walks down the path, tiles move on ahead, plants grow round it

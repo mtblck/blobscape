@@ -14,7 +14,7 @@ const HOP = 1
 
 /** A slime standing at the origin, in a phase of its life `t` seconds in. */
 function slimeAt(kind: SlimeKind, phase: Slime['phase'], t: number, hopT = 0): Slime {
-  return { slot: 0, kind, phase, t, x: 0, z: 0, heading: 0, hp: 1, hopT, vx: 0, vz: 0, hitBy: -1, struck: 99 }
+  return { slot: 0, kind, phase, t, x: 0, z: 0, heading: 0, hp: 1, hopT, vx: 0, vz: 0, hitBy: -1, struck: 99, chill: 0, burn: 0 }
 }
 
 /** Every color is the same body, so the kind for posing never matters: green stands in. */
