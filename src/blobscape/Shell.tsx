@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { EXPERIMENTS, longDate, type Experiment } from './site.ts'
 import { Button } from '../shared/ui.tsx'
 import { COMING, LESSONS, href } from './routes.ts'
 import type { Goal } from './progress.ts'
@@ -22,13 +23,28 @@ const CRUMB = 'text-ink-muted underline decoration-rule underline-offset-2 hover
 
 /** Blobscape / (an optional parent page) / this page. */
 export function Crumbs({ here, parent }: { here: string; parent?: { label: string; href: string } }) {
+  // an experiment's page says when it was published, like a post
+  const dated = parent ? EXPERIMENTS.find((e) => e.title === here) : undefined
   return (
-    <nav aria-label="Breadcrumb" className="pt-6 text-sm text-ink-faint">
-      <a href={href({ page: 'home' })} className={CRUMB}>Blobscape</a>
-      <span aria-hidden className="px-1.5">/</span>
-      {parent && <><a href={parent.href} className={CRUMB}>{parent.label}</a><span aria-hidden className="px-1.5">/</span></>}
-      <span aria-current="page">{here}</span>
-    </nav>
+    <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 pt-6 text-sm text-ink-faint">
+      <nav aria-label="Breadcrumb">
+        <a href={href({ page: 'home' })} className={CRUMB}>Blobscape</a>
+        <span aria-hidden className="px-1.5">/</span>
+        {parent && <><a href={parent.href} className={CRUMB}>{parent.label}</a><span aria-hidden className="px-1.5">/</span></>}
+        <span aria-current="page">{here}</span>
+      </nav>
+      {dated && <Dates e={dated} testId="page-dates" />}
+    </div>
+  )
+}
+
+/** When an experiment was published, and when it last changed if that was another day. */
+export function Dates({ e, testId }: { e: Experiment; testId?: string }) {
+  return (
+    <p className="text-sm text-ink-faint" data-testid={testId}>
+      Published <time dateTime={e.published}>{longDate(e.published)}</time>
+      {e.updated !== e.published && <> · Updated <time dateTime={e.updated}>{longDate(e.updated)}</time></>}
+    </p>
   )
 }
 
