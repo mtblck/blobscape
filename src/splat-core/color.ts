@@ -1,6 +1,6 @@
 /**
  * sRGB ↔ linear, the two transfer functions every renderer here needs: blobs
- * store display (sRGB) colour, three.js's WebGPU renderer blends in linear,
+ * store display (sRGB) color, three.js's WebGPU renderer blends in linear,
  * and pixels read back from a render target come out linear.
  */
 export function srgbToLinear(c: number) {
@@ -14,12 +14,12 @@ export function linearToSrgb(c: number) {
 /** linearToSrgb over 4096 steps, for converting whole images quickly. Index with round(linear × 4095). */
 export const LINEAR_TO_SRGB_4K = Float32Array.from({ length: 4096 }, (_, i) => linearToSrgb(i / 4095))
 
-/** The zeroth spherical-harmonic constant: a blob's base colour is 0.5 + SH_C0 × its first coefficient. */
+/** The zeroth spherical-harmonic constant: a blob's base color is 0.5 + SH_C0 × its first coefficient. */
 export const SH_C0 = 0.28209479177387814
 
 /**
  * Pixels read back from a render target are linear and premultiplied by
- * alpha. Converts them to display (sRGB) colour, either straight (for an
+ * alpha. Converts them to display (sRGB) color, either straight (for an
  * ImageData) or still premultiplied (for the pixel pipeline; `encoded` skips
  * the conversion for a target that already holds sRGB), and flips the
  * rows when `flip` is set (WebGPU reads top-down, WebGL bottom-up).

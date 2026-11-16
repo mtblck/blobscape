@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { Blobs } from '../../splat-core/blobs.ts'
-import { both, boxMask, faintMask, findFloor, floaterMask, floorMask, fromTo, hugeMask, kept, keepOnly, levelling, rotate, turned } from './clean.ts'
+import { both, boxMask, faintMask, findFloor, floaterMask, floorMask, fromTo, hugeMask, kept, keepOnly, leveling, rotate, turned } from './clean.ts'
 import { SAMPLE_TILT, sampleScan } from './sample.ts'
 
 const share = (m: Uint8Array, part: Uint8Array, p: number) => {
@@ -27,13 +27,13 @@ test('findFloor finds the tipped table, facing the mug', () => {
   assert.ok(p.share > 0.25, `share ${p.share}`)
 })
 
-test('levelling puts the table at y = 0 and the mug above it', () => {
+test('leveling puts the table at y = 0 and the mug above it', () => {
   const { blobs, part } = sampleScan()
-  const { q, lift } = levelling(findFloor(blobs)!)
+  const { q, lift } = leveling(findFloor(blobs)!)
   const level = turned(blobs, q, lift)
   let table = 0, tn = 0, mugMin = Infinity
   for (let i = 0; i < level.count; i++) {
-    const y = level.centre[i * 3 + 1]
+    const y = level.center[i * 3 + 1]
     if (part[i] === 1) { table += Math.abs(y); tn++ }
     if (part[i] === 0) mugMin = Math.min(mugMin, y)
   }
@@ -47,7 +47,7 @@ test('levelling puts the table at y = 0 and the mug above it', () => {
 
 test('the clean-up masks drop floaters, haze and faint blobs and keep the mug', () => {
   const { blobs, part } = sampleScan()
-  const { q, lift } = levelling(findFloor(blobs)!)
+  const { q, lift } = leveling(findFloor(blobs)!)
   const level = turned(blobs, q, lift)
   const floor = floorMask(level, 0.015)
   const huge = hugeMask(level, 0.1)
@@ -66,11 +66,11 @@ test('the clean-up masks drop floaters, haze and faint blobs and keep the mug', 
 
 test('boxMask, both and keepOnly agree', () => {
   const b = new Blobs()
-  for (let i = 0; i < 10; i++) b.push({ centre: [i, 0, 0], scale: [0.1, 0.1, 0.1], quat: [0, 0, 0, 1], colour: [1, 1, 1], opacity: i / 10 })
+  for (let i = 0; i < 10; i++) b.push({ center: [i, 0, 0], scale: [0.1, 0.1, 0.1], quat: [0, 0, 0, 1], color: [1, 1, 1], opacity: i / 10 })
   const box = boxMask(b, [2, -1, -1], [6.5, 1, 1])
   assert.equal(kept(box, b.count), 5)
   const m = both(box, faintMask(b, 0.4))!
-  assert.deepEqual([...keepOnly(b, m).centre].filter((_, i) => i % 3 === 0), [4, 5, 6])
+  assert.deepEqual([...keepOnly(b, m).center].filter((_, i) => i % 3 === 0), [4, 5, 6])
   assert.equal(both(), undefined)
   assert.equal(kept(undefined, 7), 7)
 })
@@ -78,7 +78,7 @@ test('boxMask, both and keepOnly agree', () => {
 test('floaterMask copes with an empty list and a single clump', () => {
   assert.equal(floaterMask(new Blobs(), 0.5).length, 0)
   const b = new Blobs()
-  for (let i = 0; i < 400; i++) b.push({ centre: [(i % 20) * 0.01, Math.floor(i / 20) * 0.01, 0], scale: [0.01, 0.01, 0.01], quat: [0, 0, 0, 1], colour: [1, 1, 1], opacity: 1 })
+  for (let i = 0; i < 400; i++) b.push({ center: [(i % 20) * 0.01, Math.floor(i / 20) * 0.01, 0], scale: [0.01, 0.01, 0.01], quat: [0, 0, 0, 1], color: [1, 1, 1], opacity: 1 })
   assert.equal(kept(floaterMask(b, 1), b.count), 400)
 })
 

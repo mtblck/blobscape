@@ -9,12 +9,12 @@ const wrap = (a: number, m: number) => ((a % m) + m) % m
 
 test('the hands keep time: the minute hand turns once an hour, small seconds once a minute, the hour hand once in twelve', () => {
   const a = anglesAt(0), h = anglesAt(3600), m = anglesAt(60)
-  assert.ok(near(h.centre - a.centre, -TAU, 1e-9))
+  assert.ok(near(h.center - a.center, -TAU, 1e-9))
   assert.ok(near(m.fourth - a.fourth, -TAU, 1e-9))
   assert.ok(near(anglesAt(43200).hour - a.hour, -TAU, 1e-9))
   // half past three reads half past three
   const t = anglesAt(3 * 3600 + 30 * 60)
-  assert.ok(near(wrap(-t.centre, TAU), Math.PI, 1e-9))
+  assert.ok(near(wrap(-t.center, TAU), Math.PI, 1e-9))
   assert.ok(near(wrap(-t.hour, TAU), (3.5 / 12) * TAU, 1e-9))
   assert.equal(secondsOf(new Date(2026, 0, 1, 15, 30, 0)), 3 * 3600 + 30 * 60)
 })
@@ -25,7 +25,7 @@ test('the train ticks five times a second: locked between beats, half a tooth of
   assert.equal(anglesAt(s + 0.15 / BEATS).escape, anglesAt(s + 0.9 / BEATS).escape)
   const step = anglesAt(s + 1 / BEATS).escape - anglesAt(s).escape
   assert.ok(near(step, Math.PI / TEETH.escape, 1e-9))
-  // the balance swings through its centre on each beat, and the fork has crossed over by the time the wheel locks again
+  // the balance swings through its center on each beat, and the fork has crossed over by the time the wheel locks again
   assert.ok(near(anglesAt(s).balance, 0, 1e-6))
   assert.ok(near(anglesAt(s + 0.5 / BEATS).pallet, -anglesAt(s + 1.5 / BEATS).pallet, 1e-9))
   // and the fork is kicked the opposite way to the balance's swing, as two touching pivots turn
@@ -63,6 +63,6 @@ test('the watch is made with about as many blobs as asked, every blob on one bon
   assert.ok(near(c.skeleton.matrix[plate * 16], 1) && near(c.skeleton.matrix[plate * 16 + 12], 0))
   // and inside the case
   let far = 0
-  for (let i = 0; i < c.blobs.count; i++) far = Math.max(far, Math.hypot(c.blobs.centre[i * 3], c.blobs.centre[i * 3 + 1]))
+  for (let i = 0; i < c.blobs.count; i++) far = Math.max(far, Math.hypot(c.blobs.center[i * 3], c.blobs.center[i * 3 + 1]))
   assert.ok(far < 1.3, `${far}`)
 })

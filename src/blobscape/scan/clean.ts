@@ -22,13 +22,13 @@ export interface Plane {
   share: number
 }
 
-/** The box round every blob's centre, and its diagonal. */
+/** The box round every blob's center, and its diagonal. */
 export function extent(b: Blobs, mask?: Mask) {
   const lo: Vec3 = [Infinity, Infinity, Infinity], hi: Vec3 = [-Infinity, -Infinity, -Infinity]
   for (let i = 0; i < b.count; i++) {
     if (mask && !mask[i]) continue
     for (let k = 0; k < 3; k++) {
-      const v = b.centre[i * 3 + k]
+      const v = b.center[i * 3 + k]
       if (v < lo[k]) lo[k] = v
       if (v > hi[k]) hi[k] = v
     }
@@ -44,7 +44,7 @@ export function coreBox(b: Blobs, share = 0.96): { lo: Vec3; hi: Vec3 } {
   const step = Math.max(1, Math.floor(b.count / 50000))
   for (let k = 0; k < 3; k++) {
     const v: number[] = []
-    for (let i = 0; i < b.count; i += step) v.push(b.centre[i * 3 + k])
+    for (let i = 0; i < b.count; i += step) v.push(b.center[i * 3 + k])
     v.sort((x, y) => x - y)
     const cut = (1 - share) / 2
     lo[k] = v[Math.floor(cut * (v.length - 1))]
@@ -69,7 +69,7 @@ export function findFloor(b: Blobs, { tries = 400, tol = 0.012, minShare = 0.15,
   // score on a sample, so a million-blob scan stays quick
   const n = Math.min(b.count, 20000)
   const pick = Array.from({ length: n }, () => Math.floor(rand() * b.count))
-  const P = (i: number): Vec3 => [b.centre[i * 3], b.centre[i * 3 + 1], b.centre[i * 3 + 2]]
+  const P = (i: number): Vec3 => [b.center[i * 3], b.center[i * 3 + 1], b.center[i * 3 + 2]]
   let best: Plane | null = null
   for (let k = 0; k < tries; k++) {
     const a = P(pick[Math.floor(rand() * n)]), c = P(pick[Math.floor(rand() * n)]), e = P(pick[Math.floor(rand() * n)])
@@ -98,7 +98,7 @@ export function findFloor(b: Blobs, { tries = 400, tol = 0.012, minShare = 0.15,
     const n2 = dot(refined.n, best.n) < 0 ? scale(refined.n, -1) : refined.n
     best = { n: n2, d: dot(n2, refined.c), share: best.share }
   }
-  // face the normal towards the object: the side most of the other blobs are on
+  // face the normal toward the object: the side most of the other blobs are on
   let above = 0, below = 0
   for (const i of pick) {
     const s = dot(best.n, P(i)) - best.d
@@ -110,7 +110,7 @@ export function findFloor(b: Blobs, { tries = 400, tol = 0.012, minShare = 0.15,
 }
 
 /** The rotation that turns the plane's normal to +y, and how far to lift so the plane sits at y = 0. */
-export function levelling(p: Plane): { q: Quat; lift: number } {
+export function leveling(p: Plane): { q: Quat; lift: number } {
   const q = fromTo(p.n, [0, 1, 0])
   return { q, lift: -p.d }
 }
@@ -119,26 +119,26 @@ export function levelling(p: Plane): { q: Quat; lift: number } {
 export function turned(b: Blobs, q: Quat, lift = 0): Blobs {
   const out = b.clone()
   for (let i = 0; i < b.count; i++) {
-    const c = rotate(q, [b.centre[i * 3], b.centre[i * 3 + 1], b.centre[i * 3 + 2]])
-    out.centre.set([c[0], c[1] + lift, c[2]], i * 3)
+    const c = rotate(q, [b.center[i * 3], b.center[i * 3 + 1], b.center[i * 3 + 2]])
+    out.center.set([c[0], c[1] + lift, c[2]], i * 3)
     out.quat.set(mulQ(q, [b.quat[i * 4], b.quat[i * 4 + 1], b.quat[i * 4 + 2], b.quat[i * 4 + 3]]), i * 4)
   }
   return out
 }
 
-/** Keeps blobs above y = `above` (cutting a levelled floor away, with its thickness). */
+/** Keeps blobs above y = `above` (cutting a leveled floor away, with its thickness). */
 export function floorMask(b: Blobs, above: number): Mask {
   const m = new Uint8Array(b.count)
-  for (let i = 0; i < b.count; i++) m[i] = b.centre[i * 3 + 1] > above ? 1 : 0
+  for (let i = 0; i < b.count; i++) m[i] = b.center[i * 3 + 1] > above ? 1 : 0
   return m
 }
 
-/** Keeps blobs whose centre is inside the box. */
+/** Keeps blobs whose center is inside the box. */
 export function boxMask(b: Blobs, lo: Vec3, hi: Vec3): Mask {
   const m = new Uint8Array(b.count)
   for (let i = 0; i < b.count; i++) {
     let inside = 1
-    for (let k = 0; k < 3; k++) { const v = b.centre[i * 3 + k]; if (v < lo[k] || v > hi[k]) inside = 0 }
+    for (let k = 0; k < 3; k++) { const v = b.center[i * 3 + k]; if (v < lo[k] || v > hi[k]) inside = 0 }
     m[i] = inside
   }
   return m
@@ -185,7 +185,7 @@ export function floaterMask(b: Blobs, strength: number, within?: Mask): Mask {
     count = new Map()
     for (let i = 0; i < b.count; i++) {
       if (within && !within[i]) continue
-      const k = cellKey(Math.floor(b.centre[i * 3] / cell), Math.floor(b.centre[i * 3 + 1] / cell), Math.floor(b.centre[i * 3 + 2] / cell))
+      const k = cellKey(Math.floor(b.center[i * 3] / cell), Math.floor(b.center[i * 3 + 1] / cell), Math.floor(b.center[i * 3 + 2] / cell))
       keys[i] = k
       count.set(k, (count.get(k) ?? 0) + 1)
     }
@@ -197,7 +197,7 @@ export function floaterMask(b: Blobs, strength: number, within?: Mask): Mask {
     if (!total || typical >= 3 * min) break
     cell *= 1.6
   }
-  // clumps of full cells, joined through their 26 neighbours
+  // clumps of full cells, joined through their 26 neighbors
   const clump = new Map<number, number>()
   const sizes: number[] = []
   for (const [k, c] of count) {
@@ -259,10 +259,10 @@ export function keepOnly(b: Blobs, m?: Mask): Blobs {
 
 /** Copies blob i of `from` into slot j of `to` (which must have room). */
 export function copyBlob(from: Blobs, i: number, to: Blobs, j: number) {
-  to.centre.set(from.centre.subarray(i * 3, i * 3 + 3), j * 3)
+  to.center.set(from.center.subarray(i * 3, i * 3 + 3), j * 3)
   to.scale.set(from.scale.subarray(i * 3, i * 3 + 3), j * 3)
   to.quat.set(from.quat.subarray(i * 4, i * 4 + 4), j * 4)
-  to.colour.set(from.colour.subarray(i * 3, i * 3 + 3), j * 3)
+  to.color.set(from.color.subarray(i * 3, i * 3 + 3), j * 3)
   to.opacity[j] = from.opacity[i]
 }
 

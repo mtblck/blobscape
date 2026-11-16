@@ -7,7 +7,7 @@ import { Slider, Toggle } from '../../shared/ui.tsx'
 import { LessonShell } from '../Shell.tsx'
 import { LESSON_GOALS } from '../routes.ts'
 import { Viewport } from '../Viewport.tsx'
-import { drawBones, themeColour } from '../overlay.ts'
+import { drawBones, themeColor } from '../overlay.ts'
 import { useGoals } from '../progress.ts'
 
 const START: Orbit = { target: [0, 0.35, 0], distance: 4.2, azimuth: 18, elevation: 14 }
@@ -29,7 +29,7 @@ export function OneBone() {
   const sk = model.skeleton
   const onHead = useMemo(() => {
     let n = 0
-    for (let i = 0; i < model.blobs.count; i++) if (model.blobs.centre[i * 3] >= cut) n++
+    for (let i = 0; i < model.blobs.count; i++) if (model.blobs.center[i * 3] >= cut) n++
     return n
   }, [model, cut])
   // Re-posed from the rest pose every time, so nothing drifts
@@ -41,7 +41,7 @@ export function OneBone() {
     poseBlobs(model.blobs, model.skin, sk, 'quat', shown)
     for (let i = 0; i < shown.count; i++) {
       const head = model.skin.weights[i * 4 + 1] > 0.5
-      for (let k = 0; k < 3; k++) shown.colour[i * 3 + k] = tint ? (head ? HEAD_TINT : BODY_TINT)[k] * (0.55 + 0.45 * model.blobs.colour[i * 3 + 1]) : model.blobs.colour[i * 3 + k]
+      for (let k = 0; k < 3; k++) shown.color[i * 3 + k] = tint ? (head ? HEAD_TINT : BODY_TINT)[k] * (0.55 + 0.45 * model.blobs.color[i * 3 + 1]) : model.blobs.color[i * 3 + k]
     }
     return Math.random()
   }, [model, shown, sk, lift, cut, tint])
@@ -74,7 +74,7 @@ export function OneBone() {
               ? (ctx, lens) => drawBones(ctx, [
                   { from: sk.posedHead.subarray(0, 3), to: sk.posedHead.subarray(3, 6) },
                   { from: sk.posedHead.subarray(3, 6), to: posedPoint(sk, 1, HEAD_END) },
-                ], lens, themeColour('accent', ctx.canvas))
+                ], lens, themeColor('accent', ctx.canvas))
               : undefined
           }
         />
@@ -104,7 +104,7 @@ export function OneBone() {
           content: (
             <>
               <Toggle label="Bones" checked={bones} onChange={setBones} />
-              <Toggle label="Colour each blob by its bone" checked={tint} onChange={setTint} />
+              <Toggle label="Color each blob by its bone" checked={tint} onChange={setTint} />
             </>
           ),
         },
@@ -116,7 +116,7 @@ export function OneBone() {
       formula={{
         eq: <>p′ = M · p</>,
         terms: [
-          ['p', "a blob's centre in the rest pose"],
+          ['p', "a blob's center in the rest pose"],
           ['M', 'its bone’s turn about the joint, as a matrix'],
           ['p′', 'where the blob is drawn now'],
         ],
@@ -125,12 +125,12 @@ export function OneBone() {
         <>
           <p>
             The bone never touched a blob. What moved them was a list: every blob carries the number of the bone it hangs on, and each
-            frame its centre and its shape are turned by that bone. When you moved the cut, the bone stayed put and the list changed, so
+            frame its center and its shape are turned by that bone. When you moved the cut, the bone stayed put and the list changed, so
             the tear moved with the cut, and blobs behind the joint swung round it and through the floor.
           </p>
           <p>
             That's all rigging is: a skeleton to pose, and a note on every blob of which bones to follow. Animators call the note the
-            skin. With one bone per blob, though, a bend always opens a seam on its outside, where neighbours follow different bones.
+            skin. With one bone per blob, though, a bend always opens a seam on its outside, where neighbors follow different bones.
             The next lesson lets a blob follow two.
           </p>
         </>

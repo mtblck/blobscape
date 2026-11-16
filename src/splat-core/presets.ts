@@ -3,9 +3,9 @@ import type { PackedSplats } from '@sparkjsdev/spark'
 
 /**
  * Procedural sample splats. They're built here, blob by blob, rather than
- * downloaded: no asset licences to track, a few hundred KB of JS instead of
+ * downloaded: no asset licenses to track, a few hundred KB of JS instead of
  * tens of MB of .ply, and they show the core idea plainly — a splat object is
- * nothing but a list of coloured, see-through ellipsoids.
+ * nothing but a list of colored, see-through ellipsoids.
  *
  * Each blob is a flat disc lying on the surface (thin along the normal), with
  * simple baked lighting, which is roughly what a trained capture ends up with.
@@ -34,7 +34,7 @@ function pusher(s: PackedSplats, rand: () => number): Push {
     q.setFromUnitVectors(up, normal)
     const jitter = 0.75 + rand() * 0.5
     scale.set(size * jitter, size * jitter * (0.7 + rand() * 0.6), size * thin)
-    // Half-Lambert shading + a little noise, baked into the colour
+    // Half-Lambert shading + a little noise, baked into the color
     const lit = 0.45 + 0.55 * Math.max(0, normal.dot(LIGHT) * 0.5 + 0.5)
     const n = 0.92 + rand() * 0.16
     c.copy(color).multiplyScalar(lit * n)
@@ -45,7 +45,7 @@ function pusher(s: PackedSplats, rand: () => number): Push {
 const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z)
 
 /** Even-ish points on a sphere (Fibonacci), filtered by a predicate on the unit normal. */
-function sphere(push: Push, centre: THREE.Vector3, radii: THREE.Vector3, count: number, size: number, color: (n: THREE.Vector3) => THREE.Color, keep: (n: THREE.Vector3) => boolean = () => true, opacity = 0.95) {
+function sphere(push: Push, center: THREE.Vector3, radii: THREE.Vector3, count: number, size: number, color: (n: THREE.Vector3) => THREE.Color, keep: (n: THREE.Vector3) => boolean = () => true, opacity = 0.95) {
   const golden = Math.PI * (3 - Math.sqrt(5))
   for (let i = 0; i < count; i++) {
     const y = 1 - (i / (count - 1)) * 2
@@ -53,7 +53,7 @@ function sphere(push: Push, centre: THREE.Vector3, radii: THREE.Vector3, count: 
     const t = golden * i
     const n = v(Math.cos(t) * r, y, Math.sin(t) * r)
     if (!keep(n)) continue
-    const p = v(n.x * radii.x, n.y * radii.y, n.z * radii.z).add(centre)
+    const p = v(n.x * radii.x, n.y * radii.y, n.z * radii.z).add(center)
     const sn = v(n.x / radii.x, n.y / radii.y, n.z / radii.z).normalize()
     push(p, sn, size, color(n), opacity)
   }
@@ -70,11 +70,11 @@ function cylinder(push: Push, base: THREE.Vector3, radius: (t: number) => number
   }
 }
 
-function disc(push: Push, centre: THREE.Vector3, radius: number, count: number, size: number, color: (r: number) => THREE.Color, rand: () => number, normal = v(0, 1, 0)) {
+function disc(push: Push, center: THREE.Vector3, radius: number, count: number, size: number, color: (r: number) => THREE.Color, rand: () => number, normal = v(0, 1, 0)) {
   for (let i = 0; i < count; i++) {
     const r = Math.sqrt(rand()) * radius
     const a = rand() * Math.PI * 2
-    push(v(centre.x + Math.cos(a) * r, centre.y, centre.z + Math.sin(a) * r), normal, size, color(r / radius))
+    push(v(center.x + Math.cos(a) * r, center.y, center.z + Math.sin(a) * r), normal, size, color(r / radius))
   }
 }
 

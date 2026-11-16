@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu'
-import { readbackToSrgb } from '../splat-core/colour.ts'
+import { readbackToSrgb } from '../splat-core/color.ts'
 import type { Frame } from '../splat-core/pixel.ts'
 import { baseline, processFrames } from '../splat-to-sprite/sheet.ts'
 import { sampleClip } from './glb.ts'
@@ -29,7 +29,7 @@ export interface BakeTarget {
 export interface BakeOptions {
   directions: 4 | 8
   size: number
-  colours: number
+  colors: number
   outline: boolean
 }
 
@@ -57,7 +57,7 @@ export async function bakeSheet(t: BakeTarget, moves: SheetMove[], o: BakeOption
   camera.near = Math.max(0.01, dist - framing.radius * 2)
   camera.far = dist + framing.radius * 2
   camera.updateProjectionMatrix()
-  const aim = new THREE.Vector3(...framing.centre)
+  const aim = new THREE.Vector3(...framing.center)
   const target = new THREE.RenderTarget(big, big)
   const webgl = (renderer.backend as unknown as { isWebGLBackend?: boolean }).isWebGLBackend === true
   const prevTarget = renderer.getRenderTarget()
@@ -93,7 +93,7 @@ export async function bakeSheet(t: BakeTarget, moves: SheetMove[], o: BakeOption
   }
 
   const frames = processFrames(raws, {
-    size: o.size, supersample: SUPERSAMPLE, alphaCut: 0.5, palette: 'auto', autoColours: o.colours, dither: 0, strays: true, outline: o.outline ? 'darkest' : 'none',
+    size: o.size, supersample: SUPERSAMPLE, alphaCut: 0.5, palette: 'auto', autoColors: o.colors, dither: 0, strays: true, outline: o.outline ? 'darkest' : 'none',
   }, true).map((s) => s.final)
   const anchorY = Math.max(...frames.map(baseline))
   const size = o.size

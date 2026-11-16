@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { covariance } from '../splat-core/blobs.ts'
 import { arm, blendAt, caterpillar, weightByX, wrist } from './models.ts'
-import { mat3ToQuat, neighbourPairs, poseBlobs, stretch, symEigen, volumeKept } from './pose.ts'
+import { mat3ToQuat, neighborPairs, poseBlobs, stretch, symEigen, volumeKept } from './pose.ts'
 import { axisAngle, quatMat3, skinBlob } from './rig.ts'
 import { KEYS, footSpeed, keyPose, poseKeys, feet } from './walk.ts'
 import { makeCreature } from './creature.ts'
@@ -32,8 +32,8 @@ for (const mode of ['quat', 'linear'] as const) {
     const c = new Float32Array(3), v = new Float32Array(6)
     for (let i = 0; i < m.blobs.count; i += 3) {
       const b = m.blobs
-      skinBlob(b.centre.subarray(i * 3, i * 3 + 3), b.scale.subarray(i * 3, i * 3 + 3), b.quat.subarray(i * 4, i * 4 + 4), m.skin.joints.subarray(i * 4, i * 4 + 4), m.skin.weights.subarray(i * 4, i * 4 + 4), m.skeleton, mode, c, 0, v, 0)
-      for (let k = 0; k < 3; k++) assert.ok(Math.abs(out.centre[i * 3 + k] - c[k]) < 1e-5)
+      skinBlob(b.center.subarray(i * 3, i * 3 + 3), b.scale.subarray(i * 3, i * 3 + 3), b.quat.subarray(i * 4, i * 4 + 4), m.skin.joints.subarray(i * 4, i * 4 + 4), m.skin.weights.subarray(i * 4, i * 4 + 4), m.skeleton, mode, c, 0, v, 0)
+      for (let k = 0; k < 3; k++) assert.ok(Math.abs(out.center[i * 3 + k] - c[k]) < 1e-5)
       const got = covariance(out, i)
       for (let k = 0; k < 6; k++) assert.ok(Math.abs(got[k] - v[k]) < 1e-6 + 1e-4 * Math.abs(v[k]), `blob ${i} cov ${k}: ${got[k]} vs ${v[k]}`)
     }
@@ -49,14 +49,14 @@ test('a half-twisted wrist keeps its blobs whole when turns are averaged, and fl
   poseBlobs(m.blobs, m.skin, m.skeleton, 'quat', q)
   poseBlobs(m.blobs, m.skin, m.skeleton, 'linear', l)
   let minQ = 1, minL = 1
-  for (let i = 0; i < m.blobs.count; i++) if (Math.abs(m.blobs.centre[i * 3]) < 0.1) { minQ = Math.min(minQ, volumeKept(m.blobs, q, i)); minL = Math.min(minL, volumeKept(m.blobs, l, i)) }
+  for (let i = 0; i < m.blobs.count; i++) if (Math.abs(m.blobs.center[i * 3]) < 0.1) { minQ = Math.min(minQ, volumeKept(m.blobs, q, i)); minL = Math.min(minL, volumeKept(m.blobs, l, i)) }
   assert.ok(minQ > 0.99, `quat ${minQ}`)
   assert.ok(minL < 0.05, `linear ${minL}`)
 })
 
 test('a hard cut tears the bent elbow open, and a blend closes it', () => {
   const m = arm(1600)
-  const pairs = neighbourPairs(m.blobs, (i) => Math.abs(m.blobs.centre[i * 3]) < 0.5)
+  const pairs = neighborPairs(m.blobs, (i) => Math.abs(m.blobs.center[i * 3]) < 0.5)
   const posed = m.blobs.clone()
   const at = (width: number) => {
     weightByX(m, 0, width)

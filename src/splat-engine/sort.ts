@@ -19,7 +19,7 @@ const SETTLE = 48
  *    first slot, and clears the histogram for next frame;
  * 3. scatter: each blob takes the next slot in its bin;
  * 4. settle: threads race for those slots, so blobs that share a bin would
- *    come out in a different order every frame, and where two colours meet at
+ *    come out in a different order every frame, and where two colors meet at
  *    one depth (a window in its frame) the edge flickers. This pass puts each
  *    bin of up to `SETTLE` blobs in index order, as the CPU sort does. Bigger
  *    bins (a wall seen dead on) are left as they fell.

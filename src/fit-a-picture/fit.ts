@@ -5,14 +5,14 @@
  * and add new ones where the picture is still wrong.
  *
  * A flat picture has no depth to sort by, so the blobs simply add up
- * (pixel = Σ opacity·colour·falloff), as in GaussianImage (Zhang et al., 2024).
+ * (pixel = Σ opacity·color·falloff), as in GaussianImage (Zhang et al., 2024).
  * Everything else is the 3DGS loop.
  *
  * Plain TypeScript on typed arrays: runs in a worker in the page and in Node
  * for the tests. Images are RGB floats in [0, 1], row-major.
  */
 
-/** Parameters per blob: centre x, y (px); log scale along its two axes; angle; raw colour r, g, b; raw opacity. */
+/** Parameters per blob: center x, y (px); log scale along its two axes; angle; raw color r, g, b; raw opacity. */
 export const P = 9
 const X = 0, Y = 1, SX = 2, SY = 3, TH = 4, R = 5, G = 6, B = 7, O = 8
 
@@ -38,10 +38,10 @@ export function rng(seed: number): Rng {
   }
 }
 
-export type Rates = { position: number; scale: number; angle: number; colour: number; opacity: number }
+export type Rates = { position: number; scale: number; angle: number; color: number; opacity: number }
 
 /** Adam step sizes per parameter group, tuned on the samples (see fit.test.ts). */
-export const BASE_RATES: Rates = { position: 0.15, scale: 0.012, angle: 0.02, colour: 0.04, opacity: 0.03 }
+export const BASE_RATES: Rates = { position: 0.15, scale: 0.012, angle: 0.02, color: 0.04, opacity: 0.03 }
 
 export class Fitter {
   readonly width: number
@@ -104,7 +104,7 @@ export class Fitter {
     }
   }
 
-  /** Add one blob. Colour and opacity are in [0, 1]; returns false when full. */
+  /** Add one blob. Color and opacity are in [0, 1]; returns false when full. */
   add(x: number, y: number, sx: number, sy: number, angle: number, rgb: ArrayLike<number>, opacity: number) {
     if (this.count >= this.capacity) return false
     const i = this.count++
@@ -141,7 +141,7 @@ export class Fitter {
     return sigmoid(this.params[i * P + O])
   }
 
-  /** A blob as the page draws it: centre, the two standard deviations, angle, colour, opacity. */
+  /** A blob as the page draws it: center, the two standard deviations, angle, color, opacity. */
   blob(i: number) {
     const p = this.params
     const o = i * P
@@ -290,7 +290,7 @@ export class Fitter {
   private adam() {
     const b1 = 0.9, b2 = 0.99, eps = 1e-8
     const r = BASE_RATES
-    const lr = [r.position, r.position, r.scale, r.scale, r.angle, r.colour, r.colour, r.colour, r.opacity]
+    const lr = [r.position, r.position, r.scale, r.scale, r.angle, r.color, r.color, r.color, r.opacity]
     const p = this.params, gr = this.grad, m = this.m, v = this.v
     for (let i = 0; i < this.count; i++) {
       const t = ++this.age[i]
@@ -365,14 +365,14 @@ export class Fitter {
   }
 
   /**
-   * Add one blob at (x, y), coloured with what the picture is missing there:
+   * Add one blob at (x, y), colored with what the picture is missing there:
    * what the user's click does, and what densify adds.
    */
   addPatch(x: number, y: number, size: number) {
     const W = this.width, H = this.height
     const k = (Math.min(H - 1, Math.max(0, y | 0)) * W + Math.min(W - 1, Math.max(0, x | 0))) * 3
     const t = this.target, out = this.out
-    // Too dark: paint the target colour in. Too bright: a blob can't subtract, so add a faint one and let training sort it out.
+    // Too dark: paint the target color in. Too bright: a blob can't subtract, so add a faint one and let training sort it out.
     const missing = Math.max(0, t[k] - out[k]) + Math.max(0, t[k + 1] - out[k + 1]) + Math.max(0, t[k + 2] - out[k + 2])
     const opacity = Math.min(0.9, Math.max(0.05, missing / 1.5))
     return this.add(x, y, size, size, 0, [t[k], t[k + 1], t[k + 2]], opacity)
@@ -380,7 +380,7 @@ export class Fitter {
 }
 
 /**
- * The blob's centre and inverse squared scales in the drawing's pixels, its
+ * The blob's center and inverse squared scales in the drawing's pixels, its
  * rotation, and how far its drawn ellipse reaches along x and y. Null when it
  * has shrunk to nothing.
  */

@@ -323,7 +323,7 @@ export function ScanStudio() {
                   <Button small onClick={() => turnBy(about([1, 0, 0], 90))}>Tip forward</Button>
                   <Button small onClick={() => turnBy(about([0, 0, 1], 90))}>Tip sideways</Button>
                 </div>
-                <Slider label="Cut the table" value={clean.floor} min={0} max={0.3} step={0.005} onChange={(v) => set({ floor: v })} format={(v) => (v ? `${cm(v)} up` : 'Off')} hint="Cuts everything below this height, the table and its shadow. Lengths assume the scan is in metres, as phone apps save them." />
+                <Slider label="Cut the table" value={clean.floor} min={0} max={0.3} step={0.005} onChange={(v) => set({ floor: v })} format={(v) => (v ? `${cm(v)} up` : 'Off')} hint="Cuts everything below this height, the table and its shadow. Lengths assume the scan is in meters, as phone apps save them." />
                 <Slider label="Crop round" value={clean.radius ?? RADIUS_OFF} min={0.1} max={RADIUS_OFF} step={0.02} onChange={(v) => set({ radius: v >= RADIUS_OFF ? null : v })} format={(v) => (v >= RADIUS_OFF ? 'Off' : cm(v))} hint="Keeps only what's within this distance of the middle." />
                 <Slider label="Crop height" value={clean.top ?? TOP_OFF} min={0.1} max={TOP_OFF} step={0.02} onChange={(v) => set({ top: v >= TOP_OFF ? null : v })} format={(v) => (v >= TOP_OFF ? 'Off' : cm(v))} />
               </div>
@@ -363,7 +363,7 @@ export function ScanStudio() {
                   <Button small primary disabled={!masks?.kept || busy} onClick={() => void toSandbox()}>Open in the sandbox</Button>
                   <Button small disabled={!masks?.kept || busy} onClick={() => void save()}>Download .ply</Button>
                 </div>
-                {light !== 'scanned' && <Toggle label="Keep the lighting in its colours" checked={keepLight} onChange={setKeepLight} />}
+                {light !== 'scanned' && <Toggle label="Keep the lighting in its colors" checked={keepLight} onChange={setKeepLight} />}
                 <p className="text-xs leading-relaxed text-ink-faint">The kept blobs, stood on the floor and sized to sit beside the sandbox's own scenes.</p>
                 <p role="status" className="text-xs text-ink-muted empty:-mt-3">{message}</p>
                 {error && <p role="alert" className="text-xs text-accent-ink">{error}</p>}
@@ -388,7 +388,7 @@ export function ScanStudio() {
             the scan so that's level, and cuts below it. Floaters go by clumping blobs into small cells and keeping only the big clump.
           </p>
           <p>
-            The light from the day you scanned is baked into the colours. The lights here add to it, worked out for each blob from which
+            The light from the day you scanned is baked into the colors. The lights here add to it, worked out for each blob from which
             way it faces, so a lamp brightens the near side of a mug. Blobscape's own splat engine draws it, the one that moves the
             creatures in <a href={href({ page: 'creature' })} className="underline decoration-rule underline-offset-2 hover:text-accent">Splat Creatures</a> and
             lights the torches in <a href={href({ page: 'dungeon' })} className="underline decoration-rule underline-offset-2 hover:text-accent">Dungeon Run</a>.

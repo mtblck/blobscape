@@ -5,9 +5,9 @@ import { Blobs, covariance, pick, project, quatFacing, quatFromEuler, quatToMat,
 // A camera at the origin looking down −Z (the identity view matrix), 800×600, focal 500 px.
 const lens: Lens = { view: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], width: 800, height: 600, fx: 500, fy: 500, ortho: false }
 
-const one = (centre: [number, number, number], scale: [number, number, number], quat: [number, number, number, number] = [0, 0, 0, 1]) => {
+const one = (center: [number, number, number], scale: [number, number, number], quat: [number, number, number, number] = [0, 0, 0, 1]) => {
   const b = new Blobs()
-  b.push({ centre, scale, quat, colour: [1, 0, 0], opacity: 1 })
+  b.push({ center, scale, quat, color: [1, 0, 0], opacity: 1 })
   return b
 }
 
@@ -33,7 +33,7 @@ test('the projected covariance matches sampling the 3D Gaussian and projecting e
   const us: number[] = [], vs: number[] = []
   for (let k = 0; k < 40000; k++) {
     const l = [gauss() * 0.3, gauss() * 0.08, gauss() * 0.15]
-    const p = [0, 1, 2].map((r) => b.centre[r] + R[r * 3] * l[0] + R[r * 3 + 1] * l[1] + R[r * 3 + 2] * l[2])
+    const p = [0, 1, 2].map((r) => b.center[r] + R[r * 3] * l[0] + R[r * 3 + 1] * l[1] + R[r * 3 + 2] * l[2])
     us.push(400 + (500 * p[0]) / -p[2])
     vs.push(300 - (500 * p[1]) / -p[2])
   }
@@ -64,9 +64,9 @@ test('a ray hits a blob where it enters its 2σ ellipsoid', () => {
 
 test('pick returns the nearest blob and skips invisible ones', () => {
   const b = new Blobs()
-  b.push({ centre: [0, 0, -8], scale: [1, 1, 1], quat: [0, 0, 0, 1], colour: [0, 0, 1], opacity: 1 })
-  b.push({ centre: [0, 0, -4], scale: [0.5, 0.5, 0.5], quat: [0, 0, 0, 1], colour: [1, 0, 0], opacity: 1 })
-  b.push({ centre: [0, 0, -2], scale: [0.5, 0.5, 0.5], quat: [0, 0, 0, 1], colour: [0, 1, 0], opacity: 0.01 })
+  b.push({ center: [0, 0, -8], scale: [1, 1, 1], quat: [0, 0, 0, 1], color: [0, 0, 1], opacity: 1 })
+  b.push({ center: [0, 0, -4], scale: [0.5, 0.5, 0.5], quat: [0, 0, 0, 1], color: [1, 0, 0], opacity: 1 })
+  b.push({ center: [0, 0, -2], scale: [0.5, 0.5, 0.5], quat: [0, 0, 0, 1], color: [0, 1, 0], opacity: 0.01 })
   assert.equal(pick(b, [0, 0, 0], [0, 0, -1]).index, 1)
 })
 
@@ -80,9 +80,9 @@ test('quatFacing turns +Z onto the given normal', () => {
 
 test('filter keeps order and clone is independent', () => {
   const b = new Blobs(2)
-  for (let i = 0; i < 5; i++) b.push({ centre: [i, 0, 0], scale: [1, 1, 1], quat: [0, 0, 0, 1], colour: [0, 0, 0], opacity: 1 })
+  for (let i = 0; i < 5; i++) b.push({ center: [i, 0, 0], scale: [1, 1, 1], quat: [0, 0, 0, 1], color: [0, 0, 0], opacity: 1 })
   const c = b.clone()
   assert.equal(b.filter((i) => i % 2 === 0), 2)
-  assert.deepEqual([...b.centre.subarray(0, b.count * 3)].filter((_, k) => k % 3 === 0), [0, 2, 4])
+  assert.deepEqual([...b.center.subarray(0, b.count * 3)].filter((_, k) => k % 3 === 0), [0, 2, 4])
   assert.equal(c.count, 5)
 })

@@ -1,6 +1,6 @@
 /**
  * Sample pictures, drawn in code pixel by pixel so there are no image files
- * or licences, and the tests can use them in Node. Each returns RGB floats
+ * or licenses, and the tests can use them in Node. Each returns RGB floats
  * in [0, 1], `width` × `height`, row-major.
  */
 
@@ -61,7 +61,7 @@ export const SAMPLES: Sample[] = [
     },
   },
   {
-    // Hard edges and flat colour, the opposite of a blob: watch them line up along the edges
+    // Hard edges and flat color, the opposite of a blob: watch them line up along the edges
     id: 'blocks',
     name: 'Blocks',
     aspect: 1,
@@ -76,7 +76,7 @@ export const SAMPLES: Sample[] = [
     },
   },
   {
-    // Rings get finer towards the edge, so you can see where the blob budget runs out
+    // Rings get finer toward the edge, so you can see where the blob budget runs out
     id: 'rings',
     name: 'Rings',
     aspect: 1,

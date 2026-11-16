@@ -63,7 +63,7 @@ self.onmessage = (e: MessageEvent<ToWorker>) => {
     case 'add': {
       if (!fitter || !settings) return
       const f = fitter
-      f.loss() // colour the new blobs from the picture as it is now
+      f.loss() // color the new blobs from the picture as it is now
       const s = Math.max(1.5, Math.sqrt((f.width * f.height) / Math.max(50, f.count)) * 0.5)
       // A cluster, so one click visibly lands
       let n = 0

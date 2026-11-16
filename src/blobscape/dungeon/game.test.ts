@@ -88,7 +88,7 @@ test('a slime hops to the hero, hurts on touch with a grace time after, and the 
   assert.equal(g.wave, 1)
 })
 
-test('waves come through the doors, never more of a colour than its pool, and the next wave follows a cleared one', () => {
+test('waves come through the doors, never more of a color than its pool, and the next wave follows a cleared one', () => {
   const g = new Game('normal', 3)
   const seen = new Set<string>()
   for (let t = 0; t < 400 && g.wave < 5; t += 1 / 30) {

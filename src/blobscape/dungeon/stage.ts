@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu'
 import { mix, positionView, smoothstep, uniform } from 'three/tsl'
-import { readbackToSrgb, srgbToLinear } from '../../splat-core/colour.ts'
+import { readbackToSrgb, srgbToLinear } from '../../splat-core/color.ts'
 import { SplatWorld } from '../../splat-engine/engine.ts'
 import { Dungeon, LIVE_AMBIENT, type DungeonOptions } from './dungeon.ts'
 import { HALF, type GameEvent, type Input } from './game.ts'

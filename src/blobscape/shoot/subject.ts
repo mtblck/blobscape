@@ -16,26 +16,26 @@ const ORANGE: V3 = [0.98, 0.5, 0.1]
 const WHITE: V3 = [0.97, 0.97, 0.97]
 const DARK: V3 = [0.08, 0.08, 0.1]
 
-interface Part { centre: V3; radius: V3; count: number; size: number; colour: (p: V3, n: V3) => V3 }
+interface Part { center: V3; radius: V3; count: number; size: number; color: (p: V3, n: V3) => V3 }
 
 export function subject(seed = 5): Model {
   const parts: Part[] = [
     // Body: cream belly in front, a blue stripe down the back
-    { centre: [0, -0.15, 0], radius: [0.48, 0.44, 0.52], count: 520, size: 0.06, colour: (_p, n) => (n[2] > 0.35 && n[1] < 0.5 ? CREAM : n[2] < -0.3 && Math.abs(n[0]) < 0.3 ? BLUE : YELLOW) },
+    { center: [0, -0.15, 0], radius: [0.48, 0.44, 0.52], count: 520, size: 0.06, color: (_p, n) => (n[2] > 0.35 && n[1] < 0.5 ? CREAM : n[2] < -0.3 && Math.abs(n[0]) < 0.3 ? BLUE : YELLOW) },
     // Head
-    { centre: [0, 0.42, 0.1], radius: [0.31, 0.3, 0.3], count: 260, size: 0.055, colour: () => YELLOW },
+    { center: [0, 0.42, 0.1], radius: [0.31, 0.3, 0.3], count: 260, size: 0.055, color: () => YELLOW },
     // Wings, blue, on both sides
-    { centre: [0.47, -0.12, -0.05], radius: [0.08, 0.26, 0.34], count: 70, size: 0.055, colour: () => BLUE },
-    { centre: [-0.47, -0.12, -0.05], radius: [0.08, 0.26, 0.34], count: 70, size: 0.055, colour: () => BLUE },
+    { center: [0.47, -0.12, -0.05], radius: [0.08, 0.26, 0.34], count: 70, size: 0.055, color: () => BLUE },
+    { center: [-0.47, -0.12, -0.05], radius: [0.08, 0.26, 0.34], count: 70, size: 0.055, color: () => BLUE },
     // Tail, sticking up and back
-    { centre: [0, 0.02, -0.6], radius: [0.16, 0.2, 0.14], count: 60, size: 0.05, colour: () => RED },
+    { center: [0, 0.02, -0.6], radius: [0.16, 0.2, 0.14], count: 60, size: 0.05, color: () => RED },
     // Beak
-    { centre: [0, 0.38, 0.43], radius: [0.08, 0.06, 0.1], count: 24, size: 0.035, colour: () => ORANGE },
+    { center: [0, 0.38, 0.43], radius: [0.08, 0.06, 0.1], count: 24, size: 0.035, color: () => ORANGE },
     // Eyes and pupils
-    { centre: [0.12, 0.5, 0.36], radius: [0.06, 0.06, 0.03], count: 12, size: 0.03, colour: () => WHITE },
-    { centre: [-0.12, 0.5, 0.36], radius: [0.06, 0.06, 0.03], count: 12, size: 0.03, colour: () => WHITE },
-    { centre: [0.12, 0.5, 0.39], radius: [0.03, 0.03, 0.01], count: 5, size: 0.022, colour: () => DARK },
-    { centre: [-0.12, 0.5, 0.39], radius: [0.03, 0.03, 0.01], count: 5, size: 0.022, colour: () => DARK },
+    { center: [0.12, 0.5, 0.36], radius: [0.06, 0.06, 0.03], count: 12, size: 0.03, color: () => WHITE },
+    { center: [-0.12, 0.5, 0.36], radius: [0.06, 0.06, 0.03], count: 12, size: 0.03, color: () => WHITE },
+    { center: [0.12, 0.5, 0.39], radius: [0.03, 0.03, 0.01], count: 5, size: 0.022, color: () => DARK },
+    { center: [-0.12, 0.5, 0.39], radius: [0.03, 0.03, 0.01], count: 5, size: 0.022, color: () => DARK },
   ]
   const total = parts.reduce((s, p) => s + p.count, 0)
   const m = emptyModel(total)
@@ -49,11 +49,11 @@ export function subject(seed = 5): Model {
       const ring = Math.sqrt(Math.max(0, 1 - y * y))
       const phi = k * 2.399963 + r() * 0.3
       const n: V3 = [ring * Math.sin(phi), y, ring * Math.cos(phi)]
-      const p: V3 = [part.centre[0] + n[0] * part.radius[0], part.centre[1] + n[1] * part.radius[1], part.centre[2] + n[2] * part.radius[2]]
+      const p: V3 = [part.center[0] + n[0] * part.radius[0], part.center[1] + n[1] * part.radius[1], part.center[2] + n[2] * part.radius[2]]
       m.pos.set(p, i * 3)
       m.logS[i] = Math.log(part.size)
-      const c = part.colour(p, n)
-      // Pull colours a hair in from 0 and 1 so the sigmoid can hold them
+      const c = part.color(p, n)
+      // Pull colors a hair in from 0 and 1 so the sigmoid can hold them
       m.col.set(c.map((v) => logit(Math.min(0.985, Math.max(0.015, v)))), i * 3)
       m.op[i] = logit(0.95)
     }

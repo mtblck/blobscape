@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu'
 import { placeCamera, type Orbit } from '../../splat-core/view.ts'
-import { readbackToSrgb } from '../../splat-core/colour.ts'
+import { readbackToSrgb } from '../../splat-core/color.ts'
 import { SplatWorld, type PointLight } from '../../splat-engine/engine.ts'
 import { sampleClip, type Clip } from '../../splat-engine/glb.ts'
 import type { Skeleton, Skin, SkinMode } from '../../splat-engine/rig.ts'
@@ -9,7 +9,7 @@ import { BoneView } from './bones.ts'
 import type { BakeOptions, BakedSheet } from '../../splat-engine/bakeSheet.ts'
 import type { SheetMove } from '../../splat-engine/spriteSheet.ts'
 import { PixelPass } from '../../splat-engine/pixelPass.ts'
-import { lookColours, snapColours, type Frame, type PixelLook } from '../../splat-core/pixel.ts'
+import { lookColors, snapColors, type Frame, type PixelLook } from '../../splat-core/pixel.ts'
 
 /**
  * The Creature page's view: Blobscape's own splat engine (src/splat-engine)
@@ -229,20 +229,20 @@ export class CreatureStage {
   private async read(target: THREE.RenderTarget, encoded = false): Promise<Frame> {
     const { width, height } = target
     const px = await this.renderer.readRenderTargetPixelsAsync(target, 0, 0, width, height) as Uint8Array
-    // a target holds linear, premultiplied colour (pixel mode's art, `encoded`, already holds sRGB); a frame is sRGB, straight, top row first. WebGPU reads rows top-down, WebGL bottom-up.
+    // a target holds linear, premultiplied color (pixel mode's art, `encoded`, already holds sRGB); a frame is sRGB, straight, top row first. WebGPU reads rows top-down, WebGL bottom-up.
     return { width, height, data: readbackToSrgb(px, width, height, { flip: this.backend === 'webgl', premultiplied: false, encoded }) }
   }
 
-  /** Pixel mode's last frame as it was drawn small, and as finished art (exactly in the look's colours): for tests and for saving. */
+  /** Pixel mode's last frame as it was drawn small, and as finished art (exactly in the look's colors): for tests and for saving. */
   async pixelFrames(): Promise<{ small: Frame; art: Frame; before?: Frame; parts?: Frame } | undefined> {
     // a sheet being drawn has the renderer to itself
     if (!this.pixel || this.baking) return
     // pixel mode can be switched off, or the view resized, while the reads are out: hold the pass and start every read now
     const pass = this.pixel
     if (!this.target) pass.render(this.renderer, this.scene, this.camera)
-    const colours = lookColours(pass.look)
+    const colors = lookColors(pass.look)
     const [small, art, before, parts] = await Promise.all([this.read(pass.small), this.read(pass.art, true), pass.before ? this.read(pass.before, true) : undefined, pass.look.parts ? this.read(pass.ids, true) : undefined])
-    return { small, art: snapColours(art, colours), before: before && snapColours(before, colours), parts }
+    return { small, art: snapColors(art, colors), before: before && snapColors(before, colors), parts }
   }
 
   invalidate(frames = 2) { this.pending = Math.max(this.pending, frames) }

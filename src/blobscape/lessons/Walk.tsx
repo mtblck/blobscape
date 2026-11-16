@@ -8,7 +8,7 @@ import { Button, Chip, Field, Slider, Toggle } from '../../shared/ui.tsx'
 import { LessonShell } from '../Shell.tsx'
 import { LESSON_GOALS } from '../routes.ts'
 import { Viewport } from '../Viewport.tsx'
-import { drawBones, themeColour } from '../overlay.ts'
+import { drawBones, themeColor } from '../overlay.ts'
 import { useGoals } from '../progress.ts'
 
 const START: Orbit = { target: [0, 0.65, 0], distance: 4.4, azimuth: 72, elevation: 12 }
@@ -109,12 +109,12 @@ export function Walk() {
           version={0}
           orbit={orbit}
           setOrbit={setOrbit}
-          label={`A blob fox walking on the spot from ${keys} key poses, ${hold ? 'held' : 'in-betweened'}, one step every ${cycle.toFixed(2)} seconds, over ground moving at ${ground.toFixed(2)} metres a second. Drag or use the arrow keys to orbit.`}
+          label={`A blob fox walking on the spot from ${keys} key poses, ${hold ? 'held' : 'in-betweened'}, one step every ${cycle.toFixed(2)} seconds, over ground moving at ${ground.toFixed(2)} meters a second. Drag or use the arrow keys to orbit.`}
           hint="drag to orbit · scroll to zoom"
           onView={(v) => { view.current = v; v.setFloor(true, '#8a8a8a'); show(live.current.phase) }}
           overlay={
             bones
-              ? (ctx, lens) => drawBones(ctx, sk.bones.map((b, i) => ({ from: sk.posedHead.subarray(i * 3, i * 3 + 3), to: posedPoint(sk, i, TAILS[b.name]) })), lens, themeColour('accent', ctx.canvas))
+              ? (ctx, lens) => drawBones(ctx, sk.bones.map((b, i) => ({ from: sk.posedHead.subarray(i * 3, i * 3 + 3), to: posedPoint(sk, i, TAILS[b.name]) })), lens, themeColor('accent', ctx.canvas))
               : undefined
           }
         />

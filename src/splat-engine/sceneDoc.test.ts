@@ -12,11 +12,11 @@ const sound = (): SceneDoc => ({
   camera: { target: [0, 0.5, 0], distance: 4, azimuth: 20, elevation: 10 },
   bones: [{ name: 'arm', at: [0, 0.5, 0] }, { name: 'hand', at: [0.3, 0.5, 0], parent: 'arm' }, { name: 'puff', at: [0, 1, 0] }],
   parts: [
-    { shape: { kind: 'cylinder', at: [0, -0.2, 0], height: 0.2, r: 1 }, paint: { kind: 'faces', top: { kind: 'patches', size: 0.3, colours: ['#3f7a45', '#101018'] }, side: '#101018' } },
-    { shape: { kind: 'box', at: [0.15, 0.5, 0], half: [0.15, 0.03, 0.03] }, paint: { kind: 'bricks', size: [0.1, 0.05], colours: ['#f4f1e4'], line: '#101018' }, bone: 'arm' },
+    { shape: { kind: 'cylinder', at: [0, -0.2, 0], height: 0.2, r: 1 }, paint: { kind: 'faces', top: { kind: 'patches', size: 0.3, colors: ['#3f7a45', '#101018'] }, side: '#101018' } },
+    { shape: { kind: 'box', at: [0.15, 0.5, 0], half: [0.15, 0.03, 0.03] }, paint: { kind: 'bricks', size: [0.1, 0.05], colors: ['#f4f1e4'], line: '#101018' }, bone: 'arm' },
     { shape: { kind: 'sphere', at: [0.3, 0.5, 0], r: 0.005 }, paint: '#ffd166', bone: 'hand', glow: true },
-    { shape: { kind: 'rough', shape: { kind: 'join', shapes: [{ kind: 'ball', at: [0, 1, 0], r: [0.1, 0.05, 0.1] }, { kind: 'cone', from: [0, 1, 0], to: [0.1, 1.1, 0], r: 0.04 }] }, by: 0.01 }, paint: { kind: 'split', axis: 'y', at: 1, below: '#101018', above: { kind: 'speckle', size: 0.05, colours: ['#f4f1e4', '#ffd166'] } }, bone: 'puff', noShadow: true },
-    { shape: { kind: 'cut', shape: { kind: 'roof', at: [-0.5, 0, 0], half: [0.2, 0.2], height: 0.3 }, hole: { kind: 'ring', at: [-0.5, 0.1, 0], r: 0.1, tube: 0.03 } }, paint: { kind: 'faces', top: { kind: 'bands', axis: 'x', size: 0.05, colours: ['#f4f1e4', '#ffd166'] }, side: { kind: 'hex', size: 0.1, colours: ['#f4f1e4', '#ffd166'], line: '#101018', deep: '#3f7a45' } } },
+    { shape: { kind: 'rough', shape: { kind: 'join', shapes: [{ kind: 'ball', at: [0, 1, 0], r: [0.1, 0.05, 0.1] }, { kind: 'cone', from: [0, 1, 0], to: [0.1, 1.1, 0], r: 0.04 }] }, by: 0.01 }, paint: { kind: 'split', axis: 'y', at: 1, below: '#101018', above: { kind: 'speckle', size: 0.05, colors: ['#f4f1e4', '#ffd166'] } }, bone: 'puff', noShadow: true },
+    { shape: { kind: 'cut', shape: { kind: 'roof', at: [-0.5, 0, 0], half: [0.2, 0.2], height: 0.3 }, hole: { kind: 'ring', at: [-0.5, 0.1, 0], r: 0.1, tube: 0.03 } }, paint: { kind: 'faces', top: { kind: 'bands', axis: 'x', size: 0.05, colors: ['#f4f1e4', '#ffd166'] }, side: { kind: 'hex', size: 0.1, colors: ['#f4f1e4', '#ffd166'], line: '#101018', deep: '#3f7a45' } } },
   ],
   moves: [
     { kind: 'spin', bone: 'arm', axis: 'y', times: 2 },
@@ -25,7 +25,7 @@ const sound = (): SceneDoc => ({
     { kind: 'drift', bone: 'puff', by: [0.1, 0.5, 0], times: 2, grow: [0.5, 2] },
     { kind: 'pulse', bone: 'puff', size: [0.8, 1.2], times: 7 },
   ],
-  lights: [{ at: [0, 0.3, 0], colour: '#ffd166', strength: 2, range: 0.8, flicker: { by: 0.3, times: 9 }, circle: { r: 0.5, times: 1 } }],
+  lights: [{ at: [0, 0.3, 0], color: '#ffd166', strength: 2, range: 0.8, flicker: { by: 0.3, times: 9 }, circle: { r: 0.5, times: 1 } }],
 })
 
 test('a sound description has nothing wrong with it', () => {
@@ -34,8 +34,8 @@ test('a sound description has nothing wrong with it', () => {
 
 test('checkScene points at each mistake', () => {
   const cases: [string, (d: any) => void, RegExp][] = [
-    ['a bad colour', (d) => { d.palette[1] = 'green' }, /^palette\[1\]: must be a colour/],
-    ['too many colours', (d) => { d.palette = Array.from({ length: 33 }, () => '#000000') }, /^palette: must be 2 to 32 colours/],
+    ['a bad color', (d) => { d.palette[1] = 'green' }, /^palette\[1\]: must be a color/],
+    ['too many colors', (d) => { d.palette = Array.from({ length: 33 }, () => '#000000') }, /^palette: must be 2 to 32 colors/],
     ['an unknown shape', (d) => { d.parts[1].shape.kind = 'pyramid' }, /^parts\[1\]\.shape\.kind: 'pyramid' is not a shape/],
     ['a shape missing a size', (d) => { delete d.parts[2].shape.r }, /^parts\[2\]\.shape\.r: must be a number/],
     ['a nested shape', (d) => { d.parts[3].shape.shape.shapes[1].to = [0, 1] }, /^parts\[3\]\.shape\.shape\.shapes\[1\]\.to: must be 3 numbers/],
@@ -102,7 +102,7 @@ test('a compiled scene loops: bones and lights after one loop are where they beg
   const lb = c.lights(1.7 + c.loop)
   for (let i = 0; i < 3; i++) {
     assert.ok(Math.abs(la[0].position[i] - lb[0].position[i]) < 1e-6)
-    assert.ok(Math.abs(la[0].colour[i] - lb[0].colour[i]) < 1e-6)
+    assert.ok(Math.abs(la[0].color[i] - lb[0].color[i]) < 1e-6)
   }
   c.pose(sk, 2.6)
   for (const name of ['arm', 'hand', 'puff']) {

@@ -8,7 +8,7 @@ import { Footer } from '../shared/Footer.tsx'
 import { Crumbs } from '../blobscape/Shell.tsx'
 import { Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
 import { TAB_SECTIONS, Workbench } from '../shared/Workbench.tsx'
-import { countColours, countSolid, rgbToHex, type Frame } from '../splat-core/pixel.ts'
+import { countColors, countSolid, rgbToHex, type Frame } from '../splat-core/pixel.ts'
 
 const CAMERAS: { id: string; name: string; view: Partial<View>; note: string }[] = [
   { id: 'rpg', name: 'Top-down RPG', view: { elevation: 45, ortho: true }, note: 'Looking down at 45°, like most top-down adventures.' },
@@ -48,7 +48,7 @@ export function App() {
   const [stdDev, setStdDev] = useState(Math.sqrt(8))
   const [crop, setCrop] = useState(3)
   const [palette, setPalette] = useState<PaletteChoice>('auto')
-  const [autoColours, setAutoColours] = useState(12)
+  const [autoColors, setAutoColors] = useState(12)
   const [dither, setDither] = useState(0)
   const [strays, setStrays] = useState(true)
   const [outlineMode, setOutlineMode] = useState<PixelSettings['outline']>('darkest')
@@ -61,10 +61,10 @@ export function App() {
 
   const settings: PixelSettings = useMemo(
     () => ({
-      size, supersample, alphaCut: cut, autoColours, dither, strays, outline: outlineMode,
+      size, supersample, alphaCut: cut, autoColors, dither, strays, outline: outlineMode,
       palette: palette === 'auto' || palette === 'none' ? palette : PALETTES.find((p) => p.id === palette)!.colors,
     }),
-    [size, supersample, cut, autoColours, dither, strays, outlineMode, palette],
+    [size, supersample, cut, autoColors, dither, strays, outlineMode, palette],
   )
   // Everything a bake depends on, so the page can say when the sheet on show is out of date
   const bakeKey = JSON.stringify([settings, view, stdDev, crop, upright, layout, source.kind, source.id])
@@ -294,7 +294,7 @@ export function App() {
           }
           status={<>
             <span><span className="text-ink tabular-nums" data-testid="splat-count">{splatCount.toLocaleString()} splats</span> in {source.name}</span>
-            {stages && <span className="tabular-nums">Sprite: {size}×{size} pixels, {countSolid(stages.final)} filled, {countColours(stages.final)} colours</span>}
+            {stages && <span className="tabular-nums">Sprite: {size}×{size} pixels, {countSolid(stages.final)} filled, {countColors(stages.final)} colors</span>}
           </>}
           tabsLabel="Sprite settings"
           tabs={[
@@ -374,22 +374,22 @@ export function App() {
                       <select aria-label="Palette" className="w-full rounded border border-rule bg-paper py-1.5 pr-9 pl-2.5" value={palette} onChange={(e) => setPalette(e.target.value)}>
                         <option value="auto">Auto: picked from the splat</option>
                         {PALETTES.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.colors.length})</option>)}
-                        <option value="none">Full colour (no palette)</option>
+                        <option value="none">Full color (no palette)</option>
                       </select>
                     </Field>
-                    {palette === 'auto' && <Slider label="Colours" value={autoColours} min={2} max={32} step={1} onChange={setAutoColours} format={(v) => `${v}`} />}
+                    {palette === 'auto' && <Slider label="Colors" value={autoColors} min={2} max={32} step={1} onChange={setAutoColors} format={(v) => `${v}`} />}
                     {stages && stages.palette.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-0.5" role="img" aria-label={`Palette in use: ${stages.palette.length} colours`}>
+                      <div className="mt-2 flex flex-wrap gap-0.5" role="img" aria-label={`Palette in use: ${stages.palette.length} colors`}>
                         {stages.palette.map((c, i) => <span key={i} title={rgbToHex(c)} aria-hidden className="h-3.5 w-3.5 rounded-[2px]" style={{ background: rgbToHex(c) }} />)}
                       </div>
                     )}
-                    <p className="text-xs leading-relaxed text-ink-faint">Every pixel snaps to its nearest palette colour, measured in OKLab so it matches what your eye would pick.</p>
+                    <p className="text-xs leading-relaxed text-ink-faint">Every pixel snaps to its nearest palette color, measured in OKLab so it matches what your eye would pick.</p>
                   </div>
                   <Slider label="Dither" value={dither} min={0} max={1} step={0.05} onChange={setDither} format={(v) => (v === 0 ? 'off' : `${Math.round(v * 100)}%`)} />
                   <div className="grid gap-3">
                     <Field label="Outline">
                       <div className="flex flex-wrap gap-1.5">
-                        {(['none', 'darkest', 'black'] as const).map((o) => <Chip key={o} small active={outlineMode === o} onClick={() => setOutlineMode(o)}>{o === 'darkest' ? 'darkest colour' : o}</Chip>)}
+                        {(['none', 'darkest', 'black'] as const).map((o) => <Chip key={o} small active={outlineMode === o} onClick={() => setOutlineMode(o)}>{o === 'darkest' ? 'darkest color' : o}</Chip>)}
                       </div>
                     </Field>
                     <Toggle label="Remove stray pixels" checked={strays} onChange={setStrays} />
@@ -477,7 +477,7 @@ function Pipeline({ stages, size, supersample }: { stages: Stages | null; size: 
   const steps = [
     { key: 'raw', title: '1 · Render', text: `The splats drawn at ${size * supersample}×${size * supersample}. Each blob is sorted back to front and blended, so edges are soft and see-through.` },
     { key: 'shrunk', title: '2 · Shrink', text: `Every ${supersample}×${supersample} block averaged into one pixel. Edge pixels end up partly transparent.` },
-    { key: 'snapped', title: '3 · Cut and snap', text: 'Pixels over the coverage cut become solid, the rest vanish. Colours snap to the palette.' },
+    { key: 'snapped', title: '3 · Cut and snap', text: 'Pixels over the coverage cut become solid, the rest vanish. Colors snap to the palette.' },
     { key: 'final', title: '4 · Clean up', text: 'Lone specks from stray blobs are removed, and an outline is drawn around the silhouette.' },
   ] as const
   return (
@@ -581,7 +581,7 @@ function SheetView({ sheet, name, onJson, stale, baking }: { sheet: Sheet; name:
           </div>
         </div>
 
-        {/* every frame, labelled */}
+        {/* every frame, labeled */}
         <div className="min-w-0">
           <h3 className="text-sm font-medium">Frames</h3>
           <ol className="mt-2 flex flex-wrap gap-3">
@@ -627,7 +627,7 @@ function FrameImage({ frame, className, smooth, testId, label }: { frame: Frame;
     c.height = frame.height
     c.getContext('2d')!.putImageData(new ImageData(new Uint8ClampedArray(frame.data), frame.width, frame.height), 0, 0)
   }, [frame])
-  // Labelled frames are images; unlabelled ones sit beside a caption that already says what they show.
+  // Labeled frames are images; unlabeled ones sit beside a caption that already says what they show.
   return <canvas ref={ref} className={`${smooth ? '' : 'pixelated'} ${className ?? ''}`} data-testid={testId} role={label ? 'img' : undefined} aria-label={label} aria-hidden={label ? undefined : true} />
 }
 

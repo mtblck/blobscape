@@ -12,10 +12,10 @@ import type { Built } from './body.ts'
  * between bones, this fills a regular grid and hangs each part on one bone, so
  * parts move rigidly (a lamp turns, a boat bobs) and the grid stays crisp.
  *
- * Light is baked into the colours: one sun, an ambient floor, and shadows cast
+ * Light is baked into the colors: one sun, an ambient floor, and shadows cast
  * by every part on every other, found by marching from each blob toward the
  * sun through the scene's shapes in the rest pose. `glow` parts keep their
- * colour and cast no shadow.
+ * color and cast no shadow.
  */
 export interface Shape {
   /** Distance to the surface: negative inside. */
@@ -27,8 +27,8 @@ export interface Shape {
 
 export interface VoxelPart {
   shape: Shape
-  /** Colour (0–1, sRGB) or colour at a surface point given its outward normal. */
-  colour: Vec3 | ((p: Vec3, n: Vec3) => Vec3)
+  /** Color (0–1, sRGB) or color at a surface point given its outward normal. */
+  color: Vec3 | ((p: Vec3, n: Vec3) => Vec3)
   /** The bone that carries it. */
   bone: string
   /** Unlit and casting no shadow: lamps, windows, beams of light. */
@@ -56,7 +56,7 @@ export interface VoxelSpec {
 }
 
 /**
- * The brightest the baked sun makes a surface, as a share of its colour. Only
+ * The brightest the baked sun makes a surface, as a share of its color. Only
  * `glow` parts are built brighter, so pixel mode can tell a lamp from a white
  * wall in the sun (GLOW_FROM in splat-core/pixel.ts sits just over it). Live
  * lights add on top: a surface under a strong one does pass the line and glow.
@@ -213,7 +213,7 @@ export function buildVoxels(spec: VoxelSpec): Built {
   const e = s * 0.5
   spec.parts.forEach((part, pi) => {
     const { sdf, min, max } = part.shape
-    // parts on the same bone never move apart, so a cell buried in a neighbour is never seen
+    // parts on the same bone never move apart, so a cell buried in a neighbor is never seen
     const same = spec.parts.filter((q, qi) => qi !== pi && boneOf[qi] === boneOf[pi] && !q.glow && (q.opacity ?? 1) >= 0.9).map((q) => q.shape)
     const i0 = Math.floor(min[0] / s), i1 = Math.ceil(max[0] / s)
     const j0 = Math.floor(min[1] / s), j1 = Math.ceil(max[1] / s)
@@ -230,7 +230,7 @@ export function buildVoxels(spec: VoxelSpec): Built {
           if (same.some((q) => boxDistance(q, x, y, z) === 0 && q.sdf(x, y, z) < -s)) continue
           const n = norm([sdf(x + e, y, z) - sdf(x - e, y, z), sdf(x, y + e, z) - sdf(x, y - e, z), sdf(x, y, z + e) - sdf(x, y, z - e)])
           const p: Vec3 = [x, y, z]
-          const base = typeof part.colour === 'function' ? part.colour(p, n) : part.colour
+          const base = typeof part.color === 'function' ? part.color(p, n) : part.color
           let shade = 1
           if (!part.glow) {
             const facing = Math.max(0, n[0] * L[0] + n[1] * L[1] + n[2] * L[2])
@@ -239,8 +239,8 @@ export function buildVoxels(spec: VoxelSpec): Built {
           }
           blobs.push({
             // a disc lying on the surface: flat along the normal, which is what live lights read as the way it faces
-            centre: p, scale: [s * 0.55, s * 0.55, s * 0.3], quat: quatFacing(n),
-            colour: [base[0] * shade, base[1] * shade, base[2] * shade], opacity: part.opacity ?? 0.96,
+            center: p, scale: [s * 0.55, s * 0.55, s * 0.3], quat: quatFacing(n),
+            color: [base[0] * shade, base[1] * shade, base[2] * shade], opacity: part.opacity ?? 0.96,
           })
           parts.push(pi)
         }

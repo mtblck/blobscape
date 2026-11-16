@@ -15,7 +15,7 @@ import { poseSpark, restAtOrigin, setSplatBones } from './sparkBones.ts'
 
 const fake = (n: number) => ({ numSplats: n, needsUpdate: false }) as never
 
-function sparkCentre(sk: SplatSkinning, i: number, c: ArrayLike<number>): [number, number, number] {
+function sparkCenter(sk: SplatSkinning, i: number, c: ArrayLike<number>): [number, number, number] {
   const d = sk.boneData
   const w = [0, 1, 2, 3].map((k) => (sk.skinData[i * 4 + k] & 0xff) / 255)
   const b = [0, 1, 2, 3].map((k) => (sk.skinData[i * 4 + k] >> 8) & 0xff)
@@ -49,10 +49,10 @@ function sparkCentre(sk: SplatSkinning, i: number, c: ArrayLike<number>): [numbe
 }
 
 /** Our skinning with the weights rounded to bytes as Spark stores them. */
-function ourCentre(fox: ReturnType<typeof makeCreature>, i: number) {
+function ourCenter(fox: ReturnType<typeof makeCreature>, i: number) {
   const w = [0, 1, 2, 3].map((k) => Math.round(fox.skin.weights[i * 4 + k] * 255) / 255)
   const out = new Float32Array(3), cov = new Float32Array(6)
-  skinBlob(fox.blobs.centre.subarray(i * 3, i * 3 + 3), [1, 1, 1], [0, 0, 0, 1], fox.skin.joints.subarray(i * 4, i * 4 + 4), w, fox.skeleton, 'linear', out, 0, cov, 0)
+  skinBlob(fox.blobs.center.subarray(i * 3, i * 3 + 3), [1, 1, 1], [0, 0, 0, 1], fox.skin.joints.subarray(i * 4, i * 4 + 4), w, fox.skeleton, 'linear', out, 0, cov, 0)
   return out
 }
 
@@ -71,7 +71,7 @@ function trottingFox(mode: SplatSkinningMode) {
 test("Spark's linear blend, fed our skin matrices, puts every fox blob where ours does", () => {
   const { fox, sk } = trottingFox(SplatSkinningMode.LINEAR_BLEND)
   let worst = 0
-  for (let i = 0; i < fox.blobs.count; i++) worst = Math.max(worst, dist(sparkCentre(sk, i, fox.blobs.centre.subarray(i * 3)), ourCentre(fox, i)))
+  for (let i = 0; i < fox.blobs.count; i++) worst = Math.max(worst, dist(sparkCenter(sk, i, fox.blobs.center.subarray(i * 3)), ourCenter(fox, i)))
   assert.ok(worst < 1e-4, `worst ${worst}`)
 })
 
@@ -79,7 +79,7 @@ test("Spark's dual quaternions agree with us on blobs held by one bone, and stay
   const { fox, sk } = trottingFox(SplatSkinningMode.DUAL_QUATERNION)
   let single = 0, blended = 0
   for (let i = 0; i < fox.blobs.count; i++) {
-    const d = dist(sparkCentre(sk, i, fox.blobs.centre.subarray(i * 3)), ourCentre(fox, i))
+    const d = dist(sparkCenter(sk, i, fox.blobs.center.subarray(i * 3)), ourCenter(fox, i))
     if (fox.skin.weights[i * 4] > 0.999) single = Math.max(single, d)
     else blended = Math.max(blended, d)
   }
@@ -104,7 +104,7 @@ test("Spark 2.4's rest pose only matches glTF skinning when it's the identity (w
     sk.setSplatBones(0, new THREE.Vector4(0, 0, 0, 0), new THREE.Vector4(1, 0, 0, 0))
     if (mode === SplatSkinningMode.LINEAR_BLEND) sk.setBoneMatrix(0, new THREE.Matrix4().compose(head, q, new THREE.Vector3(1, 1, 1)))
     else sk.setBoneQuatPos(0, q, head)
-    const got = sparkCentre(sk, 0, [2, 0, 0]).map((v) => +v.toFixed(5))
+    const got = sparkCenter(sk, 0, [2, 0, 0]).map((v) => +v.toFixed(5))
     // Spark turns the blob about the origin instead of the bone's head. If this starts failing, Spark fixed it.
     assert.deepEqual(got, [0, 2, 0], mode)
   }

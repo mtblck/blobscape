@@ -11,9 +11,9 @@ import type { CreatureStage } from './stage.ts'
 const STILL = -1
 const SIZES = [32, 48, 64, 96]
 const FRAMES = [6, 8, 12]
-const COLOURS = [8, 16, 32]
+const COLORS = [8, 16, 32]
 
-interface Settings { moves: number[]; directions: 4 | 8; size: number; frames: number; colours: number; outline: boolean }
+interface Settings { moves: number[]; directions: 4 | 8; size: number; frames: number; colors: number; outline: boolean }
 
 /** For verify: the same settings, with moves by clip name ('still' for the rest pose). */
 export type SheetRequest = Omit<Settings, 'moves'> & { moves: string[] }
@@ -55,7 +55,7 @@ export function Sprites({ stage, name, clips, labelOf, current }: { stage?: Crea
   const [directions, setDirections] = useState<4 | 8>(4)
   const [size, setSize] = useState(48)
   const [frames, setFrames] = useState(8)
-  const [colours, setColours] = useState(16)
+  const [colors, setColors] = useState(16)
   const [outline, setOutline] = useState(true)
   /** Announced: drawing started, the sheet is ready. */
   const [note, setNote] = useState('')
@@ -77,7 +77,7 @@ export function Sprites({ stage, name, clips, labelOf, current }: { stage?: Crea
   useEffect(() => () => { if (made) URL.revokeObjectURL(made.url) }, [made])
 
   const toggle = (id: number) => setChosen((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]))
-  const settings: Settings = { moves: [...chosen].sort((a, b) => a - b), directions, size, frames, colours, outline }
+  const settings: Settings = { moves: [...chosen].sort((a, b) => a - b), directions, size, frames, colors, outline }
   const moves = sheetMoves(clips, chosen, frames)
   const plan = planSheet(moves, directions)
   const count = moves.reduce((s, m) => s + m.frames, 0) * directions
@@ -95,7 +95,7 @@ export function Sprites({ stage, name, clips, labelOf, current }: { stage?: Crea
     setNote(`Drawing ${total} frames…`)
     setProgress('Drawing…')
     try {
-      const sheet = await stage.bake(ms, { directions: r.directions, size: r.size, colours: r.colours, outline: r.outline }, (d, t) => setProgress(`Drawing frame ${d} of ${t}…`))
+      const sheet = await stage.bake(ms, { directions: r.directions, size: r.size, colors: r.colors, outline: r.outline }, (d, t) => setProgress(`Drawing frame ${d} of ${t}…`))
       if (gen !== generation.current) { setNote(''); return undefined }
       const png = await sheet.png()
       if (gen !== generation.current) { setNote(''); return undefined }
@@ -159,8 +159,8 @@ export function Sprites({ stage, name, clips, labelOf, current }: { stage?: Crea
           <Field label="Size">
             <div className="flex flex-wrap gap-1.5">{SIZES.map((n) => <Chip key={n} active={size === n} onClick={() => setSize(n)}>{n} px</Chip>)}</div>
           </Field>
-          <Field label="Colours">
-            <div className="flex flex-wrap gap-1.5">{COLOURS.map((n) => <Chip key={n} active={colours === n} onClick={() => setColours(n)}>{n}</Chip>)}</div>
+          <Field label="Colors">
+            <div className="flex flex-wrap gap-1.5">{COLORS.map((n) => <Chip key={n} active={colors === n} onClick={() => setColors(n)}>{n}</Chip>)}</div>
           </Field>
           <Field label="Edges">
             <Toggle label="Dark outline" checked={outline} onChange={setOutline} />

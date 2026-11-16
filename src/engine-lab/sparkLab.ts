@@ -45,10 +45,10 @@ export async function startSparkLab(display: HTMLCanvasElement, o: LabOptions): 
     const store = linear ? new ExtSplats({ maxSplats: b.count }) : new PackedSplats({ maxSplats: b.count })
     const c = new THREE.Vector3(), s = new THREE.Vector3(), q = new THREE.Quaternion(), col = new THREE.Color()
     for (let i = 0; i < b.count; i++) {
-      c.fromArray(b.centre, i * 3)
+      c.fromArray(b.center, i * 3)
       s.fromArray(b.scale, i * 3)
       q.fromArray(b.quat, i * 4)
-      col.setRGB(b.colour[i * 3], b.colour[i * 3 + 1], b.colour[i * 3 + 2])
+      col.setRGB(b.color[i * 3], b.color[i * 3 + 1], b.color[i * 3 + 2])
       store.setSplat(i, c, s, q, b.opacity[i], col)
     }
     let mesh: SplatMesh

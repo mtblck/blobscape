@@ -6,7 +6,7 @@ import { project, type Blobs, type Footprint, type Lens } from '../splat-core/bl
  *
  * It's the whole algorithm in one loop: project each blob to its 2D Gaussian,
  * then for every pixel blend it "over" what's already there:
- *   colour = blobColour · α + colour · (1 − α),  α = opacity · exp(−½ dᵀ Σ⁻¹ d)
+ *   color = blobColor · α + color · (1 − α),  α = opacity · exp(−½ dᵀ Σ⁻¹ d)
  * That blend is only right when blobs arrive back to front.
  */
 
@@ -26,13 +26,13 @@ export function drawOrder(b: Blobs, lens: Lens, order: Order): number[] {
  * Renders into premultiplied RGBA floats (0–1). `reach` is how many standard
  * deviations out each blob is drawn, like Spark's maxStdDev.
  */
-export function rasterise(b: Blobs, lens: Lens, order: number[], width: number, height: number, reach = Math.sqrt(8)): Float32Array {
+export function rasterize(b: Blobs, lens: Lens, order: number[], width: number, height: number, reach = Math.sqrt(8)): Float32Array {
   const out = new Float32Array(width * height * 4)
   const sx = width / lens.width, sy = height / lens.height
   for (const i of order) {
     const f = project(b, i, lens)
     if (!f) continue
-    splatOne(out, width, height, f, sx, sy, b.colour.subarray(i * 3, i * 3 + 3), b.opacity[i], reach)
+    splatOne(out, width, height, f, sx, sy, b.color.subarray(i * 3, i * 3 + 3), b.opacity[i], reach)
   }
   return out
 }

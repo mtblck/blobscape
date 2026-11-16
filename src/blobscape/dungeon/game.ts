@@ -3,13 +3,13 @@ import { rng } from '../../splat-engine/body.ts'
 /**
  * Dungeon Run's rules, without any drawing: a square hall with four pillars
  * and three doors, a hero who runs, swings a sword and casts bolts of magic,
- * and slimes that come through the doors in waves and hop towards the hero.
+ * and slimes that come through the doors in waves and hop toward the hero.
  * Everything is plain numbers, stepped by `step(dt, input)`, so it runs in
  * Node tests; the stage poses the blobs from what it finds here.
  *
  * Seen from behind the hero at the start, +z is ahead and +x is to the left
  * (as in Forest Walk). Headings are radians, 0 facing +z, positive turning
- * towards +x.
+ * toward +x.
  */
 
 /** Half the hall's width: it runs from −HALF to HALF in x and z. */
@@ -30,7 +30,7 @@ export type SlimeKind = (typeof KINDS)[number]
 export interface KindRule {
   label: string
   hp: number
-  /** Average ground speed, metres a second (they cover it all while in the air). */
+  /** Average ground speed, meters a second (they cover it all while in the air). */
   speed: number
   /** Seconds from one hop to the next. */
   hop: number
@@ -38,7 +38,7 @@ export interface KindRule {
   damage: number
   /** Size, relative: radius is SLIME_R times this. */
   size: number
-  /** How many of this colour can be out at once (the stage builds this many). */
+  /** How many of this color can be out at once (the stage builds this many). */
   pool: number
   /** First wave it comes in. */
   from: number
@@ -51,7 +51,7 @@ export const RULES: Record<SlimeKind, KindRule> = {
   purple: { label: 'purple', hp: 6, speed: 1.0, hop: 1.3, damage: 20, size: 1.45, pool: 2, from: 4 },
   gold: { label: 'gold', hp: 3, speed: 1.9, hop: 0.8, damage: 8, size: 0.95, pool: 1, from: 2 },
 }
-/** A slime's radius at size 1, metres. */
+/** A slime's radius at size 1, meters. */
 export const SLIME_R = 0.36
 /** Bursting a gold slime gives this much health and magic back. */
 export const GOLD_HEAL = 25
@@ -117,7 +117,7 @@ export interface Hero {
 }
 
 export interface Slime {
-  /** Which of its colour's pool it is drawn by. */
+  /** Which of its color's pool it is drawn by. */
   slot: number
   kind: SlimeKind
   phase: 'spawn' | 'live' | 'burst'
@@ -316,7 +316,7 @@ export class Game {
     for (const b of this.bolts) {
       b.t += dt
       if (b.popped) continue
-      // bolts curve a little towards the slime they were cast at
+      // bolts curve a little toward the slime they were cast at
       if (b.target && b.target.phase !== 'burst') {
         const want = Math.atan2(b.target.x - b.x, b.target.z - b.z)
         const d = angleTo(b.heading, want)
@@ -437,7 +437,7 @@ export class Game {
     if (this.time < this.spawnAt || this.alive >= Math.min(2 + this.wave, 7)) return
     const kinds = KINDS.filter((k) => RULES[k].from <= this.wave && this.free(k) >= 0 && (k !== 'gold' || this.rand() < 0.35))
     if (!kinds.length) return
-    // the newest colour comes more often in its own wave
+    // the newest color comes more often in its own wave
     const kind = kinds.find((k) => RULES[k].from === this.wave && k !== 'gold' && this.rand() < 0.5) ?? kinds[Math.floor(this.rand() * kinds.length)]
     // from the door farthest from the hero, so nothing lands on top of them
     const door = [...DOORS].sort((a, b) => Math.hypot(b.x - this.hero.x, b.z - this.hero.z) - Math.hypot(a.x - this.hero.x, a.z - this.hero.z))[this.rand() < 0.7 ? 0 : 1]
@@ -449,7 +449,7 @@ export class Game {
     this.spawnAt = this.time + 1.1
   }
 
-  /** A free pool slot for this colour, or −1. */
+  /** A free pool slot for this color, or −1. */
   private free(kind: SlimeKind) {
     const used = new Set(this.slimes.filter((s) => s.kind === kind).map((s) => s.slot))
     for (let i = 0; i < RULES[kind].pool; i++) if (!used.has(i)) return i
@@ -473,7 +473,7 @@ function newHero(): Hero {
   return { x: 0, z: -2.5, heading: 0, speed: 0, hp: MAX_HP, mp: MAX_MP, vx: 0, vz: 0, swingT: -1, swingN: 0, castT: -1, hurt: 0 }
 }
 
-/** Seconds from one hop to the next for this colour at this difficulty. */
+/** Seconds from one hop to the next for this color at this difficulty. */
 export const hopPeriod = (kind: SlimeKind, d: Difficulty) => RULES[kind].hop / HASTE[d]
 
 export const slimeR = (s: { kind: SlimeKind }) => SLIME_R * RULES[s.kind].size

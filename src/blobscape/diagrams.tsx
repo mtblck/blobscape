@@ -6,7 +6,7 @@
  * single image to assistive tech (role="img" with a description).
  */
 
-const COLOURS = {
+const COLORS = {
   red: '#d9382e',
   deep: '#a3231c',
   cream: '#f3e6cc',
@@ -18,14 +18,14 @@ const COLOURS = {
   orange: '#f2a65a',
   white: '#ffffff',
 } as const
-type Colour = keyof typeof COLOURS
+type Color = keyof typeof COLORS
 
 /** The gradients every drawing on the page uses; rendered once, before them. */
 export function BlobDefs() {
   return (
     <svg aria-hidden width="0" height="0" className="absolute">
       <defs>
-        {Object.entries(COLOURS).map(([k, c]) => (
+        {Object.entries(COLORS).map(([k, c]) => (
           <radialGradient key={k} id={`bs-${k}`}>
             <stop offset="0" stopColor={c} stopOpacity="1" />
             <stop offset="0.45" stopColor={c} stopOpacity="0.8" />
@@ -37,7 +37,7 @@ export function BlobDefs() {
   )
 }
 
-interface B { x: number; y: number; rx: number; ry: number; r: number; c: Colour }
+interface B { x: number; y: number; rx: number; ry: number; r: number; c: Color }
 
 function Blob({ x, y, rx, ry, r, c, o = 0.95 }: B & { o?: number }) {
   return <ellipse cx={x} cy={y} rx={rx} ry={ry} transform={r ? `rotate(${r} ${x} ${y})` : undefined} fill={`url(#bs-${c})`} opacity={o} />
@@ -66,7 +66,7 @@ const TOADSTOOL: B[] = (() => {
 /** The blob the hero points at: one of the cap's spots. */
 const PICKED = TOADSTOOL.length - 4
 
-function Toadstool({ x = 0, y = 0, s = 1, pick, tint }: { x?: number; y?: number; s?: number; pick?: boolean; tint?: (b: B) => Colour | null }) {
+function Toadstool({ x = 0, y = 0, s = 1, pick, tint }: { x?: number; y?: number; s?: number; pick?: boolean; tint?: (b: B) => Color | null }) {
   const p = TOADSTOOL[PICKED]
   return (
     <g transform={`translate(${x} ${y}) scale(${s})`}>
@@ -74,7 +74,7 @@ function Toadstool({ x = 0, y = 0, s = 1, pick, tint }: { x?: number; y?: number
         const c = tint?.(b)
         return <Blob key={i} {...b} c={c ?? b.c} x={c ? b.x + 18 : b.x} y={c ? b.y - 14 : b.y} />
       })}
-      {pick && <ellipse cx={p.x} cy={p.y} rx={p.rx + 9} ry={p.ry + 9} fill="none" stroke={COLOURS.sun} strokeWidth={2.5 / s} strokeDasharray={`${6 / s} ${5 / s}`} className="motion-safe:animate-[bs-march_1.6s_linear_infinite]" />}
+      {pick && <ellipse cx={p.x} cy={p.y} rx={p.rx + 9} ry={p.ry + 9} fill="none" stroke={COLORS.sun} strokeWidth={2.5 / s} strokeDasharray={`${6 / s} ${5 / s}`} className="motion-safe:animate-[bs-march_1.6s_linear_infinite]" />}
     </g>
   )
 }
@@ -88,19 +88,19 @@ export function HeroDiagram() {
     ['Where it is', 'x, y, z', 3],
     ['How big, each way', 'width, height, depth', 3],
     ['Which way it turns', 'a rotation', 4],
-    ['Colour', 'red, green, blue', 3],
+    ['Color', 'red, green, blue', 3],
     ['How solid', 'opacity', 1],
   ]
   return (
     <div
       role="img"
-      aria-label="A toadstool drawn entirely from soft, overlapping coloured blobs. One blob on its cap is circled, and a card beside it lists its 14 values in 5 attributes: 3 for where it is, 3 for its size, 4 for its turn, 3 for its colour and 1 for how solid it is."
+      aria-label="A toadstool drawn entirely from soft, overlapping colored blobs. One blob on its cap is circled, and a card beside it lists its 14 values in 5 attributes: 3 for where it is, 3 for its size, 4 for its turn, 3 for its color and 1 for how solid it is."
       className="case relative grid overflow-hidden rounded-2xl ring-1 ring-rule sm:grid-cols-[minmax(0,1fr)_15rem]"
       style={{ background: 'var(--c-paper)' }}
     >
       <svg viewBox="0 0 400 400" className="block h-auto w-full">
         <Toadstool x={X} y={Y} s={S} pick />
-        <path d={`M ${px + p.rx + 10} ${py} H 400`} stroke={COLOURS.sun} strokeWidth="1.5" strokeDasharray="3 4" className="max-sm:hidden" />
+        <path d={`M ${px + p.rx + 10} ${py} H 400`} stroke={COLORS.sun} strokeWidth="1.5" strokeDasharray="3 4" className="max-sm:hidden" />
       </svg>
       <div className="flex flex-col justify-center gap-3 border-rule-soft p-5 max-sm:border-t sm:border-l">
         <p className="text-xs font-semibold tracking-wider text-ink-faint uppercase">Construction of a blob</p>
@@ -173,14 +173,14 @@ export function TrainDiagram() {
           return i % 2 ? (
             <g key={i}>
               <Blob {...b} x={b.x + dx} y={b.y + dy} o={0.45} />
-              <path d={`M ${b.x + dx} ${b.y + dy} L ${b.x + dx * 0.25} ${b.y + dy * 0.25}`} stroke={COLOURS.sun} strokeWidth="5" strokeLinecap="round" opacity="0.8" />
+              <path d={`M ${b.x + dx} ${b.y + dy} L ${b.x + dx * 0.25} ${b.y + dy * 0.25}`} stroke={COLORS.sun} strokeWidth="5" strokeLinecap="round" opacity="0.8" />
             </g>
           ) : <Blob key={i} {...b} />
         })}
       </g>
       <g transform="translate(168 40)">
         <path d="M 0 0 V 70 H 60" stroke="#665d52" fill="none" strokeWidth="1" />
-        <path d="M 2 6 C 12 40 20 52 30 58 S 50 64 58 65" stroke={COLOURS.orange} fill="none" strokeWidth="2" />
+        <path d="M 2 6 C 12 40 20 52 30 58 S 50 64 58 65" stroke={COLORS.orange} fill="none" strokeWidth="2" />
         <text x="4" y="-6" fill="#9197b2" fontSize="9" fontFamily="var(--font-sans)">error</text>
       </g>
     </Case>
@@ -193,8 +193,8 @@ export function AnyAngleDiagram() {
     <Case viewBox="0 0 240 150" label="The finished toadstool of blobs, with a dashed orbit round it showing it can be seen from anywhere">
       <ellipse cx="120" cy="104" rx="96" ry="26" fill="none" stroke="#9197b2" strokeWidth="1" strokeDasharray="3 4" />
       <Toadstool x={120} y={112} s={0.32} />
-      <path d="M 200 116 l 10 -2 l -4 9" stroke={COLOURS.sun} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx="40" cy="120" r="5" fill={COLOURS.sun} />
+      <path d="M 200 116 l 10 -2 l -4 9" stroke={COLORS.sun} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="40" cy="120" r="5" fill={COLORS.sun} />
     </Case>
   )
 }
@@ -206,7 +206,7 @@ export function LessonGlyph({ id }: { id: string }) {
     case 'one-blob':
       return g(<>
         <Blob x={60} y={38} rx={30} ry={16} r={-15} c="blue" />
-        <path d="M 60 38 L 92 30 M 60 38 L 52 10 M 60 38 L 40 54" stroke={COLOURS.sun} strokeWidth="1.5" strokeLinecap="round" />
+        <path d="M 60 38 L 92 30 M 60 38 L 52 10 M 60 38 L 40 54" stroke={COLORS.sun} strokeWidth="1.5" strokeLinecap="round" />
       </>)
     case 'footprint':
       return g(<>
@@ -234,13 +234,13 @@ export function LessonGlyph({ id }: { id: string }) {
       return g(<>
         <Blob x={56} y={38} rx={26} ry={26} r={0} c="blue" />
         <Blob x={46} y={28} rx={9} ry={7} r={-30} c="white" o={0.9} />
-        <path d="M 90 14 A 40 40 0 0 1 96 58" stroke={COLOURS.sun} strokeWidth="1.5" fill="none" strokeDasharray="3 3" />
-        <circle cx="90" cy="14" r="3.5" fill={COLOURS.sun} />
+        <path d="M 90 14 A 40 40 0 0 1 96 58" stroke={COLORS.sun} strokeWidth="1.5" fill="none" strokeDasharray="3 3" />
+        <circle cx="90" cy="14" r="3.5" fill={COLORS.sun} />
       </>)
     case 'paint': {
       const rand = rng(4)
       return g(<>
-        <path d="M 22 52 L 60 62 L 98 52 L 60 42 Z" fill="none" stroke={COLOURS.orange} strokeDasharray="3 3" />
+        <path d="M 22 52 L 60 62 L 98 52 L 60 42 Z" fill="none" stroke={COLORS.orange} strokeDasharray="3 3" />
         {Array.from({ length: 22 }, (_, k) => <Blob key={k} x={30 + rand() * 50} y={48 + rand() * 10} rx={7} ry={3} r={0} c="green" o={0.85} />)}
         <path d="M 84 14 l 10 -6 l 4 7 l -10 6 z" fill="#bdc3db" />
         {[0, 1, 2].map((k) => <circle key={k} cx={78 - k * 5} cy={24 + k * 6} r="1.4" fill="#bdc3db" />)}
@@ -251,7 +251,7 @@ export function LessonGlyph({ id }: { id: string }) {
         {([['.ply', 76, 'red'], ['.splat', 46, 'orange'], ['.spz', 16, 'sun']] as const).map(([n, w, c], k) => (
           <g key={n}>
             <text x="12" y={22 + k * 18} fill="#bdc3db" fontSize="10" fontFamily="var(--font-sans)">{n}</text>
-            <rect x="42" y={14 + k * 18} width={w * 0.85} height="9" rx="2" fill={COLOURS[c]} />
+            <rect x="42" y={14 + k * 18} width={w * 0.85} height="9" rx="2" fill={COLORS[c]} />
           </g>
         ))}
       </>)
@@ -260,7 +260,7 @@ export function LessonGlyph({ id }: { id: string }) {
       return g(<>
         {Array.from({ length: 60 }, (_, k) => {
           const t = rand() * Math.PI * 2, d = 6 + rand() * 30
-          return <circle key={k} cx={60 + Math.cos(t) * d * 1.4} cy={36 + Math.sin(t) * d * 0.9} r="1.4" fill={k % 3 ? COLOURS.red : COLOURS.cream} />
+          return <circle key={k} cx={60 + Math.cos(t) * d * 1.4} cy={36 + Math.sin(t) * d * 0.9} r="1.4" fill={k % 3 ? COLORS.red : COLORS.cream} />
         })}
       </>)
     }
@@ -273,22 +273,22 @@ export function LessonGlyph({ id }: { id: string }) {
       })
       return g(<>
         {body.map((p, k) => <Blob key={k} x={p.x} y={p.y} rx={9} ry={8} r={0} c={k === 8 ? 'red' : 'green'} />)}
-        <path d={`M 22 50 L ${body[4].x} ${body[4].y} L ${body[8].x} ${body[8].y}`} stroke={COLOURS.sun} strokeWidth="1.5" fill="none" />
-        <circle cx={body[4].x} cy={body[4].y} r="3" fill="none" stroke={COLOURS.sun} strokeWidth="1.5" />
+        <path d={`M 22 50 L ${body[4].x} ${body[4].y} L ${body[8].x} ${body[8].y}`} stroke={COLORS.sun} strokeWidth="1.5" fill="none" />
+        <circle cx={body[4].x} cy={body[4].y} r="3" fill="none" stroke={COLORS.sun} strokeWidth="1.5" />
       </>)
     }
     case 'weights':
       return g(<>
         {Array.from({ length: 6 }, (_, k) => <Blob key={`u${k}`} x={14 + k * 8} y={50} rx={8} ry={10} r={0} c="blue" />)}
         {Array.from({ length: 6 }, (_, k) => <Blob key={`f${k}`} x={60 + k * 5} y={46 - k * 6} rx={8} ry={10} r={-40} c={k < 2 ? 'violet' : 'orange'} />)}
-        <path d="M 14 50 L 58 50 L 86 16" stroke={COLOURS.sun} strokeWidth="1.5" fill="none" />
+        <path d="M 14 50 L 58 50 L 86 16" stroke={COLORS.sun} strokeWidth="1.5" fill="none" />
       </>)
     case 'twist':
       return g(<>
         {Array.from({ length: 7 }, (_, k) => <Blob key={k} x={16 + k * 7} y={36} rx={6} ry={11} r={0} c="red" />)}
         <Blob x={68} y={36} rx={4} ry={3} r={0} c="red" />
         {Array.from({ length: 5 }, (_, k) => <Blob key={`h${k}`} x={76 + k * 7} y={36} rx={6} ry={13 - k} r={0} c="cream" />)}
-        <path d="M 66 18 A 10 18 0 1 1 64 54" stroke={COLOURS.sun} strokeWidth="1.5" fill="none" strokeDasharray="3 3" />
+        <path d="M 66 18 A 10 18 0 1 1 64 54" stroke={COLORS.sun} strokeWidth="1.5" fill="none" strokeDasharray="3 3" />
       </>)
     case 'walk':
       return g(<>
@@ -304,8 +304,8 @@ export function LessonGlyph({ id }: { id: string }) {
     case 'model':
       return g(<>
         {Array.from({ length: 14 }, (_, k) => <Blob key={k} x={18 + (k % 5) * 7} y={24 + Math.floor(k / 5) * 11} rx={7} ry={6} r={0} c="orange" o={0.85} />)}
-        <path d="M 58 36 H 68 m -4 -4 l 4 4 l -4 4" stroke={COLOURS.sun} strokeWidth="1.5" fill="none" strokeLinecap="round" />
-        <path d="M 76 20 L 104 20 L 108 34 L 100 52 L 80 52 L 74 36 Z M 76 20 L 90 36 L 104 20 M 74 36 L 90 36 L 108 34 M 90 36 L 80 52 M 90 36 L 100 52" fill="rgb(242 166 90 / 0.25)" stroke={COLOURS.orange} strokeWidth="1" strokeLinejoin="round" />
+        <path d="M 58 36 H 68 m -4 -4 l 4 4 l -4 4" stroke={COLORS.sun} strokeWidth="1.5" fill="none" strokeLinecap="round" />
+        <path d="M 76 20 L 104 20 L 108 34 L 100 52 L 80 52 L 74 36 Z M 76 20 L 90 36 L 104 20 M 74 36 L 90 36 L 108 34 M 90 36 L 80 52 M 90 36 L 100 52" fill="rgb(242 166 90 / 0.25)" stroke={COLORS.orange} strokeWidth="1" strokeLinejoin="round" />
       </>)
     case 'shoot':
       return g(<>
@@ -319,7 +319,7 @@ export function LessonGlyph({ id }: { id: string }) {
         {[[16, 16], [92, 16], [54, 60]].map(([x, y], k) => (
           <g key={k} transform={`translate(${x} ${y})`}>
             <path d="M0 3 h4 l1.5 -2.5 h5 l1.5 2.5 h4 v9 h-16 z" fill="#2b3150" stroke="#bdc3db" strokeWidth="1" strokeLinejoin="round" />
-            <circle cx="8" cy="7.5" r="2.6" fill="none" stroke={COLOURS.sun} strokeWidth="1.2" />
+            <circle cx="8" cy="7.5" r="2.6" fill="none" stroke={COLORS.sun} strokeWidth="1.2" />
           </g>
         ))}
       </>)
@@ -327,8 +327,8 @@ export function LessonGlyph({ id }: { id: string }) {
       return g(<>
         {/* Grass blades as splats on the left; the same tuft as a lumpy mesh on the right */}
         {[-14, -7, 0, 7, 14].map((dx, k) => <Blob key={k} x={30 + dx * 0.8} y={40 - Math.abs(dx) * 0.3} rx={2} ry={20} r={dx * 1.6} c="green" />)}
-        <path d="M 58 36 H 66 m -3 -3 l 3 3 l -3 3" stroke={COLOURS.sun} strokeWidth="1.5" fill="none" strokeLinecap="round" />
-        <path d="M 76 62 L 74 52 L 80 44 L 88 46 L 94 40 L 100 48 L 104 54 L 102 62 Z" fill="rgb(63 143 74 / 0.35)" stroke={COLOURS.green} strokeWidth="1" strokeLinejoin="round" />
+        <path d="M 58 36 H 66 m -3 -3 l 3 3 l -3 3" stroke={COLORS.sun} strokeWidth="1.5" fill="none" strokeLinecap="round" />
+        <path d="M 76 62 L 74 52 L 80 44 L 88 46 L 94 40 L 100 48 L 104 54 L 102 62 Z" fill="rgb(63 143 74 / 0.35)" stroke={COLORS.green} strokeWidth="1" strokeLinejoin="round" />
       </>)
     case 'floaters':
       return g(<>
@@ -337,7 +337,7 @@ export function LessonGlyph({ id }: { id: string }) {
         <Blob x={64} y={27} rx={8} ry={8} r={0} c="sun" />
         <Blob x={50} y={44} rx={6} ry={4} r={-20} c="blue" />
         {[[22, 20, 5], [96, 16, 4], [100, 52, 6], [28, 58, 4], [86, 34, 3]].map(([x, y, r], k) => <Blob key={k} x={x} y={y} rx={r} ry={r} r={0} c="white" o={0.55} />)}
-        <path d="M 91 47 L 109 57 M 109 47 L 91 57" stroke={COLOURS.red} strokeWidth="1.8" strokeLinecap="round" />
+        <path d="M 91 47 L 109 57 M 109 47 L 91 57" stroke={COLORS.red} strokeWidth="1.8" strokeLinecap="round" />
       </>)
     case 'lighting':
       return g(<>
@@ -345,7 +345,7 @@ export function LessonGlyph({ id }: { id: string }) {
         <ellipse cx="72" cy="60" rx="22" ry="5" fill="rgb(0 0 0 / 0.35)" />
         <Blob x={56} y={44} rx={14} ry={14} r={0} c="orange" />
         <Blob x={20} y={16} rx={6} ry={6} r={0} c="sun" />
-        <path d="M 27 21 L 44 33 M 24 26 L 36 40 M 30 17 L 50 26" stroke={COLOURS.sun} strokeWidth="1.2" strokeLinecap="round" opacity="0.8" />
+        <path d="M 27 21 L 44 33 M 24 26 L 36 40 M 30 17 L 50 26" stroke={COLORS.sun} strokeWidth="1.2" strokeLinecap="round" opacity="0.8" />
         <path d="M 96 18 L 104 26 M 104 18 L 96 26" stroke="#9197b2" strokeWidth="1.5" strokeLinecap="round" />
       </>)
     default:
@@ -356,13 +356,13 @@ export function LessonGlyph({ id }: { id: string }) {
 const lassoed = (b: B) => b.x > 30 && b.y < -125
 export const SANDBOX_COUNTS = { all: TOADSTOOL.length, selected: TOADSTOOL.filter(lassoed).length }
 
-/** The sandbox: part of the cap lassoed, recoloured and dragged off. */
+/** The sandbox: part of the cap lassoed, recolored and dragged off. */
 export function SandboxDiagram() {
   const lasso = 'M 205 72 C 260 52 330 70 336 120 C 340 160 300 178 250 170 C 210 162 186 120 205 72 Z'
   return (
     <svg viewBox="0 0 400 300" aria-hidden className="block h-auto w-full">
       <Toadstool x={190} y={278} s={0.92} tint={(b) => (lassoed(b) ? (b.c === 'cream' ? 'white' : 'blue') : null)} />
-      <path d={lasso} fill="rgb(255 208 74 / 0.06)" stroke={COLOURS.sun} strokeWidth="1.5" strokeDasharray="5 4" className="motion-safe:animate-[bs-march_1.6s_linear_infinite]" />
+      <path d={lasso} fill="rgb(255 208 74 / 0.06)" stroke={COLORS.sun} strokeWidth="1.5" strokeDasharray="5 4" className="motion-safe:animate-[bs-march_1.6s_linear_infinite]" />
       <path d="M 300 182 l 18 14 m 0 0 l -2 -9 m 2 9 l -9 -1" stroke="#bdc3db" strokeWidth="1.5" fill="none" strokeLinecap="round" />
     </svg>
   )

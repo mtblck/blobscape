@@ -6,7 +6,7 @@ import { placeCamera, type Orbit } from '../splat-core/view.ts'
 import { SplatWorld } from '../splat-engine/engine.ts'
 import { makeCreature, poseWalk, type Creature } from '../splat-engine/creature.ts'
 import type { SkinMode } from '../splat-engine/rig.ts'
-import { readbackToSrgb, srgbToLinear } from '../splat-core/colour.ts'
+import { readbackToSrgb, srgbToLinear } from '../splat-core/color.ts'
 
 /**
  * The engine test bench. One canvas, one creature, two ways to draw it:
@@ -96,7 +96,7 @@ export interface StepTimes {
   order: number
   /** Drawing (on WebGL this includes moving each blob, which happens as it's drawn). */
   draw: number
-  /** CPU (WebGL): moving centres for the sort, and sorting. */
+  /** CPU (WebGL): moving centers for the sort, and sorting. */
   cpuSkin: number
   cpuSort: number
 }
@@ -137,17 +137,17 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
     // three.js draws each object on its own; give it the foxes as separate meshes
     for (const f of foxes) {
       const b = f.blobs
-      const centres = new Float32Array(b.count * 3), covs = new Float32Array(b.count * 6), cols = new Uint8ClampedArray(b.count * 4)
+      const centers = new Float32Array(b.count * 3), covs = new Float32Array(b.count * 6), cols = new Uint8ClampedArray(b.count * 4)
       const root = f.skeleton.matrix
       for (let i = 0; i < b.count; i++) {
-        centres[i * 3] = b.centre[i * 3] + root[12]
-        centres[i * 3 + 1] = b.centre[i * 3 + 1] + root[13]
-        centres[i * 3 + 2] = b.centre[i * 3 + 2] + root[14]
+        centers[i * 3] = b.center[i * 3] + root[12]
+        centers[i * 3 + 1] = b.center[i * 3 + 1] + root[13]
+        centers[i * 3 + 2] = b.center[i * 3 + 2] + root[14]
         covs.set(covariance(b, i), i * 6)
-        for (let k = 0; k < 3; k++) cols[i * 4 + k] = Math.round(srgbToLinear(b.colour[i * 3 + k]) * 255)
+        for (let k = 0; k < 3; k++) cols[i * 4 + k] = Math.round(srgbToLinear(b.color[i * 3 + k]) * 255)
         cols[i * 4 + 3] = Math.round(b.opacity[i] * 255)
       }
-      scene.add(new GaussianSplat(createGaussianSplatGeometry(centres, covs, cols)))
+      scene.add(new GaussianSplat(createGaussianSplatGeometry(centers, covs, cols)))
     }
   }
   const blobs = foxes.reduce((s, f) => s + f.blobs.count, 0)
@@ -176,7 +176,7 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
     const px = await renderer.readRenderTargetPixelsAsync(target, 0, 0, target.width, target.height) as Uint8Array
     const { width: w, height: h } = target
     const img = new ImageData(w, h)
-    // the target holds linear, premultiplied colour; ImageData wants sRGB, straight. WebGPU reads rows top-down, WebGL bottom-up.
+    // the target holds linear, premultiplied color; ImageData wants sRGB, straight. WebGPU reads rows top-down, WebGL bottom-up.
     readbackToSrgb(px, w, h, { flip: backend === 'webgl', premultiplied: false }, img.data)
     display.getContext('2d')!.putImageData(img, 0, 0)
   }
@@ -184,7 +184,7 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
   const pose = (t: number) => {
     if (!world) return
     for (const f of foxes) {
-      // each fox a little out of step with its neighbours
+      // each fox a little out of step with its neighbors
       if (walk) poseWalk(f.skeleton, t + f.skeleton.place[0])
       else { f.skeleton.reset(); f.skeleton.update() }
     }

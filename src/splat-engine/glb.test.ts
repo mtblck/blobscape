@@ -19,8 +19,8 @@ test('a rigged fox survives a round trip through .glb', () => {
   assert.deepEqual(b.skeleton.bones.map((x) => x.name), a.skeleton.bones.map((x) => x.name))
   for (let i = 0; i < a.skeleton.count; i++) for (let k = 0; k < 3; k++) assert.ok(Math.abs(b.skeleton.bones[i].head[k] - a.skeleton.bones[i].head[k]) < 1e-5)
   for (let i = 0; i < a.blobs.count * 3; i++) {
-    assert.ok(Math.abs(b.blobs.centre[i] - a.blobs.centre[i]) < 1e-6)
-    assert.ok(Math.abs(b.blobs.colour[i] - a.blobs.colour[i]) < 1e-5)
+    assert.ok(Math.abs(b.blobs.center[i] - a.blobs.center[i]) < 1e-6)
+    assert.ok(Math.abs(b.blobs.color[i] - a.blobs.color[i]) < 1e-5)
   }
   assert.deepEqual([...b.skin.joints], [...a.skin.joints])
   assert.equal(b.clips.length, 1)
@@ -36,7 +36,7 @@ test('the walk read back from the file poses the fox as the original did', () =>
   const ca = new Float32Array(3), cb = new Float32Array(3), v = new Float32Array(6)
   let worst = 0
   for (let i = 0; i < a.blobs.count; i += 7) {
-    const args = (x: typeof a) => [x.blobs.centre.subarray(i * 3, i * 3 + 3), x.blobs.scale.subarray(i * 3, i * 3 + 3), x.blobs.quat.subarray(i * 4, i * 4 + 4), x.skin.joints.subarray(i * 4, i * 4 + 4), x.skin.weights.subarray(i * 4, i * 4 + 4), x.skeleton] as const
+    const args = (x: typeof a) => [x.blobs.center.subarray(i * 3, i * 3 + 3), x.blobs.scale.subarray(i * 3, i * 3 + 3), x.blobs.quat.subarray(i * 4, i * 4 + 4), x.skin.joints.subarray(i * 4, i * 4 + 4), x.skin.weights.subarray(i * 4, i * 4 + 4), x.skeleton] as const
     skinBlob(...args(a), 'quat', ca, 0, v, 0)
     skinBlob(...args(b), 'quat', cb, 0, v, 0)
     worst = Math.max(worst, Math.hypot(ca[0] - cb[0], ca[1] - cb[1], ca[2] - cb[2]))

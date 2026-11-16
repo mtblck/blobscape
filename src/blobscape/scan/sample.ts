@@ -7,7 +7,7 @@ import { about, turned } from './clean.ts'
  * scanned anything: a glazed mug on a patch of wooden table, with what a real
  * capture leaves round it (stray floaters, and huge faint blobs where the
  * room behind was only half seen), the whole thing tipped and moved off
- * centre the way a scan app's axes rarely match the table.
+ * center the way a scan app's axes rarely match the table.
  */
 
 export interface SampleParts {
@@ -20,13 +20,13 @@ export interface SampleParts {
 export const SAMPLE_TILT = about(norm([0.6, 0.15, 0.8]), 28)
 export const SAMPLE_LIFT = 0.35
 
-/** `size` scales the whole scan: 0.12 makes the mug about a real mug in metres, as a phone app would export it. */
+/** `size` scales the whole scan: 0.12 makes the mug about a real mug in meters, as a phone app would export it. */
 export function sampleScan(seed = 7, detail = 1, size = 1): SampleParts {
   const r = rng(seed)
   const b = new Blobs(60000)
   const part: number[] = []
-  const add = (centre: Vec3, normal: Vec3, size: number, colour: Vec3, opacity: number, p: number) => {
-    b.push({ centre, scale: [size, size, size * 0.25], quat: quatFacing(normal), colour, opacity })
+  const add = (center: Vec3, normal: Vec3, size: number, color: Vec3, opacity: number, p: number) => {
+    b.push({ center, scale: [size, size, size * 0.25], quat: quatFacing(normal), color, opacity })
     part.push(p)
   }
   const jitter = (c: Vec3, k: number): Vec3 => c.map((v) => Math.min(1, Math.max(0, v + (r() - 0.5) * k))) as Vec3
@@ -89,7 +89,7 @@ export function sampleScan(seed = 7, detail = 1, size = 1): SampleParts {
 
   const out = turned(b, SAMPLE_TILT, SAMPLE_LIFT)
   if (size !== 1) {
-    for (let i = 0; i < out.count * 3; i++) { out.centre[i] *= size; out.scale[i] *= size }
+    for (let i = 0; i < out.count * 3; i++) { out.center[i] *= size; out.scale[i] *= size }
   }
   return { blobs: out, part: Uint8Array.from(part) }
 }

@@ -108,9 +108,9 @@ export class SplatView {
   private floor?: THREE.GridHelper
 
   /** A faint grid on the ground (y = 0). Drawn in the scene, so blobs in front of it hide it. */
-  setFloor(on: boolean, colour = '#888888') {
+  setFloor(on: boolean, color = '#888888') {
     if (on && !this.floor) {
-      this.floor = new THREE.GridHelper(FLOOR_SIZE, FLOOR_CELLS, colour, colour)
+      this.floor = new THREE.GridHelper(FLOOR_SIZE, FLOOR_CELLS, color, color)
       const m = this.floor.material as THREE.Material
       m.transparent = true
       m.opacity = 0.35
@@ -200,7 +200,7 @@ export class SplatView {
     this.invalidate(2)
   }
 
-  private fx?: { kind: dyno.DynoFloat<string>; amount: dyno.DynoFloat<string>; time: dyno.DynoFloat<string>; radius: dyno.DynoFloat<string>; floor: dyno.DynoFloat<string>; count: dyno.DynoFloat<string>; centre: dyno.DynoVec3<THREE.Vector3, string> }
+  private fx?: { kind: dyno.DynoFloat<string>; amount: dyno.DynoFloat<string>; time: dyno.DynoFloat<string>; radius: dyno.DynoFloat<string>; floor: dyno.DynoFloat<string>; count: dyno.DynoFloat<string>; center: dyno.DynoVec3<THREE.Vector3, string> }
   private fxOn = false
 
   /**
@@ -219,18 +219,18 @@ export class SplatView {
     if (!this.fx) {
       this.fx = {
         kind: dyno.dynoFloat(0), amount: dyno.dynoFloat(0), time: dyno.dynoFloat(0), radius: dyno.dynoFloat(1),
-        floor: dyno.dynoFloat(0), count: dyno.dynoFloat(0), centre: dyno.dynoVec3(new THREE.Vector3()),
+        floor: dyno.dynoFloat(0), count: dyno.dynoFloat(0), center: dyno.dynoVec3(new THREE.Vector3()),
       }
     }
     const u = this.fx
     if (!this.fxOn) {
       const node = new dyno.Dyno({
-        inTypes: { gsplat: dyno.Gsplat, kind: 'float', amount: 'float', time: 'float', radius: 'float', floor: 'float', count: 'float', centre: 'vec3' },
+        inTypes: { gsplat: dyno.Gsplat, kind: 'float', amount: 'float', time: 'float', radius: 'float', floor: 'float', count: 'float', center: 'vec3' },
         outTypes: { gsplat: dyno.Gsplat },
         globals: () => [EFFECT_GLSL_GLOBALS],
         statements: ({ inputs, outputs }) => {
           const i = inputs as Record<string, string>
-          return effectStatements(i.gsplat, String(outputs.gsplat), { kind: i.kind, amount: i.amount, time: i.time, radius: i.radius, floor: i.floor, count: i.count, centre: i.centre }).split('\n')
+          return effectStatements(i.gsplat, String(outputs.gsplat), { kind: i.kind, amount: i.amount, time: i.time, radius: i.radius, floor: i.floor, count: i.count, center: i.center }).split('\n')
         },
       })
       mesh.objectModifier = dyno.dynoBlock({ gsplat: dyno.Gsplat }, { gsplat: dyno.Gsplat }, ({ gsplat }) => ({ gsplat: node.apply({ gsplat, ...u }).gsplat }))
@@ -243,7 +243,7 @@ export class SplatView {
     u.radius.value = p.radius
     u.floor.value = p.floor
     u.count.value = count
-    u.centre.value.set(p.centre[0], p.centre[1], p.centre[2])
+    u.center.value.set(p.center[0], p.center[1], p.center[2])
     mesh.updateVersion()
     this.invalidate(2)
   }
@@ -267,10 +267,10 @@ const c3 = new THREE.Vector3(), s3 = new THREE.Vector3(), q4 = new THREE.Quatern
 function writeSplats(p: PackedSplats, blobs: Blobs, start: number, order: ArrayLike<number> | null) {
   for (let g = start; g < blobs.count; g++) {
     const i = order ? order[g] : g
-    c3.fromArray(blobs.centre, i * 3)
+    c3.fromArray(blobs.center, i * 3)
     s3.fromArray(blobs.scale, i * 3)
     q4.fromArray(blobs.quat, i * 4)
-    col.setRGB(blobs.colour[i * 3], blobs.colour[i * 3 + 1], blobs.colour[i * 3 + 2])
+    col.setRGB(blobs.color[i * 3], blobs.color[i * 3 + 1], blobs.color[i * 3 + 2])
     p.setSplat(g, c3, s3, q4, blobs.opacity[i], col)
   }
   p.numSplats = blobs.count

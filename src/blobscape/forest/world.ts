@@ -63,12 +63,12 @@ export const PER_TILE: Record<Kind, number> = { pine: 2, oak: 1, birch: 1, bush:
 interface KindRule {
   /** Chance each one is there at all. */
   chance: number
-  /** How far from the path's edge, in metres. */
+  /** How far from the path's edge, in meters. */
   from: number
   to: number
   /** Size range. */
   scale: [number, number]
-  /** How close (metres, from the walker) it waits before it grows, when plants sprout as you come. */
+  /** How close (meters, from the walker) it waits before it grows, when plants sprout as you come. */
   sprout: number
   /** Trunk radius the walker bumps into, before scaling; 0 walks through. */
   solid: number
@@ -129,9 +129,9 @@ export function obstacles(tiles: number[], seed: number) {
 export interface Walker {
   x: number
   z: number
-  /** Which way it faces, radians: 0 is +z (down the path), positive turns towards +x (left, seen from behind). */
+  /** Which way it faces, radians: 0 is +z (down the path), positive turns toward +x (left, seen from behind). */
   heading: number
-  /** Metres per second along its heading (negative backs up). */
+  /** Meters per second along its heading (negative backs up). */
   speed: number
 }
 
@@ -148,9 +148,9 @@ const TURN_RATE = 1.9
 const BODY = 0.28
 
 /**
- * One step of the walker: it turns, speeds up or slows down towards what the
+ * One step of the walker: it turns, speeds up or slows down toward what the
  * input asks (so starts and stops ease), moves, and is pushed back out of
- * trunks and back towards the path if it strays too far.
+ * trunks and back toward the path if it strays too far.
  */
 export function stepWalker(w: Walker, input: Input, dt: number, solid: { x: number; z: number; r: number }[] = []): Walker {
   // seen from behind (looking down +z), screen right is −x

@@ -144,7 +144,7 @@ export function setWeights(skin: Skin, i: number, pairs: [bone: number, weight: 
 
 /**
  * Four weights to four bytes summing to exactly 255, so a blob never shrinks
- * or grows from rounding: normalised first (files may not be), and whatever
+ * or grows from rounding: normalized first (files may not be), and whatever
  * rounding leaves over goes to the largest weight. All zero means the first bone.
  */
 export function packWeights(w: ArrayLike<number>, o: number): number {
@@ -166,16 +166,16 @@ export type SkinMode = 'linear' | 'quat'
  * - 'linear': its covariance is pushed through the blended 3×3 matrix. A blend of
  *   two rotations is not a rotation, so a blob on a twisting joint gets squashed.
  * - 'quat': its rotation is the weighted average of the bone rotations
- *   (quaternions sign-aligned, summed, renormalised) and its scale the weighted
+ *   (quaternions sign-aligned, summed, renormalized) and its scale the weighted
  *   average scale, so the blob only ever turns, never flattens.
  *
- * Writes the world centre (3) and covariance [xx, xy, xz, yy, yz, zz] (6).
+ * Writes the world center (3) and covariance [xx, xy, xz, yy, yz, zz] (6).
  */
 export function skinBlob(
-  centre: ArrayLike<number>, scale: ArrayLike<number>, quat: ArrayLike<number>,
+  center: ArrayLike<number>, scale: ArrayLike<number>, quat: ArrayLike<number>,
   joints: ArrayLike<number>, weights: ArrayLike<number>,
   rig: { matrix: ArrayLike<number>; quat: ArrayLike<number>; scale: ArrayLike<number> },
-  mode: SkinMode, outCentre: Float32Array, oc: number, outCov: Float32Array, ov: number,
+  mode: SkinMode, outCenter: Float32Array, oc: number, outCov: Float32Array, ov: number,
 ) {
   const M = new Float64Array(12) // blended 3×4, column-major without the last row
   const Q = [0, 0, 0, 0]
@@ -192,10 +192,10 @@ export function skinBlob(
     for (let c = 0; c < 4; c++) Q[c] += w * sign * qj[c]
     S += w * rig.scale[j]
   }
-  const x = centre[0], y = centre[1], z = centre[2]
-  outCentre[oc] = M[0] * x + M[3] * y + M[6] * z + M[9]
-  outCentre[oc + 1] = M[1] * x + M[4] * y + M[7] * z + M[10]
-  outCentre[oc + 2] = M[2] * x + M[5] * y + M[8] * z + M[11]
+  const x = center[0], y = center[1], z = center[2]
+  outCenter[oc] = M[0] * x + M[3] * y + M[6] * z + M[9]
+  outCenter[oc + 1] = M[1] * x + M[4] * y + M[7] * z + M[10]
+  outCenter[oc + 2] = M[2] * x + M[5] * y + M[8] * z + M[11]
 
   if (mode === 'quat') {
     const q = mulQ(norm4(Q), norm4(quat))
@@ -265,17 +265,17 @@ export function quatMat3(q: ArrayLike<number>): number[] {
 }
 
 /**
- * Moves only the centres of many blobs, fast: what the sort needs on the CPU
+ * Moves only the centers of many blobs, fast: what the sort needs on the CPU
  * when the GPU does the rest of the skinning. No allocation per blob.
  *
- * - `src`: rest centres as vec4s, with each blob's first bone (its actor's
+ * - `src`: rest centers as vec4s, with each blob's first bone (its actor's
  *   offset into `bones`) in w;
  * - `skin`: two words per blob, four joint bytes then four weight bytes summing to 255;
  * - `bones`: 20 floats per bone, the first 16 its column-major skin matrix.
  *
- * Writes xyz into `out` (3 floats per blob). Matches `skinBlob`'s centre.
+ * Writes xyz into `out` (3 floats per blob). Matches `skinBlob`'s center.
  */
-export function skinCentres(src: Float32Array, skin: Uint32Array, bones: Float32Array, count: number, out: Float32Array) {
+export function skinCenters(src: Float32Array, skin: Uint32Array, bones: Float32Array, count: number, out: Float32Array) {
   for (let i = 0; i < count; i++) {
     const x = src[i * 4], y = src[i * 4 + 1], z = src[i * 4 + 2], base = src[i * 4 + 3]
     const jw = skin[i * 2], ww = skin[i * 2 + 1]

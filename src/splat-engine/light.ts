@@ -1,5 +1,5 @@
 import { covariance, type Blobs } from '../splat-core/blobs.ts'
-import { linearToSrgb, srgbToLinear } from '../splat-core/colour.ts'
+import { linearToSrgb, srgbToLinear } from '../splat-core/color.ts'
 import type { PointLight } from './engine.ts'
 
 /**
@@ -34,17 +34,17 @@ export function lightAt(p: ArrayLike<number>, n: ArrayLike<number>, lights: Poin
     const fall = (fade * fade) / (1 + d2 / r2)
     const inv = 1 / Math.sqrt(Math.max(d2, 1e-6))
     const facing = Math.abs((n[0] * to[0] + n[1] * to[1] + n[2] * to[2]) * inv) * 0.65 + 0.35
-    for (let k = 0; k < 3; k++) sum[k] += L.colour[k] * fall * facing
+    for (let k = 0; k < 3; k++) sum[k] += L.color[k] * fall * facing
   }
   return sum
 }
 
-/** A copy of the blobs with the lights baked into their colours, as the engine would show them (still blobs, no bones). */
+/** A copy of the blobs with the lights baked into their colors, as the engine would show them (still blobs, no bones). */
 export function bakeLights(b: Blobs, lights: PointLight[], ambient: number): Blobs {
   const out = b.clone()
   for (let i = 0; i < b.count; i++) {
-    const s = lightAt(b.centre.subarray(i * 3, i * 3 + 3), blobNormal(covariance(b, i)), lights, ambient)
-    for (let k = 0; k < 3; k++) out.colour[i * 3 + k] = linearToSrgb(Math.min(1, srgbToLinear(b.colour[i * 3 + k]) * s[k]))
+    const s = lightAt(b.center.subarray(i * 3, i * 3 + 3), blobNormal(covariance(b, i)), lights, ambient)
+    for (let k = 0; k < 3; k++) out.color[i * 3 + k] = linearToSrgb(Math.min(1, srgbToLinear(b.color[i * 3 + k]) * s[k]))
   }
   return out
 }

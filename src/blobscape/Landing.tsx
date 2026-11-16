@@ -14,7 +14,7 @@ const STEPS = [
 ]
 
 const SANDBOX_POINTS = [
-  'Spray, select with a box or lasso, move, recolour and delete',
+  'Spray, select with a box or lasso, move, recolor and delete',
   'Effects that explode, melt, twist and ripple the whole scene',
   'Open your own .ply, .spz, .splat, .ksplat or .sog capture, and save a standard .ply',
 ]
@@ -46,7 +46,7 @@ export function Landing() {
             Learn 3D splats by taking them apart
           </h1>
           <p className="max-w-[44ch] text-xl leading-relaxed text-ink-muted">
-            A Gaussian splat is a 3D scene made of nothing but soft, coloured, see-through blobs. Learn what one blob is, then pile up
+            A Gaussian splat is a 3D scene made of nothing but soft, colored, see-through blobs. Learn what one blob is, then pile up
             thousands and pull real scenes to pieces.
           </p>
           <div className="flex flex-wrap items-center gap-3">
@@ -131,7 +131,7 @@ export function Landing() {
           <span className={CHIP}>Sandbox</span>
           <h2 id="sandbox-title" className="font-display text-4xl leading-tight text-balance">Then get your hands on a whole scene</h2>
           <p className="max-w-[48ch] text-lg text-ink-muted">
-            The sandbox is every tool from the lessons, on any scene you like. Grab a corner of a capture, drag it off, recolour it and
+            The sandbox is every tool from the lessons, on any scene you like. Grab a corner of a capture, drag it off, recolor it and
             see what it was hiding.
           </p>
           <ul className="flex flex-col gap-2">
@@ -224,10 +224,10 @@ function SandboxMockup() {
     ['Spray', <><circle cx="7" cy="12" r="1.3" /><circle cx="4" cy="8" r="1.3" /><circle cx="9" cy="6" r="1.3" /><path d="M 12 10 l 6 -6 l 2 2 l -6 6 z" /></>],
     ['Lasso', <path d="M 4 9 C 4 3 20 3 20 9 C 20 15 6 15 8 11 M 8 11 L 6 20" fill="none" strokeWidth="1.6" />],
     ['Move', <path d="M 12 3 V 21 M 3 12 H 21 M 12 3 l -3 3 m 3 -3 l 3 3 M 12 21 l -3 -3 m 3 3 l 3 -3" fill="none" strokeWidth="1.6" />],
-    ['Colour', <><circle cx="12" cy="12" r="8" fill="none" strokeWidth="1.6" /><circle cx="9" cy="9" r="1.6" /><circle cx="15" cy="9" r="1.6" /><circle cx="12" cy="15" r="1.6" /></>],
+    ['Color', <><circle cx="12" cy="12" r="8" fill="none" strokeWidth="1.6" /><circle cx="9" cy="9" r="1.6" /><circle cx="15" cy="9" r="1.6" /><circle cx="12" cy="15" r="1.6" /></>],
   ]
   return (
-    <div role="img" aria-label="The sandbox: a tool rail with spray, lasso, move and colour tools beside the toadstool, part of whose cap has been lassoed, turned blue and dragged off, with a row of effects underneath" className="rounded-3xl bg-paper-sunk p-4 ring-1 ring-rule sm:p-5">
+    <div role="img" aria-label="The sandbox: a tool rail with spray, lasso, move and color tools beside the toadstool, part of whose cap has been lassoed, turned blue and dragged off, with a row of effects underneath" className="rounded-3xl bg-paper-sunk p-4 ring-1 ring-rule sm:p-5">
       <div className="flex gap-3">
         <div className="flex flex-col gap-2">
           {tools.map(([name, icon], k) => (

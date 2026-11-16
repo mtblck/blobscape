@@ -3,23 +3,23 @@
  * scene of tens of thousands stays cheap to copy, undo and hand to the GPU.
  *
  * Each blob is the five kinds of number (14 values) a 3D Gaussian splat is made of:
- * a centre, three scales (standard deviations along its own axes), a rotation
- * (unit quaternion x, y, z, w), a colour and an opacity. Colours are stored as
+ * a center, three scales (standard deviations along its own axes), a rotation
+ * (unit quaternion x, y, z, w), a color and an opacity. Colors are stored as
  * given to Spark (0–1 per channel), which draws them as sRGB.
  */
 export class Blobs {
   count = 0
-  centre: Float32Array
+  center: Float32Array
   scale: Float32Array
   quat: Float32Array
-  colour: Float32Array
+  color: Float32Array
   opacity: Float32Array
 
   constructor(capacity = 64) {
-    this.centre = new Float32Array(capacity * 3)
+    this.center = new Float32Array(capacity * 3)
     this.scale = new Float32Array(capacity * 3)
     this.quat = new Float32Array(capacity * 4)
-    this.colour = new Float32Array(capacity * 3)
+    this.color = new Float32Array(capacity * 3)
     this.opacity = new Float32Array(capacity)
   }
 
@@ -29,10 +29,10 @@ export class Blobs {
     if (min <= this.capacity) return
     const cap = Math.max(min, this.capacity * 2, 64)
     const re = (a: Float32Array, k: number) => { const b = new Float32Array(cap * k); b.set(a.subarray(0, this.count * k)); return b }
-    this.centre = re(this.centre, 3)
+    this.center = re(this.center, 3)
     this.scale = re(this.scale, 3)
     this.quat = re(this.quat, 4)
-    this.colour = re(this.colour, 3)
+    this.color = re(this.color, 3)
     this.opacity = re(this.opacity, 1)
   }
 
@@ -44,19 +44,19 @@ export class Blobs {
   }
 
   set(i: number, b: Blob) {
-    this.centre.set(b.centre, i * 3)
+    this.center.set(b.center, i * 3)
     this.scale.set(b.scale, i * 3)
-    this.quat.set(normalise(b.quat), i * 4)
-    this.colour.set(b.colour, i * 3)
+    this.quat.set(normalize(b.quat), i * 4)
+    this.color.set(b.color, i * 3)
     this.opacity[i] = b.opacity
   }
 
   get(i: number): Blob {
     return {
-      centre: [...this.centre.subarray(i * 3, i * 3 + 3)] as Vec3,
+      center: [...this.center.subarray(i * 3, i * 3 + 3)] as Vec3,
       scale: [...this.scale.subarray(i * 3, i * 3 + 3)] as Vec3,
       quat: [...this.quat.subarray(i * 4, i * 4 + 4)] as Quat,
-      colour: [...this.colour.subarray(i * 3, i * 3 + 3)] as Vec3,
+      color: [...this.color.subarray(i * 3, i * 3 + 3)] as Vec3,
       opacity: this.opacity[i],
     }
   }
@@ -67,10 +67,10 @@ export class Blobs {
     for (let r = 0; r < this.count; r++) {
       if (!keep(r)) continue
       if (w !== r) {
-        this.centre.copyWithin(w * 3, r * 3, r * 3 + 3)
+        this.center.copyWithin(w * 3, r * 3, r * 3 + 3)
         this.scale.copyWithin(w * 3, r * 3, r * 3 + 3)
         this.quat.copyWithin(w * 4, r * 4, r * 4 + 4)
-        this.colour.copyWithin(w * 3, r * 3, r * 3 + 3)
+        this.color.copyWithin(w * 3, r * 3, r * 3 + 3)
         this.opacity[w] = this.opacity[r]
       }
       w++
@@ -83,10 +83,10 @@ export class Blobs {
   clone(): Blobs {
     const c = new Blobs(Math.max(1, this.count))
     c.count = this.count
-    c.centre.set(this.centre.subarray(0, this.count * 3))
+    c.center.set(this.center.subarray(0, this.count * 3))
     c.scale.set(this.scale.subarray(0, this.count * 3))
     c.quat.set(this.quat.subarray(0, this.count * 4))
-    c.colour.set(this.colour.subarray(0, this.count * 3))
+    c.color.set(this.color.subarray(0, this.count * 3))
     c.opacity.set(this.opacity.subarray(0, this.count))
     return c
   }
@@ -97,9 +97,9 @@ export class Blobs {
 
 export type Vec3 = [number, number, number]
 export type Quat = [number, number, number, number]
-export interface Blob { centre: Vec3; scale: Vec3; quat: Quat; colour: Vec3; opacity: number }
+export interface Blob { center: Vec3; scale: Vec3; quat: Quat; color: Vec3; opacity: number }
 
-export function normalise(q: ArrayLike<number>): Quat {
+export function normalize(q: ArrayLike<number>): Quat {
   const n = Math.hypot(q[0], q[1], q[2], q[3]) || 1
   return [q[0] / n, q[1] / n, q[2] / n, q[3] / n]
 }
@@ -131,8 +131,8 @@ export function quatFromEuler(xDeg: number, yDeg: number, zDeg: number): Quat {
 export function quatFacing(n: ArrayLike<number>): Quat {
   const d = n[2]
   if (d < -0.999999) return [1, 0, 0, 0]
-  // axis = z × n, angle from dot: q = (z × n, 1 + z·n), normalised
-  return normalise([-n[1], n[0], 0, 1 + d])
+  // axis = z × n, angle from dot: q = (z × n, 1 + z·n), normalized
+  return normalize([-n[1], n[0], 0, 1 + d])
 }
 
 /**
@@ -189,12 +189,12 @@ export function projectPoint(p: ArrayLike<number>, lens: Lens): { x: number; y: 
 
 /**
  * Projects blob i to its screen footprint, the same way 3DGS renderers do:
- * Σ' = J W Σ Wᵀ Jᵀ, with J the Jacobian of the projection at the blob's centre.
+ * Σ' = J W Σ Wᵀ Jᵀ, with J the Jacobian of the projection at the blob's center.
  * Returns null when the blob is behind the camera.
  */
 export function project(b: Blobs, i: number, lens: Lens): Footprint | null {
   const V = lens.view
-  const c = projectPoint(b.centre.subarray(i * 3, i * 3 + 3), lens)
+  const c = projectPoint(b.center.subarray(i * 3, i * 3 + 3), lens)
   if (!c) return null
   const { x, y, depth, tx, ty } = c
   // Jacobian rows (screen u right, v down) w.r.t. camera-space x, y, z
@@ -237,7 +237,7 @@ export function rayHit(b: Blobs, i: number, o: ArrayLike<number>, dir: ArrayLike
   const ax0 = 1 - 2 * (y * y + z * z), ay0 = 2 * (x * y + z * w), az0 = 2 * (x * z - y * w)
   const ax1 = 2 * (x * y - z * w), ay1 = 1 - 2 * (x * x + z * z), az1 = 2 * (y * z + x * w)
   const ax2 = 2 * (x * z + y * w), ay2 = 2 * (y * z - x * w), az2 = 1 - 2 * (x * x + y * y)
-  const rx = o[0] - b.centre[i3], ry = o[1] - b.centre[i3 + 1], rz = o[2] - b.centre[i3 + 2]
+  const rx = o[0] - b.center[i3], ry = o[1] - b.center[i3 + 1], rz = o[2] - b.center[i3 + 2]
   const s0 = 1 / (k * Math.max(b.scale[i3], 1e-6)), s1 = 1 / (k * Math.max(b.scale[i3 + 1], 1e-6)), s2 = 1 / (k * Math.max(b.scale[i3 + 2], 1e-6))
   // Rᵀ · v, divided by k·scale per axis: in this frame the ellipsoid is a unit sphere
   const lo0 = (ax0 * rx + ay0 * ry + az0 * rz) * s0, lo1 = (ax1 * rx + ay1 * ry + az1 * rz) * s1, lo2 = (ax2 * rx + ay2 * ry + az2 * rz) * s2
@@ -266,7 +266,7 @@ export function pick(b: Blobs, o: ArrayLike<number>, dir: ArrayLike<number>, k =
   return { index: best, t: bestT }
 }
 
-/** sRGB hex ("#rrggbb") to 0–1 channels, no colour management: what you pick is what Spark draws. */
+/** sRGB hex ("#rrggbb") to 0–1 channels, no color management: what you pick is what Spark draws. */
 export function hexToRgb(hex: string): Vec3 {
   const n = parseInt(hex.replace('#', ''), 16)
   return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]

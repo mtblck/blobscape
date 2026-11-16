@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react'
 import type { Orbit } from '../../splat-core/view.ts'
 import { arm, weightByX } from '../../splat-engine/models.ts'
-import { neighbourPairs, poseBlobs, stretch } from '../../splat-engine/pose.ts'
+import { neighborPairs, poseBlobs, stretch } from '../../splat-engine/pose.ts'
 import { axisAngle, posedPoint } from '../../splat-engine/rig.ts'
 import { Slider, Toggle } from '../../shared/ui.tsx'
 import { LessonShell } from '../Shell.tsx'
 import { LESSON_GOALS } from '../routes.ts'
 import { Viewport } from '../Viewport.tsx'
-import { drawBones, themeColour } from '../overlay.ts'
+import { drawBones, themeColor } from '../overlay.ts'
 import { useGoals } from '../progress.ts'
 
 const START: Orbit = { target: [0, 1.05, 0], distance: 4.4, azimuth: 8, elevation: 10 }
@@ -20,33 +20,33 @@ export function Weights() {
   const [orbit, setOrbit] = useState<Orbit>(START)
   const [bend, setBend] = useState(0)
   const [width, setWidth] = useState(0)
-  const [centre, setCentre] = useState(0)
+  const [center, setCenter] = useState(0)
   const [tint, setTint] = useState(false)
   const [bones, setBones] = useState(true)
 
   const model = useMemo(() => arm(), [])
   const shown = useMemo(() => model.blobs.clone(), [model])
-  // Neighbours round the elbow, found once in the rest pose, to measure how far a bend pulls them apart
-  const pairs = useMemo(() => neighbourPairs(model.blobs, (i) => Math.abs(model.blobs.centre[i * 3]) < 0.9), [model])
+  // Neighbors round the elbow, found once in the rest pose, to measure how far a bend pulls them apart
+  const pairs = useMemo(() => neighborPairs(model.blobs, (i) => Math.abs(model.blobs.center[i * 3]) < 0.9), [model])
   const sk = model.skeleton
   const { version, gap } = useMemo(() => {
-    weightByX(model, centre, width)
+    weightByX(model, center, width)
     sk.reset()
     sk.setRotation(1, axisAngle([0, 0, 1], (bend * Math.PI) / 180))
     sk.update()
     poseBlobs(model.blobs, model.skin, sk, 'quat', shown)
     for (let i = 0; i < shown.count; i++) {
       const w = model.skin.weights[i * 4 + 1]
-      for (let k = 0; k < 3; k++) shown.colour[i * 3 + k] = tint ? (UPPER[k] * (1 - w) + FORE[k] * w) * (0.6 + 0.4 * model.blobs.colour[i * 3 + 1]) : model.blobs.colour[i * 3 + k]
+      for (let k = 0; k < 3; k++) shown.color[i * 3 + k] = tint ? (UPPER[k] * (1 - w) + FORE[k] * w) * (0.6 + 0.4 * model.blobs.color[i * 3 + 1]) : model.blobs.color[i * 3 + k]
     }
     return { version: Math.random(), gap: stretch(pairs, model.blobs, shown) }
-  }, [model, shown, sk, pairs, bend, width, centre, tint])
+  }, [model, shown, sk, pairs, bend, width, center, tint])
 
   const done = useGoals('weights', {
     crack: bend >= 60 && gap >= 4,
     smooth: bend >= 80 && gap <= 1.6,
     rubber: bend >= 80 && width >= 1.8,
-    offset: bend >= 60 && width >= 0.2 && Math.abs(centre) >= 0.4,
+    offset: bend >= 60 && width >= 0.2 && Math.abs(center) >= 0.4,
   })
 
   return (
@@ -60,21 +60,21 @@ export function Weights() {
           version={version}
           orbit={orbit}
           setOrbit={setOrbit}
-          label={`An arm of ${model.blobs.count.toLocaleString()} blobs bent ${bend} degrees at the elbow. The switch from upper arm to forearm is ${width < 0.01 ? 'sudden' : `spread over ${Math.round(width * 100)} cm`}, centred ${cm(centre)} from the elbow. Drag or use the arrow keys to orbit.`}
+          label={`An arm of ${model.blobs.count.toLocaleString()} blobs bent ${bend} degrees at the elbow. The switch from upper arm to forearm is ${width < 0.01 ? 'sudden' : `spread over ${Math.round(width * 100)} cm`}, centerd ${cm(center)} from the elbow. Drag or use the arrow keys to orbit.`}
           hint="drag to orbit · scroll to zoom"
           overlay={
             bones
               ? (ctx, lens) => drawBones(ctx, [
                   { from: sk.posedHead.subarray(0, 3), to: sk.posedHead.subarray(3, 6) },
                   { from: sk.posedHead.subarray(3, 6), to: posedPoint(sk, 1, HAND) },
-                ], lens, themeColour('accent', ctx.canvas))
+                ], lens, themeColor('accent', ctx.canvas))
               : undefined
           }
         />
       }
       caption={
         <p>
-          Bent <span className="tabular-nums text-ink">{bend}°</span>. Round the elbow, the widest gap between neighbouring blobs is{' '}
+          Bent <span className="tabular-nums text-ink">{bend}°</span>. Round the elbow, the widest gap between neighboring blobs is{' '}
           <span className="tabular-nums text-ink" data-testid="gap">×{gap.toFixed(1)}</span> what it was{gap >= 3 ? ': torn open' : gap <= 1.6 ? ': still a surface' : ''}.
         </p>
       }
@@ -93,7 +93,7 @@ export function Weights() {
           content: (
             <>
               <Slider label="Blend over" value={width} min={0} max={2.2} step={0.02} onChange={setWidth} format={(v) => (v < 0.01 ? 'none' : `${Math.round(v * 100)} cm`)} />
-              <Slider label="Centred at" value={centre} min={-0.8} max={0.8} step={0.05} onChange={setCentre} format={(v) => (Math.abs(v) < 0.025 ? 'elbow' : cm(v))} />
+              <Slider label="Centerd at" value={center} min={-0.8} max={0.8} step={0.05} onChange={setCenter} format={(v) => (Math.abs(v) < 0.025 ? 'elbow' : cm(v))} />
             </>
           ),
         },
@@ -103,7 +103,7 @@ export function Weights() {
           content: (
             <>
               <Toggle label="Bones" checked={bones} onChange={setBones} />
-              <Toggle label="Colour by weight" checked={tint} onChange={setTint} />
+              <Toggle label="Color by weight" checked={tint} onChange={setTint} />
             </>
           ),
         },
@@ -128,7 +128,7 @@ export function Weights() {
             between the two places their bones would put them, and fill the gap.
           </p>
           <p>
-            Too wide a blend and the middle of the forearm half-follows the upper arm, so the whole arm curves like a hose. Off-centre,
+            Too wide a blend and the middle of the forearm half-follows the upper arm, so the whole arm curves like a hose. Off-center,
             the crease moves away from the elbow, because weights don't know where the joint is. Real rigs paint weights blob by blob
             with a brush, and the goal is the same: a narrow blend, right on the joint. There is one movement no weights can fix,
             though, and the next lesson twists it.

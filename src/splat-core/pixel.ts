@@ -1,4 +1,4 @@
-import { srgbToLinear } from './colour.ts'
+import { srgbToLinear } from './color.ts'
 /**
  * The 2D half of Splat to Sprite: everything that happens after the splat has
  * been rendered. Pure functions on RGBA byte arrays so they can be unit tested
@@ -24,7 +24,7 @@ export function makeFrame(width: number, height: number): Frame {
 
 /**
  * Averages each `factor`×`factor` block of the big render into one pixel.
- * GL readback is bottom-up, so this also flips rows. Colour is averaged
+ * GL readback is bottom-up, so this also flips rows. Color is averaged
  * weighted by alpha, so a pixel half covered by a red blob comes out red at
  * 50% coverage, not dark red.
  */
@@ -73,11 +73,11 @@ export function alphaCut(f: Frame, threshold: number): Frame {
   return out
 }
 
-// --- colour ---------------------------------------------------------------
+// --- color ---------------------------------------------------------------
 
 const toLinear = (c: number) => srgbToLinear(c / 255)
 
-/** OKLab, so "nearest palette colour" matches what an eye would pick, not raw RGB distance. */
+/** OKLab, so "nearest palette color" matches what an eye would pick, not raw RGB distance. */
 export function oklab(r: number, g: number, b: number): Rgb {
   const lr = toLinear(r), lg = toLinear(g), lb = toLinear(b)
   const l = Math.cbrt(0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb)
@@ -114,9 +114,9 @@ export const BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5]
 
 /**
  * Snaps every solid pixel to the palette. `dither` (0..1) nudges each pixel by
- * an ordered Bayer offset first, so a gradient between two palette colours
+ * an ordered Bayer offset first, so a gradient between two palette colors
  * becomes a checker pattern instead of a hard band — the classic pixel-art
- * trick for faking colours the palette doesn't have.
+ * trick for faking colors the palette doesn't have.
  */
 export function quantize(f: Frame, palette: Rgb[], dither: number): Frame {
   const out = { ...f, data: new Uint8ClampedArray(f.data) }
@@ -154,32 +154,32 @@ export function autoPalette(frames: Frame[], k: number): Rgb[] {
   let seed = 1234567
   const rand = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff)
   // k-means++ seeding
-  const centres: Rgb[] = [labs[Math.floor(rand() * labs.length)]]
+  const centers: Rgb[] = [labs[Math.floor(rand() * labs.length)]]
   const dist = new Float64Array(labs.length)
-  while (centres.length < Math.min(k, labs.length)) {
+  while (centers.length < Math.min(k, labs.length)) {
     let sum = 0
     for (let i = 0; i < labs.length; i++) {
-      const c = centres[nearest(labs[i], centres)]
+      const c = centers[nearest(labs[i], centers)]
       dist[i] = (labs[i][0] - c[0]) ** 2 + (labs[i][1] - c[1]) ** 2 + (labs[i][2] - c[2]) ** 2
       sum += dist[i]
     }
     if (sum === 0) break
     let r = rand() * sum, j = 0
     while (j < labs.length - 1 && (r -= dist[j]) > 0) j++
-    centres.push(labs[j])
+    centers.push(labs[j])
   }
   const assign = new Int32Array(labs.length)
   for (let iter = 0; iter < 12; iter++) {
-    for (let i = 0; i < labs.length; i++) assign[i] = nearest(labs[i], centres)
-    const acc = centres.map(() => [0, 0, 0, 0])
+    for (let i = 0; i < labs.length; i++) assign[i] = nearest(labs[i], centers)
+    const acc = centers.map(() => [0, 0, 0, 0])
     for (let i = 0; i < labs.length; i++) {
       const a = acc[assign[i]]
       a[0] += labs[i][0]; a[1] += labs[i][1]; a[2] += labs[i][2]; a[3]++
     }
-    acc.forEach((a, c) => { if (a[3]) centres[c] = [a[0] / a[3], a[1] / a[3], a[2] / a[3]] })
+    acc.forEach((a, c) => { if (a[3]) centers[c] = [a[0] / a[3], a[1] / a[3], a[2] / a[3]] })
   }
   // Report each cluster as the mean of its real sRGB pixels (no OKLab→sRGB inverse needed).
-  const rgbAcc = centres.map(() => [0, 0, 0, 0])
+  const rgbAcc = centers.map(() => [0, 0, 0, 0])
   for (let i = 0; i < px.length; i++) {
     const a = rgbAcc[assign[i]]
     a[0] += px[i][0]; a[1] += px[i][1]; a[2] += px[i][2]; a[3]++
@@ -192,7 +192,7 @@ export function autoPalette(frames: Frame[], k: number): Rgb[] {
 
 const N4 = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const
 
-/** Drops solid pixels with no solid neighbour: single specks from stray, far-off splats. */
+/** Drops solid pixels with no solid neighbor: single specks from stray, far-off splats. */
 export function removeStrays(f: Frame): Frame {
   const out = { ...f, data: new Uint8ClampedArray(f.data) }
   const solid = (x: number, y: number) => x >= 0 && y >= 0 && x < f.width && y < f.height && f.data[(y * f.width + x) * 4 + 3] > 0
@@ -222,7 +222,7 @@ export function outline(f: Frame, color: Rgb, diagonal = false): Frame {
   return out
 }
 
-/** Darkest colour of a palette: the usual outline choice. */
+/** Darkest color of a palette: the usual outline choice. */
 export function darkest(palette: Rgb[]): Rgb {
   if (!palette.length) return [20, 16, 24]
   return palette.reduce((a, b) => (oklab(...a)[0] <= oklab(...b)[0] ? a : b))
@@ -234,7 +234,7 @@ export function countSolid(f: Frame): number {
   return n
 }
 
-export function countColours(f: Frame): number {
+export function countColors(f: Frame): number {
   const s = new Set<number>()
   for (let i = 0; i < f.data.length; i += 4) if (f.data[i + 3] > 0) s.add((f.data[i] << 16) | (f.data[i + 1] << 8) | f.data[i + 2])
   return s.size
@@ -244,46 +244,46 @@ export function countColours(f: Frame): number {
 
 /** How a scene is turned into pixel art, live (splat-engine/pixelPass.ts) or here on the CPU. */
 export interface PixelLook {
-  /** The colours every pixel snaps to; empty keeps the scene's own colours. */
+  /** The colors every pixel snaps to; empty keeps the scene's own colors. */
   palette: Rgb[]
   /** 0..1, as for `quantize`. */
   dither: number
   /** A 1-pixel line round the scene's silhouette, or none. */
   outline: Rgb | null
-  /** How far bright pixels spill light onto their neighbours: 0 is none. */
+  /** How far bright pixels spill light onto their neighbors: 0 is none. */
   glow: number
-  /** Lines inside the scene, where one colour meets a much lighter one: 0 (or left out) is none, 1 the darkest line. */
+  /** Lines inside the scene, where one color meets a much lighter one: 0 (or left out) is none, 1 the darkest line. */
   edges?: number
   /**
-   * A line where one part of the scene meets another whose colour is too close for `edges` to draw one (two things of one colour, one in front of the other), at `edges`' strength or full strength without it.
+   * A line where one part of the scene meets another whose color is too close for `edges` to draw one (two things of one color, one in front of the other), at `edges`' strength or full strength without it.
    * Needs a map of the parts drawn beside the scene (`pixelArt`'s `parts`; the live pass draws its own).
    */
   parts?: boolean
   /**
-   * A backdrop behind the scene: its colour at the top and at the bottom of the picture, blended between and dithered into the palette.
-   * `reach` is how far down the picture the blend runs before it is all the bottom colour (above 0, up to 1; the whole way when left out or not a sound number: `skyReach`).
+   * A backdrop behind the scene: its color at the top and at the bottom of the picture, blended between and dithered into the palette.
+   * `reach` is how far down the picture the blend runs before it is all the bottom color (above 0, up to 1; the whole way when left out or not a sound number: `skyReach`).
    * Left out, empty pixels stay clear.
    */
   sky?: [top: Rgb, bottom: Rgb, reach?: number]
   /**
-   * Steady pixels: a pixel keeps the palette colour it had in the frame before unless another is closer by more than this (an OKLab distance; 0 or left out is off).
-   * Without it, a pixel that sits between two colours flips back and forth as lights flicker and the view turns.
+   * Steady pixels: a pixel keeps the palette color it had in the frame before unless another is closer by more than this (an OKLab distance; 0 or left out is off).
+   * Without it, a pixel that sits between two colors flips back and forth as lights flicker and the view turns.
    */
   steady?: number
 }
 
-/** A good `steady` for a moving scene: under the gap between neighbouring palette colours, so shapes still move freely. */
+/** A good `steady` for a moving scene: under the gap between neighboring palette colors, so shapes still move freely. */
 export const STEADY = 0.04
 
-/** The most colours a look's palette can hold (the live pass keeps them in a fixed list). */
+/** The most colors a look's palette can hold (the live pass keeps them in a fixed list). */
 export const MAX_PALETTE_SIZE = 32
 /** Coverage at or over this is a solid pixel. */
 export const PIXEL_CUT = 0.5
-/** Where a neighbour's light is gathered from, in pixels: a small diamond. */
+/** Where a neighbor's light is gathered from, in pixels: a small diamond. */
 export const GLOW_TAPS: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1], [2, 0], [-2, 0], [0, 2], [0, -2], [1, 1], [1, -1], [-1, 1], [-1, -1]]
 /** A pixel gives off light once its brightest channel passes this (0..1), fully by 1. */
 export const GLOW_FROM = 0.92
-/** Two neighbouring pixels are on either side of an edge when their colours are this far apart in OKLab. */
+/** Two neighboring pixels are on either side of an edge when their colors are this far apart in OKLab. */
 export const EDGE_JUMP = 0.11
 /** How much of its light a pixel on an edge loses at `edges` 1. */
 export const EDGE_DARK = 0.62
@@ -301,15 +301,15 @@ const smooth = (a: number, b: number, x: number) => { const t = Math.min(1, Math
  * One frame of a scene to pixel art, the CPU twin of the live pixel pass
  * (change one, change both). `f` is the scene drawn small: straight sRGB.
  *
- *   alpha cut → glow (bright pixels light their neighbours, and empty pixels
- *   beside them) → edge lines (the darker side of a jump in colour) →
+ *   alpha cut → glow (bright pixels light their neighbors, and empty pixels
+ *   beside them) → edge lines (the darker side of a jump in color) →
  *   palette + dither → outline on the empty pixels that touch the scene →
  *   sky on the rest, if the look has one
  *
  * `before` is the art of the frame before, for a look with `steady`: where it
- * holds a palette colour that is nearly as close as the best one, that pixel
+ * holds a palette color that is nearly as close as the best one, that pixel
  * keeps it. `parts` is the scene's map of parts for a look with `parts`: the
- * same view with every part in its own flat colour (alpha 0 where there is none).
+ * same view with every part in its own flat color (alpha 0 where there is none).
  */
 export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Frame): Frame {
   const { width: w, height: h } = f
@@ -348,7 +348,7 @@ export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Fram
             const n = oklab(f.data[j], f.data[j + 1], f.data[j + 2])
             const far = Math.hypot(n[0] - a[0], n[1] - a[1], n[2] - a[2]) > EDGE_JUMP
             if (edges > 0 && far && n[0] > a[0]) return true
-            // and where another part begins in a colour too close for that: on the lower-numbered part, so the line keeps its side as lights flicker
+            // and where another part begins in a color too close for that: on the lower-numbered part, so the line keeps its side as lights flicker
             if (far || !map || map[i + 3] < 128 || map[j + 3] < 128) return false
             return (map[i] | (map[i + 1] << 8) | (map[i + 2] << 16)) < (map[j] | (map[j + 1] << 8) | (map[j + 2] << 16))
           })
@@ -370,7 +370,7 @@ export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Fram
         const off = spread > 0 ? (BAYER4[(y & 3) * 4 + (x & 3)] / 16 - 0.5) * spread : 0
         const lab = oklab(Math.max(0, r + off), Math.max(0, gg + off), Math.max(0, b + off))
         let k = nearest(lab, pl)
-        // only the scene's own pixels: the sky is the same every frame, and a pixel the scene has left must not keep its colour
+        // only the scene's own pixels: the sky is the same every frame, and a pixel the scene has left must not keep its color
         if (steady > 0 && solid(x, y) && before!.data[i + 3] === 255) {
           const was = slot.get((before!.data[i] << 16) | (before!.data[i + 1] << 8) | before!.data[i + 2])
           const far = (p: Rgb) => Math.hypot(lab[0] - p[0], lab[1] - p[1], lab[2] - p[2])
@@ -386,26 +386,26 @@ export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Fram
 }
 
 /**
- * The colours a look can put in a frame: its palette and its outline. Empty
- * when the look has no palette (then any colour can appear).
+ * The colors a look can put in a frame: its palette and its outline. Empty
+ * when the look has no palette (then any color can appear).
  */
-export function lookColours(look: PixelLook): Rgb[] {
+export function lookColors(look: PixelLook): Rgb[] {
   if (!look.palette.length) return []
   return look.outline ? [...look.palette, look.outline] : look.palette
 }
 
 /**
- * Moves every solid pixel onto the closest of `colours`, in place. Colour that
+ * Moves every solid pixel onto the closest of `colors`, in place. Color that
  * has been through 8-bit linear storage comes back a level or two off the
  * palette; this puts it back exactly. (The live pass now keeps its art in
- * sRGB, where a palette colour is stored as it is, so there it changes nothing.)
+ * sRGB, where a palette color is stored as it is, so there it changes nothing.)
  */
-export function snapColours(f: Frame, colours: Rgb[]): Frame {
-  if (!colours.length) return f
+export function snapColors(f: Frame, colors: Rgb[]): Frame {
+  if (!colors.length) return f
   for (let i = 0; i < f.data.length; i += 4) {
     if (!f.data[i + 3]) continue
-    let best = colours[0], bestD = Infinity
-    for (const c of colours) {
+    let best = colors[0], bestD = Infinity
+    for (const c of colors) {
       const d = (f.data[i] - c[0]) ** 2 + (f.data[i + 1] - c[1]) ** 2 + (f.data[i + 2] - c[2]) ** 2
       if (d < bestD) { bestD = d; best = c }
     }

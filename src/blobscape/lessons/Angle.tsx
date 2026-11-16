@@ -23,7 +23,7 @@ function eye(o: Orbit): [number, number, number] {
   return [o.target[0] + o.distance * Math.sin(az) * Math.cos(el), o.target[1] + o.distance * Math.sin(el), o.target[2] + o.distance * Math.cos(az) * Math.cos(el)]
 }
 
-/** The real colour of blob i seen from direction v: its own colour plus a Blinn-Phong highlight. */
+/** The real color of blob i seen from direction v: its own color plus a Blinn-Phong highlight. */
 function real(i: number, shine: number, x: number, y: number, z: number): [number, number, number] {
   const { n, c } = SAMPLES[i]
   let hx = L[0] + x, hy = L[1] + y, hz = L[2] + z
@@ -41,12 +41,12 @@ export function Angle() {
   const [degree, setDegree] = useState(2)
   const [shine, setShine] = useState(24)
 
-  // Each blob's colour by angle, projected once per shine setting: 48 numbers a blob
+  // Each blob's color by angle, projected once per shine setting: 48 numbers a blob
   const coeffs = useMemo(() => SAMPLES.map((_, i) => projectSH((x, y, z) => real(i, shine, x, y, z), DIRS)), [shine])
   const realBlobs = useMemo(() => blobsFromSamples(SAMPLES, 0.075, true), [])
   const storedBlobs = useMemo(() => blobsFromSamples(SAMPLES, 0.075, true), [])
 
-  // Recolour both for where the camera is now, and compare the brightest highlight each one shows
+  // Recolor both for where the camera is now, and compare the brightest highlight each one shows
   const peak = useMemo(() => {
     const e = eye(orbit)
     let realPeak = 0, storedPeak = 0
@@ -58,10 +58,10 @@ export function Angle() {
       const r = real(i, shine, x, y, z)
       const st = evalSH(coeffs[i], degree, x, y, z)
       for (let k = 0; k < 3; k++) {
-        realBlobs.colour[i * 3 + k] = clamp(r[k])
-        storedBlobs.colour[i * 3 + k] = clamp(st[k])
+        realBlobs.color[i * 3 + k] = clamp(r[k])
+        storedBlobs.color[i * 3 + k] = clamp(st[k])
       }
-      // Only blobs facing the camera count, and only the brightness added on top of the blob's own colour
+      // Only blobs facing the camera count, and only the brightness added on top of the blob's own color
       if (n[0] * x + n[1] * y + n[2] * z <= 0) continue
       const base = (c[0] + c[1] + c[2]) / 3
       realPeak = Math.max(realPeak, Math.min(1, (r[0] + r[1] + r[2]) / 3) - base)
@@ -69,7 +69,7 @@ export function Angle() {
     }
     return realPeak > 0.01 ? Math.max(0, storedPeak / realPeak) : 1
   }, [orbit, degree, shine, coeffs, realBlobs, storedBlobs])
-  // A new number each time the colours above change, so both views re-upload them
+  // A new number each time the colors above change, so both views re-upload them
   const version = useMemo(() => Math.random(), [peak, orbit, degree, shine]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const done = useGoals('angle', {
@@ -88,26 +88,26 @@ export function Angle() {
   return (
     <LessonShell
       id="angle"
-      intro={<p>Shiny things look different from every side: the bright spot moves as you do. How can a blob, which has one colour, do that?</p>}
+      intro={<p>Shiny things look different from every side: the bright spot moves as you do. How can a blob, which has one color, do that?</p>}
       view={
         <div className="relative h-full">
           <div className="grid h-full grid-cols-2 divide-x divide-rule-soft">
             {view(realBlobs, 'A shiny ball of blobs with its real shine. Drag or use the arrow keys to walk round it.', 'The real shine')}
-            {view(storedBlobs, `The same ball, each blob's colour stored at degree ${degree}. Drag or use the arrow keys to walk round it.`, `Stored at degree ${degree}`)}
+            {view(storedBlobs, `The same ball, each blob's color stored at degree ${degree}. Drag or use the arrow keys to walk round it.`, `Stored at degree ${degree}`)}
           </div>
           <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => setOrbit(start)} />
         </div>
       }
       caption={
         <p data-testid="sh-readout">
-          Degree {degree}: <span className="tabular-nums text-ink">{numbersPerBlob(degree)}</span> numbers per blob, {numbersPerBlob(degree) - 11} of them colour.
+          Degree {degree}: <span className="tabular-nums text-ink">{numbersPerBlob(degree)}</span> numbers per blob, {numbersPerBlob(degree) - 11} of them color.
           {' '}From here the stored highlight is <span className="tabular-nums text-ink">{Math.round(peak * 100)}%</span> as bright as the real one.
         </p>
       }
       groups={[
         {
           id: 'degree',
-          title: 'Colour by angle',
+          title: 'Color by angle',
           note: 'how many numbers each blob keeps',
           span: 2,
           content: <Slider label="Degree" value={degree} min={0} max={3} step={1} onChange={setDegree} format={(v) => `${v} (${numbersPerBlob(v)} numbers)`} />,
@@ -130,28 +130,28 @@ export function Angle() {
       goals={LESSON_GOALS['angle']}
       done={done}
       scene={() => storedBlobs}
-      explainTitle="A colour for every direction"
+      explainTitle="A color for every direction"
       formula={{
-        eq: <>colour(<i>v</i>) = Σ <i>c</i><sub className="text-[0.45em]">ℓm</sub> <i>Y</i><sub className="text-[0.45em]">ℓm</sub>(<i>v</i>)</>,
+        eq: <>color(<i>v</i>) = Σ <i>c</i><sub className="text-[0.45em]">ℓm</sub> <i>Y</i><sub className="text-[0.45em]">ℓm</sub>(<i>v</i>)</>,
         terms: [
           ['v', 'the direction you look at the blob from'],
           ['Yℓm', 'fixed patterns over all directions, smooth for low degree ℓ and finer as it rises (spherical harmonics)'],
-          ['cℓm', "the blob's own numbers: how much of each pattern it has, per colour channel"],
+          ['cℓm', "the blob's own numbers: how much of each pattern it has, per color channel"],
         ],
       }}
       explain={
         <>
           <p>
-            A blob doesn't keep one colour. It keeps a recipe: a few standard patterns over every direction, each mixed in by its own amount.
-            Mix them and you get a colour that changes smoothly as you walk round, which is why the highlight followed you.
+            A blob doesn't keep one color. It keeps a recipe: a few standard patterns over every direction, each mixed in by its own amount.
+            Mix them and you get a color that changes smoothly as you walk round, which is why the highlight followed you.
           </p>
           <p>
-            Degree 0 is a single pattern, the same from everywhere, so the shine averaged away to a flat colour. Each degree adds finer
+            Degree 0 is a single pattern, the same from everywhere, so the shine averaged away to a flat color. Each degree adds finer
             patterns: 9 extra numbers at degree 1, 24 at degree 2, 45 at degree 3. Even at 3, a sharp glint is too fine to build, so it
             smeared. That's why real captures often blur mirror-like reflections.
           </p>
           <p>
-            Most capture files store degree 3, which makes colour by angle about three quarters of the file. Formats and how they shrink
+            Most capture files store degree 3, which makes color by angle about three quarters of the file. Formats and how they shrink
             those numbers are two lessons on.
           </p>
         </>

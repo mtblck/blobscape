@@ -36,5 +36,5 @@ test('the scene loops: the pose after one loop is the pose at the start, and it 
 })
 
 test('every palette fits the pixel pass', () => {
-  for (const p of PALETTES) assert.ok(p.colours.length <= MAX_PALETTE_SIZE, p.id)
+  for (const p of PALETTES) assert.ok(p.colors.length <= MAX_PALETTE_SIZE, p.id)
 })

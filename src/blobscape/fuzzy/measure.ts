@@ -8,9 +8,9 @@ import type { SplatMesh } from '../../splat-engine/mesh.ts'
 
 type V3 = [number, number, number]
 
-/** Bytes per blob in a plain .splat file (position, size, colour, opacity, rotation). */
+/** Bytes per blob in a plain .splat file (position, size, color, opacity, rotation). */
 export const SPLAT_BYTES = 32
-/** A mesh as a plain .glb: position, normal and colour per corner (floats), three indices per triangle. */
+/** A mesh as a plain .glb: position, normal and color per corner (floats), three indices per triangle. */
 export const meshBytes = (m: SplatMesh) => m.vertexCount * 36 + m.triangleCount * 12
 
 /** How far out (in its own standard deviations) a blob counts as covering a point. */
@@ -19,7 +19,7 @@ const REACH = 2
 /** The blob's covariance-scaled distance squared from p, in standard deviations. */
 function sigmas2(b: Blobs, i: number, p: ArrayLike<number>): number {
   const r = quatToMat(b.quat.subarray(i * 4, i * 4 + 4))
-  const d = [p[0] - b.centre[i * 3], p[1] - b.centre[i * 3 + 1], p[2] - b.centre[i * 3 + 2]]
+  const d = [p[0] - b.center[i * 3], p[1] - b.center[i * 3 + 1], p[2] - b.center[i * 3 + 2]]
   let q = 0
   for (let a = 0; a < 3; a++) {
     // Component along the blob's own axis a (column a of R)
@@ -62,7 +62,7 @@ export function lightThroughSplats(b: Blobs, from: V3, to: V3): number {
   const u = [dir[0] / len, dir[1] / len, dir[2] / len]
   let t = 1
   for (let i = 0; i < b.count; i++) {
-    const c = [b.centre[i * 3] - from[0], b.centre[i * 3 + 1] - from[1], b.centre[i * 3 + 2] - from[2]]
+    const c = [b.center[i * 3] - from[0], b.center[i * 3 + 1] - from[1], b.center[i * 3 + 2] - from[2]]
     const along = Math.max(0, Math.min(len, c[0] * u[0] + c[1] * u[1] + c[2] * u[2]))
     const p = [from[0] + u[0] * along, from[1] + u[1] * along, from[2] + u[2] * along]
     const q = sigmas2(b, i, p)

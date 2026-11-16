@@ -5,7 +5,7 @@ import { BURST, KINDS, MAX_MP, RULES } from './game.ts'
 import { MAX_LIGHTS } from '../../splat-engine/engine.ts'
 import { torchLight } from './hall.ts'
 
-test('the dungeon builds every actor once, with a pool of slimes per colour hidden until they come out', () => {
+test('the dungeon builds every actor once, with a pool of slimes per color hidden until they come out', () => {
   const t0 = performance.now()
   const d = new Dungeon({ detail: 1, look: 'forest', difficulty: 'normal', light: 'baked' })
   const ms = performance.now() - t0
@@ -47,10 +47,10 @@ test('live lights: eight torches, the orb dimming with the magic, a light per bo
   const d = new Dungeon({ detail: 0.3, look: 'forest', difficulty: 'normal', light: 'live' })
   d.game.hold()
   const orb = () => d.lights()[8]
-  const full = orb().colour[2]
+  const full = orb().color[2]
   d.game.hero.mp = 0
   d.update(1 / 30, { forward: 0, turn: 0 })
-  assert.ok(orb().colour[2] < full * 0.5)
+  assert.ok(orb().color[2] < full * 0.5)
   d.game.hero.mp = MAX_MP
   for (let k = 0; k < 4; k++) d.game.place(KINDS[k], -3 + 2 * k, 3)
   d.update(1 / 30, { forward: 0, turn: 0, cast: true })
@@ -60,5 +60,5 @@ test('live lights: eight torches, the orb dimming with the magic, a light per bo
   d.update(1 / 30, { forward: 0, turn: 0 })
   const ls = d.lights()
   assert.ok(ls.length > 12 && ls.length <= MAX_LIGHTS, `${ls.length} lights`)
-  for (const l of ls) assert.ok(l.range > 0 && l.colour.every((c) => c >= 0 && Number.isFinite(c)))
+  for (const l of ls) assert.ok(l.range > 0 && l.color.every((c) => c >= 0 && Number.isFinite(c)))
 })

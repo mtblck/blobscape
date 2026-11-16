@@ -20,7 +20,7 @@ const SPEEDS = [
 const DETAILS = [128, 192, 256]
 const VIEWS: { id: View; name: string; note: string }[] = [
   { id: 'fit', name: 'Fit', note: 'The blobs added up: this is the picture the training is drawing.' },
-  { id: 'blobs', name: 'Blobs', note: 'Each blob outlined in its own colour, about where its glow fades out. Fainter outlines are more see-through.' },
+  { id: 'blobs', name: 'Blobs', note: 'Each blob outlined in its own color, about where its glow fades out. Fainter outlines are more see-through.' },
   { id: 'error', name: 'Error', note: 'How far off each pixel is. Bright is wrong, black is right. Growth adds blobs where this is bright.' },
 ]
 /** The long side of the picture shown beside the fit. */
@@ -452,7 +452,7 @@ export function App() {
                       </div>
                     </Field>
                     <Slider label="Learning rate" value={settings.rate} min={0.25} max={4} step={0.25} onChange={(v) => set('rate', v)} format={(v) => `${v}×`} hint="Higher learns faster but jitters; too high and blobs overshoot." />
-                    <p className="text-xs leading-relaxed text-ink-faint">Each step nudges every blob's position, size, angle, colour and opacity downhill on the loss, using Adam, the standard optimiser that real splat training uses too.</p>
+                    <p className="text-xs leading-relaxed text-ink-faint">Each step nudges every blob's position, size, angle, color and opacity downhill on the loss, using Adam, the standard optimizer that real splat training uses too.</p>
                   </div>
                   <div className="grid gap-3">
                     <Slider label="Start with" value={settings.start} min={20} max={2000} step={10} onChange={(v) => set('start', v)} format={(v) => `${v}`} hint="Used when you restart." />
@@ -516,7 +516,7 @@ export function App() {
           </p>
           <ol className="mt-6 grid max-w-6xl gap-6 sm:grid-cols-2 lg:grid-cols-5">
             {[
-              ['1 · Render', 'Draw every blob: a soft ellipse with a centre, two sizes, an angle, a colour and an opacity.'],
+              ['1 · Render', 'Draw every blob: a soft ellipse with a center, two sizes, an angle, a color and an opacity.'],
               ['2 · Compare', 'Subtract the picture. The loss is the average squared difference, the line in the graph.'],
               ['3 · Backpropagate', 'Work out, for every number on every blob, which way to nudge it to shrink the loss.'],
               ['4 · Step', 'Adam nudges them all a little. Each blob keeps its own running average, so steps stay steady.'],

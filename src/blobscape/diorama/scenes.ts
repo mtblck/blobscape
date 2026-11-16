@@ -31,7 +31,7 @@ export interface Diorama {
   /** Seconds before it repeats. */
   loop: number
   /** Its own palette, and what to call it. */
-  palette: { label: string; colours: Rgb[] }
+  palette: { label: string; colors: Rgb[] }
   sky: NonNullable<PixelLook['sky']>
   /** How it starts out: the Finish controls. */
   finish: { dither: number; glow: number; outline: boolean; edges: boolean; sky: boolean }
@@ -51,7 +51,7 @@ const LIGHTHOUSE: Diorama = {
   label: 'Lighthouse',
   about: 'A lighthouse and a cottage on a rock in the sea at dusk, with a turning lamp, pines, a jetty, a small boat, gulls and clouds',
   loop: LOOP,
-  palette: { label: OWN_PALETTE, colours: PALETTES[0].colours },
+  palette: { label: OWN_PALETTE, colors: PALETTES[0].colors },
   sky: [[9, 13, 32], [60, 94, 164]],
   finish: { dither: 0.05, glow: 1.5, outline: true, edges: true, sky: true },
   views: [
@@ -82,8 +82,8 @@ export function described(id: string, doc: SceneDoc, about: string): Diorama {
     label: c.name,
     about,
     loop: c.loop,
-    palette: { label: OWN_PALETTE, colours: c.palette },
-    // with no sky of its own, the switch gives it a night made of its two darkest colours
+    palette: { label: OWN_PALETTE, colors: c.palette },
+    // with no sky of its own, the switch gives it a night made of its two darkest colors
     sky: c.look.sky ?? night(c.palette),
     finish: { dither: c.look.dither, glow: c.look.glow, outline: !!c.look.outline, edges: !!c.look.edges, sky: !!c.look.sky },
     views: [

@@ -36,8 +36,8 @@ interface Slot {
 
 /** The elf's blob count at detail 1. */
 export const ELF_BLOBS = 20000
-/** Metres the elf covers in one walk cycle, so the feet keep pace with the ground. */
-const STRIDE_METRES = 1.5
+/** Meters the elf covers in one walk cycle, so the feet keep pace with the ground. */
+const STRIDE_METERS = 1.5
 const STRIDE_SECONDS = 1.1
 const WAVE_SECONDS = 4
 
@@ -53,7 +53,7 @@ export class Forest {
   wind = 1
   seed: number
   time = 0
-  /** Metres walked, either way. */
+  /** Meters walked, either way. */
   walked = 0
   private tileOf = new Array<number | null>(RING).fill(null)
   private walkT = 0
@@ -148,7 +148,7 @@ export class Forest {
     const { speed, heading } = this.walker
     this.idleT += dt
     // the walk cycle runs at the pace of the feet: backwards when backing up
-    this.walkT += (dt * speed * STRIDE_SECONDS) / STRIDE_METRES
+    this.walkT += (dt * speed * STRIDE_SECONDS) / STRIDE_METERS
     const w = Math.min(1, Math.abs(speed) / (WALK_SPEED * 0.45))
     if (this.waving) elfWave(sk, WAVE_SECONDS - (this.waveUntil - this.time))
     else elfIdle(sk, this.idleT)
@@ -177,7 +177,7 @@ function hide(sk: Skeleton, at: Walker) {
   sk.update()
 }
 
-/** Mixes the pose in `sk` with `from`, weight w on `sk`'s: turns by normalised lerp, offsets by lerp. */
+/** Mixes the pose in `sk` with `from`, weight w on `sk`'s: turns by normalized lerp, offsets by lerp. */
 export function blendPose(sk: Skeleton, from: { rotation: Float32Array; offset: Float32Array }, w: number) {
   for (let b = 0; b < sk.count; b++) {
     const a = from.rotation.subarray(b * 4, b * 4 + 4), q = sk.rotation.subarray(b * 4, b * 4 + 4)

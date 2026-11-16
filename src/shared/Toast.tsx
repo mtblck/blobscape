@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 
 /**
- * Small notices that slide down from the top centre and go away on their own,
+ * Small notices that slide down from the top center and go away on their own,
  * so nothing on the page moves to make room for them. A lesson shows one when
  * a goal ticks (`step`) and a bigger one when every goal is done (`lesson`).
  *

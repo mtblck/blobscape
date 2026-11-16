@@ -49,17 +49,17 @@ The extension object sits inside the `KHR_gaussian_splatting` object, as that sp
 
 ## The rule
 
-For splat *i* with bind-pose centre **p**, rotation **r** (a unit quaternion), scales **s** = (s<sub>x</sub>, s<sub>y</sub>, s<sub>z</sub>), joints *j*<sub>0..3</sub> and weights *w*<sub>0..3</sub> (which sum to 1):
+For splat *i* with bind-pose center **p**, rotation **r** (a unit quaternion), scales **s** = (s<sub>x</sub>, s<sub>y</sub>, s<sub>z</sub>), joints *j*<sub>0..3</sub> and weights *w*<sub>0..3</sub> (which sum to 1):
 
 Each joint's skin matrix is the standard glTF one, **M**<sub>j</sub> = global(joint *j*) · inverseBind(*j*). Its upper 3×3 must factor as *k*<sub>j</sub>·**R**<sub>j</sub>, a rotation times a positive *uniform* scale. Let **q**<sub>j</sub> be **R**<sub>j</sub> as a unit quaternion.
 
-**Centre.** This is glTF's linear blend, unchanged:
+**Center.** This is glTF's linear blend, unchanged:
 
 > **p**′ = Σ *w*<sub>j</sub> **M**<sub>j</sub> **p**
 
 **Rotation** (`rotationBlend: "quaternionAverage"`). Align every **q**<sub>j</sub> with the first joint's (flip its sign when their dot product is negative), then:
 
-> **r**′ = normalise(Σ *w*<sub>j</sub> ±**q**<sub>j</sub>) · **r**
+> **r**′ = normalize(Σ *w*<sub>j</sub> ±**q**<sub>j</sub>) · **r**
 
 **Scale** (`scaleBlend: "weightedAverage"`):
 
@@ -69,13 +69,13 @@ The splat's covariance is then built from **r**′ and **s**′ in the usual way
 
 **Spherical harmonics**, when present, turn by **r**′·**r**⁻¹, the same way `KHR_gaussian_splatting` turns them for a node's rotation.
 
-**Sorting** must use the skinned centres **p**′. A splat's depth changes as it moves.
+**Sorting** must use the skinned centers **p**′. A splat's depth changes as it moves.
 
 ### Why this rule and not the matrix one
 
 The obvious alternative pushes the covariance through the blended matrix: Σ′ = **A** Σ **A**ᵀ with **A** = Σ *w*<sub>j</sub> **M**<sub>j</sub>(3×3). That's what you get by treating a splat like a mesh vertex. But a blend of two rotations isn't a rotation, so on a twisting joint **A** shrinks, and the splats there flatten into slivers. It's the splat version of linear-blend skinning's "candy-wrapper" collapse, and it's easy to see: the splats on a twisted wrist go see-through. Averaging the rotations keeps every splat the same size and shape as it turns. Blobscape's tests check that on a half-twist, where the matrix rule loses the volume of the joint's splats and this rule keeps it.
 
-Dual quaternion skinning (Spark's default) also keeps splats whole. It moves centres along an arc rather than a straight blend, and on the fox's joints the difference is at most 6 mm. It has no scale, though, so a bone can't grow. This rule keeps glTF's centre maths, so mesh tools that already skin `POSITION` put splats in the same places, and bones can grow.
+Dual quaternion skinning (Spark's default) also keeps splats whole. It moves centers along an arc rather than a straight blend, and on the fox's joints the difference is at most 6 mm. It has no scale, though, so a bone can't grow. This rule keeps glTF's center math, so mesh tools that already skin `POSITION` put splats in the same places, and bones can grow.
 
 ### Growing bones
 
@@ -84,7 +84,7 @@ Joints may animate a positive uniform `scale`, which is what lets a tongue or a 
 ## What a viewer without this extension shows
 
 - **Knows `KHR_gaussian_splatting`, not skinning** (three.js r186's loader): the splats in their bind pose, standing still. Blobscape's verify run checks this.
-- **Skins splats its own way:** the same centres, but possibly different shapes at the joints. That's why the rule needs a name.
+- **Skins splats its own way:** the same centers, but possibly different shapes at the joints. That's why the rule needs a name.
 - **Knows neither:** the `POSITION` points, or nothing.
 
 ## Sample files
@@ -99,7 +99,7 @@ Larger ones (up to 400k splats, and the 43-bone dragon) come from the Download b
 ## Implementations
 
 - **Blobscape's engine** (`src/splat-engine/`): writes and reads these files, and skins on the GPU on WebGPU (a compute pass) or WebGL (in the vertex shader). `rig.ts` `skinBlob` is the reference on the CPU.
-- **Spark 2.4** can play these files through its `SplatSkinning` in either of its modes, if you give every bone an identity rest pose and pass the full skin transform each frame. The engine lab does this (`src/engine-lab/sparkBones.ts`). Spark's linear-blend mode then matches our centres to 1e-4 m. Its dual-quaternion mode agrees on splats held by one bone and is within 6 mm elsewhere on the fox. Neither mode is this rotation rule. With a non-identity rest pose, Spark 2.4 turns bones about the origin rather than their head (`src/engine-lab/sparkSkinning.test.ts` shows it).
+- **Spark 2.4** can play these files through its `SplatSkinning` in either of its modes, if you give every bone an identity rest pose and pass the full skin transform each frame. The engine lab does this (`src/engine-lab/sparkBones.ts`). Spark's linear-blend mode then matches our centers to 1e-4 m. Its dual-quaternion mode agrees on splats held by one bone and is within 6 mm elsewhere on the fox. Neither mode is this rotation rule. With a non-identity rest pose, Spark 2.4 turns bones about the origin rather than their head (`src/engine-lab/sparkSkinning.test.ts` shows it).
 
 ## Open questions
 

@@ -7,7 +7,7 @@ import type { Species } from './species.ts'
 /**
  * A frog, sitting, facing +z: twenty bones, including a jaw and a tongue of
  * three. The tongue lies folded back along the floor of the mouth, tip
- * towards the throat, as a real frog's does; flicking it turns it over the
+ * toward the throat, as a real frog's does; flicking it turns it over the
  * jaw and out, and grows it, so it never stretches its blobs thin.
  */
 
@@ -53,47 +53,47 @@ function spec(c: Skin): BodySpec {
   const hide = (p: Vec3, n: Vec3): Vec3 => (n[1] < -0.3 ? c.belly : spots(p, 70) > 0.72 ? c.spot : c.back)
   const legHide = (p: Vec3, n: Vec3): Vec3 => (n[1] < -0.4 ? mix(c.belly, c.back, 0.4) : Math.sin(Math.hypot(p[0], p[2]) * 90) > 0.55 ? c.spot : c.back)
   const parts: Part[] = [
-    { shape: { tube: [[0, 0.12, -0.13], [0, 0.19, 0.06]], r: [0.11, 0.12], flat: 0.78 }, colour: hide, bones: ['body', 'head'] },
-    { shape: { ball: [0, 0.225, 0.15], r: [0.115, 0.058, 0.105] }, colour: hide, bones: ['head', 'body'] },
-    { shape: { ball: [0, 0.178, 0.155], r: [0.108, 0.034, 0.095] }, colour: (p, n) => (n[1] < 0 ? c.belly : hide(p, n)), bones: ['jaw'] },
+    { shape: { tube: [[0, 0.12, -0.13], [0, 0.19, 0.06]], r: [0.11, 0.12], flat: 0.78 }, color: hide, bones: ['body', 'head'] },
+    { shape: { ball: [0, 0.225, 0.15], r: [0.115, 0.058, 0.105] }, color: hide, bones: ['head', 'body'] },
+    { shape: { ball: [0, 0.178, 0.155], r: [0.108, 0.034, 0.095] }, color: (p, n) => (n[1] < 0 ? c.belly : hide(p, n)), bones: ['jaw'] },
     // the inside of the mouth, seen when the jaw drops
-    { shape: { ball: [0, 0.192, 0.15], r: [0.095, 0.012, 0.08] }, colour: MOUTH, bones: ['head'], density: 1.5 },
-    { shape: { tube: [[0, 0.181, 0.215], [0, 0.192, 0.085]], r: [0.009, 0.012] }, colour: TONGUE, bones: ['tongue1', 'tongue2', 'tongue3'], density: 10, size: 0.4 },
-    { shape: { ball: [0, 0.193, 0.08], r: [0.02, 0.015, 0.017] }, colour: TONGUE, bones: ['tongue3'], density: 10, size: 0.4 },
+    { shape: { ball: [0, 0.192, 0.15], r: [0.095, 0.012, 0.08] }, color: MOUTH, bones: ['head'], density: 1.5 },
+    { shape: { tube: [[0, 0.181, 0.215], [0, 0.192, 0.085]], r: [0.009, 0.012] }, color: TONGUE, bones: ['tongue1', 'tongue2', 'tongue3'], density: 10, size: 0.4 },
+    { shape: { ball: [0, 0.193, 0.08], r: [0.02, 0.015, 0.017] }, color: TONGUE, bones: ['tongue3'], density: 10, size: 0.4 },
   ]
   for (const [s, x] of SIDES) {
     const out = dir([0.62 * x, 0.35, 0.7])
     parts.push(
       {
         shape: { ball: [0.068 * x, 0.268, 0.168], r: [0.038, 0.036, 0.036] }, bones: ['head'], density: 5,
-        colour: (_p, n) => {
+        color: (_p, n) => {
           const d = n[0] * out[0] + n[1] * out[1] + n[2] * out[2]
           if (d > 0.93 && n[1] > out[1] + 0.1) return [1, 1, 0.95] // a glint
           return d > 0.78 && Math.abs(n[1] - out[1]) < 0.16 ? PUPIL : d > 0.45 ? GOLD : c.back
         },
       },
-      { shape: { tube: [sided(x, [0.075, 0.15, 0.07]), sided(x, [0.11, 0.08, 0.11])], r: [0.032, 0.024] }, colour: legHide, bones: ['body', `${s}Arm`, `${s}Forearm`] },
-      { shape: { tube: [sided(x, [0.11, 0.08, 0.11]), sided(x, [0.11, 0.018, 0.125])], r: [0.024, 0.018] }, colour: legHide, bones: [`${s}Arm`, `${s}Forearm`, `${s}Hand`] },
+      { shape: { tube: [sided(x, [0.075, 0.15, 0.07]), sided(x, [0.11, 0.08, 0.11])], r: [0.032, 0.024] }, color: legHide, bones: ['body', `${s}Arm`, `${s}Forearm`] },
+      { shape: { tube: [sided(x, [0.11, 0.08, 0.11]), sided(x, [0.11, 0.018, 0.125])], r: [0.024, 0.018] }, color: legHide, bones: [`${s}Arm`, `${s}Forearm`, `${s}Hand`] },
     )
     // four fingers with round pads
     for (const tip of [[0.075, 0.006, 0.175], [0.105, 0.006, 0.195], [0.14, 0.006, 0.185], [0.16, 0.006, 0.15]] as Vec3[]) {
       parts.push(
-        { shape: { tube: [sided(x, [0.11, 0.014, 0.13]), sided(x, tip)], r: [0.011, 0.007] }, colour: c.back, bones: [`${s}Hand`], density: 2 },
-        { shape: { ball: sided(x, tip), r: [0.011, 0.007, 0.011] }, colour: mix(c.belly, c.back, 0.3), bones: [`${s}Hand`], density: 2 },
+        { shape: { tube: [sided(x, [0.11, 0.014, 0.13]), sided(x, tip)], r: [0.011, 0.007] }, color: c.back, bones: [`${s}Hand`], density: 2 },
+        { shape: { ball: sided(x, tip), r: [0.011, 0.007, 0.011] }, color: mix(c.belly, c.back, 0.3), bones: [`${s}Hand`], density: 2 },
       )
     }
     const knee = sided(x, [0.2, 0.1, 0.0]), ankle = sided(x, [0.17, 0.045, -0.15]), base = sided(x, [0.2, 0.012, -0.02])
     parts.push(
-      { shape: { tube: [sided(x, [0.07, 0.12, -0.12]), knee], r: [0.06, 0.04] }, colour: legHide, bones: ['body', `${s}Thigh`] },
-      { shape: { tube: [knee, ankle], r: [0.04, 0.026] }, colour: legHide, bones: [`${s}Thigh`, `${s}Shin`, `${s}Foot`] },
-      { shape: { tube: [ankle, base], r: [0.024, 0.016] }, colour: legHide, bones: [`${s}Shin`, `${s}Foot`, `${s}Toes`] },
+      { shape: { tube: [sided(x, [0.07, 0.12, -0.12]), knee], r: [0.06, 0.04] }, color: legHide, bones: ['body', `${s}Thigh`] },
+      { shape: { tube: [knee, ankle], r: [0.04, 0.026] }, color: legHide, bones: [`${s}Thigh`, `${s}Shin`, `${s}Foot`] },
+      { shape: { tube: [ankle, base], r: [0.024, 0.016] }, color: legHide, bones: [`${s}Shin`, `${s}Foot`, `${s}Toes`] },
     )
     // long toes with webbing between them
     const tips: Vec3[] = ([[0.16, 0.006, 0.075], [0.205, 0.006, 0.1], [0.255, 0.006, 0.085], [0.285, 0.006, 0.035]] as Vec3[]).map((p) => sided(x, p))
     const web: Vec3[][] = []
     for (let k = 0; k < tips.length - 1; k++) web.push([base, tips[k], tips[k + 1]])
-    parts.push({ shape: { sheet: web }, colour: mix(c.back, c.belly, 0.35), bones: [`${s}Toes`], opacity: 0.85 })
-    for (const tip of tips) parts.push({ shape: { tube: [base, tip], r: [0.01, 0.007] }, colour: c.back, bones: [`${s}Foot`, `${s}Toes`], density: 2 })
+    parts.push({ shape: { sheet: web }, color: mix(c.back, c.belly, 0.35), bones: [`${s}Toes`], opacity: 0.85 })
+    for (const tip of tips) parts.push({ shape: { tube: [base, tip], r: [0.01, 0.007] }, color: c.back, bones: [`${s}Foot`, `${s}Toes`], density: 2 })
   }
   return { bones: BONES, parts, blend: 0.03 }
 }

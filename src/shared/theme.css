@@ -163,7 +163,7 @@
 
 /* Blobscape's display case: always dark, in either theme, so the blobs glow the
    same way everywhere. It redefines the dark tokens, so overlays drawn with
-   themeColour(name, canvas) and any text inside read as on a dark page. */
+   themeColor(name, canvas) and any text inside read as on a dark page. */
 .case {
   color-scheme: dark;
   --c-paper:      #14161f;
@@ -235,7 +235,7 @@
 }
 .zoom-btn:hover { border-color: var(--c-ink-faint); transform: translateY(-1px); box-shadow: 0 3px 6px -2px rgb(0 0 0 / 0.35); }
 
-/* tipjar's floating support button, in the site's colours */
+/* tipjar's floating support button, in the site's colors */
 :root {
   --tipjar-bg: var(--c-accent);
   --tipjar-label: var(--c-paper);
@@ -259,7 +259,7 @@
 }
 @keyframes bs-beat { 0%, 100% { transform: scale(1); } 40% { transform: scale(1.25); } }
 
-/* Toasts (src/shared/Toast.tsx) slide down from the top centre and back up when they go */
+/* Toasts (src/shared/Toast.tsx) slide down from the top center and back up when they go */
 .toast-in { animation: bs-toast-in 0.32s cubic-bezier(0.2, 0.9, 0.3, 1.15) both; }
 .toast-out { animation: bs-toast-out 0.2s ease-in both; }
 @keyframes bs-toast-in { from { opacity: 0; transform: translateY(-120%); } to { opacity: 1; transform: none; } }

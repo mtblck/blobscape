@@ -1,13 +1,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { Blobs, quatFromEuler, quatToMat } from './blobs.ts'
-import { Selection, flipUpright, inPolygon, selectByColour, sitOnFloor, thin, turnY } from './ops.ts'
+import { Selection, flipUpright, inPolygon, selectByColor, sitOnFloor, thin, turnY } from './ops.ts'
 import { readOwnPly, writePly } from './ply.ts'
 import { applyEffectOne, bakeEffect, hash01, type EffectParams } from './effects.ts'
 
 const scene = (n: number) => {
   const b = new Blobs()
-  for (let i = 0; i < n; i++) b.push({ centre: [i * 0.1, 1 + (i % 5) * 0.2, -i * 0.05], scale: [0.05, 0.03, 0.01], quat: quatFromEuler(i * 7, i * 13, i * 3), colour: [i / n, 0.5, 1 - i / n], opacity: 0.2 + 0.7 * (i / n) })
+  for (let i = 0; i < n; i++) b.push({ center: [i * 0.1, 1 + (i % 5) * 0.2, -i * 0.05], scale: [0.05, 0.03, 0.01], quat: quatFromEuler(i * 7, i * 13, i * 3), color: [i / n, 0.5, 1 - i / n], opacity: 0.2 + 0.7 * (i / n) })
   return b
 }
 const near = (a: number, b: number, eps = 1e-5) => Math.abs(a - b) < eps
@@ -17,9 +17,9 @@ test('a .ply written and read back gives the same blobs', () => {
   const r = readOwnPly(writePly(b))
   assert.equal(r.count, 50)
   for (let i = 0; i < 50 * 3; i++) {
-    assert.ok(near(r.centre[i], b.centre[i]), `centre ${i}`)
+    assert.ok(near(r.center[i], b.center[i]), `center ${i}`)
     assert.ok(near(r.scale[i], b.scale[i]), `scale ${i}`)
-    assert.ok(near(r.colour[i], b.colour[i], 1e-4), `colour ${i}`)
+    assert.ok(near(r.color[i], b.color[i], 1e-4), `color ${i}`)
   }
   for (let i = 0; i < 50; i++) assert.ok(near(r.opacity[i], b.opacity[i], 1e-4))
   // A quaternion and its negative are the same turn: compare the rotation matrices
@@ -38,28 +38,28 @@ test('the .ply header is the standard 3DGS layout', () => {
 test('flipping upright twice is a no-op, and once turns y and z over', () => {
   const b = scene(10), c = b.clone()
   flipUpright(c)
-  assert.ok(near(c.centre[1], -b.centre[1]) && near(c.centre[2], -b.centre[2]) && near(c.centre[0], b.centre[0]))
+  assert.ok(near(c.center[1], -b.center[1]) && near(c.center[2], -b.center[2]) && near(c.center[0], b.center[0]))
   // The blob's axes turn with it: rotation = Rx(180°) · R
   const R = quatToMat(b.quat.subarray(0, 4)), F = quatToMat(c.quat.subarray(0, 4))
   for (let col = 0; col < 3; col++) {
     assert.ok(near(F[col], R[col]) && near(F[3 + col], -R[3 + col]) && near(F[6 + col], -R[6 + col]))
   }
   flipUpright(c)
-  for (let i = 0; i < 30; i++) assert.ok(near(c.centre[i], b.centre[i]))
+  for (let i = 0; i < 30; i++) assert.ok(near(c.center[i], b.center[i]))
 })
 
 test('sitOnFloor puts the bottom at y = 0', () => {
   const b = scene(200)
   sitOnFloor(b)
   let min = Infinity
-  for (let i = 0; i < b.count; i++) min = Math.min(min, b.centre[i * 3 + 1])
+  for (let i = 0; i < b.count; i++) min = Math.min(min, b.center[i * 3 + 1])
   assert.ok(near(min, 0, 1e-6), `${min}`)
 })
 
 test('turning by 360° in steps comes back to the start', () => {
   const b = scene(8), c = b.clone()
   for (let k = 0; k < 24; k++) turnY(c, null, [0.3, 0, 0.1], 15)
-  for (let i = 0; i < 24; i++) assert.ok(near(c.centre[i], b.centre[i], 1e-4))
+  for (let i = 0; i < 24; i++) assert.ok(near(c.center[i], b.center[i], 1e-4))
   for (let i = 0; i < 8; i++) {
     const m1 = quatToMat(b.quat.subarray(i * 4, i * 4 + 4)), m2 = quatToMat(c.quat.subarray(i * 4, i * 4 + 4))
     m1.forEach((v, k) => assert.ok(near(v, m2[k], 1e-4)))
@@ -76,11 +76,11 @@ test('selection keeps its count and puts selected blobs first', () => {
   assert.ok(!s.has(3) && s.has(0))
 })
 
-test('lasso polygon test and colour select', () => {
+test('lasso polygon test and color select', () => {
   const square = [0, 0, 10, 0, 10, 10, 0, 10]
   assert.ok(inPolygon(5, 5, square) && !inPolygon(15, 5, square))
   const b = scene(10), s = new Selection()
-  selectByColour(b, s, [0, 0.5, 1], 0.1)
+  selectByColor(b, s, [0, 0.5, 1], 0.1)
   assert.ok(s.has(0) && !s.has(9))
 })
 
@@ -91,25 +91,25 @@ test('thinning keeps every nth blob and widens them', () => {
   assert.ok(near(b.scale[0], 0.05 * 2))
 })
 
-const frame = { centre: [0, 1, 0] as [number, number, number], radius: 1, floor: 0 }
+const frame = { center: [0, 1, 0] as [number, number, number], radius: 1, floor: 0 }
 test('every effect leaves blobs untouched at amount 0, except the looping ones', () => {
   for (const kind of ['explode', 'melt', 'twist', 'dissolve'] as const) {
     const b = scene(20), c = b.clone()
     bakeEffect(c, { ...frame, kind, amount: 0, time: 0 }, null, c.count)
-    for (let i = 0; i < 60; i++) assert.equal(c.centre[i], b.centre[i], kind)
+    for (let i = 0; i < 60; i++) assert.equal(c.center[i], b.center[i], kind)
   }
 })
 
 test('explode pushes blobs outward, melt brings them down, dissolve fades them', () => {
   const p = (kind: EffectParams['kind']): EffectParams => ({ ...frame, kind, amount: 1, time: 0 })
   const b = scene(30)
-  const dist = (x: Blobs, i: number) => Math.hypot(x.centre[i * 3], x.centre[i * 3 + 1] - 1, x.centre[i * 3 + 2])
+  const dist = (x: Blobs, i: number) => Math.hypot(x.center[i * 3], x.center[i * 3 + 1] - 1, x.center[i * 3 + 2])
   const e = b.clone(); bakeEffect(e, p('explode'), null, e.count)
   let out = 0
   for (let i = 0; i < 30; i++) if (dist(e, i) > dist(b, i)) out++
   assert.ok(out >= 28, `${out} of 30 moved out`)
   const m = b.clone(); bakeEffect(m, p('melt'), null, m.count)
-  for (let i = 0; i < 30; i++) assert.ok(m.centre[i * 3 + 1] < 0.1, `blob ${i} at ${m.centre[i * 3 + 1]}`)
+  for (let i = 0; i < 30; i++) assert.ok(m.center[i * 3 + 1] < 0.1, `blob ${i} at ${m.center[i * 3 + 1]}`)
   const d = b.clone(); bakeEffect(d, p('dissolve'), null, d.count)
   for (let i = 0; i < 30; i++) assert.ok(d.opacity[i] < 0.01)
 })
@@ -119,12 +119,12 @@ test('a baked effect only touches the first `count` blobs in GPU order', () => {
   const order = [4, 5, 0, 1, 2, 3, 6, 7, 8, 9]
   bakeEffect(c, { ...frame, kind: 'explode', amount: 1, time: 0 }, order, 2)
   for (let i = 0; i < 10; i++) {
-    const moved = c.centre[i * 3] !== b.centre[i * 3]
+    const moved = c.center[i * 3] !== b.center[i * 3]
     assert.equal(moved, i === 4 || i === 5, `blob ${i}`)
   }
   // The hash seed is the GPU slot, not the blob index
   const one = b.clone(); applyEffectOne(one, 4, 0, { ...frame, kind: 'explode', amount: 1, time: 0 })
-  assert.equal(one.centre[12], c.centre[12])
+  assert.equal(one.center[12], c.center[12])
 })
 
 test('the hash spreads evenly over 0..1', () => {

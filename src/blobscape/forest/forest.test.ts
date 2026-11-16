@@ -41,7 +41,7 @@ test('the walker turns, moves, keeps out of trunks and stays near the path', () 
   for (let k = 0; k < 120; k++) w = stepWalker(w, { forward: 1, turn: 0 }, 1 / 60)
   assert.ok(w.z > 1 && Math.abs(w.x) < 1e-9, `went to ${w.x}, ${w.z}`)
   const right = stepWalker(w, { forward: 0, turn: 1 }, 0.5)
-  assert.ok(right.heading < w.heading, 'right turns clockwise from above, towards −x')
+  assert.ok(right.heading < w.heading, 'right turns clockwise from above, toward −x')
   // straight into a trunk: pushed round it, never inside
   let v = { x: 0, z: 0, heading: 0, speed: 0 }
   const trunk = [{ x: 0, z: 2, r: 0.3 }]

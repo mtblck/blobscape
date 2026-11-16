@@ -1,6 +1,6 @@
 /**
  * The loss after every step, kept at bounded size: up to 32k points, and once
- * full, neighbours are averaged so each point covers twice as many steps.
+ * full, neighbors are averaged so each point covers twice as many steps.
  */
 
 export const HISTORY_CAP = 1 << 15

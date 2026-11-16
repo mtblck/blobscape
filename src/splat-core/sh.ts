@@ -1,7 +1,7 @@
 /**
  * Real spherical harmonics up to degree 3, the way Gaussian splat files store
- * view-dependent colour: each blob keeps (degree + 1)² coefficients per colour
- * channel, and its colour from direction v is Σ c·Y(v). Degree 0 is one colour
+ * view-dependent color: each blob keeps (degree + 1)² coefficients per color
+ * channel, and its color from direction v is Σ c·Y(v). Degree 0 is one color
  * for every direction; each degree after it adds finer variation.
  */
 
@@ -44,7 +44,7 @@ export function sphereDirections(n: number): Float64Array {
 }
 
 /**
- * Projects a colour function of direction onto degree-3 harmonics: 16
+ * Projects a color function of direction onto degree-3 harmonics: 16
  * coefficients per channel, as 48 numbers (r0…r15, g0…g15, b0…b15).
  * Truncating the result to a lower degree is that degree's best fit.
  */
@@ -66,7 +66,7 @@ export function projectSH(f: (x: number, y: number, z: number) => [number, numbe
   return out
 }
 
-/** The colour the coefficients give towards (x, y, z), using terms up to `degree`. */
+/** The color the coefficients give toward (x, y, z), using terms up to `degree`. */
 export function evalSH(c: ArrayLike<number>, degree: number, x: number, y: number, z: number, Y = new Float64Array(16)): [number, number, number] {
   shBasis(x, y, z, Y)
   const n = SH_TERMS[degree]
@@ -79,5 +79,5 @@ export function evalSH(c: ArrayLike<number>, degree: number, x: number, y: numbe
   return [r, g, b]
 }
 
-/** How many numbers one blob takes with colour by angle up to `degree`: 14, 23, 38 or 59. */
+/** How many numbers one blob takes with color by angle up to `degree`: 14, 23, 38 or 59. */
 export const numbersPerBlob = (degree: number) => 11 + 3 * SH_TERMS[degree]

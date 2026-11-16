@@ -41,12 +41,12 @@ export const frameTimes = (m: SheetMove) => Array.from({ length: m.frames }, (_,
 /** Frames per second that plays a move at its real speed. */
 export const moveFps = (m: SheetMove) => (m.clip && loopSeconds(m) > 0 ? Math.max(1, Math.round(m.frames / loopSeconds(m))) : 1)
 
-export interface Framing { centre: [number, number, number]; radius: number }
+export interface Framing { center: [number, number, number]; radius: number }
 
 /**
  * A sphere round the creature through every frame of every move, so one
  * camera distance fits them all and the creature is the same size in every
- * frame. Moves a sample of blob centres by their bones on the CPU (the same
+ * frame. Moves a sample of blob centers by their bones on the CPU (the same
  * blend as the GPU), and pads each by its largest scale.
  */
 export function frameAll(actor: { blobs: Blobs; skin: Skin; skeleton: Skeleton }, moves: SheetMove[], sample = 3000): Framing {
@@ -58,7 +58,7 @@ export function frameAll(actor: { blobs: Blobs; skin: Skin; skeleton: Skeleton }
     else { sk.reset(); sk.update() }
     for (let i = 0; i < blobs.count; i += step) {
       if (blobs.opacity[i] < 0.05) continue
-      const x = blobs.centre[i * 3], y = blobs.centre[i * 3 + 1], z = blobs.centre[i * 3 + 2]
+      const x = blobs.center[i * 3], y = blobs.center[i * 3 + 1], z = blobs.center[i * 3 + 2]
       let ox = 0, oy = 0, oz = 0, grow = 0
       for (let k = 0; k < 4; k++) {
         const w = skin.weights[i * 4 + k]
@@ -77,13 +77,13 @@ export function frameAll(actor: { blobs: Blobs; skin: Skin; skeleton: Skeleton }
   for (const m of moves) for (const t of m.clip ? frameTimes(m) : [0]) pose(m, t)
   sk.reset()
   sk.update()
-  if (!pts.length) return { centre: [0, 0, 0], radius: 1 }
+  if (!pts.length) return { center: [0, 0, 0], radius: 1 }
   const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity]
   for (let i = 0; i < pts.length; i += 4) for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], pts[i + k] - pts[i + 3]); hi[k] = Math.max(hi[k], pts[i + k] + pts[i + 3]) }
-  const centre: [number, number, number] = [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2]
+  const center: [number, number, number] = [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2]
   let r = 0
-  for (let i = 0; i < pts.length; i += 4) r = Math.max(r, Math.hypot(pts[i] - centre[0], pts[i + 1] - centre[1], pts[i + 2] - centre[2]) + pts[i + 3])
-  return { centre, radius: r }
+  for (let i = 0; i < pts.length; i += 4) r = Math.max(r, Math.hypot(pts[i] - center[0], pts[i + 1] - center[1], pts[i + 2] - center[2]) + pts[i + 3])
+  return { center, radius: r }
 }
 
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'sprite'

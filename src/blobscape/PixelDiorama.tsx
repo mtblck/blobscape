@@ -116,8 +116,8 @@ export function PixelDiorama() {
   // the scene's own palette first, then the shared ones
   const palettes = useMemo(() => [{ id: 'own', ...shown.palette }, ...PALETTES.slice(1)], [shown])
   const picked = palettes.find((p) => p.id === palette) ?? palettes[0]
-  const colours = picked.colours
-  const look = useMemo<PixelLook>(() => ({ palette: colours, dither, outline: outline ? (colours.length ? darkest(colours) : [11, 16, 38]) : null, glow, edges: edges ? 1 : 0, parts, sky: sky ? shown.sky : undefined, steady: steady ? STEADY : 0 }), [colours, dither, outline, glow, edges, parts, sky, shown, steady])
+  const colors = picked.colors
+  const look = useMemo<PixelLook>(() => ({ palette: colors, dither, outline: outline ? (colors.length ? darkest(colors) : [11, 16, 38]) : null, glow, edges: edges ? 1 : 0, parts, sky: sky ? shown.sky : undefined, steady: steady ? STEADY : 0 }), [colors, dither, outline, glow, edges, parts, sky, shown, steady])
 
   // a new level of detail keeps the moment it was showing
   useEffect(() => {
@@ -214,7 +214,7 @@ export function PixelDiorama() {
         <h1 ref={h1} tabIndex={-1} className="font-display text-4xl outline-none sm:text-5xl">Pixel Diorama</h1>
         <p className="max-w-xl text-lg text-ink-muted">
           Small scenes made of blobs and drawn as pixel art while they move. Each one is real 3D, so you can turn it,
-          and every frame is cut down to a few colours on a coarse grid of pixels. Pick a scene, change the palette and
+          and every frame is cut down to a few colors on a coarse grid of pixels. Pick a scene, change the palette and
           the pixel size, or switch the pixels off to see the blobs underneath.
         </p>
       </header>
@@ -259,7 +259,7 @@ export function PixelDiorama() {
         </>}
         status={<>
               <span>{scene ? <><span className="tabular-nums text-ink" data-testid="diorama-blobs">{scene.built.blobs.count.toLocaleString()}</span> blobs on <span className="tabular-nums text-ink">{scene.built.skeleton.count}</span> bones.</> : loadingLabel}</span>
-              <span data-testid="diorama-art">{pixels && art ? <>Drawn at <span className="tabular-nums text-ink">{art.width} × {art.height}</span> pixels{colours.length ? <> in <span className="tabular-nums text-ink">{colours.length}</span> colours</> : ''}.</> : 'Drawn as blobs, at full size.'}</span>
+              <span data-testid="diorama-art">{pixels && art ? <>Drawn at <span className="tabular-nums text-ink">{art.width} × {art.height}</span> pixels{colors.length ? <> in <span className="tabular-nums text-ink">{colors.length}</span> colors</> : ''}.</> : 'Drawn as blobs, at full size.'}</span>
         </>}
         tabsLabel="Options"
         tabs={[
@@ -298,12 +298,12 @@ export function PixelDiorama() {
                     {palettes.map((p) => <Chip key={p.id} active={palette === p.id} onClick={() => { setPalette(p.id); setPixels(true) }}>{p.label}</Chip>)}
                   </div>
                   <div data-testid="palette-strip" aria-hidden className="mt-5 flex h-3 overflow-hidden rounded ring-1 ring-rule">
-                    {colours.length ? colours.map((c, i) => <span key={i} className="flex-1" style={{ background: `rgb(${c[0]} ${c[1]} ${c[2]})` }} />) : <span className="flex-1 bg-paper-sunk" />}
+                    {colors.length ? colors.map((c, i) => <span key={i} className="flex-1" style={{ background: `rgb(${c[0]} ${c[1]} ${c[2]})` }} />) : <span className="flex-1 bg-paper-sunk" />}
                   </div>
                   <p className="mt-2 text-xs text-ink-faint">
-                    {!colours.length ? 'No palette: every pixel keeps the color the scene gives it, in as many colors as it takes.'
-                      : palette === 'own' ? `The ${colours.length} colors chosen for this scene. Every pixel snaps to the closest one.`
-                        : `${('note' in picked && picked.note) || `A borrowed palette of ${colours.length} colors.`} Every pixel snaps to the closest one.`}
+                    {!colors.length ? 'No palette: every pixel keeps the color the scene gives it, in as many colors as it takes.'
+                      : palette === 'own' ? `The ${colors.length} colors chosen for this scene. Every pixel snaps to the closest one.`
+                        : `${('note' in picked && picked.note) || `A borrowed palette of ${colors.length} colors.`} Every pixel snaps to the closest one.`}
                   </p>
                 </Field>
                 <Field label="Pixel size">
@@ -322,11 +322,11 @@ export function PixelDiorama() {
           {
             id: 'finish', label: 'Finish', content: (
               <div className={TAB_SECTIONS}>
-                <Slider label="Dither" value={dither} min={0} max={1} step={0.05} onChange={setDither} format={(v) => `${Math.round(v * 100)}%`} hint={!pixels ? 'Applies to Pixel art.' : colours.length ? (sky ? 'Checkers two palette colours to fake the ones between. The sky is always dithered, so its bands blend.' : 'Checkers two palette colours to fake the ones between.') : 'Needs a palette: Full color has none to mix.'} />
+                <Slider label="Dither" value={dither} min={0} max={1} step={0.05} onChange={setDither} format={(v) => `${Math.round(v * 100)}%`} hint={!pixels ? 'Applies to Pixel art.' : colors.length ? (sky ? 'Checkers two palette colors to fake the ones between. The sky is always dithered, so its bands blend.' : 'Checkers two palette colors to fake the ones between.') : 'Needs a palette: Full color has none to mix.'} />
                 <Slider label="Glow" value={glow} min={0} max={4} step={0.25} onChange={setGlow} format={(v) => (v ? `${v.toFixed(2)}×` : 'off')} hint={pixels ? 'Bright pixels light the ones beside them.' : 'Applies to Pixel art.'} />
                 <div className="grid gap-3">
                 <Toggle label={pixels ? 'Outline the scene' : 'Outline the scene (in Pixel art)'} checked={outline} onChange={setOutline} />
-                <Toggle label={pixels ? 'Lines where colours meet' : 'Lines where colours meet (in Pixel art)'} checked={edges} onChange={setEdges} />
+                <Toggle label={pixels ? 'Lines where colors meet' : 'Lines where colors meet (in Pixel art)'} checked={edges} onChange={setEdges} />
                 <Toggle label={pixels ? 'Lines between parts' : 'Lines between parts (in Pixel art)'} checked={parts} onChange={setParts} />
                 <Toggle label={pixels ? 'Sky behind' : 'Sky behind (in Pixel art)'} checked={sky} onChange={setSky} />
                 <Toggle label={pixels ? 'Steady pixels' : 'Steady pixels (in Pixel art)'} checked={steady} onChange={setSteady} />
@@ -350,14 +350,14 @@ export function PixelDiorama() {
         </div>
         <div className="mt-8 max-w-[36em] space-y-4 text-lg leading-relaxed text-ink-muted lg:col-span-7 lg:mt-0 lg:text-xl">
           <p>
-            Nothing here was drawn or scanned. In the lighthouse scene, the rock, the tower, the cottage and the boat are written as simple shapes in code, and so are the bricks, the roof tiles and the planks: each is a rule for what colour a point on the shape should be. The scene is
+            Nothing here was drawn or scanned. In the lighthouse scene, the rock, the tower, the cottage and the boat are written as simple shapes in code, and so are the bricks, the roof tiles and the planks: each is a rule for what color a point on the shape should be. The scene is
             cut into a grid, and every grid cell on a shape's surface becomes one small, solid blob. The light and the shadows
-            are worked out once and painted into the blobs' colours.
+            are worked out once and painted into the blobs' colors.
           </p>
           <p>
             Each moving part hangs on a bone: the lamp turns, the boat rocks, the pines lean, smoke rises and the gulls circle and beat their wings. Each frame the
-            scene is drawn very small, every pixel is snapped to the nearest colour of the palette, bright pixels spill a little
-            light, a dark line is drawn where one colour meets a much lighter one, and the result is scaled up in whole pixels with no smoothing. Switch to Blobs to see the same frame before
+            scene is drawn very small, every pixel is snapped to the nearest color of the palette, bright pixels spill a little
+            light, a dark line is drawn where one color meets a much lighter one, and the result is scaled up in whole pixels with no smoothing. Switch to Blobs to see the same frame before
             that last step.
           </p>
           <p>

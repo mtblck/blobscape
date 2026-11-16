@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { Skeleton, axisAngle, emptySkin, packWeights, setWeights, skinBlob, skinCentres } from './rig.ts'
+import { Skeleton, axisAngle, emptySkin, packWeights, setWeights, skinBlob, skinCenters } from './rig.ts'
 
 const near = (a: number, b: number, eps = 1e-5) => Math.abs(a - b) < eps
 
@@ -71,7 +71,7 @@ test('root scale grows the whole creature from its root', () => {
   assert.ok(near(v[0], 0.04))
 })
 
-test('packed byte weights always sum to 255, even from a file that does not normalise them', () => {
+test('packed byte weights always sum to 255, even from a file that does not normalize them', () => {
   for (const w of [[0, 0.5, 0.5, 0], [0.2, 0.2, 0.2, 0.2], [1, 0, 0, 0], [0, 0, 0, 0], [3, 1, 0, 0]]) {
     const word = packWeights(w, 0)
     const bytes = [0, 8, 16, 24].map((s) => (word >>> s) & 255)
@@ -79,7 +79,7 @@ test('packed byte weights always sum to 255, even from a file that does not norm
   }
 })
 
-test('the fast centre skinning lands every blob where skinBlob does', () => {
+test('the fast center skinning lands every blob where skinBlob does', () => {
   const sk = arm()
   sk.setRotation(1, axisAngle([0, 0, 1], 1.1))
   sk.rootScale = 1.3
@@ -95,7 +95,7 @@ test('the fast centre skinning lands every blob where skinBlob does', () => {
     skin[i * 2 + 1] = packWeights(weights[i], 0)
   })
   const out = new Float32Array(blobs.length * 3)
-  skinCentres(src, skin, bones, blobs.length, out)
+  skinCenters(src, skin, bones, blobs.length, out)
   blobs.forEach((c, i) => {
     const word = skin[i * 2 + 1]
     const w = [0, 8, 16, 24].map((s) => ((word >>> s) & 255) / 255)

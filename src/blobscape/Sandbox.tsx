@@ -3,14 +3,14 @@ import { Blobs, hexToRgb, pick, projectPoint, quatFacing, quatToMat, rgbToHex, t
 import type { Orbit, SplatView } from '../splat-core/view.ts'
 import { PRESETS } from '../splat-core/presets.ts'
 import { blobsFromPreset, blobsFromSamples, sampleShape } from '../splat-core/shapes.ts'
-import { Selection, bounds, centroid, flipUpright, frame, inPolygon, meanColour, scaleGroup, selectByColour, sitOnFloor, translate, turnY } from '../splat-core/ops.ts'
+import { Selection, bounds, centroid, flipUpright, frame, inPolygon, meanColor, scaleGroup, selectByColor, sitOnFloor, translate, turnY } from '../splat-core/ops.ts'
 import { EFFECTS, bakeEffect, type EffectFrame, type EffectId, type EffectParams } from '../splat-core/effects.ts'
 import { writePly } from '../splat-core/ply.ts'
 import { ImportError, readSplatFile } from '../splat-core/importer.ts'
 import { Button, Chip, Field, Panel, Slider, Tabs, Toggle } from '../shared/ui.tsx'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
 import { Viewport, type ToolHandlers } from './Viewport.tsx'
-import { drawBones, drawCentres, drawOutlines, themeColour, toScreen } from './overlay.ts'
+import { drawBones, drawCenters, drawOutlines, themeColor, toScreen } from './overlay.ts'
 import { History } from './history.ts'
 import { takeHandOff } from './handoff.ts'
 import { STILL, actorAt, actorBlobs, actorBones, detailsOf, freezeInto, makeActor, poseAll, remake, type Actor } from './actors.ts'
@@ -27,7 +27,7 @@ const TOOLS: { id: ToolId; name: string; note: string }[] = [
   { id: 'select', name: 'Select', note: 'Click a blob to select it, or drag a box around many. Hold Shift to add to the selection. Then change it in the Selection tab.' },
   { id: 'lasso', name: 'Lasso', note: 'Draw round the blobs you want. Hold Shift to add to the selection.' },
   { id: 'move', name: 'Move', note: 'Drag to slide the selection across the screen. With nothing selected, it grabs the blob or creature under the pointer. Drag a creature to walk it somewhere else.' },
-  { id: 'erase', name: 'Erase', note: 'Drag to remove every blob whose centre is inside the ring.' },
+  { id: 'erase', name: 'Erase', note: 'Drag to remove every blob whose center is inside the ring.' },
 ]
 
 const STARTS = [
@@ -53,10 +53,10 @@ const kilo = (n: number) => (n >= 1000 ? `${n / 1000}k` : String(n))
 /** Where an effect works from: the middle, size and floor of what it acts on. */
 function effectFrame(b: Blobs, sel: Selection | null): EffectFrame {
   const bb = bounds(b, sel)
-  if (!bb) return { centre: [0, 0.5, 0], radius: 1, floor: 0 }
+  if (!bb) return { center: [0, 0.5, 0], radius: 1, floor: 0 }
   const { lo, hi } = bb
   return {
-    centre: [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2],
+    center: [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2],
     radius: Math.max(0.05, Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2),
     floor: lo[1],
   }
@@ -91,7 +91,7 @@ export function Sandbox() {
   // Phones run out of memory sooner
   const maxBlobs = coarse ? 400_000 : 1_000_000
   const [tool, setTool] = useState<ToolId>(coarse ? 'orbit' : 'spray')
-  const [colour, setColour] = useState('#f2a65a')
+  const [color, setColor] = useState('#f2a65a')
   const [size, setSize] = useState(Math.log2(0.05))
   const [spread, setSpread] = useState(40)
   const [density, setDensity] = useState(6)
@@ -269,7 +269,7 @@ export function Sandbox() {
       const R = quatToMat(b.quat.subarray(hit.index * 4, hit.index * 4 + 4))
       let n: Vec3 = [R[a], R[3 + a], R[6 + a]]
       if (n[0] * d[0] + n[1] * d[1] + n[2] * d[2] > 0) n = [-n[0], -n[1], -n[2]]
-      // A round blob has no thin axis: use the direction back towards the camera
+      // A round blob has no thin axis: use the direction back toward the camera
       if (Math.max(s[0], s[1], s[2]) < Math.min(s[0], s[1], s[2]) * 1.5) n = [-d[0], -d[1], -d[2]]
       return { p: [o[0] + d[0] * hit.t, o[1] + d[1] * hit.t, o[2] + d[2] * hit.t], n }
     }
@@ -286,21 +286,21 @@ export function Sandbox() {
   const place = (b: Blobs, at: { p: Vec3; n: Vec3 } | null, jitter: number) => {
     if (b.count >= maxBlobs) { setMessage(`The sandbox holds up to ${maxBlobs.toLocaleString()} blobs`); return false }
     if (!at) return false
-    const rgb = hexToRgb(colour)
+    const rgb = hexToRgb(color)
     const s = blobSize * (1 - jitter / 2 + Math.random() * jitter)
     const shade = 1 - jitter * 0.15 + Math.random() * jitter * 0.3
     b.push({
-      centre: at.p,
+      center: at.p,
       scale: [s, s * (1 - jitter / 3 + Math.random() * jitter / 3), flat ? s * 0.15 : s],
       quat: quatFacing(at.n),
-      colour: [rgb[0] * shade, rgb[1] * shade, rgb[2] * shade],
+      color: [rgb[0] * shade, rgb[1] * shade, rgb[2] * shade],
       opacity,
     })
     return true
   }
 
   /**
-   * One dab: find the surface under the ring's centre once, then scatter the
+   * One dab: find the surface under the ring's center once, then scatter the
    * dab's blobs over that surface's tangent plane, sized so the scatter
    * matches the ring on screen. One pick per dab, not one per blob.
    */
@@ -328,7 +328,7 @@ export function Sandbox() {
     const b = blobsRef.current
     const r2 = spread * spread
     const removed = b.filter((i) => {
-      const p = toScreen(b.centre.subarray(i * 3, i * 3 + 3), lens)
+      const p = toScreen(b.center.subarray(i * 3, i * 3 + 3), lens)
       return !p || (p[0] - x) ** 2 + (p[1] - y) ** 2 > r2
     })
     if (removed) { clearSel(); changed() }
@@ -361,7 +361,7 @@ export function Sandbox() {
     announce(hit < 0 ? 'No blob there. ' : '')
   }
 
-  /** Selects every blob whose centre lands inside a screen polygon (x, y pairs). */
+  /** Selects every blob whose center lands inside a screen polygon (x, y pairs). */
   const selectInPolygon = (poly: number[], add: boolean) => {
     if (!view || poly.length < 6) return
     const lens = view.lens(), b = blobsRef.current
@@ -370,7 +370,7 @@ export function Sandbox() {
     for (let k = 0; k < poly.length; k += 2) { xmin = Math.min(xmin, poly[k]); xmax = Math.max(xmax, poly[k]); ymin = Math.min(ymin, poly[k + 1]); ymax = Math.max(ymax, poly[k + 1]) }
     const at = [0, 0, 0]
     for (let i = 0; i < b.count; i++) {
-      at[0] = b.centre[i * 3]; at[1] = b.centre[i * 3 + 1]; at[2] = b.centre[i * 3 + 2]
+      at[0] = b.center[i * 3]; at[1] = b.center[i * 3 + 1]; at[2] = b.center[i * 3 + 2]
       const p = projectPoint(at, lens)
       if (!p || p.x < xmin || p.x > xmax || p.y < ymin || p.y > ymax) continue
       if (inPolygon(p.x, p.y, poly)) sel.set(i, true)
@@ -390,7 +390,7 @@ export function Sandbox() {
     while (from < b.count && !sel.has(from)) from++
     grab.current = { depth: projectPoint(centroid(b, sel), view.lens())?.depth ?? orbit.distance, from, copied: false }
   }
-  /** Slides the selection by a screen-space drag, at the depth of its centre. */
+  /** Slides the selection by a screen-space drag, at the depth of its center. */
   const moveBy = (dx: number, dy: number) => {
     const g = grab.current
     if (!view || !g || (!dx && !dy)) return
@@ -464,7 +464,7 @@ export function Sandbox() {
       grab.current = null
       actorGrab.current = null
     },
-    // Enter or Space on the focused view uses the tool at the centre (a keyboard stand-in for a click)
+    // Enter or Space on the focused view uses the tool at the center (a keyboard stand-in for a click)
     // With Move, the arrow keys slide the selection instead of orbiting (Shift for bigger steps)
     key: tool === 'move' ? (ev) => {
       const step = ev.shiftKey ? 40 : 10
@@ -493,9 +493,9 @@ export function Sandbox() {
   }
 
   // --- selection edits --------------------------------------------------------
-  const recolourSelected = () => {
-    const rgb = hexToRgb(colour)
-    edit((b) => { for (let i = 0; i < b.count; i++) if (sel.has(i)) b.colour.set(rgb, i * 3) })
+  const recolorSelected = () => {
+    const rgb = hexToRgb(color)
+    edit((b) => { for (let i = 0; i < b.count; i++) if (sel.has(i)) b.color.set(rgb, i * 3) })
     setMessage('Painted')
   }
   const eachSelected = (fn: (b: Blobs, i: number) => void, done: string) => {
@@ -510,11 +510,11 @@ export function Sandbox() {
   const selectAll = () => { sel.all(blobsRef.current.count); announce() }
   const invertSel = () => { sel.invert(blobsRef.current.count); announce() }
   const selectNone = () => { clearSel(); announce() }
-  const selectColour = () => {
-    selectByColour(blobsRef.current, sel, hexToRgb(colour), tolerance)
+  const selectColor = () => {
+    selectByColor(blobsRef.current, sel, hexToRgb(color), tolerance)
     announce()
   }
-  const takeColour = () => { const c = meanColour(blobsRef.current, sel); if (c) setColour(rgbToHex(c)) }
+  const takeColor = () => { const c = meanColor(blobsRef.current, sel); if (c) setColor(rgbToHex(c)) }
 
   // --- effects -----------------------------------------------------------------
   const fx = effect ? EFFECTS.find((e) => e.id === effect)! : null
@@ -747,30 +747,30 @@ export function Sandbox() {
   // --- overlay -----------------------------------------------------------------
   const overlay = (ctx: CanvasRenderingContext2D, lens: Lens) => {
     const b = blobsRef.current
-    if (showRig !== 'blobs') for (const a of actorsRef.current) drawBones(ctx, actorBones(a), lens, themeColour('accent', ctx.canvas))
+    if (showRig !== 'blobs') for (const a of actorsRef.current) drawBones(ctx, actorBones(a), lens, themeColor('accent', ctx.canvas))
     if (xray) {
       if (b.count <= OUTLINE_LIMIT) drawOutlines(ctx, b, lens, { sigmas: [2] })
-      else drawCentres(ctx, b, lens, themeColour('ink'))
+      else drawCenters(ctx, b, lens, themeColor('ink'))
     }
     // While an effect moves blobs on the GPU, outlines at their real places would float in the wrong spot
     if (sel.count && !effect) {
-      const accent = themeColour('accent')
-      if (sel.count <= SELECT_OUTLINES) drawOutlines(ctx, b, lens, { indices: sel.indices(b.count), sigmas: [2], colour: accent, width: 1.5 })
+      const accent = themeColor('accent')
+      if (sel.count <= SELECT_OUTLINES) drawOutlines(ctx, b, lens, { indices: sel.indices(b.count), sigmas: [2], color: accent, width: 1.5 })
       else {
-        // Too many to outline: a dot on each selected centre
+        // Too many to outline: a dot on each selected center
         ctx.fillStyle = accent
         const stride = Math.max(1, Math.ceil(sel.count / 30000))
         let k = 0
         for (let i = 0; i < b.count; i++) {
           if (!sel.has(i) || k++ % stride) continue
-          const p = toScreen(b.centre.subarray(i * 3, i * 3 + 3), lens)
+          const p = toScreen(b.center.subarray(i * 3, i * 3 + 3), lens)
           if (p) ctx.fillRect(p[0] - 1, p[1] - 1, 2, 2)
         }
       }
     }
     const m = marquee.current
     if (m) {
-      ctx.strokeStyle = themeColour('accent')
+      ctx.strokeStyle = themeColor('accent')
       ctx.lineWidth = 1.5
       ctx.setLineDash([5, 4])
       ctx.beginPath()
@@ -779,11 +779,11 @@ export function Sandbox() {
       ctx.stroke()
       ctx.setLineDash([])
     }
-    // Keyboard users aim at the centre: mark it while the view has focus
+    // Keyboard users aim at the center: mark it while the view has focus
     const c = ctx.canvas
     if (tool !== 'orbit' && c.matches(':focus-visible')) {
       const cx = c.clientWidth / 2, cy = c.clientHeight / 2
-      ctx.strokeStyle = themeColour('accent')
+      ctx.strokeStyle = themeColor('accent')
       ctx.lineWidth = 1.5
       ctx.beginPath()
       ctx.moveTo(cx - 9, cy); ctx.lineTo(cx - 3, cy); ctx.moveTo(cx + 3, cy); ctx.lineTo(cx + 9, cy)
@@ -792,7 +792,7 @@ export function Sandbox() {
     }
     const h = hover.current
     if (h && (tool === 'spray' || tool === 'erase')) {
-      ctx.strokeStyle = themeColour(tool === 'erase' ? 'ink' : 'accent')
+      ctx.strokeStyle = themeColor(tool === 'erase' ? 'ink' : 'accent')
       ctx.setLineDash([4, 3])
       ctx.beginPath()
       ctx.arc(h.x, h.y, spread, 0, Math.PI * 2)
@@ -812,11 +812,11 @@ export function Sandbox() {
   })
   // What Enter does on the focused view, per tool
   const toolKeyNote: Partial<Record<ToolId, string>> = {
-    add: '; press Enter to add a blob at the centre',
-    spray: '; press Enter to spray at the centre',
-    erase: '; press Enter to erase at the centre',
-    select: '; press Enter to select the blob at the centre, Shift+Enter to add it',
-    lasso: '; press Enter to select the blob at the centre, Shift+Enter to add it',
+    add: '; press Enter to add a blob at the center',
+    spray: '; press Enter to spray at the center',
+    erase: '; press Enter to erase at the center',
+    select: '; press Enter to select the blob at the center, Shift+Enter to add it',
+    lasso: '; press Enter to select the blob at the center, Shift+Enter to add it',
   }
 
   return (
@@ -848,7 +848,7 @@ export function Sandbox() {
             orbit={orbit}
             setOrbit={setOrbit}
             reach={reach}
-            onView={(v) => { setView(v); v.setFloor(true, themeColour('ink-faint')) }}
+            onView={(v) => { setView(v); v.setFloor(true, themeColor('ink-faint')) }}
             tool={handlers}
             overlay={overlay}
             takeSync={takeSync}
@@ -882,13 +882,13 @@ export function Sandbox() {
                 label: 'Brush',
                 summary: `${blobSize.toFixed(3)} · ${flat ? 'flat' : 'round'}`,
                 content: (
-                  <Panel note="What Add and Spray put down. Each new blob takes the brush colour, with a little variation so sprayed patches don't look flat.">
-                    <Field label="Colour">
+                  <Panel note="What Add and Spray put down. Each new blob takes the brush color, with a little variation so sprayed patches don't look flat.">
+                    <Field label="Color">
                       <div className="flex flex-wrap items-center gap-1.5">
                         {SWATCHES.map((c) => (
-                          <button key={c} type="button" aria-label={`Colour ${c}`} aria-pressed={colour === c} onClick={() => setColour(c)} className={`h-7 w-7 cursor-pointer rounded-full border-2 transition-transform hover:scale-110 ${colour === c ? 'border-ink' : 'border-rule'}`} style={{ background: c }} />
+                          <button key={c} type="button" aria-label={`Color ${c}`} aria-pressed={color === c} onClick={() => setColor(c)} className={`h-7 w-7 cursor-pointer rounded-full border-2 transition-transform hover:scale-110 ${color === c ? 'border-ink' : 'border-rule'}`} style={{ background: c }} />
                         ))}
-                        <input type="color" aria-label="Any colour" value={colour} onChange={(e) => setColour(e.target.value)} className="h-7 w-9 cursor-pointer rounded border border-rule bg-transparent" />
+                        <input type="color" aria-label="Any color" value={color} onChange={(e) => setColor(e.target.value)} className="h-7 w-9 cursor-pointer rounded border border-rule bg-transparent" />
                       </div>
                     </Field>
                     <Slider label="Blob size" value={size} min={-7} max={-1} step={0.05} onChange={setSize} format={(v) => (2 ** v).toFixed(3)} />
@@ -904,22 +904,22 @@ export function Sandbox() {
                 label: 'Selection',
                 summary: sel.count ? `${sel.count.toLocaleString()} blobs` : 'None',
                 content: (
-                  <Panel note="Pick blobs with Select or Lasso, or by colour here. Edits apply to every selected blob and can be undone.">
+                  <Panel note="Pick blobs with Select or Lasso, or by color here. Edits apply to every selected blob and can be undone.">
                     <div className="flex flex-wrap gap-2">
                       <Button small onClick={selectAll} disabled={!blobs.count}>Select all</Button>
                       <Button small onClick={selectNone} disabled={none}>Select none</Button>
                       <Button small onClick={invertSel} disabled={!blobs.count}>Invert</Button>
                     </div>
-                    <Field label="By colour">
+                    <Field label="By color">
                       <div className="flex flex-wrap gap-2">
-                        <Button small onClick={selectColour} disabled={!blobs.count}>
-                          <span aria-hidden className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: colour }} />
-                          Select blobs near the brush colour
+                        <Button small onClick={selectColor} disabled={!blobs.count}>
+                          <span aria-hidden className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: color }} />
+                          Select blobs near the brush color
                         </Button>
-                        <Button small onClick={takeColour} disabled={none}>Use their colour for the brush</Button>
+                        <Button small onClick={takeColor} disabled={none}>Use their color for the brush</Button>
                       </div>
                     </Field>
-                    <Slider label="Colour tolerance" value={tolerance} min={0.02} max={0.5} step={0.01} onChange={setTolerance} format={(v) => `${Math.round(v * 100)}%`} />
+                    <Slider label="Color tolerance" value={tolerance} min={0.02} max={0.5} step={0.01} onChange={setTolerance} format={(v) => `${Math.round(v * 100)}%`} />
                     <Field label="Arrange">
                       <div className="flex flex-wrap gap-2">
                         <Button small onClick={() => turnSelected(-15)} disabled={none}>Turn left</Button>
@@ -934,9 +934,9 @@ export function Sandbox() {
                     </Field>
                     <Field label="Change each blob">
                       <div className="flex flex-wrap gap-2">
-                        <Button small onClick={recolourSelected} disabled={none}>
-                          <span aria-hidden className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: colour }} />
-                          Paint with brush colour
+                        <Button small onClick={recolorSelected} disabled={none}>
+                          <span aria-hidden className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: color }} />
+                          Paint with brush color
                         </Button>
                         <Button small onClick={() => resizeSelected(1.25, 'Grown')} disabled={none}>Grow</Button>
                         <Button small onClick={() => resizeSelected(0.8, 'Shrunk')} disabled={none}>Shrink</Button>
@@ -1072,7 +1072,7 @@ export function Sandbox() {
                       <Button small onClick={() => setOrbit((o) => ({ ...o, ...frameAll() }))}>Frame the scene</Button>
                     </div>
                     <Toggle label="X-ray" checked={xray} onChange={setXray} />
-                    <p className="text-xs text-ink-faint">X-ray outlines every blob up to {OUTLINE_LIMIT.toLocaleString()}; past that it shows centres as dots.</p>
+                    <p className="text-xs text-ink-faint">X-ray outlines every blob up to {OUTLINE_LIMIT.toLocaleString()}; past that it shows centers as dots.</p>
                     <Slider label="Reach" value={reach} min={0.5} max={3} step={0.01} onChange={setReach} format={(v) => `${v.toFixed(2)}σ`} hint="How far out each blob is drawn. Turn it down to see the individual blobs in a dense scene." />
                   </Panel>
                 ),
