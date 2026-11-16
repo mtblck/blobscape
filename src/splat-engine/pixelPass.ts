@@ -1,12 +1,14 @@
 import { NearestFilter, NoBlending, NodeMaterial, QuadMesh, RenderTarget, Vector2, Vector3, type Camera, type Object3D, type WebGPURenderer } from 'three/webgpu'
 import * as TSLTyped from 'three/tsl'
 import { BAYER4, EDGE_DARK, EDGE_JUMP, GLOW_FROM, GLOW_SHOWS, GLOW_TAPS, MAX_PALETTE_SIZE, PIXEL_CUT, SKY_DITHER, oklab, skyReach, type PixelLook } from '../splat-core/pixel.ts'
-import { srgbToLinear } from '../splat-core/colour.ts'
 
 // As in engine.ts: the shader builders use TSL untyped.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const TSL = TSLTyped as unknown as Record<string, any>
-const { Fn, If, Loop, dot, float, floor, int, max, min, mod, pow, select, smoothstep, texture, uniform, uniformArray, uv, vec2, vec3, vec4 } = TSL
+const { Fn, If, Loop, dot, float, floor, int, max, min, mod, pow, select, smoothstep, sqrt, texture, uniform, uniformArray, uv, vec2, vec3, vec4 } = TSL
+
+/** A stored pixel is taken for a palette colour when it is this close to it in OKLab: the art keeps palette colours exactly, so this only allows for rounding. */
+const SAME = 0.004
 
 const MAX_PALETTE = MAX_PALETTE_SIZE
 
@@ -17,18 +19,31 @@ const MAX_PALETTE = MAX_PALETTE_SIZE
  * The pass is the GPU twin of `pixelArt` in splat-core/pixel.ts (change one,
  * change both): alpha cut, glow from bright pixels, nearest palette colour in
  * OKLab with a Bayer dither, edge lines inside the scene, an outline on the
- * empty pixels that touch it, and a sky behind. It runs per art pixel: every screen pixel inside one art pixel asks
- * the same question and gets the same answer.
+ * empty pixels that touch it, and a sky behind. It runs once per art pixel,
+ * into `art`, which keeps display (sRGB) colour so a palette colour is stored
+ * exactly; the screen then gets a plain copy, scaled up. The art of the frame
+ * before is kept too: a look with `steady` reads it so a pixel between two
+ * palette colours does not flip from frame to frame.
  */
 export class PixelPass {
   /** The scene, drawn small. Linear and premultiplied, as any render target. */
   readonly small = new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter })
-  /** The finished art at its own size, for reading back (tests, sprite sheets). */
-  readonly art = new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter })
+  /** The art of this frame and of the one before: each frame is drawn into the older of the two. */
+  private readonly frames = [0, 1].map(() => new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter, depthBuffer: false }))
+  private now = 0
+  /** Whether the other target holds the frame before (not after a new size or look). */
+  private kept = false
+  /** Whether the last frame was drawn against the one before. */
+  private used = false
   private readonly quad: QuadMesh
   private readonly material = new NodeMaterial()
+  private readonly copy = new NodeMaterial()
+  private readonly copyQuad: QuadMesh
+  private readonly beforeTex = texture(this.frames[1].texture)
+  private readonly artTex = texture(this.frames[0].texture)
+  private readonly sticky = uniform(0)
   private readonly res = uniform(new Vector2(1, 1))
-  /** How many art pixels fit across and down the output: `res` when drawing the art itself, a fraction more on a screen. */
+  /** How many art pixels fit across and down the screen: the art's size or a fraction under it, as the last one may be cut off. */
   private readonly cells = uniform(new Vector2(1, 1))
   private readonly count = uniform(0)
   private readonly dither = uniform(0)
@@ -43,7 +58,8 @@ export class PixelPass {
   /** How far down the picture the sky's blend runs (above 0, up to 1). */
   private readonly skyReach = uniform(1)
   private readonly palLab = Array.from({ length: MAX_PALETTE }, () => new Vector3())
-  private readonly palLinear = Array.from({ length: MAX_PALETTE }, () => new Vector3())
+  /** The palette as it is stored in the art: sRGB, 0–1. */
+  private readonly palShown = Array.from({ length: MAX_PALETTE }, () => new Vector3())
 
   constructor(look: PixelLook) {
     this.material.fragmentNode = this.fragment()
@@ -51,19 +67,33 @@ export class PixelPass {
     this.material.depthTest = false
     this.material.depthWrite = false
     this.quad = new QuadMesh(this.material)
+    this.copy.fragmentNode = this.toScreen()
+    this.copy.blending = NoBlending
+    this.copy.depthTest = false
+    this.copy.depthWrite = false
+    this.copyQuad = new QuadMesh(this.copy)
     this.setLook(look)
   }
+
+  /** The finished art at its own size, in display colour, for reading back (tests, saving) and for the screen. */
+  get art() { return this.frames[this.now] }
+  /** The art of the frame before, when this frame was drawn against it (a look with `steady`): what `pixelArt` needs to give the same answer. */
+  get before() { return this.used ? this.frames[1 - this.now] : undefined }
+
+  /** Forgets the frame before: for when what is being drawn is swapped for something else. */
+  reset() { this.kept = false }
 
   /** The look in use. */
   look!: PixelLook
 
   setLook(look: PixelLook) {
     this.look = look
+    this.kept = false
     const n = Math.min(MAX_PALETTE, look.palette.length)
     for (let i = 0; i < n; i++) {
       const c = look.palette[i]
       this.palLab[i].set(...oklab(c[0], c[1], c[2]))
-      this.palLinear[i].set(srgbToLinear(c[0] / 255), srgbToLinear(c[1] / 255), srgbToLinear(c[2] / 255))
+      this.palShown[i].set(c[0] / 255, c[1] / 255, c[2] / 255)
     }
     this.count.value = n
     this.dither.value = look.dither
@@ -72,7 +102,7 @@ export class PixelPass {
     this.lined.value = look.outline ? 1 : 0
     this.skied.value = look.sky ? 1 : 0
     if (look.sky) { this.skyTop.value.set(...look.sky[0]); this.skyLow.value.set(...look.sky[1]); this.skyReach.value = skyReach(look.sky) }
-    if (look.outline) this.line.value.set(srgbToLinear(look.outline[0] / 255), srgbToLinear(look.outline[1] / 255), srgbToLinear(look.outline[2] / 255))
+    if (look.outline) this.line.value.set(look.outline[0] / 255, look.outline[1] / 255, look.outline[2] / 255)
   }
 
   /** The art's size in pixels. */
@@ -80,7 +110,8 @@ export class PixelPass {
     const w = Math.max(1, Math.round(width)), h = Math.max(1, Math.round(height))
     if (this.small.width === w && this.small.height === h) return
     this.small.setSize(w, h)
-    this.art.setSize(w, h)
+    for (const f of this.frames) f.setSize(w, h)
+    this.kept = false
     this.res.value.set(w, h)
   }
 
@@ -97,21 +128,25 @@ export class PixelPass {
     renderer.setRenderTarget(this.small)
     renderer.clear()
     renderer.render(scene, camera)
-    if (screen) {
-      this.cells.value.set(screen.width / screen.scale, screen.height / screen.scale)
-      renderer.setRenderTarget(to)
-    } else {
-      this.cells.value.copy(this.res.value)
-      renderer.setRenderTarget(this.art)
-    }
+    // the art, into the older target, against the newer one
+    this.used = this.kept && (this.look.steady ?? 0) > 0
+    this.sticky.value = this.used ? this.look.steady! : 0
+    this.beforeTex.value = this.frames[this.now].texture
+    this.now = 1 - this.now
+    renderer.setRenderTarget(this.art)
     this.quad.render(renderer)
+    this.kept = true
     renderer.setRenderTarget(to)
+    if (!screen) return
+    this.cells.value.set(screen.width / screen.scale, screen.height / screen.scale)
+    this.artTex.value = this.art.texture
+    this.copyQuad.render(renderer)
   }
 
   private fragment() {
     const small = this.small.texture
-    const { res, cells } = this
-    const palLab = uniformArray(this.palLab, 'vec3'), palLinear = uniformArray(this.palLinear, 'vec3')
+    const { res } = this
+    const palLab = uniformArray(this.palLab, 'vec3'), palShown = uniformArray(this.palShown, 'vec3')
     const bayer = uniformArray(BAYER4, 'float')
     const toSrgb = (c: unknown) => select(float(c).lessThanEqual(0.0031308), float(c).mul(12.92), pow(max(c, 0), 1 / 2.4).mul(1.055).sub(0.055))
     const toLinear = (c: unknown) => select(float(c).lessThanEqual(0.04045), float(c).div(12.92), pow(float(c).add(0.055).div(1.055), 2.4))
@@ -133,7 +168,7 @@ export class PixelPass {
     return Fn(() => {
       // which art pixel this is, counted from the left and from the bottom of the picture
       const st = uv()
-      const cell = floor(vec2(st.x, float(1).sub(st.y)).mul(cells)).toVar()
+      const cell = floor(vec2(st.x, float(1).sub(st.y)).mul(res)).toVar()
       // the picture's row, from its top: what the dither and the sky go by (the CPU twin's y)
       const row = res.y.sub(1).sub(cell.y).toVar()
       /** The small render at an art pixel `dx, dy` away: straight sRGB (0–255) and whether it is solid. */
@@ -194,25 +229,47 @@ export class PixelPass {
           const lab = toLab(colour.add(off)).toVar()
           const best = float(1e9).toVar()
           const pick = vec3(0).toVar()
+          // steady pixels: the palette colour this pixel had the frame before, and how far that is from what it wants now
+          const was = this.beforeTex.sample(vec2(cell.x.add(0.5).div(res.x), float(1).sub(cell.y.add(0.5).div(res.y))))
+          const wasLab = toLab(was.rgb.mul(255)).toVar()
+          const wasOff = float(1e9).toVar()
+          const wasFar = float(1e9).toVar()
+          const wasPick = vec3(0).toVar()
           Loop(MAX_PALETTE, ({ i }: { i: unknown }) => {
             If(float(i).lessThan(this.count), () => {
               const d = lab.sub(palLab.element(i))
               const dd = dot(d, d)
-              If(dd.lessThan(best), () => { best.assign(dd); pick.assign(palLinear.element(i)) })
+              If(dd.lessThan(best), () => { best.assign(dd); pick.assign(palShown.element(i)) })
+              const w = wasLab.sub(palLab.element(i))
+              const ww = dot(w, w)
+              If(ww.lessThan(wasOff), () => { wasOff.assign(ww); wasFar.assign(dd); wasPick.assign(palShown.element(i)) })
             })
           })
+          If(this.sticky.greaterThan(0).and(here.solid).and(was.a.greaterThan(0.5)).and(wasOff.lessThan(SAME * SAME)).and(sqrt(wasFar).lessThanEqual(sqrt(best).add(this.sticky))), () => { pick.assign(wasPick) })
           out.assign(vec4(pick, 1))
         }).Else(() => {
-          out.assign(vec4(each(colour.div(255), toLinear), 1))
+          out.assign(vec4(colour.div(255), 1))
         })
       })
       return out
     })()
   }
 
+  /** The art onto the output: every screen pixel inside one art pixel takes that pixel's colour. */
+  private toScreen() {
+    const toLinear = (c: unknown) => select(float(c).lessThanEqual(0.04045), float(c).div(12.92), pow(float(c).add(0.055).div(1.055), 2.4))
+    return Fn(() => {
+      const st = uv()
+      const cell = floor(vec2(st.x, float(1).sub(st.y)).mul(this.cells))
+      const c = this.artTex.sample(vec2(cell.x.add(0.5).div(this.res.x), float(1).sub(cell.y.add(0.5).div(this.res.y))))
+      return vec4(toLinear(c.x), toLinear(c.y), toLinear(c.z), c.a)
+    })()
+  }
+
   dispose() {
     this.small.dispose()
-    this.art.dispose()
+    for (const f of this.frames) f.dispose()
     this.material.dispose()
+    this.copy.dispose()
   }
 }

@@ -872,12 +872,13 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
         solid++
         if (!pal.has((f.art.data[i] << 16) | (f.art.data[i + 1] << 8) | f.art.data[i + 2])) off++
       }
-      return { backend: stage.backend, w: f.art.width, h: f.art.height, solid, off, soft, small: Array.from(f.small.data), art: Array.from(f.art.data), look: look() }
+      return { backend: stage.backend, w: f.art.width, h: f.art.height, solid, off, soft, small: Array.from(f.small.data), art: Array.from(f.art.data), before: f.before && Array.from(f.before.data), look: look() }
     }, t)
     const a = await shot(2), b = await shot(5)
     // the same frame through the CPU twin (the page's own module isn't reachable from a production build, so it runs here)
     const { pixelArt } = await import('../src/splat-core/pixel.ts')
-    const want = pixelArt({ width: a.w, height: a.h, data: Uint8ClampedArray.from(a.small) }, a.look)
+    const frame = (data) => data && { width: a.w, height: a.h, data: Uint8ClampedArray.from(data) }
+    const want = pixelArt(frame(a.small), a.look, frame(a.before))
     let alpha = 0, colour = 0, moved = 0
     for (let i = 0; i < want.data.length; i += 4) {
       if (want.data[i + 3] !== a.art[i + 3]) alpha++
@@ -893,6 +894,34 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     else ok(`${label}: the pixel pass matches its CPU twin (same shape, ${colour} of ${a.solid} pixels a neighbouring colour)`)
     if (!(moved > 150)) fails.push(`${label}: only ${moved} pixels change in a few seconds`)
     else ok(`${label}: ${moved} pixels change in a few seconds`)
+    // steady pixels: the frame after is drawn against this one, as the CPU twin does given the same two; and fewer pixels flip there and back than with it off
+    {
+      const c = await shot(5 + 1 / 60)
+      const again = pixelArt(frame(c.small), c.look, frame(c.before))
+      let held = 0, differ = 0
+      const plain = pixelArt(frame(c.small), { ...c.look, steady: 0 })
+      for (let i = 0; i < again.data.length; i += 4) {
+        if (Math.abs(again.data[i] - c.art[i]) + Math.abs(again.data[i + 1] - c.art[i + 1]) + Math.abs(again.data[i + 2] - c.art[i + 2]) > 6 || again.data[i + 3] !== c.art[i + 3]) differ++
+        if (plain.data[i] !== again.data[i] || plain.data[i + 1] !== again.data[i + 1] || plain.data[i + 2] !== again.data[i + 2]) held++
+      }
+      if (!(c.look.steady > 0 && c.before && differ < a.solid * 0.05 && held > 20)) fails.push(`${label}: steady pixels: ${JSON.stringify({ steady: c.look.steady, before: !!c.before, differ, held })}`)
+      else ok(`${label}: steady pixels: drawn against the frame before as the CPU twin is (${differ} pixels a neighbouring colour), ${held} pixels keep their colour that would have flipped`)
+    }
+    // held frames: with a step, the scene only moves on every step, so two moments inside one step are one picture
+    {
+      const held = await d.page.evaluate(async () => {
+        const { stage } = window.__diorama
+        const grab = async (t) => { await stage.frame(t); return (await stage.pixelFrames()).art.data }
+        stage.step = 1 / 8
+        const x = await grab(3.01), y = await grab(3.1), z = await grab(3.26)
+        const at = stage.time
+        stage.step = 0
+        const differ = (p, q) => { let n = 0; for (let i = 0; i < p.length; i += 4) if (p[i] !== q[i] || p[i + 1] !== q[i + 1] || p[i + 2] !== q[i + 2]) n++; return n }
+        return { same: differ(x, y), next: differ(x, z), at }
+      })
+      if (!(held.same === 0 && held.next > 20 && Math.abs(held.at - 3.25) < 1e-6)) fails.push(`${label}: held frames: ${JSON.stringify(held)}`)
+      else ok(`${label}: held frames: two moments inside one eighth of a second are the same picture, the next eighth moves ${held.next} pixels`)
+    }
     // the same moment drawn twice is the same picture: blobs at one depth keep one order, so edges (a window in its frame) do not flicker
     const twice = await d.page.evaluate(async () => {
       const { stage } = window.__diorama
@@ -979,7 +1008,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
         if (!pal.has(c)) off++
         used.add(c)
       }
-      return { off, used: used.size, bones: bones(), turned: stage.orbit.azimuth, art: Array.from(f.art.data), small: Array.from(f.small.data), w: f.art.width, h: f.art.height, look: look() }
+      return { off, used: used.size, bones: bones(), turned: stage.orbit.azimuth, art: Array.from(f.art.data), small: Array.from(f.small.data), before: f.before && Array.from(f.before.data), w: f.art.width, h: f.art.height, look: look() }
     }, t)
     // a view that swings stands at the same angle at t and at half a loop less t (half a loop is given here), so what changes between those is the scene itself
     const half = { bee: 6, dragon: 8, hand: 8, reef: 6 }[id]
@@ -992,7 +1021,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     if (id === 'dragon') {
       // the one scene whose sky stops short: that path of the pass against its CPU twin
       const { pixelArt } = await import('../src/splat-core/pixel.ts')
-      const want = pixelArt({ width: a.w, height: a.h, data: Uint8ClampedArray.from(a.small) }, a.look)
+      const want = pixelArt({ width: a.w, height: a.h, data: Uint8ClampedArray.from(a.small) }, a.look, a.before && { width: a.w, height: a.h, data: Uint8ClampedArray.from(a.before) })
       let alpha = 0, colour = 0
       for (let i = 0; i < want.data.length; i += 4) {
         if (want.data[i + 3] !== a.art[i + 3]) alpha++

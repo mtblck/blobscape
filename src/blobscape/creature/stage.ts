@@ -60,6 +60,12 @@ export class CreatureStage {
   orbit: Orbit = { target: [0, 0.72, 0], distance: 4.2, azimuth: 40, elevation: 12 }
   playing = true
   speed = 1
+  /**
+   * Held frames: above 0, the pose only moves on every `step` seconds and the picture is left alone in between,
+   * like animation drawn at a few frames a second. In pixel mode that is what stops edges crawling.
+   */
+  step = 0
+  private posedAt = NaN
   /** Called once, after the first frame with a creature in it has been drawn. */
   onFirstFrame?: () => void
   private drawn = false
@@ -83,8 +89,13 @@ export class CreatureStage {
         if (this.stopped) return
         const dt = this.last ? Math.min(0.1, (now - this.last) / 1000) : 0
         this.last = now
-        if (this.playing && (this.clip || this.poser) && !this.baking) { this.t += dt * this.speed; this.pose() }
-        if (!this.baking && (this.pending > 0 || (this.playing && (this.clip || this.poser)))) {
+        let moved = false
+        if (this.playing && (this.clip || this.poser) && !this.baking) {
+          this.t += dt * this.speed
+          moved = this.time !== this.posedAt
+          if (moved) this.pose()
+        }
+        if (!this.baking && (this.pending > 0 || moved)) {
           this.pending = Math.max(0, this.pending - 1)
           this.resize()
           this.draw()
@@ -117,6 +128,7 @@ export class CreatureStage {
   setActor(actor: Actor, clip?: Clip) {
     // a sheet being drawn holds on to the current world; swap once it's done
     if (this.baking) { this.queued = { actor, clip }; return }
+    this.pixel?.reset()
     if (this.world) { this.scene.remove(this.world); this.world.dispose() }
     if (this.rig) { this.scene.remove(this.rig); this.rig.dispose() }
     this.actor = actor
@@ -144,7 +156,7 @@ export class CreatureStage {
   }
 
   /** Seconds into the clip, or the time a poser is showing. */
-  get time() { return this.t }
+  get time() { return this.step > 0 ? Math.floor(this.t / this.step + 1e-6) * this.step : this.t }
 
   setMode(m: SkinMode) {
     this.mode = m
@@ -214,22 +226,23 @@ export class CreatureStage {
     this.pixel.render(this.renderer, this.scene, this.camera, { width: x, height: y, scale })
   }
 
-  private async read(target: THREE.RenderTarget): Promise<Frame> {
+  private async read(target: THREE.RenderTarget, encoded = false): Promise<Frame> {
     const { width, height } = target
     const px = await this.renderer.readRenderTargetPixelsAsync(target, 0, 0, width, height) as Uint8Array
-    // a target holds linear, premultiplied colour; a frame is sRGB, straight, top row first. WebGPU reads rows top-down, WebGL bottom-up.
-    return { width, height, data: readbackToSrgb(px, width, height, { flip: this.backend === 'webgl', premultiplied: false }) }
+    // a target holds linear, premultiplied colour (pixel mode's art, `encoded`, already holds sRGB); a frame is sRGB, straight, top row first. WebGPU reads rows top-down, WebGL bottom-up.
+    return { width, height, data: readbackToSrgb(px, width, height, { flip: this.backend === 'webgl', premultiplied: false, encoded }) }
   }
 
   /** Pixel mode's last frame as it was drawn small, and as finished art (exactly in the look's colours): for tests and for saving. */
-  async pixelFrames(): Promise<{ small: Frame; art: Frame } | undefined> {
+  async pixelFrames(): Promise<{ small: Frame; art: Frame; before?: Frame } | undefined> {
     // a sheet being drawn has the renderer to itself
     if (!this.pixel || this.baking) return
-    // pixel mode can be switched off, or the view resized, while the reads are out: hold the pass and start both reads now
+    // pixel mode can be switched off, or the view resized, while the reads are out: hold the pass and start every read now
     const pass = this.pixel
     if (!this.target) pass.render(this.renderer, this.scene, this.camera)
-    const [small, art] = await Promise.all([this.read(pass.small), this.read(pass.art)])
-    return { small, art: snapColours(art, lookColours(pass.look)) }
+    const colours = lookColours(pass.look)
+    const [small, art, before] = await Promise.all([this.read(pass.small), this.read(pass.art, true), pass.before ? this.read(pass.before, true) : undefined])
+    return { small, art: snapColours(art, colours), before: before && snapColours(before, colours) }
   }
 
   invalidate(frames = 2) { this.pending = Math.max(this.pending, frames) }
@@ -237,8 +250,9 @@ export class CreatureStage {
   private pose() {
     if (!this.actor || !this.world) return
     const sk = this.actor.skeleton
-    if (this.poser) this.poser(sk, this.t)
-    else if (this.clip) sampleClip(this.clip, sk, this.t)
+    const t = this.posedAt = this.time
+    if (this.poser) this.poser(sk, t)
+    else if (this.clip) sampleClip(this.clip, sk, t)
     else { sk.reset(); sk.update() }
     this.world.markPosed()
     if (this.rig?.visible) this.rig.update()
@@ -273,7 +287,7 @@ export class CreatureStage {
     const ctx = this.display.getContext('2d')!
     if (this.pixel) {
       // the art, scaled up in whole pixels
-      const art = await this.read(this.pixel.art)
+      const art = await this.read(this.pixel.art, true)
       const c = document.createElement('canvas')
       c.width = art.width
       c.height = art.height
