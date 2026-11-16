@@ -59,7 +59,10 @@ test('magic costs mana, flies to a slime and does two damage; without mana it fi
   const s = g.place('purple', 0.5, 1)
   g.step(1 / 30, { ...idle, cast: true })
   assert.equal(Math.round(g.hero.mp), 100 - SPELL_COST)
-  run(g, 1.2)
+  // the bolt itself does two; the fire it leaves on the floor is checked in ground.test.ts
+  let landed = false
+  for (let t = 0; t < 1.2 && !landed; t += 1 / 30) { g.step(1 / 30, idle); landed = g.events.some((e) => e.type === 'hit' && e.by === 'magic') }
+  assert.ok(landed)
   assert.equal(s.hp, RULES.purple.hp - 2)
   g.hero.mp = 5
   g.step(1 / 30, { ...idle, cast: true })

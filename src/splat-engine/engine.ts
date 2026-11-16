@@ -213,6 +213,20 @@ export class SplatWorld extends Mesh {
     this.bonesDirty = true
   }
 
+  /**
+   * Takes one actor's colors and opacities again after they were changed in place, when nothing moved
+   * (a floor that scorches): only the color buffer goes up again.
+   */
+  recolor(actor: Actor) {
+    const ai = this.actors.indexOf(actor)
+    if (ai < 0) throw new Error('recolor: not an actor of this world')
+    let at = 0
+    for (let j = 0; j < ai; j++) at += this.actors[j].blobs.count
+    packColors(actor.blobs, this.buf.colorAttr.array as Uint32Array, at)
+    bump(this.buf.colorAttr)
+    this.lightsDirty = true
+  }
+
   private isWebGL(renderer: Renderer) {
     return (renderer as unknown as { backend?: { isWebGLBackend?: boolean } }).backend?.isWebGLBackend === true
   }
@@ -447,7 +461,6 @@ function bump(a: StorageBufferAttribute) {
 
 /** The blobs' own numbers as the GPU holds them: center (with the actor's first bone), scale, facing, and color with opacity in one word. */
 function packBlobs(actors: Actor[], boneOffset: number[], center: Float32Array, scale: Float32Array, quat: Float32Array, color: Uint32Array) {
-  const byte = (v: number) => Math.max(0, Math.min(255, Math.round(v * 255)))
   let i = 0
   actors.forEach((a, ai) => {
     const { blobs } = a
@@ -456,10 +469,18 @@ function packBlobs(actors: Actor[], boneOffset: number[], center: Float32Array, 
       center[i * 4 + 3] = boneOffset[ai]
       scale[i * 4] = blobs.scale[k * 3]; scale[i * 4 + 1] = blobs.scale[k * 3 + 1]; scale[i * 4 + 2] = blobs.scale[k * 3 + 2]
       quat[i * 4] = blobs.quat[k * 4]; quat[i * 4 + 1] = blobs.quat[k * 4 + 1]; quat[i * 4 + 2] = blobs.quat[k * 4 + 2]; quat[i * 4 + 3] = blobs.quat[k * 4 + 3]
-      color[i] = (byte(srgbToLinear(blobs.color[k * 3])) | (byte(srgbToLinear(blobs.color[k * 3 + 1])) << 8) |
-        (byte(srgbToLinear(blobs.color[k * 3 + 2])) << 16) | (byte(blobs.opacity[k]) << 24)) >>> 0
     }
+    packColors(blobs, color, i - blobs.count)
   })
+}
+
+/** A set of blobs' colors (linear) and opacities as one word each, written from blob `at` on. */
+function packColors(blobs: Blobs, color: Uint32Array, at: number) {
+  const byte = (v: number) => Math.max(0, Math.min(255, Math.round(v * 255)))
+  for (let k = 0; k < blobs.count; k++) {
+    color[at + k] = (byte(srgbToLinear(blobs.color[k * 3])) | (byte(srgbToLinear(blobs.color[k * 3 + 1])) << 8) |
+      (byte(srgbToLinear(blobs.color[k * 3 + 2])) << 16) | (byte(blobs.opacity[k]) << 24)) >>> 0
+  }
 }
 
 function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones: number) {
