@@ -9,7 +9,7 @@ import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitD
 import { href } from './routes.ts'
 import { download } from './files.ts'
 import type { CreatureStage } from './creature/stage.ts'
-import { CARD, CARD_SUB, CARD_TITLE } from './creature/card.ts'
+import { Workbench } from '../shared/Workbench.tsx'
 import { DETAIL, PALETTES } from './diorama/scene.ts'
 import { DIORAMAS, type Diorama } from './diorama/scenes.ts'
 import type { Skeleton } from '../splat-engine/rig.ts'
@@ -206,10 +206,9 @@ export function PixelDiorama() {
           the pixel size, or switch the pixels off to see the blobs underneath.
         </p>
       </header>
-      <div className="flex flex-col gap-4 lg:grid lg:grid-cols-12 lg:gap-x-5">
-        <section aria-label="The scene" className="lg:col-span-12">
-          <div className="case relative overflow-hidden rounded-2xl ring-1 ring-rule">
-            <div className="relative h-[min(60dvh,480px)] min-h-[280px] lg:h-[clamp(380px,calc(100dvh-22rem),700px)]">
+      <Workbench
+        viewLabel="The scene"
+        view={<>
               <canvas
                 ref={canvas}
                 role="application"
@@ -245,46 +244,15 @@ export function PixelDiorama() {
               </div>
               <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => pick(view)} />
               <p aria-hidden className="pointer-events-none absolute right-14 bottom-2 rounded bg-paper/80 px-1.5 py-0.5 text-xs text-ink-muted">{coarse ? 'drag to orbit · pinch to zoom' : 'drag to orbit · scroll to zoom'}</p>
-            </div>
-            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-t border-rule-soft px-4 py-2 text-xs leading-relaxed text-ink-muted sm:text-sm">
+        </>}
+        status={<>
               <span>{scene ? <><span className="tabular-nums text-ink" data-testid="diorama-blobs">{scene.built.blobs.count.toLocaleString()}</span> blobs on <span className="tabular-nums text-ink">{scene.built.skeleton.count}</span> bones.</> : loadingLabel}</span>
               <span data-testid="diorama-art">{pixels && art ? <>Drawn at <span className="tabular-nums text-ink">{art.width} × {art.height}</span> pixels{colours.length ? <> in <span className="tabular-nums text-ink">{colours.length}</span> colours</> : ''}.</> : 'Drawn as blobs, at full size.'}</span>
-            </div>
-          </div>
-        </section>
-
-        <section aria-label="Controls" className={CARD}>
-          <div className="stack-controls grid items-start gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
-            <div role="group" aria-labelledby="d-pixels">
-              <h2 id="d-pixels" className={CARD_TITLE}>Pixels</h2>
-              <div className="grid gap-4">
-                <Field label="Palette">
-                  <div className="flex flex-wrap gap-1.5">
-                    {palettes.map((p) => <Chip key={p.id} active={palette === p.id} onClick={() => { setPalette(p.id); setPixels(true) }}>{p.label}</Chip>)}
-                  </div>
-                  <div aria-hidden className="mt-2 flex h-3 overflow-hidden rounded ring-1 ring-rule">
-                    {colours.length ? colours.map((c, i) => <span key={i} className="flex-1" style={{ background: `rgb(${c[0]} ${c[1]} ${c[2]})` }} />) : <span className="flex-1 bg-paper-sunk" />}
-                  </div>
-                </Field>
-                <Field label="Pixel size">
-                  <div className="flex flex-wrap gap-1.5">
-                    {SIZES.map((n) => <Chip key={n} active={size === n} onClick={() => { setSize(n); setPixels(true) }}>{n}×</Chip>)}
-                  </div>
-                </Field>
-              </div>
-            </div>
-            <div role="group" aria-labelledby="d-finish">
-              <h2 id="d-finish" className={CARD_TITLE}>Finish</h2>
-              <div className="grid gap-4">
-                <Slider label="Dither" value={dither} min={0} max={1} step={0.05} onChange={setDither} format={(v) => `${Math.round(v * 100)}%`} hint={!pixels ? 'Applies to Pixel art.' : colours.length ? (sky ? 'Checkers two palette colours to fake the ones between. The sky is always dithered, so its bands blend.' : 'Checkers two palette colours to fake the ones between.') : 'Needs a palette: Scene colours has none to mix.'} />
-                <Slider label="Glow" value={glow} min={0} max={4} step={0.25} onChange={setGlow} format={(v) => (v ? `${v.toFixed(2)}×` : 'off')} hint={pixels ? 'Bright pixels light the ones beside them.' : 'Applies to Pixel art.'} />
-                <Toggle label={pixels ? 'Outline the scene' : 'Outline the scene (in Pixel art)'} checked={outline} onChange={setOutline} />
-                <Toggle label={pixels ? 'Lines where colours meet' : 'Lines where colours meet (in Pixel art)'} checked={edges} onChange={setEdges} />
-                <Toggle label={pixels ? 'Sky behind' : 'Sky behind (in Pixel art)'} checked={sky} onChange={setSky} />
-              </div>
-            </div>
-            <div role="group" aria-labelledby="d-scene" className="sm:col-span-2 lg:col-span-1">
-              <h2 id="d-scene" className={CARD_TITLE}>Scene <small className={CARD_SUB}>repeats every {shown.loop} seconds</small></h2>
+        </>}
+        tabsLabel="Options"
+        tabs={[
+          {
+            id: 'scene', label: 'Scene', content: (
               <div className="grid gap-4">
                 <Field label="Scene">
                   <div className="flex flex-wrap gap-1.5">
@@ -303,14 +271,47 @@ export function PixelDiorama() {
                 </Field>
                 <div className="flex flex-wrap items-center gap-1.5">
                   <Button small onClick={() => setPlaying((p) => !p)}>{playing ? 'Pause' : 'Play'}</Button>
+                </div>
+                <p className="text-xs text-ink-faint">The scene repeats every {shown.loop} seconds.</p>
+              </div>
+            ),
+          },
+          {
+            id: 'pixels', label: 'Pixels', content: (
+              <div className="grid gap-4">
+                <Field label="Palette">
+                  <div className="flex flex-wrap gap-1.5">
+                    {palettes.map((p) => <Chip key={p.id} active={palette === p.id} onClick={() => { setPalette(p.id); setPixels(true) }}>{p.label}</Chip>)}
+                  </div>
+                  <div aria-hidden className="mt-2 flex h-3 overflow-hidden rounded ring-1 ring-rule">
+                    {colours.length ? colours.map((c, i) => <span key={i} className="flex-1" style={{ background: `rgb(${c[0]} ${c[1]} ${c[2]})` }} />) : <span className="flex-1 bg-paper-sunk" />}
+                  </div>
+                </Field>
+                <Field label="Pixel size">
+                  <div className="flex flex-wrap gap-1.5">
+                    {SIZES.map((n) => <Chip key={n} active={size === n} onClick={() => { setSize(n); setPixels(true) }}>{n}×</Chip>)}
+                  </div>
+                </Field>
+              </div>
+            ),
+          },
+          {
+            id: 'finish', label: 'Finish', content: (
+              <div className="grid gap-4">
+                <Slider label="Dither" value={dither} min={0} max={1} step={0.05} onChange={setDither} format={(v) => `${Math.round(v * 100)}%`} hint={!pixels ? 'Applies to Pixel art.' : colours.length ? (sky ? 'Checkers two palette colours to fake the ones between. The sky is always dithered, so its bands blend.' : 'Checkers two palette colours to fake the ones between.') : 'Needs a palette: Scene colours has none to mix.'} />
+                <Slider label="Glow" value={glow} min={0} max={4} step={0.25} onChange={setGlow} format={(v) => (v ? `${v.toFixed(2)}×` : 'off')} hint={pixels ? 'Bright pixels light the ones beside them.' : 'Applies to Pixel art.'} />
+                <Toggle label={pixels ? 'Outline the scene' : 'Outline the scene (in Pixel art)'} checked={outline} onChange={setOutline} />
+                <Toggle label={pixels ? 'Lines where colours meet' : 'Lines where colours meet (in Pixel art)'} checked={edges} onChange={setEdges} />
+                <Toggle label={pixels ? 'Sky behind' : 'Sky behind (in Pixel art)'} checked={sky} onChange={setSky} />
+                <div className="flex flex-wrap items-center gap-1.5">
                   <Button small disabled={!pixels || !drawn || saving} onClick={save}>{saving ? 'Saving…' : 'Save this frame'}</Button>
                 </div>
                 <p role="status" className="min-h-4 text-xs text-ink-faint">{pixels ? note : 'Switch back to Pixel art to save a frame.'}</p>
               </div>
-            </div>
-          </div>
-        </section>
-      </div>
+            ),
+          },
+        ]}
+      />
 
       <section aria-labelledby="how-title" className="mt-14 border-t border-rule pt-10 lg:grid lg:grid-cols-12 lg:gap-x-5 lg:pt-14">
         <div className="lg:col-span-5">

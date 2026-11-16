@@ -6,7 +6,7 @@ import { useId, useRef, useState, type ButtonHTMLAttributes, type ReactNode } fr
  * Accessible tabs (WAI-ARIA tabs pattern): arrow keys, Home and End move
  * between tabs; every panel stays mounted so its state and labels survive.
  */
-export function Tabs({ label, tabs }: { label: string; tabs: { id: string; label: string; summary: string; content: ReactNode }[] }) {
+export function Tabs({ label, tabs }: { label: string; tabs: { id: string; label: string; summary?: string; content: ReactNode }[] }) {
   const [active, setActive] = useState(tabs[0].id)
   const base = useId()
   const refs = useRef<(HTMLButtonElement | null)[]>([])
@@ -38,7 +38,7 @@ export function Tabs({ label, tabs }: { label: string; tabs: { id: string; label
               className={`group/tab -mb-px min-w-0 cursor-pointer rounded-t-md border-b-2 px-2 pt-2 pb-2.5 text-left transition-colors hover:bg-paper-sunk sm:px-3 ${on ? 'border-accent' : `${tabs.length > 4 ? 'max-sm:border-rule' : ''} border-transparent hover:border-ink-faint`}`}
             >
               <span className={`block truncate font-display ${tabs.length > 4 ? 'text-base' : 'text-lg'} transition-colors ${on ? 'text-ink' : 'text-ink-muted group-hover/tab:text-ink'}`}>{t.label}</span>
-              <span className="block truncate text-xs text-ink-faint transition-colors group-hover/tab:text-ink-muted">{t.summary}</span>
+              {t.summary && <span className="block truncate text-xs text-ink-faint transition-colors group-hover/tab:text-ink-muted">{t.summary}</span>}
             </button>
           )
         })}

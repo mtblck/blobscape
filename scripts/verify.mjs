@@ -850,6 +850,19 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
       await d.page.waitForFunction(async () => { await window.__diorama.stage.frame(4.5); return !!window.__diorama.stage.artSize })
       await d.page.screenshot({ path: join(shots, 'blobscape-pixel-diorama.png') })
       await axe(d.page, 'blobscape pixel diorama')
+      // the shared layout: options in tabs beside the preview, which stays in sight on scroll and can fill the screen
+      const tabNames = await d.page.getByRole('tab').allTextContents()
+      await d.page.getByRole('tab', { name: 'Finish' }).click()
+      const finishShown = await d.page.getByRole('button', { name: 'Save this frame' }).isVisible()
+      await d.page.setViewportSize({ width: 390, height: 700 })
+      await d.page.evaluate(() => window.scrollTo(0, 500))
+      const stuck = await d.page.getByTestId('diorama-view').evaluate((c) => { const r = c.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight && r.height > 200 })
+      await d.page.getByTestId('full-screen').click()
+      const filled = await d.page.waitForFunction(() => { const c = document.querySelector('[data-testid=diorama-view]'); return !!document.querySelector('[data-full]') && c.clientWidth >= innerWidth - 2 && c.clientHeight > innerHeight * 0.8 }, null, { timeout: 5000 }).then(() => true, () => false)
+      await d.page.getByTestId('full-screen').click()
+      const back = await d.page.waitForFunction(() => !document.querySelector('[data-full]'), null, { timeout: 5000 }).then(() => true, () => false)
+      if (tabNames.join() !== 'Scene,Pixels,Finish' || !finishShown || !stuck || !filled || !back) fails.push(`${label} layout: ${JSON.stringify({ tabNames, finishShown, stuck, filled, back })}`)
+      else ok(`${label} layout: options in ${tabNames.length} tabs, the preview stays in sight on a phone as the page scrolls, and it fills the screen and comes back`)
     }
     await d.ctx.close()
   }
