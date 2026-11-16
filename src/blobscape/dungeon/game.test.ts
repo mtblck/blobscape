@@ -229,3 +229,22 @@ test('props: none stands in a pillar, a door or another prop, and a swing at a c
     }
   }
 })
+
+test('a swing steps in to reach a slime a little too far for the blade, and leaves alone one that is out of range', () => {
+  for (const [far, hit] of [[1.2, true], [1.9, true], [2.3, true], [2.9, false]] as const) {
+    const g = new Game()
+    g.hold()
+    g.hero.x = 0
+    g.hero.z = 0
+    g.hero.heading = 0.5
+    const s = g.place('purple', 0.4, far)
+    g.step(1 / 30, { ...idle, swing: true })
+    let struck = false
+    for (let t = 0; t < SWING; t += 1 / 30) { g.step(1 / 30, idle); struck ||= g.events.some((e) => e.type === 'hit' && e.by === 'sword') }
+    assert.equal(struck, hit, `a slime ${far} m off`)
+    assert.equal(s.hp, RULES.purple.hp - (hit ? 1 : 0))
+    // the step in never carries the hero into the slime
+    assert.ok(Math.hypot(s.x - g.hero.x, s.z - g.hero.z) > 0.6)
+    if (!hit) assert.ok(Math.hypot(g.hero.x, g.hero.z) < 0.05, 'no step toward a slime out of range')
+  }
+})

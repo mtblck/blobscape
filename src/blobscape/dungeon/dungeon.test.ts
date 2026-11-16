@@ -1,7 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { Dungeon } from './dungeon.ts'
-import { BURST, KINDS, MAX_MP, PROPS, RULES } from './game.ts'
+import { BURST, Game, KINDS, MAX_MP, PROPS, RULES, SWING, SWORD_REACH } from './game.ts'
+import { makeHero, poseHero } from './hero.ts'
+import { rotate } from '../../splat-engine/rig.ts'
 import { PIECES, pieceFlight } from './breakables.ts'
 import { CRYSTALS, FLAMES, paintFloor } from './elements.ts'
 import { Ground } from './ground.ts'
@@ -162,4 +164,30 @@ test('a prop stands whole with its pieces hidden; broken, the body is gone and t
     }
     assert.ok(sum / PIECES > 0.5, `${kind}'s pieces went the blow's way: ${sum / PIECES}`)
   }
+})
+
+test('the swing is a low sweep: while it can hit, the blade is below a slime\'s top and reaches out in front, right to left', () => {
+  const hero = makeHero(3000, 'forest'), sk = hero.skeleton
+  const g = new Game()
+  g.hold()
+  Object.assign(g.hero, { x: 0, z: 0, heading: 0 })
+  const clock = { idle: 0, walk: 0, down: -1, flicker: true }
+  const sword = sk.index('sword')
+  const tip = (u: number) => {
+    g.hero.swingT = u * SWING
+    poseHero(sk, g.hero, clock, 0)
+    const d = rotate(sk.quat.subarray(sword * 4, sword * 4 + 4), [0, 0, 0.84])
+    return [sk.posedHead[sword * 3] + d[0], sk.posedHead[sword * 3 + 1] + d[1], sk.posedHead[sword * 3 + 2] + d[2]]
+  }
+  // a green slime's top is 0.57 m up; the sweep's middle (the hit window is 0.1 to 0.24 s of the swing's 0.42)
+  let reach = 0
+  for (let u = 0.34; u <= 0.5; u += 0.02) {
+    const [x, y, z] = tip(u)
+    assert.ok(y > 0.1 && y < 0.6, `the tip is ${y.toFixed(2)} m up at ${u.toFixed(2)}`)
+    assert.ok(z > 0.5, `the tip is ${z.toFixed(2)} m in front at ${u.toFixed(2)}`)
+    reach = Math.max(reach, Math.hypot(x, z))
+  }
+  assert.ok(Math.abs(reach - SWORD_REACH) < 0.2, `the blade reaches ${reach.toFixed(2)} m, the rules say ${SWORD_REACH}`)
+  // it starts on the hero's right (−x) and ends on the left
+  assert.ok(tip(0.3)[0] < -0.8 && tip(0.56)[0] > 0.6)
 })
