@@ -9,6 +9,7 @@ import { BoneView } from './bones.ts'
 import type { BakeOptions, BakedSheet } from '../../splat-engine/bakeSheet.ts'
 import type { SheetMove } from '../../splat-engine/spriteSheet.ts'
 import { PixelPass } from '../../splat-engine/pixelPass.ts'
+import { boneLabel, boneShare, pickActors } from '../../splat-engine/pick.ts'
 import { lookColors, snapColors, type Frame, type PixelLook } from '../../splat-core/pixel.ts'
 
 /**
@@ -26,6 +27,19 @@ export interface Actor { blobs: Blobs; skin: Skin; skeleton: Skeleton }
 
 /** What the view shows: the blobs, the bones that move them, or both (bones on top). */
 export type Show = 'blobs' | 'bones' | 'both'
+
+/** A bone found under the pointer (or stepped to): what the page says about it. */
+export interface PickedBone {
+  bone: number
+  /** Its name for people: 'left forearm'. */
+  label: string
+  /** How many blobs it moves at all. */
+  blobs: number
+}
+
+/** Blobs a bone moves turn toward this coral, as much as they follow it; the rest go dim, so its reach shows at a glance. */
+const PICK_TINT = [0.95, 0.33, 0.23]
+const PICK_DIM = 0.4
 
 export interface StageOptions {
   offscreen?: boolean
@@ -79,6 +93,9 @@ export class CreatureStage {
   /** How many CSS pixels across one art pixel is. */
   private pixelSize = 4
   private readonly buffer = new THREE.Vector2()
+  private readonly ray = new THREE.Raycaster()
+  /** The bone lit up, if any: its blobs tinted on the GPU only (the creature's own colors stay as they were, for files and sheets). */
+  private highlighted?: number
 
   private constructor(private readonly display: HTMLCanvasElement, private readonly opts: StageOptions, renderer: THREE.WebGPURenderer) {
     this.renderer = renderer
@@ -132,6 +149,7 @@ export class CreatureStage {
     if (this.world) { this.scene.remove(this.world); this.world.dispose() }
     if (this.rig) { this.scene.remove(this.rig); this.rig.dispose() }
     this.actor = actor
+    this.highlighted = undefined
     this.world = new SplatWorld([actor], { mode: this.mode, lights: this.opts.lights })
     if (this.opts.lights) this.world.setLights(this.lit.lights, this.lit.ambient)
     this.scene.add(this.world)
@@ -251,6 +269,60 @@ export class CreatureStage {
     return { small, art: snapColors(art, colors), before: before && snapColors(before, colors), parts }
   }
 
+  /**
+   * The bone under a point on the view (CSS pixels from its top left), as the creature stands now:
+   * the bone that holds most of the blob the pointer is on. Undefined when the pointer is off the creature.
+   */
+  pick(x: number, y: number): PickedBone | undefined {
+    const { actor } = this
+    const w = this.display.clientWidth, h = this.display.clientHeight
+    if (!actor || !w || !h) return
+    placeCamera(this.camera as never, this.orbit, w / h)
+    this.camera.updateMatrixWorld()
+    this.ray.setFromCamera(new THREE.Vector2((x / w) * 2 - 1, 1 - (y / h) * 2), this.camera)
+    const { origin, direction } = this.ray.ray
+    const hit = pickActors([actor], origin.toArray(), direction.toArray())
+    return hit ? this.boneInfo(hit.bone) : undefined
+  }
+
+  /** What the page says about a bone. */
+  boneInfo(bone: number): PickedBone | undefined {
+    const { actor } = this
+    if (!actor || bone < 0 || bone >= actor.skeleton.count) return
+    const share = boneShare(actor, bone)
+    let blobs = 0
+    for (const s of share) if (s > 0.02) blobs++
+    return { bone, label: boneLabel(actor.skeleton.bones[bone].name), blobs }
+  }
+
+  /** Lights up one bone and the blobs it moves (or none). */
+  highlight(bone?: number) {
+    this.highlighted = bone
+    this.paintHighlight()
+  }
+
+  /** Tints the GPU's copy of the colors for the bone lit up, then puts the creature's own colors back on the CPU. */
+  private paintHighlight() {
+    const { actor, world } = this
+    if (!actor || !world) return
+    const bone = this.highlighted
+    this.rig?.setHighlight(bone)
+    const c = actor.blobs.color
+    if (bone === undefined) { world.recolor(actor); this.invalidate(); return }
+    const own = c.slice(0, actor.blobs.count * 3)
+    const share = boneShare(actor, bone)
+    for (let i = 0; i < actor.blobs.count; i++) {
+      const k = Math.min(1, share[i] * 1.25)
+      for (let j = 0; j < 3; j++) {
+        const v = own[i * 3 + j]
+        c[i * 3 + j] = v * PICK_DIM * (1 - k) + (v * 0.25 + PICK_TINT[j] * 0.75) * k
+      }
+    }
+    world.recolor(actor)
+    c.set(own)
+    this.invalidate()
+  }
+
   invalidate(frames = 2) { this.pending = Math.max(this.pending, frames) }
 
   private pose() {
@@ -317,6 +389,9 @@ export class CreatureStage {
     if (!actor || !world) throw new Error('No creature to draw')
     if (this.baking) throw new Error('Already drawing a sheet')
     this.baking = true
+    // a sheet shows the creature's own colors, not the bone lit up
+    const lit = this.highlighted
+    if (lit !== undefined) world.recolor(actor)
     if (this.floor) this.floor.visible = false
     if (this.rig) this.rig.visible = false
     world.visible = true
@@ -329,7 +404,10 @@ export class CreatureStage {
       const next = this.queued
       this.queued = undefined
       if (next) this.setActor(next.actor, next.clip)
-      else { this.setMode(this.mode); this.setShow(this.show); this.pose() }
+      else {
+        this.setMode(this.mode); this.setShow(this.show); this.pose()
+        if (lit !== undefined) this.paintHighlight()
+      }
     }
   }
 

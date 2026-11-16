@@ -207,7 +207,7 @@ export function Walk() {
           <p>
             A walk on the spot only looks planted when the ground moves exactly as fast as a foot that's down. Halve the step time
             and that speed doubles. Game engines do the same sum the other way round, moving a character at the speed its feet
-            say. The last lesson takes this walking fox out of Blobscape.
+            say. Next, the walk leaves flat ground.
           </p>
         </>
       }

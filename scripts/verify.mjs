@@ -408,7 +408,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     else ok(`blobscape ${label}: home lists the lessons`)
     await axe(page, `blobscape ${label} home`)
     await page.screenshot({ path: join(shots, `blobscape-home-${label}.png`), fullPage: true })
-    for (const id of ['lessons', 'one-blob', 'footprint', 'order', 'many', 'angle', 'paint', 'formats', 'break', 'one-bone', 'weights', 'twist', 'walk', 'model', 'morphs', 'fur', 'shoot', 'fuzzy', 'floaters', 'lighting', 'sandbox', 'creature', 'forest-walk', 'clockwork', 'shape-shifter', 'pixel-diorama', 'dungeon-run', 'scan-studio', 'contact']) {
+    for (const id of ['lessons', 'one-blob', 'footprint', 'order', 'many', 'angle', 'paint', 'formats', 'break', 'one-bone', 'weights', 'twist', 'walk', 'feet', 'model', 'morphs', 'fur', 'shoot', 'fuzzy', 'floaters', 'lighting', 'sandbox', 'creature', 'forest-walk', 'clockwork', 'shape-shifter', 'pixel-diorama', 'dungeon-run', 'scan-studio', 'contact']) {
       // headless WebGPU can't present to a canvas, so Creature and Forest Walk draw off-screen here
       await page.goto(base + (['creature', 'forest-walk', 'clockwork', 'shape-shifter', 'pixel-diorama', 'dungeon-run', 'scan-studio'].includes(id) ? `/experiments/${id}/?offscreen=1` : ['sandbox', 'lessons', 'contact'].includes(id) ? `/${id}/` : `/lessons/${id}/`))
       await page.waitForTimeout(1500)
@@ -720,6 +720,23 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   await slider('Speed').fill(String(Math.round(feet * 2 * 20) / 20))
   if (!(await goalsAt(4)).startsWith('4 of')) fails.push(`blobscape walk: goals show "${await goalCount()}" (${await page.textContent('[data-testid=slip]')})`)
   else ok(`blobscape walk: two keys, held keys, grip and run tick (feet at ${feet} m/s)`)
+
+  await fresh('feet')
+  await page.getByRole('button', { name: 'Steps', exact: true }).click()
+  await slider('Step height').fill('0.15')
+  await slider('Stand at').fill('0.1')
+  await page.waitForTimeout(2500)
+  await page.getByLabel('Bend the legs to the ground').check()
+  await page.waitForTimeout(2500)
+  await page.getByLabel('Move the hips to the lower foot').uncheck()
+  await slider('Step height').fill('0.3')
+  await page.waitForTimeout(2500)
+  await page.getByLabel('Move the hips to the lower foot').check()
+  await page.waitForTimeout(2500)
+  await page.getByRole('button', { name: 'Slope', exact: true }).click()
+  await slider('Steepness').fill('20')
+  if (!(await goalsAt(4)).startsWith('4 of')) fails.push(`blobscape feet: goals show "${await goalCount()}" (${await page.textContent('[data-testid=feet-readout]')})`)
+  else ok(`blobscape feet: sunk, planted, reached and tilted tick (${(await page.textContent('[data-testid=feet-readout]')).trim()})`)
 
   await fresh('model')
   await slider('Level').fill('8')

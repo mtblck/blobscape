@@ -93,10 +93,10 @@ export function Slider({ label, value, min, max, step, onChange, format, hint }:
   )
 }
 
-export function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+export function Toggle({ label, checked, onChange, disabled = false }: { label: string; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (
-    <label className="flex cursor-pointer items-center gap-2 text-sm text-ink-muted hover:text-ink">
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="accent-[var(--c-accent)]" />
+    <label className={`flex items-center gap-2 text-sm text-ink-muted ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:text-ink'}`}>
+      <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} className="accent-[var(--c-accent)] disabled:cursor-not-allowed" />
       {label}
     </label>
   )

@@ -4,7 +4,7 @@ import { X, Y, aim, dir, env, ramp, turn } from '../../splat-engine/posing.ts'
 import { axisAngle, mulQ, rotate, type Bone, type Skeleton } from '../../splat-engine/rig.ts'
 import { joinBuilt } from '../../splat-engine/sculpt.ts'
 import { ELF_BONES, clearCloak, elfIdle, elfWalk, makeElf } from '../../splat-engine/zoo/elf.ts'
-import { blendPose } from '../forest/forest.ts'
+import { blendPose } from '../../splat-engine/mix.ts'
 import { BOLT_POP, CAST, RUN_SPEED, SWING, type Bolt, type Element, type Hero } from './game.ts'
 
 /**

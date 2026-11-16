@@ -301,6 +301,16 @@ export function LessonGlyph({ id }: { id: string }) {
           </g>
         ))}
       </>)
+    case 'feet':
+      return g(<>
+        {/* A two-legged walker on a step: one foot on each tread, the knee bent to reach the lower one */}
+        <path d="M 8 50 H 58 V 62 H 112" stroke="#665d52" strokeWidth="1.6" fill="none" />
+        <Blob x={58} y={22} rx={9} ry={12} r={0} c="green" />
+        <Blob x={58} y={8} rx={5} ry={5} r={0} c="cream" />
+        <path d="M 54 32 L 46 41 L 44 50 M 62 32 L 70 46 L 68 61" stroke="#bdc3db" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx="44" cy="50" r="2" fill={COLORS.sun} />
+        <circle cx="68" cy="61" r="2" fill={COLORS.sun} />
+      </>)
     case 'model':
       return g(<>
         {Array.from({ length: 14 }, (_, k) => <Blob key={k} x={18 + (k % 5) * 7} y={24 + Math.floor(k / 5) * 11} rx={7} ry={6} r={0} c="orange" o={0.85} />)}

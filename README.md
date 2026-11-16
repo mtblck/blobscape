@@ -10,7 +10,7 @@
 <h3 align="center">Learn 3D Gaussian splats by taking them apart.</h3>
 
 <p align="center">
-  Nineteen hands-on lessons, a sandbox, and a shelf of experiments on our own animated-splat engine.<br />
+  Twenty hands-on lessons, a sandbox, and a shelf of experiments on our own animated-splat engine.<br />
   All of it runs in your browser. Free, no account.
 </p>
 
@@ -56,8 +56,8 @@ with a hint that points the way without giving it away, and every scene opens in
 | Part | Lessons | What you learn |
 | --- | --- | --- |
 | **1. One object** | 1–8 | What a blob is, how it lands on screen, why order matters, color by angle, painting, file formats, breaking a scene apart |
-| **2. Rigs and 3D models** | 9–14 | Bones, weights, twisting without tearing, a walk cycle, saving a creature as a model, morphs |
-| **3. Real things from photos** | 15–18 | Training blobs from photos, fuzzy things meshes can't keep, cleaning up floaters, why lighting is baked |
+| **2. Rigs and 3D models** | 9–16 | Bones, weights, twisting without tearing, a walk cycle, feet on uneven ground, saving a creature as a model, morphs, fur and grass |
+| **3. Real things from photos** | 17–20 | Training blobs from photos, fuzzy things meshes can't keep, cleaning up floaters, why lighting is baked |
 
 <p align="center">
   <a href="https://blobscape.dev/lessons/one-blob/"><img src=".github/readme/lesson.webp" alt="Lesson 1, One blob: goal cards above a dark display case holding a single orange blob with its axes, and sliders for its size, turn, color and opacity" width="880" /></a>
