@@ -1,143 +1,192 @@
-# Blobscape
+<p align="center">
+  <a href="https://blobscape.dev/">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset=".github/readme/logo-dark.svg" />
+      <img src=".github/readme/logo-light.svg" alt="Blobscape" width="360" />
+    </picture>
+  </a>
+</p>
 
-Small experiments with Gaussian splats: learn how 3D splats work by taking them apart, one blob at
-a time. Served at [blobscape.dev](https://blobscape.dev/).
+<h3 align="center">Learn 3D Gaussian splats by taking them apart.</h3>
 
-| Page | What it is |
-| --- | --- |
-| [Lessons](https://blobscape.dev/lessons/) | Eighteen hands-on lessons, from one blob to a walking creature and a real photo shoot |
-| [Sandbox](https://blobscape.dev/sandbox/) | Spray, select, recolor and explode blobs, or open your own capture |
-| [Splat Creatures](https://blobscape.dev/experiments/creature/) | A frog, fox, elf and ice dragon on our own splat engine, with a bones view, exported as rigged .glb |
-| [Fit a Picture](https://blobscape.dev/experiments/fit-a-picture/) | Watch 2D Gaussians start as noise and learn a picture, the way a splat is trained |
-| [Splat to Sprite](https://blobscape.dev/experiments/splat-to-sprite/) | Turn a 3D Gaussian splat into pixel-art sprites and Tinkerkit sprite sheets |
+<p align="center">
+  Eighteen hands-on lessons, a sandbox, and a shelf of experiments on our own animated-splat engine.<br />
+  All of it runs in your browser. Free, no account.
+</p>
+
+<p align="center">
+  <a href="https://blobscape.dev/"><b>Website</b></a> ·
+  <a href="https://blobscape.dev/lessons/">Lessons</a> ·
+  <a href="https://blobscape.dev/sandbox/">Sandbox</a> ·
+  <a href="https://blobscape.dev/experiments/">Experiments</a> ·
+  <a href="https://blobscape.dev/engine/">Engine</a> ·
+  <a href="https://blobscape.dev/engine/rigged-splats/">Rigged-splat spec</a>
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-1d2440" /></a>
+  <a href="https://threejs.org/"><img alt="Built on three.js" src="https://img.shields.io/badge/built_on-three.js-1d2440" /></a>
+  <img alt="WebGPU with a WebGL 2 fallback" src="https://img.shields.io/badge/renders_with-WebGPU_%7C_WebGL_2-1d2440" />
+  <a href="https://blobscape.dev/"><img alt="Live at blobscape.dev" src="https://img.shields.io/badge/live-blobscape.dev-b3250a" /></a>
+</p>
+
+<p align="center">
+  <a href="https://blobscape.dev/experiments/pixel-diorama/"><img src=".github/readme/hero.webp" alt="Five Pixel Diorama scenes drawn as pixel art from Gaussian splats: a lighthouse on a small island at night, a red dragon over a lava pool, an owl in a wizard hat beside a cauldron, snowy floating islands with a waterfall, and a scarecrow in a pumpkin patch under a full moon" width="880" /></a>
+</p>
+<p align="center"><sub>Every one of these is real 3D, made of blobs and drawn live as pixel art. <a href="https://blobscape.dev/experiments/pixel-diorama/">Turn them in Pixel Diorama</a>.</sub></p>
+
+## What is a Gaussian splat?
+
+A splat is a 3D scene made of nothing but soft, colored, see-through blobs. Each blob is 14
+numbers: where it is, how big it is each way, which way it turns, its color and how solid it is.
+Pile up a few million of them, sort them back to front and blend, and you get a photo-real scene
+you can walk around. Blobscape teaches that one blob at a time, then shows what else blobs can do
+when they are made instead of captured: creatures on bones, worlds that grow, and pixel art that is
+still 3D.
+
+<p align="center">
+  <a href="https://blobscape.dev/"><img src=".github/readme/front-page.webp" alt="The Blobscape front page: 'Learn 3D splats by taking them apart', beside a toadstool made of 146 blobs with one blob circled and its five attributes listed" width="880" /></a>
+</p>
+
+## Lessons
+
+Every lesson is one question you answer with your hands. Goals tick off as you reach them, each
+with a hint that points the way without giving it away, and every scene opens in the sandbox.
+
+| Part | Lessons | What you learn |
+| --- | --- | --- |
+| **1. One object** | 1–8 | What a blob is, how it lands on screen, why order matters, color by angle, painting, file formats, breaking a scene apart |
+| **2. Rigs and 3D models** | 9–14 | Bones, weights, twisting without tearing, a walk cycle, saving a creature as a model, morphs |
+| **3. Real things from photos** | 15–18 | Training blobs from photos, fuzzy things meshes can't keep, cleaning up floaters, why lighting is baked |
+
+<p align="center">
+  <a href="https://blobscape.dev/lessons/one-blob/"><img src=".github/readme/lesson.webp" alt="Lesson 1, One blob: goal cards above a dark display case holding a single orange blob with its axes, and sliders for its size, turn, color and opacity" width="880" /></a>
+</p>
+
+The [**Sandbox**](https://blobscape.dev/sandbox/) is where you make a mess: spray, select, recolor
+and explode blobs, add creatures, or open your own capture (.ply, .spz, .splat, .ksplat, .sog). Files
+stay in your browser.
+
+## Experiments
+
+<table>
+  <tr>
+    <td width="33%" valign="top">
+      <a href="https://blobscape.dev/experiments/creature/"><img src="public/covers/splat-creatures.webp" alt="A fox in fur walking beside two smaller foxes" /></a><br />
+      <a href="https://blobscape.dev/experiments/creature/"><b>Splat Creatures</b></a><br />
+      Creatures made of blobs, moving on bones. Take one away as a rigged .glb or a sprite sheet.
+    </td>
+    <td width="33%" valign="top">
+      <a href="https://blobscape.dev/experiments/pixel-diorama/"><img src="public/covers/pixel-diorama.webp" alt="A pixel-art lighthouse on a small island at night" /></a><br />
+      <a href="https://blobscape.dev/experiments/pixel-diorama/"><b>Pixel Diorama</b></a><br />
+      Scenes built from shapes and drawn as moving pixel art. Turn them, or switch the pixels off.
+    </td>
+    <td width="33%" valign="top">
+      <a href="https://blobscape.dev/experiments/dungeon-run/"><img src="public/covers/dungeon-run.webp" alt="An elf with a sword in a torchlit dungeon, surrounded by colored slimes" /></a><br />
+      <a href="https://blobscape.dev/experiments/dungeon-run/"><b>Dungeon Run</b></a><br />
+      Sword, fire and frost against waves of slimes that burst into splats.
+    </td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <a href="https://blobscape.dev/experiments/shape-shifter/"><img src="public/covers/shape-shifter.webp" alt="A frog made of blobs partway through turning into another creature" /></a><br />
+      <a href="https://blobscape.dev/experiments/shape-shifter/"><b>Shape Shifter</b></a><br />
+      One creature turns into another, every blob traveling to a partner.
+    </td>
+    <td valign="top">
+      <a href="https://blobscape.dev/experiments/forest-walk/"><img src="public/covers/forest-walk.webp" alt="An elf seen from behind on a misty forest path" /></a><br />
+      <a href="https://blobscape.dev/experiments/forest-walk/"><b>Forest Walk</b></a><br />
+      Walk an endless path while trees and flowers grow out of the ground.
+    </td>
+    <td valign="top">
+      <a href="https://blobscape.dev/experiments/clockwork/"><img src="public/covers/clockwork.webp" alt="A watch movement with gold wheels and blue hands" /></a><br />
+      <a href="https://blobscape.dev/experiments/clockwork/"><b>Clockwork</b></a><br />
+      A watch movement made of blobs, keeping the real time.
+    </td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <a href="https://blobscape.dev/experiments/scan-studio/"><img src="public/covers/scan-studio.webp" alt="A green mug scanned as a splat" /></a><br />
+      <a href="https://blobscape.dev/experiments/scan-studio/"><b>Scan Studio</b></a><br />
+      Clean up a phone scan: level it, cut the table and floaters, relight it.
+    </td>
+    <td valign="top">
+      <a href="https://blobscape.dev/experiments/fit-a-picture/"><img src="public/covers/fit-a-picture.webp" alt="Blurry colored blobs on the left settling into a sunset picture on the right" /></a><br />
+      <a href="https://blobscape.dev/experiments/fit-a-picture/"><b>Fit a Picture</b></a><br />
+      Watch blobs train themselves into a picture: the splat training loop, in 2D.
+    </td>
+    <td valign="top">
+      <a href="https://blobscape.dev/experiments/splat-to-sprite/"><img src="public/covers/splat-to-sprite.webp" alt="A potion bottle, half splat and half pixel-art sprite" /></a><br />
+      <a href="https://blobscape.dev/experiments/splat-to-sprite/"><b>Splat to Sprite</b></a><br />
+      Bake a splat into palette-locked pixel-art sprite sheets.
+    </td>
+  </tr>
+</table>
+
+## The Blobscape engine
+
+Most splat renderers show a place someone captured with a camera. The engine in
+[`src/splat-engine`](src/splat-engine) is for splats that are **made, and that move**. It draws
+through three.js on WebGPU, with a WebGL 2 fallback, and everything on the site that walks, grows,
+ticks or burns uses it.
+
+- **Bones for blobs.** Every blob follows up to four bones, blended on the GPU. Bones turn, slide and grow.
+- **One world, one sort.** Every actor shares one set of blobs, sorted together each frame, so a hero, forty slimes and the hall around them overlap correctly.
+- **Made, not captured.** Creatures and scenes are written as shapes and cut into blobs with sun and shadows baked in. A whole scene can be [plain data](docs/scene-descriptions.md).
+- **Live lights.** Point lights shade the baked colors by distance and facing.
+- **Pixel mode.** Palette, dither, outlines, glow and pixels that hold steady while the camera swings. Sprite sheets come from the same pass.
+- **Files that travel.** A rigged, animated splat saves as one .glb: the glTF splat extension plus ordinary skins and animation.
+
+For captured rooms, very large scans and headsets, use [Spark](https://github.com/sparkjsdev/spark),
+which also draws Blobscape's lessons and sandbox. The two trade files, not a renderer.
+
+The engine is not on npm yet. A three.js package with guides is planned once the showcase settles;
+until then, read the source or [get in touch](https://blobscape.dev/contact/) if you want to try it early.
+
+### Rigged splats in glTF
+
+`KHR_gaussian_splatting` stores splats in glTF but says nothing about how a splat's shape follows
+its bones. The [rigged-splat spec](docs/rigged-splats.md) (draft, also at
+[blobscape.dev/engine/rigged-splats](https://blobscape.dev/engine/rigged-splats/)) settles that with
+one rule and no new data. Files that follow it still open in any glTF splat viewer, standing still.
+Sample files: [`public/rigged-splats/`](public/rigged-splats).
+
+## Run it locally
+
+Needs Node 22.12 or newer (the tests and scripts run TypeScript directly).
 
 ```sh
+git clone https://github.com/mtblck/blobscape.git
+cd blobscape
 npm install
-npm run dev            # http://localhost:5173/
-npm test               # unit tests (pixel pipeline, Gaussian fitter, splat engine)
-npm run build          # hosting check, typecheck, build to dist, prerender every page
-npm run verify         # Chromium against dist, under the production CSP, with axe
+npm run dev          # http://localhost:5173/
 ```
 
-## The site
+| Command | What it does |
+| --- | --- |
+| `npm test` | Unit tests in Node, no GPU: the pixel pipeline, the trainers, and the engine's rig, file and scene math |
+| `npm run build` | Hosting check, type check, Vite build to `dist`, then a prerendered HTML file for every page |
+| `npm run preview` | Serve the build with the production headers |
+| `npm run verify` | Real Chromium against `dist` under the production CSP, with axe accessibility checks |
 
-- **Vite and React, not Next.** Every page draws in the browser with WebGL or WebGPU, so a server
-  would render nothing useful. Instead each page is a real path (`/lessons/one-blob/`) and
-  `scripts/prerender.ts` writes it out as its own HTML file after the build: its title,
-  description, canonical link, share tags, JSON-LD and a readable version of the page, plus
-  `404.html`, `sitemap.xml` and `robots.txt`. In the browser it is still one app, and links between
-  Blobscape's pages swap the page without a reload. Old `#/lesson/<id>` links land on their page.
-- **The brand** comes from the Blobscape brand kit: the logo (`src/shared/logoPaths.ts`, drawn by
-  `Logo.tsx` so it follows the theme), Fredoka for headings and Figtree for text (self-hosted), the
-  light and dark palette as hex tokens in `src/shared/theme.css`, and the icons and share image in
-  `public/`. Light is the default; dark follows the system unless the menu sets it.
-- **Hosting:** one Vercel project serving `dist` from the root, `trailingSlash: true` (every page is
-  a folder). `npm run build` fails if the hosting shape or the CSP drifts (`scripts/check-hosting.mjs`).
-  Old `/experiments/...` addresses redirect to their new home.
+## How the repo is laid out
 
-## Splat to Sprite
+```
+src/
+  blobscape/      the site: pages, lessons, sandbox and experiments
+  splat-engine/   the animated-splat engine (WebGPU + WebGL 2, on three.js)
+  splat-core/     shared splat pieces: blobs, pixel pipeline, color, file reading
+  shared/         header, footer, theme, controls and the experiment layout
+  fit-a-picture/  the 2D trainer
+  splat-to-sprite/
+api/              the contact form's serverless function
+scripts/          prerender, hosting check and browser verify
+docs/             design notes, the engine note, the rigged-splat spec, scene descriptions
+```
 
-A Gaussian splat is a 3D scene made only of soft, see-through ellipsoids ("splats"), each with a
-position, size, rotation, opacity and color. Rendering one means sorting the splats back to front
-and blending them. This experiment frames a splat with a game camera and bakes it into pixel art:
-
-1. **Render** the sprite camera's view at size × samples (e.g. 32 × 8 = 256 px), with Spark.
-2. **Shrink**: average each block of samples into one pixel, color weighted by coverage.
-3. **Cut and snap**: coverage over the cut becomes solid, the rest transparent; colors snap to a
-   palette (fixed, or k-means in OKLab across every frame so a sheet shares one palette), with
-   optional ordered dithering.
-4. **Clean up**: drop lone pixels left by stray splats, draw a 1-px outline.
-
-Sheets turn the camera around the object: 4 directions in Tinkerkit's row order (down, left, right,
-up), 8 directions, or a spin. The `.spritesheet.json` export mirrors Tinkerkit's `SpriteSheet`
-document (format 71), with the anchor on the object's lowest pixel.
-
-### Design notes
-
-- **Spark, not a hand-written renderer.** Spark (World Labs, MIT) reads .ply, .spz, .splat,
-  .ksplat and .sog, sorts in a worker and supports SDF edits, which is what the crop uses. Its
-  bundle carries its WASM inline, hence the 3.2 MB (1.1 MB gzip) chunk.
-- **Two SparkRenderers.** The sort is per camera, so the sprite camera gets its own offline
-  renderer with a render target, updated (sorted) before each shot.
-- **Sync readback.** Spark's `readTarget()` uses three's async fence polling, which stalled after a
-  few back-to-back shots in headless Chromium. A sync `readPixels` of a ≤512 px target is cheap.
-- **Render on demand.** The viewport draws only when something changed, or while Spark is
-  mid-sort. An earlier version stopped after a fixed number of frames and left the view blank after
-  loading a file: Spark only adopts a finished sort on the next render.
-- **Procedural samples.** The four sample objects are generated in code, splat by splat (flat
-  discs on the surface with baked half-Lambert shading), so there are no asset licenses and no
-  multi-MB downloads. Real objects come from phone scanning apps that export .ply/.spz; files stay
-  in the browser.
-- **Orthographic by default.** Pixel-art games draw without perspective. Camera presets are
-  top-down RPG (45°), ¾ (30°), side-on (0°) and isometric (30°, corner-on).
-- Measured in headless Chromium with SwiftShader (software GL): a shot of the 22k-splat sample
-  takes about 5 s there, so a 4-direction bake takes about 20 s. Expect much less on a real GPU,
-  but that hasn't been measured yet.
-
-## Fit a Picture
-
-Training a splat is a loop: render the blobs, compare with a photo, work out which way to nudge every
-number on every blob to shrink the difference (backpropagation), take a small step (Adam), and every
-so often prune blobs that have faded out and add new ones where the picture is still wrong. This
-experiment runs that loop against one flat picture so you can watch it: a few hundred 2D Gaussians
-start as random noise and settle into the image, with the loss graphed live.
-
-### Design notes
-
-- **Additive, not sorted.** In 3D, blobs are sorted by depth and alpha-blended front to back. A flat
-  picture has no depth, so each pixel is just the sum of opacity × color × falloff over the blobs,
-  as in GaussianImage (Zhang et al., 2024). The rest is the 3DGS loop: Adam with per-group step
-  sizes, a warm-up, then prune and grow every 100 steps.
-- **CPU in a worker, not WebGPU.** Each blob is drawn only inside its own 3.5σ box, so a step costs
-  about the total area of the blobs, not pixels × blobs. At 192 px with a few hundred to 1,500 blobs
-  that is 5–20 ms a step in plain TypeScript, fast enough to watch and too fast to follow at full
-  speed. It works in every browser, and the same code runs in Node for the tests. WebGPU would buy
-  bigger pictures and more blobs; worth it if this grows past ~5,000 blobs.
-- **Hand-written gradients.** `fit.ts` derives every partial (center, log scales, angle, color,
-  opacity) by hand; `fit.test.ts` checks them against finite differences.
-- **Growth is error-driven.** 3DGS densifies blobs with large positional gradients by cloning or
-  splitting them. Here new blobs go where the squared error is largest, which shows the same idea
-  more directly. New blobs get one round (100 steps) before they can be pruned.
-- **Your picture stays put.** It is decoded with `createImageBitmap`, shrunk to the training size on
-  a canvas, and handed to the worker. Nothing is uploaded.
-
-## Blobscape
-
-Lessons and a sandbox in one page. Each lesson is one idea you can poke at, with goals that tick off
-as you reach them: **One blob** (the 14 numbers of a Gaussian), **Footprint** (how a 3D blob lands
-on screen as a 2D ellipse), **Order matters** (why every frame sorts back to front), and **Many make
-a shape** (from one blob to 20,000). Every lesson can open its scene in the **Sandbox**, which adds,
-sprays and erases blobs; selects them by click, box, lasso or color; moves, turns, scales,
-recolors and fades the selection; runs live effects (explode, melt, wind, twist, wave, dissolve)
-on the whole scene or the selection; opens .ply, .spz, .splat, .ksplat and .sog captures; and saves
-a 3DGS .ply (base color only: no `f_rest_*` terms, so it opens in viewers such as SuperSplat
-and Spark but not in the original training code). Everything is undoable. More lessons (color by angle, painting, real
-captures, breaking a scene) are planned.
-
-### Design notes
-
-- **Spark draws, our code owns the blobs.** The scene is a `Blobs` list of flat typed arrays
-  (`src/splat-core/blobs.ts`) synced into a Spark `PackedSplats`; after an append only the new blobs
-  are rewritten. Projection (Σ′ = J W Σ Wᵀ Jᵀ) and ray picking against each blob's ellipsoid are
-  plain functions, tested against sampling in `blobs.test.ts`; the x-ray outlines and lesson read-outs
-  use them, so they match what Spark draws.
-- **One custom renderer, on purpose.** Spark always sorts correctly, so the Order lesson uses a
-  ~60-line software splatter (`cpuSplat.ts`) that can draw in any order.
-- **Nothing leaves the browser.** Goal progress is kept in localStorage (`blobscape-progress`); the
-  lesson-to-sandbox hand-off is in memory.
-- **Spray picks once per dab.** It finds the surface under the ring once, then scatters the dab's
-  blobs over that surface's tangent plane, so a stroke stays cheap on a 200k-blob scene.
-- **Effects run twice, identically.** Each effect is GLSL in a Spark dyno modifier (a live preview
-  that costs only uniforms per frame) and the same math in TypeScript (`effects.ts`) for "Make it
-  permanent". Both seed their randomness from an integer hash of the blob's GPU slot, so a bake
-  matches the preview pixel for pixel. An effect on the selection puts the selected blobs first on
-  the GPU and only touches the first `count`.
-- **Files stay on the device.** Imports are decoded by Spark (WASM) in the page and copied into
-  `Blobs` (base color only, no view-dependent shading); scenes over a million blobs (400k on
-  phones) are thinned evenly, with the survivors widened to cover. Captures are turned upright on
-  opening, since COLMAP-trained scenes come out upside down. Edits are plain functions in `ops.ts`
-  with tests.
-
+Further reading: [design notes](docs/design-notes.md) ·
+[engine prototype](docs/engine-prototype.md) ·
+[writing a scene as data](docs/scene-descriptions.md).
 
 ## Thanks
 
@@ -146,6 +195,10 @@ Pixel Diorama was inspired by the pixel-art Gaussian splat scenes that
 blobs and cutting them to a palette, and the themes of several scenes. The scenes, the engine and the
 code here are our own.
 
+Blobscape stands on [three.js](https://threejs.org/), [Spark](https://sparkjs.dev/) and the
+[3D Gaussian Splatting](https://repo-sam.inria.fr/fungraph/3d-gaussian-splatting/) paper by Kerbl
+et al.
+
 ## License
 
-[MIT](LICENSE).
+[MIT](LICENSE) © Matt Black
