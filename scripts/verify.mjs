@@ -840,7 +840,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   }
 
   // the scenes written as descriptions: each opens by its address, draws in its own palette, and moves
-  for (const [id, name] of [['bee', 'Forest bee'], ['campfire', 'Campfire'], ['dragon', 'Lava dragon'], ['windmill', 'Windmill']]) {
+  for (const [id, name] of [['bee', 'Forest bee'], ['campfire', 'Campfire'], ['dragon', 'Lava dragon'], ['hand', 'Stone hand'], ['reef', 'Jellyfish reef'], ['windmill', 'Windmill']]) {
     const d = await open(`/experiments/pixel-diorama/?offscreen=1&scene=${id}`, { viewport: { width: 1280, height: 900 } })
     const label = `blobscape pixel diorama ${id}`
     if (!await d.page.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).then(() => true, () => false)) {
@@ -865,7 +865,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
       return { off, used: used.size, bones: bones(), turned: stage.orbit.azimuth, art: Array.from(f.art.data), small: Array.from(f.small.data), w: f.art.width, h: f.art.height, look: look() }
     }, t)
     // a view that swings stands at the same angle at t and at half a loop less t (half a loop is given here), so what changes between those is the scene itself
-    const half = { bee: 6, dragon: 8 }[id]
+    const half = { bee: 6, dragon: 8, hand: 8, reef: 6 }[id]
     const a = await shot(2), b = await shot(half ? half - 2 : 5)
     if (half) {
       const c = await shot(half / 2)

@@ -82,3 +82,5 @@ export const EXPERIMENTS = [
   },
 ] as const
 
+/** The footer's short list: the three newest, newest first. The rest are one click away on the Experiments page (and in the menu and the sitemap), so the column stays the same length. A new experiment goes first and the last one drops off. */
+export const NEWEST_EXPERIMENTS = ['diorama', 'scan', 'dungeon'].map((id) => EXPERIMENTS.find((e) => e.id === id)!)
