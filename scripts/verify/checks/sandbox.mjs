@@ -155,9 +155,9 @@ export default [
   },
   {
     name: 'sandbox-creatures',
-    about: 'add, play, drag with Move, bones, freeze, undo, walk about, look at, effects, save .ply and rigged .glb; phone',
-    entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/actors.ts', 'src/blobscape/wander.ts', 'src/splat-core/view.ts', 'src/blobscape/sceneFile.ts'],
-    async run({ readFileSync, shots, join, fails, ok, open, axe }) {
+    about: 'add, play, drag with Move, bones, freeze, undo, walk about, look at, effects, save .ply and rigged .glb, open a rigged model; phone',
+    entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/actors.ts', 'src/blobscape/wander.ts', 'src/splat-core/view.ts', 'src/blobscape/sceneFile.ts', 'src/blobscape/modelRig.ts', 'src/splat-engine/skinnedModel.ts'],
+    async run({ readFileSync, shots, join, fails, ok, open, axe, tabClick }) {
       const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 900 }, acceptDownloads: true })
       await page.waitForTimeout(1500)
       const count = async () => Number((await page.textContent('[data-testid=blob-count]')).replace(/\D/g, ''))
@@ -288,14 +288,36 @@ export default [
       // The sandbox's page closes first: two pages drawing 55k blobs at once starve software WebGPU
       const glbBytes = readFileSync(glbPath)
       await ctx.close()
-      const cp = await open('/experiments/creature/?offscreen=1', { viewport: { width: 1280, height: 900 } })
+      const cp = await open('/experiments/creature/?offscreen=1', { viewport: { width: 1280, height: 900 }, acceptDownloads: true })
       await cp.page.waitForFunction(() => window.__creature?.blobs() > 0, null, { timeout: 60000 }).catch(() => {})
       await cp.page.setInputFiles('input[type=file]', { name: 'saved-scene.glb', mimeType: 'model/gltf-binary', buffer: glbBytes })
       await cp.page.waitForFunction((n) => window.__creature?.blobs() === n, live + sceneBefore, { timeout: 30000 }).catch(() => {})
       const onCreature = await cp.page.evaluate(() => window.__creature?.blobs() ?? 0)
       if (onCreature !== live + sceneBefore) fails.push(`blobscape sandbox creatures: Splat Creatures opened the saved scene with ${onCreature} blobs, expected ${live + sceneBefore}`)
       else ok('blobscape sandbox creatures: Splat Creatures opens the saved scene too')
+      // A rigged model (issue #208): the frog saved as an ordinary skinned mesh opens again as blobs on its own bones,
+      // here and in the sandbox, with its moves
+      await cp.page.goto(cp.page.url().replace(/\?.*/, '?offscreen=1&creature=frog'))
+      await cp.page.waitForFunction(() => window.__creature?.blobs() > 0, null, { timeout: 60000 }).catch(() => {})
+      await cp.page.waitForTimeout(1500)
+      const [meshDl] = await Promise.all([cp.page.waitForEvent('download', { timeout: 120000 }), tabClick(cp.page.getByRole('button', { name: 'As a mesh' }))])
+      const meshBytes = readFileSync(await meshDl.path())
+      await cp.page.setInputFiles('input[type=file]', { name: 'frog-mesh.glb', mimeType: 'model/gltf-binary', buffer: meshBytes })
+      await cp.page.waitForFunction(() => /bones/.test(document.querySelector('[data-testid=creature-note]')?.textContent ?? ''), null, { timeout: 60000 }).catch(() => {})
+      const meshNote = await cp.page.textContent('[data-testid=creature-note]')
+      const meshBlobs = await cp.page.evaluate(() => window.__creature?.blobs() ?? 0)
+      if (!/Opened frog-mesh\.glb: 60,000 blobs, \d+ bones, [1-9]\d* clips?/.test(meshNote ?? '') || meshBlobs !== 60000) fails.push(`blobscape sandbox creatures: the frog as a skinned mesh opened on Splat Creatures as ${meshBlobs} blobs: ${meshNote}`)
+      else ok(`blobscape sandbox creatures: a rigged model opens on Splat Creatures as blobs on its own bones (${meshNote})`)
+      await cp.page.screenshot({ path: join(shots, 'blobscape-creature-from-model.png') })
       await cp.ctx.close()
+      const sb = await open('/sandbox/', { viewport: { width: 1280, height: 900 } })
+      await sb.page.waitForTimeout(1500)
+      await sb.page.setInputFiles('input[type=file]', { name: 'frog-mesh.glb', mimeType: 'model/gltf-binary', buffer: meshBytes })
+      await sb.page.waitForFunction(() => /Added .* blobs on its \d+ bones/.test(document.body.textContent ?? ''), null, { timeout: 60000 }).catch(() => {})
+      const added = await sb.page.getByText(/Added .* blobs on its \d+ bones/).first().textContent().catch(() => '')
+      if (!added) fails.push('blobscape sandbox creatures: the frog as a skinned mesh did not join the sandbox as a creature')
+      else ok(`blobscape sandbox creatures: ${added.trim()}`)
+      await sb.ctx.close()
       const phone = await open('/sandbox/', { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
       await phone.page.waitForTimeout(1500)
       await phone.page.getByRole('tab', { name: /Creatures/ }).click()

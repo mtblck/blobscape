@@ -18,21 +18,7 @@ import type { Skeleton } from '../splat-engine/rig.ts'
 import { Pokes } from '../splat-engine/poke.ts'
 import { browserDeflate, encodeApng } from '../splat-core/apng.ts'
 import type { Texture } from '../splat-engine/meshShape.ts'
-
-/** A texture image decoded in the page, read nearest-pixel and repeating, as glTF's default sampler wraps. */
-async function decodeTexture(bytes: Uint8Array, mime: string): Promise<Texture> {
-  const bitmap = await createImageBitmap(new Blob([bytes as BlobPart], { type: mime }))
-  const c = new OffscreenCanvas(bitmap.width, bitmap.height)
-  const g = c.getContext('2d')!
-  g.drawImage(bitmap, 0, 0)
-  const { data, width: w, height: h } = g.getImageData(0, 0, bitmap.width, bitmap.height)
-  bitmap.close()
-  const wrap = (x: number, n: number) => ((Math.floor(x * n) % n) + n) % n
-  return (u, v) => {
-    const i = (wrap(v, h) * w + wrap(u, w)) * 4
-    return [data[i] / 255, data[i + 1] / 255, data[i + 2] / 255]
-  }
-}
+import { decodeTexture } from './modelRig.ts'
 
 const SIZES = [2, 3, 4, 6]
 /** Frames a second the scene moves at: 0 is every frame the screen shows. */
