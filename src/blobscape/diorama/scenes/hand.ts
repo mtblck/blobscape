@@ -17,6 +17,7 @@ export const HAND: SceneDoc = {
   look: { dither: 0.05, glow: 1.1, outline: true, edges: true },
   camera: { target: [0, 1.1, 0.0], distance: 6.4, azimuth: -18, elevation: 10, swing: 20 },
   air: { haze: { color: '#2b1c1a', from: 0.5, to: 7 }, mist: [{ at: [0, 0.08, 0.2], half: [1.6, 0.08, 1.1], color: '#96704c', thick: 0.3 }], specks: [{ kind: 'dust', count: 40, from: [-1.6, 0.1, -1.0], to: [1.6, 1.6, 1.2], colors: ['#c09a66', '#e6cf9a'] }] },
+  cover: { kind: 'dust', color: '#e6cf9a', amount: 0.5 },
   bones: [
     { name: 'f0a', at: [-0.42, 1.6, 0.05] },
     { name: 'f0b', at: [-0.454, 2.02, 0.2], parent: 'f0a' },

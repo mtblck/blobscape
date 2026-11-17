@@ -42,6 +42,20 @@ export interface VoxelPart {
   noShadow?: boolean
   /** A color (sRGB, 0–1) that gathers in its hollows and creases, as moss or dirt does. Needs the light's `crevice` to find them. */
   grime?: Vec3
+  /** Takes none of the scene's `cover`: water, glass, anything that moves through it or was just made. */
+  bare?: boolean
+}
+
+/**
+ * Something laid over the whole scene once it is cut: `snow` settles on tops that the sky can reach, `moss` creeps
+ * over shut-in and up-turned faces in patches, `dust` lies thin on every upturned face, under cover or not.
+ */
+export interface Cover {
+  kind: 'snow' | 'moss' | 'dust'
+  /** sRGB, 0–1. */
+  color: Vec3
+  /** 0–1: how much of the scene it takes, from a dusting to most of what faces up. */
+  amount: number
 }
 
 /**
@@ -114,6 +128,8 @@ export interface VoxelSpec {
   /** Blobs placed as they are, after the cut ones: see LooseBlob. */
   loose?: LooseBlob[]
   beams?: Beam[]
+  /** Snow, moss or dust over every part that isn't `bare` or `glow`: see Cover. */
+  cover?: Cover
   /**
    * Lamps whose shadows are baked, in the order of the live lights they stand for (at most four; a gap is a light
    * that casts none): for each blob, how much of lamp k it can see goes in byte k of `seen`, and the engine's live
@@ -281,6 +297,41 @@ function sunlight(casters: Shape[], p: Vec3, L: Vec3, spacing: number, far: numb
   return Math.min(1, Math.max(0, lit))
 }
 
+/** Smooth noise in 0–1 with lumps about `size` across, for patches that don't follow the grid. */
+function patches(x: number, y: number, z: number, size: number) {
+  const h = (i: number, j: number, k: number) => { const v = Math.sin(i * 127.1 + j * 311.7 + k * 74.7) * 43758.5453; return v - Math.floor(v) }
+  const fx = x / size, fy = y / size, fz = z / size
+  const i = Math.floor(fx), j = Math.floor(fy), k = Math.floor(fz)
+  const u = fx - i, v = fy - j, w = fz - k
+  const a = u * u * (3 - 2 * u), b = v * v * (3 - 2 * v), c = w * w * (3 - 2 * w)
+  const lerp = (p: number, q: number, t: number) => p + (q - p) * t
+  const face = (kk: number) => lerp(lerp(h(i, j, kk), h(i + 1, j, kk), a), lerp(h(i, j + 1, kk), h(i + 1, j + 1, kk), a), b)
+  return lerp(face(k), face(k + 1), c)
+}
+
+const smooth = (lo: number, hi: number, t: number) => { const u = Math.min(1, Math.max(0, (t - lo) / (hi - lo))); return u * u * (3 - 2 * u) }
+
+/**
+ * How much of a cover lies on a surface point, 0–1. `open` is its openness (moss wants it low) and `sky` how much
+ * of the sky straight up it sees (snow wants it high); each is only asked for when the kind needs it.
+ */
+export function coverAt(cover: Cover, p: Vec3, n: Vec3, spacing: number, open: () => number, sky: () => number) {
+  const a = Math.min(1, Math.max(0, cover.amount))
+  if (a <= 0) return 0
+  const lumpy = patches(p[0], p[1], p[2], spacing * 4) - 0.5
+  if (cover.kind === 'snow') {
+    // a top takes it first, steeper faces as the amount grows; ragged where it gives out
+    const from = 1 - a * 1.1
+    const k = smooth(from, from + 0.2, n[1] + lumpy * 0.35)
+    return k > 0 ? k * smooth(0.25, 0.7, sky()) : 0
+  }
+  if (cover.kind === 'dust') return Math.min(0.85, a * smooth(0.2, 0.9, n[1] + lumpy * 0.3))
+  // moss: up-turned and shut-in faces, in patches; nothing on the underside of things
+  if (n[1] < -0.3) return 0
+  const want = 0.45 * smooth(-0.3, 0.8, n[1]) + 0.55 * (1 - open()) + lumpy * 0.9
+  return smooth(1 - a, 1.15 - a, want)
+}
+
 /** How far out from a surface `openness` looks for others, in world units, and how much each look counts. */
 const SHUT_REACH = [0.03, 0.06, 0.11, 0.18]
 const SHUT_WEIGHT = [0.3, 0.3, 0.25, 0.15]
@@ -402,7 +453,8 @@ export function buildVoxels(spec: VoxelSpec): Built {
     const same = spec.parts.filter((q, qi) => qi !== pi && boneOf[qi] === boneOf[pi] && !q.glow && (q.opacity ?? 1) >= 0.9).map((q) => q.shape)
     // only shapes within reach of this part can shut its surface in
     const reach = Math.max(SHUT_REACH[SHUT_REACH.length - 1], s * 1.5) + s
-    const near = crevice > 0 || part.grime ? casters.filter((c) => [0, 1, 2].every((i) => c.min[i] <= max[i] + reach && c.max[i] >= min[i] - reach)) : []
+    const cover = part.bare || part.glow ? undefined : spec.cover
+    const near = crevice > 0 || part.grime || cover?.kind === 'moss' ? casters.filter((c) => [0, 1, 2].every((i) => c.min[i] <= max[i] + reach && c.max[i] >= min[i] - reach)) : []
     const i0 = Math.floor(min[0] / s), i1 = Math.ceil(max[0] / s)
     const j0 = Math.floor(min[1] / s), j1 = Math.ceil(max[1] / s)
     const k0 = Math.floor(min[2] / s), k1 = Math.ceil(max[2] / s)
@@ -423,9 +475,16 @@ export function buildVoxels(spec: VoxelSpec): Built {
         const facing = Math.max(0, n[0] * L[0] + n[1] * L[1] + n[2] * L[2])
         const sun = facing > 0 ? 1 - light.shadow * (1 - sunlight(casters, [x + n[0] * s, y + n[1] * s, z + n[2] * s], L, s, far)) : 0
         let ambient = light.ambient
+        let opened: number | undefined
+        // looked at from the surface itself, not from the cell's middle, so a flat face is fully open
+        const openHere = () => (opened ??= openness(near, [x - n[0] * d, y - n[1] * d, z - n[2] * d], n, s))
+        if (cover) {
+          const k = coverAt(cover, p, n, s, openHere, () => sunlight(casters, [x + n[0] * s, y + n[1] * s, z + n[2] * s], [0, 1, 0], s, far))
+          const c = cover.color
+          if (k > 0) base = [base[0] + (c[0] - base[0]) * k, base[1] + (c[1] - base[1]) * k, base[2] + (c[2] - base[2]) * k]
+        }
         if (crevice > 0 || part.grime) {
-          // looked at from the surface itself, not from the cell's middle, so a flat face is fully open
-          const open = openness(near, [x - n[0] * d, y - n[1] * d, z - n[2] * d], n, s)
+          const open = openHere()
           // a corner keeps out the light from all round, not the sun: a sunlit foot of a wall stays bright
           ambient *= 1 - crevice * (1 - open)
           if (part.grime) {

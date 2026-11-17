@@ -156,3 +156,39 @@ test('a lamp\'s shadow is baked per blob: the floor behind a wall can\'t see it,
   // without lamps nothing is baked
   assert.equal(buildVoxels({ bones: [ROOT], spacing: 0.05, parts: [{ shape: sphere([0, 0, 0], 0.3), color: [1, 1, 1], bone: 'root' }] }).seen, undefined)
 })
+
+test('cover: snow on open tops only, moss in the corners first, dust under cover too, and bare parts keep their paint', () => {
+  const spec = (cover?: VoxelSpec['cover'], bare = false): VoxelSpec => ({
+    bones: [ROOT], spacing: 0.04, light: { ambient: 1, shadow: 0 }, cover,
+    parts: [
+      { shape: box([0, -0.1, 0], [1, 0.1, 1]), color: [0.2, 0.2, 0.2], bone: 'root', bare },
+      // a slab held over one end of the floor, and a wall at the back
+      { shape: box([0.6, 0.5, 0.3], [0.3, 0.04, 0.3]), color: [0.2, 0.2, 0.2], bone: 'root' },
+      { shape: box([0, 0.4, -0.75], [1, 0.4, 0.1]), color: [0.2, 0.2, 0.2], bone: 'root' },
+    ],
+  })
+  const red = (b: ReturnType<typeof buildVoxels>, x: number, y: number, z: number) => {
+    let best = -1, d = Infinity
+    for (let i = 0; i < b.blobs.count; i++) {
+      const e = Math.hypot(b.blobs.center[i * 3] - x, b.blobs.center[i * 3 + 1] - y, b.blobs.center[i * 3 + 2] - z)
+      if (e < d) { d = e; best = i }
+    }
+    return b.blobs.color[best * 3] - b.blobs.color[best * 3 + 1]
+  }
+  const C: [number, number, number] = [1, 0, 0]
+  const plain = buildVoxels(spec())
+  assert.ok(Math.abs(red(plain, -0.3, 0, 0.3)) < 1e-6)
+  const snow = buildVoxels(spec({ kind: 'snow', color: C, amount: 0.5 }))
+  assert.ok(red(snow, -0.3, 0, 0.3) > 0.5, 'open floor')
+  assert.ok(red(snow, 0.6, 0.54, 0.3) > 0.5, 'top of the slab')
+  assert.ok(red(snow, 0.6, 0, 0.3) < 0.05, 'floor under the slab')
+  assert.ok(red(snow, 0, 0.4, -0.65) < 0.05, 'face of the wall')
+  const dust = buildVoxels(spec({ kind: 'dust', color: C, amount: 0.6 }))
+  assert.ok(red(dust, 0.6, 0, 0.3) > 0.3, 'dust under the slab')
+  const moss = buildVoxels(spec({ kind: 'moss', color: C, amount: 0.35 }))
+  let corner = 0, open = 0
+  for (let x = -0.9; x < 0.2; x += 0.04) { corner += red(moss, x, 0, -0.63); open += red(moss, x, 0, 0.5) }
+  assert.ok(corner > open + 2, `corner ${corner} open ${open}`)
+  const bare = buildVoxels(spec({ kind: 'snow', color: C, amount: 1 }, true))
+  assert.ok(Math.abs(red(bare, -0.3, 0, 0.3)) < 1e-6)
+})

@@ -130,6 +130,9 @@ test('air: mistakes are pointed at, and a sound one builds specks that loop and 
     ['a mist with no color', (d) => { delete d.air.mist[0].color }, /^air\.mist\[0\]\.color: must be a color/],
     ['a bad grime', (d) => { d.parts[0].grime = 'moss' }, /^parts\[0\]\.grime: must be a color/],
     ['a ramp past 1', (d) => { d.light = { ramp: 2 } }, /^light\.ramp: must be from 0 to 1/],
+    ['an unknown cover', (d) => { d.cover = { kind: 'ash', color: '#ffffff', amount: 0.5 } }, /^cover\.kind: must be one of 'snow'/],
+    ['too much cover', (d) => { d.cover = { kind: 'snow', color: '#ffffff', amount: 2 } }, /^cover\.amount: must be from 0 to 1/],
+    ['a bare that is not true or false', (d) => { d.parts[0].bare = 'yes' }, /^parts\[0\]\.bare: must be true or false/],
   ]
   const withAir = () => {
     const d: any = sound()
@@ -142,6 +145,8 @@ test('air: mistakes are pointed at, and a sound one builds specks that loop and 
     return d
   }
   assert.deepEqual(checkScene(withAir()), [])
+  assert.deepEqual(checkScene({ ...withAir(), cover: { kind: 'moss', color: '#4a6a2a', amount: 0.4 } }), [])
+  assert.equal(compileScene({ ...withAir(), cover: { kind: 'snow', color: '#ffffff', amount: 0.4 } }).spec(0.05).cover?.kind, 'snow')
   for (const [what, spoil, want] of bad) {
     const d = withAir()
     spoil(d)

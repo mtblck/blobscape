@@ -48,6 +48,12 @@ export interface SceneDoc {
   lights?: LightDoc[]
   /** What hangs in the air: distance haze, low mist, beams of light and drifting specks. */
   air?: AirDoc
+  /**
+   * Snow, moss or dust laid over everything once it is cut (parts marked `bare` and glowing ones keep their paint):
+   * `snow` settles on tops open to the sky, `moss` creeps over shut-in and up-turned faces in patches, `dust` lies
+   * thin on every upturned face. `amount` 0 to 1, from a dusting to most of what faces up.
+   */
+  cover?: { kind: 'snow' | 'moss' | 'dust'; color: string; amount: number }
 }
 
 export interface AirDoc {
@@ -121,6 +127,8 @@ export interface PartDoc {
   noShadow?: boolean
   /** A color that gathers in its corners and cracks, as moss or soot does. */
   grime?: string
+  /** Takes none of the scene's `cover`: water, glass, a fresh fire. */
+  bare?: boolean
 }
 
 export type ShapeDoc =
@@ -210,6 +218,7 @@ const MAX_MOVES_PER_BONE = 6
 const MAX_SPECKS = 300
 const SPECK_KINDS: SpeckKind[] = ['dust', 'embers', 'rain', 'snow', 'fireflies', 'bubbles']
 /** A value for a message: only what is safe to print (anything can arrive from a prompt). */
+const COVERS = ['snow', 'moss', 'dust']
 const show = (v: unknown) => (typeof v === 'string' ? `'${v.slice(0, 40)}'` : typeof v === 'number' || typeof v === 'boolean' ? String(v) : v === undefined ? 'nothing' : `a ${Array.isArray(v) ? 'list' : typeof v}`)
 /** Half the size of a sound shape's box, near enough: for adding up how much surface a scene has. */
 function halfSize(s: ShapeDoc): Vec3 {
@@ -355,7 +364,7 @@ export function checkScene(doc: unknown): string[] {
     }
     paint(p.paint, `${at}.paint`, 0)
     if (p.bone !== undefined) bone(p.bone, `${at}.bone`)
-    for (const k of ['glow', 'noShadow']) if (p[k] !== undefined && typeof p[k] !== 'boolean') bad(`${at}.${k}`, 'must be true or false')
+    for (const k of ['glow', 'noShadow', 'bare']) if (p[k] !== undefined && typeof p[k] !== 'boolean') bad(`${at}.${k}`, 'must be true or false')
     if (p.grime !== undefined) hex(p.grime, `${at}.grime`)
   })
 
@@ -403,6 +412,15 @@ export function checkScene(doc: unknown): string[] {
         else { num(l.circle.r, `${at}.circle.r`, 0, REACH); whole(l.circle.times, `${at}.circle.times`) }
       }
     })
+  }
+  if (doc.cover !== undefined) {
+    const c = doc.cover
+    if (!obj(c)) bad('cover', 'must be an object')
+    else {
+      if (!COVERS.includes(c.kind as string)) bad('cover.kind', `must be one of ${COVERS.map((k) => `'${k}'`).join(', ')}`)
+      hex(c.color, 'cover.color')
+      num(c.amount, 'cover.amount', 0, 1)
+    }
   }
   if (doc.air !== undefined) {
     const air = doc.air
@@ -711,9 +729,9 @@ export function compileScene(doc: SceneDoc): CompiledScene {
       const thin = spacing * 0.75
       const parts: VoxelPart[] = doc.parts.map((p) => ({
         shape: toShape(p.shape, thin), color: toPaint(p.paint, spacing), bone: p.bone ?? 'land', glow: p.glow, noShadow: p.noShadow,
-        grime: p.grime === undefined ? undefined : unit(p.grime),
+        grime: p.grime === undefined ? undefined : unit(p.grime), bare: p.bare,
       }))
-      for (const p of specks) parts.push({ shape: toShape(p.shape, thin), color: unit(p.color), bone: p.bone, glow: p.glow, noShadow: true })
+      for (const p of specks) parts.push({ shape: toShape(p.shape, thin), color: unit(p.color), bone: p.bone, glow: p.glow, noShadow: true, bare: true })
       // only what the scene sets: a key left undefined would wipe the builder's default
       const light: VoxelSpec['light'] = { ...PAINTED }
       if (doc.light?.from) light.dir = doc.light.from
@@ -721,7 +739,8 @@ export function compileScene(doc: SceneDoc): CompiledScene {
       const beams = (doc.air?.shafts ?? []).map((b) => ({ from: b.from, to: b.to, r: b.r, color: unit(b.color), strength: b.strength ?? 0.6 }))
       // a lamp that stays put casts shadows baked once; byte k of each blob is light k
       const lamps = lights.slice(0, MAX_LAMPS).map((l) => (!l.shadows || l.circle ? null : { at: l.at, reach: l.range }))
-      return { bones, parts, spacing, light, loose: looseAir(doc.air), beams, lamps, disc: doc.disc }
+      const cover = doc.cover && { kind: doc.cover.kind, color: unit(doc.cover.color), amount: doc.cover.amount }
+      return { bones, parts, spacing, light, loose: looseAir(doc.air), beams, lamps, cover, disc: doc.disc }
     },
     empty(built) {
       const seen = new Set<number>()

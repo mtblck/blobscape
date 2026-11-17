@@ -19,6 +19,7 @@ export const WINDOW: SceneDoc = {
   look: { dither: 0.05, glow: 1.12, outline: true, edges: true },
   camera: { target: [0.0, 1.408, 0.0], distance: 5.544, azimuth: 14, elevation: 9, swing: 14 },
   air: { haze: { color: '#241c48', from: 0.5, to: 6 }, shafts: [{ from: [0, 1.54, -0.1], to: [-0.3, 0, 1.1], r: 0.22, color: '#ffc83c', strength: 0.6 }, { from: [0.1, 1.6, -0.1], to: [0.35, 0, 1.0], r: 0.18, color: '#ff9cb0', strength: 0.5 }, { from: [-0.05, 1.45, -0.1], to: [0.05, 0, 1.3], r: 0.16, color: '#f89428', strength: 0.5 }], specks: [{ kind: 'dust', count: 50, from: [-0.6, 0.2, -0.1], to: [0.7, 1.7, 1.3], colors: ['#ffe9a0', '#ffc83c'], glow: true }] },
+  cover: { kind: 'moss', color: '#3a7c5c', amount: 0.55 },
   bones: [
     { name: 'roseIn', at: [0.0, 1.54, -0.176] },
     { name: 'roseOut', at: [0.0, 1.54, -0.176] },
