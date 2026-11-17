@@ -20,8 +20,8 @@ its release. Same shape as seedkin's release setup.
 
 ## Publishing @blobscape/engine
 
-The package lives under Matt's npm organization `blobscape`. It stays `private: true` until Matt says publish;
-making it public is a line in the release PR he approves.
+The package lives under Matt's npm organization `blobscape`. It is public from 0.2.0 and goes out with every
+release, at the release's version.
 
 - **The first version** can't use trusted publishing (npm offers it only for a package that exists), so it goes
   out with a short-lived granular npm token, write access to the `@blobscape` scope only, saved as the

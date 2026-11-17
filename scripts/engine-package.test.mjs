@@ -32,10 +32,10 @@ test('the engine package runs on three.js alone, with no Spark and no site code'
   assert.ok(files.length > 30, `only ${files.length} files reached`)
 })
 
-test('the package manifest stays unpublishable until Matt says go, and three.js is a peer', () => {
+test('the package manifest is publishable (Matt said go, 2026-11-17), and three.js is a peer', () => {
   const pkg = JSON.parse(readFileSync(resolve(root, 'packages/engine/package.json'), 'utf8'))
   assert.equal(pkg.name, '@blobscape/engine')
-  assert.equal(pkg.private, true)
+  assert.ok(!pkg.private)
   assert.ok(pkg.peerDependencies.three)
   assert.ok(!pkg.dependencies)
   // one version for the site and the package: `npm run release` sets both, and the release workflow publishes it
