@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { checkScene, compileScene, type SceneDoc } from './sceneDoc.ts'
 import { buildVoxels } from './voxel.ts'
+import { PUFFS } from './poke.ts'
 import { Skeleton } from './rig.ts'
 
 const sound = (): SceneDoc => ({
@@ -77,7 +78,8 @@ test('a compiled scene builds with every part, however small, at any detail', ()
   const c = compileScene(sound())
   for (const spacing of [0.05, 0.03, 0.02]) {
     const b = buildVoxels(c.spec(spacing))
-    assert.equal(new Set(b.partOf).size, 5, `spacing ${spacing}`)
+    // the scene's five, and the hidden sparkles a tap throws
+    assert.equal(new Set(b.partOf).size, 5 + PUFFS, `spacing ${spacing}`)
   }
   // a hole that swallows its shape leaves a part with nothing: the check can't see it, the build can
   const hollow = sound()
@@ -86,7 +88,8 @@ test('a compiled scene builds with every part, however small, at any detail', ()
   const h = compileScene(hollow)
   assert.deepEqual(h.empty(buildVoxels(h.spec(0.03))), [2])
   assert.deepEqual(c.empty(buildVoxels(c.spec(0.03))), [])
-  assert.equal(c.bones.length, 4)
+  assert.equal(c.bones.length, 4 + PUFFS)
+  assert.equal(compileScene(sound(), { puffs: false }).bones.length, 4)
   assert.equal(c.bones[2].parent, 1)
   assert.equal(c.look.palette.length, 4)
   assert.deepEqual(c.look.outline, [16, 16, 24])

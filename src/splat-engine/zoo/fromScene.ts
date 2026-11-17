@@ -70,7 +70,7 @@ export function sceneCreature(c: FromScene): SceneCreature {
     // the creature leaves the scene's air behind: its specks, mist and haze
     air: undefined, cover: undefined,
   }
-  const compiled = compileScene(doc)
+  const compiled = compileScene(doc, { puffs: false })
   const moves = (c.doc.moves ?? []).filter((m) => names.has(m.bone))
 
   const cutAt = (spacing: number): Built => {

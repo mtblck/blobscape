@@ -50,6 +50,7 @@ Paints: a color, or `bands`, `bricks`, `hex` (honeycomb, scales, paving), `speck
 9. **Thin is fine.** Anything thinner than the grid is fattened to one cell, so a rope or a star still shows at every detail level.
 10. **Detail comes from parts and paint.** Sixty to ninety parts make a full scene, and a showpiece can take about 150. Give big surfaces a paint with texture (`patches` on grass, `bricks` on walls, `bands` on planks and tiles), and scatter small things: stones, flowers, mushrooms.
 11. **Tests read the values and the loop.** Every scene must still read in grayscale (its darkest and lightest blobs well apart, little colorless mid-gray) and nothing seen may snap from one place to another, at the loop's seam or anywhere. A `drift` passes because it shrinks away before it starts again; a hand-made particle that wraps while full size fails.
+12. **Visitors can poke it.** A tap leans a part on its own bone away from the finger and lets it wobble back (with everything hung on that bone); a tap on the land throws a few sparkles in the palette's lightest color. So give the things people will want to poke, like trees, creatures and lamps, bones of their own.
 
 ## Getting the look of a showpiece
 

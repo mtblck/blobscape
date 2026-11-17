@@ -15,6 +15,7 @@ import { DETAIL, PALETTES } from './diorama/scene.ts'
 import { DIORAMAS, type Diorama } from './diorama/scenes.ts'
 import { SceneDetails, kilobytes, type SceneFacts } from './diorama/SceneDetails.tsx'
 import type { Skeleton } from '../splat-engine/rig.ts'
+import { Pokes } from '../splat-engine/poke.ts'
 
 const SIZES = [2, 3, 4, 6]
 /** Frames a second the scene moves at: 0 is every frame the screen shows. */
@@ -130,6 +131,7 @@ export function PixelDiorama() {
     if (!stage || !scene) return
     const from = stage.time
     stage.setActor(scene.built)
+    pokes.current = new Pokes(scene.built.skeleton)
     // lights move with the bones (the lamp's beam with its lens, the fire's glow with its flames), so both are set from the same time
     const d = scene.of
     posed.current = d
@@ -143,6 +145,7 @@ export function PixelDiorama() {
     }
     stage.setPoser((sk: Skeleton, t: number) => {
       d.pose(sk, t)
+      pokes.current?.apply(sk, performance.now() / 1000)
       stage.setLights(d.lights(t), 1)
       // a scene that asks for it rocks the view gently as it plays, about wherever the view has been turned to
       if (d.swing && !calm) stage.orbit = swung(orbitNow.current, d.swing, d.loop, t)
@@ -153,6 +156,8 @@ export function PixelDiorama() {
   useEffect(() => { if (stage) { stage.step = pixels && rate ? 1 / rate : 0; stage.invalidate() } }, [stage, pixels, rate])
   const orbitNow = useRef(orbit)
   const posed = useRef<Diorama | undefined>(undefined)
+  /** Taps on the scene: a part leans and wobbles, the land throws sparkles. */
+  const pokes = useRef<Pokes | undefined>(undefined)
   orbitNow.current = orbit
   // the scene being posed, which is the one whose swing applies: a scene just picked is not in the view until it is cut
   useEffect(() => {
@@ -230,6 +235,13 @@ export function PixelDiorama() {
 
   const drag = useRef<OrbitDrag | null>(null)
   const pointers = useRef(new Map<number, { x: number; y: number }>())
+  /** Where and when a press began, so a short press that hardly moves pokes instead of orbiting. */
+  const press = useRef<{ x: number; y: number; at: number } | null>(null)
+  const canPoke = playing && !calm
+  const poke = (x: number, y: number) => {
+    const hit = stage?.hitAt(x, y)
+    if (hit && scene && pokes.current) pokes.current.add(scene.built.skeleton, hit.bone, hit.point, performance.now() / 1000)
+  }
   useWheelZoom(canvas, setOrbit)
   const pick = (id: string) => { setView(id); setOrbit((shown.views.find((v) => v.id === id) ?? shown.views[0]).orbit) }
   /** Another scene. It is cut first; its palette, finish and view follow when it reaches the view. */
@@ -266,7 +278,7 @@ export function PixelDiorama() {
                 ref={canvas}
                 role="application"
                 aria-roledescription="3D view"
-                aria-label={`${shown.about}, ${pixels ? 'drawn as pixel art' : 'drawn as blobs'}, ${failed ? 'not drawn' : playing ? 'moving' : 'paused'}. Drag or use the arrow keys to orbit; scroll, pinch or press plus and minus to zoom.`}
+                aria-label={`${shown.about}, ${pixels ? 'drawn as pixel art' : 'drawn as blobs'}, ${failed ? 'not drawn' : playing ? 'moving' : 'paused'}. Drag or use the arrow keys to orbit; scroll, pinch or press plus and minus to zoom.${canPoke ? ' Tap or press Enter to poke it.' : ''}`}
                 tabIndex={0}
                 data-testid="diorama-view"
                 className="absolute inset-0 h-full w-full cursor-grab touch-none outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset active:cursor-grabbing"
@@ -274,15 +286,31 @@ export function PixelDiorama() {
                   ev.currentTarget.setPointerCapture(ev.pointerId)
                   pointers.current.set(ev.pointerId, { x: ev.clientX, y: ev.clientY })
                   drag.current = beginOrbitDrag(pointers.current, ev, orbit)
+                  press.current = pointers.current.size === 1 ? { x: ev.clientX, y: ev.clientY, at: performance.now() } : null
                 }}
                 onPointerMove={(ev) => {
                   if (pointers.current.has(ev.pointerId)) pointers.current.set(ev.pointerId, { x: ev.clientX, y: ev.clientY })
                   const d = drag.current
                   if (d) setOrbit(dragOrbit(d, pointers.current, ev))
                 }}
-                onPointerUp={(ev) => { pointers.current.delete(ev.pointerId); drag.current = null }}
-                onPointerCancel={(ev) => { pointers.current.delete(ev.pointerId); drag.current = null }}
+                onPointerUp={(ev) => {
+                  pointers.current.delete(ev.pointerId)
+                  drag.current = null
+                  const p = press.current
+                  press.current = null
+                  // a tap, not a drag: pokes what is under it
+                  if (canPoke && p && Math.hypot(ev.clientX - p.x, ev.clientY - p.y) < 6 && performance.now() - p.at < 400) {
+                    const r = ev.currentTarget.getBoundingClientRect()
+                    poke(ev.clientX - r.left, ev.clientY - r.top)
+                  }
+                }}
+                onPointerCancel={(ev) => { pointers.current.delete(ev.pointerId); drag.current = null; press.current = null }}
                 onKeyDown={(ev) => {
+                  if (canPoke && (ev.key === 'Enter' || ev.key === ' ')) {
+                    ev.preventDefault()
+                    poke(ev.currentTarget.clientWidth / 2, ev.currentTarget.clientHeight / 2)
+                    return
+                  }
                   if (!orbitKey(ev, orbit)) return
                   ev.preventDefault()
                   setOrbit((o) => orbitKey(ev, o) ?? o)

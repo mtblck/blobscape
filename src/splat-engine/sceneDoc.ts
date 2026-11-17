@@ -4,6 +4,7 @@ import { MAX_PALETTE_SIZE, darkest, type PixelLook, type Rgb } from '../splat-co
 import type { PointLight } from './engine.ts'
 import { axisAngle, mulQ, type Bone, type Skeleton } from './rig.ts'
 import { INK_MARKS, LETTERS, MAX_LAMPS, PAINTED, blend, box, lathe, letterGrid, pixelText, sweep, cone, cut, cylinder, displace, ellipsoid, roof, sphere, torus, union, type LooseBlob, type Shape, type VoxelPart, type VoxelSpec } from './voxel.ts'
+import { PUFFS } from './poke.ts'
 
 /**
  * A pixel-art scene written as data: no code, so it can be typed by hand, kept
@@ -815,7 +816,8 @@ function looseAir(air: AirDoc | undefined): LooseBlob[] {
 }
 
 /** A sound description (see `checkScene`) made ready to build and play. Throws on an unsound one. */
-export function compileScene(doc: SceneDoc): CompiledScene {
+/** `puffs` keeps hidden bones for a tap's puff of sparkles (`poke.ts`); a creature taken from a scene goes without. */
+export function compileScene(doc: SceneDoc, { puffs = true }: { puffs?: boolean } = {}): CompiledScene {
   const errs = checkScene(doc)
   if (errs.length) throw new Error(`Scene "${String((doc as { name?: unknown })?.name)}" has ${errs.length} mistake${errs.length > 1 ? 's' : ''}: ${errs.slice(0, 5).join('; ')}`)
   const bones: Bone[] = [{ name: 'land', parent: -1, head: [0, 0, 0] }]
@@ -828,6 +830,9 @@ export function compileScene(doc: SceneDoc): CompiledScene {
   const banks = doc.air?.mist ?? []
   banks.forEach((m, mi) => { for (let k = 0; k < BANK_BONES; k++) bones.push({ name: `~mist${mi}-${k}`, parent: 0, head: m.at }) })
   for (const p of specks) { p.index = bones.length; bones.push({ name: p.bone, parent: 0, head: p.at }) }
+  // a tap on the land throws sparkles from where it lands (poke.ts); they wait hidden at the view's target
+  const puffBones = puffs ? Array.from({ length: PUFFS }, (_, k) => bones.push({ name: `~puff${k}`, parent: 0, head: doc.camera.target }) - 1) : []
+  const sparkle = palette.reduce((a, c) => (c[0] + c[1] + c[2] > a[0] + a[1] + a[2] ? c : a), palette[0])
   const bankBone = (mi: number, k: number) => bones.findIndex((b) => b.name === `~mist${mi}-${k}`)
   const bankBones = banks.map((_, mi) => Array.from({ length: BANK_BONES }, (_, k) => bankBone(mi, k)))
   const haze = doc.air?.haze
@@ -859,6 +864,7 @@ export function compileScene(doc: SceneDoc): CompiledScene {
         }
       })
       for (const p of specks) parts.push({ shape: toShape(p.shape, thin), color: unit(p.color), bone: p.bone, glow: p.glow, noShadow: true, bare: true })
+      for (const b of puffBones) parts.push({ shape: toShape({ kind: 'sphere', at: doc.camera.target, r: spacing * 2 }, thin), color: sparkle.map((c) => c / 255) as Vec3, bone: bones[b].name, glow: true, noShadow: true, bare: true })
       // only what the scene sets: a key left undefined would wipe the builder's default
       const light: VoxelSpec['light'] = { ...PAINTED }
       if (doc.light?.from) light.dir = doc.light.from
@@ -907,6 +913,7 @@ export function compileScene(doc: SceneDoc): CompiledScene {
         }
       })
       for (const p of specks) poseSpeck(sk, p, u)
+      for (const b of puffBones) sk.size[b] = 0
       sk.update()
     },
     haze: haze ? { color: unit(haze.color).map(linear) as Vec3, from: haze.from ?? 0, to: haze.to ?? 4 } : undefined,
