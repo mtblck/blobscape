@@ -2,8 +2,8 @@ import { srgbToLinear } from '../../splat-core/color.ts'
 import type { Creature } from '../../splat-engine/body.ts'
 import { MAX_LIGHTS, type PointLight } from '../../splat-engine/engine.ts'
 import { makeProp, poseProp, type PropBody } from './breakables.ts'
-import { CRYSTAL_GAP, CRYSTALS, FLAME_GAP, FLAMES, makeBlaze, makeIce, paintFloor, poseBlaze, poseIce } from './elements.ts'
-import { BOLT_POP, BOLTS, Game, KINDS, MAX_MP, PROPS, RULES, hopPeriod, type Difficulty, type Element, type Input, type SlimeKind } from './game.ts'
+import { BODY_FLAMES, CRYSTAL_GAP, CRYSTALS, FLAME_GAP, FLAMES, climbCells, makeBlaze, makeIce, makeSteam, paintClimb, paintFloor, poseBlaze, poseBodyFlames, poseIce, poseSteam } from './elements.ts'
+import { BOLT_POP, BOLTS, Game, KINDS, MAX_MP, PROP_TOP, PROPS, RULES, SLIME_TOP, hopPeriod, type Difficulty, type Element, type Input, type SlimeKind } from './game.ts'
 import { Patches } from './ground.ts'
 import { TORCHES, flicker, makeFloor, makePillars, makeTorches, makeWalls, poseTorches } from './hall.ts'
 import { makeBolt, makeHero, poseBolt, poseHero, type HeroClock } from './hero.ts'
@@ -48,12 +48,19 @@ export class Dungeon {
   /** The flames and the ice that stand on the floor where it burns and freezes. */
   readonly blaze: Creature
   readonly ice: Creature
+  /** Flames riding on burning slimes and props, and puffs of steam where fire met frost. */
+  readonly bodyFlames: Creature
+  readonly steam: Creature
+  /** The walls and the pillars: frost climbs them and flames lick their lowest courses. */
+  readonly walls: Creature
+  readonly pillars: Creature
   private readonly floorBase: Float32Array
+  private readonly climb: { actor: Creature; base: Float32Array; at: Int32Array; was: number }[]
   private readonly fireSpots = new Patches(FLAMES, FLAME_GAP)
   private readonly iceSpots = new Patches(CRYSTALS, CRYSTAL_GAP, 0.6, 0.12)
   private painted = -1
   private stained = 0
-  private repaint = false
+  private repaint: Creature[] = []
   /** Every actor for the SplatWorld. */
   readonly actors: Creature[]
   private clock: HeroClock = { idle: 0, walk: 0, down: -1, flicker: true }
@@ -77,7 +84,12 @@ export class Dungeon {
     this.blaze = makeBlaze(Math.round(4200 * Math.max(0.5, d)))
     this.ice = makeIce(Math.round(3000 * Math.max(0.5, d)))
     this.props = PROPS.map((p) => makeProp(p.kind, Math.round((p.kind === 'urn' ? 2000 : 3400) * Math.max(0.5, d))))
-    this.actors = [this.hero, this.floor, makeWalls(d, live), makePillars(d, live), this.torches, ...KINDS.flatMap((k) => slimes[k]), ...this.bolts.fire, ...this.bolts.frost, this.blaze, this.ice, ...this.props]
+    this.bodyFlames = makeBlaze(Math.round(1800 * Math.max(0.5, d)), BODY_FLAMES, 61)
+    this.steam = makeSteam(Math.round(1400 * Math.max(0.5, d)))
+    this.walls = makeWalls(d, live)
+    this.pillars = makePillars(d, live)
+    this.climb = [this.walls, this.pillars].map((actor) => ({ actor, base: actor.blobs.color.slice(0, actor.blobs.count * 3), at: climbCells(actor.blobs, this.game.ground), was: 0 }))
+    this.actors = [this.hero, this.floor, this.walls, this.pillars, this.torches, ...KINDS.flatMap((k) => slimes[k]), ...this.bolts.fire, ...this.bolts.frost, this.blaze, this.ice, this.bodyFlames, this.steam, ...this.props]
     this.update(0, { forward: 0, turn: 0 })
   }
 
@@ -88,10 +100,10 @@ export class Dungeon {
 
   get blobCount() { return this.actors.reduce((s, a) => s + a.blobs.count, 0) }
 
-  /** True once after the floor's colors changed: the view then takes them again (`SplatWorld.recolor(floor)`). */
+  /** The actors whose colors changed since last asked (the floor, the walls, the pillars): the view takes them again (`SplatWorld.recolor`). */
   takeRepaint() {
     const was = this.repaint
-    this.repaint = false
+    this.repaint = []
     return was
   }
 
@@ -127,11 +139,25 @@ export class Dungeon {
       this.painted = ground.version
       this.fireSpots.update(ground, ground.fire)
       this.iceSpots.update(ground, ground.frost)
-      this.stained = paintFloor(this.floor.blobs, this.floorBase, ground, this.opts.light === 'live')
-      this.repaint = true
+      const live = this.opts.light === 'live'
+      this.stained = paintFloor(this.floor.blobs, this.floorBase, ground, live)
+      this.repaint = [this.floor]
+      for (const c of this.climb) {
+        // a wall goes up again only while something is on it, or once more as the last of it goes
+        const n = paintClimb(c.actor.blobs, c.base, c.at, ground, live)
+        if (n || c.was) this.repaint.push(c.actor)
+        c.was = n
+        this.stained += n
+      }
       poseIce(this.ice.skeleton, ground, this.iceSpots.cells)
     }
     poseBlaze(this.blaze.skeleton, ground, this.fireSpots.cells, g.time, !this.clock.flicker)
+    const burning = [
+      ...g.slimes.filter((s) => s.phase === 'live').map((s) => ({ x: s.x, z: s.z, alight: s.alight, top: SLIME_TOP })),
+      ...g.props.filter((p) => p.phase === 'whole').map((p) => ({ x: p.x, z: p.z, alight: p.alight, top: PROP_TOP })),
+    ]
+    poseBodyFlames(this.bodyFlames.skeleton, burning, g.time, !this.clock.flicker)
+    poseSteam(this.steam.skeleton, ground.puffs(), !this.clock.flicker)
     poseTorches(this.torches.skeleton, g.time)
   }
 
@@ -182,6 +208,12 @@ export class Dungeon {
       const k = g.ground.frost[cell]
       floor.push({ position: [x, 0.5, z], color: [0.3 * k, 0.5 * k, 0.85 * k], range: 1.9 })
     })
+    // flames on burning bodies light what is round them too
+    for (const t of [...g.slimes.filter((s) => s.phase === 'live'), ...g.props.filter((p) => p.phase === 'whole')]) {
+      if (t.alight < 0.1) continue
+      const k = t.alight * (calm ? 0.9 : flicker(g.time, 17))
+      floor.push({ position: [t.x, 0.6, t.z], color: [1.8 * k, 0.75 * k, 0.2 * k], range: 1.8 })
+    }
     floor.sort((a, b) => far(a) - far(b))
     const all = [...out, ...extra, ...floor].slice(0, MAX_LIGHTS)
     if (this.shadows) for (const l of all) l.shadow = true

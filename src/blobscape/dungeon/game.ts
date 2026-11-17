@@ -108,6 +108,12 @@ export const BOLT_SPEED = 9
 const BOLT_LIFE = 1.5
 export const BOLT_POP = 0.45
 export const BOLTS = 4
+/** Seconds flames stay on a body after it leaves the fire. */
+export const ALIGHT_FOR = 1.5
+/** How high flames and steam sit on a slime and on a prop, meters. */
+export const SLIME_TOP = 0.35
+export const PROP_TOP = 0.5
+
 /** What a bolt takes off the slime it hits: fire hits harder, frost chills. */
 export const BOLT_HARM: Record<Element, number> = { fire: 2, frost: 1 }
 /** Seconds a slime stays chilled after a frost bolt or leaving frozen floor, and how much of its speed it keeps. */
@@ -188,6 +194,8 @@ export interface Slime {
   chill: number
   /** Seconds until fire underfoot burns it again. */
   burn: number
+  /** How much it is on fire, 0 to 1: flames on its body, caught from the floor or a fire bolt; frost puts them out in steam. */
+  alight: number
 }
 
 export interface Prop {
@@ -209,6 +217,8 @@ export interface Prop {
   dz: number
   /** Seconds until fire underfoot burns it again. */
   burn: number
+  /** How much it is on fire, 0 to 1 (only what can burn catches). */
+  alight: number
 }
 
 export interface Bolt {
@@ -292,7 +302,7 @@ export class Game {
       if (p.phase !== 'broken') continue
       const near = (x: number, z: number, r: number) => Math.hypot(x - p.x, z - p.z) < PROP_RULES[p.kind].r + r + 0.15
       if (near(this.hero.x, this.hero.z, HERO_R) || this.slimes.some((s) => s.phase !== 'burst' && near(s.x, s.z, slimeR(s)))) continue
-      Object.assign(p, { hp: PROP_RULES[p.kind].hp, phase: 'whole', t: 0, hitBy: -1, struck: 99, burn: 0.25 })
+      Object.assign(p, { hp: PROP_RULES[p.kind].hp, phase: 'whole', t: 0, hitBy: -1, struck: 99, burn: 0.25, alight: 0 })
     }
     this.banner = { text: `Wave ${w}`, until: this.time + 2 }
     this.events.push({ type: 'wave', wave: w })
@@ -456,9 +466,13 @@ export class Game {
       if (hit) {
         this.damage(hit, BOLT_HARM[b.element], 'magic', Math.sin(b.heading), Math.cos(b.heading))
         if (b.element === 'frost') hit.chill = CHILL
+        this.kindle(hit, b.element, SLIME_TOP)
       }
       const prop = hit ? undefined : this.props.find((p) => p.phase === 'whole' && Math.hypot(p.x - b.x, p.z - b.z) < PROP_RULES[p.kind].r + 0.15)
-      if (prop) this.strike(prop, BOLT_HARM[b.element], Math.sin(b.heading), Math.cos(b.heading))
+      if (prop) {
+        this.strike(prop, BOLT_HARM[b.element], Math.sin(b.heading), Math.cos(b.heading))
+        if (PROP_RULES[prop.kind].burns || b.element === 'frost') this.kindle(prop, b.element, PROP_TOP)
+      }
       if (hit || prop || wall || b.t > BOLT_LIFE) {
         b.popped = true
         b.t = 0
@@ -480,12 +494,30 @@ export class Game {
     return keepIn(x, z, r)
   }
 
+  /**
+   * A bolt meets something: fire sets it alight, frost puts its flames out in a puff of steam at `top`, how high
+   * the flames sit on it.
+   */
+  private kindle(t: { x: number; z: number; alight: number }, what: Element, top: number) {
+    if (what === 'fire') t.alight = 1
+    else if (t.alight > 0.15) { this.ground.puff(t.x, top, t.z); t.alight = 0 }
+  }
+
+  /** Flames on a body: lit by the floor under it, dying down after it leaves; frost underfoot puts them out in steam. */
+  private smoulder(t: { x: number; z: number; alight: number }, under: { fire: number; frost: number }, top: number, dt: number) {
+    if (under.fire > 0.5) t.alight = Math.max(t.alight, under.fire)
+    else if (under.frost > 0.4 && t.alight > 0.15) { this.ground.puff(t.x, top, t.z); t.alight = 0 }
+    else t.alight = Math.max(0, t.alight - dt / ALIGHT_FOR)
+  }
+
   /** Props age, and fire on the floor burns the ones that can burn. */
   private stepProps(dt: number) {
     for (const p of this.props) {
       p.t += dt
       p.struck += dt
-      if (p.phase !== 'whole' || !PROP_RULES[p.kind].burns || this.state !== 'playing') continue
+      if (p.phase !== 'whole') { p.alight = 0; continue }
+      if (PROP_RULES[p.kind].burns) this.smoulder(p, this.ground.at(p.x, p.z), PROP_TOP, dt)
+      if (!PROP_RULES[p.kind].burns || this.state !== 'playing') continue
       if (this.ground.at(p.x, p.z).fire > 0.5) {
         p.burn -= dt
         if (p.burn <= 0) { p.burn = BURN_EVERY; this.strike(p, 1, 0, 0) }
@@ -554,6 +586,7 @@ export class Game {
       // what it stands on: frost chills it for as long as it stays and a little after, fire burns it again and again
       const under = this.ground.at(s.x, s.z)
       s.chill = under.frost > 0.4 ? Math.max(s.chill, 0.6) : Math.max(0, s.chill - dt)
+      this.smoulder(s, under, SLIME_TOP, dt)
       if (under.fire > 0.5 && this.state === 'playing') {
         s.burn -= dt
         if (s.burn <= 0) {
@@ -641,7 +674,7 @@ export class Game {
     const door = [...DOORS].sort((a, b) => Math.hypot(b.x - this.hero.x, b.z - this.hero.z) - Math.hypot(a.x - this.hero.x, a.z - this.hero.z))[this.rand() < 0.7 ? 0 : 1]
     this.slimes.push({
       slot: this.free(kind), kind, phase: 'spawn', t: 0, x: door.x, z: door.z, heading: door.heading,
-      hp: RULES[kind].hp, hopT: this.rand() * RULES[kind].hop, vx: 0, vz: 0, hitBy: -1, struck: 99, chill: 0, burn: 0.25,
+      hp: RULES[kind].hp, hopT: this.rand() * RULES[kind].hop, vx: 0, vz: 0, hitBy: -1, struck: 99, chill: 0, burn: 0.25, alight: 0,
     })
     this.toSpawn--
     this.spawnAt = this.time + 1.1
@@ -658,7 +691,7 @@ export class Game {
   place(kind: SlimeKind, x: number, z: number) {
     const slot = this.free(kind)
     if (slot < 0) throw new Error(`no ${kind} slime free`)
-    const s: Slime = { slot, kind, phase: 'live', t: 0, x, z, heading: 0, hp: RULES[kind].hp, hopT: 0, vx: 0, vz: 0, hitBy: -1, struck: 99, chill: 0, burn: 0.25 }
+    const s: Slime = { slot, kind, phase: 'live', t: 0, x, z, heading: 0, hp: RULES[kind].hp, hopT: 0, vx: 0, vz: 0, hitBy: -1, struck: 99, chill: 0, burn: 0.25, alight: 0 }
     this.slimes.push(s)
     return s
   }
@@ -684,7 +717,7 @@ export function angleTo(a: number, b: number) {
 
 /** Pushes a body of radius r out of the pillars and back inside the walls. */
 function newProps(): Prop[] {
-  return PROPS.map((p, slot) => ({ slot, kind: p.kind, x: p.x, z: p.z, hp: PROP_RULES[p.kind].hp, phase: 'whole', t: 99, hitBy: -1, struck: 99, dx: 0, dz: 1, burn: 0.25 }))
+  return PROPS.map((p, slot) => ({ slot, kind: p.kind, x: p.x, z: p.z, hp: PROP_RULES[p.kind].hp, phase: 'whole', t: 99, hitBy: -1, struck: 99, dx: 0, dz: 1, burn: 0.25, alight: 0 }))
 }
 
 export function keepIn(x: number, z: number, r: number): [number, number] {

@@ -133,8 +133,8 @@ export class DungeonStage {
     const input = { ...this.input, swing: this.input.swing || this.taps.swing, cast: this.input.cast || this.taps.cast, frost: this.input.frost || this.taps.frost }
     this.taps = { swing: false, cast: false, frost: false }
     this.dungeon.update(dt, input)
-    // the floor burned or froze: its blobs' colors go up again
-    if (this.dungeon.takeRepaint()) this.world.recolor(this.dungeon.floor)
+    // the floor or a wall burned or froze: its blobs' colors go up again
+    for (const a of this.dungeon.takeRepaint()) this.world.recolor(a)
     this.world.markPosed()
     this.light()
     if (this.dungeon.game.events.length) {

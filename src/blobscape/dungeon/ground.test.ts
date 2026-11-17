@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { BURN, FROST_LIFE, Ground, Patches, SPLASH } from './ground.ts'
+import { BURN, FROST_LIFE, Ground, LAYERS, Patches, SPLASH, STEAM_LIFE, STEAM_MAX } from './ground.ts'
 import { BURN_EVERY, CHILL_SPEED, Game, HALF, HERO_BURN, MAX_HP, PILLARS, RULES, SPELL_COST } from './game.ts'
 
 const run = (g: Ground, seconds: number) => { for (let t = 0; t < seconds - 1e-9; t += 0.05) g.step(0.05) }
@@ -183,4 +183,51 @@ test('the hero is burned by standing in fire and slowed on ice, and a restart cl
     return k.hero.z + 6
   }
   assert.ok(ran(true) < ran(false) * 0.8, `on ice ${ran(true)}, free ${ran(false)}`)
+})
+
+test('frost by a wall creeps up it a course at a time, flames lick only the lowest courses, and both go again', () => {
+  const g = new Ground(HALF, PILLARS)
+  // a column for each floor cell along the four walls, and some round each pillar
+  const walls = g.columns.filter((c) => Math.abs(c.x) > HALF - 0.1 || Math.abs(c.z) > HALF - 0.1).length
+  assert.equal(walls, g.n * 4)
+  assert.ok(g.columns.length > walls + PILLARS.length * 4)
+  const near = (x: number, z: number) => g.columns.findIndex((c) => Math.hypot(c.x - x, c.z - z) < 0.3)
+  g.light(0, HALF - 0.3, 'frost')
+  const k = near(0.25, HALF)
+  assert.ok(k >= 0)
+  run(g, 0.5)
+  const top = (field: Float32Array, k: number) => { let j = -1; for (let l = 0; l < LAYERS; l++) if (field[k * LAYERS + l] > 0) j = l; return j }
+  const early = top(g.upFrost, k)
+  run(g, 5)
+  const later = top(g.upFrost, k)
+  assert.ok(later > early && later >= 2, `frost up the wall: layer ${early} then ${later}`)
+  run(g, FROST_LIFE + 12)
+  assert.equal(top(g.upFrost, k), -1, 'melted')
+  // fire by the opposite wall climbs, but no higher than the second course
+  g.light(0, -HALF + 0.3, 'fire')
+  run(g, 2)
+  let highest = -1
+  for (let c = 0; c < g.columns.length; c++) highest = Math.max(highest, top(g.upFire, c))
+  assert.ok(highest >= 0 && highest <= 1, `fire up to layer ${highest}`)
+  // the floor and the walls are the same for the same bolts
+  const h = new Ground(HALF, PILLARS)
+  h.light(0, HALF - 0.3, 'frost'); run(h, 5.5 + FROST_LIFE + 12); h.light(0, -HALF + 0.3, 'fire'); run(h, 2)
+  assert.deepEqual([...h.upFire], [...g.upFire])
+  assert.deepEqual([...h.upFrost], [...g.upFrost])
+})
+
+test('steam rises where fire meets frost, and drifts away', () => {
+  const g = new Ground(HALF, [])
+  g.light(1, 1, 'frost')
+  run(g, 1)
+  assert.equal(g.puffs().length, 0)
+  g.light(1, 1, 'fire')
+  const puffs = g.puffs()
+  assert.ok(puffs.length >= 3, `${puffs.length} puffs`)
+  assert.ok(puffs.every((p) => Math.hypot(p.x - 1, p.z - 1) < SPLASH + 0.5 && p.age === 0))
+  g.puff(0, 0.5, 0)
+  run(g, STEAM_LIFE + 0.2)
+  assert.equal(g.puffs().length, 0)
+  for (let i = 0; i < 40; i++) g.puff(i, 0, 0)
+  assert.equal(g.steam.length, STEAM_MAX)
 })

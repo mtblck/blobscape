@@ -1,7 +1,7 @@
 import type { Blobs, Vec3 } from '../../splat-core/blobs.ts'
 import { buildBody, mix, rng, type Creature, type Part } from '../../splat-engine/body.ts'
 import { axisAngle, mulQ, type Bone, type Skeleton } from '../../splat-engine/rig.ts'
-import type { Ground } from './ground.ts'
+import { LAYER, LAYERS, type Ground } from './ground.ts'
 import { flicker } from './hall.ts'
 
 /**
@@ -14,6 +14,9 @@ import { flicker } from './hall.ts'
 
 export const FLAMES = 12
 export const CRYSTALS = 10
+/** Flames that ride on burning slimes and props, and puffs of steam (as many as the ground keeps). */
+export const BODY_FLAMES = 6
+export const PUFFS = 16
 /** How far apart they stand, meters. */
 export const FLAME_GAP = 0.8
 export const CRYSTAL_GAP = 0.95
@@ -21,12 +24,12 @@ export const CRYSTAL_GAP = 0.95
 const EMBER: Vec3 = [1, 0.5, 0.12]
 const ICE: Vec3 = [0.74, 0.88, 1]
 
-/** `FLAMES` floor fires at the origin: three tongues each, white-yellow at the root and orange at the tip. */
-export function makeBlaze(count = 4200): Creature {
+/** `flames` fires at the origin: three tongues each, white-yellow at the root and orange at the tip. */
+export function makeBlaze(count = 4200, flames = FLAMES, seed = 57): Creature {
   const bones: Bone[] = [{ name: 'root', parent: -1, head: [0, 0, 0] }]
   const parts: Part[] = []
-  const rand = rng(57)
-  for (let i = 0; i < FLAMES; i++) {
+  const rand = rng(seed)
+  for (let i = 0; i < flames; i++) {
     const bone = `flame${i}`
     bones.push({ name: bone, parent: 0, head: [0, 0, 0] })
     const tongues: [number, number, number, number][] = [[0, 0, 0.62, 0.15]]
@@ -41,6 +44,23 @@ export function makeBlaze(count = 4200): Creature {
     parts.push({ shape: { ball: [0, 0.2, 0], r: [0.3, 0.3, 0.3] }, color: [1, 0.48, 0.14], glow: true, opacity: 0.09, bones: [bone], density: 0.5, size: 2.2 })
   }
   const b = buildBody({ bones, parts, blend: 0.02 }, count, 31)
+  return { blobs: b.blobs, skin: b.skin, skeleton: b.skeleton }
+}
+
+/** `PUFFS` puffs of steam at the origin: a few soft pale balls each, faint, so they read as vapor, not smoke. */
+export function makeSteam(count = 1400): Creature {
+  const bones: Bone[] = [{ name: 'root', parent: -1, head: [0, 0, 0] }]
+  const parts: Part[] = []
+  const rand = rng(91)
+  for (let i = 0; i < PUFFS; i++) {
+    const bone = `puff${i}`
+    bones.push({ name: bone, parent: 0, head: [0, 0, 0] })
+    for (let j = 0; j < 5; j++) {
+      const at: Vec3 = [(rand() - 0.5) * 0.3, 0.08 + j * 0.08, (rand() - 0.5) * 0.3]
+      parts.push({ shape: { ball: at, r: [0.16, 0.12, 0.16] }, color: [0.9, 0.93, 0.96], opacity: 0.13, bones: [bone], density: 0.7, size: 2.4 })
+    }
+  }
+  const b = buildBody({ bones, parts, blend: 0.02 }, count, 35)
   return { blobs: b.blobs, skin: b.skin, skeleton: b.skeleton }
 }
 
@@ -82,6 +102,85 @@ export function poseBlaze(sk: Skeleton, g: Ground, cells: Int32Array, t: number,
     sk.setRotation(b, mulQ(axisAngle([1, 0, 0], lean), axisAngle([0, 0, 1], 0.6 * lean)))
   }
   sk.update()
+}
+
+/**
+ * Stands flames on whatever burns (slimes and props, each with its `alight` and how high its middle is), the most
+ * alight first; the rest stand hidden.
+ */
+export function poseBodyFlames(sk: Skeleton, burning: { x: number; z: number; alight: number; top: number }[], t: number, calm = false) {
+  const on = burning.filter((b) => b.alight > 0.04).sort((a, b) => b.alight - a.alight)
+  for (let i = 0; i < sk.count - 1; i++) {
+    const b = i + 1, o = on[i]
+    if (!o) { sk.size[b] = 0; continue }
+    sk.offset.set([o.x, o.top * 0.85, o.z], b * 3)
+    sk.size[b] = (0.45 + 0.55 * o.alight) * (calm ? 0.9 : flicker(t, i + 11))
+    const lean = calm ? 0 : 0.12 * Math.sin(t * 6.3 + i * 2.1)
+    sk.setRotation(b, axisAngle([1, 0, 0], lean))
+  }
+  sk.update()
+}
+
+/** Each puff of steam rises, swells and thins away over its life (`age` 0 to 1); `calm` lets them stand still and fade. */
+export function poseSteam(sk: Skeleton, puffs: { x: number; y: number; z: number; age: number }[], calm = false) {
+  for (let i = 0; i < sk.count - 1; i++) {
+    const b = i + 1, p = puffs[i]
+    if (!p) { sk.size[b] = 0; continue }
+    sk.offset.set([p.x, p.y + (calm ? 0.2 : 1.1 * p.age), p.z], b * 3)
+    sk.size[b] = (0.6 + 1.3 * p.age) * Math.sqrt(Math.max(0, 1 - p.age))
+  }
+  sk.update()
+}
+
+/**
+ * Which layer of which column up a wall or a pillar each blob of a wall or pillar actor lies in (column × LAYERS +
+ * layer), or −1 for one too high or too far from any column: found once, as the blobs don't move.
+ */
+export function climbCells(blobs: Blobs, g: Ground): Int32Array {
+  const byCell = new Map<number, number[]>()
+  g.columns.forEach((c, k) => { if (!byCell.has(c.cell)) byCell.set(c.cell, []); byCell.get(c.cell)!.push(k) })
+  const out = new Int32Array(blobs.count).fill(-1)
+  const lim = g.half - 0.01
+  for (let i = 0; i < blobs.count; i++) {
+    const x = blobs.center[i * 3], y = blobs.center[i * 3 + 1], z = blobs.center[i * 3 + 2]
+    const layer = Math.floor(y / LAYER)
+    if (layer < 0 || layer >= LAYERS) continue
+    const cx = Math.min(lim, Math.max(-lim, x)), cz = Math.min(lim, Math.max(-lim, z))
+    let best = -1, near = 0.45
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+      for (const k of byCell.get(g.index(cx + dx * g.cell, cz + dz * g.cell)) ?? []) {
+        const d = Math.hypot(g.columns[k].x - x, g.columns[k].z - z)
+        if (d < near) { near = d; best = k }
+      }
+    }
+    if (best >= 0) out[i] = best * LAYERS + layer
+  }
+  return out
+}
+
+/** Colors wall and pillar blobs from the layers above the floor: rime where frozen, a glow where flames lick. Returns how many changed. */
+export function paintClimb(blobs: Blobs, base: Float32Array, at: Int32Array, g: Ground, live: boolean) {
+  let changed = 0
+  const c = blobs.color
+  for (let i = 0; i < blobs.count; i++) {
+    let r = base[i * 3], gr = base[i * 3 + 1], b = base[i * 3 + 2]
+    const k = at[i]
+    if (k >= 0 && (g.upFire[k] > 0.004 || g.upFrost[k] > 0.004)) {
+      changed++
+      const frost = g.upFrost[k], fire = g.upFire[k]
+      if (frost > 0) {
+        const m = Math.min(1, frost * (0.5 + 0.5 * hash(i, 10))) * 0.75
+        const l = live ? 1 : Math.max(0.3, Math.min(1.15, Math.max(r, gr, b) / 0.42))
+        r += (ICE[0] * l - r) * m; gr += (ICE[1] * l - gr) * m; b += (ICE[2] * l - b) * m
+      }
+      if (fire > 0) {
+        const m = Math.min(1, fire * (0.5 + 0.5 * hash(i, 11))) * 0.8
+        r += (EMBER[0] - r) * m; gr += (EMBER[1] - gr) * m; b += (EMBER[2] - b) * m
+      }
+    }
+    c[i * 3] = r; c[i * 3 + 1] = gr; c[i * 3 + 2] = b
+  }
+  return changed
 }
 
 /** Stands each clump of ice on its cell: it grows as the cell freezes and sinks as it melts. */
