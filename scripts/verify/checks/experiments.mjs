@@ -734,6 +734,14 @@ export default [
       // the footsteps (issue #160): the elf steps, and the fox trots along and keeps up
       if (!(walked.steps > 20 && walked.fox.steps > 60 && walked.fox.apart < 2.5)) fails.push(`blobscape forest: footsteps ${JSON.stringify({ steps: walked.steps, fox: walked.fox })}`)
       else ok(`blobscape forest: the elf takes ${walked.steps} steps and the fox ${walked.fox.steps}, ${walked.fox.apart.toFixed(1)} m from it`)
+      // the cloak and plait are cloth (issue #161): swinging while the elf turns, still once it has stood a while
+      const swing = (seconds, forward, turn) => f.page.evaluate(async ([s, fw, t]) => {
+        await window.__forest.stage.frame(s, { forward: fw, turn: t })
+        return window.__forest.stage.forest.cloth.sim.energy()
+      }, [seconds, forward, turn])
+      const turning = await swing(0.6, 0, 1), still = await swing(8, 0, 0) // on the spot, so the elf stays where the season check expects it
+      if (!(turning > 1e-3 && still < turning / 50)) fails.push(`blobscape forest: cloth ${JSON.stringify({ turning, still })}`)
+      else ok(`blobscape forest: the cloak swings as the elf turns and settles when it stops (${turning.toFixed(4)} to ${still.toExponential(1)})`)
       if (await f.page.locator('[data-testid=forest-loading]').count()) fails.push('blobscape forest: the loading note stays after the forest is drawn')
       await f.page.screenshot({ path: join(shots, 'blobscape-forest.png') })
       // the Light the grass button: a fire runs through the grass beside the path, and it goes black
