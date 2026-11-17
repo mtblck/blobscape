@@ -21,9 +21,10 @@ import { href } from './routes.ts'
 import { GlbError, readRiggedGlb, writeRiggedGlb, type Rigged } from '../splat-engine/glb.ts'
 import { MeshFileError } from '../splat-engine/meshFile.ts'
 import { isMeshGlb, rigFromModel } from './modelRig.ts'
+import { fillHole, stampDab } from './patch.ts'
 import { fileSpecies, sceneRig, splitScene } from './sceneFile.ts'
 
-type ToolId = 'orbit' | 'add' | 'spray' | 'select' | 'lasso' | 'move' | 'erase'
+type ToolId = 'orbit' | 'add' | 'spray' | 'select' | 'lasso' | 'move' | 'erase' | 'fill' | 'stamp'
 const TOOLS: { id: ToolId; name: string; note: string }[] = [
   { id: 'orbit', name: 'Look', note: 'Drag to orbit, scroll or pinch to zoom. With a mouse, right-drag (or Alt-drag) orbits whatever tool is picked.' },
   { id: 'add', name: 'Add', note: 'Click to place one blob, on the floor or on the surface of whatever you click.' },
@@ -32,6 +33,8 @@ const TOOLS: { id: ToolId; name: string; note: string }[] = [
   { id: 'lasso', name: 'Lasso', note: 'Draw round the blobs you want. Hold Shift to add to the selection.' },
   { id: 'move', name: 'Move', note: 'Drag to slide the selection across the screen. With nothing selected, it grabs the blob or creature under the pointer. Drag a creature to walk it somewhere else.' },
   { id: 'erase', name: 'Erase', note: 'Drag to remove every blob whose center is inside the ring.' },
+  { id: 'fill', name: 'Fill', note: 'Click or drag over a hole. Blobs grow in from its edge, in the size, facing and colors of the ones beside them.' },
+  { id: 'stamp', name: 'Stamp', note: 'Click what you want to copy, then drag somewhere else to paint a copy of it there.' },
 ]
 
 const STARTS = [
@@ -419,6 +422,49 @@ export function Sandbox() {
     if (removed) { clearSel(); changed() }
   }
 
+  /** Fill: grows blobs into the gap under the ring. `say` is for a single click, where no change needs a reason. */
+  const fillAt = (x: number, y: number, say: boolean) => {
+    if (!view) return
+    const { origin, dir } = view.ray(x, y)
+    const b = blobsRef.current, from = b.count
+    const got = fillHole(b, [origin.x, origin.y, origin.z], [dir.x, dir.y, dir.z], spread / view.lens().fx, maxBlobs, from + 1)
+    if (got.added) { changed(from); setMessage(`Filled in with ${got.added.toLocaleString()} blobs`) }
+    else if (got.why === 'full') setMessage(`The sandbox holds up to ${maxBlobs.toLocaleString()} blobs`)
+    else if (say) setMessage(got.why === 'no-gap' ? 'No gap under the ring' : 'Nothing round the ring to grow from')
+  }
+
+  /** Stamp: where it copies from (set by a click), and the stroke under way. */
+  const stampFrom = useRef<Vec3 | null>(null)
+  const stamping = useRef<{ p: Vec3; n: Vec3; shift: Vec3; count: number; done: Set<number>; added: number } | null>(null)
+  const setStampFrom = (x: number, y: number) => {
+    const b = blobsRef.current
+    const at = b.count ? land(x, y) : null
+    if (!at) { setMessage('Nothing here to copy'); return }
+    stampFrom.current = at.p
+    setMessage('Copying from here. Now drag where the copy should go')
+    view?.invalidate(1)
+  }
+  const stampAt = (x: number, y: number) => {
+    const src = stampFrom.current
+    if (!view || !src) return
+    const { origin: o, dir: d } = view.ray(x, y)
+    let st = stamping.current
+    if (!st) {
+      const at = land(x, y)
+      if (!at) return
+      st = stamping.current = { p: at.p, n: at.n, shift: [at.p[0] - src[0], at.p[1] - src[1], at.p[2] - src[2]], count: blobsRef.current.count, done: new Set(), added: 0 }
+    }
+    // The stroke stays on the plane it began on, so copies already laid don't pull it toward the camera
+    const down = d.x * st.n[0] + d.y * st.n[1] + d.z * st.n[2]
+    if (Math.abs(down) < 1e-4) return
+    const t = ((st.p[0] - o.x) * st.n[0] + (st.p[1] - o.y) * st.n[1] + (st.p[2] - o.z) * st.n[2]) / down
+    if (t <= 0) return
+    const b = blobsRef.current, from = b.count
+    const n = stampDab(b, st.count, [o.x + d.x * t - st.shift[0], o.y + d.y * t - st.shift[1], o.z + d.z * t - st.shift[2]], (spread * t) / view.lens().fx, st.shift, st.done, maxBlobs)
+    if (n) { st.added += n; changed(from); setMessage(`Copied ${st.added.toLocaleString()} blobs`) }
+    else if (b.count >= maxBlobs) setMessage(`The sandbox holds up to ${maxBlobs.toLocaleString()} blobs`)
+  }
+
   const deleteSelected = () => {
     const n = sel.count
     edit((b) => b.filter((i) => !sel.has(i)))
@@ -511,10 +557,13 @@ export function Sandbox() {
         startMove()
         return
       }
+      // Stamp waits to see whether this is a click (set where to copy from) or a drag (paint the copy)
+      if (tool === 'stamp') return
       before.current = blobsRef.current.clone()
       if (tool === 'add') { const from = blobsRef.current.count; if (place(blobsRef.current, land(x, y), 0)) changed(from) }
       else if (tool === 'spray') sprayAt(x, y)
       else if (tool === 'erase' && view) eraseAt(x, y, view.lens())
+      else if (tool === 'fill') fillAt(x, y, true)
     },
     move: (x, y) => {
       const l = last.current
@@ -530,11 +579,19 @@ export function Sandbox() {
         return
       }
       if (tool === 'move') { if (actorGrab.current) dragActor(x, y); else moveBy(x - l.x, y - l.y); last.current = { ...l, x, y }; return }
+      if (tool === 'stamp' && !stamping.current) {
+        if (Math.hypot(x - l.x0, y - l.y0) <= 4) return
+        if (!stampFrom.current) { setMessage('Click what to copy first, then drag'); return }
+        before.current = blobsRef.current.clone()
+        stampAt(l.x0, l.y0)
+      }
       // Space the dabs out so a slow drag doesn't pile blobs up in one spot
       if (Math.hypot(x - l.x, y - l.y) < Math.max(4, spread / 3)) return
       last.current = { ...l, x, y }
       if (tool === 'spray') sprayAt(x, y)
       else if (tool === 'erase' && view) eraseAt(x, y, view.lens())
+      else if (tool === 'fill') fillAt(x, y, false)
+      else if (tool === 'stamp') stampAt(x, y)
     },
     up: () => {
       const l = last.current, m = marquee.current
@@ -542,6 +599,8 @@ export function Sandbox() {
         if (m?.kind === 'box') selectInPolygon([m.x0, m.y0, m.x1, m.y0, m.x1, m.y1, m.x0, m.y1], l.shift)
         else selectAt(l.x0, l.y0, l.shift)
       } else if (l && tool === 'lasso' && m?.kind === 'lasso') selectInPolygon(m.pts, l.shift)
+      else if (l && tool === 'stamp' && !stamping.current) setStampFrom(l.x0, l.y0)
+      stamping.current = null
       if (m) view?.invalidate(1)
       last.current = null
       before.current = null
@@ -568,6 +627,12 @@ export function Sandbox() {
       if (tool === 'add') { const from = blobsRef.current.count; if (place(blobsRef.current, land(x, y), 0)) changed(from) }
       else if (tool === 'spray') sprayAt(x, y)
       else if (tool === 'erase' && view) eraseAt(x, y, view.lens())
+      else if (tool === 'fill') fillAt(x, y, true)
+      else if (tool === 'stamp') {
+        // From the keyboard: Shift+Enter says where to copy from, Enter lays one dab of it at the center
+        if (shift || !stampFrom.current) setStampFrom(x, y)
+        else { stampAt(x, y); stamping.current = null }
+      }
       before.current = null
       hover.current = { x, y }
     },
@@ -890,7 +955,18 @@ export function Sandbox() {
       ctx.stroke()
     }
     const h = hover.current
-    if (h && (tool === 'spray' || tool === 'erase')) {
+    const sf = tool === 'stamp' ? stampFrom.current : null
+    const sp = sf && toScreen(sf, lens)
+    if (sp) {
+      // Where the stamp copies from: a ring with a cross in it
+      ctx.strokeStyle = themeColor('ink')
+      ctx.lineWidth = 1.5
+      ctx.beginPath()
+      ctx.arc(sp[0], sp[1], 7, 0, Math.PI * 2)
+      ctx.moveTo(sp[0] - 11, sp[1]); ctx.lineTo(sp[0] + 11, sp[1]); ctx.moveTo(sp[0], sp[1] - 11); ctx.lineTo(sp[0], sp[1] + 11)
+      ctx.stroke()
+    }
+    if (h && (tool === 'spray' || tool === 'erase' || tool === 'fill' || tool === 'stamp')) {
       ctx.strokeStyle = themeColor(tool === 'erase' ? 'ink' : 'accent')
       ctx.setLineDash([4, 3])
       ctx.beginPath()
@@ -914,6 +990,8 @@ export function Sandbox() {
     add: '; press Enter to add a blob at the center',
     spray: '; press Enter to spray at the center',
     erase: '; press Enter to erase at the center',
+    fill: '; press Enter to fill the hole at the center',
+    stamp: '; press Shift+Enter to copy from the center, then Enter to lay the copy at the center',
     select: '; press Enter to select the blob at the center, Shift+Enter to add it',
     lasso: '; press Enter to select the blob at the center, Shift+Enter to add it',
   }
@@ -992,7 +1070,7 @@ export function Sandbox() {
                     </Field>
                     <Slider label="Blob size" value={size} min={-7} max={-1} step={0.05} onChange={setSize} format={(v) => (2 ** v).toFixed(3)} />
                     <Slider label="Opacity" value={opacity} min={0.05} max={1} step={0.01} onChange={setOpacity} format={(v) => `${Math.round(v * 100)}%`} />
-                    <Slider label="Brush radius" value={spread} min={4} max={120} step={1} onChange={setSpread} format={(v) => `${v}px`} hint="The ring for Spray and Erase." />
+                    <Slider label="Brush radius" value={spread} min={4} max={120} step={1} onChange={setSpread} format={(v) => `${v}px`} hint="The ring for Spray, Erase, Fill and Stamp." />
                     <Slider label="Density" value={density} min={1} max={30} step={1} onChange={setDensity} format={(v) => `${v} per dab`} />
                     <Toggle label="Flat discs (off = round balls)" checked={flat} onChange={setFlat} />
                   </Panel>

@@ -122,6 +122,56 @@ export default [
     },
   },
   {
+    name: 'sandbox-mend',
+    about: 'erase a hole, Fill grows it shut, Stamp copies one place to another, Undo',
+    entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/patch.ts'],
+    async run({ shots, join, fails, ok, open, ballPly }) {
+      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 900 } })
+      await page.waitForTimeout(1500)
+      const count = async () => Number((await page.textContent('[data-testid=blob-count]')).replace(/\D/g, ''))
+      await page.getByRole('tab', { name: /Scene/ }).click()
+      await page.setInputFiles('input[type=file]', { name: 'ball.ply', mimeType: 'application/octet-stream', buffer: ballPly() })
+      await page.waitForFunction(() => document.querySelector('[data-testid=blob-count]')?.textContent === '2,000', null, { timeout: 30000 }).catch(() => {})
+      await page.waitForTimeout(1200)
+      const box = await page.getByTestId('viewport').boundingBox()
+      const at = (fx, fy) => [box.x + box.width * fx, box.y + box.height * fy]
+      const click = async (fx, fy) => { await page.mouse.move(...at(fx, fy)); await page.mouse.down(); await page.mouse.up(); await page.waitForTimeout(400) }
+
+      // Cut a hole in the middle, then grow it shut
+      await page.getByRole('button', { name: 'Erase', exact: true }).click()
+      await click(0.5, 0.5)
+      const holed = await count()
+      await page.getByRole('button', { name: 'Fill', exact: true }).click()
+      await click(0.5, 0.5)
+      const filled = await count()
+      if (holed >= 2000 || filled <= holed) fails.push(`blobscape sandbox: erasing left ${holed} blobs and Fill made it ${filled}`)
+      else ok(`blobscape sandbox: Fill grows ${filled - holed} blobs into a hole of ${2000 - holed}`)
+      await page.waitForTimeout(2000)
+      await page.screenshot({ path: join(shots, 'blobscape-sandbox-fill.png') })
+      // Filling open space beside the ball adds nothing
+      await click(0.06, 0.08)
+      if ((await count()) !== filled) fails.push(`blobscape sandbox: Fill in open space added ${(await count()) - filled} blobs`)
+      else ok('blobscape sandbox: Fill leaves open space empty')
+
+      // Stamp: a drag before a click copies nothing; click the middle, then drag beside it
+      await page.getByRole('button', { name: 'Stamp', exact: true }).click()
+      await click(0.5, 0.5)
+      await page.mouse.move(...at(0.2, 0.5)); await page.mouse.down()
+      for (let k = 1; k <= 6; k++) await page.mouse.move(...at(0.2 + k * 0.01, 0.5 + k * 0.02))
+      await page.mouse.up()
+      await page.waitForTimeout(500)
+      const stamped = await count()
+      if (stamped <= filled) fails.push(`blobscape sandbox: Stamp copied ${stamped - filled} blobs`)
+      else ok(`blobscape sandbox: Stamp copies ${stamped - filled} blobs somewhere else`)
+      await page.screenshot({ path: join(shots, 'blobscape-sandbox-stamp.png') })
+      await page.getByRole('button', { name: 'Undo' }).click()
+      await page.waitForTimeout(400)
+      if ((await count()) !== filled) fails.push(`blobscape sandbox: Undo after a stamp stroke left ${await count()} blobs, not ${filled}`)
+      else ok('blobscape sandbox: one Undo takes back a whole stamp stroke')
+      await ctx.close()
+    },
+  },
+  {
     name: 'sandbox-props',
     about: 'a slime that bursts and the watch, added from other experiments',
     entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/props.ts'],
