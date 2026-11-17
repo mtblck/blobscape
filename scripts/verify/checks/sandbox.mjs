@@ -253,11 +253,16 @@ export default [
       await axe(page, 'blobscape sandbox path')
       // Play: the view goes back to the first stop and glides; partway it is neither stop, and it ends at the second
       await play.click()
-      await page.waitForTimeout(1000)
-      const mid = await shot()
+      // look until the view is clear of both stops: how soon that is depends on how busy the machine is
+      let fromFirst = 0, fromSecond = 0
+      for (let k = 0; k < 10 && (fromFirst < 500 || fromSecond < 500); k++) {
+        await page.waitForTimeout(250)
+        const mid = await shot()
+        fromFirst = await differs(mid, first); fromSecond = await differs(mid, second)
+      }
       await page.waitForFunction(() => [...document.querySelectorAll('button')].find((b) => b.textContent === 'Play the path')?.getAttribute('aria-pressed') === 'false', null, { timeout: 15000 }).catch(() => {})
       const end = await settled()
-      const fromFirst = await differs(mid, first), fromSecond = await differs(mid, second), short = await differs(end, second)
+      const short = await differs(end, second)
       if (fromFirst < 500 || fromSecond < 500) fails.push(`blobscape sandbox path: partway through playing, the view is at a stop (${fromFirst} and ${fromSecond} pixels from them)`)
       else if (short > turned / 20) fails.push(`blobscape sandbox path: playing ended ${short} pixels from the last stop (the stops are ${turned} apart)`)
       else ok('blobscape sandbox path: Play glides from the first stop to the last')
