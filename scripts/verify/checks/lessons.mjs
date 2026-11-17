@@ -335,7 +335,6 @@ export default [
       await fresh('feet')
       await page.getByRole('button', { name: 'Steps', exact: true }).click()
       await slider('Step height').fill('0.15')
-      await slider('Stand at').fill('0.1')
       await page.waitForTimeout(2500)
       await page.getByLabel('Bend the legs to the ground').check()
       await page.waitForTimeout(2500)
