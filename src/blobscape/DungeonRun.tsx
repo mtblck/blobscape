@@ -47,7 +47,7 @@ export function DungeonRun() {
   const webgl = useMemo(() => new URLSearchParams(location.search).get('webgl') === '1', [])
   const [look, setLook] = useState('forest')
   const [detail, setDetail] = useState<number>()
-  const [view, setView] = useState<CameraView>('close')
+  const [view, setView] = useState<CameraView>('far')
   const [light, setLight] = useState<'live' | 'baked'>()
   const [shadows, setShadows] = useState(true)
   const [exact, setExact] = useState(() => typeof location !== 'undefined' && new URLSearchParams(location.search).get('sort') === 'radix')

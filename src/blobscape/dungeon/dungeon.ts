@@ -37,7 +37,7 @@ export const HERO_BLOBS = 22000
 export const SLIME_BLOBS = 2600
 
 /** The most lights the fire on the floor and on bodies, and the ice, are gathered into. */
-export const FIRE_LIGHTS = 3
+export const FIRE_LIGHTS = 5
 export const ICE_LIGHTS = 2
 
 export class Dungeon {
@@ -186,14 +186,14 @@ export class Dungeon {
       return { position: [t[0], t[1] + 0.1, t[2]], color: [2.4 * f, 1.0 * f, 0.32 * f], range: 2.9 * (0.8 + 0.2 * f) }
     })
     const sk = this.hero.skeleton, orb = sk.index('orb')
-    const k = 0.25 + 0.75 * (g.hero.mp / MAX_MP) + (g.hero.castT >= 0 ? 0.5 : 0)
+    const k = 0.25 + 0.75 * (g.hero.mp / MAX_MP) + (g.hero.castT >= 0 ? 0.7 : 0)
     // the orb turns orange while it throws fire
     const hot = g.hero.castT >= 0 && g.hero.spell === 'fire'
-    const wants: Want[] = [{ kind: 'orb', position: [sk.posedHead[orb * 3], sk.posedHead[orb * 3 + 1] + 0.05, sk.posedHead[orb * 3 + 2]], color: hot ? [1.5 * k, 0.68 * k, 0.28 * k] : [0.4 * k, 0.7 * k, 1.5 * k], range: 1.4 }]
-    // bolts and bursts: a soft glow, not a flash
+    const wants: Want[] = [{ kind: 'orb', follow: true, position: [sk.posedHead[orb * 3], sk.posedHead[orb * 3 + 1] + 0.05, sk.posedHead[orb * 3 + 2]], color: hot ? [1.5 * k, 0.68 * k, 0.28 * k] : [0.4 * k, 0.7 * k, 1.5 * k], range: 1.4 }]
+    // bolts ride on the bolt (no easing after it), and pop with a glow on the wall they hit; bursts are a soft glow
     for (const b of g.bolts) {
-      const k = b.popped ? 1.4 * (1 - b.t / BOLT_POP) : 1.1
-      wants.push({ kind: b.element, position: [b.x, 1, b.z], color: b.element === 'fire' ? [2 * k, 0.9 * k, 0.28 * k] : [0.6 * k, 0.9 * k, 1.9 * k], range: b.popped ? 2.3 : 2 })
+      const k = b.popped ? 1.9 * (1 - b.t / BOLT_POP) : 1.2
+      wants.push({ kind: b.element, follow: true, position: [b.x, 1, b.z], color: b.element === 'fire' ? [2 * k, 0.9 * k, 0.28 * k] : [0.6 * k, 0.9 * k, 1.9 * k], range: b.popped ? 2.3 : 2 })
     }
     for (const s of g.slimes) {
       if (s.phase !== 'burst' || s.t > 0.5) continue

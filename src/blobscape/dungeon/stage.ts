@@ -53,7 +53,7 @@ export class DungeonStage {
   private placed = false
   /** Hit stop and shake from the blows that land. */
   private readonly impact: Impact
-  view: CameraView = 'close'
+  view: CameraView = 'far'
   /** What's held now (keys, the stick, held buttons). */
   input: Input = { forward: 0, turn: 0 }
   /** Taps since the last step, so a press shorter than a frame still counts. */
