@@ -69,13 +69,6 @@ export class CreatureStage {
   private morphRest?: Blobs
   private morphW = new Float32Array(0)
   private morphShown = new Float32Array(0)
-  /** Loose parts that swing after the body while a move plays (a `Swing` made for this actor's skeleton), or none. */
-  setSwing(swing?: { update(sk: Skeleton, dt: number): void; reset(): void }) {
-    this.swing = swing
-    swing?.reset()
-    this.pose()
-  }
-
   /** The morphs' weights while no clip keys them. */
   private heldW = new Float32Array(0)
   /** Poses the actor straight from the time, for motion that never loops (a watch keeping time): used instead of a clip. */
@@ -220,6 +213,13 @@ export class CreatureStage {
   setPoser(poser?: (sk: Skeleton, t: number) => void, from = this.t) {
     this.poser = poser
     this.t = from
+    this.pose()
+  }
+
+  /** Loose parts that swing after the body while a move plays (a `Swing` made for this actor's skeleton), or none. */
+  setSwing(swing?: { update(sk: Skeleton, dt: number): void; reset(): void }) {
+    this.swing = swing
+    swing?.reset()
     this.pose()
   }
 
