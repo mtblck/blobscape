@@ -364,15 +364,20 @@ export class Stage {
   }
 
   /** Pixel mode's last frame as it was drawn small, and as finished art (exactly in the look's colors): for tests and for saving. */
-  async pixelFrames(): Promise<{ small: Frame; art: Frame; before?: Frame; parts?: Frame } | undefined> {
+  async pixelFrames(): Promise<{ small: Frame; art: Frame; before?: Frame; parts?: Frame; fine?: { small: Frame; parts: Frame } } | undefined> {
     // a sheet being drawn has the renderer to itself
     if (!this.pixel || this.baking) return
     // pixel mode can be switched off, or the view resized, while the reads are out: hold the pass and start every read now
     const pass = this.pixel
     if (!this.target) pass.render(this.renderer, this.scene, this.camera)
     const colors = lookColors(pass.look)
-    const [small, art, before, parts] = await Promise.all([this.read(pass.small), this.read(pass.art, true), pass.before ? this.read(pass.before, true) : undefined, pass.look.parts ? this.read(pass.ids, true) : undefined])
-    return { small, art: snapColors(art, colors), before: before && snapColors(before, colors), parts }
+    const fine = !!pass.look.fine
+    const [small, art, before, parts, fineSmall, fineParts] = await Promise.all([
+      this.read(pass.small), this.read(pass.art, true), pass.before ? this.read(pass.before, true) : undefined, pass.look.parts || fine ? this.read(pass.ids, true) : undefined,
+      fine ? this.read(pass.fineSmall) : undefined, fine ? this.read(pass.fineIds, true) : undefined,
+    ])
+    // a look with four samples a pixel also gives what it was settled from: the scene and its map of parts at twice the size
+    return { small, art: snapColors(art, colors), before: before && snapColors(before, colors), parts, fine: fineSmall && fineParts && { small: fineSmall, parts: fineParts } }
   }
 
   /**

@@ -92,6 +92,8 @@ export function PixelDiorama() {
   const [sky, setSky] = useState(diorama.finish.sky)
   const [steady, setSteady] = useState(() => new URLSearchParams(location.search).get('steady') !== '0')
   const [tidy, setTidy] = useState(() => new URLSearchParams(location.search).get('tidy') !== '0')
+  const [fine, setFine] = useState(() => new URLSearchParams(location.search).get('fine') !== '0')
+  const [own, setOwn] = useState(() => new URLSearchParams(location.search).get('own') !== '0')
   const [rate, setRate] = useState(0)
   const [exact, setExact] = useState(() => new URLSearchParams(location.search).get('sort') === 'radix')
   const [parts, setParts] = useState(() => new URLSearchParams(location.search).get('parts') !== '0')
@@ -142,7 +144,7 @@ export function PixelDiorama() {
   const palettes = useMemo(() => [{ id: 'own', ...shown.palette }, ...PALETTES.slice(1)], [shown])
   const picked = palettes.find((p) => p.id === palette) ?? palettes[0]
   const colors = picked.colors
-  const look = useMemo<PixelLook>(() => ({ palette: colors, dither, outline: outline ? (colors.length ? darkest(colors) : [11, 16, 38]) : null, glow, edges: edges ? 1 : 0, parts, sky: sky ? shown.sky : undefined, steady: steady ? STEADY : 0, tidy }), [colors, dither, outline, glow, edges, parts, sky, shown, steady, tidy])
+  const look = useMemo<PixelLook>(() => ({ palette: colors, dither, outline: outline ? (colors.length ? darkest(colors) : [11, 16, 38]) : null, glow, edges: edges ? 1 : 0, parts, sky: sky ? shown.sky : undefined, steady: steady ? STEADY : 0, tidy, fine, own }), [colors, dither, outline, glow, edges, parts, sky, shown, steady, tidy, fine, own])
 
   // the exact (radix) sort: the stage rebuilds its world, keeping the moment and the poser
   useEffect(() => { stage?.setSort(exact ? 'radix' : 'bins') }, [stage, exact])
@@ -492,7 +494,10 @@ export function PixelDiorama() {
                 <Slider label="Dither" value={dither} min={0} max={1} step={0.05} onChange={setDither} format={(v) => `${Math.round(v * 100)}%`} hint={!pixels ? 'Applies to Pixel art.' : colors.length ? (sky ? 'Checkers two palette colors to fake the ones between. The sky is always dithered, so its bands blend.' : 'Checkers two palette colors to fake the ones between.') : 'Needs a palette: Full color has none to mix.'} />
                 <Slider label="Glow" value={glow} min={0} max={4} step={0.25} onChange={setGlow} format={(v) => (v ? `${v.toFixed(2)}×` : 'off')} hint={pixels ? 'Bright pixels light the ones beside them.' : 'Applies to Pixel art.'} />
                 <div className="grid gap-3">
+                <Toggle label={pixels ? 'Four samples a pixel' : 'Four samples a pixel (in Pixel art)'} checked={fine} onChange={setFine} />
+                <p className="text-xs text-ink-faint">Draws the scene at twice the size and gives each pixel the thing most of its four samples show, so edges are one thing or the other, never a mix.</p>
                 <Toggle label={pixels ? 'Outline the scene' : 'Outline the scene (in Pixel art)'} checked={outline} onChange={setOutline} />
+                <Toggle label={pixels ? 'Outline in each thing\'s own color' : 'Outline in each thing\'s own color (in Pixel art)'} checked={own} onChange={setOwn} disabled={!outline} />
                 <Toggle label={pixels ? 'Lines where colors meet' : 'Lines where colors meet (in Pixel art)'} checked={edges} onChange={setEdges} />
                 <Toggle label={pixels ? 'Lines between parts' : 'Lines between parts (in Pixel art)'} checked={parts} onChange={setParts} />
                 <Toggle label={pixels ? 'Sky behind' : 'Sky behind (in Pixel art)'} checked={sky} onChange={setSky} />

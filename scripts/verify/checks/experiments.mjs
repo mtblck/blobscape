@@ -243,12 +243,27 @@ export default [
             solid++
             if (!pal.has((f.art.data[i] << 16) | (f.art.data[i + 1] << 8) | f.art.data[i + 2])) off++
           }
-          return { backend: stage.backend, w: f.art.width, h: f.art.height, solid, off, soft, small: Array.from(f.small.data), art: Array.from(f.art.data), before: f.before && Array.from(f.before.data), parts: f.parts && Array.from(f.parts.data), look: look() }
+          return { backend: stage.backend, w: f.art.width, h: f.art.height, solid, off, soft, small: Array.from(f.small.data), art: Array.from(f.art.data), before: f.before && Array.from(f.before.data), parts: f.parts && Array.from(f.parts.data), fine: f.fine && { small: Array.from(f.fine.small.data), parts: Array.from(f.fine.parts.data) }, look: look() }
         }, t)
         const a = await shot(2), b = await shot(5)
         // the same frame through the CPU twin (the page's own module isn't reachable from a production build, so it runs here)
-        const { pixelArt } = await import('../../../src/splat-core/pixel.ts')
+        const { pixelArt, resolveFine } = await import('../../../src/splat-core/pixel.ts')
         const frame = (data) => data && { width: a.w, height: a.h, data: Uint8ClampedArray.from(data) }
+        // four samples a pixel: the pass settled each pixel from its 2×2 samples as the twin does (a near tie between two samples can fall either way after rounding)
+        if (!a.look.fine || !a.fine) fails.push(`${`blobscape pixel diorama (${a.backend})`}: four samples a pixel is not on`)
+        else {
+          const big = (data) => ({ width: a.w * 2, height: a.h * 2, data: Uint8ClampedArray.from(data) })
+          const settled = resolveFine(big(a.fine.small), big(a.fine.parts))
+          let solid = 0, cover = 0, tone = 0, part = 0
+          for (let i = 0; i < settled.small.data.length; i += 4) {
+            if (settled.small.data[i + 3] >= 128) solid++
+            if ((settled.small.data[i + 3] >= 128) !== (a.small[i + 3] >= 128)) cover++
+            else if (Math.abs(settled.small.data[i] - a.small[i]) + Math.abs(settled.small.data[i + 1] - a.small[i + 1]) + Math.abs(settled.small.data[i + 2] - a.small[i + 2]) > 6) tone++
+            if (settled.parts.data[i] !== a.parts[i] || settled.parts.data[i + 1] !== a.parts[i + 1] || settled.parts.data[i + 2] !== a.parts[i + 2] || settled.parts.data[i + 3] !== a.parts[i + 3]) part++
+          }
+          if (!(solid > 3000 && cover === 0 && part === 0 && tone < solid * 0.02)) fails.push(`blobscape pixel diorama (${a.backend}): four samples a pixel differs from its twin: ${JSON.stringify({ solid, cover, part, tone })}`)
+          else ok(`blobscape pixel diorama (${a.backend}): four samples a pixel: ${solid} pixels settled as the CPU twin settles them (which thing shows: all; which sample: all but ${tone})`)
+        }
         const want = pixelArt(frame(a.small), a.look, frame(a.before), frame(a.parts))
         let alpha = 0, color = 0, moved = 0
         for (let i = 0; i < want.data.length; i += 4) {
