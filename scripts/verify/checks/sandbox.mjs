@@ -155,8 +155,8 @@ export default [
   },
   {
     name: 'sandbox-creatures',
-    about: 'add, play, drag with Move, bones, freeze, undo, save; phone',
-    entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/actors.ts'],
+    about: 'add, play, drag with Move, bones, freeze, undo, walk about, save; phone',
+    entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/actors.ts', 'src/blobscape/wander.ts'],
     async run({ readFileSync, shots, join, fails, ok, open, axe }) {
       const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 900 }, acceptDownloads: true })
       await page.waitForTimeout(1500)
@@ -229,6 +229,19 @@ export default [
       await page.waitForTimeout(500)
       if ((await count()) !== 0 || (await inCreatures()) !== foxBlobs) fails.push(`blobscape sandbox creatures: undoing the freeze gave ${await count()} / ${await inCreatures()}`)
       else ok('blobscape sandbox creatures: Undo brings the live fox back')
+      // Walk about (issue #132): even set to Still, it trots off round its spot, and stands again when switched off
+      await page.getByRole('button', { name: 'Still', exact: true }).click()
+      await page.waitForTimeout(800)
+      const standing = await shot()
+      await page.getByLabel('Walk about').check()
+      await page.waitForTimeout(2500)
+      const roamed = await differs(standing, await shot())
+      if (roamed < 500 || !(await page.getByRole('slider', { name: /How far/ }).isVisible())) fails.push(`blobscape sandbox creatures: Walk about didn't take the fox anywhere (${roamed} px)`)
+      else ok(`blobscape sandbox creatures: Walk about takes the fox round its spot (${roamed} px changed)`)
+      await page.getByLabel('Walk about').uncheck()
+      await page.waitForTimeout(800)
+      if ((await differs(standing, await shot())) > 200) fails.push('blobscape sandbox creatures: switching Walk about off left the fox away from its spot')
+      else ok('blobscape sandbox creatures: switched off, it stands on its spot again')
       for (const n of ['Frog', 'Elf', 'Dragon']) await page.getByTestId('add-creature').getByRole('button', { name: n }).click()
       await page.waitForTimeout(2500)
       await page.screenshot({ path: join(shots, 'blobscape-sandbox-creatures.png') })

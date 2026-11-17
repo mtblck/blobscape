@@ -13,7 +13,7 @@ import { Viewport, type ToolHandlers } from './Viewport.tsx'
 import { drawBones, drawCenters, drawOutlines, themeColor, toScreen } from './overlay.ts'
 import { History } from './history.ts'
 import { takeHandOff } from './handoff.ts'
-import { STILL, actorAt, actorBlobs, actorBones, detailsOf, freezeInto, makeActor, poseAll, remake, type Actor } from './actors.ts'
+import { ROAM, STILL, actorAt, actorBlobs, actorBones, canRoam, detailsOf, freezeInto, makeActor, poseAll, remake, type Actor } from './actors.ts'
 import { CREATURES } from './creature/fromScenes.ts'
 import { PROPS } from './props.ts'
 import type { Creature as Body } from '../splat-engine/body.ts'
@@ -618,7 +618,7 @@ export function Sandbox() {
       prev = now
       const list = actorsRef.current
       for (const a of list) clocks.current.set(a.key, (clocks.current.get(a.key) ?? 0) + dt * a.speed)
-      if (list.some((a) => a.move !== STILL)) drawActors()
+      if (list.some((a) => a.move !== STILL || a.roam > 0)) drawActors()
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
@@ -723,6 +723,7 @@ export function Sandbox() {
     if (scene.index >= 0 && scene.t < hit.t) return false
     const a = actorsRef.current[hit.index]
     const g = groundAt(x, y, a.at[1])
+    // Its spot keeps its distance from the pointer, so one walking about carries on round wherever it's dropped
     actorGrab.current = { key: a.key, y: a.at[1], dx: g ? a.at[0] - g[0] : 0, dz: g ? a.at[2] - g[1] : 0, recorded: false }
     setCurrentKey(a.key)
     return true
@@ -747,7 +748,7 @@ export function Sandbox() {
   // --- overlay -----------------------------------------------------------------
   const overlay = (ctx: CanvasRenderingContext2D, lens: Lens) => {
     const b = blobsRef.current
-    if (showRig !== 'blobs') for (const a of actorsRef.current) drawBones(ctx, actorBones(a), lens, themeColor('accent', ctx.canvas))
+    if (showRig !== 'blobs') for (const a of actorsRef.current) drawBones(ctx, actorBones(a, clocks.current.get(a.key) ?? 0), lens, themeColor('accent', ctx.canvas))
     if (xray) {
       if (b.count <= OUTLINE_LIMIT) drawOutlines(ctx, b, lens, { sigmas: [2] })
       else drawCenters(ctx, b, lens, themeColor('ink'))
@@ -852,7 +853,7 @@ export function Sandbox() {
             tool={handlers}
             overlay={overlay}
             takeSync={takeSync}
-            label={`Sandbox scene with ${blobs.count.toLocaleString()} blobs${actors.length ? ` and ${actors.length === 1 ? 'a' : actors.length} creature${actors.length === 1 ? '' : 's'}: ${actors.map((a) => a.species.name).join(', ')}` : ''}. ${tool === 'move' ? `With the Move tool, the arrow keys slide the selection${actors.length ? `, or with nothing selected walk the ${current.species.name}` : ''} (Shift for bigger steps)` : 'Drag or use the arrow keys to orbit'}, plus and minus to zoom${toolKeyNote[tool] ?? ''}.`}
+            label={`Sandbox scene with ${blobs.count.toLocaleString()} blobs${actors.length ? ` and ${actors.length === 1 ? 'a' : actors.length} creature${actors.length === 1 ? '' : 's'}: ${actors.map((a) => a.species.name + (a.roam > 0 ? ' walking about' : '')).join(', ')}` : ''}. ${tool === 'move' ? `With the Move tool, the arrow keys slide the selection${actors.length ? `, or with nothing selected walk the ${current.species.name}` : ''} (Shift for bigger steps)` : 'Drag or use the arrow keys to orbit'}, plus and minus to zoom${toolKeyNote[tool] ?? ''}.`}
             home={() => ({ ...frameAll(), azimuth: 30, elevation: 22 })}
             hint={coarse ? (tool === 'orbit' ? 'drag to orbit · pinch to zoom' : 'pinch to zoom · pick Look to orbit') : tool === 'orbit' ? 'drag to orbit · scroll to zoom' : 'right-drag to orbit · scroll to zoom'}
           >
@@ -979,6 +980,12 @@ export function Sandbox() {
                             <Chip active={current.move === STILL} onClick={() => tweak(current.key, (a) => ({ ...a, move: STILL }))}>Still</Chip>
                           </div>
                         </Field>
+                        {canRoam(current) && (
+                          <div>
+                            <Toggle label="Walk about" checked={current.roam > 0} onChange={(on) => tweak(current.key, (a) => ({ ...a, roam: on ? ROAM : 0 }))} />
+                            {current.roam > 0 && <Slider label="How far" value={current.roam} min={1} max={8} step={0.25} onChange={(v) => tweak(current.key, (a) => ({ ...a, roam: v }), 'roam')} format={(v) => `${v.toFixed(1)} × its height`} />}
+                          </div>
+                        )}
                         <Slider label="Speed" value={current.speed} min={0.1} max={2} step={0.05} onChange={(v) => tweak(current.key, (a) => ({ ...a, speed: v }), 'speed')} format={(v) => `×${v.toFixed(2)}`} />
                         <Slider label="Size" value={Math.log2(current.height)} min={-5} max={4} step={0.05} onChange={(v) => tweak(current.key, (a) => ({ ...a, height: 2 ** v }), 'size')} format={(v) => `${(2 ** v).toFixed(2)} tall`} />
                         <Slider label="Facing" value={((current.yaw % 360) + 360) % 360} min={0} max={359} step={1} onChange={(v) => tweak(current.key, (a) => ({ ...a, yaw: v }), 'facing')} format={(v) => `${Math.round(v)}°`} />
