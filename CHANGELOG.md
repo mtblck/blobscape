@@ -6,6 +6,8 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 
 ## [Unreleased]
 
+- The sandbox's short notes ("Added…", "Opened…") now stay up for a moment after they are drawn. On a slow device a note set just before a big file was shown could be cleared before it ever appeared.
+
 - The elf's plait now hangs outside the cloak, beside the quiver, instead of cutting through them (Forest Walk, Splat Creatures, Dungeon Run and the engine page). The fox's brush in Forest Walk sways slowly as it trots instead of wagging on every step.
 
 - Pixel Diorama draws cleaner pixels. Each pixel is now settled from four samples (Finish tab, Four samples a pixel): it takes whichever thing most of them show, so edges are one thing or the other and thin parts stop breaking up. Outlines take a darker tone of the thing they are round instead of one color for everything. And a scene can be painted in steps of its palette as it is cut, so shade falls in flat bands (the windmill is; Paint in steps of the palette).

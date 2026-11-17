@@ -12,7 +12,8 @@ export default [
     async run({ root, shots, join, fails, ok, open, tabClick, axe }) {
       const c = await open('/experiments/creature/?offscreen=1', { viewport: { width: 1280, height: 900 } })
       if (!(await c.page.locator('[data-testid=creature-loading]').count())) fails.push('blobscape creature: no loading note while the engine starts')
-      await c.page.waitForFunction(() => window.__creature, null, { timeout: 60000 }).catch(() => {})
+      // the stage is there before the fox is: the view waits for the creature asked for to be cut
+      await c.page.waitForFunction(() => window.__creature?.blobs() > 0, null, { timeout: 60000 }).catch(() => {})
       const orange = await c.page.evaluate(async () => {
         const cr = window.__creature
         if (!cr) return -1
@@ -171,7 +172,8 @@ export default [
       // a file with morphs: the sample pufferfish opens, its puff clip swells it, Still hands the morphs to sliders,
       // a sprite sheet draws the swelling, and the file written back keeps its morph targets
       await tabClick(c.page.getByRole('button', { name: 'Fox', exact: true }))
-      await c.page.waitForFunction(() => !document.querySelector('[data-testid=creature-loading]'), null, { timeout: 60000 }).catch(() => {})
+      // until the fox itself is in view: just after the click the last creature still is, with no loading mark yet
+      await c.page.waitForFunction(() => window.__creature?.stage.actor?.skeleton.bones.some((b) => b.name === 'tail2') && !document.querySelector('[data-testid=creature-loading]'), null, { timeout: 60000 }).catch(() => {})
       // the fox's tail swings after the trot (on by default), and the switch puts it back on the clip
       const tailAt = () => c.page.evaluate(async () => {
         const st = window.__creature.stage, sk = st.actor.skeleton, b = sk.index('tail2')

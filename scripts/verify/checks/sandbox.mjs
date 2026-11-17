@@ -252,14 +252,18 @@ export default [
       else ok('blobscape sandbox path: two views saved as stops')
       await axe(page, 'blobscape sandbox path')
       // Play: the view goes back to the first stop and glides; partway it is neither stop, and it ends at the second
+      // The page's clock is stepped by hand: in software a picture of the view can take longer than the whole path,
+      // so on the real clock the play was over before the first look at it
+      await page.clock.install()
+      await page.clock.pauseAt(Date.now() + 1000)
       await play.click()
-      // look until the view is clear of both stops: how soon that is depends on how busy the machine is
-      let fromFirst = 0, fromSecond = 0
-      for (let k = 0; k < 10 && (fromFirst < 500 || fromSecond < 500); k++) {
-        await page.waitForTimeout(250)
-        const mid = await shot()
-        fromFirst = await differs(mid, first); fromSecond = await differs(mid, second)
-      }
+      await page.clock.fastForward(1000)
+      await page.clock.runFor(100)
+      const mid = await shot()
+      const fromFirst = await differs(mid, first), fromSecond = await differs(mid, second)
+      await page.clock.fastForward(1500)
+      await page.clock.runFor(100)
+      await page.clock.resume()
       await page.waitForFunction(() => [...document.querySelectorAll('button')].find((b) => b.textContent === 'Play the path')?.getAttribute('aria-pressed') === 'false', null, { timeout: 15000 }).catch(() => {})
       const end = await settled()
       const short = await differs(end, second)
@@ -436,7 +440,8 @@ export default [
     async run({ shots, join, fails, ok, open, axe }) {
       const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 900 } })
       await page.waitForTimeout(1500)
-      const inCreatures = async () => Number(((await page.textContent('[data-testid=creature-blob-count]', { timeout: 1000 }).catch(() => '0')) ?? '0').replace(/\D/g, ''))
+      // no count on the page is no creatures; where there is one, a busy page is given time to answer (a second was not enough in software, and read as 0)
+      const inCreatures = async () => ((await page.locator('[data-testid=creature-blob-count]').count()) ? Number(((await page.textContent('[data-testid=creature-blob-count]', { timeout: 30000 }).catch(() => '0')) ?? '0').replace(/\D/g, '')) : 0)
       await page.getByRole('tab', { name: /Scene/ }).click()
       await page.getByRole('button', { name: 'Empty' }).click()
       await page.getByRole('tab', { name: /Creatures/ }).click()
@@ -469,7 +474,8 @@ export default [
       const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 900 }, acceptDownloads: true })
       await page.waitForTimeout(1500)
       const count = async () => Number((await page.textContent('[data-testid=blob-count]')).replace(/\D/g, ''))
-      const inCreatures = async () => Number(((await page.textContent('[data-testid=creature-blob-count]', { timeout: 1000 }).catch(() => '0')) ?? '0').replace(/\D/g, ''))
+      // no count on the page is no creatures; where there is one, a busy page is given time to answer (a second was not enough in software, and read as 0)
+      const inCreatures = async () => ((await page.locator('[data-testid=creature-blob-count]').count()) ? Number(((await page.textContent('[data-testid=creature-blob-count]', { timeout: 30000 }).catch(() => '0')) ?? '0').replace(/\D/g, '')) : 0)
       const shot = async () => page.getByTestId('viewport').screenshot()
       const differs = (a, b) => page.evaluate(async ([a, b]) => {
         const px = async (s) => { const i = await createImageBitmap(new Blob([Uint8Array.from(atob(s), (ch) => ch.charCodeAt(0))], { type: 'image/png' })); const c = new OffscreenCanvas(i.width, i.height); const x = c.getContext('2d'); x.drawImage(i, 0, 0); return x.getImageData(0, 0, i.width, i.height).data }
@@ -582,6 +588,8 @@ export default [
       await page.screenshot({ path: join(shots, 'blobscape-sandbox-creatures.png') })
       await axe(page, 'blobscape sandbox with creatures')
       // Save as rigged .glb (issue #135): it opens back as the same creatures, and on Splat Creatures as one model
+      // all four cut and counted before saving: on a slow machine the dragon is still being cut after the wait above
+      await page.getByText(/in 4 creatures/).first().waitFor({ timeout: 120000 }).catch(() => {})
       const live = await inCreatures(), sceneBefore = await count()
       await page.getByRole('tab', { name: /Scene/ }).click()
       const [glbDl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Save as rigged .glb' }).click()])
@@ -589,7 +597,7 @@ export default [
       await page.getByRole('button', { name: 'Empty' }).click()
       await page.setInputFiles('input[type=file]', { name: 'saved-scene.glb', mimeType: 'model/gltf-binary', buffer: readFileSync(glbPath) })
       // Handing 55k blobs to the view holds the page a moment, so wait for the count rather than read it once
-      await page.waitForFunction((n) => document.querySelector('[data-testid=creature-blob-count]')?.textContent?.replace(/\D/g, '') === String(n), live, { timeout: 30000 }).catch(() => {})
+      await page.waitForFunction((n) => document.querySelector('[data-testid=creature-blob-count]')?.textContent?.replace(/\D/g, '') === String(n) && /in 4 creatures/.test(document.body.textContent), live, { timeout: 120000 }).catch(() => {})
       const back = await inCreatures(), creaturesBack = await page.getByText(/in 4 creatures/).count()
       if (back !== live || (await count()) !== sceneBefore || !creaturesBack) fails.push(`blobscape sandbox creatures: the saved .glb opened as ${await count()} scene blobs and ${back} in creatures, expected ${sceneBefore} and ${live} in 4`)
       else ok(`blobscape sandbox creatures: a saved rigged .glb opens back as the same 4 creatures (${back.toLocaleString()} blobs)`)
@@ -621,7 +629,7 @@ export default [
       const sb = await open('/sandbox/', { viewport: { width: 1280, height: 900 } })
       await sb.page.waitForTimeout(1500)
       await sb.page.setInputFiles('input[type=file]', { name: 'frog-mesh.glb', mimeType: 'model/gltf-binary', buffer: meshBytes })
-      await sb.page.waitForFunction(() => /Added .* blobs on its \d+ bones/.test(document.body.textContent ?? ''), null, { timeout: 60000 }).catch(() => {})
+      await sb.page.waitForFunction(() => /Added .* blobs on its \d+ bones/.test(document.body.textContent ?? ''), null, { timeout: 180000 }).catch(() => {})
       const added = await sb.page.getByText(/Added .* blobs on its \d+ bones/).first().textContent().catch(() => '')
       if (!added) fails.push('blobscape sandbox creatures: the frog as a skinned mesh did not join the sandbox as a creature')
       else ok(`blobscape sandbox creatures: ${added.trim()}`)
