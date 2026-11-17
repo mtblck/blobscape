@@ -3,6 +3,7 @@ import type { Orbit } from '../splat-core/view.ts'
 import { STEADY, countColors, darkest, type Frame, type PixelLook } from '../splat-core/pixel.ts'
 import type { Built } from '../splat-engine/body.ts'
 import { LoadingMark } from '../shared/BlobLoader.tsx'
+import { Gallery } from './diorama/Gallery.tsx'
 import { Button, Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
 import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitDrag } from './Viewport.tsx'
@@ -157,6 +158,9 @@ export function PixelDiorama() {
     if (!stage) return
     const d = posed.current
     stage.orbit = d && !calm ? swung(orbit, d.swing, d.loop, stage.time) : orbit
+    // haze is measured from the view's target, so it stays put on the scene as the view moves in and out
+    const h = d?.haze
+    stage.setFog(h?.color ?? [0, 0, 0], h ? orbit.distance + h.from : 0, h ? orbit.distance + h.to : 0)
     stage.invalidate()
   }, [stage, orbit, scene, calm])
   // the art's size follows the view's; read it now and then for the caption (it's text, not every frame)
@@ -192,7 +196,7 @@ export function PixelDiorama() {
     if (!scene || !stage) return
     const { built, of } = scene
     return {
-      name: of.label, about: of.about, blobs: built.blobs.count, bones: built.skeleton.count, parts: new Set(built.partOf).size,
+      name: of.label, about: of.about, blobs: built.blobs.count, bones: built.skeleton.count, parts: of.parts ?? new Set(built.partOf).size,
       moves: of.moves, descriptionBytes: of.bytes, lights: of.lights(0).length, loop: of.loop, splatBytes: built.blobs.count * BLOB_BYTES,
       detail: DETAIL.find((d) => d.id === scene.detail)?.label ?? scene.detail, backend: stage.backend,
       picture: pixels && art ? { ...art, scale: size, palette: colors, paletteName: palettes.find((p) => p.id === palette)?.label ?? '', motion: rate ? `${rate} fps` : 'Smooth', pngBytes: png?.bytes, used: png?.used } : undefined,
@@ -379,6 +383,24 @@ export function PixelDiorama() {
         ]}
       />
 
+      <section aria-labelledby="every-title" className="mt-14 border-t border-rule pt-10 lg:pt-14" data-testid="diorama-gallery">
+        <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-3 pb-6">
+          <div>
+            <p className="text-sm text-ink-faint">Every scene</p>
+            <h2 id="every-title" className="mt-1 font-display text-4xl leading-[1.05] sm:text-5xl">{DIORAMAS.length} scenes, one loop each</h2>
+          </div>
+          <p className="max-w-xl text-ink-muted">
+            Each scene plays once through, recorded from this page at 12 frames a second with its own palette. Pick one to
+            open it in the view above, where you can turn it and change how it's drawn.
+          </p>
+        </div>
+        <Gallery current={which} testId="diorama-loops" onPick={(id) => {
+          show(id)
+          window.scrollTo({ top: 0, behavior: calm ? 'auto' : 'smooth' })
+          canvas.current?.focus({ preventScroll: true })
+        }} />
+      </section>
+
       <section aria-labelledby="how-title" className="mt-14 border-t border-rule pt-10 lg:grid lg:grid-cols-12 lg:gap-x-5 lg:pt-14">
         <div className="lg:col-span-5">
           <p className="text-sm text-ink-faint">How it's made</p>
@@ -397,7 +419,7 @@ export function PixelDiorama() {
             that last step.
           </p>
           <p>
-            The campfire, the dragon, the bee, the stone hand, the reef and the windmill go one step further: each is only a description, a list of shapes, paints, bones
+            Every other scene goes one step further: each is only a description, a list of shapes, paints, bones
             and moves with no code of its own, which is the kind of thing Claude can write from a sentence. The engine checks
             the description, then builds and plays it the same way.
           </p>

@@ -3,7 +3,7 @@ import type { Orbit } from '../splat-core/view.ts'
 import { MAX_PALETTE_SIZE, darkest, type PixelLook, type Rgb } from '../splat-core/pixel.ts'
 import type { PointLight } from './engine.ts'
 import { axisAngle, mulQ, type Bone, type Skeleton } from './rig.ts'
-import { box, cone, cut, cylinder, displace, ellipsoid, roof, sphere, torus, union, type Shape, type VoxelPart, type VoxelSpec } from './voxel.ts'
+import { PAINTED, box, cone, cut, cylinder, displace, ellipsoid, roof, sphere, torus, union, type LooseBlob, type Shape, type VoxelPart, type VoxelSpec } from './voxel.ts'
 
 /**
  * A pixel-art scene written as data: no code, so it can be typed by hand, kept
@@ -19,8 +19,12 @@ export interface SceneDoc {
   name: string
   /** Seconds before everything repeats: 4 to 60. */
   loop: number
-  /** The baked sun: `from` points toward it. */
-  light?: { from?: Vec3; ambient?: number; shadow?: number }
+  /**
+   * The baked sun: `from` points toward it. `ramp` (0–1, 0.7 when left out) turns shade toward cool violet and full
+   * sun toward warm yellow, as a painter's ramp does; `crevice` (0.5) darkens corners and cracks; `wear` (0.5)
+   * lightens sharp outer edges. 0 turns any of them off.
+   */
+  light?: { from?: Vec3; ambient?: number; shadow?: number; ramp?: number; crevice?: number; wear?: number }
   /** The colors the picture is drawn in, 2 to 32. */
   palette: string[]
   /** The sky behind, top and bottom. Left out, the background is clear. */
@@ -36,6 +40,60 @@ export interface SceneDoc {
   moves?: MoveDoc[]
   /** Live lights, at most four: they light what is near them, frame by frame. */
   lights?: LightDoc[]
+  /** What hangs in the air: distance haze, low mist, beams of light and drifting specks. */
+  air?: AirDoc
+}
+
+export interface AirDoc {
+  /** Things far from the camera fade toward `color`: it starts `from` units past the view's target (0 when left out) and would be total at `to` (4). */
+  haze?: { color: string; from?: number; to?: number }
+  /** Low banks of mist that drift slowly to and fro, at most four. */
+  mist?: MistDoc[]
+  /** Beams of light, as from a window or a gap in the leaves, at most six: what they land on is lit by them. */
+  shafts?: ShaftDoc[]
+  /** Swarms of small things, each moving on its own, at most eight swarms and 300 specks in all. */
+  specks?: SpeckDoc[]
+}
+
+export interface MistDoc {
+  /** The middle of the bank. */
+  at: Vec3
+  /** Half its size along x, y (its depth) and z. */
+  half: Vec3
+  color: string
+  /** How thick it is, 0 to 1 (0.5 when left out). */
+  thick?: number
+}
+
+export interface ShaftDoc {
+  /** Where it starts (a window, a crack, a lamp) and where it lands. */
+  from: Vec3
+  to: Vec3
+  /** How wide it is, as a radius. */
+  r: number
+  color: string
+  /** How bright, 0 to 1 (0.6 when left out). */
+  strength?: number
+}
+
+/**
+ * What a swarm does: `dust` hangs and twinkles, `embers` rise and fade, `rain` falls fast as streaks, `snow` falls
+ * slowly and sways, `fireflies` wander and blink, `bubbles` rise and wobble.
+ */
+export type SpeckKind = 'dust' | 'embers' | 'rain' | 'snow' | 'fireflies' | 'bubbles'
+
+export interface SpeckDoc {
+  kind: SpeckKind
+  count: number
+  /** Two opposite corners of the box they live in: rain and snow fall from its top to its bottom, embers and bubbles rise from its bottom to its top. */
+  from: Vec3
+  to: Vec3
+  /** Each speck takes one of these. */
+  colors: string[]
+  /** A speck's radius; left out, a size that suits the kind. */
+  size?: number
+  /** Whether they give off light; left out, embers and fireflies do. */
+  glow?: boolean
 }
 
 export interface BoneDoc {
@@ -55,6 +113,8 @@ export interface PartDoc {
   glow?: boolean
   /** Casts no shadow: thin things in the air. */
   noShadow?: boolean
+  /** A color that gathers in its corners and cracks, as moss or soot does. */
+  grime?: string
 }
 
 export type ShapeDoc =
@@ -134,6 +194,9 @@ const MAX_SHAPES = 600
 /** The most surface a scene's parts may have between them, by their boxes, in square units: a third over the fullest scene we ship (the dragon, about 160). Past it the build takes seconds and the blobs run to millions. */
 const MAX_SURFACE = 200
 const MAX_MOVES_PER_BONE = 6
+/** Specks in a whole scene: each is a bone of its own, posed every frame. */
+const MAX_SPECKS = 300
+const SPECK_KINDS: SpeckKind[] = ['dust', 'embers', 'rain', 'snow', 'fireflies', 'bubbles']
 /** A value for a message: only what is safe to print (anything can arrive from a prompt). */
 const show = (v: unknown) => (typeof v === 'string' ? `'${v.slice(0, 40)}'` : typeof v === 'number' || typeof v === 'boolean' ? String(v) : v === undefined ? 'nothing' : `a ${Array.isArray(v) ? 'list' : typeof v}`)
 /** Half the size of a sound shape's box, near enough: for adding up how much surface a scene has. */
@@ -186,8 +249,7 @@ export function checkScene(doc: unknown): string[] {
     if (!obj(doc.light)) bad('light', 'must be an object')
     else {
       if (doc.light.from !== undefined && vec(doc.light.from, 'light.from', -1, 1) && Math.hypot(...(doc.light.from as Vec3)) < 0.1) bad('light.from', 'must point somewhere')
-      opt(doc.light.ambient, 'light.ambient', 0, 1)
-      opt(doc.light.shadow, 'light.shadow', 0, 1)
+      for (const k of ['ambient', 'shadow', 'ramp', 'crevice', 'wear']) opt(doc.light[k], `light.${k}`, 0, 1)
     }
   }
   hexes(doc.palette, 'palette', 2, MAX_PALETTE_SIZE)
@@ -281,6 +343,7 @@ export function checkScene(doc: unknown): string[] {
     paint(p.paint, `${at}.paint`, 0)
     if (p.bone !== undefined) bone(p.bone, `${at}.bone`)
     for (const k of ['glow', 'noShadow']) if (p[k] !== undefined && typeof p[k] !== 'boolean') bad(`${at}.${k}`, 'must be true or false')
+    if (p.grime !== undefined) hex(p.grime, `${at}.grime`)
   })
 
   if (shapes > MAX_SHAPES) bad('parts', `hold ${shapes} shapes between them; the most is ${MAX_SHAPES}`)
@@ -326,6 +389,44 @@ export function checkScene(doc: unknown): string[] {
         else { num(l.circle.r, `${at}.circle.r`, 0, REACH); whole(l.circle.times, `${at}.circle.times`) }
       }
     })
+  }
+  if (doc.air !== undefined) {
+    const air = doc.air
+    const list = (v: unknown, at: string, max: number) => {
+      if (v === undefined) return []
+      if (!Array.isArray(v) || v.length > max) { bad(at, `must be a list of at most ${max}`); return [] }
+      return v.map((x, i) => (obj(x) ? x : (bad(`${at}[${i}]`, 'must be an object'), undefined)))
+    }
+    if (!obj(air)) bad('air', 'must be an object')
+    else {
+      if (air.haze !== undefined) {
+        if (!obj(air.haze)) bad('air.haze', 'must be an object')
+        else { hex(air.haze.color, 'air.haze.color'); opt(air.haze.from, 'air.haze.from', -REACH, 2 * REACH); opt(air.haze.to, 'air.haze.to', -REACH, 4 * REACH) }
+        if (obj(air.haze) && typeof air.haze.from === 'number' && typeof air.haze.to === 'number' && air.haze.to <= air.haze.from) bad('air.haze.to', 'must be past from')
+      }
+      list(air.mist, 'air.mist', 4).forEach((m, i) => {
+        if (!m) return
+        const at = `air.mist[${i}]`
+        vec(m.at, `${at}.at`); vec(m.half, `${at}.half`, 0.05, 2.5); hex(m.color, `${at}.color`); opt(m.thick, `${at}.thick`, 0, 1)
+      })
+      list(air.shafts, 'air.shafts', 6).forEach((m, i) => {
+        if (!m) return
+        const at = `air.shafts[${i}]`
+        vec(m.from, `${at}.from`); vec(m.to, `${at}.to`); num(m.r, `${at}.r`, 0.02, 1); hex(m.color, `${at}.color`); opt(m.strength, `${at}.strength`, 0, 1)
+      })
+      let specks = 0
+      list(air.specks, 'air.specks', 8).forEach((m, i) => {
+        if (!m) return
+        const at = `air.specks[${i}]`
+        if (!SPECK_KINDS.includes(m.kind as SpeckKind)) bad(`${at}.kind`, `${show(m.kind)} is not a kind of speck (${SPECK_KINDS.join(', ')})`)
+        if (num(m.count, `${at}.count`, 1, MAX_SPECKS)) specks += m.count as number
+        vec(m.from, `${at}.from`); vec(m.to, `${at}.to`)
+        hexes(m.colors, `${at}.colors`, 1, 4)
+        opt(m.size, `${at}.size`, 0.003, 0.1)
+        if (m.glow !== undefined && typeof m.glow !== 'boolean') bad(`${at}.glow`, 'must be true or false')
+      })
+      if (specks > MAX_SPECKS) bad('air.specks', `hold ${specks} specks between them; the most is ${MAX_SPECKS}`)
+    }
   }
   return errs
 }
@@ -445,6 +546,118 @@ export interface CompiledScene {
   /** Poses the bones for `t` seconds. */
   pose(sk: Skeleton, t: number): void
   lights(t: number): PointLight[]
+  /** Distance haze, if the scene asks for it: the color (linear) and where it starts and would be total, in units past the view's target. */
+  haze?: { color: Vec3; from: number; to: number }
+}
+
+// --- What hangs in the air
+
+/** How a speck moves, worked out once from the scene: where it starts, how far it travels and how fast, in whole times a loop. */
+interface Speck {
+  kind: SpeckKind
+  bone: string
+  /** Its bone's place in the skeleton, set once the bones are listed. */
+  index: number
+  at: Vec3
+  travel: number
+  /** Whole times a loop it repeats its path (falls, rises), wanders or blinks. */
+  times: number
+  wander: [number, number, number, number]
+  phase: [number, number, number, number, number]
+  shape: ShapeDoc
+  color: string
+  glow: boolean
+}
+
+const SPECK_SIZE: Record<SpeckKind, number> = { dust: 0.01, embers: 0.014, rain: 0.008, snow: 0.014, fireflies: 0.018, bubbles: 0.02 }
+/** Seconds one fall or rise takes, about: the rest of a swarm's speed comes from that. */
+const SPECK_SECONDS: Record<SpeckKind, number> = { dust: 6, embers: 2.2, rain: 0.55, snow: 7, fireflies: 3, bubbles: 3 }
+const BANK_BONES = 3
+
+function planSpecks(air: AirDoc | undefined, loop: number): Speck[] {
+  const out: Speck[] = []
+  ;(air?.specks ?? []).forEach((sw, si) => {
+    const lo: Vec3 = [Math.min(sw.from[0], sw.to[0]), Math.min(sw.from[1], sw.to[1]), Math.min(sw.from[2], sw.to[2])]
+    const hi: Vec3 = [Math.max(sw.from[0], sw.to[0]), Math.max(sw.from[1], sw.to[1]), Math.max(sw.from[2], sw.to[2])]
+    const size = sw.size ?? SPECK_SIZE[sw.kind]
+    const glow = sw.glow ?? (sw.kind === 'embers' || sw.kind === 'fireflies')
+    for (let j = 0; j < sw.count; j++) {
+      const r = (k: number) => hash(si + 1, j + 1, k)
+      const across = (i: number, k: number) => lo[i] + (hi[i] - lo[i]) * r(k)
+      const falls = sw.kind === 'rain' || sw.kind === 'snow', rises = sw.kind === 'embers' || sw.kind === 'bubbles'
+      const at: Vec3 = [across(0, 1), falls ? hi[1] : rises ? lo[1] : across(1, 2), across(2, 3)]
+      // a little quicker or slower each, so a swarm never moves in step
+      const seconds = SPECK_SECONDS[sw.kind] * (0.7 + 0.6 * r(4))
+      const times = Math.max(1, Math.round(loop / seconds))
+      const wander: Speck['wander'] = [1 + Math.floor(r(5) * 2), 1 + Math.floor(r(6) * 2), 1 + Math.floor(r(7) * 2), Math.max(1, Math.round(loop / (2 + 3 * r(8))))]
+      const shape: ShapeDoc = sw.kind === 'rain' ? { kind: 'ball', at, r: [size, 0.07, size] } : { kind: 'sphere', at, r: size }
+      out.push({
+        kind: sw.kind, bone: `~speck${out.length}`, index: -1, at, travel: hi[1] - lo[1], times, wander,
+        phase: [r(9), r(10), r(11), r(12), r(13)], shape, color: sw.colors[Math.floor(r(14) * sw.colors.length)], glow,
+      })
+    }
+  })
+  return out
+}
+
+/** Poses one speck's bone for `u`, the share of the loop gone by. */
+function poseSpeck(sk: Skeleton, p: Speck, u: number) {
+  const b = p.index
+  const wave = (k: number, ph: number) => Math.sin((u * k + ph) * TAU)
+  const life = (((u * p.times + p.phase[0]) % 1) + 1) % 1
+  let dx = 0, dy = 0, dz = 0, size = 1
+  switch (p.kind) {
+    case 'rain': dy = -p.travel * life; size = Math.sin(Math.PI * life) ** 0.25; break
+    case 'snow':
+      dy = -p.travel * life
+      dx = 0.05 * wave(p.wander[0] * p.times, p.phase[1]); dz = 0.04 * wave(p.wander[2] * p.times, p.phase[3])
+      size = Math.sin(Math.PI * life) ** 0.25
+      break
+    case 'embers':
+      dy = p.travel * life
+      dx = 0.05 * life * wave(p.wander[0] * p.times, p.phase[1]); dz = 0.05 * life * wave(p.wander[2] * p.times, p.phase[3])
+      size = Math.sin(Math.PI * life) ** 0.6 * (1 - 0.6 * life)
+      break
+    case 'bubbles':
+      dy = p.travel * life
+      dx = 0.02 * wave(p.wander[0] * p.times * 2, p.phase[1])
+      size = Math.sin(Math.PI * life) ** 0.25
+      break
+    case 'dust':
+      dx = 0.06 * wave(p.wander[0], p.phase[1]); dy = 0.04 * wave(p.wander[1], p.phase[2]); dz = 0.06 * wave(p.wander[2], p.phase[3])
+      size = 0.55 + 0.45 * wave(p.wander[3], p.phase[4])
+      break
+    case 'fireflies':
+      dx = 0.15 * wave(p.wander[0], p.phase[1]); dy = 0.08 * wave(p.wander[1], p.phase[2]); dz = 0.15 * wave(p.wander[2], p.phase[3])
+      // lit about half the time, coming and going softly
+      size = Math.max(0, wave(p.wander[3], p.phase[4])) ** 0.4
+      break
+  }
+  sk.offset[b * 3] += dx; sk.offset[b * 3 + 1] += dy; sk.offset[b * 3 + 2] += dz
+  sk.size[b] *= size
+}
+
+/** Mist as loose blobs: faint, soft, and never part of a surface. */
+function looseAir(air: AirDoc | undefined): LooseBlob[] {
+  const out: LooseBlob[] = []
+  ;(air?.mist ?? []).forEach((m, mi) => {
+    const thick = m.thick ?? 0.5
+    const r = Math.min(0.45, Math.max(0.15, Math.min(m.half[0], m.half[2]) * 0.5))
+    const n = Math.min(160, Math.ceil(((4 * m.half[0] * m.half[2]) / (r * r)) * (0.8 + 1.2 * thick)))
+    // spread evenly, on a jittered grid, so the bank has no thick clumps and thin gaps
+    const across = Math.max(1, Math.round(Math.sqrt((n * m.half[0]) / m.half[2]))), deep = Math.max(1, Math.ceil(n / across))
+    for (let j = 0; j < across * deep; j++) {
+      const q = (k: number) => hash(mi + 50, j + 1, k) * 2 - 1
+      const gx = ((j % across) + 0.5 + q(1) * 0.4) / across, gz = (Math.floor(j / across) + 0.5 + q(3) * 0.4) / deep
+      out.push({
+        center: [m.at[0] + (gx * 2 - 1) * m.half[0], m.at[1] + q(2) * m.half[1] * 0.6, m.at[2] + (gz * 2 - 1) * m.half[2]],
+        // a flat cushion: wide, and as deep as the bank
+        scale: [r * 0.6, Math.max(0.03, m.half[1] * 0.6), r * 0.6],
+        color: unit(m.color), opacity: 0.025 + 0.05 * thick, bone: `~mist${mi}-${j % BANK_BONES}`,
+      })
+    }
+  })
+  return out
 }
 
 /** A sound description (see `checkScene`) made ready to build and play. Throws on an unsound one. */
@@ -456,6 +669,14 @@ export function compileScene(doc: SceneDoc): CompiledScene {
   const palette = doc.palette.map(rgb)
   const moves = doc.moves ?? []
   const lights = doc.lights ?? []
+  // what hangs in the air rides bones of its own, after the scene's: a bone for each speck, a few for each bank of mist
+  const specks = planSpecks(doc.air, doc.loop)
+  const banks = doc.air?.mist ?? []
+  banks.forEach((m, mi) => { for (let k = 0; k < BANK_BONES; k++) bones.push({ name: `~mist${mi}-${k}`, parent: 0, head: m.at }) })
+  for (const p of specks) { p.index = bones.length; bones.push({ name: p.bone, parent: 0, head: p.at }) }
+  const bankBone = (mi: number, k: number) => bones.findIndex((b) => b.name === `~mist${mi}-${k}`)
+  const bankBones = banks.map((_, mi) => Array.from({ length: BANK_BONES }, (_, k) => bankBone(mi, k)))
+  const haze = doc.air?.haze
 
   return {
     name: doc.name,
@@ -474,13 +695,17 @@ export function compileScene(doc: SceneDoc): CompiledScene {
     },
     spec(spacing) {
       const thin = spacing * 0.75
-      const parts: VoxelPart[] = doc.parts.map((p) => ({ shape: toShape(p.shape, thin), color: toPaint(p.paint, spacing), bone: p.bone ?? 'land', glow: p.glow, noShadow: p.noShadow }))
+      const parts: VoxelPart[] = doc.parts.map((p) => ({
+        shape: toShape(p.shape, thin), color: toPaint(p.paint, spacing), bone: p.bone ?? 'land', glow: p.glow, noShadow: p.noShadow,
+        grime: p.grime === undefined ? undefined : unit(p.grime),
+      }))
+      for (const p of specks) parts.push({ shape: toShape(p.shape, thin), color: unit(p.color), bone: p.bone, glow: p.glow, noShadow: true })
       // only what the scene sets: a key left undefined would wipe the builder's default
-      const light: VoxelSpec['light'] = {}
+      const light: VoxelSpec['light'] = { ...PAINTED }
       if (doc.light?.from) light.dir = doc.light.from
-      if (doc.light?.ambient !== undefined) light.ambient = doc.light.ambient
-      if (doc.light?.shadow !== undefined) light.shadow = doc.light.shadow
-      return { bones, parts, spacing, light }
+      for (const k of ['ambient', 'shadow', 'ramp', 'crevice', 'wear'] as const) if (doc.light?.[k] !== undefined) light[k] = doc.light[k]
+      const beams = (doc.air?.shafts ?? []).map((b) => ({ from: b.from, to: b.to, r: b.r, color: unit(b.color), strength: b.strength ?? 0.6 }))
+      return { bones, parts, spacing, light, loose: looseAir(doc.air), beams }
     },
     empty(built) {
       const seen = new Set<number>()
@@ -507,8 +732,18 @@ export function compileScene(doc: SceneDoc): CompiledScene {
           sk.size[b] *= m.size[0] + (m.size[1] - m.size[0]) * (0.5 + 0.5 * Math.sin(at * TAU))
         }
       }
+      // mist drifts slowly to and fro, a third of a bank out of step with the next
+      banks.forEach((m, mi) => {
+        for (let k = 0; k < BANK_BONES; k++) {
+          const b = bankBones[mi][k], w = Math.sin((u + k / BANK_BONES) * TAU)
+          sk.offset[b * 3] += m.half[0] * 0.25 * w
+          sk.offset[b * 3 + 2] += m.half[2] * 0.15 * Math.cos((u + k / BANK_BONES) * TAU)
+        }
+      })
+      for (const p of specks) poseSpeck(sk, p, u)
       sk.update()
     },
+    haze: haze ? { color: unit(haze.color).map(linear) as Vec3, from: haze.from ?? 0, to: haze.to ?? 4 } : undefined,
     lights(t) {
       const u = t / doc.loop
       return lights.map((l) => {

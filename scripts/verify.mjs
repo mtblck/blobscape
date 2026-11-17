@@ -408,7 +408,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     else ok(`blobscape ${label}: home lists the lessons`)
     await axe(page, `blobscape ${label} home`)
     await page.screenshot({ path: join(shots, `blobscape-home-${label}.png`), fullPage: true })
-    for (const id of ['lessons', 'one-blob', 'footprint', 'order', 'many', 'angle', 'paint', 'formats', 'break', 'one-bone', 'weights', 'twist', 'walk', 'model', 'morphs', 'fur', 'shoot', 'fuzzy', 'floaters', 'lighting', 'sandbox', 'creature', 'forest-walk', 'clockwork', 'shape-shifter', 'pixel-diorama', 'dungeon-run', 'scan-studio', 'contact']) {
+    for (const id of ['lessons', 'one-blob', 'footprint', 'order', 'many', 'angle', 'paint', 'formats', 'break', 'one-bone', 'weights', 'twist', 'walk', 'feet', 'model', 'morphs', 'fur', 'shoot', 'fuzzy', 'floaters', 'lighting', 'sandbox', 'creature', 'forest-walk', 'clockwork', 'shape-shifter', 'pixel-diorama', 'dungeon-run', 'scan-studio', 'contact']) {
       // headless WebGPU can't present to a canvas, so Creature and Forest Walk draw off-screen here
       await page.goto(base + (['creature', 'forest-walk', 'clockwork', 'shape-shifter', 'pixel-diorama', 'dungeon-run', 'scan-studio'].includes(id) ? `/experiments/${id}/?offscreen=1` : ['sandbox', 'lessons', 'contact'].includes(id) ? `/${id}/` : `/lessons/${id}/`))
       await page.waitForTimeout(1500)
@@ -720,6 +720,23 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
   await slider('Speed').fill(String(Math.round(feet * 2 * 20) / 20))
   if (!(await goalsAt(4)).startsWith('4 of')) fails.push(`blobscape walk: goals show "${await goalCount()}" (${await page.textContent('[data-testid=slip]')})`)
   else ok(`blobscape walk: two keys, held keys, grip and run tick (feet at ${feet} m/s)`)
+
+  await fresh('feet')
+  await page.getByRole('button', { name: 'Steps', exact: true }).click()
+  await slider('Step height').fill('0.15')
+  await slider('Stand at').fill('0.1')
+  await page.waitForTimeout(2500)
+  await page.getByLabel('Bend the legs to the ground').check()
+  await page.waitForTimeout(2500)
+  await page.getByLabel('Move the hips to the lower foot').uncheck()
+  await slider('Step height').fill('0.3')
+  await page.waitForTimeout(2500)
+  await page.getByLabel('Move the hips to the lower foot').check()
+  await page.waitForTimeout(2500)
+  await page.getByRole('button', { name: 'Slope', exact: true }).click()
+  await slider('Steepness').fill('20')
+  if (!(await goalsAt(4)).startsWith('4 of')) fails.push(`blobscape feet: goals show "${await goalCount()}" (${await page.textContent('[data-testid=feet-readout]')})`)
+  else ok(`blobscape feet: sunk, planted, reached and tilted tick (${(await page.textContent('[data-testid=feet-readout]')).trim()})`)
 
   await fresh('model')
   await slider('Level').fill('8')
@@ -1078,6 +1095,13 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     const changed = await d.page.waitForFunction((was) => { const now = [...document.querySelectorAll('[data-testid=palette-strip] span')].map((e) => e.style.background).join(); return !!window.__diorama && now !== was }, before, { timeout: 90000 }).then(() => true, () => false)
     if (!before || justAfter !== before || !changed) fails.push(`blobscape pixel diorama: on picking another scene the palette ${justAfter !== before ? 'changed before the scene did' : 'never changed'}`)
     else ok('blobscape pixel diorama: a newly picked scene brings its palette only when it reaches the view')
+    // the gallery of recorded loops: every tile's loop loads, and a tile opens its scene in the view
+    await d.page.getByTestId('diorama-loops').scrollIntoViewIfNeeded()
+    const loops = await d.page.waitForFunction(() => { const im = [...document.querySelectorAll('[data-testid=diorama-loops] img')]; return im.length && im.every((i) => i.complete && i.naturalWidth) ? im.length : 0 }, null, { timeout: 30000 }).then((h) => h.jsonValue(), () => 0)
+    await d.page.getByTestId('diorama-loops').getByRole('button', { name: 'Snail house, open in the view above' }).click()
+    const picked = await d.page.waitForFunction(() => location.search.includes('scene=snail') && scrollY < 50 && document.activeElement?.dataset.testid === 'diorama-view', null, { timeout: 5000 }).then(() => true, () => false)
+    if (loops < 18 || !picked) fails.push(`blobscape pixel diorama gallery: ${loops} loops loaded, picking a tile ${picked ? 'worked' : 'did not open the scene above'}`)
+    else ok(`blobscape pixel diorama: the gallery's ${loops} loops load, and a tile opens its scene in the view`)
     await d.ctx.close()
   }
 

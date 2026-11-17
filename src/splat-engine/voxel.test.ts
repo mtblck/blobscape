@@ -96,3 +96,38 @@ test('each part hangs wholly on its bone, and turns with it', () => {
   const p = posedPoint(skeleton, lamp, blobs.center.subarray(tip * 3, tip * 3 + 3))
   assert.ok(p[2] < -0.9 && Math.abs(p[0]) < 0.3, `${p}`)
 })
+
+test('painted light: shade turns cool and never passes the glow line, and the touches are off by default', async () => {
+  const { bakedColor } = await import('./voxel.ts')
+  const gray: [number, number, number] = [0.6, 0.6, 0.6]
+  const plain = bakedColor(gray, 0.3, 0, 0)
+  assert.ok(plain.every((v) => Math.abs(v - 0.18) < 1e-9))
+  const cool = bakedColor(gray, 0.3, 0, 0.7)
+  // a gray in shadow takes a blue-violet cast instead of staying gray
+  assert.ok(cool[2] > cool[1] && cool[2] > plain[2] - 0.01, `${cool}`)
+  for (const c of [[1, 1, 1], [1, 0.2, 0.1], [0.2, 1, 0.3]] as [number, number, number][]) {
+    for (const lit of [0, 0.5, 1]) assert.ok(Math.max(...bakedColor(c, LIT_MAX, lit, 1, 1)) <= LIT_MAX + 1e-9)
+  }
+})
+
+test('crevice darkens a corner and leaves an open face alone; a beam lights the floor it lands on', () => {
+  const spec = (light: VoxelSpec['light'], beams?: VoxelSpec['beams']): VoxelSpec => ({
+    bones: [ROOT], spacing: 0.04, light: { ambient: 1, shadow: 0, ...light }, beams,
+    parts: [{ shape: box([0, -0.1, 0], [1, 0.1, 1]), color: [0.5, 0.5, 0.5], bone: 'root' }, { shape: box([0, 0.5, -0.6], [1, 0.5, 0.1]), color: [0.5, 0.5, 0.5], bone: 'root' }],
+  })
+  const at = (b: ReturnType<typeof buildVoxels>, x: number, y: number, z: number) => {
+    let best = -1, d = Infinity
+    for (let i = 0; i < b.blobs.count; i++) {
+      const e = Math.hypot(b.blobs.center[i * 3] - x, b.blobs.center[i * 3 + 1] - y, b.blobs.center[i * 3 + 2] - z)
+      if (e < d) { d = e; best = i }
+    }
+    return b.blobs.color[best * 3]
+  }
+  const off = buildVoxels(spec({})), on = buildVoxels(spec({ crevice: 1 }))
+  // the floor at the foot of the wall, and out in the open
+  assert.ok(at(on, 0, 0, -0.48) < at(off, 0, 0, -0.48) - 0.02)
+  assert.ok(Math.abs(at(on, 0, 0, 0.6) - at(off, 0, 0, 0.6)) < 1e-6)
+  const lit = buildVoxels(spec({}, [{ from: [0, 1.5, 0.4], to: [0, 0, 0.4], r: 0.2, color: [1, 0.9, 0.5], strength: 1 }]))
+  assert.ok(at(lit, 0, 0, 0.4) > at(off, 0, 0, 0.4) + 0.05)
+  assert.ok(Math.abs(at(lit, 0, 0, -0.2) - at(off, 0, 0, -0.2)) < 1e-6)
+})

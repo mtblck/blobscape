@@ -1,5 +1,6 @@
 import type { Creature } from '../../splat-engine/body.ts'
-import { axisAngle, mulQ, norm4, rotate, type Skeleton } from '../../splat-engine/rig.ts'
+import { blendPose } from '../../splat-engine/mix.ts'
+import { axisAngle, mulQ, rotate, type Skeleton } from '../../splat-engine/rig.ts'
 import { clearCloak, elfIdle, elfWalk, elfWave, makeElf } from '../../splat-engine/zoo/elf.ts'
 import { makeGround } from './ground.ts'
 import { makePlant, type Plant, type Season } from './plants.ts'
@@ -177,14 +178,4 @@ function hide(sk: Skeleton, at: Walker) {
   sk.rootScale = 0
   sk.place.set([at.x, 0, at.z])
   sk.update()
-}
-
-/** Mixes the pose in `sk` with `from`, weight w on `sk`'s: turns by normalized lerp, offsets by lerp. */
-export function blendPose(sk: Skeleton, from: { rotation: Float32Array; offset: Float32Array }, w: number) {
-  for (let b = 0; b < sk.count; b++) {
-    const a = from.rotation.subarray(b * 4, b * 4 + 4), q = sk.rotation.subarray(b * 4, b * 4 + 4)
-    const sign = a[0] * q[0] + a[1] * q[1] + a[2] * q[2] + a[3] * q[3] < 0 ? -1 : 1
-    sk.setRotation(b, norm4([0, 1, 2, 3].map((k) => a[k] + (q[k] * sign - a[k]) * w)))
-    for (let k = 0; k < 3; k++) sk.offset[b * 3 + k] = from.offset[b * 3 + k] + (sk.offset[b * 3 + k] - from.offset[b * 3 + k]) * w
-  }
 }

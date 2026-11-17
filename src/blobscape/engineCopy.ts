@@ -38,6 +38,13 @@ export const DEMOS = [
 
 export type DemoId = (typeof DEMOS)[number]['id']
 
+/** The strip of recorded pixel scenes under the demos (loops from diorama/loops.ts). */
+export const PIXEL_STRIP = {
+  title: 'Pixel scenes, written as data',
+  body: 'Each of these is a short description of shapes, paints, bones and moves, cut into blobs and drawn as pixel art by the engine. These loops were recorded from Pixel Diorama, where every one of them plays live.',
+  link: { label: 'See all of them in Pixel Diorama', href: '/experiments/pixel-diorama/' },
+} as const
+
 export const FEATURES = [
   { title: 'Bones for blobs', body: 'Every blob follows up to four bones, blended on the graphics card. Bones turn, slide and grow, so a tongue shoots out, a tree sprouts and a slime bursts.' },
   { title: 'One world, one sort', body: 'Every actor shares one set of blobs, sorted together each frame. A hero, forty slimes and the hall round them overlap the way they should.' },

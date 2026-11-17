@@ -1,4 +1,5 @@
 import { Blobs, quatFacing, type Vec3 } from '../splat-core/blobs.ts'
+import { fromOklab, toOklab } from '../splat-core/color.ts'
 import { Skeleton, emptySkin, setWeights, type Bone } from './rig.ts'
 import type { Built } from './body.ts'
 
@@ -15,7 +16,10 @@ import type { Built } from './body.ts'
  * Light is baked into the colors: one sun, an ambient floor, and shadows cast
  * by every part on every other, found by marching from each blob toward the
  * sun through the scene's shapes in the rest pose. `glow` parts keep their
- * color and cast no shadow.
+ * color and cast no shadow. Three optional touches a pixel artist would paint
+ * (all off unless the light asks): `ramp` turns shade cool and light warm
+ * instead of only darker, `crevice` darkens what is shut in by other surfaces,
+ * and `wear` lightens edges. A part's `grime` collects where it is shut in.
  */
 export interface Shape {
   /** Distance to the surface: negative inside. */
@@ -36,7 +40,39 @@ export interface VoxelPart {
   opacity?: number
   /** Casts no shadow on other parts (thin things far from the ground, like birds). */
   noShadow?: boolean
+  /** A color (sRGB, 0–1) that gathers in its hollows and creases, as moss or dirt does. Needs the light's `crevice` to find them. */
+  grime?: Vec3
 }
+
+/**
+ * A blob placed as it is, not cut from a shape: soft, faint things in the air such as mist or a beam of light. Kept
+ * under LOOSE_MAX opacity, so pixel mode's map of parts never takes one for a surface.
+ */
+export interface LooseBlob {
+  center: Vec3
+  /** Its radii along x, y and z. */
+  scale: Vec3
+  color: Vec3
+  opacity: number
+  bone: string
+}
+
+/**
+ * A beam of light falling through the scene, as from a window or a gap in the leaves: surfaces inside it that face
+ * back up it are lit by its color, on top of the sun, so the beam shows where it lands.
+ */
+export interface Beam {
+  from: Vec3
+  to: Vec3
+  /** Its radius. */
+  r: number
+  color: Vec3
+  /** 0–1. */
+  strength: number
+}
+
+/** The most a loose blob may cover: under the engine's PART_CUT, so it never shows in the map of parts. */
+export const LOOSE_MAX = 0.13
 
 export interface VoxelLight {
   /** Direction toward the sun. */
@@ -45,6 +81,12 @@ export interface VoxelLight {
   ambient: number
   /** How dark a cast shadow is: 0 leaves no shadow, 1 leaves only the ambient light. */
   shadow: number
+  /** How far shade turns its hue toward cool violet and full sun toward warm yellow, as a painter's ramp does: 0 only darkens. */
+  ramp?: number
+  /** How much surfaces shut in by others (corners, cracks, the foot of a wall) darken: 0 to 1. */
+  crevice?: number
+  /** How much sharp outer edges lighten, as worn stone and wood do: 0 to 1. */
+  wear?: number
 }
 
 export interface VoxelSpec {
@@ -69,6 +111,9 @@ export interface VoxelSpec {
    * show between them, so a creature seen as blobs wants them wider.
    */
   disc?: number
+  /** Blobs placed as they are, after the cut ones: see LooseBlob. */
+  loose?: LooseBlob[]
+  beams?: Beam[]
 }
 
 /**
@@ -78,6 +123,9 @@ export interface VoxelSpec {
  * lights add on top: a surface under a strong one does pass the line and glow.
  */
 export const LIT_MAX = 0.9
+
+/** The painted touches pixel scenes use unless they say otherwise: hue-turning shade, dark crevices, worn edges. */
+export const PAINTED = { ramp: 0.7, crevice: 0.5, wear: 0.5 }
 
 export const DEFAULT_LIGHT: VoxelLight = { dir: [-0.45, 0.75, 0.5], ambient: 0.35, shadow: 0.75 }
 
@@ -214,6 +262,89 @@ function sunlight(casters: Shape[], p: Vec3, L: Vec3, spacing: number, far: numb
   return Math.min(1, Math.max(0, lit))
 }
 
+/** How far out from a surface `openness` looks for others, in world units, and how much each look counts. */
+const SHUT_REACH = [0.03, 0.06, 0.11, 0.18]
+const SHUT_WEIGHT = [0.3, 0.3, 0.25, 0.15]
+
+/**
+ * How open a surface point is: 1 with nothing near in front of it, falling toward 0 in a corner, a crack or under
+ * an overhang. Looks a few steps out along the normal and asks how much nearer than that the scene's surfaces are.
+ */
+function openness(casters: Shape[], p: Vec3, n: Vec3, spacing: number) {
+  let shut = 0
+  for (let k = 0; k < SHUT_REACH.length; k++) {
+    const h = Math.max(SHUT_REACH[k], spacing * 1.5)
+    const x = p[0] + n[0] * h, y = p[1] + n[1] * h, z = p[2] + n[2] * h
+    // only a surface nearer than h counts, so a box further off than that is never asked
+    let d = h
+    for (const c of casters) {
+      if (boxDistance(c, x, y, z) >= d) continue
+      d = Math.min(d, c.sdf(x, y, z))
+    }
+    shut += SHUT_WEIGHT[k] * Math.min(1, Math.max(0, (h - d) / h))
+  }
+  return 1 - shut
+}
+
+type ReadyBeam = Beam & { axis: Vec3; len: number; dir: Vec3 }
+
+/** A surface color with the beams it stands in added: brighter toward the beam's middle, only on faces turned back up it. */
+function inBeams(beams: ReadyBeam[], p: Vec3, n: Vec3, base: Vec3, color: Vec3): Vec3 {
+  let out = color
+  for (const b of beams) {
+    const q: Vec3 = [p[0] - b.from[0], p[1] - b.from[1], p[2] - b.from[2]]
+    const along = q[0] * b.dir[0] + q[1] * b.dir[1] + q[2] * b.dir[2]
+    // a little past its end, so the floor it ends on is lit
+    if (along < 0 || along > b.len + b.r) continue
+    const off = Math.hypot(q[0] - b.dir[0] * along, q[1] - b.dir[1] * along, q[2] - b.dir[2] * along)
+    if (off >= b.r) continue
+    const facing = -(n[0] * b.dir[0] + n[1] * b.dir[1] + n[2] * b.dir[2])
+    if (facing <= 0) continue
+    const soft = 1 - (off / b.r) ** 2
+    // light falls on the surface's own color: a beam brightens what it lands on, and tints it
+    const k = b.strength * soft * Math.min(1, facing * 1.4)
+    out = [0, 1, 2].map((i) => out[i] + (base[i] * 0.6 + 0.4) * b.color[i] * k * 0.7) as Vec3
+  }
+  const top = Math.max(out[0], out[1], out[2])
+  return top > LIT_MAX ? (out.map((v) => (v * LIT_MAX) / top) as Vec3) : out
+}
+
+/** Hues (OKLab, radians) that shade turns toward and full sun turns toward: a cool violet and a warm yellow. */
+const COOL = (295 * Math.PI) / 180
+const WARM = (75 * Math.PI) / 180
+
+/**
+ * A surface color under the baked light. `shade` is how bright (0 to LIT_MAX), `lit` how much straight sun it takes
+ * (0–1). With `ramp` the color doesn't only darken: shade turns its hue toward violet and gains a little chroma in the
+ * middle tones, full sun leans warm, and even a gray goes cool in shadow, so a palette's cool darks get picked over its
+ * browns. `lift` lightens it (a worn edge). Never brighter than LIT_MAX, which keeps it under pixel mode's glow line.
+ */
+export function bakedColor(base: Vec3, shade: number, lit: number, ramp: number, lift = 0): Vec3 {
+  const c: Vec3 = [base[0] * shade, base[1] * shade, base[2] * shade]
+  if (ramp <= 0 && lift <= 0) return c
+  const [L, a, b] = toOklab(c)
+  const dark = Math.min(1, Math.max(0, 1 - shade / LIT_MAX))
+  const warm = Math.max(0, lit - 0.6) / 0.4
+  let C = Math.hypot(a, b), h = Math.atan2(b, a)
+  const turn = (to: number, by: number) => {
+    const d = Math.atan2(Math.sin(to - h), Math.cos(to - h))
+    h += Math.sign(d) * Math.min(Math.abs(d), by)
+  }
+  turn(COOL, ramp * dark * 0.6)
+  turn(WARM, ramp * warm * 0.12)
+  C *= 1 + ramp * dark * (1 - dark) * 1.4
+  // a tint of the light's own color on top, which is what gives a gray a hue at all
+  const cool = ramp * dark * 0.03, sun = ramp * warm * 0.012
+  const out = fromOklab([
+    Math.min(1, L + lift * 0.08),
+    C * Math.cos(h) + cool * Math.cos(COOL) + sun * Math.cos(WARM),
+    C * Math.sin(h) + cool * Math.sin(COOL) + sun * Math.sin(WARM),
+  ])
+  const top = Math.max(out[0], out[1], out[2])
+  if (top > LIT_MAX) for (let i = 0; i < 3; i++) out[i] *= LIT_MAX / top
+  return out
+}
+
 /**
  * Builds the scene's blobs, skin and skeleton. Cells sit on one grid shared by
  * every part (multiples of `spacing` from the origin), so parts line up, and
@@ -230,6 +361,11 @@ export function buildVoxels(spec: VoxelSpec): Built {
   const far = Math.hypot(...[0, 1, 2].map((i) => Math.max(...spec.parts.map((p) => p.shape.max[i])) - Math.min(...spec.parts.map((p) => p.shape.min[i]))))
 
   const disc = spec.disc ?? 0.55
+  const beams = (spec.beams ?? []).map((b) => {
+    const axis: Vec3 = [b.to[0] - b.from[0], b.to[1] - b.from[1], b.to[2] - b.from[2]]
+    return { ...b, axis, len: Math.hypot(...axis) || 1, dir: norm(axis) }
+  })
+  const ramp = light.ramp ?? 0, crevice = light.crevice ?? 0, wear = light.wear ?? 0
   const buried = -Math.max(s, spec.keepBuried ?? 0)
   const blobs = new Blobs(4096)
   const parts: number[] = []
@@ -238,6 +374,9 @@ export function buildVoxels(spec: VoxelSpec): Built {
     const { sdf, min, max } = part.shape
     // parts on the same bone never move apart, so a cell buried in a neighbor is never seen
     const same = spec.parts.filter((q, qi) => qi !== pi && boneOf[qi] === boneOf[pi] && !q.glow && (q.opacity ?? 1) >= 0.9).map((q) => q.shape)
+    // only shapes within reach of this part can shut its surface in
+    const reach = Math.max(SHUT_REACH[SHUT_REACH.length - 1], s * 1.5) + s
+    const near = crevice > 0 || part.grime ? casters.filter((c) => [0, 1, 2].every((i) => c.min[i] <= max[i] + reach && c.max[i] >= min[i] - reach)) : []
     const i0 = Math.floor(min[0] / s), i1 = Math.ceil(max[0] / s)
     const j0 = Math.floor(min[1] / s), j1 = Math.ceil(max[1] / s)
     const k0 = Math.floor(min[2] / s), k1 = Math.ceil(max[2] / s)
@@ -246,22 +385,38 @@ export function buildVoxels(spec: VoxelSpec): Built {
       // the outermost layer of cells inside the shape
       if (d > 0 || d <= -s * (spec.trueShell ? 4 : 1)) return
       if (same.some((q) => boxDistance(q, x, y, z) === 0 && q.sdf(x, y, z) < buried)) return
-      const g: Vec3 = [sdf(x + e, y, z) - sdf(x - e, y, z), sdf(x, y + e, z) - sdf(x, y - e, z), sdf(x, y, z + e) - sdf(x, y, z - e)]
+      const xa = sdf(x + e, y, z), xb = sdf(x - e, y, z), ya = sdf(x, y + e, z), yb = sdf(x, y - e, z), za = sdf(x, y, z + e), zb = sdf(x, y, z - e)
+      const g: Vec3 = [xa - xb, ya - yb, za - zb]
       // the distance in world units, from how fast the shape's distance changes here
       if (spec.trueShell && (d * s) / (Math.hypot(g[0], g[1], g[2]) || s) <= -s) return
       const n = norm(g)
       const p: Vec3 = [x, y, z]
-      const base = typeof part.color === 'function' ? part.color(p, n) : part.color
-      let shade = 1
+      let base = typeof part.color === 'function' ? part.color(p, n) : part.color
+      let color = base
       if (!part.glow) {
         const facing = Math.max(0, n[0] * L[0] + n[1] * L[1] + n[2] * L[2])
         const sun = facing > 0 ? 1 - light.shadow * (1 - sunlight(casters, [x + n[0] * s, y + n[1] * s, z + n[2] * s], L, s, far)) : 0
-        shade = (light.ambient + (1 - light.ambient) * facing * sun) * LIT_MAX
+        let ambient = light.ambient
+        if (crevice > 0 || part.grime) {
+          // looked at from the surface itself, not from the cell's middle, so a flat face is fully open
+          const open = openness(near, [x - n[0] * d, y - n[1] * d, z - n[2] * d], n, s)
+          // a corner keeps out the light from all round, not the sun: a sunlit foot of a wall stays bright
+          ambient *= 1 - crevice * (1 - open)
+          if (part.grime) {
+            const k = Math.min(1, Math.max(0, (1 - open) * 2.2 - 0.1)), gr = part.grime
+            base = [base[0] + (gr[0] - base[0]) * k, base[1] + (gr[1] - base[1]) * k, base[2] + (gr[2] - base[2]) * k]
+          }
+        }
+        const shade = (ambient + (1 - light.ambient) * facing * sun) * LIT_MAX
+        // how sharply the surface bends outward here (from the samples the normal came from): 0 flat, over 1 at an edge
+        const edge = wear > 0 ? Math.min(1, Math.max(0, (((xa + xb + ya + yb + za + zb - 6 * d) / (e * e)) * s - 0.5) / 1.5)) : 0
+        color = bakedColor(base, shade, facing * sun, ramp, wear * edge)
+        if (beams.length) color = inBeams(beams, p, n, base, color)
       }
       blobs.push({
         // a disc lying on the surface: flat along the normal, which is what live lights read as the way it faces
         center: p, scale: [s * disc, s * disc, s * 0.3], quat: quatFacing(n),
-        color: [base[0] * shade, base[1] * shade, base[2] * shade], opacity: part.opacity ?? 0.96,
+        color, opacity: part.opacity ?? 0.96,
       })
       parts.push(pi)
     }
@@ -284,11 +439,19 @@ export function buildVoxels(spec: VoxelSpec): Built {
     }
   })
 
+  // loose blobs come last, each counted as a part of its own after the shapes
+  for (const [k, b] of (spec.loose ?? []).entries()) {
+    blobs.push({ center: b.center, scale: b.scale, quat: [0, 0, 0, 1], color: b.color, opacity: Math.min(b.opacity, LOOSE_MAX) })
+    parts.push(spec.parts.length + k)
+  }
+  const looseBone = (spec.loose ?? []).map((b) => skeleton.index(b.bone))
+
   const skin = emptySkin(blobs.count)
   const partOf = new Uint16Array(blobs.count)
   for (let i = 0; i < blobs.count; i++) {
     partOf[i] = parts[i]
-    setWeights(skin, i, [[boneOf[parts[i]], 1]])
+    const pi = parts[i]
+    setWeights(skin, i, [[pi < boneOf.length ? boneOf[pi] : looseBone[pi - boneOf.length], 1]])
   }
   return { blobs, skin, skeleton, partOf }
 }

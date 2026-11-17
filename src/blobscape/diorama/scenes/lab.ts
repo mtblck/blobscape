@@ -16,6 +16,7 @@ export const LAB: SceneDoc = {
   ],
   look: { dither: 0.05, glow: 1.2, outline: true, edges: true },
   camera: { target: [0, 1.05, 0], distance: 5.6, azimuth: 12, elevation: 12, swing: 12 },
+  air: { haze: { color: '#100c20', from: 0.5, to: 6 }, shafts: [{ from: [-0.45, 2.1, 0.5], to: [-0.3, 0, 0.8], r: 0.3, color: '#ffe08c', strength: 0.5 }], specks: [{ kind: 'dust', count: 35, from: [-0.9, 0.3, 0.1], to: [0.1, 2.0, 1.0], colors: ['#ffe08c', '#e8e4dc'], glow: true }] },
   bones: [
     { name: 'sprout0', at: [-0.85, 0.4, 0.1] },
     { name: 'bub0_0', at: [-0.98, 0.42, 0.178] },

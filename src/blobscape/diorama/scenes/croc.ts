@@ -18,6 +18,7 @@ export const CROC: SceneDoc = {
   skyReach: 0.8,
   look: { dither: 0.05, glow: 1.0, outline: true, edges: true },
   camera: { target: [0, 0.4, 0], distance: 4.7, azimuth: 24, elevation: 16, swing: 16 },
+  air: { haze: { color: '#98d0ec', from: 2, to: 14 }, specks: [{ kind: 'dust', count: 25, from: [-1.5, 0.3, -0.8], to: [1.5, 1.6, 1.0], colors: ['#fff4e0', '#ffd044'] }] },
   bones: [
     { name: 'croc', at: [0, 0.1, 0] },
     { name: 'torso', at: [-0.1, 0.12, 0], parent: 'croc' },

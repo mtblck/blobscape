@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { Orbit } from '../splat-core/view.ts'
 import type { Creature as Body } from '../splat-engine/body.ts'
 import { GlbError, readRiggedGlb, recordClip, writeRiggedGlb, writeRiggedMeshGlb, type Clip } from '../splat-engine/glb.ts'
@@ -13,13 +13,13 @@ import { Crumbs, useFocusHeading } from './Shell.tsx'
 import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitDrag } from './Viewport.tsx'
 import { download, kb } from './files.ts'
 import { LESSONS, href } from './routes.ts'
-import type { CreatureStage, Show } from './creature/stage.ts'
+import type { CreatureStage, PickedBone, Show } from './creature/stage.ts'
 import { TAB_SECTIONS, Workbench } from '../shared/Workbench.tsx'
 import { Sprites } from './creature/Sprites.tsx'
 
 const STILL = 'still'
 const MAX_FILE = 200 * 1024 * 1024
-const RIG_LESSONS = LESSONS.filter((l) => ['one-bone', 'weights', 'twist', 'walk', 'model', 'morphs', 'fur'].includes(l.id))
+const RIG_LESSONS = LESSONS.filter((l) => ['one-bone', 'weights', 'twist', 'walk', 'feet', 'model', 'morphs', 'fur'].includes(l.id))
 const SHOW: { id: Show; label: string }[] = [{ id: 'blobs', label: 'Blobs' }, { id: 'bones', label: 'Bones' }, { id: 'both', label: 'Both' }]
 const DEFAULT = 'fox'
 
@@ -84,6 +84,8 @@ export function Creature() {
   const [cells, setCells] = useState(64)
   /** An opened file's morph weights while it stands still. */
   const [morphW, setMorphW] = useState<number[]>([])
+  /** The bone lit up by a tap (or the [ and ] keys), and what it moves. */
+  const [picked, setPicked] = useState<PickedBone>()
 
   // the address says what's shown: a monster's seed (one made up for a bad or missing seed too), nothing extra for the zoo
   useEffect(() => {
@@ -173,9 +175,26 @@ export function Creature() {
     first.current = false
     inView.current = shown.body
     stage.setActor(shown.body, clip)
+    setPicked(undefined)
   }, [stage, shown, building]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { stage?.setClip(clip) }, [stage, clip])
   useEffect(() => { stage?.setMorphWeights(morphW) }, [stage, morphW, shown])
+  useEffect(() => { stage?.highlight(picked?.bone) }, [stage, picked])
+  /** Lights up the bone under a tap, or puts it out when the tap is on the same bone or off the creature. */
+  const tapAt = (ev: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (!stage) return
+    const r = ev.currentTarget.getBoundingClientRect()
+    const hit = stage.pick(ev.clientX - r.left, ev.clientY - r.top)
+    setPicked((was) => (!hit || was?.bone === hit.bone ? undefined : hit))
+  }
+  /** Steps to the next or previous bone, from the keyboard or the buttons beside the name. */
+  const stepBone = (by: number) => {
+    if (!stage) return
+    const n = shown.body.skeleton.count
+    setPicked((was) => stage.boneInfo(was ? (was.bone + by + n) % n : by > 0 ? 0 : n - 1))
+  }
+  /** Where a press went down, to tell a tap from the start of a drag. */
+  const pressed = useRef<{ id: number; x: number; y: number; many: boolean } | null>(null)
   useEffect(() => { if (stage) stage.speed = speed }, [stage, speed])
   useEffect(() => { stage?.setShow(show) }, [stage, show])
   useEffect(() => { stage?.setFloor(Math.max(8, 2 * Math.round(scaleOf.view.distance))) }, [stage, scaleOf])
@@ -248,13 +267,14 @@ export function Creature() {
                 ref={canvas}
                 role="application"
                 aria-roledescription="3D view"
-                aria-label={`${shown.name}, ${shown.body.blobs.count.toLocaleString()} blobs, ${moveLabel}${showing}. Drag or use the arrow keys to orbit; scroll, pinch or press plus and minus to zoom.`}
+                aria-label={`${shown.name}, ${shown.body.blobs.count.toLocaleString()} blobs, ${moveLabel}${showing}. Drag or use the arrow keys to orbit; scroll, pinch or press plus and minus to zoom. Tap the creature, or press the square bracket keys, to light up a bone and the blobs it moves.`}
                 tabIndex={0}
                 data-testid="creature-view"
                 className="absolute inset-0 h-full w-full cursor-grab touch-none outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset active:cursor-grabbing"
                 onPointerDown={(ev) => {
                   ev.currentTarget.setPointerCapture(ev.pointerId)
                   pointers.current.set(ev.pointerId, { x: ev.clientX, y: ev.clientY })
+                  pressed.current = pointers.current.size === 1 ? { id: ev.pointerId, x: ev.clientX, y: ev.clientY, many: false } : pressed.current && { ...pressed.current, many: true }
                   drag.current = beginOrbitDrag(pointers.current, ev, orbit)
                 }}
                 onPointerMove={(ev) => {
@@ -262,9 +282,17 @@ export function Creature() {
                   const d = drag.current
                   if (d) setOrbit(dragOrbit(d, pointers.current, ev))
                 }}
-                onPointerUp={(ev) => { pointers.current.delete(ev.pointerId); drag.current = null }}
+                onPointerUp={(ev) => {
+                  const p = pressed.current
+                  if (p && p.id === ev.pointerId && !p.many && Math.hypot(ev.clientX - p.x, ev.clientY - p.y) < 6) tapAt(ev)
+                  if (p?.id === ev.pointerId) pressed.current = null
+                  pointers.current.delete(ev.pointerId)
+                  drag.current = null
+                }}
                 onPointerCancel={(ev) => { pointers.current.delete(ev.pointerId); drag.current = null }}
                 onKeyDown={(ev) => {
+                  if (ev.key === '[' || ev.key === ']') { ev.preventDefault(); stepBone(ev.key === ']' ? 1 : -1); return }
+                  if (ev.key === 'Escape' && picked) { ev.preventDefault(); setPicked(undefined); return }
                   if (!orbitKey(ev, orbit)) return
                   ev.preventDefault()
                   setOrbit((o) => orbitKey(ev, o) ?? o)
@@ -277,7 +305,17 @@ export function Creature() {
                 {SHOW.map((v) => <Chip small key={v.id} active={show === v.id} onClick={() => setShow(v.id)}>{v.label}</Chip>)}
               </div>
               <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => setOrbit(scaleOf.view)} />
-              <p aria-hidden className="pointer-events-none absolute right-14 bottom-2 left-3 text-right text-xs text-ink-faint">{typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches ? 'drag to orbit · pinch to zoom' : 'drag to orbit · scroll to zoom'}</p>
+              {picked ? (
+                <div role="group" aria-label="Bone lit up" data-testid="picked-bone" className="absolute bottom-2 left-12 flex max-w-[calc(100%-7rem)] items-center gap-1 rounded-full border border-rule bg-paper/90 py-0.5 pr-0.5 pl-1 text-xs text-ink shadow-sm backdrop-blur">
+                  <button type="button" aria-label="Previous bone" onClick={() => stepBone(-1)} className="grid size-7 cursor-pointer place-items-center rounded-full text-ink-muted hover:bg-rule/60 hover:text-ink">‹</button>
+                  <span className="truncate px-1"><b className="font-semibold">{picked.label[0].toUpperCase() + picked.label.slice(1)}</b> moves <span className="tabular-nums">{picked.blobs.toLocaleString()}</span> blobs</span>
+                  <button type="button" aria-label="Next bone" onClick={() => stepBone(1)} className="grid size-7 cursor-pointer place-items-center rounded-full text-ink-muted hover:bg-rule/60 hover:text-ink">›</button>
+                  <button type="button" aria-label="Put the bone out" onClick={() => setPicked(undefined)} className="grid size-7 cursor-pointer place-items-center rounded-full text-ink-muted hover:bg-rule/60 hover:text-ink">×</button>
+                </div>
+              ) : (
+                <p aria-hidden className="pointer-events-none absolute right-14 bottom-2 left-3 text-right text-xs text-ink-faint">{typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches ? 'tap a bone · drag to orbit · pinch to zoom' : 'click a bone · drag to orbit · scroll to zoom'}</p>
+              )}
+              <p aria-live="polite" className="sr-only">{picked ? `${picked.label}: moves ${picked.blobs.toLocaleString()} blobs.` : ''}</p>
         </>}
         status={<><div>
               <span className="tabular-nums text-ink" data-testid="blob-count">{shown.body.blobs.count.toLocaleString()}</span> blobs on{' '}

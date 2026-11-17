@@ -67,6 +67,8 @@ export function sceneCreature(c: FromScene): SceneCreature {
     }),
     moves: [],
     lights: [],
+    // the creature leaves the scene's air behind: its specks, mist and haze
+    air: undefined,
   }
   const compiled = compileScene(doc)
   const moves = (c.doc.moves ?? []).filter((m) => names.has(m.bone))
