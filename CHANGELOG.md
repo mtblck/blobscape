@@ -14,6 +14,8 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 
 - Two mending tools in the sandbox. Fill grows blobs into a hole from its edge, in the size, facing and colors of the blobs beside it. Stamp copies what is round one place to another: click what to copy, then drag where the copy should go.
 
+- The engine's API reference is now its docs page (/engine/docs/; the old address goes there): a getting-started guide from the package's README, then a card for every export with its properties, methods and signatures, names in types linked to their entries, and a contents list that follows what you are reading. The reference is generated with TypeDoc from the package's own doc comments.
+
 - The engine page, the API reference and the Build with the engine lessons now say how to install the package from npm.
 
 - Open a rigged model in the sandbox or on Splat Creatures: a .glb of triangles on bones (from Blender, Mixamo or a game kit) becomes blobs laid over its surface on its own bones, and plays its own animations. The engine package has it as `readSkinnedGlb` and `splatModel`.

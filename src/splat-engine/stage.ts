@@ -16,7 +16,12 @@ import { lookColors, snapColors, type Frame, type PixelLook } from '../splat-cor
 
 /** What a stage shows: blobs, the skin that ties them to bones, and the skeleton. */
 export interface Actor {
-  blobs: Blobs; skin: Skin; skeleton: Skeleton
+  /** The blobs in the rest pose. */
+  blobs: Blobs
+  /** Which bones move each blob, and by how much. */
+  skin: Skin
+  /** The bones, and their pose. */
+  skeleton: Skeleton
   /** Blend shapes (from an opened .glb): a clip's weights, or `setMorphWeights` while none play, reshape the blobs on the CPU. */
   morphs?: Morph[]
 }
@@ -26,6 +31,7 @@ export type Show = 'blobs' | 'bones' | 'both'
 
 /** A bone found under the pointer (or stepped to): what the page says about it. */
 export interface PickedBone {
+  /** The bone's index in the skeleton. */
   bone: number
   /** Its name for people: 'left forearm'. */
   label: string
@@ -37,7 +43,12 @@ export interface PickedBone {
 const PICK_TINT = [0.95, 0.33, 0.23]
 const PICK_DIM = 0.4
 
+/** How a `Stage` starts. */
 export interface StageOptions {
+  /**
+   * Draws into a render target and copies each frame to a 2D canvas on request: headless test browsers can render
+   * WebGPU but not show it.
+   */
   offscreen?: boolean
   /** Builds each world with live lights (`setLights`), as Scan Studio does. */
   lights?: boolean
@@ -62,7 +73,9 @@ export interface StageOptions {
  * on request: headless test browsers can render WebGPU but not show it.
  */
 export class Stage {
+  /** The three.js renderer the stage made and draws with. */
   readonly renderer: THREE.WebGPURenderer
+  /** Which backend the renderer started on: WebGPU, or WebGL 2 where a browser has none. */
   readonly backend: 'webgpu' | 'webgl'
   private readonly scene = new THREE.Scene()
   private readonly camera = new THREE.PerspectiveCamera(40, 1, 0.05, 100)
@@ -91,8 +104,11 @@ export class Stage {
   private last = 0
   /** Frames left to draw while nothing moves (orbiting, a new creature). */
   private pending = 2
+  /** Where the camera looks from. Set it to move the view. */
   orbit: Orbit = { target: [0, 0.72, 0], distance: 4.2, azimuth: 40, elevation: 12 }
+  /** Whether time moves on. False holds the pose. */
   playing = true
+  /** How fast time runs: 1 is real time, 0.5 half speed. */
   speed = 1
   /**
    * Held frames: above 0, the pose only moves on every `step` seconds and the picture is left alone in between,
@@ -106,6 +122,7 @@ export class Stage {
   /** While a sprite sheet is being drawn, the live view leaves the renderer alone. */
   private baking = false
   private queued?: { actor: Actor; clip?: Clip }
+  /** How a blob on several bones takes its shape: see `SkinMode`. Change it with `setMode`. */
   mode: SkinMode = 'quat'
   private lit: { lights: PointLight[]; ambient: number } = { lights: [], ambient: 1 }
   /** Pixel mode: the scene drawn small and turned into pixel art (pixelPass.ts). */
@@ -145,6 +162,7 @@ export class Stage {
     }
   }
 
+  /** Starts a stage on a canvas: makes the renderer (WebGPU, or WebGL 2 where there is none) and begins drawing. */
   static async start(display: HTMLCanvasElement, opts: StageOptions = {}) {
     const canvas = opts.offscreen ? document.createElement('canvas') : display
     const renderer = await startRenderer({ canvas, antialias: false, alpha: true, forceWebGL: !!opts.webgl }, (r) => {
@@ -160,6 +178,7 @@ export class Stage {
     this.onFirstFrame?.()
   }
 
+  /** How many blobs the creature shown has. */
   get blobCount() { return this.actor?.blobs.count ?? 0 }
 
   /** Shows a creature, replacing the last one, and plays `clip` on it. */
@@ -196,6 +215,10 @@ export class Stage {
 
   /** Which depth sort the world uses: the counting sort, or the exact radix sort (slower; ties always in one order). */
   get sortKind() { return this.sort }
+  /**
+   * Changes how blobs are sorted by depth: 'bins' is quick, 'radix' settles every tie the same way each frame, which
+   * pixel art with hard edges wants.
+   */
   setSort(kind: 'bins' | 'radix') {
     if (kind === this.sort) return
     this.sort = kind
@@ -211,6 +234,7 @@ export class Stage {
     this.pose()
   }
 
+  /** Plays another clip on the creature shown, or none. */
   setClip(clip?: Clip) {
     this.clip = clip
     this.pose()
@@ -254,6 +278,7 @@ export class Stage {
   /** Seconds into the clip, or the time a poser is showing. */
   get time() { return this.step > 0 ? Math.floor(this.t / this.step + 1e-6) * this.step : this.t }
 
+  /** Changes how a blob on several bones takes its shape: see `SkinMode`. */
   setMode(m: SkinMode) {
     this.mode = m
     // a sheet being drawn keeps one rule throughout; the new one applies when it's done
@@ -291,6 +316,7 @@ export class Stage {
     this.invalidate()
   }
 
+  /** Shows the blobs, the bones, or both. */
   setShow(s: Show) {
     this.show = s
     if (this.baking) return
@@ -420,6 +446,10 @@ export class Stage {
     this.invalidate()
   }
 
+  /**
+   * Asks for the next `frames` frames to be drawn. Call it after changing something the stage can't see, such as its
+   * `orbit`.
+   */
   invalidate(frames = 2) { this.pending = Math.max(this.pending, frames) }
 
   private pose() {
@@ -514,6 +544,7 @@ export class Stage {
     }
   }
 
+  /** Stops drawing and frees what the stage made. */
   dispose() {
     this.stopped = true
     cancelAnimationFrame(this.raf)

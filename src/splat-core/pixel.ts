@@ -9,10 +9,14 @@ import { srgbToLinear } from './color.ts'
  *   stray-pixel cleanup → outline
  */
 
+/** A color as three numbers: red, green and blue, 0 to 255 in a palette. */
 export type Rgb = [number, number, number]
 
+/** A picture as RGBA bytes. */
 export interface Frame {
+  /** Pixels across. */
   width: number
+  /** Pixels down. */
   height: number
   /** RGBA, row 0 at the top, straight (not premultiplied) alpha. */
   data: Uint8ClampedArray

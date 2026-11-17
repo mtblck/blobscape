@@ -162,6 +162,7 @@ export function trot(sk: Skeleton, t: number) {
   sk.update()
 }
 
+/** Builds the fox with about `count` blobs: a sculpted skin under strands of fur. `look` picks its coat. */
 export function makeFox(count = 20000, look = 'red') {
   const c = COATS[look as keyof typeof COATS] ?? COATS.red
   const skin = sculptToCount((s) => spec(c, s), count * SKIN, 0.05)
@@ -175,6 +176,7 @@ export function makeFox(count = 20000, look = 'red') {
  */
 export const FOX_SWING: SwingSpec = { parts: 'tail', chains: [{ bones: ['tail1', 'tail2'], follow: [0.0015, 0.003], bend: 0.001 }], damping: 3 }
 
+/** The fox as a `Species`: how to build it, its looks, its moves and where the camera starts. */
 export const FOX: Species = {
   id: 'fox',
   name: 'fox',

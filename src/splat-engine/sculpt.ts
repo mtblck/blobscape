@@ -15,24 +15,36 @@ import { buildVoxels, type Shape, type VoxelLight } from './voxel.ts'
  * the rest (a jaw, a wing), or what it uncovers would be missing.
  */
 export interface SculptPart {
+  /** The part's shape, as a distance function. */
   shape: Shape
   /** Color (0–1, sRGB) or color at a surface point given its outward normal. */
   color: Vec3 | ((p: Vec3, n: Vec3) => Vec3)
   /** The bones that move it: each cell is weighted by its distance to each. */
   bones: string[]
+  /**
+   * Parts in one group cut each other where they overlap; a part that swings clear, like a jaw or a wing, wants its
+   * own.
+   */
   group?: string
+  /** Unlit: the color as given, for eyes and fire. */
   glow?: boolean
+  /** How solid its blobs are, 0–1. */
   opacity?: number
+  /** Casts no shadow on other parts. */
   noShadow?: boolean
   /** How far its weights spread from each bone, if not the creature's `blend`. */
   blend?: number
 }
 
+/** A creature to sculpt: its bones, its parts and how far a cell's weight spreads between bones. */
 export interface SculptSpec {
+  /** The creature's bones. */
   bones: Bone[]
+  /** Its parts. */
   parts: SculptPart[]
   /** How far (in world units) a cell's weight spreads from a bone. */
   blend: number
+  /** The baked light; what is left out comes from `DEFAULT_LIGHT`. */
   light?: Partial<VoxelLight>
   /**
    * How deep (world units) a part's skin goes on inside a neighbor of its group. 0 cuts it off at the neighbor's
@@ -42,7 +54,9 @@ export interface SculptSpec {
 }
 
 export interface Sculpted extends Creature {
+  /** Which part each blob came from. */
   partOf: Uint16Array
+  /** The grid's cell size it was cut at. */
   spacing: number
 }
 

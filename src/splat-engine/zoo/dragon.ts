@@ -249,6 +249,10 @@ function flame(): BodySpec {
 /** The share of the dragon's blobs that are its fire. */
 const FIRE_SHARE = 0.07
 
+/**
+ * Builds the dragon with about `count` blobs, a small share of them the fire that waits in its mouth. `look` picks
+ * its colors.
+ */
 export function makeDragon(count = 100000, look = 'ice') {
   const c = LOOKS[look] ?? LOOKS.ice
   const body = sculptToCount((s) => spec(c, s), Math.round(count * (1 - FIRE_SHARE)))
@@ -375,6 +379,7 @@ export function dragonFire(sk: Skeleton, t: number) {
 /** The tail, loose behind the body (swing.ts): five links, softer toward the spade, so a wingbeat sends a slow wave down it. */
 export const DRAGON_SWING: SwingSpec = { parts: 'tail', chains: [{ bones: ['tail1', 'tail2', 'tail3', 'tail4', 'tail5'], follow: [0.003, 0.0045, 0.006, 0.0075, 0.009], bend: 0.002 }], damping: 3 }
 
+/** The dragon as a `Species`: how to build it, its looks, its moves and where the camera starts. */
 export const DRAGON: Species = {
   id: 'dragon',
   name: 'dragon',

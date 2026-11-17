@@ -29,6 +29,10 @@ import { morphWeight, targetCount, targetWeights, type Morph, type MorphTarget }
  * not the extension move the centers right and leave the shapes as they were.
  */
 export const SKIN_EXTENSION = 'BLOBSCAPE_gaussian_skinning'
+/**
+ * The glTF extension that says how each morph target changes a splat's shape, and which targets are one morph's
+ * in-betweens.
+ */
 export const MORPH_EXTENSION = 'BLOBSCAPE_gaussian_morphs'
 /** The morph target attribute holding each splat's shape change, G = J − I, as a column-major MAT3. */
 export const SHAPE_ATTRIBUTE = `${MORPH_EXTENSION}:SHAPE`
@@ -36,7 +40,9 @@ const SPLATS = 'KHR_gaussian_splatting'
 /** How a skinned blob turns and grows: the spec is docs/rigged-splats.md. */
 export const SKIN_RULE = { rotationBlend: 'quaternionAverage', scaleBlend: 'weightedAverage' } as const
 
+/** An animation: keys for each bone at shared times. */
 export interface Clip {
+  /** The clip's name. */
   name: string
   /** Seconds. */
   times: Float32Array
@@ -50,11 +56,17 @@ export interface Clip {
   weights?: Float32Array
 }
 
+/** Everything a rigged .glb holds: the blobs, their skin, the skeleton, its clips and any morphs. */
 export interface Rigged {
+  /** The model's name. */
   name: string
+  /** The blobs in the rest pose. */
   blobs: Blobs
+  /** Which bones move each blob, and by how much. */
   skin: Skin
+  /** The bones. */
   skeleton: Skeleton
+  /** Its animations. */
   clips: Clip[]
   /** Blend shapes on the blobs (morph.ts), applied to the rest blobs before skinning; clips key their weights. */
   morphs?: Morph[]
@@ -195,6 +207,10 @@ class BinWriter {
 
 const FLOAT = 5126, UBYTE = 5121, USHORT = 5123, UINT = 5125
 
+/**
+ * Writes blobs, bones, clips and morphs as a .glb: the KHR_gaussian_splatting standard with ordinary glTF skins and
+ * animation, plus the two Blobscape extensions. Blender and game engines open its bones and clips.
+ */
 export function writeRiggedGlb(r: Rigged): Uint8Array {
   const { blobs, skin, skeleton } = r
   const n = blobs.count
@@ -446,6 +462,7 @@ function packGlb(json: unknown, bin: Uint8Array) {
 
 // --- reading ---
 
+/** Thrown when a file can't be read as a rigged .glb; its message says why. */
 export class GlbError extends Error {}
 
 /** Reads a .glb written by `writeRiggedGlb`, or any KHR_gaussian_splatting file with a skin whose joints have no rest rotation. */

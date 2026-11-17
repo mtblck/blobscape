@@ -25,11 +25,15 @@ import { mat3ToQuat, symEigen } from './pose.ts'
  * goes from 0 to 1.
  */
 export interface MorphTarget {
+  /** How far each blob's center moves: x, y, z per blob. */
   delta: Float32Array
+  /** How each blob's shape changes: the morph's local 3×3 map minus identity, nine per blob. */
   grad: Float32Array
 }
 
+/** A blend shape for blobs: a named change of shape, reached as its weight goes from 0 to 1. */
 export interface Morph {
+  /** The morph's name, as files and clips know it. */
   name: string
   /** Reached in turn, evenly spaced, as the weight goes 0 → 1; the last is the full shape. */
   targets: MorphTarget[]

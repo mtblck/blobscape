@@ -32,11 +32,13 @@ function polygon(x: number, y: number, n: number, apothem: number) {
 
 // --- Crystals
 
+/** One crystal for `crystal`. */
 export interface CrystalSpec {
   /** Its foot, where it grows out of the rock. */
   at: Vec3
   /** The way it points. */
   dir: Vec3
+  /** How long it is, foot to point. */
   length: number
   /** Its radius, corner to middle. */
   r: number
@@ -46,6 +48,7 @@ export interface CrystalSpec {
   tip?: number
   /** How many chips are knocked off its faces, 0 to 6. */
   chips?: number
+  /** The same seed gives the same result. */
   seed: number
 }
 
@@ -89,17 +92,23 @@ export function crystal(s: CrystalSpec): Shape {
   }
 }
 
+/** A cluster of crystals growing from one root, for `cluster`. */
 export interface ClusterSpec {
   /** Where they grow from. */
   at: Vec3
+  /** How many crystals. */
   count: number
   /** The longest, in the middle. */
   size: number
+  /** The radius of the biggest. */
   r: number
   /** How far the outer ones lean, in degrees (50 when left out). */
   spread?: number
+  /** Sides to each crystal, 3 to 8 (6 when left out). */
   sides?: number
+  /** Chips knocked off each crystal's faces, 0 to 6. */
   chips?: number
+  /** The same seed gives the same result. */
   seed: number
 }
 
@@ -127,8 +136,11 @@ export function cluster(s: ClusterSpec): Shape {
 
 // --- Geodes
 
+/** A broken-open geode for `geode`. */
 export interface GeodeSpec {
+  /** Its middle. */
   at: Vec3
+  /** Its radius. */
   r: number
   /** The way the broken face looks: its outward direction. */
   open: Vec3
@@ -138,6 +150,7 @@ export interface GeodeSpec {
   bands?: number
   /** How long the crystals lining the hollow are, as a share of the radius (0.22). */
   lining?: number
+  /** The same seed gives the same result. */
   seed: number
 }
 
@@ -184,6 +197,7 @@ function geodeRaw(s: GeodeSpec): Shape {
 
 // --- Columns
 
+/** A field of six-sided columns, as basalt, for `columns`. */
 export interface ColumnsSpec {
   /** The middle of the field, on the ground. */
   at: Vec3
@@ -195,9 +209,11 @@ export interface ColumnsSpec {
   height: number
   /** How heights run: 'dome' (tallest in the middle, as organ pipes), 'steps' (a causeway stepping down to its edge) or 'random'. */
   rise?: 'dome' | 'steps' | 'random'
+  /** The same seed gives the same result. */
   seed: number
 }
 
+/** The ways the heights of a field of columns can run. */
 export const RISES = ['dome', 'steps', 'random'] as const
 
 const SQ3 = Math.sqrt(3)
@@ -266,6 +282,7 @@ export function columns(s: ColumnsSpec): Shape {
 
 // --- Stalactites and stalagmites
 
+/** Stalactites and stalagmites for `drips`. */
 export interface DripsSpec {
   /** The middle of the floor under them. */
   at: Vec3
@@ -273,9 +290,11 @@ export interface DripsSpec {
   r: number
   /** The height of the roof they hang from. */
   roof: number
+  /** How many drips. */
   count: number
   /** The longest stalactite. */
   length: number
+  /** The same seed gives the same result. */
   seed: number
 }
 
@@ -324,16 +343,19 @@ function spike(from: Vec3, to: Vec3, r: number, rTo = 0): Shape {
 
 // --- Flowstone
 
+/** A sheet of flowstone for `flowstone`. */
 export interface FlowSpec {
   /** The middle of its top, where it leaves the wall. */
   at: Vec3
   /** Along the wall: [x, z]. Its face looks out to the right of this. */
   along: [number, number]
+  /** How wide it is along the wall. */
   width: number
   /** How far it hangs down. */
   drop: number
   /** Folds across it (5). */
   folds?: number
+  /** The same seed gives the same result. */
   seed: number
 }
 
@@ -360,6 +382,7 @@ function flowstoneRaw(s: FlowSpec): Shape {
 
 // --- Icicles
 
+/** Icicles along a shape's edges, for `icicles`. */
 export interface IcicleSpec {
   /** About how far apart they hang. */
   every: number
@@ -367,6 +390,7 @@ export interface IcicleSpec {
   length: number
   /** Only edges higher than this hang icicles (an edge resting on the ground has none): every edge when left out. */
   above?: number
+  /** The same seed gives the same result. */
   seed: number
 }
 
@@ -408,6 +432,8 @@ export function icicles(host: Shape, s: IcicleSpec, thin = 0): Shape {
   return many(parts)
 }
 
+/** A geode broken open: a rind, banded layers and crystals lining the hollow. */
 export const geode = (s: GeodeSpec): Shape => tighten(geodeRaw(s), 0.92)
 
+/** Flowstone: a folded sheet of stone hanging down a wall. */
 export const flowstone = (s: FlowSpec): Shape => tighten(flowstoneRaw(s), 0.65)

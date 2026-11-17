@@ -1,0 +1,186 @@
+// The @blobscape/engine API reference, read with TypeDoc from the package's own type declarations and boiled down to
+// what the docs page (/engine/docs/) shows: each export's name, its doc comment, and its shape (a function's
+// signatures, an interface's properties, a class's constructor, properties and methods, a type or a value's type),
+// grouped by the module that declares it, in the order the package's entry exports them. The page draws it in the
+// site's own markup, under the site's CSP, which TypeDoc's own HTML theme would not pass (it has inline scripts).
+//
+// TypeDoc needs TypeScript 6's compiler API, which the site's TypeScript 7 no longer ships, so this lives in its own
+// small package: `npm run docs` at the repo root installs it and writes src/blobscape/engineApi.json;
+// scripts/engine-api.test.mjs fails when that file is behind the code.
+import { execFileSync } from 'node:child_process'
+import { readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { Application, ReflectionKind } from 'typedoc'
+
+const here = dirname(fileURLToPath(import.meta.url))
+const root = join(here, '..', '..')
+/** Where the declarations are written for TypeDoc to read (git-ignored; inside the repo so three.js's types resolve). */
+const TYPES = join(here, '.types')
+export const API_FILE = join(root, 'src/blobscape/engineApi.json')
+
+/** Each module's heading on the page, in the words the site uses. */
+export const TITLES = {
+  'splat-engine/stage': 'Stage: a creature or scene on a canvas',
+  'splat-engine/engine': 'SplatWorld: every blob in one three.js object',
+  'splat-core/orbit': 'Orbit: where the camera looks from',
+  'splat-core/blobs': 'Blobs',
+  'splat-engine/rig': 'Bones and skins',
+  'splat-engine/posing': 'Posing by hand',
+  'splat-engine/mix': 'Mixing poses',
+  'splat-engine/ik': 'Reaching and feet on the ground',
+  'splat-engine/steps': 'Footsteps',
+  'splat-engine/swing': 'Loose parts that swing',
+  'splat-engine/xpbd': 'Cloth solver',
+  'splat-engine/morph': 'Morphs',
+  'splat-engine/pick': 'Picking',
+  'splat-engine/voxel': 'Shapes on a grid',
+  'splat-engine/sculpt': 'Sculpting creatures',
+  'splat-engine/body': 'Bodies from tubes and balls',
+  'splat-engine/fur': 'Fur',
+  'splat-engine/built': 'Built things: walls, steps, fences, arcades',
+  'splat-engine/forms': 'Formations: crystals, columns, drips',
+  'splat-engine/life': 'Living forms: trees, cacti, shells',
+  'splat-engine/erode': 'Worn land',
+  'splat-engine/grow': 'Growers',
+  'splat-engine/weather': 'Weather that lands',
+  'splat-engine/sceneDoc': 'Scenes written as data',
+  'splat-engine/mpm': 'Sand, snow and goo',
+  'splat-engine/pixelPass': 'Pixel mode',
+  'splat-core/pixel': 'Pixel art',
+  'splat-engine/lod': 'Level of detail',
+  'splat-engine/edit': 'Cuts and paint',
+  'splat-engine/depth': 'Depth for post effects',
+  'splat-engine/glb': 'Rigged .glb files',
+  'splat-engine/skinnedModel': 'Rigged models to splats',
+  'splat-engine/bakeSheet': 'Baking sprite sheets',
+  'splat-engine/spriteSheet': 'Sprite sheet layout',
+  'splat-engine/zoo/index': 'The zoo',
+  'splat-engine/zoo/fox': 'Fox',
+  'splat-engine/zoo/frog': 'Frog',
+  'splat-engine/zoo/elf': 'Elf',
+  'splat-engine/zoo/dragon': 'Dragon',
+  'splat-engine/zoo/monster': 'Monsters from a seed',
+}
+
+/** A doc comment as text: `code` kept in its backticks, {@link name} as `name`, without the issue numbers it was built under. */
+const text = (comment) => (comment?.summary ?? [])
+  .map((p) => (p.kind === 'inline-tag' ? `\`${p.target?.name ?? p.text.trim()}\`` : p.text))
+  .join('').replace(/ \(issues? #\d+[^)]*\)/g, '').trim()
+const tag = (comment, name) => (comment?.getTag(name)?.content ?? []).map((p) => p.text).join('').trim()
+const type = (t) => (t ? t.toString() : 'unknown')
+/** TypeDoc's name for a parameter taken apart where it is declared (`{ a, b }`): `options` reads better. */
+const named = (name) => (name === '__namedParameters' ? 'options' : name)
+const generics = (ps) => (ps?.length ? `<${ps.map((p) => p.name + (p.type ? ` extends ${type(p.type)}` : '')).join(', ')}>` : '')
+
+/** One way to call a function, method or constructor, as code, with any parameter or return docs it has. */
+function signature(sig, name) {
+  const params = sig.parameters ?? []
+  const s = { code: `${name}${generics(sig.typeParameters)}(${params.map((p) => `${p.flags.isRest ? '...' : ''}${named(p.name)}${p.flags.isOptional ? '?' : ''}: ${type(p.type)}`).join(', ')})${sig.kindOf(ReflectionKind.ConstructorSignature) ? '' : `: ${type(sig.type)}`}` }
+  const documented = params.filter((p) => text(p.comment)).map((p) => ({ name: p.name, type: type(p.type), doc: text(p.comment) }))
+  if (documented.length) s.params = documented
+  const returns = tag(sig.comment, '@returns')
+  if (returns) s.returns = { type: type(sig.type), doc: returns }
+  return s
+}
+
+/** The properties and methods of an interface or class, in the order they are declared. */
+function members(ref) {
+  const props = [], methods = []
+  for (const c of ref.children ?? []) {
+    if (c.inheritedFrom || c.flags.isPrivate || c.flags.isProtected) continue
+    const flags = { ...(c.flags.isStatic && { static: true }), ...(c.flags.isReadonly && { readonly: true }), ...(c.flags.isOptional && { optional: true }) }
+    if (c.kindOf(ReflectionKind.Method)) methods.push({ name: c.name, ...flags, doc: text(c.signatures[0].comment ?? c.comment), signatures: c.signatures.map((s) => signature(s, c.name)) })
+    else if (c.kindOf(ReflectionKind.Accessor)) props.push({ name: c.name, ...flags, ...(!c.setSignature && { readonly: true }), type: type(c.getSignature?.type ?? c.setSignature?.parameters?.[0]?.type), doc: text(c.getSignature?.comment ?? c.setSignature?.comment ?? c.comment) })
+    else if (c.kindOf(ReflectionKind.Property)) props.push({ name: c.name, ...flags, type: type(c.type), doc: text(c.comment) })
+  }
+  return { ...(props.length && { props }), ...(methods.length && { methods }) }
+}
+
+/** One export, as the page shows it. */
+function entry(ref, name) {
+  const base = { name }
+  if (ref.kindOf(ReflectionKind.Function)) return { ...base, kind: 'function', doc: text(ref.signatures[0].comment ?? ref.comment), signatures: ref.signatures.map((s) => signature(s, name)) }
+  const typed = { ...(ref.typeParameters?.length && { generics: generics(ref.typeParameters) }), ...(ref.extendedTypes?.length && { extends: ref.extendedTypes.map(type) }) }
+  if (ref.kindOf(ReflectionKind.Class)) {
+    const ctor = ref.children?.find((c) => c.kindOf(ReflectionKind.Constructor) && !c.flags.isPrivate)
+    return { ...base, kind: 'class', doc: text(ref.comment), ...typed, ...(ctor && { ctor: ctor.signatures.map((s) => signature(s, `new ${name}`)) }), ...members(ref) }
+  }
+  if (ref.kindOf(ReflectionKind.Interface)) return { ...base, kind: 'interface', doc: text(ref.comment), ...typed, ...members(ref) }
+  if (ref.kindOf(ReflectionKind.TypeAlias)) return { ...base, kind: 'type', doc: text(ref.comment), ...typed, type: type(ref.type) }
+  if (ref.kindOf(ReflectionKind.Enum)) return { ...base, kind: 'enum', doc: text(ref.comment), props: (ref.children ?? []).map((c) => ({ name: c.name, type: type(c.type), doc: text(c.comment) })) }
+  return { ...base, kind: 'const', doc: text(ref.comment), type: type(ref.type) }
+}
+
+const squash = (s) => s.replace(/\s+/g, ' ')
+
+/** The module's own comment, from its source: the first doc comment followed by a blank line. */
+function moduleDoc(src) {
+  const body = src.replace(/^(?:\s*import\s[\s\S]*?from\s+['"][^'"]+['"];?[^\n]*\n|\s*import\s+['"][^'"]+['"];?\n|\s*\/\/[^\n]*\n|\s*\n)*/, '')
+  const m = body.match(/^(\/\*\*[\s\S]*?\*\/)\n\s*\n/)
+  if (!m) return ''
+  return m[1].replace(/^\s*\/\*\*\s?/, '').replace(/\s*\*\/\s*$/, '').split('\n').map((l) => l.replace(/^\s*\* ?/, '')).join('\n').replace(/ \(issues? #\d+[^)]*\)/g, '').trim()
+}
+
+/** Writes the package's declarations where TypeDoc reads them, and reads the reference from them. */
+export async function buildApi() {
+  rmSync(TYPES, { recursive: true, force: true })
+  try {
+    execFileSync(join(root, 'node_modules/.bin/tsc'), ['-p', join(root, 'tsconfig.engine.json'), '--declarationDir', TYPES], { stdio: 'inherit' })
+    const app = await Application.bootstrap({
+      entryPoints: [join(TYPES, 'splat-engine/index.d.ts')],
+      tsconfig: join(here, 'tsconfig.json'),
+      readme: 'none',
+      excludePrivate: true,
+      excludeInternal: true,
+      sort: ['source-order'],
+      // three.js's own doc comments trip TypeDoc's warnings; only errors matter here
+      logLevel: 'Error',
+    })
+    const project = await app.convert()
+    if (!project || app.logger.hasErrors()) throw new Error('TypeDoc could not read the engine package')
+
+    // modules in the order the entry exports from them
+    const order = [...readFileSync(join(TYPES, 'splat-engine/index.d.ts'), 'utf8').matchAll(/from\s+'([^']+)'/g)]
+      .map((m) => join('splat-engine', m[1]).replace(/\\/g, '/').replace(/\.(js|ts)$/, ''))
+    const modules = new Map(order.map((from) => [from, null]))
+    // a file the entry doesn't name itself belongs to the module that passes its exports on (the zoo's species)
+    const home = new Map()
+    const passes = (mod, to) => {
+      for (const m of readFileSync(join(TYPES, `${mod}.d.ts`), 'utf8').matchAll(/^export\s[^;]*?from\s+'([^']+)'/gm)) {
+        const from = join(dirname(mod), m[1]).replace(/\\/g, '/').replace(/\.(js|ts)$/, '')
+        if (modules.has(from) || home.has(from)) continue
+        home.set(from, to)
+        passes(from, to)
+      }
+    }
+    for (const from of order) passes(from, from)
+    for (const child of project.children ?? []) {
+      const ref = child.kindOf(ReflectionKind.Reference) ? child.getTargetReflectionDeep() : child
+      const src = ref.sources?.[0]
+      if (!src) throw new Error(`engine docs: ${child.name} has no source`)
+      const file = src.fullFileName.slice(TYPES.length + 1).replace(/\\/g, '/').replace(/\.d\.ts$/, '')
+      const from = home.get(file) ?? file
+      if (!TITLES[from]) throw new Error(`engine docs: ${child.name} comes from ${from}, which has no title in TITLES`)
+      if (!modules.get(from)) modules.set(from, { id: from.replace(/^splat-(engine|core)\//, '').replace(/\//g, '-'), title: TITLES[from], doc: moduleDoc(readFileSync(join(root, 'src', `${from}.ts`), 'utf8')), entries: [] })
+      const mod = modules.get(from)
+      // a second name for an export is listed as that, not written out twice
+      const e = child.kindOf(ReflectionKind.Reference) && project.children.includes(ref) ? { name: child.name, kind: 'alias', doc: text(child.comment), of: ref.name } : entry(ref, child.name)
+      // the module's own comment sits on its first declaration in a .d.ts: keep it once, on the module
+      if (e.doc && squash(e.doc) === squash(mod.doc)) e.doc = ''
+      mod.entries.push({ ...e, at: [file === from ? 0 : 1, file, src.line] })
+    }
+    return {
+      modules: [...modules.values()].filter((m) => m?.entries.length).map((m) => ({ ...m, entries: m.entries.sort((a, b) => a.at[0] - b.at[0] || a.at[1].localeCompare(b.at[1]) || a.at[2] - b.at[2]).map(({ at, ...e }) => e) })),
+    }
+  } finally { rmSync(TYPES, { recursive: true, force: true }) }
+}
+
+export const apiJson = (api) => JSON.stringify(api, null, 1) + '\n'
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const api = await buildApi()
+  writeFileSync(API_FILE, apiJson(api))
+  const n = api.modules.reduce((s, m) => s + m.entries.length, 0)
+  console.log(`engine docs: ${n} names in ${api.modules.length} sections → ${API_FILE.slice(root.length + 1)}`)
+}

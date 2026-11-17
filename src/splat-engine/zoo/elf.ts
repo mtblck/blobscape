@@ -428,6 +428,7 @@ export const ELF_SWING: SwingSpec = {
   after: clearCloak,
 }
 
+/** The elf as a `Species`: how to build it, its looks, its moves and where the camera starts. */
 export const ELF: Species = {
   id: 'elf',
   name: 'elf',

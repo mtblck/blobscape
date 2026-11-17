@@ -188,6 +188,7 @@ function spec(c: Skin, s: number): SculptSpec {
   return { bones: BONES, parts, blend: 0.03, light: { ambient: 0.62, shadow: 0.5 } }
 }
 
+/** Builds the frog with about `count` blobs. `look` picks its colors. */
 export function makeFrog(count = 10000, look = 'green') {
   const c = LOOKS[look] ?? LOOKS.green
   const b = sculptToCount((s) => spec(c, s), count, 0.012)
@@ -253,6 +254,7 @@ export function frogTongue(sk: Skeleton, t: number) {
   sk.update()
 }
 
+/** The frog as a `Species`: how to build it, its looks, its moves and where the camera starts. */
 export const FROG: Species = {
   id: 'frog',
   name: 'frog',

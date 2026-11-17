@@ -15,6 +15,7 @@ import type { Actor } from './engine.ts'
 export interface PickHit {
   /** Index into the actors given. */
   actor: number
+  /** The blob's index in that actor. */
   blob: number
   /** Distance along the ray (in units of the direction's length). */
   t: number
@@ -26,6 +27,7 @@ export interface PickHit {
   part: number
 }
 
+/** Options for `pickActors`. */
 export interface PickOptions {
   /** How far out a blob counts, in standard deviations (2 is about where it fades to nothing). */
   k?: number

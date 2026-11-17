@@ -9,8 +9,11 @@ import { axisAngle, mulQ, norm4, rotate, type Skeleton } from './rig.ts'
  * into keys for a file.
  */
 
+/** The x axis. */
 export const X: Vec3 = [1, 0, 0]
+/** The y axis: up. */
 export const Y: Vec3 = [0, 1, 0]
+/** The z axis. */
 export const Z: Vec3 = [0, 0, 1]
 
 /** 0 → 1 smoothly as t goes from a to b. */
@@ -22,6 +25,7 @@ export function ramp(t: number, a: number, b: number) {
 /** Up from a to b, held, then down from c to d. */
 export const env = (t: number, a: number, b: number, c: number, d: number) => ramp(t, a, b) * (1 - ramp(t, c, d))
 
+/** A unit quaternion's inverse: the same turn, the other way. */
 export const conj = (q: ArrayLike<number>): Quat => [-q[0], -q[1], -q[2], q[3]]
 
 /** The rotation that turns unit vector a onto unit vector b by the shortest way. */
@@ -41,6 +45,7 @@ export function worldQuat(sk: Skeleton, b: number): Quat {
   return q
 }
 
+/** A vector scaled to length 1. */
 export function dir(v: Vec3): Vec3 { const l = Math.hypot(...v) || 1; return [v[0] / l, v[1] / l, v[2] / l] }
 
 /** Where a bone points in the rest pose. */

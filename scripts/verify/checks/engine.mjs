@@ -79,31 +79,43 @@ export default [
   },
   {
     name: 'api-page',
-    about: 'the API reference: prerendered with its data, every section, find a name, fits a phone, linked from the engine page, and an in-app visit loads it',
-    entries: ['src/blobscape/api/EngineApi.tsx', 'src/blobscape/api/types.ts'],
-    files: ['src/blobscape/engineApi.json'],
+    about: 'the engine docs: prerendered with the guide and the reference, every section, find a name, fits a phone, the contents follow what is read, linked from the engine page, and an in-app visit loads it',
+    entries: ['src/blobscape/api/EngineApi.tsx', 'src/blobscape/api/types.ts', 'src/blobscape/api/guide.ts', 'src/blobscape/api/useActiveEntry.ts'],
+    files: ['src/blobscape/engineApi.json', 'packages/engine/README.md'],
     async run({ base, fails, ok, open, axe }) {
-      const html = await (await fetch(base + '/engine/api/')).text()
-      const door = (await (await fetch(base + '/engine/')).text()).includes('href="/engine/api/"')
-      if (!(html.includes('id="stage-Stage"') && html.includes('id="engine-api-data"') && door)) fails.push(`api page: prerendered Stage ${html.includes('id="stage-Stage"')}, carries its data ${html.includes('id="engine-api-data"')}, linked from the engine page ${door}`)
-      else ok('api page: prerendered with its data, and the engine page links to it')
-      const s = await open('/engine/api/', { viewport: { width: 390, height: 800 } })
-      await s.page.waitForSelector('[data-testid=api] h2', { timeout: 20000 }).catch(() => {})
-      const before = await s.page.evaluate(() => ({ sections: document.querySelectorAll('[data-testid=api] h2').length, names: document.querySelectorAll('[data-testid=api] h3').length, wide: document.documentElement.scrollWidth - window.innerWidth }))
+      const html = await (await fetch(base + '/engine/docs/')).text()
+      const door = (await (await fetch(base + '/engine/')).text()).includes('href="/engine/docs/"')
+      const pre = { stage: html.includes('<article id="Stage"'), guide: html.includes('id="a-creature-on-a-canvas"'), data: html.includes('id="engine-api-data"'), door }
+      if (!(pre.stage && pre.guide && pre.data && pre.door)) fails.push(`docs page: prerendered ${JSON.stringify(pre)}`)
+      else ok('docs page: prerendered with the guide, the reference and its data, and the engine page links to it')
+      const s = await open('/engine/docs/', { viewport: { width: 390, height: 800 } })
+      await s.page.waitForSelector('[data-testid=api] article', { timeout: 20000 }).catch(() => {})
+      const count = () => s.page.evaluate(() => ({ sections: document.querySelectorAll('[data-testid=api] > section > h2').length, names: document.querySelectorAll('[data-testid=api] article').length, guide: document.querySelectorAll('[data-testid=api-guide] pre').length, wide: document.documentElement.scrollWidth - window.innerWidth }))
+      const before = await count()
       await s.page.getByLabel('Find a name').fill('setPixels')
       await s.page.waitForTimeout(200)
-      const found = await s.page.evaluate(() => [...document.querySelectorAll('[data-testid=api] h3 code')].map((c) => c.textContent))
-      if (!(before.sections >= 30 && before.names >= 300 && before.wide <= 0 && found.includes('Stage') && found.length < 12)) fails.push(`api page: ${JSON.stringify(before)}, finding setPixels shows ${found.join(', ')}`)
-      else ok(`api page: ${before.names} names in ${before.sections} sections fit a phone; finding setPixels leaves ${found.length}`)
+      const found = await s.page.evaluate(() => [...document.querySelectorAll('[data-testid=api] article h3 code')].map((c) => c.textContent))
+      if (!(before.sections >= 30 && before.names >= 300 && before.guide >= 4 && before.wide <= 0 && found.includes('Stage') && found.length < 12)) fails.push(`docs page: ${JSON.stringify(before)}, finding setPixels shows ${found.join(', ')}`)
+      else ok(`docs page: the guide and ${before.names} names in ${before.sections - 1} sections fit a phone; finding setPixels leaves ${found.length}`)
       await s.page.getByLabel('Find a name').fill('')
-      await axe(s.page, 'api page')
+      await axe(s.page, 'docs page')
+      // on a wide screen the contents mark what is being read, and a name in a type goes to its entry
+      await s.page.setViewportSize({ width: 1280, height: 800 })
+      await s.page.evaluate(() => document.getElementById('Stage').scrollIntoView())
+      await s.page.waitForFunction(() => document.querySelector('nav[aria-label="On this page"] [aria-current]')?.textContent === 'Stage', null, { timeout: 5000 }).catch(() => {})
+      const reading = await s.page.evaluate(() => document.querySelector('nav[aria-label="On this page"] [aria-current]')?.textContent)
+      await s.page.locator('[id="Stage.orbit"] a[href="#Orbit"]').click()
+      await s.page.waitForFunction(() => document.querySelector('nav[aria-label="On this page"] [aria-current]')?.textContent === 'Orbit', null, { timeout: 5000 }).catch(() => {})
+      const went = await s.page.evaluate(() => ({ hash: location.hash, top: Math.round(document.getElementById('Orbit').getBoundingClientRect().top), current: document.querySelector('nav[aria-label="On this page"] [aria-current]')?.textContent }))
+      if (!(reading === 'Stage' && went.hash === '#Orbit' && went.top >= 0 && went.top < 300 && went.current === 'Orbit')) fails.push(`docs page: reading Stage marks ${reading}; the Orbit link gives ${JSON.stringify(went)}`)
+      else ok('docs page: the contents mark the entry being read, and a type links to its entry')
       // from another page, the reference loads its data itself (a plain link click navigates in the app)
       await s.page.goto(base + '/contact/')
-      await s.page.evaluate(() => { const a = document.createElement('a'); a.href = '/engine/api/'; a.textContent = 'API'; document.querySelector('main').append(a); a.click() })
-      await s.page.waitForSelector('[data-testid=api] h2', { timeout: 20000 }).catch(() => {})
-      const inApp = await s.page.evaluate(() => document.querySelectorAll('[data-testid=api] h3').length)
-      if (inApp !== before.names) fails.push(`api page: reached from the engine page it shows ${inApp} names, not ${before.names}`)
-      else ok('api page: reached in the app, it loads the same reference')
+      await s.page.evaluate(() => { const a = document.createElement('a'); a.href = '/engine/docs/'; a.textContent = 'Docs'; document.querySelector('main').append(a); a.click() })
+      await s.page.waitForSelector('[data-testid=api] article', { timeout: 20000 }).catch(() => {})
+      const inApp = (await count()).names
+      if (inApp !== before.names) fails.push(`docs page: reached from another page it shows ${inApp} names, not ${before.names}`)
+      else ok('docs page: reached in the app, it loads the same reference')
       await s.ctx.close()
     },
   },
