@@ -153,7 +153,7 @@ export function ShapeShifter() {
     stage.setActor({ blobs: pair.out, skin, skeleton })
     stage.setPoser(poser, timeAt(now.current.amount, now.current.seconds, back.current))
     const key = `${from}>${to}`
-    if (framed.current !== key) { framed.current = key; home.current = fit(pair.shift); setOrbit(home.current) }
+    if (framed.current !== key) { framed.current = key; home.current = fit(pair.shift); setOrbit(home.current); stage.orbit = home.current }
     // from and to only name the pair: the pair itself is the trigger
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage, pair, poser])
