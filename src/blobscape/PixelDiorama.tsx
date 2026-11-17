@@ -107,6 +107,7 @@ export function PixelDiorama() {
   const [steady, setSteady] = useState(() => new URLSearchParams(location.search).get('steady') !== '0')
   const [tidy, setTidy] = useState(() => new URLSearchParams(location.search).get('tidy') !== '0')
   const [rate, setRate] = useState(0)
+  const [exact, setExact] = useState(() => new URLSearchParams(location.search).get('sort') === 'radix')
   const [parts, setParts] = useState(() => new URLSearchParams(location.search).get('parts') !== '0')
   const [view, setView] = useState(diorama.views[0].id)
   const [orbit, setOrbit] = useState<Orbit>(diorama.views[0].orbit)
@@ -156,6 +157,9 @@ export function PixelDiorama() {
   const picked = palettes.find((p) => p.id === palette) ?? palettes[0]
   const colors = picked.colors
   const look = useMemo<PixelLook>(() => ({ palette: colors, dither, outline: outline ? (colors.length ? darkest(colors) : [11, 16, 38]) : null, glow, edges: edges ? 1 : 0, parts, sky: sky ? shown.sky : undefined, steady: steady ? STEADY : 0, tidy }), [colors, dither, outline, glow, edges, parts, sky, shown, steady, tidy])
+
+  // the exact (radix) sort: the stage rebuilds its world, keeping the moment and the poser
+  useEffect(() => { stage?.setSort(exact ? 'radix' : 'bins') }, [stage, exact])
 
   // a new level of detail keeps the moment it was showing
   useEffect(() => {
@@ -508,6 +512,8 @@ export function PixelDiorama() {
                 <Toggle label={pixels ? 'Sky behind' : 'Sky behind (in Pixel art)'} checked={sky} onChange={setSky} />
                 <Toggle label={pixels ? 'Steady pixels' : 'Steady pixels (in Pixel art)'} checked={steady} onChange={setSteady} />
                 <Toggle label={pixels ? 'Clean up lone pixels' : 'Clean up lone pixels (in Pixel art)'} checked={tidy} onChange={setTidy} />
+                <Toggle label="Exact sort (slower)" checked={exact} onChange={setExact} />
+                <p className="text-xs text-ink-faint">Draws blobs at the same depth in one fixed order, so flat walls can't flicker. It costs about 10 ms a frame on a phone at 500,000 blobs.</p>
                 </div>
                 <div className="grid gap-3">
                 <Field label="Record the loop as">
