@@ -389,10 +389,10 @@ export default [
   },
   {
     name: 'diorama-picker',
-    about: 'Pixel Diorama: details dialog, picking a scene swaps the palette on arrival, the gallery of loops',
+    about: "Pixel Diorama: details dialog, How it's made, picking a scene swaps the palette on arrival, the gallery of loops",
     entries: ['src/blobscape/PixelDiorama.tsx'],
     files: ['public/loops/'],
-    async run({ join, fails, ok, open, axe }) {
+    async run({ shots, join, fails, ok, open, axe }) {
       const d = await open('/experiments/pixel-diorama/?offscreen=1&scene=campfire', { viewport: { width: 1280, height: 900 } })
       await d.page.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).catch(() => {})
       // the details panel: one short line under the view, and Full details opens a dialog with the scene's numbers that Escape closes
@@ -412,6 +412,48 @@ export default [
         const kb = (t) => parseFloat(t.replace(/,/g, ''))
         if (!(/blobs, drawn at \d+ × \d+, [\d.,]+\sKB a frame/.test(line) && shown && sizes.every((t) => /KB$/.test(t)) && kb(sizes[0]) < kb(sizes[2]) && kb(sizes[1]) < kb(sizes[2]) && tiles.length >= 10 && closed && back === 'diorama-details-open')) fails.push(`blobscape pixel diorama details: ${JSON.stringify({ line, shown, sizes, tiles, closed, back })}`)
         else ok(`blobscape pixel diorama: Full details opens a panel of ${tiles.length} readouts (description ${sizes[0]}, picture ${sizes[1]}, splats ${sizes[2]}), and Escape closes it and gives focus back`)
+      }
+      // How it's made: five steps under the view, each drawing the scene its own way; Done puts the page back as it was
+      {
+        const draw = () => d.page.evaluate(async () => { const s = window.__diorama.stage; await s.frame(2); await s.frame(2) })
+        // how much of the picture is drawn, and how far its colors are from gray
+        const seen = () => d.page.evaluate(async () => {
+          const s = window.__diorama.stage
+          await s.frame(2)
+          const c = document.querySelector('[data-testid=diorama-view]')
+          const t = document.createElement('canvas'); t.width = 160; t.height = 120
+          const g = t.getContext('2d', { willReadFrequently: true }); g.drawImage(c, 0, 0, 160, 120)
+          const px = g.getImageData(0, 0, 160, 120).data
+          let lit = 0, hue = 0
+          for (let i = 0; i < px.length; i += 4) { if (px[i] + px[i + 1] + px[i + 2] > 90) { lit++; hue += Math.max(px[i], px[i + 1], px[i + 2]) - Math.min(px[i], px[i + 1], px[i + 2]) } }
+          return { lit, hue: lit ? hue / lit : 0, art: !!s.artSize }
+        })
+        await d.page.getByTestId('diorama-tour-open').click()
+        const tour = d.page.getByTestId('diorama-tour')
+        const steps = []
+        for (let i = 0; i < 5; i++) {
+          await d.page.waitForFunction((n) => document.querySelector('[data-testid=diorama-tour] p')?.textContent.startsWith(`${n} of 5`), i + 1, { timeout: 10000 }).catch(() => {})
+          await d.page.waitForTimeout(250)
+          await draw()
+          const words = await tour.locator('p').innerText().catch(() => '')
+          let spot = ''
+          if (i === 3) {
+            spot = await d.page.waitForFunction(() => document.querySelector('[data-testid=diorama-magnifier]')?.dataset.spot, null, { timeout: 30000 }).then((h) => h.jsonValue(), () => '')
+            await d.page.screenshot({ path: join(shots, 'blobscape-pixel-diorama-tour.png') })
+            await axe(d.page, 'blobscape pixel diorama how it is made')
+          }
+          steps.push({ words, spot, focus: await d.page.evaluate(() => document.activeElement?.textContent), ...await seen() })
+          if (i < 4) await d.page.getByRole('button', { name: 'Next' }).click()
+        }
+        await d.page.getByRole('button', { name: 'Done' }).click()
+        const back = await d.page.waitForFunction(() => document.activeElement?.getAttribute('data-testid') === 'diorama-tour-open', null, { timeout: 5000 }).then(() => true, () => false)
+        const after = await seen()
+        const [shapes, blobs, paint, samples, finish] = steps
+        const good = steps.every((s, i) => s.words.startsWith(`${i + 1} of 5`)) && !shapes.art && !blobs.art && !paint.art && samples.art && finish.art
+          && shapes.hue < 25 && blobs.lit < shapes.lit * 0.95 && blobs.lit > 200 && paint.hue > shapes.hue * 1.5 && /^\d+,\d+$/.test(samples.spot)
+          && steps.slice(0, 4).every((s) => s.focus === 'Next') && finish.focus === 'Done' && back && after.art
+        if (!good) fails.push(`blobscape pixel diorama how it's made: ${JSON.stringify({ steps, back, after })}`)
+        else ok(`blobscape pixel diorama: How it's made walks five steps (clay, one blob in eight at ${Math.round((blobs.lit / shapes.lit) * 100)}% of the clay's cover, paint, four samples with its magnifier, the finish), keeps the keyboard on the way forward, and Done puts the picture and focus back`)
       }
       const strip = () => [...document.querySelectorAll('[data-testid=palette-strip] span')].map((e) => e.style.background).join()
       const before = await d.page.evaluate(strip)

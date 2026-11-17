@@ -133,6 +133,7 @@ export class Stage {
   private readonly ray = new THREE.Raycaster()
   /** The bone lit up, if any: its blobs tinted on the GPU only (the creature's own colors stay as they were, for files and sheets). */
   private highlighted?: number
+  private painter?: (color: readonly [number, number, number], blob: number) => readonly number[]
   private sort: 'bins' | 'radix' = 'bins'
 
   private constructor(private readonly display: HTMLCanvasElement, private readonly opts: StageOptions, renderer: THREE.WebGPURenderer) {
@@ -211,6 +212,35 @@ export class Stage {
     if (this.opts.lights) this.world.setLights(this.lit.lights, this.lit.ambient)
     this.world.setFog(...this.fog)
     this.scene.add(this.world)
+    if (this.painter) this.paintOver()
+  }
+
+  /**
+   * Shows the actor in other colors without changing it: `paint` gives each blob's color (sRGB, 0–1) from its own and
+   * its place in the list, and may give a fourth number, a share of the blob's own opacity (0 hides it). Left out,
+   * its own colors come back. It stays through a new actor, until it is taken off.
+   */
+  tint(paint?: (color: readonly [number, number, number], blob: number) => readonly number[]) {
+    this.painter = paint
+    this.paintOver()
+  }
+
+  /** Sends the painted colors to the GPU, then puts the actor's own back on the CPU (as `highlight` does). */
+  private paintOver() {
+    const { actor, world, painter } = this
+    if (!actor || !world) return
+    const c = actor.blobs.color, o = actor.blobs.opacity, n = actor.blobs.count
+    if (painter) {
+      const own = c.slice(0, n * 3), solid = o.slice(0, n)
+      for (let i = 0; i < n; i++) {
+        const p = painter([own[i * 3], own[i * 3 + 1], own[i * 3 + 2]], i)
+        c[i * 3] = p[0]; c[i * 3 + 1] = p[1]; c[i * 3 + 2] = p[2]
+        if (p.length > 3) o[i] = solid[i] * p[3]
+      }
+      world.recolor(actor)
+      c.set(own); o.set(solid)
+    } else world.recolor(actor)
+    this.invalidate()
   }
 
   /** Which depth sort the world uses: the counting sort, or the exact radix sort (slower; ties always in one order). */

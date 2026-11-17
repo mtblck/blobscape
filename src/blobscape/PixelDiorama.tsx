@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Orbit } from '../splat-core/view.ts'
+import { Magnifier, TourStrip } from './diorama/HowItsMade.tsx'
+import { TOUR, clay, kept } from './diorama/tour.ts'
 import { STEADY, countColors, darkest, type Frame, type PixelLook } from '../splat-core/pixel.ts'
 import type { Built } from '../splat-engine/body.ts'
 import { LoadingMark } from '../shared/BlobLoader.tsx'
@@ -159,6 +161,13 @@ export function PixelDiorama() {
   const palettes = useMemo(() => [{ id: 'own', ...shown.palette }, ...PALETTES.slice(1)], [shown])
   const picked = palettes.find((p) => p.id === palette) ?? palettes[0]
   const colors = picked.colors
+  /** How it's made: which step of the walk-through is showing, or none. */
+  const [tour, setTour] = useState<number | null>(null)
+  const touring = tour === null ? undefined : TOUR[tour]
+  const tourOpener = useRef<HTMLButtonElement>(null)
+  const closeTour = () => { setTour(null); requestAnimationFrame(() => tourOpener.current?.focus()) }
+  // a step of the walk-through says how the scene is drawn, whatever the switch says
+  const asPixels = touring ? touring.pixels : pixels
   const look = useMemo<PixelLook>(() => ({ palette: colors, dither, outline: outline ? (colors.length ? darkest(colors) : [11, 16, 38]) : null, glow, edges: edges ? 1 : 0, parts, sky: sky ? shown.sky : undefined, steady: steady ? STEADY : 0, tidy, fine, own }), [colors, dither, outline, glow, edges, parts, sky, shown, steady, tidy, fine, own])
 
   // the exact (radix) sort: the stage rebuilds its world, keeping the moment and the poser
@@ -189,7 +198,14 @@ export function PixelDiorama() {
       if (d.swing && !calm) stage.orbit = swung(orbitNow.current, d.swing, d.loop, t)
     }, from)
   }, [stage, scene, calm])
-  useEffect(() => { stage?.setPixels(pixels ? look : undefined, size) }, [stage, pixels, look, size])
+  // the walk-through's fourth step is about the four samples, so it draws them whatever the switch says
+  useEffect(() => { stage?.setPixels(asPixels ? (touring ? { ...look, fine: true } : look) : undefined, size) }, [stage, asPixels, touring, look, size])
+  useEffect(() => {
+    if (!stage) return
+    const keep = touring?.keep ?? 1
+    // in clay, and with only some of the blobs drawn where the step shows them one by one
+    stage.tint(touring?.clay ? (c, i) => [...clay(c), kept(i, keep) ? 1 : 0] : undefined)
+  }, [stage, touring])
   useEffect(() => { if (stage) stage.playing = playing }, [stage, playing])
   useEffect(() => { if (stage) { stage.step = pixels && rate ? 1 / rate : 0; stage.invalidate() } }, [stage, pixels, rate])
   const orbitNow = useRef(orbit)
@@ -384,7 +400,7 @@ export function PixelDiorama() {
                 ref={canvas}
                 role="application"
                 aria-roledescription="3D view"
-                aria-label={`${shown.about}, ${pixels ? 'drawn as pixel art' : 'drawn as blobs'}, ${failed ? 'not drawn' : playing ? 'moving' : 'paused'}. Drag or use the arrow keys to orbit; scroll, pinch or press plus and minus to zoom.${canPoke ? ' Tap or press Enter to poke it.' : ''}`}
+                aria-label={`${shown.about}, ${asPixels ? 'drawn as pixel art' : touring?.clay ? 'drawn as blobs in plain clay' : 'drawn as blobs'}, ${failed ? 'not drawn' : playing ? 'moving' : 'paused'}. Drag or use the arrow keys to orbit; scroll, pinch or press plus and minus to zoom.${canPoke ? ' Tap or press Enter to poke it.' : ''}`}
                 tabIndex={0}
                 data-testid="diorama-view"
                 className="absolute inset-0 h-full w-full cursor-grab touch-none outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset active:cursor-grabbing"
@@ -425,16 +441,20 @@ export function PixelDiorama() {
               {loading && <LoadingMark testid="diorama-loading" />}
               <p role="status" className="sr-only">{loading ? loadingLabel : ''}</p>
               {failed && <div role="alert" className="absolute inset-4 grid place-items-center text-center text-sm text-ink">{failed}</div>}
-              <div role="group" aria-label="Draw the scene as" className="absolute top-3 left-3 flex gap-1.5 max-sm:top-2 max-sm:left-2">
+              {!touring && <div role="group" aria-label="Draw the scene as" className="absolute top-3 left-3 flex gap-1.5 max-sm:top-2 max-sm:left-2">
                 <Chip small active={pixels} onClick={() => setPixels(true)}>Pixel art</Chip>
                 <Chip small active={!pixels} onClick={() => setPixels(false)}>Blobs</Chip>
-              </div>
+              </div>}
+              {touring?.id === 'samples' && stage && scene && <Magnifier stage={stage} />}
               <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => pick(view)} />
               <p aria-hidden className="pointer-events-none absolute right-14 bottom-2 rounded bg-paper/80 px-1.5 py-0.5 text-xs text-ink-muted">{coarse ? 'drag to orbit · pinch to zoom' : 'drag to orbit · scroll to zoom'}</p>
         </>}
-        status={<>
+        status={tour !== null && scene ? <TourStrip step={tour} facts={{ parts: scene.of.parts ?? new Set(scene.built.partOf).size, descriptionBytes: scene.of.bytes, blobs: scene.built.blobs.count, colors: colors.length, steps: scene.paint !== '' }} onStep={setTour} onClose={closeTour} /> : <>
               <span>{scene ? <><span className="tabular-nums text-ink" data-testid="diorama-blobs">{scene.built.blobs.count.toLocaleString()}</span> blobs<span data-testid="diorama-art">{pixels && art ? <>, drawn at <span className="tabular-nums text-ink">{art.width} × {art.height}</span>{png ? <>, <span className="tabular-nums text-ink" data-testid="diorama-png-size">{kilobytes(png.bytes)}</span> a frame</> : ''}</> : ', drawn as blobs'}</span>.</> : loadingLabel}</span>
+              <span className="flex gap-x-4">
+              {scene && <button type="button" ref={tourOpener} onClick={() => setTour(0)} data-testid="diorama-tour-open" className="cursor-pointer text-ink underline decoration-rule underline-offset-2 hover:text-accent">How it's made</button>}
               {facts && <button type="button" onClick={() => setDetails(true)} aria-haspopup="dialog" data-testid="diorama-details-open" className="cursor-pointer text-ink underline decoration-rule underline-offset-2 hover:text-accent">Full details</button>}
+              </span>
         </>}
         tabsLabel="Options"
         tabs={[
