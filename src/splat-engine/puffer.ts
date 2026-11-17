@@ -173,3 +173,24 @@ export function tailLength(w: number) {
   for (let i = 1; i <= n; i++) { const b = at((i / n) * TAIL_LONG); sum += Math.hypot(b[0] - a[0], b[1] - a[1]); a = b }
   return sum / TAIL_LONG
 }
+
+/** The puffer's morphs in one list: the order its moves key their weights in, and the order a file lists them. */
+export function pufferMorphs(fish: Puffer): Morph[] {
+  return [fish.puff, fish.spikes, ...fish.tails]
+}
+
+/**
+ * Moves for the puffer as a file (the sample .glb): its bones only bob, and the
+ * rest is morph weights, in `pufferMorphs` order. Each loops.
+ */
+export const PUFFER_MOVES: { name: string; seconds: number; bob: number; weights: (t: number) => number[] }[] = [
+  { name: 'swim', seconds: 2, bob: 0.03, weights: (t) => [0, 0, ...tailWeights(0.8 * Math.sin(Math.PI * t))] },
+  {
+    name: 'puff', seconds: 3, bob: 0.015,
+    weights: (t) => {
+      // swells and goes down again, the spikes coming out once it's half full
+      const u = 0.5 - 0.5 * Math.cos((2 * Math.PI * t) / 3)
+      return [u, Math.min(1, Math.max(0, (u - 0.35) / 0.55)), 0, 0]
+    },
+  },
+]

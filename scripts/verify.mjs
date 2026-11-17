@@ -884,6 +884,39 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     if (same.bones !== m2.bones || same.seed !== m2.seed) fails.push(`blobscape creature monster link: ${JSON.stringify(same)} vs ${JSON.stringify(m2)}`)
     else ok(`blobscape creature monster: the link with seed ${m2.seed} opens the same monster`)
     await relink.ctx.close()
+    // a file with morphs: the sample pufferfish opens, its puff clip swells it, Still hands the morphs to sliders,
+    // a sprite sheet draws the swelling, and the file written back keeps its morph targets
+    await tabClick(c.page.getByRole('button', { name: 'Fox', exact: true }))
+    await c.page.waitForFunction(() => !document.querySelector('[data-testid=creature-loading]'), null, { timeout: 60000 }).catch(() => {})
+    await c.page.setInputFiles('input[type=file]', join(root, 'public/rigged-splats/puffer.glb'))
+    await c.page.waitForFunction(() => window.__creature?.blobs() === 5257, null, { timeout: 30000 }).catch(() => {})
+    const fish = (t) => c.page.evaluate(async (t) => {
+      await window.__creature.stage.frame(t)
+      const cv = document.querySelector('[data-testid=creature-view]')
+      const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+      let n = 0
+      for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 128 && d[i] > 150 && d[i + 1] > 100 && d[i + 2] < 150) n++
+      return n
+    }, t)
+    await tabClick(c.page.getByRole('region', { name: 'Options' }).getByRole('button', { name: 'puff', exact: true }))
+    const puff = { rest: await fish(0), full: await fish(1.5) }
+    await c.page.screenshot({ path: join(shots, 'blobscape-creature-puffer.png') })
+    await tabClick(c.page.getByRole('region', { name: 'Options' }).getByRole('button', { name: 'Still', exact: true }))
+    const still = await fish(0)
+    await c.page.getByRole('slider', { name: 'Puff' }).fill('1')
+    await c.page.waitForTimeout(150)
+    const slid = await fish(0)
+    const fishSheet = await c.page.evaluate(() => window.__sprites({ moves: ['puff'], directions: 4, size: 32, frames: 6, colors: 16, outline: true }))
+    const kept = await c.page.evaluate(() => {
+      const b = window.__creature.glb(), len = new DataView(b.buffer, b.byteOffset).getUint32(12, true)
+      const j = JSON.parse(new TextDecoder().decode(b.subarray(20, 20 + len)))
+      return j.meshes[0].primitives[0].targets?.length
+    })
+    const note = await c.page.getByTestId('creature-note').textContent()
+    // the puff peaks at the clip's middle frame; the side view's first row holds frames 0..5
+    const swells = Math.max(...fishSheet.solid.slice(2, 4)) > fishSheet.solid[0] * 1.3
+    if (!(/4 morphs/.test(note) && puff.full > puff.rest * 1.5 && slid > still * 1.5 && kept === 4 && swells)) fails.push(`blobscape creature morphs: ${JSON.stringify({ note, puff, still, slid, kept, solid: fishSheet.solid.slice(0, 6) })}`)
+    else ok(`blobscape creature morphs: the pufferfish file swells from its clip (${puff.rest} → ${puff.full} pixels) and its slider, draws as a sheet and keeps its 4 morph targets`)
     await axe(c.page, 'blobscape creature sprites')
     await c.ctx.close()
   }

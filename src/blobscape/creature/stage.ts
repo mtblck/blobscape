@@ -2,7 +2,8 @@ import * as THREE from 'three/webgpu'
 import { placeCamera, type Orbit } from '../../splat-core/view.ts'
 import { readbackToSrgb } from '../../splat-core/color.ts'
 import { SplatWorld, type PointLight } from '../../splat-engine/engine.ts'
-import { sampleClip, type Clip } from '../../splat-engine/glb.ts'
+import { sampleClip, sampleWeights, type Clip } from '../../splat-engine/glb.ts'
+import { applyMorphs, type Morph } from '../../splat-engine/morph.ts'
 import type { Skeleton, Skin, SkinMode } from '../../splat-engine/rig.ts'
 import type { Blobs } from '../../splat-core/blobs.ts'
 import { BoneView } from './bones.ts'
@@ -22,7 +23,11 @@ import { lookColors, snapColors, type Frame, type PixelLook } from '../../splat-
  * `offscreen` draws into a render target and copies each frame to a 2D canvas
  * on request: headless test browsers can render WebGPU but not show it.
  */
-export interface Actor { blobs: Blobs; skin: Skin; skeleton: Skeleton }
+export interface Actor {
+  blobs: Blobs; skin: Skin; skeleton: Skeleton
+  /** Blend shapes (from an opened .glb): a clip's weights, or `setMorphWeights` while none play, reshape the blobs on the CPU. */
+  morphs?: Morph[]
+}
 
 /** What the view shows: the blobs, the bones that move them, or both (bones on top). */
 export type Show = 'blobs' | 'bones' | 'both'
@@ -46,6 +51,12 @@ export class CreatureStage {
   private show: Show = 'blobs'
   private actor?: Actor
   private clip?: Clip
+  /** For an actor with morphs: its blobs as built (the actor shown holds a copy that the weights reshape). */
+  private morphRest?: Blobs
+  private morphW = new Float32Array(0)
+  private morphShown = new Float32Array(0)
+  /** The morphs' weights while no clip keys them. */
+  private heldW = new Float32Array(0)
   /** Poses the actor straight from the time, for motion that never loops (a watch keeping time): used instead of a clip. */
   private poser?: (sk: Skeleton, t: number) => void
   private target?: THREE.RenderTarget
@@ -131,6 +142,13 @@ export class CreatureStage {
     this.pixel?.reset()
     if (this.world) { this.scene.remove(this.world); this.world.dispose() }
     if (this.rig) { this.scene.remove(this.rig); this.rig.dispose() }
+    // morphs reshape a copy, so the blobs handed in (and any file written from them) stay as built
+    const m = actor.morphs?.length ?? 0
+    this.morphRest = m ? actor.blobs : undefined
+    if (m) actor = { ...actor, blobs: actor.blobs.clone() }
+    this.morphW = new Float32Array(m)
+    this.morphShown = new Float32Array(m)
+    this.heldW = new Float32Array(m)
     this.actor = actor
     this.world = new SplatWorld([actor], { mode: this.mode, lights: this.opts.lights })
     if (this.opts.lights) this.world.setLights(this.lit.lights, this.lit.ambient)
@@ -153,6 +171,26 @@ export class CreatureStage {
     this.poser = poser
     this.t = from
     this.pose()
+  }
+
+  /** The morphs' weights while no clip keys them (the clip's own weights win while it plays). */
+  setMorphWeights(w: ArrayLike<number>) {
+    for (let k = 0; k < this.heldW.length; k++) this.heldW[k] = w[k] ?? 0
+    this.pose()
+  }
+
+  /**
+   * Reshapes the actor's blobs for its morphs' weights at a time; true if they changed. Only the CPU copy:
+   * the caller sends them to the GPU (`world.refresh`).
+   */
+  private reshape(clip: Clip | undefined, t: number) {
+    const rest = this.morphRest, actor = this.actor
+    if (!rest || !actor?.morphs) return false
+    if (!sampleWeights(clip, t, this.morphW)) this.morphW.set(this.heldW)
+    if (this.morphW.every((v, k) => v === this.morphShown[k])) return false
+    this.morphShown.set(this.morphW)
+    applyMorphs(rest, actor.morphs, this.morphW, actor.blobs)
+    return true
   }
 
   /** After the actor's blobs were changed in place (a poser may do it each frame): the engine takes them again. */
@@ -260,6 +298,7 @@ export class CreatureStage {
     if (this.poser) this.poser(sk, t)
     else if (this.clip) sampleClip(this.clip, sk, t)
     else { sk.reset(); sk.update() }
+    if (this.reshape(this.poser ? undefined : this.clip, t)) this.world.refresh()
     this.world.markPosed()
     if (this.rig?.visible) this.rig.update()
     this.invalidate()
@@ -322,7 +361,9 @@ export class CreatureStage {
     world.visible = true
     try {
       const { bakeSheet } = await import('../../splat-engine/bakeSheet.ts')
-      return await bakeSheet({ renderer: this.renderer, scene: this.scene, actor, posed: () => world.markPosed() }, moves, opts, progress)
+      // a sheet's frames are reshaped as they're drawn (and framed), each sent up whole, so the GPU never lags the CPU copy
+      const morph = this.morphRest ? (c: Clip | undefined, t: number) => { this.reshape(c, t); world.refresh() } : undefined
+      return await bakeSheet({ renderer: this.renderer, scene: this.scene, actor, posed: () => world.markPosed(), morph }, moves, opts, progress)
     } finally {
       this.baking = false
       if (this.floor) this.floor.visible = true

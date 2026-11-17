@@ -8,7 +8,7 @@ import { mdToHtml, mdTitle } from './markdown.ts'
  */
 export const SPEC = {
   crumb: 'Rigged-splat spec',
-  description: 'A draft glTF extension for rigged, animated Gaussian splats: one rule for how a skinned splat turns and grows with its bones, on top of KHR_gaussian_splatting and standard glTF skins. With an example, sample .glb files and notes on other viewers.',
+  description: 'A draft glTF extension for rigged, animated Gaussian splats: one rule for how a skinned splat turns and grows with its bones, and how a morph reshapes it, on top of KHR_gaussian_splatting and standard glTF skins and morph targets. With examples, sample .glb files and notes on other viewers.',
 } as const
 
 /** A link in the document, as an address on the site: the sample files sit in public/, and our own pages need no origin. */
