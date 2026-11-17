@@ -38,7 +38,10 @@ test('a run is as long as asked, no bigger than the sandbox takes, and writes no
 test('where it cannot run it says why, and the progress line reads as a sentence', () => {
   assert.match(cannotTrain({ picker: false, gpu: true })!, /open a folder/)
   assert.match(cannotTrain({ picker: true, gpu: false })!, /WebGPU/)
-  assert.match(cannotTrain({ picker: true, gpu: true, buffers: 10 })!, /allows 10 buffers.*needs 12/)
+  assert.match(cannotTrain({ picker: true, gpu: true, buffers: 8 })!, /allows 8 buffers.*needs 10/)
+  assert.equal(cannotTrain({ picker: true, gpu: true, buffers: 10, subgroups: true, software: false }), null)
+  assert.match(cannotTrain({ picker: true, gpu: true, buffers: 10, subgroups: true, software: true })!, /software graphics/)
+  assert.match(cannotTrain({ picker: true, gpu: true, buffers: 16, subgroups: false })!, /no subgroups/)
   assert.equal(cannotTrain({ picker: true, gpu: true, buffers: BUFFERS_NEEDED }), null)
   assert.equal(cannotTrain({ picker: true, gpu: true }), null)
   assert.equal(trainSay(1250, 7000, 48213), 'Step 1,250 of 7,000, 48,213 blobs')

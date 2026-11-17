@@ -477,9 +477,9 @@ export default [
       const real = !!process.env.VERIFY_TRAIN
       await page.waitForFunction(() => /^Step \d|graphics card/.test(document.querySelector('[data-testid=train-note]')?.textContent ?? '') || /Could not train/.test(document.querySelector('[role=alert]')?.textContent ?? ''), null, { timeout: real ? 180000 : 60000 }).catch(() => {})
       const said = `${await note()} ${await page.getByRole('alert').textContent({ timeout: 500 }).catch(() => '')}`
-      if (/allows \d+ buffers a pass/.test(said)) {
+      if (/software graphics|allows \d+ buffers a pass|no subgroups/.test(said)) {
         if (real) fails.push(`blobscape sandbox train: asked to train for real, and this graphics card can't: ${said.slice(0, 200)}`)
-        else ok('blobscape sandbox train: the capture is taken as one; this browser\'s software graphics card is too small for the trainer, and the page says so (training not checked here)')
+        else ok('blobscape sandbox train: the capture is taken as one; this browser draws with software graphics, which the trainer can\'t use, and the page says so (training not checked here)')
       } else if (/^Step \d/.test(said)) {
         // a real graphics card: let it run, stop it, and see a scene
         await page.waitForTimeout(20000)

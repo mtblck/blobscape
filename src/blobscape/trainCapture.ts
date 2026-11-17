@@ -34,8 +34,11 @@ export type PlanId = (typeof PLANS)[number]['id']
 export const TRAIN_MAX_SPLATS = 300_000
 /** Photos are shrunk so their longer side is at most this before training. */
 export const TRAIN_MAX_SIDE = 1280
-/** How many storage buffers one of Brush's compute passes binds: a GPU that allows fewer cannot train. */
-export const BUFFERS_NEEDED = 12
+/**
+ * How many storage buffers the busiest of Brush's compute passes binds, as built here (`vendor/brush`): a GPU that
+ * allows fewer cannot train. Ten is what Chrome reports on many real graphics cards.
+ */
+export const BUFFERS_NEEDED = 10
 
 /**
  * Brush's settings for a run, from the ones it starts with (its defaults, or the capture's own `args.txt`): how long,
@@ -60,10 +63,13 @@ export function trainConfig(init: Record<string, unknown>, steps: number, maxSpl
 }
 
 /** Why training cannot start here, in words for the page; null when it can. */
-export function cannotTrain(has: { picker: boolean; gpu: boolean; buffers?: number }): string | null {
+export function cannotTrain(has: { picker: boolean; gpu: boolean; buffers?: number; subgroups?: boolean; software?: boolean }): string | null {
   if (!has.picker) return 'This needs a browser that can open a folder: Chrome or Edge on a computer.'
   if (!has.gpu) return 'This needs WebGPU, which this browser does not have: Chrome or Edge on a computer.'
   if (has.buffers !== undefined && has.buffers < BUFFERS_NEEDED) return `This device's graphics card can't run the trainer (it allows ${has.buffers} buffers a pass, and the trainer needs ${BUFFERS_NEEDED}).`
+  // Brush's sort adds across a subgroup, which a software renderer is not given
+  if (has.software) return 'This browser is drawing with software graphics, which can\'t run the trainer. It needs a real graphics card.'
+  if (has.subgroups === false) return 'This device\'s graphics card can\'t run the trainer (its WebGPU has no subgroups).'
   return null
 }
 

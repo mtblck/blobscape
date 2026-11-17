@@ -1,0 +1,320 @@
+diff --git a/apps/brush-js/Cargo.toml b/apps/brush-js/Cargo.toml
+index 3ea1ab3..f3680f3 100644
+--- a/apps/brush-js/Cargo.toml
++++ b/apps/brush-js/Cargo.toml
+@@ -12,6 +12,7 @@ crate-type = ["cdylib", "rlib"]
+ [dependencies]
+ brush-process.path = "../../crates/brush-process"
+ brush-render.path = "../../crates/brush-render"
++brush-serde.path = "../../crates/brush-serde"
+ rrfd.path = "../../crates/rrfd"
+ 
+ burn.workspace = true
+diff --git a/apps/brush-js/src/lib.rs b/apps/brush-js/src/lib.rs
+index 4ef4cd9..d22e218 100644
+--- a/apps/brush-js/src/lib.rs
++++ b/apps/brush-js/src/lib.rs
+@@ -373,6 +373,19 @@ impl Training {
+     pub fn current_splats(&self) -> Option<BrushSplats> {
+         self.splat_view.latest().map(|inner| BrushSplats { inner })
+     }
++
++    /// The current splats as the bytes of a .ply file, read back from the
++    /// GPU. Resolves to `undefined` if no splats have been produced yet.
++    #[wasm_bindgen(js_name = exportPly)]
++    pub async fn export_ply(&self) -> Result<Option<Vec<u8>>, JsValue> {
++        let Some(splats) = self.splat_view.latest() else {
++            return Ok(None);
++        };
++        brush_serde::splat_to_ply(splats, None)
++            .await
++            .map(Some)
++            .map_err(|e| js_err_str(&format!("{e:#}")))
++    }
+ }
+ 
+ /// Round-trip the initial `TrainStreamConfig` through a JS async callback.
+diff --git a/crates/brush-process/src/lib.rs b/crates/brush-process/src/lib.rs
+index 2cac236..e9e83d7 100644
+--- a/crates/brush-process/src/lib.rs
++++ b/crates/brush-process/src/lib.rs
+@@ -28,6 +28,17 @@ use brush_vfs::SendNotWasm;
+ use tokio_stream::{Stream, StreamExt};
+ 
+ fn burn_options() -> RuntimeOptions {
++    // In a browser nothing can block on the GPU, and the timing probe that the
++    // lower autotune levels run first does. `Full` skips the probe.
++    #[cfg(target_family = "wasm")]
++    {
++        use burn::cubecl::config::{
++            CubeClRuntimeConfig, RuntimeConfig, autotune::AutotuneLevel,
++        };
++        let mut config = CubeClRuntimeConfig::default();
++        config.autotune.level = AutotuneLevel::Full;
++        let _ = CubeClRuntimeConfig::try_set(config);
++    }
+     RuntimeOptions {
+         tasks_max: 64,
+         memory_config: burn_wgpu::MemoryConfiguration::ExclusivePages,
+diff --git a/crates/brush-render/src/bwd/kernels/project_backwards.rs b/crates/brush-render/src/bwd/kernels/project_backwards.rs
+index 5eaf6da..ec9cfab 100644
+--- a/crates/brush-render/src/bwd/kernels/project_backwards.rs
++++ b/crates/brush-render/src/bwd/kernels/project_backwards.rs
+@@ -101,8 +101,8 @@ fn inverse2x2_vjp(minv: Sym2, v_minv: Sym2) -> Sym2 {
+ fn write_zero_row(
+     v_transforms: &mut Tensor<f32>,
+     v_coeffs: &mut Tensor<f32>,
+-    v_raw_opac: &mut Tensor<f32>,
+-    v_refine_weight: &mut Tensor<f32>,
++    v_opac_refine: &mut Tensor<f32>,
++    rows: u32,
+     row: u32,
+     #[comptime] sh_degree: u32,
+ ) {
+@@ -114,8 +114,8 @@ fn write_zero_row(
+     for k in 0u32..comptime![num_sh_coeffs(sh_degree) * 3u32] {
+         v_coeffs[(coeff_base + k) as usize] = 0.0f32;
+     }
+-    v_raw_opac[row as usize] = 0.0f32;
+-    v_refine_weight[row as usize] = 0.0f32;
++    v_opac_refine[row as usize] = 0.0f32;
++    v_opac_refine[(rows + row) as usize] = 0.0f32;
+ }
+ 
+ /// Outputs are compact with a zero row in front: row 0 is what culled splats
+@@ -132,8 +132,9 @@ pub fn project_backwards_kernel(
+     v_rasterize_grads: &Tensor<f32>,
+     v_transforms: &mut Tensor<f32>,
+     v_coeffs: &mut Tensor<f32>,
+-    v_raw_opac: &mut Tensor<f32>,
+-    v_refine_weight: &mut Tensor<f32>,
++    // Two outputs in one buffer (raw opacity grads, then refine weights),
++    // to stay within 10 storage buffers a pass.
++    v_opac_refine: &mut Tensor<f32>,
+     u: ProjectUniforms,
+     #[comptime] mip_splatting: bool,
+     #[comptime] has_min_scale: bool,
+@@ -144,12 +145,13 @@ pub fn project_backwards_kernel(
+     if row > u.num_visible {
+         terminate!();
+     }
++    let rows = u.num_visible + 1u32;
+     if row == 0u32 {
+         write_zero_row(
+             v_transforms,
+             v_coeffs,
+-            v_raw_opac,
+-            v_refine_weight,
++            v_opac_refine,
++            rows,
+             row,
+             sh_degree,
+         );
+@@ -187,8 +189,8 @@ pub fn project_backwards_kernel(
+         write_zero_row(
+             v_transforms,
+             v_coeffs,
+-            v_raw_opac,
+-            v_refine_weight,
++            v_opac_refine,
++            rows,
+             row,
+             sh_degree,
+         );
+@@ -234,12 +236,12 @@ pub fn project_backwards_kernel(
+     let (cov, filter_comp) = compensate_cov2d(raw_cov, mip_splatting);
+     // Gradient w.r.t. the (compensated, clamped) opacity, zero if clamped.
+     let v_opac_base = select(floor.opac_open, filter_comp * v_alpha_in, 0.0f32);
+-    v_raw_opac[row as usize] = v_opac_base * floor.coef * opac_sig * (1.0f32 - opac_sig);
++    v_opac_refine[row as usize] = v_opac_base * floor.coef * opac_sig * (1.0f32 - opac_sig);
+ 
+     // Make sure to keep refine weight >= 0 and finite. Helps with super large degenerate splats
+     // that sum up their refine weight to some massive value.
+     let refine_clean = select(is_finite_f32(v_refine_in), v_refine_in, 0.0f32);
+-    v_refine_weight[row as usize] = clamp(refine_clean, 0.0f32, 1.0e32f32);
++    v_opac_refine[(rows + row) as usize] = clamp(refine_clean, 0.0f32, 1.0e32f32);
+ 
+     let conic_inv = cov.inverse();
+     let v_inv = Sym2 {
+diff --git a/crates/brush-render/src/bwd/render_bwd.rs b/crates/brush-render/src/bwd/render_bwd.rs
+index 4848313..ce211f2 100644
+--- a/crates/brush-render/src/bwd/render_bwd.rs
++++ b/crates/brush-render/src/bwd/render_bwd.rs
+@@ -131,8 +131,7 @@ impl SplatBwdOps for CubeBackend {
+         let coeffs = sh_coeffs_for_degree(project_uniforms.sh_degree) as usize;
+         let v_transforms = create_tensor([rows, 10], &device, DType::F32);
+         let v_coeffs = create_tensor([rows, coeffs, 3], &device, DType::F32);
+-        let v_raw_opac = create_tensor([rows], &device, DType::F32);
+-        let v_refine_weight = create_tensor([rows], &device, DType::F32);
++        let v_opac_refine = create_tensor([rows * 2], &device, DType::F32);
+ 
+         let uniforms = project_uniforms.to_launch_object();
+         let cube_dim = CubeDim::new_1d(kernels::project_backwards::WG_SIZE);
+@@ -150,8 +149,7 @@ impl SplatBwdOps for CubeBackend {
+                 v_combined.into_tensor_arg(),
+                 v_transforms.clone().into_tensor_arg(),
+                 v_coeffs.clone().into_tensor_arg(),
+-                v_raw_opac.clone().into_tensor_arg(),
+-                v_refine_weight.clone().into_tensor_arg(),
++                v_opac_refine.clone().into_tensor_arg(),
+                 uniforms,
+                 mip_splat,
+                 has_min_scale,
+@@ -160,6 +158,9 @@ impl SplatBwdOps for CubeBackend {
+             );
+         });
+ 
++        let v_raw_opac = Self::float_slice(v_opac_refine.clone(), &[(0..rows).into()]);
++        let v_refine_weight = Self::float_slice(v_opac_refine, &[(rows..rows * 2).into()]);
++
+         SplatGrads {
+             v_transforms,
+             v_coeffs,
+diff --git a/crates/brush-render/src/kernels/project_forward.rs b/crates/brush-render/src/kernels/project_forward.rs
+index ec6c672..04efab6 100644
+--- a/crates/brush-render/src/kernels/project_forward.rs
++++ b/crates/brush-render/src/kernels/project_forward.rs
+@@ -25,12 +25,12 @@ pub fn project_forward_kernel(
+     min_scale: &Tensor<f32>,
+     global_from_compact_gid: &mut Tensor<u32>,
+     compact_from_global: &mut Tensor<u32>,
+-    opacities: &mut Tensor<f32>,
++    // Opacities then max radii in one buffer, and both counts in one
++    // (visible, intersections), to stay within 10 storage buffers a pass.
++    opac_radius: &mut Tensor<f32>,
+     depths: &mut Tensor<f32>,
+-    num_visible: &mut Tensor<Atomic<u32>>,
++    counts: &mut Tensor<Atomic<u32>>,
+     intersect_counts: &mut Tensor<u32>,
+-    num_intersections: &mut Tensor<Atomic<u32>>,
+-    max_radius: &mut Tensor<f32>,
+     u: ProjectUniforms,
+     #[comptime] mip_splatting: bool,
+     #[comptime] has_min_scale: bool,
+@@ -47,7 +47,7 @@ pub fn project_forward_kernel(
+     if bwd_info {
+         compact_from_global[global_gid as usize] = 0u32;
+     }
+-    opacities[global_gid as usize] = 0.0f32;
++    opac_radius[global_gid as usize] = 0.0f32;
+ 
+     // means(3) + quats(4) + log_scales(3)
+     let base = (global_gid * 10u32) as usize;
+@@ -101,7 +101,7 @@ pub fn project_forward_kernel(
+         has_min_scale,
+     );
+     // Per-splat opacity with the floor folded in, for the trainer's noise gate.
+-    opacities[global_gid as usize] = floor.opac;
++    opac_radius[global_gid as usize] = floor.opac;
+ 
+     let raw_cov = calc_cov2d(floor.scale, quat, mean_c, u, camera_model);
+     let (cov, filter_comp) = compensate_cov2d(raw_cov, mip_splatting);
+@@ -138,12 +138,12 @@ pub fn project_forward_kernel(
+     let num_tiles_hit = count_contributing_tiles(bb, mean2d_x, mean2d_y, conic, power_threshold);
+ 
+     intersect_counts[global_gid as usize] = num_tiles_hit;
+-    Atomic::fetch_add(&num_intersections[0], num_tiles_hit);
++    Atomic::fetch_add(&counts[1], num_tiles_hit);
+ 
+     // Screen-space radius (pixels) for the small-splat prior.
+-    max_radius[global_gid as usize] = f32::max(ex / img_w_f, ey / img_h_f);
++    opac_radius[(u.total_splats + global_gid) as usize] = f32::max(ex / img_w_f, ey / img_h_f);
+ 
+-    let write_id = Atomic::fetch_add(&num_visible[0], 1u32);
++    let write_id = Atomic::fetch_add(&counts[0], 1u32);
+     global_from_compact_gid[write_id as usize] = global_gid;
+     depths[write_id as usize] = mean_c.z();
+ }
+diff --git a/crates/brush-render/src/render.rs b/crates/brush-render/src/render.rs
+index 89d9105..049a392 100644
+--- a/crates/brush-render/src/render.rs
++++ b/crates/brush-render/src/render.rs
+@@ -109,24 +109,22 @@ impl SplatOps for CubeBackend {
+             depths,
+             intersect_counts,
+             max_radius,
+-            num_visible_buf,
+-            num_intersections_buf,
++            counts_buf,
+         ) = {
+             let project_uniforms: &shaders::helpers::ProjectUniforms = &project_uniforms;
+             let _span = tracing::trace_span!("ProjectSplats").entered();
+ 
+             let total_splats = project_uniforms.total_splats as usize;
+-            let num_visible_buf = Self::int_zeros([1].into(), &device, IntDType::U32);
+-            let num_intersections_buf = Self::int_zeros([1].into(), &device, IntDType::U32);
++            let counts_buf = Self::int_zeros([2].into(), &device, IntDType::U32);
+             let intersect_counts = Self::int_zeros([total_splats].into(), &device, IntDType::U32);
+-            let max_radius = Self::float_zeros([total_splats].into(), &device, FloatDType::F32);
++            let opac_radius =
++                Self::float_zeros([total_splats * 2].into(), &device, FloatDType::F32);
+ 
+             let global_from_presort_gid = create_tensor([total_splats], &device, DType::U32);
+             // Only backward needs the inverse map. Forward kernels never access
+             // this placeholder; backward writes every entry, so no zero-fill.
+             let inverse_map_len = if bwd_info { total_splats } else { 1 };
+             let compact_from_global = create_tensor([inverse_map_len], &device, DType::U32);
+-            let opacities = create_tensor([total_splats], &device, DType::F32);
+             let depths = create_tensor([total_splats], &device, DType::F32);
+ 
+             let uniforms = project_uniforms.to_launch_object();
+@@ -141,18 +139,19 @@ impl SplatOps for CubeBackend {
+                 min_scale.clone().into_tensor_arg(),
+                 global_from_presort_gid.clone().into_tensor_arg(),
+                 compact_from_global.clone().into_tensor_arg(),
+-                opacities.clone().into_tensor_arg(),
++                opac_radius.clone().into_tensor_arg(),
+                 depths.clone().into_tensor_arg(),
+-                num_visible_buf.clone().into_tensor_arg(),
++                counts_buf.clone().into_tensor_arg(),
+                 intersect_counts.clone().into_tensor_arg(),
+-                num_intersections_buf.clone().into_tensor_arg(),
+-                max_radius.clone().into_tensor_arg(),
+                 uniforms,
+                 mip_splat,
+                 has_min_scale,
+                 bwd_info,
+                 camera.camera_model,
+             );
++            let opacities = Self::float_slice(opac_radius.clone(), &[(0..total_splats).into()]);
++            let max_radius =
++                Self::float_slice(opac_radius, &[(total_splats..total_splats * 2).into()]);
+             (
+                 global_from_presort_gid,
+                 compact_from_global,
+@@ -160,8 +159,7 @@ impl SplatOps for CubeBackend {
+                 depths,
+                 intersect_counts,
+                 max_radius,
+-                num_visible_buf,
+-                num_intersections_buf,
++                counts_buf,
+             )
+         };
+ 
+@@ -172,20 +170,18 @@ impl SplatOps for CubeBackend {
+             let tp = TransactionPrimitive::<Self>::new(
+                 vec![],
+                 vec![],
+-                vec![num_visible_buf, num_intersections_buf],
++                vec![counts_buf],
+                 vec![],
+             );
+             let data = <Self as TransactionOps<Self>>::tr_execute(tp)
+                 .await
+                 .expect("Failed to read counts");
+-            let num_visible = data.read_ints[0]
++            let counts = data.read_ints[0]
+                 .clone()
+                 .try_into_vec::<u32>()
+-                .expect("num_visible")[0];
+-            let num_intersections = data.read_ints[1]
+-                .clone()
+-                .try_into_vec::<u32>()
+-                .expect("num_intersections")[0];
++                .expect("counts");
++            let num_visible = counts[0];
++            let num_intersections = counts[1];
+             (num_visible, num_intersections)
+         };
+ 

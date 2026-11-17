@@ -36,8 +36,15 @@ const consoleError = console.error.bind(console)
 console.error = (...args: unknown[]) => { lastWords = String(args[0] ?? '').split('\n')[0].slice(0, 300); consoleError(...args) }
 
 async function train(folder: FileSystemDirectoryHandle, steps: number, maxSplats: number) {
-  const adapter = await (navigator as Navigator & { gpu?: { requestAdapter(): Promise<{ limits: { maxStorageBuffersPerShaderStage: number } } | null> } }).gpu?.requestAdapter()
-  const no = cannotTrain({ picker: true, gpu: !!adapter, buffers: adapter?.limits.maxStorageBuffersPerShaderStage })
+  type Adapter = { limits: { maxStorageBuffersPerShaderStage: number }; features: { has(name: string): boolean }; isFallbackAdapter?: boolean; info?: { isFallbackAdapter?: boolean } }
+  const adapter = await (navigator as Navigator & { gpu?: { requestAdapter(): Promise<Adapter | null> } }).gpu?.requestAdapter()
+  const no = cannotTrain({
+    picker: true,
+    gpu: !!adapter,
+    buffers: adapter?.limits.maxStorageBuffersPerShaderStage,
+    subgroups: adapter?.features.has('subgroups'),
+    software: !!(adapter?.info?.isFallbackAdapter ?? adapter?.isFallbackAdapter),
+  })
   if (no) { say({ kind: 'error', why: no }); return }
   say({ kind: 'status', text: 'Fetching the trainer…' })
   await (ready ??= init({ module_or_path: wasmUrl }))
