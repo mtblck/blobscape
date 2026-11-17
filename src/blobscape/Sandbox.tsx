@@ -22,13 +22,15 @@ import { GlbError, readRiggedGlb, writeRiggedGlb, type Rigged } from '../splat-e
 import { MeshFileError } from '../splat-engine/meshFile.ts'
 import { isMeshGlb, rigFromModel } from './modelRig.ts'
 import { fillHole, stampDab } from './patch.ts'
+import { BRUSHES, brushDab, type BrushId } from './brushes.ts'
 import { fileSpecies, sceneRig, splitScene } from './sceneFile.ts'
 
-type ToolId = 'orbit' | 'add' | 'spray' | 'select' | 'lasso' | 'move' | 'erase' | 'fill' | 'stamp'
+type ToolId = 'orbit' | 'add' | 'spray' | 'select' | 'lasso' | 'move' | 'paint' | 'erase' | 'fill' | 'stamp'
 const TOOLS: { id: ToolId; name: string; note: string }[] = [
   { id: 'orbit', name: 'Look', note: 'Drag to orbit, scroll or pinch to zoom. With a mouse, right-drag (or Alt-drag) orbits whatever tool is picked.' },
   { id: 'add', name: 'Add', note: 'Click to place one blob, on the floor or on the surface of whatever you click.' },
   { id: 'spray', name: 'Spray', note: 'Drag to spray blobs inside the ring. They stick to whatever is under them, so you can build up layers.' },
+  { id: 'paint', name: 'Paint', note: 'Drag to paint grass, fur, moss, stones or leaves onto whatever is under the ring. Pick which in the Brush tab.' },
   { id: 'select', name: 'Select', note: 'Click a blob to select it, or drag a box around many. Hold Shift to add to the selection. Then change it in the Selection tab.' },
   { id: 'lasso', name: 'Lasso', note: 'Draw round the blobs you want. Hold Shift to add to the selection.' },
   { id: 'move', name: 'Move', note: 'Drag to slide the selection across the screen. With nothing selected, it grabs the blob or creature under the pointer. Drag a creature to walk it somewhere else.' },
@@ -113,6 +115,8 @@ export function Sandbox() {
   const [spread, setSpread] = useState(40)
   const [density, setDensity] = useState(6)
   const [flat, setFlat] = useState(true)
+  const [brush, setBrush] = useState<BrushId>('grass')
+  const [ownColors, setOwnColors] = useState(true)
   const [opacity, setOpacity] = useState(0.9)
   const [xray, setXray] = useState(false)
   const [reach, setReach] = useState(Math.sqrt(8))
@@ -412,6 +416,27 @@ export function Sandbox() {
     if (b.count > from) changed(from)
   }
 
+  /** Paint: one dab of the picked brush on the surface under the ring. Fur lies the way the stroke is going. */
+  const painted = useRef<{ p: Vec3; n: number } | null>(null)
+  const paintAt = (x: number, y: number) => {
+    const b = blobsRef.current
+    const at = land(x, y)
+    if (!at || !view) return
+    const depth = Math.max(0.01, Math.hypot(at.p[0] - view.camera.position.x, at.p[1] - view.camera.position.y, at.p[2] - view.camera.position.z))
+    const was = painted.current
+    const along: Vec3 | undefined = was ? [at.p[0] - was.p[0], at.p[1] - was.p[1], at.p[2] - was.p[2]] : undefined
+    painted.current = { p: at.p, n: (was?.n ?? 0) + 1 }
+    const blobs = brushDab(brush, {
+      p: at.p, n: at.n, radius: (spread * depth) / view.lens().fx, size: blobSize * 5, density,
+      color: ownColors ? undefined : hexToRgb(color),
+      along: along && Math.hypot(along[0], along[1], along[2]) > 1e-4 ? along : undefined,
+      seed: b.count * 31 + (was?.n ?? 0) + 1,
+    })
+    const from = b.count
+    for (const blob of blobs) { if (b.count >= maxBlobs) { setMessage(`The sandbox holds up to ${maxBlobs.toLocaleString()} blobs`); break } b.push(blob) }
+    if (b.count > from) changed(from)
+  }
+
   const eraseAt = (x: number, y: number, lens: Lens) => {
     const b = blobsRef.current
     const r2 = spread * spread
@@ -562,6 +587,7 @@ export function Sandbox() {
       before.current = blobsRef.current.clone()
       if (tool === 'add') { const from = blobsRef.current.count; if (place(blobsRef.current, land(x, y), 0)) changed(from) }
       else if (tool === 'spray') sprayAt(x, y)
+      else if (tool === 'paint') { painted.current = null; paintAt(x, y) }
       else if (tool === 'erase' && view) eraseAt(x, y, view.lens())
       else if (tool === 'fill') fillAt(x, y, true)
     },
@@ -589,6 +615,7 @@ export function Sandbox() {
       if (Math.hypot(x - l.x, y - l.y) < Math.max(4, spread / 3)) return
       last.current = { ...l, x, y }
       if (tool === 'spray') sprayAt(x, y)
+      else if (tool === 'paint') paintAt(x, y)
       else if (tool === 'erase' && view) eraseAt(x, y, view.lens())
       else if (tool === 'fill') fillAt(x, y, false)
       else if (tool === 'stamp') stampAt(x, y)
@@ -626,6 +653,7 @@ export function Sandbox() {
       before.current = blobsRef.current.clone()
       if (tool === 'add') { const from = blobsRef.current.count; if (place(blobsRef.current, land(x, y), 0)) changed(from) }
       else if (tool === 'spray') sprayAt(x, y)
+      else if (tool === 'paint') { painted.current = null; paintAt(x, y) }
       else if (tool === 'erase' && view) eraseAt(x, y, view.lens())
       else if (tool === 'fill') fillAt(x, y, true)
       else if (tool === 'stamp') {
@@ -966,7 +994,7 @@ export function Sandbox() {
       ctx.moveTo(sp[0] - 11, sp[1]); ctx.lineTo(sp[0] + 11, sp[1]); ctx.moveTo(sp[0], sp[1] - 11); ctx.lineTo(sp[0], sp[1] + 11)
       ctx.stroke()
     }
-    if (h && (tool === 'spray' || tool === 'erase' || tool === 'fill' || tool === 'stamp')) {
+    if (h && (tool === 'spray' || tool === 'paint' || tool === 'erase' || tool === 'fill' || tool === 'stamp')) {
       ctx.strokeStyle = themeColor(tool === 'erase' ? 'ink' : 'accent')
       ctx.setLineDash([4, 3])
       ctx.beginPath()
@@ -989,6 +1017,7 @@ export function Sandbox() {
   const toolKeyNote: Partial<Record<ToolId, string>> = {
     add: '; press Enter to add a blob at the center',
     spray: '; press Enter to spray at the center',
+    paint: '; press Enter to paint a dab at the center',
     erase: '; press Enter to erase at the center',
     fill: '; press Enter to fill the hole at the center',
     stamp: '; press Shift+Enter to copy from the center, then Enter to lay the copy at the center',
@@ -1059,7 +1088,7 @@ export function Sandbox() {
                 label: 'Brush',
                 summary: `${blobSize.toFixed(3)} · ${flat ? 'flat' : 'round'}`,
                 content: (
-                  <Panel note="What Add and Spray put down. Each new blob takes the brush color, with a little variation so sprayed patches don't look flat.">
+                  <Panel note="What Add, Spray and Paint put down. Each new blob takes the brush color, with a little variation so sprayed patches don't look flat.">
                     <Field label="Color">
                       <div className="flex flex-wrap items-center gap-1.5">
                         {SWATCHES.map((c) => (
@@ -1070,9 +1099,18 @@ export function Sandbox() {
                     </Field>
                     <Slider label="Blob size" value={size} min={-7} max={-1} step={0.05} onChange={setSize} format={(v) => (2 ** v).toFixed(3)} />
                     <Slider label="Opacity" value={opacity} min={0.05} max={1} step={0.01} onChange={setOpacity} format={(v) => `${Math.round(v * 100)}%`} />
-                    <Slider label="Brush radius" value={spread} min={4} max={120} step={1} onChange={setSpread} format={(v) => `${v}px`} hint="The ring for Spray, Erase, Fill and Stamp." />
+                    <Slider label="Brush radius" value={spread} min={4} max={120} step={1} onChange={setSpread} format={(v) => `${v}px`} hint="The ring for Spray, Paint, Erase, Fill and Stamp." />
                     <Slider label="Density" value={density} min={1} max={30} step={1} onChange={setDensity} format={(v) => `${v} per dab`} />
                     <Toggle label="Flat discs (off = round balls)" checked={flat} onChange={setFlat} />
+                    <div className="grid gap-3">
+                      <Field label="Paint with">
+                        <div className="flex flex-wrap gap-1.5">
+                          {BRUSHES.map((k) => <Chip key={k.id} active={brush === k.id} onClick={() => { setBrush(k.id); setTool('paint') }}>{k.name}</Chip>)}
+                        </div>
+                      </Field>
+                      <p className="text-sm text-ink-faint">{BRUSHES.find((k) => k.id === brush)!.note} Blob size sets how big they grow, Density how many a dab lays.</p>
+                      <Toggle label="Their own colors (off = the brush color)" checked={ownColors} onChange={setOwnColors} />
+                    </div>
                   </Panel>
                 ),
               },
