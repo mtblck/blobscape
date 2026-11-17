@@ -3,7 +3,7 @@ import { ExtSplats, PackedSplats, SparkRenderer, SplatMesh, SplatSkinning, Splat
 import { placeCamera, type Orbit } from '../splat-core/view.ts'
 import { makeCreature, poseWalk, type Creature } from '../splat-engine/creature.ts'
 import type { SkinMode } from '../splat-engine/rig.ts'
-import { poseSpark, restAtOrigin, setSplatBones } from './sparkBones.ts'
+import { poseSpark, restAtOrigin, setSplatBones } from '../splat-engine/three/spark.ts'
 import type { BenchResult, Lab, LabOptions, StepTimes } from './lab.ts'
 
 /**
