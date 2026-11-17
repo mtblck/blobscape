@@ -1,6 +1,7 @@
 import { Blobs, quatFacing, type Quat, type Vec3 } from '../../splat-core/blobs.ts'
 import { mix, rng, spots, type Creature } from '../../splat-engine/body.ts'
 import { Skeleton, emptySkin, mulQ, setWeights } from '../../splat-engine/rig.ts'
+import type { Meadow } from '../../splat-engine/meadow.ts'
 import type { Season } from './plants.ts'
 import { HALF_WIDTH, TILE, pathHalf, pathX } from './world.ts'
 
@@ -24,7 +25,18 @@ export const GROUND_BLOBS = 6000
 
 const up: Vec3 = [0, 1, 0]
 
-export function makeGround(slot: number, detail: number, season: Season): Creature {
+/** What each blob of a tile is, for burning: grass lying flat or a fallen leaf, the upper part of a blade, its stub, or dirt and stone that never burn. */
+export const FLAT = 0, BLADE = 1, STUB = 2, INERT = 3
+
+/** A tile of forest floor and what fire needs of it: each blob's kind, its own color and opacity, and (once a field is known) its cell. */
+export interface GroundTile extends Creature {
+  kind: Uint8Array
+  base: Float32Array
+  alpha: Float32Array
+  cell?: Int32Array
+}
+
+export function makeGround(slot: number, detail: number, season: Season): GroundTile {
   const rand = rng(1000 + slot)
   const n = Math.max(600, Math.round(GROUND_BLOBS * detail))
   const blobs = new Blobs(n)
@@ -32,10 +44,12 @@ export function makeGround(slot: number, detail: number, season: Season): Creatu
   const pal = GRASS[season]
   // blob size grows as detail drops, so the floor stays covered
   const k = Math.sqrt(1 / Math.max(detail, 0.15))
-  const lie = (p: Vec3, s: number, c: Vec3, o = 0.95) => {
+  const kinds: number[] = []
+  const lie = (p: Vec3, s: number, c: Vec3, o = 0.95, kind = FLAT) => {
     const a = rand() * Math.PI
     const q: Quat = [0, Math.sin(a / 2), 0, Math.cos(a / 2)]
     blobs.push({ center: p, scale: [s, s * (0.6 + rand() * 0.4), s * 0.12], quat: mulQ(q, quatFacing(up)), color: c, opacity: o })
+    kinds.push(kind)
   }
   const along = () => z0 - 0.1 + rand() * (TILE + 0.2)
 
@@ -57,7 +71,7 @@ export function makeGround(slot: number, detail: number, season: Season): Creatu
     const p: Vec3 = [mid + across, 0, z]
     const edge = Math.abs(across) / half
     const c = mix(mix(DIRT, DIRT_DARK, 0.6 * edge * edge + 0.35 * spots(p, 6, 3)), [0.66, 0.55, 0.4], 0.25 * (1 - edge))
-    lie(p, (0.09 + rand() * 0.05) * k, shade(c, rand))
+    lie(p, (0.09 + rand() * 0.05) * k, shade(c, rand), 0.95, INERT)
   }
   // pebbles along the edges
   const pebbles = Math.round(n * 0.05)
@@ -67,9 +81,10 @@ export function makeGround(slot: number, detail: number, season: Season): Creatu
     const p: Vec3 = [mid + side * (half - 0.1 + (rand() - 0.5) * 0.35), 0.015, z]
     const s = 0.02 + rand() * 0.025
     blobs.push({ center: p, scale: [s * 1.3, s * 0.6, s], quat: [0, Math.sin(rand() * 3), 0, 1], color: shade(mix(PEBBLE, [0.45, 0.43, 0.4], rand()), rand), opacity: 1 })
+    kinds.push(INERT)
   }
-  // blades standing up, thickest along the path, thinning out into the forest
-  const blades = n - blobs.count - (season === 'autumn' ? Math.round(n * 0.04) : 0)
+  // blades standing up, thickest along the path, thinning out into the forest; each a blade over a short stub, so a fire burns it down to the stub
+  const blades = Math.floor((n - blobs.count - (season === 'autumn' ? Math.round(n * 0.04) : 0)) / 2)
   for (let i = 0; i < blades; i++) {
     const z = along(), mid = pathX(z), half = pathHalf(z)
     const side = rand() < 0.5 ? -1 : 1
@@ -80,7 +95,10 @@ export function makeGround(slot: number, detail: number, season: Season): Creatu
     const q = mulQ([0, Math.sin(turn / 2), 0, Math.cos(turn / 2)], [Math.sin(lean / 2), 0, 0, Math.cos(lean / 2)])
     const tip = rand()
     const c = mix(mix(pal[1], [0.6, 0.7, 0.25], 0.35 * tip), pal[2], 0.3 * spots([x, 0, z], 3.1, 7))
-    blobs.push({ center: [x, h * 0.9, z], scale: [0.012 * k, h, 0.006 * k], quat: q, color: shade(c, rand), opacity: 0.95 })
+    const col = shade(c, rand)
+    blobs.push({ center: [x, h * 0.9, z], scale: [0.012 * k, h, 0.006 * k], quat: q, color: col, opacity: 0.95 })
+    blobs.push({ center: [x, 0.02, z], scale: [0.013 * k, 0.025, 0.007 * k], quat: q, color: col, opacity: 0.95 })
+    kinds.push(BLADE, STUB)
   }
   // fallen leaves, mostly on the path and its edges
   while (blobs.count < n) {
@@ -92,7 +110,44 @@ export function makeGround(slot: number, detail: number, season: Season): Creatu
   const skeleton = new Skeleton([{ name: 'ground', parent: -1, head: [0, 0, z0] }])
   const skin = emptySkin(blobs.count)
   for (let i = 0; i < blobs.count; i++) setWeights(skin, i, [[0, 1]])
-  return { blobs, skin, skeleton }
+  return { blobs, skin, skeleton, kind: Uint8Array.from(kinds), base: blobs.color.slice(0, blobs.count * 3), alpha: blobs.opacity.slice(0, blobs.count) }
+}
+
+const ASH: Vec3 = [0.07, 0.06, 0.055], EMBER: Vec3 = [1, 0.42, 0.08], FLAME: Vec3 = [1, 0.78, 0.3]
+
+/**
+ * Colors a tile from the field it lies in: burning grass glows, burnt ground is black and flecked with embers that
+ * flicker, a burnt blade is gone to its black stub, and as grass grows back the blades come back and the black fades.
+ * Changes only colors and opacity, so the world sends up just the colors. The tile's blobs sit at rest z, which the
+ * field (wrapping every PERIOD) reads as where the tile stands now.
+ */
+export function paintGround(t: GroundTile, m: Meadow, time: number) {
+  const { blobs } = t
+  if (!t.cell) {
+    t.cell = new Int32Array(blobs.count)
+    for (let k = 0; k < blobs.count; k++) t.cell[k] = t.kind[k] === INERT ? -1 : m.index(blobs.center[k * 3], blobs.center[k * 3 + 2])
+  }
+  const set = (k: number, c: Vec3, o: number) => { blobs.color[k * 3] = c[0]; blobs.color[k * 3 + 1] = c[1]; blobs.color[k * 3 + 2] = c[2]; blobs.opacity[k] = o }
+  for (let k = 0; k < blobs.count; k++) {
+    const cell = t.cell[k]
+    if (cell < 0) continue
+    const base: Vec3 = [t.base[k * 3], t.base[k * 3 + 1], t.base[k * 3 + 2]], a0 = t.alpha[k]
+    const room = m.room[cell], grown = room > 0 ? m.grass[cell] / room : 1, fire = m.fire[cell], scar = m.char[cell]
+    const flick = 0.5 + 0.5 * Math.sin(time * (7 + (k % 5)) + k * 1.7)
+    if (t.kind[k] === BLADE) {
+      // a blade stands as tall as the grass left; burning, it is flame; growing back, it greens through the black
+      const o = a0 * Math.max(0, Math.min(1, grown * 1.4 - 0.25))
+      set(k, fire > 0 ? mix(EMBER, FLAME, flick * fire) : mix(base, ASH, scar * 0.8), o)
+    } else if (t.kind[k] === STUB) {
+      set(k, fire > 0 ? mix(base, EMBER, 0.5 + 0.5 * fire) : mix(base, ASH, scar), a0)
+    } else {
+      let c = mix(base, ASH, scar * 0.9)
+      if (fire > 0) c = mix(c, mix(EMBER, FLAME, flick), fire * 0.7)
+      // the fresh scar keeps a few embers glowing as it cools
+      else if (scar > 0.5 && (k * 2654435761 >>> 0) % 23 === 0) c = mix(c, EMBER, Math.max(0, 1 - m.since[cell] / 4) * flick * 0.85)
+      set(k, c, a0)
+    }
+  }
 }
 
 function shade(c: Vec3, rand: () => number): Vec3 {

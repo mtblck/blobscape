@@ -129,6 +129,8 @@ export class ForestStage {
   step(dt: number) {
     if (!this.forest || !this.world) return
     this.forest.update(dt, this.input)
+    // burning grass changes only colors: send just those up
+    for (const g of this.forest.recolored) this.world.recolor(g)
     this.world.markPosed()
     this.follow(dt)
   }

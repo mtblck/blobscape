@@ -706,7 +706,7 @@ export default [
   },
   {
     name: 'forest',
-    about: 'Forest Walk: the elf walks, tiles move on ahead, plants grow',
+    about: 'Forest Walk: the elf walks, tiles move on ahead, plants grow, the grass burns',
     entries: ['src/blobscape/ForestWalk.tsx'],
     async run({ shots, join, fails, ok, open, tabClick }) {
       const f = await open('/experiments/forest-walk/?offscreen=1', { viewport: { width: 1280, height: 900 } })
@@ -736,6 +736,14 @@ export default [
       else ok(`blobscape forest: the elf takes ${walked.steps} steps and the fox ${walked.fox.steps}, ${walked.fox.apart.toFixed(1)} m from it`)
       if (await f.page.locator('[data-testid=forest-loading]').count()) fails.push('blobscape forest: the loading note stays after the forest is drawn')
       await f.page.screenshot({ path: join(shots, 'blobscape-forest.png') })
+      // the Light the grass button: a fire runs through the grass beside the path, and it goes black
+      const before = await look(0.1, 0)
+      await f.page.getByRole('button', { name: 'Light the grass' }).click()
+      const fire = await f.page.evaluate(async () => { await window.__forest.stage.frame(5, { forward: 0, turn: 0 }); return window.__forest.stage.forest.meadow.char.filter((c) => c === 1).length })
+      const burnt = await look(0.1, 0)
+      if (!(fire > 20 && burnt.green < before.green)) fails.push(`blobscape forest: grass fire ${JSON.stringify({ fire, green: [before.green, burnt.green] })}`)
+      else ok(`blobscape forest: the grass burns (${fire} cells black, green ${before.green} to ${burnt.green})`)
+      await f.page.screenshot({ path: join(shots, 'blobscape-forest-fire.png') })
       // a new season rebuilds the forest and keeps the elf where it was
       await tabClick(f.page.getByRole('button', { name: 'Autumn', exact: true }).first())
       await f.page.waitForFunction(() => window.__forest?.stage.forest?.opts.season === 'autumn', null, { timeout: 30000 }).catch(() => {})

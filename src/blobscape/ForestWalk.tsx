@@ -102,6 +102,7 @@ export function ForestWalk() {
     const down = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || !mine(e)) return
       if (e.code === 'KeyE') { stageRef.current?.forest?.wave(); return }
+      if (e.code === 'KeyF') { stageRef.current?.forest?.spark(); return }
       const k = KEYS[e.code]
       if (!k) return
       e.preventDefault()
@@ -148,7 +149,7 @@ export function ForestWalk() {
                 ref={canvas}
                 role="application"
                 aria-roledescription="3D view"
-                aria-label="An elf and a fox on a forest path, seen from behind. Arrow keys or W, A, S and D walk and turn; E waves."
+                aria-label="An elf and a fox on a forest path, seen from behind. Arrow keys or W, A, S and D walk and turn; E waves; F lights the grass ahead."
                 tabIndex={0}
                 data-testid="forest-view"
                 className="absolute inset-0 h-full w-full outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
@@ -158,10 +159,11 @@ export function ForestWalk() {
               {failed && <div role="alert" className="absolute inset-4 grid place-items-center text-center text-sm text-ink">{failed}</div>}
               <Stick onChange={(v) => { stick.current = v; push() }} />
               <div className="absolute right-3 bottom-3 flex flex-col items-end gap-2">
+                <Button onClick={() => stage?.forest?.spark()} className="rounded-full bg-paper/85 font-medium text-ink shadow-sm backdrop-blur-sm hover:bg-paper">Light the grass</Button>
                 <Button onClick={() => stage?.forest?.wave()} className="rounded-full bg-paper/85 font-medium text-ink shadow-sm backdrop-blur-sm hover:bg-paper">Wave</Button>
               </div>
               <p aria-hidden className="pointer-events-none absolute top-2 right-2 rounded-full bg-paper/80 px-2.5 py-0.5 text-xs text-ink backdrop-blur-sm">
-                {coarse ? 'drag the stick to walk' : 'arrow keys or WASD to walk · E to wave'}
+                {coarse ? 'drag the stick to walk' : 'arrow keys or WASD to walk · E to wave · F to light the grass'}
               </p>
         </>}
         status={<div data-testid="forest-stats">
@@ -249,6 +251,13 @@ export function ForestWalk() {
             from where it would stand under the body, aiming a little ahead of where the body is going, so the same rule walks,
             turns on the spot, backs up and stops with the feet square. The fox's feet step in diagonal pairs, a trot. The legs
             are then bent to reach each foot, and the hips come down a little when a stride is long.
+          </p>
+          <p>
+            Light the grass and the fire runs through it from patch to patch, faster where it is thick, and stops at the path.
+            The grass is a grid of cells under the forest, each holding how much grass stands there, how hard it burns and how
+            black the ground is. Each blade of grass stands over a short stub: burning, the blade turns to flame and then is gone,
+            leaving the stub black on a scorched patch with a few embers glowing. After a while the scar greens and the blades
+            grow back. Only the blobs' colors change, so nothing is rebuilt.
           </p>
           <p>
             Bones are the subject of the <a href={href({ page: 'lesson', id: 'one-bone' })} className="underline decoration-rule underline-offset-2 hover:text-accent">rigs lessons</a>,
