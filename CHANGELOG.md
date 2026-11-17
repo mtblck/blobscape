@@ -6,6 +6,8 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-17
+
 The first tagged release of blobscape.dev: lessons, a sandbox and experiments with Gaussian splats, and the Blobscape engine they run on. It marks the site as it stands. The `@blobscape/engine` npm package comes later (#102).
 
 ### Lessons (20)
@@ -41,3 +43,6 @@ Our own renderer for animated splats, built on three.js with WebGPU and a WebGL 
 ### Thanks
 
 Some pixel-scene ideas come from Silicon Jungle's play kits (ideas, not code). The code is MIT licensed.
+
+[Unreleased]: https://github.com/mtblck/blobscape/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/mtblck/blobscape/releases/tag/v0.1.0
