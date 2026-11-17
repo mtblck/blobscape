@@ -1901,6 +1901,26 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
       if (so.missing || so.outOfOrder || so.unsettled) fails.push(`engine lab: GPU sort ${JSON.stringify(so)}`)
       else ok(`engine lab: GPU sort draws every blob once, farthest first, and blobs at one depth in index order (at most ${so.biggest} at one depth)`)
     }
+    // shape edits: the lab's demo (a box cuts the foxes' heads off, a soft ball paints them blue), the GPU matching the CPU
+    {
+      const e = await open(`/engine-lab/?which=engine&n=12000&walk=0&herd=2&offscreen=1&edits=1${webgl ? '&webgl=1' : ''}`, { viewport: { width: 1000, height: 1000 } })
+      await e.page.waitForFunction(() => window.__lab || window.__labError, null, { timeout: 60000 })
+      const r = await e.page.evaluate(async (webgl) => {
+        const l = window.__lab
+        await l.frame(0.3)
+        const chk = webgl ? null : await l.world.checkAgainstCPU(l.renderer)
+        const cov = l.world.deformCPU().cov
+        let cut = 0
+        for (let i = 0; i < l.world.count; i++) if (cov[i * 6] === 0 && cov[i * 6 + 3] === 0 && cov[i * 6 + 5] === 0) cut++
+        const cv = document.querySelector('canvas'), d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+        let orange = 0, blue = 0
+        for (let i = 0; i < d.length; i += 4) { if (d[i] > 150 && d[i + 1] > 50 && d[i + 1] < 140 && d[i + 2] < 80) orange++; if (d[i + 2] > 120 && d[i + 2] > d[i] * 1.4) blue++ }
+        return { chk, cut, count: l.world.count, orange, blue }
+      }, webgl)
+      if (!(r.cut > r.count * 0.1 && r.cut < r.count * 0.6 && r.blue > 3000 && r.blue > r.orange && (!r.chk || (r.chk.center < 1e-3 && r.chk.cov < r.chk.covScale * 0.01)))) fails.push(`engine lab ${label}: shape edits ${JSON.stringify(r)}`)
+      else ok(`engine lab ${label}: shape edits cut ${r.cut} of ${r.count} blobs${r.chk ? ' (GPU matching the CPU)' : ''} and paint ${r.blue} pixels`)
+      await e.ctx.close()
+    }
     // depth map for post effects (SplatDepth): the two foxes cover pixels, at depths round the camera's distance (7)
     const dm = await page.evaluate(() => window.__lab.depth(0.3))
     if (!(dm.covered > 5000 && dm.near > 4.5 && dm.near < dm.median && dm.median > 5.5 && dm.median < 8.5 && dm.far < 10)) fails.push(`engine lab ${label}: depth map ${JSON.stringify(dm)}`)

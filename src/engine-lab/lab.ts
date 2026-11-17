@@ -6,6 +6,7 @@ import { placeCamera, type Orbit } from '../splat-core/view.ts'
 import { SplatWorld } from '../splat-engine/engine.ts'
 import { DETAIL } from '../splat-engine/lod.ts'
 import { SplatDepth } from '../splat-engine/depth.ts'
+import type { ShapeEdit } from '../splat-engine/edit.ts'
 import { makeCreature, poseWalk, type Creature } from '../splat-engine/creature.ts'
 import type { SkinMode } from '../splat-engine/rig.ts'
 import { readbackToSrgb, srgbToLinear } from '../splat-core/color.ts'
@@ -39,6 +40,8 @@ export interface LabOptions {
   herd: number
   /** Level of detail (ours only): each fox draws as many blobs as its size on screen needs. */
   lod?: boolean
+  /** Shape edits (ours only): a box cuts the herd's front half away and a soft sphere paints their middles blue. */
+  edits?: boolean
   /**
    * Draw into an off-screen target and copy each frame to the page with the
    * CPU. Only for headless test browsers, whose software WebGPU can render but
@@ -46,6 +49,12 @@ export interface LabOptions {
    */
   offscreen?: boolean
 }
+
+/** The lab's shape edits: everything in front of z = 0.35 cut away, and a soft blue ball painted over the middle of the herd. */
+export const DEMO_EDITS: ShapeEdit[] = [
+  { shape: 'box', center: [0, 1, 5.35], size: [20, 20, 5], op: 'cut' },
+  { shape: 'sphere', center: [0, 0.7, 0], size: [0.9, 0, 0], op: 'paint', color: [0.2, 0.45, 1], soft: 0.4 },
+]
 
 export interface Lab {
   readonly info: string
@@ -137,8 +146,9 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
   let walk = o.walk
   let mode = o.mode
   if (o.which === 'engine') {
-    world = new SplatWorld(foxes, { mode })
+    world = new SplatWorld(foxes, { mode, paint: o.edits })
     if (o.lod) world.autoDetail = DETAIL
+    if (o.edits) world.setEdits(DEMO_EDITS)
     scene.add(world)
   } else {
     // three.js draws each object on its own; give it the foxes as separate meshes
@@ -226,7 +236,7 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
   raf = requestAnimationFrame(tick)
 
   return {
-    info: `${o.which === 'three' ? 'three.js (standing still: it has no bones)' : 'ours'} · ${backend} · ${blobs.toLocaleString()} blobs${world?.autoDetail ? ' · fewer when small' : ''}`,
+    info: `${o.which === 'three' ? 'three.js (standing still: it has no bones)' : 'ours'} · ${backend} · ${blobs.toLocaleString()} blobs${world?.autoDetail ? ' · fewer when small' : ''}${o.edits ? ' · cut and painted' : ''}`,
     world,
     renderer,
     get orbit() { return orbit },
