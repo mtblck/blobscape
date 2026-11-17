@@ -24,7 +24,8 @@ import { makeGraph } from './verify/graph.mjs'
 const args = process.argv.slice(2)
 const flag = (name) => args.find((a) => a === `--${name}` || a.startsWith(`--${name}=`))
 const value = (name, d) => { const f = flag(name); return f?.includes('=') ? f.slice(f.indexOf('=') + 1) : d }
-const named = args.filter((a) => !a.startsWith('--'))
+const named = args.filter((a) => !a.startsWith('--') && !/^https?:/.test(a))
+const urlArg = args.find((a) => /^https?:/.test(a))
 
 // every check, in file order (heaviest groups first when there is no timing yet)
 const dir = join(root, 'scripts/verify/checks')
@@ -114,7 +115,7 @@ if (!run.length) { console.log('no browser checks to run'); process.exit(0) }
 const jobs = Math.max(1, Math.min(Number(value('jobs', Math.min(3, cpus().length - 1))), run.length))
 const LIMIT = Number(value('limit', 15 * 60)) * 1000 // a check that takes longer than this has hung
 const queue = [...run].sort((a, b) => (lastTimes[b.name] ?? 0) - (lastTimes[a.name] ?? 0))
-let base = value('base', named.find((n) => /^https?:/.test(n)))
+let base = value('base', urlArg)
 const served = base ? null : await serveDist()
 base ??= served.base
 console.log(`${run.length} checks, ${jobs} at a time${run.length < checks.length ? `: ${run.map((c) => c.name).join(', ')}` : ''}\n`)
