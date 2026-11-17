@@ -1,7 +1,7 @@
 // The @blobscape/engine API reference, read with TypeDoc from the package's own type declarations and boiled down to
 // what the docs page (/engine/docs/) shows: each export's name, its doc comment, and its shape (a function's
 // signatures, an interface's properties, a class's constructor, properties and methods, a type or a value's type),
-// grouped by the module that declares it, in the order the package's entry exports them. The page draws it in the
+// grouped by the module that declares it, and the modules into the parts of `GROUPS`. The page draws it in the
 // site's own markup, under the site's CSP, which TypeDoc's own HTML theme would not pass (it has inline scripts).
 //
 // TypeDoc needs TypeScript 6's compiler API, which the site's TypeScript 7 no longer ships, so this lives in its own
@@ -62,6 +62,22 @@ export const TITLES = {
   'splat-engine/zoo/dragon': 'Dragon',
   'splat-engine/zoo/monster': 'Monsters from a seed',
 }
+
+/**
+ * The parts of the reference, in page order: what most people need first, then the specialist pieces. Every module
+ * is in exactly one, in the order given here.
+ */
+export const GROUPS = [
+  { id: 'core', title: 'Core', doc: 'What every page needs: a stage on a canvas, the world of blobs it draws, the camera, and the bones that move them. Start here.', modules: ['splat-engine/stage', 'splat-engine/engine', 'splat-core/orbit', 'splat-core/blobs', 'splat-engine/rig'] },
+  { id: 'movement', title: 'Movement', doc: 'Moves written by hand, poses mixed together, feet that find the ground, loose parts that swing after the body, and morphs.', modules: ['splat-engine/posing', 'splat-engine/mix', 'splat-engine/ik', 'splat-engine/steps', 'splat-engine/swing', 'splat-engine/morph'] },
+  { id: 'creatures', title: 'Creatures', doc: 'Cutting a creature out of shapes, hanging it on bones and growing its fur, and the creatures that come ready made.', modules: ['splat-engine/sculpt', 'splat-engine/body', 'splat-engine/fur', 'splat-engine/zoo/index', 'splat-engine/zoo/fox', 'splat-engine/zoo/frog', 'splat-engine/zoo/elf', 'splat-engine/zoo/dragon', 'splat-engine/zoo/monster'] },
+  { id: 'scenes', title: 'Shapes and scenes', doc: 'Scenes written as data and the shapes they are cut from: buildings, rock, plants, worn land and weather.', modules: ['splat-engine/sceneDoc', 'splat-engine/voxel', 'splat-engine/built', 'splat-engine/forms', 'splat-engine/life', 'splat-engine/erode', 'splat-engine/grow', 'splat-engine/weather'] },
+  { id: 'pixels', title: 'Pixels and sprites', doc: 'Drawing a stage as pixel art, and baking a creature into a sprite sheet.', modules: ['splat-engine/pixelPass', 'splat-core/pixel', 'splat-engine/bakeSheet', 'splat-engine/spriteSheet'] },
+  { id: 'simulation', title: 'Simulation', doc: 'The solvers under cloth and under sand, snow and goo, for when you want to step them yourself.', modules: ['splat-engine/xpbd', 'splat-engine/mpm'] },
+  { id: 'extras', title: 'Picking, detail and edits', doc: 'Finding what a tap hit, drawing fewer blobs far away, cutting and painting live, and depth for effects after the draw.', modules: ['splat-engine/pick', 'splat-engine/lod', 'splat-engine/edit', 'splat-engine/depth'] },
+  { id: 'files', title: 'Files and models', doc: 'Writing and reading rigged .glb files, and turning an ordinary rigged model into splats.', modules: ['splat-engine/glb', 'splat-engine/skinnedModel'] },
+]
+const GROUP_OF = new Map(GROUPS.flatMap((g) => g.modules.map((m, i) => [m, { id: g.id, at: GROUPS.indexOf(g) * 1000 + i }])))
 
 /** A doc comment as text: `code` kept in its backticks, {@link name} as `name`, without the issue numbers it was built under. */
 const text = (comment) => (comment?.summary ?? [])
@@ -162,7 +178,8 @@ export async function buildApi() {
       const file = src.fullFileName.slice(TYPES.length + 1).replace(/\\/g, '/').replace(/\.d\.ts$/, '')
       const from = home.get(file) ?? file
       if (!TITLES[from]) throw new Error(`engine docs: ${child.name} comes from ${from}, which has no title in TITLES`)
-      if (!modules.get(from)) modules.set(from, { id: from.replace(/^splat-(engine|core)\//, '').replace(/\//g, '-'), title: TITLES[from], doc: moduleDoc(readFileSync(join(root, 'src', `${from}.ts`), 'utf8')), entries: [] })
+      if (!GROUP_OF.has(from)) throw new Error(`engine docs: ${from} is in no part of GROUPS`)
+      if (!modules.get(from)) modules.set(from, { id: from.replace(/^splat-(engine|core)\//, '').replace(/\//g, '-'), title: TITLES[from], group: GROUP_OF.get(from).id, from, doc: moduleDoc(readFileSync(join(root, 'src', `${from}.ts`), 'utf8')), entries: [] })
       const mod = modules.get(from)
       // a second name for an export is listed as that, not written out twice
       const e = child.kindOf(ReflectionKind.Reference) && project.children.includes(ref) ? { name: child.name, kind: 'alias', doc: text(child.comment), of: ref.name } : entry(ref, child.name)
@@ -171,7 +188,8 @@ export async function buildApi() {
       mod.entries.push({ ...e, at: [file === from ? 0 : 1, file, src.line] })
     }
     return {
-      modules: [...modules.values()].filter((m) => m?.entries.length).map((m) => ({ ...m, entries: m.entries.sort((a, b) => a.at[0] - b.at[0] || a.at[1].localeCompare(b.at[1]) || a.at[2] - b.at[2]).map(({ at, ...e }) => e) })),
+      groups: GROUPS.map(({ id, title, doc }) => ({ id, title, doc })),
+      modules: [...modules.values()].filter((m) => m?.entries.length).sort((a, b) => GROUP_OF.get(a.from).at - GROUP_OF.get(b.from).at).map(({ from, ...m }) => ({ ...m, entries: m.entries.sort((a, b) => a.at[0] - b.at[0] || a.at[1].localeCompare(b.at[1]) || a.at[2] - b.at[2]).map(({ at, ...e }) => e) })),
     }
   } finally { rmSync(TYPES, { recursive: true, force: true }) }
 }
