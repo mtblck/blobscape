@@ -20,6 +20,7 @@
     "@sparkjsdev/spark": "^2.4.0",
     "mp4-muxer": "5.2.2",
     "nodemailer": "^10.6.0",
+    "onnxruntime-web": "1.22.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "three": "^0.187.0",

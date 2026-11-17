@@ -14,7 +14,7 @@ export const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 export const dist = join(root, 'dist')
 export const shots = join(root, 'verify-shots')
 
-const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.png': 'image/png', '.webp': 'image/webp', '.json': 'application/json', '.glb': 'model/gltf-binary', '.mp4': 'video/mp4' }
+const types = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.wasm': 'application/wasm', '.onnx': 'application/octet-stream', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.png': 'image/png', '.webp': 'image/webp', '.json': 'application/json', '.glb': 'model/gltf-binary', '.mp4': 'video/mp4' }
 
 /** Serves ./dist with the production headers; resolves to its base URL. */
 export async function serveDist(port = 4181) {

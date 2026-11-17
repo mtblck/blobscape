@@ -280,6 +280,43 @@ export default [
     },
   },
   {
+    name: 'sandbox-photo',
+    about: 'one photo to a shallow scene: the depth model runs in the page, the view opens as the photo and has depth',
+    entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/photo.ts', 'src/blobscape/photo/scene.ts', 'src/blobscape/photo/depth.worker.ts'],
+    async run({ readFileSync, root, shots, join, fails, ok, open }) {
+      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 900 } })
+      // nothing but this site may be asked for anything
+      const outside = []
+      page.on('request', (r) => { if (!/^(http:\/\/localhost|data:|blob:)/.test(r.url())) outside.push(r.url()) })
+      await page.waitForTimeout(1500)
+      const count = async () => Number((await page.textContent('[data-testid=blob-count]')).replace(/\D/g, ''))
+      await page.getByRole('tab', { name: /Scene/ }).click()
+      // one of the site's own pictures, the cabin scene's first frame, 410 by 307: shrunk to 256 by 192
+      await page.setInputFiles('[data-testid=photo-input]', { name: 'picture.png', mimeType: 'image/png', buffer: readFileSync(join(root, 'public', 'loops', 'cabin.png')) })
+      await page.waitForFunction(() => document.querySelector('[data-testid=blob-count]')?.textContent === (256 * 192).toLocaleString('en-US'), null, { timeout: 120000 }).catch(() => {})
+      const made = await count()
+      const alert = await page.getByRole('alert').textContent({ timeout: 500 }).catch(() => '')
+      if (made !== 256 * 192) fails.push(`blobscape sandbox photo: a 410 by 307 photo gave ${made} blobs, not ${256 * 192}. ${alert}`)
+      else ok(`blobscape sandbox photo: a photo becomes ${made.toLocaleString()} blobs, a blob a pixel`)
+      if (outside.length) fails.push(`blobscape sandbox photo: asked another site for ${outside.slice(0, 3).join(', ')}`)
+      else ok('blobscape sandbox photo: the model and its runtime come from this site alone')
+      await page.waitForTimeout(3000)
+      const front = await page.getByTestId('viewport').screenshot()
+      await page.screenshot({ path: join(shots, 'blobscape-sandbox-photo.png') })
+      // a small turn of the view
+      await page.getByRole('button', { name: 'Look', exact: true }).click()
+      const box = await page.getByTestId('viewport').boundingBox()
+      await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.5); await page.mouse.down()
+      await page.mouse.move(box.x + box.width * 0.36, box.y + box.height * 0.5, { steps: 6 }); await page.mouse.up()
+      await page.waitForTimeout(3000)
+      const side = await page.getByTestId('viewport').screenshot()
+      await page.screenshot({ path: join(shots, 'blobscape-sandbox-photo-turned.png') })
+      if (front.equals(side)) fails.push('blobscape sandbox photo: turning the view changed nothing')
+      else ok('blobscape sandbox photo: the view turns round the scene')
+      await ctx.close()
+    },
+  },
+  {
     name: 'sandbox-props',
     about: 'a slime that bursts and the watch, added from other experiments',
     entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/props.ts'],

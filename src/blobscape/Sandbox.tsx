@@ -210,6 +210,7 @@ export function Sandbox() {
 
   // --- opening and saving files ----------------------------------------------
   const fileInput = useRef<HTMLInputElement>(null)
+  const photoInput = useRef<HTMLInputElement>(null)
   const [upright, setUpright] = useState(true)
   const maxFileBytes = coarse ? 400e6 : 1.5e9
   const openFile = async (file: File) => {
@@ -223,6 +224,17 @@ export function Sandbox() {
     try {
       if (file.size > maxFileBytes) {
         setError(`${file.name} is ${(file.size / 1e9).toFixed(1)} GB, more than this device can open here (${(maxFileBytes / 1e9).toFixed(1)} GB). A compressed .spz or .sog of the same scene is much smaller.`)
+        return
+      }
+      // A photo becomes a shallow scene: a depth guess made on this device puts each pixel's blob at its distance
+      if (file.type.startsWith('image/') || /\.(jpe?g|png|webp|avif|gif)$/i.test(file.name)) {
+        setMessage(`Working out how deep ${file.name} is…`)
+        const { photoScene } = await import('./photo/scene.ts')
+        const made = await photoScene(file, coarse)
+        history.current.record(blobsRef.current, sourceRef.current, actorsRef.current)
+        replace(made.blobs, file.name)
+        setOrbit(made.orbit)
+        setMessage(`Made ${file.name} into ${made.blobs.count.toLocaleString()} blobs, one for each pixel of ${made.width} by ${made.height}. Turn the view a little to see its depth`)
         return
       }
       const bytes = await file.arrayBuffer()
@@ -242,9 +254,10 @@ export function Sandbox() {
     } catch (err) {
       console.warn(err)
       setMessage('')
-      const why = err instanceof GlbError ? `It isn't a rigged splat .glb the sandbox can read: ${err.message}.` : err instanceof MeshFileError ? `It's a model, but not one the sandbox can lay blobs on: ${err.message}.` : err instanceof ImportError ? err.message : err instanceof RangeError ? 'This file is too big for this device.' : 'The sandbox reads Gaussian splat files: .ply, .spz, .splat, .ksplat and .sog, rigged splat .glb files, and rigged models as .glb.'
+      const photo = file.type.startsWith('image/')
+      const why = photo ? `The photo could not be made into a scene: ${err instanceof Error ? err.message : String(err)}.` : err instanceof GlbError ? `It isn't a rigged splat .glb the sandbox can read: ${err.message}.` : err instanceof MeshFileError ? `It's a model, but not one the sandbox can lay blobs on: ${err.message}.` : err instanceof ImportError ? err.message : err instanceof RangeError ? 'This file is too big for this device.' : 'The sandbox reads Gaussian splat files: .ply, .spz, .splat, .ksplat and .sog, rigged splat .glb files, and rigged models as .glb.'
       // Spark's decoder can stop working after a file it chokes on; checked files never get that far
-      const stuck = decoded && !(err instanceof ImportError && (err.kind === 'mesh' || (err.kind === 'damaged' && /header/.test(err.message))))
+      const stuck = !photo && decoded && !(err instanceof ImportError && (err.kind === 'mesh' || (err.kind === 'damaged' && /header/.test(err.message))))
       setError(`Couldn't open ${file.name}. ${why}${stuck ? ' If other files stop opening too, reload the page.' : ''}`)
     } finally {
       setBusy(false)
@@ -1355,6 +1368,13 @@ export function Sandbox() {
                         </p>
                         {error && <p className="text-sm text-accent-ink">{error}</p>}
                         <Toggle label="Turn captures the right way up on opening" checked={upright} onChange={setUpright} />
+                      </div>
+                    </Field>
+                    <Field label="Your own photo">
+                      <div className="space-y-2">
+                        <Button small onClick={() => { if (!busy) photoInput.current?.click() }} aria-disabled={busy}>{busy ? 'Opening…' : 'Open a photo…'}</Button>
+                        <input ref={photoInput} type="file" accept="image/*" className="sr-only" tabIndex={-1} aria-hidden data-testid="photo-input" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void openFile(f) }} />
+                        <p className="text-xs text-ink-faint">One photo becomes a shallow scene: a blob for each pixel, set as far back as a depth model guesses it is. It opens as the photo; turn the view a little and it has depth. What the camera never saw isn't there, so a wide turn opens gaps. The photo stays on your device: the model (Depth Anything V2 Small, 27 MB, fetched the first time) runs in this page.</p>
                       </div>
                     </Field>
                     <div className="flex flex-wrap gap-2">
