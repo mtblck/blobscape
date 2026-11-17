@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { posedPoint } from '../../splat-engine/rig.ts'
+import { posedPoint, rotate } from '../../splat-engine/rig.ts'
 import { Forest } from './forest.ts'
 import { makePlant, sprung } from './plants.ts'
 import { KINDS, PERIOD, RING, ROAM, RULES, TILE, layout, obstacles, pathHalf, pathX, slotOf, stepWalker, tileWindow } from './world.ts'
@@ -131,6 +131,35 @@ test('the elf and the fox walk on planned footsteps: a planted foot stays put, a
   // standing still at the end, the elf's feet are down and square under it
   const still = { ...f.walker, vx: 0, vz: 0, turn: 0 }
   f.elfSteps.feet.forEach((ft, i) => assert.ok(ft.t < 0 && f.elfSteps.off(i, still) <= f.elfSteps.opts.settle + 1e-9, `elf foot ${i} left off square`))
+})
+
+test("the fox's brush sways slowly as it trots, not on the beat of its steps", () => {
+  const f = new Forest({ detail: 0.12, season: 'summer', look: 'forest', seed: 5 })
+  const sk = f.fox.skeleton, tail = sk.index('tail2')
+  // how far to one side of the fox the tip of its brush is
+  const side = () => {
+    const hips = posedPoint(sk, 0, sk.bones[0].head), tip = posedPoint(sk, tail, sk.bones[tail].tail!)
+    const q = sk.quat.subarray(0, 4)
+    return rotate([-q[0], -q[1], -q[2], q[3]], [tip[0] - hips[0], tip[1] - hips[1], tip[2] - hips[2]])[0]
+  }
+  for (let k = 0; k < 120; k++) f.update(1 / 60, { forward: 1, turn: 0 })
+  const steps = f.foxSteps.taken
+  let was = side(), swings = 0, turns = 0, way = 0, most = 0
+  for (let k = 0; k < 360; k++) {
+    f.update(1 / 60, { forward: 1, turn: 0 })
+    const now = side()
+    if (was < 0 && now >= 0) swings++
+    if ((now - was) * way < 0) turns++
+    if (now !== was) way = Math.sign(now - was)
+    most = Math.max(most, Math.abs(now))
+    was = now
+  }
+  // four paws at well over two strides a second
+  assert.ok(f.foxSteps.taken - steps > 48, `${f.foxSteps.taken - steps} steps in six seconds`)
+  assert.ok(swings >= 2 && swings <= 5, `the brush swung ${swings} times in six seconds`)
+  // and no quicker shake rides on the sway
+  assert.ok(turns <= 10, `the brush changed its way ${turns} times in six seconds`)
+  assert.ok(most > 0.1 && most < 0.35, `the brush swings ${most} to each side`)
 })
 
 test('a spark lights the grass beside the path; blades burn down to black stubs and grow back', async () => {
