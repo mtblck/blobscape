@@ -167,7 +167,8 @@ npm run dev          # http://localhost:5173/
 | `npm test` | Unit tests in Node, no GPU: the pixel pipeline, the trainers, and the engine's rig, file and scene math |
 | `npm run build` | Hosting check, type check, Vite build to `dist`, then a prerendered HTML file for every page |
 | `npm run preview` | Serve the build with the production headers |
-| `npm run verify` | Real Chromium against `dist` under the production CSP, with axe accessibility checks |
+| `npm run verify` | Real Chromium against `dist` under the production CSP, with axe accessibility checks (all of them; `-- --changed` runs only those a change reaches) |
+| `npm run check` | Unit tests, build, then the browser checks the branch's changes reach: run this before merging ([testing](docs/testing.md)) |
 
 ## How the repo is laid out
 
@@ -186,7 +187,8 @@ docs/             design notes, the engine note, the rigged-splat spec, scene de
 
 Further reading: [design notes](docs/design-notes.md) ·
 [engine prototype](docs/engine-prototype.md) ·
-[writing a scene as data](docs/scene-descriptions.md).
+[writing a scene as data](docs/scene-descriptions.md) ·
+[testing](docs/testing.md).
 
 ## Thanks
 

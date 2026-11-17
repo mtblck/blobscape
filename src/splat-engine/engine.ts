@@ -50,6 +50,12 @@ export interface Actor {
   skeleton: Skeleton
   /** Which part of the actor each blob belongs to (as `buildBody` and `voxelBody` give it): what `SplatWorld.parts` draws. Left out, the actor is one part. */
   partOf?: ArrayLike<number>
+  /**
+   * How much of each of the first four live lights a blob can see, four bytes a blob (255 sees it all): baked lamp
+   * shadows (voxel.ts `lamps`). The light pass scales light k by byte k, so a flickering lamp's shadows flicker with it.
+   * Left out, every light reaches every blob.
+   */
+  seen?: Uint8Array
   /** Blend shapes (morph.ts), set with `SplatWorld.setMorphWeights`: on WebGPU a pass before the deform reshapes the blobs; on WebGL the CPU does and uploads them. */
   morphs?: Morph[]
 }
@@ -847,6 +853,8 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
   const part = new Uint32Array(n)
   // joints and weights interleaved, two words per blob: a compute stage may only bind 8 storage buffers on many phones
   const skinWords = new Uint32Array(n * 2)
+  // how much of each of the first four lights a blob sees, a byte each: all of it unless the actor baked lamp shadows
+  const seen = new Uint32Array(n).fill(0xffffffff)
   packBlobs(actors, boneOffset, center, scale, quat, color)
   let i = 0
   actors.forEach((a, ai) => {
@@ -856,11 +864,12 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
       part[i] = ((p & 255) | ((p >> 8) << 8) | (who << 16)) >>> 0
       skinWords[i * 2] = (skin.joints[k * 4] | (skin.joints[k * 4 + 1] << 8) | (skin.joints[k * 4 + 2] << 16) | (skin.joints[k * 4 + 3] << 24)) >>> 0
       skinWords[i * 2 + 1] = packWeights(skin.weights, k * 4)
+      if (a.seen) seen[i] = (a.seen[k * 4] | (a.seen[k * 4 + 1] << 8) | (a.seen[k * 4 + 2] << 16) | (a.seen[k * 4 + 3] << 24)) >>> 0
     }
   })
   const attr = (a: Float32Array | Uint32Array, size: number) => new StorageBufferAttribute(a, size)
   const centerAttr = attr(center, 4), scaleAttr = attr(scale, 4), quatAttr = attr(quat, 4)
-  const colorAttr = attr(color, 1), skinAttr = attr(skinWords, 1), partAttr = attr(part, 1)
+  const colorAttr = attr(color, 1), skinAttr = attr(skinWords, 1), partAttr = attr(part, 1), seenAttr = attr(seen, 1)
   const boneData = new Float32Array(Math.max(1, bones) * 20)
   const boneAttr = new StorageBufferAttribute(boneData, 4)
   boneAttr.setUsage(DynamicDrawUsage)
@@ -873,7 +882,7 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
   return {
     count: n,
     /** Every GPU buffer, so dispose can free them. */
-    attrs: [centerAttr, scaleAttr, quatAttr, colorAttr, partAttr, skinAttr, boneAttr, worldCenterAttr, covAAttr, covBAttr, splatAAttr, splatBAttr],
+    attrs: [centerAttr, scaleAttr, quatAttr, colorAttr, partAttr, seenAttr, skinAttr, boneAttr, worldCenterAttr, covAAttr, covBAttr, splatAAttr, splatBAttr],
     skinWords, srcCenterData: center,
     boneData, boneAttr, worldCenterAttr, covAAttr, covBAttr, colorAttr, centerAttr, scaleAttr, quatAttr,
     srcCenter: storage(centerAttr, 'vec4', n).toReadOnly(),
@@ -884,6 +893,7 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
     color: storage(colorAttr, 'uint', n).toReadOnly(),
     edits: makeEdits(),
     part: storage(partAttr, 'uint', n).toReadOnly(),
+    seen: storage(seenAttr, 'uint', n).toReadOnly(),
     worldCenterW: storage(worldCenterAttr, 'vec4', n),
     covAW: storage(covAAttr, 'vec4', n),
     covBW: storage(covBAttr, 'vec4', n),
@@ -901,7 +911,7 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
 /** On WebGL, storage is read through textures that the CPU fills; the draw reads the blobs' rest data and the bones. */
 function enableWebGL(buf: ReturnType<typeof makeBuffers>, sort: DepthSort) {
   if (buf.webgl) return
-  for (const r of [buf.srcCenter, buf.srcScale, buf.srcQuat, buf.skin, buf.bones, buf.color, buf.part]) (r as unknown as { setPBO: (b: boolean) => void }).setPBO(true)
+  for (const r of [buf.srcCenter, buf.srcScale, buf.srcQuat, buf.skin, buf.bones, buf.color, buf.part, buf.seen]) (r as unknown as { setPBO: (b: boolean) => void }).setPBO(true)
   sort.enableWebGL()
   buf.webgl = true
 }
@@ -1323,8 +1333,12 @@ function blobNormal(covA: N, covB: N) {
   return normalize(best.add(vec3(0, 1e-12, 0)))
 }
 
-/** The blob's color under the lights: ambient times its own, plus each light by distance and by how its face turns to it. CPU twin: `light.ts` (change both). */
-function lit(rgb: N, world: N, covA: N, covB: N, L: Lighting) {
+/**
+ * The blob's color under the lights: ambient times its own, plus each light by distance and by how its face turns
+ * to it, and each of the first four by how much of it the blob can see (`seen`, a byte a light). CPU twin: `light.ts`
+ * (change both).
+ */
+function lit(rgb: N, world: N, covA: N, covB: N, seen: N, L: Lighting) {
   const n = blobNormal(covA, covB).toVar()
   const sum = vec3(L.ambient).toVar()
   // only the lights in use: the loop stops at the count
@@ -1337,7 +1351,8 @@ function lit(rgb: N, world: N, covA: N, covB: N, L: Lighting) {
     const fade = max(float(1).sub(d2.div(r2.mul(4))), 0)
     const fall = fade.mul(fade).div(float(1).add(d2.div(r2)))
     const facing = abs(dot(n, to.mul(TSL.inverseSqrt(max(d2, 1e-6))))).mul(0.65).add(0.35)
-    const reach = fall.mul(facing).toVar()
+    const sees = select(i.lessThan(4), float(seen.shiftRight(uint(i).mul(8)).bitAnd(255)).div(255), float(1))
+    const reach = fall.mul(facing).mul(sees).toVar()
     const through = float(1).toVar()
     If(C.w.greaterThan(0.5).and(reach.greaterThan(0.001)), () => { through.assign(shadowMarch(world, n, to, d2, L)) })
     sum.addAssign(C.xyz.mul(reach.mul(through)))
@@ -1415,7 +1430,7 @@ function makeLight(buf: ReturnType<typeof makeBuffers>, L: Lighting, viewed: boo
     // with color by angle, `makeViewColor` has just written the blob's color for this view into the same buffer
     const color = (viewed ? L.litW.element(i) : unpackUnorm4x8(buf.color.element(i))).toVar()
     const world = buf.worldCenter.element(i).xyz.toVar()
-    L.litW.element(i).assign(vec4(lit(painted(color.rgb, world, buf.edits), world, buf.covA.element(i), buf.covB.element(i), L), color.a))
+    L.litW.element(i).assign(vec4(lit(painted(color.rgb, world, buf.edits), world, buf.covA.element(i), buf.covB.element(i), buf.seen.element(i), L), color.a))
   })().compute(buf.count, [WORKGROUP]).setName('SplatWorldLight')
 }
 
@@ -1567,7 +1582,7 @@ function makeVertexWebGL(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, m
     const p = projectSplat(d.world, d.covA, d.covB, cameraViewMatrix, cameraProjectionMatrix, cameraViewport.zw)
     const color = unpackUnorm4x8(buf.color.element(idx)).toVar()
     const own = S ? viewed(color.rgb, idx, d.world, buf, S) : color.rgb
-    const rgb = L ? lit(painted(own, d.world, buf.edits), d.world, d.covA, d.covB, L) : own
+    const rgb = L ? lit(painted(own, d.world, buf.edits), d.world, d.covA, d.covB, buf.seen.element(idx), L) : own
     const part = unpackUnorm4x8(buf.part.element(idx))
     return placeQuad(p.ndc, p.axes, vec4(flatColor(flat, part.rgb, p.depth, fogged(rgb, p.depth, fog)), color.a.mul(p.alphaScale)))
   })()

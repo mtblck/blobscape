@@ -56,6 +56,8 @@ export interface BodySpec {
 export interface Built extends Creature {
   /** Which part each blob came from. */
   partOf: Uint16Array
+  /** How much of each baked lamp a blob can see, four bytes a blob (voxel.ts `lamps`); left out, every lamp is seen. */
+  seen?: Uint8Array
 }
 
 const LIGHT: Vec3 = norm([-0.45, 0.75, 0.5])

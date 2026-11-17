@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { alphaCut, autoPalette, downsample, makeFrame, outline, pixelArt, quantize, lookColors, snapColors, removeStrays, countSolid, type Rgb } from './pixel.ts'
+import { alphaCut, autoPalette, downsample, makeFrame, outline, pixelArt, quantize, lookColors, snapColors, removeStrays, countSolid, tidyLone, type Rgb } from './pixel.ts'
 
 const solid = (w: number, h: number, on: (x: number, y: number) => boolean, rgb = [200, 40, 40]) => {
   const f = makeFrame(w, h)
@@ -198,4 +198,30 @@ test('pixelArt with parts draws a line where one part meets another of the same 
   // where the map has nothing (alpha 0), there is no part to end
   for (let y = 0; y < 3; y++) map.data[(y * 6 + 3) * 4 + 3] = 0
   assert.deepEqual(dark(pixelArt(f, look, undefined, map)), [false, false, false, false, false, false])
+})
+
+test('tidyLone: a stray in a flat patch takes its neighbors\' color; dither, edges, other parts and empty pixels stay', () => {
+  const w = 12, h = 6
+  const solid = makeFrame(w, h)
+  for (let i = 0; i < w * h; i++) solid.data[i * 4 + 3] = 255
+  const art = makeFrame(w, h)
+  const put = (x: number, y: number, c: Rgb) => { const i = (y * w + x) * 4; art.data[i] = c[0]; art.data[i + 1] = c[1]; art.data[i + 2] = c[2]; art.data[i + 3] = 255 }
+  const A: Rgb = [200, 100, 50], B: Rgb = [20, 40, 60]
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) put(x, y, x < 6 ? A : (x + y) % 2 ? A : B)
+  put(2, 2, B) // a stray in the flat half
+  put(3, 4, B); put(4, 4, B) // a pair: not lone
+  const got = (f: ReturnType<typeof makeFrame>, x: number, y: number) => Array.from(f.data.slice((y * w + x) * 4, (y * w + x) * 4 + 3))
+  const out = tidyLone(art, solid)
+  assert.deepEqual(got(out, 2, 2), A)
+  assert.deepEqual(got(out, 3, 4), B)
+  // the checkerboard half is untouched
+  for (let y = 0; y < h; y++) for (let x = 7; x < w; x++) assert.deepEqual(got(out, x, y), got(art, x, y))
+  // with a map of parts: the stray is a part of its own (an eye, a speck), so it stays
+  const map = makeFrame(w, h)
+  for (let i = 0; i < w * h; i++) { map.data[i * 4] = 1; map.data[i * 4 + 3] = 255 }
+  map.data[(2 * w + 2) * 4] = 2
+  assert.deepEqual(got(tidyLone(art, solid, map.data), 2, 2), B)
+  // an empty pixel (sky) is never touched
+  solid.data[(2 * w + 2) * 4 + 3] = 0
+  assert.deepEqual(got(tidyLone(art, solid), 2, 2), B)
 })

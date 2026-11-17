@@ -3,7 +3,7 @@ import type { Orbit } from '../splat-core/view.ts'
 import { MAX_PALETTE_SIZE, darkest, type PixelLook, type Rgb } from '../splat-core/pixel.ts'
 import type { PointLight } from './engine.ts'
 import { axisAngle, mulQ, type Bone, type Skeleton } from './rig.ts'
-import { PAINTED, box, cone, cut, cylinder, displace, ellipsoid, roof, sphere, torus, union, type LooseBlob, type Shape, type VoxelPart, type VoxelSpec } from './voxel.ts'
+import { INK_MARKS, LETTERS, MAX_LAMPS, PAINTED, blend, box, lathe, letterGrid, pixelText, sweep, cone, cut, cylinder, displace, ellipsoid, roof, sphere, torus, union, type LooseBlob, type Shape, type VoxelPart, type VoxelSpec } from './voxel.ts'
 
 /**
  * A pixel-art scene written as data: no code, so it can be typed by hand, kept
@@ -22,9 +22,10 @@ export interface SceneDoc {
   /**
    * The baked sun: `from` points toward it. `ramp` (0–1, 0.7 when left out) turns shade toward cool violet and full
    * sun toward warm yellow, as a painter's ramp does; `crevice` (0.5) darkens corners and cracks; `wear` (0.5)
-   * lightens sharp outer edges. 0 turns any of them off.
+   * lightens sharp outer edges. 0 turns any of them off. `bounce` (off unless set) lets surfaces throw their color onto
+   * what faces them, as a red wall warms the floor beside it; it costs build time, so use it where it shows.
    */
-  light?: { from?: Vec3; ambient?: number; shadow?: number; ramp?: number; crevice?: number; wear?: number }
+  light?: { from?: Vec3; ambient?: number; shadow?: number; ramp?: number; crevice?: number; wear?: number; bounce?: number }
   /** The colors the picture is drawn in, 2 to 32. */
   palette: string[]
   /** The sky behind, top and bottom. Left out, the background is clear. */
@@ -48,6 +49,14 @@ export interface SceneDoc {
   lights?: LightDoc[]
   /** What hangs in the air: distance haze, low mist, beams of light and drifting specks. */
   air?: AirDoc
+  /**
+   * Snow, moss or dust laid over everything once it is cut (parts marked `bare` and glowing ones keep their paint):
+   * `snow` settles on tops open to the sky, `moss` creeps over shut-in and up-turned faces in patches, `dust` lies
+   * thin on every upturned face. `amount` 0 to 1, from a dusting to most of what faces up.
+   */
+  cover?: { kind: 'snow' | 'moss' | 'dust'; color: string; amount: number }
+  /** Where the eye goes: within `r` of `at` the scene is cut at full detail, further out on a grid twice as coarse, in about a quarter of the blobs. */
+  focus?: { at: Vec3; r: number }
 }
 
 export interface AirDoc {
@@ -121,6 +130,23 @@ export interface PartDoc {
   noShadow?: boolean
   /** A color that gathers in its corners and cracks, as moss or soot does. */
   grime?: string
+  /** Takes none of the scene's `cover`: water, glass, a fresh fire. */
+  bare?: boolean
+  /**
+   * Little drawn marks over it, one in some 4-by-4 blocks of pixels, never repeating: `hatch`, `stipple`, `cracks`,
+   * `grain` (wood), `tufts` (grass) or `scales`. `amount` (0.5) is the share of blocks marked; `color` the ink, a
+   * darker step of the paint when left out.
+   */
+  ink?: { kind: 'hatch' | 'stipple' | 'cracks' | 'grain' | 'tufts' | 'scales'; amount?: number; color?: string }
+  /**
+   * Water, ice or glass: it shows what lies behind it (`see`, 0.6) and mirrors what is over it (`mirror`, 0.3, more
+   * at a glancing look), painted for the scene's own camera. Its paint tints what shows through, and where the line
+   * from the eye leaves it with nothing met, a darker step of it shows, as the bottom of a pond does. `top` keeps it
+   * to upturned faces, for a pond cut as one slab with earth sides.
+   */
+  glass?: { see?: number; mirror?: number; top?: boolean }
+  /** Dabs that follow the form: 0 to 1, how far each cell is drawn as a stroke along the level line round the shape. Shows as brushwork in the Blobs view. */
+  strokes?: number
 }
 
 export type ShapeDoc =
@@ -137,7 +163,19 @@ export type ShapeDoc =
   | { kind: 'ring'; at: Vec3; r: number; tube: number }
   /** A pitched roof standing on `at`, ridge along x: `half` is [along the ridge, eave to ridge]. */
   | { kind: 'roof'; at: Vec3; half: [number, number]; height: number }
-  | { kind: 'join'; shapes: ShapeDoc[] }
+  /**
+   * Shapes made one. `blend` fills the seams where they meet: 'smooth' a rounded fillet, 'chamfer' a flat bevel,
+   * 'stairs' a run of `steps` little steps (3 when left out), each reaching `by` from the seam.
+   */
+  | { kind: 'join'; shapes: ShapeDoc[]; blend?: 'smooth' | 'chamfer' | 'stairs'; by?: number; steps?: number }
+  /** Turned on a lathe: `profile` is [radius, height above `at`] pairs from the bottom up, spun round the upright through `at`. Vases, bells, bottles, posts. */
+  | { kind: 'lathe'; at: Vec3; profile: [number, number][] }
+  /** A tube through a list of points, `r` thick at the first and `rTo` at the last: vines, pipes, rails, tails. */
+  | { kind: 'sweep'; path: Vec3[]; r: number; rTo?: number }
+  /** Words in blocky 3-by-5 letters, `size` tall and `depth` thick, centered on `at`, reading along +x (or along -z when `facing` is 'x'). Letters, digits, space and . , ! ? - : only. */
+  | { kind: 'text'; at: Vec3; text: string; size: number; depth: number; facing?: 'x' | 'z' }
+  /** A model drawn in letters: `layers` from the bottom up, each a list of rows from back to front, each row read along +x; any letter but '.' fills a cube `size` across. It stands on `at`. Paint it with a `key`. */
+  | { kind: 'blocks'; at: Vec3; size: number; layers: string[][] }
   /** The first shape with the second cut out of it. */
   | { kind: 'cut'; shape: ShapeDoc; hole: ShapeDoc }
   /** A lumpy version: `by` is how far the surface moves, `scale` how big the lumps are. */
@@ -155,6 +193,8 @@ export type PaintDoc =
   | { kind: 'speckle'; size: number; colors: string[] }
   /** Soft-edged patches `size` across, as moss on rock or light on water. */
   | { kind: 'patches'; size: number; colors: string[] }
+  /** For a `blocks` shape: each letter of the model takes its color. */
+  | { kind: 'key'; colors: Record<string, string> }
   /** One paint where the surface faces up, another on the sides, another underneath. */
   | { kind: 'faces'; top?: PaintDoc; side: PaintDoc; under?: PaintDoc }
   /** One paint under a height (or left of x, or behind z), another over it. */
@@ -184,6 +224,12 @@ export interface LightDoc {
   flicker?: { by: number; times: number }
   /** Goes round a circle of this radius about `at`, `times` per loop. */
   circle?: { r: number; times: number }
+  /**
+   * Casts shadows, worked out once when the scene is built, so they cost nothing as it plays and flicker with it. Only
+   * the first four lights can, and not one that goes round a circle. Give it to a lamp or fire out in the open: a light
+   * set inside something (a jar, a window, a hollow) to stand for its glow would shade everything outside.
+   */
+  shadows?: boolean
 }
 
 // --- Checking
@@ -204,6 +250,15 @@ const MAX_MOVES_PER_BONE = 6
 const MAX_SPECKS = 300
 const SPECK_KINDS: SpeckKind[] = ['dust', 'embers', 'rain', 'snow', 'fireflies', 'bubbles']
 /** A value for a message: only what is safe to print (anything can arrive from a prompt). */
+const COVERS = ['snow', 'moss', 'dust']
+const BLENDS = ['smooth', 'chamfer', 'stairs']
+/** The keys paints use, found anywhere inside one. */
+const keysIn = (p: unknown): Record<string, unknown>[] => {
+  if (typeof p !== 'object' || p === null) return []
+  const q = p as Record<string, unknown>
+  if (q.kind === 'key') return [q]
+  return [q.top, q.side, q.under, q.below, q.above].flatMap(keysIn)
+}
 const show = (v: unknown) => (typeof v === 'string' ? `'${v.slice(0, 40)}'` : typeof v === 'number' || typeof v === 'boolean' ? String(v) : v === undefined ? 'nothing' : `a ${Array.isArray(v) ? 'list' : typeof v}`)
 /** Half the size of a sound shape's box, near enough: for adding up how much surface a scene has. */
 function halfSize(s: ShapeDoc): Vec3 {
@@ -216,6 +271,10 @@ function halfSize(s: ShapeDoc): Vec3 {
     case 'ring': return [s.r + s.tube, s.tube, s.r + s.tube]
     case 'roof': return [s.half[0], s.height / 2, s.half[1]]
     case 'join': return s.shapes.map(halfSize).reduce((a, b) => [Math.max(a[0], b[0]), Math.max(a[1], b[1]), Math.max(a[2], b[2])])
+    case 'lathe': { const r = Math.max(...s.profile.map((q) => q[0])); return [r, (Math.max(...s.profile.map((q) => q[1])) - Math.min(...s.profile.map((q) => q[1]))) / 2, r] }
+    case 'sweep': return [0, 1, 2].map((i) => (Math.max(...s.path.map((q) => q[i])) - Math.min(...s.path.map((q) => q[i]))) / 2 + Math.max(s.r, s.rTo ?? 0)) as Vec3
+    case 'text': { const w = ((s.text.length * 4 - 1) * s.size) / 10; return s.facing === 'x' ? [s.depth / 2, s.size / 2, w] : [w, s.size / 2, s.depth / 2] }
+    case 'blocks': return [(Math.max(...s.layers.flatMap((l) => l.map((r) => r.length))) * s.size) / 2, (s.layers.length * s.size) / 2, (Math.max(...s.layers.map((l) => l.length)) * s.size) / 2]
     case 'cut': case 'rough': return halfSize(s.shape)
   }
 }
@@ -255,7 +314,7 @@ export function checkScene(doc: unknown): string[] {
     if (!obj(doc.light)) bad('light', 'must be an object')
     else {
       if (doc.light.from !== undefined && vec(doc.light.from, 'light.from', -1, 1) && Math.hypot(...(doc.light.from as Vec3)) < 0.1) bad('light.from', 'must point somewhere')
-      for (const k of ['ambient', 'shadow', 'ramp', 'crevice', 'wear']) opt(doc.light[k], `light.${k}`, 0, 1)
+      for (const k of ['ambient', 'shadow', 'ramp', 'crevice', 'wear', 'bounce']) opt(doc.light[k], `light.${k}`, 0, 1)
     }
   }
   hexes(doc.palette, 'palette', 2, MAX_PALETTE_SIZE)
@@ -310,10 +369,44 @@ export function checkScene(doc: unknown): string[] {
       case 'join':
         if (!Array.isArray(s.shapes) || !s.shapes.length || s.shapes.length > 40) bad(`${at}.shapes`, 'must be a list of 1 to 40 shapes')
         else s.shapes.forEach((k: unknown, i: number) => shape(k, `${at}.shapes[${i}]`, depth + 1))
+        if (s.blend !== undefined) {
+          if (!BLENDS.includes(s.blend as string)) bad(`${at}.blend`, `must be one of ${BLENDS.map((b) => `'${b}'`).join(', ')}`)
+          num(s.by, `${at}.by`, 0.005, 1)
+          if (s.steps !== undefined && (typeof s.steps !== 'number' || !Number.isInteger(s.steps) || s.steps < 1 || s.steps > 8)) bad(`${at}.steps`, 'must be a whole number from 1 to 8')
+        } else if (s.by !== undefined || s.steps !== undefined) bad(`${at}.blend`, 'is needed for by or steps')
         break
+      case 'lathe':
+        vec(s.at, `${at}.at`)
+        if (!Array.isArray(s.profile) || s.profile.length < 2 || s.profile.length > 24) bad(`${at}.profile`, 'must be a list of 2 to 24 [radius, height] pairs')
+        else s.profile.forEach((q: unknown, i: number) => vec(q, `${at}.profile[${i}]`, 0, REACH, 2))
+        break
+      case 'sweep':
+        if (!Array.isArray(s.path) || s.path.length < 2 || s.path.length > 16) bad(`${at}.path`, 'must be a list of 2 to 16 points')
+        else s.path.forEach((q: unknown, i: number) => vec(q, `${at}.path[${i}]`))
+        num(s.r, `${at}.r`, 0.001, REACH); opt(s.rTo, `${at}.rTo`, 0, REACH)
+        break
+      case 'text':
+        vec(s.at, `${at}.at`); num(s.size, `${at}.size`, 0.05, REACH); num(s.depth, `${at}.depth`, 0.005, REACH)
+        if (typeof s.text !== 'string' || !s.text.length || s.text.length > 24) bad(`${at}.text`, 'must be 1 to 24 characters')
+        else { const odd = [...s.text.toUpperCase()].find((c) => !(c in LETTERS)); if (odd !== undefined) bad(`${at}.text`, `can't draw ${show(odd)}: letters, digits, space and . , ! ? - : only`) }
+        if (s.facing !== undefined && s.facing !== 'x' && s.facing !== 'z') bad(`${at}.facing`, "must be 'x' or 'z'")
+        break
+      case 'blocks': {
+        vec(s.at, `${at}.at`); num(s.size, `${at}.size`, 0.01, REACH)
+        const rows = Array.isArray(s.layers) ? s.layers : undefined
+        if (!rows || !rows.length || rows.length > 24) { bad(`${at}.layers`, 'must be a list of 1 to 24 layers'); break }
+        rows.forEach((l: unknown, j: number) => {
+          if (!Array.isArray(l) || !l.length || l.length > 24) bad(`${at}.layers[${j}]`, 'must be a list of 1 to 24 rows')
+          else l.forEach((r: unknown, k: number) => {
+            if (typeof r !== 'string' || !r.length || r.length > 24) bad(`${at}.layers[${j}][${k}]`, 'must be a row of 1 to 24 letters')
+            else if (/['"`\\]/.test(r)) bad(`${at}.layers[${j}][${k}]`, 'must not hold quotes or backslashes')
+          })
+        })
+        break
+      }
       case 'cut': shape(s.shape, `${at}.shape`, depth + 1); shape(s.hole, `${at}.hole`, depth + 1); break
       case 'rough': shape(s.shape, `${at}.shape`, depth + 1); num(s.by, `${at}.by`, 0, 0.3); opt(s.scale, `${at}.scale`, 0.02, REACH); break
-      default: bad(`${at}.kind`, `${show(s.kind)} is not a shape (sphere, ball, box, cylinder, cone, ring, roof, join, cut, rough)`)
+      default: bad(`${at}.kind`, `${show(s.kind)} is not a shape (sphere, ball, box, cylinder, cone, ring, roof, join, lathe, sweep, text, blocks, cut, rough)`)
     }
   }
   const paint = (p: unknown, at: string, depth: number) => {
@@ -324,6 +417,10 @@ export function checkScene(doc: unknown): string[] {
       case 'bands': axis(p.axis, `${at}.axis`); num(p.size, `${at}.size`, 0.005, REACH); hexes(p.colors, `${at}.colors`, 2, 8); break
       case 'bricks': vec(p.size, `${at}.size`, 0.01, REACH, 2); hexes(p.colors, `${at}.colors`, 1, 8); hex(p.line, `${at}.line`); break
       case 'hex': num(p.size, `${at}.size`, 0.03, REACH); hexes(p.colors, `${at}.colors`, 1, 8); hex(p.line, `${at}.line`); if (p.deep !== undefined) hex(p.deep, `${at}.deep`); break
+      case 'key':
+        if (!obj(p.colors) || !Object.keys(p.colors).length) bad(`${at}.colors`, 'must map letters to colors')
+        else for (const [k, c] of Object.entries(p.colors)) { if ([...k].length !== 1) bad(`${at}.colors`, `${show(k)} is not one letter`); hex(c, `${at}.colors.${k}`) }
+        break
       case 'speckle': case 'patches': num(p.size, `${at}.size`, 0.005, REACH); hexes(p.colors, `${at}.colors`, 2, 8); break
       case 'faces':
         paint(p.side, `${at}.side`, depth + 1)
@@ -348,9 +445,34 @@ export function checkScene(doc: unknown): string[] {
       surface += area
     }
     paint(p.paint, `${at}.paint`, 0)
+    const keys = keysIn(p.paint)
+    if (keys.length) {
+      const sh = p.shape as Record<string, unknown> | undefined
+      if (sh?.kind !== 'blocks') bad(`${at}.paint`, 'a key paints a blocks shape only')
+      else if (Array.isArray(sh.layers)) {
+        const used = new Set((sh.layers as unknown[]).flat().filter((r): r is string => typeof r === 'string').flatMap((r) => [...r]).filter((c) => c !== '.' && c !== ' '))
+        for (const k of keys) if (obj(k.colors)) for (const c of used) if (!(c in k.colors)) bad(`${at}.paint`, `the key has no color for ${show(c)}`)
+      }
+    }
     if (p.bone !== undefined) bone(p.bone, `${at}.bone`)
-    for (const k of ['glow', 'noShadow']) if (p[k] !== undefined && typeof p[k] !== 'boolean') bad(`${at}.${k}`, 'must be true or false')
+    for (const k of ['glow', 'noShadow', 'bare']) if (p[k] !== undefined && typeof p[k] !== 'boolean') bad(`${at}.${k}`, 'must be true or false')
     if (p.grime !== undefined) hex(p.grime, `${at}.grime`)
+    opt(p.strokes, `${at}.strokes`, 0, 1)
+    if (p.glass !== undefined) {
+      if (!obj(p.glass)) bad(`${at}.glass`, 'must be an object')
+      else {
+        opt(p.glass.see, `${at}.glass.see`, 0, 1); opt(p.glass.mirror, `${at}.glass.mirror`, 0, 1)
+        if (p.glass.top !== undefined && typeof p.glass.top !== 'boolean') bad(`${at}.glass.top`, 'must be true or false')
+      }
+    }
+    if (p.ink !== undefined) {
+      if (!obj(p.ink)) bad(`${at}.ink`, 'must be an object')
+      else {
+        if (!(typeof p.ink.kind === 'string' && p.ink.kind in INK_MARKS)) bad(`${at}.ink.kind`, `must be one of ${Object.keys(INK_MARKS).map((k) => `'${k}'`).join(', ')}`)
+        opt(p.ink.amount, `${at}.ink.amount`, 0, 1)
+        if (p.ink.color !== undefined) hex(p.ink.color, `${at}.ink.color`)
+      }
+    }
   })
 
   if (shapes > MAX_SHAPES) bad('parts', `hold ${shapes} shapes between them; the most is ${MAX_SHAPES}`)
@@ -391,11 +513,25 @@ export function checkScene(doc: unknown): string[] {
         if (!obj(l.flicker)) bad(`${at}.flicker`, 'must be an object')
         else { num(l.flicker.by, `${at}.flicker.by`, 0, 1); whole(l.flicker.times, `${at}.flicker.times`) }
       }
+      if (l.shadows !== undefined && typeof l.shadows !== 'boolean') bad(`${at}.shadows`, 'must be true or false')
       if (l.circle !== undefined) {
         if (!obj(l.circle)) bad(`${at}.circle`, 'must be an object')
         else { num(l.circle.r, `${at}.circle.r`, 0, REACH); whole(l.circle.times, `${at}.circle.times`) }
       }
     })
+  }
+  if (doc.focus !== undefined) {
+    if (!obj(doc.focus)) bad('focus', 'must be an object')
+    else { vec(doc.focus.at, 'focus.at'); num(doc.focus.r, 'focus.r', 0.1, REACH * 2) }
+  }
+  if (doc.cover !== undefined) {
+    const c = doc.cover
+    if (!obj(c)) bad('cover', 'must be an object')
+    else {
+      if (!COVERS.includes(c.kind as string)) bad('cover.kind', `must be one of ${COVERS.map((k) => `'${k}'`).join(', ')}`)
+      hex(c.color, 'cover.color')
+      num(c.amount, 'cover.amount', 0, 1)
+    }
   }
   if (doc.air !== undefined) {
     const air = doc.air
@@ -463,7 +599,14 @@ function toShape(s: ShapeDoc, thin: number): Shape {
     case 'cone': return cone(s.from, s.to, t(s.r), Math.max(s.rTo ?? s.r, thin * 0.6))
     case 'ring': return torus(s.at, s.r, t(s.tube))
     case 'roof': return roof([s.at[0], s.at[2]], s.at[1], s.at[1] + Math.max(s.height, thin * 2), t(s.half[0]), t(s.half[1]))
-    case 'join': return union(...s.shapes.map((k) => toShape(k, thin)))
+    case 'join': {
+      const all = s.shapes.map((k) => toShape(k, thin))
+      return s.blend ? blend(s.blend, s.by ?? 0.05, all, s.steps) : union(...all)
+    }
+    case 'lathe': return lathe(s.at, s.profile.map(([r, h]) => [Math.max(r, thin), h] as [number, number]))
+    case 'sweep': return sweep(s.path, t(s.r), Math.max(s.rTo ?? s.r, thin * 0.6))
+    case 'text': return pixelText(s.at, s.text, Math.max(s.size, thin * 5), t(s.depth), s.facing)
+    case 'blocks': return letterGrid(s.at, t(s.size), s.layers)
     case 'cut': return cut(toShape(s.shape, thin), toShape(s.hole, 0))
     case 'rough': {
       const k = 1 / (s.scale ?? 0.5)
@@ -474,9 +617,13 @@ function toShape(s: ShapeDoc, thin: number): Shape {
 
 type Paint = (p: Vec3, n: Vec3) => Vec3
 
-function toPaint(p: PaintDoc, cell: number): Paint {
+function toPaint(p: PaintDoc, cell: number, letterAt?: (p: Vec3, n: Vec3) => string | undefined): Paint {
   if (typeof p === 'string') { const c = unit(p); return () => c }
   switch (p.kind) {
+    case 'key': {
+      const cs = new Map(Object.entries(p.colors).map(([k, c]) => [k, unit(c)])), none = cs.values().next().value as Vec3
+      return (q, n) => cs.get(letterAt?.(q, n) ?? '') ?? none
+    }
     case 'bands': {
       const cs = p.colors.map(unit), i = IDX[p.axis], size = Math.max(p.size, cell)
       return (q) => cs[((Math.floor(q[i] / size) % cs.length) + cs.length) % cs.length]
@@ -526,11 +673,11 @@ function toPaint(p: PaintDoc, cell: number): Paint {
       return (q) => cs[Math.min(cs.length - 1, Math.floor(((wobble(q[0] * k, q[1] * k, q[2] * k) + 1) / 2) * cs.length))]
     }
     case 'faces': {
-      const side = toPaint(p.side, cell), top = p.top === undefined ? side : toPaint(p.top, cell), under = p.under === undefined ? side : toPaint(p.under, cell)
+      const side = toPaint(p.side, cell, letterAt), top = p.top === undefined ? side : toPaint(p.top, cell, letterAt), under = p.under === undefined ? side : toPaint(p.under, cell, letterAt)
       return (q, n) => (n[1] > 0.6 ? top : n[1] < -0.6 ? under : side)(q, n)
     }
     case 'split': {
-      const below = toPaint(p.below, cell), above = toPaint(p.above, cell), i = IDX[p.axis]
+      const below = toPaint(p.below, cell, letterAt), above = toPaint(p.above, cell, letterAt), i = IDX[p.axis]
       return (q, n) => (q[i] < p.at ? below : above)(q, n)
     }
   }
@@ -702,17 +849,29 @@ export function compileScene(doc: SceneDoc): CompiledScene {
     },
     spec(spacing) {
       const thin = spacing * 0.75
-      const parts: VoxelPart[] = doc.parts.map((p) => ({
-        shape: toShape(p.shape, thin), color: toPaint(p.paint, spacing), bone: p.bone ?? 'land', glow: p.glow, noShadow: p.noShadow,
-        grime: p.grime === undefined ? undefined : unit(p.grime),
-      }))
-      for (const p of specks) parts.push({ shape: toShape(p.shape, thin), color: unit(p.color), bone: p.bone, glow: p.glow, noShadow: true })
+      const parts: VoxelPart[] = doc.parts.map((p) => {
+        const shape = toShape(p.shape, thin)
+        return {
+        shape, color: toPaint(p.paint, spacing, 'letterAt' in shape ? (shape.letterAt as (p: Vec3, n: Vec3) => string | undefined) : undefined), bone: p.bone ?? 'land', glow: p.glow, noShadow: p.noShadow,
+        grime: p.grime === undefined ? undefined : unit(p.grime), bare: p.bare,
+        glass: p.glass, strokes: p.strokes,
+        ink: p.ink && { kind: p.ink.kind, amount: p.ink.amount, color: p.ink.color === undefined ? undefined : unit(p.ink.color) },
+        }
+      })
+      for (const p of specks) parts.push({ shape: toShape(p.shape, thin), color: unit(p.color), bone: p.bone, glow: p.glow, noShadow: true, bare: true })
       // only what the scene sets: a key left undefined would wipe the builder's default
       const light: VoxelSpec['light'] = { ...PAINTED }
       if (doc.light?.from) light.dir = doc.light.from
-      for (const k of ['ambient', 'shadow', 'ramp', 'crevice', 'wear'] as const) if (doc.light?.[k] !== undefined) light[k] = doc.light[k]
+      for (const k of ['ambient', 'shadow', 'ramp', 'crevice', 'wear', 'bounce'] as const) if (doc.light?.[k] !== undefined) light[k] = doc.light[k]
       const beams = (doc.air?.shafts ?? []).map((b) => ({ from: b.from, to: b.to, r: b.r, color: unit(b.color), strength: b.strength ?? 0.6 }))
-      return { bones, parts, spacing, light, loose: looseAir(doc.air), beams, disc: doc.disc }
+      // a lamp that stays put casts shadows baked once; byte k of each blob is light k
+      const lamps = lights.slice(0, MAX_LAMPS).map((l) => (!l.shadows || l.circle ? null : { at: l.at, reach: l.range }))
+      const cover = doc.cover && { kind: doc.cover.kind, color: unit(doc.cover.color), amount: doc.cover.amount }
+      const { target: tg, distance: dist, azimuth: az, elevation: el } = doc.camera
+      const ra = (az * Math.PI) / 180, re = (el * Math.PI) / 180
+      const eye: Vec3 = [tg[0] + dist * Math.sin(ra) * Math.cos(re), tg[1] + dist * Math.sin(re), tg[2] + dist * Math.cos(ra) * Math.cos(re)]
+      const sky: [Vec3, Vec3] | undefined = doc.sky ? [unit(doc.sky[0]), unit(doc.sky[1])] : doc.air?.haze ? [unit(doc.air.haze.color), unit(doc.air.haze.color)] : undefined
+      return { bones, parts, spacing, light, loose: looseAir(doc.air), beams, lamps, cover, eye, sky, focus: doc.focus, disc: doc.disc }
     },
     empty(built) {
       const seen = new Set<number>()

@@ -78,6 +78,7 @@ export function PixelDiorama() {
   const [edges, setEdges] = useState(diorama.finish.edges)
   const [sky, setSky] = useState(diorama.finish.sky)
   const [steady, setSteady] = useState(() => new URLSearchParams(location.search).get('steady') !== '0')
+  const [tidy, setTidy] = useState(() => new URLSearchParams(location.search).get('tidy') !== '0')
   const [rate, setRate] = useState(0)
   const [parts, setParts] = useState(() => new URLSearchParams(location.search).get('parts') !== '0')
   const [view, setView] = useState(diorama.views[0].id)
@@ -122,7 +123,7 @@ export function PixelDiorama() {
   const palettes = useMemo(() => [{ id: 'own', ...shown.palette }, ...PALETTES.slice(1)], [shown])
   const picked = palettes.find((p) => p.id === palette) ?? palettes[0]
   const colors = picked.colors
-  const look = useMemo<PixelLook>(() => ({ palette: colors, dither, outline: outline ? (colors.length ? darkest(colors) : [11, 16, 38]) : null, glow, edges: edges ? 1 : 0, parts, sky: sky ? shown.sky : undefined, steady: steady ? STEADY : 0 }), [colors, dither, outline, glow, edges, parts, sky, shown, steady])
+  const look = useMemo<PixelLook>(() => ({ palette: colors, dither, outline: outline ? (colors.length ? darkest(colors) : [11, 16, 38]) : null, glow, edges: edges ? 1 : 0, parts, sky: sky ? shown.sky : undefined, steady: steady ? STEADY : 0, tidy }), [colors, dither, outline, glow, edges, parts, sky, shown, steady, tidy])
 
   // a new level of detail keeps the moment it was showing
   useEffect(() => {
@@ -370,6 +371,7 @@ export function PixelDiorama() {
                 <Toggle label={pixels ? 'Lines between parts' : 'Lines between parts (in Pixel art)'} checked={parts} onChange={setParts} />
                 <Toggle label={pixels ? 'Sky behind' : 'Sky behind (in Pixel art)'} checked={sky} onChange={setSky} />
                 <Toggle label={pixels ? 'Steady pixels' : 'Steady pixels (in Pixel art)'} checked={steady} onChange={setSteady} />
+                <Toggle label={pixels ? 'Clean up lone pixels' : 'Clean up lone pixels (in Pixel art)'} checked={tidy} onChange={setTidy} />
                 </div>
                 <div className="grid gap-2">
                 <div className="flex flex-wrap items-center gap-1.5">
