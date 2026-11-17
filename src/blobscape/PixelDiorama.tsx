@@ -16,6 +16,23 @@ import { DIORAMAS, type Diorama } from './diorama/scenes.ts'
 import { SceneDetails, kilobytes, type SceneFacts } from './diorama/SceneDetails.tsx'
 import type { Skeleton } from '../splat-engine/rig.ts'
 import { Pokes } from '../splat-engine/poke.ts'
+import { browserDeflate, encodeApng } from '../splat-core/apng.ts'
+import type { Texture } from '../splat-engine/meshShape.ts'
+
+/** A texture image decoded in the page, read nearest-pixel and repeating, as glTF's default sampler wraps. */
+async function decodeTexture(bytes: Uint8Array, mime: string): Promise<Texture> {
+  const bitmap = await createImageBitmap(new Blob([bytes as BlobPart], { type: mime }))
+  const c = new OffscreenCanvas(bitmap.width, bitmap.height)
+  const g = c.getContext('2d')!
+  g.drawImage(bitmap, 0, 0)
+  const { data, width: w, height: h } = g.getImageData(0, 0, bitmap.width, bitmap.height)
+  bitmap.close()
+  const wrap = (x: number, n: number) => ((Math.floor(x * n) % n) + n) % n
+  return (u, v) => {
+    const i = (wrap(v, h) * w + wrap(u, w)) * 4
+    return [data[i] / 255, data[i + 1] / 255, data[i + 2] / 255]
+  }
+}
 
 const SIZES = [2, 3, 4, 6]
 /** Frames a second the scene moves at: 0 is every frame the screen shows. */
@@ -53,6 +70,9 @@ async function toPng(f: Frame, scale: number): Promise<Uint8Array> {
 /** What one blob holds: a center, three sizes, a facing, a color and an opacity, each number four bytes. */
 const BLOB_BYTES = (3 + 3 + 4 + 3 + 1) * 4
 
+/** Frames a second in a recorded loop: one of the page's Motion choices, as the gallery's loops are. */
+const RECORD_FPS = 12
+
 export function PixelDiorama() {
   const h1 = useFocusHeading()
   const canvas = useRef<HTMLCanvasElement>(null)
@@ -65,7 +85,13 @@ export function PixelDiorama() {
   const coarse = useMemo(() => typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches, [])
   // ?scene=campfire opens on that scene
   const [which, setWhich] = useState(() => DIORAMAS.find((d) => d.id === new URLSearchParams(location.search).get('scene'))?.id ?? DIORAMAS[0].id)
-  const diorama = DIORAMAS.find((d) => d.id === which)!
+  // a model the visitor opened, as one more scene (it stays in this page only)
+  const [model, setModel] = useState<Diorama>()
+  const [opening, setOpening] = useState(false)
+  const [modelNote, setModelNote] = useState('')
+  const modelInput = useRef<HTMLInputElement>(null)
+  const scenes = model ? [...DIORAMAS, model] : DIORAMAS
+  const diorama = scenes.find((d) => d.id === which) ?? DIORAMAS[0]
   /** The scene whose palette, finish and view are set. */
   const dressed = useRef(which)
   const [playing, setPlaying] = useState(!calm)
@@ -87,6 +113,11 @@ export function PixelDiorama() {
   const [art, setArt] = useState<{ width: number; height: number }>()
   const [saving, setSaving] = useState(false)
   const [note, setNote] = useState('')
+  /** Frames recorded so far while Record the loop runs. */
+  const [recording, setRecording] = useState<number | null>(null)
+  /** What Record the loop saves: a lossless animated PNG at the art's own size, or an MP4 scaled up in whole pixels. */
+  const [recordAs, setRecordAs] = useState<'png' | 'mp4'>('png')
+  const [videoSize, setVideoSize] = useState(6)
 
   // built after a paint, so the waiting mark shows first
   const [made, setScene] = useState<{ built: Built; of: Diorama; detail: string }>()
@@ -216,6 +247,51 @@ export function PixelDiorama() {
     return () => { delete window.__diorama }
   }, [stage, scene, look])
 
+  /**
+   * Records one whole loop as the art stands (palette, size, finish), stepped frame by frame from the time so it joins
+   * up end to end, and saves it as a lossless animated PNG, one art pixel per image pixel, as the gallery's loops are.
+   */
+  const record = async () => {
+    if (!stage || recording !== null) return
+    const loop = shown.loop, count = Math.round(loop * RECORD_FPS), was = playing
+    setPlaying(false)
+    stage.playing = false
+    setRecording(0)
+    setNote('Recording the loop, one frame at a time…')
+    try {
+      // the half second before the start first, so steady pixels have a frame before frame 0
+      for (let i = Math.round(RECORD_FPS / 2); i > 0; i--) await stage.frame(loop - i / RECORD_FPS)
+      const frames: Frame[] = []
+      for (let f = 0; f < count; f++) {
+        await stage.frame(f / RECORD_FPS)
+        const got = await stage.pixelFrames()
+        if (!got) throw new Error('pixel art went away')
+        frames.push(got.art)
+        if (f % 6 === 0) setRecording(f)
+      }
+      setRecording(count)
+      const { width: w, height: h } = frames[0]
+      if (recordAs === 'mp4') {
+        const { encodeVideo, videoScale } = await import('./diorama/video.ts')
+        const s = videoScale(w, h, videoSize)
+        const bytes = await encodeVideo(frames, RECORD_FPS, s)
+        download(bytes, `pixel-diorama-${shown.id}-loop.mp4`, 'video/mp4')
+        setNote(`Saved the loop: ${count} frames at ${w * s} × ${h * s}, an MP4 of ${kilobytes(bytes.length)}.`)
+      } else {
+        const bytes = await encodeApng(frames, RECORD_FPS, browserDeflate)
+        download(bytes, `pixel-diorama-${shown.id}-loop.png`, 'image/png')
+        setNote(`Saved the loop: ${count} frames at ${w} × ${h}, an animated PNG of ${kilobytes(bytes.length)}.`)
+      }
+    } catch (e) {
+      console.warn(e)
+      setNote(recordAs === 'mp4' && String(e).includes('MP4') ? 'This browser can’t make an MP4. The animated PNG works everywhere.' : 'The loop could not be recorded. Keep the settings and size as they are while it records.')
+    } finally {
+      setRecording(null)
+      stage.playing = was
+      setPlaying(was)
+    }
+  }
+
   const save = async () => {
     if (!stage) return
     setSaving(true)
@@ -249,11 +325,34 @@ export function PixelDiorama() {
     if (id === which) return
     setWhich(id)
     setNote('')
-    // the address names the scene, so a reload or a shared link opens the same one
+    // the address names the scene, so a reload or a shared link opens the same one (an opened model can't be)
     const url = new URL(location.href)
-    if (id === DIORAMAS[0].id) url.searchParams.delete('scene')
+    if (id === DIORAMAS[0].id || id === 'model') url.searchParams.delete('scene')
     else url.searchParams.set('scene', id)
     history.replaceState(history.state, '', url)
+  }
+  /** A model file (.obj, with its .mtl if picked too, or .glb) as a scene of its own, turning on a plinth. */
+  const openModel = async (files: File[]) => {
+    const f = files.find((x) => /\.(obj|glb)$/i.test(x.name)) ?? files[0]
+    const mtl = files.find((x) => /\.mtl$/i.test(x.name))
+    setOpening(true)
+    setModelNote(`Reading ${f.name}…`)
+    try {
+      const [{ readMeshFile }, { modelDiorama }] = await Promise.all([import('../splat-engine/meshFile.ts'), import('./diorama/model.ts')])
+      const file = readMeshFile(f.name, new Uint8Array(await f.arrayBuffer()), mtl && (await mtl.text()))
+      const textures = await Promise.all(file.images.map((im) => decodeTexture(im.bytes, im.mime).catch((): Texture => () => [1, 1, 1])))
+      const d = modelDiorama(f.name, file, textures)
+      setModel(d)
+      setWhich('model')
+      const url = new URL(location.href)
+      url.searchParams.delete('scene')
+      history.replaceState(history.state, '', url)
+      setModelNote(`Opened ${f.name}: ${(file.mesh.indices.length / 3).toLocaleString('en-US')} triangles.`)
+    } catch (e) {
+      setModelNote(`Could not open ${f.name}: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setOpening(false)
+    }
   }
   const backend = stage ? (stage.backend === 'webgpu' ? 'WebGPU' : 'WebGL 2') : 'WebGPU or WebGL 2'
   const loading = !failed && (!drawn || !scene)
@@ -337,9 +436,18 @@ export function PixelDiorama() {
               <div className={TAB_SECTIONS}>
                 <Field label="Scene">
                   <div className="flex flex-wrap gap-1.5">
-                    {DIORAMAS.map((d) => <Chip key={d.id} active={which === d.id} onClick={() => show(d.id)}>{d.label}</Chip>)}
+                    {scenes.map((d) => <Chip key={d.id} active={which === d.id} onClick={() => show(d.id)}>{d.label}</Chip>)}
                   </div>
                 </Field>
+                <div className="grid gap-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <Button small disabled={opening} onClick={() => modelInput.current?.click()}>{opening ? 'Opening…' : 'Open a model'}</Button>
+                    <input ref={modelInput} type="file" accept=".obj,.mtl,.glb" multiple className="sr-only" tabIndex={-1} aria-hidden="true" data-testid="diorama-model"
+                      onChange={(e) => { const fs = [...(e.target.files ?? [])]; e.target.value = ''; if (fs.length) void openModel(fs) }} />
+                  </div>
+                  <p className="text-xs text-ink-faint">A closed .glb, or an .obj (pick its .mtl with it for colors), cut into blobs on a turning plinth, in a palette from its own colors. It stays on this computer.</p>
+                  <p role="status" className="text-xs text-ink-faint empty:hidden" data-testid="diorama-model-note">{modelNote}</p>
+                </div>
                 <Field label="View">
                   <div className="flex flex-wrap gap-1.5">
                     {shown.views.map((v) => <Chip key={v.id} active={view === v.id} onClick={() => pick(v.id)}>{v.label}</Chip>)}
@@ -401,11 +509,25 @@ export function PixelDiorama() {
                 <Toggle label={pixels ? 'Steady pixels' : 'Steady pixels (in Pixel art)'} checked={steady} onChange={setSteady} />
                 <Toggle label={pixels ? 'Clean up lone pixels' : 'Clean up lone pixels (in Pixel art)'} checked={tidy} onChange={setTidy} />
                 </div>
+                <div className="grid gap-3">
+                <Field label="Record the loop as">
+                  <div className="flex flex-wrap gap-1.5">
+                    <Chip active={recordAs === 'png'} onClick={() => setRecordAs('png')}>Animated PNG</Chip>
+                    <Chip active={recordAs === 'mp4'} onClick={() => setRecordAs('mp4')}>MP4 video</Chip>
+                  </div>
+                </Field>
+                {recordAs === 'mp4' && <Field label="Video size">
+                  <div className="flex flex-wrap gap-1.5">
+                    {[4, 6, 8].map((s) => <Chip key={s} active={videoSize === s} onClick={() => setVideoSize(s)}>{`${s}×`}</Chip>)}
+                  </div>
+                </Field>}
                 <div className="grid gap-2">
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <Button small disabled={!pixels || !drawn || saving} onClick={save}>{saving ? 'Saving…' : 'Save this frame'}</Button>
+                  <Button small disabled={!pixels || !drawn || saving || recording !== null} onClick={save}>{saving ? 'Saving…' : 'Save this frame'}</Button>
+                  <Button small disabled={!pixels || !drawn || saving || recording !== null} onClick={record} data-testid="diorama-record">{recording === null ? 'Record the loop' : recording >= Math.round(shown.loop * RECORD_FPS) ? 'Saving the loop…' : `Recording ${recording} of ${Math.round(shown.loop * RECORD_FPS)}…`}</Button>
                 </div>
-                <p role="status" className="text-xs text-ink-faint empty:-mt-2">{pixels ? note : 'Switch back to Pixel art to save a frame.'}</p>
+                <p role="status" className="text-xs text-ink-faint empty:-mt-2">{pixels ? note : 'Switch back to Pixel art to save a frame or record the loop.'}</p>
+                </div>
                 </div>
               </div>
             ),
