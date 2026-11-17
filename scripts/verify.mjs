@@ -149,7 +149,7 @@ const wall = (Date.now() - started) / 1000
 writeFileSync(timesFile, JSON.stringify({ ...lastTimes, ...Object.fromEntries(results.map((r) => [r.name, Math.round(r.secs * 10) / 10])) }, null, 1))
 console.log(`times: ${results.sort((a, b) => b.secs - a.secs).map((r) => `${r.name} ${r.secs.toFixed(0)}s`).join(', ')}`)
 const failed = results.filter((r) => r.fails.length)
-console.log(`\n${results.length} checks in ${Math.floor(wall / 60)}m ${Math.round(wall % 60)}s (${jobs} at a time)`)
+console.log(`\n${results.length} checks in ${Math.floor(wall / 60)}m ${Math.floor(wall % 60)}s (${jobs} at a time)`)
 if (failed.length) {
   console.error('\nFAIL\n' + failed.flatMap((r) => r.fails.map((f) => `  - [${r.name}] ${f}`)).join('\n'))
   process.exit(1)
