@@ -28,6 +28,23 @@ const PASS: Record<Element, number> = { fire: 0.28, frost: 0.5 }
 /** A cell scorched more than this can't catch again yet. */
 const SPENT = 0.45
 
+/** Cells up a wall or a pillar over each floor cell beside one, and how tall each is, meters. */
+export const LAYERS = 4
+export const LAYER = 0.45
+/** How many layers each climbs: frost creeps to the top, flames lick only the lowest course. */
+const CLIMB: Record<Element, number> = { fire: 2, frost: LAYERS }
+/** The chance, each tick, that a layer passes on to the one above. */
+const UP: Record<Element, number> = { fire: 0.22, frost: 0.18 }
+/** Seconds a puff of steam rises before it is gone, and how many are kept. */
+export const STEAM_LIFE = 1.6
+export const STEAM_MAX = 16
+
+/** A puff of steam where fire met frost: where, and the ground's clock when it rose. */
+export interface Puff { x: number; y: number; z: number; t: number }
+
+/** A column of cells up a wall or a pillar, over floor cell `cell`; `x`, `z` on the face, `n` the way the face looks. */
+export interface Column { cell: number; x: number; z: number; n: [number, number] }
+
 export class Ground {
   /** Cells across, and the size of one in meters. */
   readonly n: number
@@ -47,6 +64,18 @@ export class Ground {
   /** Half the hall's width: the grid runs from −half to half. */
   readonly half: number
   private readonly seed: number
+  /**
+   * Layers above the floor: one column of `LAYERS` cells up the face of a wall or a pillar beside each floor cell
+   * that has one (a corner cell has two), and how hard each burns and how frozen it is, column by column, bottom up.
+   */
+  readonly columns: Column[] = []
+  readonly upFire: Float32Array
+  readonly upFrost: Float32Array
+  private readonly upLeft: Record<Element, Float32Array>
+  /** Puffs of steam, oldest first: fire put out by frost, or frost melted by fire. */
+  readonly steam: Puff[] = []
+  /** Seconds of ticks so far: the clock puffs are timed by. */
+  time = 0
 
   constructor(half: number, pillars: { x: number; z: number; r: number }[] = [], cell = 0.5, seed = 1) {
     this.half = half
@@ -64,12 +93,31 @@ export class Ground {
       const [x, z] = this.center(i)
       if (pillars.some((p) => Math.hypot(p.x - x, p.z - z) < p.r)) this.blocked[i] = 1
     }
+    // a column up each face beside a floor cell: the hall's four walls, and each pillar's side facing it
+    for (let i = 0; i < size; i++) {
+      if (this.blocked[i]) continue
+      const [x, z] = this.center(i), c = i % this.n, r = Math.floor(i / this.n), e = half - 0.02
+      if (c === 0) this.columns.push({ cell: i, x: -e, z, n: [1, 0] })
+      if (c === this.n - 1) this.columns.push({ cell: i, x: e, z, n: [-1, 0] })
+      if (r === 0) this.columns.push({ cell: i, x, z: -e, n: [0, 1] })
+      if (r === this.n - 1) this.columns.push({ cell: i, x, z: e, n: [0, -1] })
+      for (const p of pillars) {
+        const d = Math.hypot(x - p.x, z - p.z)
+        if (d >= p.r && d < p.r + cell * 0.95) this.columns.push({ cell: i, x: p.x + ((x - p.x) / d) * p.r, z: p.z + ((z - p.z) / d) * p.r, n: [(x - p.x) / d, (z - p.z) / d] })
+      }
+    }
+    const up = this.columns.length * LAYERS
+    this.upFire = new Float32Array(up)
+    this.upFrost = new Float32Array(up)
+    this.upLeft = { fire: new Float32Array(up), frost: new Float32Array(up) }
     this.rand = rng(seed * 104729 + 7)
   }
 
   /** Everything out and melted, and the same luck again. */
   clear() {
-    for (const a of [this.fire, this.frost, this.char, this.left.fire, this.left.frost]) a.fill(0)
+    for (const a of [this.fire, this.frost, this.char, this.left.fire, this.left.frost, this.upFire, this.upFrost, this.upLeft.fire, this.upLeft.frost]) a.fill(0)
+    this.steam.length = 0
+    this.time = 0
     this.reach.fire.fill(0)
     this.reach.frost.fill(0)
     this.acc = 0
@@ -121,12 +169,12 @@ export class Ground {
   private set(i: number, what: Element, reach: number, force = false) {
     if (this.blocked[i]) return
     if (what === 'fire') {
-      if (this.frost[i] > 0.05) { this.frost[i] = 0; this.left.frost[i] = 0; this.reach.frost[i] = 0; return }
+      if (this.frost[i] > 0.05) { this.frost[i] = 0; this.left.frost[i] = 0; this.reach.frost[i] = 0; this.puffAt(i, 0.1); return }
       if (!force && (this.fire[i] > 0 || this.char[i] > SPENT)) return
       this.fire[i] = Math.max(this.fire[i], 0.3)
       this.left.fire[i] = BURN
     } else {
-      if (this.fire[i] > 0.05) { this.fire[i] = 0; this.left.fire[i] = 0; this.reach.fire[i] = 0; return }
+      if (this.fire[i] > 0.05) { this.fire[i] = 0; this.left.fire[i] = 0; this.reach.fire[i] = 0; this.puffAt(i, 0.1); return }
       if (!force && this.frost[i] > 0) return
       this.frost[i] = Math.max(this.frost[i], 0.3)
       this.left.frost[i] = FROST_LIFE
@@ -137,6 +185,62 @@ export class Ground {
   step(dt: number) {
     this.acc += dt
     while (this.acc >= TICK) { this.acc -= TICK; this.tick() }
+  }
+
+  /** A puff of steam rises at a point (fire and frost met there). The oldest goes when there are too many. */
+  puff(x: number, y: number, z: number) {
+    this.steam.push({ x, y, z, t: this.time })
+    if (this.steam.length > STEAM_MAX) this.steam.shift()
+  }
+
+  private puffAt(i: number, y: number) {
+    const [x, z] = this.center(i)
+    this.puff(x, y, z)
+  }
+
+  /** Puffs still rising, each with its age as a share of its life (0 new, 1 gone). */
+  puffs(): { x: number; y: number; z: number; age: number }[] {
+    return this.steam.map((p) => ({ x: p.x, y: p.y, z: p.z, age: (this.time - p.t) / STEAM_LIFE })).filter((p) => p.age < 1)
+  }
+
+  /** How hard a layer burns and how frozen it is: column k, layer j (0 at the floor). */
+  up(k: number, j: number) {
+    return { fire: this.upFire[k * LAYERS + j], frost: this.upFrost[k * LAYERS + j] }
+  }
+
+  /** Fire and frost climb: each column's bottom layer catches from its floor cell, each layer above from the one below. */
+  private climb(): boolean {
+    let changed = false
+    for (let k = 0; k < this.columns.length; k++) {
+      const floor = this.columns[k].cell
+      for (let j = 0; j < LAYERS; j++) {
+        const at = k * LAYERS + j
+        for (const what of ['fire', 'frost'] as Element[]) {
+          const level = what === 'fire' ? this.upFire : this.upFrost, other = what === 'fire' ? this.upFrost : this.upFire
+          const left = this.upLeft[what]
+          if (level[at] > 0) {
+            changed = true
+            left[at] -= TICK
+            level[at] = left[at] > 0 ? Math.min(1, level[at] + 0.35) : Math.max(0, level[at] - (what === 'fire' ? 0.25 : 0.06))
+          }
+          if (j >= CLIMB[what] || level[at] > 0) continue
+          const below = j === 0 ? (what === 'fire' ? this.fire : this.frost)[floor] : level[at - 1]
+          if (below < 0.6 || this.rand() >= UP[what]) continue
+          changed = true
+          // the other element there: the two cancel in a puff of steam
+          if (other[at] > 0.05) {
+            other[at] = 0
+            this.upLeft[what === 'fire' ? 'frost' : 'fire'][at] = 0
+            const c = this.columns[k]
+            this.puff(c.x + c.n[0] * 0.15, (j + 0.5) * LAYER, c.z + c.n[1] * 0.15)
+            continue
+          }
+          level[at] = 0.3
+          left[at] = what === 'fire' ? BURN * 0.8 : FROST_LIFE
+        }
+      }
+    }
+    return changed
   }
 
   private tick() {
@@ -169,6 +273,8 @@ export class Ground {
       if (this.char[i] > 0 && this.fire[i] === 0) { this.char[i] = Math.max(0, this.char[i] - TICK * 0.04); changed = true }
     }
     for (const [i, what, reach] of caught) this.set(i, what, Math.max(0, reach))
+    if (this.climb()) changed = true
+    this.time += TICK
     if (changed || caught.length) this.version++
   }
 
