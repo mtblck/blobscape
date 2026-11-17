@@ -6,6 +6,8 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 
 ## [Unreleased]
 
+- Rigged-splat files open in three.js: a loader hands the bones and clips to three's own animation player, and an adapter draws them with Spark.
+
 ## [0.1.0] - 2026-11-17
 
 The first tagged release of blobscape.dev: lessons, a sandbox and experiments with Gaussian splats, and the Blobscape engine they run on. It marks the site as it stands. The `@blobscape/engine` npm package comes later (#102).

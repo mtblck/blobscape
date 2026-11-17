@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import { SplatSkinning, SplatSkinningMode } from '@sparkjsdev/spark'
 import { makeCreature, poseWalk } from '../splat-engine/creature.ts'
 import { Skeleton, axisAngle, skinBlob } from '../splat-engine/rig.ts'
-import { poseSpark, restAtOrigin, setSplatBones } from './sparkBones.ts'
+import { poseSpark, restAtOrigin, setSplatBones } from '../splat-engine/three/spark.ts'
 
 /*
  * Checks the engine lab's Spark runs move the same fox the same way ours does.
