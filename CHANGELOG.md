@@ -6,6 +6,8 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 
 ## [Unreleased]
 
+- The sandbox works with an assistant in the browser: where the browser has WebMCP (Chrome is trying it out), the sandbox offers its actions as tools, so an assistant can look at the scene, build one from a scene description, add a creature, cut, recolor, paint with a brush, save and undo. Other browsers see no change.
+
 - One photo to a scene in the sandbox: open a photo in the Scene tab (or drop one on the view) and it becomes a shallow scene, a blob for each pixel set as far back as a depth model guesses. The model runs in the page and is served by this site, so the photo stays on your device.
 
 - The engine docs are in parts: Core (Stage, the world, the camera, bones) comes first, and the specialist pieces sit under Movement, Creatures, Shapes and scenes, Pixels and sprites, Simulation, Picking, detail and edits, and Files and models. The contents list opens a part when you ask or read into it.
