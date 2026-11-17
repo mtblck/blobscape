@@ -5,6 +5,7 @@ import { covariance } from '../splat-core/blobs.ts'
 import { placeCamera, type Orbit } from '../splat-core/view.ts'
 import { SplatWorld } from '../splat-engine/engine.ts'
 import { DETAIL } from '../splat-engine/lod.ts'
+import { SplatDepth } from '../splat-engine/depth.ts'
 import { makeCreature, poseWalk, type Creature } from '../splat-engine/creature.ts'
 import type { SkinMode } from '../splat-engine/rig.ts'
 import { readbackToSrgb, srgbToLinear } from '../splat-core/color.ts'
@@ -58,6 +59,8 @@ export interface Lab {
   dispose(): void
   /** Times each step of a walking frame on its own, waiting for the GPU after each. */
   profile(frames: number): Promise<StepTimes>
+  /** Renders one frame at time t and its depth map (`SplatDepth`): how many pixels hold a blob, and the nearest, middle and farthest depth. */
+  depth?(t: number): Promise<{ covered: number; near: number; median: number; far: number; width: number; height: number }>
   /** Renders one frame at time t (seconds) and waits for the GPU. */
   frame(t: number): Promise<void>
   /** Runs `job` with the live view paused, so it can use the renderer on its own. */
@@ -154,6 +157,7 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
       scene.add(new GaussianSplat(createGaussianSplatGeometry(centers, covs, cols)))
     }
   }
+  const depthMap = new SplatDepth()
   const blobs = foxes.reduce((s, f) => s + f.blobs.count, 0)
 
   let target: THREE.RenderTarget | undefined
@@ -230,6 +234,20 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
     setWalk(on) { walk = on; pose(0) },
     setMode(m) { mode = m; if (world) { world.mode = m; world.markPosed() } },
     frame: show,
+    async depth(t) {
+      busy++
+      try {
+        await frame(t)
+        const size = target ?? canvas
+        depthMap.setSize(size.width, size.height)
+        depthMap.render(renderer, scene, camera)
+        const { width, height, depth } = await depthMap.read(renderer)
+        const got = [...depth].filter((d) => d > 0).sort((a, b) => a - b)
+        return { covered: got.length, near: got[0] ?? 0, median: got[got.length >> 1] ?? 0, far: got[got.length - 1] ?? 0, width, height }
+      } finally {
+        busy--
+      }
+    },
     async exclusive(job) {
       busy++
       try { return await job() } finally { busy-- }
@@ -314,6 +332,7 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
       cancelAnimationFrame(raf)
       world?.dispose()
       target?.dispose()
+      depthMap.dispose()
       renderer.dispose()
     },
   }

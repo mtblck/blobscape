@@ -1901,6 +1901,10 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
       if (so.missing || so.outOfOrder || so.unsettled) fails.push(`engine lab: GPU sort ${JSON.stringify(so)}`)
       else ok(`engine lab: GPU sort draws every blob once, farthest first, and blobs at one depth in index order (at most ${so.biggest} at one depth)`)
     }
+    // depth map for post effects (SplatDepth): the two foxes cover pixels, at depths round the camera's distance (7)
+    const dm = await page.evaluate(() => window.__lab.depth(0.3))
+    if (!(dm.covered > 5000 && dm.near > 4.5 && dm.near < dm.median && dm.median > 5.5 && dm.median < 8.5 && dm.far < 10)) fails.push(`engine lab ${label}: depth map ${JSON.stringify(dm)}`)
+    else ok(`engine lab ${label}: depth map covers ${dm.covered} pixels at ${dm.near.toFixed(1)}–${dm.far.toFixed(1)} units`)
     const steps = await page.evaluate(() => window.__lab.profile(2))
     if (!(steps.draw > 0) || (!webgl && !(steps.deform > 0 && steps.project > 0 && steps.order > 0))) fails.push(`engine lab ${label}: step times ${JSON.stringify(steps)}`)
     else ok(`engine lab ${label}: times each step (move ${steps.deform.toFixed(0)}, project ${steps.project.toFixed(0)}, sort ${steps.order.toFixed(0)}, draw ${steps.draw.toFixed(0)} ms; CPU ${steps.cpuSkin.toFixed(0)}+${steps.cpuSort.toFixed(0)})`)

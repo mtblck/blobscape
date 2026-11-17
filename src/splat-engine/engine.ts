@@ -98,8 +98,15 @@ export class SplatWorld extends Mesh {
    * (red and green hold the part's number plus one, blue the actor's), with no light, fog or soft edge, so where two
    * parts meet the color changes exactly. Pixel mode draws it for the lines between parts.
    */
-  get parts() { return this.flat.value > 0 }
+  get parts() { return this.flat.value === 1 }
   set parts(on: boolean) { this.flat.value = on ? 1 : 0 }
+  /**
+   * While true, the draw is a depth map: every blob a hard disc (as in the map of parts) whose color is its distance in
+   * front of the camera, in units, in all three channels. Drawn after the frame's own render with `hold`, the frame's
+   * sort puts the nearest disc last, so each pixel keeps the nearest depth. `SplatDepth` (depth.ts) draws it.
+   */
+  get depthMap() { return this.flat.value === 2 }
+  set depthMap(on: boolean) { this.flat.value = on ? 2 : 0 }
 
   private readonly boneOffset: number[]
   /** Per actor, the share of its blobs left out (0: all drawn). Sent to the GPU in each of its bones' spare matrix slot. */
@@ -1130,6 +1137,11 @@ function placeQuad(ndc: N, axes: N, rgba: N) {
   return vec4(ndc.xy.add(axes.xy.mul(uv.x)).add(axes.zw.mul(uv.y)), ndc.z, 1)
 }
 
+/** What a blob draws as: its picture color, its part's flat color (map of parts), or its depth (depth map). */
+function flatColor(flat: N, part: N, depth: N, picture: N) {
+  return select(flat.greaterThan(1.5), vec3(depth), select(flat.greaterThan(0.5), part, picture))
+}
+
 function makeVertexWebGPU(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, fog: Fog, flat: N, L?: Lighting) {
   return Fn(() => {
     const idx = sort.orderRead.element(instanceIndex).toVar()
@@ -1140,7 +1152,7 @@ function makeVertexWebGPU(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, 
     // ndc z = −(P22·z + P32) / z for a perspective camera, so −z = P32 / (ndc z + P22)
     const depth = cameraProjectionMatrix[3].z.div(A.z.add(cameraProjectionMatrix[2].z))
     const part = unpackUnorm4x8(buf.part.element(idx))
-    return placeQuad(A.xyz, buf.splatB.element(idx), vec4(select(flat.greaterThan(0), part.rgb, fogged(color.rgb, depth, fog)), color.a.mul(A.w)))
+    return placeQuad(A.xyz, buf.splatB.element(idx), vec4(flatColor(flat, part.rgb, depth, fogged(color.rgb, depth, fog)), color.a.mul(A.w)))
   })()
 }
 
@@ -1153,7 +1165,7 @@ function makeVertexWebGL(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, m
     const color = unpackUnorm4x8(buf.color.element(idx)).toVar()
     const rgb = L ? lit(color.rgb, d.world, d.covA, d.covB, L) : color.rgb
     const part = unpackUnorm4x8(buf.part.element(idx))
-    return placeQuad(p.ndc, p.axes, vec4(select(flat.greaterThan(0), part.rgb, fogged(rgb, p.depth, fog)), color.a.mul(p.alphaScale)))
+    return placeQuad(p.ndc, p.axes, vec4(flatColor(flat, part.rgb, p.depth, fogged(rgb, p.depth, fog)), color.a.mul(p.alphaScale)))
   })()
 }
 
