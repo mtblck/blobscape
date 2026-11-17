@@ -37,7 +37,7 @@ console.error = (...args: unknown[]) => { lastWords = String(args[0] ?? '').spli
 
 async function train(folder: FileSystemDirectoryHandle, steps: number, maxSplats: number) {
   type Adapter = { limits: { maxStorageBuffersPerShaderStage: number }; features: { has(name: string): boolean }; isFallbackAdapter?: boolean; info?: { isFallbackAdapter?: boolean } }
-  const adapter = await (navigator as Navigator & { gpu?: { requestAdapter(): Promise<Adapter | null> } }).gpu?.requestAdapter()
+  const adapter = (await (navigator as unknown as { gpu?: { requestAdapter(): Promise<unknown> } }).gpu?.requestAdapter()) as Adapter | null | undefined
   const no = cannotTrain({
     picker: true,
     gpu: !!adapter,
