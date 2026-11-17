@@ -32,6 +32,12 @@ export interface SceneDoc {
   /** How far down the picture the sky's blend runs before it is all the bottom color: 0.05 to 1, the whole way when left out. */
   skyReach?: number
   look?: { dither?: number; glow?: number; outline?: boolean; edges?: boolean }
+  /**
+   * How wide each surface disc is, as a share of the grid: 0.4 to 1, 0.55 when left out. Small discs keep paint
+   * crisp but let about a tenth of what lies behind a surface show through; a subject whose far side or inner
+   * parts are much darker or lighter than its near side (a head over an open jaw) wants 0.75, as creatures use.
+   */
+  disc?: number
   /** Where the view starts. `swing` rocks it gently from side to side by that many degrees, once a loop. */
   camera: Orbit & { swing?: number }
   /** Things that move. The land itself needs none: parts with no bone stand still. */
@@ -255,6 +261,7 @@ export function checkScene(doc: unknown): string[] {
   hexes(doc.palette, 'palette', 2, MAX_PALETTE_SIZE)
   if (doc.sky !== undefined) hexes(doc.sky, 'sky', 2, 2)
   opt(doc.skyReach, 'skyReach', 0.05, 1)
+  opt(doc.disc, 'disc', 0.4, 1)
   if (doc.look !== undefined) {
     if (!obj(doc.look)) bad('look', 'must be an object')
     else {
@@ -705,7 +712,7 @@ export function compileScene(doc: SceneDoc): CompiledScene {
       if (doc.light?.from) light.dir = doc.light.from
       for (const k of ['ambient', 'shadow', 'ramp', 'crevice', 'wear'] as const) if (doc.light?.[k] !== undefined) light[k] = doc.light[k]
       const beams = (doc.air?.shafts ?? []).map((b) => ({ from: b.from, to: b.to, r: b.r, color: unit(b.color), strength: b.strength ?? 0.6 }))
-      return { bones, parts, spacing, light, loose: looseAir(doc.air), beams }
+      return { bones, parts, spacing, light, loose: looseAir(doc.air), beams, disc: doc.disc }
     },
     empty(built) {
       const seen = new Set<number>()
