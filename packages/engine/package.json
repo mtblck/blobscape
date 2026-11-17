@@ -13,6 +13,7 @@
     ".": { "types": "./dist/types/splat-engine/index.d.ts", "import": "./dist/index.js" }
   },
   "types": "./dist/types/splat-engine/index.d.ts",
+  "publishConfig": { "access": "public" },
   "files": ["dist", "README.md", "LICENSE"],
   "peerDependencies": { "three": ">=0.187.0 <0.188.0" }
 }
