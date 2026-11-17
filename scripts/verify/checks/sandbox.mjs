@@ -212,6 +212,74 @@ export default [
     },
   },
   {
+    name: 'sandbox-path',
+    about: 'camera stops and playing the path (saving the MP4 only with VERIFY_MP4=1)',
+    entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/cameraPath.ts', 'src/blobscape/diorama/video.ts'],
+    async run({ readFileSync, shots, join, fails, ok, open, axe }) {
+      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 900 }, acceptDownloads: true })
+      await page.waitForTimeout(1500)
+      const shot = async () => (await page.getByTestId('viewport').screenshot()).toString('base64')
+      // The view once it has stopped changing: software rendering sorts seconds behind a turn
+      const settled = async () => {
+        let was = await shot()
+        for (let k = 0; k < 20; k++) { await page.waitForTimeout(700); const now = await shot(); if (now === was) return now; was = now }
+        return was
+      }
+      // Pixels that differ clearly between two pictures of the view
+      const differs = (a, b) => page.evaluate(async ([a, b]) => {
+        const px = async (s) => { const i = await createImageBitmap(new Blob([Uint8Array.from(atob(s), (ch) => ch.charCodeAt(0))], { type: 'image/png' })); const c = new OffscreenCanvas(i.width, i.height); const x = c.getContext('2d'); x.drawImage(i, 0, 0); return x.getImageData(0, 0, i.width, i.height).data }
+        const [p, q] = await Promise.all([px(a), px(b)])
+        let n = 0
+        for (let k = 0; k < p.length; k += 4) if (Math.abs(p[k] - q[k]) > 24 || Math.abs(p[k + 1] - q[k + 1]) > 24 || Math.abs(p[k + 2] - q[k + 2]) > 24) n++
+        return n
+      }, [a, b])
+      const box = await page.getByTestId('viewport').boundingBox()
+      const at = (fx, fy) => [box.x + box.width * fx, box.y + box.height * fy]
+      await page.getByRole('button', { name: 'Look', exact: true }).click()
+      await page.getByRole('tab', { name: /Scene/ }).click()
+      const add = page.getByRole('button', { name: 'Add this view as a stop' })
+      const play = page.getByRole('button', { name: 'Play the path' })
+      if (!(await play.isDisabled())) fails.push('blobscape sandbox path: Play is on with no stops')
+      await add.click()
+      const first = await settled()
+      // turn the view a good way round, then save the second stop
+      await page.mouse.move(...at(0.3, 0.5)); await page.mouse.down(); await page.mouse.move(...at(0.7, 0.4), { steps: 8 }); await page.mouse.up()
+      const second = await settled()
+      await add.click()
+      const said = await page.getByTestId('path-stops').textContent()
+      const turned = await differs(first, second)
+      if (turned < 2000 || !said.startsWith('2 stops, 2 seconds')) fails.push(`blobscape sandbox path: after two stops it says "${said.slice(0, 40)}"${turned < 2000 ? ' and the view did not turn' : ''}`)
+      else ok('blobscape sandbox path: two views saved as stops')
+      await axe(page, 'blobscape sandbox path')
+      // Play: the view goes back to the first stop and glides; partway it is neither stop, and it ends at the second
+      await play.click()
+      await page.waitForTimeout(1000)
+      const mid = await shot()
+      await page.waitForFunction(() => [...document.querySelectorAll('button')].find((b) => b.textContent === 'Play the path')?.getAttribute('aria-pressed') === 'false', null, { timeout: 15000 }).catch(() => {})
+      const end = await settled()
+      const fromFirst = await differs(mid, first), fromSecond = await differs(mid, second), short = await differs(end, second)
+      if (fromFirst < 500 || fromSecond < 500) fails.push(`blobscape sandbox path: partway through playing, the view is at a stop (${fromFirst} and ${fromSecond} pixels from them)`)
+      else if (short > turned / 20) fails.push(`blobscape sandbox path: playing ended ${short} pixels from the last stop (the stops are ${turned} apart)`)
+      else ok('blobscape sandbox path: Play glides from the first stop to the last')
+      // Save: an MP4 where the browser can make one (headless Chromium may have no H.264 encoder), else a plain reason
+      // Saving is checked only where asked (VERIFY_MP4=1, a browser with a working H.264 encoder): headless Chromium
+      // says it supports H.264, then sits on the frames and takes the GPU process down with it
+      if (process.env.VERIFY_MP4) {
+        await page.getByRole('slider', { name: 'Seconds a stop' }).focus()
+        await page.keyboard.press('Home')
+        const [download] = await Promise.all([page.waitForEvent('download', { timeout: 240000 }), page.getByTestId('path-save').click()])
+        const bytes = readFileSync(await download.path())
+        if (!download.suggestedFilename().endsWith('-path.mp4') || bytes.subarray(4, 8).toString('latin1') !== 'ftyp' || bytes.length < 20000) fails.push(`blobscape sandbox path: saved ${download.suggestedFilename()}, ${bytes.length} bytes`)
+        else ok(`blobscape sandbox path: saves an MP4 (${Math.round(bytes.length / 1024)} KB)`)
+        await page.waitForTimeout(800)
+        if ((await differs(await shot(), second)) > turned / 20) fails.push('blobscape sandbox path: the view did not come back after saving')
+        else ok('blobscape sandbox path: the view comes back after saving')
+      } else ok('blobscape sandbox path: saving the MP4 not checked here (no working H.264 encoder in this browser)')
+      await page.screenshot({ path: join(shots, 'blobscape-sandbox-path.png') })
+      await ctx.close()
+    },
+  },
+  {
     name: 'sandbox-props',
     about: 'a slime that bursts and the watch, added from other experiments',
     entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/props.ts'],

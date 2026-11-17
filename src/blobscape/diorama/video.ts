@@ -58,3 +58,53 @@ export async function encodeVideo(frames: Frame[], fps: number, scale: number): 
   muxer.finalize()
   return new Uint8Array(muxer.target.buffer)
 }
+
+/** How long the encoder may sit on a full queue before it counts as stuck, in ms. */
+const STALL = 8000
+
+/** An MP4 written a frame at a time, for pictures drawn as they are recorded (the sandbox's camera path). */
+export interface VideoWriter {
+  /** Adds the next frame: anything a 2D canvas can draw, already `width` by `height`. */
+  add(picture: CanvasImageSource): Promise<void>
+  /** The finished file. */
+  finish(): Promise<Uint8Array>
+}
+
+/** The size a `w` by `h` view is recorded at: even numbers, the long side at most `side`. */
+export function videoSize(w: number, h: number, side = 1920): [number, number] {
+  const k = Math.min(1, side / Math.max(w, h))
+  return [Math.max(2, Math.round((w * k) / 2) * 2), Math.max(2, Math.round((h * k) / 2) * 2)]
+}
+
+export async function startVideo(width: number, height: number, fps: number): Promise<VideoWriter> {
+  if (!(await canMakeVideo(width, height))) throw new Error('this browser cannot make an MP4')
+  const muxer = new Muxer({ target: new ArrayBufferTarget(), video: { codec: 'avc', width, height, frameRate: fps }, fastStart: 'in-memory' })
+  let failed: unknown
+  const encoder = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: (e) => { failed = e } })
+  // soft blobs compress well: about a seventh of a bit a pixel a frame, at most 40 Mb/s
+  encoder.configure({ codec: 'avc1.640034', width, height, bitrate: Math.min(40e6, width * height * fps * 0.15), framerate: fps, avc: { format: 'avc' } })
+  let n = 0
+  return {
+    async add(picture) {
+      if (failed) throw failed
+      const vf = new VideoFrame(picture, { timestamp: Math.round((n * 1e6) / fps), duration: Math.round(1e6 / fps) })
+      encoder.encode(vf, { keyFrame: n % (fps * 2) === 0 })
+      vf.close()
+      n++
+      // an encoder that stops answering (some browsers claim H.264 and never deliver) must not hang the page
+      const since = performance.now()
+      while (encoder.encodeQueueSize > 4) {
+        if (performance.now() - since > STALL) throw new Error('this browser cannot make an MP4 (its video encoder stopped answering)')
+        await new Promise((r) => setTimeout(r, 5))
+      }
+    },
+    async finish() {
+      const stalled = new Promise<never>((_, no) => setTimeout(() => no(new Error('this browser cannot make an MP4 (its video encoder stopped answering)')), STALL * 2))
+      await Promise.race([encoder.flush(), stalled])
+      encoder.close()
+      if (failed) throw failed
+      muxer.finalize()
+      return new Uint8Array(muxer.target.buffer)
+    },
+  }
+}
