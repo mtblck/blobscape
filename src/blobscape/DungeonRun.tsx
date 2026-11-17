@@ -61,7 +61,7 @@ export function DungeonRun() {
   useEffect(() => {
     let live: DungeonStage | undefined, gone = false
     import('./dungeon/stage.ts')
-      .then(({ DungeonStage }) => DungeonStage.start(canvas.current!, { offscreen, webgl }))
+      .then(({ DungeonStage }) => DungeonStage.start(canvas.current!, { offscreen, webgl, calm: window.matchMedia('(prefers-reduced-motion: reduce)').matches }))
       .then((s) => {
         if (gone) { s.dispose(); return }
         live = s
