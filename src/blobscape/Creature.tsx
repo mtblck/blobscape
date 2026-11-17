@@ -70,6 +70,7 @@ export function Creature() {
   const [drawn, setDrawn] = useState(false)
   const [failed, setFailed] = useState<string>()
   const offscreen = useMemo(() => new URLSearchParams(location.search).get('offscreen') === '1', [])
+  const webgl = useMemo(() => new URLSearchParams(location.search).get('webgl') === '1', [])
   // which creature is in the address (?creature=dragon), so a link can show one
   const [species, setSpecies] = useState<Species>(() => speciesOf(new URLSearchParams(location.search)))
   const [count, setCount] = useState(species.start)
@@ -159,7 +160,7 @@ export function Creature() {
   useEffect(() => {
     let live: CreatureStage | undefined, gone = false
     import('./creature/stage.ts')
-      .then(({ CreatureStage }) => CreatureStage.start(canvas.current!, { offscreen }))
+      .then(({ CreatureStage }) => CreatureStage.start(canvas.current!, { offscreen, webgl }))
       .then((s) => {
         if (gone) { s.dispose(); return }
         live = s
@@ -167,7 +168,7 @@ export function Creature() {
         setStage(s)
       }, (e: unknown) => { console.warn(e); setFailed('This browser could not start WebGPU or WebGL 2, which the creature needs.') })
     return () => { gone = true; live?.dispose() }
-  }, [offscreen])
+  }, [offscreen, webgl])
 
   // the placeholder cut is never shown: the view waits for the creature asked for
   const first = useRef(true)
