@@ -78,6 +78,17 @@ export default [
         if (newest.length < 8 || !sorted || JSON.stringify(oldest) !== JSON.stringify([...newest].reverse()) || JSON.stringify(kept) !== JSON.stringify(oldest)) fails.push(`experiments page dates: ${JSON.stringify({ newest, oldest: oldest.map((c) => c[0]), kept: kept.map((c) => c[0]) })}`)
         else ok(`experiments page: ${newest.length} dated cards, newest first (${newest[0][0]}, ${newest[0][1]}), and "Oldest first" turns the list round and is kept`)
         await ex.page.getByRole('button', { name: 'Newest first' }).click()
+        // a filter by kind (issue #104): Games shows only the games, kept in the address, and All brings every card back
+        await ex.page.getByRole('group', { name: 'Show' }).getByRole('button', { name: 'Games' }).click()
+        const games = (await listed()).map((c) => c[0])
+        const gameUrl = new URL(ex.page.url()).searchParams.get('tag')
+        await ex.page.goto(base + '/experiments/?tag=pixel')
+        await ex.page.getByRole('button', { name: 'Pixel art', pressed: true }).waitFor({ timeout: 5000 }).catch(() => {})
+        const pixel = (await listed()).map((c) => c[0])
+        await ex.page.getByRole('group', { name: 'Show' }).getByRole('button', { name: 'All' }).click()
+        const all = await listed()
+        if (JSON.stringify(games) !== JSON.stringify(['Dungeon Run', 'Forest Walk']) || gameUrl !== 'game' || !pixel.includes('Pixel Diorama') || pixel.includes('Dungeon Run') || all.length !== newest.length) fails.push(`experiments page filter: ${JSON.stringify({ games, gameUrl, pixel, all: all.length })}`)
+        else ok(`experiments page: Games shows ${games.join(' and ')}, ?tag=pixel opens on ${pixel.length} pixel-art experiments, All shows every one`)
         await axe(ex.page, 'experiments page')
         // an experiment's own page carries the dates too: drawn by the app, and in the HTML a crawler reads
         const html = await (await fetch(base + '/experiments/creature/')).text()
