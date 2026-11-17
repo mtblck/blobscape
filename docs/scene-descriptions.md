@@ -36,7 +36,16 @@ Shapes: `sphere`, `ball` (stretched), `box`, `cylinder` (can taper), `cone` (a r
 - `text`: words in blocky 3-by-5 letters, `size` tall and `depth` thick, centered on `at`, reading along +x (or along -z with `facing: 'x'`). Letters, digits, space and `. , ! ? - :` only. A letter needs about five grid cells of height to read, so keep `size` at 0.25 or more.
 - `blocks`: a model drawn in letters, `size` a cube. `layers` go from the bottom up, each a list of rows from the back to the front, each row read along +x; `.` or a space is empty and any other letter fills a cube. Paint it with `{ kind: 'key', colors: { t: '#5a3a24', l: '#3a7c5c' } }` to color each letter, and every letter used needs a color. Good for little houses, crates, trees and signs; a model at most 24 cubes a side.
 
-Paints: a color, or `bands`, `bricks`, `hex` (honeycomb, scales, paving), `speckle`, `patches`, `faces` (top, side, under), `split` (one paint below a height, another above), `key` (for `blocks` only). Paints nest.
+Built things, each one shape however many pieces it has, laid by a rule from a `seed` (the same seed, the same ruin), and sized so the pieces come out whole:
+
+- `wall`: bricks in courses from `from` to `to` (both on the ground, any direction), `height` tall and `thick` deep. `brick` is [length, course height], fitted so whole bricks fill the wall, with half bricks at the ends of every other course. Bricks sit a little proud or sunk (`jitter`), with mortar sunk between. `ruin` breaks the top down in a ragged line, `missing` takes bricks out of the face (the mortar core shows), `fallen` lays that many at the foot. Cut a doorway with `cut`.
+- `steps`: a flight of `count` blocks climbing along `dir` ([x, z]) from `at`, the bottom step's front middle, each `rise` up and `run` deep. `wear` rounds the noses and hollows each tread where feet go.
+- `fence`: posts and rails along a `path` on the ground, each straight run cut into whole bays about `bay` long so a post stands at every corner. `post` is half a post's thickness; `lean`, `missing` (rails gone or hanging from one end) and `sag` wear it.
+- `arcade`: a wall cut into `bays` equal bays with an opening in each and a `pillar` between, `'round'`, `'pointed'` or `'flat'` heads springing from `spring`. `ruin` (with a `seed`) breaks its top, never below the arches.
+
+Paint any of them with `pieces`: each brick, block, post or stone takes one of the `colors` (earlier ones commoner) and the joints between them `line`. The checker turns `pieces` down on a shape without pieces.
+
+Paints: a color, or `bands`, `bricks`, `hex` (honeycomb, scales, paving), `speckle`, `patches`, `faces` (top, side, under), `split` (one paint below a height, another above), `key` (for `blocks` only), `pieces` (for built things and the other shapes of pieces). Paints nest.
 
 ## Rules that make a scene work
 
@@ -84,6 +93,6 @@ Asking for several different takes at once and picking the best works better tha
 
 ## What it can't do yet
 
-- Turned boxes: a box or a roof is always square to the axes, and a bone has no resting turn. Build slanted things from cones.
+- Turned boxes: a box or a roof is always square to the axes, and a bone has no resting turn. Build slanted things from cones (walls, fences and arcades can run any way along the ground).
 - Characters that walk. Bones here turn, slide and grow; there is no skinning between them (creatures use `body.ts` for that).
 - Paint that follows a round wall: `bricks` run along x or z, which holds up on a tower but isn't exact.

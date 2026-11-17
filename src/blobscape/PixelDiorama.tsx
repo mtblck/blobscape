@@ -590,7 +590,9 @@ export function PixelDiorama() {
           <p>
             The idea of pixel art made from splats, and the themes of several scenes here, were inspired by the clips
             that <a href="https://x.com/JungleSilicon" target="_blank" rel="noopener" className="underline decoration-rule underline-offset-2 hover:text-accent">Silicon Jungle</a> shared
-            of their own pixel-art splat scenes. The scenes, the engine and the code on this page are our own.
+            of their own pixel-art splat scenes, and the world-building shapes (brick walls, steps and fences,
+            formations, weather that lands, worn rock) follow ideas from their Ink Studio kit. The scenes, the engine
+            and the code on this page are our own.
           </p>
         </div>
       </section>

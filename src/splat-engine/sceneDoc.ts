@@ -3,9 +3,10 @@ import type { Orbit } from '../splat-core/view.ts'
 import { MAX_PALETTE_SIZE, darkest, type PixelLook, type Rgb } from '../splat-core/pixel.ts'
 import type { PointLight } from './engine.ts'
 import { axisAngle, mulQ, type Bone, type Skeleton } from './rig.ts'
-import { INK_MARKS, LETTERS, MAX_LAMPS, PAINTED, blend, box, lathe, letterGrid, pixelText, sweep, cone, cut, cylinder, displace, ellipsoid, roof, sphere, torus, union, type LooseBlob, type Shape, type VoxelPart, type VoxelSpec } from './voxel.ts'
+import { INK_MARKS, LETTERS, MAX_LAMPS, PAINTED, blend, box, many, lathe, letterGrid, pixelText, sweep, cone, cut, cylinder, displace, ellipsoid, roof, sphere, torus, union, type LooseBlob, type Shape, type VoxelPart, type VoxelSpec } from './voxel.ts'
 import { PUFFS } from './poke.ts'
 import { GROW_STYLES, grow, growBounds, type GrowStyle } from './grow.ts'
+import { ARCHES, arcade, fence, steps, wall } from './built.ts'
 
 /**
  * A pixel-art scene written as data: no code, so it can be typed by hand, kept
@@ -185,6 +186,23 @@ export type ShapeDoc =
    * 'twigs' or just the 'tips', so two parts can paint them apart from one grower.
    */
   | { kind: 'grow'; style: GrowStyle; at: Vec3; seed: number; size: number; r: number; depth?: number; branches?: number; tips?: number; only?: 'twigs' | 'tips' }
+  /**
+   * A wall of bricks in courses from `from` to `to` (feet on the ground, any direction), each brick a little proud,
+   * sunk or off size (`jitter`, 0 to 1), with sunk mortar between. `brick` is [length, course height] (0.16 by 0.08
+   * when left out), fitted so whole bricks fill it. `ruin` (0 to 1) breaks the top down in a ragged line, `missing`
+   * (0 to 0.5) takes bricks out of the face, `fallen` lays that many at its foot. Paint it with `pieces`.
+   */
+  | { kind: 'wall'; from: Vec3; to: Vec3; height: number; thick: number; brick?: [number, number]; jitter?: number; ruin?: number; missing?: number; fallen?: number; seed: number }
+  /** A flight of `count` stone steps climbing along `dir` ([x, z]) from `at`, the bottom step's front middle: each block its own, `wear` (0 to 1) rounding the noses and hollowing the treads. */
+  | { kind: 'steps'; at: Vec3; dir: [number, number]; count: number; rise: number; run: number; width: number; wear?: number; seed: number }
+  /**
+   * Posts and rails along `path` (on the ground, 2 to 16 points), each straight run cut into whole bays about `bay`
+   * long, so a post stands at every corner. `post` is half a post's thickness, `rails` 1 to 4; `lean`, `missing`
+   * (rails gone or hanging from one end) and `sag`, 0 to 1, wear it down.
+   */
+  | { kind: 'fence'; path: Vec3[]; bay: number; height: number; post: number; rails: number; lean?: number; missing?: number; sag?: number; seed: number }
+  /** A wall from `from` to `to` cut into `bays` equal bays, an opening in each with a `pillar` between: 'round', 'pointed' or 'flat' heads springing at `spring`. Stones in courses `course` high and wedges round each arch, for `pieces`. `ruin` (0 to 1, with a `seed`) breaks its top down, never below the arches. */
+  | { kind: 'arcade'; from: Vec3; to: Vec3; height: number; thick: number; bays: number; pillar: number; spring?: number; arch?: 'round' | 'pointed' | 'flat'; course?: number; ruin?: number; seed?: number }
   /** The first shape with the second cut out of it. */
   | { kind: 'cut'; shape: ShapeDoc; hole: ShapeDoc }
   /** A lumpy version: `by` is how far the surface moves, `scale` how big the lumps are. */
@@ -208,6 +226,8 @@ export type PaintDoc =
   | { kind: 'faces'; top?: PaintDoc; side: PaintDoc; under?: PaintDoc }
   /** One paint under a height (or left of x, or behind z), another over it. */
   | { kind: 'split'; axis: 'x' | 'y' | 'z'; at: number; below: PaintDoc; above: PaintDoc }
+  /** For a shape made of pieces (wall, steps, fence, arcade and the rest): each brick, block, post or stone takes one of `colors` (earlier ones commoner), and what lies between them `line`. */
+  | { kind: 'pieces'; colors: string[]; line?: string }
 
 /** Every move repeats a whole number of `times` in the loop, so the scene loops. */
 export type MoveDoc =
@@ -260,6 +280,7 @@ const MAX_SPECKS = 300
 const SPECK_KINDS: SpeckKind[] = ['dust', 'embers', 'rain', 'snow', 'fireflies', 'bubbles']
 /** A value for a message: only what is safe to print (anything can arrive from a prompt). */
 const COVERS = ['snow', 'moss', 'dust']
+const SHAPE_KINDS = ['sphere', 'ball', 'box', 'cylinder', 'cone', 'ring', 'roof', 'join', 'lathe', 'sweep', 'grow', 'text', 'blocks', 'wall', 'steps', 'fence', 'arcade', 'cut', 'rough']
 const BLENDS = ['smooth', 'chamfer', 'stairs']
 /** The keys paints use, found anywhere inside one. */
 const keysIn = (p: unknown): Record<string, unknown>[] => {
@@ -285,8 +306,34 @@ function halfSize(s: ShapeDoc): Vec3 {
     case 'text': { const w = ((s.text.length * 4 - 1) * s.size) / 10; return s.facing === 'x' ? [s.depth / 2, s.size / 2, w] : [w, s.size / 2, s.depth / 2] }
     case 'blocks': return [(Math.max(...s.layers.flatMap((l) => l.map((r) => r.length))) * s.size) / 2, (s.layers.length * s.size) / 2, (Math.max(...s.layers.map((l) => l.length)) * s.size) / 2]
     case 'grow': { const h = growBounds(s).half, k = s.only === 'twigs' ? 0 : s.tips ?? 0; return [h[0] + k, h[1] + k, h[2] + k] }
+    case 'wall': case 'arcade': {
+      const r = s.kind === 'wall' ? (s.fallen ? s.thick / 2 + 0.2 + s.height * 0.35 : s.thick / 2) : s.thick / 2
+      return [Math.abs(s.to[0] - s.from[0]) / 2 + r, s.height / 2, Math.abs(s.to[2] - s.from[2]) / 2 + r]
+    }
+    case 'steps': {
+      const l = Math.hypot(s.dir[0], s.dir[1]) || 1, run = s.run * s.count
+      return [Math.abs((s.dir[0] / l) * run) / 2 + s.width / 2, (s.rise * s.count) / 2, Math.abs((s.dir[1] / l) * run) / 2 + s.width / 2]
+    }
+    case 'fence': return [0, 1, 2].map((i) => (i === 1 ? s.height / 2 : (Math.max(...s.path.map((q) => q[i])) - Math.min(...s.path.map((q) => q[i]))) / 2 + s.post + s.height * 0.15)) as Vec3
     case 'cut': case 'rough': return halfSize(s.shape)
   }
+}
+
+/** The shapes the `pieces` paint can paint, as they are or cut and roughened. */
+const PIECED = ['wall', 'steps', 'fence', 'arcade']
+const hasPieces = (s: unknown): boolean => {
+  if (typeof s !== 'object' || s === null) return false
+  const q = s as Record<string, unknown>
+  if (PIECED.includes(q.kind as string)) return true
+  if (q.kind === 'cut' || q.kind === 'rough') return hasPieces(q.shape)
+  if (q.kind === 'join' && Array.isArray(q.shapes)) return q.shapes.some(hasPieces)
+  return false
+}
+const piecesIn = (p: unknown): boolean => {
+  if (typeof p !== 'object' || p === null) return false
+  const q = p as Record<string, unknown>
+  if (q.kind === 'pieces') return true
+  return [q.top, q.side, q.under, q.below, q.above].some(piecesIn)
 }
 
 /**
@@ -315,6 +362,7 @@ export function checkScene(doc: unknown): string[] {
     v.forEach((c, i) => hex(c, `${at}[${i}]`))
   }
   const axis = (v: unknown, at: string) => { if (!AXES.includes(v as string)) bad(at, "must be 'x', 'y' or 'z'") }
+  const seed = (v: unknown, at: string) => { if (typeof v !== 'number' || !Number.isInteger(v) || v < 0) bad(at, 'must be a whole number, 0 or more') }
   const whole = (v: unknown, at: string) => { if (typeof v !== 'number' || !Number.isInteger(v) || v === 0 || Math.abs(v) > 60) bad(at, 'must be a whole number of times per loop (not 0), so the scene loops') }
 
   if (!obj(doc)) return ['scene: must be an object']
@@ -424,9 +472,40 @@ export function checkScene(doc: unknown): string[] {
         })
         break
       }
+      case 'wall':
+        vec(s.from, `${at}.from`); vec(s.to, `${at}.to`); num(s.height, `${at}.height`, 0.02, REACH); num(s.thick, `${at}.thick`, 0.01, 1)
+        if (s.brick !== undefined) vec(s.brick, `${at}.brick`, 0.02, 1, 2)
+        opt(s.jitter, `${at}.jitter`, 0, 1); opt(s.ruin, `${at}.ruin`, 0, 1); opt(s.missing, `${at}.missing`, 0, 0.5)
+        if (s.fallen !== undefined && (typeof s.fallen !== 'number' || !Number.isInteger(s.fallen) || s.fallen < 0 || s.fallen > 60)) bad(`${at}.fallen`, 'must be a whole number from 0 to 60')
+        seed(s.seed, `${at}.seed`)
+        if (Array.isArray(s.from) && Array.isArray(s.to) && Math.hypot((s.to[0] as number) - (s.from[0] as number), (s.to[2] as number) - (s.from[2] as number)) < 0.05) bad(`${at}.to`, 'must be apart from from along the ground')
+        break
+      case 'steps':
+        vec(s.at, `${at}.at`); vec(s.dir, `${at}.dir`, -1, 1, 2)
+        if (Array.isArray(s.dir) && Math.hypot(Number(s.dir[0]) || 0, Number(s.dir[1]) || 0) < 0.1) bad(`${at}.dir`, 'must point somewhere along the ground')
+        if (typeof s.count !== 'number' || !Number.isInteger(s.count) || s.count < 1 || s.count > 24) bad(`${at}.count`, 'must be a whole number from 1 to 24')
+        num(s.rise, `${at}.rise`, 0.01, 1); num(s.run, `${at}.run`, 0.01, 1); num(s.width, `${at}.width`, 0.02, REACH); opt(s.wear, `${at}.wear`, 0, 1)
+        seed(s.seed, `${at}.seed`)
+        break
+      case 'fence':
+        if (!Array.isArray(s.path) || s.path.length < 2 || s.path.length > 16) bad(`${at}.path`, 'must be a list of 2 to 16 points')
+        else s.path.forEach((q: unknown, i: number) => vec(q, `${at}.path[${i}]`))
+        num(s.bay, `${at}.bay`, 0.05, REACH); num(s.height, `${at}.height`, 0.02, 2); num(s.post, `${at}.post`, 0.003, 0.2)
+        if (typeof s.rails !== 'number' || !Number.isInteger(s.rails) || s.rails < 1 || s.rails > 4) bad(`${at}.rails`, 'must be a whole number from 1 to 4')
+        opt(s.lean, `${at}.lean`, 0, 1); opt(s.missing, `${at}.missing`, 0, 1); opt(s.sag, `${at}.sag`, 0, 1)
+        seed(s.seed, `${at}.seed`)
+        break
+      case 'arcade':
+        vec(s.from, `${at}.from`); vec(s.to, `${at}.to`); num(s.height, `${at}.height`, 0.05, REACH); num(s.thick, `${at}.thick`, 0.01, 1)
+        if (typeof s.bays !== 'number' || !Number.isInteger(s.bays) || s.bays < 1 || s.bays > 16) bad(`${at}.bays`, 'must be a whole number from 1 to 16')
+        num(s.pillar, `${at}.pillar`, 0.01, REACH); opt(s.spring, `${at}.spring`, 0, REACH); opt(s.course, `${at}.course`, 0.01, 1); opt(s.ruin, `${at}.ruin`, 0, 1)
+        if (s.seed !== undefined) seed(s.seed, `${at}.seed`)
+        if (s.arch !== undefined && !ARCHES.includes(s.arch as never)) bad(`${at}.arch`, `must be one of ${ARCHES.map((k) => `'${k}'`).join(', ')}`)
+        if (Array.isArray(s.from) && Array.isArray(s.to) && typeof s.bays === 'number' && typeof s.pillar === 'number' && Math.hypot((s.to[0] as number) - (s.from[0] as number), (s.to[2] as number) - (s.from[2] as number)) / s.bays <= s.pillar) bad(`${at}.pillar`, 'leaves no room for an opening in each bay')
+        break
       case 'cut': shape(s.shape, `${at}.shape`, depth + 1); shape(s.hole, `${at}.hole`, depth + 1); break
       case 'rough': shape(s.shape, `${at}.shape`, depth + 1); num(s.by, `${at}.by`, 0, 0.3); opt(s.scale, `${at}.scale`, 0.02, REACH); break
-      default: bad(`${at}.kind`, `${show(s.kind)} is not a shape (sphere, ball, box, cylinder, cone, ring, roof, join, lathe, sweep, grow, text, blocks, cut, rough)`)
+      default: bad(`${at}.kind`, `${show(s.kind)} is not a shape (${SHAPE_KINDS.join(', ')})`)
     }
   }
   const paint = (p: unknown, at: string, depth: number) => {
@@ -448,7 +527,8 @@ export function checkScene(doc: unknown): string[] {
         if (p.under !== undefined) paint(p.under, `${at}.under`, depth + 1)
         break
       case 'split': axis(p.axis, `${at}.axis`); num(p.at, `${at}.at`, -REACH, REACH); paint(p.below, `${at}.below`, depth + 1); paint(p.above, `${at}.above`, depth + 1); break
-      default: bad(`${at}.kind`, `${show(p.kind)} is not a paint (bands, bricks, hex, speckle, patches, faces, split)`)
+      case 'pieces': hexes(p.colors, `${at}.colors`, 1, 8); if (p.line !== undefined) hex(p.line, `${at}.line`); break
+      default: bad(`${at}.kind`, `${show(p.kind)} is not a paint (bands, bricks, hex, speckle, patches, faces, split, key, pieces)`)
     }
   }
   if (!Array.isArray(doc.parts) || !doc.parts.length || doc.parts.length > MAX_PARTS) bad('parts', `must be a list of 1 to ${MAX_PARTS} parts`)
@@ -474,6 +554,7 @@ export function checkScene(doc: unknown): string[] {
         for (const k of keys) if (obj(k.colors)) for (const c of used) if (!(c in k.colors)) bad(`${at}.paint`, `the key has no color for ${show(c)}`)
       }
     }
+    if (piecesIn(p.paint) && !hasPieces(p.shape)) bad(`${at}.paint`, `pieces paints a shape made of pieces only (${PIECED.join(', ')})`)
     if (p.bone !== undefined) bone(p.bone, `${at}.bone`)
     for (const k of ['glow', 'noShadow', 'bare']) if (p[k] !== undefined && typeof p[k] !== 'boolean') bad(`${at}.${k}`, 'must be true or false')
     if (p.grime !== undefined) hex(p.grime, `${at}.grime`)
@@ -632,8 +713,12 @@ function toShape(s: ShapeDoc, thin: number): Shape {
       const all: Shape[] = []
       if (s.only !== 'tips') for (const w of twigs) all.push(cone(w.from, w.to, t(w.r), Math.max(w.rTo, thin * 0.6)))
       if (s.only !== 'twigs' && s.tips) for (const p of tips) all.push(sphere(p, Math.max(s.tips, thin * 1.2)))
-      return all.length ? union(...all) : sphere(s.at, thin * 1.2)
+      return all.length ? many(all) : sphere(s.at, thin * 1.2)
     }
+    case 'wall': return wall({ ...s, height: Math.max(s.height, thin * 2), thick: t(s.thick) }, thin / 0.75)
+    case 'steps': return steps({ ...s, rise: t(s.rise), run: t(s.run), width: t(s.width) })
+    case 'fence': return fence({ ...s, post: Math.max(s.post, thin * 0.75) }, thin / 0.75)
+    case 'arcade': return arcade({ ...s, thick: t(s.thick), pillar: t(s.pillar) }, thin / 0.75)
     case 'cut': return cut(toShape(s.shape, thin), toShape(s.hole, 0))
     case 'rough': {
       const k = 1 / (s.scale ?? 0.5)
@@ -644,9 +729,17 @@ function toShape(s: ShapeDoc, thin: number): Shape {
 
 type Paint = (p: Vec3, n: Vec3) => Vec3
 
-function toPaint(p: PaintDoc, cell: number, letterAt?: (p: Vec3, n: Vec3) => string | undefined): Paint {
+function toPaint(p: PaintDoc, cell: number, letterAt?: (p: Vec3, n: Vec3) => string | undefined, pieceAt?: (p: Vec3) => number): Paint {
   if (typeof p === 'string') { const c = unit(p); return () => c }
   switch (p.kind) {
+    case 'pieces': {
+      const cs = p.colors.map(unit), line = p.line === undefined ? cs[0] : unit(p.line)
+      return (q) => {
+        const id = pieceAt?.(q) ?? 0
+        // squared, so the first color is the commonest
+        return id < 0 ? line : cs[Math.floor(hash(id, 17, 3) ** 2 * cs.length)]
+      }
+    }
     case 'key': {
       const cs = new Map(Object.entries(p.colors).map(([k, c]) => [k, unit(c)])), none = cs.values().next().value as Vec3
       return (q, n) => cs.get(letterAt?.(q, n) ?? '') ?? none
@@ -700,11 +793,11 @@ function toPaint(p: PaintDoc, cell: number, letterAt?: (p: Vec3, n: Vec3) => str
       return (q) => cs[Math.min(cs.length - 1, Math.floor(((wobble(q[0] * k, q[1] * k, q[2] * k) + 1) / 2) * cs.length))]
     }
     case 'faces': {
-      const side = toPaint(p.side, cell, letterAt), top = p.top === undefined ? side : toPaint(p.top, cell, letterAt), under = p.under === undefined ? side : toPaint(p.under, cell, letterAt)
+      const side = toPaint(p.side, cell, letterAt, pieceAt), top = p.top === undefined ? side : toPaint(p.top, cell, letterAt, pieceAt), under = p.under === undefined ? side : toPaint(p.under, cell, letterAt, pieceAt)
       return (q, n) => (n[1] > 0.6 ? top : n[1] < -0.6 ? under : side)(q, n)
     }
     case 'split': {
-      const below = toPaint(p.below, cell, letterAt), above = toPaint(p.above, cell, letterAt), i = IDX[p.axis]
+      const below = toPaint(p.below, cell, letterAt, pieceAt), above = toPaint(p.above, cell, letterAt, pieceAt), i = IDX[p.axis]
       return (q, n) => (q[i] < p.at ? below : above)(q, n)
     }
   }
@@ -883,7 +976,7 @@ export function compileScene(doc: SceneDoc, { puffs = true }: { puffs?: boolean 
       const parts: VoxelPart[] = doc.parts.map((p) => {
         const shape = toShape(p.shape, thin)
         return {
-        shape, color: toPaint(p.paint, spacing, 'letterAt' in shape ? (shape.letterAt as (p: Vec3, n: Vec3) => string | undefined) : undefined), bone: p.bone ?? 'land', glow: p.glow, noShadow: p.noShadow,
+        shape, color: toPaint(p.paint, spacing, 'letterAt' in shape ? (shape.letterAt as (p: Vec3, n: Vec3) => string | undefined) : undefined, shape.pieceAt), bone: p.bone ?? 'land', glow: p.glow, noShadow: p.noShadow,
         grime: p.grime === undefined ? undefined : unit(p.grime), bare: p.bare,
         glass: p.glass, strokes: p.strokes,
         ink: p.ink && { kind: p.ink.kind, amount: p.ink.amount, color: p.ink.color === undefined ? undefined : unit(p.ink.color) },
