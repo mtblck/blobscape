@@ -36,7 +36,9 @@ export interface Shape {
   pieceAt?: (p: Vec3) => number
 }
 
+/** One part of a voxel scene: a shape, its paint and the bone that carries it. */
 export interface VoxelPart {
+  /** The part's shape, as a distance function. */
   shape: Shape
   /** Color (0–1, sRGB) or color at a surface point given its outward normal. */
   color: Vec3 | ((p: Vec3, n: Vec3) => Vec3)
@@ -90,6 +92,7 @@ export interface Ink {
   color?: Vec3
 }
 
+/** The kinds of mark a part's `ink` can draw on it. */
 export type InkKind = 'hatch' | 'stipple' | 'cracks' | 'grain' | 'tufts' | 'scales'
 
 /** The marks of each kind, 4×4, top row first. Kinds in UPRIGHT only ever flip side to side: grass grows up, wood grain runs along. */
@@ -170,6 +173,7 @@ export interface Beam {
 /** The most a loose blob may cover: under the engine's PART_CUT, so it never shows in the map of parts. */
 export const LOOSE_MAX = 0.13
 
+/** The light baked into a voxel scene's colors: the sun, the ambient light, cast shadows and the painted touches. */
 export interface VoxelLight {
   /** Direction toward the sun. */
   dir: Vec3
@@ -187,11 +191,15 @@ export interface VoxelLight {
   bounce?: number
 }
 
+/** A voxel scene for `buildVoxels`: its bones, its parts and the grid's cell size. */
 export interface VoxelSpec {
+  /** The scene's bones. */
   bones: Bone[]
+  /** The parts, all cut into one shared grid. */
   parts: VoxelPart[]
   /** Grid cell size in world units: one blob per surface cell. */
   spacing: number
+  /** The baked light; what is left out comes from `DEFAULT_LIGHT`. */
   light?: Partial<VoxelLight>
   /** Skip blocks of cells far from a surface: much quicker for big smooth shapes, sound only for honest distance functions (sculpt.ts). */
   blocks?: boolean
@@ -232,7 +240,9 @@ export interface VoxelSpec {
   lamps?: (Lamp | null | undefined)[]
 }
 
+/** A light that stays put, whose shadows `buildVoxels` works out once for each blob. */
 export interface Lamp {
+  /** Where it is. */
   at: Vec3
   /** How far its light reaches: blobs further off are not looked at (their byte stays full). */
   reach: number
@@ -259,10 +269,12 @@ export const LIT_MAX = 0.9
 /** The painted touches pixel scenes use unless they say otherwise: hue-turning shade, dark crevices, worn edges. */
 export const PAINTED = { ramp: 0.7, crevice: 0.5, wear: 0.5 }
 
+/** The light a voxel scene gets where it sets none of its own. */
 export const DEFAULT_LIGHT: VoxelLight = { dir: [-0.45, 0.75, 0.5], ambient: 0.35, shadow: 0.75 }
 
 // --- Shapes
 
+/** A ball of radius `r` about `c`. */
 export function sphere(c: Vec3, r: number): Shape {
   return {
     sdf: (x, y, z) => Math.hypot(x - c[0], y - c[1], z - c[2]) - r,
@@ -337,6 +349,7 @@ export function roof(c: [x: number, z: number], y0: number, top: number, hx: num
   }
 }
 
+/** Several shapes as one: a point inside any of them is inside. */
 export function union(...s: Shape[]): Shape {
   return {
     sdf: (x, y, z) => { let d = Infinity; for (const k of s) d = Math.min(d, k.sdf(x, y, z)); return d },
@@ -385,6 +398,10 @@ export function tighten(s: Shape, k: number, near = 0.006): Shape {
   return { ...s, sdf: (x, y, z) => f(s.sdf(x, y, z)) }
 }
 
+/**
+ * A union of many scattered shapes, sorted into buckets so a point asks only the shapes near it: quick for fences,
+ * fallen bricks and twigs.
+ */
 export function many(shapes: Shape[]): Shape {
   if (shapes.length <= 6) return { ...union(...shapes), pieceAt: nearestPiece(shapes, true) }
   const all = union(...shapes)

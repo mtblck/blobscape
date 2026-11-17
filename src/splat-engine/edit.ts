@@ -13,6 +13,7 @@ import { linearToSrgb, srgbToLinear } from '../splat-core/color.ts'
  * a file (`bakeEdits`). The GPU side is `editsAt` in engine.ts; change both.
  */
 
+/** One edit for `setEdits`: a sphere or a box in world space that cuts blobs away or paints them. */
 export interface ShapeEdit {
   shape: 'sphere' | 'box'
   /** World position of the shape's middle. */

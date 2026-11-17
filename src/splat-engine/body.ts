@@ -28,7 +28,9 @@ export type Shape =
   /** A solid cone of round blobs from a (radius ra) to b (radius rb): flame, smoke. */
   | { fill: [a: Vec3, b: Vec3]; r: [ra: number, rb: number] }
 
+/** One part of a body for `buildBody`: a shape, its color and the bones that move it. */
 export interface Part {
+  /** A tube, a ball, a sheet or a filled cone. */
   shape: Shape
   /** Color at a point on the surface, given its outward normal and `u`, how far along a tube or fill (0–1). */
   color: Vec3 | ((p: Vec3, n: Vec3, u: number) => Vec3)
@@ -46,8 +48,11 @@ export interface Part {
   blend?: number
 }
 
+/** A body for `buildBody`: its bones, its parts and how far a blob's weight spreads between bones. */
 export interface BodySpec {
+  /** The body's bones. */
   bones: Bone[]
+  /** Its parts. */
   parts: Part[]
   /** How far (in world units) a blob's weight spreads from a bone: about a tenth of a limb. */
   blend: number
@@ -63,6 +68,10 @@ export interface Built extends Creature {
 const LIGHT: Vec3 = norm([-0.45, 0.75, 0.5])
 const r2 = (i: number): [number, number] => [(0.5 + i * 0.7548776662466927) % 1, (0.5 + i * 0.5698402909980532) % 1]
 
+/**
+ * A small seeded random number generator: it returns a function that gives the next number from 0 up to 1, the same
+ * run for the same seed.
+ */
 export function rng(seed: number) {
   return () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296)
 }
@@ -80,6 +89,7 @@ export function boneTail(bones: Bone[], i: number): Vec3 {
   return [b.head[0], b.head[1] + 0.1, b.head[2]]
 }
 
+/** About how much surface a body shape has, which decides its share of the blobs. */
 export function shapeArea(s: Shape): number {
   if ('tube' in s || 'fill' in s) {
     const [a, b] = 'tube' in s ? s.tube : s.fill
@@ -233,6 +243,7 @@ export function spots(p: Vec3, freq: number, seed = 0) {
   return 0.5 + 0.35 * s + 0.15 * t
 }
 
+/** The point part of the way from `a` to `b`: `t` 0 is `a`, 1 is `b`. */
 export const mix = (a: Vec3, b: Vec3, t: number): Vec3 => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]
 
 function triArea([a, b, c]: Vec3[]) { const x = cross(sub(b, a), sub(c, a)); return Math.hypot(...x) / 2 }

@@ -31,6 +31,7 @@ const hardAt = (beds: Bed[], y: number) => beds[((bedAt(beds, y) % beds.length) 
 
 // --- Land worn by water
 
+/** Land worn by water, for `land` and `wornLand`. */
 export interface LandSpec {
   /** The middle of its foot. */
   at: Vec3
@@ -49,14 +50,22 @@ export interface LandSpec {
   seed: number
 }
 
+/** The most water drops a `LandSpec` may ask for. */
 export const MAX_DROPS = 30000
+/** The most cells along a side of a land's height grid. */
 export const MAX_GRID = 112
 
+/** Worn land as a grid of heights, from `wornLand`. */
 export interface Land {
+  /** Grid points along x. */
   nx: number
+  /** Grid points along z. */
   nz: number
+  /** The distance between grid points. */
   cell: number
+  /** The grid's first x. */
   x0: number
+  /** The grid's first z. */
   z0: number
   /** Heights above the foot, nx by nz. */
   height: Float32Array
@@ -228,6 +237,7 @@ export function land(s: LandSpec & { base?: number }): Shape {
 
 // --- Buttes, hoodoos and arches
 
+/** A butte for `butte`: beds of rock, the soft ones worn back. */
 export interface ButteSpec {
   /** The middle of its foot. */
   at: Vec3
@@ -292,6 +302,7 @@ export function hoodoo(s: { at: Vec3; height: number; r: number; seed: number })
   return butte({ at: s.at, r: s.r, height: s.height, beds, wear: 0.55, cap: 0.5, seed: s.seed })
 }
 
+/** A rock arch for `arch`. */
 export interface ArchSpec {
   /** The feet of its two legs, on the ground. */
   from: Vec3
@@ -335,6 +346,7 @@ function archRaw(s: ArchSpec): Shape {
 
 // --- Cracked mud and pebbles
 
+/** A patch of cracked mud for `mud`. */
 export interface MudSpec {
   /** The middle of the patch, on the ground. */
   at: Vec3
@@ -381,6 +393,7 @@ function mudRaw(s: MudSpec, cell = 0): Shape {
   }
 }
 
+/** Pebbles along a stream bed, for `pebbles`. */
 export interface PebbleSpec {
   /** The stream's line, on the ground. */
   path: Vec3[]
@@ -410,6 +423,10 @@ export function pebbleList(s: PebbleSpec): { at: Vec3; r: Vec3 }[] {
   })
 }
 
+/**
+ * Pebbles along a stream's line, the biggest mid-stream. `cell` is the grid's cell size, so none comes out smaller
+ * than a cell.
+ */
 export function pebbles(s: PebbleSpec, cell = 0): Shape {
   return many(pebbleList(s).map((p) => {
     const r: Vec3 = [Math.max(p.r[0], cell), Math.max(p.r[1], cell * 0.8), Math.max(p.r[2], cell)]
@@ -424,6 +441,10 @@ export function pebbles(s: PebbleSpec, cell = 0): Shape {
 /** See butteRaw; its wobble and worn beds make the side distance a little ragged. */
 export const butte = (s: ButteSpec): Shape => tighten(butteRaw(s), 0.55)
 
+/** A rock arch: a fin of rock with a hole worn through its soft bed. */
 export const arch = (s: ArchSpec): Shape => tighten(archRaw(s), 0.88)
 
+/**
+ * Cracked mud: plates with curled edges. `cell` is the grid's cell size, so the cracks are never thinner than a cell.
+ */
 export const mud = (s: MudSpec, cell = 0): Shape => tighten(mudRaw(s, cell), 0.6)

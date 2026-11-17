@@ -18,14 +18,20 @@ import { Skeleton, emptySkin, mulQ, rotate, setWeights, type Bone } from './rig.
  * vertices would.
  */
 
+/**
+ * An ordinary skinned model as `readSkinnedGlb` reads it: its triangles, their bone weights, our bones and its clips.
+ */
 export interface SkinnedModel {
+  /** The model's name. */
   name: string
   /** The triangles in the bind pose. */
   mesh: Mesh
   /** Per vertex, four of our bone indices and their weights (summing to 1). */
   joints: Uint8Array
   weights: Float32Array
+  /** Our bones, parents first. */
   bones: Bone[]
+  /** Its animations, sampled onto our bones. */
   clips: Clip[]
   /** Texture images, still encoded, which `mesh.tex` points at. */
   images: MeshImage[]
@@ -315,6 +321,7 @@ function clipFrom(
 
 // --- covering the surface in blobs ---
 
+/** Options for `splatModel`. */
 export interface SplatOptions {
   /** How many blobs to lay on the surface. */
   count: number
@@ -324,6 +331,7 @@ export interface SplatOptions {
   textures?: Texture[]
   /** The color of a surface with neither vertex colors nor a texture (sRGB). */
   base?: Vec3
+  /** The same seed scatters the blobs the same way. */
   seed?: number
 }
 

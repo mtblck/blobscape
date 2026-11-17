@@ -7,9 +7,12 @@ import type { Vec3 } from '../splat-core/blobs.ts'
  * far they lean out, how much shorter and thinner each step is, and how hard they pull back toward the sky.
  */
 
+/** What a grower grows as. */
 export type GrowStyle = 'tree' | 'coral' | 'crystal'
+/** Every `GrowStyle`. */
 export const GROW_STYLES: GrowStyle[] = ['tree', 'coral', 'crystal']
 
+/** A tree, a coral or a cluster of crystals to grow from a seed, for `grow`. */
 export interface Grower {
   style: GrowStyle
   /** Where it stands. */
@@ -25,6 +28,7 @@ export interface Grower {
   branches?: number
 }
 
+/** One branch of a grower: a cone from `from`, where its radius is `r`, to `to`, where it is `rTo`. */
 export interface Twig {
   from: Vec3
   to: Vec3

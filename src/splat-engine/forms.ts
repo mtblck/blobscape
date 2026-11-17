@@ -32,6 +32,7 @@ function polygon(x: number, y: number, n: number, apothem: number) {
 
 // --- Crystals
 
+/** One crystal for `crystal`. */
 export interface CrystalSpec {
   /** Its foot, where it grows out of the rock. */
   at: Vec3
@@ -89,6 +90,7 @@ export function crystal(s: CrystalSpec): Shape {
   }
 }
 
+/** A cluster of crystals growing from one root, for `cluster`. */
 export interface ClusterSpec {
   /** Where they grow from. */
   at: Vec3
@@ -127,6 +129,7 @@ export function cluster(s: ClusterSpec): Shape {
 
 // --- Geodes
 
+/** A broken-open geode for `geode`. */
 export interface GeodeSpec {
   at: Vec3
   r: number
@@ -184,6 +187,7 @@ function geodeRaw(s: GeodeSpec): Shape {
 
 // --- Columns
 
+/** A field of six-sided columns, as basalt, for `columns`. */
 export interface ColumnsSpec {
   /** The middle of the field, on the ground. */
   at: Vec3
@@ -198,6 +202,7 @@ export interface ColumnsSpec {
   seed: number
 }
 
+/** The ways the heights of a field of columns can run. */
 export const RISES = ['dome', 'steps', 'random'] as const
 
 const SQ3 = Math.sqrt(3)
@@ -266,6 +271,7 @@ export function columns(s: ColumnsSpec): Shape {
 
 // --- Stalactites and stalagmites
 
+/** Stalactites and stalagmites for `drips`. */
 export interface DripsSpec {
   /** The middle of the floor under them. */
   at: Vec3
@@ -324,6 +330,7 @@ function spike(from: Vec3, to: Vec3, r: number, rTo = 0): Shape {
 
 // --- Flowstone
 
+/** A sheet of flowstone for `flowstone`. */
 export interface FlowSpec {
   /** The middle of its top, where it leaves the wall. */
   at: Vec3
@@ -360,6 +367,7 @@ function flowstoneRaw(s: FlowSpec): Shape {
 
 // --- Icicles
 
+/** Icicles along a shape's edges, for `icicles`. */
 export interface IcicleSpec {
   /** About how far apart they hang. */
   every: number
@@ -408,6 +416,8 @@ export function icicles(host: Shape, s: IcicleSpec, thin = 0): Shape {
   return many(parts)
 }
 
+/** A geode broken open: a rind, banded layers and crystals lining the hollow. */
 export const geode = (s: GeodeSpec): Shape => tighten(geodeRaw(s), 0.92)
 
+/** Flowstone: a folded sheet of stone hanging down a wall. */
 export const flowstone = (s: FlowSpec): Shape => tighten(flowstoneRaw(s), 0.65)

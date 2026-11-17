@@ -64,13 +64,13 @@
     {
      "name": "StageOptions",
      "kind": "interface",
-     "doc": "",
+     "doc": "How a `Stage` starts.",
      "props": [
       {
        "name": "offscreen",
        "optional": true,
        "type": "boolean",
-       "doc": ""
+       "doc": "Draws into a render target and copies each frame to a 2D canvas on request: headless test browsers can render\nWebGPU but not show it."
       },
       {
        "name": "lights",
@@ -95,28 +95,28 @@
        "name": "renderer",
        "readonly": true,
        "type": "WebGPURenderer",
-       "doc": ""
+       "doc": "The three.js renderer the stage made and draws with."
       },
       {
        "name": "backend",
        "readonly": true,
        "type": "\"webgpu\" | \"webgl\"",
-       "doc": ""
+       "doc": "Which backend the renderer started on: WebGPU, or WebGL 2 where a browser has none."
       },
       {
        "name": "orbit",
        "type": "Orbit",
-       "doc": ""
+       "doc": "Where the camera looks from. Set it to move the view."
       },
       {
        "name": "playing",
        "type": "boolean",
-       "doc": ""
+       "doc": "Whether time moves on. False holds the pose."
       },
       {
        "name": "speed",
        "type": "number",
-       "doc": ""
+       "doc": "How fast time runs: 1 is real time, 0.5 half speed."
       },
       {
        "name": "step",
@@ -132,13 +132,13 @@
       {
        "name": "mode",
        "type": "SkinMode",
-       "doc": ""
+       "doc": "How a blob on several bones takes its shape: see `SkinMode`. Change it with `setMode`."
       },
       {
        "name": "blobCount",
        "readonly": true,
        "type": "number",
-       "doc": ""
+       "doc": "How many blobs the creature shown has."
       },
       {
        "name": "sortKind",
@@ -163,7 +163,7 @@
       {
        "name": "start",
        "static": true,
-       "doc": "",
+       "doc": "Starts a stage on a canvas: makes the renderer (WebGPU, or WebGL 2 where there is none) and begins drawing.",
        "signatures": [
         {
          "code": "start(display: HTMLCanvasElement, opts?: StageOptions): Promise<Stage>"
@@ -181,7 +181,7 @@
       },
       {
        "name": "setSort",
-       "doc": "",
+       "doc": "Changes how blobs are sorted by depth: 'bins' is quick, 'radix' settles every tie the same way each frame, which\npixel art with hard edges wants.",
        "signatures": [
         {
          "code": "setSort(kind: \"bins\" | \"radix\"): void"
@@ -190,7 +190,7 @@
       },
       {
        "name": "setClip",
-       "doc": "",
+       "doc": "Plays another clip on the creature shown, or none.",
        "signatures": [
         {
          "code": "setClip(clip?: Clip): void"
@@ -235,7 +235,7 @@
       },
       {
        "name": "setMode",
-       "doc": "",
+       "doc": "Changes how a blob on several bones takes its shape: see `SkinMode`.",
        "signatures": [
         {
          "code": "setMode(m: SkinMode): void"
@@ -271,7 +271,7 @@
       },
       {
        "name": "setShow",
-       "doc": "",
+       "doc": "Shows the blobs, the bones, or both.",
        "signatures": [
         {
          "code": "setShow(s: Show): void"
@@ -343,7 +343,7 @@
       },
       {
        "name": "invalidate",
-       "doc": "",
+       "doc": "Asks for the next `frames` frames to be drawn. Call it after changing something the stage can't see, such as its\n`orbit`.",
        "signatures": [
         {
          "code": "invalidate(frames?: number): void"
@@ -370,7 +370,7 @@
       },
       {
        "name": "dispose",
-       "doc": "",
+       "doc": "Stops drawing and frees what the stage made.",
        "signatures": [
         {
          "code": "dispose(): void"
@@ -441,7 +441,7 @@
     {
      "name": "EngineOptions",
      "kind": "interface",
-     "doc": "",
+     "doc": "How a `SplatWorld` is built: its sort, how a blob on several bones turns, and whether it lights or paints its\nblobs.",
      "props": [
       {
        "name": "bins",
@@ -459,7 +459,7 @@
        "name": "mode",
        "optional": true,
        "type": "SkinMode",
-       "doc": ""
+       "doc": "How a blob on several bones takes its shape ('quat' unless set): see `SkinMode`."
       },
       {
        "name": "lights",
@@ -512,7 +512,7 @@
     {
      "name": "SplatWorld",
      "kind": "class",
-     "doc": "",
+     "doc": "Every blob of every actor as one three.js mesh, so things that overlap are sorted against each other in one pass.\nOn WebGPU the bones move the blobs, and the blobs are projected and sorted, in compute passes each frame; on WebGL\n2 the vertex shader moves them and the CPU sorts. Add it to a scene drawn by three.js's `WebGPURenderer`, or let\n`Stage` do that for you.",
      "extends": [
       "Mesh"
      ],
@@ -526,30 +526,30 @@
        "name": "isSplatWorld",
        "readonly": true,
        "type": "true",
-       "doc": ""
+       "doc": "Marks the object as a `SplatWorld`, the way three.js marks its own kinds."
       },
       {
        "name": "count",
        "readonly": true,
        "type": "number",
-       "doc": "The number of instances of this mesh.\nCan only be used with `WebGPURenderer`."
+       "doc": "How many blobs it holds, over every actor."
       },
       {
        "name": "actors",
        "readonly": true,
        "type": "Actor[]",
-       "doc": ""
+       "doc": "The actors it was built from."
       },
       {
        "name": "boneCount",
        "readonly": true,
        "type": "number",
-       "doc": ""
+       "doc": "How many bones it holds, over every actor."
       },
       {
        "name": "mode",
        "type": "SkinMode",
-       "doc": ""
+       "doc": "How a blob on several bones takes its shape: see `SkinMode`."
       },
       {
        "name": "cpuPath",
@@ -564,12 +564,12 @@
       {
        "name": "cpuSkinMs",
        "type": "number",
-       "doc": ""
+       "doc": "Milliseconds of that spent moving centers."
       },
       {
        "name": "cpuSortMs",
        "type": "number",
-       "doc": ""
+       "doc": "Milliseconds of that spent sorting."
       },
       {
        "name": "hold",
@@ -595,7 +595,7 @@
        "name": "bounds",
        "readonly": true,
        "type": "Sphere",
-       "doc": ""
+       "doc": "A sphere round every actor's posed bones, for placing a camera or a shadow grid."
       },
       {
        "name": "fog",
@@ -749,7 +749,7 @@
       },
       {
        "name": "checkSort",
-       "doc": "",
+       "doc": "Reads the sorted order back from the GPU and counts what is wrong with it: blobs missing, out of order, or in\nbins left unsettled. For tests.",
        "signatures": [
         {
          "code": "checkSort(renderer: Renderer): Promise<{ missing: number; outOfOrder: number; unsettled: number; biggest: number }>"
@@ -782,12 +782,12 @@
       {
        "name": "target",
        "type": "[number, number, number]",
-       "doc": ""
+       "doc": "The point it looks at."
       },
       {
        "name": "distance",
        "type": "number",
-       "doc": ""
+       "doc": "How far from the target it is."
       },
       {
        "name": "azimuth",
@@ -804,7 +804,7 @@
     {
      "name": "FOV",
      "kind": "const",
-     "doc": "",
+     "doc": "The camera's vertical field of view, in degrees.",
      "type": "35"
     },
     {
@@ -857,32 +857,32 @@
       {
        "name": "count",
        "type": "number",
-       "doc": ""
+       "doc": "How many blobs."
       },
       {
        "name": "center",
        "type": "Float32Array",
-       "doc": ""
+       "doc": "Centers: x, y, z per blob."
       },
       {
        "name": "scale",
        "type": "Float32Array",
-       "doc": ""
+       "doc": "Sizes along each blob's own axes (standard deviations): three per blob."
       },
       {
        "name": "quat",
        "type": "Float32Array",
-       "doc": ""
+       "doc": "Rotations as unit quaternions: x, y, z, w per blob."
       },
       {
        "name": "color",
        "type": "Float32Array",
-       "doc": ""
+       "doc": "Colors, 0–1 sRGB: red, green, blue per blob."
       },
       {
        "name": "opacity",
        "type": "Float32Array",
-       "doc": ""
+       "doc": "Opacity, 0–1: one per blob."
       },
       {
        "name": "shDegree",
@@ -898,7 +898,7 @@
        "name": "capacity",
        "readonly": true,
        "type": "number",
-       "doc": ""
+       "doc": "How many blobs the arrays have room for; they grow as blobs are pushed."
       },
       {
        "name": "shTerms",
@@ -925,7 +925,7 @@
       },
       {
        "name": "push",
-       "doc": "",
+       "doc": "Adds a blob and returns its index.",
        "signatures": [
         {
          "code": "push(b: Blob): number"
@@ -934,7 +934,7 @@
       },
       {
        "name": "set",
-       "doc": "",
+       "doc": "Writes blob `i`.",
        "signatures": [
         {
          "code": "set(i: number, b: Blob): void"
@@ -943,7 +943,7 @@
       },
       {
        "name": "get",
-       "doc": "",
+       "doc": "Reads blob `i`.",
        "signatures": [
         {
          "code": "get(i: number): Blob"
@@ -961,7 +961,7 @@
       },
       {
        "name": "clone",
-       "doc": "",
+       "doc": "A copy that shares nothing with this one.",
        "signatures": [
         {
          "code": "clone(): Blobs"
@@ -973,7 +973,7 @@
     {
      "name": "Vec3",
      "kind": "type",
-     "doc": "",
+     "doc": "Three numbers: a point or a direction (x, y, z), or a color (red, green, blue).",
      "type": "[number, number, number]"
     }
    ]
@@ -1014,7 +1014,7 @@
     {
      "name": "Skeleton",
      "kind": "class",
-     "doc": "",
+     "doc": "Bones in a tree, and their pose. Set `rotation`, `offset` and `size` (or use the posing helpers), then call\n`update()` to work out what the skinning pass needs; `reset()` goes back to the rest pose.",
      "ctor": [
       {
        "code": "new Skeleton(bones: Bone[])"
@@ -1025,7 +1025,7 @@
        "name": "bones",
        "readonly": true,
        "type": "Bone[]",
-       "doc": ""
+       "doc": "The bones, parents before their children."
       },
       {
        "name": "rotation",
@@ -1084,13 +1084,13 @@
        "name": "count",
        "readonly": true,
        "type": "number",
-       "doc": ""
+       "doc": "How many bones."
       }
      ],
      "methods": [
       {
        "name": "index",
-       "doc": "",
+       "doc": "A bone's index by its name. Throws when there is no such bone.",
        "signatures": [
         {
          "code": "index(name: string): number"
@@ -1099,7 +1099,7 @@
       },
       {
        "name": "setRotation",
-       "doc": "",
+       "doc": "Sets one bone's local rotation (x, y, z, w).",
        "signatures": [
         {
          "code": "setRotation(bone: number, q: ArrayLike<number>): void"
@@ -1117,7 +1117,7 @@
       },
       {
        "name": "update",
-       "doc": "",
+       "doc": "Works the pose out: every bone's skin matrix, rotation and scale, parents first. Call it after posing and before\ndrawing.",
        "signatures": [
         {
          "code": "update(): void"
@@ -1146,7 +1146,7 @@
     {
      "name": "emptySkin",
      "kind": "function",
-     "doc": "",
+     "doc": "A skin for `count` blobs with nothing in it yet: four bone indices and four weights per blob. Fill it with\n`setWeights`.",
      "signatures": [
       {
        "code": "emptySkin(count: number): Skin"
@@ -1176,7 +1176,7 @@
     {
      "name": "SkinMode",
      "kind": "type",
-     "doc": "",
+     "doc": "How a blob on several bones takes its shape: 'linear' pushes it through the blended matrices, which squashes it on\na twisting joint; 'quat' averages the bones' rotations and scales, so it only ever turns. See `skinBlob`.",
      "type": "\"linear\" | \"quat\""
     },
     {
@@ -1192,7 +1192,7 @@
     {
      "name": "norm4",
      "kind": "function",
-     "doc": "",
+     "doc": "A quaternion scaled to unit length.",
      "signatures": [
       {
        "code": "norm4(q: ArrayLike<number>): Quat"
@@ -1202,7 +1202,7 @@
     {
      "name": "mulQ",
      "kind": "function",
-     "doc": "",
+     "doc": "The product of two quaternions: the turn `b`, then the turn `a`.",
      "signatures": [
       {
        "code": "mulQ(a: ArrayLike<number>, b: ArrayLike<number>): Quat"
@@ -1212,7 +1212,7 @@
     {
      "name": "axisAngle",
      "kind": "function",
-     "doc": "",
+     "doc": "The quaternion for a turn of `rad` radians about `axis`.",
      "signatures": [
       {
        "code": "axisAngle(axis: Vec3, rad: number): Quat"
@@ -1222,7 +1222,7 @@
     {
      "name": "rotate",
      "kind": "function",
-     "doc": "",
+     "doc": "A vector turned by a quaternion.",
      "signatures": [
       {
        "code": "rotate(q: ArrayLike<number>, v: ArrayLike<number>): Vec3"
@@ -1269,19 +1269,19 @@
     {
      "name": "X",
      "kind": "const",
-     "doc": "",
+     "doc": "The x axis.",
      "type": "Vec3"
     },
     {
      "name": "Y",
      "kind": "const",
-     "doc": "",
+     "doc": "The y axis: up.",
      "type": "Vec3"
     },
     {
      "name": "Z",
      "kind": "const",
-     "doc": "",
+     "doc": "The z axis.",
      "type": "Vec3"
     },
     {
@@ -1303,7 +1303,7 @@
     {
      "name": "conj",
      "kind": "const",
-     "doc": "",
+     "doc": "A unit quaternion's inverse: the same turn, the other way.",
      "type": "(q: ArrayLike<number>) => Quat"
     },
     {
@@ -1329,7 +1329,7 @@
     {
      "name": "dir",
      "kind": "function",
-     "doc": "",
+     "doc": "A vector scaled to length 1.",
      "signatures": [
       {
        "code": "dir(v: Vec3): Vec3"
@@ -1418,7 +1418,7 @@
     {
      "name": "takePose",
      "kind": "function",
-     "doc": "",
+     "doc": "A copy of the skeleton's pose as it is now: every bone's rotation, offset and size.",
      "signatures": [
       {
        "code": "takePose(sk: Skeleton): Pose"
@@ -1428,7 +1428,7 @@
     {
      "name": "putPose",
      "kind": "function",
-     "doc": "",
+     "doc": "Sets the skeleton's pose from one taken with `takePose`. Call the skeleton's `update()` after.",
      "signatures": [
       {
        "code": "putPose(sk: Skeleton, p: Pose): void"
@@ -1458,12 +1458,12 @@
     {
      "name": "MixMove",
      "kind": "interface",
-     "doc": "",
+     "doc": "A move a `Mixer` can blend: its name, how long its loop takes and the function that poses it.",
      "props": [
       {
        "name": "name",
        "type": "string",
-       "doc": ""
+       "doc": "What the mixer knows it by."
       },
       {
        "name": "seconds",
@@ -1474,7 +1474,7 @@
       {
        "name": "pose",
        "type": "(sk: Skeleton, t: number) => void",
-       "doc": ""
+       "doc": "Poses the skeleton `t` seconds into the move."
       }
      ]
     },
@@ -1573,7 +1573,7 @@
     {
      "name": "TwoBoneOptions",
      "kind": "interface",
-     "doc": "",
+     "doc": "Options for `twoBoneIK`.",
      "props": [
       {
        "name": "pole",
@@ -1602,7 +1602,7 @@
     {
      "name": "LookOptions",
      "kind": "interface",
-     "doc": "",
+     "doc": "Options for `lookAt`.",
      "props": [
       {
        "name": "forward",
@@ -1688,7 +1688,7 @@
     {
      "name": "PlantOptions",
      "kind": "interface",
-     "doc": "",
+     "doc": "Options for `plantFeet`.",
      "props": [
       {
        "name": "amount",
@@ -1713,7 +1713,7 @@
     {
      "name": "Planted",
      "kind": "interface",
-     "doc": "",
+     "doc": "What `plantFeet` did, for a readout or a test.",
      "props": [
       {
        "name": "hipShift",
@@ -1767,7 +1767,7 @@
     {
      "name": "StepFoot",
      "kind": "interface",
-     "doc": "",
+     "doc": "One foot for `Steps` to plan.",
      "props": [
       {
        "name": "home",
@@ -1779,7 +1779,7 @@
     {
      "name": "StepOptions",
      "kind": "interface",
-     "doc": "",
+     "doc": "How `Steps` steps: how far a foot may trail, how long and how high a step is, and which feet go together.",
      "props": [
       {
        "name": "reach",
@@ -1862,7 +1862,7 @@
     {
      "name": "FootState",
      "kind": "interface",
-     "doc": "",
+     "doc": "Where one foot is in its stepping: planted, or part way through a step.",
      "props": [
       {
        "name": "at",
@@ -1899,7 +1899,7 @@
     {
      "name": "Steps",
      "kind": "class",
-     "doc": "",
+     "doc": "A footstep planner. Give it the feet and where the body starts, then call `update` each frame with where the body\nis now: each foot stays planted until it falls too far from its home under the body, then steps to where the body\nis going.",
      "ctor": [
       {
        "code": "new Steps(feet: StepFoot[], body: StepBody, opts: StepOptions)"
@@ -1910,13 +1910,13 @@
        "name": "feet",
        "readonly": true,
        "type": "FootState[]",
-       "doc": ""
+       "doc": "Each foot's state, in the order the feet were given."
       },
       {
        "name": "opts",
        "readonly": true,
        "type": "Required<StepOptions>",
-       "doc": ""
+       "doc": "The options in use, with the defaults filled in."
       },
       {
        "name": "taken",
@@ -1991,12 +1991,12 @@
     {
      "name": "Chain",
      "kind": "interface",
-     "doc": "",
+     "doc": "One chain of bones that swings: a tail, a plait, one side of a cloak.",
      "props": [
       {
        "name": "bones",
        "type": "readonly string[]",
-       "doc": ""
+       "doc": "The chain's bones by name, from the body outward."
       },
       {
        "name": "follow",
@@ -2014,7 +2014,7 @@
     {
      "name": "SwingSpec",
      "kind": "interface",
-     "doc": "",
+     "doc": "A creature's loose parts, for `Swing`: the chains that swing and what holds them back.",
      "props": [
       {
        "name": "parts",
@@ -2024,7 +2024,7 @@
       {
        "name": "chains",
        "type": "readonly Chain[]",
-       "doc": ""
+       "doc": "The chains of bones that swing."
       },
       {
        "name": "ties",
@@ -2061,7 +2061,7 @@
     {
      "name": "Swing",
      "kind": "class",
-     "doc": "",
+     "doc": "Loose parts swinging after a move. It hangs a `SwingSpec`'s chains on the cloth solver (`Xpbd`); pose the skeleton,\nthen call `update` each frame and it turns the chains' bones to follow.",
      "ctor": [
       {
        "code": "new Swing(sk: Skeleton, spec: SwingSpec)"
@@ -2072,7 +2072,7 @@
        "name": "sim",
        "readonly": true,
        "type": "Xpbd",
-       "doc": ""
+       "doc": "The solver the chains hang on."
       },
       {
        "name": "spec",
@@ -2150,13 +2150,13 @@
     {
      "name": "SUBSTEPS",
      "kind": "const",
-     "doc": "",
+     "doc": "Substeps the solver takes in each `STEP`.",
      "type": "4"
     },
     {
      "name": "Xpbd",
      "kind": "class",
-     "doc": "",
+     "doc": "A small XPBD solver: points joined by links, pulled toward goals and kept out of capsules. It steps at a fixed\n`STEP`, carrying the rest of a frame over, so the same frames always give the same motion.",
      "ctor": [
       {
        "code": "new Xpbd(n: number)"
@@ -2167,25 +2167,25 @@
        "name": "n",
        "readonly": true,
        "type": "number",
-       "doc": ""
+       "doc": "How many points."
       },
       {
        "name": "pos",
        "readonly": true,
        "type": "Float64Array",
-       "doc": ""
+       "doc": "Positions: x, y, z per point."
       },
       {
        "name": "vel",
        "readonly": true,
        "type": "Float64Array",
-       "doc": ""
+       "doc": "Velocities: x, y, z per point."
       },
       {
        "name": "invMass",
        "readonly": true,
        "type": "Float64Array",
-       "doc": ""
+       "doc": "One over each point's mass; 0 pins a point where it is."
       },
       {
        "name": "links",
@@ -2208,12 +2208,12 @@
       {
        "name": "capsules",
        "type": "Capsule[]",
-       "doc": ""
+       "doc": "The capsules the points stay out of. Set it each frame as the body moves."
       },
       {
        "name": "gravity",
        "type": "Vec3",
-       "doc": ""
+       "doc": "The pull on every point, per second squared."
       },
       {
        "name": "damping",
@@ -2233,7 +2233,7 @@
       },
       {
        "name": "distance",
-       "doc": "",
+       "doc": "How far apart two points are now.",
        "signatures": [
         {
          "code": "distance(a: number, b: number): number"
@@ -2342,12 +2342,12 @@
     {
      "name": "Morph",
      "kind": "interface",
-     "doc": "",
+     "doc": "A blend shape for blobs: a named change of shape, reached as its weight goes from 0 to 1.",
      "props": [
       {
        "name": "name",
        "type": "string",
-       "doc": ""
+       "doc": "The morph's name, as files and clips know it."
       },
       {
        "name": "targets",
@@ -2463,7 +2463,7 @@
     {
      "name": "PickOptions",
      "kind": "interface",
-     "doc": "",
+     "doc": "Options for `pickActors`.",
      "props": [
       {
        "name": "k",
@@ -2547,12 +2547,12 @@
     {
      "name": "VoxelPart",
      "kind": "interface",
-     "doc": "",
+     "doc": "One part of a voxel scene: a shape, its paint and the bone that carries it.",
      "props": [
       {
        "name": "shape",
        "type": "Shape",
-       "doc": ""
+       "doc": "The part's shape, as a distance function."
       },
       {
        "name": "color",
@@ -2666,7 +2666,7 @@
     {
      "name": "InkKind",
      "kind": "type",
-     "doc": "",
+     "doc": "The kinds of mark a part's `ink` can draw on it.",
      "type": "\"hatch\" | \"stipple\" | \"cracks\" | \"grain\" | \"tufts\" | \"scales\""
     },
     {
@@ -2790,7 +2790,7 @@
     {
      "name": "VoxelLight",
      "kind": "interface",
-     "doc": "",
+     "doc": "The light baked into a voxel scene's colors: the sun, the ambient light, cast shadows and the painted touches.",
      "props": [
       {
        "name": "dir",
@@ -2836,17 +2836,17 @@
     {
      "name": "VoxelSpec",
      "kind": "interface",
-     "doc": "",
+     "doc": "A voxel scene for `buildVoxels`: its bones, its parts and the grid's cell size.",
      "props": [
       {
        "name": "bones",
        "type": "Bone[]",
-       "doc": ""
+       "doc": "The scene's bones."
       },
       {
        "name": "parts",
        "type": "VoxelPart[]",
-       "doc": ""
+       "doc": "The parts, all cut into one shared grid."
       },
       {
        "name": "spacing",
@@ -2857,7 +2857,7 @@
        "name": "light",
        "optional": true,
        "type": "Partial<VoxelLight>",
-       "doc": ""
+       "doc": "The baked light; what is left out comes from `DEFAULT_LIGHT`."
       },
       {
        "name": "blocks",
@@ -2930,12 +2930,12 @@
     {
      "name": "Lamp",
      "kind": "interface",
-     "doc": "",
+     "doc": "A light that stays put, whose shadows `buildVoxels` works out once for each blob.",
      "props": [
       {
        "name": "at",
        "type": "Vec3",
-       "doc": ""
+       "doc": "Where it is."
       },
       {
        "name": "reach",
@@ -2965,13 +2965,13 @@
     {
      "name": "DEFAULT_LIGHT",
      "kind": "const",
-     "doc": "",
+     "doc": "The light a voxel scene gets where it sets none of its own.",
      "type": "VoxelLight"
     },
     {
      "name": "sphere",
      "kind": "function",
-     "doc": "",
+     "doc": "A ball of radius `r` about `c`.",
      "signatures": [
       {
        "code": "sphere(c: Vec3, r: number): Shape"
@@ -3041,7 +3041,7 @@
     {
      "name": "union",
      "kind": "function",
-     "doc": "",
+     "doc": "Several shapes as one: a point inside any of them is inside.",
      "signatures": [
       {
        "code": "union(...s: Shape[]): Shape"
@@ -3061,7 +3061,7 @@
     {
      "name": "many",
      "kind": "function",
-     "doc": "",
+     "doc": "A union of many scattered shapes, sorted into buckets so a point asks only the shapes near it: quick for fences,\nfallen bricks and twigs.",
      "signatures": [
       {
        "code": "many(shapes: Shape[]): Shape"
@@ -3252,17 +3252,17 @@
     {
      "name": "SculptSpec",
      "kind": "interface",
-     "doc": "",
+     "doc": "A creature to sculpt: its bones, its parts and how far a cell's weight spreads between bones.",
      "props": [
       {
        "name": "bones",
        "type": "Bone[]",
-       "doc": ""
+       "doc": "The creature's bones."
       },
       {
        "name": "parts",
        "type": "SculptPart[]",
-       "doc": ""
+       "doc": "Its parts."
       },
       {
        "name": "blend",
@@ -3273,7 +3273,7 @@
        "name": "light",
        "optional": true,
        "type": "Partial<VoxelLight>",
-       "doc": ""
+       "doc": "The baked light; what is left out comes from `DEFAULT_LIGHT`."
       },
       {
        "name": "skirt",
@@ -3421,12 +3421,12 @@
     {
      "name": "Part",
      "kind": "interface",
-     "doc": "",
+     "doc": "One part of a body for `buildBody`: a shape, its color and the bones that move it.",
      "props": [
       {
        "name": "shape",
        "type": "Shape",
-       "doc": ""
+       "doc": "A tube, a ball, a sheet or a filled cone."
       },
       {
        "name": "color",
@@ -3473,17 +3473,17 @@
     {
      "name": "BodySpec",
      "kind": "interface",
-     "doc": "",
+     "doc": "A body for `buildBody`: its bones, its parts and how far a blob's weight spreads between bones.",
      "props": [
       {
        "name": "bones",
        "type": "Bone[]",
-       "doc": ""
+       "doc": "The body's bones."
       },
       {
        "name": "parts",
        "type": "Part[]",
-       "doc": ""
+       "doc": "Its parts."
       },
       {
        "name": "blend",
@@ -3516,7 +3516,7 @@
     {
      "name": "rng",
      "kind": "function",
-     "doc": "",
+     "doc": "A small seeded random number generator: it returns a function that gives the next number from 0 up to 1, the same\nrun for the same seed.",
      "signatures": [
       {
        "code": "rng(seed: number): () => number"
@@ -3536,7 +3536,7 @@
     {
      "name": "shapeArea",
      "kind": "function",
-     "doc": "",
+     "doc": "About how much surface a body shape has, which decides its share of the blobs.",
      "signatures": [
       {
        "code": "shapeArea(s: Shape): number"
@@ -3582,7 +3582,7 @@
     {
      "name": "mix",
      "kind": "const",
-     "doc": "",
+     "doc": "The point part of the way from `a` to `b`: `t` 0 is `a`, 1 is `b`.",
      "type": "(a: Vec3, b: Vec3, t: number) => Vec3"
     }
    ]
@@ -3711,7 +3711,7 @@
     {
      "name": "WallSpec",
      "kind": "interface",
-     "doc": "",
+     "doc": "A brick wall for `wall`.",
      "props": [
       {
        "name": "from",
@@ -3726,12 +3726,12 @@
       {
        "name": "height",
        "type": "number",
-       "doc": ""
+       "doc": "How high it stands."
       },
       {
        "name": "thick",
        "type": "number",
-       "doc": ""
+       "doc": "How thick it is."
       },
       {
        "name": "brick",
@@ -3773,7 +3773,7 @@
     {
      "name": "WALL_BRICK",
      "kind": "const",
-     "doc": "",
+     "doc": "A brick's length and height where a wall gives none.",
      "type": "[number, number]"
     },
     {
@@ -3809,7 +3809,7 @@
     {
      "name": "StepsSpec",
      "kind": "interface",
-     "doc": "",
+     "doc": "A flight of steps for `steps`.",
      "props": [
       {
        "name": "at",
@@ -3824,22 +3824,22 @@
       {
        "name": "count",
        "type": "number",
-       "doc": ""
+       "doc": "How many steps."
       },
       {
        "name": "rise",
        "type": "number",
-       "doc": ""
+       "doc": "A step's height."
       },
       {
        "name": "run",
        "type": "number",
-       "doc": ""
+       "doc": "A step's depth, front to back."
       },
       {
        "name": "width",
        "type": "number",
-       "doc": ""
+       "doc": "How wide the flight is."
       },
       {
        "name": "wear",
@@ -3877,7 +3877,7 @@
     {
      "name": "FenceSpec",
      "kind": "interface",
-     "doc": "",
+     "doc": "A post-and-rail fence for `fence`.",
      "props": [
       {
        "name": "path",
@@ -3892,7 +3892,7 @@
       {
        "name": "height",
        "type": "number",
-       "doc": ""
+       "doc": "A post's height."
       },
       {
        "name": "post",
@@ -3952,27 +3952,27 @@
     {
      "name": "ArcadeSpec",
      "kind": "interface",
-     "doc": "",
+     "doc": "A wall of arches for `arcade`.",
      "props": [
       {
        "name": "from",
        "type": "Vec3",
-       "doc": ""
+       "doc": "The foot of the wall at one end."
       },
       {
        "name": "to",
        "type": "Vec3",
-       "doc": ""
+       "doc": "The foot of the wall at the other end."
       },
       {
        "name": "height",
        "type": "number",
-       "doc": ""
+       "doc": "How high it stands."
       },
       {
        "name": "thick",
        "type": "number",
-       "doc": ""
+       "doc": "How thick it is."
       },
       {
        "name": "bays",
@@ -4019,13 +4019,13 @@
     {
      "name": "ARCHES",
      "kind": "const",
-     "doc": "",
+     "doc": "The heads an arcade's openings can have.",
      "type": "readonly [\"round\", \"pointed\", \"flat\"]"
     },
     {
      "name": "arcade",
      "kind": "const",
-     "doc": "",
+     "doc": "A wall cut into equal bays with an opening in each: arcades, cloisters, viaducts. Its stones are laid in courses,\nwith wedge stones round each arch. `cell` is the grid's cell size.",
      "type": "(s: ArcadeSpec, cell: number) => Shape"
     }
    ]
@@ -4038,7 +4038,7 @@
     {
      "name": "CrystalSpec",
      "kind": "interface",
-     "doc": "",
+     "doc": "One crystal for `crystal`.",
      "props": [
       {
        "name": "at",
@@ -4098,7 +4098,7 @@
     {
      "name": "ClusterSpec",
      "kind": "interface",
-     "doc": "",
+     "doc": "A cluster of crystals growing from one root, for `cluster`.",
      "props": [
       {
        "name": "at",
@@ -4168,7 +4168,7 @@
     {
      "name": "GeodeSpec",
      "kind": "interface",
-     "doc": "",
+     "doc": "A broken-open geode for `geode`.",
      "props": [
       {
        "name": "at",
@@ -4213,7 +4213,7 @@
     {
      "name": "ColumnsSpec",
      "kind": "interface",
-     "doc": "",
+     "doc": "A field of six-sided columns, as basalt, for `columns`.",
      "props": [
       {
        "name": "at",
@@ -4251,7 +4251,7 @@
     {
      "name": "RISES",
      "kind": "const",
-     "doc": "",
+     "doc": "The ways the heights of a field of columns can run.",
      "type": "readonly [\"dome\", \"steps\", \"random\"]"
     },
     {
@@ -4267,7 +4267,7 @@
     {
      "name": "DripsSpec",
      "kind": "interface",
-     "doc": "",
+     "doc": "Stalactites and stalagmites for `drips`.",
      "props": [
       {
        "name": "at",
@@ -4324,7 +4324,7 @@
     {
      "name": "FlowSpec",
      "kind": "interface",
-     "doc": "",
+     "doc": "A sheet of flowstone for `flowstone`.",
      "props": [
       {
        "name": "at",
@@ -4362,7 +4362,7 @@
     {
      "name": "IcicleSpec",
      "kind": "interface",
-     "doc": "",
+     "doc": "Icicles along a shape's edges, for `icicles`.",
      "props": [
       {
        "name": "every",
@@ -4400,13 +4400,13 @@
     {
      "name": "geode",
      "kind": "const",
-     "doc": "",
+     "doc": "A geode broken open: a rind, banded layers and crystals lining the hollow.",
      "type": "(s: GeodeSpec) => Shape"
     },
     {
      "name": "flowstone",
      "kind": "const",
-     "doc": "",
+     "doc": "Flowstone: a folded sheet of stone hanging down a wall.",
      "type": "(s: FlowSpec) => Shape"
     }
    ]
@@ -4419,7 +4419,7 @@
     {
      "name": "TreeSpec",
      "kind": "interface",
-     "doc": "",
+     "doc": "A tree for `tree`, grown by space colonization.",
      "props": [
       {
        "name": "at",
@@ -4457,7 +4457,7 @@
     {
      "name": "TreeNode",
      "kind": "interface",
-     "doc": "",
+     "doc": "One joint of a grown tree: its place, the joint it grew from and the limb's radius there.",
      "props": [
       {
        "name": "p",
@@ -4499,7 +4499,7 @@
     {
      "name": "CactusSpec",
      "kind": "interface",
-     "doc": "",
+     "doc": "A ribbed cactus for `cactus`.",
      "props": [
       {
        "name": "at",
@@ -4558,7 +4558,7 @@
     {
      "name": "RosetteSpec",
      "kind": "interface",
-     "doc": "",
+     "doc": "A succulent's rosette of leaves, for `rosette`.",
      "props": [
       {
        "name": "at",
@@ -4595,7 +4595,7 @@
     {
      "name": "BracketSpec",
      "kind": "interface",
-     "doc": "",
+     "doc": "Bracket fungi up a trunk, for `brackets`.",
      "props": [
       {
        "name": "at",
@@ -4637,7 +4637,7 @@
     {
      "name": "BrainSpec",
      "kind": "interface",
-     "doc": "",
+     "doc": "A brain coral for `brain`.",
      "props": [
       {
        "name": "at",
@@ -4675,7 +4675,7 @@
     {
      "name": "ShellSpec",
      "kind": "interface",
-     "doc": "",
+     "doc": "A coiled shell for `shell`.",
      "props": [
       {
        "name": "at",
@@ -4730,7 +4730,7 @@
     {
      "name": "HornSpec",
      "kind": "interface",
-     "doc": "",
+     "doc": "A horn for `horn`.",
      "props": [
       {
        "name": "at",
@@ -4785,7 +4785,7 @@
     {
      "name": "horn",
      "kind": "function",
-     "doc": "",
+     "doc": "A horn: a tapering tube that curls and can wind sideways. `thin` is the least radius it may have, so its tip never\nslips between grid cells.",
      "signatures": [
       {
        "code": "horn(s: HornSpec, thin?: number): Shape"
@@ -4795,7 +4795,7 @@
     {
      "name": "AntlerSpec",
      "kind": "interface",
-     "doc": "",
+     "doc": "An antler for `antler`.",
      "props": [
       {
        "name": "at",
@@ -4842,7 +4842,7 @@
     {
      "name": "RibsSpec",
      "kind": "interface",
-     "doc": "",
+     "doc": "A rib cage for `ribs`.",
      "props": [
       {
        "name": "from",
@@ -4929,7 +4929,7 @@
     {
      "name": "LandSpec",
      "kind": "interface",
-     "doc": "",
+     "doc": "Land worn by water, for `land` and `wornLand`.",
      "props": [
       {
        "name": "at",
@@ -4980,44 +4980,44 @@
     {
      "name": "MAX_DROPS",
      "kind": "const",
-     "doc": "",
+     "doc": "The most water drops a `LandSpec` may ask for.",
      "type": "30000"
     },
     {
      "name": "MAX_GRID",
      "kind": "const",
-     "doc": "",
+     "doc": "The most cells along a side of a land's height grid.",
      "type": "112"
     },
     {
      "name": "Land",
      "kind": "interface",
-     "doc": "",
+     "doc": "Worn land as a grid of heights, from `wornLand`.",
      "props": [
       {
        "name": "nx",
        "type": "number",
-       "doc": ""
+       "doc": "Grid points along x."
       },
       {
        "name": "nz",
        "type": "number",
-       "doc": ""
+       "doc": "Grid points along z."
       },
       {
        "name": "cell",
        "type": "number",
-       "doc": ""
+       "doc": "The distance between grid points."
       },
       {
        "name": "x0",
        "type": "number",
-       "doc": ""
+       "doc": "The grid's first x."
       },
       {
        "name": "z0",
        "type": "number",
-       "doc": ""
+       "doc": "The grid's first z."
       },
       {
        "name": "height",
@@ -5085,7 +5085,7 @@
     {
      "name": "ButteSpec",
      "kind": "interface",
-     "doc": "",
+     "doc": "A butte for `butte`: beds of rock, the soft ones worn back.",
      "props": [
       {
        "name": "at",
@@ -5140,7 +5140,7 @@
     {
      "name": "ArchSpec",
      "kind": "interface",
-     "doc": "",
+     "doc": "A rock arch for `arch`.",
      "props": [
       {
        "name": "from",
@@ -5184,7 +5184,7 @@
     {
      "name": "MudSpec",
      "kind": "interface",
-     "doc": "",
+     "doc": "A patch of cracked mud for `mud`.",
      "props": [
       {
        "name": "at",
@@ -5217,7 +5217,7 @@
     {
      "name": "PebbleSpec",
      "kind": "interface",
-     "doc": "",
+     "doc": "Pebbles along a stream bed, for `pebbles`.",
      "props": [
       {
        "name": "path",
@@ -5259,7 +5259,7 @@
     {
      "name": "pebbles",
      "kind": "function",
-     "doc": "",
+     "doc": "Pebbles along a stream's line, the biggest mid-stream. `cell` is the grid's cell size, so none comes out smaller\nthan a cell.",
      "signatures": [
       {
        "code": "pebbles(s: PebbleSpec, cell?: number): Shape"
@@ -5275,13 +5275,13 @@
     {
      "name": "arch",
      "kind": "const",
-     "doc": "",
+     "doc": "A rock arch: a fin of rock with a hole worn through its soft bed.",
      "type": "(s: ArchSpec) => Shape"
     },
     {
      "name": "mud",
      "kind": "const",
-     "doc": "",
+     "doc": "Cracked mud: plates with curled edges. `cell` is the grid's cell size, so the cracks are never thinner than a cell.",
      "type": "(s: MudSpec, cell?: number) => Shape"
     }
    ]
@@ -5294,19 +5294,19 @@
     {
      "name": "GrowStyle",
      "kind": "type",
-     "doc": "",
+     "doc": "What a grower grows as.",
      "type": "\"tree\" | \"coral\" | \"crystal\""
     },
     {
      "name": "GROW_STYLES",
      "kind": "const",
-     "doc": "",
+     "doc": "Every `GrowStyle`.",
      "type": "GrowStyle[]"
     },
     {
      "name": "Grower",
      "kind": "interface",
-     "doc": "",
+     "doc": "A tree, a coral or a cluster of crystals to grow from a seed, for `grow`.",
      "props": [
       {
        "name": "style",
@@ -5350,7 +5350,7 @@
     {
      "name": "Twig",
      "kind": "interface",
-     "doc": "",
+     "doc": "One branch of a grower: a cone from `from`, where its radius is `r`, to `to`, where it is `rTo`.",
      "props": [
       {
        "name": "from",
@@ -5420,7 +5420,7 @@
     {
      "name": "Falling",
      "kind": "type",
-     "doc": "",
+     "doc": "The kinds of thing that fall and land.",
      "type": "\"rain\" | \"snow\" | \"leaves\""
     },
     {
@@ -5442,7 +5442,7 @@
     {
      "name": "DriftSpec",
      "kind": "interface",
-     "doc": "",
+     "doc": "A field of drifted snow, for `drift` and `driftField`.",
      "props": [
       {
        "name": "at",
@@ -5498,32 +5498,32 @@
     {
      "name": "Drift",
      "kind": "interface",
-     "doc": "",
+     "doc": "Drifted snow as a grid, from `driftField`.",
      "props": [
       {
        "name": "nx",
        "type": "number",
-       "doc": ""
+       "doc": "Grid points along x."
       },
       {
        "name": "nz",
        "type": "number",
-       "doc": ""
+       "doc": "Grid points along z."
       },
       {
        "name": "cell",
        "type": "number",
-       "doc": ""
+       "doc": "The distance between grid points."
       },
       {
        "name": "x0",
        "type": "number",
-       "doc": ""
+       "doc": "The grid's first x."
       },
       {
        "name": "z0",
        "type": "number",
-       "doc": ""
+       "doc": "The grid's first z."
       },
       {
        "name": "ground",
@@ -5540,7 +5540,7 @@
     {
      "name": "DRIFT_GRID",
      "kind": "const",
-     "doc": "",
+     "doc": "The most cells along a side of a drift's grid.",
      "type": "96"
     },
     {
@@ -5556,7 +5556,7 @@
     {
      "name": "FrostSpec",
      "kind": "interface",
-     "doc": "",
+     "doc": "A frost fern for `frost`.",
      "props": [
       {
        "name": "at",
@@ -5595,7 +5595,7 @@
     {
      "name": "FrostBranch",
      "kind": "interface",
-     "doc": "",
+     "doc": "One stroke of a frost fern: its ends, its radius, which generation of branch it is, and `t`, when it grows (0 at\nthe start to 1 at the last tip).",
      "props": [
       {
        "name": "from",
@@ -5647,7 +5647,7 @@
     {
      "name": "drift",
      "kind": "const",
-     "doc": "",
+     "doc": "Drifted snow as a shape: deep behind whatever stands in the wind, gone from steep faces, thin on a trodden path.\n`under` gives the height of the ground at a place.",
      "type": "(s: DriftSpec, under: (x: number, z: number) => number, thin?: number) => Shape"
     }
    ]
@@ -5758,7 +5758,7 @@
     {
      "name": "AirDoc",
      "kind": "interface",
-     "doc": "",
+     "doc": "A scene's air: haze, mist, shafts of light and specks.",
      "props": [
       {
        "name": "haze",
@@ -5789,7 +5789,7 @@
     {
      "name": "MistDoc",
      "kind": "interface",
-     "doc": "",
+     "doc": "One bank of mist.",
      "props": [
       {
        "name": "at",
@@ -5804,7 +5804,7 @@
       {
        "name": "color",
        "type": "string",
-       "doc": ""
+       "doc": "Its color."
       },
       {
        "name": "thick",
@@ -5817,7 +5817,7 @@
     {
      "name": "ShaftDoc",
      "kind": "interface",
-     "doc": "",
+     "doc": "One beam of light.",
      "props": [
       {
        "name": "from",
@@ -5837,7 +5837,7 @@
       {
        "name": "color",
        "type": "string",
-       "doc": ""
+       "doc": "Its color."
       },
       {
        "name": "strength",
@@ -5856,17 +5856,17 @@
     {
      "name": "SpeckDoc",
      "kind": "interface",
-     "doc": "",
+     "doc": "One swarm of specks: dust, embers, rain, snow, leaves, fireflies or bubbles.",
      "props": [
       {
        "name": "kind",
        "type": "SpeckKind",
-       "doc": ""
+       "doc": "What they are, which sets how they move."
       },
       {
        "name": "count",
        "type": "number",
-       "doc": ""
+       "doc": "How many."
       },
       {
        "name": "from",
@@ -5912,12 +5912,12 @@
     {
      "name": "BoneDoc",
      "kind": "interface",
-     "doc": "",
+     "doc": "One bone of a scene: something for parts to ride on and moves to turn.",
      "props": [
       {
        "name": "name",
        "type": "string",
-       "doc": ""
+       "doc": "What parts and moves call it."
       },
       {
        "name": "at",
@@ -5935,17 +5935,17 @@
     {
      "name": "PartDoc",
      "kind": "interface",
-     "doc": "",
+     "doc": "One part of a scene: a shape, its paint and the bone that carries it.",
      "props": [
       {
        "name": "shape",
        "type": "ShapeDoc",
-       "doc": ""
+       "doc": "Its shape."
       },
       {
        "name": "paint",
        "type": "PaintDoc",
-       "doc": ""
+       "doc": "Its paint."
       },
       {
        "name": "bone",
@@ -6000,13 +6000,13 @@
     {
      "name": "ShapeDoc",
      "kind": "type",
-     "doc": "",
+     "doc": "A shape, written as data: `kind` says which. The guide, docs/scene-descriptions.md in the repository, goes through\nthem all.",
      "type": "{ kind: \"sphere\"; at: Vec3; r: number } | { kind: \"ball\"; at: Vec3; r: Vec3 } | { kind: \"box\"; at: Vec3; half: Vec3; round?: number } | { kind: \"cylinder\"; at: Vec3; height: number; r: number; rTop?: number } | { kind: \"cone\"; from: Vec3; to: Vec3; r: number; rTo?: number } | { kind: \"ring\"; at: Vec3; r: number; tube: number } | { kind: \"roof\"; at: Vec3; half: [number, number]; height: number } | { kind: \"join\"; shapes: ShapeDoc[]; blend?: \"smooth\" | \"chamfer\" | \"stairs\"; by?: number; steps?: number } | { kind: \"lathe\"; at: Vec3; profile: [number, number][] } | { kind: \"sweep\"; path: Vec3[]; r: number; rTo?: number } | { kind: \"text\"; at: Vec3; text: string; size: number; depth: number; facing?: \"x\" | \"z\" } | { kind: \"blocks\"; at: Vec3; size: number; layers: string[][] } | { kind: \"grow\"; style: GrowStyle; at: Vec3; seed: number; size: number; r: number; depth?: number; branches?: number; tips?: number; only?: \"twigs\" | \"tips\" } | { kind: \"wall\"; from: Vec3; to: Vec3; height: number; thick: number; brick?: [number, number]; jitter?: number; ruin?: number; missing?: number; fallen?: number; seed: number } | { kind: \"steps\"; at: Vec3; dir: [number, number]; count: number; rise: number; run: number; width: number; wear?: number; seed: number } | { kind: \"fence\"; path: Vec3[]; bay: number; height: number; post: number; rails: number; lean?: number; missing?: number; sag?: number; seed: number } | { kind: \"arcade\"; from: Vec3; to: Vec3; height: number; thick: number; bays: number; pillar: number; spring?: number; arch?: \"round\" | \"pointed\" | \"flat\"; course?: number; ruin?: number; seed?: number } | { kind: \"crystal\"; at: Vec3; dir: Vec3; length: number; r: number; sides?: number; tip?: number; chips?: number; seed: number } | { kind: \"crystals\"; at: Vec3; count: number; size: number; r: number; spread?: number; sides?: number; chips?: number; seed: number } | { kind: \"geode\"; at: Vec3; r: number; open: Vec3; rind?: number; bands?: number; lining?: number; seed: number } | { kind: \"columns\"; at: Vec3; r: number; cell: number; height: number; rise?: \"dome\" | \"steps\" | \"random\"; seed: number } | { kind: \"drips\"; at: Vec3; r: number; roof: number; count: number; length: number; seed: number } | { kind: \"flowstone\"; at: Vec3; along: [number, number]; width: number; drop: number; folds?: number; seed: number } | { kind: \"icicles\"; on: ShapeDoc; every: number; length: number; above?: number; seed: number } | { kind: \"tree\"; at: Vec3; height: number; crown: Vec3; r: number; points?: number; leaves?: number; only?: \"limbs\" | \"leaves\"; seed: number } | { kind: \"cactus\"; at: Vec3; height: number; r: number; ribs?: number; arms?: number; seed: number } | { kind: \"rosette\"; at: Vec3; r: number; leaves: number; seed: number } | { kind: \"brackets\"; at: Vec3; facing: [number, number]; r: number; count: number; seed: number } | { kind: \"brain\"; at: Vec3; r: number; groove?: number; seed: number } | { kind: \"shell\"; at: Vec3; size: number; turns?: number; spire?: number; facing?: number } | { kind: \"horn\"; at: Vec3; dir: Vec3; length: number; r: number; curl?: number; twist?: number; ridges?: number } | { kind: \"antler\"; at: Vec3; dir: Vec3; length: number; r: number; tines: number; seed: number } | { kind: \"ribs\"; from: Vec3; to: Vec3; count: number; span: number; drop: number; r: number } | { kind: \"land\"; at: Vec3; half: [number, number]; base?: number; peaks: { at: [number, number]; h: number; r: number }[]; noise?: number; drops?: number; slump?: number; beds?: { thick: number; hard: number }[]; seed: number } | { kind: \"butte\"; at: Vec3; r: number; height: number; beds?: { thick: number; hard: number }[]; wear?: number; cap?: number; seed: number } | { kind: \"hoodoo\"; at: Vec3; height: number; r: number; seed: number } | { kind: \"arch\"; from: Vec3; to: Vec3; height: number; thick: number; soft?: number; beds?: { thick: number; hard: number }[]; seed: number } | { kind: \"mud\"; at: Vec3; r: number; plate: number; curl?: number; seed: number } | { kind: \"pebbles\"; path: Vec3[]; width: number; count: number; size: number; seed: number } | { kind: \"drift\"; at: Vec3; half: [number, number]; depth: number; wind: [number, number]; pile?: number; reach?: number; path?: Vec3[]; pathWidth?: number; seed: number } | { kind: \"frost\"; at: Vec3; facing: Vec3; r: number; arms?: number; stage?: [number, number]; seed: number } | { kind: \"cut\"; shape: ShapeDoc; hole: ShapeDoc } | { kind: \"rough\"; shape: ShapeDoc; by: number; scale?: number }"
     },
     {
      "name": "PaintDoc",
      "kind": "type",
-     "doc": "",
+     "doc": "A part's paint: one color, or a pattern of several.",
      "type": "string | { kind: \"bands\"; axis: \"x\" | \"y\" | \"z\"; size: number; colors: string[] } | { kind: \"bricks\"; size: [number, number]; colors: string[]; line: string } | { kind: \"hex\"; size: number; colors: string[]; line: string; deep?: string } | { kind: \"speckle\"; size: number; colors: string[] } | { kind: \"patches\"; size: number; colors: string[] } | { kind: \"key\"; colors: Record<string, string> } | { kind: \"faces\"; top?: PaintDoc; side: PaintDoc; under?: PaintDoc } | { kind: \"split\"; axis: \"x\" | \"y\" | \"z\"; at: number; below: PaintDoc; above: PaintDoc } | { kind: \"pieces\"; colors: string[]; line?: string; ordered?: boolean }"
     },
     {
@@ -6018,17 +6018,17 @@
     {
      "name": "LightDoc",
      "kind": "interface",
-     "doc": "",
+     "doc": "A point light in a scene.",
      "props": [
       {
        "name": "at",
        "type": "Vec3",
-       "doc": ""
+       "doc": "Where it is."
       },
       {
        "name": "color",
        "type": "string",
-       "doc": ""
+       "doc": "Its color."
       },
       {
        "name": "strength",
@@ -6073,22 +6073,22 @@
     {
      "name": "CompiledScene",
      "kind": "interface",
-     "doc": "",
+     "doc": "A scene ready to build and play, from `compileScene`.",
      "props": [
       {
        "name": "name",
        "type": "string",
-       "doc": ""
+       "doc": "The scene's name."
       },
       {
        "name": "loop",
        "type": "number",
-       "doc": ""
+       "doc": "Seconds the scene takes to repeat."
       },
       {
        "name": "orbit",
        "type": "Orbit",
-       "doc": ""
+       "doc": "Where the camera starts."
       },
       {
        "name": "swing",
@@ -6103,12 +6103,12 @@
       {
        "name": "palette",
        "type": "Rgb[]",
-       "doc": ""
+       "doc": "The scene's own palette."
       },
       {
        "name": "bones",
        "type": "Bone[]",
-       "doc": ""
+       "doc": "The scene's bones."
       },
       {
        "name": "haze",
@@ -6186,19 +6186,19 @@
     {
      "name": "Material",
      "kind": "type",
-     "doc": "",
+     "doc": "What a particle is made of.",
      "type": "\"sand\" | \"snow\" | \"goo\""
     },
     {
      "name": "MATERIALS",
      "kind": "const",
-     "doc": "",
+     "doc": "Every `Material`.",
      "type": "readonly Material[]"
     },
     {
      "name": "MpmOptions",
      "kind": "interface",
-     "doc": "",
+     "doc": "Options for an `Mpm` box.",
      "props": [
       {
        "name": "cells",
@@ -6241,7 +6241,7 @@
     {
      "name": "Mpm",
      "kind": "class",
-     "doc": "",
+     "doc": "A box of sand, snow and goo: a small 3D material point simulation (MLS-MPM) on the CPU. Put particles in with `add`\nor `fillBox`, then move time on with `advance`.",
      "ctor": [
       {
        "code": "new Mpm(o?: MpmOptions)"
@@ -6252,34 +6252,34 @@
        "name": "n",
        "readonly": true,
        "type": "number",
-       "doc": ""
+       "doc": "Grid cells a side."
       },
       {
        "name": "dx",
        "readonly": true,
        "type": "number",
-       "doc": ""
+       "doc": "A cell's size: the box is 1 a side."
       },
       {
        "name": "capacity",
        "readonly": true,
        "type": "number",
-       "doc": ""
+       "doc": "The most particles it can hold."
       },
       {
        "name": "dt",
        "type": "number",
-       "doc": ""
+       "doc": "Seconds per substep."
       },
       {
        "name": "gravity",
        "type": "number",
-       "doc": ""
+       "doc": "Downward pull, box sides per second squared."
       },
       {
        "name": "count",
        "type": "number",
-       "doc": ""
+       "doc": "How many particles are in the box."
       },
       {
        "name": "x",
@@ -6350,13 +6350,13 @@
       {
        "name": "time",
        "type": "number",
-       "doc": ""
+       "doc": "Seconds simulated so far."
       }
      ],
      "methods": [
       {
        "name": "setFriction",
-       "doc": "",
+       "doc": "Sets sand's friction angle in degrees: the steepest slope a heap keeps.",
        "signatures": [
         {
          "code": "setFriction(degrees: number): void"
@@ -6419,7 +6419,7 @@
       },
       {
        "name": "step",
-       "doc": "",
+       "doc": "Moves the box on by one substep of `dt`.",
        "signatures": [
         {
          "code": "step(): void"
@@ -6565,23 +6565,23 @@
     {
      "name": "Rgb",
      "kind": "type",
-     "doc": "",
+     "doc": "A color as three numbers: red, green and blue, 0 to 255 in a palette.",
      "type": "[number, number, number]"
     },
     {
      "name": "Frame",
      "kind": "interface",
-     "doc": "",
+     "doc": "A picture as RGBA bytes.",
      "props": [
       {
        "name": "width",
        "type": "number",
-       "doc": ""
+       "doc": "Pixels across."
       },
       {
        "name": "height",
        "type": "number",
-       "doc": ""
+       "doc": "Pixels down."
       },
       {
        "name": "data",
@@ -6677,7 +6677,7 @@
     {
      "name": "DetailRule",
      "kind": "interface",
-     "doc": "",
+     "doc": "How many of its blobs an actor keeps for the size it is on screen.",
      "props": [
       {
        "name": "density",
@@ -6694,7 +6694,7 @@
     {
      "name": "DETAIL",
      "kind": "const",
-     "doc": "",
+     "doc": "The rule to give `world.autoDetail`: about one blob per pixel, and never under 6% of them.",
      "type": "DetailRule"
     },
     {
@@ -6727,7 +6727,7 @@
     {
      "name": "ShapeEdit",
      "kind": "interface",
-     "doc": "",
+     "doc": "One edit for `setEdits`: a sphere or a box in world space that cuts blobs away or paints them.",
      "props": [
       {
        "name": "shape",
@@ -6890,7 +6890,7 @@
     {
      "name": "MORPH_EXTENSION",
      "kind": "const",
-     "doc": "",
+     "doc": "The glTF extension that says how each morph target changes a splat's shape, and which targets are one morph's\nin-betweens.",
      "type": "\"BLOBSCAPE_gaussian_morphs\""
     },
     {
@@ -6908,12 +6908,12 @@
     {
      "name": "Clip",
      "kind": "interface",
-     "doc": "",
+     "doc": "An animation: keys for each bone at shared times.",
      "props": [
       {
        "name": "name",
        "type": "string",
-       "doc": ""
+       "doc": "The clip's name."
       },
       {
        "name": "times",
@@ -6948,32 +6948,32 @@
     {
      "name": "Rigged",
      "kind": "interface",
-     "doc": "",
+     "doc": "Everything a rigged .glb holds: the blobs, their skin, the skeleton, its clips and any morphs.",
      "props": [
       {
        "name": "name",
        "type": "string",
-       "doc": ""
+       "doc": "The model's name."
       },
       {
        "name": "blobs",
        "type": "Blobs",
-       "doc": ""
+       "doc": "The blobs in the rest pose."
       },
       {
        "name": "skin",
        "type": "Skin",
-       "doc": ""
+       "doc": "Which bones move each blob, and by how much."
       },
       {
        "name": "skeleton",
        "type": "Skeleton",
-       "doc": ""
+       "doc": "The bones."
       },
       {
        "name": "clips",
        "type": "Clip[]",
-       "doc": ""
+       "doc": "Its animations."
       },
       {
        "name": "morphs",
@@ -7016,7 +7016,7 @@
     {
      "name": "writeRiggedGlb",
      "kind": "function",
-     "doc": "",
+     "doc": "Writes blobs, bones, clips and morphs as a .glb: the KHR_gaussian_splatting standard with ordinary glTF skins and\nanimation, plus the two Blobscape extensions. Blender and game engines open its bones and clips.",
      "signatures": [
       {
        "code": "writeRiggedGlb(r: Rigged): Uint8Array"
@@ -7042,7 +7042,7 @@
     {
      "name": "GlbError",
      "kind": "class",
-     "doc": "",
+     "doc": "Thrown when a file can't be read as a rigged .glb; its message says why.",
      "extends": [
       "Error"
      ],
@@ -7108,49 +7108,49 @@
     {
      "name": "BakeOptions",
      "kind": "interface",
-     "doc": "",
+     "doc": "How a sprite sheet is baked.",
      "props": [
       {
        "name": "directions",
        "type": "4 | 8",
-       "doc": ""
+       "doc": "Directions each move is drawn from."
       },
       {
        "name": "size",
        "type": "number",
-       "doc": ""
+       "doc": "A frame's width and height, in pixels."
       },
       {
        "name": "colors",
        "type": "number",
-       "doc": ""
+       "doc": "Colors in the palette."
       },
       {
        "name": "outline",
        "type": "boolean",
-       "doc": ""
+       "doc": "Whether each sprite gets a dark outline."
       }
      ]
     },
     {
      "name": "BakedSheet",
      "kind": "interface",
-     "doc": "",
+     "doc": "A baked sprite sheet: its frames and how they are laid out.",
      "props": [
       {
        "name": "plan",
        "type": "SheetPlan",
-       "doc": ""
+       "doc": "The rows and columns."
       },
       {
        "name": "frames",
        "type": "Frame[]",
-       "doc": ""
+       "doc": "Every frame, row by row."
       },
       {
        "name": "size",
        "type": "number",
-       "doc": ""
+       "doc": "A frame's width and height, in pixels."
       },
       {
        "name": "anchorY",
@@ -7160,19 +7160,19 @@
       {
        "name": "framing",
        "type": "Framing",
-       "doc": ""
+       "doc": "The sphere the camera was fitted to."
       },
       {
        "name": "png",
        "type": "() => Promise<Blob>",
-       "doc": ""
+       "doc": "The whole sheet as one PNG."
       }
      ]
     },
     {
      "name": "bakeSheet",
      "kind": "function",
-     "doc": "",
+     "doc": "Draws every frame of every move from each direction, all at one camera distance, and turns them into pixel art.\n`progress` is called as frames are done.",
      "signatures": [
       {
        "code": "bakeSheet(t: BakeTarget, moves: SheetMove[], o: BakeOptions, progress?: (done: number, total: number) => void): Promise<BakedSheet>"
@@ -7212,7 +7212,7 @@
     {
      "name": "SheetRow",
      "kind": "interface",
-     "doc": "",
+     "doc": "One row of a sheet: a move seen from one direction (`turn` is that direction's angle).",
      "props": [
       {
        "name": "move",
@@ -7234,7 +7234,7 @@
     {
      "name": "SheetPlan",
      "kind": "interface",
-     "doc": "",
+     "doc": "A sheet's rows, and as many columns as its longest move has frames.",
      "props": [
       {
        "name": "rows",
@@ -7251,7 +7251,7 @@
     {
      "name": "planSheet",
      "kind": "function",
-     "doc": "",
+     "doc": "Lays a sheet out: a row for each move seen from each direction.",
      "signatures": [
       {
        "code": "planSheet(moves: SheetMove[], directions: 4 | 8): SheetPlan"
@@ -7279,7 +7279,7 @@
     {
      "name": "Framing",
      "kind": "interface",
-     "doc": "",
+     "doc": "A sphere that holds the creature through every frame of every move.",
      "props": [
       {
        "name": "center",
@@ -7333,12 +7333,12 @@
     {
      "name": "SkinnedModel",
      "kind": "interface",
-     "doc": "",
+     "doc": "An ordinary skinned model as `readSkinnedGlb` reads it: its triangles, their bone weights, our bones and its clips.",
      "props": [
       {
        "name": "name",
        "type": "string",
-       "doc": ""
+       "doc": "The model's name."
       },
       {
        "name": "mesh",
@@ -7358,12 +7358,12 @@
       {
        "name": "bones",
        "type": "Bone[]",
-       "doc": ""
+       "doc": "Our bones, parents first."
       },
       {
        "name": "clips",
        "type": "Clip[]",
-       "doc": ""
+       "doc": "Its animations, sampled onto our bones."
       },
       {
        "name": "images",
@@ -7391,7 +7391,7 @@
     {
      "name": "SplatOptions",
      "kind": "interface",
-     "doc": "",
+     "doc": "Options for `splatModel`.",
      "props": [
       {
        "name": "count",
@@ -7420,7 +7420,7 @@
        "name": "seed",
        "optional": true,
        "type": "number",
-       "doc": ""
+       "doc": "The same seed scatters the blobs the same way."
       }
      ]
     },
@@ -7559,7 +7559,7 @@
     {
      "name": "makeFox",
      "kind": "function",
-     "doc": "",
+     "doc": "Builds the fox with about `count` blobs: a sculpted skin under strands of fur. `look` picks its coat.",
      "signatures": [
       {
        "code": "makeFox(count?: number, look?: string): { blobs: Blobs; skin: Skin; skeleton: Skeleton }"
@@ -7569,7 +7569,7 @@
     {
      "name": "FOX",
      "kind": "const",
-     "doc": "",
+     "doc": "The fox as a `Species`: how to build it, its looks, its moves and where the camera starts.",
      "type": "Species"
     }
    ]
@@ -7582,7 +7582,7 @@
     {
      "name": "makeFrog",
      "kind": "function",
-     "doc": "",
+     "doc": "Builds the frog with about `count` blobs. `look` picks its colors.",
      "signatures": [
       {
        "code": "makeFrog(count?: number, look?: string): { blobs: Blobs; skin: Skin; skeleton: Skeleton }"
@@ -7592,7 +7592,7 @@
     {
      "name": "FROG",
      "kind": "const",
-     "doc": "",
+     "doc": "The frog as a `Species`: how to build it, its looks, its moves and where the camera starts.",
      "type": "Species"
     }
    ]
@@ -7615,7 +7615,7 @@
     {
      "name": "ELF",
      "kind": "const",
-     "doc": "",
+     "doc": "The elf as a `Species`: how to build it, its looks, its moves and where the camera starts.",
      "type": "Species"
     }
    ]
@@ -7628,7 +7628,7 @@
     {
      "name": "makeDragon",
      "kind": "function",
-     "doc": "",
+     "doc": "Builds the dragon with about `count` blobs, a small share of them the fire that waits in its mouth. `look` picks\nits colors.",
      "signatures": [
       {
        "code": "makeDragon(count?: number, look?: string): { blobs: Blobs; skin: Skin; skeleton: Skeleton }"
@@ -7638,7 +7638,7 @@
     {
      "name": "DRAGON",
      "kind": "const",
-     "doc": "",
+     "doc": "The dragon as a `Species`: how to build it, its looks, its moves and where the camera starts.",
      "type": "Species"
     }
    ]
@@ -7651,7 +7651,7 @@
     {
      "name": "makeMonster",
      "kind": "function",
-     "doc": "",
+     "doc": "Builds the monster a seed gives, with about `count` blobs: the same seed always gives the same monster.",
      "signatures": [
       {
        "code": "makeMonster(seed: number, count?: number): { blobs: Blobs; skin: Skin; skeleton: Skeleton }"

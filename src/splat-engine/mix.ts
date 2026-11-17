@@ -19,10 +19,12 @@ export interface Pose {
   size: Float32Array
 }
 
+/** A copy of the skeleton's pose as it is now: every bone's rotation, offset and size. */
 export function takePose(sk: Skeleton): Pose {
   return { rotation: sk.rotation.slice(), offset: sk.offset.slice(), size: sk.size.slice() }
 }
 
+/** Sets the skeleton's pose from one taken with `takePose`. Call the skeleton's `update()` after. */
 export function putPose(sk: Skeleton, p: Pose) {
   sk.rotation.set(p.rotation)
   sk.offset.set(p.offset)
@@ -63,10 +65,13 @@ export function addPose(sk: Skeleton, layer: Pose, ref: Pose, w = 1) {
   }
 }
 
+/** A move a `Mixer` can blend: its name, how long its loop takes and the function that poses it. */
 export interface MixMove {
+  /** What the mixer knows it by. */
   name: string
   /** Seconds a loop takes; the move's time wraps at it. Leave it out for a move that runs on (a pose held, or a one-off read with `elapsed`). */
   seconds?: number
+  /** Poses the skeleton `t` seconds into the move. */
   pose: (sk: Skeleton, t: number) => void
 }
 

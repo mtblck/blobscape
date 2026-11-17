@@ -41,6 +41,7 @@ function partTurn(q: Quat, amount: number): Quat {
   return axisAngle([(q[0] / s) * sign, (q[1] / s) * sign, (q[2] / s) * sign], angle * amount)
 }
 
+/** Options for `twoBoneIK`. */
 export interface TwoBoneOptions {
   /** World direction the knee or elbow should point when the limb gives no bend of its own (it is straight). */
   pole?: Vec3
@@ -94,6 +95,7 @@ export function twoBoneIK(sk: Skeleton, upper: number, lower: number, tip: Array
   return len(sub(posedPoint(sk, lower, tip), T))
 }
 
+/** Options for `lookAt`. */
 export interface LookOptions {
   /** The direction the bone looks along at rest, in world space (a creature facing +z looks along +z). */
   forward?: Vec3
@@ -147,6 +149,7 @@ export function groundNormal(ground: Ground, x: number, z: number, e = 0.03): Ve
   return dir([-sx, 1, -sz])
 }
 
+/** Options for `plantFeet`. */
 export interface PlantOptions {
   /** 0 leaves the walk as it is (on flat ground), 1 plants it fully. */
   amount?: number
@@ -156,6 +159,7 @@ export interface PlantOptions {
   tilt?: boolean
 }
 
+/** What `plantFeet` did, for a readout or a test. */
 export interface Planted {
   /** How far the hips moved down (negative) or up. */
   hipShift: number

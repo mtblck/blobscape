@@ -28,20 +28,31 @@ export interface BakeTarget {
   morph?: (clip: Clip | undefined, t: number) => void
 }
 
+/** How a sprite sheet is baked. */
 export interface BakeOptions {
+  /** Directions each move is drawn from. */
   directions: 4 | 8
+  /** A frame's width and height, in pixels. */
   size: number
+  /** Colors in the palette. */
   colors: number
+  /** Whether each sprite gets a dark outline. */
   outline: boolean
 }
 
+/** A baked sprite sheet: its frames and how they are laid out. */
 export interface BakedSheet {
+  /** The rows and columns. */
   plan: SheetPlan
+  /** Every frame, row by row. */
   frames: Frame[]
+  /** A frame's width and height, in pixels. */
   size: number
   /** Where the feet are: one past the lowest solid row of any frame. */
   anchorY: number
+  /** The sphere the camera was fitted to. */
   framing: Framing
+  /** The whole sheet as one PNG. */
   png: () => Promise<Blob>
 }
 
@@ -49,6 +60,10 @@ const SUPERSAMPLE = 4
 const LENS = 10
 const ELEVATION = 28
 
+/**
+ * Draws every frame of every move from each direction, all at one camera distance, and turns them into pixel art.
+ * `progress` is called as frames are done.
+ */
 export async function bakeSheet(t: BakeTarget, moves: SheetMove[], o: BakeOptions, progress?: (done: number, total: number) => void): Promise<BakedSheet> {
   const plan = planSheet(moves, o.directions)
   const framing = frameAll(t.actor, moves, undefined, t.morph)

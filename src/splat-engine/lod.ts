@@ -23,6 +23,7 @@ export function lodRank(i: number): number {
   return (h >>> 8) / 16777216
 }
 
+/** How many of its blobs an actor keeps for the size it is on screen. */
 export interface DetailRule {
   /**
    * Blobs wanted per pixel of the disc round the actor on screen. The disc is a loose fit (a long creature seen end on
@@ -33,6 +34,7 @@ export interface DetailRule {
   min: number
 }
 
+/** The rule to give `world.autoDetail`: about one blob per pixel, and never under 6% of them. */
 export const DETAIL: DetailRule = { density: 1, min: 0.06 }
 
 /** The share of an actor's `count` blobs to draw when it covers a disc `radiusPx` pixels across on screen. */

@@ -59,11 +59,14 @@ function slabBox(f: ReturnType<typeof groundFrame>, vLo: number, vHi: number, ha
 
 // --- Walls
 
+/** A brick wall for `wall`. */
 export interface WallSpec {
   /** The foot of the wall at one end and at the other; the wall stands on `from`'s height. */
   from: Vec3
   to: Vec3
+  /** How high it stands. */
   height: number
+  /** How thick it is. */
   thick: number
   /** A brick's length and height (a course), fitted so whole courses and bricks fill the wall. */
   brick?: [number, number]
@@ -78,6 +81,7 @@ export interface WallSpec {
   seed: number
 }
 
+/** A brick's length and height where a wall gives none. */
 export const WALL_BRICK: [number, number] = [0.16, 0.08]
 
 /** How the bricks of a wall are laid: fitted sizes and which bricks stand. */
@@ -199,14 +203,19 @@ export function fallenBricks(s: WallSpec, plan = wallPlan(s)): Shape[] {
 
 // --- Steps
 
+/** A flight of steps for `steps`. */
 export interface StepsSpec {
   /** The middle of the bottom step's front edge, on the ground. */
   at: Vec3
   /** The way the flight climbs, along the ground: [x, z]. */
   dir: [number, number]
+  /** How many steps. */
   count: number
+  /** A step's height. */
   rise: number
+  /** A step's depth, front to back. */
   run: number
+  /** How wide the flight is. */
   width: number
   /** How worn: rounded noses and a hollow where feet go, 0 to 1. */
   wear?: number
@@ -283,11 +292,13 @@ export function bays(path: Vec3[], bay: number): Vec3[] {
   return out
 }
 
+/** A post-and-rail fence for `fence`. */
 export interface FenceSpec {
   /** Where it runs, on the ground: 2 to 16 points. */
   path: Vec3[]
   /** About how far apart the posts stand; each run is cut into whole bays. */
   bay: number
+  /** A post's height. */
   height: number
   /** Half a post's thickness. */
   post: number
@@ -358,10 +369,15 @@ export function fence(s: FenceSpec, cell = 0): Shape {
   return many(parts)
 }
 
+/** A wall of arches for `arcade`. */
 export interface ArcadeSpec {
+  /** The foot of the wall at one end. */
   from: Vec3
+  /** The foot of the wall at the other end. */
   to: Vec3
+  /** How high it stands. */
   height: number
+  /** How thick it is. */
   thick: number
   /** Equal bays the span is cut into: one opening each, with a pillar between. */
   bays: number
@@ -378,6 +394,7 @@ export interface ArcadeSpec {
   seed?: number
 }
 
+/** The heads an arcade's openings can have. */
 export const ARCHES = ['round', 'pointed', 'flat'] as const
 
 /** A wall cut into equal bays with an opening in each: arcades, cloisters, viaducts. Stones laid in courses, and wedge stones round each arch. */
@@ -439,4 +456,8 @@ function arcadeRaw(s: ArcadeSpec, cell: number): Shape {
   }
 }
 
+/**
+ * A wall cut into equal bays with an opening in each: arcades, cloisters, viaducts. Its stones are laid in courses,
+ * with wedge stones round each arch. `cell` is the grid's cell size.
+ */
 export const arcade = (s: ArcadeSpec, cell: number): Shape => tighten(arcadeRaw(s, cell), 0.7)

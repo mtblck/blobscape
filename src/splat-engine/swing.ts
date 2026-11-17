@@ -18,7 +18,9 @@ import { Xpbd, type Capsule, type Vec3 } from './xpbd.ts'
  * Pure and tested.
  */
 
+/** One chain of bones that swings: a tail, a plait, one side of a cloak. */
 export interface Chain {
+  /** The chain's bones by name, from the body outward. */
   bones: readonly string[]
   /** How loosely each point after the first follows the move: one number for all, or one per point. */
   follow: number | readonly number[]
@@ -26,9 +28,11 @@ export interface Chain {
   bend?: number
 }
 
+/** A creature's loose parts, for `Swing`: the chains that swing and what holds them back. */
 export interface SwingSpec {
   /** What swings, for a sentence: "tail", "cloak and plait". */
   parts: string
+  /** The chains of bones that swing. */
   chains: readonly Chain[]
   /** Links between chains, as [chain, point, chain, point, compliance]: a cloak's two halves, say. */
   ties?: readonly (readonly [number, number, number, number, number])[]
@@ -42,7 +46,12 @@ export interface SwingSpec {
   after?: (sk: Skeleton) => void
 }
 
+/**
+ * Loose parts swinging after a move. It hangs a `SwingSpec`'s chains on the cloth solver (`Xpbd`); pose the skeleton,
+ * then call `update` each frame and it turns the chains' bones to follow.
+ */
 export class Swing {
+  /** The solver the chains hang on. */
   readonly sim: Xpbd
   /** Each chain's bone indices and where its points start in the solver. */
   private chains: { bones: number[]; at: number; follow: number[] }[]

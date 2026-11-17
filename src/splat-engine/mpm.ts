@@ -17,9 +17,12 @@
  * Pure and tested.
  */
 
+/** What a particle is made of. */
 export type Material = 'sand' | 'snow' | 'goo'
+/** Every `Material`. */
 export const MATERIALS: readonly Material[] = ['sand', 'snow', 'goo']
 
+/** Options for an `Mpm` box. */
 export interface MpmOptions {
   /** Grid cells a side. */
   cells?: number
@@ -42,12 +45,22 @@ const GOO = { yield: 0.02 }
 /** Particles per cell a side when filling a shape. */
 export const PER_CELL = 2
 
+/**
+ * A box of sand, snow and goo: a small 3D material point simulation (MLS-MPM) on the CPU. Put particles in with `add`
+ * or `fillBox`, then move time on with `advance`.
+ */
 export class Mpm {
+  /** Grid cells a side. */
   readonly n: number
+  /** A cell's size: the box is 1 a side. */
   readonly dx: number
+  /** The most particles it can hold. */
   readonly capacity: number
+  /** Seconds per substep. */
   dt: number
+  /** Downward pull, box sides per second squared. */
   gravity: number
+  /** How many particles are in the box. */
   count = 0
   /** Particle state. */
   readonly x: Float64Array
@@ -67,6 +80,7 @@ export class Mpm {
   private params: Params[]
   /** A push waiting for the next step: center, radius, velocity added. */
   private push: { at: [number, number, number]; r: number; v: [number, number, number] } | null = null
+  /** Seconds simulated so far. */
   time = 0
 
   constructor(o: MpmOptions = {}) {
@@ -93,6 +107,7 @@ export class Mpm {
     this.setFriction(o.friction ?? 32)
   }
 
+  /** Sets sand's friction angle in degrees: the steepest slope a heap keeps. */
   setFriction(degrees: number) {
     const s = Math.sin((degrees * Math.PI) / 180)
     this.alpha = Math.sqrt(2 / 3) * (2 * s) / (3 - s)
@@ -142,6 +157,7 @@ export class Mpm {
     for (let s = 0; s < steps; s++) this.step()
   }
 
+  /** Moves the box on by one substep of `dt`. */
   step() {
     const { n, dx, dt, x, v, C, tau, gv, gm, mass, volume } = this
     const inv = 1 / dx

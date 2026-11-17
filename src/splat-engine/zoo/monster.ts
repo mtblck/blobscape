@@ -409,6 +409,7 @@ function spec(p: Plan, s: number): SculptSpec & { parts: FurryPart[] } {
 /** The share of a furry monster's blobs that are its skin; the rest are strands. */
 const SKIN = 0.4
 
+/** Builds the monster a seed gives, with about `count` blobs: the same seed always gives the same monster. */
 export function makeMonster(seed: number, count = 15000) {
   const p = planMonster(seed)
   const skin = sculptToCount((s) => spec(p, s), p.hide === 'fur' ? count * SKIN : count, 0.03)

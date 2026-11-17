@@ -8,11 +8,17 @@
  * given to Spark (0–1 per channel), which draws them as sRGB.
  */
 export class Blobs {
+  /** How many blobs. */
   count = 0
+  /** Centers: x, y, z per blob. */
   center: Float32Array
+  /** Sizes along each blob's own axes (standard deviations): three per blob. */
   scale: Float32Array
+  /** Rotations as unit quaternions: x, y, z, w per blob. */
   quat: Float32Array
+  /** Colors, 0–1 sRGB: red, green, blue per blob. */
   color: Float32Array
+  /** Opacity, 0–1: one per blob. */
   opacity: Float32Array
   /**
    * Color by angle, when the blobs have it: `shDegree` 1–3, and per blob
@@ -31,6 +37,7 @@ export class Blobs {
     this.opacity = new Float32Array(capacity)
   }
 
+  /** How many blobs the arrays have room for; they grow as blobs are pushed. */
   get capacity() { return this.opacity.length }
 
   /** Rest terms per blob: 0, 3, 8 or 15. */
@@ -57,6 +64,7 @@ export class Blobs {
     if (this.sh) this.sh = re(this.sh, this.shTerms * 3)
   }
 
+  /** Adds a blob and returns its index. */
   push(b: Blob): number {
     this.grow(this.count + 1)
     const i = this.count++
@@ -66,6 +74,7 @@ export class Blobs {
     return i
   }
 
+  /** Writes blob `i`. */
   set(i: number, b: Blob) {
     this.center.set(b.center, i * 3)
     this.scale.set(b.scale, i * 3)
@@ -74,6 +83,7 @@ export class Blobs {
     this.opacity[i] = b.opacity
   }
 
+  /** Reads blob `i`. */
   get(i: number): Blob {
     return {
       center: [...this.center.subarray(i * 3, i * 3 + 3)] as Vec3,
@@ -105,6 +115,7 @@ export class Blobs {
     return removed
   }
 
+  /** A copy that shares nothing with this one. */
   clone(): Blobs {
     const c = new Blobs(Math.max(1, this.count))
     c.count = this.count
@@ -121,6 +132,7 @@ export class Blobs {
   get bytes() { return this.count * (14 + this.shTerms * 3) * 4 }
 }
 
+/** Three numbers: a point or a direction (x, y, z), or a color (red, green, blue). */
 export type Vec3 = [number, number, number]
 export type Quat = [number, number, number, number]
 export interface Blob { center: Vec3; scale: Vec3; quat: Quat; color: Vec3; opacity: number }

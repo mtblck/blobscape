@@ -26,6 +26,7 @@ export interface PickHit {
   part: number
 }
 
+/** Options for `pickActors`. */
 export interface PickOptions {
   /** How far out a blob counts, in standard deviations (2 is about where it fades to nothing). */
   k?: number

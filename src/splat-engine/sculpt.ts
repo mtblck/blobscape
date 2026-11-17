@@ -28,11 +28,15 @@ export interface SculptPart {
   blend?: number
 }
 
+/** A creature to sculpt: its bones, its parts and how far a cell's weight spreads between bones. */
 export interface SculptSpec {
+  /** The creature's bones. */
   bones: Bone[]
+  /** Its parts. */
   parts: SculptPart[]
   /** How far (in world units) a cell's weight spreads from a bone. */
   blend: number
+  /** The baked light; what is left out comes from `DEFAULT_LIGHT`. */
   light?: Partial<VoxelLight>
   /**
    * How deep (world units) a part's skin goes on inside a neighbor of its group. 0 cuts it off at the neighbor's

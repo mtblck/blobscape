@@ -19,7 +19,12 @@ export interface Bone {
   tail?: Vec3
 }
 
+/**
+ * Bones in a tree, and their pose. Set `rotation`, `offset` and `size` (or use the posing helpers), then call
+ * `update()` to work out what the skinning pass needs; `reset()` goes back to the rest pose.
+ */
 export class Skeleton {
+  /** The bones, parents before their children. */
   readonly bones: Bone[]
   /** Pose: local rotation per bone (x, y, z, w). */
   readonly rotation: Float32Array
@@ -54,14 +59,17 @@ export class Skeleton {
     this.update()
   }
 
+  /** How many bones. */
   get count() { return this.bones.length }
 
+  /** A bone's index by its name. Throws when there is no such bone. */
   index(name: string) {
     const i = this.bones.findIndex((b) => b.name === name)
     if (i < 0) throw new Error(`no bone ${name}`)
     return i
   }
 
+  /** Sets one bone's local rotation (x, y, z, w). */
   setRotation(bone: number, q: ArrayLike<number>) { this.rotation.set([q[0], q[1], q[2], q[3]], bone * 4) }
 
   /** Back to the rest pose. */
@@ -73,6 +81,10 @@ export class Skeleton {
     this.rootScale = 1
   }
 
+  /**
+   * Works the pose out: every bone's skin matrix, rotation and scale, parents first. Call it after posing and before
+   * drawing.
+   */
   update() {
     const n = this.count
     // world rotation (quat), world position of head, world scale, per bone
@@ -127,6 +139,10 @@ export interface Skin {
   weights: Float32Array
 }
 
+/**
+ * A skin for `count` blobs with nothing in it yet: four bone indices and four weights per blob. Fill it with
+ * `setWeights`.
+ */
 export function emptySkin(count: number): Skin {
   return { joints: new Uint8Array(count * 4), weights: new Float32Array(count * 4) }
 }
@@ -157,6 +173,10 @@ export function packWeights(w: ArrayLike<number>, o: number): number {
   return (b[0] | (b[1] << 8) | (b[2] << 16) | (b[3] << 24)) >>> 0
 }
 
+/**
+ * How a blob on several bones takes its shape: 'linear' pushes it through the blended matrices, which squashes it on
+ * a twisting joint; 'quat' averages the bones' rotations and scales, so it only ever turns. See `skinBlob`.
+ */
 export type SkinMode = 'linear' | 'quat'
 
 /**
@@ -227,11 +247,13 @@ function writeCovA(A: ArrayLike<number>, out: Float32Array, o: number) {
 
 // --- small quaternion helpers (x, y, z, w) ---
 
+/** A quaternion scaled to unit length. */
 export function norm4(q: ArrayLike<number>): Quat {
   const n = Math.hypot(q[0], q[1], q[2], q[3]) || 1
   return [q[0] / n, q[1] / n, q[2] / n, q[3] / n]
 }
 
+/** The product of two quaternions: the turn `b`, then the turn `a`. */
 export function mulQ(a: ArrayLike<number>, b: ArrayLike<number>): Quat {
   const [ax, ay, az, aw] = [a[0], a[1], a[2], a[3]]
   const [bx, by, bz, bw] = [b[0], b[1], b[2], b[3]]
@@ -243,12 +265,14 @@ export function mulQ(a: ArrayLike<number>, b: ArrayLike<number>): Quat {
   ]
 }
 
+/** The quaternion for a turn of `rad` radians about `axis`. */
 export function axisAngle(axis: Vec3, rad: number): Quat {
   const n = Math.hypot(...axis) || 1
   const s = Math.sin(rad / 2)
   return [(axis[0] / n) * s, (axis[1] / n) * s, (axis[2] / n) * s, Math.cos(rad / 2)]
 }
 
+/** A vector turned by a quaternion. */
 export function rotate(q: ArrayLike<number>, v: ArrayLike<number>): Vec3 {
   const R = quatMat3(q)
   return [R[0] * v[0] + R[1] * v[1] + R[2] * v[2], R[3] * v[0] + R[4] * v[1] + R[5] * v[2], R[6] * v[0] + R[7] * v[1] + R[8] * v[2]]

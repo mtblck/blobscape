@@ -9,11 +9,13 @@ import type { Vec3 } from '../splat-core/blobs.ts'
  * furthest behind goes first. Pure, plain numbers: the same motion gives the same steps.
  */
 
+/** One foot for `Steps` to plan. */
 export interface StepFoot {
   /** Where the foot stands under the body at rest, in the body's frame: x to its left, z ahead. */
   home: [number, number]
 }
 
+/** How `Steps` steps: how far a foot may trail, how long and how high a step is, and which feet go together. */
 export interface StepOptions {
   /** How far a planted foot may fall from its home under the body before it steps, meters. */
   reach: number
@@ -47,6 +49,7 @@ export interface StepBody {
   turn: number
 }
 
+/** Where one foot is in its stepping: planted, or part way through a step. */
 export interface FootState {
   /** Where the foot stands, or stood when it lifted. */
   at: [number, number]
@@ -64,8 +67,15 @@ export interface FootState {
 
 const smooth = (t: number) => t * t * (3 - 2 * t)
 
+/**
+ * A footstep planner. Give it the feet and where the body starts, then call `update` each frame with where the body
+ * is now: each foot stays planted until it falls too far from its home under the body, then steps to where the body
+ * is going.
+ */
 export class Steps {
+  /** Each foot's state, in the order the feet were given. */
   readonly feet: FootState[]
+  /** The options in use, with the defaults filled in. */
   readonly opts: Required<StepOptions>
   private readonly homes: [number, number][]
   /** How far the farthest home is from the body's center. */
