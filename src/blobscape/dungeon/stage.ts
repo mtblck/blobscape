@@ -2,6 +2,7 @@ import * as THREE from 'three/webgpu'
 import { mix, positionView, smoothstep, uniform } from 'three/tsl'
 import { readbackToSrgb, srgbToLinear } from '../../splat-core/color.ts'
 import { SplatWorld } from '../../splat-engine/engine.ts'
+import { startRenderer } from '../../splat-engine/startRenderer.ts'
 import { Dungeon, LIVE_AMBIENT, type DungeonOptions } from './dungeon.ts'
 import { HALF, type GameEvent, type Input } from './game.ts'
 import { Impact } from './impact.ts'
@@ -98,9 +99,7 @@ export class DungeonStage {
 
   static async start(display: HTMLCanvasElement, opts: StageOptions = {}) {
     const canvas = opts.offscreen ? document.createElement('canvas') : display
-    const renderer = new THREE.WebGPURenderer({ canvas, antialias: false, alpha: false, forceWebGL: !!opts.webgl })
-    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1))
-    await renderer.init()
+    const renderer = await startRenderer({ canvas, antialias: false, alpha: false, forceWebGL: !!opts.webgl }, (r) => r.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)))
     return new DungeonStage(display, opts, renderer)
   }
 

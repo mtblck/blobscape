@@ -76,6 +76,7 @@ multi-page React app, one Vercel project, served from the root. See README for t
 - Quads shrink with opacity (`placeQuad`): a blob's quad reaches only as far as it stays above 1/255.
 - `rig.ts` `skinBlob` is the CPU twin of the deform pass (used by `checkAgainstCPU`; `skinCenters` is its fast center-only twin, tested against it); change one, change both. Weights go to the GPU as bytes summing to 255 (`packWeights`) and the CPU twin reads the same bytes.
 - A compute stage may bind only 8 storage buffers on many phones: joints+weights share one buffer for that reason.
+- Every stage makes its renderer with `startRenderer` (`splat-engine/startRenderer.ts`; `withRetries` is tested): a start that fails is tried twice more after short waits, because a browser can refuse WebGPU and WebGL once and give them a moment later (Matt saw "could not start" go away on reload). A failed try is not disposed, which would lose a WebGL context the canvas hands back to the next try.
 - Headless software WebGPU renders but can't present to a canvas: the lab's `offscreen=1` draws to a target and copies frames to the page; verify uses it.
 - Rigged files: `glb.ts` writes KHR_gaussian_splatting + standard glTF skins/animation + `BLOBSCAPE_gaussian_skinning` (used, not required). three.js's loader opens them as a still splat (verify checks).
 - The pixel pipeline lives in `src/splat-core/pixel.ts` (shared by Splat to Sprite and the engine's walk sheet); color transfer functions, `SH_C0` and the render-target readback (`readbackToSrgb`) in `splat-core/color.ts`.
