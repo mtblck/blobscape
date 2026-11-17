@@ -17,6 +17,7 @@ const {
 import { packWeights, skinBlob, skinCenters, type Skeleton, type Skin, type SkinMode } from './rig.ts'
 import { DepthSort } from './sort.ts'
 import { detailFor, lodRank, screenRadius, type DetailRule } from './lod.ts'
+import { MAX_EDITS, editAt, type ShapeEdit } from './edit.ts'
 import { LIFT, MAX_MARCH, OCC_SCALE, REACH, SHADOW_CELLS, SHADOW_DENSITY, blobSigma, occupancy, shadowBox } from './shadow.ts'
 import { srgbToLinear } from '../splat-core/color.ts'
 
@@ -62,6 +63,8 @@ export interface EngineOptions {
   mode?: SkinMode
   /** Live lights (`setLights`): each blob is lit every frame from its normal. Off unless asked for, as it costs a pass. */
   lights?: boolean
+  /** Paint edits (`setEdits` with op 'paint'): needs the same color pass as lights. Cuts work without it. */
+  paint?: boolean
 }
 
 /** A point light for `setLights`. */
@@ -98,8 +101,15 @@ export class SplatWorld extends Mesh {
    * (red and green hold the part's number plus one, blue the actor's), with no light, fog or soft edge, so where two
    * parts meet the color changes exactly. Pixel mode draws it for the lines between parts.
    */
-  get parts() { return this.flat.value > 0 }
+  get parts() { return this.flat.value === 1 }
   set parts(on: boolean) { this.flat.value = on ? 1 : 0 }
+  /**
+   * While true, the draw is a depth map: every blob a hard disc (as in the map of parts) whose color is its distance in
+   * front of the camera, in units, in all three channels. Drawn after the frame's own render with `hold`, the frame's
+   * sort puts the nearest disc last, so each pixel keeps the nearest depth. `SplatDepth` (depth.ts) draws it.
+   */
+  get depthMap() { return this.flat.value === 2 }
+  set depthMap(on: boolean) { this.flat.value = on ? 2 : 0 }
 
   private readonly boneOffset: number[]
   /** Per actor, the share of its blobs left out (0: all drawn). Sent to the GPU in each of its bones' spare matrix slot. */
@@ -149,7 +159,7 @@ export class SplatWorld extends Mesh {
   private restOpacity?: Float32Array
   private lightsDirty = true
 
-  constructor(actors: Actor[], { bins = 65536, mode = 'quat', lights = false }: EngineOptions = {}) {
+  constructor(actors: Actor[], { bins = 65536, mode = 'quat', lights = false, paint = false }: EngineOptions = {}) {
     const count = actors.reduce((s, a) => s + a.blobs.count, 0)
     const geometry = new InstancedBufferGeometry()
     geometry.setAttribute('position', new BufferAttribute(new Float32Array([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0]), 3))
@@ -187,7 +197,7 @@ export class SplatWorld extends Mesh {
     this.cam = { view: uniform(new Matrix4()), proj: uniform(new Matrix4()), viewport: uniform(new Vector2(1, 1)), depthRange: uniform(new Vector2(0, 1)) }
     this.fog = { color: uniform(new Vector3(0, 0, 0)), range: uniform(new Vector2(0, 0)) }
     this.projectNode = makeProject(buf, sort, this.cam, bins)
-    if (lights) {
+    if (lights || paint) {
       this.lighting = makeLighting(buf.count)
       buf.attrs.push(this.lighting.attr)
       this.lightNode = makeLight(buf, this.lighting)
@@ -226,6 +236,30 @@ export class SplatWorld extends Mesh {
     if (casting && !this.casting) this.bonesDirty = true
     this.casting = casting
   }
+
+  /**
+   * Cuts and paints by shape, live (edit.ts): up to MAX_EDITS spheres or boxes in world space, tested against where each
+   * blob is now. A cut blob gets no size; a painted one is mixed toward the paint before any light (needs `paint: true`
+   * or `lights: true`). Replaces the edits before; [] clears them.
+   */
+  setEdits(edits: readonly ShapeEdit[]) {
+    const E = this.buf.edits
+    const list = edits.slice(0, MAX_EDITS)
+    if (list.some((e) => e.op === 'paint') && !this.lighting) throw new Error('setEdits: paint needs a world made with paint: true')
+    this.edits = list.map((e) => ({ ...e }))
+    E.count.value = list.length
+    for (let k = 0; k < MAX_EDITS; k++) {
+      const e = list[k]
+      const kind = e ? (e.shape === 'box' ? 1 : 0) + (e.op === 'paint' ? 2 : 0) + (e.outside ? 4 : 0) : 0
+      const c = (e?.color ?? [1, 1, 1]).map(srgbToLinear)
+      ;(E.a.array[k] as Vector4).set(e?.center[0] ?? 0, e?.center[1] ?? 0, e?.center[2] ?? 0, kind)
+      ;(E.b.array[k] as Vector4).set(e?.size[0] ?? 0, e?.size[1] ?? 0, e?.size[2] ?? 0, Math.max(0, e?.soft ?? 0))
+      ;(E.c.array[k] as Vector4).set(c[0], c[1], c[2], Math.max(0, Math.min(1, e?.amount ?? 1)))
+    }
+    this.bonesDirty = true
+    this.lightsDirty = true
+  }
+  private edits: ShapeEdit[] = []
 
   /** Call after posing any skeleton. */
   markPosed() { this.bonesDirty = true }
@@ -578,7 +612,9 @@ export class SplatWorld extends Mesh {
         )
         center[i * 4 + 3] = 1
         // level of detail, as the GPU does it: left out (no size), or grown to cover for those that are
-        const f = lodRank(i) < drop ? 0 : 1 / Math.max(1 - drop, 1e-4)
+        let f = lodRank(i) < drop ? 0 : 1 / Math.max(1 - drop, 1e-4)
+        // shape edits, as the GPU does them: a cut blob has no size
+        if (this.edits.length && !editAt(this.edits, center.subarray(i * 4, i * 4 + 3)).keep) f = 0
         if (f !== 1) for (let j = 0; j < 6; j++) cov[i * 6 + j] *= f
       }
     }
@@ -719,6 +755,7 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
     skin: storage(skinAttr, 'uint', n * 2).toReadOnly(),
     bones: storage(boneAttr, 'vec4', Math.max(1, bones) * 5).toReadOnly(),
     color: storage(colorAttr, 'uint', n).toReadOnly(),
+    edits: makeEdits(),
     part: storage(partAttr, 'uint', n).toReadOnly(),
     worldCenterW: storage(worldCenterAttr, 'vec4', n),
     covAW: storage(covAAttr, 'vec4', n),
@@ -823,6 +860,44 @@ function lodRankNode(i: N) {
   return float(h.shiftRight(uint(8))).div(16777216)
 }
 
+interface Edits { a: N; b: N; c: N; count: N }
+
+function makeEdits(): Edits {
+  const v = () => uniformArray(Array.from({ length: MAX_EDITS }, () => new Vector4()), 'vec4')
+  // a: middle and kind (1 box, +2 paint, +4 outside); b: size and soft edge; c: paint (linear) and amount
+  return { a: v(), b: v(), c: v(), count: uniform(0, 'int') }
+}
+
+/** What the shape edits do at p: `keep` 0 or 1, and the paint (premultiplied by `amount`). CPU twin: `editAt` in edit.ts. */
+function editsAt(E: Edits, p: N) {
+  const keep = float(1).toVar(), paint = vec3(0).toVar(), amount = float(0).toVar()
+  TSL.Loop({ start: TSL.int(0), end: E.count, type: 'int', condition: '<', name: 'e' }, ({ e }: { e: N }) => {
+    const A = E.a.element(e), B = E.b.element(e), C = E.c.element(e)
+    const kind = A.w.toVar()
+    const q = p.sub(A.xyz).toVar()
+    const d = abs(q).sub(B.xyz).toVar()
+    const boxD = length(max(d, vec3(0))).add(min(max(d.x, max(d.y, d.z)), 0))
+    const isBox = TSL.mod(kind, 2).greaterThan(0.5)
+    const isPaint = TSL.mod(floor(kind.div(2)), 2).greaterThan(0.5)
+    const sd = select(isBox, boxD, length(q).sub(B.x)).mul(select(kind.greaterThanEqual(4), float(-1), float(1))).toVar()
+    If(isPaint.not(), () => {
+      If(sd.lessThan(0), () => { keep.assign(0) })
+    }).Else(() => {
+      const w = C.w.mul(select(B.w.greaterThan(0), sd.negate().div(max(B.w, 1e-6)).clamp(0, 1), select(sd.lessThan(0), float(1), float(0)))).toVar()
+      paint.assign(paint.mul(float(1).sub(w)).add(C.xyz.mul(w)))
+      amount.assign(amount.mul(float(1).sub(w)).add(w))
+    })
+  })
+  return { keep, paint, amount }
+}
+
+/** A blob's own (linear) color with the paint edits mixed in. */
+function painted(rgb: N, world: N, E: Edits) {
+  const e = editsAt(E, world)
+  // paint is premultiplied: mix(rgb, paint / amount, amount) = rgb·(1 − amount) + paint
+  return rgb.mul(float(1).sub(e.amount)).add(e.paint)
+}
+
 /** One blob through its bones: world center and the six covariance terms, as `skinBlob` does on the CPU. */
 function deformBlob(buf: ReturnType<typeof makeBuffers>, i: N, mode: SkinMode) {
   const src = buf.srcCenter.element(i).toVar()
@@ -871,6 +946,8 @@ function deformBlob(buf: ReturnType<typeof makeBuffers>, i: N, mode: SkinMode) {
   // level of detail (lod.ts): a blob ranked under the share dropped has no size, and is culled where it is projected;
   // the rest grow to cover for it
   const f = select(lodRankNode(i).lessThan(drop), float(0), float(1).div(max(float(1).sub(drop), 0.0001))).toVar()
+  // shape edits: a cut blob has no size either
+  f.mulAssign(editsAt(buf.edits, world).keep)
   return { world, covA: vec4(e('x', 'x'), e('x', 'y'), e('x', 'z'), e('y', 'y')).mul(f).toVar(), covB: vec4(e('y', 'z'), e('z', 'z'), 0, 0).mul(f).toVar() }
 }
 
@@ -1102,7 +1179,8 @@ function makeLight(buf: ReturnType<typeof makeBuffers>, L: Lighting) {
   return Fn(() => {
     const i = instanceIndex
     const color = unpackUnorm4x8(buf.color.element(i)).toVar()
-    L.litW.element(i).assign(vec4(lit(color.rgb, buf.worldCenter.element(i).xyz, buf.covA.element(i), buf.covB.element(i), L), color.a))
+    const world = buf.worldCenter.element(i).xyz.toVar()
+    L.litW.element(i).assign(vec4(lit(painted(color.rgb, world, buf.edits), world, buf.covA.element(i), buf.covB.element(i), L), color.a))
   })().compute(buf.count, [WORKGROUP]).setName('SplatWorldLight')
 }
 
@@ -1130,6 +1208,11 @@ function placeQuad(ndc: N, axes: N, rgba: N) {
   return vec4(ndc.xy.add(axes.xy.mul(uv.x)).add(axes.zw.mul(uv.y)), ndc.z, 1)
 }
 
+/** What a blob draws as: its picture color, its part's flat color (map of parts), or its depth (depth map). */
+function flatColor(flat: N, part: N, depth: N, picture: N) {
+  return select(flat.greaterThan(1.5), vec3(depth), select(flat.greaterThan(0.5), part, picture))
+}
+
 function makeVertexWebGPU(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, fog: Fog, flat: N, L?: Lighting) {
   return Fn(() => {
     const idx = sort.orderRead.element(instanceIndex).toVar()
@@ -1140,7 +1223,7 @@ function makeVertexWebGPU(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, 
     // ndc z = −(P22·z + P32) / z for a perspective camera, so −z = P32 / (ndc z + P22)
     const depth = cameraProjectionMatrix[3].z.div(A.z.add(cameraProjectionMatrix[2].z))
     const part = unpackUnorm4x8(buf.part.element(idx))
-    return placeQuad(A.xyz, buf.splatB.element(idx), vec4(select(flat.greaterThan(0), part.rgb, fogged(color.rgb, depth, fog)), color.a.mul(A.w)))
+    return placeQuad(A.xyz, buf.splatB.element(idx), vec4(flatColor(flat, part.rgb, depth, fogged(color.rgb, depth, fog)), color.a.mul(A.w)))
   })()
 }
 
@@ -1151,9 +1234,9 @@ function makeVertexWebGL(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, m
     const d = deformBlob(buf, idx, mode)
     const p = projectSplat(d.world, d.covA, d.covB, cameraViewMatrix, cameraProjectionMatrix, cameraViewport.zw)
     const color = unpackUnorm4x8(buf.color.element(idx)).toVar()
-    const rgb = L ? lit(color.rgb, d.world, d.covA, d.covB, L) : color.rgb
+    const rgb = L ? lit(painted(color.rgb, d.world, buf.edits), d.world, d.covA, d.covB, L) : color.rgb
     const part = unpackUnorm4x8(buf.part.element(idx))
-    return placeQuad(p.ndc, p.axes, vec4(select(flat.greaterThan(0), part.rgb, fogged(rgb, p.depth, fog)), color.a.mul(p.alphaScale)))
+    return placeQuad(p.ndc, p.axes, vec4(flatColor(flat, part.rgb, p.depth, fogged(rgb, p.depth, fog)), color.a.mul(p.alphaScale)))
   })()
 }
 
