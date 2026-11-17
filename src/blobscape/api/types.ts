@@ -24,8 +24,10 @@ export interface ApiEntry {
   /** For a second name of an export, the first. */
   of?: string
 }
-export interface ApiModule { id: string; title: string; doc: string; entries: ApiEntry[] }
-export interface Api { modules: ApiModule[] }
+export interface ApiModule { id: string; title: string; /** The part it belongs to, an `ApiGroup`'s id. */ group: string; doc: string; entries: ApiEntry[] }
+/** A part of the reference: a handful of modules about one thing, Core first. */
+export interface ApiGroup { id: string; title: string; doc: string }
+export interface Api { groups: ApiGroup[]; modules: ApiModule[] }
 
 /** The docs page's words, shared with the prerender. */
 export const API_PAGE = {
@@ -42,3 +44,6 @@ export const ApiContext = createContext<Api | undefined>(undefined)
 
 /** A module's section on the page. Its own prefix, because a module and a function can share a name (`mix`, `grow`). */
 export const sectionId = (moduleId: string) => `about-${moduleId}`
+
+/** A part's heading on the page. */
+export const groupId = (id: string) => `part-${id}`

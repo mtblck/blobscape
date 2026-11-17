@@ -79,7 +79,7 @@ export default [
   },
   {
     name: 'api-page',
-    about: 'the engine docs: prerendered with the guide and the reference, every section, find a name, fits a phone, the contents follow what is read, linked from the engine page, and an in-app visit loads it',
+    about: 'the engine docs: prerendered with the guide and the reference, every section in its part, find a name, fits a phone, the contents follow what is read, linked from the engine page, and an in-app visit loads it',
     entries: ['src/blobscape/api/EngineApi.tsx', 'src/blobscape/api/types.ts', 'src/blobscape/api/guide.ts', 'src/blobscape/api/useActiveEntry.ts'],
     files: ['src/blobscape/engineApi.json', 'packages/engine/README.md'],
     async run({ base, fails, ok, open, axe }) {
@@ -90,13 +90,13 @@ export default [
       else ok('docs page: prerendered with the guide, the reference and its data, and the engine page links to it')
       const s = await open('/engine/docs/', { viewport: { width: 390, height: 800 } })
       await s.page.waitForSelector('[data-testid=api] article', { timeout: 20000 }).catch(() => {})
-      const count = () => s.page.evaluate(() => ({ sections: document.querySelectorAll('[data-testid=api] > section > h2').length, names: document.querySelectorAll('[data-testid=api] article').length, guide: document.querySelectorAll('[data-testid=api-guide] pre').length, wide: document.documentElement.scrollWidth - window.innerWidth }))
+      const count = () => s.page.evaluate(() => ({ parts: document.querySelectorAll('[data-testid=api-part] > div > h2').length, sections: document.querySelectorAll('[data-testid=api-part] > section > h3').length, names: document.querySelectorAll('[data-testid=api] article').length, guide: document.querySelectorAll('[data-testid=api-guide] pre').length, wide: document.documentElement.scrollWidth - window.innerWidth }))
       const before = await count()
       await s.page.getByLabel('Find a name').fill('setPixels')
       await s.page.waitForTimeout(200)
-      const found = await s.page.evaluate(() => [...document.querySelectorAll('[data-testid=api] article h3 code')].map((c) => c.textContent))
-      if (!(before.sections >= 30 && before.names >= 300 && before.guide >= 4 && before.wide <= 0 && found.includes('Stage') && found.length < 12)) fails.push(`docs page: ${JSON.stringify(before)}, finding setPixels shows ${found.join(', ')}`)
-      else ok(`docs page: the guide and ${before.names} names in ${before.sections - 1} sections fit a phone; finding setPixels leaves ${found.length}`)
+      const found = await s.page.evaluate(() => [...document.querySelectorAll('[data-testid=api] article h4 code')].map((c) => c.textContent))
+      if (!(before.parts >= 6 && before.sections >= 30 && before.names >= 300 && before.guide >= 4 && before.wide <= 0 && found.includes('Stage') && found.length < 12)) fails.push(`docs page: ${JSON.stringify(before)}, finding setPixels shows ${found.join(', ')}`)
+      else ok(`docs page: the guide and ${before.names} names in ${before.sections} sections and ${before.parts} parts fit a phone; finding setPixels leaves ${found.length}`)
       await s.page.getByLabel('Find a name').fill('')
       await axe(s.page, 'docs page')
       // on a wide screen the contents mark what is being read, and a name in a type goes to its entry
@@ -109,6 +109,19 @@ export default [
       const went = await s.page.evaluate(() => ({ hash: location.hash, top: Math.round(document.getElementById('Orbit').getBoundingClientRect().top), current: document.querySelector('nav[aria-label="On this page"] [aria-current]')?.textContent }))
       if (!(reading === 'Stage' && went.hash === '#Orbit' && went.top >= 0 && went.top < 300 && went.current === 'Orbit')) fails.push(`docs page: reading Stage marks ${reading}; the Orbit link gives ${JSON.stringify(went)}`)
       else ok('docs page: the contents mark the entry being read, and a type links to its entry')
+      // the contents: Core is open, a part being read opens itself, and any part opens and shuts by its button
+      const nav = s.page.locator('nav[aria-label="On this page"]')
+      const openParts = () => nav.locator('button[aria-expanded=true]').allTextContents()
+      const first = await openParts()
+      await nav.getByRole('button', { name: 'Files and models' }).click()
+      const opened = await nav.getByRole('link', { name: 'Rigged .glb files' }).isVisible()
+      await nav.getByRole('button', { name: 'Files and models' }).click()
+      const shut = !(await nav.getByRole('link', { name: 'Rigged .glb files' }).isVisible())
+      await s.page.evaluate(() => document.getElementById('Swing').scrollIntoView())
+      await s.page.waitForFunction(() => document.querySelector('nav[aria-label="On this page"] [aria-current]')?.textContent === 'Swing', null, { timeout: 5000 }).catch(() => {})
+      const reads = await openParts()
+      if (!(first.includes('Core') && !first.includes('Files and models') && opened && shut && reads.includes('Movement'))) fails.push(`docs page: contents open ${first.join(', ')}; Files opens ${opened}, shuts ${shut}; reading Swing opens ${reads.join(', ')}`)
+      else ok('docs page: the contents are in parts, Core open, the rest opened by hand or by reading')
       // from another page, the reference loads its data itself (a plain link click navigates in the app)
       await s.page.goto(base + '/contact/')
       await s.page.evaluate(() => { const a = document.createElement('a'); a.href = '/engine/docs/'; a.textContent = 'Docs'; document.querySelector('main').append(a); a.click() })
