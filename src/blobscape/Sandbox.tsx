@@ -23,6 +23,7 @@ import { MeshFileError } from '../splat-engine/meshFile.ts'
 import { isMeshGlb, rigFromModel } from './modelRig.ts'
 import { fillHole, stampDab } from './patch.ts'
 import { BRUSHES, brushDab, type BrushId } from './brushes.ts'
+import { MAX_STOPS, PATH_FPS, pathAt, pathSeconds } from './cameraPath.ts'
 import { fileSpecies, sceneRig, splitScene } from './sceneFile.ts'
 
 type ToolId = 'orbit' | 'add' | 'spray' | 'select' | 'lasso' | 'move' | 'paint' | 'erase' | 'fill' | 'stamp'
@@ -329,6 +330,67 @@ export function Sandbox() {
       setMessage(`Saved ${r.blobs.count.toLocaleString()} blobs on ${r.skeleton.count} bones as a rigged .glb${roaming}`)
     } catch (err) {
       setError(`Couldn't save the .glb: ${err instanceof Error ? err.message : String(err)}. Remove or freeze a creature and try again.`)
+    }
+  }
+
+  // --- camera path -------------------------------------------------------------
+  const [stops, setStops] = useState<Orbit[]>([])
+  const [leg, setLeg] = useState(2)
+  const [touring, setTouring] = useState(false)
+  /** Frames drawn so far while a path is being saved, or null. */
+  const [filming, setFilming] = useState<number | null>(null)
+  const pathFrames = Math.max(2, Math.round(pathSeconds(stops.length, leg) * PATH_FPS) + 1)
+  // Play: the view follows the path on the clock, and stops at the last stop or when anything interrupts
+  useEffect(() => {
+    if (!touring || stops.length < 2) return
+    const began = performance.now(), length = pathSeconds(stops.length, leg) * 1000
+    let raf = 0
+    const tick = () => {
+      const u = (performance.now() - began) / length
+      setOrbit(pathAt(stops, u))
+      // Spark sorts a little behind the view: keep drawing after the last stop until its sort for it is in
+      if (u >= 1) { setTouring(false); view?.invalidate(90) }
+      else raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [touring, stops, leg, view])
+  const saveTour = async () => {
+    if (!view || stops.length < 2 || filming !== null) return
+    setTouring(false)
+    setError('')
+    const was = orbit
+    try {
+      const { startVideo, videoSize } = await import('./diorama/video.ts')
+      const [w, h] = videoSize(view.canvas.width, view.canvas.height)
+      const video = await startVideo(w, h, PATH_FPS)
+      const page = new OffscreenCanvas(w, h), pc = page.getContext('2d')!
+      // video has no see-through: the page's own color goes behind the scene
+      const back = getComputedStyle(view.canvas.parentElement ?? view.canvas).backgroundColor
+      const paper = !back || back === 'rgba(0, 0, 0, 0)' || back === 'transparent' ? themeColor('paper', view.canvas) : back
+      for (let f = 0; f < pathFrames; f++) {
+        setFilming(f + 1)
+        await view.settle(pathAt(stops, f / (pathFrames - 1)))
+        pc.fillStyle = paper
+        pc.fillRect(0, 0, w, h)
+        pc.drawImage(view.canvas, 0, 0, w, h)
+        await video.add(page)
+      }
+      const bytes = await video.finish()
+      const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'video/mp4' }))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${source.replace(/\.[^.]+$/, '').replace(/[^\w-]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'blobscape'}-path.mp4`
+      document.body.append(a)
+      a.click()
+      a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 60_000)
+      setMessage(`Saved a ${pathSeconds(stops.length, leg)} second video, ${w} by ${h}`)
+    } catch (err) {
+      setError(`Couldn't save the video: ${err instanceof Error ? err.message : String(err)}.`)
+    } finally {
+      setFilming(null)
+      setOrbit(was)
     }
   }
 
@@ -1299,6 +1361,18 @@ export function Sandbox() {
                       <Button small onClick={() => { edit(flipUpright); setOrbit((o) => ({ ...o, ...frame(blobsRef.current) })) }} disabled={!blobs.count}>Flip upside down</Button>
                       <Button small onClick={() => { edit(sitOnFloor); setOrbit((o) => ({ ...o, ...frame(blobsRef.current) })) }} disabled={!blobs.count}>Sit on the floor</Button>
                       <Button small onClick={() => setOrbit((o) => ({ ...o, ...frameAll() }))}>Frame the scene</Button>
+                    </div>
+                    <div className="grid gap-3">
+                      <Field label="Camera path">
+                        <div className="flex flex-wrap gap-2">
+                          <Button small onClick={() => { setStops((s) => [...s, { ...orbit, target: [...orbit.target] }]); setMessage(`Stop ${stops.length + 1} saved. Turn the view and add the next`) }} disabled={stops.length >= MAX_STOPS || touring || filming !== null}>Add this view as a stop</Button>
+                          <Button small onClick={() => setStops((s) => s.slice(0, -1))} disabled={!stops.length || touring || filming !== null}>Remove the last</Button>
+                          <Button small onClick={() => setTouring((t) => !t)} disabled={stops.length < 2 || filming !== null} aria-pressed={touring}>{touring ? 'Stop' : 'Play the path'}</Button>
+                          <Button small primary onClick={() => void saveTour()} disabled={stops.length < 2 || filming !== null} data-testid="path-save">{filming === null ? 'Save as MP4' : `Drawing ${filming} of ${pathFrames}…`}</Button>
+                        </div>
+                      </Field>
+                      <p className="text-xs text-ink-faint" data-testid="path-stops">{stops.length ? `${stops.length} ${stops.length === 1 ? 'stop' : 'stops'}${stops.length > 1 ? `, ${pathSeconds(stops.length, leg)} seconds` : ''}.` : 'No stops yet.'} Turn the view to somewhere you like and add it as a stop; two or more make a path the camera glides along. The video is made on your device.</p>
+                      <Slider label="Seconds a stop" value={leg} min={0.5} max={6} step={0.5} onChange={setLeg} format={(v) => `${v} s`} />
                     </div>
                     <Toggle label="X-ray" checked={xray} onChange={setXray} />
                     <p className="text-xs text-ink-faint">X-ray outlines every blob up to {OUTLINE_LIMIT.toLocaleString()}; past that it shows centers as dots.</p>
