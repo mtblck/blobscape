@@ -73,9 +73,9 @@ test('a fire bolt colors the floor, stands flames on it and lights it; when it h
   const d = new Dungeon({ detail: 0.3, look: 'forest', difficulty: 'normal', light: 'live' })
   const idle = { forward: 0, turn: 0 }
   d.game.hold()
-  assert.equal(d.takeRepaint(), true)
+  assert.ok(d.takeRepaint().includes(d.floor))
   d.update(1 / 30, idle)
-  assert.equal(d.takeRepaint(), false, 'a floor nothing happened to is left alone')
+  assert.deepEqual(d.takeRepaint(), [], 'a floor nothing happened to is left alone')
   const floor = d.floor.blobs, own = floor.color.slice(0, floor.count * 3)
   const flames = () => { let n = 0; for (let i = 0; i < FLAMES; i++) if (d.blaze.skeleton.size[i + 1] > 0) n++; return n }
   assert.equal(flames(), 0)
@@ -88,7 +88,7 @@ test('a fire bolt colors the floor, stands flames on it and lights it; when it h
   const slot = d.game.bolts[0].slot
   assert.ok(d.bolts.fire[slot].skeleton.scale[0] > 0.5 && d.bolts.frost[slot].skeleton.scale[0] < 1e-6)
   for (let t = 0; t < 1.2; t += 1 / 30) d.update(1 / 30, idle)
-  assert.equal(d.takeRepaint(), true)
+  assert.ok(d.takeRepaint().includes(d.floor))
   assert.ok(flames() >= 2, `${flames()} flames`)
   assert.ok(d.stainedBlobs > 50, `${d.stainedBlobs} blobs recolored`)
   assert.ok(d.lights().length > lights)
@@ -210,4 +210,35 @@ test('the swing is a low sweep: while it can hit, the blade is below a slime\'s 
   assert.ok(Math.abs(reach - SWORD_REACH) < 0.2, `the blade reaches ${reach.toFixed(2)} m, the rules say ${SWORD_REACH}`)
   // it starts on the hero's right (−x) and ends on the left
   assert.ok(tip(0.3)[0] < -0.8 && tip(0.56)[0] > 0.6)
+})
+
+test('a slime a fire bolt hits burns on its body, a frost bolt puts it out in steam, and frost by a wall frosts the wall', () => {
+  const d = new Dungeon({ detail: 0.3, look: 'forest', difficulty: 'normal', light: 'live' })
+  const idle = { forward: 0, turn: 0 }
+  const g = d.game
+  g.hold()
+  const s = g.place('red', 0, 1.5)
+  s.hp = 99
+  const shown = (sk: { count: number; size: Float32Array }) => { let n = 0; for (let i = 1; i < sk.count; i++) if (sk.size[i] > 0.05) n++; return n }
+  assert.equal(shown(d.bodyFlames.skeleton), 0)
+  d.update(1 / 30, { ...idle, cast: true })
+  for (let t = 0; t < 0.5; t += 1 / 30) d.update(1 / 30, idle)
+  assert.ok(s.alight > 0.5, `alight ${s.alight}`)
+  assert.equal(shown(d.bodyFlames.skeleton), 1)
+  const at = d.bodyFlames.skeleton.posedHead
+  assert.ok(Math.hypot(at[3] - s.x, at[5] - s.z) < 0.05, 'the flame rides on the slime')
+  // the frost bolt meets the burning slime: out, in a puff of steam
+  for (let t = 0; t < 0.6; t += 1 / 30) d.update(1 / 30, idle)
+  d.update(1 / 30, { ...idle, frost: true })
+  for (let t = 0; t < 0.4; t += 1 / 30) d.update(1 / 30, idle)
+  assert.equal(s.alight, 0)
+  assert.ok(shown(d.steam.skeleton) >= 1, 'steam rises')
+  assert.equal(shown(d.bodyFlames.skeleton), 0)
+  // frost on the floor by a wall climbs it, and the wall's blobs turn pale
+  g.ground.light(0, 6.7, 'frost')
+  for (let t = 0; t < 5; t += 1 / 30) d.update(1 / 30, idle)
+  const w = d.walls.blobs
+  let pale = 0
+  for (let i = 0; i < w.count; i++) if (w.color[i * 3 + 2] > 0.6 && w.center[i * 3 + 1] > 0.5) pale++
+  assert.ok(pale > 10, `${pale} frosted wall blobs above the first course`)
 })
