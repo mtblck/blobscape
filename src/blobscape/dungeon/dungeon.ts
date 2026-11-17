@@ -83,6 +83,8 @@ export class Dungeon {
 
   /** Whether the hero blinks after a hurt (the page turns it off under reduced motion). */
   set flicker(on: boolean) { this.clock.flicker = on }
+  /** Whether the live lights cast shadows (the engine's grid of shadows); on unless turned off. */
+  shadows = true
 
   get blobCount() { return this.actors.reduce((s, a) => s + a.blobs.count, 0) }
 
@@ -181,6 +183,8 @@ export class Dungeon {
       floor.push({ position: [x, 0.5, z], color: [0.3 * k, 0.5 * k, 0.85 * k], range: 1.9 })
     })
     floor.sort((a, b) => far(a) - far(b))
-    return [...out, ...extra, ...floor].slice(0, MAX_LIGHTS)
+    const all = [...out, ...extra, ...floor].slice(0, MAX_LIGHTS)
+    if (this.shadows) for (const l of all) l.shadow = true
+    return all
   }
 }

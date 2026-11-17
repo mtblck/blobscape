@@ -1257,7 +1257,8 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     const run = (s, input) => k.page.evaluate(async ([s, input]) => { await window.__dungeon.stage.frame(s, input) }, [s, input])
     await k.page.evaluate(() => { const g = window.__dungeon.stage.dungeon.game; g.hold(); g.place('green', 0.7, g.hero.z + 1.1) })
     await run(0.2, { forward: 0, turn: 0 })
-    const a = await look()
+    // live light with shadows (WebGPU's default) leaves less of the hall torchlit than baked light
+    const a = { ...(await look()), light: await k.page.evaluate(() => window.__dungeon.stage.dungeon.opts.light) }
     // a few swings (running after it when knocked back) burst a green slime
     for (let i = 0; i < 5 && !(await k.page.evaluate(() => window.__dungeon.stage.dungeon.game.score)); i++) { await run(0.05, { forward: 0, turn: 0, swing: true }); await run(0.5, { forward: 0.6, turn: 0 }) }
     const fight = await k.page.evaluate(() => { const g = window.__dungeon.stage.dungeon.game; return { score: g.score, phase: g.slimes[0]?.phase } })
@@ -1265,7 +1266,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     await run(0.5, { forward: 0, turn: 0 })
     const meters = async () => Object.fromEntries(await k.page.getByRole('meter').evaluateAll((els) => els.map((e) => [e.getAttribute('aria-label'), +e.getAttribute('aria-valuenow')])))
     const m = await meters()
-    if (!(a.warm > 20000 && a.green > 150 && fight.score === 1 && fight.phase === 'burst' && m.Magic < 100 && m.Health >= 80)) fails.push(`blobscape dungeon: ${JSON.stringify({ a, fight, m })}`)
+    if (!(a.warm > (a.light === 'live' ? 8000 : 20000) && a.green > 150 && fight.score === 1 && fight.phase === 'burst' && m.Magic < 100 && m.Health >= 80)) fails.push(`blobscape dungeon: ${JSON.stringify({ a, fight, m })}`)
     else ok(`blobscape dungeon: the hall draws (${a.warm} torchlit, ${a.green} slime pixels), swings burst the slime, a bolt spends magic (${m.Magic} left)`)
     await k.page.screenshot({ path: join(shots, 'blobscape-dungeon.png') })
     await axe(k.page, 'blobscape dungeon')
@@ -1283,6 +1284,16 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     const was = await k.page.evaluate(() => ({ light: window.__dungeon.stage.dungeon.opts.light, backend: window.__dungeon.stage.backend }))
     await run(0.1, { forward: 0, turn: 0 })
     const liveLook = await look()
+    // shadows (on by default in live light): the GPU's grid of what blocks light matches the CPU's, and turning them off brightens the hall
+    if (was.backend === 'webgpu') {
+      const sh = await k.page.evaluate(async () => { const st = window.__dungeon.stage; return st.world.checkShadows(st.renderer) })
+      await tabClick(k.page.getByLabel('Shadows'))
+      await run(0.1, { forward: 0, turn: 0 })
+      const unshaded = await look()
+      await tabClick(k.page.getByLabel('Shadows'))
+      if (!(sh.gpuTotal > 0 && Math.abs(sh.gpuTotal - sh.cpuTotal) < sh.cpuTotal * 0.001 && sh.differ < 50 && unshaded.warm > liveLook.warm)) fails.push(`blobscape dungeon shadows: ${JSON.stringify({ sh, shaded: liveLook, unshaded })}`)
+      else ok(`blobscape dungeon: shadows from live lights (GPU grid matches the CPU, ${sh.differ} cells off by more than a unit); turning them off lights ${unshaded.warm - liveLook.warm} more pixels`)
+    }
     await tabClick(k.page.getByRole('button', { name: 'Baked', exact: true }))
     await k.page.waitForFunction(() => window.__dungeon.stage.dungeon.opts.light === 'baked', null, { timeout: 30000 }).catch(() => {})
     await run(0.1, { forward: 0, turn: 0 })
