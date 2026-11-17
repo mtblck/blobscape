@@ -55,7 +55,28 @@ Formations, shapes that come from a rule:
 
 Any of them can grow as you watch: put the part on a bone and give the bone a `sprout` move.
 
-Paint the built things and formations with `pieces`: each brick, block, post, stone, column or crystal takes one of the `colors` (earlier ones commoner) and the joints between them `line`; `ordered` takes the colors in turn by piece instead. The checker turns `pieces` down on a shape without pieces.
+Living forms, grown by a rule from a `seed`:
+
+- `tree`: a gnarled tree grown by space colonization: `points` scattered through a `crown` (radii) sitting `height` above `at` pull the branches toward them, and every limb is as thick as what it carries (`r` at the foot). `leaves` puts a ball that size on every end; `only` ('limbs' or 'leaves') keeps one so two parts can paint it in two colors.
+- `cactus`: a ribbed column `height` tall and `r` round, with `ribs` (8) and up to four `arms` that bend up.
+- `rosette`: a succulent: `leaves` thick pointed leaves set by the golden angle, the inner ones short and upright. A `split` paint tints the tips.
+- `brackets`: `count` shelf fungi stacked up a trunk from `at`, facing `facing` ([x, z]), smaller as they go up.
+- `brain`: brain coral: a dome `r` round worn into meandering grooves (`groove` apart).
+- `shell`: a shell wound on a log spiral, `size` wide with `turns` whorls; `spire` 0 is a flat coil, 1 a tall whelk. Each stretch is a piece, so `pieces` with `ordered` bands it.
+- `horn`: from `at` along `dir`, `length` long and `r` at the root, turning `curl` times (1 is a full ram's curl), winding sideways by `twist`, with `ridges` rings.
+- `antler`: a main beam from `at` along `dir` with `tines` rising off it.
+- `ribs`: a spine from `from` to `to` with `count` pairs of ribs reaching `span` out and curving `drop` down.
+
+Worn land, rock shaped by water and weather:
+
+- `land`: ground `half` wide round `at` raised by `peaks` (each a place, a height and a reach) and `noise`, then worn: `drops` water drops (up to 30000) each run downhill, wearing gullies and laying fans where they slow, and `slump` lets slopes slide to scree. With `beds` (from the bottom up, repeating; each a `thick` and how `hard`, 0 to 1) hard beds stand as cliffs with benches on top and soft ones wear back to slopes. Pieces are the beds, and -1 is scree and fans, so paint it `pieces` with `ordered` and a `line` for the scree.
+- `butte`: a mesa `r` round and `height` tall in `beds`, each worn back by how soft it is (`wear`), with a `cap` this much wider than the rock under it.
+- `hoodoo`: a thin waisted spire of soft beds under a hard cap.
+- `arch`: a fin of rock in beds from `from` to `to`, `thick` through, with a hole worn through its soft bed (`soft`, the hole's middle as a share of `height`).
+- `mud`: dried mud `r` round cracked into plates about `plate` wide, their edges curled up by `curl`. Each plate is a piece and the cracks are -1.
+- `pebbles`: `count` pebbles along a stream bed `path`, `width` across, the biggest (`size`) mid-stream where the water is fastest.
+
+Paint the built things, formations, shells, worn land and mud with `pieces`: each brick, block, post, stone, column, crystal, bed or plate takes one of the `colors` (earlier ones commoner) and the joints between them `line`; `ordered` takes the colors in turn by piece instead. The checker turns `pieces` down on a shape without pieces.
 
 Paints: a color, or `bands`, `bricks`, `hex` (honeycomb, scales, paving), `speckle`, `patches`, `faces` (top, side, under), `split` (one paint below a height, another above), `key` (for `blocks` only), `pieces` (for built things and the other shapes of pieces). Paints nest.
 

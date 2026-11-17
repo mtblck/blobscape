@@ -7,6 +7,8 @@ import { INK_MARKS, LETTERS, MAX_LAMPS, PAINTED, blend, box, many, lathe, letter
 import { PUFFS } from './poke.ts'
 import { GROW_STYLES, grow, growBounds, type GrowStyle } from './grow.ts'
 import { ARCHES, arcade, fence, steps, wall } from './built.ts'
+import { antler, brackets, brain, cactus, horn, ribs, rosette, shell, tree } from './life.ts'
+import { MAX_DROPS, arch, butte, hoodoo, land, mud, pebbles } from './erode.ts'
 import { RISES, cluster, columns, crystal, drips, flowstone, geode, icicles } from './forms.ts'
 
 /**
@@ -218,6 +220,45 @@ export type ShapeDoc =
   | { kind: 'flowstone'; at: Vec3; along: [number, number]; width: number; drop: number; folds?: number; seed: number }
   /** Icicles under every downward edge of the shape `on` (which is only looked at: give it a part of its own), about `every` apart, the longest `length`; only from edges higher than `above`, if given (not where it rests on the ground). */
   | { kind: 'icicles'; on: ShapeDoc; every: number; length: number; above?: number; seed: number }
+  /**
+   * A tree grown by space colonization: its trunk rises `height` from `at`, then branches grow to fill a crown with
+   * radii `crown`, each limb as thick as what it carries (the trunk `r` at its foot). `points` (160, up to 400) makes
+   * it finer, `leaves` puts a ball that size at every twig's end, and `only` ('limbs' or 'leaves') keeps one of them.
+   */
+  | { kind: 'tree'; at: Vec3; height: number; crown: Vec3; r: number; points?: number; leaves?: number; only?: 'limbs' | 'leaves'; seed: number }
+  /** A ribbed cactus `height` tall and `r` thick with `ribs` (8) and `arms` (0 to 4, 2) that bend up. */
+  | { kind: 'cactus'; at: Vec3; height: number; r: number; ribs?: number; arms?: number; seed: number }
+  /** A succulent: `leaves` (3 to 60) thick pointed leaves set round a spiral, reaching `r`, the inner ones short and upright. */
+  | { kind: 'rosette'; at: Vec3; r: number; leaves: number; seed: number }
+  /** Bracket fungi: `count` half-round shelves `r` wide stacked up a trunk from `at`, facing out along `facing` ([x, z]). */
+  | { kind: 'brackets'; at: Vec3; facing: [number, number]; r: number; count: number; seed: number }
+  /** Brain coral: a dome `r` across worn into meandering grooves `groove` wide. */
+  | { kind: 'brain'; at: Vec3; r: number; groove?: number; seed: number }
+  /** A shell wound on a log spiral, about `size` across: `turns` whorls (3), `spire` 0 (a flat nautilus coil) to 1 (a tall whelk), turned `facing` degrees. Each stretch of its tube is a piece. */
+  | { kind: 'shell'; at: Vec3; size: number; turns?: number; spire?: number; facing?: number }
+  /** A horn from `at` along `dir`, `length` long and `r` thick at the root: `curl` turns (0.5; 1 is a ram's full curl) down and back, `twist` winding it sideways, `ridges` rings (12). */
+  | { kind: 'horn'; at: Vec3; dir: Vec3; length: number; r: number; curl?: number; twist?: number; ridges?: number }
+  /** An antler: a main beam from `at` along `dir` that sweeps up and round, with `tines` (1 to 8) rising off it. */
+  | { kind: 'antler'; at: Vec3; dir: Vec3; length: number; r: number; tines: number; seed: number }
+  /** A spine from `from` to `to` with `count` pairs of ribs curving out `span` and down `drop`, widest in the middle, `r` thick. */
+  | { kind: 'ribs'; from: Vec3; to: Vec3; count: number; span: number; drop: number; r: number }
+  /**
+   * Land worn by water: hills (`peaks`, each [x, z], a height and a reach) and `noise` on a block `half` across, `base`
+   * deep (0.2), then worn by `drops` water drops (up to 30000) that carve gullies and drop what they carry in fans, and
+   * slumped (`slump`, 0 to 1) to scree. `beds` lays it in rock beds from its foot up, soft ones wearing faster.
+   * Pieces: each bed (for `pieces` with `ordered`), and -1 (`line`) where something was laid down.
+   */
+  | { kind: 'land'; at: Vec3; half: [number, number]; base?: number; peaks: { at: [number, number]; h: number; r: number }[]; noise?: number; drops?: number; slump?: number; beds?: { thick: number; hard: number }[]; seed: number }
+  /** A butte or mesa: rock in `beds` turned about the upright, each soft bed worn back by `wear` (0.3) so hard beds stand out as ledges; `cap` makes a caprock that much wider, overhanging. Each bed is a piece. */
+  | { kind: 'butte'; at: Vec3; r: number; height: number; beds?: { thick: number; hard: number }[]; wear?: number; cap?: number; seed: number }
+  /** A hoodoo: a thin pillar of soft rock, waisted where it is softest, under a hard cap. */
+  | { kind: 'hoodoo'; at: Vec3; height: number; r: number; seed: number }
+  /** A natural arch: a fin of rock in `beds` from `from` to `to` (its feet), `height` tall and `thick`, with a hole worn through its soft bed at `soft` of its height (0.4). */
+  | { kind: 'arch'; from: Vec3; to: Vec3; height: number; thick: number; soft?: number; beds?: { thick: number; hard: number }[]; seed: number }
+  /** Dried mud, `r` round `at`, cracked into plates about `plate` wide whose edges `curl` up (0 to 1, 0.5). Each plate is a piece and the cracks are `line`. */
+  | { kind: 'mud'; at: Vec3; r: number; plate: number; curl?: number; seed: number }
+  /** `count` pebbles (up to 200) along a stream's `path`, `width` wide: the biggest, `size`, mid-stream where it runs fastest. Each is a piece. */
+  | { kind: 'pebbles'; path: Vec3[]; width: number; count: number; size: number; seed: number }
   /** The first shape with the second cut out of it. */
   | { kind: 'cut'; shape: ShapeDoc; hole: ShapeDoc }
   /** A lumpy version: `by` is how far the surface moves, `scale` how big the lumps are. */
@@ -297,7 +338,7 @@ const MAX_SPECKS = 300
 const SPECK_KINDS: SpeckKind[] = ['dust', 'embers', 'rain', 'snow', 'fireflies', 'bubbles']
 /** A value for a message: only what is safe to print (anything can arrive from a prompt). */
 const COVERS = ['snow', 'moss', 'dust']
-const SHAPE_KINDS = ['sphere', 'ball', 'box', 'cylinder', 'cone', 'ring', 'roof', 'join', 'lathe', 'sweep', 'grow', 'text', 'blocks', 'wall', 'steps', 'fence', 'arcade', 'crystal', 'crystals', 'geode', 'columns', 'drips', 'flowstone', 'icicles', 'cut', 'rough']
+const SHAPE_KINDS = ['sphere', 'ball', 'box', 'cylinder', 'cone', 'ring', 'roof', 'join', 'lathe', 'sweep', 'grow', 'text', 'blocks', 'wall', 'steps', 'fence', 'arcade', 'crystal', 'crystals', 'geode', 'columns', 'drips', 'flowstone', 'icicles', 'tree', 'cactus', 'rosette', 'brackets', 'brain', 'shell', 'horn', 'antler', 'ribs', 'land', 'butte', 'hoodoo', 'arch', 'mud', 'pebbles', 'cut', 'rough']
 const BLENDS = ['smooth', 'chamfer', 'stairs']
 /** The keys paints use, found anywhere inside one. */
 const keysIn = (p: unknown): Record<string, unknown>[] => {
@@ -340,12 +381,26 @@ function halfSize(s: ShapeDoc): Vec3 {
     case 'flowstone': return [s.width / 2 + s.drop * 0.25, s.drop / 2, s.width / 2 + s.drop * 0.25]
     // only the icicles are drawn, under the host's edges: about a third of its box, as deep as they hang
     case 'icicles': { const h = halfSize(s.on); return [h[0] / 2, s.length / 2, h[2] / 2] }
+    case 'tree': return [s.crown[0] + s.r, (s.height + s.crown[1] * 1.8) / 2, s.crown[2] + s.r]
+    case 'cactus': return [s.r * 3, s.height / 2, s.r * 3]
+    case 'rosette': return [s.r, s.r / 2, s.r]
+    case 'brackets': return [s.r, (s.count * s.r * 0.55) / 2, s.r]
+    case 'brain': return [s.r, s.r / 2, s.r]
+    case 'shell': return [s.size / 2, s.size / 2 + (s.spire ?? 0) * s.size * 0.6, s.size / 2]
+    case 'horn': case 'antler': return [s.length / 2, s.length / 2, s.length / 2]
+    case 'ribs': { const l = Math.hypot(s.to[0] - s.from[0], s.to[1] - s.from[1], s.to[2] - s.from[2]); return [l / 2 + s.span, s.drop / 2, l / 2 + s.span] }
+    case 'land': return [s.half[0], (Math.max(0, ...s.peaks.map((k) => k.h)) + (s.noise ?? 0) + (s.base ?? 0.2)) / 2, s.half[1]]
+    case 'butte': return [s.r * (1.3 + (s.cap ?? 0)), s.height / 2, s.r * (1.3 + (s.cap ?? 0))]
+    case 'hoodoo': return [s.r * 1.6, s.height / 2, s.r * 1.6]
+    case 'arch': { const l = Math.hypot(s.to[0] - s.from[0], s.to[2] - s.from[2]); return [l / 2 + s.thick, s.height / 2, l / 2 + s.thick] }
+    case 'mud': return [s.r, s.plate * 0.1, s.r]
+    case 'pebbles': return [0, 1, 2].map((i) => (i === 1 ? s.size / 2 : (Math.max(...s.path.map((q) => q[i])) - Math.min(...s.path.map((q) => q[i]))) / 2 + s.width / 2)) as Vec3
     case 'cut': case 'rough': return halfSize(s.shape)
   }
 }
 
 /** The shapes the `pieces` paint can paint, as they are or cut and roughened. */
-const PIECED = ['wall', 'steps', 'fence', 'arcade', 'crystals', 'geode', 'columns', 'drips', 'icicles']
+const PIECED = ['wall', 'steps', 'fence', 'arcade', 'crystals', 'geode', 'columns', 'drips', 'icicles', 'shell', 'land', 'butte', 'hoodoo', 'arch', 'mud', 'pebbles']
 const hasPieces = (s: unknown): boolean => {
   if (typeof s !== 'object' || s === null) return false
   const q = s as Record<string, unknown>
@@ -389,6 +444,11 @@ export function checkScene(doc: unknown): string[] {
   const axis = (v: unknown, at: string) => { if (!AXES.includes(v as string)) bad(at, "must be 'x', 'y' or 'z'") }
   const count = (v: unknown, at: string, min: number, max: number, optional = false) => { if (optional && v === undefined) return; if (typeof v !== 'number' || !Number.isInteger(v) || v < min || v > max) bad(at, `must be a whole number from ${min} to ${max}`) }
   const sides = (v: unknown, at: string) => count(v, at, 3, 8, true)
+  const beds = (v: unknown, at: string) => {
+    if (v === undefined) return
+    if (!Array.isArray(v) || !v.length || v.length > 12) { bad(at, 'must be a list of 1 to 12 beds'); return }
+    v.forEach((b, i) => { if (!obj(b)) bad(`${at}[${i}]`, 'must be an object'); else { num(b.thick, `${at}[${i}].thick`, 0.01, 2); num(b.hard, `${at}[${i}].hard`, 0, 1) } })
+  }
   const seed = (v: unknown, at: string) => { if (typeof v !== 'number' || !Number.isInteger(v) || v < 0) bad(at, 'must be a whole number, 0 or more') }
   const whole = (v: unknown, at: string) => { if (typeof v !== 'number' || !Number.isInteger(v) || v === 0 || Math.abs(v) > 60) bad(at, 'must be a whole number of times per loop (not 0), so the scene loops') }
 
@@ -562,6 +622,55 @@ export function checkScene(doc: unknown): string[] {
         break
       case 'icicles':
         shape(s.on, `${at}.on`, depth + 1); num(s.every, `${at}.every`, 0.01, 1); num(s.length, `${at}.length`, 0.01, 2); opt(s.above, `${at}.above`, -REACH, REACH); seed(s.seed, `${at}.seed`)
+        break
+      case 'tree':
+        vec(s.at, `${at}.at`); num(s.height, `${at}.height`, 0, REACH); vec(s.crown, `${at}.crown`, 0.05, 2); num(s.r, `${at}.r`, 0.005, 0.5)
+        count(s.points, `${at}.points`, 10, 400, true); opt(s.leaves, `${at}.leaves`, 0, 0.5)
+        if (s.only !== undefined && s.only !== 'limbs' && s.only !== 'leaves') bad(`${at}.only`, "must be 'limbs' or 'leaves'")
+        if (s.only === 'leaves' && !s.leaves) bad(`${at}.leaves`, "is needed when only is 'leaves'")
+        seed(s.seed, `${at}.seed`)
+        break
+      case 'cactus': vec(s.at, `${at}.at`); num(s.height, `${at}.height`, 0.05, REACH); num(s.r, `${at}.r`, 0.01, 1); count(s.ribs, `${at}.ribs`, 3, 24, true); count(s.arms, `${at}.arms`, 0, 4, true); seed(s.seed, `${at}.seed`); break
+      case 'rosette': vec(s.at, `${at}.at`); num(s.r, `${at}.r`, 0.02, 1); count(s.leaves, `${at}.leaves`, 3, 60); seed(s.seed, `${at}.seed`); break
+      case 'brackets':
+        vec(s.at, `${at}.at`); vec(s.facing, `${at}.facing`, -1, 1, 2); num(s.r, `${at}.r`, 0.01, 1); count(s.count, `${at}.count`, 1, 8); seed(s.seed, `${at}.seed`)
+        if (Array.isArray(s.facing) && Math.hypot(Number(s.facing[0]) || 0, Number(s.facing[1]) || 0) < 0.1) bad(`${at}.facing`, 'must point somewhere along the ground')
+        break
+      case 'brain': vec(s.at, `${at}.at`); num(s.r, `${at}.r`, 0.03, 2); opt(s.groove, `${at}.groove`, 0.01, 1); seed(s.seed, `${at}.seed`); break
+      case 'shell': vec(s.at, `${at}.at`); num(s.size, `${at}.size`, 0.03, 2); opt(s.turns, `${at}.turns`, 1, 6); opt(s.spire, `${at}.spire`, 0, 1); opt(s.facing, `${at}.facing`, -360, 360); break
+      case 'horn':
+        vec(s.at, `${at}.at`); vec(s.dir, `${at}.dir`, -1, 1); num(s.length, `${at}.length`, 0.02, 2); num(s.r, `${at}.r`, 0.003, 0.5)
+        opt(s.curl, `${at}.curl`, -1.5, 1.5); opt(s.twist, `${at}.twist`, -1, 1); opt(s.ridges, `${at}.ridges`, 0, 40)
+        if (Array.isArray(s.dir) && Math.hypot(...s.dir.map((c) => Number(c) || 0)) < 0.1) bad(`${at}.dir`, 'must point somewhere')
+        break
+      case 'antler':
+        vec(s.at, `${at}.at`); vec(s.dir, `${at}.dir`, -1, 1); num(s.length, `${at}.length`, 0.02, 2); num(s.r, `${at}.r`, 0.003, 0.5); count(s.tines, `${at}.tines`, 1, 8); seed(s.seed, `${at}.seed`)
+        if (Array.isArray(s.dir) && Math.hypot(...s.dir.map((c) => Number(c) || 0)) < 0.1) bad(`${at}.dir`, 'must point somewhere')
+        break
+      case 'ribs':
+        vec(s.from, `${at}.from`); vec(s.to, `${at}.to`); count(s.count, `${at}.count`, 1, 16); num(s.span, `${at}.span`, 0.01, 2); num(s.drop, `${at}.drop`, 0, 2); num(s.r, `${at}.r`, 0.003, 0.3)
+        if (Array.isArray(s.from) && Array.isArray(s.to) && Math.hypot(...s.from.map((c, i) => (Number(c) || 0) - (Number((s.to as unknown[])[i]) || 0))) < 0.05) bad(`${at}.to`, 'must be apart from from')
+        break
+      case 'land':
+        vec(s.at, `${at}.at`); vec(s.half, `${at}.half`, 0.1, REACH, 2); opt(s.base, `${at}.base`, 0, 2); opt(s.noise, `${at}.noise`, 0, 1)
+        if (!Array.isArray(s.peaks) || s.peaks.length > 16) bad(`${at}.peaks`, 'must be a list of at most 16')
+        else s.peaks.forEach((k: unknown, i: number) => {
+          if (!obj(k)) { bad(`${at}.peaks[${i}]`, 'must be an object'); return }
+          vec(k.at, `${at}.peaks[${i}].at`, -REACH, REACH, 2); num(k.h, `${at}.peaks[${i}].h`, -2, 3); num(k.r, `${at}.peaks[${i}].r`, 0.05, REACH)
+        })
+        count(s.drops, `${at}.drops`, 0, MAX_DROPS, true); opt(s.slump, `${at}.slump`, 0, 1); beds(s.beds, `${at}.beds`); seed(s.seed, `${at}.seed`)
+        break
+      case 'butte': vec(s.at, `${at}.at`); num(s.r, `${at}.r`, 0.02, 2); num(s.height, `${at}.height`, 0.05, REACH); beds(s.beds, `${at}.beds`); opt(s.wear, `${at}.wear`, 0, 0.8); opt(s.cap, `${at}.cap`, 0, 1.5); seed(s.seed, `${at}.seed`); break
+      case 'hoodoo': vec(s.at, `${at}.at`); num(s.height, `${at}.height`, 0.05, REACH); num(s.r, `${at}.r`, 0.01, 1); seed(s.seed, `${at}.seed`); break
+      case 'arch':
+        vec(s.from, `${at}.from`); vec(s.to, `${at}.to`); num(s.height, `${at}.height`, 0.1, REACH); num(s.thick, `${at}.thick`, 0.02, 1); opt(s.soft, `${at}.soft`, 0.15, 0.7); beds(s.beds, `${at}.beds`); seed(s.seed, `${at}.seed`)
+        if (Array.isArray(s.from) && Array.isArray(s.to) && Math.hypot((s.to[0] as number) - (s.from[0] as number), (s.to[2] as number) - (s.from[2] as number)) < 0.1) bad(`${at}.to`, 'must be apart from from along the ground')
+        break
+      case 'mud': vec(s.at, `${at}.at`); num(s.r, `${at}.r`, 0.05, 3); num(s.plate, `${at}.plate`, 0.03, 1); opt(s.curl, `${at}.curl`, 0, 1); seed(s.seed, `${at}.seed`); break
+      case 'pebbles':
+        if (!Array.isArray(s.path) || s.path.length < 2 || s.path.length > 16) bad(`${at}.path`, 'must be a list of 2 to 16 points')
+        else s.path.forEach((q: unknown, i: number) => vec(q, `${at}.path[${i}]`))
+        num(s.width, `${at}.width`, 0.02, 2); count(s.count, `${at}.count`, 1, 200); num(s.size, `${at}.size`, 0.005, 0.5); seed(s.seed, `${at}.seed`)
         break
       case 'cut': shape(s.shape, `${at}.shape`, depth + 1); shape(s.hole, `${at}.hole`, depth + 1); break
       case 'rough': shape(s.shape, `${at}.shape`, depth + 1); num(s.by, `${at}.by`, 0, 0.3); opt(s.scale, `${at}.scale`, 0.02, REACH); break
@@ -790,6 +899,21 @@ function toShape(s: ShapeDoc, thin: number): Shape {
     case 'drips': return drips(s, thin)
     case 'flowstone': return flowstone(s)
     case 'icicles': return icicles(toShape(s.on, thin), { ...s, every: Math.max(s.every, thin * 2) }, thin)
+    case 'tree': return tree({ ...s, r: Math.max(s.r, thin) }, thin)
+    case 'cactus': return cactus({ ...s, r: Math.max(s.r, thin * 1.5) })
+    case 'rosette': return rosette(s, thin)
+    case 'brackets': return brackets({ ...s, r: Math.max(s.r, thin * 3) })
+    case 'brain': return brain(s)
+    case 'shell': return shell(s, thin)
+    case 'horn': return horn(s, thin)
+    case 'antler': return antler(s, thin)
+    case 'ribs': return ribs(s, thin)
+    case 'land': return land(s)
+    case 'butte': return butte(s)
+    case 'hoodoo': return hoodoo(s)
+    case 'arch': return arch(s)
+    case 'mud': return mud(s, thin / 0.75)
+    case 'pebbles': return pebbles(s, thin)
     case 'cut': return cut(toShape(s.shape, thin), toShape(s.hole, 0))
     case 'rough': {
       const k = 1 / (s.scale ?? 0.5)
