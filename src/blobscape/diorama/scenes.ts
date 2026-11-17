@@ -40,15 +40,18 @@ export interface Diorama {
   palette: { label: string; colors: Rgb[] }
   sky: NonNullable<PixelLook['sky']>
   /** How it starts out: the Finish controls. */
-  finish: { dither: number; glow: number; outline: boolean; edges: boolean; sky: boolean }
+  finish: { dither: number; glow: number; outline: boolean; edges: boolean; sky: boolean; steps: boolean }
   views: { id: string; label: string; orbit: Orbit }[]
   /** Degrees the view rocks to either side while it plays, once a loop. */
   swing: number
-  make(spacing: number): Built
+  /** Cuts the scene. With `steps` (a palette), it is painted in steps of that palette as it is cut. */
+  make(spacing: number, steps?: Rgb[]): Built
   pose(sk: Skeleton, t: number): void
   lights(t: number): PointLight[]
   /** Distance haze: its color (linear) and where it starts and would be total, in units past the view's target. */
   haze?: { color: [number, number, number]; from: number; to: number }
+  /** Parts (by their place in the list) that meet others by design: the check for parts passing through each other lets them. */
+  touching?: number[]
   /** How big its description is, in bytes, written out as JSON: only for a scene that is data alone. */
   bytes?: number
   /** How many moves its description lists. */
@@ -67,7 +70,7 @@ const LIGHTHOUSE: Diorama = {
   loop: LOOP,
   palette: { label: OWN_PALETTE, colors: PALETTES[0].colors },
   sky: [[9, 13, 32], [60, 94, 164]],
-  finish: { dither: 0.05, glow: 1.5, outline: true, edges: true, sky: true },
+  finish: { dither: 0.05, glow: 1.5, outline: true, edges: true, sky: true, steps: false },
   views: [
     { id: 'shore', label: 'From the shore', orbit: { target: [0.05, 0.84, 0.05], distance: 3.7, azimuth: 28, elevation: 10 } },
     { id: 'above', label: 'From above', orbit: { target: [0, 0.6, 0], distance: 5.2, azimuth: 40, elevation: 38 } },
@@ -98,19 +101,20 @@ export function described(id: string, doc: SceneDoc, about: string): Diorama {
     bytes: new TextEncoder().encode(JSON.stringify(doc)).length,
     moves: doc.moves?.length ?? 0,
     parts: doc.parts.length,
+    touching: c.touching,
     loop: c.loop,
     palette: { label: OWN_PALETTE, colors: c.palette },
     // with no sky of its own, the switch gives it a night made of its two darkest colors
     sky: c.look.sky ?? night(c.palette),
-    finish: { dither: c.look.dither, glow: c.look.glow, outline: !!c.look.outline, edges: !!c.look.edges, sky: !!c.look.sky },
+    finish: { dither: c.look.dither, glow: c.look.glow, outline: !!c.look.outline, edges: !!c.look.edges, sky: !!c.look.sky, steps: c.steps },
     views: [
       { id: 'start', label: 'From the front', orbit: c.orbit },
       { id: 'above', label: 'From above', orbit: { ...c.orbit, elevation: 40, distance: c.orbit.distance * 1.25 } },
       { id: 'close', label: 'Close up', orbit: { ...c.orbit, target: [c.orbit.target[0], c.orbit.target[1] * 0.6, c.orbit.target[2]], distance: c.orbit.distance * 0.55 } },
     ],
     swing: c.swing,
-    make: (spacing) => {
-      const built = buildVoxels(c.spec(spacing))
+    make: (spacing, steps) => {
+      const built = buildVoxels(c.spec(spacing, steps))
       const empty = c.empty(built)
       if (empty.length) console.warn(`${c.name}: parts ${empty.join(', ')} have no blobs at this detail`)
       return built

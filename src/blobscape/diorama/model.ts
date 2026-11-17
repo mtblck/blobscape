@@ -106,8 +106,8 @@ export function modelDiorama(name: string, file: MeshFile, textures: Texture[]):
   const compiled = compileScene(doc)
   return {
     ...described('model', doc, `A model opened from ${name}, turning on a plinth`),
-    make(spacing) {
-      const spec = compiled.spec(spacing)
+    make(spacing, steps) {
+      const spec = compiled.spec(spacing, steps)
       // half a cell: fine enough that a thin part of the model keeps its own distance
       const shape = meshShape(mesh, spacing * 0.5)
       spec.parts.push({ shape, color: meshColor(mesh, shape, undefined, textures), bone: 'model' })

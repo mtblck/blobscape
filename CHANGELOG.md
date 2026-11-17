@@ -8,6 +8,17 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 
 - Train a scene from your own capture in the sandbox: in the Scene tab, pick a folder of photos that comes with their camera positions (Nerfstudio or COLMAP format, as scanning apps export) and the scene is trained on your graphics card, growing in the view as it goes. It needs Chrome or Edge on a computer. Loose photos don't work yet.
 
+- Pixel Diorama draws cleaner pixels. Each pixel is now settled from four samples (Finish tab, Four samples a pixel): it takes whichever thing most of them show, so edges are one thing or the other and thin parts stop breaking up. Outlines take a darker tone of the thing they are round instead of one color for everything. And a scene can be painted in steps of its palette as it is cut, so shade falls in flat bands (the windmill is; Paint in steps of the palette).
+
+- How it's made, under Pixel Diorama's view: five steps from plain clay shapes, to one blob in eight, the paint, the four samples behind each pixel under a magnifier, and the finished picture.
+
+- Pixel Diorama opens a scene description (.json) from your computer as one more scene, and says where a broken one is broken.
+
+- For people (and assistants) writing scenes: `npm run scene -- my-scene.json` checks a description, cuts it and says what to fix, and `--shots` draws it. Scenes are now also checked for parts that pass through each other as they play, like sails through a tower.
+- The support button opens two ways to support: Buy me a coffee (Ko-fi) and Star on GitHub, in a plain card.
+
+- A simpler header: Engine opens a list with its overview, the docs, the file spec and the package on npm and GitHub; the theme has its own button; and wide screens no longer have a Menu button. The support button is on every page, as a small circle where a page has controls. The engine page has a Read the docs button at the top.
+
 - Tap to select in the sandbox: turn on "A click with Select takes the whole thing" in the Selection tab and a click on a mug, a leaf or a chair selects everything that belongs to it, the far side too. A small model (a slimmed Segment Anything, 14 MB, served by this site) looks at the view on your device.
 
 - The sandbox works with an assistant in the browser: where the browser has WebMCP (Chrome is trying it out), the sandbox offers its actions as tools, so an assistant can look at the scene, build one from a scene description, add a creature, cut, recolor, paint with a brush, save and undo. Other browsers see no change.

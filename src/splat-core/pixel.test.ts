@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { alphaCut, autoPalette, downsample, makeFrame, outline, pixelArt, quantize, lookColors, snapColors, removeStrays, countSolid, tidyLone, type Rgb } from './pixel.ts'
+import { alphaCut, autoPalette, downsample, makeFrame, outline, pixelArt, quantize, lookColors, snapColors, removeStrays, countSolid, tidyLone, resolveFine, type Rgb } from './pixel.ts'
 
 const solid = (w: number, h: number, on: (x: number, y: number) => boolean, rgb = [200, 40, 40]) => {
   const f = makeFrame(w, h)
@@ -224,4 +224,69 @@ test('tidyLone: a stray in a flat patch takes its neighbors\' color; dither, edg
   // an empty pixel (sky) is never touched
   solid.data[(2 * w + 2) * 4 + 3] = 0
   assert.deepEqual(got(tidyLone(art, solid), 2, 2), B)
+})
+
+test('resolveFine: a pixel is scene with two samples or more, shows the part most samples show, and takes one of its samples whole', () => {
+  // one art pixel a case, side by side: 2 samples down, 2 across each
+  const cases = 6
+  const fine = makeFrame(cases * 2, 2), map = makeFrame(cases * 2, 2)
+  const put = (c: number, k: number, rgb: Rgb | null, part = 0) => {
+    const i = ((k >> 1) * cases * 2 + c * 2 + (k & 1)) * 4
+    if (rgb) fine.data.set([...rgb, 255], i)
+    if (part) map.data.set([part, 0, 0, 255], i)
+  }
+  const R: Rgb = [200, 40, 40], B: Rgb = [40, 40, 200]
+  // 0: one sample only: empty
+  put(0, 0, R, 1)
+  // 1: two samples: scene
+  put(1, 0, R, 1); put(1, 3, R, 1)
+  // 2: three of part 2, one of part 1: part 2 wins, and no red gets in
+  put(2, 0, R, 1); put(2, 1, B, 2); put(2, 2, B, 2); put(2, 3, B, 2)
+  // 3: two of each: the lower-numbered part
+  put(3, 0, B, 2); put(3, 1, B, 2); put(3, 2, R, 1); put(3, 3, R, 1)
+  // 4: one part, three shades: the one nearest their average, not the average itself
+  put(4, 0, [10, 10, 10], 3); put(4, 1, [100, 100, 100], 3); put(4, 2, [110, 110, 110], 3); put(4, 3, [250, 250, 250], 3)
+  // 5: no part under any sample (a mesh): still settled, and the map stays empty there
+  put(5, 0, R); put(5, 1, R); put(5, 2, B)
+  const { small, parts } = resolveFine(fine, map)
+  assert.equal(small.width, cases); assert.equal(small.height, 1)
+  const px = (f: { data: Uint8ClampedArray }, c: number) => Array.from(f.data.slice(c * 4, c * 4 + 4))
+  assert.deepEqual(px(small, 0), [0, 0, 0, 0])
+  assert.deepEqual(px(small, 1), [...R, 255])
+  assert.deepEqual(px(small, 2), [...B, 255]); assert.deepEqual(px(parts!, 2), [2, 0, 0, 255])
+  assert.deepEqual(px(small, 3), [...R, 255]); assert.deepEqual(px(parts!, 3), [1, 0, 0, 255])
+  assert.deepEqual(px(small, 4), [110, 110, 110, 255])
+  assert.deepEqual(px(small, 5), [...R, 255]); assert.deepEqual(px(parts!, 5), [0, 0, 0, 0])
+  // without a map, every sample counts as one thing
+  assert.deepEqual(px(resolveFine(fine).small, 2), [...B, 255])
+  assert.equal(resolveFine(fine).parts, undefined)
+})
+
+test('pixelArt with own draws the outline in a darker palette step of the thing beside it, and in the outline color where there is none', () => {
+  const pal: Rgb[] = [[12, 10, 20], [70, 30, 30], [200, 60, 50], [30, 50, 110], [90, 140, 230]]
+  // a red thing on the left, a blue one on the right, a gap between
+  const f = makeFrame(9, 3)
+  const put = (x: number, c: Rgb) => f.data.set([...c, 255], (1 * 9 + x) * 4)
+  put(1, pal[2]); put(2, pal[2]); put(6, pal[4]); put(7, pal[4])
+  const look = { palette: pal, dither: 0, outline: pal[0], glow: 0, own: true }
+  const art = pixelArt(f, look)
+  const px = (x: number, y: number) => Array.from(art.data.slice((y * 9 + x) * 4, (y * 9 + x) * 4 + 3))
+  assert.deepEqual(px(1, 0), pal[1], 'over the red thing: dark red')
+  assert.deepEqual(px(0, 1), pal[1])
+  assert.deepEqual(px(6, 2), pal[3], 'under the blue thing: dark blue')
+  assert.deepEqual(px(8, 1), pal[3])
+  assert.deepEqual(px(1, 1), pal[2], 'the things keep their colors')
+  assert.equal(art.data[(1 * 9 + 4) * 4 + 3], 0, 'and the gap stays empty')
+  // a thing already in the darkest color has no darker step: the outline color
+  const g = makeFrame(3, 3)
+  g.data.set([...pal[1], 255], (1 * 3 + 1) * 4)
+  const lone = pixelArt(g, { ...look, outline: [1, 2, 3] })
+  assert.deepEqual(Array.from(lone.data.slice(1 * 4, 1 * 4 + 3)), pal[0])
+  const dark = makeFrame(3, 3)
+  dark.data.set([...pal[0], 255], (1 * 3 + 1) * 4)
+  assert.deepEqual(Array.from(pixelArt(dark, { ...look, outline: [1, 2, 3] }).data.slice(1 * 4, 1 * 4 + 3)), [1, 2, 3])
+  // with no palette: the neighbor's color, darkened
+  const free = pixelArt(f, { ...look, palette: [] })
+  assert.deepEqual(Array.from(free.data.slice(0, 3)), [0, 0, 0])
+  assert.deepEqual(Array.from(free.data.slice((1 * 9 + 0) * 4, (1 * 9 + 0) * 4 + 3)), pal[2].map((v) => Math.round(v * 0.38)))
 })

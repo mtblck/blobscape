@@ -67,7 +67,7 @@ export default [
   {
     name: 'lessons-basics',
     core: true,
-    about: 'Order, front page chrome (menu, footer, tip button, SEO), Color by angle, Paint, Splat files',
+    about: 'Order, front page chrome (header, menu, footer, tip button, SEO), Color by angle, Paint, Splat files',
     entries: ['src/blobscape/lessons/Order.tsx', 'src/blobscape/Landing.tsx', 'src/blobscape/Chrome.tsx', 'src/shared/Footer.tsx', 'src/shared/SiteHeader.tsx', 'src/blobscape/lessons/Angle.tsx', 'src/blobscape/lessons/Paint.tsx', 'src/blobscape/lessons/Formats.tsx'],
     async run({ base, shots, join, fails, ok, open, axe, solidPixels }) {
       const B = '/'
@@ -86,15 +86,49 @@ export default [
       // Front page chrome: the menu, the footer, the tip button and the search metadata
       await page.goto(base + '/')
       await page.waitForTimeout(800)
-      await page.getByRole('button', { name: 'Menu' }).click()
-      const menuLinks = await page.locator('[popover] a').count()
-      if (!(await page.locator('[popover]:popover-open').count()) || menuLinks < 6) fails.push(`blobscape menu: open ${await page.locator('[popover]:popover-open').count()}, ${menuLinks} links`)
-      else ok(`blobscape menu: opens with ${menuLinks} links`)
-      await axe(page, 'blobscape menu open')
+      // the header: Engine opens a list with the overview, the docs and the file spec; no Menu button on a wide screen
+      const openNow = () => page.locator('[popover]:popover-open')
+      await page.getByTestId('engine-menu').click()
+      const engineLinks = await openNow().locator('a').evaluateAll((as) => as.map((a) => a.getAttribute('href')))
+      const under = await page.evaluate(() => { const b = document.querySelector('[data-testid=engine-menu]').getBoundingClientRect(), p = document.querySelector('[popover]:popover-open').getBoundingClientRect(); return { gap: Math.round(p.top - b.bottom), right: Math.round(p.right - b.right) } })
+      const menuShown = await page.getByRole('button', { name: 'Menu' }).isVisible()
+      if (!(['/engine/', '/engine/docs/', '/engine/rigged-splats/'].every((h) => engineLinks.includes(h)) && engineLinks.length === 5 && under.gap >= 0 && under.gap < 24 && Math.abs(under.right) < 4 && !menuShown)) fails.push(`blobscape header: Engine lists ${engineLinks.join(', ')}, placed ${JSON.stringify(under)}, Menu shown ${menuShown}`)
+      else ok(`blobscape header: Engine opens ${engineLinks.length} links under its button, and a wide screen has no Menu button`)
+      await axe(page, 'blobscape engine menu open')
       await page.screenshot({ path: join(shots, 'blobscape-menu.png') })
       await page.keyboard.press('Escape')
-      if (await page.locator('[popover]:popover-open').count()) fails.push('blobscape menu: Escape left it open')
-      if (!(await page.locator('a.tipjar').count())) fails.push('blobscape: no tip button on the front page')
+      if (await openNow().count()) fails.push('blobscape header: Escape left the Engine list open')
+      await openNow().first().waitFor({ state: 'detached', timeout: 1000 }).catch(() => {})
+      await page.getByTestId('engine-menu').click()
+      await openNow().getByRole('link', { name: /^Docs/ }).click()
+      await page.waitForURL('**/engine/docs/')
+      if (await openNow().count()) fails.push('blobscape header: following a link left the Engine list open')
+      else ok('blobscape header: the Docs link goes to the docs and shuts the list')
+      // on a phone the pages fold into the menu, the engine's among them
+      await page.setViewportSize({ width: 390, height: 800 })
+      await page.goto(base + '/')
+      await page.waitForTimeout(800)
+      await page.getByRole('button', { name: 'Menu' }).click()
+      const menuLinks = await openNow().locator('a').count()
+      const fits = await page.evaluate(() => { const p = document.querySelector('[popover]:popover-open').getBoundingClientRect(); return p.left >= 0 && p.right <= window.innerWidth })
+      if (menuLinks !== 7 || !fits) fails.push(`blobscape menu: on a phone ${menuLinks} links, fits ${fits}`)
+      else ok(`blobscape menu: on a phone it opens with ${menuLinks} links`)
+      await axe(page, 'blobscape menu open')
+      await page.keyboard.press('Escape')
+      if (!(await page.locator('button.tipjar').evaluate((a) => a.getBoundingClientRect().width < 60).catch(() => false))) fails.push('blobscape: on a phone the tip button is not just its icon')
+      await page.setViewportSize({ width: 1280, height: 800 })
+      await page.goto(base + '/')
+      await page.waitForTimeout(800)
+      if (!(await page.locator('button.tipjar').count())) fails.push('blobscape: no tip button on the front page')
+      // the support button opens two ways to support, above itself
+      await page.locator('button.tipjar').click()
+      const ways = await page.locator('.tipjar-list:popover-open a').evaluateAll((as) => as.map((a) => [a.textContent.trim().replace(/\s+/g, ' '), a.getAttribute('href'), a.target]))
+      const above = await page.evaluate(() => { const l = document.querySelector('.tipjar-list:popover-open')?.getBoundingClientRect(), b = document.querySelector('button.tipjar').getBoundingClientRect(); return !!l && l.bottom <= b.top && l.right <= window.innerWidth })
+      if (!(ways.length === 2 && /^Buy me a coffee/.test(ways[0][0]) && ways[0][1] === 'https://ko-fi.com/mtblck' && /^Star on GitHub/.test(ways[1][0]) && ways[1][1] === 'https://github.com/mtblck/blobscape' && ways.every((w) => w[2] === '_blank') && above)) fails.push(`blobscape: the support button opens ${JSON.stringify(ways)}, above it ${above}`)
+      else ok('blobscape: the support button opens Buy me a coffee and Star on GitHub')
+      await axe(page, 'blobscape support list open')
+      await page.screenshot({ path: join(shots, 'blobscape-support.png') })
+      await page.keyboard.press('Escape')
       const ld = await page.evaluate(() => { try { return JSON.parse(document.querySelector('script[type="application/ld+json"]').textContent)['@graph'].length } catch { return 0 } })
       const og = await page.getAttribute('meta[property="og:image"]', 'content')
       if (!ld || !og) fails.push(`blobscape seo: structured data ${ld}, og:image ${og}`)
@@ -107,13 +141,16 @@ export default [
       if (footLinks.length !== 4 || footLinks[3][0] !== 'All experiments' || footLinks[3][1] !== '/experiments/') fails.push(`blobscape footer: expected three experiments and "All experiments", got ${JSON.stringify(footLinks)}`)
       else ok(`blobscape footer: lists ${footLinks.slice(0, 3).map((l) => l[0]).join(', ')} and a link to all experiments`)
       await page.waitForTimeout(600)
-      if (!(await page.locator('a.tipjar[data-tucked]').count())) fails.push('blobscape: the tip button stays over the footer')
+      if (!(await page.locator('button.tipjar[data-tucked]').count())) fails.push('blobscape: the tip button stays over the footer')
       else ok('blobscape: the tip button tucks away at the footer')
       await page.goto(base + '/lessons/paint/')
       await page.waitForTimeout(500)
       if (!(await page.title()).startsWith('Paint · Lesson 6')) fails.push(`blobscape: lesson title is "${await page.title()}"`)
       else ok('blobscape: each page sets its own title')
-      if (await page.locator('a.tipjar').count()) fails.push('blobscape: the tip button covers a lesson')
+      // on a page with controls the tip button is a circle until hovered
+      const tip = await page.locator('button.tipjar').evaluate((a) => ({ compact: a.dataset.compact, width: Math.round(a.getBoundingClientRect().width) })).catch(() => null)
+      if (!(tip && tip.compact === 'hover' && tip.width < 60)) fails.push(`blobscape: on a lesson the tip button is ${JSON.stringify(tip)}`)
+      else ok('blobscape: on a lesson the tip button is a circle')
 
       // Color by angle: degree 3 keeps up with a soft shine and falls behind a sharp one
       const goalCount = () => page.textContent('[data-testid=goal-count]')

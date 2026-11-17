@@ -316,6 +316,13 @@
   --tipjar-label: var(--c-paper);
   --tipjar-ring: var(--c-paper);
 }
+/* its list of links is a quiet card in the page's own colors (Matt found the coral too strong for the list); only the icons keep the coral */
+.tipjar-list {
+  --tipjar-bg: var(--c-paper);
+  --tipjar-label: var(--c-ink);
+  --tipjar-ring: var(--c-rule);
+  --tipjar-icon: var(--c-accent);
+}
 
 /* Dungeon Run: a red edge that fades when a slime gets you, the wave banner, and a beating heart when health is low */
 .dungeon-hurt {
@@ -357,3 +364,6 @@
 .spec ul { list-style: disc; padding-left: 1.25rem; }
 .spec li + li { margin-top: 0.5rem; }
 .spec blockquote { border-left: 3px solid var(--c-rule); padding-left: 1rem; color: var(--c-ink); font-size: 1.0625rem; overflow-x: auto; }
+
+/* A preview that fills the window (Workbench, where the browser has no element full screen) has the screen to itself. */
+html[data-full] .tipjar { display: none; }

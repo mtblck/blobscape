@@ -223,6 +223,15 @@
        ]
       },
       {
+       "name": "tint",
+       "doc": "Shows the actor in other colors without changing it: `paint` gives each blob's color (sRGB, 0–1) from its own and\nits place in the list, and may give a fourth number, a share of the blob's own opacity (0 hides it). Left out,\nits own colors come back. It stays through a new actor, until it is taken off; `highlight` and `refresh` send the\nactor's own colors again, so call it again after them, and take it off before `bake`.",
+       "signatures": [
+        {
+         "code": "tint(paint?: (color: readonly [number, number, number], blob: number) => readonly number[]): void"
+        }
+       ]
+      },
+      {
        "name": "setSort",
        "doc": "Changes how blobs are sorted by depth: 'bins' is quick, 'radix' settles every tie the same way each frame, which\npixel art with hard edges wants.",
        "signatures": [
@@ -335,7 +344,7 @@
        "doc": "Pixel mode's last frame as it was drawn small, and as finished art (exactly in the look's colors): for tests and for saving.",
        "signatures": [
         {
-         "code": "pixelFrames(): Promise<{ small: Frame; art: Frame; before?: Frame; parts?: Frame } | undefined>"
+         "code": "pixelFrames(): Promise<{ small: Frame; art: Frame; before?: Frame; parts?: Frame; fine?: { small: Frame; parts: Frame } } | undefined>"
         }
        ]
       },
@@ -3055,8 +3064,8 @@
       {
        "name": "look",
        "optional": true,
-       "type": "{ dither?: number; glow?: number; outline?: boolean; edges?: boolean }",
-       "doc": "The pixel look it asks for: how much dither and glow, and whether to draw an outline and edge lines."
+       "type": "{ dither?: number; glow?: number; outline?: boolean; edges?: boolean; steps?: boolean }",
+       "doc": "The pixel look it asks for: how much dither and glow, and whether to draw an outline and edge lines. `steps` paints\nthe scene in steps of its palette as it is cut (each blob takes one palette color, a step of its own paint from shade\nto sun), so shade falls in flat bands; left out, shading is smooth and the picture is matched to the palette pixel by pixel."
       },
       {
        "name": "disc",
@@ -3335,6 +3344,12 @@
        "doc": "Takes none of the scene's `cover`: water, glass, a fresh fire."
       },
       {
+       "name": "touches",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Meets other parts by design as it moves (foam round a bobbing buoy): the check for parts passing through each other lets it."
+      },
+      {
        "name": "ink",
        "optional": true,
        "type": "{ kind: \"hatch\" | \"stipple\" | \"cracks\" | \"grain\" | \"tufts\" | \"scales\"; amount?: number; color?: string }",
@@ -3468,6 +3483,16 @@
        "doc": "The scene's bones."
       },
       {
+       "name": "steps",
+       "type": "boolean",
+       "doc": "Whether the scene asks to be painted in steps of its palette (`look.steps`)."
+      },
+      {
+       "name": "touching",
+       "type": "number[]",
+       "doc": "The parts (by their place in the list) marked `touches`: they meet others by design."
+      },
+      {
        "name": "haze",
        "optional": true,
        "type": "{ color: Vec3; from: number; to: number }",
@@ -3477,10 +3502,10 @@
      "methods": [
       {
        "name": "spec",
-       "doc": "The shapes on a grid of `spacing`.",
+       "doc": "The shapes on a grid of `spacing`. With `steps` (a palette, 0–255), the scene is painted in steps of it as it is cut.",
        "signatures": [
         {
-         "code": "spec(spacing: number): VoxelSpec"
+         "code": "spec(spacing: number, steps?: Rgb[]): VoxelSpec"
         }
        ]
       },
@@ -3855,8 +3880,26 @@
        "optional": true,
        "type": "number",
        "doc": "How much color surfaces throw onto what faces them, as a red wall warms the floor beside it: 0 to 1."
+      },
+      {
+       "name": "steps",
+       "optional": true,
+       "type": "{ palette: Vec3[]; mottle?: number }",
+       "doc": "Painted in steps: once a blob's light is worked out, its color is moved onto one color of `palette` (sRGB, 0–1), a\nstep of its own paint's ramp (the palette colors that paint passes through from deep shade to full sun), so shade\nfalls in flat bands a pixel pass has nothing left to guess at. `mottle` (0–1, `MOTTLE` when left out) nudges small\npatches a little lighter or darker first, so a band's edge is ragged as a brush leaves it, not ruled. Parts that\n`glow` keep their color."
       }
      ]
+    },
+    {
+     "name": "STEP_L",
+     "kind": "const",
+     "doc": "How much a difference in lightness counts beside one in hue when a blob picks its step (`stepper`): under 1, so hue is kept first.",
+     "type": "0.7"
+    },
+    {
+     "name": "MOTTLE",
+     "kind": "const",
+     "doc": "How ragged the edge between two steps is, where a scene doesn't say (`VoxelLight.steps`).",
+     "type": "0.35"
     },
     {
      "name": "VoxelSpec",
@@ -4202,6 +4245,16 @@
      "signatures": [
       {
        "code": "bakedColor(base: Vec3, shade: number, lit: number, ramp: number, lift?: number): Vec3"
+      }
+     ]
+    },
+    {
+     "name": "stepper",
+     "kind": "function",
+     "doc": "Painting in steps (`VoxelLight.steps`): gives the function that moves a blob's finished color onto its paint's ramp.\nA paint's ramp is the palette colors it passes through as its light goes from a deep corner to full sun (found once\nper paint, to 1/64 a channel); a finished color takes the nearest of them, after `mottle` has pushed its lightness up\nor down by patch. Light of another color (a beam, a bounce, a mirror) can carry a blob well off its ramp: when a\npalette color outside it is more than twice as close, that one is taken. Palette colors over `LIT_MAX` are held at\nit, as every lit color is, so nothing painted starts to glow.",
+     "signatures": [
+      {
+       "code": "stepper(steps: { palette: Vec3[]; mottle?: number }, light: VoxelLight): (base: Vec3, color: Vec3, i: number, j: number, k: number) => Vec3"
       }
      ]
     },
@@ -4774,7 +4827,7 @@
       {
        "name": "rise",
        "optional": true,
-       "type": "\"dome\" | \"steps\" | \"random\"",
+       "type": "\"steps\" | \"dome\" | \"random\"",
        "doc": "How heights run: 'dome' (tallest in the middle, as organ pipes), 'steps' (a causeway stepping down to its edge) or 'random'."
       },
       {
@@ -6201,7 +6254,7 @@
     {
      "name": "PixelPass",
      "kind": "class",
-     "doc": "Pixel mode: the scene is drawn small into a target, and one full-screen pass\nturns it into pixel art and scales it up in whole pixels, with no smoothing.\n\nThe pass is the GPU twin of `pixelArt` in splat-core/pixel.ts (change one,\nchange both): alpha cut, glow from bright pixels, nearest palette color in\nOKLab with a Bayer dither, edge lines inside the scene, an outline on the\nempty pixels that touch it, and a sky behind. It runs once per art pixel,\ninto `art`, which keeps display (sRGB) color so a palette color is stored\nexactly; the screen then gets a plain copy, scaled up. The art of the frame\nbefore is kept too: a look with `steady` reads it so a pixel between two\npalette colors does not flip from frame to frame.",
+     "doc": "Pixel mode: the scene is drawn small into a target, and one full-screen pass\nturns it into pixel art and scales it up in whole pixels, with no smoothing.\n\nThe pass is the GPU twin of `pixelArt` in splat-core/pixel.ts (change one,\nchange both): alpha cut, glow from bright pixels, nearest palette color in\nOKLab with a Bayer dither, edge lines inside the scene, an outline on the\nempty pixels that touch it, and a sky behind. It runs once per art pixel,\ninto `art`, which keeps display (sRGB) color so a palette color is stored\nexactly; the screen then gets a plain copy, scaled up. The art of the frame\nbefore is kept too: a look with `steady` reads it so a pixel between two\npalette colors does not flip from frame to frame.\n\nA look with `fine` draws the scene and its map of parts at twice the art's\nsize first, and a step before the pass settles each art pixel from its four\nsamples into `small` and `ids` (`resolveFine` in pixel.ts is its twin), so\neverything after it is the same either way.",
      "ctor": [
       {
        "code": "new PixelPass(look: PixelLook)"
@@ -6219,6 +6272,18 @@
        "readonly": true,
        "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
        "doc": "The scene's parts, drawn small (`SplatWorld.parts`): where the color changes, one part ends and another begins. Only drawn for a look with `parts`."
+      },
+      {
+       "name": "fineSmall",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
+       "doc": "The scene and its map of parts at twice the art's size, for a look with `fine`: what `small` and `ids` are settled from."
+      },
+      {
+       "name": "fineIds",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
+       "doc": "The map of parts at twice the art's size, which four samples a pixel settles from."
       },
       {
        "name": "art",
@@ -6353,6 +6418,18 @@
        "name": "outline",
        "type": "Rgb | null",
        "doc": "A 1-pixel line round the scene's silhouette, or none."
+      },
+      {
+       "name": "own",
+       "optional": true,
+       "type": "boolean",
+       "doc": "The outline in a darker tone of whatever it goes round, not one color for the whole scene: each outline pixel takes\nthe palette color nearest a darker step of the scene pixel beside it (`outline`'s own color where the palette has\nnothing darker). Needs `outline`."
+      },
+      {
+       "name": "fine",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Four samples a pixel: the scene is drawn at twice the art's size and each art pixel is settled from its 2×2 samples\n(`resolveFine`) before anything else happens, so a pixel on the edge of a thing shows one thing or the other, never\na mix. The live pass does it itself; `pixelArt` is given the settled frame."
       },
       {
        "name": "glow",

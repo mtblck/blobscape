@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { LIT_MAX, blend, box, buildVoxels, inkedAt, cylinder, cone, cut, lathe, letterGrid, pixelText, sphere, sweep, union, type VoxelSpec } from './voxel.ts'
+import { LIT_MAX, PAINTED, blend, box, buildVoxels, inkedAt, cylinder, cone, cut, lathe, letterGrid, pixelText, sphere, sweep, union, type VoxelSpec } from './voxel.ts'
 import { posedPoint, axisAngle } from './rig.ts'
 
 const ROOT = { name: 'root', parent: -1, head: [0, 0, 0] as [number, number, number] }
@@ -321,4 +321,40 @@ test('bounce, form dabs and focus: a red wall warms the floor by it, strokes run
     const { i: k, d } = at(eyed, x, 0, z)
     assert.ok(d < eyed.blobs.scale[k * 3] * 1.3, `hole at ${x.toFixed(2)}, ${z.toFixed(2)}`)
   }
+})
+
+test('painted in steps: every lit blob takes a palette color of its own paint\'s ramp, in flat bands; glow keeps its color', () => {
+  const greens: [number, number, number][] = [[0.08, 0.16, 0.12], [0.18, 0.36, 0.2], [0.36, 0.6, 0.28], [0.62, 0.82, 0.4]]
+  const reds: [number, number, number][] = [[0.3, 0.08, 0.1], [0.62, 0.16, 0.14], [0.9, 0.36, 0.26]]
+  const palette = [...greens, ...reds, [1, 1, 0.9] as [number, number, number]]
+  const spec = (steps: boolean): VoxelSpec => ({
+    bones: [ROOT], spacing: 0.05,
+    parts: [
+      { shape: sphere([-1.2, 0, 0], 1), color: [0.3, 0.55, 0.26], bone: 'root' },
+      { shape: sphere([1.2, 0, 0], 1), color: [0.7, 0.2, 0.16], bone: 'root' },
+      { shape: sphere([0, 1.6, 0], 0.2), color: [1, 0.9, 0.5], bone: 'root', glow: true },
+    ],
+    light: { ...PAINTED, ...(steps ? { steps: { palette } } : {}) },
+  })
+  const key = (c: ArrayLike<number>, i = 0) => `${c[i].toFixed(3)},${c[i + 1].toFixed(3)},${c[i + 2].toFixed(3)}`
+  const smooth = buildVoxels(spec(false)), stepped = buildVoxels(spec(true))
+  assert.equal(stepped.blobs.count, smooth.blobs.count, 'the same cells either way')
+  const seen = [new Set<string>(), new Set<string>(), new Set<string>()]
+  const plain = [new Set<string>(), new Set<string>()]
+  for (let i = 0; i < stepped.blobs.count; i++) {
+    seen[stepped.partOf[i]].add(key(stepped.blobs.color, i * 3))
+    if (smooth.partOf[i] < 2) plain[smooth.partOf[i]].add(key(smooth.blobs.color, i * 3))
+  }
+  const names = (cs: [number, number, number][]) => new Set(cs.map((c) => key(c)))
+  // the green ball is only ever a green, the red one a red: shade does not turn one paint into another
+  for (const c of seen[0]) assert.ok(names(greens).has(c), `green ball in ${c}`)
+  for (const c of seen[1]) assert.ok(names(reds).has(c), `red ball in ${c}`)
+  // bands, from shade to sun: a few steps where the smooth build has hundreds of colors
+  assert.ok(seen[0].size >= 3 && seen[1].size >= 2, `${seen[0].size} greens, ${seen[1].size} reds`)
+  assert.ok(plain[0].size > 100)
+  // the glowing part is left as it was
+  assert.deepEqual([...seen[2]], [key([1, 0.9, 0.5])])
+  // a palette color over the glow line is held under it, so nothing painted glows
+  const white = buildVoxels({ bones: [ROOT], spacing: 0.1, parts: [{ shape: sphere([0, 0, 0], 0.5), color: [1, 1, 1], bone: 'root' }], light: { steps: { palette: [[1, 1, 1], [0.2, 0.2, 0.3]], mottle: 0 } } })
+  for (let i = 0; i < white.blobs.count * 3; i++) assert.ok(white.blobs.color[i] <= LIT_MAX + 1e-6)
 })

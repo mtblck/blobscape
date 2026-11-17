@@ -1,6 +1,6 @@
 import { NearestFilter, NoBlending, NodeMaterial, QuadMesh, RenderTarget, Vector2, Vector3, type Camera, type Object3D, type WebGPURenderer } from 'three/webgpu'
 import * as TSLTyped from 'three/tsl'
-import { BAYER4, EDGE_DARK, EDGE_JUMP, GLOW_FROM, GLOW_SHOWS, GLOW_TAPS, MAX_PALETTE_SIZE, PIXEL_CUT, SKY_DITHER, oklab, skyReach, type PixelLook } from '../splat-core/pixel.ts'
+import { BAYER4, EDGE_DARK, EDGE_JUMP, GLOW_FROM, GLOW_SHOWS, GLOW_TAPS, MAX_PALETTE_SIZE, OWN_C, OWN_L, OWN_UNDER, PIXEL_CUT, SKY_DITHER, oklab, skyReach, type PixelLook } from '../splat-core/pixel.ts'
 
 // As in engine.ts: the shader builders use TSL untyped.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -8,6 +8,10 @@ const TSL = TSLTyped as unknown as Record<string, any>
 const { Fn, If, Loop, abs, dot, float, floor, int, max, min, mod, pow, select, smoothstep, sqrt, texture, uniform, uniformArray, uv, vec2, vec3, vec4 } = TSL
 
 const SIDES: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+/** The four samples of an art pixel, across the top then the bottom: `QUAD` in pixel.ts. */
+const QUAD: [number, number][] = [[0, 0], [1, 0], [0, 1], [1, 1]]
+/** A sample the map of parts has nothing for: above every part's number. */
+const NO_PART = 16777216
 
 /** A stored pixel is taken for a palette color when it is this close to it in OKLab: the art keeps palette colors exactly, so this only allows for rounding. */
 const SAME = 0.004
@@ -26,6 +30,11 @@ const MAX_PALETTE = MAX_PALETTE_SIZE
  * exactly; the screen then gets a plain copy, scaled up. The art of the frame
  * before is kept too: a look with `steady` reads it so a pixel between two
  * palette colors does not flip from frame to frame.
+ *
+ * A look with `fine` draws the scene and its map of parts at twice the art's
+ * size first, and a step before the pass settles each art pixel from its four
+ * samples into `small` and `ids` (`resolveFine` in pixel.ts is its twin), so
+ * everything after it is the same either way.
  */
 export class PixelPass {
   /** The scene, drawn small. Linear and premultiplied, as any render target. */
@@ -33,6 +42,15 @@ export class PixelPass {
   /** The scene's parts, drawn small (`SplatWorld.parts`): where the color changes, one part ends and another begins. Only drawn for a look with `parts`. */
   readonly ids = new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter })
   private readonly parted = uniform(0)
+  /** The scene and its map of parts at twice the art's size, for a look with `fine`: what `small` and `ids` are settled from. */
+  readonly fineSmall = new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter })
+  /** The map of parts at twice the art's size, which four samples a pixel settles from. */
+  readonly fineIds = new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter })
+  private readonly settleMat = new NodeMaterial()
+  private readonly settleIdsMat = new NodeMaterial()
+  private readonly settleQuad: QuadMesh
+  private readonly settleIdsQuad: QuadMesh
+  private readonly own = uniform(0)
   /** The art of this frame and of the one before: each frame is drawn into the older of the two. */
   private readonly frames = [0, 1].map(() => new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter, depthBuffer: false }))
   /** The art with its lone pixels cleaned up, for a look with `tidy`: a second pass over the art. */
@@ -87,6 +105,14 @@ export class PixelPass {
     this.tidyMat.depthTest = false
     this.tidyMat.depthWrite = false
     this.tidyQuad = new QuadMesh(this.tidyMat)
+    for (const [m, parts] of [[this.settleMat, false], [this.settleIdsMat, true]] as const) {
+      m.fragmentNode = this.settle(parts)
+      m.blending = NoBlending
+      m.depthTest = false
+      m.depthWrite = false
+    }
+    this.settleQuad = new QuadMesh(this.settleMat)
+    this.settleIdsQuad = new QuadMesh(this.settleIdsMat)
     this.setLook(look)
   }
 
@@ -117,6 +143,8 @@ export class PixelPass {
     this.edges.value = look.edges ?? 0
     this.parted.value = look.parts ? 1 : 0
     this.lined.value = look.outline ? 1 : 0
+    this.own.value = look.own ? 1 : 0
+    this.sizeFine()
     this.skied.value = look.sky ? 1 : 0
     if (look.sky) { this.skyTop.value.set(...look.sky[0]); this.skyLow.value.set(...look.sky[1]); this.skyReach.value = skyReach(look.sky) }
     if (look.outline) this.line.value.set(look.outline[0] / 255, look.outline[1] / 255, look.outline[2] / 255)
@@ -132,6 +160,14 @@ export class PixelPass {
     this.tidied.setSize(w, h)
     this.kept = false
     this.res.value.set(w, h)
+    this.sizeFine()
+  }
+
+  /** The twice-size targets only take their room while a look uses them. */
+  private sizeFine() {
+    const k = this.look?.fine ? 2 : 0
+    const w = Math.max(1, this.small.width * k), h = Math.max(1, this.small.height * k)
+    if (this.fineSmall.width !== w || this.fineSmall.height !== h) { this.fineSmall.setSize(w, h); this.fineIds.setSize(w, h) }
   }
 
   /** The art's width, in art pixels. */
@@ -146,10 +182,18 @@ export class PixelPass {
    */
   render(renderer: WebGPURenderer, scene: Object3D, camera: Camera, screen?: { width: number; height: number; scale: number }) {
     const to = renderer.getRenderTarget()
-    renderer.setRenderTarget(this.small)
+    const fine = !!this.look.fine
+    renderer.setRenderTarget(fine ? this.fineSmall : this.small)
     renderer.clear()
     renderer.render(scene, camera)
-    if (this.look.parts) this.drawParts(renderer, scene, camera)
+    // four samples a pixel go by the parts too: which thing most of a pixel's samples show
+    if (fine || this.look.parts) this.drawParts(renderer, scene, camera, fine ? this.fineIds : this.ids)
+    if (fine) {
+      renderer.setRenderTarget(this.small)
+      this.settleQuad.render(renderer)
+      renderer.setRenderTarget(this.ids)
+      this.settleIdsQuad.render(renderer)
+    }
     // the art, into the older target, against the newer one
     this.used = this.kept && (this.look.steady ?? 0) > 0
     this.sticky.value = this.used ? this.look.steady! : 0
@@ -255,7 +299,27 @@ export class PixelPass {
           color.mulAssign(float(1).sub(jump.mul(select(this.edges.greaterThan(0), this.edges, 1)).mul(EDGE_DARK)))
         })
       })
-        .ElseIf(this.lined.greaterThan(0).and(beside), () => { out.assign(vec4(this.line, 1)) })
+        .ElseIf(this.lined.greaterThan(0).and(beside), () => {
+          out.assign(vec4(this.line, 1))
+          // in the scene's own colors: a darker tone of the scene pixel beside it, the first of right, left, below, above
+          If(this.own.greaterThan(0), () => {
+            const [right, left, above, below] = sides
+            const n = vec3(select(right.solid, right.rgb, select(left.solid, left.rgb, select(below.solid, below.rgb, above.rgb)))).toVar()
+            If(this.count.greaterThan(0), () => {
+              const a = toLab(n).toVar()
+              const aim = a.mul(vec3(OWN_L, OWN_C, OWN_C)).toVar()
+              const best = float(1e9).toVar()
+              Loop(MAX_PALETTE, ({ i }: { i: unknown }) => {
+                If(float(i).lessThan(this.count), () => {
+                  const p = palLab.element(i)
+                  const d = aim.sub(p)
+                  const dd = dot(d, d)
+                  If(p.x.lessThan(a.x.mul(OWN_UNDER)).and(dd.lessThan(best)), () => { best.assign(dd); out.assign(vec4(palShown.element(i), 1)) })
+                })
+              })
+            }).Else(() => { out.assign(vec4(n.mul((1 - EDGE_DARK) / 255), 1)) })
+          })
+        })
         .ElseIf(this.skied.greaterThan(0), () => {
           const t = min(row.add(0.5).div(res.y).div(this.skyReach), 1).toVar()
           color.assign(this.skyTop.add(this.skyLow.sub(this.skyTop).mul(t)).add(spill))
@@ -298,8 +362,58 @@ export class PixelPass {
     })()
   }
 
+  /**
+   * Four samples a pixel: settles each art pixel from its 2×2 samples of the twice-size scene and map of parts, writing
+   * the scene (`parts` false) or the map (true) at the art's size. `resolveFine` in pixel.ts is its CPU twin (change one,
+   * change both): scene when two or more samples are solid, the part most of them show (the lower number on a tie), and
+   * of that part's samples the one nearest their average, copied whole.
+   */
+  private settle(parts: boolean) {
+    const fine = this.fineSmall.texture, ids = this.fineIds.texture
+    const { res } = this
+    const toSrgb = (c: unknown) => select(float(c).lessThanEqual(0.0031308), float(c).mul(12.92), pow(max(c, 0), 1 / 2.4).mul(1.055).sub(0.055))
+    return Fn(() => {
+      const st = uv()
+      const cell = floor(vec2(st.x, float(1).sub(st.y)).mul(res)).toVar()
+      const row = res.y.sub(1).sub(cell.y).toVar()
+      const s = QUAD.map(([sx, sy]) => {
+        const at = vec2(cell.x.mul(2).add(sx + 0.5).div(res.x.mul(2)), row.mul(2).add(sy + 0.5).div(res.y.mul(2)))
+        const c = vec4(texture(fine, at)).toVar()
+        const p = vec4(texture(ids, at)).toVar()
+        const solid = float(select(c.a.greaterThanEqual(PIXEL_CUT), 1, 0)).toVar()
+        const byte = (v: unknown) => floor(float(v).mul(255).add(0.5))
+        const number = float(select(p.a.greaterThanEqual(0.5), byte(p.x).add(byte(p.y).mul(256)).add(byte(p.z).mul(65536)), NO_PART)).toVar()
+        const straight = c.rgb.div(max(c.a, 1e-5)).clamp(0, 1)
+        // whole levels, as a frame read back holds them, so the twin breaks ties the same way
+        const rgb = floor(vec3(toSrgb(straight.x), toSrgb(straight.y), toSrgb(straight.z)).mul(255).add(0.5)).toVar()
+        return { c, p, solid, number, rgb }
+      })
+      const same = (a: unknown, b: unknown) => abs(float(a).sub(b)).lessThan(0.5)
+      const count = s[0].solid.add(s[1].solid).add(s[2].solid).add(s[3].solid)
+      const most = float(0).toVar(), win = float(NO_PART).toVar()
+      for (const k of s) {
+        const n = float(0).toVar()
+        for (const m of s) n.addAssign(select(same(m.number, k.number), m.solid, 0))
+        If(k.solid.greaterThan(0.5).and(n.greaterThan(most).or(n.equal(most).and(k.number.lessThan(win)))), () => { most.assign(n); win.assign(k.number) })
+      }
+      const mean = vec3(0).toVar()
+      const mine = s.map((k) => float(select(k.solid.greaterThan(0.5).and(same(k.number, win)), 1, 0)).toVar())
+      s.forEach((k, i) => { mean.addAssign(k.rgb.mul(mine[i])) })
+      mean.divAssign(max(most, 1))
+      const best = float(1e12).toVar()
+      const out = vec4(0).toVar()
+      s.forEach((k, i) => {
+        const d = k.rgb.sub(mean)
+        const dd = dot(d, d)
+        If(mine[i].greaterThan(0.5).and(dd.lessThan(best)), () => { best.assign(dd); out.assign(parts ? k.p : k.c) })
+      })
+      const shown = parts ? count.greaterThanEqual(2).and(win.lessThan(NO_PART)) : count.greaterThanEqual(2)
+      return select(shown, out, vec4(0))
+    })()
+  }
+
   /** The same view as a map of parts: only the blobs, as they were just drawn (nothing is moved or sorted again). */
-  private drawParts(renderer: WebGPURenderer, scene: Object3D, camera: Camera) {
+  private drawParts(renderer: WebGPURenderer, scene: Object3D, camera: Camera, into: RenderTarget) {
     type World = Object3D & { isSplatWorld?: boolean; parts: boolean; hold: boolean }
     const worlds: { w: World; hold: boolean }[] = []
     const hidden: Object3D[] = []
@@ -312,7 +426,7 @@ export class PixelPass {
       }
     })
     try {
-      renderer.setRenderTarget(this.ids)
+      renderer.setRenderTarget(into)
       renderer.clear()
       renderer.render(scene, camera)
     } finally {
@@ -379,6 +493,10 @@ export class PixelPass {
   dispose() {
     this.small.dispose()
     this.ids.dispose()
+    this.fineSmall.dispose()
+    this.fineIds.dispose()
+    this.settleMat.dispose()
+    this.settleIdsMat.dispose()
     for (const f of this.frames) f.dispose()
     this.tidied.dispose()
     this.tidyMat.dispose()

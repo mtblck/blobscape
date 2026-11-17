@@ -254,6 +254,18 @@ export interface PixelLook {
   dither: number
   /** A 1-pixel line round the scene's silhouette, or none. */
   outline: Rgb | null
+  /**
+   * The outline in a darker tone of whatever it goes round, not one color for the whole scene: each outline pixel takes
+   * the palette color nearest a darker step of the scene pixel beside it (`outline`'s own color where the palette has
+   * nothing darker). Needs `outline`.
+   */
+  own?: boolean
+  /**
+   * Four samples a pixel: the scene is drawn at twice the art's size and each art pixel is settled from its 2×2 samples
+   * (`resolveFine`) before anything else happens, so a pixel on the edge of a thing shows one thing or the other, never
+   * a mix. The live pass does it itself; `pixelArt` is given the settled frame.
+   */
+  fine?: boolean
   /** How far bright pixels spill light onto their neighbors: 0 is none. */
   glow: number
   /** Lines inside the scene, where one color meets a much lighter one: 0 (or left out) is none, 1 the darkest line. */
@@ -298,6 +310,10 @@ export const GLOW_FROM = 0.92
 export const EDGE_JUMP = 0.11
 /** How much of its light a pixel on an edge loses at `edges` 1. */
 export const EDGE_DARK = 0.62
+/** An outline in the scene's own colors aims at this share of its neighbor's lightness and of its color's strength (OKLab), */
+export const OWN_L = 0.6, OWN_C = 0.85
+/** and only takes a palette color under this share of the neighbor's lightness, so the line is always darker than what it goes round. */
+export const OWN_UNDER = 0.85
 /** How far down the picture a sky's blend runs: its third value when that is a sound share of the picture, else the whole way. Both twins go by this. */
 export const skyReach = (sky: NonNullable<PixelLook['sky']>): number => { const r = sky[2]; return typeof r === 'number' && r > 0 && r <= 1 ? r : 1 }
 
@@ -367,7 +383,22 @@ export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Fram
         }
       }
       else if (look.outline && N4.some(([dx, dy]) => solid(x + dx, y + dy))) {
-        out.data[i] = look.outline[0]; out.data[i + 1] = look.outline[1]; out.data[i + 2] = look.outline[2]; out.data[i + 3] = 255
+        let c = look.outline
+        if (look.own) {
+          // a darker tone of the scene pixel beside it: the first of right, left, below, above
+          const [dx, dy] = N4.find(([dx, dy]) => solid(x + dx, y + dy))!
+          const j = ((y + dy) * w + x + dx) * 4
+          if (pl.length) {
+            const a = oklab(f.data[j], f.data[j + 1], f.data[j + 2])
+            let bestD = Infinity
+            for (let k = 0; k < pl.length; k++) {
+              if (pl[k][0] >= a[0] * OWN_UNDER) continue
+              const d = (pl[k][0] - a[0] * OWN_L) ** 2 + (pl[k][1] - a[1] * OWN_C) ** 2 + (pl[k][2] - a[2] * OWN_C) ** 2
+              if (d < bestD) { bestD = d; c = look.palette[k] }
+            }
+          } else c = [f.data[j] * (1 - EDGE_DARK), f.data[j + 1] * (1 - EDGE_DARK), f.data[j + 2] * (1 - EDGE_DARK)]
+        }
+        out.data[i] = c[0]; out.data[i + 1] = c[1]; out.data[i + 2] = c[2]; out.data[i + 3] = 255
         continue
       } else if (look.sky) {
         const [top, low] = look.sky, reach = skyReach(look.sky), t = Math.min(1, (y + 0.5) / h / reach)
@@ -394,6 +425,64 @@ export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Fram
     }
   }
   return look.tidy ? tidyLone(out, f, map) : out
+}
+
+/** The four samples of an art pixel, in the order ties go by: across the top, then the bottom. */
+const QUAD = [[0, 0], [1, 0], [0, 1], [1, 1]] as const
+
+/**
+ * Four samples a pixel (`PixelLook.fine`), the CPU twin of the live pass's first step (change one, change both).
+ * `fine` is the scene drawn at twice the art's size (straight sRGB) and `parts` its map of parts at that size, if there
+ * is one. Each art pixel is settled from its 2×2 samples:
+ *
+ *   it is scene when two or more samples are solid → the part most of those samples show wins (the lower-numbered on a
+ *   tie; samples the map has no part for count as one more) → the pixel takes one of that part's samples whole, the one
+ *   nearest their average, so it is always a color that was drawn, never a mix of two things.
+ *
+ * Gives the frame and the map of parts at the art's size, as `pixelArt` takes them.
+ */
+export function resolveFine(fine: Frame, parts?: Frame): { small: Frame; parts?: Frame } {
+  const w = fine.width >> 1, h = fine.height >> 1
+  const small = makeFrame(w, h)
+  const map = parts && parts.width === fine.width && parts.height === fine.height ? parts.data : undefined
+  const ids = map ? makeFrame(w, h) : undefined
+  const cut = PIXEL_CUT * 255
+  const NONE = 1 << 24
+  const at = [0, 0, 0, 0], part = [0, 0, 0, 0], solid = [false, false, false, false]
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let count = 0
+      QUAD.forEach(([sx, sy], k) => {
+        const j = at[k] = ((y * 2 + sy) * fine.width + x * 2 + sx) * 4
+        solid[k] = fine.data[j + 3] >= cut
+        if (solid[k]) count++
+        part[k] = map && map[j + 3] >= 128 ? map[j] | (map[j + 1] << 8) | (map[j + 2] << 16) : NONE
+      })
+      if (count < 2) continue
+      // the part most samples show: the lower number on a tie
+      let win = NONE, most = 0
+      for (let k = 0; k < 4; k++) {
+        if (!solid[k]) continue
+        let n = 0
+        for (let m = 0; m < 4; m++) if (solid[m] && part[m] === part[k]) n++
+        if (n > most || (n === most && part[k] < win)) { most = n; win = part[k] }
+      }
+      // of its samples, the one nearest their average
+      let r = 0, g = 0, b = 0
+      for (let k = 0; k < 4; k++) if (solid[k] && part[k] === win) { r += fine.data[at[k]]; g += fine.data[at[k] + 1]; b += fine.data[at[k] + 2] }
+      r /= most; g /= most; b /= most
+      let pick = -1, bestD = Infinity
+      for (let k = 0; k < 4; k++) {
+        if (!solid[k] || part[k] !== win) continue
+        const j = at[k], d = (fine.data[j] - r) ** 2 + (fine.data[j + 1] - g) ** 2 + (fine.data[j + 2] - b) ** 2
+        if (d < bestD) { bestD = d; pick = j }
+      }
+      const i = (y * w + x) * 4
+      small.data[i] = fine.data[pick]; small.data[i + 1] = fine.data[pick + 1]; small.data[i + 2] = fine.data[pick + 2]; small.data[i + 3] = fine.data[pick + 3]
+      if (ids && win !== NONE) { ids.data[i] = map![pick]; ids.data[i + 1] = map![pick + 1]; ids.data[i + 2] = map![pick + 2]; ids.data[i + 3] = map![pick + 3] }
+    }
+  }
+  return { small, parts: ids }
 }
 
 const N8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]] as const
