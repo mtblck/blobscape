@@ -810,7 +810,8 @@ export default [
           await k.page.waitForTimeout(300)
           const held = await k.page.evaluate(() => window.__shift.amount())
           await tabClick(k.page.getByRole('button', { name: 'At random', exact: true }))
-          await k.page.waitForFunction(() => /paired by place it would be/.test(document.querySelector('[data-testid=shift-trip]')?.textContent ?? ''), null, { timeout: 60000 }).catch(() => {})
+          // the wording changes at once and the numbers once the new pairs are made: wait for the numbers
+          await k.page.waitForFunction((was) => { const t = document.querySelector('[data-testid=shift-trip]')?.textContent ?? ''; return /paired by place it would be/.test(t) && Number(t.match(/\d+\.\d+/)?.[0]) !== was }, near, { timeout: 60000 }).catch(() => {})
           const swapped = [...((await k.page.getByTestId('shift-trip').textContent()) ?? '').matchAll(/(\d+\.\d+)/g)].map((m) => Number(m[1]))
           if (!(held === 0.25 && swapped[0] === wild && swapped[1] === near && await k.page.getByRole('button', { name: 'Play', exact: true }).count() === 1)) fails.push(`blobscape shape shifter: slider holds ${held}, random trips ${swapped} (were ${near}, ${wild})`)
           else ok(`blobscape shape shifter: the slider stops the loop at 25%, and random partners travel ${swapped[0]}`)
