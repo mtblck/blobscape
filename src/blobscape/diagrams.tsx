@@ -412,6 +412,15 @@ export function LessonGlyph({ id }: { id: string }) {
         <rect x={82.5} y={40} width="3" height="10" fill={COLORS.orange} />
         <circle cx="68" cy="38" r="2.2" fill={COLORS.sun} />
       </>)
+    case 'pixel-art':
+      return g(<>
+        {/* A blob turning into a block of square pixels in a few colors */}
+        <Blob x={36} y={30} rx={18} ry={14} r={0} c="orange" />
+        <path d="M 58 30 L 70 30 M 66 26 L 70 30 L 66 34" stroke={COLORS.cream} strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        {[[84, 18, 'orange'], [92, 18, 'orange'], [76, 26, 'orange'], [84, 26, 'sun'], [92, 26, 'orange'], [100, 26, 'red'], [76, 34, 'red'], [84, 34, 'orange'], [92, 34, 'orange'], [100, 34, 'red'], [84, 42, 'red'], [92, 42, 'red']].map(([x, y, c], k) => (
+          <rect key={k} x={x as number} y={y as number} width="8" height="8" fill={COLORS[c as Color]} />
+        ))}
+      </>)
     default:
       return g(null)
   }

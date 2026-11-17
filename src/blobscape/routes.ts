@@ -33,6 +33,7 @@ export const LESSONS = [
   { id: 'shimmer', title: 'Why small blobs shimmer', summary: 'A wire fence in the distance blinks as it moves. Blur it to stop the blinking, and find what the blur costs.' },
   { id: 'first-creature', title: 'Your first creature', summary: 'A slug of two shapes on two bones, made with the engine in a page of code. Make its tail bend, close the crease, and let it swing.' },
   { id: 'scene-data', title: 'A scene written as data', summary: 'A cottage at dusk, written as a page of JSON the engine checks and plays. Make the tree sway, find the rule every move keeps, and light the lantern.' },
+  { id: 'pixel-art', title: 'Pixel art that holds still', summary: 'The cottage drawn small in a few colors. Make it a small picture, cut its colors, and stop its pixels flickering with the lantern.' },
 ] as const
 
 const WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty', 'twenty-one', 'twenty-two', 'twenty-three', 'twenty-four', 'twenty-five']
@@ -173,6 +174,11 @@ export const LESSON_GOALS: Record<(typeof LESSONS)[number]['id'], Goal[]> = {
     { id: 'sway', label: 'Make the tree sway', hint: 'The tree has a bone already. What makes a bone move?', where: 'scene', why: 'A bone holds still until a move names it. A sway rocks it to and fro, and the trunk and crown on it go along.' },
     { id: 'loop', label: 'Find the rule every move must keep', hint: 'What if a move came round only partway by the end of the loop? Ask the checker.', where: 'checker', why: 'Every move comes round a whole number of times a loop, so when the loop ends every bone is back where it began and the scene runs on with no seam.' },
     { id: 'light', label: 'Light the lantern with a light that flickers', hint: 'Live lights go in a list of their own, next to the parts.', where: 'scene', why: 'A live light shines on what is near it frame by frame, and a flicker makes it waver a whole number of times a loop, like any move.' },
+  ],
+  'pixel-art': [
+    { id: 'small', label: 'Draw the cottage as a picture under 200 pixels across', hint: 'The readout gives the picture\u2019s size.', where: 'pixels', why: 'Pixel mode draws the scene into a small picture and shows each of its pixels as a block of screen pixels.' },
+    { id: 'few', label: 'Draw it in 4 colors or fewer', hint: 'Every pixel takes the nearest color it is allowed.', where: 'colors', why: 'Each pixel snaps to the nearest palette color as the eye judges it; dither mixes two where neither is near.' },
+    { id: 'steady', label: 'Stop the lantern\u2019s flicker changing pixels, with the view still', hint: 'Watch the readout while the light wavers. Which pixels change, and should they?', where: 'motion', why: 'A pixel halfway between two colors flips when the light wavers. Steady pixels keep last frame\u2019s color unless another is clearly closer.' },
   ],
   'fuzzy': [
     { id: 'blades', label: 'Give the grass mesh its finest grid, and count the blade tips it keeps', where: 'mesh', why: 'None. A blade is thinner than a grid cell, so the skin can’t close round it and the blades melt into the clump.' },
