@@ -7,7 +7,7 @@ import type { SceneDoc } from '../../../splat-engine/sceneDoc.ts'
 export const CROC: SceneDoc = {
   name: 'Garden crocodile',
   loop: 12,
-  light: { from: [0.4, 1, 0.55], ambient: 0.55, shadow: 0.5 },
+  light: { from: [0.4, 1, 0.55], ambient: 0.55, shadow: 0.5, bounce: 0.5 },
   palette: [
     '#101c18', '#1e3a24', '#3a6c3a', '#5c9848', '#98c468', '#b8a868', '#e4d898', '#5c4c30',
     '#8a7448', '#c4a868', '#e8d498', '#1c4c6c', '#2c7494', '#5cb0c4', '#b4e4e8', '#3c8c4c',

@@ -7,7 +7,7 @@ import type { SceneDoc } from '../../../splat-engine/sceneDoc.ts'
 export const WINDOW: SceneDoc = {
   name: 'Sunrise window',
   loop: 14,
-  light: { from: [0.35, 1, 0.75], ambient: 0.48, shadow: 0.5 },
+  light: { from: [0.35, 1, 0.75], ambient: 0.48, shadow: 0.5, bounce: 0.5 },
   palette: [
     '#1a1824', '#383444', '#5a5668', '#888294', '#b8b0bc', '#38221a', '#684028', '#9c6c3c',
     '#14302c', '#225044', '#3a7c5c', '#72b47c', '#3c1c78', '#6a34b4', '#c8327c', '#f0603c',

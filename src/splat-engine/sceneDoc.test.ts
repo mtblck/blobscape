@@ -135,6 +135,9 @@ test('air: mistakes are pointed at, and a sound one builds specks that loop and 
     ['an unknown ink', (d) => { d.parts[0].ink = { kind: 'swirl' } }, /^parts\[0\]\.ink\.kind: must be one of 'hatch'/],
     ['ink past 1', (d) => { d.parts[0].ink = { kind: 'cracks', amount: 3 } }, /^parts\[0\]\.ink\.amount: must be from 0 to 1/],
     ['glass past 1', (d) => { d.parts[0].glass = { see: 2 } }, /^parts\[0\]\.glass\.see: must be from 0 to 1/],
+    ['a focus with no reach', (d) => { d.focus = { at: [0, 0, 0] } }, /^focus\.r: must be a number/],
+    ['strokes past 1', (d) => { d.parts[0].strokes = 2 }, /^parts\[0\]\.strokes: must be from 0 to 1/],
+    ['bounce past 1', (d) => { d.light = { bounce: 3 } }, /^light\.bounce: must be from 0 to 1/],
     ['a bare that is not true or false', (d) => { d.parts[0].bare = 'yes' }, /^parts\[0\]\.bare: must be true or false/],
   ]
   const withAir = () => {

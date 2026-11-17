@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { LIT_MAX, blend, box, buildVoxels, inkedAt, cone, cut, lathe, letterGrid, pixelText, sphere, sweep, union, type VoxelSpec } from './voxel.ts'
+import { LIT_MAX, blend, box, buildVoxels, inkedAt, cylinder, cone, cut, lathe, letterGrid, pixelText, sphere, sweep, union, type VoxelSpec } from './voxel.ts'
 import { posedPoint, axisAngle } from './rig.ts'
 
 const ROOT = { name: 'root', parent: -1, head: [0, 0, 0] as [number, number, number] }
@@ -284,4 +284,41 @@ test('glass: water mirrors a red post standing in it, shows its depth, and keeps
   assert.ok(near(clear, 0.6, 0, 0.6)[1] < near(plain, 0.6, 0, 0.6)[1] - 0.05, 'deep water is darker')
   // the sides are earth, not glass
   assert.deepEqual(near(mirror, 0, -0.2, 1), near(plain, 0, -0.2, 1))
+})
+
+test('bounce, form dabs and focus: a red wall warms the floor by it, strokes run round a trunk, and out of focus is a coarser grid with no holes', () => {
+  const at = (b: ReturnType<typeof buildVoxels>, x: number, y: number, z: number) => {
+    let best = -1, d = Infinity
+    for (let i = 0; i < b.blobs.count; i++) {
+      const e = Math.hypot(b.blobs.center[i * 3] - x, b.blobs.center[i * 3 + 1] - y, b.blobs.center[i * 3 + 2] - z)
+      if (e < d) { d = e; best = i }
+    }
+    return { i: best, d, c: [b.blobs.color[best * 3], b.blobs.color[best * 3 + 1], b.blobs.color[best * 3 + 2]] }
+  }
+  const room = (bounce: number): VoxelSpec => ({
+    bones: [ROOT], spacing: 0.04, light: { ambient: 0.5, shadow: 0, bounce },
+    parts: [{ shape: box([0, -0.1, 0], [1, 0.1, 1]), color: [0.7, 0.7, 0.7], bone: 'root' }, { shape: box([0, 0.5, -0.7], [1, 0.5, 0.1]), color: [1, 0.1, 0.1], bone: 'root' }],
+  })
+  const flat = buildVoxels(room(0)), warm = buildVoxels(room(1))
+  const red = (b: typeof flat, z: number) => { const { c } = at(b, 0, 0, z); return c[0] - c[1] }
+  assert.ok(red(warm, -0.5) > red(flat, -0.5) + 0.05, 'by the wall')
+  assert.ok(red(warm, 0.8) - red(flat, 0.8) < red(warm, -0.5) - red(flat, -0.5), 'less far from it')
+  // strokes round an upright trunk: long along the level line, which is level
+  const trunk = buildVoxels({ bones: [ROOT], spacing: 0.04, parts: [{ shape: cylinder([0, 0], 0, 1, 0.3), color: [0.5, 0.4, 0.3], bone: 'root', strokes: 0.8 }] })
+  const { i } = at(trunk, 0.3, 0.5, 0)
+  assert.ok(trunk.blobs.scale[i * 3] > trunk.blobs.scale[i * 3 + 1] * 1.5)
+  const q = trunk.blobs.quat.subarray(i * 4, i * 4 + 4)
+  // the local x axis, turned into the world: level, and across the face (along z here)
+  const xw = [1 - 2 * (q[1] * q[1] + q[2] * q[2]), 2 * (q[0] * q[1] + q[2] * q[3]), 2 * (q[0] * q[2] - q[1] * q[3])]
+  assert.ok(Math.abs(xw[1]) < 0.05 && Math.abs(xw[2]) > 0.9, JSON.stringify(xw))
+  // focus: a floor with the eye on one corner
+  const floor = (focus?: VoxelSpec['focus']) => buildVoxels({ bones: [ROOT], spacing: 0.04, focus, parts: [{ shape: box([0, -0.2, 0], [1, 0.2, 1]), color: [0.5, 0.5, 0.5], bone: 'root' }] })
+  const all = floor(), eyed = floor({ at: [-0.6, 0, -0.6], r: 0.4 })
+  assert.ok(eyed.blobs.count < all.blobs.count * 0.45, `${eyed.blobs.count} of ${all.blobs.count}`)
+  assert.ok(at(eyed, -0.62, 0, -0.58).d < 0.03, 'fine in focus')
+  // out of focus every point of the top still has a disc within reach of its wider radius
+  for (let x = 0; x < 0.9; x += 0.037) for (let z = 0; z < 0.9; z += 0.041) {
+    const { i: k, d } = at(eyed, x, 0, z)
+    assert.ok(d < eyed.blobs.scale[k * 3] * 1.3, `hole at ${x.toFixed(2)}, ${z.toFixed(2)}`)
+  }
 })

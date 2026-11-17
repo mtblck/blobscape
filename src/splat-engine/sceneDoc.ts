@@ -22,9 +22,10 @@ export interface SceneDoc {
   /**
    * The baked sun: `from` points toward it. `ramp` (0–1, 0.7 when left out) turns shade toward cool violet and full
    * sun toward warm yellow, as a painter's ramp does; `crevice` (0.5) darkens corners and cracks; `wear` (0.5)
-   * lightens sharp outer edges. 0 turns any of them off.
+   * lightens sharp outer edges. 0 turns any of them off. `bounce` (off unless set) lets surfaces throw their color onto
+   * what faces them, as a red wall warms the floor beside it; it costs build time, so use it where it shows.
    */
-  light?: { from?: Vec3; ambient?: number; shadow?: number; ramp?: number; crevice?: number; wear?: number }
+  light?: { from?: Vec3; ambient?: number; shadow?: number; ramp?: number; crevice?: number; wear?: number; bounce?: number }
   /** The colors the picture is drawn in, 2 to 32. */
   palette: string[]
   /** The sky behind, top and bottom. Left out, the background is clear. */
@@ -54,6 +55,8 @@ export interface SceneDoc {
    * thin on every upturned face. `amount` 0 to 1, from a dusting to most of what faces up.
    */
   cover?: { kind: 'snow' | 'moss' | 'dust'; color: string; amount: number }
+  /** Where the eye goes: within `r` of `at` the scene is cut at full detail, further out on a grid twice as coarse, in about a quarter of the blobs. */
+  focus?: { at: Vec3; r: number }
 }
 
 export interface AirDoc {
@@ -142,6 +145,8 @@ export interface PartDoc {
    * to upturned faces, for a pond cut as one slab with earth sides.
    */
   glass?: { see?: number; mirror?: number; top?: boolean }
+  /** Dabs that follow the form: 0 to 1, how far each cell is drawn as a stroke along the level line round the shape. Shows as brushwork in the Blobs view. */
+  strokes?: number
 }
 
 export type ShapeDoc =
@@ -309,7 +314,7 @@ export function checkScene(doc: unknown): string[] {
     if (!obj(doc.light)) bad('light', 'must be an object')
     else {
       if (doc.light.from !== undefined && vec(doc.light.from, 'light.from', -1, 1) && Math.hypot(...(doc.light.from as Vec3)) < 0.1) bad('light.from', 'must point somewhere')
-      for (const k of ['ambient', 'shadow', 'ramp', 'crevice', 'wear']) opt(doc.light[k], `light.${k}`, 0, 1)
+      for (const k of ['ambient', 'shadow', 'ramp', 'crevice', 'wear', 'bounce']) opt(doc.light[k], `light.${k}`, 0, 1)
     }
   }
   hexes(doc.palette, 'palette', 2, MAX_PALETTE_SIZE)
@@ -452,6 +457,7 @@ export function checkScene(doc: unknown): string[] {
     if (p.bone !== undefined) bone(p.bone, `${at}.bone`)
     for (const k of ['glow', 'noShadow', 'bare']) if (p[k] !== undefined && typeof p[k] !== 'boolean') bad(`${at}.${k}`, 'must be true or false')
     if (p.grime !== undefined) hex(p.grime, `${at}.grime`)
+    opt(p.strokes, `${at}.strokes`, 0, 1)
     if (p.glass !== undefined) {
       if (!obj(p.glass)) bad(`${at}.glass`, 'must be an object')
       else {
@@ -513,6 +519,10 @@ export function checkScene(doc: unknown): string[] {
         else { num(l.circle.r, `${at}.circle.r`, 0, REACH); whole(l.circle.times, `${at}.circle.times`) }
       }
     })
+  }
+  if (doc.focus !== undefined) {
+    if (!obj(doc.focus)) bad('focus', 'must be an object')
+    else { vec(doc.focus.at, 'focus.at'); num(doc.focus.r, 'focus.r', 0.1, REACH * 2) }
   }
   if (doc.cover !== undefined) {
     const c = doc.cover
@@ -844,7 +854,7 @@ export function compileScene(doc: SceneDoc): CompiledScene {
         return {
         shape, color: toPaint(p.paint, spacing, 'letterAt' in shape ? (shape.letterAt as (p: Vec3, n: Vec3) => string | undefined) : undefined), bone: p.bone ?? 'land', glow: p.glow, noShadow: p.noShadow,
         grime: p.grime === undefined ? undefined : unit(p.grime), bare: p.bare,
-        glass: p.glass,
+        glass: p.glass, strokes: p.strokes,
         ink: p.ink && { kind: p.ink.kind, amount: p.ink.amount, color: p.ink.color === undefined ? undefined : unit(p.ink.color) },
         }
       })
@@ -852,7 +862,7 @@ export function compileScene(doc: SceneDoc): CompiledScene {
       // only what the scene sets: a key left undefined would wipe the builder's default
       const light: VoxelSpec['light'] = { ...PAINTED }
       if (doc.light?.from) light.dir = doc.light.from
-      for (const k of ['ambient', 'shadow', 'ramp', 'crevice', 'wear'] as const) if (doc.light?.[k] !== undefined) light[k] = doc.light[k]
+      for (const k of ['ambient', 'shadow', 'ramp', 'crevice', 'wear', 'bounce'] as const) if (doc.light?.[k] !== undefined) light[k] = doc.light[k]
       const beams = (doc.air?.shafts ?? []).map((b) => ({ from: b.from, to: b.to, r: b.r, color: unit(b.color), strength: b.strength ?? 0.6 }))
       // a lamp that stays put casts shadows baked once; byte k of each blob is light k
       const lamps = lights.slice(0, MAX_LAMPS).map((l) => (!l.shadows || l.circle ? null : { at: l.at, reach: l.range }))
@@ -861,7 +871,7 @@ export function compileScene(doc: SceneDoc): CompiledScene {
       const ra = (az * Math.PI) / 180, re = (el * Math.PI) / 180
       const eye: Vec3 = [tg[0] + dist * Math.sin(ra) * Math.cos(re), tg[1] + dist * Math.sin(re), tg[2] + dist * Math.cos(ra) * Math.cos(re)]
       const sky: [Vec3, Vec3] | undefined = doc.sky ? [unit(doc.sky[0]), unit(doc.sky[1])] : doc.air?.haze ? [unit(doc.air.haze.color), unit(doc.air.haze.color)] : undefined
-      return { bones, parts, spacing, light, loose: looseAir(doc.air), beams, lamps, cover, eye, sky, disc: doc.disc }
+      return { bones, parts, spacing, light, loose: looseAir(doc.air), beams, lamps, cover, eye, sky, focus: doc.focus, disc: doc.disc }
     },
     empty(built) {
       const seen = new Set<number>()

@@ -1,4 +1,5 @@
-import { Blobs, quatFacing, type Vec3 } from '../splat-core/blobs.ts'
+import { Blobs, quatFacing, type Quat, type Vec3 } from '../splat-core/blobs.ts'
+import { quatFromAxes } from './fur.ts'
 import { fromOklab, toOklab } from '../splat-core/color.ts'
 import { Skeleton, emptySkin, setWeights, type Bone } from './rig.ts'
 import type { Built } from './body.ts'
@@ -48,6 +49,12 @@ export interface VoxelPart {
   ink?: Ink
   /** Water, ice or glass: see Glass. Needs the spec's `eye`. */
   glass?: Glass
+  /**
+   * Dabs that follow the form: 0 leaves each cell a round disc; up to 1 draws it as a stroke along the level line
+   * round the shape, as a painter's brush goes round a pot or a trunk. Seen as blobs it reads as brushwork; in pixel
+   * mode it barely shows.
+   */
+  strokes?: number
 }
 
 /**
@@ -170,6 +177,8 @@ export interface VoxelLight {
   crevice?: number
   /** How much sharp outer edges lighten, as worn stone and wood do: 0 to 1. */
   wear?: number
+  /** How much color surfaces throw onto what faces them, as a red wall warms the floor beside it: 0 to 1. */
+  bounce?: number
 }
 
 export interface VoxelSpec {
@@ -199,6 +208,12 @@ export interface VoxelSpec {
   beams?: Beam[]
   /** Snow, moss or dust over every part that isn't `bare` or `glow`: see Cover. */
   cover?: Cover
+  /**
+   * Where the eye goes: within `r` of `at` the grid is as fine as `spacing`; further out it is twice as coarse, with
+   * discs twice the size, so the subject keeps its detail and the rest is painted broadly in a quarter of the blobs. Only parts at least
+   * eight cells across every way go coarse: a thinner one could miss every coarse cell.
+   */
+  focus?: { at: Vec3; r: number }
   /** Where `glass` parts are looked at from: the scene's camera. */
   eye?: Vec3
   /** The sky a `glass` part mirrors where its mirror line meets nothing: [overhead, at the horizon]. Dark when left out. */
@@ -216,6 +231,9 @@ export interface Lamp {
   /** How far its light reaches: blobs further off are not looked at (their byte stays full). */
   reach: number
 }
+
+/** How far bounced light comes from, in world units. */
+const BOUNCE_REACH = 0.5
 
 /** How many lamps' shadows a blob carries, one byte each. */
 export const MAX_LAMPS = 4
@@ -663,9 +681,9 @@ export function buildVoxels(spec: VoxelSpec): Built {
   const lookable = spec.parts.map((q, qi) => ({ q, qi })).filter(({ q }) => q.glow || !q.noShadow)
   const sky = spec.sky ?? [[0.05, 0.06, 0.1], [0.1, 0.1, 0.14]]
   // `deep` is what shows once the line leaves the glass's own part with nothing met inside it: the bottom of a pond
-  const lookAlong = (from: Vec3, dir: Vec3, skip: number, deep?: Vec3): Vec3 => {
+  const lookAlong = (from: Vec3, dir: Vec3, skip: number, deep?: Vec3, reach = far): Vec3 | undefined => {
     let t = s * 0.5
-    for (let step = 0; step < 64 && t < far; step++) {
+    for (let step = 0; step < 64 && t < reach; step++) {
       const x = from[0] + dir[0] * t, y = from[1] + dir[1] * t, z = from[2] + dir[2] * t
       if (deep && spec.parts[skip].shape.sdf(x, y, z) > 0) return deep
       let d = Infinity, hit = -1
@@ -685,10 +703,35 @@ export function buildVoxels(spec: VoxelSpec): Built {
       }
       t += Math.max(d, s * 0.5)
     }
+    if (reach < far) return undefined
     const up = Math.min(1, Math.max(0, dir[1]))
     return [0, 1, 2].map((i) => sky[1][i] + (sky[0][i] - sky[1][i]) * up) as Vec3
   }
+  /** A cell's disc: round and lying on the surface, or a stroke along the level line round the shape. */
+  const dab = (n: Vec3, strokes: number, k: number): { scale: Vec3; quat: Quat } => {
+    if (strokes <= 0 || Math.abs(n[1]) > 0.97) return { scale: [s * disc * k, s * disc * k, s * 0.3 * k], quat: quatFacing(n) }
+    const t = norm([n[2], 0, -n[0]]), b: Vec3 = [n[1] * t[2] - n[2] * t[1], n[2] * t[0] - n[0] * t[2], n[0] * t[1] - n[1] * t[0]]
+    return { scale: [s * disc * k * (1 + strokes), s * disc * k * (1 - strokes * 0.25), s * 0.3 * k], quat: quatFromAxes(t, b, n) }
+  }
   const glassSeen = new Map<number, [Vec3, Vec3]>()
+  const bounce = light.bounce ?? 0
+  const bounceSeen = new Map<number, Vec3>()
+  /** The color thrown onto a point facing `n` by what is within BOUNCE_REACH in front of it: five looks, a miss counting as none. */
+  const thrown = (p: Vec3, n: Vec3, pi: number): Vec3 => {
+    const B = s * 2.5
+    const key = ((pi * 4096 + (Math.floor(p[0] / B) & 4095)) * 4096 + (Math.floor(p[1] / B) & 4095)) * 4096 + (Math.floor(p[2] / B) & 4095)
+    const got = bounceSeen.get(key)
+    if (got) return got
+    const a = norm(Math.abs(n[1]) < 0.9 ? [n[2], 0, -n[0]] : [1, 0, 0]), b: Vec3 = [n[1] * a[2] - n[2] * a[1], n[2] * a[0] - n[0] * a[2], n[0] * a[1] - n[1] * a[0]]
+    const sum: Vec3 = [0, 0, 0]
+    for (const [u, v] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const dir = norm([n[0] + (a[0] * u + b[0] * v) * 1.2, n[1] + (a[1] * u + b[1] * v) * 1.2, n[2] + (a[2] * u + b[2] * v) * 1.2])
+      const c = lookAlong([p[0] + n[0] * s, p[1] + n[1] * s, p[2] + n[2] * s], dir, pi, undefined, BOUNCE_REACH)
+      if (c) for (let i = 0; i < 3; i++) sum[i] += c[i] / 5
+    }
+    bounceSeen.set(key, sum)
+    return sum
+  }
   const blobs = new Blobs(4096)
   const parts: number[] = []
   const e = s * 0.5
@@ -703,10 +746,15 @@ export function buildVoxels(spec: VoxelSpec): Built {
     const i0 = Math.floor(min[0] / s), i1 = Math.ceil(max[0] / s)
     const j0 = Math.floor(min[1] / s), j1 = Math.ceil(max[1] / s)
     const k0 = Math.floor(min[2] / s), k1 = Math.ceil(max[2] / s)
+    // only a part at least eight cells thick each way can be painted broadly: a thinner one could miss every coarse cell
+    const broad = spec.focus !== undefined && [0, 1, 2].every((i) => max[i] - min[i] >= s * 8)
     const cell = (x: number, y: number, z: number) => {
       const d = sdf(x, y, z)
       // the outermost layer of cells inside the shape
-      if (d > 0 || d <= -s * (spec.trueShell ? 4 : 1)) return
+      // out of focus, only every other grid point, in a shell two cells deep
+      const wide = broad && Math.hypot(x - spec.focus!.at[0], y - spec.focus!.at[1], z - spec.focus!.at[2]) > spec.focus!.r
+      if (wide && ((Math.round(x / s) | Math.round(y / s) | Math.round(z / s)) & 1)) return
+      if (d > 0 || d <= -s * (spec.trueShell ? 4 : 1) * (wide ? 2 : 1)) return
       if (same.some((q) => boxDistance(q, x, y, z) === 0 && q.sdf(x, y, z) < buried)) return
       const xa = sdf(x + e, y, z), xb = sdf(x - e, y, z), ya = sdf(x, y + e, z), yb = sdf(x, y - e, z), za = sdf(x, y, z + e), zb = sdf(x, y, z - e)
       const g: Vec3 = [xa - xb, ya - yb, za - zb]
@@ -742,6 +790,10 @@ export function buildVoxels(spec: VoxelSpec): Built {
         // how sharply the surface bends outward here (from the samples the normal came from): 0 flat, over 1 at an edge
         const edge = wear > 0 ? Math.min(1, Math.max(0, (((xa + xb + ya + yb + za + zb - 6 * d) / (e * e)) * s - 0.5) / 1.5)) : 0
         color = bakedColor(base, shade, facing * sun, ramp, wear * edge)
+        if (bounce > 0) {
+          const t = thrown(p, n, pi)
+          color = [0, 1, 2].map((i) => Math.min(LIT_MAX, color[i] + base[i] * t[i] * bounce * 0.6)) as Vec3
+        }
         if (beams.length) color = inBeams(beams, p, n, base, color)
         if (part.glass && spec.eye && (!part.glass.top || n[1] > 0.5)) {
           const v = norm([spec.eye[0] - x, spec.eye[1] - y, spec.eye[2] - z])
@@ -754,7 +806,7 @@ export function buildVoxels(spec: VoxelSpec): Built {
           let looks = glassSeen.get(key)
           if (!looks) {
             const r: Vec3 = [2 * cos * n[0] - v[0], 2 * cos * n[1] - v[1], 2 * cos * n[2] - v[2]]
-            looks = [ks > 0 ? lookAlong([x - n[0] * s, y - n[1] * s, z - n[2] * s], [-v[0], -v[1], -v[2]], pi, inkOf(color)) : color, kr > 0 ? lookAlong([x + n[0] * s, y + n[1] * s, z + n[2] * s], norm(r), pi) : color]
+            looks = [ks > 0 ? lookAlong([x - n[0] * s, y - n[1] * s, z - n[2] * s], [-v[0], -v[1], -v[2]], pi, inkOf(color))! : color, kr > 0 ? lookAlong([x + n[0] * s, y + n[1] * s, z + n[2] * s], norm(r), pi)! : color]
             glassSeen.set(key, looks)
           }
           const [back, over] = looks
@@ -786,7 +838,7 @@ export function buildVoxels(spec: VoxelSpec): Built {
       }
       blobs.push({
         // a disc lying on the surface: flat along the normal, which is what live lights read as the way it faces
-        center: p, scale: [s * disc, s * disc, s * 0.3], quat: quatFacing(n),
+        center: p, ...dab(n, part.strokes ?? 0, wide ? 2 : 1),
         color, opacity: part.opacity ?? 0.96,
       })
       parts.push(pi)
