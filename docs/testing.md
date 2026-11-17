@@ -31,7 +31,7 @@ Some examples of what `--changed` runs:
 | The site's copy and dates (`site.ts`, `meta.ts`) | `site` |
 | Header or footer | `site`, `lessons-basics`, both page sweeps |
 | The pixel pass (`splat-engine/pixelPass.ts`) | every page drawn by the engine (10 checks) |
-| `splat-core/blobs.ts`, `routes.ts` | nearly everything |
+| A file most checks import (`splat-core/blobs.ts`, `shared/ui.tsx`, `routes.ts`, the lesson shell) | the 10 `core` checks (see below) |
 
 To see what a change would run without running it:
 
@@ -59,6 +59,15 @@ npm run verify -- --changed --why --list                                  # your
   and copy (`App.tsx`, `site.ts`, `meta.ts`, `engineCopy.ts`, header, footer,
   logo) are not followed into from other checks: what they can break is the
   chrome, which the checks that name them cover.
+- A file that reaches 80% or more of the checks through imports (the blobs,
+  the shared controls, the router, the lesson shell, toasts) runs only the checks
+  marked `core: true`: `site`, `lessons-basics`, `lessons-rigs`,
+  `sandbox-tools`, `creature`, `diorama`, `engine-lab`, `sprite`, `fit` and
+  `layout`. Between them they draw with Spark and with the engine on WebGPU and
+  WebGL, make pixel art and sprite sheets, train, pose on the CPU, edit in the
+  sandbox and lay out every experiment, in about 5 minutes instead of 15. Add
+  `--wide` to run everything such a file reaches, for example when a change to
+  the shared controls could show on every page.
 - `--changed` prints any changed file no check covers. That usually means a new
   page or asset that needs a check.
 - Checks run three at a time, each in its own Chromium (`--jobs=N` to change it),

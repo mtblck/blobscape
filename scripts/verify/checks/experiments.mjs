@@ -6,6 +6,7 @@ const SCENES = [['bee', 'Forest bee'], ['campfire', 'Campfire'], ['croc', 'Garde
 export default [
   {
     name: 'creature',
+    core: true,
     about: 'Splat Creatures: draws, details, bones, every creature, monsters, sprite sheets, files',
     entries: ['src/blobscape/Creature.tsx'],
     async run({ root, shots, join, fails, ok, open, tabClick, axe }) {
@@ -208,6 +209,7 @@ export default [
   },
   {
     name: 'diorama',
+    core: true,
     about: 'Pixel Diorama on WebGPU and WebGL: pixel art in palette, the GPU pass matches its CPU twin, motion, steady pixels, layout',
     entries: ['src/blobscape/PixelDiorama.tsx'],
     async run({ shots, join, fails, ok, open, tabClick, axe }) {
@@ -749,6 +751,7 @@ export default [
   },
   {
     name: 'layout',
+    core: true,
     about: 'every experiment: same two columns, its own tabs, a preview that stays in sight on a phone',
     entries: ['src/shared/Workbench.tsx', 'src/shared/ui.tsx'],
     files: ['src/shared/theme.css', 'src/blobscape/PixelDiorama.tsx', 'src/blobscape/Creature.tsx', 'src/blobscape/ForestWalk.tsx', 'src/blobscape/DungeonRun.tsx', 'src/blobscape/ScanStudio.tsx', 'src/blobscape/Clockwork.tsx', 'src/blobscape/ShapeShifter.tsx', 'src/fit-a-picture/App.tsx', 'src/splat-to-sprite/App.tsx'],
