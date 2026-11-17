@@ -414,7 +414,7 @@ export function Creature() {
                   </div>
                 </Field>
                 <label className="grid gap-1.5 text-sm">
-                  <span className="text-ink-muted">Open a rigged splat .glb</span>
+                  <span className="text-ink-muted">Open a rigged .glb: splats, or a model with bones</span>
                   <input type="file" accept=".glb,model/gltf-binary" onChange={(e) => { void open(e.target.files?.[0]); e.target.value = '' }} className="block w-full text-xs text-ink-faint file:mr-2 file:cursor-pointer file:rounded file:border file:border-rule file:bg-paper file:px-3 file:py-1.5 file:text-sm file:text-ink hover:file:border-ink-faint" />
                 </label>
               </div>

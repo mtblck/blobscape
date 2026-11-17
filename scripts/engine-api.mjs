@@ -44,6 +44,7 @@ const TITLES = {
   'splat-engine/edit': 'Cuts and paint',
   'splat-engine/depth': 'Depth for post effects',
   'splat-engine/glb': 'Rigged .glb files',
+  'splat-engine/skinnedModel': 'Rigged models to splats',
   'splat-engine/bakeSheet': 'Baking sprite sheets',
   'splat-engine/spriteSheet': 'Sprite sheet layout',
   'splat-engine/zoo/index': 'The zoo',

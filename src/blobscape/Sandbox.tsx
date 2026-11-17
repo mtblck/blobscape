@@ -1173,7 +1173,7 @@ export function Sandbox() {
                         </div>
                         <input ref={fileInput} type="file" accept={FILE_TYPES} className="sr-only" tabIndex={-1} aria-hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void openFile(f) }} />
                         <p className="text-xs text-ink-faint">
-                          .ply, .spz, .splat, .ksplat, .sog or a rigged .glb, or drop one on the view. It stays on your device. Scenes over {maxBlobs.toLocaleString()} blobs are thinned to fit. A .ply opens in most splat viewers; a rigged .glb keeps the creatures moving and opens here again and on Splat Creatures.
+                          .ply, .spz, .splat, .ksplat, .sog or a rigged .glb, or drop one on the view. It stays on your device. Scenes over {maxBlobs.toLocaleString()} blobs are thinned to fit. A .ply opens in most splat viewers; a rigged .glb keeps the creatures moving and opens here again and on Splat Creatures. A rigged model saved as a .glb (triangles on bones, as from Blender or Mixamo) joins as a creature: blobs laid over its surface on its own bones, with its moves.
                         </p>
                         {error && <p className="text-sm text-accent-ink">{error}</p>}
                         <Toggle label="Turn captures the right way up on opening" checked={upright} onChange={setUpright} />
