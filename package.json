@@ -8,6 +8,8 @@
     "hosting:check": "node scripts/check-hosting.mjs",
     "test": "node --test --experimental-strip-types 'src/**/*.test.ts'",
     "verify": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/verify.mjs",
+    "verify:changed": "npm run verify -- --changed",
+    "check": "npm test && npm run build && npm run verify -- --changed",
     "prerender": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/prerender.ts"
   },
   "dependencies": {
