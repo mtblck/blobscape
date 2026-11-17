@@ -46,6 +46,23 @@ export interface VoxelPart {
   bare?: boolean
   /** Little drawn marks over the surface: see Ink. */
   ink?: Ink
+  /** Water, ice or glass: see Glass. Needs the spec's `eye`. */
+  glass?: Glass
+}
+
+/**
+ * A surface you see into and that mirrors what is over it, baked for one place to look from (the spec's `eye`, the
+ * scene's camera): pixel mode cuts anything faint, so instead of being drawn see-through, each cell takes the color
+ * of what lies behind it on the line from the eye (`see`) and of what its mirror line meets (`mirror`, stronger at a
+ * glancing look, as on real water). Seen from far off the scene's own view it is a painting of glass, not glass.
+ */
+export interface Glass {
+  /** How much of what is behind shows through: 0 to 1. */
+  see?: number
+  /** How much it mirrors, looked at straight on; more at a glancing look. 0 to 1. */
+  mirror?: number
+  /** Only its upturned faces: a pond cut as one slab whose sides are earth. */
+  top?: boolean
 }
 
 /**
@@ -182,6 +199,10 @@ export interface VoxelSpec {
   beams?: Beam[]
   /** Snow, moss or dust over every part that isn't `bare` or `glow`: see Cover. */
   cover?: Cover
+  /** Where `glass` parts are looked at from: the scene's camera. */
+  eye?: Vec3
+  /** The sky a `glass` part mirrors where its mirror line meets nothing: [overhead, at the horizon]. Dark when left out. */
+  sky?: [Vec3, Vec3]
   /**
    * Lamps whose shadows are baked, in the order of the live lights they stand for (at most four; a gap is a light
    * that casts none): for each blob, how much of lamp k it can see goes in byte k of `seen`, and the engine's live
@@ -638,6 +659,36 @@ export function buildVoxels(spec: VoxelSpec): Built {
   const lampCasters = lamps.map((l) => l && casters.filter((c) => boxDistance(c, l.at[0], l.at[1], l.at[2]) < l.reach * 2))
   const ramp = light.ramp ?? 0, crevice = light.crevice ?? 0, wear = light.wear ?? 0
   const buried = -Math.max(s, spec.keepBuried ?? 0)
+  // what a line from a glass cell meets: any part that casts a shadow or glows, but not the glass itself
+  const lookable = spec.parts.map((q, qi) => ({ q, qi })).filter(({ q }) => q.glow || !q.noShadow)
+  const sky = spec.sky ?? [[0.05, 0.06, 0.1], [0.1, 0.1, 0.14]]
+  // `deep` is what shows once the line leaves the glass's own part with nothing met inside it: the bottom of a pond
+  const lookAlong = (from: Vec3, dir: Vec3, skip: number, deep?: Vec3): Vec3 => {
+    let t = s * 0.5
+    for (let step = 0; step < 64 && t < far; step++) {
+      const x = from[0] + dir[0] * t, y = from[1] + dir[1] * t, z = from[2] + dir[2] * t
+      if (deep && spec.parts[skip].shape.sdf(x, y, z) > 0) return deep
+      let d = Infinity, hit = -1
+      for (const { q, qi } of lookable) {
+        if (qi === skip || boxDistance(q.shape, x, y, z) >= d) continue
+        const k = q.shape.sdf(x, y, z)
+        if (k < d) { d = k; hit = qi }
+      }
+      if (d < s * 0.5 && hit >= 0) {
+        const q = spec.parts[hit], f = q.shape.sdf, h = s * 0.5
+        const n = norm([f(x + h, y, z) - f(x - h, y, z), f(x, y + h, z) - f(x, y - h, z), f(x, y, z + h) - f(x, y, z - h)])
+        const at: Vec3 = [x, y, z]
+        const c = typeof q.color === 'function' ? q.color(at, n) : q.color
+        if (q.glow) return c
+        const facing = Math.max(0, n[0] * L[0] + n[1] * L[1] + n[2] * L[2])
+        return bakedColor(c, (light.ambient + (1 - light.ambient) * facing) * LIT_MAX, facing, ramp)
+      }
+      t += Math.max(d, s * 0.5)
+    }
+    const up = Math.min(1, Math.max(0, dir[1]))
+    return [0, 1, 2].map((i) => sky[1][i] + (sky[0][i] - sky[1][i]) * up) as Vec3
+  }
+  const glassSeen = new Map<number, [Vec3, Vec3]>()
   const blobs = new Blobs(4096)
   const parts: number[] = []
   const e = s * 0.5
@@ -692,6 +743,23 @@ export function buildVoxels(spec: VoxelSpec): Built {
         const edge = wear > 0 ? Math.min(1, Math.max(0, (((xa + xb + ya + yb + za + zb - 6 * d) / (e * e)) * s - 0.5) / 1.5)) : 0
         color = bakedColor(base, shade, facing * sun, ramp, wear * edge)
         if (beams.length) color = inBeams(beams, p, n, base, color)
+        if (part.glass && spec.eye && (!part.glass.top || n[1] > 0.5)) {
+          const v = norm([spec.eye[0] - x, spec.eye[1] - y, spec.eye[2] - z])
+          const cos = Math.max(0, n[0] * v[0] + n[1] * v[1] + n[2] * v[2])
+          const mirror = part.glass.mirror ?? 0.3, see = part.glass.see ?? 0.6
+          const kr = Math.min(1, mirror * (0.35 + 0.65 * (1 - cos) ** 3)), ks = see * (1 - kr)
+          // behind: from just inside the surface, on along the line from the eye; tinted by the glass's own color
+          // neighbors two cells a side share their looks: a glass face is smooth, and the looks are what it costs
+          const key = ((pi * 4096 + (Math.floor(x / (2 * s)) & 4095)) * 4096 + (Math.floor(y / (2 * s)) & 4095)) * 4096 + (Math.floor(z / (2 * s)) & 4095)
+          let looks = glassSeen.get(key)
+          if (!looks) {
+            const r: Vec3 = [2 * cos * n[0] - v[0], 2 * cos * n[1] - v[1], 2 * cos * n[2] - v[2]]
+            looks = [ks > 0 ? lookAlong([x - n[0] * s, y - n[1] * s, z - n[2] * s], [-v[0], -v[1], -v[2]], pi, inkOf(color)) : color, kr > 0 ? lookAlong([x + n[0] * s, y + n[1] * s, z + n[2] * s], norm(r), pi) : color]
+            glassSeen.set(key, looks)
+          }
+          const [back, over] = looks
+          color = [0, 1, 2].map((i) => Math.min(LIT_MAX, color[i] * (1 - ks - kr) + (back[i] * 0.7 + color[i] * 0.3) * ks + over[i] * kr)) as Vec3
+        }
       }
       if (sight.length) {
         const at = blobs.count * MAX_LAMPS

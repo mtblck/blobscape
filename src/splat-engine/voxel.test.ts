@@ -257,3 +257,31 @@ test('ink: a share of 4x4 blocks carry a mark, a big face never repeats, and a p
   for (let i = 0; i < plain.blobs.count; i++) if (inked.blobs.color[i * 3] < plain.blobs.color[i * 3] - 0.1) darker++
   assert.ok(darker > 50 && darker < plain.blobs.count * 0.3, `${darker} of ${plain.blobs.count}`)
 })
+
+test('glass: water mirrors a red post standing in it, shows its depth, and keeps its earth sides when `top`', () => {
+  const spec = (glass?: { see?: number; mirror?: number; top?: boolean }): VoxelSpec => ({
+    bones: [ROOT], spacing: 0.04, light: { ambient: 0.6, shadow: 0 }, eye: [0, 1.2, 3], sky: [[0, 0, 1], [0, 0, 1]],
+    parts: [
+      { shape: box([0, -0.2, 0], [1, 0.2, 1]), color: [0.2, 0.5, 0.6], bone: 'root', glass },
+      { shape: box([0, 0.5, -0.3], [0.15, 0.5, 0.15]), color: [1, 0, 0], bone: 'root' },
+    ],
+  })
+  const near = (b: ReturnType<typeof buildVoxels>, x: number, y: number, z: number) => {
+    let best = -1, d = Infinity
+    for (let i = 0; i < b.blobs.count; i++) {
+      const e = Math.hypot(b.blobs.center[i * 3] - x, b.blobs.center[i * 3 + 1] - y, b.blobs.center[i * 3 + 2] - z)
+      if (e < d) { d = e; best = i }
+    }
+    return [b.blobs.color[best * 3], b.blobs.color[best * 3 + 1], b.blobs.color[best * 3 + 2]]
+  }
+  const plain = buildVoxels(spec()), mirror = buildVoxels(spec({ see: 0, mirror: 0.8, top: true })), clear = buildVoxels(spec({ see: 0.8, mirror: 0, top: true }))
+  // on the water just in front of the post, the mirror line runs back up into it
+  const front: [number, number, number] = [0, 0, 0.1]
+  assert.ok(near(mirror, ...front)[0] - near(mirror, ...front)[1] > near(plain, ...front)[0] - near(plain, ...front)[1] + 0.2, 'red in the water')
+  // out to the side the mirror line meets only sky
+  assert.ok(near(mirror, 0.8, 0, 0.6)[2] > near(plain, 0.8, 0, 0.6)[2] + 0.1, 'sky in the water')
+  // looking in, nothing is met before the line leaves the water: a darker step of its own color
+  assert.ok(near(clear, 0.6, 0, 0.6)[1] < near(plain, 0.6, 0, 0.6)[1] - 0.05, 'deep water is darker')
+  // the sides are earth, not glass
+  assert.deepEqual(near(mirror, 0, -0.2, 1), near(plain, 0, -0.2, 1))
+})

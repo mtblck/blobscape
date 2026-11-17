@@ -135,6 +135,13 @@ export interface PartDoc {
    * darker step of the paint when left out.
    */
   ink?: { kind: 'hatch' | 'stipple' | 'cracks' | 'grain' | 'tufts' | 'scales'; amount?: number; color?: string }
+  /**
+   * Water, ice or glass: it shows what lies behind it (`see`, 0.6) and mirrors what is over it (`mirror`, 0.3, more
+   * at a glancing look), painted for the scene's own camera. Its paint tints what shows through, and where the line
+   * from the eye leaves it with nothing met, a darker step of it shows, as the bottom of a pond does. `top` keeps it
+   * to upturned faces, for a pond cut as one slab with earth sides.
+   */
+  glass?: { see?: number; mirror?: number; top?: boolean }
 }
 
 export type ShapeDoc =
@@ -445,6 +452,13 @@ export function checkScene(doc: unknown): string[] {
     if (p.bone !== undefined) bone(p.bone, `${at}.bone`)
     for (const k of ['glow', 'noShadow', 'bare']) if (p[k] !== undefined && typeof p[k] !== 'boolean') bad(`${at}.${k}`, 'must be true or false')
     if (p.grime !== undefined) hex(p.grime, `${at}.grime`)
+    if (p.glass !== undefined) {
+      if (!obj(p.glass)) bad(`${at}.glass`, 'must be an object')
+      else {
+        opt(p.glass.see, `${at}.glass.see`, 0, 1); opt(p.glass.mirror, `${at}.glass.mirror`, 0, 1)
+        if (p.glass.top !== undefined && typeof p.glass.top !== 'boolean') bad(`${at}.glass.top`, 'must be true or false')
+      }
+    }
     if (p.ink !== undefined) {
       if (!obj(p.ink)) bad(`${at}.ink`, 'must be an object')
       else {
@@ -830,6 +844,7 @@ export function compileScene(doc: SceneDoc): CompiledScene {
         return {
         shape, color: toPaint(p.paint, spacing, 'letterAt' in shape ? (shape.letterAt as (p: Vec3, n: Vec3) => string | undefined) : undefined), bone: p.bone ?? 'land', glow: p.glow, noShadow: p.noShadow,
         grime: p.grime === undefined ? undefined : unit(p.grime), bare: p.bare,
+        glass: p.glass,
         ink: p.ink && { kind: p.ink.kind, amount: p.ink.amount, color: p.ink.color === undefined ? undefined : unit(p.ink.color) },
         }
       })
@@ -842,7 +857,11 @@ export function compileScene(doc: SceneDoc): CompiledScene {
       // a lamp that stays put casts shadows baked once; byte k of each blob is light k
       const lamps = lights.slice(0, MAX_LAMPS).map((l) => (!l.shadows || l.circle ? null : { at: l.at, reach: l.range }))
       const cover = doc.cover && { kind: doc.cover.kind, color: unit(doc.cover.color), amount: doc.cover.amount }
-      return { bones, parts, spacing, light, loose: looseAir(doc.air), beams, lamps, cover, disc: doc.disc }
+      const { target: tg, distance: dist, azimuth: az, elevation: el } = doc.camera
+      const ra = (az * Math.PI) / 180, re = (el * Math.PI) / 180
+      const eye: Vec3 = [tg[0] + dist * Math.sin(ra) * Math.cos(re), tg[1] + dist * Math.sin(re), tg[2] + dist * Math.cos(ra) * Math.cos(re)]
+      const sky: [Vec3, Vec3] | undefined = doc.sky ? [unit(doc.sky[0]), unit(doc.sky[1])] : doc.air?.haze ? [unit(doc.air.haze.color), unit(doc.air.haze.color)] : undefined
+      return { bones, parts, spacing, light, loose: looseAir(doc.air), beams, lamps, cover, eye, sky, disc: doc.disc }
     },
     empty(built) {
       const seen = new Set<number>()

@@ -86,7 +86,7 @@ export const CROC: SceneDoc = {
     { name: 'wing15', at: [0.435, 0.852, 0.045], parent: 'orbit15' },
   ],
   parts: [
-    { shape: { kind: 'cylinder', at: [0, -0.24, 0], height: 0.22, r: 1.75 }, paint: { kind: 'faces', top: { kind: 'patches', size: 0.3, colors: ['#2c7494', '#2c7494', '#5cb0c4', '#1c4c6c', '#2c7494'] }, side: { kind: 'bands', axis: 'y', size: 0.07, colors: ['#8a7448', '#5c4c30', '#8a7448'] } } },
+    { shape: { kind: 'cylinder', at: [0, -0.24, 0], height: 0.22, r: 1.75 }, paint: { kind: 'faces', top: { kind: 'patches', size: 0.3, colors: ['#2c7494', '#2c7494', '#5cb0c4', '#1c4c6c', '#2c7494'] }, side: { kind: 'bands', axis: 'y', size: 0.07, colors: ['#8a7448', '#5c4c30', '#8a7448'] } }, glass: { see: 0.45, mirror: 0.35, top: true } },
     { shape: { kind: 'rough', shape: { kind: 'ball', at: [-0.05, -0.02, 0.0], r: [1.5, 0.12, 0.72] }, by: 0.02, scale: 0.3 }, paint: { kind: 'faces', top: { kind: 'patches', size: 0.14, colors: ['#c4a868', '#e8d498', '#c4a868', '#8a7448'] }, side: '#8a7448' } },
     { shape: { kind: 'join', shapes: [{ kind: 'ball', at: [-0.1, 0.3, 0], r: [0.62, 0.24, 0.34] }, { kind: 'ball', at: [0.42, 0.29, 0], r: [0.34, 0.2, 0.27] }, { kind: 'ball', at: [-0.62, 0.27, 0], r: [0.3, 0.19, 0.26] }] }, paint: { kind: 'faces', top: { kind: 'hex', size: 0.1, colors: ['#5c9848', '#98c468', '#5c9848', '#5c9848', '#7cc45c'], line: '#3a6c3a' }, side: { kind: 'hex', size: 0.1, colors: ['#5c9848', '#3a6c3a', '#5c9848', '#5c9848'], line: '#3a6c3a' }, under: '#b8a868' }, bone: 'torso' },
     { shape: { kind: 'ball', at: [-0.1, 0.16, 0], r: [0.7, 0.1, 0.3] }, paint: { kind: 'bands', axis: 'x', size: 0.07, colors: ['#e4d898', '#b8a868'] }, bone: 'torso', noShadow: true },

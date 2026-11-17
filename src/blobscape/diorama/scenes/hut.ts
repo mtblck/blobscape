@@ -86,7 +86,7 @@ export const HUT: SceneDoc = {
     { name: 'fly35', at: [0, 1.23, 0.2] },
   ],
   parts: [
-    { shape: { kind: 'cylinder', at: [0, -0.3, 0], height: 0.22, r: 1.72 }, paint: { kind: 'faces', top: { kind: 'patches', size: 0.3, colors: ['#1c5860', '#1c5860', '#2f8088', '#123840', '#1c5860'] }, side: { kind: 'bands', axis: 'y', size: 0.08, colors: ['#2e1c14', '#5a3a22', '#0c1418'] } } },
+    { shape: { kind: 'cylinder', at: [0, -0.3, 0], height: 0.22, r: 1.72 }, paint: { kind: 'faces', top: { kind: 'patches', size: 0.3, colors: ['#1c5860', '#1c5860', '#2f8088', '#123840', '#1c5860'] }, side: { kind: 'bands', axis: 'y', size: 0.08, colors: ['#2e1c14', '#5a3a22', '#0c1418'] } }, glass: { see: 0.35, mirror: 0.5, top: true } },
     { shape: { kind: 'rough', shape: { kind: 'ball', at: [-0.995, 0, 0.912], r: [0.36, 0.07, 0.28] }, by: 0.02, scale: 0.2 }, paint: { kind: 'faces', top: { kind: 'patches', size: 0.12, colors: ['#5a3a22', '#22502c', '#5a3a22', '#3c7c3c'] }, side: '#2e1c14' } },
     { shape: { kind: 'rough', shape: { kind: 'ball', at: [-1.124, 0, -0.421], r: [0.36, 0.07, 0.28] }, by: 0.02, scale: 0.2 }, paint: { kind: 'faces', top: { kind: 'patches', size: 0.12, colors: ['#5a3a22', '#22502c', '#5a3a22', '#3c7c3c'] }, side: '#2e1c14' } },
     { shape: { kind: 'rough', shape: { kind: 'ball', at: [1.125, 0, -0.915], r: [0.36, 0.07, 0.28] }, by: 0.02, scale: 0.2 }, paint: { kind: 'faces', top: { kind: 'patches', size: 0.12, colors: ['#5a3a22', '#22502c', '#5a3a22', '#3c7c3c'] }, side: '#2e1c14' } },

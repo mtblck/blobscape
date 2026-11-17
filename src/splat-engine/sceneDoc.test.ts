@@ -134,6 +134,7 @@ test('air: mistakes are pointed at, and a sound one builds specks that loop and 
     ['too much cover', (d) => { d.cover = { kind: 'snow', color: '#ffffff', amount: 2 } }, /^cover\.amount: must be from 0 to 1/],
     ['an unknown ink', (d) => { d.parts[0].ink = { kind: 'swirl' } }, /^parts\[0\]\.ink\.kind: must be one of 'hatch'/],
     ['ink past 1', (d) => { d.parts[0].ink = { kind: 'cracks', amount: 3 } }, /^parts\[0\]\.ink\.amount: must be from 0 to 1/],
+    ['glass past 1', (d) => { d.parts[0].glass = { see: 2 } }, /^parts\[0\]\.glass\.see: must be from 0 to 1/],
     ['a bare that is not true or false', (d) => { d.parts[0].bare = 'yes' }, /^parts\[0\]\.bare: must be true or false/],
   ]
   const withAir = () => {
