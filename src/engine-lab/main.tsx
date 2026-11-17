@@ -30,7 +30,7 @@ async function downloadGlb(count: number) {
 /**
  * Unlisted page for trying the engine on any device: pick a renderer and a blob
  * count, watch the fox walk, and press Time it. Every setting is also a URL
- * parameter (?which=engine&n=200000&walk=1&mode=quat&webgl=0&herd=1&lod=0), so a
+ * parameter (?which=engine&n=200000&walk=1&mode=quat&webgl=0&herd=1&lod=0&edits=0), so a
  * phone can open a ready-made test from a link, and verify can drive it.
  */
 const params = new URLSearchParams(location.search)
@@ -42,6 +42,7 @@ const initial: LabOptions = {
   webgl: params.get('webgl') === '1',
   herd: Math.max(1, Math.min(12, Number(params.get('herd')) || 1)),
   lod: params.get('lod') === '1',
+  edits: params.get('edits') === '1',
   offscreen: params.get('offscreen') === '1',
 }
 const COUNTS = [20000, 100000, 200000, 500000]
@@ -83,7 +84,7 @@ function App() {
     let live: Lab | undefined, gone = false
     setLab(undefined)
     setError(undefined)
-    const q = new URLSearchParams({ which: opts.which, n: String(opts.count), walk: opts.walk ? '1' : '0', mode: opts.mode, webgl: opts.webgl ? '1' : '0', herd: String(opts.herd), lod: opts.lod ? '1' : '0', ...(opts.offscreen ? { offscreen: '1' } : {}) })
+    const q = new URLSearchParams({ which: opts.which, n: String(opts.count), walk: opts.walk ? '1' : '0', mode: opts.mode, webgl: opts.webgl ? '1' : '0', herd: String(opts.herd), lod: opts.lod ? '1' : '0', edits: opts.edits ? '1' : '0', ...(opts.offscreen ? { offscreen: '1' } : {}) })
     history.replaceState(null, '', `?${q}`)
     startLab(canvas.current!, opts).then((l) => {
       if (gone) { l.dispose(); return }
@@ -97,7 +98,7 @@ function App() {
     return () => { gone = true; live?.dispose() }
     // walk and mode change live, without a rebuild (except on Spark, whose two joint rules need different meshes)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [opts.which, opts.count, opts.webgl, opts.herd, opts.lod, opts.which === 'spark' ? opts.mode : ''])
+  }, [opts.which, opts.count, opts.webgl, opts.herd, opts.lod, opts.edits, opts.which === 'spark' ? opts.mode : ''])
 
   const set = (p: Partial<LabOptions>) => setOpts((o) => ({ ...o, ...p }))
 
@@ -164,7 +165,7 @@ function App() {
           <p className="mt-1 max-w-[65ch] text-ink-muted">A blob fox, drawn by Blobscape's own engine, by three.js's built-in splat renderer or by Spark with its own skinning, and timed. Open it on a phone and press Time it.</p>
         </div>
         <div className="case relative aspect-[4/3] w-full overflow-hidden rounded-xl bg-[#0d0f16] sm:aspect-[16/9]">
-          <canvas key={`${opts.which}-${opts.webgl}-${opts.count}-${opts.herd}-${opts.lod}-${opts.which === 'spark' ? opts.mode : ''}`} ref={canvas} className="h-full w-full touch-none" aria-label="A blob fox trotting on the spot" />
+          <canvas key={`${opts.which}-${opts.webgl}-${opts.count}-${opts.herd}-${opts.lod}-${opts.edits}-${opts.which === 'spark' ? opts.mode : ''}`} ref={canvas} className="h-full w-full touch-none" aria-label="A blob fox trotting on the spot" />
           <p className="absolute bottom-2.5 left-3 text-sm text-white/70" aria-live="polite">{error ? `Couldn't start: ${error}` : lab ? lab.info : 'Starting…'}</p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

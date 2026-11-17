@@ -12,11 +12,13 @@ import type { Blobs } from '../splat-core/blobs.ts'
 const TSL = TSLTyped as unknown as Record<string, any>
 const {
   Discard, EPSILON, Fn, If, atan, cameraProjectionMatrix, cameraViewport, cameraViewMatrix, cos, dot, exp, float, instanceIndex,
-  abs, length, max, min, normalize, positionGeometry, select, sin, sqrt, storage, uint, uniform, uniformArray, unpackUnorm4x8, varyingProperty, vec2, vec3, vec4,
+  abs, floor, length, max, min, normalize, positionGeometry, select, sin, sqrt, storage, uint, uniform, uniformArray, unpackUnorm4x8, varyingProperty, vec2, vec3, vec4,
 } = TSL
 import { packWeights, skinBlob, skinCenters, type Skeleton, type Skin, type SkinMode } from './rig.ts'
 import { DepthSort } from './sort.ts'
 import { detailFor, lodRank, screenRadius, type DetailRule } from './lod.ts'
+import { MAX_EDITS, editAt, type ShapeEdit } from './edit.ts'
+import { LIFT, MAX_MARCH, OCC_SCALE, REACH, SHADOW_CELLS, SHADOW_DENSITY, blobSigma, occupancy, shadowBox } from './shadow.ts'
 import { srgbToLinear } from '../splat-core/color.ts'
 
 /**
@@ -67,6 +69,8 @@ export interface EngineOptions {
   mode?: SkinMode
   /** Live lights (`setLights`): each blob is lit every frame from its normal. Off unless asked for, as it costs a pass. */
   lights?: boolean
+  /** Paint edits (`setEdits` with op 'paint'): needs the same color pass as lights. Cuts work without it. */
+  paint?: boolean
 }
 
 /** A point light for `setLights`. */
@@ -76,6 +80,8 @@ export interface PointLight {
   color: [number, number, number]
   /** Its reach: about a quarter strength at this distance, and gone by twice it. */
   range: number
+  /** Whether it casts shadows (`shadow.ts`): blobs between a blob and the light take some of it. Off unless set. */
+  shadow?: boolean
 }
 
 /** How many lights `setLights` takes; the rest are dropped. */
@@ -101,8 +107,15 @@ export class SplatWorld extends Mesh {
    * (red and green hold the part's number plus one, blue the actor's), with no light, fog or soft edge, so where two
    * parts meet the color changes exactly. Pixel mode draws it for the lines between parts.
    */
-  get parts() { return this.flat.value > 0 }
+  get parts() { return this.flat.value === 1 }
   set parts(on: boolean) { this.flat.value = on ? 1 : 0 }
+  /**
+   * While true, the draw is a depth map: every blob a hard disc (as in the map of parts) whose color is its distance in
+   * front of the camera, in units, in all three channels. Drawn after the frame's own render with `hold`, the frame's
+   * sort puts the nearest disc last, so each pixel keeps the nearest depth. `SplatDepth` (depth.ts) draws it.
+   */
+  get depthMap() { return this.flat.value === 2 }
+  set depthMap(on: boolean) { this.flat.value = on ? 2 : 0 }
 
   private readonly boneOffset: number[]
   /** Per actor, the share of its blobs left out (0: all drawn). Sent to the GPU in each of its bones' spare matrix slot. */
@@ -120,6 +133,8 @@ export class SplatWorld extends Mesh {
   private readonly boneRadius: Float32Array
   /** Per bone, a sphere round its own blobs at rest (x, y, z, radius), carried by the bone's matrix: for level of detail. */
   private readonly boneSphere: Float32Array
+  /** Per bone, the box round its own blobs at rest (middle x, y, z, then half sizes): for the grid of shadows. */
+  private readonly boneBox: Float32Array
   private readonly buf: ReturnType<typeof makeBuffers>
   private readonly sort: DepthSort
   private readonly deformNodes: Record<SkinMode, ReturnType<typeof makeDeform>>
@@ -142,9 +157,15 @@ export class SplatWorld extends Mesh {
   /** Live lighting, when the world was made with `lights: true`. */
   readonly lighting?: Lighting
   private lightNode?: ReturnType<typeof makeLight>
+  private shadowNodes?: { clear: ReturnType<typeof makeShadowClear>; scatter: ReturnType<typeof makeShadowScatter> }
+  /** Whether any light in use casts shadows. */
+  private casting = false
+  /** WebGL only: each blob's reach and opacity at rest, for building the grid of shadows on the CPU. */
+  private restSigma?: Float32Array
+  private restOpacity?: Float32Array
   private lightsDirty = true
 
-  constructor(actors: Actor[], { bins = 65536, mode = 'quat', lights = false }: EngineOptions = {}) {
+  constructor(actors: Actor[], { bins = 65536, mode = 'quat', lights = false, paint = false }: EngineOptions = {}) {
     const count = actors.reduce((s, a) => s + a.blobs.count, 0)
     const geometry = new InstancedBufferGeometry()
     geometry.setAttribute('position', new BufferAttribute(new Float32Array([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0]), 3))
@@ -177,15 +198,17 @@ export class SplatWorld extends Mesh {
     this.drop = new Float32Array(actors.length)
 
     this.boneRadius = boneRadii(actors, boneOffset, bones)
-    this.boneSphere = boneSpheres(actors, boneOffset, bones)
+    ;({ sphere: this.boneSphere, box: this.boneBox } = boneSpheres(actors, boneOffset, bones))
     this.deformNodes = { quat: makeDeform(buf, 'quat'), linear: makeDeform(buf, 'linear') }
     this.cam = { view: uniform(new Matrix4()), proj: uniform(new Matrix4()), viewport: uniform(new Vector2(1, 1)), depthRange: uniform(new Vector2(0, 1)) }
     this.fog = { color: uniform(new Vector3(0, 0, 0)), range: uniform(new Vector2(0, 0)) }
     this.projectNode = makeProject(buf, sort, this.cam, bins)
-    if (lights) {
+    if (lights || paint) {
       this.lighting = makeLighting(buf.count)
       buf.attrs.push(this.lighting.attr)
       this.lightNode = makeLight(buf, this.lighting)
+      buf.attrs.push(this.lighting.gridAttr)
+      this.shadowNodes = { clear: makeShadowClear(this.lighting), scatter: makeShadowScatter(buf, this.lighting) }
     }
     material.colorNode = makeFragment(this.flat) as never
 
@@ -212,9 +235,37 @@ export class SplatWorld extends Mesh {
     for (let k = 0; k < MAX_LIGHTS; k++) {
       const l = lights[k]
       ;(L.pos.array[k] as Vector4).set(l?.position[0] ?? 0, l?.position[1] ?? 0, l?.position[2] ?? 0, l ? Math.max(1e-3, l.range) : 1)
-      ;(L.col.array[k] as Vector4).set(l?.color[0] ?? 0, l?.color[1] ?? 0, l?.color[2] ?? 0, 0)
+      ;(L.col.array[k] as Vector4).set(l?.color[0] ?? 0, l?.color[1] ?? 0, l?.color[2] ?? 0, l?.shadow ? 1 : 0)
     }
+    const casting = lights.slice(0, MAX_LIGHTS).some((l) => l.shadow)
+    // a light that starts casting needs a grid of this frame's blobs, even if nothing moved
+    if (casting && !this.casting) this.bonesDirty = true
+    this.casting = casting
   }
+
+  /**
+   * Cuts and paints by shape, live (edit.ts): up to MAX_EDITS spheres or boxes in world space, tested against where each
+   * blob is now. A cut blob gets no size; a painted one is mixed toward the paint before any light (needs `paint: true`
+   * or `lights: true`). Replaces the edits before; [] clears them.
+   */
+  setEdits(edits: readonly ShapeEdit[]) {
+    const E = this.buf.edits
+    const list = edits.slice(0, MAX_EDITS)
+    if (list.some((e) => e.op === 'paint') && !this.lighting) throw new Error('setEdits: paint needs a world made with paint: true')
+    this.edits = list.map((e) => ({ ...e }))
+    E.count.value = list.length
+    for (let k = 0; k < MAX_EDITS; k++) {
+      const e = list[k]
+      const kind = e ? (e.shape === 'box' ? 1 : 0) + (e.op === 'paint' ? 2 : 0) + (e.outside ? 4 : 0) : 0
+      const c = (e?.color ?? [1, 1, 1]).map(srgbToLinear)
+      ;(E.a.array[k] as Vector4).set(e?.center[0] ?? 0, e?.center[1] ?? 0, e?.center[2] ?? 0, kind)
+      ;(E.b.array[k] as Vector4).set(e?.size[0] ?? 0, e?.size[1] ?? 0, e?.size[2] ?? 0, Math.max(0, e?.soft ?? 0))
+      ;(E.c.array[k] as Vector4).set(c[0], c[1], c[2], Math.max(0, Math.min(1, e?.amount ?? 1)))
+    }
+    this.bonesDirty = true
+    this.lightsDirty = true
+  }
+  private edits: ShapeEdit[] = []
 
   /** Call after posing any skeleton. */
   markPosed() { this.bonesDirty = true }
@@ -247,7 +298,10 @@ export class SplatWorld extends Mesh {
     if (center !== b.srcCenterData) b.srcCenterData.set(center.subarray(0, b.srcCenterData.length))
     for (const a of [b.centerAttr, b.scaleAttr, b.quatAttr, b.colorAttr]) bump(a)
     this.boneRadius.set(boneRadii(this.actors, this.boneOffset, this.boneCount))
-    this.boneSphere.set(boneSpheres(this.actors, this.boneOffset, this.boneCount))
+    const fresh = boneSpheres(this.actors, this.boneOffset, this.boneCount)
+    this.boneSphere.set(fresh.sphere)
+    this.boneBox.set(fresh.box)
+    this.restSigma = this.restOpacity = undefined
     this.bonesDirty = true
   }
 
@@ -276,6 +330,8 @@ export class SplatWorld extends Mesh {
     const material = this.material as NodeMaterial
     if (webgl) {
       enableWebGL(this.buf, this.sort)
+      // the WebGL vertex shader reads the grid of shadows as a texture, like the other buffers
+      if (this.lighting) (this.lighting.grid as { setPBO: (b: boolean) => void }).setPBO(true)
       material.vertexNode = makeVertexWebGL(this.buf, this.sort, this.mode, this.fog, this.flat, this.lighting) as never
     } else {
       material.vertexNode = makeVertexWebGPU(this.buf, this.sort, this.fog, this.flat, this.lighting) as never
@@ -366,6 +422,7 @@ export class SplatWorld extends Mesh {
     if (webgl) {
       const t0 = performance.now()
       if (deformed) skinCenters(this.buf.srcCenterData, this.buf.skinWords, this.buf.boneData, this.count, this.cpuCenters)
+      if (deformed && this.casting) this.shadowGridCPU()
       const t1 = performance.now()
       if (needsSort) this.sortCPU()
       const t2 = performance.now()
@@ -374,6 +431,11 @@ export class SplatWorld extends Mesh {
       this.cpuMs = t2 - t0
     } else {
       if (deformed) this.deform(renderer)
+      if (deformed && this.casting && this.shadowNodes) {
+        this.placeShadowBox()
+        renderer.compute(this.shadowNodes.clear as never)
+        renderer.compute(this.shadowNodes.scatter as never)
+      }
       // lights move on their own: the lit colors are redone whenever they or the blobs moved
       if (this.lightNode && (deformed || this.lightsDirty)) { renderer.compute(this.lightNode as never); this.lightsDirty = false }
       if (needsSort) this.project(renderer)
@@ -381,6 +443,81 @@ export class SplatWorld extends Mesh {
     this.posed = true
     this.bonesDirty = false
     this.lastSortKey = key
+  }
+
+  /** Lays the grid of shadows over the world's bounds as they are this frame. */
+  private placeShadowBox() {
+    // each bone's box at rest, carried by its matrix: the middle moves, the half sizes go through |M|
+    const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity]
+    for (let a = 0; a < this.actors.length; a++) {
+      const sk = this.actors[a].skeleton, m = sk.matrix
+      for (let b = 0; b < sk.count; b++) {
+        const g = (this.boneOffset[a] + b) * 6
+        if (!(sk.scale[b] > 0) || !(this.boneBox[g + 3] + this.boneBox[g + 4] + this.boneBox[g + 5] > 0)) continue
+        const o = b * 16, x = this.boneBox[g], y = this.boneBox[g + 1], z = this.boneBox[g + 2]
+        const hx = this.boneBox[g + 3], hy = this.boneBox[g + 4], hz = this.boneBox[g + 5]
+        for (let k = 0; k < 3; k++) {
+          const c = m[o + k] * x + m[o + 4 + k] * y + m[o + 8 + k] * z + m[o + 12 + k]
+          const h = Math.abs(m[o + k]) * hx + Math.abs(m[o + 4 + k]) * hy + Math.abs(m[o + 8 + k]) * hz
+          lo[k] = Math.min(lo[k], c - h)
+          hi[k] = Math.max(hi[k], c + h)
+        }
+      }
+    }
+    if (!(lo[0] <= hi[0])) { lo.fill(-1); hi.fill(1) }
+    const b = shadowBox(lo, hi)
+    const L = this.lighting!
+    L.box.value.set(b.origin[0], b.origin[1], b.origin[2], b.cell)
+    L.dims.value.set(b.dims[0], b.dims[1], b.dims[2])
+    return b
+  }
+
+  /** WebGL: the grid of shadows built on the CPU from the moved centers and each blob's reach at rest (`shadow.ts`). */
+  private shadowGridCPU() {
+    const L = this.lighting!
+    if (!this.restSigma || !this.restOpacity) {
+      this.restSigma = new Float32Array(this.count)
+      this.restOpacity = new Float32Array(this.count)
+      let i = 0
+      for (const a of this.actors) {
+        const b = a.blobs
+        for (let k = 0; k < b.count; k++, i++) {
+          this.restSigma[i] = Math.max(b.scale[k * 3], b.scale[k * 3 + 1], b.scale[k * 3 + 2])
+          this.restOpacity[i] = b.opacity[k]
+        }
+      }
+    }
+    const box = this.placeShadowBox()
+    // three.js may have swapped in a padded copy of the array for WebGL: fill whatever it holds now
+    occupancy(this.cpuCenters, 3, this.restSigma, this.restOpacity, this.count, box, (L.gridAttr.array as Uint32Array).subarray(0, box.dims[0] * box.dims[1] * box.dims[2]))
+    bump(L.gridAttr)
+  }
+
+  /**
+   * For tests: the GPU's grid of shadows against the CPU twin's, built from the CPU's deform of the same frame
+   * (WebGPU, with a light casting). Returns the cells that differ by more than one unit and the total in each.
+   */
+  async checkShadows(renderer: Renderer) {
+    const L = this.lighting
+    if (!L) throw new Error('checkShadows: the world has no lights')
+    const r = renderer as unknown as { getArrayBufferAsync: (a: StorageBufferAttribute) => Promise<ArrayBuffer> }
+    const gpu = new Uint32Array(await r.getArrayBufferAsync(L.gridAttr))
+    const cpu = this.deformCPU()
+    const sigma = new Float32Array(this.count), opacity = new Float32Array(this.count), center = new Float32Array(this.count * 3)
+    let i = 0
+    for (const a of this.actors) for (let k = 0; k < a.blobs.count; k++, i++) {
+      sigma[i] = blobSigma(cpu.cov, i * 6)
+      opacity[i] = Math.round(a.blobs.opacity[k] * 255) / 255
+      center.set(cpu.center.subarray(i * 4, i * 4 + 3), i * 3)
+    }
+    const v = L.box.value, d = L.dims.value
+    const want = occupancy(center, 3, sigma, opacity, this.count, { origin: [v.x, v.y, v.z], cell: v.w, dims: [d.x, d.y, d.z] })
+    let differ = 0, gpuTotal = 0, cpuTotal = 0
+    for (let c = 0; c < want.length; c++) {
+      gpuTotal += gpu[c]; cpuTotal += want[c]
+      if (Math.abs(gpu[c] - want[c]) > Math.max(2, want[c] * 0.02)) differ++
+    }
+    return { differ, gpuTotal, cpuTotal }
   }
 
   /**
@@ -481,7 +618,9 @@ export class SplatWorld extends Mesh {
         )
         center[i * 4 + 3] = 1
         // level of detail, as the GPU does it: left out (no size), or grown to cover for those that are
-        const f = lodRank(i) < drop ? 0 : 1 / Math.max(1 - drop, 1e-4)
+        let f = lodRank(i) < drop ? 0 : 1 / Math.max(1 - drop, 1e-4)
+        // shape edits, as the GPU does them: a cut blob has no size
+        if (this.edits.length && !editAt(this.edits, center.subarray(i * 4, i * 4 + 3)).keep) f = 0
         if (f !== 1) for (let j = 0; j < 6; j++) cov[i * 6 + j] *= f
       }
     }
@@ -625,6 +764,7 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
     skin: storage(skinAttr, 'uint', n * 2).toReadOnly(),
     bones: storage(boneAttr, 'vec4', Math.max(1, bones) * 5).toReadOnly(),
     color: storage(colorAttr, 'uint', n).toReadOnly(),
+    edits: makeEdits(),
     part: storage(partAttr, 'uint', n).toReadOnly(),
     seen: storage(seenAttr, 'uint', n).toReadOnly(),
     worldCenterW: storage(worldCenterAttr, 'vec4', n),
@@ -669,7 +809,7 @@ function boneRadii(actors: Actor[], boneOffset: number[], bones: number) {
   return r
 }
 
-/** Per bone, the smallest box round the blobs it carries most, at rest, as a sphere (x, y, z, radius); blobs count by 2σ. */
+/** Per bone, the smallest box round the blobs it carries most, at rest, and a sphere round that box (x, y, z, radius); blobs count by 2σ. */
 function boneSpheres(actors: Actor[], boneOffset: number[], bones: number) {
   const lo = new Float32Array(Math.max(1, bones) * 3).fill(Infinity), hi = new Float32Array(Math.max(1, bones) * 3).fill(-Infinity)
   actors.forEach((a, ai) => {
@@ -685,13 +825,16 @@ function boneSpheres(actors: Actor[], boneOffset: number[], bones: number) {
       }
     }
   })
-  const out = new Float32Array(Math.max(1, bones) * 4)
+  const sphere = new Float32Array(Math.max(1, bones) * 4), box = new Float32Array(Math.max(1, bones) * 6)
   for (let g = 0; g < bones; g++) {
     if (!(lo[g * 3] <= hi[g * 3])) continue
-    for (let i = 0; i < 3; i++) out[g * 4 + i] = (lo[g * 3 + i] + hi[g * 3 + i]) / 2
-    out[g * 4 + 3] = Math.hypot(hi[g * 3] - lo[g * 3], hi[g * 3 + 1] - lo[g * 3 + 1], hi[g * 3 + 2] - lo[g * 3 + 2]) / 2
+    for (let i = 0; i < 3; i++) {
+      sphere[g * 4 + i] = box[g * 6 + i] = (lo[g * 3 + i] + hi[g * 3 + i]) / 2
+      box[g * 6 + 3 + i] = (hi[g * 3 + i] - lo[g * 3 + i]) / 2
+    }
+    sphere[g * 4 + 3] = Math.hypot(hi[g * 3] - lo[g * 3], hi[g * 3 + 1] - lo[g * 3 + 1], hi[g * 3 + 2] - lo[g * 3 + 2]) / 2
   }
-  return out
+  return { sphere, box }
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -725,6 +868,44 @@ function lodRankNode(i: N) {
   h.assign(h.mul(uint(0x27d4eb2d)))
   h.assign(h.bitXor(h.shiftRight(uint(15))))
   return float(h.shiftRight(uint(8))).div(16777216)
+}
+
+interface Edits { a: N; b: N; c: N; count: N }
+
+function makeEdits(): Edits {
+  const v = () => uniformArray(Array.from({ length: MAX_EDITS }, () => new Vector4()), 'vec4')
+  // a: middle and kind (1 box, +2 paint, +4 outside); b: size and soft edge; c: paint (linear) and amount
+  return { a: v(), b: v(), c: v(), count: uniform(0, 'int') }
+}
+
+/** What the shape edits do at p: `keep` 0 or 1, and the paint (premultiplied by `amount`). CPU twin: `editAt` in edit.ts. */
+function editsAt(E: Edits, p: N) {
+  const keep = float(1).toVar(), paint = vec3(0).toVar(), amount = float(0).toVar()
+  TSL.Loop({ start: TSL.int(0), end: E.count, type: 'int', condition: '<', name: 'e' }, ({ e }: { e: N }) => {
+    const A = E.a.element(e), B = E.b.element(e), C = E.c.element(e)
+    const kind = A.w.toVar()
+    const q = p.sub(A.xyz).toVar()
+    const d = abs(q).sub(B.xyz).toVar()
+    const boxD = length(max(d, vec3(0))).add(min(max(d.x, max(d.y, d.z)), 0))
+    const isBox = TSL.mod(kind, 2).greaterThan(0.5)
+    const isPaint = TSL.mod(floor(kind.div(2)), 2).greaterThan(0.5)
+    const sd = select(isBox, boxD, length(q).sub(B.x)).mul(select(kind.greaterThanEqual(4), float(-1), float(1))).toVar()
+    If(isPaint.not(), () => {
+      If(sd.lessThan(0), () => { keep.assign(0) })
+    }).Else(() => {
+      const w = C.w.mul(select(B.w.greaterThan(0), sd.negate().div(max(B.w, 1e-6)).clamp(0, 1), select(sd.lessThan(0), float(1), float(0)))).toVar()
+      paint.assign(paint.mul(float(1).sub(w)).add(C.xyz.mul(w)))
+      amount.assign(amount.mul(float(1).sub(w)).add(w))
+    })
+  })
+  return { keep, paint, amount }
+}
+
+/** A blob's own (linear) color with the paint edits mixed in. */
+function painted(rgb: N, world: N, E: Edits) {
+  const e = editsAt(E, world)
+  // paint is premultiplied: mix(rgb, paint / amount, amount) = rgb·(1 − amount) + paint
+  return rgb.mul(float(1).sub(e.amount)).add(e.paint)
 }
 
 /** One blob through its bones: world center and the six covariance terms, as `skinBlob` does on the CPU. */
@@ -775,6 +956,8 @@ function deformBlob(buf: ReturnType<typeof makeBuffers>, i: N, mode: SkinMode) {
   // level of detail (lod.ts): a blob ranked under the share dropped has no size, and is culled where it is projected;
   // the rest grow to cover for it
   const f = select(lodRankNode(i).lessThan(drop), float(0), float(1).div(max(float(1).sub(drop), 0.0001))).toVar()
+  // shape edits: a cut blob has no size either
+  f.mulAssign(editsAt(buf.edits, world).keep)
   return { world, covA: vec4(e('x', 'x'), e('x', 'y'), e('x', 'z'), e('y', 'y')).mul(f).toVar(), covB: vec4(e('y', 'z'), e('z', 'z'), 0, 0).mul(f).toVar() }
 }
 
@@ -873,12 +1056,21 @@ function makeProject(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, cam: 
 
 interface Fog { color: N; range: N }
 
-interface Lighting { pos: N; col: N; ambient: N; count: N; attr: StorageBufferAttribute; litW: N; lit: N }
+interface Lighting { pos: N; col: N; ambient: N; count: N; attr: StorageBufferAttribute; litW: N; lit: N; gridAttr: StorageBufferAttribute; gridW: N; grid: N; box: N; dims: N }
 
 function makeLighting(n: number): Lighting {
   // written only by the GPU, so no copy of it on the CPU
   const attr = new StorageBufferAttribute(n, 4)
+  const cells = SHADOW_CELLS
+  const gridAttr = new StorageBufferAttribute(new Uint32Array(cells), 1)
   return {
+    gridAttr,
+    gridW: storage(gridAttr, 'uint', cells).toAtomic(),
+    grid: storage(gridAttr, 'uint', cells).toReadOnly(),
+    // the grid's lowest corner and the side of a cell
+    box: uniform(new Vector4(0, 0, 0, 1)),
+    // cells each way (whole numbers, as floats)
+    dims: uniform(new Vector3(1, 1, 1)),
     pos: uniformArray(Array.from({ length: MAX_LIGHTS }, () => new Vector4(0, 0, 0, 1)), 'vec4'),
     col: uniformArray(Array.from({ length: MAX_LIGHTS }, () => new Vector4()), 'vec4'),
     ambient: uniform(1),
@@ -926,9 +1118,75 @@ function lit(rgb: N, world: N, covA: N, covB: N, seen: N, L: Lighting) {
     const fall = fade.mul(fade).div(float(1).add(d2.div(r2)))
     const facing = abs(dot(n, to.mul(TSL.inverseSqrt(max(d2, 1e-6))))).mul(0.65).add(0.35)
     const sees = select(i.lessThan(4), float(seen.shiftRight(uint(i).mul(8)).bitAnd(255)).div(255), float(1))
-    sum.addAssign(C.xyz.mul(fall.mul(facing).mul(sees)))
+    const reach = fall.mul(facing).mul(sees).toVar()
+    const through = float(1).toVar()
+    If(C.w.greaterThan(0.5).and(reach.greaterThan(0.001)), () => { through.assign(shadowMarch(world, n, to, d2, L)) })
+    sum.addAssign(C.xyz.mul(reach.mul(through)))
   })
   return rgb.mul(sum)
+}
+
+/** Whether a cell (ivec3) is inside the grid of shadows. */
+function inGrid(q: N, L: Lighting) {
+  const d = TSL.ivec3(L.dims)
+  return q.x.greaterThanEqual(0).and(q.y.greaterThanEqual(0)).and(q.z.greaterThanEqual(0))
+    .and(q.x.lessThan(d.x)).and(q.y.lessThan(d.y)).and(q.z.lessThan(d.z))
+}
+
+/** A cell's place in the grid's buffer: x fastest, then y, then z, as in shadow.ts. */
+function cellIndex(q: N, L: Lighting) {
+  const d = TSL.ivec3(L.dims)
+  return uint(q.z.mul(d.y).add(q.y).mul(d.x).add(q.x))
+}
+
+/** The share of a light that gets from a blob to it through the grid of shadows. CPU twin: `transmittance` in shadow.ts (change both). */
+function shadowMarch(world: N, n: N, to: N, d2: N, L: Lighting) {
+  const cell = L.box.w
+  const dist = sqrt(max(d2, 1e-12)).toVar()
+  const dir = to.div(dist).toVar()
+  const side = select(dot(n, dir).lessThan(0), float(-1), float(1))
+  const start = world.add(n.mul(side).add(dir).mul(cell.mul(LIFT))).toVar()
+  const steps = TSL.int(floor(min(max(dist.sub(cell.mul(2.5)).div(cell), 0), MAX_MARCH))).toVar()
+  const acc = float(0).toVar()
+  TSL.Loop({ start: TSL.int(0), end: steps, type: 'int', condition: '<', name: 'm' }, ({ m }: { m: N }) => {
+    const q = TSL.ivec3(floor(start.add(dir.mul(float(m).add(0.5).mul(cell))).sub(L.box.xyz).div(cell))).toVar()
+    If(inGrid(q, L), () => {
+      acc.addAssign(float(L.grid.element(cellIndex(q, L))).div(OCC_SCALE))
+    })
+    If(acc.greaterThan(6), () => { TSL.Break() })
+  })
+  return exp(acc.mul(-SHADOW_DENSITY))
+}
+
+/** WebGPU: empties the grid of shadows before the blobs are dropped in. */
+function makeShadowClear(L: Lighting) {
+  return Fn(() => {
+    TSL.atomicStore(L.gridW.element(instanceIndex), uint(0))
+  })().compute(SHADOW_CELLS, [WORKGROUP]).setName('SplatWorldShadowClear')
+}
+
+/** WebGPU: each blob adds how much it blocks to the cells its core touches. CPU twin: `occupancy` in shadow.ts. */
+function makeShadowScatter(buf: ReturnType<typeof makeBuffers>, L: Lighting) {
+  return Fn(() => {
+    const i = instanceIndex
+    const A = buf.covA.element(i), B = buf.covB.element(i)
+    const reach = sqrt(max(max(A.x, A.w), max(B.y, 0))).mul(REACH).toVar()
+    const cell = L.box.w
+    const a = unpackUnorm4x8(buf.color.element(i)).a
+    const add = uint(floor(a.mul(min(reach.div(cell).pow2(), 1)).mul(OCC_SCALE).add(0.5))).toVar()
+    If(add.greaterThan(uint(0)), () => {
+      const p = buf.worldCenter.element(i).xyz.toVar()
+      const c = TSL.ivec3(floor(p.sub(L.box.xyz).div(cell))).toVar()
+      for (let dz = -1; dz <= 1; dz++) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const q = c.add(TSL.ivec3(dx, dy, dz)).toVar()
+        const lo = L.box.xyz.add(vec3(q).mul(cell))
+        const e = max(max(lo.sub(p), p.sub(lo.add(cell))), vec3(0)).toVar()
+        If(inGrid(q, L).and(dot(e, e).lessThanEqual(reach.mul(reach))), () => {
+          TSL.atomicAdd(L.gridW.element(cellIndex(q, L)), add)
+        })
+      }
+    })
+  })().compute(buf.count, [WORKGROUP]).setName('SplatWorldShadowScatter')
 }
 
 /** WebGPU: every blob's lit color, once a frame (after the deform, before the draw). */
@@ -936,7 +1194,8 @@ function makeLight(buf: ReturnType<typeof makeBuffers>, L: Lighting) {
   return Fn(() => {
     const i = instanceIndex
     const color = unpackUnorm4x8(buf.color.element(i)).toVar()
-    L.litW.element(i).assign(vec4(lit(color.rgb, buf.worldCenter.element(i).xyz, buf.covA.element(i), buf.covB.element(i), buf.seen.element(i), L), color.a))
+    const world = buf.worldCenter.element(i).xyz.toVar()
+    L.litW.element(i).assign(vec4(lit(painted(color.rgb, world, buf.edits), world, buf.covA.element(i), buf.covB.element(i), buf.seen.element(i), L), color.a))
   })().compute(buf.count, [WORKGROUP]).setName('SplatWorldLight')
 }
 
@@ -964,6 +1223,11 @@ function placeQuad(ndc: N, axes: N, rgba: N) {
   return vec4(ndc.xy.add(axes.xy.mul(uv.x)).add(axes.zw.mul(uv.y)), ndc.z, 1)
 }
 
+/** What a blob draws as: its picture color, its part's flat color (map of parts), or its depth (depth map). */
+function flatColor(flat: N, part: N, depth: N, picture: N) {
+  return select(flat.greaterThan(1.5), vec3(depth), select(flat.greaterThan(0.5), part, picture))
+}
+
 function makeVertexWebGPU(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, fog: Fog, flat: N, L?: Lighting) {
   return Fn(() => {
     const idx = sort.orderRead.element(instanceIndex).toVar()
@@ -974,7 +1238,7 @@ function makeVertexWebGPU(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, 
     // ndc z = −(P22·z + P32) / z for a perspective camera, so −z = P32 / (ndc z + P22)
     const depth = cameraProjectionMatrix[3].z.div(A.z.add(cameraProjectionMatrix[2].z))
     const part = unpackUnorm4x8(buf.part.element(idx))
-    return placeQuad(A.xyz, buf.splatB.element(idx), vec4(select(flat.greaterThan(0), part.rgb, fogged(color.rgb, depth, fog)), color.a.mul(A.w)))
+    return placeQuad(A.xyz, buf.splatB.element(idx), vec4(flatColor(flat, part.rgb, depth, fogged(color.rgb, depth, fog)), color.a.mul(A.w)))
   })()
 }
 
@@ -985,9 +1249,9 @@ function makeVertexWebGL(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, m
     const d = deformBlob(buf, idx, mode)
     const p = projectSplat(d.world, d.covA, d.covB, cameraViewMatrix, cameraProjectionMatrix, cameraViewport.zw)
     const color = unpackUnorm4x8(buf.color.element(idx)).toVar()
-    const rgb = L ? lit(color.rgb, d.world, d.covA, d.covB, buf.seen.element(idx), L) : color.rgb
+    const rgb = L ? lit(painted(color.rgb, d.world, buf.edits), d.world, d.covA, d.covB, buf.seen.element(idx), L) : color.rgb
     const part = unpackUnorm4x8(buf.part.element(idx))
-    return placeQuad(p.ndc, p.axes, vec4(select(flat.greaterThan(0), part.rgb, fogged(rgb, p.depth, fog)), color.a.mul(p.alphaScale)))
+    return placeQuad(p.ndc, p.axes, vec4(flatColor(flat, part.rgb, p.depth, fogged(rgb, p.depth, fog)), color.a.mul(p.alphaScale)))
   })()
 }
 

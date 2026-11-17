@@ -5,6 +5,8 @@ import { covariance } from '../splat-core/blobs.ts'
 import { placeCamera, type Orbit } from '../splat-core/view.ts'
 import { SplatWorld } from '../splat-engine/engine.ts'
 import { DETAIL } from '../splat-engine/lod.ts'
+import { SplatDepth } from '../splat-engine/depth.ts'
+import type { ShapeEdit } from '../splat-engine/edit.ts'
 import { makeCreature, poseWalk, type Creature } from '../splat-engine/creature.ts'
 import type { SkinMode } from '../splat-engine/rig.ts'
 import { readbackToSrgb, srgbToLinear } from '../splat-core/color.ts'
@@ -38,6 +40,8 @@ export interface LabOptions {
   herd: number
   /** Level of detail (ours only): each fox draws as many blobs as its size on screen needs. */
   lod?: boolean
+  /** Shape edits (ours only): a box cuts the herd's front half away and a soft sphere paints their middles blue. */
+  edits?: boolean
   /**
    * Draw into an off-screen target and copy each frame to the page with the
    * CPU. Only for headless test browsers, whose software WebGPU can render but
@@ -45,6 +49,12 @@ export interface LabOptions {
    */
   offscreen?: boolean
 }
+
+/** The lab's shape edits: everything in front of z = 0.35 cut away, and a soft blue ball painted over the middle of the herd. */
+export const DEMO_EDITS: ShapeEdit[] = [
+  { shape: 'box', center: [0, 1, 5.35], size: [20, 20, 5], op: 'cut' },
+  { shape: 'sphere', center: [0, 0.7, 0], size: [0.9, 0, 0], op: 'paint', color: [0.2, 0.45, 1], soft: 0.4 },
+]
 
 export interface Lab {
   readonly info: string
@@ -58,6 +68,8 @@ export interface Lab {
   dispose(): void
   /** Times each step of a walking frame on its own, waiting for the GPU after each. */
   profile(frames: number): Promise<StepTimes>
+  /** Renders one frame at time t and its depth map (`SplatDepth`): how many pixels hold a blob, and the nearest, middle and farthest depth. */
+  depth?(t: number): Promise<{ covered: number; near: number; median: number; far: number; width: number; height: number }>
   /** Renders one frame at time t (seconds) and waits for the GPU. */
   frame(t: number): Promise<void>
   /** Runs `job` with the live view paused, so it can use the renderer on its own. */
@@ -134,8 +146,9 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
   let walk = o.walk
   let mode = o.mode
   if (o.which === 'engine') {
-    world = new SplatWorld(foxes, { mode })
+    world = new SplatWorld(foxes, { mode, paint: o.edits })
     if (o.lod) world.autoDetail = DETAIL
+    if (o.edits) world.setEdits(DEMO_EDITS)
     scene.add(world)
   } else {
     // three.js draws each object on its own; give it the foxes as separate meshes
@@ -154,6 +167,7 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
       scene.add(new GaussianSplat(createGaussianSplatGeometry(centers, covs, cols)))
     }
   }
+  const depthMap = new SplatDepth()
   const blobs = foxes.reduce((s, f) => s + f.blobs.count, 0)
 
   let target: THREE.RenderTarget | undefined
@@ -222,7 +236,7 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
   raf = requestAnimationFrame(tick)
 
   return {
-    info: `${o.which === 'three' ? 'three.js (standing still: it has no bones)' : 'ours'} · ${backend} · ${blobs.toLocaleString()} blobs${world?.autoDetail ? ' · fewer when small' : ''}`,
+    info: `${o.which === 'three' ? 'three.js (standing still: it has no bones)' : 'ours'} · ${backend} · ${blobs.toLocaleString()} blobs${world?.autoDetail ? ' · fewer when small' : ''}${o.edits ? ' · cut and painted' : ''}`,
     world,
     renderer,
     get orbit() { return orbit },
@@ -230,6 +244,20 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
     setWalk(on) { walk = on; pose(0) },
     setMode(m) { mode = m; if (world) { world.mode = m; world.markPosed() } },
     frame: show,
+    async depth(t) {
+      busy++
+      try {
+        await frame(t)
+        const size = target ?? canvas
+        depthMap.setSize(size.width, size.height)
+        depthMap.render(renderer, scene, camera)
+        const { width, height, depth } = await depthMap.read(renderer)
+        const got = [...depth].filter((d) => d > 0).sort((a, b) => a - b)
+        return { covered: got.length, near: got[0] ?? 0, median: got[got.length >> 1] ?? 0, far: got[got.length - 1] ?? 0, width, height }
+      } finally {
+        busy--
+      }
+    },
     async exclusive(job) {
       busy++
       try { return await job() } finally { busy-- }
@@ -314,6 +342,7 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
       cancelAnimationFrame(raf)
       world?.dispose()
       target?.dispose()
+      depthMap.dispose()
       renderer.dispose()
     },
   }

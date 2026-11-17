@@ -1265,7 +1265,8 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     const run = (s, input) => k.page.evaluate(async ([s, input]) => { await window.__dungeon.stage.frame(s, input) }, [s, input])
     await k.page.evaluate(() => { const g = window.__dungeon.stage.dungeon.game; g.hold(); g.place('green', 0.7, g.hero.z + 1.1) })
     await run(0.2, { forward: 0, turn: 0 })
-    const a = await look()
+    // live light with shadows (WebGPU's default) leaves less of the hall torchlit than baked light
+    const a = { ...(await look()), light: await k.page.evaluate(() => window.__dungeon.stage.dungeon.opts.light) }
     // a few swings (running after it when knocked back) burst a green slime
     for (let i = 0; i < 5 && !(await k.page.evaluate(() => window.__dungeon.stage.dungeon.game.score)); i++) { await run(0.05, { forward: 0, turn: 0, swing: true }); await run(0.5, { forward: 0.6, turn: 0 }) }
     const fight = await k.page.evaluate(() => { const g = window.__dungeon.stage.dungeon.game; return { score: g.score, phase: g.slimes[0]?.phase } })
@@ -1273,7 +1274,7 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     await run(0.5, { forward: 0, turn: 0 })
     const meters = async () => Object.fromEntries(await k.page.getByRole('meter').evaluateAll((els) => els.map((e) => [e.getAttribute('aria-label'), +e.getAttribute('aria-valuenow')])))
     const m = await meters()
-    if (!(a.warm > 20000 && a.green > 150 && fight.score === 1 && fight.phase === 'burst' && m.Magic < 100 && m.Health >= 80)) fails.push(`blobscape dungeon: ${JSON.stringify({ a, fight, m })}`)
+    if (!(a.warm > (a.light === 'live' ? 8000 : 20000) && a.green > 150 && fight.score === 1 && fight.phase === 'burst' && m.Magic < 100 && m.Health >= 80)) fails.push(`blobscape dungeon: ${JSON.stringify({ a, fight, m })}`)
     else ok(`blobscape dungeon: the hall draws (${a.warm} torchlit, ${a.green} slime pixels), swings burst the slime, a bolt spends magic (${m.Magic} left)`)
     await k.page.screenshot({ path: join(shots, 'blobscape-dungeon.png') })
     await axe(k.page, 'blobscape dungeon')
@@ -1291,6 +1292,16 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
     const was = await k.page.evaluate(() => ({ light: window.__dungeon.stage.dungeon.opts.light, backend: window.__dungeon.stage.backend }))
     await run(0.1, { forward: 0, turn: 0 })
     const liveLook = await look()
+    // shadows (on by default in live light): the GPU's grid of what blocks light matches the CPU's, and turning them off brightens the hall
+    if (was.backend === 'webgpu') {
+      const sh = await k.page.evaluate(async () => { const st = window.__dungeon.stage; return st.world.checkShadows(st.renderer) })
+      await tabClick(k.page.getByLabel('Shadows'))
+      await run(0.1, { forward: 0, turn: 0 })
+      const unshaded = await look()
+      await tabClick(k.page.getByLabel('Shadows'))
+      if (!(sh.gpuTotal > 0 && Math.abs(sh.gpuTotal - sh.cpuTotal) < sh.cpuTotal * 0.001 && sh.differ < 50 && unshaded.warm > liveLook.warm)) fails.push(`blobscape dungeon shadows: ${JSON.stringify({ sh, shaded: liveLook, unshaded })}`)
+      else ok(`blobscape dungeon: shadows from live lights (GPU grid matches the CPU, ${sh.differ} cells off by more than a unit); turning them off lights ${unshaded.warm - liveLook.warm} more pixels`)
+    }
     await tabClick(k.page.getByRole('button', { name: 'Baked', exact: true }))
     await k.page.waitForFunction(() => window.__dungeon.stage.dungeon.opts.light === 'baked', null, { timeout: 30000 }).catch(() => {})
     await run(0.1, { forward: 0, turn: 0 })
@@ -1898,6 +1909,30 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
       if (so.missing || so.outOfOrder || so.unsettled) fails.push(`engine lab: GPU sort ${JSON.stringify(so)}`)
       else ok(`engine lab: GPU sort draws every blob once, farthest first, and blobs at one depth in index order (at most ${so.biggest} at one depth)`)
     }
+    // shape edits: the lab's demo (a box cuts the foxes' heads off, a soft ball paints them blue), the GPU matching the CPU
+    {
+      const e = await open(`/engine-lab/?which=engine&n=12000&walk=0&herd=2&offscreen=1&edits=1${webgl ? '&webgl=1' : ''}`, { viewport: { width: 1000, height: 1000 } })
+      await e.page.waitForFunction(() => window.__lab || window.__labError, null, { timeout: 60000 })
+      const r = await e.page.evaluate(async (webgl) => {
+        const l = window.__lab
+        await l.frame(0.3)
+        const chk = webgl ? null : await l.world.checkAgainstCPU(l.renderer)
+        const cov = l.world.deformCPU().cov
+        let cut = 0
+        for (let i = 0; i < l.world.count; i++) if (cov[i * 6] === 0 && cov[i * 6 + 3] === 0 && cov[i * 6 + 5] === 0) cut++
+        const cv = document.querySelector('canvas'), d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+        let orange = 0, blue = 0
+        for (let i = 0; i < d.length; i += 4) { if (d[i] > 150 && d[i + 1] > 50 && d[i + 1] < 140 && d[i + 2] < 80) orange++; if (d[i + 2] > 120 && d[i + 2] > d[i] * 1.4) blue++ }
+        return { chk, cut, count: l.world.count, orange, blue }
+      }, webgl)
+      if (!(r.cut > r.count * 0.1 && r.cut < r.count * 0.6 && r.blue > 3000 && r.blue > r.orange && (!r.chk || (r.chk.center < 1e-3 && r.chk.cov < r.chk.covScale * 0.01)))) fails.push(`engine lab ${label}: shape edits ${JSON.stringify(r)}`)
+      else ok(`engine lab ${label}: shape edits cut ${r.cut} of ${r.count} blobs${r.chk ? ' (GPU matching the CPU)' : ''} and paint ${r.blue} pixels`)
+      await e.ctx.close()
+    }
+    // depth map for post effects (SplatDepth): the two foxes cover pixels, at depths round the camera's distance (7)
+    const dm = await page.evaluate(() => window.__lab.depth(0.3))
+    if (!(dm.covered > 5000 && dm.near > 4.5 && dm.near < dm.median && dm.median > 5.5 && dm.median < 8.5 && dm.far < 10)) fails.push(`engine lab ${label}: depth map ${JSON.stringify(dm)}`)
+    else ok(`engine lab ${label}: depth map covers ${dm.covered} pixels at ${dm.near.toFixed(1)}–${dm.far.toFixed(1)} units`)
     const steps = await page.evaluate(() => window.__lab.profile(2))
     if (!(steps.draw > 0) || (!webgl && !(steps.deform > 0 && steps.project > 0 && steps.order > 0))) fails.push(`engine lab ${label}: step times ${JSON.stringify(steps)}`)
     else ok(`engine lab ${label}: times each step (move ${steps.deform.toFixed(0)}, project ${steps.project.toFixed(0)}, sort ${steps.order.toFixed(0)}, draw ${steps.draw.toFixed(0)} ms; CPU ${steps.cpuSkin.toFixed(0)}+${steps.cpuSort.toFixed(0)})`)
