@@ -202,7 +202,20 @@ export interface VoxelLight {
   wear?: number
   /** How much color surfaces throw onto what faces them, as a red wall warms the floor beside it: 0 to 1. */
   bounce?: number
+  /**
+   * Painted in steps: once a blob's light is worked out, its color is moved onto one color of `palette` (sRGB, 0–1), a
+   * step of its own paint's ramp (the palette colors that paint passes through from deep shade to full sun), so shade
+   * falls in flat bands a pixel pass has nothing left to guess at. `mottle` (0–1, `MOTTLE` when left out) nudges small
+   * patches a little lighter or darker first, so a band's edge is ragged as a brush leaves it, not ruled. Parts that
+   * `glow` keep their color.
+   */
+  steps?: { palette: Vec3[]; mottle?: number }
 }
+
+/** How much a difference in lightness counts beside one in hue when a blob picks its step (`stepper`): under 1, so hue is kept first. */
+export const STEP_L = 0.7
+/** How ragged the edge between two steps is, where a scene doesn't say (`VoxelLight.steps`). */
+export const MOTTLE = 0.35
 
 /** A voxel scene for `buildVoxels`: its bones, its parts and the grid's cell size. */
 export interface VoxelSpec {
@@ -802,6 +815,55 @@ export function bakedColor(base: Vec3, shade: number, lit: number, ramp: number,
 }
 
 /**
+ * Painting in steps (`VoxelLight.steps`): gives the function that moves a blob's finished color onto its paint's ramp.
+ * A paint's ramp is the palette colors it passes through as its light goes from a deep corner to full sun (found once
+ * per paint, to 1/64 a channel); a finished color takes the nearest of them, after `mottle` has pushed its lightness up
+ * or down by patch. Light of another color (a beam, a bounce, a mirror) can carry a blob well off its ramp: when a
+ * palette color outside it is more than twice as close, that one is taken. Palette colors over `LIT_MAX` are held at
+ * it, as every lit color is, so nothing painted starts to glow.
+ */
+export function stepper(steps: NonNullable<VoxelLight['steps']>, light: VoxelLight): (base: Vec3, color: Vec3, i: number, j: number, k: number) => Vec3 {
+  const shown = steps.palette.map((c) => { const top = Math.max(c[0], c[1], c[2]); return (top > LIT_MAX ? c.map((v) => (v * LIT_MAX) / top) : [...c]) as Vec3 })
+  const labs = shown.map((c) => toOklab(c))
+  const mottle = steps.mottle ?? MOTTLE
+  const nearestOf = (lab: readonly number[], among?: number[]) => {
+    let best = -1, bestD = Infinity
+    const n = among ? among.length : labs.length
+    for (let q = 0; q < n; q++) {
+      const k = among ? among[q] : q, p = labs[k]
+      // lightness counts for less than hue: a paint in shade should stay its own color a step darker or lighter, before it turns into its neighbor's
+      const d = STEP_L * (lab[0] - p[0]) ** 2 + (lab[1] - p[1]) ** 2 + (lab[2] - p[2]) ** 2
+      if (d < bestD) { bestD = d; best = k }
+    }
+    return [best, bestD] as const
+  }
+  const ramps = new Map<number, number[]>()
+  const rampOf = (base: Vec3) => {
+    const key = (Math.round(base[0] * 63) * 64 + Math.round(base[1] * 63)) * 64 + Math.round(base[2] * 63)
+    let got = ramps.get(key)
+    if (!got) {
+      const seen = new Set<number>()
+      const add = (shade: number, lit: number, lift = 0) => seen.add(nearestOf(toOklab(bakedColor(base, shade * LIT_MAX, lit, light.ramp ?? 0, lift)))[0])
+      // corners darker than the ambient light, then shade to full sun, then a worn edge in the sun
+      for (const k of [0.3, 0.6]) add(light.ambient * k, 0)
+      for (let q = 0; q <= 12; q++) add(light.ambient + (1 - light.ambient) * (q / 12), q / 12)
+      add(1, 1, light.wear ?? 0)
+      got = [...seen]
+      ramps.set(key, got)
+    }
+    return got
+  }
+  return (base, color, i, j, k) => {
+    const lab = toOklab(color)
+    // patches three cells across, each a little lighter or darker: about a third of the gap between two steps at most
+    if (mottle > 0) lab[0] += (ihash(Math.floor(i / 3), Math.floor(j / 3), Math.floor(k / 3), 91) - 0.5 + (ihash(i, j, k, 93) - 0.5) * 0.3) * mottle * 0.1
+    const [own, ownD] = nearestOf(lab, rampOf(base))
+    const [any, anyD] = nearestOf(lab)
+    return shown[anyD * 4 < ownD ? any : own]
+  }
+}
+
+/**
  * Builds the scene's blobs, skin and skeleton. Cells sit on one grid shared by
  * every part (multiples of `spacing` from the origin), so parts line up, and
  * the same spec always gives the same blobs.
@@ -829,6 +891,7 @@ export function buildVoxels(spec: VoxelSpec): Built {
   // only shapes inside a lamp's reach can come between it and what it lights
   const lampCasters = lamps.map((l) => l && casters.filter((c) => boxDistance(c, l.at[0], l.at[1], l.at[2]) < l.reach * 2))
   const ramp = light.ramp ?? 0, crevice = light.crevice ?? 0, wear = light.wear ?? 0
+  const step = light.steps && light.steps.palette.length ? stepper(light.steps, light) : undefined
   const buried = -Math.max(s, spec.keepBuried ?? 0)
   // what a line from a glass cell meets: any part that casts a shadow or glows, but not the glass itself
   const lookable = spec.parts.map((q, qi) => ({ q, qi })).filter(({ q }) => q.glow || !q.noShadow)
@@ -965,6 +1028,7 @@ export function buildVoxels(spec: VoxelSpec): Built {
           const [back, over] = looks
           color = [0, 1, 2].map((i) => Math.min(LIT_MAX, color[i] * (1 - ks - kr) + (back[i] * 0.7 + color[i] * 0.3) * ks + over[i] * kr)) as Vec3
         }
+        if (step) color = step(base, color, Math.round(x / s), Math.round(y / s), Math.round(z / s))
       }
       if (sight.length) {
         const at = blobs.count * MAX_LAMPS

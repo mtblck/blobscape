@@ -302,8 +302,10 @@ export const DETAIL = [
  */
 export const FINER = 0.72
 
-export function makeDiorama(spacing = 0.03): Built {
-  return buildVoxels(dioramaSpec(spacing * FINER))
+export function makeDiorama(spacing = 0.03, steps?: Rgb[]): Built {
+  const spec = dioramaSpec(spacing * FINER)
+  if (steps?.length) spec.light = { ...spec.light, steps: { palette: steps.map((c) => [c[0] / 255, c[1] / 255, c[2] / 255] as Vec3) } }
+  return buildVoxels(spec)
 }
 
 const Yq = (rad: number) => axisAngle([0, 1, 0], rad)

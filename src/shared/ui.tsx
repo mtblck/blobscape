@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react'
+import { useId, useRef, useState, type ButtonHTMLAttributes, type ReactNode, type Ref } from 'react'
 
 /** Shared controls for every experiment, so hover, cursor and focus states match across pages. */
 
@@ -117,7 +117,7 @@ export function Chip({ active, onClick, children, small }: { active?: boolean; o
 }
 
 /** A plain button: `primary` is the filled accent one, the default is outlined. */
-export function Button({ primary, small, className, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { primary?: boolean; small?: boolean }) {
+export function Button({ primary, small, className, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { primary?: boolean; small?: boolean; ref?: Ref<HTMLButtonElement> }) {
   const size = small ? 'px-3 py-1.5 text-sm' : primary ? 'px-4 py-2 font-medium' : 'px-3 py-2 text-sm'
   const look = primary
     ? 'bg-accent text-paper hover:bg-accent-ink'

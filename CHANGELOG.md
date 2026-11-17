@@ -6,6 +6,13 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 
 ## [Unreleased]
 
+- Pixel Diorama draws cleaner pixels. Each pixel is now settled from four samples (Finish tab, Four samples a pixel): it takes whichever thing most of them show, so edges are one thing or the other and thin parts stop breaking up. Outlines take a darker tone of the thing they are round instead of one color for everything. And a scene can be painted in steps of its palette as it is cut, so shade falls in flat bands (the windmill is; Paint in steps of the palette).
+
+- How it's made, under Pixel Diorama's view: five steps from plain clay shapes, to one blob in eight, the paint, the four samples behind each pixel under a magnifier, and the finished picture.
+
+- Pixel Diorama opens a scene description (.json) from your computer as one more scene, and says where a broken one is broken.
+
+- For people (and assistants) writing scenes: `npm run scene -- my-scene.json` checks a description, cuts it and says what to fix, and `--shots` draws it. Scenes are now also checked for parts that pass through each other as they play, like sails through a tower.
 - The support button opens two ways to support: Buy me a coffee (Ko-fi) and Star on GitHub, in a plain card.
 
 - A simpler header: Engine opens a list with its overview, the docs, the file spec and the package on npm and GitHub; the theme has its own button; and wide screens no longer have a Menu button. The support button is on every page, as a small circle where a page has controls. The engine page has a Read the docs button at the top.
