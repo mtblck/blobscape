@@ -21,7 +21,7 @@ The point is that Claude can write one from a sentence. A scene that is data can
 | `camera` | Where the view starts, and optionally a `swing`: degrees (0 to 60) it rocks to either side, once a loop, as the scene plays. |
 | `bones` | Things that move, each with the point it turns about. Parts with no bone stand still. |
 | `parts` | A shape, a paint, and optionally a bone, `glow`, `noShadow`, `grime` (a color that gathers in its corners and cracks, as moss or soot), `bare` (takes none of the scene's `cover`: a sleeping fox, water, a fresh fire), or `ink` (little drawn marks: `{ kind, amount, color }`, kind `hatch`, `stipple`, `cracks`, `grain`, `tufts` or `scales`; about `amount` of the 4-by-4 blocks of pixels get one mark, picked and turned at random so a big wall never repeats; the ink is a darker step of the paint unless `color` says otherwise). Ink shows best on a plain or gently patched paint: on busy patches it gets lost.Water, ice or glass takes `glass: { see, mirror, top }`: it shows what lies behind it (`see`, 0.6), darkening toward the bottom where nothing is met, and mirrors what stands over it and the sky (`mirror`, 0.3, stronger at a glancing look). It is painted for the scene's own camera, so keep the camera's swing small. `top: true` keeps it to upturned faces, for a pond cut as one slab with earth sides. `strokes` (0 to 1) draws each cell as a brush stroke along the level line round the shape, as on a trunk or a pot; it shows in Blobs and barely in pixel art. |
-| `moves` | spin, sway, bob, drift, pulse. Each names a bone and a whole number of `times` per loop; a bone takes up to six. |
+| `moves` | spin, sway, bob, drift, pulse, sprout (grows from nothing, stands, shrinks away). Each names a bone and a whole number of `times` per loop; a bone takes up to six. |
 | `lights` | Up to four live lights, which can flicker or go round a circle. A light that stays put can set `shadows: true`: what stands between it and a surface then hides that surface from it (baked once, so it holds as the light flickers). Only for a lamp out in the open; one inside a ring of stones or a hand just darkens the scene. |
 | `air` | What hangs in the air: `haze` (far things fade toward a color), `mist` (low banks that drift), `shafts` (beams of light that light what they land on) and `specks` (swarms of `dust`, `embers`, `rain`, `snow`, `fireflies` or `bubbles`, each speck moving on its own). |
 | `cover` | Snow, moss or dust over everything once it is cut: `{ kind, color, amount }`, `amount` 0 to 1. `snow` settles on tops the sky can reach (not under a roof), `moss` creeps over up-turned and shut-in faces in patches, `dust` lies thin on every upturned face, under cover too. Glowing parts and parts marked `bare` keep their paint, so mark a creature in the scene `bare`. Pick a color from the palette. |
@@ -43,7 +43,19 @@ Built things, each one shape however many pieces it has, laid by a rule from a `
 - `fence`: posts and rails along a `path` on the ground, each straight run cut into whole bays about `bay` long so a post stands at every corner. `post` is half a post's thickness; `lean`, `missing` (rails gone or hanging from one end) and `sag` wear it.
 - `arcade`: a wall cut into `bays` equal bays with an opening in each and a `pillar` between, `'round'`, `'pointed'` or `'flat'` heads springing from `spring`. `ruin` (with a `seed`) breaks its top, never below the arches.
 
-Paint any of them with `pieces`: each brick, block, post or stone takes one of the `colors` (earlier ones commoner) and the joints between them `line`. The checker turns `pieces` down on a shape without pieces.
+Formations, shapes that come from a rule:
+
+- `crystal`: one crystal from `at` along `dir`, with `sides` (6), a point (`tip`, the share of its length, 0.3) and `chips` knocked off its faces. Crystals read by their facets, so light them (a live light beside them) rather than making them `glow`.
+- `crystals`: a cluster of `count` from one root: the middle one `size` long and upright, the rest leaning out up to `spread` degrees and shorter the further they lean.
+- `geode`: broken open, its cut face looking along `open`: a rind, `bands` layers and a hollow lined with small crystals pointing in. Paint it `{ kind: 'pieces', ordered: true, colors: [rind, band, band], line: crystals }`.
+- `columns`: basalt columns on a hex grid round `at`, `r` across and `cell` wide, the tallest `height`; `rise` `'steps'` (a causeway), `'dome'` (organ pipes) or `'random'`.
+- `drips`: `count` stalactites hanging from a roof at height `roof`, spread `r` round `at` on the floor, with stalagmites where their drips land, joined into columns where they would meet.
+- `flowstone`: a curtain of stone in folds down a wall, hanging from `at` along `along`.
+- `icicles`: under every downward edge of the shape `on`, about `every` apart; `above` keeps them off edges that rest on the ground. Only the icicles are drawn, so give the shape its own part too.
+
+Any of them can grow as you watch: put the part on a bone and give the bone a `sprout` move.
+
+Paint the built things and formations with `pieces`: each brick, block, post, stone, column or crystal takes one of the `colors` (earlier ones commoner) and the joints between them `line`; `ordered` takes the colors in turn by piece instead. The checker turns `pieces` down on a shape without pieces.
 
 Paints: a color, or `bands`, `bricks`, `hex` (honeycomb, scales, paving), `speckle`, `patches`, `faces` (top, side, under), `split` (one paint below a height, another above), `key` (for `blocks` only), `pieces` (for built things and the other shapes of pieces). Paints nest.
 

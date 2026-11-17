@@ -7,6 +7,7 @@ import { INK_MARKS, LETTERS, MAX_LAMPS, PAINTED, blend, box, many, lathe, letter
 import { PUFFS } from './poke.ts'
 import { GROW_STYLES, grow, growBounds, type GrowStyle } from './grow.ts'
 import { ARCHES, arcade, fence, steps, wall } from './built.ts'
+import { RISES, cluster, columns, crystal, drips, flowstone, geode, icicles } from './forms.ts'
 
 /**
  * A pixel-art scene written as data: no code, so it can be typed by hand, kept
@@ -203,6 +204,20 @@ export type ShapeDoc =
   | { kind: 'fence'; path: Vec3[]; bay: number; height: number; post: number; rails: number; lean?: number; missing?: number; sag?: number; seed: number }
   /** A wall from `from` to `to` cut into `bays` equal bays, an opening in each with a `pillar` between: 'round', 'pointed' or 'flat' heads springing at `spring`. Stones in courses `course` high and wedges round each arch, for `pieces`. `ruin` (0 to 1, with a `seed`) breaks its top down, never below the arches. */
   | { kind: 'arcade'; from: Vec3; to: Vec3; height: number; thick: number; bays: number; pillar: number; spring?: number; arch?: 'round' | 'pointed' | 'flat'; course?: number; ruin?: number; seed?: number }
+  /** A crystal with `sides` (3 to 8, 6) and a pointed end (`tip`, the share of its length, 0.3), growing from `at` along `dir`; `chips` (0 to 6) knocks pieces off its faces. */
+  | { kind: 'crystal'; at: Vec3; dir: Vec3; length: number; r: number; sides?: number; tip?: number; chips?: number; seed: number }
+  /** A cluster of `count` crystals from one root at `at`: the middle one `size` long and upright, the rest leaning out up to `spread` degrees (50), shorter the further they lean. */
+  | { kind: 'crystals'; at: Vec3; count: number; size: number; r: number; spread?: number; sides?: number; chips?: number; seed: number }
+  /** A geode broken open, its cut face looking along `open`: a rind (`rind`, a share of `r`, 0.15), `bands` layers (3), a hollow lined with crystals `lining` long (a share of `r`, 0.22). Paint `pieces` with `ordered`: the rind takes the first color, the bands the next two by turns, the crystals `line`. */
+  | { kind: 'geode'; at: Vec3; r: number; open: Vec3; rind?: number; bands?: number; lining?: number; seed: number }
+  /** Basalt columns on a hex grid round `at`, `r` across, each `cell` wide, the tallest `height`: `rise` 'steps' (a causeway, the default), 'dome' (organ pipes) or 'random'. */
+  | { kind: 'columns'; at: Vec3; r: number; cell: number; height: number; rise?: 'dome' | 'steps' | 'random'; seed: number }
+  /** `count` stalactites hanging from a roof at height `roof`, the longest `length`, spread `r` round `at` on the floor, with stalagmites where their drips land, joined into columns where they meet. */
+  | { kind: 'drips'; at: Vec3; r: number; roof: number; count: number; length: number; seed: number }
+  /** Flowstone down a wall: a curtain of stone `width` wide and `drop` deep in `folds` folds (5), hanging from `at` along `along` ([x, z]); its face looks out to the right of `along`. */
+  | { kind: 'flowstone'; at: Vec3; along: [number, number]; width: number; drop: number; folds?: number; seed: number }
+  /** Icicles under every downward edge of the shape `on` (which is only looked at: give it a part of its own), about `every` apart, the longest `length`; only from edges higher than `above`, if given (not where it rests on the ground). */
+  | { kind: 'icicles'; on: ShapeDoc; every: number; length: number; above?: number; seed: number }
   /** The first shape with the second cut out of it. */
   | { kind: 'cut'; shape: ShapeDoc; hole: ShapeDoc }
   /** A lumpy version: `by` is how far the surface moves, `scale` how big the lumps are. */
@@ -226,8 +241,8 @@ export type PaintDoc =
   | { kind: 'faces'; top?: PaintDoc; side: PaintDoc; under?: PaintDoc }
   /** One paint under a height (or left of x, or behind z), another over it. */
   | { kind: 'split'; axis: 'x' | 'y' | 'z'; at: number; below: PaintDoc; above: PaintDoc }
-  /** For a shape made of pieces (wall, steps, fence, arcade and the rest): each brick, block, post or stone takes one of `colors` (earlier ones commoner), and what lies between them `line`. */
-  | { kind: 'pieces'; colors: string[]; line?: string }
+  /** For a shape made of pieces (wall, steps, fence, arcade and the rest): each brick, block, post or stone takes one of `colors` (earlier ones commoner), and what lies between them `line`. `ordered` takes the colors in turn by the piece's number instead (a geode's rind and bands). */
+  | { kind: 'pieces'; colors: string[]; line?: string; ordered?: boolean }
 
 /** Every move repeats a whole number of `times` in the loop, so the scene loops. */
 export type MoveDoc =
@@ -241,6 +256,8 @@ export type MoveDoc =
   | { kind: 'drift'; bone: string; by: Vec3; times: number; grow?: [number, number]; phase?: number }
   /** Swells and shrinks between two sizes. */
   | { kind: 'pulse'; bone: string; size: [number, number]; times: number; phase?: number }
+  /** Grows from nothing as you watch, stands, and shrinks away again before it starts over, `times` per loop: crystals, icicles, a sprout. */
+  | { kind: 'sprout'; bone: string; times: number; phase?: number }
 
 export interface LightDoc {
   at: Vec3
@@ -280,7 +297,7 @@ const MAX_SPECKS = 300
 const SPECK_KINDS: SpeckKind[] = ['dust', 'embers', 'rain', 'snow', 'fireflies', 'bubbles']
 /** A value for a message: only what is safe to print (anything can arrive from a prompt). */
 const COVERS = ['snow', 'moss', 'dust']
-const SHAPE_KINDS = ['sphere', 'ball', 'box', 'cylinder', 'cone', 'ring', 'roof', 'join', 'lathe', 'sweep', 'grow', 'text', 'blocks', 'wall', 'steps', 'fence', 'arcade', 'cut', 'rough']
+const SHAPE_KINDS = ['sphere', 'ball', 'box', 'cylinder', 'cone', 'ring', 'roof', 'join', 'lathe', 'sweep', 'grow', 'text', 'blocks', 'wall', 'steps', 'fence', 'arcade', 'crystal', 'crystals', 'geode', 'columns', 'drips', 'flowstone', 'icicles', 'cut', 'rough']
 const BLENDS = ['smooth', 'chamfer', 'stairs']
 /** The keys paints use, found anywhere inside one. */
 const keysIn = (p: unknown): Record<string, unknown>[] => {
@@ -315,12 +332,20 @@ function halfSize(s: ShapeDoc): Vec3 {
       return [Math.abs((s.dir[0] / l) * run) / 2 + s.width / 2, (s.rise * s.count) / 2, Math.abs((s.dir[1] / l) * run) / 2 + s.width / 2]
     }
     case 'fence': return [0, 1, 2].map((i) => (i === 1 ? s.height / 2 : (Math.max(...s.path.map((q) => q[i])) - Math.min(...s.path.map((q) => q[i]))) / 2 + s.post + s.height * 0.15)) as Vec3
+    case 'crystal': { const e = [0, 1, 2].map((i) => Math.abs(s.dir[i]) / (Math.hypot(...s.dir) || 1) * s.length / 2 + s.r); return e as Vec3 }
+    case 'crystals': return [s.size * 0.8 + s.r, s.size / 2 + s.r, s.size * 0.8 + s.r]
+    case 'geode': return [s.r, s.r, s.r]
+    case 'columns': return [s.r + s.cell, s.height / 2, s.r + s.cell]
+    case 'drips': return [s.r, Math.abs(s.roof - s.at[1]) / 2, s.r]
+    case 'flowstone': return [s.width / 2 + s.drop * 0.25, s.drop / 2, s.width / 2 + s.drop * 0.25]
+    // only the icicles are drawn, under the host's edges: about a third of its box, as deep as they hang
+    case 'icicles': { const h = halfSize(s.on); return [h[0] / 2, s.length / 2, h[2] / 2] }
     case 'cut': case 'rough': return halfSize(s.shape)
   }
 }
 
 /** The shapes the `pieces` paint can paint, as they are or cut and roughened. */
-const PIECED = ['wall', 'steps', 'fence', 'arcade']
+const PIECED = ['wall', 'steps', 'fence', 'arcade', 'crystals', 'geode', 'columns', 'drips', 'icicles']
 const hasPieces = (s: unknown): boolean => {
   if (typeof s !== 'object' || s === null) return false
   const q = s as Record<string, unknown>
@@ -362,6 +387,8 @@ export function checkScene(doc: unknown): string[] {
     v.forEach((c, i) => hex(c, `${at}[${i}]`))
   }
   const axis = (v: unknown, at: string) => { if (!AXES.includes(v as string)) bad(at, "must be 'x', 'y' or 'z'") }
+  const count = (v: unknown, at: string, min: number, max: number, optional = false) => { if (optional && v === undefined) return; if (typeof v !== 'number' || !Number.isInteger(v) || v < min || v > max) bad(at, `must be a whole number from ${min} to ${max}`) }
+  const sides = (v: unknown, at: string) => count(v, at, 3, 8, true)
   const seed = (v: unknown, at: string) => { if (typeof v !== 'number' || !Number.isInteger(v) || v < 0) bad(at, 'must be a whole number, 0 or more') }
   const whole = (v: unknown, at: string) => { if (typeof v !== 'number' || !Number.isInteger(v) || v === 0 || Math.abs(v) > 60) bad(at, 'must be a whole number of times per loop (not 0), so the scene loops') }
 
@@ -503,6 +530,39 @@ export function checkScene(doc: unknown): string[] {
         if (s.arch !== undefined && !ARCHES.includes(s.arch as never)) bad(`${at}.arch`, `must be one of ${ARCHES.map((k) => `'${k}'`).join(', ')}`)
         if (Array.isArray(s.from) && Array.isArray(s.to) && typeof s.bays === 'number' && typeof s.pillar === 'number' && Math.hypot((s.to[0] as number) - (s.from[0] as number), (s.to[2] as number) - (s.from[2] as number)) / s.bays <= s.pillar) bad(`${at}.pillar`, 'leaves no room for an opening in each bay')
         break
+      case 'crystal':
+        vec(s.at, `${at}.at`); vec(s.dir, `${at}.dir`, -1, 1); num(s.length, `${at}.length`, 0.01, REACH); num(s.r, `${at}.r`, 0.003, 1)
+        if (Array.isArray(s.dir) && Math.hypot(...s.dir.map((c) => Number(c) || 0)) < 0.1) bad(`${at}.dir`, 'must point somewhere')
+        sides(s.sides, `${at}.sides`); opt(s.tip, `${at}.tip`, 0.1, 0.8); count(s.chips, `${at}.chips`, 0, 6, true); seed(s.seed, `${at}.seed`)
+        break
+      case 'crystals':
+        vec(s.at, `${at}.at`); count(s.count, `${at}.count`, 1, 40); num(s.size, `${at}.size`, 0.01, REACH); num(s.r, `${at}.r`, 0.003, 1)
+        opt(s.spread, `${at}.spread`, 0, 85); sides(s.sides, `${at}.sides`); count(s.chips, `${at}.chips`, 0, 6, true); seed(s.seed, `${at}.seed`)
+        break
+      case 'geode':
+        vec(s.at, `${at}.at`); num(s.r, `${at}.r`, 0.03, 2); vec(s.open, `${at}.open`, -1, 1)
+        if (Array.isArray(s.open) && Math.hypot(...s.open.map((c) => Number(c) || 0)) < 0.1) bad(`${at}.open`, 'must point somewhere')
+        opt(s.rind, `${at}.rind`, 0.05, 0.4); count(s.bands, `${at}.bands`, 1, 8, true); opt(s.lining, `${at}.lining`, 0.05, 0.4); seed(s.seed, `${at}.seed`)
+        break
+      case 'columns':
+        vec(s.at, `${at}.at`); num(s.r, `${at}.r`, 0.05, 3); num(s.cell, `${at}.cell`, 0.02, 1); num(s.height, `${at}.height`, 0.02, REACH)
+        if (s.rise !== undefined && !RISES.includes(s.rise as never)) bad(`${at}.rise`, `must be one of ${RISES.map((k) => `'${k}'`).join(', ')}`)
+        if (typeof s.r === 'number' && typeof s.cell === 'number' && s.r / s.cell > 30) bad(`${at}.cell`, 'is too small for the field: at most 30 columns across its radius')
+        seed(s.seed, `${at}.seed`)
+        break
+      case 'drips':
+        vec(s.at, `${at}.at`); num(s.r, `${at}.r`, 0.01, 3); num(s.roof, `${at}.roof`, -REACH, REACH); count(s.count, `${at}.count`, 1, 60); num(s.length, `${at}.length`, 0.01, REACH)
+        if (Array.isArray(s.at) && typeof s.roof === 'number' && s.roof <= (s.at[1] as number) + 0.05) bad(`${at}.roof`, 'must be above the floor at at')
+        seed(s.seed, `${at}.seed`)
+        break
+      case 'flowstone':
+        vec(s.at, `${at}.at`); vec(s.along, `${at}.along`, -1, 1, 2); num(s.width, `${at}.width`, 0.02, REACH); num(s.drop, `${at}.drop`, 0.02, REACH)
+        if (Array.isArray(s.along) && Math.hypot(Number(s.along[0]) || 0, Number(s.along[1]) || 0) < 0.1) bad(`${at}.along`, 'must point somewhere along the ground')
+        opt(s.folds, `${at}.folds`, 1, 20); seed(s.seed, `${at}.seed`)
+        break
+      case 'icicles':
+        shape(s.on, `${at}.on`, depth + 1); num(s.every, `${at}.every`, 0.01, 1); num(s.length, `${at}.length`, 0.01, 2); opt(s.above, `${at}.above`, -REACH, REACH); seed(s.seed, `${at}.seed`)
+        break
       case 'cut': shape(s.shape, `${at}.shape`, depth + 1); shape(s.hole, `${at}.hole`, depth + 1); break
       case 'rough': shape(s.shape, `${at}.shape`, depth + 1); num(s.by, `${at}.by`, 0, 0.3); opt(s.scale, `${at}.scale`, 0.02, REACH); break
       default: bad(`${at}.kind`, `${show(s.kind)} is not a shape (${SHAPE_KINDS.join(', ')})`)
@@ -527,7 +587,10 @@ export function checkScene(doc: unknown): string[] {
         if (p.under !== undefined) paint(p.under, `${at}.under`, depth + 1)
         break
       case 'split': axis(p.axis, `${at}.axis`); num(p.at, `${at}.at`, -REACH, REACH); paint(p.below, `${at}.below`, depth + 1); paint(p.above, `${at}.above`, depth + 1); break
-      case 'pieces': hexes(p.colors, `${at}.colors`, 1, 8); if (p.line !== undefined) hex(p.line, `${at}.line`); break
+      case 'pieces':
+        hexes(p.colors, `${at}.colors`, 1, 8); if (p.line !== undefined) hex(p.line, `${at}.line`)
+        if (p.ordered !== undefined && typeof p.ordered !== 'boolean') bad(`${at}.ordered`, 'must be true or false')
+        break
       default: bad(`${at}.kind`, `${show(p.kind)} is not a paint (bands, bricks, hex, speckle, patches, faces, split, key, pieces)`)
     }
   }
@@ -600,7 +663,8 @@ export function checkScene(doc: unknown): string[] {
           if (typeof m.times === 'number' && m.times < 0) bad(`${at}.times`, 'must be over 0 for a drift')
           break
         case 'pulse': vec(m.size, `${at}.size`, 0, 4, 2); break
-        default: bad(`${at}.kind`, `${show(m.kind)} is not a move (spin, sway, bob, drift, pulse)`)
+        case 'sprout': if (typeof m.times === 'number' && m.times < 0) bad(`${at}.times`, 'must be over 0 for a sprout'); break
+        default: bad(`${at}.kind`, `${show(m.kind)} is not a move (spin, sway, bob, drift, pulse, sprout)`)
       }
     })
   }
@@ -719,6 +783,13 @@ function toShape(s: ShapeDoc, thin: number): Shape {
     case 'steps': return steps({ ...s, rise: t(s.rise), run: t(s.run), width: t(s.width) })
     case 'fence': return fence({ ...s, post: Math.max(s.post, thin * 0.75) }, thin / 0.75)
     case 'arcade': return arcade({ ...s, thick: t(s.thick), pillar: t(s.pillar) }, thin / 0.75)
+    case 'crystal': return crystal({ ...s, r: Math.max(s.r, thin * 1.2) })
+    case 'crystals': return cluster({ ...s, r: Math.max(s.r, thin * 1.2) })
+    case 'geode': return geode(s)
+    case 'columns': return columns({ ...s, cell: Math.max(s.cell, thin * 3) })
+    case 'drips': return drips(s, thin)
+    case 'flowstone': return flowstone(s)
+    case 'icicles': return icicles(toShape(s.on, thin), { ...s, every: Math.max(s.every, thin * 2) }, thin)
     case 'cut': return cut(toShape(s.shape, thin), toShape(s.hole, 0))
     case 'rough': {
       const k = 1 / (s.scale ?? 0.5)
@@ -737,7 +808,7 @@ function toPaint(p: PaintDoc, cell: number, letterAt?: (p: Vec3, n: Vec3) => str
       return (q) => {
         const id = pieceAt?.(q) ?? 0
         // squared, so the first color is the commonest
-        return id < 0 ? line : cs[Math.floor(hash(id, 17, 3) ** 2 * cs.length)]
+        return id < 0 ? line : p.ordered ? cs[id % cs.length] : cs[Math.floor(hash(id, 17, 3) ** 2 * cs.length)]
       }
     }
     case 'key': {
@@ -934,6 +1005,12 @@ function looseAir(air: AirDoc | undefined): LooseBlob[] {
   return out
 }
 
+/** A sprout's size through its life (0 to 1): grows from nothing over the first 40%, stands, and shrinks away over the last 15%. */
+export function sprouted(life: number) {
+  const ease = (t: number) => { const k = Math.min(1, Math.max(0, t)); return k * k * (3 - 2 * k) }
+  return life < 0.85 ? ease(life / 0.4) : ease((1 - life) / 0.15)
+}
+
 /** A sound description (see `checkScene`) made ready to build and play. Throws on an unsound one. */
 /** `puffs` keeps hidden bones for a tap's puff of sparkles (`poke.ts`); a creature taken from a scene goes without. */
 export function compileScene(doc: SceneDoc, { puffs = true }: { puffs?: boolean } = {}): CompiledScene {
@@ -1019,6 +1096,8 @@ export function compileScene(doc: SceneDoc, { puffs = true }: { puffs?: boolean 
           const life = ((at % 1) + 1) % 1, [g0, g1] = m.grow ?? [1, 1]
           for (let i = 0; i < 3; i++) sk.offset[b * 3 + i] += m.by[i] * life
           sk.size[b] *= Math.sin(Math.PI * life) ** 0.6 * (g0 + (g1 - g0) * life)
+        } else if (m.kind === 'sprout') {
+          sk.size[b] *= sprouted(((at % 1) + 1) % 1)
         } else {
           sk.size[b] *= m.size[0] + (m.size[1] - m.size[0]) * (0.5 + 0.5 * Math.sin(at * TAU))
         }

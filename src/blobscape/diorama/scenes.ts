@@ -24,6 +24,7 @@ import { SPIDER } from './scenes/spider.ts'
 import { WINDOW } from './scenes/window.ts'
 import { WINDMILL } from './scenes/windmill.ts'
 import { RUIN } from './scenes/ruin.ts'
+import { CAVE } from './scenes/cave.ts'
 
 /** A scene Pixel Diorama can show: how to build it, move it and light it, and how it asks to be drawn. */
 export interface Diorama {
@@ -138,4 +139,5 @@ export const DIORAMAS: Diorama[] = [
   described('snail', SNAIL, 'A giant snail whose shell is a little house, with lit windows, a smoking chimney, a deck with a flag and a swinging lantern, inching through a wood of tall glowing mushrooms with ferns and fireflies'),
   described('windmill', WINDMILL, 'A windmill on a farm by day, with turning sails, sheep, a duck on a pond, a wheat field, trees, clouds and birds'),
   described('ruin', RUIN, 'A ruined chapel at dusk in autumn: an arcade of pointed arches broken along its top, brick walls fallen in places with their bricks at their feet, worn steps, a leaning fence, a maple and a lantern'),
+  described('cave', CAVE, 'An ice cave cut open at night, with icicles along its broken roof, stalactites joining stalagmites, flowstone, basalt columns stepping into a still pool, a geode broken open and glowing crystals, one growing as you watch'),
 ]
