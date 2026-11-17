@@ -383,8 +383,8 @@ export default [
   },
   {
     name: 'lessons-engine',
-    about: 'Build with the engine: each goal ticks on the engine view, and the code below follows the controls',
-    entries: ['src/blobscape/lessons/FirstCreature.tsx', 'src/blobscape/build/StageView.tsx', 'src/blobscape/build/slug.ts'],
+    about: 'Build with the engine: each goal ticks on the engine view, and the code below follows the controls (or the description)',
+    entries: ['src/blobscape/lessons/FirstCreature.tsx', 'src/blobscape/lessons/SceneData.tsx', 'src/blobscape/build/StageView.tsx', 'src/blobscape/build/slug.ts', 'src/blobscape/build/scene.ts'],
     async run({ base, shots, join, fails, ok, open, axe }) {
       const { page, ctx } = await open('/', { viewport: { width: 1440, height: 1000 } })
       const goalCount = () => page.textContent('[data-testid=goal-count]')
@@ -416,6 +416,33 @@ export default [
       else ok(`blobscape first creature: bend, smooth and swing tick (the join tore ${torn} blobs, ${mended} spread), and the code follows the controls`)
       await page.screenshot({ path: join(shots, 'blobscape-first-creature.png') })
       await axe(page, 'blobscape first creature')
+
+      // A scene written as data: the checker turns down a move that won't loop, then a sway and a flickering light tick the rest
+      await page.goto(base + '/lessons/scene-data/?offscreen=1')
+      await page.waitForFunction(() => window.__scene && !document.querySelector('[data-testid=stage-loading]'), null, { timeout: 30000 }).catch(() => {})
+      const box = page.getByTestId('scene-text')
+      const doc = JSON.parse(await box.inputValue())
+      const readout = () => page.textContent('[data-testid=scene-readout]')
+      const blobsIn = async () => Number((await readout()).match(/cut into ([\d,]+) blobs/)?.[1].replace(/,/g, ''))
+      const startBlobs = await blobsIn()
+      const settle = async () => { await page.waitForTimeout(700); await page.waitForFunction(() => !document.querySelector('[data-testid=stage-loading]'), null, { timeout: 15000 }).catch(() => {}) }
+      await box.fill(JSON.stringify({ ...doc, moves: [{ kind: 'sway', bone: 'tree', axis: 'z', degrees: 4, times: 1.5 }] }, null, 2))
+      await settle()
+      const refused = (await page.textContent('[data-testid=scene-problems]')).includes('so the scene loops') && (await readout()).includes(' 0 moves')
+      const sway = { kind: 'sway', bone: 'tree', axis: 'z', degrees: 4, times: 3 }
+      await box.fill(JSON.stringify({ ...doc, moves: [sway], lights: [{ at: [0.35, 0.56, 0.62], color: '#ffd166', strength: 1.2, range: 1.2, flicker: { by: 0.3, times: 24 } }] }, null, 2))
+      await settle()
+      const kept = (await blobsIn()) === startBlobs
+      await box.fill(JSON.stringify({ ...doc, moves: [sway], parts: doc.parts.filter((_, i) => i !== 3) }, null, 2))
+      await settle()
+      const recut = (await blobsIn()) < startBlobs
+      await page.evaluate(async () => { for (let f = 0; f <= 20; f++) { await window.__scene.stage.frame(f / 10); await new Promise((r) => setTimeout(r, 30)) } })
+      const sceneCode = await page.textContent('[data-testid=lesson-code]')
+      const sceneFollowed = /"kind": "sway"/.test(sceneCode) && /compileScene\(doc\)/.test(sceneCode)
+      if (!(refused && kept && recut && sceneFollowed && (await goalsAt(3)).startsWith('3 of'))) fails.push(`blobscape scene data: goals ${await goalCount()}, refused a half move: ${refused}, a move kept the cut: ${kept}, a part recut it: ${recut}, code follows: ${sceneFollowed}`)
+      else ok('blobscape scene data: a move that would not loop is refused, a sway and a flickering light tick the rest, and only a new shape recuts')
+      await page.screenshot({ path: join(shots, 'blobscape-scene-data.png') })
+      await axe(page, 'blobscape scene data')
       await ctx.close()
     },
   },

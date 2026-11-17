@@ -7,7 +7,7 @@ const L = (f) => [`${B}lessons/${f}.tsx`]
 const PAGES = {
   lessons: [`${B}routes.ts`], 'one-blob': L('OneBlob'), footprint: L('Footprint'), order: L('Order'), many: L('Many'), angle: L('Angle'), paint: L('Paint'),
   formats: L('Formats'), break: L('Break'), 'one-bone': L('OneBone'), weights: L('Weights'), twist: L('Twist'), walk: L('Walk'), feet: L('Feet'), model: L('Model'),
-  morphs: L('Morphs'), fur: L('Fur'), shoot: L('Shoot'), fuzzy: L('Fuzzy'), floaters: L('Floaters'), lighting: L('Lighting'), shimmer: L('Shimmer'), 'first-creature': L('FirstCreature'), sandbox: [`${B}Sandbox.tsx`],
+  morphs: L('Morphs'), fur: L('Fur'), shoot: L('Shoot'), fuzzy: L('Fuzzy'), floaters: L('Floaters'), lighting: L('Lighting'), shimmer: L('Shimmer'), 'first-creature': L('FirstCreature'), 'scene-data': L('SceneData'), sandbox: [`${B}Sandbox.tsx`],
   creature: [`${B}Creature.tsx`], 'forest-walk': [`${B}ForestWalk.tsx`], clockwork: [`${B}Clockwork.tsx`], 'shape-shifter': [`${B}ShapeShifter.tsx`], 'sand-snow-goo': [`${B}SandSnowGoo.tsx`],
   'pixel-diorama': [`${B}PixelDiorama.tsx`], 'dungeon-run': [`${B}DungeonRun.tsx`], 'scan-studio': [`${B}ScanStudio.tsx`], contact: [`${B}Contact.tsx`],
 }
@@ -19,7 +19,7 @@ const SHELL_FILES = [`${B}App.tsx`, `${B}main.tsx`, `${B}ssr.tsx`, 'src/shared/t
 // headless WebGPU can't present to a canvas, so the engine pages draw off-screen here
 const OFFSCREEN = ['creature', 'forest-walk', 'clockwork', 'shape-shifter', 'sand-snow-goo', 'pixel-diorama', 'dungeon-run', 'scan-studio']
 // and so do the lessons drawn by the engine
-const ENGINE_LESSONS = ['first-creature']
+const ENGINE_LESSONS = ['first-creature', 'scene-data']
 const pathOf = (id) => (OFFSCREEN.includes(id) ? `/experiments/${id}/?offscreen=1` : ['sandbox', 'lessons', 'contact'].includes(id) ? `/${id}/` : `/lessons/${id}/${ENGINE_LESSONS.includes(id) ? '?offscreen=1' : ''}`)
 
 // each sweep in two halves that run side by side: the front page and lessons, then the rest

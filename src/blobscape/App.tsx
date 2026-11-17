@@ -18,6 +18,7 @@ import { Weights } from './lessons/Weights.tsx'
 import { Twist } from './lessons/Twist.tsx'
 import { Morphs } from './lessons/Morphs.tsx'
 import { FirstCreature } from './lessons/FirstCreature.tsx'
+import { SceneData } from './lessons/SceneData.tsx'
 import { Fur } from './lessons/Fur.tsx'
 import { Walk } from './lessons/Walk.tsx'
 import { FeetOnTheGround } from './lessons/Feet.tsx'
@@ -43,7 +44,7 @@ import { Contact } from './Contact.tsx'
 import { Engine } from './Engine.tsx'
 import { Spec } from './Spec.tsx'
 
-const PAGES: Record<string, () => React.JSX.Element> = { 'first-creature': FirstCreature, 'one-blob': OneBlob, footprint: Footprint, order: Order, many: Many, angle: Angle, paint: Paint, formats: Formats, break: Break, 'one-bone': OneBone, weights: Weights, twist: Twist, walk: Walk, feet: FeetOnTheGround, model: Model, morphs: Morphs, fur: Fur, shoot: Shoot, fuzzy: Fuzzy, floaters: Floaters, lighting: Lighting, shimmer: Shimmer }
+const PAGES: Record<string, () => React.JSX.Element> = { 'first-creature': FirstCreature, 'scene-data': SceneData, 'one-blob': OneBlob, footprint: Footprint, order: Order, many: Many, angle: Angle, paint: Paint, formats: Formats, break: Break, 'one-bone': OneBone, weights: Weights, twist: Twist, walk: Walk, feet: FeetOnTheGround, model: Model, morphs: Morphs, fur: Fur, shoot: Shoot, fuzzy: Fuzzy, floaters: Floaters, lighting: Lighting, shimmer: Shimmer }
 
 /** The whole site. `route` is only for prerendering (scripts/prerender.ts), where there is no address bar to read. */
 export function App({ route: at }: { route?: Route } = {}) {

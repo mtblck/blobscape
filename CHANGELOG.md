@@ -6,6 +6,7 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 
 ## [Unreleased]
 
+- New lesson, A scene written as data: a cottage at dusk as a page of JSON you edit, with the engine's checker saying what is wrong and where. Make the tree sway, find the rule every move keeps so the scene loops, and light the lantern; it ends with the code that plays your description.
 - New lesson part, Build with the engine, starting with Your first creature: a slug of two shapes on two bones, made with the engine. Make its tail bend, close the crease where it joins, and let it swing; the lesson ends with the code for the slug you made, to copy.
 - New experiment, Sand, Snow and Goo: a box of blobs that flow, every one a particle in a small physics simulation. Sand runs into a heap, snow stands until it's hit, goo spreads; pour more in and tap to poke them.
 - Forest Walk: the elf's cloak and plait swing after the body as cloth, trailing when it turns and settling when it stops.
