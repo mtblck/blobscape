@@ -7,6 +7,7 @@ import type { Morph } from './morph.ts'
 import type { Skeleton, Skin, SkinMode } from './rig.ts'
 import type { Blobs } from '../splat-core/blobs.ts'
 import { BoneView } from './boneView.ts'
+import { startRenderer } from './startRenderer.ts'
 import type { BakeOptions, BakedSheet } from './bakeSheet.ts'
 import type { SheetMove } from './spriteSheet.ts'
 import { PixelPass } from './pixelPass.ts'
@@ -146,10 +147,10 @@ export class Stage {
 
   static async start(display: HTMLCanvasElement, opts: StageOptions = {}) {
     const canvas = opts.offscreen ? document.createElement('canvas') : display
-    const renderer = new THREE.WebGPURenderer({ canvas, antialias: false, alpha: true, forceWebGL: !!opts.webgl })
-    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1))
-    renderer.setClearColor(0x000000, 0)
-    await renderer.init()
+    const renderer = await startRenderer({ canvas, antialias: false, alpha: true, forceWebGL: !!opts.webgl }, (r) => {
+      r.setPixelRatio(Math.min(2, window.devicePixelRatio || 1))
+      r.setClearColor(0x000000, 0)
+    })
     return new Stage(display, opts, renderer)
   }
 

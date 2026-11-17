@@ -4,6 +4,7 @@ import { createGaussianSplatGeometry } from 'three/addons/utils/GaussianSplatUti
 import { covariance, type Blobs } from '../splat-core/blobs.ts'
 import { placeCamera, type Orbit } from '../splat-core/view.ts'
 import { SplatWorld } from '../splat-engine/engine.ts'
+import { startRenderer } from '../splat-engine/startRenderer.ts'
 import { DETAIL } from '../splat-engine/lod.ts'
 import { SplatDepth } from '../splat-engine/depth.ts'
 import type { ShapeEdit } from '../splat-engine/edit.ts'
@@ -130,10 +131,10 @@ export interface StepTimes {
 export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promise<Lab> {
   if (o.which === 'spark') return (await import('./sparkLab.ts')).startSparkLab(display, o)
   const canvas = o.offscreen ? document.createElement('canvas') : display
-  const renderer = new THREE.WebGPURenderer({ canvas, antialias: false, alpha: true, forceWebGL: o.webgl })
-  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1))
-  renderer.setClearColor(0x000000, 0)
-  await renderer.init()
+  const renderer = await startRenderer({ canvas, antialias: false, alpha: true, forceWebGL: o.webgl }, (r) => {
+    r.setPixelRatio(Math.min(2, window.devicePixelRatio || 1))
+    r.setClearColor(0x000000, 0)
+  })
   const backend = (renderer.backend as unknown as { isWebGPUBackend?: boolean }).isWebGPUBackend ? 'webgpu' : 'webgl'
 
   const scene = new THREE.Scene()
