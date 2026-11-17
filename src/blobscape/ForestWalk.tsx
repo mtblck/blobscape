@@ -102,7 +102,7 @@ export function ForestWalk() {
     const down = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || !mine(e)) return
       if (e.code === 'KeyE') { stageRef.current?.forest?.wave(); return }
-      if (e.code === 'KeyF') { stageRef.current?.forest?.spark(); return }
+      if (e.code === 'KeyF') { if (!e.repeat) stageRef.current?.forest?.spark(); return }
       const k = KEYS[e.code]
       if (!k) return
       e.preventDefault()
