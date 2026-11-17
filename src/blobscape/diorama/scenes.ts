@@ -43,10 +43,14 @@ export interface Diorama {
   make(spacing: number): Built
   pose(sk: Skeleton, t: number): void
   lights(t: number): PointLight[]
+  /** Distance haze: its color (linear) and where it starts and would be total, in units past the view's target. */
+  haze?: { color: [number, number, number]; from: number; to: number }
   /** How big its description is, in bytes, written out as JSON: only for a scene that is data alone. */
   bytes?: number
   /** How many moves its description lists. */
   moves?: number
+  /** How many parts its description lists: specks and mist in the air are not counted. */
+  parts?: number
 }
 
 /** The name of the palette chosen for a scene, on its chip. */
@@ -89,6 +93,7 @@ export function described(id: string, doc: SceneDoc, about: string): Diorama {
     about,
     bytes: new TextEncoder().encode(JSON.stringify(doc)).length,
     moves: doc.moves?.length ?? 0,
+    parts: doc.parts.length,
     loop: c.loop,
     palette: { label: OWN_PALETTE, colors: c.palette },
     // with no sky of its own, the switch gives it a night made of its two darkest colors
@@ -108,6 +113,7 @@ export function described(id: string, doc: SceneDoc, about: string): Diorama {
     },
     pose: c.pose,
     lights: c.lights,
+    haze: c.haze,
   }
 }
 

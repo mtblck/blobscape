@@ -3,7 +3,7 @@ import type { Rgb } from '../../splat-core/pixel.ts'
 import type { Built } from '../../splat-engine/body.ts'
 import type { PointLight } from '../../splat-engine/engine.ts'
 import { axisAngle, mulQ, type Bone, type Skeleton } from '../../splat-engine/rig.ts'
-import { box, buildVoxels, cone, cut, cylinder, displace, ellipsoid, roof, sphere, torus, union, type VoxelPart, type VoxelSpec } from '../../splat-engine/voxel.ts'
+import { PAINTED, box, buildVoxels, cone, cut, cylinder, displace, ellipsoid, roof, sphere, torus, union, type VoxelPart, type VoxelSpec } from '../../splat-engine/voxel.ts'
 import { PALETTES as SPRITE_PALETTES } from '../../splat-to-sprite/palettes.ts'
 
 /**
@@ -286,7 +286,7 @@ export function dioramaSpec(spacing = 0.03): VoxelSpec {
     parts.push({ shape: ellipsoid([f[0], f[1] + 0.01, f[2]], [0.15, Math.max(0.02, thin), Math.max(0.028, thin)]), color: FOAM_C, bone: `foam${i}`, glow: true })
   })
 
-  return { bones: dioramaBones(), parts, spacing: s, light: { dir: [0.4, 0.55, 0.72], ambient: 0.5, shadow: 0.75 } }
+  return { bones: dioramaBones(), parts, spacing: s, light: { dir: [0.4, 0.55, 0.72], ambient: 0.5, shadow: 0.75, ...PAINTED } }
 }
 
 export const DETAIL = [

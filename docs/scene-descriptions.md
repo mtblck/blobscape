@@ -15,13 +15,14 @@ The point is that Claude can write one from a sentence. A scene that is data can
 | `name`, `loop` | A name, and the seconds before everything repeats. |
 | `palette` | 2 to 32 colors, `'#rrggbb'`. The picture uses only these. |
 | `sky` | Top and bottom colors of the backdrop. `skyReach` (0.05 to 1) is how far down the picture the blend runs before it is all the bottom color. |
-| `light` | The baked sun: where it is, how much light reaches everywhere, how dark shadows are. |
+| `light` | The baked sun: where it is, how much light reaches everywhere, how dark shadows are, and three painted touches that are on unless set to 0: `ramp` (shade turns cool violet, full sun warm yellow), `crevice` (corners and cracks darken) and `wear` (sharp edges lighten). |
 | `look` | Dither, glow, outline, edge lines. |
 | `camera` | Where the view starts, and optionally a `swing`: degrees (0 to 60) it rocks to either side, once a loop, as the scene plays. |
 | `bones` | Things that move, each with the point it turns about. Parts with no bone stand still. |
-| `parts` | A shape, a paint, and optionally a bone, `glow` or `noShadow`. |
+| `parts` | A shape, a paint, and optionally a bone, `glow`, `noShadow`, or `grime` (a color that gathers in its corners and cracks, as moss or soot). |
 | `moves` | spin, sway, bob, drift, pulse. Each names a bone and a whole number of `times` per loop; a bone takes up to six. |
 | `lights` | Up to four live lights, which can flicker or go round a circle. |
+| `air` | What hangs in the air: `haze` (far things fade toward a color), `mist` (low banks that drift), `shafts` (beams of light that light what they land on) and `specks` (swarms of `dust`, `embers`, `rain`, `snow`, `fireflies` or `bubbles`, each speck moving on its own). |
 
 Shapes: `sphere`, `ball` (stretched), `box`, `cylinder` (can taper), `cone` (a round-ended stick), `ring`, `roof`, and `join`, `cut`, `rough` to combine them.
 
@@ -33,7 +34,7 @@ Paints: a color, or `bands`, `bricks`, `hex` (honeycomb, scales, paving), `speck
 2. **Paint in palette colors.** Baked light darkens a color, and the picture then snaps to the nearest palette color. So the palette needs a darker step for each main color (three or four greens, not one), and neutral grays if there is stone. Without them, shade snaps to something odd, like brown.
 3. **Glow is for light sources.** `glow: true` parts take no light and spill light on their neighbors: flames, lamps, windows, stars, the moon. Small bright things that must stay readable (flowers, birds) can use it too.
 4. **Every move loops.** `times` is a whole number, so the scene repeats exactly. Use different `times` and `phase` on similar things (trees, fireflies) so they don't move in step.
-5. **Particles are parts on their own bones.** Smoke, sparks and bubbles are small parts, each on a bone with a `drift` move, with `phase` spread from 0 to 1.
+5. **Particles: use `air.specks` first.** A swarm of rain, snow, embers, dust, fireflies or bubbles is one line, and each speck gets its own bone and path. For a few particles with a path of their own (smoke from one chimney), use small parts, each on a bone with a `drift` move, with `phase` spread from 0 to 1.
 6. **A bone turns about its `at`.** Put it at the hinge: the hub of a wheel, the foot of a tree. A child bone (`parent`) rides its parent, as a wing rides a circling bird.
 7. **Join only what is close together.** A `join` is searched as one box, so joining far-apart shapes (every star in the sky) is slow. Make them separate parts.
 8. **A cone has round ends.** It reaches `r` past both ends. For a flat-bottomed cone (a pine tier, a spire) use a `cylinder` with a small `rTop`.
@@ -48,7 +49,8 @@ The dragon scene (`scenes/dragon.ts`) follows a few habits that make a scene rea
 - **Few hues.** A dark ramp for the setting, one hue ramp for the subject, and two or three steps of a warm accent used only on light sources.
 - **One big subject.** Build it from many small parts (the dragon is about 140, mostly cones) and let it fill the frame.
 - **A chain of bones for anything that bends.** Each neck bone has the one before as its `parent` and sways a few degrees; the turns add up along the chain, so the head sweeps wide while each joint barely moves. A jaw is a child of the head with one `sway`.
-- **Embers or dust.** A dozen or so tiny `glow` parts with slow `drift` moves give the air depth.
+- **Embers or dust.** A swarm in `air.specks` gives the air depth, and a `haze` in the backdrop's darkest color pushes the back of the scene away.
+- **Mist and beams are light touches.** Mist is a faint layer over what is behind it, so it tints the ground under it toward its own color: keep `thick` low and its color close to what it lies on (pale over water), or it turns a scene muddy. A shaft only lights what it lands on, so aim it at a floor or ground.
 - **Line a big dark body.** A part is one layer of blobs, and a little of what is behind shows through it: bright things behind a dark part spoil it. Put the same shape, a little smaller, inside it on a still bone of its own (parts on one bone drop cells buried in each other), in a dark color, with `noShadow`.
 - **Small parts cast no shadow.** Mark fronds, petals, legs and the like `noShadow`: every shadow caster is checked for every lit cell, so a hundred small ones double the build time for shadows nobody sees.
 - **A shade for every hue.** A color in shadow snaps to the nearest palette color, which is a gray if its own hue has no darker step: give each hue at least two steps. A `glow` part whose color is already pale goes white: fine for a spark or a bubble, but glow anything that should keep its color (a crystal, a lamp) in a saturated middle color.
