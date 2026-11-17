@@ -19,7 +19,7 @@ export const EXPERIMENTS_INTRO = "Small tools built from the same blobs as the l
 
 /**
  * The splat experiments, newest first: the Experiments page, the front page and the menu (the footer lists only `NEWEST_EXPERIMENTS`).
- * `needs` is what the browser must have. `published` is the day it first went live and `updated` the day it last changed in a way a
+ * `needs` is what the browser must have, `tags` the kinds it is (`TAGS`, the Experiments page's filter; every experiment has at least one). `published` is the day it first went live and `updated` the day it last changed in a way a
  * visitor would see (a new scene, a new feature), both as YYYY-MM-DD; site-wide work such as a new layout is not an update. A new
  * experiment goes first, with both dates the same.
  */
@@ -29,6 +29,7 @@ export const EXPERIMENTS = [
     title: 'Shape Shifter',
     url: '/experiments/shape-shifter/',
     cover: '/covers/shape-shifter.webp',
+    tags: ['creatures', 'watch'],
     needs: 'WebGPU or WebGL 2',
     published: '2026-11-16',
     updated: '2026-11-16',
@@ -39,6 +40,7 @@ export const EXPERIMENTS = [
     title: 'Pixel Diorama',
     url: '/experiments/pixel-diorama/',
     cover: '/covers/pixel-diorama.webp',
+    tags: ['pixel', 'tool'],
     needs: 'WebGPU or WebGL 2',
     published: '2026-11-15',
     updated: '2026-11-17',
@@ -49,6 +51,7 @@ export const EXPERIMENTS = [
     title: 'Scan Studio',
     url: '/experiments/scan-studio/',
     cover: '/covers/scan-studio.webp',
+    tags: ['tool'],
     needs: 'WebGPU or WebGL 2',
     published: '2026-11-12',
     updated: '2026-11-12',
@@ -59,6 +62,7 @@ export const EXPERIMENTS = [
     title: 'Dungeon Run',
     url: '/experiments/dungeon-run/',
     cover: '/covers/dungeon-run.webp',
+    tags: ['game', 'creatures'],
     needs: 'WebGPU or WebGL 2',
     published: '2026-11-12',
     updated: '2026-11-17',
@@ -69,6 +73,7 @@ export const EXPERIMENTS = [
     title: 'Clockwork',
     url: '/experiments/clockwork/',
     cover: '/covers/clockwork.webp',
+    tags: ['watch'],
     needs: 'WebGPU or WebGL 2',
     published: '2026-11-12',
     updated: '2026-11-12',
@@ -79,6 +84,7 @@ export const EXPERIMENTS = [
     title: 'Forest Walk',
     url: '/experiments/forest-walk/',
     cover: '/covers/forest-walk.webp',
+    tags: ['game', 'creatures'],
     needs: 'WebGPU or WebGL 2',
     published: '2026-11-11',
     updated: '2026-11-17',
@@ -89,6 +95,7 @@ export const EXPERIMENTS = [
     title: 'Splat Creatures',
     url: '/experiments/creature/',
     cover: '/covers/splat-creatures.webp',
+    tags: ['creatures', 'tool', 'pixel'],
     needs: 'WebGPU or WebGL 2',
     published: '2026-11-11',
     updated: '2026-11-16',
@@ -99,6 +106,7 @@ export const EXPERIMENTS = [
     title: 'Fit a Picture',
     url: '/experiments/fit-a-picture/',
     cover: '/covers/fit-a-picture.webp',
+    tags: ['watch'],
     needs: 'any modern browser',
     published: '2026-11-10',
     updated: '2026-11-10',
@@ -109,6 +117,7 @@ export const EXPERIMENTS = [
     title: 'Splat to Sprite',
     url: '/experiments/splat-to-sprite/',
     cover: '/covers/splat-to-sprite.webp',
+    tags: ['pixel', 'tool'],
     needs: 'WebGL 2',
     published: '2026-11-10',
     updated: '2026-11-10',
@@ -117,6 +126,19 @@ export const EXPERIMENTS = [
 ] as const
 
 export type Experiment = (typeof EXPERIMENTS)[number]
+
+/** The kinds of experiment, in the order the Experiments page's filter offers them. */
+export const TAGS = [
+  { id: 'game', label: 'Games' },
+  { id: 'creatures', label: 'Creatures' },
+  { id: 'pixel', label: 'Pixel art' },
+  { id: 'tool', label: 'Tools' },
+  { id: 'watch', label: 'To watch' },
+] as const
+export type Tag = (typeof TAGS)[number]['id']
+export const isTag = (s: string | null): s is Tag => TAGS.some((t) => t.id === s)
+/** The experiments of one kind, or all of them, in the list's order. */
+export const tagged = (list: readonly Experiment[], tag: Tag | null): Experiment[] => (tag ? list.filter((e) => (e.tags as readonly string[]).includes(tag)) : [...list])
 
 /** A card's title link on the Experiments page (shared with its prerendered HTML): it covers the whole card, and the focus ring goes round the card with it. */
 export const CARD_LINK = '-mt-2 font-display text-2xl text-ink no-underline after:absolute after:inset-0 after:rounded-2xl hover:text-accent focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-accent'

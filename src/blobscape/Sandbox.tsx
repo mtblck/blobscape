@@ -13,11 +13,13 @@ import { Viewport, type ToolHandlers } from './Viewport.tsx'
 import { drawBones, drawCenters, drawOutlines, themeColor, toScreen } from './overlay.ts'
 import { History } from './history.ts'
 import { takeHandOff } from './handoff.ts'
-import { STILL, actorAt, actorBlobs, actorBones, detailsOf, freezeInto, makeActor, poseAll, remake, type Actor } from './actors.ts'
+import { GAZES, ROAM, STILL, actorAt, actorBlobs, actorBones, canLook, canRoam, detailsOf, freezeInto, makeActor, poseAll, remake, type Actor } from './actors.ts'
 import { CREATURES } from './creature/fromScenes.ts'
 import { PROPS } from './props.ts'
 import type { Creature as Body } from '../splat-engine/body.ts'
 import { href } from './routes.ts'
+import { GlbError, readRiggedGlb, writeRiggedGlb, type Rigged } from '../splat-engine/glb.ts'
+import { fileSpecies, sceneRig, splitScene } from './sceneFile.ts'
 
 type ToolId = 'orbit' | 'add' | 'spray' | 'select' | 'lasso' | 'move' | 'erase'
 const TOOLS: { id: ToolId; name: string; note: string }[] = [
@@ -39,7 +41,7 @@ const STARTS = [
 const SWATCHES = ['#e5484d', '#f2a65a', '#f5d90a', '#30a46c', '#3e9be0', '#8e4ec6', '#f4ede1', '#2b2620']
 const OUTLINE_LIMIT = 1500
 const SELECT_OUTLINES = 3000
-const FILE_TYPES = '.ply,.spz,.splat,.ksplat,.sog'
+const FILE_TYPES = '.ply,.spz,.splat,.ksplat,.sog,.glb'
 const PLAY_SECONDS = 2.5
 const MAX_ACTORS = 8
 /** What the Creatures tab can add: the zoo, then things from the other experiments (a slime, the watch). */
@@ -50,11 +52,18 @@ const cap = (s: string) => s[0].toUpperCase() + s.slice(1)
 const aOr = (s: string) => `${/^[aeiou]/i.test(s) ? 'an' : 'a'} ${s}`
 const kilo = (n: number) => (n >= 1000 ? `${n / 1000}k` : String(n))
 
-/** Where an effect works from: the middle, size and floor of what it acts on. */
-function effectFrame(b: Blobs, sel: Selection | null): EffectFrame {
-  const bb = bounds(b, sel)
+/** Where an effect works from: the middle, size and floor of what it acts on (with any creatures, each as the box it stands in). */
+function effectFrame(b: Blobs, sel: Selection | null, actors: readonly Actor[] = []): EffectFrame {
+  const bb = bounds(b, sel) ?? (actors.length ? { lo: [Infinity, Infinity, Infinity], hi: [-Infinity, -Infinity, -Infinity] } : null)
   if (!bb) return { center: [0, 0.5, 0], radius: 1, floor: 0 }
-  const { lo, hi } = bb
+  const lo = [...bb.lo], hi = [...bb.hi]
+  for (const a of actors) {
+    // Walking about, it may be anywhere in its disc
+    const r = a.height * (0.5 + a.roam)
+    lo[0] = Math.min(lo[0], a.at[0] - r); hi[0] = Math.max(hi[0], a.at[0] + r)
+    lo[1] = Math.min(lo[1], a.at[1]); hi[1] = Math.max(hi[1], a.at[1] + a.height)
+    lo[2] = Math.min(lo[2], a.at[2] - r); hi[2] = Math.max(hi[2], a.at[2] + r)
+  }
   return {
     center: [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2],
     radius: Math.max(0.05, Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2),
@@ -127,6 +136,8 @@ export function Sandbox() {
   const [showRig, setShowRig] = useState<ShowRig>('blobs')
   const showRef = useRef(showRig)
   showRef.current = showRig
+  const orbitRef = useRef(orbit)
+  orbitRef.current = orbit
   const clocks = useRef(new Map<number, number>())
   // Every creature as drawn this frame, one after another, and where each starts
   const drawn = useRef(new Blobs())
@@ -202,6 +213,8 @@ export function Sandbox() {
         return
       }
       const bytes = await file.arrayBuffer()
+      // A rigged .glb (a saved sandbox scene, or a creature from Splat Creatures) opens live
+      if (/\.glb$/i.test(file.name)) { openRigged(new Uint8Array(bytes), file.name); return }
       decoded = true
       const { blobs: b, step: n, dropped } = await readSplatFile(bytes, file.name, maxBlobs)
       if (!b.count) throw new Error('empty')
@@ -216,7 +229,7 @@ export function Sandbox() {
     } catch (err) {
       console.warn(err)
       setMessage('')
-      const why = err instanceof ImportError ? err.message : err instanceof RangeError ? 'This file is too big for this device.' : 'The sandbox reads Gaussian splat files: .ply, .spz, .splat, .ksplat and .sog.'
+      const why = err instanceof GlbError ? `It isn't a rigged splat .glb the sandbox can read: ${err.message}.` : err instanceof ImportError ? err.message : err instanceof RangeError ? 'This file is too big for this device.' : 'The sandbox reads Gaussian splat files: .ply, .spz, .splat, .ksplat and .sog, and rigged splat .glb files.'
       // Spark's decoder can stop working after a file it chokes on; checked files never get that far
       const stuck = decoded && !(err instanceof ImportError && (err.kind === 'mesh' || (err.kind === 'damaged' && /header/.test(err.message))))
       setError(`Couldn't open ${file.name}. ${why}${stuck ? ' If other files stop opening too, reload the page.' : ''}`)
@@ -238,6 +251,61 @@ export function Sandbox() {
     setDragOver(false)
     const f = ev.dataTransfer.files[0]
     if (f) void openFile(f)
+  }
+
+  /**
+   * A rigged .glb: a saved sandbox scene comes back as its scene and its
+   * creatures; any other (one from Splat Creatures) joins the scene as one
+   * creature. Creatures past the sandbox's limits are frozen into the scene.
+   */
+  const openRigged = (bytes: Uint8Array, name: string) => {
+    const r = readRiggedGlb(bytes)
+    const split = splitScene(r)
+    const parts: Rigged[] = split ? split.parts : [{ ...r, name: r.name || name.replace(/\.glb$/i, '') }]
+    const scene = split ? split.scene : blobsRef.current.clone()
+    const list: Actor[] = split ? [] : [...actorsRef.current]
+    let frozen = 0
+    for (const part of parts) {
+      if (list.length >= MAX_ACTORS || actorBlobs(list) + part.blobs.count > maxActorBlobs) {
+        for (let i = 0; i < part.blobs.count; i++) scene.push(part.blobs.get(i))
+        frozen++
+        continue
+      }
+      const sp = fileSpecies(part, part.name || 'creature')
+      const a = makeActor(sp, { at: [0, 0, 0], height: 1, move: sp.moves.length ? undefined : STILL })
+      // Its rest pose is already where it stood: placed as it is
+      list.push({ ...a, at: a.rest.foot, height: a.rest.height })
+    }
+    if (scene.count > maxBlobs) throw new ImportError('too-big', `That scene has ${scene.count.toLocaleString()} blobs; the sandbox holds up to ${maxBlobs.toLocaleString()} here.`)
+    history.current.record(blobsRef.current, sourceRef.current, actorsRef.current)
+    for (const a of list) if (!clocks.current.has(a.key)) clocks.current.set(a.key, 0)
+    replace(scene, split ? name : sourceRef.current)
+    setActors(list)
+    if (list.length) setCurrentKey(list[list.length - 1].key)
+    frameNext.current = true
+    const made = list.length - (split ? 0 : actorsRef.current.length)
+    const kept = frozen ? `; ${frozen === 1 ? 'one creature' : `${frozen} creatures`} didn't fit as live creatures here, so ${frozen === 1 ? 'it was' : 'they were'} frozen into the scene` : ''
+    setMessage(split ? `Opened ${name}: ${scene.count.toLocaleString()} scene blobs and ${made === 1 ? 'a creature' : `${made} creatures`}${kept}` : `Added ${parts[0].name} from ${name}${kept}`)
+  }
+
+  /** The scene and its creatures as one rigged-splat .glb that opens here again and on Splat Creatures. */
+  const exportGlb = () => {
+    try {
+      const r = sceneRig(blobsRef.current, actorsRef.current, (a) => clocks.current.get(a.key) ?? 0, gazeAt)
+      const bytes = writeRiggedGlb(r)
+      const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'model/gltf-binary' }))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${source.replace(/\.[^.]+$/, '').replace(/[^\w-]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'blobscape'}-scene.glb`
+      document.body.append(a)
+      a.click()
+      a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 60_000)
+      const roaming = actorsRef.current.some((x) => x.roam > 0) ? '. Creatures walking about are saved standing on their spots' : ''
+      setMessage(`Saved ${r.blobs.count.toLocaleString()} blobs on ${r.skeleton.count} bones as a rigged .glb${roaming}`)
+    } catch (err) {
+      setError(`Couldn't save the .glb: ${err instanceof Error ? err.message : String(err)}. Remove or freeze a creature and try again.`)
+    }
   }
 
   const exportPly = () => {
@@ -520,11 +588,14 @@ export function Sandbox() {
   const fx = effect ? EFFECTS.find((e) => e.id === effect)! : null
   const onSelection = target === 'selection'
   const fxCount = !effect ? 0 : onSelection ? sel.count : blobs.count
+  // On the whole scene, an effect moves the creatures too (as they stand: freezing one keeps it)
+  const fxCreatures = !effect || onSelection ? 0 : actorCount
   const fxFrame = useMemo(
-    () => effectFrame(blobsRef.current, onSelection ? selRef.current : null),
-    // The blobs and selection are mutable: their version numbers are what change
+    () => effectFrame(blobsRef.current, onSelection ? selRef.current : null, onSelection ? [] : actors),
+    // The blobs and selection are mutable: their version numbers are what change. The creatures count
+    // by where they stand, not where they are this frame, so the effect doesn't swim with them
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [version, selVersion, onSelection],
+    [version, selVersion, onSelection, actors],
   )
   const params = (a = amount): EffectParams | null => (effect ? { ...fxFrame, kind: effect, amount: a, time: time.current } : null)
 
@@ -546,10 +617,10 @@ export function Sandbox() {
   }, [ordered, orderKey])
 
   // The latest effect settings, for the animation loop to read without restarting
-  const live = useRef({ params, fxCount })
-  live.current = { params, fxCount }
+  const live = useRef({ params, fxCount, fxCreatures })
+  live.current = { params, fxCount, fxCreatures }
   // Until the selection is first on the GPU, the first fxCount slots are the wrong blobs: hold the effect back
-  useEffect(() => { void view?.setEffect(params(), ordered && lastOrder.current !== orderKey ? 0 : fxCount) })
+  useEffect(() => { void view?.setEffect(params(), ordered && lastOrder.current !== orderKey ? 0 : fxCount, fxCreatures) })
 
   const chooseEffect = (id: EffectId | null) => {
     setEffect(id)
@@ -568,7 +639,7 @@ export function Sandbox() {
       if (fx.loops) {
         time.current += dt
         const p = live.current.params()
-        if (p) void view.setEffect(p, live.current.fxCount)
+        if (p) void view.setEffect(p, live.current.fxCount, live.current.fxCreatures)
       } else {
         const a = Math.min(1, (now - t0) / 1000 / PLAY_SECONDS)
         setAmount(a)
@@ -588,14 +659,21 @@ export function Sandbox() {
     edit((b) => bakeEffect(b, p, order, fxCount))
     setRunning(false)
     setEffect(null)
-    setMessage(`${fx!.name} made permanent`)
+    setMessage(`${fx!.name} made permanent${fxCreatures ? '. The creatures are as they were: freeze one first to keep an effect on it' : ''}`)
   }
 
   // --- creatures ---------------------------------------------------------------
+  /** Where a creature looks: the camera, or the middle of the view. */
+  const gazeAt = (a: Actor): Vec3 => {
+    const { target, distance, azimuth, elevation } = orbitRef.current
+    if (a.gaze === 'middle') return target
+    const az = (azimuth * Math.PI) / 180, el = (Math.max(-89, Math.min(89, elevation)) * Math.PI) / 180
+    return [target[0] + distance * Math.sin(az) * Math.cos(el), target[1] + distance * Math.sin(el), target[2] + distance * Math.cos(az) * Math.cos(el)]
+  }
   /** Poses every creature at its own clock and sends the layer to the view. */
   const drawActors = useCallback(() => {
     const list = actorsRef.current
-    starts.current = poseAll(list, (a) => clocks.current.get(a.key) ?? 0, drawn.current, scratch.current)
+    starts.current = poseAll(list, (a) => clocks.current.get(a.key) ?? 0, drawn.current, scratch.current, gazeAt)
     if (!view) return
     void view.syncLayer(list.length && showRef.current !== 'bones' ? drawn.current : null)
     view.invalidate(2)
@@ -607,6 +685,9 @@ export function Sandbox() {
     if (frameNext.current) { frameNext.current = false; setOrbit((o) => ({ ...o, ...frameAll() })) }
   }, [drawActors, actors, showRig]) // eslint-disable-line react-hooks/exhaustive-deps
   const anyActors = actors.length > 0
+  // A creature watching you, or the middle of the view, follows the camera even when it's still
+  const watching = actors.some((a) => a.gaze !== 'ahead')
+  useEffect(() => { if (watching) drawActors() }, [orbit, watching, drawActors])
   useEffect(() => {
     if (!view || !playing || !anyActors) return
     let raf = 0, prev = performance.now()
@@ -618,7 +699,7 @@ export function Sandbox() {
       prev = now
       const list = actorsRef.current
       for (const a of list) clocks.current.set(a.key, (clocks.current.get(a.key) ?? 0) + dt * a.speed)
-      if (list.some((a) => a.move !== STILL)) drawActors()
+      if (list.some((a) => a.move !== STILL || a.roam > 0)) drawActors()
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
@@ -723,6 +804,7 @@ export function Sandbox() {
     if (scene.index >= 0 && scene.t < hit.t) return false
     const a = actorsRef.current[hit.index]
     const g = groundAt(x, y, a.at[1])
+    // Its spot keeps its distance from the pointer, so one walking about carries on round wherever it's dropped
     actorGrab.current = { key: a.key, y: a.at[1], dx: g ? a.at[0] - g[0] : 0, dz: g ? a.at[2] - g[1] : 0, recorded: false }
     setCurrentKey(a.key)
     return true
@@ -747,7 +829,7 @@ export function Sandbox() {
   // --- overlay -----------------------------------------------------------------
   const overlay = (ctx: CanvasRenderingContext2D, lens: Lens) => {
     const b = blobsRef.current
-    if (showRig !== 'blobs') for (const a of actorsRef.current) drawBones(ctx, actorBones(a), lens, themeColor('accent', ctx.canvas))
+    if (showRig !== 'blobs') for (const a of actorsRef.current) drawBones(ctx, actorBones(a, clocks.current.get(a.key) ?? 0), lens, themeColor('accent', ctx.canvas))
     if (xray) {
       if (b.count <= OUTLINE_LIMIT) drawOutlines(ctx, b, lens, { sigmas: [2] })
       else drawCenters(ctx, b, lens, themeColor('ink'))
@@ -852,7 +934,7 @@ export function Sandbox() {
             tool={handlers}
             overlay={overlay}
             takeSync={takeSync}
-            label={`Sandbox scene with ${blobs.count.toLocaleString()} blobs${actors.length ? ` and ${actors.length === 1 ? 'a' : actors.length} creature${actors.length === 1 ? '' : 's'}: ${actors.map((a) => a.species.name).join(', ')}` : ''}. ${tool === 'move' ? `With the Move tool, the arrow keys slide the selection${actors.length ? `, or with nothing selected walk the ${current.species.name}` : ''} (Shift for bigger steps)` : 'Drag or use the arrow keys to orbit'}, plus and minus to zoom${toolKeyNote[tool] ?? ''}.`}
+            label={`Sandbox scene with ${blobs.count.toLocaleString()} blobs${actors.length ? ` and ${actors.length === 1 ? 'a' : actors.length} creature${actors.length === 1 ? '' : 's'}: ${actors.map((a) => a.species.name + (a.roam > 0 ? ' walking about' : '')).join(', ')}` : ''}. ${tool === 'move' ? `With the Move tool, the arrow keys slide the selection${actors.length ? `, or with nothing selected walk the ${current.species.name}` : ''} (Shift for bigger steps)` : 'Drag or use the arrow keys to orbit'}, plus and minus to zoom${toolKeyNote[tool] ?? ''}.`}
             home={() => ({ ...frameAll(), azimuth: 30, elevation: 22 })}
             hint={coarse ? (tool === 'orbit' ? 'drag to orbit · pinch to zoom' : 'pinch to zoom · pick Look to orbit') : tool === 'orbit' ? 'drag to orbit · scroll to zoom' : 'right-drag to orbit · scroll to zoom'}
           >
@@ -954,7 +1036,7 @@ export function Sandbox() {
                 label: 'Creatures',
                 summary: actors.length ? `${actors.length} added` : 'None',
                 content: (
-                  <Panel note="Creatures from Splat Creatures, a slime from Dungeon Run and the watch from Clockwork, moving in your scene. Drag one with the Move tool (or, with nothing selected, use the arrow keys on the view) to put it somewhere else. Brushes, selections and effects leave them alone until you freeze one into ordinary blobs.">
+                  <Panel note="Creatures from Splat Creatures, a slime from Dungeon Run and the watch from Clockwork, moving in your scene. Drag one with the Move tool (or, with nothing selected, use the arrow keys on the view) to put it somewhere else. Brushes and selections leave them alone until you freeze one into ordinary blobs. An effect on the whole scene moves them too, but only on screen: freeze one to keep it.">
                     <Field label="Add">
                       <div className="flex flex-wrap gap-1.5" data-testid="add-creature">
                         {ADDABLE.map((sp) => <Button small key={sp.id} aria-label={`Add ${aOr(sp.name)}`} onClick={() => addActor(sp)} disabled={actors.length >= MAX_ACTORS || actorCount + detailsOf(sp)[0] > maxActorBlobs}>{cap(sp.name)}</Button>)}
@@ -979,6 +1061,19 @@ export function Sandbox() {
                             <Chip active={current.move === STILL} onClick={() => tweak(current.key, (a) => ({ ...a, move: STILL }))}>Still</Chip>
                           </div>
                         </Field>
+                        {canRoam(current) && (
+                          <div>
+                            <Toggle label="Walk about" checked={current.roam > 0} onChange={(on) => tweak(current.key, (a) => ({ ...a, roam: on ? ROAM : 0 }))} />
+                            {current.roam > 0 && <Slider label="How far" value={current.roam} min={1} max={8} step={0.25} onChange={(v) => tweak(current.key, (a) => ({ ...a, roam: v }), 'roam')} format={(v) => `${v.toFixed(1)} × its height`} />}
+                          </div>
+                        )}
+                        {canLook(current) && (
+                          <Field label="Looks at">
+                            <div className="flex flex-wrap gap-1.5">
+                              {GAZES.map((g) => <Chip key={g.id} active={current.gaze === g.id} onClick={() => tweak(current.key, (a) => ({ ...a, gaze: g.id }))}>{g.label}</Chip>)}
+                            </div>
+                          </Field>
+                        )}
                         <Slider label="Speed" value={current.speed} min={0.1} max={2} step={0.05} onChange={(v) => tweak(current.key, (a) => ({ ...a, speed: v }), 'speed')} format={(v) => `×${v.toFixed(2)}`} />
                         <Slider label="Size" value={Math.log2(current.height)} min={-5} max={4} step={0.05} onChange={(v) => tweak(current.key, (a) => ({ ...a, height: 2 ** v }), 'size')} format={(v) => `${(2 ** v).toFixed(2)} tall`} />
                         <Slider label="Facing" value={((current.yaw % 360) + 360) % 360} min={0} max={359} step={1} onChange={(v) => tweak(current.key, (a) => ({ ...a, yaw: v }), 'facing')} format={(v) => `${Math.round(v)}°`} />
@@ -1057,10 +1152,11 @@ export function Sandbox() {
                         <div className="flex flex-wrap gap-2">
                           <Button small onClick={() => { if (!busy) fileInput.current?.click() }} aria-disabled={busy}>{busy ? 'Opening…' : 'Open a splat file…'}</Button>
                           <Button small onClick={exportPly} disabled={!blobs.count && !actors.length}>Save as .ply</Button>
+                          <Button small onClick={exportGlb} disabled={!blobs.count && !actors.length}>Save as rigged .glb</Button>
                         </div>
                         <input ref={fileInput} type="file" accept={FILE_TYPES} className="sr-only" tabIndex={-1} aria-hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void openFile(f) }} />
                         <p className="text-xs text-ink-faint">
-                          .ply, .spz, .splat, .ksplat or .sog, or drop one on the view. It stays on your device. Scenes over {maxBlobs.toLocaleString()} blobs are thinned to fit. Saved files open in most splat viewers.
+                          .ply, .spz, .splat, .ksplat, .sog or a rigged .glb, or drop one on the view. It stays on your device. Scenes over {maxBlobs.toLocaleString()} blobs are thinned to fit. A .ply opens in most splat viewers; a rigged .glb keeps the creatures moving and opens here again and on Splat Creatures.
                         </p>
                         {error && <p className="text-sm text-accent-ink">{error}</p>}
                         <Toggle label="Turn captures the right way up on opening" checked={upright} onChange={setUpright} />

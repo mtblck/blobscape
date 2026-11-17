@@ -22,7 +22,7 @@ New since the lessons first went up: Feet on the ground walks the elf over a dir
 
 ### Sandbox
 
-Place blobs and shapes, and add creatures (fox, frog, elf, dragon, monsters, a slime, a watch) that move, then freeze them into the scene.
+Place blobs and shapes, and add creatures (fox, frog, elf, dragon, monsters, a slime, a watch) that move, then freeze them into the scene. A creature can walk about: switch it on and it wanders round its spot, turning, walking and resting. It can also look at you, or at the middle of the view, turning its head as you move round it. Effects on the whole scene (explode, melt, wind...) now move the creatures too. Save the whole scene, creatures and all, as a rigged .glb: it opens here again with every creature still moving, and on Splat Creatures as one model.
 
 ### Experiments (9)
 
@@ -35,6 +35,8 @@ Place blobs and shapes, and add creatures (fox, frog, elf, dragon, monsters, a s
 - **Scan Studio**: clean up and relight a phone splat scan.
 - **Fit a Picture**: train 2D blobs to match a picture.
 - **Splat to Sprite**: turn a splat into a pixel sprite sheet.
+
+The Experiments page lists them like posts, newest or oldest first, and can show one kind at a time: games, creatures, pixel art, tools, or ones to watch.
 
 ### The engine
 
