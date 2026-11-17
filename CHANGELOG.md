@@ -6,7 +6,7 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 
 ## [Unreleased]
 
-- The support button opens two ways to support: Buy me a coffee (Ko-fi) and Star on GitHub.
+- The support button opens two ways to support: Buy me a coffee (Ko-fi) and Star on GitHub, in a plain card.
 
 - A simpler header: Engine opens a list with its overview, the docs, the file spec and the package on npm and GitHub; the theme has its own button; and wide screens no longer have a Menu button. The support button is on every page, as a small circle where a page has controls. The engine page has a Read the docs button at the top.
 
