@@ -390,6 +390,18 @@ export function LessonGlyph({ id }: { id: string }) {
         <path d="M 33 30 C 60 33 80 33 104 30" stroke={COLORS.white} strokeWidth="1" fill="none" opacity="0.9" />
         {[[40, 50], [64, 50], [88, 50]].map(([x, y], k) => <rect key={k} x={x} y={y - 1} width="12" height="12" fill={COLORS.white} opacity={k === 1 ? 0.15 : 0.7} />)}
       </>)
+    case 'first-creature':
+      return g(<>
+        {/* A slug of blobs, its tail curving off to one side along its bone, beside a pair of code brackets */}
+        <Blob x={74} y={42} rx={22} ry={13} r={0} c="orange" />
+        <Blob x={92} y={33} rx={10} ry={9} r={0} c="orange" />
+        <Blob x={50} y={46} rx={11} ry={8} r={20} c="orange" />
+        <Blob x={36} y={54} rx={8} ry={5} r={40} c="orange" o={0.85} />
+        <circle cx="95" cy="30" r="1.8" fill="#1d2440" />
+        <path d="M 96 42 L 70 42 L 50 46 L 34 56" stroke={COLORS.cream} strokeWidth="1.2" fill="none" strokeLinecap="round" opacity="0.9" />
+        {[[70, 42], [50, 46]].map(([x, y], k) => <circle key={k} cx={x} cy={y} r="2" fill={COLORS.cream} />)}
+        <path d="M 16 14 L 10 22 L 16 30 M 26 14 L 32 22 L 26 30" stroke={COLORS.sun} strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      </>)
     default:
       return g(null)
   }

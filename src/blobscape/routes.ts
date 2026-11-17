@@ -31,6 +31,7 @@ export const LESSONS = [
   { id: 'floaters', title: 'Floaters and cleanup', summary: 'A rushed capture leaves blobs hanging in the air. Cut them away, and find what no cut can fix.' },
   { id: 'lighting', title: 'Lighting is baked', summary: 'A scan keeps the light it was shot in. Move the lamp, and try three ways to make the scan keep up.' },
   { id: 'shimmer', title: 'Why small blobs shimmer', summary: 'A wire fence in the distance blinks as it moves. Blur it to stop the blinking, and find what the blur costs.' },
+  { id: 'first-creature', title: 'Your first creature', summary: 'A slug of two shapes on two bones, made with the engine in a page of code. Make its tail bend, close the crease, and let it swing.' },
 ] as const
 
 const WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty', 'twenty-one', 'twenty-two', 'twenty-three', 'twenty-four', 'twenty-five']
@@ -42,6 +43,7 @@ export const PARTS = [
   { title: 'One object', from: 0, summary: 'What a blob is, and how thousands of them make a thing you can look at from anywhere.' },
   { title: 'Rigs and 3D models', from: 8, summary: 'Bones that move blobs, a walk cycle and feet that find the ground, a creature that leaves as a model Blender opens, a pufferfish that moves with no bones, and fur.' },
   { title: 'Real things from photos', from: 16, summary: 'Where splats really shine: capturing real objects and places from photos, and what a capture can and can’t do.' },
+  { title: 'Build with the engine', from: 21, summary: 'The engine behind the experiments, as code you can take away: a creature on bones, a scene written as data, and pixel art.' },
 ] as const
 
 /**
@@ -160,6 +162,11 @@ export const LESSON_GOALS: Record<(typeof LESSONS)[number]['id'], Goal[]> = {
     { id: 'calm', label: 'Stop the blinking without bringing the fence closer', hint: 'Keep it at 6 m or more.', where: 'blur', why: 'Blurred to at least a pixel wide, no wire can fall between two pixel middles. Most splat renderers do this to every blob.' },
     { id: 'heavy', label: 'Find what the blur costs far away', hint: 'Compare how much fence each view shows, at 6 m or more.', where: 'blur', why: 'A wire blurred a pixel wide is still drawn as solid as before, so far off it covers twice what it should: thin things go thick.' },
     { id: 'both', label: 'At 7 m or more, keep the blink under 2% and the fence within 5% of what it should cover', hint: 'The blur spreads each blob out. What else would have to change?', where: 'fade', why: 'Fade each blob by as much as the blur spread it and it covers what it should, still too wide to blink. That is Mip-Splatting’s 2D filter.' },
+  ],
+  'first-creature': [
+    { id: 'bend', label: 'Make the tail bend with its bone', hint: 'The bone turns already. Look at what the skin listens to.', where: 'skin', why: 'A blob moves only with the bones its part lists. Turn a bone nobody listens to and nothing happens.' },
+    { id: 'smooth', label: 'Bend the tail hard with no crease where it joins', hint: 'Watch the readout as you change how far a weight spreads.', where: 'skin', why: 'Spread each blob\u2019s weight over both bones near the join and it turns part of the way, so the skin bends instead of folding.' },
+    { id: 'swing', label: 'Let the tail swing behind as the slug turns', where: 'move', why: 'A swing pulls the tail toward its pose loosely instead of setting it, so it lags, overshoots and settles, on top of the move.' },
   ],
   'fuzzy': [
     { id: 'blades', label: 'Give the grass mesh its finest grid, and count the blade tips it keeps', where: 'mesh', why: 'None. A blade is thinner than a grid cell, so the skin can’t close round it and the blades melt into the clump.' },

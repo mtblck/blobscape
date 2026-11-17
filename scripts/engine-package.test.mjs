@@ -39,3 +39,29 @@ test('the package manifest stays unpublishable until Matt says go, and three.js 
   assert.ok(pkg.peerDependencies.three)
   assert.ok(!pkg.dependencies)
 })
+
+test("the engine lessons' take-away code compiles against the package", async () => {
+  const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { execFileSync } = await import('node:child_process')
+  const { lessonCodes } = await import('../src/blobscape/build/codes.ts')
+  const dir = mkdtempSync(resolve(tmpdir(), 'lesson-code-'))
+  try {
+    const codes = lessonCodes()
+    for (const c of codes) writeFileSync(resolve(dir, `${c.name}.ts`), `${c.source}\nexport {}\n`)
+    writeFileSync(resolve(dir, 'tsconfig.json'), JSON.stringify({
+      compilerOptions: {
+        target: 'ES2022', module: 'ESNext', moduleResolution: 'bundler', strict: true, noEmit: true, skipLibCheck: true,
+        allowImportingTsExtensions: true, lib: ['ES2023', 'DOM'], types: [],
+        // the package's entry as source: its own imports (three.js) resolve from the repo
+        paths: { '@blobscape/engine': [resolve(root, 'src/splat-engine/index.ts')] },
+      },
+      files: codes.map((c) => `${c.name}.ts`),
+    }))
+    try {
+      execFileSync(resolve(root, 'node_modules/.bin/tsc'), ['-p', dir], { encoding: 'utf8' })
+    } catch (e) {
+      assert.fail(`the lessons' code doesn't compile:\n${e.stdout}`)
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+})
