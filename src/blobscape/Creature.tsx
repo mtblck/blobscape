@@ -8,7 +8,8 @@ import type { Species } from '../splat-engine/zoo/index.ts'
 import { CREATURES } from './creature/fromScenes.ts'
 import { MAX_SEED, monsterSpecies, newSeed } from '../splat-engine/zoo/monster.ts'
 import { LoadingMark } from '../shared/BlobLoader.tsx'
-import { Button, Chip, Field, Slider } from '../shared/ui.tsx'
+import { Button, Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
+import { Swing } from '../splat-engine/swing.ts'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
 import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitDrag } from './Viewport.tsx'
 import { download, kb } from './files.ts'
@@ -78,6 +79,8 @@ export function Creature() {
   const [move, setMove] = useState<string>(species.moves[0].name)
   const [show, setShow] = useState<Show>('blobs')
   const [speed, setSpeed] = useState(1)
+  /** Tails, ears and cloaks swing after the body as it moves (the files and sheets keep the move as it is). */
+  const [loose, setLoose] = useState(true)
   const [orbit, setOrbit] = useState<Orbit>(species.view)
   const [loaded, setLoaded] = useState<Shown>()
   const [fileNote, setFileNote] = useState<string>()
@@ -181,6 +184,12 @@ export function Creature() {
     setPicked(undefined)
   }, [stage, shown, building]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { stage?.setClip(clip) }, [stage, clip])
+  // the loose parts swing on the creature in view, never one still being cut
+  const swingSpec = loaded ? undefined : shown.species?.swing
+  useEffect(() => {
+    if (!stage || inView.current !== shown.body) return
+    stage.setSwing(loose && swingSpec ? new Swing(shown.body.skeleton, swingSpec) : undefined)
+  }, [stage, shown, building, loose, swingSpec])
   useEffect(() => { stage?.setMorphWeights(morphW) }, [stage, morphW, shown])
   useEffect(() => { stage?.highlight(picked?.bone) }, [stage, picked])
   /** Lights up the bone under a tap, or puts it out when the tap is on the same bone or off the creature. */
@@ -360,6 +369,7 @@ export function Creature() {
                   </div>
                 </Field>
                 <Slider label="Speed" value={speed} min={0.1} max={2} step={0.05} onChange={setSpeed} format={(v) => `×${v.toFixed(2)}`} />
+                {swingSpec && <Toggle label={`Swing the ${swingSpec.parts} as it moves`} checked={loose} onChange={setLoose} />}
                 {!!shown.body.morphs?.length && (
                   <div className="flex flex-col gap-3" data-testid="morph-sliders">
                     <p className="text-xs leading-relaxed text-ink-faint">

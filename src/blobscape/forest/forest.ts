@@ -7,7 +7,8 @@ import { axisAngle, mulQ, rotate, type Skeleton } from '../../splat-engine/rig.t
 import { Steps, type StepBody } from '../../splat-engine/steps.ts'
 import { elfIdle, elfWalk, elfWave, makeElf } from '../../splat-engine/zoo/elf.ts'
 import { ElfCloth } from '../../splat-engine/zoo/elfCloth.ts'
-import { makeFox, trot } from '../../splat-engine/zoo/fox.ts'
+import { FOX_SWING, makeFox, trot } from '../../splat-engine/zoo/fox.ts'
+import { Swing } from '../../splat-engine/swing.ts'
 import { Meadow } from '../../splat-engine/meadow.ts'
 import { makeGround, paintGround, type GroundTile } from './ground.ts'
 import { makePlant, type Plant, type Season } from './plants.ts'
@@ -128,6 +129,8 @@ export class Forest {
   readonly opts: ForestOptions
   /** The elf's cloak and plait, swinging after its body. */
   private readonly cloth: ElfCloth
+  /** The fox's brush, swinging after it (measured at the fox's size here). */
+  readonly foxTail: Swing
 
   constructor(opts: ForestOptions) {
     this.opts = opts
@@ -136,6 +139,8 @@ export class Forest {
     this.fox = makeFox(Math.round(FOX_BLOBS * Math.max(0.5, opts.detail)), 'red')
     const esk = this.elf.skeleton, fsk = this.fox.skeleton
     this.cloth = new ElfCloth(esk)
+    fsk.rootScale = FOX_SIZE
+    this.foxTail = new Swing(fsk, FOX_SWING)
     const ankle = (i: number): [number, number] => [esk.bones[i].head[0], esk.bones[i].head[2]]
     this.elfSteps = new Steps(ELF_LEGS.map((l) => ({ home: ankle(esk.index(l.foot!)) })), this.body(this.walker, 0), ELF_STEPS)
     const hips = fsk.bones[0].head
@@ -347,6 +352,8 @@ export class Forest {
     this.foxDrop = this.ease(this.foxDrop, Math.min(FOX_CROUCH, hipDrop(sk, this.foxLegs, targets)), dt)
     sk.offset[1] -= this.foxDrop
     stepLegs(sk, this.foxLegs, targets)
+    // the brush trails the trot and swings out on a turn
+    this.foxTail.update(sk, dt)
   }
 
   /** Eases the hips toward a new drop: down at once (a leg must reach), back up gently. */

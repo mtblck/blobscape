@@ -5,6 +5,8 @@ import { emptySkin, posedPoint, rotate, type Bone, type Skeleton } from '../rig.
 import { X, Y, Z, aim, conj, dir, env, set, turn } from '../posing.ts'
 import { buildSculpt, flatten, joinBuilt, membrane, sculptToCount, smooth, toCount, type SculptPart, type SculptSpec, type Sculpted } from '../sculpt.ts'
 import { box, cone, cut, displace, ellipsoid, type Shape } from '../voxel.ts'
+import { between, type SwingSpec } from '../swing.ts'
+import type { Capsule } from '../xpbd.ts'
 import type { Species } from './species.ts'
 
 /**
@@ -396,6 +398,36 @@ export function elfWave(sk: Skeleton, t: number) {
   sk.update()
 }
 
+/** Leg tubes for the cloth, a little fatter than the legs (as in `clearCloak`). */
+const CLOTH_LEGS = [['Thigh', 'Shin', 0.11], ['Shin', 'Foot', 0.09]] as const
+
+/** The elf's body as capsules, as posed now, for the cloth to stay out of. */
+function clothBody(sk: Skeleton): Capsule[] {
+  const top = posedPoint(sk, sk.index('head'), [0, 1.73, 0.02])
+  const out: Capsule[] = [between(sk, 'hips', 'chest', 0.1), { a: top, b: top, r: 0.1 }]
+  for (const s of ['l', 'r']) for (const [from, to, r] of CLOTH_LEGS) out.push(between(sk, `${s}${from}`, `${s}${to}`, r))
+  return out
+}
+
+/**
+ * The cloak and plait as cloth (issue #161, `zoo/elfCloth.ts`): each cloak side and the plait is a chain of three
+ * points (top, fold, hem), the cloak's two sides tied at the fold and the hem as one piece of cloth, with a little
+ * give. The body's capsules keep the points out, and `clearCloak` runs after, so no leg ever passes through the cloak
+ * between points.
+ */
+export const ELF_SWING: SwingSpec = {
+  parts: 'cloak and plait',
+  chains: [
+    { bones: ['lCape1', 'lCape2'], follow: [0.004, 0.006], bend: 0.002 },
+    { bones: ['rCape1', 'rCape2'], follow: [0.004, 0.006], bend: 0.002 },
+    { bones: ['hair1', 'hair2'], follow: [0.0025, 0.004], bend: 0.002 },
+  ],
+  ties: [[0, 1, 1, 1, 0.0005], [0, 2, 1, 2, 0.001]],
+  body: clothBody,
+  jump: 0.75,
+  after: clearCloak,
+}
+
 export const ELF: Species = {
   id: 'elf',
   name: 'elf',
@@ -410,4 +442,5 @@ export const ELF: Species = {
     { name: 'idle', label: 'Stand', doing: 'standing and looking round', seconds: 4, fps: 12, pose: elfIdle },
   ],
   view: { target: [0, 0.95, 0], distance: 3.6, azimuth: 30, elevation: 8 },
+  swing: ELF_SWING,
 }

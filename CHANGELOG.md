@@ -8,6 +8,7 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 
 - New experiment, Sand, Snow and Goo: a box of blobs that flow, every one a particle in a small physics simulation. Sand runs into a heap, snow stands until it's hit, goo spreads; pour more in and tap to poke them.
 - Forest Walk: the elf's cloak and plait swing after the body as cloth, trailing when it turns and settling when it stops.
+- Loose parts swing on more creatures: on Splat Creatures the fox's and the dragon's tails, the elf's cloak and plait, and a monster's tail, ears or feelers swing after the body as a move plays (a switch on the Movement tab turns it off; files and sprite sheets keep the move as it is). Forest Walk's fox swings its tail, and Dungeon Run's hero its cloak.
 - Rigged-splat files open in three.js: a loader hands the bones and clips to three's own animation player, and an adapter draws them with Spark.
 
 ## [0.1.0] - 2026-11-17

@@ -1,6 +1,7 @@
 import type { Orbit } from '../../splat-core/view.ts'
 import type { Creature } from '../body.ts'
 import type { Skeleton } from '../rig.ts'
+import type { SwingSpec } from '../swing.ts'
 
 /** One of a creature's moves, as a function of time, recorded into a clip when the creature is made. */
 export interface Move {
@@ -34,4 +35,6 @@ export interface Species {
   view: Orbit
   /** For a made-up monster, the seed that makes it again. */
   seed?: number
+  /** Loose parts (a tail, ears, a cloak) that swing after the body when it's played live (swing.ts); files and sheets keep the move as it is. */
+  swing?: SwingSpec
 }

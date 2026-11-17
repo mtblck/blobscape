@@ -8,6 +8,7 @@ import { Glow, gather, type Want } from './glow.ts'
 import { Patches } from './ground.ts'
 import { TORCHES, flicker, makeFloor, makePillars, makeTorches, makeWalls, poseTorches } from './hall.ts'
 import { makeBolt, makeHero, poseBolt, poseHero, type HeroClock } from './hero.ts'
+import { ElfCloth } from '../../splat-engine/zoo/elfCloth.ts'
 import { COLORS, hideSlime, makeSlime, poseSlime } from './slime.ts'
 
 /**
@@ -80,6 +81,7 @@ export class Dungeon {
     this.game.difficulty = opts.difficulty
     const d = Math.max(0.3, opts.detail)
     this.hero = makeHero(Math.round(HERO_BLOBS * Math.max(0.5, d)), opts.look)
+    this.clock.cloth = new ElfCloth(this.hero.skeleton)
     const live = opts.light === 'live'
     this.torches = makeTorches(d, live)
     const slimes = {} as Record<SlimeKind, Creature[]>
