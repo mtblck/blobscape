@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { LIT_MAX, box, buildVoxels, cone, cut, sphere, union, type VoxelSpec } from './voxel.ts'
+import { LIT_MAX, blend, box, buildVoxels, inkedAt, cylinder, cone, cut, lathe, letterGrid, pixelText, sphere, sweep, union, type VoxelSpec } from './voxel.ts'
 import { posedPoint, axisAngle } from './rig.ts'
 
 const ROOT = { name: 'root', parent: -1, head: [0, 0, 0] as [number, number, number] }
@@ -130,4 +130,195 @@ test('crevice darkens a corner and leaves an open face alone; a beam lights the 
   const lit = buildVoxels(spec({}, [{ from: [0, 1.5, 0.4], to: [0, 0, 0.4], r: 0.2, color: [1, 0.9, 0.5], strength: 1 }]))
   assert.ok(at(lit, 0, 0, 0.4) > at(off, 0, 0, 0.4) + 0.05)
   assert.ok(Math.abs(at(lit, 0, 0, -0.2) - at(off, 0, 0, -0.2)) < 1e-6)
+})
+
+test('a lamp\'s shadow is baked per blob: the floor behind a wall can\'t see it, the open floor can', () => {
+  const b = buildVoxels({
+    bones: [ROOT], spacing: 0.04,
+    parts: [{ shape: box([0, -0.1, 0], [1, 0.1, 1]), color: [0.5, 0.5, 0.5], bone: 'root' }, { shape: box([0, 0.3, 0], [0.6, 0.3, 0.05]), color: [0.5, 0.5, 0.5], bone: 'root' }],
+    lamps: [null, { at: [0, 0.5, 0.6], reach: 1.5 }],
+  })
+  assert.ok(b.seen && b.seen.length === b.blobs.count * 4)
+  const near = (x: number, z: number) => {
+    let best = -1, d = Infinity
+    for (let i = 0; i < b.blobs.count; i++) {
+      const e = Math.hypot(b.blobs.center[i * 3] - x, b.blobs.center[i * 3 + 1], b.blobs.center[i * 3 + 2] - z)
+      if (e < d) { d = e; best = i }
+    }
+    return best
+  }
+  const behind = near(0, -0.3), open = near(0, 0.6)
+  assert.ok(b.seen[behind * 4 + 1] < 40, `behind ${b.seen[behind * 4 + 1]}`)
+  assert.ok(b.seen[open * 4 + 1] > 200, `open ${b.seen[open * 4 + 1]}`)
+  // a gap in the list casts nothing, and the bytes past the lamps stay full
+  assert.equal(b.seen[behind * 4], 255)
+  assert.equal(b.seen[behind * 4 + 3], 255)
+  // without lamps nothing is baked
+  assert.equal(buildVoxels({ bones: [ROOT], spacing: 0.05, parts: [{ shape: sphere([0, 0, 0], 0.3), color: [1, 1, 1], bone: 'root' }] }).seen, undefined)
+})
+
+test('cover: snow on open tops only, moss in the corners first, dust under cover too, and bare parts keep their paint', () => {
+  const spec = (cover?: VoxelSpec['cover'], bare = false): VoxelSpec => ({
+    bones: [ROOT], spacing: 0.04, light: { ambient: 1, shadow: 0 }, cover,
+    parts: [
+      { shape: box([0, -0.1, 0], [1, 0.1, 1]), color: [0.2, 0.2, 0.2], bone: 'root', bare },
+      // a slab held over one end of the floor, and a wall at the back
+      { shape: box([0.6, 0.5, 0.3], [0.3, 0.04, 0.3]), color: [0.2, 0.2, 0.2], bone: 'root' },
+      { shape: box([0, 0.4, -0.75], [1, 0.4, 0.1]), color: [0.2, 0.2, 0.2], bone: 'root' },
+    ],
+  })
+  const red = (b: ReturnType<typeof buildVoxels>, x: number, y: number, z: number) => {
+    let best = -1, d = Infinity
+    for (let i = 0; i < b.blobs.count; i++) {
+      const e = Math.hypot(b.blobs.center[i * 3] - x, b.blobs.center[i * 3 + 1] - y, b.blobs.center[i * 3 + 2] - z)
+      if (e < d) { d = e; best = i }
+    }
+    return b.blobs.color[best * 3] - b.blobs.color[best * 3 + 1]
+  }
+  const C: [number, number, number] = [1, 0, 0]
+  const plain = buildVoxels(spec())
+  assert.ok(Math.abs(red(plain, -0.3, 0, 0.3)) < 1e-6)
+  const snow = buildVoxels(spec({ kind: 'snow', color: C, amount: 0.5 }))
+  assert.ok(red(snow, -0.3, 0, 0.3) > 0.5, 'open floor')
+  assert.ok(red(snow, 0.6, 0.54, 0.3) > 0.5, 'top of the slab')
+  assert.ok(red(snow, 0.6, 0, 0.3) < 0.05, 'floor under the slab')
+  assert.ok(red(snow, 0, 0.4, -0.65) < 0.05, 'face of the wall')
+  const dust = buildVoxels(spec({ kind: 'dust', color: C, amount: 0.6 }))
+  assert.ok(red(dust, 0.6, 0, 0.3) > 0.3, 'dust under the slab')
+  const moss = buildVoxels(spec({ kind: 'moss', color: C, amount: 0.35 }))
+  let corner = 0, open = 0
+  for (let x = -0.9; x < 0.2; x += 0.04) { corner += red(moss, x, 0, -0.63); open += red(moss, x, 0, 0.5) }
+  assert.ok(corner > open + 2, `corner ${corner} open ${open}`)
+  const bare = buildVoxels(spec({ kind: 'snow', color: C, amount: 1 }, true))
+  assert.ok(Math.abs(red(bare, -0.3, 0, 0.3)) < 1e-6)
+})
+
+test('more shapes: a turned vase, a swept tube, blended seams, pixel letters and a letter-grid model', () => {
+  // a vase: wide belly, narrow neck
+  const vase = lathe([0, 0, 0], [[0.2, 0], [0.4, 0.3], [0.15, 0.7], [0.2, 0.8]])
+  assert.ok(vase.sdf(0.3, 0.3, 0) < 0 && vase.sdf(0, 0.3, 0.3) < 0, 'inside the belly, all the way round')
+  assert.ok(vase.sdf(0.3, 0.7, 0) > 0, 'outside the neck')
+  assert.ok(Math.abs(vase.sdf(0.4, 0.3, 0)) < 1e-9, 'on the widest point')
+  assert.ok(vase.sdf(0, 0.9, 0) > 0 && vase.sdf(0, -0.1, 0) > 0)
+  // a tube that bends round a corner and thins
+  const tube = sweep([[0, 0, 0], [1, 0, 0], [1, 1, 0]], 0.2, 0.05)
+  assert.ok(tube.sdf(0.5, 0, 0) < 0 && tube.sdf(1, 0.9, 0) < 0 && tube.sdf(0.5, 0.5, 0) > 0)
+  assert.ok(tube.sdf(1, 0.98, 0.1) > 0, 'thin at the end')
+  // two boxes meeting at a right angle: every blend fills the inside corner, a plain join doesn't
+  const a = box([0, 0.5, 0], [0.1, 0.5, 0.5]), b = box([0.5, 0, 0], [0.5, 0.1, 0.5])
+  const corner: [number, number, number] = [0.13, 0.13, 0]
+  assert.ok(union(a, b).sdf(...corner) > 0)
+  for (const k of ['smooth', 'chamfer', 'stairs'] as const) assert.ok(blend(k, 0.15, [a, b]).sdf(...corner) < 0, k)
+  assert.ok(blend('chamfer', 0.15, [a, b]).sdf(0.6, 0.6, 0) > 0, 'nothing far from the seam')
+  // "HI" 0.5 tall: the H's crossbar is filled, the gap between the letters is not
+  const hi = pixelText([0, 0, 0], 'HI', 0.5, 0.1)
+  const px = 0.1, left = -(7 * px) / 2
+  assert.ok(hi.sdf(left + 1.5 * px, 0, 0) < 0, 'H crossbar')
+  assert.ok(hi.sdf(left + 1.5 * px, 0.2, 0) > 0, 'above the crossbar, between the uprights')
+  assert.ok(hi.sdf(left + 3.5 * px, 0, 0) > 0, 'the gap between letters')
+  assert.ok(hi.sdf(left + 1.5 * px, 0, 0.2) > 0, 'in front of it')
+  const built = buildVoxels({ bones: [ROOT], spacing: 0.02, parts: [{ shape: hi, color: [1, 1, 1], bone: 'root' }] })
+  assert.ok(built.blobs.count > 100)
+  // a little tree: trunk t, leaves l
+  const tree = letterGrid([0, 0, 0], 0.1, [['...', '.t.', '...'], ['...', '.t.', '...'], ['lll', 'lll', 'lll'], ['...', '.l.', '...']])
+  assert.ok(tree.sdf(0, 0.05, 0) < 0 && tree.sdf(0.1, 0.05, 0) > 0 && tree.sdf(0.1, 0.25, 0.1) < 0)
+  assert.equal(tree.letterAt([0, 0.1, 0.05], [0, 0, 1]), 't')
+  assert.equal(tree.letterAt([0.1, 0.3, 0], [0, 1, 0]), 'l')
+  assert.ok(Math.abs(tree.max[1] - 0.4) < 1e-9 && Math.abs(tree.min[0] + 0.15) < 1e-9)
+})
+
+test('ink: a share of 4x4 blocks carry a mark, a big face never repeats, and a part without ink is untouched', () => {
+  const N = 96
+  for (const kind of ['hatch', 'stipple', 'cracks', 'grain', 'tufts', 'scales'] as const) {
+    const mask = (x: number, z: number) => inkedAt({ kind, amount: 0.5 }, x, 0, z, [0, 1, 0], 3)
+    let on = 0, blocks = 0
+    for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) if (mask(x, z)) on++
+    for (let bz = 0; bz < N; bz += 4) for (let bx = 0; bx < N; bx += 4) { let any = false; for (let k = 0; k < 16; k++) any ||= mask(bx + (k & 3), bz + (k >> 2)); if (any) blocks++ }
+    assert.ok(on > 0 && on < N * N * 0.3, `${kind}: ${on} inked`)
+    // about half the blocks; a shifted row can split a mark over two blocks, so allow some slack
+    assert.ok(blocks > N * N / 16 * 0.3 && blocks < N * N / 16 * 0.9, `${kind}: ${blocks} blocks`)
+    // no shift of a block or more (up to 24 cells) either way lines the face up with itself; a mark's own strokes touch, so shorter shifts are left out
+    for (let d = 4; d <= 24; d++) {
+      let sameX = 0, sameZ = 0, total = 0
+      for (let z = 0; z < N - 24; z++) for (let x = 0; x < N - 24; x++) {
+        const m = mask(x, z)
+        if (!m) continue
+        total++
+        if (mask(x + d, z)) sameX++
+        if (mask(x, z + d)) sameZ++
+      }
+      assert.ok(sameX < total * 0.5 && sameZ < total * 0.5, `${kind} repeats every ${d}`)
+    }
+  }
+  const spec = (ink?: { kind: 'cracks'; amount: number }): VoxelSpec => ({ bones: [ROOT], spacing: 0.04, light: { ambient: 1, shadow: 0 }, parts: [{ shape: box([0, 0, 0], [1, 0.1, 1]), color: [0.6, 0.5, 0.4], bone: 'root', ink }] })
+  const plain = buildVoxels(spec()), inked = buildVoxels(spec({ kind: 'cracks', amount: 0.6 }))
+  assert.equal(plain.blobs.count, inked.blobs.count)
+  let darker = 0
+  for (let i = 0; i < plain.blobs.count; i++) if (inked.blobs.color[i * 3] < plain.blobs.color[i * 3] - 0.1) darker++
+  assert.ok(darker > 50 && darker < plain.blobs.count * 0.3, `${darker} of ${plain.blobs.count}`)
+})
+
+test('glass: water mirrors a red post standing in it, shows its depth, and keeps its earth sides when `top`', () => {
+  const spec = (glass?: { see?: number; mirror?: number; top?: boolean }): VoxelSpec => ({
+    bones: [ROOT], spacing: 0.04, light: { ambient: 0.6, shadow: 0 }, eye: [0, 1.2, 3], sky: [[0, 0, 1], [0, 0, 1]],
+    parts: [
+      { shape: box([0, -0.2, 0], [1, 0.2, 1]), color: [0.2, 0.5, 0.6], bone: 'root', glass },
+      { shape: box([0, 0.5, -0.3], [0.15, 0.5, 0.15]), color: [1, 0, 0], bone: 'root' },
+    ],
+  })
+  const near = (b: ReturnType<typeof buildVoxels>, x: number, y: number, z: number) => {
+    let best = -1, d = Infinity
+    for (let i = 0; i < b.blobs.count; i++) {
+      const e = Math.hypot(b.blobs.center[i * 3] - x, b.blobs.center[i * 3 + 1] - y, b.blobs.center[i * 3 + 2] - z)
+      if (e < d) { d = e; best = i }
+    }
+    return [b.blobs.color[best * 3], b.blobs.color[best * 3 + 1], b.blobs.color[best * 3 + 2]]
+  }
+  const plain = buildVoxels(spec()), mirror = buildVoxels(spec({ see: 0, mirror: 0.8, top: true })), clear = buildVoxels(spec({ see: 0.8, mirror: 0, top: true }))
+  // on the water just in front of the post, the mirror line runs back up into it
+  const front: [number, number, number] = [0, 0, 0.1]
+  assert.ok(near(mirror, ...front)[0] - near(mirror, ...front)[1] > near(plain, ...front)[0] - near(plain, ...front)[1] + 0.2, 'red in the water')
+  // out to the side the mirror line meets only sky
+  assert.ok(near(mirror, 0.8, 0, 0.6)[2] > near(plain, 0.8, 0, 0.6)[2] + 0.1, 'sky in the water')
+  // looking in, nothing is met before the line leaves the water: a darker step of its own color
+  assert.ok(near(clear, 0.6, 0, 0.6)[1] < near(plain, 0.6, 0, 0.6)[1] - 0.05, 'deep water is darker')
+  // the sides are earth, not glass
+  assert.deepEqual(near(mirror, 0, -0.2, 1), near(plain, 0, -0.2, 1))
+})
+
+test('bounce, form dabs and focus: a red wall warms the floor by it, strokes run round a trunk, and out of focus is a coarser grid with no holes', () => {
+  const at = (b: ReturnType<typeof buildVoxels>, x: number, y: number, z: number) => {
+    let best = -1, d = Infinity
+    for (let i = 0; i < b.blobs.count; i++) {
+      const e = Math.hypot(b.blobs.center[i * 3] - x, b.blobs.center[i * 3 + 1] - y, b.blobs.center[i * 3 + 2] - z)
+      if (e < d) { d = e; best = i }
+    }
+    return { i: best, d, c: [b.blobs.color[best * 3], b.blobs.color[best * 3 + 1], b.blobs.color[best * 3 + 2]] }
+  }
+  const room = (bounce: number): VoxelSpec => ({
+    bones: [ROOT], spacing: 0.04, light: { ambient: 0.5, shadow: 0, bounce },
+    parts: [{ shape: box([0, -0.1, 0], [1, 0.1, 1]), color: [0.7, 0.7, 0.7], bone: 'root' }, { shape: box([0, 0.5, -0.7], [1, 0.5, 0.1]), color: [1, 0.1, 0.1], bone: 'root' }],
+  })
+  const flat = buildVoxels(room(0)), warm = buildVoxels(room(1))
+  const red = (b: typeof flat, z: number) => { const { c } = at(b, 0, 0, z); return c[0] - c[1] }
+  assert.ok(red(warm, -0.5) > red(flat, -0.5) + 0.05, 'by the wall')
+  assert.ok(red(warm, 0.8) - red(flat, 0.8) < red(warm, -0.5) - red(flat, -0.5), 'less far from it')
+  // strokes round an upright trunk: long along the level line, which is level
+  const trunk = buildVoxels({ bones: [ROOT], spacing: 0.04, parts: [{ shape: cylinder([0, 0], 0, 1, 0.3), color: [0.5, 0.4, 0.3], bone: 'root', strokes: 0.8 }] })
+  const { i } = at(trunk, 0.3, 0.5, 0)
+  assert.ok(trunk.blobs.scale[i * 3] > trunk.blobs.scale[i * 3 + 1] * 1.5)
+  const q = trunk.blobs.quat.subarray(i * 4, i * 4 + 4)
+  // the local x axis, turned into the world: level, and across the face (along z here)
+  const xw = [1 - 2 * (q[1] * q[1] + q[2] * q[2]), 2 * (q[0] * q[1] + q[2] * q[3]), 2 * (q[0] * q[2] - q[1] * q[3])]
+  assert.ok(Math.abs(xw[1]) < 0.05 && Math.abs(xw[2]) > 0.9, JSON.stringify(xw))
+  // focus: a floor with the eye on one corner
+  const floor = (focus?: VoxelSpec['focus']) => buildVoxels({ bones: [ROOT], spacing: 0.04, focus, parts: [{ shape: box([0, -0.2, 0], [1, 0.2, 1]), color: [0.5, 0.5, 0.5], bone: 'root' }] })
+  const all = floor(), eyed = floor({ at: [-0.6, 0, -0.6], r: 0.4 })
+  assert.ok(eyed.blobs.count < all.blobs.count * 0.45, `${eyed.blobs.count} of ${all.blobs.count}`)
+  assert.ok(at(eyed, -0.62, 0, -0.58).d < 0.03, 'fine in focus')
+  // out of focus every point of the top still has a disc within reach of its wider radius
+  for (let x = 0; x < 0.9; x += 0.037) for (let z = 0; z < 0.9; z += 0.041) {
+    const { i: k, d } = at(eyed, x, 0, z)
+    assert.ok(d < eyed.blobs.scale[k * 3] * 1.3, `hole at ${x.toFixed(2)}, ${z.toFixed(2)}`)
+  }
 })

@@ -35,6 +35,11 @@ export class PixelPass {
   private readonly parted = uniform(0)
   /** The art of this frame and of the one before: each frame is drawn into the older of the two. */
   private readonly frames = [0, 1].map(() => new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter, depthBuffer: false }))
+  /** The art with its lone pixels cleaned up, for a look with `tidy`: a second pass over the art. */
+  private readonly tidied = new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter, depthBuffer: false })
+  private readonly tidyMat = new NodeMaterial()
+  private readonly tidyQuad: QuadMesh
+  private readonly rawTex = texture(this.frames[0].texture)
   private now = 0
   /** Whether the other target holds the frame before (not after a new size or look). */
   private kept = false
@@ -77,11 +82,16 @@ export class PixelPass {
     this.copy.depthTest = false
     this.copy.depthWrite = false
     this.copyQuad = new QuadMesh(this.copy)
+    this.tidyMat.fragmentNode = this.tidy()
+    this.tidyMat.blending = NoBlending
+    this.tidyMat.depthTest = false
+    this.tidyMat.depthWrite = false
+    this.tidyQuad = new QuadMesh(this.tidyMat)
     this.setLook(look)
   }
 
   /** The finished art at its own size, in display color, for reading back (tests, saving) and for the screen. */
-  get art() { return this.frames[this.now] }
+  get art() { return this.look.tidy ? this.tidied : this.frames[this.now] }
   /** The art of the frame before, when this frame was drawn against it (a look with `steady`): what `pixelArt` needs to give the same answer. */
   get before() { return this.used ? this.frames[1 - this.now] : undefined }
 
@@ -118,6 +128,7 @@ export class PixelPass {
     this.small.setSize(w, h)
     this.ids.setSize(w, h)
     for (const f of this.frames) f.setSize(w, h)
+    this.tidied.setSize(w, h)
     this.kept = false
     this.res.value.set(w, h)
   }
@@ -141,9 +152,14 @@ export class PixelPass {
     this.sticky.value = this.used ? this.look.steady! : 0
     this.beforeTex.value = this.frames[this.now].texture
     this.now = 1 - this.now
-    renderer.setRenderTarget(this.art)
+    renderer.setRenderTarget(this.frames[this.now])
     this.quad.render(renderer)
     this.kept = true
+    if (this.look.tidy) {
+      this.rawTex.value = this.frames[this.now].texture
+      renderer.setRenderTarget(this.tidied)
+      this.tidyQuad.render(renderer)
+    }
     renderer.setRenderTarget(to)
     if (!screen) return
     this.cells.value.set(screen.width / screen.scale, screen.height / screen.scale)
@@ -302,6 +318,49 @@ export class PixelPass {
     }
   }
 
+  /** Lone-pixel cleanup over the art just drawn: `tidyLone` in pixel.ts is its CPU twin (change one, change both). */
+  private tidy() {
+    const small = this.small.texture, ids = this.ids.texture
+    const { res } = this
+    const N8: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]]
+    return Fn(() => {
+      const st = uv()
+      const cell = floor(vec2(st.x, float(1).sub(st.y)).mul(res)).toVar()
+      const where = (dx: number, dy: number) => { const c = cell.add(vec2(dx, dy)); return { c, st: vec2(c.x.add(0.5).div(res.x), float(1).sub(c.y.add(0.5).div(res.y))) } }
+      const read = (dx: number, dy: number) => {
+        const { c, st: at } = where(dx, dy)
+        const inside = c.x.greaterThanEqual(0).and(c.y.greaterThanEqual(0)).and(c.x.lessThan(res.x)).and(c.y.lessThan(res.y))
+        return { rgb: this.rawTex.sample(at).rgb, solid: inside.and(texture(small, at).a.greaterThanEqual(PIXEL_CUT)), part: texture(ids, at) }
+      }
+      const same = (a: unknown, b: unknown) => { const d = vec3(a).sub(b); return dot(d, d).lessThan(1e-5) }
+      const samePart = (a: { x: unknown; y: unknown; z: unknown; w: unknown }, b: { x: unknown; y: unknown; z: unknown; w: unknown }) => {
+        const d = vec3(a.x, a.y, a.z).sub(vec3(b.x, b.y, b.z))
+        return float(a.w).greaterThanEqual(0.5).and(float(b.w).greaterThanEqual(0.5)).and(dot(d, d).lessThan(1e-6))
+      }
+      const here = read(0, 0)
+      const out = vec4(here.rgb, this.rawTex.sample(where(0, 0).st).a).toVar()
+      If(here.solid, () => {
+        const ns = N8.map(([dx, dy]) => read(dx, dy))
+        const mine = float(0).toVar(), count = float(0).toVar(), ofPart = float(0).toVar()
+        for (const n of ns) {
+          If(n.solid, () => {
+            count.addAssign(1)
+            If(same(n.rgb, here.rgb), () => { mine.assign(1) })
+            If(samePart(n.part, here.part), () => { ofPart.addAssign(1) })
+          })
+        }
+        const most = float(0).toVar(), best = vec3(0).toVar()
+        for (const a of ns) {
+          const n = float(0).toVar()
+          for (const b of ns) If(a.solid.and(b.solid).and(same(a.rgb, b.rgb)), () => { n.addAssign(1) })
+          If(n.greaterThan(most), () => { most.assign(n); best.assign(a.rgb) })
+        }
+        If(mine.lessThan(0.5).and(count.greaterThanEqual(6)).and(most.greaterThanEqual(6)).and(this.parted.lessThan(0.5).or(ofPart.greaterThanEqual(4))), () => { out.assign(vec4(best, 1)) })
+      })
+      return out
+    })()
+  }
+
   /** The art onto the output: every screen pixel inside one art pixel takes that pixel's color. */
   private toScreen() {
     const toLinear = (c: unknown) => select(float(c).lessThanEqual(0.04045), float(c).div(12.92), pow(float(c).add(0.055).div(1.055), 2.4))
@@ -317,6 +376,8 @@ export class PixelPass {
     this.small.dispose()
     this.ids.dispose()
     for (const f of this.frames) f.dispose()
+    this.tidied.dispose()
+    this.tidyMat.dispose()
     this.material.dispose()
     this.copy.dispose()
   }

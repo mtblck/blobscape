@@ -273,7 +273,7 @@ export const OCTOPUS: SceneDoc = {
     { kind: 'drift', bone: 'rain8', by: [-0.5, -3.4, 0], times: 6, grow: [1, 1], phase: 0.485 },
   ],
   lights: [
-    { at: [0.776, 2.61, 0.078], color: '#ffd24a', strength: 2.4, range: 2.2, flicker: { by: 0.25, times: 7 } },
+    { at: [0.776, 2.61, 0.078], color: '#ffd24a', strength: 2.4, range: 2.2, flicker: { by: 0.25, times: 7 }, shadows: true },
     { at: [-1.4, 2.8, 1.2], color: '#7fb4b8', strength: 1.6, range: 4, flicker: { by: 0.8, times: 5 } },
   ],
 }

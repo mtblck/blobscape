@@ -34,3 +34,13 @@ test('bakeLights with no lights and full ambient keeps the colors', () => {
   const lit = bakeLights(b, [{ position: [0, 1, 0], color: [4, 0, 0], range: 1 }], 0.5)
   assert.ok(lit.color[0] > 0.5 && lit.color[1] < 0.5)
 })
+
+test('a light a point can\'t see adds nothing, and only the first four lights are shaded', async () => {
+  const { lightAt } = await import('./light.ts')
+  const L = { position: [0, 1, 0] as [number, number, number], color: [1, 1, 1] as [number, number, number], range: 2 }
+  const open = lightAt([0, 0, 0], [0, 1, 0], [L], 0)
+  const hid = lightAt([0, 0, 0], [0, 1, 0], [L], 0, [0, 255, 255, 255])
+  assert.ok(open[0] > 0.1 && hid[0] === 0)
+  const fifth = lightAt([0, 0, 0], [0, 1, 0], [L, L, L, L, L], 0, [0, 0, 0, 0])
+  assert.ok(Math.abs(fifth[0] - open[0]) < 1e-9)
+})

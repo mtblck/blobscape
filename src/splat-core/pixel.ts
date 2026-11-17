@@ -270,6 +270,13 @@ export interface PixelLook {
    * Without it, a pixel that sits between two colors flips back and forth as lights flicker and the view turns.
    */
   steady?: number
+  /**
+   * Lone-pixel cleanup, as a pixel artist does it: a scene pixel whose color none of its eight neighbors shares, while
+   * six or more of them share one other color, takes that color. With a map of parts, only a pixel inside its own
+   * part (four or more neighbors of its part) is touched, so a speck, an eye or a firefly in front of something stays.
+   * A checkerboard dither keeps its pixels: each has its own color on the diagonals.
+   */
+  tidy?: boolean
 }
 
 /** A good `steady` for a moving scene: under the gap between neighboring palette colors, so shapes still move freely. */
@@ -380,6 +387,46 @@ export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Fram
         r = c[0]; gg = c[1]; b = c[2]
       }
       out.data[i] = r; out.data[i + 1] = gg; out.data[i + 2] = b; out.data[i + 3] = 255
+    }
+  }
+  return look.tidy ? tidyLone(out, f, map) : out
+}
+
+const N8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]] as const
+
+/**
+ * `art` with its lone pixels cleaned up (see `PixelLook.tidy`): `f` is the small frame it was drawn from (which pixels
+ * are scene), `map` the map of parts if there is one. Reads only `art`, so a pixel cleaned never changes its neighbors.
+ */
+export function tidyLone(art: Frame, f: Frame, map?: Uint8ClampedArray | Uint8Array): Frame {
+  const { width: w, height: h } = art
+  const out = makeFrame(w, h)
+  out.data.set(art.data)
+  const cut = PIXEL_CUT * 255
+  const solid = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h && f.data[(y * w + x) * 4 + 3] >= cut
+  const colorAt = (x: number, y: number) => { const j = (y * w + x) * 4; return (art.data[j] << 16) | (art.data[j + 1] << 8) | art.data[j + 2] }
+  const partAt = (x: number, y: number) => { const j = (y * w + x) * 4; return map![j + 3] < 128 ? -1 : map![j] | (map![j + 1] << 8) | (map![j + 2] << 16) }
+  const near: number[] = []
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!solid(x, y)) continue
+      const me = colorAt(x, y)
+      near.length = 0
+      let mine = false, ofPart = 0
+      const part = map ? partAt(x, y) : -1
+      for (const [dx, dy] of N8) {
+        if (!solid(x + dx, y + dy)) continue
+        const c = colorAt(x + dx, y + dy)
+        if (c === me) { mine = true; break }
+        near.push(c)
+        if (map && part >= 0 && partAt(x + dx, y + dy) === part) ofPart++
+      }
+      if (mine || near.length < 6 || (map && ofPart < 4)) continue
+      let best = -1, most = 0
+      for (const c of near) { let n = 0; for (const d of near) if (d === c) n++; if (n > most) { most = n; best = c } }
+      if (most < 6) continue
+      const i = (y * w + x) * 4
+      out.data[i] = best >> 16; out.data[i + 1] = (best >> 8) & 255; out.data[i + 2] = best & 255
     }
   }
   return out

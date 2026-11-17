@@ -237,7 +237,7 @@ export const DRAGON: SceneDoc = {
     { kind: 'drift', bone: 'ember15', by: [-0.038, 1.634, -0.085], times: 2, grow: [1.3, 0.3], phase: 0.834 },
   ],
   lights: [
-    { at: [0, 0.5, 0.6], color: '#ff8a1e', strength: 2.2, range: 1.6, flicker: { by: 0.2, times: 7 } },
+    { at: [0, 0.5, 0.6], color: '#ff8a1e', strength: 2.2, range: 1.6, flicker: { by: 0.2, times: 7 }, shadows: true },
     { at: [-1.2, 0.25, 1.1], color: '#ff8a1e', strength: 1.0, range: 0.6, flicker: { by: 0.25, times: 9 } },
     { at: [0.3, 0.25, 1.4], color: '#ffc93c', strength: 1.0, range: 0.6, flicker: { by: 0.25, times: 11 } },
   ],
