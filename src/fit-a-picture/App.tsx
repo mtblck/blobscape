@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { SiteHeader } from '../shared/SiteHeader.tsx'
 import { Footer } from '../shared/Footer.tsx'
 import { Crumbs } from '../blobscape/Shell.tsx'
+import { CARD, CARD_SUB, CARD_TITLE } from '../blobscape/creature/card.ts'
 import { Button, Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
 import { TAB_SECTIONS, Workbench } from '../shared/Workbench.tsx'
 import { SAMPLES, drawSample, fitSize, type Sample } from './samples.ts'
@@ -483,9 +484,9 @@ export function App() {
         />
         <p aria-live="polite" className="sr-only">{announce}</p>
 
-        <section aria-labelledby="so-far" className="mt-10 rounded-2xl border border-rule bg-paper-sunk/60 p-4 sm:p-6">
-          <h2 id="so-far" className="font-display text-2xl">Training so far</h2>
-          <div className="mt-4 grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <section aria-labelledby="so-far" className={`mt-4 ${CARD}`}>
+          <h2 id="so-far" className={CARD_TITLE}>Training so far <small className={CARD_SUB}>loss and events since the last restart</small></h2>
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
             <div className="min-w-0">
               <LossGraph history={history.current} version={historyVersion} />
               <p className="mt-3 text-xs leading-relaxed text-ink-faint">
@@ -507,33 +508,44 @@ export function App() {
           </div>
         </section>
 
-        <section aria-labelledby="how" className="mt-12 border-t border-rule pt-8">
-          <h2 id="how" className="font-display text-3xl">How a splat learns</h2>
-          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-ink-muted">
-            A real capture starts from a rough cloud of 3D blobs and photos of the scene from many angles. It runs the loop below tens
-            of thousands of times, with one photo per step. This page runs the same loop against one flat picture. The one thing
-            missing is depth: in 3D the blobs are sorted front to back and blended; here they just add up.
-          </p>
-          <ol className="mt-6 grid max-w-6xl gap-6 sm:grid-cols-2 lg:grid-cols-5">
-            {[
-              ['1 · Render', 'Draw every blob: a soft ellipse with a center, two sizes, an angle, a color and an opacity.'],
-              ['2 · Compare', 'Subtract the picture. The loss is the average squared difference, the line in the graph.'],
-              ['3 · Backpropagate', 'Work out, for every number on every blob, which way to nudge it to shrink the loss.'],
-              ['4 · Step', 'Adam nudges them all a little. Each blob keeps its own running average, so steps stay steady.'],
-              ['5 · Prune and grow', 'Every 100 steps, drop blobs that have faded to nothing and add small ones where the error is worst.'],
-            ].map(([t, d]) => (
-              <li key={t} className="min-w-0">
-                <p className="text-sm font-medium">{t}</p>
-                <p className="mt-1 text-xs leading-relaxed text-ink-muted">{d}</p>
-              </li>
-            ))}
-          </ol>
+        <section aria-labelledby="how-title" className="mt-14 border-t border-rule pt-10 lg:grid lg:grid-cols-12 lg:gap-x-5 lg:pt-14">
+          <div className="lg:col-span-5">
+            <p className="text-sm text-ink-faint">How it works</p>
+            <h2 id="how-title" className="mt-1 max-w-[16ch] font-display text-4xl leading-[1.05] text-balance sm:text-5xl">How a splat learns</h2>
+          </div>
+          <div className="mt-8 max-w-[36em] lg:col-span-7 lg:mt-0">
+            <p className="text-lg leading-relaxed text-ink-muted lg:text-xl">
+              A real capture starts from a rough cloud of 3D blobs and photos of the scene from many angles, and runs the loop below
+              tens of thousands of times, one photo per step. This page runs the same loop against one flat picture. The one thing
+              missing is depth: in 3D the blobs are sorted front to back and blended; here they just add up.
+            </p>
+            <ol className="mt-8 grid gap-3" data-testid="how-steps">
+              {HOW_STEPS.map(([title, body], i) => (
+                <li key={title} className="flex gap-4 rounded-2xl border border-rule bg-paper p-4 sm:gap-5 sm:p-5">
+                  <span aria-hidden className="w-7 shrink-0 font-display text-3xl leading-none text-ink-faint tabular-nums">{i + 1}</span>
+                  <div className="min-w-0">
+                    <h3 className="font-display text-xl leading-tight">{title}</h3>
+                    <p className="mt-1.5 leading-relaxed text-ink-muted">{body}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
         </section>
       </main>
       <Footer />
     </div>
   )
 }
+
+/** The training loop, in order; the page's bottom section numbers them. */
+const HOW_STEPS = [
+  ['Render', 'Draw every blob as a soft ellipse with a center, two sizes, an angle, a color and an opacity, and add them all up into one picture.'],
+  ['Compare', 'Subtract the real picture. The loss is the average squared difference, the line in the graph above.'],
+  ['Backpropagate', 'Work out, for every number on every blob, which way to nudge it to shrink the loss.'],
+  ['Step', 'Adam nudges them all a little. Each blob keeps its own running average, so the steps stay steady.'],
+  ['Prune and grow', 'Every 100 steps, drop blobs that have faded to nothing and add small ones where the error is worst. Then back to the first step.'],
+] as const
 
 function describe(e: TrainEvent) {
   const blobs = (n: number) => `${n.toLocaleString()} ${n === 1 ? 'blob' : 'blobs'}`
