@@ -194,8 +194,9 @@ Further reading: [design notes](docs/design-notes.md) ·
 
 Pixel Diorama was inspired by the pixel-art Gaussian splat scenes that
 [Silicon Jungle](https://x.com/JungleSilicon) shared: the idea of drawing voxel scenes as small solid
-blobs and cutting them to a palette, and the themes of several scenes. The scenes, the engine and the
-code here are our own.
+blobs and cutting them to a palette, and the themes of several scenes. The world-building shapes
+(brick walls, steps and fences, formations, weather that lands, worn rock) follow ideas from their
+Ink Studio kit. The scenes, the engine and the code here are our own.
 
 Blobscape stands on [three.js](https://threejs.org/), [Spark](https://sparkjs.dev/) and the
 [3D Gaussian Splatting](https://repo-sam.inria.fr/fungraph/3d-gaussian-splatting/) paper by Kerbl

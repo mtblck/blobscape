@@ -28,6 +28,12 @@ export interface Shape {
   /** A box that holds the whole shape. */
   min: Vec3
   max: Vec3
+  /**
+   * For a shape made of many pieces (the bricks of a wall, the posts of a fence, the columns of a basalt
+   * causeway): which piece a surface point belongs to, as a whole number 0 or more, or -1 for what lies between
+   * them (mortar). The `pieces` paint gives every piece a color of its own.
+   */
+  pieceAt?: (p: Vec3) => number
 }
 
 export interface VoxelPart {
@@ -336,6 +342,120 @@ export function union(...s: Shape[]): Shape {
     sdf: (x, y, z) => { let d = Infinity; for (const k of s) d = Math.min(d, k.sdf(x, y, z)); return d },
     min: [0, 1, 2].map((i) => Math.min(...s.map((k) => k.min[i]))) as Vec3,
     max: [0, 1, 2].map((i) => Math.max(...s.map((k) => k.max[i]))) as Vec3,
+    pieceAt: nearestPiece(s),
+  }
+}
+
+/** The pieces of whichever shape is nearest the point, offset so two shapes' pieces never share a number; undefined when none has pieces. */
+function nearestPiece(s: Shape[], always = false): Shape['pieceAt'] {
+  if (!always && !s.some((k) => k.pieceAt)) return undefined
+  return (p) => {
+    let best = Infinity, at = 0
+    s.forEach((k, i) => { const d = k.sdf(p[0], p[1], p[2]); if (d < best) { best = d; at = i } })
+    const k = s[at]
+    if (!k.pieceAt) return at * 7919
+    const id = k.pieceAt(p)
+    return id < 0 ? id : id + at * 7919
+  }
+}
+
+/** A shape's box as low and high corners. */
+const boxBetween = (a: Shape) => ({ lo: a.min, hi: a.max })
+
+/** The distance between two boxes, 0 when they touch. */
+function boxGap(a: { lo: Vec3; hi: Vec3 }, b: { lo: Vec3; hi: Vec3 }) {
+  let q = 0
+  for (let i = 0; i < 3; i++) { const g = Math.max(a.lo[i] - b.hi[i], b.lo[i] - a.hi[i], 0); q += g * g }
+  return Math.sqrt(q)
+}
+
+/**
+ * Many shapes made one, fast however many there are: the shapes are sorted into a grid of buckets, and a point asks
+ * only the shapes near its bucket (`union` asks every one). The distance is exact near any surface and never more
+ * than the true distance elsewhere, which is all the builder and the sun's march need. For a wall's fallen bricks, a
+ * fence's posts and rails, a field of stalagmites: anything scattered of many small pieces.
+ */
+/**
+ * A shape whose distance can overstate by up to 1/k − 1 of itself (a ragged edge, an overhang the side distance
+ * doesn't see) made honest for the sun march: exact within `near` of the surface, where cells are placed, and
+ * scaled by k beyond it, so a step never passes through.
+ */
+export function tighten(s: Shape, k: number, near = 0.006): Shape {
+  const f = (d: number) => (Math.abs(d) <= near ? d : Math.sign(d) * (near + (Math.abs(d) - near) * k))
+  return { ...s, sdf: (x, y, z) => f(s.sdf(x, y, z)) }
+}
+
+export function many(shapes: Shape[]): Shape {
+  if (shapes.length <= 6) return { ...union(...shapes), pieceAt: nearestPiece(shapes, true) }
+  const all = union(...shapes)
+  const lo = all.min, hi = all.max
+  const ext = [0, 1, 2].map((i) => Math.max(hi[i] - lo[i], 1e-6))
+  // buckets about as big as a typical piece, and not more than about 4096 of them
+  const sizes = shapes.map((k) => Math.max(k.max[0] - k.min[0], k.max[1] - k.min[1], k.max[2] - k.min[2])).sort((a, b) => a - b)
+  let cell = Math.max(sizes[sizes.length >> 1] / 3, 1e-4)
+  while (ext.reduce((n, e) => n * Math.ceil(e / cell), 1) > 4096) cell *= 1.25
+  const n = ext.map((e) => Math.max(1, Math.ceil(e / cell)))
+  const near: number[][] = [], clear: number[] = []
+  const boxes = shapes.map(boxBetween)
+  for (let k = 0; k < n[2]; k++) for (let j = 0; j < n[1]; j++) for (let i = 0; i < n[0]; i++) {
+    const b = { lo: [lo[0] + i * cell, lo[1] + j * cell, lo[2] + k * cell] as Vec3, hi: [lo[0] + (i + 1) * cell, lo[1] + (j + 1) * cell, lo[2] + (k + 1) * cell] as Vec3 }
+    const list: number[] = []
+    let c = Infinity
+    boxes.forEach((s, si) => { const g = boxGap(s, b); if (g <= cell) list.push(si); else c = Math.min(c, g) })
+    near.push(list); clear.push(c)
+  }
+  /** The shapes listed for the bucket round (qx, qy, qz) asked at (x, y, z), `out` from it; the rest are at least their gap less `out` away. */
+  const ask = (qx: number, qy: number, qz: number, x: number, y: number, z: number, out: number) => {
+    const i = Math.min(n[0] - 1, Math.max(0, Math.floor((qx - lo[0]) / cell)))
+    const j = Math.min(n[1] - 1, Math.max(0, Math.floor((qy - lo[1]) / cell)))
+    const k = Math.min(n[2] - 1, Math.max(0, Math.floor((qz - lo[2]) / cell)))
+    let d = clear[(k * n[1] + j) * n[0] + i] - out
+    for (const si of near[(k * n[1] + j) * n[0] + i]) d = Math.min(d, shapes[si].sdf(x, y, z))
+    return d
+  }
+  return {
+    sdf: (x, y, z) => {
+      const qx = Math.min(hi[0], Math.max(lo[0], x)), qy = Math.min(hi[1], Math.max(lo[1], y)), qz = Math.min(hi[2], Math.max(lo[2], z))
+      const out = Math.hypot(x - qx, y - qy, z - qz)
+      // just outside the box (where the builder still looks), the shapes near its edge give the exact distance
+      if (out <= cell / 2) { const d = ask(qx, qy, qz, x, y, z, out); return out > 0 ? Math.max(out, d) : d }
+      // far outside: from the nearest point on the box, which no shape is nearer than (the box is convex)
+      const d = ask(qx, qy, qz, qx, qy, qz, 0)
+      return d <= 0 ? out : Math.hypot(out, d)
+    },
+    min: lo, max: hi,
+    // each shape is a piece (or its own pieces, numbered apart)
+    pieceAt: (p) => {
+      // the nearest shape in the point's bucket
+      const i = Math.min(n[0] - 1, Math.max(0, Math.floor((p[0] - lo[0]) / cell)))
+      const j = Math.min(n[1] - 1, Math.max(0, Math.floor((p[1] - lo[1]) / cell)))
+      const k = Math.min(n[2] - 1, Math.max(0, Math.floor((p[2] - lo[2]) / cell)))
+      let best = Infinity, at = -1
+      for (const si of near[(k * n[1] + j) * n[0] + i]) { const d = shapes[si].sdf(p[0], p[1], p[2]); if (d < best) { best = d; at = si } }
+      if (at < 0) return 0
+      const id = shapes[at].pieceAt?.(p) ?? 0
+      return id < 0 ? id : id + at * 7919
+    },
+  }
+}
+
+/**
+ * A box turned any way: `axes` are its three edge directions (unit length, square to each other) and `half` its half
+ * size along each. Fallen bricks, leaning posts, rails between them.
+ */
+export function orientedBox(c: Vec3, axes: [Vec3, Vec3, Vec3], h: Vec3, round = 0): Shape {
+  const [a, b, w] = axes
+  const ex: Vec3 = [0, 0, 0]
+  for (let i = 0; i < 3; i++) ex[i] = Math.abs(a[i]) * h[0] + Math.abs(b[i]) * h[1] + Math.abs(w[i]) * h[2]
+  return {
+    sdf: (x, y, z) => {
+      const px = x - c[0], py = y - c[1], pz = z - c[2]
+      const qx = Math.abs(px * a[0] + py * a[1] + pz * a[2]) - h[0] + round
+      const qy = Math.abs(px * b[0] + py * b[1] + pz * b[2]) - h[1] + round
+      const qz = Math.abs(px * w[0] + py * w[1] + pz * w[2]) - h[2] + round
+      return Math.hypot(Math.max(qx, 0), Math.max(qy, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qy, qz), 0) - round
+    },
+    min: [c[0] - ex[0], c[1] - ex[1], c[2] - ex[2]], max: [c[0] + ex[0], c[1] + ex[1], c[2] + ex[2]],
   }
 }
 
@@ -357,6 +477,7 @@ export function blend(kind: BlendKind, r: number, shapes: Shape[], steps = 3): S
   return {
     sdf: (x, y, z) => { let d = shapes[0].sdf(x, y, z); for (let i = 1; i < shapes.length; i++) d = two(d, shapes[i].sdf(x, y, z)); return d },
     min: [all.min[0] - r, all.min[1] - r, all.min[2] - r], max: [all.max[0] + r, all.max[1] + r, all.max[2] + r],
+    pieceAt: all.pieceAt,
   }
 }
 
@@ -483,7 +604,7 @@ export function letterGrid(at: Vec3, size: number, layers: string[][]): Shape & 
 
 /** `a` with `b` cut out of it. */
 export function cut(a: Shape, b: Shape): Shape {
-  return { sdf: (x, y, z) => Math.max(a.sdf(x, y, z), -b.sdf(x, y, z)), min: a.min, max: a.max }
+  return { sdf: (x, y, z) => Math.max(a.sdf(x, y, z), -b.sdf(x, y, z)), min: a.min, max: a.max, pieceAt: a.pieceAt }
 }
 
 /** A shape pushed in or out by `f(x, y, z)` world units: ripples, rough rock. `reach` is the most it moves. */
@@ -491,6 +612,7 @@ export function displace(s: Shape, f: (x: number, y: number, z: number) => numbe
   return {
     sdf: (x, y, z) => s.sdf(x, y, z) - f(x, y, z),
     min: [s.min[0] - reach, s.min[1] - reach, s.min[2] - reach], max: [s.max[0] + reach, s.max[1] + reach, s.max[2] + reach],
+    pieceAt: s.pieceAt,
   }
 }
 

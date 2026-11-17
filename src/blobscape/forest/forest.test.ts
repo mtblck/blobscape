@@ -132,3 +132,30 @@ test('the elf and the fox walk on planned footsteps: a planted foot stays put, a
   const still = { ...f.walker, vx: 0, vz: 0, turn: 0 }
   f.elfSteps.feet.forEach((ft, i) => assert.ok(ft.t < 0 && f.elfSteps.off(i, still) <= f.elfSteps.opts.settle + 1e-9, `elf foot ${i} left off square`))
 })
+
+test('a spark lights the grass beside the path; blades burn down to black stubs and grow back', async () => {
+  const { BLADE, STUB } = await import('./ground.ts')
+  const { SCAR_TIME, REGROW_TIME } = await import('../../splat-engine/meadow.ts')
+  const f = new Forest({ detail: 0.3, season: 'summer', look: 'forest', seed: 1 })
+  const still = { forward: 0, turn: 0 }
+  // facing across the path, so the spark lands in the grass
+  f.walker = { ...f.walker, heading: Math.PI / 2 }
+  const at = f.spark()
+  assert.ok(at, 'it caught')
+  assert.ok(Math.abs(at![0] - pathX(at![1])) >= pathHalf(at![1]) - 0.2, 'not on the path')
+  for (let k = 0; k < 40; k++) f.update(0.1, still)
+  // the tile under the spark: its blades near the fire are gone, their stubs black
+  const g = f.grounds[slotOf(Math.floor(at![1] / TILE))]
+  // the blobs standing where it has burnt out
+  const burnt = (k: number) => { const c = f.meadow.index(g.blobs.center[k * 3], g.blobs.center[k * 3 + 2]); return c >= 0 && f.meadow.char[c] === 1 && f.meadow.fire[c] === 0 }
+  const blades = [...g.kind.keys()].filter((k) => g.kind[k] === BLADE && burnt(k)), stubs = [...g.kind.keys()].filter((k) => g.kind[k] === STUB && burnt(k))
+  assert.ok(blades.length > 3, `${blades.length} blades burnt`)
+  assert.ok(blades.every((k) => g.blobs.opacity[k] < 0.05), 'burnt down')
+  assert.ok(stubs.every((k) => g.blobs.color[k * 3 + 1] < 0.15), 'black stubs')
+  assert.ok(f.meadow.burning > 0 || f.meadow.busy, 'still burning or scarred')
+  // nothing burnt on the path
+  for (let k = 0; k < f.meadow.char.length; k++) if (f.meadow.char[k] > 0) { const [x, z] = f.meadow.center(k); assert.ok(Math.abs(x - pathX(z)) >= pathHalf(z) - 0.2) }
+  for (let k = 0; k < (SCAR_TIME + REGROW_TIME) * 40; k++) f.update(0.1, still)
+  assert.equal(f.meadow.busy, false)
+  assert.ok(blades.every((k) => Math.abs(g.blobs.opacity[k] - g.alpha[k]) < 1e-6), 'grown back')
+})

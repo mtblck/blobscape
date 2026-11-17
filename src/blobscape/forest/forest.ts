@@ -7,9 +7,10 @@ import { axisAngle, mulQ, rotate, type Skeleton } from '../../splat-engine/rig.t
 import { Steps, type StepBody } from '../../splat-engine/steps.ts'
 import { clearCloak, elfIdle, elfWalk, elfWave, makeElf } from '../../splat-engine/zoo/elf.ts'
 import { makeFox, trot } from '../../splat-engine/zoo/fox.ts'
-import { makeGround } from './ground.ts'
+import { Meadow } from '../../splat-engine/meadow.ts'
+import { makeGround, paintGround, type GroundTile } from './ground.ts'
 import { makePlant, type Plant, type Season } from './plants.ts'
-import { FOX_SPOT, KINDS, PER_TILE, RING, RULES, TILE, WALK_SPEED, layout, obstacles, slotOf, stepFox, stepWalker, tileWindow, type Input, type Kind, type Placed, type Walker } from './world.ts'
+import { FOX_SPOT, HALF_WIDTH, KINDS, PERIOD, PER_TILE, RING, RULES, TILE, pathHalf, pathX, WALK_SPEED, layout, obstacles, slotOf, stepFox, stepWalker, tileWindow, type Input, type Kind, type Placed, type Walker } from './world.ts'
 
 /**
  * The forest walk, without the drawing: the elf, a ring of ground tiles and a
@@ -39,6 +40,12 @@ interface Slot {
   /** When it started growing (seconds of forest time), or null while waiting for the elf to come near. */
   since: number | null
 }
+
+/** The meadow's cells, meters: a fire runs through the grass from cell to cell. */
+export const MEADOW_CELL = 0.25
+/** How far ahead of the elf a spark lands, and how far round that it looks for grass to catch. */
+const SPARK_AHEAD = 1.3
+const SPARK_SIDE = 2.5
 
 /** The elf's blob count at detail 1. */
 export const ELF_BLOBS = 20000
@@ -80,7 +87,13 @@ export class Forest {
   readonly elf: Creature
   /** A fox that walks with the elf, on the same kind of footsteps, four feet in two pairs. */
   readonly fox: Creature
-  readonly grounds: Creature[]
+  readonly grounds: GroundTile[]
+  /** The grass of the ring of tiles, wrapping every PERIOD as the tiles do: it burns, scorches and grows back. */
+  readonly meadow: Meadow
+  /** Ground tiles whose colors changed this frame: the world sends them up. */
+  recolored: GroundTile[] = []
+  private painted = -1
+  private dirty = new Array<boolean>(RING).fill(false)
   readonly slots: Slot[][]
   /** Every actor for the SplatWorld, elf first, then the fox. */
   readonly actors: Creature[]
@@ -128,6 +141,12 @@ export class Forest {
       return { home: [(paw[0] - hips[0]) * FOX_SIZE, (paw[2] - hips[2]) * FOX_SIZE] as [number, number] }
     }), this.body(this.foxWalker, 0), FOX_STEPS)
     this.grounds = Array.from({ length: RING }, (_, j) => makeGround(j, opts.detail, opts.season))
+    // the field covers the forest's width round the path's widest swing; the path itself has no grass to burn
+    const wide = HALF_WIDTH + 2.2
+    this.meadow = new Meadow(
+      { x0: -wide, z0: 0, nx: Math.ceil((wide * 2) / MEADOW_CELL), nz: Math.round(PERIOD / MEADOW_CELL), cell: MEADOW_CELL, wrap: true, seed: opts.seed },
+      (x, z) => (Math.abs(x - pathX(z)) < pathHalf(z) - 0.1 ? 0 : 1),
+    )
     this.slots = Array.from({ length: RING }, (_, j) => {
       const out: Slot[] = []
       for (const kind of KINDS) for (let n = 0; n < PER_TILE[kind]; n++) {
@@ -164,6 +183,27 @@ export class Forest {
   }
 
   wave() { this.waveUntil = this.time + WAVE_SECONDS }
+
+  /**
+   * Throws a spark ahead of the elf to light the grass. On the path it lands on the nearest grass beside it, so it
+   * always catches if there is any to burn. Returns where it landed, or null if nothing caught.
+   */
+  spark(): [number, number] | null {
+    const { x, z, heading } = this.walker
+    const ax = x + Math.sin(heading) * SPARK_AHEAD, az = z + Math.cos(heading) * SPARK_AHEAD
+    // the nearest grass to where it lands, looking round it in widening rings
+    for (let d = 0; d <= SPARK_SIDE; d += MEADOW_CELL) {
+      const n = d ? Math.ceil((Math.PI * 2 * d) / MEADOW_CELL) : 1
+      for (let q = 0; q < n; q++) {
+        const a = heading + (q / n) * Math.PI * 2
+        const px = ax + Math.sin(a) * d, pz = az + Math.cos(a) * d
+        const k = this.meadow.index(px, pz)
+        if (k < 0 || this.meadow.grass[k] < 0.5) continue
+        if (this.meadow.light(px, pz, 0.35) > 0) return [px, pz]
+      }
+    }
+    return null
+  }
   get waving() { return this.time < this.waveUntil }
 
   /** One frame: move the elf, hand out tiles, grow and sway the plants, pose the elf. */
@@ -197,6 +237,28 @@ export class Forest {
     }
     this.poseElf(dt)
     this.poseFox(dt)
+    this.burn(dt)
+  }
+
+  /** Steps the grass fire and repaints the tiles it touches (and once more when a tile is back to green). */
+  private burn(dt: number) {
+    this.recolored = []
+    this.meadow.step(dt)
+    if (this.meadow.version === this.painted) return
+    this.painted = this.meadow.version
+    const m = this.meadow, rows = Math.round(TILE / MEADOW_CELL)
+    for (let j = 0; j < RING; j++) {
+      let busy = false
+      // the rows of slot j and one either side, for blobs that lie just over the edge
+      for (let r = -1; r <= rows && !busy; r++) {
+        const row = (((j * rows + r) % m.spec.nz) + m.spec.nz) % m.spec.nz
+        for (let i = row * m.spec.nx, e = i + m.spec.nx; i < e; i++) if (m.fire[i] > 0 || m.char[i] > 0 || m.grass[i] < m.room[i]) { busy = true; break }
+      }
+      if (!busy && !this.dirty[j]) continue
+      this.dirty[j] = busy
+      paintGround(this.grounds[j], m, this.time)
+      this.recolored.push(this.grounds[j])
+    }
   }
 
   /** The body as the footstep planner sees it. */
@@ -212,6 +274,8 @@ export class Forest {
     const g = this.grounds[j].skeleton
     g.place[2] = (i - j) * TILE
     g.update()
+    // a new stretch of path comes in green
+    if (this.dirty[j]) this.meadow.reset(j * TILE, (j + 1) * TILE)
     const placed = layout(i, this.seed)
     for (const s of this.slots[j]) {
       s.at = placed.find((p) => p.kind === s.kind && p.n === s.n) ?? null

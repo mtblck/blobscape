@@ -21,9 +21,9 @@ The point is that Claude can write one from a sentence. A scene that is data can
 | `camera` | Where the view starts, and optionally a `swing`: degrees (0 to 60) it rocks to either side, once a loop, as the scene plays. |
 | `bones` | Things that move, each with the point it turns about. Parts with no bone stand still. |
 | `parts` | A shape, a paint, and optionally a bone, `glow`, `noShadow`, `grime` (a color that gathers in its corners and cracks, as moss or soot), `bare` (takes none of the scene's `cover`: a sleeping fox, water, a fresh fire), or `ink` (little drawn marks: `{ kind, amount, color }`, kind `hatch`, `stipple`, `cracks`, `grain`, `tufts` or `scales`; about `amount` of the 4-by-4 blocks of pixels get one mark, picked and turned at random so a big wall never repeats; the ink is a darker step of the paint unless `color` says otherwise). Ink shows best on a plain or gently patched paint: on busy patches it gets lost.Water, ice or glass takes `glass: { see, mirror, top }`: it shows what lies behind it (`see`, 0.6), darkening toward the bottom where nothing is met, and mirrors what stands over it and the sky (`mirror`, 0.3, stronger at a glancing look). It is painted for the scene's own camera, so keep the camera's swing small. `top: true` keeps it to upturned faces, for a pond cut as one slab with earth sides. `strokes` (0 to 1) draws each cell as a brush stroke along the level line round the shape, as on a trunk or a pot; it shows in Blobs and barely in pixel art. |
-| `moves` | spin, sway, bob, drift, pulse. Each names a bone and a whole number of `times` per loop; a bone takes up to six. |
+| `moves` | spin, sway, bob, drift, pulse, sprout (grows from nothing, stands, shrinks away). Each names a bone and a whole number of `times` per loop; a bone takes up to six. |
 | `lights` | Up to four live lights, which can flicker or go round a circle. A light that stays put can set `shadows: true`: what stands between it and a surface then hides that surface from it (baked once, so it holds as the light flickers). Only for a lamp out in the open; one inside a ring of stones or a hand just darkens the scene. |
-| `air` | What hangs in the air: `haze` (far things fade toward a color), `mist` (low banks that drift), `shafts` (beams of light that light what they land on) and `specks` (swarms of `dust`, `embers`, `rain`, `snow`, `fireflies` or `bubbles`, each speck moving on its own). |
+| `air` | What hangs in the air: `haze` (far things fade toward a color), `mist` (low banks that drift), `shafts` (beams of light that light what they land on) and `specks` (swarms of `dust`, `embers`, `rain`, `snow`, `leaves`, `fireflies` or `bubbles`, each speck moving on its own; rain, snow and leaves can `land` on whatever stands still under them and lie a while before falling again, blown sideways by `wind`, [x, z] over a whole fall). |
 | `cover` | Snow, moss or dust over everything once it is cut: `{ kind, color, amount }`, `amount` 0 to 1. `snow` settles on tops the sky can reach (not under a roof), `moss` creeps over up-turned and shut-in faces in patches, `dust` lies thin on every upturned face, under cover too. Glowing parts and parts marked `bare` keep their paint, so mark a creature in the scene `bare`. Pick a color from the palette. |
 | `focus` | Where the eye goes: `{ at, r }`. Within `r` of `at` the grid is as fine as the detail level; further out every part at least eight cells across every way is cut on a grid twice as coarse with discs twice the size, so the subject keeps its detail and broad ground or walls cost a quarter of the blobs. Thin parts stay fine everywhere. In pixel art it looks the same at half the blobs or less. |
 
@@ -36,7 +36,54 @@ Shapes: `sphere`, `ball` (stretched), `box`, `cylinder` (can taper), `cone` (a r
 - `text`: words in blocky 3-by-5 letters, `size` tall and `depth` thick, centered on `at`, reading along +x (or along -z with `facing: 'x'`). Letters, digits, space and `. , ! ? - :` only. A letter needs about five grid cells of height to read, so keep `size` at 0.25 or more.
 - `blocks`: a model drawn in letters, `size` a cube. `layers` go from the bottom up, each a list of rows from the back to the front, each row read along +x; `.` or a space is empty and any other letter fills a cube. Paint it with `{ kind: 'key', colors: { t: '#5a3a24', l: '#3a7c5c' } }` to color each letter, and every letter used needs a color. Good for little houses, crates, trees and signs; a model at most 24 cubes a side.
 
-Paints: a color, or `bands`, `bricks`, `hex` (honeycomb, scales, paving), `speckle`, `patches`, `faces` (top, side, under), `split` (one paint below a height, another above), `key` (for `blocks` only). Paints nest.
+Built things, each one shape however many pieces it has, laid by a rule from a `seed` (the same seed, the same ruin), and sized so the pieces come out whole:
+
+- `wall`: bricks in courses from `from` to `to` (both on the ground, any direction), `height` tall and `thick` deep. `brick` is [length, course height], fitted so whole bricks fill the wall, with half bricks at the ends of every other course. Bricks sit a little proud or sunk (`jitter`), with mortar sunk between. `ruin` breaks the top down in a ragged line, `missing` takes bricks out of the face (the mortar core shows), `fallen` lays that many at the foot. Cut a doorway with `cut`.
+- `steps`: a flight of `count` blocks climbing along `dir` ([x, z]) from `at`, the bottom step's front middle, each `rise` up and `run` deep. `wear` rounds the noses and hollows each tread where feet go.
+- `fence`: posts and rails along a `path` on the ground, each straight run cut into whole bays about `bay` long so a post stands at every corner. `post` is half a post's thickness; `lean`, `missing` (rails gone or hanging from one end) and `sag` wear it.
+- `arcade`: a wall cut into `bays` equal bays with an opening in each and a `pillar` between, `'round'`, `'pointed'` or `'flat'` heads springing from `spring`. `ruin` (with a `seed`) breaks its top, never below the arches.
+
+Formations, shapes that come from a rule:
+
+- `crystal`: one crystal from `at` along `dir`, with `sides` (6), a point (`tip`, the share of its length, 0.3) and `chips` knocked off its faces. Crystals read by their facets, so light them (a live light beside them) rather than making them `glow`.
+- `crystals`: a cluster of `count` from one root: the middle one `size` long and upright, the rest leaning out up to `spread` degrees and shorter the further they lean.
+- `geode`: broken open, its cut face looking along `open`: a rind, `bands` layers and a hollow lined with small crystals pointing in. Paint it `{ kind: 'pieces', ordered: true, colors: [rind, band, band], line: crystals }`.
+- `columns`: basalt columns on a hex grid round `at`, `r` across and `cell` wide, the tallest `height`; `rise` `'steps'` (a causeway), `'dome'` (organ pipes) or `'random'`.
+- `drips`: `count` stalactites hanging from a roof at height `roof`, spread `r` round `at` on the floor, with stalagmites where their drips land, joined into columns where they would meet.
+- `flowstone`: a curtain of stone in folds down a wall, hanging from `at` along `along`.
+- `icicles`: under every downward edge of the shape `on`, about `every` apart; `above` keeps them off edges that rest on the ground. Only the icicles are drawn, so give the shape its own part too.
+
+Any of them can grow as you watch: put the part on a bone and give the bone a `sprout` move.
+
+Living forms, grown by a rule from a `seed`:
+
+- `tree`: a gnarled tree grown by space colonization: `points` scattered through a `crown` (radii) sitting `height` above `at` pull the branches toward them, and every limb is as thick as what it carries (`r` at the foot). `leaves` puts a ball that size on every end; `only` ('limbs' or 'leaves') keeps one so two parts can paint it in two colors.
+- `cactus`: a ribbed column `height` tall and `r` round, with `ribs` (8) and up to four `arms` that bend up.
+- `rosette`: a succulent: `leaves` thick pointed leaves set by the golden angle, the inner ones short and upright. A `split` paint tints the tips.
+- `brackets`: `count` shelf fungi stacked up a trunk from `at`, facing `facing` ([x, z]), smaller as they go up.
+- `brain`: brain coral: a dome `r` round worn into meandering grooves (`groove` apart).
+- `shell`: a shell wound on a log spiral, `size` wide with `turns` whorls; `spire` 0 is a flat coil, 1 a tall whelk. Each stretch is a piece, so `pieces` with `ordered` bands it.
+- `horn`: from `at` along `dir`, `length` long and `r` at the root, turning `curl` times (1 is a full ram's curl), winding sideways by `twist`, with `ridges` rings.
+- `antler`: a main beam from `at` along `dir` with `tines` rising off it.
+- `ribs`: a spine from `from` to `to` with `count` pairs of ribs reaching `span` out and curving `drop` down.
+
+Worn land, rock shaped by water and weather:
+
+- `land`: ground `half` wide round `at` raised by `peaks` (each a place, a height and a reach) and `noise`, then worn: `drops` water drops (up to 30000) each run downhill, wearing gullies and laying fans where they slow, and `slump` lets slopes slide to scree. With `beds` (from the bottom up, repeating; each a `thick` and how `hard`, 0 to 1) hard beds stand as cliffs with benches on top and soft ones wear back to slopes. Pieces are the beds, and -1 is scree and fans, so paint it `pieces` with `ordered` and a `line` for the scree.
+- `butte`: a mesa `r` round and `height` tall in `beds`, each worn back by how soft it is (`wear`), with a `cap` this much wider than the rock under it.
+- `hoodoo`: a thin waisted spire of soft beds under a hard cap.
+- `arch`: a fin of rock in beds from `from` to `to`, `thick` through, with a hole worn through its soft bed (`soft`, the hole's middle as a share of `height`).
+- `mud`: dried mud `r` round cracked into plates about `plate` wide, their edges curled up by `curl`. Each plate is a piece and the cracks are -1.
+- `pebbles`: `count` pebbles along a stream bed `path`, `width` across, the biggest (`size`) mid-stream where the water is fastest.
+
+Weather that lands:
+
+- `drift`: snow lying over every part listed before it that stays put, `half` wide round `at`: `depth` on open level ground, piled up to `pile` downwind of anything wide that stands in the `wind` ([x, z]), as far as `reach` times its height, scoured thin on what the wind meets and gone from steep faces, and thin along a trodden `path`. It must be a part's own shape, after what it lies on. Paint it `bare`, so the scene's `cover` doesn't paint it twice.
+- `frost`: a frost fern on a surface facing `facing`, spreading `r` from `at` in `arms` main branches, each throwing side branches. Split one fern over parts with `stage` ([0, 0.34], [0.34, 0.67], [0.67, 1]), each on its own bone at `at` with a `sprout` move a little later than the last, and it grows a branch at a time and melts back.
+
+Paint the built things, formations, shells, worn land, mud and frost with `pieces`: each brick, block, post, stone, column, crystal, bed, plate or generation of frost takes one of the `colors` (earlier ones commoner) and the joints between them `line`; `ordered` takes the colors in turn by piece instead. The checker turns `pieces` down on a shape without pieces.
+
+Paints: a color, or `bands`, `bricks`, `hex` (honeycomb, scales, paving), `speckle`, `patches`, `faces` (top, side, under), `split` (one paint below a height, another above), `key` (for `blocks` only), `pieces` (for built things and the other shapes of pieces). Paints nest.
 
 ## Rules that make a scene work
 
@@ -84,6 +131,6 @@ Asking for several different takes at once and picking the best works better tha
 
 ## What it can't do yet
 
-- Turned boxes: a box or a roof is always square to the axes, and a bone has no resting turn. Build slanted things from cones.
+- Turned boxes: a box or a roof is always square to the axes, and a bone has no resting turn. Build slanted things from cones (walls, fences and arcades can run any way along the ground).
 - Characters that walk. Bones here turn, slide and grow; there is no skinning between them (creatures use `body.ts` for that).
 - Paint that follows a round wall: `bricks` run along x or z, which holds up on a tower but isn't exact.
