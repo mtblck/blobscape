@@ -66,6 +66,29 @@ export class SplatView {
     return lensOf(this.camera, this.canvas.clientWidth, this.canvas.clientHeight)
   }
 
+  /**
+   * Draws one view and comes back straight after the draw, with the picture still on the canvas: for recording. It
+   * draws again until Spark has sorted for this view (at most `tries` times), holding the live loop meanwhile. No
+   * overlay is drawn, so rings and outlines stay out of the picture.
+   */
+  async settle(o: Orbit, tries = 40) {
+    this._orbit = o
+    this.loop.hold++
+    try {
+      for (let i = 0; i < tries && !this.disposed; i++) {
+        this.place()
+        this.renderer.render(this.scene, this.camera)
+        if (i > 0 && !(this.spark.dirty || this.spark.sorting || this.spark.sortDirty)) return
+        await new Promise((r) => setTimeout(r, 8))
+      }
+      this.place()
+      this.renderer.render(this.scene, this.camera)
+    } finally {
+      this.loop.hold--
+      this.invalidate(2)
+    }
+  }
+
   private floor?: THREE.GridHelper
 
   /** A faint grid on the ground (y = 0). Drawn in the scene, so blobs in front of it hide it. */
