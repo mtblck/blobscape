@@ -132,6 +132,8 @@ test('air: mistakes are pointed at, and a sound one builds specks that loop and 
     ['a ramp past 1', (d) => { d.light = { ramp: 2 } }, /^light\.ramp: must be from 0 to 1/],
     ['an unknown cover', (d) => { d.cover = { kind: 'ash', color: '#ffffff', amount: 0.5 } }, /^cover\.kind: must be one of 'snow'/],
     ['too much cover', (d) => { d.cover = { kind: 'snow', color: '#ffffff', amount: 2 } }, /^cover\.amount: must be from 0 to 1/],
+    ['an unknown ink', (d) => { d.parts[0].ink = { kind: 'swirl' } }, /^parts\[0\]\.ink\.kind: must be one of 'hatch'/],
+    ['ink past 1', (d) => { d.parts[0].ink = { kind: 'cracks', amount: 3 } }, /^parts\[0\]\.ink\.amount: must be from 0 to 1/],
     ['a bare that is not true or false', (d) => { d.parts[0].bare = 'yes' }, /^parts\[0\]\.bare: must be true or false/],
   ]
   const withAir = () => {
@@ -147,6 +149,10 @@ test('air: mistakes are pointed at, and a sound one builds specks that loop and 
   assert.deepEqual(checkScene(withAir()), [])
   assert.deepEqual(checkScene({ ...withAir(), cover: { kind: 'moss', color: '#4a6a2a', amount: 0.4 } }), [])
   assert.equal(compileScene({ ...withAir(), cover: { kind: 'snow', color: '#ffffff', amount: 0.4 } }).spec(0.05).cover?.kind, 'snow')
+  const inked = withAir()
+  inked.parts[0].ink = { kind: 'cracks', amount: 0.3, color: '#101018' }
+  assert.deepEqual(checkScene(inked), [])
+  assert.deepEqual(compileScene(inked).spec(0.05).parts[0].ink, { kind: 'cracks', amount: 0.3, color: [16 / 255, 16 / 255, 24 / 255] })
   for (const [what, spoil, want] of bad) {
     const d = withAir()
     spoil(d)

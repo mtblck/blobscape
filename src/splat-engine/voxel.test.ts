@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { LIT_MAX, blend, box, buildVoxels, cone, cut, lathe, letterGrid, pixelText, sphere, sweep, union, type VoxelSpec } from './voxel.ts'
+import { LIT_MAX, blend, box, buildVoxels, inkedAt, cone, cut, lathe, letterGrid, pixelText, sphere, sweep, union, type VoxelSpec } from './voxel.ts'
 import { posedPoint, axisAngle } from './rig.ts'
 
 const ROOT = { name: 'root', parent: -1, head: [0, 0, 0] as [number, number, number] }
@@ -225,4 +225,35 @@ test('more shapes: a turned vase, a swept tube, blended seams, pixel letters and
   assert.equal(tree.letterAt([0, 0.1, 0.05], [0, 0, 1]), 't')
   assert.equal(tree.letterAt([0.1, 0.3, 0], [0, 1, 0]), 'l')
   assert.ok(Math.abs(tree.max[1] - 0.4) < 1e-9 && Math.abs(tree.min[0] + 0.15) < 1e-9)
+})
+
+test('ink: a share of 4x4 blocks carry a mark, a big face never repeats, and a part without ink is untouched', () => {
+  const N = 96
+  for (const kind of ['hatch', 'stipple', 'cracks', 'grain', 'tufts', 'scales'] as const) {
+    const mask = (x: number, z: number) => inkedAt({ kind, amount: 0.5 }, x, 0, z, [0, 1, 0], 3)
+    let on = 0, blocks = 0
+    for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) if (mask(x, z)) on++
+    for (let bz = 0; bz < N; bz += 4) for (let bx = 0; bx < N; bx += 4) { let any = false; for (let k = 0; k < 16; k++) any ||= mask(bx + (k & 3), bz + (k >> 2)); if (any) blocks++ }
+    assert.ok(on > 0 && on < N * N * 0.3, `${kind}: ${on} inked`)
+    // about half the blocks; a shifted row can split a mark over two blocks, so allow some slack
+    assert.ok(blocks > N * N / 16 * 0.3 && blocks < N * N / 16 * 0.9, `${kind}: ${blocks} blocks`)
+    // no shift of a block or more (up to 24 cells) either way lines the face up with itself; a mark's own strokes touch, so shorter shifts are left out
+    for (let d = 4; d <= 24; d++) {
+      let sameX = 0, sameZ = 0, total = 0
+      for (let z = 0; z < N - 24; z++) for (let x = 0; x < N - 24; x++) {
+        const m = mask(x, z)
+        if (!m) continue
+        total++
+        if (mask(x + d, z)) sameX++
+        if (mask(x, z + d)) sameZ++
+      }
+      assert.ok(sameX < total * 0.5 && sameZ < total * 0.5, `${kind} repeats every ${d}`)
+    }
+  }
+  const spec = (ink?: { kind: 'cracks'; amount: number }): VoxelSpec => ({ bones: [ROOT], spacing: 0.04, light: { ambient: 1, shadow: 0 }, parts: [{ shape: box([0, 0, 0], [1, 0.1, 1]), color: [0.6, 0.5, 0.4], bone: 'root', ink }] })
+  const plain = buildVoxels(spec()), inked = buildVoxels(spec({ kind: 'cracks', amount: 0.6 }))
+  assert.equal(plain.blobs.count, inked.blobs.count)
+  let darker = 0
+  for (let i = 0; i < plain.blobs.count; i++) if (inked.blobs.color[i * 3] < plain.blobs.color[i * 3] - 0.1) darker++
+  assert.ok(darker > 50 && darker < plain.blobs.count * 0.3, `${darker} of ${plain.blobs.count}`)
 })

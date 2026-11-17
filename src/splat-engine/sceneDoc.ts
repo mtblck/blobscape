@@ -3,7 +3,7 @@ import type { Orbit } from '../splat-core/view.ts'
 import { MAX_PALETTE_SIZE, darkest, type PixelLook, type Rgb } from '../splat-core/pixel.ts'
 import type { PointLight } from './engine.ts'
 import { axisAngle, mulQ, type Bone, type Skeleton } from './rig.ts'
-import { LETTERS, MAX_LAMPS, PAINTED, blend, box, lathe, letterGrid, pixelText, sweep, cone, cut, cylinder, displace, ellipsoid, roof, sphere, torus, union, type LooseBlob, type Shape, type VoxelPart, type VoxelSpec } from './voxel.ts'
+import { INK_MARKS, LETTERS, MAX_LAMPS, PAINTED, blend, box, lathe, letterGrid, pixelText, sweep, cone, cut, cylinder, displace, ellipsoid, roof, sphere, torus, union, type LooseBlob, type Shape, type VoxelPart, type VoxelSpec } from './voxel.ts'
 
 /**
  * A pixel-art scene written as data: no code, so it can be typed by hand, kept
@@ -129,6 +129,12 @@ export interface PartDoc {
   grime?: string
   /** Takes none of the scene's `cover`: water, glass, a fresh fire. */
   bare?: boolean
+  /**
+   * Little drawn marks over it, one in some 4-by-4 blocks of pixels, never repeating: `hatch`, `stipple`, `cracks`,
+   * `grain` (wood), `tufts` (grass) or `scales`. `amount` (0.5) is the share of blocks marked; `color` the ink, a
+   * darker step of the paint when left out.
+   */
+  ink?: { kind: 'hatch' | 'stipple' | 'cracks' | 'grain' | 'tufts' | 'scales'; amount?: number; color?: string }
 }
 
 export type ShapeDoc =
@@ -439,6 +445,14 @@ export function checkScene(doc: unknown): string[] {
     if (p.bone !== undefined) bone(p.bone, `${at}.bone`)
     for (const k of ['glow', 'noShadow', 'bare']) if (p[k] !== undefined && typeof p[k] !== 'boolean') bad(`${at}.${k}`, 'must be true or false')
     if (p.grime !== undefined) hex(p.grime, `${at}.grime`)
+    if (p.ink !== undefined) {
+      if (!obj(p.ink)) bad(`${at}.ink`, 'must be an object')
+      else {
+        if (!(typeof p.ink.kind === 'string' && p.ink.kind in INK_MARKS)) bad(`${at}.ink.kind`, `must be one of ${Object.keys(INK_MARKS).map((k) => `'${k}'`).join(', ')}`)
+        opt(p.ink.amount, `${at}.ink.amount`, 0, 1)
+        if (p.ink.color !== undefined) hex(p.ink.color, `${at}.ink.color`)
+      }
+    }
   })
 
   if (shapes > MAX_SHAPES) bad('parts', `hold ${shapes} shapes between them; the most is ${MAX_SHAPES}`)
@@ -816,6 +830,7 @@ export function compileScene(doc: SceneDoc): CompiledScene {
         return {
         shape, color: toPaint(p.paint, spacing, 'letterAt' in shape ? (shape.letterAt as (p: Vec3, n: Vec3) => string | undefined) : undefined), bone: p.bone ?? 'land', glow: p.glow, noShadow: p.noShadow,
         grime: p.grime === undefined ? undefined : unit(p.grime), bare: p.bare,
+        ink: p.ink && { kind: p.ink.kind, amount: p.ink.amount, color: p.ink.color === undefined ? undefined : unit(p.ink.color) },
         }
       })
       for (const p of specks) parts.push({ shape: toShape(p.shape, thin), color: unit(p.color), bone: p.bone, glow: p.glow, noShadow: true, bare: true })

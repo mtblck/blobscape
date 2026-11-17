@@ -44,6 +44,58 @@ export interface VoxelPart {
   grime?: Vec3
   /** Takes none of the scene's `cover`: water, glass, anything that moves through it or was just made. */
   bare?: boolean
+  /** Little drawn marks over the surface: see Ink. */
+  ink?: Ink
+}
+
+/**
+ * Inked detail: the surface is taken in blocks of 4×4 cells (one picture pixel each in pixel mode), and a share of
+ * the blocks (`amount`) each carry one small mark of the kind, picked, turned and flipped at random per block and with
+ * the blocks of each row shifted, so a big wall never shows a repeat. `color` is the ink; left out, a darker step of
+ * the paint under it.
+ */
+export interface Ink {
+  kind: InkKind
+  amount?: number
+  color?: Vec3
+}
+
+export type InkKind = 'hatch' | 'stipple' | 'cracks' | 'grain' | 'tufts' | 'scales'
+
+/** The marks of each kind, 4×4, top row first. Kinds in UPRIGHT only ever flip side to side: grass grows up, wood grain runs along. */
+export const INK_MARKS: Record<InkKind, string[]> = {
+  hatch: ['#....#....#.....', '......#....#....', '#....#.......#..', '.#....#.........'],
+  stipple: ['.......#........', '#.........#.....', '.#.......#....#.', '.....#..........'],
+  cracks: ['#....##....#....', '.#...#..#.#....#', '....##....##....', '..#..#..##......'],
+  grain: ['....###.........', '##........##....', '....####........', '.........###....'],
+  tufts: ['#.#..#..........', '..#...#.........', '.....#.#..#.....', '#...#...........'],
+  scales: ['.##.#..#........', '.........##.#..#', '.#..#.#.........', '..........#..#.#'],
+}
+const UPRIGHT = new Set<InkKind>(['grain', 'tufts', 'scales'])
+
+const ihash = (a: number, b: number, c: number, d: number) => { const v = Math.sin(a * 127.1 + b * 311.7 + c * 74.7 + d * 19.3) * 43758.5453; return v - Math.floor(v) }
+
+/** Whether the cell at grid (gx, gy, gz) with normal `n` carries ink of this kind: see Ink. `seed` keeps parts apart. */
+export function inkedAt(ink: Ink, gx: number, gy: number, gz: number, n: Vec3, seed: number) {
+  const ax = Math.abs(n[0]), ay = Math.abs(n[1]), az = Math.abs(n[2])
+  // across the face and up it, and the way through it
+  const [u, v, w] = ay >= ax && ay >= az ? [gx, gz, gy] : ax >= az ? [gz, gy, gx] : [gx, gy, gz]
+  const ty = Math.floor(v / 4), shifted = u + Math.floor(ihash(ty, w >> 2, seed, 7) * 4), tx = Math.floor(shifted / 4), tw = w >> 2
+  if (ihash(tx, ty, tw, seed) >= (ink.amount ?? 0.5)) return false
+  const marks = INK_MARKS[ink.kind]
+  const mark = marks[Math.floor(ihash(tx, ty, tw, seed + 1) * marks.length)]
+  const turn = Math.floor(ihash(tx, ty, tw, seed + 2) * 8) & (UPRIGHT.has(ink.kind) ? 1 : 7)
+  let a = shifted - tx * 4, b = v - ty * 4
+  if (turn & 4) [a, b] = [b, a]
+  if (turn & 1) a = 3 - a
+  if (turn & 2) b = 3 - b
+  return mark[(3 - b) * 4 + a] === '#'
+}
+
+/** The ink a color takes by default: a darker, slightly richer step of it. */
+export function inkOf(c: Vec3): Vec3 {
+  const [L, a, b] = toOklab(c)
+  return fromOklab([L * 0.45, a * 1.1, b * 1.1])
 }
 
 /**
@@ -612,6 +664,7 @@ export function buildVoxels(spec: VoxelSpec): Built {
       const n = norm(g)
       const p: Vec3 = [x, y, z]
       let base = typeof part.color === 'function' ? part.color(p, n) : part.color
+      if (part.ink && !part.glow && inkedAt(part.ink, Math.round(x / s), Math.round(y / s), Math.round(z / s), n, pi * 13 + 5)) base = part.ink.color ?? inkOf(base)
       let color = base
       if (!part.glow) {
         const facing = Math.max(0, n[0] * L[0] + n[1] * L[1] + n[2] * L[2])
