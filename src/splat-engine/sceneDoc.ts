@@ -5,6 +5,7 @@ import type { PointLight } from './engine.ts'
 import { axisAngle, mulQ, type Bone, type Skeleton } from './rig.ts'
 import { INK_MARKS, LETTERS, MAX_LAMPS, PAINTED, blend, box, lathe, letterGrid, pixelText, sweep, cone, cut, cylinder, displace, ellipsoid, roof, sphere, torus, union, type LooseBlob, type Shape, type VoxelPart, type VoxelSpec } from './voxel.ts'
 import { PUFFS } from './poke.ts'
+import { GROW_STYLES, grow, growBounds, type GrowStyle } from './grow.ts'
 
 /**
  * A pixel-art scene written as data: no code, so it can be typed by hand, kept
@@ -177,6 +178,13 @@ export type ShapeDoc =
   | { kind: 'text'; at: Vec3; text: string; size: number; depth: number; facing?: 'x' | 'z' }
   /** A model drawn in letters: `layers` from the bottom up, each a list of rows from back to front, each row read along +x; any letter but '.' fills a cube `size` across. It stands on `at`. Paint it with a `key`. */
   | { kind: 'blocks'; at: Vec3; size: number; layers: string[][] }
+  /**
+   * Grown by a branching rule from `seed` (the same seed, the same plant): a 'tree', a 'coral' or a cluster of
+   * 'crystal' spikes standing on `at`, its trunk `size` long and `r` thick at the foot. `depth` and `branches` change
+   * the rule's splits. `tips` puts a ball that size at every branch's end (leaves, polyps); `only` keeps just the
+   * 'twigs' or just the 'tips', so two parts can paint them apart from one grower.
+   */
+  | { kind: 'grow'; style: GrowStyle; at: Vec3; seed: number; size: number; r: number; depth?: number; branches?: number; tips?: number; only?: 'twigs' | 'tips' }
   /** The first shape with the second cut out of it. */
   | { kind: 'cut'; shape: ShapeDoc; hole: ShapeDoc }
   /** A lumpy version: `by` is how far the surface moves, `scale` how big the lumps are. */
@@ -276,6 +284,7 @@ function halfSize(s: ShapeDoc): Vec3 {
     case 'sweep': return [0, 1, 2].map((i) => (Math.max(...s.path.map((q) => q[i])) - Math.min(...s.path.map((q) => q[i]))) / 2 + Math.max(s.r, s.rTo ?? 0)) as Vec3
     case 'text': { const w = ((s.text.length * 4 - 1) * s.size) / 10; return s.facing === 'x' ? [s.depth / 2, s.size / 2, w] : [w, s.size / 2, s.depth / 2] }
     case 'blocks': return [(Math.max(...s.layers.flatMap((l) => l.map((r) => r.length))) * s.size) / 2, (s.layers.length * s.size) / 2, (Math.max(...s.layers.map((l) => l.length)) * s.size) / 2]
+    case 'grow': { const h = growBounds(s).half, k = s.only === 'twigs' ? 0 : s.tips ?? 0; return [h[0] + k, h[1] + k, h[2] + k] }
     case 'cut': case 'rough': return halfSize(s.shape)
   }
 }
@@ -386,6 +395,16 @@ export function checkScene(doc: unknown): string[] {
         else s.path.forEach((q: unknown, i: number) => vec(q, `${at}.path[${i}]`))
         num(s.r, `${at}.r`, 0.001, REACH); opt(s.rTo, `${at}.rTo`, 0, REACH)
         break
+      case 'grow':
+        if (!GROW_STYLES.includes(s.style as GrowStyle)) bad(`${at}.style`, `${show(s.style)} is not a style (${GROW_STYLES.join(', ')})`)
+        vec(s.at, `${at}.at`); num(s.size, `${at}.size`, 0.02, REACH); num(s.r, `${at}.r`, 0.002, REACH)
+        if (typeof s.seed !== 'number' || !Number.isInteger(s.seed) || s.seed < 0) bad(`${at}.seed`, 'must be a whole number, 0 or more')
+        if (s.depth !== undefined && (typeof s.depth !== 'number' || !Number.isInteger(s.depth) || s.depth < 1 || s.depth > 6)) bad(`${at}.depth`, 'must be a whole number from 1 to 6')
+        if (s.branches !== undefined && (typeof s.branches !== 'number' || !Number.isInteger(s.branches) || s.branches < 1 || s.branches > 9)) bad(`${at}.branches`, 'must be a whole number from 1 to 9')
+        opt(s.tips, `${at}.tips`, 0, REACH)
+        if (s.only !== undefined && s.only !== 'twigs' && s.only !== 'tips') bad(`${at}.only`, "must be 'twigs' or 'tips'")
+        if (s.only === 'tips' && !s.tips) bad(`${at}.tips`, "is needed when only is 'tips'")
+        break
       case 'text':
         vec(s.at, `${at}.at`); num(s.size, `${at}.size`, 0.05, REACH); num(s.depth, `${at}.depth`, 0.005, REACH)
         if (typeof s.text !== 'string' || !s.text.length || s.text.length > 24) bad(`${at}.text`, 'must be 1 to 24 characters')
@@ -407,7 +426,7 @@ export function checkScene(doc: unknown): string[] {
       }
       case 'cut': shape(s.shape, `${at}.shape`, depth + 1); shape(s.hole, `${at}.hole`, depth + 1); break
       case 'rough': shape(s.shape, `${at}.shape`, depth + 1); num(s.by, `${at}.by`, 0, 0.3); opt(s.scale, `${at}.scale`, 0.02, REACH); break
-      default: bad(`${at}.kind`, `${show(s.kind)} is not a shape (sphere, ball, box, cylinder, cone, ring, roof, join, lathe, sweep, text, blocks, cut, rough)`)
+      default: bad(`${at}.kind`, `${show(s.kind)} is not a shape (sphere, ball, box, cylinder, cone, ring, roof, join, lathe, sweep, grow, text, blocks, cut, rough)`)
     }
   }
   const paint = (p: unknown, at: string, depth: number) => {
@@ -608,6 +627,13 @@ function toShape(s: ShapeDoc, thin: number): Shape {
     case 'sweep': return sweep(s.path, t(s.r), Math.max(s.rTo ?? s.r, thin * 0.6))
     case 'text': return pixelText(s.at, s.text, Math.max(s.size, thin * 5), t(s.depth), s.facing)
     case 'blocks': return letterGrid(s.at, t(s.size), s.layers)
+    case 'grow': {
+      const { twigs, tips } = grow(s)
+      const all: Shape[] = []
+      if (s.only !== 'tips') for (const w of twigs) all.push(cone(w.from, w.to, t(w.r), Math.max(w.rTo, thin * 0.6)))
+      if (s.only !== 'twigs' && s.tips) for (const p of tips) all.push(sphere(p, Math.max(s.tips, thin * 1.2)))
+      return all.length ? union(...all) : sphere(s.at, thin * 1.2)
+    }
     case 'cut': return cut(toShape(s.shape, thin), toShape(s.hole, 0))
     case 'rough': {
       const k = 1 / (s.scale ?? 0.5)
