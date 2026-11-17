@@ -1,4 +1,5 @@
 import { Blobs, type Quat, type Vec3 } from '../../splat-core/blobs.ts'
+import { turnSH } from '../../splat-core/sh.ts'
 import type { PointLight } from '../../splat-engine/engine.ts'
 import { Skeleton, emptySkin } from '../../splat-engine/rig.ts'
 import { both, coreBox, extent, faintMask, findFloor, floaterMask, floorMask, hugeMask, keepOnly, kept, leveling, mulQ, rotate, type Mask } from './clean.ts'
@@ -47,6 +48,8 @@ export function working(raw: Blobs, o: Orient): { blobs: Blobs; scale: number } 
     out.center.set(rotate(q, raw.center.subarray(i * 3, i * 3 + 3)), i * 3)
     out.quat.set(mulQ(q, raw.quat.subarray(i * 4, i * 4 + 4)), i * 4)
   }
+  // color by angle turns with the scan, or its highlights would face the old way
+  if (out.sh) turnSH(out.sh, out.shDegree, out.count, q)
   const floorY = o.floorY ?? coreBox(out, 0.98).lo[1]
   // with a table found, the middle and the size come from what stands on it: a scan is often mostly table
   const core = o.floorY === null ? coreBox(out, 0.9) : objectBox(out, floorY)

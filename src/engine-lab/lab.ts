@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu'
 import { GaussianSplat } from 'three/addons/objects/GaussianSplat.js'
 import { createGaussianSplatGeometry } from 'three/addons/utils/GaussianSplatUtils.js'
-import { covariance } from '../splat-core/blobs.ts'
+import { covariance, type Blobs } from '../splat-core/blobs.ts'
 import { placeCamera, type Orbit } from '../splat-core/view.ts'
 import { SplatWorld } from '../splat-engine/engine.ts'
 import { DETAIL } from '../splat-engine/lod.ts'
@@ -42,6 +42,8 @@ export interface LabOptions {
   lod?: boolean
   /** Shape edits (ours only): a box cuts the herd's front half away and a soft sphere paints their middles blue. */
   edits?: boolean
+  /** Color by angle (ours only): every fox looks warmer from its left and bluer from its right. */
+  sh?: boolean
   /**
    * Draw into an off-screen target and copy each frame to the page with the
    * CPU. Only for headless test browsers, whose software WebGPU can render but
@@ -55,6 +57,13 @@ export const DEMO_EDITS: ShapeEdit[] = [
   { shape: 'box', center: [0, 1, 5.35], size: [20, 20, 5], op: 'cut' },
   { shape: 'sphere', center: [0, 0.7, 0], size: [0.9, 0, 0], op: 'paint', color: [0.2, 0.45, 1], soft: 0.4 },
 ]
+
+/** The lab's color by angle: one degree-1 term along the fox's own x, warmer seen from one side and bluer from the other. */
+export function giveSheen(b: Blobs) {
+  b.setSHDegree(1)
+  // the third term goes with x (file signs: −C1·x), so this adds (0.5, 0, −0.5)·C1·x toward the blob
+  for (let i = 0; i < b.count; i++) b.sh!.set([-0.5, 0, 0.5], i * 9 + 6)
+}
 
 export interface Lab {
   readonly info: string
@@ -146,6 +155,7 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
   let walk = o.walk
   let mode = o.mode
   if (o.which === 'engine') {
+    if (o.sh) for (const f of foxes) giveSheen(f.blobs)
     world = new SplatWorld(foxes, { mode, paint: o.edits })
     if (o.lod) world.autoDetail = DETAIL
     if (o.edits) world.setEdits(DEMO_EDITS)
@@ -236,7 +246,7 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
   raf = requestAnimationFrame(tick)
 
   return {
-    info: `${o.which === 'three' ? 'three.js (standing still: it has no bones)' : 'ours'} · ${backend} · ${blobs.toLocaleString()} blobs${world?.autoDetail ? ' · fewer when small' : ''}${o.edits ? ' · cut and painted' : ''}`,
+    info: `${o.which === 'three' ? 'three.js (standing still: it has no bones)' : 'ours'} · ${backend} · ${blobs.toLocaleString()} blobs${world?.autoDetail ? ' · fewer when small' : ''}${o.edits ? ' · cut and painted' : ''}${o.sh ? ' · color by angle' : ''}`,
     world,
     renderer,
     get orbit() { return orbit },

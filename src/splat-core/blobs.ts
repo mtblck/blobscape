@@ -14,6 +14,14 @@ export class Blobs {
   quat: Float32Array
   color: Float32Array
   opacity: Float32Array
+  /**
+   * Color by angle, when the blobs have it: `shDegree` 1–3, and per blob
+   * `shTerms` triples (r, g, b for each spherical harmonic term after the
+   * first, in the files' order and signs: see `viewColor` in sh.ts). Blobs
+   * without it have degree 0 and no array.
+   */
+  shDegree = 0
+  sh: Float32Array | null = null
 
   constructor(capacity = 64) {
     this.center = new Float32Array(capacity * 3)
@@ -25,6 +33,18 @@ export class Blobs {
 
   get capacity() { return this.opacity.length }
 
+  /** Rest terms per blob: 0, 3, 8 or 15. */
+  get shTerms() { return [0, 3, 8, 15][this.shDegree] }
+
+  /** Gives the blobs color by angle up to `degree` (0 removes it), keeping the terms they already have. */
+  setSHDegree(degree: number) {
+    const was = this.sh, wasTerms = this.shTerms
+    this.shDegree = degree
+    const t = this.shTerms
+    this.sh = t ? new Float32Array(this.capacity * t * 3) : null
+    if (this.sh && was) for (let i = 0; i < this.count; i++) for (let k = 0; k < Math.min(t, wasTerms) * 3; k++) this.sh[i * t * 3 + k] = was[i * wasTerms * 3 + k]
+  }
+
   private grow(min: number) {
     if (min <= this.capacity) return
     const cap = Math.max(min, this.capacity * 2, 64)
@@ -34,12 +54,15 @@ export class Blobs {
     this.quat = re(this.quat, 4)
     this.color = re(this.color, 3)
     this.opacity = re(this.opacity, 1)
+    if (this.sh) this.sh = re(this.sh, this.shTerms * 3)
   }
 
   push(b: Blob): number {
     this.grow(this.count + 1)
     const i = this.count++
     this.set(i, b)
+    // a slot freed by filter may still hold an old blob's terms
+    if (this.sh) this.sh.fill(0, i * this.shTerms * 3, (i + 1) * this.shTerms * 3)
     return i
   }
 
@@ -72,6 +95,8 @@ export class Blobs {
         this.quat.copyWithin(w * 4, r * 4, r * 4 + 4)
         this.color.copyWithin(w * 3, r * 3, r * 3 + 3)
         this.opacity[w] = this.opacity[r]
+        const s = this.shTerms * 3
+        if (this.sh) this.sh.copyWithin(w * s, r * s, r * s + s)
       }
       w++
     }
@@ -88,11 +113,12 @@ export class Blobs {
     c.quat.set(this.quat.subarray(0, this.count * 4))
     c.color.set(this.color.subarray(0, this.count * 3))
     c.opacity.set(this.opacity.subarray(0, this.count))
+    if (this.sh) { c.setSHDegree(this.shDegree); c.sh!.set(this.sh.subarray(0, this.count * this.shTerms * 3)) }
     return c
   }
 
   /** Bytes held by the used part, for capping undo history. */
-  get bytes() { return this.count * 14 * 4 }
+  get bytes() { return this.count * (14 + this.shTerms * 3) * 4 }
 }
 
 export type Vec3 = [number, number, number]
@@ -275,4 +301,62 @@ export function hexToRgb(hex: string): Vec3 {
 export function rgbToHex(c: ArrayLike<number>): string {
   const h = (v: number) => Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, '0')
   return `#${h(c[0])}${h(c[1])}${h(c[2])}`
+}
+
+/**
+ * The scale and facing of a blob with covariance `c` ([xx, xy, xz, yy, yz, zz]): its
+ * axes are Σ's eigenvectors, its scales the roots of the eigenvalues (Jacobi
+ * sweeps; exact to float precision). The inverse of `covariance`, up to which
+ * axis is called which.
+ */
+export function fromCovariance(c: ArrayLike<number>): { scale: Vec3; quat: Quat } {
+  const a = [[c[0], c[1], c[2]], [c[1], c[3], c[4]], [c[2], c[4], c[5]]]
+  const v = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+  for (let sweep = 0; sweep < 12; sweep++) {
+    const off = Math.abs(a[0][1]) + Math.abs(a[0][2]) + Math.abs(a[1][2])
+    if (off < 1e-30 + 1e-12 * (Math.abs(a[0][0]) + Math.abs(a[1][1]) + Math.abs(a[2][2]))) break
+    for (const [p, q] of [[0, 1], [0, 2], [1, 2]]) {
+      if (a[p][q] === 0) continue
+      const th = (a[q][q] - a[p][p]) / (2 * a[p][q])
+      const t = Math.sign(th || 1) / (Math.abs(th) + Math.sqrt(th * th + 1))
+      const cs = 1 / Math.sqrt(t * t + 1), sn = t * cs
+      for (let k = 0; k < 3; k++) {
+        const akp = a[k][p], akq = a[k][q]
+        a[k][p] = cs * akp - sn * akq; a[k][q] = sn * akp + cs * akq
+      }
+      for (let k = 0; k < 3; k++) {
+        const apk = a[p][k], aqk = a[q][k]
+        a[p][k] = cs * apk - sn * aqk; a[q][k] = sn * apk + cs * aqk
+      }
+      for (let k = 0; k < 3; k++) {
+        const vkp = v[k][p], vkq = v[k][q]
+        v[k][p] = cs * vkp - sn * vkq; v[k][q] = sn * vkp + cs * vkq
+      }
+    }
+  }
+  // the columns of v are the axes; a proper turn needs a determinant of +1
+  const det = v[0][0] * (v[1][1] * v[2][2] - v[1][2] * v[2][1]) - v[0][1] * (v[1][0] * v[2][2] - v[1][2] * v[2][0]) + v[0][2] * (v[1][0] * v[2][1] - v[1][1] * v[2][0])
+  if (det < 0) for (let k = 0; k < 3; k++) v[k][2] = -v[k][2]
+  const scale: Vec3 = [Math.sqrt(Math.max(a[0][0], 0)), Math.sqrt(Math.max(a[1][1], 0)), Math.sqrt(Math.max(a[2][2], 0))]
+  return { scale, quat: matToQuat(v) }
+}
+
+/** The unit quaternion of a rotation matrix given as rows. */
+function matToQuat(m: number[][]): Quat {
+  const tr = m[0][0] + m[1][1] + m[2][2]
+  let q: Quat
+  if (tr > 0) {
+    const s = Math.sqrt(tr + 1) * 2
+    q = [(m[2][1] - m[1][2]) / s, (m[0][2] - m[2][0]) / s, (m[1][0] - m[0][1]) / s, s / 4]
+  } else if (m[0][0] > m[1][1] && m[0][0] > m[2][2]) {
+    const s = Math.sqrt(1 + m[0][0] - m[1][1] - m[2][2]) * 2
+    q = [s / 4, (m[0][1] + m[1][0]) / s, (m[0][2] + m[2][0]) / s, (m[2][1] - m[1][2]) / s]
+  } else if (m[1][1] > m[2][2]) {
+    const s = Math.sqrt(1 + m[1][1] - m[0][0] - m[2][2]) * 2
+    q = [(m[0][1] + m[1][0]) / s, s / 4, (m[1][2] + m[2][1]) / s, (m[0][2] - m[2][0]) / s]
+  } else {
+    const s = Math.sqrt(1 + m[2][2] - m[0][0] - m[1][1]) * 2
+    q = [(m[0][2] + m[2][0]) / s, (m[1][2] + m[2][1]) / s, s / 4, (m[1][0] - m[0][1]) / s]
+  }
+  return normalize(q)
 }

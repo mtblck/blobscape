@@ -248,6 +248,7 @@ export const kept = (m: Mask | undefined, n: number) => (m ? m.reduce((s, v) => 
 export function keepOnly(b: Blobs, m?: Mask): Blobs {
   if (!m) return b.clone()
   const out = new Blobs(Math.max(1, kept(m, b.count)))
+  if (b.shDegree) out.setSHDegree(b.shDegree)
   let w = 0
   for (let i = 0; i < b.count; i++) {
     if (!m[i]) continue
@@ -257,13 +258,15 @@ export function keepOnly(b: Blobs, m?: Mask): Blobs {
   return out
 }
 
-/** Copies blob i of `from` into slot j of `to` (which must have room). */
+/** Copies blob i of `from` into slot j of `to` (which must have room, and color by angle to the same degree if `from` has it). */
 export function copyBlob(from: Blobs, i: number, to: Blobs, j: number) {
   to.center.set(from.center.subarray(i * 3, i * 3 + 3), j * 3)
   to.scale.set(from.scale.subarray(i * 3, i * 3 + 3), j * 3)
   to.quat.set(from.quat.subarray(i * 4, i * 4 + 4), j * 4)
   to.color.set(from.color.subarray(i * 3, i * 3 + 3), j * 3)
   to.opacity[j] = from.opacity[i]
+  const t = from.shTerms * 3
+  if (t && to.shTerms * 3 === t) to.sh!.set(from.sh!.subarray(i * t, i * t + t), j * t)
 }
 
 // --- small vector helpers
