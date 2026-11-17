@@ -18,6 +18,8 @@ import { CREATURES } from './creature/fromScenes.ts'
 import { PROPS } from './props.ts'
 import type { Creature as Body } from '../splat-engine/body.ts'
 import { href } from './routes.ts'
+import { GlbError, readRiggedGlb, writeRiggedGlb, type Rigged } from '../splat-engine/glb.ts'
+import { fileSpecies, sceneRig, splitScene } from './sceneFile.ts'
 
 type ToolId = 'orbit' | 'add' | 'spray' | 'select' | 'lasso' | 'move' | 'erase'
 const TOOLS: { id: ToolId; name: string; note: string }[] = [
@@ -39,7 +41,7 @@ const STARTS = [
 const SWATCHES = ['#e5484d', '#f2a65a', '#f5d90a', '#30a46c', '#3e9be0', '#8e4ec6', '#f4ede1', '#2b2620']
 const OUTLINE_LIMIT = 1500
 const SELECT_OUTLINES = 3000
-const FILE_TYPES = '.ply,.spz,.splat,.ksplat,.sog'
+const FILE_TYPES = '.ply,.spz,.splat,.ksplat,.sog,.glb'
 const PLAY_SECONDS = 2.5
 const MAX_ACTORS = 8
 /** What the Creatures tab can add: the zoo, then things from the other experiments (a slime, the watch). */
@@ -211,6 +213,8 @@ export function Sandbox() {
         return
       }
       const bytes = await file.arrayBuffer()
+      // A rigged .glb (a saved sandbox scene, or a creature from Splat Creatures) opens live
+      if (/\.glb$/i.test(file.name)) { openRigged(new Uint8Array(bytes), file.name); return }
       decoded = true
       const { blobs: b, step: n, dropped } = await readSplatFile(bytes, file.name, maxBlobs)
       if (!b.count) throw new Error('empty')
@@ -225,7 +229,7 @@ export function Sandbox() {
     } catch (err) {
       console.warn(err)
       setMessage('')
-      const why = err instanceof ImportError ? err.message : err instanceof RangeError ? 'This file is too big for this device.' : 'The sandbox reads Gaussian splat files: .ply, .spz, .splat, .ksplat and .sog.'
+      const why = err instanceof GlbError ? `It isn't a rigged splat .glb the sandbox can read: ${err.message}.` : err instanceof ImportError ? err.message : err instanceof RangeError ? 'This file is too big for this device.' : 'The sandbox reads Gaussian splat files: .ply, .spz, .splat, .ksplat and .sog, and rigged splat .glb files.'
       // Spark's decoder can stop working after a file it chokes on; checked files never get that far
       const stuck = decoded && !(err instanceof ImportError && (err.kind === 'mesh' || (err.kind === 'damaged' && /header/.test(err.message))))
       setError(`Couldn't open ${file.name}. ${why}${stuck ? ' If other files stop opening too, reload the page.' : ''}`)
@@ -247,6 +251,61 @@ export function Sandbox() {
     setDragOver(false)
     const f = ev.dataTransfer.files[0]
     if (f) void openFile(f)
+  }
+
+  /**
+   * A rigged .glb: a saved sandbox scene comes back as its scene and its
+   * creatures; any other (one from Splat Creatures) joins the scene as one
+   * creature. Creatures past the sandbox's limits are frozen into the scene.
+   */
+  const openRigged = (bytes: Uint8Array, name: string) => {
+    const r = readRiggedGlb(bytes)
+    const split = splitScene(r)
+    const parts: Rigged[] = split ? split.parts : [{ ...r, name: r.name || name.replace(/\.glb$/i, '') }]
+    const scene = split ? split.scene : blobsRef.current.clone()
+    const list: Actor[] = split ? [] : [...actorsRef.current]
+    let frozen = 0
+    for (const part of parts) {
+      if (list.length >= MAX_ACTORS || actorBlobs(list) + part.blobs.count > maxActorBlobs) {
+        for (let i = 0; i < part.blobs.count; i++) scene.push(part.blobs.get(i))
+        frozen++
+        continue
+      }
+      const sp = fileSpecies(part, part.name || 'creature')
+      const a = makeActor(sp, { at: [0, 0, 0], height: 1, move: sp.moves.length ? undefined : STILL })
+      // Its rest pose is already where it stood: placed as it is
+      list.push({ ...a, at: a.rest.foot, height: a.rest.height })
+    }
+    if (scene.count > maxBlobs) throw new ImportError('too-big', `That scene has ${scene.count.toLocaleString()} blobs; the sandbox holds up to ${maxBlobs.toLocaleString()} here.`)
+    history.current.record(blobsRef.current, sourceRef.current, actorsRef.current)
+    for (const a of list) if (!clocks.current.has(a.key)) clocks.current.set(a.key, 0)
+    replace(scene, split ? name : sourceRef.current)
+    setActors(list)
+    if (list.length) setCurrentKey(list[list.length - 1].key)
+    frameNext.current = true
+    const made = list.length - (split ? 0 : actorsRef.current.length)
+    const kept = frozen ? `; ${frozen === 1 ? 'one creature' : `${frozen} creatures`} didn't fit as live creatures here, so ${frozen === 1 ? 'it was' : 'they were'} frozen into the scene` : ''
+    setMessage(split ? `Opened ${name}: ${scene.count.toLocaleString()} scene blobs and ${made === 1 ? 'a creature' : `${made} creatures`}${kept}` : `Added ${parts[0].name} from ${name}${kept}`)
+  }
+
+  /** The scene and its creatures as one rigged-splat .glb that opens here again and on Splat Creatures. */
+  const exportGlb = () => {
+    try {
+      const r = sceneRig(blobsRef.current, actorsRef.current, (a) => clocks.current.get(a.key) ?? 0, gazeAt)
+      const bytes = writeRiggedGlb(r)
+      const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'model/gltf-binary' }))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${source.replace(/\.[^.]+$/, '').replace(/[^\w-]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'blobscape'}-scene.glb`
+      document.body.append(a)
+      a.click()
+      a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 60_000)
+      const roaming = actorsRef.current.some((x) => x.roam > 0) ? '. Creatures walking about are saved standing on their spots' : ''
+      setMessage(`Saved ${r.blobs.count.toLocaleString()} blobs on ${r.skeleton.count} bones as a rigged .glb${roaming}`)
+    } catch (err) {
+      setError(`Couldn't save the .glb: ${err instanceof Error ? err.message : String(err)}. Remove or freeze a creature and try again.`)
+    }
   }
 
   const exportPly = () => {
@@ -1093,10 +1152,11 @@ export function Sandbox() {
                         <div className="flex flex-wrap gap-2">
                           <Button small onClick={() => { if (!busy) fileInput.current?.click() }} aria-disabled={busy}>{busy ? 'Opening…' : 'Open a splat file…'}</Button>
                           <Button small onClick={exportPly} disabled={!blobs.count && !actors.length}>Save as .ply</Button>
+                          <Button small onClick={exportGlb} disabled={!blobs.count && !actors.length}>Save as rigged .glb</Button>
                         </div>
                         <input ref={fileInput} type="file" accept={FILE_TYPES} className="sr-only" tabIndex={-1} aria-hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void openFile(f) }} />
                         <p className="text-xs text-ink-faint">
-                          .ply, .spz, .splat, .ksplat or .sog, or drop one on the view. It stays on your device. Scenes over {maxBlobs.toLocaleString()} blobs are thinned to fit. Saved files open in most splat viewers.
+                          .ply, .spz, .splat, .ksplat, .sog or a rigged .glb, or drop one on the view. It stays on your device. Scenes over {maxBlobs.toLocaleString()} blobs are thinned to fit. A .ply opens in most splat viewers; a rigged .glb keeps the creatures moving and opens here again and on Splat Creatures.
                         </p>
                         {error && <p className="text-sm text-accent-ink">{error}</p>}
                         <Toggle label="Turn captures the right way up on opening" checked={upright} onChange={setUpright} />

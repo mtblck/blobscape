@@ -155,8 +155,8 @@ export default [
   },
   {
     name: 'sandbox-creatures',
-    about: 'add, play, drag with Move, bones, freeze, undo, walk about, look at, effects, save; phone',
-    entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/actors.ts', 'src/blobscape/wander.ts', 'src/splat-core/view.ts'],
+    about: 'add, play, drag with Move, bones, freeze, undo, walk about, look at, effects, save .ply and rigged .glb; phone',
+    entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/actors.ts', 'src/blobscape/wander.ts', 'src/splat-core/view.ts', 'src/blobscape/sceneFile.ts'],
     async run({ readFileSync, shots, join, fails, ok, open, axe }) {
       const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 900 }, acceptDownloads: true })
       await page.waitForTimeout(1500)
@@ -273,7 +273,29 @@ export default [
       await page.waitForTimeout(2500)
       await page.screenshot({ path: join(shots, 'blobscape-sandbox-creatures.png') })
       await axe(page, 'blobscape sandbox with creatures')
+      // Save as rigged .glb (issue #135): it opens back as the same creatures, and on Splat Creatures as one model
+      const live = await inCreatures(), sceneBefore = await count()
+      await page.getByRole('tab', { name: /Scene/ }).click()
+      const [glbDl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Save as rigged .glb' }).click()])
+      const glbPath = await glbDl.path()
+      await page.getByRole('button', { name: 'Empty' }).click()
+      await page.setInputFiles('input[type=file]', { name: 'saved-scene.glb', mimeType: 'model/gltf-binary', buffer: readFileSync(glbPath) })
+      // Handing 55k blobs to the view holds the page a moment, so wait for the count rather than read it once
+      await page.waitForFunction((n) => document.querySelector('[data-testid=creature-blob-count]')?.textContent?.replace(/\D/g, '') === String(n), live, { timeout: 30000 }).catch(() => {})
+      const back = await inCreatures(), creaturesBack = await page.getByText(/in 4 creatures/).count()
+      if (back !== live || (await count()) !== sceneBefore || !creaturesBack) fails.push(`blobscape sandbox creatures: the saved .glb opened as ${await count()} scene blobs and ${back} in creatures, expected ${sceneBefore} and ${live} in 4`)
+      else ok(`blobscape sandbox creatures: a saved rigged .glb opens back as the same 4 creatures (${back.toLocaleString()} blobs)`)
+      // The sandbox's page closes first: two pages drawing 55k blobs at once starve software WebGPU
+      const glbBytes = readFileSync(glbPath)
       await ctx.close()
+      const cp = await open('/experiments/creature/?offscreen=1', { viewport: { width: 1280, height: 900 } })
+      await cp.page.waitForFunction(() => window.__creature?.blobs() > 0, null, { timeout: 60000 }).catch(() => {})
+      await cp.page.setInputFiles('input[type=file]', { name: 'saved-scene.glb', mimeType: 'model/gltf-binary', buffer: glbBytes })
+      await cp.page.waitForFunction((n) => window.__creature?.blobs() === n, live + sceneBefore, { timeout: 30000 }).catch(() => {})
+      const onCreature = await cp.page.evaluate(() => window.__creature?.blobs() ?? 0)
+      if (onCreature !== live + sceneBefore) fails.push(`blobscape sandbox creatures: Splat Creatures opened the saved scene with ${onCreature} blobs, expected ${live + sceneBefore}`)
+      else ok('blobscape sandbox creatures: Splat Creatures opens the saved scene too')
+      await cp.ctx.close()
       const phone = await open('/sandbox/', { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
       await phone.page.waitForTimeout(1500)
       await phone.page.getByRole('tab', { name: /Creatures/ }).click()
