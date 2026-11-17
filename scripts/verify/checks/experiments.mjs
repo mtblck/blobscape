@@ -1,0 +1,785 @@
+// The engine experiments, each on its own page.
+
+// the Pixel Diorama scenes written as descriptions, each checked as one part
+const SCENES = [['bee', 'Forest bee'], ['campfire', 'Campfire'], ['croc', 'Garden crocodile'], ['dragon', 'Lava dragon'], ['grove', 'Lantern grove'], ['hand', 'Stone hand'], ['harvest', 'Pumpkin watch'], ['hut', 'Heron hut'], ['isles', 'Sky islands'], ['lab', 'Sprout lab'], ['octopus', 'Storm octopus'], ['owl', 'Owl and cauldron'], ['reef', 'Jellyfish reef'], ['snail', 'Snail house'], ['spider', 'Lantern spider'], ['window', 'Sunrise window'], ['windmill', 'Windmill']]
+
+export default [
+  {
+    name: 'creature',
+    about: 'Splat Creatures: draws, details, bones, every creature, monsters, sprite sheets, files',
+    entries: ['src/blobscape/Creature.tsx'],
+    async run({ root, shots, join, fails, ok, open, tabClick, axe }) {
+      const c = await open('/experiments/creature/?offscreen=1', { viewport: { width: 1280, height: 900 } })
+      if (!(await c.page.locator('[data-testid=creature-loading]').count())) fails.push('blobscape creature: no loading note while the engine starts')
+      await c.page.waitForFunction(() => window.__creature, null, { timeout: 60000 }).catch(() => {})
+      const orange = await c.page.evaluate(async () => {
+        const cr = window.__creature
+        if (!cr) return -1
+        await cr.stage.frame(0.3)
+        const cv = document.querySelector('[data-testid=creature-view]')
+        const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+        let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i] > 150 && d[i + 1] > 50 && d[i + 1] < 140 && d[i + 2] < 80) n++
+        return n
+      })
+      if (orange < 2000) fails.push(`blobscape creature: ${orange} fox-orange pixels`)
+      else ok(`blobscape creature: our engine draws the fox (${orange} orange pixels)`)
+      await c.page.waitForTimeout(100)
+      if (await c.page.locator('[data-testid=creature-loading]').count()) fails.push('blobscape creature: the loading note stays after the fox is drawn')
+      else ok('blobscape creature: a loading note shows until the first frame, then goes')
+      const sizes = await c.page.evaluate(() => ({ splats: window.__creature?.glb().byteLength, mesh: window.__creature?.mesh(48).byteLength }))
+      if (!(sizes.splats > 100000 && sizes.mesh > 10000)) fails.push(`blobscape creature: files ${JSON.stringify(sizes)}`)
+      else ok(`blobscape creature: writes splats (${Math.round(sizes.splats / 1024)} KB) and mesh (${Math.round(sizes.mesh / 1024)} KB) .glb`)
+      // a new fox replaces the old one, freeing its GPU buffers, and still draws
+      await tabClick(c.page.getByRole('button', { name: '5k', exact: true }))
+      await c.page.waitForFunction(() => window.__creature?.blobs() < 6000, null, { timeout: 30000 }).catch(() => {})
+      const again = await c.page.evaluate(async () => {
+        await window.__creature.stage.frame(0.5)
+        const cv = document.querySelector('[data-testid=creature-view]')
+        const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+        let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i] > 150 && d[i + 1] > 50 && d[i + 1] < 140 && d[i + 2] < 80) n++
+        return { n, blobs: window.__creature.blobs() }
+      })
+      if (!(again.blobs < 6000 && again.n > 2000)) fails.push(`blobscape creature: after switching to 5k, ${JSON.stringify(again)}`)
+      else ok(`blobscape creature: swaps to a ${again.blobs}-blob fox and draws it`)
+      await c.page.screenshot({ path: join(shots, 'blobscape-creature-offscreen.png') })
+      // pixels in the view that pass a test, after drawing `t` seconds into the clip
+      const pixels = (t, kind) => c.page.evaluate(async ([t, kind]) => {
+        await window.__creature.stage.frame(t)
+        const cv = document.querySelector('[data-testid=creature-view]')
+        const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+        const test = {
+          fox: (r, g, b) => r > 150 && g > 50 && g < 140 && b < 80,
+          bone: (r, g, b) => r > 190 && g > 190 && b > 195 && Math.abs(r - b) < 30,
+          frog: (r, g, b) => g > 120 && g > r * 1.4 && b < 110,
+          elf: (r, g, b) => g > 90 && g > r * 1.5 && g > b * 1.3,
+          fire: (r, g, b) => r > 200 && g > 70 && g < 210 && b < 120,
+          // a monster's colors come from its seed: anything bright and saturated
+          colorful: (r, g, b) => Math.max(r, g, b) > 110 && Math.max(r, g, b) - Math.min(r, g, b) > 50,
+        }[kind]
+        let n = 0; for (let i = 0; i < d.length; i += 4) if (test(d[i], d[i + 1], d[i + 2])) n++
+        return n
+      }, [t, kind])
+      const FOX = 'fox', BONE = 'bone'
+      // the bones view hides every blob and draws the rig
+      await tabClick(c.page.getByRole('button', { name: 'Bones', exact: true }))
+      await c.page.waitForTimeout(100)
+      const bones = { fox: await pixels(0.5, FOX), bone: await pixels(0.5, BONE) }
+      // the joints are coral, which reads as a little fox-orange; the fox itself is thousands
+      if (!(bones.fox < 2000 && bones.bone > 300)) fails.push(`blobscape creature: bones view ${JSON.stringify(bones)}`)
+      else ok(`blobscape creature: Bones hides the blobs and draws the rig (${bones.bone} bone pixels)`)
+      await c.page.screenshot({ path: join(shots, 'blobscape-creature-bones.png') })
+      await tabClick(c.page.getByRole('button', { name: 'Both', exact: true }))
+      await c.page.waitForTimeout(100)
+      const both = { fox: await pixels(0.5, FOX), bone: await pixels(0.5, BONE) }
+      if (!(both.fox > 1000 && both.bone > 300)) fails.push(`blobscape creature: both view ${JSON.stringify(both)}`)
+      else ok('blobscape creature: Both draws the bones over the blobs')
+      await tabClick(c.page.getByRole('button', { name: 'Blobs', exact: true }))
+      // every other creature builds, draws, and has its own clips
+      for (const [name, bonesWanted, color, clip, t] of [
+        // the three taken from the pixel scenes come first on the page
+        ['Crocodile', 27, 'colorful', 'Walk', 0.5],
+        ['Jellyfish', 26, 'colorful', 'Swim', 0.5],
+        ['Owl', 8, 'colorful', 'Walk', 0.4],
+        ['Frog', 20, 'frog', 'Tongue', 1.15],
+        ['Elf', 29, 'elf', 'Wave', 1],
+        ['Dragon', 43, 'fire', 'Breathe fire', 2],
+      ]) {
+        await tabClick(c.page.getByRole('button', { name, exact: true }))
+        await c.page.waitForFunction((n) => window.__creature?.bones() === n && !document.querySelector('[data-testid=creature-loading]'), bonesWanted, { timeout: 60000 }).catch(() => {})
+        // the Sprites panel has a chip per move too: pick the one that plays it
+        await tabClick(c.page.getByRole('region', { name: 'Options' }).getByRole('button', { name: clip, exact: true }))
+        await c.page.waitForTimeout(150)
+        const got = { bones: await c.page.evaluate(() => window.__creature?.bones()), n: await pixels(t, color), url: new URL(c.page.url()).searchParams.get('creature') }
+        if (!(got.bones === bonesWanted && got.n > 1500 && got.url === name.toLowerCase())) fails.push(`blobscape creature: ${name} ${JSON.stringify(got)}`)
+        else ok(`blobscape creature: the ${name.toLowerCase()} draws on ${got.bones} bones, playing ${clip.toLowerCase()} (${got.n} pixels of its color)`)
+        await c.page.screenshot({ path: join(shots, `blobscape-creature-${name.toLowerCase()}.png`) })
+      }
+      // the dragon's flame is bones that grow: it leaves in the file as scale keys, and comes back
+      const fire = await c.page.evaluate(() => {
+        const bytes = window.__creature.glb()
+        const len = new DataView(bytes.buffer, bytes.byteOffset).getUint32(12, true)
+        const json = JSON.parse(new TextDecoder().decode(bytes.subarray(20, 20 + len)))
+        const anim = json.animations.find((a) => a.name === 'fire')
+        return { scales: anim?.channels.filter((ch) => ch.target.path === 'scale').length, kb: Math.round(bytes.byteLength / 1024) }
+      })
+      // the dragon's other looks: ember is red, not ice blue
+      await tabClick(c.page.getByRole('button', { name: 'Ember', exact: true }))
+      await c.page.waitForTimeout(300)
+      await c.page.waitForFunction(() => !document.querySelector('[data-testid=creature-loading]'), null, { timeout: 60000 }).catch(() => {})
+      const ember = await c.page.evaluate(async () => {
+        await window.__creature.stage.frame(0.5)
+        const cv = document.querySelector('[data-testid=creature-view]')
+        const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+        let red = 0, ice = 0
+        for (let i = 0; i < d.length; i += 4) { if (d[i] > 120 && d[i] > d[i + 2] * 1.8 && d[i] > d[i + 1] * 1.6) red++; if (d[i + 2] > 150 && d[i + 2] > d[i] * 1.4) ice++ }
+        return { red, ice }
+      })
+      if (!(ember.red > 2000 && ember.red > ember.ice)) fails.push(`blobscape creature: ember dragon ${JSON.stringify(ember)}`)
+      else ok(`blobscape creature: the ember dragon is red (${ember.red} red, ${ember.ice} ice-blue pixels)`)
+      await c.page.screenshot({ path: join(shots, 'blobscape-creature-ember.png') })
+      if (fire.scales !== 6) fails.push(`blobscape creature: dragon file ${JSON.stringify(fire)}`)
+      else ok(`blobscape creature: the dragon's .glb keys its fire as scale on six bones (${fire.kb} KB)`)
+      // the Sprites panel: the frog's tongue flick and its still pose from 8 sides, as 32 px pixel art
+      await tabClick(c.page.getByRole('button', { name: 'Frog', exact: true }))
+      await c.page.waitForFunction(() => window.__creature?.bones() === 20 && !document.querySelector('[data-testid=creature-loading]'), null, { timeout: 60000 }).catch(() => {})
+      const sheet = await c.page.evaluate(() => window.__sprites({ moves: ['tongue', 'still'], directions: 8, size: 32, frames: 6, colors: 16, outline: true }))
+      const tongueLeft = Math.max(...sheet.solid.slice(12, 18)), stillLeft = sheet.solid[50]
+      if (sheet.cols !== 6 || sheet.rows !== 16 || sheet.solid.length !== 56 || sheet.solid.some((k) => k < 20)) fails.push(`blobscape creature sprites: ${JSON.stringify({ ...sheet, solid: sheet.solid.slice(0, 8) })}`)
+      else if (!(tongueLeft > stillLeft * 1.05)) fails.push(`blobscape creature sprites: the tongue doesn't show from the side (${tongueLeft} vs ${stillLeft} solid pixels)`)
+      else ok(`blobscape creature sprites: 16 rows of the frog from 8 sides, every frame drawn, tongue out from the side (${tongueLeft} vs ${stillLeft} solid pixels)`)
+      await c.page.locator('[data-testid=sprites] img').waitFor({ timeout: 10000 }).catch(() => {})
+      if (!(await c.page.locator('[data-testid=sprites] img').count())) fails.push('blobscape creature sprites: no sheet preview')
+      // the live view comes back after drawing the sheet
+      const after = await pixels(0.4, 'frog')
+      if (after < 1500) fails.push(`blobscape creature sprites: the view is empty after drawing a sheet (${after} frog pixels)`)
+      else ok('blobscape creature sprites: the live view comes back after the sheet')
+      await c.page.locator('[data-testid=sprites]').screenshot({ path: join(shots, 'blobscape-creature-sprites.png') })
+      // Make me a monster: a new creature from a seed, in the address so the link makes it again, with its own sprite sheet
+      // a monster's colors come from its seed, and a dark one has few bright pixels: one that moves is drawn whatever its colors
+      const moved = (t1, t2) => c.page.evaluate(async ([t1, t2]) => {
+        const grab = async (t) => { await window.__creature.stage.frame(t); const cv = document.querySelector('[data-testid=creature-view]'); return cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data }
+        const a = await grab(t1), b = await grab(t2)
+        let n = 0; for (let i = 0; i < a.length; i += 4) if (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]) > 48) n++
+        return n
+      }, [t1, t2])
+      const monster = async () => {
+        await c.page.waitForFunction(() => new URL(location.href).searchParams.get('creature') === 'monster' && !document.querySelector('[data-testid=creature-loading]'), null, { timeout: 30000 }).catch(() => {})
+        await c.page.waitForTimeout(200)
+        return { seed: new URL(c.page.url()).searchParams.get('seed'), bones: await c.page.evaluate(() => window.__creature?.bones()), n: await pixels(0.3, 'colorful'), moved: await moved(0.3, 0.9), label: await c.page.getByTestId('make-monster').textContent(), note: await c.page.getByTestId('creature-note').textContent() }
+      }
+      await tabClick(c.page.getByTestId('species').getByRole('button', { name: 'Monster', exact: true }))
+      const m1 = await monster()
+      await tabClick(c.page.getByTestId('make-monster'))
+      await c.page.waitForFunction((s) => new URL(location.href).searchParams.get('seed') !== s, m1.seed, { timeout: 10000 }).catch(() => {})
+      // the address changes at once and the new monster is cut a moment later: its note is what says it is on show
+      await c.page.waitForFunction((n) => (document.querySelector('[data-testid=creature-note]')?.textContent ?? '') !== n, m1.note, { timeout: 30000 }).catch(() => {})
+      const m2 = await monster()
+      if (!(m1.seed && m2.seed && m1.seed !== m2.seed && m1.bones >= 14 && (m1.n > 1500 || m1.moved > 400) && (m2.n > 1500 || m2.moved > 400) && m2.label === 'Generate a new monster' && /^Made a .*legged/.test(m2.note))) fails.push(`blobscape creature monster: ${JSON.stringify({ m1, m2 })}`)
+      else ok(`blobscape creature monster: seeds ${m1.seed} and ${m2.seed} make two monsters (${m1.bones} and ${m2.bones} bones) that draw`)
+      await c.page.screenshot({ path: join(shots, 'blobscape-creature-monster.png') })
+      const mSheet = await c.page.evaluate(() => window.__sprites({ moves: ['walk', 'roar'], directions: 4, size: 32, frames: 6, colors: 16, outline: true }))
+      if (mSheet.rows !== 8 || mSheet.solid.some((k) => k < 20)) fails.push(`blobscape creature monster sprites: ${JSON.stringify({ ...mSheet, solid: mSheet.solid.slice(0, 8) })}`)
+      else ok('blobscape creature monster sprites: the monster walks and roars from 4 sides as a sheet')
+      // the address makes the same monster again
+      const relink = await open(`/experiments/creature/?offscreen=1&creature=monster&seed=${m2.seed}`, { viewport: { width: 1280, height: 900 } })
+      await relink.page.waitForFunction(() => window.__creature?.bones() > 0, null, { timeout: 60000 }) // off-screen, the waiting mark stays until a frame is drawn.catch(() => {})
+      const same = { bones: await relink.page.evaluate(() => window.__creature?.bones()), seed: new URL(relink.page.url()).searchParams.get('seed') }
+      if (same.bones !== m2.bones || same.seed !== m2.seed) fails.push(`blobscape creature monster link: ${JSON.stringify(same)} vs ${JSON.stringify(m2)}`)
+      else ok(`blobscape creature monster: the link with seed ${m2.seed} opens the same monster`)
+      await relink.ctx.close()
+      // a file with morphs: the sample pufferfish opens, its puff clip swells it, Still hands the morphs to sliders,
+      // a sprite sheet draws the swelling, and the file written back keeps its morph targets
+      await tabClick(c.page.getByRole('button', { name: 'Fox', exact: true }))
+      await c.page.waitForFunction(() => !document.querySelector('[data-testid=creature-loading]'), null, { timeout: 60000 }).catch(() => {})
+      await c.page.setInputFiles('input[type=file]', join(root, 'public/rigged-splats/puffer.glb'))
+      await c.page.waitForFunction(() => window.__creature?.blobs() === 5257, null, { timeout: 30000 }).catch(() => {})
+      const fish = (t) => c.page.evaluate(async (t) => {
+        await window.__creature.stage.frame(t)
+        const cv = document.querySelector('[data-testid=creature-view]')
+        const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+        let n = 0
+        for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 128 && d[i] > 150 && d[i + 1] > 100 && d[i + 2] < 150) n++
+        return n
+      }, t)
+      await tabClick(c.page.getByRole('region', { name: 'Options' }).getByRole('button', { name: 'puff', exact: true }))
+      const puff = { rest: await fish(0), full: await fish(1.5) }
+      await c.page.screenshot({ path: join(shots, 'blobscape-creature-puffer.png') })
+      await tabClick(c.page.getByRole('region', { name: 'Options' }).getByRole('button', { name: 'Still', exact: true }))
+      const still = await fish(0)
+      await c.page.getByRole('slider', { name: 'Puff' }).fill('1')
+      await c.page.waitForTimeout(150)
+      const slid = await fish(0)
+      const fishSheet = await c.page.evaluate(() => window.__sprites({ moves: ['puff'], directions: 4, size: 32, frames: 6, colors: 16, outline: true }))
+      const kept = await c.page.evaluate(() => {
+        const b = window.__creature.glb(), len = new DataView(b.buffer, b.byteOffset).getUint32(12, true)
+        const j = JSON.parse(new TextDecoder().decode(b.subarray(20, 20 + len)))
+        return j.meshes[0].primitives[0].targets?.length
+      })
+      const note = await c.page.getByTestId('creature-note').textContent()
+      // the puff peaks at the clip's middle frame; the side view's first row holds frames 0..5
+      const swells = Math.max(...fishSheet.solid.slice(2, 4)) > fishSheet.solid[0] * 1.3
+      if (!(/4 morphs/.test(note) && puff.full > puff.rest * 1.5 && slid > still * 1.5 && kept === 4 && swells)) fails.push(`blobscape creature morphs: ${JSON.stringify({ note, puff, still, slid, kept, solid: fishSheet.solid.slice(0, 6) })}`)
+      else ok(`blobscape creature morphs: the pufferfish file swells from its clip (${puff.rest} → ${puff.full} pixels) and its slider, draws as a sheet and keeps its 4 morph targets`)
+      await axe(c.page, 'blobscape creature sprites')
+      await c.ctx.close()
+    },
+  },
+  {
+    name: 'diorama',
+    about: 'Pixel Diorama on WebGPU and WebGL: pixel art in palette, the GPU pass matches its CPU twin, motion, steady pixels, layout',
+    entries: ['src/blobscape/PixelDiorama.tsx'],
+    async run({ shots, join, fails, ok, open, tabClick, axe }) {
+      for (const q of ['', '&webgl=1']) {
+        const d = await open(`/experiments/pixel-diorama/?offscreen=1${q}`, { viewport: { width: 1280, height: 900 } })
+        await d.page.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).catch(() => {})
+        const shot = (t) => d.page.evaluate(async (t) => {
+          const { stage, look } = window.__diorama
+          await stage.frame(t)
+          const f = await stage.pixelFrames()
+          const pal = new Set([...look().palette, look().outline].map((c) => (c[0] << 16) | (c[1] << 8) | c[2]))
+          let solid = 0, off = 0, soft = 0
+          for (let i = 0; i < f.art.data.length; i += 4) {
+            const a = f.art.data[i + 3]
+            if (a !== 0 && a !== 255) soft++
+            if (!a) continue
+            solid++
+            if (!pal.has((f.art.data[i] << 16) | (f.art.data[i + 1] << 8) | f.art.data[i + 2])) off++
+          }
+          return { backend: stage.backend, w: f.art.width, h: f.art.height, solid, off, soft, small: Array.from(f.small.data), art: Array.from(f.art.data), before: f.before && Array.from(f.before.data), parts: f.parts && Array.from(f.parts.data), look: look() }
+        }, t)
+        const a = await shot(2), b = await shot(5)
+        // the same frame through the CPU twin (the page's own module isn't reachable from a production build, so it runs here)
+        const { pixelArt } = await import('../../../src/splat-core/pixel.ts')
+        const frame = (data) => data && { width: a.w, height: a.h, data: Uint8ClampedArray.from(data) }
+        const want = pixelArt(frame(a.small), a.look, frame(a.before), frame(a.parts))
+        let alpha = 0, color = 0, moved = 0
+        for (let i = 0; i < want.data.length; i += 4) {
+          if (want.data[i + 3] !== a.art[i + 3]) alpha++
+          else if (Math.abs(want.data[i] - a.art[i]) + Math.abs(want.data[i + 1] - a.art[i + 1]) + Math.abs(want.data[i + 2] - a.art[i + 2]) > 6) color++
+          if (a.art[i] !== b.art[i] || a.art[i + 1] !== b.art[i + 1] || a.art[i + 3] !== b.art[i + 3]) moved++
+        }
+        const label = `blobscape pixel diorama (${a.backend})`
+        if ((q ? 'webgl' : 'webgpu') !== a.backend) fails.push(`${label}: wanted the ${q ? 'webgl' : 'webgpu'} backend`)
+        if (!(a.solid > 3000 && a.off === 0 && a.soft === 0)) fails.push(`${label}: ${JSON.stringify({ solid: a.solid, offPalette: a.off, soft: a.soft })}`)
+        else ok(`${label}: ${a.w}×${a.h} art, ${a.solid} solid pixels, every one a palette color, none half transparent`)
+        // dither sits pixels on the line between two colors, where 8-bit rounding can tip them either way
+        if (!(alpha === 0 && color < a.solid * 0.05)) fails.push(`${label}: the pixel pass and its CPU twin differ (${alpha} in shape, ${color} of ${a.solid} in color)`)
+        else ok(`${label}: the pixel pass matches its CPU twin (same shape, ${color} of ${a.solid} pixels a neighboring color)`)
+        // lines between parts: the pass drew a map of the scene's parts beside the picture, and the lines it adds are the ones the twin adds
+        {
+          const none = pixelArt(frame(a.small), { ...a.look, parts: false }, frame(a.before))
+          const ids = new Set()
+          let lines = 0
+          for (let i = 0; i < want.data.length; i += 4) {
+            if (a.parts?.[i + 3]) ids.add(a.parts[i] | (a.parts[i + 1] << 8) | (a.parts[i + 2] << 16))
+            if (want.data[i] !== none.data[i] || want.data[i + 1] !== none.data[i + 1] || want.data[i + 2] !== none.data[i + 2]) lines++
+          }
+          if (!(a.look.parts && ids.size > 20 && lines > 200)) fails.push(`${label}: lines between parts: ${JSON.stringify({ on: a.look.parts, parts: ids.size, lines })}`)
+          else ok(`${label}: lines between parts: a map of ${ids.size} parts, ${lines} pixels of line that color alone would not draw`)
+        }
+        if (!(moved > 150)) fails.push(`${label}: only ${moved} pixels change in a few seconds`)
+        else ok(`${label}: ${moved} pixels change in a few seconds`)
+        // steady pixels: the frame after is drawn against this one, as the CPU twin does given the same two; and fewer pixels flip there and back than with it off
+        {
+          const c = await shot(5 + 1 / 60)
+          const again = pixelArt(frame(c.small), c.look, frame(c.before), frame(c.parts))
+          let held = 0, differ = 0
+          const plain = pixelArt(frame(c.small), { ...c.look, steady: 0 }, undefined, frame(c.parts))
+          for (let i = 0; i < again.data.length; i += 4) {
+            if (Math.abs(again.data[i] - c.art[i]) + Math.abs(again.data[i + 1] - c.art[i + 1]) + Math.abs(again.data[i + 2] - c.art[i + 2]) > 6 || again.data[i + 3] !== c.art[i + 3]) differ++
+            if (plain.data[i] !== again.data[i] || plain.data[i + 1] !== again.data[i + 1] || plain.data[i + 2] !== again.data[i + 2]) held++
+          }
+          if (!(c.look.steady > 0 && c.before && differ < a.solid * 0.05 && held > 20)) fails.push(`${label}: steady pixels: ${JSON.stringify({ steady: c.look.steady, before: !!c.before, differ, held })}`)
+          else ok(`${label}: steady pixels: drawn against the frame before as the CPU twin is (${differ} pixels a neighboring color), ${held} pixels keep their color that would have flipped`)
+        }
+        // held frames: with a step, the scene only moves on every step, so two moments inside one step are one picture
+        {
+          const held = await d.page.evaluate(async () => {
+            const { stage } = window.__diorama
+            const grab = async (t) => { await stage.frame(t); return (await stage.pixelFrames()).art.data }
+            stage.step = 1 / 8
+            const x = await grab(3.01), y = await grab(3.1), z = await grab(3.26)
+            const at = stage.time
+            stage.step = 0
+            const differ = (p, q) => { let n = 0; for (let i = 0; i < p.length; i += 4) if (p[i] !== q[i] || p[i + 1] !== q[i + 1] || p[i + 2] !== q[i + 2]) n++; return n }
+            return { same: differ(x, y), next: differ(x, z), at }
+          })
+          if (!(held.same === 0 && held.next > 20 && Math.abs(held.at - 3.25) < 1e-6)) fails.push(`${label}: held frames: ${JSON.stringify(held)}`)
+          else ok(`${label}: held frames: two moments inside one eighth of a second are the same picture, the next eighth moves ${held.next} pixels`)
+        }
+        // the same moment drawn twice is the same picture: blobs at one depth keep one order, so edges (a window in its frame) do not flicker
+        const twice = await d.page.evaluate(async () => {
+          const { stage } = window.__diorama
+          const grab = async () => { await stage.frame(2); return (await stage.pixelFrames()).small.data }
+          const x = await grab(), y = await grab()
+          let n = 0
+          for (let i = 0; i < x.length; i += 4) if (x[i] !== y[i] || x[i + 1] !== y[i + 1] || x[i + 2] !== y[i + 2]) n++
+          return n
+        })
+        if (twice > 40) fails.push(`${label}: one moment drawn twice differs in ${twice} pixels (blobs at one depth are changing order)`)
+        else ok(`${label}: one moment drawn twice is the same picture (${twice} pixels differ)`)
+        if (!q) {
+          // pixels off: the same scene as blobs, in far more colors
+          await tabClick(d.page.getByRole('button', { name: 'Blobs', exact: true }))
+          await d.page.waitForFunction(() => !window.__diorama.stage.artSize)
+          const colors = await d.page.evaluate(async () => {
+            await window.__diorama.stage.frame(2)
+            const cv = document.querySelector('[data-testid=diorama-view]')
+            const px = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+            const s = new Set()
+            for (let i = 0; i < px.length; i += 4) if (px[i + 3] > 200) s.add((px[i] << 16) | (px[i + 1] << 8) | px[i + 2])
+            return s.size
+          })
+          if (!(colors > 500)) fails.push(`${label}: as blobs it shows only ${colors} colors`)
+          else ok(`${label}: with pixels off it draws the blobs (${colors} colors)`)
+          await tabClick(d.page.getByRole('button', { name: 'Pixel art', exact: true }))
+          // offscreen draws only when asked: draw until pixel mode is back on
+          await d.page.waitForFunction(async () => { await window.__diorama.stage.frame(4.5); return !!window.__diorama.stage.artSize })
+          await d.page.screenshot({ path: join(shots, 'blobscape-pixel-diorama.png') })
+          await axe(d.page, 'blobscape pixel diorama')
+          // the shared layout: options in tabs beside the preview, which stays in sight on scroll and can fill the screen
+          const tabNames = await d.page.getByRole('tab').allTextContents()
+          await d.page.getByRole('tab', { name: 'Finish' }).click()
+          const finishShown = await d.page.getByRole('button', { name: 'Save this frame' }).isVisible()
+          await d.page.setViewportSize({ width: 390, height: 700 })
+          await d.page.evaluate(() => window.scrollTo(0, 500))
+          const stuck = await d.page.getByTestId('diorama-view').evaluate((c) => { const r = c.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight && r.height > 200 })
+          await d.page.getByTestId('full-screen').click()
+          const filled = await d.page.waitForFunction(() => { const c = document.querySelector('[data-testid=diorama-view]'); return !!document.querySelector('[data-full]') && c.clientWidth >= innerWidth - 2 && c.clientHeight > innerHeight * 0.8 }, null, { timeout: 5000 }).then(() => true, () => false)
+          await d.page.getByTestId('full-screen').click()
+          const back = await d.page.waitForFunction(() => !document.querySelector('[data-full]'), null, { timeout: 5000 }).then(() => true, () => false)
+          if (tabNames.join() !== 'Scene,Pixels,Finish' || !finishShown || !stuck || !filled || !back) fails.push(`${label} layout: ${JSON.stringify({ tabNames, finishShown, stuck, filled, back })}`)
+          else ok(`${label} layout: options in ${tabNames.length} tabs, the preview stays in sight on a phone as the page scrolls, and it fills the screen and comes back`)
+        }
+        await d.ctx.close()
+      }
+    },
+  },
+  {
+    name: 'diorama-picker',
+    about: 'Pixel Diorama: details dialog, picking a scene swaps the palette on arrival, the gallery of loops',
+    entries: ['src/blobscape/PixelDiorama.tsx'],
+    files: ['public/loops/'],
+    async run({ join, fails, ok, open, axe }) {
+      const d = await open('/experiments/pixel-diorama/?offscreen=1&scene=campfire', { viewport: { width: 1280, height: 900 } })
+      await d.page.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).catch(() => {})
+      // the details panel: one short line under the view, and Full details opens a dialog with the scene's numbers that Escape closes
+      {
+        await d.page.evaluate(async () => { await window.__diorama.stage.frame(0.5) })
+        await d.page.waitForSelector('[data-testid=diorama-png-size]', { timeout: 30000 }).catch(() => {})
+        const line = await d.page.locator('[data-testid=diorama-blobs]').locator('xpath=ancestor::div[1]').innerText().catch(() => '')
+        await d.page.locator('[data-testid=diorama-details-open]').click()
+        const dialog = d.page.locator('[data-testid=diorama-details]')
+        const shown = await dialog.evaluate((el) => el.open && el.matches(':modal')).catch(() => false)
+        const sizes = await Promise.all(['description', 'picture', 'splats'].map((k) => d.page.locator(`[data-testid=details-${k}]`).innerText().catch(() => '')))
+        const tiles = await dialog.locator('dt').allInnerTexts()
+        if (shown) await axe(d.page, 'blobscape pixel diorama details')
+        await d.page.keyboard.press('Escape')
+        const closed = await dialog.evaluate((el) => !el.open)
+        const back = await d.page.evaluate(() => document.activeElement?.getAttribute('data-testid'))
+        const kb = (t) => parseFloat(t.replace(/,/g, ''))
+        if (!(/blobs, drawn at \d+ × \d+, [\d.,]+\sKB a frame/.test(line) && shown && sizes.every((t) => /KB$/.test(t)) && kb(sizes[0]) < kb(sizes[2]) && kb(sizes[1]) < kb(sizes[2]) && tiles.length >= 10 && closed && back === 'diorama-details-open')) fails.push(`blobscape pixel diorama details: ${JSON.stringify({ line, shown, sizes, tiles, closed, back })}`)
+        else ok(`blobscape pixel diorama: Full details opens a panel of ${tiles.length} readouts (description ${sizes[0]}, picture ${sizes[1]}, splats ${sizes[2]}), and Escape closes it and gives focus back`)
+      }
+      const strip = () => [...document.querySelectorAll('[data-testid=palette-strip] span')].map((e) => e.style.background).join()
+      const before = await d.page.evaluate(strip)
+      const justAfter = await d.page.evaluate(() => {
+        [...document.querySelectorAll('button')].find((b) => b.textContent === 'Windmill').click()
+        return [...document.querySelectorAll('[data-testid=palette-strip] span')].map((e) => e.style.background).join()
+      }).catch(() => '')
+      const changed = await d.page.waitForFunction((was) => { const now = [...document.querySelectorAll('[data-testid=palette-strip] span')].map((e) => e.style.background).join(); return !!window.__diorama && now !== was }, before, { timeout: 90000 }).then(() => true, () => false)
+      if (!before || justAfter !== before || !changed) fails.push(`blobscape pixel diorama: on picking another scene the palette ${justAfter !== before ? 'changed before the scene did' : 'never changed'}`)
+      else ok('blobscape pixel diorama: a newly picked scene brings its palette only when it reaches the view')
+      // the gallery of recorded loops: every tile's loop loads, and a tile opens its scene in the view
+      await d.page.getByTestId('diorama-loops').scrollIntoViewIfNeeded()
+      const loops = await d.page.waitForFunction(() => { const im = [...document.querySelectorAll('[data-testid=diorama-loops] img')]; return im.length && im.every((i) => i.complete && i.naturalWidth) ? im.length : 0 }, null, { timeout: 30000 }).then((h) => h.jsonValue(), () => 0)
+      await d.page.getByTestId('diorama-loops').getByRole('button', { name: 'Snail house, open in the view above' }).click()
+      const picked = await d.page.waitForFunction(() => location.search.includes('scene=snail') && scrollY < 50 && document.activeElement?.dataset.testid === 'diorama-view', null, { timeout: 20000 }).then(() => true, () => false)
+      if (loops < 18 || !picked) fails.push(`blobscape pixel diorama gallery: ${loops} loops loaded, picking a tile ${picked ? 'worked' : 'did not open the scene above'}`)
+      else ok(`blobscape pixel diorama: the gallery's ${loops} loops load, and a tile opens its scene in the view`)
+      await d.ctx.close()
+    },
+  },
+  // the scenes in three checks of about six, so they run side by side
+  ...[0, 1, 2].map((k) => SCENES.filter((_, i) => i % 3 === k)).map((scenes, k) => ({
+      name: `diorama-scenes-${k + 1}`,
+      about: `scenes written as descriptions, ${scenes.map(([id]) => id).join(', ')}: each opens by its address, draws in its palette and moves`,
+      entries: ['src/blobscape/PixelDiorama.tsx'],
+      parts: Object.fromEntries(scenes.map(([id]) => [id, [`src/blobscape/diorama/scenes/${id}.ts`]])),
+      async run({ shots, join, fails, ok, open, wants }) {
+        for (const [id, name] of scenes) {
+          if (!wants(id)) continue
+          const d = await open(`/experiments/pixel-diorama/?offscreen=1&scene=${id}`, { viewport: { width: 1280, height: 900 } })
+          const label = `blobscape pixel diorama ${id}`
+          if (!await d.page.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).then(() => true, () => false)) {
+            fails.push(`${label}: the scene never started`)
+            await d.ctx.close()
+            continue
+          }
+          const shot = (t) => d.page.evaluate(async (t) => {
+            const { stage, look, bones } = window.__diorama
+            await stage.frame(t)
+            const f = await stage.pixelFrames()
+            const pal = new Set([...look().palette, look().outline].filter(Boolean).map((c) => (c[0] << 16) | (c[1] << 8) | c[2]))
+            let off = 0
+            const used = new Set()
+            for (let i = 0; i < f.art.data.length; i += 4) {
+              const c = (f.art.data[i] << 16) | (f.art.data[i + 1] << 8) | f.art.data[i + 2]
+              // a scene with no sky leaves the background clear
+              if (!f.art.data[i + 3]) { if (look().sky) off++; continue }
+              if (!pal.has(c)) off++
+              used.add(c)
+            }
+            return { off, used: used.size, bones: bones(), turned: stage.orbit.azimuth, art: Array.from(f.art.data), small: Array.from(f.small.data), before: f.before && Array.from(f.before.data), parts: f.parts && Array.from(f.parts.data), w: f.art.width, h: f.art.height, look: look() }
+          }, t)
+          // a view that swings stands at the same angle at t and at half a loop less t (half a loop is given here), so what changes between those is the scene itself
+          const half = { bee: 6, dragon: 8, hand: 8, reef: 6 }[id]
+          const a = await shot(2), b = await shot(half ? half - 2 : 5)
+          if (half) {
+            const c = await shot(half / 2)
+            if (Math.abs(a.turned - b.turned) > 0.01 || Math.abs(c.turned - a.turned) < 0.5) fails.push(`${label}: the view should swing and come back: ${JSON.stringify([a.turned, c.turned, b.turned])}`)
+            else ok(`${label}: the view swings (${a.turned.toFixed(1)}° at 2 s, ${c.turned.toFixed(1)}° at ${half / 2} s) and the bones move on their own`)
+          }
+          if (id === 'dragon') {
+            // the one scene whose sky stops short: that path of the pass against its CPU twin
+            const { pixelArt } = await import('../../../src/splat-core/pixel.ts')
+            const want = pixelArt({ width: a.w, height: a.h, data: Uint8ClampedArray.from(a.small) }, a.look, a.before && { width: a.w, height: a.h, data: Uint8ClampedArray.from(a.before) }, a.parts && { width: a.w, height: a.h, data: Uint8ClampedArray.from(a.parts) })
+            let alpha = 0, color = 0
+            for (let i = 0; i < want.data.length; i += 4) {
+              if (want.data[i + 3] !== a.art[i + 3]) alpha++
+              else if (Math.abs(want.data[i] - a.art[i]) + Math.abs(want.data[i + 1] - a.art[i + 1]) + Math.abs(want.data[i + 2] - a.art[i + 2]) > 6) color++
+            }
+            if (!(a.look.sky?.[2] < 1 && alpha === 0 && color < a.w * a.h * 0.05)) fails.push(`${label}: with a sky that stops short, the pixel pass and its CPU twin differ (${alpha} in shape, ${color} of ${a.w * a.h} in color, reach ${a.look.sky?.[2]})`)
+            else ok(`${label}: with a sky that stops short, the pixel pass matches its CPU twin (${color} of ${a.w * a.h} pixels a neighboring color)`)
+          }
+          let moved = 0
+          for (let i = 0; i < a.art.length; i += 4) if (a.art[i] !== b.art[i] || a.art[i + 1] !== b.art[i + 1] || a.art[i + 2] !== b.art[i + 2]) moved++
+          const chip = await d.page.getByRole('button', { name, exact: true }).getAttribute('aria-pressed')
+          if (!(a.off === 0 && a.used >= 12 && a.bones > 10 && moved > 100 && chip === 'true')) fails.push(`${label}: ${JSON.stringify({ offPalette: a.off, colors: a.used, bones: a.bones, moved, chip })}`)
+          else ok(`${label}: built from its description (${a.bones} bones), ${a.used} palette colors in the picture, ${moved} pixels change in a few seconds`)
+          await d.page.screenshot({ path: join(shots, `blobscape-pixel-diorama-${id}.png`) })
+          await d.ctx.close()
+        }
+      },
+  })),
+  {
+    name: 'clockwork',
+    about: 'Clockwork: the watch draws, the train turns by the right amount, the hands read the time',
+    entries: ['src/blobscape/Clockwork.tsx'],
+    async run({ shots, join, fails, ok, open, tabClick, axe }) {
+      const k = await open('/experiments/clockwork/?offscreen=1', { viewport: { width: 1280, height: 900 } })
+      await k.page.waitForFunction(() => window.__clock, null, { timeout: 90000 }).catch(() => {})
+      const shot = (s) => k.page.evaluate(async (s) => {
+        await window.__clock.stage.frame(s)
+        const cv = document.querySelector('[data-testid=clock-view]')
+        const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+        let gold = 0, blue = 0
+        for (let i = 0; i < d.length; i += 4) {
+          if (d[i] > 170 && d[i + 1] > 110 && d[i + 2] < 120 && d[i] > d[i + 2] * 1.8) gold++
+          if (d[i + 2] > 110 && d[i + 2] > d[i] * 2 && d[i + 2] > d[i + 1] * 1.6) blue++
+        }
+        return { gold, blue, d: Array.from(d) }
+      }, s)
+      await tabClick(k.page.getByRole('button', { name: 'Dial', exact: true }))
+      const a = await shot(3 * 3600 + 41 * 60 + 17), b = await shot(3 * 3600 + 41 * 60 + 47)
+      let moved = 0
+      for (let i = 0; i < a.d.length; i += 4) if (Math.abs(a.d[i] - b.d[i]) + Math.abs(a.d[i + 1] - b.d[i + 1]) > 60) moved++
+      const bones = await k.page.evaluate(() => window.__clock.bones())
+      if (!(a.gold > 8000 && a.blue > 300 && moved > 500 && bones === 9)) fails.push(`blobscape clockwork: ${JSON.stringify({ gold: a.gold, blue: a.blue, moved, bones })}`)
+      else ok(`blobscape clockwork: the movement draws (${a.gold} gold, ${a.blue} blued pixels) on ${bones} bones, and ${moved} pixels change in thirty seconds`)
+      await k.page.waitForFunction(() => /\d+:\d\d:\d\d/.test(document.querySelector('[data-testid=clock-reading]')?.textContent ?? ''), null, { timeout: 5000 }).catch(() => {})
+      const read = await k.page.getByTestId('clock-reading').textContent()
+      if (!/^(1[0-2]|[1-9]):[0-5]\d:[0-5]\d$/.test(read ?? '')) fails.push(`blobscape clockwork: the reading is "${read}"`)
+      else ok(`blobscape clockwork: the hands' reading shows (${read})`)
+      await tabClick(k.page.getByRole('button', { name: 'Escapement', exact: true }))
+      await shot(100.02)
+      await k.page.screenshot({ path: join(shots, 'blobscape-clockwork.png') })
+      await axe(k.page, 'blobscape clockwork')
+      await k.ctx.close()
+    },
+  },
+  {
+    name: 'scan-studio',
+    about: 'Scan Studio: the sample is leveled and cleaned, cut blobs show red, a lamp relights, .ply round trip, hand-off to the sandbox',
+    entries: ['src/blobscape/ScanStudio.tsx'],
+    async run({ shots, join, fails, ok, open, tabClick, axe }) {
+      const k = await open('/experiments/scan-studio/?offscreen=1', { viewport: { width: 1280, height: 900 } })
+      await k.page.waitForFunction(() => window.__scan?.kept() > 0, null, { timeout: 90000 }).catch(() => {})
+      const look = () => k.page.evaluate(async () => {
+        await new Promise((r) => setTimeout(r, 400))
+        await window.__scan.stage.frame(0)
+        const cv = document.querySelector('[data-testid=scan-view]')
+        const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+        let teal = 0, red = 0, sum = 0
+        for (let i = 0; i < d.length; i += 4) {
+          if (d[i + 1] > 80 && d[i + 2] > 80 && d[i + 1] > d[i] * 1.4) teal++
+          if (d[i] > 120 && d[i] > d[i + 1] * 2 && d[i] > d[i + 2] * 2) red++
+          sum += d[i] + d[i + 1] + d[i + 2]
+        }
+        return { teal, red, sum }
+      })
+      const st = await k.page.evaluate(() => ({ kept: window.__scan.kept(), total: window.__scan.total(), level: window.__scan.level() }))
+      const a = await look()
+      if (!(st.level === true && st.kept > 0.45 * st.total && st.kept < 0.7 * st.total && a.teal > 20000 && a.red < 500)) fails.push(`blobscape scan: sample ${JSON.stringify({ ...st, ...a })}`)
+      else ok(`blobscape scan: the sample's table is found and the clean keeps ${st.kept.toLocaleString()} of ${st.total.toLocaleString()} blobs (${a.teal} mug pixels)`)
+      await tabClick(k.page.getByRole('button', { name: 'Kept and cut' }))
+      const b = await look()
+      await tabClick(k.page.getByRole('button', { name: 'Kept', exact: true }))
+      await tabClick(k.page.getByRole('button', { name: 'Lamp' }))
+      const c = await look()
+      if (!(b.red > 50000 && Math.abs(c.sum - a.sum) > a.sum * 0.03)) fails.push(`blobscape scan: cut/lamp ${JSON.stringify({ red: b.red, before: a.sum, lamp: c.sum })}`)
+      else ok(`blobscape scan: cut blobs show red (${b.red} pixels) and the lamp relights the mug (brightness ${Math.round((100 * c.sum) / a.sum)}%)`)
+      await k.page.screenshot({ path: join(shots, 'blobscape-scan.png') })
+      await axe(k.page, 'blobscape scan')
+      const [dl] = await Promise.all([k.page.waitForEvent('download'), k.page.getByRole('button', { name: 'Download .ply' }).click()])
+      const file = join(shots, 'scan-clean.ply')
+      await dl.saveAs(file)
+      await tabClick(k.page.getByRole('button', { name: 'As scanned' }))
+      await k.page.locator('input[type=file]').setInputFiles(file)
+      await k.page.waitForFunction(() => /Opened scan-clean/.test(document.body.innerText), null, { timeout: 60000 }).catch(() => {})
+      const back = await k.page.evaluate(() => window.__scan.total())
+      if (back !== st.kept) fails.push(`blobscape scan: the saved .ply holds ${back} blobs, not ${st.kept}`)
+      else ok(`blobscape scan: the saved .ply opens again with all ${back.toLocaleString()} kept blobs`)
+      const kept = await k.page.evaluate(() => window.__scan.kept())
+      await tabClick(k.page.getByRole('button', { name: 'Open in the sandbox' }))
+      await k.page.waitForURL('**/sandbox/', { timeout: 30000 }).catch(() => {})
+      const count = (await k.page.getByTestId('blob-count').textContent({ timeout: 30000 }).catch(() => '')) ?? ''
+      if (Number(count.replace(/\D/g, '')) !== kept) fails.push(`blobscape scan: the sandbox shows "${count}" for ${kept} kept blobs`)
+      else ok(`blobscape scan: Open in the sandbox hands over the ${kept.toLocaleString()} kept blobs`)
+      await k.ctx.close()
+    },
+  },
+  {
+    name: 'dungeon',
+    about: 'Dungeon Run: the hall draws, swings, bolts, health, Try again, props break, fire and frost, live light',
+    entries: ['src/blobscape/DungeonRun.tsx'],
+    async run({ shots, join, fails, ok, open, tabClick, axe }) {
+      const k = await open('/experiments/dungeon-run/?offscreen=1', { viewport: { width: 1280, height: 900 } })
+      await k.page.waitForFunction(() => window.__dungeon?.stage.dungeon, null, { timeout: 90000 }).catch(() => {})
+      const look = () => k.page.evaluate(() => {
+        const cv = document.querySelector('[data-testid=dungeon-view]')
+        const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+        let warm = 0, green = 0
+        for (let i = 0; i < d.length; i += 4) {
+          if (d[i] > 90 && d[i] > d[i + 2] * 1.4 && d[i + 1] > d[i + 2]) warm++
+          if (d[i + 1] > 120 && d[i + 1] > d[i] * 1.4 && d[i + 1] > d[i + 2] * 1.4) green++
+        }
+        return { warm, green }
+      })
+      const run = (s, input) => k.page.evaluate(async ([s, input]) => { await window.__dungeon.stage.frame(s, input) }, [s, input])
+      await k.page.evaluate(() => { const g = window.__dungeon.stage.dungeon.game; g.hold(); g.place('green', 0.7, g.hero.z + 1.1) })
+      await run(0.2, { forward: 0, turn: 0 })
+      // live light with shadows (WebGPU's default) leaves less of the hall torchlit than baked light
+      const a = { ...(await look()), light: await k.page.evaluate(() => window.__dungeon.stage.dungeon.opts.light) }
+      // a few swings (running after it when knocked back) burst a green slime
+      for (let i = 0; i < 5 && !(await k.page.evaluate(() => window.__dungeon.stage.dungeon.game.score)); i++) { await run(0.05, { forward: 0, turn: 0, swing: true }); await run(0.5, { forward: 0.6, turn: 0 }) }
+      const fight = await k.page.evaluate(() => { const g = window.__dungeon.stage.dungeon.game; return { score: g.score, phase: g.slimes[0]?.phase } })
+      await run(0.15, { forward: 0, turn: 0, cast: true })
+      await run(0.5, { forward: 0, turn: 0 })
+      const meters = async () => Object.fromEntries(await k.page.getByRole('meter').evaluateAll((els) => els.map((e) => [e.getAttribute('aria-label'), +e.getAttribute('aria-valuenow')])))
+      const m = await meters()
+      if (!(a.warm > (a.light === 'live' ? 8000 : 20000) && a.green > 150 && fight.score === 1 && fight.phase === 'burst' && m.Magic < 100 && m.Health >= 80)) fails.push(`blobscape dungeon: ${JSON.stringify({ a, fight, m })}`)
+      else ok(`blobscape dungeon: the hall draws (${a.warm} torchlit, ${a.green} slime pixels), swings burst the slime, a bolt spends magic (${m.Magic} left)`)
+      await k.page.screenshot({ path: join(shots, 'blobscape-dungeon.png') })
+      await axe(k.page, 'blobscape dungeon')
+      // a red slime at the hero's feet with health nearly gone: down, and Try again starts over
+      await k.page.evaluate(() => { const g = window.__dungeon.stage.dungeon.game; g.hero.hp = 4; g.place('red', 0, g.hero.z + 0.5) })
+      await run(2, { forward: 0, turn: 0 })
+      const over = await k.page.getByRole('button', { name: 'Try again' }).count()
+      const hurt = await meters()
+      if (over) await tabClick(k.page.getByRole('button', { name: 'Try again' }))
+      await run(0.1, { forward: 0, turn: 0 })
+      const after = await meters()
+      if (!(over === 1 && hurt.Health === 0 && after.Health === 100)) fails.push(`blobscape dungeon down: ${JSON.stringify({ over, hurt, after })}`)
+      else ok('blobscape dungeon: a slime takes the last health, the hero goes down, and Try again starts over at full health')
+      // light: live where WebGPU runs (each blob lit by the torches and the orb), and the Baked chip rebuilds the hall with it worked in
+      const was = await k.page.evaluate(() => ({ light: window.__dungeon.stage.dungeon.opts.light, backend: window.__dungeon.stage.backend }))
+      await run(0.1, { forward: 0, turn: 0 })
+      const liveLook = await look()
+      // shadows (on by default in live light): the GPU's grid of what blocks light matches the CPU's, and turning them off brightens the hall
+      if (was.backend === 'webgpu') {
+        const sh = await k.page.evaluate(async () => { const st = window.__dungeon.stage; return st.world.checkShadows(st.renderer) })
+        await tabClick(k.page.getByLabel('Shadows'))
+        await run(0.1, { forward: 0, turn: 0 })
+        const unshaded = await look()
+        await tabClick(k.page.getByLabel('Shadows'))
+        if (!(sh.gpuTotal > 0 && Math.abs(sh.gpuTotal - sh.cpuTotal) < sh.cpuTotal * 0.001 && sh.differ < 50 && unshaded.warm > liveLook.warm)) fails.push(`blobscape dungeon shadows: ${JSON.stringify({ sh, shaded: liveLook, unshaded })}`)
+        else ok(`blobscape dungeon: shadows from live lights (GPU grid matches the CPU, ${sh.differ} cells off by more than a unit); turning them off lights ${unshaded.warm - liveLook.warm} more pixels`)
+      }
+      await tabClick(k.page.getByRole('button', { name: 'Baked', exact: true }))
+      await k.page.waitForFunction(() => window.__dungeon.stage.dungeon.opts.light === 'baked', null, { timeout: 30000 }).catch(() => {})
+      await run(0.1, { forward: 0, turn: 0 })
+      const bakedLook = await look()
+      const want = was.backend === 'webgpu' ? 'live' : 'baked'
+      if (!(was.light === want && bakedLook.warm > 20000 && liveLook.warm > 5000 && liveLook.warm !== bakedLook.warm)) fails.push(`blobscape dungeon light: ${JSON.stringify({ was, live: liveLook, baked: bakedLook })}`)
+      else ok(`blobscape dungeon: starts with ${want} light on ${was.backend}; live and baked both draw (${liveLook.warm} and ${bakedLook.warm} torchlit pixels)`)
+      // fire and frost: a bolt lights the floor where it lands, the floor's blobs change color, and fire burns out. Once here, once on WebGL.
+      const elements = async (page, name) => {
+        const run = (s, input = { forward: 0, turn: 0 }) => page.evaluate(async ([s, input]) => { await window.__dungeon.stage.frame(s, input) }, [s, input])
+        const see = () => page.evaluate(() => {
+          const cv = document.querySelector('[data-testid=dungeon-view]')
+          const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+          let ember = 0, ice = 0
+          // only the lower half: the floor, not the torches
+          for (let i = d.length / 2; i < d.length; i += 4) {
+            if (d[i] > 200 && d[i + 1] > 70 && d[i + 1] < 190 && d[i + 2] < 100) ember++
+            if (d[i + 2] > 150 && d[i + 2] > d[i] * 1.12 && d[i + 1] > 120) ice++
+          }
+          const g = window.__dungeon.stage.dungeon.game.ground
+          return { ember, ice, fire: g.count('fire'), frost: g.count('frost'), stained: window.__dungeon.stage.dungeon.stainedBlobs }
+        })
+        await page.evaluate(() => { const g = window.__dungeon.stage.dungeon.game; g.restart(); g.hold(); g.place('purple', 0, g.hero.z + 3) })
+        await run(0.2)
+        const before = await see()
+        await run(0.05, { forward: 0, turn: 0, cast: true })
+        await run(1.4)
+        const burning = await see()
+        await run(6)
+        const out = await see()
+        // frost on clean stone (on the scorched patch it would be too dark to tell from the picture)
+        const scorched = out.stained
+        await page.evaluate(() => { const g = window.__dungeon.stage.dungeon.game; g.restart(); g.hold(); g.place('purple', 0, g.hero.z + 3) })
+        await run(0.2)
+        const clean = await see()
+        await run(0.05, { forward: 0, turn: 0, frost: true })
+        await run(3)
+        const frozen = await see()
+        const good = before.fire === 0 && before.stained === 0 && burning.fire > 8 && burning.ember > before.ember + 2000 && out.fire === 0 && out.ember < burning.ember / 4 && scorched > 100 && clean.stained === 0 &&
+          frozen.frost > 12 && frozen.ice > clean.ice + 2000
+        if (!good) fails.push(`${name}: ${JSON.stringify({ before, burning, out, clean, frozen })}`)
+        else ok(`${name}: a fire bolt sets ${burning.fire} cells alight (${burning.ember} glowing pixels), it burns out and leaves the stone scorched, and a frost bolt freezes ${frozen.frost} cells (${frozen.ice} icy pixels)`)
+      }
+      // props: two swings break a crate, which gives health and leaves its pieces on the floor
+      {
+        const run = (s, input = { forward: 0, turn: 0 }) => k.page.evaluate(async ([s, input]) => { await window.__dungeon.stage.frame(s, input) }, [s, input])
+        await k.page.evaluate(() => { const g = window.__dungeon.stage.dungeon.game; g.restart(); g.hold(); const p = g.props.find((p) => p.kind === 'crate'); g.hero.x = p.x; g.hero.z = p.z - 1; g.hero.heading = 0; g.hero.hp = 50 })
+        const crate = () => k.page.evaluate(() => { const d = window.__dungeon.stage.dungeon, p = d.game.props.find((p) => p.kind === 'crate'), sk = d.props[p.slot].skeleton; return { phase: p.phase, hp: d.game.hero.hp, body: sk.scale[1], piece: sk.scale[2], y: sk.posedHead[7] } })
+        await run(0.1)
+        const whole = await crate()
+        for (let i = 0; i < 2; i++) { await run(0.05, { forward: 0, turn: 0, swing: true }); await run(0.6) }
+        await run(1)
+        const broken = await crate()
+        if (!(whole.phase === 'whole' && whole.body > 0.9 && whole.piece === 0 && broken.phase === 'broken' && broken.body < 0.01 && broken.piece > 0.9 && broken.y < 0.1 && broken.hp === 60)) fails.push(`blobscape dungeon props: ${JSON.stringify({ whole, broken })}`)
+        else ok('blobscape dungeon: two swings break a crate into pieces that lie on the floor, and it gives health back')
+      }
+      await elements(k.page, 'blobscape dungeon fire and frost')
+      await k.page.screenshot({ path: join(shots, 'blobscape-dungeon-frost.png') })
+      const fire = await k.page.getByRole('button', { name: /^Fire/ }).count(), frost = await k.page.getByRole('button', { name: /^Frost/ }).count()
+      if (fire !== 1 || frost !== 1) fails.push(`blobscape dungeon: ${fire} Fire and ${frost} Frost buttons`)
+      await k.ctx.close()
+      const gl = await open('/experiments/dungeon-run/?offscreen=1&webgl=1', { viewport: { width: 1280, height: 900 } })
+      await gl.page.waitForFunction(() => window.__dungeon?.stage.dungeon, null, { timeout: 90000 }).catch(() => {})
+      await elements(gl.page, 'blobscape dungeon fire and frost on WebGL')
+      await gl.ctx.close()
+    },
+  },
+  {
+    name: 'forest',
+    about: 'Forest Walk: the elf walks, tiles move on ahead, plants grow',
+    entries: ['src/blobscape/ForestWalk.tsx'],
+    async run({ shots, join, fails, ok, open, tabClick }) {
+      const f = await open('/experiments/forest-walk/?offscreen=1', { viewport: { width: 1280, height: 900 } })
+      if (!(await f.page.locator('[data-testid=forest-loading]').count())) fails.push('blobscape forest: no loading note while the engine starts')
+      await f.page.waitForFunction(() => window.__forest?.stage.forest, null, { timeout: 90000 }).catch(() => {})
+      // green of leaves and grass, brown of the path, the elf's tunic (from behind)
+      const look = (seconds, forward, turn = 0) => f.page.evaluate(async ([s, fw, t]) => {
+        await window.__forest.stage.frame(s, { forward: fw, turn: t })
+        const cv = document.querySelector('[data-testid=forest-view]')
+        const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+        let green = 0, path = 0
+        for (let i = 0; i < d.length; i += 4) {
+          if (d[i + 1] > d[i] + 25 && d[i + 1] > d[i + 2] + 25) green++
+          if (d[i] > 100 && d[i] > d[i + 1] + 20 && d[i + 1] > d[i + 2] + 15) path++
+        }
+        const fo = window.__forest.stage.forest
+        return { green, path, z: fo.walker.z, growing: fo.growing, tiles: fo.tiles }
+      }, [seconds, forward, turn])
+      const start = await look(0.1, 0)
+      const walked = await look(12, 1)
+      if (!(start.green > 20000 && start.path > 5000)) fails.push(`blobscape forest: first frame ${JSON.stringify(start)}`)
+      else ok(`blobscape forest: grass, path and plants draw (${start.green} green, ${start.path} path pixels)`)
+      if (!(walked.z > 12 && walked.growing > 30 && walked.green > 20000 && Math.min(...walked.tiles) > Math.min(...start.tiles))) fails.push(`blobscape forest: after walking ${JSON.stringify(walked)}`)
+      else ok(`blobscape forest: the elf walks ${walked.z.toFixed(1)} m, tiles move on ahead and ${walked.growing} plants grow round it`)
+      if (await f.page.locator('[data-testid=forest-loading]').count()) fails.push('blobscape forest: the loading note stays after the forest is drawn')
+      await f.page.screenshot({ path: join(shots, 'blobscape-forest.png') })
+      // a new season rebuilds the forest and keeps the elf where it was
+      await tabClick(f.page.getByRole('button', { name: 'Autumn', exact: true }).first())
+      await f.page.waitForFunction(() => window.__forest?.stage.forest?.opts.season === 'autumn', null, { timeout: 30000 }).catch(() => {})
+      const autumn = await look(1.5, 0)
+      if (!(Math.abs(autumn.z - walked.z) < 0.5 && autumn.growing > 20)) fails.push(`blobscape forest: autumn ${JSON.stringify(autumn)}`)
+      else ok(`blobscape forest: autumn regrows ${autumn.growing} plants round the elf where it stood`)
+      await f.page.screenshot({ path: join(shots, 'blobscape-forest-autumn.png') })
+      await f.ctx.close()
+    },
+  },
+  {
+    name: 'shifter',
+    about: 'Shape Shifter on both backends: from one creature to the other, the slider, random partners',
+    entries: ['src/blobscape/ShapeShifter.tsx'],
+    async run({ shots, join, fails, ok, open, tabClick, axe }) {
+      for (const gl of ['', '&webgl=1']) {
+        const k = await open(`/experiments/shape-shifter/?offscreen=1&from=frog&to=fox${gl}`, { viewport: { width: 1280, height: 900 } })
+        await k.page.waitForFunction(() => window.__shift && window.__shift.blobs() > 0, null, { timeout: 120000 }).catch(() => {})
+        // green pixels (the frog) and orange ones (the fox: slim and furred, so fewer than the frog, and fewer still halfway, where thin fur strands are part green; the frog's yellow flank counts as a little orange too, so halfway is judged by the green it has lost); the loop holds 0.8 s on each creature and takes 3 s between
+        const shot = (t) => k.page.evaluate(async (t) => {
+          await window.__shift.stage.frame(t)
+          const cv = document.querySelector('[data-testid=shift-view]')
+          const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+          let green = 0, orange = 0
+          for (let i = 0; i < d.length; i += 4) {
+            if (d[i + 1] > 90 && d[i + 1] > d[i] * 1.3 && d[i + 1] > d[i + 2] * 1.5) green++
+            if (d[i] > 150 && d[i] > d[i + 1] * 1.4 && d[i + 1] > d[i + 2] * 1.3) orange++
+          }
+          return { green, orange, amount: window.__shift.amount() }
+        }, t)
+        const a = await shot(0.2), mid = await shot(0.8 + 1.5), b = await shot(0.8 + 3 + 0.3)
+        const on = await k.page.evaluate(() => window.__shift.stage.backend)
+        const trip = (await k.page.getByTestId('shift-trip').textContent()) ?? ''
+        const [near, wild] = [...trip.matchAll(/(\d+\.\d+)/g)].map((m) => Number(m[1]))
+        if (!(a.amount === 0 && b.amount === 1 && Math.abs(mid.amount - 0.5) < 1e-6 && a.green > 4000 && a.orange < a.green / 4 && b.orange > 2500 && b.green < b.orange / 4 && mid.green > 300 && mid.orange > 150 && mid.green < a.green * 0.7 && near < wild * 0.8) || (gl && on !== 'webgl')) {
+          fails.push(`blobscape shape shifter (${on}): ${JSON.stringify({ a, mid, b, trip })}`)
+        } else ok(`blobscape shape shifter (${on}): frog (${a.green} green pixels) to fox (${b.orange} orange), both halfway (${mid.green}, ${mid.orange}); blobs travel ${near} paired by place, ${wild} at random`)
+        if (!gl) {
+          // the slider stops the loop and shows that amount; random partners make the trips longer
+          await tabClick(k.page.getByRole('slider', { name: 'Shift', exact: true }))
+          await k.page.getByRole('slider', { name: 'Shift', exact: true }).fill('0.25')
+          await k.page.waitForTimeout(300)
+          const held = await k.page.evaluate(() => window.__shift.amount())
+          await tabClick(k.page.getByRole('button', { name: 'At random', exact: true }))
+          await k.page.waitForFunction(() => /paired by place it would be/.test(document.querySelector('[data-testid=shift-trip]')?.textContent ?? ''), null, { timeout: 60000 }).catch(() => {})
+          const swapped = [...((await k.page.getByTestId('shift-trip').textContent()) ?? '').matchAll(/(\d+\.\d+)/g)].map((m) => Number(m[1]))
+          if (!(held === 0.25 && swapped[0] === wild && swapped[1] === near && await k.page.getByRole('button', { name: 'Play', exact: true }).count() === 1)) fails.push(`blobscape shape shifter: slider holds ${held}, random trips ${swapped} (were ${near}, ${wild})`)
+          else ok(`blobscape shape shifter: the slider stops the loop at 25%, and random partners travel ${swapped[0]}`)
+          await k.page.screenshot({ path: join(shots, 'blobscape-shape-shifter.png') })
+          await axe(k.page, 'blobscape shape shifter')
+        }
+        await k.ctx.close()
+      }
+    },
+  },
+  {
+    name: 'layout',
+    about: 'every experiment: same two columns, its own tabs, a preview that stays in sight on a phone',
+    entries: ['src/shared/Workbench.tsx', 'src/shared/ui.tsx'],
+    files: ['src/shared/theme.css', 'src/blobscape/PixelDiorama.tsx', 'src/blobscape/Creature.tsx', 'src/blobscape/ForestWalk.tsx', 'src/blobscape/DungeonRun.tsx', 'src/blobscape/ScanStudio.tsx', 'src/blobscape/Clockwork.tsx', 'src/blobscape/ShapeShifter.tsx', 'src/fit-a-picture/App.tsx', 'src/splat-to-sprite/App.tsx'],
+    async run({ join, fails, ok, open }) {
+      const PAGES = [
+        ['pixel-diorama', 'Scene,Pixels,Finish'], ['creature', 'Creature Type,Movement & Details,Export & Import'], ['forest-walk', 'Forest Type,Character Style,View'],
+        ['dungeon-run', 'Game Settings,Character Style,View'], ['scan-studio', 'Import,Level & Crop,Clean,Lighting'], ['clockwork', 'Time,View'], ['shape-shifter', 'Shift,Creatures'],
+        ['fit-a-picture', 'Picture,Training'], ['splat-to-sprite', 'Prop Type,Pixels,Finish,View'],
+      ]
+      const sizes = new Set()
+      let bad = 0
+      for (const [id, want] of PAGES) {
+        const w = await open(`/experiments/${id}/`, { viewport: { width: 1280, height: 900 } })
+        // only the layout is looked at, and the page is closed while its engine is still starting: each page's own check listens for errors
+        w.page.removeAllListeners('console')
+        w.page.removeAllListeners('pageerror')
+        await w.page.getByRole('tab').first().waitFor({ timeout: 30000 }).catch(() => {})
+        const at = await w.page.evaluate(() => {
+          const view = document.querySelector('[data-testid=full-screen]')?.parentElement.getBoundingClientRect()
+          const panel = document.querySelector('section[aria-label=Options]')?.getBoundingClientRect()
+          return {
+            tabs: [...document.querySelectorAll('section[aria-label=Options] [role=tab]')].map((t) => t.textContent).join(),
+            cut: [...document.querySelectorAll('section[aria-label=Options] [role=tab] span')].filter((e) => e.scrollWidth > e.clientWidth).length,
+            view: view ? `${Math.round(view.width)}×${Math.round(view.height)}` : 'none', panel: panel ? Math.round(panel.width) : 0, beside: !!view && !!panel && panel.left > view.right,
+          }
+        })
+        await w.page.setViewportSize({ width: 390, height: 700 })
+        // the page lays itself out again for the phone width: give it time to settle before measuring (a page that stays too wide still fails)
+        await w.page.waitForFunction(() => document.documentElement.scrollWidth <= innerWidth, null, { timeout: 3000 }).catch(() => {})
+        await w.page.evaluate(() => window.scrollTo(0, 420))
+        await w.page.waitForTimeout(150)
+        const phone = await w.page.evaluate(() => {
+          const r = document.querySelector('[data-testid=full-screen]')?.parentElement.getBoundingClientRect()
+          return { stuck: !!r && r.top >= 0 && r.bottom <= innerHeight && r.height > 200, wide: document.documentElement.scrollWidth - innerWidth }
+        })
+        sizes.add(`${at.view}+${at.panel}`)
+        if (at.tabs !== want || at.cut || !at.beside || !phone.stuck || phone.wide > 0) { bad++; fails.push(`layout ${id}: ${JSON.stringify({ ...at, ...phone })}`) }
+        await w.ctx.close()
+      }
+      if (sizes.size !== 1) fails.push(`layout: the columns differ between experiments (${[...sizes].join(', ')})`)
+      else if (!bad) ok(`layout: all ${PAGES.length} experiments have their tabs beside a preview of the same size (${[...sizes][0]}), which stays in sight on a phone`)
+    },
+  },
+]
