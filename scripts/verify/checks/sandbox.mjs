@@ -172,6 +172,46 @@ export default [
     },
   },
   {
+    name: 'sandbox-paint',
+    about: 'the five brushes each paint onto the scene, one Undo a stroke',
+    entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/brushes.ts'],
+    async run({ shots, join, fails, ok, open, axe }) {
+      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 900 } })
+      await page.waitForTimeout(1500)
+      const count = async () => Number((await page.textContent('[data-testid=blob-count]')).replace(/\D/g, ''))
+      const box = await page.getByTestId('viewport').boundingBox()
+      const at = (fx, fy) => [box.x + box.width * fx, box.y + box.height * fy]
+      await page.getByRole('tab', { name: /Brush/ }).click()
+      // Each brush on its own strip of the floor, left to right
+      const kinds = ['Leaves', 'Grass', 'Fur', 'Moss', 'Stones']
+      for (const [i, kind] of kinds.entries()) {
+        await page.getByRole('group', { name: 'Paint with' }).getByRole('button', { name: kind, exact: true }).click()
+        const before = await count()
+        const fx = 0.14 + i * 0.18
+        await page.mouse.move(...at(fx, 0.68)); await page.mouse.down()
+        for (let k = 1; k <= 6; k++) await page.mouse.move(...at(fx + k * 0.006, 0.68 + k * 0.025))
+        await page.mouse.up()
+        await page.waitForTimeout(300)
+        const added = (await count()) - before
+        if (added < 5) fails.push(`blobscape sandbox: the ${kind} brush added ${added} blobs`)
+        else ok(`blobscape sandbox: the ${kind} brush paints ${added} blobs`)
+      }
+      if ((await page.getByRole('button', { name: 'Paint', exact: true }).getAttribute('aria-pressed')) !== 'true') fails.push('blobscape sandbox: picking a brush did not pick the Paint tool')
+      await page.waitForTimeout(2000)
+      await page.screenshot({ path: join(shots, 'blobscape-sandbox-paint.png') })
+      await axe(page, 'blobscape sandbox brushes')
+      const full = await count()
+      await page.getByRole('button', { name: 'Undo' }).click()
+      await page.waitForTimeout(400)
+      const back = await count()
+      await page.getByRole('button', { name: 'Undo' }).click()
+      await page.waitForTimeout(400)
+      if (!(back < full && (await count()) < back)) fails.push(`blobscape sandbox: Undo after painting went ${full}, ${back}, ${await count()}`)
+      else ok('blobscape sandbox: each painted stroke is one Undo')
+      await ctx.close()
+    },
+  },
+  {
     name: 'sandbox-props',
     about: 'a slime that bursts and the watch, added from other experiments',
     entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/props.ts'],
