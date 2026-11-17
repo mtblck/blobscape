@@ -28,6 +28,8 @@ import { fileSpecies, sceneRig, splitScene } from './sceneFile.ts'
 import { registerTools, sandboxTools, type SandboxApi } from './agentTools.ts'
 import { blobsInMasks } from './tapSelect.ts'
 import { thingAt } from './select/thing.ts'
+import { PLANS, TRAIN_MAX_SPLATS, cannotTrain, trainSay, type PlanId } from './trainCapture.ts'
+import type { Run } from './train/train.ts'
 import { SCENE_SPACING, readDoc } from './build/scene.ts'
 import { buildVoxels } from '../splat-engine/voxel.ts'
 
@@ -409,6 +411,59 @@ export function Sandbox() {
     } finally {
       setFilming(null)
       setOrbit(was)
+    }
+  }
+
+  // --- training from a capture (Brush) ----------------------------------------
+  const [plan, setPlan] = useState<PlanId>('quick')
+  /** What the trainer last said, while a run is on; null otherwise. */
+  const [training, setTraining] = useState<string | null>(null)
+  const run = useRef<Run | null>(null)
+  // read in an effect: the prerendered page must not differ from the first render
+  const [trainNo, setTrainNo] = useState<string | null>(null)
+  useEffect(() => { setTrainNo(cannotTrain({ picker: 'showDirectoryPicker' in window, gpu: 'gpu' in navigator })) }, [])
+  useEffect(() => () => run.current?.stop(), [])
+  const trainCapture = async () => {
+    if (training !== null || busy) return
+    let folder: FileSystemDirectoryHandle
+    try {
+      folder = await (window as unknown as { showDirectoryPicker(o?: { mode: 'read' }): Promise<FileSystemDirectoryHandle> }).showDirectoryPicker({ mode: 'read' })
+    } catch {
+      return // the picker was closed
+    }
+    const steps = PLANS.find((p) => p.id === plan)!.steps
+    setError('')
+    setTraining('Looking at the folder…')
+    let first = true, total = 0
+    try {
+      const { trainFolder } = await import('./train/train.ts')
+      run.current = await trainFolder(folder, steps, Math.min(TRAIN_MAX_SPLATS, maxBlobs), {
+        status: (text) => setTraining(text),
+        step: (iter, splats) => { total = splats; setTraining(trainSay(iter, steps, splats)) },
+        scene: async (ply, _iter, last) => {
+          const { blobs: b } = await readSplatFile(ply.buffer as ArrayBuffer, 'trained.ply', maxBlobs)
+          if (!b.count) return
+          // one step of Undo takes the whole run back
+          if (first) history.current.record(blobsRef.current, sourceRef.current, actorsRef.current)
+          replace(b, folder.name)
+          if (first || last) setOrbit((o) => ({ ...o, ...frame(b) }))
+          first = false
+        },
+        done: (iter, stopped) => {
+          setTraining(null)
+          run.current = null
+          setMessage(`${stopped ? 'Stopped' : 'Trained'} ${folder.name} at step ${iter.toLocaleString()}: ${total.toLocaleString()} blobs. If it stands on its head or its side, Flip upside down turns it`)
+        },
+        error: (why) => {
+          setTraining(null)
+          run.current = null
+          setError(`Could not train ${folder.name}: ${why}`)
+        },
+      })
+    } catch (err) {
+      setTraining(null)
+      run.current = null
+      setError(err instanceof Error ? err.message : String(err))
     }
   }
 
@@ -1484,6 +1539,20 @@ export function Sandbox() {
                         <Button small onClick={() => { if (!busy) photoInput.current?.click() }} aria-disabled={busy}>{busy ? 'Opening…' : 'Open a photo…'}</Button>
                         <input ref={photoInput} type="file" accept="image/*" className="sr-only" tabIndex={-1} aria-hidden data-testid="photo-input" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void openFile(f) }} />
                         <p className="text-xs text-ink-faint">One photo becomes a shallow scene: a blob for each pixel, set as far back as a depth model guesses it is. It opens as the photo; turn the view a little and it has depth. What the camera never saw isn't there, so a wide turn opens gaps. The photo stays on your device: the model (Depth Anything V2 Small, 27 MB, fetched the first time) runs in this page.</p>
+                      </div>
+                    </Field>
+                    <Field label="Your own capture">
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap gap-2" role="group" aria-label="How long to train">
+                          {PLANS.map((p) => <Chip key={p.id} active={plan === p.id} onClick={() => setPlan(p.id)}>{p.name}</Chip>)}
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Button small onClick={() => void trainCapture()} disabled={!!trainNo || training !== null || busy}>Train from a capture folder…</Button>
+                          {training !== null && <Button small onClick={() => run.current?.stop()}>Stop and keep it</Button>}
+                        </div>
+                        <p className="text-xs text-ink-faint" data-testid="train-note">
+                          {training ?? trainNo ?? `${PLANS.find((p) => p.id === plan)!.note} Pick a folder of photos that comes with their camera positions (a Nerfstudio transforms.json, or COLMAP's cameras and images files, as scanning apps export) and the scene is trained here from them, growing in the view as it goes. Loose photos won't do yet. It runs on this computer's graphics card with Brush; nothing is uploaded.`}
+                        </p>
                       </div>
                     </Field>
                     <div className="flex flex-wrap gap-2">

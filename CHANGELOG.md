@@ -6,6 +6,8 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 
 ## [Unreleased]
 
+- Train a scene from your own capture in the sandbox: in the Scene tab, pick a folder of photos that comes with their camera positions (Nerfstudio or COLMAP format, as scanning apps export) and the scene is trained on your graphics card, growing in the view as it goes. It needs Chrome or Edge on a computer. Loose photos don't work yet.
+
 - Pixel Diorama draws cleaner pixels. Each pixel is now settled from four samples (Finish tab, Four samples a pixel): it takes whichever thing most of them show, so edges are one thing or the other and thin parts stop breaking up. Outlines take a darker tone of the thing they are round instead of one color for everything. And a scene can be painted in steps of its palette as it is cut, so shade falls in flat bands (the windmill is; Paint in steps of the palette).
 
 - How it's made, under Pixel Diorama's view: five steps from plain clay shapes, to one blob in eight, the paint, the four samples behind each pixel under a magnifier, and the finished picture.
