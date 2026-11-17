@@ -3,6 +3,7 @@
 export default [
   {
     name: 'sprite',
+    core: true,
     about: 'desktop and phone: the splat loads, the sprite preview draws, sheets bake',
     entries: ['src/splat-to-sprite/main.tsx'],
     files: ['experiments/splat-to-sprite/'],

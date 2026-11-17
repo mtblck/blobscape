@@ -3,6 +3,7 @@
 export default [
   {
     name: 'sandbox-tools',
+    core: true,
     about: 'open a .ply, box and lasso select, move, a live effect, bake, save, bad files, keyboard',
     entries: ['src/blobscape/Sandbox.tsx'],
     async run({ readFileSync, shots, join, fails, ok, open, axe, ballPly }) {

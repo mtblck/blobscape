@@ -6,7 +6,7 @@ multi-page React app, one Vercel project, served from the root. See README for t
 ## Commands
 - `npm run dev`, `npm run build` (hosting:check + tsc, vite build, then `scripts/prerender.ts`), `npm run preview` (production headers)
 - `npm test` — unit tests for the pixel pipeline and the Gaussian fitter (node --test, no GPU)
-- `npm run check` before merging: `npm test`, the build, then `verify --changed` (only the browser checks the changed files reach, by imports). Full `npm run build && npm run verify` (every check, three at a time) for build, hosting or harness changes, or when asked. Real Chromium against dist with vercel.json headers, plus axe; screenshots in verify-shots/. Checks live in `scripts/verify/checks/` with the source files they cover; a new page or experiment needs one. See docs/testing.md.
+- `npm run check` before merging: `npm test`, the build, then `verify --changed` (only the browser checks the changed files reach, by imports; a file most checks import runs the `core` set, `--wide` for all). Full `npm run build && npm run verify` (every check, three at a time) for build, hosting or harness changes, or when asked. Real Chromium against dist with vercel.json headers, plus axe; screenshots in verify-shots/. Checks live in `scripts/verify/checks/` with the source files they cover; a new page or experiment needs one. See docs/testing.md.
 
 ## Load-bearing
 - Vite `base: '/'`, `outDir: 'dist'`, Vercel `trailingSlash: true` (every page is a folder with an index.html). `hosting:check` enforces it.

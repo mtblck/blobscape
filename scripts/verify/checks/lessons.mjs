@@ -66,6 +66,7 @@ export default [
   },
   {
     name: 'lessons-basics',
+    core: true,
     about: 'Order, front page chrome (menu, footer, tip button, SEO), Color by angle, Paint, Splat files',
     entries: ['src/blobscape/lessons/Order.tsx', 'src/blobscape/Landing.tsx', 'src/blobscape/Chrome.tsx', 'src/shared/Footer.tsx', 'src/shared/SiteHeader.tsx', 'src/blobscape/lessons/Angle.tsx', 'src/blobscape/lessons/Paint.tsx', 'src/blobscape/lessons/Formats.tsx'],
     async run({ base, shots, join, fails, ok, open, axe, solidPixels }) {
@@ -243,6 +244,7 @@ export default [
   },
   {
     name: 'lessons-rigs',
+    core: true,
     about: 'One bone, Weights, Morphs, Fur, Twist, Walk, Feet, Model: each goal ticks',
     entries: ['src/blobscape/lessons/OneBone.tsx', 'src/blobscape/lessons/Weights.tsx', 'src/blobscape/lessons/Morphs.tsx', 'src/blobscape/lessons/Fur.tsx', 'src/blobscape/lessons/Twist.tsx', 'src/blobscape/lessons/Walk.tsx', 'src/blobscape/lessons/Feet.tsx', 'src/blobscape/lessons/Model.tsx'],
     async run({ base, fails, ok, open }) {

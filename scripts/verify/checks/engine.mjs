@@ -79,6 +79,7 @@ export default [
   },
   {
     name: 'engine-lab',
+    core: true,
     about: 'engine lab on WebGPU and WebGL: draws, poses reach the draw, picks, lights, .glb in three.js, timing',
     entries: ['src/engine-lab/main.tsx'],
     files: ['engine-lab/'],

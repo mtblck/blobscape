@@ -8,6 +8,7 @@
  *   npm run verify -- diorama creature  checks by name, or a whole file (site, lessons, sandbox, experiments, engine, sprite, fit)
  *   npm run verify -- --list            what there is, with each check's last time
  *   npm run verify -- --files=a.ts,b.ts --why --list   which checks those files would run, and why
+ *   --wide: a file most checks reach runs all of them, not just the core ones
  *   options: --jobs=N (checks side by side, default 3), --base=URL (default: serves ./dist on :4181), --why
  *
  * The checks live in scripts/verify/checks/*.mjs. Each names the source files
@@ -61,28 +62,45 @@ function changedFiles(ref) {
   return [...new Set([...sh(`git diff --name-only ${base}`), ...sh('git ls-files --others --exclude-standard')])]
 }
 
+/**
+ * A file most checks reach through imports (the blobs, the controls, the lesson
+ * shell) is checked by the `core` checks only, which between them draw on Spark,
+ * on the engine's two backends, in pixel art, in the lessons and the sandbox.
+ * Every check still runs when the harness or the build changes, or with --wide.
+ */
+const WIDE = 0.8
+
 /** Which checks (and which parts of them) the changed files reach, and why. */
 function affected(files) {
   const graph = makeGraph(root)
   const inFiles = (list, f) => (list ?? []).some((p) => (p.endsWith('/') ? f.startsWith(p) : f === p))
-  const picks = new Map()
-  const why = (c, f) => { if (!picks.has(c.name)) picks.set(c.name, { why: f, parts: new Set(), all: false }) ; return picks.get(c.name) }
-  const covered = new Set()
+  const hits = new Map(files.map((f) => [f, []])) // file → [check, part or null (all of it)]
   for (const c of checks) {
     const own = graph.closure(c.entries ?? [], (f) => LEAF.test(f))
-    for (const f of files) {
-      if (EVERYTHING.test(f) || f === `scripts/verify/checks/${c.group}.mjs` || own.has(f) || inFiles(c.files, f)) {
-        why(c, f).all = true
-        covered.add(f)
-      }
-    }
+    for (const f of files) if (EVERYTHING.test(f) || f === `scripts/verify/checks/${c.group}.mjs` || own.has(f) || inFiles(c.files, f)) hits.get(f).push([c, null])
     for (const [key, entries] of Object.entries(c.parts ?? {})) {
       const reach = graph.closure(entries, (f) => LEAF.test(f))
-      for (const f of files) if (reach.has(f)) { why(c, f).parts.add(key); covered.add(f) }
+      for (const f of files) if (reach.has(f)) hits.get(f).push([c, key])
     }
   }
-  const loose = files.filter((f) => !covered.has(f) && !NOTHING.test(f))
-  return { picks, loose }
+  const picks = new Map()
+  const wide = []
+  for (const [f, list] of hits) {
+    let use = list
+    const reached = new Set(list.map(([c]) => c.name)).size
+    if (!flag('wide') && !EVERYTHING.test(f) && !f.startsWith('scripts/verify/') && reached >= checks.length * WIDE) {
+      use = list.filter(([c]) => c.core)
+      wide.push(f)
+    }
+    for (const [c, part] of use) {
+      if (!picks.has(c.name)) picks.set(c.name, { why: f, parts: new Set(), all: false })
+      const p = picks.get(c.name)
+      if (part === null) p.all = true
+      else p.parts.add(part)
+    }
+  }
+  const loose = files.filter((f) => !hits.get(f).length && !NOTHING.test(f))
+  return { picks, loose, wide }
 }
 
 // pick the checks
@@ -90,11 +108,12 @@ let run = checks
 let partsFor = () => null
 if (flag('changed') || flag('files')) {
   const files = flag('files') ? value('files', '').split(',').filter(Boolean) : changedFiles(value('changed', '') || undefined)
-  const { picks, loose } = affected(files)
+  const { picks, loose, wide } = affected(files)
   run = checks.filter((c) => picks.has(c.name))
   partsFor = (c) => (picks.get(c.name).all ? null : picks.get(c.name).parts)
   console.log(`${files.length} files ${flag('files') ? 'named' : 'changed since main'}: ${run.length} of ${checks.length} checks reach them`)
   if (flag('why')) for (const c of run) { const p = picks.get(c.name); console.log(`  ${c.name.padEnd(22)} ${p.all ? 'all' : [...p.parts].join(', ')}  (${p.why})`) }
+  if (wide.length) console.log(`  reached by most checks, so only the core ones run for them (--wide for all): ${wide.join(', ')}`)
   if (loose.length) console.log(`  no check covers: ${loose.join(', ')}`)
 }
 if (named.length) {
