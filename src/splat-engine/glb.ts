@@ -2,6 +2,7 @@ import { SH_C0, srgbToLinear } from '../splat-core/color.ts'
 import { Blobs, type Vec3 } from '../splat-core/blobs.ts'
 import { Skeleton, norm4, packWeights, type Bone, type Skin } from './rig.ts'
 import type { SplatMesh } from './mesh.ts'
+import { morphWeight, targetCount, targetWeights, type Morph, type MorphTarget } from './morph.ts'
 
 /**
  * Rigged splats in a .glb.
@@ -19,8 +20,18 @@ import type { SplatMesh } from './mesh.ts'
  * rotations. It's listed as used, not required, so viewers that don't know it
  * still load the file, and most will show the creature standing still. The
  * full rule is written up in docs/rigged-splats.md.
+ *
+ * Morphs are standard glTF morph targets on the same primitive (POSITION
+ * deltas, animated as the mesh node's `weights`), and our second extension,
+ * BLOBSCAPE_gaussian_morphs, adds what a splat needs beside its center: a SHAPE
+ * attribute per target (the morph's local 3×3 map minus identity, morph.ts) and
+ * which targets are in-betweens of one morph. Viewers that know glTF morphs but
+ * not the extension move the centers right and leave the shapes as they were.
  */
 export const SKIN_EXTENSION = 'BLOBSCAPE_gaussian_skinning'
+export const MORPH_EXTENSION = 'BLOBSCAPE_gaussian_morphs'
+/** The morph target attribute holding each splat's shape change, G = J − I, as a column-major MAT3. */
+export const SHAPE_ATTRIBUTE = `${MORPH_EXTENSION}:SHAPE`
 const SPLATS = 'KHR_gaussian_splatting'
 /** How a skinned blob turns and grows: the spec is docs/rigged-splats.md. */
 export const SKIN_RULE = { rotationBlend: 'quaternionAverage', scaleBlend: 'weightedAverage' } as const
@@ -35,6 +46,8 @@ export interface Clip {
   offsets?: (Float32Array | undefined)[]
   /** Per bone that grows or shrinks, a uniform scale key per time; missing for bones that keep their size. */
   sizes?: (Float32Array | undefined)[]
+  /** Each morph's weight per time (times × morphs, a key's weights together); missing for a clip that leaves them at 0. */
+  weights?: Float32Array
 }
 
 export interface Rigged {
@@ -43,14 +56,17 @@ export interface Rigged {
   skin: Skin
   skeleton: Skeleton
   clips: Clip[]
+  /** Blend shapes on the blobs (morph.ts), applied to the rest blobs before skinning; clips key their weights. */
+  morphs?: Morph[]
 }
 
 /**
  * Records a clip by posing the skeleton at `fps` across `seconds`. Rotations
  * are kept for every bone; offsets and sizes only for bones that use them.
+ * `weights`, if given, says each morph's weight at a time, and is keyed too.
  * Leaves the skeleton posed at the end.
  */
-export function recordClip(name: string, sk: Skeleton, pose: (sk: Skeleton, t: number) => void, seconds: number, fps = 24): Clip {
+export function recordClip(name: string, sk: Skeleton, pose: (sk: Skeleton, t: number) => void, seconds: number, fps = 24, weights?: (t: number) => ArrayLike<number>): Clip {
   const n = Math.max(2, Math.round(seconds * fps) + 1)
   const nb = sk.count
   const times = new Float32Array(n)
@@ -58,10 +74,12 @@ export function recordClip(name: string, sk: Skeleton, pose: (sk: Skeleton, t: n
   const offsets = sk.bones.map(() => new Float32Array(n * 3))
   const sizes = sk.bones.map(() => new Float32Array(n))
   const moved = new Array<boolean>(nb).fill(false), grew = new Array<boolean>(nb).fill(false)
+  const keyed: number[] = []
   for (let f = 0; f < n; f++) {
     const t = (f / (n - 1)) * seconds
     times[f] = t
     pose(sk, t)
+    if (weights) keyed.push(...Array.from(weights(t)))
     for (let b = 0; b < nb; b++) {
       rotations[b].set(sk.rotation.subarray(b * 4, b * 4 + 4), f * 4)
       offsets[b].set(sk.offset.subarray(b * 3, b * 3 + 3), f * 3)
@@ -81,7 +99,28 @@ export function recordClip(name: string, sk: Skeleton, pose: (sk: Skeleton, t: n
     name, times, rotations,
     offsets: offsets.map((o, b) => (moved[b] ? o : undefined)),
     ...(grew.some(Boolean) ? { sizes: sizes.map((s, b) => (grew[b] ? s : undefined)) } : {}),
+    ...(weights ? { weights: Float32Array.from(keyed) } : {}),
   }
+}
+
+/**
+ * Each morph's weight from a clip at time t (looping, interpolating keys), into
+ * `out`. False, with `out` all 0, when the clip keys no weights.
+ */
+export function sampleWeights(clip: Clip | undefined, t: number, out: Float32Array) {
+  out.fill(0)
+  const w = clip?.weights
+  if (!clip || !w || !out.length) return false
+  const n = clip.times.length, m = w.length / n
+  const end = clip.times[n - 1]
+  const u = end > 0 ? ((t % end) + end) % end : 0
+  let f = 0
+  while (f < n - 2 && clip.times[f + 1] <= u) f++
+  const span = clip.times[f + 1] - clip.times[f] || 1
+  const a = n > 1 ? Math.min(1, Math.max(0, (u - clip.times[f]) / span)) : 0
+  const g = Math.min(n - 1, f + 1)
+  for (let k = 0; k < Math.min(m, out.length); k++) out[k] = w[f * m + k] * (1 - a) + w[g * m + k] * a
+  return true
 }
 
 /** Poses the skeleton from a clip at time t (looping), interpolating keys. */
@@ -107,7 +146,10 @@ export function sampleClip(clip: Clip, sk: Skeleton, t: number) {
 
 // --- writing ---
 
-interface Accessor { bufferView: number; componentType: number; count: number; type: string; normalized?: boolean; min?: number[]; max?: number[] }
+interface Accessor {
+  bufferView?: number; componentType: number; count: number; type: string; normalized?: boolean; min?: number[]; max?: number[]
+  sparse?: { count: number; indices: { bufferView: number; componentType: number }; values: { bufferView: number } }
+}
 
 class BinWriter {
   chunks: Uint8Array[] = []
@@ -116,13 +158,30 @@ class BinWriter {
   accessors: Accessor[] = []
 
   add(data: Float32Array | Uint8Array | Uint16Array | Uint32Array, componentType: number, type: string, count: number, extra: Partial<Accessor> = {}) {
+    this.accessors.push({ bufferView: this.view(data), componentType, count, type, ...extra })
+    return this.accessors.length - 1
+  }
+
+  /** A buffer view holding `data`, 4-byte aligned. */
+  view(data: Float32Array | Uint8Array | Uint16Array | Uint32Array) {
     const bytes = new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
     const pad = (4 - (this.length % 4)) % 4
     if (pad) { this.chunks.push(new Uint8Array(pad)); this.length += pad }
     this.views.push({ buffer: 0, byteOffset: this.length, byteLength: bytes.byteLength })
     this.chunks.push(bytes.slice())
     this.length += bytes.byteLength
-    this.accessors.push({ bufferView: this.views.length - 1, componentType, count, type, ...extra })
+    return this.views.length - 1
+  }
+
+  /**
+   * A float accessor that is zero except at `indices` (a view of increasing indices, shared by every accessor of
+   * one target): glTF's sparse accessor with no buffer view under it. No indices at all is all zeros.
+   */
+  addSparse(values: Float32Array, type: string, count: number, indices: { view: number; count: number; componentType: number } | undefined, extra: Partial<Accessor> = {}) {
+    this.accessors.push({
+      componentType: FLOAT, count, type, ...extra,
+      ...(indices?.count ? { sparse: { count: indices.count, indices: { bufferView: indices.view, componentType: indices.componentType }, values: { bufferView: this.view(values) } } } : {}),
+    })
     return this.accessors.length - 1
   }
 
@@ -156,12 +215,15 @@ export function writeRiggedGlb(r: Rigged): Uint8Array {
     WEIGHTS_0: w.add(weights, FLOAT, 'VEC4', n),
   }
 
-  const rig = writeRig(w, r.name, skeleton, r.clips)
+  const morphs = r.morphs?.length ? r.morphs : undefined
+  const targets = morphs ? writeTargets(w, morphs, n) : undefined
+
+  const rig = writeRig(w, r.name, skeleton, r.clips, morphs)
 
   const bin = w.bytes()
   const json = {
     asset: { version: '2.0', generator: 'Blobscape' },
-    extensionsUsed: [SPLATS, SKIN_EXTENSION],
+    extensionsUsed: [SPLATS, SKIN_EXTENSION, ...(morphs ? [MORPH_EXTENSION] : [])],
     scene: 0,
     scenes: [{ nodes: rig.sceneNodes }],
     nodes: rig.nodes,
@@ -170,14 +232,17 @@ export function writeRiggedGlb(r: Rigged): Uint8Array {
       primitives: [{
         mode: 0,
         attributes,
+        ...(targets ? { targets: targets.targets } : {}),
         extensions: {
           [SPLATS]: {
             kernel: 'ellipse', colorSpace: 'srgb_rec709_display', projection: 'perspective', sortingMethod: 'cameraDistance',
             // KHR_gaussian_splatting asks extensions that build on it to sit inside its own object (docs/rigged-splats.md)
-            extensions: { [SKIN_EXTENSION]: SKIN_RULE },
+            extensions: { [SKIN_EXTENSION]: SKIN_RULE, ...(targets ? { [MORPH_EXTENSION]: targets.extension } : {}) },
           },
         },
       }],
+      // every morph starts at 0; targetNames is where three.js and Blender look for the names
+      ...(targets ? { weights: targets.names.map(() => 0), extras: { targetNames: targets.names } } : {}),
     }],
     skins: [rig.skin],
     animations: rig.animations,
@@ -186,6 +251,56 @@ export function writeRiggedGlb(r: Rigged): Uint8Array {
     accessors: w.accessors,
   }
   return packGlb(json, bin)
+}
+
+/** How a morph target's shape change is applied: J = I + Σ w·SHAPE, and the splat's covariance becomes J Σ Jᵀ (docs/rigged-splats.md). */
+export const MORPH_RULE = { shapeBlend: 'linearMap' } as const
+
+/**
+ * The morphs as glTF morph targets: a POSITION delta and a SHAPE change per
+ * target, in-betweens as targets of their own in order. A target that moves
+ * under half the blobs is written sparse, so a tail's morph costs the tail's
+ * blobs, not the whole creature's.
+ */
+function writeTargets(w: BinWriter, morphs: Morph[], n: number) {
+  const targets: Record<string, number>[] = []
+  const names: string[] = []
+  const groups: { name: string; targets: number[] }[] = []
+  for (const m of morphs) {
+    const ids: number[] = []
+    m.targets.forEach((t, k) => {
+      ids.push(targets.length)
+      names.push(m.targets.length > 1 ? `${m.name} ${k + 1}/${m.targets.length}` : m.name)
+      targets.push(writeTarget(w, t, n))
+    })
+    groups.push({ name: m.name, targets: ids })
+  }
+  return { targets, names, extension: { ...MORPH_RULE, morphs: groups } }
+}
+
+function writeTarget(w: BinWriter, t: MorphTarget, n: number) {
+  const touched: number[] = []
+  for (let i = 0; i < n; i++) {
+    let any = t.delta[i * 3] !== 0 || t.delta[i * 3 + 1] !== 0 || t.delta[i * 3 + 2] !== 0
+    for (let k = 0; !any && k < 9; k++) any = t.grad[i * 9 + k] !== 0
+    if (any) touched.push(i)
+  }
+  // glTF stores a MAT3 by columns; morph.ts keeps grad by rows
+  const column = (i: number, out: Float32Array, o: number) => { for (let c = 0; c < 3; c++) for (let r = 0; r < 3; r++) out[o + c * 3 + r] = t.grad[i * 9 + r * 3 + c] }
+  // the untouched blobs' zeros count too
+  const min = [0, 1, 2].map(() => (touched.length < n ? 0 : Infinity)), max = min.map((v) => -v)
+  for (const i of touched) for (let k = 0; k < 3; k++) { const v = t.delta[i * 3 + k]; min[k] = Math.min(min[k], v); max[k] = Math.max(max[k], v) }
+  if (touched.length * 2 < n) {
+    const m = touched.length
+    const idx = n > 65535 ? Uint32Array.from(touched) : Uint16Array.from(touched)
+    const indices = m ? { view: w.view(idx), count: m, componentType: n > 65535 ? UINT : USHORT } : undefined
+    const d = new Float32Array(m * 3), g = new Float32Array(m * 9)
+    touched.forEach((i, j) => { d.set(t.delta.subarray(i * 3, i * 3 + 3), j * 3); column(i, g, j * 9) })
+    return { POSITION: w.addSparse(d, 'VEC3', n, indices, { min, max }), [SHAPE_ATTRIBUTE]: w.addSparse(g, 'MAT3', n, indices) }
+  }
+  const g = new Float32Array(n * 9)
+  for (let i = 0; i < n; i++) column(i, g, i * 9)
+  return { POSITION: w.add(t.delta.slice(0, n * 3), FLOAT, 'VEC3', n, { min, max }), [SHAPE_ATTRIBUTE]: w.add(g, FLOAT, 'MAT3', n) }
 }
 
 /** A bone's place relative to its parent's head (its glTF node translation) in the rest pose. */
@@ -202,7 +317,7 @@ function restTranslation(skeleton: Skeleton, i: number): Vec3 {
  * inverse bind matrix per bone, and each clip as rotation channels on the
  * bone nodes, plus translation and scale channels on the bones that move or grow.
  */
-function writeRig(w: BinWriter, name: string, skeleton: Skeleton, clips: Clip[]) {
+function writeRig(w: BinWriter, name: string, skeleton: Skeleton, clips: Clip[], morphs?: Morph[]) {
   const nb = skeleton.count
   const ibm = new Float32Array(nb * 16)
   const nodes: Record<string, unknown>[] = [{ name, mesh: 0, skin: 0 }]
@@ -238,6 +353,14 @@ function writeRig(w: BinWriter, name: string, skeleton: Skeleton, clips: Clip[])
       samplers.push({ input, output: w.add(sc, FLOAT, 'VEC3', clip.times.length), interpolation: 'LINEAR' })
       channels.push({ sampler: samplers.length - 1, target: { node: b + 1, path: 'scale' } })
     })
+    if (morphs && clip.weights) {
+      // glTF keys a weight per target: in-betweens share their morph's weight
+      const m = morphs.length, nt = targetCount(morphs), keys = clip.times.length
+      const tw = new Float32Array(keys * nt)
+      for (let f = 0; f < keys; f++) targetWeights(morphs, clip.weights.subarray(f * m, f * m + m), tw.subarray(f * nt, f * nt + nt))
+      samplers.push({ input, output: w.add(tw, FLOAT, 'SCALAR', keys * nt), interpolation: 'LINEAR' })
+      channels.push({ sampler: samplers.length - 1, target: { node: 0, path: 'weights' } })
+    }
     return { name: clip.name, samplers, channels }
   })
   return {
@@ -338,13 +461,36 @@ export function readRiggedGlb(bytes: Uint8Array): Rigged {
 
   const read = (ai: number, Ctor: typeof Float32Array | typeof Uint8Array | typeof Uint16Array) => {
     const a = json.accessors[ai]
-    const v = json.bufferViews[a.bufferView]
-    const size = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4, MAT4: 16 }[a.type as string] ?? 1
+    const size = SIZES[a.type as string] ?? 1
+    if (a.bufferView === undefined || a.sparse) return readSparse(ai, Ctor, size)
+    return view(a.bufferView, a.byteOffset ?? 0, a.count * size, Ctor, size)
+  }
+  const view = (bv: number, offset: number, length: number, Ctor: typeof Float32Array | typeof Uint8Array | typeof Uint16Array | typeof Uint32Array, size = 1) => {
+    const v = json.bufferViews[bv]
     const bytesPer = Ctor.BYTES_PER_ELEMENT
     if (v.byteStride && v.byteStride !== size * bytesPer) throw new GlbError('Interleaved buffers are not supported yet')
-    const start = (v.byteOffset ?? 0) + (a.byteOffset ?? 0)
-    const raw = bin.slice(start, start + a.count * size * bytesPer)
-    return new Ctor(raw.buffer, raw.byteOffset, a.count * size)
+    const start = (v.byteOffset ?? 0) + offset
+    if (start + length * bytesPer > Math.min(bin.byteLength, (v.byteOffset ?? 0) + v.byteLength)) throw new GlbError('An accessor runs past the end of its data')
+    const raw = bin.slice(start, start + length * bytesPer)
+    return new Ctor(raw.buffer, raw.byteOffset, length)
+  }
+  // zeros (or the buffer view's values) with a sparse accessor's few values written over them
+  const readSparse = (ai: number, Ctor: typeof Float32Array | typeof Uint8Array | typeof Uint16Array, size: number) => {
+    const a = json.accessors[ai]
+    const out = a.bufferView === undefined ? new Ctor(a.count * size) : view(a.bufferView, a.byteOffset ?? 0, a.count * size, Ctor, size)
+    const sp = a.sparse
+    if (!sp?.count) return out
+    if (a.componentType !== FLOAT || Ctor !== Float32Array) throw new GlbError('Sparse accessors are read only as floats')
+    const IdxCtor = sp.indices.componentType === UBYTE ? Uint8Array : sp.indices.componentType === USHORT ? Uint16Array : sp.indices.componentType === UINT ? Uint32Array : undefined
+    if (!IdxCtor) throw new GlbError('Unknown sparse index format')
+    const idx = view(sp.indices.bufferView, sp.indices.byteOffset ?? 0, sp.count, IdxCtor)
+    const vals = view(sp.values.bufferView, sp.values.byteOffset ?? 0, sp.count * size, Float32Array, size)
+    for (let j = 0; j < sp.count; j++) {
+      const i = idx[j]
+      if (i >= a.count) throw new GlbError('A sparse index is past the end of its accessor')
+      for (let k = 0; k < size; k++) out[i * size + k] = vals[j * size + k]
+    }
+    return out
   }
 
   const meshNode = json.nodes.findIndex((nd: { mesh?: number }) => nd.mesh !== undefined)
@@ -411,6 +557,14 @@ export function readRiggedGlb(bytes: Uint8Array): Rigged {
     for (let i = 0; i < n; i++) skin.weights[i * 4] = 1
   }
 
+  const mesh = json.meshes[json.nodes[meshNode].mesh]
+  const morphs = readMorphs(mesh, prim, n, (ai, size) => {
+    if (json.accessors[ai]?.componentType !== FLOAT) throw new GlbError('Quantized morph targets are not supported yet')
+    if (SIZES[json.accessors[ai].type] !== size || json.accessors[ai].count !== n) throw new GlbError('A morph target does not match its splats')
+    return read(ai, Float32Array) as Float32Array
+  })
+  const nt = prim.targets?.length ?? 0
+
   const clips: Clip[] = (json.animations ?? []).map((anim: { name?: string; samplers: { input: number; output: number }[]; channels: { sampler: number; target: { node: number; path: string } }[] }, ai: number) => {
     const first = anim.samplers[0]
     const times = read(first.input, Float32Array) as Float32Array
@@ -421,7 +575,18 @@ export function readRiggedGlb(bytes: Uint8Array): Rigged {
     })
     const offsets: (Float32Array | undefined)[] = skeleton.bones.map(() => undefined)
     const sizes: (Float32Array | undefined)[] = skeleton.bones.map(() => undefined)
+    let weights: Float32Array | undefined
     for (const ch of anim.channels) {
+      if (ch.target.node === meshNode && ch.target.path === 'weights' && morphs) {
+        const out = read(anim.samplers[ch.sampler].output, Float32Array) as Float32Array
+        if (out.length !== times.length * nt || !out.every(Number.isFinite)) continue
+        weights = new Float32Array(times.length * morphs.length)
+        for (let f = 0; f < times.length; f++) {
+          let at = 0
+          morphs.forEach((m, k) => { weights![f * morphs.length + k] = morphWeight(out, f * nt + at, m.targets.length); at += m.targets.length })
+        }
+        continue
+      }
       const b = jointOf.get(ch.target.node)
       if (b === undefined) continue
       const s = anim.samplers[ch.sampler]
@@ -442,7 +607,38 @@ export function readRiggedGlb(bytes: Uint8Array): Rigged {
         sizes[b] = o
       }
     }
-    return { name: anim.name ?? `clip${ai}`, times, rotations, offsets, ...(sizes.some(Boolean) ? { sizes } : {}) }
+    return { name: anim.name ?? `clip${ai}`, times, rotations, offsets, ...(sizes.some(Boolean) ? { sizes } : {}), ...(weights ? { weights } : {}) }
   })
-  return { name: json.nodes[meshNode].name ?? '', blobs, skin, skeleton, clips }
+  return { name: json.nodes[meshNode].name ?? '', blobs, skin, skeleton, clips, ...(morphs ? { morphs } : {}) }
+}
+
+const SIZES: Record<string, number> = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4, MAT3: 9, MAT4: 16 }
+
+/**
+ * The primitive's morph targets as morphs. Our extension groups in-betweens
+ * into one morph; without it (or if its groups don't cover every target once,
+ * in order) each target is a morph of its own. A target with no SHAPE moves
+ * centers only, as a plain glTF morph would.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function readMorphs(mesh: any, prim: any, n: number, read: (accessor: number, size: number) => Float32Array): Morph[] | undefined {
+  const defs: Record<string, number>[] = prim.targets ?? []
+  if (!defs.length) return undefined
+  const targets: MorphTarget[] = defs.map((d) => {
+    const delta = d.POSITION !== undefined ? read(d.POSITION, 3) : new Float32Array(n * 3)
+    const grad = new Float32Array(n * 9)
+    if (d[SHAPE_ATTRIBUTE] !== undefined) {
+      const g = read(d[SHAPE_ATTRIBUTE], 9)
+      // columns in the file, rows in morph.ts
+      for (let i = 0; i < n; i++) for (let c = 0; c < 3; c++) for (let r = 0; r < 3; r++) grad[i * 9 + r * 3 + c] = g[i * 9 + c * 3 + r]
+    }
+    if (!delta.every(Number.isFinite) || !grad.every(Number.isFinite)) throw new GlbError('A morph target holds a value that is not a number')
+    return { delta, grad }
+  })
+  const names: unknown[] = mesh.extras?.targetNames ?? []
+  const groups: { name?: unknown; targets?: unknown }[] | undefined = prim.extensions?.[SPLATS]?.extensions?.[MORPH_EXTENSION]?.morphs
+  let next = 0
+  const fits = Array.isArray(groups) && groups.every((g) => Array.isArray(g.targets) && g.targets.length > 0 && g.targets.every((t) => t === next++)) && next === targets.length
+  if (fits) return groups!.map((g, k) => ({ name: typeof g.name === 'string' ? g.name : `morph${k}`, targets: (g.targets as number[]).map((t) => targets[t]) }))
+  return targets.map((t, k) => ({ name: typeof names[k] === 'string' ? (names[k] as string) : `morph${k}`, targets: [t] }))
 }

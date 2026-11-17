@@ -2,7 +2,7 @@ import * as THREE from 'three/webgpu'
 import { readbackToSrgb } from '../splat-core/color.ts'
 import type { Frame } from '../splat-core/pixel.ts'
 import { baseline, processFrames } from '../splat-to-sprite/sheet.ts'
-import { sampleClip } from './glb.ts'
+import { sampleClip, type Clip } from './glb.ts'
 import type { Skeleton } from './rig.ts'
 import { frameAll, frameTimes, planSheet, type Framing, type SheetMove, type SheetPlan } from './spriteSheet.ts'
 import type { Blobs } from '../splat-core/blobs.ts'
@@ -22,8 +22,10 @@ export interface BakeTarget {
   /** A scene holding only what should be in the sprite (the creature's SplatWorld). */
   scene: THREE.Scene
   actor: { blobs: Blobs; skin: Skin; skeleton: Skeleton }
-  /** Tells the world its skeleton moved. */
+  /** Tells the world its skeleton (and, after `morph`, its blobs) moved. */
   posed: () => void
+  /** Reshapes the actor's blobs by a clip's morph weights at a time, on the CPU, for an actor with morphs. */
+  morph?: (clip: Clip | undefined, t: number) => void
 }
 
 export interface BakeOptions {
@@ -49,7 +51,7 @@ const ELEVATION = 28
 
 export async function bakeSheet(t: BakeTarget, moves: SheetMove[], o: BakeOptions, progress?: (done: number, total: number) => void): Promise<BakedSheet> {
   const plan = planSheet(moves, o.directions)
-  const framing = frameAll(t.actor, moves)
+  const framing = frameAll(t.actor, moves, undefined, t.morph)
   const big = o.size * SUPERSAMPLE
   const { renderer, scene, actor } = t
   const camera = new THREE.PerspectiveCamera(LENS, 1, 0.1, 1000)
@@ -76,6 +78,7 @@ export async function bakeSheet(t: BakeTarget, moves: SheetMove[], o: BakeOption
       for (const time of row.move.clip ? frameTimes(row.move) : [0]) {
         if (row.move.clip) sampleClip(row.move.clip, actor.skeleton, time)
         else { actor.skeleton.reset(); actor.skeleton.update() }
+        t.morph?.(row.move.clip, time)
         t.posed()
         renderer.setRenderTarget(target)
         renderer.clear()

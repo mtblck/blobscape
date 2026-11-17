@@ -49,13 +49,14 @@ export interface Framing { center: [number, number, number]; radius: number }
  * frame. Moves a sample of blob centers by their bones on the CPU (the same
  * blend as the GPU), and pads each by its largest scale.
  */
-export function frameAll(actor: { blobs: Blobs; skin: Skin; skeleton: Skeleton }, moves: SheetMove[], sample = 3000): Framing {
+export function frameAll(actor: { blobs: Blobs; skin: Skin; skeleton: Skeleton }, moves: SheetMove[], sample = 3000, morph?: (clip: Clip | undefined, t: number) => void): Framing {
   const { blobs, skin, skeleton: sk } = actor
   const step = Math.max(1, Math.floor(blobs.count / sample))
   const pts: number[] = []
   const pose = (m: SheetMove, t: number) => {
     if (m.clip) sampleClip(m.clip, sk, t)
     else { sk.reset(); sk.update() }
+    morph?.(m.clip, t)
     for (let i = 0; i < blobs.count; i += step) {
       if (blobs.opacity[i] < 0.05) continue
       const x = blobs.center[i * 3], y = blobs.center[i * 3 + 1], z = blobs.center[i * 3 + 2]

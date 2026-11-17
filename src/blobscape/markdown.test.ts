@@ -30,5 +30,5 @@ test('the spec turns into a page: a title, sections, sample files on the site', 
   // nothing of the Markdown is left showing, and nothing was escaped twice
   assert.ok(!/\*\*|\]\(|&amp;lt;|\u0000/.test(html.replace(/<pre[\s\S]*?<\/pre>/g, '')), 'Markdown left in the page')
   assert.equal(specLink('../public/rigged-splats/frog.glb'), '/rigged-splats/frog.glb')
-  for (const f of ['fox', 'frog']) assert.ok(readFileSync(new URL(`../../public/rigged-splats/${f}.glb`, import.meta.url)).length > 1000)
+  for (const f of ['fox', 'frog', 'puffer']) assert.ok(readFileSync(new URL(`../../public/rigged-splats/${f}.glb`, import.meta.url)).length > 1000)
 })

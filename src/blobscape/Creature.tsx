@@ -3,6 +3,7 @@ import type { Orbit } from '../splat-core/view.ts'
 import type { Creature as Body } from '../splat-engine/body.ts'
 import { GlbError, readRiggedGlb, recordClip, writeRiggedGlb, writeRiggedMeshGlb, type Clip } from '../splat-engine/glb.ts'
 import { blobsToMesh } from '../splat-engine/mesh.ts'
+import type { Morph } from '../splat-engine/morph.ts'
 import type { Species } from '../splat-engine/zoo/index.ts'
 import { CREATURES } from './creature/fromScenes.ts'
 import { MAX_SEED, monsterSpecies, newSeed } from '../splat-engine/zoo/monster.ts'
@@ -22,7 +23,8 @@ const RIG_LESSONS = LESSONS.filter((l) => ['one-bone', 'weights', 'twist', 'walk
 const SHOW: { id: Show; label: string }[] = [{ id: 'blobs', label: 'Blobs' }, { id: 'bones', label: 'Bones' }, { id: 'both', label: 'Both' }]
 const DEFAULT = 'fox'
 
-interface Shown { name: string; body: Body; clips: Clip[]; species?: Species }
+/** A file's body may carry morphs, which its clips key and the stage applies. */
+interface Shown { name: string; body: Body & { morphs?: Morph[] }; clips: Clip[]; species?: Species }
 
 /** A creature and its moves, each recorded into a clip once, when it's made. */
 function build(sp: Species, count: number, look: string): Shown {
@@ -80,6 +82,8 @@ export function Creature() {
   const [fileNote, setFileNote] = useState<string>()
   const [busy, setBusy] = useState<string>()
   const [cells, setCells] = useState(64)
+  /** An opened file's morph weights while it stands still. */
+  const [morphW, setMorphW] = useState<number[]>([])
   /** The bone lit up by a tap (or the [ and ] keys), and what it moves. */
   const [picked, setPicked] = useState<PickedBone>()
 
@@ -174,6 +178,7 @@ export function Creature() {
     setPicked(undefined)
   }, [stage, shown, building]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { stage?.setClip(clip) }, [stage, clip])
+  useEffect(() => { stage?.setMorphWeights(morphW) }, [stage, morphW, shown])
   useEffect(() => { stage?.highlight(picked?.bone) }, [stage, picked])
   /** Lights up the bone under a tap, or puts it out when the tap is on the same bone or off the creature. */
   const tapAt = (ev: ReactPointerEvent<HTMLCanvasElement>) => {
@@ -226,7 +231,9 @@ export function Creature() {
       if (r.skeleton.count > 255) throw new GlbError('More than 255 bones')
       setLoaded({ name: r.name || file.name.replace(/\.glb$/i, ''), body: r, clips: r.clips })
       setMove(r.clips[0]?.name ?? STILL)
-      setFileNote(`Opened ${file.name}: ${r.blobs.count.toLocaleString()} blobs, ${r.skeleton.count} bones, ${r.clips.length} clip${r.clips.length === 1 ? '' : 's'}.`)
+      setMorphW((r.morphs ?? []).map(() => 0))
+      const morphs = r.morphs?.length ? `, ${r.morphs.length} morph${r.morphs.length === 1 ? '' : 's'}` : ''
+      setFileNote(`Opened ${file.name}: ${r.blobs.count.toLocaleString()} blobs, ${r.skeleton.count} bones, ${r.clips.length} clip${r.clips.length === 1 ? '' : 's'}${morphs}.`)
     } catch (e) {
       setFileNote(e instanceof GlbError ? `${file.name} didn't open: ${e.message}.` : `${file.name} didn't open: it isn't a rigged splat .glb this page can read.`)
     }
@@ -350,6 +357,17 @@ export function Creature() {
                   </div>
                 </Field>
                 <Slider label="Speed" value={speed} min={0.1} max={2} step={0.05} onChange={setSpeed} format={(v) => `×${v.toFixed(2)}`} />
+                {!!shown.body.morphs?.length && (
+                  <div className="flex flex-col gap-3" data-testid="morph-sliders">
+                    <p className="text-xs leading-relaxed text-ink-faint">
+                      {clip ? 'This file has morphs, which its clip sets as it plays. Pick Still to set them by hand.' : 'This file\'s morphs: each slider reshapes the blobs.'}
+                    </p>
+                    {!clip && shown.body.morphs.map((m, k) => (
+                      <Slider key={`${k}-${m.name}`} label={m.name[0].toUpperCase() + m.name.slice(1)} value={morphW[k] ?? 0} min={0} max={1} step={0.05}
+                        onChange={(v) => setMorphW((w) => w.map((x, j) => (j === k ? v : x)))} format={(v) => `${Math.round(v * 100)}%`} />
+                    ))}
+                  </div>
+                )}
                 <Field label="Blobs">
                   <div className="flex flex-wrap gap-1.5">
                     {species.detail.map((n) => <Chip key={n} active={!loaded && count === n} onClick={() => { asked.current = n; setLoaded(undefined); setCount(n) }}>{kilo(n)}</Chip>)}
@@ -395,8 +413,10 @@ export function Creature() {
           <p>
             <b className="font-sans text-base font-semibold text-ink">As splats</b>, the .glb holds every blob with the KHR_gaussian_splatting
             standard, its bones and every clip as ordinary glTF, and a note (our BLOBSCAPE_gaussian_skinning extension) on how a
-            skinned blob turns. The frog's tongue and the dragon's fire are bones that grow, which glTF keys as scale. three.js and
-            other splat viewers open it as a still creature; this page plays it.
+            skinned blob turns. The frog's tongue and the dragon's fire are bones that grow, which glTF keys as scale. A file with
+            morphs (blend shapes) keeps them as glTF morph targets, with a second note on how each blob stretches: open the{' '}
+            <a href="/rigged-splats/puffer.glb" download className="underline decoration-rule underline-offset-2 hover:text-accent">sample pufferfish</a> here to see one.
+            three.js and other splat viewers open it as a still creature; this page plays it.
           </p>
           <p>
             <b className="font-sans text-base font-semibold text-ink">As a mesh</b>, it's a solid skin wrapped round the blobs, colored from

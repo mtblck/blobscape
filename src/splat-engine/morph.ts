@@ -126,3 +126,43 @@ export function applyMorphs(rest: Blobs, morphs: Morph[], weights: ArrayLike<num
     out.quat.set(mat3ToQuat(eig.subarray(3)), i * 4)
   }
 }
+
+/** How many targets the morphs have in all: what a glTF primitive lists, in-betweens included. */
+export function targetCount(morphs: Morph[]) {
+  return morphs.reduce((s, m) => s + m.targets.length, 0)
+}
+
+/**
+ * Each target's weight for the morphs' weights, in the order the morphs list
+ * them: what a glTF file animates. A single-target morph's weight is its
+ * target's; a morph with in-betweens spreads its weight over the two targets
+ * either side of it (`shares`). `applyMorphs` gives the same blobs as adding up
+ * every target times its weight here.
+ */
+export function targetWeights(morphs: Morph[], weights: ArrayLike<number>, out = new Float32Array(targetCount(morphs))) {
+  out.fill(0)
+  let at = 0
+  morphs.forEach((m, k) => {
+    const w = weights[k] ?? 0, n = m.targets.length
+    if (w && n) {
+      const [a, b, u] = shares(n, w)
+      if (a >= 0) out[at + a] = 1 - u
+      out[at + b] = u
+    }
+    at += n
+  })
+  return out
+}
+
+/**
+ * A morph's weight back from its `k` targets' weights, starting at `from`: the
+ * inverse of `targetWeights`. The last target with any weight says which stretch
+ * the morph is on, and that weight says how far along it.
+ */
+export function morphWeight(tw: ArrayLike<number>, from: number, k: number) {
+  for (let b = k - 1; b >= 0; b--) {
+    const u = tw[from + b]
+    if (u) return (b + u) / k
+  }
+  return 0
+}

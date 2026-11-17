@@ -139,3 +139,31 @@ test('the pufferfish: the tail bends from a base that stays put, to either side,
   assert.ok(tailLength(0.5) > 0.9 && tailLength(0.5) < 1, `half ${tailLength(0.5)}`)
   assert.ok(tailLength(1.5) > 1.1 && tailLength(-1.5) === tailLength(1.5), `past ${tailLength(1.5)}`)
 })
+
+test('a morph weight spread over its targets reads back as the same weight', async () => {
+  const { targetWeights, morphWeight } = await import('./morph.ts')
+  const dummy = (k: number): Morph => ({ name: 'm', targets: Array.from({ length: k }, () => ({ delta: new Float32Array(0), grad: new Float32Array(0) })) })
+  for (const k of [1, 2, 3]) for (const w of [-0.5, -0.1, 0, 0.2, 1 / 3, 0.5, 0.75, 1, 1.4]) {
+    const tw = targetWeights([dummy(2), dummy(k)], [0.3, w])
+    assert.equal(tw.length, 2 + k)
+    assert.ok(Math.abs(morphWeight(tw, 0, 2) - 0.3) < 1e-6)
+    assert.ok(Math.abs(morphWeight(tw, 2, k) - w) < 1e-6, `k ${k}, w ${w}: ${morphWeight(tw, 2, k)}`)
+  }
+})
+
+test('the morphs give the same centers as each target times its weight, which is what glTF adds up', async () => {
+  const { targetWeights } = await import('./morph.ts')
+  const rest = some()
+  const a = targetFrom(rest, (p) => [p[0] * 1.3, p[1], p[2] + 0.1]), b = targetFrom(rest, (p) => [p[0], p[1] * 0.6, p[2]])
+  const c = targetFrom(rest, (p) => [p[0] - 0.2, p[1] + p[0] * 0.4, p[2]])
+  const morphs: Morph[] = [{ name: 'one', targets: [a] }, { name: 'two', targets: [b, c] }]
+  for (const w of [[0.4, 0.3], [1, 0.75], [-0.3, 1.2]]) {
+    const out = rest.clone()
+    applyMorphs(rest, morphs, w, out)
+    const tw = targetWeights(morphs, w), all = [a, b, c]
+    for (let i = 0; i < rest.count * 3; i++) {
+      const want = rest.center[i] + all.reduce((s, t, k) => s + tw[k] * t.delta[i], 0)
+      assert.ok(Math.abs(out.center[i] - want) < 1e-5, `${w}: ${out.center[i]} vs ${want}`)
+    }
+  }
+})
