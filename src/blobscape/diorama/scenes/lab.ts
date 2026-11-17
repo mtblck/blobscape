@@ -216,6 +216,6 @@ export const LAB: SceneDoc = {
     { at: [0, 1.0, 0.3], color: '#28a0b4', strength: 1.8, range: 1.5, flicker: { by: 0.1, times: 3 } },
     { at: [-0.85, 0.8, 0.55], color: '#d03c90', strength: 1.4, range: 1.1 },
     { at: [0.85, 0.8, 0.55], color: '#d03c90', strength: 1.4, range: 1.1 },
-    { at: [-0.45, 1.5, 0.5], color: '#f0a028', strength: 1.6, range: 1.6, flicker: { by: 0.1, times: 5 } },
+    { at: [-0.45, 1.5, 0.5], color: '#f0a028', strength: 1.6, range: 1.6, flicker: { by: 0.1, times: 5 }, shadows: true },
   ],
 }

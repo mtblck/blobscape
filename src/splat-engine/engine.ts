@@ -3,7 +3,7 @@ import {
   type Camera, type Renderer,
 } from 'three/webgpu'
 import * as TSLTyped from 'three/tsl'
-import type { Blobs } from '../splat-core/blobs.ts'
+import { Blobs } from '../splat-core/blobs.ts'
 
 // TSL's typings model each node type closely, and the shader code below mixes
 // them freely (as three.js's own JavaScript does), so the node functions are
@@ -18,6 +18,7 @@ import { packWeights, skinBlob, skinCenters, type Skeleton, type Skin, type Skin
 import { DepthSort } from './sort.ts'
 import { detailFor, lodRank, screenRadius, type DetailRule } from './lod.ts'
 import { MAX_EDITS, editAt, type ShapeEdit } from './edit.ts'
+import { applyMorphs, shares, type Morph } from './morph.ts'
 import { LIFT, MAX_MARCH, OCC_SCALE, REACH, SHADOW_CELLS, SHADOW_DENSITY, blobSigma, occupancy, shadowBox } from './shadow.ts'
 import { srgbToLinear } from '../splat-core/color.ts'
 
@@ -48,7 +49,18 @@ export interface Actor {
   skeleton: Skeleton
   /** Which part of the actor each blob belongs to (as `buildBody` and `voxelBody` give it): what `SplatWorld.parts` draws. Left out, the actor is one part. */
   partOf?: ArrayLike<number>
+  /**
+   * How much of each of the first four live lights a blob can see, four bytes a blob (255 sees it all): baked lamp
+   * shadows (voxel.ts `lamps`). The light pass scales light k by byte k, so a flickering lamp's shadows flicker with it.
+   * Left out, every light reaches every blob.
+   */
+  seen?: Uint8Array
+  /** Blend shapes (morph.ts), set with `SplatWorld.setMorphWeights`: on WebGPU a pass before the deform reshapes the blobs; on WebGL the CPU does and uploads them. */
+  morphs?: Morph[]
 }
+
+/** How many morph targets a world takes, over all its actors. */
+export const MAX_MORPH_TARGETS = 32
 
 const WORKGROUP = 256
 /** In a map of parts, a blob is solid out to where it has faded to this. */
@@ -132,6 +144,11 @@ export class SplatWorld extends Mesh {
   private readonly buf: ReturnType<typeof makeBuffers>
   private readonly sort: DepthSort
   private readonly deformNodes: Record<SkinMode, ReturnType<typeof makeDeform>>
+  /** Morphs, when any actor has them: the GPU data, the pass, the deform that reads its output, and each actor's weights. */
+  private readonly morph?: MorphGPU & { node: ReturnType<typeof makeMorph>; deform: Record<SkinMode, ReturnType<typeof makeDeform>>; weights: Float32Array[]; firstTarget: number[] }
+  private morphDirty = true
+  /** Per actor, its blobs reshaped on the CPU for its weights (WebGL and the CPU twin), or undefined at rest. */
+  private morphed: (Blobs | undefined)[] = []
   private readonly projectNode: ReturnType<typeof makeProject>
   private readonly cam: CameraUniforms
   private readonly bins: number
@@ -194,6 +211,11 @@ export class SplatWorld extends Mesh {
     this.boneRadius = boneRadii(actors, boneOffset, bones)
     ;({ sphere: this.boneSphere, box: this.boneBox } = boneSpheres(actors, boneOffset, bones))
     this.deformNodes = { quat: makeDeform(buf, 'quat'), linear: makeDeform(buf, 'linear') }
+    if (actors.some((a) => a.morphs?.length)) {
+      const m = makeMorphGPU(actors, count)
+      this.morph = { ...m, node: makeMorph(buf, m), deform: { quat: makeDeform(buf, 'quat', m), linear: makeDeform(buf, 'linear', m) }, weights: actors.map((a) => new Float32Array(a.morphs?.length ?? 0)), firstTarget: m.firstTarget }
+      buf.attrs.push(m.dataAttr, m.centerAttr, m.cholAAttr, m.cholBAttr)
+    }
     this.cam = { view: uniform(new Matrix4()), proj: uniform(new Matrix4()), viewport: uniform(new Vector2(1, 1)), depthRange: uniform(new Vector2(0, 1)) }
     this.fog = { color: uniform(new Vector3(0, 0, 0)), range: uniform(new Vector2(0, 0)) }
     this.projectNode = makeProject(buf, sort, this.cam, bins)
@@ -260,6 +282,58 @@ export class SplatWorld extends Mesh {
     this.lightsDirty = true
   }
   private edits: ShapeEdit[] = []
+
+  /** Sets an actor's morph weights (one per morph, 0–1); the blobs are reshaped next frame. */
+  setMorphWeights(actor: Actor | number, weights: ArrayLike<number>) {
+    const a = typeof actor === 'number' ? actor : this.actors.indexOf(actor)
+    const M = this.morph
+    if (!M || !this.actors[a]?.morphs?.length) throw new Error('setMorphWeights: that actor has no morphs')
+    const w = M.weights[a]
+    let changed = false
+    for (let k = 0; k < w.length; k++) { const v = weights[k] ?? 0; if (v !== w[k]) { w[k] = v; changed = true } }
+    if (!changed) return
+    // each morph's weight as factors on its targets (a morph with in-betweens reaches them in turn)
+    const morphs = this.actors[a].morphs!
+    let t = M.firstTarget[a]
+    morphs.forEach((m, k) => {
+      const f = new Float32Array(m.targets.length)
+      if (w[k] && m.targets.length) {
+        const [lo, hi, u] = shares(m.targets.length, w[k])
+        if (lo >= 0 && u !== 1) f[lo] += 1 - u
+        if (u !== 0) f[hi] += u
+      }
+      for (const v of f) M.factors.array[t++] = v
+    })
+    this.morphed[a] = undefined
+    this.morphDirty = true
+    this.bonesDirty = true
+  }
+
+  /** An actor's blobs as its morphs shape them now (the rest blobs when it has none or they are all 0). */
+  private shapedBlobs(a: number): Blobs {
+    const actor = this.actors[a], w = this.morph?.weights[a]
+    if (!actor.morphs?.length || !w || w.every((v) => v === 0)) return actor.blobs
+    let b = this.morphed[a]
+    if (!b) {
+      b = actor.blobs.clone()
+      applyMorphs(actor.blobs, actor.morphs, w, b)
+      this.morphed[a] = b
+    }
+    return b
+  }
+
+  /** WebGL: the morphed actors' centers and shapes, worked out on the CPU and sent up in place of the rest ones. */
+  private morphCPU() {
+    const b = this.buf
+    const center = b.centerAttr.array as Float32Array, scale = b.scaleAttr.array as Float32Array, quat = b.quatAttr.array as Float32Array
+    let i0 = 0
+    this.actors.forEach((actor, a) => {
+      if (actor.morphs?.length) packShape(this.shapedBlobs(a), this.boneOffset[a], i0, center, scale, quat)
+      i0 += actor.blobs.count
+    })
+    if (center !== b.srcCenterData) b.srcCenterData.set(center.subarray(0, b.srcCenterData.length))
+    for (const x of [b.centerAttr, b.scaleAttr, b.quatAttr]) bump(x)
+  }
 
   /** Call after posing any skeleton. */
   markPosed() { this.bonesDirty = true }
@@ -415,6 +489,7 @@ export class SplatWorld extends Mesh {
     const needsSort = deformed || key !== this.lastSortKey
     if (webgl) {
       const t0 = performance.now()
+      if (this.morph && this.morphDirty) { this.morphCPU(); this.morphDirty = false }
       if (deformed) skinCenters(this.buf.srcCenterData, this.buf.skinWords, this.buf.boneData, this.count, this.cpuCenters)
       if (deformed && this.casting) this.shadowGridCPU()
       const t1 = performance.now()
@@ -424,6 +499,7 @@ export class SplatWorld extends Mesh {
       this.cpuSortMs = t2 - t1
       this.cpuMs = t2 - t0
     } else {
+      if (this.morph && this.morphDirty) { renderer.compute(this.morph.node as never); this.morphDirty = false }
       if (deformed) this.deform(renderer)
       if (deformed && this.casting && this.shadowNodes) {
         this.placeShadowBox()
@@ -572,7 +648,7 @@ export class SplatWorld extends Mesh {
     }
   }
 
-  private deform(renderer: Renderer) { renderer.compute(this.deformNodes[this.mode] as never) }
+  private deform(renderer: Renderer) { renderer.compute((this.morph ? this.morph.deform : this.deformNodes)[this.mode] as never) }
   private project(renderer: Renderer) {
     renderer.compute(this.projectNode as never)
     this.sort.order(renderer as never)
@@ -601,7 +677,8 @@ export class SplatWorld extends Mesh {
     let i = 0
     const w = new Float32Array(4)
     for (let a = 0; a < this.actors.length; a++) {
-      const { blobs, skin, skeleton } = this.actors[a]
+      const { skin, skeleton } = this.actors[a]
+      const blobs = this.shapedBlobs(a)
       const drop = this.drop[a]
       for (let k = 0; k < blobs.count; k++, i++) {
         const word = this.buf.skinWords[i * 2 + 1]
@@ -701,6 +778,17 @@ function packBlobs(actors: Actor[], boneOffset: number[], center: Float32Array, 
   })
 }
 
+/** One actor's centers, scales and turns, written from blob `at` on (its colors stay). */
+function packShape(blobs: Blobs, bone0: number, at: number, center: Float32Array, scale: Float32Array, quat: Float32Array) {
+  for (let k = 0; k < blobs.count; k++) {
+    const i = at + k
+    center[i * 4] = blobs.center[k * 3]; center[i * 4 + 1] = blobs.center[k * 3 + 1]; center[i * 4 + 2] = blobs.center[k * 3 + 2]
+    center[i * 4 + 3] = bone0
+    scale[i * 4] = blobs.scale[k * 3]; scale[i * 4 + 1] = blobs.scale[k * 3 + 1]; scale[i * 4 + 2] = blobs.scale[k * 3 + 2]
+    quat.set(blobs.quat.subarray(k * 4, k * 4 + 4), i * 4)
+  }
+}
+
 /** A set of blobs' colors (linear) and opacities as one word each, written from blob `at` on. */
 function packColors(blobs: Blobs, color: Uint32Array, at: number) {
   const byte = (v: number) => Math.max(0, Math.min(255, Math.round(v * 255)))
@@ -720,6 +808,8 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
   const part = new Uint32Array(n)
   // joints and weights interleaved, two words per blob: a compute stage may only bind 8 storage buffers on many phones
   const skinWords = new Uint32Array(n * 2)
+  // how much of each of the first four lights a blob sees, a byte each: all of it unless the actor baked lamp shadows
+  const seen = new Uint32Array(n).fill(0xffffffff)
   packBlobs(actors, boneOffset, center, scale, quat, color)
   let i = 0
   actors.forEach((a, ai) => {
@@ -729,11 +819,12 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
       part[i] = ((p & 255) | ((p >> 8) << 8) | (who << 16)) >>> 0
       skinWords[i * 2] = (skin.joints[k * 4] | (skin.joints[k * 4 + 1] << 8) | (skin.joints[k * 4 + 2] << 16) | (skin.joints[k * 4 + 3] << 24)) >>> 0
       skinWords[i * 2 + 1] = packWeights(skin.weights, k * 4)
+      if (a.seen) seen[i] = (a.seen[k * 4] | (a.seen[k * 4 + 1] << 8) | (a.seen[k * 4 + 2] << 16) | (a.seen[k * 4 + 3] << 24)) >>> 0
     }
   })
   const attr = (a: Float32Array | Uint32Array, size: number) => new StorageBufferAttribute(a, size)
   const centerAttr = attr(center, 4), scaleAttr = attr(scale, 4), quatAttr = attr(quat, 4)
-  const colorAttr = attr(color, 1), skinAttr = attr(skinWords, 1), partAttr = attr(part, 1)
+  const colorAttr = attr(color, 1), skinAttr = attr(skinWords, 1), partAttr = attr(part, 1), seenAttr = attr(seen, 1)
   const boneData = new Float32Array(Math.max(1, bones) * 20)
   const boneAttr = new StorageBufferAttribute(boneData, 4)
   boneAttr.setUsage(DynamicDrawUsage)
@@ -746,7 +837,7 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
   return {
     count: n,
     /** Every GPU buffer, so dispose can free them. */
-    attrs: [centerAttr, scaleAttr, quatAttr, colorAttr, partAttr, skinAttr, boneAttr, worldCenterAttr, covAAttr, covBAttr, splatAAttr, splatBAttr],
+    attrs: [centerAttr, scaleAttr, quatAttr, colorAttr, partAttr, seenAttr, skinAttr, boneAttr, worldCenterAttr, covAAttr, covBAttr, splatAAttr, splatBAttr],
     skinWords, srcCenterData: center,
     boneData, boneAttr, worldCenterAttr, covAAttr, covBAttr, colorAttr, centerAttr, scaleAttr, quatAttr,
     srcCenter: storage(centerAttr, 'vec4', n).toReadOnly(),
@@ -757,6 +848,7 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
     color: storage(colorAttr, 'uint', n).toReadOnly(),
     edits: makeEdits(),
     part: storage(partAttr, 'uint', n).toReadOnly(),
+    seen: storage(seenAttr, 'uint', n).toReadOnly(),
     worldCenterW: storage(worldCenterAttr, 'vec4', n),
     covAW: storage(covAAttr, 'vec4', n),
     covBW: storage(covBAttr, 'vec4', n),
@@ -774,7 +866,7 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
 /** On WebGL, storage is read through textures that the CPU fills; the draw reads the blobs' rest data and the bones. */
 function enableWebGL(buf: ReturnType<typeof makeBuffers>, sort: DepthSort) {
   if (buf.webgl) return
-  for (const r of [buf.srcCenter, buf.srcScale, buf.srcQuat, buf.skin, buf.bones, buf.color, buf.part]) (r as unknown as { setPBO: (b: boolean) => void }).setPBO(true)
+  for (const r of [buf.srcCenter, buf.srcScale, buf.srcQuat, buf.skin, buf.bones, buf.color, buf.part, buf.seen]) (r as unknown as { setPBO: (b: boolean) => void }).setPBO(true)
   sort.enableWebGL()
   buf.webgl = true
 }
@@ -898,9 +990,104 @@ function painted(rgb: N, world: N, E: Edits) {
   return rgb.mul(float(1).sub(e.amount)).add(e.paint)
 }
 
+interface MorphGPU {
+  dataAttr: StorageBufferAttribute; centerAttr: StorageBufferAttribute; cholAAttr: StorageBufferAttribute; cholBAttr: StorageBufferAttribute
+  data: N; centerW: N; cholAW: N; cholBW: N; center: N; cholA: N; cholB: N
+  /** Per actor: first blob, blob count, where its targets start in `data` (in vec4s), target count; and its first target. */
+  info: N; first: N
+  /** Every target's factor this frame (uniform). */
+  factors: N
+  firstTarget: number[]
+}
+
+/**
+ * The morph targets of every actor in one buffer, three vec4s per blob per target: the center's move and the nine
+ * terms of its local stretch (morph.ts `grad`, row by row), target after target, each target all of its actor's blobs.
+ */
+function makeMorphGPU(actors: Actor[], count: number): MorphGPU {
+  const n = Math.max(1, count)
+  let targets = 0, cells = 0
+  for (const a of actors) for (const m of a.morphs ?? []) { targets += m.targets.length; cells += m.targets.length * a.blobs.count }
+  if (targets > MAX_MORPH_TARGETS) throw new Error(`a world takes ${MAX_MORPH_TARGETS} morph targets, not ${targets}`)
+  const data = new Float32Array(Math.max(1, cells) * 12)
+  const info = actors.map(() => new Vector4()), first = actors.map(() => new Vector4())
+  const firstTarget: number[] = []
+  let blob0 = 0, t = 0, at = 0
+  actors.forEach((a, ai) => {
+    const ts = (a.morphs ?? []).flatMap((m) => m.targets)
+    info[ai].set(blob0, a.blobs.count, at / 4, ts.length)
+    first[ai].set(t, 0, 0, 0)
+    firstTarget.push(t)
+    for (const tg of ts) {
+      for (let k = 0; k < a.blobs.count; k++, at += 12) {
+        data[at] = tg.delta[k * 3]; data[at + 1] = tg.delta[k * 3 + 1]; data[at + 2] = tg.delta[k * 3 + 2]
+        for (let g = 0; g < 9; g++) data[at + 3 + g] = tg.grad[k * 9 + g]
+      }
+      t++
+    }
+    blob0 += a.blobs.count
+  })
+  const dataAttr = new StorageBufferAttribute(data, 4)
+  const centerAttr = new StorageBufferAttribute(new Float32Array(n * 4), 4)
+  const cholAAttr = new StorageBufferAttribute(new Float32Array(n * 4), 4)
+  const cholBAttr = new StorageBufferAttribute(new Float32Array(n * 4), 4)
+  return {
+    dataAttr, centerAttr, cholAAttr, cholBAttr, firstTarget,
+    data: storage(dataAttr, 'vec4', data.length / 4).toReadOnly(),
+    centerW: storage(centerAttr, 'vec4', n), cholAW: storage(cholAAttr, 'vec4', n), cholBW: storage(cholBAttr, 'vec4', n),
+    center: storage(centerAttr, 'vec4', n).toReadOnly(), cholA: storage(cholAAttr, 'vec4', n).toReadOnly(), cholB: storage(cholBAttr, 'vec4', n).toReadOnly(),
+    info: uniformArray(info, 'vec4'), first: uniformArray(first, 'vec4'),
+    factors: uniformArray(new Array(MAX_MORPH_TARGETS).fill(0), 'float'),
+  }
+}
+
+/**
+ * WebGPU: every blob's rest shape with its actor's morphs applied, before the deform (CPU twin: `applyMorphs`):
+ * center + Σ factor·delta, and J = I + Σ factor·grad taken through the blob's own axes, M = J·R·S, kept as the
+ * Cholesky factor of M Mᵀ (six numbers, so it fits where scale and turn were).
+ */
+function makeMorph(buf: ReturnType<typeof makeBuffers>, M: MorphGPU) {
+  return Fn(() => {
+    const i = instanceIndex
+    const who = TSL.int(buf.part.element(i).shiftRight(uint(16)).bitAnd(uint(255))).sub(1).toVar()
+    const info = M.info.element(who).toVar()
+    const t0 = TSL.int(M.first.element(who).x).toVar()
+    const local = TSL.int(i).sub(TSL.int(info.x)).toVar()
+    const src = buf.srcCenter.element(i).toVar()
+    const d = vec3(0).toVar()
+    const J0 = vec3(1, 0, 0).toVar(), J1 = vec3(0, 1, 0).toVar(), J2 = vec3(0, 0, 1).toVar()
+    TSL.Loop({ start: TSL.int(0), end: TSL.int(info.w), type: 'int', condition: '<', name: 'k' }, ({ k }: { k: N }) => {
+      const f = M.factors.element(t0.add(k)).toVar()
+      If(f.notEqual(0), () => {
+        const at = TSL.int(info.z).add(k.mul(TSL.int(info.y)).add(local).mul(3)).toVar()
+        const v0 = M.data.element(at), v1 = M.data.element(at.add(1)), v2 = M.data.element(at.add(2))
+        d.addAssign(v0.xyz.mul(f))
+        // rows of J: (g0 g1 g2), (g3 g4 g5), (g6 g7 g8) = (v0.w v1.x v1.y), (v1.z v1.w v2.x), (v2.y v2.z v2.w)
+        J0.addAssign(vec3(v0.w, v1.x, v1.y).mul(f))
+        J1.addAssign(vec3(v1.z, v1.w, v2.x).mul(f))
+        J2.addAssign(vec3(v2.y, v2.z, v2.w).mul(f))
+      })
+    })
+    M.centerW.element(i).assign(vec4(src.xyz.add(d), src.w))
+    const s = buf.srcScale.element(i).xyz.toVar()
+    const R = quatColumns(normalize(buf.srcQuat.element(i)) as never)
+    // M = J·R·S by columns, then Σ = M Mᵀ
+    const m = [R[0].mul(s.x), R[1].mul(s.y), R[2].mul(s.z)].map((c) => vec3(dot(J0, c), dot(J1, c), dot(J2, c)).toVar())
+    const e = (r: 'x' | 'y' | 'z', c: 'x' | 'y' | 'z') => m[0][r].mul(m[0][c]).add(m[1][r].mul(m[1][c])).add(m[2][r].mul(m[2][c]))
+    const l00 = sqrt(max(e('x', 'x'), 1e-20)).toVar()
+    const l10 = e('x', 'y').div(l00).toVar(), l20 = e('x', 'z').div(l00).toVar()
+    const l11 = sqrt(max(e('y', 'y').sub(l10.mul(l10)), 1e-20)).toVar()
+    const l21 = e('y', 'z').sub(l20.mul(l10)).div(l11).toVar()
+    const l22 = sqrt(max(e('z', 'z').sub(l20.mul(l20)).sub(l21.mul(l21)), 1e-20))
+    M.cholAW.element(i).assign(vec4(l00, l10, l20, l11))
+    M.cholBW.element(i).assign(vec4(l21, l22, 0, 0))
+  })().compute(buf.count, [WORKGROUP]).setName('SplatWorldMorph')
+}
+
 /** One blob through its bones: world center and the six covariance terms, as `skinBlob` does on the CPU. */
-function deformBlob(buf: ReturnType<typeof makeBuffers>, i: N, mode: SkinMode) {
-  const src = buf.srcCenter.element(i).toVar()
+function deformBlob(buf: ReturnType<typeof makeBuffers>, i: N, mode: SkinMode, M?: MorphGPU) {
+  // with morphs, the morph pass's output: the reshaped center, and the rest shape as a Cholesky factor
+  const src = (M ? M.center : buf.srcCenter).element(i).toVar()
   const base = uint(src.w).toVar()
   const jw = buf.skin.element(i.mul(2)).toVar()
   const w = unpackUnorm4x8(buf.skin.element(i.mul(2).add(1))).toVar()
@@ -929,14 +1116,26 @@ function deformBlob(buf: ReturnType<typeof makeBuffers>, i: N, mode: SkinMode) {
   const p = src.xyz
   const world = c0.mul(p.x).add(c1.mul(p.y)).add(c2.mul(p.z)).add(c3).toVar()
 
-  const s = buf.srcScale.element(i).xyz.toVar()
-  const lq = normalize(buf.srcQuat.element(i)).toVar()
   let A: N[]
-  if (mode === 'quat') {
+  if (M) {
+    // the rest shape is L Lᵀ, L lower triangular: its columns stand in for the blob's scaled axes
+    const la = M.cholA.element(i).toVar(), lb = M.cholB.element(i).toVar()
+    const L = [vec3(la.x, la.y, la.z), vec3(0, la.w, lb.x), vec3(0, 0, lb.y)]
+    if (mode === 'quat') {
+      const R = quatColumns(normalize(Q) as never)
+      A = L.map((l) => R[0].mul(l.x).add(R[1].mul(l.y)).add(R[2].mul(l.z)).mul(S))
+    } else {
+      A = L.map((l) => c0.mul(l.x).add(c1.mul(l.y)).add(c2.mul(l.z)))
+    }
+  } else if (mode === 'quat') {
+    const s = buf.srcScale.element(i).xyz.toVar()
+    const lq = normalize(buf.srcQuat.element(i)).toVar()
     const q = quatMul(normalize(Q), lq).toVar()
     const R = quatColumns(q as never)
     A = [R[0].mul(s.x.mul(S)), R[1].mul(s.y.mul(S)), R[2].mul(s.z.mul(S))]
   } else {
+    const s = buf.srcScale.element(i).xyz.toVar()
+    const lq = normalize(buf.srcQuat.element(i)).toVar()
     const R = quatColumns(lq as never)
     const blend = (v: N) => c0.mul(v.x).add(c1.mul(v.y)).add(c2.mul(v.z))
     A = [blend(R[0]).mul(s.x), blend(R[1]).mul(s.y), blend(R[2]).mul(s.z)]
@@ -951,10 +1150,10 @@ function deformBlob(buf: ReturnType<typeof makeBuffers>, i: N, mode: SkinMode) {
   return { world, covA: vec4(e('x', 'x'), e('x', 'y'), e('x', 'z'), e('y', 'y')).mul(f).toVar(), covB: vec4(e('y', 'z'), e('z', 'z'), 0, 0).mul(f).toVar() }
 }
 
-function makeDeform(buf: ReturnType<typeof makeBuffers>, mode: SkinMode) {
+function makeDeform(buf: ReturnType<typeof makeBuffers>, mode: SkinMode, M?: MorphGPU) {
   return Fn(() => {
     const i = instanceIndex
-    const d = deformBlob(buf, i, mode)
+    const d = deformBlob(buf, i, mode, M)
     buf.worldCenterW.element(i).assign(vec4(d.world, 1))
     buf.covAW.element(i).assign(d.covA)
     buf.covBW.element(i).assign(d.covB)
@@ -1089,8 +1288,12 @@ function blobNormal(covA: N, covB: N) {
   return normalize(best.add(vec3(0, 1e-12, 0)))
 }
 
-/** The blob's color under the lights: ambient times its own, plus each light by distance and by how its face turns to it. CPU twin: `light.ts` (change both). */
-function lit(rgb: N, world: N, covA: N, covB: N, L: Lighting) {
+/**
+ * The blob's color under the lights: ambient times its own, plus each light by distance and by how its face turns
+ * to it, and each of the first four by how much of it the blob can see (`seen`, a byte a light). CPU twin: `light.ts`
+ * (change both).
+ */
+function lit(rgb: N, world: N, covA: N, covB: N, seen: N, L: Lighting) {
   const n = blobNormal(covA, covB).toVar()
   const sum = vec3(L.ambient).toVar()
   // only the lights in use: the loop stops at the count
@@ -1103,7 +1306,8 @@ function lit(rgb: N, world: N, covA: N, covB: N, L: Lighting) {
     const fade = max(float(1).sub(d2.div(r2.mul(4))), 0)
     const fall = fade.mul(fade).div(float(1).add(d2.div(r2)))
     const facing = abs(dot(n, to.mul(TSL.inverseSqrt(max(d2, 1e-6))))).mul(0.65).add(0.35)
-    const reach = fall.mul(facing).toVar()
+    const sees = select(i.lessThan(4), float(seen.shiftRight(uint(i).mul(8)).bitAnd(255)).div(255), float(1))
+    const reach = fall.mul(facing).mul(sees).toVar()
     const through = float(1).toVar()
     If(C.w.greaterThan(0.5).and(reach.greaterThan(0.001)), () => { through.assign(shadowMarch(world, n, to, d2, L)) })
     sum.addAssign(C.xyz.mul(reach.mul(through)))
@@ -1180,7 +1384,7 @@ function makeLight(buf: ReturnType<typeof makeBuffers>, L: Lighting) {
     const i = instanceIndex
     const color = unpackUnorm4x8(buf.color.element(i)).toVar()
     const world = buf.worldCenter.element(i).xyz.toVar()
-    L.litW.element(i).assign(vec4(lit(painted(color.rgb, world, buf.edits), world, buf.covA.element(i), buf.covB.element(i), L), color.a))
+    L.litW.element(i).assign(vec4(lit(painted(color.rgb, world, buf.edits), world, buf.covA.element(i), buf.covB.element(i), buf.seen.element(i), L), color.a))
   })().compute(buf.count, [WORKGROUP]).setName('SplatWorldLight')
 }
 
@@ -1234,7 +1438,7 @@ function makeVertexWebGL(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, m
     const d = deformBlob(buf, idx, mode)
     const p = projectSplat(d.world, d.covA, d.covB, cameraViewMatrix, cameraProjectionMatrix, cameraViewport.zw)
     const color = unpackUnorm4x8(buf.color.element(idx)).toVar()
-    const rgb = L ? lit(painted(color.rgb, d.world, buf.edits), d.world, d.covA, d.covB, L) : color.rgb
+    const rgb = L ? lit(painted(color.rgb, d.world, buf.edits), d.world, d.covA, d.covB, buf.seen.element(idx), L) : color.rgb
     const part = unpackUnorm4x8(buf.part.element(idx))
     return placeQuad(p.ndc, p.axes, vec4(flatColor(flat, part.rgb, p.depth, fogged(rgb, p.depth, fog)), color.a.mul(p.alphaScale)))
   })()

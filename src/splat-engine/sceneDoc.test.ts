@@ -130,6 +130,15 @@ test('air: mistakes are pointed at, and a sound one builds specks that loop and 
     ['a mist with no color', (d) => { delete d.air.mist[0].color }, /^air\.mist\[0\]\.color: must be a color/],
     ['a bad grime', (d) => { d.parts[0].grime = 'moss' }, /^parts\[0\]\.grime: must be a color/],
     ['a ramp past 1', (d) => { d.light = { ramp: 2 } }, /^light\.ramp: must be from 0 to 1/],
+    ['an unknown cover', (d) => { d.cover = { kind: 'ash', color: '#ffffff', amount: 0.5 } }, /^cover\.kind: must be one of 'snow'/],
+    ['too much cover', (d) => { d.cover = { kind: 'snow', color: '#ffffff', amount: 2 } }, /^cover\.amount: must be from 0 to 1/],
+    ['an unknown ink', (d) => { d.parts[0].ink = { kind: 'swirl' } }, /^parts\[0\]\.ink\.kind: must be one of 'hatch'/],
+    ['ink past 1', (d) => { d.parts[0].ink = { kind: 'cracks', amount: 3 } }, /^parts\[0\]\.ink\.amount: must be from 0 to 1/],
+    ['glass past 1', (d) => { d.parts[0].glass = { see: 2 } }, /^parts\[0\]\.glass\.see: must be from 0 to 1/],
+    ['a focus with no reach', (d) => { d.focus = { at: [0, 0, 0] } }, /^focus\.r: must be a number/],
+    ['strokes past 1', (d) => { d.parts[0].strokes = 2 }, /^parts\[0\]\.strokes: must be from 0 to 1/],
+    ['bounce past 1', (d) => { d.light = { bounce: 3 } }, /^light\.bounce: must be from 0 to 1/],
+    ['a bare that is not true or false', (d) => { d.parts[0].bare = 'yes' }, /^parts\[0\]\.bare: must be true or false/],
   ]
   const withAir = () => {
     const d: any = sound()
@@ -142,6 +151,12 @@ test('air: mistakes are pointed at, and a sound one builds specks that loop and 
     return d
   }
   assert.deepEqual(checkScene(withAir()), [])
+  assert.deepEqual(checkScene({ ...withAir(), cover: { kind: 'moss', color: '#4a6a2a', amount: 0.4 } }), [])
+  assert.equal(compileScene({ ...withAir(), cover: { kind: 'snow', color: '#ffffff', amount: 0.4 } }).spec(0.05).cover?.kind, 'snow')
+  const inked = withAir()
+  inked.parts[0].ink = { kind: 'cracks', amount: 0.3, color: '#101018' }
+  assert.deepEqual(checkScene(inked), [])
+  assert.deepEqual(compileScene(inked).spec(0.05).parts[0].ink, { kind: 'cracks', amount: 0.3, color: [16 / 255, 16 / 255, 24 / 255] })
   for (const [what, spoil, want] of bad) {
     const d = withAir()
     spoil(d)
@@ -164,4 +179,42 @@ test('air: mistakes are pointed at, and a sound one builds specks that loop and 
   sk.size.forEach((v, i) => assert.ok(Math.abs(v - s0[i]) < 1e-4))
   c.pose(sk, 1.9)
   assert.ok(sk.offset.some((v, i) => Math.abs(v - a[i]) > 1e-3), 'the specks move')
+})
+
+test('more shapes: each is checked, and each builds; a key paints a model by its letters', () => {
+  const shaped = () => {
+    const d: any = sound()
+    d.parts.push(
+      { shape: { kind: 'lathe', at: [0.5, 0, 0.5], profile: [[0.1, 0], [0.18, 0.15], [0.06, 0.35], [0.09, 0.4]] }, paint: '#f4f1e4' },
+      { shape: { kind: 'sweep', path: [[-0.6, 0.05, 0.5], [-0.3, 0.2, 0.6], [-0.1, 0.1, 0.8]], r: 0.04, rTo: 0.015 }, paint: '#3f7a45' },
+      { shape: { kind: 'join', blend: 'stairs', by: 0.08, steps: 2, shapes: [{ kind: 'box', at: [0, 0.2, -0.6], half: [0.3, 0.2, 0.05] }, { kind: 'box', at: [0, 0.03, -0.45], half: [0.3, 0.03, 0.1] }] }, paint: '#101018' },
+      { shape: { kind: 'text', at: [0, 0.6, 0.6], text: 'Hi!', size: 0.2, depth: 0.04 }, paint: '#ffd166' },
+      { shape: { kind: 'blocks', at: [0.6, 0, -0.4], size: 0.06, layers: [['.t.'], ['.t.'], ['lll']] }, paint: { kind: 'key', colors: { t: '#101018', l: '#3f7a45' } } },
+    )
+    return d
+  }
+  assert.deepEqual(checkScene(shaped()), [])
+  const n = sound().parts.length
+  const bad: [string, (d: any) => void, RegExp][] = [
+    ['a lathe with one point', (d) => { d.parts[n].shape.profile = [[0.1, 0]] }, /^parts\[\d+\]\.shape\.profile: must be a list of 2 to 24/],
+    ['a sweep with no path', (d) => { d.parts[n + 1].shape.path = [] }, /^parts\[\d+\]\.shape\.path: must be a list of 2 to 16 points/],
+    ['an unknown blend', (d) => { d.parts[n + 2].shape.blend = 'weld' }, /^parts\[\d+\]\.shape\.blend: must be one of 'smooth'/],
+    ['a blend with no reach', (d) => { delete d.parts[n + 2].shape.by }, /^parts\[\d+\]\.shape\.by: must be a number/],
+    ['text it cannot draw', (d) => { d.parts[n + 3].shape.text = 'a&b' }, /^parts\[\d+\]\.shape\.text: can't draw '&'/],
+    ['a key with a letter missing', (d) => { delete d.parts[n + 4].paint.colors.l }, /^parts\[\d+\]\.paint: the key has no color for 'l'/],
+    ['a key on a box', (d) => { d.parts[0].paint = { kind: 'key', colors: { a: '#101018' } } }, /^parts\[0\]\.paint: a key paints a blocks shape only/],
+    ['a quote in a model', (d) => { d.parts[n + 4].shape.layers[0][0] = ".'." }, /must not hold quotes/],
+  ]
+  for (const [what, spoil, want] of bad) {
+    const d = shaped()
+    spoil(d)
+    assert.ok(checkScene(d).some((e) => want.test(e)), `${what}: ${JSON.stringify(checkScene(d))}`)
+  }
+  const b = buildVoxels(compileScene(shaped()).spec(0.02))
+  const caught = new Set(b.partOf)
+  for (let i = n; i < n + 5; i++) assert.ok(caught.has(i), `part ${i} caught no cells`)
+  // the model's trunk is dark and its leaves green
+  const colors = new Map<string, number>()
+  for (let i = 0; i < b.blobs.count; i++) if (b.partOf[i] === n + 4) { const g = b.blobs.color[i * 3 + 1] > b.blobs.color[i * 3] + 0.05 ? 'green' : 'dark'; colors.set(g, (colors.get(g) ?? 0) + 1) }
+  assert.ok((colors.get('green') ?? 0) > 20 && (colors.get('dark') ?? 0) > 10, JSON.stringify([...colors]))
 })

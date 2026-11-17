@@ -189,6 +189,8 @@ export default [
       await c.page.getByRole('slider', { name: 'Puff' }).fill('1')
       await c.page.waitForTimeout(150)
       const slid = await fish(0)
+      // the GPU morph pass gives the same centers and shapes as the CPU's applyMorphs
+      const morphChk = await c.page.evaluate(async () => { const st = window.__creature.stage; return st.backend === 'webgpu' ? st.world.checkAgainstCPU(st.renderer) : null })
       const fishSheet = await c.page.evaluate(() => window.__sprites({ moves: ['puff'], directions: 4, size: 32, frames: 6, colors: 16, outline: true }))
       const kept = await c.page.evaluate(() => {
         const b = window.__creature.glb(), len = new DataView(b.buffer, b.byteOffset).getUint32(12, true)
@@ -198,8 +200,8 @@ export default [
       const note = await c.page.getByTestId('creature-note').textContent()
       // the puff peaks at the clip's middle frame; the side view's first row holds frames 0..5
       const swells = Math.max(...fishSheet.solid.slice(2, 4)) > fishSheet.solid[0] * 1.3
-      if (!(/4 morphs/.test(note) && puff.full > puff.rest * 1.5 && slid > still * 1.5 && kept === 4 && swells)) fails.push(`blobscape creature morphs: ${JSON.stringify({ note, puff, still, slid, kept, solid: fishSheet.solid.slice(0, 6) })}`)
-      else ok(`blobscape creature morphs: the pufferfish file swells from its clip (${puff.rest} → ${puff.full} pixels) and its slider, draws as a sheet and keeps its 4 morph targets`)
+      if (!(/4 morphs/.test(note) && puff.full > puff.rest * 1.5 && slid > still * 1.5 && kept === 4 && swells && (!morphChk || (morphChk.center < 1e-3 && morphChk.cov < morphChk.covScale * 0.01)))) fails.push(`blobscape creature morphs: ${JSON.stringify({ note, puff, still, slid, kept, morphChk, solid: fishSheet.solid.slice(0, 6) })}`)
+      else ok(`blobscape creature morphs: the pufferfish file swells from its clip (${puff.rest} → ${puff.full} pixels) and its slider, draws as a sheet and keeps its 4 morph targets${morphChk ? ', GPU morphs match the CPU' : ''}`)
       await axe(c.page, 'blobscape creature sprites')
       await c.ctx.close()
     },
@@ -257,7 +259,15 @@ export default [
           if (!(a.look.parts && ids.size > 20 && lines > 200)) fails.push(`${label}: lines between parts: ${JSON.stringify({ on: a.look.parts, parts: ids.size, lines })}`)
           else ok(`${label}: lines between parts: a map of ${ids.size} parts, ${lines} pixels of line that color alone would not draw`)
         }
-        if (!(moved > 150)) fails.push(`${label}: only ${moved} pixels change in a few seconds`)
+        // lone pixels: the pass cleaned some up, and (above) the same ones its twin does
+      {
+        const untidy = pixelArt(frame(a.small), { ...a.look, tidy: false }, frame(a.before), frame(a.parts))
+        let cleaned = 0
+        for (let i = 0; i < want.data.length; i += 4) if (want.data[i] !== untidy.data[i] || want.data[i + 1] !== untidy.data[i + 1] || want.data[i + 2] !== untidy.data[i + 2]) cleaned++
+        if (!(a.look.tidy && cleaned > 0 && cleaned < a.solid * 0.05)) fails.push(`${label}: lone-pixel cleanup: ${JSON.stringify({ on: a.look.tidy, cleaned })}`)
+        else ok(`${label}: lone-pixel cleanup took ${cleaned} stray pixels`)
+      }
+      if (!(moved > 150)) fails.push(`${label}: only ${moved} pixels change in a few seconds`)
         else ok(`${label}: ${moved} pixels change in a few seconds`)
         // steady pixels: the frame after is drawn against this one, as the CPU twin does given the same two; and fewer pixels flip there and back than with it off
         {
