@@ -130,6 +130,10 @@ export const SPAWN = 0.6
 export const BURST = 1.6
 /** Seconds the hero can't be hurt again after a touch. */
 const GRACE = 0.9
+/** A dodge: a hop straight back of DODGE_DIST meters in DODGE seconds, untouchable through it, then DODGE_REST to land. */
+export const DODGE = 0.32
+export const DODGE_DIST = 1.7
+const DODGE_REST = 0.3
 
 export type Difficulty = 'gentle' | 'normal' | 'hard'
 const HARM: Record<Difficulty, number> = { gentle: 0.5, normal: 1, hard: 1.6 }
@@ -146,6 +150,8 @@ export interface Input {
   cast?: boolean
   /** A bolt of frost. */
   frost?: boolean
+  /** A hop back out of reach. */
+  dodge?: boolean
 }
 
 export interface Hero {
@@ -169,6 +175,9 @@ export interface Hero {
   hurt: number
   /** Seconds until fire underfoot burns again. */
   burn: number
+  /** Time into a dodge, or −1; and seconds until the next dodge can start. */
+  dodgeT: number
+  dodgeRest: number
 }
 
 export interface Slime {
@@ -235,7 +244,7 @@ export interface Bolt {
 }
 
 export type GameEvent =
-  | { type: 'swing' } | { type: 'cast' } | { type: 'fizzle' }
+  | { type: 'swing' } | { type: 'cast' } | { type: 'fizzle' } | { type: 'dodge' }
   | { type: 'hit'; kind: SlimeKind; by: 'sword' | 'magic' | 'fire' | 'blast' }
   /** A prop was struck; a prop broke. */
   | { type: 'knock'; kind: PropKind } | { type: 'break'; kind: PropKind }
@@ -266,6 +275,7 @@ export class Game {
   private nextWaveAt = 0
   private rand: () => number
   private lastSwing = false
+  private lastDodge = false
   private lastCast = false
   private lastFrost = false
   /** What happened in the last step, for sounds, words and effects. */
@@ -317,9 +327,10 @@ export class Game {
       this.attack(dt, input)
     } else {
       h.speed = 0
-      h.swingT = h.castT = -1
+      h.swingT = h.castT = h.dodgeT = -1
     }
     this.lastSwing = !!input.swing
+    this.lastDodge = !!input.dodge
     this.lastCast = !!input.cast
     this.lastFrost = !!input.frost
     this.ground.step(dt)
@@ -332,11 +343,25 @@ export class Game {
 
   private moveHero(dt: number, input: Input) {
     const h = this.hero
-    // turning is slower mid-swing, so a swing commits
-    const busy = h.swingT >= 0 ? 0.45 : 1
+    // a fresh press of dodge hops back at once, out of a swing or a cast (dropping it), unless still landing from the last
+    h.dodgeRest = Math.max(0, h.dodgeRest - dt)
+    if (input.dodge && !this.lastDodge && h.dodgeT < 0 && h.dodgeRest <= 0) {
+      h.dodgeT = 0
+      h.swingT = h.castT = -1
+      this.events.push({ type: 'dodge' })
+    }
+    // turning is slower mid-swing, so a swing commits; a dodge goes straight back
+    const busy = h.dodgeT >= 0 ? 0 : h.swingT >= 0 ? 0.45 : 1
     h.heading -= input.turn * TURN_RATE * dt * busy
     const under = this.ground.at(h.x, h.z)
-    const want = (input.forward >= 0 ? input.forward * RUN_SPEED : input.forward * BACK_SPEED) * (h.swingT >= 0 || h.castT >= 0 ? 0.4 : 1) * (under.frost > 0.4 ? ICE_SPEED : 1)
+    let want = (input.forward >= 0 ? input.forward * RUN_SPEED : input.forward * BACK_SPEED) * (h.swingT >= 0 || h.castT >= 0 ? 0.4 : 1) * (under.frost > 0.4 ? ICE_SPEED : 1)
+    if (h.dodgeT >= 0) {
+      // fast at first and easing to a stop, covering DODGE_DIST: speed 2·D/T·(1 − t/T)
+      const u = Math.min(1, h.dodgeT / DODGE)
+      h.speed = want = (-2 * DODGE_DIST / DODGE) * (1 - u) * (under.frost > 0.4 ? ICE_SPEED : 1)
+      h.dodgeT += dt
+      if (h.dodgeT >= DODGE) { h.dodgeT = -1; h.dodgeRest = DODGE_REST; h.speed = 0; want = 0 }
+    }
     h.speed += (want - h.speed) * (1 - Math.exp(-dt * 8))
     const fade = Math.exp(-dt * 6)
     h.vx *= fade
@@ -366,7 +391,9 @@ export class Game {
     // fire and frost share the casting hand: whichever is pressed (fire, if both)
     const fire = !!input.cast && (!this.lastCast || h.castT < 0), ice = !!input.frost && (!this.lastFrost || h.castT < 0)
     const cast = fire || ice
-    if (swing && h.swingT < 0 && h.castT < 0) {
+    if (h.dodgeT >= 0) {
+      // nothing starts mid-dodge
+    } else if (swing && h.swingT < 0 && h.castT < 0) {
       h.swingT = 0
       h.swingN++
       // a little help: turn to face a slime that's roughly in front and close, and step in if the blade would fall short of it
@@ -632,7 +659,7 @@ export class Game {
       const min = slimeR(s) + HERO_R
       s.x -= (dx / d) * (min - d)
       s.z -= (dz / d) * (min - d)
-      if (h.hurt > 0) continue
+      if (h.hurt > 0 || h.dodgeT >= 0) continue
       const dmg = Math.round(RULES[s.kind].damage * HARM[this.difficulty])
       h.hp = Math.max(0, h.hp - dmg)
       h.hurt = GRACE
@@ -701,7 +728,7 @@ export class Game {
 }
 
 function newHero(): Hero {
-  return { x: 0, z: -2.5, heading: 0, speed: 0, hp: MAX_HP, mp: MAX_MP, vx: 0, vz: 0, swingT: -1, swingN: 0, castT: -1, spell: 'fire', hurt: 0, burn: 0.25 }
+  return { x: 0, z: -2.5, heading: 0, speed: 0, hp: MAX_HP, mp: MAX_MP, vx: 0, vz: 0, swingT: -1, swingN: 0, castT: -1, spell: 'fire', hurt: 0, burn: 0.25, dodgeT: -1, dodgeRest: 0 }
 }
 
 /** Seconds from one hop to the next for this color at this difficulty. */

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { BURST, DOORS, Game, HALF, KINDS, MAX_HP, PILLARS, PROPS, RULES, SPELL_COST, SWING, hopShape, keepIn, slimeR, PROP_RULES, HERO_R, CRATE_HEAL, URN_MAGIC, BARREL_HARM } from './game.ts'
+import { BURST, DODGE, DODGE_DIST, DOORS, Game, HALF, KINDS, MAX_HP, PILLARS, PROPS, RULES, SPELL_COST, SWING, hopShape, keepIn, slimeR, PROP_RULES, HERO_R, CRATE_HEAL, URN_MAGIC, BARREL_HARM } from './game.ts'
 
 const idle = { forward: 0, turn: 0 }
 const run = (g: Game, seconds: number, input = idle) => { for (let t = 0; t < seconds; t += 1 / 30) g.step(1 / 30, input) }
@@ -247,4 +247,30 @@ test('a swing steps in to reach a slime a little too far for the blade, and leav
     assert.ok(Math.hypot(s.x - g.hero.x, s.z - g.hero.z) > 0.6)
     if (!hit) assert.ok(Math.hypot(g.hero.x, g.hero.z) < 0.05, 'no step toward a slime out of range')
   }
+})
+
+test('Space dodges: a hop straight back of DODGE_DIST, untouchable on the way, dropping a swing, then a moment to land', () => {
+  const g = new Game()
+  g.hold()
+  const h = g.hero
+  h.heading = 0
+  const z0 = h.z
+  g.step(1 / 60, { forward: 0, turn: 0, swing: true })
+  assert.ok(h.swingT >= 0)
+  g.step(1 / 60, { forward: 1, turn: 1, dodge: true })
+  assert.ok(g.events.some((e) => e.type === 'dodge') && h.swingT < 0 && h.dodgeT >= 0)
+  // a slime right where the hero passes does no harm
+  g.place('green', h.x, h.z - 0.8)
+  const hp = h.hp
+  for (let k = 0; k < 15; k++) g.step(1 / 60, { forward: 1, turn: 1, dodge: true })
+  assert.equal(h.heading, 0, 'a dodge goes straight back')
+  for (let k = 15; k < DODGE * 60 + 1; k++) g.step(1 / 60, { forward: 0, turn: 0, dodge: true })
+  assert.equal(h.hp, hp)
+  assert.ok(Math.abs(z0 - h.z - DODGE_DIST) < 0.25, `went back ${z0 - h.z} m`)
+  // held, it doesn't dodge again; let go and pressed after landing, it does
+  g.step(1 / 60, { forward: 0, turn: 0, dodge: true })
+  assert.ok(h.dodgeT < 0)
+  for (let t = 0; t < 0.4; t += 1 / 60) g.step(1 / 60, { forward: 0, turn: 0 })
+  g.step(1 / 60, { forward: 0, turn: 0, dodge: true })
+  assert.ok(h.dodgeT >= 0)
 })

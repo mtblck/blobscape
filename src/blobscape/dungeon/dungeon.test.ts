@@ -49,21 +49,30 @@ test('torchlight is warm by a torch and cold and dim in the middle of the hall',
   assert.ok(mid[2] >= mid[0] * 0.6)
 })
 
-test('live lights: eight torches, the orb dimming with the magic, a light per bolt and a flash per burst, never more than the engine takes', () => {
+test('live lights: eight torches, the orb dimming with the magic, a light per bolt and a glow per burst, eased in and out, never more than the engine takes', () => {
   const d = new Dungeon({ detail: 0.3, look: 'forest', difficulty: 'normal', light: 'live' })
   d.game.hold()
-  const orb = () => d.lights()[8]
+  // the stage asks for the lights once a drawn frame, which moves their easing on
+  const run = (secs: number, input = { forward: 0, turn: 0 }) => { for (let t = 0; t < secs; t += 1 / 30) { d.update(1 / 30, input); d.lights() } }
+  const sk = d.hero.skeleton, ob = sk.index('orb')
+  const orb = () => d.lights().find((l) => Math.hypot(l.position[0] - sk.posedHead[ob * 3], l.position[2] - sk.posedHead[ob * 3 + 2]) < 0.05 && l.color[2] > l.color[0])!
+  run(1)
+  assert.equal(d.lights().slice(0, 8).length, 8)
   const full = orb().color[2]
   d.game.hero.mp = 0
   d.update(1 / 30, { forward: 0, turn: 0 })
+  // it dims, but not at once
+  const first = orb().color[2]
+  assert.ok(first > full * 0.6, `the orb dropped to ${first / full} in one frame`)
+  run(1)
   assert.ok(orb().color[2] < full * 0.5)
   d.game.hero.mp = MAX_MP
   for (let k = 0; k < 4; k++) d.game.place(KINDS[k], -3 + 2 * k, 3)
   d.update(1 / 30, { forward: 0, turn: 0, cast: true })
-  for (let t = 0; t < 0.3; t += 1 / 30) d.update(1 / 30, { forward: 0, turn: 0 })
+  run(0.3)
   assert.ok(d.lights().length >= 10, 'a bolt lights')
   for (const s of d.game.slimes) { s.phase = 'burst'; s.t = 0 }
-  d.update(1 / 30, { forward: 0, turn: 0 })
+  run(0.1)
   const ls = d.lights()
   assert.ok(ls.length > 12 && ls.length <= MAX_LIGHTS, `${ls.length} lights`)
   for (const l of ls) assert.ok(l.range > 0 && l.color.every((c) => c >= 0 && Number.isFinite(c)))

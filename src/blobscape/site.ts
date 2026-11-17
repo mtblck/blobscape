@@ -61,7 +61,7 @@ export const EXPERIMENTS = [
     cover: '/covers/dungeon-run.webp',
     needs: 'WebGPU or WebGL 2',
     published: '2026-11-12',
-    updated: '2026-11-16',
+    updated: '2026-11-17',
     body: 'The elf takes a sword and a hand full of fire and frost into a torchlit dungeon. Both spread across the floor, and crates, urns and barrels break. Slimes in five colors hop in, wave after wave, and burst into splats.',
   },
   {

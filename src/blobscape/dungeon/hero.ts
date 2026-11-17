@@ -5,7 +5,7 @@ import { axisAngle, mulQ, rotate, type Bone, type Skeleton } from '../../splat-e
 import { joinBuilt } from '../../splat-engine/sculpt.ts'
 import { ELF_BONES, clearCloak, elfIdle, elfWalk, makeElf } from '../../splat-engine/zoo/elf.ts'
 import { blendPose } from '../../splat-engine/mix.ts'
-import { BOLT_POP, CAST, RUN_SPEED, SWING, type Bolt, type Element, type Hero } from './game.ts'
+import { BOLT_POP, CAST, DODGE, RUN_SPEED, SWING, type Bolt, type Element, type Hero } from './game.ts'
 
 /**
  * The hero: Forest Walk's elf with a sword in the right hand (on its own
@@ -66,14 +66,16 @@ const STRIDE_METERS = 1.5, STRIDE_SECONDS = 1.1
  * Poses the hero from the game: standing blending into a run with the
  * speed, the sword held ready in front, a swing (wind up over the
  * shoulder, cut across, follow through) or a cast (the left arm thrown
- * forward), a stagger when hurt, and a fall when down.
+ * forward), a hop back to dodge, a stagger when hurt, and a fall when down.
  */
 export function poseHero(sk: Skeleton, h: Hero, clock: HeroClock, dt: number) {
   clock.idle += dt
-  clock.walk += (dt * h.speed * STRIDE_SECONDS) / STRIDE_METERS
+  const dodging = h.dodgeT >= 0 ? Math.min(1, h.dodgeT / DODGE) : -1
+  // a dodge is a hop, not running backwards: the legs don't walk through it
+  if (dodging < 0) clock.walk += (dt * h.speed * STRIDE_SECONDS) / STRIDE_METERS
   elfIdle(sk, clock.idle)
   const rest = { rotation: sk.rotation.slice(), offset: sk.offset.slice() }
-  const w = Math.min(1, Math.abs(h.speed) / (RUN_SPEED * 0.35))
+  const w = dodging >= 0 ? 0 : Math.min(1, Math.abs(h.speed) / (RUN_SPEED * 0.35))
   if (w > 0) {
     elfWalk(sk, ((clock.walk % STRIDE_SECONDS) + STRIDE_SECONDS) % STRIDE_SECONDS)
     blendPose(sk, rest, w)
@@ -102,6 +104,15 @@ export function poseHero(sk: Skeleton, h: Hero, clock: HeroClock, dt: number) {
   // the orb is as big as the magic left, and swells as a spell leaves
   const orb = sk.index('orb')
   sk.size[orb] = (0.45 + 0.55 * (h.mp / 100)) * (1 + (casting >= 0 ? 1.6 * env(casting, 0.1, 0.35, 0.4, 0.7) : 0))
+
+  // dodge: a crouch, a low hop back with the knees tucked and the body leaning in, and a landing
+  if (dodging >= 0) {
+    const hop = Math.sin(Math.PI * dodging), crouch = env(dodging, 0, 0.15, 0.75, 1)
+    sk.offset[1] += 0.22 * hop - 0.12 * crouch * (1 - hop)
+    turn(sk, 'chest', X, 0.25 * crouch)
+    turn(sk, 'head', X, -0.15 * crouch)
+    for (const s of ['l', 'r']) { turn(sk, `${s}Thigh`, X, -0.7 * crouch); turn(sk, `${s}Shin`, X, 1.1 * crouch) }
+  }
 
   // hurt: thrown back for a moment
   if (h.hurt > 0 && clock.down < 0) {

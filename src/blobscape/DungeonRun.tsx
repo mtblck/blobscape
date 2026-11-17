@@ -116,7 +116,7 @@ export function DungeonRun() {
   // --- input: keys, the thumb stick and the two buttons all feed one input
   const keys = useRef(new Set<string>())
   const stick = useRef({ forward: 0, turn: 0 })
-  const held = useRef({ swing: false, cast: false, frost: false })
+  const held = useRef({ swing: false, cast: false, frost: false, dodge: false })
   const stageRef = useRef(stage)
   stageRef.current = stage
   const push = () => {
@@ -128,6 +128,7 @@ export function DungeonRun() {
     stage.input = {
       forward: Math.max(-1, Math.min(1, forward)), turn: Math.max(-1, Math.min(1, turn)),
       swing: k.has('swing') || held.current.swing, cast: k.has('cast') || held.current.cast, frost: k.has('frost') || held.current.frost,
+      dodge: k.has('dodge') || held.current.dodge,
     }
   }
   const pausedRef = useRef(paused)
@@ -146,7 +147,7 @@ export function DungeonRun() {
   useEffect(() => {
     const KEYS: Record<string, string> = {
       ArrowUp: 'f', KeyW: 'f', ArrowDown: 'b', KeyS: 'b', ArrowLeft: 'l', KeyA: 'l', ArrowRight: 'r', KeyD: 'r',
-      Space: 'swing', KeyJ: 'swing', KeyK: 'cast', KeyE: 'cast', KeyL: 'frost', KeyQ: 'frost',
+      KeyJ: 'swing', Space: 'dodge', KeyK: 'cast', KeyE: 'cast', KeyL: 'frost', KeyQ: 'frost',
     }
     // keys play from anywhere on the page, except where they already mean something (typing, sliders, tabs, a focused button for Space)
     const mine = (e: KeyboardEvent) => {
@@ -173,12 +174,12 @@ export function DungeonRun() {
       if (!k) return
       e.preventDefault()
       if (pausedRef.current) return
-      if (k === 'swing' || k === 'cast' || k === 'frost') stage?.tap(k)
+      if (k === 'swing' || k === 'cast' || k === 'frost' || k === 'dodge') stage?.tap(k)
       keys.current.add(k)
       push()
     }
     const up = (e: KeyboardEvent) => { const k = KEYS[e.code]; if (k && keys.current.delete(k)) push() }
-    const clear = () => { keys.current.clear(); stick.current = { forward: 0, turn: 0 }; held.current = { swing: false, cast: false, frost: false }; push() }
+    const clear = () => { keys.current.clear(); stick.current = { forward: 0, turn: 0 }; held.current = { swing: false, cast: false, frost: false, dodge: false }; push() }
     // leaving the tab or the window pauses, so the slimes don't win while you're away
     const playing = () => stageRef.current?.dungeon?.game.state === 'playing'
     const leave = () => { clear(); if (playing()) setPaused(true) }
@@ -205,7 +206,7 @@ export function DungeonRun() {
   const backend = stage ? (stage.backend === 'webgpu' ? 'WebGPU' : 'WebGL 2') : 'WebGPU or WebGL 2'
   const loading = !failed && (!drawn || !!busy)
   const loadingLabel = busy ?? (stage ? 'Lighting the torches…' : 'Starting the splat engine…')
-  const hold = (what: 'swing' | 'cast' | 'frost', on: boolean) => {
+  const hold = (what: 'swing' | 'cast' | 'frost' | 'dodge', on: boolean) => {
     held.current[what] = on
     if (on) stage?.tap(what)
     push()
@@ -229,7 +230,7 @@ export function DungeonRun() {
                 ref={canvas}
                 role="application"
                 aria-roledescription="3D game"
-                aria-label="The elf in a torchlit dungeon hall, seen from behind. Arrow keys or W, A, S and D run and turn; Space or J swings the sword, which also breaks crates, urns and barrels; K or E throws fire, which spreads over the floor and burns; L or Q throws frost, which spreads and slows; P pauses."
+                aria-label="The elf in a torchlit dungeon hall, seen from behind. Arrow keys or W, A, S and D run and turn; J swings the sword, which also breaks crates, urns and barrels; Space dodges, a hop backwards that nothing can touch; K or E throws fire, which spreads over the floor and burns; L or Q throws frost, which spreads and slows; P pauses."
                 tabIndex={0}
                 data-testid="dungeon-view"
                 className="absolute inset-0 h-full w-full outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
@@ -259,13 +260,18 @@ export function DungeonRun() {
                         <path d="M12 2c1 4 6 6.5 6 12a6 6 0 0 1-12 0c0-2.5 1.2-4.3 2.5-5.8.300 1.7 1 2.6 2 3C10.3 8 10.8 5 12 2z" />
                       </ActionButton>
                     </div>
-                    <ActionButton label="Sword" tone="sword" big onHold={(on) => hold('swing', on)}>
-                      <path d="M19 2h3v3L10.5 16.5l-3-3zM6.3 13.7l4 4-1.4 1.4-1.3-1.3-2.8 2.8-1.4-1.4 2.8-2.8-1.3-1.3z" />
-                    </ActionButton>
+                    <div className="grid justify-items-center gap-2">
+                      <ActionButton label="Dodge" tone="dodge" onHold={(on) => hold('dodge', on)}>
+                        <path d="M12 4 4 11h5v9h6v-9h5z" transform="rotate(180 12 12)" />
+                      </ActionButton>
+                      <ActionButton label="Sword" tone="sword" big onHold={(on) => hold('swing', on)}>
+                        <path d="M19 2h3v3L10.5 16.5l-3-3zM6.3 13.7l4 4-1.4 1.4-1.3-1.3-2.8 2.8-1.4-1.4 2.8-2.8-1.3-1.3z" />
+                      </ActionButton>
+                    </div>
                   </div>
                   {!coarse && (
                     <p aria-hidden className="pointer-events-none absolute bottom-3 left-1/2 hidden -translate-x-1/2 rounded-full bg-paper/80 px-2.5 py-0.5 text-xs text-ink backdrop-blur-sm md:block">
-                      WASD to run · Space to swing · K for fire · L for frost · P to pause
+                      WASD to run · J to swing · Space to dodge · K for fire · L for frost · P to pause
                     </p>
                   )}
                 </>
@@ -374,7 +380,7 @@ export function DungeonRun() {
           <p>
             Under the blobs the game is flat and simple. The hero, each slime and each pillar is a circle on the floor. A sword
             swing hits any slime whose circle comes within reach in a wedge in front of the hero, and a bolt of fire or frost hits
-            the first circle it flies into. Slimes push each other apart, so they crowd round you instead of piling up. None of this
+            the first circle it flies into. A dodge carries the hero's circle straight back, and nothing can touch it on the way. Slimes push each other apart, so they crowd round you instead of piling up. None of this
             looks at a single blob, which is why it stays quick with a hundred thousand of them on screen.
           </p>
           <p>
@@ -458,7 +464,7 @@ function Bar({ label, value, max, color, low, children }: { label: string; value
 }
 
 /** A round button over the view for touch (and mouse): press and hold to keep swinging. Keys do the same. */
-function ActionButton({ label, sub, tone, big, disabled, onHold, children }: { label: string; sub?: string; tone: 'sword' | 'fire' | 'frost'; big?: boolean; disabled?: boolean; onHold: (on: boolean) => void; children: ReactNode }) {
+function ActionButton({ label, sub, tone, big, disabled, onHold, children }: { label: string; sub?: string; tone: 'sword' | 'fire' | 'frost' | 'dodge'; big?: boolean; disabled?: boolean; onHold: (on: boolean) => void; children: ReactNode }) {
   const id = useRef<number | null>(null)
   const end = (e: PointerEvent) => { if (id.current === e.pointerId) { id.current = null; onHold(false) } }
   return (
@@ -468,7 +474,7 @@ function ActionButton({ label, sub, tone, big, disabled, onHold, children }: { l
       aria-disabled={disabled || undefined}
       data-testid={`dungeon-${tone}`}
       className={`grid touch-none place-items-center rounded-full border shadow-lg backdrop-blur-sm transition-transform select-none active:scale-95 ${big ? 'size-20' : 'size-14'} ${
-        tone === 'sword' ? 'border-white/40 bg-white/20 text-white hover:bg-white/30' : tone === 'fire' ? 'border-orange-200/50 bg-orange-500/30 text-orange-100 hover:bg-orange-500/40' : 'border-sky-200/50 bg-sky-400/25 text-sky-100 hover:bg-sky-400/35'
+        tone === 'sword' || tone === 'dodge' ? 'border-white/40 bg-white/20 text-white hover:bg-white/30' : tone === 'fire' ? 'border-orange-200/50 bg-orange-500/30 text-orange-100 hover:bg-orange-500/40' : 'border-sky-200/50 bg-sky-400/25 text-sky-100 hover:bg-sky-400/35'
       } ${disabled ? 'opacity-50' : 'cursor-pointer'}`}
       onPointerDown={(e) => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); id.current = e.pointerId; onHold(true) }}
       onPointerUp={end}
