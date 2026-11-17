@@ -149,8 +149,9 @@ ticks or burns uses it.
 For captured rooms, very large scans and headsets, use [Spark](https://github.com/sparkjsdev/spark),
 which also draws Blobscape's lessons and sandbox. The two trade files, not a renderer.
 
-The engine is not on npm yet. A three.js package with guides is planned once the showcase settles;
-until then, read the source or [get in touch](https://blobscape.dev/contact/) if you want to try it early.
+The engine is on npm as [`@blobscape/engine`](https://www.npmjs.com/package/@blobscape/engine), a package for
+three.js (`npm install @blobscape/engine three`). The [Build with the engine](https://blobscape.dev/lessons/first-creature/)
+lessons are its guides, and every export is in the [API reference](https://blobscape.dev/engine/api/).
 
 ### Rigged splats in glTF
 

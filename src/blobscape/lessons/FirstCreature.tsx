@@ -163,7 +163,7 @@ export function FirstCreature() {
         note: (
           <>
             <p>The same slug, with the settings you chose, written with the engine package. Paste it into a page with a canvas, with three.js installed.</p>
-            <p>The package is getting ready and isn&rsquo;t on npm yet.</p>
+            <p>Install it with <code>npm install @blobscape/engine three</code>.</p>
           </>
         ),
         source: slugCode(opts, swing),

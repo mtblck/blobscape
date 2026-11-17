@@ -179,7 +179,7 @@ export function SceneData() {
         note: (
           <>
             <p>The last sound description in the box, played with the engine package. The description could as well be read from a .json file.</p>
-            <p>The package is getting ready and isn&rsquo;t on npm yet. Every shape, paint and move is in the{' '}
+            <p>Install it with <code>npm install @blobscape/engine three</code>. Every shape, paint and move is in the{' '}
               <a href="https://github.com/mtblck/blobscape/blob/main/docs/scene-descriptions.md" className="text-accent underline underline-offset-2">guide to scene descriptions</a>.
             </p>
           </>

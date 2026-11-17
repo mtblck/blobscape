@@ -23,12 +23,11 @@ its release. Same shape as seedkin's release setup.
 The package lives under Matt's npm organization `blobscape`. It is public from 0.2.0 and goes out with every
 release, at the release's version.
 
-- **The first version** can't use trusted publishing (npm offers it only for a package that exists), so it goes
-  out with a short-lived granular npm token, write access to the `@blobscape` scope only, saved as the
-  repository secret `NPM_TOKEN` (Settings, Secrets and variables, Actions).
-- **After that**, on npmjs.com: `@blobscape/engine`, Settings, Trusted publishers, GitHub Actions, repository
-  `mtblck/blobscape`, workflow `release.yml`. Then delete the `NPM_TOKEN` secret and the token. The workflow
-  needs no change: npm tries the run's OIDC token first and the token only if that fails.
+- It is published by npm trusted publishing: npm accepts the release workflow's own OIDC token, so no npm token
+  is stored anywhere. The setting is on npmjs.com: `@blobscape/engine`, Settings, Trusted publishers, GitHub
+  Actions, repository `mtblck/blobscape`, workflow `release.yml` (so keep that file's name).
+- 0.2.0, the first version, went out with a short-lived token, because npm offers trusted publishing only for a
+  package that exists. A token for a workflow must have "Bypass two-factor authentication" ticked.
 - Every version is published with provenance, linking it to the commit that built it.
 - If the publish fails, the tag and release are already made: fix the cause and re-run the job, which skips
   what's done.

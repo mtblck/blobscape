@@ -67,7 +67,7 @@ export const BESIDE = {
 export const DOORS = [
   { title: 'Use the tools', body: 'No code. Make a creature, a monster or a pixel scene in the experiments and take it away as a model, a sprite sheet or a picture.', link: { label: 'See the experiments', href: '/experiments/' } },
   { title: 'Use the files', body: 'Download a rigged creature as a .glb from Splat Creatures and open it in your own three.js project. The file rule is written up as a draft spec.', link: { label: 'Read the rigged-splat spec', href: '/engine/rigged-splats/' } },
-  { title: 'Use the code', body: 'A package for three.js, @blobscape/engine, with the Build with the engine lessons as its guides and a full API reference. It is not on npm yet: if you would like to try it early, say so.', link: { label: 'Read the API reference', href: '/engine/api/' } },
+  { title: 'Use the code', body: 'A package for three.js, @blobscape/engine, with the Build with the engine lessons as its guides and a full API reference. Install it with npm install @blobscape/engine three.', link: { label: 'Read the API reference', href: '/engine/api/' } },
 ] as const
 
 /** Ids of the experiments (site.ts) drawn by the engine: each links here, and this page lists them. */

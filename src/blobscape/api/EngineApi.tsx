@@ -63,7 +63,7 @@ export function EngineApi() {
           Every name <code>@blobscape/engine</code> exports, read from the package&rsquo;s own type declarations. Start with{' '}
           <a href="#stage-Stage" className="text-accent underline underline-offset-2">Stage</a>; the lessons in{' '}
           <a href={href({ page: 'lesson', id: 'first-creature' })} className="text-accent underline underline-offset-2">Build with the engine</a> walk through
-          a creature, a scene written as data and pixel art with it. The package is version 0.x and isn&rsquo;t on npm yet.
+          a creature, a scene written as data and pixel art with it. Install it with <code>npm install @blobscape/engine three</code>; it is version 0.x, so the API will change between minor versions.
         </p>
       </header>
 
