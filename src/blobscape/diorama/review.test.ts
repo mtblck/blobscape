@@ -24,6 +24,15 @@ test('what is not a scene is turned away with where it went wrong', () => {
   const { doc, problems } = readScene(JSON.stringify(broken))
   assert.equal(doc, undefined)
   assert.ok(problems.some((p) => p.startsWith('parts[0]')), problems.join('; '))
+  // shapes nested too deep to check are a mistake like any other, not a crash
+  const n = 20000
+  const deep = `${'{"kind":"rough","by":0.01,"scale":0.1,"shape":'.repeat(n)}{"kind":"sphere","at":[0,1,0],"r":0.2}${'}'.repeat(n)}`
+  const rest = JSON.stringify({ ...copy(CAMPFIRE), parts: [] })
+  let nested
+  // a JSON reader that can't take the depth either says so as a problem too
+  try { nested = readScene(rest.replace('"parts":[]', `"parts":[{"paint":"${CAMPFIRE.palette[0]}","shape":${deep}}]`)) } catch { assert.fail('reading a deep description threw') }
+  assert.equal(nested.doc, undefined)
+  assert.ok(nested.problems.length > 0)
   // and a review of it stops at the same list, without cutting anything
   assert.deepEqual(reviewScene(broken).problems, problems)
 })

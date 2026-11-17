@@ -10,8 +10,9 @@
  * status of 1 when there is anything that must be fixed, so it can gate a loop: write, check, fix, look.
  * How to write a scene: docs/scene-descriptions.md.
  */
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, existsSync } from 'node:fs'
 import { join, resolve, basename } from 'node:path'
+import { tmpdir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 
 const args = process.argv.slice(2)
@@ -64,7 +65,8 @@ if (out !== undefined && doc && f) {
   if (!existsSync(join(dist, 'experiments', 'pixel-diorama', 'index.html'))) { console.error('No built site to draw with: run `npm run build` first.'); process.exit(2) }
   const folder = resolve(out || 'scene-shots')
   mkdirSync(folder, { recursive: true })
-  const json = join(folder, `${basename(path).replace(/\.[^.]+$/, '')}.json`)
+  // the page is handed a copy, kept out of the way of the file itself
+  const json = join(mkdtempSync(join(tmpdir(), 'scene-')), `${basename(path).replace(/\.[^.]+$/, '')}.json`)
   writeFileSync(json, JSON.stringify(doc))
   let served
   for (let port = 4300; !served && port < 4320; port++) served = await serveDist(port).catch(() => undefined)

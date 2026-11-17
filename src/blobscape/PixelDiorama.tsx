@@ -199,7 +199,8 @@ export function PixelDiorama() {
     }, from)
   }, [stage, scene, calm])
   // the walk-through's fourth step is about the four samples, so it draws them whatever the switch says
-  useEffect(() => { stage?.setPixels(asPixels ? (touring ? { ...look, fine: true } : look) : undefined, size) }, [stage, asPixels, touring, look, size])
+  const sampling = touring?.id === 'samples'
+  useEffect(() => { stage?.setPixels(asPixels ? (sampling ? { ...look, fine: true } : look) : undefined, size) }, [stage, asPixels, sampling, look, size])
   useEffect(() => {
     if (!stage) return
     const keep = touring?.keep ?? 1
@@ -473,9 +474,9 @@ export function PixelDiorama() {
               </div>}
               {touring?.id === 'samples' && stage && scene && <Magnifier stage={stage} />}
               <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => pick(view)} />
-              <p aria-hidden className="pointer-events-none absolute right-14 bottom-2 rounded bg-paper/80 px-1.5 py-0.5 text-xs text-ink-muted">{coarse ? 'drag to orbit · pinch to zoom' : 'drag to orbit · scroll to zoom'}</p>
+              {!sampling && <p aria-hidden className="pointer-events-none absolute right-14 bottom-2 rounded bg-paper/80 px-1.5 py-0.5 text-xs text-ink-muted">{coarse ? 'drag to orbit · pinch to zoom' : 'drag to orbit · scroll to zoom'}</p>}
         </>}
-        status={tour !== null && scene ? <TourStrip step={tour} facts={{ parts: scene.of.parts ?? new Set(scene.built.partOf).size, descriptionBytes: scene.of.bytes, blobs: scene.built.blobs.count, colors: colors.length, steps: scene.paint !== '' }} onStep={setTour} onClose={closeTour} /> : <>
+        status={tour !== null && made ? <TourStrip step={tour} facts={{ parts: made.of.parts ?? new Set(made.built.partOf).size, descriptionBytes: made.of.bytes, blobs: made.built.blobs.count, colors: colors.length, steps: made.paint !== '', lines: !outline ? 'none' : own ? 'own' : 'one' }} onStep={setTour} onClose={closeTour} /> : <>
               <span>{scene ? <><span className="tabular-nums text-ink" data-testid="diorama-blobs">{scene.built.blobs.count.toLocaleString()}</span> blobs<span data-testid="diorama-art">{pixels && art ? <>, drawn at <span className="tabular-nums text-ink">{art.width} × {art.height}</span>{png ? <>, <span className="tabular-nums text-ink" data-testid="diorama-png-size">{kilobytes(png.bytes)}</span> a frame</> : ''}</> : ', drawn as blobs'}</span>.</> : loadingLabel}</span>
               <span className="flex gap-x-4">
               {scene && <button type="button" ref={tourOpener} onClick={() => setTour(0)} data-testid="diorama-tour-open" className="cursor-pointer text-ink underline decoration-rule underline-offset-2 hover:text-accent">How it's made</button>}
@@ -583,10 +584,10 @@ export function PixelDiorama() {
                 </Field>}
                 <div className="grid gap-2">
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <Button small disabled={!pixels || !drawn || saving || recording !== null} onClick={save}>{saving ? 'Saving…' : 'Save this frame'}</Button>
-                  <Button small disabled={!pixels || !drawn || saving || recording !== null} onClick={record} data-testid="diorama-record">{recording === null ? 'Record the loop' : recording >= Math.round(shown.loop * RECORD_FPS) ? 'Saving the loop…' : `Recording ${recording} of ${Math.round(shown.loop * RECORD_FPS)}…`}</Button>
+                  <Button small disabled={!pixels || !!touring || !drawn || saving || recording !== null} onClick={save}>{saving ? 'Saving…' : 'Save this frame'}</Button>
+                  <Button small disabled={!pixels || !!touring || !drawn || saving || recording !== null} onClick={record} data-testid="diorama-record">{recording === null ? 'Record the loop' : recording >= Math.round(shown.loop * RECORD_FPS) ? 'Saving the loop…' : `Recording ${recording} of ${Math.round(shown.loop * RECORD_FPS)}…`}</Button>
                 </div>
-                <p role="status" className="text-xs text-ink-faint empty:-mt-2">{pixels ? note : 'Switch back to Pixel art to save a frame or record the loop.'}</p>
+                <p role="status" className="text-xs text-ink-faint empty:-mt-2">{touring ? 'Close How it\'s made to save a frame or record the loop.' : pixels ? note : 'Switch back to Pixel art to save a frame or record the loop.'}</p>
                 </div>
                 </div>
               </div>

@@ -1,19 +1,23 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { makeFrame } from '../../splat-core/pixel.ts'
-import { TOUR, busiestSpot, clay, kept } from './tour.ts'
+import { TOUR, busiestSpot, clay, kept, type TourFacts } from './tour.ts'
 
 test('the tour goes from clay shapes to finished pixels, and its words are filled in from the scene', () => {
   assert.deepEqual(TOUR.map((s) => s.id), ['shapes', 'blobs', 'paint', 'samples', 'finish'])
   assert.deepEqual(TOUR.map((s) => s.pixels), [false, false, false, true, true])
   assert.ok(TOUR[1].keep < 0.5 && TOUR.every((s, i) => i === 1 || s.keep === 1), 'only the blobs step thins them out')
-  const f = { parts: 84, descriptionBytes: 20480, blobs: 104080, colors: 16, steps: false }
+  const f: TourFacts = { parts: 84, descriptionBytes: 20480, blobs: 104080, colors: 16, steps: false, lines: 'own' }
   assert.match(TOUR[0].text(f), /84 shapes.*20 KB of text/)
   assert.doesNotMatch(TOUR[0].text({ ...f, descriptionBytes: undefined }), /KB/)
   assert.match(TOUR[1].text(f), /104,080/)
   assert.notEqual(TOUR[2].text(f), TOUR[2].text({ ...f, steps: true }))
   assert.match(TOUR[4].text(f), /nearest of 16 colors/)
   assert.match(TOUR[4].text({ ...f, colors: 0 }), /keeps its own color/)
+  // the last step says what the Finish tab's outline really is
+  assert.match(TOUR[4].text(f), /darker tone of their own color/)
+  assert.match(TOUR[4].text({ ...f, lines: 'one' }), /a dark line round its edge/)
+  assert.doesNotMatch(TOUR[4].text({ ...f, lines: 'none' }), /line/)
   for (const s of TOUR) assert.ok(s.text(f).length < 260, `${s.id} fits under the view`)
 })
 

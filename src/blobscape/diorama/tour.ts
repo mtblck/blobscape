@@ -15,6 +15,8 @@ export interface TourFacts {
   colors: number
   /** Whether the scene was painted in steps of the palette as it was cut. */
   steps: boolean
+  /** The outline as the Finish tab has it: each thing's own darker tone, one color for everything, or none. */
+  lines: 'own' | 'one' | 'none'
 }
 
 export interface TourStep {
@@ -52,7 +54,7 @@ export const TOUR: TourStep[] = [
   },
   {
     id: 'finish', title: 'Palette and lines', pixels: true, clay: false, keep: 1,
-    text: (f) => `${f.colors ? `Every pixel moves to the nearest of ${f.colors} colors` : 'Every pixel keeps its own color'}, and the edges of things take a line in a darker tone of their own color. Then it is scaled up in whole pixels.`,
+    text: (f) => `${f.colors ? `Every pixel moves to the nearest of ${f.colors} colors` : 'Every pixel keeps its own color'}${f.lines === 'own' ? ', and the edges of things take a line in a darker tone of their own color' : f.lines === 'one' ? ', and the scene takes a dark line round its edge' : ''}. Then it is scaled up in whole pixels.`,
   },
 ]
 

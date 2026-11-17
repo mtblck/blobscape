@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useId, useRef } from 'react'
 import type { CreatureStage } from '../../splat-engine/stage.ts'
 import type { Frame } from '../../splat-core/pixel.ts'
 import { Button } from '../../shared/ui.tsx'
@@ -18,13 +18,16 @@ export function TourStrip({ step, facts, onStep, onClose }: { step: number; fact
   // opening it puts the keyboard on the way forward
   useEffect(() => { next.current?.focus() }, [])
   const last = step === TOUR.length - 1
+  const words = useId()
   return (
-    <div role="group" aria-label="How this picture is made" data-testid="diorama-tour" className="grid w-full gap-2 sm:grid-cols-[1fr_auto] sm:items-center sm:gap-x-4">
-      <p role="status" className="min-h-[4.5em] sm:min-h-[3em]">
+    <div role="group" aria-label="How this picture is made" aria-describedby={words} data-testid="diorama-tour" className="grid w-full gap-2 sm:grid-cols-[1fr_auto] sm:items-center sm:gap-x-4">
+      {/* tall enough for the longest step on a phone, so the buttons under it never move under a finger */}
+      <p role="status" id={words} className="min-h-[8.5em] sm:min-h-[3em]">
         <span className="font-medium text-ink"><span className="tabular-nums">{step + 1}</span> of {TOUR.length}: {s.title}.</span> {s.text(facts)}
       </p>
       <div className="flex gap-1.5">
-        <Button small disabled={step === 0} onClick={() => onStep(step - 1)}>Back</Button>
+        {/* back at the first step, Back goes dead: the keyboard moves to Next */}
+        <Button small disabled={step === 0} onClick={() => { if (step === 1) next.current?.focus(); onStep(step - 1) }}>Back</Button>
         {/* the last step has nowhere on to go: the keyboard moves to Done rather than being left on a dead button */}
         <Button small primary ref={next} disabled={last} onClick={() => { if (step === TOUR.length - 2) done.current?.focus(); onStep(step + 1) }}>Next</Button>
         <Button small ref={done} onClick={onClose}>Done</Button>
@@ -82,7 +85,7 @@ export function Magnifier({ stage }: { stage: CreatureStage }) {
   }, [stage])
   return (
     <figure className="pointer-events-none absolute bottom-3 left-14 m-0 rounded-lg border border-rule bg-paper/90 p-1.5 max-sm:bottom-2 max-sm:left-12">
-      <canvas ref={canvas} width={SIDE * 2 + 8} height={SIDE} data-testid="diorama-magnifier" role="img" aria-label="A small box of the picture, enlarged: on the left as it was drawn, four samples to each pixel; on the right what each pixel became." className="block h-auto w-[272px] max-w-[60vw] [image-rendering:pixelated]" />
+      <canvas ref={canvas} width={SIDE * 2 + 8} height={SIDE} data-testid="diorama-magnifier" role="img" aria-label="A small box of the picture, enlarged: on the left as it was drawn, four samples to each pixel; on the right what each pixel became." className="block h-auto w-[272px] max-w-[58vw] [image-rendering:pixelated]" />
       <figcaption className="mt-1 flex justify-between text-[11px] leading-tight text-ink-muted"><span>As drawn: 4 samples a pixel</span><span>What each pixel became</span></figcaption>
     </figure>
   )

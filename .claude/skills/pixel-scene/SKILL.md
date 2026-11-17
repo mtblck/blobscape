@@ -15,7 +15,7 @@ A scene is data alone: shapes, paints, bones and moves in one `SceneDoc` object.
 
 ## The loop
 
-Work in a scratch folder (`scratch/` is git-ignored), on a `.json` file.
+Work in a scratch folder (`scratch/` is git-ignored), on a `.json` file. The checker also takes a `.ts` or `.mjs` module, which it runs: only hand it one you wrote.
 
 1. **Plan in words before shapes.** One subject that fills the scene, where the light comes from, what moves, and the palette: a dark ramp for the setting, a ramp of three or four steps for each main hue, two or three warm steps kept for light sources. Write the palette first and paint only in its colors.
 2. **Write the description.** Block the big shapes first (ground, the subject's body), check, look, and only then add the small parts. Sixty to ninety parts make a full scene.

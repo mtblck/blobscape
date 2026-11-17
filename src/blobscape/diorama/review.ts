@@ -33,7 +33,9 @@ export function readScene(text: string): { doc?: SceneDoc; problems: string[] } 
   if (text.length > MOST_BYTES) return { problems: [`file: over ${MOST_BYTES / 1000} KB, which no scene needs`] }
   let doc: unknown
   try { doc = JSON.parse(text) } catch (e) { return { problems: [`file: not JSON (${e instanceof Error ? e.message : String(e)})`] } }
-  const problems = checkScene(doc)
+  let problems: string[]
+  // shapes nested thousands deep run the checker out of stack: no scene is, so it is turned away like any other mistake
+  try { problems = checkScene(doc) } catch (e) { return { problems: [`file: could not be checked (${e instanceof Error ? e.message : String(e)})`] } }
   return problems.length ? { problems } : { doc: doc as SceneDoc, problems }
 }
 
@@ -43,7 +45,8 @@ export function readScene(text: string): { doc?: SceneDoc; problems: string[] } 
  * through each other as it plays.
  */
 export function reviewScene(doc: unknown, spacing: number = DETAIL[0].spacing): Review {
-  const problems = checkScene(doc)
+  let problems: string[]
+  try { problems = checkScene(doc) } catch (e) { return { problems: [`file: could not be checked (${e instanceof Error ? e.message : String(e)})`], warnings: [] } }
   if (problems.length) return { problems, warnings: [] }
   const scene = doc as SceneDoc
   const warnings: string[] = []

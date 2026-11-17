@@ -218,7 +218,8 @@ export class Stage {
   /**
    * Shows the actor in other colors without changing it: `paint` gives each blob's color (sRGB, 0–1) from its own and
    * its place in the list, and may give a fourth number, a share of the blob's own opacity (0 hides it). Left out,
-   * its own colors come back. It stays through a new actor, until it is taken off.
+   * its own colors come back. It stays through a new actor, until it is taken off; `highlight` and `refresh` send the
+   * actor's own colors again, so call it again after them, and take it off before `bake`.
    */
   tint(paint?: (color: readonly [number, number, number], blob: number) => readonly number[]) {
     this.painter = paint
