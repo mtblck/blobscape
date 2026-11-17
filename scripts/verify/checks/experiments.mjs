@@ -689,7 +689,7 @@ export default [
           if (d[i] > 100 && d[i] > d[i + 1] + 20 && d[i + 1] > d[i + 2] + 15) path++
         }
         const fo = window.__forest.stage.forest
-        return { green, path, z: fo.walker.z, growing: fo.growing, tiles: fo.tiles }
+        return { green, path, z: fo.walker.z, growing: fo.growing, tiles: fo.tiles, steps: fo.elfSteps.taken, fox: { steps: fo.foxSteps.taken, apart: Math.hypot(fo.foxWalker.x - fo.walker.x, fo.foxWalker.z - fo.walker.z) } }
       }, [seconds, forward, turn])
       const start = await look(0.1, 0)
       const walked = await look(12, 1)
@@ -697,6 +697,9 @@ export default [
       else ok(`blobscape forest: grass, path and plants draw (${start.green} green, ${start.path} path pixels)`)
       if (!(walked.z > 12 && walked.growing > 30 && walked.green > 20000 && Math.min(...walked.tiles) > Math.min(...start.tiles))) fails.push(`blobscape forest: after walking ${JSON.stringify(walked)}`)
       else ok(`blobscape forest: the elf walks ${walked.z.toFixed(1)} m, tiles move on ahead and ${walked.growing} plants grow round it`)
+      // the footsteps (issue #160): the elf steps, and the fox trots along and keeps up
+      if (!(walked.steps > 20 && walked.fox.steps > 60 && walked.fox.apart < 2.5)) fails.push(`blobscape forest: footsteps ${JSON.stringify({ steps: walked.steps, fox: walked.fox })}`)
+      else ok(`blobscape forest: the elf takes ${walked.steps} steps and the fox ${walked.fox.steps}, ${walked.fox.apart.toFixed(1)} m from it`)
       if (await f.page.locator('[data-testid=forest-loading]').count()) fails.push('blobscape forest: the loading note stays after the forest is drawn')
       await f.page.screenshot({ path: join(shots, 'blobscape-forest.png') })
       // a new season rebuilds the forest and keeps the elf where it was

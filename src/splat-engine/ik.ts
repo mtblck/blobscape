@@ -11,7 +11,8 @@ import { conj, dir, fromTo, worldQuat } from './posing.ts'
  *   so its end lands on a point, keeping the knee on the side it bends now;
  * - `lookAt` turns one bone so a direction it carries points at a place;
  * - `plantFeet` lays a walk over uneven ground: hips down to the lower foot,
- *   each leg bent to its own patch of ground, each foot tilted to the slope.
+ *   each leg bent to its own patch of ground, each foot tilted to the slope;
+ * - `hipDrop` and `stepLegs` put feet where a footstep planner (steps.ts) says.
  *
  * Bones here have no rest rotation, so a bone's world turn is the product of
  * the local ones up its chain (`worldQuat`), and changing a bone's world turn
@@ -172,12 +173,7 @@ export interface Planted {
  */
 export function plantFeet(sk: Skeleton, legs: Leg[], ground: Ground, { amount = 1, hips = true, tilt = true }: PlantOptions = {}): Planted {
   sk.update()
-  const ids = legs.map((l) => {
-    const foot = l.foot ? sk.index(l.foot) : -1
-    const tip = l.tip ?? (foot >= 0 ? sk.bones[foot].head : undefined)
-    if (!tip) throw new Error(`leg ${l.upper}: give a foot bone or a tip`)
-    return { upper: sk.index(l.upper), lower: sk.index(l.lower), foot, tip, pole: l.pole }
-  })
+  const ids = legIds(sk, legs)
   const floor = sk.place[1]
   const plan = ids.map((l) => {
     const P = posedPoint(sk, l.lower, l.tip)
@@ -203,4 +199,40 @@ export function plantFeet(sk: Skeleton, legs: Leg[], ground: Ground, { amount = 
     return { target: plan[i].target, miss, ground: plan[i].g }
   })
   return { hipShift, legs: out }
+}
+
+const legIds = (sk: Skeleton, legs: Leg[]) => legs.map((l) => {
+  const foot = l.foot ? sk.index(l.foot) : -1
+  const tip = l.tip ?? (foot >= 0 ? sk.bones[foot].head : undefined)
+  if (!tip) throw new Error(`leg ${l.upper}: give a foot bone or a tip`)
+  return { upper: sk.index(l.upper), lower: sk.index(l.lower), foot, tip, pole: l.pole }
+})
+
+/**
+ * How far the hips must come down (meters, 0 or more) so every leg reaches its ankle target with a little bend
+ * left (`slack` of its length): a long stride from straight legs needs the body lower. The skeleton as posed now.
+ */
+export function hipDrop(sk: Skeleton, legs: Leg[], targets: ArrayLike<number>[], slack = 0.97): number {
+  sk.update()
+  let drop = 0
+  legIds(sk, legs).forEach((l, i) => {
+    const A = head(sk, l.upper), B = head(sk, l.lower), C = posedPoint(sk, l.lower, l.tip), T = targets[i]
+    const L = (len(sub(B, A)) + len(sub(C, B))) * slack
+    const h = Math.min(L, Math.hypot(T[0] - A[0], T[2] - A[2]))
+    drop = Math.max(drop, A[1] - T[1] - Math.sqrt(L * L - h * h))
+  })
+  return drop
+}
+
+/**
+ * Bends each leg so its ankle lands on its target (from a footstep planner, say), and turns each foot bone level,
+ * facing `facing[i]` (radians from +z toward +x) when given. Leaves the skeleton updated; returns each leg's miss.
+ */
+export function stepLegs(sk: Skeleton, legs: Leg[], targets: ArrayLike<number>[], facing?: number[]): number[] {
+  sk.update()
+  return legIds(sk, legs).map((l, i) => {
+    const miss = twoBoneIK(sk, l.upper, l.lower, l.tip, targets[i], { pole: l.pole })
+    if (l.foot >= 0 && facing) { setWorldQuat(sk, l.foot, axisAngle([0, 1, 0], facing[i])); sk.update() }
+    return miss
+  })
 }

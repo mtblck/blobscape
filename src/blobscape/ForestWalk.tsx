@@ -136,8 +136,8 @@ export function ForestWalk() {
       <header className="flex flex-wrap items-end justify-between gap-x-8 gap-y-2 pt-4 pb-6">
         <h1 ref={h1} tabIndex={-1} className="font-display text-4xl outline-none sm:text-5xl">Forest Walk</h1>
         <p className="max-w-xl text-lg text-ink-muted">
-          Walk the elf down a forest path that never ends. Trees, ferns, flowers and mushrooms grow out of the ground as you come,
-          all of them made of blobs.
+          Walk the elf down a forest path that never ends, with a fox trotting at its side. Trees, ferns, flowers and mushrooms
+          grow out of the ground as you come, all of them made of blobs.
         </p>
       </header>
       <Workbench
@@ -148,7 +148,7 @@ export function ForestWalk() {
                 ref={canvas}
                 role="application"
                 aria-roledescription="3D view"
-                aria-label="An elf on a forest path, seen from behind. Arrow keys or W, A, S and D walk and turn; E waves."
+                aria-label="An elf and a fox on a forest path, seen from behind. Arrow keys or W, A, S and D walk and turn; E waves."
                 tabIndex={0}
                 data-testid="forest-view"
                 className="absolute inset-0 h-full w-full outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
@@ -201,8 +201,8 @@ export function ForestWalk() {
                   </div>
                 </Field>
                 <p className="text-xs text-ink-faint">
-                  The same elf as in <a href={href({ page: 'creature' })} className="underline hover:text-accent">Splat Creatures</a>, blending from standing into its walk as it speeds up,
-                  with the walk played at the pace of its feet.
+                  The same elf and fox as in <a href={href({ page: 'creature' })} className="underline hover:text-accent">Splat Creatures</a>. Each foot is
+                  placed on the ground and stays there until it steps, and the walk's swing follows the steps.
                 </p>
               </div>
             ),
@@ -243,6 +243,12 @@ export function ForestWalk() {
             branches, fronds unrolling and flowers opening, and the wind is a slow turn on the upper bones. Nothing is rebuilt as you
             walk. Blobscape's own splat engine, running here on {backend}, moves every blob by its bones each frame, then sorts
             the elf and the whole forest together, blob by blob, so the elf can walk behind a trunk and through the ferns.
+          </p>
+          <p>
+            The feet aren't played from a clip. Each foot keeps its spot on the ground, and only steps once it has fallen too far
+            from where it would stand under the body, aiming a little ahead of where the body is going, so the same rule walks,
+            turns on the spot, backs up and stops with the feet square. The fox's feet step in diagonal pairs, a trot. The legs
+            are then bent to reach each foot, and the hips come down a little when a stride is long.
           </p>
           <p>
             Bones are the subject of the <a href={href({ page: 'lesson', id: 'one-bone' })} className="underline decoration-rule underline-offset-2 hover:text-accent">rigs lessons</a>,

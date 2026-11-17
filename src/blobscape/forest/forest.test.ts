@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { posedPoint } from '../../splat-engine/rig.ts'
 import { Forest } from './forest.ts'
 import { makePlant, sprung } from './plants.ts'
 import { KINDS, PERIOD, RING, ROAM, RULES, TILE, layout, obstacles, pathHalf, pathX, slotOf, stepWalker, tileWindow } from './world.ts'
@@ -100,4 +101,34 @@ test('walking the forest hands tiles on, grows plants near the elf and never los
   const before = f.growing
   for (let k = 0; k < 30; k++) f.update(1 / 60, { forward: 0, turn: 0 })
   assert.ok(before > 0 && f.growing >= before)
+})
+
+test('the elf and the fox walk on planned footsteps: a planted foot stays put, and the fox keeps up', () => {
+  const f = new Forest({ detail: 0.12, season: 'summer', look: 'forest', seed: 5 })
+  const esk = f.elf.skeleton, fsk = f.fox.skeleton
+  const ankles = ['lFoot', 'rFoot'].map((n) => esk.index(n))
+  const paws = ['fl', 'fr', 'bl', 'br'].map((l) => fsk.index(`${l}Lower`))
+  const feet = () => [
+    ...ankles.map((b) => [esk.posedHead[b * 3], esk.posedHead[b * 3 + 1], esk.posedHead[b * 3 + 2]]),
+    ...paws.map((b) => posedPoint(fsk, b, fsk.bones[b].tail!)),
+  ]
+  const planted = () => [...f.elfSteps.feet, ...f.foxSteps.feet].map((s) => s.t < 0)
+  let slid = 0, far = 0
+  // walk on, turn on the spot, walk on turning, back up, stand
+  for (const [secs, forward, turn] of [[3, 1, 0], [2, 0, 1], [2, 1, -0.6], [1.5, -1, 0], [2.5, 0, 0]]) {
+    for (let k = 0; k < secs * 60; k++) {
+      const was = feet(), down = planted()
+      f.update(1 / 60, { forward, turn })
+      const now = feet(), still = planted()
+      now.forEach((p, i) => { if (down[i] && still[i]) slid = Math.max(slid, Math.hypot(p[0] - was[i][0], p[1] - was[i][1], p[2] - was[i][2])) })
+      far = Math.max(far, Math.hypot(f.foxWalker.x - f.walker.x, f.foxWalker.z - f.walker.z))
+    }
+  }
+  // the plan's feet never move at all while down (steps.test.ts); the legs reach them to within a couple of centimeters
+  assert.ok(slid < 0.03, `a planted foot slid ${slid} m in one frame`)
+  assert.ok(f.elfSteps.taken > 12 && f.foxSteps.taken > 40, `${f.elfSteps.taken} elf steps, ${f.foxSteps.taken} fox steps`)
+  assert.ok(far < 2.5, `the fox fell ${far} m behind`)
+  // standing still at the end, the elf's feet are down and square under it
+  const still = { ...f.walker, vx: 0, vz: 0, turn: 0 }
+  f.elfSteps.feet.forEach((ft, i) => assert.ok(ft.t < 0 && f.elfSteps.off(i, still) <= f.elfSteps.opts.settle + 1e-9, `elf foot ${i} left off square`))
 })
