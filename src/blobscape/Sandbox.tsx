@@ -13,7 +13,7 @@ import { Viewport, type ToolHandlers } from './Viewport.tsx'
 import { drawBones, drawCenters, drawOutlines, themeColor, toScreen } from './overlay.ts'
 import { History } from './history.ts'
 import { takeHandOff } from './handoff.ts'
-import { ROAM, STILL, actorAt, actorBlobs, actorBones, canRoam, detailsOf, freezeInto, makeActor, poseAll, remake, type Actor } from './actors.ts'
+import { GAZES, ROAM, STILL, actorAt, actorBlobs, actorBones, canLook, canRoam, detailsOf, freezeInto, makeActor, poseAll, remake, type Actor } from './actors.ts'
 import { CREATURES } from './creature/fromScenes.ts'
 import { PROPS } from './props.ts'
 import type { Creature as Body } from '../splat-engine/body.ts'
@@ -127,6 +127,8 @@ export function Sandbox() {
   const [showRig, setShowRig] = useState<ShowRig>('blobs')
   const showRef = useRef(showRig)
   showRef.current = showRig
+  const orbitRef = useRef(orbit)
+  orbitRef.current = orbit
   const clocks = useRef(new Map<number, number>())
   // Every creature as drawn this frame, one after another, and where each starts
   const drawn = useRef(new Blobs())
@@ -592,10 +594,17 @@ export function Sandbox() {
   }
 
   // --- creatures ---------------------------------------------------------------
+  /** Where a creature looks: the camera, or the middle of the view. */
+  const gazeAt = (a: Actor): Vec3 => {
+    const { target, distance, azimuth, elevation } = orbitRef.current
+    if (a.gaze === 'middle') return target
+    const az = (azimuth * Math.PI) / 180, el = (Math.max(-89, Math.min(89, elevation)) * Math.PI) / 180
+    return [target[0] + distance * Math.sin(az) * Math.cos(el), target[1] + distance * Math.sin(el), target[2] + distance * Math.cos(az) * Math.cos(el)]
+  }
   /** Poses every creature at its own clock and sends the layer to the view. */
   const drawActors = useCallback(() => {
     const list = actorsRef.current
-    starts.current = poseAll(list, (a) => clocks.current.get(a.key) ?? 0, drawn.current, scratch.current)
+    starts.current = poseAll(list, (a) => clocks.current.get(a.key) ?? 0, drawn.current, scratch.current, gazeAt)
     if (!view) return
     void view.syncLayer(list.length && showRef.current !== 'bones' ? drawn.current : null)
     view.invalidate(2)
@@ -607,6 +616,9 @@ export function Sandbox() {
     if (frameNext.current) { frameNext.current = false; setOrbit((o) => ({ ...o, ...frameAll() })) }
   }, [drawActors, actors, showRig]) // eslint-disable-line react-hooks/exhaustive-deps
   const anyActors = actors.length > 0
+  // A creature watching you, or the middle of the view, follows the camera even when it's still
+  const watching = actors.some((a) => a.gaze !== 'ahead')
+  useEffect(() => { if (watching) drawActors() }, [orbit, watching, drawActors])
   useEffect(() => {
     if (!view || !playing || !anyActors) return
     let raf = 0, prev = performance.now()
@@ -985,6 +997,13 @@ export function Sandbox() {
                             <Toggle label="Walk about" checked={current.roam > 0} onChange={(on) => tweak(current.key, (a) => ({ ...a, roam: on ? ROAM : 0 }))} />
                             {current.roam > 0 && <Slider label="How far" value={current.roam} min={1} max={8} step={0.25} onChange={(v) => tweak(current.key, (a) => ({ ...a, roam: v }), 'roam')} format={(v) => `${v.toFixed(1)} × its height`} />}
                           </div>
+                        )}
+                        {canLook(current) && (
+                          <Field label="Looks at">
+                            <div className="flex flex-wrap gap-1.5">
+                              {GAZES.map((g) => <Chip key={g.id} active={current.gaze === g.id} onClick={() => tweak(current.key, (a) => ({ ...a, gaze: g.id }))}>{g.label}</Chip>)}
+                            </div>
+                          </Field>
                         )}
                         <Slider label="Speed" value={current.speed} min={0.1} max={2} step={0.05} onChange={(v) => tweak(current.key, (a) => ({ ...a, speed: v }), 'speed')} format={(v) => `×${v.toFixed(2)}`} />
                         <Slider label="Size" value={Math.log2(current.height)} min={-5} max={4} step={0.05} onChange={(v) => tweak(current.key, (a) => ({ ...a, height: 2 ** v }), 'size')} format={(v) => `${(2 ** v).toFixed(2)} tall`} />

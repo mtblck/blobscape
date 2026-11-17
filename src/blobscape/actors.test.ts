@@ -5,6 +5,7 @@ import { ZOO } from '../splat-engine/zoo/index.ts'
 import { CREATURES } from './creature/fromScenes.ts'
 import { STILL, actorAt, actorBones, freezeInto, makeActor, placeInto, placingOf, poseAll, remake, type Actor } from './actors.ts'
 import type { Creature } from '../splat-engine/body.ts'
+import { posedPoint } from '../splat-engine/rig.ts'
 
 const near = (a: number, b: number, e = 1e-4) => Math.abs(a - b) < e
 const fox = ZOO.find((s) => s.id === 'fox')!
@@ -85,4 +86,54 @@ test('remaking keeps where a creature stands and what it does', () => {
   assert.equal(b.key, a.key)
   assert.deepEqual([b.at, b.height, b.yaw, b.move, b.speed, b.look], [a.at, a.height, a.yaw, a.move, a.speed, 'arctic'])
   assert.notEqual(b.body, a.body)
+})
+
+test('looking: the head turns toward a point in the scene, the neck helps, and it never twists round', async () => {
+  const { canLook, lookBones, placePoint, turnToLook, unplace } = await import('./actors.ts')
+  const elf = ZOO.find((s) => s.id === 'elf')!
+  const a = makeActor(elf, { at: [3, 0, -2], height: 1.8, yaw: 60, move: STILL })
+  const P = placingOf(a)
+  const back = unplace(placePoint([0.3, 1.2, -0.7], P), P)
+  assert.ok(near(back[0], 0.3) && near(back[1], 1.2) && near(back[2], -0.7), 'unplace undoes placePoint')
+  assert.deepEqual(lookBones(a.body.skeleton), ['neck', 'head'])
+  const sk = a.body.skeleton, h = sk.index('head')
+  // Where the head's forward (+z at rest) points, in the scene
+  const facing = () => {
+    const o = placePoint(sk.posedHead.subarray(h * 3, h * 3 + 3), P)
+    const ahead = placePoint(posedPoint(sk, h, [sk.bones[h].head[0], sk.bones[h].head[1], sk.bones[h].head[2] + 1]), P)
+    return [ahead[0] - o[0], ahead[2] - o[2]]
+  }
+  const angleTo = (f: number[], p: number[]) => {
+    const o = placePoint(sk.posedHead.subarray(h * 3, h * 3 + 3), P)
+    const d = [p[0] - o[0], p[2] - o[2]]
+    return Math.acos(Math.min(1, (f[0] * d[0] + f[1] * d[1]) / Math.hypot(...f) / Math.hypot(...d)))
+  }
+  sk.reset(); sk.update()
+  // A point off to its left, a quarter turn round
+  const r = (60 * Math.PI) / 180, left = [3 + 4 * Math.cos(r), 1.6, -2 - 4 * Math.sin(r)]
+  const before = angleTo(facing(), left)
+  turnToLook(a, left, P)
+  const after = angleTo(facing(), left)
+  assert.ok(before > 1.3 && after < 0.15, `head ${before.toFixed(2)} -> ${after.toFixed(2)} rad from the point`)
+  const neck = sk.index('neck')
+  assert.ok(Math.abs(sk.rotation[neck * 4 + 3]) < 0.9999, 'the neck takes some of the turn')
+  // Right behind it: the head turns as far as it may (about 95 degrees with the neck) and no further
+  sk.reset(); sk.update()
+  const behind = [3 - 4 * Math.sin(r), 1.6, -2 - 4 * Math.cos(r)]
+  turnToLook(a, behind, P)
+  assert.ok(angleTo(facing(), behind) > Math.PI / 4, `never spins round to face backward (${angleTo(facing(), behind).toFixed(2)})`)
+  const slime = (await import('./props.ts')).PROPS.find((s) => s.id === 'slime')!
+  const jelly = CREATURES.find((s) => s.id === 'jellyfish')!
+  assert.ok(canLook(makeActor(slime, { at: [0, 0, 0], height: 1 })) && !canLook(makeActor(jelly, { at: [0, 0, 0], height: 1 })))
+})
+
+test('a creature set to look at something is posed looking at it', () => {
+  const elf = ZOO.find((s) => s.id === 'elf')!
+  const a = { ...makeActor(elf, { at: [0, 0, 0], height: 1.8, move: STILL }), gaze: 'you' as const }
+  const plain = new Blobs(), looking = new Blobs()
+  poseAll([{ ...a, gaze: 'ahead' }], () => 0, plain, new WeakMap(), () => [5, 1.6, 0])
+  poseAll([a], () => 0, looking, new WeakMap(), () => [5, 1.6, 0])
+  let moved = 0
+  for (let i = 0; i < plain.count; i++) if (Math.hypot(plain.center[i * 3] - looking.center[i * 3], plain.center[i * 3 + 2] - looking.center[i * 3 + 2]) > 0.02) moved++
+  assert.ok(moved > 50 && moved < plain.count / 2, `${moved} of ${plain.count} blobs turned: the head, not the body`)
 })

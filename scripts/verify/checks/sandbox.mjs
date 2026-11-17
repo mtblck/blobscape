@@ -155,7 +155,7 @@ export default [
   },
   {
     name: 'sandbox-creatures',
-    about: 'add, play, drag with Move, bones, freeze, undo, walk about, save; phone',
+    about: 'add, play, drag with Move, bones, freeze, undo, walk about, look at, save; phone',
     entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/actors.ts', 'src/blobscape/wander.ts'],
     async run({ readFileSync, shots, join, fails, ok, open, axe }) {
       const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 900 }, acceptDownloads: true })
@@ -242,6 +242,14 @@ export default [
       await page.waitForTimeout(800)
       if ((await differs(standing, await shot())) > 200) fails.push('blobscape sandbox creatures: switching Walk about off left the fox away from its spot')
       else ok('blobscape sandbox creatures: switched off, it stands on its spot again')
+      // Looks at (issue #133): standing still, it turns its head to the camera
+      const ahead = await shot()
+      await page.getByRole('group', { name: 'Looks at' }).getByRole('button', { name: 'You' }).click()
+      await page.waitForTimeout(800)
+      const turned = await differs(ahead, await shot())
+      if (turned < 150) fails.push(`blobscape sandbox creatures: Looks at You didn't turn the fox's head (${turned} px)`)
+      else ok(`blobscape sandbox creatures: Looks at You turns the fox's head to the camera (${turned} px changed)`)
+      await page.getByRole('group', { name: 'Looks at' }).getByRole('button', { name: 'Ahead' }).click()
       for (const n of ['Frog', 'Elf', 'Dragon']) await page.getByTestId('add-creature').getByRole('button', { name: n }).click()
       await page.waitForTimeout(2500)
       await page.screenshot({ path: join(shots, 'blobscape-sandbox-creatures.png') })

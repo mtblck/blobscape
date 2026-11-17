@@ -2,7 +2,8 @@ import { Blobs, pick, type Vec3 } from '../splat-core/blobs.ts'
 import type { Creature } from '../splat-engine/body.ts'
 import { boneTail } from '../splat-engine/body.ts'
 import { poseBlobs } from '../splat-engine/pose.ts'
-import { posedPoint } from '../splat-engine/rig.ts'
+import { posedPoint, type Skeleton } from '../splat-engine/rig.ts'
+import { lookAt } from '../splat-engine/ik.ts'
 import type { Species } from '../splat-engine/zoo/index.ts'
 import { goingMove, paceOf, restMove, wanderAt, wanderPlan, type Where } from './wander.ts'
 
@@ -39,7 +40,12 @@ export interface Actor {
   speed: number
   /** Walking about (wander.ts): how far from `at` it roams, in its own heights; 0 stays put. */
   roam: number
+  /** What it turns its head to: where it's going, the camera, or the middle of the view. */
+  gaze: Gaze
 }
+
+export type Gaze = 'ahead' | 'you' | 'middle'
+export const GAZES: { id: Gaze; label: string }[] = [{ id: 'ahead', label: 'Ahead' }, { id: 'you', label: 'You' }, { id: 'middle', label: 'Middle of the view' }]
 
 /** How far a creature roams when Walk about is first switched on, in its heights. */
 export const ROAM = 2.5
@@ -65,7 +71,7 @@ export function restFootprint(b: Blobs): { foot: Vec3; height: number } {
 let nextKey = 1
 
 /** A new creature standing at `at`, `height` tall, playing its first move. */
-export function makeActor(species: Species, opts: { look?: string; detail?: number; at: Vec3; height: number; yaw?: number; move?: string; speed?: number; roam?: number }): Actor {
+export function makeActor(species: Species, opts: { look?: string; detail?: number; at: Vec3; height: number; yaw?: number; move?: string; speed?: number; roam?: number; gaze?: Gaze }): Actor {
   const look = opts.look ?? species.looks[0].id
   const detail = opts.detail ?? detailsOf(species)[0]
   const body = species.make(detail, look)
@@ -84,12 +90,13 @@ export function makeActor(species: Species, opts: { look?: string; detail?: numb
     move: opts.move ?? species.moves[0].name,
     speed: opts.speed ?? 1,
     roam: opts.roam ?? 0,
+    gaze: opts.gaze ?? 'ahead',
   }
 }
 
 /** The same creature remade with another look or detail, keeping where it stands and what it does. */
 export function remake(a: Actor, look: string, detail: number): Actor {
-  return { ...makeActor(a.species, { look, detail, at: a.at, height: a.height, yaw: a.yaw, move: a.move, speed: a.speed, roam: a.roam }), key: a.key }
+  return { ...makeActor(a.species, { look, detail, at: a.at, height: a.height, yaw: a.yaw, move: a.move, speed: a.speed, roam: a.roam, gaze: a.gaze }), key: a.key }
 }
 
 /** Whether it can walk about: it needs a move that goes somewhere. */
@@ -102,6 +109,45 @@ export function roamingAt(a: Actor, seconds: number): Where | null {
   const k = a.height / a.rest.height
   const plan = wanderPlan(a.key, a.roam * a.height, paceOf(a.body, going, a.rest.height) * k, a.yaw)
   return wanderAt(plan, seconds)
+}
+
+/**
+ * The bones it looks with, neck first: every neck bone and the head, or, with
+ * no head, a body that is all head (a slime). Empty for things with no face.
+ */
+export function lookBones(sk: Skeleton): string[] {
+  const names = sk.bones.map((b) => b.name)
+  if (names.includes('head')) return [...names.filter((n) => /^neck\d*$/.test(n)), 'head']
+  return names.includes('body') && !names.includes('land') ? ['body'] : []
+}
+export const canLook = (a: Actor) => lookBones(a.body.skeleton).length > 0
+
+/** The most a neck bone turns, and the head, in radians: a head with its neck turns about a quarter turn and a bit, never round to face backward. */
+const NECK_TURN = 0.4, HEAD_TURN = 1.25, NECK_SHARE = 0.35, TILT = 0.4
+
+/** A point in the scene in the actor's own rest frame (the inverse of `placePoint`). */
+export function unplace(p: ArrayLike<number>, P: Placing): Vec3 {
+  const wx = p[0] - P.at[0], wy = p[1] - P.at[1], wz = p[2] - P.at[2]
+  return [P.foot[0] + (wx * P.c - wz * P.s) / P.k, P.foot[1] + wy / P.k, P.foot[2] + (wx * P.s + wz * P.c) / P.k]
+}
+
+/**
+ * Turns a posed actor's neck and head toward a point in the scene, placed by
+ * `P`. Creatures face +z at rest. It turns about the upright first (on a level
+ * with each bone, so a point behind turns the head sideways as far as it goes
+ * instead of tipping it over backward), then tips the head up or down a little.
+ */
+export function turnToLook(a: Actor, point: ArrayLike<number>, P: Placing) {
+  const sk = a.body.skeleton, bones = lookBones(sk)
+  if (!bones.length) return
+  const target = unplace(point, P)
+  const level = (name: string): Vec3 => [target[0], sk.posedHead[sk.index(name) * 3 + 1], target[2]]
+  // Each neck bone takes a share and the head the rest, so the turn runs down the neck
+  // (lookAt scales its limit by the amount, so the neck's limit is given over it)
+  for (const name of bones.slice(0, -1)) lookAt(sk, name, level(name), { amount: NECK_SHARE, limit: NECK_TURN / NECK_SHARE })
+  const head = bones[bones.length - 1]
+  lookAt(sk, head, level(head), { limit: HEAD_TURN })
+  lookAt(sk, head, target, { limit: TILT })
 }
 
 /** Placement: scale about the rest footprint, turn about the vertical, stand on `at` (or where its walk has got to). */
@@ -175,7 +221,7 @@ export const actorBlobs = (actors: readonly Actor[]) => actors.reduce((n, a) => 
  * another into `out`, growing it if needed. `scratch` holds one posed list per
  * body, reused frame to frame. Returns where each actor starts in `out`.
  */
-export function poseAll(actors: readonly Actor[], clock: (a: Actor) => number, out: Blobs, scratch: WeakMap<Creature, Blobs>): number[] {
+export function poseAll(actors: readonly Actor[], clock: (a: Actor) => number, out: Blobs, scratch: WeakMap<Creature, Blobs>, gazeAt?: (a: Actor) => Vec3 | null): number[] {
   const total = actorBlobs(actors)
   if (out.capacity < total) {
     const bigger = new Blobs(Math.max(total, out.capacity * 2))
@@ -188,10 +234,13 @@ export function poseAll(actors: readonly Actor[], clock: (a: Actor) => number, o
     // A clone keeps the rest colors and opacities, which posing leaves alone
     let posed = scratch.get(a.body)
     if (!posed) { posed = rest.clone(); scratch.set(a.body, posed) }
-    poseActor(a, clock(a))
+    const t = clock(a), P = placingOf(a, t)
+    poseActor(a, t)
+    const point = a.gaze !== 'ahead' ? gazeAt?.(a) : null
+    if (point) turnToLook(a, point, P)
     poseBlobs(rest, a.body.skin, a.body.skeleton, 'quat', posed)
     starts.push(from)
-    placeInto(posed, placingOf(a, clock(a)), out, from)
+    placeInto(posed, P, out, from)
     from += rest.count
   }
   out.count = total
