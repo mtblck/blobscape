@@ -86,6 +86,8 @@ interface Props {
   /** At most one formula, with each symbol said in words. */
   formula?: { eq: ReactNode; terms: [ReactNode, string][] }
   explain: ReactNode
+  /** Code to take away (the engine lessons): what the view shows, written with the package, kept in step with the controls. */
+  code?: { title: string; note: ReactNode; source: string }
 }
 
 const TOTAL = LESSONS.length + COMING.length
@@ -103,7 +105,7 @@ const TOTAL = LESSONS.length + COMING.length
  * On a phone the case and the current goal stick under the site header, the
  * desk becomes one group at a time, and the goal cards follow as a list.
  */
-export function LessonShell({ id, intro, view, caption, groups, goals, done, scene, explainTitle, formula, explain }: Props) {
+export function LessonShell({ id, intro, view, caption, groups, goals, done, scene, explainTitle, formula, explain, code }: Props) {
   const h1 = useFocusHeading()
   const i = LESSONS.findIndex((l) => l.id === id)
   const lesson = LESSONS[i]
@@ -273,6 +275,8 @@ export function LessonShell({ id, intro, view, caption, groups, goals, done, sce
         <div className="mt-8 max-w-[36em] space-y-4 text-lg leading-relaxed text-ink-muted lg:col-span-7 lg:mt-0 lg:text-xl">{explain}</div>
       </section>
 
+      {code && <TakeTheCode {...code} />}
+
       <nav aria-label="Lessons" className="mt-14 grid grid-cols-2 items-center gap-4 border-t border-rule pt-6 sm:grid-cols-3">
         {prev ? (
           <a href={href({ page: 'lesson', id: prev.id })} className="group -m-3 rounded-lg p-3 transition-colors hover:bg-paper-sunk">
@@ -289,5 +293,33 @@ export function LessonShell({ id, intro, view, caption, groups, goals, done, sce
         </a>
       </nav>
     </>
+  )
+}
+
+/** The code a lesson ends with: what you just made, as the engine package writes it, with a button that copies it. */
+function TakeTheCode({ title, note, source }: { title: string; note: ReactNode; source: string }) {
+  const [copied, setCopied] = useState(false)
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(source)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch { setCopied(false) }
+  }
+  return (
+    <section aria-labelledby="code" className="mt-14 border-t border-rule pt-10 lg:grid lg:grid-cols-12 lg:gap-x-5 lg:pt-14">
+      <div className="lg:col-span-4">
+        <p className="text-sm text-ink-faint">Take it with you</p>
+        <h2 id="code" className="mt-1 max-w-[16ch] font-display text-3xl leading-[1.05] text-balance sm:text-4xl">{title}</h2>
+        <div className="mt-4 max-w-[36em] space-y-3 text-base leading-relaxed text-ink-muted">{note}</div>
+      </div>
+      <div className="relative mt-6 min-w-0 lg:col-span-8 lg:mt-0">
+        <div className="absolute top-2 right-2">
+          <Button small onClick={() => void copy()}>{copied ? 'Copied' : 'Copy the code'}</Button>
+        </div>
+        <pre data-testid="lesson-code" tabIndex={0} aria-label="The code" className="max-h-[36rem] overflow-auto rounded-xl border border-rule bg-paper-sunk p-4 pt-12 text-[0.8rem] leading-relaxed text-ink"><code>{source}</code></pre>
+        <p aria-live="polite" className="sr-only">{copied ? 'Copied the code.' : ''}</p>
+      </div>
+    </section>
   )
 }

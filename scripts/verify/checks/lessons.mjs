@@ -382,6 +382,44 @@ export default [
     },
   },
   {
+    name: 'lessons-engine',
+    about: 'Build with the engine: each goal ticks on the engine view, and the code below follows the controls',
+    entries: ['src/blobscape/lessons/FirstCreature.tsx', 'src/blobscape/build/StageView.tsx', 'src/blobscape/build/slug.ts'],
+    async run({ base, shots, join, fails, ok, open, axe }) {
+      const { page, ctx } = await open('/', { viewport: { width: 1440, height: 1000 } })
+      const goalCount = () => page.textContent('[data-testid=goal-count]')
+      const goalsAt = async (n) => {
+        await page.waitForFunction((k) => document.querySelector('[data-testid=goal-count]')?.textContent.startsWith(`${k} of`), n, { timeout: 8000 }).catch(() => {})
+        return goalCount()
+      }
+      const slider = (name) => page.getByRole('slider', { name, exact: true })
+      // headless WebGPU can't present to a canvas, so the engine view draws off-screen and is stepped by hand
+      await page.goto(base + '/lessons/first-creature/?offscreen=1')
+      await page.evaluate(() => localStorage.clear())
+      await page.reload()
+      await page.waitForFunction(() => window.__build && !document.querySelector('[data-testid=stage-loading]'), null, { timeout: 30000 }).catch(() => {})
+      const cut = async () => { await page.waitForTimeout(400); await page.waitForFunction(() => !document.querySelector('[data-testid=stage-loading]'), null, { timeout: 15000 }).catch(() => {}) }
+      await slider('Turn the tail bone').fill('0.9')
+      const still = await goalCount()
+      await page.getByRole('button', { name: "['body', 'tail']" }).click()
+      await cut()
+      const torn = Number((await page.textContent('[data-testid=slug-readout]')).match(/pulled ([\d.]+) blobs/)?.[1])
+      await slider('blend: how far a weight spreads').fill('0.15')
+      await cut()
+      const mended = Number((await page.textContent('[data-testid=slug-readout]')).match(/pulled ([\d.]+) blobs/)?.[1])
+      await page.getByRole('checkbox', { name: 'Turn from side to side' }).check()
+      await page.getByRole('checkbox', { name: 'Swing the tail' }).check()
+      await page.evaluate(async () => { for (let f = 0; f <= 40; f++) { await window.__build.stage.frame(f / 20); await new Promise((r) => setTimeout(r, 40)) } })
+      const code = await page.textContent('[data-testid=lesson-code]')
+      const followed = /blend: 0\.15,/.test(code) && /\['body', 'tail'\] \}/.test(code) && /new Swing\(/.test(code)
+      if (!(still.startsWith('0 of') && torn > 2 && mended < 0.5 && (await goalsAt(3)).startsWith('3 of') && followed)) fails.push(`blobscape first creature: goals ${await goalCount()} (${still} before listening), tear ${torn} → ${mended}, code follows: ${followed}`)
+      else ok(`blobscape first creature: bend, smooth and swing tick (the join tore ${torn} blobs, ${mended} spread), and the code follows the controls`)
+      await page.screenshot({ path: join(shots, 'blobscape-first-creature.png') })
+      await axe(page, 'blobscape first creature')
+      await ctx.close()
+    },
+  },
+  {
     name: 'sandbox-basics',
     about: 'a lesson opens in the sandbox; spray, undo, redo, delete, keyboard, skip link',
     entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/lessons/Many.tsx', 'src/blobscape/lessons/Footprint.tsx'],
