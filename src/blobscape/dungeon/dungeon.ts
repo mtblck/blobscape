@@ -1,7 +1,7 @@
 import { srgbToLinear } from '../../splat-core/color.ts'
 import type { Creature } from '../../splat-engine/body.ts'
 import { MAX_LIGHTS, type PointLight } from '../../splat-engine/engine.ts'
-import { makeProp, poseProp } from './breakables.ts'
+import { makeProp, poseProp, type PropBody } from './breakables.ts'
 import { CRYSTAL_GAP, CRYSTALS, FLAME_GAP, FLAMES, makeBlaze, makeIce, paintFloor, poseBlaze, poseIce } from './elements.ts'
 import { BOLT_POP, BOLTS, Game, KINDS, MAX_MP, PROPS, RULES, hopPeriod, type Difficulty, type Element, type Input, type SlimeKind } from './game.ts'
 import { Patches } from './ground.ts'
@@ -43,7 +43,7 @@ export class Dungeon {
   /** A pool of bolts of each element: bolt `slot` of the game is drawn by the one of its element. */
   readonly bolts: Record<Element, Creature[]>
   /** The crates, urns and barrels, in the game's `PROPS` order. */
-  readonly props: Creature[]
+  readonly props: PropBody[]
   readonly floor: Creature
   /** The flames and the ice that stand on the floor where it burns and freezes. */
   readonly blaze: Creature
@@ -120,7 +120,7 @@ export class Dungeon {
         else hideSlime(actor.skeleton, at)
       })
     }
-    g.props.forEach((p) => poseProp(this.props[p.slot].skeleton, p))
+    g.props.forEach((p) => poseProp(this.props[p.slot], p))
     // the floor: its colors and where the flames and the ice stand change only when the ground did
     const ground = g.ground
     if (ground.version !== this.painted) {

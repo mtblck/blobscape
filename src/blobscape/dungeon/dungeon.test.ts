@@ -4,7 +4,7 @@ import { Dungeon } from './dungeon.ts'
 import { BURST, Game, KINDS, MAX_MP, PROPS, RULES, SWING, SWORD_REACH } from './game.ts'
 import { makeHero, poseHero } from './hero.ts'
 import { rotate } from '../../splat-engine/rig.ts'
-import { PIECES, pieceFlight } from './breakables.ts'
+import { PIECES, cutPieces, pieceFlight } from './breakables.ts'
 import { CRYSTALS, FLAMES, paintFloor } from './elements.ts'
 import { Ground } from './ground.ts'
 import { Blobs } from '../../splat-core/blobs.ts'
@@ -136,7 +136,7 @@ test('a frost bolt grows ice on the floor and turns it pale blue, dimmer where b
   assert.ok(two.color[5] > 0.5, 'with live lights the frost is its own color and the lights dim it')
 })
 
-test('a prop stands whole with its pieces hidden; broken, the body is gone and the pieces fly on from the blow and lie flat on the floor', () => {
+test('a prop is cut into pieces of its own blobs: whole, they sit where they were cut; broken, they fly on from the blow and lie on the floor', () => {
   const d = new Dungeon({ detail: 0.3, look: 'forest', difficulty: 'normal', light: 'baked' })
   const idle = { forward: 0, turn: 0 }
   d.game.hold()
@@ -144,26 +144,46 @@ test('a prop stands whole with its pieces hidden; broken, the body is gone and t
   assert.equal(d.props.length, PROPS.length)
   for (const kind of ['crate', 'urn', 'barrel'] as const) {
     const p = d.game.props.find((p) => p.kind === kind)!
-    const sk = d.props[p.slot].skeleton
+    const prop = d.props[p.slot], sk = prop.skeleton
+    // every blob rides one piece, and every piece has blobs: nothing hidden waits to stand in for the body
+    const per = new Array(PIECES).fill(0)
+    for (let i = 0; i < prop.blobs.count; i++) {
+      const j = prop.skin.joints[i * 4]
+      assert.ok(j >= 2 && j < 2 + PIECES && prop.skin.weights[i * 4] === 1, `${kind} blob ${i} on bone ${j}`)
+      per[j - 2]++
+    }
+    assert.ok(per.every((n) => n > prop.blobs.count / PIECES / 4), `${kind} pieces: ${per}`)
     assert.ok(sk.scale[1] > 0.9, `${kind} stands`)
-    for (let i = 0; i < PIECES; i++) assert.equal(sk.scale[2 + i], 0)
+    for (let i = 0; i < PIECES; i++) {
+      const h = prop.pieces[i].home
+      assert.ok(Math.hypot(sk.posedHead[(2 + i) * 3] - p.x - 0, 0) < 1 && Math.abs(sk.posedHead[(2 + i) * 3 + 1] - h[1]) < 1e-5, `${kind} piece ${i} sits where it was cut`)
+    }
     // a blow going +x
     Object.assign(p, { phase: 'broken', hp: 0, t: 0, dx: 1, dz: 0 })
     for (let t = 0; t < 1.5; t += 1 / 30) d.update(1 / 30, idle)
-    assert.ok(sk.scale[1] < 1e-6, `${kind}'s body is gone`)
     let sum = 0
     for (let i = 0; i < PIECES; i++) {
-      const b = 2 + i
-      assert.ok(sk.scale[b] > 0.9)
+      const b = 2 + i, piece = prop.pieces[i]
       const y = sk.posedHead[b * 3 + 1]
-      assert.ok(y >= 0 && y < 0.08, `${kind} piece ${i} lies at ${y}`)
+      assert.ok(Math.abs(y - piece.rest) < 1e-4 && piece.rest > 0 && piece.rest < 0.4, `${kind} piece ${i} lies at ${y}, rest ${piece.rest}`)
       sum += sk.posedHead[b * 3] - p.x
       // a piece landed is the same however long ago it broke
-      assert.ok(pieceFlight(kind, i, 1, 0, 1.5).landed)
-      assert.deepEqual(pieceFlight(kind, i, 1, 0, 1.5).at, pieceFlight(kind, i, 1, 0, 9).at)
+      assert.ok(pieceFlight(piece, i, 1, 0, 1.5).landed)
+      assert.deepEqual(pieceFlight(piece, i, 1, 0, 1.5).at, pieceFlight(piece, i, 1, 0, 9).at)
     }
     assert.ok(sum / PIECES > 0.5, `${kind}'s pieces went the blow's way: ${sum / PIECES}`)
   }
+})
+
+test('cutPieces spreads its seeds and gives every blob to the nearest', () => {
+  // a row of 100 points along x: ten pieces should be ten runs of about ten
+  const c = new Float32Array(300)
+  for (let i = 0; i < 100; i++) c[i * 3] = i
+  const of = cutPieces(c, 100, 10)
+  const sizes = new Array(10).fill(0)
+  for (let i = 0; i < 100; i++) sizes[of[i]]++
+  assert.ok(sizes.every((n) => n >= 5 && n <= 16), `${sizes}`)
+  for (let i = 1; i < 100; i++) if (of[i] !== of[i - 1]) assert.ok(!Array.from(of.subarray(0, i - 1)).includes(of[i]), 'each piece is one run')
 })
 
 test('the swing is a low sweep: while it can hit, the blade is below a slime\'s top and reaches out in front, right to left', () => {
