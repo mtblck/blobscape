@@ -32,6 +32,7 @@ export const LOOPS: readonly { id: string; label: string }[] = [
   { id: 'ruin', label: 'Ruined chapel' },
   { id: 'cave', label: 'Crystal cave' },
   { id: 'canyon', label: 'Desert canyon' },
+  { id: 'cabin', label: 'Snowed-in cabin' },
 ]
 
 /** Every loop's size in art pixels (the recorder's page is always the same size). */

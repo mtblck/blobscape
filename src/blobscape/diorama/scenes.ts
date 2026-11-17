@@ -26,6 +26,7 @@ import { WINDMILL } from './scenes/windmill.ts'
 import { RUIN } from './scenes/ruin.ts'
 import { CAVE } from './scenes/cave.ts'
 import { CANYON } from './scenes/canyon.ts'
+import { CABIN } from './scenes/cabin.ts'
 
 /** A scene Pixel Diorama can show: how to build it, move it and light it, and how it asks to be drawn. */
 export interface Diorama {
@@ -142,4 +143,5 @@ export const DIORAMAS: Diorama[] = [
   described('ruin', RUIN, 'A ruined chapel at dusk in autumn: an arcade of pointed arches broken along its top, brick walls fallen in places with their bricks at their feet, worn steps, a leaning fence, a maple and a lantern'),
   described('cave', CAVE, 'An ice cave cut open at night, with icicles along its broken roof, stalactites joining stalagmites, flowstone, basalt columns stepping into a still pool, a geode broken open and glowing crystals, one growing as you watch'),
   described('canyon', CANYON, 'A desert canyon at sunset worn by water, with banded cliffs and ledges, scree, a mesa, hoodoos, a natural arch, a dry stream bed of pebbles and cracked mud, saguaros, a gnarled tree, a ram skull with curled horns, old ribs, a fossil shell and a circling hawk'),
+  described('cabin', CABIN, 'A log cabin snowed in on a winter night: snow falling and settling where it lands, drifts piled deep downwind of the cabin, rocks and fence, a path trodden to the gate, frost growing across the lit window, chimney smoke, a woodpile and a lantern'),
 ]

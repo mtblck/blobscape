@@ -10,6 +10,7 @@ import { ARCHES, arcade, fence, steps, wall } from './built.ts'
 import { antler, brackets, brain, cactus, horn, ribs, rosette, shell, tree } from './life.ts'
 import { MAX_DROPS, arch, butte, hoodoo, land, mud, pebbles } from './erode.ts'
 import { RISES, cluster, columns, crystal, drips, flowstone, geode, icicles } from './forms.ts'
+import { drift, fallAt, fallShare, frost, groundUnder, type Falling } from './weather.ts'
 
 /**
  * A pixel-art scene written as data: no code, so it can be typed by hand, kept
@@ -99,9 +100,9 @@ export interface ShaftDoc {
 
 /**
  * What a swarm does: `dust` hangs and twinkles, `embers` rise and fade, `rain` falls fast as streaks, `snow` falls
- * slowly and sways, `fireflies` wander and blink, `bubbles` rise and wobble.
+ * slowly and sways, `leaves` flutter down, `fireflies` wander and blink, `bubbles` rise and wobble.
  */
-export type SpeckKind = 'dust' | 'embers' | 'rain' | 'snow' | 'fireflies' | 'bubbles'
+export type SpeckKind = 'dust' | 'embers' | 'rain' | 'snow' | 'leaves' | 'fireflies' | 'bubbles'
 
 export interface SpeckDoc {
   kind: SpeckKind
@@ -115,6 +116,10 @@ export interface SpeckDoc {
   size?: number
   /** Whether they give off light; left out, embers and fireflies do. */
   glow?: boolean
+  /** Rain, snow and leaves only: each lands on whatever stands still under it (or the box's floor), lies a while and goes, then falls again. */
+  land?: boolean
+  /** Rain, snow and leaves only: how far the wind carries each sideways over its whole fall, [x, z]; rain slants along it. */
+  wind?: [number, number]
 }
 
 export interface BoneDoc {
@@ -259,6 +264,18 @@ export type ShapeDoc =
   | { kind: 'mud'; at: Vec3; r: number; plate: number; curl?: number; seed: number }
   /** `count` pebbles (up to 200) along a stream's `path`, `width` wide: the biggest, `size`, mid-stream where it runs fastest. Each is a piece. */
   | { kind: 'pebbles'; path: Vec3[]; width: number; count: number; size: number; seed: number }
+  /**
+   * Snow lying in drifts over everything in the parts before it, `half` wide round `at`: `depth` on open level ground,
+   * piled up to `pile` (3 × depth) downwind of whatever stands in the `wind` ([x, z]), as far as `reach` (4) times its
+   * height, scoured thin where the wind meets it, and thin along a trodden `path` (`pathWidth` wide). A part's own shape only.
+   */
+  | { kind: 'drift'; at: Vec3; half: [number, number]; depth: number; wind: [number, number]; pile?: number; reach?: number; path?: Vec3[]; pathWidth?: number; seed: number }
+  /**
+   * A frost fern on a surface facing `facing`, spreading `r` from `at` in `arms` (5) main branches, each throwing side
+   * branches. `stage` [from, to] shows only that share of its growth: give each share a part on a bone that sprouts in
+   * turn and it grows a branch at a time. Pieces are the generations, 0 the main branches.
+   */
+  | { kind: 'frost'; at: Vec3; facing: Vec3; r: number; arms?: number; stage?: [number, number]; seed: number }
   /** The first shape with the second cut out of it. */
   | { kind: 'cut'; shape: ShapeDoc; hole: ShapeDoc }
   /** A lumpy version: `by` is how far the surface moves, `scale` how big the lumps are. */
@@ -335,10 +352,10 @@ const MAX_SURFACE = 200
 const MAX_MOVES_PER_BONE = 6
 /** Specks in a whole scene: each is a bone of its own, posed every frame. */
 const MAX_SPECKS = 300
-const SPECK_KINDS: SpeckKind[] = ['dust', 'embers', 'rain', 'snow', 'fireflies', 'bubbles']
+const SPECK_KINDS: SpeckKind[] = ['dust', 'embers', 'rain', 'snow', 'leaves', 'fireflies', 'bubbles']
 /** A value for a message: only what is safe to print (anything can arrive from a prompt). */
 const COVERS = ['snow', 'moss', 'dust']
-const SHAPE_KINDS = ['sphere', 'ball', 'box', 'cylinder', 'cone', 'ring', 'roof', 'join', 'lathe', 'sweep', 'grow', 'text', 'blocks', 'wall', 'steps', 'fence', 'arcade', 'crystal', 'crystals', 'geode', 'columns', 'drips', 'flowstone', 'icicles', 'tree', 'cactus', 'rosette', 'brackets', 'brain', 'shell', 'horn', 'antler', 'ribs', 'land', 'butte', 'hoodoo', 'arch', 'mud', 'pebbles', 'cut', 'rough']
+const SHAPE_KINDS = ['sphere', 'ball', 'box', 'cylinder', 'cone', 'ring', 'roof', 'join', 'lathe', 'sweep', 'grow', 'text', 'blocks', 'wall', 'steps', 'fence', 'arcade', 'crystal', 'crystals', 'geode', 'columns', 'drips', 'flowstone', 'icicles', 'tree', 'cactus', 'rosette', 'brackets', 'brain', 'shell', 'horn', 'antler', 'ribs', 'land', 'butte', 'hoodoo', 'arch', 'mud', 'pebbles', 'drift', 'frost', 'cut', 'rough']
 const BLENDS = ['smooth', 'chamfer', 'stairs']
 /** The keys paints use, found anywhere inside one. */
 const keysIn = (p: unknown): Record<string, unknown>[] => {
@@ -395,12 +412,14 @@ function halfSize(s: ShapeDoc): Vec3 {
     case 'arch': { const l = Math.hypot(s.to[0] - s.from[0], s.to[2] - s.from[2]); return [l / 2 + s.thick, s.height / 2, l / 2 + s.thick] }
     case 'mud': return [s.r, s.plate * 0.1, s.r]
     case 'pebbles': return [0, 1, 2].map((i) => (i === 1 ? s.size / 2 : (Math.max(...s.path.map((q) => q[i])) - Math.min(...s.path.map((q) => q[i]))) / 2 + s.width / 2)) as Vec3
+    case 'drift': return [s.half[0], (s.pile ?? s.depth * 3) / 2 + s.depth, s.half[1]]
+    case 'frost': return [s.r, s.r, s.r]
     case 'cut': case 'rough': return halfSize(s.shape)
   }
 }
 
 /** The shapes the `pieces` paint can paint, as they are or cut and roughened. */
-const PIECED = ['wall', 'steps', 'fence', 'arcade', 'crystals', 'geode', 'columns', 'drips', 'icicles', 'shell', 'land', 'butte', 'hoodoo', 'arch', 'mud', 'pebbles']
+const PIECED = ['wall', 'steps', 'fence', 'arcade', 'crystals', 'geode', 'columns', 'drips', 'icicles', 'shell', 'land', 'butte', 'hoodoo', 'arch', 'mud', 'pebbles', 'frost']
 const hasPieces = (s: unknown): boolean => {
   if (typeof s !== 'object' || s === null) return false
   const q = s as Record<string, unknown>
@@ -672,6 +691,25 @@ export function checkScene(doc: unknown): string[] {
         else s.path.forEach((q: unknown, i: number) => vec(q, `${at}.path[${i}]`))
         num(s.width, `${at}.width`, 0.02, 2); count(s.count, `${at}.count`, 1, 200); num(s.size, `${at}.size`, 0.005, 0.5); seed(s.seed, `${at}.seed`)
         break
+      case 'drift':
+        if (depth > 0) bad(`${at}.kind`, "a drift lies over the parts before it, so it must be a part's own shape")
+        vec(s.at, `${at}.at`); vec(s.half, `${at}.half`, 0.05, REACH, 2); num(s.depth, `${at}.depth`, 0.005, 0.5)
+        vec(s.wind, `${at}.wind`, -1, 1, 2); opt(s.pile, `${at}.pile`, 0, 1); opt(s.reach, `${at}.reach`, 0.5, 20); opt(s.pathWidth, `${at}.pathWidth`, 0.02, 2)
+        if (s.path !== undefined) {
+          if (!Array.isArray(s.path) || s.path.length < 2 || s.path.length > 16) bad(`${at}.path`, 'must be a list of 2 to 16 points')
+          else s.path.forEach((q: unknown, i: number) => vec(q, `${at}.path[${i}]`))
+        }
+        seed(s.seed, `${at}.seed`)
+        break
+      case 'frost':
+        vec(s.at, `${at}.at`); vec(s.facing, `${at}.facing`, -1, 1)
+        if (Array.isArray(s.facing) && Math.hypot(...(s.facing as number[]).map((v) => Number(v) || 0)) < 0.1) bad(`${at}.facing`, 'must point somewhere')
+        num(s.r, `${at}.r`, 0.02, 2); count(s.arms, `${at}.arms`, 1, 8, true); seed(s.seed, `${at}.seed`)
+        if (s.stage !== undefined) {
+          vec(s.stage, `${at}.stage`, 0, 1, 2)
+          if (Array.isArray(s.stage) && !((s.stage[0] as number) < (s.stage[1] as number))) bad(`${at}.stage`, 'must run from a share to a later one')
+        }
+        break
       case 'cut': shape(s.shape, `${at}.shape`, depth + 1); shape(s.hole, `${at}.hole`, depth + 1); break
       case 'rough': shape(s.shape, `${at}.shape`, depth + 1); num(s.by, `${at}.by`, 0, 0.3); opt(s.scale, `${at}.scale`, 0.02, REACH); break
       default: bad(`${at}.kind`, `${show(s.kind)} is not a shape (${SHAPE_KINDS.join(', ')})`)
@@ -709,6 +747,7 @@ export function checkScene(doc: unknown): string[] {
     if (!obj(p)) { bad(at, 'must be an object'); return }
     const before = found
     shape(p.shape, `${at}.shape`, 0)
+    if (i === 0 && (p.shape as { kind?: unknown } | undefined)?.kind === 'drift') bad(`${at}.shape`, 'a drift lies over the parts before it, so it cannot come first')
     if (found === before) {
       // a sound shape: add its box's surface, and catch one so big it would take seconds to cut
       const [a, b, c] = halfSize(p.shape as ShapeDoc)
@@ -841,6 +880,10 @@ export function checkScene(doc: unknown): string[] {
         hexes(m.colors, `${at}.colors`, 1, 4)
         opt(m.size, `${at}.size`, 0.003, 0.1)
         if (m.glow !== undefined && typeof m.glow !== 'boolean') bad(`${at}.glow`, 'must be true or false')
+        const falls = m.kind === 'rain' || m.kind === 'snow' || m.kind === 'leaves'
+        if (m.land !== undefined && typeof m.land !== 'boolean') bad(`${at}.land`, 'must be true or false')
+        if (m.land && !falls) bad(`${at}.land`, 'only rain, snow and leaves land')
+        if (m.wind !== undefined) { vec(m.wind, `${at}.wind`, -2, 2, 2); if (!falls) bad(`${at}.wind`, 'only rain, snow and leaves are blown') }
       })
       if (specks > MAX_SPECKS) bad('air.specks', `hold ${specks} specks between them; the most is ${MAX_SPECKS}`)
     }
@@ -862,7 +905,7 @@ const AXIS: Record<string, Vec3> = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] }
 const IDX: Record<string, number> = { x: 0, y: 1, z: 2 }
 
 /** A shape for the builder. Nothing is made thinner than `thin`, so it catches the grid at any detail. */
-function toShape(s: ShapeDoc, thin: number): Shape {
+function toShape(s: ShapeDoc, thin: number, under?: (x: number, z: number) => number): Shape {
   const t = (v: number) => Math.max(v, thin)
   switch (s.kind) {
     // a ball has to be a little fatter than a box to be sure of holding a grid point
@@ -914,6 +957,11 @@ function toShape(s: ShapeDoc, thin: number): Shape {
     case 'arch': return arch(s)
     case 'mud': return mud(s, thin / 0.75)
     case 'pebbles': return pebbles(s, thin)
+    case 'drift': {
+      if (!under) throw new Error('a drift needs the ground under it')
+      return drift(s, under, thin)
+    }
+    case 'frost': return frost(s, thin)
     case 'cut': return cut(toShape(s.shape, thin), toShape(s.hole, 0))
     case 'rough': {
       const k = 1 / (s.scale ?? 0.5)
@@ -1036,14 +1084,32 @@ interface Speck {
   shape: ShapeDoc
   color: string
   glow: boolean
+  /** Whether it lands, and the wind that carries it over its fall. */
+  land: boolean
+  wind: [number, number]
+  /** A falling speck's lean, so a streak of rain points along its fall. */
+  lean?: [number, number, number, number]
 }
 
-const SPECK_SIZE: Record<SpeckKind, number> = { dust: 0.01, embers: 0.014, rain: 0.008, snow: 0.014, fireflies: 0.018, bubbles: 0.02 }
-/** Seconds one fall or rise takes, about: the rest of a swarm's speed comes from that. */
-const SPECK_SECONDS: Record<SpeckKind, number> = { dust: 6, embers: 2.2, rain: 0.55, snow: 7, fireflies: 3, bubbles: 3 }
+const SPECK_SIZE: Record<SpeckKind, number> = { dust: 0.01, embers: 0.014, rain: 0.008, snow: 0.014, leaves: 0.022, fireflies: 0.018, bubbles: 0.02 }
+/** Seconds one fall or rise takes, about: the rest of a swarm's speed comes from that. A speck that lands lies a while too. */
+const SPECK_SECONDS: Record<SpeckKind, number> = { dust: 6, embers: 2.2, rain: 0.55, snow: 7, leaves: 6, fireflies: 3, bubbles: 3 }
+const LANDING_SECONDS: Record<Falling, number> = { rain: 0.7, snow: 8.5, leaves: 9 }
+
+const smoothstep = (a: number, b: number, x: number) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t) }
+
+/** How far a snowflake or leaf has swayed at `life` of its fall, frozen where it landed. */
+function swayOf(p: Speck, life: number): [number, number] {
+  const k = p.kind === 'snow' || p.kind === 'leaves' ? p.kind : null
+  if (!k) return [0, 0]
+  const l = p.land ? Math.min(life, fallShare(k)) : life
+  // snow sways `wander` times a fall, leaves twice that; counted from the fall's start so it repeats each fall
+  const a = k === 'leaves' ? 0.08 : 0.05, n = k === 'leaves' ? 2 : 1, l0 = l - p.phase[0]
+  return [a * Math.sin((l0 * p.wander[0] * n + p.phase[1]) * TAU), a * 0.8 * Math.sin((l0 * p.wander[2] * n + p.phase[3]) * TAU)]
+}
 const BANK_BONES = 3
 
-function planSpecks(air: AirDoc | undefined, loop: number): Speck[] {
+function planSpecks(air: AirDoc | undefined, loop: number, ground: (x: number, z: number, top: number, bottom: number) => number): Speck[] {
   const out: Speck[] = []
   ;(air?.specks ?? []).forEach((sw, si) => {
     const lo: Vec3 = [Math.min(sw.from[0], sw.to[0]), Math.min(sw.from[1], sw.to[1]), Math.min(sw.from[2], sw.to[2])]
@@ -1053,17 +1119,33 @@ function planSpecks(air: AirDoc | undefined, loop: number): Speck[] {
     for (let j = 0; j < sw.count; j++) {
       const r = (k: number) => hash(si + 1, j + 1, k)
       const across = (i: number, k: number) => lo[i] + (hi[i] - lo[i]) * r(k)
-      const falls = sw.kind === 'rain' || sw.kind === 'snow', rises = sw.kind === 'embers' || sw.kind === 'bubbles'
-      const at: Vec3 = [across(0, 1), falls ? hi[1] : rises ? lo[1] : across(1, 2), across(2, 3)]
+      const falls = sw.kind === 'rain' || sw.kind === 'snow' || sw.kind === 'leaves', rises = sw.kind === 'embers' || sw.kind === 'bubbles'
+      const land = !!sw.land && falls, wind: [number, number] = falls && sw.wind ? sw.wind : [0, 0]
+      // blown, a speck starts upwind of where it comes down, so the swarm still lands in its box
+      const at: Vec3 = [across(0, 1) - wind[0], falls ? hi[1] : rises ? lo[1] : across(1, 2), across(2, 3) - wind[1]]
       // a little quicker or slower each, so a swarm never moves in step
-      const seconds = SPECK_SECONDS[sw.kind] * (0.7 + 0.6 * r(4))
+      const seconds = (land ? LANDING_SECONDS[sw.kind as Falling] : SPECK_SECONDS[sw.kind]) * (0.7 + 0.6 * r(4))
       const times = Math.max(1, Math.round(loop / seconds))
       const wander: Speck['wander'] = [1 + Math.floor(r(5) * 2), 1 + Math.floor(r(6) * 2), 1 + Math.floor(r(7) * 2), Math.max(1, Math.round(loop / (2 + 3 * r(8))))]
-      const shape: ShapeDoc = sw.kind === 'rain' ? { kind: 'ball', at, r: [size, 0.07, size] } : { kind: 'sphere', at, r: size }
-      out.push({
+      const shape: ShapeDoc = sw.kind === 'rain' ? { kind: 'ball', at, r: [size, 0.07, size] } : sw.kind === 'leaves' ? { kind: 'ball', at, r: [size, size * 0.3, size * 0.65] } : { kind: 'sphere', at, r: size }
+      const p: Speck = {
         kind: sw.kind, bone: `~speck${out.length}`, index: -1, at, travel: hi[1] - lo[1], times, wander,
-        phase: [r(9), r(10), r(11), r(12), r(13)], shape, color: sw.colors[Math.floor(r(14) * sw.colors.length)], glow,
-      })
+        phase: [r(9), r(10), r(11), r(12), r(13)], shape, color: sw.colors[Math.floor(r(14) * sw.colors.length)], glow, land, wind,
+      }
+      if (land) {
+        // it falls to whatever is under where it comes down, resting on it
+        const [sx, sz] = swayOf(p, 1)
+        const rest = sw.kind === 'leaves' ? size * 0.3 : sw.kind === 'rain' ? 0 : size * 0.6
+        p.travel = Math.max(0, hi[1] - (ground(at[0] + wind[0] + sx, at[2] + wind[1] + sz, hi[1], lo[1]) + rest))
+      }
+      // a streak of rain leans along its fall
+      if (sw.kind === 'rain' && (wind[0] || wind[1])) {
+        const fall = Math.max(p.travel, 0.05), w = Math.hypot(wind[0], wind[1]), ang = Math.atan2(w, fall)
+        const ax: Vec3 = [-wind[1] / w, 0, wind[0] / w]
+        // turning the streak's upright toward -wind tips its bottom downwind
+        p.lean = axisAngle(ax, -ang) as unknown as [number, number, number, number]
+      }
+      out.push(p)
     }
   })
   return out
@@ -1075,13 +1157,24 @@ function poseSpeck(sk: Skeleton, p: Speck, u: number) {
   const wave = (k: number, ph: number) => Math.sin((u * k + ph) * TAU)
   const life = (((u * p.times + p.phase[0]) % 1) + 1) % 1
   let dx = 0, dy = 0, dz = 0, size = 1
+  if (p.kind === 'rain' || p.kind === 'snow' || p.kind === 'leaves') {
+    const f = p.land ? fallAt(p.kind, life) : { drop: life, lying: false, size: Math.sin(Math.PI * life) ** 0.25 }
+    const [sx, sz] = swayOf(p, life)
+    dx = p.wind[0] * f.drop + sx; dz = p.wind[1] * f.drop + sz; dy = -p.travel * f.drop
+    size = f.size
+    if (p.lean) sk.setRotation(b, p.lean)
+    if (p.kind === 'leaves') {
+      // a leaf flutters as it falls, rocking less as it comes down, and lies flat where it lands
+      const settle = f.lying ? 0 : 1 - smoothstep(0.8, 1, f.drop)
+      const yaw = axisAngle([0, 1, 0], (p.phase[4] + (f.lying ? 1 : f.drop) * p.wander[1]) * TAU)
+      const rock = axisAngle([1, 0, 0], 0.9 * settle * Math.sin((f.drop * 3 * p.wander[0] + p.phase[2]) * TAU))
+      sk.setRotation(b, mulQ(yaw, rock))
+    }
+    sk.offset[b * 3] += dx; sk.offset[b * 3 + 1] += dy; sk.offset[b * 3 + 2] += dz
+    sk.size[b] *= size
+    return
+  }
   switch (p.kind) {
-    case 'rain': dy = -p.travel * life; size = Math.sin(Math.PI * life) ** 0.25; break
-    case 'snow':
-      dy = -p.travel * life
-      dx = 0.05 * wave(p.wander[0] * p.times, p.phase[1]); dz = 0.04 * wave(p.wander[2] * p.times, p.phase[3])
-      size = Math.sin(Math.PI * life) ** 0.25
-      break
     case 'embers':
       dy = p.travel * life
       dx = 0.05 * life * wave(p.wander[0] * p.times, p.phase[1]); dz = 0.05 * life * wave(p.wander[2] * p.times, p.phase[3])
@@ -1145,8 +1238,23 @@ export function compileScene(doc: SceneDoc, { puffs = true }: { puffs?: boolean 
   const palette = doc.palette.map(rgb)
   const moves = doc.moves ?? []
   const lights = doc.lights ?? []
+  // what weather lands on: parts that stay put (on no bone, or one that only sways), in order, a drift over those before it
+  const moved = new Set<string>()
+  for (const m of moves) if (m.kind !== 'sway') moved.add(m.bone)
+  for (const b of doc.bones ?? []) if (b.parent && moved.has(b.parent)) moved.add(b.name)
+  const solidShapes = (thin: number) => {
+    const out: Shape[] = [], still: Shape[] = []
+    for (const p of doc.parts) {
+      const sh = toShape(p.shape, thin, (x, z) => groundUnder(still, x, z, 4, -1))
+      out.push(sh)
+      if (!p.glow && !(p.bone && moved.has(p.bone))) still.push(sh)
+    }
+    return { out, still }
+  }
   // what hangs in the air rides bones of its own, after the scene's: a bone for each speck, a few for each bank of mist
-  const specks = planSpecks(doc.air, doc.loop)
+  const lands = (doc.air?.specks ?? []).some((m) => m.land)
+  const ground = lands ? solidShapes(0.02).still : []
+  const specks = planSpecks(doc.air, doc.loop, (x, z, top, bottom) => groundUnder(ground, x, z, top, bottom))
   const banks = doc.air?.mist ?? []
   banks.forEach((m, mi) => { for (let k = 0; k < BANK_BONES; k++) bones.push({ name: `~mist${mi}-${k}`, parent: 0, head: m.at }) })
   for (const p of specks) { p.index = bones.length; bones.push({ name: p.bone, parent: 0, head: p.at }) }
@@ -1174,8 +1282,9 @@ export function compileScene(doc: SceneDoc, { puffs = true }: { puffs?: boolean 
     },
     spec(spacing) {
       const thin = spacing * 0.75
-      const parts: VoxelPart[] = doc.parts.map((p) => {
-        const shape = toShape(p.shape, thin)
+      const shapes = solidShapes(thin).out
+      const parts: VoxelPart[] = doc.parts.map((p, i) => {
+        const shape = shapes[i]
         return {
         shape, color: toPaint(p.paint, spacing, 'letterAt' in shape ? (shape.letterAt as (p: Vec3, n: Vec3) => string | undefined) : undefined, shape.pieceAt), bone: p.bone ?? 'land', glow: p.glow, noShadow: p.noShadow,
         grime: p.grime === undefined ? undefined : unit(p.grime), bare: p.bare,
