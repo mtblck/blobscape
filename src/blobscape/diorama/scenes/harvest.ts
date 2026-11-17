@@ -328,7 +328,7 @@ export const HARVEST: SceneDoc = {
   ],
   lights: [
     { at: [0.35, 1.4, 0.55], color: '#f89030', strength: 1.8, range: 1.4, flicker: { by: 0.2, times: 7 } },
-    { at: [0.95, 0.75, 0.3], color: '#ffc860', strength: 1.6, range: 1.2, flicker: { by: 0.15, times: 9 } },
+    { at: [0.95, 0.75, 0.3], color: '#ffc860', strength: 1.6, range: 1.2, flicker: { by: 0.15, times: 9 }, shadows: true },
     { at: [-0.25, 0.35, 1.25], color: '#f89030', strength: 1.4, range: 0.9, flicker: { by: 0.2, times: 5 } },
     { at: [0.6, 2.2, -1.2], color: '#e8f0c0', strength: 0.9, range: 3.0 },
   ],

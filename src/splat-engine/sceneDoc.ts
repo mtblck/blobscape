@@ -3,7 +3,7 @@ import type { Orbit } from '../splat-core/view.ts'
 import { MAX_PALETTE_SIZE, darkest, type PixelLook, type Rgb } from '../splat-core/pixel.ts'
 import type { PointLight } from './engine.ts'
 import { axisAngle, mulQ, type Bone, type Skeleton } from './rig.ts'
-import { PAINTED, box, cone, cut, cylinder, displace, ellipsoid, roof, sphere, torus, union, type LooseBlob, type Shape, type VoxelPart, type VoxelSpec } from './voxel.ts'
+import { MAX_LAMPS, PAINTED, box, cone, cut, cylinder, displace, ellipsoid, roof, sphere, torus, union, type LooseBlob, type Shape, type VoxelPart, type VoxelSpec } from './voxel.ts'
 
 /**
  * A pixel-art scene written as data: no code, so it can be typed by hand, kept
@@ -184,6 +184,12 @@ export interface LightDoc {
   flicker?: { by: number; times: number }
   /** Goes round a circle of this radius about `at`, `times` per loop. */
   circle?: { r: number; times: number }
+  /**
+   * Casts shadows, worked out once when the scene is built, so they cost nothing as it plays and flicker with it. Only
+   * the first four lights can, and not one that goes round a circle. Give it to a lamp or fire out in the open: a light
+   * set inside something (a jar, a window, a hollow) to stand for its glow would shade everything outside.
+   */
+  shadows?: boolean
 }
 
 // --- Checking
@@ -391,6 +397,7 @@ export function checkScene(doc: unknown): string[] {
         if (!obj(l.flicker)) bad(`${at}.flicker`, 'must be an object')
         else { num(l.flicker.by, `${at}.flicker.by`, 0, 1); whole(l.flicker.times, `${at}.flicker.times`) }
       }
+      if (l.shadows !== undefined && typeof l.shadows !== 'boolean') bad(`${at}.shadows`, 'must be true or false')
       if (l.circle !== undefined) {
         if (!obj(l.circle)) bad(`${at}.circle`, 'must be an object')
         else { num(l.circle.r, `${at}.circle.r`, 0, REACH); whole(l.circle.times, `${at}.circle.times`) }
@@ -712,7 +719,9 @@ export function compileScene(doc: SceneDoc): CompiledScene {
       if (doc.light?.from) light.dir = doc.light.from
       for (const k of ['ambient', 'shadow', 'ramp', 'crevice', 'wear'] as const) if (doc.light?.[k] !== undefined) light[k] = doc.light[k]
       const beams = (doc.air?.shafts ?? []).map((b) => ({ from: b.from, to: b.to, r: b.r, color: unit(b.color), strength: b.strength ?? 0.6 }))
-      return { bones, parts, spacing, light, loose: looseAir(doc.air), beams, disc: doc.disc }
+      // a lamp that stays put casts shadows baked once; byte k of each blob is light k
+      const lamps = lights.slice(0, MAX_LAMPS).map((l) => (!l.shadows || l.circle ? null : { at: l.at, reach: l.range }))
+      return { bones, parts, spacing, light, loose: looseAir(doc.air), beams, lamps, disc: doc.disc }
     },
     empty(built) {
       const seen = new Set<number>()

@@ -299,6 +299,6 @@ export const WINDOW: SceneDoc = {
     { at: [-0.484, 0.616, 0.396], color: '#c8327c', strength: 1.8, range: 1.584 },
     { at: [0.484, 0.616, 0.396], color: '#f89428', strength: 1.8, range: 1.584 },
     { at: [0.0, 1.54, 0.44], color: '#ffc83c', strength: 1.4, range: 1.584 },
-    { at: [-0.273, 0.66, 0.748], color: '#ffc83c', strength: 1.5, range: 0.88, flicker: { by: 0.2, times: 9 } },
+    { at: [-0.273, 0.66, 0.748], color: '#ffc83c', strength: 1.5, range: 0.88, flicker: { by: 0.2, times: 9 }, shadows: true },
   ],
 }

@@ -114,7 +114,26 @@ export interface VoxelSpec {
   /** Blobs placed as they are, after the cut ones: see LooseBlob. */
   loose?: LooseBlob[]
   beams?: Beam[]
+  /**
+   * Lamps whose shadows are baked, in the order of the live lights they stand for (at most four; a gap is a light
+   * that casts none): for each blob, how much of lamp k it can see goes in byte k of `seen`, and the engine's live
+   * light pass scales that light by it, so a lamp's shadows flicker with it and cost nothing a frame.
+   */
+  lamps?: (Lamp | null | undefined)[]
 }
+
+export interface Lamp {
+  at: Vec3
+  /** How far its light reaches: blobs further off are not looked at (their byte stays full). */
+  reach: number
+}
+
+/** How many lamps' shadows a blob carries, one byte each. */
+export const MAX_LAMPS = 4
+/** How far short of a lamp the look toward it stops, so the lamp's own housing doesn't shade everything. */
+const LAMP_CLEAR = 0.15
+/** Cells a side of the blocks that share one look toward a lamp. */
+const LAMP_BLOCK = 2.5
 
 /**
  * The brightest the baked sun makes a surface, as a share of its color. Only
@@ -355,6 +374,7 @@ export function buildVoxels(spec: VoxelSpec): Built {
   const light = { ...DEFAULT_LIGHT, ...spec.light }
   const L = norm(light.dir)
   const skeleton = new Skeleton(spec.bones)
+  let cutCount = 0
   const boneOf = spec.parts.map((p) => skeleton.index(p.bone))
   const casters = spec.parts.filter((p) => !p.glow && !p.noShadow).map((p) => p.shape)
   // far enough to cross the whole scene
@@ -365,6 +385,12 @@ export function buildVoxels(spec: VoxelSpec): Built {
     const axis: Vec3 = [b.to[0] - b.from[0], b.to[1] - b.from[1], b.to[2] - b.from[2]]
     return { ...b, axis, len: Math.hypot(...axis) || 1, dir: norm(axis) }
   })
+  const lamps = (spec.lamps ?? []).slice(0, MAX_LAMPS)
+  // grown as cells are made: four bytes a cell, one per lamp
+  let sight = new Uint8Array(lamps.some(Boolean) ? 4096 * MAX_LAMPS : 0)
+  const lampSeen = new Map<number, number>()
+  // only shapes inside a lamp's reach can come between it and what it lights
+  const lampCasters = lamps.map((l) => l && casters.filter((c) => boxDistance(c, l.at[0], l.at[1], l.at[2]) < l.reach * 2))
   const ramp = light.ramp ?? 0, crevice = light.crevice ?? 0, wear = light.wear ?? 0
   const buried = -Math.max(s, spec.keepBuried ?? 0)
   const blobs = new Blobs(4096)
@@ -413,6 +439,29 @@ export function buildVoxels(spec: VoxelSpec): Built {
         color = bakedColor(base, shade, facing * sun, ramp, wear * edge)
         if (beams.length) color = inBeams(beams, p, n, base, color)
       }
+      if (sight.length) {
+        const at = blobs.count * MAX_LAMPS
+        if (at + MAX_LAMPS > sight.length) { const g = new Uint8Array(sight.length * 2); g.set(sight); sight = g }
+        for (let k = 0; k < MAX_LAMPS; k++) {
+          const l = lamps[k]
+          let v = 255
+          if (l && !part.glow) {
+            const q: Vec3 = [x + n[0] * s, y + n[1] * s, z + n[2] * s]
+            const to: Vec3 = [l.at[0] - q[0], l.at[1] - q[1], l.at[2] - q[2]]
+            const dist = Math.hypot(to[0], to[1], to[2])
+            // past twice its reach the light is gone anyway (see the engine's falloff)
+            if (dist < l.reach * 2 && dist > LAMP_CLEAR) {
+              // shadows from a lamp are soft, so neighbors share one look: cells are taken a few at a time
+              const B = s * LAMP_BLOCK
+              const key = ((k * 2048 + Math.floor(q[0] / B) + 1024) * 2048 + Math.floor(q[1] / B) + 1024) * 2048 + Math.floor(q[2] / B) + 1024
+              let got = lampSeen.get(key)
+              if (got === undefined) { got = Math.round(255 * sunlight(lampCasters[k] ?? casters, q, norm(to), s, dist - LAMP_CLEAR)); lampSeen.set(key, got) }
+              v = got
+            }
+          }
+          sight[at + k] = v
+        }
+      }
       blobs.push({
         // a disc lying on the surface: flat along the normal, which is what live lights read as the way it faces
         center: p, scale: [s * disc, s * disc, s * 0.3], quat: quatFacing(n),
@@ -439,6 +488,7 @@ export function buildVoxels(spec: VoxelSpec): Built {
     }
   })
 
+  cutCount = blobs.count
   // loose blobs come last, each counted as a part of its own after the shapes
   for (const [k, b] of (spec.loose ?? []).entries()) {
     blobs.push({ center: b.center, scale: b.scale, quat: [0, 0, 0, 1], color: b.color, opacity: Math.min(b.opacity, LOOSE_MAX) })
@@ -448,10 +498,15 @@ export function buildVoxels(spec: VoxelSpec): Built {
 
   const skin = emptySkin(blobs.count)
   const partOf = new Uint16Array(blobs.count)
+  let seen: Uint8Array | undefined
+  if (lamps.some(Boolean)) {
+    seen = new Uint8Array(blobs.count * MAX_LAMPS).fill(255)
+    seen.set(sight.subarray(0, Math.min(sight.length, cutCount * MAX_LAMPS)))
+  }
   for (let i = 0; i < blobs.count; i++) {
     partOf[i] = parts[i]
     const pi = parts[i]
     setWeights(skin, i, [[pi < boneOf.length ? boneOf[pi] : looseBone[pi - boneOf.length], 1]])
   }
-  return { blobs, skin, skeleton, partOf }
+  return { blobs, skin, skeleton, partOf, seen }
 }

@@ -23,10 +23,13 @@ export function blobNormal(cov: ArrayLike<number>): [number, number, number] {
   return [v[0] / l, v[1] / l, v[2] / l]
 }
 
-/** How much light (linear, per channel) reaches a point with normal n: ambient plus each light by distance and facing. */
-export function lightAt(p: ArrayLike<number>, n: ArrayLike<number>, lights: PointLight[], ambient: number): [number, number, number] {
+/**
+ * How much light (linear, per channel) reaches a point with normal n: ambient plus each light by distance and facing,
+ * and each of the first four by `seen` (0–255, how much of it the point can see), as the engine reads an actor's `seen`.
+ */
+export function lightAt(p: ArrayLike<number>, n: ArrayLike<number>, lights: PointLight[], ambient: number, seen?: ArrayLike<number>): [number, number, number] {
   const sum: [number, number, number] = [ambient, ambient, ambient]
-  for (const L of lights) {
+  for (const [j, L] of lights.entries()) {
     const to = [L.position[0] - p[0], L.position[1] - p[1], L.position[2] - p[2]]
     const d2 = to[0] * to[0] + to[1] * to[1] + to[2] * to[2]
     const r2 = Math.max(1e-3, L.range) ** 2
@@ -34,7 +37,8 @@ export function lightAt(p: ArrayLike<number>, n: ArrayLike<number>, lights: Poin
     const fall = (fade * fade) / (1 + d2 / r2)
     const inv = 1 / Math.sqrt(Math.max(d2, 1e-6))
     const facing = Math.abs((n[0] * to[0] + n[1] * to[1] + n[2] * to[2]) * inv) * 0.65 + 0.35
-    for (let k = 0; k < 3; k++) sum[k] += L.color[k] * fall * facing
+    const sees = seen && j < 4 ? seen[j] / 255 : 1
+    for (let k = 0; k < 3; k++) sum[k] += L.color[k] * fall * facing * sees
   }
   return sum
 }

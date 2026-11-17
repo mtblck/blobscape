@@ -296,7 +296,7 @@ export const SPIDER: SceneDoc = {
     { kind: 'spin', bone: 'leaf13', axis: 'x', times: 4, phase: 0.32 },
   ],
   lights: [
-    { at: [0, 1.3, 0.75], color: '#ffb030', strength: 2.0, range: 2.2, flicker: { by: 0.12, times: 7 } },
+    { at: [0, 1.3, 0.75], color: '#ffb030', strength: 2.0, range: 2.2, flicker: { by: 0.12, times: 7 }, shadows: true },
     { at: [0, 1.4, -0.3], color: '#ffb030', strength: 1.6, range: 2.0 },
     { at: [-0.62, 2.45, 0.3], color: '#38a890', strength: 1.5, range: 1.3 },
     { at: [0.78, 2.3, 0.3], color: '#38a890', strength: 1.5, range: 1.3 },

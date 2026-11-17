@@ -131,3 +131,28 @@ test('crevice darkens a corner and leaves an open face alone; a beam lights the 
   assert.ok(at(lit, 0, 0, 0.4) > at(off, 0, 0, 0.4) + 0.05)
   assert.ok(Math.abs(at(lit, 0, 0, -0.2) - at(off, 0, 0, -0.2)) < 1e-6)
 })
+
+test('a lamp\'s shadow is baked per blob: the floor behind a wall can\'t see it, the open floor can', () => {
+  const b = buildVoxels({
+    bones: [ROOT], spacing: 0.04,
+    parts: [{ shape: box([0, -0.1, 0], [1, 0.1, 1]), color: [0.5, 0.5, 0.5], bone: 'root' }, { shape: box([0, 0.3, 0], [0.6, 0.3, 0.05]), color: [0.5, 0.5, 0.5], bone: 'root' }],
+    lamps: [null, { at: [0, 0.5, 0.6], reach: 1.5 }],
+  })
+  assert.ok(b.seen && b.seen.length === b.blobs.count * 4)
+  const near = (x: number, z: number) => {
+    let best = -1, d = Infinity
+    for (let i = 0; i < b.blobs.count; i++) {
+      const e = Math.hypot(b.blobs.center[i * 3] - x, b.blobs.center[i * 3 + 1], b.blobs.center[i * 3 + 2] - z)
+      if (e < d) { d = e; best = i }
+    }
+    return best
+  }
+  const behind = near(0, -0.3), open = near(0, 0.6)
+  assert.ok(b.seen[behind * 4 + 1] < 40, `behind ${b.seen[behind * 4 + 1]}`)
+  assert.ok(b.seen[open * 4 + 1] > 200, `open ${b.seen[open * 4 + 1]}`)
+  // a gap in the list casts nothing, and the bytes past the lamps stay full
+  assert.equal(b.seen[behind * 4], 255)
+  assert.equal(b.seen[behind * 4 + 3], 255)
+  // without lamps nothing is baked
+  assert.equal(buildVoxels({ bones: [ROOT], spacing: 0.05, parts: [{ shape: sphere([0, 0, 0], 0.3), color: [1, 1, 1], bone: 'root' }] }).seen, undefined)
+})

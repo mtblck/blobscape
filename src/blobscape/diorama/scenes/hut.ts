@@ -314,7 +314,7 @@ export const HUT: SceneDoc = {
     { kind: 'bob', bone: 'fly35', by: [0, 0.15, 0], times: 4, phase: 0.492 },
   ],
   lights: [
-    { at: [-0.8, 1.42, 0.55], color: '#ffb840', strength: 1.8, range: 1.6, flicker: { by: 0.15, times: 7 } },
+    { at: [-0.8, 1.42, 0.55], color: '#ffb840', strength: 1.8, range: 1.6, flicker: { by: 0.15, times: 7 }, shadows: true },
     { at: [0.1, 1.4, 0.5], color: '#ffb840', strength: 1.4, range: 1.4 },
     { at: [0.75, 1.4, -0.34], color: '#ffb840', strength: 1.2, range: 1.2 },
   ],
