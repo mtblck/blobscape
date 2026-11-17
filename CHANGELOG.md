@@ -6,6 +6,9 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-17
+
+- The engine is a package: `@blobscape/engine`, for three.js, goes to npm with this release (`npm install @blobscape/engine three`). Version 0.x: the API will change between minor versions.
 - New page, the engine's API reference (/engine/api/): every name the @blobscape/engine package exports, with its declaration and what it does, and a box to find a name. The engine page's "Use the code" door now leads to it and the Build with the engine lessons.
 - New lesson, Pixel art that holds still: the cottage drawn small in a few colors. Make it a small picture, cut it to four colors, and stop its pixels flickering with the lantern (steady pixels, and held poses for a swinging view); it ends with the code for your look.
 - New lesson, A scene written as data: a cottage at dusk as a page of JSON you edit, with the engine's checker saying what is wrong and where. Make the tree sway, find the rule every move keeps so the scene loops, and light the lantern; it ends with the code that plays your description.
@@ -55,5 +58,6 @@ Our own renderer for animated splats, built on three.js with WebGPU and a WebGL 
 
 Some pixel-scene ideas come from Silicon Jungle's play kits (ideas, not code). The code is MIT licensed.
 
-[Unreleased]: https://github.com/mtblck/blobscape/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/mtblck/blobscape/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/mtblck/blobscape/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/mtblck/blobscape/releases/tag/v0.1.0
