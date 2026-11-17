@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from 'react'
 import { LoadingMark } from '../shared/BlobLoader.tsx'
-import { Button, Chip, Field } from '../shared/ui.tsx'
+import { Button, Chip, Field, Toggle } from '../shared/ui.tsx'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
 import { TAB_SECTIONS, Workbench } from '../shared/Workbench.tsx'
 import { href } from './routes.ts'
@@ -49,6 +49,7 @@ export function DungeonRun() {
   const [detail, setDetail] = useState<number>()
   const [view, setView] = useState<CameraView>('close')
   const [light, setLight] = useState<'live' | 'baked'>()
+  const [shadows, setShadows] = useState(true)
   const [difficulty, setDifficulty] = useState<Difficulty>('normal')
   const [paused, setPaused] = useState(false)
   const [hud, setHud] = useState<Hud>(START)
@@ -100,6 +101,7 @@ export function DungeonRun() {
     const t = setTimeout(() => {
       stage.setDungeon({ detail, look, difficulty, light })
       stage.dungeon!.flicker = !calm
+      stage.dungeon!.shadows = shadows
       setHud((h) => ({ ...h, blobs: stage.blobCount }))
       setBusy(undefined)
     }, 30)
@@ -107,6 +109,7 @@ export function DungeonRun() {
   }, [stage, detail, look, light]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (stage?.dungeon) stage.dungeon.game.difficulty = difficulty }, [stage, difficulty, busy])
   useEffect(() => { if (stage) stage.view = view }, [stage, view])
+  useEffect(() => { if (stage?.dungeon) stage.dungeon.shadows = shadows }, [stage, shadows, busy])
   useEffect(() => { if (stage) stage.paused = paused }, [stage, paused])
 
   // --- input: keys, the thumb stick and the two buttons all feed one input
@@ -341,6 +344,9 @@ export function DungeonRun() {
                   <div className="flex flex-wrap gap-1.5">
                     {LIGHTS.map((l) => <Chip key={l.id} active={light === l.id} onClick={() => setLight(l.id)}>{l.label}</Chip>)}
                   </div>
+                  <div className="mt-2">
+                    <Toggle label="Shadows" checked={shadows} disabled={light !== 'live'} onChange={setShadows} />
+                  </div>
                 </Field>
                 <Field label="Detail">
                   <div className="flex flex-wrap gap-1.5">
@@ -393,7 +399,10 @@ export function DungeonRun() {
             their flames, the orb in the hero's hand (dimmer as the magic runs down), each bolt as it flies, the flames on the
             floor, and a flash of color as a slime bursts. A blob is a flat disc, so it knows which way it lies: its thinnest axis. Light is strongest where a
             disc turns square to it and falls away with distance. A disc doesn't know which face is its outside, so both faces
-            catch the light, which is right for floors and walls and a little soft on round things. Bones are the subject of the <a href={href({ page: 'lesson', id: 'one-bone' })} className="underline decoration-rule underline-offset-2 hover:text-accent">rigs lessons</a>,
+            catch the light, which is right for floors and walls and a little soft on round things. With Shadows on, each frame the engine
+            also drops every blob into a coarse grid of how much it blocks, and each lit blob looks along the way to each
+            light through that grid: a pillar shades the floor behind it from a torch, and the hero shades the floor from the
+            orb in their hand. A cell is a few blobs wide, so the edges are soft. Bones are the subject of the <a href={href({ page: 'lesson', id: 'one-bone' })} className="underline decoration-rule underline-offset-2 hover:text-accent">rigs lessons</a>,
             and the slimes' colors come from blobs adding up, which is <a href={href({ page: 'lesson', id: 'order' })} className="underline decoration-rule underline-offset-2 hover:text-accent">Order matters</a>.
           </p>
         </div>
