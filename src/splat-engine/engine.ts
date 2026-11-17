@@ -776,6 +776,9 @@ export class SplatWorld extends Mesh {
   }
 
   /** Reads back the GPU sort and checks it: every blob drawn once, farthest first. */
+  /** Which depth sort this world was built with. */
+  get sortKind(): 'bins' | 'radix' { return this.sort instanceof RadixSort ? 'radix' : 'bins' }
+
   async checkSort(renderer: Renderer) {
     const r = renderer as unknown as { getArrayBufferAsync: (a: StorageBufferAttribute) => Promise<ArrayBuffer> }
     const order = new Uint32Array(await r.getArrayBufferAsync(this.sort.orderAttr))

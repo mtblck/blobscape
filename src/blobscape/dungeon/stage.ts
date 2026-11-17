@@ -105,12 +105,12 @@ export class DungeonStage {
   }
 
   /** Builds the dungeon's blobs (for a change of detail or look), keeping the game as it stands. */
-  setDungeon(opts: DungeonOptions) {
+  setDungeon(opts: DungeonOptions, sort: 'bins' | 'radix' = 'bins') {
     const d = new Dungeon(opts, this.dungeon?.game)
     if (this.world) { this.scene.remove(this.world); this.world.dispose() }
     this.dungeon = d
     d.takeRepaint()
-    this.world = new SplatWorld(d.actors, { bins: 32768, lights: opts.light === 'live' })
+    this.world = new SplatWorld(d.actors, { bins: 32768, lights: opts.light === 'live', sort })
     this.light()
     this.scene.add(this.world)
     const lin = [(GLOOM >> 16) & 255, (GLOOM >> 8) & 255, GLOOM & 255].map((c) => srgbToLinear(c / 255)) as [number, number, number]

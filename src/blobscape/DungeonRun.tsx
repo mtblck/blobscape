@@ -50,6 +50,7 @@ export function DungeonRun() {
   const [view, setView] = useState<CameraView>('close')
   const [light, setLight] = useState<'live' | 'baked'>()
   const [shadows, setShadows] = useState(true)
+  const [exact, setExact] = useState(() => typeof location !== 'undefined' && new URLSearchParams(location.search).get('sort') === 'radix')
   const [difficulty, setDifficulty] = useState<Difficulty>('normal')
   const [paused, setPaused] = useState(false)
   const [hud, setHud] = useState<Hud>(START)
@@ -99,14 +100,14 @@ export function DungeonRun() {
     if (!stage || detail === undefined || !light) return
     setBusy('Lighting the torches…')
     const t = setTimeout(() => {
-      stage.setDungeon({ detail, look, difficulty, light })
+      stage.setDungeon({ detail, look, difficulty, light }, exact ? 'radix' : 'bins')
       stage.dungeon!.flicker = !calm
       stage.dungeon!.shadows = shadows
       setHud((h) => ({ ...h, blobs: stage.blobCount }))
       setBusy(undefined)
     }, 30)
     return () => clearTimeout(t)
-  }, [stage, detail, look, light]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [stage, detail, look, light, exact]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (stage?.dungeon) stage.dungeon.game.difficulty = difficulty }, [stage, difficulty, busy])
   useEffect(() => { if (stage) stage.view = view }, [stage, view])
   useEffect(() => { if (stage?.dungeon) stage.dungeon.shadows = shadows }, [stage, shadows, busy])
@@ -354,6 +355,10 @@ export function DungeonRun() {
                   </div>
                 </Field>
                 <p className="text-xs text-ink-faint">Lighter detail runs smoother on older phones.</p>
+                <div>
+                  <Toggle label="Exact sort (slower)" checked={exact} onChange={setExact} />
+                  <p className="mt-1 text-xs text-ink-faint">Draws blobs at the same depth in one fixed order. It costs about 10 ms a frame on a phone at 500,000 blobs.</p>
+                </div>
               </div>
             ),
           },

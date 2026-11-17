@@ -107,6 +107,7 @@ export class CreatureStage {
   private readonly ray = new THREE.Raycaster()
   /** The bone lit up, if any: its blobs tinted on the GPU only (the creature's own colors stay as they were, for files and sheets). */
   private highlighted?: number
+  private sort: 'bins' | 'radix' = 'bins'
 
   private constructor(private readonly display: HTMLCanvasElement, private readonly opts: StageOptions, renderer: THREE.WebGPURenderer) {
     this.renderer = renderer
@@ -167,16 +168,37 @@ export class CreatureStage {
     this.heldW = new Float32Array(m)
     this.actor = actor
     this.highlighted = undefined
-    this.world = new SplatWorld([actor], { mode: this.mode, lights: this.opts.lights })
-    if (this.opts.lights) this.world.setLights(this.lit.lights, this.lit.ambient)
-    this.world.setFog(...this.fog)
-    this.scene.add(this.world)
+    this.build(actor)
     this.rig = new BoneView(actor.skeleton)
     this.scene.add(this.rig)
     this.setShow(this.show)
     // a new actor plays its clip; a caller that poses from the time sets its poser again after
     this.poser = undefined
     this.setClip(clip)
+  }
+
+  private build(actor: Actor) {
+    this.world = new SplatWorld([actor], { mode: this.mode, lights: this.opts.lights, sort: this.sort })
+    if (this.opts.lights) this.world.setLights(this.lit.lights, this.lit.ambient)
+    this.world.setFog(...this.fog)
+    this.scene.add(this.world)
+  }
+
+  /** Which depth sort the world uses: the counting sort, or the exact radix sort (slower; ties always in one order). */
+  get sortKind() { return this.sort }
+  setSort(kind: 'bins' | 'radix') {
+    if (kind === this.sort) return
+    this.sort = kind
+    if (!this.actor || !this.world || this.baking) return
+    this.pixel?.reset()
+    this.scene.remove(this.world)
+    this.world.dispose()
+    this.highlighted = undefined
+    this.morphShown.fill(NaN)
+    this.build(this.actor)
+    this.setShow(this.show)
+    this.posedAt = NaN
+    this.pose()
   }
 
   setClip(clip?: Clip) {
