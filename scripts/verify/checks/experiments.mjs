@@ -389,7 +389,7 @@ export default [
   },
   {
     name: 'diorama-picker',
-    about: "Pixel Diorama: details dialog, How it's made, picking a scene swaps the palette on arrival, the gallery of loops",
+    about: "Pixel Diorama: details dialog, How it's made, picking a scene swaps the palette on arrival, the gallery of loops, opening a description",
     entries: ['src/blobscape/PixelDiorama.tsx'],
     files: ['public/loops/'],
     async run({ shots, join, fails, ok, open, axe }) {
@@ -471,6 +471,22 @@ export default [
       const picked = await d.page.waitForFunction(() => location.search.includes('scene=snail') && scrollY < 50 && document.activeElement?.dataset.testid === 'diorama-view', null, { timeout: 20000 }).then(() => true, () => false)
       if (loops < 18 || !picked) fails.push(`blobscape pixel diorama gallery: ${loops} loops loaded, picking a tile ${picked ? 'worked' : 'did not open the scene above'}`)
       else ok(`blobscape pixel diorama: the gallery's ${loops} loops load, and a tile opens its scene in the view`)
+      // a scene description opened from a file is drawn as one more scene, and a broken one says where it is broken
+      {
+        const { BEE } = await import('../../../src/blobscape/diorama/scenes/bee.ts')
+        const input = d.page.getByTestId('diorama-model'), note = d.page.getByTestId('diorama-model-note')
+        const said = (re) => d.page.waitForFunction((src) => new RegExp(src).test(document.querySelector('[data-testid=diorama-model-note]')?.textContent ?? ''), re.source, { timeout: 30000 }).then(() => note.innerText(), () => note.innerText())
+        await d.page.evaluate(() => scrollTo(0, 0))
+        await input.setInputFiles({ name: 'broken.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ ...BEE, loop: 'long', parts: [{ ...BEE.parts[0], shape: { kind: 'cloud' } }, ...BEE.parts.slice(1)] })) })
+        const refused = await said(/^Could not open broken\.json/)
+        const still = await d.page.evaluate(() => location.search.includes('scene=snail'))
+        await input.setInputFiles({ name: 'bee.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ ...BEE, name: 'Opened bee' })) })
+        const opened = await said(/^Opened bee\.json/)
+        const drawn = await d.page.waitForFunction(() => document.querySelector('[data-testid=diorama-view]')?.getAttribute('aria-label')?.startsWith('Opened bee') && window.__diorama?.blobs() > 5000, null, { timeout: 120000 }).then(() => true, () => false)
+        const chip = await d.page.getByRole('button', { name: 'Opened bee', exact: true }).count()
+        if (!(/loop: /.test(refused) && /parts\[0\]/.test(refused) && still && /224 parts/.test(opened) && drawn && chip === 1)) fails.push(`blobscape pixel diorama open a description: ${JSON.stringify({ refused, still, opened, drawn, chip })}`)
+        else ok('blobscape pixel diorama: a broken description is turned away with where it is broken, and a sound one opens as one more scene')
+      }
       await d.ctx.close()
     },
   },

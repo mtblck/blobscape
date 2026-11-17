@@ -12,9 +12,6 @@ import { checkScene } from '../../splat-engine/sceneDoc.ts'
 import { MAX_PALETTE_SIZE } from '../../splat-core/pixel.ts'
 import { MAX_MUD, MIN_VALUE_RANGE, loopSnaps, partClashes, valuesOf } from '../../splat-engine/sceneChecks.ts'
 
-/** Parts that meet by design, by scene: [the part that moves, the part it meets]. The octopus's buoy rides up and down in its ring of foam. */
-const MEET: Record<string, [number, number][]> = { octopus: [[11, 77]] }
-
 test('the described scenes are sound, and are data alone', () => {
   for (const doc of [BEE, CAMPFIRE, DRAGON, HAND, REEF, WINDMILL]) {
     assert.deepEqual(checkScene(doc), [], doc.name)
@@ -41,7 +38,7 @@ test('every scene builds at every detail with all of its parts, reads in graysca
     assert.deepEqual(loopSnaps(sk, d.pose, d.loop), [], `${d.id}: snaps`)
     // and no part turns or swings through another (the lighthouse is cut on a finer grid)
     const clashes = partClashes(built, d.pose, d.loop, DETAIL[0].spacing * (d.id === 'lighthouse' ? FINER : 1))
-      .filter((c) => !(MEET[d.id] ?? []).some(([a, b]) => (a === c.part && b === c.into) || (a === c.into && b === c.part)))
+      .filter((c) => !d.touching?.includes(c.part) && !d.touching?.includes(c.into))
     assert.deepEqual(clashes, [], `${d.id}: parts pass through each other`)
     const [l0, l1] = [d.lights(0.9), d.lights(0.9 + d.loop)]
     assert.ok(l0.every((l, i) => [...l.position, ...l.color].every((x, j) => Math.abs(x - [...l1[i].position, ...l1[i].color][j]) < 1e-6)), `${d.id}: lights loop`)

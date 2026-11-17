@@ -14,7 +14,7 @@ import { download } from './files.ts'
 import type { CreatureStage } from './creature/stage.ts'
 import { TAB_SECTIONS, Workbench } from '../shared/Workbench.tsx'
 import { DETAIL, PALETTES } from './diorama/scene.ts'
-import { DIORAMAS, type Diorama } from './diorama/scenes.ts'
+import { DIORAMAS, described, type Diorama } from './diorama/scenes.ts'
 import { SceneDetails, kilobytes, type SceneFacts } from './diorama/SceneDetails.tsx'
 import type { Skeleton } from '../splat-engine/rig.ts'
 import { Pokes } from '../splat-engine/poke.ts'
@@ -354,9 +354,35 @@ export function PixelDiorama() {
     else url.searchParams.set('scene', id)
     history.replaceState(history.state, '', url)
   }
+  /** A scene description (.json) as a scene of its own. What is wrong with it is listed instead when it can't be cut. */
+  const openDescription = async (f: File) => {
+    setOpening(true)
+    setModelNote(`Reading ${f.name}…`)
+    try {
+      const { readScene, MOST_BYTES } = await import('./diorama/review.ts')
+      const read = f.size > MOST_BYTES ? { doc: undefined, problems: [`file: over ${MOST_BYTES / 1000} KB, which no scene needs`] } : readScene(await f.text())
+      if (!read.doc) {
+        const shown = read.problems.slice(0, 6)
+        setModelNote(`Could not open ${f.name}. ${shown.join('; ')}${read.problems.length > shown.length ? `; and ${read.problems.length - shown.length} more` : ''}.`)
+        return
+      }
+      const d = described('model', read.doc, `${read.doc.name}, a scene opened from a file`)
+      setModel(d)
+      setWhich('model')
+      const url = new URL(location.href)
+      url.searchParams.delete('scene')
+      history.replaceState(history.state, '', url)
+      setModelNote(`Opened ${f.name}: ${read.doc.parts.length.toLocaleString('en-US')} parts.`)
+    } catch (e) {
+      setModelNote(`Could not open ${f.name}: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setOpening(false)
+    }
+  }
   /** A model file (.obj, with its .mtl if picked too, or .glb) as a scene of its own, turning on a plinth. */
   const openModel = async (files: File[]) => {
-    const f = files.find((x) => /\.(obj|glb)$/i.test(x.name)) ?? files[0]
+    const f = files.find((x) => /\.(obj|glb|json)$/i.test(x.name)) ?? files[0]
+    if (/\.json$/i.test(f.name)) return openDescription(f)
     const mtl = files.find((x) => /\.mtl$/i.test(x.name))
     setOpening(true)
     setModelNote(`Reading ${f.name}…`)
@@ -468,11 +494,11 @@ export function PixelDiorama() {
                 </Field>
                 <div className="grid gap-2">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <Button small disabled={opening} onClick={() => modelInput.current?.click()}>{opening ? 'Opening…' : 'Open a model'}</Button>
-                    <input ref={modelInput} type="file" accept=".obj,.mtl,.glb" multiple className="sr-only" tabIndex={-1} aria-hidden="true" data-testid="diorama-model"
+                    <Button small disabled={opening} onClick={() => modelInput.current?.click()}>{opening ? 'Opening…' : 'Open a file'}</Button>
+                    <input ref={modelInput} type="file" accept=".obj,.mtl,.glb,.json" multiple className="sr-only" tabIndex={-1} aria-hidden="true" data-testid="diorama-model"
                       onChange={(e) => { const fs = [...(e.target.files ?? [])]; e.target.value = ''; if (fs.length) void openModel(fs) }} />
                   </div>
-                  <p className="text-xs text-ink-faint">A closed .glb, or an .obj (pick its .mtl with it for colors), cut into blobs on a turning plinth, in a palette from its own colors. It stays on this computer.</p>
+                  <p className="text-xs text-ink-faint">A closed .glb, or an .obj (pick its .mtl with it for colors), cut into blobs on a turning plinth, in a palette from its own colors. Or a scene description (.json), drawn as it is written. It stays on this computer.</p>
                   <p role="status" className="text-xs text-ink-faint empty:hidden" data-testid="diorama-model-note">{modelNote}</p>
                 </div>
                 <Field label="View">

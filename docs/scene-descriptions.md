@@ -16,11 +16,11 @@ The point is that Claude can write one from a sentence. A scene that is data can
 | `palette` | 2 to 32 colors, `'#rrggbb'`. The picture uses only these. |
 | `sky` | Top and bottom colors of the backdrop. `skyReach` (0.05 to 1) is how far down the picture the blend runs before it is all the bottom color. |
 | `light` | The baked sun: where it is, how much light reaches everywhere, how dark shadows are, and three painted touches that are on unless set to 0: `ramp` (shade turns cool violet, full sun warm yellow), `crevice` (corners and cracks darken) and `wear` (sharp edges lighten). `bounce` (off unless set, 0 to 1) lets surfaces throw their color onto what faces them, so a red wall warms the floor beside it and green water tints a bank; it costs build time, so set it where a strong color stands next to a pale one. |
-| `look` | Dither, glow, outline, edge lines. |
+| `look` | Dither, glow, outline, edge lines. `steps: true` paints the scene in steps of its palette as it is cut: each cell's lit color moves to the nearest step of the ramp its own paint runs through from shade to sun, in small patches, so shade falls in flat bands that hold still instead of a smooth blend snapped later. It suits scenes with a ramp of three or more steps for each hue (the windmill uses it); with fewer, leave it off. |
 | `disc` | How wide each surface blob is, as a share of the grid (0.4 to 1, 0.55 when left out). Raise it to 0.75 when the far side of a subject shows through its near side, as on the lava dragon's head; paint gets a little softer. |
 | `camera` | Where the view starts, and optionally a `swing`: degrees (0 to 60) it rocks to either side, once a loop, as the scene plays. |
 | `bones` | Things that move, each with the point it turns about. Parts with no bone stand still. |
-| `parts` | A shape, a paint, and optionally a bone, `glow`, `noShadow`, `grime` (a color that gathers in its corners and cracks, as moss or soot), `bare` (takes none of the scene's `cover`: a sleeping fox, water, a fresh fire), or `ink` (little drawn marks: `{ kind, amount, color }`, kind `hatch`, `stipple`, `cracks`, `grain`, `tufts` or `scales`; about `amount` of the 4-by-4 blocks of pixels get one mark, picked and turned at random so a big wall never repeats; the ink is a darker step of the paint unless `color` says otherwise). Ink shows best on a plain or gently patched paint: on busy patches it gets lost.Water, ice or glass takes `glass: { see, mirror, top }`: it shows what lies behind it (`see`, 0.6), darkening toward the bottom where nothing is met, and mirrors what stands over it and the sky (`mirror`, 0.3, stronger at a glancing look). It is painted for the scene's own camera, so keep the camera's swing small. `top: true` keeps it to upturned faces, for a pond cut as one slab with earth sides. `strokes` (0 to 1) draws each cell as a brush stroke along the level line round the shape, as on a trunk or a pot; it shows in Blobs and barely in pixel art. |
+| `parts` | A shape, a paint, and optionally a bone, `glow`, `noShadow`, `grime` (a color that gathers in its corners and cracks, as moss or soot), `bare` (takes none of the scene's `cover`: a sleeping fox, water, a fresh fire), `touches` (it meets another part by design as it moves, like foam round a bobbing buoy, so the check for parts passing through each other lets it), or `ink` (little drawn marks: `{ kind, amount, color }`, kind `hatch`, `stipple`, `cracks`, `grain`, `tufts` or `scales`; about `amount` of the 4-by-4 blocks of pixels get one mark, picked and turned at random so a big wall never repeats; the ink is a darker step of the paint unless `color` says otherwise). Ink shows best on a plain or gently patched paint: on busy patches it gets lost.Water, ice or glass takes `glass: { see, mirror, top }`: it shows what lies behind it (`see`, 0.6), darkening toward the bottom where nothing is met, and mirrors what stands over it and the sky (`mirror`, 0.3, stronger at a glancing look). It is painted for the scene's own camera, so keep the camera's swing small. `top: true` keeps it to upturned faces, for a pond cut as one slab with earth sides. `strokes` (0 to 1) draws each cell as a brush stroke along the level line round the shape, as on a trunk or a pot; it shows in Blobs and barely in pixel art. |
 | `moves` | spin, sway, bob, drift, pulse, sprout (grows from nothing, stands, shrinks away). Each names a bone and a whole number of `times` per loop; a bone takes up to six. |
 | `lights` | Up to four live lights, which can flicker or go round a circle. A light that stays put can set `shadows: true`: what stands between it and a surface then hides that surface from it (baked once, so it holds as the light flickers). Only for a lamp out in the open; one inside a ring of stones or a hand just darkens the scene. |
 | `air` | What hangs in the air: `haze` (far things fade toward a color), `mist` (low banks that drift), `shafts` (beams of light that light what they land on) and `specks` (swarms of `dust`, `embers`, `rain`, `snow`, `leaves`, `fireflies` or `bubbles`, each speck moving on its own; rain, snow and leaves can `land` on whatever stands still under them and lie a while before falling again, blown sideways by `wind`, [x, z] over a whole fall). |
@@ -97,7 +97,7 @@ Paints: a color, or `bands`, `bricks`, `hex` (honeycomb, scales, paving), `speck
 8. **A cone has round ends.** It reaches `r` past both ends. For a flat-bottomed cone (a pine tier, a spire) use a `cylinder` with a small `rTop`.
 9. **Thin is fine.** Anything thinner than the grid is fattened to one cell, so a rope or a star still shows at every detail level.
 10. **Detail comes from parts and paint.** Sixty to ninety parts make a full scene, and a showpiece can take about 150. Give big surfaces a paint with texture (`patches` on grass, `bricks` on walls, `bands` on planks and tiles), and scatter small things: stones, flowers, mushrooms.
-11. **Tests read the values and the loop.** Every scene must still read in grayscale (its darkest and lightest blobs well apart, little colorless mid-gray) and nothing seen may snap from one place to another, at the loop's seam or anywhere. A `drift` passes because it shrinks away before it starts again; a hand-made particle that wraps while full size fails.
+11. **Tests read the values and the loop.** Every scene must still read in grayscale (its darkest and lightest blobs well apart, little colorless mid-gray) and nothing seen may snap from one place to another, at the loop's seam or anywhere. A `drift` passes because it shrinks away before it starts again; a hand-made particle that wraps while full size fails. And no part may pass through another as the scene plays: sails must clear their tower and a tail its wall. A part that turns needs room for its whole sweep, not only where it starts.
 12. **Visitors can poke it.** A tap leans a part on its own bone away from the finger and lets it wobble back (with everything hung on that bone); a tap on the land throws a few sparkles in the palette's lightest color. So give the things people will want to poke, like trees, creatures and lamps, bones of their own.
 
 ## Getting the look of a showpiece
@@ -128,6 +128,23 @@ Then:
 3. Look, then ask for changes in words: "the hut is too small", "more snow", "warmer palette". Small changes are small edits.
 
 Asking for several different takes at once and picking the best works better than polishing the first.
+
+## Checking and drawing one without the site
+
+`npm run scene` looks a description over from the command line, which is what an assistant writing one needs: an answer in a second or two, in lines it can act on.
+
+```sh
+npm run scene -- my-scene.json                  # check it, cut it, say what is wrong
+npm run scene -- my-scene.json --shots shots/   # then draw it as pixel art (after `npm run build`)
+npm run scene -- --example campfire             # one of the site's scenes as JSON, to start from
+npm run scene -- --list                         # the site's scenes
+```
+
+Each `fix` line is `where: what`: a mistake in the description, a part that caught no blobs, a palette that reads as one tone, a move that snaps, or a part that passes through another (`parts[40] (box on bone 'sails'): passes through parts[3] (cylinder) at 3.00 s`). It ends with status 1 while anything must be fixed. `--shots` writes four pictures (front, above, close up, and the front again later in the loop). The checks are `reviewScene` in `src/blobscape/diorama/review.ts`, the same ones the site's own scenes pass in `scenes.test.ts`.
+
+The same file opens on Pixel Diorama itself (Scene tab, Open a file), where it plays and How it's made steps through how it was cut. It stays in the page.
+
+For Claude Code there is a skill with the whole loop, `.claude/skills/pixel-scene/SKILL.md`: plan, write, check, look, fix.
 
 ## What it can't do yet
 

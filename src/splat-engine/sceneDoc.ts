@@ -166,6 +166,8 @@ export interface PartDoc {
   grime?: string
   /** Takes none of the scene's `cover`: water, glass, a fresh fire. */
   bare?: boolean
+  /** Meets other parts by design as it moves (foam round a bobbing buoy): the check for parts passing through each other lets it. */
+  touches?: boolean
   /**
    * Little drawn marks over it, one in some 4-by-4 blocks of pixels, never repeating: `hatch`, `stipple`, `cracks`,
    * `grain` (wood), `tufts` (grass) or `scales`. `amount` (0.5) is the share of blocks marked; `color` the ink, a
@@ -805,7 +807,7 @@ export function checkScene(doc: unknown): string[] {
     }
     if (piecesIn(p.paint) && !hasPieces(p.shape)) bad(`${at}.paint`, `pieces paints a shape made of pieces only (${PIECED.join(', ')})`)
     if (p.bone !== undefined) bone(p.bone, `${at}.bone`)
-    for (const k of ['glow', 'noShadow', 'bare']) if (p[k] !== undefined && typeof p[k] !== 'boolean') bad(`${at}.${k}`, 'must be true or false')
+    for (const k of ['glow', 'noShadow', 'bare', 'touches']) if (p[k] !== undefined && typeof p[k] !== 'boolean') bad(`${at}.${k}`, 'must be true or false')
     if (p.grime !== undefined) hex(p.grime, `${at}.grime`)
     opt(p.strokes, `${at}.strokes`, 0, 1)
     if (p.glass !== undefined) {
@@ -1102,6 +1104,8 @@ export interface CompiledScene {
   bones: Bone[]
   /** Whether the scene asks to be painted in steps of its palette (`look.steps`). */
   steps: boolean
+  /** The parts (by their place in the list) marked `touches`: they meet others by design. */
+  touching: number[]
   /** The shapes on a grid of `spacing`. With `steps` (a palette, 0–255), the scene is painted in steps of it as it is cut. */
   spec(spacing: number, steps?: Rgb[]): VoxelSpec
   /** The parts (by their place in the list) that came out with no blobs at all, such as a shape whose hole swallows it: `checkScene` can't see those. */
@@ -1328,6 +1332,7 @@ export function compileScene(doc: SceneDoc, { puffs = true }: { puffs?: boolean 
       sky: doc.sky ? [rgb(doc.sky[0]), rgb(doc.sky[1]), doc.skyReach ?? 1] : undefined,
     },
     steps: doc.look?.steps ?? false,
+    touching: doc.parts.map((p, i) => (p.touches ? i : -1)).filter((i) => i >= 0),
     spec(spacing, steps) {
       const thin = spacing * 0.75
       const shapes = solidShapes(thin).out

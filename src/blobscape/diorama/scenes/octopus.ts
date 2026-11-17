@@ -162,7 +162,7 @@ export const OCTOPUS: SceneDoc = {
     { shape: { kind: 'cone', from: [0.776, 2.54, 0.158], to: [0.776, 2.74, 0.158], r: 0.012 }, paint: '#3a4048', bone: 'lantern', noShadow: true },
     { shape: { kind: 'cone', from: [0.696, 2.54, 0.078], to: [0.696, 2.74, 0.078], r: 0.012 }, paint: '#3a4048', bone: 'lantern', noShadow: true },
     { shape: { kind: 'cone', from: [0.776, 2.54, -0.002], to: [0.776, 2.74, -0.002], r: 0.012 }, paint: '#3a4048', bone: 'lantern', noShadow: true },
-    { shape: { kind: 'ring', at: [0, 0.0, 0], r: 0.74, tube: 0.04 }, paint: { kind: 'bands', axis: 'x', size: 0.1, colors: ['#d8ecec', '#7fb4b8'] }, bone: 'foam', noShadow: true },
+    { shape: { kind: 'ring', at: [0, 0.0, 0], r: 0.74, tube: 0.04 }, paint: { kind: 'bands', axis: 'x', size: 0.1, colors: ['#d8ecec', '#7fb4b8'] }, bone: 'foam', noShadow: true, touches: true },
     { shape: { kind: 'cone', from: [1.049, 3.3, 0.022], to: [1.004, 3.0, 0.022], r: 0.014 }, paint: '#7fb4b8', bone: 'rain0', glow: true, noShadow: true },
     { shape: { kind: 'cone', from: [-0.033, 3.6, -0.223], to: [-0.078, 3.3, -0.223], r: 0.014 }, paint: '#7fb4b8', bone: 'rain0', glow: true, noShadow: true },
     { shape: { kind: 'cone', from: [0.269, 3.9, -0.807], to: [0.224, 3.6, -0.807], r: 0.014 }, paint: '#7fb4b8', bone: 'rain0', glow: true, noShadow: true },

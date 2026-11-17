@@ -50,6 +50,8 @@ export interface Diorama {
   lights(t: number): PointLight[]
   /** Distance haze: its color (linear) and where it starts and would be total, in units past the view's target. */
   haze?: { color: [number, number, number]; from: number; to: number }
+  /** Parts (by their place in the list) that meet others by design: the check for parts passing through each other lets them. */
+  touching?: number[]
   /** How big its description is, in bytes, written out as JSON: only for a scene that is data alone. */
   bytes?: number
   /** How many moves its description lists. */
@@ -99,6 +101,7 @@ export function described(id: string, doc: SceneDoc, about: string): Diorama {
     bytes: new TextEncoder().encode(JSON.stringify(doc)).length,
     moves: doc.moves?.length ?? 0,
     parts: doc.parts.length,
+    touching: c.touching,
     loop: c.loop,
     palette: { label: OWN_PALETTE, colors: c.palette },
     // with no sky of its own, the switch gives it a night made of its two darkest colors
