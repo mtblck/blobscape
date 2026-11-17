@@ -254,15 +254,18 @@ export default [
       else ok('blobscape sandbox path: two views saved as stops')
       await axe(page, 'blobscape sandbox path')
       // Play: the view goes back to the first stop and glides; partway it is neither stop, and it ends at the second
+      // a slow glide, six seconds: a busy machine can take a second or two to draw its first frame
+      await page.getByRole('slider', { name: 'Seconds a stop' }).focus()
+      await page.keyboard.press('End')
       await play.click()
       // look until the view is clear of both stops: how soon that is depends on how busy the machine is
       let fromFirst = 0, fromSecond = 0
-      for (let k = 0; k < 10 && (fromFirst < 500 || fromSecond < 500); k++) {
+      for (let k = 0; k < 16 && (fromFirst < 500 || fromSecond < 500); k++) {
         await page.waitForTimeout(250)
         const mid = await shot()
         fromFirst = await differs(mid, first); fromSecond = await differs(mid, second)
       }
-      await page.waitForFunction(() => [...document.querySelectorAll('button')].find((b) => b.textContent === 'Play the path')?.getAttribute('aria-pressed') === 'false', null, { timeout: 15000 }).catch(() => {})
+      await page.waitForFunction(() => [...document.querySelectorAll('button')].find((b) => b.textContent === 'Play the path')?.getAttribute('aria-pressed') === 'false', null, { timeout: 30000 }).catch(() => {})
       const end = await settled()
       const short = await differs(end, second)
       if (fromFirst < 500 || fromSecond < 500) fails.push(`blobscape sandbox path: partway through playing, the view is at a stop (${fromFirst} and ${fromSecond} pixels from them)`)
