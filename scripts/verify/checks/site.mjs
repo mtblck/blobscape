@@ -3,6 +3,7 @@
 export default [
   {
     name: 'site',
+    core: true,
     about: 'prerendered HTML for every page, 404, sitemap, in-place navigation, theme, Experiments list and dates, old #/ links',
     entries: ['scripts/prerender.ts', 'src/blobscape/routes.ts', 'src/blobscape/meta.ts', 'src/blobscape/site.ts', 'src/blobscape/Landing.tsx', 'src/blobscape/Experiments.tsx', 'src/blobscape/Chrome.tsx', 'src/shared/SiteHeader.tsx', 'src/shared/Footer.tsx', 'src/shared/Logo.tsx', 'src/blobscape/engineCopy.ts', 'src/blobscape/specCopy.ts'],
     files: ['src/blobscape/App.tsx', 'src/blobscape/main.tsx', 'src/blobscape/ssr.tsx', 'index.html', 'public/theme.js'],

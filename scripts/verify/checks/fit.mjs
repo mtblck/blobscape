@@ -3,6 +3,7 @@
 export default [
   {
     name: 'fit',
+    core: true,
     about: 'desktop and phone: training, the loss graph, views, pause/step, adding blobs, own pictures',
     entries: ['src/fit-a-picture/main.tsx', 'src/fit-a-picture/trainer.worker.ts'],
     files: ['experiments/fit-a-picture/'],
