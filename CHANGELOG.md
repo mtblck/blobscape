@@ -13,6 +13,8 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 - Pixel Diorama opens a scene description (.json) from your computer as one more scene, and says where a broken one is broken.
 
 - For people (and assistants) writing scenes: `npm run scene -- my-scene.json` checks a description, cuts it and says what to fix, and `--shots` draws it. Scenes are now also checked for parts that pass through each other as they play, like sails through a tower.
+- The support button opens two ways to support: Buy me a coffee (Ko-fi) and Star on GitHub, in a plain card.
+
 - A simpler header: Engine opens a list with its overview, the docs, the file spec and the package on npm and GitHub; the theme has its own button; and wide screens no longer have a Menu button. The support button is on every page, as a small circle where a page has controls. The engine page has a Read the docs button at the top.
 
 - Tap to select in the sandbox: turn on "A click with Select takes the whole thing" in the Selection tab and a click on a mug, a leaf or a chair selects everything that belongs to it, the far side too. A small model (a slimmed Segment Anything, 14 MB, served by this site) looks at the view on your device.

@@ -17,7 +17,7 @@ const ENGINE = [
 ] as const
 const ENGINE_OUT = [
   { label: 'npm', href: 'https://www.npmjs.com/package/@blobscape/engine' },
-  { label: 'GitHub', href: 'https://github.com/mtblck/blobscape' },
+  { label: 'GitHub', href: SITE.repo },
 ] as const
 
 /** True when `path` is the page we're on, or the list it belongs to (a lesson under Lessons, an experiment under Experiments). */
