@@ -11,6 +11,13 @@ import type { PointLight } from '../../splat-engine/engine.ts'
 /** A light the game wants, and what kind it is: lights only ever turn into lights of their own kind. */
 export interface Want extends PointLight {
   kind: string
+  /**
+   * A light carried by something that moves fast (a bolt, the orb in the hand): it stays on its carrier rather
+   * than easing after it, starts at full brightness, and brightens three times quicker (a cast's flash), since
+   * what carries it changes at once too. It still fades out at the usual pace. Easing it trailed a fireball by most
+   * of a meter and left the wall it hit dim (Matt saw it).
+   */
+  follow?: boolean
 }
 
 interface Held {
@@ -47,16 +54,17 @@ export class Glow {
         if (e < d) { d = e; best = h }
       }
       if (best) best.want = w
-      else this.held.push({ kind: w.kind, position: [...w.position] as [number, number, number], color: [0, 0, 0], range: w.range, want: w })
+      else this.held.push({ kind: w.kind, position: [...w.position] as [number, number, number], color: w.follow ? [...w.color] as [number, number, number] : [0, 0, 0], range: w.range, want: w })
     }
-    const rise = 1 - Math.exp(-dt / RISE), fade = 1 - Math.exp(-dt / FADE), move = 1 - Math.exp(-dt / 0.08)
+    const rise = 1 - Math.exp(-dt / RISE), quick = 1 - Math.exp(-dt / (RISE / 3)), fade = 1 - Math.exp(-dt / FADE), move = 1 - Math.exp(-dt / 0.08)
     for (const h of this.held) {
       const to = h.want?.color ?? [0, 0, 0]
-      const k = bright(to) > bright(h.color) ? rise : fade
+      const k = bright(to) > bright(h.color) ? (h.want?.follow ? quick : rise) : fade
       for (let c = 0; c < 3; c++) h.color[c] += (to[c] - h.color[c]) * k
       if (h.want) {
-        for (let c = 0; c < 3; c++) h.position[c] += (h.want.position[c] - h.position[c]) * move
-        h.range += (h.want.range - h.range) * move
+        const m = h.want.follow ? 1 : move
+        for (let c = 0; c < 3; c++) h.position[c] += (h.want.position[c] - h.position[c]) * m
+        h.range += (h.want.range - h.range) * m
       }
     }
     this.held = this.held.filter((h) => h.want || bright(h.color) > 0.02)
@@ -73,7 +81,7 @@ export class Glow {
  * middle of its group, as bright as the brightest in it and a little more for the rest (a patch of fire lights
  * the floor more than one flame, but not ten times more), and reaching a little further.
  */
-export function gather(lights: Want[], most: number, near = 1.6): Want[] {
+export function gather(lights: Want[], most: number, near = 1.2): Want[] {
   const left = [...lights].sort((a, b) => bright(b.color) - bright(a.color))
   const out: Want[] = []
   while (left.length && out.length < most) {
@@ -82,8 +90,8 @@ export function gather(lights: Want[], most: number, near = 1.6): Want[] {
     for (const g of group.slice(1)) left.splice(left.indexOf(g), 1)
     const w = group.reduce((s, l) => s + bright(l.color), 0) || 1
     const at = [0, 1, 2].map((c) => group.reduce((s, l) => s + l.position[c] * bright(l.color), 0) / w) as [number, number, number]
-    const more = 1 + 0.35 * Math.log2(group.length)
-    out.push({ kind: seed.kind, position: at, color: seed.color.map((c) => c * more) as [number, number, number], range: Math.max(...group.map((l) => l.range)) * (1 + 0.15 * Math.log2(group.length)) })
+    const more = 1 + 0.45 * Math.log2(group.length)
+    out.push({ kind: seed.kind, position: at, color: seed.color.map((c) => c * more) as [number, number, number], range: Math.max(...group.map((l) => l.range)) * (1 + 0.2 * Math.log2(group.length)) })
   }
   return out
 }

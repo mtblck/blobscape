@@ -49,3 +49,17 @@ test('gather: a patch of fire is one light, a far patch another, never more than
   assert.equal(gather(spread, 3).length, 3)
   assert.deepEqual(gather([], 3), [])
 })
+
+test('a light that follows (a bolt) rides on its carrier at full brightness, and still fades once it has gone', () => {
+  const g = new Glow(), dt = 1 / 60
+  const bolt = (x: number): Want => ({ ...fire(x, 0), kind: 'fire', follow: true })
+  let out = g.update([bolt(0)], dt)
+  assert.ok(Math.abs(sum(out[0].color) - sum(bolt(0).color)) < 1e-9)
+  for (let k = 1; k <= 20; k++) {
+    out = g.update([bolt(k * 0.15)], dt)
+    assert.equal(out.length, 1)
+    assert.ok(Math.abs(out[0].position[0] - k * 0.15) < 1e-9, 'it does not trail the bolt')
+  }
+  out = g.update([], dt)
+  assert.ok(out.length === 1 && sum(out[0].color) < sum(bolt(0).color))
+})
