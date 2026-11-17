@@ -64,17 +64,25 @@ export class Mpm {
   count = 0
   /** Particle state. */
   readonly x: Float64Array
+  /** @internal Velocities. */
   readonly v: Float64Array
+  /** @internal Each particle's affine velocity field. */
   readonly C: Float64Array
+  /** @internal Each particle's deformation. */
   readonly F: Float64Array
   /** Kirchhoff stress from the last step's F, so each step needs one decomposition. */
   readonly tau: Float64Array
+  /** @internal Snow's plastic volume change. */
   readonly Jp: Float64Array
+  /** Which material each particle is, as an index into `MATERIALS`. */
   readonly mat: Uint8Array
   /** Grid: velocity (momentum while scattering) and mass. */
   readonly gv: Float64Array
+  /** @internal Grid masses. */
   readonly gm: Float64Array
+  /** @internal A particle's mass. */
   readonly mass: number
+  /** @internal A particle's volume. */
   readonly volume: number
   private alpha: number
   private params: Params[]

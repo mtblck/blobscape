@@ -39,11 +39,15 @@ export interface StepOptions {
 
 /** The body as the planner sees it: where it stands and faces, and how it moves (per second). */
 export interface StepBody {
+  /** Where it stands, along x. */
   x: number
+  /** Where it stands, along z. */
   z: number
   /** Turned from +z toward +x, radians. */
   heading: number
+  /** Its speed along x. */
   vx: number
+  /** Its speed along z. */
   vz: number
   /** Radians a second. */
   turn: number

@@ -19,14 +19,27 @@ export interface SheetMove {
   name: string
   /** Undefined for a still pose (the rest pose). */
   clip?: Clip
+  /** How many frames it gets. */
   frames: number
 }
 
 /** One row of a sheet: a move seen from one direction (`turn` is that direction's angle). */
-export interface SheetRow { move: SheetMove; dir: string; turn: number }
+export interface SheetRow {
+  /** The move. */
+  move: SheetMove
+  /** The direction's name, such as 'down'. */
+  dir: string
+  /** How far the creature is turned for it, in degrees. */
+  turn: number
+}
 
 /** A sheet's rows, and as many columns as its longest move has frames. */
-export interface SheetPlan { rows: SheetRow[]; cols: number }
+export interface SheetPlan {
+  /** The rows, top to bottom. */
+  rows: SheetRow[]
+  /** Columns: the longest move's frames. */
+  cols: number
+}
 
 /** Lays a sheet out: a row for each move seen from each direction. */
 export function planSheet(moves: SheetMove[], directions: 4 | 8): SheetPlan {
@@ -45,7 +58,12 @@ export const frameTimes = (m: SheetMove) => Array.from({ length: m.frames }, (_,
 export const moveFps = (m: SheetMove) => (m.clip && loopSeconds(m) > 0 ? Math.max(1, Math.round(m.frames / loopSeconds(m))) : 1)
 
 /** A sphere that holds the creature through every frame of every move. */
-export interface Framing { center: [number, number, number]; radius: number }
+export interface Framing {
+  /** The sphere's middle. */
+  center: [number, number, number]
+  /** Its radius. */
+  radius: number
+}
 
 /**
  * A sphere round the creature through every frame of every move, so one

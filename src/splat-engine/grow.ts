@@ -14,9 +14,11 @@ export const GROW_STYLES: GrowStyle[] = ['tree', 'coral', 'crystal']
 
 /** A tree, a coral or a cluster of crystals to grow from a seed, for `grow`. */
 export interface Grower {
+  /** What it grows as. */
   style: GrowStyle
   /** Where it stands. */
   at: Vec3
+  /** The same seed gives the same result. */
   seed: number
   /** The trunk's length (a crystal's longest spike). */
   size: number
@@ -30,9 +32,13 @@ export interface Grower {
 
 /** One branch of a grower: a cone from `from`, where its radius is `r`, to `to`, where it is `rTo`. */
 export interface Twig {
+  /** Where it starts. */
   from: Vec3
+  /** Where it ends. */
   to: Vec3
+  /** Its radius at the start. */
   r: number
+  /** Its radius at the end. */
   rTo: number
 }
 

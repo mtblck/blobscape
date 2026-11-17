@@ -15,7 +15,12 @@ import { many, type Shape, tighten } from './voxel.ts'
  */
 
 /** A bed of rock: how thick it is and how hard (0 soft, worn back far, to 1 hard, standing out as a ledge). */
-export interface Bed { thick: number; hard: number }
+export interface Bed {
+  /** How thick the bed is. */
+  thick: number
+  /** How hard: 0 is soft and wears back far, 1 is hard and stands out as a ledge. */
+  hard: number
+}
 
 /** Beds when none are given: soft and hard by turns, a hard one on top. */
 export const BEDS: Bed[] = [{ thick: 0.14, hard: 0.85 }, { thick: 0.2, hard: 0.25 }, { thick: 0.1, hard: 0.95 }, { thick: 0.22, hard: 0.35 }, { thick: 0.12, hard: 0.8 }, { thick: 0.18, hard: 0.2 }]
@@ -47,6 +52,7 @@ export interface LandSpec {
   slump?: number
   /** Beds of rock, from the bottom up, repeating: soft ones wear faster. Left out, all one rock. */
   beds?: Bed[]
+  /** The same seed gives the same result. */
   seed: number
 }
 
@@ -241,13 +247,17 @@ export function land(s: LandSpec & { base?: number }): Shape {
 export interface ButteSpec {
   /** The middle of its foot. */
   at: Vec3
+  /** Its radius at the foot. */
   r: number
+  /** How tall it is. */
   height: number
+  /** Beds of rock from the bottom up, repeating; left out, `BEDS`. */
   beds?: Bed[]
   /** How far each soft bed is worn back, as a share of the radius (0.3). */
   wear?: number
   /** A caprock this much wider than the rock under it, as a share (0: none). */
   cap?: number
+  /** The same seed gives the same result. */
   seed: number
 }
 
@@ -306,13 +316,17 @@ export function hoodoo(s: { at: Vec3; height: number; r: number; seed: number })
 export interface ArchSpec {
   /** The feet of its two legs, on the ground. */
   from: Vec3
+  /** The foot of its other leg. */
   to: Vec3
+  /** How tall it is. */
   height: number
   /** How thick the fin of rock is. */
   thick: number
   /** How high the soft bed the hole wore through sits: its middle, as a share of the height (0.4). */
   soft?: number
+  /** Beds of rock from the bottom up, repeating; left out, `BEDS`. */
   beds?: Bed[]
+  /** The same seed gives the same result. */
   seed: number
 }
 
@@ -350,11 +364,13 @@ function archRaw(s: ArchSpec): Shape {
 export interface MudSpec {
   /** The middle of the patch, on the ground. */
   at: Vec3
+  /** How far the patch reaches. */
   r: number
   /** About how wide a plate is. */
   plate: number
   /** How far plate edges curl up, 0 to 1. */
   curl?: number
+  /** The same seed gives the same result. */
   seed: number
 }
 
@@ -397,10 +413,13 @@ function mudRaw(s: MudSpec, cell = 0): Shape {
 export interface PebbleSpec {
   /** The stream's line, on the ground. */
   path: Vec3[]
+  /** How wide the stream bed is. */
   width: number
+  /** How many pebbles. */
   count: number
   /** The biggest pebble, mid-stream. */
   size: number
+  /** The same seed gives the same result. */
   seed: number
 }
 

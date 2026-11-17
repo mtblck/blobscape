@@ -16,7 +16,12 @@ import { lookColors, snapColors, type Frame, type PixelLook } from '../splat-cor
 
 /** What a stage shows: blobs, the skin that ties them to bones, and the skeleton. */
 export interface Actor {
-  blobs: Blobs; skin: Skin; skeleton: Skeleton
+  /** The blobs in the rest pose. */
+  blobs: Blobs
+  /** Which bones move each blob, and by how much. */
+  skin: Skin
+  /** The bones, and their pose. */
+  skeleton: Skeleton
   /** Blend shapes (from an opened .glb): a clip's weights, or `setMorphWeights` while none play, reshape the blobs on the CPU. */
   morphs?: Morph[]
 }
@@ -26,6 +31,7 @@ export type Show = 'blobs' | 'bones' | 'both'
 
 /** A bone found under the pointer (or stepped to): what the page says about it. */
 export interface PickedBone {
+  /** The bone's index in the skeleton. */
   bone: number
   /** Its name for people: 'left forearm'. */
   label: string

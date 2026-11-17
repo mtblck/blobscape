@@ -126,10 +126,15 @@ export function lookAt(sk: Skeleton, name: string, point: ArrayLike<number>, { f
  * foot bone. `pole` is where its knee points if the leg is straight.
  */
 export interface Leg {
+  /** The thigh bone's name. */
   upper: string
+  /** The shin bone's name. */
   lower: string
+  /** The foot bone's name, if the leg has one. */
   foot?: string
+  /** The ankle as a rest point the lower bone carries, for a leg with no foot bone. */
   tip?: Vec3
+  /** Where the knee points if the leg is straight. */
   pole?: Vec3
 }
 

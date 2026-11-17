@@ -63,6 +63,7 @@ function slabBox(f: ReturnType<typeof groundFrame>, vLo: number, vHi: number, ha
 export interface WallSpec {
   /** The foot of the wall at one end and at the other; the wall stands on `from`'s height. */
   from: Vec3
+  /** The foot of the wall at its other end. */
   to: Vec3
   /** How high it stands. */
   height: number
@@ -78,6 +79,7 @@ export interface WallSpec {
   missing?: number
   /** Bricks lying at the foot of the wall, fallen from its top. */
   fallen?: number
+  /** The same seed gives the same result. */
   seed: number
 }
 
@@ -219,6 +221,7 @@ export interface StepsSpec {
   width: number
   /** How worn: rounded noses and a hollow where feet go, 0 to 1. */
   wear?: number
+  /** The same seed gives the same result. */
   seed: number
 }
 
@@ -310,6 +313,7 @@ export interface FenceSpec {
   missing?: number
   /** How far rails sag in the middle, 0 to 1. */
   sag?: number
+  /** The same seed gives the same result. */
   seed: number
 }
 
@@ -391,6 +395,7 @@ export interface ArcadeSpec {
   course?: number
   /** How much of the top has fallen, in a ragged line, 0 to 1 (never below the arches' springing). */
   ruin?: number
+  /** The same seed gives the same result. */
   seed?: number
 }
 

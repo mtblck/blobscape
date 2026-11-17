@@ -38,6 +38,7 @@ export interface CrystalSpec {
   at: Vec3
   /** The way it points. */
   dir: Vec3
+  /** How long it is, foot to point. */
   length: number
   /** Its radius, corner to middle. */
   r: number
@@ -47,6 +48,7 @@ export interface CrystalSpec {
   tip?: number
   /** How many chips are knocked off its faces, 0 to 6. */
   chips?: number
+  /** The same seed gives the same result. */
   seed: number
 }
 
@@ -94,14 +96,19 @@ export function crystal(s: CrystalSpec): Shape {
 export interface ClusterSpec {
   /** Where they grow from. */
   at: Vec3
+  /** How many crystals. */
   count: number
   /** The longest, in the middle. */
   size: number
+  /** The radius of the biggest. */
   r: number
   /** How far the outer ones lean, in degrees (50 when left out). */
   spread?: number
+  /** Sides to each crystal, 3 to 8 (6 when left out). */
   sides?: number
+  /** Chips knocked off each crystal's faces, 0 to 6. */
   chips?: number
+  /** The same seed gives the same result. */
   seed: number
 }
 
@@ -131,7 +138,9 @@ export function cluster(s: ClusterSpec): Shape {
 
 /** A broken-open geode for `geode`. */
 export interface GeodeSpec {
+  /** Its middle. */
   at: Vec3
+  /** Its radius. */
   r: number
   /** The way the broken face looks: its outward direction. */
   open: Vec3
@@ -141,6 +150,7 @@ export interface GeodeSpec {
   bands?: number
   /** How long the crystals lining the hollow are, as a share of the radius (0.22). */
   lining?: number
+  /** The same seed gives the same result. */
   seed: number
 }
 
@@ -199,6 +209,7 @@ export interface ColumnsSpec {
   height: number
   /** How heights run: 'dome' (tallest in the middle, as organ pipes), 'steps' (a causeway stepping down to its edge) or 'random'. */
   rise?: 'dome' | 'steps' | 'random'
+  /** The same seed gives the same result. */
   seed: number
 }
 
@@ -279,9 +290,11 @@ export interface DripsSpec {
   r: number
   /** The height of the roof they hang from. */
   roof: number
+  /** How many drips. */
   count: number
   /** The longest stalactite. */
   length: number
+  /** The same seed gives the same result. */
   seed: number
 }
 
@@ -336,11 +349,13 @@ export interface FlowSpec {
   at: Vec3
   /** Along the wall: [x, z]. Its face looks out to the right of this. */
   along: [number, number]
+  /** How wide it is along the wall. */
   width: number
   /** How far it hangs down. */
   drop: number
   /** Folds across it (5). */
   folds?: number
+  /** The same seed gives the same result. */
   seed: number
 }
 
@@ -375,6 +390,7 @@ export interface IcicleSpec {
   length: number
   /** Only edges higher than this hang icicles (an edge resting on the ground has none): every edge when left out. */
   above?: number
+  /** The same seed gives the same result. */
   seed: number
 }
 

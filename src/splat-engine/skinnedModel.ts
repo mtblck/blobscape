@@ -28,6 +28,7 @@ export interface SkinnedModel {
   mesh: Mesh
   /** Per vertex, four of our bone indices and their weights (summing to 1). */
   joints: Uint8Array
+  /** Per vertex, the weights of those four bones. */
   weights: Float32Array
   /** Our bones, parents first. */
   bones: Bone[]

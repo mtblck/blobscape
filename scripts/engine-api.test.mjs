@@ -19,6 +19,9 @@ test('the API reference is up to date with the package (else: npm run docs)', { 
   assert.match(stage.doc, /front door/)
   for (const name of ['SplatWorld', 'Swing', 'compileScene', 'checkScene', 'buildVoxels', 'sculptToCount', 'writeRiggedGlb', 'makeFox', 'StageActor', 'Move']) assert.ok(all.some((e) => e.name === name), `${name} is missing`)
   assert.equal(new Set(all.map((e) => e.name)).size, all.length, 'a name is listed twice')
+  // everything the docs show says what it is: a new export or member needs a doc comment, or `@internal` to leave the package's types
+  const bare = all.flatMap((e) => [...(e.doc ? [] : [e.name]), ...[...(e.props ?? []), ...(e.methods ?? [])].filter((m) => !m.doc).map((m) => `${e.name}.${m.name}`)])
+  assert.deepEqual(bare, [], 'these have no doc comment')
   assert.deepEqual(all.find((e) => e.name === 'CreatureStage'), { name: 'CreatureStage', kind: 'alias', doc: "The name the site's pages use.", of: 'Stage' })
 })
 

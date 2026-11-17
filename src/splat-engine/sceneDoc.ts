@@ -23,6 +23,7 @@ import { drift, fallAt, fallShare, frost, groundUnder, type Falling } from './we
  * camera starts on the +z side. Colors are '#rrggbb'.
  */
 export interface SceneDoc {
+  /** The scene's name. */
   name: string
   /** Seconds before everything repeats: 4 to 60. */
   loop: number
@@ -39,6 +40,7 @@ export interface SceneDoc {
   sky?: [string, string]
   /** How far down the picture the sky's blend runs before it is all the bottom color: 0.05 to 1, the whole way when left out. */
   skyReach?: number
+  /** The pixel look it asks for: how much dither and glow, and whether to draw an outline and edge lines. */
   look?: { dither?: number; glow?: number; outline?: boolean; edges?: boolean }
   /**
    * How wide each surface disc is, as a share of the grid: 0.4 to 1, 0.55 when left out. Small discs keep paint
@@ -50,7 +52,9 @@ export interface SceneDoc {
   camera: Orbit & { swing?: number }
   /** Things that move. The land itself needs none: parts with no bone stand still. */
   bones?: BoneDoc[]
+  /** Everything in the scene, each a shape with its paint. */
   parts: PartDoc[]
+  /** What moves, each a whole number of times a loop. */
   moves?: MoveDoc[]
   /** Live lights, at most four: they light what is near them, frame by frame. */
   lights?: LightDoc[]
@@ -94,6 +98,7 @@ export interface MistDoc {
 export interface ShaftDoc {
   /** Where it starts (a window, a crack, a lamp) and where it lands. */
   from: Vec3
+  /** Where it lands. */
   to: Vec3
   /** How wide it is, as a radius. */
   r: number
@@ -117,6 +122,7 @@ export interface SpeckDoc {
   count: number
   /** Two opposite corners of the box they live in: rain and snow fall from its top to its bottom, embers and bubbles rise from its bottom to its top. */
   from: Vec3
+  /** The box's opposite corner. */
   to: Vec3
   /** Each speck takes one of these. */
   colors: string[]
@@ -1096,6 +1102,7 @@ export interface CompiledScene {
   empty(built: { partOf: ArrayLike<number> }): number[]
   /** Poses the bones for `t` seconds. */
   pose(sk: Skeleton, t: number): void
+  /** The scene's live lights at a time, in seconds. */
   lights(t: number): PointLight[]
   /** Distance haze, if the scene asks for it: the color (linear) and where it starts and would be total, in units past the view's target. */
   haze?: { color: Vec3; from: number; to: number }

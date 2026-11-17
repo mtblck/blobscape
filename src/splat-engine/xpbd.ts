@@ -14,7 +14,14 @@
 export type Vec3 = [number, number, number]
 
 /** A segment from `a` to `b` with a radius; `a` and `b` the same is a ball. */
-export interface Capsule { a: Vec3; b: Vec3; r: number }
+export interface Capsule {
+  /** One end of its middle line. */
+  a: Vec3
+  /** The other end. */
+  b: Vec3
+  /** Its radius. */
+  r: number
+}
 
 /** Seconds per step, and substeps per step. */
 export const STEP = 1 / 120
@@ -36,9 +43,11 @@ export class Xpbd {
   readonly vel: Float64Array
   /** One over each point's mass; 0 pins a point where it is. */
   readonly invMass: Float64Array
+  /** @internal The links between points. Add one with `link`. */
   readonly links: Link[] = []
   /** Where the animation puts each point, and how loosely it follows (Infinity: not at all). */
   readonly goal: Float64Array
+  /** @internal How softly each point is pulled to its goal. Set one with `follow`. */
   readonly goalCompliance: Float64Array
   /** The capsules the points stay out of. Set it each frame as the body moves. */
   capsules: Capsule[] = []

@@ -74,7 +74,9 @@ export interface DriftSpec {
   reach?: number
   /** A path trodden through it, where it lies thin. */
   path?: Vec3[]
+  /** How wide the trodden path is (0.2 when left out). */
   pathWidth?: number
+  /** The same seed gives the same result. */
   seed: number
 }
 
@@ -214,6 +216,7 @@ export interface FrostSpec {
   arms?: number
   /** Which share of its growth to show, [from, to] in 0..1 (all of it): split one fern over parts that sprout in turn and it grows a branch at a time. */
   stage?: [number, number]
+  /** The same seed gives the same result. */
   seed: number
 }
 
@@ -221,7 +224,18 @@ export interface FrostSpec {
  * One stroke of a frost fern: its ends, its radius, which generation of branch it is, and `t`, when it grows (0 at
  * the start to 1 at the last tip).
  */
-export interface FrostBranch { from: Vec3; to: Vec3; r: number; gen: number; t: number }
+export interface FrostBranch {
+  /** Where the stroke starts. */
+  from: Vec3
+  /** Where it ends. */
+  to: Vec3
+  /** Its radius. */
+  r: number
+  /** Which generation of branch it is: 0 for a main branch. */
+  gen: number
+  /** When it grows: 0 at the start to 1 at the last tip. */
+  t: number
+}
 
 /**
  * A frost fern as straight strokes in the surface's plane: main branches curve out from the start, each throwing

@@ -13,17 +13,17 @@
       {
        "name": "blobs",
        "type": "Blobs",
-       "doc": ""
+       "doc": "The blobs in the rest pose."
       },
       {
        "name": "skin",
        "type": "Skin",
-       "doc": ""
+       "doc": "Which bones move each blob, and by how much."
       },
       {
        "name": "skeleton",
        "type": "Skeleton",
-       "doc": ""
+       "doc": "The bones, and their pose."
       },
       {
        "name": "morphs",
@@ -47,7 +47,7 @@
       {
        "name": "bone",
        "type": "number",
-       "doc": ""
+       "doc": "The bone's index in the skeleton."
       },
       {
        "name": "label",
@@ -400,17 +400,17 @@
       {
        "name": "blobs",
        "type": "Blobs",
-       "doc": ""
+       "doc": "The blobs in the rest pose."
       },
       {
        "name": "skin",
        "type": "Skin",
-       "doc": ""
+       "doc": "Which bones move each blob, and by how much."
       },
       {
        "name": "skeleton",
        "type": "Skeleton",
-       "doc": ""
+       "doc": "The bones, and their pose."
       },
       {
        "name": "partOf",
@@ -483,7 +483,7 @@
       {
        "name": "position",
        "type": "[number, number, number]",
-       "doc": ""
+       "doc": "Where it is, in world space."
       },
       {
        "name": "color",
@@ -892,7 +892,7 @@
       {
        "name": "sh",
        "type": "Float32Array<ArrayBufferLike> | null",
-       "doc": ""
+       "doc": "The color-by-angle terms themselves, or null when the blobs have none: see `shDegree`."
       },
       {
        "name": "capacity",
@@ -991,17 +991,17 @@
       {
        "name": "name",
        "type": "string",
-       "doc": ""
+       "doc": "What poses and files call it."
       },
       {
        "name": "parent",
        "type": "number",
-       "doc": ""
+       "doc": "The index of the bone it hangs on, or -1 for a root."
       },
       {
        "name": "head",
        "type": "Vec3",
-       "doc": ""
+       "doc": "Where it turns about, in the rest pose."
       },
       {
        "name": "tail",
@@ -1066,13 +1066,13 @@
        "name": "quat",
        "readonly": true,
        "type": "Float32Array",
-       "doc": ""
+       "doc": "Output, per bone: the skin rotation as a quaternion (4)."
       },
       {
        "name": "scale",
        "readonly": true,
        "type": "Float32Array",
-       "doc": ""
+       "doc": "Output, per bone: the skin's uniform scale (1)."
       },
       {
        "name": "posedHead",
@@ -1134,12 +1134,12 @@
       {
        "name": "joints",
        "type": "Uint8Array",
-       "doc": ""
+       "doc": "Four bone indices per blob."
       },
       {
        "name": "weights",
        "type": "Float32Array",
-       "doc": ""
+       "doc": "Four weights per blob, for those bones, summing to 1."
       }
      ]
     },
@@ -1401,17 +1401,17 @@
       {
        "name": "rotation",
        "type": "Float32Array",
-       "doc": ""
+       "doc": "Each bone's local rotation (x, y, z, w)."
       },
       {
        "name": "offset",
        "type": "Float32Array",
-       "doc": ""
+       "doc": "Each bone's offset from its rest place (x, y, z)."
       },
       {
        "name": "size",
        "type": "Float32Array",
-       "doc": ""
+       "doc": "Each bone's size (1 is as built)."
       }
      ]
     },
@@ -1642,30 +1642,30 @@
       {
        "name": "upper",
        "type": "string",
-       "doc": ""
+       "doc": "The thigh bone's name."
       },
       {
        "name": "lower",
        "type": "string",
-       "doc": ""
+       "doc": "The shin bone's name."
       },
       {
        "name": "foot",
        "optional": true,
        "type": "string",
-       "doc": ""
+       "doc": "The foot bone's name, if the leg has one."
       },
       {
        "name": "tip",
        "optional": true,
        "type": "Vec3",
-       "doc": ""
+       "doc": "The ankle as a rest point the lower bone carries, for a leg with no foot bone."
       },
       {
        "name": "pole",
        "optional": true,
        "type": "Vec3",
-       "doc": ""
+       "doc": "Where the knee points if the leg is straight."
       }
      ]
     },
@@ -1830,12 +1830,12 @@
       {
        "name": "x",
        "type": "number",
-       "doc": ""
+       "doc": "Where it stands, along x."
       },
       {
        "name": "z",
        "type": "number",
-       "doc": ""
+       "doc": "Where it stands, along z."
       },
       {
        "name": "heading",
@@ -1845,12 +1845,12 @@
       {
        "name": "vx",
        "type": "number",
-       "doc": ""
+       "doc": "Its speed along x."
       },
       {
        "name": "vz",
        "type": "number",
-       "doc": ""
+       "doc": "Its speed along z."
       },
       {
        "name": "turn",
@@ -2078,7 +2078,7 @@
        "name": "spec",
        "readonly": true,
        "type": "SwingSpec",
-       "doc": ""
+       "doc": "The loose parts it was made for."
       }
      ],
      "methods": [
@@ -2127,17 +2127,17 @@
       {
        "name": "a",
        "type": "Vec3",
-       "doc": ""
+       "doc": "One end of its middle line."
       },
       {
        "name": "b",
        "type": "Vec3",
-       "doc": ""
+       "doc": "The other end."
       },
       {
        "name": "r",
        "type": "number",
-       "doc": ""
+       "doc": "Its radius."
       }
      ]
     },
@@ -2188,22 +2188,10 @@
        "doc": "One over each point's mass; 0 pins a point where it is."
       },
       {
-       "name": "links",
-       "readonly": true,
-       "type": "Link[]",
-       "doc": ""
-      },
-      {
        "name": "goal",
        "readonly": true,
        "type": "Float64Array",
        "doc": "Where the animation puts each point, and how loosely it follows (Infinity: not at all)."
-      },
-      {
-       "name": "goalCompliance",
-       "readonly": true,
-       "type": "Float64Array",
-       "doc": ""
       },
       {
        "name": "capsules",
@@ -2330,12 +2318,12 @@
       {
        "name": "delta",
        "type": "Float32Array",
-       "doc": ""
+       "doc": "How far each blob's center moves: x, y, z per blob."
       },
       {
        "name": "grad",
        "type": "Float32Array",
-       "doc": ""
+       "doc": "How each blob's shape changes: the morph's local 3×3 map minus identity, nine per blob."
       }
      ]
     },
@@ -2436,7 +2424,7 @@
       {
        "name": "blob",
        "type": "number",
-       "doc": ""
+       "doc": "The blob's index in that actor."
       },
       {
        "name": "t",
@@ -2534,7 +2522,7 @@
       {
        "name": "max",
        "type": "Vec3",
-       "doc": ""
+       "doc": "The far corner of a box that holds it."
       },
       {
        "name": "pieceAt",
@@ -2574,7 +2562,7 @@
        "name": "opacity",
        "optional": true,
        "type": "number",
-       "doc": ""
+       "doc": "How solid its blobs are, 0–1."
       },
       {
        "name": "noShadow",
@@ -2647,19 +2635,19 @@
       {
        "name": "kind",
        "type": "InkKind",
-       "doc": ""
+       "doc": "Which marks."
       },
       {
        "name": "amount",
        "optional": true,
        "type": "number",
-       "doc": ""
+       "doc": "The share of blocks that take a mark, 0–1."
       },
       {
        "name": "color",
        "optional": true,
        "type": "Vec3",
-       "doc": ""
+       "doc": "The marks' color (sRGB, 0–1); left out, a much darker step of the paint."
       }
      ]
     },
@@ -2703,7 +2691,7 @@
       {
        "name": "kind",
        "type": "\"snow\" | \"moss\" | \"dust\"",
-       "doc": ""
+       "doc": "What lies on the scene."
       },
       {
        "name": "color",
@@ -2725,7 +2713,7 @@
       {
        "name": "center",
        "type": "Vec3",
-       "doc": ""
+       "doc": "Where it is."
       },
       {
        "name": "scale",
@@ -2735,17 +2723,17 @@
       {
        "name": "color",
        "type": "Vec3",
-       "doc": ""
+       "doc": "Its color (sRGB, 0–1)."
       },
       {
        "name": "opacity",
        "type": "number",
-       "doc": ""
+       "doc": "How solid it is, 0–1."
       },
       {
        "name": "bone",
        "type": "string",
-       "doc": ""
+       "doc": "The bone that carries it."
       }
      ]
     },
@@ -2757,12 +2745,12 @@
       {
        "name": "from",
        "type": "Vec3",
-       "doc": ""
+       "doc": "Where it starts."
       },
       {
        "name": "to",
        "type": "Vec3",
-       "doc": ""
+       "doc": "Where it lands."
       },
       {
        "name": "r",
@@ -2772,7 +2760,7 @@
       {
        "name": "color",
        "type": "Vec3",
-       "doc": ""
+       "doc": "Its color (sRGB, 0–1)."
       },
       {
        "name": "strength",
@@ -2893,7 +2881,7 @@
        "name": "beams",
        "optional": true,
        "type": "Beam[]",
-       "doc": ""
+       "doc": "Beams of light that fall through the scene."
       },
       {
        "name": "cover",
@@ -3205,7 +3193,7 @@
       {
        "name": "shape",
        "type": "Shape",
-       "doc": ""
+       "doc": "The part's shape, as a distance function."
       },
       {
        "name": "color",
@@ -3221,25 +3209,25 @@
        "name": "group",
        "optional": true,
        "type": "string",
-       "doc": ""
+       "doc": "Parts in one group cut each other where they overlap; a part that swings clear, like a jaw or a wing, wants its\nown."
       },
       {
        "name": "glow",
        "optional": true,
        "type": "boolean",
-       "doc": ""
+       "doc": "Unlit: the color as given, for eyes and fire."
       },
       {
        "name": "opacity",
        "optional": true,
        "type": "number",
-       "doc": ""
+       "doc": "How solid its blobs are, 0–1."
       },
       {
        "name": "noShadow",
        "optional": true,
        "type": "boolean",
-       "doc": ""
+       "doc": "Casts no shadow on other parts."
       },
       {
        "name": "blend",
@@ -3294,12 +3282,12 @@
       {
        "name": "partOf",
        "type": "Uint16Array",
-       "doc": ""
+       "doc": "Which part each blob came from."
       },
       {
        "name": "spacing",
        "type": "number",
-       "doc": ""
+       "doc": "The grid's cell size it was cut at."
       }
      ]
     },
@@ -3404,17 +3392,17 @@
       {
        "name": "blobs",
        "type": "Blobs",
-       "doc": ""
+       "doc": "The blobs in the rest pose."
       },
       {
        "name": "skin",
        "type": "Skin",
-       "doc": ""
+       "doc": "Which bones move each blob, and by how much."
       },
       {
        "name": "skeleton",
        "type": "Skeleton",
-       "doc": ""
+       "doc": "The bones, and their pose."
       }
      ]
     },
@@ -3657,7 +3645,7 @@
        "name": "fur",
        "optional": true,
        "type": "Fur",
-       "doc": ""
+       "doc": "The fur that grows on it; left out, bare skin."
       }
      ]
     },
@@ -3721,7 +3709,7 @@
       {
        "name": "to",
        "type": "Vec3",
-       "doc": ""
+       "doc": "The foot of the wall at its other end."
       },
       {
        "name": "height",
@@ -3766,7 +3754,7 @@
       {
        "name": "seed",
        "type": "number",
-       "doc": ""
+       "doc": "The same seed gives the same result."
       }
      ]
     },
@@ -3850,7 +3838,7 @@
       {
        "name": "seed",
        "type": "number",
-       "doc": ""
+       "doc": "The same seed gives the same result."
       }
      ]
     },
@@ -3925,7 +3913,7 @@
       {
        "name": "seed",
        "type": "number",
-       "doc": ""
+       "doc": "The same seed gives the same result."
       }
      ]
     },
@@ -4012,7 +4000,7 @@
        "name": "seed",
        "optional": true,
        "type": "number",
-       "doc": ""
+       "doc": "The same seed gives the same result."
       }
      ]
     },
@@ -4053,7 +4041,7 @@
       {
        "name": "length",
        "type": "number",
-       "doc": ""
+       "doc": "How long it is, foot to point."
       },
       {
        "name": "r",
@@ -4081,7 +4069,7 @@
       {
        "name": "seed",
        "type": "number",
-       "doc": ""
+       "doc": "The same seed gives the same result."
       }
      ]
     },
@@ -4108,7 +4096,7 @@
       {
        "name": "count",
        "type": "number",
-       "doc": ""
+       "doc": "How many crystals."
       },
       {
        "name": "size",
@@ -4118,7 +4106,7 @@
       {
        "name": "r",
        "type": "number",
-       "doc": ""
+       "doc": "The radius of the biggest."
       },
       {
        "name": "spread",
@@ -4130,18 +4118,18 @@
        "name": "sides",
        "optional": true,
        "type": "number",
-       "doc": ""
+       "doc": "Sides to each crystal, 3 to 8 (6 when left out)."
       },
       {
        "name": "chips",
        "optional": true,
        "type": "number",
-       "doc": ""
+       "doc": "Chips knocked off each crystal's faces, 0 to 6."
       },
       {
        "name": "seed",
        "type": "number",
-       "doc": ""
+       "doc": "The same seed gives the same result."
       }
      ]
     },
@@ -4173,12 +4161,12 @@
       {
        "name": "at",
        "type": "Vec3",
-       "doc": ""
+       "doc": "Its middle."
       },
       {
        "name": "r",
        "type": "number",
-       "doc": ""
+       "doc": "Its radius."
       },
       {
        "name": "open",
@@ -4206,7 +4194,7 @@
       {
        "name": "seed",
        "type": "number",
-       "doc": ""
+       "doc": "The same seed gives the same result."
       }
      ]
     },
@@ -4244,7 +4232,7 @@
       {
        "name": "seed",
        "type": "number",
-       "doc": ""
+       "doc": "The same seed gives the same result."
       }
      ]
     },
@@ -4287,7 +4275,7 @@
       {
        "name": "count",
        "type": "number",
-       "doc": ""
+       "doc": "How many drips."
       },
       {
        "name": "length",
@@ -4297,7 +4285,7 @@
       {
        "name": "seed",
        "type": "number",
-       "doc": ""
+       "doc": "The same seed gives the same result."
       }
      ]
     },
@@ -4339,7 +4327,7 @@
       {
        "name": "width",
        "type": "number",
-       "doc": ""
+       "doc": "How wide it is along the wall."
       },
       {
        "name": "drop",
@@ -4355,7 +4343,7 @@
       {
        "name": "seed",
        "type": "number",
-       "doc": ""
+       "doc": "The same seed gives the same result."
       }
      ]
     },
@@ -4383,7 +4371,7 @@
       {
        "name": "seed",
        "type": "number",
-       "doc": ""
+       "doc": "The same seed gives the same result."
       }
      ]
     },
@@ -4450,7 +4438,7 @@
       {
        "name": "seed",
        "type": "number",
-       "doc": ""
+       "doc": "The same seed gives the same result."
       }
      ]
     },
@@ -4462,17 +4450,17 @@
       {
        "name": "p",
        "type": "Vec3",
-       "doc": ""
+       "doc": "Where the joint is."
       },
       {
        "name": "parent",
        "type": "number",
-       "doc": ""
+       "doc": "The joint it grew from, or -1 for the foot."
       },
       {
        "name": "r",
        "type": "number",
-       "doc": ""
+       "doc": "The limb's radius here."
       }
      ]
     },
@@ -4504,17 +4492,17 @@
       {
        "name": "at",
        "type": "Vec3",
-       "doc": ""
+       "doc": "Where it stands."
       },
       {
        "name": "height",
        "type": "number",
-       "doc": ""
+       "doc": "How tall the trunk is."
       },
       {
        "name": "r",
        "type": "number",
-       "doc": ""
+       "doc": "The trunk's radius."
       },
       {
        "name": "ribs",
@@ -4531,7 +4519,7 @@
       {
        "name": "seed",
        "type": "number",
-       "doc": ""
+       "doc": "The same seed gives the same result."
       }
      ]
     },
@@ -4563,22 +4551,22 @@
       {
        "name": "at",
        "type": "Vec3",
-       "doc": ""
+       "doc": "Its middle, on the ground."
       },
       {
        "name": "r",
        "type": "number",
-       "doc": ""
+       "doc": "How far the outer leaves reach."
       },
       {
        "name": "leaves",
        "type": "number",
-       "doc": ""
+       "doc": "How many leaves, 3 to 60."
       },
       {
        "name": "seed",
        "type": "number",
-       "doc": ""
+       "doc": "The same seed gives the same result."
       }
      ]
     },
@@ -4610,17 +4598,17 @@
       {
        "name": "r",
        "type": "number",
-       "doc": ""
+       "doc": "How far the biggest shelf stands out."
       },
       {
        "name": "count",
        "type": "number",
-       "doc": ""
+       "doc": "How many shelves."
       },
       {
        "name": "seed",
        "type": "number",
-       "doc": ""
+       "doc": "The same seed gives the same result."
       }
      ]
     },
@@ -4642,23 +4630,23 @@
       {
        "name": "at",
        "type": "Vec3",
-       "doc": ""
+       "doc": "The middle of its foot."
       },
       {
        "name": "r",
        "type": "number",
-       "doc": ""
+       "doc": "Its radius."
       },
       {
        "name": "groove",
        "optional": true,
        "type": "number",
-       "doc": ""
+       "doc": "How wide a groove is; left out, about a sixth of the radius."
       },
       {
        "name": "seed",
        "type": "number",
-       "doc": ""
+       "doc": "The same seed gives the same result."
       }
      ]
     },
@@ -4745,7 +4733,7 @@
       {
        "name": "length",
        "type": "number",
-       "doc": ""
+       "doc": "How long it is along its curl."
       },
       {
        "name": "r",
@@ -4800,7 +4788,7 @@
       {
        "name": "at",
        "type": "Vec3",
-       "doc": ""
+       "doc": "The root, on the head."
       },
       {
        "name": "dir",
@@ -4810,12 +4798,12 @@
       {
        "name": "length",
        "type": "number",
-       "doc": ""
+       "doc": "How long the main beam is."
       },
       {
        "name": "r",
        "type": "number",
-       "doc": ""
+       "doc": "The beam's radius at the root."
       },
       {
        "name": "tines",
@@ -4825,7 +4813,7 @@
       {
        "name": "seed",
        "type": "number",
-       "doc": ""
+       "doc": "The same seed gives the same result."
       }
      ]
     },
@@ -4852,7 +4840,7 @@
       {
        "name": "to",
        "type": "Vec3",
-       "doc": ""
+       "doc": "The spine's other end."
       },
       {
        "name": "count",
@@ -4901,12 +4889,12 @@
       {
        "name": "thick",
        "type": "number",
-       "doc": ""
+       "doc": "How thick the bed is."
       },
       {
        "name": "hard",
        "type": "number",
-       "doc": ""
+       "doc": "How hard: 0 is soft and wears back far, 1 is hard and stands out as a ledge."
       }
      ]
     },
@@ -4973,7 +4961,7 @@
       {
        "name": "seed",
        "type": "number",
-       "doc": ""
+       "doc": "The same seed gives the same result."
       }
      ]
     },
@@ -5095,18 +5083,18 @@
       {
        "name": "r",
        "type": "number",
-       "doc": ""
+       "doc": "Its radius at the foot."
       },
       {
        "name": "height",
        "type": "number",
-       "doc": ""
+       "doc": "How tall it is."
       },
       {
        "name": "beds",
        "optional": true,
        "type": "Bed[]",
-       "doc": ""
+       "doc": "Beds of rock from the bottom up, repeating; left out, `BEDS`."
       },
       {
        "name": "wear",
@@ -5123,7 +5111,7 @@
       {
        "name": "seed",
        "type": "number",
-       "doc": ""
+       "doc": "The same seed gives the same result."
       }
      ]
     },
@@ -5150,12 +5138,12 @@
       {
        "name": "to",
        "type": "Vec3",
-       "doc": ""
+       "doc": "The foot of its other leg."
       },
       {
        "name": "height",
        "type": "number",
-       "doc": ""
+       "doc": "How tall it is."
       },
       {
        "name": "thick",
@@ -5172,12 +5160,12 @@
        "name": "beds",
        "optional": true,
        "type": "Bed[]",
-       "doc": ""
+       "doc": "Beds of rock from the bottom up, repeating; left out, `BEDS`."
       },
       {
        "name": "seed",
        "type": "number",
-       "doc": ""
+       "doc": "The same seed gives the same result."
       }
      ]
     },
@@ -5194,7 +5182,7 @@
       {
        "name": "r",
        "type": "number",
-       "doc": ""
+       "doc": "How far the patch reaches."
       },
       {
        "name": "plate",
@@ -5210,7 +5198,7 @@
       {
        "name": "seed",
        "type": "number",
-       "doc": ""
+       "doc": "The same seed gives the same result."
       }
      ]
     },
@@ -5227,12 +5215,12 @@
       {
        "name": "width",
        "type": "number",
-       "doc": ""
+       "doc": "How wide the stream bed is."
       },
       {
        "name": "count",
        "type": "number",
-       "doc": ""
+       "doc": "How many pebbles."
       },
       {
        "name": "size",
@@ -5242,7 +5230,7 @@
       {
        "name": "seed",
        "type": "number",
-       "doc": ""
+       "doc": "The same seed gives the same result."
       }
      ]
     },
@@ -5311,7 +5299,7 @@
       {
        "name": "style",
        "type": "GrowStyle",
-       "doc": ""
+       "doc": "What it grows as."
       },
       {
        "name": "at",
@@ -5321,7 +5309,7 @@
       {
        "name": "seed",
        "type": "number",
-       "doc": ""
+       "doc": "The same seed gives the same result."
       },
       {
        "name": "size",
@@ -5355,22 +5343,22 @@
       {
        "name": "from",
        "type": "Vec3",
-       "doc": ""
+       "doc": "Where it starts."
       },
       {
        "name": "to",
        "type": "Vec3",
-       "doc": ""
+       "doc": "Where it ends."
       },
       {
        "name": "r",
        "type": "number",
-       "doc": ""
+       "doc": "Its radius at the start."
       },
       {
        "name": "rTo",
        "type": "number",
-       "doc": ""
+       "doc": "Its radius at the end."
       }
      ]
     },
@@ -5486,12 +5474,12 @@
        "name": "pathWidth",
        "optional": true,
        "type": "number",
-       "doc": ""
+       "doc": "How wide the trodden path is (0.2 when left out)."
       },
       {
        "name": "seed",
        "type": "number",
-       "doc": ""
+       "doc": "The same seed gives the same result."
       }
      ]
     },
@@ -5588,7 +5576,7 @@
       {
        "name": "seed",
        "type": "number",
-       "doc": ""
+       "doc": "The same seed gives the same result."
       }
      ]
     },
@@ -5600,27 +5588,27 @@
       {
        "name": "from",
        "type": "Vec3",
-       "doc": ""
+       "doc": "Where the stroke starts."
       },
       {
        "name": "to",
        "type": "Vec3",
-       "doc": ""
+       "doc": "Where it ends."
       },
       {
        "name": "r",
        "type": "number",
-       "doc": ""
+       "doc": "Its radius."
       },
       {
        "name": "gen",
        "type": "number",
-       "doc": ""
+       "doc": "Which generation of branch it is: 0 for a main branch."
       },
       {
        "name": "t",
        "type": "number",
-       "doc": ""
+       "doc": "When it grows: 0 at the start to 1 at the last tip."
       }
      ]
     },
@@ -5665,7 +5653,7 @@
       {
        "name": "name",
        "type": "string",
-       "doc": ""
+       "doc": "The scene's name."
       },
       {
        "name": "loop",
@@ -5699,7 +5687,7 @@
        "name": "look",
        "optional": true,
        "type": "{ dither?: number; glow?: number; outline?: boolean; edges?: boolean }",
-       "doc": ""
+       "doc": "The pixel look it asks for: how much dither and glow, and whether to draw an outline and edge lines."
       },
       {
        "name": "disc",
@@ -5721,13 +5709,13 @@
       {
        "name": "parts",
        "type": "PartDoc[]",
-       "doc": ""
+       "doc": "Everything in the scene, each a shape with its paint."
       },
       {
        "name": "moves",
        "optional": true,
        "type": "MoveDoc[]",
-       "doc": ""
+       "doc": "What moves, each a whole number of times a loop."
       },
       {
        "name": "lights",
@@ -5827,7 +5815,7 @@
       {
        "name": "to",
        "type": "Vec3",
-       "doc": ""
+       "doc": "Where it lands."
       },
       {
        "name": "r",
@@ -5876,7 +5864,7 @@
       {
        "name": "to",
        "type": "Vec3",
-       "doc": ""
+       "doc": "The box's opposite corner."
       },
       {
        "name": "colors",
@@ -6147,7 +6135,7 @@
       },
       {
        "name": "lights",
-       "doc": "",
+       "doc": "The scene's live lights at a time, in seconds.",
        "signatures": [
         {
          "code": "lights(t: number): PointLight[]"
@@ -6288,64 +6276,22 @@
        "doc": "Particle state."
       },
       {
-       "name": "v",
-       "readonly": true,
-       "type": "Float64Array",
-       "doc": ""
-      },
-      {
-       "name": "C",
-       "readonly": true,
-       "type": "Float64Array",
-       "doc": ""
-      },
-      {
-       "name": "F",
-       "readonly": true,
-       "type": "Float64Array",
-       "doc": ""
-      },
-      {
        "name": "tau",
        "readonly": true,
        "type": "Float64Array",
        "doc": "Kirchhoff stress from the last step's F, so each step needs one decomposition."
       },
       {
-       "name": "Jp",
-       "readonly": true,
-       "type": "Float64Array",
-       "doc": ""
-      },
-      {
        "name": "mat",
        "readonly": true,
        "type": "Uint8Array",
-       "doc": ""
+       "doc": "Which material each particle is, as an index into `MATERIALS`."
       },
       {
        "name": "gv",
        "readonly": true,
        "type": "Float64Array",
        "doc": "Grid: velocity (momentum while scattering) and mass."
-      },
-      {
-       "name": "gm",
-       "readonly": true,
-       "type": "Float64Array",
-       "doc": ""
-      },
-      {
-       "name": "mass",
-       "readonly": true,
-       "type": "number",
-       "doc": ""
-      },
-      {
-       "name": "volume",
-       "readonly": true,
-       "type": "number",
-       "doc": ""
       },
       {
        "name": "time",
@@ -6498,13 +6444,13 @@
        "name": "width",
        "readonly": true,
        "type": "number",
-       "doc": ""
+       "doc": "The art's width, in art pixels."
       },
       {
        "name": "height",
        "readonly": true,
        "type": "number",
-       "doc": ""
+       "doc": "The art's height, in art pixels."
       }
      ],
      "methods": [
@@ -6519,7 +6465,7 @@
       },
       {
        "name": "setLook",
-       "doc": "",
+       "doc": "Changes the look: palette, dither, glow, lines.",
        "signatures": [
         {
          "code": "setLook(look: PixelLook): void"
@@ -6546,7 +6492,7 @@
       },
       {
        "name": "dispose",
-       "doc": "",
+       "doc": "Frees its render targets.",
        "signatures": [
         {
          "code": "dispose(): void"
@@ -6732,7 +6678,7 @@
       {
        "name": "shape",
        "type": "\"sphere\" | \"box\"",
-       "doc": ""
+       "doc": "The shape of what it acts on."
       },
       {
        "name": "center",
@@ -6747,7 +6693,7 @@
       {
        "name": "op",
        "type": "\"cut\" | \"paint\"",
-       "doc": ""
+       "doc": "Cut the blobs away, or paint them."
       },
       {
        "name": "outside",
@@ -6832,13 +6778,13 @@
        "name": "target",
        "readonly": true,
        "type": "RenderTarget",
-       "doc": ""
+       "doc": "The depth map: each pixel's distance in front of the camera, 0 where nothing is."
       }
      ],
      "methods": [
       {
        "name": "setSize",
-       "doc": "",
+       "doc": "Sizes the map, in pixels.",
        "signatures": [
         {
          "code": "setSize(width: number, height: number): void"
@@ -6865,7 +6811,7 @@
       },
       {
        "name": "dispose",
-       "doc": "",
+       "doc": "Frees its render target.",
        "signatures": [
         {
          "code": "dispose(): void"
@@ -7080,7 +7026,7 @@
       {
        "name": "renderer",
        "type": "WebGPURenderer",
-       "doc": ""
+       "doc": "The renderer to draw with."
       },
       {
        "name": "scene",
@@ -7090,7 +7036,7 @@
       {
        "name": "actor",
        "type": "{ blobs: Blobs; skin: Skin; skeleton: Skeleton }",
-       "doc": ""
+       "doc": "The creature being drawn."
       },
       {
        "name": "posed",
@@ -7205,7 +7151,7 @@
       {
        "name": "frames",
        "type": "number",
-       "doc": ""
+       "doc": "How many frames it gets."
       }
      ]
     },
@@ -7217,17 +7163,17 @@
       {
        "name": "move",
        "type": "SheetMove",
-       "doc": ""
+       "doc": "The move."
       },
       {
        "name": "dir",
        "type": "string",
-       "doc": ""
+       "doc": "The direction's name, such as 'down'."
       },
       {
        "name": "turn",
        "type": "number",
-       "doc": ""
+       "doc": "How far the creature is turned for it, in degrees."
       }
      ]
     },
@@ -7239,12 +7185,12 @@
       {
        "name": "rows",
        "type": "SheetRow[]",
-       "doc": ""
+       "doc": "The rows, top to bottom."
       },
       {
        "name": "cols",
        "type": "number",
-       "doc": ""
+       "doc": "Columns: the longest move's frames."
       }
      ]
     },
@@ -7284,12 +7230,12 @@
       {
        "name": "center",
        "type": "[number, number, number]",
-       "doc": ""
+       "doc": "The sphere's middle."
       },
       {
        "name": "radius",
        "type": "number",
-       "doc": ""
+       "doc": "Its radius."
       }
      ]
     },
@@ -7353,7 +7299,7 @@
       {
        "name": "weights",
        "type": "Float32Array",
-       "doc": ""
+       "doc": "Per vertex, the weights of those four bones."
       },
       {
        "name": "bones",
@@ -7470,18 +7416,18 @@
       {
        "name": "seconds",
        "type": "number",
-       "doc": ""
+       "doc": "How long one loop takes."
       },
       {
        "name": "fps",
        "optional": true,
        "type": "number",
-       "doc": ""
+       "doc": "Keys a second when it is recorded as a clip."
       },
       {
        "name": "pose",
        "type": "(sk: Skeleton, t: number) => void",
-       "doc": ""
+       "doc": "Poses the skeleton `t` seconds into the move."
       }
      ]
     },
@@ -7493,7 +7439,7 @@
       {
        "name": "id",
        "type": "string",
-       "doc": ""
+       "doc": "Its id in addresses and lists."
       },
       {
        "name": "name",
@@ -7513,22 +7459,22 @@
       {
        "name": "start",
        "type": "number",
-       "doc": ""
+       "doc": "The blob count picked first."
       },
       {
        "name": "looks",
        "type": "Look[]",
-       "doc": ""
+       "doc": "Its looks, the first the default."
       },
       {
        "name": "make",
        "type": "(count: number, look: string) => Creature",
-       "doc": ""
+       "doc": "Builds it with about `count` blobs in a look."
       },
       {
        "name": "moves",
        "type": "Move[]",
-       "doc": ""
+       "doc": "Its moves, the first played first."
       },
       {
        "name": "view",

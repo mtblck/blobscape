@@ -18,9 +18,11 @@ import type { Skin } from './rig.ts'
  * every frame, so the creature is the same size in all of them.
  */
 export interface BakeTarget {
+  /** The renderer to draw with. */
   renderer: THREE.WebGPURenderer
   /** A scene holding only what should be in the sprite (the creature's SplatWorld). */
   scene: THREE.Scene
+  /** The creature being drawn. */
   actor: { blobs: Blobs; skin: Skin; skeleton: Skeleton }
   /** Tells the world its skeleton (and, after `morph`, its blobs) moved. */
   posed: () => void

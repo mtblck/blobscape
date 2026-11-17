@@ -13,8 +13,11 @@ import { Skeleton, emptySkin, setWeights, type Bone, type Skin } from './rig.ts'
  * the color from a fixed light, as for the fox, unless a part is `glow`.
  */
 export interface Creature {
+  /** The blobs in the rest pose. */
   blobs: Blobs
+  /** Which bones move each blob, and by how much. */
   skin: Skin
+  /** The bones, and their pose. */
   skeleton: Skeleton
 }
 

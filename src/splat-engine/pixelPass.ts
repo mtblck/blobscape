@@ -101,6 +101,7 @@ export class PixelPass {
   /** The look in use. */
   look!: PixelLook
 
+  /** Changes the look: palette, dither, glow, lines. */
   setLook(look: PixelLook) {
     this.look = look
     this.kept = false
@@ -133,7 +134,9 @@ export class PixelPass {
     this.res.value.set(w, h)
   }
 
+  /** The art's width, in art pixels. */
   get width() { return this.small.width }
+  /** The art's height, in art pixels. */
   get height() { return this.small.height }
 
   /**
@@ -372,6 +375,7 @@ export class PixelPass {
     })()
   }
 
+  /** Frees its render targets. */
   dispose() {
     this.small.dispose()
     this.ids.dispose()

@@ -27,6 +27,7 @@ export interface Shape {
   sdf: (x: number, y: number, z: number) => number
   /** A box that holds the whole shape. */
   min: Vec3
+  /** The far corner of a box that holds it. */
   max: Vec3
   /**
    * For a shape made of many pieces (the bricks of a wall, the posts of a fence, the columns of a basalt
@@ -46,6 +47,7 @@ export interface VoxelPart {
   bone: string
   /** Unlit and casting no shadow: lamps, windows, beams of light. */
   glow?: boolean
+  /** How solid its blobs are, 0–1. */
   opacity?: number
   /** Casts no shadow on other parts (thin things far from the ground, like birds). */
   noShadow?: boolean
@@ -87,8 +89,11 @@ export interface Glass {
  * the paint under it.
  */
 export interface Ink {
+  /** Which marks. */
   kind: InkKind
+  /** The share of blocks that take a mark, 0–1. */
   amount?: number
+  /** The marks' color (sRGB, 0–1); left out, a much darker step of the paint. */
   color?: Vec3
 }
 
@@ -136,6 +141,7 @@ export function inkOf(c: Vec3): Vec3 {
  * over shut-in and up-turned faces in patches, `dust` lies thin on every upturned face, under cover or not.
  */
 export interface Cover {
+  /** What lies on the scene. */
   kind: 'snow' | 'moss' | 'dust'
   /** sRGB, 0–1. */
   color: Vec3
@@ -148,11 +154,15 @@ export interface Cover {
  * under LOOSE_MAX opacity, so pixel mode's map of parts never takes one for a surface.
  */
 export interface LooseBlob {
+  /** Where it is. */
   center: Vec3
   /** Its radii along x, y and z. */
   scale: Vec3
+  /** Its color (sRGB, 0–1). */
   color: Vec3
+  /** How solid it is, 0–1. */
   opacity: number
+  /** The bone that carries it. */
   bone: string
 }
 
@@ -161,10 +171,13 @@ export interface LooseBlob {
  * back up it are lit by its color, on top of the sun, so the beam shows where it lands.
  */
 export interface Beam {
+  /** Where it starts. */
   from: Vec3
+  /** Where it lands. */
   to: Vec3
   /** Its radius. */
   r: number
+  /** Its color (sRGB, 0–1). */
   color: Vec3
   /** 0–1. */
   strength: number
@@ -219,6 +232,7 @@ export interface VoxelSpec {
   disc?: number
   /** Blobs placed as they are, after the cut ones: see LooseBlob. */
   loose?: LooseBlob[]
+  /** Beams of light that fall through the scene. */
   beams?: Beam[]
   /** Snow, moss or dust over every part that isn't `bare` or `glow`: see Cover. */
   cover?: Cover

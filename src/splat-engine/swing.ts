@@ -57,6 +57,7 @@ export class Swing {
   private chains: { bones: number[]; at: number; follow: number[] }[]
   private started = false
   private jump: number
+  /** The loose parts it was made for. */
   readonly spec: SwingSpec
 
   constructor(sk: Skeleton, spec: SwingSpec) {

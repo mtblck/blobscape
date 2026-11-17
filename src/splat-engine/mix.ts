@@ -14,8 +14,11 @@ import { mulQ, norm4, type Skeleton } from './rig.ts'
  * - `Mixer` plays named moves with weights and crossfades between them.
  */
 export interface Pose {
+  /** Each bone's local rotation (x, y, z, w). */
   rotation: Float32Array
+  /** Each bone's offset from its rest place (x, y, z). */
   offset: Float32Array
+  /** Each bone's size (1 is as built). */
   size: Float32Array
 }
 

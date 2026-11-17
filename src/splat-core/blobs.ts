@@ -27,6 +27,7 @@ export class Blobs {
    * without it have degree 0 and no array.
    */
   shDegree = 0
+  /** The color-by-angle terms themselves, or null when the blobs have none: see `shDegree`. */
   sh: Float32Array | null = null
 
   constructor(capacity = 64) {

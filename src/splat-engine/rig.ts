@@ -12,8 +12,11 @@ import type { Quat, Vec3 } from '../splat-core/blobs.ts'
  * children, as in glTF.
  */
 export interface Bone {
+  /** What poses and files call it. */
   name: string
+  /** The index of the bone it hangs on, or -1 for a root. */
   parent: number
+  /** Where it turns about, in the rest pose. */
   head: Vec3
   /** Where the bone ends in the rest pose, for drawing it. A bone with children points at its first child when this is missing. */
   tail?: Vec3
@@ -39,7 +42,9 @@ export class Skeleton {
 
   /** Output, per bone: skin matrix (16), skin rotation quaternion (4), skin uniform scale (1). */
   readonly matrix: Float32Array
+  /** Output, per bone: the skin rotation as a quaternion (4). */
   readonly quat: Float32Array
+  /** Output, per bone: the skin's uniform scale (1). */
   readonly scale: Float32Array
   /** Posed world position of each bone's head, for drawing the rig. */
   readonly posedHead: Float32Array
@@ -135,7 +140,9 @@ export class Skeleton {
 
 /** How each blob hangs on the skeleton: up to four bones and weights summing to 1. */
 export interface Skin {
+  /** Four bone indices per blob. */
   joints: Uint8Array
+  /** Four weights per blob, for those bones, summing to 1. */
   weights: Float32Array
 }
 

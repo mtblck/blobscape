@@ -49,8 +49,11 @@ import { viewColor } from '../splat-core/sh.ts'
  */
 
 export interface Actor {
+  /** The blobs in the rest pose. */
   blobs: Blobs
+  /** Which bones move each blob, and by how much. */
   skin: Skin
+  /** The bones, and their pose. */
   skeleton: Skeleton
   /** Which part of the actor each blob belongs to (as `buildBody` and `voxelBody` give it): what `SplatWorld.parts` draws. Left out, the actor is one part. */
   partOf?: ArrayLike<number>
@@ -96,6 +99,7 @@ export interface EngineOptions {
 
 /** A point light for `setLights`. */
 export interface PointLight {
+  /** Where it is, in world space. */
   position: [number, number, number]
   /** Linear RGB, times its strength: [1, 0.6, 0.3] is a torch at full strength. */
   color: [number, number, number]
