@@ -171,7 +171,7 @@ export const LESSON_GOALS: Record<(typeof LESSONS)[number]['id'], Goal[]> = {
   ],
   'scene-data': [
     { id: 'sway', label: 'Make the tree sway', hint: 'The tree has a bone already. What makes a bone move?', where: 'scene', why: 'A bone holds still until a move names it. A sway rocks it to and fro, and the trunk and crown on it go along.' },
-    { id: 'loop', label: 'Find the rule every move must keep', hint: 'Give a move one and a half times a loop, and read the checker.', where: 'checker', why: 'Every move comes round a whole number of times a loop, so when the loop ends every bone is back where it began and the scene runs on with no seam.' },
+    { id: 'loop', label: 'Find the rule every move must keep', hint: 'What if a move came round only partway by the end of the loop? Ask the checker.', where: 'checker', why: 'Every move comes round a whole number of times a loop, so when the loop ends every bone is back where it began and the scene runs on with no seam.' },
     { id: 'light', label: 'Light the lantern with a light that flickers', hint: 'Live lights go in a list of their own, next to the parts.', where: 'scene', why: 'A live light shines on what is near it frame by frame, and a flicker makes it waver a whole number of times a loop, like any move.' },
   ],
   'fuzzy': [
