@@ -6,6 +6,7 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 
 ## [Unreleased]
 
+- New page, the engine's API reference (/engine/api/): every name the @blobscape/engine package exports, with its declaration and what it does, and a box to find a name. The engine page's "Use the code" door now leads to it and the Build with the engine lessons.
 - New lesson, Pixel art that holds still: the cottage drawn small in a few colors. Make it a small picture, cut it to four colors, and stop its pixels flickering with the lantern (steady pixels, and held poses for a swinging view); it ends with the code for your look.
 - New lesson, A scene written as data: a cottage at dusk as a page of JSON you edit, with the engine's checker saying what is wrong and where. Make the tree sway, find the rule every move keeps so the scene loops, and light the lantern; it ends with the code that plays your description.
 - New lesson part, Build with the engine, starting with Your first creature: a slug of two shapes on two bones, made with the engine. Make its tail bend, close the crease where it joins, and let it swing; the lesson ends with the code for the slug you made, to copy.

@@ -6,6 +6,8 @@ It is the engine behind [blobscape.dev](https://blobscape.dev/engine/): Splat Cr
 
 > Version 0.x: the API will change between minor versions.
 
+Guides: the [Build with the engine](https://blobscape.dev/lessons/first-creature/) lessons (a creature on bones, a scene written as data, pixel art). Every export: the [API reference](https://blobscape.dev/engine/api/).
+
 ## Install
 
 ```sh
