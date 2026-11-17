@@ -201,7 +201,7 @@ export function PixelArt() {
         note: (
           <>
             <p>The cottage from the last lesson, drawn with the settings you chose, with the engine package.</p>
-            <p>The package is getting ready and isn&rsquo;t on npm yet.</p>
+            <p>Install it with <code>npm install @blobscape/engine three</code>.</p>
           </>
         ),
         source: pixelCode(opts),

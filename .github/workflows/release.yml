@@ -9,11 +9,10 @@ name: Release
 # pushed by hand (vX.Y.Z matching package.json) also makes its release. Same shape as
 # seedkin's release.yml.
 #
-# npm: trusted publishing (this workflow's OIDC token, with provenance) once the package
-# exists on npm; npmjs.com -> @blobscape/engine -> Settings -> Trusted publishers names
-# GitHub Actions, mtblck/blobscape and this file, release.yml, so keep its name. npm only
-# offers that for a package that exists, so the first version goes out with a short-lived
-# granular token in the NPM_TOKEN secret; delete the secret once trusted publishing is on.
+# npm: trusted publishing (this workflow's OIDC token, with provenance). On npmjs.com,
+# @blobscape/engine -> Settings -> Trusted publishers names
+# GitHub Actions, mtblck/blobscape and this file, release.yml, so keep its name. No npm
+# token is stored (0.2.0, the first version, went out with a short-lived one, since deleted).
 # A failed publish leaves the tag and release in place: re-running the job finishes it.
 on:
   push:
@@ -135,7 +134,4 @@ jobs:
       - name: Publish @blobscape/engine
         if: steps.engine.outputs.publish == 'true'
         working-directory: packages/engine
-        env:
-          # Only for the first version; empty once trusted publishing takes over.
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --access public --provenance
