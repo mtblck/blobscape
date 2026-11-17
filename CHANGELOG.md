@@ -6,15 +6,13 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 
 ## [Unreleased]
 
-<<<<<<< Updated upstream
 - A view that fails to start WebGPU or WebGL the first time now tries again by itself, instead of saying the browser can't and working after a reload. The engine package's `Stage.start` does the same.
 
 - Brushes in the sandbox: Paint lays grass, fur, moss, stones or leaves onto whatever is under the ring, each by its own rule. Grass bends, fur lies the way you drag, stones keep apart, leaves grow on sprigs.
 
 - Two mending tools in the sandbox. Fill grows blobs into a hole from its edge, in the size, facing and colors of the blobs beside it. Stamp copies what is round one place to another: click what to copy, then drag where the copy should go.
-=======
+
 - The engine's API reference is now its docs page (/engine/docs/; the old address goes there): a getting-started guide from the package's README, then a card for every export with its properties, methods and signatures, names in types linked to their entries, and a contents list that follows what you are reading. The reference is generated with TypeDoc from the package's own doc comments.
->>>>>>> Stashed changes
 
 - The engine page, the API reference and the Build with the engine lessons now say how to install the package from npm.
 
