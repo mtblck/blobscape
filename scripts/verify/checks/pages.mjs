@@ -7,7 +7,7 @@ const L = (f) => [`${B}lessons/${f}.tsx`]
 const PAGES = {
   lessons: [`${B}routes.ts`], 'one-blob': L('OneBlob'), footprint: L('Footprint'), order: L('Order'), many: L('Many'), angle: L('Angle'), paint: L('Paint'),
   formats: L('Formats'), break: L('Break'), 'one-bone': L('OneBone'), weights: L('Weights'), twist: L('Twist'), walk: L('Walk'), feet: L('Feet'), model: L('Model'),
-  morphs: L('Morphs'), fur: L('Fur'), shoot: L('Shoot'), fuzzy: L('Fuzzy'), floaters: L('Floaters'), lighting: L('Lighting'), sandbox: [`${B}Sandbox.tsx`],
+  morphs: L('Morphs'), fur: L('Fur'), shoot: L('Shoot'), fuzzy: L('Fuzzy'), floaters: L('Floaters'), lighting: L('Lighting'), shimmer: L('Shimmer'), sandbox: [`${B}Sandbox.tsx`],
   creature: [`${B}Creature.tsx`], 'forest-walk': [`${B}ForestWalk.tsx`], clockwork: [`${B}Clockwork.tsx`], 'shape-shifter': [`${B}ShapeShifter.tsx`],
   'pixel-diorama': [`${B}PixelDiorama.tsx`], 'dungeon-run': [`${B}DungeonRun.tsx`], 'scan-studio': [`${B}ScanStudio.tsx`], contact: [`${B}Contact.tsx`],
 }

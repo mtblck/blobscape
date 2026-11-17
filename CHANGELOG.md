@@ -10,13 +10,13 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 
 The first tagged release of blobscape.dev: lessons, a sandbox and experiments with Gaussian splats, and the Blobscape engine they run on. It marks the site as it stands. The `@blobscape/engine` npm package comes later (#102).
 
-### Lessons (20)
+### Lessons (21)
 
 Three parts, each lesson a question with goals to tick:
 
 - **One object** (1 to 8): One blob, Footprint, Order matters, Many make a shape, Color by angle, Paint, Splat files, Break it.
 - **Rigs and 3D models** (9 to 16): One bone, Weights, Twist without tearing, Walk cycle, Feet on the ground, Blobs to a model, Morphs, Fur and grass.
-- **Real things from photos** (17 to 20): Photo shoot, Fuzzy things, Floaters and cleanup, Lighting is baked.
+- **Real things from photos** (17 to 21): Photo shoot, Fuzzy things, Floaters and cleanup, Lighting is baked, Why small blobs shimmer (new: a wire fence that blinks in the distance, the blur that stops it, and the fade that keeps the blur honest).
 
 New since the lessons first went up: Feet on the ground walks the elf over a dirt path, up stone steps, up a grassy slope and over a rocky path. The ground slides under it, each ground has its own walk (a heel-to-toe stride on the flat, a slower climb on the steps, high steps over the stones), and every foot is planned so it never goes through a step.
 

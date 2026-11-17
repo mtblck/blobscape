@@ -165,8 +165,8 @@ export default [
   },
   {
     name: 'lessons-capture',
-    about: 'Photo shoot, Fuzzy things, Floaters, Lighting is baked, Break it',
-    entries: ['src/blobscape/lessons/Shoot.tsx', 'src/blobscape/lessons/Fuzzy.tsx', 'src/blobscape/lessons/Floaters.tsx', 'src/blobscape/lessons/Lighting.tsx', 'src/blobscape/lessons/Break.tsx'],
+    about: 'Photo shoot, Fuzzy things, Floaters, Lighting is baked, Why small blobs shimmer, Break it',
+    entries: ['src/blobscape/lessons/Shoot.tsx', 'src/blobscape/lessons/Fuzzy.tsx', 'src/blobscape/lessons/Floaters.tsx', 'src/blobscape/lessons/Lighting.tsx', 'src/blobscape/lessons/Shimmer.tsx', 'src/blobscape/lessons/Break.tsx'],
     async run({ base, fails, ok, open }) {
       const { page, ctx } = await open('/', { viewport: { width: 1440, height: 1000 } })
       const goalCount = () => page.textContent('[data-testid=goal-count]')
@@ -227,6 +227,27 @@ export default [
       const relitScore = await lightingScore()
       if (!(stuck <= 5 && relitScore >= 95)) fails.push(`blobscape lighting: as captured ${stuck}%, relit with the shape ${relitScore}%`)
       else ok(`blobscape lighting: the scan stays at ${stuck}% when the lamp moves, ${relitScore}% once the old light and shadows come out`)
+
+      // Why small blobs shimmer: far off the sharp fence blinks; blurred it calms but thickens; faded it's right, and every goal ticks
+      await page.goto(base + '/lessons/shimmer/')
+      await page.evaluate(() => localStorage.clear())
+      await page.reload()
+      const shimmer = async () => {
+        await page.waitForTimeout(150)
+        await page.waitForFunction(() => /Blink/.test(document.querySelector('[data-testid=shimmer-readout]')?.textContent ?? ''), null, { timeout: 15000 }).catch(() => {})
+        const t = await page.textContent('[data-testid=shimmer-readout]')
+        return { blink: Number(t.match(/Blink ([\d.]+)%/)?.[1]), cover: Number(t.match(/covers (\d+)%/)?.[1]) }
+      }
+      await page.getByRole('slider', { name: 'Distance' }).fill('8')
+      const sharp = await shimmer()
+      await page.getByRole('slider', { name: 'Blur' }).fill('0.6')
+      const blurred = await shimmer()
+      await page.getByLabel('Fade each blob by as much as the blur spread it').check()
+      const faded = await shimmer()
+      await page.waitForTimeout(400)
+      const shimmerGoals = await goalCount()
+      if (!(sharp.blink >= 12 && blurred.blink < 4 && blurred.cover >= 180 && faded.blink < 2 && Math.abs(faded.cover - 100) <= 5 && /^4 of/.test(shimmerGoals))) fails.push(`blobscape shimmer: ${JSON.stringify({ sharp, blurred, faded, shimmerGoals })}`)
+      else ok(`blobscape shimmer: at 8 m the sharp fence blinks ${sharp.blink}%, blurred ${blurred.blink}% but ${blurred.cover}% of the fence, faded ${faded.blink}% at ${faded.cover}%; all four goals tick`)
 
       // Break it: shrink, explode, and put it back
       await page.goto(base + '/lessons/break/')

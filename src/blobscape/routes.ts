@@ -30,9 +30,10 @@ export const LESSONS = [
   { id: 'fuzzy', title: 'Fuzzy things', summary: 'Grass, a dandelion clock and a wooden block, kept as splats and as a mesh. Which keeps what, and for how many bytes?' },
   { id: 'floaters', title: 'Floaters and cleanup', summary: 'A rushed capture leaves blobs hanging in the air. Cut them away, and find what no cut can fix.' },
   { id: 'lighting', title: 'Lighting is baked', summary: 'A scan keeps the light it was shot in. Move the lamp, and try three ways to make the scan keep up.' },
+  { id: 'shimmer', title: 'Why small blobs shimmer', summary: 'A wire fence in the distance blinks as it moves. Blur it to stop the blinking, and find what the blur costs.' },
 ] as const
 
-const WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty']
+const WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty', 'twenty-one', 'twenty-two', 'twenty-three', 'twenty-four', 'twenty-five']
 /** How many lessons there are, in words ("thirteen"), for headings and links. */
 export const LESSON_COUNT = WORDS[LESSONS.length] ?? String(LESSONS.length)
 
@@ -153,6 +154,12 @@ export const LESSON_GOALS: Record<(typeof LESSONS)[number]['id'], Goal[]> = {
     { id: 'double', label: 'Add a live light from the other side', hint: 'Keep the lamp well away from where it was.', where: 'relight', why: 'The old light is still painted on, so the scan ends up lit from both sides and the score barely moves.' },
     { id: 'guess', label: 'Take the old light out and get past 55% with the lamp moved', hint: 'Work out where the capture’s lamp stood from the scan’s shading.', where: 'old', why: 'Divide out the old light and the ball and box relight well. The shadows still sit where they were.' },
     { id: 'shape', label: 'Get the table within 2% with the lamp moved', hint: 'The old shadows have to go. What would you need to know to move them?', where: 'old', why: 'Shadows need the scene’s shape: what blocked the light. With it, both the light and the shadows move.' },
+  ],
+  'shimmer': [
+    { id: 'blink', label: 'Make the fence blink as it drifts', hint: 'Send it further away, with no blur.', where: 'distance', why: 'Far off, a wire is thinner than a pixel. Each pixel looks at one point, its middle, and the wire is caught or missed as it slides.' },
+    { id: 'calm', label: 'Stop the blinking without bringing the fence closer', hint: 'Keep it at 6 m or more.', where: 'blur', why: 'Blurred to at least a pixel wide, no wire can fall between two pixel middles. Most splat renderers do this to every blob.' },
+    { id: 'heavy', label: 'Find what the blur costs far away', hint: 'Compare how much fence each view shows, at 6 m or more.', where: 'blur', why: 'A wire blurred a pixel wide is still drawn as solid as before, so far off it covers twice what it should: thin things go thick.' },
+    { id: 'both', label: 'At 7 m or more, keep the blink under 2% and the fence within 5% of what it should cover', hint: 'The blur spreads each blob out. What else would have to change?', where: 'fade', why: 'Fade each blob by as much as the blur spread it and it covers what it should, still too wide to blink. That is Mip-Splatting’s 2D filter.' },
   ],
   'fuzzy': [
     { id: 'blades', label: 'Give the grass mesh its finest grid, and count the blade tips it keeps', where: 'mesh', why: 'None. A blade is thinner than a grid cell, so the skin can’t close round it and the blades melt into the clump.' },
