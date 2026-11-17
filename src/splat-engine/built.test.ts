@@ -139,4 +139,6 @@ test('a scene can say walls, steps, fences and arcades, painted brick by brick, 
   assert.match(errs({ kind: 'arcade', from: [-1, 0, 0], to: [1, 0, 0], height: 1, thick: 0.1, bays: 4, pillar: 0.6 }), /pillar: leaves no room/)
   assert.match(errs({ kind: 'sphere', at: [0, 0, 0], r: 0.3 }), /pieces paints a shape made of pieces only/)
   assert.deepEqual(checkScene(scene({ kind: 'cut', shape: shapes[0], hole: { kind: 'box', at: [0, 0.2, 0], half: [0.2, 0.2, 0.3] } })), [], 'a doorway cut through a wall keeps its bricks')
+  // a path whose points repeat would make a rail of no length
+  assert.match(checkScene(scene({ kind: 'fence', path: [[0, 0, 0], [0, 0, 0]], bay: 0.3, height: 0.3, post: 0.03, rails: 2, seed: 1 })).join(), /must be apart from the point before it/)
 })

@@ -375,6 +375,16 @@ function boxGap(a: { lo: Vec3; hi: Vec3 }, b: { lo: Vec3; hi: Vec3 }) {
  * than the true distance elsewhere, which is all the builder and the sun's march need. For a wall's fallen bricks, a
  * fence's posts and rails, a field of stalagmites: anything scattered of many small pieces.
  */
+/**
+ * A shape whose distance can overstate by up to 1/k − 1 of itself (a ragged edge, an overhang the side distance
+ * doesn't see) made honest for the sun march: exact within `near` of the surface, where cells are placed, and
+ * scaled by k beyond it, so a step never passes through.
+ */
+export function tighten(s: Shape, k: number, near = 0.006): Shape {
+  const f = (d: number) => (Math.abs(d) <= near ? d : Math.sign(d) * (near + (Math.abs(d) - near) * k))
+  return { ...s, sdf: (x, y, z) => f(s.sdf(x, y, z)) }
+}
+
 export function many(shapes: Shape[]): Shape {
   if (shapes.length <= 6) return { ...union(...shapes), pieceAt: nearestPiece(shapes, true) }
   const all = union(...shapes)
@@ -382,7 +392,7 @@ export function many(shapes: Shape[]): Shape {
   const ext = [0, 1, 2].map((i) => Math.max(hi[i] - lo[i], 1e-6))
   // buckets about as big as a typical piece, and not more than about 4096 of them
   const sizes = shapes.map((k) => Math.max(k.max[0] - k.min[0], k.max[1] - k.min[1], k.max[2] - k.min[2])).sort((a, b) => a - b)
-  let cell = sizes[sizes.length >> 1] / 3
+  let cell = Math.max(sizes[sizes.length >> 1] / 3, 1e-4)
   while (ext.reduce((n, e) => n * Math.ceil(e / cell), 1) > 4096) cell *= 1.25
   const n = ext.map((e) => Math.max(1, Math.ceil(e / cell)))
   const near: number[][] = [], clear: number[] = []

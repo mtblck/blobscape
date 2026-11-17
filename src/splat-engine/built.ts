@@ -1,5 +1,5 @@
 import type { Vec3 } from '../splat-core/blobs.ts'
-import { many, orientedBox, type Shape } from './voxel.ts'
+import { many, orientedBox, type Shape, tighten } from './voxel.ts'
 
 /**
  * Built things (issue #176): walls of real bricks, flights of worn steps, fences along a path and arcades cut into
@@ -381,7 +381,7 @@ export interface ArcadeSpec {
 export const ARCHES = ['round', 'pointed', 'flat'] as const
 
 /** A wall cut into equal bays with an opening in each: arcades, cloisters, viaducts. Stones laid in courses, and wedge stones round each arch. */
-export function arcade(s: ArcadeSpec, cell: number): Shape {
+function arcadeRaw(s: ArcadeSpec, cell: number): Shape {
   const f = groundFrame(s.from, s.to)
   const n = Math.max(1, Math.round(s.bays)), bw = f.len / n
   const ow = Math.max(cell, (bw - s.pillar) / 2)
@@ -438,3 +438,5 @@ export function arcade(s: ArcadeSpec, cell: number): Shape {
     },
   }
 }
+
+export const arcade = (s: ArcadeSpec, cell: number): Shape => tighten(arcadeRaw(s, cell), 0.7)

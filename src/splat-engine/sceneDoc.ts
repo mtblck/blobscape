@@ -461,6 +461,13 @@ export function checkScene(doc: unknown): string[] {
     v.forEach((c, i) => hex(c, `${at}[${i}]`))
   }
   const axis = (v: unknown, at: string) => { if (!AXES.includes(v as string)) bad(at, "must be 'x', 'y' or 'z'") }
+  /** Each point of a path a little way from the one before, along the ground: a repeated point makes a piece with no length. */
+  const apart = (path: unknown[], at: string) => {
+    for (let i = 1; i < path.length; i++) {
+      const a = path[i - 1], b = path[i]
+      if (Array.isArray(a) && Array.isArray(b) && Math.hypot(Number(b[0]) - Number(a[0]), Number(b[2]) - Number(a[2])) < 0.01) bad(`${at}[${i}]`, 'must be apart from the point before it along the ground')
+    }
+  }
   const count = (v: unknown, at: string, min: number, max: number, optional = false) => { if (optional && v === undefined) return; if (typeof v !== 'number' || !Number.isInteger(v) || v < min || v > max) bad(at, `must be a whole number from ${min} to ${max}`) }
   const sides = (v: unknown, at: string) => count(v, at, 3, 8, true)
   const beds = (v: unknown, at: string) => {
@@ -595,7 +602,7 @@ export function checkScene(doc: unknown): string[] {
         break
       case 'fence':
         if (!Array.isArray(s.path) || s.path.length < 2 || s.path.length > 16) bad(`${at}.path`, 'must be a list of 2 to 16 points')
-        else s.path.forEach((q: unknown, i: number) => vec(q, `${at}.path[${i}]`))
+        else { s.path.forEach((q: unknown, i: number) => vec(q, `${at}.path[${i}]`)); apart(s.path, `${at}.path`) }
         num(s.bay, `${at}.bay`, 0.05, REACH); num(s.height, `${at}.height`, 0.02, 2); num(s.post, `${at}.post`, 0.003, 0.2)
         if (typeof s.rails !== 'number' || !Number.isInteger(s.rails) || s.rails < 1 || s.rails > 4) bad(`${at}.rails`, 'must be a whole number from 1 to 4')
         opt(s.lean, `${at}.lean`, 0, 1); opt(s.missing, `${at}.missing`, 0, 1); opt(s.sag, `${at}.sag`, 0, 1)
@@ -688,7 +695,7 @@ export function checkScene(doc: unknown): string[] {
       case 'mud': vec(s.at, `${at}.at`); num(s.r, `${at}.r`, 0.05, 3); num(s.plate, `${at}.plate`, 0.03, 1); opt(s.curl, `${at}.curl`, 0, 1); seed(s.seed, `${at}.seed`); break
       case 'pebbles':
         if (!Array.isArray(s.path) || s.path.length < 2 || s.path.length > 16) bad(`${at}.path`, 'must be a list of 2 to 16 points')
-        else s.path.forEach((q: unknown, i: number) => vec(q, `${at}.path[${i}]`))
+        else { s.path.forEach((q: unknown, i: number) => vec(q, `${at}.path[${i}]`)); apart(s.path, `${at}.path`) }
         num(s.width, `${at}.width`, 0.02, 2); count(s.count, `${at}.count`, 1, 200); num(s.size, `${at}.size`, 0.005, 0.5); seed(s.seed, `${at}.seed`)
         break
       case 'drift':
@@ -697,7 +704,7 @@ export function checkScene(doc: unknown): string[] {
         vec(s.wind, `${at}.wind`, -1, 1, 2); opt(s.pile, `${at}.pile`, 0, 1); opt(s.reach, `${at}.reach`, 0.5, 20); opt(s.pathWidth, `${at}.pathWidth`, 0.02, 2)
         if (s.path !== undefined) {
           if (!Array.isArray(s.path) || s.path.length < 2 || s.path.length > 16) bad(`${at}.path`, 'must be a list of 2 to 16 points')
-          else s.path.forEach((q: unknown, i: number) => vec(q, `${at}.path[${i}]`))
+          else { s.path.forEach((q: unknown, i: number) => vec(q, `${at}.path[${i}]`)); apart(s.path, `${at}.path`) }
         }
         seed(s.seed, `${at}.seed`)
         break
@@ -707,7 +714,7 @@ export function checkScene(doc: unknown): string[] {
         num(s.r, `${at}.r`, 0.02, 2); count(s.arms, `${at}.arms`, 1, 8, true); seed(s.seed, `${at}.seed`)
         if (s.stage !== undefined) {
           vec(s.stage, `${at}.stage`, 0, 1, 2)
-          if (Array.isArray(s.stage) && !((s.stage[0] as number) < (s.stage[1] as number))) bad(`${at}.stage`, 'must run from a share to a later one')
+          if (Array.isArray(s.stage) && !((s.stage[0] as number) + 0.05 <= (s.stage[1] as number))) bad(`${at}.stage`, 'must run from a share to one at least 0.05 later')
         }
         break
       case 'cut': shape(s.shape, `${at}.shape`, depth + 1); shape(s.hole, `${at}.hole`, depth + 1); break

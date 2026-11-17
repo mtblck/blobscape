@@ -1,6 +1,6 @@
 import type { Vec3 } from '../splat-core/blobs.ts'
 import { hash } from './built.ts'
-import { many, type Shape } from './voxel.ts'
+import { many, type Shape, tighten } from './voxel.ts'
 
 /**
  * Formations (issue #177): shapes that come from a rule rather than placing each one by hand. A faceted crystal and
@@ -142,7 +142,7 @@ export interface GeodeSpec {
 }
 
 /** A geode broken open: a rough rind, banded layers, and a hollow lined with small crystals pointing in. */
-export function geode(s: GeodeSpec): Shape {
+function geodeRaw(s: GeodeSpec): Shape {
   const o = norm(s.open)
   const rind = s.r * (s.rind ?? 0.15), bands = Math.max(1, Math.round(s.bands ?? 3))
   const rIn = s.r * (1 - (s.rind ?? 0.15) - 0.3)
@@ -338,7 +338,7 @@ export interface FlowSpec {
 }
 
 /** Flowstone down a wall: a curtain of stone in folds, thicker at the top, its foot hanging in scallops. */
-export function flowstone(s: FlowSpec): Shape {
+function flowstoneRaw(s: FlowSpec): Shape {
   const l = Math.hypot(s.along[0], s.along[1]) || 1, ux = s.along[0] / l, uz = s.along[1] / l
   const folds = Math.max(1, s.folds ?? 5)
   const k = (Math.PI * 2 * folds) / s.width
@@ -407,3 +407,7 @@ export function icicles(host: Shape, s: IcicleSpec, thin = 0): Shape {
   if (!parts.length) return { sdf: () => 1, min: host.min, max: host.min }
   return many(parts)
 }
+
+export const geode = (s: GeodeSpec): Shape => tighten(geodeRaw(s), 0.92)
+
+export const flowstone = (s: FlowSpec): Shape => tighten(flowstoneRaw(s), 0.65)

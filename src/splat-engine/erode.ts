@@ -1,6 +1,6 @@
 import type { Vec3 } from '../splat-core/blobs.ts'
 import { hash, noise1 } from './built.ts'
-import { many, type Shape } from './voxel.ts'
+import { many, type Shape, tighten } from './voxel.ts'
 
 /**
  * Worn land and layered rock (issue #175): a height field worn by water and slumping (droplets carve gullies and drop
@@ -245,13 +245,14 @@ export interface ButteSpec {
  * A butte, mesa or hoodoo: rock in beds, turned about the upright, each bed worn back by how soft it is, so hard beds
  * stand out as ledges over the soft ones under them, and a wide caprock overhangs. A scree apron flares at its foot.
  */
-export function butte(s: ButteSpec): Shape {
+const NEAR_BEDS = [-0.06, -0.045, -0.03, -0.015, 0.015, 0.03, 0.045, 0.06]
+
+function butteRaw(s: ButteSpec): Shape {
   const beds = s.beds ?? BEDS
   const wear = s.wear ?? 0.3, cap = s.cap ?? 0
   const capH = cap > 0 ? Math.min(s.height * 0.18, s.r * 0.6) : 0
   /** The radius at a height above the foot, before the wobble round it. */
   const radius = (y: number) => {
-    if (y > s.height - capH) return s.r * (1 + cap)
     // worn back by softness, eased across a bed's edges so ledges round off a little
     const lo = hardAt(beds, y - 0.02), hi = hardAt(beds, y + 0.02), here = hardAt(beds, y)
     const h = (lo + hi + here * 2) / 4
@@ -264,9 +265,18 @@ export function butte(s: ButteSpec): Shape {
     const ang = Math.atan2(q[2], q[0])
     const wobble = 1 + 0.1 * (noise1(s.seed, ang * 3 + q[1] * 2, 1) - 0.5) + 0.06 * Math.sin(ang * 5 + s.seed)
     const rho = Math.hypot(q[0], q[2])
-    const side = (rho - radius(Math.min(s.height, Math.max(0, q[1]))) * wobble) * 0.7
+    const at = (y: number) => radius(Math.min(s.height, Math.max(0, y))) * wobble
+    let side = rho - at(q[1])
+    // the beds step the radius, so a wider bed just above or below may be nearer than the face level with the point
+    if (side > 0) for (const o of NEAR_BEDS) side = Math.min(side, Math.hypot(Math.max(0, rho - at(q[1] + o)), Math.max(0, Math.abs(o) - 0.012)))
+    side *= 0.7
     const top = q[1] - s.height + (cap > 0 ? -capH * 0.4 * Math.max(0, 1 - (rho / (s.r * (1 + cap))) ** 2) : 0)
-    return Math.max(side, top, -q[1])
+    const body = Math.max(side, top, -q[1])
+    if (cap <= 0) return body
+    // the caprock is a slab of its own laid on top, so its overhang has a distance of its own
+    const capSide = (rho - s.r * (1 + cap) * wobble) * 0.7
+    const slab = Math.max(capSide, top, s.height - capH - q[1])
+    return Math.min(body, slab)
   }
   const R = s.r * (1.4 + cap)
   return {
@@ -296,7 +306,7 @@ export interface ArchSpec {
 }
 
 /** A natural arch: a fin of rock in beds, with a hole worn through its soft bed so a span of hard rock bridges it. */
-export function arch(s: ArchSpec): Shape {
+function archRaw(s: ArchSpec): Shape {
   const dx = s.to[0] - s.from[0], dz = s.to[2] - s.from[2], l = Math.hypot(dx, dz) || 1e-6
   const ux = dx / l, uz = dz / l
   const beds = s.beds ?? BEDS
@@ -349,16 +359,21 @@ function plates(s: MudSpec, x: number, z: number) {
 }
 
 /** Dried mud cracked into plates, each plate's edges curled up off the ground, the cracks between them sunk. Each plate is a piece. */
-export function mud(s: MudSpec, cell = 0): Shape {
+function mudRaw(s: MudSpec, cell = 0): Shape {
   const thick = Math.max(s.plate * 0.06, cell)
   const gap = Math.max(s.plate * 0.05, cell * 0.6)
   const curl = (s.curl ?? 0.5) * s.plate * 0.18
   const sdf = (x: number, y: number, z: number) => {
     const { edge } = plates(s, x, z)
     const disc = Math.hypot(x - s.at[0], z - s.at[2]) - s.r
-    const lift = curl * Math.max(0, 1 - edge / (s.plate * 0.35)) ** 2
-    const top = edge < gap ? s.at[1] - thick : s.at[1] + thick + lift
-    return Math.max((y - top) * 0.6, s.at[1] - thick * 2 - y, disc)
+    const liftAt = (e: number) => curl * Math.max(0, 1 - e / (s.plate * 0.35)) ** 2
+    let above: number
+    if (edge < gap) {
+      // over a crack: down to its floor, or across to the nearest plate's raised edge, whichever is nearer
+      const rim = s.at[1] + thick + liftAt(gap)
+      above = Math.min((y - (s.at[1] - thick)) * 0.6, Math.hypot(gap - edge, Math.max(0, y - rim)))
+    } else above = (y - (s.at[1] + thick + liftAt(edge))) * 0.6
+    return Math.max(above, s.at[1] - thick * 2 - y, disc)
   }
   return {
     sdf, min: [s.at[0] - s.r, s.at[1] - thick * 2, s.at[2] - s.r], max: [s.at[0] + s.r, s.at[1] + thick + curl, s.at[2] + s.r],
@@ -405,3 +420,10 @@ export function pebbles(s: PebbleSpec, cell = 0): Shape {
     }
   }))
 }
+
+/** See butteRaw; its wobble and worn beds make the side distance a little ragged. */
+export const butte = (s: ButteSpec): Shape => tighten(butteRaw(s), 0.55)
+
+export const arch = (s: ArchSpec): Shape => tighten(archRaw(s), 0.88)
+
+export const mud = (s: MudSpec, cell = 0): Shape => tighten(mudRaw(s, cell), 0.6)

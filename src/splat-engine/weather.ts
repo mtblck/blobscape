@@ -1,6 +1,6 @@
 import type { Vec3 } from '../splat-core/blobs.ts'
 import { hash } from './built.ts'
-import { cone, many, type Shape } from './voxel.ts'
+import { cone, many, type Shape, tighten } from './voxel.ts'
 
 /**
  * Weather that lands (issue #174): what falls finds the ground actually under it, snow lies in drifts shaped by the
@@ -173,7 +173,7 @@ function sample(D: Drift, f: Float32Array, x: number, z: number) {
 }
 
 /** Snow lying as a layer of its own over whatever `under` finds: its top the ground plus the drift, gone where it is thinner than `thin`. */
-export function drift(s: DriftSpec, under: (x: number, z: number) => number, thin = 0): Shape {
+function driftRaw(s: DriftSpec, under: (x: number, z: number) => number, thin = 0): Shape {
   const D = driftField(s, under)
   const top = new Float32Array(D.ground.length)
   for (let k = 0; k < top.length; k++) top[k] = D.depth[k] >= thin * 0.5 ? D.ground[k] + Math.max(D.depth[k], thin) : D.ground[k] - thin * 2
@@ -264,3 +264,5 @@ export function frost(s: FrostSpec, thin = 0): Shape {
 
 const norm = (v: Vec3): Vec3 => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l] }
 const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+
+export const drift = (s: DriftSpec, under: (x: number, z: number) => number, thin = 0): Shape => tighten(driftRaw(s, under, thin), 0.8)

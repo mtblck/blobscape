@@ -123,3 +123,21 @@ test('a scene can say every worn-land shape, and the checker points at mistakes'
   assert.match(errs({ ...shapes[3], to: [-0.4, 0, 0] }), /to/)
 })
 
+
+test('no worn-land distance claims more room than there is (the sun march steps by it)', () => {
+  const shapes = {
+    butte: butte({ at: [0, 0, 0], r: 0.36, height: 0.95, beds: BEDS, wear: 0.35, cap: 0.15, seed: 3 }),
+    hoodoo: hoodoo({ at: [0, 0, 0], height: 0.6, r: 0.075, seed: 1 }),
+    mud: mud({ at: [0, 0, 0], r: 0.34, plate: 0.13, curl: 0.7, seed: 2 }, 0.03),
+    arch: arch({ from: [-0.4, 0, 0], to: [0.4, 0, 0], height: 0.7, thick: 0.17, beds: BEDS, seed: 5 }),
+  }
+  let seed = 9
+  const r = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647 }
+  for (const [name, s] of Object.entries(shapes)) for (let i = 0; i < 3000; i++) {
+    const p = [0, 1, 2].map((k) => s.min[k] + (s.max[k] - s.min[k]) * (r() * 1.3 - 0.15)) as [number, number, number]
+    const d = s.sdf(...p)
+    if (d <= 0.002) continue
+    const u = [r() - 0.5, r() - 0.5, r() - 0.5], l = Math.hypot(...u), m = d * 0.97 * Math.sqrt(r())
+    assert.ok(s.sdf(p[0] + (u[0] / l) * m, p[1] + (u[1] / l) * m, p[2] + (u[2] / l) * m) > 0, `${name} at ${p.map((v) => v.toFixed(3))}`)
+  }
+})
