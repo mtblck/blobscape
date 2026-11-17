@@ -384,7 +384,7 @@ export default [
   {
     name: 'lessons-engine',
     about: 'Build with the engine: each goal ticks on the engine view, and the code below follows the controls (or the description)',
-    entries: ['src/blobscape/lessons/FirstCreature.tsx', 'src/blobscape/lessons/SceneData.tsx', 'src/blobscape/build/StageView.tsx', 'src/blobscape/build/slug.ts', 'src/blobscape/build/scene.ts'],
+    entries: ['src/blobscape/lessons/FirstCreature.tsx', 'src/blobscape/lessons/SceneData.tsx', 'src/blobscape/lessons/PixelArt.tsx', 'src/blobscape/build/pixels.ts', 'src/blobscape/build/StageView.tsx', 'src/blobscape/build/slug.ts', 'src/blobscape/build/scene.ts'],
     async run({ base, shots, join, fails, ok, open, axe }) {
       const { page, ctx } = await open('/', { viewport: { width: 1440, height: 1000 } })
       const goalCount = () => page.textContent('[data-testid=goal-count]')
@@ -397,7 +397,9 @@ export default [
       await page.goto(base + '/lessons/first-creature/?offscreen=1')
       await page.evaluate(() => localStorage.clear())
       await page.reload()
-      await page.waitForFunction(() => window.__build && !document.querySelector('[data-testid=stage-loading]'), null, { timeout: 30000 }).catch(() => {})
+      // off-screen, nothing is drawn until a frame is asked for
+      await page.waitForFunction(() => window.__build, null, { timeout: 30000 }).catch(() => {})
+      await page.evaluate(() => window.__build?.stage.frame(0))
       const cut = async () => { await page.waitForTimeout(400); await page.waitForFunction(() => !document.querySelector('[data-testid=stage-loading]'), null, { timeout: 15000 }).catch(() => {}) }
       await slider('Turn the tail bone').fill('0.9')
       const still = await goalCount()
@@ -419,7 +421,8 @@ export default [
 
       // A scene written as data: the checker turns down a move that won't loop, then a sway and a flickering light tick the rest
       await page.goto(base + '/lessons/scene-data/?offscreen=1')
-      await page.waitForFunction(() => window.__scene && !document.querySelector('[data-testid=stage-loading]'), null, { timeout: 30000 }).catch(() => {})
+      await page.waitForFunction(() => window.__scene, null, { timeout: 30000 }).catch(() => {})
+      await page.evaluate(() => window.__scene?.stage.frame(0))
       const box = page.getByTestId('scene-text')
       const doc = JSON.parse(await box.inputValue())
       const readout = () => page.textContent('[data-testid=scene-readout]')
@@ -443,6 +446,30 @@ export default [
       else ok('blobscape scene data: a move that would not loop is refused, a sway and a flickering light tick the rest, and only a new shape recuts')
       await page.screenshot({ path: join(shots, 'blobscape-scene-data.png') })
       await axe(page, 'blobscape scene data')
+
+      // Pixel art that holds still: the lantern flips pixels until steady pixels are on; a small picture in four colors
+      await page.goto(base + '/lessons/pixel-art/?offscreen=1')
+      await page.waitForFunction(() => window.__pixels, null, { timeout: 30000 }).catch(() => {})
+      await page.waitForTimeout(1000)
+      await page.evaluate(() => window.__pixels?.stage.frame(0))
+      // plays the scene in real time for a while, so the page's own looks at the picture see the light change
+      const play = (ms) => page.evaluate(async (ms) => {
+        const st = window.__pixels.stage, t0 = performance.now()
+        while (performance.now() - t0 < ms) { await st.frame((performance.now() - t0) / 1000); await new Promise((r) => setTimeout(r, 30)) }
+        return window.__pixels.seen()
+      }, ms)
+      await page.getByRole('checkbox', { name: 'Draw in pixels' }).check()
+      const flickering = await play(3500)
+      await page.getByRole('button', { name: '8', exact: true }).click()
+      await page.getByRole('button', { name: '4 colors' }).click()
+      await page.getByRole('checkbox', { name: 'Steady pixels' }).check()
+      const held = await play(5000)
+      const pixelCode = await page.textContent('[data-testid=lesson-code]')
+      const shown = !!held && held.width <= 200 && held.colors <= 4 && held.flips <= 0.002 && /steady: 0\.04/.test(pixelCode)
+      if (!(flickering?.flips > 0.005 && shown && (await goalsAt(3)).startsWith('3 of'))) fails.push(`blobscape pixel art: goals ${await goalCount()}, flips ${flickering?.flips} then ${held?.flips}, picture ${held?.width} wide in ${held?.colors} colors, code follows: ${/steady: 0\.04/.test(pixelCode)}`)
+      else ok(`blobscape pixel art: the lantern flipped ${(flickering.flips * 100).toFixed(1)}% of the pixels, steady pixels ${(held.flips * 100).toFixed(2)}%; ${held.width} pixels wide in ${held.colors} colors`)
+      await page.screenshot({ path: join(shots, 'blobscape-pixel-art.png') })
+      await axe(page, 'blobscape pixel art')
       await ctx.close()
     },
   },
