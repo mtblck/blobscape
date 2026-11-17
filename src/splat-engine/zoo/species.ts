@@ -1,4 +1,4 @@
-import type { Orbit } from '../../splat-core/view.ts'
+import type { Orbit } from '../../splat-core/orbit.ts'
 import type { Creature } from '../body.ts'
 import type { Skeleton } from '../rig.ts'
 import type { SwingSpec } from '../swing.ts'

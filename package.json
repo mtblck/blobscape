@@ -4,6 +4,7 @@
   "scripts": {
     "dev": "vite",
     "build": "npm run hosting:check && tsc && vite build && npm run prerender",
+    "engine:build": "node scripts/build-engine.mjs",
     "preview": "vite preview",
     "hosting:check": "node scripts/check-hosting.mjs",
     "test": "node --test --experimental-strip-types 'src/**/*.test.ts' 'scripts/*.test.mjs'",

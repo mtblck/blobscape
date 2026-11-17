@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu'
-import { boneTail } from '../../splat-engine/body.ts'
-import { posedPoint, type Skeleton } from '../../splat-engine/rig.ts'
+import { boneTail } from './body.ts'
+import { posedPoint, type Skeleton } from './rig.ts'
 
 /**
  * The rig drawn the way Blender draws it: each bone an eight-sided spindle

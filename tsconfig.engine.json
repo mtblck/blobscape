@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "rewriteRelativeImportExtensions": true,
+    "declarationDir": "packages/engine/dist/types",
+    "rootDir": "src",
+    "types": []
+  },
+  "include": ["src/splat-engine/index.ts"]
+}
