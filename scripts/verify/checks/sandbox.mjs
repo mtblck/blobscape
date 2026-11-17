@@ -317,6 +317,69 @@ export default [
     },
   },
   {
+    name: 'sandbox-agent',
+    about: 'WebMCP: the sandbox registers its tools with the browser, an assistant can look, build, cut, recolor, paint, add a creature, save and undo, and leaving takes them away',
+    entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/agentTools.ts'],
+    async run({ shots, join, fails, ok, open }) {
+      // the browser here has no WebMCP: stand one in on the front page, then walk into the sandbox
+      const { page, ctx } = await open('/', { viewport: { width: 1280, height: 900 }, acceptDownloads: true })
+      await page.evaluate(() => {
+        const tools = (window.__tools = new Map())
+        Object.defineProperty(document, 'modelContext', { configurable: true, value: { registerTool(t, o) { tools.set(t.name, t); o?.signal?.addEventListener('abort', () => tools.delete(t.name)); return Promise.resolve() } } })
+      })
+      await page.locator('a[href="/sandbox/"]').first().click()
+      await page.waitForSelector('[data-testid=blob-count]')
+      await page.waitForTimeout(1500)
+      const count = async () => Number((await page.textContent('[data-testid=blob-count]')).replace(/\D/g, ''))
+      const call = (name, input) => page.evaluate(([n, i]) => window.__tools.get(n).execute(i), [name, input])
+      const names = await page.evaluate(() => [...window.__tools.keys()])
+      if (names.length !== 8) fails.push(`blobscape sandbox agent: ${names.length} tools registered: ${names.join(', ')}`)
+      else ok(`blobscape sandbox agent: registers ${names.join(', ')}`)
+      const said = {}
+      said.bad = await call('write_scene', { description: '{"name":"x","parts":[]}' })
+      const doc = {
+        name: 'A box on a hill', loop: 12, light: { from: [-0.5, 0.6, 0.6], ambient: 0.45 }, palette: ['#2c4a2a', '#4a7a3a', '#7aa84e', '#6e4a2e', '#d8c09a', '#8a2f2a'],
+        camera: { target: [0, 0.3, 0], distance: 3.2, azimuth: 25, elevation: 18 },
+        parts: [
+          { shape: { kind: 'cylinder', at: [0, -0.2, 0], height: 0.2, r: 0.9 }, paint: '#4a7a3a' },
+          { shape: { kind: 'box', at: [0, 0.25, 0], half: [0.3, 0.25, 0.3] }, paint: '#d8c09a' },
+        ],
+      }
+      said.built = await call('write_scene', { description: JSON.stringify(doc) })
+      await page.waitForTimeout(600)
+      const built = await count()
+      said.look = await call('describe_scene', {})
+      said.cut = await call('cut', { center: [0, 0.5, 0], radius: 0.25 })
+      await page.waitForTimeout(300)
+      const afterCut = await count()
+      said.recolor = await call('recolor', { center: [0.6, 0, 0], radius: 0.3, color: '#f2553a' })
+      said.paint = await call('paint', { brush: 'grass', at: [-0.5, 0, 0.4], radius: 0.2 })
+      await page.waitForTimeout(300)
+      const afterPaint = await count()
+      said.refused = await call('paint', { brush: 'lava', at: [0, 0, 0], radius: 0.2 })
+      said.undo = await call('undo', {})
+      await page.waitForTimeout(300)
+      const afterUndo = await count()
+      said.fox = await call('add_creature', { creature: 'fox' })
+      const [download] = await Promise.all([page.waitForEvent('download'), call('save_scene', {})])
+      // Spark sorts a whole new scene slowly when drawn in software: give the picture time to be the scene
+      await page.waitForTimeout(9000)
+      await page.screenshot({ path: join(shots, 'blobscape-sandbox-agent.png') })
+      const good = /^Not built\. Fix these/.test(said.bad) && /^Built "A box on a hill"/.test(said.built) && built > 3000 && /A box on a hill.*blobs, in a box from/.test(said.look)
+        && /^Cut /.test(said.cut) && afterCut < built && /^Recolored /.test(said.recolor) && /^Painted /.test(said.paint) && afterPaint > afterCut
+        && /^Not done: there is no brush "lava"/.test(said.refused) && afterUndo === afterCut && /^Added a /.test(said.fox) && download.suggestedFilename().endsWith('.ply')
+      if (!good) fails.push(`blobscape sandbox agent: ${JSON.stringify({ said, built, afterCut, afterPaint, afterUndo, file: download.suggestedFilename() })}`)
+      else ok(`blobscape sandbox agent: built ${built.toLocaleString()} blobs from a description, cut to ${afterCut.toLocaleString()}, painted to ${afterPaint.toLocaleString()}, took it back, added a fox and saved ${download.suggestedFilename()}`)
+      // leaving the sandbox takes the tools away
+      await page.locator('a[href="/"]').first().click()
+      await page.waitForTimeout(500)
+      const left = await page.evaluate(() => window.__tools.size)
+      if (left) fails.push(`blobscape sandbox agent: ${left} tools still registered after leaving`)
+      else ok('blobscape sandbox agent: leaving the sandbox unregisters the tools')
+      await ctx.close()
+    },
+  },
+  {
     name: 'sandbox-props',
     about: 'a slime that bursts and the watch, added from other experiments',
     entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/props.ts'],

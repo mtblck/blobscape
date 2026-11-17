@@ -25,6 +25,9 @@ import { fillHole, stampDab } from './patch.ts'
 import { BRUSHES, brushDab, type BrushId } from './brushes.ts'
 import { MAX_STOPS, PATH_FPS, pathAt, pathSeconds } from './cameraPath.ts'
 import { fileSpecies, sceneRig, splitScene } from './sceneFile.ts'
+import { registerTools, sandboxTools, type SandboxApi } from './agentTools.ts'
+import { SCENE_SPACING, readDoc } from './build/scene.ts'
+import { buildVoxels } from '../splat-engine/voxel.ts'
 
 type ToolId = 'orbit' | 'add' | 'spray' | 'select' | 'lasso' | 'move' | 'paint' | 'erase' | 'fill' | 'stamp'
 const TOOLS: { id: ToolId; name: string; note: string }[] = [
@@ -907,11 +910,12 @@ export function Sandbox() {
 
   /** The ground under the middle of the view: where the scene's lowest blobs are, else y = 0. */
   const floorY = () => bounds(blobsRef.current, null)?.lo[1] ?? 0
-  const addActor = (sp: (typeof ADDABLE)[number]) => {
+  const addActor = (sp: (typeof ADDABLE)[number]): string => {
+    const say = (m: string) => { setMessage(m); return m }
     const list = actorsRef.current
-    if (list.length >= MAX_ACTORS) { setMessage(`The sandbox holds up to ${MAX_ACTORS} creatures`); return }
+    if (list.length >= MAX_ACTORS) return say(`The sandbox holds up to ${MAX_ACTORS} creatures`)
     const detail = detailsOf(sp)[0]
-    if (actorBlobs(list) + detail > maxActorBlobs) { setMessage(`Creatures can have ${maxActorBlobs.toLocaleString()} blobs between them here. Remove or freeze one first.`); return }
+    if (actorBlobs(list) + detail > maxActorBlobs) return say(`Creatures can have ${maxActorBlobs.toLocaleString()} blobs between them here. Remove or freeze one first.`)
     // Sized to the scene, keeping the zoo's sizes to each other: a fox comes up about half way up a sample
     const bb = bounds(blobsRef.current, null)
     const fit = Math.min(4, Math.max(0.2, bb ? (bb.hi[1] - bb.lo[1]) / 2.4 : 0.5))
@@ -932,7 +936,7 @@ export function Sandbox() {
     setActors([...list, added])
     setCurrentKey(added.key)
     frameNext.current = true
-    setMessage(`Added ${aOr(sp.name)}`)
+    return say(`Added ${aOr(sp.name)}`)
   }
   const removeActor = (a: Actor) => {
     recordActors()
@@ -1078,6 +1082,67 @@ export function Sandbox() {
       ctx.setLineDash([])
     }
   }
+
+  // --- tools for an assistant in the browser (WebMCP) ---------------------------
+  const n3 = (v: ArrayLike<number>) => `[${[v[0], v[1], v[2]].map((x) => +x.toFixed(2)).join(', ')}]`
+  const inBall = (b: Blobs, c: Vec3, r: number) => (i: number) => (b.center[i * 3] - c[0]) ** 2 + (b.center[i * 3 + 1] - c[1]) ** 2 + (b.center[i * 3 + 2] - c[2]) ** 2 <= r * r
+  const api: SandboxApi = {
+    describe: () => {
+      const b = blobsRef.current, bb = b.count ? bounds(b, null) : null
+      const list = actorsRef.current
+      return [
+        `The scene "${source}" has ${b.count.toLocaleString('en-US')} blobs${bb ? `, in a box from ${n3(bb.lo)} to ${n3(bb.hi)} (meters, y up)` : ''}.`,
+        list.length ? `Creatures: ${list.map((a) => `${a.species.name} at ${n3(a.at)}`).join('; ')}.` : 'No creatures.',
+        `It holds up to ${maxBlobs.toLocaleString('en-US')} blobs and ${MAX_ACTORS} creatures.`,
+      ].join(' ')
+    },
+    creatures: () => ADDABLE.map((sp) => sp.id),
+    addCreature: (id) => addActor(ADDABLE.find((sp) => sp.id === id)!),
+    writeScene: (json) => {
+      const r = readDoc(json)
+      if (!r.scene) return `Not built. Fix these and call again: ${r.errors.join('; ')}`
+      const built = buildVoxels(r.scene.spec(SCENE_SPACING)).blobs
+      if (!built.count) return 'Not built: the description gave no blobs'
+      if (built.count > maxBlobs) return `Not built: it came to ${built.count.toLocaleString('en-US')} blobs and the sandbox holds ${maxBlobs.toLocaleString('en-US')}. Make it smaller.`
+      history.current.record(blobsRef.current, source, actorsRef.current)
+      replace(built, r.scene.name)
+      setOrbit(r.scene.orbit)
+      return `Built "${r.scene.name}": ${built.count.toLocaleString('en-US')} blobs.`
+    },
+    cut: (c, r) => {
+      const b = blobsRef.current, inside = inBall(b, c, r)
+      let n = 0
+      for (let i = 0; i < b.count; i++) if (inside(i)) n++
+      if (!n) return 'No blobs there: nothing was cut.'
+      edit((x) => { x.filter((i) => !inside(i)) })
+      clearSel()
+      return `Cut ${n.toLocaleString('en-US')} blobs. ${blobsRef.current.count.toLocaleString('en-US')} are left.`
+    },
+    recolor: (c, r, color) => {
+      const b = blobsRef.current, inside = inBall(b, c, r)
+      let n = 0
+      for (let i = 0; i < b.count; i++) if (inside(i)) n++
+      if (!n) return 'No blobs there: nothing was recolored.'
+      edit((x) => { for (let i = 0; i < x.count; i++) if (inside(i)) x.color.set(color, i * 3) })
+      return `Recolored ${n.toLocaleString('en-US')} blobs.`
+    },
+    brush: (kind, at, r) => {
+      const b = blobsRef.current, from = b.count
+      if (from >= maxBlobs) return `Nothing painted: the sandbox holds up to ${maxBlobs.toLocaleString('en-US')} blobs.`
+      const dab = brushDab(kind, { p: at, n: [0, 1, 0], radius: r, size: blobSize * 5, density, seed: from * 31 + 7 })
+      edit((x) => { for (const blob of dab) { if (x.count >= maxBlobs) break; x.push(blob) } })
+      return `Painted ${(blobsRef.current.count - from).toLocaleString('en-US')} blobs of ${kind}.`
+    },
+    save: () => { exportPly(); return `Saved the scene as a .ply file: ${everything().count.toLocaleString('en-US')} blobs.` },
+    undo: () => { if (!history.current.canUndo) return 'Nothing to take back.'; undo(); return 'Took back the last change.' },
+  }
+  // The tools are registered once and always reach this render's sandbox
+  const apiRef = useRef(api)
+  apiRef.current = api
+  useEffect(() => {
+    const live = Object.fromEntries(Object.keys(apiRef.current).map((k) => [k, (...args: unknown[]) => (apiRef.current[k as keyof SandboxApi] as (...a: unknown[]) => unknown)(...args)])) as unknown as SandboxApi
+    return registerTools(sandboxTools(live)).remove
+  }, [])
 
   const toolNote = tool === 'orbit' && coarse ? 'Drag to orbit, pinch to zoom. Pick another tool to change the scene, then come back here to turn it.' : TOOLS.find((t) => t.id === tool)!.note
   const none = !sel.count
