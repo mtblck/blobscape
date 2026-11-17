@@ -34,14 +34,15 @@ const LINK = 'text-ink underline decoration-rule underline-offset-2 hover:text-a
 
 /**
  * The app's header, as near as static HTML gets: the main links hide on a
- * phone and an invisible stand-in holds the Menu button's place, so nothing
+ * phone and invisible stand-ins hold the theme and Menu buttons' places, so nothing
  * jumps when the app takes over.
  */
 function shell(main: string): string {
+  // Engine is a dropdown in the app: here it is a plain link, as wide as the button with its chevron
   const nav = [['Lessons', '/lessons/'], ['Experiments', '/experiments/'], ['Sandbox', '/sandbox/'], ['Engine', '/engine/']]
-    .map(([label, path]) => `<li><a href="${path}" class="rounded-full px-3 py-1.5 text-[0.9375rem] font-medium text-ink-muted no-underline hover:text-ink">${label}</a></li>`)
+    .map(([label, path]) => `<li><a href="${path}" class="${label === 'Engine' ? 'flex items-center gap-1.5 ' : ''}rounded-full px-3 py-1.5 text-[0.9375rem] font-medium text-ink-muted no-underline hover:text-ink">${label}${label === 'Engine' ? '<span aria-hidden="true" class="size-3"></span>' : ''}</a></li>`)
     .join('')
-  return `<div class="flex min-h-dvh flex-col"><a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded focus:bg-paper focus:px-3 focus:py-2 focus:text-sm">Skip to content</a><header class="sticky top-0 z-30 border-b border-rule bg-paper"><div class="mx-auto flex h-14 max-w-7xl items-center justify-between gap-4 px-4"><a href="/" class="-mx-1 shrink-0 rounded-md px-1 py-1.5">${LOGO}</a><div class="flex items-center gap-1"><nav aria-label="Main" class="max-md:hidden"><ul class="flex items-center gap-1">${nav}</ul></nav><span aria-hidden="true" class="invisible flex h-9 items-center gap-2 rounded-full border px-3 text-sm font-medium"><span class="h-4.5 w-4.5"></span>Menu</span></div></div></header><main id="main" class="mx-auto w-full max-w-7xl flex-1 px-4 pb-16">${main}</main></div>`
+  return `<div class="flex min-h-dvh flex-col"><a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded focus:bg-paper focus:px-3 focus:py-2 focus:text-sm">Skip to content</a><header class="sticky top-0 z-30 border-b border-rule bg-paper"><div class="mx-auto flex h-14 max-w-7xl items-center justify-between gap-4 px-4"><a href="/" class="-mx-1 shrink-0 rounded-md px-1 py-1.5">${LOGO}</a><div class="flex items-center gap-1"><nav aria-label="Main" class="max-md:hidden"><ul class="flex items-center gap-1">${nav}</ul></nav><span aria-hidden="true" class="size-9 shrink-0"></span><span aria-hidden="true" class="invisible flex h-9 items-center gap-2 rounded-full border px-3 text-sm font-medium md:hidden"><span class="h-4.5 w-4.5"></span>Menu</span></div></div></header><main id="main" class="mx-auto w-full max-w-7xl flex-1 px-4 pb-16">${main}</main></div>`
 }
 
 /** When an experiment was published, and when it last changed if that was another day (as `Dates` in Shell.tsx). */

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { SiteHeader } from '../shared/SiteHeader.tsx'
 import { Footer } from '../shared/Footer.tsx'
+import { TipButton } from '../blobscape/Chrome.tsx'
 import { Crumbs } from '../blobscape/Shell.tsx'
 import { CARD, CARD_SUB, CARD_TITLE } from '../blobscape/creature/card.ts'
 import { Button, Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
@@ -534,6 +535,7 @@ export function App() {
         </section>
       </main>
       <Footer />
+      <TipButton small />
     </div>
   )
 }

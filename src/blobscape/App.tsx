@@ -49,6 +49,9 @@ import { EngineApi } from './api/EngineApi.tsx'
 const PAGES: Record<string, () => React.JSX.Element> = { 'first-creature': FirstCreature, 'scene-data': SceneData, 'pixel-art': PixelArt, 'one-blob': OneBlob, footprint: Footprint, order: Order, many: Many, angle: Angle, paint: Paint, formats: Formats, break: Break, 'one-bone': OneBone, weights: Weights, twist: Twist, walk: Walk, feet: FeetOnTheGround, model: Model, morphs: Morphs, fur: Fur, shoot: Shoot, fuzzy: Fuzzy, floaters: Floaters, lighting: Lighting, shimmer: Shimmer }
 
 /** The whole site. `route` is only for prerendering (scripts/prerender.ts), where there is no address bar to read. */
+/** Pages for reading, where the tip button shows whole; on the rest, which have controls, it is a circle. */
+const READING = new Set<Route['page']>(['home', 'lessons', 'experiments', 'engine', 'spec', 'api', 'contact', 'notfound'])
+
 export function App({ route: at }: { route?: Route } = {}) {
   const route = useRoute(at)
   const key = route.page === 'lesson' ? route.id : route.page
@@ -67,7 +70,7 @@ export function App({ route: at }: { route?: Route } = {}) {
       <Footer />
       <Toaster />
       {/* not in the prerendered HTML: it fades in once the app is running */}
-      {!at && (route.page === 'home' || route.page === 'lessons') && <TipButton key={`tip-${route.page}`} />}
+      {!at && <TipButton small={!READING.has(route.page)} />}
     </div>
   )
 }

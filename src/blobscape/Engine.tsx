@@ -227,6 +227,10 @@ export function Engine() {
         <h1 ref={h1} tabIndex={-1} className="font-display text-5xl outline-none">{ENGINE.title}</h1>
         <p className="mt-4 text-xl leading-relaxed text-ink-muted">{ENGINE.lede}</p>
         <p className="mt-3 text-ink-faint">{ENGINE.note}</p>
+        <p className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-3">
+          <a href="/engine/docs/" data-testid="engine-docs" className="rounded-full bg-ink px-5 py-2.5 font-semibold text-paper no-underline transition-transform hover:-translate-y-px">Read the docs</a>
+          <code translate="no" className="rounded-lg border border-rule bg-paper-sunk px-3 py-2 font-mono text-sm text-ink">npm install @blobscape/engine three</code>
+        </p>
       </header>
       <Demos />
 
