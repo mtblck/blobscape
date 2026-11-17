@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { cutRelease } from './release.mjs'
+import { cutRelease, withVersion } from './release.mjs'
 
 const REPO = 'https://github.com/mtblck/blobscape'
 const first = '# Changelog\n\nIntro.\n\n## [Unreleased]\n\nThe first one.\n\n### Lessons\n\n- One blob.\n'
@@ -26,4 +26,11 @@ test('refuses a bad version, a repeat or nothing to release', () => {
   const once = cutRelease(first, '0.1.0', '2026-11-18')
   assert.throws(() => cutRelease(once, '0.1.0', '2026-11-19'), /already has/)
   assert.throws(() => cutRelease(once, '0.2.0', '2026-11-19'), /nothing to release/)
+})
+
+test("the engine package's manifest takes the release's version and keeps the rest", () => {
+  const manifest = '{\n  "name": "@blobscape/engine",\n  "version": "0.1.0",\n  "private": true\n}\n'
+  assert.equal(withVersion(manifest, '0.2.0'), manifest.replace('0.1.0', '0.2.0'))
+  assert.throws(() => withVersion(manifest, '0.2'), /isn't a version/)
+  assert.throws(() => withVersion('{ "name": "x" }', '0.2.0'), /no "version"/)
 })

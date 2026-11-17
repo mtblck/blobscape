@@ -1,6 +1,8 @@
 // Prepares a release PR: `npm run release -- 0.2.0` moves the CHANGELOG's [Unreleased] entries under a dated
-// 0.2.0 heading, adds its link, and sets the version in package.json and package-lock.json. Merging that PR to
-// main makes .github/workflows/release.yml tag the merge commit and make the GitHub release. (seedkin's, adapted.)
+// 0.2.0 heading, adds its link, and sets the version in package.json, package-lock.json and the engine package's
+// manifest (the site and @blobscape/engine share one version). Merging that PR to main makes
+// .github/workflows/release.yml tag the merge commit, make the GitHub release and, once the engine package isn't
+// private, publish it to npm. (seedkin's, adapted.)
 import { execFileSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -33,6 +35,14 @@ export function cutRelease(markdown, version, date) {
   return out
 }
 
+/** The engine package's manifest at this version, everything else as written. */
+export function withVersion(manifest, version) {
+  if (!SEMVER.test(version)) throw new Error(`"${version}" isn't a version like 0.2.0.`)
+  const out = manifest.replace(/("version":\s*)"[^"]*"/, `$1"${version}"`)
+  if (out === manifest && !manifest.includes(`"version": "${version}"`)) throw new Error('The engine manifest has no "version".')
+  return out
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const version = process.argv[2] ?? ''
   const file = new URL('../CHANGELOG.md', import.meta.url)
@@ -46,5 +56,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
   execFileSync('npm', ['version', version, '--no-git-tag-version', '--allow-same-version'], { stdio: 'inherit' })
   writeFileSync(file, markdown)
-  console.log(`CHANGELOG.md and package.json are at ${version}. Open the release PR; merging it makes the release.`)
+  const engine = new URL('../packages/engine/package.json', import.meta.url)
+  writeFileSync(engine, withVersion(readFileSync(engine, 'utf8'), version))
+  console.log(`CHANGELOG.md, package.json and packages/engine/package.json are at ${version}. Open the release PR; merging it makes the release.`)
 }

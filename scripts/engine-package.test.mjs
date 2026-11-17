@@ -38,6 +38,9 @@ test('the package manifest stays unpublishable until Matt says go, and three.js 
   assert.equal(pkg.private, true)
   assert.ok(pkg.peerDependencies.three)
   assert.ok(!pkg.dependencies)
+  // one version for the site and the package: `npm run release` sets both, and the release workflow publishes it
+  assert.equal(pkg.version, JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')).version)
+  assert.equal(pkg.publishConfig?.access, 'public')
 })
 
 test("the engine lessons' take-away code compiles against the package", async () => {

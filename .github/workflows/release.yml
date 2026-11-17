@@ -2,10 +2,19 @@ name: Release
 
 # Cuts a release when a merge to main changes `version` in package.json (the release PR,
 # made with `npm run release -- x.y.z`): it runs the unit tests, tags that merge commit
-# vX.Y.Z with this run's own token and makes the GitHub release from that version's
-# CHANGELOG section. Merging the release PR is the approval. Nothing goes to npm: the
-# site deploys from main on Vercel as always. A tag pushed by hand (vX.Y.Z matching
-# package.json) also makes its release. Same shape as seedkin's release.yml.
+# vX.Y.Z with this run's own token, makes the GitHub release from that version's
+# CHANGELOG section, then publishes @blobscape/engine (packages/engine, same version) to
+# npm unless its manifest is still `private` or that version is already there. Merging
+# the release PR is the approval. The site deploys from main on Vercel as always. A tag
+# pushed by hand (vX.Y.Z matching package.json) also makes its release. Same shape as
+# seedkin's release.yml.
+#
+# npm: trusted publishing (this workflow's OIDC token, with provenance) once the package
+# exists on npm; npmjs.com -> @blobscape/engine -> Settings -> Trusted publishers names
+# GitHub Actions, mtblck/blobscape and this file, release.yml, so keep its name. npm only
+# offers that for a package that exists, so the first version goes out with a short-lived
+# granular token in the NPM_TOKEN secret; delete the secret once trusted publishing is on.
+# A failed publish leaves the tag and release in place: re-running the job finishes it.
 on:
   push:
     tags: ['v*']
@@ -28,13 +37,17 @@ jobs:
     permissions:
       # To create the tag and the GitHub release.
       contents: write
+      # The OIDC token npm trusted publishing exchanges for a one-time publish token.
+      id-token: write
     steps:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
+      # Node 24 ships npm 11, which trusted publishing needs (11.5.1 or newer).
       - uses: actions/setup-node@v5
         with:
           node-version: 24
+          registry-url: https://registry.npmjs.org
       # On main, release only when this push changed the version: a merge that touches
       # package.json for anything else (a dependency) does nothing.
       - name: Version to release
@@ -96,3 +109,33 @@ jobs:
           awk -v v="${TAG#v}" '/^## \[/ { on = index($0, "## [" v "]") == 1; next } /^\[.*\]: / { exit } on' CHANGELOG.md > notes.md
           if gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then exit 0; fi
           gh release create "$TAG" -R "$GITHUB_REPOSITORY" --title "Blobscape $TAG" --notes-file notes.md --verify-tag
+      - name: Engine package to publish?
+        if: steps.version.outputs.release == 'true'
+        id: engine
+        working-directory: packages/engine
+        run: |
+          if [ "$(node -p "require('./package.json').private === true")" = true ]; then
+            echo "::notice::@blobscape/engine is still private; nothing goes to npm."
+            exit 0
+          fi
+          version=$(node -p "require('./package.json').version")
+          name=$(node -p "require('./package.json').name")
+          if [ "$version" != "${TAG#v}" ]; then echo "::error::$name is $version but the release is $TAG."; exit 1; fi
+          if npm view "$name@$version" version >/dev/null 2>&1; then
+            echo "::notice::$name@$version is already on npm."
+            exit 0
+          fi
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+      # The unit tests above include the package's own (no Spark or site code, the README's
+      # and the lessons' code typecheck against it); the build here is what ships.
+      - if: steps.engine.outputs.publish == 'true'
+        run: npm run engine:build
+      - name: Publish @blobscape/engine
+        if: steps.engine.outputs.publish == 'true'
+        working-directory: packages/engine
+        env:
+          # Only for the first version; empty once trusted publishing takes over.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public --provenance
