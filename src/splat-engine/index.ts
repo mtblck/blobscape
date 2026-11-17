@@ -55,6 +55,8 @@ export * from './depth.ts'
 export * from './glb.ts'
 export * from './bakeSheet.ts'
 export * from './spriteSheet.ts'
+// a rigged model (triangles on bones) as splats on the same bones
+export { readSkinnedGlb, splatModel, MODEL_FPS, type SkinnedModel, type SplatOptions } from './skinnedModel.ts'
 
 // creatures to start from
 export { ZOO, type Move, type Species } from './zoo/index.ts'

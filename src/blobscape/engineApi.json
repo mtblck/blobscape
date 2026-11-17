@@ -2200,6 +2200,43 @@
    ]
   },
   {
+   "id": "skinnedModel",
+   "title": "Rigged models to splats",
+   "doc": "A rigged model to splats, keeping its rig: an ordinary skinned glTF (a .glb from Blender, Mixamo or\na game kit: triangles, JOINTS_0/WEIGHTS_0, a skin and its animations) read into our bones and clips, then its\nsurface covered in flat blobs that hang on the same bones with the weights the mesh gave its corners. Pure: the\npage decodes texture images and hands them in as `Texture`s.\n\nOur bones have no rest rotation: a bone is its head, posed by a turn about it. A glTF joint carries any rest\nframe, so each frame of a clip is read as what the skin does, not what the nodes say: joint j's skin matrix is\nS = G·IBM (its world matrix now times its inverse bind matrix), which takes the bind pose to the posed one. Its\nlinear part is our bone's world turn (times its scale) and it carries the bind head (where IBM⁻¹ puts the joint)\nto where the joint is now. Local turns, offsets and sizes follow from those, so the blobs land where the mesh's\nvertices would.",
+   "entries": [
+    {
+     "name": "readSkinnedGlb",
+     "kind": "function",
+     "doc": "Reads a skinned .glb: the first mesh node with a skin, its triangles in the bind pose with colors and texture\ncoordinates, the skin's joints as our bones (parents first), and every animation sampled as our clips.",
+     "code": "function readSkinnedGlb(bytes: Uint8Array, name?: string): SkinnedModel;"
+    },
+    {
+     "name": "splatModel",
+     "kind": "function",
+     "doc": "The model as rigged splats: `count` flat blobs scattered over its triangles by area (the same seed gives the same\nblobs), each lying on its triangle, colored from the vertex colors or the texture at that point, and hung on the\nbones the triangle's corners hang on, weighted by how near each corner is. Bones and clips come with it, fitted\nto `height` when given.",
+     "code": "function splatModel(model: SkinnedModel, o: SplatOptions): Rigged;"
+    },
+    {
+     "name": "MODEL_FPS",
+     "kind": "const",
+     "doc": "Keys a second when a clip is read: glTF keys may sit anywhere in time, ours sit evenly.",
+     "code": "const MODEL_FPS = 30;"
+    },
+    {
+     "name": "SkinnedModel",
+     "kind": "interface",
+     "doc": "",
+     "code": "interface SkinnedModel {\n    name: string;\n    /** The triangles in the bind pose. */\n    mesh: Mesh;\n    /** Per vertex, four of our bone indices and their weights (summing to 1). */\n    joints: Uint8Array;\n    weights: Float32Array;\n    bones: Bone[];\n    clips: Clip[];\n    /** Texture images, still encoded, which `mesh.tex` points at. */\n    images: MeshImage[];\n}"
+    },
+    {
+     "name": "SplatOptions",
+     "kind": "interface",
+     "doc": "",
+     "code": "interface SplatOptions {\n    /** How many blobs to lay on the surface. */\n    count: number;\n    /** The model's height once fitted, standing on y = 0 and centered over the origin; left as the file has it when missing. */\n    height?: number;\n    /** Decoded texture images, in the order of `model.images`. */\n    textures?: Texture[];\n    /** The color of a surface with neither vertex colors nor a texture (sRGB). */\n    base?: Vec3;\n    seed?: number;\n}"
+    }
+   ]
+  },
+  {
    "id": "zoo-index",
    "title": "The zoo",
    "doc": "",

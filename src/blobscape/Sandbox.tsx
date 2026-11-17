@@ -19,6 +19,8 @@ import { PROPS } from './props.ts'
 import type { Creature as Body } from '../splat-engine/body.ts'
 import { href } from './routes.ts'
 import { GlbError, readRiggedGlb, writeRiggedGlb, type Rigged } from '../splat-engine/glb.ts'
+import { MeshFileError } from '../splat-engine/meshFile.ts'
+import { isMeshGlb, rigFromModel } from './modelRig.ts'
 import { fileSpecies, sceneRig, splitScene } from './sceneFile.ts'
 
 type ToolId = 'orbit' | 'add' | 'spray' | 'select' | 'lasso' | 'move' | 'erase'
@@ -44,6 +46,9 @@ const SELECT_OUTLINES = 3000
 const FILE_TYPES = '.ply,.spz,.splat,.ksplat,.sog,.glb'
 const PLAY_SECONDS = 2.5
 const MAX_ACTORS = 8
+/** Blobs laid on an opened rigged model (half on phones), and the fewest worth laying. */
+const MODEL_BLOBS = 40_000
+const MODEL_MIN = 4_000
 /** What the Creatures tab can add: the zoo, then things from the other experiments (a slime, the watch). */
 const ADDABLE = [...CREATURES, ...PROPS]
 type ShowRig = 'blobs' | 'bones' | 'both'
@@ -214,7 +219,7 @@ export function Sandbox() {
       }
       const bytes = await file.arrayBuffer()
       // A rigged .glb (a saved sandbox scene, or a creature from Splat Creatures) opens live
-      if (/\.glb$/i.test(file.name)) { openRigged(new Uint8Array(bytes), file.name); return }
+      if (/\.glb$/i.test(file.name)) { await openRigged(new Uint8Array(bytes), file.name); return }
       decoded = true
       const { blobs: b, step: n, dropped } = await readSplatFile(bytes, file.name, maxBlobs)
       if (!b.count) throw new Error('empty')
@@ -229,7 +234,7 @@ export function Sandbox() {
     } catch (err) {
       console.warn(err)
       setMessage('')
-      const why = err instanceof GlbError ? `It isn't a rigged splat .glb the sandbox can read: ${err.message}.` : err instanceof ImportError ? err.message : err instanceof RangeError ? 'This file is too big for this device.' : 'The sandbox reads Gaussian splat files: .ply, .spz, .splat, .ksplat and .sog, and rigged splat .glb files.'
+      const why = err instanceof GlbError ? `It isn't a rigged splat .glb the sandbox can read: ${err.message}.` : err instanceof MeshFileError ? `It's a model, but not one the sandbox can lay blobs on: ${err.message}.` : err instanceof ImportError ? err.message : err instanceof RangeError ? 'This file is too big for this device.' : 'The sandbox reads Gaussian splat files: .ply, .spz, .splat, .ksplat and .sog, rigged splat .glb files, and rigged models as .glb.'
       // Spark's decoder can stop working after a file it chokes on; checked files never get that far
       const stuck = decoded && !(err instanceof ImportError && (err.kind === 'mesh' || (err.kind === 'damaged' && /header/.test(err.message))))
       setError(`Couldn't open ${file.name}. ${why}${stuck ? ' If other files stop opening too, reload the page.' : ''}`)
@@ -256,11 +261,22 @@ export function Sandbox() {
   /**
    * A rigged .glb: a saved sandbox scene comes back as its scene and its
    * creatures; any other (one from Splat Creatures) joins the scene as one
-   * creature. Creatures past the sandbox's limits are frozen into the scene.
+   * creature, and so does an ordinary rigged model (triangles on bones), its
+   * surface laid with blobs on its own bones. Creatures past the sandbox's
+   * limits are frozen into the scene.
    */
-  const openRigged = (bytes: Uint8Array, name: string) => {
-    const r = readRiggedGlb(bytes)
-    const split = splitScene(r)
+  const openRigged = async (bytes: Uint8Array, name: string) => {
+    let r: Rigged
+    let model = false
+    try {
+      r = readRiggedGlb(bytes)
+    } catch (e) {
+      if (!isMeshGlb(e)) throw e
+      // as many blobs as the creatures here leave room for, up to MODEL_BLOBS
+      r = await rigFromModel(bytes, name, Math.max(MODEL_MIN, Math.min(coarse ? MODEL_BLOBS / 2 : MODEL_BLOBS, maxActorBlobs - actorBlobs(actorsRef.current))))
+      model = true
+    }
+    const split = model ? null : splitScene(r)
     const parts: Rigged[] = split ? split.parts : [{ ...r, name: r.name || name.replace(/\.glb$/i, '') }]
     const scene = split ? split.scene : blobsRef.current.clone()
     const list: Actor[] = split ? [] : [...actorsRef.current]
@@ -285,7 +301,8 @@ export function Sandbox() {
     frameNext.current = true
     const made = list.length - (split ? 0 : actorsRef.current.length)
     const kept = frozen ? `; ${frozen === 1 ? 'one creature' : `${frozen} creatures`} didn't fit as live creatures here, so ${frozen === 1 ? 'it was' : 'they were'} frozen into the scene` : ''
-    setMessage(split ? `Opened ${name}: ${scene.count.toLocaleString()} scene blobs and ${made === 1 ? 'a creature' : `${made} creatures`}${kept}` : `Added ${parts[0].name} from ${name}${kept}`)
+    const rig = model ? ` as ${r.blobs.count.toLocaleString()} blobs on its ${r.skeleton.count} bones${r.clips.length ? `, with ${r.clips.length === 1 ? 'its move' : `${r.clips.length} moves`}` : ''}` : ''
+    setMessage(split ? `Opened ${name}: ${scene.count.toLocaleString()} scene blobs and ${made === 1 ? 'a creature' : `${made} creatures`}${kept}` : `Added ${parts[0].name} from ${name}${rig}${kept}`)
   }
 
   /** The scene and its creatures as one rigged-splat .glb that opens here again and on Splat Creatures. */
@@ -1156,7 +1173,7 @@ export function Sandbox() {
                         </div>
                         <input ref={fileInput} type="file" accept={FILE_TYPES} className="sr-only" tabIndex={-1} aria-hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void openFile(f) }} />
                         <p className="text-xs text-ink-faint">
-                          .ply, .spz, .splat, .ksplat, .sog or a rigged .glb, or drop one on the view. It stays on your device. Scenes over {maxBlobs.toLocaleString()} blobs are thinned to fit. A .ply opens in most splat viewers; a rigged .glb keeps the creatures moving and opens here again and on Splat Creatures.
+                          .ply, .spz, .splat, .ksplat, .sog or a rigged .glb, or drop one on the view. It stays on your device. Scenes over {maxBlobs.toLocaleString()} blobs are thinned to fit. A .ply opens in most splat viewers; a rigged .glb keeps the creatures moving and opens here again and on Splat Creatures. A rigged model saved as a .glb (triangles on bones, as from Blender or Mixamo) joins as a creature: blobs laid over its surface on its own bones, with its moves.
                         </p>
                         {error && <p className="text-sm text-accent-ink">{error}</p>}
                         <Toggle label="Turn captures the right way up on opening" checked={upright} onChange={setUpright} />

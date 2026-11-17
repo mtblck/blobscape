@@ -86,15 +86,15 @@ const TYPES: Record<number, { bytes: number; get: (d: DataView, at: number) => n
   5126: { bytes: 4, get: (d, a) => d.getFloat32(a, true), max: 1 },
 }
 
-type M4 = number[]
-const IDENTITY: M4 = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
-const mul = (a: M4, b: M4): M4 => {
+export type M4 = number[]
+export const IDENTITY: M4 = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+export const mul = (a: M4, b: M4): M4 => {
   const o = new Array(16).fill(0)
   for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) for (let k = 0; k < 4; k++) o[c * 4 + r] += a[k * 4 + r] * b[c * 4 + k]
   return o
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function nodeMatrix(nd: any): M4 {
+export function nodeMatrix(nd: any): M4 {
   if (nd.matrix) return nd.matrix
   const [x, y, z, w] = nd.rotation ?? [0, 0, 0, 1], [sx, sy, sz] = nd.scale ?? [1, 1, 1], [tx, ty, tz] = nd.translation ?? [0, 0, 0]
   return [
@@ -105,8 +105,21 @@ function nodeMatrix(nd: any): M4 {
   ]
 }
 
-/** Reads a .glb's triangles, placed by its node tree, with colors and the base color texture. */
-export function readMeshGlb(bytes: Uint8Array): MeshFile {
+/** An accessor read as plain numbers (normalized ones scaled to 0–1), `size` per element. */
+export type GlbRead = (accessor: number) => { data: Float64Array; size: number }
+
+/** A .glb taken apart: its description, a reader for its accessors, and its texture images (decoded by the page). */
+export interface OpenGlb {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  json: any
+  read: GlbRead
+  images: MeshImage[]
+  /** The index in `images` of a texture's image, added on first use; -1 when the file doesn't hold it. */
+  textureImage: (texture: number | undefined) => number
+}
+
+/** Opens a .glb: checks its chunks and gives readers for what's in it. Shared with skinnedModel.ts. */
+export function openGlb(bytes: Uint8Array): OpenGlb {
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   if (bytes.byteLength < 20 || dv.getUint32(0, true) !== 0x46546c67) throw new MeshFileError('Not a .glb file')
   const jsonLen = dv.getUint32(12, true)
@@ -118,8 +131,7 @@ export function readMeshGlb(bytes: Uint8Array): MeshFile {
   const bin = binStart + 8 <= bytes.byteLength ? bytes.subarray(binStart + 8, binStart + 8 + dv.getUint32(binStart, true)) : new Uint8Array(0)
   const bdv = new DataView(bin.buffer, bin.byteOffset, bin.byteLength)
 
-  /** An accessor as plain numbers (normalized ones scaled to 0–1), `size` per element. */
-  const read = (ai: number): { data: Float64Array; size: number } => {
+  const read: GlbRead = (ai) => {
     const a = json.accessors?.[ai]
     if (!a) throw new MeshFileError(`Accessor ${ai} is missing`)
     const size = SIZES[a.type] ?? 1, t = TYPES[a.componentType]
@@ -153,7 +165,12 @@ export function readMeshGlb(bytes: Uint8Array): MeshFile {
     }
     return imageOf.get(src)!
   }
+  return { json, read, images, textureImage }
+}
 
+/** Reads a .glb's triangles, placed by its node tree, with colors and the base color texture. */
+export function readMeshGlb(bytes: Uint8Array): MeshFile {
+  const { json, read, images, textureImage } = openGlb(bytes)
   const pos: number[] = [], col: number[] = [], uv: number[] = [], idx: number[] = [], tex: number[] = []
   let anyColor = false, anyTex = false
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -214,7 +231,7 @@ export function readMeshGlb(bytes: Uint8Array): MeshFile {
   }
 }
 
-function toSrgb(c: number): number {
+export function toSrgb(c: number): number {
   const x = Math.min(1, Math.max(0, c))
   return x <= 0.0031308 ? x * 12.92 : 1.055 * x ** (1 / 2.4) - 0.055
 }

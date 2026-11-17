@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { Orbit } from '../splat-core/view.ts'
 import type { Creature as Body } from '../splat-engine/body.ts'
-import { GlbError, readRiggedGlb, recordClip, writeRiggedGlb, writeRiggedMeshGlb, type Clip } from '../splat-engine/glb.ts'
+import { GlbError, readRiggedGlb, recordClip, writeRiggedGlb, writeRiggedMeshGlb, type Clip, type Rigged } from '../splat-engine/glb.ts'
+import { MeshFileError } from '../splat-engine/meshFile.ts'
+import { isMeshGlb, rigFromModel } from './modelRig.ts'
 import { blobsToMesh } from '../splat-engine/mesh.ts'
 import type { Morph } from '../splat-engine/morph.ts'
 import type { Species } from '../splat-engine/zoo/index.ts'
@@ -20,6 +22,8 @@ import { Sprites } from './creature/Sprites.tsx'
 
 const STILL = 'still'
 const MAX_FILE = 200 * 1024 * 1024
+/** Blobs laid on an opened rigged model. */
+const MODEL_BLOBS = 60_000
 const RIG_LESSONS = LESSONS.filter((l) => ['one-bone', 'weights', 'twist', 'walk', 'feet', 'model', 'morphs', 'fur'].includes(l.id))
 const SHOW: { id: Show; label: string }[] = [{ id: 'blobs', label: 'Blobs' }, { id: 'bones', label: 'Bones' }, { id: 'both', label: 'Both' }]
 const DEFAULT = 'fox'
@@ -237,9 +241,14 @@ export function Creature() {
 
   const open = async (file: File | undefined) => {
     if (!file) return
+    // the last save's line gives way to what this file does
+    setBusy(undefined)
     if (file.size > MAX_FILE) { setFileNote(`That file is ${kb(file.size)}; files up to ${kb(MAX_FILE)} open here.`); return }
     try {
-      const r = readRiggedGlb(new Uint8Array(await file.arrayBuffer()))
+      const bytes = new Uint8Array(await file.arrayBuffer())
+      // a rigged splat file, or an ordinary rigged model laid with blobs on its own bones
+      let r: Rigged
+      try { r = readRiggedGlb(bytes) } catch (e) { if (!isMeshGlb(e)) throw e; r = await rigFromModel(bytes, file.name, MODEL_BLOBS) }
       if (r.skeleton.count > 255) throw new GlbError('More than 255 bones')
       setLoaded({ name: r.name || file.name.replace(/\.glb$/i, ''), body: r, clips: r.clips })
       setMove(r.clips[0]?.name ?? STILL)
@@ -247,7 +256,7 @@ export function Creature() {
       const morphs = r.morphs?.length ? `, ${r.morphs.length} morph${r.morphs.length === 1 ? '' : 's'}` : ''
       setFileNote(`Opened ${file.name}: ${r.blobs.count.toLocaleString()} blobs, ${r.skeleton.count} bones, ${r.clips.length} clip${r.clips.length === 1 ? '' : 's'}${morphs}.`)
     } catch (e) {
-      setFileNote(e instanceof GlbError ? `${file.name} didn't open: ${e.message}.` : `${file.name} didn't open: it isn't a rigged splat .glb this page can read.`)
+      setFileNote(e instanceof GlbError || e instanceof MeshFileError ? `${file.name} didn't open: ${e.message}.` : `${file.name} didn't open: it isn't a rigged splat .glb or a rigged model this page can read.`)
     }
   }
 
@@ -405,7 +414,7 @@ export function Creature() {
                   </div>
                 </Field>
                 <label className="grid gap-1.5 text-sm">
-                  <span className="text-ink-muted">Open a rigged splat .glb</span>
+                  <span className="text-ink-muted">Open a rigged .glb: splats, or a model with bones</span>
                   <input type="file" accept=".glb,model/gltf-binary" onChange={(e) => { void open(e.target.files?.[0]); e.target.value = '' }} className="block w-full text-xs text-ink-faint file:mr-2 file:cursor-pointer file:rounded file:border file:border-rule file:bg-paper file:px-3 file:py-1.5 file:text-sm file:text-ink hover:file:border-ink-faint" />
                 </label>
               </div>
