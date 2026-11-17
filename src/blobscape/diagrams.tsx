@@ -402,6 +402,16 @@ export function LessonGlyph({ id }: { id: string }) {
         {[[70, 42], [50, 46]].map(([x, y], k) => <circle key={k} cx={x} cy={y} r="2" fill={COLORS.cream} />)}
         <path d="M 16 14 L 10 22 L 16 30 M 26 14 L 32 22 L 26 30" stroke={COLORS.sun} strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
       </>)
+    case 'scene-data':
+      return g(<>
+        {/* A cottage and a tree of blobs between a pair of curly braces: a scene written as data */}
+        <path d="M 22 14 C 16 14 18 26 14 30 C 18 34 16 46 22 46 M 106 14 C 112 14 110 26 114 30 C 110 34 112 46 106 46" stroke={COLORS.sun} strokeWidth="1.8" fill="none" strokeLinecap="round" />
+        <Blob x={52} y={40} rx={16} ry={10} r={0} c="cream" />
+        <Blob x={52} y={26} rx={18} ry={7} r={0} c="red" />
+        <Blob x={84} y={30} rx={11} ry={12} r={0} c="green" />
+        <rect x={82.5} y={40} width="3" height="10" fill={COLORS.orange} />
+        <circle cx="68" cy="38" r="2.2" fill={COLORS.sun} />
+      </>)
     default:
       return g(null)
   }

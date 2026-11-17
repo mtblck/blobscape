@@ -32,6 +32,7 @@ export const LESSONS = [
   { id: 'lighting', title: 'Lighting is baked', summary: 'A scan keeps the light it was shot in. Move the lamp, and try three ways to make the scan keep up.' },
   { id: 'shimmer', title: 'Why small blobs shimmer', summary: 'A wire fence in the distance blinks as it moves. Blur it to stop the blinking, and find what the blur costs.' },
   { id: 'first-creature', title: 'Your first creature', summary: 'A slug of two shapes on two bones, made with the engine in a page of code. Make its tail bend, close the crease, and let it swing.' },
+  { id: 'scene-data', title: 'A scene written as data', summary: 'A cottage at dusk, written as a page of JSON the engine checks and plays. Make the tree sway, find the rule every move keeps, and light the lantern.' },
 ] as const
 
 const WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty', 'twenty-one', 'twenty-two', 'twenty-three', 'twenty-four', 'twenty-five']
@@ -167,6 +168,11 @@ export const LESSON_GOALS: Record<(typeof LESSONS)[number]['id'], Goal[]> = {
     { id: 'bend', label: 'Make the tail bend with its bone', hint: 'The bone turns already. Look at what the skin listens to.', where: 'skin', why: 'A blob moves only with the bones its part lists. Turn a bone nobody listens to and nothing happens.' },
     { id: 'smooth', label: 'Bend the tail hard with no crease where it joins', hint: 'Watch the readout as you change how far a weight spreads.', where: 'skin', why: 'Spread each blob\u2019s weight over both bones near the join and it turns part of the way, so the skin bends instead of folding.' },
     { id: 'swing', label: 'Let the tail swing behind as the slug turns', where: 'move', why: 'A swing pulls the tail toward its pose loosely instead of setting it, so it lags, overshoots and settles, on top of the move.' },
+  ],
+  'scene-data': [
+    { id: 'sway', label: 'Make the tree sway', hint: 'The tree has a bone already. What makes a bone move?', where: 'scene', why: 'A bone holds still until a move names it. A sway rocks it to and fro, and the trunk and crown on it go along.' },
+    { id: 'loop', label: 'Find the rule every move must keep', hint: 'What if a move came round only partway by the end of the loop? Ask the checker.', where: 'checker', why: 'Every move comes round a whole number of times a loop, so when the loop ends every bone is back where it began and the scene runs on with no seam.' },
+    { id: 'light', label: 'Light the lantern with a light that flickers', hint: 'Live lights go in a list of their own, next to the parts.', where: 'scene', why: 'A live light shines on what is near it frame by frame, and a flicker makes it waver a whole number of times a loop, like any move.' },
   ],
   'fuzzy': [
     { id: 'blades', label: 'Give the grass mesh its finest grid, and count the blade tips it keeps', where: 'mesh', why: 'None. A blade is thinner than a grid cell, so the skin can’t close round it and the blades melt into the clump.' },
