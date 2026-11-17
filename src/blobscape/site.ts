@@ -9,6 +9,8 @@ export const SITE = {
   origin: 'https://blobscape.dev',
   author: { name: 'Matt Black', url: 'https://mattblack.space/' },
   tip: 'https://ko-fi.com/mtblck',
+  /** The site's and the engine's source. */
+  repo: 'https://github.com/mtblck/blobscape',
 } as const
 
 /** The Get in touch page's intro, shared with its prerendered HTML. */
