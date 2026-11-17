@@ -113,8 +113,11 @@ export function ScanStudio() {
     if (!box) return
     const { lo, hi } = box
     const r = Math.max(0.3, Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2)
-    setOrbit((o) => ({ ...o, target: [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2], distance: r * 3.2, azimuth: 30, elevation: 20 }))
-  }, [box])
+    const next: Orbit = { target: [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2], distance: r * 3.2, azimuth: 30, elevation: 20 }
+    setOrbit(next)
+    // and at once, so a new scan's first frame isn't drawn from the last view
+    if (stage) stage.orbit = next
+  }, [box, stage])
   const reframeNow = useRef(reframe)
   reframeNow.current = reframe
   useEffect(() => {

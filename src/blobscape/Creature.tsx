@@ -149,7 +149,9 @@ export function Creature() {
     if (framed.current === made.species || !made.species) return
     framed.current = made.species
     setOrbit(made.species.view)
-  }, [made])
+    // and at once, so the new creature's first frame isn't drawn from the last one's view
+    if (stage) stage.orbit = made.species.view
+  }, [made]) // eslint-disable-line react-hooks/exhaustive-deps
   const scaleOf = shown.species ?? made.species ?? species
   const clip = move === STILL ? undefined : shown.clips.find((c) => c.name === move) ?? shown.clips[0]
   const moveOf = (c: Clip) => shown.species?.moves.find((m) => m.name === c.name)

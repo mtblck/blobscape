@@ -57,6 +57,8 @@ function OrbitDemo({ id, about, start, lights, dress, onState }: DemoProps & { i
         raf = requestAnimationFrame(() => {
           raf = requestAnimationFrame(() => {
             t = setTimeout(() => {
+              // the stage starts on its own default view: the demo's goes on before its first frame, not a render later
+              s.orbit = start
               const blobs = dress(s)
               window.__engine = { demo: id, stage: s, blobs: () => s.blobCount }
               onState({ blobs, backend: s.backend })
