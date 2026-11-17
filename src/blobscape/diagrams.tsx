@@ -381,6 +381,15 @@ export function LessonGlyph({ id }: { id: string }) {
         <path d="M 27 21 L 44 33 M 24 26 L 36 40 M 30 17 L 50 26" stroke={COLORS.sun} strokeWidth="1.2" strokeLinecap="round" opacity="0.8" />
         <path d="M 96 18 L 104 26 M 104 18 L 96 26" stroke="#9197b2" strokeWidth="1.5" strokeLinecap="round" />
       </>)
+    case 'shimmer':
+      return g(<>
+        {/* A fence post and wires on a pixel grid, the far wire broken into the pixels that catch it */}
+        {[16, 28, 40, 52, 64, 76, 88, 100].map((x) => <path key={`v${x}`} d={`M ${x} 8 V 68`} stroke="#9197b2" strokeWidth="0.5" opacity="0.35" />)}
+        {[14, 26, 38, 50, 62].map((y) => <path key={`h${y}`} d={`M 10 ${y} H 106`} stroke="#9197b2" strokeWidth="0.5" opacity="0.35" />)}
+        <Blob x={30} y={40} rx={3} ry={26} r={0} c="orange" />
+        <path d="M 33 30 C 60 33 80 33 104 30" stroke={COLORS.white} strokeWidth="1" fill="none" opacity="0.9" />
+        {[[40, 50], [64, 50], [88, 50]].map(([x, y], k) => <rect key={k} x={x} y={y - 1} width="12" height="12" fill={COLORS.white} opacity={k === 1 ? 0.15 : 0.7} />)}
+      </>)
     default:
       return g(null)
   }

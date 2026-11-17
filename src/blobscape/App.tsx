@@ -25,6 +25,7 @@ import { Shoot } from './lessons/Shoot.tsx'
 import { Fuzzy } from './lessons/Fuzzy.tsx'
 import { Floaters } from './lessons/Floaters.tsx'
 import { Lighting } from './lessons/Lighting.tsx'
+import { Shimmer } from './lessons/Shimmer.tsx'
 import { Sandbox } from './Sandbox.tsx'
 import { Creature } from './Creature.tsx'
 import { ForestWalk } from './ForestWalk.tsx'
@@ -40,7 +41,7 @@ import { Contact } from './Contact.tsx'
 import { Engine } from './Engine.tsx'
 import { Spec } from './Spec.tsx'
 
-const PAGES: Record<string, () => React.JSX.Element> = { 'one-blob': OneBlob, footprint: Footprint, order: Order, many: Many, angle: Angle, paint: Paint, formats: Formats, break: Break, 'one-bone': OneBone, weights: Weights, twist: Twist, walk: Walk, feet: FeetOnTheGround, model: Model, morphs: Morphs, fur: Fur, shoot: Shoot, fuzzy: Fuzzy, floaters: Floaters, lighting: Lighting }
+const PAGES: Record<string, () => React.JSX.Element> = { 'one-blob': OneBlob, footprint: Footprint, order: Order, many: Many, angle: Angle, paint: Paint, formats: Formats, break: Break, 'one-bone': OneBone, weights: Weights, twist: Twist, walk: Walk, feet: FeetOnTheGround, model: Model, morphs: Morphs, fur: Fur, shoot: Shoot, fuzzy: Fuzzy, floaters: Floaters, lighting: Lighting, shimmer: Shimmer }
 
 /** The whole site. `route` is only for prerendering (scripts/prerender.ts), where there is no address bar to read. */
 export function App({ route: at }: { route?: Route } = {}) {
