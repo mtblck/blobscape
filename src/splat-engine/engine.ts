@@ -16,6 +16,7 @@ const {
 } = TSL
 import { packWeights, skinBlob, skinCenters, type Skeleton, type Skin, type SkinMode } from './rig.ts'
 import { DepthSort } from './sort.ts'
+import { detailFor, lodRank, screenRadius, type DetailRule } from './lod.ts'
 import { srgbToLinear } from '../splat-core/color.ts'
 
 /**
@@ -98,7 +99,21 @@ export class SplatWorld extends Mesh {
   set parts(on: boolean) { this.flat.value = on ? 1 : 0 }
 
   private readonly boneOffset: number[]
+  /** Per actor, the share of its blobs left out (0: all drawn). Sent to the GPU in each of its bones' spare matrix slot. */
+  private readonly drop: Float32Array
+  /**
+   * Level of detail: while set, each actor draws a share of its blobs by how big it is on screen (`detailFor`),
+   * the rest grown to cover for them. Off (every blob drawn) unless asked for; turning it off draws every blob again.
+   */
+  get autoDetail(): DetailRule | false { return this.auto }
+  set autoDetail(rule: DetailRule | false) {
+    this.auto = rule
+    if (!rule && this.drop.some((d) => d > 0)) { this.drop.fill(0); this.bonesDirty = true }
+  }
+  private auto: DetailRule | false = false
   private readonly boneRadius: Float32Array
+  /** Per bone, a sphere round its own blobs at rest (x, y, z, radius), carried by the bone's matrix: for level of detail. */
+  private readonly boneSphere: Float32Array
   private readonly buf: ReturnType<typeof makeBuffers>
   private readonly sort: DepthSort
   private readonly deformNodes: Record<SkinMode, ReturnType<typeof makeDeform>>
@@ -153,8 +168,10 @@ export class SplatWorld extends Mesh {
     this.mode = mode
     this.frustumCulled = false
     this.cpuCenters = new Float32Array(Math.max(1, count) * 3)
+    this.drop = new Float32Array(actors.length)
 
     this.boneRadius = boneRadii(actors, boneOffset, bones)
+    this.boneSphere = boneSpheres(actors, boneOffset, bones)
     this.deformNodes = { quat: makeDeform(buf, 'quat'), linear: makeDeform(buf, 'linear') }
     this.cam = { view: uniform(new Matrix4()), proj: uniform(new Matrix4()), viewport: uniform(new Vector2(1, 1)), depthRange: uniform(new Vector2(0, 1)) }
     this.fog = { color: uniform(new Vector3(0, 0, 0)), range: uniform(new Vector2(0, 0)) }
@@ -196,6 +213,20 @@ export class SplatWorld extends Mesh {
   /** Call after posing any skeleton. */
   markPosed() { this.bonesDirty = true }
 
+  /** Draws `keep` (0–1) of an actor's blobs, each grown to cover for the rest. 1 draws them all. `autoDetail` overrides it each frame. */
+  setDetail(actor: Actor | number, keep: number) {
+    const a = typeof actor === 'number' ? actor : this.actors.indexOf(actor)
+    if (a < 0 || a >= this.actors.length) throw new Error('setDetail: not an actor of this world')
+    const d = 1 - Math.min(1, Math.max(0.01, keep))
+    if (d === this.drop[a]) return
+    this.drop[a] = d
+    this.bonesDirty = true
+  }
+
+  /** The share of each actor's blobs being drawn. */
+  get detail(): number[] { return [...this.drop].map((d) => 1 - d) }
+
+
   /**
    * Takes the actors' blobs again after they were changed in place: centers, shapes, colors and opacities, for blobs
    * that something other than a bone moves (a shape shift). The counts, the bones and the weights must be as they were.
@@ -210,6 +241,7 @@ export class SplatWorld extends Mesh {
     if (center !== b.srcCenterData) b.srcCenterData.set(center.subarray(0, b.srcCenterData.length))
     for (const a of [b.centerAttr, b.scaleAttr, b.quatAttr, b.colorAttr]) bump(a)
     this.boneRadius.set(boneRadii(this.actors, this.boneOffset, this.boneCount))
+    this.boneSphere.set(boneSpheres(this.actors, this.boneOffset, this.boneCount))
     this.bonesDirty = true
   }
 
@@ -253,6 +285,8 @@ export class SplatWorld extends Mesh {
       for (let b = 0; b < sk.count; b++) {
         const g = this.boneOffset[a] + b
         data.set(sk.matrix.subarray(b * 16, b * 16 + 16), g * 20)
+        // the matrix's bottom row is never read: its first slot carries the actor's share dropped (lod.ts)
+        data[g * 20 + 3] = this.drop[a]
         data.set(sk.quat.subarray(b * 4, b * 4 + 4), g * 20 + 16)
       }
     }
@@ -310,12 +344,18 @@ export class SplatWorld extends Mesh {
     const webgl = this.isWebGL(renderer)
     this.cpuPath = webgl
     this.build(webgl)
-    const deformed = this.bonesDirty || !this.posed
+    let deformed = this.bonesDirty || !this.posed
     if (deformed) {
       this.uploadBones()
       this.updateBounds()
     }
-    const key = this.setView(renderer, camera)
+    let key = this.setView(renderer, camera)
+    if (this.auto && this.pickDetail(camera, this.auto)) {
+      // the shares changed: send them up with the bones and move the blobs again
+      this.uploadBones()
+      deformed = true
+      key += '|detail'
+    }
     const needsSort = deformed || key !== this.lastSortKey
     if (webgl) {
       const t0 = performance.now()
@@ -335,6 +375,50 @@ export class SplatWorld extends Mesh {
     this.posed = true
     this.bonesDirty = false
     this.lastSortKey = key
+  }
+
+  /**
+   * Sets each actor's share of blobs from how big it is on screen now. Returns true when a share moved enough to
+   * redo (2% of the blobs), so a creature walking toward the camera fills in in steps, not every frame.
+   */
+  private pickDetail(camera: Camera, rule: DetailRule): boolean {
+    const v = this.cam.view.value.elements
+    const p11 = camera.projectionMatrix.elements[5]
+    let changed = false
+    const c = new Float32Array(3)
+    const at = new Float32Array(Math.max(...this.actors.map((x) => x.skeleton.count), 1) * 4)
+    for (let a = 0; a < this.actors.length; a++) {
+      const sk = this.actors[a].skeleton
+      // the actor's own sphere: each bone's sphere carried to where the bone is now, then one round them all
+      const n = sk.count
+      at.fill(0, 0, n * 4)
+      const min = [Infinity, Infinity, Infinity], max_ = [-Infinity, -Infinity, -Infinity]
+      for (let b = 0; b < n; b++) {
+        const g = (this.boneOffset[a] + b) * 4, r = this.boneSphere[g + 3] * sk.scale[b]
+        if (!(r > 0)) continue
+        const m = sk.matrix, o = b * 16, x = this.boneSphere[g], y = this.boneSphere[g + 1], z = this.boneSphere[g + 2]
+        c[0] = m[o] * x + m[o + 4] * y + m[o + 8] * z + m[o + 12]
+        c[1] = m[o + 1] * x + m[o + 5] * y + m[o + 9] * z + m[o + 13]
+        c[2] = m[o + 2] * x + m[o + 6] * y + m[o + 10] * z + m[o + 14]
+        at.set(c, b * 4)
+        at[b * 4 + 3] = r
+        for (let k = 0; k < 3; k++) { min[k] = Math.min(min[k], c[k] - r); max_[k] = Math.max(max_[k], c[k] + r) }
+      }
+      let keep = rule.min
+      if (min[0] <= max_[0]) {
+        const mid = [(min[0] + max_[0]) / 2, (min[1] + max_[1]) / 2, (min[2] + max_[2]) / 2]
+        let radius = 0
+        for (let b = 0; b < n; b++) {
+          if (!(at[b * 4 + 3] > 0)) continue
+          radius = Math.max(radius, Math.hypot(at[b * 4] - mid[0], at[b * 4 + 1] - mid[1], at[b * 4 + 2] - mid[2]) + at[b * 4 + 3])
+        }
+        const depth = -(v[2] * mid[0] + v[6] * mid[1] + v[10] * mid[2] + v[14])
+        keep = detailFor(this.actors[a].blobs.count, screenRadius(radius, depth, p11, this.size.y), rule)
+      }
+      const d = 1 - keep
+      if (Math.abs(d - this.drop[a]) > 0.02 || (d === 0 && this.drop[a] !== 0)) { this.drop[a] = d; changed = true }
+    }
+    return changed
   }
 
   /**
@@ -381,6 +465,7 @@ export class SplatWorld extends Mesh {
     const w = new Float32Array(4)
     for (let a = 0; a < this.actors.length; a++) {
       const { blobs, skin, skeleton } = this.actors[a]
+      const drop = this.drop[a]
       for (let k = 0; k < blobs.count; k++, i++) {
         const word = this.buf.skinWords[i * 2 + 1]
         for (let j = 0; j < 4; j++) w[j] = ((word >>> (j * 8)) & 255) / 255
@@ -389,6 +474,9 @@ export class SplatWorld extends Mesh {
           skin.joints.subarray(k * 4, k * 4 + 4), w, skeleton, this.mode, center, i * 4, cov, i * 6,
         )
         center[i * 4 + 3] = 1
+        // level of detail, as the GPU does it: left out (no size), or grown to cover for those that are
+        const f = lodRank(i) < drop ? 0 : 1 / Math.max(1 - drop, 1e-4)
+        if (f !== 1) for (let j = 0; j < 6; j++) cov[i * 6 + j] *= f
       }
     }
     return { center, cov }
@@ -571,6 +659,31 @@ function boneRadii(actors: Actor[], boneOffset: number[], bones: number) {
   return r
 }
 
+/** Per bone, the smallest box round the blobs it carries most, at rest, as a sphere (x, y, z, radius); blobs count by 2σ. */
+function boneSpheres(actors: Actor[], boneOffset: number[], bones: number) {
+  const lo = new Float32Array(Math.max(1, bones) * 3).fill(Infinity), hi = new Float32Array(Math.max(1, bones) * 3).fill(-Infinity)
+  actors.forEach((a, ai) => {
+    const { blobs, skin } = a
+    for (let k = 0; k < blobs.count; k++) {
+      let m = 0
+      for (let j = 1; j < 4; j++) if (skin.weights[k * 4 + j] > skin.weights[k * 4 + m]) m = j
+      const g = boneOffset[ai] + skin.joints[k * 4 + m]
+      const s = Math.max(blobs.scale[k * 3], blobs.scale[k * 3 + 1], blobs.scale[k * 3 + 2]) * 2
+      for (let i = 0; i < 3; i++) {
+        lo[g * 3 + i] = Math.min(lo[g * 3 + i], blobs.center[k * 3 + i] - s)
+        hi[g * 3 + i] = Math.max(hi[g * 3 + i], blobs.center[k * 3 + i] + s)
+      }
+    }
+  })
+  const out = new Float32Array(Math.max(1, bones) * 4)
+  for (let g = 0; g < bones; g++) {
+    if (!(lo[g * 3] <= hi[g * 3])) continue
+    for (let i = 0; i < 3; i++) out[g * 4 + i] = (lo[g * 3 + i] + hi[g * 3 + i]) / 2
+    out[g * 4 + 3] = Math.hypot(hi[g * 3] - lo[g * 3], hi[g * 3 + 1] - lo[g * 3 + 1], hi[g * 3 + 2] - lo[g * 3 + 2]) / 2
+  }
+  return out
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type N = any
 
@@ -593,6 +706,17 @@ function quatMul(a: N, b: N) {
   )
 }
 
+/** `lodRank` on the GPU: Wang's integer hash of the blob's index, to 0–1. */
+function lodRankNode(i: N) {
+  const h = uint(i).toVar()
+  h.assign(h.bitXor(uint(61)).bitXor(h.shiftRight(uint(16))))
+  h.assign(h.mul(uint(9)))
+  h.assign(h.bitXor(h.shiftRight(uint(4))))
+  h.assign(h.mul(uint(0x27d4eb2d)))
+  h.assign(h.bitXor(h.shiftRight(uint(15))))
+  return float(h.shiftRight(uint(8))).div(16777216)
+}
+
 /** One blob through its bones: world center and the six covariance terms, as `skinBlob` does on the CPU. */
 function deformBlob(buf: ReturnType<typeof makeBuffers>, i: N, mode: SkinMode) {
   const src = buf.srcCenter.element(i).toVar()
@@ -605,10 +729,13 @@ function deformBlob(buf: ReturnType<typeof makeBuffers>, i: N, mode: SkinMode) {
   const c0 = vec3(0).toVar(), c1 = vec3(0).toVar(), c2 = vec3(0).toVar(), c3 = vec3(0).toVar()
   const Q = vec4(0).toVar()
   const S = float(0).toVar()
+  const drop = float(0).toVar()
   const q0 = col(0, 4).toVar()
   for (let k = 0; k < 4; k++) {
     const wk = ws[k]
     const a0 = col(k, 0).xyz
+    // every bone of an actor carries the same share dropped in its matrix's spare slot, so the blend is that share
+    drop.addAssign(col(k, 0).w.mul(wk))
     c0.addAssign(a0.mul(wk))
     c1.addAssign(col(k, 1).xyz.mul(wk))
     c2.addAssign(col(k, 2).xyz.mul(wk))
@@ -635,7 +762,10 @@ function deformBlob(buf: ReturnType<typeof makeBuffers>, i: N, mode: SkinMode) {
   }
   const a0 = A[0].toVar(), a1 = A[1].toVar(), a2 = A[2].toVar()
   const e = (r: 'x' | 'y' | 'z', c: 'x' | 'y' | 'z') => a0[r].mul(a0[c]).add(a1[r].mul(a1[c])).add(a2[r].mul(a2[c]))
-  return { world, covA: vec4(e('x', 'x'), e('x', 'y'), e('x', 'z'), e('y', 'y')).toVar(), covB: vec4(e('y', 'z'), e('z', 'z'), 0, 0).toVar() }
+  // level of detail (lod.ts): a blob ranked under the share dropped has no size, and is culled where it is projected;
+  // the rest grow to cover for it
+  const f = select(lodRankNode(i).lessThan(drop), float(0), float(1).div(max(float(1).sub(drop), 0.0001))).toVar()
+  return { world, covA: vec4(e('x', 'x'), e('x', 'y'), e('x', 'z'), e('y', 'y')).mul(f).toVar(), covB: vec4(e('y', 'z'), e('z', 'z'), 0, 0).mul(f).toVar() }
 }
 
 function makeDeform(buf: ReturnType<typeof makeBuffers>, mode: SkinMode) {

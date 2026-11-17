@@ -1855,6 +1855,36 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
         else ok(`engine lab: GPU skinning matches the CPU (${mode}, center ±${r.center.toExponential(1)})`)
       }
     }
+    // level of detail: a quarter of the first fox, the same blobs dropped and the rest grown alike on the GPU and the CPU;
+    // and with autoDetail, a fox far away keeps a share and one close keeps them all
+    if (!webgl) {
+      const lod = await page.evaluate(async () => {
+        const l = window.__lab, w = l.world
+        w.setDetail(0, 0.25)
+        await l.frame(0.37)
+        const chk = await w.checkAgainstCPU(l.renderer)
+        const cov = w.deformCPU().cov
+        let dropped = 0
+        for (let i = 0; i < w.actors[0].blobs.count; i++) if (cov[i * 6] === 0 && cov[i * 6 + 3] === 0 && cov[i * 6 + 5] === 0) dropped++
+        w.setDetail(0, 1)
+        const was = l.orbit
+        w.autoDetail = { density: 1, min: 0.06 }
+        l.orbit = { ...was, distance: 60 }
+        await l.frame(0.37)
+        const far = w.detail
+        l.orbit = { ...was, distance: 3 }
+        await l.frame(0.37)
+        const near = w.detail
+        w.autoDetail = false
+        l.orbit = was
+        await l.frame(0.37)
+        return { chk, dropped, count: w.actors[0].blobs.count, far, near, after: w.detail }
+      })
+      const share = lod.dropped / lod.count
+      if (!(lod.chk.center < 1e-3 && lod.chk.cov < lod.chk.covScale * 0.01) || Math.abs(share - 0.75) > 0.03) fails.push(`engine lab: level of detail ${JSON.stringify(lod)}`)
+      else if (!(lod.far.every((d) => d < 1) && lod.near.every((d) => d === 1) && lod.after.every((d) => d === 1))) fails.push(`engine lab: autoDetail shares ${JSON.stringify(lod)}`)
+      else ok(`engine lab: level of detail drops ${(share * 100).toFixed(0)}% of a fox at a quarter, GPU matching the CPU; far foxes keep ${lod.far.map((d) => d.toFixed(2)).join(', ')}`)
+    }
     if (!webgl) {
       const so = await page.evaluate(async () => { const l = window.__lab; await l.frame(0.3); return l.world.checkSort(l.renderer) })
       if (so.missing || so.outOfOrder || so.unsettled) fails.push(`engine lab: GPU sort ${JSON.stringify(so)}`)
