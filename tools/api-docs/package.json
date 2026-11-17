@@ -1,0 +1,13 @@
+{
+  "name": "blobscape-api-docs",
+  "private": true,
+  "description": "Reads the @blobscape/engine API reference with TypeDoc. Kept apart from the site because TypeDoc needs TypeScript 6's compiler API, which TypeScript 7 no longer ships.",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "typedoc": "0.28.20",
+    "typescript": "6.0.3"
+  }
+}

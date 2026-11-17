@@ -16,6 +16,10 @@ Run the one that fits before merging. Say in the PR which one ran.
 | The build, hosting headers, `package.json` beyond its runtime `dependencies`, the check harness; or before a release | `npm test && npm run build && npm run verify` (the full run) |
 | Just want one area again after fixing it | `npm run verify -- <check or group>` |
 
+The engine docs' reference is checked against the code by a unit test that needs TypeDoc, which lives in its own
+small package (`tools/api-docs`); `npm run check` installs it first (`npm run docs:deps`), and without it that one
+test is skipped.
+
 `npm run check` is `npm test`, `npm run build` and then
 `npm run verify -- --changed`: the browser checks that the files changed since
 `main` (committed, uncommitted and new) can reach, and no others. If the changes
