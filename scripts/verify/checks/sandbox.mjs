@@ -380,6 +380,51 @@ export default [
     },
   },
   {
+    name: 'sandbox-thing',
+    about: 'tap to select: with whole things on, a click on the toadstool selects it and not the scene, by a model run in the page',
+    entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/tapSelect.ts', 'src/blobscape/select/thing.ts', 'src/blobscape/select/segment.worker.ts'],
+    async run({ shots, join, fails, ok, open }) {
+      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 900 } })
+      const outside = []
+      page.on('request', (r) => { if (!/^(http:\/\/localhost|data:|blob:)/.test(r.url())) outside.push(r.url()) })
+      await page.waitForTimeout(2500)
+      const total = Number((await page.textContent('[data-testid=blob-count]')).replace(/\D/g, ''))
+      const selected = async () => Number(((await page.getByRole('tab', { name: /Selection/ }).textContent()) ?? '').replace(/\D/g, '') || 0)
+      await page.getByRole('tab', { name: /Selection/ }).click()
+      await page.getByRole('checkbox', { name: 'A click with Select takes the whole thing' }).check()
+      if ((await page.getByRole('button', { name: 'Select', exact: true }).getAttribute('aria-pressed')) !== 'true') fails.push('blobscape sandbox thing: turning whole things on did not pick the Select tool')
+      const box = await page.getByTestId('viewport').boundingBox()
+      const click = async (fx, fy) => {
+        const t = Date.now()
+        await page.mouse.click(box.x + box.width * fx, box.y + box.height * fy)
+        await page.waitForFunction(() => /Looking/.test(document.querySelector('[data-testid=whole-note]')?.textContent ?? ''), null, { timeout: 5000 }).catch(() => {})
+        await page.waitForFunction(() => !/Looking/.test(document.querySelector('[data-testid=whole-note]')?.textContent ?? ''), null, { timeout: 180000 }).catch(() => {})
+        return Date.now() - t
+      }
+      // the middle of the view is the toadstool
+      const first = await click(0.5, 0.45)
+      const got = await selected()
+      const alert = await page.getByRole('alert').textContent({ timeout: 500 }).catch(() => '')
+      // the toadstool is most of the scene's blobs; the ground under it is the rest
+      if (!(got > total * 0.5 && got < total * 0.97)) fails.push(`blobscape sandbox thing: a click on the toadstool selected ${got} of ${total} blobs. ${alert}`)
+      else ok(`blobscape sandbox thing: a click selects ${got.toLocaleString()} of ${total.toLocaleString()} blobs (${(first / 1000).toFixed(1)} s with the model's download and first look)`)
+      await page.waitForTimeout(2500)
+      await page.screenshot({ path: join(shots, 'blobscape-sandbox-thing.png') })
+      // the same view again: the picture is already read
+      const again = await click(0.5, 0.45)
+      const same = await selected()
+      if (same !== got || again > first) fails.push(`blobscape sandbox thing: a second click on the same spot gave ${same} (was ${got}) in ${again} ms (the first took ${first})`)
+      else ok(`blobscape sandbox thing: the same click again gives the same blobs, in ${(again / 1000).toFixed(1)} s`)
+      // empty space selects nothing
+      await click(0.04, 0.06)
+      const none = await selected()
+      if (none) fails.push(`blobscape sandbox thing: a click on nothing left ${none} selected`)
+      if (outside.length) fails.push(`blobscape sandbox thing: asked another site for ${outside.slice(0, 3).join(', ')}`)
+      else ok('blobscape sandbox thing: the model and its runtime come from this site alone')
+      await ctx.close()
+    },
+  },
+  {
     name: 'sandbox-props',
     about: 'a slime that bursts and the watch, added from other experiments',
     entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/props.ts'],
