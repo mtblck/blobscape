@@ -80,7 +80,7 @@ export default [
   {
     name: 'engine-lab',
     core: true,
-    about: 'engine lab on WebGPU and WebGL: draws, poses reach the draw, picks, lights, .glb in three.js, timing',
+    about: 'engine lab on WebGPU and WebGL: draws, poses reach the draw, sorts (bins and radix), picks, lights, .glb in three.js, timing',
     entries: ['src/engine-lab/main.tsx'],
     files: ['engine-lab/'],
     async run({ root, shots, join, fails, ok, open, axe }) {
@@ -134,6 +134,23 @@ export default [
           const so = await page.evaluate(async () => { const l = window.__lab; await l.frame(0.3); return l.world.checkSort(l.renderer) })
           if (so.missing || so.outOfOrder || so.unsettled) fails.push(`engine lab: GPU sort ${JSON.stringify(so)}`)
           else ok(`engine lab: GPU sort draws every blob once, farthest first, and blobs at one depth in index order (at most ${so.biggest} at one depth)`)
+        }
+        // the full radix sort (opt in, `sort: 'radix'`): every blob once, farthest first, ties in index order, and it draws
+        {
+          const e = await open(`/engine-lab/?which=engine&n=12000&walk=1&herd=2&offscreen=1&sort=radix${webgl ? '&webgl=1' : ''}`, { viewport: { width: 800, height: 800 } })
+          await e.page.waitForFunction(() => window.__lab || window.__labError, null, { timeout: 60000 })
+          const r = await e.page.evaluate(async (webgl) => {
+            const l = window.__lab
+            await l.frame(0.3)
+            const so = webgl ? null : await l.world.checkSort(l.renderer)
+            const cv = document.querySelector('canvas'), d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+            let orange = 0
+            for (let i = 0; i < d.length; i += 4) if (d[i] > 150 && d[i + 1] > 50 && d[i + 1] < 140 && d[i + 2] < 80) orange++
+            return { so, orange, info: l.info }
+          }, webgl)
+          if (!r.info.includes('radix') || r.orange < 2000 || (r.so && (r.so.missing || r.so.outOfOrder || r.so.unsettled))) fails.push(`engine lab ${label}: radix sort ${JSON.stringify(r)}`)
+          else ok(`engine lab ${label}: radix sort draws the foxes (${r.orange} orange pixels)${r.so ? `, every blob once in exact order (at most ${r.so.biggest} at one key)` : ''}`)
+          await e.ctx.close()
         }
         // shape edits: the lab's demo (a box cuts the foxes' heads off, a soft ball paints them blue), the GPU matching the CPU
         {
