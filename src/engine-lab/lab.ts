@@ -44,6 +44,8 @@ export interface LabOptions {
   edits?: boolean
   /** Color by angle (ours only): every fox looks warmer from its left and bluer from its right. */
   sh?: boolean
+  /** The full radix sort (ours only) in place of the counting sort over depth bins. */
+  radix?: boolean
   /**
    * Draw into an off-screen target and copy each frame to the page with the
    * CPU. Only for headless test browsers, whose software WebGPU can render but
@@ -156,7 +158,7 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
   let mode = o.mode
   if (o.which === 'engine') {
     if (o.sh) for (const f of foxes) giveSheen(f.blobs)
-    world = new SplatWorld(foxes, { mode, paint: o.edits })
+    world = new SplatWorld(foxes, { mode, paint: o.edits, sort: o.radix ? 'radix' : 'bins' })
     if (o.lod) world.autoDetail = DETAIL
     if (o.edits) world.setEdits(DEMO_EDITS)
     scene.add(world)
@@ -246,7 +248,7 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
   raf = requestAnimationFrame(tick)
 
   return {
-    info: `${o.which === 'three' ? 'three.js (standing still: it has no bones)' : 'ours'} · ${backend} · ${blobs.toLocaleString()} blobs${world?.autoDetail ? ' · fewer when small' : ''}${o.edits ? ' · cut and painted' : ''}${o.sh ? ' · color by angle' : ''}`,
+    info: `${o.which === 'three' ? 'three.js (standing still: it has no bones)' : 'ours'} · ${backend} · ${blobs.toLocaleString()} blobs${world?.autoDetail ? ' · fewer when small' : ''}${o.edits ? ' · cut and painted' : ''}${o.sh ? ' · color by angle' : ''}${o.radix ? ' · radix sort' : ''}`,
     world,
     renderer,
     get orbit() { return orbit },

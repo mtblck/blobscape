@@ -16,6 +16,10 @@ const {
 } = TSL
 import { packWeights, skinBlob, skinCenters, type Skeleton, type Skin, type SkinMode } from './rig.ts'
 import { DepthSort } from './sort.ts'
+import { RadixSort } from './radix.ts'
+
+/** Either depth sort: the counting sort over bins, or the full radix sort. */
+type Sorter = DepthSort | RadixSort
 import { detailFor, lodRank, screenRadius, type DetailRule } from './lod.ts'
 import { MAX_EDITS, editAt, type ShapeEdit } from './edit.ts'
 import { applyMorphs, shares, type Morph } from './morph.ts'
@@ -71,8 +75,13 @@ const MAX_SPLAT_PX = 1024
 const CLIP_XY = 1.4
 
 export interface EngineOptions {
-  /** Depth buckets for the sort. More buckets, fewer ties between blobs that are close in depth. */
+  /** Depth buckets for the counting sort. More buckets, fewer ties between blobs that are close in depth. */
   bins?: number
+  /**
+   * 'bins' (the default): a counting sort over `bins` depth buckets, small buckets settled into index order.
+   * 'radix': a stable radix sort over 2²⁴ depth steps (radix.ts), every tie in index order however many share it.
+   */
+  sort?: 'bins' | 'radix'
   mode?: SkinMode
   /** Live lights (`setLights`): each blob is lit every frame from its normal. Off unless asked for, as it costs a pass. */
   lights?: boolean
@@ -143,7 +152,7 @@ export class SplatWorld extends Mesh {
   /** Per bone, the box round its own blobs at rest (middle x, y, z, then half sizes): for the grid of shadows. */
   private readonly boneBox: Float32Array
   private readonly buf: ReturnType<typeof makeBuffers>
-  private readonly sort: DepthSort
+  private readonly sort: Sorter
   private readonly deformNodes: Record<SkinMode, ReturnType<typeof makeDeform>>
   /** Morphs, when any actor has them: the GPU data, the pass, the deform that reads its output, and each actor's weights. */
   private readonly morph?: MorphGPU & { node: ReturnType<typeof makeMorph>; deform: Record<SkinMode, ReturnType<typeof makeDeform>>; weights: Float32Array[]; firstTarget: number[] }
@@ -180,7 +189,7 @@ export class SplatWorld extends Mesh {
   private restOpacity?: Float32Array
   private lightsDirty = true
 
-  constructor(actors: Actor[], { bins = 65536, mode = 'quat', lights = false, paint = false }: EngineOptions = {}) {
+  constructor(actors: Actor[], { bins: wantBins = 65536, sort: sortKind = 'bins', mode = 'quat', lights = false, paint = false }: EngineOptions = {}) {
     const count = actors.reduce((s, a) => s + a.blobs.count, 0)
     const geometry = new InstancedBufferGeometry()
     geometry.setAttribute('position', new BufferAttribute(new Float32Array([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0]), 3))
@@ -191,7 +200,8 @@ export class SplatWorld extends Mesh {
     let bones = 0
     for (const a of actors) { boneOffset.push(bones); bones += a.skeleton.count }
     const buf = makeBuffers(actors, boneOffset, count, bones)
-    const sort = new DepthSort(count, bins, WORKGROUP)
+    const sort: Sorter = sortKind === 'radix' ? new RadixSort(count) : new DepthSort(count, wantBins, WORKGROUP)
+    const bins = sort.bins
     const material = new NodeMaterial()
     material.transparent = true
     material.depthWrite = false
@@ -766,6 +776,9 @@ export class SplatWorld extends Mesh {
   }
 
   /** Reads back the GPU sort and checks it: every blob drawn once, farthest first. */
+  /** Which depth sort this world was built with. */
+  get sortKind(): 'bins' | 'radix' { return this.sort instanceof RadixSort ? 'radix' : 'bins' }
+
   async checkSort(renderer: Renderer) {
     const r = renderer as unknown as { getArrayBufferAsync: (a: StorageBufferAttribute) => Promise<ArrayBuffer> }
     const order = new Uint32Array(await r.getArrayBufferAsync(this.sort.orderAttr))
@@ -909,7 +922,7 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
 }
 
 /** On WebGL, storage is read through textures that the CPU fills; the draw reads the blobs' rest data and the bones. */
-function enableWebGL(buf: ReturnType<typeof makeBuffers>, sort: DepthSort) {
+function enableWebGL(buf: ReturnType<typeof makeBuffers>, sort: Sorter) {
   if (buf.webgl) return
   for (const r of [buf.srcCenter, buf.srcScale, buf.srcQuat, buf.skin, buf.bones, buf.color, buf.part, buf.seen]) (r as unknown as { setPBO: (b: boolean) => void }).setPBO(true)
   sort.enableWebGL()
@@ -1273,7 +1286,7 @@ function projectSplat(center: N, covA: N, covB: N, view: N, proj: N, viewport: N
 }
 
 /** WebGPU: project every blob once (not once per corner), and write its sort key. */
-function makeProject(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, cam: CameraUniforms, bins: number) {
+function makeProject(buf: ReturnType<typeof makeBuffers>, sort: Sorter, cam: CameraUniforms, bins: number) {
   const bins1 = bins - 1
   return Fn(() => {
     const i = instanceIndex
@@ -1284,7 +1297,8 @@ function makeProject(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, cam: 
     const t = p.depth.sub(cam.depthRange.x).div(span).clamp(0, 1)
     const key = uint(bins1).sub(uint(t.mul(bins1))).toVar()
     sort.keysW.element(i).assign(key)
-    TSL.atomicAdd(sort.histogram.element(key), uint(1))
+    // the counting sort counts its bins here; the radix sort counts its own
+    if (sort.histogram) TSL.atomicAdd(sort.histogram.element(key), uint(1))
   })().compute(buf.count, [WORKGROUP]).setName('SplatWorldProject')
 }
 
@@ -1560,7 +1574,7 @@ function flatColor(flat: N, part: N, depth: N, picture: N) {
   return select(flat.greaterThan(1.5), vec3(depth), select(flat.greaterThan(0.5), part, picture))
 }
 
-function makeVertexWebGPU(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, fog: Fog, flat: N, L?: Lighting) {
+function makeVertexWebGPU(buf: ReturnType<typeof makeBuffers>, sort: Sorter, fog: Fog, flat: N, L?: Lighting) {
   return Fn(() => {
     const idx = sort.orderRead.element(instanceIndex).toVar()
     const A = buf.splatA.element(idx).toVar()
@@ -1575,7 +1589,7 @@ function makeVertexWebGPU(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, 
 }
 
 /** WebGL has no compute: each corner moves its blob through the bones and projects it, like a skinned mesh. */
-function makeVertexWebGL(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, mode: SkinMode, fog: Fog, flat: N, L?: Lighting, S?: ViewSH) {
+function makeVertexWebGL(buf: ReturnType<typeof makeBuffers>, sort: Sorter, mode: SkinMode, fog: Fog, flat: N, L?: Lighting, S?: ViewSH) {
   return Fn(() => {
     const idx = sort.orderRead.element(instanceIndex).toVar()
     const d = deformBlob(buf, idx, mode)

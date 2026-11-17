@@ -284,6 +284,17 @@ export default [
           if (!(c.look.steady > 0 && c.before && differ < a.solid * 0.05 && held > 20)) fails.push(`${label}: steady pixels: ${JSON.stringify({ steady: c.look.steady, before: !!c.before, differ, held })}`)
           else ok(`${label}: steady pixels: drawn against the frame before as the CPU twin is (${differ} pixels a neighboring color), ${held} pixels keep their color that would have flipped`)
         }
+        // Exact sort: the stage swaps in the radix sort and the art still draws, every pixel a palette color
+        {
+          await tabClick(d.page.getByLabel('Exact sort (slower)'))
+          await d.page.waitForFunction(() => window.__diorama.stage.world?.sortKind === 'radix', null, { timeout: 30000 }).catch(() => {})
+          const ex = await shot(2)
+          const sort = await d.page.evaluate(() => window.__diorama.stage.world?.sortKind)
+          await tabClick(d.page.getByLabel('Exact sort (slower)'))
+          await d.page.waitForFunction(() => window.__diorama.stage.world?.sortKind === 'bins', null, { timeout: 30000 }).catch(() => {})
+          if (!(sort === 'radix' && ex.solid > a.solid * 0.9 && ex.off === 0)) fails.push(`${label}: exact sort: ${JSON.stringify({ sort, solid: ex.solid, before: a.solid, off: ex.off })}`)
+          else ok(`${label}: Exact sort draws on the radix sort (${ex.solid} solid pixels, ${a.solid} before)`)
+        }
         // held frames: with a step, the scene only moves on every step, so two moments inside one step are one picture
         {
           const held = await d.page.evaluate(async () => {
@@ -597,6 +608,20 @@ export default [
         await tabClick(k.page.getByLabel('Shadows'))
         if (!(sh.gpuTotal > 0 && Math.abs(sh.gpuTotal - sh.cpuTotal) < sh.cpuTotal * 0.001 && sh.differ < 50 && unshaded.warm > liveLook.warm)) fails.push(`blobscape dungeon shadows: ${JSON.stringify({ sh, shaded: liveLook, unshaded })}`)
         else ok(`blobscape dungeon: shadows from live lights (GPU grid matches the CPU, ${sh.differ} cells off by more than a unit); turning them off lights ${unshaded.warm - liveLook.warm} more pixels`)
+      }
+      // Exact sort rebuilds the hall on the radix sort, which draws it much as before
+      {
+        await tabClick(k.page.getByLabel('Exact sort (slower)'))
+        await k.page.waitForFunction(() => window.__dungeon.stage.world?.sortKind === 'radix', null, { timeout: 30000 }).catch(() => {})
+        await run(0.1, { forward: 0, turn: 0 })
+        const ex = { ...(await look()), sort: await k.page.evaluate(() => window.__dungeon.stage.world.sortKind) }
+        await tabClick(k.page.getByLabel('Exact sort (slower)'))
+        await k.page.waitForFunction(() => window.__dungeon.stage.world?.sortKind === 'bins', null, { timeout: 30000 }).catch(() => {})
+        await run(0.1, { forward: 0, turn: 0 })
+        const back = await look()
+        // the torches flicker, so the two are a moment apart, not one picture
+        if (!(ex.sort === 'radix' && ex.warm > back.warm * 0.7 && ex.warm < back.warm / 0.7)) fails.push(`blobscape dungeon exact sort: ${JSON.stringify({ ex, back, before: liveLook })}`)
+        else ok(`blobscape dungeon: Exact sort rebuilds the hall on the radix sort (${ex.warm} torchlit pixels; ${back.warm} back on the bins, ${liveLook.warm} before)`)
       }
       await tabClick(k.page.getByRole('button', { name: 'Baked', exact: true }))
       await k.page.waitForFunction(() => window.__dungeon.stage.dungeon.opts.light === 'baked', null, { timeout: 30000 }).catch(() => {})
