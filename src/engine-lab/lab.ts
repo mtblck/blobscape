@@ -4,6 +4,7 @@ import { createGaussianSplatGeometry } from 'three/addons/utils/GaussianSplatUti
 import { covariance } from '../splat-core/blobs.ts'
 import { placeCamera, type Orbit } from '../splat-core/view.ts'
 import { SplatWorld } from '../splat-engine/engine.ts'
+import { DETAIL } from '../splat-engine/lod.ts'
 import { makeCreature, poseWalk, type Creature } from '../splat-engine/creature.ts'
 import type { SkinMode } from '../splat-engine/rig.ts'
 import { readbackToSrgb, srgbToLinear } from '../splat-core/color.ts'
@@ -35,6 +36,8 @@ export interface LabOptions {
   webgl: boolean
   /** Extra copies of the fox, side by side, to test one shared sort over many objects. */
   herd: number
+  /** Level of detail (ours only): each fox draws as many blobs as its size on screen needs. */
+  lod?: boolean
   /**
    * Draw into an off-screen target and copy each frame to the page with the
    * CPU. Only for headless test browsers, whose software WebGPU can render but
@@ -132,6 +135,7 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
   let mode = o.mode
   if (o.which === 'engine') {
     world = new SplatWorld(foxes, { mode })
+    if (o.lod) world.autoDetail = DETAIL
     scene.add(world)
   } else {
     // three.js draws each object on its own; give it the foxes as separate meshes
@@ -218,7 +222,7 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
   raf = requestAnimationFrame(tick)
 
   return {
-    info: `${o.which === 'three' ? 'three.js (standing still: it has no bones)' : 'ours'} · ${backend} · ${blobs.toLocaleString()} blobs`,
+    info: `${o.which === 'three' ? 'three.js (standing still: it has no bones)' : 'ours'} · ${backend} · ${blobs.toLocaleString()} blobs${world?.autoDetail ? ' · fewer when small' : ''}`,
     world,
     renderer,
     get orbit() { return orbit },
