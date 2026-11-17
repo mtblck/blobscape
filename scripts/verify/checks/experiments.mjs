@@ -808,15 +808,55 @@ export default [
     },
   },
   {
+    name: 'flow',
+    about: 'Sand, Snow and Goo: three columns run, stand and spread; a poke and a pour',
+    entries: ['src/blobscape/SandSnowGoo.tsx'],
+    files: ['src/splat-engine/mpm.ts', 'src/blobscape/flow/flow.worker.ts', 'src/blobscape/flow/scenes.ts'],
+    async run({ shots, join, fails, ok, open, tabClick, axe }) {
+      const k = await open('/experiments/sand-snow-goo/?offscreen=1&scene=three', { viewport: { width: 1280, height: 900 } })
+      await k.page.waitForFunction(() => window.__flow && window.__flow.count() > 0, null, { timeout: 90000 }).catch(() => {})
+      // stop the clock and run the same two seconds every time, then draw
+      const look = (seconds) => k.page.evaluate(async (s) => {
+        window.__flow.pause()
+        if (s) await window.__flow.run(s)
+        await window.__flow.stage.frame(0)
+        const cv = document.querySelector('[data-testid=flow-view]')
+        const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+        let sand = 0, snow = 0, goo = 0
+        for (let i = 0; i < d.length; i += 4) {
+          if (d[i] > 150 && d[i] > d[i + 1] * 1.12 && d[i + 1] > d[i + 2] * 1.25) sand++
+          if (d[i] > 200 && d[i + 1] > 200 && d[i + 2] > 210) snow++
+          if (d[i + 1] > 120 && d[i + 1] > d[i] * 1.4 && d[i + 1] > d[i + 2] * 1.6) goo++
+        }
+        return { sand, snow, goo, count: window.__flow.count(), tops: window.__flow.heights() }
+      }, seconds)
+      const start = await look(0.05)
+      const later = await look(2)
+      const t = later.tops
+      if (!(start.count > 2000 && later.sand > 1500 && later.snow > 1500 && later.goo > 1000 && t.snow > t.sand + 0.15 && t.goo < t.sand)) fails.push(`blobscape sand snow goo: ${JSON.stringify({ start, later })}`)
+      else ok(`blobscape sand snow goo: ${later.count} particles; after 2 s sand stands ${t.sand.toFixed(2)}, snow ${t.snow.toFixed(2)}, goo ${t.goo.toFixed(2)} (${later.sand}, ${later.snow}, ${later.goo} pixels)`)
+      await k.page.screenshot({ path: join(shots, 'blobscape-sand-snow-goo.png') })
+      // a tap on the middle of the view pokes, and a pour adds particles
+      const poked = await k.page.evaluate(() => { const c = document.querySelector('[data-testid=flow-view]'); return window.__flow.poke(c.clientWidth / 2, c.clientHeight * 0.6) })
+      await tabClick(k.page.getByRole('button', { name: 'Pour sand', exact: true }))
+      await k.page.waitForFunction((n) => window.__flow.count() > n, later.count, { timeout: 10000 }).catch(() => {})
+      const after = await k.page.evaluate(() => window.__flow.count())
+      if (!(poked && after > later.count)) fails.push(`blobscape sand snow goo: poke ${poked}, pour ${later.count} to ${after}`)
+      else ok(`blobscape sand snow goo: a tap pokes, and pouring sand brings ${later.count} to ${after}`)
+      await axe(k.page, 'blobscape sand snow goo')
+      await k.ctx.close()
+    },
+  },
+  {
     name: 'layout',
     core: true,
     about: 'every experiment: same two columns, its own tabs, a preview that stays in sight on a phone',
     entries: ['src/shared/Workbench.tsx', 'src/shared/ui.tsx'],
-    files: ['src/shared/theme.css', 'src/blobscape/PixelDiorama.tsx', 'src/blobscape/Creature.tsx', 'src/blobscape/ForestWalk.tsx', 'src/blobscape/DungeonRun.tsx', 'src/blobscape/ScanStudio.tsx', 'src/blobscape/Clockwork.tsx', 'src/blobscape/ShapeShifter.tsx', 'src/fit-a-picture/App.tsx', 'src/splat-to-sprite/App.tsx'],
+    files: ['src/shared/theme.css', 'src/blobscape/PixelDiorama.tsx', 'src/blobscape/Creature.tsx', 'src/blobscape/ForestWalk.tsx', 'src/blobscape/DungeonRun.tsx', 'src/blobscape/ScanStudio.tsx', 'src/blobscape/Clockwork.tsx', 'src/blobscape/ShapeShifter.tsx', 'src/blobscape/SandSnowGoo.tsx', 'src/fit-a-picture/App.tsx', 'src/splat-to-sprite/App.tsx'],
     async run({ join, fails, ok, open }) {
       const PAGES = [
         ['pixel-diorama', 'Scene,Pixels,Finish'], ['creature', 'Creature Type,Movement & Details,Export & Import'], ['forest-walk', 'Forest Type,Character Style,View'],
-        ['dungeon-run', 'Game Settings,Character Style,View'], ['scan-studio', 'Import,Level & Crop,Clean,Lighting'], ['clockwork', 'Time,View'], ['shape-shifter', 'Shift,Creatures'],
+        ['dungeon-run', 'Game Settings,Character Style,View'], ['scan-studio', 'Import,Level & Crop,Clean,Lighting'], ['clockwork', 'Time,View'], ['shape-shifter', 'Shift,Creatures'], ['sand-snow-goo', 'Pour,Box'],
         ['fit-a-picture', 'Picture,Training'], ['splat-to-sprite', 'Prop Type,Pixels,Finish,View'],
       ]
       const sizes = new Set()

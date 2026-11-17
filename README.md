@@ -121,6 +121,15 @@ stay in your browser.
       Bake a splat into palette-locked pixel-art sprite sheets.
     </td>
   </tr>
+  <tr>
+    <td valign="top">
+      <a href="https://blobscape.dev/experiments/sand-snow-goo/"><img src="public/covers/sand-snow-goo.webp" alt="A heap of sand, a standing column of snow and a slumped block of green goo, all made of blobs" /></a><br />
+      <a href="https://blobscape.dev/experiments/sand-snow-goo/"><b>Sand, Snow and Goo</b></a><br />
+      A box of blobs that flow: sand heaps, snow stands, goo spreads. Pour and poke.
+    </td>
+    <td valign="top"></td>
+    <td valign="top"></td>
+  </tr>
 </table>
 
 ## The Blobscape engine

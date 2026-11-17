@@ -25,6 +25,17 @@ export const EXPERIMENTS_INTRO = "Small tools built from the same blobs as the l
  */
 export const EXPERIMENTS = [
   {
+    id: 'flow',
+    title: 'Sand, Snow and Goo',
+    url: '/experiments/sand-snow-goo/',
+    cover: '/covers/sand-snow-goo.webp',
+    tags: ['tool', 'watch'],
+    needs: 'WebGPU or WebGL 2',
+    published: '2026-11-17',
+    updated: '2026-11-17',
+    body: 'A box of blobs that flow: sand runs into a heap, snow stands until it is hit, goo spreads. Pour more in and tap to poke them.',
+  },
+  {
     id: 'shift',
     title: 'Shape Shifter',
     url: '/experiments/shape-shifter/',

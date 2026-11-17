@@ -341,6 +341,17 @@ export class CreatureStage {
     return hit ? this.boneInfo(hit.bone) : undefined
   }
 
+  /** The line from the camera through a point on the view (CSS pixels from its top left), in world space. */
+  rayAt(x: number, y: number): { origin: [number, number, number]; direction: [number, number, number] } | undefined {
+    const w = this.display.clientWidth, h = this.display.clientHeight
+    if (!w || !h) return
+    placeCamera(this.camera as never, this.orbit, w / h)
+    this.camera.updateMatrixWorld()
+    this.ray.setFromCamera(new THREE.Vector2((x / w) * 2 - 1, 1 - (y / h) * 2), this.camera)
+    const { origin, direction } = this.ray.ray
+    return { origin: origin.toArray(), direction: direction.toArray() }
+  }
+
   /** The bone under a point on the view (CSS pixels from its top left) and where the pointer meets it, in world space. */
   hitAt(x: number, y: number): { bone: number; point: [number, number, number] } | undefined {
     const { actor } = this
