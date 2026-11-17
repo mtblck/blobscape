@@ -1,0 +1,18 @@
+{
+  "name": "@blobscape/engine",
+  "version": "0.1.0",
+  "description": "Animated Gaussian splats for three.js: creatures on bones, scenes written as data, and pixel art drawn from them, on the WebGPU renderer with a WebGL 2 fallback.",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://blobscape.dev/engine/",
+  "repository": { "type": "git", "url": "git+https://github.com/mtblck/blobscape.git", "directory": "packages/engine" },
+  "keywords": ["gaussian-splatting", "splats", "three.js", "webgpu", "animation", "skinning", "pixel-art", "gltf"],
+  "sideEffects": false,
+  "exports": {
+    ".": { "types": "./dist/types/splat-engine/index.d.ts", "import": "./dist/index.js" }
+  },
+  "types": "./dist/types/splat-engine/index.d.ts",
+  "files": ["dist", "README.md", "LICENSE"],
+  "peerDependencies": { "three": ">=0.187.0 <0.188.0" }
+}

@@ -1,5 +1,5 @@
 import type { Vec3 } from '../splat-core/blobs.ts'
-import type { Orbit } from '../splat-core/view.ts'
+import type { Orbit } from '../splat-core/orbit.ts'
 import { MAX_PALETTE_SIZE, darkest, type PixelLook, type Rgb } from '../splat-core/pixel.ts'
 import type { PointLight } from './engine.ts'
 import { axisAngle, mulQ, type Bone, type Skeleton } from './rig.ts'
