@@ -6,6 +6,8 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 
 ## [Unreleased]
 
+- A simpler header: Engine opens a list with its overview, the docs, the file spec and the package on npm and GitHub; the theme has its own button; and wide screens no longer have a Menu button. The support button is on every page, as a small circle where a page has controls. The engine page has a Read the docs button at the top.
+
 - One photo to a scene in the sandbox: open a photo in the Scene tab (or drop one on the view) and it becomes a shallow scene, a blob for each pixel set as far back as a depth model guesses. The model runs in the page and is served by this site, so the photo stays on your device.
 
 - The engine docs are in parts: Core (Stage, the world, the camera, bones) comes first, and the specialist pieces sit under Movement, Creatures, Shapes and scenes, Pixels and sprites, Simulation, Picking, detail and edits, and Files and models. The contents list opens a part when you ask or read into it.

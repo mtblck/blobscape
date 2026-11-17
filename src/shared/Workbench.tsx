@@ -67,8 +67,10 @@ function useFullScreen(frame: React.RefObject<HTMLDivElement | null>) {
     // the page behind must not scroll under a preview that fills the window
     const was = document.documentElement.style.overflow
     document.documentElement.style.overflow = 'hidden'
+    // and the floating tip button must not sit on a game's buttons (theme.css hides it while this is set)
+    document.documentElement.dataset.full = 'window'
     window.addEventListener('keydown', onKey)
-    return () => { window.removeEventListener('keydown', onKey); document.documentElement.style.overflow = was }
+    return () => { window.removeEventListener('keydown', onKey); document.documentElement.style.overflow = was; delete document.documentElement.dataset.full }
   }, [full])
   const toggle = useCallback(() => {
     const el = frame.current

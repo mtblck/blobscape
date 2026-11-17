@@ -5,6 +5,7 @@ import { PALETTES } from './palettes.ts'
 import { baseline, packSheet, processFrames, shotsFor, tinkerkitSheet, type Layout, type PixelSettings, type Stages } from './sheet.ts'
 import { SiteHeader } from '../shared/SiteHeader.tsx'
 import { Footer } from '../shared/Footer.tsx'
+import { TipButton } from '../blobscape/Chrome.tsx'
 import { Crumbs } from '../blobscape/Shell.tsx'
 import { Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
 import { TAB_SECTIONS, Workbench } from '../shared/Workbench.tsx'
@@ -467,6 +468,7 @@ export function App() {
         </section>
       </main>
       <Footer />
+      <TipButton small />
     </div>
   )
 }
