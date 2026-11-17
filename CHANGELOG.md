@@ -7,6 +7,7 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 ## [Unreleased]
 
 - A camera path in the sandbox: save a few views as stops in the Scene tab, play a smooth glide through them, and save it as an MP4 made on your device.
+- A view that fails to start WebGPU or WebGL the first time now tries again by itself, instead of saying the browser can't and working after a reload. The engine package's `Stage.start` does the same.
 
 - Brushes in the sandbox: Paint lays grass, fur, moss, stones or leaves onto whatever is under the ring, each by its own rule. Grass bends, fur lies the way you drag, stones keep apart, leaves grow on sprigs.
 
