@@ -31,6 +31,7 @@ Shapes: `sphere`, `ball` (stretched), `box`, `cylinder` (can taper), `cone` (a r
 
 - `lathe`: an outline of `[radius, height]` pairs from the bottom up, turned round the upright through `at`. Vases, bells, bottles, lamp posts, chess pieces.
 - `sweep`: a tube through a `path` of up to 16 points, `r` thick at the start and `rTo` at the end. Vines, pipes, rails, tails, a rope that sags.
+- `grow`: a plant grown by a rule from a `seed` (same seed, same plant): `style` 'tree', 'coral' or 'crystal', standing on `at`, its trunk `size` long and `r` thick; `depth` and `branches` change how it splits, `tips` puts a ball that size on every end (leaves, polyps), and `only` ('twigs' or 'tips') keeps one or the other so two parts can paint one grower in two colors. The whole thing rides its part's bone.
 - `join` with a `blend`: `'smooth'` rounds the seam where its shapes meet, `'chamfer'` bevels it, `'stairs'` steps it (`steps`, 3 when left out); `by` is how far the fill reaches from the seam. A wall that flares into its footing, a trunk into its roots.
 - `text`: words in blocky 3-by-5 letters, `size` tall and `depth` thick, centered on `at`, reading along +x (or along -z with `facing: 'x'`). Letters, digits, space and `. , ! ? - :` only. A letter needs about five grid cells of height to read, so keep `size` at 0.25 or more.
 - `blocks`: a model drawn in letters, `size` a cube. `layers` go from the bottom up, each a list of rows from the back to the front, each row read along +x; `.` or a space is empty and any other letter fills a cube. Paint it with `{ kind: 'key', colors: { t: '#5a3a24', l: '#3a7c5c' } }` to color each letter, and every letter used needs a color. Good for little houses, crates, trees and signs; a model at most 24 cubes a side.
@@ -49,6 +50,8 @@ Paints: a color, or `bands`, `bricks`, `hex` (honeycomb, scales, paving), `speck
 8. **A cone has round ends.** It reaches `r` past both ends. For a flat-bottomed cone (a pine tier, a spire) use a `cylinder` with a small `rTop`.
 9. **Thin is fine.** Anything thinner than the grid is fattened to one cell, so a rope or a star still shows at every detail level.
 10. **Detail comes from parts and paint.** Sixty to ninety parts make a full scene, and a showpiece can take about 150. Give big surfaces a paint with texture (`patches` on grass, `bricks` on walls, `bands` on planks and tiles), and scatter small things: stones, flowers, mushrooms.
+11. **Tests read the values and the loop.** Every scene must still read in grayscale (its darkest and lightest blobs well apart, little colorless mid-gray) and nothing seen may snap from one place to another, at the loop's seam or anywhere. A `drift` passes because it shrinks away before it starts again; a hand-made particle that wraps while full size fails.
+12. **Visitors can poke it.** A tap leans a part on its own bone away from the finger and lets it wobble back (with everything hung on that bone); a tap on the land throws a few sparkles in the palette's lightest color. So give the things people will want to poke, like trees, creatures and lamps, bones of their own.
 
 ## Getting the look of a showpiece
 

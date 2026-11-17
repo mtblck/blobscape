@@ -315,6 +315,12 @@ export class CreatureStage {
    * the bone that holds most of the blob the pointer is on. Undefined when the pointer is off the creature.
    */
   pick(x: number, y: number): PickedBone | undefined {
+    const hit = this.hitAt(x, y)
+    return hit ? this.boneInfo(hit.bone) : undefined
+  }
+
+  /** The bone under a point on the view (CSS pixels from its top left) and where the pointer meets it, in world space. */
+  hitAt(x: number, y: number): { bone: number; point: [number, number, number] } | undefined {
     const { actor } = this
     const w = this.display.clientWidth, h = this.display.clientHeight
     if (!actor || !w || !h) return
@@ -323,7 +329,7 @@ export class CreatureStage {
     this.ray.setFromCamera(new THREE.Vector2((x / w) * 2 - 1, 1 - (y / h) * 2), this.camera)
     const { origin, direction } = this.ray.ray
     const hit = pickActors([actor], origin.toArray(), direction.toArray())
-    return hit ? this.boneInfo(hit.bone) : undefined
+    return hit ? { bone: hit.bone, point: hit.point } : undefined
   }
 
   /** What the page says about a bone. */

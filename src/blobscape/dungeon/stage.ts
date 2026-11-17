@@ -4,6 +4,7 @@ import { readbackToSrgb, srgbToLinear } from '../../splat-core/color.ts'
 import { SplatWorld } from '../../splat-engine/engine.ts'
 import { Dungeon, LIVE_AMBIENT, type DungeonOptions } from './dungeon.ts'
 import { HALF, type GameEvent, type Input } from './game.ts'
+import { Impact } from './impact.ts'
 
 /**
  * Dungeon Run's view: the hall, the hero, the slimes and the bolts in one
@@ -28,6 +29,8 @@ export interface StageOptions {
   offscreen?: boolean
   /** Draw with the WebGL backend even where WebGPU runs (for testing that path). */
   webgl?: boolean
+  /** Reduced motion: blows still hold the fight a moment, but the camera never shakes. */
+  calm?: boolean
 }
 
 export class DungeonStage {
@@ -48,6 +51,8 @@ export class DungeonStage {
   private camPos = new THREE.Vector3()
   private camLook = new THREE.Vector3()
   private placed = false
+  /** Hit stop and shake from the blows that land. */
+  private readonly impact: Impact
   view: CameraView = 'close'
   /** What's held now (keys, the stick, held buttons). */
   input: Input = { forward: 0, turn: 0 }
@@ -66,6 +71,7 @@ export class DungeonStage {
 
   private constructor(private readonly display: HTMLCanvasElement, private readonly opts: StageOptions, renderer: THREE.WebGPURenderer) {
     this.renderer = renderer
+    this.impact = new Impact(!!opts.calm)
     this.backend = (renderer.backend as unknown as { isWebGPUBackend?: boolean }).isWebGPUBackend ? 'webgpu' : 'webgl'
     const floor = new THREE.MeshBasicNodeMaterial()
     floor.colorNode = mix(uniform(new THREE.Color(FLOOR)), uniform(new THREE.Color(GLOOM)), smoothstep(GLOOM_NEAR, GLOOM_FAR, positionView.z.negate()))
@@ -120,6 +126,10 @@ export class DungeonStage {
   /** Moves the game on by dt seconds with the current input. */
   step(dt: number) {
     if (!this.dungeon || !this.world) return
+    // a blow just landed: the fight holds still (taps wait for it) while the camera keeps following
+    const run = this.impact.pass(dt)
+    if (dt > 0 && run <= 0) { this.follow(dt); return }
+    dt = run
     const input = { ...this.input, swing: this.input.swing || this.taps.swing, cast: this.input.cast || this.taps.cast, frost: this.input.frost || this.taps.frost }
     this.taps = { swing: false, cast: false, frost: false }
     this.dungeon.update(dt, input)
@@ -127,7 +137,10 @@ export class DungeonStage {
     if (this.dungeon.takeRepaint()) this.world.recolor(this.dungeon.floor)
     this.world.markPosed()
     this.light()
-    if (this.dungeon.game.events.length) this.onEvents?.(this.dungeon.game.events)
+    if (this.dungeon.game.events.length) {
+      this.impact.add(this.dungeon.game.events)
+      this.onEvents?.(this.dungeon.game.events)
+    }
     this.follow(dt)
   }
 
@@ -156,8 +169,9 @@ export class DungeonStage {
     if (!this.dungeon) return
     if (!this.placed) this.follow(0)
     this.resize()
-    this.camera.position.copy(this.camPos)
-    this.camera.lookAt(this.camLook)
+    const [ox, oy, oz] = this.impact.offset()
+    this.camera.position.set(this.camPos.x + ox, this.camPos.y + oy, this.camPos.z + oz)
+    this.camera.lookAt(this.camLook.x + ox * 0.5, this.camLook.y + oy * 0.5, this.camLook.z + oz * 0.5)
     this.camera.updateMatrixWorld()
     this.renderer.render(this.scene, this.camera)
     if (!this.drawn) { this.drawn = true; this.onFirstFrame?.() }

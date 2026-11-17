@@ -13,7 +13,7 @@ Run the one that fits before merging. Say in the PR which one ran.
 | --- | --- |
 | Docs, tests only, copy in a `.md` file | `npm test` |
 | Anything else (the usual case) | `npm run check` |
-| The build, hosting headers, `package.json`, the check harness; or before a release | `npm test && npm run build && npm run verify` (the full run) |
+| The build, hosting headers, `package.json` beyond its runtime `dependencies`, the check harness; or before a release | `npm test && npm run build && npm run verify` (the full run) |
 | Just want one area again after fixing it | `npm run verify -- <check or group>` |
 
 `npm run check` is `npm test`, `npm run build` and then
@@ -53,8 +53,14 @@ npm run verify -- --changed --why --list                                  # your
   one per scene): `--changed` then runs only the parts a change reaches, and the
   check asks `t.wants(key)`.
 - `scripts/verify/graph.mjs` reads imports (static, `import()`, `new URL()`
-  workers, `?raw`). Changes to `package.json`, `vite.config.ts`, `vercel.json`,
-  `tsconfig.json` or the harness reach every check; tests, `docs/` (except the
+  workers, `?raw`), and which packages each file imports by name. A change to
+  `package.json` that only adds, bumps or drops runtime `dependencies` reaches
+  just the checks whose files import those packages (the lock file goes with
+  it; `--why` shows them as `pkg:<name>`, and `--files=pkg:<name>` asks the same
+  by hand). Any other change to `package.json` (scripts, `devDependencies`,
+  which build and test the site), a lock file change on its own,
+  `vite.config.ts`, `vercel.json`, `tsconfig.json` or the harness reach every
+  check; tests, `docs/` (except the
   spec) and the loop recorder reach none. The app shell and the site's chrome
   and copy (`App.tsx`, `site.ts`, `meta.ts`, `engineCopy.ts`, header, footer,
   logo) are not followed into from other checks: what they can break is the

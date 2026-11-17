@@ -645,14 +645,19 @@ export default [
       {
         const run = (s, input = { forward: 0, turn: 0 }) => k.page.evaluate(async ([s, input]) => { await window.__dungeon.stage.frame(s, input) }, [s, input])
         await k.page.evaluate(() => { const g = window.__dungeon.stage.dungeon.game; g.restart(); g.hold(); const p = g.props.find((p) => p.kind === 'crate'); g.hero.x = p.x; g.hero.z = p.z - 1; g.hero.heading = 0; g.hero.hp = 50 })
-        const crate = () => k.page.evaluate(() => { const d = window.__dungeon.stage.dungeon, p = d.game.props.find((p) => p.kind === 'crate'), sk = d.props[p.slot].skeleton; return { phase: p.phase, hp: d.game.hero.hp, body: sk.scale[1], piece: sk.scale[2], y: sk.posedHead[7] } })
+        const crate = () => k.page.evaluate(() => { const d = window.__dungeon.stage.dungeon, p = d.game.props.find((p) => p.kind === 'crate'), sk = d.props[p.slot].skeleton; const at = []; for (let b = 2; b < sk.count; b++) at.push([sk.posedHead[b * 3], sk.posedHead[b * 3 + 1], sk.posedHead[b * 3 + 2]]); return { phase: p.phase, hp: d.game.hero.hp, at } })
         await run(0.1)
         const whole = await crate()
         for (let i = 0; i < 2; i++) { await run(0.05, { forward: 0, turn: 0, swing: true }); await run(0.6) }
         await run(1)
         const broken = await crate()
-        if (!(whole.phase === 'whole' && whole.body > 0.9 && whole.piece === 0 && broken.phase === 'broken' && broken.body < 0.01 && broken.piece > 0.9 && broken.y < 0.1 && broken.hp === 60)) fails.push(`blobscape dungeon props: ${JSON.stringify({ whole, broken })}`)
-        else ok('blobscape dungeon: two swings break a crate into pieces that lie on the floor, and it gives health back')
+        // the pieces are the crate's own blobs (no hidden copy): broken, they have flown apart and lie low on the floor
+        const moved = whole.at.map((w, i) => Math.hypot(broken.at[i][0] - w[0], broken.at[i][2] - w[2]))
+        const spread = moved.reduce((a, m) => a + m, 0) / moved.length
+        const lying = broken.at.every(([, y]) => y >= 0 && y < 0.45)
+        const stood = Math.max(...whole.at.map(([, y]) => y))
+        if (!(whole.phase === 'whole' && whole.at.length >= 4 && stood > 0.3 && broken.phase === 'broken' && spread > 0.2 && lying && broken.hp === 60)) fails.push(`blobscape dungeon props: ${JSON.stringify({ whole, broken, spread, lying, stood })}`)
+        else ok(`blobscape dungeon: two swings break a crate into ${whole.at.length} pieces that fly ${spread.toFixed(2)} m apart and lie on the floor, and it gives health back`)
       }
       await elements(k.page, 'blobscape dungeon fire and frost')
       await k.page.screenshot({ path: join(shots, 'blobscape-dungeon-frost.png') })

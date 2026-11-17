@@ -1,15 +1,16 @@
 import type { Vec3 } from '../../splat-core/blobs.ts'
 import { buildBody, mix, spots, type Creature, type Part } from '../../splat-engine/body.ts'
-import { axisAngle, mulQ, type Bone, type Skeleton } from '../../splat-engine/rig.ts'
-import { PROP_RULES, type Prop, type PropKind } from './game.ts'
+import { Skeleton, axisAngle, emptySkin, mulQ, setWeights, type Bone } from '../../splat-engine/rig.ts'
+import type { Prop, PropKind } from './game.ts'
 
 /**
  * The crates, urns and barrels that stand about the hall. Each is built
- * once, like a slime: a body on one bone and a handful of pieces (planks,
- * shards of clay, staves) each on its own, kept at no size while it is
- * whole. When it breaks the body is gone and the pieces fly on the way the
- * blow was going, tumble, land and lie on the floor until the hall is set
- * out again for the next wave.
+ * once, like a slime, and then cut into pieces (issue #157): every blob of
+ * the body goes to the nearest of a few seeds spread over it, and each
+ * piece is a bone hung on the body. Whole, the pieces sit where they were
+ * cut, so it is one thing; when it breaks the same paint and shape fly on
+ * the way the blow was going, tumble, land and lie on the floor until the
+ * hall is set out again for the next wave.
  */
 
 export const PIECES = 10
@@ -20,13 +21,6 @@ const GROW = 0.3
 const WOOD: Vec3 = [0.62, 0.44, 0.26], WOOD_DARK: Vec3 = [0.3, 0.2, 0.12], IRON: Vec3 = [0.2, 0.19, 0.2]
 const CLAY: Vec3 = [0.78, 0.47, 0.3], GLAZE: Vec3 = [0.2, 0.45, 0.55]
 
-/** Where piece i starts inside the body: a ring at mid-height, alternating high and low. */
-function home(kind: PropKind, i: number): Vec3 {
-  const r = PROP_RULES[kind].r * 0.6, a = (i / PIECES) * Math.PI * 2
-  const h = kind === 'urn' ? 0.5 : kind === 'crate' ? 0.6 : 0.7
-  return [Math.cos(a) * r, h * (0.3 + 0.45 * (i % 2)), Math.sin(a) * r]
-}
-
 /** The four side walls and the lid of a box on the floor, as triangles. */
 function box(w: number, h: number): Vec3[][] {
   const c: Vec3[] = [[-w, 0, -w], [w, 0, -w], [w, 0, w], [-w, 0, w]], t = c.map((p): Vec3 => [p[0], h, p[2]])
@@ -35,11 +29,62 @@ function box(w: number, h: number): Vec3[][] {
   return tris
 }
 
-export function makeProp(kind: PropKind, count = 1600): Creature {
+/** A piece cut from a prop: where its bone stands (the middle of its blobs) and how high that is once it lies on the floor. */
+export interface Piece {
+  home: Vec3
+  rest: number
+}
+
+export interface PropBody extends Creature {
+  pieces: Piece[]
+}
+
+/**
+ * Cuts a built body into `n` pieces: seeds spread by farthest-point picking from the highest blob, then moved to the
+ * middle of their blobs a few times (Lloyd's steps) so the pieces come out much of a size; each blob to its nearest
+ * seed. Only blobs `use` passes (all, if left out) place the seeds. Returns which piece each blob went to.
+ */
+export function cutPieces(centers: ArrayLike<number>, count: number, n: number, steps = 4, use: (i: number) => boolean = () => true): Int32Array {
+  const at = (i: number): Vec3 => [centers[i * 3], centers[i * 3 + 1], centers[i * 3 + 2]]
+  const d2 = (i: number, s: Vec3) => (centers[i * 3] - s[0]) ** 2 + (centers[i * 3 + 1] - s[1]) ** 2 + (centers[i * 3 + 2] - s[2]) ** 2
+  let top = -1
+  for (let i = 0; i < count; i++) if (use(i) && (top < 0 || centers[i * 3 + 1] > centers[top * 3 + 1])) top = i
+  if (top < 0) return new Int32Array(count)
+  const seeds: Vec3[] = [at(top)]
+  const near = new Float32Array(count).fill(Infinity)
+  while (seeds.length < n) {
+    const s = seeds[seeds.length - 1]
+    let far = -1, farD = 0
+    for (let i = 0; i < count; i++) {
+      if (!use(i)) continue
+      near[i] = Math.min(near[i], d2(i, s))
+      if (near[i] > farD) { farD = near[i]; far = i }
+    }
+    if (far < 0) break
+    seeds.push(at(far))
+  }
+  const of = new Int32Array(count)
+  const assign = () => {
+    for (let i = 0; i < count; i++) {
+      let best = 0, bestD = Infinity
+      for (let k = 0; k < seeds.length; k++) { const d = d2(i, seeds[k]); if (d < bestD) { bestD = d; best = k } }
+      of[i] = best
+    }
+  }
+  assign()
+  for (let step = 0; step < steps; step++) {
+    const sum = seeds.map(() => [0, 0, 0, 0])
+    for (let i = 0; i < count; i++) { if (!use(i)) continue; const s = sum[of[i]]; s[0] += centers[i * 3]; s[1] += centers[i * 3 + 1]; s[2] += centers[i * 3 + 2]; s[3]++ }
+    sum.forEach((s, k) => { if (s[3]) seeds[k] = [s[0] / s[3], s[1] / s[3], s[2] / s[3]] })
+    assign()
+  }
+  return of
+}
+
+export function makeProp(kind: PropKind, count = 1600): PropBody {
   const bones: Bone[] = [
     { name: 'root', parent: -1, head: [0, 0, 0] },
     { name: 'body', parent: 0, head: [0, 0, 0] },
-    ...Array.from({ length: PIECES }, (_, i): Bone => ({ name: `piece${i}`, parent: 0, head: home(kind, i) })),
   ]
   const parts: Part[] = []
   const grain = (p: Vec3, k: number) => mix(WOOD, WOOD_DARK, 0.22 * spots(p, 7, k))
@@ -80,38 +125,51 @@ export function makeProp(kind: PropKind, count = 1600): Creature {
       { shape: { ball: [0, H - 0.03, 0], r: [0.25, 0.012, 0.25] }, color: (p) => (Math.hypot(p[0], p[2]) > 0.2 ? WOOD_DARK : mix(WOOD, [0.85, 0.68, 0.45], 0.5)), bones: ['body'], density: 1.6 },
     )
   }
-  // the pieces, hidden until it breaks: each lies flat as built, so it can come to rest that way
-  for (let i = 0; i < PIECES; i++) {
-    const at = home(kind, i), k = 0.8 + ((i * 0.618) % 1) * 0.5
-    const r: Vec3 = kind === 'crate' ? [0.15 * k, 0.014, 0.045] : kind === 'urn' ? [0.07 * k, 0.012, 0.05 * k] : [0.04, 0.016, 0.17 * k]
-    const color = kind === 'urn' ? (i % 4 === 0 ? GLAZE : mix(CLAY, [0.5, 0.28, 0.18], (i % 3) * 0.25)) : kind === 'barrel' && i % 5 === 0 ? IRON : mix(WOOD, WOOD_DARK, ((i * 0.381) % 1) * 0.6)
-    parts.push({ shape: { ball: at, r }, color, bones: [`piece${i}`], density: 2.5, size: 0.8 })
-  }
   const b = buildBody({ bones, parts, blend: 0.02 }, count, 61 + kind.length)
-  return { blobs: b.blobs, skin: b.skin, skeleton: b.skeleton }
+  // what the shapes put under the floor was never seen whole, so it isn't seen flying either
+  for (let i = 0; i < b.blobs.count; i++) if (b.blobs.center[i * 3 + 1] < -0.01) b.blobs.opacity[i] = 0
+  // cut the body into pieces: each a bone on the body at the middle of its blobs, lying as cut once it lands
+  const of = cutPieces(b.blobs.center, b.blobs.count, PIECES, 4, (i) => b.blobs.opacity[i] > 0)
+  const sum = Array.from({ length: PIECES }, () => [0, 0, 0, 0]), low = new Array<number>(PIECES).fill(Infinity)
+  for (let i = 0; i < b.blobs.count; i++) {
+    if (!b.blobs.opacity[i]) continue
+    const s = sum[of[i]], c = b.blobs.center
+    s[0] += c[i * 3]; s[1] += c[i * 3 + 1]; s[2] += c[i * 3 + 2]; s[3]++
+    low[of[i]] = Math.min(low[of[i]], c[i * 3 + 1] - Math.max(b.blobs.scale[i * 3], b.blobs.scale[i * 3 + 1], b.blobs.scale[i * 3 + 2]))
+  }
+  const pieces: Piece[] = sum.map((s, k) => {
+    const home: Vec3 = s[3] ? [s[0] / s[3], s[1] / s[3], s[2] / s[3]] : [0, 0.3, 0]
+    return { home, rest: Math.max(0.01, home[1] - (Number.isFinite(low[k]) ? low[k] : home[1])) }
+  })
+  const skeleton = new Skeleton([...bones, ...pieces.map((p, k): Bone => ({ name: `piece${k}`, parent: BODY, head: p.home }))])
+  const skin = emptySkin(b.blobs.count)
+  for (let i = 0; i < b.blobs.count; i++) setWeights(skin, i, [[PIECE0 + of[i], 1]])
+  return { blobs: b.blobs, skin, skeleton, pieces }
 }
 
-/** When piece i of a broken prop lands, and where: it flies on the way the blow went, spread to the sides. */
-export function pieceFlight(kind: PropKind, i: number, dx: number, dz: number, t: number): { at: Vec3; landed: boolean; spin: number } {
-  const h = home(kind, i)
+/**
+ * When piece i of a broken prop lands, and how far it has gone from where it was cut: it flies on the way the blow
+ * went, spread to the sides, and comes down with its bone `rest` above the floor.
+ */
+export function pieceFlight(piece: Piece, i: number, dx: number, dz: number, t: number): { at: Vec3; landed: boolean; spin: number } {
+  const h = piece.home, rest = piece.rest
   // its own way out from the middle, leaning toward the blow's way
   const l = Math.hypot(h[0], h[2]) || 1
   const sp = 0.9 + ((i * 0.618) % 1) * 1.6, vy = 1.2 + ((i * 0.381) % 1) * 2.2, g = 9.8
   const vx = (h[0] / l) * sp + dx * 1.6, vz = (h[2] / l) * sp + dz * 1.6
-  const rest = 0.02 + (i % 3) * 0.012
-  const land = (vy + Math.sqrt(vy * vy + 2 * g * Math.max(0, h[1] - rest))) / g
+  const land = (vy + Math.sqrt(Math.max(0, vy * vy + 2 * g * (h[1] - rest)))) / g
   const tt = Math.min(t, land)
   return { at: [vx * tt, vy * tt - 0.5 * g * tt * tt, vz * tt], landed: t >= land, spin: (land - tt) * (7 + (i % 4) * 3) }
 }
 
 /** Poses a prop from the game's state of it. */
-export function poseProp(sk: Skeleton, p: Prop) {
+export function poseProp(prop: PropBody, p: Prop) {
+  const sk = prop.skeleton
   sk.reset()
   sk.place.set([p.x, 0, p.z])
   // each stands turned its own way
   sk.setRotation(0, axisAngle([0, 1, 0], p.slot * 1.7))
   if (p.phase === 'whole') {
-    for (let i = 0; i < PIECES; i++) sk.size[PIECE0 + i] = 0
     const u = Math.min(1, p.t / GROW)
     sk.size[BODY] = Math.max(0.001, u * (1 + 0.25 * Math.sin(u * Math.PI)))
     // struck: it rocks away from the blow and settles
@@ -123,15 +181,13 @@ export function poseProp(sk: Skeleton, p: Prop) {
       sk.setRotation(BODY, axisAngle([lz, 0, -lx], rock))
     }
   } else {
-    sk.size[BODY] = p.t < 0.05 ? 1 : 0
     const a = -p.slot * 1.7, c = Math.cos(a), s = Math.sin(a)
     const lx = p.dx * c + p.dz * s, lz = -p.dx * s + p.dz * c
     for (let i = 0; i < PIECES; i++) {
-      const f = pieceFlight(p.kind, i, lx, lz, p.t)
+      const f = pieceFlight(prop.pieces[i], i, lx, lz, p.t)
       sk.offset.set(f.at, (PIECE0 + i) * 3)
-      sk.size[PIECE0 + i] = 1
-      // tumbling in the air, flat and turned its own way once down
-      const yaw = axisAngle([0, 1, 0], i * 2.4)
+      // tumbling in the air, then lying as it was cut, turned its own way about the upright
+      const yaw = axisAngle([0, 1, 0], i * 2.4 * Math.min(1, p.t * 3))
       sk.setRotation(PIECE0 + i, f.landed ? yaw : mulQ(yaw, axisAngle([Math.cos(i), 0, Math.sin(i)], f.spin)))
     }
   }
