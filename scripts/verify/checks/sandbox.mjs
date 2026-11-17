@@ -155,8 +155,8 @@ export default [
   },
   {
     name: 'sandbox-creatures',
-    about: 'add, play, drag with Move, bones, freeze, undo, walk about, look at, save; phone',
-    entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/actors.ts', 'src/blobscape/wander.ts'],
+    about: 'add, play, drag with Move, bones, freeze, undo, walk about, look at, effects, save; phone',
+    entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/actors.ts', 'src/blobscape/wander.ts', 'src/splat-core/view.ts'],
     async run({ readFileSync, shots, join, fails, ok, open, axe }) {
       const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 900 }, acceptDownloads: true })
       await page.waitForTimeout(1500)
@@ -250,6 +250,25 @@ export default [
       if (turned < 150) fails.push(`blobscape sandbox creatures: Looks at You didn't turn the fox's head (${turned} px)`)
       else ok(`blobscape sandbox creatures: Looks at You turns the fox's head to the camera (${turned} px changed)`)
       await page.getByRole('group', { name: 'Looks at' }).getByRole('button', { name: 'Ahead' }).click()
+      // Effects (issue #134): on the whole scene they move the creatures too; on a selection, not
+      await page.waitForTimeout(800)
+      const whole = await shot()
+      await page.getByRole('tab', { name: /Effects/ }).click()
+      await page.getByRole('button', { name: 'Explode', exact: true }).click()
+      await page.getByRole('slider', { name: 'Amount' }).focus()
+      await page.keyboard.press('End')
+      await page.waitForTimeout(2500)
+      const blownFox = await differs(whole, await shot())
+      if (blownFox < 1000) fails.push(`blobscape sandbox creatures: Explode on the whole scene left the fox alone (${blownFox} px)`)
+      else ok(`blobscape sandbox creatures: Explode on the whole scene blows the fox apart too (${blownFox} px changed)`)
+      await page.getByRole('group', { name: 'Apply to' }).getByRole('button', { name: 'Selection only' }).click()
+      await page.waitForTimeout(1500)
+      const spared = await differs(whole, await shot())
+      if (spared > 200) fails.push(`blobscape sandbox creatures: an effect on the selection still moved the fox (${spared} px)`)
+      else ok('blobscape sandbox creatures: an effect on the selection leaves the fox alone')
+      await page.getByRole('group', { name: 'Apply to' }).getByRole('button', { name: 'Whole scene' }).click()
+      await page.getByRole('group', { name: 'Effect' }).getByRole('button', { name: 'None' }).click()
+      await page.getByRole('tab', { name: /Creatures/ }).click()
       for (const n of ['Frog', 'Elf', 'Dragon']) await page.getByTestId('add-creature').getByRole('button', { name: n }).click()
       await page.waitForTimeout(2500)
       await page.screenshot({ path: join(shots, 'blobscape-sandbox-creatures.png') })

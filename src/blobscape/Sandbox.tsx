@@ -50,11 +50,18 @@ const cap = (s: string) => s[0].toUpperCase() + s.slice(1)
 const aOr = (s: string) => `${/^[aeiou]/i.test(s) ? 'an' : 'a'} ${s}`
 const kilo = (n: number) => (n >= 1000 ? `${n / 1000}k` : String(n))
 
-/** Where an effect works from: the middle, size and floor of what it acts on. */
-function effectFrame(b: Blobs, sel: Selection | null): EffectFrame {
-  const bb = bounds(b, sel)
+/** Where an effect works from: the middle, size and floor of what it acts on (with any creatures, each as the box it stands in). */
+function effectFrame(b: Blobs, sel: Selection | null, actors: readonly Actor[] = []): EffectFrame {
+  const bb = bounds(b, sel) ?? (actors.length ? { lo: [Infinity, Infinity, Infinity], hi: [-Infinity, -Infinity, -Infinity] } : null)
   if (!bb) return { center: [0, 0.5, 0], radius: 1, floor: 0 }
-  const { lo, hi } = bb
+  const lo = [...bb.lo], hi = [...bb.hi]
+  for (const a of actors) {
+    // Walking about, it may be anywhere in its disc
+    const r = a.height * (0.5 + a.roam)
+    lo[0] = Math.min(lo[0], a.at[0] - r); hi[0] = Math.max(hi[0], a.at[0] + r)
+    lo[1] = Math.min(lo[1], a.at[1]); hi[1] = Math.max(hi[1], a.at[1] + a.height)
+    lo[2] = Math.min(lo[2], a.at[2] - r); hi[2] = Math.max(hi[2], a.at[2] + r)
+  }
   return {
     center: [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2],
     radius: Math.max(0.05, Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2),
@@ -522,11 +529,14 @@ export function Sandbox() {
   const fx = effect ? EFFECTS.find((e) => e.id === effect)! : null
   const onSelection = target === 'selection'
   const fxCount = !effect ? 0 : onSelection ? sel.count : blobs.count
+  // On the whole scene, an effect moves the creatures too (as they stand: freezing one keeps it)
+  const fxCreatures = !effect || onSelection ? 0 : actorCount
   const fxFrame = useMemo(
-    () => effectFrame(blobsRef.current, onSelection ? selRef.current : null),
-    // The blobs and selection are mutable: their version numbers are what change
+    () => effectFrame(blobsRef.current, onSelection ? selRef.current : null, onSelection ? [] : actors),
+    // The blobs and selection are mutable: their version numbers are what change. The creatures count
+    // by where they stand, not where they are this frame, so the effect doesn't swim with them
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [version, selVersion, onSelection],
+    [version, selVersion, onSelection, actors],
   )
   const params = (a = amount): EffectParams | null => (effect ? { ...fxFrame, kind: effect, amount: a, time: time.current } : null)
 
@@ -548,10 +558,10 @@ export function Sandbox() {
   }, [ordered, orderKey])
 
   // The latest effect settings, for the animation loop to read without restarting
-  const live = useRef({ params, fxCount })
-  live.current = { params, fxCount }
+  const live = useRef({ params, fxCount, fxCreatures })
+  live.current = { params, fxCount, fxCreatures }
   // Until the selection is first on the GPU, the first fxCount slots are the wrong blobs: hold the effect back
-  useEffect(() => { void view?.setEffect(params(), ordered && lastOrder.current !== orderKey ? 0 : fxCount) })
+  useEffect(() => { void view?.setEffect(params(), ordered && lastOrder.current !== orderKey ? 0 : fxCount, fxCreatures) })
 
   const chooseEffect = (id: EffectId | null) => {
     setEffect(id)
@@ -570,7 +580,7 @@ export function Sandbox() {
       if (fx.loops) {
         time.current += dt
         const p = live.current.params()
-        if (p) void view.setEffect(p, live.current.fxCount)
+        if (p) void view.setEffect(p, live.current.fxCount, live.current.fxCreatures)
       } else {
         const a = Math.min(1, (now - t0) / 1000 / PLAY_SECONDS)
         setAmount(a)
@@ -590,7 +600,7 @@ export function Sandbox() {
     edit((b) => bakeEffect(b, p, order, fxCount))
     setRunning(false)
     setEffect(null)
-    setMessage(`${fx!.name} made permanent`)
+    setMessage(`${fx!.name} made permanent${fxCreatures ? '. The creatures are as they were: freeze one first to keep an effect on it' : ''}`)
   }
 
   // --- creatures ---------------------------------------------------------------
@@ -967,7 +977,7 @@ export function Sandbox() {
                 label: 'Creatures',
                 summary: actors.length ? `${actors.length} added` : 'None',
                 content: (
-                  <Panel note="Creatures from Splat Creatures, a slime from Dungeon Run and the watch from Clockwork, moving in your scene. Drag one with the Move tool (or, with nothing selected, use the arrow keys on the view) to put it somewhere else. Brushes, selections and effects leave them alone until you freeze one into ordinary blobs.">
+                  <Panel note="Creatures from Splat Creatures, a slime from Dungeon Run and the watch from Clockwork, moving in your scene. Drag one with the Move tool (or, with nothing selected, use the arrow keys on the view) to put it somewhere else. Brushes and selections leave them alone until you freeze one into ordinary blobs. An effect on the whole scene moves them too, but only on screen: freeze one to keep it.">
                     <Field label="Add">
                       <div className="flex flex-wrap gap-1.5" data-testid="add-creature">
                         {ADDABLE.map((sp) => <Button small key={sp.id} aria-label={`Add ${aOr(sp.name)}`} onClick={() => addActor(sp)} disabled={actors.length >= MAX_ACTORS || actorCount + detailsOf(sp)[0] > maxActorBlobs}>{cap(sp.name)}</Button>)}
