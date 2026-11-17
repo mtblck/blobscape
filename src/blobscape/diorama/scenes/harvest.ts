@@ -18,6 +18,7 @@ export const HARVEST: SceneDoc = {
   skyReach: 0.85,
   look: { dither: 0.06, glow: 1.2, outline: true, edges: true },
   camera: { target: [0, 1.2, 0], distance: 5.9, azimuth: -14, elevation: 9, swing: 14 },
+  air: { haze: { color: '#120c24', from: 0.5, to: 6 }, mist: [{ at: [0, 0.08, 0.2], half: [1.6, 0.08, 1.2], color: '#6450a0', thick: 0.5 }], specks: [{ kind: 'fireflies', count: 20, from: [-1.5, 0.2, -0.8], to: [1.5, 1.4, 1.2], colors: ['#f0dc88', '#ffc860'] }] },
   bones: [
     { name: 'crow', at: [0.35, 0.02, 0.05] },
     { name: 'armL', at: [-0.17, 1.1, 0.05], parent: 'crow' },

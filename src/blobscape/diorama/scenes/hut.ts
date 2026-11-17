@@ -18,6 +18,7 @@ export const HUT: SceneDoc = {
   skyReach: 0.85,
   look: { dither: 0.05, glow: 1.12, outline: true, edges: true },
   camera: { target: [0, 0.95, 0], distance: 5.9, azimuth: 18, elevation: 11, swing: 14 },
+  air: { haze: { color: '#5c5078', from: 1, to: 8 }, mist: [{ at: [0.3, 0.1, 0.6], half: [1.5, 0.1, 1.0], color: '#eef0f4', thick: 0.25 }] },
   bones: [
     { name: 'lining', at: [-0.2, 1.0, -0.2] },
     { name: 'lamp', at: [-0.8, 1.72, 0.3] },

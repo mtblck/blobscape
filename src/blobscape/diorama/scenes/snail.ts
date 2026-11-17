@@ -15,6 +15,7 @@ export const SNAIL: SceneDoc = {
   ],
   look: { dither: 0.05, glow: 1.15, outline: true, edges: true },
   camera: { target: [0, 1.05, 0], distance: 5.9, azimuth: 16, elevation: 9, swing: 16 },
+  air: { haze: { color: '#0c0f0c', from: 0.5, to: 6 }, mist: [{ at: [0, 0.07, 0.2], half: [1.6, 0.07, 1.2], color: '#2c4a4c', thick: 0.45 }], specks: [{ kind: 'dust', count: 30, from: [-1.6, 0.3, -1.0], to: [1.6, 2.4, 1.2], colors: ['#c4a4f8', '#c8ecd8'], glow: true }] },
   bones: [
     { name: 'snail', at: [0, 0, 0] },
     { name: 'foot', at: [-0.1, 0, 0], parent: 'snail' },

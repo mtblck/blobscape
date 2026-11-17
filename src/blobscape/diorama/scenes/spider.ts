@@ -17,6 +17,7 @@ export const SPIDER: SceneDoc = {
   skyReach: 0.7,
   look: { dither: 0.05, glow: 1.1, outline: true, edges: true },
   camera: { target: [0, 1.65, 0], distance: 5.9, azimuth: 10, elevation: 4, swing: 14 },
+  air: { haze: { color: '#090d0c', from: 0.5, to: 6 }, mist: [{ at: [0, 0.07, 0.3], half: [1.6, 0.07, 1.2], color: '#1c6058', thick: 0.4 }], specks: [{ kind: 'dust', count: 25, from: [-0.8, 1.0, -0.4], to: [0.8, 2.4, 0.8], colors: ['#ffe890'], glow: true }] },
   bones: [
     { name: 'spider', at: [0, 1.65, 0] },
     { name: 'lining', at: [0, 1.65, 0], parent: 'spider' },

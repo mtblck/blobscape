@@ -157,6 +157,9 @@ export function PixelDiorama() {
     if (!stage) return
     const d = posed.current
     stage.orbit = d && !calm ? swung(orbit, d.swing, d.loop, stage.time) : orbit
+    // haze is measured from the view's target, so it stays put on the scene as the view moves in and out
+    const h = d?.haze
+    stage.setFog(h?.color ?? [0, 0, 0], h ? orbit.distance + h.from : 0, h ? orbit.distance + h.to : 0)
     stage.invalidate()
   }, [stage, orbit, scene, calm])
   // the art's size follows the view's; read it now and then for the caption (it's text, not every frame)
@@ -192,7 +195,7 @@ export function PixelDiorama() {
     if (!scene || !stage) return
     const { built, of } = scene
     return {
-      name: of.label, about: of.about, blobs: built.blobs.count, bones: built.skeleton.count, parts: new Set(built.partOf).size,
+      name: of.label, about: of.about, blobs: built.blobs.count, bones: built.skeleton.count, parts: of.parts ?? new Set(built.partOf).size,
       moves: of.moves, descriptionBytes: of.bytes, lights: of.lights(0).length, loop: of.loop, splatBytes: built.blobs.count * BLOB_BYTES,
       detail: DETAIL.find((d) => d.id === scene.detail)?.label ?? scene.detail, backend: stage.backend,
       picture: pixels && art ? { ...art, scale: size, palette: colors, paletteName: palettes.find((p) => p.id === palette)?.label ?? '', motion: rate ? `${rate} fps` : 'Smooth', pngBytes: png?.bytes, used: png?.used } : undefined,

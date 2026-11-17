@@ -114,3 +114,47 @@ test('a compiled scene loops: bones and lights after one loop are where they beg
   for (let k = 0; k < 16; k++) assert.equal(a[k], sk.matrix[k])
   assert.notDeepEqual(c.lights(2.6)[0].position, la[0].position)
 })
+
+test('air: mistakes are pointed at, and a sound one builds specks that loop and mist that stays faint', () => {
+  const bad: [string, (d: any) => void, RegExp][] = [
+    ['an unknown speck', (d) => { d.air.specks[0].kind = 'hail' }, /^air\.specks\[0\]\.kind: 'hail' is not a kind of speck/],
+    ['too many specks', (d) => { d.air.specks[0].count = 400 }, /^air\.specks\[0\]\.count: must be from 1 to 300/],
+    ['a haze that ends before it starts', (d) => { d.air.haze.to = -1 }, /^air\.haze\.to: must be past from/],
+    ['a mist with no color', (d) => { delete d.air.mist[0].color }, /^air\.mist\[0\]\.color: must be a color/],
+    ['a bad grime', (d) => { d.parts[0].grime = 'moss' }, /^parts\[0\]\.grime: must be a color/],
+    ['a ramp past 1', (d) => { d.light = { ramp: 2 } }, /^light\.ramp: must be from 0 to 1/],
+  ]
+  const withAir = () => {
+    const d: any = sound()
+    d.air = {
+      haze: { color: '#101018', from: 0.5, to: 5 },
+      mist: [{ at: [0, 0.1, 0], half: [1, 0.08, 1], color: '#8090a0' }],
+      shafts: [{ from: [0, 2, 0], to: [0, 0, 0.5], r: 0.2, color: '#ffe0a0' }],
+      specks: [{ kind: 'rain', count: 20, from: [-1, 0, -1], to: [1, 2, 1], colors: ['#a0c0d0'] }, { kind: 'fireflies', count: 10, from: [-1, 0.2, -1], to: [1, 1, 1], colors: ['#ffe080'] }],
+    }
+    return d
+  }
+  assert.deepEqual(checkScene(withAir()), [])
+  for (const [what, spoil, want] of bad) {
+    const d = withAir()
+    spoil(d)
+    assert.ok(checkScene(d).some((e) => want.test(e)), `${what}: ${JSON.stringify(checkScene(d))}`)
+  }
+  const c = compileScene(withAir())
+  const b = buildVoxels(c.spec(0.03))
+  // every speck has a bone of its own and came out
+  assert.equal(b.skeleton.bones.filter((x) => x.name.startsWith('~speck')).length, 30)
+  // the mist is faint enough never to be taken for a surface
+  let faint = 0
+  for (let i = 0; i < b.blobs.count; i++) if (b.blobs.opacity[i] < 0.14) faint++
+  assert.ok(faint > 10)
+  assert.ok(c.haze && c.haze.to > c.haze.from)
+  const sk = b.skeleton
+  c.pose(sk, 1.3)
+  const a = Float32Array.from(sk.offset), s0 = Float32Array.from(sk.size)
+  c.pose(sk, 1.3 + c.loop)
+  sk.offset.forEach((v, i) => assert.ok(Math.abs(v - a[i]) < 1e-4))
+  sk.size.forEach((v, i) => assert.ok(Math.abs(v - s0[i]) < 1e-4))
+  c.pose(sk, 1.9)
+  assert.ok(sk.offset.some((v, i) => Math.abs(v - a[i]) > 1e-3), 'the specks move')
+})

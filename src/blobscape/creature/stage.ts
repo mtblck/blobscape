@@ -134,6 +134,7 @@ export class CreatureStage {
     this.actor = actor
     this.world = new SplatWorld([actor], { mode: this.mode, lights: this.opts.lights })
     if (this.opts.lights) this.world.setLights(this.lit.lights, this.lit.ambient)
+    this.world.setFog(...this.fog)
     this.scene.add(this.world)
     this.rig = new BoneView(actor.skeleton)
     this.scene.add(this.rig)
@@ -169,6 +170,14 @@ export class CreatureStage {
     // a sheet being drawn keeps one rule throughout; the new one applies when it's done
     if (this.baking) return
     if (this.world) { this.world.mode = m; this.world.markPosed() }
+    this.invalidate()
+  }
+
+  private fog: [color: [number, number, number], near: number, far: number] = [[0, 0, 0], 0, 0]
+  /** Distance fog toward `color` (linear) from `near` to `far` units from the camera (`far` 0 is none); kept for the next actor too. */
+  setFog(color: [number, number, number], near: number, far: number) {
+    this.fog = [color, near, far]
+    this.world?.setFog(color, near, far)
     this.invalidate()
   }
 

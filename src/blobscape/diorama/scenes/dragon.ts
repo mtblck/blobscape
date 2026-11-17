@@ -16,6 +16,7 @@ export const DRAGON: SceneDoc = {
   skyReach: 0.5,
   look: { dither: 0.05, glow: 1.5, outline: true, edges: true },
   camera: { target: [0, 1.15, 0.0], distance: 5.4, azimuth: 28, elevation: 12, swing: 22 },
+  air: { haze: { color: '#1a0f12', from: 0.5, to: 6 }, specks: [{ kind: 'embers', count: 50, from: [-0.7, 0.1, 0.2], to: [0.7, 2.6, 1.2], colors: ['#ff8a1e', '#ffc93c', '#e2492c'] }] },
   bones: [
     { name: 'bubble0', at: [-0.2, 0.03, 0.7] },
     { name: 'bubble1', at: [0.25, 0.03, 0.44999999999999996] },

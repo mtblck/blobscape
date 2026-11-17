@@ -17,6 +17,7 @@ export const REEF: SceneDoc = {
   skyReach: 0.75,
   look: { dither: 0.05, glow: 1.1, outline: true, edges: true },
   camera: { target: [0, 1.15, 0], distance: 6.3, azimuth: 20, elevation: 8, swing: 16 },
+  air: { haze: { color: '#0c1a38', from: 0, to: 5 }, shafts: [{ from: [-0.8, 3.6, -0.6], to: [-0.3, 0, 0.4], r: 0.25, color: '#8fd0f0', strength: 0.9 }, { from: [0.5, 3.6, -0.8], to: [0.8, 0, 0.3], r: 0.22, color: '#8fd0f0', strength: 0.8 }, { from: [-0.1, 3.6, -1.0], to: [0.2, 0, -0.2], r: 0.2, color: '#8fd0f0', strength: 0.8 }], specks: [{ kind: 'bubbles', count: 30, from: [-1.4, 0.1, -0.9], to: [1.4, 3.0, 1.0], colors: ['#8fd0f0', '#b4b8cc'] }, { kind: 'dust', count: 30, from: [-1.5, 0.2, -1.0], to: [1.5, 3.0, 1.1], colors: ['#8fd0f0'] }] },
   bones: [
     { name: 'weed0a', at: [0.6, 0.0, -1.35] },
     { name: 'weed0b', at: [0.6, 0.42, -1.35], parent: 'weed0a' },
