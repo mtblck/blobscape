@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { DIORAMAS } from './scenes.ts'
-import { DETAIL } from './scene.ts'
+import { DETAIL, FINER } from './scene.ts'
 import { CAMPFIRE } from './scenes/campfire.ts'
 import { BEE } from './scenes/bee.ts'
 import { DRAGON } from './scenes/dragon.ts'
@@ -10,7 +10,10 @@ import { REEF } from './scenes/reef.ts'
 import { WINDMILL } from './scenes/windmill.ts'
 import { checkScene } from '../../splat-engine/sceneDoc.ts'
 import { MAX_PALETTE_SIZE } from '../../splat-core/pixel.ts'
-import { MAX_MUD, MIN_VALUE_RANGE, loopSnaps, valuesOf } from '../../splat-engine/sceneChecks.ts'
+import { MAX_MUD, MIN_VALUE_RANGE, loopSnaps, partClashes, valuesOf } from '../../splat-engine/sceneChecks.ts'
+
+/** Parts that meet by design, by scene: [the part that moves, the part it meets]. The octopus's buoy rides up and down in its ring of foam. */
+const MEET: Record<string, [number, number][]> = { octopus: [[11, 77]] }
 
 test('the described scenes are sound, and are data alone', () => {
   for (const doc of [BEE, CAMPFIRE, DRAGON, HAND, REEF, WINDMILL]) {
@@ -29,12 +32,17 @@ test('every scene builds at every detail with all of its parts, reads in graysca
       assert.equal(new Set(b.partOf).size, b.partOf.reduce((m, p) => Math.max(m, p), 0) + 1, `${d.id} ${level.id}: a part caught no grid cell`)
       last = b.blobs.count
     }
-    const { skeleton: sk, blobs } = d.make(DETAIL[0].spacing)
+    const built = d.make(DETAIL[0].spacing)
+    const { skeleton: sk, blobs } = built
     // it still reads in grayscale, and nothing seen snaps from place to place
     const v = valuesOf(blobs)
     assert.ok(v.light - v.dark >= MIN_VALUE_RANGE, `${d.id}: values ${v.dark.toFixed(2)} to ${v.light.toFixed(2)} read as one tone`)
     assert.ok(v.mud <= MAX_MUD, `${d.id}: ${Math.round(v.mud * 100)}% gray mud`)
     assert.deepEqual(loopSnaps(sk, d.pose, d.loop), [], `${d.id}: snaps`)
+    // and no part turns or swings through another (the lighthouse is cut on a finer grid)
+    const clashes = partClashes(built, d.pose, d.loop, DETAIL[0].spacing * (d.id === 'lighthouse' ? FINER : 1))
+      .filter((c) => !(MEET[d.id] ?? []).some(([a, b]) => (a === c.part && b === c.into) || (a === c.into && b === c.part)))
+    assert.deepEqual(clashes, [], `${d.id}: parts pass through each other`)
     const [l0, l1] = [d.lights(0.9), d.lights(0.9 + d.loop)]
     assert.ok(l0.every((l, i) => [...l.position, ...l.color].every((x, j) => Math.abs(x - [...l1[i].position, ...l1[i].color][j]) < 1e-6)), `${d.id}: lights loop`)
     d.pose(sk, 0.9)
