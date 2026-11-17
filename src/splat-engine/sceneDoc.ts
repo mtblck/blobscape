@@ -40,8 +40,12 @@ export interface SceneDoc {
   sky?: [string, string]
   /** How far down the picture the sky's blend runs before it is all the bottom color: 0.05 to 1, the whole way when left out. */
   skyReach?: number
-  /** The pixel look it asks for: how much dither and glow, and whether to draw an outline and edge lines. */
-  look?: { dither?: number; glow?: number; outline?: boolean; edges?: boolean }
+  /**
+   * The pixel look it asks for: how much dither and glow, and whether to draw an outline and edge lines. `steps` paints
+   * the scene in steps of its palette as it is cut (each blob takes one palette color, a step of its own paint from shade
+   * to sun), so shade falls in flat bands; left out, shading is smooth and the picture is matched to the palette pixel by pixel.
+   */
+  look?: { dither?: number; glow?: number; outline?: boolean; edges?: boolean; steps?: boolean }
   /**
    * How wide each surface disc is, as a share of the grid: 0.4 to 1, 0.55 when left out. Small discs keep paint
    * crisp but let about a tenth of what lies behind a surface show through; a subject whose far side or inner
@@ -524,7 +528,7 @@ export function checkScene(doc: unknown): string[] {
     else {
       opt(doc.look.dither, 'look.dither', 0, 1)
       opt(doc.look.glow, 'look.glow', 0, 4)
-      for (const k of ['outline', 'edges']) if (doc.look[k] !== undefined && typeof doc.look[k] !== 'boolean') bad(`look.${k}`, 'must be true or false')
+      for (const k of ['outline', 'edges', 'steps']) if (doc.look[k] !== undefined && typeof doc.look[k] !== 'boolean') bad(`look.${k}`, 'must be true or false')
     }
   }
   if (!obj(doc.camera)) bad('camera', 'must be an object')
@@ -1096,8 +1100,10 @@ export interface CompiledScene {
   palette: Rgb[]
   /** The scene's bones. */
   bones: Bone[]
-  /** The shapes on a grid of `spacing`. */
-  spec(spacing: number): VoxelSpec
+  /** Whether the scene asks to be painted in steps of its palette (`look.steps`). */
+  steps: boolean
+  /** The shapes on a grid of `spacing`. With `steps` (a palette, 0–255), the scene is painted in steps of it as it is cut. */
+  spec(spacing: number, steps?: Rgb[]): VoxelSpec
   /** The parts (by their place in the list) that came out with no blobs at all, such as a shape whose hole swallows it: `checkScene` can't see those. */
   empty(built: { partOf: ArrayLike<number> }): number[]
   /** Poses the bones for `t` seconds. */
@@ -1321,7 +1327,8 @@ export function compileScene(doc: SceneDoc, { puffs = true }: { puffs?: boolean 
       edges: doc.look?.edges === false ? 0 : 1,
       sky: doc.sky ? [rgb(doc.sky[0]), rgb(doc.sky[1]), doc.skyReach ?? 1] : undefined,
     },
-    spec(spacing) {
+    steps: doc.look?.steps ?? false,
+    spec(spacing, steps) {
       const thin = spacing * 0.75
       const shapes = solidShapes(thin).out
       const parts: VoxelPart[] = doc.parts.map((p, i) => {
@@ -1339,6 +1346,7 @@ export function compileScene(doc: SceneDoc, { puffs = true }: { puffs?: boolean 
       const light: VoxelSpec['light'] = { ...PAINTED }
       if (doc.light?.from) light.dir = doc.light.from
       for (const k of ['ambient', 'shadow', 'ramp', 'crevice', 'wear', 'bounce'] as const) if (doc.light?.[k] !== undefined) light[k] = doc.light[k]
+      if (steps?.length) light.steps = { palette: steps.map((c) => [c[0] / 255, c[1] / 255, c[2] / 255] as Vec3) }
       const beams = (doc.air?.shafts ?? []).map((b) => ({ from: b.from, to: b.to, r: b.r, color: unit(b.color), strength: b.strength ?? 0.6 }))
       // a lamp that stays put casts shadows baked once; byte k of each blob is light k
       const lamps = lights.slice(0, MAX_LAMPS).map((l) => (!l.shadows || l.circle ? null : { at: l.at, reach: l.range }))

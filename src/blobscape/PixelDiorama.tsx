@@ -94,6 +94,8 @@ export function PixelDiorama() {
   const [tidy, setTidy] = useState(() => new URLSearchParams(location.search).get('tidy') !== '0')
   const [fine, setFine] = useState(() => new URLSearchParams(location.search).get('fine') !== '0')
   const [own, setOwn] = useState(() => new URLSearchParams(location.search).get('own') !== '0')
+  /** Painted in steps of the palette as the scene is cut: the scene's own choice unless the address says. */
+  const [steps, setSteps] = useState(() => { const q = new URLSearchParams(location.search).get('steps'); return q === null ? diorama.finish.steps : q !== '0' })
   const [rate, setRate] = useState(0)
   const [exact, setExact] = useState(() => new URLSearchParams(location.search).get('sort') === 'radix')
   const [parts, setParts] = useState(() => new URLSearchParams(location.search).get('parts') !== '0')
@@ -109,9 +111,15 @@ export function PixelDiorama() {
   const [videoSize, setVideoSize] = useState(6)
 
   // built after a paint, so the waiting mark shows first
-  const [made, setScene] = useState<{ built: Built; of: Diorama; detail: string }>()
+  const [made, setScene] = useState<{ built: Built; of: Diorama; detail: string; paint: string }>()
+  // Painting in steps happens as a scene is cut, in the palette picked. While another scene is being cut the controls
+  // are still the old one's, so the new one is cut with its own palette and its own choice, which it then brings along.
+  const settled = !made || made.of === diorama
+  const paintId = settled ? palette : 'own'
+  const stepColors = (settled ? steps : diorama.finish.steps) ? (paintId === 'own' ? diorama.palette.colors : PALETTES.find((p) => p.id === paintId)?.colors ?? []) : []
+  const paint = stepColors.length ? paintId : ''
   // the scene asked for, once it is cut: until then the loading note (and its announcement) shows
-  const scene = made?.of === diorama && made.detail === detail ? made : undefined
+  const scene = made?.of === diorama && made.detail === detail && made.paint === paint ? made : undefined
   // what is in the view now: the last scene built, which lags the one picked while it is being cut.
   // It is kept until the new one replaces it, so the old scene never wears the new one's palette or sky.
   const shown = made?.of ?? diorama
@@ -121,10 +129,17 @@ export function PixelDiorama() {
     // animation handed to the compositor first: two frames, then a beat, before the cut starts.
     let t: ReturnType<typeof setTimeout> | undefined
     let raf = requestAnimationFrame(() => {
-      raf = requestAnimationFrame(() => { t = setTimeout(() => setScene({ built: diorama.make(spacing), of: diorama, detail }), 60) })
+      raf = requestAnimationFrame(() => {
+        t = setTimeout(() => {
+          if (!settled) { setPalette('own'); setSteps(diorama.finish.steps) }
+          setScene({ built: diorama.make(spacing, stepColors.length ? stepColors : undefined), of: diorama, detail, paint })
+        }, 60)
+      })
     })
     return () => { cancelAnimationFrame(raf); clearTimeout(t) }
-  }, [detail, diorama])
+    // `paint` stands for the colors and for whose controls these are
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detail, diorama, paint])
 
   useEffect(() => {
     let live: CreatureStage | undefined, gone = false
@@ -496,6 +511,8 @@ export function PixelDiorama() {
                 <div className="grid gap-3">
                 <Toggle label={pixels ? 'Four samples a pixel' : 'Four samples a pixel (in Pixel art)'} checked={fine} onChange={setFine} />
                 <p className="text-xs text-ink-faint">Draws the scene at twice the size and gives each pixel the thing most of its four samples show, so edges are one thing or the other, never a mix.</p>
+                <Toggle label="Paint in steps of the palette" checked={steps} onChange={setSteps} disabled={!colors.length} />
+                <p className="text-xs text-ink-faint">{colors.length ? 'Cuts the scene again with every blob in one palette color, a step of its own paint from shade to sun, so shade falls in flat bands.' : 'Needs a palette: Full color has no steps.'}</p>
                 <Toggle label={pixels ? 'Outline the scene' : 'Outline the scene (in Pixel art)'} checked={outline} onChange={setOutline} />
                 <Toggle label={pixels ? 'Outline in each thing\'s own color' : 'Outline in each thing\'s own color (in Pixel art)'} checked={own} onChange={setOwn} disabled={!outline} />
                 <Toggle label={pixels ? 'Lines where colors meet' : 'Lines where colors meet (in Pixel art)'} checked={edges} onChange={setEdges} />

@@ -15,7 +15,7 @@ export const WINDMILL: SceneDoc = {
     '#9fd0ee', '#dff1f8',
   ],
   sky: ['#5fa8e0', '#dff1f8'],
-  look: { dither: 0.1, glow: 0.5, outline: true, edges: true },
+  look: { dither: 0.1, glow: 0.5, outline: true, edges: true, steps: true },
   camera: { target: [0, 1.05, 0], distance: 5.4, azimuth: -16, elevation: 12 },
   focus: { at: [-0.25, 0.7, -0.25], r: 1.3 },
   air: { haze: { color: '#9fd0ee', from: 2, to: 14 }, specks: [{ kind: 'dust', count: 20, from: [-1.5, 0.2, -1.0], to: [1.5, 1.2, 1.2], colors: ['#f3d977', '#fbf7ea'] }] },
