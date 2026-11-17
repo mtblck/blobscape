@@ -1,4 +1,5 @@
 import { Blobs, type Vec3 } from './blobs.ts'
+import { turnSH } from './sh.ts'
 
 /**
  * Whole-scene and selection edits on a `Blobs` list. Plain functions, so the
@@ -90,6 +91,7 @@ export function turnY(b: Blobs, sel: Selection | null, pivot: Vec3, deg: number)
     b.quat[q + 2] = w * z - s * x
     b.quat[q + 3] = w * qw - s * y
   }
+  if (b.sh) turnSH(b.sh, b.shDegree, b.count, [0, s, 0, w], sel ? (i) => sel.has(i) : undefined)
 }
 
 /** Scales the selected blobs as a group about `pivot`: positions and blob sizes together. */
@@ -120,6 +122,7 @@ export function flipUpright(b: Blobs) {
     b.quat[q + 2] = y
     b.quat[q + 3] = -x
   }
+  if (b.sh) turnSH(b.sh, b.shDegree, b.count, [1, 0, 0, 0])
 }
 
 /**

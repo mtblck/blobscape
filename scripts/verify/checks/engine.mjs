@@ -155,6 +155,26 @@ export default [
           else ok(`engine lab ${label}: shape edits cut ${r.cut} of ${r.count} blobs${r.chk ? ' (GPU matching the CPU)' : ''} and paint ${r.blue} pixels`)
           await e.ctx.close()
         }
+        // color by angle (spherical harmonics): the lab's sheen makes the fox warm from one side and blue from the other,
+        // and on WebGPU the colors the GPU gave each blob match `viewColor`
+        {
+          const e = await open(`/engine-lab/?which=engine&n=12000&walk=1&herd=1&offscreen=1&sh=1${webgl ? '&webgl=1' : ''}`, { viewport: { width: 800, height: 800 } })
+          await e.page.waitForFunction(() => window.__lab || window.__labError, null, { timeout: 60000 })
+          const side = (az) => e.page.evaluate(async ([az, webgl]) => {
+            const l = window.__lab
+            l.orbit = { ...l.orbit, azimuth: az }
+            await l.frame(0.3)
+            const chk = webgl ? null : await l.world.checkViewColors(l.renderer)
+            const cv = document.querySelector('canvas'), d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+            let n = 0, r = 0, b = 0
+            for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 200) { n++; r += d[i]; b += d[i + 2] }
+            return { n, warmth: (r - b) / Math.max(1, n), chk }
+          }, [az, webgl])
+          const a = await side(90), b = await side(-90)
+          if (!(a.n > 5000 && b.n > 5000 && b.warmth - a.warmth > 60 && (webgl || (a.chk < 2e-3 && b.chk < 2e-3)))) fails.push(`engine lab ${label}: color by angle ${JSON.stringify({ a, b })}`)
+          else ok(`engine lab ${label}: color by angle turns the fox from ${a.warmth.toFixed(0)} to ${b.warmth.toFixed(0)} warmth across it${webgl ? '' : ', GPU matching the CPU'}`)
+          await e.ctx.close()
+        }
         // depth map for post effects (SplatDepth): the two foxes cover pixels, at depths round the camera's distance (7)
         const dm = await page.evaluate(() => window.__lab.depth(0.3))
         if (!(dm.covered > 5000 && dm.near > 4.5 && dm.near < dm.median && dm.median > 5.5 && dm.median < 8.5 && dm.far < 10)) fails.push(`engine lab ${label}: depth map ${JSON.stringify(dm)}`)

@@ -86,3 +86,20 @@ test('filter keeps order and clone is independent', () => {
   assert.deepEqual([...b.center.subarray(0, b.count * 3)].filter((_, k) => k % 3 === 0), [0, 2, 4])
   assert.equal(c.count, 5)
 })
+
+test('fromCovariance gives back a blob with the same covariance', async () => {
+  const { Blobs, covariance, fromCovariance, quatFromEuler } = await import('./blobs.ts')
+  const b = new Blobs()
+  const cases: [number, number, number, number, number, number][] = [[0.3, 0.1, 0.02, 10, 20, 30], [1, 1, 1, 0, 0, 0], [0.5, 0.5, 0.01, -70, 45, 160], [2, 0.2, 0.2, 90, 0, 0]]
+  for (const [sx, sy, sz, ex, ey, ez] of cases) b.push({ center: [0, 0, 0], scale: [sx, sy, sz], quat: quatFromEuler(ex, ey, ez), color: [1, 1, 1], opacity: 1 })
+  for (let i = 0; i < b.count; i++) {
+    const want = covariance(b, i)
+    const { scale, quat } = fromCovariance(want)
+    const c = new Blobs()
+    c.push({ center: [0, 0, 0], scale, quat, color: [1, 1, 1], opacity: 1 })
+    const got = covariance(c, 0)
+    for (let k = 0; k < 6; k++) assert.ok(Math.abs(got[k] - want[k]) < 1e-6 * Math.max(1, Math.abs(want[0])), `case ${i}: ${got} vs ${want}`)
+    const have = [...scale].sort((x, y) => x - y), had = [...b.scale.subarray(i * 3, i * 3 + 3)].sort((x, y) => x - y)
+    for (let k = 0; k < 3; k++) assert.ok(Math.abs(have[k] - had[k]) < 1e-6, `case ${i}: scales ${have} vs ${had}`)
+  }
+})

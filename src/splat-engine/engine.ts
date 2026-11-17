@@ -1,5 +1,5 @@
 import {
-  BufferAttribute, DynamicDrawUsage, InstancedBufferGeometry, Matrix4, Mesh, NodeMaterial, Sphere, StorageBufferAttribute, Vector2, Vector3, Vector4,
+  BufferAttribute, DataUtils, DynamicDrawUsage, InstancedBufferGeometry, Matrix4, Mesh, NodeMaterial, Sphere, StorageBufferAttribute, Vector2, Vector3, Vector4,
   type Camera, type Renderer,
 } from 'three/webgpu'
 import * as TSLTyped from 'three/tsl'
@@ -20,7 +20,8 @@ import { detailFor, lodRank, screenRadius, type DetailRule } from './lod.ts'
 import { MAX_EDITS, editAt, type ShapeEdit } from './edit.ts'
 import { applyMorphs, shares, type Morph } from './morph.ts'
 import { LIFT, MAX_MARCH, OCC_SCALE, REACH, SHADOW_CELLS, SHADOW_DENSITY, blobSigma, occupancy, shadowBox } from './shadow.ts'
-import { srgbToLinear } from '../splat-core/color.ts'
+import { linearToSrgb, srgbToLinear } from '../splat-core/color.ts'
+import { viewColor } from '../splat-core/sh.ts'
 
 /**
  * Blobscape's splat engine: one mesh that draws every blob of every object in a
@@ -168,6 +169,9 @@ export class SplatWorld extends Mesh {
   /** Live lighting, when the world was made with `lights: true`. */
   readonly lighting?: Lighting
   private lightNode?: ReturnType<typeof makeLight>
+  /** Color by angle, when any actor's blobs have it: the terms on the GPU and the pass that adds them. */
+  private readonly sh?: ViewSH
+  private shNode?: ReturnType<typeof makeViewColor>
   private shadowNodes?: { clear: ReturnType<typeof makeShadowClear>; scatter: ReturnType<typeof makeShadowScatter> }
   /** Whether any light in use casts shadows. */
   private casting = false
@@ -219,10 +223,17 @@ export class SplatWorld extends Mesh {
     this.cam = { view: uniform(new Matrix4()), proj: uniform(new Matrix4()), viewport: uniform(new Vector2(1, 1)), depthRange: uniform(new Vector2(0, 1)) }
     this.fog = { color: uniform(new Vector3(0, 0, 0)), range: uniform(new Vector2(0, 0)) }
     this.projectNode = makeProject(buf, sort, this.cam, bins)
-    if (lights || paint) {
+    const sh = actors.some((a) => a.blobs.shDegree > 0)
+    if (sh) {
+      this.sh = makeSH(actors, buf.count)
+      buf.attrs.push(this.sh.attr)
+    }
+    // color by angle is worked out in the same color pass as lights and paint, which the draw reads in place of the packed color
+    if (lights || paint || sh) {
       this.lighting = makeLighting(buf.count)
       buf.attrs.push(this.lighting.attr)
-      this.lightNode = makeLight(buf, this.lighting)
+      this.lightNode = makeLight(buf, this.lighting, sh)
+      if (this.sh) this.shNode = makeViewColor(buf, this.lighting, this.sh)
       buf.attrs.push(this.lighting.gridAttr)
       this.shadowNodes = { clear: makeShadowClear(this.lighting), scatter: makeShadowScatter(buf, this.lighting) }
     }
@@ -365,6 +376,7 @@ export class SplatWorld extends Mesh {
     // the WebGL path moves centers on the CPU from its own copy
     if (center !== b.srcCenterData) b.srcCenterData.set(center.subarray(0, b.srcCenterData.length))
     for (const a of [b.centerAttr, b.scaleAttr, b.quatAttr, b.colorAttr]) bump(a)
+    if (this.sh) { packSH(this.actors, this.sh, this.sh.attr.array as Uint32Array); bump(this.sh.attr); this.lightsDirty = true }
     this.boneRadius.set(boneRadii(this.actors, this.boneOffset, this.boneCount))
     const fresh = boneSpheres(this.actors, this.boneOffset, this.boneCount)
     this.boneSphere.set(fresh.sphere)
@@ -400,7 +412,8 @@ export class SplatWorld extends Mesh {
       enableWebGL(this.buf, this.sort)
       // the WebGL vertex shader reads the grid of shadows as a texture, like the other buffers
       if (this.lighting) (this.lighting.grid as { setPBO: (b: boolean) => void }).setPBO(true)
-      material.vertexNode = makeVertexWebGL(this.buf, this.sort, this.mode, this.fog, this.flat, this.lighting) as never
+      if (this.sh) (this.sh.data as { setPBO: (b: boolean) => void }).setPBO(true)
+      material.vertexNode = makeVertexWebGL(this.buf, this.sort, this.mode, this.fog, this.flat, this.lighting, this.sh) as never
     } else {
       material.vertexNode = makeVertexWebGPU(this.buf, this.sort, this.fog, this.flat, this.lighting) as never
     }
@@ -466,6 +479,7 @@ export class SplatWorld extends Mesh {
     this.cam.proj.value.copy(camera.projectionMatrix)
     this.cam.viewport.value.copy(this.size)
     this.cam.depthRange.value.set(near, far)
+    if (this.sh) this.sh.eye.value.setFromMatrixPosition(camera.matrixWorld)
     return `${e.join(',')}|${camera.projectionMatrix.elements.join(',')}|${this.size.x}x${this.size.y}`
   }
 
@@ -507,7 +521,12 @@ export class SplatWorld extends Mesh {
         renderer.compute(this.shadowNodes.scatter as never)
       }
       // lights move on their own: the lit colors are redone whenever they or the blobs moved
-      if (this.lightNode && (deformed || this.lightsDirty)) { renderer.compute(this.lightNode as never); this.lightsDirty = false }
+      // and with color by angle, whenever the view moved
+      if (this.lightNode && (deformed || this.lightsDirty || (this.sh && key !== this.lastSortKey))) {
+        if (this.shNode) renderer.compute(this.shNode as never)
+        renderer.compute(this.lightNode as never)
+        this.lightsDirty = false
+      }
       if (needsSort) this.project(renderer)
     }
     this.posed = true
@@ -642,7 +661,7 @@ export class SplatWorld extends Mesh {
   stages(renderer: Renderer, camera: Camera) {
     this.build(this.isWebGL(renderer))
     return {
-      deform: () => { this.uploadBones(); this.updateBounds(); this.deform(renderer); if (this.lightNode) renderer.compute(this.lightNode as never) },
+      deform: () => { this.uploadBones(); this.updateBounds(); this.deform(renderer); if (this.shNode) renderer.compute(this.shNode as never); if (this.lightNode) renderer.compute(this.lightNode as never) },
       project: () => { this.setView(renderer, camera); renderer.compute(this.projectNode as never) },
       order: () => this.sort.order(renderer as never),
     }
@@ -718,6 +737,32 @@ export class SplatWorld extends Mesh {
       }
     }
     return { center, cov, covScale: scale }
+  }
+
+  /**
+   * Reads back the colors the GPU gave each blob by angle and checks them against `viewColor` (sh.ts) for the view
+   * last drawn: the largest gap per channel, 0–1. Only meaningful with no lights and no paint (the pass's output is
+   * the lit color). WebGPU only.
+   */
+  async checkViewColors(renderer: Renderer) {
+    if (!this.sh || !this.lighting) return null
+    const r = renderer as unknown as { getArrayBufferAsync: (a: StorageBufferAttribute) => Promise<ArrayBuffer> }
+    const gpu = new Float32Array(await r.getArrayBufferAsync(this.lighting.attr))
+    const cpu = this.deformCPU()
+    const eye = this.sh.eye.value, bones = this.buf.boneData, color = this.buf.colorAttr.array as Uint32Array
+    let worst = 0, i = 0
+    const d = [0, 0, 0], base = [0, 0, 0], Y = new Float64Array(16)
+    for (let a = 0; a < this.actors.length; a++) {
+      const b = this.actors[a].blobs, t = b.shTerms
+      for (let k = 0; k < b.count; k++, i++) {
+        const j = (this.boneOffset[a] + (this.buf.skinWords[i * 2] & 255)) * 20
+        blobDirection(cpu.center, i, eye, bones, j, d)
+        for (let c = 0; c < 3; c++) base[c] = linearToSrgb(((color[i] >>> (c * 8)) & 255) / 255)
+        const want = t ? viewColor(base, halves(b.sh!, k * t * 3, t * 3), 0, t, d, Y) : base
+        for (let c = 0; c < 3; c++) worst = Math.max(worst, Math.abs(gpu[i * 4 + c] - srgbToLinear(want[c])))
+      }
+    }
+    return worst
   }
 
   /** Reads back the GPU sort and checks it: every blob drawn once, farthest first. */
@@ -1379,13 +1424,111 @@ function makeShadowScatter(buf: ReturnType<typeof makeBuffers>, L: Lighting) {
 }
 
 /** WebGPU: every blob's lit color, once a frame (after the deform, before the draw). */
-function makeLight(buf: ReturnType<typeof makeBuffers>, L: Lighting) {
+function makeLight(buf: ReturnType<typeof makeBuffers>, L: Lighting, viewed: boolean) {
   return Fn(() => {
     const i = instanceIndex
-    const color = unpackUnorm4x8(buf.color.element(i)).toVar()
+    // with color by angle, `makeViewColor` has just written the blob's color for this view into the same buffer
+    const color = (viewed ? L.litW.element(i) : unpackUnorm4x8(buf.color.element(i))).toVar()
     const world = buf.worldCenter.element(i).xyz.toVar()
     L.litW.element(i).assign(vec4(lit(painted(color.rgb, world, buf.edits), world, buf.covA.element(i), buf.covB.element(i), buf.seen.element(i), L), color.a))
   })().compute(buf.count, [WORKGROUP]).setName('SplatWorldLight')
+}
+
+/** Color by angle on the GPU: each blob's rest terms as half floats, two to a word, and where the camera is. */
+interface ViewSH { terms: number; words: number; attr: StorageBufferAttribute; data: N; eye: N }
+
+function makeSH(actors: Actor[], n: number): ViewSH {
+  const terms = Math.max(...actors.map((a) => a.blobs.shTerms))
+  const words = Math.ceil((terms * 3) / 2)
+  const attr = new StorageBufferAttribute(new Uint32Array(n * words), 1)
+  const S = { terms, words, attr, data: storage(attr, 'uint', n * words).toReadOnly(), eye: uniform(new Vector3()) }
+  packSH(actors, S, attr.array as Uint32Array)
+  return S
+}
+
+/** Every actor's rest terms, to the world's count of terms (an actor with fewer, or none, gets zeros for the rest). */
+function packSH(actors: Actor[], S: ViewSH, out: Uint32Array) {
+  out.fill(0)
+  const half = DataUtils.toHalfFloat
+  let i = 0
+  for (const a of actors) {
+    const b = a.blobs, t = b.shTerms
+    for (let k = 0; k < b.count; k++, i++) {
+      for (let h = 0; h < t * 3; h++) out[i * S.words + (h >> 1)] |= half(b.sh![k * t * 3 + h]) << ((h & 1) * 16)
+    }
+  }
+}
+
+/** The terms as the GPU holds them: rounded to half floats. */
+function halves(sh: Float32Array, at: number, n: number) {
+  const out = new Float32Array(n)
+  for (let h = 0; h < n; h++) out[h] = DataUtils.fromHalfFloat(DataUtils.toHalfFloat(sh[at + h]))
+  return out
+}
+
+/** The way from the eye to a blob, turned back into its first bone's frame. CPU twin of the first half of `viewed`. */
+function blobDirection(center: Float32Array, i: number, eye: Vector3, bones: Float32Array, j: number, out: number[]) {
+  let vx = center[i * 4] - eye.x, vy = center[i * 4 + 1] - eye.y, vz = center[i * 4 + 2] - eye.z
+  const l = Math.hypot(vx, vy, vz) || 1
+  vx /= l; vy /= l; vz /= l
+  const ql = Math.hypot(bones[j + 16], bones[j + 17], bones[j + 18], bones[j + 19]) || 1
+  const ux = -bones[j + 16] / ql, uy = -bones[j + 17] / ql, uz = -bones[j + 18] / ql, w = bones[j + 19] / ql
+  // v + w·t + u × t, with t = 2 u × v: v turned by the bone's inverse turn
+  const tx = 2 * (uy * vz - uz * vy), ty = 2 * (uz * vx - ux * vz), tz = 2 * (ux * vy - uy * vx)
+  out[0] = vx + w * tx + (uy * tz - uz * ty)
+  out[1] = vy + w * ty + (uz * tx - ux * tz)
+  out[2] = vz + w * tz + (ux * ty - uy * tx)
+}
+
+/** The spherical harmonic basis after the first term, in the files' signs (`fileBasis` in sh.ts), as TSL. */
+function fileBasisTSL(d: N, terms: number): N[] {
+  const x = d.x, y = d.y, z = d.z
+  const xx = x.mul(x), yy = y.mul(y), zz = z.mul(z)
+  const Y = [
+    y.mul(-0.4886025119029199), z.mul(0.4886025119029199), x.mul(-0.4886025119029199),
+    x.mul(y).mul(1.0925484305920792), y.mul(z).mul(-1.0925484305920792), zz.mul(3).sub(1).mul(0.31539156525252005), x.mul(z).mul(-1.0925484305920792), xx.sub(yy).mul(0.5462742152960396),
+    y.mul(xx.mul(3).sub(yy)).mul(-0.5900435899266435), x.mul(y).mul(z).mul(2.890611442640554), y.mul(zz.mul(5).sub(1)).mul(-0.4570457994644658),
+    z.mul(zz.mul(5).sub(3)).mul(0.3731763325901154), x.mul(zz.mul(5).sub(1)).mul(-0.4570457994644658), z.mul(xx.sub(yy)).mul(1.445305721320277),
+    x.mul(xx.sub(yy.mul(3))).mul(-0.5900435899266435),
+  ]
+  return Y.slice(0, terms)
+}
+
+/** Linear to sRGB and back, a channel at a time without branches (so GLSL and WGSL agree). */
+function toSrgb(c: N) {
+  return TSL.mix(TSL.pow(max(c, 0.0031308), float(1 / 2.4)).mul(1.055).sub(0.055), c.mul(12.92), TSL.step(c, float(0.0031308)))
+}
+function toLinear(c: N) {
+  return TSL.mix(TSL.pow(c.add(0.055).div(1.055), float(2.4)), c.div(12.92), TSL.step(c, float(0.04045)))
+}
+
+/**
+ * A blob's color seen from the eye (color by angle): its own color, in sRGB as files keep it, plus its terms toward
+ * the blob in its first bone's frame, clamped and back to linear. CPU twin: `viewColor` in sh.ts with `blobDirection`.
+ */
+function viewed(rgb: N, i: N, world: N, buf: ReturnType<typeof makeBuffers>, S: ViewSH) {
+  const base = uint(buf.srcCenter.element(i).w)
+  const q = normalize(buf.bones.element(base.add(buf.skin.element(i.mul(2)).bitAnd(255)).mul(5).add(4))).toVar()
+  const v = normalize(world.sub(S.eye)).toVar()
+  const u = q.xyz.negate().toVar()
+  const t = TSL.cross(u, v).mul(2).toVar()
+  const d = v.add(t.mul(q.w)).add(TSL.cross(u, t)).toVar()
+  const Y = fileBasisTSL(d, S.terms)
+  const at = i.mul(S.words)
+  const w = Array.from({ length: S.words }, (_, k) => TSL.unpackHalf2x16(S.data.element(at.add(k))).toVar())
+  const coef = (h: number) => (h & 1 ? w[h >> 1].y : w[h >> 1].x)
+  const sum = vec3(0).toVar()
+  Y.forEach((y, k) => { sum.addAssign(vec3(coef(k * 3), coef(k * 3 + 1), coef(k * 3 + 2)).mul(y)) })
+  return toLinear(toSrgb(rgb).add(sum).clamp(0, 1))
+}
+
+/** WebGPU: every blob's color for this view, into the color pass's buffer, which `makeLight` then lights in place. */
+function makeViewColor(buf: ReturnType<typeof makeBuffers>, L: Lighting, S: ViewSH) {
+  return Fn(() => {
+    const i = instanceIndex
+    const color = unpackUnorm4x8(buf.color.element(i)).toVar()
+    L.litW.element(i).assign(vec4(viewed(color.rgb, i, buf.worldCenter.element(i).xyz, buf, S), color.a))
+  })().compute(buf.count, [WORKGROUP]).setName('SplatWorldViewColor')
 }
 
 /** The blob's color after distance fog: none while the fog's far distance is 0. */
@@ -1432,13 +1575,14 @@ function makeVertexWebGPU(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, 
 }
 
 /** WebGL has no compute: each corner moves its blob through the bones and projects it, like a skinned mesh. */
-function makeVertexWebGL(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, mode: SkinMode, fog: Fog, flat: N, L?: Lighting) {
+function makeVertexWebGL(buf: ReturnType<typeof makeBuffers>, sort: DepthSort, mode: SkinMode, fog: Fog, flat: N, L?: Lighting, S?: ViewSH) {
   return Fn(() => {
     const idx = sort.orderRead.element(instanceIndex).toVar()
     const d = deformBlob(buf, idx, mode)
     const p = projectSplat(d.world, d.covA, d.covB, cameraViewMatrix, cameraProjectionMatrix, cameraViewport.zw)
     const color = unpackUnorm4x8(buf.color.element(idx)).toVar()
-    const rgb = L ? lit(painted(color.rgb, d.world, buf.edits), d.world, d.covA, d.covB, buf.seen.element(idx), L) : color.rgb
+    const own = S ? viewed(color.rgb, idx, d.world, buf, S) : color.rgb
+    const rgb = L ? lit(painted(own, d.world, buf.edits), d.world, d.covA, d.covB, buf.seen.element(idx), L) : own
     const part = unpackUnorm4x8(buf.part.element(idx))
     return placeQuad(p.ndc, p.axes, vec4(flatColor(flat, part.rgb, p.depth, fogged(rgb, p.depth, fog)), color.a.mul(p.alphaScale)))
   })()
