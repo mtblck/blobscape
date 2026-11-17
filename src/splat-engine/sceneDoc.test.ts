@@ -170,3 +170,41 @@ test('air: mistakes are pointed at, and a sound one builds specks that loop and 
   c.pose(sk, 1.9)
   assert.ok(sk.offset.some((v, i) => Math.abs(v - a[i]) > 1e-3), 'the specks move')
 })
+
+test('more shapes: each is checked, and each builds; a key paints a model by its letters', () => {
+  const shaped = () => {
+    const d: any = sound()
+    d.parts.push(
+      { shape: { kind: 'lathe', at: [0.5, 0, 0.5], profile: [[0.1, 0], [0.18, 0.15], [0.06, 0.35], [0.09, 0.4]] }, paint: '#f4f1e4' },
+      { shape: { kind: 'sweep', path: [[-0.6, 0.05, 0.5], [-0.3, 0.2, 0.6], [-0.1, 0.1, 0.8]], r: 0.04, rTo: 0.015 }, paint: '#3f7a45' },
+      { shape: { kind: 'join', blend: 'stairs', by: 0.08, steps: 2, shapes: [{ kind: 'box', at: [0, 0.2, -0.6], half: [0.3, 0.2, 0.05] }, { kind: 'box', at: [0, 0.03, -0.45], half: [0.3, 0.03, 0.1] }] }, paint: '#101018' },
+      { shape: { kind: 'text', at: [0, 0.6, 0.6], text: 'Hi!', size: 0.2, depth: 0.04 }, paint: '#ffd166' },
+      { shape: { kind: 'blocks', at: [0.6, 0, -0.4], size: 0.06, layers: [['.t.'], ['.t.'], ['lll']] }, paint: { kind: 'key', colors: { t: '#101018', l: '#3f7a45' } } },
+    )
+    return d
+  }
+  assert.deepEqual(checkScene(shaped()), [])
+  const n = sound().parts.length
+  const bad: [string, (d: any) => void, RegExp][] = [
+    ['a lathe with one point', (d) => { d.parts[n].shape.profile = [[0.1, 0]] }, /^parts\[\d+\]\.shape\.profile: must be a list of 2 to 24/],
+    ['a sweep with no path', (d) => { d.parts[n + 1].shape.path = [] }, /^parts\[\d+\]\.shape\.path: must be a list of 2 to 16 points/],
+    ['an unknown blend', (d) => { d.parts[n + 2].shape.blend = 'weld' }, /^parts\[\d+\]\.shape\.blend: must be one of 'smooth'/],
+    ['a blend with no reach', (d) => { delete d.parts[n + 2].shape.by }, /^parts\[\d+\]\.shape\.by: must be a number/],
+    ['text it cannot draw', (d) => { d.parts[n + 3].shape.text = 'a&b' }, /^parts\[\d+\]\.shape\.text: can't draw '&'/],
+    ['a key with a letter missing', (d) => { delete d.parts[n + 4].paint.colors.l }, /^parts\[\d+\]\.paint: the key has no color for 'l'/],
+    ['a key on a box', (d) => { d.parts[0].paint = { kind: 'key', colors: { a: '#101018' } } }, /^parts\[0\]\.paint: a key paints a blocks shape only/],
+    ['a quote in a model', (d) => { d.parts[n + 4].shape.layers[0][0] = ".'." }, /must not hold quotes/],
+  ]
+  for (const [what, spoil, want] of bad) {
+    const d = shaped()
+    spoil(d)
+    assert.ok(checkScene(d).some((e) => want.test(e)), `${what}: ${JSON.stringify(checkScene(d))}`)
+  }
+  const b = buildVoxels(compileScene(shaped()).spec(0.02))
+  const caught = new Set(b.partOf)
+  for (let i = n; i < n + 5; i++) assert.ok(caught.has(i), `part ${i} caught no cells`)
+  // the model's trunk is dark and its leaves green
+  const colors = new Map<string, number>()
+  for (let i = 0; i < b.blobs.count; i++) if (b.partOf[i] === n + 4) { const g = b.blobs.color[i * 3 + 1] > b.blobs.color[i * 3] + 0.05 ? 'green' : 'dark'; colors.set(g, (colors.get(g) ?? 0) + 1) }
+  assert.ok((colors.get('green') ?? 0) > 20 && (colors.get('dark') ?? 0) > 10, JSON.stringify([...colors]))
+})

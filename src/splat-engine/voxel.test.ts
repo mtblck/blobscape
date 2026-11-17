@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { LIT_MAX, box, buildVoxels, cone, cut, sphere, union, type VoxelSpec } from './voxel.ts'
+import { LIT_MAX, blend, box, buildVoxels, cone, cut, lathe, letterGrid, pixelText, sphere, sweep, union, type VoxelSpec } from './voxel.ts'
 import { posedPoint, axisAngle } from './rig.ts'
 
 const ROOT = { name: 'root', parent: -1, head: [0, 0, 0] as [number, number, number] }
@@ -191,4 +191,38 @@ test('cover: snow on open tops only, moss in the corners first, dust under cover
   assert.ok(corner > open + 2, `corner ${corner} open ${open}`)
   const bare = buildVoxels(spec({ kind: 'snow', color: C, amount: 1 }, true))
   assert.ok(Math.abs(red(bare, -0.3, 0, 0.3)) < 1e-6)
+})
+
+test('more shapes: a turned vase, a swept tube, blended seams, pixel letters and a letter-grid model', () => {
+  // a vase: wide belly, narrow neck
+  const vase = lathe([0, 0, 0], [[0.2, 0], [0.4, 0.3], [0.15, 0.7], [0.2, 0.8]])
+  assert.ok(vase.sdf(0.3, 0.3, 0) < 0 && vase.sdf(0, 0.3, 0.3) < 0, 'inside the belly, all the way round')
+  assert.ok(vase.sdf(0.3, 0.7, 0) > 0, 'outside the neck')
+  assert.ok(Math.abs(vase.sdf(0.4, 0.3, 0)) < 1e-9, 'on the widest point')
+  assert.ok(vase.sdf(0, 0.9, 0) > 0 && vase.sdf(0, -0.1, 0) > 0)
+  // a tube that bends round a corner and thins
+  const tube = sweep([[0, 0, 0], [1, 0, 0], [1, 1, 0]], 0.2, 0.05)
+  assert.ok(tube.sdf(0.5, 0, 0) < 0 && tube.sdf(1, 0.9, 0) < 0 && tube.sdf(0.5, 0.5, 0) > 0)
+  assert.ok(tube.sdf(1, 0.98, 0.1) > 0, 'thin at the end')
+  // two boxes meeting at a right angle: every blend fills the inside corner, a plain join doesn't
+  const a = box([0, 0.5, 0], [0.1, 0.5, 0.5]), b = box([0.5, 0, 0], [0.5, 0.1, 0.5])
+  const corner: [number, number, number] = [0.13, 0.13, 0]
+  assert.ok(union(a, b).sdf(...corner) > 0)
+  for (const k of ['smooth', 'chamfer', 'stairs'] as const) assert.ok(blend(k, 0.15, [a, b]).sdf(...corner) < 0, k)
+  assert.ok(blend('chamfer', 0.15, [a, b]).sdf(0.6, 0.6, 0) > 0, 'nothing far from the seam')
+  // "HI" 0.5 tall: the H's crossbar is filled, the gap between the letters is not
+  const hi = pixelText([0, 0, 0], 'HI', 0.5, 0.1)
+  const px = 0.1, left = -(7 * px) / 2
+  assert.ok(hi.sdf(left + 1.5 * px, 0, 0) < 0, 'H crossbar')
+  assert.ok(hi.sdf(left + 1.5 * px, 0.2, 0) > 0, 'above the crossbar, between the uprights')
+  assert.ok(hi.sdf(left + 3.5 * px, 0, 0) > 0, 'the gap between letters')
+  assert.ok(hi.sdf(left + 1.5 * px, 0, 0.2) > 0, 'in front of it')
+  const built = buildVoxels({ bones: [ROOT], spacing: 0.02, parts: [{ shape: hi, color: [1, 1, 1], bone: 'root' }] })
+  assert.ok(built.blobs.count > 100)
+  // a little tree: trunk t, leaves l
+  const tree = letterGrid([0, 0, 0], 0.1, [['...', '.t.', '...'], ['...', '.t.', '...'], ['lll', 'lll', 'lll'], ['...', '.l.', '...']])
+  assert.ok(tree.sdf(0, 0.05, 0) < 0 && tree.sdf(0.1, 0.05, 0) > 0 && tree.sdf(0.1, 0.25, 0.1) < 0)
+  assert.equal(tree.letterAt([0, 0.1, 0.05], [0, 0, 1]), 't')
+  assert.equal(tree.letterAt([0.1, 0.3, 0], [0, 1, 0]), 'l')
+  assert.ok(Math.abs(tree.max[1] - 0.4) < 1e-9 && Math.abs(tree.min[0] + 0.15) < 1e-9)
 })

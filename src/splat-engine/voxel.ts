@@ -248,6 +248,148 @@ export function union(...s: Shape[]): Shape {
   }
 }
 
+/** How a `blend` meets where its shapes touch: a rounded fillet, a flat bevel, or a run of little steps. */
+export type BlendKind = 'smooth' | 'chamfer' | 'stairs'
+
+/** Shapes joined so the seam between them is filled in: `r` is how far the fillet, bevel or stairs reach. */
+export function blend(kind: BlendKind, r: number, shapes: Shape[], steps = 3): Shape {
+  const two = (a: number, b: number) => {
+    if (kind === 'chamfer') return Math.min(a, b, (a + b - r) * Math.SQRT1_2)
+    if (kind === 'stairs') {
+      const st = r / steps, u = b - r, m = u - a + st
+      return Math.min(a, b, 0.5 * (u + a + Math.abs(m - 2 * st * Math.floor(m / (2 * st)) - st)))
+    }
+    const h = Math.max(r - Math.abs(a - b), 0) / r
+    return Math.min(a, b) - (h * h * r) / 4
+  }
+  const all = union(...shapes)
+  return {
+    sdf: (x, y, z) => { let d = shapes[0].sdf(x, y, z); for (let i = 1; i < shapes.length; i++) d = two(d, shapes[i].sdf(x, y, z)); return d },
+    min: [all.min[0] - r, all.min[1] - r, all.min[2] - r], max: [all.max[0] + r, all.max[1] + r, all.max[2] + r],
+  }
+}
+
+/** The signed distance from (px, py) to a closed polygon, negative inside. */
+function polygonDistance(v: [number, number][], px: number, py: number) {
+  let d = (px - v[0][0]) ** 2 + (py - v[0][1]) ** 2, sign = 1
+  for (let i = 0, j = v.length - 1; i < v.length; j = i, i++) {
+    const ex = v[j][0] - v[i][0], ey = v[j][1] - v[i][1], wx = px - v[i][0], wy = py - v[i][1]
+    const t = Math.min(1, Math.max(0, (wx * ex + wy * ey) / (ex * ex + ey * ey || 1e-12)))
+    d = Math.min(d, (wx - ex * t) ** 2 + (wy - ey * t) ** 2)
+    const a = py >= v[i][1], b = py < v[j][1], c = ex * wy > ey * wx
+    if ((a && b && c) || (!a && !b && !c)) sign = -sign
+  }
+  return sign * Math.sqrt(d)
+}
+
+/**
+ * A turned shape, as from a lathe: `profile` is [radius, height] pairs from the bottom up, standing on `c`, and the
+ * outline is spun about the upright axis through it. Vases, bells, bottles, chess pieces, lamp posts.
+ */
+export function lathe(c: Vec3, profile: [number, number][]): Shape {
+  const v: [number, number][] = [[0, profile[0][1]], ...profile, [0, profile[profile.length - 1][1]]]
+  const R = Math.max(...profile.map((q) => q[0])), lo = Math.min(...profile.map((q) => q[1])), hi = Math.max(...profile.map((q) => q[1]))
+  return {
+    sdf: (x, y, z) => polygonDistance(v, Math.hypot(x - c[0], z - c[2]), y - c[1]),
+    min: [c[0] - R, c[1] + lo, c[2] - R], max: [c[0] + R, c[1] + hi, c[2] + R],
+  }
+}
+
+/** A tube along a path of points, `r0` thick at the start and `r1` at the end: vines, pipes, rails, a dragon's tail. */
+export function sweep(path: Vec3[], r0: number, r1 = r0): Shape {
+  const lens = path.slice(1).map((q, i) => Math.hypot(q[0] - path[i][0], q[1] - path[i][1], q[2] - path[i][2]))
+  const total = lens.reduce((a, b) => a + b, 0) || 1
+  let run = 0
+  const bits = lens.map((l, i) => {
+    const ra = r0 + ((r1 - r0) * run) / total
+    run += l
+    return cone(path[i], path[i + 1], ra, r0 + ((r1 - r0) * run) / total)
+  })
+  return union(...bits)
+}
+
+/** The 3×5 letters `pixelText` knows, top row first. */
+export const LETTERS: Record<string, string> = {
+  A: '.#.#.#####.##.#', B: '##.#.###.#.###.', C: '.###..#..#...##', D: '##.#.##.##.###.', E: '####..##.#..###', F: '####..##.#..#..',
+  G: '.###..#.##.#.##', H: '#.##.#####.##.#', I: '###.#..#..#.###', J: '..#..#..##.#.#.', K: '#.##.###.#.##.#', L: '#..#..#..#..###',
+  M: '#.########.##.#', N: '##.#.##.##.##.#', O: '.#.#.##.##.#.#.', P: '##.#.###.#..#..', Q: '.#.#.##.###..##', R: '##.#.###.#.##.#',
+  S: '.###...#...###.', T: '###.#..#..#..#.', U: '#.##.##.##.####', V: '#.##.##.##.#.#.', W: '#.##.########.#', X: '#.##.#.#.#.##.#',
+  Y: '#.##.#.#..#..#.', Z: '###..#.#.#..###', 0: '####.##.##.####', 1: '.#.##..#..#.###', 2: '##...#.#.#..###', 3: '##...#.#...###.',
+  4: '#.##.####..#..#', 5: '####..##...###.', 6: '.###..####.####', 7: '###..#.#..#..#.', 8: '####.#####.####', 9: '####.####..###.',
+  ' ': '...............', '.': '.............#.', '!': '.#..#..#.....#.', '?': '##...#.#.....#.', '-': '......###......', ':': '....#.....#....',
+  ',': '..........#.#..',
+}
+
+/** A filled grid of cells `size` across, with distances good enough to cut it: negative inside, the far side of a filled cell beside an empty one. */
+function gridDistance(filled: (i: number, j: number, k: number) => boolean, size: number, gx: number, gy: number, gz: number, flat: boolean) {
+  const i = Math.floor(gx), j = Math.floor(gy), k = Math.floor(gz)
+  const inside = filled(i, j, k)
+  let best = Infinity
+  for (let dk = flat ? 0 : -1; dk <= (flat ? 0 : 1); dk++) for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+    if ((di | dj | dk) === 0 || filled(i + di, j + dj, k + dk) === inside) continue
+    // distance (in cells) from the point to that neighbor's box
+    const ox = Math.max(i + di - gx, gx - (i + di + 1), 0), oy = Math.max(j + dj - gy, gy - (j + dj + 1), 0), oz = flat ? 0 : Math.max(k + dk - gz, gz - (k + dk + 1), 0)
+    best = Math.min(best, Math.hypot(ox, oy, oz))
+  }
+  return (inside ? -1 : 1) * Math.min(best, 1) * size
+}
+
+/**
+ * Words in blocky 3×5 letters (`LETTERS`; lower case is read as upper), `size` tall and `depth` thick, centered on
+ * `at` and reading along +x, or along -z when `facing` is 'x'. A letter needs about five grid cells of height to read.
+ */
+export function pixelText(at: Vec3, text: string, size: number, depth: number, facing: 'z' | 'x' = 'z'): Shape {
+  const px = size / 5, chars = [...text.toUpperCase()].map((ch) => LETTERS[ch] ?? LETTERS[' '])
+  const wide = chars.length * 4 - 1, half = (wide * px) / 2
+  const lit = (i: number, j: number) => {
+    if (i < 0 || j < 0 || j > 4 || i >= wide || i % 4 === 3) return false
+    return chars[(i / 4) | 0][(4 - j) * 3 + (i % 4)] === '#'
+  }
+  const fx = facing === 'x'
+  return {
+    sdf: (x, y, z) => {
+      const u = fx ? at[2] - z : x - at[0], w = fx ? x - at[0] : z - at[2]
+      const d2 = gridDistance((i, j) => lit(i, j), px, (u + half) / px, (y - at[1] + size / 2) / px, 0, true)
+      const dw = Math.abs(w) - depth / 2
+      return Math.hypot(Math.max(d2, 0), Math.max(dw, 0)) + Math.min(Math.max(d2, dw), 0)
+    },
+    min: fx ? [at[0] - depth / 2, at[1] - size / 2, at[2] - half] : [at[0] - half, at[1] - size / 2, at[2] - depth / 2],
+    max: fx ? [at[0] + depth / 2, at[1] + size / 2, at[2] + half] : [at[0] + half, at[1] + size / 2, at[2] + depth / 2],
+  }
+}
+
+/**
+ * A model drawn as letters: `layers` from the bottom up, each a list of rows from the back (-z) to the front, each
+ * row a string read along +x; any character but '.' or a space fills a cube `size` across. Standing on `at`, centered
+ * on it across. `letterAt` says which letter a point is in, so a paint can color the model by letter.
+ */
+export function letterGrid(at: Vec3, size: number, layers: string[][]): Shape & { letterAt: (p: Vec3, n: Vec3) => string | undefined } {
+  const nx = Math.max(...layers.flatMap((l) => l.map((r) => r.length))), nz = Math.max(...layers.map((l) => l.length)), ny = layers.length
+  const x0 = at[0] - (nx * size) / 2, z0 = at[2] - (nz * size) / 2, y0 = at[1]
+  const ch = (i: number, j: number, k: number) => {
+    const c = layers[j]?.[k]?.[i]
+    return c === undefined || c === '.' || c === ' ' ? undefined : c
+  }
+  const filled = (i: number, j: number, k: number) => ch(i, j, k) !== undefined
+  return {
+    sdf: (x, y, z) => gridDistance(filled, size, (x - x0) / size, (y - y0) / size, (z - z0) / size, false),
+    min: [x0, y0, z0], max: [x0 + nx * size, y0 + ny * size, z0 + nz * size],
+    letterAt: (p, n) => {
+      // a little way in from the surface, then the nearest filled cell round it
+      const gx = (p[0] - n[0] * size * 0.25 - x0) / size, gy = (p[1] - n[1] * size * 0.25 - y0) / size, gz = (p[2] - n[2] * size * 0.25 - z0) / size
+      const i = Math.floor(gx), j = Math.floor(gy), k = Math.floor(gz)
+      let best: string | undefined, bd = Infinity
+      for (let dk = -1; dk <= 1; dk++) for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+        const c = ch(i + di, j + dj, k + dk)
+        if (c === undefined) continue
+        const d = (i + di + 0.5 - gx) ** 2 + (j + dj + 0.5 - gy) ** 2 + (k + dk + 0.5 - gz) ** 2
+        if (d < bd) { bd = d; best = c }
+      }
+      return best
+    },
+  }
+}
+
 /** `a` with `b` cut out of it. */
 export function cut(a: Shape, b: Shape): Shape {
   return { sdf: (x, y, z) => Math.max(a.sdf(x, y, z), -b.sdf(x, y, z)), min: a.min, max: a.max }

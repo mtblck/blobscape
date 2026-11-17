@@ -26,9 +26,15 @@ The point is that Claude can write one from a sentence. A scene that is data can
 | `air` | What hangs in the air: `haze` (far things fade toward a color), `mist` (low banks that drift), `shafts` (beams of light that light what they land on) and `specks` (swarms of `dust`, `embers`, `rain`, `snow`, `fireflies` or `bubbles`, each speck moving on its own). |
 | `cover` | Snow, moss or dust over everything once it is cut: `{ kind, color, amount }`, `amount` 0 to 1. `snow` settles on tops the sky can reach (not under a roof), `moss` creeps over up-turned and shut-in faces in patches, `dust` lies thin on every upturned face, under cover too. Glowing parts and parts marked `bare` keep their paint, so mark a creature in the scene `bare`. Pick a color from the palette. |
 
-Shapes: `sphere`, `ball` (stretched), `box`, `cylinder` (can taper), `cone` (a round-ended stick), `ring`, `roof`, and `join`, `cut`, `rough` to combine them.
+Shapes: `sphere`, `ball` (stretched), `box`, `cylinder` (can taper), `cone` (a round-ended stick), `ring`, `roof`, and `join`, `cut`, `rough` to combine them. Then:
 
-Paints: a color, or `bands`, `bricks`, `hex` (honeycomb, scales, paving), `speckle`, `patches`, `faces` (top, side, under), `split` (one paint below a height, another above). Paints nest.
+- `lathe`: an outline of `[radius, height]` pairs from the bottom up, turned round the upright through `at`. Vases, bells, bottles, lamp posts, chess pieces.
+- `sweep`: a tube through a `path` of up to 16 points, `r` thick at the start and `rTo` at the end. Vines, pipes, rails, tails, a rope that sags.
+- `join` with a `blend`: `'smooth'` rounds the seam where its shapes meet, `'chamfer'` bevels it, `'stairs'` steps it (`steps`, 3 when left out); `by` is how far the fill reaches from the seam. A wall that flares into its footing, a trunk into its roots.
+- `text`: words in blocky 3-by-5 letters, `size` tall and `depth` thick, centered on `at`, reading along +x (or along -z with `facing: 'x'`). Letters, digits, space and `. , ! ? - :` only. A letter needs about five grid cells of height to read, so keep `size` at 0.25 or more.
+- `blocks`: a model drawn in letters, `size` a cube. `layers` go from the bottom up, each a list of rows from the back to the front, each row read along +x; `.` or a space is empty and any other letter fills a cube. Paint it with `{ kind: 'key', colors: { t: '#5a3a24', l: '#3a7c5c' } }` to color each letter, and every letter used needs a color. Good for little houses, crates, trees and signs; a model at most 24 cubes a side.
+
+Paints: a color, or `bands`, `bricks`, `hex` (honeycomb, scales, paving), `speckle`, `patches`, `faces` (top, side, under), `split` (one paint below a height, another above), `key` (for `blocks` only). Paints nest.
 
 ## Rules that make a scene work
 
