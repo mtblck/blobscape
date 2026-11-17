@@ -987,6 +987,14 @@ for (const [label, opts] of [['desktop', { viewport: { width: 1440, height: 1000
       if (!(a.look.parts && ids.size > 20 && lines > 200)) fails.push(`${label}: lines between parts: ${JSON.stringify({ on: a.look.parts, parts: ids.size, lines })}`)
       else ok(`${label}: lines between parts: a map of ${ids.size} parts, ${lines} pixels of line that color alone would not draw`)
     }
+    // lone pixels: the pass cleaned some up, and (above) the same ones its twin does
+    {
+      const untidy = pixelArt(frame(a.small), { ...a.look, tidy: false }, frame(a.before), frame(a.parts))
+      let cleaned = 0
+      for (let i = 0; i < want.data.length; i += 4) if (want.data[i] !== untidy.data[i] || want.data[i + 1] !== untidy.data[i + 1] || want.data[i + 2] !== untidy.data[i + 2]) cleaned++
+      if (!(a.look.tidy && cleaned > 0 && cleaned < a.solid * 0.05)) fails.push(`${label}: lone-pixel cleanup: ${JSON.stringify({ on: a.look.tidy, cleaned })}`)
+      else ok(`${label}: lone-pixel cleanup took ${cleaned} stray pixels`)
+    }
     if (!(moved > 150)) fails.push(`${label}: only ${moved} pixels change in a few seconds`)
     else ok(`${label}: ${moved} pixels change in a few seconds`)
     // steady pixels: the frame after is drawn against this one, as the CPU twin does given the same two; and fewer pixels flip there and back than with it off
