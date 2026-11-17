@@ -5,7 +5,7 @@ import { Button } from '../../shared/ui.tsx'
 import { href, LESSONS, PARTS } from '../routes.ts'
 import { Crumbs, useFocusHeading } from '../Shell.tsx'
 import { guideSections } from './guide.ts'
-import { API_DATA_ID, API_PAGE, ApiContext, sectionId, type Api, type ApiEntry, type ApiMethod, type ApiProp, type ApiSignature } from './types.ts'
+import { API_DATA_ID, API_PAGE, ApiContext, groupId, sectionId, type Api, type ApiEntry, type ApiMethod, type ApiProp, type ApiSignature } from './types.ts'
 import { hashId, useActiveEntry } from './useActiveEntry.ts'
 
 const REPO = 'https://github.com/mtblck/blobscape'
@@ -75,13 +75,13 @@ function Signatures({ list, label, self, names }: { list: ApiSignature[]; label:
           <pre tabIndex={0} aria-label={label} className="mt-3 overflow-x-auto rounded-lg bg-paper-sunk px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap"><Type self={self} names={names}>{s.code}</Type></pre>
           {s.params && (
             <>
-              <h4 className={LABEL}>Parameters</h4>
+              <h5 className={LABEL}>Parameters</h5>
               <Props list={s.params} names={names} />
             </>
           )}
           {s.returns && (
             <>
-              <h4 className={LABEL}>Returns</h4>
+              <h5 className={LABEL}>Returns</h5>
               <div className="text-ink-muted"><Type names={names}>{s.returns.type}</Type> <Doc text={s.returns.doc} names={names} className="inline [&>p]:inline" /></div>
             </>
           )}
@@ -137,10 +137,10 @@ const KIND: Record<ApiEntry['kind'], string> = { function: 'function', const: 'v
 const Entry = memo(function Entry({ e, active, names }: { e: ApiEntry; active: boolean; names: Names }) {
   return (
     <article id={e.name} aria-labelledby={`${e.name}-name`} className={`mt-4 scroll-mt-20 rounded-2xl border bg-paper px-4 pt-5 pb-6 transition-[border-color,box-shadow] duration-200 sm:px-7 ${active ? 'border-accent shadow-[0_0_0_3px_color-mix(in_srgb,var(--c-accent)_22%,transparent)]' : 'border-rule'}`}>
-      <h3 id={`${e.name}-name`} className="flex flex-wrap items-baseline gap-x-2.5">
+      <h4 id={`${e.name}-name`} className="flex flex-wrap items-baseline gap-x-2.5">
         <code translate="no" className="font-mono text-xl font-bold text-ink">{shownAs(e.name, names)}{e.generics}</code>
         <span className="text-xs text-ink-faint">{KIND[e.kind]}</span>
-      </h3>
+      </h4>
       <Doc text={e.doc} names={names} className="mt-2 max-w-[64ch] space-y-2 text-ink-muted" />
       {e.of && <p className="mt-2 text-ink-muted">Another name for <a href={`#${e.of}`} className={LINK}><code className={MONO}>{e.of}</code></a>.</p>}
       {e.signatures && <Signatures list={e.signatures} label={`Signature of ${e.name}`} self={e.name} names={names} />}
@@ -148,19 +148,19 @@ const Entry = memo(function Entry({ e, active, names }: { e: ApiEntry; active: b
       {e.extends && <p className="mt-3 text-ink-muted">Plus everything in {e.extends.map((x, i) => <span key={x}>{i > 0 && ', '}<Type names={names}>{x}</Type></span>)}.</p>}
       {e.ctor && (
         <>
-          <h4 className={LABEL}>Constructor</h4>
+          <h5 className={LABEL}>Constructor</h5>
           <Signatures list={e.ctor} label={`Constructor of ${e.name}`} self={e.name} names={names} />
         </>
       )}
       {e.props && (
         <>
-          <h4 className={LABEL}>{e.kind === 'enum' ? 'Members' : 'Properties'}</h4>
+          <h5 className={LABEL}>{e.kind === 'enum' ? 'Members' : 'Properties'}</h5>
           <Props list={e.props} names={names} owner={e.name} />
         </>
       )}
       {e.methods && (
         <>
-          <h4 className={LABEL}>Methods</h4>
+          <h5 className={LABEL}>Methods</h5>
           <Methods list={e.methods} names={names} owner={e.name} />
         </>
       )}
@@ -197,8 +197,8 @@ function CopyInstall() {
 /**
  * The @blobscape/engine docs (/engine/docs/), laid out like the tipjar docs: an intro with the install line, a
  * contents list that sticks beside the page on wide screens and follows what is being read, the package README as
- * the getting-started guide, then one card per export, grouped by module in the order the package's entry exports
- * them. The reference is read with TypeDoc (tools/api-docs). Prerendered from the app; the data rides in the page as
+ * the getting-started guide, then one card per export, grouped by module, and the modules into a few parts (Core
+ * first; in the contents the others stay shut until opened, read or looked through). The reference is read with TypeDoc (tools/api-docs). Prerendered from the app; the data rides in the page as
  * JSON so the bundle doesn't carry it, and in-app visits load it on their own.
  */
 export function EngineApi() {
@@ -226,6 +226,10 @@ export function EngineApi() {
   const count = shown.reduce((n, m) => n + m.entries.length, 0)
   const ids = useMemo(() => [...(q ? [] : GUIDE.map((g) => g.id)), ...shown.flatMap((m) => m.entries.map((e) => e.name))], [shown, q])
   const [active, choose] = useActiveEntry(ids)
+  const parts = useMemo(() => (api?.groups ?? []).map((g) => ({ ...g, modules: shown.filter((m) => m.group === g.id) })).filter((g) => g.modules.length), [api, shown])
+  // a part of the contents is open when the visitor said so, else Core and whichever is being read; all while looking
+  const [said, setSaid] = useState<Record<string, boolean>>({})
+  const isOpen = (g: (typeof parts)[number]) => !!q || (said[g.id] ?? (g.id === api?.groups[0].id || g.modules.some((m) => m.entries.some((e) => e.name === active))))
 
   // On a wide screen the contents scroll on their own when taller than the window: keep the current link in view.
   const toc = useRef<HTMLElement>(null)
@@ -271,7 +275,7 @@ export function EngineApi() {
             placeholder="setPixels, Swing…"
             className="mt-1 w-full rounded-lg border border-rule bg-paper px-3 py-2 outline-none focus-visible:ring-2 focus-visible:ring-accent"
           />
-          <p role="status" className="mt-2 text-xs text-ink-faint" data-testid="api-count">{api ? (q ? `${count} of ${total} names` : `${total} names in ${api.modules.length} sections`) : 'Loading the reference…'}</p>
+          <p role="status" className="mt-2 text-xs text-ink-faint" data-testid="api-count">{api ? (q ? `${count} of ${total} names` : `${total} names in ${api.groups.length} parts`) : 'Loading the reference…'}</p>
           <div className="mt-4 grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-x-6 gap-y-2.5 lg:grid-cols-1">
             {!q && (
               <div>
@@ -279,12 +283,27 @@ export function EngineApi() {
                 {list(GUIDE.some((g) => g.id === active), GUIDE.map((g) => item(g.id, g.title)))}
               </div>
             )}
-            {shown.map((m) => (
-              <div key={m.id}>
-                <a href={`#${sectionId(m.id)}`} className={head}>{m.title.split(':')[0]}</a>
-                {list(!!q || m.entries.some((e) => e.name === active), m.entries.map((e) => item(e.name, <code translate="no" className="font-mono text-[0.8125rem]">{shownAs(e.name, names)}</code>)))}
-              </div>
-            ))}
+          </div>
+          <div className="mt-3 border-t border-rule-soft">
+            {parts.map((g) => {
+              const open = isOpen(g)
+              return (
+                <div key={g.id} className="border-b border-rule-soft">
+                    <button type="button" aria-expanded={open} aria-controls={`toc-${g.id}`} disabled={!!q} onClick={() => setSaid((s) => ({ ...s, [g.id]: !open }))} className="flex w-full cursor-pointer items-center justify-between gap-2 py-2 text-left font-display text-base text-ink hover:text-accent disabled:cursor-default disabled:hover:text-ink">
+                      {g.title}
+                      {!q && <svg aria-hidden="true" viewBox="0 0 12 12" className={`size-3 shrink-0 text-ink-faint transition-transform ${open ? 'rotate-180' : ''}`}><path d="M2 4.5 6 8.5 10 4.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                    </button>
+                  <div id={`toc-${g.id}`} hidden={!open} className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-x-6 gap-y-2.5 pt-1 pb-3 lg:grid-cols-1">
+                    {g.modules.map((m) => (
+                      <div key={m.id}>
+                        <a href={`#${sectionId(m.id)}`} className={head}>{m.title.split(':')[0]}</a>
+                        {list(!!q || m.entries.some((e) => e.name === active), m.entries.map((e) => item(e.name, <code translate="no" className="font-mono text-[0.8125rem]">{shownAs(e.name, names)}</code>)))}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </nav>
 
@@ -310,11 +329,19 @@ export function EngineApi() {
               </section>
             </section>
           )}
-          {shown.map((m) => (
-            <section key={m.id} aria-labelledby={sectionId(m.id)} className={q ? 'mt-10 first:mt-0' : 'mt-14'}>
-              <h2 id={sectionId(m.id)} className="scroll-mt-20 font-display text-4xl">{m.title}</h2>
-              <Doc text={m.doc} names={names} className="mt-3 max-w-[64ch] space-y-2 leading-relaxed text-ink-muted" />
-              {m.entries.map((e) => <Entry key={e.name} e={e} active={active === e.name} names={names} />)}
+          {parts.map((g) => (
+            <section key={g.id} aria-labelledby={groupId(g.id)} data-testid="api-part" className={q ? 'mt-12 first:mt-0' : 'mt-20'}>
+              <div className="border-t-2 border-ink pt-4">
+                <h2 id={groupId(g.id)} className="scroll-mt-20 font-display text-4xl">{g.title}</h2>
+                <p className="mt-2 max-w-[64ch] text-lg leading-relaxed text-ink-muted">{g.doc}</p>
+              </div>
+              {g.modules.map((m) => (
+                <section key={m.id} aria-labelledby={sectionId(m.id)} className="mt-10">
+                  <h3 id={sectionId(m.id)} className="scroll-mt-20 font-display text-3xl">{m.title}</h3>
+                  <Doc text={m.doc} names={names} className="mt-3 max-w-[64ch] space-y-2 leading-relaxed text-ink-muted" />
+                  {m.entries.map((e) => <Entry key={e.name} e={e} active={active === e.name} names={names} />)}
+                </section>
+              ))}
             </section>
           ))}
           {api && !shown.length && <p className="text-ink-muted">No name, description or type has &ldquo;{find}&rdquo; in it.</p>}

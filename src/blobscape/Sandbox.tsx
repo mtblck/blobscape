@@ -25,6 +25,11 @@ import { fillHole, stampDab } from './patch.ts'
 import { BRUSHES, brushDab, type BrushId } from './brushes.ts'
 import { MAX_STOPS, PATH_FPS, pathAt, pathSeconds } from './cameraPath.ts'
 import { fileSpecies, sceneRig, splitScene } from './sceneFile.ts'
+import { registerTools, sandboxTools, type SandboxApi } from './agentTools.ts'
+import { blobsInMasks } from './tapSelect.ts'
+import { thingAt } from './select/thing.ts'
+import { SCENE_SPACING, readDoc } from './build/scene.ts'
+import { buildVoxels } from '../splat-engine/voxel.ts'
 
 type ToolId = 'orbit' | 'add' | 'spray' | 'select' | 'lasso' | 'move' | 'paint' | 'erase' | 'fill' | 'stamp'
 const TOOLS: { id: ToolId; name: string; note: string }[] = [
@@ -210,6 +215,7 @@ export function Sandbox() {
 
   // --- opening and saving files ----------------------------------------------
   const fileInput = useRef<HTMLInputElement>(null)
+  const photoInput = useRef<HTMLInputElement>(null)
   const [upright, setUpright] = useState(true)
   const maxFileBytes = coarse ? 400e6 : 1.5e9
   const openFile = async (file: File) => {
@@ -223,6 +229,17 @@ export function Sandbox() {
     try {
       if (file.size > maxFileBytes) {
         setError(`${file.name} is ${(file.size / 1e9).toFixed(1)} GB, more than this device can open here (${(maxFileBytes / 1e9).toFixed(1)} GB). A compressed .spz or .sog of the same scene is much smaller.`)
+        return
+      }
+      // A photo becomes a shallow scene: a depth guess made on this device puts each pixel's blob at its distance
+      if (file.type.startsWith('image/') || /\.(jpe?g|png|webp|avif|gif)$/i.test(file.name)) {
+        setMessage(`Working out how deep ${file.name} is…`)
+        const { photoScene } = await import('./photo/scene.ts')
+        const made = await photoScene(file, coarse)
+        history.current.record(blobsRef.current, sourceRef.current, actorsRef.current)
+        replace(made.blobs, file.name)
+        setOrbit(made.orbit)
+        setMessage(`Made ${file.name} into ${made.blobs.count.toLocaleString()} blobs, one for each pixel of ${made.width} by ${made.height}. Turn the view a little to see its depth`)
         return
       }
       const bytes = await file.arrayBuffer()
@@ -242,9 +259,10 @@ export function Sandbox() {
     } catch (err) {
       console.warn(err)
       setMessage('')
-      const why = err instanceof GlbError ? `It isn't a rigged splat .glb the sandbox can read: ${err.message}.` : err instanceof MeshFileError ? `It's a model, but not one the sandbox can lay blobs on: ${err.message}.` : err instanceof ImportError ? err.message : err instanceof RangeError ? 'This file is too big for this device.' : 'The sandbox reads Gaussian splat files: .ply, .spz, .splat, .ksplat and .sog, rigged splat .glb files, and rigged models as .glb.'
+      const photo = file.type.startsWith('image/')
+      const why = photo ? `The photo could not be made into a scene: ${err instanceof Error ? err.message : String(err)}.` : err instanceof GlbError ? `It isn't a rigged splat .glb the sandbox can read: ${err.message}.` : err instanceof MeshFileError ? `It's a model, but not one the sandbox can lay blobs on: ${err.message}.` : err instanceof ImportError ? err.message : err instanceof RangeError ? 'This file is too big for this device.' : 'The sandbox reads Gaussian splat files: .ply, .spz, .splat, .ksplat and .sog, rigged splat .glb files, and rigged models as .glb.'
       // Spark's decoder can stop working after a file it chokes on; checked files never get that far
-      const stuck = decoded && !(err instanceof ImportError && (err.kind === 'mesh' || (err.kind === 'damaged' && /header/.test(err.message))))
+      const stuck = !photo && decoded && !(err instanceof ImportError && (err.kind === 'mesh' || (err.kind === 'damaged' && /header/.test(err.message))))
       setError(`Couldn't open ${file.name}. ${why}${stuck ? ' If other files stop opening too, reload the page.' : ''}`)
     } finally {
       setBusy(false)
@@ -572,7 +590,43 @@ export function Sandbox() {
     selChanged()
     setMessage(`${prefix}${sel.count ? `${sel.count.toLocaleString()} selected` : 'Nothing selected'}`)
   }
+  /** Whole things: a tap with Select picks everything the model says belongs to what was tapped. */
+  const [whole, setWhole] = useState(false)
+  const [looking, setLooking] = useState(false)
+  const selectThing = async (x: number, y: number, add: boolean) => {
+    if (!view || looking) return
+    const hit = blobAt(x, y)
+    if (hit < 0) { if (!add) sel.clear(); announce('No blob there. '); return }
+    const b = blobsRef.current
+    const at: Vec3 = [b.center[hit * 3], b.center[hit * 3 + 1], b.center[hit * 3 + 2]]
+    setLooking(true)
+    setError('')
+    setMessage('Looking at what you tapped…')
+    try {
+      // the picture as it stands, without rings and outlines
+      await view.settle(orbit)
+      const lens = view.lens()
+      const back = getComputedStyle(view.canvas.parentElement ?? view.canvas).backgroundColor
+      const paper = !back || back === 'rgba(0, 0, 0, 0)' || back === 'transparent' ? themeColor('paper', view.canvas) : back
+      const mask = await thingAt(view.canvas, lens, paper, x, y, `${version}|${JSON.stringify(orbit)}|${lens.width}x${lens.height}`)
+      // the scene may have changed while the model looked
+      if (blobsRef.current !== b || b.count < hit) { setMessage(''); return }
+      const picked = mask ? blobsInMasks(b, [mask], at) : new Uint8Array(0)
+      if (!add) sel.clear()
+      let n = 0
+      for (let i = 0; i < picked.length; i++) if (picked[i]) { sel.set(i, true); n++ }
+      // the tapped blob itself is always part of it
+      if (!n) sel.set(hit, true)
+      announce(n ? '' : 'Could not tell what that is, so only the blob. ')
+    } catch (err) {
+      setMessage('')
+      setError(`Could not look at it: ${err instanceof Error ? err.message : String(err)}.`)
+    } finally {
+      setLooking(false)
+    }
+  }
   const selectAt = (x: number, y: number, add: boolean) => {
+    if (whole && tool === 'select') { void selectThing(x, y, add); return }
     const hit = blobAt(x, y)
     if (!add) sel.clear()
     if (hit >= 0) sel.set(hit, !(add && sel.has(hit)))
@@ -894,11 +948,12 @@ export function Sandbox() {
 
   /** The ground under the middle of the view: where the scene's lowest blobs are, else y = 0. */
   const floorY = () => bounds(blobsRef.current, null)?.lo[1] ?? 0
-  const addActor = (sp: (typeof ADDABLE)[number]) => {
+  const addActor = (sp: (typeof ADDABLE)[number]): string => {
+    const say = (m: string) => { setMessage(m); return m }
     const list = actorsRef.current
-    if (list.length >= MAX_ACTORS) { setMessage(`The sandbox holds up to ${MAX_ACTORS} creatures`); return }
+    if (list.length >= MAX_ACTORS) return say(`The sandbox holds up to ${MAX_ACTORS} creatures`)
     const detail = detailsOf(sp)[0]
-    if (actorBlobs(list) + detail > maxActorBlobs) { setMessage(`Creatures can have ${maxActorBlobs.toLocaleString()} blobs between them here. Remove or freeze one first.`); return }
+    if (actorBlobs(list) + detail > maxActorBlobs) return say(`Creatures can have ${maxActorBlobs.toLocaleString()} blobs between them here. Remove or freeze one first.`)
     // Sized to the scene, keeping the zoo's sizes to each other: a fox comes up about half way up a sample
     const bb = bounds(blobsRef.current, null)
     const fit = Math.min(4, Math.max(0.2, bb ? (bb.hi[1] - bb.lo[1]) / 2.4 : 0.5))
@@ -919,7 +974,7 @@ export function Sandbox() {
     setActors([...list, added])
     setCurrentKey(added.key)
     frameNext.current = true
-    setMessage(`Added ${aOr(sp.name)}`)
+    return say(`Added ${aOr(sp.name)}`)
   }
   const removeActor = (a: Actor) => {
     recordActors()
@@ -1066,6 +1121,67 @@ export function Sandbox() {
     }
   }
 
+  // --- tools for an assistant in the browser (WebMCP) ---------------------------
+  const n3 = (v: ArrayLike<number>) => `[${[v[0], v[1], v[2]].map((x) => +x.toFixed(2)).join(', ')}]`
+  const inBall = (b: Blobs, c: Vec3, r: number) => (i: number) => (b.center[i * 3] - c[0]) ** 2 + (b.center[i * 3 + 1] - c[1]) ** 2 + (b.center[i * 3 + 2] - c[2]) ** 2 <= r * r
+  const api: SandboxApi = {
+    describe: () => {
+      const b = blobsRef.current, bb = b.count ? bounds(b, null) : null
+      const list = actorsRef.current
+      return [
+        `The scene "${source}" has ${b.count.toLocaleString('en-US')} blobs${bb ? `, in a box from ${n3(bb.lo)} to ${n3(bb.hi)} (meters, y up)` : ''}.`,
+        list.length ? `Creatures: ${list.map((a) => `${a.species.name} at ${n3(a.at)}`).join('; ')}.` : 'No creatures.',
+        `It holds up to ${maxBlobs.toLocaleString('en-US')} blobs and ${MAX_ACTORS} creatures.`,
+      ].join(' ')
+    },
+    creatures: () => ADDABLE.map((sp) => sp.id),
+    addCreature: (id) => addActor(ADDABLE.find((sp) => sp.id === id)!),
+    writeScene: (json) => {
+      const r = readDoc(json)
+      if (!r.scene) return `Not built. Fix these and call again: ${r.errors.join('; ')}`
+      const built = buildVoxels(r.scene.spec(SCENE_SPACING)).blobs
+      if (!built.count) return 'Not built: the description gave no blobs'
+      if (built.count > maxBlobs) return `Not built: it came to ${built.count.toLocaleString('en-US')} blobs and the sandbox holds ${maxBlobs.toLocaleString('en-US')}. Make it smaller.`
+      history.current.record(blobsRef.current, source, actorsRef.current)
+      replace(built, r.scene.name)
+      setOrbit(r.scene.orbit)
+      return `Built "${r.scene.name}": ${built.count.toLocaleString('en-US')} blobs.`
+    },
+    cut: (c, r) => {
+      const b = blobsRef.current, inside = inBall(b, c, r)
+      let n = 0
+      for (let i = 0; i < b.count; i++) if (inside(i)) n++
+      if (!n) return 'No blobs there: nothing was cut.'
+      edit((x) => { x.filter((i) => !inside(i)) })
+      clearSel()
+      return `Cut ${n.toLocaleString('en-US')} blobs. ${blobsRef.current.count.toLocaleString('en-US')} are left.`
+    },
+    recolor: (c, r, color) => {
+      const b = blobsRef.current, inside = inBall(b, c, r)
+      let n = 0
+      for (let i = 0; i < b.count; i++) if (inside(i)) n++
+      if (!n) return 'No blobs there: nothing was recolored.'
+      edit((x) => { for (let i = 0; i < x.count; i++) if (inside(i)) x.color.set(color, i * 3) })
+      return `Recolored ${n.toLocaleString('en-US')} blobs.`
+    },
+    brush: (kind, at, r) => {
+      const b = blobsRef.current, from = b.count
+      if (from >= maxBlobs) return `Nothing painted: the sandbox holds up to ${maxBlobs.toLocaleString('en-US')} blobs.`
+      const dab = brushDab(kind, { p: at, n: [0, 1, 0], radius: r, size: blobSize * 5, density, seed: from * 31 + 7 })
+      edit((x) => { for (const blob of dab) { if (x.count >= maxBlobs) break; x.push(blob) } })
+      return `Painted ${(blobsRef.current.count - from).toLocaleString('en-US')} blobs of ${kind}.`
+    },
+    save: () => { exportPly(); return `Saved the scene as a .ply file: ${everything().count.toLocaleString('en-US')} blobs.` },
+    undo: () => { if (!history.current.canUndo) return 'Nothing to take back.'; undo(); return 'Took back the last change.' },
+  }
+  // The tools are registered once and always reach this render's sandbox
+  const apiRef = useRef(api)
+  apiRef.current = api
+  useEffect(() => {
+    const live = Object.fromEntries(Object.keys(apiRef.current).map((k) => [k, (...args: unknown[]) => (apiRef.current[k as keyof SandboxApi] as (...a: unknown[]) => unknown)(...args)])) as unknown as SandboxApi
+    return registerTools(sandboxTools(live)).remove
+  }, [])
+
   const toolNote = tool === 'orbit' && coarse ? 'Drag to orbit, pinch to zoom. Pick another tool to change the scene, then come back here to turn it.' : TOOLS.find((t) => t.id === tool)!.note
   const none = !sel.count
   // A button that disables itself (Delete, Make it permanent) would drop focus to the page: keep it in the panel
@@ -1186,6 +1302,12 @@ export function Sandbox() {
                       <Button small onClick={selectAll} disabled={!blobs.count}>Select all</Button>
                       <Button small onClick={selectNone} disabled={none}>Select none</Button>
                       <Button small onClick={invertSel} disabled={!blobs.count}>Invert</Button>
+                    </div>
+                    <div>
+                      <Toggle label="A click with Select takes the whole thing" checked={whole} onChange={(on) => { setWhole(on); if (on) setTool('select') }} />
+                      <p className="mt-1.5 text-xs text-ink-faint" data-testid="whole-note">
+                        {looking ? 'Looking at what you tapped…' : 'Click a mug, a leaf or a chair and everything that belongs to it is selected, the far side too. A small model (Segment Anything, slimmed; 14 MB, fetched the first time) looks at the view on your device: a few seconds the first click, quick after that until the view moves.'}
+                      </p>
                     </div>
                     <Field label="By color">
                       <div className="flex flex-wrap gap-2">
@@ -1355,6 +1477,13 @@ export function Sandbox() {
                         </p>
                         {error && <p className="text-sm text-accent-ink">{error}</p>}
                         <Toggle label="Turn captures the right way up on opening" checked={upright} onChange={setUpright} />
+                      </div>
+                    </Field>
+                    <Field label="Your own photo">
+                      <div className="space-y-2">
+                        <Button small onClick={() => { if (!busy) photoInput.current?.click() }} aria-disabled={busy}>{busy ? 'Opening…' : 'Open a photo…'}</Button>
+                        <input ref={photoInput} type="file" accept="image/*" className="sr-only" tabIndex={-1} aria-hidden data-testid="photo-input" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void openFile(f) }} />
+                        <p className="text-xs text-ink-faint">One photo becomes a shallow scene: a blob for each pixel, set as far back as a depth model guesses it is. It opens as the photo; turn the view a little and it has depth. What the camera never saw isn't there, so a wide turn opens gaps. The photo stays on your device: the model (Depth Anything V2 Small, 27 MB, fetched the first time) runs in this page.</p>
                       </div>
                     </Field>
                     <div className="flex flex-wrap gap-2">

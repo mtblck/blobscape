@@ -253,11 +253,16 @@ export default [
       await axe(page, 'blobscape sandbox path')
       // Play: the view goes back to the first stop and glides; partway it is neither stop, and it ends at the second
       await play.click()
-      await page.waitForTimeout(1000)
-      const mid = await shot()
+      // look until the view is clear of both stops: how soon that is depends on how busy the machine is
+      let fromFirst = 0, fromSecond = 0
+      for (let k = 0; k < 10 && (fromFirst < 500 || fromSecond < 500); k++) {
+        await page.waitForTimeout(250)
+        const mid = await shot()
+        fromFirst = await differs(mid, first); fromSecond = await differs(mid, second)
+      }
       await page.waitForFunction(() => [...document.querySelectorAll('button')].find((b) => b.textContent === 'Play the path')?.getAttribute('aria-pressed') === 'false', null, { timeout: 15000 }).catch(() => {})
       const end = await settled()
-      const fromFirst = await differs(mid, first), fromSecond = await differs(mid, second), short = await differs(end, second)
+      const short = await differs(end, second)
       if (fromFirst < 500 || fromSecond < 500) fails.push(`blobscape sandbox path: partway through playing, the view is at a stop (${fromFirst} and ${fromSecond} pixels from them)`)
       else if (short > turned / 20) fails.push(`blobscape sandbox path: playing ended ${short} pixels from the last stop (the stops are ${turned} apart)`)
       else ok('blobscape sandbox path: Play glides from the first stop to the last')
@@ -276,6 +281,151 @@ export default [
         else ok('blobscape sandbox path: the view comes back after saving')
       } else ok('blobscape sandbox path: saving the MP4 not checked here (no working H.264 encoder in this browser)')
       await page.screenshot({ path: join(shots, 'blobscape-sandbox-path.png') })
+      await ctx.close()
+    },
+  },
+  {
+    name: 'sandbox-photo',
+    about: 'one photo to a shallow scene: the depth model runs in the page, the view opens as the photo and has depth',
+    entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/photo.ts', 'src/blobscape/photo/scene.ts', 'src/blobscape/photo/depth.worker.ts'],
+    async run({ readFileSync, root, shots, join, fails, ok, open }) {
+      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 900 } })
+      // nothing but this site may be asked for anything
+      const outside = []
+      page.on('request', (r) => { if (!/^(http:\/\/localhost|data:|blob:)/.test(r.url())) outside.push(r.url()) })
+      await page.waitForTimeout(1500)
+      const count = async () => Number((await page.textContent('[data-testid=blob-count]')).replace(/\D/g, ''))
+      await page.getByRole('tab', { name: /Scene/ }).click()
+      // one of the site's own pictures, the cabin scene's first frame, 410 by 307: shrunk to 256 by 192
+      await page.setInputFiles('[data-testid=photo-input]', { name: 'picture.png', mimeType: 'image/png', buffer: readFileSync(join(root, 'public', 'loops', 'cabin.png')) })
+      await page.waitForFunction(() => document.querySelector('[data-testid=blob-count]')?.textContent === (256 * 192).toLocaleString('en-US'), null, { timeout: 120000 }).catch(() => {})
+      const made = await count()
+      const alert = await page.getByRole('alert').textContent({ timeout: 500 }).catch(() => '')
+      if (made !== 256 * 192) fails.push(`blobscape sandbox photo: a 410 by 307 photo gave ${made} blobs, not ${256 * 192}. ${alert}`)
+      else ok(`blobscape sandbox photo: a photo becomes ${made.toLocaleString()} blobs, a blob a pixel`)
+      if (outside.length) fails.push(`blobscape sandbox photo: asked another site for ${outside.slice(0, 3).join(', ')}`)
+      else ok('blobscape sandbox photo: the model and its runtime come from this site alone')
+      await page.waitForTimeout(3000)
+      const front = await page.getByTestId('viewport').screenshot()
+      await page.screenshot({ path: join(shots, 'blobscape-sandbox-photo.png') })
+      // a small turn of the view
+      await page.getByRole('button', { name: 'Look', exact: true }).click()
+      const box = await page.getByTestId('viewport').boundingBox()
+      await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.5); await page.mouse.down()
+      await page.mouse.move(box.x + box.width * 0.36, box.y + box.height * 0.5, { steps: 6 }); await page.mouse.up()
+      await page.waitForTimeout(3000)
+      const side = await page.getByTestId('viewport').screenshot()
+      await page.screenshot({ path: join(shots, 'blobscape-sandbox-photo-turned.png') })
+      if (front.equals(side)) fails.push('blobscape sandbox photo: turning the view changed nothing')
+      else ok('blobscape sandbox photo: the view turns round the scene')
+      await ctx.close()
+    },
+  },
+  {
+    name: 'sandbox-agent',
+    about: 'WebMCP: the sandbox registers its tools with the browser, an assistant can look, build, cut, recolor, paint, add a creature, save and undo, and leaving takes them away',
+    entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/agentTools.ts'],
+    async run({ shots, join, fails, ok, open }) {
+      // the browser here has no WebMCP: stand one in on the front page, then walk into the sandbox
+      const { page, ctx } = await open('/', { viewport: { width: 1280, height: 900 }, acceptDownloads: true })
+      await page.evaluate(() => {
+        const tools = (window.__tools = new Map())
+        Object.defineProperty(document, 'modelContext', { configurable: true, value: { registerTool(t, o) { tools.set(t.name, t); o?.signal?.addEventListener('abort', () => tools.delete(t.name)); return Promise.resolve() } } })
+      })
+      await page.locator('a[href="/sandbox/"]').first().click()
+      await page.waitForSelector('[data-testid=blob-count]')
+      await page.waitForTimeout(1500)
+      const count = async () => Number((await page.textContent('[data-testid=blob-count]')).replace(/\D/g, ''))
+      const call = (name, input) => page.evaluate(([n, i]) => window.__tools.get(n).execute(i), [name, input])
+      const names = await page.evaluate(() => [...window.__tools.keys()])
+      if (names.length !== 8) fails.push(`blobscape sandbox agent: ${names.length} tools registered: ${names.join(', ')}`)
+      else ok(`blobscape sandbox agent: registers ${names.join(', ')}`)
+      const said = {}
+      said.bad = await call('write_scene', { description: '{"name":"x","parts":[]}' })
+      const doc = {
+        name: 'A box on a hill', loop: 12, light: { from: [-0.5, 0.6, 0.6], ambient: 0.45 }, palette: ['#2c4a2a', '#4a7a3a', '#7aa84e', '#6e4a2e', '#d8c09a', '#8a2f2a'],
+        camera: { target: [0, 0.3, 0], distance: 3.2, azimuth: 25, elevation: 18 },
+        parts: [
+          { shape: { kind: 'cylinder', at: [0, -0.2, 0], height: 0.2, r: 0.9 }, paint: '#4a7a3a' },
+          { shape: { kind: 'box', at: [0, 0.25, 0], half: [0.3, 0.25, 0.3] }, paint: '#d8c09a' },
+        ],
+      }
+      said.built = await call('write_scene', { description: JSON.stringify(doc) })
+      await page.waitForTimeout(600)
+      const built = await count()
+      said.look = await call('describe_scene', {})
+      said.cut = await call('cut', { center: [0, 0.5, 0], radius: 0.25 })
+      await page.waitForTimeout(300)
+      const afterCut = await count()
+      said.recolor = await call('recolor', { center: [0.6, 0, 0], radius: 0.3, color: '#f2553a' })
+      said.paint = await call('paint', { brush: 'grass', at: [-0.5, 0, 0.4], radius: 0.2 })
+      await page.waitForTimeout(300)
+      const afterPaint = await count()
+      said.refused = await call('paint', { brush: 'lava', at: [0, 0, 0], radius: 0.2 })
+      said.undo = await call('undo', {})
+      await page.waitForTimeout(300)
+      const afterUndo = await count()
+      said.fox = await call('add_creature', { creature: 'fox' })
+      const [download] = await Promise.all([page.waitForEvent('download'), call('save_scene', {})])
+      // Spark sorts a whole new scene slowly when drawn in software: give the picture time to be the scene
+      await page.waitForTimeout(9000)
+      await page.screenshot({ path: join(shots, 'blobscape-sandbox-agent.png') })
+      const good = /^Not built\. Fix these/.test(said.bad) && /^Built "A box on a hill"/.test(said.built) && built > 3000 && /A box on a hill.*blobs, in a box from/.test(said.look)
+        && /^Cut /.test(said.cut) && afterCut < built && /^Recolored /.test(said.recolor) && /^Painted /.test(said.paint) && afterPaint > afterCut
+        && /^Not done: there is no brush "lava"/.test(said.refused) && afterUndo === afterCut && /^Added a /.test(said.fox) && download.suggestedFilename().endsWith('.ply')
+      if (!good) fails.push(`blobscape sandbox agent: ${JSON.stringify({ said, built, afterCut, afterPaint, afterUndo, file: download.suggestedFilename() })}`)
+      else ok(`blobscape sandbox agent: built ${built.toLocaleString()} blobs from a description, cut to ${afterCut.toLocaleString()}, painted to ${afterPaint.toLocaleString()}, took it back, added a fox and saved ${download.suggestedFilename()}`)
+      // leaving the sandbox takes the tools away
+      await page.locator('a[href="/"]').first().click()
+      await page.waitForTimeout(500)
+      const left = await page.evaluate(() => window.__tools.size)
+      if (left) fails.push(`blobscape sandbox agent: ${left} tools still registered after leaving`)
+      else ok('blobscape sandbox agent: leaving the sandbox unregisters the tools')
+      await ctx.close()
+    },
+  },
+  {
+    name: 'sandbox-thing',
+    about: 'tap to select: with whole things on, a click on the toadstool selects it and not the scene, by a model run in the page',
+    entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/tapSelect.ts', 'src/blobscape/select/thing.ts', 'src/blobscape/select/segment.worker.ts'],
+    async run({ shots, join, fails, ok, open }) {
+      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 900 } })
+      const outside = []
+      page.on('request', (r) => { if (!/^(http:\/\/localhost|data:|blob:)/.test(r.url())) outside.push(r.url()) })
+      await page.waitForTimeout(2500)
+      const total = Number((await page.textContent('[data-testid=blob-count]')).replace(/\D/g, ''))
+      const selected = async () => Number(((await page.getByRole('tab', { name: /Selection/ }).textContent()) ?? '').replace(/\D/g, '') || 0)
+      await page.getByRole('tab', { name: /Selection/ }).click()
+      await page.getByRole('checkbox', { name: 'A click with Select takes the whole thing' }).check()
+      if ((await page.getByRole('button', { name: 'Select', exact: true }).getAttribute('aria-pressed')) !== 'true') fails.push('blobscape sandbox thing: turning whole things on did not pick the Select tool')
+      const box = await page.getByTestId('viewport').boundingBox()
+      const click = async (fx, fy) => {
+        const t = Date.now()
+        await page.mouse.click(box.x + box.width * fx, box.y + box.height * fy)
+        await page.waitForFunction(() => /Looking/.test(document.querySelector('[data-testid=whole-note]')?.textContent ?? ''), null, { timeout: 5000 }).catch(() => {})
+        await page.waitForFunction(() => !/Looking/.test(document.querySelector('[data-testid=whole-note]')?.textContent ?? ''), null, { timeout: 180000 }).catch(() => {})
+        return Date.now() - t
+      }
+      // the middle of the view is the toadstool
+      const first = await click(0.5, 0.45)
+      const got = await selected()
+      const alert = await page.getByRole('alert').textContent({ timeout: 500 }).catch(() => '')
+      // the toadstool is most of the scene's blobs; the ground under it is the rest
+      if (!(got > total * 0.5 && got < total * 0.97)) fails.push(`blobscape sandbox thing: a click on the toadstool selected ${got} of ${total} blobs. ${alert}`)
+      else ok(`blobscape sandbox thing: a click selects ${got.toLocaleString()} of ${total.toLocaleString()} blobs (${(first / 1000).toFixed(1)} s with the model's download and first look)`)
+      await page.waitForTimeout(2500)
+      await page.screenshot({ path: join(shots, 'blobscape-sandbox-thing.png') })
+      // the same view again: the picture is already read
+      const again = await click(0.5, 0.45)
+      const same = await selected()
+      if (same !== got || again > first) fails.push(`blobscape sandbox thing: a second click on the same spot gave ${same} (was ${got}) in ${again} ms (the first took ${first})`)
+      else ok(`blobscape sandbox thing: the same click again gives the same blobs, in ${(again / 1000).toFixed(1)} s`)
+      // empty space selects nothing
+      await click(0.04, 0.06)
+      const none = await selected()
+      if (none) fails.push(`blobscape sandbox thing: a click on nothing left ${none} selected`)
+      if (outside.length) fails.push(`blobscape sandbox thing: asked another site for ${outside.slice(0, 3).join(', ')}`)
+      else ok('blobscape sandbox thing: the model and its runtime come from this site alone')
       await ctx.close()
     },
   },

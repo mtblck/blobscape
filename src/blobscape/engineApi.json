@@ -1,8 +1,51 @@
 {
+ "groups": [
+  {
+   "id": "core",
+   "title": "Core",
+   "doc": "What every page needs: a stage on a canvas, the world of blobs it draws, the camera, and the bones that move them. Start here."
+  },
+  {
+   "id": "movement",
+   "title": "Movement",
+   "doc": "Moves written by hand, poses mixed together, feet that find the ground, loose parts that swing after the body, and morphs."
+  },
+  {
+   "id": "creatures",
+   "title": "Creatures",
+   "doc": "Cutting a creature out of shapes, hanging it on bones and growing its fur, and the creatures that come ready made."
+  },
+  {
+   "id": "scenes",
+   "title": "Shapes and scenes",
+   "doc": "Scenes written as data and the shapes they are cut from: buildings, rock, plants, worn land and weather."
+  },
+  {
+   "id": "pixels",
+   "title": "Pixels and sprites",
+   "doc": "Drawing a stage as pixel art, and baking a creature into a sprite sheet."
+  },
+  {
+   "id": "simulation",
+   "title": "Simulation",
+   "doc": "The solvers under cloth and under sand, snow and goo, for when you want to step them yourself."
+  },
+  {
+   "id": "extras",
+   "title": "Picking, detail and edits",
+   "doc": "Finding what a tap hit, drawing fewer blobs far away, cutting and painting live, and depth for effects after the draw."
+  },
+  {
+   "id": "files",
+   "title": "Files and models",
+   "doc": "Writing and reading rigged .glb files, and turning an ordinary rigged model into splats."
+  }
+ ],
  "modules": [
   {
    "id": "stage",
    "title": "Stage: a creature or scene on a canvas",
+   "group": "core",
    "doc": "",
    "entries": [
     {
@@ -399,6 +442,7 @@
   {
    "id": "engine",
    "title": "SplatWorld: every blob in one three.js object",
+   "group": "core",
    "doc": "",
    "entries": [
     {
@@ -781,6 +825,7 @@
   {
    "id": "orbit",
    "title": "Orbit: where the camera looks from",
+   "group": "core",
    "doc": "",
    "entries": [
     {
@@ -851,6 +896,7 @@
   {
    "id": "blobs",
    "title": "Blobs",
+   "group": "core",
    "doc": "",
    "entries": [
     {
@@ -990,6 +1036,7 @@
   {
    "id": "rig",
    "title": "Bones and skins",
+   "group": "core",
    "doc": "",
    "entries": [
     {
@@ -1273,6 +1320,7 @@
   {
    "id": "posing",
    "title": "Posing by hand",
+   "group": "movement",
    "doc": "Small helpers for writing clips by hand, the way an animator thinks: aim a\nbone at a direction, ease in and out of a move, hold a pose for a while.\nClips are functions of time that pose a skeleton; `recordClip` turns them\ninto keys for a file.",
    "entries": [
     {
@@ -1400,6 +1448,7 @@
   {
    "id": "mix",
    "title": "Mixing poses",
+   "group": "movement",
    "doc": "",
    "entries": [
     {
@@ -1567,6 +1616,7 @@
   {
    "id": "ik",
    "title": "Reaching and feet on the ground",
+   "group": "movement",
    "doc": "Reaching for things: inverse kinematics on our skeletons, the part of a\nmesh engine's animation tools (three.js's `CCDIKSolver`, a game engine's\nfoot IK) that creatures need most.\n\n- `twoBoneIK` bends a limb of two bones (thigh and shin, arm and forearm)\n  so its end lands on a point, keeping the knee on the side it bends now;\n- `lookAt` turns one bone so a direction it carries points at a place;\n- `plantFeet` lays a walk over uneven ground: hips down to the lower foot,\n  each leg bent to its own patch of ground, each foot tilted to the slope;\n- `hipDrop` and `stepLegs` put feet where a footstep planner (steps.ts) says.\n\nBones here have no rest rotation, so a bone's world turn is the product of\nthe local ones up its chain (`worldQuat`), and changing a bone's world turn\nmeans setting its local turn to parent⁻¹ · wanted.",
    "entries": [
     {
@@ -1771,6 +1821,7 @@
   {
    "id": "steps",
    "title": "Footsteps",
+   "group": "movement",
    "doc": "Footstep planning: instead of a walk clip moving the legs and the feet being pinned to the ground\nafter, each foot keeps a spot on the ground and only leaves it to step. A foot steps when its spot has fallen\ntoo far from where it would stand under the body now (`reach`), aiming up to `reach` ahead of the body's motion, so\none planner walks, turns on the spot, sidesteps, backs up and stops with every foot still where it landed.\nFeet in one `group` step together (a trot's diagonal pair); only one group is ever in the air, and the group\nfurthest behind goes first. Pure, plain numbers: the same motion gives the same steps.",
    "entries": [
     {
@@ -1995,6 +2046,7 @@
   {
    "id": "swing",
    "title": "Loose parts that swing",
+   "group": "movement",
    "doc": "Loose parts that swing after the body: tails, ears, cloaks, plaits. Each\nchain is a run of bones, each the child of the one before; its points are\nevery bone's head and the last bone's tail. The first point is pinned where\nthe body carries it, and the rest are pulled loosely toward where the move\nputs them (`follow`, a compliance: bigger is looser), so they lag, swing and\nsettle (xpbd.ts). Afterwards each bone is turned to point at the next point,\nso the move still shapes the part and the swing rides on top.\n\n  const s = new Swing(sk, FOX_SWING)   // once\n  ...pose the move, place the creature...\n  s.update(sk, dt)                     // turns the chains' bones\n\nPure and tested.",
    "entries": [
     {
@@ -2124,199 +2176,9 @@
    ]
   },
   {
-   "id": "xpbd",
-   "title": "Cloth solver",
-   "doc": "A small position-based dynamics solver (XPBD, \"small steps\" form: many\nsubsteps, one pass over the constraints in each), for cloth and hair hung\non a rig. Points carry an inverse mass (0 = pinned, moved by the caller);\nlinks keep two points at a length, goals pull a point toward where the\nanimation puts it, and capsules push points out of the body. Compliance is\nthe inverse of stiffness: 0 is rigid.\n\nIt always steps by `STEP`, carrying what's left of a frame to the next, so\nthe same frames give the same motion and a recorded loop can be played back.\nPure and tested.",
-   "entries": [
-    {
-     "name": "Capsule",
-     "kind": "interface",
-     "doc": "A segment from `a` to `b` with a radius; `a` and `b` the same is a ball.",
-     "props": [
-      {
-       "name": "a",
-       "type": "Vec3",
-       "doc": "One end of its middle line."
-      },
-      {
-       "name": "b",
-       "type": "Vec3",
-       "doc": "The other end."
-      },
-      {
-       "name": "r",
-       "type": "number",
-       "doc": "Its radius."
-      }
-     ]
-    },
-    {
-     "name": "STEP",
-     "kind": "const",
-     "doc": "Seconds per step, and substeps per step.",
-     "type": "number"
-    },
-    {
-     "name": "SUBSTEPS",
-     "kind": "const",
-     "doc": "Substeps the solver takes in each `STEP`.",
-     "type": "4"
-    },
-    {
-     "name": "Xpbd",
-     "kind": "class",
-     "doc": "A small XPBD solver: points joined by links, pulled toward goals and kept out of capsules. It steps at a fixed\n`STEP`, carrying the rest of a frame over, so the same frames always give the same motion.",
-     "ctor": [
-      {
-       "code": "new Xpbd(n: number)"
-      }
-     ],
-     "props": [
-      {
-       "name": "n",
-       "readonly": true,
-       "type": "number",
-       "doc": "How many points."
-      },
-      {
-       "name": "pos",
-       "readonly": true,
-       "type": "Float64Array",
-       "doc": "Positions: x, y, z per point."
-      },
-      {
-       "name": "vel",
-       "readonly": true,
-       "type": "Float64Array",
-       "doc": "Velocities: x, y, z per point."
-      },
-      {
-       "name": "invMass",
-       "readonly": true,
-       "type": "Float64Array",
-       "doc": "One over each point's mass; 0 pins a point where it is."
-      },
-      {
-       "name": "goal",
-       "readonly": true,
-       "type": "Float64Array",
-       "doc": "Where the animation puts each point, and how loosely it follows (Infinity: not at all)."
-      },
-      {
-       "name": "capsules",
-       "type": "Capsule[]",
-       "doc": "The capsules the points stay out of. Set it each frame as the body moves."
-      },
-      {
-       "name": "gravity",
-       "type": "Vec3",
-       "doc": "The pull on every point, per second squared."
-      },
-      {
-       "name": "damping",
-       "type": "number",
-       "doc": "Share of velocity lost per second."
-      }
-     ],
-     "methods": [
-      {
-       "name": "link",
-       "doc": "Keeps `a` and `b` at `rest` (their distance now if not given).",
-       "signatures": [
-        {
-         "code": "link(a: number, b: number, compliance?: number, rest?: number): void"
-        }
-       ]
-      },
-      {
-       "name": "distance",
-       "doc": "How far apart two points are now.",
-       "signatures": [
-        {
-         "code": "distance(a: number, b: number): number"
-        }
-       ]
-      },
-      {
-       "name": "place",
-       "doc": "Puts point `i` at `p`, still.",
-       "signatures": [
-        {
-         "code": "place(i: number, p: ArrayLike<number>): void"
-        }
-       ]
-      },
-      {
-       "name": "fix",
-       "doc": "Pins point `i`: from now on it moves only where `pin` sends it.",
-       "signatures": [
-        {
-         "code": "fix(i: number): void"
-        }
-       ]
-      },
-      {
-       "name": "pin",
-       "doc": "Where pinned point `i` should be at the end of the next `advance`; it gets there evenly over the frame.",
-       "signatures": [
-        {
-         "code": "pin(i: number, p: ArrayLike<number>): void"
-        }
-       ]
-      },
-      {
-       "name": "follow",
-       "doc": "Where the animation wants point `i`, and how loosely it follows.",
-       "signatures": [
-        {
-         "code": "follow(i: number, p: ArrayLike<number>, compliance: number): void"
-        }
-       ]
-      },
-      {
-       "name": "advance",
-       "doc": "Runs whole steps for `dt` seconds (carrying the rest); returns how many ran.",
-       "signatures": [
-        {
-         "code": "advance(dt: number): number"
-        }
-       ]
-      },
-      {
-       "name": "energy",
-       "doc": "Kinetic energy, for a unit mass per free point.",
-       "signatures": [
-        {
-         "code": "energy(): number"
-        }
-       ]
-      },
-      {
-       "name": "settle",
-       "doc": "Every point still, where it is (after a jump, say).",
-       "signatures": [
-        {
-         "code": "settle(): void"
-        }
-       ]
-      }
-     ]
-    },
-    {
-     "name": "closestOnSegment",
-     "kind": "function",
-     "doc": "The point on segment a–b nearest (x, y, z).",
-     "signatures": [
-      {
-       "code": "closestOnSegment(a: Vec3, b: Vec3, x: number, y: number, z: number): Vec3"
-      }
-     ]
-    }
-   ]
-  },
-  {
    "id": "morph",
    "title": "Morphs",
+   "group": "movement",
    "doc": "",
    "entries": [
     {
@@ -2416,93 +2278,1283 @@
    ]
   },
   {
-   "id": "pick",
-   "title": "Picking",
+   "id": "sculpt",
+   "title": "Sculpting creatures",
+   "group": "creatures",
    "doc": "",
    "entries": [
     {
-     "name": "PickHit",
+     "name": "SculptPart",
      "kind": "interface",
-     "doc": "Picking: which blob of which actor is under a pointer, as the actor stands\nposed right now, and which bone and part it belongs to.\n\nEach blob's bones move it by a blend of their skin matrices. That blend, M,\ncarries the blob's rest ellipsoid to where it is drawn (exactly, in the\n'linear' rule; to within the rounding of a joint in 'quat'), and a straight\nline through M is still a straight line with the same distances along it.\nSo the ray is taken back into the blob's rest frame through M⁻¹ and tested\nagainst the rest blob there, with `rayHit`, as a still scene is.",
+     "doc": "Creatures cut the way the pixel scenes are (voxel.ts): shapes given as\ndistance functions, one solid disc per surface cell, sun and cast shadows\nbaked in. What a scene does not need and a creature does is bending: here\nevery cell is weighted to the bones named on its part by distance, as\nbody.ts weights its blobs, so a neck or a tail curves without a seam.\n\nParts in one `group` are treated as one solid: a cell buried inside a\nneighbor is never made. Give a part its own group when it swings clear of\nthe rest (a jaw, a wing), or what it uncovers would be missing.",
      "props": [
       {
-       "name": "actor",
-       "type": "number",
-       "doc": "Index into the actors given."
+       "name": "shape",
+       "type": "Shape",
+       "doc": "The part's shape, as a distance function."
       },
       {
-       "name": "blob",
-       "type": "number",
-       "doc": "The blob's index in that actor."
+       "name": "color",
+       "type": "Vec3 | ((p: Vec3, n: Vec3) => Vec3)",
+       "doc": "Color (0–1, sRGB) or color at a surface point given its outward normal."
       },
       {
-       "name": "t",
-       "type": "number",
-       "doc": "Distance along the ray (in units of the direction's length)."
+       "name": "bones",
+       "type": "string[]",
+       "doc": "The bones that move it: each cell is weighted by its distance to each."
       },
       {
-       "name": "point",
-       "type": "[number, number, number]",
-       "doc": "Where the ray meets the blob, in world space."
+       "name": "group",
+       "optional": true,
+       "type": "string",
+       "doc": "Parts in one group cut each other where they overlap; a part that swings clear, like a jaw or a wing, wants its\nown."
+      },
+      {
+       "name": "glow",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Unlit: the color as given, for eyes and fire."
+      },
+      {
+       "name": "opacity",
+       "optional": true,
+       "type": "number",
+       "doc": "How solid its blobs are, 0–1."
+      },
+      {
+       "name": "noShadow",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Casts no shadow on other parts."
+      },
+      {
+       "name": "blend",
+       "optional": true,
+       "type": "number",
+       "doc": "How far its weights spread from each bone, if not the creature's `blend`."
+      }
+     ]
+    },
+    {
+     "name": "SculptSpec",
+     "kind": "interface",
+     "doc": "A creature to sculpt: its bones, its parts and how far a cell's weight spreads between bones.",
+     "props": [
+      {
+       "name": "bones",
+       "type": "Bone[]",
+       "doc": "The creature's bones."
+      },
+      {
+       "name": "parts",
+       "type": "SculptPart[]",
+       "doc": "Its parts."
+      },
+      {
+       "name": "blend",
+       "type": "number",
+       "doc": "How far (in world units) a cell's weight spreads from a bone."
+      },
+      {
+       "name": "light",
+       "optional": true,
+       "type": "Partial<VoxelLight>",
+       "doc": "The baked light; what is left out comes from `DEFAULT_LIGHT`."
+      },
+      {
+       "name": "skirt",
+       "optional": true,
+       "type": "number",
+       "doc": "How deep (world units) a part's skin goes on inside a neighbor of its group. 0 cuts it off at the neighbor's\nsurface; a little keeps a neck closed where it meets a turning head."
+      }
+     ]
+    },
+    {
+     "name": "Sculpted",
+     "kind": "interface",
+     "doc": "A body builder for procedural creatures: a skeleton, plus a list of simple\nshapes (tapered tubes, ellipsoids, flat sheets, and filled cones for things\nlike flame), each covered in flat surface blobs and weighted to the bones\nnamed on it by distance. The fox (creature.ts) was the first creature and\nbuilds its own way; the frog, elf and dragon are written in this.\n\nBlobs are spread by area, so a part gets its share of `count`; `density`\ngives small parts (eyes, claws) more than their share. Lighting is baked into\nthe color from a fixed light, as for the fox, unless a part is `glow`.",
+     "extends": [
+      "Creature"
+     ],
+     "props": [
+      {
+       "name": "partOf",
+       "type": "Uint16Array",
+       "doc": "Which part each blob came from."
+      },
+      {
+       "name": "spacing",
+       "type": "number",
+       "doc": "The grid's cell size it was cut at."
+      }
+     ]
+    },
+    {
+     "name": "DISC",
+     "kind": "const",
+     "doc": "A creature's discs are wider than a scene's (voxel.ts `disc`): a creature is seen as blobs, without pixel mode's\nalpha cut, and at the scene's size its far side showed through between them.",
+     "type": "0.75"
+    },
+    {
+     "name": "buildSculpt",
+     "kind": "function",
+     "doc": "Cuts the creature on a grid of `spacing`.",
+     "signatures": [
+      {
+       "code": "buildSculpt(spec: SculptSpec, spacing: number): Sculpted"
+      }
+     ]
+    },
+    {
+     "name": "sculptToCount",
+     "kind": "function",
+     "doc": "Cuts the creature at the spacing that gives about `count` blobs. Cells go\nroughly as 1 / spacing², but not exactly (thin parts are fattened to the\ngrid), so it measures twice: a coarse cut, then one nearer the answer, each\na fraction of the final cut's cost. `make` is handed the spacing so thin\nparts can be kept at least a cell thick.",
+     "signatures": [
+      {
+       "code": "sculptToCount(make: (spacing: number) => SculptSpec, count: number, probe?: number): Sculpted"
+      }
+     ]
+    },
+    {
+     "name": "toCount",
+     "kind": "function",
+     "doc": "`cut` at the spacing that gives about `count` blobs, for anything cut on a grid (a sculpt, a scene's creature).",
+     "signatures": [
+      {
+       "code": "toCount<T extends { blobs: Blobs }>(cut: (spacing: number) => T, count: number, probe: number): T"
+      }
+     ]
+    },
+    {
+     "name": "joinBuilt",
+     "kind": "function",
+     "doc": "One creature from two builds on the same bones (a sculpted body and a fuzzy flame, say): `b`'s blobs follow `a`'s.",
+     "signatures": [
+      {
+       "code": "joinBuilt(a: { blobs: Blobs; skin: Skin }, b: { blobs: Blobs; skin: Skin }): { blobs: Blobs; skin: Skin; from: number }"
+      }
+     ]
+    },
+    {
+     "name": "smooth",
+     "kind": "function",
+     "doc": "Shapes melted into each other over a distance `k`, so a neck runs into a chest without a crease.",
+     "signatures": [
+      {
+       "code": "smooth(k: number, ...s: Shape[]): Shape"
+      }
+     ]
+    },
+    {
+     "name": "flatten",
+     "kind": "function",
+     "doc": "A shape squashed front to back (along z) about z = `at`, to `f` of its depth: a chest, a foot.",
+     "signatures": [
+      {
+       "code": "flatten(s: Shape, f: number, at?: number): Shape"
+      }
+     ]
+    },
+    {
+     "name": "membrane",
+     "kind": "function",
+     "doc": "A skin of thickness 2r stretched over triangles: a wing's membrane, a fin.",
+     "signatures": [
+      {
+       "code": "membrane(tris: Vec3[][], r: number): Shape"
+      }
+     ]
+    },
+    {
+     "name": "scales",
+     "kind": "function",
+     "doc": "A pattern of scales: space cut into staggered cells of size `a`. Gives how\nfar the point is from its cell's middle (0 at the middle, 1 at the seam) and\na number 0–1 that is the same all over one scale.",
+     "signatures": [
+      {
+       "code": "scales(p: ArrayLike<number>, a: number): { out: number; id: number }"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "body",
+   "title": "Bodies from tubes and balls",
+   "group": "creatures",
+   "doc": "",
+   "entries": [
+    {
+     "name": "Creature",
+     "kind": "interface",
+     "doc": "A body builder for procedural creatures: a skeleton, plus a list of simple\nshapes (tapered tubes, ellipsoids, flat sheets, and filled cones for things\nlike flame), each covered in flat surface blobs and weighted to the bones\nnamed on it by distance. The fox (creature.ts) was the first creature and\nbuilds its own way; the frog, elf and dragon are written in this.\n\nBlobs are spread by area, so a part gets its share of `count`; `density`\ngives small parts (eyes, claws) more than their share. Lighting is baked into\nthe color from a fixed light, as for the fox, unless a part is `glow`.",
+     "props": [
+      {
+       "name": "blobs",
+       "type": "Blobs",
+       "doc": "The blobs in the rest pose."
+      },
+      {
+       "name": "skin",
+       "type": "Skin",
+       "doc": "Which bones move each blob, and by how much."
+      },
+      {
+       "name": "skeleton",
+       "type": "Skeleton",
+       "doc": "The bones, and their pose."
+      }
+     ]
+    },
+    {
+     "name": "Part",
+     "kind": "interface",
+     "doc": "One part of a body for `buildBody`: a shape, its color and the bones that move it.",
+     "props": [
+      {
+       "name": "shape",
+       "type": "Shape",
+       "doc": "A tube, a ball, a sheet or a filled cone."
+      },
+      {
+       "name": "color",
+       "type": "Vec3 | ((p: Vec3, n: Vec3, u: number) => Vec3)",
+       "doc": "Color at a point on the surface, given its outward normal and `u`, how far along a tube or fill (0–1)."
+      },
+      {
+       "name": "bones",
+       "type": "string[]",
+       "doc": "The bones that move it, nearest first is not needed: each blob is weighted by its distance to each."
+      },
+      {
+       "name": "density",
+       "optional": true,
+       "type": "number",
+       "doc": "Blobs per unit area, relative to the rest."
+      },
+      {
+       "name": "size",
+       "optional": true,
+       "type": "number",
+       "doc": "Blob size, relative to the rest."
+      },
+      {
+       "name": "opacity",
+       "optional": true,
+       "type": "number | ((p: Vec3, u: number) => number)",
+       "doc": "Opacity, or opacity at a point given how far along it is (as for `color`)."
+      },
+      {
+       "name": "glow",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Unlit: the color as given, for eyes and fire."
+      },
+      {
+       "name": "blend",
+       "optional": true,
+       "type": "number",
+       "doc": "How far its weights spread from each bone, if not the creature's `blend`: wider for a sheet that must stretch smoothly."
+      }
+     ]
+    },
+    {
+     "name": "BodySpec",
+     "kind": "interface",
+     "doc": "A body for `buildBody`: its bones, its parts and how far a blob's weight spreads between bones.",
+     "props": [
+      {
+       "name": "bones",
+       "type": "Bone[]",
+       "doc": "The body's bones."
+      },
+      {
+       "name": "parts",
+       "type": "Part[]",
+       "doc": "Its parts."
+      },
+      {
+       "name": "blend",
+       "type": "number",
+       "doc": "How far (in world units) a blob's weight spreads from a bone: about a tenth of a limb."
+      }
+     ]
+    },
+    {
+     "name": "Built",
+     "kind": "interface",
+     "doc": "A body builder for procedural creatures: a skeleton, plus a list of simple\nshapes (tapered tubes, ellipsoids, flat sheets, and filled cones for things\nlike flame), each covered in flat surface blobs and weighted to the bones\nnamed on it by distance. The fox (creature.ts) was the first creature and\nbuilds its own way; the frog, elf and dragon are written in this.\n\nBlobs are spread by area, so a part gets its share of `count`; `density`\ngives small parts (eyes, claws) more than their share. Lighting is baked into\nthe color from a fixed light, as for the fox, unless a part is `glow`.",
+     "extends": [
+      "Creature"
+     ],
+     "props": [
+      {
+       "name": "partOf",
+       "type": "Uint16Array",
+       "doc": "Which part each blob came from."
+      },
+      {
+       "name": "seen",
+       "optional": true,
+       "type": "Uint8Array<ArrayBufferLike>",
+       "doc": "How much of each baked lamp a blob can see, four bytes a blob (voxel.ts `lamps`); left out, every lamp is seen."
+      }
+     ]
+    },
+    {
+     "name": "rng",
+     "kind": "function",
+     "doc": "A small seeded random number generator: it returns a function that gives the next number from 0 up to 1, the same\nrun for the same seed.",
+     "signatures": [
+      {
+       "code": "rng(seed: number): () => number"
+      }
+     ]
+    },
+    {
+     "name": "boneTail",
+     "kind": "function",
+     "doc": "Where a bone ends in the rest pose: its tail, else its first child's head, else a short way on from its parent.",
+     "signatures": [
+      {
+       "code": "boneTail(bones: Bone[], i: number): Vec3"
+      }
+     ]
+    },
+    {
+     "name": "shapeArea",
+     "kind": "function",
+     "doc": "About how much surface a body shape has, which decides its share of the blobs.",
+     "signatures": [
+      {
+       "code": "shapeArea(s: Shape): number"
+      }
+     ]
+    },
+    {
+     "name": "buildBody",
+     "kind": "function",
+     "doc": "Builds a creature from its spec with about `count` blobs. The same spec and\nseed always give the same creature.",
+     "signatures": [
+      {
+       "code": "buildBody(spec: BodySpec, count: number, seed?: number): Built"
+      }
+     ]
+    },
+    {
+     "name": "segDist",
+     "kind": "function",
+     "doc": "Distance from p to the segment ab.",
+     "signatures": [
+      {
+       "code": "segDist(p: ArrayLike<number>, a: Vec3, b: Vec3): number"
+      }
+     ]
+    },
+    {
+     "name": "mirror",
+     "kind": "const",
+     "doc": "Mirrors a point (or a list of them) to the creature's other side.",
+     "type": "(p: Vec3) => Vec3"
+    },
+    {
+     "name": "spots",
+     "kind": "function",
+     "doc": "A cheap, smooth-ish pattern in 0–1 for spots and scales: the same at the same point every time.",
+     "signatures": [
+      {
+       "code": "spots(p: Vec3, freq: number, seed?: number): number"
+      }
+     ]
+    },
+    {
+     "name": "mix",
+     "kind": "const",
+     "doc": "The point part of the way from `a` to `b`: `t` 0 is `a`, 1 is `b`.",
+     "type": "(a: Vec3, b: Vec3, t: number) => Vec3"
+    }
+   ]
+  },
+  {
+   "id": "fur",
+   "title": "Fur",
+   "group": "creatures",
+   "doc": "",
+   "entries": [
+    {
+     "name": "Fur",
+     "kind": "interface",
+     "doc": "Fur for a sculpted creature (sculpt.ts): strands grown out of its skin.\n\nThe cut creature is a shell of round discs, one per grid cell; textured, it\nreads as bricks. Fur is what a Gaussian is good at: every strand here is one\nlong, thin blob that leaves the skin at a slant and lies the way the coat\nruns (`flow`), rooted anywhere inside its cell so the grid never shows. The\nshell stays underneath, a shade darker, as the undercoat: it keeps the body\nsolid where strands part, and the strands' soft tips make the outline soft.\n\nA strand hangs on its root cell's bones with the same weights, so the fur\nbends with the body, and it is still a plain blob: files, sprite sheets and\nShape Shifter take it as they take any other.",
+     "props": [
+      {
+       "name": "length",
+       "type": "number",
+       "doc": "How long a strand is, in world units."
+      },
+      {
+       "name": "flow",
+       "type": "Vec3 | ((p: Vec3, n: Vec3) => Vec3)",
+       "doc": "Which way the coat lies at a surface point. Only its part along the skin counts."
+      },
+      {
+       "name": "lift",
+       "optional": true,
+       "type": "number",
+       "doc": "How far strands stand up from the skin, in radians: 0 lies flat."
+      },
+      {
+       "name": "wild",
+       "optional": true,
+       "type": "number",
+       "doc": "How far strands stray from the flow, in radians either way."
+      },
+      {
+       "name": "density",
+       "optional": true,
+       "type": "number",
+       "doc": "Strands here for each strand on plain fur of the same area (a ruff is thicker)."
+      },
+      {
+       "name": "long",
+       "optional": true,
+       "type": "(p: Vec3, n: Vec3) => number",
+       "doc": "A factor on the length at a surface point: a ruff that grows longer toward the chest."
+      },
+      {
+       "name": "under",
+       "optional": true,
+       "type": "number",
+       "doc": "How dark the undercoat (the shell under the strands) is, as a share of its color."
+      },
+      {
+       "name": "color",
+       "optional": true,
+       "type": "(p: Vec3, n: Vec3) => Vec3",
+       "doc": "Strand color at a point, if not the skin's own (a pale tip on dark fur). Lit as the skin under it is."
+      }
+     ]
+    },
+    {
+     "name": "FurryPart",
+     "kind": "interface",
+     "doc": "A part of a sculpted creature that may grow fur.",
+     "extends": [
+      "SculptPart"
+     ],
+     "props": [
+      {
+       "name": "fur",
+       "optional": true,
+       "type": "Fur",
+       "doc": "The fur that grows on it; left out, bare skin."
+      }
+     ]
+    },
+    {
+     "name": "quatFromAxes",
+     "kind": "function",
+     "doc": "The rotation whose x, y and z axes are the given (orthonormal, right-handed) columns.",
+     "signatures": [
+      {
+       "code": "quatFromAxes(x: Vec3, y: Vec3, z: Vec3): Quat"
+      }
+     ]
+    },
+    {
+     "name": "growFur",
+     "kind": "function",
+     "doc": "Grows `total - shell.blobs.count` strands over the furred parts of `shell`\n(cut from `parts`, in the same order), spread by area and `density`, so the\ncreature comes out at exactly `total` blobs. The same shell and parts always\ngrow the same fur.",
+     "signatures": [
+      {
+       "code": "growFur(shell: Sculpted, parts: FurryPart[], total: number): Sculpted"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "zoo-index",
+   "title": "The zoo",
+   "group": "creatures",
+   "doc": "",
+   "entries": [
+    {
+     "name": "ZOO",
+     "kind": "const",
+     "doc": "Every creature on the Creature page, simplest first.",
+     "type": "Species[]"
+    },
+    {
+     "name": "Move",
+     "kind": "interface",
+     "doc": "One of a creature's moves, as a function of time, recorded into a clip when the creature is made.",
+     "props": [
+      {
+       "name": "name",
+       "type": "string",
+       "doc": "The clip's name in a file."
+      },
+      {
+       "name": "label",
+       "type": "string",
+       "doc": "Its name on the page."
+      },
+      {
+       "name": "doing",
+       "type": "string",
+       "doc": "What the creature is doing, for the view's description: \"jumping on the spot\"."
+      },
+      {
+       "name": "seconds",
+       "type": "number",
+       "doc": "How long one loop takes."
+      },
+      {
+       "name": "fps",
+       "optional": true,
+       "type": "number",
+       "doc": "Keys a second when it is recorded as a clip."
+      },
+      {
+       "name": "pose",
+       "type": "(sk: Skeleton, t: number) => void",
+       "doc": "Poses the skeleton `t` seconds into the move."
+      }
+     ]
+    },
+    {
+     "name": "Species",
+     "kind": "interface",
+     "doc": "A procedural creature the Creature page can show.",
+     "props": [
+      {
+       "name": "id",
+       "type": "string",
+       "doc": "Its id in addresses and lists."
+      },
+      {
+       "name": "name",
+       "type": "string",
+       "doc": "\"frog\": used in sentences."
+      },
+      {
+       "name": "blurb",
+       "type": "string",
+       "doc": "One line for the page."
+      },
+      {
+       "name": "detail",
+       "type": "number[]",
+       "doc": "Blob counts on the detail chips, and the one picked first."
+      },
+      {
+       "name": "start",
+       "type": "number",
+       "doc": "The blob count picked first."
+      },
+      {
+       "name": "looks",
+       "type": "Look[]",
+       "doc": "Its looks, the first the default."
+      },
+      {
+       "name": "make",
+       "type": "(count: number, look: string) => Creature",
+       "doc": "Builds it with about `count` blobs in a look."
+      },
+      {
+       "name": "moves",
+       "type": "Move[]",
+       "doc": "Its moves, the first played first."
+      },
+      {
+       "name": "view",
+       "type": "Orbit",
+       "doc": "Where the camera starts."
+      },
+      {
+       "name": "seed",
+       "optional": true,
+       "type": "number",
+       "doc": "For a made-up monster, the seed that makes it again."
+      },
+      {
+       "name": "swing",
+       "optional": true,
+       "type": "SwingSpec",
+       "doc": "Loose parts (a tail, ears, a cloak) that swing after the body when it's played live (swing.ts); files and sheets keep the move as it is."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "zoo-fox",
+   "title": "Fox",
+   "group": "creatures",
+   "doc": "",
+   "entries": [
+    {
+     "name": "makeFox",
+     "kind": "function",
+     "doc": "Builds the fox with about `count` blobs: a sculpted skin under strands of fur. `look` picks its coat.",
+     "signatures": [
+      {
+       "code": "makeFox(count?: number, look?: string): { blobs: Blobs; skin: Skin; skeleton: Skeleton }"
+      }
+     ]
+    },
+    {
+     "name": "FOX",
+     "kind": "const",
+     "doc": "The fox as a `Species`: how to build it, its looks, its moves and where the camera starts.",
+     "type": "Species"
+    }
+   ]
+  },
+  {
+   "id": "zoo-frog",
+   "title": "Frog",
+   "group": "creatures",
+   "doc": "A frog, sitting, facing +z: twenty bones, including a jaw and a tongue of\nthree. The tongue lies along the floor of the mouth, rooted at the back;\nflicking it grows it straight out between the jaws, so it never stretches\nits blobs thin.",
+   "entries": [
+    {
+     "name": "makeFrog",
+     "kind": "function",
+     "doc": "Builds the frog with about `count` blobs. `look` picks its colors.",
+     "signatures": [
+      {
+       "code": "makeFrog(count?: number, look?: string): { blobs: Blobs; skin: Skin; skeleton: Skeleton }"
+      }
+     ]
+    },
+    {
+     "name": "FROG",
+     "kind": "const",
+     "doc": "The frog as a `Species`: how to build it, its looks, its moves and where the camera starts.",
+     "type": "Species"
+    }
+   ]
+  },
+  {
+   "id": "zoo-elf",
+   "title": "Elf",
+   "group": "creatures",
+   "doc": "An elf, standing, facing +z: a humanoid of 29 bones (a spine of three, a\nneck and head, arms with hands and fingers, legs with feet and toes, a plait\nof hair and a cloak of two each side). The Creature page, Forest Walk and\nDungeon Run's hero are all this one elf.",
+   "entries": [
+    {
+     "name": "makeElf",
+     "kind": "function",
+     "doc": "The detailed elf, at exactly `count` blobs. `bones` may add to the elf's own (the hero's sword and orb).",
+     "signatures": [
+      {
+       "code": "makeElf(count?: number, look?: string, bones?: Bone[]): { blobs: Blobs; skin: Skin; skeleton: Skeleton }"
+      }
+     ]
+    },
+    {
+     "name": "ELF",
+     "kind": "const",
+     "doc": "The elf as a `Species`: how to build it, its looks, its moves and where the camera starts.",
+     "type": "Species"
+    }
+   ]
+  },
+  {
+   "id": "zoo-dragon",
+   "title": "Dragon",
+   "group": "creatures",
+   "doc": "A dragon, standing, facing +z, about eight units nose to tail: 43 bones.\nIts body is cut the way the pixel scenes are (sculpt.ts): every scale, tooth\nand horn ring is a shape or a pattern on one, lit and shadowed once, and\nweighted to the bones so the neck and tail still curve. Its wings are skin\nstretched between an arm and three finger bones, so the membrane follows\nthe fingers as they spread and fold.\n\nIts fire is bones too: a chain of six from inside the mouth. In the rest\npose the flame is built FLAME times smaller than life, hidden in the mouth,\nso a file opened elsewhere shows a dragon with its mouth shut; breathing\nfire grows the first fire bone by FLAME (a scale key, which glTF has) and\nthe chain unrolls and flickers. Nothing about it is a particle system.",
+   "entries": [
+    {
+     "name": "makeDragon",
+     "kind": "function",
+     "doc": "Builds the dragon with about `count` blobs, a small share of them the fire that waits in its mouth. `look` picks\nits colors.",
+     "signatures": [
+      {
+       "code": "makeDragon(count?: number, look?: string): { blobs: Blobs; skin: Skin; skeleton: Skeleton }"
+      }
+     ]
+    },
+    {
+     "name": "DRAGON",
+     "kind": "const",
+     "doc": "The dragon as a `Species`: how to build it, its looks, its moves and where the camera starts.",
+     "type": "Species"
+    }
+   ]
+  },
+  {
+   "id": "zoo-monster",
+   "title": "Monsters from a seed",
+   "group": "creatures",
+   "doc": "Make me a monster: a creature drawn up from a seed. The seed picks a body\nplan (two, four or six legs; how long, how round, how tall), a head (one to\nthree eyes, a snout, horns, ears or feelers), a tail, back spikes and a\ncoat and what its hide is (fur in strands, scales, or smooth wet skin), then\ncuts it with sculpt.ts like the hand-made zoo. Every monster can\nwalk on the spot, stand and breathe, and roar, and the same seed always\nmakes the same monster, so a link can share one.\n\nMonsters face +z and stand on the floor (y = 0) at rest.",
+   "entries": [
+    {
+     "name": "makeMonster",
+     "kind": "function",
+     "doc": "Builds the monster a seed gives, with about `count` blobs: the same seed always gives the same monster.",
+     "signatures": [
+      {
+       "code": "makeMonster(seed: number, count?: number): { blobs: Blobs; skin: Skin; skeleton: Skeleton }"
+      }
+     ]
+    },
+    {
+     "name": "monsterSpecies",
+     "kind": "function",
+     "doc": "The seed as a creature for the Creature page and its sprite sheets.",
+     "signatures": [
+      {
+       "code": "monsterSpecies(seed: number): Species"
+      }
+     ]
+    },
+    {
+     "name": "MAX_SEED",
+     "kind": "const",
+     "doc": "Seeds run from 1 to this; the button picks one and a link may name any.",
+     "type": "99999"
+    }
+   ]
+  },
+  {
+   "id": "sceneDoc",
+   "title": "Scenes written as data",
+   "group": "scenes",
+   "doc": "",
+   "entries": [
+    {
+     "name": "SceneDoc",
+     "kind": "interface",
+     "doc": "A pixel-art scene written as data: no code, so it can be typed by hand, kept\nin a file, or written by Claude from a prompt (docs/scene-descriptions.md).\n`checkScene` says what is wrong with one, in words that point at the place;\n`compileScene` turns a sound one into what the voxel builder, the bones and\npixel mode need.\n\nUnits: about 1 is a small house, and a whole scene is about 4 across. y is up, the ground is y = 0, and the\ncamera starts on the +z side. Colors are '#rrggbb'.",
+     "props": [
+      {
+       "name": "name",
+       "type": "string",
+       "doc": "The scene's name."
+      },
+      {
+       "name": "loop",
+       "type": "number",
+       "doc": "Seconds before everything repeats: 4 to 60."
+      },
+      {
+       "name": "light",
+       "optional": true,
+       "type": "{ from?: Vec3; ambient?: number; shadow?: number; ramp?: number; crevice?: number; wear?: number; bounce?: number }",
+       "doc": "The baked sun: `from` points toward it. `ramp` (0–1, 0.7 when left out) turns shade toward cool violet and full\nsun toward warm yellow, as a painter's ramp does; `crevice` (0.5) darkens corners and cracks; `wear` (0.5)\nlightens sharp outer edges. 0 turns any of them off. `bounce` (off unless set) lets surfaces throw their color onto\nwhat faces them, as a red wall warms the floor beside it; it costs build time, so use it where it shows."
+      },
+      {
+       "name": "palette",
+       "type": "string[]",
+       "doc": "The colors the picture is drawn in, 2 to 32."
+      },
+      {
+       "name": "sky",
+       "optional": true,
+       "type": "[string, string]",
+       "doc": "The sky behind, top and bottom. Left out, the background is clear."
+      },
+      {
+       "name": "skyReach",
+       "optional": true,
+       "type": "number",
+       "doc": "How far down the picture the sky's blend runs before it is all the bottom color: 0.05 to 1, the whole way when left out."
+      },
+      {
+       "name": "look",
+       "optional": true,
+       "type": "{ dither?: number; glow?: number; outline?: boolean; edges?: boolean; steps?: boolean }",
+       "doc": "The pixel look it asks for: how much dither and glow, and whether to draw an outline and edge lines. `steps` paints\nthe scene in steps of its palette as it is cut (each blob takes one palette color, a step of its own paint from shade\nto sun), so shade falls in flat bands; left out, shading is smooth and the picture is matched to the palette pixel by pixel."
+      },
+      {
+       "name": "disc",
+       "optional": true,
+       "type": "number",
+       "doc": "How wide each surface disc is, as a share of the grid: 0.4 to 1, 0.55 when left out. Small discs keep paint\ncrisp but let about a tenth of what lies behind a surface show through; a subject whose far side or inner\nparts are much darker or lighter than its near side (a head over an open jaw) wants 0.75, as creatures use."
+      },
+      {
+       "name": "camera",
+       "type": "Orbit & { swing?: number }",
+       "doc": "Where the view starts. `swing` rocks it gently from side to side by that many degrees, once a loop."
+      },
+      {
+       "name": "bones",
+       "optional": true,
+       "type": "BoneDoc[]",
+       "doc": "Things that move. The land itself needs none: parts with no bone stand still."
+      },
+      {
+       "name": "parts",
+       "type": "PartDoc[]",
+       "doc": "Everything in the scene, each a shape with its paint."
+      },
+      {
+       "name": "moves",
+       "optional": true,
+       "type": "MoveDoc[]",
+       "doc": "What moves, each a whole number of times a loop."
+      },
+      {
+       "name": "lights",
+       "optional": true,
+       "type": "LightDoc[]",
+       "doc": "Live lights, at most four: they light what is near them, frame by frame."
+      },
+      {
+       "name": "air",
+       "optional": true,
+       "type": "AirDoc",
+       "doc": "What hangs in the air: distance haze, low mist, beams of light and drifting specks."
+      },
+      {
+       "name": "cover",
+       "optional": true,
+       "type": "{ kind: \"snow\" | \"moss\" | \"dust\"; color: string; amount: number }",
+       "doc": "Snow, moss or dust laid over everything once it is cut (parts marked `bare` and glowing ones keep their paint):\n`snow` settles on tops open to the sky, `moss` creeps over shut-in and up-turned faces in patches, `dust` lies\nthin on every upturned face. `amount` 0 to 1, from a dusting to most of what faces up."
+      },
+      {
+       "name": "focus",
+       "optional": true,
+       "type": "{ at: Vec3; r: number }",
+       "doc": "Where the eye goes: within `r` of `at` the scene is cut at full detail, further out on a grid twice as coarse, in about a quarter of the blobs."
+      }
+     ]
+    },
+    {
+     "name": "AirDoc",
+     "kind": "interface",
+     "doc": "A scene's air: haze, mist, shafts of light and specks.",
+     "props": [
+      {
+       "name": "haze",
+       "optional": true,
+       "type": "{ color: string; from?: number; to?: number }",
+       "doc": "Things far from the camera fade toward `color`: it starts `from` units past the view's target (0 when left out) and would be total at `to` (4)."
+      },
+      {
+       "name": "mist",
+       "optional": true,
+       "type": "MistDoc[]",
+       "doc": "Low banks of mist that drift slowly to and fro, at most four."
+      },
+      {
+       "name": "shafts",
+       "optional": true,
+       "type": "ShaftDoc[]",
+       "doc": "Beams of light, as from a window or a gap in the leaves, at most six: what they land on is lit by them."
+      },
+      {
+       "name": "specks",
+       "optional": true,
+       "type": "SpeckDoc[]",
+       "doc": "Swarms of small things, each moving on its own, at most eight swarms and 300 specks in all."
+      }
+     ]
+    },
+    {
+     "name": "MistDoc",
+     "kind": "interface",
+     "doc": "One bank of mist.",
+     "props": [
+      {
+       "name": "at",
+       "type": "Vec3",
+       "doc": "The middle of the bank."
+      },
+      {
+       "name": "half",
+       "type": "Vec3",
+       "doc": "Half its size along x, y (its depth) and z."
+      },
+      {
+       "name": "color",
+       "type": "string",
+       "doc": "Its color."
+      },
+      {
+       "name": "thick",
+       "optional": true,
+       "type": "number",
+       "doc": "How thick it is, 0 to 1 (0.5 when left out)."
+      }
+     ]
+    },
+    {
+     "name": "ShaftDoc",
+     "kind": "interface",
+     "doc": "One beam of light.",
+     "props": [
+      {
+       "name": "from",
+       "type": "Vec3",
+       "doc": "Where it starts (a window, a crack, a lamp) and where it lands."
+      },
+      {
+       "name": "to",
+       "type": "Vec3",
+       "doc": "Where it lands."
+      },
+      {
+       "name": "r",
+       "type": "number",
+       "doc": "How wide it is, as a radius."
+      },
+      {
+       "name": "color",
+       "type": "string",
+       "doc": "Its color."
+      },
+      {
+       "name": "strength",
+       "optional": true,
+       "type": "number",
+       "doc": "How bright, 0 to 1 (0.6 when left out)."
+      }
+     ]
+    },
+    {
+     "name": "SpeckKind",
+     "kind": "type",
+     "doc": "What a swarm does: `dust` hangs and twinkles, `embers` rise and fade, `rain` falls fast as streaks, `snow` falls\nslowly and sways, `leaves` flutter down, `fireflies` wander and blink, `bubbles` rise and wobble.",
+     "type": "\"dust\" | \"embers\" | \"rain\" | \"snow\" | \"leaves\" | \"fireflies\" | \"bubbles\""
+    },
+    {
+     "name": "SpeckDoc",
+     "kind": "interface",
+     "doc": "One swarm of specks: dust, embers, rain, snow, leaves, fireflies or bubbles.",
+     "props": [
+      {
+       "name": "kind",
+       "type": "SpeckKind",
+       "doc": "What they are, which sets how they move."
+      },
+      {
+       "name": "count",
+       "type": "number",
+       "doc": "How many."
+      },
+      {
+       "name": "from",
+       "type": "Vec3",
+       "doc": "Two opposite corners of the box they live in: rain and snow fall from its top to its bottom, embers and bubbles rise from its bottom to its top."
+      },
+      {
+       "name": "to",
+       "type": "Vec3",
+       "doc": "The box's opposite corner."
+      },
+      {
+       "name": "colors",
+       "type": "string[]",
+       "doc": "Each speck takes one of these."
+      },
+      {
+       "name": "size",
+       "optional": true,
+       "type": "number",
+       "doc": "A speck's radius; left out, a size that suits the kind."
+      },
+      {
+       "name": "glow",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Whether they give off light; left out, embers and fireflies do."
+      },
+      {
+       "name": "land",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Rain, snow and leaves only: each lands on whatever stands still under it (or the box's floor), lies a while and goes, then falls again."
+      },
+      {
+       "name": "wind",
+       "optional": true,
+       "type": "[number, number]",
+       "doc": "Rain, snow and leaves only: how far the wind carries each sideways over its whole fall, [x, z]; rain slants along it."
+      }
+     ]
+    },
+    {
+     "name": "BoneDoc",
+     "kind": "interface",
+     "doc": "One bone of a scene: something for parts to ride on and moves to turn.",
+     "props": [
+      {
+       "name": "name",
+       "type": "string",
+       "doc": "What parts and moves call it."
+      },
+      {
+       "name": "at",
+       "type": "Vec3",
+       "doc": "The point it turns and grows about."
+      },
+      {
+       "name": "parent",
+       "optional": true,
+       "type": "string",
+       "doc": "Another bone it rides on (named earlier in the list)."
+      }
+     ]
+    },
+    {
+     "name": "PartDoc",
+     "kind": "interface",
+     "doc": "One part of a scene: a shape, its paint and the bone that carries it.",
+     "props": [
+      {
+       "name": "shape",
+       "type": "ShapeDoc",
+       "doc": "Its shape."
+      },
+      {
+       "name": "paint",
+       "type": "PaintDoc",
+       "doc": "Its paint."
       },
       {
        "name": "bone",
-       "type": "number",
-       "doc": "The bone that holds most of the blob."
+       "optional": true,
+       "type": "string",
+       "doc": "The bone that carries it; left out, it is part of the land."
       },
       {
-       "name": "part",
+       "name": "glow",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Gives off light and takes none: lamps, fire, stars, anything that must stay bright."
+      },
+      {
+       "name": "noShadow",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Casts no shadow: thin things in the air."
+      },
+      {
+       "name": "grime",
+       "optional": true,
+       "type": "string",
+       "doc": "A color that gathers in its corners and cracks, as moss or soot does."
+      },
+      {
+       "name": "bare",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Takes none of the scene's `cover`: water, glass, a fresh fire."
+      },
+      {
+       "name": "touches",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Meets other parts by design as it moves (foam round a bobbing buoy): the check for parts passing through each other lets it."
+      },
+      {
+       "name": "ink",
+       "optional": true,
+       "type": "{ kind: \"hatch\" | \"stipple\" | \"cracks\" | \"grain\" | \"tufts\" | \"scales\"; amount?: number; color?: string }",
+       "doc": "Little drawn marks over it, one in some 4-by-4 blocks of pixels, never repeating: `hatch`, `stipple`, `cracks`,\n`grain` (wood), `tufts` (grass) or `scales`. `amount` (0.5) is the share of blocks marked; `color` the ink, a\ndarker step of the paint when left out."
+      },
+      {
+       "name": "glass",
+       "optional": true,
+       "type": "{ see?: number; mirror?: number; top?: boolean }",
+       "doc": "Water, ice or glass: it shows what lies behind it (`see`, 0.6) and mirrors what is over it (`mirror`, 0.3, more\nat a glancing look), painted for the scene's own camera. Its paint tints what shows through, and where the line\nfrom the eye leaves it with nothing met, a darker step of it shows, as the bottom of a pond does. `top` keeps it\nto upturned faces, for a pond cut as one slab with earth sides."
+      },
+      {
+       "name": "strokes",
+       "optional": true,
        "type": "number",
-       "doc": "Its part (`Actor.partOf`), or 0 when the actor has none."
+       "doc": "Dabs that follow the form: 0 to 1, how far each cell is drawn as a stroke along the level line round the shape. Shows as brushwork in the Blobs view."
       }
      ]
     },
     {
-     "name": "PickOptions",
+     "name": "ShapeDoc",
+     "kind": "type",
+     "doc": "A shape, written as data: `kind` says which. The guide, docs/scene-descriptions.md in the repository, goes through\nthem all.",
+     "type": "{ kind: \"sphere\"; at: Vec3; r: number } | { kind: \"ball\"; at: Vec3; r: Vec3 } | { kind: \"box\"; at: Vec3; half: Vec3; round?: number } | { kind: \"cylinder\"; at: Vec3; height: number; r: number; rTop?: number } | { kind: \"cone\"; from: Vec3; to: Vec3; r: number; rTo?: number } | { kind: \"ring\"; at: Vec3; r: number; tube: number } | { kind: \"roof\"; at: Vec3; half: [number, number]; height: number } | { kind: \"join\"; shapes: ShapeDoc[]; blend?: \"smooth\" | \"chamfer\" | \"stairs\"; by?: number; steps?: number } | { kind: \"lathe\"; at: Vec3; profile: [number, number][] } | { kind: \"sweep\"; path: Vec3[]; r: number; rTo?: number } | { kind: \"text\"; at: Vec3; text: string; size: number; depth: number; facing?: \"x\" | \"z\" } | { kind: \"blocks\"; at: Vec3; size: number; layers: string[][] } | { kind: \"grow\"; style: GrowStyle; at: Vec3; seed: number; size: number; r: number; depth?: number; branches?: number; tips?: number; only?: \"twigs\" | \"tips\" } | { kind: \"wall\"; from: Vec3; to: Vec3; height: number; thick: number; brick?: [number, number]; jitter?: number; ruin?: number; missing?: number; fallen?: number; seed: number } | { kind: \"steps\"; at: Vec3; dir: [number, number]; count: number; rise: number; run: number; width: number; wear?: number; seed: number } | { kind: \"fence\"; path: Vec3[]; bay: number; height: number; post: number; rails: number; lean?: number; missing?: number; sag?: number; seed: number } | { kind: \"arcade\"; from: Vec3; to: Vec3; height: number; thick: number; bays: number; pillar: number; spring?: number; arch?: \"round\" | \"pointed\" | \"flat\"; course?: number; ruin?: number; seed?: number } | { kind: \"crystal\"; at: Vec3; dir: Vec3; length: number; r: number; sides?: number; tip?: number; chips?: number; seed: number } | { kind: \"crystals\"; at: Vec3; count: number; size: number; r: number; spread?: number; sides?: number; chips?: number; seed: number } | { kind: \"geode\"; at: Vec3; r: number; open: Vec3; rind?: number; bands?: number; lining?: number; seed: number } | { kind: \"columns\"; at: Vec3; r: number; cell: number; height: number; rise?: \"dome\" | \"steps\" | \"random\"; seed: number } | { kind: \"drips\"; at: Vec3; r: number; roof: number; count: number; length: number; seed: number } | { kind: \"flowstone\"; at: Vec3; along: [number, number]; width: number; drop: number; folds?: number; seed: number } | { kind: \"icicles\"; on: ShapeDoc; every: number; length: number; above?: number; seed: number } | { kind: \"tree\"; at: Vec3; height: number; crown: Vec3; r: number; points?: number; leaves?: number; only?: \"limbs\" | \"leaves\"; seed: number } | { kind: \"cactus\"; at: Vec3; height: number; r: number; ribs?: number; arms?: number; seed: number } | { kind: \"rosette\"; at: Vec3; r: number; leaves: number; seed: number } | { kind: \"brackets\"; at: Vec3; facing: [number, number]; r: number; count: number; seed: number } | { kind: \"brain\"; at: Vec3; r: number; groove?: number; seed: number } | { kind: \"shell\"; at: Vec3; size: number; turns?: number; spire?: number; facing?: number } | { kind: \"horn\"; at: Vec3; dir: Vec3; length: number; r: number; curl?: number; twist?: number; ridges?: number } | { kind: \"antler\"; at: Vec3; dir: Vec3; length: number; r: number; tines: number; seed: number } | { kind: \"ribs\"; from: Vec3; to: Vec3; count: number; span: number; drop: number; r: number } | { kind: \"land\"; at: Vec3; half: [number, number]; base?: number; peaks: { at: [number, number]; h: number; r: number }[]; noise?: number; drops?: number; slump?: number; beds?: { thick: number; hard: number }[]; seed: number } | { kind: \"butte\"; at: Vec3; r: number; height: number; beds?: { thick: number; hard: number }[]; wear?: number; cap?: number; seed: number } | { kind: \"hoodoo\"; at: Vec3; height: number; r: number; seed: number } | { kind: \"arch\"; from: Vec3; to: Vec3; height: number; thick: number; soft?: number; beds?: { thick: number; hard: number }[]; seed: number } | { kind: \"mud\"; at: Vec3; r: number; plate: number; curl?: number; seed: number } | { kind: \"pebbles\"; path: Vec3[]; width: number; count: number; size: number; seed: number } | { kind: \"drift\"; at: Vec3; half: [number, number]; depth: number; wind: [number, number]; pile?: number; reach?: number; path?: Vec3[]; pathWidth?: number; seed: number } | { kind: \"frost\"; at: Vec3; facing: Vec3; r: number; arms?: number; stage?: [number, number]; seed: number } | { kind: \"cut\"; shape: ShapeDoc; hole: ShapeDoc } | { kind: \"rough\"; shape: ShapeDoc; by: number; scale?: number }"
+    },
+    {
+     "name": "PaintDoc",
+     "kind": "type",
+     "doc": "A part's paint: one color, or a pattern of several.",
+     "type": "string | { kind: \"bands\"; axis: \"x\" | \"y\" | \"z\"; size: number; colors: string[] } | { kind: \"bricks\"; size: [number, number]; colors: string[]; line: string } | { kind: \"hex\"; size: number; colors: string[]; line: string; deep?: string } | { kind: \"speckle\"; size: number; colors: string[] } | { kind: \"patches\"; size: number; colors: string[] } | { kind: \"key\"; colors: Record<string, string> } | { kind: \"faces\"; top?: PaintDoc; side: PaintDoc; under?: PaintDoc } | { kind: \"split\"; axis: \"x\" | \"y\" | \"z\"; at: number; below: PaintDoc; above: PaintDoc } | { kind: \"pieces\"; colors: string[]; line?: string; ordered?: boolean }"
+    },
+    {
+     "name": "MoveDoc",
+     "kind": "type",
+     "doc": "Every move repeats a whole number of `times` in the loop, so the scene loops.",
+     "type": "{ kind: \"spin\"; bone: string; axis: \"x\" | \"y\" | \"z\"; times: number; phase?: number } | { kind: \"sway\"; bone: string; axis: \"x\" | \"y\" | \"z\"; degrees: number; times: number; phase?: number } | { kind: \"bob\"; bone: string; by: Vec3; times: number; phase?: number } | { kind: \"drift\"; bone: string; by: Vec3; times: number; grow?: [number, number]; phase?: number } | { kind: \"pulse\"; bone: string; size: [number, number]; times: number; phase?: number } | { kind: \"sprout\"; bone: string; times: number; phase?: number }"
+    },
+    {
+     "name": "LightDoc",
      "kind": "interface",
-     "doc": "Options for `pickActors`.",
+     "doc": "A point light in a scene.",
      "props": [
       {
-       "name": "k",
-       "optional": true,
-       "type": "number",
-       "doc": "How far out a blob counts, in standard deviations (2 is about where it fades to nothing)."
+       "name": "at",
+       "type": "Vec3",
+       "doc": "Where it is."
       },
       {
-       "name": "minOpacity",
-       "optional": true,
+       "name": "color",
+       "type": "string",
+       "doc": "Its color."
+      },
+      {
+       "name": "strength",
        "type": "number",
-       "doc": "Blobs fainter than this are looked through."
+       "doc": "1 is a torch; 3 lights dark ground brightly."
+      },
+      {
+       "name": "range",
+       "type": "number",
+       "doc": "How far it reaches."
+      },
+      {
+       "name": "flicker",
+       "optional": true,
+       "type": "{ by: number; times: number }",
+       "doc": "Flickers by this share of its strength, `times` per loop."
+      },
+      {
+       "name": "circle",
+       "optional": true,
+       "type": "{ r: number; times: number }",
+       "doc": "Goes round a circle of this radius about `at`, `times` per loop."
+      },
+      {
+       "name": "shadows",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Casts shadows, worked out once when the scene is built, so they cost nothing as it plays and flicker with it. Only\nthe first four lights can, and not one that goes round a circle. Give it to a lamp or fire out in the open: a light\nset inside something (a jar, a window, a hollow) to stand for its glow would shade everything outside."
       }
      ]
     },
     {
-     "name": "pickActors",
+     "name": "checkScene",
      "kind": "function",
-     "doc": "The nearest blob a ray hits among posed actors, or null. Call each skeleton's `update()` first.",
+     "doc": "Everything wrong with a scene description, each as `where: what`. Empty when\nit is sound. It takes anything, so it can check what came back from a prompt.",
      "signatures": [
       {
-       "code": "pickActors(actors: readonly Actor[], origin: ArrayLike<number>, dir: ArrayLike<number>, options?: PickOptions): PickHit | null"
+       "code": "checkScene(doc: unknown): string[]"
       }
      ]
     },
     {
-     "name": "boneShare",
-     "kind": "function",
-     "doc": "How much of each blob of an actor moves with `bone`: its weight on that bone, 0–1.",
-     "signatures": [
+     "name": "CompiledScene",
+     "kind": "interface",
+     "doc": "A scene ready to build and play, from `compileScene`.",
+     "props": [
       {
-       "code": "boneShare(actor: Pick<Actor, \"blobs\" | \"skin\">, bone: number): Float32Array"
+       "name": "name",
+       "type": "string",
+       "doc": "The scene's name."
+      },
+      {
+       "name": "loop",
+       "type": "number",
+       "doc": "Seconds the scene takes to repeat."
+      },
+      {
+       "name": "orbit",
+       "type": "Orbit",
+       "doc": "Where the camera starts."
+      },
+      {
+       "name": "swing",
+       "type": "number",
+       "doc": "Degrees the view rocks to either side, once a loop: 0 holds still."
+      },
+      {
+       "name": "look",
+       "type": "PixelLook",
+       "doc": "The pixel look the scene asks for."
+      },
+      {
+       "name": "palette",
+       "type": "Rgb[]",
+       "doc": "The scene's own palette."
+      },
+      {
+       "name": "bones",
+       "type": "Bone[]",
+       "doc": "The scene's bones."
+      },
+      {
+       "name": "steps",
+       "type": "boolean",
+       "doc": "Whether the scene asks to be painted in steps of its palette (`look.steps`)."
+      },
+      {
+       "name": "touching",
+       "type": "number[]",
+       "doc": "The parts (by their place in the list) marked `touches`: they meet others by design."
+      },
+      {
+       "name": "haze",
+       "optional": true,
+       "type": "{ color: Vec3; from: number; to: number }",
+       "doc": "Distance haze, if the scene asks for it: the color (linear) and where it starts and would be total, in units past the view's target."
+      }
+     ],
+     "methods": [
+      {
+       "name": "spec",
+       "doc": "The shapes on a grid of `spacing`. With `steps` (a palette, 0–255), the scene is painted in steps of it as it is cut.",
+       "signatures": [
+        {
+         "code": "spec(spacing: number, steps?: Rgb[]): VoxelSpec"
+        }
+       ]
+      },
+      {
+       "name": "empty",
+       "doc": "The parts (by their place in the list) that came out with no blobs at all, such as a shape whose hole swallows it: `checkScene` can't see those.",
+       "signatures": [
+        {
+         "code": "empty(built: { partOf: ArrayLike<number> }): number[]"
+        }
+       ]
+      },
+      {
+       "name": "pose",
+       "doc": "Poses the bones for `t` seconds.",
+       "signatures": [
+        {
+         "code": "pose(sk: Skeleton, t: number): void"
+        }
+       ]
+      },
+      {
+       "name": "lights",
+       "doc": "The scene's live lights at a time, in seconds.",
+       "signatures": [
+        {
+         "code": "lights(t: number): PointLight[]"
+        }
+       ]
       }
      ]
     },
     {
-     "name": "boneLabel",
+     "name": "sprouted",
      "kind": "function",
-     "doc": "A bone's name for people: 'lForearm' → 'left forearm', 'flUpper' → 'front left upper', 'tail3' → 'tail 3'.",
+     "doc": "A sprout's size through its life (0 to 1): grows from nothing over the first 40%, stands, and shrinks away over the last 15%.",
      "signatures": [
       {
-       "code": "boneLabel(name: string): string"
+       "code": "sprouted(life: number): number"
+      }
+     ]
+    },
+    {
+     "name": "compileScene",
+     "kind": "function",
+     "doc": "`puffs` keeps hidden bones for a tap's puff of sparkles (`poke.ts`); a creature taken from a scene goes without.",
+     "signatures": [
+      {
+       "code": "compileScene(doc: SceneDoc, options?: { puffs?: boolean }): CompiledScene"
       }
      ]
     }
@@ -2511,6 +3563,7 @@
   {
    "id": "voxel",
    "title": "Shapes on a grid",
+   "group": "scenes",
    "doc": "",
    "entries": [
     {
@@ -3218,499 +4271,9 @@
    ]
   },
   {
-   "id": "sculpt",
-   "title": "Sculpting creatures",
-   "doc": "",
-   "entries": [
-    {
-     "name": "SculptPart",
-     "kind": "interface",
-     "doc": "Creatures cut the way the pixel scenes are (voxel.ts): shapes given as\ndistance functions, one solid disc per surface cell, sun and cast shadows\nbaked in. What a scene does not need and a creature does is bending: here\nevery cell is weighted to the bones named on its part by distance, as\nbody.ts weights its blobs, so a neck or a tail curves without a seam.\n\nParts in one `group` are treated as one solid: a cell buried inside a\nneighbor is never made. Give a part its own group when it swings clear of\nthe rest (a jaw, a wing), or what it uncovers would be missing.",
-     "props": [
-      {
-       "name": "shape",
-       "type": "Shape",
-       "doc": "The part's shape, as a distance function."
-      },
-      {
-       "name": "color",
-       "type": "Vec3 | ((p: Vec3, n: Vec3) => Vec3)",
-       "doc": "Color (0–1, sRGB) or color at a surface point given its outward normal."
-      },
-      {
-       "name": "bones",
-       "type": "string[]",
-       "doc": "The bones that move it: each cell is weighted by its distance to each."
-      },
-      {
-       "name": "group",
-       "optional": true,
-       "type": "string",
-       "doc": "Parts in one group cut each other where they overlap; a part that swings clear, like a jaw or a wing, wants its\nown."
-      },
-      {
-       "name": "glow",
-       "optional": true,
-       "type": "boolean",
-       "doc": "Unlit: the color as given, for eyes and fire."
-      },
-      {
-       "name": "opacity",
-       "optional": true,
-       "type": "number",
-       "doc": "How solid its blobs are, 0–1."
-      },
-      {
-       "name": "noShadow",
-       "optional": true,
-       "type": "boolean",
-       "doc": "Casts no shadow on other parts."
-      },
-      {
-       "name": "blend",
-       "optional": true,
-       "type": "number",
-       "doc": "How far its weights spread from each bone, if not the creature's `blend`."
-      }
-     ]
-    },
-    {
-     "name": "SculptSpec",
-     "kind": "interface",
-     "doc": "A creature to sculpt: its bones, its parts and how far a cell's weight spreads between bones.",
-     "props": [
-      {
-       "name": "bones",
-       "type": "Bone[]",
-       "doc": "The creature's bones."
-      },
-      {
-       "name": "parts",
-       "type": "SculptPart[]",
-       "doc": "Its parts."
-      },
-      {
-       "name": "blend",
-       "type": "number",
-       "doc": "How far (in world units) a cell's weight spreads from a bone."
-      },
-      {
-       "name": "light",
-       "optional": true,
-       "type": "Partial<VoxelLight>",
-       "doc": "The baked light; what is left out comes from `DEFAULT_LIGHT`."
-      },
-      {
-       "name": "skirt",
-       "optional": true,
-       "type": "number",
-       "doc": "How deep (world units) a part's skin goes on inside a neighbor of its group. 0 cuts it off at the neighbor's\nsurface; a little keeps a neck closed where it meets a turning head."
-      }
-     ]
-    },
-    {
-     "name": "Sculpted",
-     "kind": "interface",
-     "doc": "A body builder for procedural creatures: a skeleton, plus a list of simple\nshapes (tapered tubes, ellipsoids, flat sheets, and filled cones for things\nlike flame), each covered in flat surface blobs and weighted to the bones\nnamed on it by distance. The fox (creature.ts) was the first creature and\nbuilds its own way; the frog, elf and dragon are written in this.\n\nBlobs are spread by area, so a part gets its share of `count`; `density`\ngives small parts (eyes, claws) more than their share. Lighting is baked into\nthe color from a fixed light, as for the fox, unless a part is `glow`.",
-     "extends": [
-      "Creature"
-     ],
-     "props": [
-      {
-       "name": "partOf",
-       "type": "Uint16Array",
-       "doc": "Which part each blob came from."
-      },
-      {
-       "name": "spacing",
-       "type": "number",
-       "doc": "The grid's cell size it was cut at."
-      }
-     ]
-    },
-    {
-     "name": "DISC",
-     "kind": "const",
-     "doc": "A creature's discs are wider than a scene's (voxel.ts `disc`): a creature is seen as blobs, without pixel mode's\nalpha cut, and at the scene's size its far side showed through between them.",
-     "type": "0.75"
-    },
-    {
-     "name": "buildSculpt",
-     "kind": "function",
-     "doc": "Cuts the creature on a grid of `spacing`.",
-     "signatures": [
-      {
-       "code": "buildSculpt(spec: SculptSpec, spacing: number): Sculpted"
-      }
-     ]
-    },
-    {
-     "name": "sculptToCount",
-     "kind": "function",
-     "doc": "Cuts the creature at the spacing that gives about `count` blobs. Cells go\nroughly as 1 / spacing², but not exactly (thin parts are fattened to the\ngrid), so it measures twice: a coarse cut, then one nearer the answer, each\na fraction of the final cut's cost. `make` is handed the spacing so thin\nparts can be kept at least a cell thick.",
-     "signatures": [
-      {
-       "code": "sculptToCount(make: (spacing: number) => SculptSpec, count: number, probe?: number): Sculpted"
-      }
-     ]
-    },
-    {
-     "name": "toCount",
-     "kind": "function",
-     "doc": "`cut` at the spacing that gives about `count` blobs, for anything cut on a grid (a sculpt, a scene's creature).",
-     "signatures": [
-      {
-       "code": "toCount<T extends { blobs: Blobs }>(cut: (spacing: number) => T, count: number, probe: number): T"
-      }
-     ]
-    },
-    {
-     "name": "joinBuilt",
-     "kind": "function",
-     "doc": "One creature from two builds on the same bones (a sculpted body and a fuzzy flame, say): `b`'s blobs follow `a`'s.",
-     "signatures": [
-      {
-       "code": "joinBuilt(a: { blobs: Blobs; skin: Skin }, b: { blobs: Blobs; skin: Skin }): { blobs: Blobs; skin: Skin; from: number }"
-      }
-     ]
-    },
-    {
-     "name": "smooth",
-     "kind": "function",
-     "doc": "Shapes melted into each other over a distance `k`, so a neck runs into a chest without a crease.",
-     "signatures": [
-      {
-       "code": "smooth(k: number, ...s: Shape[]): Shape"
-      }
-     ]
-    },
-    {
-     "name": "flatten",
-     "kind": "function",
-     "doc": "A shape squashed front to back (along z) about z = `at`, to `f` of its depth: a chest, a foot.",
-     "signatures": [
-      {
-       "code": "flatten(s: Shape, f: number, at?: number): Shape"
-      }
-     ]
-    },
-    {
-     "name": "membrane",
-     "kind": "function",
-     "doc": "A skin of thickness 2r stretched over triangles: a wing's membrane, a fin.",
-     "signatures": [
-      {
-       "code": "membrane(tris: Vec3[][], r: number): Shape"
-      }
-     ]
-    },
-    {
-     "name": "scales",
-     "kind": "function",
-     "doc": "A pattern of scales: space cut into staggered cells of size `a`. Gives how\nfar the point is from its cell's middle (0 at the middle, 1 at the seam) and\na number 0–1 that is the same all over one scale.",
-     "signatures": [
-      {
-       "code": "scales(p: ArrayLike<number>, a: number): { out: number; id: number }"
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "body",
-   "title": "Bodies from tubes and balls",
-   "doc": "",
-   "entries": [
-    {
-     "name": "Creature",
-     "kind": "interface",
-     "doc": "A body builder for procedural creatures: a skeleton, plus a list of simple\nshapes (tapered tubes, ellipsoids, flat sheets, and filled cones for things\nlike flame), each covered in flat surface blobs and weighted to the bones\nnamed on it by distance. The fox (creature.ts) was the first creature and\nbuilds its own way; the frog, elf and dragon are written in this.\n\nBlobs are spread by area, so a part gets its share of `count`; `density`\ngives small parts (eyes, claws) more than their share. Lighting is baked into\nthe color from a fixed light, as for the fox, unless a part is `glow`.",
-     "props": [
-      {
-       "name": "blobs",
-       "type": "Blobs",
-       "doc": "The blobs in the rest pose."
-      },
-      {
-       "name": "skin",
-       "type": "Skin",
-       "doc": "Which bones move each blob, and by how much."
-      },
-      {
-       "name": "skeleton",
-       "type": "Skeleton",
-       "doc": "The bones, and their pose."
-      }
-     ]
-    },
-    {
-     "name": "Part",
-     "kind": "interface",
-     "doc": "One part of a body for `buildBody`: a shape, its color and the bones that move it.",
-     "props": [
-      {
-       "name": "shape",
-       "type": "Shape",
-       "doc": "A tube, a ball, a sheet or a filled cone."
-      },
-      {
-       "name": "color",
-       "type": "Vec3 | ((p: Vec3, n: Vec3, u: number) => Vec3)",
-       "doc": "Color at a point on the surface, given its outward normal and `u`, how far along a tube or fill (0–1)."
-      },
-      {
-       "name": "bones",
-       "type": "string[]",
-       "doc": "The bones that move it, nearest first is not needed: each blob is weighted by its distance to each."
-      },
-      {
-       "name": "density",
-       "optional": true,
-       "type": "number",
-       "doc": "Blobs per unit area, relative to the rest."
-      },
-      {
-       "name": "size",
-       "optional": true,
-       "type": "number",
-       "doc": "Blob size, relative to the rest."
-      },
-      {
-       "name": "opacity",
-       "optional": true,
-       "type": "number | ((p: Vec3, u: number) => number)",
-       "doc": "Opacity, or opacity at a point given how far along it is (as for `color`)."
-      },
-      {
-       "name": "glow",
-       "optional": true,
-       "type": "boolean",
-       "doc": "Unlit: the color as given, for eyes and fire."
-      },
-      {
-       "name": "blend",
-       "optional": true,
-       "type": "number",
-       "doc": "How far its weights spread from each bone, if not the creature's `blend`: wider for a sheet that must stretch smoothly."
-      }
-     ]
-    },
-    {
-     "name": "BodySpec",
-     "kind": "interface",
-     "doc": "A body for `buildBody`: its bones, its parts and how far a blob's weight spreads between bones.",
-     "props": [
-      {
-       "name": "bones",
-       "type": "Bone[]",
-       "doc": "The body's bones."
-      },
-      {
-       "name": "parts",
-       "type": "Part[]",
-       "doc": "Its parts."
-      },
-      {
-       "name": "blend",
-       "type": "number",
-       "doc": "How far (in world units) a blob's weight spreads from a bone: about a tenth of a limb."
-      }
-     ]
-    },
-    {
-     "name": "Built",
-     "kind": "interface",
-     "doc": "A body builder for procedural creatures: a skeleton, plus a list of simple\nshapes (tapered tubes, ellipsoids, flat sheets, and filled cones for things\nlike flame), each covered in flat surface blobs and weighted to the bones\nnamed on it by distance. The fox (creature.ts) was the first creature and\nbuilds its own way; the frog, elf and dragon are written in this.\n\nBlobs are spread by area, so a part gets its share of `count`; `density`\ngives small parts (eyes, claws) more than their share. Lighting is baked into\nthe color from a fixed light, as for the fox, unless a part is `glow`.",
-     "extends": [
-      "Creature"
-     ],
-     "props": [
-      {
-       "name": "partOf",
-       "type": "Uint16Array",
-       "doc": "Which part each blob came from."
-      },
-      {
-       "name": "seen",
-       "optional": true,
-       "type": "Uint8Array<ArrayBufferLike>",
-       "doc": "How much of each baked lamp a blob can see, four bytes a blob (voxel.ts `lamps`); left out, every lamp is seen."
-      }
-     ]
-    },
-    {
-     "name": "rng",
-     "kind": "function",
-     "doc": "A small seeded random number generator: it returns a function that gives the next number from 0 up to 1, the same\nrun for the same seed.",
-     "signatures": [
-      {
-       "code": "rng(seed: number): () => number"
-      }
-     ]
-    },
-    {
-     "name": "boneTail",
-     "kind": "function",
-     "doc": "Where a bone ends in the rest pose: its tail, else its first child's head, else a short way on from its parent.",
-     "signatures": [
-      {
-       "code": "boneTail(bones: Bone[], i: number): Vec3"
-      }
-     ]
-    },
-    {
-     "name": "shapeArea",
-     "kind": "function",
-     "doc": "About how much surface a body shape has, which decides its share of the blobs.",
-     "signatures": [
-      {
-       "code": "shapeArea(s: Shape): number"
-      }
-     ]
-    },
-    {
-     "name": "buildBody",
-     "kind": "function",
-     "doc": "Builds a creature from its spec with about `count` blobs. The same spec and\nseed always give the same creature.",
-     "signatures": [
-      {
-       "code": "buildBody(spec: BodySpec, count: number, seed?: number): Built"
-      }
-     ]
-    },
-    {
-     "name": "segDist",
-     "kind": "function",
-     "doc": "Distance from p to the segment ab.",
-     "signatures": [
-      {
-       "code": "segDist(p: ArrayLike<number>, a: Vec3, b: Vec3): number"
-      }
-     ]
-    },
-    {
-     "name": "mirror",
-     "kind": "const",
-     "doc": "Mirrors a point (or a list of them) to the creature's other side.",
-     "type": "(p: Vec3) => Vec3"
-    },
-    {
-     "name": "spots",
-     "kind": "function",
-     "doc": "A cheap, smooth-ish pattern in 0–1 for spots and scales: the same at the same point every time.",
-     "signatures": [
-      {
-       "code": "spots(p: Vec3, freq: number, seed?: number): number"
-      }
-     ]
-    },
-    {
-     "name": "mix",
-     "kind": "const",
-     "doc": "The point part of the way from `a` to `b`: `t` 0 is `a`, 1 is `b`.",
-     "type": "(a: Vec3, b: Vec3, t: number) => Vec3"
-    }
-   ]
-  },
-  {
-   "id": "fur",
-   "title": "Fur",
-   "doc": "",
-   "entries": [
-    {
-     "name": "Fur",
-     "kind": "interface",
-     "doc": "Fur for a sculpted creature (sculpt.ts): strands grown out of its skin.\n\nThe cut creature is a shell of round discs, one per grid cell; textured, it\nreads as bricks. Fur is what a Gaussian is good at: every strand here is one\nlong, thin blob that leaves the skin at a slant and lies the way the coat\nruns (`flow`), rooted anywhere inside its cell so the grid never shows. The\nshell stays underneath, a shade darker, as the undercoat: it keeps the body\nsolid where strands part, and the strands' soft tips make the outline soft.\n\nA strand hangs on its root cell's bones with the same weights, so the fur\nbends with the body, and it is still a plain blob: files, sprite sheets and\nShape Shifter take it as they take any other.",
-     "props": [
-      {
-       "name": "length",
-       "type": "number",
-       "doc": "How long a strand is, in world units."
-      },
-      {
-       "name": "flow",
-       "type": "Vec3 | ((p: Vec3, n: Vec3) => Vec3)",
-       "doc": "Which way the coat lies at a surface point. Only its part along the skin counts."
-      },
-      {
-       "name": "lift",
-       "optional": true,
-       "type": "number",
-       "doc": "How far strands stand up from the skin, in radians: 0 lies flat."
-      },
-      {
-       "name": "wild",
-       "optional": true,
-       "type": "number",
-       "doc": "How far strands stray from the flow, in radians either way."
-      },
-      {
-       "name": "density",
-       "optional": true,
-       "type": "number",
-       "doc": "Strands here for each strand on plain fur of the same area (a ruff is thicker)."
-      },
-      {
-       "name": "long",
-       "optional": true,
-       "type": "(p: Vec3, n: Vec3) => number",
-       "doc": "A factor on the length at a surface point: a ruff that grows longer toward the chest."
-      },
-      {
-       "name": "under",
-       "optional": true,
-       "type": "number",
-       "doc": "How dark the undercoat (the shell under the strands) is, as a share of its color."
-      },
-      {
-       "name": "color",
-       "optional": true,
-       "type": "(p: Vec3, n: Vec3) => Vec3",
-       "doc": "Strand color at a point, if not the skin's own (a pale tip on dark fur). Lit as the skin under it is."
-      }
-     ]
-    },
-    {
-     "name": "FurryPart",
-     "kind": "interface",
-     "doc": "A part of a sculpted creature that may grow fur.",
-     "extends": [
-      "SculptPart"
-     ],
-     "props": [
-      {
-       "name": "fur",
-       "optional": true,
-       "type": "Fur",
-       "doc": "The fur that grows on it; left out, bare skin."
-      }
-     ]
-    },
-    {
-     "name": "quatFromAxes",
-     "kind": "function",
-     "doc": "The rotation whose x, y and z axes are the given (orthonormal, right-handed) columns.",
-     "signatures": [
-      {
-       "code": "quatFromAxes(x: Vec3, y: Vec3, z: Vec3): Quat"
-      }
-     ]
-    },
-    {
-     "name": "growFur",
-     "kind": "function",
-     "doc": "Grows `total - shell.blobs.count` strands over the furred parts of `shell`\n(cut from `parts`, in the same order), spread by area and `density`, so the\ncreature comes out at exactly `total` blobs. The same shell and parts always\ngrow the same fur.",
-     "signatures": [
-      {
-       "code": "growFur(shell: Sculpted, parts: FurryPart[], total: number): Sculpted"
-      }
-     ]
-    }
-   ]
-  },
-  {
    "id": "built",
    "title": "Built things: walls, steps, fences, arcades",
+   "group": "scenes",
    "doc": "Built things: walls of real bricks, flights of worn steps, fences along a path and arcades cut into\nequal bays, each one shape however many pieces it has. Pure numbers and distance functions, so the scene builder\ncuts them like any other shape, and each shape's `pieceAt` says which brick, block, post or stone a point is on,\nfor the `pieces` paint.\n\nEvery piece is placed by a rule from the shape's own sizes and a seed (the same seed, the same ruin), and sizes are\nfitted so the pieces come out whole: a wall's length is a whole number of bricks (half bricks at the ends of every\nother course), a span a whole number of bays, so pillars and posts land exactly at its ends.\n\nThe idea comes from Silicon Jungle's Ink Studio built-things kit; this is our own code.",
    "entries": [
     {
@@ -4058,6 +4621,7 @@
   {
    "id": "forms",
    "title": "Formations: crystals, columns, drips",
+   "group": "scenes",
    "doc": "Formations: shapes that come from a rule rather than placing each one by hand. A faceted crystal and\nclusters of them from one root, a geode broken open, basalt columns on a hex grid, stalactites and stalagmites that\njoin into columns, flowstone down a wall, and icicles under every downward edge of another shape. Pure distance\nfunctions, each with a `pieceAt` for the `pieces` paint.\n\nThe idea comes from Silicon Jungle's Ink Studio formations kit; this is our own code.",
    "entries": [
     {
@@ -4439,6 +5003,7 @@
   {
    "id": "life",
    "title": "Living forms: trees, cacti, shells",
+   "group": "scenes",
    "doc": "Living forms: trees grown by space colonization, ribbed cacti, succulent rosettes, bracket fungi,\nbrain coral, shells wound on a log spiral, horns that curl, antlers with tines and a spine of ribs. Pure numbers and\ndistance functions: each lights, shadows, grows (on a bone with a `sprout` move) and rigs like any other part.\n\nThe idea comes from Silicon Jungle's Ink Studio living-forms kit; this is our own code.",
    "entries": [
     {
@@ -4916,6 +5481,7 @@
   {
    "id": "erode",
    "title": "Worn land",
+   "group": "scenes",
    "doc": "Worn land and layered rock: a height field worn by water and slumping (droplets carve gullies and drop\nwhat they carry in fans; slopes too steep for their rock slide to scree), rock laid down in beds where soft beds wear\nback further than hard ones, so ledges, benches and overhangs come by themselves, with hoodoos and natural arches as\npresets; cracked mud whose plates curl at their edges; and pebbles along a stream bed, bigger where it runs fastest.\n\nEverything runs once, when the scene is built, from its numbers and a seed: the same seed, the same land. Erosion\nhas a budget (`MAX_DROPS`, a grid of at most `MAX_GRID` cells a side) so a build stays within a second or so.\n\nThe idea comes from Silicon Jungle's Ink Studio erosion kit; this is our own code.",
    "entries": [
     {
@@ -5314,6 +5880,7 @@
   {
    "id": "grow",
    "title": "Growers",
+   "group": "scenes",
    "doc": "Growers: a tree, a coral or a cluster of crystals grown by a branching rule from a seed, so the same\nseed always gives the same plant. Pure numbers: `grow` gives the twigs (round-ended sticks, thick to thin) and the\ntips, which the scene builder turns into shapes. Each style is a rule: how many branches split from each end, how\nfar they lean out, how much shorter and thinner each step is, and how hard they pull back toward the sky.",
    "entries": [
     {
@@ -5430,6 +5997,7 @@
   {
    "id": "weather",
    "title": "Weather that lands",
+   "group": "scenes",
    "doc": "Weather that lands: what falls finds the ground actually under it, snow lies in drifts shaped by the\nwind and what stands in its way, and frost grows across a pane a branch at a time. Pure and tested.\n\nThe idea comes from Silicon Jungle's Ink Studio weather kit; this is our own code.",
    "entries": [
     {
@@ -5678,542 +6246,687 @@
    ]
   },
   {
-   "id": "sceneDoc",
-   "title": "Scenes written as data",
+   "id": "pixelPass",
+   "title": "Pixel mode",
+   "group": "pixels",
    "doc": "",
    "entries": [
     {
-     "name": "SceneDoc",
-     "kind": "interface",
-     "doc": "A pixel-art scene written as data: no code, so it can be typed by hand, kept\nin a file, or written by Claude from a prompt (docs/scene-descriptions.md).\n`checkScene` says what is wrong with one, in words that point at the place;\n`compileScene` turns a sound one into what the voxel builder, the bones and\npixel mode need.\n\nUnits: about 1 is a small house, and a whole scene is about 4 across. y is up, the ground is y = 0, and the\ncamera starts on the +z side. Colors are '#rrggbb'.",
+     "name": "PixelPass",
+     "kind": "class",
+     "doc": "Pixel mode: the scene is drawn small into a target, and one full-screen pass\nturns it into pixel art and scales it up in whole pixels, with no smoothing.\n\nThe pass is the GPU twin of `pixelArt` in splat-core/pixel.ts (change one,\nchange both): alpha cut, glow from bright pixels, nearest palette color in\nOKLab with a Bayer dither, edge lines inside the scene, an outline on the\nempty pixels that touch it, and a sky behind. It runs once per art pixel,\ninto `art`, which keeps display (sRGB) color so a palette color is stored\nexactly; the screen then gets a plain copy, scaled up. The art of the frame\nbefore is kept too: a look with `steady` reads it so a pixel between two\npalette colors does not flip from frame to frame.\n\nA look with `fine` draws the scene and its map of parts at twice the art's\nsize first, and a step before the pass settles each art pixel from its four\nsamples into `small` and `ids` (`resolveFine` in pixel.ts is its twin), so\neverything after it is the same either way.",
+     "ctor": [
+      {
+       "code": "new PixelPass(look: PixelLook)"
+      }
+     ],
      "props": [
       {
-       "name": "name",
-       "type": "string",
-       "doc": "The scene's name."
+       "name": "small",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
+       "doc": "The scene, drawn small. Linear and premultiplied, as any render target."
       },
       {
-       "name": "loop",
-       "type": "number",
-       "doc": "Seconds before everything repeats: 4 to 60."
+       "name": "ids",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
+       "doc": "The scene's parts, drawn small (`SplatWorld.parts`): where the color changes, one part ends and another begins. Only drawn for a look with `parts`."
       },
       {
-       "name": "light",
-       "optional": true,
-       "type": "{ from?: Vec3; ambient?: number; shadow?: number; ramp?: number; crevice?: number; wear?: number; bounce?: number }",
-       "doc": "The baked sun: `from` points toward it. `ramp` (0–1, 0.7 when left out) turns shade toward cool violet and full\nsun toward warm yellow, as a painter's ramp does; `crevice` (0.5) darkens corners and cracks; `wear` (0.5)\nlightens sharp outer edges. 0 turns any of them off. `bounce` (off unless set) lets surfaces throw their color onto\nwhat faces them, as a red wall warms the floor beside it; it costs build time, so use it where it shows."
+       "name": "fineSmall",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
+       "doc": "The scene and its map of parts at twice the art's size, for a look with `fine`: what `small` and `ids` are settled from."
       },
       {
-       "name": "palette",
-       "type": "string[]",
-       "doc": "The colors the picture is drawn in, 2 to 32."
+       "name": "fineIds",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
+       "doc": "The map of parts at twice the art's size, which four samples a pixel settles from."
       },
       {
-       "name": "sky",
-       "optional": true,
-       "type": "[string, string]",
-       "doc": "The sky behind, top and bottom. Left out, the background is clear."
+       "name": "art",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
+       "doc": "The finished art at its own size, in display color, for reading back (tests, saving) and for the screen."
       },
       {
-       "name": "skyReach",
-       "optional": true,
-       "type": "number",
-       "doc": "How far down the picture the sky's blend runs before it is all the bottom color: 0.05 to 1, the whole way when left out."
-      },
-      {
-       "name": "look",
-       "optional": true,
-       "type": "{ dither?: number; glow?: number; outline?: boolean; edges?: boolean; steps?: boolean }",
-       "doc": "The pixel look it asks for: how much dither and glow, and whether to draw an outline and edge lines. `steps` paints\nthe scene in steps of its palette as it is cut (each blob takes one palette color, a step of its own paint from shade\nto sun), so shade falls in flat bands; left out, shading is smooth and the picture is matched to the palette pixel by pixel."
-      },
-      {
-       "name": "disc",
-       "optional": true,
-       "type": "number",
-       "doc": "How wide each surface disc is, as a share of the grid: 0.4 to 1, 0.55 when left out. Small discs keep paint\ncrisp but let about a tenth of what lies behind a surface show through; a subject whose far side or inner\nparts are much darker or lighter than its near side (a head over an open jaw) wants 0.75, as creatures use."
-      },
-      {
-       "name": "camera",
-       "type": "Orbit & { swing?: number }",
-       "doc": "Where the view starts. `swing` rocks it gently from side to side by that many degrees, once a loop."
-      },
-      {
-       "name": "bones",
-       "optional": true,
-       "type": "BoneDoc[]",
-       "doc": "Things that move. The land itself needs none: parts with no bone stand still."
-      },
-      {
-       "name": "parts",
-       "type": "PartDoc[]",
-       "doc": "Everything in the scene, each a shape with its paint."
-      },
-      {
-       "name": "moves",
-       "optional": true,
-       "type": "MoveDoc[]",
-       "doc": "What moves, each a whole number of times a loop."
-      },
-      {
-       "name": "lights",
-       "optional": true,
-       "type": "LightDoc[]",
-       "doc": "Live lights, at most four: they light what is near them, frame by frame."
-      },
-      {
-       "name": "air",
-       "optional": true,
-       "type": "AirDoc",
-       "doc": "What hangs in the air: distance haze, low mist, beams of light and drifting specks."
-      },
-      {
-       "name": "cover",
-       "optional": true,
-       "type": "{ kind: \"snow\" | \"moss\" | \"dust\"; color: string; amount: number }",
-       "doc": "Snow, moss or dust laid over everything once it is cut (parts marked `bare` and glowing ones keep their paint):\n`snow` settles on tops open to the sky, `moss` creeps over shut-in and up-turned faces in patches, `dust` lies\nthin on every upturned face. `amount` 0 to 1, from a dusting to most of what faces up."
-      },
-      {
-       "name": "focus",
-       "optional": true,
-       "type": "{ at: Vec3; r: number }",
-       "doc": "Where the eye goes: within `r` of `at` the scene is cut at full detail, further out on a grid twice as coarse, in about a quarter of the blobs."
-      }
-     ]
-    },
-    {
-     "name": "AirDoc",
-     "kind": "interface",
-     "doc": "A scene's air: haze, mist, shafts of light and specks.",
-     "props": [
-      {
-       "name": "haze",
-       "optional": true,
-       "type": "{ color: string; from?: number; to?: number }",
-       "doc": "Things far from the camera fade toward `color`: it starts `from` units past the view's target (0 when left out) and would be total at `to` (4)."
-      },
-      {
-       "name": "mist",
-       "optional": true,
-       "type": "MistDoc[]",
-       "doc": "Low banks of mist that drift slowly to and fro, at most four."
-      },
-      {
-       "name": "shafts",
-       "optional": true,
-       "type": "ShaftDoc[]",
-       "doc": "Beams of light, as from a window or a gap in the leaves, at most six: what they land on is lit by them."
-      },
-      {
-       "name": "specks",
-       "optional": true,
-       "type": "SpeckDoc[]",
-       "doc": "Swarms of small things, each moving on its own, at most eight swarms and 300 specks in all."
-      }
-     ]
-    },
-    {
-     "name": "MistDoc",
-     "kind": "interface",
-     "doc": "One bank of mist.",
-     "props": [
-      {
-       "name": "at",
-       "type": "Vec3",
-       "doc": "The middle of the bank."
-      },
-      {
-       "name": "half",
-       "type": "Vec3",
-       "doc": "Half its size along x, y (its depth) and z."
-      },
-      {
-       "name": "color",
-       "type": "string",
-       "doc": "Its color."
-      },
-      {
-       "name": "thick",
-       "optional": true,
-       "type": "number",
-       "doc": "How thick it is, 0 to 1 (0.5 when left out)."
-      }
-     ]
-    },
-    {
-     "name": "ShaftDoc",
-     "kind": "interface",
-     "doc": "One beam of light.",
-     "props": [
-      {
-       "name": "from",
-       "type": "Vec3",
-       "doc": "Where it starts (a window, a crack, a lamp) and where it lands."
-      },
-      {
-       "name": "to",
-       "type": "Vec3",
-       "doc": "Where it lands."
-      },
-      {
-       "name": "r",
-       "type": "number",
-       "doc": "How wide it is, as a radius."
-      },
-      {
-       "name": "color",
-       "type": "string",
-       "doc": "Its color."
-      },
-      {
-       "name": "strength",
-       "optional": true,
-       "type": "number",
-       "doc": "How bright, 0 to 1 (0.6 when left out)."
-      }
-     ]
-    },
-    {
-     "name": "SpeckKind",
-     "kind": "type",
-     "doc": "What a swarm does: `dust` hangs and twinkles, `embers` rise and fade, `rain` falls fast as streaks, `snow` falls\nslowly and sways, `leaves` flutter down, `fireflies` wander and blink, `bubbles` rise and wobble.",
-     "type": "\"dust\" | \"embers\" | \"rain\" | \"snow\" | \"leaves\" | \"fireflies\" | \"bubbles\""
-    },
-    {
-     "name": "SpeckDoc",
-     "kind": "interface",
-     "doc": "One swarm of specks: dust, embers, rain, snow, leaves, fireflies or bubbles.",
-     "props": [
-      {
-       "name": "kind",
-       "type": "SpeckKind",
-       "doc": "What they are, which sets how they move."
-      },
-      {
-       "name": "count",
-       "type": "number",
-       "doc": "How many."
-      },
-      {
-       "name": "from",
-       "type": "Vec3",
-       "doc": "Two opposite corners of the box they live in: rain and snow fall from its top to its bottom, embers and bubbles rise from its bottom to its top."
-      },
-      {
-       "name": "to",
-       "type": "Vec3",
-       "doc": "The box's opposite corner."
-      },
-      {
-       "name": "colors",
-       "type": "string[]",
-       "doc": "Each speck takes one of these."
-      },
-      {
-       "name": "size",
-       "optional": true,
-       "type": "number",
-       "doc": "A speck's radius; left out, a size that suits the kind."
-      },
-      {
-       "name": "glow",
-       "optional": true,
-       "type": "boolean",
-       "doc": "Whether they give off light; left out, embers and fireflies do."
-      },
-      {
-       "name": "land",
-       "optional": true,
-       "type": "boolean",
-       "doc": "Rain, snow and leaves only: each lands on whatever stands still under it (or the box's floor), lies a while and goes, then falls again."
-      },
-      {
-       "name": "wind",
-       "optional": true,
-       "type": "[number, number]",
-       "doc": "Rain, snow and leaves only: how far the wind carries each sideways over its whole fall, [x, z]; rain slants along it."
-      }
-     ]
-    },
-    {
-     "name": "BoneDoc",
-     "kind": "interface",
-     "doc": "One bone of a scene: something for parts to ride on and moves to turn.",
-     "props": [
-      {
-       "name": "name",
-       "type": "string",
-       "doc": "What parts and moves call it."
-      },
-      {
-       "name": "at",
-       "type": "Vec3",
-       "doc": "The point it turns and grows about."
-      },
-      {
-       "name": "parent",
-       "optional": true,
-       "type": "string",
-       "doc": "Another bone it rides on (named earlier in the list)."
-      }
-     ]
-    },
-    {
-     "name": "PartDoc",
-     "kind": "interface",
-     "doc": "One part of a scene: a shape, its paint and the bone that carries it.",
-     "props": [
-      {
-       "name": "shape",
-       "type": "ShapeDoc",
-       "doc": "Its shape."
-      },
-      {
-       "name": "paint",
-       "type": "PaintDoc",
-       "doc": "Its paint."
-      },
-      {
-       "name": "bone",
-       "optional": true,
-       "type": "string",
-       "doc": "The bone that carries it; left out, it is part of the land."
-      },
-      {
-       "name": "glow",
-       "optional": true,
-       "type": "boolean",
-       "doc": "Gives off light and takes none: lamps, fire, stars, anything that must stay bright."
-      },
-      {
-       "name": "noShadow",
-       "optional": true,
-       "type": "boolean",
-       "doc": "Casts no shadow: thin things in the air."
-      },
-      {
-       "name": "grime",
-       "optional": true,
-       "type": "string",
-       "doc": "A color that gathers in its corners and cracks, as moss or soot does."
-      },
-      {
-       "name": "bare",
-       "optional": true,
-       "type": "boolean",
-       "doc": "Takes none of the scene's `cover`: water, glass, a fresh fire."
-      },
-      {
-       "name": "touches",
-       "optional": true,
-       "type": "boolean",
-       "doc": "Meets other parts by design as it moves (foam round a bobbing buoy): the check for parts passing through each other lets it."
-      },
-      {
-       "name": "ink",
-       "optional": true,
-       "type": "{ kind: \"hatch\" | \"stipple\" | \"cracks\" | \"grain\" | \"tufts\" | \"scales\"; amount?: number; color?: string }",
-       "doc": "Little drawn marks over it, one in some 4-by-4 blocks of pixels, never repeating: `hatch`, `stipple`, `cracks`,\n`grain` (wood), `tufts` (grass) or `scales`. `amount` (0.5) is the share of blocks marked; `color` the ink, a\ndarker step of the paint when left out."
-      },
-      {
-       "name": "glass",
-       "optional": true,
-       "type": "{ see?: number; mirror?: number; top?: boolean }",
-       "doc": "Water, ice or glass: it shows what lies behind it (`see`, 0.6) and mirrors what is over it (`mirror`, 0.3, more\nat a glancing look), painted for the scene's own camera. Its paint tints what shows through, and where the line\nfrom the eye leaves it with nothing met, a darker step of it shows, as the bottom of a pond does. `top` keeps it\nto upturned faces, for a pond cut as one slab with earth sides."
-      },
-      {
-       "name": "strokes",
-       "optional": true,
-       "type": "number",
-       "doc": "Dabs that follow the form: 0 to 1, how far each cell is drawn as a stroke along the level line round the shape. Shows as brushwork in the Blobs view."
-      }
-     ]
-    },
-    {
-     "name": "ShapeDoc",
-     "kind": "type",
-     "doc": "A shape, written as data: `kind` says which. The guide, docs/scene-descriptions.md in the repository, goes through\nthem all.",
-     "type": "{ kind: \"sphere\"; at: Vec3; r: number } | { kind: \"ball\"; at: Vec3; r: Vec3 } | { kind: \"box\"; at: Vec3; half: Vec3; round?: number } | { kind: \"cylinder\"; at: Vec3; height: number; r: number; rTop?: number } | { kind: \"cone\"; from: Vec3; to: Vec3; r: number; rTo?: number } | { kind: \"ring\"; at: Vec3; r: number; tube: number } | { kind: \"roof\"; at: Vec3; half: [number, number]; height: number } | { kind: \"join\"; shapes: ShapeDoc[]; blend?: \"smooth\" | \"chamfer\" | \"stairs\"; by?: number; steps?: number } | { kind: \"lathe\"; at: Vec3; profile: [number, number][] } | { kind: \"sweep\"; path: Vec3[]; r: number; rTo?: number } | { kind: \"text\"; at: Vec3; text: string; size: number; depth: number; facing?: \"x\" | \"z\" } | { kind: \"blocks\"; at: Vec3; size: number; layers: string[][] } | { kind: \"grow\"; style: GrowStyle; at: Vec3; seed: number; size: number; r: number; depth?: number; branches?: number; tips?: number; only?: \"twigs\" | \"tips\" } | { kind: \"wall\"; from: Vec3; to: Vec3; height: number; thick: number; brick?: [number, number]; jitter?: number; ruin?: number; missing?: number; fallen?: number; seed: number } | { kind: \"steps\"; at: Vec3; dir: [number, number]; count: number; rise: number; run: number; width: number; wear?: number; seed: number } | { kind: \"fence\"; path: Vec3[]; bay: number; height: number; post: number; rails: number; lean?: number; missing?: number; sag?: number; seed: number } | { kind: \"arcade\"; from: Vec3; to: Vec3; height: number; thick: number; bays: number; pillar: number; spring?: number; arch?: \"round\" | \"pointed\" | \"flat\"; course?: number; ruin?: number; seed?: number } | { kind: \"crystal\"; at: Vec3; dir: Vec3; length: number; r: number; sides?: number; tip?: number; chips?: number; seed: number } | { kind: \"crystals\"; at: Vec3; count: number; size: number; r: number; spread?: number; sides?: number; chips?: number; seed: number } | { kind: \"geode\"; at: Vec3; r: number; open: Vec3; rind?: number; bands?: number; lining?: number; seed: number } | { kind: \"columns\"; at: Vec3; r: number; cell: number; height: number; rise?: \"dome\" | \"steps\" | \"random\"; seed: number } | { kind: \"drips\"; at: Vec3; r: number; roof: number; count: number; length: number; seed: number } | { kind: \"flowstone\"; at: Vec3; along: [number, number]; width: number; drop: number; folds?: number; seed: number } | { kind: \"icicles\"; on: ShapeDoc; every: number; length: number; above?: number; seed: number } | { kind: \"tree\"; at: Vec3; height: number; crown: Vec3; r: number; points?: number; leaves?: number; only?: \"limbs\" | \"leaves\"; seed: number } | { kind: \"cactus\"; at: Vec3; height: number; r: number; ribs?: number; arms?: number; seed: number } | { kind: \"rosette\"; at: Vec3; r: number; leaves: number; seed: number } | { kind: \"brackets\"; at: Vec3; facing: [number, number]; r: number; count: number; seed: number } | { kind: \"brain\"; at: Vec3; r: number; groove?: number; seed: number } | { kind: \"shell\"; at: Vec3; size: number; turns?: number; spire?: number; facing?: number } | { kind: \"horn\"; at: Vec3; dir: Vec3; length: number; r: number; curl?: number; twist?: number; ridges?: number } | { kind: \"antler\"; at: Vec3; dir: Vec3; length: number; r: number; tines: number; seed: number } | { kind: \"ribs\"; from: Vec3; to: Vec3; count: number; span: number; drop: number; r: number } | { kind: \"land\"; at: Vec3; half: [number, number]; base?: number; peaks: { at: [number, number]; h: number; r: number }[]; noise?: number; drops?: number; slump?: number; beds?: { thick: number; hard: number }[]; seed: number } | { kind: \"butte\"; at: Vec3; r: number; height: number; beds?: { thick: number; hard: number }[]; wear?: number; cap?: number; seed: number } | { kind: \"hoodoo\"; at: Vec3; height: number; r: number; seed: number } | { kind: \"arch\"; from: Vec3; to: Vec3; height: number; thick: number; soft?: number; beds?: { thick: number; hard: number }[]; seed: number } | { kind: \"mud\"; at: Vec3; r: number; plate: number; curl?: number; seed: number } | { kind: \"pebbles\"; path: Vec3[]; width: number; count: number; size: number; seed: number } | { kind: \"drift\"; at: Vec3; half: [number, number]; depth: number; wind: [number, number]; pile?: number; reach?: number; path?: Vec3[]; pathWidth?: number; seed: number } | { kind: \"frost\"; at: Vec3; facing: Vec3; r: number; arms?: number; stage?: [number, number]; seed: number } | { kind: \"cut\"; shape: ShapeDoc; hole: ShapeDoc } | { kind: \"rough\"; shape: ShapeDoc; by: number; scale?: number }"
-    },
-    {
-     "name": "PaintDoc",
-     "kind": "type",
-     "doc": "A part's paint: one color, or a pattern of several.",
-     "type": "string | { kind: \"bands\"; axis: \"x\" | \"y\" | \"z\"; size: number; colors: string[] } | { kind: \"bricks\"; size: [number, number]; colors: string[]; line: string } | { kind: \"hex\"; size: number; colors: string[]; line: string; deep?: string } | { kind: \"speckle\"; size: number; colors: string[] } | { kind: \"patches\"; size: number; colors: string[] } | { kind: \"key\"; colors: Record<string, string> } | { kind: \"faces\"; top?: PaintDoc; side: PaintDoc; under?: PaintDoc } | { kind: \"split\"; axis: \"x\" | \"y\" | \"z\"; at: number; below: PaintDoc; above: PaintDoc } | { kind: \"pieces\"; colors: string[]; line?: string; ordered?: boolean }"
-    },
-    {
-     "name": "MoveDoc",
-     "kind": "type",
-     "doc": "Every move repeats a whole number of `times` in the loop, so the scene loops.",
-     "type": "{ kind: \"spin\"; bone: string; axis: \"x\" | \"y\" | \"z\"; times: number; phase?: number } | { kind: \"sway\"; bone: string; axis: \"x\" | \"y\" | \"z\"; degrees: number; times: number; phase?: number } | { kind: \"bob\"; bone: string; by: Vec3; times: number; phase?: number } | { kind: \"drift\"; bone: string; by: Vec3; times: number; grow?: [number, number]; phase?: number } | { kind: \"pulse\"; bone: string; size: [number, number]; times: number; phase?: number } | { kind: \"sprout\"; bone: string; times: number; phase?: number }"
-    },
-    {
-     "name": "LightDoc",
-     "kind": "interface",
-     "doc": "A point light in a scene.",
-     "props": [
-      {
-       "name": "at",
-       "type": "Vec3",
-       "doc": "Where it is."
-      },
-      {
-       "name": "color",
-       "type": "string",
-       "doc": "Its color."
-      },
-      {
-       "name": "strength",
-       "type": "number",
-       "doc": "1 is a torch; 3 lights dark ground brightly."
-      },
-      {
-       "name": "range",
-       "type": "number",
-       "doc": "How far it reaches."
-      },
-      {
-       "name": "flicker",
-       "optional": true,
-       "type": "{ by: number; times: number }",
-       "doc": "Flickers by this share of its strength, `times` per loop."
-      },
-      {
-       "name": "circle",
-       "optional": true,
-       "type": "{ r: number; times: number }",
-       "doc": "Goes round a circle of this radius about `at`, `times` per loop."
-      },
-      {
-       "name": "shadows",
-       "optional": true,
-       "type": "boolean",
-       "doc": "Casts shadows, worked out once when the scene is built, so they cost nothing as it plays and flicker with it. Only\nthe first four lights can, and not one that goes round a circle. Give it to a lamp or fire out in the open: a light\nset inside something (a jar, a window, a hollow) to stand for its glow would shade everything outside."
-      }
-     ]
-    },
-    {
-     "name": "checkScene",
-     "kind": "function",
-     "doc": "Everything wrong with a scene description, each as `where: what`. Empty when\nit is sound. It takes anything, so it can check what came back from a prompt.",
-     "signatures": [
-      {
-       "code": "checkScene(doc: unknown): string[]"
-      }
-     ]
-    },
-    {
-     "name": "CompiledScene",
-     "kind": "interface",
-     "doc": "A scene ready to build and play, from `compileScene`.",
-     "props": [
-      {
-       "name": "name",
-       "type": "string",
-       "doc": "The scene's name."
-      },
-      {
-       "name": "loop",
-       "type": "number",
-       "doc": "Seconds the scene takes to repeat."
-      },
-      {
-       "name": "orbit",
-       "type": "Orbit",
-       "doc": "Where the camera starts."
-      },
-      {
-       "name": "swing",
-       "type": "number",
-       "doc": "Degrees the view rocks to either side, once a loop: 0 holds still."
+       "name": "before",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap> | undefined",
+       "doc": "The art of the frame before, when this frame was drawn against it (a look with `steady`): what `pixelArt` needs to give the same answer."
       },
       {
        "name": "look",
        "type": "PixelLook",
-       "doc": "The pixel look the scene asks for."
+       "doc": "The look in use."
       },
       {
-       "name": "palette",
-       "type": "Rgb[]",
-       "doc": "The scene's own palette."
+       "name": "width",
+       "readonly": true,
+       "type": "number",
+       "doc": "The art's width, in art pixels."
       },
       {
-       "name": "bones",
-       "type": "Bone[]",
-       "doc": "The scene's bones."
-      },
-      {
-       "name": "steps",
-       "type": "boolean",
-       "doc": "Whether the scene asks to be painted in steps of its palette (`look.steps`)."
-      },
-      {
-       "name": "touching",
-       "type": "number[]",
-       "doc": "The parts (by their place in the list) marked `touches`: they meet others by design."
-      },
-      {
-       "name": "haze",
-       "optional": true,
-       "type": "{ color: Vec3; from: number; to: number }",
-       "doc": "Distance haze, if the scene asks for it: the color (linear) and where it starts and would be total, in units past the view's target."
+       "name": "height",
+       "readonly": true,
+       "type": "number",
+       "doc": "The art's height, in art pixels."
       }
      ],
      "methods": [
       {
-       "name": "spec",
-       "doc": "The shapes on a grid of `spacing`. With `steps` (a palette, 0–255), the scene is painted in steps of it as it is cut.",
+       "name": "reset",
+       "doc": "Forgets the frame before: for when what is being drawn is swapped for something else.",
        "signatures": [
         {
-         "code": "spec(spacing: number, steps?: Rgb[]): VoxelSpec"
+         "code": "reset(): void"
         }
        ]
       },
       {
-       "name": "empty",
-       "doc": "The parts (by their place in the list) that came out with no blobs at all, such as a shape whose hole swallows it: `checkScene` can't see those.",
+       "name": "setLook",
+       "doc": "Changes the look: palette, dither, glow, lines.",
        "signatures": [
         {
-         "code": "empty(built: { partOf: ArrayLike<number> }): number[]"
+         "code": "setLook(look: PixelLook): void"
         }
        ]
       },
       {
-       "name": "pose",
-       "doc": "Poses the bones for `t` seconds.",
+       "name": "setSize",
+       "doc": "The art's size in pixels.",
        "signatures": [
         {
-         "code": "pose(sk: Skeleton, t: number): void"
+         "code": "setSize(width: number, height: number): void"
         }
        ]
       },
       {
-       "name": "lights",
-       "doc": "The scene's live lights at a time, in seconds.",
+       "name": "render",
+       "doc": "Draws `scene` as pixel art. With `screen` (the output's size in device\npixels and how many of them make one art pixel) it goes to the renderer's\ncurrent output; without, into `art` at one to one.",
        "signatures": [
         {
-         "code": "lights(t: number): PointLight[]"
+         "code": "render(renderer: WebGPURenderer, scene: Object3D, camera: Camera, screen?: { width: number; height: number; scale: number }): void"
+        }
+       ]
+      },
+      {
+       "name": "dispose",
+       "doc": "Frees its render targets.",
+       "signatures": [
+        {
+         "code": "dispose(): void"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "pixel",
+   "title": "Pixel art",
+   "group": "pixels",
+   "doc": "The 2D half of Splat to Sprite: everything that happens after the splat has\nbeen rendered. Pure functions on RGBA byte arrays so they can be unit tested\nwithout a GPU.\n\nPipeline per frame:\n  supersampled render → box downsample → alpha cut → palette (+dither) →\n  stray-pixel cleanup → outline",
+   "entries": [
+    {
+     "name": "Rgb",
+     "kind": "type",
+     "doc": "A color as three numbers: red, green and blue, 0 to 255 in a palette.",
+     "type": "[number, number, number]"
+    },
+    {
+     "name": "Frame",
+     "kind": "interface",
+     "doc": "A picture as RGBA bytes.",
+     "props": [
+      {
+       "name": "width",
+       "type": "number",
+       "doc": "Pixels across."
+      },
+      {
+       "name": "height",
+       "type": "number",
+       "doc": "Pixels down."
+      },
+      {
+       "name": "data",
+       "type": "Uint8ClampedArray",
+       "doc": "RGBA, row 0 at the top, straight (not premultiplied) alpha."
+      }
+     ]
+    },
+    {
+     "name": "PixelLook",
+     "kind": "interface",
+     "doc": "How a scene is turned into pixel art, live (splat-engine/pixelPass.ts) or here on the CPU.",
+     "props": [
+      {
+       "name": "palette",
+       "type": "Rgb[]",
+       "doc": "The colors every pixel snaps to; empty keeps the scene's own colors."
+      },
+      {
+       "name": "dither",
+       "type": "number",
+       "doc": "0..1, as for `quantize`."
+      },
+      {
+       "name": "outline",
+       "type": "Rgb | null",
+       "doc": "A 1-pixel line round the scene's silhouette, or none."
+      },
+      {
+       "name": "own",
+       "optional": true,
+       "type": "boolean",
+       "doc": "The outline in a darker tone of whatever it goes round, not one color for the whole scene: each outline pixel takes\nthe palette color nearest a darker step of the scene pixel beside it (`outline`'s own color where the palette has\nnothing darker). Needs `outline`."
+      },
+      {
+       "name": "fine",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Four samples a pixel: the scene is drawn at twice the art's size and each art pixel is settled from its 2×2 samples\n(`resolveFine`) before anything else happens, so a pixel on the edge of a thing shows one thing or the other, never\na mix. The live pass does it itself; `pixelArt` is given the settled frame."
+      },
+      {
+       "name": "glow",
+       "type": "number",
+       "doc": "How far bright pixels spill light onto their neighbors: 0 is none."
+      },
+      {
+       "name": "edges",
+       "optional": true,
+       "type": "number",
+       "doc": "Lines inside the scene, where one color meets a much lighter one: 0 (or left out) is none, 1 the darkest line."
+      },
+      {
+       "name": "parts",
+       "optional": true,
+       "type": "boolean",
+       "doc": "A line where one part of the scene meets another whose color is too close for `edges` to draw one (two things of one color, one in front of the other), at `edges`' strength or full strength without it.\nNeeds a map of the parts drawn beside the scene (`pixelArt`'s `parts`; the live pass draws its own)."
+      },
+      {
+       "name": "sky",
+       "optional": true,
+       "type": "[top: Rgb, bottom: Rgb, reach?: number]",
+       "doc": "A backdrop behind the scene: its color at the top and at the bottom of the picture, blended between and dithered into the palette.\n`reach` is how far down the picture the blend runs before it is all the bottom color (above 0, up to 1; the whole way when left out or not a sound number: `skyReach`).\nLeft out, empty pixels stay clear."
+      },
+      {
+       "name": "steady",
+       "optional": true,
+       "type": "number",
+       "doc": "Steady pixels: a pixel keeps the palette color it had in the frame before unless another is closer by more than this (an OKLab distance; 0 or left out is off).\nWithout it, a pixel that sits between two colors flips back and forth as lights flicker and the view turns."
+      },
+      {
+       "name": "tidy",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Lone-pixel cleanup, as a pixel artist does it: a scene pixel whose color none of its eight neighbors shares, while\nsix or more of them share one other color, takes that color. With a map of parts, only a pixel inside its own\npart (four or more neighbors of its part) is touched, so a speck, an eye or a firefly in front of something stays.\nA checkerboard dither keeps its pixels: each has its own color on the diagonals."
+      }
+     ]
+    },
+    {
+     "name": "pixelArt",
+     "kind": "function",
+     "doc": "One frame of a scene to pixel art, the CPU twin of the live pixel pass\n(change one, change both). `f` is the scene drawn small: straight sRGB.\n\n  alpha cut → glow (bright pixels light their neighbors, and empty pixels\n  beside them) → edge lines (the darker side of a jump in color) →\n  palette + dither → outline on the empty pixels that touch the scene →\n  sky on the rest, if the look has one\n\n`before` is the art of the frame before, for a look with `steady`: where it\nholds a palette color that is nearly as close as the best one, that pixel\nkeeps it. `parts` is the scene's map of parts for a look with `parts`: the\nsame view with every part in its own flat color (alpha 0 where there is none).",
+     "signatures": [
+      {
+       "code": "pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Frame): Frame"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "bakeSheet",
+   "title": "Baking sprite sheets",
+   "group": "pixels",
+   "doc": "",
+   "entries": [
+    {
+     "name": "BakeTarget",
+     "kind": "interface",
+     "doc": "Draws a rigged creature's moves from 4 or 8 sides and turns each frame into\npixel art with Splat to Sprite's pipeline (render big, average down, cut the\nalpha, one palette for the whole sheet, tidy, outline).\n\nThe camera circles the creature (which faces +Z) with a narrow lens from far\noff, so the sprite is close to orthographic, and stays at one distance for\nevery frame, so the creature is the same size in all of them.",
+     "props": [
+      {
+       "name": "renderer",
+       "type": "WebGPURenderer",
+       "doc": "The renderer to draw with."
+      },
+      {
+       "name": "scene",
+       "type": "Scene",
+       "doc": "A scene holding only what should be in the sprite (the creature's SplatWorld)."
+      },
+      {
+       "name": "actor",
+       "type": "{ blobs: Blobs; skin: Skin; skeleton: Skeleton }",
+       "doc": "The creature being drawn."
+      },
+      {
+       "name": "posed",
+       "type": "() => void",
+       "doc": "Tells the world its skeleton (and, after `morph`, its blobs) moved."
+      },
+      {
+       "name": "morph",
+       "optional": true,
+       "type": "(clip: Clip | undefined, t: number) => void",
+       "doc": "Reshapes the actor's blobs by a clip's morph weights at a time, on the CPU, for an actor with morphs."
+      }
+     ]
+    },
+    {
+     "name": "BakeOptions",
+     "kind": "interface",
+     "doc": "How a sprite sheet is baked.",
+     "props": [
+      {
+       "name": "directions",
+       "type": "4 | 8",
+       "doc": "Directions each move is drawn from."
+      },
+      {
+       "name": "size",
+       "type": "number",
+       "doc": "A frame's width and height, in pixels."
+      },
+      {
+       "name": "colors",
+       "type": "number",
+       "doc": "Colors in the palette."
+      },
+      {
+       "name": "outline",
+       "type": "boolean",
+       "doc": "Whether each sprite gets a dark outline."
+      }
+     ]
+    },
+    {
+     "name": "BakedSheet",
+     "kind": "interface",
+     "doc": "A baked sprite sheet: its frames and how they are laid out.",
+     "props": [
+      {
+       "name": "plan",
+       "type": "SheetPlan",
+       "doc": "The rows and columns."
+      },
+      {
+       "name": "frames",
+       "type": "Frame[]",
+       "doc": "Every frame, row by row."
+      },
+      {
+       "name": "size",
+       "type": "number",
+       "doc": "A frame's width and height, in pixels."
+      },
+      {
+       "name": "anchorY",
+       "type": "number",
+       "doc": "Where the feet are: one past the lowest solid row of any frame."
+      },
+      {
+       "name": "framing",
+       "type": "Framing",
+       "doc": "The sphere the camera was fitted to."
+      },
+      {
+       "name": "png",
+       "type": "() => Promise<Blob>",
+       "doc": "The whole sheet as one PNG."
+      }
+     ]
+    },
+    {
+     "name": "bakeSheet",
+     "kind": "function",
+     "doc": "Draws every frame of every move from each direction, all at one camera distance, and turns them into pixel art.\n`progress` is called as frames are done.",
+     "signatures": [
+      {
+       "code": "bakeSheet(t: BakeTarget, moves: SheetMove[], o: BakeOptions, progress?: (done: number, total: number) => void): Promise<BakedSheet>"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "spriteSheet",
+   "title": "Sprite sheet layout",
+   "group": "pixels",
+   "doc": "",
+   "entries": [
+    {
+     "name": "SheetMove",
+     "kind": "interface",
+     "doc": "A rigged creature's moves as a pixel-art sprite sheet: the plan (which row\nis which move from which side), the framing, and the two JSON files that go\nwith the PNG. Pure, so Node tests can check it; the drawing is bakeSheet.ts.\n\nRows are move by move, and within a move one row per direction, in the\norder Splat to Sprite uses: 4 directions follow Tinkerkit (down, left,\nright, up), 8 go round clockwise from down. Each row holds that move's\nframes, evenly spaced through one loop of its clip.",
+     "props": [
+      {
+       "name": "name",
+       "type": "string",
+       "doc": "Names the animations: `<name>-<direction>`."
+      },
+      {
+       "name": "clip",
+       "optional": true,
+       "type": "Clip",
+       "doc": "Undefined for a still pose (the rest pose)."
+      },
+      {
+       "name": "frames",
+       "type": "number",
+       "doc": "How many frames it gets."
+      }
+     ]
+    },
+    {
+     "name": "SheetRow",
+     "kind": "interface",
+     "doc": "One row of a sheet: a move seen from one direction (`turn` is that direction's angle).",
+     "props": [
+      {
+       "name": "move",
+       "type": "SheetMove",
+       "doc": "The move."
+      },
+      {
+       "name": "dir",
+       "type": "string",
+       "doc": "The direction's name, such as 'down'."
+      },
+      {
+       "name": "turn",
+       "type": "number",
+       "doc": "How far the creature is turned for it, in degrees."
+      }
+     ]
+    },
+    {
+     "name": "SheetPlan",
+     "kind": "interface",
+     "doc": "A sheet's rows, and as many columns as its longest move has frames.",
+     "props": [
+      {
+       "name": "rows",
+       "type": "SheetRow[]",
+       "doc": "The rows, top to bottom."
+      },
+      {
+       "name": "cols",
+       "type": "number",
+       "doc": "Columns: the longest move's frames."
+      }
+     ]
+    },
+    {
+     "name": "planSheet",
+     "kind": "function",
+     "doc": "Lays a sheet out: a row for each move seen from each direction.",
+     "signatures": [
+      {
+       "code": "planSheet(moves: SheetMove[], directions: 4 | 8): SheetPlan"
+      }
+     ]
+    },
+    {
+     "name": "loopSeconds",
+     "kind": "const",
+     "doc": "How long one loop of a move lasts, in seconds (0 for a still pose).",
+     "type": "(m: SheetMove) => number"
+    },
+    {
+     "name": "frameTimes",
+     "kind": "const",
+     "doc": "When each frame of a move is taken: evenly through one loop, so the last frame leads back into the first.",
+     "type": "(m: SheetMove) => number[]"
+    },
+    {
+     "name": "moveFps",
+     "kind": "const",
+     "doc": "Frames per second that plays a move at its real speed.",
+     "type": "(m: SheetMove) => number"
+    },
+    {
+     "name": "Framing",
+     "kind": "interface",
+     "doc": "A sphere that holds the creature through every frame of every move.",
+     "props": [
+      {
+       "name": "center",
+       "type": "[number, number, number]",
+       "doc": "The sphere's middle."
+      },
+      {
+       "name": "radius",
+       "type": "number",
+       "doc": "Its radius."
+      }
+     ]
+    },
+    {
+     "name": "frameAll",
+     "kind": "function",
+     "doc": "A sphere round the creature through every frame of every move, so one\ncamera distance fits them all and the creature is the same size in every\nframe. Moves a sample of blob centers by their bones on the CPU (the same\nblend as the GPU), and pads each by its largest scale.",
+     "signatures": [
+      {
+       "code": "frameAll(actor: { blobs: Blobs; skin: Skin; skeleton: Skeleton }, moves: SheetMove[], sample?: number, morph?: (clip: Clip | undefined, t: number) => void): Framing"
+      }
+     ]
+    },
+    {
+     "name": "tinkerkitJson",
+     "kind": "function",
+     "doc": "Mirrors Tinkerkit's `SpriteSheet` document (packages/format/src/spritesheet.ts,\nformat version 71). Adds `idle-<direction>` (the first frame of the first\nmove) when no move is called idle, since Tinkerkit's characters stand on it.",
+     "signatures": [
+      {
+       "code": "tinkerkitJson(name: string, image: string, plan: SheetPlan, size: number, anchorY?: number): { kind: string; formatVersion: number; id: string; name: string; image: string; imageWidth: number; imageHeight: number; frameWidth: number; frameHeight: number; pixelScale: number; anchor: { x: number; y: number }; footprint: { x: number; y: number; w: number; h: number }; animations: Record<string, { frames: number[]; fps: number; loop: boolean }> }"
+      }
+     ]
+    },
+    {
+     "name": "asepriteJson",
+     "kind": "function",
+     "doc": "The JSON-array sheet Aseprite writes (and TexturePacker, Phaser and most\nengines' importers read): one entry per frame, with a tag per animation.",
+     "signatures": [
+      {
+       "code": "asepriteJson(image: string, plan: SheetPlan, size: number): { frames: object[]; meta: { app: string; version: string; image: string; format: string; size: { w: number; h: number }; scale: string; frameTags: object[] } }"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "xpbd",
+   "title": "Cloth solver",
+   "group": "simulation",
+   "doc": "A small position-based dynamics solver (XPBD, \"small steps\" form: many\nsubsteps, one pass over the constraints in each), for cloth and hair hung\non a rig. Points carry an inverse mass (0 = pinned, moved by the caller);\nlinks keep two points at a length, goals pull a point toward where the\nanimation puts it, and capsules push points out of the body. Compliance is\nthe inverse of stiffness: 0 is rigid.\n\nIt always steps by `STEP`, carrying what's left of a frame to the next, so\nthe same frames give the same motion and a recorded loop can be played back.\nPure and tested.",
+   "entries": [
+    {
+     "name": "Capsule",
+     "kind": "interface",
+     "doc": "A segment from `a` to `b` with a radius; `a` and `b` the same is a ball.",
+     "props": [
+      {
+       "name": "a",
+       "type": "Vec3",
+       "doc": "One end of its middle line."
+      },
+      {
+       "name": "b",
+       "type": "Vec3",
+       "doc": "The other end."
+      },
+      {
+       "name": "r",
+       "type": "number",
+       "doc": "Its radius."
+      }
+     ]
+    },
+    {
+     "name": "STEP",
+     "kind": "const",
+     "doc": "Seconds per step, and substeps per step.",
+     "type": "number"
+    },
+    {
+     "name": "SUBSTEPS",
+     "kind": "const",
+     "doc": "Substeps the solver takes in each `STEP`.",
+     "type": "4"
+    },
+    {
+     "name": "Xpbd",
+     "kind": "class",
+     "doc": "A small XPBD solver: points joined by links, pulled toward goals and kept out of capsules. It steps at a fixed\n`STEP`, carrying the rest of a frame over, so the same frames always give the same motion.",
+     "ctor": [
+      {
+       "code": "new Xpbd(n: number)"
+      }
+     ],
+     "props": [
+      {
+       "name": "n",
+       "readonly": true,
+       "type": "number",
+       "doc": "How many points."
+      },
+      {
+       "name": "pos",
+       "readonly": true,
+       "type": "Float64Array",
+       "doc": "Positions: x, y, z per point."
+      },
+      {
+       "name": "vel",
+       "readonly": true,
+       "type": "Float64Array",
+       "doc": "Velocities: x, y, z per point."
+      },
+      {
+       "name": "invMass",
+       "readonly": true,
+       "type": "Float64Array",
+       "doc": "One over each point's mass; 0 pins a point where it is."
+      },
+      {
+       "name": "goal",
+       "readonly": true,
+       "type": "Float64Array",
+       "doc": "Where the animation puts each point, and how loosely it follows (Infinity: not at all)."
+      },
+      {
+       "name": "capsules",
+       "type": "Capsule[]",
+       "doc": "The capsules the points stay out of. Set it each frame as the body moves."
+      },
+      {
+       "name": "gravity",
+       "type": "Vec3",
+       "doc": "The pull on every point, per second squared."
+      },
+      {
+       "name": "damping",
+       "type": "number",
+       "doc": "Share of velocity lost per second."
+      }
+     ],
+     "methods": [
+      {
+       "name": "link",
+       "doc": "Keeps `a` and `b` at `rest` (their distance now if not given).",
+       "signatures": [
+        {
+         "code": "link(a: number, b: number, compliance?: number, rest?: number): void"
+        }
+       ]
+      },
+      {
+       "name": "distance",
+       "doc": "How far apart two points are now.",
+       "signatures": [
+        {
+         "code": "distance(a: number, b: number): number"
+        }
+       ]
+      },
+      {
+       "name": "place",
+       "doc": "Puts point `i` at `p`, still.",
+       "signatures": [
+        {
+         "code": "place(i: number, p: ArrayLike<number>): void"
+        }
+       ]
+      },
+      {
+       "name": "fix",
+       "doc": "Pins point `i`: from now on it moves only where `pin` sends it.",
+       "signatures": [
+        {
+         "code": "fix(i: number): void"
+        }
+       ]
+      },
+      {
+       "name": "pin",
+       "doc": "Where pinned point `i` should be at the end of the next `advance`; it gets there evenly over the frame.",
+       "signatures": [
+        {
+         "code": "pin(i: number, p: ArrayLike<number>): void"
+        }
+       ]
+      },
+      {
+       "name": "follow",
+       "doc": "Where the animation wants point `i`, and how loosely it follows.",
+       "signatures": [
+        {
+         "code": "follow(i: number, p: ArrayLike<number>, compliance: number): void"
+        }
+       ]
+      },
+      {
+       "name": "advance",
+       "doc": "Runs whole steps for `dt` seconds (carrying the rest); returns how many ran.",
+       "signatures": [
+        {
+         "code": "advance(dt: number): number"
+        }
+       ]
+      },
+      {
+       "name": "energy",
+       "doc": "Kinetic energy, for a unit mass per free point.",
+       "signatures": [
+        {
+         "code": "energy(): number"
+        }
+       ]
+      },
+      {
+       "name": "settle",
+       "doc": "Every point still, where it is (after a jump, say).",
+       "signatures": [
+        {
+         "code": "settle(): void"
         }
        ]
       }
      ]
     },
     {
-     "name": "sprouted",
+     "name": "closestOnSegment",
      "kind": "function",
-     "doc": "A sprout's size through its life (0 to 1): grows from nothing over the first 40%, stands, and shrinks away over the last 15%.",
+     "doc": "The point on segment a–b nearest (x, y, z).",
      "signatures": [
       {
-       "code": "sprouted(life: number): number"
-      }
-     ]
-    },
-    {
-     "name": "compileScene",
-     "kind": "function",
-     "doc": "`puffs` keeps hidden bones for a tap's puff of sparkles (`poke.ts`); a creature taken from a scene goes without.",
-     "signatures": [
-      {
-       "code": "compileScene(doc: SceneDoc, options?: { puffs?: boolean }): CompiledScene"
+       "code": "closestOnSegment(a: Vec3, b: Vec3, x: number, y: number, z: number): Vec3"
       }
      ]
     }
@@ -6222,6 +6935,7 @@
   {
    "id": "mpm",
    "title": "Sand, snow and goo",
+   "group": "simulation",
    "doc": "Sand, snow and goo that flow: a small 3D MLS-MPM (moving least\nsquares material point method, after Hu et al. 2018's 88-line version, in\n3D), on the CPU. Each particle carries its place, velocity, affine velocity\nfield `C` and deformation `F`; each step scatters mass and momentum to a\ncoarse grid with quadratic B-splines, moves the grid under gravity and the\nwalls, and gathers it back.\n\n- Sand: Hencky elasticity with a Drucker-Prager yield (Klár et al. 2016), so\n  it can't pull and slides once a slope passes its friction angle.\n- Snow: fixed corotated elasticity with Stomakhin et al. 2013's plasticity\n  and hardening, so it packs where it is pressed and breaks in clumps.\n- Goo: soft, and giving way at a small stretch, so it runs out flat and,\n  pulled, draws out slowly instead of flying apart.\n\nThe box is [0, 1] on each side (the page scales it), the floor y = 0.\nPure and tested.",
    "entries": [
     {
@@ -6450,233 +7164,94 @@
    ]
   },
   {
-   "id": "pixelPass",
-   "title": "Pixel mode",
+   "id": "pick",
+   "title": "Picking",
+   "group": "extras",
    "doc": "",
    "entries": [
     {
-     "name": "PixelPass",
-     "kind": "class",
-     "doc": "Pixel mode: the scene is drawn small into a target, and one full-screen pass\nturns it into pixel art and scales it up in whole pixels, with no smoothing.\n\nThe pass is the GPU twin of `pixelArt` in splat-core/pixel.ts (change one,\nchange both): alpha cut, glow from bright pixels, nearest palette color in\nOKLab with a Bayer dither, edge lines inside the scene, an outline on the\nempty pixels that touch it, and a sky behind. It runs once per art pixel,\ninto `art`, which keeps display (sRGB) color so a palette color is stored\nexactly; the screen then gets a plain copy, scaled up. The art of the frame\nbefore is kept too: a look with `steady` reads it so a pixel between two\npalette colors does not flip from frame to frame.\n\nA look with `fine` draws the scene and its map of parts at twice the art's\nsize first, and a step before the pass settles each art pixel from its four\nsamples into `small` and `ids` (`resolveFine` in pixel.ts is its twin), so\neverything after it is the same either way.",
-     "ctor": [
-      {
-       "code": "new PixelPass(look: PixelLook)"
-      }
-     ],
-     "props": [
-      {
-       "name": "small",
-       "readonly": true,
-       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
-       "doc": "The scene, drawn small. Linear and premultiplied, as any render target."
-      },
-      {
-       "name": "ids",
-       "readonly": true,
-       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
-       "doc": "The scene's parts, drawn small (`SplatWorld.parts`): where the color changes, one part ends and another begins. Only drawn for a look with `parts`."
-      },
-      {
-       "name": "fineSmall",
-       "readonly": true,
-       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
-       "doc": "The scene and its map of parts at twice the art's size, for a look with `fine`: what `small` and `ids` are settled from."
-      },
-      {
-       "name": "fineIds",
-       "readonly": true,
-       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
-       "doc": "The map of parts at twice the art's size, which four samples a pixel settles from."
-      },
-      {
-       "name": "art",
-       "readonly": true,
-       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
-       "doc": "The finished art at its own size, in display color, for reading back (tests, saving) and for the screen."
-      },
-      {
-       "name": "before",
-       "readonly": true,
-       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap> | undefined",
-       "doc": "The art of the frame before, when this frame was drawn against it (a look with `steady`): what `pixelArt` needs to give the same answer."
-      },
-      {
-       "name": "look",
-       "type": "PixelLook",
-       "doc": "The look in use."
-      },
-      {
-       "name": "width",
-       "readonly": true,
-       "type": "number",
-       "doc": "The art's width, in art pixels."
-      },
-      {
-       "name": "height",
-       "readonly": true,
-       "type": "number",
-       "doc": "The art's height, in art pixels."
-      }
-     ],
-     "methods": [
-      {
-       "name": "reset",
-       "doc": "Forgets the frame before: for when what is being drawn is swapped for something else.",
-       "signatures": [
-        {
-         "code": "reset(): void"
-        }
-       ]
-      },
-      {
-       "name": "setLook",
-       "doc": "Changes the look: palette, dither, glow, lines.",
-       "signatures": [
-        {
-         "code": "setLook(look: PixelLook): void"
-        }
-       ]
-      },
-      {
-       "name": "setSize",
-       "doc": "The art's size in pixels.",
-       "signatures": [
-        {
-         "code": "setSize(width: number, height: number): void"
-        }
-       ]
-      },
-      {
-       "name": "render",
-       "doc": "Draws `scene` as pixel art. With `screen` (the output's size in device\npixels and how many of them make one art pixel) it goes to the renderer's\ncurrent output; without, into `art` at one to one.",
-       "signatures": [
-        {
-         "code": "render(renderer: WebGPURenderer, scene: Object3D, camera: Camera, screen?: { width: number; height: number; scale: number }): void"
-        }
-       ]
-      },
-      {
-       "name": "dispose",
-       "doc": "Frees its render targets.",
-       "signatures": [
-        {
-         "code": "dispose(): void"
-        }
-       ]
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "pixel",
-   "title": "Pixel art",
-   "doc": "The 2D half of Splat to Sprite: everything that happens after the splat has\nbeen rendered. Pure functions on RGBA byte arrays so they can be unit tested\nwithout a GPU.\n\nPipeline per frame:\n  supersampled render → box downsample → alpha cut → palette (+dither) →\n  stray-pixel cleanup → outline",
-   "entries": [
-    {
-     "name": "Rgb",
-     "kind": "type",
-     "doc": "A color as three numbers: red, green and blue, 0 to 255 in a palette.",
-     "type": "[number, number, number]"
-    },
-    {
-     "name": "Frame",
+     "name": "PickHit",
      "kind": "interface",
-     "doc": "A picture as RGBA bytes.",
+     "doc": "Picking: which blob of which actor is under a pointer, as the actor stands\nposed right now, and which bone and part it belongs to.\n\nEach blob's bones move it by a blend of their skin matrices. That blend, M,\ncarries the blob's rest ellipsoid to where it is drawn (exactly, in the\n'linear' rule; to within the rounding of a joint in 'quat'), and a straight\nline through M is still a straight line with the same distances along it.\nSo the ray is taken back into the blob's rest frame through M⁻¹ and tested\nagainst the rest blob there, with `rayHit`, as a still scene is.",
      "props": [
       {
-       "name": "width",
+       "name": "actor",
        "type": "number",
-       "doc": "Pixels across."
+       "doc": "Index into the actors given."
       },
       {
-       "name": "height",
+       "name": "blob",
        "type": "number",
-       "doc": "Pixels down."
+       "doc": "The blob's index in that actor."
       },
       {
-       "name": "data",
-       "type": "Uint8ClampedArray",
-       "doc": "RGBA, row 0 at the top, straight (not premultiplied) alpha."
+       "name": "t",
+       "type": "number",
+       "doc": "Distance along the ray (in units of the direction's length)."
+      },
+      {
+       "name": "point",
+       "type": "[number, number, number]",
+       "doc": "Where the ray meets the blob, in world space."
+      },
+      {
+       "name": "bone",
+       "type": "number",
+       "doc": "The bone that holds most of the blob."
+      },
+      {
+       "name": "part",
+       "type": "number",
+       "doc": "Its part (`Actor.partOf`), or 0 when the actor has none."
       }
      ]
     },
     {
-     "name": "PixelLook",
+     "name": "PickOptions",
      "kind": "interface",
-     "doc": "How a scene is turned into pixel art, live (splat-engine/pixelPass.ts) or here on the CPU.",
+     "doc": "Options for `pickActors`.",
      "props": [
       {
-       "name": "palette",
-       "type": "Rgb[]",
-       "doc": "The colors every pixel snaps to; empty keeps the scene's own colors."
-      },
-      {
-       "name": "dither",
-       "type": "number",
-       "doc": "0..1, as for `quantize`."
-      },
-      {
-       "name": "outline",
-       "type": "Rgb | null",
-       "doc": "A 1-pixel line round the scene's silhouette, or none."
-      },
-      {
-       "name": "own",
-       "optional": true,
-       "type": "boolean",
-       "doc": "The outline in a darker tone of whatever it goes round, not one color for the whole scene: each outline pixel takes\nthe palette color nearest a darker step of the scene pixel beside it (`outline`'s own color where the palette has\nnothing darker). Needs `outline`."
-      },
-      {
-       "name": "fine",
-       "optional": true,
-       "type": "boolean",
-       "doc": "Four samples a pixel: the scene is drawn at twice the art's size and each art pixel is settled from its 2×2 samples\n(`resolveFine`) before anything else happens, so a pixel on the edge of a thing shows one thing or the other, never\na mix. The live pass does it itself; `pixelArt` is given the settled frame."
-      },
-      {
-       "name": "glow",
-       "type": "number",
-       "doc": "How far bright pixels spill light onto their neighbors: 0 is none."
-      },
-      {
-       "name": "edges",
+       "name": "k",
        "optional": true,
        "type": "number",
-       "doc": "Lines inside the scene, where one color meets a much lighter one: 0 (or left out) is none, 1 the darkest line."
+       "doc": "How far out a blob counts, in standard deviations (2 is about where it fades to nothing)."
       },
       {
-       "name": "parts",
-       "optional": true,
-       "type": "boolean",
-       "doc": "A line where one part of the scene meets another whose color is too close for `edges` to draw one (two things of one color, one in front of the other), at `edges`' strength or full strength without it.\nNeeds a map of the parts drawn beside the scene (`pixelArt`'s `parts`; the live pass draws its own)."
-      },
-      {
-       "name": "sky",
-       "optional": true,
-       "type": "[top: Rgb, bottom: Rgb, reach?: number]",
-       "doc": "A backdrop behind the scene: its color at the top and at the bottom of the picture, blended between and dithered into the palette.\n`reach` is how far down the picture the blend runs before it is all the bottom color (above 0, up to 1; the whole way when left out or not a sound number: `skyReach`).\nLeft out, empty pixels stay clear."
-      },
-      {
-       "name": "steady",
+       "name": "minOpacity",
        "optional": true,
        "type": "number",
-       "doc": "Steady pixels: a pixel keeps the palette color it had in the frame before unless another is closer by more than this (an OKLab distance; 0 or left out is off).\nWithout it, a pixel that sits between two colors flips back and forth as lights flicker and the view turns."
-      },
-      {
-       "name": "tidy",
-       "optional": true,
-       "type": "boolean",
-       "doc": "Lone-pixel cleanup, as a pixel artist does it: a scene pixel whose color none of its eight neighbors shares, while\nsix or more of them share one other color, takes that color. With a map of parts, only a pixel inside its own\npart (four or more neighbors of its part) is touched, so a speck, an eye or a firefly in front of something stays.\nA checkerboard dither keeps its pixels: each has its own color on the diagonals."
+       "doc": "Blobs fainter than this are looked through."
       }
      ]
     },
     {
-     "name": "pixelArt",
+     "name": "pickActors",
      "kind": "function",
-     "doc": "One frame of a scene to pixel art, the CPU twin of the live pixel pass\n(change one, change both). `f` is the scene drawn small: straight sRGB.\n\n  alpha cut → glow (bright pixels light their neighbors, and empty pixels\n  beside them) → edge lines (the darker side of a jump in color) →\n  palette + dither → outline on the empty pixels that touch the scene →\n  sky on the rest, if the look has one\n\n`before` is the art of the frame before, for a look with `steady`: where it\nholds a palette color that is nearly as close as the best one, that pixel\nkeeps it. `parts` is the scene's map of parts for a look with `parts`: the\nsame view with every part in its own flat color (alpha 0 where there is none).",
+     "doc": "The nearest blob a ray hits among posed actors, or null. Call each skeleton's `update()` first.",
      "signatures": [
       {
-       "code": "pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Frame): Frame"
+       "code": "pickActors(actors: readonly Actor[], origin: ArrayLike<number>, dir: ArrayLike<number>, options?: PickOptions): PickHit | null"
+      }
+     ]
+    },
+    {
+     "name": "boneShare",
+     "kind": "function",
+     "doc": "How much of each blob of an actor moves with `bone`: its weight on that bone, 0–1.",
+     "signatures": [
+      {
+       "code": "boneShare(actor: Pick<Actor, \"blobs\" | \"skin\">, bone: number): Float32Array"
+      }
+     ]
+    },
+    {
+     "name": "boneLabel",
+     "kind": "function",
+     "doc": "A bone's name for people: 'lForearm' → 'left forearm', 'flUpper' → 'front left upper', 'tail3' → 'tail 3'.",
+     "signatures": [
+      {
+       "code": "boneLabel(name: string): string"
       }
      ]
     }
@@ -6685,6 +7260,7 @@
   {
    "id": "lod",
    "title": "Level of detail",
+   "group": "extras",
    "doc": "Level of detail per actor: a creature far away or small on screen draws a\nshare of its blobs, each grown to cover for the ones left out, so it costs\nless to draw and looks about the same.\n\nWhich blobs stay is fixed per blob by `lodRank` (a hash of its index), so a\ncreature thinning out loses the same blobs every time and keeps the rest:\nnothing flickers as the share drifts. A kept blob's covariance is divided by\nthe share kept (each axis grows by 1/√keep), so the covered area stays about\nthe same for the surface discs creatures are cut from.\n\nThe GPU (`deformBlob` in engine.ts) and the CPU twin (`SplatWorld.deformCPU`)\nuse the same hash; change both.",
    "entries": [
     {
@@ -6745,6 +7321,7 @@
   {
    "id": "edit",
    "title": "Cuts and paint",
+   "group": "extras",
    "doc": "Shape edits: cut or paint every blob inside a sphere or a box, live, without\nrebuilding anything. The GPU applies them as it moves the blobs (a cut blob\ngets no size, as level of detail leaves one out) and as it colors them (a\npainted blob's own color is mixed toward the paint before any light).\nEdits are tested against where a blob is now, in world space, so a box\nthat cuts a creature's head off keeps cutting as the head moves through it.\n\nThis file is the CPU twin (`editAt`), also used to bake edits into blobs for\na file (`bakeEdits`). The GPU side is `editsAt` in engine.ts; change both.",
    "entries": [
     {
@@ -6839,6 +7416,7 @@
   {
    "id": "depth",
    "title": "Depth for post effects",
+   "group": "extras",
    "doc": "",
    "entries": [
     {
@@ -6902,6 +7480,7 @@
   {
    "id": "glb",
    "title": "Rigged .glb files",
+   "group": "files",
    "doc": "",
    "entries": [
     {
@@ -7091,266 +7670,9 @@
    ]
   },
   {
-   "id": "bakeSheet",
-   "title": "Baking sprite sheets",
-   "doc": "",
-   "entries": [
-    {
-     "name": "BakeTarget",
-     "kind": "interface",
-     "doc": "Draws a rigged creature's moves from 4 or 8 sides and turns each frame into\npixel art with Splat to Sprite's pipeline (render big, average down, cut the\nalpha, one palette for the whole sheet, tidy, outline).\n\nThe camera circles the creature (which faces +Z) with a narrow lens from far\noff, so the sprite is close to orthographic, and stays at one distance for\nevery frame, so the creature is the same size in all of them.",
-     "props": [
-      {
-       "name": "renderer",
-       "type": "WebGPURenderer",
-       "doc": "The renderer to draw with."
-      },
-      {
-       "name": "scene",
-       "type": "Scene",
-       "doc": "A scene holding only what should be in the sprite (the creature's SplatWorld)."
-      },
-      {
-       "name": "actor",
-       "type": "{ blobs: Blobs; skin: Skin; skeleton: Skeleton }",
-       "doc": "The creature being drawn."
-      },
-      {
-       "name": "posed",
-       "type": "() => void",
-       "doc": "Tells the world its skeleton (and, after `morph`, its blobs) moved."
-      },
-      {
-       "name": "morph",
-       "optional": true,
-       "type": "(clip: Clip | undefined, t: number) => void",
-       "doc": "Reshapes the actor's blobs by a clip's morph weights at a time, on the CPU, for an actor with morphs."
-      }
-     ]
-    },
-    {
-     "name": "BakeOptions",
-     "kind": "interface",
-     "doc": "How a sprite sheet is baked.",
-     "props": [
-      {
-       "name": "directions",
-       "type": "4 | 8",
-       "doc": "Directions each move is drawn from."
-      },
-      {
-       "name": "size",
-       "type": "number",
-       "doc": "A frame's width and height, in pixels."
-      },
-      {
-       "name": "colors",
-       "type": "number",
-       "doc": "Colors in the palette."
-      },
-      {
-       "name": "outline",
-       "type": "boolean",
-       "doc": "Whether each sprite gets a dark outline."
-      }
-     ]
-    },
-    {
-     "name": "BakedSheet",
-     "kind": "interface",
-     "doc": "A baked sprite sheet: its frames and how they are laid out.",
-     "props": [
-      {
-       "name": "plan",
-       "type": "SheetPlan",
-       "doc": "The rows and columns."
-      },
-      {
-       "name": "frames",
-       "type": "Frame[]",
-       "doc": "Every frame, row by row."
-      },
-      {
-       "name": "size",
-       "type": "number",
-       "doc": "A frame's width and height, in pixels."
-      },
-      {
-       "name": "anchorY",
-       "type": "number",
-       "doc": "Where the feet are: one past the lowest solid row of any frame."
-      },
-      {
-       "name": "framing",
-       "type": "Framing",
-       "doc": "The sphere the camera was fitted to."
-      },
-      {
-       "name": "png",
-       "type": "() => Promise<Blob>",
-       "doc": "The whole sheet as one PNG."
-      }
-     ]
-    },
-    {
-     "name": "bakeSheet",
-     "kind": "function",
-     "doc": "Draws every frame of every move from each direction, all at one camera distance, and turns them into pixel art.\n`progress` is called as frames are done.",
-     "signatures": [
-      {
-       "code": "bakeSheet(t: BakeTarget, moves: SheetMove[], o: BakeOptions, progress?: (done: number, total: number) => void): Promise<BakedSheet>"
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "spriteSheet",
-   "title": "Sprite sheet layout",
-   "doc": "",
-   "entries": [
-    {
-     "name": "SheetMove",
-     "kind": "interface",
-     "doc": "A rigged creature's moves as a pixel-art sprite sheet: the plan (which row\nis which move from which side), the framing, and the two JSON files that go\nwith the PNG. Pure, so Node tests can check it; the drawing is bakeSheet.ts.\n\nRows are move by move, and within a move one row per direction, in the\norder Splat to Sprite uses: 4 directions follow Tinkerkit (down, left,\nright, up), 8 go round clockwise from down. Each row holds that move's\nframes, evenly spaced through one loop of its clip.",
-     "props": [
-      {
-       "name": "name",
-       "type": "string",
-       "doc": "Names the animations: `<name>-<direction>`."
-      },
-      {
-       "name": "clip",
-       "optional": true,
-       "type": "Clip",
-       "doc": "Undefined for a still pose (the rest pose)."
-      },
-      {
-       "name": "frames",
-       "type": "number",
-       "doc": "How many frames it gets."
-      }
-     ]
-    },
-    {
-     "name": "SheetRow",
-     "kind": "interface",
-     "doc": "One row of a sheet: a move seen from one direction (`turn` is that direction's angle).",
-     "props": [
-      {
-       "name": "move",
-       "type": "SheetMove",
-       "doc": "The move."
-      },
-      {
-       "name": "dir",
-       "type": "string",
-       "doc": "The direction's name, such as 'down'."
-      },
-      {
-       "name": "turn",
-       "type": "number",
-       "doc": "How far the creature is turned for it, in degrees."
-      }
-     ]
-    },
-    {
-     "name": "SheetPlan",
-     "kind": "interface",
-     "doc": "A sheet's rows, and as many columns as its longest move has frames.",
-     "props": [
-      {
-       "name": "rows",
-       "type": "SheetRow[]",
-       "doc": "The rows, top to bottom."
-      },
-      {
-       "name": "cols",
-       "type": "number",
-       "doc": "Columns: the longest move's frames."
-      }
-     ]
-    },
-    {
-     "name": "planSheet",
-     "kind": "function",
-     "doc": "Lays a sheet out: a row for each move seen from each direction.",
-     "signatures": [
-      {
-       "code": "planSheet(moves: SheetMove[], directions: 4 | 8): SheetPlan"
-      }
-     ]
-    },
-    {
-     "name": "loopSeconds",
-     "kind": "const",
-     "doc": "How long one loop of a move lasts, in seconds (0 for a still pose).",
-     "type": "(m: SheetMove) => number"
-    },
-    {
-     "name": "frameTimes",
-     "kind": "const",
-     "doc": "When each frame of a move is taken: evenly through one loop, so the last frame leads back into the first.",
-     "type": "(m: SheetMove) => number[]"
-    },
-    {
-     "name": "moveFps",
-     "kind": "const",
-     "doc": "Frames per second that plays a move at its real speed.",
-     "type": "(m: SheetMove) => number"
-    },
-    {
-     "name": "Framing",
-     "kind": "interface",
-     "doc": "A sphere that holds the creature through every frame of every move.",
-     "props": [
-      {
-       "name": "center",
-       "type": "[number, number, number]",
-       "doc": "The sphere's middle."
-      },
-      {
-       "name": "radius",
-       "type": "number",
-       "doc": "Its radius."
-      }
-     ]
-    },
-    {
-     "name": "frameAll",
-     "kind": "function",
-     "doc": "A sphere round the creature through every frame of every move, so one\ncamera distance fits them all and the creature is the same size in every\nframe. Moves a sample of blob centers by their bones on the CPU (the same\nblend as the GPU), and pads each by its largest scale.",
-     "signatures": [
-      {
-       "code": "frameAll(actor: { blobs: Blobs; skin: Skin; skeleton: Skeleton }, moves: SheetMove[], sample?: number, morph?: (clip: Clip | undefined, t: number) => void): Framing"
-      }
-     ]
-    },
-    {
-     "name": "tinkerkitJson",
-     "kind": "function",
-     "doc": "Mirrors Tinkerkit's `SpriteSheet` document (packages/format/src/spritesheet.ts,\nformat version 71). Adds `idle-<direction>` (the first frame of the first\nmove) when no move is called idle, since Tinkerkit's characters stand on it.",
-     "signatures": [
-      {
-       "code": "tinkerkitJson(name: string, image: string, plan: SheetPlan, size: number, anchorY?: number): { kind: string; formatVersion: number; id: string; name: string; image: string; imageWidth: number; imageHeight: number; frameWidth: number; frameHeight: number; pixelScale: number; anchor: { x: number; y: number }; footprint: { x: number; y: number; w: number; h: number }; animations: Record<string, { frames: number[]; fps: number; loop: boolean }> }"
-      }
-     ]
-    },
-    {
-     "name": "asepriteJson",
-     "kind": "function",
-     "doc": "The JSON-array sheet Aseprite writes (and TexturePacker, Phaser and most\nengines' importers read): one entry per frame, with a tag per animation.",
-     "signatures": [
-      {
-       "code": "asepriteJson(image: string, plan: SheetPlan, size: number): { frames: object[]; meta: { app: string; version: string; image: string; format: string; size: { w: number; h: number }; scale: string; frameTags: object[] } }"
-      }
-     ]
-    }
-   ]
-  },
-  {
    "id": "skinnedModel",
    "title": "Rigged models to splats",
+   "group": "files",
    "doc": "A rigged model to splats, keeping its rig: an ordinary skinned glTF (a .glb from Blender, Mixamo or\na game kit: triangles, JOINTS_0/WEIGHTS_0, a skin and its animations) read into our bones and clips, then its\nsurface covered in flat blobs that hang on the same bones with the weights the mesh gave its corners. Pure: the\npage decodes texture images and hands them in as `Texture`s.\n\nOur bones have no rest rotation: a bone is its head, posed by a turn about it. A glTF joint carries any rest\nframe, so each frame of a clip is read as what the skin does, not what the nodes say: joint j's skin matrix is\nS = G·IBM (its world matrix now times its inverse bind matrix), which takes the bind pose to the posed one. Its\nlinear part is our bone's world turn (times its scale) and it carries the bind head (where IBM⁻¹ puts the joint)\nto where the joint is now. Local turns, offsets and sizes follow from those, so the blobs land where the mesh's\nvertices would.",
    "entries": [
     {
@@ -7456,246 +7778,6 @@
        "code": "splatModel(model: SkinnedModel, o: SplatOptions): Rigged"
       }
      ]
-    }
-   ]
-  },
-  {
-   "id": "zoo-index",
-   "title": "The zoo",
-   "doc": "",
-   "entries": [
-    {
-     "name": "ZOO",
-     "kind": "const",
-     "doc": "Every creature on the Creature page, simplest first.",
-     "type": "Species[]"
-    },
-    {
-     "name": "Move",
-     "kind": "interface",
-     "doc": "One of a creature's moves, as a function of time, recorded into a clip when the creature is made.",
-     "props": [
-      {
-       "name": "name",
-       "type": "string",
-       "doc": "The clip's name in a file."
-      },
-      {
-       "name": "label",
-       "type": "string",
-       "doc": "Its name on the page."
-      },
-      {
-       "name": "doing",
-       "type": "string",
-       "doc": "What the creature is doing, for the view's description: \"jumping on the spot\"."
-      },
-      {
-       "name": "seconds",
-       "type": "number",
-       "doc": "How long one loop takes."
-      },
-      {
-       "name": "fps",
-       "optional": true,
-       "type": "number",
-       "doc": "Keys a second when it is recorded as a clip."
-      },
-      {
-       "name": "pose",
-       "type": "(sk: Skeleton, t: number) => void",
-       "doc": "Poses the skeleton `t` seconds into the move."
-      }
-     ]
-    },
-    {
-     "name": "Species",
-     "kind": "interface",
-     "doc": "A procedural creature the Creature page can show.",
-     "props": [
-      {
-       "name": "id",
-       "type": "string",
-       "doc": "Its id in addresses and lists."
-      },
-      {
-       "name": "name",
-       "type": "string",
-       "doc": "\"frog\": used in sentences."
-      },
-      {
-       "name": "blurb",
-       "type": "string",
-       "doc": "One line for the page."
-      },
-      {
-       "name": "detail",
-       "type": "number[]",
-       "doc": "Blob counts on the detail chips, and the one picked first."
-      },
-      {
-       "name": "start",
-       "type": "number",
-       "doc": "The blob count picked first."
-      },
-      {
-       "name": "looks",
-       "type": "Look[]",
-       "doc": "Its looks, the first the default."
-      },
-      {
-       "name": "make",
-       "type": "(count: number, look: string) => Creature",
-       "doc": "Builds it with about `count` blobs in a look."
-      },
-      {
-       "name": "moves",
-       "type": "Move[]",
-       "doc": "Its moves, the first played first."
-      },
-      {
-       "name": "view",
-       "type": "Orbit",
-       "doc": "Where the camera starts."
-      },
-      {
-       "name": "seed",
-       "optional": true,
-       "type": "number",
-       "doc": "For a made-up monster, the seed that makes it again."
-      },
-      {
-       "name": "swing",
-       "optional": true,
-       "type": "SwingSpec",
-       "doc": "Loose parts (a tail, ears, a cloak) that swing after the body when it's played live (swing.ts); files and sheets keep the move as it is."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "zoo-fox",
-   "title": "Fox",
-   "doc": "",
-   "entries": [
-    {
-     "name": "makeFox",
-     "kind": "function",
-     "doc": "Builds the fox with about `count` blobs: a sculpted skin under strands of fur. `look` picks its coat.",
-     "signatures": [
-      {
-       "code": "makeFox(count?: number, look?: string): { blobs: Blobs; skin: Skin; skeleton: Skeleton }"
-      }
-     ]
-    },
-    {
-     "name": "FOX",
-     "kind": "const",
-     "doc": "The fox as a `Species`: how to build it, its looks, its moves and where the camera starts.",
-     "type": "Species"
-    }
-   ]
-  },
-  {
-   "id": "zoo-frog",
-   "title": "Frog",
-   "doc": "A frog, sitting, facing +z: twenty bones, including a jaw and a tongue of\nthree. The tongue lies along the floor of the mouth, rooted at the back;\nflicking it grows it straight out between the jaws, so it never stretches\nits blobs thin.",
-   "entries": [
-    {
-     "name": "makeFrog",
-     "kind": "function",
-     "doc": "Builds the frog with about `count` blobs. `look` picks its colors.",
-     "signatures": [
-      {
-       "code": "makeFrog(count?: number, look?: string): { blobs: Blobs; skin: Skin; skeleton: Skeleton }"
-      }
-     ]
-    },
-    {
-     "name": "FROG",
-     "kind": "const",
-     "doc": "The frog as a `Species`: how to build it, its looks, its moves and where the camera starts.",
-     "type": "Species"
-    }
-   ]
-  },
-  {
-   "id": "zoo-elf",
-   "title": "Elf",
-   "doc": "An elf, standing, facing +z: a humanoid of 29 bones (a spine of three, a\nneck and head, arms with hands and fingers, legs with feet and toes, a plait\nof hair and a cloak of two each side). The Creature page, Forest Walk and\nDungeon Run's hero are all this one elf.",
-   "entries": [
-    {
-     "name": "makeElf",
-     "kind": "function",
-     "doc": "The detailed elf, at exactly `count` blobs. `bones` may add to the elf's own (the hero's sword and orb).",
-     "signatures": [
-      {
-       "code": "makeElf(count?: number, look?: string, bones?: Bone[]): { blobs: Blobs; skin: Skin; skeleton: Skeleton }"
-      }
-     ]
-    },
-    {
-     "name": "ELF",
-     "kind": "const",
-     "doc": "The elf as a `Species`: how to build it, its looks, its moves and where the camera starts.",
-     "type": "Species"
-    }
-   ]
-  },
-  {
-   "id": "zoo-dragon",
-   "title": "Dragon",
-   "doc": "A dragon, standing, facing +z, about eight units nose to tail: 43 bones.\nIts body is cut the way the pixel scenes are (sculpt.ts): every scale, tooth\nand horn ring is a shape or a pattern on one, lit and shadowed once, and\nweighted to the bones so the neck and tail still curve. Its wings are skin\nstretched between an arm and three finger bones, so the membrane follows\nthe fingers as they spread and fold.\n\nIts fire is bones too: a chain of six from inside the mouth. In the rest\npose the flame is built FLAME times smaller than life, hidden in the mouth,\nso a file opened elsewhere shows a dragon with its mouth shut; breathing\nfire grows the first fire bone by FLAME (a scale key, which glTF has) and\nthe chain unrolls and flickers. Nothing about it is a particle system.",
-   "entries": [
-    {
-     "name": "makeDragon",
-     "kind": "function",
-     "doc": "Builds the dragon with about `count` blobs, a small share of them the fire that waits in its mouth. `look` picks\nits colors.",
-     "signatures": [
-      {
-       "code": "makeDragon(count?: number, look?: string): { blobs: Blobs; skin: Skin; skeleton: Skeleton }"
-      }
-     ]
-    },
-    {
-     "name": "DRAGON",
-     "kind": "const",
-     "doc": "The dragon as a `Species`: how to build it, its looks, its moves and where the camera starts.",
-     "type": "Species"
-    }
-   ]
-  },
-  {
-   "id": "zoo-monster",
-   "title": "Monsters from a seed",
-   "doc": "Make me a monster: a creature drawn up from a seed. The seed picks a body\nplan (two, four or six legs; how long, how round, how tall), a head (one to\nthree eyes, a snout, horns, ears or feelers), a tail, back spikes and a\ncoat and what its hide is (fur in strands, scales, or smooth wet skin), then\ncuts it with sculpt.ts like the hand-made zoo. Every monster can\nwalk on the spot, stand and breathe, and roar, and the same seed always\nmakes the same monster, so a link can share one.\n\nMonsters face +z and stand on the floor (y = 0) at rest.",
-   "entries": [
-    {
-     "name": "makeMonster",
-     "kind": "function",
-     "doc": "Builds the monster a seed gives, with about `count` blobs: the same seed always gives the same monster.",
-     "signatures": [
-      {
-       "code": "makeMonster(seed: number, count?: number): { blobs: Blobs; skin: Skin; skeleton: Skeleton }"
-      }
-     ]
-    },
-    {
-     "name": "monsterSpecies",
-     "kind": "function",
-     "doc": "The seed as a creature for the Creature page and its sprite sheets.",
-     "signatures": [
-      {
-       "code": "monsterSpecies(seed: number): Species"
-      }
-     ]
-    },
-    {
-     "name": "MAX_SEED",
-     "kind": "const",
-     "doc": "Seeds run from 1 to this; the button picks one and a link may name any.",
-     "type": "99999"
     }
    ]
   }

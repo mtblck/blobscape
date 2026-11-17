@@ -44,14 +44,15 @@ export default [
       await page.waitForURL(base + '/')
       if (!(await page.getByRole('heading', { level: 1, name: /Learn 3D splats/ }).count())) fails.push('Back did not return to the front page')
       else ok('Back returns to the front page')
-      // The theme lives in the menu: system, light or dark, stored under Blobscape's own key
-      await page.getByRole('button', { name: 'Menu' }).click()
+      // The theme has its own button in the header: system, light or dark, stored under Blobscape's own key
+      await page.getByTestId('theme-button').click()
       await page.getByRole('button', { name: /^dark$/i }).click()
       const picked = await page.evaluate(() => [document.documentElement.dataset.theme, localStorage.getItem('blobscape-theme')])
       if (picked[0] !== 'dark' || picked[1] !== 'dark') fails.push(`theme choice gave ${picked.join(' / ')}`)
-      else ok('the menu sets and stores the theme')
+      else if ((await page.getByTestId('theme-button').getAttribute('aria-label')) !== 'Theme: dark') fails.push('the theme button does not say Dark is picked')
+      else ok('the theme button sets and stores the theme')
       await page.waitForTimeout(600) // let color transitions (the tip button's) finish before measuring contrast
-      await axe(page, 'front page, menu open, dark')
+      await axe(page, 'front page, theme list open, dark')
       await page.getByRole('button', { name: /^system$/i }).click()
       if (await page.evaluate(() => document.documentElement.dataset.theme || localStorage.getItem('blobscape-theme'))) fails.push('System did not clear the theme')
       await ctx.close()

@@ -208,6 +208,13 @@ blobs and cutting them to a palette, and the themes of several scenes. The world
 (brick walls, steps and fences, formations, weather that lands, worn rock) follow ideas from their
 Ink Studio kit. The scenes, the engine and the code here are our own.
 
+The sandbox's One photo to a scene guesses depth with
+[Depth Anything V2](https://github.com/DepthAnything/Depth-Anything-V2) Small (Yang et al., 2024, Apache 2.0),
+and its tap to select finds the tapped thing with
+[SlimSAM](https://github.com/czg1225/SlimSAM) (Chen et al., 2023, Apache 2.0), a slimmed
+[Segment Anything](https://segment-anything.com/) (Kirillov et al., 2023). Both are
+run in the browser by [ONNX Runtime Web](https://onnxruntime.ai/); the weights are in `public/models/`.
+
 Blobscape stands on [three.js](https://threejs.org/), [Spark](https://sparkjs.dev/) and the
 [3D Gaussian Splatting](https://repo-sam.inria.fr/fungraph/3d-gaussian-splatting/) paper by Kerbl
 et al.

@@ -13,6 +13,15 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 - Pixel Diorama opens a scene description (.json) from your computer as one more scene, and says where a broken one is broken.
 
 - For people (and assistants) writing scenes: `npm run scene -- my-scene.json` checks a description, cuts it and says what to fix, and `--shots` draws it. Scenes are now also checked for parts that pass through each other as they play, like sails through a tower.
+- A simpler header: Engine opens a list with its overview, the docs, the file spec and the package on npm and GitHub; the theme has its own button; and wide screens no longer have a Menu button. The support button is on every page, as a small circle where a page has controls. The engine page has a Read the docs button at the top.
+
+- Tap to select in the sandbox: turn on "A click with Select takes the whole thing" in the Selection tab and a click on a mug, a leaf or a chair selects everything that belongs to it, the far side too. A small model (a slimmed Segment Anything, 14 MB, served by this site) looks at the view on your device.
+
+- The sandbox works with an assistant in the browser: where the browser has WebMCP (Chrome is trying it out), the sandbox offers its actions as tools, so an assistant can look at the scene, build one from a scene description, add a creature, cut, recolor, paint with a brush, save and undo. Other browsers see no change.
+
+- One photo to a scene in the sandbox: open a photo in the Scene tab (or drop one on the view) and it becomes a shallow scene, a blob for each pixel set as far back as a depth model guesses. The model runs in the page and is served by this site, so the photo stays on your device.
+
+- The engine docs are in parts: Core (Stage, the world, the camera, bones) comes first, and the specialist pieces sit under Movement, Creatures, Shapes and scenes, Pixels and sprites, Simulation, Picking, detail and edits, and Files and models. The contents list opens a part when you ask or read into it.
 
 - A camera path in the sandbox: save a few views as stops in the Scene tab, play a smooth glide through them, and save it as an MP4 made on your device.
 
