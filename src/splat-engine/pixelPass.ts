@@ -44,6 +44,7 @@ export class PixelPass {
   private readonly parted = uniform(0)
   /** The scene and its map of parts at twice the art's size, for a look with `fine`: what `small` and `ids` are settled from. */
   readonly fineSmall = new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter })
+  /** The map of parts at twice the art's size, which four samples a pixel settles from. */
   readonly fineIds = new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter })
   private readonly settleMat = new NodeMaterial()
   private readonly settleIdsMat = new NodeMaterial()

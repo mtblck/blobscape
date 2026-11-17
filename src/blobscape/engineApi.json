@@ -6486,7 +6486,7 @@
        "name": "fineIds",
        "readonly": true,
        "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
-       "doc": ""
+       "doc": "The map of parts at twice the art's size, which four samples a pixel settles from."
       },
       {
        "name": "art",
