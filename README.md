@@ -151,7 +151,7 @@ which also draws Blobscape's lessons and sandbox. The two trade files, not a ren
 
 The engine is on npm as [`@blobscape/engine`](https://www.npmjs.com/package/@blobscape/engine), a package for
 three.js (`npm install @blobscape/engine three`). The [Build with the engine](https://blobscape.dev/lessons/first-creature/)
-lessons are its guides, and every export is in the [API reference](https://blobscape.dev/engine/api/).
+lessons are its guides, and every export is in the [docs](https://blobscape.dev/engine/docs/).
 
 ### Rigged splats in glTF
 

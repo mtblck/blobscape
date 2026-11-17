@@ -19,6 +19,7 @@ import { positionView, vec4 } from 'three/tsl'
  * points (grids, helpers) are left out.
  */
 export class SplatDepth {
+  /** The depth map: each pixel's distance in front of the camera, 0 where nothing is. */
   readonly target: RenderTarget
   private readonly material = new NodeMaterial()
 
@@ -29,6 +30,7 @@ export class SplatDepth {
     this.material.colorNode = vec4(d, d, d, 1) as never
   }
 
+  /** Sizes the map, in pixels. */
   setSize(width: number, height: number) {
     if (this.target.width !== width || this.target.height !== height) this.target.setSize(width, height)
   }
@@ -79,6 +81,7 @@ export class SplatDepth {
     return { width, height, depth }
   }
 
+  /** Frees its render target. */
   dispose() {
     this.target.dispose()
     this.material.dispose()

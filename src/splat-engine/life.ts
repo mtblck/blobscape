@@ -34,6 +34,7 @@ function tube(points: Vec3[], radii: number[], thin: number): Shape[] {
 
 // --- Trees by space colonization
 
+/** A tree for `tree`, grown by space colonization. */
 export interface TreeSpec {
   /** The foot of the trunk. */
   at: Vec3
@@ -45,10 +46,19 @@ export interface TreeSpec {
   r: number
   /** Points scattered through the crown that the branches grow toward (160). More makes a finer tree. */
   points?: number
+  /** The same seed gives the same result. */
   seed: number
 }
 
-export interface TreeNode { p: Vec3; parent: number; r: number }
+/** One joint of a grown tree: its place, the joint it grew from and the limb's radius there. */
+export interface TreeNode {
+  /** Where the joint is. */
+  p: Vec3
+  /** The joint it grew from, or -1 for the foot. */
+  parent: number
+  /** The limb's radius here. */
+  r: number
+}
 
 /**
  * Grows a tree by space colonization: points are scattered through the crown, and every point pulls the nearest
@@ -120,14 +130,19 @@ export function tree(s: TreeSpec & { leaves?: number; only?: 'limbs' | 'leaves' 
 
 // --- Cacti and succulents
 
+/** A ribbed cactus for `cactus`. */
 export interface CactusSpec {
+  /** Where it stands. */
   at: Vec3
+  /** How tall the trunk is. */
   height: number
+  /** The trunk's radius. */
   r: number
   /** Ribs round it (8). */
   ribs?: number
   /** Arms, 0 to 4. */
   arms?: number
+  /** The same seed gives the same result. */
   seed: number
 }
 
@@ -183,7 +198,17 @@ export function cactus(s: CactusSpec): Shape {
   }
 }
 
-export interface RosetteSpec { at: Vec3; r: number; leaves: number; seed: number }
+/** A succulent's rosette of leaves, for `rosette`. */
+export interface RosetteSpec {
+  /** Its middle, on the ground. */
+  at: Vec3
+  /** How far the outer leaves reach. */
+  r: number
+  /** How many leaves, 3 to 60. */
+  leaves: number
+  /** The same seed gives the same result. */
+  seed: number
+}
 
 /** A succulent: thick pointed leaves set round a spiral by the golden angle, the inner ones short and upright. */
 export function rosette(s: RosetteSpec, thin = 0): Shape {
@@ -201,13 +226,17 @@ export function rosette(s: RosetteSpec, thin = 0): Shape {
 
 // --- Fungi and coral
 
+/** Bracket fungi up a trunk, for `brackets`. */
 export interface BracketSpec {
   /** Where the lowest shelf meets the trunk. */
   at: Vec3
   /** The way the shelves face out from the trunk: [x, z]. */
   facing: [number, number]
+  /** How far the biggest shelf stands out. */
   r: number
+  /** How many shelves. */
   count: number
+  /** The same seed gives the same result. */
   seed: number
 }
 
@@ -234,7 +263,17 @@ export function brackets(s: BracketSpec): Shape {
   return { sdf, min: [s.at[0] - R, s.at[1] - s.r * 0.1, s.at[2] - R], max: [s.at[0] + R, top, s.at[2] + R] }
 }
 
-export interface BrainSpec { at: Vec3; r: number; groove?: number; seed: number }
+/** A brain coral for `brain`. */
+export interface BrainSpec {
+  /** The middle of its foot. */
+  at: Vec3
+  /** Its radius. */
+  r: number
+  /** How wide a groove is; left out, about a sixth of the radius. */
+  groove?: number
+  /** The same seed gives the same result. */
+  seed: number
+}
 
 /** Brain coral: a dome worn into meandering ridges and grooves. */
 export function brain(s: BrainSpec): Shape {
@@ -251,6 +290,7 @@ export function brain(s: BrainSpec): Shape {
 
 // --- Shells, horns, antlers and ribs
 
+/** A coiled shell for `shell`. */
 export interface ShellSpec {
   /** The middle of its coil. */
   at: Vec3
@@ -292,11 +332,13 @@ export function shell(s: ShellSpec, thin = 0): Shape {
   return many(parts)
 }
 
+/** A horn for `horn`. */
 export interface HornSpec {
   /** The root, on the head. */
   at: Vec3
   /** The way it first grows. */
   dir: Vec3
+  /** How long it is along its curl. */
   length: number
   /** At the root. */
   r: number
@@ -328,19 +370,28 @@ export function hornPath(s: HornSpec): { points: Vec3[]; radii: number[] } {
   return { points, radii }
 }
 
+/**
+ * A horn: a tapering tube that curls and can wind sideways. `thin` is the least radius it may have, so its tip never
+ * slips between grid cells.
+ */
 export function horn(s: HornSpec, thin = 0): Shape {
   const { points, radii } = hornPath(s)
   return many(tube(points, radii, thin))
 }
 
+/** An antler for `antler`. */
 export interface AntlerSpec {
+  /** The root, on the head. */
   at: Vec3
   /** The way the main beam leaves the head. */
   dir: Vec3
+  /** How long the main beam is. */
   length: number
+  /** The beam's radius at the root. */
   r: number
   /** Tines off the main beam, 1 to 8. */
   tines: number
+  /** The same seed gives the same result. */
   seed: number
 }
 
@@ -360,9 +411,11 @@ export function antler(s: AntlerSpec, thin = 0): Shape {
   return many(parts)
 }
 
+/** A rib cage for `ribs`. */
 export interface RibsSpec {
   /** The ends of the spine. */
   from: Vec3
+  /** The spine's other end. */
   to: Vec3
   /** Pairs of ribs. */
   count: number

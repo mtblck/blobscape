@@ -66,6 +66,16 @@
       "source": "/tools/:path*",
       "destination": "/experiments/",
       "permanent": true
+    },
+    {
+      "source": "/engine/api",
+      "destination": "/engine/docs/",
+      "permanent": true
+    },
+    {
+      "source": "/engine/api/:path*",
+      "destination": "/engine/docs/",
+      "permanent": true
     }
   ],
   "headers": [

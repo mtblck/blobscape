@@ -201,7 +201,7 @@ export function parsePath(pathname: string): Route | null {
   if (m.length === 1 && m[0] === 'experiments') return { page: 'experiments' }
   if (m.length === 1 && m[0] === 'engine') return { page: 'engine' }
   if (m.length === 2 && m[0] === 'engine' && m[1] === 'rigged-splats') return { page: 'spec' }
-  if (m.length === 2 && m[0] === 'engine' && m[1] === 'api') return { page: 'api' }
+  if (m.length === 2 && m[0] === 'engine' && (m[1] === 'docs' || m[1] === 'api')) return { page: 'api' }
   if (m.length === 1 && m[0] === 'contact') return { page: 'contact' }
   if (m.length === 2 && m[0] === 'experiments' && m[1] === 'creature') return { page: 'creature' }
   if (m.length === 2 && m[0] === 'experiments' && m[1] === 'forest-walk') return { page: 'forest' }
@@ -241,7 +241,7 @@ export function href(r: Route): string {
   if (r.page === 'experiments') return '/experiments/'
   if (r.page === 'engine') return '/engine/'
   if (r.page === 'spec') return '/engine/rigged-splats/'
-  if (r.page === 'api') return '/engine/api/'
+  if (r.page === 'api') return '/engine/docs/'
   if (r.page === 'contact') return '/contact/'
   if (r.page === 'lessons') return '/lessons/'
   return '/'

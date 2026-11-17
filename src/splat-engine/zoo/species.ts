@@ -11,8 +11,11 @@ export interface Move {
   label: string
   /** What the creature is doing, for the view's description: "jumping on the spot". */
   doing: string
+  /** How long one loop takes. */
   seconds: number
+  /** Keys a second when it is recorded as a clip. */
   fps?: number
+  /** Poses the skeleton `t` seconds into the move. */
   pose: (sk: Skeleton, t: number) => void
 }
 
@@ -20,6 +23,7 @@ export interface Look { id: string; label: string }
 
 /** A procedural creature the Creature page can show. */
 export interface Species {
+  /** Its id in addresses and lists. */
   id: string
   /** "frog": used in sentences. */
   name: string
@@ -27,9 +31,13 @@ export interface Species {
   blurb: string
   /** Blob counts on the detail chips, and the one picked first. */
   detail: number[]
+  /** The blob count picked first. */
   start: number
+  /** Its looks, the first the default. */
   looks: Look[]
+  /** Builds it with about `count` blobs in a look. */
   make: (count: number, look: string) => Creature
+  /** Its moves, the first played first. */
   moves: Move[]
   /** Where the camera starts. */
   view: Orbit

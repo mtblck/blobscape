@@ -23,6 +23,7 @@ import { drift, fallAt, fallShare, frost, groundUnder, type Falling } from './we
  * camera starts on the +z side. Colors are '#rrggbb'.
  */
 export interface SceneDoc {
+  /** The scene's name. */
   name: string
   /** Seconds before everything repeats: 4 to 60. */
   loop: number
@@ -39,6 +40,7 @@ export interface SceneDoc {
   sky?: [string, string]
   /** How far down the picture the sky's blend runs before it is all the bottom color: 0.05 to 1, the whole way when left out. */
   skyReach?: number
+  /** The pixel look it asks for: how much dither and glow, and whether to draw an outline and edge lines. */
   look?: { dither?: number; glow?: number; outline?: boolean; edges?: boolean }
   /**
    * How wide each surface disc is, as a share of the grid: 0.4 to 1, 0.55 when left out. Small discs keep paint
@@ -50,7 +52,9 @@ export interface SceneDoc {
   camera: Orbit & { swing?: number }
   /** Things that move. The land itself needs none: parts with no bone stand still. */
   bones?: BoneDoc[]
+  /** Everything in the scene, each a shape with its paint. */
   parts: PartDoc[]
+  /** What moves, each a whole number of times a loop. */
   moves?: MoveDoc[]
   /** Live lights, at most four: they light what is near them, frame by frame. */
   lights?: LightDoc[]
@@ -66,6 +70,7 @@ export interface SceneDoc {
   focus?: { at: Vec3; r: number }
 }
 
+/** A scene's air: haze, mist, shafts of light and specks. */
 export interface AirDoc {
   /** Things far from the camera fade toward `color`: it starts `from` units past the view's target (0 when left out) and would be total at `to` (4). */
   haze?: { color: string; from?: number; to?: number }
@@ -77,22 +82,27 @@ export interface AirDoc {
   specks?: SpeckDoc[]
 }
 
+/** One bank of mist. */
 export interface MistDoc {
   /** The middle of the bank. */
   at: Vec3
   /** Half its size along x, y (its depth) and z. */
   half: Vec3
+  /** Its color. */
   color: string
   /** How thick it is, 0 to 1 (0.5 when left out). */
   thick?: number
 }
 
+/** One beam of light. */
 export interface ShaftDoc {
   /** Where it starts (a window, a crack, a lamp) and where it lands. */
   from: Vec3
+  /** Where it lands. */
   to: Vec3
   /** How wide it is, as a radius. */
   r: number
+  /** Its color. */
   color: string
   /** How bright, 0 to 1 (0.6 when left out). */
   strength?: number
@@ -104,11 +114,15 @@ export interface ShaftDoc {
  */
 export type SpeckKind = 'dust' | 'embers' | 'rain' | 'snow' | 'leaves' | 'fireflies' | 'bubbles'
 
+/** One swarm of specks: dust, embers, rain, snow, leaves, fireflies or bubbles. */
 export interface SpeckDoc {
+  /** What they are, which sets how they move. */
   kind: SpeckKind
+  /** How many. */
   count: number
   /** Two opposite corners of the box they live in: rain and snow fall from its top to its bottom, embers and bubbles rise from its bottom to its top. */
   from: Vec3
+  /** The box's opposite corner. */
   to: Vec3
   /** Each speck takes one of these. */
   colors: string[]
@@ -122,7 +136,9 @@ export interface SpeckDoc {
   wind?: [number, number]
 }
 
+/** One bone of a scene: something for parts to ride on and moves to turn. */
 export interface BoneDoc {
+  /** What parts and moves call it. */
   name: string
   /** The point it turns and grows about. */
   at: Vec3
@@ -130,8 +146,11 @@ export interface BoneDoc {
   parent?: string
 }
 
+/** One part of a scene: a shape, its paint and the bone that carries it. */
 export interface PartDoc {
+  /** Its shape. */
   shape: ShapeDoc
+  /** Its paint. */
   paint: PaintDoc
   /** The bone that carries it; left out, it is part of the land. */
   bone?: string
@@ -160,6 +179,10 @@ export interface PartDoc {
   strokes?: number
 }
 
+/**
+ * A shape, written as data: `kind` says which. The guide, docs/scene-descriptions.md in the repository, goes through
+ * them all.
+ */
 export type ShapeDoc =
   | { kind: 'sphere'; at: Vec3; r: number }
   /** A stretched ball: radii along x, y, z. */
@@ -281,6 +304,7 @@ export type ShapeDoc =
   /** A lumpy version: `by` is how far the surface moves, `scale` how big the lumps are. */
   | { kind: 'rough'; shape: ShapeDoc; by: number; scale?: number }
 
+/** A part's paint: one color, or a pattern of several. */
 export type PaintDoc =
   | string
   /** Stripes across an axis, `size` thick, taking the colors in turn. */
@@ -317,8 +341,11 @@ export type MoveDoc =
   /** Grows from nothing as you watch, stands, and shrinks away again before it starts over, `times` per loop: crystals, icicles, a sprout. */
   | { kind: 'sprout'; bone: string; times: number; phase?: number }
 
+/** A point light in a scene. */
 export interface LightDoc {
+  /** Where it is. */
   at: Vec3
+  /** Its color. */
   color: string
   /** 1 is a torch; 3 lights dark ground brightly. */
   strength: number
@@ -1053,15 +1080,21 @@ function toPaint(p: PaintDoc, cell: number, letterAt?: (p: Vec3, n: Vec3) => str
   }
 }
 
+/** A scene ready to build and play, from `compileScene`. */
 export interface CompiledScene {
+  /** The scene's name. */
   name: string
+  /** Seconds the scene takes to repeat. */
   loop: number
+  /** Where the camera starts. */
   orbit: Orbit
   /** Degrees the view rocks to either side, once a loop: 0 holds still. */
   swing: number
   /** The pixel look the scene asks for. */
   look: PixelLook
+  /** The scene's own palette. */
   palette: Rgb[]
+  /** The scene's bones. */
   bones: Bone[]
   /** The shapes on a grid of `spacing`. */
   spec(spacing: number): VoxelSpec
@@ -1069,6 +1102,7 @@ export interface CompiledScene {
   empty(built: { partOf: ArrayLike<number> }): number[]
   /** Poses the bones for `t` seconds. */
   pose(sk: Skeleton, t: number): void
+  /** The scene's live lights at a time, in seconds. */
   lights(t: number): PointLight[]
   /** Distance haze, if the scene asks for it: the color (linear) and where it starts and would be total, in units past the view's target. */
   haze?: { color: Vec3; from: number; to: number }

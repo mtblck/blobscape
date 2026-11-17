@@ -14,24 +14,44 @@
 export type Vec3 = [number, number, number]
 
 /** A segment from `a` to `b` with a radius; `a` and `b` the same is a ball. */
-export interface Capsule { a: Vec3; b: Vec3; r: number }
+export interface Capsule {
+  /** One end of its middle line. */
+  a: Vec3
+  /** The other end. */
+  b: Vec3
+  /** Its radius. */
+  r: number
+}
 
 /** Seconds per step, and substeps per step. */
 export const STEP = 1 / 120
+/** Substeps the solver takes in each `STEP`. */
 export const SUBSTEPS = 4
 
 interface Link { a: number; b: number; rest: number; compliance: number }
 
+/**
+ * A small XPBD solver: points joined by links, pulled toward goals and kept out of capsules. It steps at a fixed
+ * `STEP`, carrying the rest of a frame over, so the same frames always give the same motion.
+ */
 export class Xpbd {
+  /** How many points. */
   readonly n: number
+  /** Positions: x, y, z per point. */
   readonly pos: Float64Array
+  /** Velocities: x, y, z per point. */
   readonly vel: Float64Array
+  /** One over each point's mass; 0 pins a point where it is. */
   readonly invMass: Float64Array
+  /** @internal The links between points. Add one with `link`. */
   readonly links: Link[] = []
   /** Where the animation puts each point, and how loosely it follows (Infinity: not at all). */
   readonly goal: Float64Array
+  /** @internal How softly each point is pulled to its goal. Set one with `follow`. */
   readonly goalCompliance: Float64Array
+  /** The capsules the points stay out of. Set it each frame as the body moves. */
   capsules: Capsule[] = []
+  /** The pull on every point, per second squared. */
   gravity: Vec3 = [0, -9.8, 0]
   /** Share of velocity lost per second. */
   damping = 1.5
@@ -57,6 +77,7 @@ export class Xpbd {
     this.links.push({ a, b, rest, compliance })
   }
 
+  /** How far apart two points are now. */
   distance(a: number, b: number): number {
     const p = this.pos
     return Math.hypot(p[a * 3] - p[b * 3], p[a * 3 + 1] - p[b * 3 + 1], p[a * 3 + 2] - p[b * 3 + 2])

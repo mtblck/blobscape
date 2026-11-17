@@ -3,7 +3,9 @@ import type { Lens } from './blobs.ts'
 
 /** Where the orbit camera is: it circles `target` at `distance`, looking at it. */
 export interface Orbit {
+  /** The point it looks at. */
   target: [number, number, number]
+  /** How far from the target it is. */
   distance: number
   /** Degrees around the vertical axis; 0 looks from +Z. */
   azimuth: number
@@ -11,6 +13,7 @@ export interface Orbit {
   elevation: number
 }
 
+/** The camera's vertical field of view, in degrees. */
 export const FOV = 35
 
 /** Places a three.js camera for an orbit and a canvas aspect. */

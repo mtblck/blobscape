@@ -36,7 +36,10 @@ export interface Fur {
 }
 
 /** A part of a sculpted creature that may grow fur. */
-export interface FurryPart extends SculptPart { fur?: Fur }
+export interface FurryPart extends SculptPart {
+  /** The fur that grows on it; left out, bare skin. */
+  fur?: Fur
+}
 
 /** A number 0–1 that is the same for the same pair of whole numbers. */
 function hash(a: number, b: number) {

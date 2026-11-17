@@ -49,8 +49,11 @@ import { viewColor } from '../splat-core/sh.ts'
  */
 
 export interface Actor {
+  /** The blobs in the rest pose. */
   blobs: Blobs
+  /** Which bones move each blob, and by how much. */
   skin: Skin
+  /** The bones, and their pose. */
   skeleton: Skeleton
   /** Which part of the actor each blob belongs to (as `buildBody` and `voxelBody` give it): what `SplatWorld.parts` draws. Left out, the actor is one part. */
   partOf?: ArrayLike<number>
@@ -74,6 +77,10 @@ const KERNEL_2D = 0.3
 const MAX_SPLAT_PX = 1024
 const CLIP_XY = 1.4
 
+/**
+ * How a `SplatWorld` is built: its sort, how a blob on several bones turns, and whether it lights or paints its
+ * blobs.
+ */
 export interface EngineOptions {
   /** Depth buckets for the counting sort. More buckets, fewer ties between blobs that are close in depth. */
   bins?: number
@@ -82,6 +89,7 @@ export interface EngineOptions {
    * 'radix': a stable radix sort over 2²⁴ depth steps (radix.ts), every tie in index order however many share it.
    */
   sort?: 'bins' | 'radix'
+  /** How a blob on several bones takes its shape ('quat' unless set): see `SkinMode`. */
   mode?: SkinMode
   /** Live lights (`setLights`): each blob is lit every frame from its normal. Off unless asked for, as it costs a pass. */
   lights?: boolean
@@ -91,6 +99,7 @@ export interface EngineOptions {
 
 /** A point light for `setLights`. */
 export interface PointLight {
+  /** Where it is, in world space. */
   position: [number, number, number]
   /** Linear RGB, times its strength: [1, 0.6, 0.3] is a torch at full strength. */
   color: [number, number, number]
@@ -103,17 +112,30 @@ export interface PointLight {
 /** How many lights `setLights` takes; the rest are dropped. */
 export const MAX_LIGHTS = 16
 
+/**
+ * Every blob of every actor as one three.js mesh, so things that overlap are sorted against each other in one pass.
+ * On WebGPU the bones move the blobs, and the blobs are projected and sorted, in compute passes each frame; on WebGL
+ * 2 the vertex shader moves them and the CPU sorts. Add it to a scene drawn by three.js's `WebGPURenderer`, or let
+ * `Stage` do that for you.
+ */
 export class SplatWorld extends Mesh {
+  /** Marks the object as a `SplatWorld`, the way three.js marks its own kinds. */
   readonly isSplatWorld = true
+  /** How many blobs it holds, over every actor. */
   readonly count: number
+  /** The actors it was built from. */
   readonly actors: Actor[]
+  /** How many bones it holds, over every actor. */
   readonly boneCount: number
+  /** How a blob on several bones takes its shape: see `SkinMode`. */
   mode: SkinMode
   /** Set by the WebGL backend path, read by tests: did the last frame skin on the CPU? */
   cpuPath = false
   /** Milliseconds the CPU spent in the last frame (WebGL path only): moving centers, sorting, both. */
   cpuMs = 0
+  /** Milliseconds of that spent moving centers. */
   cpuSkinMs = 0
+  /** Milliseconds of that spent sorting. */
   cpuSortMs = 0
   /** While true, rendering draws the last frame's blobs without moving or sorting them (for timing the draw alone, and for a second draw of the same frame such as the map of parts). */
   hold = false
@@ -168,6 +190,7 @@ export class SplatWorld extends Mesh {
   private bonesDirty = true
   private lastSortKey = ''
   private readonly size = new Vector2()
+  /** A sphere round every actor's posed bones, for placing a camera or a shadow grid. */
   readonly bounds = new Sphere()
   /**
    * Distance fog: blobs fade toward `color` (linear RGB) from `near` to `far`
@@ -779,6 +802,10 @@ export class SplatWorld extends Mesh {
   /** Which depth sort this world was built with. */
   get sortKind(): 'bins' | 'radix' { return this.sort instanceof RadixSort ? 'radix' : 'bins' }
 
+  /**
+   * Reads the sorted order back from the GPU and counts what is wrong with it: blobs missing, out of order, or in
+   * bins left unsettled. For tests.
+   */
   async checkSort(renderer: Renderer) {
     const r = renderer as unknown as { getArrayBufferAsync: (a: StorageBufferAttribute) => Promise<ArrayBuffer> }
     const order = new Uint32Array(await r.getArrayBufferAsync(this.sort.orderAttr))

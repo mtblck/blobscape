@@ -15,7 +15,12 @@ import { many, type Shape, tighten } from './voxel.ts'
  */
 
 /** A bed of rock: how thick it is and how hard (0 soft, worn back far, to 1 hard, standing out as a ledge). */
-export interface Bed { thick: number; hard: number }
+export interface Bed {
+  /** How thick the bed is. */
+  thick: number
+  /** How hard: 0 is soft and wears back far, 1 is hard and stands out as a ledge. */
+  hard: number
+}
 
 /** Beds when none are given: soft and hard by turns, a hard one on top. */
 export const BEDS: Bed[] = [{ thick: 0.14, hard: 0.85 }, { thick: 0.2, hard: 0.25 }, { thick: 0.1, hard: 0.95 }, { thick: 0.22, hard: 0.35 }, { thick: 0.12, hard: 0.8 }, { thick: 0.18, hard: 0.2 }]
@@ -31,6 +36,7 @@ const hardAt = (beds: Bed[], y: number) => beds[((bedAt(beds, y) % beds.length) 
 
 // --- Land worn by water
 
+/** Land worn by water, for `land` and `wornLand`. */
 export interface LandSpec {
   /** The middle of its foot. */
   at: Vec3
@@ -46,17 +52,26 @@ export interface LandSpec {
   slump?: number
   /** Beds of rock, from the bottom up, repeating: soft ones wear faster. Left out, all one rock. */
   beds?: Bed[]
+  /** The same seed gives the same result. */
   seed: number
 }
 
+/** The most water drops a `LandSpec` may ask for. */
 export const MAX_DROPS = 30000
+/** The most cells along a side of a land's height grid. */
 export const MAX_GRID = 112
 
+/** Worn land as a grid of heights, from `wornLand`. */
 export interface Land {
+  /** Grid points along x. */
   nx: number
+  /** Grid points along z. */
   nz: number
+  /** The distance between grid points. */
   cell: number
+  /** The grid's first x. */
   x0: number
+  /** The grid's first z. */
   z0: number
   /** Heights above the foot, nx by nz. */
   height: Float32Array
@@ -228,16 +243,21 @@ export function land(s: LandSpec & { base?: number }): Shape {
 
 // --- Buttes, hoodoos and arches
 
+/** A butte for `butte`: beds of rock, the soft ones worn back. */
 export interface ButteSpec {
   /** The middle of its foot. */
   at: Vec3
+  /** Its radius at the foot. */
   r: number
+  /** How tall it is. */
   height: number
+  /** Beds of rock from the bottom up, repeating; left out, `BEDS`. */
   beds?: Bed[]
   /** How far each soft bed is worn back, as a share of the radius (0.3). */
   wear?: number
   /** A caprock this much wider than the rock under it, as a share (0: none). */
   cap?: number
+  /** The same seed gives the same result. */
   seed: number
 }
 
@@ -292,16 +312,21 @@ export function hoodoo(s: { at: Vec3; height: number; r: number; seed: number })
   return butte({ at: s.at, r: s.r, height: s.height, beds, wear: 0.55, cap: 0.5, seed: s.seed })
 }
 
+/** A rock arch for `arch`. */
 export interface ArchSpec {
   /** The feet of its two legs, on the ground. */
   from: Vec3
+  /** The foot of its other leg. */
   to: Vec3
+  /** How tall it is. */
   height: number
   /** How thick the fin of rock is. */
   thick: number
   /** How high the soft bed the hole wore through sits: its middle, as a share of the height (0.4). */
   soft?: number
+  /** Beds of rock from the bottom up, repeating; left out, `BEDS`. */
   beds?: Bed[]
+  /** The same seed gives the same result. */
   seed: number
 }
 
@@ -335,14 +360,17 @@ function archRaw(s: ArchSpec): Shape {
 
 // --- Cracked mud and pebbles
 
+/** A patch of cracked mud for `mud`. */
 export interface MudSpec {
   /** The middle of the patch, on the ground. */
   at: Vec3
+  /** How far the patch reaches. */
   r: number
   /** About how wide a plate is. */
   plate: number
   /** How far plate edges curl up, 0 to 1. */
   curl?: number
+  /** The same seed gives the same result. */
   seed: number
 }
 
@@ -381,13 +409,17 @@ function mudRaw(s: MudSpec, cell = 0): Shape {
   }
 }
 
+/** Pebbles along a stream bed, for `pebbles`. */
 export interface PebbleSpec {
   /** The stream's line, on the ground. */
   path: Vec3[]
+  /** How wide the stream bed is. */
   width: number
+  /** How many pebbles. */
   count: number
   /** The biggest pebble, mid-stream. */
   size: number
+  /** The same seed gives the same result. */
   seed: number
 }
 
@@ -410,6 +442,10 @@ export function pebbleList(s: PebbleSpec): { at: Vec3; r: Vec3 }[] {
   })
 }
 
+/**
+ * Pebbles along a stream's line, the biggest mid-stream. `cell` is the grid's cell size, so none comes out smaller
+ * than a cell.
+ */
 export function pebbles(s: PebbleSpec, cell = 0): Shape {
   return many(pebbleList(s).map((p) => {
     const r: Vec3 = [Math.max(p.r[0], cell), Math.max(p.r[1], cell * 0.8), Math.max(p.r[2], cell)]
@@ -424,6 +460,10 @@ export function pebbles(s: PebbleSpec, cell = 0): Shape {
 /** See butteRaw; its wobble and worn beds make the side distance a little ragged. */
 export const butte = (s: ButteSpec): Shape => tighten(butteRaw(s), 0.55)
 
+/** A rock arch: a fin of rock with a hole worn through its soft bed. */
 export const arch = (s: ArchSpec): Shape => tighten(archRaw(s), 0.88)
 
+/**
+ * Cracked mud: plates with curled edges. `cell` is the grid's cell size, so the cracks are never thinner than a cell.
+ */
 export const mud = (s: MudSpec, cell = 0): Shape => tighten(mudRaw(s, cell), 0.6)

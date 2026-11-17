@@ -31,6 +31,7 @@ export function groundUnder(shapes: Shape[], x: number, z: number, top: number, 
 
 // --- Falling and landing
 
+/** The kinds of thing that fall and land. */
 export type Falling = 'rain' | 'snow' | 'leaves'
 
 /** How long the fall takes, as a share of each life, then how long it lies before it is gone. */
@@ -57,6 +58,7 @@ export const fallShare = (kind: Falling) => FALL[kind].fall
 
 // --- Snow drifts
 
+/** A field of drifted snow, for `drift` and `driftField`. */
 export interface DriftSpec {
   /** The middle of the snow field, at about ground height. */
   at: Vec3
@@ -72,15 +74,23 @@ export interface DriftSpec {
   reach?: number
   /** A path trodden through it, where it lies thin. */
   path?: Vec3[]
+  /** How wide the trodden path is (0.2 when left out). */
   pathWidth?: number
+  /** The same seed gives the same result. */
   seed: number
 }
 
+/** Drifted snow as a grid, from `driftField`. */
 export interface Drift {
+  /** Grid points along x. */
   nx: number
+  /** Grid points along z. */
   nz: number
+  /** The distance between grid points. */
   cell: number
+  /** The grid's first x. */
   x0: number
+  /** The grid's first z. */
   z0: number
   /** The ground under the snow. */
   ground: Float32Array
@@ -88,6 +98,7 @@ export interface Drift {
   depth: Float32Array
 }
 
+/** The most cells along a side of a drift's grid. */
 export const DRIFT_GRID = 96
 /** Half how wide something must be to shelter snow behind it. */
 const WIDE = 0.06
@@ -193,6 +204,7 @@ function driftRaw(s: DriftSpec, under: (x: number, z: number) => number, thin = 
 
 // --- Frost ferns
 
+/** A frost fern for `frost`. */
 export interface FrostSpec {
   /** Where it starts, on the surface. */
   at: Vec3
@@ -204,10 +216,26 @@ export interface FrostSpec {
   arms?: number
   /** Which share of its growth to show, [from, to] in 0..1 (all of it): split one fern over parts that sprout in turn and it grows a branch at a time. */
   stage?: [number, number]
+  /** The same seed gives the same result. */
   seed: number
 }
 
-export interface FrostBranch { from: Vec3; to: Vec3; r: number; gen: number; t: number }
+/**
+ * One stroke of a frost fern: its ends, its radius, which generation of branch it is, and `t`, when it grows (0 at
+ * the start to 1 at the last tip).
+ */
+export interface FrostBranch {
+  /** Where the stroke starts. */
+  from: Vec3
+  /** Where it ends. */
+  to: Vec3
+  /** Its radius. */
+  r: number
+  /** Which generation of branch it is: 0 for a main branch. */
+  gen: number
+  /** When it grows: 0 at the start to 1 at the last tip. */
+  t: number
+}
 
 /**
  * A frost fern as straight strokes in the surface's plane: main branches curve out from the start, each throwing
@@ -265,4 +293,8 @@ export function frost(s: FrostSpec, thin = 0): Shape {
 const norm = (v: Vec3): Vec3 => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l] }
 const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
 
+/**
+ * Drifted snow as a shape: deep behind whatever stands in the wind, gone from steep faces, thin on a trodden path.
+ * `under` gives the height of the ground at a place.
+ */
 export const drift = (s: DriftSpec, under: (x: number, z: number) => number, thin = 0): Shape => tighten(driftRaw(s, under, thin), 0.8)
