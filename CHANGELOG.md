@@ -6,6 +6,7 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 
 ## [Unreleased]
 
+- Forest Walk: the elf's cloak and plait swing after the body as cloth, trailing when it turns and settling when it stops.
 - Rigged-splat files open in three.js: a loader hands the bones and clips to three's own animation player, and an adapter draws them with Spark.
 
 ## [0.1.0] - 2026-11-17

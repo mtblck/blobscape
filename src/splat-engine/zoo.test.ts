@@ -2,9 +2,10 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readRiggedGlb, recordClip, sampleClip, writeRiggedGlb } from './glb.ts'
 import { aim, dir, restDir, worldQuat } from './posing.ts'
-import { Skeleton, posedPoint, rotate, skinBlob } from './rig.ts'
+import { Skeleton, mulQ, posedPoint, rotate, skinBlob } from './rig.ts'
 import { FLAME, makeDragon } from './zoo/dragon.ts'
 import { ELF_BONES, clearCloak } from './zoo/elf.ts'
+import { ElfCloth } from './zoo/elfCloth.ts'
 import { ZOO } from './zoo/index.ts'
 import { gaitOf, layout, legRoom, makeMonster, monsterSpecies, planMonster } from './zoo/monster.ts'
 
@@ -122,44 +123,80 @@ test('a seed makes the same monster every time, and different seeds make differe
   assert.equal(monsterSpecies(42).name, monsterSpecies(42).name)
 })
 
-test("the elf's legs stay in front of the cloak through the whole walk, and a harder kick still clears it", () => {
-  const sk = new Skeleton(ELF_BONES)
-  const sub = (a: ArrayLike<number>, b: ArrayLike<number>): [number, number, number] => [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
-  const dot = (a: ArrayLike<number>, b: ArrayLike<number>) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-  const head = (name: string) => sk.posedHead.subarray(sk.index(name) * 3, sk.index(name) * 3 + 3)
-  /** The least any point down either leg clears the lower cloak by (under 0: through it). */
-  const clearance = () => {
-    let least = Infinity
-    for (const s of ['l', 'r']) {
-      const cape = sk.index(`${s}Cape2`)
-      const top = head(`${s}Cape2`), hem = posedPoint(sk, cape, ELF_BONES[cape].tail!)
-      const down = dir(sub(hem, top)), length = Math.hypot(...sub(hem, top))
-      // the cloak's face: across the chest and down the cloak, with its normal pointing back
-      const across = rotate(worldQuat(sk, sk.index('chest')), [1, 0, 0])
-      let back: [number, number, number] = [across[1] * down[2] - across[2] * down[1], across[2] * down[0] - across[0] * down[2], across[0] * down[1] - across[1] * down[0]]
-      if (back[2] > 0) back = [-back[0], -back[1], -back[2]]
-      for (const [from, to, r] of [['Thigh', 'Shin', 0.07], ['Shin', 'Foot', 0.055], ['Foot', 'Toe', 0.045]] as const) {
-        for (let k = 0; k <= 8; k++) {
-          const p = [0, 1, 2].map((i) => head(`${s}${from}`)[i] * (1 - k / 8) + head(`${s}${to}`)[i] * (k / 8))
-          const along = dot(sub(p, top), down)
-          if (along < 0 || along > length) continue
-          least = Math.min(least, -dot(sub(p, top), back) - r)
-        }
+const sub = (a: ArrayLike<number>, b: ArrayLike<number>): [number, number, number] => [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+const dot = (a: ArrayLike<number>, b: ArrayLike<number>) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+const head = (sk: Skeleton, name: string) => sk.posedHead.subarray(sk.index(name) * 3, sk.index(name) * 3 + 3)
+/** The least any point down either of the elf's legs clears the lower cloak by (under 0: through it). */
+const clearance = (sk: Skeleton) => {
+  let least = Infinity
+  for (const s of ['l', 'r']) {
+    const cape = sk.index(`${s}Cape2`)
+    const top = head(sk, `${s}Cape2`), hem = posedPoint(sk, cape, ELF_BONES[cape].tail!)
+    const down = dir(sub(hem, top)), length = Math.hypot(...sub(hem, top))
+    // the cloak's face: across the chest and down the cloak, with its normal pointing back
+    const across = rotate(worldQuat(sk, sk.index('chest')), [1, 0, 0])
+    let back: [number, number, number] = [across[1] * down[2] - across[2] * down[1], across[2] * down[0] - across[0] * down[2], across[0] * down[1] - across[1] * down[0]]
+    if (back[2] > 0) back = [-back[0], -back[1], -back[2]]
+    for (const [from, to, r] of [['Thigh', 'Shin', 0.07], ['Shin', 'Foot', 0.055], ['Foot', 'Toe', 0.045]] as const) {
+      for (let k = 0; k <= 8; k++) {
+        const p = [0, 1, 2].map((i) => head(sk, `${s}${from}`)[i] * (1 - k / 8) + head(sk, `${s}${to}`)[i] * (k / 8))
+        const along = dot(sub(p, top), down)
+        if (along < 0 || along > length) continue
+        least = Math.min(least, -dot(sub(p, top), back) - r)
       }
     }
-    return least
   }
+  return least
+}
+
+test("the elf's legs stay in front of the cloak through the whole walk, and a harder kick still clears it", () => {
+  const sk = new Skeleton(ELF_BONES)
   const walk = ZOO.find((s) => s.id === 'elf')!.moves.find((m) => m.name === 'walk')!
   for (let k = 0; k < 44; k++) {
     walk.pose(sk, (k / 44) * walk.seconds)
-    assert.ok(clearance() > 0, `through the cloak ${k / 44} of the way through a stride (${clearance()})`)
+    assert.ok(clearance(sk) > 0, `through the cloak ${k / 44} of the way through a stride (${clearance(sk)})`)
     // a leg thrown further back than the walk ever throws it
     aim(sk, 'lThigh', dir([0, -0.6, -0.8]))
     sk.update()
-    assert.ok(clearance() < 0, 'the kick goes through until the cloak is cleared')
+    assert.ok(clearance(sk) < 0, 'the kick goes through until the cloak is cleared')
     clearCloak(sk)
-    assert.ok(clearance() > 0, `through the cloak on a kick (${clearance()})`)
+    assert.ok(clearance(sk) > 0, `through the cloak on a kick (${clearance(sk)})`)
   }
+})
+
+test("the elf's cloth swings behind as it walks and turns, stays its length, and still clears the legs", () => {
+  const sk = new Skeleton(ELF_BONES)
+  const walk = ZOO.find((s) => s.id === 'elf')!.moves.find((m) => m.name === 'walk')!
+  const cloth = new ElfCloth(sk)
+  const len = (a: ArrayLike<number>, b: ArrayLike<number>) => Math.hypot(...sub(a, b))
+  const rest = new Skeleton(ELF_BONES)
+  rest.update()
+  const restLength = (name: string) => len(head(rest, name), posedPoint(rest, rest.index(name), ELF_BONES[rest.index(name)].tail!))
+  let differs = 0
+  const dt = 1 / 60
+  for (let f = 0; f < 240; f++) {
+    const t = f * dt
+    walk.pose(sk, t % walk.seconds)
+    const clip = sk.rotation.slice()
+    // walking along, turning hard one way then the other
+    const heading = 1.2 * Math.sin(t * 2)
+    sk.setRotation(0, mulQ([0, Math.sin(heading / 2), 0, Math.cos(heading / 2)], sk.rotation.subarray(0, 4)))
+    sk.place.set([Math.sin(heading) * t, 0, Math.cos(heading) * t])
+    cloth.update(sk, dt)
+    assert.ok(clearance(sk) > 0, `through the cloak at frame ${f} (${clearance(sk)})`)
+    const hem = sk.index('lCape2')
+    if (Math.abs(sk.rotation[hem * 4] - clip[hem * 4]) > 0.02) differs++
+    for (const name of ['lCape2', 'rCape2', 'hair2']) {
+      const b = sk.index(name)
+      const got = len(head(sk, name), posedPoint(sk, b, ELF_BONES[b].tail!))
+      assert.ok(Math.abs(got - restLength(name)) < 1e-3, `${name} is ${got} long, not ${restLength(name)}`)
+    }
+    // the plait never goes into the head
+    const middle = posedPoint(sk, sk.index('head'), [0, 1.73, 0.02])
+    assert.ok(len(head(sk, 'hair2'), middle) > 0.09, `the plait is inside the head at frame ${f}`)
+  }
+  assert.ok(differs > 60, `the cloak follows the clip too closely (${differs} frames differ)`)
+  for (let i = 0; i < sk.rotation.length; i++) assert.ok(Number.isFinite(sk.rotation[i]))
 })
 
 test('no leg of a four- or six-legged monster passes through another, in any move', () => {

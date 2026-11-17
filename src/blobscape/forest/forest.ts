@@ -5,7 +5,8 @@ import { hipDrop, stepLegs, type Leg } from '../../splat-engine/ik.ts'
 import { blendPose } from '../../splat-engine/mix.ts'
 import { axisAngle, mulQ, rotate, type Skeleton } from '../../splat-engine/rig.ts'
 import { Steps, type StepBody } from '../../splat-engine/steps.ts'
-import { clearCloak, elfIdle, elfWalk, elfWave, makeElf } from '../../splat-engine/zoo/elf.ts'
+import { elfIdle, elfWalk, elfWave, makeElf } from '../../splat-engine/zoo/elf.ts'
+import { ElfCloth } from '../../splat-engine/zoo/elfCloth.ts'
 import { makeFox, trot } from '../../splat-engine/zoo/fox.ts'
 import { Meadow } from '../../splat-engine/meadow.ts'
 import { makeGround, paintGround, type GroundTile } from './ground.ts'
@@ -125,6 +126,8 @@ export class Forest {
   private solidFor = ''
 
   readonly opts: ForestOptions
+  /** The elf's cloak and plait, swinging after its body. */
+  private readonly cloth: ElfCloth
 
   constructor(opts: ForestOptions) {
     this.opts = opts
@@ -132,6 +135,7 @@ export class Forest {
     this.elf = makeElf(Math.round(ELF_BLOBS * Math.max(0.5, opts.detail)), opts.look)
     this.fox = makeFox(Math.round(FOX_BLOBS * Math.max(0.5, opts.detail)), 'red')
     const esk = this.elf.skeleton, fsk = this.fox.skeleton
+    this.cloth = new ElfCloth(esk)
     const ankle = (i: number): [number, number] => [esk.bones[i].head[0], esk.bones[i].head[2]]
     this.elfSteps = new Steps(ELF_LEGS.map((l) => ({ home: ankle(esk.index(l.foot!)) })), this.body(this.walker, 0), ELF_STEPS)
     const hips = fsk.bones[0].head
@@ -315,9 +319,8 @@ export class Forest {
     this.elfDrop = this.ease(this.elfDrop, Math.min(ELF_CROUCH, hipDrop(sk, ELF_LEGS, targets)), dt)
     sk.offset[1] -= this.elfDrop
     stepLegs(sk, ELF_LEGS, targets, placed.map((_, i) => this.elfSteps.turned(i)))
-    // the cloak swings clear of the legs as they are now
-    clearCloak(sk)
-    sk.update()
+    // the cloak and plait swing after the body, then clear the legs as they are now
+    this.cloth.update(sk, dt)
   }
 
   private poseFox(dt: number) {
