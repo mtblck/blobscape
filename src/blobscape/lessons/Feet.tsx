@@ -4,17 +4,16 @@ import { Blobs } from '../../splat-core/blobs.ts'
 import { boneTail } from '../../splat-engine/body.ts'
 import { poseBlobs } from '../../splat-engine/pose.ts'
 import { posedPoint } from '../../splat-engine/rig.ts'
-import { elfIdle, elfWalk, makeElf } from '../../splat-engine/zoo/elf.ts'
+import { elfIdle, makeElf } from '../../splat-engine/zoo/elf.ts'
 import { Button, Chip, Field, Slider, Toggle } from '../../shared/ui.tsx'
 import { LessonShell } from '../Shell.tsx'
 import { LESSON_GOALS } from '../routes.ts'
 import { Viewport } from '../Viewport.tsx'
 import { drawBones, themeColor } from '../overlay.ts'
 import { useGoals } from '../progress.ts'
-import { groundBlobs, stand, type FeetOptions, type GroundKind, type GroundSpec, type Standing } from '../feet/stand.ts'
+import { groundBlobs, slidAt, stand, walk, type FeetOptions, type GroundKind, type GroundSpec, type Standing } from '../feet/stand.ts'
 
 const START: Orbit = { target: [0, 0.85, 0], distance: 4.8, azimuth: 66, elevation: 10 }
-const STRIDE = 1.1
 const BLOBS = 7000
 const reduceMotion = () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
@@ -26,7 +25,7 @@ const HEIGHT: Record<GroundKind, { label: string; min: number; max: number; step
   flat: { label: 'Height', min: 0, max: 0, step: 1, start: 0, format: () => '—' },
   steps: { label: 'Step height', min: 0.02, max: 0.3, step: 0.01, start: 0.12, format: (v) => `${Math.round(v * 100)} cm` },
   slope: { label: 'Steepness', min: 0, max: 30, step: 1, start: 12, format: (v) => `${Math.round(v)}°` },
-  rocks: { label: 'Rock height', min: 0.02, max: 0.2, step: 0.01, start: 0.08, format: (v) => `${Math.round(v * 100)} cm` },
+  rocks: { label: 'Rock height', min: 0.04, max: 0.25, step: 0.01, start: 0.14, format: (v) => `${Math.round(v * 100)} cm` },
 }
 
 /** Puts the ground's blobs after the elf's `n`. */
@@ -56,7 +55,8 @@ export function FeetOnTheGround() {
   const sk = elf.skeleton
   const tails = useMemo(() => sk.bones.map((_, i) => boneTail(sk.bones, i)), [sk])
   const spec: GroundSpec = { kind, height: heights[kind], at }
-  const ground = useMemo(() => groundBlobs({ kind, height: heights[kind], at }), [kind, heights, at])
+  // the ground's blob count depends only on its kind and height, so one buffer serves every frame as it slides
+  const ground = useMemo(() => groundBlobs({ kind, height: heights[kind], at: 0 }), [kind, heights])
   // the view takes its size from the first blobs it is given, so it starts with the elf and the ground in it
   const shown = useMemo(() => {
     const b = new Blobs(elf.blobs.count + ground.count)
@@ -76,9 +76,11 @@ export function FeetOnTheGround() {
   // Poses the elf for the time now, lays it on the ground, measures it and sends it to the view
   const show = () => {
     const l = live.current
-    if (l.walking) elfWalk(sk, l.t % STRIDE)
-    else elfIdle(sk, l.t)
-    const measured = stand(sk, l.spec, l.feet)
+    let measured: Standing
+    // walking, the ground slides back under the elf as fast as a planted foot; standing, the slider places it
+    if (l.walking) measured = walk(sk, l.spec, l.t, l.feet)
+    else { elfIdle(sk, l.t); measured = stand(sk, l.spec, l.feet) }
+    groundBlobs({ ...l.spec, at: l.walking ? slidAt(l.t) : l.spec.at }, undefined, l.ground)
     poseBlobs(elf.blobs, elf.skin, sk, 'quat', l.shown)
     addGround(l.shown, elf.blobs.count, l.ground)
     void view.current?.sync(l.shown)
@@ -135,7 +137,7 @@ export function FeetOnTheGround() {
           version={0}
           orbit={orbit}
           setOrbit={setOrbit}
-          label={`A blob elf ${walking ? 'walking on the spot' : 'standing'} on ${kind === 'flat' ? 'flat ground' : kind === 'steps' ? `steps ${cm(heights.steps)} tall` : kind === 'slope' ? `a ${Math.round(heights.slope)}° slope` : `rocks ${cm(heights.rocks)} tall`}, ${feet.ik ? 'its legs bent to the ground' : 'its legs as the walk made them'}. Drag or use the arrow keys to orbit.`}
+          label={`A blob elf ${walking ? 'walking, the ground sliding back under it,' : 'standing'} on ${kind === 'flat' ? 'a flat path' : kind === 'steps' ? `steps ${cm(heights.steps)} tall` : kind === 'slope' ? `a ${Math.round(heights.slope)}° slope` : `rocks ${cm(heights.rocks)} tall`}, ${feet.ik ? 'its legs bent to the ground' : 'its legs as the walk made them'}. Drag or use the arrow keys to orbit.`}
           hint="drag to orbit · scroll to zoom"
           onView={(v) => { view.current = v; v.setFloor(false); show() }}
           overlay={
@@ -167,7 +169,7 @@ export function FeetOnTheGround() {
                 </div>
               </Field>
               {kind !== 'flat' && <Slider label={h.label} value={heights[kind]} min={h.min} max={h.max} step={h.step} onChange={(v) => setHeights((s) => ({ ...s, [kind]: v }))} format={h.format} />}
-              {kind !== 'flat' && kind !== 'slope' && <Slider label="Stand at" value={at} min={0} max={0.6} step={0.01} onChange={setAt} format={(v) => `${Math.round(v * 100)} cm`} />}
+              {kind !== 'flat' && !walking && <Slider label="Stand at" value={at} min={0} max={0.6} step={0.01} onChange={setAt} format={(v) => `${Math.round(v * 100)} cm`} />}
             </>
           ),
         },
@@ -214,15 +216,21 @@ export function FeetOnTheGround() {
       explain={
         <>
           <p>
-            The walk is kept as it was made, on flat ground, and corrected after: each ankle's target is its own patch of ground
-            plus however high the walk lifted it, so a stepping foot still steps. Hip, knee and ankle make a triangle whose sides
-            are known, so the knee has one place to go (two, mirror images, and it keeps the side it bent to). That is
-            two-bone inverse kinematics, the same sum a game engine runs on every leg, every frame.
+            The elf walks on the spot and the ground slides back under it, exactly as fast as a planted foot moves, so a
+            foot that is down stays on its patch of ground. On steps and slopes the ground also sinks as it slides, one
+            step's height for every step's depth, like an escalator, so the elf climbs without going anywhere.
           </p>
           <p>
-            A leg can only reach as far as it is long. On a deep step down the hips sink by whatever the lower foot needs,
-            and the upper leg bends more to make up for it. The foot is its own bone, so it is turned last, by the slope under
-            it, measured from the ground's height either side.
+            Each foot is planned before its leg is bent. Down, it rides back with its tread. Up, it swings to where it
+            lands next and rises early enough to clear the highest ground on the way, so a toe never catches a step's edge.
+            Hip, knee and ankle make a triangle whose sides are known, so the knee has one place to go (two, mirror images,
+            and it keeps the side it bent to). That is two-bone inverse kinematics, the same sum a game engine runs on every
+            leg, every frame.
+          </p>
+          <p>
+            A leg can only reach as far as it is long. Climbing, the foot behind sinks with its tread, so the hips come down
+            by whatever that foot needs and the front knee bends more. The foot is its own bone, so it is turned last, by
+            the slope under it, measured from the ground's height either side.
           </p>
         </>
       }
