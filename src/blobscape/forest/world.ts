@@ -168,3 +168,37 @@ export function stepWalker(w: Walker, input: Input, dt: number, solid: { x: numb
   x = Math.max(mid - ROAM, Math.min(mid + ROAM, x))
   return { x, z, heading, speed }
 }
+
+/** The fox's best speed: faster than the elf walks, so it catches up. */
+export const FOX_SPEED = 2.2
+const FOX_TURN = 3
+const FOX_BODY = 0.2
+/** Where the fox likes to be, in the elf's frame: x to the elf's left, z ahead. */
+export const FOX_SPOT: [number, number] = [0.75, -0.55]
+
+/**
+ * One step of the fox that walks with the elf: it heads for its spot at the elf's left shoulder, faster the
+ * farther it is (and only as fast as it faces that way, so it turns before it runs), keeps out of trunks, out of
+ * the elf and near the path, and once there turns to face the way the elf faces. Plain numbers, like the walker.
+ */
+export function stepFox(f: Walker, elf: Walker, dt: number, solid: { x: number; z: number; r: number }[] = []): Walker {
+  const c = Math.cos(elf.heading), s = Math.sin(elf.heading)
+  const [hx, hz] = FOX_SPOT
+  const tx = elf.x + hz * s + hx * c, tz = elf.z + hz * c - hx * s
+  const dx = tx - f.x, dz = tz - f.z, d = Math.hypot(dx, dz)
+  // far off it heads for the spot; there, it faces with the elf
+  const want = d > 0.4 ? Math.atan2(dx, dz) : elf.heading
+  const diff = Math.atan2(Math.sin(want - f.heading), Math.cos(want - f.heading))
+  const heading = f.heading + Math.max(-FOX_TURN * dt, Math.min(FOX_TURN * dt, diff))
+  const go = d > 0.12 ? Math.min(FOX_SPEED, d * 2.2) * Math.max(0, Math.cos(want - heading)) : 0
+  const speed = f.speed + (go - f.speed) * (1 - Math.exp(-dt * 5))
+  let x = f.x + Math.sin(heading) * speed * dt
+  let z = f.z + Math.cos(heading) * speed * dt
+  for (const o of [...solid, { x: elf.x, z: elf.z, r: BODY }]) {
+    const ox = x - o.x, oz = z - o.z, od = Math.hypot(ox, oz), min = o.r + FOX_BODY
+    if (od < min && od > 1e-6) { x = o.x + (ox / od) * min; z = o.z + (oz / od) * min }
+  }
+  const mid = pathX(z)
+  x = Math.max(mid - ROAM, Math.min(mid + ROAM, x))
+  return { x, z, heading, speed }
+}

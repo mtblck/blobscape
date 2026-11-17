@@ -103,7 +103,7 @@ export class ForestStage {
     const was = this.forest
     const f = new Forest(opts)
     if (was) {
-      f.walker = { ...was.walker, speed: 0 }
+      f.standAt(was.walker, was.foxWalker)
       f.sprout = was.sprout
       f.wind = was.wind
       f.walked = was.walked
