@@ -46,6 +46,7 @@ test('checkScene points at each mistake', () => {
     ['a move that would not loop', (d) => { d.moves[0].times = 1.5 }, /^moves\[0\]\.times: must be a whole number/],
     ['an unknown move', (d) => { d.moves[1].kind = 'wiggle' }, /^moves\[1\]\.kind: 'wiggle' is not a move/],
     ['a light too strong', (d) => { d.lights[0].strength = 50 }, /^lights\[0\]\.strength: must be from 0 to 8/],
+    ['discs too wide', (d) => { d.disc = 2 }, /^disc: must be from 0\.4 to 1/],
     ['a far-off part', (d) => { d.parts[0].shape.at = [0, 0, 40] }, /^parts\[0\]\.shape\.at\[2\]: must be from -4 to 4/],
     ['a part too big to build', (d) => { d.parts[0].shape = { kind: 'box', at: [0, 0, 0], half: [3, 3, 3] } }, /^parts\[0\]\.shape: is too big/],
     ['too much surface in all', (d) => { for (let i = 0; i < 12; i++) d.parts.push({ shape: { kind: 'box', at: [0, 0, 0], half: [1.2, 1.2, 1.2] }, paint: '#101018' }) }, /^parts: have too much surface/],
@@ -90,6 +91,12 @@ test('a compiled scene builds with every part, however small, at any detail', ()
   assert.equal(c.look.palette.length, 4)
   assert.deepEqual(c.look.outline, [16, 16, 24])
   assert.deepEqual(c.look.sky, [[16, 16, 24], [63, 122, 69], 1])
+  // discs are the builder's default unless the scene widens them, which only widens them
+  const one = (d: number | undefined) => { const b = buildVoxels(compileScene({ ...sound(), disc: d }).spec(0.03)); return [b.blobs.count, b.blobs.scale[0]] }
+  assert.equal(c.spec(0.03).disc, undefined)
+  const [n, narrow] = one(undefined), [m, wide] = one(0.75)
+  assert.equal(m, n)
+  assert.ok(Math.abs(wide / narrow - 0.75 / 0.55) < 1e-6)
 })
 
 test('a compiled scene loops: bones and lights after one loop are where they began, and they move in between', () => {

@@ -17,6 +17,7 @@ The point is that Claude can write one from a sentence. A scene that is data can
 | `sky` | Top and bottom colors of the backdrop. `skyReach` (0.05 to 1) is how far down the picture the blend runs before it is all the bottom color. |
 | `light` | The baked sun: where it is, how much light reaches everywhere, how dark shadows are, and three painted touches that are on unless set to 0: `ramp` (shade turns cool violet, full sun warm yellow), `crevice` (corners and cracks darken) and `wear` (sharp edges lighten). |
 | `look` | Dither, glow, outline, edge lines. |
+| `disc` | How wide each surface blob is, as a share of the grid (0.4 to 1, 0.55 when left out). Raise it to 0.75 when the far side of a subject shows through its near side, as on the lava dragon's head; paint gets a little softer. |
 | `camera` | Where the view starts, and optionally a `swing`: degrees (0 to 60) it rocks to either side, once a loop, as the scene plays. |
 | `bones` | Things that move, each with the point it turns about. Parts with no bone stand still. |
 | `parts` | A shape, a paint, and optionally a bone, `glow`, `noShadow`, or `grime` (a color that gathers in its corners and cracks, as moss or soot). |
