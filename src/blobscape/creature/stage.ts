@@ -73,6 +73,8 @@ export class CreatureStage {
   private heldW = new Float32Array(0)
   /** Poses the actor straight from the time, for motion that never loops (a watch keeping time): used instead of a clip. */
   private poser?: (sk: Skeleton, t: number) => void
+  /** Loose parts that swing on top of the move while it plays live (`Swing`); never in a sheet. */
+  private swing?: { update(sk: Skeleton, dt: number): void; reset(): void }
   private target?: THREE.RenderTarget
   private raf = 0
   private stopped = false
@@ -174,6 +176,7 @@ export class CreatureStage {
     this.setShow(this.show)
     // a new actor plays its clip; a caller that poses from the time sets its poser again after
     this.poser = undefined
+    this.swing = undefined
     this.setClip(clip)
   }
 
@@ -210,6 +213,13 @@ export class CreatureStage {
   setPoser(poser?: (sk: Skeleton, t: number) => void, from = this.t) {
     this.poser = poser
     this.t = from
+    this.pose()
+  }
+
+  /** Loose parts that swing after the body while a move plays (a `Swing` made for this actor's skeleton), or none. */
+  setSwing(swing?: { update(sk: Skeleton, dt: number): void; reset(): void }) {
+    this.swing = swing
+    swing?.reset()
     this.pose()
   }
 
@@ -408,10 +418,13 @@ export class CreatureStage {
   private pose() {
     if (!this.actor || !this.world) return
     const sk = this.actor.skeleton
+    const was = this.posedAt
     const t = this.posedAt = this.time
     if (this.poser) this.poser(sk, t)
     else if (this.clip) sampleClip(this.clip, sk, t)
     else { sk.reset(); sk.update() }
+    if (this.swing && (this.poser || this.clip)) this.swing.update(sk, Number.isFinite(was) ? Math.min(0.1, Math.max(0, t - was)) : 0)
+    else this.swing?.reset()
     this.reshape(this.poser ? undefined : this.clip, t)
     this.world.markPosed()
     if (this.rig?.visible) this.rig.update()

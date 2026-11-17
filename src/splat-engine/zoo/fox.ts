@@ -5,6 +5,7 @@ import { axisAngle, type Skeleton } from '../rig.ts'
 import { growFur, type FurryPart } from '../fur.ts'
 import { flatten, sculptToCount, smooth, type SculptSpec } from '../sculpt.ts'
 import { cone, ellipsoid } from '../voxel.ts'
+import type { SwingSpec } from '../swing.ts'
 import type { Species } from './species.ts'
 
 const LABELS: Record<keyof typeof COATS, string> = { red: 'Red', arctic: 'Arctic', silver: 'Silver' }
@@ -168,6 +169,12 @@ export function makeFox(count = 20000, look = 'red') {
   return { blobs: b.blobs, skin: b.skin, skeleton: b.skeleton }
 }
 
+/**
+ * The brush, loose behind the trot (swing.ts): softer toward the tip, but stiff enough to swing well above the trot's
+ * own beat, which a looser tail picked up and rang with.
+ */
+export const FOX_SWING: SwingSpec = { parts: 'tail', chains: [{ bones: ['tail1', 'tail2'], follow: [0.0015, 0.003], bend: 0.001 }], damping: 3 }
+
 export const FOX: Species = {
   id: 'fox',
   name: 'fox',
@@ -181,4 +188,6 @@ export const FOX: Species = {
     { name: 'idle', label: 'Stand', doing: 'standing and looking round', seconds: 4, fps: 12, pose: poseIdle },
   ],
   view: { target: [0, 0.72, 0], distance: 4.2, azimuth: 40, elevation: 12 },
+  // the brush trails the trot and swings out on a turn
+  swing: FOX_SWING,
 }

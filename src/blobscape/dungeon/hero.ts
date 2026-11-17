@@ -5,6 +5,7 @@ import { axisAngle, mulQ, rotate, type Bone, type Skeleton } from '../../splat-e
 import { joinBuilt } from '../../splat-engine/sculpt.ts'
 import { ELF_BONES, clearCloak, elfIdle, elfWalk, makeElf } from '../../splat-engine/zoo/elf.ts'
 import { blendPose } from '../../splat-engine/mix.ts'
+import type { ElfCloth } from '../../splat-engine/zoo/elfCloth.ts'
 import { BOLT_POP, CAST, DODGE, RUN_SPEED, SWING, type Bolt, type Element, type Hero } from './game.ts'
 
 /**
@@ -58,6 +59,8 @@ export interface HeroClock {
   down: number
   /** Blink while the hero can't be hurt (off under reduced motion, where it only staggers). */
   flicker: boolean
+  /** The cloak and plait as cloth, swinging after the run, the dodge and the fall (without it the cloak only clears the legs). */
+  cloth?: ElfCloth
 }
 
 const STRIDE_METERS = 1.5, STRIDE_SECONDS = 1.1
@@ -138,7 +141,9 @@ export function poseHero(sk: Skeleton, h: Hero, clock: HeroClock, dt: number) {
   sk.place.set([h.x, 0, h.z])
   // the grace after a hurt shows as a slow blink: off for 0.12 s in every 0.45 s, about two blinks, well under three flashes a second
   sk.rootScale = clock.flicker && h.hurt > 0 && clock.down < 0 && h.hurt % 0.45 < 0.12 ? 0.0001 : 1
-  sk.update()
+  // the cloak and plait swing after the body (and clear the legs); a blinked-out hero isn't drawn, so it waits
+  if (clock.cloth && sk.rootScale === 1) clock.cloth.update(sk, dt)
+  else sk.update()
 }
 
 /**

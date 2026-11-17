@@ -4,6 +4,7 @@ import { joinBuilt, membrane, scales, sculptToCount, smooth, type SculptPart, ty
 import { cone, displace, ellipsoid, sphere, type Shape } from '../voxel.ts'
 import { Skeleton, type Bone } from '../rig.ts'
 import { X, Y, Z, aim, dir, env, ramp, set, turn } from '../posing.ts'
+import type { SwingSpec } from '../swing.ts'
 import type { Species } from './species.ts'
 
 /**
@@ -50,7 +51,8 @@ const SPINE: Bone[] = [
 
 const WING = { shoulder: [0.32, 2.02, 0.65], elbow: [1.35, 2.9, 0.4], wrist: [2.65, 2.7, 0.12], tips: [[4.5, 3.6, -0.6], [4.3, 2.05, -1.55], [2.95, 1.4, -2.05]], flank: [0.35, 1.8, -0.9] } as const
 
-function bones(): Bone[] {
+/** The dragon's rest bones (spine, wings, legs, fire), for tests that need no blobs. */
+export function dragonBones(): Bone[] {
   const out = [...SPINE]
   const idx = (n: string) => out.findIndex((b) => b.name === n)
   for (const [s, x] of SIDES) {
@@ -219,7 +221,7 @@ function spec(c: Palette, s: number): SculptSpec {
       },
     )
   }
-  return { bones: bones(), parts, blend: 0.22, light: { ambient: 0.62, shadow: 0.5 } }
+  return { bones: dragonBones(), parts, blend: 0.22, light: { ambient: 0.62, shadow: 0.5 } }
 }
 
 /** The flame, as body.ts makes it: a solid cone of glowing blobs, white-hot at its heart, thinning to red at its edges and end. */
@@ -241,7 +243,7 @@ function flame(): BodySpec {
     opacity: (p, u) => (0.1 + 0.75 * (1 - u) ** 0.7) * (1 - 0.7 * offAxis(p, u) ** 2),
     bones: fireBones, glow: true,
   }
-  return { bones: bones(), parts: [part], blend: 0.22 }
+  return { bones: dragonBones(), parts: [part], blend: 0.22 }
 }
 
 /** The share of the dragon's blobs that are its fire. */
@@ -258,7 +260,7 @@ export function makeDragon(count = 100000, look = 'ice') {
     b.blobs.center.set(shrink(b.blobs.center.subarray(i * 3, i * 3 + 3)), i * 3)
     for (let k = 0; k < 3; k++) b.blobs.scale[i * 3 + k] /= FLAME
   }
-  const all = bones()
+  const all = dragonBones()
   const rest = all.map((bone, i): Bone => (bone.name.startsWith('fire') ? { ...bone, head: shrink(bone.head), tail: shrink(boneTail(all, i)) } : bone))
   return { blobs: b.blobs, skin: b.skin, skeleton: new Skeleton(rest) }
 }
@@ -370,6 +372,9 @@ export function dragonFire(sk: Skeleton, t: number) {
   sk.update()
 }
 
+/** The tail, loose behind the body (swing.ts): five links, softer toward the spade, so a wingbeat sends a slow wave down it. */
+export const DRAGON_SWING: SwingSpec = { parts: 'tail', chains: [{ bones: ['tail1', 'tail2', 'tail3', 'tail4', 'tail5'], follow: [0.003, 0.0045, 0.006, 0.0075, 0.009], bend: 0.002 }], damping: 3 }
+
 export const DRAGON: Species = {
   id: 'dragon',
   name: 'dragon',
@@ -384,4 +389,5 @@ export const DRAGON: Species = {
     { name: 'idle', label: 'Stand', doing: 'standing guard', seconds: IDLE, fps: 12, pose: dragonIdle },
   ],
   view: { target: [0, 1.7, -0.4], distance: 11, azimuth: 40, elevation: 14 },
+  swing: DRAGON_SWING,
 }

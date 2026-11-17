@@ -5,6 +5,7 @@ import { X, Y, Z, env, set, turn } from '../posing.ts'
 import { growFur, type Fur, type FurryPart } from '../fur.ts'
 import { membrane, scales, sculptToCount, smooth, type SculptSpec } from '../sculpt.ts'
 import { cone, displace, ellipsoid, sphere, type Shape } from '../voxel.ts'
+import type { SwingSpec } from '../swing.ts'
 import type { Species } from './species.ts'
 
 /**
@@ -593,6 +594,21 @@ export function monsterRoar(p: Plan) {
   }
 }
 
+/**
+ * A monster's loose parts (swing.ts): the tail, looser the longer it is, and ears or feelers on their own, ears
+ * stiffer, so they bounce after the head and feelers wave. Horns are stiff and stay out.
+ */
+export function monsterSwing(p: Plan): SwingSpec | undefined {
+  const chains: SwingSpec['chains'][number][] = []
+  if (p.tail > 0) {
+    const s = Math.max(0.5, p.tail * p.length)
+    chains.push({ bones: ['tail1', 'tail2', 'tail3'], follow: [0.0012 * s, 0.0018 * s, 0.0024 * s], bend: 0.001 * s })
+  }
+  if (tops(p)) for (const [s] of SIDES) chains.push({ bones: [`${s}Top`], follow: p.top === 'ears' ? 0.002 : 0.004 })
+  const parts = [p.tail > 0 ? 'tail' : '', tops(p) ? p.top : ''].filter(Boolean).join(' and ')
+  return chains.length ? { parts, chains, damping: 3 } : undefined
+}
+
 const NUMBERS = ['', 'one', 'two', 'three', 'four', 'five', 'six']
 
 /** The seed as a creature for the Creature page and its sprite sheets. */
@@ -622,6 +638,7 @@ export function monsterSpecies(seed: number): Species {
       { name: 'roar', label: 'Roar', doing: 'roaring', seconds: ROAR, fps: 24, pose: monsterRoar(p) },
     ],
     view: { target: [0, height * 0.5, 0], distance: Math.max(1.4, reach * 2.6), azimuth: 35, elevation: 12 },
+    swing: monsterSwing(p),
   }
 }
 

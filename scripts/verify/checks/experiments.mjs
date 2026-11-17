@@ -172,6 +172,20 @@ export default [
       // a sprite sheet draws the swelling, and the file written back keeps its morph targets
       await tabClick(c.page.getByRole('button', { name: 'Fox', exact: true }))
       await c.page.waitForFunction(() => !document.querySelector('[data-testid=creature-loading]'), null, { timeout: 60000 }).catch(() => {})
+      // the fox's tail swings after the trot (on by default), and the switch puts it back on the clip
+      const tailAt = () => c.page.evaluate(async () => {
+        const st = window.__creature.stage, sk = st.actor.skeleton, b = sk.index('tail2')
+        for (let f = 0; f <= 30; f++) await st.frame(f / 30)
+        return Array.from(sk.rotation.slice(b * 4, b * 4 + 4))
+      })
+      const swingSwitch = c.page.getByRole('checkbox', { name: 'Swing the tail as it moves' })
+      const swung = await tailAt()
+      await tabClick(swingSwitch)
+      const clipped = await tailAt()
+      await tabClick(swingSwitch)
+      const tailOff = Math.max(...swung.map((v, i) => Math.abs(v - clipped[i])))
+      if (!(tailOff > 0.01 && swung.every(Number.isFinite))) fails.push(`blobscape creature swing: the fox's tail ${JSON.stringify({ swung, clipped })}`)
+      else ok(`blobscape creature swing: the fox's tail swings after the trot (${tailOff.toFixed(3)} off the clip) and the switch turns it off`)
       await c.page.setInputFiles('input[type=file]', join(root, 'public/rigged-splats/puffer.glb'))
       await c.page.waitForFunction(() => window.__creature?.blobs() === 5257, null, { timeout: 30000 }).catch(() => {})
       const fish = (t) => c.page.evaluate(async (t) => {
