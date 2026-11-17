@@ -1,4 +1,4 @@
-import type { SceneDoc } from '../../../splat-engine/sceneDoc.ts'
+import type { PaintDoc, SceneDoc } from '../../../splat-engine/sceneDoc.ts'
 
 /**
  * A desert canyon at sunset, worn by water: banded cliffs with ledges where hard beds stand out, fans of scree, a mesa
@@ -8,7 +8,7 @@ import type { SceneDoc } from '../../../splat-engine/sceneDoc.ts'
  * docs/scene-descriptions.md.
  */
 const BEDS = [{ thick: 0.12, hard: 0.9 }, { thick: 0.16, hard: 0.25 }, { thick: 0.08, hard: 0.95 }, { thick: 0.17, hard: 0.3 }]
-const ROCK = { kind: 'pieces', colors: ['#b8542e', '#e09a5c', '#8e3a26', '#f0c08a'], line: '#c98a52', ordered: true } as const
+const ROCK: PaintDoc = { kind: 'pieces', colors: ['#b8542e', '#e09a5c', '#8e3a26', '#f0c08a'], line: '#c98a52', ordered: true }
 
 export const CANYON: SceneDoc = {
   name: 'Desert canyon',
