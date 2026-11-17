@@ -411,7 +411,7 @@ export function Creature() {
         </div>
         <div className="mt-8 max-w-[36em] space-y-4 text-lg leading-relaxed text-ink-muted lg:col-span-7 lg:mt-0 lg:text-xl">
           <p>
-            <b className="font-sans text-base font-semibold text-ink">As splats</b>, the .glb holds every blob with the KHR_gaussian_splatting
+            <b className="font-semibold text-ink">As splats</b>, the .glb holds every blob with the KHR_gaussian_splatting
             standard, its bones and every clip as ordinary glTF, and a note (our BLOBSCAPE_gaussian_skinning extension) on how a
             skinned blob turns. The frog's tongue and the dragon's fire are bones that grow, which glTF keys as scale. A file with
             morphs (blend shapes) keeps them as glTF morph targets, with a second note on how each blob stretches: open the{' '}
@@ -419,11 +419,11 @@ export function Creature() {
             three.js and other splat viewers open it as a still creature; this page plays it.
           </p>
           <p>
-            <b className="font-sans text-base font-semibold text-ink">As a mesh</b>, it's a solid skin wrapped round the blobs, colored from
+            <b className="font-semibold text-ink">As a mesh</b>, it's a solid skin wrapped round the blobs, colored from
             them, with the same bones and clips. It loses the soft edges (and thin things like wings can come out holey) but moves in Blender, Godot, Unity or three.js.
           </p>
           <p>
-            <b className="font-sans text-base font-semibold text-ink">As pixel art</b>, it's a sprite sheet: each move you pick, drawn from 4 or 8 sides,
+            <b className="font-semibold text-ink">As pixel art</b>, it's a sprite sheet: each move you pick, drawn from 4 or 8 sides,
             squeezed down to a few colors and outlined, the way <a href="/experiments/splat-to-sprite/" className="underline decoration-rule underline-offset-2 hover:text-accent">Splat to Sprite</a> does it. The JSON beside it names every animation, in
             Tinkerkit's format or the one Aseprite and Phaser read.
           </p>
