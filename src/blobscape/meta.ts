@@ -35,6 +35,8 @@ export function pageMeta(route: Route): PageMeta {
       return { path, title: `Scan Studio · ${SITE.name}`, description: 'Open a Gaussian splat scan of an object from your phone (Scaniverse, Polycam and others export .ply or .spz), find the table and turn it level, cut away the floor and the floaters, relight it with live lights, then take it into the sandbox or save it. Everything stays on your device.' }
     case 'shift':
       return { path, title: `Shape Shifter · ${SITE.name}`, description: 'One creature made of Gaussian splats turns into another: a frog into a dragon, an owl into a crocodile. Every blob finds a partner in the other creature and travels to it, blending its size, facing and color on the way. Pick the pair, send the blobs straight, in a swirl, through a puddle or out in a burst, and see what pairing by place is for.' }
+    case 'flow':
+      return { path, title: `Sand, Snow and Goo · ${SITE.name}`, description: 'A box of Gaussian splats that flow: every blob is a particle of sand, snow or goo in a small material point simulation (MLS-MPM), so a column of sand runs into a heap at its friction angle, snow stands until it is hit and goo spreads. Pour more in and tap to poke them.' }
     case 'clockwork':
       return { path, title: `Clockwork · ${SITE.name}`, description: 'A watch movement made of Gaussian splats, keeping the real time: barrel, going train, escape wheel, pallet fork and a balance swinging five times a second, every wheel a bone turning by a real watch\'s ratios. Slow it down to see one tick, or speed it up to watch the hours go.' }
     case 'diorama':
