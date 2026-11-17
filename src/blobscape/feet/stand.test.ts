@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { Skeleton } from '../../splat-engine/rig.ts'
 import { ELF_BONES, elfIdle, elfWalk } from '../../splat-engine/zoo/elf.ts'
-import { STRIDE, footings, groundBlobs, groundOf, slidAt, stand, walk, type FeetOptions, type GroundSpec } from './stand.ts'
+import { GAITS, footings, groundBlobs, groundOf, slidAt, stand, walk, type FeetOptions, type GroundSpec } from './stand.ts'
 
 const elf = () => new Skeleton(ELF_BONES.map((b) => ({ ...b })))
 const ALL: FeetOptions = { ik: true, hips: true, tilt: true }
@@ -34,7 +34,7 @@ test('the ground stays near the elf’s feet however far it has slid: steps and 
 /** Every frame of two strides of walking, measured. */
 const strides = (spec: GroundSpec, opts: FeetOptions) => {
   const sk = elf()
-  return Array.from({ length: 220 }, (_, k) => walk(sk, spec, (k / 110) * STRIDE, opts))
+  return Array.from({ length: 220 }, (_, k) => walk(sk, spec, (k / 110) * GAITS[spec.kind].period, opts))
 }
 
 test('walking, no sole ever goes into the ground, and every planted foot sits on its own ground', () => {
@@ -62,14 +62,16 @@ test('the ground slides as fast as a planted foot: a foot down keeps its place o
   let downs = 0
   let was: number | undefined
   for (let k = 0; k < 220; k++) {
-    const t = (k / 110) * STRIDE
+    const t = (k / 110) * GAITS.flat.period
     walk(sk, spec, t, ALL)
-    const down = footings({ ...spec, at: slidAt(t) }, t)[0].down
-    const onGround = sk.posedHead[sk.index('lFoot') * 3 + 2] + slidAt(t)
+    const f = footings({ ...spec, at: slidAt('flat', t) }, t)[0]
+    // while it lies flat (between heel strike and toe-off) the ankle itself stays put on the ground
+    const down = f.down && f.roll === 0
+    const onGround = sk.posedHead[sk.index('lFoot') * 3 + 2] + slidAt('flat', t)
     if (down && was !== undefined) { assert.ok(Math.abs(onGround - was) < 1e-4, `slid ${onGround - was} at ${t}`); downs++ }
     was = down ? onGround : undefined
   }
-  assert.ok(downs > 100)
+  assert.ok(downs > 30)
 })
 
 test('the walk alone, on steps, sinks one foot into a step or leaves it floating by the step’s height', () => {

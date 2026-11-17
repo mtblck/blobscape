@@ -80,7 +80,7 @@ export function FeetOnTheGround() {
     // walking, the ground slides back under the elf as fast as a planted foot; standing, the slider places it
     if (l.walking) measured = walk(sk, l.spec, l.t, l.feet)
     else { elfIdle(sk, l.t); measured = stand(sk, l.spec, l.feet) }
-    groundBlobs({ ...l.spec, at: l.walking ? slidAt(l.t) : l.spec.at }, undefined, l.ground)
+    groundBlobs({ ...l.spec, at: l.walking ? slidAt(l.spec.kind, l.t) : l.spec.at }, undefined, l.ground)
     poseBlobs(elf.blobs, elf.skin, sk, 'quat', l.shown)
     addGround(l.shown, elf.blobs.count, l.ground)
     void view.current?.sync(l.shown)
@@ -152,7 +152,6 @@ export function FeetOnTheGround() {
           Worst foot: {footSays}.
           {feet.ik && m.short > 0.005 && <> A leg is <span className="tabular-nums text-ink">{cm(m.short)}</span> short.</>}
           {kind !== 'flat' && <> Soles off the ground by <span className="tabular-nums text-ink">{Math.round(m.tilt)}°</span>.</>}
-          {feet.ik && feet.hips && Math.abs(m.hipShift) > 0.005 && <> Hips {m.hipShift < 0 ? 'down' : 'up'} <span className="tabular-nums text-ink">{cm(m.hipShift)}</span>.</>}
         </p>
       }
       groups={[
