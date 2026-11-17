@@ -1,6 +1,7 @@
 import { LESSONS, LESSON_COUNT, href, type Route } from './routes.ts'
 import { EXPERIMENTS, SITE } from './site.ts'
 import { SPEC } from './specCopy.ts'
+import { API_PAGE } from './api/types.ts'
 
 /**
  * Each page's title and description. The app sets them as you move around
@@ -47,6 +48,8 @@ export function pageMeta(route: Route): PageMeta {
       return { path, title: `The Blobscape engine · ${SITE.name}`, description: 'A small engine for Gaussian splats that move, built on three.js: creatures on bones, whole worlds in one sort, live lights, pixel art from 3D and rigged splats saved as .glb. Three live demos, what it does, and how to use it.' }
     case 'spec':
       return { path, title: `Rigged Gaussian splats in glTF · ${SITE.name}`, description: SPEC.description }
+    case 'api':
+      return { path, title: `${API_PAGE.title} · ${SITE.name}`, description: API_PAGE.description }
     case 'contact':
       return { path, title: `Get in touch · ${SITE.name}`, description: `Send ${SITE.author.name} a note about ${SITE.name}: a question, a bug, an idea for a lesson or an experiment.` }
     case 'lesson': {

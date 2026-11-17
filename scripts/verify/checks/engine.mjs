@@ -78,6 +78,36 @@ export default [
     },
   },
   {
+    name: 'api-page',
+    about: 'the API reference: prerendered with its data, every section, find a name, fits a phone, linked from the engine page, and an in-app visit loads it',
+    entries: ['src/blobscape/api/EngineApi.tsx', 'src/blobscape/api/types.ts'],
+    files: ['src/blobscape/engineApi.json'],
+    async run({ base, fails, ok, open, axe }) {
+      const html = await (await fetch(base + '/engine/api/')).text()
+      const door = (await (await fetch(base + '/engine/')).text()).includes('href="/engine/api/"')
+      if (!(html.includes('id="stage-Stage"') && html.includes('id="engine-api-data"') && door)) fails.push(`api page: prerendered Stage ${html.includes('id="stage-Stage"')}, carries its data ${html.includes('id="engine-api-data"')}, linked from the engine page ${door}`)
+      else ok('api page: prerendered with its data, and the engine page links to it')
+      const s = await open('/engine/api/', { viewport: { width: 390, height: 800 } })
+      await s.page.waitForSelector('[data-testid=api] h2', { timeout: 20000 }).catch(() => {})
+      const before = await s.page.evaluate(() => ({ sections: document.querySelectorAll('[data-testid=api] h2').length, names: document.querySelectorAll('[data-testid=api] h3').length, wide: document.documentElement.scrollWidth - window.innerWidth }))
+      await s.page.getByLabel('Find a name').fill('setPixels')
+      await s.page.waitForTimeout(200)
+      const found = await s.page.evaluate(() => [...document.querySelectorAll('[data-testid=api] h3 code')].map((c) => c.textContent))
+      if (!(before.sections >= 30 && before.names >= 300 && before.wide <= 0 && found.includes('Stage') && found.length < 12)) fails.push(`api page: ${JSON.stringify(before)}, finding setPixels shows ${found.join(', ')}`)
+      else ok(`api page: ${before.names} names in ${before.sections} sections fit a phone; finding setPixels leaves ${found.length}`)
+      await s.page.getByLabel('Find a name').fill('')
+      await axe(s.page, 'api page')
+      // from another page, the reference loads its data itself (a plain link click navigates in the app)
+      await s.page.goto(base + '/contact/')
+      await s.page.evaluate(() => { const a = document.createElement('a'); a.href = '/engine/api/'; a.textContent = 'API'; document.querySelector('main').append(a); a.click() })
+      await s.page.waitForSelector('[data-testid=api] h2', { timeout: 20000 }).catch(() => {})
+      const inApp = await s.page.evaluate(() => document.querySelectorAll('[data-testid=api] h3').length)
+      if (inApp !== before.names) fails.push(`api page: reached from the engine page it shows ${inApp} names, not ${before.names}`)
+      else ok('api page: reached in the app, it loads the same reference')
+      await s.ctx.close()
+    },
+  },
+  {
     name: 'engine-lab',
     core: true,
     about: 'engine lab on WebGPU and WebGL: draws, poses reach the draw, sorts (bins and radix), picks, lights, .glb in three.js, timing',

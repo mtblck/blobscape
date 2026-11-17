@@ -17,6 +17,7 @@ import { EXPERIMENTS, SITE, byPublished, experimentAt, longDate, type Experiment
 import { DESCRIPTION, pageMeta } from '../src/blobscape/meta.ts'
 import { BUILT_ON, ENGINE, ENGINE_BUILT } from '../src/blobscape/engineCopy.ts'
 import { SPEC, specTitle } from '../src/blobscape/specCopy.ts'
+import { API_DATA_ID, API_PAGE } from '../src/blobscape/api/types.ts'
 import { AXIS, BLOB, WORD } from '../src/shared/logoPaths.ts'
 
 const DIST = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist')
@@ -160,6 +161,11 @@ function structured(route: Route): object[] {
         { '@type': 'TechArticle', headline: specTitle(SPEC_MD), description: SPEC.description, url: url(href(route)), author: PERSON },
         breadcrumbs([home, ['Engine', '/engine/'], [SPEC.crumb, href(route)]]),
       ]
+    case 'api':
+      return [
+        { '@type': 'TechArticle', headline: API_PAGE.title, description: API_PAGE.description, url: url(href(route)), author: PERSON },
+        breadcrumbs([home, ['Engine', '/engine/'], [API_PAGE.crumb, href(route)]]),
+      ]
     case 'contact':
       return [{ '@type': 'ContactPage', name: `Get in touch · ${SITE.name}`, url: url(href(route)) }, breadcrumbs([home, ['Get in touch', href(route)]])]
     default:
@@ -198,6 +204,8 @@ function render(template: string, route: Route): string {
   if (!root.test(html)) throw new Error('prerender: the built page has no #root')
   // Pages the app draws without WebGL are prerendered from the app itself, so its first frame matches this one;
   // the rest get a readable stand-in under the same header
+  // the API reference carries its data as JSON (not run, so the CSP allows it), so the page needn't load it again
+  if (route.page === 'api') html = html.replace('</body>', () => `<script type="application/json" id="${API_DATA_ID}">${readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'blobscape', 'engineApi.json'), 'utf8').replace(/</g, '\\u003c').trim()}</script>\n  </body>`)
   if (FROM_APP.has(route.page)) return html.replace(root, () => `<div id="root" data-ssr>${renderPage(route)}</div>`)
   return html.replace(root, () => `<div id="root">${shell(content(route))}</div>`)
 }
@@ -208,7 +216,7 @@ function write(path: string, html: string) {
 }
 
 // The app, loaded the way Vite would for a server, to draw the pages in FROM_APP
-const FROM_APP = new Set<Route['page']>(['home', 'lessons', 'experiments', 'contact', 'engine', 'spec', 'notfound'])
+const FROM_APP = new Set<Route['page']>(['home', 'lessons', 'experiments', 'contact', 'engine', 'spec', 'api', 'notfound'])
 const vite = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'error' })
 const { renderPage } = (await vite.ssrLoadModule('/src/blobscape/ssr.tsx')) as typeof import('../src/blobscape/ssr.tsx')
 
@@ -220,7 +228,7 @@ const preloads = fonts.map((f) => `<link rel="preload" href="/assets/${f}" as="f
 const built = readFileSync(join(DIST, 'index.html'), 'utf8')
 if (!built.includes('<link rel="stylesheet"')) throw new Error('prerender: the built page has no stylesheet link')
 const template = built.replace('<link rel="stylesheet"', () => `${preloads}\n    <link rel="stylesheet"`)
-const routes: Route[] = [{ page: 'home' }, { page: 'lessons' }, ...LESSONS.map((l) => ({ page: 'lesson' as const, id: l.id })), { page: 'sandbox' }, { page: 'experiments' }, { page: 'creature' }, { page: 'forest' }, { page: 'clockwork' }, { page: 'shift' }, { page: 'flow' }, { page: 'diorama' }, { page: 'dungeon' }, { page: 'scan' }, { page: 'engine' }, { page: 'spec' }, { page: 'contact' }]
+const routes: Route[] = [{ page: 'home' }, { page: 'lessons' }, ...LESSONS.map((l) => ({ page: 'lesson' as const, id: l.id })), { page: 'sandbox' }, { page: 'experiments' }, { page: 'creature' }, { page: 'forest' }, { page: 'clockwork' }, { page: 'shift' }, { page: 'flow' }, { page: 'diorama' }, { page: 'dungeon' }, { page: 'scan' }, { page: 'engine' }, { page: 'spec' }, { page: 'api' }, { page: 'contact' }]
 for (const r of routes) write(join(DIST, href(r), 'index.html'), render(template, r))
 write(join(DIST, '404.html'), render(template, { page: 'notfound' }))
 

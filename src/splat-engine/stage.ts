@@ -13,22 +13,7 @@ import { PixelPass } from './pixelPass.ts'
 import { boneLabel, boneShare, pickActors } from './pick.ts'
 import { lookColors, snapColors, type Frame, type PixelLook } from '../splat-core/pixel.ts'
 
-/**
- * The engine's front door: one rigged creature (or a scene) on a canvas, drawn
- * by `SplatWorld` through three.js's WebGPU renderer, which falls back to
- * WebGL 2 where a browser has no WebGPU. Every blob is moved by its bones on
- * the GPU, so a creature can have hundreds of thousands. It plays a clip or a
- * poser, orbits, picks bones, draws pixel art and bakes sprite sheets.
- *
- *   const stage = await Stage.start(canvas)
- *   stage.setActor(makeFox(20000), recordClip('trot', ...))
- *
- * On blobscape.dev it is the Creature page's view (`CreatureStage`) and every
- * engine experiment's.
- *
- * `offscreen` draws into a render target and copies each frame to a 2D canvas
- * on request: headless test browsers can render WebGPU but not show it.
- */
+/** What a stage shows: blobs, the skin that ties them to bones, and the skeleton. */
 export interface Actor {
   blobs: Blobs; skin: Skin; skeleton: Skeleton
   /** Blend shapes (from an opened .glb): a clip's weights, or `setMorphWeights` while none play, reshape the blobs on the CPU. */
@@ -59,6 +44,22 @@ export interface StageOptions {
   webgl?: boolean
 }
 
+/**
+ * The engine's front door: one rigged creature (or a scene) on a canvas, drawn
+ * by `SplatWorld` through three.js's WebGPU renderer, which falls back to
+ * WebGL 2 where a browser has no WebGPU. Every blob is moved by its bones on
+ * the GPU, so a creature can have hundreds of thousands. It plays a clip or a
+ * poser, orbits, picks bones, draws pixel art and bakes sprite sheets.
+ *
+ *   const stage = await Stage.start(canvas)
+ *   stage.setActor(makeFox(20000), recordClip('trot', ...))
+ *
+ * On blobscape.dev it is the Creature page's view (`CreatureStage`) and every
+ * engine experiment's.
+ *
+ * `offscreen` draws into a render target and copies each frame to a 2D canvas
+ * on request: headless test browsers can render WebGPU but not show it.
+ */
 export class Stage {
   readonly renderer: THREE.WebGPURenderer
   readonly backend: 'webgpu' | 'webgl'
