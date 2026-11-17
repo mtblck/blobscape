@@ -26,6 +26,8 @@ import { BRUSHES, brushDab, type BrushId } from './brushes.ts'
 import { MAX_STOPS, PATH_FPS, pathAt, pathSeconds } from './cameraPath.ts'
 import { fileSpecies, sceneRig, splitScene } from './sceneFile.ts'
 import { registerTools, sandboxTools, type SandboxApi } from './agentTools.ts'
+import { blobsInMasks } from './tapSelect.ts'
+import { thingAt } from './select/thing.ts'
 import { SCENE_SPACING, readDoc } from './build/scene.ts'
 import { buildVoxels } from '../splat-engine/voxel.ts'
 
@@ -588,7 +590,43 @@ export function Sandbox() {
     selChanged()
     setMessage(`${prefix}${sel.count ? `${sel.count.toLocaleString()} selected` : 'Nothing selected'}`)
   }
+  /** Whole things: a tap with Select picks everything the model says belongs to what was tapped. */
+  const [whole, setWhole] = useState(false)
+  const [looking, setLooking] = useState(false)
+  const selectThing = async (x: number, y: number, add: boolean) => {
+    if (!view || looking) return
+    const hit = blobAt(x, y)
+    if (hit < 0) { if (!add) sel.clear(); announce('No blob there. '); return }
+    const b = blobsRef.current
+    const at: Vec3 = [b.center[hit * 3], b.center[hit * 3 + 1], b.center[hit * 3 + 2]]
+    setLooking(true)
+    setError('')
+    setMessage('Looking at what you tapped…')
+    try {
+      // the picture as it stands, without rings and outlines
+      await view.settle(orbit)
+      const lens = view.lens()
+      const back = getComputedStyle(view.canvas.parentElement ?? view.canvas).backgroundColor
+      const paper = !back || back === 'rgba(0, 0, 0, 0)' || back === 'transparent' ? themeColor('paper', view.canvas) : back
+      const mask = await thingAt(view.canvas, lens, paper, x, y, `${version}|${JSON.stringify(orbit)}|${lens.width}x${lens.height}`)
+      // the scene may have changed while the model looked
+      if (blobsRef.current !== b || b.count < hit) { setMessage(''); return }
+      const picked = mask ? blobsInMasks(b, [mask], at) : new Uint8Array(0)
+      if (!add) sel.clear()
+      let n = 0
+      for (let i = 0; i < picked.length; i++) if (picked[i]) { sel.set(i, true); n++ }
+      // the tapped blob itself is always part of it
+      if (!n) sel.set(hit, true)
+      announce(n ? '' : 'Could not tell what that is, so only the blob. ')
+    } catch (err) {
+      setMessage('')
+      setError(`Could not look at it: ${err instanceof Error ? err.message : String(err)}.`)
+    } finally {
+      setLooking(false)
+    }
+  }
   const selectAt = (x: number, y: number, add: boolean) => {
+    if (whole && tool === 'select') { void selectThing(x, y, add); return }
     const hit = blobAt(x, y)
     if (!add) sel.clear()
     if (hit >= 0) sel.set(hit, !(add && sel.has(hit)))
@@ -1264,6 +1302,12 @@ export function Sandbox() {
                       <Button small onClick={selectAll} disabled={!blobs.count}>Select all</Button>
                       <Button small onClick={selectNone} disabled={none}>Select none</Button>
                       <Button small onClick={invertSel} disabled={!blobs.count}>Invert</Button>
+                    </div>
+                    <div>
+                      <Toggle label="A click with Select takes the whole thing" checked={whole} onChange={(on) => { setWhole(on); if (on) setTool('select') }} />
+                      <p className="mt-1.5 text-xs text-ink-faint" data-testid="whole-note">
+                        {looking ? 'Looking at what you tapped…' : 'Click a mug, a leaf or a chair and everything that belongs to it is selected, the far side too. A small model (Segment Anything, slimmed; 14 MB, fetched the first time) looks at the view on your device: a few seconds the first click, quick after that until the view moves.'}
+                      </p>
                     </div>
                     <Field label="By color">
                       <div className="flex flex-wrap gap-2">
