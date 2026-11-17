@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { href } from './routes.ts'
 import { Crumbs, Dates, useFocusHeading } from './Shell.tsx'
-import { CARD_LINK, EXPERIMENTS_INTRO, byPublished, type Experiment } from './site.ts'
+import { CARD_LINK, EXPERIMENTS_INTRO, TAGS, byPublished, isTag, tagged, type Experiment, type Tag } from './site.ts'
 import { Chip } from '../shared/ui.tsx'
 
 /** Each experiment's cover picture (a 16:10 still from it), on this page and the front page. */
@@ -14,7 +14,7 @@ type Order = 'newest' | 'oldest'
 const ORDER_KEY = 'blobscape-experiments-order'
 const ORDERS: { id: Order; label: string }[] = [{ id: 'newest', label: 'Newest first' }, { id: 'oldest', label: 'Oldest first' }]
 
-/** Every experiment, listed like posts: each with the day it was published, newest first unless you turn the list round. */
+/** Every experiment, listed like posts: each with the day it was published, newest first unless you turn the list round, and one kind at a time if you like. */
 export function Experiments() {
   const h1 = useFocusHeading()
   const [order, setOrder] = useState<Order>(() => {
@@ -27,13 +27,32 @@ export function Experiments() {
     setSaid(o === 'newest' ? 'Showing the newest first.' : 'Showing the oldest first.')
     try { if (o === 'newest') localStorage.removeItem(ORDER_KEY); else localStorage.setItem(ORDER_KEY, o) } catch { /* the choice just isn't kept */ }
   }
+  // One kind at a time, kept in the address (?tag=game) so a filtered list can be shared. Read after hydration: the prerendered page shows them all
+  const [tag, setTag] = useState<Tag | null>(null)
+  useEffect(() => {
+    const t = new URLSearchParams(location.search).get('tag')
+    if (isTag(t)) setTag(t)
+  }, [])
+  const pick = (t: Tag | null) => {
+    setTag(t)
+    const n = tagged(byPublished(order), t).length
+    setSaid(t ? `Showing ${n} of ${byPublished(order).length}: ${TAGS.find((x) => x.id === t)!.label.toLowerCase()}.` : 'Showing every experiment.')
+    const url = new URL(location.href)
+    if (t) url.searchParams.set('tag', t); else url.searchParams.delete('tag')
+    history.replaceState(history.state, '', url)
+  }
+  const shown = tagged(byPublished(order), tag)
   return (
     <div>
       <Crumbs here="Experiments" />
-      <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-5 pt-6 pb-8">
-        <div className="max-w-3xl">
-          <h1 ref={h1} tabIndex={-1} className="font-display text-5xl outline-none">Experiments</h1>
-          <p className="mt-4 text-xl leading-relaxed text-ink-muted">{EXPERIMENTS_INTRO}</p>
+      <div className="max-w-3xl pt-6 pb-6">
+        <h1 ref={h1} tabIndex={-1} className="font-display text-5xl outline-none">Experiments</h1>
+        <p className="mt-4 text-xl leading-relaxed text-ink-muted">{EXPERIMENTS_INTRO}</p>
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-3 pb-6">
+        <div role="group" aria-label="Show" className="flex flex-wrap gap-1.5">
+          <Chip small active={!tag} onClick={() => pick(null)}>All</Chip>
+          {TAGS.map((t) => <Chip small key={t.id} active={tag === t.id} onClick={() => pick(t.id)}>{t.label}</Chip>)}
         </div>
         <div role="group" aria-label="Order by the day published" className="flex gap-1.5">
           {ORDERS.map((o) => <Chip small key={o.id} active={order === o.id} onClick={() => choose(o.id)}>{o.label}</Chip>)}
@@ -41,7 +60,7 @@ export function Experiments() {
         <p role="status" className="sr-only">{said}</p>
       </div>
       <ul className="grid gap-6 md:grid-cols-2 lg:grid-cols-3" data-testid="experiment-list">
-        {byPublished(order).map((e) => (
+        {shown.map((e) => (
           <li key={e.id} className="relative flex flex-col gap-4 rounded-2xl border border-rule bg-paper p-4 transition-colors hover:border-ink-faint">
             <Cover e={e} />
             <Dates e={e} />

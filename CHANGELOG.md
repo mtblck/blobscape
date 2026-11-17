@@ -34,6 +34,8 @@ Place blobs and shapes, and add creatures (fox, frog, elf, dragon, monsters, a s
 - **Fit a Picture**: train 2D blobs to match a picture.
 - **Splat to Sprite**: turn a splat into a pixel sprite sheet.
 
+The Experiments page lists them like posts, newest or oldest first, and can show one kind at a time: games, creatures, pixel art, tools, or ones to watch.
+
 ### The engine
 
 Our own renderer for animated splats, built on three.js with WebGPU and a WebGL fallback. It has bones that bend, grow and slide, morphs, live lights and shadows, level of detail, picking, foot IK and a pixel-art pass. The engine page shows three live demos. Rigged splats save as glTF using a draft extension, documented at /engine/rigged-splats/.
