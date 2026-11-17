@@ -57,7 +57,7 @@ export class DungeonStage {
   /** What's held now (keys, the stick, held buttons). */
   input: Input = { forward: 0, turn: 0 }
   /** Taps since the last step, so a press shorter than a frame still counts. */
-  private taps = { swing: false, cast: false, frost: false }
+  private taps = { swing: false, cast: false, frost: false, dodge: false }
   paused = false
   /** Called after drawn frames, about ten times a second, for the bars. */
   onTick?: (d: Dungeon, fps: number) => void
@@ -120,8 +120,8 @@ export class DungeonStage {
 
   get blobCount() { return this.dungeon?.blobCount ?? 0 }
 
-  /** A tap of the sword, fire or frost button: counts in the next step even if let go before it. */
-  tap(what: 'swing' | 'cast' | 'frost') { this.taps[what] = true }
+  /** A tap of the sword, fire, frost or dodge button: counts in the next step even if let go before it. */
+  tap(what: 'swing' | 'cast' | 'frost' | 'dodge') { this.taps[what] = true }
 
   /** Moves the game on by dt seconds with the current input. */
   step(dt: number) {
@@ -130,8 +130,8 @@ export class DungeonStage {
     const run = this.impact.pass(dt)
     if (dt > 0 && run <= 0) { this.follow(dt); return }
     dt = run
-    const input = { ...this.input, swing: this.input.swing || this.taps.swing, cast: this.input.cast || this.taps.cast, frost: this.input.frost || this.taps.frost }
-    this.taps = { swing: false, cast: false, frost: false }
+    const input = { ...this.input, swing: this.input.swing || this.taps.swing, cast: this.input.cast || this.taps.cast, frost: this.input.frost || this.taps.frost, dodge: this.input.dodge || this.taps.dodge }
+    this.taps = { swing: false, cast: false, frost: false, dodge: false }
     this.dungeon.update(dt, input)
     // the floor or a wall burned or froze: its blobs' colors go up again
     for (const a of this.dungeon.takeRepaint()) this.world.recolor(a)

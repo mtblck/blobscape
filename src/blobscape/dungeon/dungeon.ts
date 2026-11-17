@@ -4,6 +4,7 @@ import { MAX_LIGHTS, type PointLight } from '../../splat-engine/engine.ts'
 import { makeProp, poseProp, type PropBody } from './breakables.ts'
 import { BODY_FLAMES, CRYSTAL_GAP, CRYSTALS, FLAME_GAP, FLAMES, climbCells, makeBlaze, makeIce, makeSteam, paintClimb, paintFloor, poseBlaze, poseBodyFlames, poseIce, poseSteam } from './elements.ts'
 import { BOLT_POP, BOLTS, Game, KINDS, MAX_MP, PROP_TOP, PROPS, RULES, SLIME_TOP, hopPeriod, type Difficulty, type Element, type Input, type SlimeKind } from './game.ts'
+import { Glow, gather, type Want } from './glow.ts'
 import { Patches } from './ground.ts'
 import { TORCHES, flicker, makeFloor, makePillars, makeTorches, makeWalls, poseTorches } from './hall.ts'
 import { makeBolt, makeHero, poseBolt, poseHero, type HeroClock } from './hero.ts'
@@ -35,6 +36,10 @@ const lin = (c: number[]): [number, number, number] => [srgbToLinear(c[0]), srgb
 export const HERO_BLOBS = 22000
 export const SLIME_BLOBS = 2600
 
+/** The most lights the fire on the floor and on bodies, and the ice, are gathered into. */
+export const FIRE_LIGHTS = 3
+export const ICE_LIGHTS = 2
+
 export class Dungeon {
   readonly game: Game
   readonly hero: Creature
@@ -64,6 +69,9 @@ export class Dungeon {
   /** Every actor for the SplatWorld. */
   readonly actors: Creature[]
   private clock: HeroClock = { idle: 0, walk: 0, down: -1, flicker: true }
+  /** Lights that come and go, eased in and out (glow.ts), and the game time they were last eased to. */
+  private readonly glow = new Glow()
+  private litAt = 0
   readonly opts: DungeonOptions
 
   constructor(opts: DungeonOptions, game?: Game) {
@@ -163,9 +171,11 @@ export class Dungeon {
 
   /**
    * The live lights as things stand: the eight torches (flickering with their
-   * flames), the orb in the hero's hand (as bright as the magic left), each
-   * bolt in its element's color, a flash of a slime's own color as it bursts,
-   * and then each flame and each clump of ice on the floor.
+   * flames), then, eased in and out by `Glow` so nothing pops: the orb in the
+   * hero's hand (as bright as the magic left), each bolt in its element's color,
+   * a glow of a slime's own color as it bursts, the fire on the floor and on
+   * burning bodies gathered into at most `FIRE_LIGHTS` lights, and the ice into
+   * `ICE_LIGHTS`. Call it once a drawn frame: it moves the easing on.
    */
   lights(): PointLight[] {
     const g = this.game
@@ -176,46 +186,48 @@ export class Dungeon {
       return { position: [t[0], t[1] + 0.1, t[2]], color: [2.4 * f, 1.0 * f, 0.32 * f], range: 2.9 * (0.8 + 0.2 * f) }
     })
     const sk = this.hero.skeleton, orb = sk.index('orb')
-    const k = 0.25 + 0.75 * (g.hero.mp / MAX_MP) + (g.hero.castT >= 0 ? 0.8 : 0)
+    const k = 0.25 + 0.75 * (g.hero.mp / MAX_MP) + (g.hero.castT >= 0 ? 0.5 : 0)
     // the orb turns orange while it throws fire
     const hot = g.hero.castT >= 0 && g.hero.spell === 'fire'
-    out.push({ position: [sk.posedHead[orb * 3], sk.posedHead[orb * 3 + 1] + 0.05, sk.posedHead[orb * 3 + 2]], color: hot ? [1.7 * k, 0.75 * k, 0.3 * k] : [0.4 * k, 0.7 * k, 1.6 * k], range: 1.4 })
-    // bolts and bursts, nearest the hero first, then the floor's lights, as many as the engine has room for
-    const extra: PointLight[] = []
+    const wants: Want[] = [{ kind: 'orb', position: [sk.posedHead[orb * 3], sk.posedHead[orb * 3 + 1] + 0.05, sk.posedHead[orb * 3 + 2]], color: hot ? [1.5 * k, 0.68 * k, 0.28 * k] : [0.4 * k, 0.7 * k, 1.5 * k], range: 1.4 }]
+    // bolts and bursts: a soft glow, not a flash
     for (const b of g.bolts) {
-      const k = b.popped ? (calm ? 1.3 : 2.2) * (1 - b.t / BOLT_POP) : 1.3
-      extra.push({ position: [b.x, 1, b.z], color: b.element === 'fire' ? [2.1 * k, 0.95 * k, 0.3 * k] : [0.6 * k, 0.9 * k, 2 * k], range: b.popped ? 2.4 : 2 })
+      const k = b.popped ? 1.4 * (1 - b.t / BOLT_POP) : 1.1
+      wants.push({ kind: b.element, position: [b.x, 1, b.z], color: b.element === 'fire' ? [2 * k, 0.9 * k, 0.28 * k] : [0.6 * k, 0.9 * k, 1.9 * k], range: b.popped ? 2.3 : 2 })
     }
     for (const s of g.slimes) {
       if (s.phase !== 'burst' || s.t > 0.5) continue
-      // a flash of the slime's color, gentler under reduced motion
-      const c = lin(COLORS[s.kind].skin), k = (calm ? 0.9 : 2.5) * (1 - s.t / 0.5)
-      extra.push({ position: [s.x, 0.5, s.z], color: [c[0] * k, c[1] * k, c[2] * k], range: 1.8 })
+      const c = lin(COLORS[s.kind].skin), k = (calm ? 0.9 : 1.5) * (1 - s.t / 0.5)
+      wants.push({ kind: `burst-${s.kind}`, position: [s.x, 0.5, s.z], color: [c[0] * k, c[1] * k, c[2] * k], range: 1.8 })
     }
-    const far = (l: PointLight) => Math.hypot(l.position[0] - g.hero.x, l.position[2] - g.hero.z)
-    extra.sort((a, b) => far(a) - far(b))
-    // then what stands on the floor: each flame, and a cold glow from each clump of ice
-    const floor: PointLight[] = []
-    this.fireSpots.cells.forEach((cell, i) => {
+    // the floor's flames and burning bodies, gathered into a few lights of fire with one slow, shared flicker
+    // (many small lights each flickering on its own, and swapping in and out of the budget, is what looked wrong)
+    const fires: Want[] = []
+    this.fireSpots.cells.forEach((cell) => {
       if (cell < 0) return
       const [x, z] = g.ground.center(cell)
-      const k = g.ground.fire[cell] * (calm ? 0.9 : flicker(g.time, i + 3))
-      floor.push({ position: [x, 0.45, z], color: [1.9 * k, 0.8 * k, 0.22 * k], range: 2.3 })
+      const k = g.ground.fire[cell]
+      fires.push({ kind: 'fire', position: [x, 0.45, z], color: [1.8 * k, 0.78 * k, 0.22 * k], range: 2.3 })
     })
+    for (const t of [...g.slimes.filter((s) => s.phase === 'live'), ...g.props.filter((p) => p.phase === 'whole')]) {
+      if (t.alight < 0.1) continue
+      fires.push({ kind: 'fire', position: [t.x, 0.6, t.z], color: [1.7 * t.alight, 0.72 * t.alight, 0.2 * t.alight], range: 1.8 })
+    }
+    const sway = calm ? 0.95 : 0.93 + 0.05 * Math.sin(g.time * 5.3) + 0.02 * Math.sin(g.time * 8.9)
+    for (const f of gather(fires, FIRE_LIGHTS)) wants.push({ ...f, kind: 'fire', color: [f.color[0] * sway, f.color[1] * sway, f.color[2] * sway] })
+    const ice: Want[] = []
     this.iceSpots.cells.forEach((cell) => {
       if (cell < 0) return
       const [x, z] = g.ground.center(cell)
       const k = g.ground.frost[cell]
-      floor.push({ position: [x, 0.5, z], color: [0.3 * k, 0.5 * k, 0.85 * k], range: 1.9 })
+      ice.push({ kind: 'ice', position: [x, 0.5, z], color: [0.3 * k, 0.5 * k, 0.85 * k], range: 1.9 })
     })
-    // flames on burning bodies light what is round them too
-    for (const t of [...g.slimes.filter((s) => s.phase === 'live'), ...g.props.filter((p) => p.phase === 'whole')]) {
-      if (t.alight < 0.1) continue
-      const k = t.alight * (calm ? 0.9 : flicker(g.time, 17))
-      floor.push({ position: [t.x, 0.6, t.z], color: [1.8 * k, 0.75 * k, 0.2 * k], range: 1.8 })
-    }
-    floor.sort((a, b) => far(a) - far(b))
-    const all = [...out, ...extra, ...floor].slice(0, MAX_LIGHTS)
+    wants.push(...gather(ice, ICE_LIGHTS))
+    const dt = g.time - this.litAt
+    if (dt < 0 || dt > 1) this.glow.clear()
+    this.litAt = g.time
+    const extra = this.glow.update(wants, Math.max(0, Math.min(dt, 0.1)), MAX_LIGHTS - out.length)
+    const all = [...out, ...extra].slice(0, MAX_LIGHTS)
     if (this.shadows) for (const l of all) l.shadow = true
     return all
   }
