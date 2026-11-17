@@ -1,5 +1,7 @@
 // Sandbox tools: files, selection, effects, bake, save; props and creatures in the sandbox.
 
+import { capture } from '../capture.mjs'
+
 export default [
   {
     name: 'sandbox-tools',
@@ -426,6 +428,66 @@ export default [
       if (none) fails.push(`blobscape sandbox thing: a click on nothing left ${none} selected`)
       if (outside.length) fails.push(`blobscape sandbox thing: asked another site for ${outside.slice(0, 3).join(', ')}`)
       else ok('blobscape sandbox thing: the model and its runtime come from this site alone')
+      await ctx.close()
+    },
+  },
+  {
+    name: 'sandbox-train',
+    about: 'photos to splats: a capture folder with camera positions starts the trainer (Brush), loose photos are turned away with the reason; training itself needs a real graphics card (VERIFY_TRAIN=1)',
+    entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/trainCapture.ts', 'src/blobscape/train/train.ts', 'src/blobscape/train/train.worker.ts'],
+    async run({ shots, join, fails, ok, open }) {
+      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 900 } })
+      const outside = []
+      page.on('request', (r) => { if (!/^(http:\/\/localhost|data:|blob:)/.test(r.url())) outside.push(r.url()) })
+      await page.waitForTimeout(1500)
+      const count = async () => Number((await page.textContent('[data-testid=blob-count]')).replace(/\D/g, ''))
+      const before = await count()
+      // the folder picker can't be driven from here: stand a folder in the browser's own private storage in its place
+      const pick = (files) => page.evaluate(async (files) => {
+        const root = await navigator.storage.getDirectory()
+        await root.removeEntry('capture', { recursive: true }).catch(() => {})
+        const dir = await root.getDirectoryHandle('capture', { create: true })
+        for (const [name, b64] of Object.entries(files)) {
+          const parts = name.split('/')
+          let d = dir
+          for (const p of parts.slice(0, -1)) d = await d.getDirectoryHandle(p, { create: true })
+          const w = await (await d.getFileHandle(parts.at(-1), { create: true })).createWritable()
+          await w.write(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)))
+          await w.close()
+        }
+        window.showDirectoryPicker = async () => dir
+      }, Object.fromEntries(Object.entries(files).map(([k, v]) => [k, v.toString('base64')])))
+      const made = capture()
+      await page.getByRole('tab', { name: /Scene/ }).click()
+      const train = page.getByRole('button', { name: 'Train from a capture folder…' })
+      const note = () => page.getByTestId('train-note').textContent()
+      if (await train.isDisabled()) { fails.push(`blobscape sandbox train: the button is off here: ${await note()}`); await ctx.close(); return }
+      // photos with no camera positions
+      await pick(Object.fromEntries(Object.entries(made).filter(([k]) => k !== 'transforms.json')))
+      await train.click()
+      const turned = await page.getByRole('alert').textContent({ timeout: 8000 }).catch(() => '')
+      if (!/no camera positions/.test(turned)) fails.push(`blobscape sandbox train: loose photos gave "${turned.slice(0, 120)}"`)
+      else ok('blobscape sandbox train: photos without camera positions are turned away, with what is missing')
+      // the capture itself: 24 photos of three balls with a transforms.json
+      await pick(made)
+      await train.click()
+      const real = !!process.env.VERIFY_TRAIN
+      await page.waitForFunction(() => /^Step \d|graphics card/.test(document.querySelector('[data-testid=train-note]')?.textContent ?? '') || /Could not train/.test(document.querySelector('[role=alert]')?.textContent ?? ''), null, { timeout: real ? 180000 : 60000 }).catch(() => {})
+      const said = `${await note()} ${await page.getByRole('alert').textContent({ timeout: 500 }).catch(() => '')}`
+      if (/allows \d+ buffers a pass/.test(said)) {
+        if (real) fails.push(`blobscape sandbox train: asked to train for real, and this graphics card can't: ${said.slice(0, 200)}`)
+        else ok('blobscape sandbox train: the capture is taken as one; this browser\'s software graphics card is too small for the trainer, and the page says so (training not checked here)')
+      } else if (/^Step \d/.test(said)) {
+        // a real graphics card: let it run, stop it, and see a scene
+        await page.waitForTimeout(20000)
+        await page.getByRole('button', { name: 'Stop and keep it' }).click()
+        await page.waitForFunction(() => !/^Step \d/.test(document.querySelector('[data-testid=train-note]')?.textContent ?? ''), null, { timeout: 60000 }).catch(() => {})
+        const after = await count()
+        if (after === before || after < 500) fails.push(`blobscape sandbox train: stopped with ${after} blobs (${before} before)`)
+        else ok(`blobscape sandbox train: trained the capture to ${after.toLocaleString()} blobs and kept them on Stop`)
+      } else fails.push(`blobscape sandbox train: the capture gave "${said.slice(0, 240)}"`)
+      await page.screenshot({ path: join(shots, 'blobscape-sandbox-train.png') })
+      if (outside.length) fails.push(`blobscape sandbox train: asked another site for ${outside.slice(0, 3).join(', ')}`)
       await ctx.close()
     },
   },

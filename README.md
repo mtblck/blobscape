@@ -215,6 +215,9 @@ and its tap to select finds the tapped thing with
 [Segment Anything](https://segment-anything.com/) (Kirillov et al., 2023). Both are
 run in the browser by [ONNX Runtime Web](https://onnxruntime.ai/); the weights are in `public/models/`.
 
+Its Train from a capture folder is [Brush](https://github.com/ArthurBrussee/brush) (Arthur Brussee and
+contributors, Apache 2.0), built for the browser in `vendor/brush/`.
+
 Blobscape stands on [three.js](https://threejs.org/), [Spark](https://sparkjs.dev/) and the
 [3D Gaussian Splatting](https://repo-sam.inria.fr/fungraph/3d-gaussian-splatting/) paper by Kerbl
 et al.

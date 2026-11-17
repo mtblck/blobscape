@@ -6,6 +6,8 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 
 ## [Unreleased]
 
+- Train a scene from your own capture in the sandbox: in the Scene tab, pick a folder of photos that comes with their camera positions (Nerfstudio or COLMAP format, as scanning apps export) and the scene is trained on your graphics card, growing in the view as it goes. It needs Chrome or Edge on a computer. Loose photos don't work yet.
+
 - Tap to select in the sandbox: turn on "A click with Select takes the whole thing" in the Selection tab and a click on a mug, a leaf or a chair selects everything that belongs to it, the far side too. A small model (a slimmed Segment Anything, 14 MB, served by this site) looks at the view on your device.
 
 - The sandbox works with an assistant in the browser: where the browser has WebMCP (Chrome is trying it out), the sandbox offers its actions as tools, so an assistant can look at the scene, build one from a scene description, add a creature, cut, recolor, paint with a brush, save and undo. Other browsers see no change.
