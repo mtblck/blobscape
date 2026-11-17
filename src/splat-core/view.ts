@@ -19,6 +19,8 @@ export interface Orbit {
 
 const FOV = 35
 
+type FxUniforms = { kind: dyno.DynoFloat<string>; amount: dyno.DynoFloat<string>; time: dyno.DynoFloat<string>; radius: dyno.DynoFloat<string>; floor: dyno.DynoFloat<string>; count: dyno.DynoFloat<string>; center: dyno.DynoVec3<THREE.Vector3, string> }
+
 /** Places a three.js camera for an orbit and a canvas aspect. */
 export function placeCamera(cam: THREE.PerspectiveCamera, o: Orbit, aspect: number) {
   const { target, distance, azimuth, elevation } = o
@@ -175,9 +177,9 @@ export class SplatView {
 
   /**
    * A second list of blobs drawn with the first and sorted with it, but kept
-   * apart from it: no effect touches it and `sync` never rewrites it. The
-   * sandbox's creatures live here, rewritten whole every frame they move.
-   * Null (or an empty list) hides it.
+   * apart from it: `sync` never rewrites it, and an effect reaches it only when
+   * `setEffect` is given a `layerCount`. The sandbox's creatures live here,
+   * rewritten whole every frame they move. Null (or an empty list) hides it.
    */
   async syncLayer(blobs: Blobs | null) {
     if (!blobs?.count && !this.layer) return
@@ -188,6 +190,8 @@ export class SplatView {
       if (this.disposed) { mesh.dispose(); return undefined }
       this.layerMesh = mesh
       this.scene.add(mesh)
+      // An effect already running reaches the layer as soon as there is one
+      if (this.lastFx) this.applyFx(mesh, this.lastFx.p, this.lastFx.layerCount)
       return { mesh, packed }
     })()
     const l = await this.layer
@@ -200,30 +204,41 @@ export class SplatView {
     this.invalidate(2)
   }
 
-  private fx?: { kind: dyno.DynoFloat<string>; amount: dyno.DynoFloat<string>; time: dyno.DynoFloat<string>; radius: dyno.DynoFloat<string>; floor: dyno.DynoFloat<string>; count: dyno.DynoFloat<string>; center: dyno.DynoVec3<THREE.Vector3, string> }
-  private fxOn = false
+  /** Each mesh's effect uniforms, and whether its modifier is on. */
+  private fx = new WeakMap<SplatMesh, { on: boolean; u: FxUniforms }>()
+  private lastFx?: { p: EffectParams | null; layerCount: number }
 
   /**
    * Runs a live effect on the GPU (see effects.ts) for the first `count`
-   * blobs in GPU order, or turns it off with null. Cheap to call every frame:
-   * it only changes uniforms.
+   * blobs in GPU order, and the first `layerCount` of the layer's, or turns it
+   * off with null. Cheap to call every frame: it only changes uniforms.
    */
-  async setEffect(p: EffectParams | null, count: number) {
+  async setEffect(p: EffectParams | null, count: number, layerCount = 0) {
+    this.lastFx = { p, layerCount }
+    if (this.layerMesh) this.applyFx(this.layerMesh, p, layerCount)
     await this.ready
-    const mesh = this.mesh
-    if (!mesh || this.disposed) return
-    if (!p) {
-      if (this.fxOn) { mesh.objectModifier = undefined; mesh.updateGenerator(); this.fxOn = false; this.invalidate() }
+    if (!this.mesh || this.disposed) return
+    this.applyFx(this.mesh, p, count)
+  }
+
+  private applyFx(mesh: SplatMesh, p: EffectParams | null, count: number) {
+    let state = this.fx.get(mesh)
+    if (!p || !count) {
+      if (state?.on) { mesh.objectModifier = undefined; mesh.updateGenerator(); state.on = false; this.invalidate() }
       return
     }
-    if (!this.fx) {
-      this.fx = {
-        kind: dyno.dynoFloat(0), amount: dyno.dynoFloat(0), time: dyno.dynoFloat(0), radius: dyno.dynoFloat(1),
-        floor: dyno.dynoFloat(0), count: dyno.dynoFloat(0), center: dyno.dynoVec3(new THREE.Vector3()),
+    if (!state) {
+      state = {
+        on: false,
+        u: {
+          kind: dyno.dynoFloat(0), amount: dyno.dynoFloat(0), time: dyno.dynoFloat(0), radius: dyno.dynoFloat(1),
+          floor: dyno.dynoFloat(0), count: dyno.dynoFloat(0), center: dyno.dynoVec3(new THREE.Vector3()),
+        },
       }
+      this.fx.set(mesh, state)
     }
-    const u = this.fx
-    if (!this.fxOn) {
+    const u = state.u
+    if (!state.on) {
       const node = new dyno.Dyno({
         inTypes: { gsplat: dyno.Gsplat, kind: 'float', amount: 'float', time: 'float', radius: 'float', floor: 'float', count: 'float', center: 'vec3' },
         outTypes: { gsplat: dyno.Gsplat },
@@ -235,7 +250,7 @@ export class SplatView {
       })
       mesh.objectModifier = dyno.dynoBlock({ gsplat: dyno.Gsplat }, { gsplat: dyno.Gsplat }, ({ gsplat }) => ({ gsplat: node.apply({ gsplat, ...u }).gsplat }))
       mesh.updateGenerator()
-      this.fxOn = true
+      state.on = true
     }
     u.kind.value = EFFECT_INDEX[p.kind]
     u.amount.value = p.amount
