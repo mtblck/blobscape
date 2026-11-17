@@ -58,7 +58,22 @@ function changedFiles(ref) {
   const sh = (c) => execSync(c, { cwd: root, encoding: 'utf8' }).split('\n').filter(Boolean)
   if (!ref) ref = ['origin/main', 'main'].find((r) => { try { sh(`git rev-parse --verify -q ${r}`); return true } catch { return false } })
   const base = sh(`git merge-base ${ref} HEAD`)[0]
-  return [...new Set([...sh(`git diff --name-only ${base}`), ...sh('git ls-files --others --exclude-standard')])]
+  const files = [...new Set([...sh(`git diff --name-only ${base}`), ...sh('git ls-files --others --exclude-standard')])]
+  return files.includes('package.json') ? packageChanges(files, execSync(`git show ${base}:package.json`, { cwd: root, encoding: 'utf8' })) : files
+}
+
+/**
+ * A change to package.json that only adds, bumps or drops runtime `dependencies`
+ * reaches just the checks whose files import those packages: each becomes a
+ * `pkg:<name>` entry, and the lock file goes with them. Anything else in it
+ * (scripts, devDependencies, which build and test the site) still reaches every check.
+ */
+function packageChanges(files, before) {
+  const was = JSON.parse(before), now = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
+  const { dependencies: a = {}, ...restWas } = was, { dependencies: b = {}, ...restNow } = now
+  if (JSON.stringify(restWas) !== JSON.stringify(restNow)) return files
+  const names = [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((n) => a[n] !== b[n])
+  return [...files.filter((f) => f !== 'package.json' && f !== 'package-lock.json'), ...names.map((n) => `pkg:${n}`)]
 }
 
 /** Which checks (and which parts of them) the changed files reach, and why. */
@@ -70,15 +85,16 @@ function affected(files) {
   const covered = new Set()
   for (const c of checks) {
     const own = graph.closure(c.entries ?? [], (f) => LEAF.test(f))
+    const usesPkg = (f, reach) => f.startsWith('pkg:') && [...graph.packagesOf(reach)].some((n) => n === f.slice(4) || n.startsWith(f.slice(4) + '/'))
     for (const f of files) {
-      if (EVERYTHING.test(f) || f === `scripts/verify/checks/${c.group}.mjs` || own.has(f) || inFiles(c.files, f)) {
+      if (EVERYTHING.test(f) || usesPkg(f, own) || f === `scripts/verify/checks/${c.group}.mjs` || own.has(f) || inFiles(c.files, f)) {
         why(c, f).all = true
         covered.add(f)
       }
     }
     for (const [key, entries] of Object.entries(c.parts ?? {})) {
       const reach = graph.closure(entries, (f) => LEAF.test(f))
-      for (const f of files) if (reach.has(f)) { why(c, f).parts.add(key); covered.add(f) }
+      for (const f of files) if (reach.has(f) || usesPkg(f, reach)) { why(c, f).parts.add(key); covered.add(f) }
     }
   }
   const loose = files.filter((f) => !covered.has(f) && !NOTHING.test(f))

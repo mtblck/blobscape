@@ -9,9 +9,12 @@ import { join, dirname, relative, resolve } from 'node:path'
 
 const SPEC = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+|new\s+URL\(\s*)['"](\.{1,2}\/[^'"]+)['"]/g
 const EXTS = ['', '.ts', '.tsx', '.js', '.mjs', '/index.ts', '/index.tsx']
+// packages a file imports by name ('three', '@sparkjsdev/spark', 'three/webgpu' as 'three')
+const BARE = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)['"]((?:@[^/'"]+\/)?[^./'"][^/'"]*)[^'"]*['"]/g
 
 export function makeGraph(root) {
   const deps = new Map()
+  const pkgs = new Map()
   const resolveSpec = (from, spec) => {
     const base = resolve(dirname(join(root, from)), spec.replace(/\?.*$/, ''))
     for (const e of EXTS) {
@@ -22,15 +25,17 @@ export function makeGraph(root) {
   }
   const depsOf = (file) => {
     if (!deps.has(file)) {
-      const out = []
+      const out = [], names = new Set()
       if (/\.(ts|tsx|js|mjs)$/.test(file) && existsSync(join(root, file))) {
         const text = readFileSync(join(root, file), 'utf8')
         for (const m of text.matchAll(SPEC)) {
           const r = resolveSpec(file, m[1])
           if (r) out.push(r)
         }
+        for (const m of text.matchAll(BARE)) if (!m[1].startsWith('node:')) names.add(m[1])
       }
       deps.set(file, out)
+      pkgs.set(file, names)
     }
     return deps.get(file)
   }
@@ -46,5 +51,11 @@ export function makeGraph(root) {
     }
     return seen
   }
-  return { closure, depsOf }
+  /** The packages any of `files` import by name. */
+  const packagesOf = (files) => {
+    const out = new Set()
+    for (const f of files) { depsOf(f); for (const n of pkgs.get(f) ?? []) out.add(n) }
+    return out
+  }
+  return { closure, depsOf, packagesOf }
 }
