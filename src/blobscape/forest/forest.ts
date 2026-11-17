@@ -55,6 +55,8 @@ export const ELF_BLOBS = 20000
 export const FOX_BLOBS = 9000
 /** The fox is the Creature page's, at this size. */
 export const FOX_SIZE = 0.55
+/** How often the walking fox's brush sways side to side, a second, and how far each way (radians at each of its two bones). */
+const TAIL_BEAT = 0.55, TAIL_SWAY = 0.26
 /** The elf's walk clip's cycle: its arms and body swing once a stride; the legs go where the footsteps say. */
 const STRIDE_SECONDS = 1.1
 const WAVE_SECONDS = 4
@@ -339,6 +341,10 @@ export class Forest {
     const rest = { rotation: sk.rotation.slice(), offset: sk.offset.slice() }
     if (this.foxWeight > 0.01) {
       trot(sk, (((this.foxStride / TAU) % 1) + 1) % 1 / 1.4)
+      // the brush keeps its own slow time: on the steps' beat, which is quick at this size, it wagged far too fast
+      const sway = this.time * TAU * TAIL_BEAT
+      sk.setRotation(sk.index('tail1'), mulQ(axisAngle([0, 1, 0], TAIL_SWAY * Math.sin(sway)), axisAngle([1, 0, 0], 0.15)))
+      sk.setRotation(sk.index('tail2'), axisAngle([0, 1, 0], TAIL_SWAY * 1.2 * Math.sin(sway - 0.8)))
       blendPose(sk, rest, this.foxWeight)
     }
     // smaller than the Creature page's fox, turned to its heading about the hips, which stand over (x, z)

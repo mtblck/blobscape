@@ -6,7 +6,7 @@ import { X, Y, Z, aim, conj, dir, env, set, turn } from '../posing.ts'
 import { buildSculpt, flatten, joinBuilt, membrane, sculptToCount, smooth, toCount, type SculptPart, type SculptSpec, type Sculpted } from '../sculpt.ts'
 import { box, cone, cut, displace, ellipsoid, type Shape } from '../voxel.ts'
 import { between, type SwingSpec } from '../swing.ts'
-import type { Capsule } from '../xpbd.ts'
+import { closestOnSegment, type Capsule } from '../xpbd.ts'
 import type { Species } from './species.ts'
 
 /**
@@ -73,6 +73,8 @@ const LEATHER: Vec3 = [0.36, 0.22, 0.12], DARK_LEATHER: Vec3 = [0.2, 0.13, 0.08]
 const IRIS: Vec3 = [0.16, 0.5, 0.62]
 const SHARE = { face: 0.2, hair: 0.05, strands: 0.17, mantle: 0.08 }
 const ROWS = [1.43, 1.24, 1.05, 0.83, 0.62]
+/** The quiver's middle line, from its foot to its mouth. The plait hangs beside it (`clearPlait`). */
+export const QUIVER: [Vec3, Vec3] = [[-0.1, 1.06, -0.235], [0.14, 1.5, -0.19]]
 
 /** The hair's cap: the face's cut drops whatever of the skull lies under it. */
 function cap(): Shape {
@@ -183,7 +185,7 @@ function bodySpec(c: Colors, s: number, bones: Bone[]): SculptSpec & { parts: Fu
     // a leaf brooch at the throat, and the cords that hold the cloak to it
     { shape: ellipsoid([0, 1.4, 0.1], [0.02, 0.026, fat(0.009)]), color: [0.3, 0.9, 0.5], bones: ['chest'], glow: true },
     // a quiver slung across the back, outside the cloak, with three arrows in it
-    { shape: cone([-0.1, 1.06, -0.235], [0.14, 1.5, -0.19], 0.045, 0.05), color: (p) => (Math.abs(p[1] - 1.12) < 0.014 || Math.abs(p[1] - 1.44) < 0.014 ? c.trim : LEATHER), bones: ['chest', 'spine'] },
+    { shape: cone(QUIVER[0], QUIVER[1], 0.045, 0.05), color: (p) => (Math.abs(p[1] - 1.12) < 0.014 || Math.abs(p[1] - 1.44) < 0.014 ? c.trim : LEATHER), bones: ['chest', 'spine'] },
     ...[[-0.02, 0], [0.012, 0.018], [0.0, -0.02]].flatMap(([dx, dz], k): FurryPart[] => {
       const a: Vec3 = [0.14 + dx, 1.5, -0.19 + dz], b: Vec3 = [0.19 + dx * 1.6, 1.6 + k * 0.012, -0.18 + dz * 1.6]
       return [
@@ -330,7 +332,63 @@ export function clearCloak(sk: Skeleton) {
     const has = HANGS + angle(`${s}Cape1`) + angle(`${s}Cape2`)
     if (want > has) turn(sk, `${s}Cape2`, X, want - has)
   })
+  clearPlait(sk)
+}
+
+/**
+ * The plait's two bones, for `clearPlait`: how far behind the bone's end the hair's middle lies, how thick the hair
+ * is there, and how far behind the cloak's line the bone's end stays. The upper end lies in the mantle's fur as it
+ * was cut; the tip lies on the cloak.
+ */
+const PLAIT = [['hair1', 0.01, 0.035, 0.008], ['hair2', 0.035, 0.025, 0.005]] as const
+/** The quiver's radius where the plait passes it, and a little room. */
+const QUIVER_ROOM = 0.052
+/** `x`, held under `limit`: eased over about `soft`, so what it holds comes to rest on the limit instead of hitting it. */
+const under = (x: number, limit: number, soft: number) => {
+  const u = (limit - x) / soft
+  return u > 30 ? x : limit - soft * Math.log1p(Math.exp(u))
+}
+
+/**
+ * Keeps the plait on the outside of the cloak and beside the quiver, whatever the head, the cloak and the plait's
+ * own swing are doing: each of its two bones is turned so its end lies behind the cloak's upper half and on the
+ * quiver's low side (the elf's right), never through either. Each limit is eased, so the plait comes to rest on the
+ * cloak or against the quiver instead of knocking on it. `clearCloak` ends with it, so everything that clears the
+ * cloak clears the plait. It reads the pose and leaves it updated.
+ */
+export function clearPlait(sk: Skeleton) {
   sk.update()
+  const chest = sk.index('chest')
+  const q = sk.quat.subarray(chest * 4, chest * 4 + 4), back = conj(q)
+  const origin = posedPoint(sk, chest, [0, 0, 0])
+  // in the chest's own frame, where the cloak's top and the quiver are as they were cut
+  const local = (w: ArrayLike<number>): Vec3 => rotate(back, [w[0] - origin[0], w[1] - origin[1], w[2] - origin[2]])
+  const head = (name: string): Vec3 => { const b = sk.index(name); return local([sk.posedHead[b * 3], sk.posedHead[b * 3 + 1], sk.posedHead[b * 3 + 2]]) }
+  // the cloak's upper half from the side: the line from each half's top to its fold, whichever is further back
+  const lines = SIDES.map(([s]) => [head(`${s}Cape1`), head(`${s}Cape2`)])
+  const cloak = (y: number) => Math.min(...lines.map(([a, b]) => {
+    const drop = a[1] - b[1]
+    return drop > 0.05 ? a[2] + (b[2] - a[2]) * Math.min(1, Math.max(-0.3, (a[1] - y) / drop)) : Math.min(a[2], b[2])
+  }))
+  for (const [name, lag, thick, gap] of PLAIT) {
+    const b = sk.index(name), from = head(name)
+    const end = name === 'hair1' ? head('hair2') : local(posedPoint(sk, b, sk.bones[b].tail!))
+    const z = under(end[2], cloak(end[1]) - gap, 0.006)
+    // beside the quiver: as far to its low side as the hair's middle needs, at this height and depth
+    const room = QUIVER_ROOM + thick
+    let limit = Infinity
+    for (let k = 0; k < 3; k++) {
+      const near = closestOnSegment(QUIVER[0], QUIVER[1], Math.min(end[0], limit), end[1], z - lag)
+      const off = (end[1] - near[1]) ** 2 + (z - lag - near[2]) ** 2
+      if (off >= room * room) break
+      limit = near[0] - Math.sqrt(room * room - off)
+    }
+    const x = limit < Infinity ? under(end[0], limit, 0.02) : end[0]
+    if (Math.abs(x - end[0]) + Math.abs(z - end[2]) > 1e-7) {
+      aim(sk, name, dir(rotate(q, [x - from[0], end[1] - from[1], z - from[2]])))
+      sk.update()
+    }
+  }
 }
 
 /** Standing: breathing, the weight shifting from foot to foot, a look round. Loops every four seconds. */

@@ -4,9 +4,10 @@ import { readRiggedGlb, recordClip, sampleClip, writeRiggedGlb } from './glb.ts'
 import { aim, dir, restDir, worldQuat } from './posing.ts'
 import { Skeleton, mulQ, posedPoint, rotate, skinBlob } from './rig.ts'
 import { FLAME, makeDragon } from './zoo/dragon.ts'
-import { ELF_BONES, clearCloak } from './zoo/elf.ts'
+import { ELF_BONES, QUIVER, clearCloak, clearPlait } from './zoo/elf.ts'
 import { ElfCloth } from './zoo/elfCloth.ts'
 import { ZOO } from './zoo/index.ts'
+import { closestOnSegment } from './xpbd.ts'
 import { gaitOf, layout, legRoom, makeMonster, monsterSpecies, planMonster } from './zoo/monster.ts'
 
 const near = (a: number, b: number, e = 1e-4) => Math.abs(a - b) < e
@@ -164,6 +165,51 @@ test("the elf's legs stay in front of the cloak through the whole walk, and a ha
   }
 })
 
+/**
+ * How far the plait keeps outside the cloak and clear of the quiver (under 0: through one of them). Down the plait's
+ * lower bone, the hair's middle lies a little behind the bone; it must be behind the cloak's face (its tip by its own
+ * thickness too) and its whole thickness clear of the quiver.
+ */
+const plaitRoom = (sk: Skeleton) => {
+  const chest = sk.index('chest'), hair = sk.index('hair2')
+  const backward = rotate(worldQuat(sk, chest), [0, 0, -1])
+  // the cloak's upper face: through both tops and the middle of the folds, its normal pointing back
+  const l = head(sk, 'lCape1'), r = head(sk, 'rCape1'), fl = head(sk, 'lCape2'), fr = head(sk, 'rCape2')
+  const across = sub(r, l), down = sub([0, 1, 2].map((i) => (fl[i] + fr[i]) / 2), [0, 1, 2].map((i) => (l[i] + r[i]) / 2))
+  let n = dir([across[1] * down[2] - across[2] * down[1], across[2] * down[0] - across[0] * down[2], across[0] * down[1] - across[1] * down[0]])
+  if (dot(n, backward) < 0) n = [-n[0], -n[1], -n[2]]
+  const a = posedPoint(sk, chest, QUIVER[0]), b = posedPoint(sk, chest, QUIVER[1])
+  const from = head(sk, 'hair2'), to = posedPoint(sk, hair, ELF_BONES[hair].tail!)
+  let least = Infinity
+  for (const u of [0, 0.5, 1]) {
+    const lag = 0.01 + 0.025 * u, thick = 0.035 - 0.01 * u
+    const p = [0, 1, 2].map((i) => from[i] * (1 - u) + to[i] * u + backward[i] * lag)
+    least = Math.min(least, dot(sub(p, l), n) - (u === 1 ? thick : 0))
+    const q = closestOnSegment(a, b, p[0], p[1], p[2])
+    least = Math.min(least, Math.hypot(...sub(p, q)) - 0.05 - thick)
+  }
+  return least
+}
+
+test("the elf's plait hangs outside the cloak and beside the quiver in every move, and a plait thrown forward is put back", () => {
+  const sk = new Skeleton(ELF_BONES)
+  for (const m of ZOO.find((s) => s.id === 'elf')!.moves) {
+    for (let k = 0; k < 44; k++) {
+      m.pose(sk, (k / 44) * m.seconds)
+      assert.ok(plaitRoom(sk) > 0, `the plait is through the cloak or quiver ${k / 44} of the way through ${m.name} (${plaitRoom(sk)})`)
+    }
+  }
+  // thrown forward into the back, and across behind the quiver
+  for (const to of [[0, -1, 0.3], [0.4, -1, 0], [0.15, -1, -0.15]] as const) {
+    aim(sk, 'hair1', dir([...to]))
+    aim(sk, 'hair2', dir([...to]))
+    sk.update()
+    assert.ok(plaitRoom(sk) < 0, `a plait thrown to ${to} goes through until it is cleared`)
+    clearPlait(sk)
+    assert.ok(plaitRoom(sk) > 0, `through the cloak or quiver when thrown to ${to} (${plaitRoom(sk)})`)
+  }
+})
+
 test("the elf's cloth swings behind as it walks and turns, stays its length, and still clears the legs", () => {
   const sk = new Skeleton(ELF_BONES)
   const walk = ZOO.find((s) => s.id === 'elf')!.moves.find((m) => m.name === 'walk')!
@@ -184,6 +230,7 @@ test("the elf's cloth swings behind as it walks and turns, stays its length, and
     sk.place.set([Math.sin(heading) * t, 0, Math.cos(heading) * t])
     cloth.update(sk, dt)
     assert.ok(clearance(sk) > 0, `through the cloak at frame ${f} (${clearance(sk)})`)
+    assert.ok(plaitRoom(sk) > 0, `the plait is through the cloak or quiver at frame ${f} (${plaitRoom(sk)})`)
     const hem = sk.index('lCape2')
     if (Math.abs(sk.rotation[hem * 4] - clip[hem * 4]) > 0.02) differs++
     for (const name of ['lCape2', 'rCape2', 'hair2']) {
