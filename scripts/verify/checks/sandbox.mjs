@@ -8,7 +8,7 @@ export default [
     entries: ['src/blobscape/Sandbox.tsx'],
     async run({ readFileSync, shots, join, fails, ok, open, axe, ballPly, tabClick }) {
       const B = '/'
-      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 900 }, acceptDownloads: true })
+      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 720 }, acceptDownloads: true })
       await page.waitForTimeout(1500)
       const count = async () => Number((await page.textContent('[data-testid=blob-count]')).replace(/\D/g, ''))
       const selected = async () => Number(((await page.textContent('[data-testid=selected-count]').catch(() => '0')) ?? '0').replace(/\D/g, ''))
@@ -126,7 +126,7 @@ export default [
     about: 'erase a hole, Fill grows it shut, Stamp copies one place to another, Undo',
     entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/patch.ts'],
     async run({ shots, join, fails, ok, open, ballPly, tabClick }) {
-      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 900 } })
+      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 720 } })
       await page.waitForTimeout(1500)
       const count = async () => Number((await page.textContent('[data-testid=blob-count]')).replace(/\D/g, ''))
       await page.getByRole('tab', { name: /Scene/ }).click()
@@ -176,7 +176,7 @@ export default [
     about: 'the five brushes each paint onto the scene, one Undo a stroke',
     entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/brushes.ts'],
     async run({ shots, join, fails, ok, open, axe, tabClick }) {
-      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 900 } })
+      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 720 } })
       await page.waitForTimeout(1500)
       const count = async () => Number((await page.textContent('[data-testid=blob-count]')).replace(/\D/g, ''))
       const box = await page.getByTestId('viewport').boundingBox()
@@ -216,7 +216,7 @@ export default [
     about: 'camera stops and playing the path (saving the MP4 only with VERIFY_MP4=1)',
     entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/cameraPath.ts', 'src/blobscape/diorama/video.ts'],
     async run({ readFileSync, shots, join, fails, ok, open, axe, tabClick }) {
-      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 900 }, acceptDownloads: true })
+      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 720 }, acceptDownloads: true })
       await page.waitForTimeout(1500)
       const shot = async () => (await page.getByTestId('viewport').screenshot()).toString('base64')
       // The view once it has stopped changing: software rendering sorts seconds behind a turn
@@ -293,7 +293,7 @@ export default [
     about: 'one photo to a shallow scene: the depth model runs in the page, the view opens as the photo and has depth',
     entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/photo.ts', 'src/blobscape/photo/scene.ts', 'src/blobscape/photo/depth.worker.ts'],
     async run({ readFileSync, root, shots, join, fails, ok, open, tabClick }) {
-      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 900 } })
+      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 720 } })
       // nothing but this site may be asked for anything
       const outside = []
       page.on('request', (r) => { if (!/^(http:\/\/localhost|data:|blob:)/.test(r.url())) outside.push(r.url()) })
@@ -393,7 +393,7 @@ export default [
     about: 'tap to select: with whole things on, a click on the toadstool selects it and not the scene, by a model run in the page',
     entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/tapSelect.ts', 'src/blobscape/select/thing.ts', 'src/blobscape/select/segment.worker.ts'],
     async run({ shots, join, fails, ok, open }) {
-      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 900 } })
+      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 720 } })
       const outside = []
       page.on('request', (r) => { if (!/^(http:\/\/localhost|data:|blob:)/.test(r.url())) outside.push(r.url()) })
       await page.waitForTimeout(2500)
@@ -438,7 +438,7 @@ export default [
     about: 'a slime that bursts and the watch, added from other experiments',
     entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/props.ts'],
     async run({ shots, join, fails, ok, open, axe, tabClick }) {
-      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 900 } })
+      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 720 } })
       await page.waitForTimeout(1500)
       // no count on the page is no creatures; where there is one, a busy page is given time to answer (a second was not enough in software, and read as 0)
       const inCreatures = async () => ((await page.locator('[data-testid=creature-blob-count]').count()) ? Number(((await page.textContent('[data-testid=creature-blob-count]', { timeout: 30000 }).catch(() => '0')) ?? '0').replace(/\D/g, '')) : 0)
@@ -471,7 +471,7 @@ export default [
     about: 'add, play, drag with Move, bones, freeze, undo, walk about, look at, effects, save .ply and rigged .glb, open a rigged model; phone',
     entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/actors.ts', 'src/blobscape/wander.ts', 'src/splat-core/view.ts', 'src/blobscape/sceneFile.ts', 'src/blobscape/modelRig.ts', 'src/splat-engine/skinnedModel.ts'],
     async run({ readFileSync, shots, join, fails, ok, open, axe, tabClick }) {
-      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 900 }, acceptDownloads: true })
+      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 720 }, acceptDownloads: true })
       await page.waitForTimeout(1500)
       const count = async () => Number((await page.textContent('[data-testid=blob-count]')).replace(/\D/g, ''))
       // no count on the page is no creatures; where there is one, a busy page is given time to answer (a second was not enough in software, and read as 0)
@@ -565,9 +565,10 @@ export default [
       else ok(`blobscape sandbox creatures: Looks at You turns the fox's head to the camera (${turned} px changed)`)
       await tabClick(page.getByRole('group', { name: 'Looks at' }).getByRole('button', { name: 'Ahead' }))
       // Effects (issue #134): on the whole scene they move the creatures too; on a selection, not
+      // open Effects first: the view's Look around button leaves with the mode, and would count as a change
+      await page.getByRole('tab', { name: /Effects/ }).click()
       await page.waitForTimeout(800)
       const whole = await shot()
-      await page.getByRole('tab', { name: /Effects/ }).click()
       await tabClick(page.getByRole('button', { name: 'Explode', exact: true }))
       await page.getByRole('slider', { name: 'Amount' }).focus()
       await page.keyboard.press('End')
@@ -626,7 +627,7 @@ export default [
       else ok(`blobscape sandbox creatures: a rigged model opens on Splat Creatures as blobs on its own bones (${meshNote})`)
       await cp.page.screenshot({ path: join(shots, 'blobscape-creature-from-model.png') })
       await cp.ctx.close()
-      const sb = await open('/sandbox/', { viewport: { width: 1280, height: 900 } })
+      const sb = await open('/sandbox/', { viewport: { width: 1280, height: 720 } })
       await sb.page.waitForTimeout(1500)
       await sb.page.setInputFiles('input[type=file]', { name: 'frog-mesh.glb', mimeType: 'model/gltf-binary', buffer: meshBytes })
       // the note is read in the same look that finds it: it is gone a few seconds later, and a second look at a busy page can come after that
