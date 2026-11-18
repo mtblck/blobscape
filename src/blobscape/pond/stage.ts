@@ -48,8 +48,18 @@ const MIRROR_PLANE = levelPlane(WATER_LEVEL)
 export const FILM = 0.024 * 20
 /** The opening the view starts at. */
 export const START_F = 5.6
-/** How strongly bright light glows to start with: the picture stops at white, so a flame's light is spread several times over. */
-export const START_GLOW = 4
+/** How strongly light over the knee glows to start with. */
+export const START_GLOW = 0.5
+/**
+ * How many times white a flame is while the lens glows (`SplatWorld.glowGain`), and how bright a pixel must be to
+ * glow. With flames no brighter than white the glow could not tell them from the elf's fair hair by candlelight,
+ * and her whole head glowed (Matt saw it). The candles' light can bring a pale thing beside them to two or three
+ * times white; the flames are well over that and the knee lies between, so only flames and fireflies glow.
+ */
+export const FLAME_GAIN = 8
+const KNEE = 4
+/** Where strong light starts to roll off toward white, so a fair head by the candles keeps its color and shape. */
+const SHOULDER = 0.65
 /** How fast the focus follows the elf, a second: a lens pulled by hand, not snapped. */
 const FOCUS_PULL = 4
 
@@ -180,6 +190,8 @@ export class PondStage {
     this.reflect(p)
     this.shade(p, world)
     const lens = this.lens(p)
+    // flames are brighter than white only while a lens is there to spread that light; straight to the screen it would just clip
+    world.glowGain = lens && lens.glow > 0 ? FLAME_GAIN : 1
     if (lens) {
       const size = this.target ? this.buffer.set(this.target.width, this.target.height) : this.renderer.getDrawingBufferSize(this.buffer)
       this.optics.setSize(size.x, size.y)
@@ -199,7 +211,7 @@ export class PondStage {
     const now = performance.now(), dt = this.focused ? Math.min(0.1, (now - this.focused) / 1000) : 1
     this.focused = now
     this.focus = this.focus > 0 && !this.opts.offscreen ? this.focus + (far - this.focus) * Math.min(1, dt * FOCUS_PULL) : far
-    return { focus: this.focus, fNumber: this.focusBlur ? this.fNumber : 0, film: FILM, glow: Math.max(0, this.glow) }
+    return { focus: this.focus, fNumber: this.focusBlur ? this.fNumber : 0, film: FILM, glow: Math.max(0, this.glow), knee: KNEE, shoulder: SHOULDER }
   }
   private readonly looking = new THREE.Vector3()
   private readonly buffer = new THREE.Vector2()

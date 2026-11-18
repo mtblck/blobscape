@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { blurRadius, blurScale, focalLength, glowShare, sharpRange, type OpticsLook } from './optics.ts'
+import { blurRadius, blurScale, focalLength, glowShare, rolledOff, sharpRange, type OpticsLook } from './optics.ts'
 
 const look: OpticsLook = { focus: 6, fNumber: 2, glow: 0.5 }
 
@@ -38,4 +38,15 @@ test('only bright things glow', () => {
   assert.equal(glowShare(0.5), 0)
   assert.equal(glowShare(1.2), 1)
   assert.ok(glowShare(0.8) > 0 && glowShare(0.8) < 1)
+})
+
+test('the shoulder leaves ordinary light alone and brings strong light to white without passing it', () => {
+  assert.equal(rolledOff(0.3, 0.65), 0.3)
+  assert.equal(rolledOff(0.65, 0.65), 0.65)
+  let last = 0.65
+  for (let x = 0.7; x < 12; x += 0.1) { const y = rolledOff(x, 0.65); assert.ok(y > last && y < 1, `${x} gives ${y}`); last = y }
+  assert.ok(rolledOff(3, 0.65) > 0.99)
+  // no shoulder: light clips at white
+  assert.equal(rolledOff(3, 1), 1)
+  assert.equal(rolledOff(0.9, 1), 0.9)
 })

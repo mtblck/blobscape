@@ -17,7 +17,7 @@ const DETAIL = [{ id: 'light', label: 'Light', spacing: 0.034, elf: 12000 }, { i
 /** The lens openings on offer, as f-numbers: each lets in half the light of the one before. */
 const STOPS = [1.4, 2, 2.8, 4, 5.6, 8, 11, 16]
 /** How strongly bright light glows when the switch is on (the stage's own start). */
-const GLOW = 4
+const GLOW = 0.5
 const RAIN = [{ id: 0, label: 'None' }, { id: 12, label: 'A few drops' }, { id: 110, label: 'A shower' }]
 
 const at = (azimuth: number, elevation: number, distance = POND_SCENE.camera.distance): Orbit => ({ target: POND_SCENE.camera.target.map((v) => v * SCALE) as [number, number, number], distance: distance * SCALE, azimuth, elevation })

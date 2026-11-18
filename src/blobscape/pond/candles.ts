@@ -17,7 +17,7 @@ export const CANDLE_LIGHTS = 2
 const FLAME_H = 0.15, FLAME_R = 0.034
 
 /** The flames for wicks at `wicks` (world, the top of each candle), one bone each after the root. */
-export function makeFlames(wicks: Vec3[], blobs = 1400): Creature {
+export function makeFlames(wicks: Vec3[], blobs = 1400): Creature & { glow: Uint8Array } {
   const bones = [{ name: 'root', parent: -1, head: [0, 0, 0] as Vec3 }]
   const parts: Part[] = []
   wicks.forEach((w, i) => {
@@ -33,7 +33,10 @@ export function makeFlames(wicks: Vec3[], blobs = 1400): Creature {
     )
   })
   const b = buildBody({ bones, parts, blend: 0.02 }, blobs, 31)
-  return { blobs: b.blobs, skin: b.skin, skeleton: b.skeleton }
+  // the flames give their own light (the wicks don't): under a world's `glowGain` they are brighter than anything they light
+  const glow = new Uint8Array(b.blobs.count)
+  for (let k = 0; k < glow.length; k++) glow[k] = b.blobs.color[k * 3] > 0.5 ? 255 : 0
+  return { blobs: b.blobs, skin: b.skin, skeleton: b.skeleton, glow }
 }
 
 /**
@@ -75,7 +78,7 @@ export function candleLights(wicks: Vec3[], t: number, calm = false): PointLight
   const each: Want[] = wicks.map((w, i) => {
     const k = flameAt(t, i, calm).bright
     // a little over the flames and out toward the niche's mouth, so the light stands in open air
-    return { kind: 'candle', position: [w[0], w[1] + 0.3, w[2] + 0.3], color: [1.3 * k, 0.62 * k, 0.2 * k], range: 2.4 }
+    return { kind: 'candle', position: [w[0], w[1] + 0.3, w[2] + 0.3], color: [0.9 * k, 0.43 * k, 0.14 * k], range: 2.4 }
   })
   const span = Math.max(...wicks.map((w) => w[0])) - Math.min(...wicks.map((w) => w[0]))
   return gather(each, CANDLE_LIGHTS, Math.max(0.2, span * 0.3)).map((l) => ({ position: l.position, color: l.color, range: l.range, shadow: true }))

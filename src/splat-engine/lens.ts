@@ -6,7 +6,7 @@ import { blurScale, type OpticsLook } from '../splat-core/optics.ts'
 // As in engine.ts: the shader builders use TSL untyped.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const TSL = TSLTyped as unknown as Record<string, any>
-const { Fn, abs, clamp, cos, dot, float, fract, max, min, select, sin, smoothstep, texture, uniform, uv, vec2, vec4 } = TSL
+const { Fn, abs, clamp, cos, dot, exp, float, fract, max, min, select, sin, smoothstep, texture, uniform, uv, vec2, vec4 } = TSL
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type N = any
 
@@ -48,6 +48,8 @@ export class SplatLens {
   private readonly res = uniform(new Vector2(1, 1))
   private readonly knee = uniform(0.7)
   private readonly glow = uniform(0)
+  /** Where light starts to roll off toward white; 1 or more for none. */
+  private readonly shoulder = uniform(1)
   /** Pixels of blur radius per |d − s| / d. */
   private readonly scale = uniform(0)
   private readonly focus = uniform(1)
@@ -90,6 +92,7 @@ export class SplatLens {
     this.fov = fov
     this.glow.value = Math.max(0, look.glow)
     this.knee.value = look.knee ?? 0.7
+    this.shoulder.value = look.shoulder !== undefined && look.shoulder < 1 ? Math.max(0, look.shoulder) : 1
     this.focus.value = Math.max(1e-4, look.focus)
     this.fit()
   }
@@ -141,7 +144,7 @@ export class SplatLens {
       const top = max(c.r, max(c.g, c.b))
       const share = smoothstep(this.knee, this.knee.mul(4 / 3), top)
       // one very bright pixel would otherwise twinkle as it moves across the half-size grid
-      return vec4(min(c.rgb, 4).mul(share), 1)
+      return vec4(min(c.rgb, 16).mul(share), 1)
     })()
   }
 
@@ -200,8 +203,14 @@ export class SplatLens {
       }
       const [h0] = this.half, [, q1] = this.quarter
       const halo = texture(h0.texture, st).rgb.mul(0.6).add(texture(q1.texture, st).rgb.mul(0.6))
+      const rgb = out.rgb.add(halo.mul(this.glow)).toVar()
+      // the film's shoulder: strong light closes on white without running into it, the whole color together so its hue holds. CPU twin: `rolledOff`
+      const top = max(rgb.r, max(rgb.g, rgb.b)).toVar()
+      const room = max(float(1).sub(this.shoulder), 1e-4)
+      const rolled = this.shoulder.add(room.mul(float(1).sub(exp(top.sub(this.shoulder).div(room).negate()))))
+      rgb.mulAssign(select(this.shoulder.lessThan(1).and(top.greaterThan(this.shoulder)), rolled.div(top), float(1)))
       // linear color out, as the blobs' own draw gives
-      return vec4(out.rgb.add(halo.mul(this.glow)), out.a)
+      return vec4(rgb, out.a)
     })()
   }
 
