@@ -34,6 +34,12 @@ export interface SculptPart {
   noShadow?: boolean
   /** How far its weights spread from each bone, if not the creature's `blend`. */
   blend?: number
+  /**
+   * Skin stretched between its bones (a wing's membrane, a web): each cell is shared out by one over its distance
+   * to each bone, squared, in place of `blend`. So it is held fast where it meets a bone, and no gap opens there
+   * beside the part that bone carries, while the skin in between is shared smoothly however far apart the bones are.
+   */
+  span?: boolean
 }
 
 /** A creature to sculpt: its bones, its parts and how far a cell's weight spreads between bones. */
@@ -89,7 +95,7 @@ export function buildSculpt(spec: SculptSpec, spacing: number): Sculpted {
     const p = built.blobs.center.subarray(i * 3, i * 3 + 3)
     const pairs = lists[built.partOf[i]].map((b): [number, number] => {
       const d = segDist(p, spec.bones[b].head, tails[b])
-      return [b, Math.exp(-(d * d) / sig2)]
+      return [b, part.span ? 1 / (d * d + spacing * spacing * 0.01) : Math.exp(-(d * d) / sig2)]
     })
     // the closest bone always gets a share, so no cell is left behind
     const best = pairs.reduce((m, q) => (q[1] > m[1] ? q : m))

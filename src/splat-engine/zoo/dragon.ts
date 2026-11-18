@@ -217,7 +217,7 @@ function spec(c: Palette, s: number): SculptSpec {
           const sc = scales(p, 0.21)
           return sc.id > 0.8 ? mix(base, c.frost, 0.3) : sc.id < 0.18 ? mix(base, c.dark, 0.2) : base
         },
-        bones: wingBones, opacity: 0.93, blend: 0.55, group: wing, noShadow: true,
+        bones: wingBones, opacity: 0.93, span: true, group: wing, noShadow: true,
       },
     )
   }

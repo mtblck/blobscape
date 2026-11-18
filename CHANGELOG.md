@@ -6,6 +6,7 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 
 ## [Unreleased]
 
+- Skin no longer tears. The dragon's wings opened black seams and rows of holes as they beat, and the backs of the frog's legs came apart as it jumped. Blobs now stretch with the skin they are part of: where two bones pull skin out between them, each blob is pulled out by the same amount, on every creature, in files and in models opened from outside. Skin shared between more than four bones no longer splits along the lines where a bone was dropped, and thin sheets such as wing skin are cut without the rows of holes they had even at rest. In the engine: `weightGradients`, and `span` on a sculpted part for skin stretched between its bones.
 - A link to Blobscape now shows a picture of what it leads to. Each experiment's page shares its own cover, and the front page shares the logo beside four experiments, in place of one plain logo card for every page.
 - Pixel Diorama's gallery loops are recorded again, so they show each scene as it is now: the koi pond's cherry tree, and every scene at 50% dither.
 - Pixel Diorama has a new scene, Fox and wisp: a furred fox trotting through tall grass round a standing stone at night while a wisp of light circles it and throws moving shadows. It is the fox scene from One Scene, Four Ways.

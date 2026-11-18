@@ -19,6 +19,7 @@ export { Blobs, type Vec3 } from '../splat-core/blobs.ts'
 
 // bones and moves
 export * from './rig.ts'
+export * from './stretch.ts'
 export * from './posing.ts'
 export * from './mix.ts'
 export * from './ik.ts'
