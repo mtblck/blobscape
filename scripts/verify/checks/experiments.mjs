@@ -579,7 +579,7 @@ export default [
         if (!up) { fails.push(`brush and ink on ${backend}: the fox never came up`); await k.ctx.close(); continue }
         await k.page.evaluate(() => { window.__brush.stage.playing = false })
         const got = await k.page.evaluate(() => window.__brush.stage.backend)
-        const gouache = await read(k.page), again = await read(k.page)
+        const gouache = await read(k.page), again = await read(k.page), third = await read(k.page)
         await pick(k.page, 'Oil', 'oil')
         const oil = await read(k.page)
         await pick(k.page, 'Ink and wash', 'ink')
@@ -602,7 +602,7 @@ export default [
         await pick(k.page, 'Blobs', 'blobs')
         const blobs = await read(k.page)
         pictures[backend] = { gouache, hatch, ink }
-        const m = { backend: got, same: differ(gouache, again, 0), cover: solid(gouache), blobs: solid(blobs), paint: differ(gouache, blobs), oil: differ(oil, gouache), ink: differ(ink, gouache), hatch: differ(hatch, ink), paper }
+        const m = { backend: got, same: differ(gouache, again, 0), sameLater: differ(again, third, 0), sameLoose: differ(gouache, again, 12), cover: solid(gouache), blobs: solid(blobs), paint: differ(gouache, blobs), oil: differ(oil, gouache), ink: differ(ink, gouache), hatch: differ(hatch, ink), paper }
         // marks are opaque where soft dots fade, so the painted fox is at least as solid; each look is a different picture; a frame drawn twice is the same frame
         if (m.backend !== backend || m.same !== 0 || !(m.cover > 0.03 && m.cover >= m.blobs * 0.9) || !(m.paint > 0.01 && m.oil > 0.003 && m.ink > 0.01 && m.hatch > 0.005) || !/rgb\(2[0-9]{2}, 2[0-9]{2}, 2[0-9]{2}\)/.test(m.paper)) fails.push(`brush and ink on ${backend}: ${JSON.stringify(m)}`)
         else ok(`brush and ink on ${backend}: the fox in gouache covers ${(m.cover * 100).toFixed(0)}% of the view (${(m.blobs * 100).toFixed(0)}% as blobs), every look is its own picture, and a frame drawn twice is the same`)
@@ -698,7 +698,7 @@ export default [
         const up = await k.page.waitForFunction(() => window.__daynight?.blobs() > 0, null, { timeout: 120000 }).then(() => true, () => false)
         if (!up) { fails.push(`day and night on ${backend}: the scene never came up`); await k.ctx.close(); continue }
         const got = await k.page.evaluate(() => window.__daynight.stage.backend)
-        const noon = await read(k.page, 12), again = await read(k.page, 12)
+        const noon = await read(k.page, 12), again = await read(k.page, 12), third = await read(k.page, 12)
         const morning = await read(k.page, 8), evening = await read(k.page, 16), night = await read(k.page, 22.5)
         // the same hours with the shadows off: what the shadows took away
         const box = k.page.getByRole('checkbox', { name: /^Shadows/ })
@@ -709,7 +709,7 @@ export default [
         const am = shade(morningBare, morning), pm = shade(eveningBare, evening)
         const n = stats(noon), d = stats(night)
         pictures[backend] = { noon, night, morning }
-        const m = { backend: got, same: differ(noon, again), solid: n.solid, noonMean: n.mean, nightMean: d.mean, noonWarm: n.warm, nightWarm: d.warm, am, pm, noonLights: noon.lights, nightLights: night.lights, noonSky: noon.sky, nightSky: night.sky }
+        const m = { backend: got, same: differ(noon, again), sameLater: differ(again, third), sameLoose: differ(noon, again, 12), solid: n.solid, noonMean: n.mean, nightMean: d.mean, noonWarm: n.warm, nightWarm: d.warm, am, pm, noonLights: noon.lights, nightLights: night.lights, noonSky: noon.sky, nightSky: night.sky }
         const lightsRight = noon.lights.sun && !noon.lights.moon && noon.lights.lamps === 0 && noon.lights.count === 1 && night.lights.moon && !night.lights.sun && night.lights.lamps === 4
         // by day the sky is blue and bright, at night dark; the scene is clearly darker at night (dim, not black, under a full moon and its lamps) and its windows are lit;
         // shadows fall west (left, seen from the south) in the morning and east in the evening

@@ -14,6 +14,11 @@ name: Check
 on:
   pull_request:
   workflow_dispatch:
+    inputs:
+      checks:
+        description: Browser checks to run, by name or group (empty for every one)
+        type: string
+        default: ''
 
 concurrency:
   group: check-${{ github.ref }}
@@ -47,7 +52,10 @@ jobs:
           echo "CHROME_PATH=$(find "$HOME/.cache/ms-playwright" -path '*/chromium-*' -name chrome -type f | head -1)" >> "$GITHUB_ENV"
       - name: Every browser check
         if: github.event_name == 'workflow_dispatch'
-        run: npm run verify
+        env:
+          CHECKS: ${{ inputs.checks }}
+        # Word splitting is wanted: several names, or none.
+        run: npm run verify -- $CHECKS
       - uses: actions/upload-artifact@v4
         if: always()
         with:
