@@ -18,6 +18,8 @@ const DETAIL = [{ id: 'light', label: 'Light', spacing: 0.034, elf: 12000 }, { i
 const STOPS = [1.4, 2, 2.8, 4, 5.6, 8, 11, 16]
 /** How strongly bright light glows when the switch is on (the stage's own start). */
 const GLOW = 0.5
+/** How many times steeper than it is the water is drawn to start with: the pond's own `RIPPLE`, which this page can't import without loading the stage early. */
+const RIPPLE = 2.5
 const RAIN = [{ id: 0, label: 'None' }, { id: 30, label: 'A few drops' }, { id: 300, label: 'A shower' }]
 
 const at = (azimuth: number, elevation: number, distance = POND_SCENE.camera.distance): Orbit => ({ target: POND_SCENE.camera.target.map((v) => v * SCALE) as [number, number, number], distance: distance * SCALE, azimuth, elevation })
@@ -62,6 +64,7 @@ export function WadingPond() {
   const [blur, setBlur] = useState<boolean>()
   const [stop, setStop] = useState(STOPS.indexOf(5.6))
   const [rain, setRain] = useState(0)
+  const [ripple, setRipple] = useState(RIPPLE)
   const [stats, setStats] = useState<Stats>({ blobs: 0, waded: 0, still: true, fps: 0 })
   const coarse = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
 
@@ -94,6 +97,7 @@ export function WadingPond() {
         stage.setPond({ spacing: d.spacing, look, elfBlobs: d.elf })
         stage.pond!.calm = !flicker
         stage.pond!.rain = rain
+        stage.pond!.ripple = ripple
         setStats((s) => ({ ...s, blobs: stage.blobCount }))
       } catch (e) {
         console.warn(e)
@@ -105,6 +109,7 @@ export function WadingPond() {
   }, [stage, detail, look]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (stage?.pond) stage.pond.calm = !flicker }, [stage, flicker])
   useEffect(() => { if (stage?.pond) stage.pond.rain = rain }, [stage, rain])
+  useEffect(() => { if (stage?.pond) stage.pond.ripple = ripple }, [stage, ripple])
   useEffect(() => { if (stage) stage.shadows = shadows }, [stage, shadows])
   useEffect(() => { if (stage && mirror !== undefined) stage.reflections = mirror }, [stage, mirror])
   useEffect(() => { if (stage && glow !== undefined) stage.glow = glow ? GLOW : 0 }, [stage, glow])
@@ -247,6 +252,7 @@ export function WadingPond() {
                     {RAIN.map((r) => <Chip key={r.id} active={rain === r.id} onClick={() => setRain(r.id)}>{r.label}</Chip>)}
                   </div>
                 </Field>
+                <Slider label="Ripple strength" value={ripple} min={1} max={5} step={0.5} onChange={setRipple} format={(v) => `${v}×`} />
                 <div className="grid gap-2">
                   <Toggle label="The water mirrors the scene" checked={mirror ?? false} onChange={setMirror} />
                   <Toggle label="Candles flicker" checked={flicker} onChange={setFlicker} />
