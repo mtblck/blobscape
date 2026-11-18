@@ -223,7 +223,7 @@ export default [
       const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 720 }, acceptDownloads: true })
       await page.waitForTimeout(1500)
       // a picture of the view waits on Spark's frames, which software rendering can take most of a minute over on a busy machine
-      const shot = async () => (await page.getByTestId('viewport').screenshot({ timeout: 120000 })).toString('base64')
+      const shot = async () => (await page.getByTestId('viewport').screenshot({ timeout: 120000 * (Number(process.env.VERIFY_SLOW) || 1) })).toString('base64')
       // The view once it has stopped changing: software rendering sorts seconds behind a turn
       const settled = async () => {
         let was = await shot()
@@ -557,8 +557,9 @@ export default [
       else ok('blobscape sandbox creatures: Undo brings the live fox back')
       // Walk about (issue #132): even set to Still, it trots off round its spot, and stands again when switched off
       await tabClick(page.getByRole('button', { name: 'Still', exact: true }))
-      await page.waitForTimeout(800)
-      const standing = await shot()
+      // the fox standing still, once the view has stopped changing: on a slow machine the last move is still being drawn after most of a second
+      let standing = await shot()
+      for (let k = 0; k < 20; k++) { await page.waitForTimeout(800); const now = await shot(); const moved = await differs(standing, now); standing = now; if (moved < 50) break }
       await page.getByLabel('Walk about').check()
       await page.waitForTimeout(2500)
       const roamed = await differs(standing, await shot())
