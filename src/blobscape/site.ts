@@ -35,7 +35,7 @@ export const EXPERIMENTS = [
     needs: 'WebGPU or WebGL 2',
     published: '2026-11-18',
     updated: '2026-11-18',
-    body: 'One pixel-art campfire drawn at the same moment by a plain shader, three.js meshes, Spark splats and Blobscape. Turn it, dim the fire, and see what each one is made of and what it can do.',
+    body: 'A fox in tall grass under a circling light, or a campfire, drawn at the same moment by a plain shader, three.js meshes, Spark splats and Blobscape. Turn it, dim the light, and see what each one is made of and what it can do.',
   },
   {
     id: 'daynight',

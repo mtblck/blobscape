@@ -1,30 +1,42 @@
 import * as THREE from 'three'
 import { ExtSplats, SparkRenderer, SplatMesh, SplatSkinning, SplatSkinningMode } from '@sparkjsdev/spark'
-import { covariance } from '../../splat-core/blobs.ts'
 import { linearToSrgb, srgbToLinear } from '../../splat-core/color.ts'
 import { placeCamera, type Orbit } from '../../splat-core/orbit.ts'
 import type { Built } from '../../splat-engine/body.ts'
 import { blobNormal, lightAt, ownLight } from '../../splat-engine/light.ts'
 import { poseSpark, restAtOrigin, setSplatBones } from '../../splat-engine/three/spark.ts'
-import { SCENE, lightsAt } from './scene.ts'
+import { skinBlob } from '../../splat-engine/rig.ts'
+import type { FourScene } from './scenes.ts'
 
 /**
- * The campfire in Spark. Spark draws splats and does not make them, so these are the blobs Blobscape cut for its own
+ * A scene in Spark. Spark draws splats and does not make them, so these are the blobs Blobscape made for its own
  * panel, handed over as a rigged file would be: Spark's own skinning moves them by the same bones, its worker sorts
- * them, and its shader draws them. What it has no place for is light: a splat is a color, so the fire's light is
- * worked out once, as the scene stood at the start, and painted into the colors. The flames move; their light does not.
+ * them, and its shader draws them. What it has no place for is light: a splat is a color, so the scene's live light is
+ * worked out once and painted into the colors. Things move; their light does not.
  *
  * It gives the scene drawn small with clear pixels where there is nothing; the page finishes it as pixel art.
  */
 
-/** The blobs' colors with the scene's lights painted in, as they are at the start of the loop. */
-function litColors(b: Built): Float32Array {
-  const { blobs, seen, glow } = b
-  const lights = lightsAt(0, 1), out = new Float32Array(blobs.count * 3)
-  for (let i = 0; i < blobs.count; i++) {
-    const light = ownLight(lightAt(blobs.center.subarray(i * 3, i * 3 + 3), blobNormal(covariance(blobs, i)), lights, 1, seen?.subarray(i * 4, i * 4 + 4)), glow ? glow[i] / 255 : 0)
-    for (let k = 0; k < 3; k++) out[i * 3 + k] = linearToSrgb(Math.min(1, srgbToLinear(blobs.color[i * 3 + k]) * light[k]))
+/**
+ * The blobs' colors with the scene's lights painted in: each blob as it stands and faces at each of the scene's
+ * `paintedAt` moments, lit by the lights of that moment, averaged. One moment paints a light that stays put; many
+ * spread a light that travels over everything it passes, and keep what travels with it (the fox behind its wisp) lit.
+ */
+function litColors(b: Built, scene: FourScene): Float32Array {
+  const { blobs, seen, glow, skin, skeleton } = b
+  const sum = new Float32Array(blobs.count * 3), out = new Float32Array(blobs.count * 3)
+  const center = new Float32Array(3), cov = new Float32Array(6)
+  for (const t of scene.paintedAt) {
+    scene.pose(b, skeleton, t)
+    const lights = scene.lights(t, 1, false)
+    for (let i = 0; i < blobs.count; i++) {
+      skinBlob(blobs.center.subarray(i * 3, i * 3 + 3), blobs.scale.subarray(i * 3, i * 3 + 3), blobs.quat.subarray(i * 4, i * 4 + 4), skin.joints.subarray(i * 4, i * 4 + 4), skin.weights.subarray(i * 4, i * 4 + 4), skeleton, 'linear', center, 0, cov, 0)
+      const light = ownLight(lightAt(center, blobNormal(cov), lights, scene.ambient, seen?.subarray(i * 4, i * 4 + 4)), glow ? glow[i] / 255 : 0)
+      for (let k = 0; k < 3; k++) sum[i * 3 + k] += light[k]
+    }
   }
+  const n = scene.paintedAt.length
+  for (let i = 0; i < blobs.count * 3; i++) out[i] = linearToSrgb(Math.min(1, srgbToLinear(blobs.color[i]) * (sum[i] / n)))
   return out
 }
 
@@ -40,7 +52,7 @@ export class SplatPanel {
   private skinning?: SplatSkinning
   private posed = NaN
 
-  private constructor(private built: Built) {
+  private constructor(private built: Built, private scene4: FourScene) {
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, alpha: true, premultipliedAlpha: true, antialias: false, preserveDrawingBuffer: true })
     this.renderer.setPixelRatio(1)
     this.renderer.setClearColor(0x000000, 0)
@@ -49,9 +61,9 @@ export class SplatPanel {
     this.scene.add(this.spark)
   }
 
-  static async start(built: Built) {
-    const p = new SplatPanel(built)
-    const b = built.blobs, colors = litColors(built)
+  static async start(built: Built, scene: FourScene) {
+    const p = new SplatPanel(built, scene)
+    const b = built.blobs, colors = litColors(built, scene)
     const store = new ExtSplats({ maxSplats: b.count })
     const c = new THREE.Vector3(), s = new THREE.Vector3(), q = new THREE.Quaternion(), col = new THREE.Color()
     for (let i = 0; i < b.count; i++) {
@@ -80,7 +92,7 @@ export class SplatPanel {
   get sorting() { return this.spark.sorting || this.spark.sortDirty || this.spark.dirty }
 
   /** Draws the scene `t` seconds in, `width` by `height`, and gives its pixels: RGBA, bottom row first, color times cover. */
-  draw(t: number, orbit: Orbit, width: number, height: number, _fire: number, fov: number): Uint8Array {
+  draw(t: number, orbit: Orbit, width: number, height: number, _gain: number, fov: number): Uint8Array {
     const { renderer, canvas } = this
     if (canvas.width !== width || canvas.height !== height) { renderer.setSize(width, height, false); this.pixels = new Uint8Array(width * height * 4) }
     this.camera.fov = fov
@@ -88,7 +100,7 @@ export class SplatPanel {
     // the same moment asked for again is only waiting on the sort: posing it again would start the sort over
     if (t !== this.posed) {
       this.posed = t
-      SCENE.pose(this.built.skeleton, t)
+      this.scene4.pose(this.built, this.built.skeleton, t)
       if (this.skinning) poseSpark(this.skinning, this.built.skeleton)
     }
     renderer.render(this.scene, this.camera)

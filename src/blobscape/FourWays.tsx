@@ -3,29 +3,19 @@ import { STAGE_FOV, type Orbit } from '../splat-core/orbit.ts'
 import { STEADY, countColors, darkest, type PixelLook } from '../splat-core/pixel.ts'
 import type { Built } from '../splat-engine/body.ts'
 import type { Skeleton } from '../splat-engine/rig.ts'
-import { buildVoxels } from '../splat-engine/voxel.ts'
 import { LoadingMark } from '../shared/BlobLoader.tsx'
 import { Button, Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
 import { TAB_SECTIONS, Workbench } from '../shared/Workbench.tsx'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
 import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitDrag } from './Viewport.tsx'
 import type { CreatureStage } from './creature/stage.ts'
-import { DETAIL } from './diorama/scene.ts'
 import { Finisher } from './fourways/finish.ts'
-import { PANELS, type PanelId } from './fourways/panels.ts'
-import { DOC_BYTES, SCENE, lightsAt } from './fourways/scene.ts'
-import type { MeshPanel } from './fourways/meshes.ts'
-import type { ShaderPanel } from './fourways/shader.ts'
+import { PANELS, WORDS, type PanelId } from './fourways/panels.ts'
+import { SCENES, sceneOf, type Drawn } from './fourways/scenes.ts'
+import { written } from './fourways/sources.ts'
 import type { SplatPanel } from './fourways/splats.ts'
 import { href } from './routes.ts'
-import campfireSource from './diorama/scenes/campfire.ts?raw'
-import layoutSource from './fourways/layout.ts?raw'
-import meshSource from './fourways/meshes.ts?raw'
-import shaderSource from './fourways/shader.ts?raw'
-import splatSource from './fourways/splats.ts?raw'
 
-/** One of the three panels this page draws and finishes itself (Blobscape draws and finishes its own). */
-type Drawn = ShaderPanel | MeshPanel | SplatPanel
 type Others = Exclude<PanelId, 'blobscape'>
 
 declare global {
@@ -45,10 +35,10 @@ declare global {
 
 const params = () => new URLSearchParams(typeof location === 'undefined' ? '' : location.search)
 const media = (q: string) => typeof window !== 'undefined' && window.matchMedia(q).matches
-const lines = (source: string) => source.split('\n').length
 /** Art pixels across one panel: the choices on the Pixels tab. */
+/** How fast blobs in the way dim the wisp's light: fur and grass are thin, so less than the engine's own setting, or a coat shades itself dark. */
+const SHADOW_DENSITY = 0.5
 const ACROSS = [{ id: 'chunky', label: 'Chunky', across: 128 }, { id: 'medium', label: 'Medium', across: 176 }, { id: 'fine', label: 'Fine', across: 240 }]
-const START: Orbit = SCENE.orbit
 const ms = (v: number) => (v < 10 ? `${v.toFixed(1)} ms` : `${Math.round(v)} ms`)
 /** How many frames a second a panel could draw by itself, from the time one frame takes: the screen may show fewer. */
 const rate = (v: number) => { const f = 1000 / Math.max(v, 0.01); return f >= 100 ? Math.round(f / 10) * 10 : f >= 10 ? Math.round(f) : Number(f.toFixed(1)) }
@@ -71,23 +61,24 @@ export function FourWays() {
   const [stage, setStage] = useState<CreatureStage>()
   const [stageFailed, setStageFailed] = useState(false)
   const [drawn, setDrawn] = useState(false)
-  const [built, setBuilt] = useState<{ built: Built; seconds: number }>()
+  const [built, setBuilt] = useState<{ built: Built; seconds: number; scene: typeof scene }>()
   const [panels, setPanels] = useState<Partial<Record<Others, Drawn>>>({})
   const [failed, setFailed] = useState<Partial<Record<Others, boolean>>>({})
   const [playing, setPlaying] = useState(!calm)
+  const [scene, setScene] = useState(() => sceneOf(params().get('scene')))
   const [fire, setFire] = useState(() => { const q = Number(params().get('fire') ?? 1); return q >= 0 && q <= 2 ? q : 1 })
   const [only, setOnly] = useState<PanelId | 'all'>(() => PANELS.find((p) => p.id === params().get('only'))?.id ?? 'all')
   const [across, setAcross] = useState(ACROSS[2].id)
   const [outline, setOutline] = useState(true)
   const [steady, setSteady] = useState(true)
-  const [orbit, setOrbit] = useState<Orbit>(START)
+  const [orbit, setOrbit] = useState<Orbit>(scene.orbit)
   const [timings, setTimings] = useState<Partial<Record<PanelId, number>>>({})
   /** One panel's size on the page, in CSS pixels. */
   const [box, setBox] = useState<{ width: number; height: number }>()
 
   const look = useMemo<PixelLook>(() => ({
-    ...SCENE.look, outline: outline ? darkest(SCENE.palette) : null, steady: steady ? STEADY : 0, tidy: true, fine: true, own: true, parts: false,
-  }), [outline, steady])
+    ...scene.look, outline: outline ? darkest(scene.palette) : null, steady: steady ? STEADY : 0, tidy: true, fine: true, own: true, parts: false,
+  }), [scene, outline, steady])
 
   // how big one art pixel is: a whole number of device pixels, so every panel's pixels are the same size
   const ratio = typeof window === 'undefined' ? 1 : Math.min(2, window.devicePixelRatio || 1)
@@ -109,7 +100,7 @@ export function FourWays() {
   useEffect(() => {
     let live: CreatureStage | undefined, gone = false
     import('./creature/stage.ts')
-      .then(({ CreatureStage }) => CreatureStage.start(stageCanvas.current!, { offscreen, lights: true, webgl: params().get('webgl') === '1' }))
+      .then(({ CreatureStage }) => CreatureStage.start(stageCanvas.current!, { offscreen, lights: true, webgl: params().get('webgl') === '1', shadowDensity: Number(params().get('density') ?? SHADOW_DENSITY) }))
       .then((s) => {
         if (gone) { s.dispose(); return }
         live = s
@@ -129,30 +120,30 @@ export function FourWays() {
       mine.push(p)
       setPanels((all) => ({ ...all, [id]: p }))
     }, (e: unknown) => { console.warn(e); if (!gone) setFailed((f) => ({ ...f, [id]: true })) })
-    void start('shader', async () => new (await import('./fourways/shader.ts')).ShaderPanel())
-    void start('meshes', async () => new (await import('./fourways/meshes.ts')).MeshPanel())
-    return () => { gone = true; for (const p of mine) p.dispose() }
-  }, [])
+    void start('shader', scene.shader)
+    void start('meshes', scene.meshes)
+    return () => { gone = true; for (const p of mine) p.dispose(); setPanels((all) => ({ splats: all.splats })); setFailed((f) => ({ splats: f.splats })) }
+  }, [scene])
 
   // The scene is cut into blobs once, after a paint so the waiting mark shows: Blobscape and Spark both draw them
   useEffect(() => {
     const id = setTimeout(() => {
       const t0 = performance.now()
-      const made = buildVoxels(SCENE.spec(DETAIL[coarse ? 0 : 1].spacing))
-      setBuilt({ built: made, seconds: (performance.now() - t0) / 1000 })
+      const made = scene.build(coarse)
+      setBuilt({ built: made, seconds: (performance.now() - t0) / 1000, scene })
     }, 80)
-    return () => clearTimeout(id)
-  }, [coarse])
+    return () => { clearTimeout(id); setBuilt(undefined) }
+  }, [scene, coarse])
 
   useEffect(() => {
     if (!built) return
     let gone = false, mine: SplatPanel | undefined
-    import('./fourways/splats.ts').then(({ SplatPanel }) => SplatPanel.start(built.built)).then((p) => {
+    import('./fourways/splats.ts').then(({ SplatPanel }) => SplatPanel.start(built.built, built.scene)).then((p) => {
       if (gone) { p.dispose(); return }
       mine = p
       setPanels((all) => ({ ...all, splats: p }))
     }, (e: unknown) => { console.warn(e); if (!gone) setFailed((f) => ({ ...f, splats: true })) })
-    return () => { gone = true; mine?.dispose() }
+    return () => { gone = true; mine?.dispose(); setPanels((all) => ({ ...all, splats: undefined })) }
   }, [built])
 
   // one clock for all four: the page's own, so the others still play where the engine cannot start
@@ -165,22 +156,23 @@ export function FourWays() {
   useEffect(() => {
     if (!stage || !built) return
     stage.setActor(built.built)
+    const cast = built.scene.shadows && stage.backend === 'webgpu' && params().get('shadows') !== '0'
     stage.setPoser((sk: Skeleton, t: number) => {
-      SCENE.pose(sk, t)
-      stage.setLights(lightsAt(t, fireNow.current), 1)
+      built.scene.pose(built.built, sk, t)
+      stage.setLights(built.scene.lights(t, fireNow.current, cast), built.scene.ambient)
     }, clock.current.t)
   }, [stage, built])
   useEffect(() => { stage?.setPixels(look, scale / ratio) }, [stage, look, scale, ratio])
   useEffect(() => { if (stage) stage.playing = playing }, [stage, playing])
   // the fire's brightness shows at once, playing or not
-  useEffect(() => { if (stage && built) stage.setLights(lightsAt(stage.time, fire), 1) }, [stage, built, fire])
+  useEffect(() => { if (stage && built) stage.setLights(built.scene.lights(stage.time, fire, built.scene.shadows && stage.backend === 'webgpu'), built.scene.ambient) }, [stage, built, fire])
   useEffect(() => {
     if (!stage) return
     stage.orbit = orbit
-    const h = SCENE.haze
+    const h = scene.haze
     stage.setFog(h?.color ?? [0, 0, 0], h ? orbit.distance + h.from : 0, h ? orbit.distance + h.to : 0)
     stage.invalidate()
-  }, [stage, orbit])
+  }, [stage, orbit, scene])
 
   const finishers = useRef<Record<Others, Finisher>>({ shader: new Finisher(), meshes: new Finisher(), splats: new Finisher() })
   const spent = useRef<Partial<Record<PanelId, number>>>({})
@@ -273,13 +265,10 @@ export function FourWays() {
   useWheelZoom(grid, setOrbit)
   const backend = stage ? (stage.backend === 'webgpu' ? 'WebGPU' : 'WebGL 2') : 'WebGPU or WebGL 2'
   const waiting = (id: PanelId) => (id === 'blobscape' ? !stageFailed && (!drawn || !built) : !failed[id] && !panels[id])
-  const sky = `linear-gradient(${SCENE.look.sky ? `rgb(${SCENE.look.sky[0].join(' ')}), rgb(${SCENE.look.sky[1].join(' ')})` : '#0a0f1e, #1f2d55'})`
-  const facts: Record<PanelId, string> = {
-    shader: `${lines(shaderSource) + lines(layoutSource)} lines, most of them one shader`,
-    meshes: `${lines(meshSource) + lines(layoutSource)} lines of three.js`,
-    splats: `${lines(splatSource)} lines, and the blobs made elsewhere`,
-    blobscape: `${lines(campfireSource)} lines of data (${(DOC_BYTES / 1024).toFixed(1)} KB as JSON)`,
-  }
+  const sky = `linear-gradient(${scene.look.sky ? `rgb(${scene.look.sky[0].join(' ')}), rgb(${scene.look.sky[1].join(' ')})` : '#0a0f1e, #1f2d55'})`
+  const facts = written(scene.id)
+  const words = WORDS[scene.id]
+  const pick = (next: typeof scene) => { if (next === scene) return; setScene(next); setOrbit(next.orbit); setDrawn(false) }
 
   return (
     <div className="pb-4">
@@ -287,8 +276,7 @@ export function FourWays() {
       <header className="flex flex-wrap items-end justify-between gap-x-8 gap-y-2 pt-4 pb-6">
         <h1 ref={h1} tabIndex={-1} className="font-display text-4xl outline-none sm:text-5xl">One Scene, Four Ways</h1>
         <p className="max-w-xl text-lg text-ink-muted">
-          The same campfire, drawn at the same moment by four different things: a shader written with no engine, three.js meshes,
-          Spark's splats, and Blobscape. All four get the same pixel-art finish, so what you see is how each one makes a picture.
+          {scene.intro} All four get the same pixel-art finish, so what you see is how each one makes a picture.
         </p>
       </header>
       <Workbench
@@ -298,7 +286,7 @@ export function FourWays() {
             ref={grid}
             role="application"
             aria-roledescription="3D view"
-            aria-label="A camp in a clearing among pines at night, with a flickering fire, a tent, a lantern and fireflies, drawn four ways side by side. Drag or use the arrow keys to orbit all four; scroll, pinch or press plus and minus to zoom."
+            aria-label={`${scene.viewLabel} Drag or use the arrow keys to orbit all four; scroll, pinch or press plus and minus to zoom.`}
             tabIndex={0}
             data-testid="four-view"
             className={`absolute inset-0 grid cursor-grab touch-none gap-px bg-black pr-12 sm:pl-12 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset active:cursor-grabbing ${only === 'all' ? 'grid-cols-2 grid-rows-2' : 'grid-cols-1'}`}
@@ -335,30 +323,35 @@ export function FourWays() {
             ))}
           </div>
           <p role="status" className="sr-only">{PANELS.some((p) => waiting(p.id)) ? `Still starting: ${PANELS.filter((p) => waiting(p.id)).map((p) => p.label).join(', ')}.` : 'All four are drawing.'}</p>
-          <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => setOrbit(START)} />
+          <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => setOrbit(scene.orbit)} />
         </>}
         status={<>
-          <span>{built ? <><span className="tabular-nums text-ink" data-testid="four-blobs">{built.built.blobs.count.toLocaleString()}</span> blobs, cut in {built.seconds.toFixed(1)} s, for Blobscape and Spark.</> : 'Cutting the scene into blobs…'}</span>
-          <span>{planned ? `Each picture ${planned.width} × ${planned.height}, ${SCENE.palette.length} colors` : ''}</span>
+          <span>{built ? <><span className="tabular-nums text-ink" data-testid="four-blobs">{built.built.blobs.count.toLocaleString()}</span> blobs, made in {built.seconds.toFixed(1)} s, for Blobscape and Spark{built.scene.made(built.built) ? `: ${built.scene.made(built.built)}` : ''}.</> : 'Making the scene’s blobs…'}</span>
+          <span>{planned ? `Each picture ${planned.width} × ${planned.height}, ${scene.palette.length} colors` : ''}</span>
         </>}
         tabsLabel="Options"
         tabs={[
           {
             id: 'compare', label: 'Compare', content: (
               <div className={TAB_SECTIONS}>
+                <Field label="Scene">
+                  <div className="flex flex-wrap gap-1.5" data-testid="four-scene">
+                    {SCENES.map((sc) => <Chip key={sc.id} active={scene === sc} onClick={() => pick(sc)}>{sc.label}</Chip>)}
+                  </div>
+                </Field>
                 <Field label="Show">
                   <div className="flex flex-wrap gap-1.5" data-testid="four-show">
                     <Chip active={only === 'all'} onClick={() => setOnly('all')}>All four</Chip>
                     {PANELS.map((p) => <Chip key={p.id} active={only === p.id} onClick={() => setOnly(p.id)}>{p.label}</Chip>)}
                   </div>
-                  <p className="mt-1.5 text-xs text-ink-faint">The time on each picture is what it takes to draw one frame here, before the shared finish. With all four drawing they share this device.</p>
+                  <p className="mt-1.5 text-xs text-ink-faint">The speed on each picture is how many frames a second it could draw by itself here, before the shared finish. With all four drawing they share this device.</p>
                 </Field>
                 <div data-testid="four-fire">
-                  <Slider label="Fire" value={fire} min={0} max={2} step={0.05} onChange={setFire} format={(v) => `${Math.round(v * 100)}%`} hint="How bright the fire burns. Three of the four light the camp afresh every frame, so they follow. Spark's splats had the light painted in when they were made." />
+                  <Slider label={scene.slider.label} value={fire} min={0} max={2} step={0.05} onChange={setFire} format={(v) => `${Math.round(v * 100)}%`} hint={scene.slider.hint} />
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   <Button small onClick={() => setPlaying((p) => !p)}>{playing ? 'Stop' : 'Play'}</Button>
-                  <Button small onClick={() => setOrbit(START)}>Reset the view</Button>
+                  <Button small onClick={() => setOrbit(scene.orbit)}>Reset the view</Button>
                 </div>
               </div>
             ),
@@ -370,12 +363,12 @@ export function FourWays() {
                   <div className="flex flex-wrap gap-1.5" data-testid="four-across">
                     {ACROSS.map((a) => <Chip key={a.id} active={across === a.id} onClick={() => setAcross(a.id)}>{a.label}</Chip>)}
                   </div>
-                  <p className="mt-1.5 text-xs text-ink-faint">The same for all four, with the campfire's own palette and dither from Pixel Diorama.</p>
+                  <p className="mt-1.5 text-xs text-ink-faint">The same for all four, with the scene’s own palette and Pixel Diorama’s dither.</p>
                 </Field>
                 <Toggle label="Outline" checked={outline} onChange={setOutline} />
                 <div>
                   <Toggle label="Steady pixels" checked={steady} onChange={setSteady} />
-                  <p className="mt-1.5 text-xs text-ink-faint">A pixel keeps its color unless another is clearly closer, so the firelight flickers without the whole picture crawling.</p>
+                  <p className="mt-1.5 text-xs text-ink-faint">A pixel keeps its color unless another is clearly closer, so a light can flicker or move without the whole picture crawling.</p>
                 </div>
               </div>
             ),
@@ -385,7 +378,7 @@ export function FourWays() {
 
       <section aria-labelledby="ways-title" className="mt-14 border-t border-rule pt-10 lg:pt-14">
         <p className="text-sm text-ink-faint">What each one is</p>
-        <h2 id="ways-title" className="mt-1 max-w-[20ch] font-display text-4xl leading-[1.05] text-balance sm:text-5xl">Four honest tries at one camp</h2>
+        <h2 id="ways-title" className="mt-1 max-w-[20ch] font-display text-4xl leading-[1.05] text-balance sm:text-5xl">Four honest tries at {scene.subject}</h2>
         <p className="mt-4 max-w-[40em] text-lg leading-relaxed text-ink-muted">
           Each one is built the way it would be if you asked for this scene with that tool, and each is given a fair go: none is
           held back to make another look good. They run on {backend} for Blobscape and WebGL 2 for the rest.
@@ -394,14 +387,14 @@ export function FourWays() {
           {PANELS.map((p) => (
             <article key={p.id} className="rounded-2xl border border-rule bg-paper-sunk/60 p-5" data-testid={`four-card-${p.id}`}>
               <h3 className="font-display text-2xl">{p.label}</h3>
-              <p className="mt-1 text-ink-muted">{p.what}</p>
+              <p className="mt-1 text-ink-muted">{words[p.id].what}</p>
               <dl className="mt-4 grid gap-x-4 gap-y-2 text-sm sm:grid-cols-[7.5rem_1fr]">
-                <dt className="text-ink-faint">Real time</dt><dd>{p.realTime}</dd>
-                <dt className="text-ink-faint">What moves</dt><dd>{p.moves}</dd>
-                <dt className="text-ink-faint">The light</dt><dd>{p.light}</dd>
+                <dt className="text-ink-faint">Real time</dt><dd>{words[p.id].realTime}</dd>
+                <dt className="text-ink-faint">What moves</dt><dd>{words[p.id].moves}</dd>
+                <dt className="text-ink-faint">The light</dt><dd>{words[p.id].light}</dd>
                 <dt className="text-ink-faint">Written as</dt><dd>{facts[p.id]}</dd>
-                <dt className="text-ink-faint">Speed here</dt><dd className="tabular-nums">{timings[p.id] === undefined ? 'not timed yet' : `${fps(timings[p.id])} drawn alone (${ms(timings[p.id]!)} a frame)`}{p.id === 'blobscape' && built ? `, after ${built.seconds.toFixed(1)} s cutting the scene` : ''}</dd>
-                <dt className="text-ink-faint">Where it stops</dt><dd>{p.limit}</dd>
+                <dt className="text-ink-faint">Speed here</dt><dd className="tabular-nums">{timings[p.id] === undefined ? 'not timed yet' : `${fps(timings[p.id])} drawn alone (${ms(timings[p.id]!)} a frame)`}{p.id === 'blobscape' && built ? `, after ${built.seconds.toFixed(1)} s making the scene` : ''}</dd>
+                <dt className="text-ink-faint">Where it stops</dt><dd>{words[p.id].limit}</dd>
               </dl>
             </article>
           ))}

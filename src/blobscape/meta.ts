@@ -41,7 +41,7 @@ export function pageMeta(route: Route): PageMeta {
     case 'daynight':
       return { path, title: `Day and Night · ${SITE.name}`, description: 'A cabin in a forest clearing made of Gaussian splats, lit live through a whole day: drag the time and the sun follows its real path for the latitude and season, shadows turn and stretch, the sky reddens, the windows and a lantern come on at dusk, and birds give way to fireflies under the moon and stars.' }
     case 'fourways':
-      return { path, title: `One Scene, Four Ways · ${SITE.name}`, description: 'One pixel-art campfire drawn four ways at the same moment: a shader written with no engine, three.js meshes, Spark splats and Blobscape. One clock, one camera and one fire slider drive all four, with the same palette and dither, so you can see what each is made of, what moves, what the light can do and what a frame costs.' }
+      return { path, title: `One Scene, Four Ways · ${SITE.name}`, description: 'One pixel-art scene (a fox in tall grass under a circling light, or a campfire) drawn four ways at the same moment: a shader written with no engine, three.js meshes, Spark splats and Blobscape. One clock, one camera and one light slider drive all four, with the same palette and dither, so you can see what each is made of, what moves, what the light can do and what a frame costs.' }
     case 'brush':
       return { path, title: `Brush and Ink · ${SITE.name}`, description: 'Gaussian splats drawn as brush marks and pen strokes in place of soft dots: gouache, oil, ink and wash, and hatching. Every mark belongs to one blob and takes its shape and direction from it, so a scene, a creature or a scan reads as a painting from any side and the strokes hold still as you turn it.' }
     case 'flow':
