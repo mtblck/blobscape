@@ -514,21 +514,21 @@ export default [
     name: 'sandbox-basics',
     about: 'a lesson opens in the sandbox; spray, undo, redo, delete, keyboard, skip link',
     entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/lessons/Many.tsx', 'src/blobscape/lessons/Footprint.tsx'],
-    async run({ base, fails, ok, open, axe }) {
+    async run({ base, fails, ok, open, axe, tabClick }) {
       const count = (page) => page.textContent('[data-testid=blob-count]').then((t) => Number(t.replace(/\D/g, '')))
       const { page, ctx } = await open('/', { viewport: { width: 1440, height: 1000 } })
       await page.goto(base + '/lessons/many/')
       await page.waitForTimeout(800)
       const lessonCount = await count(page)
-      await page.getByRole('button', { name: 'Open this scene in the sandbox' }).click()
+      await tabClick(page.getByRole('button', { name: 'Open this scene in the sandbox' }))
       await page.waitForTimeout(800)
       if ((await count(page)) !== lessonCount) fails.push(`blobscape: sandbox got ${await count(page)} blobs from a ${lessonCount}-blob lesson`)
       else ok(`blobscape: "Open in the sandbox" carries the lesson's ${lessonCount} blobs`)
 
       // Sandbox: spray onto an empty floor, undo, redo, select, delete
       await page.getByRole('tab', { name: /Scene/ }).click()
-      await page.getByRole('button', { name: 'Empty', exact: true }).click()
-      await page.getByRole('button', { name: 'Spray', exact: true }).click()
+      await tabClick(page.getByRole('button', { name: 'Empty', exact: true }))
+      await tabClick(page.getByRole('button', { name: 'Spray', exact: true }))
       const box = await page.getByTestId('viewport').boundingBox()
       await page.mouse.move(box.x + box.width * 0.4, box.y + box.height * 0.7)
       await page.mouse.down()
@@ -542,15 +542,15 @@ export default [
       await page.getByRole('button', { name: 'Redo' }).click()
       if (undone !== 0 || (await count(page)) !== sprayed) fails.push(`blobscape sandbox: undo/redo gave ${undone} then ${await count(page)}`)
       else ok('blobscape sandbox: undo and redo the stroke')
-      await page.getByRole('tab', { name: /Selection/ }).click()
-      await page.getByRole('button', { name: 'Select all' }).click()
-      await page.getByRole('button', { name: 'Delete' }).click()
+      await page.getByRole('tab', { name: /^Select/ }).click()
+      await tabClick(page.getByRole('button', { name: 'Select all' }))
+      await tabClick(page.getByRole('button', { name: 'Delete' }))
       if ((await count(page)) !== 0) fails.push('blobscape sandbox: delete left blobs behind')
       await page.keyboard.press('Control+z')
       if ((await count(page)) !== sprayed) fails.push('blobscape sandbox: Ctrl+Z did not bring the deleted blobs back')
       else ok('blobscape sandbox: select all, delete, Ctrl+Z')
       // Keyboard: Enter on the focused view uses the tool at its center
-      await page.getByRole('button', { name: 'Add', exact: true }).click()
+      await tabClick(page.getByRole('button', { name: 'Add', exact: true }))
       const beforeKey = await count(page)
       await page.getByTestId('viewport').focus()
       await page.keyboard.press('Enter')

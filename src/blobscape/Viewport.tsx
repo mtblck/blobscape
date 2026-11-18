@@ -83,7 +83,8 @@ type Points = Map<number, { x: number; y: number }>
 export function beginOrbitDrag(pointers: Points, ev: { clientX: number; clientY: number }, o: Orbit): OrbitDrag {
   if (pointers.size === 2) {
     const [a, b] = [...pointers.values()]
-    return { x: 0, y: 0, az: o.azimuth, el: o.elevation, pinch: Math.hypot(a.x - b.x, a.y - b.y), dist: o.distance }
+    // Two fingers both pinch (zoom) and move together (turn), so every tool can still turn the view on a touchscreen
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, az: o.azimuth, el: o.elevation, pinch: Math.hypot(a.x - b.x, a.y - b.y), dist: o.distance }
   }
   return { x: ev.clientX, y: ev.clientY, az: o.azimuth, el: o.elevation, dist: o.distance }
 }
@@ -93,7 +94,8 @@ export function dragOrbit(d: OrbitDrag, pointers: Points, ev: { clientX: number;
   if (d.pinch !== undefined && pointers.size >= 2) {
     const [a, b] = [...pointers.values()]
     const now = Math.hypot(a.x - b.x, a.y - b.y)
-    return (o: Orbit) => clampOrbit({ ...o, distance: d.dist * (d.pinch! / Math.max(now, 1)) })
+    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2
+    return (o: Orbit) => clampOrbit({ ...o, distance: d.dist * (d.pinch! / Math.max(now, 1)), azimuth: d.az - (mx - d.x) * DRAG.azimuth, elevation: d.el + (my - d.y) * DRAG.elevation })
   }
   return (o: Orbit) => clampOrbit({ ...o, azimuth: d.az - (ev.clientX - d.x) * DRAG.azimuth, elevation: d.el + (ev.clientY - d.y) * DRAG.elevation })
 }
