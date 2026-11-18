@@ -11,6 +11,7 @@ import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitD
 import { href } from './routes.ts'
 import type { CreatureStage } from './creature/stage.ts'
 import { SCENES, dayStage, lampAt } from './daynight/scene.ts'
+import { SEASONS, seasonFrom, type Season } from './daynight/season.ts'
 import { facing, makeStars, paintSky, upTimes } from './daynight/sky.ts'
 import { clockLabel, compass, hourFrom } from './daynight/words.ts'
 
@@ -25,12 +26,13 @@ const SPEEDS = [
   { id: 180, label: 'In three minutes' },
   { id: 720, label: 'In twelve minutes' },
 ]
-const SEASONS = [
-  { id: 80, label: 'Spring' },
-  { id: 172, label: 'Summer' },
-  { id: 266, label: 'Fall' },
-  { id: 355, label: 'Winter' },
-]
+/** What a season changes, said under its chips. */
+const SEASON_SAYS: Record<Season, string> = {
+  spring: 'The leafy trees are in blossom and petals drift down. Fireflies come out at night.',
+  summer: 'The trees are in full leaf, and fireflies come out at night.',
+  fall: 'The leaves have turned and are coming down. The fireflies are gone.',
+  winter: 'The leafy trees are bare, and snow falls and lies on everything the sky can reach.',
+}
 const MOONS = [
   { id: 0, label: 'New' },
   { id: 0.12, label: 'Crescent' },
@@ -85,17 +87,17 @@ export function DayNight() {
   const phone = useMemo(() => typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches, [])
   const [sceneId, setSceneId] = useState(() => (SCENES.some((s) => s.id === params.get('scene')) ? params.get('scene')! : SCENES[0].id))
   const scene = SCENES.find((s) => s.id === sceneId)!
-  const day = useMemo(() => dayStage(scene), [scene])
 
   // the hour lives in a ref, because the view reads it every frame; the page hears of it a few times a second
   const hourNow = useRef(hourFrom(params.get('hour')) ?? (calm ? 19.5 : 16))
   const [hour, setHourShown] = useState(hourNow.current)
   const [running, setRunning] = useState(!calm && !offscreen && params.get('hour') === null)
   const [length, setLength] = useState(60)
-  const [season, setSeason] = useState(172)
+  const [season, setSeason] = useState<Season>(() => seasonFrom(params.get('season')))
+  const day = useMemo(() => dayStage(scene, season), [scene, season])
   const [latitude, setLatitude] = useState(45)
   const [moon, setMoon] = useState(0.5)
-  const place = useMemo<SkyPlace>(() => ({ latitude, day: season, moon }), [latitude, season, moon])
+  const place = useMemo<SkyPlace>(() => ({ latitude, day: SEASONS.find((s) => s.id === season)!.day, moon }), [latitude, season, moon])
   const [shadows, setShadows] = useState<boolean>()
   const [detail, setDetail] = useState<(typeof DETAIL)[number]['id']>(phone ? 'chunky' : 'medium')
   const [view, setView] = useState(scene.views[0].id)
@@ -120,13 +122,13 @@ export function DayNight() {
   }, [offscreen, webgl, params])
 
   // cut after a paint, so the loading mark shows first
-  const [built, setBuilt] = useState<{ scene: string; detail: string; actor: Built }>()
+  const [built, setBuilt] = useState<{ scene: string; season: Season; detail: string; actor: Built }>()
   useEffect(() => {
     const spacing = DETAIL.find((d) => d.id === detail)!.spacing
-    const t = setTimeout(() => setBuilt({ scene: scene.id, detail, actor: day.make(spacing) }), 30)
+    const t = setTimeout(() => setBuilt({ scene: scene.id, season, detail, actor: day.make(spacing) }), 30)
     return () => clearTimeout(t)
-  }, [day, scene, detail])
-  const cutting = built?.detail !== detail || built?.scene !== scene.id
+  }, [day, scene, season, detail])
+  const cutting = built?.detail !== detail || built?.scene !== scene.id || built?.season !== season
 
   // what the poser reads each frame, kept in refs so a change needs no new poser
   const live = useRef({ place, shadows: !!shadows, running, length, orbit })
@@ -145,7 +147,8 @@ export function DayNight() {
 
   // the scene on show is the one that has been cut: while the next is cut, the old one keeps playing
   const shown = useMemo(() => (built ? SCENES.find((s) => s.id === built.scene)! : scene), [built, scene])
-  const dayShown = useMemo(() => (shown === scene ? day : dayStage(shown)), [shown, scene, day])
+  const seasonShown = built?.season ?? season
+  const dayShown = useMemo(() => (shown === scene && seasonShown === season ? day : dayStage(shown, seasonShown)), [shown, scene, seasonShown, season, day])
   const poser = useCallback((sk: Skeleton, t: number) => {
     const s = live.current
     // the day moves on by the wall clock, however fast the scene's own clock runs
@@ -210,6 +213,13 @@ export function DayNight() {
     history.replaceState(history.state, '', url)
   }
 
+  const pickSeason = (id: Season) => {
+    setSeason(id)
+    const url = new URL(location.href)
+    if (id === 'summer') url.searchParams.delete('season'); else url.searchParams.set('season', id)
+    history.replaceState(history.state, '', url)
+  }
+
   const sky = useMemo(() => daylight(hour, place), [hour, place])
   const times = useMemo(() => sunTimes(place), [place])
   const moonUp = useMemo(() => upTimes((h) => daylight(h, place).moonHeight), [place])
@@ -237,19 +247,20 @@ export function DayNight() {
       <header className="flex flex-wrap items-end justify-between gap-x-8 gap-y-2 pt-4 pb-6">
         <h1 ref={h1} tabIndex={-1} className="font-display text-4xl outline-none sm:text-5xl">Day and Night</h1>
         <p className="max-w-xl text-lg text-ink-muted">
-          A cabin in a clearing, or a few city blocks, through a whole day. Drag the time and the sun crosses the sky, shadows turn
-          and stretch, the windows come on at dusk, and the birds give way to fireflies and stars.
+          A cabin in a clearing, or a few city blocks, through a whole day in any season. Drag the time and the sun crosses the sky,
+          shadows turn and stretch, the windows come on at dusk, and the birds give way to fireflies and stars. Pick a season and
+          the trees blossom, turn or stand bare under falling snow.
         </p>
       </header>
       <Workbench
-        viewLabel={shown.label}
+        viewLabel={`${shown.label}, ${SEASONS.find((s) => s.id === seasonShown)!.label.toLowerCase()}`}
         view={<>
           <canvas ref={skyCanvas} aria-hidden className="absolute inset-0 h-full w-full" data-testid="daynight-sky" />
           <canvas
             ref={canvas}
             role="application"
             aria-roledescription="3D view"
-            aria-label={`${shown.about}, at ${clockLabel(hour)}. ${sunSays}. Drag or use the arrow keys to orbit; scroll, pinch or press plus and minus to zoom.`}
+            aria-label={`${shown.about}, in ${seasonShown}, at ${clockLabel(hour)}. ${sunSays}. Drag or use the arrow keys to orbit; scroll, pinch or press plus and minus to zoom.`}
             tabIndex={0}
             data-testid="daynight-view"
             className="absolute inset-0 h-full w-full cursor-grab touch-none outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset active:cursor-grabbing"
@@ -309,15 +320,16 @@ export function DayNight() {
             ),
           },
           {
-            id: 'sky', label: 'Sky', content: (
+            id: 'season', label: 'Season', content: (
               <div className={TAB_SECTIONS}>
                 <div className="grid gap-3">
                   <Field label="Season">
-                    <div className="flex flex-wrap gap-1.5">
-                      {SEASONS.map((s) => <Chip key={s.id} active={season === s.id} onClick={() => setSeason(s.id)}>{s.label}</Chip>)}
+                    <div className="flex flex-wrap gap-1.5" data-testid="daynight-seasons">
+                      {SEASONS.map((s) => <Chip key={s.id} active={season === s.id} onClick={() => pickSeason(s.id)}>{s.label}</Chip>)}
                     </div>
+                    <p className="mt-1.5 text-xs text-ink-faint" data-testid="daynight-season">{SEASON_SAYS[season]}</p>
                   </Field>
-                  <Slider label="Latitude" value={latitude} min={0} max={70} step={1} onChange={setLatitude} format={(v) => `${v}° north`} hint={`${daySays} Only the sun's path changes with the season: the trees stay green.`} />
+                  <Slider label="Latitude" value={latitude} min={0} max={70} step={1} onChange={setLatitude} format={(v) => `${v}° north`} hint={`${daySays} The season sets the sun's path as well: low and short in winter, high and long in summer.`} />
                 </div>
                 <Field label="Moon">
                   <div className="flex flex-wrap gap-1.5">
@@ -375,6 +387,11 @@ export function DayNight() {
             reddens and fades toward the horizon. The sky gives a second, softer light from everywhere, blue by day and dim at night.
             For shadows, every blob is dropped into a coarse grid each frame, and each blob looks through that grid toward the sun to
             see what is in the way. Move the sun and every shadow follows. The moon and the lantern cast theirs the same way.
+          </p>
+          <p>
+            A season is the same description with a few lines changed: what the leafy trees wear, the grass, and what falls. The
+            petals, leaves and snowflakes each come down somewhere of their own, land on whatever is under them, lie a while and go.
+            The snow on the roofs and the pines is laid where the sky can reach when the scene is cut.
           </p>
           <p>
             The lit windows, the lamps and the fireflies give their own light, so they stay bright when everything round
