@@ -27,6 +27,17 @@ export const EXPERIMENTS_INTRO = "Small tools built from the same blobs as the l
  */
 export const EXPERIMENTS = [
   {
+    id: 'brush',
+    title: 'Brush and Ink',
+    url: '/experiments/brush-and-ink/',
+    cover: '/covers/brush-and-ink.webp',
+    tags: ['watch', 'tool'],
+    needs: 'WebGPU or WebGL 2',
+    published: '2026-11-18',
+    updated: '2026-11-18',
+    body: 'A windmill, a fox and a scanned mug drawn as brush marks or pen strokes in place of soft dots. Every mark belongs to one blob, so the painting holds still as you turn it.',
+  },
+  {
     id: 'flow',
     title: 'Sand, Snow and Goo',
     url: '/experiments/sand-snow-goo/',

@@ -13,6 +13,7 @@ import type { SheetMove } from './spriteSheet.ts'
 import { PixelPass } from './pixelPass.ts'
 import { boneLabel, boneShare, pickActors } from './pick.ts'
 import { lookColors, snapColors, type Frame, type PixelLook } from '../splat-core/pixel.ts'
+import type { MarkLook } from '../splat-core/marks.ts'
 
 /** What a stage shows: blobs, the skin that ties them to bones, and the skeleton. */
 export interface Actor {
@@ -213,6 +214,7 @@ export class Stage {
     this.world = new SplatWorld([actor], { mode: this.mode, lights: this.opts.lights, sort: this.sort })
     if (this.opts.lights) this.world.setLights(this.lit.lights, this.lit.ambient)
     this.world.setFog(...this.fog)
+    this.world.setMarks(this.marks)
     this.scene.add(this.world)
     if (this.painter) this.paintOver()
   }
@@ -336,6 +338,17 @@ export class Stage {
   setFog(color: [number, number, number], near: number, far: number) {
     this.fog = [color, near, far]
     this.world?.setFog(color, near, far)
+    this.invalidate()
+  }
+
+  private marks?: MarkLook
+  /**
+   * Draws every blob as a brush mark or an ink stroke, or as soft dots again when left out; kept for the next actor
+   * too. The marks belong to the blobs, so they stay put as the view turns.
+   */
+  setMarks(look?: MarkLook) {
+    this.marks = look
+    this.world?.setMarks(look)
     this.invalidate()
   }
 

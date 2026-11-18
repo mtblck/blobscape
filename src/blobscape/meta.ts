@@ -36,6 +36,8 @@ export function pageMeta(route: Route): PageMeta {
       return { path, title: `Scan Studio · ${SITE.name}`, description: 'Open a Gaussian splat scan of an object from your phone (Scaniverse, Polycam and others export .ply or .spz), find the table and turn it level, cut away the floor and the floaters, relight it with live lights, then take it into the sandbox or save it. Everything stays on your device.' }
     case 'shift':
       return { path, title: `Shape Shifter · ${SITE.name}`, description: 'One creature made of Gaussian splats turns into another: a frog into a dragon, an owl into a crocodile. Every blob finds a partner in the other creature and travels to it, blending its size, facing and color on the way. Pick the pair, send the blobs straight, in a swirl, through a puddle or out in a burst, and see what pairing by place is for.' }
+    case 'brush':
+      return { path, title: `Brush and Ink · ${SITE.name}`, description: 'Gaussian splats drawn as brush marks and pen strokes in place of soft dots: gouache, oil, ink and wash, and hatching. Every mark belongs to one blob and takes its shape and direction from it, so a scene, a creature or a scan reads as a painting from any side and the strokes hold still as you turn it.' }
     case 'flow':
       return { path, title: `Sand, Snow and Goo · ${SITE.name}`, description: 'A box of Gaussian splats that flow: every blob is a particle of sand, snow or goo in a small material point simulation (MLS-MPM), so a column of sand runs into a heap at its friction angle, snow stands until it is hit and goo spreads. Pour more in and tap to poke them.' }
     case 'clockwork':

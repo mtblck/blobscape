@@ -12,7 +12,7 @@ import { Blobs } from '../splat-core/blobs.ts'
 const TSL = TSLTyped as unknown as Record<string, any>
 const {
   Discard, EPSILON, Fn, If, atan, cameraProjectionMatrix, cameraViewport, cameraViewMatrix, cos, dot, exp, float, instanceIndex,
-  abs, floor, length, max, min, normalize, positionGeometry, select, sin, sqrt, storage, uint, uniform, uniformArray, unpackUnorm4x8, varyingProperty, vec2, vec3, vec4,
+  abs, floor, fract, length, max, min, mix, normalize, positionGeometry, pow, select, sin, smoothstep, sqrt, storage, uint, uniform, uniformArray, unpackUnorm4x8, varyingProperty, vec2, vec3, vec4,
 } = TSL
 import { packWeights, skinBlob, skinCenters, type Skeleton, type Skin, type SkinMode } from './rig.ts'
 import { DepthSort } from './sort.ts'
@@ -26,6 +26,7 @@ import { applyMorphs, shares, type Morph } from './morph.ts'
 import { LIFT, MAX_MARCH, OCC_SCALE, REACH, SHADOW_CELLS, SHADOW_DENSITY, blobSigma, occupancy, shadowBox } from './shadow.ts'
 import { linearToSrgb, srgbToLinear } from '../splat-core/color.ts'
 import { viewColor } from '../splat-core/sh.ts'
+import { INK, MARK_KINDS, MARK_LONG, MARK_MOST, MARK_SOLID, MARK_WIDE, PAPER, type MarkLook } from '../splat-core/marks.ts'
 
 /**
  * Blobscape's splat engine: one mesh that draws every blob of every object in a
@@ -140,6 +141,7 @@ export class SplatWorld extends Mesh {
   /** While true, rendering draws the last frame's blobs without moving or sorting them (for timing the draw alone, and for a second draw of the same frame such as the map of parts). */
   hold = false
   private readonly flat = uniform(0)
+  private readonly mark: Marks = { kind: uniform(0), size: uniform(1), ink: uniform(new Vector3()), paper: uniform(new Vector3()) }
   /**
    * While true, the draw is a map of parts, not a picture: every blob is a hard disc in its part's own flat color
    * (red and green hold the part's number plus one, blue the actor's), with no light, fog or soft edge, so where two
@@ -270,9 +272,23 @@ export class SplatWorld extends Mesh {
       buf.attrs.push(this.lighting.gridAttr)
       this.shadowNodes = { clear: makeShadowClear(this.lighting), scatter: makeShadowScatter(buf, this.lighting) }
     }
-    material.colorNode = makeFragment(this.flat) as never
+    material.colorNode = makeFragment(this.flat, this.mark) as never
 
     this.onBeforeRender = (renderer, _scene, camera) => this.prepare(renderer as unknown as Renderer, camera)
+  }
+
+  /**
+   * Draws every blob as a brush mark or an ink stroke (marks.ts) in place of a soft dot, or as dots again when left
+   * out. A mark is turned and stretched by its blob's own shape on screen and seeded by the blob, so it stays on its
+   * blob as the view moves. Maps of parts and depth are drawn as before.
+   */
+  setMarks(look?: MarkLook) {
+    const M = this.mark
+    M.kind.value = look ? MARK_KINDS.indexOf(look.kind) + 1 : 0
+    M.size.value = look?.size ?? 1
+    const lin = (c: readonly number[]) => [srgbToLinear(c[0]), srgbToLinear(c[1]), srgbToLinear(c[2])] as const
+    M.ink.value.set(...lin(look?.ink ?? INK))
+    M.paper.value.set(...lin(look?.paper ?? PAPER))
   }
 
   /** Fades blobs to `color` (linear RGB, 0–1) between `near` and `far` units from the camera; `far` 0 turns it off. */
@@ -1581,13 +1597,56 @@ function fogged(rgb: N, depth: N, fog: Fog) {
 
 const splatUv = () => varyingProperty('vec2', 'vSplatUv')
 const splatColor = () => varyingProperty('vec4', 'vSplatColor')
+/** The blob's own number, 0–1 (the same hash as `lodRank`): what makes its mark its own. */
+const splatSeed = () => varyingProperty('float', 'vSplatSeed')
+
+/** How blobs are drawn as marks (`setMarks`): kind 0 is none, then `MARK_KINDS` from 1; ink and paper are linear. */
+interface Marks { kind: N; size: N; ink: N; paper: N }
+
+/** A mark at a pixel of its blob: color (linear) and cover. CPU twin: `markAt` in splat-core/marks.ts; change both. */
+function markOf(M: Marks, uv: N, seed: N, rgb: N) {
+  const hash = (i: N, s: N) => fract(sin(i.mul(127.1).add(s.mul(311.7))).mul(43758.5453))
+  const noise1 = (x: N, s: N) => {
+    const i = floor(x).toVar(), f = x.sub(i).toVar()
+    const a = hash(i, s).toVar()
+    return a.add(hash(i.add(1), s).sub(a).mul(f.mul(f).mul(float(3).sub(f.mul(2)))))
+  }
+  const streak = (v: N, s: N, rate: number) => noise1(v.mul(rate).add(40), s).add(noise1(v.mul(-rate).add(40), s)).mul(0.5)
+  const k = M.size.clamp(0.2, MARK_MOST).toVar()
+  const u = uv.x, v = uv.y
+  const s = streak(v.div(k), seed, 5).toVar()
+  const long = k.mul(MARK_LONG).mul(s.mul(0.3).add(0.78)), wide = k.mul(MARK_WIDE)
+  const d = pow(abs(u).div(long), 4).add(pow(abs(v).div(wide), 4))
+  const cover = float(1).sub(smoothstep(0.8, 1, d)).toVar()
+  const own = seed.sub(0.5).mul(0.12).add(1).toVar()
+  const color = vec3(0).toVar()
+  const dark = float(1).sub(sqrt(max(dot(rgb, vec3(0.2126, 0.7152, 0.0722)), 0)).min(1)).toVar()
+  If(M.kind.lessThan(1.5), () => {
+    color.assign(rgb.mul(own.mul(s.mul(0.12).add(0.94))))
+  }).ElseIf(M.kind.lessThan(2.5), () => {
+    const ridge = streak(v.div(k), seed.add(0.37), 9).toVar()
+    color.assign(rgb.mul(own.mul(ridge.mul(0.4).add(0.8))).add(smoothstep(0.62, 0.9, ridge).mul(0.1)))
+  }).ElseIf(M.kind.lessThan(3.5), () => {
+    const wash = mix(M.paper, rgb, 0.7)
+    const reach = max(float(1).sub(pow(abs(u).div(k.mul(MARK_LONG * 0.95)), 2)), 0).toVar()
+    const half = dark.mul(0.3).add(0.05).mul(k).mul(sqrt(reach)).mul(s.mul(0.6).add(0.7)).toVar()
+    const pen = select(reach.greaterThan(0), float(1).sub(smoothstep(half.mul(0.6), half.add(0.02), abs(v))), float(0))
+    color.assign(mix(wash, M.ink, pen))
+  }).Else(() => {
+    const line = abs(fract(abs(v).div(k.mul(0.42)).add(seed)).sub(0.5)).mul(2)
+    const pen = float(1).sub(smoothstep(dark.mul(0.7), dark.mul(0.7).add(0.25), line)).mul(smoothstep(0.06, 0.2, dark))
+    color.assign(mix(M.paper, M.ink, pen))
+  })
+  return vec4(color, cover)
+}
 
 /**
  * A quad around the blob, only as big as it is visible: a faint blob fades
  * below 1/255 sooner than two standard deviations out, so its quad shrinks and
  * covers fewer pixels.
  */
-function placeQuad(ndc: N, axes: N, rgba: N) {
+function placeQuad(ndc: N, axes: N, rgba: N, idx: N) {
+  splatSeed().assign(lodRankNode(idx))
   const alpha = rgba.a
   const reach = sqrt(max(TSL.log(alpha.mul(255)).mul(2), 0)).min(2).toVar()
   const uv = positionGeometry.xy.mul(reach).toVar()
@@ -1611,7 +1670,7 @@ function makeVertexWebGPU(buf: ReturnType<typeof makeBuffers>, sort: Sorter, fog
     // ndc z = −(P22·z + P32) / z for a perspective camera, so −z = P32 / (ndc z + P22)
     const depth = cameraProjectionMatrix[3].z.div(A.z.add(cameraProjectionMatrix[2].z))
     const part = unpackUnorm4x8(buf.part.element(idx))
-    return placeQuad(A.xyz, buf.splatB.element(idx), vec4(flatColor(flat, part.rgb, depth, fogged(color.rgb, depth, fog)), color.a.mul(A.w)))
+    return placeQuad(A.xyz, buf.splatB.element(idx), vec4(flatColor(flat, part.rgb, depth, fogged(color.rgb, depth, fog)), color.a.mul(A.w)), idx)
   })()
 }
 
@@ -1625,22 +1684,32 @@ function makeVertexWebGL(buf: ReturnType<typeof makeBuffers>, sort: Sorter, mode
     const own = S ? viewed(color.rgb, idx, d.world, buf, S) : color.rgb
     const rgb = L ? lit(painted(own, d.world, buf.edits), d.world, d.covA, d.covB, buf.seen.element(idx), L) : own
     const part = unpackUnorm4x8(buf.part.element(idx))
-    return placeQuad(p.ndc, p.axes, vec4(flatColor(flat, part.rgb, p.depth, fogged(rgb, p.depth, fog)), color.a.mul(p.alphaScale)))
+    return placeQuad(p.ndc, p.axes, vec4(flatColor(flat, part.rgb, p.depth, fogged(rgb, p.depth, fog)), color.a.mul(p.alphaScale)), idx)
   })()
 }
 
-function makeFragment(flat: N) {
+function makeFragment(flat: N, M: Marks) {
   return Fn(() => {
     const uv = splatUv()
     const r2 = dot(uv, uv).toVar()
     If(r2.greaterThan(4), () => { Discard() })
-    const alpha = exp(r2.mul(-0.5)).mul(splatColor().a).toVar()
-    // a map of parts: all of the blob or none of it, so the nearest part's color is left whole
-    If(flat.greaterThan(0), () => {
-      // well out from the middle, so the discs of one surface close up and nothing behind shows between them
-      If(alpha.lessThan(PART_CUT), () => { Discard() })
-      alpha.assign(1)
+    const out = vec4(0).toVar()
+    // marks: paint in the mark's shape, not a soft dot (the picture only: maps of parts and depth stay discs)
+    If(M.kind.greaterThan(0.5).and(flat.lessThan(0.5)), () => {
+      const m = markOf(M, uv, splatSeed(), splatColor().rgb).toVar()
+      const a = m.a.mul(splatColor().a.mul(MARK_SOLID).min(1)).toVar()
+      If(a.lessThan(1 / 255), () => { Discard() })
+      out.assign(vec4(m.rgb, a))
+    }).Else(() => {
+      const alpha = exp(r2.mul(-0.5)).mul(splatColor().a).toVar()
+      // a map of parts: all of the blob or none of it, so the nearest part's color is left whole
+      If(flat.greaterThan(0), () => {
+        // well out from the middle, so the discs of one surface close up and nothing behind shows between them
+        If(alpha.lessThan(PART_CUT), () => { Discard() })
+        alpha.assign(1)
+      })
+      out.assign(vec4(splatColor().rgb, alpha))
     })
-    return vec4(splatColor().rgb, alpha)
+    return out
   })()
 }
