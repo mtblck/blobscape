@@ -155,7 +155,7 @@ export const EXPERIMENTS = [
     tags: ['creatures', 'tool', 'pixel'],
     needs: 'WebGPU or WebGL 2',
     published: '2026-11-11',
-    updated: '2026-11-17',
+    updated: '2026-11-18',
     body: 'A crocodile, a jellyfish, an owl, a fox, an elf and a fire-breathing ice dragon, made of blobs and moving on our own splat engine. See their bones, then take one away as a rigged 3D model for Blender or a game engine, or as a pixel-art sprite sheet.',
   },
   {

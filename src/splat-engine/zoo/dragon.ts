@@ -328,9 +328,14 @@ export function dragonFlap(sk: Skeleton, t: number) {
     set(sk, `${s}Wing2`, Z, x * 0.35 * Math.cos(ph - 0.7))
     set(sk, `${s}Wing3`, Z, x * 0.3 * Math.cos(ph - 1.3))
     for (let k = 1; k <= 3; k++) set(sk, `${s}Finger${k}`, Z, x * 0.25 * Math.cos(ph - 1.5 - k * 0.15))
-    // legs hang back, swinging a little
-    aim(sk, `${s}Arm`, dir([0.1 * x, -0.9, -0.3]))
-    aim(sk, `${s}Forearm`, dir([0.05 * x, -0.7, 0.6]))
+    // the forelegs hang loose under the chest: the elbow back, the forearm dropping from it, the paw limp at the wrist
+    // with its claws down, and the whole leg swinging a little behind the beat. Held out in front with the paw
+    // up, as they were, they looked stiff (Matt, 2026-11-18)
+    const sway = 0.1 * Math.sin(ph - 0.9)
+    aim(sk, `${s}Arm`, dir([0.1 * x, -0.82, -0.5 + sway]))
+    aim(sk, `${s}Forearm`, dir([0.04 * x, -0.97, 0.22 + sway * 1.6]))
+    aim(sk, `${s}Hand`, dir([0.02 * x, -0.9, -0.3 + sway * 2.2]))
+    // hind legs hang back, swinging a little
     aim(sk, `${s}Thigh`, dir([0.15 * x, -0.75, -0.55 - 0.08 * Math.sin(ph)]))
     aim(sk, `${s}Shin`, dir([0.05 * x, -0.45, -0.9]))
     aim(sk, `${s}Foot`, dir([0.02 * x, -0.3, -0.95]))
