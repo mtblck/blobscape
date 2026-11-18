@@ -12,9 +12,10 @@ import { Blobs } from '../splat-core/blobs.ts'
 const TSL = TSLTyped as unknown as Record<string, any>
 const {
   Discard, EPSILON, Fn, If, atan, cameraProjectionMatrix, cameraViewport, cameraViewMatrix, cos, dot, exp, float, instanceIndex,
-  abs, cameraPosition, cameraProjectionMatrixInverse, cameraWorldMatrix, floor, fract, length, max, min, mix, normalize, positionGeometry, pow, select, sin, smoothstep, sqrt, storage, uint, uniform, uniformArray, unpackUnorm4x8, varyingProperty, vec2, vec3, vec4,
+  abs, cameraPosition, cameraProjectionMatrixInverse, cameraWorldMatrix, floor, fract, length, max, min, mix, normalize, positionGeometry, pow, select, sin, smoothstep, sqrt, storage, uint, uniform, uniformArray, uintBitsToFloat, unpackUnorm4x8, varyingProperty, vec2, vec3, vec4,
 } = TSL
-import { packWeights, skinBlob, skinCenters, type Skeleton, type Skin, type SkinMode } from './rig.ts'
+import { MAX_STRETCH, packWeights, skinBlob, skinCenters, type Skeleton, type Skin, type SkinMode } from './rig.ts'
+import { GRAD_STRIDE, weightGradients } from './stretch.ts'
 import { DepthSort } from './sort.ts'
 import { RadixSort } from './radix.ts'
 
@@ -906,6 +907,7 @@ export class SplatWorld extends Mesh {
         skinBlob(
           blobs.center.subarray(k * 3, k * 3 + 3), blobs.scale.subarray(k * 3, k * 3 + 3), blobs.quat.subarray(k * 4, k * 4 + 4),
           skin.joints.subarray(k * 4, k * 4 + 4), w, skeleton, this.mode, center, i * 4, cov, i * 6,
+          this.buf.grads[a] ?? undefined, k * GRAD_STRIDE,
         )
         center[i * 4 + 3] = 1
         // level of detail, as the GPU does it: left out (no size), or grown to cover for those that are
@@ -1066,6 +1068,14 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
   const part = new Uint32Array(n)
   // joints and weights interleaved, two words per blob: a compute stage may only bind 8 storage buffers on many phones
   const skinWords = new Uint32Array(n * 2)
+  // how each blob's weights change across the skin (stretch.ts), for actors with skin between bones; none, and the
+  // GPU's copy of the skin is those two words alone
+  const grads = actors.map((a) => weightGradients(a.blobs, a.skin, a.partOf))
+  const stretch = grads.some((g) => g)
+  // with them, the gradients ride behind the two words as the bits of nine floats, in the same buffer for the same reason
+  const skinStride = stretch ? 2 + GRAD_STRIDE : 2
+  const skinGpu = stretch ? new Uint32Array(n * skinStride) : skinWords
+  const skinFloats = new Float32Array(skinGpu.buffer)
   // how much of each of the first four lights a blob sees, a byte each: all of it unless the actor baked lamp shadows
   const seen = new Uint32Array(n).fill(0xffffffff)
   packBlobs(actors, boneOffset, center, scale, quat, color)
@@ -1077,6 +1087,12 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
       part[i] = ((p & 255) | ((p >> 8) << 8) | (who << 16)) >>> 0
       skinWords[i * 2] = (skin.joints[k * 4] | (skin.joints[k * 4 + 1] << 8) | (skin.joints[k * 4 + 2] << 16) | (skin.joints[k * 4 + 3] << 24)) >>> 0
       skinWords[i * 2 + 1] = packWeights(skin.weights, k * 4)
+      if (stretch) {
+        skinGpu[i * skinStride] = skinWords[i * 2]
+        skinGpu[i * skinStride + 1] = skinWords[i * 2 + 1]
+        const g = grads[ai]
+        if (g) for (let j = 0; j < GRAD_STRIDE; j++) skinFloats[i * skinStride + 2 + j] = g[k * GRAD_STRIDE + j]
+      }
       if (a.seen) seen[i] = (a.seen[k * 4] | (a.seen[k * 4 + 1] << 8) | (a.seen[k * 4 + 2] << 16) | (a.seen[k * 4 + 3] << 24)) >>> 0
       // a blob's own light rides in the spare float beside its scale (`packShape` leaves it be)
       if (a.glow) scale[i * 4 + 3] = a.glow[k] / 255
@@ -1084,7 +1100,7 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
   })
   const attr = (a: Float32Array | Uint32Array, size: number) => new StorageBufferAttribute(a, size)
   const centerAttr = attr(center, 4), scaleAttr = attr(scale, 4), quatAttr = attr(quat, 4)
-  const colorAttr = attr(color, 1), skinAttr = attr(skinWords, 1), partAttr = attr(part, 1), seenAttr = attr(seen, 1)
+  const colorAttr = attr(color, 1), skinAttr = attr(skinGpu, 1), partAttr = attr(part, 1), seenAttr = attr(seen, 1)
   const boneData = new Float32Array(Math.max(1, bones) * 20)
   const boneAttr = new StorageBufferAttribute(boneData, 4)
   boneAttr.setUsage(DynamicDrawUsage)
@@ -1100,11 +1116,13 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
     /** Every GPU buffer, so dispose can free them. */
     attrs: [centerAttr, scaleAttr, quatAttr, colorAttr, partAttr, seenAttr, skinAttr, boneAttr, worldCenterAttr, covAAttr, covBAttr, splatAAttr, splatBAttr, splatCAttr],
     skinWords, srcCenterData: center,
+    /** Each actor's weight gradients (stretch.ts), or null; how many words a blob has in `skin`; whether any actor stretches. */
+    grads, skinStride, stretch,
     boneData, boneAttr, worldCenterAttr, covAAttr, covBAttr, colorAttr, centerAttr, scaleAttr, quatAttr,
     srcCenter: storage(centerAttr, 'vec4', n).toReadOnly(),
     srcScale: storage(scaleAttr, 'vec4', n).toReadOnly(),
     srcQuat: storage(quatAttr, 'vec4', n).toReadOnly(),
-    skin: storage(skinAttr, 'uint', n * 2).toReadOnly(),
+    skin: storage(skinAttr, 'uint', n * skinStride).toReadOnly(),
     bones: storage(boneAttr, 'vec4', Math.max(1, bones) * 5).toReadOnly(),
     color: storage(colorAttr, 'uint', n).toReadOnly(),
     edits: makeEdits(),
@@ -1359,8 +1377,9 @@ function deformBlob(buf: ReturnType<typeof makeBuffers>, i: N, mode: SkinMode, M
   // with morphs, the morph pass's output: the reshaped center, and the rest shape as a Cholesky factor
   const src = (M ? M.center : buf.srcCenter).element(i).toVar()
   const base = uint(src.w).toVar()
-  const jw = buf.skin.element(i.mul(2)).toVar()
-  const w = unpackUnorm4x8(buf.skin.element(i.mul(2).add(1))).toVar()
+  const at = i.mul(buf.skinStride).toVar()
+  const jw = buf.skin.element(at).toVar()
+  const w = unpackUnorm4x8(buf.skin.element(at.add(1))).toVar()
   const js = [0, 8, 16, 24].map((s) => base.add(jw.shiftRight(s).bitAnd(255)).mul(5).toVar())
   const ws = [w.x, w.y, w.z, w.w]
   const col = (k: number, c: number) => buf.bones.element(js[k].add(c))
@@ -1386,6 +1405,20 @@ function deformBlob(buf: ReturnType<typeof makeBuffers>, i: N, mode: SkinMode, M
   const p = src.xyz
   const world = c0.mul(p.x).add(c1.mul(p.y)).add(c2.mul(p.z)).add(c3).toVar()
 
+  // skin that stretches (stretch.ts; `skinBlob` is the twin): E = Σ (bone k's place for the center − the blend's) ⊗ ∇wₖ
+  // is what the blended matrices leave out, and each of the blob's rest axes takes its share of it
+  let stretched = (_rest: N, posed: N) => posed
+  if (buf.stretch) {
+    const gf = (o: number) => uintBitsToFloat(buf.skin.element(at.add(o)))
+    const g = [0, 1, 2].map((k) => vec3(gf(2 + k * 3), gf(3 + k * 3), gf(4 + k * 3)).toVar())
+    const gs = [g[0].add(g[1]).add(g[2]).negate().toVar(), ...g]
+    const ds = [0, 1, 2, 3].map((k) => col(k, 0).xyz.mul(p.x).add(col(k, 1).xyz.mul(p.y)).add(col(k, 2).xyz.mul(p.z)).add(col(k, 3).xyz).sub(world).toVar())
+    stretched = (rest, posed) => {
+      const add = ds[0].mul(dot(gs[0], rest)).add(ds[1].mul(dot(gs[1], rest))).add(ds[2].mul(dot(gs[2], rest))).add(ds[3].mul(dot(gs[3], rest))).toVar()
+      return posed.add(add.mul(min(float(1), length(posed).mul(MAX_STRETCH).div(max(length(add), 1e-20)))))
+    }
+  }
+
   let A: N[]
   // the blob's own light (`Actor.glow`), handed on to the color pass in a spare slot of the covariance
   let glow: N
@@ -1396,9 +1429,9 @@ function deformBlob(buf: ReturnType<typeof makeBuffers>, i: N, mode: SkinMode, M
     const L = [vec3(la.x, la.y, la.z), vec3(0, la.w, lb.x), vec3(0, 0, lb.y)]
     if (mode === 'quat') {
       const R = quatColumns(normalize(Q) as never)
-      A = L.map((l) => R[0].mul(l.x).add(R[1].mul(l.y)).add(R[2].mul(l.z)).mul(S))
+      A = L.map((l) => stretched(l, R[0].mul(l.x).add(R[1].mul(l.y)).add(R[2].mul(l.z)).mul(S)))
     } else {
-      A = L.map((l) => c0.mul(l.x).add(c1.mul(l.y)).add(c2.mul(l.z)))
+      A = L.map((l) => stretched(l, c0.mul(l.x).add(c1.mul(l.y)).add(c2.mul(l.z))))
     }
   } else if (mode === 'quat') {
     glow = buf.srcScale.element(i).w
@@ -1407,13 +1440,17 @@ function deformBlob(buf: ReturnType<typeof makeBuffers>, i: N, mode: SkinMode, M
     const q = quatMul(normalize(Q), lq).toVar()
     const R = quatColumns(q as never)
     A = [R[0].mul(s.x.mul(S)), R[1].mul(s.y.mul(S)), R[2].mul(s.z.mul(S))]
+    if (buf.stretch) {
+      const own = quatColumns(lq as never)
+      A = [stretched(own[0].mul(s.x), A[0]), stretched(own[1].mul(s.y), A[1]), stretched(own[2].mul(s.z), A[2])]
+    }
   } else {
     glow = buf.srcScale.element(i).w
     const s = buf.srcScale.element(i).xyz.toVar()
     const lq = normalize(buf.srcQuat.element(i)).toVar()
     const R = quatColumns(lq as never)
     const blend = (v: N) => c0.mul(v.x).add(c1.mul(v.y)).add(c2.mul(v.z))
-    A = [blend(R[0]).mul(s.x), blend(R[1]).mul(s.y), blend(R[2]).mul(s.z)]
+    A = [stretched(R[0].mul(s.x), blend(R[0]).mul(s.x)), stretched(R[1].mul(s.y), blend(R[1]).mul(s.y)), stretched(R[2].mul(s.z), blend(R[2]).mul(s.z))]
   }
   const a0 = A[0].toVar(), a1 = A[1].toVar(), a2 = A[2].toVar()
   const e = (r: 'x' | 'y' | 'z', c: 'x' | 'y' | 'z') => a0[r].mul(a0[c]).add(a1[r].mul(a1[c])).add(a2[r].mul(a2[c]))
@@ -1778,7 +1815,7 @@ function toLinear(c: N) {
  */
 function viewed(rgb: N, i: N, world: N, buf: ReturnType<typeof makeBuffers>, S: ViewSH) {
   const base = uint(buf.srcCenter.element(i).w)
-  const q = normalize(buf.bones.element(base.add(buf.skin.element(i.mul(2)).bitAnd(255)).mul(5).add(4))).toVar()
+  const q = normalize(buf.bones.element(base.add(buf.skin.element(i.mul(buf.skinStride)).bitAnd(255)).mul(5).add(4))).toVar()
   const v = normalize(world.sub(S.eye)).toVar()
   const u = q.xyz.negate().toVar()
   const t = TSL.cross(u, v).mul(2).toVar()

@@ -1440,7 +1440,7 @@
     {
      "name": "setWeights",
      "kind": "function",
-     "doc": "Keeps the four largest weights and makes them sum to 1.",
+     "doc": "Keeps the four largest weights and makes them sum to 1. Given more than four, each of the four first gives up\nas much as the fifth had, so a bone's weight has run down to nothing by the time it drops out of the four: cut\noff as it stood, skin shared between many bones tore along every line where the fourth and fifth changed places.",
      "signatures": [
       {
        "code": "setWeights(skin: Skin, i: number, pairs: [bone: number, weight: number][]): void"
@@ -1466,12 +1466,18 @@
     {
      "name": "skinBlob",
      "kind": "function",
-     "doc": "Moves one blob by its bones. Positions blend the skin matrices linearly (as\nevery engine does). The blob's shape then follows one of two rules:\n\n- 'linear': its covariance is pushed through the blended 3×3 matrix. A blend of\n  two rotations is not a rotation, so a blob on a twisting joint gets squashed.\n- 'quat': its rotation is the weighted average of the bone rotations\n  (quaternions sign-aligned, summed, renormalized) and its scale the weighted\n  average scale, so the blob only ever turns, never flattens.\n\nWrites the world center (3) and covariance [xx, xy, xz, yy, yz, zz] (6).",
+     "doc": "Moves one blob by its bones. Positions blend the skin matrices linearly (as\nevery engine does). The blob's shape then follows one of two rules:\n\n- 'linear': its covariance is pushed through the blended 3×3 matrix. A blend of\n  two rotations is not a rotation, so a blob on a twisting joint gets squashed.\n- 'quat': its rotation is the weighted average of the bone rotations\n  (quaternions sign-aligned, summed, renormalized) and its scale the weighted\n  average scale, so the blob only ever turns, never flattens.\n\nGiven `grad` (the blob's nine numbers from `weightGradients`, stretch.ts), either rule then adds how the skin\nstretches between the bones: Σ (where bone k alone puts the center − where the blend does) ⊗ ∇wₖ, applied to the\nblob's own axes, so a blob on skin pulled out between two bones is pulled out with it. No axis grows by more than\n`MAX_STRETCH` times its own length.\n\nWrites the world center (3) and covariance [xx, xy, xz, yy, yz, zz] (6).",
      "signatures": [
       {
-       "code": "skinBlob(center: ArrayLike<number>, scale: ArrayLike<number>, quat: ArrayLike<number>, joints: ArrayLike<number>, weights: ArrayLike<number>, rig: { matrix: ArrayLike<number>; quat: ArrayLike<number>; scale: ArrayLike<number> }, mode: SkinMode, outCenter: Float32Array, oc: number, outCov: Float32Array, ov: number): void"
+       "code": "skinBlob(center: ArrayLike<number>, scale: ArrayLike<number>, quat: ArrayLike<number>, joints: ArrayLike<number>, weights: ArrayLike<number>, rig: { matrix: ArrayLike<number>; quat: ArrayLike<number>; scale: ArrayLike<number> }, mode: SkinMode, outCenter: Float32Array, oc: number, outCov: Float32Array, ov: number, grad?: ArrayLike<number>, og?: number): void"
       }
      ]
+    },
+    {
+     "name": "MAX_STRETCH",
+     "kind": "const",
+     "doc": "The most the stretch between bones may add to one of a blob's axes, in that axis's own length.",
+     "type": "3"
     },
     {
      "name": "norm4",
@@ -1540,6 +1546,30 @@
      "signatures": [
       {
        "code": "posedPoint(sk: { matrix: ArrayLike<number> }, bone: number, p: ArrayLike<number>): [number, number, number]"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "stretch",
+   "title": "Skin that stretches",
+   "group": "core",
+   "doc": "Skin that stretches. Skinning moves each blob's center by its bones, but a blob's size was only ever turned, so\nwhere the skin between two bones is pulled out (a wing's membrane as it opens, the back of a knee) the centers\npart and the blobs no longer cover the gaps between them.\n\nHow the skin stretches at a blob is the gradient of where skinning puts a point, and that has two halves: the\nblend of the bones' own matrices, and how the weights themselves change from one place to the next,\nΣ (bone k's place for the point) ⊗ ∇wₖ. The second half is the stretch between bones and was missing. Here each\nblob gets ∇wₖ for its four bones, found from the weights of the blobs next to it, so any skin has it: a sculpted\ncreature, one opened from a file, a model laid with blobs. `skinBlob` and the engine's deform pass add the half\nit gives.",
+   "entries": [
+    {
+     "name": "GRAD_STRIDE",
+     "kind": "const",
+     "doc": "Numbers per blob in what `weightGradients` gives: ∇w (x, y, z) for the second, third and fourth of its bones.",
+     "type": "9"
+    },
+    {
+     "name": "weightGradients",
+     "kind": "function",
+     "doc": "How each blob's weights change across the skin, from the blobs next to it: for the second, third and fourth of\nits bones the gradient of that weight in the rest pose (`GRAD_STRIDE` numbers a blob; the first bone's is minus\ntheir sum, since the weights always add up to 1). Along the surface only: nothing is known across it. Null when\nno blob hangs on two bones, so nothing can stretch. `partOf` keeps a blob to neighbors of its own part. The\nanswer is kept for the same skin and blobs.",
+     "signatures": [
+      {
+       "code": "weightGradients(blobs: Blobs, skin: Skin, partOf?: ArrayLike<number>): Float32Array<ArrayBufferLike> | null"
       }
      ]
     }
@@ -2580,6 +2610,12 @@
        "optional": true,
        "type": "number",
        "doc": "How far its weights spread from each bone, if not the creature's `blend`."
+      },
+      {
+       "name": "span",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Skin stretched between its bones (a wing's membrane, a web): each cell is shared out by one over its distance\nto each bone, squared, in place of `blend`. So it is held fast where it meets a bone, and no gap opens there\nbeside the part that bone carries, while the skin in between is shared smoothly however far apart the bones are."
       }
      ]
     },

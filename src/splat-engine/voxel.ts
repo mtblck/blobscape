@@ -974,8 +974,11 @@ export function buildVoxels(spec: VoxelSpec): Built {
       if (same.some((q) => boxDistance(q, x, y, z) === 0 && q.sdf(x, y, z) < buried)) return
       const xa = sdf(x + e, y, z), xb = sdf(x - e, y, z), ya = sdf(x, y + e, z), yb = sdf(x, y - e, z), za = sdf(x, y, z + e), zb = sdf(x, y, z - e)
       const g: Vec3 = [xa - xb, ya - yb, za - zb]
-      // the distance in world units, from how fast the shape's distance changes here
-      if (spec.trueShell && (d * s) / (Math.hypot(g[0], g[1], g[2]) || s) <= -s) return
+      // the distance in world units, from how fast the shape's distance changes here. Only a distance that changes
+      // faster than one for one is corrected: down the middle of a thin sheet (a wing's skin) it seems hardly to
+      // change at all, the two faces pulling opposite ways, and read as deep the sheet's middle cells were left out,
+      // leaving a row of holes wherever the sheet stepped from one layer of the grid to the next
+      if (spec.trueShell && (d * s) / Math.max(Math.hypot(g[0], g[1], g[2]), 2 * e) <= -s) return
       const n = norm(g)
       const p: Vec3 = [x, y, z]
       let base = typeof part.color === 'function' ? part.color(p, n) : part.color

@@ -154,9 +154,16 @@ export function emptySkin(count: number): Skin {
   return { joints: new Uint8Array(count * 4), weights: new Float32Array(count * 4) }
 }
 
-/** Keeps the four largest weights and makes them sum to 1. */
+/**
+ * Keeps the four largest weights and makes them sum to 1. Given more than four, each of the four first gives up
+ * as much as the fifth had, so a bone's weight has run down to nothing by the time it drops out of the four: cut
+ * off as it stood, skin shared between many bones tore along every line where the fourth and fifth changed places.
+ */
 export function setWeights(skin: Skin, i: number, pairs: [bone: number, weight: number][]) {
-  const top = pairs.filter((p) => p[1] > 0).sort((a, b) => b[1] - a[1]).slice(0, 4)
+  const sorted = pairs.filter((p) => p[1] > 0).sort((a, b) => b[1] - a[1])
+  const fifth = sorted[4]?.[1] ?? 0
+  // the first always keeps something, so a blob is never left with no bone
+  const top = sorted.slice(0, 4).map((p, k): [number, number] => [p[0], k ? p[1] - fifth : Math.max(p[1] - fifth, p[1] * 1e-6)]).filter((p) => p[1] > 0)
   const sum = top.reduce((s, p) => s + p[1], 0) || 1
   for (let k = 0; k < 4; k++) {
     skin.joints[i * 4 + k] = top[k]?.[0] ?? 0
@@ -196,6 +203,11 @@ export type SkinMode = 'linear' | 'quat'
  *   (quaternions sign-aligned, summed, renormalized) and its scale the weighted
  *   average scale, so the blob only ever turns, never flattens.
  *
+ * Given `grad` (the blob's nine numbers from `weightGradients`, stretch.ts), either rule then adds how the skin
+ * stretches between the bones: Σ (where bone k alone puts the center − where the blend does) ⊗ ∇wₖ, applied to the
+ * blob's own axes, so a blob on skin pulled out between two bones is pulled out with it. No axis grows by more than
+ * `MAX_STRETCH` times its own length.
+ *
  * Writes the world center (3) and covariance [xx, xy, xz, yy, yz, zz] (6).
  */
 export function skinBlob(
@@ -203,6 +215,7 @@ export function skinBlob(
   joints: ArrayLike<number>, weights: ArrayLike<number>,
   rig: { matrix: ArrayLike<number>; quat: ArrayLike<number>; scale: ArrayLike<number> },
   mode: SkinMode, outCenter: Float32Array, oc: number, outCov: Float32Array, ov: number,
+  grad?: ArrayLike<number>, og = 0,
 ) {
   const M = new Float64Array(12) // blended 3×4, column-major without the last row
   const Q = [0, 0, 0, 0]
@@ -224,27 +237,46 @@ export function skinBlob(
   outCenter[oc + 1] = M[1] * x + M[4] * y + M[7] * z + M[10]
   outCenter[oc + 2] = M[2] * x + M[5] * y + M[8] * z + M[11]
 
+  const R = quatMat3(norm4(quat))
+  const A = new Float64Array(9)
   if (mode === 'quat') {
-    const q = mulQ(norm4(Q), norm4(quat))
-    writeCov(quatMat3(q), [scale[0] * S, scale[1] * S, scale[2] * S], outCov, ov)
+    const B = quatMat3(mulQ(norm4(Q), norm4(quat)))
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) A[r * 3 + c] = B[r * 3 + c] * scale[c] * S
   } else {
     // A = Mblend(3×3) · R_local · S_local; Σ = A Aᵀ
-    const R = quatMat3(norm4(quat))
-    const A = new Float64Array(9)
     for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
       let v = 0
       for (let k = 0; k < 3; k++) v += M[k * 3 + r] * R[k * 3 + c]
       A[r * 3 + c] = v * scale[c]
     }
-    writeCovA(A, outCov, ov)
   }
+  if (grad) {
+    // E = Σ (bone k's place for the center − the blend's) ⊗ ∇wₖ; the first bone's gradient is minus the others' sum
+    const E = new Float64Array(9)
+    const g0 = [0, 0, 0]
+    const place = (k: number, r: number) => {
+      const m = joints[k] * 16
+      return rig.matrix[m + r] * x + rig.matrix[m + 4 + r] * y + rig.matrix[m + 8 + r] * z + rig.matrix[m + 12 + r] - outCenter[oc + r]
+    }
+    for (let k = 1; k < 4; k++) {
+      for (let c = 0; c < 3; c++) g0[c] -= grad[og + (k - 1) * 3 + c]
+      for (let r = 0; r < 3; r++) { const d = place(k, r); for (let c = 0; c < 3; c++) E[r * 3 + c] += d * grad[og + (k - 1) * 3 + c] }
+    }
+    for (let r = 0; r < 3; r++) { const d = place(0, r); for (let c = 0; c < 3; c++) E[r * 3 + c] += d * g0[c] }
+    for (let c = 0; c < 3; c++) {
+      // the blob's axis c in the rest pose, and what the stretch adds to it
+      const add = [0, 0, 0]
+      for (let r = 0; r < 3; r++) for (let k = 0; k < 3; k++) add[r] += E[r * 3 + k] * R[k * 3 + c] * scale[c]
+      const len = Math.hypot(add[0], add[1], add[2]), own = Math.hypot(A[c], A[3 + c], A[6 + c])
+      const f = len > MAX_STRETCH * own ? (MAX_STRETCH * own) / len : 1
+      for (let r = 0; r < 3; r++) A[r * 3 + c] += add[r] * f
+    }
+  }
+  writeCovA(A, outCov, ov)
 }
 
-function writeCov(R: ArrayLike<number>, s: ArrayLike<number>, out: Float32Array, o: number) {
-  const A = new Float64Array(9)
-  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) A[r * 3 + c] = R[r * 3 + c] * s[c]
-  writeCovA(A, out, o)
-}
+/** The most the stretch between bones may add to one of a blob's axes, in that axis's own length. */
+export const MAX_STRETCH = 3
 
 function writeCovA(A: ArrayLike<number>, out: Float32Array, o: number) {
   const d = (a: number, b: number) => A[a * 3] * A[b * 3] + A[a * 3 + 1] * A[b * 3 + 1] + A[a * 3 + 2] * A[b * 3 + 2]

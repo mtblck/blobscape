@@ -26,6 +26,7 @@ export const TITLES = {
   'splat-core/orbit': 'Orbit: where the camera looks from',
   'splat-core/blobs': 'Blobs',
   'splat-engine/rig': 'Bones and skins',
+  'splat-engine/stretch': 'Skin that stretches',
   'splat-engine/posing': 'Posing by hand',
   'splat-engine/mix': 'Mixing poses',
   'splat-engine/ik': 'Reaching and feet on the ground',
@@ -79,7 +80,7 @@ export const TITLES = {
  * is in exactly one, in the order given here.
  */
 export const GROUPS = [
-  { id: 'core', title: 'Core', doc: 'What every page needs: a stage on a canvas, the world of blobs it draws, the camera, and the bones that move them. Start here.', modules: ['splat-engine/stage', 'splat-engine/engine', 'splat-core/orbit', 'splat-core/blobs', 'splat-engine/rig'] },
+  { id: 'core', title: 'Core', doc: 'What every page needs: a stage on a canvas, the world of blobs it draws, the camera, and the bones that move them. Start here.', modules: ['splat-engine/stage', 'splat-engine/engine', 'splat-core/orbit', 'splat-core/blobs', 'splat-engine/rig', 'splat-engine/stretch'] },
   { id: 'movement', title: 'Movement', doc: 'Moves written by hand, poses mixed together, feet that find the ground, loose parts that swing after the body, and morphs.', modules: ['splat-engine/posing', 'splat-engine/mix', 'splat-engine/ik', 'splat-engine/steps', 'splat-engine/swing', 'splat-engine/morph'] },
   { id: 'creatures', title: 'Creatures', doc: 'Cutting a creature out of shapes, hanging it on bones and growing its fur, and the creatures that come ready made.', modules: ['splat-engine/sculpt', 'splat-engine/body', 'splat-engine/fur', 'splat-engine/zoo/index', 'splat-engine/zoo/fox', 'splat-engine/zoo/frog', 'splat-engine/zoo/elf', 'splat-engine/zoo/dragon', 'splat-engine/zoo/monster'] },
   { id: 'scenes', title: 'Shapes and scenes', doc: 'Scenes written as data and the shapes they are cut from: buildings, rock, plants, worn land and weather, and the sun, moon and sky that light them through a day.', modules: ['splat-engine/sceneDoc', 'splat-engine/sceneWater', 'splat-engine/voxel', 'splat-engine/built', 'splat-engine/forms', 'splat-engine/life', 'splat-engine/erode', 'splat-engine/grow', 'splat-engine/weather', 'splat-engine/daylight'] },
