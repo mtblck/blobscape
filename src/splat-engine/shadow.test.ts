@@ -45,3 +45,27 @@ test('blobs smaller than a cell add up by the share of the cell they cover; noth
   assert.equal(occupancy([9, 9, 9], 3, [0.05], [1], 1, b).reduce((s, v) => s + v, 0), 0)
   assert.equal(blobSigma([0.04, 0, 0, 0.01, 0, 0.09]), 0.3)
 })
+
+test('a sun casts the wall\'s shadow away from itself, longer as it sinks, and a march that leaves the grid stops', () => {
+  const s = scene(), g = occupancy(s.pts, 3, s.sig, s.op, s.count, box)
+  const sun = (deg: number): [number, number, number] => [-Math.cos(deg * Math.PI / 180), Math.sin(deg * Math.PI / 180), 0]
+  // the wall is 1.2 high at x = 0.5 and the sun is in the west (−x): its shadow falls east of the wall
+  const at = (x: number, deg: number) => transmittance(g, box, [x, 0, 0], [0, 1, 0], sun(deg), true)
+  assert.ok(at(1.0, 60) < 0.1, `near the wall under a high sun: ${at(1.0, 60)}`)
+  assert.ok(at(1.9, 60) > 0.95, `past the shadow's end under a high sun: ${at(1.9, 60)}`)
+  assert.ok(at(1.9, 30) < 0.1, `the same spot under a low sun: ${at(1.9, 30)}`)
+  // the sunny side is lit at any height of sun, and the length of the direction doesn't matter
+  assert.ok(at(-0.5, 30) > 0.95 && at(-0.5, 60) > 0.95)
+  const d = sun(30)
+  assert.equal(transmittance(g, box, [1.9, 0, 0], [0, 1, 0], [d[0] * 7, d[1] * 7, 0], true), at(1.9, 30))
+})
+
+test('a denser shadow lets less through the same wall, and nothing changes where nothing is in the way', () => {
+  const s = scene(), g = occupancy(s.pts, 3, s.sig, s.op, s.count, box)
+  const west: [number, number, number] = [-Math.cos(Math.PI / 4), Math.sin(Math.PI / 4), 0]
+  // a spot whose line to the sun just clips the wall's top, so some light gets by
+  const soft = transmittance(g, box, [1.55, 0, 0], [0, 1, 0], west, true), hard = transmittance(g, box, [1.55, 0, 0], [0, 1, 0], west, true, 5)
+  assert.ok(hard <= soft && soft < 1, `${soft} ${hard}`)
+  assert.ok(hard < soft ** 3 + 1e-9)
+  assert.equal(transmittance(g, box, [-0.5, 0, 0], [0, 1, 0], west, true, 5), 1)
+})

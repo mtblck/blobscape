@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu'
 import { STAGE_FOV, placeCamera, type Orbit } from '../splat-core/orbit.ts'
 import { readbackToSrgb } from '../splat-core/color.ts'
-import { SplatWorld, type PointLight } from './engine.ts'
+import { SplatWorld, type Light } from './engine.ts'
 import type { ShapeEdit } from './edit.ts'
 import { sampleClip, sampleWeights, type Clip } from './glb.ts'
 import type { Morph } from './morph.ts'
@@ -56,6 +56,8 @@ export interface StageOptions {
   offscreen?: boolean
   /** Builds each world with live lights (`setLights`), as Scan Studio does. */
   lights?: boolean
+  /** How dark what stands in a casting light's way makes it (the world's `shadowDensity`): left out, soft shadows that thin things let light through. */
+  shadowDensity?: number
   /** Uses the WebGL 2 backend even where WebGPU would start: for testing the fallback. */
   webgl?: boolean
   /** Builds each world so cuts (`setEdits`) have a clean edge, tested per pixel (`setCleanCuts` turns it off and on). */
@@ -131,7 +133,7 @@ export class Stage {
   private queued?: { actor: Actor; clip?: Clip }
   /** How a blob on several bones takes its shape: see `SkinMode`. Change it with `setMode`. */
   mode: SkinMode = 'quat'
-  private lit: { lights: PointLight[]; ambient: number } = { lights: [], ambient: 1 }
+  private lit: { lights: Light[]; ambient: number | readonly [number, number, number] } = { lights: [], ambient: 1 }
   /** Pixel mode: the scene drawn small and turned into pixel art (pixelPass.ts). */
   private pixel?: PixelPass
   /** How many CSS pixels across one art pixel is. */
@@ -216,7 +218,7 @@ export class Stage {
   }
 
   private build(actor: Actor) {
-    this.world = new SplatWorld([actor], { mode: this.mode, lights: this.opts.lights, sort: this.sort, cleanCuts: this.opts.cleanCuts })
+    this.world = new SplatWorld([actor], { mode: this.mode, lights: this.opts.lights, sort: this.sort, cleanCuts: this.opts.cleanCuts, shadowDensity: this.opts.shadowDensity })
     if (this.opts.lights) this.world.setLights(this.lit.lights, this.lit.ambient)
     this.world.setFog(...this.fog)
     this.world.setMarks(this.marks)
@@ -390,8 +392,11 @@ export class Stage {
     this.invalidate()
   }
 
-  /** Live lights on the world (needs the `lights` option); kept for the next actor too. */
-  setLights(lights: PointLight[], ambient = 1) {
+  /**
+   * Live lights on the world (needs the `lights` option); kept for the next actor too. A light is at a place or from a
+   * direction (a sun); `ambient` is one brightness or a linear color.
+   */
+  setLights(lights: Light[], ambient: number | readonly [number, number, number] = 1) {
     this.lit = { lights, ambient }
     this.world?.setLights(lights, ambient)
     this.invalidate()

@@ -44,3 +44,18 @@ test('a light a point can\'t see adds nothing, and only the first four lights ar
   const fifth = lightAt([0, 0, 0], [0, 1, 0], [L, L, L, L, L], 0, [0, 0, 0, 0])
   assert.ok(Math.abs(fifth[0] - open[0]) < 1e-9)
 })
+
+test('a light from a direction is as strong everywhere, and the sky\'s light may have a color', async () => {
+  const { lightAt, ownLight } = await import('./light.ts')
+  const sun = { direction: [0, 2, 0] as [number, number, number], color: [1, 0.9, 0.8] as [number, number, number] }
+  const near = lightAt([0, 0, 0], [0, 1, 0], [sun], [0.1, 0.2, 0.3])
+  const far = lightAt([50, -3, 9], [0, 1, 0], [sun], [0.1, 0.2, 0.3])
+  assert.deepEqual(near, far)
+  assert.ok(Math.abs(near[0] - 1.1) < 1e-9 && Math.abs(near[1] - 1.1) < 1e-9 && Math.abs(near[2] - 1.1) < 1e-9, `${near}`)
+  // edge on, a face keeps the soft wrap's share
+  assert.ok(Math.abs(lightAt([0, 0, 0], [1, 0, 0], [sun], 0)[0] - 0.35) < 1e-9)
+  // a blob that gives its own light is never darker than that share, and still takes more light than it gives
+  assert.deepEqual(ownLight([0.05, 0.05, 0.1], 1), [1, 1, 1])
+  assert.deepEqual(ownLight([1.4, 0.2, 0.1], 0.5), [1.4, 0.5, 0.5])
+  assert.deepEqual(ownLight([0.3, 0.2, 0.1], 0), [0.3, 0.2, 0.1])
+})

@@ -1,6 +1,6 @@
 import { covariance, type Blobs } from '../splat-core/blobs.ts'
 import { linearToSrgb, srgbToLinear } from '../splat-core/color.ts'
-import type { PointLight } from './engine.ts'
+import type { Light } from './engine.ts'
 
 /**
  * The CPU twin of the engine's live lights (`lit` and `blobNormal` in
@@ -24,18 +24,23 @@ export function blobNormal(cov: ArrayLike<number>): [number, number, number] {
 }
 
 /**
- * How much light (linear, per channel) reaches a point with normal n: ambient plus each light by distance and facing,
- * and each of the first four by `seen` (0–255, how much of it the point can see), as the engine reads an actor's `seen`.
+ * How much light (linear, per channel) reaches a point with normal n: ambient (one brightness, or a color) plus each
+ * light by distance and facing (a light from a direction doesn't fade with distance), and each of the first four by
+ * `seen` (0–255, how much of it the point can see), as the engine reads an actor's `seen`.
  */
-export function lightAt(p: ArrayLike<number>, n: ArrayLike<number>, lights: PointLight[], ambient: number, seen?: ArrayLike<number>): [number, number, number] {
-  const sum: [number, number, number] = [ambient, ambient, ambient]
+export function lightAt(p: ArrayLike<number>, n: ArrayLike<number>, lights: Light[], ambient: number | ArrayLike<number>, seen?: ArrayLike<number>): [number, number, number] {
+  const sum: [number, number, number] = typeof ambient === 'number' ? [ambient, ambient, ambient] : [ambient[0], ambient[1], ambient[2]]
   for (const [j, L] of lights.entries()) {
-    const to = [L.position[0] - p[0], L.position[1] - p[1], L.position[2] - p[2]]
-    const d2 = to[0] * to[0] + to[1] * to[1] + to[2] * to[2]
-    const r2 = Math.max(1e-3, L.range) ** 2
-    const fade = Math.max(1 - d2 / (r2 * 4), 0)
-    const fall = (fade * fade) / (1 + d2 / r2)
-    const inv = 1 / Math.sqrt(Math.max(d2, 1e-6))
+    let to: number[], fall = 1
+    if ('direction' in L) to = [L.direction[0], L.direction[1], L.direction[2]]
+    else {
+      to = [L.position[0] - p[0], L.position[1] - p[1], L.position[2] - p[2]]
+      const d2 = to[0] * to[0] + to[1] * to[1] + to[2] * to[2]
+      const r2 = Math.max(1e-3, L.range) ** 2
+      const fade = Math.max(1 - d2 / (r2 * 4), 0)
+      fall = (fade * fade) / (1 + d2 / r2)
+    }
+    const inv = 1 / Math.sqrt(Math.max(to[0] * to[0] + to[1] * to[1] + to[2] * to[2], 1e-6))
     const facing = Math.abs((n[0] * to[0] + n[1] * to[1] + n[2] * to[2]) * inv) * 0.65 + 0.35
     const sees = seen && j < 4 ? seen[j] / 255 : 1
     for (let k = 0; k < 3; k++) sum[k] += L.color[k] * fall * facing * sees
@@ -43,8 +48,16 @@ export function lightAt(p: ArrayLike<number>, n: ArrayLike<number>, lights: Poin
   return sum
 }
 
+/**
+ * What a blob's color is multiplied by under `light` (from `lightAt`) when it gives `glow` of its own light (0 to 1,
+ * `Actor.glow`): never less than its own share, so a lit window stays bright in the dark and still takes the sun.
+ */
+export function ownLight(light: readonly number[], glow: number): [number, number, number] {
+  return [Math.max(light[0], glow), Math.max(light[1], glow), Math.max(light[2], glow)]
+}
+
 /** A copy of the blobs with the lights baked into their colors, as the engine would show them (still blobs, no bones). */
-export function bakeLights(b: Blobs, lights: PointLight[], ambient: number): Blobs {
+export function bakeLights(b: Blobs, lights: Light[], ambient: number | ArrayLike<number>): Blobs {
   const out = b.clone()
   for (let i = 0; i < b.count; i++) {
     const s = lightAt(b.center.subarray(i * 3, i * 3 + 3), blobNormal(covariance(b, i)), lights, ambient)

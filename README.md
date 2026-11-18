@@ -137,6 +137,14 @@ stay in your browser.
       <a href="https://blobscape.dev/experiments/wading-pond/"><b>Wading Pond</b></a><br />
       Wade through a ruin's pond by candlelight: every ring comes from a real footfall.
     </td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <a href="https://blobscape.dev/experiments/day-and-night/"><img src="public/covers/day-and-night.webp" alt="A log cabin in a forest clearing at dusk, its windows and a lantern lit and fireflies out" /></a><br />
+      <a href="https://blobscape.dev/experiments/day-and-night/"><b>Day and Night</b></a><br />
+      Drag the hour: the sun and moon cross the sky, shadows turn, lamps come on and fireflies come out.
+    </td>
+    <td valign="top"></td>
     <td valign="top"></td>
   </tr>
 </table>
@@ -151,7 +159,7 @@ ticks or burns uses it.
 - **Bones for blobs.** Every blob follows up to four bones, blended on the GPU. Bones turn, slide and grow.
 - **One world, one sort.** Every actor shares one set of blobs, sorted together each frame, so a hero, forty slimes and the hall around them overlap correctly.
 - **Made, not captured.** Creatures and scenes are written as shapes and cut into blobs with sun and shadows baked in. A whole scene can be [plain data](docs/scene-descriptions.md).
-- **Live lights.** Point lights shade the baked colors by distance and facing.
+- **Live lights.** Point lights, and a sun and moon that follow the hour, shade the colors by distance and facing and cast shadows.
 - **Pixel mode.** Palette, dither, outlines, glow and pixels that hold steady while the camera swings. Sprite sheets come from the same pass.
 - **Files that travel.** A rigged, animated splat saves as one .glb: the glTF splat extension plus ordinary skins and animation.
 

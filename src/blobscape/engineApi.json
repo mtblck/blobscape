@@ -18,7 +18,7 @@
   {
    "id": "scenes",
    "title": "Shapes and scenes",
-   "doc": "Scenes written as data and the shapes they are cut from: buildings, rock, plants, worn land and weather."
+   "doc": "Scenes written as data and the shapes they are cut from: buildings, rock, plants, worn land and weather, and the sun, moon and sky that light them through a day."
   },
   {
    "id": "pixels",
@@ -120,6 +120,12 @@
        "optional": true,
        "type": "boolean",
        "doc": "Builds each world with live lights (`setLights`), as Scan Studio does."
+      },
+      {
+       "name": "shadowDensity",
+       "optional": true,
+       "type": "number",
+       "doc": "How dark what stands in a casting light's way makes it (the world's `shadowDensity`): left out, soft shadows that thin things let light through."
       },
       {
        "name": "webgl",
@@ -356,10 +362,10 @@
       },
       {
        "name": "setLights",
-       "doc": "Live lights on the world (needs the `lights` option); kept for the next actor too.",
+       "doc": "Live lights on the world (needs the `lights` option); kept for the next actor too. A light is at a place or from a\ndirection (a sun); `ambient` is one brightness or a linear color.",
        "signatures": [
         {
-         "code": "setLights(lights: PointLight[], ambient?: number): void"
+         "code": "setLights(lights: Light[], ambient?: number | readonly [number, number, number]): void"
         }
        ]
       },
@@ -538,6 +544,12 @@
        "doc": "How much of each of the first four live lights a blob can see, four bytes a blob (255 sees it all): baked lamp\nshadows (voxel.ts `lamps`). The light pass scales light k by byte k, so a flickering lamp's shadows flicker with it.\nLeft out, every light reaches every blob."
       },
       {
+       "name": "glow",
+       "optional": true,
+       "type": "Uint8Array<ArrayBufferLike>",
+       "doc": "How much of its own light each blob gives, a byte a blob (255 all of it): a lit window, a firefly, the moon. Under\nlive lights such a blob is never drawn darker than this share of its own color, so it stays bright when the scene\ngoes dark. Left out, nothing glows."
+      },
+      {
        "name": "morphs",
        "optional": true,
        "type": "Morph[]",
@@ -581,6 +593,12 @@
        "doc": "Live lights (`setLights`): each blob is lit every frame from its normal. Off unless asked for, as it costs a pass."
       },
       {
+       "name": "shadowDensity",
+       "optional": true,
+       "type": "number",
+       "doc": "How dark what stands in a casting light's way makes it (`SHADOW_DENSITY`, 1.5, where left out): low, a shadow is\nsoft and thin things let light through; about 5, a wall one blob thick blocks nearly all of it, which suits solid\nscenes under a sun."
+      },
+      {
        "name": "paint",
        "optional": true,
        "type": "boolean",
@@ -621,6 +639,35 @@
        "doc": "Whether it casts shadows (`shadow.ts`): blobs between a blob and the light take some of it. Off unless set."
       }
      ]
+    },
+    {
+     "name": "SunLight",
+     "kind": "interface",
+     "doc": "A light from one direction that reaches everything, for `setLights`: the sun, or the moon. It doesn't fade with\ndistance, and its shadows (with `shadow`) fall the same way everywhere.",
+     "props": [
+      {
+       "name": "direction",
+       "type": "[number, number, number]",
+       "doc": "The way toward the light from anywhere in the scene (any length but zero): [0, 1, 0] is straight overhead."
+      },
+      {
+       "name": "color",
+       "type": "[number, number, number]",
+       "doc": "Linear RGB, times its strength: [1.1, 1, 0.9] is a midday sun."
+      },
+      {
+       "name": "shadow",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Whether it casts shadows (`shadow.ts`). Off unless set."
+      }
+     ]
+    },
+    {
+     "name": "Light",
+     "kind": "type",
+     "doc": "A light `setLights` takes: one at a place, or one from a direction.",
+     "type": "PointLight | SunLight"
     },
     {
      "name": "MAX_LIGHTS",
@@ -774,10 +821,10 @@
       },
       {
        "name": "setLights",
-       "doc": "Lights the blobs with up to MAX_LIGHTS point lights, on top of `ambient`\ntimes their own (baked) color. Each blob's normal is its flattest axis, so\na light reaches the side of a surface that faces it. Needs `lights: true`.",
+       "doc": "Lights the blobs with up to MAX_LIGHTS lights, on top of `ambient` times their own (baked) color: point lights\nthat fade with distance, and lights from a direction (a sun, a moon) that don't. `ambient` is one brightness or a\nlinear color, for light from the whole sky. Each blob's normal is its flattest axis, so a light reaches the side\nof a surface that faces it. Needs `lights: true`.",
        "signatures": [
         {
-         "code": "setLights(lights: PointLight[], ambient?: number): void"
+         "code": "setLights(lights: Light[], ambient?: number | readonly [number, number, number]): void"
         }
        ]
       },
@@ -2692,6 +2739,12 @@
        "optional": true,
        "type": "Uint8Array<ArrayBufferLike>",
        "doc": "How much of each baked lamp a blob can see, four bytes a blob (voxel.ts `lamps`); left out, every lamp is seen."
+      },
+      {
+       "name": "glow",
+       "optional": true,
+       "type": "Uint8Array<ArrayBufferLike>",
+       "doc": "How much of its own light each blob gives, a byte a blob (the engine's `Actor.glow`): 255 for a voxel scene's `glow` parts; left out, nothing glows."
       }
      ]
     },
@@ -6337,6 +6390,204 @@
      "kind": "const",
      "doc": "Drifted snow as a shape: deep behind whatever stands in the wind, gone from steep faces, thin on a trodden path.\n`under` gives the height of the ground at a place.",
      "type": "(s: DriftSpec, under: (x: number, z: number) => number, thin?: number) => Shape"
+    }
+   ]
+  },
+  {
+   "id": "daylight",
+   "title": "The sky through a day",
+   "group": "scenes",
+   "doc": "The sky over a scene through a day: where the sun and the moon stand for a time, a latitude and a day of the year,\nand the light that follows from it, ready for `setLights`. The sun's path is the real one (declination by the day,\nhour angle by the clock); its color comes from how much air its light crosses (red and dim at the horizon, white\noverhead); the sky's own light, the sky's colors and the stars follow the sun's height. The moon is kept simple: it\ntrails the sun by its age, a full one rides high in winter and low in summer, and it gives light by how much of it\nis lit. Pure numbers, so a page, a test and a recording get the same sky.\n\nDirections are in the scene's frame: +x east, +y up, +z south. Strengths are set for a picture, not for a light\nmeter: real moonlight is a millionth of sunlight, and an eye (or a camera) opens up at night, so here the night is\ndim, not black.",
+   "entries": [
+    {
+     "name": "SkyPlace",
+     "kind": "interface",
+     "doc": "Where and when the sky is: what `daylight` needs besides the hour.",
+     "props": [
+      {
+       "name": "latitude",
+       "type": "number",
+       "doc": "Degrees north of the equator (south is negative)."
+      },
+      {
+       "name": "day",
+       "type": "number",
+       "doc": "The day of the year, 1 to 365: 80 is the March equinox, 172 the June solstice."
+      },
+      {
+       "name": "moon",
+       "type": "number",
+       "doc": "The moon's age: 0 new, 0.25 first quarter, 0.5 full, 0.75 last quarter."
+      }
+     ]
+    },
+    {
+     "name": "DEFAULT_PLACE",
+     "kind": "const",
+     "doc": "A temperate place at midsummer under a full moon: what `daylight` uses where none is given.",
+     "type": "SkyPlace"
+    },
+    {
+     "name": "Daylight",
+     "kind": "interface",
+     "doc": "The sky at one moment, from `daylight`. Colors are linear RGB; a light's color already holds its strength.",
+     "props": [
+      {
+       "name": "sun",
+       "type": "Vec3",
+       "doc": "The way toward the sun (a unit vector), below the horizon too."
+      },
+      {
+       "name": "sunHeight",
+       "type": "number",
+       "doc": "The sun's height over the horizon, in degrees (negative when it is down)."
+      },
+      {
+       "name": "sunColor",
+       "type": "Vec3",
+       "doc": "The sun's light: white overhead, redder and weaker toward the horizon, nothing once it is down."
+      },
+      {
+       "name": "moon",
+       "type": "Vec3",
+       "doc": "The way toward the moon (a unit vector)."
+      },
+      {
+       "name": "moonHeight",
+       "type": "number",
+       "doc": "The moon's height over the horizon, in degrees."
+      },
+      {
+       "name": "moonColor",
+       "type": "Vec3",
+       "doc": "The moon's light, by how much of it is lit and how dark the sky is: nothing by day."
+      },
+      {
+       "name": "moonLit",
+       "type": "number",
+       "doc": "How much of the moon's face is lit, 0 (new) to 1 (full)."
+      },
+      {
+       "name": "ambient",
+       "type": "Vec3",
+       "doc": "Light from the whole sky, which reaches into shade: blue by day, warm at dusk, dim and blue at night."
+      },
+      {
+       "name": "zenith",
+       "type": "Vec3",
+       "doc": "The sky's color straight up."
+      },
+      {
+       "name": "horizon",
+       "type": "Vec3",
+       "doc": "The sky's color at the horizon, away from the sun."
+      },
+      {
+       "name": "sunGlow",
+       "type": "Vec3",
+       "doc": "The warm glow low in the sky round the sun as it rises and sets: nothing while it is high or well down."
+      },
+      {
+       "name": "stars",
+       "type": "number",
+       "doc": "How clearly the stars show, 0 by day to 1 in full night (less under a bright moon)."
+      },
+      {
+       "name": "dark",
+       "type": "number",
+       "doc": "How dark it has grown, 0 in daylight to 1 once the sun is well down: when lamps come on."
+      }
+     ]
+    },
+    {
+     "name": "skyWay",
+     "kind": "function",
+     "doc": "The way toward a point of the sky (a unit vector: +x east, +y up, +z south) from its hour angle (degrees west of\ndue south, 15 an hour), its declination (degrees north of the sky's equator) and the latitude it is seen from.",
+     "signatures": [
+      {
+       "code": "skyWay(hourAngle: number, declination: number, latitude: number): Vec3"
+      }
+     ]
+    },
+    {
+     "name": "sunDeclination",
+     "kind": "function",
+     "doc": "How far north of the sky's equator the sun is on a day of the year, in degrees: 23.44 at the June solstice.",
+     "signatures": [
+      {
+       "code": "sunDeclination(day: number): number"
+      }
+     ]
+    },
+    {
+     "name": "sunWay",
+     "kind": "function",
+     "doc": "The way toward the sun at an hour of the day (0 to 24 by the sun: 12 is when it is highest).",
+     "signatures": [
+      {
+       "code": "sunWay(hour: number, place?: SkyPlace): Vec3"
+      }
+     ]
+    },
+    {
+     "name": "moonWay",
+     "kind": "function",
+     "doc": "The way toward the moon at an hour of the day. It trails the sun across the sky by its age (a full moon is opposite\nthe sun, so it rises as the sun sets), and its declination is the sun's turned by its age, so a full moon is high in\nwinter and low in summer.",
+     "signatures": [
+      {
+       "code": "moonWay(hour: number, place?: SkyPlace): Vec3"
+      }
+     ]
+    },
+    {
+     "name": "moonLit",
+     "kind": "function",
+     "doc": "How much of the moon's face is lit at an age: 0 new, 1 full.",
+     "signatures": [
+      {
+       "code": "moonLit(age: number): number"
+      }
+     ]
+    },
+    {
+     "name": "sunTimes",
+     "kind": "function",
+     "doc": "When the sun rises and sets, in hours by the sun, from where its center crosses the horizon. Where it never sets\n(a polar summer) `rise` is 0 and `set` 24; where it never rises, both are 12.",
+     "signatures": [
+      {
+       "code": "sunTimes(place?: SkyPlace): { rise: number; set: number }"
+      }
+     ]
+    },
+    {
+     "name": "airMass",
+     "kind": "function",
+     "doc": "How much air light crosses on its way down from a height over the horizon (degrees), as a multiple of the air\nstraight overhead: 1 at the zenith, about 38 at the horizon (Kasten and Young's fit).",
+     "signatures": [
+      {
+       "code": "airMass(height: number): number"
+      }
+     ]
+    },
+    {
+     "name": "daylight",
+     "kind": "function",
+     "doc": "The sky and its light at an hour of the day (0 to 24 by the sun; any number wraps) at a place: where the sun and\nmoon stand, their light, the sky's own light and colors, how clearly stars show and how dark it has grown. Every\nvalue changes smoothly through the day, so an hour hand dragged across it never jumps.",
+     "signatures": [
+      {
+       "code": "daylight(hour: number, place?: SkyPlace): Daylight"
+      }
+     ]
+    },
+    {
+     "name": "skyLights",
+     "kind": "function",
+     "doc": "The lights a sky gives a scene, for `setLights`: the sun and the moon as lights from a direction (each only while\nit gives light, so a march for shadows is never spent on a light that is down), casting shadows if asked, and the\nsky's own light as the ambient color.",
+     "signatures": [
+      {
+       "code": "skyLights(sky: Daylight, shadows?: boolean): { lights: { direction: Vec3; color: Vec3; shadow: boolean }[]; ambient: Vec3 }"
+      }
+     ]
     }
    ]
   },
