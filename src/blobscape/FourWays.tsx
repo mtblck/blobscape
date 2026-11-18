@@ -49,7 +49,10 @@ const lines = (source: string) => source.split('\n').length
 /** Art pixels across one panel: the choices on the Pixels tab. */
 const ACROSS = [{ id: 'chunky', label: 'Chunky', across: 128 }, { id: 'medium', label: 'Medium', across: 176 }, { id: 'fine', label: 'Fine', across: 240 }]
 const START: Orbit = SCENE.orbit
-const ms = (v: number | undefined) => (v === undefined ? 'not timed yet' : v < 10 ? `${v.toFixed(1)} ms` : `${Math.round(v)} ms`)
+const ms = (v: number) => (v < 10 ? `${v.toFixed(1)} ms` : `${Math.round(v)} ms`)
+/** How many frames a second a panel could draw by itself, from the time one frame takes: the screen may show fewer. */
+const rate = (v: number) => { const f = 1000 / Math.max(v, 0.01); return f >= 100 ? Math.round(f / 10) * 10 : f >= 10 ? Math.round(f) : Number(f.toFixed(1)) }
+const fps = (v: number | undefined) => (v === undefined ? 'not timed yet' : `up to ${rate(v).toLocaleString()} fps`)
 
 /**
  * One Scene, Four Ways: Pixel Diorama's campfire drawn by four different things at once, each given the same
@@ -74,7 +77,7 @@ export function FourWays() {
   const [playing, setPlaying] = useState(!calm)
   const [fire, setFire] = useState(() => { const q = Number(params().get('fire') ?? 1); return q >= 0 && q <= 2 ? q : 1 })
   const [only, setOnly] = useState<PanelId | 'all'>(() => PANELS.find((p) => p.id === params().get('only'))?.id ?? 'all')
-  const [across, setAcross] = useState(coarse ? ACROSS[0].id : ACROSS[1].id)
+  const [across, setAcross] = useState(ACROSS[2].id)
   const [outline, setOutline] = useState(true)
   const [steady, setSteady] = useState(true)
   const [orbit, setOrbit] = useState<Orbit>(START)
@@ -326,7 +329,7 @@ export function FourWays() {
                 {(p.id === 'blobscape' ? stageFailed : failed[p.id as Others]) && <p className="absolute inset-3 grid place-items-center text-center text-xs text-white">This browser could not start {p.id === 'blobscape' ? 'WebGPU or WebGL 2' : 'WebGL 2'} for this one.</p>}
                 <p className="pointer-events-none absolute top-2 left-2 rounded bg-black/60 px-1.5 py-0.5 text-xs leading-tight text-white max-sm:top-1 max-sm:left-1">
                   <span className="font-medium">{p.label}</span>
-                  <span className="tabular-nums text-white/75 max-sm:hidden" data-testid={`four-${p.id}-ms`}> · {ms(timings[p.id])}</span>
+                  <span className="tabular-nums text-white/75 max-sm:hidden" data-testid={`four-${p.id}-ms`}> · {fps(timings[p.id])}</span>
                 </p>
               </div>
             ))}
@@ -397,7 +400,7 @@ export function FourWays() {
                 <dt className="text-ink-faint">What moves</dt><dd>{p.moves}</dd>
                 <dt className="text-ink-faint">The light</dt><dd>{p.light}</dd>
                 <dt className="text-ink-faint">Written as</dt><dd>{facts[p.id]}</dd>
-                <dt className="text-ink-faint">One frame here</dt><dd className="tabular-nums">{ms(timings[p.id])}{p.id === 'blobscape' && built ? `, after ${built.seconds.toFixed(1)} s cutting the scene` : ''}</dd>
+                <dt className="text-ink-faint">Speed here</dt><dd className="tabular-nums">{timings[p.id] === undefined ? 'not timed yet' : `${fps(timings[p.id])} drawn alone (${ms(timings[p.id]!)} a frame)`}{p.id === 'blobscape' && built ? `, after ${built.seconds.toFixed(1)} s cutting the scene` : ''}</dd>
                 <dt className="text-ink-faint">Where it stops</dt><dd>{p.limit}</dd>
               </dl>
             </article>
