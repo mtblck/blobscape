@@ -2,6 +2,7 @@ import * as THREE from 'three/webgpu'
 import { STAGE_FOV, placeCamera, type Orbit } from '../splat-core/orbit.ts'
 import { readbackToSrgb } from '../splat-core/color.ts'
 import { SplatWorld, type Light } from './engine.ts'
+import { SHADOW_DENSITY } from './shadow.ts'
 import type { ShapeEdit } from './edit.ts'
 import { sampleClip, sampleWeights, type Clip } from './glb.ts'
 import type { Morph } from './morph.ts'
@@ -398,6 +399,13 @@ export class Stage {
   /** Seconds into the clip, or the time a poser is showing. */
   get time() { return this.step > 0 ? Math.floor(this.t / this.step + 1e-6) * this.step : this.t }
 
+  /** Moves the clock to `seconds` and draws that moment: for a page that kept its own time while this stage was paused. */
+  seek(seconds: number) {
+    this.t = seconds
+    this.pose()
+    this.invalidate()
+  }
+
   /** Changes how a blob on several bones takes its shape: see `SkinMode`. */
   setMode(m: SkinMode) {
     this.mode = m
@@ -415,6 +423,16 @@ export class Stage {
   setLightEase(frames: number) {
     this.lightEase = Math.max(0, frames)
     if (this.world) this.world.lightEase = this.lightEase
+    this.invalidate()
+  }
+
+  /**
+   * How dark what stands in a casting light's way makes it (the world's `shadowDensity`), kept for the next actor too:
+   * lower for fur and grass, which shade themselves dark at the engine's own.
+   */
+  setShadowDensity(density: number | undefined) {
+    this.opts.shadowDensity = density
+    if (this.world) this.world.shadowDensity = density ?? SHADOW_DENSITY
     this.invalidate()
   }
 
@@ -707,6 +725,26 @@ export class Stage {
       }
       this.renderer.setRenderTarget(this.target)
     }
+  }
+
+  /**
+   * @internal Poses and draws the frame as it stands `frames` times over and waits until the GPU has finished them all:
+   * how long one took, in milliseconds. For a page that times this stage beside other renderers (One Scene, Four
+   * Ways). Several frames to one wait, because the browser tells a page that WebGPU work is done some milliseconds
+   * late, and by an amount that wanders: timed one frame at a time, that wait was most of the number.
+   */
+  async timed(frames = 8): Promise<number> {
+    const t0 = performance.now()
+    for (let k = 0; k < frames; k++) {
+      this.pose()
+      this.resize()
+      this.draw()
+    }
+    const b = this.renderer.backend as unknown as { device?: { queue: { onSubmittedWorkDone(): Promise<void> } }; gl?: WebGL2RenderingContext }
+    if (b.device) await b.device.queue.onSubmittedWorkDone()
+    // reading one pixel back can't finish before the frames do
+    else b.gl?.readPixels(0, 0, 1, 1, b.gl.RGBA, b.gl.UNSIGNED_BYTE, new Uint8Array(4))
+    return (performance.now() - t0) / frames
   }
 
   /** Offscreen only: draws the frame `t` seconds into the clip and copies it to the page. */

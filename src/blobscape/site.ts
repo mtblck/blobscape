@@ -27,6 +27,17 @@ export const EXPERIMENTS_INTRO = "Small tools built from the same blobs as the l
  */
 export const EXPERIMENTS = [
   {
+    id: 'fourways',
+    title: 'One Scene, Four Ways',
+    url: '/experiments/four-ways/',
+    cover: '/covers/four-ways.webp',
+    tags: ['pixel', 'watch'],
+    needs: 'WebGPU or WebGL 2',
+    published: '2026-11-18',
+    updated: '2026-11-18',
+    body: 'A fox in tall grass under a circling light, or a campfire, drawn at the same moment by a plain shader, three.js meshes, Spark splats and Blobscape. Turn it, dim the light, and see what each one is made of and what it can do.',
+  },
+  {
     id: 'daynight',
     title: 'Day and Night',
     url: '/experiments/day-and-night/',
@@ -89,7 +100,7 @@ export const EXPERIMENTS = [
     tags: ['pixel', 'tool'],
     needs: 'WebGPU or WebGL 2',
     published: '2026-11-15',
-    updated: '2026-11-17',
+    updated: '2026-11-18',
     body: 'A lighthouse, a dragon over lava, a bee in a forest and more, built from shapes and drawn as moving pixel art. It is real 3D underneath, so you can turn it, swap the palette, or switch the pixels off to see the blobs.',
   },
   {

@@ -1,7 +1,7 @@
 // The engine experiments, each on its own page.
 
 // the Pixel Diorama scenes written as descriptions, each checked as one part
-const SCENES = [['bee', 'Forest bee'], ['campfire', 'Campfire'], ['croc', 'Garden crocodile'], ['dragon', 'Lava dragon'], ['grove', 'Lantern grove'], ['hand', 'Stone hand'], ['harvest', 'Pumpkin watch'], ['hut', 'Heron hut'], ['isles', 'Sky islands'], ['lab', 'Sprout lab'], ['octopus', 'Storm octopus'], ['owl', 'Owl and cauldron'], ['reef', 'Jellyfish reef'], ['snail', 'Snail house'], ['spider', 'Lantern spider'], ['window', 'Sunrise window'], ['windmill', 'Windmill']]
+const SCENES = [['bee', 'Forest bee'], ['campfire', 'Campfire'], ['croc', 'Garden crocodile'], ['dragon', 'Lava dragon'], ['grove', 'Lantern grove'], ['hand', 'Stone hand'], ['harvest', 'Pumpkin watch'], ['hut', 'Heron hut'], ['isles', 'Sky islands'], ['lab', 'Sprout lab'], ['meadow', 'Fox and wisp'], ['octopus', 'Storm octopus'], ['owl', 'Owl and cauldron'], ['reef', 'Jellyfish reef'], ['snail', 'Snail house'], ['spider', 'Lantern spider'], ['window', 'Sunrise window'], ['windmill', 'Windmill']]
 
 export default [
   {
@@ -602,6 +602,53 @@ export default [
           await d.ctx.close()
         }
       },
+  })),
+  ...[['fox', 'the fox', 'wisp'], ['campfire', 'the camp', 'fire']].map(([scene, what, light]) => ({
+    name: `four-ways-${scene}`,
+    about: `One Scene, Four Ways: the shader, three.js, Spark and Blobscape each draw ${what}, and the slider for the ${light} moves every one but Spark`,
+    entries: ['src/blobscape/FourWays.tsx'],
+    async run({ shots, join, fails, ok, open, axe }) {
+      const k = await open(`/experiments/four-ways/?offscreen=1&scene=${scene}`, { viewport: { width: 1280, height: 900 } })
+      const up = await k.page.waitForFunction(() => window.__four?.ready().length === 4, null, { timeout: 180000 }).then(() => true, () => false)
+      if (!up) { fails.push(`four ways (${scene}): only ${await k.page.evaluate(() => window.__four?.ready().join(', '))} came up`); await k.ctx.close(); return }
+      // one moment, with the light out and then at its brightest
+      const read = (fire) => k.page.evaluate(async (fire) => {
+        window.__four.setFire(fire)
+        await new Promise((r) => setTimeout(r, 300))
+        await window.__four.frame(1.5)
+        const out = {}
+        for (const id of ['shader', 'meshes', 'splats']) out[id] = window.__four.art(id)
+        const f = await window.__four.stage.pixelFrames()
+        let solid = 0, light = 0
+        for (let i = 0; i < f.small.data.length; i += 4) if (f.small.data[i + 3] >= 128) { solid++; light += f.small.data[i] + f.small.data[i + 1] + f.small.data[i + 2] }
+        out.blobscape = { width: f.art.width, height: f.art.height, cover: solid / (f.small.width * f.small.height), light, colors: new Set(Array.from({ length: f.art.data.length / 4 }, (_, i) => (f.art.data[i * 4] << 16) | (f.art.data[i * 4 + 1] << 8) | f.art.data[i * 4 + 2])).size }
+        return out
+      }, fire)
+      // Spark shows nothing until its first sort is back, so one frame is drawn before any is read
+      await k.page.evaluate(() => window.__four.frame(1.5))
+      const dark = await read(0), bright = await read(2)
+      await k.page.screenshot({ path: join(shots, `blobscape-four-ways-${scene}.png`) })
+      const ids = ['shader', 'meshes', 'splats', 'blobscape']
+      const sizes = new Set(ids.map((id) => `${bright[id].width}x${bright[id].height}`))
+      const drew = ids.filter((id) => bright[id].cover > 0.15 && bright[id].cover < 0.8 && bright[id].colors >= 12)
+      if (sizes.size !== 1 || drew.length !== 4) fails.push(`four ways (${scene}): sizes ${[...sizes].join(', ')}; ${ids.map((id) => `${id} covers ${(bright[id].cover * 100).toFixed(0)}% in ${bright[id].colors} colors`).join(', ')}`)
+      else ok(`four ways (${scene}): all four draw ${what} at ${[...sizes][0]} (${ids.map((id) => `${id} ${(bright[id].cover * 100).toFixed(0)}%`).join(', ')} of the picture)`)
+      // all four are one scene: no picture covers much more or less than another
+      const covers = ids.map((id) => bright[id].cover)
+      if (Math.max(...covers) - Math.min(...covers) > 0.08) fails.push(`four ways (${scene}): the four pictures cover ${covers.map((c) => (c * 100).toFixed(0)).join(', ')}% of the frame: they are not one scene`)
+      const gain = (id) => bright[id].light / Math.max(1, dark[id].light)
+      if (!(gain('shader') > 1.02 && gain('meshes') > 1.02 && gain('blobscape') > 1.02) || gain('splats') !== 1) fails.push(`four ways (${scene}): the ${light} from out to full makes the picture ${ids.map((id) => `${id} ${gain(id).toFixed(3)}`).join(', ')} times as bright; Spark's should not change and the others should`)
+      else ok(`four ways (${scene}): turning the ${light} up lights the shader, three.js and Blobscape (${ids.filter((id) => id !== 'splats').map((id) => `${id} ${gain(id).toFixed(2)}×`).join(', ')}) and leaves Spark's painted light as it was`)
+      if (scene === 'fox') {
+        // picking the other scene on the page swaps all four
+        await k.page.locator('[data-testid=four-scene] button', { hasText: 'Campfire' }).click()
+        const swapped = await k.page.waitForFunction(() => /camp/.test(document.querySelector('[data-testid=four-view]')?.getAttribute('aria-label') ?? '') && window.__four?.ready().length === 4, null, { timeout: 120000 }).then(() => true, () => false)
+        if (!swapped) fails.push('four ways: picking Campfire did not bring all four panels back')
+        else ok('four ways: picking the other scene swaps all four panels')
+      }
+      await axe(k.page, `four ways (${scene})`)
+      await k.ctx.close()
+    },
   })),
   {
     name: 'brush-and-ink',
@@ -1401,11 +1448,11 @@ export default [
     core: true,
     about: 'every experiment: same two columns, its own tabs, a preview that stays in sight on a phone',
     entries: ['src/shared/Workbench.tsx', 'src/shared/ui.tsx'],
-    files: ['src/shared/theme.css', 'src/blobscape/PixelDiorama.tsx', 'src/blobscape/Creature.tsx', 'src/blobscape/ForestWalk.tsx', 'src/blobscape/WadingPond.tsx', 'src/blobscape/DungeonRun.tsx', 'src/blobscape/ScanStudio.tsx', 'src/blobscape/Clockwork.tsx', 'src/blobscape/ShapeShifter.tsx', 'src/blobscape/SandSnowGoo.tsx', 'src/blobscape/BrushInk.tsx', 'src/fit-a-picture/App.tsx', 'src/splat-to-sprite/App.tsx'],
+    files: ['src/shared/theme.css', 'src/blobscape/PixelDiorama.tsx', 'src/blobscape/Creature.tsx', 'src/blobscape/ForestWalk.tsx', 'src/blobscape/WadingPond.tsx', 'src/blobscape/DungeonRun.tsx', 'src/blobscape/ScanStudio.tsx', 'src/blobscape/Clockwork.tsx', 'src/blobscape/ShapeShifter.tsx', 'src/blobscape/SandSnowGoo.tsx', 'src/blobscape/BrushInk.tsx', 'src/blobscape/FourWays.tsx', 'src/fit-a-picture/App.tsx', 'src/splat-to-sprite/App.tsx'],
     async run({ join, fails, ok, open }) {
       const PAGES = [
         ['pixel-diorama', 'Scene,Pixels,Finish'], ['creature', 'Creature Type,Movement & Details,Export & Import'], ['forest-walk', 'Forest Type,Character Style,View'], ['wading-pond', 'Water & Light,Character Style,View'],
-        ['dungeon-run', 'Game Settings,Character Style,View'], ['scan-studio', 'Import,Level & Crop,Clean,Lighting,Colliders'], ['clockwork', 'Time,View'], ['shape-shifter', 'Shift,Creatures'], ['sand-snow-goo', 'Material,Test,View'], ['brush-and-ink', 'Look,Subject'],
+        ['dungeon-run', 'Game Settings,Character Style,View'], ['scan-studio', 'Import,Level & Crop,Clean,Lighting,Colliders'], ['clockwork', 'Time,View'], ['shape-shifter', 'Shift,Creatures'], ['sand-snow-goo', 'Material,Test,View'], ['brush-and-ink', 'Look,Subject'], ['four-ways', 'Compare,Pixels'],
         ['fit-a-picture', 'Picture,Training'], ['splat-to-sprite', 'Prop Type,Pixels,Finish,View'],
       ]
       const sizes = new Set()

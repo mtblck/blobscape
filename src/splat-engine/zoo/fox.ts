@@ -1,9 +1,9 @@
-import type { Vec3 } from '../../splat-core/blobs.ts'
+import { Blobs, type Vec3 } from '../../splat-core/blobs.ts'
 import { mix } from '../body.ts'
 import { COATS, foxBones, poseIdle, poseWalk, type Coat } from '../creature.ts'
-import { axisAngle, type Skeleton } from '../rig.ts'
-import { growFur, type FurryPart } from '../fur.ts'
-import { flatten, sculptToCount, smooth, type SculptSpec } from '../sculpt.ts'
+import { axisAngle, emptySkin, type Skeleton } from '../rig.ts'
+import { growFur, quatFromAxes, type FurryPart } from '../fur.ts'
+import { flatten, joinBuilt, sculptToCount, smooth, type SculptSpec } from '../sculpt.ts'
 import { cone, ellipsoid } from '../voxel.ts'
 import type { SwingSpec } from '../swing.ts'
 import type { Species } from './species.ts'
@@ -63,10 +63,8 @@ function spec(c: Coat, s: number): SculptSpec & { parts: FurryPart[] } {
     {
       shape: smooth(0.06, ellipsoid([0, 1.2, 0.9], [0.125, 0.115, 0.135]), cone([0, 1.17, 1.0], [0, 1.115, 1.31], 0.075, 0.026)),
       color: (p, n) => {
-        // a dark line from the eye down the side of the muzzle
-        if (p[2] > 1.06 && p[2] < 1.2 && Math.abs(Math.abs(p[0]) - (0.07 - (p[2] - 1.06) * 0.25)) < 0.012 && p[1] > 1.13 && p[1] < 1.19) return c.dark
-        // the lip line
-        if (p[2] > 1.04 && Math.abs(p[1] - (1.125 - (p[2] - 1.04) * 0.12)) < 0.006 && n[1] < 0.2) return c.dark
+        // the lip line, a shade under the coat (in black it read as a streak across the face, as the line from the eye did)
+        if (p[2] > 1.12 && Math.abs(p[1] - (1.125 - (p[2] - 1.04) * 0.12)) < 0.006 && n[1] < 0.2) return deep
         if (n[1] < -0.15 || (p[2] > 1.04 && n[1] < 0.35)) return c.pale
         return coat(p, n)
       },
@@ -162,12 +160,42 @@ export function trot(sk: Skeleton, t: number) {
   sk.update()
 }
 
-/** Builds the fox with about `count` blobs: a sculpted skin under strands of fur. `look` picks its coat. */
-export function makeFox(count = 20000, look = 'red') {
+/** Whiskers a side, how long they are, and how thick unless `makeFox` is told (a small fox in pixel art needs them thicker to show at all). */
+export const WHISKERS = 4
+const WHISKER = { length: 0.17, width: 0.0035, color: [0.93, 0.9, 0.84] as Vec3 }
+
+/** The whiskers: one long thin blob each, fanned out and a little back from the sides of the muzzle, on the head's bone. */
+function whiskers(head: number, width: number) {
+  const blobs = new Blobs(WHISKERS * 2), skin = emptySkin(WHISKERS * 2)
+  for (const side of [1, -1]) for (let k = 0; k < WHISKERS; k++) {
+    const fan = k / (WHISKERS - 1) - 0.5
+    const way: Vec3 = [side, 0.1 - 0.75 * fan, -0.3 + 0.25 * Math.abs(fan)]
+    const l = Math.hypot(...way), d: Vec3 = [way[0] / l, way[1] / l, way[2] / l]
+    const len = WHISKER.length * (1 - 0.35 * Math.abs(fan))
+    const root: Vec3 = [side * 0.036, 1.133 - 0.012 * fan, 1.2 + 0.015 * fan]
+    // any two axes square to the whisker
+    const x: Vec3 = [0, d[2], -d[1]], xl = Math.hypot(...x)
+    const xn: Vec3 = [0, x[1] / xl, x[2] / xl], y: Vec3 = [d[1] * xn[2] - d[2] * xn[1], d[2] * xn[0] - d[0] * xn[2], d[0] * xn[1] - d[1] * xn[0]]
+    const at = blobs.push({
+      center: [root[0] + d[0] * len * 0.5, root[1] + d[1] * len * 0.5, root[2] + d[2] * len * 0.5],
+      scale: [width, width, len * 0.3], quat: quatFromAxes(xn, y, d), color: WHISKER.color, opacity: 1,
+    })
+    skin.joints[at * 4] = head
+    skin.weights[at * 4] = 1
+  }
+  return { blobs, skin }
+}
+
+/**
+ * Builds the fox with about `count` blobs: a sculpted skin under strands of fur, and whiskers. `look` picks its coat;
+ * `whisker` is how thick a whisker is.
+ */
+export function makeFox(count = 20000, look = 'red', whisker = WHISKER.width) {
   const c = COATS[look as keyof typeof COATS] ?? COATS.red
   const skin = sculptToCount((s) => spec(c, s), count * SKIN, 0.05)
-  const b = growFur(skin, spec(c, skin.spacing).parts, count)
-  return { blobs: b.blobs, skin: b.skin, skeleton: b.skeleton }
+  const b = growFur(skin, spec(c, skin.spacing).parts, count - WHISKERS * 2)
+  const all = joinBuilt(b, whiskers(b.skeleton.index('head'), whisker))
+  return { blobs: all.blobs, skin: all.skin, skeleton: b.skeleton }
 }
 
 /**

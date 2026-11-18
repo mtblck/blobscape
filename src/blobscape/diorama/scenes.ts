@@ -7,6 +7,7 @@ import { compileScene, type SceneDoc } from '../../splat-engine/sceneDoc.ts'
 import { SceneWater } from '../../splat-engine/sceneWater.ts'
 import { buildVoxels } from '../../splat-engine/voxel.ts'
 import { LOOP, PALETTES, lampLights, makeDiorama, poseDiorama } from './scene.ts'
+import * as meadow from '../fourways/meadow/build.ts'
 import { CAMPFIRE } from './scenes/campfire.ts'
 import { BEE } from './scenes/bee.ts'
 import { DRAGON } from './scenes/dragon.ts'
@@ -49,7 +50,12 @@ export interface Diorama {
   /** Cuts the scene. With `steps` (a palette), it is painted in steps of that palette as it is cut. */
   make(spacing: number, steps?: Rgb[]): Built
   pose(sk: Skeleton, t: number): void
-  lights(t: number): PointLight[]
+  /** Its live lights `t` seconds in. `shadows` says whether one that can cast shadows should (the page asks only where the GPU works them out). */
+  lights(t: number, shadows?: boolean): PointLight[]
+  /** How much of its painted color everything keeps before its lights are added: 1 where left out, less for a scene lit mostly live. */
+  ambient?: number
+  /** How dark what stands in a casting light's way makes it, for a scene whose lights cast shadows: the engine's own where left out. */
+  shadowDensity?: number
   /** Distance haze: its color (linear) and where it starts and would be total, in units past the view's target. */
   haze?: { color: [number, number, number]; from: number; to: number }
   /** Parts (by their place in the list) that meet others by design: the check for parts passing through each other lets them. */
@@ -134,6 +140,34 @@ export function described(id: string, doc: SceneDoc, about: string): Diorama {
   }
 }
 
+/**
+ * The fox and wisp of One Scene, Four Ways (fourways/meadow/): not a description alone, because a description cannot
+ * yet hold a furred creature or grass. Its turf, stone and sky are one; the fox and the blades are joined on.
+ */
+const FOX_MEADOW: Diorama = {
+  id: 'meadow',
+  label: meadow.SCENE.name,
+  about: 'A fox with a full coat of fur trotting a ring through tall swaying grass round a standing stone at night, while a wisp of light circles it and throws moving shadows',
+  loop: meadow.LOOP,
+  palette: { label: OWN_PALETTE, colors: meadow.SCENE.palette },
+  sky: meadow.SCENE.look.sky ?? night(meadow.SCENE.palette),
+  finish: { dither: meadow.SCENE.look.dither, glow: meadow.SCENE.look.glow, outline: !!meadow.SCENE.look.outline, edges: !!meadow.SCENE.look.edges, sky: !!meadow.SCENE.look.sky, steps: false },
+  views: [
+    { id: 'start', label: 'From the front', orbit: meadow.SCENE.orbit },
+    { id: 'above', label: 'From above', orbit: { ...meadow.SCENE.orbit, elevation: 40, distance: meadow.SCENE.orbit.distance * 1.25 } },
+    { id: 'close', label: 'Close up', orbit: { ...meadow.SCENE.orbit, target: [0, 0.3, 0.6], distance: meadow.SCENE.orbit.distance * 0.55 } },
+  ],
+  swing: 0,
+  make: (spacing) => { const s = meadow.sharesAt(spacing); return meadow.buildMeadow(spacing, s.fox, s.blades) },
+  pose: meadow.poseMeadowBones,
+  lights: (t, shadows = false) => meadow.lightsAt(t, 1, shadows),
+  ambient: meadow.AMBIENT,
+  shadowDensity: 0.5,
+  haze: meadow.SCENE.haze,
+  // the fox wades through the grass and its paws press into the turf
+  touching: [meadow.SCENE_PARTS, meadow.SCENE_PARTS + 1],
+}
+
 export const DIORAMAS: Diorama[] = [
   LIGHTHOUSE,
   described('campfire', CAMPFIRE, 'A camp in a clearing among pines at night, with a flickering fire throwing sparks, a tent, a lantern, fireflies and the moon'),
@@ -158,4 +192,5 @@ export const DIORAMAS: Diorama[] = [
   described('canyon', CANYON, 'A desert canyon at sunset worn by water, with banded cliffs and ledges, scree, a mesa, hoodoos, a natural arch, a dry stream bed of pebbles and cracked mud, saguaros, a gnarled tree, a ram skull with curled horns, old ribs, a fossil shell and a circling hawk'),
   described('cabin', CABIN, 'A log cabin snowed in on a winter night: snow falling and settling where it lands, drifts piled deep downwind of the cabin, rocks and fence, a path trodden to the gate, frost growing across the lit window, chimney smoke, a woodpile and a lantern'),
   described('koi', KOI, 'A koi pond in a moss garden on a rainy day: raindrops ring the water where they land, the rings cross and bounce off the banks and stepping stones, koi circle under the surface and leave wakes, and a tall stone lantern and a low snow-viewing lantern glow under a cherry tree in full bloom that sheds its petals, with bamboo, irises and lily pads'),
+  FOX_MEADOW,
 ]
