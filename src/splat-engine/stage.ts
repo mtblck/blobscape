@@ -657,7 +657,8 @@ export class Stage {
     this.draw()
     if (this.actor) this.firstFrame()
     if (!this.target) return
-    const ctx = this.display.getContext('2d')!
+    // read back by checks: a CPU canvas, because a GPU one gives a few faint pixels a different rounding the first time it is read
+    const ctx = this.display.getContext('2d', { willReadFrequently: true })!
     if (this.pixel) {
       // the art, scaled up in whole pixels
       const art = await this.read(this.pixel.art, true)

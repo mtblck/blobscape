@@ -177,7 +177,9 @@ async function runOne(browser, c) {
   try {
     await Promise.race([c.run(t), new Promise((_, j) => { timer = setTimeout(() => j(new Error(`still running after ${LIMIT / 60000} minutes`)), LIMIT) })])
   } catch (e) {
-    t.fails.push(`${c.name} stopped: ${e.message.split('\n')[0]}`)
+    // where it stopped: the last step that passed
+    const last = [...(t.log ?? [])].reverse().find((l) => l.startsWith('  ok  '))
+    t.fails.push(`${c.name} stopped: ${e.message.split('\n')[0]}${last ? ` (after "${last.slice(6, 90)}")` : ' (before its first step passed)'}`)
   }
   clearTimeout(timer)
   await t.cleanup()
