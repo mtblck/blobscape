@@ -6,6 +6,10 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 
 ## [Unreleased]
 
+- The dragon's breath ends by leaving its mouth and thinning away out in front, instead of shrinking back in. On Splat Creatures the waiting mark now stays until a detailed creature is really on screen.
+- Splat Creatures: the dragon's breath now acts on what is round it. Its ribs fill and its throat glows before the flame comes; the flame lights its hide (and casts shadows, on WebGPU), glows through a lens, and comes down on a floor of flagstones that burns, spreads a little and stays scorched for a while; sparks fly off the end and smoke hangs at the mouth after. Each look has its own breath: frost for the ice dragon (rime and ice on the floor), fire for ember, a green venom for jade. The engine page's dragon does the same.
+- Engine: `Stage.useLights`, `setGlowGain` and `recolor`; a sprite sheet leaves out whatever is drawn with the creature (`extras`) and any live light; the dragon has a `lungs` bone (44 bones) and `breathAt`, `dragonBreath`.
+
 ## [0.4.0] - 2026-11-18
 
 The headlines:

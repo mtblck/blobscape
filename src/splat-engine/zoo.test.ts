@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readRiggedGlb, recordClip, sampleClip, writeRiggedGlb } from './glb.ts'
 import { aim, dir, restDir, worldQuat } from './posing.ts'
 import { Skeleton, mulQ, posedPoint, rotate, skinBlob } from './rig.ts'
-import { FLAME, makeDragon } from './zoo/dragon.ts'
+import { BREATH, FLAME, breathAt, dragonBreath, dragonFire, makeDragon } from './zoo/dragon.ts'
 import { ELF_BONES, QUIVER, clearCloak, clearPlait } from './zoo/elf.ts'
 import { ElfCloth } from './zoo/elfCloth.ts'
 import { ZOO } from './zoo/index.ts'
@@ -74,9 +74,9 @@ test('the dragon keeps its fire in its mouth until it breathes, and the file kee
   }
   const breath = ZOO.find((s) => s.id === 'dragon')!.moves.find((m) => m.name === 'fire')!
   const clip = recordClip('fire', d.skeleton, breath.pose, breath.seconds, 30)
-  // only the fire bones grow, so only they get scale keys
+  // only the fire bones and the ribs grow, so only they get scale keys
   const grown = (clip.sizes ?? []).map((s, b) => (s ? d.skeleton.bones[b].name : '')).filter(Boolean)
-  assert.deepEqual(grown, ['fire1', 'fire2', 'fire3', 'fire4', 'fire5', 'fire6'])
+  assert.deepEqual(grown, ['fire1', 'fire2', 'fire3', 'fire4', 'fire5', 'fire6', 'lungs'])
   // mid-breath the flame is life size: its end is meters out in front
   sampleClip(clip, d.skeleton, breath.seconds * 0.6)
   assert.ok(d.skeleton.scale[fire] > FLAME * 0.5, `fire1 at ${d.skeleton.scale[fire]}`)
@@ -85,6 +85,66 @@ test('the dragon keeps its fire in its mouth until it breathes, and the file kee
   // and back in the mouth by the end
   sampleClip(clip, d.skeleton, breath.seconds * 0.99)
   assert.ok(near(d.skeleton.scale[fire], 1, 1e-2))
+})
+
+test('the dragon fills its ribs, then breathes onto the ground in front, where the flame turns and runs along it', () => {
+  const d = makeDragon(6000)
+  const sk = d.skeleton
+  const lungs = sk.index('lungs'), fire = sk.index('fire1')
+  let fullest = 0, lowest = Infinity
+  for (let u = 0; u < 1; u += 0.01) {
+    dragonFire(sk, u * BREATH)
+    const at = breathAt(u * BREATH)
+    fullest = Math.max(fullest, sk.size[lungs])
+    // the ribs are fullest before any flame is out
+    if (sk.size[lungs] > 1.12) assert.ok(at.flame < 0.5, `ribs full at ${u} with the flame out`)
+    if (sk.scale[fire] < FLAME * 0.9) continue
+    for (let k = 1; k < 6; k++) {
+      const y = sk.posedHead[(fire + k) * 3 + 1]
+      lowest = Math.min(lowest, y)
+      // no link's middle goes into the floor
+      assert.ok(y > 0.15, `fire${k + 1} at y = ${y}, u = ${u}`)
+    }
+    // the last link lies nearly level: the flame runs along the ground, not into it
+    const a = sk.posedHead.subarray((fire + 5) * 3, (fire + 5) * 3 + 3), b = posedPoint(sk, fire + 5, sk.bones[fire + 5].tail!)
+    if (u > 0.6 && u < 0.78) assert.ok(b[1] > 0.1 && Math.abs(b[1] - a[1]) < 0.35 * Math.hypot(b[0] - a[0], b[2] - a[2]), `the end of the flame dives at u = ${u}: ${a[1]} to ${b[1]}`)
+  }
+  assert.ok(fullest > 1.12, `ribs swell to ${fullest}`)
+  assert.ok(lowest < 0.7, `the flame comes down to ${lowest}`)
+  // the glow bytes mark the breath (all its own light) and the eyes (some)
+  let breath = 0
+  for (let i = 0; i < d.blobs.count; i++) if (d.glow[i] === 255) breath++
+  assert.ok(breath > 200 && breath < d.blobs.count * 0.2, `${breath} blobs of breath`)
+  // each look has its own breath, and its own colors for it
+  assert.deepEqual(['ice', 'ember', 'jade'].map(dragonBreath), ['frost', 'fire', 'venom'])
+  const mean = (look: string) => { const m = makeDragon(6000, look); let r = 0, b = 0, n = 0; for (let i = 0; i < m.blobs.count; i++) if (m.glow[i] === 255) { r += m.blobs.color[i * 3]; b += m.blobs.color[i * 3 + 2]; n++ } return { r: r / n, b: b / n } }
+  const frost = mean('ice'), flame = mean('ember')
+  assert.ok(frost.b > frost.r && flame.r > flame.b * 2, `frost ${JSON.stringify(frost)} fire ${JSON.stringify(flame)}`)
+})
+
+test('the breath ends by leaving the mouth and thinning away out in front, never by drawing back in', () => {
+  const sk = makeDragon(20000).skeleton
+  const fire = sk.index('fire1'), head = sk.bones[fire].parent
+  const mouth = () => posedPoint(sk, head, sk.bones[fire].head)
+  let last = 0, furthest = 0
+  for (let u = 0.74; u < 0.999; u += 0.004) {
+    dragonFire(sk, u * BREATH)
+    const m = mouth(), p = sk.posedHead.subarray(fire * 3, fire * 3 + 3)
+    const gap = Math.hypot(p[0] - m[0], p[1] - m[1], p[2] - m[2])
+    if (sk.scale[fire] > 1.5) {
+      // while any of it shows, its mouth end only ever goes further from the mouth, and it stays over the floor
+      assert.ok(gap >= last - 1e-3, `the flame comes back toward the mouth at u = ${u}: ${last} to ${gap}`)
+      assert.ok(p[1] > 0.1, `the flame's end is at y = ${p[1]} at u = ${u}`)
+      last = gap
+      furthest = Math.max(furthest, gap)
+      // and it gets no bigger on the way
+      if (u > 0.78) assert.ok(sk.scale[fire] < FLAME * 0.98)
+    } else if (u > 0.9 && gap > 0.01) assert.ok(sk.scale[fire] < 1e-6, `the flame is put back while it still shows, at u = ${u}, size ${sk.scale[fire]}`)
+  }
+  assert.ok(furthest > 2, `the last of the flame gets ${furthest} m from the mouth`)
+  // back in the mouth at its waiting size before the breath starts again
+  dragonFire(sk, 0.99 * BREATH)
+  assert.ok(near(sk.scale[fire], 1, 1e-6) && sk.offset[fire * 3 + 2] === 0)
 })
 
 test('aim turns a bone to point where it is told, under a turned parent', () => {

@@ -17,6 +17,8 @@ export interface Move {
   fps?: number
   /** Poses the skeleton `t` seconds into the move. */
   pose: (sk: Skeleton, t: number) => void
+  /** Another label and description in some looks, by look id: the ice dragon's breath is frost, not fire. */
+  byLook?: Record<string, { label: string; doing: string }>
 }
 
 export interface Look { id: string; label: string }

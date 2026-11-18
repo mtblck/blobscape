@@ -157,7 +157,7 @@ Here, written by `scripts/rigged-samples.ts`:
 - [`frog.glb`](../public/rigged-splats/frog.glb): 4,145 splats, 20 bones, `jump`, `tongue` and `idle`. The tongue is a bone that grows from scale 0, so it's hidden at rest.
 - [`puffer.glb`](../public/rigged-splats/puffer.glb): 5,257 splats, 3 bones and 4 morphs (`puff`, `spikes`, `tail left`, `tail right`), with `swim` and `puff` clips that key their weights. Only the puff moves every splat; the other three are sparse.
 
-Larger ones (up to 400k splats, and the 43-bone dragon) come from the Download button on [Splat Creatures](https://blobscape.dev/experiments/creature/).
+Larger ones (up to 400k splats, and the 44-bone dragon) come from the Download button on [Splat Creatures](https://blobscape.dev/experiments/creature/).
 
 ## Implementations
 

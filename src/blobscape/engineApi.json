@@ -79,6 +79,12 @@
        "optional": true,
        "type": "Morph[]",
        "doc": "Blend shapes (from an opened .glb): a clip's weights, or `setMorphWeights` while none play, reshape the blobs on the CPU."
+      },
+      {
+       "name": "glow",
+       "optional": true,
+       "type": "Uint8Array<ArrayBufferLike>",
+       "doc": "How much of its own light each blob gives, a byte a blob (255 all of it): a flame, a lit window. It only matters under live lights."
       }
      ]
     },
@@ -232,6 +238,15 @@
        ]
       },
       {
+       "name": "shown",
+       "doc": "Resolves once a frame drawn from now on is through the GPU: called after `setActor`, that is when the new\ncreature is really on screen, which on a phone can be seconds after the call returns (buffers to fill, shaders\nto build). A page keeps its waiting mark up until then. At once on an `offscreen` stage, which draws only when asked.",
+       "signatures": [
+        {
+         "code": "shown(): Promise<void>"
+        }
+       ]
+      },
+      {
        "name": "setActor",
        "doc": "Shows a creature, replacing the last one, and plays `clip` on it. `extras` are more actors drawn in the same\nworld, sorted blob by blob with the first: things that move on their own and not by its bones, such as the\nsurface of a pond (`reshape` sends one up again after its blobs were changed). Clips, posers, picking, tints and\nsheets are all about the first actor.",
        "signatures": [
@@ -259,6 +274,15 @@
        ]
       },
       {
+       "name": "useLights",
+       "doc": "Whether worlds are built with live lights (the `lights` option, changed after the start), from the next\n`setActor` on: a page turns them on for the one creature that wants them and leaves the rest as light to draw as\nthey were.",
+       "signatures": [
+        {
+         "code": "useLights(on: boolean): void"
+        }
+       ]
+      },
+      {
        "name": "setClip",
        "doc": "Plays another clip on the creature shown, or none. `from` is the time it starts at, in seconds (left out, time runs on).",
        "signatures": [
@@ -282,6 +306,15 @@
        "signatures": [
         {
          "code": "setPoser(poser?: (sk: Skeleton, t: number) => void, from?: number): void"
+        }
+       ]
+      },
+      {
+       "name": "recolor",
+       "doc": "Takes one actor's colors and opacities again after they were changed in place (the one shown or one of its\n`extras`), when nothing moved: a floor that scorches.",
+       "signatures": [
+        {
+         "code": "recolor(actor: StageActor): void"
         }
        ]
       },
@@ -426,6 +459,15 @@
        "signatures": [
         {
          "code": "setLights(lights: Light[], ambient?: number | readonly [number, number, number]): void"
+        }
+       ]
+      },
+      {
+       "name": "setGlowGain",
+       "doc": "How many times its own color a blob that gives its own light (`Actor.glow`) is drawn under live lights (the\nworld's `glowGain`), kept for the next actor too. Over 1 only with a lens (`setLens`), which lets what is brighter\nthan white glow; drawn straight to the screen it clips.",
+       "signatures": [
+        {
+         "code": "setGlowGain(gain: number): void"
         }
        ]
       },
@@ -2670,6 +2712,12 @@
        "name": "spacing",
        "type": "number",
        "doc": "The grid's cell size it was cut at."
+      },
+      {
+       "name": "glow",
+       "optional": true,
+       "type": "Uint8Array<ArrayBufferLike>",
+       "doc": "How much of its own light each blob gives, a byte a blob (the engine's `Actor.glow`): 255 for `glow` parts; left out, nothing glows."
       }
      ]
     },
@@ -3108,6 +3156,12 @@
        "name": "pose",
        "type": "(sk: Skeleton, t: number) => void",
        "doc": "Poses the skeleton `t` seconds into the move."
+      },
+      {
+       "name": "byLook",
+       "optional": true,
+       "type": "Record<string, { label: string; doing: string }>",
+       "doc": "Another label and description in some looks, by look id: the ice dragon's breath is frost, not fire."
       }
      ]
     },
@@ -3253,15 +3307,15 @@
    "id": "zoo-dragon",
    "title": "Dragon",
    "group": "creatures",
-   "doc": "A dragon, standing, facing +z, about eight units nose to tail: 43 bones.\nIts body is cut the way the pixel scenes are (sculpt.ts): every scale, tooth\nand horn ring is a shape or a pattern on one, lit and shadowed once, and\nweighted to the bones so the neck and tail still curve. Its wings are skin\nstretched between an arm and three finger bones, so the membrane follows\nthe fingers as they spread and fold.\n\nIts fire is bones too: a chain of six from inside the mouth. In the rest\npose the flame is built FLAME times smaller than life, hidden in the mouth,\nso a file opened elsewhere shows a dragon with its mouth shut; breathing\nfire grows the first fire bone by FLAME (a scale key, which glTF has) and\nthe chain unrolls and flickers. Nothing about it is a particle system.",
+   "doc": "A dragon, standing, facing +z, about eight units nose to tail: 44 bones.\nIts body is cut the way the pixel scenes are (sculpt.ts): every scale, tooth\nand horn ring is a shape or a pattern on one, lit and shadowed once, and\nweighted to the bones so the neck and tail still curve. Its wings are skin\nstretched between an arm and three finger bones, so the membrane follows\nthe fingers as they spread and fold.\n\nIts fire is bones too: a chain of six from inside the mouth. In the rest\npose the flame is built FLAME times smaller than life, hidden in the mouth,\nso a file opened elsewhere shows a dragon with its mouth shut; breathing\nfire grows the first fire bone by FLAME (a scale key, which glTF has) and\nthe chain unrolls and flickers. Nothing about it is a particle system.\nWhat it breathes goes with its look (`dragonBreath`): fire, frost, or a\ngreen venom that burns. One more bone, `lungs`, swells the ribs as it\ndraws breath.",
    "entries": [
     {
      "name": "makeDragon",
      "kind": "function",
-     "doc": "Builds the dragon with about `count` blobs, a small share of them the fire that waits in its mouth. `look` picks\nits colors.",
+     "doc": "Builds the dragon with about `count` blobs, a small share of them the breath that waits in its mouth. `look` picks\nits colors and what it breathes. `glow` marks the blobs that give their own light (the breath and the eyes), for a\nworld with live lights.",
      "signatures": [
       {
-       "code": "makeDragon(count?: number, look?: string): { blobs: Blobs; skin: Skin; skeleton: Skeleton }"
+       "code": "makeDragon(count?: number, look?: string): { blobs: Blobs; skin: Skin; skeleton: Skeleton; glow: Uint8Array<ArrayBuffer> }"
       }
      ]
     },

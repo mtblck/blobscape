@@ -64,6 +64,8 @@ export interface Sculpted extends Creature {
   partOf: Uint16Array
   /** The grid's cell size it was cut at. */
   spacing: number
+  /** How much of its own light each blob gives, a byte a blob (the engine's `Actor.glow`): 255 for `glow` parts; left out, nothing glows. */
+  glow?: Uint8Array
 }
 
 /**
@@ -102,7 +104,7 @@ export function buildSculpt(spec: SculptSpec, spacing: number): Sculpted {
     best[1] = Math.max(best[1], 1e-3)
     setWeights(skin, i, pairs)
   }
-  return { blobs: built.blobs, skin, skeleton: built.skeleton, partOf: built.partOf, spacing }
+  return { blobs: built.blobs, skin, skeleton: built.skeleton, partOf: built.partOf, spacing, glow: built.glow }
 }
 
 /**

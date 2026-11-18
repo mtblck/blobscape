@@ -36,6 +36,8 @@ export interface Actor {
   skeleton: Skeleton
   /** Blend shapes (from an opened .glb): a clip's weights, or `setMorphWeights` while none play, reshape the blobs on the CPU. */
   morphs?: Morph[]
+  /** How much of its own light each blob gives, a byte a blob (255 all of it): a flame, a lit window. It only matters under live lights. */
+  glow?: Uint8Array
 }
 
 /** What the view shows: the blobs, the bones that move them, or both (bones on top). */
@@ -184,6 +186,7 @@ export class Stage {
           if (this.reflect() === null && this.mirrorFor && this.mirrorDue) this.pending = Math.max(this.pending, 1)
           this.draw()
           if (this.actor) this.firstFrame()
+          if (this.waiting.length) this.tellShown()
         }
         this.raf = requestAnimationFrame(tick)
       }
@@ -199,6 +202,28 @@ export class Stage {
       r.setClearColor(0x000000, 0)
     })
     return new Stage(display, opts, renderer)
+  }
+
+  private waiting: (() => void)[] = []
+
+  /**
+   * Resolves once a frame drawn from now on is through the GPU: called after `setActor`, that is when the new
+   * creature is really on screen, which on a phone can be seconds after the call returns (buffers to fill, shaders
+   * to build). A page keeps its waiting mark up until then. At once on an `offscreen` stage, which draws only when asked.
+   */
+  shown(): Promise<void> {
+    if (this.opts.offscreen || this.stopped) return Promise.resolve()
+    this.pending = Math.max(this.pending, 1)
+    return new Promise((done) => this.waiting.push(done))
+  }
+
+  private tellShown() {
+    const all = this.waiting
+    this.waiting = []
+    const tell = () => { for (const done of all) done() }
+    const b = this.renderer.backend as unknown as { device?: { queue: { onSubmittedWorkDone(): Promise<void> } } }
+    if (b.device) b.device.queue.onSubmittedWorkDone().then(tell, tell)
+    else tell()
   }
 
   private firstFrame() {
@@ -245,6 +270,7 @@ export class Stage {
   private build(actor: Actor) {
     this.world = new SplatWorld([actor, ...this.extras], { mode: this.mode, lights: this.opts.lights, sort: this.sort, cleanCuts: this.opts.cleanCuts, shadowDensity: this.opts.shadowDensity })
     if (this.opts.lights) this.world.setLights(this.lit.lights, this.lit.ambient)
+    this.world.glowGain = this.glowGain
     this.world.lightEase = this.lightEase
     this.world.setFog(...this.fog)
     this.world.setMarks(this.marks)
@@ -292,6 +318,18 @@ export class Stage {
   setSort(kind: 'bins' | 'radix') {
     if (kind === this.sort) return
     this.sort = kind
+    this.rebuild()
+  }
+
+  /**
+   * Whether worlds are built with live lights (the `lights` option, changed after the start), from the next
+   * `setActor` on: a page turns them on for the one creature that wants them and leaves the rest as light to draw as
+   * they were.
+   */
+  useLights(on: boolean) { this.opts.lights = on }
+
+  /** Builds the world on show again (for a choice a world is made with), keeping the moment. */
+  private rebuild() {
     if (!this.actor || !this.world || this.baking) return
     this.pixel?.reset()
     this.scene.remove(this.world)
@@ -326,6 +364,15 @@ export class Stage {
     this.poser = poser
     this.t = from
     this.pose()
+  }
+
+  /**
+   * Takes one actor's colors and opacities again after they were changed in place (the one shown or one of its
+   * `extras`), when nothing moved: a floor that scorches.
+   */
+  recolor(actor: Actor) {
+    this.world?.recolor(actor)
+    this.pending = Math.max(this.pending, 2)
   }
 
   /** Loose parts that swing after the body while a move plays (a `Swing` made for this actor's skeleton), or none. */
@@ -506,6 +553,18 @@ export class Stage {
   setLights(lights: Light[], ambient: number | readonly [number, number, number] = 1) {
     this.lit = { lights, ambient }
     this.world?.setLights(lights, ambient)
+    this.invalidate()
+  }
+
+  private glowGain = 1
+  /**
+   * How many times its own color a blob that gives its own light (`Actor.glow`) is drawn under live lights (the
+   * world's `glowGain`), kept for the next actor too. Over 1 only with a lens (`setLens`), which lets what is brighter
+   * than white glow; drawn straight to the screen it clips.
+   */
+  setGlowGain(gain: number) {
+    this.glowGain = Math.max(0, gain)
+    if (this.world) this.world.glowGain = this.glowGain
     this.invalidate()
   }
 
@@ -791,6 +850,10 @@ export class Stage {
     if (this.floor) this.floor.visible = false
     if (this.rig) this.rig.visible = false
     world.visible = true
+    // a sheet is the creature alone in its own colors: what stands with it is hidden, and live lights are put out
+    const solid = this.extras.map((e) => e.blobs.opacity.slice(0, e.blobs.count))
+    for (const e of this.extras) { e.blobs.opacity.fill(0, 0, e.blobs.count); world.recolor(e) }
+    if (this.opts.lights) { world.setLights([], 1); world.glowGain = 1 }
     try {
       const { bakeSheet } = await import('./bakeSheet.ts')
       // a sheet's frames are reshaped as they're drawn (and framed), each sent up whole, so the GPU never lags the CPU copy
@@ -799,6 +862,8 @@ export class Stage {
     } finally {
       this.baking = false
       if (this.floor) this.floor.visible = true
+      this.extras.forEach((e, k) => { e.blobs.opacity.set(solid[k]); world.recolor(e) })
+      if (this.opts.lights) { world.setLights(this.lit.lights, this.lit.ambient); world.glowGain = this.glowGain }
       const next = this.queued
       this.queued = undefined
       if (next) this.setActor(next.actor, next.clip, next.extras)
