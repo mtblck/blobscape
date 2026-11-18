@@ -1,6 +1,6 @@
 import { Blobs, type Vec3 } from '../../splat-core/blobs.ts'
 import { mix } from '../body.ts'
-import { COATS, foxBones, poseIdle, poseWalk, type Coat } from '../creature.ts'
+import { COATS, foxBones, makeCreature, poseIdle, poseWalk, type Coat } from '../creature.ts'
 import { axisAngle, emptySkin, type Skeleton } from '../rig.ts'
 import { growFur, quatFromAxes, type FurryPart } from '../fur.ts'
 import { flatten, joinBuilt, sculptToCount, smooth, type SculptSpec } from '../sculpt.ts'
@@ -219,5 +219,26 @@ export const FOX: Species = {
   ],
   view: { target: [0, 0.72, 0], distance: 4.2, azimuth: 40, elevation: 12 },
   // the brush trails the trot and swings out on a turn
+  swing: FOX_SWING,
+}
+
+/**
+ * The first fox (creature.ts), as a `Species`: a body of eleven plain capsules with no fur, on the same fourteen bones.
+ * It is the fox in `public/rigged-splats/fox.glb`, which the creature element shows on the engine page, and Matt asked
+ * for it beside the detailed one. It trots with its own straight-legged trot, which is the one in that file.
+ */
+export const MINIMALIST_FOX: Species = {
+  id: 'minimalist-fox',
+  name: 'minimalist fox',
+  blurb: 'The first fox made here: eleven plain capsules on fourteen bones, with no fur. It is the fox in the sample file that plays from one tag on the engine page.',
+  detail: [1500, 4000, 12000, 40000],
+  start: 4000,
+  looks: FOX.looks,
+  make: (count, look) => makeCreature(count, 7, COATS[look as keyof typeof COATS] ?? COATS.red),
+  moves: [
+    { name: 'trot', label: 'Trot', doing: 'trotting on the spot', seconds: 1 / 1.4, fps: 24, pose: (sk, t) => { sk.reset(); poseWalk(sk, t) } },
+    { name: 'idle', label: 'Stand', doing: 'standing and looking round', seconds: 4, fps: 12, pose: poseIdle },
+  ],
+  view: FOX.view,
   swing: FOX_SWING,
 }
