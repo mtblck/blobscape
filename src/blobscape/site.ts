@@ -46,7 +46,7 @@ export const EXPERIMENTS = [
     needs: 'WebGPU or WebGL 2',
     published: '2026-11-18',
     updated: '2026-11-18',
-    body: 'Wade the elf through a shallow pond in a ruin by candlelight. Each footfall raises a real ring on the water, which spreads and bounces off the banks, and the candles throw the elf\'s shadow on the wall.',
+    body: 'Wade the elf through a shallow pond in a ruin by candlelight. Each footfall raises a real ring on the water, which spreads and bounces off the banks, and the water mirrors the ruin and the candle flames.',
   },
   {
     id: 'brush',

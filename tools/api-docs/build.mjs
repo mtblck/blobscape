@@ -56,6 +56,10 @@ export const TITLES = {
   'splat-engine/lod': 'Level of detail',
   'splat-engine/edit': 'Cuts and paint',
   'splat-engine/depth': 'Depth for post effects',
+  'splat-engine/reflect': 'Mirrors: the arithmetic',
+  'splat-engine/mirror': 'Mirrors: what a flat mirror shows',
+  'splat-engine/lens': 'A lens: glow and focus blur',
+  'splat-core/optics': 'A lens: the arithmetic',
   'splat-engine/glb': 'Rigged .glb files',
   'splat-engine/skinnedModel': 'Rigged models to splats',
   'splat-engine/bakeSheet': 'Baking sprite sheets',
@@ -79,7 +83,7 @@ export const GROUPS = [
   { id: 'scenes', title: 'Shapes and scenes', doc: 'Scenes written as data and the shapes they are cut from: buildings, rock, plants, worn land and weather, and the sun, moon and sky that light them through a day.', modules: ['splat-engine/sceneDoc', 'splat-engine/voxel', 'splat-engine/built', 'splat-engine/forms', 'splat-engine/life', 'splat-engine/erode', 'splat-engine/grow', 'splat-engine/weather', 'splat-engine/daylight'] },
   { id: 'pixels', title: 'Pixels and sprites', doc: 'Drawing a stage as pixel art or as brush and ink marks, and baking a creature into a sprite sheet.', modules: ['splat-engine/pixelPass', 'splat-core/pixel', 'splat-core/marks', 'splat-engine/inkLines', 'splat-engine/bakeSheet', 'splat-engine/spriteSheet'] },
   { id: 'simulation', title: 'Simulation', doc: 'The solvers under cloth, under sand, snow and goo, and under the ripples of a pond, for when you want to step them yourself.', modules: ['splat-engine/xpbd', 'splat-engine/mpm', 'splat-engine/water'] },
-  { id: 'extras', title: 'Picking, detail and edits', doc: 'Finding what a tap hit, drawing fewer blobs far away, cutting and painting live, depth for effects after the draw, and solid shapes to stand on.', modules: ['splat-engine/pick', 'splat-engine/lod', 'splat-engine/edit', 'splat-engine/depth', 'splat-engine/colliders'] },
+  { id: 'extras', title: 'Picking, detail and edits', doc: 'Finding what a tap hit, drawing fewer blobs far away, cutting and painting live, depth for effects after the draw, what a mirror shows, a lens with glow and focus blur, and solid shapes to stand on.', modules: ['splat-engine/pick', 'splat-engine/lod', 'splat-engine/edit', 'splat-engine/depth', 'splat-engine/reflect', 'splat-engine/mirror', 'splat-engine/lens', 'splat-core/optics', 'splat-engine/colliders'] },
   { id: 'files', title: 'Files and models', doc: 'Writing and reading rigged .glb files, and turning an ordinary rigged model into splats.', modules: ['splat-engine/glb', 'splat-engine/skinnedModel'] },
 ]
 const GROUP_OF = new Map(GROUPS.flatMap((g) => g.modules.map((m, i) => [m, { id: g.id, at: GROUPS.indexOf(g) * 1000 + i }])))

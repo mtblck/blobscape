@@ -303,7 +303,7 @@ export class SplatWorld extends Mesh {
       this.morph = { ...m, node: makeMorph(buf, m), deform: { quat: makeDeform(buf, 'quat', m), linear: makeDeform(buf, 'linear', m) }, weights: actors.map((a) => new Float32Array(a.morphs?.length ?? 0)), firstTarget: m.firstTarget }
       buf.attrs.push(m.dataAttr, m.centerAttr, m.cholAAttr, m.cholBAttr)
     }
-    this.cam = { view: uniform(new Matrix4()), proj: uniform(new Matrix4()), viewport: uniform(new Vector2(1, 1)), depthRange: uniform(new Vector2(0, 1)) }
+    this.cam = { view: uniform(new Matrix4()), proj: uniform(new Matrix4()), viewport: uniform(new Vector2(1, 1)), depthRange: uniform(new Vector2(0, 1)), clip: uniform(new Vector4(0, 0, 0, 1)) }
     this.fog = { color: uniform(new Vector3(0, 0, 0)), range: uniform(new Vector2(0, 0)) }
     this.projectNode = makeProject(buf, sort, this.cam, bins)
     const sh = actors.some((a) => a.blobs.shDegree > 0)
@@ -549,6 +549,20 @@ export class SplatWorld extends Mesh {
     a.needsUpdate = true
   }
 
+  /**
+   * A plane that hides every blob whose center is behind it, as [nx, ny, nz, d]: a blob at p is drawn while
+   * n·p + d is 0 or more. null (the start) draws them all. It acts where blobs are projected, so it can change from
+   * one draw to the next in a frame: `SplatMirror` sets it for its mirrored draw and puts it back.
+   */
+  get clip(): [number, number, number, number] | null {
+    const k = this.cam.clip.value
+    return k.x === 0 && k.y === 0 && k.z === 0 ? null : [k.x, k.y, k.z, k.w]
+  }
+  set clip(plane: readonly [number, number, number, number] | null) {
+    if (plane) this.cam.clip.value.set(plane[0], plane[1], plane[2], plane[3])
+    else this.cam.clip.value.set(0, 0, 0, 1)
+  }
+
   private isWebGL(renderer: Renderer) {
     return (renderer as unknown as { backend?: { isWebGLBackend?: boolean } }).backend?.isWebGLBackend === true
   }
@@ -563,7 +577,7 @@ export class SplatWorld extends Mesh {
       // the WebGL vertex shader reads the grid of shadows as a texture, like the other buffers
       if (this.lighting) (this.lighting.grid as { setPBO: (b: boolean) => void }).setPBO(true)
       if (this.sh) (this.sh.data as { setPBO: (b: boolean) => void }).setPBO(true)
-      material.vertexNode = makeVertexWebGL(this.buf, this.sort, this.mode, this.fog, this.flat, this.lighting, this.sh, this.clean) as never
+      material.vertexNode = makeVertexWebGL(this.buf, this.sort, this.mode, this.fog, this.flat, this.cam.clip, this.lighting, this.sh, this.clean) as never
     } else {
       material.vertexNode = makeVertexWebGPU(this.buf, this.sort, this.fog, this.flat, this.lighting, this.clean) as never
     }
@@ -630,7 +644,8 @@ export class SplatWorld extends Mesh {
     this.cam.viewport.value.copy(this.size)
     this.cam.depthRange.value.set(near, far)
     if (this.sh) this.sh.eye.value.setFromMatrixPosition(camera.matrixWorld)
-    return `${e.join(',')}|${camera.projectionMatrix.elements.join(',')}|${this.size.x}x${this.size.y}`
+    const k = this.cam.clip.value
+    return `${e.join(',')}|${camera.projectionMatrix.elements.join(',')}|${this.size.x}x${this.size.y}|${k.x},${k.y},${k.z},${k.w}`
   }
 
   private prepare(renderer: Renderer, camera: Camera) {
@@ -965,7 +980,7 @@ export class SplatWorld extends Mesh {
 
 interface CameraUniforms {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  view: any; proj: any; viewport: any; depthRange: any
+  view: any; proj: any; viewport: any; depthRange: any; clip: any
 }
 
 /** Buffers waiting to go up whole this frame: a stretch marked after that (`SplatWorld.reshape`) must not narrow what is sent. */
@@ -1396,9 +1411,10 @@ function makeDeform(buf: ReturnType<typeof makeBuffers>, mode: SkinMode, M?: Mor
  * ellipse on screen. Returns the screen center (NDC) and depth, the ellipse's
  * two axes in NDC (already scaled by their standard deviations), a factor for
  * the opacity (0 when the blob is off screen or behind the camera) and the
- * blob's distance in front of the camera.
+ * blob's distance in front of the camera. `clip` is a plane (normal, then
+ * offset): a blob whose center is behind it gets opacity 0.
  */
-function projectSplat(center: N, covA: N, covB: N, view: N, proj: N, viewport: N) {
+function projectSplat(center: N, covA: N, covB: N, view: N, proj: N, viewport: N, clip: N) {
   const viewCenter4 = view.mul(vec4(center, 1)).toVar()
   const viewCenter = viewCenter4.xyz.toVar()
   const centerClip = proj.mul(viewCenter4).toVar()
@@ -1451,7 +1467,9 @@ function projectSplat(center: N, covA: N, covB: N, view: N, proj: N, viewport: N
   If(viewCenter.z.greaterThanEqual(-0.01)
     .or(centerClip.z.greaterThan(w))
     .or(centerClip.x.abs().greaterThan(lim))
-    .or(centerClip.y.abs().greaterThan(lim)), () => {
+    .or(centerClip.y.abs().greaterThan(lim))
+    // the world's clip plane: a blob whose center is behind it is not drawn (a mirrored draw leaves out what is under the mirror)
+    .or(dot(center, clip.xyz).add(clip.w).lessThan(0)), () => {
     alphaScale.assign(0)
   })
   const ndc = centerClip.xyz.div(max(w, 0.0001)).toVar()
@@ -1463,7 +1481,7 @@ function makeProject(buf: ReturnType<typeof makeBuffers>, sort: Sorter, cam: Cam
   const bins1 = bins - 1
   return Fn(() => {
     const i = instanceIndex
-    const p = projectSplat(buf.worldCenter.element(i).xyz, buf.covA.element(i), buf.covB.element(i), cam.view, cam.proj, cam.viewport)
+    const p = projectSplat(buf.worldCenter.element(i).xyz, buf.covA.element(i), buf.covB.element(i), cam.view, cam.proj, cam.viewport, cam.clip)
     buf.splatAW.element(i).assign(vec4(p.ndc, p.alphaScale))
     buf.splatBW.element(i).assign(p.axes)
     const span = max(cam.depthRange.y.sub(cam.depthRange.x), 0.0001)
@@ -1859,11 +1877,11 @@ function makeVertexWebGPU(buf: ReturnType<typeof makeBuffers>, sort: Sorter, fog
 }
 
 /** WebGL has no compute: each corner moves its blob through the bones and projects it, like a skinned mesh. */
-function makeVertexWebGL(buf: ReturnType<typeof makeBuffers>, sort: Sorter, mode: SkinMode, fog: Fog, flat: N, L?: Lighting, S?: ViewSH, clean = false) {
+function makeVertexWebGL(buf: ReturnType<typeof makeBuffers>, sort: Sorter, mode: SkinMode, fog: Fog, flat: N, clip: N, L?: Lighting, S?: ViewSH, clean = false) {
   return Fn(() => {
     const idx = sort.orderRead.element(instanceIndex).toVar()
     const d = deformBlob(buf, idx, mode)
-    const p = projectSplat(d.world, d.covA, d.covB, cameraViewMatrix, cameraProjectionMatrix, cameraViewport.zw)
+    const p = projectSplat(d.world, d.covA, d.covB, cameraViewMatrix, cameraProjectionMatrix, cameraViewport.zw, clip)
     const color = unpackUnorm4x8(buf.color.element(idx)).toVar()
     const own = S ? viewed(color.rgb, idx, d.world, buf, S) : color.rgb
     const rgb = L ? lit(painted(own, d.world, buf.edits), d.world, d.covA, d.covB, buf.seen.element(idx), L) : own

@@ -55,6 +55,10 @@ export { InkLines } from './inkLines.ts'
 export * from './lod.ts'
 export * from './edit.ts'
 export * from './depth.ts'
+export * from './reflect.ts'
+export * from './mirror.ts'
+export * from './lens.ts'
+export * from '../splat-core/optics.ts'
 
 // files and sheets
 export * from './glb.ts'

@@ -2,6 +2,10 @@ import * as THREE from 'three/webgpu'
 import { readbackToSrgb } from '../../splat-core/color.ts'
 import { placeCamera, STAGE_FOV, type Orbit } from '../../splat-core/orbit.ts'
 import { SplatWorld } from '../../splat-engine/engine.ts'
+import { SplatMirror } from '../../splat-engine/mirror.ts'
+import { SplatLens } from '../../splat-engine/lens.ts'
+import type { OpticsLook } from '../../splat-core/optics.ts'
+import { levelPlane } from '../../splat-engine/reflect.ts'
 import { startRenderer } from '../../splat-engine/startRenderer.ts'
 import { Pond, WATER_LEVEL, type PondOptions } from './pond.ts'
 import { SCALE, POND_SCENE } from './scene.ts'
@@ -22,6 +26,28 @@ export const START_ORBIT: Orbit = {
   azimuth: POND_SCENE.camera.azimuth,
   elevation: POND_SCENE.camera.elevation,
 }
+
+/** The mirror picture's width, pixels: a water blob is about a pixel of it across, so more would not show. */
+const MIRROR_WIDTH = 320
+/** The water's own blobs, and whatever is under them, stay out of the mirror: everything lower than this over the level, meters. */
+const MIRROR_LIFT = 0.06
+/** The mirror is drawn again every this many frames: the water's blobs are colored from it, and at half the frame rate a reflection still follows what it mirrors. */
+const MIRROR_EVERY = 2
+/** The water as a mirror. */
+const MIRROR_PLANE = levelPlane(WATER_LEVEL)
+
+/**
+ * The camera's film, meters high. A small camera's 24 mm keeps a place this size sharp from front to back at any
+ * opening, as it would the real thing. The pond is photographed as a model of itself on a table, a twentieth of its
+ * size, would be: the same picture as a film twenty times as high in front of the full-size place.
+ */
+export const FILM = 0.024 * 20
+/** The opening the view starts at. */
+export const START_F = 5.6
+/** How strongly bright light glows to start with: the picture stops at white, so a flame's light is spread several times over. */
+export const START_GLOW = 4
+/** How fast the focus follows the elf, a second: a lens pulled by hand, not snapped. */
+const FOCUS_PULL = 4
 
 /** The night behind the scene (sRGB). */
 const NIGHT = 0x080b10
@@ -54,6 +80,22 @@ export class PondStage {
   paused = false
   /** Whether the candles cast shadows. */
   shadows = true
+  /**
+   * Whether the water mirrors the scene: each frame the scene is drawn once more as its mirror image (a second sort
+   * and a small draw) and the water's blobs are colored from that picture. On to start with on WebGPU; without it
+   * (where the CPU sorts every draw) it starts off.
+   */
+  reflections: boolean
+  private readonly mirror = new SplatMirror()
+  /** How much of the light of bright things spills round them: 0 for none. */
+  glow: number
+  /** Whether things nearer and farther than the elf are out of focus. */
+  focusBlur: boolean
+  /** The lens's opening as an f-number: smaller is wider, with a thinner slice in focus. */
+  fNumber = START_F
+  /** The distance in focus, meters in front of the camera: it follows the elf. */
+  focus = 0
+  private readonly optics = new SplatLens()
   /** Called after each drawn frame, at most ~4 times a second, with the pond as it is. */
   onTick?: (p: Pond, fps: number) => void
   onFirstFrame?: () => void
@@ -65,6 +107,9 @@ export class PondStage {
     this.renderer = renderer
     this.backend = (renderer.backend as unknown as { isWebGPUBackend?: boolean }).isWebGPUBackend ? 'webgpu' : 'webgl'
     this.scene.background = new THREE.Color(NIGHT)
+    this.reflections = this.backend === 'webgpu'
+    this.glow = this.backend === 'webgpu' ? START_GLOW : 0
+    this.focusBlur = this.backend === 'webgpu'
     if (!opts.offscreen) {
       const tick = (now: number) => {
         if (this.stopped) return
@@ -117,14 +162,56 @@ export class PondStage {
     if (!p || !world) return
     this.resize()
     placeCamera(this.camera as never, this.orbit, this.camera.aspect)
-    // the water is shaped and colored for this eye, and only its own blobs go up again
-    const eye = this.camera.position
-    p.draw([eye.x, eye.y, eye.z])
-    if (p.surfaceChanged) world.reshape(p.surface)
     world.setLights(p.lights().map((l) => ({ ...l, shadow: this.shadows })), AMBIENT)
-    this.renderer.render(this.scene, this.camera)
+    this.reflect(p)
+    this.shade(p, world)
+    const lens = this.lens(p)
+    if (lens) {
+      const size = this.target ? this.buffer.set(this.target.width, this.target.height) : this.renderer.getDrawingBufferSize(this.buffer)
+      this.optics.setSize(size.x, size.y)
+      this.optics.setLook(lens, STAGE_FOV)
+      this.optics.render(this.renderer, this.scene, this.camera)
+    } else this.renderer.render(this.scene, this.camera)
     if (!this.drawn) { this.drawn = true; this.onFirstFrame?.() }
     this.frames++
+  }
+
+  /** The lens as it stands, focused on the elf; null when it would change nothing. */
+  lens(p: Pond): OpticsLook | null {
+    if (!this.focusBlur && !(this.glow > 0)) return null
+    const eye = this.camera.position, to = this.camera.getWorldDirection(this.looking)
+    // the elf's middle, about a meter over where it stands
+    const far = Math.max(0.5, (p.walker.x - eye.x) * to.x + (p.groundAt(p.walker.x, p.walker.z) + 1 - eye.y) * to.y + (p.walker.z - eye.z) * to.z)
+    const now = performance.now(), dt = this.focused ? Math.min(0.1, (now - this.focused) / 1000) : 1
+    this.focused = now
+    this.focus = this.focus > 0 && !this.opts.offscreen ? this.focus + (far - this.focus) * Math.min(1, dt * FOCUS_PULL) : far
+    return { focus: this.focus, fNumber: this.focusBlur ? this.fNumber : 0, film: FILM, glow: Math.max(0, this.glow) }
+  }
+  private readonly looking = new THREE.Vector3()
+  private readonly buffer = new THREE.Vector2()
+  private focused = 0
+
+  /** The water, shaped and colored for the camera as it stands; only its own blobs go up again. */
+  private shade(p: Pond, world: SplatWorld) {
+    const eye = this.camera.position
+    p.draw([eye.x, eye.y, eye.z])
+    if (p.surfaceMoved) world.reshape(p.surface)
+    else if (p.surfaceChanged) world.recolor(p.surface)
+  }
+
+  /**
+   * Draws the scene's mirror image for the camera as it stands and asks for it back. The picture comes a frame or
+   * two later and carries the camera it was drawn for, so the water looks itself up in it rightly even if the view
+   * has moved on. Returns the read under way, for `frame` to wait on.
+   */
+  private reflect(p: Pond, now = false): Promise<void> | null {
+    if (!this.reflections) { p.setMirror(null); return null }
+    if (!now && this.frames % MIRROR_EVERY) return null
+    const h = Math.max(1, Math.round(MIRROR_WIDTH / Math.max(0.2, this.camera.aspect)))
+    this.mirror.setSize(MIRROR_WIDTH, h)
+    this.camera.updateProjectionMatrix()
+    this.mirror.render(this.renderer, this.scene, this.camera, MIRROR_PLANE, MIRROR_LIFT)
+    return this.mirror.read(this.renderer).then((image) => { if (image && this.pond === p && this.reflections) p.setMirror(image) }, () => {})
   }
 
   /** Where a point of the view (CSS pixels from the canvas's corner) meets the water's surface, or null if it looks at the sky. */
@@ -179,6 +266,13 @@ export class PondStage {
     for (let k = 0; k < steps; k++) this.step(seconds / steps)
     if (!steps) this.step(0)
     this.input = was
+    // a test waits for the mirror's picture of this very moment before the frame is drawn, so what it sees does not depend on timing
+    if (this.pond && this.world && this.reflections) {
+      this.resize()
+      placeCamera(this.camera as never, this.orbit, this.camera.aspect)
+      this.world.setLights(this.pond.lights().map((l) => ({ ...l, shadow: this.shadows })), AMBIENT)
+      await this.reflect(this.pond, true)
+    }
     this.draw()
     if (!this.target) return
     const px = await this.renderer.readRenderTargetPixelsAsync(this.target, 0, 0, this.target.width, this.target.height) as Uint8Array
@@ -193,6 +287,8 @@ export class PondStage {
     cancelAnimationFrame(this.raf)
     this.world?.dispose()
     this.target?.dispose()
+    this.mirror.dispose()
+    this.optics.dispose()
     this.renderer.dispose()
   }
 }

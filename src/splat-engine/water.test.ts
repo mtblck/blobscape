@@ -210,3 +210,23 @@ test('the surface reads the water as the water itself answers', () => {
     assert.ok(Math.abs(s.slope[k * 2] - sx) < 1e-6 && Math.abs(s.slope[k * 2 + 1] - sz) < 1e-6, `slope of blob ${k}`)
   }
 })
+
+test('with a mirror picture the surface shows the scene, and the sky where the picture is empty', () => {
+  // a camera low over a pond at level 0; the picture's left half holds a red wall, its right half nothing
+  const eye = [0, 1, 4], width = 32, height = 24, pixels = new Float32Array(width * height * 4)
+  for (let j = 0; j < height; j++) for (let i = 0; i < width / 2; i++) pixels.set([0.8, 0.1, 0.1, 1], (j * width + i) * 4)
+  // projection times view for that eye looking at the origin, by columns
+  const f = 1 / Math.tan((50 * Math.PI) / 360), l = Math.hypot(1, 4), cy = 4 / l, sy = 1 / l
+  // view: camera axes x = (1,0,0), y = (0,cy,-sy), z = (0,sy,cy); eye at (0,1,4)
+  const view = [1, 0, 0, 0, 0, cy, sy, 0, 0, -sy, cy, 0, 0, -(cy * 1 - sy * 4), -(sy * 1 + cy * 4), 1]
+  const proj = [f / (4 / 3), 0, 0, 0, 0, f, 0, 0, 0, 0, -1.002, -1, 0, 0, -0.2002, 0]
+  const viewProj = Array.from({ length: 16 }, (_, k) => { const c = k >> 2, r = k & 3; let s = 0; for (let q = 0; q < 4; q++) s += proj[q * 4 + r] * view[c * 4 + q]; return s })
+  const look: WaterLook = { body: [0, 0.1, 0.1], sky: [0, 0, 0.3], clear: 0.3, mirror: { width, height, pixels, viewProj, plane: { normal: [0, 1, 0], offset: 0 } } }
+  const up: [number, number, number] = [0, 1, 0]
+  const left = surfaceColor([-1, 0, 0], up, eye, look), right = surfaceColor([1, 0, 0], up, eye, look), bare = surfaceColor([1, 0, 0], up, eye, { ...look, mirror: null })
+  assert.ok(left.color[0] > right.color[0] + 0.02, `the wall's red on the left: ${left.color[0]} and ${right.color[0]}`)
+  right.color.forEach((c, i) => assert.ok(Math.abs(c - bare.color[i]) < 1e-9, 'only sky on the right'))
+  // a ripple near the wall's edge tips the line of sight across it
+  const tip = (t: number) => surfaceColor([-0.05, 0, 0], [Math.sin(t), Math.cos(t), 0], eye, look).color[0]
+  assert.ok(Math.abs(tip(0.2) - tip(-0.2)) > 0.01, `${tip(0.2)} and ${tip(-0.2)}`)
+})

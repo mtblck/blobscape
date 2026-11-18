@@ -16,6 +16,8 @@ import { boneLabel, boneShare, pickActors } from './pick.ts'
 import { lookColors, snapColors, type Frame, type PixelLook } from '../splat-core/pixel.ts'
 import { INK, type MarkLook, type OutlinePen } from '../splat-core/marks.ts'
 import { InkLines } from './inkLines.ts'
+import { SplatLens } from './lens.ts'
+import type { OpticsLook } from '../splat-core/optics.ts'
 import { srgbToLinear } from '../splat-core/color.ts'
 
 /** What a stage shows: blobs, the skin that ties them to bones, and the skeleton. */
@@ -394,6 +396,20 @@ export class Stage {
     this.invalidate()
   }
 
+  private lens?: SplatLens
+  private lensLook?: OpticsLook
+  /**
+   * Draws the picture through a lens (lens.ts): light spilling round bright things, and blur for whatever is nearer
+   * or farther than the distance in focus. Leave the look out to stop. Not in pixel mode, and outlines take its place
+   * while they are on.
+   */
+  setLens(look?: OpticsLook) {
+    this.lensLook = look
+    if (!look) { this.lens?.dispose(); this.lens = undefined }
+    else this.lens ??= new SplatLens()
+    this.invalidate()
+  }
+
   private marks?: MarkLook
   /**
    * Draws every blob as a brush mark or an ink stroke, or as soft dots again when left out; kept for the next actor
@@ -462,6 +478,13 @@ export class Stage {
       this.lines.setSize(x, y)
       this.lines.setPen((this.pen.ink ?? INK).map(srgbToLinear), (this.pen.width ?? 1.5) * this.renderer.getPixelRatio())
       this.lines.render(this.renderer, this.scene, this.camera)
+      return
+    }
+    if (!this.pixel && this.lens && this.lensLook) {
+      const { x, y } = this.target ? { x: this.target.width, y: this.target.height } : this.renderer.getDrawingBufferSize(this.buffer)
+      this.lens.setSize(x, y)
+      this.lens.setLook(this.lensLook, this.camera.fov)
+      this.lens.render(this.renderer, this.scene, this.camera)
       return
     }
     if (!this.pixel) { this.renderer.render(this.scene, this.camera); return }
@@ -692,6 +715,7 @@ export class Stage {
     this.world?.dispose()
     this.rig?.dispose()
     this.lines?.dispose()
+    this.lens?.dispose()
     this.target?.dispose()
     this.pixel?.dispose()
     this.renderer.dispose()
