@@ -94,7 +94,7 @@ export function modelDiorama(name: string, file: MeshFile, textures: Texture[]):
     light: { from: [0.5, 1, 0.6], ambient: 0.55, shadow: 0.5 },
     palette,
     sky: ['#1c1c24', '#4a4a58'],
-    look: { dither: 0.05, glow: 1, outline: true, edges: true },
+    look: { dither: 0.5, glow: 1, outline: true, edges: true },
     disc: 0.75,
     camera: { target: [0, top * 0.5, 0], distance: 3.2 + top * 0.6, azimuth: 30, elevation: 14 },
     bones: [{ name: 'model', at: [0, 0, 0] }],

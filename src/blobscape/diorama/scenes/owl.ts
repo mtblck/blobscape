@@ -13,7 +13,7 @@ export const OWL: SceneDoc = {
     '#7a4a28', '#b07a40', '#e0b878', '#f4e4c0', '#6a1050', '#c0208a', '#ff5ac0', '#ffb0e0',
     '#c8401c', '#ff8a2a', '#ffd24a', '#1c2a6a', '#3a4ab0', '#7a8ae0',
   ],
-  look: { dither: 0.05, glow: 1.2, outline: true, edges: true },
+  look: { dither: 0.5, glow: 1.2, outline: true, edges: true },
   camera: { target: [0, 1.2, 0], distance: 5.6, azimuth: 14, elevation: 9, swing: 16 },
   air: { haze: { color: '#1a1a2a', from: 0.5, to: 6 }, specks: [{ kind: 'embers', count: 18, from: [0.82, 0.1, 0.2], to: [1.02, 1.0, 0.4], colors: ['#ff8a2a', '#ffd24a'] }, { kind: 'dust', count: 30, from: [-1.4, 0.4, -0.8], to: [1.4, 2.6, 1.0], colors: ['#ffb0e0', '#f4e4c0'], glow: true }] },
   bones: [

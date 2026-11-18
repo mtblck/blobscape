@@ -17,8 +17,13 @@ import { lookColors, snapColors, type Frame, type PixelLook } from '../splat-cor
 import { INK, type MarkLook, type OutlinePen } from '../splat-core/marks.ts'
 import { InkLines } from './inkLines.ts'
 import { SplatLens } from './lens.ts'
+import { SplatMirror } from './mirror.ts'
+import type { MirrorImage, MirrorPlane } from './reflect.ts'
 import type { OpticsLook } from '../splat-core/optics.ts'
 import { srgbToLinear } from '../splat-core/color.ts'
+
+/** How many times a second a stage draws its mirror's picture again, at most (`Stage.setMirror`). */
+export const MIRROR_PACE = 24
 
 /** What a stage shows: blobs, the skin that ties them to bones, and the skeleton. */
 export interface Actor {
@@ -94,6 +99,8 @@ export class Stage {
   private floor?: THREE.GridHelper
   private show: Show = 'blobs'
   private actor?: Actor
+  /** Actors drawn with the one shown, in its world: a pond's surface, which `reshape` sends up again. */
+  private extras: Actor[] = []
   private clip?: Clip
   /** For an actor with morphs: its blobs as built (the actor shown holds a copy that the weights reshape). */
   private morphRest?: Blobs
@@ -132,7 +139,7 @@ export class Stage {
   private drawn = false
   /** While a sprite sheet is being drawn, the live view leaves the renderer alone. */
   private baking = false
-  private queued?: { actor: Actor; clip?: Clip }
+  private queued?: { actor: Actor; clip?: Clip; extras: Actor[] }
   /** How a blob on several bones takes its shape: see `SkinMode`. Change it with `setMode`. */
   mode: SkinMode = 'quat'
   private lit: { lights: Light[]; ambient: number | readonly [number, number, number] } = { lights: [], ambient: 1 }
@@ -147,6 +154,11 @@ export class Stage {
   private highlighted?: number
   private painter?: (color: readonly [number, number, number], blob: number) => readonly number[]
   private sort: 'bins' | 'radix' = 'bins'
+  private mirror?: SplatMirror
+  private mirrorFor?: { plane: MirrorPlane; lift?: number; width?: number; seen: (image: MirrorImage) => void }
+  /** Whether the pose or the view changed since the mirror's picture was drawn. */
+  private mirrorDue = false
+  private mirrored = 0
 
   private constructor(private readonly display: HTMLCanvasElement, private readonly opts: StageOptions, renderer: THREE.WebGPURenderer) {
     this.renderer = renderer
@@ -167,6 +179,8 @@ export class Stage {
         if (!this.baking && (this.pending > 0 || moved || this.world?.settling)) {
           this.pending = Math.max(0, this.pending - 1)
           this.resize()
+          // a picture that is due but held back by the pace is drawn on a later frame
+          if (this.reflect() === null && this.mirrorFor && this.mirrorDue) this.pending = Math.max(this.pending, 1)
           this.draw()
           if (this.actor) this.firstFrame()
         }
@@ -195,10 +209,16 @@ export class Stage {
   /** How many blobs the creature shown has. */
   get blobCount() { return this.actor?.blobs.count ?? 0 }
 
-  /** Shows a creature, replacing the last one, and plays `clip` on it. */
-  setActor(actor: Actor, clip?: Clip) {
+  /**
+   * Shows a creature, replacing the last one, and plays `clip` on it. `extras` are more actors drawn in the same
+   * world, sorted blob by blob with the first: things that move on their own and not by its bones, such as the
+   * surface of a pond (`reshape` sends one up again after its blobs were changed). Clips, posers, picking, tints and
+   * sheets are all about the first actor.
+   */
+  setActor(actor: Actor, clip?: Clip, extras: Actor[] = []) {
     // a sheet being drawn holds on to the current world; swap once it's done
-    if (this.baking) { this.queued = { actor, clip }; return }
+    if (this.baking) { this.queued = { actor, clip, extras }; return }
+    this.extras = extras
     this.pixel?.reset()
     if (this.world) { this.scene.remove(this.world); this.world.dispose() }
     if (this.rig) { this.scene.remove(this.rig); this.rig.dispose() }
@@ -222,7 +242,7 @@ export class Stage {
   }
 
   private build(actor: Actor) {
-    this.world = new SplatWorld([actor], { mode: this.mode, lights: this.opts.lights, sort: this.sort, cleanCuts: this.opts.cleanCuts, shadowDensity: this.opts.shadowDensity })
+    this.world = new SplatWorld([actor, ...this.extras], { mode: this.mode, lights: this.opts.lights, sort: this.sort, cleanCuts: this.opts.cleanCuts, shadowDensity: this.opts.shadowDensity })
     if (this.opts.lights) this.world.setLights(this.lit.lights, this.lit.ambient)
     this.world.lightEase = this.lightEase
     this.world.setFog(...this.fog)
@@ -321,7 +341,7 @@ export class Stage {
   }
 
   /** Sets the actor's morph weights for a time (the clip's, or the held ones while none plays); the engine reshapes the blobs. */
-  private reshape(clip: Clip | undefined, t: number) {
+  private morph(clip: Clip | undefined, t: number) {
     if (!this.morphRest || !this.world) return
     if (!sampleWeights(clip, t, this.morphW)) this.morphW.set(this.heldW)
     if (this.morphW.every((v, k) => v === this.morphShown[k])) return
@@ -333,6 +353,46 @@ export class Stage {
   refresh() {
     this.world?.refresh()
     this.invalidate()
+  }
+
+  /**
+   * After one actor's blobs were changed in place (the one shown or one of its `extras`): the engine takes that
+   * actor's centers, shapes and colors again and leaves the rest alone, which is what a pond's surface wants each
+   * frame. The count must not change, and the blobs must stay about where they were.
+   */
+  reshape(actor: Actor) {
+    this.world?.reshape(actor)
+    // not `invalidate`: a mirror's picture is what colored these blobs, and need not be drawn again for them
+    this.pending = Math.max(this.pending, 2)
+  }
+
+  /**
+   * Draws what a flat mirror shows of the scene (`SplatMirror`) and hands each picture to `seen` as it is read back,
+   * a frame or two later: for water, or a polished floor, whose blobs color themselves from it (`seenIn`). The
+   * picture is drawn again when the pose or the view changes, at most `MIRROR_PACE` times a second. `lift` leaves
+   * out blobs lower than that over the plane (the mirror's own). Offscreen, `frame` waits for the picture of its
+   * own moment before it draws. Left out, the mirror is taken away.
+   */
+  setMirror(mirror?: { plane: MirrorPlane; lift?: number; width?: number; seen: (image: MirrorImage) => void }) {
+    this.mirrorFor = mirror
+    if (!mirror) { this.mirror?.dispose(); this.mirror = undefined }
+    this.invalidate()
+  }
+
+  /** Draws the mirror's picture for the camera as it stands, if one is due, and asks for it back. */
+  private reflect(now = false): Promise<void> | null {
+    const m = this.mirrorFor
+    if (!m || !this.world || this.baking) return null
+    const at = performance.now()
+    if (!now && (!this.mirrorDue || at - this.mirrored < 1000 / MIRROR_PACE)) return null
+    this.mirrored = at
+    this.mirrorDue = false
+    const mirror = this.mirror ??= new SplatMirror()
+    const width = m.width ?? 320
+    mirror.setSize(width, Math.max(1, Math.round(width / Math.max(0.2, this.camera.aspect))))
+    this.camera.updateProjectionMatrix()
+    mirror.render(this.renderer, this.scene, this.camera, m.plane, m.lift ?? 0)
+    return mirror.read(this.renderer).then((image) => { if (image && this.mirrorFor === m) m.seen(image) }, () => {})
   }
 
   /** Seconds into the clip, or the time a poser is showing. */
@@ -613,7 +673,7 @@ export class Stage {
    * Asks for the next `frames` frames to be drawn. Call it after changing something the stage can't see, such as its
    * `orbit`.
    */
-  invalidate(frames = 2) { this.pending = Math.max(this.pending, frames) }
+  invalidate(frames = 2) { this.pending = Math.max(this.pending, frames); this.mirrorDue = true }
 
   private pose() {
     if (!this.actor || !this.world) return
@@ -626,7 +686,7 @@ export class Stage {
     this.after?.(sk, t)
     if (this.swing && (this.poser || this.clip)) this.swing.update(sk, Number.isFinite(was) ? Math.min(0.1, Math.max(0, t - was)) : 0)
     else this.swing?.reset()
-    this.reshape(this.poser ? undefined : this.clip, t)
+    this.morph(this.poser ? undefined : this.clip, t)
     this.world.markPosed()
     if (this.rig?.visible) this.rig.update()
     this.invalidate()
@@ -654,6 +714,8 @@ export class Stage {
     this.t = t
     this.pose()
     this.resize()
+    // the mirror's picture of this very moment, so what a test or a recording sees does not depend on timing
+    await this.reflect(true)
     this.draw()
     if (this.actor) this.firstFrame()
     if (!this.target) return
@@ -693,14 +755,14 @@ export class Stage {
     try {
       const { bakeSheet } = await import('./bakeSheet.ts')
       // a sheet's frames are reshaped as they're drawn (and framed), each sent up whole, so the GPU never lags the CPU copy
-      const morph = this.morphRest ? (c: Clip | undefined, t: number) => this.reshape(c, t) : undefined
+      const morph = this.morphRest ? (c: Clip | undefined, t: number) => this.morph(c, t) : undefined
       return await bakeSheet({ renderer: this.renderer, scene: this.scene, actor, posed: () => world.markPosed(), morph }, moves, opts, progress)
     } finally {
       this.baking = false
       if (this.floor) this.floor.visible = true
       const next = this.queued
       this.queued = undefined
-      if (next) this.setActor(next.actor, next.clip)
+      if (next) this.setActor(next.actor, next.clip, next.extras)
       else {
         this.setMode(this.mode); this.setShow(this.show); this.pose()
         if (lit !== undefined) this.paintHighlight()
@@ -716,6 +778,7 @@ export class Stage {
     this.rig?.dispose()
     this.lines?.dispose()
     this.lens?.dispose()
+    this.mirror?.dispose()
     this.target?.dispose()
     this.pixel?.dispose()
     this.renderer.dispose()

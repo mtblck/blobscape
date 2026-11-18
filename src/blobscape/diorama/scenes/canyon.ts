@@ -21,7 +21,7 @@ export const CANYON: SceneDoc = {
   ],
   sky: ['#3a3a5a', '#f2b25a'],
   skyReach: 0.8,
-  look: { dither: 0.12, glow: 1.5, outline: true, edges: true },
+  look: { dither: 0.5, glow: 1.5, outline: true, edges: true },
   camera: { target: [0, 0.45, 0], distance: 5.4, azimuth: 14, elevation: 20, swing: 6 },
   air: {
     haze: { color: '#8e7eb0', from: 1.5, to: 9 },
