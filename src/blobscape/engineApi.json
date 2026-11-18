@@ -8028,6 +8028,11 @@
        "name": "slope",
        "type": "Float32Array",
        "doc": "The surface's slope under each blob as `shapeSurface` last found it: along x then along z, a pair a blob."
+      },
+      {
+       "name": "curve",
+       "type": "Float32Array",
+       "doc": "The surface's curvature under each blob as `shapeSurface` last found it: the sum of its second derivatives along x and z, per meter (under zero at a crest)."
       }
      ]
     },
@@ -8086,6 +8091,12 @@
        "optional": true,
        "type": "number",
        "doc": "How many times steeper than it is the surface is drawn and lit, so ripples a few millimeters high read from across a scene: 1 when left out."
+      },
+      {
+       "name": "deep",
+       "optional": true,
+       "type": "number",
+       "doc": "How deep the water is taken to be, meters, for the light its surface gathers: a crest is a lens that draws the\nlight passing down through it together on the bed and a trough spreads it, so the water's own color is brighter\nunder crests and darker under troughs. It is what shows a ripple from above, where the surface mirrors almost\nnothing. `steep` counts here too. None when left out."
       }
      ]
     },
@@ -8106,6 +8117,28 @@
      "signatures": [
       {
        "code": "shapeSurface(s: WaterSurface, water: Water, steep?: number): void"
+      }
+     ]
+    },
+    {
+     "name": "GATHER_LEAST",
+     "kind": "const",
+     "doc": "The least and most light a ripple leaves or gathers on the bed, as a share of flat water's: past these the rays have crossed, and the thin-lens sum no longer holds.",
+     "type": "0.45"
+    },
+    {
+     "name": "GATHER_MOST",
+     "kind": "const",
+     "doc": "The least and most light a ripple leaves or gathers on the bed, as a share of flat water's: past these the rays have crossed, and the thin-lens sum no longer holds.",
+     "type": "2.6"
+    },
+    {
+     "name": "gathered",
+     "kind": "function",
+     "doc": "How much light reaches the bed under a point of the surface, as a share of what flat water lets through, from the\nsurface's curvature there (the sum of its second derivatives, per meter: under zero at a crest). Light from above\nbends toward the normal by (n − 1) / n of its tilt (a quarter, for water), so a patch of surface lights a patch of\nbed 1 + deep · curvature / 4 times as wide each way together. 1 for a look with no `deep`.",
+     "signatures": [
+      {
+       "code": "gathered(curve: number, look: Pick<WaterLook, \"deep\" | \"steep\">): number"
       }
      ]
     },
