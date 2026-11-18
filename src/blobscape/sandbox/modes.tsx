@@ -47,7 +47,7 @@ export function ModeBar({ mode, setMode, base, marks }: { mode: ModeId; setMode:
     refs.current[to]?.focus()
   }
   return (
-    <div role="tablist" aria-label="Sandbox modes" className="flex gap-1 border-t border-rule bg-paper px-1 py-1 lg:h-full lg:w-24 lg:flex-col lg:items-center lg:rounded-2xl lg:border lg:bg-paper-sunk lg:p-2">
+    <div role="tablist" aria-label="Sandbox modes" className="flex gap-1 border-t border-rule bg-paper px-1 py-1 lg:min-h-0 lg:flex-1 lg:w-24 lg:flex-col lg:items-center lg:rounded-2xl lg:border lg:bg-paper-sunk lg:p-2">
       {MODES.map((m, i) => {
         const on = m.id === mode
         return (
