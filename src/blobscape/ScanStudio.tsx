@@ -277,7 +277,7 @@ export function ScanStudio() {
 
   // the two pen looks get their outlines, as on Brush and Ink
   useEffect(() => {
-    stage?.setMarks(drawnAs === 'blobs' ? undefined : { kind: drawnAs })
+    stage?.setMarks(drawnAs === 'blobs' ? undefined : { kind: drawnAs, soft: true })
     stage?.setOutline(drawnAs === 'ink' || drawnAs === 'hatch' ? {} : undefined)
   }, [stage, drawnAs])
 
