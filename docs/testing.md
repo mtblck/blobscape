@@ -44,10 +44,13 @@ not run again. `--no-retry` skips this.
 
 ## On GitHub
 
-`.github/workflows/check.yml` runs `npm run check` on every pull request and
-every check on main each night. A night that fails opens the issue "The nightly
-check fails on main" (and a green one closes it): while it is open, a failure
-of the same check on a branch is main's, so don't chase it there.
+`.github/workflows/check.yml` runs the unit tests and the build on every pull
+request. It does not run the browser checks there yet: two trial runs on
+GitHub's runners took 32 and 44 minutes and failed checks that pass in a cloud
+session (waits timing out on a runner whose speed changes from run to run, and
+two checks whose twice-drawn frame differs by a few pixels there). They can be
+run there by hand (Actions, Check, Run workflow) to try again. Until then a
+session runs `npm run check` itself before merging.
 
 `scripts/verify/known-failures.json` is for the rare case where main is red and
 the fix will take more than a day: `{ "check", "issue", "until" }` names a
@@ -73,7 +76,7 @@ Some examples of what `--changed` runs:
 | The site's copy and dates (`site.ts`, `meta.ts`) | `site` |
 | Header or footer | `site`, `lessons-basics`, both page sweeps |
 | The pixel pass (`splat-engine/pixelPass.ts`) | every page drawn by the engine (10 checks) |
-| The engine's renderer (`splat-engine/engine.ts`, `shadow.ts`) or `splat-core/pixel.ts` | the `core` checks among the 35 they reach: `creature`, `diorama`, `engine-lab`, `layout` (and `sprite` for `pixel.ts`); the nightly run on main covers the rest |
+| The engine's renderer (`splat-engine/engine.ts`, `shadow.ts`) or `splat-core/pixel.ts` | the `core` checks among the 35 they reach: `creature`, `diorama`, `engine-lab`, `layout` (and `sprite` for `pixel.ts`); `--wide` runs the rest |
 | A file most checks import (`splat-core/blobs.ts`, `shared/ui.tsx`, `routes.ts`, the lesson shell) | the 10 `core` checks (see below) |
 
 To see what a change would run without running it:
