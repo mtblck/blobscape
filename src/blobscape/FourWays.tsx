@@ -67,7 +67,8 @@ export function FourWays() {
   const [playing, setPlaying] = useState(!calm)
   const [scene, setScene] = useState(() => sceneOf(params().get('scene')))
   const [fire, setFire] = useState(() => { const q = Number(params().get('fire') ?? 1); return q >= 0 && q <= 2 ? q : 1 })
-  const [only, setOnly] = useState<PanelId | 'all'>(() => PANELS.find((p) => p.id === params().get('only'))?.id ?? 'all')
+  // a phone shows one at a time, Blobscape first: four renderers at once were more than Matt's could run (2026-11-18)
+  const [only, setOnly] = useState<PanelId | 'all'>(() => PANELS.find((p) => p.id === params().get('only'))?.id ?? (coarse ? 'blobscape' : 'all'))
   const [across, setAcross] = useState(ACROSS[2].id)
   const [outline, setOutline] = useState(true)
   const [steady, setSteady] = useState(true)
@@ -342,10 +343,10 @@ export function FourWays() {
                 </Field>
                 <Field label="Show">
                   <div className="flex flex-wrap gap-1.5" data-testid="four-show">
-                    <Chip active={only === 'all'} onClick={() => setOnly('all')}>All four</Chip>
+                    {!coarse && <Chip active={only === 'all'} onClick={() => setOnly('all')}>All four</Chip>}
                     {PANELS.map((p) => <Chip key={p.id} active={only === p.id} onClick={() => setOnly(p.id)}>{p.label}</Chip>)}
                   </div>
-                  <p className="mt-1.5 text-xs text-ink-faint">The speed on each picture is how many frames a second it could draw by itself here, before the shared finish. With all four drawing they share this device.</p>
+                  <p className="mt-1.5 text-xs text-ink-faint">The speed on each picture is how many frames a second it could draw by itself here, before the shared finish. {coarse ? 'A phone shows one at a time: four renderers at once are too much for it. Open the page on a computer to see them side by side.' : 'With all four drawing they share this device.'}</p>
                 </Field>
                 <div data-testid="four-fire">
                   <Slider label={scene.slider.label} value={fire} min={0} max={2} step={0.05} onChange={setFire} format={(v) => `${Math.round(v * 100)}%`} hint={scene.slider.hint} />
