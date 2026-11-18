@@ -222,15 +222,31 @@ const legIds = (sk: Skeleton, legs: Leg[]) => legs.map((l) => {
  * left (`slack` of its length): a long stride from straight legs needs the body lower. The skeleton as posed now.
  */
 export function hipDrop(sk: Skeleton, legs: Leg[], targets: ArrayLike<number>[], slack = 0.97): number {
+  return Math.max(0, hipShift(sk, legs, targets, slack))
+}
+
+/**
+ * `hipDrop` with its sign kept: under zero is how far the hips could rise (meters) before the straightest leg is
+ * down to `slack` of its length. A body that stands with it stands as tall as its legs allow on whatever is under
+ * its feet, where one posed at a fixed height squats when the ground is a little higher than the pose expects.
+ */
+export function hipShift(sk: Skeleton, legs: Leg[], targets: ArrayLike<number>[], slack = 0.97): number {
+  return Math.max(...legShifts(sk, legs, targets, slack))
+}
+
+/**
+ * `hipShift` leg by leg: how far each leg's own hip joint would come down (or, under zero, could rise) to leave that
+ * leg `slack` of its length. They differ when the feet stand at different heights: a leg a centimeter short of
+ * straight has its knee well forward, so a body standing on uneven ground tips its pelvis to keep both legs straight.
+ */
+export function legShifts(sk: Skeleton, legs: Leg[], targets: ArrayLike<number>[], slack = 0.97): number[] {
   sk.update()
-  let drop = 0
-  legIds(sk, legs).forEach((l, i) => {
+  return legIds(sk, legs).map((l, i) => {
     const A = head(sk, l.upper), B = head(sk, l.lower), C = posedPoint(sk, l.lower, l.tip), T = targets[i]
     const L = (len(sub(B, A)) + len(sub(C, B))) * slack
     const h = Math.min(L, Math.hypot(T[0] - A[0], T[2] - A[2]))
-    drop = Math.max(drop, A[1] - T[1] - Math.sqrt(L * L - h * h))
+    return A[1] - T[1] - Math.sqrt(L * L - h * h)
   })
-  return drop
 }
 
 /**
