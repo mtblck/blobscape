@@ -44,6 +44,38 @@ export function onScreen(way: readonly number[], orbit: Orbit, width: number, he
   return { x: width / 2 + (x * k * height) / 2, y: height / 2 - (y * k * height) / 2 }
 }
 
+/**
+ * When something in the sky comes up and goes down, in hours of the day, from its height (degrees) by the hour: found
+ * by stepping through the day five minutes at a time. `up` says whether it is ever above the horizon; where it never
+ * crosses it (always up, or never) there is no `rise` or `set`.
+ */
+export function upTimes(height: (hour: number) => number): { rise?: number; set?: number; up: boolean } {
+  const step = 1 / 12
+  // from a little after midnight round to the same moment, so a crossing right at midnight is not lost in the join
+  const from = 0.013
+  let rise: number | undefined, set: number | undefined, up = false, before = height(from)
+  for (let h = from + step; h <= from + 24 + 1e-9; h += step) {
+    const now = height(h)
+    if (now > 0) up = true
+    // where it crosses, by the straight line between the two steps
+    if (before <= 0 && now > 0) rise = (h - step + (step * -before) / (now - before)) % 24
+    if (before > 0 && now <= 0) set = (h - step + (step * before) / (before - now)) % 24
+    before = now
+  }
+  return { rise, set, up }
+}
+
+/**
+ * The orbit turned to face a direction in the sky (a unit vector, +x east, +y up, +z south), keeping its target and
+ * distance: the camera goes round to the far side and looks up from low enough that the thing sits in the upper part
+ * of the view, as far as an orbit can tip (it stops short of looking up from under the ground, so things over about 38 degrees up stay out of sight above).
+ */
+export function facing(way: readonly number[], orbit: Orbit): Orbit {
+  const azimuth = (Math.atan2(-way[0], -way[2]) / RAD + 360) % 360
+  const height = Math.asin(Math.max(-1, Math.min(1, way[1]))) / RAD
+  return { ...orbit, azimuth, elevation: Math.max(-18, Math.min(12, STAGE_FOV / 4 - height)) }
+}
+
 /** How high over the horizon (degrees) the middle of a row of the view looks: `y` from 0 at the top to 1 at the bottom. */
 export function rowHeight(y: number, orbit: Orbit): number {
   return -orbit.elevation + Math.atan((1 - 2 * y) * Math.tan((STAGE_FOV / 2) * RAD)) / RAD

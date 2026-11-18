@@ -11,7 +11,7 @@ import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitD
 import { href } from './routes.ts'
 import type { CreatureStage } from './creature/stage.ts'
 import { SCENES, dayStage, lampAt } from './daynight/scene.ts'
-import { makeStars, paintSky } from './daynight/sky.ts'
+import { facing, makeStars, paintSky, upTimes } from './daynight/sky.ts'
 import { clockLabel, compass, hourFrom } from './daynight/words.ts'
 
 const DETAIL = [
@@ -40,6 +40,19 @@ const MOONS = [
 const STARS = makeStars(1800)
 /** How dark a shadow is here: the scene is solid things under a sun, so a wall one blob thick should block nearly all of it. */
 const SHADOW_DENSITY = 5
+/** About how many frames the light on a blob takes to change: long enough to hide a shadow edge stepping over it, short enough that a lamp still snaps on. */
+const LIGHT_EASE = 8
+
+/** An hour to see a moon that rises at `rise`: a while after it clears the horizon, or, if the sun is still up then, the darkest hour it is up. */
+function nightHour(place: SkyPlace, rise: number, set?: number): number {
+  const len = set === undefined ? 12 : ((set - rise) % 24 + 24) % 24
+  let best = rise + 1, dark = -1
+  for (let h = rise + 0.75; h < rise + len - 0.5; h += 0.25) {
+    const s = daylight(h, place)
+    if (s.moonHeight > 8 && s.dark > dark + 0.02) { dark = s.dark; best = h }
+  }
+  return best % 24
+}
 
 declare global {
   interface Window {
@@ -70,7 +83,8 @@ export function DayNight() {
   const offscreen = params.get('offscreen') === '1', webgl = params.get('webgl') === '1'
   const calm = useMemo(() => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches, [])
   const phone = useMemo(() => typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches, [])
-  const scene = SCENES[0]
+  const [sceneId, setSceneId] = useState(() => (SCENES.some((s) => s.id === params.get('scene')) ? params.get('scene')! : SCENES[0].id))
+  const scene = SCENES.find((s) => s.id === sceneId)!
   const day = useMemo(() => dayStage(scene), [scene])
 
   // the hour lives in a ref, because the view reads it every frame; the page hears of it a few times a second
@@ -96,6 +110,8 @@ export function DayNight() {
         live = s
         s.onFirstFrame = () => setDrawn(true)
         s.setFloor(0)
+        // a shadow's edge fades across a blob over a few frames instead of popping; off where a check draws a moment twice and compares
+        s.setLightEase(params.get('ease') !== null ? Number(params.get('ease')) || 0 : offscreen ? 0 : LIGHT_EASE)
         // shadows are marched for every blob each frame the light moves: on from the start where compute passes do it
         setShadows(params.get('shadows') === null ? s.backend === 'webgpu' : params.get('shadows') === '1')
         setStage(s)
@@ -104,13 +120,13 @@ export function DayNight() {
   }, [offscreen, webgl, params])
 
   // cut after a paint, so the loading mark shows first
-  const [built, setBuilt] = useState<{ detail: string; actor: Built }>()
+  const [built, setBuilt] = useState<{ scene: string; detail: string; actor: Built }>()
   useEffect(() => {
     const spacing = DETAIL.find((d) => d.id === detail)!.spacing
-    const t = setTimeout(() => setBuilt({ detail, actor: day.make(spacing) }), 30)
+    const t = setTimeout(() => setBuilt({ scene: scene.id, detail, actor: day.make(spacing) }), 30)
     return () => clearTimeout(t)
-  }, [day, detail])
-  const cutting = built?.detail !== detail
+  }, [day, scene, detail])
+  const cutting = built?.detail !== detail || built?.scene !== scene.id
 
   // what the poser reads each frame, kept in refs so a change needs no new poser
   const live = useRef({ place, shadows: !!shadows, running, length, orbit })
@@ -127,6 +143,9 @@ export function DayNight() {
     paintSky(c.getContext('2d')!, w, h, live.current.orbit, sky, hourNow.current, live.current.place, STARS)
   }, [])
 
+  // the scene on show is the one that has been cut: while the next is cut, the old one keeps playing
+  const shown = useMemo(() => (built ? SCENES.find((s) => s.id === built.scene)! : scene), [built, scene])
+  const dayShown = useMemo(() => (shown === scene ? day : dayStage(shown)), [shown, scene, day])
   const poser = useCallback((sk: Skeleton, t: number) => {
     const s = live.current
     // the day moves on by the wall clock, however fast the scene's own clock runs
@@ -134,14 +153,14 @@ export function DayNight() {
     if (s.running && lastTick.current) hourNow.current = (hourNow.current + (Math.min(0.1, (now - lastTick.current) / 1000) * 24) / s.length) % 24
     lastTick.current = now
     const hr = hourNow.current, sky = daylight(hr, s.place)
-    day.pose(sk, t, hr, sky)
-    const { lights, ambient } = day.lights(t, hr, sky, s.shadows)
+    dayShown.pose(sk, t, hr, sky)
+    const { lights, ambient } = dayShown.lights(t, hr, sky, s.shadows)
     stageNow.current?.setLights(lights, ambient)
     // far things take the horizon's color, as they do through air
     stageNow.current?.setFog(sky.horizon, s.orbit.distance + 1.5, s.orbit.distance + 12)
     sent.current = { count: lights.length, lamps: lights.filter((l) => 'position' in l).length, sun: sky.sunColor[0] > 0.002, moon: sky.moonColor[2] > 0.002 }
     paint(sky)
-  }, [day, paint])
+  }, [dayShown, paint])
   const stageNow = useRef<CreatureStage | undefined>(undefined)
   stageNow.current = stage
 
@@ -183,13 +202,31 @@ export function DayNight() {
   const pointers = useRef(new Map<number, { x: number; y: number }>())
   useWheelZoom(canvas, setOrbit)
   const pick = (id: string) => { setView(id); setOrbit(scene.views.find((v) => v.id === id)!.orbit) }
+  const pickScene = (id: string) => {
+    const next = SCENES.find((s) => s.id === id)!
+    setSceneId(id); setView(next.views[0].id); setOrbit(next.views[0].orbit)
+    const url = new URL(location.href)
+    if (id === SCENES[0].id) url.searchParams.delete('scene'); else url.searchParams.set('scene', id)
+    history.replaceState(history.state, '', url)
+  }
 
   const sky = useMemo(() => daylight(hour, place), [hour, place])
   const times = useMemo(() => sunTimes(place), [place])
-  const lit = scene.lamps.filter((l) => lampAt(l, hour, sky) > 0).length
+  const moonUp = useMemo(() => upTimes((h) => daylight(h, place).moonHeight), [place])
+  const lit = shown.lamps.filter((l) => lampAt(l, hour, sky) > 0).length
   const sunSays = sky.sunHeight > 0
     ? `The sun is ${Math.round(sky.sunHeight)}° up in the ${compass(sky.sun)}`
-    : sky.moonHeight > 0 && sky.moonLit > 0.02 ? `The sun is down and the moon is ${Math.round(sky.moonHeight)}° up in the ${compass(sky.moon)}` : 'The sun is down and there is no moon'
+    : sky.moonHeight > 0 && sky.moonLit > 0.02 ? `The sun is down and the moon is ${Math.round(sky.moonHeight)}° up in the ${compass(sky.moon)}` : sky.moonLit > 0.02 ? 'The sun is down and so is the moon' : 'The sun is down and the moon is new'
+  const moonSays = moon === 0 ? 'A new moon is up with the sun and dark, so it does not show.'
+    : !moonUp.up ? 'The moon does not rise here today.'
+      : moonUp.rise === undefined || moonUp.set === undefined ? 'The moon does not set here today.'
+        : `This moon rises at ${clockLabel(moonUp.rise)} and sets at ${clockLabel(moonUp.set)}${sky.moonHeight > 0 ? `; now it is ${Math.round(sky.moonHeight)}° up in the ${compass(sky.moon)}` : '; now it is down'}.`
+  // a new phase puts the moon somewhere else in the sky: turn to it if it is up, so it does not just vanish
+  const pickMoon = (age: number) => {
+    setMoon(age)
+    const there = daylight(hourNow.current, { ...place, moon: age })
+    if (age > 0 && there.moonHeight > 2) setOrbit((o) => facing(there.moon, o))
+  }
   const daySays = times.set - times.rise >= 24 ? 'The sun does not set here today.' : times.set === times.rise ? 'The sun does not rise here today.' : `Sunrise ${clockLabel(times.rise)}, sunset ${clockLabel(times.set)}.`
   const waiting = !failed && (!drawn || !built)
   const backend = stage ? (stage.backend === 'webgpu' ? 'WebGPU' : 'WebGL 2') : 'WebGPU or WebGL 2'
@@ -200,19 +237,19 @@ export function DayNight() {
       <header className="flex flex-wrap items-end justify-between gap-x-8 gap-y-2 pt-4 pb-6">
         <h1 ref={h1} tabIndex={-1} className="font-display text-4xl outline-none sm:text-5xl">Day and Night</h1>
         <p className="max-w-xl text-lg text-ink-muted">
-          A cabin in a clearing through a whole day. Drag the time and the sun crosses the sky, shadows turn and stretch, the windows
-          come on at dusk, and the birds give way to fireflies under the moon.
+          A cabin in a clearing, or a few city blocks, through a whole day. Drag the time and the sun crosses the sky, shadows turn
+          and stretch, the windows come on at dusk, and the birds give way to fireflies and stars.
         </p>
       </header>
       <Workbench
-        viewLabel="The clearing"
+        viewLabel={shown.label}
         view={<>
           <canvas ref={skyCanvas} aria-hidden className="absolute inset-0 h-full w-full" data-testid="daynight-sky" />
           <canvas
             ref={canvas}
             role="application"
             aria-roledescription="3D view"
-            aria-label={`${scene.about}, at ${clockLabel(hour)}. ${sunSays}. Drag or use the arrow keys to orbit; scroll, pinch or press plus and minus to zoom.`}
+            aria-label={`${shown.about}, at ${clockLabel(hour)}. ${sunSays}. Drag or use the arrow keys to orbit; scroll, pinch or press plus and minus to zoom.`}
             tabIndex={0}
             data-testid="daynight-view"
             className="absolute inset-0 h-full w-full cursor-grab touch-none outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset active:cursor-grabbing"
@@ -235,14 +272,14 @@ export function DayNight() {
             }}
           />
           {(waiting || cutting) && !failed && <LoadingMark testid="daynight-loading" />}
-          <p role="status" className="sr-only">{waiting ? (stage ? 'Building the clearing…' : 'Starting the splat engine…') : cutting ? 'Cutting the scene again…' : ''}</p>
+          <p role="status" className="sr-only">{waiting ? (stage ? 'Building the scene…' : 'Starting the splat engine…') : cutting ? 'Cutting the scene…' : ''}</p>
           {failed && <div role="alert" className="absolute inset-4 grid place-items-center text-center text-sm text-ink">{failed}</div>}
           <p className="pointer-events-none absolute top-3 left-3 rounded-full bg-black/60 px-3 py-1 text-sm font-medium text-white tabular-nums max-sm:top-2 max-sm:left-2" data-testid="daynight-clock">{clockLabel(hour)}</p>
           <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => pick(view)} />
         </>}
         status={<>
-          <span>{built ? <><span className="tabular-nums text-ink" data-testid="daynight-blobs">{built.actor.blobs.count.toLocaleString()}</span> blobs, none with light in its color.</> : 'Building the clearing…'}</span>
-          <span data-testid="daynight-says">{sunSays}{lit ? `, ${lit} ${lit === 1 ? 'lamp' : 'lamps'} lit` : ''}.</span>
+          <span>{built ? <><span className="tabular-nums text-ink" data-testid="daynight-blobs">{built.actor.blobs.count.toLocaleString()}</span> blobs, none with light in its color.</> : 'Building the scene…'}</span>
+          <span data-testid="daynight-says">{sunSays}{lit ? `, ${lit} of ${shown.lamps.length} lights on` : ''}.</span>
         </>}
         tabsLabel="Options"
         tabs={[
@@ -284,9 +321,13 @@ export function DayNight() {
                 </div>
                 <Field label="Moon">
                   <div className="flex flex-wrap gap-1.5">
-                    {MOONS.map((m) => <Chip key={m.id} active={moon === m.id} onClick={() => setMoon(m.id)}>{m.label}</Chip>)}
+                    {MOONS.map((m) => <Chip key={m.id} active={moon === m.id} onClick={() => pickMoon(m.id)}>{m.label}</Chip>)}
                   </div>
-                  <p className="mt-1.5 text-xs text-ink-faint">A full moon rises as the sun sets and lights the whole night. A half moon is already high at sunset and gone by midnight.</p>
+                  <p className="mt-1.5 text-xs text-ink-faint" data-testid="daynight-moon">{moonSays} The moon's phase is where it stands from the sun, so each phase keeps its own hours: a full moon is up all night, a half moon is high at sunset and gone by midnight.</p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    <Button small disabled={!(sky.moonHeight > 0)} onClick={() => setOrbit((o) => facing(sky.moon, o))}>Look at the moon</Button>
+                    {moonUp.rise !== undefined && <Button small onClick={() => { setRunning(false); const h = nightHour(place, moonUp.rise!, moonUp.set); setHour(h); setOrbit((o) => facing(daylight(h, place).moon, o)) }}>Go to when it is up</Button>}
+                  </div>
                 </Field>
               </div>
             ),
@@ -294,13 +335,18 @@ export function DayNight() {
           {
             id: 'view', label: 'View', content: (
               <div className={TAB_SECTIONS}>
+                <Field label="Scene">
+                  <div className="flex flex-wrap gap-1.5" data-testid="daynight-scenes">
+                    {SCENES.map((s) => <Chip key={s.id} active={sceneId === s.id} onClick={() => pickScene(s.id)}>{s.label}</Chip>)}
+                  </div>
+                </Field>
                 <Field label="View">
                   <div className="flex flex-wrap gap-1.5">
                     {scene.views.map((v) => <Chip key={v.id} active={view === v.id} onClick={() => pick(v.id)}>{v.label}</Chip>)}
                   </div>
                 </Field>
                 <div>
-                  <Toggle label="Shadows from the sun, the moon and the lantern" checked={!!shadows} onChange={setShadows} />
+                  <Toggle label="Shadows from the sun, the moon and a lamp" checked={!!shadows} onChange={setShadows} />
                   <p className="mt-1.5 text-xs text-ink-faint">{stage?.backend === 'webgl' ? 'This browser draws with WebGL 2, where shadows cost more: turn them off if the view stutters.' : 'Worked out again for every blob each time a light moves.'}</p>
                 </div>
                 <Field label="Detail">
@@ -321,7 +367,7 @@ export function DayNight() {
         </div>
         <div className="mt-8 max-w-[36em] space-y-4 text-lg leading-relaxed text-ink-muted lg:col-span-7 lg:mt-0 lg:text-xl">
           <p>
-            Most splat scenes carry their light in their colors: a photo of noon stays noon. This one is built with no light at all.
+            Most splat scenes carry their light in their colors: a photo of noon stays noon. These are built with no light at all.
             Each blob holds only its own paint, and its color on screen is that paint times the light that reaches it right now.
           </p>
           <p>
@@ -331,8 +377,9 @@ export function DayNight() {
             see what is in the way. Move the sun and every shadow follows. The moon and the lantern cast theirs the same way.
           </p>
           <p>
-            The lit windows, the lantern's flame and the fireflies give their own light, so they stay bright when everything round
-            them goes dark. The sky behind is painted from the same numbers: the sun and moon sit where the light comes from, and the
+            The lit windows, the lamps and the fireflies give their own light, so they stay bright when everything round
+            them goes dark. In the city the windows come on a group at a time, offices empty through the evening and a few rooms
+            burn till morning. The sky behind is painted from the same numbers: the sun and moon sit where the light comes from, and the
             stars turn about the pole.
           </p>
           <p>

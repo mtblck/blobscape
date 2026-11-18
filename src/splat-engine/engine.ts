@@ -23,7 +23,7 @@ type Sorter = DepthSort | RadixSort
 import { detailFor, lodRank, screenRadius, type DetailRule } from './lod.ts'
 import { CLEAN_MARGIN, MAX_EDITS, blobReach, editAt, type ShapeEdit } from './edit.ts'
 import { applyMorphs, shares, type Morph } from './morph.ts'
-import { LIFT, MAX_MARCH, OCC_SCALE, REACH, SHADOW_CELLS, SHADOW_DENSITY, SUN_MARCH, blobSigma, occupancy, shadowBox } from './shadow.ts'
+import { LIFT, MAX_MARCH, OCC_SCALE, REACH, SHADOW_CELLS, SHADOW_DENSITY, SPREAD, SUN_MARCH, blobSigma, occupancy, steadyBox, type ShadowBox } from './shadow.ts'
 import { linearToSrgb, srgbToLinear } from '../splat-core/color.ts'
 import { viewColor } from '../splat-core/sh.ts'
 import { INK, MARK_KINDS, MARK_LONG, MARK_MOST, MARK_SOLID, MARK_WIDE, PAPER, SHADE_FROM, SHADE_FULL, WASH_LEAST, WASH_MOST, type MarkLook } from '../splat-core/marks.ts'
@@ -248,7 +248,19 @@ export class SplatWorld extends Mesh {
   /** WebGL only: each blob's reach and opacity at rest, for building the grid of shadows on the CPU. */
   private restSigma?: Float32Array
   private restOpacity?: Float32Array
+  /** Where the grid of shadows lay last frame, so this frame's can keep its lattice. */
+  private shadowAt?: ShadowBox
   private lightsDirty = true
+  /**
+   * Eases the light on every blob over about this many frames (WebGPU; 0, the default, is none): a blob's lit color
+   * goes a share of the way to its new one each frame, so a shadow's edge passing over it, or a lamp catching, fades
+   * and does not pop. For lights that move slowly, like a sun. A frame is then no longer a function of its moment alone.
+   */
+  lightEase = 0
+  private easeLeft = 0
+  private eased = false
+  /** Whether eased light is still on its way: the scene needs drawing again though nothing else has changed. */
+  get settling() { return this.easeLeft > 0 }
 
   constructor(actors: Actor[], { bins: wantBins = 65536, sort: sortKind = 'bins', mode = 'quat', lights = false, paint = false, cleanCuts = false, shadowDensity = SHADOW_DENSITY }: EngineOptions = {}) {
     const count = actors.reduce((s, a) => s + a.blobs.count, 0)
@@ -675,7 +687,14 @@ export class SplatWorld extends Mesh {
       }
       // lights move on their own: the lit colors are redone whenever they or the blobs moved
       // and with color by angle, whenever the view moved
-      if (this.lightNode && (deformed || this.lightsDirty || (this.sh && key !== this.lastSortKey))) {
+      const changed = deformed || this.lightsDirty || (this.sh && key !== this.lastSortKey)
+      if (this.lightNode && (changed || this.easeLeft > 0)) {
+        // eased light: each pass goes a share of the way from the colors the last pass left, for a few passes after the
+        // last change; the first pass after the blobs were packed has nothing to ease from
+        const frames = this.sh ? 0 : this.lightEase
+        this.easeLeft = changed && frames > 1 ? Math.ceil(frames * 5) : Math.max(0, this.easeLeft - 1)
+        this.lighting!.ease.value = frames > 1 && this.eased ? 1 / frames : 1
+        this.eased = true
         if (this.shNode) renderer.compute(this.shNode as never)
         renderer.compute(this.lightNode as never)
         this.lightsDirty = false
@@ -689,7 +708,7 @@ export class SplatWorld extends Mesh {
     this.lastSortKey = key
   }
 
-  /** Lays the grid of shadows over the world's bounds as they are this frame. */
+  /** Lays the grid of shadows over the world's bounds as they are this frame, on the lattice the last frame's lay on (`steadyBox`). */
   private placeShadowBox() {
     // each bone's box at rest, carried by its matrix: the middle moves, the half sizes go through |M|
     const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity]
@@ -709,7 +728,7 @@ export class SplatWorld extends Mesh {
       }
     }
     if (!(lo[0] <= hi[0])) { lo.fill(-1); hi.fill(1) }
-    const b = shadowBox(lo, hi)
+    const b = this.shadowAt = steadyBox(lo, hi, this.shadowAt)
     const L = this.lighting!
     L.box.value.set(b.origin[0], b.origin[1], b.origin[2], b.cell)
     L.dims.value.set(b.dims[0], b.dims[1], b.dims[2])
@@ -727,7 +746,8 @@ export class SplatWorld extends Mesh {
         const b = a.blobs
         for (let k = 0; k < b.count; k++, i++) {
           this.restSigma[i] = Math.max(b.scale[k * 3], b.scale[k * 3 + 1], b.scale[k * 3 + 2])
-          this.restOpacity[i] = b.opacity[k]
+          // a blob that gives its own light casts no shadow
+          this.restOpacity[i] = a.glow && a.glow[k] > 127 ? 0 : b.opacity[k]
         }
       }
     }
@@ -751,7 +771,7 @@ export class SplatWorld extends Mesh {
     let i = 0
     for (const a of this.actors) for (let k = 0; k < a.blobs.count; k++, i++) {
       sigma[i] = blobSigma(cpu.cov, i * 6)
-      opacity[i] = Math.round(a.blobs.opacity[k] * 255) / 255
+      opacity[i] = a.glow && a.glow[k] > 127 ? 0 : Math.round(a.blobs.opacity[k] * 255) / 255
       center.set(cpu.center.subarray(i * 4, i * 4 + 3), i * 3)
     }
     const v = L.box.value, d = L.dims.value
@@ -1475,7 +1495,7 @@ function makeProject(buf: ReturnType<typeof makeBuffers>, sort: Sorter, cam: Cam
 
 interface Fog { color: N; range: N }
 
-interface Lighting { pos: N; col: N; ambient: N; count: N; density: N; attr: StorageBufferAttribute; litW: N; lit: N; gridAttr: StorageBufferAttribute; gridW: N; grid: N; box: N; dims: N }
+interface Lighting { pos: N; col: N; ambient: N; count: N; density: N; ease: N; attr: StorageBufferAttribute; litW: N; lit: N; gridAttr: StorageBufferAttribute; gridW: N; grid: N; box: N; dims: N }
 
 function makeLighting(n: number): Lighting {
   // written only by the GPU, so no copy of it on the CPU
@@ -1495,6 +1515,8 @@ function makeLighting(n: number): Lighting {
     ambient: uniform(new Vector3(1, 1, 1)),
     // how dark a cell's occupancy makes a casting light (`EngineOptions.shadowDensity`)
     density: uniform(SHADOW_DENSITY),
+    // the share of the way each light pass takes from the last pass's colors to this one's (`SplatWorld.lightEase`)
+    ease: uniform(1),
     count: uniform(0, 'int'),
     attr,
     litW: storage(attr, 'vec4', n),
@@ -1565,22 +1587,27 @@ function cellIndex(q: N, L: Lighting) {
 /**
  * The share of a light that gets from a blob to it through the grid of shadows, in at most `most` steps. A march that
  * has left the grid going away from it has nothing more to meet and stops. CPU twin: `transmittance` in shadow.ts
- * (change both).
+ * (change both; the twin takes the blob's sideways `spread` as an argument, where this makes it from the blob's place).
  */
 function shadowMarch(world: N, n: N, to: N, d2: N, most: N, L: Lighting) {
   const cell = L.box.w
   const dist = sqrt(max(d2, 1e-12)).toVar()
   const dir = to.div(dist).toVar()
   const side = select(dot(n, dir).lessThan(0), float(-1), float(1))
-  const start = world.add(n.mul(side).add(dir).mul(cell.mul(LIFT))).toVar()
+  // each blob looks from its own spot within a cell, sideways along its surface (a steady number from where it is):
+  // neighbors disagree about a shadow's edge, so the edge is a soft band that slides as the light moves, not a row of
+  // cells that flips at once
+  const h = TSL.fract(TSL.sin(vec3(dot(world, vec3(12.9898, 78.233, 37.719)), dot(world, vec3(39.346, 11.135, 83.155)), dot(world, vec3(73.156, 52.235, 9.151)))).mul(43758.5453)).sub(0.5).toVar()
+  const aside = h.sub(n.mul(dot(h, n))).mul(cell.mul(SPREAD))
+  const start = world.add(n.mul(side).add(dir).mul(cell.mul(LIFT))).add(aside).toVar()
   const steps = TSL.int(floor(min(max(dist.sub(cell.mul(2.5)).div(cell), 0), float(most)))).toVar()
   const dims = TSL.ivec3(L.dims)
   const acc = float(0).toVar()
   TSL.Loop({ start: TSL.int(0), end: steps, type: 'int', condition: '<', name: 'm' }, ({ m }: { m: N }) => {
-    const q = TSL.ivec3(floor(start.add(dir.mul(float(m).add(0.5).mul(cell))).sub(L.box.xyz).div(cell))).toVar()
-    If(inGrid(q, L), () => {
-      acc.addAssign(float(L.grid.element(cellIndex(q, L))).div(OCC_SCALE))
-    }).Else(() => {
+    const s = start.add(dir.mul(float(m).add(0.5).mul(cell))).sub(L.box.xyz).div(cell).toVar()
+    const q = TSL.ivec3(floor(s)).toVar()
+    If(inGrid(q, L), () => { acc.addAssign(float(L.grid.element(cellIndex(q, L))).div(OCC_SCALE)) })
+    If(inGrid(q, L).not(), () => {
       // out of the grid and heading further out on some axis: it can't come back in
       const gone = q.x.lessThan(0).and(dir.x.lessThanEqual(0)).or(q.x.greaterThanEqual(dims.x).and(dir.x.greaterThanEqual(0)))
         .or(q.y.lessThan(0).and(dir.y.lessThanEqual(0))).or(q.y.greaterThanEqual(dims.y).and(dir.y.greaterThanEqual(0)))
@@ -1607,7 +1634,8 @@ function makeShadowScatter(buf: ReturnType<typeof makeBuffers>, L: Lighting) {
     const reach = sqrt(max(max(A.x, A.w), max(B.y, 0))).mul(REACH).toVar()
     const cell = L.box.w
     const a = unpackUnorm4x8(buf.color.element(i)).a
-    const add = uint(floor(a.mul(min(reach.div(cell).pow2(), 1)).mul(OCC_SCALE).add(0.5))).toVar()
+    // a blob that gives its own light (`Actor.glow`, in the covariance's spare slot) casts no shadow
+    const add = uint(floor(a.mul(min(reach.div(cell).pow2(), 1)).mul(OCC_SCALE).add(0.5)).mul(select(B.z.greaterThan(0.5), float(0), float(1)))).toVar()
     If(add.greaterThan(uint(0)), () => {
       const p = buf.worldCenter.element(i).xyz.toVar()
       const c = TSL.ivec3(floor(p.sub(L.box.xyz).div(cell))).toVar()
@@ -1630,7 +1658,9 @@ function makeLight(buf: ReturnType<typeof makeBuffers>, L: Lighting, viewed: boo
     // with color by angle, `makeViewColor` has just written the blob's color for this view into the same buffer
     const color = (viewed ? L.litW.element(i) : unpackUnorm4x8(buf.color.element(i))).toVar()
     const world = buf.worldCenter.element(i).xyz.toVar()
-    L.litW.element(i).assign(vec4(lit(painted(color.rgb, world, buf.edits), world, buf.covA.element(i), buf.covB.element(i), buf.seen.element(i), L), color.a))
+    const now = vec4(lit(painted(color.rgb, world, buf.edits), world, buf.covA.element(i), buf.covB.element(i), buf.seen.element(i), L), color.a)
+    // with color by angle the buffer holds this view's color, not the last pass's light, so there is nothing to ease from
+    L.litW.element(i).assign(viewed ? now : mix(L.litW.element(i), now, L.ease))
   })().compute(buf.count, [WORKGROUP]).setName('SplatWorldLight')
 }
 
