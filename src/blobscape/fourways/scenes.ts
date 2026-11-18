@@ -49,7 +49,7 @@ export const SCENES: FourScene[] = [
   {
     id: 'fox', label: 'Fox and wisp', subject: 'one fox',
     intro: 'A fox trotting through tall grass while a wisp of light circles it, drawn at the same moment by four different things: a shader written with no engine, three.js meshes, Spark’s splats, and Blobscape.',
-    viewLabel: 'A fox trotting a ring through tall grass round a standing stone at night, after a small light that floats ahead of it, drawn four ways side by side.',
+    viewLabel: 'A fox trotting a ring through tall grass round a standing stone at night, while a small light circles it, drawn four ways side by side.',
     orbit: meadow.SCENE.orbit, look: meadow.SCENE.look, palette: meadow.SCENE.palette, haze: meadow.SCENE.haze,
     slider: { label: 'Wisp', hint: 'How bright the wisp shines. Three of the four light the meadow afresh every frame, so the light and its shadows go round with it. Spark’s splats had the light painted in when they were made.' },
     shadows: true, ambient: meadow.AMBIENT,

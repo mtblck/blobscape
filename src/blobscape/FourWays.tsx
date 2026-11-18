@@ -395,6 +395,7 @@ export function FourWays() {
                 <dt className="text-ink-faint">The light</dt><dd>{words[p.id].light}</dd>
                 <dt className="text-ink-faint">Written as</dt><dd>{facts[p.id]}</dd>
                 <dt className="text-ink-faint">Speed here</dt><dd className="tabular-nums">{timings[p.id] === undefined ? 'not timed yet' : `${fps(timings[p.id])} drawn alone (${ms(timings[p.id]!)} a frame)`}{p.id === 'blobscape' && built ? `, after ${built.seconds.toFixed(1)} s making the scene` : ''}</dd>
+                <dt className="text-ink-faint">What you keep</dt><dd>{words[p.id].keep}</dd>
                 <dt className="text-ink-faint">Where it stops</dt><dd>{words[p.id].limit}</dd>
               </dl>
             </article>
