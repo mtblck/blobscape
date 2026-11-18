@@ -33,7 +33,7 @@
   {
    "id": "extras",
    "title": "Picking, detail and edits",
-   "doc": "Finding what a tap hit, drawing fewer blobs far away, cutting and painting live, and depth for effects after the draw."
+   "doc": "Finding what a tap hit, drawing fewer blobs far away, cutting and painting live, depth for effects after the draw, and solid shapes to stand on."
   },
   {
    "id": "files",
@@ -414,6 +414,15 @@
        "signatures": [
         {
          "code": "rayAt(x: number, y: number): { origin: [number, number, number]; direction: [number, number, number] } | undefined"
+        }
+       ]
+      },
+      {
+       "name": "screenAt",
+       "doc": "Where a point in world space falls on the view, in CSS pixels from its top left, for drawing over the picture;\nundefined behind the camera. `orbit` is the view to use when it is not the stage's own yet.",
+       "signatures": [
+        {
+         "code": "screenAt(p: ArrayLike<number>, orbit?: Orbit): { x: number; y: number } | undefined"
         }
        ]
       },
@@ -7751,6 +7760,241 @@
          "code": "dispose(): void"
         }
        ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "colliders",
+   "title": "Colliders",
+   "group": "extras",
+   "doc": "Colliders: simple solid shapes laid over a scan or a scene, which has none of its own. A scan is a cloud of blobs\nwith nothing to stand on or bump into; a box for the table, a cylinder for the mug and a slab for the floor give\nfeet a ground (`groundOf`, the `Ground` that `plantFeet` takes) and bodies something to stay out of (`pushOut`).\n\nA shape is a box, a ball or an upright cylinder, turned only about the upright, which is what furniture and floors\nneed and keeps every question (how far, how high, where a ray lands) a few lines. `writeColliderGlb` saves them as\nordinary glTF nodes with a mesh each, so the file opens anywhere as shapes, and `readColliderGlb` reads them back\nexactly.",
+   "entries": [
+    {
+     "name": "Collider",
+     "kind": "interface",
+     "doc": "One solid shape.",
+     "props": [
+      {
+       "name": "shape",
+       "type": "\"sphere\" | \"box\" | \"cylinder\"",
+       "doc": "A box, a ball, or a cylinder standing along y."
+      },
+      {
+       "name": "center",
+       "type": "Vec3",
+       "doc": "Its middle, in world space."
+      },
+      {
+       "name": "size",
+       "type": "Vec3",
+       "doc": "A box's half sizes; a ball's radius (the first value); a cylinder's radius and half height."
+      },
+      {
+       "name": "turn",
+       "type": "number",
+       "doc": "Degrees it is turned about the upright (a ball and a cylinder look the same turned)."
+      },
+      {
+       "name": "name",
+       "optional": true,
+       "type": "string",
+       "doc": "What it stands for, if named: 'floor', 'table'."
+      }
+     ]
+    },
+    {
+     "name": "SMALLEST",
+     "kind": "const",
+     "doc": "The smallest a shape's size may be dragged to.",
+     "type": "0.02"
+    },
+    {
+     "name": "colliderDistance",
+     "kind": "function",
+     "doc": "Signed distance from p to the shape's surface: negative inside.",
+     "signatures": [
+      {
+       "code": "colliderDistance(c: Collider, p: ArrayLike<number>): number"
+      }
+     ]
+    },
+    {
+     "name": "topAt",
+     "kind": "function",
+     "doc": "How high the shape's top is over the point (x, z) of the floor, or undefined where it is not over it.",
+     "signatures": [
+      {
+       "code": "topAt(c: Collider, x: number, z: number): number | undefined"
+      }
+     ]
+    },
+    {
+     "name": "groundOf",
+     "kind": "function",
+     "doc": "The ground the shapes make, for `plantFeet` and anything else that asks how high the floor is at (x, z): the\nhighest top under the point, and `base` where there is none.",
+     "signatures": [
+      {
+       "code": "groundOf(colliders: readonly Collider[], base?: number): (x: number, z: number) => number"
+      }
+     ]
+    },
+    {
+     "name": "groundBelow",
+     "kind": "function",
+     "doc": "The same ground, but only tops no more than `step` above `from`: a shape too tall to step onto is a wall, not a floor.",
+     "signatures": [
+      {
+       "code": "groundBelow(colliders: readonly Collider[], from: number, step: number, base?: number): (x: number, z: number) => number"
+      }
+     ]
+    },
+    {
+     "name": "pushOut",
+     "kind": "function",
+     "doc": "A ball of `radius` at p, moved the shortest way out of every shape it is in (a few rounds, for corners).",
+     "signatures": [
+      {
+       "code": "pushOut(colliders: readonly Collider[], p: ArrayLike<number>, radius?: number): Vec3"
+      }
+     ]
+    },
+    {
+     "name": "rayCollider",
+     "kind": "function",
+     "doc": "How far along a ray (a unit `direction`) it first meets the shape, or undefined if it misses within `far`.",
+     "signatures": [
+      {
+       "code": "rayCollider(c: Collider, origin: ArrayLike<number>, direction: ArrayLike<number>, far?: number): number | undefined"
+      }
+     ]
+    },
+    {
+     "name": "pickCollider",
+     "kind": "function",
+     "doc": "The shape a ray meets first: its index and how far along, or undefined.",
+     "signatures": [
+      {
+       "code": "pickCollider(colliders: readonly Collider[], origin: ArrayLike<number>, direction: ArrayLike<number>): { index: number; t: number } | undefined"
+      }
+     ]
+    },
+    {
+     "name": "wireOf",
+     "kind": "function",
+     "doc": "The shape as lines to draw over a picture: each entry is a run of points to join. A box's twelve edges, a cylinder's\ntwo rims and four sides, a ball's three great circles. `steps` is how many points a circle gets.",
+     "signatures": [
+      {
+       "code": "wireOf(c: Collider, steps?: number): Vec3[][]"
+      }
+     ]
+    },
+    {
+     "name": "Handle",
+     "kind": "interface",
+     "doc": "A handle on a shape: where it is, the way it pulls, and which of the shape's sizes it changes.",
+     "props": [
+      {
+       "name": "key",
+       "type": "0 | 1 | 2",
+       "doc": "Which of the shape's sizes it changes."
+      },
+      {
+       "name": "at",
+       "type": "Vec3",
+       "doc": "Where it is, in world space."
+      },
+      {
+       "name": "axis",
+       "type": "Vec3",
+       "doc": "The way it pulls (a unit vector): out along it grows the shape."
+      }
+     ]
+    },
+    {
+     "name": "handlesOf",
+     "kind": "function",
+     "doc": "The handles that size a shape: one on each face that matters (a box's three, a cylinder's side and top, a ball's side).",
+     "signatures": [
+      {
+       "code": "handlesOf(c: Collider): Handle[]"
+      }
+     ]
+    },
+    {
+     "name": "resized",
+     "kind": "function",
+     "doc": "The shape with one size changed by `by` (pulling its handle out or in); never smaller than `SMALLEST`.",
+     "signatures": [
+      {
+       "code": "resized(c: Collider, key: 0 | 1 | 2, by: number): Collider"
+      }
+     ]
+    },
+    {
+     "name": "placed",
+     "kind": "function",
+     "doc": "The shape scaled about the origin and then shifted: for a scan that is resized and stood somewhere else.",
+     "signatures": [
+      {
+       "code": "placed(c: Collider, scale: number, shift?: ArrayLike<number>): Collider"
+      }
+     ]
+    },
+    {
+     "name": "guessColliders",
+     "kind": "function",
+     "doc": "A first guess for a scan: a slab for the floor (its top at `floor`, reaching well past the thing) and a box round\nwhat was kept (`lo` to `hi`, from the floor up). Either is left out when it would have no size.",
+     "signatures": [
+      {
+       "code": "guessColliders(lo: ArrayLike<number>, hi: ArrayLike<number>, floor: number): Collider[]"
+      }
+     ]
+    },
+    {
+     "name": "ColliderFileError",
+     "kind": "class",
+     "doc": "Thrown when a file holds no shapes we can read.",
+     "extends": [
+      "Error"
+     ],
+     "ctor": [
+      {
+       "code": "new ColliderFileError(message?: string)"
+      },
+      {
+       "code": "new ColliderFileError(message?: string, options?: ErrorOptions)"
+      }
+     ]
+    },
+    {
+     "name": "writeColliderGlb",
+     "kind": "function",
+     "doc": "The shapes as a .glb: a node each, placed and turned, with a mesh of its surface so the file opens anywhere, our\nown exact note in the node's `extras`, and the Khronos draft extensions for physics shapes (`KHR_implicit_shapes`,\n`KHR_physics_rigid_bodies`; used, not required) so an engine that knows them takes the shapes as colliders.",
+     "signatures": [
+      {
+       "code": "writeColliderGlb(colliders: readonly Collider[]): Uint8Array"
+      }
+     ]
+    },
+    {
+     "name": "isColliderGlb",
+     "kind": "function",
+     "doc": "Whether these bytes are a .glb of colliders (ours, or another tool's with the physics shape extensions).",
+     "signatures": [
+      {
+       "code": "isColliderGlb(bytes: Uint8Array): boolean"
+      }
+     ]
+    },
+    {
+     "name": "readColliderGlb",
+     "kind": "function",
+     "doc": "Reads the shapes back from a .glb: ours exactly, from each node's own note; another tool's from the physics shape\nextensions (boxes, spheres and upright cylinders; a turn about the upright is kept, any other is dropped). At most\n`most` shapes. Throws `ColliderFileError` when the file holds none.",
+     "signatures": [
+      {
+       "code": "readColliderGlb(bytes: Uint8Array, most?: number): Collider[]"
       }
      ]
     }

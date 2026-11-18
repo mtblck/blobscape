@@ -9,8 +9,8 @@ import { useId, useRef, useState, type ButtonHTMLAttributes, type ReactNode, typ
 export function Tabs({ label, tabs }: { label: string; tabs: { id: string; label: string; summary?: string; content: ReactNode }[] }) {
   const [active, setActive] = useState(tabs[0].id)
   const base = useId()
-  // tabs with only a name are as wide as the name needs, so four fit a narrow panel
-  const plain = tabs.length <= 4 && tabs.every((t) => !t.summary)
+  // tabs with only a name are as wide as the name needs (a long one takes two lines), so five fit a narrow panel
+  const plain = tabs.length <= 5 && tabs.every((t) => !t.summary)
   const refs = useRef<(HTMLButtonElement | null)[]>([])
   const onKeyDown = (ev: React.KeyboardEvent, i: number) => {
     const n = tabs.length

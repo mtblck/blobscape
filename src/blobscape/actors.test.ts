@@ -137,3 +137,30 @@ test('a creature set to look at something is posed looking at it', () => {
   for (let i = 0; i < plain.count; i++) if (Math.hypot(plain.center[i * 3] - looking.center[i * 3], plain.center[i * 3 + 2] - looking.center[i * 3 + 2]) > 0.02) moved++
   assert.ok(moved > 50 && moved < plain.count / 2, `${moved} of ${plain.count} blobs turned: the head, not the body`)
 })
+
+test('with solid shapes under them, creatures stand on the shapes, and the elf puts each foot on its own', async () => {
+  const { groundOf } = await import('../splat-engine/colliders.ts')
+  const lowest = (a: Actor, ground?: (x: number, z: number) => number) => {
+    const out = new Blobs()
+    poseAll([a], () => 0, out, new WeakMap(), undefined, ground)
+    let y = Infinity
+    for (let i = 0; i < out.count; i++) y = Math.min(y, out.center[i * 3 + 1])
+    return y
+  }
+  // a table under the fox: it stands on the top, and on the floor with nothing under it
+  const table = groundOf([{ shape: 'box', center: [2, 0.4, -1], size: [1.5, 0.4, 1.5], turn: 0 }], -Infinity)
+  const a = makeActor(fox, { at: [2, 0, -1], height: 1, move: STILL })
+  assert.ok(near(lowest(a), 0, 2e-3) && near(lowest(a, table), 0.8, 2e-3), `${lowest(a)} then ${lowest(a, table)}`)
+  assert.ok(near(lowest(makeActor(fox, { at: [9, 0, 9], height: 1, move: STILL }), table), 0, 2e-3))
+  // a low step under the elf's left (+x) foot only: that foot is on the step, the other on the floor
+  const elf = makeActor(ZOO.find((s) => s.id === 'elf')!, { at: [0, 0, 0], height: 1.7, move: STILL })
+  const step = groundOf([{ shape: 'box', center: [0.6, 0.04, 0], size: [0.6 - 0.02, 0.04, 2], turn: 0 }], -Infinity)
+  const foot = (side: string, ground?: (x: number, z: number) => number) => {
+    poseAll([elf], () => 0, new Blobs(), new WeakMap(), undefined, ground)
+    const sk = elf.body.skeleton, i = sk.index(`${side}Foot`)
+    return placingOf(elf, 0, ground).at[1] + (sk.posedHead[i * 3 + 1] - elf.rest.foot[1]) * (elf.height / elf.rest.height)
+  }
+  const flat = { l: foot('l'), r: foot('r') }
+  assert.ok(near(foot('l', step), flat.l + 0.08, 2e-3), `left ${foot('l', step)} from ${flat.l}`)
+  assert.ok(near(foot('r', step), flat.r, 2e-3), `right ${foot('r', step)} from ${flat.r}`)
+})

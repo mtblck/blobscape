@@ -13,6 +13,7 @@ import { Viewport, type ToolHandlers } from './Viewport.tsx'
 import { drawBones, drawCenters, drawOutlines, themeColor, toScreen } from './overlay.ts'
 import { History } from './history.ts'
 import { takeHandOff } from './handoff.ts'
+import { groundOf, wireOf } from '../splat-engine/colliders.ts'
 import { GAZES, ROAM, STILL, actorAt, actorBlobs, actorBones, canLook, canRoam, detailsOf, freezeInto, makeActor, poseAll, remake, type Actor } from './actors.ts'
 import { CREATURES } from './creature/fromScenes.ts'
 import { PROPS } from './props.ts'
@@ -104,6 +105,12 @@ export function Sandbox() {
   }, [])
   const [source, setSource] = useState(handed ? handed.name : STARTS[0].name)
   const sourceRef = useRef(source)
+  // solid shapes that came with a scan from Scan Studio: creatures stand on them while that scan is the scene
+  const shapes = handed?.colliders && source === handed.name ? handed.colliders : undefined
+  const [showShapes, setShowShapes] = useState(true)
+  const ground = useMemo(() => (shapes ? groundOf(shapes, -Infinity) : undefined), [shapes])
+  const groundRef = useRef(ground)
+  groundRef.current = ground
   sourceRef.current = source
   const [orbit, setOrbit] = useState<Orbit>(() => ({ ...frame(blobsRef.current), azimuth: 30, elevation: 22 }))
   const [view, setView] = useState<SplatView | null>(null)
@@ -902,7 +909,7 @@ export function Sandbox() {
   /** Poses every creature at its own clock and sends the layer to the view. */
   const drawActors = useCallback(() => {
     const list = actorsRef.current
-    starts.current = poseAll(list, (a) => clocks.current.get(a.key) ?? 0, drawn.current, scratch.current, gazeAt)
+    starts.current = poseAll(list, (a) => clocks.current.get(a.key) ?? 0, drawn.current, scratch.current, gazeAt, groundRef.current)
     if (!view) return
     void view.syncLayer(list.length && showRef.current !== 'bones' ? drawn.current : null)
     view.invalidate(2)
@@ -1059,7 +1066,22 @@ export function Sandbox() {
   // --- overlay -----------------------------------------------------------------
   const overlay = (ctx: CanvasRenderingContext2D, lens: Lens) => {
     const b = blobsRef.current
-    if (showRig !== 'blobs') for (const a of actorsRef.current) drawBones(ctx, actorBones(a, clocks.current.get(a.key) ?? 0), lens, themeColor('accent', ctx.canvas))
+    if (showRig !== 'blobs') for (const a of actorsRef.current) drawBones(ctx, actorBones(a, clocks.current.get(a.key) ?? 0, ground), lens, themeColor('accent', ctx.canvas))
+    if (shapes && showShapes) {
+      // the scan's solid shapes, as dashed lines
+      ctx.save()
+      ctx.setLineDash([5, 4])
+      ctx.lineWidth = 1.25
+      ctx.strokeStyle = themeColor('ink', ctx.canvas)
+      for (const c of shapes) for (const run of wireOf(c)) {
+        const pts = run.map((p) => toScreen(p, lens))
+        if (pts.some((p) => !p)) continue
+        ctx.beginPath()
+        pts.forEach((p, i) => (i ? ctx.lineTo(p![0], p![1]) : ctx.moveTo(p![0], p![1])))
+        ctx.stroke()
+      }
+      ctx.restore()
+    }
     if (xray) {
       if (b.count <= OUTLINE_LIMIT) drawOutlines(ctx, b, lens, { sigmas: [2] })
       else drawCenters(ctx, b, lens, themeColor('ink'))
@@ -1357,6 +1379,12 @@ export function Sandbox() {
                 summary: actors.length ? `${actors.length} added` : 'None',
                 content: (
                   <Panel note="Creatures from Splat Creatures, a slime from Dungeon Run and the watch from Clockwork, moving in your scene. Drag one with the Move tool (or, with nothing selected, use the arrow keys on the view) to put it somewhere else. Brushes and selections leave them alone until you freeze one into ordinary blobs. An effect on the whole scene moves them too, but only on screen: freeze one to keep it.">
+                    {shapes && (
+                      <div data-testid="scan-shapes">
+                        <p className="text-xs leading-relaxed text-ink-muted">This scan came with {shapes.length} solid {shapes.length === 1 ? 'shape' : 'shapes'} from Scan Studio. A creature over one stands on it.</p>
+                        <div className="mt-2"><Toggle label="Show the shapes" checked={showShapes} onChange={setShowShapes} /></div>
+                      </div>
+                    )}
                     <Field label="Add">
                       <div className="flex flex-wrap gap-1.5" data-testid="add-creature">
                         {ADDABLE.map((sp) => <Button small key={sp.id} aria-label={`Add ${aOr(sp.name)}`} onClick={() => addActor(sp)} disabled={actors.length >= MAX_ACTORS || actorCount + detailsOf(sp)[0] > maxActorBlobs}>{cap(sp.name)}</Button>)}

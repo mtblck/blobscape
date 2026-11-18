@@ -734,7 +734,7 @@ export default [
       const file = join(shots, 'scan-clean.ply')
       await dl.saveAs(file)
       await tabClick(k.page.getByRole('button', { name: 'As scanned' }))
-      await k.page.locator('input[type=file]').setInputFiles(file)
+      await k.page.locator('input[type=file]:not([data-testid=scan-collider-file])').setInputFiles(file)
       await k.page.waitForFunction(() => /Opened scan-clean/.test(document.body.innerText), null, { timeout: 60000 }).catch(() => {})
       const back = await k.page.evaluate(() => window.__scan.total())
       if (back !== st.kept) fails.push(`blobscape scan: the saved .ply holds ${back} blobs, not ${st.kept}`)
@@ -745,6 +745,80 @@ export default [
       const count = (await k.page.getByTestId('blob-count').textContent({ timeout: 30000 }).catch(() => '')) ?? ''
       if (Number(count.replace(/\D/g, '')) !== kept) fails.push(`blobscape scan: the sandbox shows "${count}" for ${kept} kept blobs`)
       else ok(`blobscape scan: Open in the sandbox hands over the ${kept.toLocaleString()} kept blobs`)
+      await k.ctx.close()
+    },
+  },
+  {
+    name: 'scan-colliders',
+    about: 'Scan Studio colliders: guessed, added, sized and slid by their handles, picked in the view, copied, deleted, saved, reopened in place, handed to the sandbox',
+    entries: ['src/blobscape/scan/Colliders.tsx', 'src/splat-engine/colliders.ts'],
+    async run({ shots, join, fails, ok, open, tabClick, axe }) {
+      const k = await open('/experiments/scan-studio/?offscreen=1', { viewport: { width: 1280, height: 900 } })
+      const up = await k.page.waitForFunction(() => window.__scan?.kept() > 0, null, { timeout: 120000 }).then(() => true, () => false)
+      if (!up) { fails.push('scan colliders: Scan Studio never came up'); await k.ctx.close(); return }
+      const shapes = () => k.page.evaluate(() => window.__scan.colliders())
+      const drawnShapes = () => k.page.locator('[data-testid=scan-colliders] g[data-collider]').count()
+      await tabClick(k.page.getByTestId('scan-collider-guess'))
+      const guessed = await shapes()
+      if (!(guessed.length === 2 && guessed[0].name === 'floor' && Math.abs(guessed[0].center[1] + guessed[0].size[1]) < 1e-6 && guessed[1].size[1] > 0.3 && await drawnShapes() === 2)) fails.push(`scan colliders: the guess ${JSON.stringify(guessed)}, ${await drawnShapes()} drawn`)
+      else ok(`scan colliders: a guess gives the table (top at 0) and a box ${(guessed[1].size[1] * 2).toFixed(2)} tall round the mug, both drawn over the view`)
+      // a new cylinder is picked, with handles: one sizes it, one slides it over the table
+      await tabClick(k.page.getByRole('button', { name: 'Add a cylinder' }))
+      const pull = async (handle, dx, dy) => {
+        const box = await k.page.locator(`[data-testid=scan-colliders] [data-handle="${handle}"]`).boundingBox()
+        if (!box) return false
+        const x = box.x + box.width / 2, y = box.y + box.height / 2
+        await k.page.mouse.move(x, y)
+        await k.page.mouse.down()
+        await k.page.mouse.move(x + dx / 2, y + dy / 2)
+        await k.page.mouse.move(x + dx, y + dy)
+        await k.page.mouse.up()
+        return true
+      }
+      const fresh = (await shapes())[2]
+      const pulled = await pull(0, 60, 0)
+      const wider = (await shapes())[2]
+      const slid = await pull('move', -80, 30)
+      const moved = (await shapes())[2]
+      if (!(fresh && pulled && slid && Math.abs(wider.size[0] - fresh.size[0]) > 0.05 && wider.size[1] === fresh.size[1] && Math.hypot(moved.center[0] - wider.center[0], moved.center[2] - wider.center[2]) > 0.1 && Math.abs(moved.center[1] - wider.center[1]) < 1e-9 && moved.size[0] === wider.size[0])) fails.push(`scan colliders: handles ${JSON.stringify({ fresh, wider, moved, pulled, slid })}`)
+      else ok(`scan colliders: a size handle takes the cylinder from ${(fresh.size[0] * 2).toFixed(2)} to ${(wider.size[0] * 2).toFixed(2)} across, and the middle handle slides it ${Math.hypot(moved.center[0] - wider.center[0], moved.center[2] - wider.center[2]).toFixed(2)} over the table at the same height`)
+      // the sliders move it too; a click in the view picks the shape under it
+      await k.page.getByRole('slider', { name: 'Tall' }).fill('1.2')
+      const tall = (await shapes())[2]
+      await tabClick(k.page.getByTestId('scan-collider-list').getByRole('button', { name: 'Cylinder 1' }))
+      const none = await k.page.locator('[data-testid=scan-colliders] [data-handle]').count()
+      const mid = await k.page.evaluate(() => { const s = window.__scan, c = s.colliders()[2], p = s.stage.screenAt(c.center), r = document.querySelector('[data-testid=scan-view]').getBoundingClientRect(); return { x: r.left + p.x, y: r.top + p.y } })
+      await k.page.mouse.click(mid.x, mid.y)
+      const again = await k.page.locator('[data-testid=scan-colliders] g[data-picked]').getAttribute('data-collider').catch(() => null)
+      if (!(Math.abs(tall.size[1] - 0.6) < 1e-6 && none === 0 && again === '2')) fails.push(`scan colliders: slider and click: tall ${tall.size[1]}, ${none} handles with nothing picked, a click picked ${again}`)
+      else ok('scan colliders: the Tall slider sizes it, and a click on it in the view picks it again')
+      await tabClick(k.page.getByTestId('scan-collider-copy'))
+      const copied = await shapes()
+      await tabClick(k.page.getByTestId('scan-collider-delete'))
+      const left = await shapes()
+      if (!(copied.length === 4 && copied[3].shape === 'cylinder' && copied[3].center[0] !== copied[2].center[0] && left.length === 3)) fails.push(`scan colliders: copy and delete left ${copied.length} then ${left.length}`)
+      else ok('scan colliders: Copy adds one beside it and Delete takes it away')
+      await k.page.screenshot({ path: join(shots, 'blobscape-scan-colliders.png') })
+      await axe(k.page, 'scan colliders')
+      // saved, then opened over a fresh guess: every shape is back where it was
+      const [dl] = await Promise.all([k.page.waitForEvent('download'), tabClick(k.page.getByTestId('scan-collider-save'))])
+      const file = join(shots, 'scan-colliders.glb')
+      await dl.saveAs(file)
+      await tabClick(k.page.getByTestId('scan-collider-guess'))
+      await k.page.getByTestId('scan-collider-file').setInputFiles(file)
+      await k.page.waitForFunction(() => window.__scan.colliders().length === 3, null, { timeout: 30000 }).catch(() => {})
+      const back = await shapes()
+      const off = back.length === left.length ? Math.max(...back.map((c, i) => Math.max(...c.center.map((v, j) => Math.abs(v - left[i].center[j])), ...c.size.map((v, j) => Math.abs(v - left[i].size[j])), c.shape === left[i].shape ? 0 : 1))) : 1
+      if (!(off < 1e-4)) fails.push(`scan colliders: saved and reopened, ${back.length} shapes, off by ${off}`)
+      else ok(`scan colliders: the saved .glb opens again with all ${back.length} shapes in the same places (within ${off.toExponential(1)})`)
+      // the shapes go to the sandbox with the scan
+      await tabClick(k.page.getByRole('button', { name: 'Open in the sandbox' }))
+      await k.page.waitForURL('**/sandbox/', { timeout: 30000 }).catch(() => {})
+      await k.page.getByTestId('blob-count').textContent({ timeout: 30000 }).catch(() => '')
+      await tabClick(k.page.getByTestId('add-creature').getByRole('button').first()).catch(() => {})
+      const note = (await k.page.getByTestId('scan-shapes').textContent({ timeout: 10000 }).catch(() => '')) ?? ''
+      if (!/3 solid shapes/.test(note)) fails.push(`scan colliders: the sandbox says "${note}"`)
+      else ok('scan colliders: Open in the sandbox takes the 3 shapes along')
       await k.ctx.close()
     },
   },
@@ -1053,7 +1127,7 @@ export default [
     async run({ join, fails, ok, open }) {
       const PAGES = [
         ['pixel-diorama', 'Scene,Pixels,Finish'], ['creature', 'Creature Type,Movement & Details,Export & Import'], ['forest-walk', 'Forest Type,Character Style,View'],
-        ['dungeon-run', 'Game Settings,Character Style,View'], ['scan-studio', 'Import,Level & Crop,Clean,Lighting'], ['clockwork', 'Time,View'], ['shape-shifter', 'Shift,Creatures'], ['sand-snow-goo', 'Pour,Box'], ['brush-and-ink', 'Look,Subject'],
+        ['dungeon-run', 'Game Settings,Character Style,View'], ['scan-studio', 'Import,Level & Crop,Clean,Lighting,Colliders'], ['clockwork', 'Time,View'], ['shape-shifter', 'Shift,Creatures'], ['sand-snow-goo', 'Pour,Box'], ['brush-and-ink', 'Look,Subject'],
         ['fit-a-picture', 'Picture,Training'], ['splat-to-sprite', 'Prop Type,Pixels,Finish,View'],
       ]
       const sizes = new Set()
