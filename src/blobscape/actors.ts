@@ -3,7 +3,7 @@ import type { Creature } from '../splat-engine/body.ts'
 import { boneTail } from '../splat-engine/body.ts'
 import { poseBlobs } from '../splat-engine/pose.ts'
 import { posedPoint, type Skeleton } from '../splat-engine/rig.ts'
-import { lookAt } from '../splat-engine/ik.ts'
+import { lookAt, plantFeet, type Leg } from '../splat-engine/ik.ts'
 import type { Species } from '../splat-engine/zoo/index.ts'
 import { goingMove, paceOf, restMove, wanderAt, wanderPlan, type Where } from './wander.ts'
 
@@ -150,11 +150,38 @@ export function turnToLook(a: Actor, point: ArrayLike<number>, P: Placing) {
   lookAt(sk, head, target, { limit: TILT })
 }
 
+/** How high the solid ground is under a point of the floor (the sandbox's colliders); less than the floor where there is none. */
+export type GroundAt = (x: number, z: number) => number
+
+/** A two-legged body's legs for `plantFeet`, when its bones have the usual names (the elf's); undefined for any other body. */
+function legsOf(body: Creature): Leg[] | undefined {
+  const names = new Set(body.skeleton.bones.map((b) => b.name))
+  const sides = ['l', 'r'].filter((s) => names.has(`${s}Thigh`) && names.has(`${s}Shin`) && names.has(`${s}Foot`))
+  if (sides.length !== 2 || [...names].filter((n) => n.endsWith('Thigh')).length !== 2) return undefined
+  return sides.map((s) => ({ upper: `${s}Thigh`, lower: `${s}Shin`, foot: `${s}Foot`, pole: [0, 0, 1] }))
+}
+
+/**
+ * Stands a posed two-legged actor's feet on the ground each is over: one foot on a step and one on the floor bends
+ * the legs to both (`plantFeet`), where the placing alone would stand it on the height under its middle.
+ */
+function standOn(a: Actor, P: Placing, ground: GroundAt) {
+  const legs = legsOf(a.body)
+  if (!legs) return
+  const sk = a.body.skeleton, floor = sk.place[1]
+  plantFeet(sk, legs, (lx, lz) => {
+    const x = (lx - P.foot[0]) * P.k, z = (lz - P.foot[2]) * P.k
+    const h = Math.max(a.at[1], ground(P.at[0] + x * P.c + z * P.s, P.at[2] - x * P.s + z * P.c))
+    return floor + (h - P.at[1]) / P.k
+  }, { tilt: false })
+}
+
 /** Placement: scale about the rest footprint, turn about the vertical, stand on `at` (or where its walk has got to). */
 export interface Placing { k: number; c: number; s: number; qy: number; qw: number; foot: Vec3; at: Vec3 }
-export function placingOf(a: Actor, seconds = 0): Placing {
+export function placingOf(a: Actor, seconds = 0, ground?: GroundAt): Placing {
   const w = roamingAt(a, seconds)
-  const at: Vec3 = w ? [a.at[0] + w.dx, a.at[1], a.at[2] + w.dz] : a.at
+  let at: Vec3 = w ? [a.at[0] + w.dx, a.at[1], a.at[2] + w.dz] : a.at
+  if (ground) at = [at[0], Math.max(at[1], ground(at[0], at[2])), at[2]]
   const r = ((w ? w.yaw : a.yaw) * Math.PI) / 180
   return { k: a.height / a.rest.height, c: Math.cos(r), s: Math.sin(r), qy: Math.sin(r / 2), qw: Math.cos(r / 2), foot: a.rest.foot, at }
 }
@@ -221,7 +248,7 @@ export const actorBlobs = (actors: readonly Actor[]) => actors.reduce((n, a) => 
  * another into `out`, growing it if needed. `scratch` holds one posed list per
  * body, reused frame to frame. Returns where each actor starts in `out`.
  */
-export function poseAll(actors: readonly Actor[], clock: (a: Actor) => number, out: Blobs, scratch: WeakMap<Creature, Blobs>, gazeAt?: (a: Actor) => Vec3 | null): number[] {
+export function poseAll(actors: readonly Actor[], clock: (a: Actor) => number, out: Blobs, scratch: WeakMap<Creature, Blobs>, gazeAt?: (a: Actor) => Vec3 | null, ground?: GroundAt): number[] {
   const total = actorBlobs(actors)
   if (out.capacity < total) {
     const bigger = new Blobs(Math.max(total, out.capacity * 2))
@@ -234,8 +261,9 @@ export function poseAll(actors: readonly Actor[], clock: (a: Actor) => number, o
     // A clone keeps the rest colors and opacities, which posing leaves alone
     let posed = scratch.get(a.body)
     if (!posed) { posed = rest.clone(); scratch.set(a.body, posed) }
-    const t = clock(a), P = placingOf(a, t)
+    const t = clock(a), P = placingOf(a, t, ground)
     poseActor(a, t)
+    if (ground) standOn(a, P, ground)
     const point = a.gaze !== 'ahead' ? gazeAt?.(a) : null
     if (point) turnToLook(a, point, P)
     poseBlobs(rest, a.body.skin, a.body.skeleton, 'quat', posed)
@@ -248,8 +276,8 @@ export function poseAll(actors: readonly Actor[], clock: (a: Actor) => number, o
 }
 
 /** Each bone of a posed actor as a line from head to tail, placed, for drawing the rig. */
-export function actorBones(a: Actor, seconds = 0): { from: Vec3; to: Vec3 }[] {
-  const sk = a.body.skeleton, P = placingOf(a, seconds)
+export function actorBones(a: Actor, seconds = 0, ground?: GroundAt): { from: Vec3; to: Vec3 }[] {
+  const sk = a.body.skeleton, P = placingOf(a, seconds, ground)
   return sk.bones.map((_, i) => ({
     from: placePoint(sk.posedHead.subarray(i * 3, i * 3 + 3), P),
     to: placePoint(posedPoint(sk, i, boneTail(sk.bones, i)), P),

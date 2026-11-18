@@ -502,6 +502,21 @@ export class Stage {
     return { origin: origin.toArray(), direction: direction.toArray() }
   }
 
+  /**
+   * Where a point in world space falls on the view, in CSS pixels from its top left, for drawing over the picture;
+   * undefined behind the camera. `orbit` is the view to use when it is not the stage's own yet.
+   */
+  screenAt(p: ArrayLike<number>, orbit: Orbit = this.orbit): { x: number; y: number } | undefined {
+    const w = this.display.clientWidth, h = this.display.clientHeight
+    if (!w || !h) return
+    placeCamera(this.camera as never, orbit, w / h)
+    this.camera.updateMatrixWorld()
+    const v = new THREE.Vector3(p[0], p[1], p[2]).applyMatrix4(this.camera.matrixWorldInverse)
+    if (v.z > -this.camera.near) return
+    v.applyMatrix4(this.camera.projectionMatrix)
+    return { x: (v.x * 0.5 + 0.5) * w, y: (0.5 - v.y * 0.5) * h }
+  }
+
   /** The bone under a point on the view (CSS pixels from its top left) and where the pointer meets it, in world space. */
   hitAt(x: number, y: number): { bone: number; point: [number, number, number] } | undefined {
     const { actor } = this

@@ -172,19 +172,25 @@ export function preview(b: Blobs, mask: Mask | undefined, showCut: boolean): Blo
 /** The size the finished object is scaled to (its tallest or widest side), about the size of the sandbox's own scenes. */
 export const FINISHED = 1.6
 
-/** The kept blobs as an object of their own: standing on y = 0, centerd, FINISHED units at its biggest. */
+/** How `finish` moves what it is given: scaled by `scale` about the origin, then shifted. Colliders drawn over the scan go the same way (`placed`). */
+export function finishing(b: Blobs): { scale: number; shift: [number, number, number] } {
+  if (!b.count) return { scale: 1, shift: [0, 0, 0] }
+  const { lo, hi } = extent(b)
+  const big = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2])
+  const s = big > 0 ? FINISHED / big : 1
+  return { scale: s, shift: [(-(lo[0] + hi[0]) / 2) * s, -lo[1] * s, (-(lo[2] + hi[2]) / 2) * s] }
+}
+
+/** The kept blobs as an object of their own: standing on y = 0, centered, FINISHED units at its biggest. */
 export function finish(b: Blobs, mask: Mask | undefined): Blobs {
   const out = mask ? keepOnly(b, mask) : b.clone()
   if (!out.count) return out
-  const { lo, hi } = extent(out)
-  const big = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2])
-  const s = big > 0 ? FINISHED / big : 1
-  const cx = (lo[0] + hi[0]) / 2, cz = (lo[2] + hi[2]) / 2
+  const { scale: s, shift } = finishing(out)
   for (let i = 0; i < out.count; i++) {
-    out.center[i * 3] = (out.center[i * 3] - cx) * s
-    out.center[i * 3 + 1] = (out.center[i * 3 + 1] - lo[1]) * s
-    out.center[i * 3 + 2] = (out.center[i * 3 + 2] - cz) * s
-    for (let k = 0; k < 3; k++) out.scale[i * 3 + k] *= s
+    for (let k = 0; k < 3; k++) {
+      out.center[i * 3 + k] = out.center[i * 3 + k] * s + shift[k]
+      out.scale[i * 3 + k] *= s
+    }
   }
   return out
 }

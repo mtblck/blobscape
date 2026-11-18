@@ -15,7 +15,9 @@ import { TAB_SECTIONS, Workbench } from '../shared/Workbench.tsx'
 import { about, extent, keepOnly } from './scan/clean.ts'
 import { sampleScan } from './scan/sample.ts'
 import { GROUND, LOOKS, PAPERS, css, type LookId } from './brushLooks.ts'
-import { trimEdits, DEFAULT_CLEAN, LIGHTS, UNTURNED, autoOrient, cleaner, finish, lightsFor, preview, stillActor, tip, working, type Clean, type LightId, type Orient } from './scan/studio.ts'
+import { ColliderOverlay, ColliderPanel } from './scan/Colliders.tsx'
+import { ColliderFileError, guessColliders, pickCollider, placed, readColliderGlb, writeColliderGlb, type Collider } from '../splat-engine/colliders.ts'
+import { trimEdits, DEFAULT_CLEAN, LIGHTS, UNTURNED, autoOrient, cleaner, finish, finishing, lightsFor, preview, stillActor, tip, working, type Clean, type LightId, type Orient } from './scan/studio.ts'
 
 const FILE_TYPES = '.ply,.spz,.splat,.ksplat,.sog'
 /** Slider ends that mean "off". */
@@ -26,7 +28,7 @@ class EmptyScan extends Error {}
 class TooBig extends Error {}
 
 declare global {
-  interface Window { __scan?: { stage: CreatureStage; kept: () => number; total: () => number; level: () => boolean | null; open: (bytes: ArrayBuffer, name: string) => Promise<void> } }
+  interface Window { __scan?: { stage: CreatureStage; kept: () => number; total: () => number; level: () => boolean | null; open: (bytes: ArrayBuffer, name: string) => Promise<void>; colliders: () => Collider[] } }
 }
 
 /**
@@ -62,6 +64,10 @@ export function ScanStudio() {
   const [light, setLight] = useState<LightId>('scanned')
   const [drawnAs, setDrawnAs] = useState<LookId>('blobs')
   const [trim, setTrim] = useState(true)
+  // solid shapes drawn over the scan, in the view's own units (the table at y = 0)
+  const [colliders, setColliders] = useState<Collider[]>([])
+  const [picked, setPicked] = useState(-1)
+  const [showShapes, setShowShapes] = useState(true)
   const [angle, setAngle] = useState(40)
   const [ambient, setAmbient] = useState(1)
   const [keepLight, setKeepLight] = useState(true)
@@ -80,6 +86,8 @@ export function ScanStudio() {
     const c = { ...DEFAULT_CLEAN, floor: o ? DEFAULT_CLEAN.floor : 0 }
     setClean(c)
     setApplied(c)
+    setColliders([])
+    setPicked(-1)
     framed.current = false
   }, [])
 
@@ -200,7 +208,9 @@ export function ScanStudio() {
     if (!kept.count) return undefined
     const { bakeLights } = await import('../splat-engine/light.ts')
     const { lo, hi } = extent(kept)
-    return finish(light !== 'scanned' && keepLight ? bakeLights(kept, lightsFor(light, angle, lo, hi), ambient) : kept, undefined)
+    // the shapes go where the scan goes: sized and stood with it
+    const { scale, shift } = finishing(kept)
+    return { blobs: finish(light !== 'scanned' && keepLight ? bakeLights(kept, lightsFor(light, angle, lo, hi), ambient) : kept, undefined), shapes: colliders.map((c) => placed(c, scale, shift)), scale, shift }
   }
   const base = (scan?.name ?? 'scan').replace(/\.[a-z0-9]+$/i, '').replace(/[^\w-]+/g, '-').toLowerCase() || 'scan'
   /** Runs an export with the buttons held, and says what went wrong if it fails. */
@@ -217,13 +227,47 @@ export function ScanStudio() {
       setError(err instanceof RangeError ? 'This scan is too big to export on this device.' : 'Something went wrong preparing the scan.')
     } finally { setBusy(false) }
   }
-  const toSandbox = () => exporting('Packing it for the sandbox', async () => { const b = await result(); if (b) handOff(scan?.name ?? 'Your scan', b) })
+  const toSandbox = () => exporting('Packing it for the sandbox', async () => { const r = await result(); if (r) handOff(scan?.name ?? 'Your scan', r.blobs, r.shapes) })
   const save = () => exporting('Writing the .ply', async () => {
-    const b = await result()
+    const b = (await result())?.blobs
     if (!b) return
     download(writePly(b), `${base}-clean.ply`, 'application/octet-stream')
     setMessage(`Saved ${base}-clean.ply (${b.count.toLocaleString()} blobs).`)
   })
+  /** The shapes as a file, placed round the saved scan (the same move `finish` gives the blobs). */
+  const shapesFile = async () => { const r = await result(); return r?.shapes.length ? writeColliderGlb(r.shapes) : undefined }
+  const saveShapes = () => exporting('Writing the shapes', async () => {
+    const bytes = await shapesFile()
+    if (!bytes) return
+    download(bytes, `${base}-colliders.glb`, 'model/gltf-binary')
+    setMessage(`Saved ${base}-colliders.glb (${colliders.length} ${colliders.length === 1 ? 'shape' : 'shapes'}).`)
+  })
+  /** Shapes from a file, brought back from the saved scan's frame to the view's. */
+  const openShapeBytes = async (bytes: Uint8Array) => {
+    const r = await result()
+    if (!r) return
+    const back = readColliderGlb(bytes).map((c) => placed(c, 1 / r.scale, [-r.shift[0] / r.scale, -r.shift[1] / r.scale, -r.shift[2] / r.scale]))
+    setColliders(back)
+    setPicked(-1)
+    setShowShapes(true)
+    setMessage(`Opened ${back.length} ${back.length === 1 ? 'shape' : 'shapes'}.`)
+  }
+  const openShapes = async (file: File) => {
+    setError('')
+    try { await openShapeBytes(new Uint8Array(await file.arrayBuffer())) } catch (err) {
+      console.warn(err)
+      setMessage('')
+      setError(`Couldn't open ${file.name}. ${err instanceof ColliderFileError ? err.message : 'It is not a .glb of shapes saved here.'}`)
+    }
+  }
+  const guess = () => {
+    if (!box) return
+    setColliders(guessColliders(box.lo, box.hi, 0))
+    setPicked(-1)
+    setShowShapes(true)
+  }
+  /** Where a press began, to tell a click on a shape from a drag of the view. */
+  const press = useRef<{ x: number; y: number } | null>(null)
 
   // a clean edge on the crops and the table cut: the kept blobs are trimmed where the cut passes through them
   useEffect(() => {
@@ -240,9 +284,9 @@ export function ScanStudio() {
   // For verify: the stage and the counts, without clicking
   useEffect(() => {
     if (!stage) return
-    window.__scan = { stage, kept: () => masks?.kept ?? 0, total: () => work?.blobs.count ?? 0, level: () => found, open: openBytes }
+    window.__scan = { stage, kept: () => masks?.kept ?? 0, total: () => work?.blobs.count ?? 0, level: () => found, open: openBytes, colliders: () => colliders }
     return () => { delete window.__scan }
-  }, [stage, masks, work, found, openBytes])
+  }, [stage, masks, work, found, openBytes, colliders])
 
   const drag = useRef<OrbitDrag | null>(null)
   const pointers = useRef(new Map<number, { x: number; y: number }>())
@@ -287,13 +331,25 @@ export function ScanStudio() {
                   ev.currentTarget.setPointerCapture(ev.pointerId)
                   pointers.current.set(ev.pointerId, { x: ev.clientX, y: ev.clientY })
                   drag.current = beginOrbitDrag(pointers.current, ev, orbit)
+                  press.current = { x: ev.clientX, y: ev.clientY }
                 }}
                 onPointerMove={(ev) => {
                   if (pointers.current.has(ev.pointerId)) pointers.current.set(ev.pointerId, { x: ev.clientX, y: ev.clientY })
                   const d = drag.current
                   if (d) setOrbit(dragOrbit(d, pointers.current, ev))
                 }}
-                onPointerUp={(ev) => { pointers.current.delete(ev.pointerId); drag.current = null }}
+                onPointerUp={(ev) => {
+                  pointers.current.delete(ev.pointerId)
+                  drag.current = null
+                  // a click that hardly moved picks the shape under it
+                  const from = press.current
+                  press.current = null
+                  if (!from || !stage || !showShapes || !colliders.length || Math.hypot(ev.clientX - from.x, ev.clientY - from.y) > 4) return
+                  const r = ev.currentTarget.getBoundingClientRect()
+                  const ray = stage.rayAt(ev.clientX - r.left, ev.clientY - r.top)
+                  const hit = ray && pickCollider(colliders, ray.origin, ray.direction)
+                  setPicked(hit ? hit.index : -1)
+                }}
                 onPointerCancel={(ev) => { pointers.current.delete(ev.pointerId); drag.current = null }}
                 onKeyDown={(ev) => {
                   if (!orbitKey(ev, orbit)) return
@@ -301,6 +357,9 @@ export function ScanStudio() {
                   setOrbit((o) => orbitKey(ev, o) ?? o)
                 }}
               />
+              {stage && showShapes && colliders.length > 0 && (
+                <ColliderOverlay stage={stage} orbit={orbit} colliders={colliders} picked={picked} onChange={(i, c) => setColliders((list) => list.map((x, k) => (k === i ? c : x)))} />
+              )}
               {waiting && <LoadingMark testid="scan-loading" />}
               <p role="status" className="sr-only">{waiting ? (stage ? 'Setting up the scan…' : 'Starting the splat engine…') : ''}</p>
               {failed && <div role="alert" className="absolute inset-4 grid place-items-center text-center text-sm text-ink">{failed}</div>}
@@ -382,6 +441,19 @@ export function ScanStudio() {
                   <Slider label="Light from" value={angle} min={0} max={359} step={1} onChange={setAngle} format={(v) => `${v}°`} />
                   <Slider label="Room light" value={ambient} min={0} max={1} step={0.01} onChange={setAmbient} format={(v) => `${Math.round(v * 100)}%`} hint="How bright it is away from the light." />
                 </>}
+              </div>
+            ),
+          },
+          {
+            id: 'colliders', label: 'Colliders', content: (
+              <div className={TAB_SECTIONS}>
+                <ColliderPanel
+                  colliders={colliders} picked={picked} onPick={setPicked}
+                  onSet={(next, pick) => { setColliders(next); if (pick !== undefined) setPicked(pick); setShowShapes(true) }}
+                  onGuess={guess} show={showShapes} onShow={setShowShapes}
+                  lo={box?.lo ?? [-1, 0, -1]} hi={box?.hi ?? [1, 1, 1]}
+                  onSave={() => void saveShapes()} onOpen={(f) => void openShapes(f)} busy={busy || !masks?.kept}
+                />
               </div>
             ),
           },
