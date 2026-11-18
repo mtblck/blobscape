@@ -263,19 +263,21 @@ export default [
       if (pics !== 2) fails.push(`blobscape sandbox path: the filmstrip shows ${pics} pictures for two stops`)
       else ok('blobscape sandbox path: the filmstrip shows a picture of each stop')
       await axe(page, 'blobscape sandbox path')
-      // Play: the view goes back to the first stop and glides; partway it is neither stop, and it ends at the second
-      // The page's clock is stepped by hand: in software a picture of the view can take longer than the whole path,
-      // so on the real clock the play was over before the first look at it
+      // Play: the view goes back to the first stop and glides; partway it is neither stop, and it ends at the second.
+      // The page's clock is stepped by hand to half way and Stop pressed there, because in software a picture of the
+      // view can take longer than the whole path; the picture is taken once the clock runs again (on a slow shared
+      // runner a picture asked for while the page's clock stood still never came)
       await page.clock.install()
       await page.clock.pauseAt(Date.now() + 1000)
       await play.click()
       await page.clock.fastForward(1000)
       await page.clock.runFor(100)
-      const mid = await shot()
-      const fromFirst = await differs(mid, first), fromSecond = await differs(mid, second)
-      await page.clock.fastForward(1500)
-      await page.clock.runFor(100)
+      await page.getByRole('button', { name: 'Stop', exact: true }).click()
       await page.clock.resume()
+      const mid = await settled()
+      const fromFirst = await differs(mid, first), fromSecond = await differs(mid, second)
+      await play.click()
+      await page.waitForTimeout(2500)
       await page.waitForFunction(() => [...document.querySelectorAll('button')].find((b) => b.textContent === 'Play the path')?.getAttribute('aria-pressed') === 'false', null, { timeout: 15000 }).catch(() => {})
       const end = await settled()
       const short = await differs(end, second)
