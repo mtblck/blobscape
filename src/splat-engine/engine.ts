@@ -26,7 +26,7 @@ import { applyMorphs, shares, type Morph } from './morph.ts'
 import { LIFT, MAX_MARCH, OCC_SCALE, REACH, SHADOW_CELLS, SHADOW_DENSITY, SPREAD, SUN_MARCH, blobSigma, occupancy, steadyBox, type ShadowBox } from './shadow.ts'
 import { linearToSrgb, srgbToLinear } from '../splat-core/color.ts'
 import { viewColor } from '../splat-core/sh.ts'
-import { INK, MARK_KINDS, MARK_LONG, MARK_MOST, MARK_SOLID, MARK_WIDE, PAPER, SHADE_FROM, SHADE_FULL, WASH_LEAST, WASH_MOST, type MarkLook } from '../splat-core/marks.ts'
+import { INK, MARK_CUT, MARK_KINDS, MARK_LIFT, MARK_LONG, MARK_MOST, MARK_SOLID, MARK_WIDE, PAPER, SHADE_FROM, SHADE_FULL, WASH_LEAST, WASH_MOST, type MarkLook } from '../splat-core/marks.ts'
 
 /**
  * Blobscape's splat engine: one mesh that draws every blob of every object in a
@@ -177,7 +177,7 @@ export class SplatWorld extends Mesh {
   /** While true, rendering draws the last frame's blobs without moving or sorting them (for timing the draw alone, and for a second draw of the same frame such as the map of parts). */
   hold = false
   private readonly flat = uniform(0)
-  private readonly mark: Marks = { kind: uniform(0), size: uniform(1), ink: uniform(new Vector3()), paper: uniform(new Vector3()) }
+  private readonly mark: Marks = { kind: uniform(0), size: uniform(1), soft: uniform(0), ink: uniform(new Vector3()), paper: uniform(new Vector3()) }
   /**
    * While true, the draw is a map of parts, not a picture: every blob is a hard disc in its part's own flat color
    * (red and green hold the part's number plus one, blue the actor's), with no light, fog or soft edge, so where two
@@ -350,6 +350,14 @@ export class SplatWorld extends Mesh {
   setMarks(look?: MarkLook) {
     const M = this.mark
     M.kind.value = look ? MARK_KINDS.indexOf(look.kind) + 1 : 0
+    // Marks are paint, and paint has no order of its own: drawn back to front by their centers, the blobs of one flat
+    // thing change places all at once as it turns in the view, and every mark on it jumps. So marks write depth, and
+    // each pixel keeps the mark nearest to it there (`placeQuad`), whatever order they were drawn in. A `soft` look
+    // is laid in paint order as before, for a scan's blobs, which build a surface between them
+    const byDepth = !!look && !look.soft
+    M.soft.value = byDepth ? 0 : 1
+    const material = this.material as NodeMaterial
+    if (material.depthWrite !== byDepth) { material.depthWrite = byDepth; material.needsUpdate = true }
     M.size.value = look?.size ?? 1
     const lin = (c: readonly number[]) => [srgbToLinear(c[0]), srgbToLinear(c[1]), srgbToLinear(c[2])] as const
     M.ink.value.set(...lin(look?.ink ?? INK))
@@ -1082,10 +1090,11 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
   // what the project pass writes: screen center, depth and opacity factor; the two screen axes
   const splatAAttr = new StorageBufferAttribute(new Float32Array(n * 4), 4)
   const splatBAttr = new StorageBufferAttribute(new Float32Array(n * 4), 4)
+  const splatCAttr = new StorageBufferAttribute(new Float32Array(n * 4), 4)
   return {
     count: n,
     /** Every GPU buffer, so dispose can free them. */
-    attrs: [centerAttr, scaleAttr, quatAttr, colorAttr, partAttr, seenAttr, skinAttr, boneAttr, worldCenterAttr, covAAttr, covBAttr, splatAAttr, splatBAttr],
+    attrs: [centerAttr, scaleAttr, quatAttr, colorAttr, partAttr, seenAttr, skinAttr, boneAttr, worldCenterAttr, covAAttr, covBAttr, splatAAttr, splatBAttr, splatCAttr],
     skinWords, srcCenterData: center,
     boneData, boneAttr, worldCenterAttr, covAAttr, covBAttr, colorAttr, centerAttr, scaleAttr, quatAttr,
     srcCenter: storage(centerAttr, 'vec4', n).toReadOnly(),
@@ -1107,6 +1116,8 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
     splatBW: storage(splatBAttr, 'vec4', n),
     splatA: storage(splatAAttr, 'vec4', n).toReadOnly(),
     splatB: storage(splatBAttr, 'vec4', n).toReadOnly(),
+    splatCW: storage(splatCAttr, 'vec4', n),
+    splatC: storage(splatCAttr, 'vec4', n).toReadOnly(),
     webgl: false,
   }
 }
@@ -1487,7 +1498,14 @@ function projectSplat(center: N, covA: N, covB: N, view: N, proj: N, viewport: N
     alphaScale.assign(0)
   })
   const ndc = centerClip.xyz.div(max(w, 0.0001)).toVar()
-  return { ndc, axes: vec4(ax1, ax2), alphaScale, depth: viewCenter.z.negate() }
+  // How the blob lies in depth: where it is densest along the line of sight through a point of its ellipse is nearer
+  // or further than its center by the depth that goes with that point (the mean of depth given the place on screen:
+  // for a flat blob its own plane, for a round one no slope at all). Per unit along each axis, then how far a whole
+  // seed lifts it, all as screen depth. CPU twin of the slope: `depthSlope` in splat-core/marks.ts; change both
+  const h = vec2(c02.mul(j00).add(c22.mul(j02)), c12.mul(j11).add(c22.mul(j12))).toVar()
+  const toDepth = proj[3].z.mul(invZ2).toVar()
+  const tilt = vec3(dot(h, axis1).div(sqrt(lambda1)), dot(h, axis2).div(sqrt(lambda2)), sqrt(max(c00.add(c11).add(c22), 0)).mul(MARK_LIFT)).mul(toDepth)
+  return { ndc, axes: vec4(ax1, ax2), tilt, alphaScale, depth: viewCenter.z.negate() }
 }
 
 /** WebGPU: project every blob once (not once per corner), and write its sort key. */
@@ -1498,6 +1516,7 @@ function makeProject(buf: ReturnType<typeof makeBuffers>, sort: Sorter, cam: Cam
     const p = projectSplat(buf.worldCenter.element(i).xyz, buf.covA.element(i), buf.covB.element(i), cam.view, cam.proj, cam.viewport, cam.clip)
     buf.splatAW.element(i).assign(vec4(p.ndc, p.alphaScale))
     buf.splatBW.element(i).assign(p.axes)
+    buf.splatCW.element(i).assign(vec4(p.tilt, 0))
     const span = max(cam.depthRange.y.sub(cam.depthRange.x), 0.0001)
     const t = p.depth.sub(cam.depthRange.x).div(span).clamp(0, 1)
     const key = uint(bins1).sub(uint(t.mul(bins1))).toVar()
@@ -1808,7 +1827,7 @@ function densestPoint() {
 }
 
 /** How blobs are drawn as marks (`setMarks`): kind 0 is none, then `MARK_KINDS` from 1; ink and paper are linear. */
-interface Marks { kind: N; size: N; ink: N; paper: N }
+interface Marks { kind: N; size: N; soft: N; ink: N; paper: N }
 
 /** A mark at a pixel of its blob: color (linear) and cover. CPU twin: `markAt` in splat-core/marks.ts; change both. */
 function markOf(M: Marks, uv: N, seed: N, rgb: N) {
@@ -1852,8 +1871,9 @@ function markOf(M: Marks, uv: N, seed: N, rgb: N) {
  * below 1/255 sooner than two standard deviations out, so its quad shrinks and
  * covers fewer pixels.
  */
-function placeQuad(ndc: N, axes: N, rgba: N, idx: N, cut?: { covA: N; covB: N }) {
-  splatSeed().assign(lodRankNode(idx))
+function placeQuad(ndc: N, axes: N, tilt: N, rgba: N, idx: N, cut?: { covA: N; covB: N }) {
+  const seed = lodRankNode(idx).toVar()
+  splatSeed().assign(seed)
   const alpha = rgba.a
   const reach = sqrt(max(TSL.log(alpha.mul(255)).mul(2), 0)).min(2).toVar()
   const uv = positionGeometry.xy.mul(reach).toVar()
@@ -1871,7 +1891,10 @@ function placeQuad(ndc: N, axes: N, rgba: N, idx: N, cut?: { covA: N; covB: N })
     splatAdjA().assign(vec3(d.mul(f).sub(e.mul(e)), c.mul(e).sub(b.mul(f)), b.mul(e).sub(c.mul(d))))
     splatAdjB().assign(vec3(a.mul(f).sub(c.mul(c)), b.mul(c).sub(a.mul(e)), a.mul(d).sub(b.mul(b))))
   }
-  return vec4(at, ndc.z, 1)
+  // each corner at its own depth on the blob, so blobs that lie in one plane are at one depth wherever they overlap,
+  // and a small lift by the blob's seed settles which of them is on top there: the same one from every side. It
+  // matters only to marks, which write depth (`setMarks`)
+  return vec4(at, ndc.z.add(tilt.x.mul(uv.x)).add(tilt.y.mul(uv.y)).add(tilt.z.mul(seed.sub(0.5))), 1)
 }
 
 /** What a blob draws as: its picture color, its part's flat color (map of parts), or its depth (depth map). */
@@ -1889,7 +1912,7 @@ function makeVertexWebGPU(buf: ReturnType<typeof makeBuffers>, sort: Sorter, fog
     // ndc z = −(P22·z + P32) / z for a perspective camera, so −z = P32 / (ndc z + P22)
     const depth = cameraProjectionMatrix[3].z.div(A.z.add(cameraProjectionMatrix[2].z))
     const part = unpackUnorm4x8(buf.part.element(idx))
-    return placeQuad(A.xyz, buf.splatB.element(idx), vec4(flatColor(flat, part.rgb, depth, fogged(color.rgb, depth, fog)), color.a.mul(A.w)), idx, clean ? { covA: buf.covA.element(idx), covB: buf.covB.element(idx) } : undefined)
+    return placeQuad(A.xyz, buf.splatB.element(idx), buf.splatC.element(idx).xyz, vec4(flatColor(flat, part.rgb, depth, fogged(color.rgb, depth, fog)), color.a.mul(A.w)), idx, clean ? { covA: buf.covA.element(idx), covB: buf.covB.element(idx) } : undefined)
   })()
 }
 
@@ -1903,7 +1926,7 @@ function makeVertexWebGL(buf: ReturnType<typeof makeBuffers>, sort: Sorter, mode
     const own = S ? viewed(color.rgb, idx, d.world, buf, S) : color.rgb
     const rgb = L ? lit(painted(own, d.world, buf.edits), d.world, d.covA, d.covB, buf.seen.element(idx), L) : own
     const part = unpackUnorm4x8(buf.part.element(idx))
-    return placeQuad(p.ndc, p.axes, vec4(flatColor(flat, part.rgb, p.depth, fogged(rgb, p.depth, fog)), color.a.mul(p.alphaScale)), idx, clean ? d : undefined)
+    return placeQuad(p.ndc, p.axes, p.tilt, vec4(flatColor(flat, part.rgb, p.depth, fogged(rgb, p.depth, fog)), color.a.mul(p.alphaScale)), idx, clean ? d : undefined)
   })()
 }
 
@@ -1920,7 +1943,9 @@ function makeFragment(flat: N, M: Marks, E?: Edits) {
     // marks: paint in the mark's shape, not a soft dot (the picture only: maps of parts and depth stay discs)
     If(M.kind.greaterThan(0.5).and(flat.lessThan(0.5)), () => {
       const m = markOf(M, uv, splatSeed(), splatColor().rgb).toVar()
-      const a = m.a.mul(splatColor().a.mul(MARK_SOLID).min(1)).toVar()
+      // all of a mark or none of it: a soft edge would write its depth too, and hide what should show under it
+      const cover = select(M.soft.greaterThan(0.5), m.a, select(m.a.lessThan(MARK_CUT), float(0), float(1)))
+      const a = cover.mul(splatColor().a.mul(MARK_SOLID).min(1)).toVar()
       If(a.lessThan(1 / 255), () => { Discard() })
       out.assign(vec4(m.rgb, a))
     }).Else(() => {

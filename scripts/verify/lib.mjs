@@ -83,18 +83,30 @@ export function checkContext(browser, base, parts) {
     return { page, res, ctx }
   }
 
-  /** Options sit in tabs (the sandbox's in modes): open the tab that holds a control, then click the control. */
+  /** Options sit in tabs (the sandbox's in modes, some in folded sections): open the tab and section that hold a control, then click the control. */
   async function tabClick(control) {
+    const page = control.page()
     const shows = () => control.first().isVisible().catch(() => false)
+    // a control in a folded section (the sandbox's Scene) is hidden from every query too: open each section in turn
+    const unfold = async () => {
+      for (const summary of await page.locator('[role=tabpanel]:not([hidden]) details > summary, section[aria-label=Options] details > summary').all()) {
+        if (await shows()) return
+        if (!(await summary.evaluate((el) => el.parentElement.open).catch(() => true))) await summary.click().catch(() => {})
+      }
+    }
+    if (!(await shows())) await unfold()
     if (!(await shows())) {
       // a control in a closed tab is hidden from every query, so try each tab until it shows
-      for (const tab of await control.page().locator('section[aria-label=Options] [role=tab], [role=tablist][aria-label="Sandbox modes"] [role=tab]').all()) {
+      for (const tab of await page.locator('section[aria-label=Options] [role=tab], [role=tablist][aria-label="Sandbox modes"] [role=tab]').all()) {
         await tab.click()
+        if (await shows()) break
+        await unfold()
         if (await shows()) break
       }
     }
     await control.click()
   }
+
 
   // axe-core on the rendered page; any violation fails the run
   async function axe(page, label) {

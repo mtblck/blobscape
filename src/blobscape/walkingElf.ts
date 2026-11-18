@@ -1,6 +1,6 @@
 import type { Vec3 } from '../splat-core/blobs.ts'
 import type { Creature } from '../splat-engine/body.ts'
-import { hipDrop, stepLegs, type Leg } from '../splat-engine/ik.ts'
+import { legShifts, stepLegs, type Leg } from '../splat-engine/ik.ts'
 import { blendPose } from '../splat-engine/mix.ts'
 import { axisAngle, mulQ, rotate } from '../splat-engine/rig.ts'
 import { Steps, type StepBody, type StepOptions } from '../splat-engine/steps.ts'
@@ -29,6 +29,15 @@ export const ELF_LEGS: Leg[] = ['l', 'r'].map((s) => ({ upper: `${s}Thigh`, lowe
 export const ELF_STEPS: StepOptions = { reach: 0.33, duration: 0.4, lift: 0.1 }
 /** The most it comes down to reach a stride, meters. */
 const ELF_CROUCH = 0.12
+/** The most it rises over its pose to stand straight on higher ground, meters. */
+const ELF_RISE = 0.3
+/** The most one hip joint rises over the other as the pelvis tips, meters. */
+const ELF_TIP = 0.04
+/**
+ * How much of a leg's full length the hips leave it, standing and walking. A leg 3% short of straight has its knee a
+ * tenth of a meter forward, which standing still reads as a squat (Matt saw it in the pond), so at rest it is nearly straight.
+ */
+const STAND_SLACK = 0.996, WALK_SLACK = 0.97
 /** The elf's walk clip's cycle: its arms and body swing once a stride; the legs go where the footsteps say. */
 const STRIDE_SECONDS = 1.1
 /** How long a wave lasts, seconds. */
@@ -72,6 +81,8 @@ export class WalkingElf {
   private walkWeight = 0
   private drop = 0
   private idleT = 0
+  private posed = false
+  private readonly tips = [0, 0]
 
   constructor(blobs: number, look: string, start: Walker, { steps = ELF_STEPS, pace = 1.45 }: { steps?: StepOptions; pace?: number } = {}) {
     this.elf = makeElf(blobs, look)
@@ -125,8 +136,22 @@ export class WalkingElf {
       return ground(f.at[0], f.at[1]) * (1 - k) + ground(f.to[0], f.to[1]) * k
     }
     const targets = placed.map((p, i): Vec3 => [p[0], ankles[i] + p[1] + under(i), p[2]])
-    this.drop = easeDrop(this.drop, Math.min(ELF_CROUCH, hipDrop(sk, ELF_LEGS, targets)), dt)
+    // standing, the legs are all but straight; walking they keep some bend for the stride
+    const slack = STAND_SLACK + (WALK_SLACK - STAND_SLACK) * Math.min(1, this.walkWeight)
+    // as tall as the legs allow on the ground under the feet, and no further down than a long stride needs
+    const shifts = legShifts(sk, ELF_LEGS, targets, slack)
+    const want = Math.max(-ELF_RISE, Math.min(ELF_CROUCH, Math.max(...shifts)))
+    // the first pose has no pose before it to ease from
+    this.drop = this.posed ? easeDrop(this.drop, want, dt) : want
     sk.offset[1] -= this.drop
+    // standing with one foot higher, the pelvis tips: that side's hip joint rises so its leg is as straight as the other
+    const still = 1 - Math.min(1, this.walkWeight)
+    ELF_LEGS.forEach((l, i) => {
+      const tip = Math.min(ELF_TIP, Math.max(0, want - shifts[i])) * still
+      this.tips[i] = this.posed ? this.tips[i] + (tip - this.tips[i]) * (1 - Math.exp(-dt * 6)) : tip
+      sk.offset[sk.index(l.upper) * 3 + 1] += this.tips[i]
+    })
+    this.posed = true
     stepLegs(sk, ELF_LEGS, targets, placed.map((_, i) => this.steps.turned(i)))
     // the cloak and plait swing after the body, then clear the legs as they are now
     this.cloth.update(sk, dt)

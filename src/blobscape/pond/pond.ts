@@ -43,7 +43,9 @@ const DROP_R = 0.08, DROP_VOLUME = 1.3e-4
 const SPLASH_R = 0.11, SPLASH_DEPTH = 0.02
 
 /** How the pond's surface looks: dark clear water under a night sky, catching the moon. */
-const LOOK: Omit<WaterLook, 'sun'> = { body: [0.012, 0.085, 0.075], sky: [0.012, 0.02, 0.035], horizon: [0.07, 0.11, 0.15], clear: 0.34, gloss: 70, steep: 2.5 }
+const LOOK: Omit<WaterLook, 'sun'> = { body: [0.012, 0.085, 0.075], sky: [0.012, 0.02, 0.035], horizon: [0.07, 0.11, 0.15], clear: 0.34, gloss: 70, deep: 0.35 }
+/** How many times steeper than it is the water is drawn, to start with. */
+export const RIPPLE = 2.5
 const MOON: Vec3 = [0.75, 0.85, 0.8]
 
 /** Each leg as the water sees it: from one bone's head to the next, this thick. */
@@ -79,6 +81,8 @@ export class Pond {
   calm = false
   /** Raindrops a second over the whole pond; 0 for none. */
   rain = 0
+  /** How many times steeper than it is the water is drawn and lit (`WaterLook.steep`): ripples are millimeters high, and at their true slope hardly show from across the pond. */
+  ripple = RIPPLE
   /** Whether the surface's blobs were moved or colored again by the last `draw`. */
   surfaceChanged = true
   /** Whether the last `draw` moved the surface's blobs (not only colored them). */
@@ -88,7 +92,7 @@ export class Pond {
   private mirrorNew = false
   private waveUntil = -1
   private turned = 0
-  private drawn = { version: -1, eye: [NaN, NaN, NaN], at: -1 }
+  private drawn = { version: -1, ripple: 0, eye: [NaN, NaN, NaN], at: -1 }
   private rainDue = 0
   private readonly solid: Shape[]
   /** The rain in the air. */
@@ -209,17 +213,17 @@ export class Pond {
    */
   draw(eye: ArrayLike<number>) {
     const d = this.drawn
-    const moved = this.water.version !== d.version
+    const moved = this.water.version !== d.version || this.ripple !== d.ripple
     const looked = Math.abs(eye[0] - d.eye[0]) + Math.abs(eye[1] - d.eye[1]) + Math.abs(eye[2] - d.eye[2]) > 1e-4
     this.surfaceChanged = moved || looked || this.mirrorNew || this.time - d.at > (this.calm ? 1e9 : 0.07) || d.at < 0
     this.surfaceMoved = this.surfaceChanged && (moved || d.at < 0)
     if (!this.surfaceChanged) return
     this.mirrorNew = false
-    if (this.surfaceMoved) shapeSurface(this.surface, this.water, LOOK.steep)
+    if (this.surfaceMoved) shapeSurface(this.surface, this.water, this.ripple)
     const from = POND_SCENE.light!.from!
     // with a picture of the scene to mirror, the flames are in it; without one, each flame gets a glint of its own
-    shadeSurface(this.surface, { ...LOOK, sun: { toward: from, color: MOON, glow: 0.12 }, mirror: this.mirror }, eye, this.mirror ? [] : candleGlints(this.wicks, this.time, this.calm))
-    this.drawn = { version: this.water.version, eye: [eye[0], eye[1], eye[2]], at: this.time }
+    shadeSurface(this.surface, { ...LOOK, steep: this.ripple, sun: { toward: from, color: MOON, glow: 0.12 }, mirror: this.mirror }, eye, this.mirror ? [] : candleGlints(this.wicks, this.time, this.calm))
+    this.drawn = { version: this.water.version, ripple: this.ripple, eye: [eye[0], eye[1], eye[2]], at: this.time }
   }
 }
 

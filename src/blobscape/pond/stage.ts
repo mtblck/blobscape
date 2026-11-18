@@ -155,6 +155,7 @@ export class PondStage {
       p.standAt(was.walker)
       p.calm = was.calm
       p.rain = was.rain
+      p.ripple = was.ripple
       p.waded = was.waded
       p.update(0, { forward: 0, turn: 0 })
     }

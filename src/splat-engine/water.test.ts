@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { WATER_TICK, Water, crossing, makeSurface, shadeSurface, shapeSurface, surfaceColor, type WaterLook } from './water.ts'
+import { WATER_TICK, Water, crossing, makeSurface, shadeSurface, shapeSurface, surfaceColor, gathered, GATHER_LEAST, GATHER_MOST, type WaterLook } from './water.ts'
 
 const pond = (more: Partial<ConstructorParameters<typeof Water>[0]> = {}) =>
   new Water({ x0: -2, z0: -2, nx: 80, nz: 80, cell: 0.05, level: 0.15, ...more })
@@ -247,4 +247,33 @@ test('a splash is a crater with a rim, holds no water of its own, and spreads as
   dry.wet.fill(0)
   dry.splash(0, 0, 0.11, 0.012)
   assert.ok(dry.h.every((v) => v === 0))
+})
+
+test('a crest gathers light on the bed and a trough spreads it, so a ripple shows from straight above', () => {
+  assert.equal(gathered(-2, {}), 1)
+  assert.equal(gathered(0, { deep: 0.3 }), 1)
+  // a quarter of the tilt, over the depth: 1 / (1 − 0.3 · 2 / 4)
+  assert.ok(Math.abs(gathered(-2, { deep: 0.3 }) - 1 / 0.85) < 1e-9)
+  assert.ok(gathered(2, { deep: 0.3 }) < 1 && gathered(-2, { deep: 0.3, steep: 2 }) > gathered(-2, { deep: 0.3 }))
+  assert.equal(gathered(-1e3, { deep: 0.3 }), GATHER_MOST)
+  assert.equal(gathered(1e3, { deep: 0.3 }), GATHER_LEAST)
+
+  const w = pond()
+  w.drop(0, 0, 0.1, 2e-4)
+  w.step(0.5)
+  const s = makeSurface(w)
+  shapeSurface(s, w)
+  let crest = 0, trough = 0
+  for (let k = 0; k < s.curve.length; k++) { if (s.curve[k] < s.curve[crest]) crest = k; if (s.curve[k] > s.curve[trough]) trough = k }
+  assert.ok(s.curve[crest] < 0 && s.curve[trough] > 0)
+  const look: WaterLook = { body: [0.01, 0.08, 0.07], sky: [0.01, 0.02, 0.03], clear: 0.3, deep: 0.35 }
+  const green = (k: number) => s.blobs.color[k * 3 + 1]
+  // seen from straight overhead, where the surface mirrors next to nothing
+  const over = (k: number): [number, number, number] => [s.at[k * 2], 30, s.at[k * 2 + 1]]
+  shadeSurface(s, look, over(crest))
+  const bright = green(crest)
+  shadeSurface(s, look, over(trough))
+  assert.ok(bright > green(trough) * 1.1, `${bright} over ${green(trough)}`)
+  shadeSurface(s, { ...look, deep: undefined }, over(crest))
+  assert.ok(bright > green(crest))
 })
