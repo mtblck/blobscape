@@ -4,7 +4,7 @@ import { ImportError, readSplatFile } from '../splat-core/importer.ts'
 import { writePly } from '../splat-core/ply.ts'
 import type { Orbit } from '../splat-core/view.ts'
 import { LoadingMark } from '../shared/BlobLoader.tsx'
-import { Button, Chip, Slider, Toggle } from '../shared/ui.tsx'
+import { Button, Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
 import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitDrag } from './Viewport.tsx'
 import { href } from './routes.ts'
@@ -14,6 +14,7 @@ import type { CreatureStage } from './creature/stage.ts'
 import { TAB_SECTIONS, Workbench } from '../shared/Workbench.tsx'
 import { about, extent, keepOnly } from './scan/clean.ts'
 import { sampleScan } from './scan/sample.ts'
+import { GROUND, LOOKS, PAPERS, css, type LookId } from './brushLooks.ts'
 import { DEFAULT_CLEAN, LIGHTS, UNTURNED, autoOrient, cleaner, finish, lightsFor, preview, stillActor, tip, working, type Clean, type LightId, type Orient } from './scan/studio.ts'
 
 const FILE_TYPES = '.ply,.spz,.splat,.ksplat,.sog'
@@ -59,6 +60,7 @@ export function ScanStudio() {
   }, [clean])
   const [showCut, setShowCut] = useState(false)
   const [light, setLight] = useState<LightId>('scanned')
+  const [drawnAs, setDrawnAs] = useState<LookId>('blobs')
   const [angle, setAngle] = useState(40)
   const [ambient, setAmbient] = useState(1)
   const [keepLight, setKeepLight] = useState(true)
@@ -222,6 +224,8 @@ export function ScanStudio() {
     setMessage(`Saved ${base}-clean.ply (${b.count.toLocaleString()} blobs).`)
   })
 
+  useEffect(() => { stage?.setMarks(drawnAs === 'blobs' ? undefined : { kind: drawnAs }) }, [stage, drawnAs])
+
   // For verify: the stage and the counts, without clicking
   useEffect(() => {
     if (!stage) return
@@ -258,6 +262,8 @@ export function ScanStudio() {
             onDragLeave={(ev) => { if (!ev.currentTarget.contains(ev.relatedTarget as Node | null)) setDragOver(false) }}
             onDrop={(ev) => { ev.preventDefault(); setDragOver(false); const f = ev.dataTransfer.files[0]; if (f) void openFile(f) }}
           >
+              {/* what the drawn looks stand on: paper for the pen, a dark ground for paint */}
+              {drawnAs !== 'blobs' && <div aria-hidden className="absolute inset-0" style={{ background: drawnAs === 'ink' || drawnAs === 'hatch' ? css(PAPERS[0].paper) : GROUND }} />}
               <canvas
                 ref={canvas}
                 role="application"
@@ -351,6 +357,12 @@ export function ScanStudio() {
                 </div>
                 <p className="text-xs text-ink-faint">{lightNote}</p>
                 </div>
+                <Field label="Drawn as">
+                  <div className="flex flex-wrap gap-1.5" data-testid="scan-looks">
+                    {[LOOKS[LOOKS.length - 1], ...LOOKS.slice(0, -1)].map((l) => <Chip key={l.id} active={drawnAs === l.id} onClick={() => setDrawnAs(l.id)}>{l.label}</Chip>)}
+                  </div>
+                  <p className="mt-1.5 text-xs text-ink-faint">{drawnAs === 'blobs' ? 'Or as brush marks and pen strokes, one for each blob. Only the view changes: the file keeps its blobs.' : `${LOOKS.find((l) => l.id === drawnAs)!.note} Only the view changes: the file keeps its blobs.`}</p>
+                </Field>
                 {light !== 'scanned' && <>
                   <Slider label="Light from" value={angle} min={0} max={359} step={1} onChange={setAngle} format={(v) => `${v}°`} />
                   <Slider label="Room light" value={ambient} min={0} max={1} step={0.01} onChange={setAmbient} format={(v) => `${Math.round(v * 100)}%`} hint="How bright it is away from the light." />

@@ -555,6 +555,93 @@ export default [
       },
   })),
   {
+    name: 'brush-and-ink',
+    about: 'Brush and Ink: each look redraws the same blobs as marks on both backends, a frame drawn twice is the same, the scan draws too',
+    entries: ['src/blobscape/BrushInk.tsx'],
+    async run({ shots, join, fails, ok, open, tabClick, axe }) {
+      const read = (page, t = 0.4) => page.evaluate(async (t) => {
+        await window.__brush.stage.frame(t)
+        const cv = document.querySelector('[data-testid=brush-view]')
+        return Array.from(cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data)
+      }, t)
+      const differ = (a, b, by = 40) => { let n = 0; for (let i = 0; i < a.length; i += 4) if (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]) + Math.abs(a[i + 3] - b[i + 3]) > by) n++; return n / (a.length / 4) }
+      const solid = (a) => { let n = 0; for (let i = 3; i < a.length; i += 4) if (a[i] > 128) n++; return n / (a.length / 4) }
+      const pick = async (page, name, look) => {
+        await tabClick(page.getByTestId('brush-looks').getByRole('button', { name, exact: true }))
+        await page.waitForFunction((look) => window.__brush?.look === look, look, { timeout: 10000 }).catch(() => {})
+      }
+      const pictures = {}
+      for (const backend of ['webgpu', 'webgl']) {
+        const k = await open(`/experiments/brush-and-ink/?offscreen=1&subject=fox&look=gouache${backend === 'webgl' ? '&webgl=1' : ''}`, { viewport: { width: 1280, height: 900 } })
+        const up = await k.page.waitForFunction(() => window.__brush?.subject === 'fox', null, { timeout: 120000 }).then(() => true, () => false)
+        if (!up) { fails.push(`brush and ink on ${backend}: the fox never came up`); await k.ctx.close(); continue }
+        await k.page.evaluate(() => { window.__brush.stage.playing = false })
+        const got = await k.page.evaluate(() => window.__brush.stage.backend)
+        const gouache = await read(k.page), again = await read(k.page)
+        await pick(k.page, 'Oil', 'oil')
+        const oil = await read(k.page)
+        await pick(k.page, 'Ink and wash', 'ink')
+        const ink = await read(k.page)
+        await pick(k.page, 'Hatching', 'hatch')
+        const hatch = await read(k.page)
+        const paper = await k.page.getByTestId('brush-ground').evaluate((e) => getComputedStyle(e).backgroundColor)
+        await pick(k.page, 'Blobs', 'blobs')
+        const blobs = await read(k.page)
+        pictures[backend] = { gouache, hatch }
+        const m = { backend: got, same: differ(gouache, again, 0), cover: solid(gouache), blobs: solid(blobs), paint: differ(gouache, blobs), oil: differ(oil, gouache), ink: differ(ink, gouache), hatch: differ(hatch, ink), paper }
+        // marks are opaque where soft dots fade, so the painted fox is at least as solid; each look is a different picture; a frame drawn twice is the same frame
+        if (m.backend !== backend || m.same !== 0 || !(m.cover > 0.03 && m.cover >= m.blobs * 0.9) || !(m.paint > 0.01 && m.oil > 0.003 && m.ink > 0.01 && m.hatch > 0.005) || !/rgb\(2[0-9]{2}, 2[0-9]{2}, 2[0-9]{2}\)/.test(m.paper)) fails.push(`brush and ink on ${backend}: ${JSON.stringify(m)}`)
+        else ok(`brush and ink on ${backend}: the fox in gouache covers ${(m.cover * 100).toFixed(0)}% of the view (${(m.blobs * 100).toFixed(0)}% as blobs), every look is its own picture, and a frame drawn twice is the same`)
+        if (backend === 'webgpu') {
+          // the scan and a scene, hatched and painted
+          await tabClick(k.page.getByTestId('brush-subjects').getByRole('button', { name: 'Scanned mug', exact: true }))
+          const mug = await k.page.waitForFunction(() => window.__brush?.subject === 'mug', null, { timeout: 120000 }).then(() => true, () => false)
+          await pick(k.page, 'Hatching', 'hatch')
+          const hatched = mug && await read(k.page)
+          if (hatched) await k.page.screenshot({ path: join(shots, 'blobscape-brush-mug.png') })
+          await pick(k.page, 'Blobs', 'blobs')
+          const plain = mug && await read(k.page)
+          if (!mug || !(solid(hatched) > 0.03) || !(differ(hatched, plain) > 0.02)) fails.push(`brush and ink: the scanned mug hatched: up ${mug}, ${mug ? `${solid(hatched)} solid, ${differ(hatched, plain)} changed from blobs` : ''}`)
+          else ok(`brush and ink: the scanned mug draws hatched (${(solid(hatched) * 100).toFixed(0)}% of the view)`)
+          await tabClick(k.page.getByTestId('brush-subjects').getByRole('button', { name: 'Windmill', exact: true }))
+          const mill = await k.page.waitForFunction(() => window.__brush?.subject === 'windmill', null, { timeout: 180000 }).then(() => true, () => false)
+          await pick(k.page, 'Gouache', 'gouache')
+          const painted = mill && await read(k.page, 2)
+          if (!mill || !(solid(painted) > 0.2)) fails.push(`brush and ink: the windmill in gouache: up ${mill}, ${mill ? solid(painted) : ''} solid`)
+          else ok(`brush and ink: the windmill scene draws in gouache (${(solid(painted) * 100).toFixed(0)}% of the view)`)
+          await k.page.screenshot({ path: join(shots, 'blobscape-brush-and-ink.png') })
+          await axe(k.page, 'brush and ink')
+        }
+        await k.ctx.close()
+      }
+      // the two backends draw the same marks: the same blobs get the same strokes
+      if (pictures.webgpu && pictures.webgl) {
+        const g = differ(pictures.webgpu.gouache, pictures.webgl.gouache, 90), h = differ(pictures.webgpu.hatch, pictures.webgl.hatch, 90)
+        if (!(g < 0.02 && h < 0.02)) fails.push(`brush and ink: WebGPU and WebGL differ at ${(g * 100).toFixed(2)}% of pixels in gouache, ${(h * 100).toFixed(2)}% hatched`)
+        else ok(`brush and ink: WebGPU and WebGL draw the same marks (${(g * 100).toFixed(2)}% of pixels differ in gouache, ${(h * 100).toFixed(2)}% hatched)`)
+      }
+      // Scan Studio offers the looks on its Lighting tab
+      const s = await open('/experiments/scan-studio/?offscreen=1', { viewport: { width: 1280, height: 900 } })
+      const there = await s.page.waitForFunction(() => window.__scan?.kept() > 0, null, { timeout: 120000 }).then(() => true, () => false)
+      const shot = () => s.page.evaluate(async () => {
+        await window.__scan.stage.frame(0)
+        const cv = document.querySelector('[data-testid=scan-view]') ?? document.querySelector('section[aria-label="The scan"] canvas')
+        return Array.from(cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data)
+      })
+      if (!there) fails.push('brush and ink: Scan Studio never came up')
+      else {
+        const before = await shot()
+        await tabClick(s.page.getByTestId('scan-looks').getByRole('button', { name: 'Gouache', exact: true }))
+        await s.page.waitForTimeout(200)
+        const after = await shot()
+        if (!(differ(before, after) > 0.01)) fails.push(`brush and ink: Scan Studio's Gouache changed ${differ(before, after)} of the view`)
+        else ok(`brush and ink: Scan Studio draws its scan in gouache from the Lighting tab (${(differ(before, after) * 100).toFixed(0)}% of the view changes)`)
+        await s.page.screenshot({ path: join(shots, 'blobscape-scan-gouache.png') })
+      }
+      await s.ctx.close()
+    },
+  },
+  {
     name: 'clockwork',
     about: 'Clockwork: the watch draws, the train turns by the right amount, the hands read the time',
     entries: ['src/blobscape/Clockwork.tsx'],
@@ -942,11 +1029,11 @@ export default [
     core: true,
     about: 'every experiment: same two columns, its own tabs, a preview that stays in sight on a phone',
     entries: ['src/shared/Workbench.tsx', 'src/shared/ui.tsx'],
-    files: ['src/shared/theme.css', 'src/blobscape/PixelDiorama.tsx', 'src/blobscape/Creature.tsx', 'src/blobscape/ForestWalk.tsx', 'src/blobscape/DungeonRun.tsx', 'src/blobscape/ScanStudio.tsx', 'src/blobscape/Clockwork.tsx', 'src/blobscape/ShapeShifter.tsx', 'src/blobscape/SandSnowGoo.tsx', 'src/fit-a-picture/App.tsx', 'src/splat-to-sprite/App.tsx'],
+    files: ['src/shared/theme.css', 'src/blobscape/PixelDiorama.tsx', 'src/blobscape/Creature.tsx', 'src/blobscape/ForestWalk.tsx', 'src/blobscape/DungeonRun.tsx', 'src/blobscape/ScanStudio.tsx', 'src/blobscape/Clockwork.tsx', 'src/blobscape/ShapeShifter.tsx', 'src/blobscape/SandSnowGoo.tsx', 'src/blobscape/BrushInk.tsx', 'src/fit-a-picture/App.tsx', 'src/splat-to-sprite/App.tsx'],
     async run({ join, fails, ok, open }) {
       const PAGES = [
         ['pixel-diorama', 'Scene,Pixels,Finish'], ['creature', 'Creature Type,Movement & Details,Export & Import'], ['forest-walk', 'Forest Type,Character Style,View'],
-        ['dungeon-run', 'Game Settings,Character Style,View'], ['scan-studio', 'Import,Level & Crop,Clean,Lighting'], ['clockwork', 'Time,View'], ['shape-shifter', 'Shift,Creatures'], ['sand-snow-goo', 'Pour,Box'],
+        ['dungeon-run', 'Game Settings,Character Style,View'], ['scan-studio', 'Import,Level & Crop,Clean,Lighting'], ['clockwork', 'Time,View'], ['shape-shifter', 'Shift,Creatures'], ['sand-snow-goo', 'Pour,Box'], ['brush-and-ink', 'Look,Subject'],
         ['fit-a-picture', 'Picture,Training'], ['splat-to-sprite', 'Prop Type,Pixels,Finish,View'],
       ]
       const sizes = new Set()

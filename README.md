@@ -127,7 +127,11 @@ stay in your browser.
       <a href="https://blobscape.dev/experiments/sand-snow-goo/"><b>Sand, Snow and Goo</b></a><br />
       A box of blobs that flow: sand heaps, snow stands, goo spreads. Pour and poke.
     </td>
-    <td valign="top"></td>
+    <td valign="top">
+      <a href="https://blobscape.dev/experiments/brush-and-ink/"><img src="public/covers/brush-and-ink.webp" alt="A windmill on a hill, half painted in gouache strokes and half drawn in ink on paper" /></a><br />
+      <a href="https://blobscape.dev/experiments/brush-and-ink/"><b>Brush and Ink</b></a><br />
+      The same blobs drawn as brush strokes or pen lines that stay put as the view turns.
+    </td>
     <td valign="top"></td>
   </tr>
 </table>
