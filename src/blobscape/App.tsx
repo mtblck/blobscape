@@ -45,6 +45,7 @@ import { DungeonRun } from './DungeonRun.tsx'
 import { Experiments } from './Experiments.tsx'
 import { useEffect, useState } from 'react'
 import { Toaster, clearToasts } from '../shared/Toast.tsx'
+import { StaleNotice } from '../shared/stale.tsx'
 import { Contact } from './Contact.tsx'
 import { Engine } from './Engine.tsx'
 import { Spec } from './Spec.tsx'
@@ -73,6 +74,7 @@ export function App({ route: at }: { route?: Route } = {}) {
       </main>
       <Footer />
       <Toaster />
+      <StaleNotice />
       {/* not in the prerendered HTML: it fades in once the app is running */}
       {!at && <TipButton small={!READING.has(route.page)} />}
     </div>

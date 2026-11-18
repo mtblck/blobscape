@@ -1,3 +1,4 @@
+import { startFailure } from '../shared/stale.tsx'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Blobs } from '../splat-core/blobs.ts'
 import type { Orbit } from '../splat-core/view.ts'
@@ -88,7 +89,7 @@ export function ShapeShifter() {
         live = s
         s.onFirstFrame = () => setDrawn(true)
         setStage(s)
-      }, (e: unknown) => { console.warn(e); setFailed('This browser could not start WebGPU or WebGL 2, which the creatures need.') })
+      }, (e: unknown) => { console.warn(e); setFailed(startFailure('the creatures need')) })
     return () => { gone = true; live?.dispose() }
   }, [offscreen, webgl])
 

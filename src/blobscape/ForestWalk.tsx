@@ -1,3 +1,4 @@
+import { startFailure } from '../shared/stale.tsx'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { LoadingMark } from '../shared/BlobLoader.tsx'
 import { Button, Chip, Field, Slider } from '../shared/ui.tsx'
@@ -58,7 +59,7 @@ export function ForestWalk() {
         setStage(s)
         // without WebGPU (where the CPU sorts every frame) the forest starts light; with it, full
         setDetail((d) => d ?? (s.backend === 'webgpu' ? 1 : 0.35))
-      }, (e: unknown) => { console.warn(e); setFailed('This browser could not start WebGPU or WebGL 2, which the forest needs.') })
+      }, (e: unknown) => { console.warn(e); setFailed(startFailure('the forest needs')) })
     return () => { gone = true; live?.dispose() }
   }, [offscreen])
 

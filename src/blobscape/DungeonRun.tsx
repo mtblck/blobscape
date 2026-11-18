@@ -1,3 +1,4 @@
+import { startFailure } from '../shared/stale.tsx'
 import { useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from 'react'
 import { LoadingMark } from '../shared/BlobLoader.tsx'
 import { Button, Chip, Field, Toggle } from '../shared/ui.tsx'
@@ -91,7 +92,7 @@ export function DungeonRun() {
         setDetail((d) => d ?? (s.backend === 'webgpu' ? 1 : 0.35))
         // live lights cost a pass on WebGPU, but every corner of every blob on WebGL: there they start baked
         setLight((l) => l ?? (s.backend === 'webgpu' ? 'live' : 'baked'))
-      }, (e: unknown) => { console.warn(e); setFailed('This browser could not start WebGPU or WebGL 2, which the dungeon needs.') })
+      }, (e: unknown) => { console.warn(e); setFailed(startFailure('the dungeon needs')) })
     return () => { gone = true; live?.dispose() }
   }, [offscreen, webgl])
 

@@ -5,6 +5,7 @@ Add entries under [Unreleased] as work lands; `npm run release -- x.y.z` moves t
 merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 
 ## [Unreleased]
+- A page left open across a site update now says so and offers a reload when a part of it can no longer load, in place of saying the browser could not start WebGPU or WebGL 2.
 
 - Splat Creatures has a second fox, the Minimalist fox: the plain capsule fox from the engine page's one-tag example, with the same coats, moves and controls as the others. It is in the sandbox and Shape Shifter too.
 - The dragon's breath ends by leaving its mouth and thinning away out in front, instead of shrinking back in. On Splat Creatures the waiting mark now stays until a detailed creature is really on screen.

@@ -1,7 +1,9 @@
 import { createRoot, hydrateRoot } from 'react-dom/client'
 import '../shared/theme.css'
 import { App } from './App.tsx'
+import { watchStale } from '../shared/stale.tsx'
 
+watchStale()
 const root = document.getElementById('root')!
 // Pages prerendered from the app itself (data-ssr) are picked up where they stand, so the first paint doesn't move;
 // the rest (lessons and experiments, which read the address and saved progress as they start) are prerendered from the

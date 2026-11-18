@@ -1,3 +1,4 @@
+import { startFailure } from '../shared/stale.tsx'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Orbit } from '../splat-core/view.ts'
 import { Magnifier, TourStrip } from './diorama/HowItsMade.tsx'
@@ -159,7 +160,7 @@ export function PixelDiorama() {
         s.onFirstFrame = () => setDrawn(true)
         s.setFloor(0)
         setStage(s)
-      }, (e: unknown) => { console.warn(e); setFailed('This browser could not start WebGPU or WebGL 2, which the scene needs.') })
+      }, (e: unknown) => { console.warn(e); setFailed(startFailure('the scene needs')) })
     return () => { gone = true; live?.dispose() }
   }, [offscreen, webgl])
 

@@ -1,3 +1,4 @@
+import { startFailure } from '../shared/stale.tsx'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Orbit } from '../splat-core/view.ts'
 import type { Built } from '../splat-engine/body.ts'
@@ -115,7 +116,7 @@ export function DayNight() {
         // shadows are marched for every blob each frame the light moves: on from the start where compute passes do it
         setShadows(params.get('shadows') === null ? s.backend === 'webgpu' : params.get('shadows') === '1')
         setStage(s)
-      }, (e: unknown) => { console.warn(e); setFailed('This browser could not start WebGPU or WebGL 2, which the scene needs.') })
+      }, (e: unknown) => { console.warn(e); setFailed(startFailure('the scene needs')) })
     return () => { gone = true; live?.dispose() }
   }, [offscreen, webgl, params])
 
