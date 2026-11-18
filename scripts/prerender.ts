@@ -77,10 +77,11 @@ function content(route: Route): string {
     case 'clockwork':
     case 'shift':
     case 'flow':
+    case 'brush':
     case 'diorama':
     case 'scan':
     case 'dungeon': {
-      const title = route.page === 'sandbox' ? 'Sandbox' : route.page === 'creature' ? 'Splat Creatures' : route.page === 'clockwork' ? 'Clockwork' : route.page === 'shift' ? 'Shape Shifter' : route.page === 'flow' ? 'Sand, Snow and Goo' : route.page === 'diorama' ? 'Pixel Diorama' : route.page === 'scan' ? 'Scan Studio' : route.page === 'dungeon' ? 'Dungeon Run' : 'Forest Walk'
+      const title = route.page === 'sandbox' ? 'Sandbox' : route.page === 'creature' ? 'Splat Creatures' : route.page === 'clockwork' ? 'Clockwork' : route.page === 'shift' ? 'Shape Shifter' : route.page === 'flow' ? 'Sand, Snow and Goo' : route.page === 'brush' ? 'Brush and Ink' : route.page === 'diorama' ? 'Pixel Diorama' : route.page === 'scan' ? 'Scan Studio' : route.page === 'dungeon' ? 'Dungeon Run' : 'Forest Walk'
       const tool = route.page !== 'sandbox'
       return `${crumbs(title, tool ? ['Experiments', '/experiments/'] : undefined)}<div class="max-w-3xl"><h1 class="pt-6 font-display text-5xl">${title}</h1><p class="mt-4 text-xl leading-relaxed text-ink-muted">${esc(pageMeta(route).description)}</p><p class="mt-6 text-sm text-ink-faint">It runs in your browser, with JavaScript and WebGL${tool ? ' or WebGPU' : ''}.</p></div>`
     }
@@ -142,6 +143,8 @@ function structured(route: Route): object[] {
       return [work(experimentAt(href(route))!), breadcrumbs([home, ['Experiments', '/experiments/'], ['Forest Walk', href(route)]])]
     case 'shift':
       return [work(experimentAt(href(route))!), breadcrumbs([home, ['Experiments', '/experiments/'], ['Shape Shifter', href(route)]])]
+    case 'brush':
+      return [work(experimentAt(href(route))!), breadcrumbs([home, ['Experiments', '/experiments/'], ['Brush and Ink', href(route)]])]
     case 'flow':
       return [work(experimentAt(href(route))!), breadcrumbs([home, ['Experiments', '/experiments/'], ['Sand, Snow and Goo', href(route)]])]
     case 'clockwork':
@@ -229,7 +232,7 @@ const preloads = fonts.map((f) => `<link rel="preload" href="/assets/${f}" as="f
 const built = readFileSync(join(DIST, 'index.html'), 'utf8')
 if (!built.includes('<link rel="stylesheet"')) throw new Error('prerender: the built page has no stylesheet link')
 const template = built.replace('<link rel="stylesheet"', () => `${preloads}\n    <link rel="stylesheet"`)
-const routes: Route[] = [{ page: 'home' }, { page: 'lessons' }, ...LESSONS.map((l) => ({ page: 'lesson' as const, id: l.id })), { page: 'sandbox' }, { page: 'experiments' }, { page: 'creature' }, { page: 'forest' }, { page: 'clockwork' }, { page: 'shift' }, { page: 'flow' }, { page: 'diorama' }, { page: 'dungeon' }, { page: 'scan' }, { page: 'engine' }, { page: 'spec' }, { page: 'api' }, { page: 'contact' }]
+const routes: Route[] = [{ page: 'home' }, { page: 'lessons' }, ...LESSONS.map((l) => ({ page: 'lesson' as const, id: l.id })), { page: 'sandbox' }, { page: 'experiments' }, { page: 'creature' }, { page: 'forest' }, { page: 'clockwork' }, { page: 'shift' }, { page: 'flow' }, { page: 'brush' }, { page: 'diorama' }, { page: 'dungeon' }, { page: 'scan' }, { page: 'engine' }, { page: 'spec' }, { page: 'api' }, { page: 'contact' }]
 for (const r of routes) write(join(DIST, href(r), 'index.html'), render(template, r))
 write(join(DIST, '404.html'), render(template, { page: 'notfound' }))
 

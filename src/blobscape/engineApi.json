@@ -23,7 +23,7 @@
   {
    "id": "pixels",
    "title": "Pixels and sprites",
-   "doc": "Drawing a stage as pixel art, and baking a creature into a sprite sheet."
+   "doc": "Drawing a stage as pixel art or as brush and ink marks, and baking a creature into a sprite sheet."
   },
   {
    "id": "simulation",
@@ -309,6 +309,15 @@
        "signatures": [
         {
          "code": "setFog(color: [number, number, number], near: number, far: number): void"
+        }
+       ]
+      },
+      {
+       "name": "setMarks",
+       "doc": "Draws every blob as a brush mark or an ink stroke, or as soft dots again when left out; kept for the next actor\ntoo. The marks belong to the blobs, so they stay put as the view turns.",
+       "signatures": [
+        {
+         "code": "setMarks(look?: MarkLook): void"
         }
        ]
       },
@@ -692,6 +701,15 @@
       }
      ],
      "methods": [
+      {
+       "name": "setMarks",
+       "doc": "Draws every blob as a brush mark or an ink stroke (marks.ts) in place of a soft dot, or as dots again when left\nout. A mark is turned and stretched by its blob's own shape on screen and seeded by the blob, so it stays on its\nblob as the view moves. Maps of parts and depth are drawn as before.",
+       "signatures": [
+        {
+         "code": "setMarks(look?: MarkLook): void"
+        }
+       ]
+      },
       {
        "name": "setFog",
        "doc": "Fades blobs to `color` (linear RGB, 0–1) between `near` and `far` units from the camera; `far` 0 turns it off.",
@@ -6490,6 +6508,83 @@
      "signatures": [
       {
        "code": "pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Frame): Frame"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "marks",
+   "title": "Brush and ink marks",
+   "group": "pixels",
+   "doc": "Marks: every blob drawn as a brush mark or an ink stroke in place of a soft dot, so a scene reads as a painting or\na drawing from any side. A mark is a function of where a pixel is on its own blob (along the blob's long and short\naxes on screen, in standard deviations) and of the blob's seed, and of nothing on the screen: marks belong to their\nblobs, so they stay put as the view moves, where a filter laid over the finished picture slides across it.\n\nThis file is the CPU twin of the engine's draw (`markOf` in splat-engine/engine.ts): change one, change both.",
+   "entries": [
+    {
+     "name": "MarkKind",
+     "kind": "type",
+     "doc": "The kinds of mark: flat opaque dabs with bristle streaks, thicker dabs with ridges that catch light, a wash with a pen stroke along each blob, or hatching that is denser where it is darker.",
+     "type": "\"gouache\" | \"oil\" | \"ink\" | \"hatch\""
+    },
+    {
+     "name": "MARK_KINDS",
+     "kind": "const",
+     "doc": "The kinds, in the order the GPU numbers them (from 1; 0 is no marks).",
+     "type": "readonly MarkKind[]"
+    },
+    {
+     "name": "MarkLook",
+     "kind": "interface",
+     "doc": "How the blobs are drawn as marks.",
+     "props": [
+      {
+       "name": "kind",
+       "type": "MarkKind",
+       "doc": "Which mark."
+      },
+      {
+       "name": "size",
+       "optional": true,
+       "type": "number",
+       "doc": "How big a mark is beside its blob: 1 reaches 1.5 standard deviations along the blob (default 1)."
+      },
+      {
+       "name": "ink",
+       "optional": true,
+       "type": "readonly [number, number, number]",
+       "doc": "Ink and hatch: the pen's color, sRGB 0–1 (default a blue-black)."
+      },
+      {
+       "name": "paper",
+       "optional": true,
+       "type": "readonly [number, number, number]",
+       "doc": "Ink and hatch: the paper's color, sRGB 0–1 (default a warm white). Set the page behind the view to it too."
+      }
+     ]
+    },
+    {
+     "name": "MarkSample",
+     "kind": "interface",
+     "doc": "What a mark is at one pixel.",
+     "props": [
+      {
+       "name": "cover",
+       "type": "number",
+       "doc": "How much of the pixel the mark covers, 0–1. Marks are paint: its alpha is this times the blob's opacity times `MARK_SOLID`, at most 1."
+      },
+      {
+       "name": "color",
+       "type": "[number, number, number]",
+       "doc": "The mark's color there, linear RGB."
+      }
+     ]
+    },
+    {
+     "name": "markAt",
+     "kind": "function",
+     "doc": "A mark at (u, v): u along the blob's long axis on screen and v across it, in standard deviations. `rgb` is the\nblob's color (linear) and `seed` its own number, 0–1. `ink` and `paper` are linear too.",
+     "signatures": [
+      {
+       "code": "markAt(kind: MarkKind, u: number, v: number, seed: number, rgb: ArrayLike<number>, size?: number, ink?: ArrayLike<number>, paper?: ArrayLike<number>): MarkSample"
       }
      ]
     }

@@ -8,6 +8,8 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 
 - The sandbox's short notes ("Added…", "Opened…") now stay up for a moment after they are drawn. On a slow device a note set just before a big file was shown could be cleared before it ever appeared.
 
+- Brush and Ink, a new experiment: the same blobs drawn as marks instead of soft dots. Gouache and oil lay each blob down as an opaque brush stroke with bristle streaks and a ragged end; ink and wash and hatching draw it as line on paper, more lines where the picture is darker. The marks belong to the blobs, so they turn with the view and nothing swims. Try it on the windmill, the garden crocodile, the fox or a scanned mug. Scan Studio's Lighting tab offers the same looks (Drawn as), and the engine has them as `Stage.setMarks`.
+
 - A creature on any web page from one tag: `<blobscape-creature src="fox.glb" move="trot">` plays a rigged-splat .glb with one script and no build step. Drag turns it, its head can follow the pointer, a tap or a hover can play another move, it waits until it nears the screen, stops when it leaves and holds still for reduced motion. The engine page shows one live beside its code, and the package ships it (`@blobscape/engine/element`, and one file with three.js inside for a plain script tag).
 
 - The elf's plait now hangs outside the cloak, beside the quiver, instead of cutting through them (Forest Walk, Splat Creatures, Dungeon Run and the engine page). The fox's brush in Forest Walk sways slowly as it trots instead of wagging on every step.
