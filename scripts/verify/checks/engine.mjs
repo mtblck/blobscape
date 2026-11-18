@@ -42,7 +42,7 @@ export default [
       await p.page.waitForFunction(() => window.__engine?.blobs() > 0, null, { timeout: 120000 }).catch(() => {})
       const wide = await p.page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
       const cards = await p.page.locator('[data-testid=engine-built] a').count()
-      if (wide > 0 || cards !== 9) fails.push(`engine page on a phone: ${wide}px wider than the screen, ${cards} experiments listed`)
+      if (wide > 0 || cards !== 10) fails.push(`engine page on a phone: ${wide}px wider than the screen, ${cards} experiments listed`)
       else ok(`engine page: fits a phone and lists the ${cards} experiments built on the engine`)
       await axe(p.page, 'engine page on a phone')
       await p.ctx.close()
