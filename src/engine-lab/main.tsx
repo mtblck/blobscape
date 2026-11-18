@@ -43,6 +43,7 @@ const initial: LabOptions = {
   herd: Math.max(1, Math.min(12, Number(params.get('herd')) || 1)),
   lod: params.get('lod') === '1',
   edits: params.get('edits') === '1',
+  cut: params.get('cut') === 'clean' ? 'clean' : params.get('cut') === 'rough' ? 'rough' : undefined,
   sh: params.get('sh') === '1',
   radix: params.get('sort') === 'radix',
   offscreen: params.get('offscreen') === '1',

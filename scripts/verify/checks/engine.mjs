@@ -374,6 +374,37 @@ export default [
           else ok(`engine lab ${label}: shape edits cut ${r.cut} of ${r.count} blobs${r.chk ? ' (GPU matching the CPU)' : ''} and paint ${r.blue} pixels`)
           await e.ctx.close()
         }
+        // clean cuts: big blobs cut down the middle of the picture (the camera stands in the cut's plane). Each pixel
+        // tested, the edge is the middle column; whole blobs kept or dropped, it bulges well past it
+        {
+          const edge = async (cut) => {
+            const e = await open(`/engine-lab/?which=engine&walk=0&offscreen=1&cut=${cut}${webgl ? '&webgl=1' : ''}`, { viewport: { width: 900, height: 900 } })
+            await e.page.waitForFunction(() => window.__lab || window.__labError, null, { timeout: 60000 })
+            const r = await e.page.evaluate(async (webgl) => {
+              const l = window.__lab
+              await l.frame(0.3)
+              const cv = document.querySelector('canvas'), w = cv.width, h = cv.height, d = cv.getContext('2d').getImageData(0, 0, w, h).data
+              let rows = 0, near = 0, over = 0
+              for (let y = 0; y < h; y++) {
+                let last = -1
+                for (let x = w - 1; x >= 0; x--) if (d[(y * w + x) * 4 + 3] > 128) { last = x; break }
+                if (last < 0) continue
+                rows++
+                const off = last - (w / 2 - 0.5)
+                if (Math.abs(off) <= 2) near++
+                over = Math.max(over, off)
+              }
+              const chk = webgl ? null : await l.world.checkAgainstCPU(l.renderer)
+              return { rows, near, over, chk }
+            }, webgl)
+            if (cut === 'clean') await e.page.screenshot({ path: join(shots, `engine-lab-clean-cut-${label}.png`) })
+            await e.ctx.close()
+            return r
+          }
+          const clean = await edge('clean'), rough = await edge('rough')
+          if (!(clean.rows > 300 && clean.near > clean.rows * 0.9 && clean.over <= 2 && rough.over > 20 && (!clean.chk || (clean.chk.center < 1e-3 && clean.chk.cov < clean.chk.covScale * 0.01)))) fails.push(`engine lab ${label}: clean cuts ${JSON.stringify({ clean, rough })}`)
+          else ok(`engine lab ${label}: a clean cut's edge is the cut's own line (${clean.near} of ${clean.rows} rows within 2 pixels, none past it; whole blobs reach ${Math.round(rough.over)} pixels past)`)
+        }
         // color by angle (spherical harmonics): the lab's sheen makes the fox warm from one side and blue from the other,
         // and on WebGPU the colors the GPU gave each blob match `viewColor`
         {

@@ -126,6 +126,12 @@
        "optional": true,
        "type": "boolean",
        "doc": "Uses the WebGL 2 backend even where WebGPU would start: for testing the fallback."
+      },
+      {
+       "name": "cleanCuts",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Builds each world so cuts (`setEdits`) have a clean edge, tested per pixel (`setCleanCuts` turns it off and on)."
       }
      ]
     },
@@ -309,6 +315,24 @@
        "signatures": [
         {
          "code": "setFog(color: [number, number, number], near: number, far: number): void"
+        }
+       ]
+      },
+      {
+       "name": "setEdits",
+       "doc": "Cuts by shape, live (edit.ts): spheres, boxes or upright cylinders in world space, kept for the next actor too;\n[] clears them. On a stage made with `cleanCuts` the edge is the shape's own line.",
+       "signatures": [
+        {
+         "code": "setEdits(edits: readonly ShapeEdit[]): void"
+        }
+       ]
+      },
+      {
+       "name": "setCleanCuts",
+       "doc": "On a stage made with `cleanCuts`: whether cuts have the clean edge (the default) or drop whole blobs.",
+       "signatures": [
+        {
+         "code": "setCleanCuts(on: boolean): void"
         }
        ]
       },
@@ -543,6 +567,12 @@
        "optional": true,
        "type": "boolean",
        "doc": "Paint edits (`setEdits` with op 'paint'): needs the same color pass as lights. Cuts work without it."
+      },
+      {
+       "name": "cleanCuts",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Cuts with a clean edge: a blob a cut passes through is kept and each of its pixels is tested against the cut,\nso the edge is the shape's own line and not a row of whole blobs. Costs the draw a test per pixel while there are\nedits; `cleanCuts` on the world turns it off and on again."
       }
      ]
     },
@@ -680,6 +710,11 @@
        "optional": true,
        "type": "Lighting",
        "doc": "Live lighting, when the world was made with `lights: true`."
+      },
+      {
+       "name": "cleanCuts",
+       "type": "boolean",
+       "doc": "Whether cuts have a clean edge now. Only a world made with `cleanCuts` can; setting it there switches between the clean edge and whole blobs."
       },
       {
        "name": "detail",
@@ -7432,16 +7467,16 @@
    "id": "edit",
    "title": "Cuts and paint",
    "group": "extras",
-   "doc": "Shape edits: cut or paint every blob inside a sphere or a box, live, without\nrebuilding anything. The GPU applies them as it moves the blobs (a cut blob\ngets no size, as level of detail leaves one out) and as it colors them (a\npainted blob's own color is mixed toward the paint before any light).\nEdits are tested against where a blob is now, in world space, so a box\nthat cuts a creature's head off keeps cutting as the head moves through it.\n\nThis file is the CPU twin (`editAt`), also used to bake edits into blobs for\na file (`bakeEdits`). The GPU side is `editsAt` in engine.ts; change both.",
+   "doc": "Shape edits: cut or paint every blob inside a sphere or a box, live, without\nrebuilding anything. The GPU applies them as it moves the blobs (a cut blob\ngets no size, as level of detail leaves one out) and as it colors them (a\npainted blob's own color is mixed toward the paint before any light).\nEdits are tested against where a blob is now, in world space, so a box\nthat cuts a creature's head off keeps cutting as the head moves through it.\n\nThis file is the CPU twin (`editAt`), also used to bake edits into blobs for\na file (`bakeEdits`). The GPU side is `editsAt` in engine.ts; change both.\n\nA cut can also have a clean edge (a world made with `cleanCuts`): a blob the\nedge passes through is kept, and each of its pixels is tested on its own,\nat the point of the blob that pixel shows most of (`densestAlong`). A file\nstill gets whole blobs: `bakeEdits` keeps or drops each by its center.",
    "entries": [
     {
      "name": "ShapeEdit",
      "kind": "interface",
-     "doc": "One edit for `setEdits`: a sphere or a box in world space that cuts blobs away or paints them.",
+     "doc": "One edit for `setEdits`: a sphere, a box or an upright cylinder in world space that cuts blobs away or paints them.",
      "props": [
       {
        "name": "shape",
-       "type": "\"sphere\" | \"box\"",
+       "type": "\"sphere\" | \"box\" | \"cylinder\"",
        "doc": "The shape of what it acts on."
       },
       {
@@ -7452,7 +7487,7 @@
       {
        "name": "size",
        "type": "[number, number, number]",
-       "doc": "A sphere's radius (the first value), or a box's half sizes."
+       "doc": "A sphere's radius (the first value), a box's half sizes, or a cylinder's radius and half height (it stands along y)."
       },
       {
        "name": "op",
@@ -7502,12 +7537,38 @@
      ]
     },
     {
-     "name": "editAt",
+     "name": "CLEAN_MARGIN",
+     "kind": "const",
+     "doc": "Clean cuts: a blob is dropped whole only when its center is this many of its sizes (`blobReach`) inside a cut.",
+     "type": "2.5"
+    },
+    {
+     "name": "blobReach",
      "kind": "function",
-     "doc": "What the edits do to a blob at p: whether it stays, and the paint mixed over its color (linear RGB and amount).",
+     "doc": "A blob's size for clean cuts: the root of its covariance's trace (xx, xy, xz, yy, yz, zz), at least its longest standard deviation.",
      "signatures": [
       {
-       "code": "editAt(edits: readonly ShapeEdit[], p: ArrayLike<number>): { keep: boolean; paint: [number, number, number]; amount: number }"
+       "code": "blobReach(cov: ArrayLike<number>, at?: number): number"
+      }
+     ]
+    },
+    {
+     "name": "densestAlong",
+     "kind": "function",
+     "doc": "How far along a ray (`from` + t·`dir`) a blob is densest: the point of the blob a pixel on that ray shows most of.\nFor a flat blob that is where the ray meets its plane. `cov` is xx, xy, xz, yy, yz, zz. A blob seen edge-on, or a\nneedle, has no such point to speak of and gives the point of the ray nearest its center.",
+     "signatures": [
+      {
+       "code": "densestAlong(from: ArrayLike<number>, dir: ArrayLike<number>, center: ArrayLike<number>, cov: ArrayLike<number>): number"
+      }
+     ]
+    },
+    {
+     "name": "editAt",
+     "kind": "function",
+     "doc": "What the edits do to a blob at p: whether it stays, and the paint mixed over its color (linear RGB and amount).\n`margin` is how far inside a cut it must be to go (0 for a point; clean cuts pass `CLEAN_MARGIN` blob sizes).",
+     "signatures": [
+      {
+       "code": "editAt(edits: readonly ShapeEdit[], p: ArrayLike<number>, margin?: number): { keep: boolean; paint: [number, number, number]; amount: number }"
       }
      ]
     },

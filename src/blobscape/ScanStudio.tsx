@@ -15,7 +15,7 @@ import { TAB_SECTIONS, Workbench } from '../shared/Workbench.tsx'
 import { about, extent, keepOnly } from './scan/clean.ts'
 import { sampleScan } from './scan/sample.ts'
 import { GROUND, LOOKS, PAPERS, css, type LookId } from './brushLooks.ts'
-import { DEFAULT_CLEAN, LIGHTS, UNTURNED, autoOrient, cleaner, finish, lightsFor, preview, stillActor, tip, working, type Clean, type LightId, type Orient } from './scan/studio.ts'
+import { trimEdits, DEFAULT_CLEAN, LIGHTS, UNTURNED, autoOrient, cleaner, finish, lightsFor, preview, stillActor, tip, working, type Clean, type LightId, type Orient } from './scan/studio.ts'
 
 const FILE_TYPES = '.ply,.spz,.splat,.ksplat,.sog'
 /** Slider ends that mean "off". */
@@ -61,6 +61,7 @@ export function ScanStudio() {
   const [showCut, setShowCut] = useState(false)
   const [light, setLight] = useState<LightId>('scanned')
   const [drawnAs, setDrawnAs] = useState<LookId>('blobs')
+  const [trim, setTrim] = useState(true)
   const [angle, setAngle] = useState(40)
   const [ambient, setAmbient] = useState(1)
   const [keepLight, setKeepLight] = useState(true)
@@ -98,7 +99,7 @@ export function ScanStudio() {
   useEffect(() => {
     let live: CreatureStage | undefined, gone = false
     import('./creature/stage.ts')
-      .then(({ CreatureStage }) => CreatureStage.start(canvas.current!, { offscreen, lights: true }))
+      .then(({ CreatureStage }) => CreatureStage.start(canvas.current!, { offscreen, lights: true, cleanCuts: true }))
       .then((s) => {
         if (gone) { s.dispose(); return }
         live = s
@@ -224,6 +225,12 @@ export function ScanStudio() {
     setMessage(`Saved ${base}-clean.ply (${b.count.toLocaleString()} blobs).`)
   })
 
+  // a clean edge on the crops and the table cut: the kept blobs are trimmed where the cut passes through them
+  useEffect(() => {
+    if (!stage) return
+    stage.setEdits(trim && !showCut ? trimEdits(applied) : [])
+  }, [stage, trim, showCut, applied])
+
   useEffect(() => { stage?.setMarks(drawnAs === 'blobs' ? undefined : { kind: drawnAs }) }, [stage, drawnAs])
 
   // For verify: the stage and the counts, without clicking
@@ -335,6 +342,10 @@ export function ScanStudio() {
                 <Slider label="Cut the table" value={clean.floor} min={0} max={0.3} step={0.005} onChange={(v) => set({ floor: v })} format={(v) => (v ? `${cm(v)} up` : 'Off')} hint="Cuts everything below this height, the table and its shadow. Lengths assume the scan is in meters, as phone apps save them." />
                 <Slider label="Crop round" value={clean.radius ?? RADIUS_OFF} min={0.1} max={RADIUS_OFF} step={0.02} onChange={(v) => set({ radius: v >= RADIUS_OFF ? null : v })} format={(v) => (v >= RADIUS_OFF ? 'Off' : cm(v))} hint="Keeps only what's within this distance of the middle." />
                 <Slider label="Crop height" value={clean.top ?? TOP_OFF} min={0.1} max={TOP_OFF} step={0.02} onChange={(v) => set({ top: v >= TOP_OFF ? null : v })} format={(v) => (v >= TOP_OFF ? 'Off' : cm(v))} />
+                <div data-testid="scan-trim">
+                  <Toggle label="Trim blobs at the cut" checked={trim} onChange={setTrim} />
+                  <p className="mt-1.5 text-xs text-ink-faint">The view cuts each blob where a crop or the table cut passes through it, so the edge is a clean line. A saved file keeps whole blobs.</p>
+                </div>
               </div>
             ),
           },
