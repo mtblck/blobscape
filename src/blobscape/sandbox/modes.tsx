@@ -60,7 +60,8 @@ export function ModeBar({ mode, setMode, base, marks }: { mode: ModeId; setMode:
             aria-controls={panelId(base, m.id)}
             aria-selected={on}
             tabIndex={on ? 0 : -1}
-            title={m.note}
+            title={`${m.note} (${i + 1})`}
+            aria-keyshortcuts={String(i + 1)}
             onClick={() => setMode(m.id)}
             onKeyDown={(ev) => onKeyDown(ev, i)}
             className={`relative flex min-h-12 min-w-0 flex-1 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5 text-xs font-semibold transition-colors lg:min-h-16 lg:w-20 lg:flex-none ${on ? 'bg-accent text-paper' : 'text-ink-muted hover:bg-paper-sunk hover:text-ink lg:hover:bg-paper'}`}
@@ -76,9 +77,9 @@ export function ModeBar({ mode, setMode, base, marks }: { mode: ModeId; setMode:
 }
 
 /** A tool as a button that says what it does: the held one is outlined. */
-export function ToolButton({ name, note, held, onClick }: { name: string; note: string; held: boolean; onClick: () => void }) {
+export function ToolButton({ name, note, held, onClick, keys }: { name: string; note: string; held: boolean; onClick: () => void; keys?: string }) {
   return (
-    <button type="button" aria-pressed={held} title={note} onClick={onClick} className={`min-h-11 cursor-pointer rounded-full border px-4 text-sm font-semibold transition-colors ${held ? 'border-accent bg-accent text-paper' : 'border-rule bg-paper text-ink hover:border-ink-faint'}`}>
+    <button type="button" aria-pressed={held} title={keys ? `${note} (${keys})` : note} aria-keyshortcuts={keys} onClick={onClick} className={`min-h-11 cursor-pointer rounded-full border px-4 text-sm font-semibold transition-colors ${held ? 'border-accent bg-accent text-paper' : 'border-rule bg-paper text-ink hover:border-ink-faint'}`}>
       {name}
     </button>
   )
