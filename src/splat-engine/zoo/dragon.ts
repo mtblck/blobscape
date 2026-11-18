@@ -376,18 +376,23 @@ export const BREATH = 3.4
 /**
  * Where a breath has got to `t` seconds in, each 0 to 1: how full the lungs are (`inhale`), how hot the throat is
  * before the flame comes (`charge`), how much of the flame is out (`flame`), and how much is left hanging in the air
- * once the mouth has shut, which runs on into the start of the next breath (`after`). The pose reads it, and so can
- * a page that lights the breath.
+ * once the mouth has shut, which runs on into the start of the next breath (`after`), and how far the last of the
+ * flame has gone from the mouth on its way out (`away`, 0 again once it is gone). The pose reads it, and so can a
+ * page that lights the breath.
  */
-export function breathAt(t: number): { inhale: number; charge: number; flame: number; after: number } {
+export function breathAt(t: number): { inhale: number; charge: number; flame: number; after: number; away: number } {
   const u = (((t % BREATH) + BREATH) % BREATH) / BREATH
   return {
     inhale: env(u, 0.02, 0.26, 0.34, 0.5),
     charge: env(u, 0.12, 0.33, 0.37, 0.52),
-    flame: ramp(u, 0.34, 0.4) * (1 - ramp(u, 0.8, 0.92)),
+    flame: ramp(u, 0.34, 0.4) * (1 - ramp(u, LEAVE[0], LEAVE[1])),
     after: u < 0.5 ? 1 - ramp(u, 0, 0.16) : ramp(u, 0.86, 0.94),
+    away: u >= LEAVE[1] + 0.015 ? 0 : ramp(u, LEAVE[0], LEAVE[1]),
   }
 }
+
+/** When the last of the breath leaves the mouth and when it is gone, as shares of a breath. */
+const LEAVE = [0.76, 0.9]
 
 /** How far the flame's side is from its middle at each fire bone's head, at life size. */
 const girth = (k: number) => 0.06 + 0.69 * (k / FIRE)
@@ -402,8 +407,9 @@ export function dragonFire(sk: Skeleton, t: number) {
   dragonIdle(sk, u * IDLE)
   const { inhale } = breathAt(t)
   const rear = env(u, 0.02, 0.24, 0.26, 0.36)
-  const lunge = env(u, 0.28, 0.38, 0.82, 0.95)
-  const open = env(u, 0.3, 0.37, 0.84, 0.92)
+  // the head stays down and forward until the last of the breath is well away, and the jaw shuts behind it
+  const lunge = env(u, 0.28, 0.38, 0.87, 0.98)
+  const open = env(u, 0.3, 0.37, 0.79, 0.9)
   // the ribs fill as it rears, and empty a little past rest as the breath goes out
   sk.size[sk.index('lungs')] = 1 + 0.16 * inhale - 0.05 * lunge
   set(sk, 'chest', X, -0.1 * rear + 0.1 * lunge)
@@ -414,23 +420,44 @@ export function dragonFire(sk: Skeleton, t: number) {
   set(sk, 'jaw', X, 0.06 + 0.5 * open)
   fold(sk, 0.75 * (1 - env(u, 0.05, 0.3, 0.8, 0.98)))
   for (const [s, x] of SIDES) turn(sk, `${s}Wing1`, Z, x * 0.35 * env(u, 0.05, 0.3, 0.8, 0.98))
-  // the flame: grown to life size from the mouth, unrolling segment by segment, flickering, then rolling away
+  // the flame: grown to life size from the mouth, unrolling segment by segment, flickering. It ends by leaving: the
+  // mouth end comes away and runs out along the flame's own path to where its far end is, the flame getting shorter
+  // and thinner ahead of it (the far end slowest, so what is left is a low roll on the ground) until nothing is left
+  // out there. It never draws back into the mouth (Matt saw it shrink back in, 2026-11-18). Only once it is nothing
+  // (size 0) is it put back in the mouth, and it is brought to its waiting size there, behind shut jaws.
   const on = ramp(u, 0.34, 0.4)
-  const away = ramp(u, 0.8, 0.9)
-  const gone = ramp(u, 0.9, 0.93)
+  const left = ramp(u, LEAVE[0], LEAVE[1]) ** 1.4
+  const share = Math.max(0, 1 - left)
   const f1 = sk.index('fire1')
-  sk.size[f1] = 1 + (FLAME * (0.12 + 0.88 * on) * (1 - 0.6 * away) - 1) * (1 - gone) * ramp(u, 0.33, 0.34)
-  const seg = REACH / FIRE / FLAME
-  sk.offset.set([AIM[0] * seg * 3 * away * (1 - gone), AIM[1] * seg * 3 * away * (1 - gone), AIM[2] * seg * 3 * away * (1 - gone)], f1 * 3)
+  const back = ramp(u, 0.93, 0.96)
+  sk.size[f1] = u >= LEAVE[1] ? back : 1 + (FLAME * (0.12 + 0.88 * on) * share - 1) * ramp(u, 0.33, 0.34)
+  // what is left is fatter toward its far end than a small copy of the flame would be
+  const fat = Math.max(0.05, share) ** -0.1
   for (let k = 2; k <= FIRE; k++) {
     const b = sk.index(`fire${k}`)
-    sk.size[b] = (0.35 + 0.65 * ramp(u, 0.34 + 0.02 * k, 0.4 + 0.025 * k)) * (1 + 0.08 * Math.sin(u * 140 + k * 1.7))
+    sk.size[b] = (0.35 + 0.65 * ramp(u, 0.34 + 0.02 * k, 0.4 + 0.025 * k)) * (1 + 0.08 * Math.sin(u * 140 + k * 1.7)) * fat
   }
   sk.update()
+  const head = sk.bones[f1].parent, hs = sk.scale[head] || 1
+  if (left > 0 && u < LEAVE[1] + 0.015) {
+    // the way out: along the flame from the mouth down to just over the floor, then level along it
+    const way = rotate(worldQuat(sk, f1), restDir(sk, f1))
+    const far = 0.85 * REACH * hs * left
+    const drop = sk.posedHead[f1 * 3 + 1] - (sk.place[1] + 0.22 * hs)
+    const down = way[1] < -1e-3 ? Math.min(far, Math.max(0, drop / -way[1])) : far
+    const flat = Math.hypot(way[0], way[2]) || 1, along = far - down
+    const go: Vec3 = [way[0] * down + (way[0] / flat) * along, way[1] * down, way[2] * down + (way[2] / flat) * along]
+    // a bone's slide is in its parent's frame
+    const q = worldQuat(sk, head)
+    const local = rotate([-q[0], -q[1], -q[2], q[3]], go)
+    sk.offset.set([local[0] / hs, local[1] / hs, local[2] / hs], f1 * 3)
+    sk.update()
+  }
   // where the flame would go into the ground it turns and runs along it: a link whose far end would come lower than
   // half its own girth above the floor is lifted until it doesn't
+  const seg = REACH / FIRE / FLAME
   const life = sk.scale[f1] / FLAME
-  for (let k = 2; k <= FIRE; k++) {
+  for (let k = 1; k <= FIRE; k++) {
     const name = `fire${k}`, b = sk.index(name)
     if (life > 0.05) {
       const now = rotate(worldQuat(sk, b), restDir(sk, b))
@@ -440,8 +467,10 @@ export function dragonFire(sk: Skeleton, t: number) {
         aim(sk, name, [now[0] * keep, rise, now[2] * keep])
       }
     }
-    turn(sk, name, X, 0.07 * Math.sin(u * 61 + k * 1.3))
-    turn(sk, name, Y, 0.09 * Math.sin(u * 47 + k * 2.1))
+    if (k > 1) {
+      turn(sk, name, X, 0.07 * Math.sin(u * 61 + k * 1.3))
+      turn(sk, name, Y, 0.09 * Math.sin(u * 47 + k * 2.1))
+    }
     sk.update()
   }
 }

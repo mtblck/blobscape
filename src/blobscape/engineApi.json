@@ -238,6 +238,15 @@
        ]
       },
       {
+       "name": "shown",
+       "doc": "Resolves once a frame drawn from now on is through the GPU: called after `setActor`, that is when the new\ncreature is really on screen, which on a phone can be seconds after the call returns (buffers to fill, shaders\nto build). A page keeps its waiting mark up until then. At once on an `offscreen` stage, which draws only when asked.",
+       "signatures": [
+        {
+         "code": "shown(): Promise<void>"
+        }
+       ]
+      },
+      {
        "name": "setActor",
        "doc": "Shows a creature, replacing the last one, and plays `clip` on it. `extras` are more actors drawn in the same\nworld, sorted blob by blob with the first: things that move on their own and not by its bones, such as the\nsurface of a pond (`reshape` sends one up again after its blobs were changed). Clips, posers, picking, tints and\nsheets are all about the first actor.",
        "signatures": [

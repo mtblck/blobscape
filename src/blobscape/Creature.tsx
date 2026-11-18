@@ -191,6 +191,7 @@ export function Creature() {
   // the placeholder cut is never shown: the view waits for the creature asked for
   const first = useRef(true)
   const inView = useRef<Body | undefined>(undefined)
+  const [seen, setSeen] = useState<Body>()
   // The dragon's breath acts on what is round it (creature/breathStage.ts): it gets a floor that burns, live lights
   // that ride the flame, sparks and smoke, and on WebGPU a lens so only the flame glows. `?breath=plain` leaves all
   // of that off, `?shadows=0` the shadows and `?glow=0` the lens.
@@ -204,7 +205,15 @@ export function Creature() {
     if (breathing) stageBreath(stage, shown.body, clip, shown.look ?? '', () => moveNow.current === 'fire', plain)
     else { stagePlain(stage); stage.setActor(shown.body, clip) }
     setPicked(undefined)
+    // the waiting mark stays until this creature is really on screen: handing a detailed one to the stage holds the
+    // page for seconds more on a phone, and the view sat frozen with no mark over it (Matt, 2026-11-18)
+    const body = shown.body
+    let late: ReturnType<typeof setTimeout> | undefined
+    const seenIt = () => { clearTimeout(late); setSeen(body) }
+    late = setTimeout(seenIt, 8000)
+    void stage.shown().then(seenIt)
   }, [stage, shown, building]) // eslint-disable-line react-hooks/exhaustive-deps
+  const waiting = !drawn || (building && !loaded) || seen !== shown.body
   useEffect(() => { stage?.setClip(clip) }, [stage, clip])
   // the loose parts swing on the creature in view, never one still being cut
   const swingSpec = loaded ? undefined : shown.species?.swing
@@ -338,8 +347,8 @@ export function Creature() {
                   setOrbit((o) => orbitKey(ev, o) ?? o)
                 }}
               />
-              {!failed && (!drawn || (building && !loaded)) && <LoadingMark testid="creature-loading" />}
-              <p role="status" className="sr-only">{failed ? '' : !stage ? 'Starting the splat engine…' : !drawn || (building && !loaded) ? `Making the ${species.name}…` : ''}</p>
+              {!failed && waiting && <LoadingMark testid="creature-loading" />}
+              <p role="status" className="sr-only">{failed ? '' : !stage ? 'Starting the splat engine…' : waiting ? `Making the ${species.name}…` : ''}</p>
               {failed && <div role="alert" className="absolute inset-4 grid place-items-center text-center text-sm text-ink">{failed}</div>}
               <div role="group" aria-label="Show in the view" data-testid="show" className="absolute top-3 left-3 flex gap-1.5 max-sm:top-2 max-sm:left-2">
                 {SHOW.map((v) => <Chip small key={v.id} active={show === v.id} onClick={() => setShow(v.id)}>{v.label}</Chip>)}

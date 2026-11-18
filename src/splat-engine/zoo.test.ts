@@ -122,6 +122,31 @@ test('the dragon fills its ribs, then breathes onto the ground in front, where t
   assert.ok(frost.b > frost.r && flame.r > flame.b * 2, `frost ${JSON.stringify(frost)} fire ${JSON.stringify(flame)}`)
 })
 
+test('the breath ends by leaving the mouth and thinning away out in front, never by drawing back in', () => {
+  const sk = makeDragon(20000).skeleton
+  const fire = sk.index('fire1'), head = sk.bones[fire].parent
+  const mouth = () => posedPoint(sk, head, sk.bones[fire].head)
+  let last = 0, furthest = 0
+  for (let u = 0.74; u < 0.999; u += 0.004) {
+    dragonFire(sk, u * BREATH)
+    const m = mouth(), p = sk.posedHead.subarray(fire * 3, fire * 3 + 3)
+    const gap = Math.hypot(p[0] - m[0], p[1] - m[1], p[2] - m[2])
+    if (sk.scale[fire] > 1.5) {
+      // while any of it shows, its mouth end only ever goes further from the mouth, and it stays over the floor
+      assert.ok(gap >= last - 1e-3, `the flame comes back toward the mouth at u = ${u}: ${last} to ${gap}`)
+      assert.ok(p[1] > 0.1, `the flame's end is at y = ${p[1]} at u = ${u}`)
+      last = gap
+      furthest = Math.max(furthest, gap)
+      // and it gets no bigger on the way
+      if (u > 0.78) assert.ok(sk.scale[fire] < FLAME * 0.98)
+    } else if (u > 0.9 && gap > 0.01) assert.ok(sk.scale[fire] < 1e-6, `the flame is put back while it still shows, at u = ${u}, size ${sk.scale[fire]}`)
+  }
+  assert.ok(furthest > 2, `the last of the flame gets ${furthest} m from the mouth`)
+  // back in the mouth at its waiting size before the breath starts again
+  dragonFire(sk, 0.99 * BREATH)
+  assert.ok(near(sk.scale[fire], 1, 1e-6) && sk.offset[fire * 3 + 2] === 0)
+})
+
 test('aim turns a bone to point where it is told, under a turned parent', () => {
   const sp = ZOO.find((s) => s.id === 'elf')!
   const c = sp.make(sp.detail[0], sp.looks[0].id)

@@ -186,6 +186,7 @@ export class Stage {
           if (this.reflect() === null && this.mirrorFor && this.mirrorDue) this.pending = Math.max(this.pending, 1)
           this.draw()
           if (this.actor) this.firstFrame()
+          if (this.waiting.length) this.tellShown()
         }
         this.raf = requestAnimationFrame(tick)
       }
@@ -201,6 +202,28 @@ export class Stage {
       r.setClearColor(0x000000, 0)
     })
     return new Stage(display, opts, renderer)
+  }
+
+  private waiting: (() => void)[] = []
+
+  /**
+   * Resolves once a frame drawn from now on is through the GPU: called after `setActor`, that is when the new
+   * creature is really on screen, which on a phone can be seconds after the call returns (buffers to fill, shaders
+   * to build). A page keeps its waiting mark up until then. At once on an `offscreen` stage, which draws only when asked.
+   */
+  shown(): Promise<void> {
+    if (this.opts.offscreen || this.stopped) return Promise.resolve()
+    this.pending = Math.max(this.pending, 1)
+    return new Promise((done) => this.waiting.push(done))
+  }
+
+  private tellShown() {
+    const all = this.waiting
+    this.waiting = []
+    const tell = () => { for (const done of all) done() }
+    const b = this.renderer.backend as unknown as { device?: { queue: { onSubmittedWorkDone(): Promise<void> } } }
+    if (b.device) b.device.queue.onSubmittedWorkDone().then(tell, tell)
+    else tell()
   }
 
   private firstFrame() {

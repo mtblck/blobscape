@@ -1,6 +1,6 @@
 import { Blobs, quatFacing, type Vec3 } from '../../splat-core/blobs.ts'
 import { buildBody, mix, rng, type Part } from '../../splat-engine/body.ts'
-import { Skeleton, axisAngle, emptySkin, setWeights, type Bone, type Skin } from '../../splat-engine/rig.ts'
+import { Skeleton, axisAngle, emptySkin, rotate, setWeights, type Bone, type Skin } from '../../splat-engine/rig.ts'
 import type { PointLight } from '../../splat-engine/engine.ts'
 import { FLAME, breathAt, type BreathKind } from '../../splat-engine/zoo/dragon.ts'
 import { Ground, Patches } from '../dungeon/ground.ts'
@@ -237,7 +237,7 @@ export class BreathShow {
     const st = STYLES[this.kind], g = this.ground
     dt = Math.min(0.1, Math.max(0, dt))
     const t = this.clock += dt
-    const at = breath === null ? { inhale: 0, charge: 0, flame: 0, after: 0 } : breathAt(breath)
+    const at = breath === null ? { inhale: 0, charge: 0, flame: 0, after: 0, away: 0 } : breathAt(breath)
     const bone = (name: string) => { const b = dragon.index(name); return { p: [dragon.posedHead[b * 3], dragon.posedHead[b * 3 + 1], dragon.posedHead[b * 3 + 2]] as Vec3, s: dragon.scale[b] } }
     const links = [1, 2, 3, 4, 5, 6].map((k) => bone(`fire${k}`))
     // how much of the flame is out: its first bone's size, 1 at rest and FLAME at life size
@@ -279,11 +279,13 @@ export class BreathShow {
     const end = links[5].p, before = links[3].p
     const way: Vec3 = [end[0] - before[0], end[1] - before[1], end[2] - before[2]]
     const wl = Math.hypot(...way) || 1
-    this.sparkDue += dt * (out > 0.6 ? 16 : 0)
+    // and more of them as the last of it runs out and breaks up
+    const leaving = at.away > 0 && out > 0.03
+    this.sparkDue += dt * (leaving ? 26 : out > 0.6 ? 16 : 0)
     while (this.sparkDue >= 1) {
       this.sparkDue -= 1
       const s = this.sparks[this.nextSpark++ % SPARKS], r = this.rand
-      const l = links[3 + Math.floor(r() * 3)], spread = 0.45 * (l.s / FLAME)
+      const l = links[(leaving ? 1 : 3) + Math.floor(r() * (leaving ? 5 : 3))], spread = Math.max(0.12, 0.45 * (l.s / FLAME))
       s.born = t
       s.life = st.life * (0.6 + 0.8 * r())
       s.from = [l.p[0] + (r() - 0.5) * spread, Math.max(0.05, l.p[1] + (r() - 0.3) * spread), l.p[2] + (r() - 0.5) * spread]
@@ -299,12 +301,20 @@ export class BreathShow {
       sk.size[b] = s.size * Math.sqrt(Math.max(0, 1 - age)) * Math.min(1, age * 12)
     }
     // smoke: at the mouth once it has shut on the last of the flame, and now and then off whatever is burning
-    const mouth = links[0].p
+    // (the mouth is where the flame's first bone waits, whether or not the flame is there now)
+    const f1 = dragon.index('fire1'), hd = dragon.bones[f1].parent, hp = bone(dragon.bones[hd].name)
+    const rest = dragon.bones[f1].head, hr = dragon.bones[hd].head
+    const jut = rotate(dragon.quat.subarray(hd * 4, hd * 4 + 4), [rest[0] - hr[0], rest[1] - hr[1], rest[2] - hr[2]])
+    const mouth: Vec3 = [hp.p[0] + jut[0] * hp.s, hp.p[1] + jut[1] * hp.s, hp.p[2] + jut[2] * hp.s]
     this.puffDue += dt
     if (this.puffDue > 0.09) {
       const burning = [...cells].filter((c) => c >= 0)
       const r = this.rand
-      if (at.after > 0.25 && !lit) this.puff([mouth[0] + (r() - 0.5) * 0.1, mouth[1] + 0.05, mouth[2]], [(r() - 0.5) * 0.25, 0.6 + 0.3 * r(), 0.2 + 0.2 * r()], 0.5 + 0.35 * at.after)
+      if (leaving) {
+        // the last of the breath comes apart where it is: a puff off some part of what is left of it
+        const l = links[Math.floor(r() * links.length)], wide = Math.max(0.1, 0.5 * (l.s / FLAME))
+        this.puff([l.p[0] + (r() - 0.5) * wide, Math.max(0.15, l.p[1] + (r() - 0.2) * wide), l.p[2] + (r() - 0.5) * wide], [(way[0] / wl) * 0.5 + (r() - 0.5) * 0.3, st.element === 'frost' ? 0.15 : 0.5 + 0.4 * r(), (way[2] / wl) * 0.5 + (r() - 0.5) * 0.3], 0.6 + 0.6 * r())
+      } else if (at.after > 0.25 && !lit) this.puff([mouth[0] + (r() - 0.5) * 0.1, mouth[1] + 0.05, mouth[2]], [(r() - 0.5) * 0.25, 0.6 + 0.3 * r(), 0.2 + 0.2 * r()], 0.5 + 0.35 * at.after)
       else if (burning.length && r() < (st.element === 'frost' ? 0.1 : 0.45)) {
         const [x, z] = g.center(burning[Math.floor(r() * burning.length)])
         this.puff([x, st.element === 'frost' ? 0.12 : 0.5, z], [(r() - 0.5) * 0.3, st.element === 'frost' ? 0.12 : 0.8 + 0.4 * r(), (r() - 0.5) * 0.3], 0.7 + 0.5 * r())
