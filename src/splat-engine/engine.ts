@@ -26,7 +26,7 @@ import { applyMorphs, shares, type Morph } from './morph.ts'
 import { LIFT, MAX_MARCH, OCC_SCALE, REACH, SHADOW_CELLS, SHADOW_DENSITY, blobSigma, occupancy, shadowBox } from './shadow.ts'
 import { linearToSrgb, srgbToLinear } from '../splat-core/color.ts'
 import { viewColor } from '../splat-core/sh.ts'
-import { INK, MARK_KINDS, MARK_LONG, MARK_MOST, MARK_SOLID, MARK_WIDE, PAPER, type MarkLook } from '../splat-core/marks.ts'
+import { INK, MARK_KINDS, MARK_LONG, MARK_MOST, MARK_SOLID, MARK_WIDE, PAPER, SHADE_FROM, SHADE_FULL, WASH_LEAST, WASH_MOST, type MarkLook } from '../splat-core/marks.ts'
 
 /**
  * Blobscape's splat engine: one mesh that draws every blob of every object in a
@@ -1668,10 +1668,10 @@ function markOf(M: Marks, uv: N, seed: N, rgb: N) {
     const ridge = streak(v.div(k), seed.add(0.37), 9).toVar()
     color.assign(rgb.mul(own.mul(ridge.mul(0.4).add(0.8))).add(smoothstep(0.62, 0.9, ridge).mul(0.1)))
   }).ElseIf(M.kind.lessThan(3.5), () => {
-    const wash = mix(M.paper, rgb, 0.7)
+    const wash = mix(M.paper, rgb, dark.mul(WASH_MOST - WASH_LEAST).add(WASH_LEAST))
     const reach = max(float(1).sub(pow(abs(u).div(k.mul(MARK_LONG * 0.95)), 2)), 0).toVar()
-    const half = dark.mul(0.3).add(0.05).mul(k).mul(sqrt(reach)).mul(s.mul(0.6).add(0.7)).toVar()
-    const pen = select(reach.greaterThan(0), float(1).sub(smoothstep(half.mul(0.6), half.add(0.02), abs(v))), float(0))
+    const half = dark.mul(0.16).add(0.04).mul(k).mul(sqrt(reach)).mul(s.mul(0.6).add(0.7)).toVar()
+    const pen = select(reach.greaterThan(0), float(1).sub(smoothstep(half.mul(0.6), half.add(0.02), abs(v))).mul(smoothstep(SHADE_FROM, SHADE_FULL, dark)), float(0))
     color.assign(mix(wash, M.ink, pen))
   }).Else(() => {
     const line = abs(fract(abs(v).div(k.mul(0.42)).add(seed)).sub(0.5)).mul(2)

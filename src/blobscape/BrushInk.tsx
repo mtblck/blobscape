@@ -6,7 +6,7 @@ import type { PointLight } from '../splat-engine/engine.ts'
 import type { Skeleton } from '../splat-engine/rig.ts'
 import { ZOO } from '../splat-engine/zoo/index.ts'
 import { LoadingMark } from '../shared/BlobLoader.tsx'
-import { Button, Chip, Field, Slider } from '../shared/ui.tsx'
+import { Button, Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
 import { TAB_SECTIONS, Workbench } from '../shared/Workbench.tsx'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
 import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitDrag } from './Viewport.tsx'
@@ -85,6 +85,9 @@ export function BrushInk() {
   const [subject, setSubject] = useState(() => SUBJECTS.find((s) => s.id === params().get('subject'))?.id ?? SUBJECTS[0].id)
   const [look, setLook] = useState<LookId>(() => LOOKS.find((l) => l.id === params().get('look'))?.id ?? 'gouache')
   const [size, setSize] = useState(1)
+  // outlines: on for the two pen looks unless the visitor says otherwise
+  const [outlined, setOutlined] = useState<boolean | null>(() => (params().get('outline') === '1' ? true : params().get('outline') === '0' ? false : null))
+  const [pen, setPen] = useState(1.5)
   const [paper, setPaper] = useState(PAPERS[0].id)
   const sub = SUBJECTS.find((s) => s.id === subject)!
   const [orbit, setOrbit] = useState<Orbit>(sub.orbit)
@@ -123,6 +126,8 @@ export function BrushInk() {
   const sheet = PAPERS.find((p) => p.id === paper)!
   const marks = useMemo<MarkLook | undefined>(() => (look === 'blobs' ? undefined : { kind: look, size, ink: sheet.ink, paper: sheet.paper }), [look, size, sheet])
   useEffect(() => { stage?.setMarks(marks) }, [stage, marks, built])
+  const outline = outlined ?? (look === 'ink' || look === 'hatch')
+  useEffect(() => { stage?.setOutline(outline ? { width: pen, ink: look === 'ink' || look === 'hatch' ? sheet.ink : undefined } : undefined) }, [stage, outline, pen, look, sheet])
   useEffect(() => { if (stage) stage.playing = playing }, [stage, playing])
   useEffect(() => { if (stage) { stage.orbit = orbit; stage.invalidate() } }, [stage, orbit])
 
@@ -211,6 +216,13 @@ export function BrushInk() {
                 </Field>
                 {look !== 'blobs' && (
                   <Slider label="Mark size" value={size} min={0.5} max={1.3} step={0.05} onChange={setSize} format={(v) => `${Math.round(v * 100)}%`} hint="Smaller marks leave gaps between them; bigger ones overlap more." />
+                )}
+                <div data-testid="brush-outline">
+                  <Toggle label="Outlines" checked={outline} onChange={setOutlined} />
+                  <p className="mt-1.5 text-xs text-ink-faint">A pen line round the subject, where one thing stands in front of another, and between its parts. Heavier against dark things, and it lifts off here and there against light ones.</p>
+                </div>
+                {outline && (
+                  <Slider label="Pen width" value={pen} min={0.75} max={3} step={0.25} onChange={setPen} format={(v) => `${v} px`} />
                 )}
                 {drawnOn && (
                   <Field label="Paper">

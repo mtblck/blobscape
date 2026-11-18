@@ -231,7 +231,11 @@ export function ScanStudio() {
     stage.setEdits(trim && !showCut ? trimEdits(applied) : [])
   }, [stage, trim, showCut, applied])
 
-  useEffect(() => { stage?.setMarks(drawnAs === 'blobs' ? undefined : { kind: drawnAs }) }, [stage, drawnAs])
+  // the two pen looks get their outlines, as on Brush and Ink
+  useEffect(() => {
+    stage?.setMarks(drawnAs === 'blobs' ? undefined : { kind: drawnAs })
+    stage?.setOutline(drawnAs === 'ink' || drawnAs === 'hatch' ? {} : undefined)
+  }, [stage, drawnAs])
 
   // For verify: the stage and the counts, without clicking
   useEffect(() => {

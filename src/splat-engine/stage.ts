@@ -14,7 +14,9 @@ import type { SheetMove } from './spriteSheet.ts'
 import { PixelPass } from './pixelPass.ts'
 import { boneLabel, boneShare, pickActors } from './pick.ts'
 import { lookColors, snapColors, type Frame, type PixelLook } from '../splat-core/pixel.ts'
-import type { MarkLook } from '../splat-core/marks.ts'
+import { INK, type MarkLook, type OutlinePen } from '../splat-core/marks.ts'
+import { InkLines } from './inkLines.ts'
+import { srgbToLinear } from '../splat-core/color.ts'
 
 /** What a stage shows: blobs, the skin that ties them to bones, and the skeleton. */
 export interface Actor {
@@ -365,6 +367,18 @@ export class Stage {
     this.invalidate()
   }
 
+  private lines?: InkLines
+  private pen: OutlinePen = {}
+  /**
+   * Draws outlines over the picture as a pen would (inkLines.ts): round the subject, where one thing stands in front
+   * of another, and between its parts. Leave the pen out to stop. With any look, or none; pixel mode has its own lines.
+   */
+  setOutline(pen?: OutlinePen) {
+    if (!pen) { this.lines?.dispose(); this.lines = undefined }
+    else { this.pen = pen; this.lines ??= new InkLines() }
+    this.invalidate()
+  }
+
   private marks?: MarkLook
   /**
    * Draws every blob as a brush mark or an ink stroke, or as soft dots again when left out; kept for the next actor
@@ -425,6 +439,13 @@ export class Stage {
   private get pixelScale() { return Math.max(1, Math.round(this.pixelSize * this.renderer.getPixelRatio())) }
 
   private draw() {
+    if (!this.pixel && this.lines) {
+      const { x, y } = this.target ? { x: this.target.width, y: this.target.height } : this.renderer.getDrawingBufferSize(this.buffer)
+      this.lines.setSize(x, y)
+      this.lines.setPen((this.pen.ink ?? INK).map(srgbToLinear), (this.pen.width ?? 1.5) * this.renderer.getPixelRatio())
+      this.lines.render(this.renderer, this.scene, this.camera)
+      return
+    }
     if (!this.pixel) { this.renderer.render(this.scene, this.camera); return }
     const scale = this.pixelScale
     if (this.target) {
@@ -637,6 +658,7 @@ export class Stage {
     cancelAnimationFrame(this.raf)
     this.world?.dispose()
     this.rig?.dispose()
+    this.lines?.dispose()
     this.target?.dispose()
     this.pixel?.dispose()
     this.renderer.dispose()
