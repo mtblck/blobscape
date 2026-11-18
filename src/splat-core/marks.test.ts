@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { MARK_KINDS, markAt, noise1, streak } from './marks.ts'
+import { LINE_BREAK, MARK_KINDS, lineWeight, markAt, noise1, streak } from './marks.ts'
 
 const GRID = Array.from({ length: 41 }, (_, i) => -2 + i * 0.1)
 
@@ -58,4 +58,20 @@ test('the noise is smooth and stays in 0 to 1', () => {
     assert.ok(a >= 0 && a <= 1 && Math.abs(a - b) < 0.05)
     assert.ok(Math.abs(streak(x, 0.4, 5) - streak(-x, 0.4, 5)) < 1e-12)
   }
+})
+
+test('a drawn line is heavier round dark things, swells along its length, and lifts off only round light ones', () => {
+  for (let swell = 0; swell <= 1; swell += 0.1) {
+    assert.ok(lineWeight(1, swell) >= lineWeight(0.5, swell) && lineWeight(0.5, swell) >= lineWeight(0.1, swell))
+    assert.ok(lineWeight(0.6, swell) > 0.4 && lineWeight(1, swell) <= 1)
+  }
+  assert.ok(lineWeight(0.5, 0.9) > lineWeight(0.5, 0.1))
+  assert.equal(lineWeight(LINE_BREAK.dark - 0.01, LINE_BREAK.swell - 0.01), 0)
+  assert.ok(lineWeight(LINE_BREAK.dark + 0.01, 0) > 0 && lineWeight(0, LINE_BREAK.swell + 0.01) > 0)
+})
+
+test('ink and wash leaves light things nearly bare paper and keeps its pen for the shade', () => {
+  const pen = (rgb: number[]) => { let n = 0; for (const u of GRID) for (const v of GRID) { const m = markAt('ink', u, v, 0.5, rgb); if (m.cover > 0.5 && m.color[0] < 0.2) n++ } return n }
+  assert.equal(pen([0.8, 0.8, 0.8]), 0)
+  assert.ok(pen([0.03, 0.03, 0.03]) > 20)
 })

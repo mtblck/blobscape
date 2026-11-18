@@ -582,12 +582,24 @@ export default [
         const oil = await read(k.page)
         await pick(k.page, 'Ink and wash', 'ink')
         const ink = await read(k.page)
+        // the pen looks come with outlines; switching them off takes lines out of the picture and nothing else moves
+        const box = k.page.getByTestId('brush-outline').getByRole('checkbox')
+        const lined = await box.isChecked()
+        await tabClick(box)
+        const bare = await read(k.page)
+        await tabClick(box)
+        const inkAgain = await read(k.page)
+        const lines = differ(ink, bare), back = differ(ink, inkAgain, 0)
+        let darker = 0, lighter = 0
+        for (let i = 0; i < ink.length; i += 4) { const d = ink[i] + ink[i + 1] + ink[i + 2] - bare[i] - bare[i + 1] - bare[i + 2]; if (bare[i + 3] > 128 && d < -40) darker++; else if (bare[i + 3] > 128 && d > 40) lighter++ }
+        if (!lined || !(lines > 0.004 && lines < 0.2) || back !== 0 || !(darker > lighter * 5)) fails.push(`brush and ink on ${backend}: outlines on at first ${lined}, they change ${lines} of the view, ${darker} pixels darker and ${lighter} lighter, on again differs ${back}`)
+        else ok(`brush and ink on ${backend}: ink and wash comes with outlines (${(lines * 100).toFixed(1)}% of the view is line, and off then on gives the same picture)`)
         await pick(k.page, 'Hatching', 'hatch')
         const hatch = await read(k.page)
         const paper = await k.page.getByTestId('brush-ground').evaluate((e) => getComputedStyle(e).backgroundColor)
         await pick(k.page, 'Blobs', 'blobs')
         const blobs = await read(k.page)
-        pictures[backend] = { gouache, hatch }
+        pictures[backend] = { gouache, hatch, ink }
         const m = { backend: got, same: differ(gouache, again, 0), cover: solid(gouache), blobs: solid(blobs), paint: differ(gouache, blobs), oil: differ(oil, gouache), ink: differ(ink, gouache), hatch: differ(hatch, ink), paper }
         // marks are opaque where soft dots fade, so the painted fox is at least as solid; each look is a different picture; a frame drawn twice is the same frame
         if (m.backend !== backend || m.same !== 0 || !(m.cover > 0.03 && m.cover >= m.blobs * 0.9) || !(m.paint > 0.01 && m.oil > 0.003 && m.ink > 0.01 && m.hatch > 0.005) || !/rgb\(2[0-9]{2}, 2[0-9]{2}, 2[0-9]{2}\)/.test(m.paper)) fails.push(`brush and ink on ${backend}: ${JSON.stringify(m)}`)
@@ -616,9 +628,9 @@ export default [
       }
       // the two backends draw the same marks: the same blobs get the same strokes
       if (pictures.webgpu && pictures.webgl) {
-        const g = differ(pictures.webgpu.gouache, pictures.webgl.gouache, 90), h = differ(pictures.webgpu.hatch, pictures.webgl.hatch, 90)
-        if (!(g < 0.02 && h < 0.02)) fails.push(`brush and ink: WebGPU and WebGL differ at ${(g * 100).toFixed(2)}% of pixels in gouache, ${(h * 100).toFixed(2)}% hatched`)
-        else ok(`brush and ink: WebGPU and WebGL draw the same marks (${(g * 100).toFixed(2)}% of pixels differ in gouache, ${(h * 100).toFixed(2)}% hatched)`)
+        const g = differ(pictures.webgpu.gouache, pictures.webgl.gouache, 90), h = differ(pictures.webgpu.hatch, pictures.webgl.hatch, 90), n = differ(pictures.webgpu.ink, pictures.webgl.ink, 90)
+        if (!(g < 0.02 && h < 0.02 && n < 0.02)) fails.push(`brush and ink: WebGPU and WebGL differ at ${(g * 100).toFixed(2)}% of pixels in gouache, ${(h * 100).toFixed(2)}% hatched, ${(n * 100).toFixed(2)}% in ink and wash with its outlines`)
+        else ok(`brush and ink: WebGPU and WebGL draw the same marks and outlines (${(g * 100).toFixed(2)}% of pixels differ in gouache, ${(h * 100).toFixed(2)}% hatched, ${(n * 100).toFixed(2)}% in ink and wash)`)
       }
       // Scan Studio offers the looks on its Lighting tab
       const s = await open('/experiments/scan-studio/?offscreen=1', { viewport: { width: 1280, height: 900 } })

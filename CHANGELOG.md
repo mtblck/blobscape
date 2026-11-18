@@ -6,6 +6,7 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 
 ## [Unreleased]
 
+- Brush and Ink draws outlines. Ink and wash and hatching now come with a pen line round the subject, where one thing stands in front of another, and between its parts, as a pen and wash drawing has: heavier against dark things, swelling and thinning along its length, with a hand's wobble (Look tab, Outlines and Pen width; any look can have them). Ink and wash itself is lighter, leaving paper in the light and keeping its pen strokes for the shade. Scan Studio's two pen looks get the outlines too, and the engine has them as `Stage.setOutline`.
 - Cuts with a clean edge. Scan Studio's crops and its table cut now trim each kept blob where the cut passes through it, so the edge is a straight line and not a row of whole blobs (Level & Crop tab, Trim blobs at the cut; a saved file still keeps whole blobs). In the engine it is the `cleanCuts` option: every pixel of a blob is tested against the cut shapes, on WebGPU and WebGL. Cuts can also be upright cylinders now.
 
 ## [0.3.0] - 2026-11-18

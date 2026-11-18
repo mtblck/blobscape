@@ -337,6 +337,15 @@
        ]
       },
       {
+       "name": "setOutline",
+       "doc": "Draws outlines over the picture as a pen would (inkLines.ts): round the subject, where one thing stands in front\nof another, and between its parts. Leave the pen out to stop. With any look, or none; pixel mode has its own lines.",
+       "signatures": [
+        {
+         "code": "setOutline(pen?: OutlinePen): void"
+        }
+       ]
+      },
+      {
        "name": "setMarks",
        "doc": "Draws every blob as a brush mark or an ink stroke, or as soft dots again when left out; kept for the next actor\ntoo. The marks belong to the blobs, so they stay put as the view turns.",
        "signatures": [
@@ -6597,6 +6606,35 @@
      ]
     },
     {
+     "name": "lineWeight",
+     "kind": "function",
+     "doc": "How strong a drawn outline is, 0–1: heavier round dark things than light ones, swelling and thinning along its\nlength (`swell`, 0–1, smooth noise), and broken off here and there round the lightest. `dark` is 1 less the root of\nthe thing's luminance.",
+     "signatures": [
+      {
+       "code": "lineWeight(dark: number, swell: number): number"
+      }
+     ]
+    },
+    {
+     "name": "OutlinePen",
+     "kind": "interface",
+     "doc": "A pen for drawn outlines (`Stage.setOutline`).",
+     "props": [
+      {
+       "name": "width",
+       "optional": true,
+       "type": "number",
+       "doc": "The line's width in CSS pixels (default 1.5)."
+      },
+      {
+       "name": "ink",
+       "optional": true,
+       "type": "readonly [number, number, number]",
+       "doc": "Its color, sRGB 0–1 (default the same blue-black as `MarkLook.ink`)."
+      }
+     ]
+    },
+    {
      "name": "MarkSample",
      "kind": "interface",
      "doc": "What a mark is at one pixel.",
@@ -6620,6 +6658,76 @@
      "signatures": [
       {
        "code": "markAt(kind: MarkKind, u: number, v: number, seed: number, rgb: ArrayLike<number>, size?: number, ink?: ArrayLike<number>, paper?: ArrayLike<number>): MarkSample"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "inkLines",
+   "title": "Drawn outlines",
+   "group": "pixels",
+   "doc": "",
+   "entries": [
+    {
+     "name": "InkLines",
+     "kind": "class",
+     "doc": "Drawn outlines, as a pen would put them down: round the subject, where one thing passes in front of another, and\nbetween its parts. Marks (`setMarks`) lay each blob down as a stroke, which shades a picture but never draws its\nedges; a pen and wash drawing is the other way round, contours first.\n\nThe frame is drawn three times with the same moved and sorted blobs: the picture, a map of depth (`SplatDepth`) and\na map of parts (`SplatWorld.parts`). One pass then inks a pixel when, a line's width away, the picture ends, or\nsomething is clearly nearer, or another part begins. The line is not even: its weight swells and thins along its\nlength and is heavier against dark things than light ones, where it may break off (`lineWeight` in marks.ts, the\nCPU twin of the weight); and it wobbles a little, as a hand does.",
+     "ctor": [
+      {
+       "code": "new InkLines()"
+      }
+     ],
+     "props": [
+      {
+       "name": "picture",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
+       "doc": "The picture, as the stage draws it without lines."
+      },
+      {
+       "name": "ids",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
+       "doc": "The map of parts the lines between parts come from."
+      }
+     ],
+     "methods": [
+      {
+       "name": "setPen",
+       "doc": "The pen: its color (linear RGB) and how wide its line is, in device pixels.",
+       "signatures": [
+        {
+         "code": "setPen(ink: readonly number[], width: number): void"
+        }
+       ]
+      },
+      {
+       "name": "setSize",
+       "doc": "Sizes the pass's targets, in device pixels.",
+       "signatures": [
+        {
+         "code": "setSize(width: number, height: number): void"
+        }
+       ]
+      },
+      {
+       "name": "render",
+       "doc": "Draws the scene with its lines into the renderer's current target, or onto the screen when it has none.",
+       "signatures": [
+        {
+         "code": "render(renderer: WebGPURenderer, scene: Object3D, camera: Camera): void"
+        }
+       ]
+      },
+      {
+       "name": "dispose",
+       "doc": "Frees its targets.",
+       "signatures": [
+        {
+         "code": "dispose(): void"
+        }
+       ]
       }
      ]
     }

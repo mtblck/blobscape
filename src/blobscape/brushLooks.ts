@@ -6,7 +6,7 @@ export type LookId = 'blobs' | MarkKind
 export const LOOKS: { id: LookId; label: string; note: string }[] = [
   { id: 'gouache', label: 'Gouache', note: 'Flat, opaque dabs with the streaks of a dry brush.' },
   { id: 'oil', label: 'Oil', note: 'Thick paint: ridges between the bristles catch the light.' },
-  { id: 'ink', label: 'Ink and wash', note: 'A thin wash of each color, and a pen stroke that is heavier where it is darker.' },
+  { id: 'ink', label: 'Ink and wash', note: 'A thin wash of each color that leaves the paper showing in the light, pen strokes only in the shade, and a pen outline round everything.' },
   { id: 'hatch', label: 'Hatching', note: 'Pen lines on bare paper, drawn closer where it is darker.' },
   { id: 'blobs', label: 'Blobs', note: 'The soft dots underneath, as every other page draws them.' },
 ]

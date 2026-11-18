@@ -59,6 +59,42 @@ export function streak(v: number, seed: number, rate: number): number {
   return (noise1(v * rate + 40, seed) + noise1(-v * rate + 40, seed)) / 2
 }
 
+/** Drawn outlines (the engine's `InkLines`): something counts as nearer, and gets a line, when its depth is this share less. */
+export const LINE_DEPTH = 0.035
+/** Drawn outlines: a line between two parts is this share of the pen's width. */
+export const LINE_PART = 0.6
+/** Drawn outlines: how far the hand wobbles, in pen widths. */
+export const LINE_WOBBLE = 0.6
+/** Drawn outlines: round something lighter than `dark`, the pen lifts off where its swell is under `swell`. */
+export const LINE_BREAK = { dark: 0.22, swell: 0.3 }
+
+/**
+ * How strong a drawn outline is, 0–1: heavier round dark things than light ones, swelling and thinning along its
+ * length (`swell`, 0–1, smooth noise), and broken off here and there round the lightest. `dark` is 1 less the root of
+ * the thing's luminance.
+ */
+export function lineWeight(dark: number, swell: number): number {
+  if (dark < LINE_BREAK.dark && swell < LINE_BREAK.swell) return 0
+  return Math.min(1, (0.45 + 0.55 * dark) * (0.75 + 0.5 * swell))
+}
+
+/** A pen for drawn outlines (`Stage.setOutline`). */
+export interface OutlinePen {
+  /** The line's width in CSS pixels (default 1.5). */
+  width?: number
+  /** Its color, sRGB 0–1 (default the same blue-black as `MarkLook.ink`). */
+  ink?: readonly [number, number, number]
+}
+
+/** Ink and wash: how far toward a blob's color its wash goes, for the lightest and the darkest. */
+export const WASH_LEAST = 0.45
+/** See `WASH_LEAST`. */
+export const WASH_MOST = 0.85
+/** Ink and wash: the pen hatches a blob only when it is darker than `SHADE_FROM` (1 less the root of its luminance), fully from `SHADE_FULL`. */
+export const SHADE_FROM = 0.5
+/** See `SHADE_FROM`. */
+export const SHADE_FULL = 0.72
+
 /** What a mark is at one pixel. */
 export interface MarkSample {
   /** How much of the pixel the mark covers, 0–1. Marks are paint: its alpha is this times the blob's opacity times `MARK_SOLID`, at most 1. */
@@ -95,11 +131,13 @@ export function markAt(kind: MarkKind, u: number, v: number, seed: number, rgb: 
   }
   const dark = 1 - Math.min(1, Math.sqrt(Math.max(0, luma(rgb))))
   if (kind === 'ink') {
-    // a wash of the blob's color thinned toward the paper, and a pen stroke along the blob, heavier where it is darker
-    const wash = [0, 1, 2].map((c) => paper[c] + (rgb[c] - paper[c]) * 0.7)
+    // line and wash: a wash of the blob's color, thinner the lighter it is so the lightest leave the paper nearly
+    // bare; and the pen only in the shade, a stroke along the blob that is heavier where it is darker. The outlines
+    // are the pen's main work, and are drawn over the whole picture (`Stage.setOutline`)
+    const wash = [0, 1, 2].map((c) => paper[c] + (rgb[c] - paper[c]) * (WASH_LEAST + (WASH_MOST - WASH_LEAST) * dark))
     const reach = Math.max(0, 1 - Math.pow(Math.abs(u) / (MARK_LONG * k * 0.95), 2))
-    const half = (0.05 + 0.3 * dark) * k * Math.sqrt(reach) * (0.7 + 0.6 * s)
-    const pen = reach > 0 ? 1 - smooth(half * 0.6, half + 0.02, Math.abs(v)) : 0
+    const half = (0.04 + 0.16 * dark) * k * Math.sqrt(reach) * (0.7 + 0.6 * s)
+    const pen = reach > 0 ? (1 - smooth(half * 0.6, half + 0.02, Math.abs(v))) * smooth(SHADE_FROM, SHADE_FULL, dark) : 0
     return { cover, color: [0, 1, 2].map((c) => wash[c] + (ink[c] - wash[c]) * pen) as [number, number, number] }
   }
   // hatch: lines along the blob on bare paper, more of each line drawn the darker the blob is
