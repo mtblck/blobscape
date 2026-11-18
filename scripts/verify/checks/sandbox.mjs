@@ -410,7 +410,7 @@ export default [
       page.on('request', (r) => { if (!/^(http:\/\/localhost|data:|blob:)/.test(r.url())) outside.push(r.url()) })
       await page.waitForTimeout(2500)
       const total = Number((await page.textContent('[data-testid=blob-count]')).replace(/\D/g, ''))
-      const selected = async () => Number(((await page.getByRole('tab', { name: /^Select/ }).textContent()) ?? '').replace(/\D/g, '') || 0)
+      const selected = async () => Number((await page.evaluate(() => document.querySelector('[data-testid=selected-count]')?.textContent ?? '0')).replace(/\D/g, '') || 0)
       await page.getByRole('tab', { name: /^Select/ }).click()
       await page.getByRole('checkbox', { name: 'A click with Select takes the whole thing' }).check()
       if ((await page.getByRole('button', { name: 'Select', exact: true }).getAttribute('aria-pressed')) !== 'true') fails.push('blobscape sandbox thing: turning whole things on did not pick the Select tool')
@@ -488,7 +488,7 @@ export default [
       const count = async () => Number((await page.textContent('[data-testid=blob-count]')).replace(/\D/g, ''))
       // no count on the page is no creatures; where there is one, a busy page is given time to answer (a second was not enough in software, and read as 0)
       const inCreatures = async () => ((await page.locator('[data-testid=creature-blob-count]').count()) ? Number(((await page.textContent('[data-testid=creature-blob-count]', { timeout: 30000 }).catch(() => '0')) ?? '0').replace(/\D/g, '')) : 0)
-      const shot = async () => page.getByTestId('viewport').screenshot()
+      const shot = async () => page.getByTestId('viewport').screenshot({ style: '[data-view-controls] { visibility: hidden }' })
       const differs = (a, b) => page.evaluate(async ([a, b]) => {
         const px = async (s) => { const i = await createImageBitmap(new Blob([Uint8Array.from(atob(s), (ch) => ch.charCodeAt(0))], { type: 'image/png' })); const c = new OffscreenCanvas(i.width, i.height); const x = c.getContext('2d'); x.drawImage(i, 0, 0); return x.getImageData(0, 0, i.width, i.height).data }
         const [p, q] = await Promise.all([px(a), px(b)])
