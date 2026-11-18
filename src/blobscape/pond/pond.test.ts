@@ -4,7 +4,8 @@ import { MAX_LIGHTS } from '../../splat-engine/engine.ts'
 import { CANDLE_LIGHTS, candleLights, flameAt } from './candles.ts'
 import { Pond, WATER_LEVEL } from './pond.ts'
 import { SCALE } from './scene.ts'
-import { BODY, stepWader } from './wade.ts'
+import { FALL, FALL_FROM, Rain } from './rain.ts'
+import { BODY, stepWader, steer } from './wade.ts'
 
 // one pond for the whole file: cutting the ruin takes a moment
 const pond = new Pond({ spacing: 0.05, look: 'forest', elfBlobs: 3000 })
@@ -74,12 +75,49 @@ test('a wader slides along a bank and stops head on', () => {
   assert.ok(h.x < 1 && Math.abs(h.z) < 1e-6 && h.speed < 0.2)
 })
 
-test('rain falls on the water and stops when told', () => {
+test('a stick steers by the picture: up is away from the camera, and the wader turns to go that way', () => {
+  // a camera looking down −z (from the front of the scene): up on the stick is −z, right is +x
+  const view = Math.PI
+  const up = steer({ x: 0, y: 1 }, view), right = steer({ x: 1, y: 0 }, view)
+  assert.ok(Math.abs(Math.sin(up.aim)) < 1e-9 && Math.cos(up.aim) < -0.99)
+  assert.ok(Math.sin(right.aim) > 0.99 && Math.abs(Math.cos(right.aim)) < 1e-9)
+  assert.ok(Math.abs(steer({ x: 0.3, y: 0.4 }, 1).go - 0.5) < 1e-9)
+  // held one way, it ends up walking straight that way, not in a circle; sent the other way, it turns round first
+  const room = () => true
+  let w = { x: 0, z: 0, heading: 0, speed: 0 }
+  for (let k = 0; k < 180; k++) w = stepWader(w, { forward: 0, turn: 0, ...right }, 1 / 60, room)
+  assert.ok(Math.abs(w.heading - Math.PI / 2) < 1e-6 && w.x > 2 && Math.abs(w.z) < 0.25, `went to ${w.x}, ${w.z}`)
+  let far = 0
+  for (let k = 0; k < 40; k++) { w = stepWader(w, { forward: 0, turn: 0, aim: -Math.PI / 2, go: 1 }, 1 / 60, room); far = Math.max(far, Math.abs(w.z)) }
+  assert.ok(far < 0.3, `swung ${far} wide turning round`)
+})
+
+test('rain is seen falling before the water hears of it, and stops when told', () => {
   for (let k = 0; k < 60 * 40 && !pond.water.still; k++) pond.update(1 / 60, still)
-  pond.rain = 30
+  pond.rain = 60
+  // drops are in the air for FALL_FROM / FALL seconds: until then the water is untouched
+  const air = FALL_FROM / FALL
+  for (let k = 0; k < Math.floor(air * 60) - 2; k++) pond.update(1 / 60, still)
+  assert.ok(pond.falling.drops.length > 10 && pond.water.still, 'drops in the air, still water')
+  assert.ok(pond.falling.changed && pond.falling.actor.blobs.opacity[0] > 0)
+  const before = pond.water.volume
   for (let k = 0; k < 60; k++) pond.update(1 / 60, still)
-  assert.ok(!pond.water.still)
+  assert.ok(!pond.water.still, 'the drops landed')
+  assert.ok(Math.abs(pond.water.volume - before) < 1e-6, 'rain filled the pond')
   pond.rain = 0
+  for (let k = 0; k < 60; k++) pond.update(1 / 60, still)
+  assert.equal(pond.falling.drops.length, 0)
+  assert.ok(pond.falling.actor.blobs.opacity.every((o) => o === 0))
+})
+
+test('a drop falls at its speed and lands once', () => {
+  const rain = new Rain({ x0: 0, x1: 1, z0: 0, z1: 1, level: 0 })
+  rain.add(0.5, 0.5, 0)
+  let landed = 0, t = 0
+  while (!landed && t < 2) { rain.step(1 / 60, () => landed++); t += 1 / 60 }
+  assert.ok(Math.abs(t - FALL_FROM / FALL) < 0.03)
+  rain.step(1, () => landed++)
+  assert.equal(landed, 1)
 })
 
 test('flames flutter within bounds, each on its own, and burn steady when calm', () => {

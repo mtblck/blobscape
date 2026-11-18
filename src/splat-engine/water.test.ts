@@ -230,3 +230,21 @@ test('with a mirror picture the surface shows the scene, and the sky where the p
   const tip = (t: number) => surfaceColor([-0.05, 0, 0], [Math.sin(t), Math.cos(t), 0], eye, look).color[0]
   assert.ok(Math.abs(tip(0.2) - tip(-0.2)) > 0.01, `${tip(0.2)} and ${tip(-0.2)}`)
 })
+
+test('a splash is a crater with a rim, holds no water of its own, and spreads as a ring', () => {
+  const w = pond({ damping: 0 })
+  w.splash(0.02, 0.01, 0.11, 0.012)
+  assert.ok(Math.abs(w.volume) < 1e-9, `made ${w.volume} of water`)
+  const k = w.index(0.02, 0.01)
+  assert.ok(w.h[k] < -0.005, 'no crater')
+  let rim = 0
+  for (const v of w.h) rim = Math.max(rim, v)
+  assert.ok(rim > 0.0005, 'no rim')
+  for (let i = 0; i < 40; i++) w.step(WATER_TICK)
+  assert.ok(crest(w, 0.02, 0.01) > 0.2, 'the ring did not spread')
+  // on dry ground, nothing
+  const dry = pond()
+  dry.wet.fill(0)
+  dry.splash(0, 0, 0.11, 0.012)
+  assert.ok(dry.h.every((v) => v === 0))
+})

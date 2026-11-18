@@ -7962,6 +7962,15 @@
        ]
       },
       {
+       "name": "splash",
+       "doc": "The mark a small fast thing leaves where it hits: a crater `depth` meters deep and about `r` across with a raised\nrim, holding no water of its own (what the middle loses the rim gains). A raindrop is far smaller than a cell of\nthe grid, but its splash is not; rain given as `drop`s of that size would fill the pond. Nothing on dry ground.",
+       "signatures": [
+        {
+         "code": "splash(x: number, z: number, r: number, depth: number): void"
+        }
+       ]
+      },
+      {
        "name": "step",
        "doc": "Moves the water on by `dt` seconds, in whole ticks (what is left of a frame is carried to the next).",
        "signatures": [

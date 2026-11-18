@@ -278,6 +278,29 @@ export class Water {
     this.version++
   }
 
+  /**
+   * The mark a small fast thing leaves where it hits: a crater `depth` meters deep and about `r` across with a raised
+   * rim, holding no water of its own (what the middle loses the rim gains). A raindrop is far smaller than a cell of
+   * the grid, but its splash is not; rain given as `drop`s of that size would fill the pond. Nothing on dry ground.
+   */
+  splash(x: number, z: number, r: number, depth: number) {
+    const { nx, nz, x0, z0, cell } = this.spec
+    const reach = Math.max(r, cell * 1.5)
+    const i0 = Math.max(0, Math.floor((x - reach - x0) / cell)), i1 = Math.min(nx - 1, Math.floor((x + reach - x0) / cell))
+    const j0 = Math.max(0, Math.floor((z - reach - z0) / cell)), j1 = Math.min(nz - 1, Math.floor((z + reach - z0) / cell))
+    const share = (i: number, j: number) => {
+      const d = Math.hypot(x0 + (i + 0.5) * cell - x, z0 + (j + 0.5) * cell - z) / reach
+      return d >= 1 ? 0 : (1 - d * d) ** 2
+    }
+    let sum = 0, cells = 0
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) if (this.wet[j * nx + i]) { sum += share(i, j); cells++ }
+    if (cells < 2 || sum <= 0) return
+    const mean = sum / cells
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) if (this.wet[j * nx + i]) this.h[j * nx + i] -= depth * (share(i, j) - mean)
+    this.moving = true
+    this.version++
+  }
+
   /** Moves the water on by `dt` seconds, in whole ticks (what is left of a frame is carried to the next). */
   step(dt: number) {
     this.carry += dt

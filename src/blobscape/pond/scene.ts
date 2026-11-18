@@ -34,6 +34,27 @@ const MOSS = '#3f6a3a'
 const fern = (at: Vec3, r: number, seed: number): PartDoc => ({ shape: { kind: 'rosette', at, r, leaves: 16, seed }, paint: { kind: 'speckle', size: 0.03, colors: ['#5f9a3c', '#3f7a34', '#8cc04a'] }, noShadow: true, bare: true })
 const bush = (at: Vec3, r: Vec3, seed: number): PartDoc => ({ shape: { kind: 'rough', shape: { kind: 'ball', at, r }, by: 0.03, scale: 0.08 + seed * 0.001 }, paint: { kind: 'speckle', size: 0.035, colors: ['#3f7a34', '#2c5a2c', '#6aa540', '#8cc04a'] }, bare: true })
 
+/**
+ * Ivy along a path that lies on a surface: a stem, and leaves set on it every few centimeters, each touching the
+ * stem so none hangs in the air.
+ */
+function ivy(path: Vec3[], seed: number): PartDoc[] {
+  let r = seed * 9301 + 49297
+  const rand = () => { r = (r * 9301 + 49297) % 233280; return r / 233280 - 0.5 }
+  const leaves: { kind: 'ball'; at: Vec3; r: Vec3 }[] = []
+  for (let k = 0; k + 1 < path.length; k++) {
+    const a = path[k], b = path[k + 1], n = Math.max(1, Math.round(Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]) / 0.05))
+    for (let i = 0; i < n; i++) {
+      const t = (i + 0.5) / n
+      leaves.push({ kind: 'ball', at: [a[0] + (b[0] - a[0]) * t + rand() * 0.05, a[1] + (b[1] - a[1]) * t + rand() * 0.05, a[2] + (b[2] - a[2]) * t + rand() * 0.02], r: [0.034 + rand() * 0.012, 0.03 + rand() * 0.012, 0.022] })
+    }
+  }
+  return [
+    { shape: { kind: 'sweep', path, r: 0.018, rTo: 0.01 }, paint: '#2c5a2c', noShadow: true, bare: true },
+    { shape: { kind: 'join', shapes: leaves }, paint: { kind: 'speckle', size: 0.04, colors: ['#3f7a34', '#5f9a3c', '#2c5a2c'] }, noShadow: true, bare: true },
+  ]
+}
+
 export const POND_SCENE: SceneDoc = {
   name: 'Wading pond',
   loop: 24,
@@ -91,11 +112,10 @@ export const POND_SCENE: SceneDoc = {
     // a tree on the right bank, leaning over the water
     { shape: { kind: 'tree', at: [1.62, 0.15, -0.45], height: 0.75, crown: [0.8, 0.45, 0.75], r: 0.075, points: 400, leaves: 0.085, only: 'limbs', seed: 5 }, paint: '#5a4630', bone: 'tree' },
     { shape: { kind: 'tree', at: [1.62, 0.15, -0.45], height: 0.75, crown: [0.8, 0.45, 0.75], r: 0.075, points: 400, leaves: 0.085, only: 'leaves', seed: 5 }, paint: { kind: 'speckle', size: 0.05, colors: ['#5f9a3c', '#3f7a34', '#8cc04a', '#2c5a2c'] }, bone: 'crown', noShadow: false, bare: true },
-    // ivy over the shrine and up the first pillar
-    { shape: { kind: 'grow', style: 'coral', at: [-1.38, 0.5, -0.87], seed: 6, size: 0.24, r: 0.012, depth: 4, tips: 0.04, only: 'tips' }, paint: { kind: 'speckle', size: 0.04, colors: ['#3f7a34', '#5f9a3c', '#2c5a2c'] }, noShadow: true, bare: true },
-    { shape: { kind: 'grow', style: 'coral', at: [-0.55, 0.84, -0.9], seed: 16, size: 0.2, r: 0.012, depth: 4, tips: 0.04, only: 'tips' }, paint: { kind: 'speckle', size: 0.04, colors: ['#3f7a34', '#5f9a3c', '#2c5a2c'] }, noShadow: true, bare: true },
-    { shape: { kind: 'sweep', path: [[-0.3, 0.3, -1.36], [-0.31, 0.6, -1.36], [-0.27, 0.9, -1.36], [-0.32, 1.2, -1.36]], r: 0.02, rTo: 0.008 }, paint: '#2c5a2c', noShadow: true, bare: true },
-    { shape: { kind: 'grow', style: 'coral', at: [-0.3, 0.7, -1.35], seed: 26, size: 0.22, r: 0.012, depth: 4, tips: 0.04, only: 'tips' }, paint: { kind: 'speckle', size: 0.04, colors: ['#3f7a34', '#5f9a3c', '#2c5a2c'] }, noShadow: true, bare: true },
+    // ivy lying on the stone: up the shrine's front and over its top, down its far corner, and up the first pillar
+    ...ivy([[-1.4, 0.12, -0.84], [-1.35, 0.5, -0.84], [-1.3, 0.96, -0.84], [-1.2, 1.01, -1.0], [-0.98, 1.01, -1.14]], 6),
+    ...ivy([[-0.72, 1.01, -1.2], [-0.56, 1.01, -0.96], [-0.5, 0.97, -0.84], [-0.53, 0.72, -0.84], [-0.47, 0.5, -0.84]], 16),
+    ...ivy([[-0.3, 0.3, -1.36], [-0.31, 0.6, -1.36], [-0.27, 0.9, -1.36], [-0.32, 1.2, -1.36]], 26),
     // ferns and bushes on the banks
     fern([-1.6, 0.15, 1.3], 0.2, 1), fern([-1.66, 0.15, 0.4], 0.17, 2), fern([-1.58, 0.15, -0.5], 0.19, 3),
     fern([1.62, 0.15, 1.2], 0.2, 4), fern([1.7, 0.15, 0.3], 0.16, 5), fern([-1.5, 0.3, -1.1], 0.15, 6),

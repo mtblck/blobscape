@@ -18,7 +18,7 @@ const DETAIL = [{ id: 'light', label: 'Light', spacing: 0.034, elf: 12000 }, { i
 const STOPS = [1.4, 2, 2.8, 4, 5.6, 8, 11, 16]
 /** How strongly bright light glows when the switch is on (the stage's own start). */
 const GLOW = 4
-const RAIN = [{ id: 0, label: 'None' }, { id: 6, label: 'A few drops' }, { id: 40, label: 'A shower' }]
+const RAIN = [{ id: 0, label: 'None' }, { id: 12, label: 'A few drops' }, { id: 110, label: 'A shower' }]
 
 const at = (azimuth: number, elevation: number, distance = POND_SCENE.camera.distance): Orbit => ({ target: POND_SCENE.camera.target.map((v) => v * SCALE) as [number, number, number], distance: distance * SCALE, azimuth, elevation })
 const VIEWS: { id: string; label: string; orbit: Orbit }[] = [
@@ -68,7 +68,7 @@ export function WadingPond() {
   useEffect(() => {
     let live: PondStage | undefined, gone = false
     import('./pond/stage.ts')
-      .then(({ PondStage }) => PondStage.start(canvas.current!, { offscreen, webgl }))
+      .then(({ PondStage }) => PondStage.start(canvas.current!, { offscreen, webgl, small: coarse }))
       .then((s) => {
         if (gone) { s.dispose(); return }
         live = s
@@ -76,7 +76,7 @@ export function WadingPond() {
         s.onTick = (p, fps) => setStats({ blobs: p.blobCount, waded: p.waded, still: p.water.still, fps })
         setStage(s)
         // without WebGPU (where the CPU sorts every frame) the pond starts light; with it, full
-        setDetail((d) => d ?? (s.backend === 'webgpu' ? 'full' : 'light'))
+        setDetail((d) => d ?? (s.backend === 'webgpu' && !coarse ? 'full' : 'light'))
         setMirror((m) => m ?? s.reflections)
         setGlow((g) => g ?? s.glow > 0)
         setBlur((b) => b ?? s.focusBlur)
@@ -121,9 +121,10 @@ export function WadingPond() {
     const stage = stageRef.current
     if (!stage) return
     const k = keys.current
-    const forward = (k.has('f') ? 1 : 0) - (k.has('b') ? 1 : 0) + stick.current.forward
-    const turn = (k.has('r') ? 1 : 0) - (k.has('l') ? 1 : 0) + stick.current.turn
-    stage.input = { forward: Math.max(-1, Math.min(1, forward)), turn: Math.max(-1, Math.min(1, turn)) }
+    // both steer by the picture: up is away from you, whichever way the elf faces and however the view is turned
+    const y = (k.has('f') ? 1 : 0) - (k.has('b') ? 1 : 0) + stick.current.forward
+    const x = (k.has('r') ? 1 : 0) - (k.has('l') ? 1 : 0) + stick.current.turn
+    stage.input = { forward: 0, turn: 0, stick: { x: Math.max(-1, Math.min(1, x)), y: Math.max(-1, Math.min(1, y)) } }
   }
   useEffect(() => {
     const KEYS: Record<string, string> = { ArrowUp: 'f', KeyW: 'f', ArrowDown: 'b', KeyS: 'b', ArrowLeft: 'l', KeyA: 'l', ArrowRight: 'r', KeyD: 'r' }
@@ -188,7 +189,7 @@ export function WadingPond() {
                 ref={canvas}
                 role="application"
                 aria-roledescription="3D view"
-                aria-label="An elf standing in a shallow pond in front of ruined arches, with candles burning in a niche at the water's edge. Arrow keys or W, A, S and D wade and turn; E waves. Drag to turn the view, or pick a view in the View tab; a tap on the water, or Enter here, lets a drop fall."
+                aria-label="An elf standing in a shallow pond in front of ruined arches, with candles burning in a niche at the water's edge. Arrow keys or W, A, S and D wade the way they point on the screen; E waves. Drag to turn the view, or pick a view in the View tab; a tap on the water, or Enter here, lets a drop fall."
                 tabIndex={0}
                 data-testid="pond-view"
                 className="absolute inset-0 h-full w-full cursor-grab touch-none outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset active:cursor-grabbing"
