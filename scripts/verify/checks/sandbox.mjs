@@ -12,7 +12,8 @@ export default [
       await page.waitForTimeout(1500)
       const count = async () => Number((await page.textContent('[data-testid=blob-count]')).replace(/\D/g, ''))
       const selected = async () => Number(((await page.textContent('[data-testid=selected-count]').catch(() => '0')) ?? '0').replace(/\D/g, ''))
-      const shot = async () => page.getByTestId('viewport').screenshot()
+      // the effect's Play and Make it permanent sit on the view and go with the effect: leave them out of the picture
+      const shot = async () => page.getByTestId('viewport').screenshot({ style: '[data-view-controls] { visibility: hidden }' })
       // Pixels that changed clearly (any channel by more than 24), decoded in the page
       const differs = (a, b) => page.evaluate(async ([a, b]) => {
         const px = async (s) => { const i = await createImageBitmap(new Blob([Uint8Array.from(atob(s), (ch) => ch.charCodeAt(0))], { type: 'image/png' })); const c = new OffscreenCanvas(i.width, i.height); const x = c.getContext('2d'); x.drawImage(i, 0, 0); return x.getImageData(0, 0, i.width, i.height).data }
@@ -241,6 +242,9 @@ export default [
       const at = (fx, fy) => [box.x + box.width * fx, box.y + box.height * fy]
       await tabClick(page.getByRole('button', { name: 'Look around', exact: true }))
       await page.getByRole('tab', { name: /Scene/ }).click()
+      // Scene folds into sections: open Camera path (unless it was the last one used)
+      const pathFold = page.locator('summary', { hasText: 'Camera path' })
+      if (!(await pathFold.evaluate((el) => el.parentElement.open))) await pathFold.click()
       const add = page.getByRole('button', { name: 'Add this view as a stop' })
       const play = page.getByRole('button', { name: 'Play the path' })
       if (!(await play.isDisabled())) fails.push('blobscape sandbox path: Play is on with no stops')
@@ -254,6 +258,10 @@ export default [
       const turned = await differs(first, second)
       if (turned < 2000 || !said.startsWith('2 stops, 2 seconds')) fails.push(`blobscape sandbox path: after two stops it says "${said.slice(0, 40)}"${turned < 2000 ? ' and the view did not turn' : ''}`)
       else ok('blobscape sandbox path: two views saved as stops')
+      await page.waitForFunction(() => [...document.querySelectorAll('[data-testid=path-strip] img')].filter((i) => i.complete && i.naturalWidth).length === 2, null, { timeout: 20000 }).catch(() => {})
+      const pics = await page.locator('[data-testid=path-strip] img').count()
+      if (pics !== 2) fails.push(`blobscape sandbox path: the filmstrip shows ${pics} pictures for two stops`)
+      else ok('blobscape sandbox path: the filmstrip shows a picture of each stop')
       await axe(page, 'blobscape sandbox path')
       // Play: the view goes back to the first stop and glides; partway it is neither stop, and it ends at the second
       // The page's clock is stepped by hand: in software a picture of the view can take longer than the whole path,
@@ -402,7 +410,7 @@ export default [
       page.on('request', (r) => { if (!/^(http:\/\/localhost|data:|blob:)/.test(r.url())) outside.push(r.url()) })
       await page.waitForTimeout(2500)
       const total = Number((await page.textContent('[data-testid=blob-count]')).replace(/\D/g, ''))
-      const selected = async () => Number(((await page.getByRole('tab', { name: /^Select/ }).textContent()) ?? '').replace(/\D/g, '') || 0)
+      const selected = async () => Number((await page.evaluate(() => document.querySelector('[data-testid=selected-count]')?.textContent ?? '0')).replace(/\D/g, '') || 0)
       await page.getByRole('tab', { name: /^Select/ }).click()
       await page.getByRole('checkbox', { name: 'A click with Select takes the whole thing' }).check()
       if ((await page.getByRole('button', { name: 'Select', exact: true }).getAttribute('aria-pressed')) !== 'true') fails.push('blobscape sandbox thing: turning whole things on did not pick the Select tool')
@@ -480,7 +488,7 @@ export default [
       const count = async () => Number((await page.textContent('[data-testid=blob-count]')).replace(/\D/g, ''))
       // no count on the page is no creatures; where there is one, a busy page is given time to answer (a second was not enough in software, and read as 0)
       const inCreatures = async () => ((await page.locator('[data-testid=creature-blob-count]').count()) ? Number(((await page.textContent('[data-testid=creature-blob-count]', { timeout: 30000 }).catch(() => '0')) ?? '0').replace(/\D/g, '')) : 0)
-      const shot = async () => page.getByTestId('viewport').screenshot()
+      const shot = async () => page.getByTestId('viewport').screenshot({ style: '[data-view-controls] { visibility: hidden }' })
       const differs = (a, b) => page.evaluate(async ([a, b]) => {
         const px = async (s) => { const i = await createImageBitmap(new Blob([Uint8Array.from(atob(s), (ch) => ch.charCodeAt(0))], { type: 'image/png' })); const c = new OffscreenCanvas(i.width, i.height); const x = c.getContext('2d'); x.drawImage(i, 0, 0); return x.getImageData(0, 0, i.width, i.height).data }
         const [p, q] = await Promise.all([px(a), px(b)])
@@ -646,6 +654,69 @@ export default [
       await phone.page.waitForTimeout(2000)
       await phone.page.screenshot({ path: join(shots, 'blobscape-sandbox-creatures-phone.png'), fullPage: true })
       await axe(phone.page, 'blobscape phone sandbox with creatures')
+      await phone.ctx.close()
+    },
+  },
+  {
+    name: 'sandbox-modes',
+    about: 'every mode opens on a desktop and a phone, ?mode= round-trips, keys, the view keeps half a phone screen',
+    entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/sandbox/modes.tsx'],
+    async run({ base, shots, join, fails, ok, open, axe }) {
+      const NAMES = ['Build', 'Select', 'Creatures', 'Effects', 'Scene']
+      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 720 } })
+      await page.waitForTimeout(1500)
+      // First visit: Build, with Spray held
+      const first = await page.getByRole('tab', { selected: true }).textContent()
+      const spray = await page.getByRole('button', { name: 'Spray', exact: true }).getAttribute('aria-pressed')
+      if (!/^Build/.test(first ?? '') || spray !== 'true') fails.push(`blobscape sandbox modes: the first visit opens ${first} with Spray ${spray}`)
+      else ok('blobscape sandbox modes: the first visit opens Build with Spray held')
+      // Each mode opens its own panel and goes into the address; a reload comes back to it
+      const seen = []
+      for (const name of NAMES) {
+        await page.getByRole('tab', { name: new RegExp('^' + name) }).click()
+        const panel = page.getByRole('tabpanel')
+        const heading = await panel.getByRole('heading', { level: 2 }).first().textContent()
+        const q = new URL(page.url()).searchParams.get('mode')
+        seen.push(`${name}:${heading}:${q ?? ''}`)
+        if (heading !== name || q !== (name === 'Build' ? null : name.toLowerCase())) fails.push(`blobscape sandbox modes: ${name} shows "${heading}", address mode ${q}`)
+      }
+      ok(`blobscape sandbox modes: each mode opens its panel and sets ?mode= (${seen.length})`)
+      await page.goto(base + '/sandbox/?mode=effects')
+      await page.waitForTimeout(1200)
+      const back = await page.getByRole('tab', { selected: true }).textContent()
+      if (!/^Effects/.test(back ?? '')) fails.push(`blobscape sandbox modes: ?mode=effects opened ${back}`)
+      else ok('blobscape sandbox modes: ?mode=effects opens Effects')
+      // Keys, while the sandbox has focus: 2 is Select, L the lasso, Escape puts it down to look around
+      await page.getByRole('heading', { level: 1, name: 'Sandbox' }).focus()
+      await page.keyboard.press('2')
+      await page.keyboard.press('l')
+      const lasso = await page.getByRole('button', { name: 'Lasso', exact: true }).getAttribute('aria-pressed')
+      await page.keyboard.press('Escape')
+      const looking = await page.getByRole('button', { name: 'Look around', exact: true }).getAttribute('aria-pressed')
+      const now = await page.getByRole('tab', { selected: true }).textContent()
+      if (!/^Select/.test(now ?? '') || lasso !== 'true' || looking !== 'true') fails.push(`blobscape sandbox modes: keys gave ${now}, Lasso ${lasso}, looking ${looking}`)
+      else ok('blobscape sandbox modes: 2 opens Select, L holds the lasso, Escape puts it down')
+      await page.getByRole('button', { name: 'Keys', exact: true }).click()
+      if (!(await page.getByTestId('sandbox-keys').isVisible())) fails.push('blobscape sandbox modes: Keys did not open the list of keys')
+      else ok('blobscape sandbox modes: Keys lists the keys')
+      await axe(page, 'blobscape sandbox keys')
+      await page.keyboard.press('Escape')
+      await ctx.close()
+      // A phone: every mode at the short tray leaves the view at least half the screen
+      const phone = await open('/sandbox/', { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+      await phone.page.waitForTimeout(1500)
+      const heights = []
+      for (const name of NAMES) {
+        await phone.page.getByRole('tab', { name: new RegExp('^' + name) }).click()
+        await phone.page.waitForTimeout(200)
+        const h = Math.round((await phone.page.getByTestId('viewport').boundingBox()).height)
+        const wide = await phone.page.evaluate(() => document.documentElement.scrollWidth)
+        heights.push(`${name} ${h}`)
+        if (h < 844 / 2 || wide > 390) fails.push(`blobscape sandbox modes: on a phone ${name} leaves the view ${h} px, the page ${wide} px wide`)
+        await phone.page.screenshot({ path: join(shots, `blobscape-sandbox-phone-${name.toLowerCase()}.png`) })
+      }
+      ok(`blobscape sandbox modes: on a phone the view keeps its height in every mode (${heights.join(', ')})`)
+      await axe(phone.page, 'blobscape phone sandbox modes')
       await phone.ctx.close()
     },
   },

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Blobs, hexToRgb, pick, projectPoint, quatFacing, quatToMat, rgbToHex, type Lens, type Vec3 } from '../splat-core/blobs.ts'
 import type { Orbit, SplatView } from '../splat-core/view.ts'
 import { PRESETS } from '../splat-core/presets.ts'
@@ -7,7 +7,7 @@ import { Selection, bounds, centroid, flipUpright, frame, inPolygon, meanColor, 
 import { EFFECTS, bakeEffect, type EffectFrame, type EffectId, type EffectParams } from '../splat-core/effects.ts'
 import { writePly } from '../splat-core/ply.ts'
 import { ImportError, readSplatFile } from '../splat-core/importer.ts'
-import { Button, Chip, Field, Panel, Slider, Toggle } from '../shared/ui.tsx'
+import { Button, Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
 import { useFocusHeading } from './Shell.tsx'
 import { useFullScreen } from '../shared/Workbench.tsx'
 import { MODES, ModeBar, ToolButton, Icon, addressFor, modeFrom, panelId, tabId, type ModeId } from './sandbox/modes.tsx'
@@ -64,6 +64,37 @@ const KNOBS_FOR: Record<BuildTool, Knob[]> = {
   erase: ['ring'],
   fill: ['ring'],
   stamp: ['ring'],
+}
+
+/** A small picture for each effect tile. */
+const FX_ICONS: Record<string, string> = {
+  none: 'M5 5l14 14M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z',
+  explode: 'M12 9V3M12 21v-6M9 12H3M21 12h-6M6 6l3 3M18 18l-3-3M18 6l-3 3M6 18l3-3',
+  melt: 'M5 6h14M7 6v8a2 2 0 0 0 4 0v-3M13 6v11a2 2 0 0 0 4 0V6',
+  wind: 'M3 9h11a3 3 0 1 0-3-3M3 14h15a3 3 0 1 1-3 3',
+  twist: 'M8 3c8 4 8 6 0 9s-8 5 8 9M16 3c-8 4-8 6 0 9',
+  wave: 'M2 12c3-6 5-6 8 0s5 6 8 0 3-4 4-2',
+  dissolve: 'M6 18h.01M10 14h.01M14 10h.01M18 6h.01M8 9h.01M16 16h.01M12 19h.01',
+}
+
+const SECTION_KEY = 'blobscape-sandbox-section'
+
+/** One key a tool, active while focus is in the sandbox (so typing elsewhere on the page is never taken). */
+const TOOL_KEYS: Partial<Record<ToolId, string>> = { add: 'A', spray: 'S', paint: 'P', erase: 'E', fill: 'F', stamp: 'T', select: 'V', lasso: 'L', move: 'M' }
+
+/** A section of the Scene mode that folds, with a line saying what is in it while shut. One is open at a time. */
+function Fold({ id, open, onOpen, title, summary, children }: { id: string; open: string; onOpen: (id: string | null) => void; title: string; summary: string; children: ReactNode }) {
+  const on = open === id
+  return (
+    <details open={on} onToggle={(e) => { const now = (e.currentTarget as HTMLDetailsElement).open; if (now !== on) onOpen(now ? id : null) }} className="group">
+      <summary className="flex min-h-12 cursor-pointer list-none items-center gap-2 py-2 [&::-webkit-details-marker]:hidden">
+        <span className="font-semibold text-ink">{title}</span>
+        <span className="min-w-0 truncate text-sm text-ink-faint">{summary}</span>
+        <Icon d="M6 9l6 6 6-6" className="ml-auto h-4 w-4 text-ink-muted transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="space-y-3 pb-4">{children}</div>
+    </details>
+  )
 }
 
 const STARTS = [
@@ -284,6 +315,15 @@ export function Sandbox() {
       if (mod && ev.key.toLowerCase() === 'z') { ev.preventDefault(); if (ev.shiftKey) redo(); else undo() }
       else if (mod && ev.key.toLowerCase() === 'y') { ev.preventDefault(); redo() }
       else if ((ev.key === 'Delete' || ev.key === 'Backspace') && sel.count && t.closest('[data-testid=viewport]')) { ev.preventDefault(); deleteSelected() }
+      else if (!mod && !ev.altKey && work.current?.contains(t) && !t.closest('[popover], button[aria-expanded=true]')) {
+        // Keys for modes and tools, only while the sandbox has focus
+        const k = ev.key.toUpperCase()
+        const m = Number(ev.key) >= 1 && Number(ev.key) <= MODES.length ? MODES[Number(ev.key) - 1].id : null
+        const t2 = (Object.keys(TOOL_KEYS) as ToolId[]).find((id) => TOOL_KEYS[id] === k)
+        if (m) { ev.preventDefault(); setMode(m) }
+        else if (t2 && !ev.shiftKey) { ev.preventDefault(); setTool(t2) }
+        else if (ev.key === 'Escape' && !lookAround && (mode === 'build' || mode === 'select' || mode === 'creatures')) { setLookAround(true); setMessage('Looking around. Pick a tool to use it again') }
+      }
     }
     window.addEventListener('keydown', on)
     return () => window.removeEventListener('keydown', on)
@@ -431,6 +471,46 @@ export function Sandbox() {
   const [stops, setStops] = useState<Orbit[]>([])
   const [leg, setLeg] = useState(2)
   const [touring, setTouring] = useState(false)
+  /** A small picture of each stop, for the filmstrip ('' until it is taken). */
+  const [shots, setShots] = useState<string[]>([])
+  const snap = async (o: Orbit) => {
+    if (!view) return ''
+    try {
+      await view.settle(o)
+      const c = document.createElement('canvas')
+      c.width = 160
+      c.height = Math.max(1, Math.round((160 * view.canvas.height) / Math.max(1, view.canvas.width)))
+      const g = c.getContext('2d')!
+      g.fillStyle = themeColor('paper', view.canvas)
+      g.fillRect(0, 0, c.width, c.height)
+      g.drawImage(view.canvas, 0, 0, c.width, c.height)
+      return c.toDataURL('image/jpeg', 0.7)
+    } catch {
+      return ''
+    }
+  }
+  const addStop = async () => {
+    if (stops.length >= MAX_STOPS) return
+    const o = { ...orbit, target: [...orbit.target] as Vec3 }
+    const n = stops.length + 1
+    setStops((s) => [...s, o])
+    setShots((s) => [...s, ''])
+    setMessage(`Stop ${n} saved. Turn the view and add the next`)
+    const pic = await snap(o)
+    setShots((s) => s.map((x, i) => (i === n - 1 && !x ? pic : x)))
+  }
+  const removeStop = (i: number) => {
+    setStops((s) => s.filter((_, j) => j !== i))
+    setShots((s) => s.filter((_, j) => j !== i))
+    setMessage(`Stop ${i + 1} removed`)
+  }
+  // The Scene mode's folded sections: the one last used opens first next time
+  const [section, setSection] = useState<string>('start')
+  useEffect(() => { try { const k = localStorage.getItem(SECTION_KEY); if (k) setSection(k) } catch { /* no storage: start from the top */ } }, [])
+  const openSection = (id: string | null) => {
+    setSection(id ?? '')
+    if (id) try { localStorage.setItem(SECTION_KEY, id) } catch { /* the choice still holds on this visit */ }
+  }
   /** Frames drawn so far while a path is being saved, or null. */
   const [filming, setFilming] = useState<number | null>(null)
   const pathFrames = Math.max(2, Math.round(pathSeconds(stops.length, leg) * PATH_FPS) + 1)
@@ -771,7 +851,7 @@ export function Sandbox() {
       if (tool === 'select') return
       if (tool === 'lasso') { marquee.current = { kind: 'lasso', pts: [x, y] }; return }
       if (tool === 'move') {
-        if (!sel.count && grabActor(x, y)) return
+        if ((!sel.count || mode === 'creatures') && grabActor(x, y)) return
         if (!sel.count) { const hit = blobAt(x, y); if (hit >= 0) { sel.set(hit, true); selChanged() } }
         startMove()
         return
@@ -1297,12 +1377,14 @@ export function Sandbox() {
 
   const toolsHeld = (list: (BuildTool | SelectTool)[], held: ToolId) => list.map((t) => {
     const it = TOOLS.find((x) => x.id === t)!
-    return <ToolButton key={t} name={it.name} note={it.note} held={held === t} onClick={() => setTool(t)} />
+    return <ToolButton key={t} name={it.name} note={it.note} held={held === t} onClick={() => setTool(t)} keys={coarse ? undefined : TOOL_KEYS[t]} />
   })
   const heldNote = (t: ToolId) => TOOLS.find((x) => x.id === t)!.note
   // Build shows only what the held tool uses; on a phone's short tray, one of them at a time
   const knobs = KNOBS_FOR[buildTool].filter((k) => !(k === 'color' && buildTool === 'paint' && ownColors))
   const knob = knobs.includes(pickedKnob) ? pickedKnob : knobs[0]
+  // What waits for the tall tray on a phone
+  const rest = tall ? '' : 'max-lg:hidden'
   const knobShown = (k: Knob) => (k === knob || tall ? '' : 'max-lg:hidden')
   const panels: Record<ModeId, ReactNode> = {
     build: (
@@ -1355,70 +1437,91 @@ export function Sandbox() {
       <>
         <div role="group" aria-label="Select tools" className="-mx-4 flex gap-1.5 overflow-x-auto px-4 lg:mx-0 lg:flex-wrap lg:px-0 [&>*]:flex-none">{toolsHeld(SELECT_TOOLS, tool)}</div>
         <p className="text-xs leading-relaxed text-ink-faint">{lookAround ? heldNote('orbit') : heldNote(selectTool)}</p>
-            <Panel note="Pick blobs with Select or Lasso, or by color here. Edits apply to every selected blob and can be undone.">
-              <div className="flex flex-wrap gap-2">
-                <Button small onClick={selectAll} disabled={!blobs.count}>Select all</Button>
-                <Button small onClick={selectNone} disabled={none}>Select none</Button>
-                <Button small onClick={invertSel} disabled={!blobs.count}>Invert</Button>
-              </div>
-              <div>
-                <Toggle label="A click with Select takes the whole thing" checked={whole} onChange={(on) => { setWhole(on); if (on) setTool('select') }} />
-                <p className="mt-1.5 text-xs text-ink-faint" data-testid="whole-note">
-                  {looking ? 'Looking at what you tapped…' : 'Click a mug, a leaf or a chair and everything that belongs to it is selected, the far side too. A small model (Segment Anything, slimmed; 14 MB, fetched the first time) looks at the view on your device: a few seconds the first click, quick after that until the view moves.'}
-                </p>
-              </div>
-              <Field label="By color">
-                <div className="flex flex-wrap gap-2">
-                  <Button small onClick={selectColor} disabled={!blobs.count}>
-                    <span aria-hidden className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: color }} />
-                    Select blobs near the brush color
-                  </Button>
-                  <Button small onClick={takeColor} disabled={none}>Use their color for the brush</Button>
-                </div>
-              </Field>
-              <Slider label="Color tolerance" value={tolerance} min={0.02} max={0.5} step={0.01} onChange={setTolerance} format={(v) => `${Math.round(v * 100)}%`} />
-              <Field label="Arrange">
-                <div className="flex flex-wrap gap-2">
-                  <Button small onClick={() => turnSelected(-15)} disabled={none}>Turn left</Button>
-                  <Button small onClick={() => turnSelected(15)} disabled={none}>Turn right</Button>
-                  <Button small onClick={() => nudge(-20, 0)} disabled={none}>Slide left</Button>
-                  <Button small onClick={() => nudge(20, 0)} disabled={none}>Slide right</Button>
-                  <Button small onClick={() => nudge(0, -20)} disabled={none}>Slide up</Button>
-                  <Button small onClick={() => nudge(0, 20)} disabled={none}>Slide down</Button>
-                  <Button small onClick={() => scaleSelected(1.2)} disabled={none}>Spread out</Button>
-                  <Button small onClick={() => scaleSelected(1 / 1.2)} disabled={none}>Pull together</Button>
-                </div>
-              </Field>
-              <Field label="Change each blob">
-                <div className="flex flex-wrap gap-2">
-                  <Button small onClick={recolorSelected} disabled={none}>
-                    <span aria-hidden className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: color }} />
-                    Paint with brush color
-                  </Button>
-                  <Button small onClick={() => resizeSelected(1.25, 'Grown')} disabled={none}>Grow</Button>
-                  <Button small onClick={() => resizeSelected(0.8, 'Shrunk')} disabled={none}>Shrink</Button>
-                  <Button small onClick={() => resizeSelected(0.05, 'Turned to dots')} disabled={none}>To dots</Button>
-                  <Button small onClick={() => fadeSelected(1.25, 'More opaque')} disabled={none}>More opaque</Button>
-                  <Button small onClick={() => fadeSelected(0.6, 'Faded')} disabled={none}>Fade</Button>
-                  <Button small onClick={deleteSelected} disabled={none}>Delete</Button>
-                </div>
-              </Field>
-            </Panel>
+        <div className={rest}>
+          <Toggle label="A click with Select takes the whole thing" checked={whole} onChange={(on) => { setWhole(on); if (on) setTool('select') }} />
+          <p className="mt-1.5 text-xs text-ink-faint" data-testid="whole-note">
+            {looking ? 'Looking at what you tapped…' : 'Click a mug, a leaf or a chair and everything that belongs to it is selected, the far side too. A small model (Segment Anything, slimmed; 14 MB, fetched the first time) looks at the view on your device: a few seconds the first click, quick after that until the view moves.'}
+          </p>
+        </div>
+        <div role="group" aria-label="Pick" className="flex flex-wrap gap-2">
+          <Button small onClick={selectAll} disabled={!blobs.count}>Select all</Button>
+          <Button small onClick={selectNone} disabled={none}>Select none</Button>
+          <Button small onClick={invertSel} disabled={!blobs.count}>Invert</Button>
+        </div>
+        {!none && !tall && (
+          <div role="group" aria-label="Quick changes" className="-mx-4 flex gap-2 overflow-x-auto px-4 lg:hidden [&>*]:flex-none">
+            <Button small onClick={recolorSelected}><span aria-hidden className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: color }} />Recolor</Button>
+            <Button small onClick={() => resizeSelected(1.25, 'Grown')}>Grow</Button>
+            <Button small onClick={() => resizeSelected(0.8, 'Shrunk')}>Shrink</Button>
+            <Button small onClick={() => fadeSelected(0.6, 'Faded')}>Fade</Button>
+            <Button small onClick={deleteSelected}>Delete</Button>
+          </div>
+        )}
+        <div className={`space-y-3 ${rest}`}>
+          <Field label="By color">
+            <div className="flex flex-wrap gap-2">
+              <Button small onClick={selectColor} disabled={!blobs.count}>
+                <span aria-hidden className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: color }} />
+                Select blobs near the brush color
+              </Button>
+              <Button small onClick={takeColor} disabled={none}>Use their color for the brush</Button>
+            </div>
+          </Field>
+          <Slider label="Color tolerance" value={tolerance} min={0.02} max={0.5} step={0.01} onChange={setTolerance} format={(v) => `${Math.round(v * 100)}%`} />
+          <p className="border-t border-rule pt-3 text-sm text-ink-muted" data-testid="select-state">
+            {none ? 'Nothing is selected yet. Pick something above or in the view, then arrange or change it here.' : `${sel.count.toLocaleString()} ${sel.count === 1 ? 'blob' : 'blobs'} selected. Every change can be undone.`}
+          </p>
+          <Field label="Arrange">
+            <div className="flex flex-wrap gap-2">
+              <Button small onClick={() => turnSelected(-15)} disabled={none}>Turn left</Button>
+              <Button small onClick={() => turnSelected(15)} disabled={none}>Turn right</Button>
+              <Button small onClick={() => nudge(-20, 0)} disabled={none}>Slide left</Button>
+              <Button small onClick={() => nudge(20, 0)} disabled={none}>Slide right</Button>
+              <Button small onClick={() => nudge(0, -20)} disabled={none}>Slide up</Button>
+              <Button small onClick={() => nudge(0, 20)} disabled={none}>Slide down</Button>
+              <Button small onClick={() => scaleSelected(1.2)} disabled={none}>Spread out</Button>
+              <Button small onClick={() => scaleSelected(1 / 1.2)} disabled={none}>Pull together</Button>
+            </div>
+          </Field>
+          <Field label="Change each blob">
+            <div className="flex flex-wrap gap-2">
+              <Button small onClick={recolorSelected} disabled={none}>
+                <span aria-hidden className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: color }} />
+                Paint with brush color
+              </Button>
+              <Button small onClick={() => resizeSelected(1.25, 'Grown')} disabled={none}>Grow</Button>
+              <Button small onClick={() => resizeSelected(0.8, 'Shrunk')} disabled={none}>Shrink</Button>
+              <Button small onClick={() => resizeSelected(0.05, 'Turned to dots')} disabled={none}>To dots</Button>
+              <Button small onClick={() => fadeSelected(1.25, 'More opaque')} disabled={none}>More opaque</Button>
+              <Button small onClick={() => fadeSelected(0.6, 'Faded')} disabled={none}>Fade</Button>
+            </div>
+          </Field>
+          <div className="flex flex-wrap gap-2">
+            <Button small onClick={() => { setTarget('selection'); setMode('effects') }} disabled={none}>Use an effect on it</Button>
+            <span className="ml-auto"><Button small onClick={deleteSelected} disabled={none}>Delete</Button></span>
+          </div>
+        </div>
       </>
     ),
     creatures: (
-      <Panel note="Creatures from Splat Creatures, a slime from Dungeon Run and the watch from Clockwork, moving in your scene. Drag one with the Move tool (or, with nothing selected, use the arrow keys on the view) to put it somewhere else. Brushes and selections leave them alone until you freeze one into ordinary blobs. An effect on the whole scene moves them too, but only on screen: freeze one to keep it.">
+      <>
+        <p className={`text-xs leading-relaxed text-ink-faint ${rest}`}>Creatures from Splat Creatures, a slime from Dungeon Run and the watch from Clockwork, moving in your scene. Tap one in the view to work on it, and drag it (or use the arrow keys on the view) to walk it somewhere else. Brushes and selections leave them alone until you freeze one into ordinary blobs. An effect on the whole scene moves them too, but only on screen: freeze one to keep it.</p>
         {shapes && (
-          <div data-testid="scan-shapes">
+          <div data-testid="scan-shapes" className={rest}>
             <p className="text-xs leading-relaxed text-ink-muted">This scan came with {shapes.length} solid {shapes.length === 1 ? 'shape' : 'shapes'} from Scan Studio. A creature over one stands on it.</p>
             <div className="mt-2"><Toggle label="Show the shapes" checked={showShapes} onChange={setShowShapes} /></div>
           </div>
         )}
-        <Field label="Add">
-          <div className="flex flex-wrap gap-1.5" data-testid="add-creature">
-            {ADDABLE.map((sp) => <Button small key={sp.id} aria-label={`Add ${aOr(sp.name)}`} onClick={() => addActor(sp)} disabled={actors.length >= MAX_ACTORS || actorCount + detailsOf(sp)[0] > maxActorBlobs}>{cap(sp.name)}</Button>)}
+        <div>
+          <p className="mb-1.5 flex text-sm text-ink-muted">Add a creature<span className="ml-auto tabular-nums text-ink-faint" data-testid="creature-room">{actors.length} of {MAX_ACTORS}</span></p>
+          <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 lg:mx-0 lg:grid lg:grid-cols-3 lg:px-0 [&>*]:flex-none" data-testid="add-creature">
+            {ADDABLE.map((sp) => (
+              <button key={sp.id} type="button" aria-label={`Add ${aOr(sp.name)}`} onClick={() => addActor(sp)} disabled={actors.length >= MAX_ACTORS || actorCount + detailsOf(sp)[0] > maxActorBlobs} className="flex min-h-11 cursor-pointer items-center justify-center gap-1 rounded-xl border border-rule bg-paper px-3 text-sm font-semibold text-ink transition-colors hover:border-ink-faint disabled:cursor-default disabled:text-ink-faint disabled:hover:border-rule">
+                <span aria-hidden className="text-accent">+</span>{cap(sp.name)}
+              </button>
+            ))}
           </div>
-        </Field>
+        </div>
         {actorCount > 0 && ADDABLE.every((sp) => actorCount + detailsOf(sp)[0] > maxActorBlobs) && actors.length < MAX_ACTORS && (
           <p className="text-xs text-ink-faint">That's as many blobs as creatures can have between them here ({maxActorBlobs.toLocaleString()}). Remove or freeze one to add another.</p>
         )}
@@ -1426,11 +1529,11 @@ export function Sandbox() {
         {current && (
           <>
             {actors.length > 1 && (
-              <Field label="Working on">
+              <div className={rest}><Field label="Working on">
                 <div className="flex flex-wrap gap-1.5">
                   {actors.map((a, k) => <Chip key={a.key} active={a === current} onClick={() => setCurrentKey(a.key)}>{cap(a.species.name)}{actors.filter((x) => x.species === a.species).length > 1 ? ` ${actors.filter((x, j) => x.species === a.species && j <= k).length}` : ''}</Chip>)}
                 </div>
-              </Field>
+              </Field></div>
             )}
             <Field label="Move">
               <div className="flex flex-wrap gap-1.5">
@@ -1438,6 +1541,7 @@ export function Sandbox() {
                 <Chip active={current.move === STILL} onClick={() => tweak(current.key, (a) => ({ ...a, move: STILL }))}>Still</Chip>
               </div>
             </Field>
+            <div className={`space-y-3 ${rest}`}>
             {canRoam(current) && (
               <div>
                 <Toggle label="Walk about" checked={current.roam > 0} onChange={(on) => tweak(current.key, (a) => ({ ...a, roam: on ? ROAM : 0 }))} />
@@ -1471,10 +1575,11 @@ export function Sandbox() {
               <Button small onClick={() => freezeActor(current)}>Freeze into the scene</Button>
               <Button small onClick={() => removeActor(current)}>Remove</Button>
             </div>
+            </div>
           </>
         )}
         {anyActors && (
-          <>
+          <div className={`space-y-3 ${rest}`}>
             <Field label="Show creatures as">
               <div className="flex flex-wrap gap-1.5">
                 {SHOW_RIG.map((v) => <Chip key={v.id} active={showRig === v.id} onClick={() => setShowRig(v.id)}>{v.label}</Chip>)}
@@ -1483,84 +1588,111 @@ export function Sandbox() {
             <div className="flex flex-wrap gap-2">
               <Button small onClick={() => setPlaying((p) => !p)}>{playing ? 'Pause them' : 'Play them'}</Button>
             </div>
-          </>
+          </div>
         )}
-        <p className="text-xs text-ink-faint">
+        <p className={`text-xs text-ink-faint ${rest}`}>
           They're posed on your device's processor each frame, so here they come in their lighter sizes. Bigger ones, and taking one away as a 3D model, are on the <a href={href({ page: 'creature' })} className="underline hover:text-accent">Splat Creatures</a> page.
         </p>
-      </Panel>
+      </>
     ),
     effects: (
-      <Panel note="Effects run on the GPU, so they work on a million blobs. They're a preview until you make them permanent.">
-        <div className="flex flex-wrap gap-2" role="group" aria-label="Effect">
-          <Chip active={!effect} onClick={() => chooseEffect(null)}>None</Chip>
-          {EFFECTS.map((e) => <Chip key={e.id} active={effect === e.id} onClick={() => chooseEffect(e.id)}>{e.name}</Chip>)}
+      <>
+        <p className={`text-xs leading-relaxed text-ink-faint ${rest}`}>Effects run on the GPU, so they work on a million blobs. They're a preview until you make them permanent, with the button on the view.</p>
+        <div className="-mx-4 flex gap-1 overflow-x-auto px-4 lg:mx-0 lg:grid lg:grid-cols-4 lg:px-0 [&>*]:flex-none" role="group" aria-label="Effect">
+          {[{ id: null, name: 'None' }, ...EFFECTS].map((e) => (
+            <button key={e.id ?? 'none'} type="button" aria-pressed={effect === e.id} onClick={() => chooseEffect(e.id)} className={`flex w-16 cursor-pointer flex-col items-center gap-1 text-xs font-semibold lg:w-auto ${effect === e.id ? 'text-ink' : 'text-ink-muted hover:text-ink'}`}>
+              <span className={`grid h-13 w-13 place-items-center rounded-full border bg-paper ${effect === e.id ? 'border-accent ring-2 ring-accent' : 'border-rule'}`}><Icon d={FX_ICONS[e.id ?? 'none']} /></span>
+              {e.name}
+            </button>
+          ))}
         </div>
-        {fx && <p className="text-sm text-ink-faint">{fx.note}</p>}
+        {fx && <p className={`text-sm text-ink-faint ${rest}`}>{fx.note}</p>}
         <Slider label="Amount" value={amount} min={0} max={1} step={0.01} onChange={(v) => { if (!fx?.loops) setRunning(false); setAmount(v) }} format={(v) => `${Math.round(v * 100)}%`} />
-        <div className="flex flex-wrap gap-2" role="group" aria-label="Apply to">
+        <div className={`flex flex-wrap gap-2 ${rest}`} role="group" aria-label="Apply to">
           <Chip active={!onSelection} onClick={() => setTarget('all')}>Whole scene</Chip>
           <Chip active={onSelection} onClick={() => setTarget('selection')}>Selection only</Chip>
         </div>
         {onSelection && none && effect && <p className="text-sm text-ink-faint">Nothing is selected, so nothing moves.</p>}
-        <div className="flex flex-wrap gap-2">
-          <Button small onClick={() => setRunning((r) => !r)} disabled={!fx} aria-pressed={fx?.loops ? running : undefined}>{running ? (fx?.loops ? 'Pause' : 'Stop') : 'Play'}</Button>
-          <Button small primary onClick={bake} disabled={!fx || !fxCount}>Make it permanent</Button>
-        </div>
-      </Panel>
+      </>
     ),
     scene: (
-      <Panel note="Start again from a sample or open a capture of your own. The current scene can still be brought back with Undo.">
-        <div className="flex flex-wrap gap-2" role="group" aria-label="Start from">
-          {STARTS.map((s) => <Chip key={s.id} active={source === s.name} onClick={() => start(s)}>{s.name}</Chip>)}
-        </div>
-        <Field label="Your own splats">
-          <div className="space-y-2">
-            <div className="flex flex-wrap gap-2">
+      <>
+        <p className={`text-xs leading-relaxed text-ink-faint ${rest}`}>Start again, open your own, save, or film a path. The current scene can still be brought back with Undo.</p>
+        <div className="divide-y divide-rule border-y border-rule">
+          <Fold id="start" open={section} onOpen={openSection} title="Start from" summary={source}>
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Start from">
+              {STARTS.map((s) => <Chip key={s.id} active={source === s.name} onClick={() => start(s)}>{s.name}</Chip>)}
+            </div>
+          </Fold>
+          <Fold id="open" open={section} onOpen={openSection} title="Open" summary="A splat file, a .glb or a photo">
+            <div className="space-y-2">
               <Button small onClick={() => { if (!busy) fileInput.current?.click() }} aria-disabled={busy}>{busy ? 'Opening…' : 'Open a splat file…'}</Button>
+              <input ref={fileInput} type="file" accept={FILE_TYPES} className="sr-only" tabIndex={-1} aria-hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void openFile(f) }} />
+              <p className="text-xs text-ink-faint">
+                .ply, .spz, .splat, .ksplat, .sog or a rigged .glb, or drop one on the view in any mode. It stays on your device. Scenes over {maxBlobs.toLocaleString()} blobs are thinned to fit. A rigged model saved as a .glb (triangles on bones, as from Blender or Mixamo) joins as a creature: blobs laid over its surface on its own bones, with its moves.
+              </p>
+              <Toggle label="Turn captures the right way up on opening" checked={upright} onChange={setUpright} />
+            </div>
+            <div className="space-y-2">
+              <Button small onClick={() => { if (!busy) photoInput.current?.click() }} aria-disabled={busy}>{busy ? 'Opening…' : 'Open a photo…'}</Button>
+              <input ref={photoInput} type="file" accept="image/*" className="sr-only" tabIndex={-1} aria-hidden data-testid="photo-input" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void openFile(f) }} />
+              <p className="text-xs text-ink-faint">One photo becomes a shallow scene: a blob for each pixel, set as far back as a depth model guesses it is. It opens as the photo; turn the view a little and it has depth. What the camera never saw isn't there, so a wide turn opens gaps. The photo stays on your device: the model (Depth Anything V2 Small, 27 MB, fetched the first time) runs in this page.</p>
+            </div>
+            {error && <p className="text-sm text-accent-ink">{error}</p>}
+          </Fold>
+          <Fold id="save" open={section} onOpen={openSection} title="Save" summary="As .ply or rigged .glb">
+            <div className="flex flex-wrap gap-2">
               <Button small onClick={exportPly} disabled={!blobs.count && !actors.length}>Save as .ply</Button>
               <Button small onClick={exportGlb} disabled={!blobs.count && !actors.length}>Save as rigged .glb</Button>
             </div>
-            <input ref={fileInput} type="file" accept={FILE_TYPES} className="sr-only" tabIndex={-1} aria-hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void openFile(f) }} />
-            <p className="text-xs text-ink-faint">
-              .ply, .spz, .splat, .ksplat, .sog or a rigged .glb, or drop one on the view. It stays on your device. Scenes over {maxBlobs.toLocaleString()} blobs are thinned to fit. A .ply opens in most splat viewers; a rigged .glb keeps the creatures moving and opens here again and on Splat Creatures. A rigged model saved as a .glb (triangles on bones, as from Blender or Mixamo) joins as a creature: blobs laid over its surface on its own bones, with its moves.
-            </p>
-            {error && <p className="text-sm text-accent-ink">{error}</p>}
-            <Toggle label="Turn captures the right way up on opening" checked={upright} onChange={setUpright} />
-          </div>
-        </Field>
-        <Field label="Your own photo">
-          <div className="space-y-2">
-            <Button small onClick={() => { if (!busy) photoInput.current?.click() }} aria-disabled={busy}>{busy ? 'Opening…' : 'Open a photo…'}</Button>
-            <input ref={photoInput} type="file" accept="image/*" className="sr-only" tabIndex={-1} aria-hidden data-testid="photo-input" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void openFile(f) }} />
-            <p className="text-xs text-ink-faint">One photo becomes a shallow scene: a blob for each pixel, set as far back as a depth model guesses it is. It opens as the photo; turn the view a little and it has depth. What the camera never saw isn't there, so a wide turn opens gaps. The photo stays on your device: the model (Depth Anything V2 Small, 27 MB, fetched the first time) runs in this page.</p>
-          </div>
-        </Field>
-        <div className="flex flex-wrap gap-2">
-          <Button small onClick={() => { edit(flipUpright); setOrbit((o) => ({ ...o, ...frame(blobsRef.current) })) }} disabled={!blobs.count}>Flip upside down</Button>
-          <Button small onClick={() => { edit(sitOnFloor); setOrbit((o) => ({ ...o, ...frame(blobsRef.current) })) }} disabled={!blobs.count}>Sit on the floor</Button>
-          <Button small onClick={() => setOrbit((o) => ({ ...o, ...frameAll() }))}>Frame the scene</Button>
-        </div>
-        <div className="grid gap-3">
-          <Field label="Camera path">
+            <p className="text-xs text-ink-faint">A .ply opens in most splat viewers. A rigged .glb keeps the creatures moving and opens here again and on Splat Creatures.</p>
+          </Fold>
+          <Fold id="tidy" open={section} onOpen={openSection} title="Tidy" summary="Flip, sit on the floor, frame">
             <div className="flex flex-wrap gap-2">
-              <Button small onClick={() => { setStops((s) => [...s, { ...orbit, target: [...orbit.target] }]); setMessage(`Stop ${stops.length + 1} saved. Turn the view and add the next`) }} disabled={stops.length >= MAX_STOPS || touring || filming !== null}>Add this view as a stop</Button>
-              <Button small onClick={() => setStops((s) => s.slice(0, -1))} disabled={!stops.length || touring || filming !== null}>Remove the last</Button>
+              <Button small onClick={() => { edit(flipUpright); setOrbit((o) => ({ ...o, ...frame(blobsRef.current) })) }} disabled={!blobs.count}>Flip upside down</Button>
+              <Button small onClick={() => { edit(sitOnFloor); setOrbit((o) => ({ ...o, ...frame(blobsRef.current) })) }} disabled={!blobs.count}>Sit on the floor</Button>
+              <Button small onClick={() => setOrbit((o) => ({ ...o, ...frameAll() }))}>Frame the scene</Button>
+            </div>
+          </Fold>
+          <Fold id="path" open={section} onOpen={openSection} title="Camera path" summary={stops.length ? `${stops.length} ${stops.length === 1 ? 'stop' : 'stops'}` : 'No stops yet'}>
+            <ol aria-label="Stops" className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 lg:mx-0 lg:flex-wrap lg:px-0" data-testid="path-strip">
+              {stops.map((o, i) => (
+                <li key={i} className="relative flex-none">
+                  <button type="button" onClick={() => { setTouring(false); setOrbit(o) }} disabled={filming !== null} aria-label={`Go to stop ${i + 1}`} className="block h-14 w-20 cursor-pointer overflow-hidden rounded-lg border border-rule bg-paper hover:border-ink-faint">
+                    {shots[i] ? <img src={shots[i]} alt="" className="h-full w-full object-cover" /> : <span className="grid h-full place-items-center text-xs text-ink-faint">{i + 1}</span>}
+                  </button>
+                  <span aria-hidden className="absolute bottom-0.5 left-1 rounded bg-paper/85 px-1 text-[0.625rem] font-semibold text-ink tabular-nums">{i + 1}</span>
+                  <button type="button" onClick={() => removeStop(i)} disabled={touring || filming !== null} aria-label={`Remove stop ${i + 1}`} className="absolute -top-1.5 -right-1.5 grid h-6 w-6 cursor-pointer place-items-center rounded-full border border-rule bg-paper text-ink-muted hover:text-ink disabled:hidden">
+                    <Icon d="M7 7l10 10M17 7L7 17" className="h-3 w-3" />
+                  </button>
+                </li>
+              ))}
+              {stops.length < MAX_STOPS && (
+                <li className="flex-none">
+                  <button type="button" onClick={() => void addStop()} disabled={touring || filming !== null} aria-label="Add this view as a stop" title="Add this view as a stop" className="grid h-14 w-20 cursor-pointer place-items-center rounded-lg border border-dashed border-ink-faint text-ink-muted hover:border-accent hover:text-accent disabled:cursor-default disabled:opacity-50">
+                    <Icon d="M12 5v14M5 12h14" />
+                  </button>
+                </li>
+              )}
+            </ol>
+            <p className="text-xs text-ink-faint" data-testid="path-stops">{stops.length ? `${stops.length} ${stops.length === 1 ? 'stop' : 'stops'}${stops.length > 1 ? `, ${pathSeconds(stops.length, leg)} seconds` : ''}.` : 'No stops yet.'} Turn the view to somewhere you like and add it with the plus; two or more make a path the camera glides along. Tap a stop to go back to it. The video is made on your device.</p>
+            <Slider label="Seconds a stop" value={leg} min={0.5} max={6} step={0.5} onChange={setLeg} format={(v) => `${v} s`} />
+            <div className="flex flex-wrap gap-2">
               <Button small onClick={() => setTouring((t) => !t)} disabled={stops.length < 2 || filming !== null} aria-pressed={touring}>{touring ? 'Stop' : 'Play the path'}</Button>
               <Button small primary onClick={() => void saveTour()} disabled={stops.length < 2 || filming !== null} data-testid="path-save">{filming === null ? 'Save as MP4' : `Drawing ${filming} of ${pathFrames}…`}</Button>
             </div>
-          </Field>
-          <p className="text-xs text-ink-faint" data-testid="path-stops">{stops.length ? `${stops.length} ${stops.length === 1 ? 'stop' : 'stops'}${stops.length > 1 ? `, ${pathSeconds(stops.length, leg)} seconds` : ''}.` : 'No stops yet.'} Turn the view to somewhere you like and add it as a stop; two or more make a path the camera glides along. The video is made on your device.</p>
-          <Slider label="Seconds a stop" value={leg} min={0.5} max={6} step={0.5} onChange={setLeg} format={(v) => `${v} s`} />
+          </Fold>
+          <Fold id="view" open={section} onOpen={openSection} title="View" summary={`X-ray ${xray ? 'on' : 'off'}, reach ${reach.toFixed(2)}σ`}>
+            <Toggle label="X-ray" checked={xray} onChange={setXray} />
+            <p className="text-xs text-ink-faint">X-ray outlines every blob up to {OUTLINE_LIMIT.toLocaleString()}; past that it shows centers as dots.</p>
+            <Slider label="Reach" value={reach} min={0.5} max={3} step={0.01} onChange={setReach} format={(v) => `${v.toFixed(2)}σ`} hint="How far out each blob is drawn. Turn it down to see the individual blobs in a dense scene." />
+          </Fold>
         </div>
-        <Toggle label="X-ray" checked={xray} onChange={setXray} />
-        <p className="text-xs text-ink-faint">X-ray outlines every blob up to {OUTLINE_LIMIT.toLocaleString()}; past that it shows centers as dots.</p>
-        <Slider label="Reach" value={reach} min={0.5} max={3} step={0.01} onChange={setReach} format={(v) => `${v.toFixed(2)}σ`} hint="How far out each blob is drawn. Turn it down to see the individual blobs in a dense scene." />
-      </Panel>
+      </>
     ),
   }
   const marks: Partial<Record<ModeId, ReactNode>> = {
-    select: sel.count > 0 && <Badge>{sel.count.toLocaleString()}<span className="sr-only"> selected</span></Badge>,
+    select: sel.count > 0 && <Badge>{sel.count < 1000 ? sel.count : `${Math.round(sel.count / 1000)}k`}<span className="sr-only"> selected</span></Badge>,
     creatures: actors.length > 0 && <Badge>{actors.length}<span className="sr-only"> added</span></Badge>,
     effects: fx && <Badge>on<span className="sr-only">: {fx.name}</span></Badge>,
   }
@@ -1604,7 +1736,7 @@ export function Sandbox() {
 
         <section
           aria-label="Tools and settings"
-          className={`order-2 flex min-h-0 flex-none flex-col border-t border-rule bg-paper-sunk lg:w-[22rem] lg:flex-none lg:rounded-2xl lg:border lg:transition-none ${tall ? 'h-[60%]' : 'h-[38%]'} lg:h-auto`}
+          className={`order-2 flex min-h-0 flex-none flex-col border-t border-rule bg-paper-sunk lg:w-[22rem] lg:flex-none lg:rounded-2xl lg:border lg:transition-none ${tall ? 'h-[60%]' : 'h-[33%]'} lg:h-auto`}
           onFocus={(ev) => { lastFocus.current = ev.target as HTMLElement }}
         >
           <button
@@ -1622,6 +1754,7 @@ export function Sandbox() {
             {MODES.map((m) => (
               <div key={m.id} role="tabpanel" id={panelId(base, m.id)} aria-labelledby={tabId(base, m.id)} hidden={m.id !== mode} className="space-y-3">
                 <h2 className="font-display text-xl max-lg:sr-only">{m.name}</h2>
+                <p className={`text-sm text-ink-muted ${rest}`}>{m.note}</p>
                 {panels[m.id]}
               </div>
             ))}
@@ -1655,9 +1788,33 @@ export function Sandbox() {
                   <Icon d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" />Look around
                 </button>
               )}
+              {mode === 'effects' && fx && (
+              <div className="pointer-events-auto flex gap-2" data-view-controls>
+                <button type="button" onClick={() => setRunning((r) => !r)} aria-pressed={fx.loops ? running : undefined} className="flex h-11 cursor-pointer items-center rounded-full border border-rule bg-paper px-4 text-sm font-semibold text-ink hover:border-ink-faint">{running ? (fx.loops ? 'Pause' : 'Stop') : 'Play'}</button>
+                <button type="button" onClick={bake} disabled={!fxCount} className="flex h-11 cursor-pointer items-center rounded-full border border-accent bg-accent px-4 text-sm font-semibold text-paper hover:brightness-110 disabled:cursor-default disabled:opacity-50">Make it permanent</button>
+              </div>
+            )}
               <span aria-live="polite" className="min-h-0 rounded-md bg-paper/90 px-2 py-1 text-xs text-ink-muted empty:hidden">{message}</span>
               <p role="alert" className="basis-full rounded-md bg-paper/90 px-2 py-1 text-sm text-accent-ink empty:hidden">{error}</p>
             </div>
+            {!coarse && (
+              <>
+                <button type="button" popoverTarget={`${base}-keys`} title="Keyboard keys" className="absolute bottom-2.5 left-12 flex h-8 cursor-pointer items-center rounded-full border border-rule bg-paper px-3 text-xs font-semibold text-ink-muted hover:text-ink">Keys</button>
+                <div id={`${base}-keys`} popover="auto" aria-label="Keyboard keys" className="m-auto w-[min(22rem,calc(100vw-2rem))] rounded-2xl border border-rule bg-paper p-4 text-sm text-ink shadow-xl" data-testid="sandbox-keys">
+                  <h2 className="mb-2 font-display text-lg">Keys</h2>
+                  <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
+                    <dt><kbd>1</kbd> to <kbd>5</kbd></dt><dd>{MODES.map((m) => m.name).join(', ')}</dd>
+                    {(Object.keys(TOOL_KEYS) as ToolId[]).map((id) => <Fragment key={id}><dt><kbd>{TOOL_KEYS[id]}</kbd></dt><dd>{TOOLS.find((x) => x.id === id)!.name}</dd></Fragment>)}
+                    <dt><kbd>Esc</kbd></dt><dd>Put the tool down and look around</dd>
+                    <dt><kbd>Ctrl</kbd>+<kbd>Z</kbd></dt><dd>Undo (add Shift to redo)</dd>
+                    <dt>Arrows, <kbd>+</kbd> <kbd>−</kbd></dt><dd>Turn and zoom the view (with Move, slide)</dd>
+                    <dt><kbd>Enter</kbd></dt><dd>Use the tool at the middle of the view</dd>
+                    <dt><kbd>Delete</kbd></dt><dd>Delete the selection</dd>
+                  </dl>
+                  <p className="mt-2 text-xs text-ink-faint">Letter and number keys work while the sandbox has focus.</p>
+                </div>
+              </>
+            )}
             <button type="button" aria-label={full ? 'Leave full screen' : 'Full screen'} title={full ? 'Leave full screen' : 'Full screen'} onClick={toggleFull} data-testid="full-screen" className="zoom-btn absolute bottom-2.5 left-2.5">
               <svg viewBox="0 0 16 16" aria-hidden className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                 {full ? <path d="M6 2.5V6H2.5M10 2.5V6h3.5M6 13.5V10H2.5M10 13.5V10h3.5" /> : <path d="M2.5 6V2.5H6M13.5 6V2.5H10M2.5 10v3.5H6M13.5 10v3.5H10" />}
