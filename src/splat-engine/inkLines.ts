@@ -36,8 +36,6 @@ export class InkLines {
   private readonly ink = uniform(new Vector3())
   /** The pen's width, in device pixels. */
   private readonly width = uniform(2)
-  /** 1 when the result goes to the screen, which wants sRGB; a target keeps linear color. */
-  private readonly encode = uniform(0)
 
   constructor() {
     this.material.fragmentNode = this.fragment()
@@ -71,7 +69,6 @@ export class InkLines {
     this.depth.render(renderer, scene, camera)
     this.drawParts(renderer, scene, camera)
     renderer.setRenderTarget(to)
-    this.encode.value = to ? 0 : 1
     this.quad.render(renderer)
   }
 
@@ -156,10 +153,8 @@ export class InkLines {
       const a = max(outline, inner).toVar()
       const rgb = c.rgb.mul(float(1).sub(a)).add(this.ink.mul(a)).toVar()
       const alpha = c.a.add(a.mul(float(1).sub(c.a))).toVar()
-      // the screen wants sRGB; the color here is premultiplied, so the curve goes on the straight color
-      const straight = rgb.div(max(alpha, 0.0001))
-      const srgb = select(straight.lessThanEqual(0.0031308), straight.mul(12.92), TSL.pow(max(straight, vec3(0)), vec3(1 / 2.4)).mul(1.055).sub(0.055))
-      return vec4(select(this.encode.greaterThan(0.5), srgb.mul(alpha), rgb), alpha)
+      // linear color out, as the blobs' own draw gives: the renderer turns it to the screen's sRGB, and doing it here too washed the picture out
+      return vec4(rgb, alpha)
     })()
   }
 
