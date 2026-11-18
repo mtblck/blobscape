@@ -301,7 +301,7 @@ export function FourWays() {
             aria-label="A camp in a clearing among pines at night, with a flickering fire, a tent, a lantern and fireflies, drawn four ways side by side. Drag or use the arrow keys to orbit all four; scroll, pinch or press plus and minus to zoom."
             tabIndex={0}
             data-testid="four-view"
-            className={`absolute inset-0 grid cursor-grab touch-none gap-px bg-black outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset active:cursor-grabbing ${only === 'all' ? 'grid-cols-2 grid-rows-2' : 'grid-cols-1'}`}
+            className={`absolute inset-0 grid cursor-grab touch-none gap-px bg-black pr-12 sm:pl-12 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset active:cursor-grabbing ${only === 'all' ? 'grid-cols-2 grid-rows-2' : 'grid-cols-1'}`}
             onPointerDown={(ev) => {
               ev.currentTarget.setPointerCapture(ev.pointerId)
               pointers.current.set(ev.pointerId, { x: ev.clientX, y: ev.clientY })
@@ -328,8 +328,8 @@ export function FourWays() {
                 {waiting(p.id) && <LoadingMark testid={`four-${p.id}-loading`} />}
                 {(p.id === 'blobscape' ? stageFailed : failed[p.id as Others]) && <p className="absolute inset-3 grid place-items-center text-center text-xs text-white">This browser could not start {p.id === 'blobscape' ? 'WebGPU or WebGL 2' : 'WebGL 2'} for this one.</p>}
                 <p className="pointer-events-none absolute top-2 left-2 rounded bg-black/60 px-1.5 py-0.5 text-xs leading-tight text-white max-sm:top-1 max-sm:left-1">
-                  <span className="font-medium">{p.label}</span>
-                  <span className="tabular-nums text-white/75 max-sm:hidden" data-testid={`four-${p.id}-ms`}> · {fps(timings[p.id])}</span>
+                  <span className="block font-medium">{p.label}</span>
+                  <span className="block tabular-nums text-white/75 max-sm:hidden" data-testid={`four-${p.id}-ms`}>{fps(timings[p.id])}</span>
                 </p>
               </div>
             ))}
