@@ -13,7 +13,7 @@ export const RING = 1.05
 export const FOX_SIZE = 0.5
 export const STRIDES = 16
 /** The wisp's path round the fox: how far it swings ahead and to the side, how high, and how many times a loop it goes round. */
-export const WISP = { ahead: 0.95, aside: 0.5, height: 0.55, times: 5 }
+export const WISP = { ahead: 1.1, aside: 0.5, height: 0.55, times: 5 }
 
 export const WISP_LIGHT = { color: '#ffd9a0', strength: 3.4, range: 1.25 }
 /** How much of its own color everything keeps away from the wisp. */

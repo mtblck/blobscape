@@ -23,7 +23,7 @@ export const RING = 1.05
 export const FOX_SIZE = 0.5
 export const STRIDES = 16
 /** The wisp's path round the fox: how far it swings ahead and to the side, how high, and how many times a loop it goes round. */
-export const WISP = { ahead: 0.95, aside: 0.5, height: 0.55, times: 5 }
+export const WISP = { ahead: 1.1, aside: 0.5, height: 0.55, times: 5 }
 export const WISP_LIGHT = { color: '#ffd9a0', strength: 3.4, range: 1.25 }
 /** How much of its painted color everything keeps with no wisp near: the night. */
 export const AMBIENT = 0.7
@@ -52,6 +52,22 @@ export function lightsAt(t: number, gain: number, shadows = true): PointLight[] 
 const hex = (h: string): Vec3 => [parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255]
 const GRASS = ['#10241c', '#1b3a2a', '#2c5a38', '#79a85a'].map(hex)
 const mixed = (a: Vec3, b: Vec3, k: number): Vec3 => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k]
+
+/** The moon's light on the grass, as the description has it for the turf and stone, and the parts that stand in its way: the stone and the rocks. */
+const MOON = { ambient: MEADOW.light?.ambient ?? 0.5, casts: [1, 2, 3, 4, 5] }
+const MOON_WAY: Vec3 = (() => { const [x, y, z] = MEADOW.light?.from ?? [-0.4, 0.8, 0.45], l = Math.hypot(x, y, z); return [x / l, y / l, z / l] })()
+const DRY = hex('#6e7a3a'), HEAD = hex('#b5d67a')
+
+/** Smooth noise over the ground, 0 to 1: the same wherever it is asked. */
+function patch(x: number, z: number) {
+  const at = (i: number, j: number) => { const h = Math.sin(i * 127.1 + j * 311.7) * 43758.5453; return h - Math.floor(h) }
+  const i = Math.floor(x), j = Math.floor(z), u = x - i, v = z - j, a = u * u * (3 - 2 * u), b = v * v * (3 - 2 * v)
+  return (at(i, j) * (1 - a) + at(i + 1, j) * a) * (1 - b) + (at(i, j + 1) * (1 - a) + at(i + 1, j + 1) * a) * b
+}
+/** How much taller or shorter than usual the grass stands at a spot: tussocks and hollows. */
+const tussock = (x: number, z: number) => 0.6 + 0.8 * patch(x * 3.1, z * 3.1)
+/** About how high the grass round a spot reaches: what a blade there is deep in. */
+const canopy = (x: number, z: number) => Math.max(0.03, 0.17 * grassHeight(x, z) * tussock(x, z))
 
 /** A small seeded generator: the same grass every time. */
 function seeded(seed: number) {
@@ -84,7 +100,8 @@ export interface Meadow extends Built {
 /** Cuts the turf, stone and sky at `spacing`, builds the fox with `foxBlobs` blobs and `blades` blades of grass, and joins them on one skeleton. */
 export function buildMeadow(spacing: number, foxBlobs: number, blades: number): Meadow {
   const scene = buildVoxels(SCENE.spec(spacing))
-  const fox = makeFox(foxBlobs)
+  // whiskers thick enough to be a pixel wide on a fox this small
+  const fox = makeFox(foxBlobs, 'red', 0.011)
   const sceneBones = scene.skeleton.bones.length
   const carrier = sceneBones, foxFrom = sceneBones + 1, swayFrom = foxFrom + fox.skeleton.count
   const bones: Bone[] = [
@@ -115,15 +132,32 @@ export function buildMeadow(spacing: number, foxBlobs: number, blades: number): 
     partOf[at] = parts
   }
 
-  // the grass: three blobs a blade, the foot on the turf, the tip on a sway bone and the middle shared between them
+  // the grass: three blobs a blade, the foot on the turf, the tip on a sway bone and the middle shared between them.
+  // Each blob is painted with the moon's light as the turf and stone are: less of the sky's light the deeper it sits
+  // among its neighbors, the moon's by how it faces it, and none of that where the stone or a rock stands in the way.
   const rnd = seeded(7)
+  const spec = SCENE.spec(spacing)
+  const solid = MOON.casts.map((k) => spec.parts[k].shape)
+  const blocked = (x: number, y: number, z: number) => {
+    let seen = 1
+    for (let t = 0.03; t < 1.4 && seen > 0.02; ) {
+      let d = Infinity
+      for (const s of solid) d = Math.min(d, s.sdf(x + MOON_WAY[0] * t, y + MOON_WAY[1] * t, z + MOON_WAY[2] * t))
+      seen = Math.min(seen, (10 * d) / t)
+      t += Math.max(0.02, d)
+    }
+    return Math.max(0, seen)
+  }
   for (let n = 0; n < blades;) {
     const x = (rnd() * 2 - 1) * 1.7, z = (rnd() * 2 - 1) * 1.7
     const grown = grassHeight(x, z)
     if (grown <= 0 || rnd() > grown + 0.25) continue
     n++
-    const height = (0.09 + 0.13 * rnd() * rnd() + (rnd() < 0.1 ? 0.14 : 0)) * grown, width = 0.014 + 0.009 * rnd()
-    const yaw = rnd() * TAU, lean = 0.1 + 0.3 * rnd(), shade = rnd()
+    // the canopy here: tussocks and hollows, so the meadow is not one even lawn
+    const top = canopy(x, z)
+    const seedHead = rnd() < 0.08
+    const height = (0.09 + 0.13 * rnd() * rnd() + (seedHead ? 0.14 : 0)) * grown * tussock(x, z), width = 0.014 + 0.009 * rnd()
+    const yaw = rnd() * TAU, lean = 0.1 + 0.3 * rnd(), shade = rnd(), dry = patch(x * 2.3 + 9, z * 2.3 - 4)
     const turn = axisAngle([0, 1, 0], yaw)
     const sway = swayFrom + swayBone(x, z)
     for (let k = 0; k < 3; k++) {
@@ -131,10 +165,20 @@ export function buildMeadow(spacing: number, foxBlobs: number, blades: number): 
       const tilt = lean * (0.4 + 0.6 * k), up = (k + 0.5) / 3
       const out = Math.sin(tilt) * height * up * 0.8
       const quat = mulQ(turn, axisAngle([1, 0, 0], tilt)) as Quat
-      const tone = mixed(mixed(GRASS[0], GRASS[1], shade), mixed(GRASS[2], GRASS[3], shade * shade), up)
+      let tone = mixed(mixed(GRASS[0], GRASS[1], shade), mixed(GRASS[2], GRASS[3], shade * shade * 0.75), up)
+      // drier patches, and pale heads on the tallest blades
+      tone = mixed(tone, DRY, dry * 0.55 * up)
+      if (seedHead && k === 2) tone = mixed(tone, HEAD, 0.7)
+      const center: Vec3 = [x + Math.sin(yaw) * out, height * up * Math.cos(tilt * 0.5), z + Math.cos(yaw) * out]
+      // the flat of the blade: its thin axis, turned as the blade is
+      const flat: Vec3 = [Math.sin(yaw) * Math.cos(tilt), -Math.sin(tilt), Math.cos(yaw) * Math.cos(tilt)]
+      const deep = Math.min(1, center[1] / top)
+      const sky = MOON.ambient * (0.3 + 0.7 * deep)
+      // a blade is thin enough that the moon behind it still lights it
+      const facing = 0.35 + 0.65 * Math.abs(flat[0] * MOON_WAY[0] + flat[1] * MOON_WAY[1] + flat[2] * MOON_WAY[2])
+      const lit = (sky + (1 - MOON.ambient) * facing * Math.min(1, 0.25 + deep) * blocked(center[0], center[1] + 0.01, center[2])) * 0.82
       const at = blobs.push({
-        center: [x + Math.sin(yaw) * out, height * up * Math.cos(tilt * 0.5), z + Math.cos(yaw) * out],
-        scale: [width * (1 - 0.28 * k), height / 5.2, 0.004], quat, color: tone, opacity: 1,
+        center, scale: [width * (1 - 0.28 * k), height / 5.2, 0.004], quat, color: [tone[0] * lit, tone[1] * lit, tone[2] * lit], opacity: 1,
       })
       const w = k / 2
       joints[at * 4] = still; weights[at * 4] = 1 - w
