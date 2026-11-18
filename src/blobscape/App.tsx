@@ -65,7 +65,7 @@ export function App({ route: at }: { route?: Route } = {}) {
     <div className="flex min-h-dvh flex-col">
       <SiteHeader here={route.page === 'notfound' ? undefined : href(route)} />
       {/* Keyed by page, so each one mounts fresh: its own view, its own state */}
-      <main id="main" key={key} className="mx-auto w-full max-w-7xl flex-1 px-4 pb-16">
+      <main id="main" key={key} className={route.page === 'sandbox' ? 'w-full flex-1' : 'mx-auto w-full max-w-7xl flex-1 px-4 pb-16'}>
         {route.page === 'sandbox' ? <Sandbox /> : route.page === 'creature' ? <Creature /> : route.page === 'forest' ? <ForestWalk /> : route.page === 'clockwork' ? <Clockwork /> : route.page === 'shift' ? <ShapeShifter /> : route.page === 'flow' ? <SandSnowGoo /> : route.page === 'brush' ? <BrushInk /> : route.page === 'diorama' ? <PixelDiorama /> : route.page === 'scan' ? <ScanStudio /> : route.page === 'dungeon' ? <DungeonRun /> : Lesson ? <Lesson /> : route.page === 'lessons' ? <LessonList /> : route.page === 'experiments' ? <Experiments /> : route.page === 'engine' ? <Engine /> : route.page === 'spec' ? <Spec /> : route.page === 'api' ? <EngineApi /> : route.page === 'contact' ? <Contact /> : route.page === 'notfound' ? <NotFound /> : <Landing />}
       </main>
       <Footer />

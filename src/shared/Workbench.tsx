@@ -54,7 +54,7 @@ export function Workbench({ viewLabel, view, status, tabsLabel, tabs, footer, fu
  * Full screen for the preview. Where the browser allows an element to go full screen it does; where it
  * does not (Safari on iPhone), the preview fills the window instead, and Escape or the button brings it back.
  */
-function useFullScreen(frame: React.RefObject<HTMLDivElement | null>) {
+export function useFullScreen(frame: React.RefObject<HTMLDivElement | null>) {
   const [full, setFull] = useState<false | 'screen' | 'window'>(false)
   useEffect(() => {
     const onChange = () => setFull((f) => (document.fullscreenElement === frame.current ? 'screen' : f === 'screen' ? false : f))

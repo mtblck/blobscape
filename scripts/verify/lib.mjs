@@ -77,12 +77,12 @@ export function checkContext(browser, base, parts) {
     return { page, res, ctx }
   }
 
-  /** Options sit in tabs: open the tab that holds a control, then click the control. */
+  /** Options sit in tabs (the sandbox's in modes): open the tab that holds a control, then click the control. */
   async function tabClick(control) {
     const shows = () => control.first().isVisible().catch(() => false)
     if (!(await shows())) {
       // a control in a closed tab is hidden from every query, so try each tab until it shows
-      for (const tab of await control.page().locator('section[aria-label=Options] [role=tab]').all()) {
+      for (const tab of await control.page().locator('section[aria-label=Options] [role=tab], [role=tablist][aria-label="Sandbox modes"] [role=tab]').all()) {
         await tab.click()
         if (await shows()) break
       }
