@@ -4,6 +4,7 @@ import type { PointLight } from '../../splat-engine/engine.ts'
 import { compileScene, type CompiledScene } from '../../splat-engine/sceneDoc.ts'
 import type { StepOptions } from '../../splat-engine/steps.ts'
 import { buildVoxels, type Shape } from '../../splat-engine/voxel.ts'
+import type { MirrorImage } from '../../splat-engine/reflect.ts'
 import { Water, crossing, makeSurface, shadeSurface, shapeSurface, type WaterLook, type WaterSurface } from '../../splat-engine/water.ts'
 import { groundUnder } from '../../splat-engine/weather.ts'
 import { WAVE_SECONDS, WalkingElf, type Walker } from '../walkingElf.ts'
@@ -77,6 +78,11 @@ export class Pond {
   rain = 0
   /** Whether the surface's blobs were moved or colored again by the last `draw`. */
   surfaceChanged = true
+  /** Whether the last `draw` moved the surface's blobs (not only colored them). */
+  surfaceMoved = true
+  /** What the water mirrors of the scene (the stage's `SplatMirror`, read back), or null for the sky alone. Set it with `setMirror`. */
+  mirror: MirrorImage | null = null
+  private mirrorNew = false
   private waveUntil = -1
   private turned = 0
   private drawn = { version: -1, eye: [NaN, NaN, NaN], at: -1 }
@@ -169,6 +175,13 @@ export class Pond {
     poseFlames(this.flames.skeleton, this.time, this.calm)
   }
 
+  /** Hands the water a new picture of what it mirrors (or null for none): the next `draw` colors the surface with it. */
+  setMirror(image: MirrorImage | null) {
+    if (image === this.mirror) return
+    this.mirror = image
+    this.mirrorNew = true
+  }
+
   /** The live lights this frame: the candles. */
   lights(): PointLight[] { return candleLights(this.wicks, this.time, this.calm) }
 
@@ -180,11 +193,14 @@ export class Pond {
     const d = this.drawn
     const moved = this.water.version !== d.version
     const looked = Math.abs(eye[0] - d.eye[0]) + Math.abs(eye[1] - d.eye[1]) + Math.abs(eye[2] - d.eye[2]) > 1e-4
-    this.surfaceChanged = moved || looked || this.time - d.at > (this.calm ? 1e9 : 0.07) || d.at < 0
+    this.surfaceChanged = moved || looked || this.mirrorNew || this.time - d.at > (this.calm ? 1e9 : 0.07) || d.at < 0
+    this.surfaceMoved = this.surfaceChanged && (moved || d.at < 0)
     if (!this.surfaceChanged) return
-    if (moved || d.at < 0) shapeSurface(this.surface, this.water, LOOK.steep)
+    this.mirrorNew = false
+    if (this.surfaceMoved) shapeSurface(this.surface, this.water, LOOK.steep)
     const from = POND_SCENE.light!.from!
-    shadeSurface(this.surface, { ...LOOK, sun: { toward: from, color: MOON, glow: 0.12 } }, eye, candleGlints(this.wicks, this.time, this.calm))
+    // with a picture of the scene to mirror, the flames are in it; without one, each flame gets a glint of its own
+    shadeSurface(this.surface, { ...LOOK, sun: { toward: from, color: MOON, glow: 0.12 }, mirror: this.mirror }, eye, this.mirror ? [] : candleGlints(this.wicks, this.time, this.calm))
     this.drawn = { version: this.water.version, eye: [eye[0], eye[1], eye[2]], at: this.time }
   }
 }

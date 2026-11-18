@@ -1130,7 +1130,7 @@ export default [
   },
   {
     name: 'pond',
-    about: 'Wading Pond on both backends: the water fills the ruin, the elf wades and raises rings, the candles light it, rain falls',
+    about: 'Wading Pond on both backends: the water fills the ruin, the elf wades and raises rings, the candles light it, the water mirrors the scene, rain falls',
     entries: ['src/blobscape/WadingPond.tsx'],
     async run({ shots, join, fails, ok, open, tabClick }) {
       for (const gl of ['', '&webgl=1']) {
@@ -1162,6 +1162,31 @@ export default [
         if (!(walked.waded > 2 && walked.steps > 4 && !walked.still && walked.energy > 1e-4 && walked.high > 0.005 && walked.high < 0.4 && Math.abs(walked.volume) < 1e-4 && walked.inWater)) fails.push(`blobscape pond on ${on}: after wading ${JSON.stringify(walked)}`)
         else ok(`blobscape pond on ${on}: the elf wades ${walked.waded.toFixed(1)} m in ${walked.steps} steps and raises rings ${(walked.high * 100).toFixed(1)} cm high, with no water made or lost`)
         await f.page.screenshot({ path: join(shots, `blobscape-pond${gl ? '-webgl' : ''}.png`) })
+        // the water mirrors the scene: on from the start with WebGPU, by its switch without. The mirror's picture holds the
+        // scene upside down (so mostly in its lower half), and the water's color changes with it
+        const mirrored = () => f.page.evaluate(() => {
+          const m = window.__pond.stage.pond.mirror
+          if (!m) return null
+          let high = 0, low = 0
+          for (let j = 0; j < m.height; j++) for (let i = 0; i < m.width; i++) if (m.pixels[(j * m.width + i) * 4 + 3] > 0.5) { if (j < m.height / 2) high++; else low++ }
+          return { size: m.width * m.height, high, low }
+        })
+        const water = () => f.page.evaluate(async () => {
+          await window.__pond.stage.frame(0, { forward: 0, turn: 0 })
+          const b = window.__pond.stage.pond.surface.blobs
+          let sum = 0
+          for (let k = 0; k < b.count * 3; k++) sum += b.color[k]
+          return sum / b.count
+        })
+        const before = await mirrored()
+        if (!!before !== !gl) fails.push(`blobscape pond on ${on}: the mirror starts ${before ? 'on' : 'off'}`)
+        if (gl) await tabClick(f.page.getByLabel('The water mirrors the scene'))
+        const withMirror = await water(), pic = await mirrored()
+        await tabClick(f.page.getByLabel('The water mirrors the scene'))
+        const without = await water(), gone = await mirrored()
+        if (!(pic && pic.low > pic.size * 0.05 && pic.low > pic.high * 1.5 && gone === null && Math.abs(withMirror - without) > 1e-3)) fails.push(`blobscape pond on ${on}: mirror ${JSON.stringify({ pic, gone, withMirror, without })}`)
+        else ok(`blobscape pond on ${on}: the water mirrors the scene (${Math.round((100 * (pic.low + pic.high)) / pic.size)}% of the mirror's picture, hanging downward) and stops when switched off`)
+        if (!gl) await tabClick(f.page.getByLabel('The water mirrors the scene'))
         if (!gl) {
           // standing, the rings die down; then, on water laid flat, rain sets the whole pond moving
           const rested = await look(4, 0)

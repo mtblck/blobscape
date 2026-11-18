@@ -33,7 +33,7 @@
   {
    "id": "extras",
    "title": "Picking, detail and edits",
-   "doc": "Finding what a tap hit, drawing fewer blobs far away, cutting and painting live, depth for effects after the draw, and solid shapes to stand on."
+   "doc": "Finding what a tap hit, drawing fewer blobs far away, cutting and painting live, depth for effects after the draw, what a mirror shows, and solid shapes to stand on."
   },
   {
    "id": "files",
@@ -786,6 +786,11 @@
        "readonly": true,
        "type": "number[]",
        "doc": "The share of each actor's blobs being drawn."
+      },
+      {
+       "name": "clip",
+       "type": "[number, number, number, number] | null",
+       "doc": "A plane that hides every blob whose center is behind it, as [nx, ny, nz, d]: a blob at p is drawn while\nn·p + d is 0 or more. null (the start) draws them all. It acts where blobs are projected, so it can change from\none draw to the next in a frame: `SplatMirror` sets it for its mirrored draw and puts it back."
       },
       {
        "name": "sortKind",
@@ -8022,6 +8027,18 @@
        "doc": "How tight a glint is: 120 when left out. Lower spreads it into a sheen."
       },
       {
+       "name": "mirror",
+       "optional": true,
+       "type": "MirrorImage | null",
+       "doc": "What the surface mirrors of the scene round it: a picture from `SplatMirror` for this pond's level. Where the\npicture shows something, the surface mirrors that and not the sky; a ripple tips the mirrored line of sight,\nso reflections wobble and break up. Left out, it mirrors the sky alone."
+      },
+      {
+       "name": "reach",
+       "optional": true,
+       "type": "number",
+       "doc": "How far off the things mirrored are taken to stand, meters, when a ripple tips the line of sight: farther makes reflections wobble more. 1.5 when left out."
+      },
+      {
        "name": "steep",
        "optional": true,
        "type": "number",
@@ -8395,6 +8412,169 @@
        "signatures": [
         {
          "code": "read(renderer: WebGPURenderer): Promise<{ width: number; height: number; depth: Float32Array }>"
+        }
+       ]
+      },
+      {
+       "name": "dispose",
+       "doc": "Frees its render target.",
+       "signatures": [
+        {
+         "code": "dispose(): void"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "reflect",
+   "title": "Mirrors: the arithmetic",
+   "group": "extras",
+   "doc": "A flat mirror, and what is seen in it: the plain arithmetic of a planar reflection, apart from any drawing.\n\nThe world seen in a mirror is the world itself, flipped through the mirror's plane, seen from where the eye\nreally stands. So `SplatMirror` (mirror.ts) draws the scene once more with every point flipped (`mirrorMatrix`),\nleaving out what lies behind the mirror, and keeps the picture with the camera it belongs to (`MirrorImage`).\nA point of the mirror's surface then finds what it reflects by asking that picture (`seenIn`) where its\nmirrored line of sight lands: for a flat mirror that is the very pixel the surface point itself is drawn at, and\nfor a rippled one (water) the line is tipped by the ripple first, which is what makes reflections wobble.",
+   "entries": [
+    {
+     "name": "MirrorPlane",
+     "kind": "interface",
+     "doc": "A plane: the points p with normal·p + offset = 0. `normal` is one long and points out of the mirror's face.",
+     "props": [
+      {
+       "name": "normal",
+       "type": "Vec3",
+       "doc": "The way the mirror faces, one long."
+      },
+      {
+       "name": "offset",
+       "type": "number",
+       "doc": "Minus how far the plane is from the origin along the normal."
+      }
+     ]
+    },
+    {
+     "name": "levelPlane",
+     "kind": "const",
+     "doc": "A level mirror at height y, facing up: a pond.",
+     "type": "(y: number) => MirrorPlane"
+    },
+    {
+     "name": "inFront",
+     "kind": "const",
+     "doc": "How far `p` stands in front of the plane (negative behind it).",
+     "type": "(p: ArrayLike<number>, m: MirrorPlane) => number"
+    },
+    {
+     "name": "reflectPoint",
+     "kind": "function",
+     "doc": "`p` flipped through the plane: where it is seen in the mirror.",
+     "signatures": [
+      {
+       "code": "reflectPoint(p: ArrayLike<number>, m: MirrorPlane): Vec3"
+      }
+     ]
+    },
+    {
+     "name": "mirrorMatrix",
+     "kind": "function",
+     "doc": "The matrix that flips every point through the plane, 16 numbers by columns (as three.js keeps a Matrix4). It is its own inverse.",
+     "signatures": [
+      {
+       "code": "mirrorMatrix(m: MirrorPlane): number[]"
+      }
+     ]
+    },
+    {
+     "name": "MirrorImage",
+     "kind": "interface",
+     "doc": "A picture of the mirrored world, with the camera it was drawn for.",
+     "props": [
+      {
+       "name": "width",
+       "type": "number",
+       "doc": "Pixels across."
+      },
+      {
+       "name": "height",
+       "type": "number",
+       "doc": "Pixels down."
+      },
+      {
+       "name": "pixels",
+       "type": "Float32Array",
+       "doc": "Red, green, blue (linear, multiplied by cover) and cover, four numbers a pixel, rows from the top. Cover is 0 where the mirror shows nothing but sky."
+      },
+      {
+       "name": "viewProj",
+       "type": "ArrayLike<number>",
+       "doc": "The eye's own projection times view matrix when the picture was drawn, 16 numbers by columns: where a point of the mirrored world lands in the picture."
+      },
+      {
+       "name": "plane",
+       "type": "MirrorPlane",
+       "doc": "The mirror."
+      }
+     ]
+    },
+    {
+     "name": "seenIn",
+     "kind": "function",
+     "doc": "What the picture shows where the world point (x, y, z) is seen in the mirror: writes red, green, blue (times\ncover) and cover into `out` and returns true, or returns false (and writes zeros) when the point is behind the\neye or off the picture. Blended between the four pixels round it.",
+     "signatures": [
+      {
+       "code": "seenIn(img: MirrorImage, x: number, y: number, z: number, out: number[] | Float32Array<ArrayBufferLike> | Float64Array<ArrayBufferLike>): boolean"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "mirror",
+   "title": "Mirrors: what a flat mirror shows",
+   "group": "extras",
+   "doc": "",
+   "entries": [
+    {
+     "name": "SplatMirror",
+     "kind": "class",
+     "doc": "What a flat mirror shows of a scene drawn by the engine: the scene drawn once more as its mirror image, from the\nsame eye, into a target of its own. Water, a polished floor or a looking glass then reads it (`read`, then\n`seenIn` in reflect.ts) to color itself, so whatever stands, moves or burns in the scene is in the reflection,\nwith nothing set up per scene.\n\nDraw it before the frame's own render, with the frame's camera. The mirrored view puts the blobs in another\norder than the frame's, so it costs a sort and a draw of its own (at the target's size, which can be small: a\nrippled surface blurs what it mirrors anyway). Blobs whose centers are under the mirror, or within `lift` over\nit, are left out through `SplatWorld.clip`: the bed of a pond is not in its reflection, and neither are the\nblobs of the water's own surface. Lines and points are left out; ordinary meshes are drawn, but show their back\nfaces (a mirror image turns triangles round).",
+     "ctor": [
+      {
+       "code": "new SplatMirror(width?: number, height?: number)"
+      }
+     ],
+     "props": [
+      {
+       "name": "target",
+       "readonly": true,
+       "type": "RenderTarget",
+       "doc": "The mirrored picture: linear color times cover, and cover."
+      }
+     ],
+     "methods": [
+      {
+       "name": "setSize",
+       "doc": "Sizes the picture, in pixels.",
+       "signatures": [
+        {
+         "code": "setSize(width: number, height: number): void"
+        }
+       ]
+      },
+      {
+       "name": "render",
+       "doc": "Draws `scene` as the mirror `plane` shows it to `camera`, leaving out blobs less than `lift` in front of the plane.",
+       "signatures": [
+        {
+         "code": "render(renderer: WebGPURenderer, scene: Object3D, camera: Camera, plane: MirrorPlane, lift?: number): void"
+        }
+       ]
+      },
+      {
+       "name": "read",
+       "doc": "The picture last drawn, read back for `seenIn`, with the camera it was drawn for. Reading takes a frame or\ntwo; while one read is under way another returns null, so call it every frame and keep the last picture.",
+       "signatures": [
+        {
+         "code": "read(renderer: WebGPURenderer): Promise<MirrorImage | null>"
         }
        ]
       },
