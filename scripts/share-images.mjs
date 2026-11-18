@@ -2,7 +2,7 @@
  * Makes the pictures a link to the site shows when it is shared (og:image):
  * public/og.png for the front page and every page without its own, and
  * public/share/<name>.jpg for each experiment, cut from its cover to the
- * 1200 × 630 that link previews use. Run it after adding or changing a cover:
+ * 1200 × 630 that link previews use (two use a screenshot instead: `OWN`). Run it after adding or changing a cover:
  *   node --experimental-strip-types scripts/share-images.mjs
  * meta.ts points each experiment's page at its picture (`shareImage`), and a
  * test holds that every experiment has one.
@@ -46,7 +46,10 @@ const front = `<!doctype html><meta charset="utf-8"><style>
 </div>
 <div class="pictures">${FRONT.map((name) => `<img src="${frontPicture(name)}" alt="">`).join('')}</div>`
 
-const one = (e) => `<!doctype html><meta charset="utf-8"><style>* { margin: 0 } img { display: block; width: 1200px; height: 630px; object-fit: cover }</style><img src="${cover(e)}" alt="">`
+/** Experiments whose share picture is one of Matt's screenshots (scripts/share-front/, 1200 × 630) and not their cover. */
+const OWN = { creature: 'share-front/dragon-wide.jpg', pond: 'share-front/pond-wide.jpg' }
+const shared = (e) => OWN[e.id] ? data(join('scripts', OWN[e.id]), 'image/jpeg') : cover(e)
+const one = (e) => `<!doctype html><meta charset="utf-8"><style>* { margin: 0 } img { display: block; width: 1200px; height: 630px; object-fit: cover }</style><img src="${shared(e)}" alt="">`
 
 const executablePath = process.env.CHROME_PATH || (existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : undefined)
 const browser = await chromium.launch({ executablePath })
