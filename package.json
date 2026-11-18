@@ -9,10 +9,11 @@
     "docs": "npm run docs:deps && npm --prefix tools/api-docs run build",
     "preview": "vite preview",
     "hosting:check": "node scripts/check-hosting.mjs",
-    "test": "node --test --experimental-strip-types 'src/**/*.test.ts' 'scripts/*.test.mjs'",
+    "test": "mkdir -p verify-shots && node --test --experimental-strip-types --test-reporter=./scripts/quiet-reporter.mjs --test-reporter-destination=stdout --test-reporter=spec --test-reporter-destination=verify-shots/tests.txt 'src/**/*.test.ts' 'scripts/*.test.mjs'",
+    "test:loud": "node --test --experimental-strip-types 'src/**/*.test.ts' 'scripts/*.test.mjs'",
     "verify": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/verify.mjs",
     "verify:changed": "npm run verify -- --changed",
-    "check": "npm run docs:deps && npm test && npm run build && npm run verify -- --changed",
+    "check": "node scripts/check.mjs",
     "prerender": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/prerender.ts",
     "release": "node scripts/release.mjs",
     "scene": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/scene.mjs"

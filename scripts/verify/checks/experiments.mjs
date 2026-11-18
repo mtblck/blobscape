@@ -149,6 +149,8 @@ export default [
         await c.page.waitForTimeout(200)
         return { seed: new URL(c.page.url()).searchParams.get('seed'), bones: await c.page.evaluate(() => window.__creature?.bones()), n: await pixels(0.3, 'colorful'), moved: await moved(0.3, 0.9), label: await c.page.getByTestId('make-monster').textContent(), note: await c.page.getByTestId('creature-note').textContent() }
       }
+      // the page picks seeds at random: here they come from a fixed run of numbers, so every run makes the same two monsters
+      await c.page.evaluate(() => { let a = 20261118; Math.random = () => { a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296 } })
       await tabClick(c.page.getByTestId('species').getByRole('button', { name: 'Monster', exact: true }))
       const m1 = await monster()
       await tabClick(c.page.getByTestId('make-monster'))
