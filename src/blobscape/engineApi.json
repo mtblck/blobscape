@@ -6910,6 +6910,12 @@
        "optional": true,
        "type": "readonly [number, number, number]",
        "doc": "Ink and hatch: the paper's color, sRGB 0–1 (default a warm white). Set the page behind the view to it too."
+      },
+      {
+       "name": "soft",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Lay the marks one over another from far to near, with soft edges, as soft blobs are drawn. Without it (the\ndefault) each pixel shows the mark nearest to it, so the marks on a thing keep their places as it turns: right\nfor anything cut as discs on a surface. A scan's blobs overlap far more and build a surface between them, and\nlook better laid softly."
       }
      ]
     },

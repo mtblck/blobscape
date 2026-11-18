@@ -23,6 +23,13 @@ export interface MarkLook {
   ink?: readonly [number, number, number]
   /** Ink and hatch: the paper's color, sRGB 0–1 (default a warm white). Set the page behind the view to it too. */
   paper?: readonly [number, number, number]
+  /**
+   * Lay the marks one over another from far to near, with soft edges, as soft blobs are drawn. Without it (the
+   * default) each pixel shows the mark nearest to it, so the marks on a thing keep their places as it turns: right
+   * for anything cut as discs on a surface. A scan's blobs overlap far more and build a surface between them, and
+   * look better laid softly.
+   */
+  soft?: boolean
 }
 
 /** The default pen and paper. */
@@ -37,8 +44,37 @@ export const MARK_WIDE = 1.2
 /** The quad a blob is drawn on ends two standard deviations out, so a mark can't be bigger than this. */
 export const MARK_MOST = 1.3
 
+/**
+ * The engine draws a mark where its cover is at least this, and nothing of it elsewhere: marks write depth so that
+ * each pixel shows the nearest one, and an edge that faded out would hide what lies under it.
+ */
+export const MARK_CUT = 0.5
+/**
+ * Marks that lie in one plane are at one depth, so each is lifted toward or away from the eye by up to half this
+ * share of its own size, by its seed: which of two is on top is then a matter of the two blobs and never of the view.
+ */
+export const MARK_LIFT = 0.35
+
 /** A blob this opaque or more is solid paint (a mark's alpha is its cover times the blob's opacity times this, at most 1). */
 export const MARK_SOLID = 1.5
+
+/**
+ * How a blob lies in depth across its ellipse on screen: how much nearer or further it is densest along the line of
+ * sight, per pixel right and per pixel up of its center (the mean of its depth given the place on screen). For a flat
+ * blob that is its own plane, so flat blobs lying in one plane are at one depth wherever they overlap; a round blob
+ * has no slope. `cov` is the blob's covariance in the camera's frame (xx, xy, xz, yy, yz, zz), `jac` the projection's
+ * slopes there (pixels per unit: x by x, y by y, x by depth, y by depth), `kernel` the screen blur added to the
+ * ellipse. The CPU twin of `tilt` in the engine's `projectSplat`: change one, change both.
+ */
+export function depthSlope(cov: ArrayLike<number>, jac: ArrayLike<number>, kernel = 0.3): [number, number] {
+  const [c00, c01, c02, c11, c12, c22] = cov as number[], [j00, j11, j02, j12] = jac as number[]
+  const a = j00 * j00 * c00 + 2 * j00 * j02 * c02 + j02 * j02 * c22 + kernel
+  const b = j00 * j11 * c01 + j00 * j12 * c02 + j02 * j11 * c12 + j02 * j12 * c22
+  const c = j11 * j11 * c11 + 2 * j11 * j12 * c12 + j12 * j12 * c22 + kernel
+  const h0 = c02 * j00 + c22 * j02, h1 = c12 * j11 + c22 * j12
+  const det = Math.max(a * c - b * b, 1e-12)
+  return [(c * h0 - b * h1) / det, (a * h1 - b * h0) / det]
+}
 
 const fract = (x: number) => x - Math.floor(x)
 const smooth = (a: number, b: number, x: number) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t) }

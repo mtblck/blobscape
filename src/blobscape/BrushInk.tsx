@@ -30,6 +30,8 @@ interface Subject {
   /** What its blobs came from, for the line under the view. */
   from: string
   orbit: Orbit
+  /** A scan: its marks are laid softly, one over another (`MarkLook.soft`). */
+  soft?: boolean
   make(coarse: boolean): { actor: Actor; pose?: (sk: Skeleton, t: number) => void; lights?: (t: number) => PointLight[]; clip?: ReturnType<typeof recordClip> }
 }
 
@@ -55,7 +57,7 @@ const SUBJECTS: Subject[] = [
     },
   },
   {
-    id: 'mug', label: 'Scanned mug', about: 'A mug, as a phone scan of one would be, with its table cut away', from: 'a made-up phone scan',
+    id: 'mug', soft: true, label: 'Scanned mug', about: 'A mug, as a phone scan of one would be, with its table cut away', from: 'a made-up phone scan',
     orbit: { target: [0, 0.75, 0], distance: 4.6, azimuth: 35, elevation: 18 },
     make: (coarse) => {
       const raw = sampleScan(7, coarse ? 0.6 : 1, 0.12).blobs
@@ -124,7 +126,7 @@ export function BrushInk() {
   }, [stage, subject, coarse])
 
   const sheet = PAPERS.find((p) => p.id === paper)!
-  const marks = useMemo<MarkLook | undefined>(() => (look === 'blobs' ? undefined : { kind: look, size, ink: sheet.ink, paper: sheet.paper }), [look, size, sheet])
+  const marks = useMemo<MarkLook | undefined>(() => (look === 'blobs' ? undefined : { kind: look, size, ink: sheet.ink, paper: sheet.paper, soft: sub.soft }), [look, size, sheet, sub.soft])
   useEffect(() => { stage?.setMarks(marks) }, [stage, marks, built])
   const outline = outlined ?? (look === 'ink' || look === 'hatch')
   useEffect(() => { stage?.setOutline(outline ? { width: pen, ink: look === 'ink' || look === 'hatch' ? sheet.ink : undefined } : undefined) }, [stage, outline, pen, look, sheet])

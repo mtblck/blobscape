@@ -6,6 +6,7 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 
 ## [Unreleased]
 
+- Brush and Ink: the marks on a turning thing stay where they are. The stripes on the windmill's sails used to jump as each sail came round, because the marks were laid far to near and every blob on a sail changed places at the same moment. Each pixel now shows the mark nearest to it, so the order they are drawn in no longer matters. The scanned mug keeps its softer, layered marks (`soft` on a mark look in the engine).
 - The sandbox's Build mode shows only the settings the held tool uses (Erase, Fill and Stamp just the ring; Paint its brushes first), Stamp says whether it has something to copy, and on a phone the short tray shows one setting at a time, picked by name.
 - The sandbox's footer is a button away: "More below" at the foot of the mode rail brings it up, and on a phone the Menu now lists Get in touch, the maker and Support Blobscape on every page.
 - Wading Pond: heavier rain. A few drops is now 30 a second and a shower 300.
