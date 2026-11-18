@@ -6,6 +6,7 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 
 ## [Unreleased]
 
+- Wading Pond and Forest Walk: the elf stands straight when she stops. She was squatting with her knees bent; her hips now ride as high as her legs allow on the ground under each foot.
 - Wading Pond: ripples show across the whole pond, not only by the candles. Crests gather light on the bed and troughs spread it, as real ripples do, and a Ripple strength slider sets how steep the water is drawn.
 - The sandbox's Build mode shows only the settings the held tool uses (Erase, Fill and Stamp just the ring; Paint its brushes first), Stamp says whether it has something to copy, and on a phone the short tray shows one setting at a time, picked by name.
 - The sandbox's footer is a button away: "More below" at the foot of the mode rail brings it up, and on a phone the Menu now lists Get in touch, the maker and Support Blobscape on every page.

@@ -146,3 +146,27 @@ test('the candles become a few lights that cast shadows, by the niche', () => {
   const samples = Array.from({ length: 40 }, (_, k) => sum(k * 0.11))
   assert.ok(Math.max(...samples) - Math.min(...samples) > 0.05)
 })
+
+test('standing still, the elf stands straight: neither knee is far out in front of its leg', () => {
+  // a pond of its own, so the walking above doesn't decide where it stands
+  const p = new Pond({ spacing: 0.05, look: 'forest', elfBlobs: 3000 })
+  const sk = p.elf.skeleton
+  const at = (n: string) => { const i = sk.index(n) * 3; return [sk.posedHead[i], sk.posedHead[i + 1], sk.posedHead[i + 2]] }
+  // how far the knee stands off the line from hip to ankle
+  const bend = (s: string) => {
+    const a = at(`${s}Thigh`), b = at(`${s}Shin`), c = at(`${s}Foot`)
+    const ac = [c[0] - a[0], c[1] - a[1], c[2] - a[2]], ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]]
+    const t = (ab[0] * ac[0] + ab[1] * ac[1] + ab[2] * ac[2]) / (ac[0] ** 2 + ac[1] ** 2 + ac[2] ** 2)
+    return Math.hypot(ab[0] - ac[0] * t, ab[1] - ac[1] * t, ab[2] - ac[2] * t)
+  }
+  const stands = () => { sk.update(); return Math.max(bend('l'), bend('r')) }
+  for (let i = 0; i < 90; i++) p.update(1 / 60, still)
+  // 11 cm before the hips rode on the legs: a visible squat. At rest the legs are within a few centimeters of straight
+  assert.ok(stands() < 0.05, `at the start ${stands()}`)
+  // and after wading somewhere else and stopping, on whatever the bed is there
+  for (let i = 0; i < 120; i++) p.update(1 / 60, { forward: 1, turn: 0 })
+  for (let i = 0; i < 240; i++) p.update(1 / 60, still)
+  assert.ok(stands() < 0.05, `after a walk ${stands()}`)
+  // the feet are on the bed, not hanging over it
+  for (const s of ['l', 'r']) { const f = at(`${s}Foot`); assert.ok(Math.abs(f[1] - 0.09 - p.groundAt(f[0], f[2])) < 0.02, `${s} foot`) }
+})
