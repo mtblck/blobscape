@@ -565,8 +565,10 @@ export default [
       if (roamed < 500 || !(await page.getByRole('slider', { name: /How far/ }).isVisible())) fails.push(`blobscape sandbox creatures: Walk about didn't take the fox anywhere (${roamed} px)`)
       else ok(`blobscape sandbox creatures: Walk about takes the fox round its spot (${roamed} px changed)`)
       await page.getByLabel('Walk about').uncheck()
-      await page.waitForTimeout(800)
-      if ((await differs(standing, await shot())) > 200) fails.push('blobscape sandbox creatures: switching Walk about off left the fox away from its spot')
+      // software rendering draws the fox back on its spot a while after the switch: look until it is there
+      let away = Infinity
+      for (let k = 0; k < 12 && away > 200; k++) { await page.waitForTimeout(800); away = await differs(standing, await shot()) }
+      if (away > 200) fails.push(`blobscape sandbox creatures: switching Walk about off left the fox away from its spot (${away} px differ)`)
       else ok('blobscape sandbox creatures: switched off, it stands on its spot again')
       // Looks at (issue #133): standing still, it turns its head to the camera
       const ahead = await shot()
