@@ -349,6 +349,15 @@
        ]
       },
       {
+       "name": "setShadowDensity",
+       "doc": "How dark what stands in a casting light's way makes it (the world's `shadowDensity`), kept for the next actor too:\nlower for fur and grass, which shade themselves dark at the engine's own.",
+       "signatures": [
+        {
+         "code": "setShadowDensity(density: number | undefined): void"
+        }
+       ]
+      },
+      {
        "name": "setFog",
        "doc": "Distance fog toward `color` (linear) from `near` to `far` units from the camera (`far` 0 is none); kept for the next actor too.",
        "signatures": [
@@ -833,6 +842,11 @@
        "readonly": true,
        "type": "boolean",
        "doc": "Whether eased light is still on its way: the scene needs drawing again though nothing else has changed."
+      },
+      {
+       "name": "shadowDensity",
+       "type": "number",
+       "doc": "How dark what stands in a casting light's way makes it (`EngineOptions.shadowDensity`): a world made without lights has none."
       },
       {
        "name": "cleanCuts",
@@ -3127,10 +3141,10 @@
     {
      "name": "makeFox",
      "kind": "function",
-     "doc": "Builds the fox with about `count` blobs: a sculpted skin under strands of fur. `look` picks its coat.",
+     "doc": "Builds the fox with about `count` blobs: a sculpted skin under strands of fur, and whiskers. `look` picks its coat;\n`whisker` is how thick a whisker is.",
      "signatures": [
       {
-       "code": "makeFox(count?: number, look?: string): { blobs: Blobs; skin: Skin; skeleton: Skeleton }"
+       "code": "makeFox(count?: number, look?: string, whisker?: number): { blobs: Blobs; skin: Skin; skeleton: Skeleton }"
       }
      ]
     },
