@@ -20,6 +20,8 @@ import { DESCRIPTION, SHARE, pageMeta } from '../src/blobscape/meta.ts'
 import { ENGINE } from '../src/blobscape/engineCopy.ts'
 import { SPEC, specTitle } from '../src/blobscape/specCopy.ts'
 import { API_DATA_ID, API_PAGE } from '../src/blobscape/api/types.ts'
+import { NEWS, POSTS, postById, postText, type Post } from '../src/blobscape/news.ts'
+import { mdToHtml } from '../src/blobscape/markdown.ts'
 
 const DIST = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist')
 /** The rigged-splat spec, which its page shows (Spec.tsx reads the same file through Vite). */
@@ -51,6 +53,14 @@ function breadcrumbs(items: [string, string][]) {
 function work(e: Experiment) {
   // a plain creative work: the app types want prices and ratings, which a free toy will never have
   return { '@type': 'CreativeWork', '@id': `${url(e.url)}#work`, name: e.title, description: e.body, url: url(e.url), image: url(e.cover), datePublished: e.published, dateModified: e.updated, learningResourceType: 'interactive experiment', isAccessibleForFree: true, inLanguage: 'en', author: PERSON }
+}
+
+const BLOG = `${url(NEWS.path)}#blog`
+
+/** A post, as a search engine reads one. */
+function posting(p: Post) {
+  const at = url(href({ page: 'post', id: p.id }))
+  return { '@type': 'BlogPosting', '@id': `${at}#post`, headline: p.title, description: p.summary, url: at, image: url(p.image.src), datePublished: p.date, dateModified: p.date, inLanguage: 'en', author: PERSON }
 }
 
 function structured(route: Route): object[] {
@@ -114,6 +124,12 @@ function structured(route: Route): object[] {
         { '@type': 'TechArticle', headline: API_PAGE.title, description: API_PAGE.description, url: url(href(route)), author: PERSON },
         breadcrumbs([home, ['Engine', '/engine/'], [API_PAGE.crumb, href(route)]]),
       ]
+    case 'news':
+      return [{ '@type': 'Blog', '@id': BLOG, name: `What's New · ${SITE.name}`, description: NEWS.intro, url: url(NEWS.path), inLanguage: 'en', author: PERSON, blogPost: POSTS.map(posting) }, breadcrumbs([home, ["What's New", NEWS.path]])]
+    case 'post': {
+      const p = postById(route.id)!
+      return [{ ...posting(p), isPartOf: { '@id': BLOG } }, breadcrumbs([home, ["What's New", NEWS.path], [p.title, href(route)]])]
+    }
     case 'contact':
       return [{ '@type': 'ContactPage', name: `Get in touch · ${SITE.name}`, url: url(href(route)) }, breadcrumbs([home, ['Get in touch', href(route)]])]
     default:
@@ -170,7 +186,7 @@ function write(path: string, html: string) {
 // Said above a page whose view and controls do nothing without scripts (classes the app's own pages use, so they are in the CSS)
 const NO_SCRIPT = '<noscript><p class="px-4 py-2 text-center text-sm text-ink-muted">This page draws live blobs in your browser, so it needs JavaScript.</p></noscript>'
 // The app, loaded the way Vite would for a server, to draw every page. These are the ones the browser hydrates.
-const HYDRATED = new Set<Route['page']>(['home', 'lessons', 'experiments', 'contact', 'engine', 'spec', 'api', 'notfound'])
+const HYDRATED = new Set<Route['page']>(['home', 'lessons', 'experiments', 'contact', 'engine', 'spec', 'api', 'news', 'post', 'notfound'])
 const vite = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'error' })
 const { renderPage } = (await vite.ssrLoadModule('/src/blobscape/ssr.tsx')) as typeof import('../src/blobscape/ssr.tsx')
 
@@ -182,7 +198,7 @@ const preloads = fonts.map((f) => `<link rel="preload" href="/assets/${f}" as="f
 const built = readFileSync(join(DIST, 'index.html'), 'utf8')
 if (!built.includes('<link rel="stylesheet"')) throw new Error('prerender: the built page has no stylesheet link')
 const template = built.replace('<link rel="stylesheet"', () => `${preloads}\n    <link rel="stylesheet"`)
-const routes: Route[] = [{ page: 'home' }, { page: 'lessons' }, ...LESSONS.map((l) => ({ page: 'lesson' as const, id: l.id })), { page: 'sandbox' }, { page: 'experiments' }, { page: 'creature' }, { page: 'forest' }, { page: 'pond' }, { page: 'clockwork' }, { page: 'shift' }, { page: 'flow' }, { page: 'brush' }, { page: 'fourways' }, { page: 'daynight' }, { page: 'diorama' }, { page: 'dungeon' }, { page: 'scan' }, { page: 'engine' }, { page: 'spec' }, { page: 'api' }, { page: 'contact' }]
+const routes: Route[] = [{ page: 'home' }, { page: 'lessons' }, ...LESSONS.map((l) => ({ page: 'lesson' as const, id: l.id })), { page: 'sandbox' }, { page: 'experiments' }, { page: 'creature' }, { page: 'forest' }, { page: 'pond' }, { page: 'clockwork' }, { page: 'shift' }, { page: 'flow' }, { page: 'brush' }, { page: 'fourways' }, { page: 'daynight' }, { page: 'diorama' }, { page: 'dungeon' }, { page: 'scan' }, { page: 'engine' }, { page: 'spec' }, { page: 'api' }, { page: 'contact' }, { page: 'news' }, ...POSTS.map((p) => ({ page: 'post' as const, id: p.id }))]
 for (const r of routes) write(join(DIST, href(r), 'index.html'), render(template, r))
 write(join(DIST, '404.html'), render(template, { page: 'notfound' }))
 
@@ -204,10 +220,21 @@ for (const path of TOOLS) {
 }
 
 const today = new Date().toISOString().slice(0, 10)
+/** The day a What's New page last changed: a post's own day, the newest post's for the list. */
+const postDay = (path: string) => (path === NEWS.path ? POSTS[0].date : POSTS.find((p) => href({ page: 'post', id: p.id }) === path)?.date)
 const paths = [...routes.map(href), ...TOOLS]
 write(
   join(DIST, 'sitemap.xml'),
-  `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${paths.map((p) => `  <url><loc>${url(p)}</loc><lastmod>${experimentAt(p)?.updated ?? today}</lastmod></url>`).join('\n')}\n</urlset>\n`,
+  `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${paths.map((p) => `  <url><loc>${url(p)}</loc><lastmod>${experimentAt(p)?.updated ?? postDay(p) ?? today}</lastmod></url>`).join('\n')}\n</urlset>\n`,
+)
+// What's New as a feed, for readers that follow one: each post whole, links made absolute
+const abs = (html: string) => html.replace(/href="\//g, `href="${SITE.origin}/`)
+write(
+  join(DIST, NEWS.feed),
+  `<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">\n<channel>\n  <title>${esc(`What's New · ${SITE.name}`)}</title>\n  <link>${url(NEWS.path)}</link>\n  <atom:link href="${url(NEWS.feed)}" rel="self" type="application/rss+xml" />\n  <description>${esc(NEWS.intro)}</description>\n  <language>en</language>\n${POSTS.map((p) => {
+    const at = url(href({ page: 'post', id: p.id }))
+    return `  <item>\n    <title>${esc(p.title)}</title>\n    <link>${at}</link>\n    <guid>${at}</guid>\n    <pubDate>${new Date(`${p.date}T12:00:00Z`).toUTCString()}</pubDate>\n    <description>${esc(`<p>${esc(p.summary)}</p>\n${abs(mdToHtml(postText(p)))}`)}</description>\n  </item>`
+  }).join('\n')}\n</channel>\n</rss>\n`,
 )
 // Nothing disallowed: the engine lab carries its own noindex, which crawlers only see if they may fetch it
 write(join(DIST, 'robots.txt'), `User-agent: *\nAllow: /\n\nSitemap: ${url('/sitemap.xml')}\n`)

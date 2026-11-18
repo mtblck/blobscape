@@ -9,7 +9,7 @@ export default [
     files: ['src/blobscape/App.tsx', 'src/blobscape/main.tsx', 'src/blobscape/ssr.tsx', 'index.html', 'public/theme.js'],
     async run({ base, join, fails, ok, open, axe, DESKTOP, PHONE }) {
       // Prerendered: each page's HTML carries its own title, canonical and content before any script runs
-      for (const [path, title] of [['/', 'Blobscape: learn'], ['/lessons/', 'Lessons ·'], ['/lessons/order/', 'Order matters · Lesson 3'], ['/sandbox/', 'Sandbox ·'], ['/experiments/creature/', 'Splat Creatures ·'], ['/experiments/forest-walk/', 'Forest Walk ·'], ['/experiments/clockwork/', 'Clockwork ·'], ['/experiments/shape-shifter/', 'Shape Shifter ·'], ['/experiments/pixel-diorama/', 'Pixel Diorama ·'], ['/experiments/dungeon-run/', 'Dungeon Run ·'], ['/experiments/scan-studio/', 'Scan Studio ·'], ['/experiments/', 'Experiments ·'], ['/engine/', 'The Blobscape engine ·'], ['/engine/rigged-splats/', 'Rigged Gaussian splats in glTF ·']]) {
+      for (const [path, title] of [['/', 'Blobscape: learn'], ['/lessons/', 'Lessons ·'], ['/lessons/order/', 'Order matters · Lesson 3'], ['/sandbox/', 'Sandbox ·'], ['/experiments/creature/', 'Splat Creatures ·'], ['/experiments/forest-walk/', 'Forest Walk ·'], ['/experiments/clockwork/', 'Clockwork ·'], ['/experiments/shape-shifter/', 'Shape Shifter ·'], ['/experiments/pixel-diorama/', 'Pixel Diorama ·'], ['/experiments/dungeon-run/', 'Dungeon Run ·'], ['/experiments/scan-studio/', 'Scan Studio ·'], ['/experiments/', 'Experiments ·'], ['/engine/', 'The Blobscape engine ·'], ['/engine/rigged-splats/', 'Rigged Gaussian splats in glTF ·'], ['/whats-new/', "What's New ·"], ['/whats-new/two-tools-to-start/', 'Two tools to start']]) {
         const html = await (await fetch(base + path)).text()
         if (!html.includes(`<title>${title}`)) fails.push(`${path}: prerendered title is not "${title}…"`)
         else if (!html.includes(`<link rel="canonical" href="https://blobscape.dev${path}"`)) fails.push(`${path}: prerendered canonical is wrong`)
@@ -136,6 +136,81 @@ export default [
       if (new URL(old.page.url()).pathname !== '/lessons/order/') fails.push(`#/lesson/order went to ${old.page.url()}`)
       else ok('an old #/lesson/ link lands on its lesson page')
       await old.ctx.close()
+    },
+  },
+  {
+    name: 'whats-new',
+    about: "What's New: in the header between Sandbox and Engine, posts newest first, a post's own page, earlier and later, the feed, prerendered",
+    entries: ['src/blobscape/WhatsNew.tsx', 'src/blobscape/news.ts', 'src/blobscape/markdown.ts'],
+    files: ['public/news/'],
+    async run({ base, shots, join, fails, ok, open, axe, DESKTOP, PHONE }) {
+      // what a crawler and a feed reader get, before any script runs
+      const html = await (await fetch(base + '/whats-new/')).text()
+      const feed = await (await fetch(base + '/whats-new/feed.xml')).text()
+      const items = (feed.match(/<item>/g) ?? []).length
+      const linked = new Set([...html.matchAll(/href="(\/whats-new\/[a-z0-9-]+\/)"/g)].map((m) => m[1]))
+      const first = [...linked][0]
+      const post = first ? await (await fetch(base + first)).text() : ''
+      if (items < 5 || linked.size !== items || !html.includes('"@type":"Blog"') || !post.includes('"@type":"BlogPosting"') || !/data-testid="post"[^>]*><p>/.test(post) || !feed.includes('<link>https://blobscape.dev/whats-new/')) fails.push(`what's new, prerendered: ${JSON.stringify({ items, linked: linked.size, blog: html.includes('"@type":"Blog"'), posting: post.includes('"@type":"BlogPosting"') })}`)
+      else ok(`what's new: ${items} posts in the prerendered list and in the feed, each post a page with its words in the HTML`)
+
+      // the header: between Sandbox and Engine, on one line down to a tablet, and it marks the page
+      const w = await open('/', DESKTOP)
+      const names = await w.page.getByRole('banner').getByRole('navigation', { name: 'Main' }).locator(':scope > ul > li').evaluateAll((lis) => lis.map((li) => li.textContent.trim()))
+      const at = names.indexOf("What's New")
+      if (at < 1 || names[at - 1] !== 'Sandbox' || !names[at + 1]?.startsWith('Engine')) fails.push(`header order: ${JSON.stringify(names)}`)
+      else ok(`header: ${names.join(', ')}`)
+      await w.page.evaluate(() => { window.__stayed = true })
+      await w.page.getByRole('banner').getByRole('link', { name: "What's New", exact: true }).click()
+      await w.page.waitForURL('**/whats-new/')
+      await w.page.getByRole('heading', { level: 1, name: "What's new" }).waitFor({ timeout: 5000 }).catch(() => {})
+      const listed = await w.page.locator('[data-testid=post-list] > li').evaluateAll((lis) => lis.map((li) => ({ title: li.querySelector('h2')?.textContent ?? '', day: li.querySelector('time')?.dateTime ?? '', drawn: (li.querySelector('img')?.naturalWidth ?? 0) > 0 || li.querySelector('img')?.loading === 'lazy' })))
+      const sorted = listed.every((p, i) => /^\d{4}-\d\d-\d\d$/.test(p.day) && p.title && p.drawn && (i === 0 || listed[i - 1].day >= p.day))
+      const current = () => w.page.getByRole('banner').getByRole('link', { name: "What's New", exact: true }).getAttribute('aria-current')
+      if (listed.length !== items || !sorted || (await current()) !== 'page' || !(await w.page.evaluate(() => window.__stayed))) fails.push(`what's new list: ${JSON.stringify({ listed, current: await current() })}`)
+      else ok(`what's new: ${listed.length} dated posts, newest first (${listed[0].title}, ${listed[0].day}), reached from the header without a reload`)
+      await axe(w.page, "what's new")
+      await w.page.screenshot({ path: join(shots, 'whats-new-desktop.png') })
+      // a post: its own page, still under What's New in the header, and Earlier leads to the next one down
+      await w.page.locator('[data-testid=post-list] > li').first().getByRole('link').click()
+      await w.page.getByRole('heading', { level: 1, name: listed[0].title }).waitFor({ timeout: 5000 }).catch(() => {})
+      const page1 = await w.page.evaluate(() => ({ h1: document.querySelector('h1')?.textContent, focus: document.activeElement?.tagName, raw: /\*\*|\]\(/.test(document.querySelector('[data-testid=post]')?.textContent ?? '!'), picture: document.querySelector('main article img')?.naturalWidth ?? 0, alt: document.querySelector('main article img')?.alt ?? '', title: document.title }))
+      if (page1.h1 !== listed[0].title || page1.focus !== 'H1' || page1.raw || !(page1.picture > 0) || page1.alt.length < 20 || !page1.title.startsWith(listed[0].title) || (await current()) !== 'page') fails.push(`a post: ${JSON.stringify(page1)}`)
+      else ok(`a post opens in place with focus on its heading, its picture (described) and its words: ${page1.h1}`)
+      await axe(w.page, 'a post')
+      await w.page.screenshot({ path: join(shots, 'whats-new-post-desktop.png') })
+      await w.page.getByRole('navigation', { name: 'More posts' }).getByRole('link', { name: /Earlier/ }).click()
+      await w.page.getByRole('heading', { level: 1, name: listed[1].title }).waitFor({ timeout: 5000 }).catch(() => {})
+      if ((await w.page.locator('h1').textContent()) !== listed[1].title) fails.push(`Earlier went to "${await w.page.locator('h1').textContent()}", not "${listed[1].title}"`)
+      else ok(`Earlier leads to the post before: ${listed[1].title}`)
+      // a link in a post to one of our pages opens it in place
+      await w.page.evaluate(() => { window.__stayed = true })
+      const inPost = w.page.locator('[data-testid=post] a[href^="/"]').first()
+      const to = await inPost.getAttribute('href')
+      await inPost.click()
+      await w.page.waitForFunction((p) => location.pathname + location.search === p, to, { timeout: 5000 }).catch(() => {})
+      if (!(await w.page.evaluate(() => window.__stayed)) || new URL(w.page.url()).pathname !== to.split('?')[0]) fails.push(`a link in a post to ${to} reloaded the page or went to ${w.page.url()}`)
+      else ok(`a link in a post opens ${to} in place`)
+      w.page.removeAllListeners('console')
+      w.page.removeAllListeners('pageerror')
+      await w.ctx.close()
+
+      // at a tablet's width the header still fits on one line, and on a phone the page and the menu hold it
+      const t = await open('/whats-new/', { viewport: { width: 768, height: 900 } })
+      const bar = await t.page.evaluate(() => { const tops = [...document.querySelectorAll('header nav[aria-label=Main] > ul > li')].map((li) => Math.round(li.getBoundingClientRect().top)); return { lines: new Set(tops).size, wide: document.documentElement.scrollWidth - window.innerWidth } })
+      if (bar.lines !== 1 || bar.wide > 0) fails.push(`header at 768px: ${JSON.stringify(bar)}`)
+      else ok('header fits on one line at a tablet width')
+      await t.ctx.close()
+      const p = await open(first, PHONE)
+      await p.page.waitForTimeout(500)
+      const wide = await p.page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
+      await p.page.getByRole('banner').getByRole('button', { name: 'Menu' }).click()
+      const inMenu = await p.page.getByRole('navigation', { name: 'Blobscape' }).getByRole('link', { name: "What's New" }).getAttribute('aria-current').catch(() => null)
+      if (wide > 0 || inMenu !== 'page') fails.push(`a post on a phone: scrolls sideways by ${wide}px, menu marks What's New: ${inMenu}`)
+      else ok("a post fits a phone, and the phone menu lists What's New as where we are")
+      await p.page.keyboard.press('Escape')
+      await p.page.screenshot({ path: join(shots, 'whats-new-post-phone.png'), fullPage: true })
+      await p.ctx.close()
     },
   },
 ]

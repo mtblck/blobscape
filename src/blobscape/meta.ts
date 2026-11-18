@@ -2,6 +2,7 @@ import { LESSONS, LESSON_COUNT, href, type Route } from './routes.ts'
 import { EXPERIMENTS, SITE } from './site.ts'
 import { SPEC } from './specCopy.ts'
 import { API_PAGE } from './api/types.ts'
+import { NEWS, POSTS, postById } from './news.ts'
 
 /**
  * Each page's title and description. The app sets them as you move around
@@ -27,6 +28,9 @@ export const shareImage = (e: { cover: string }) => e.cover.replace('/covers/', 
 export function pageMeta(route: Route): PageMeta {
   const meta = wordsFor(route)
   const e = EXPERIMENTS.find((x) => x.id === route.page)
+  // a post shares its own picture, cut to a link preview's shape when it is an experiment's cover
+  const post = route.page === 'post' ? postById(route.id) : undefined
+  if (post) return { ...meta, image: { src: post.image.src.startsWith('/covers/') ? shareImage({ cover: post.image.src }) : post.image.src, alt: post.image.alt } }
   return e ? { ...meta, image: { src: shareImage(e), alt: `${e.title}, an experiment on ${SITE.name}. ${e.body}` } } : meta
 }
 
@@ -75,6 +79,12 @@ function wordsFor(route: Route): PageMeta {
       return { path, title: `${API_PAGE.title} · ${SITE.name}`, description: API_PAGE.description }
     case 'contact':
       return { path, title: `Get in touch · ${SITE.name}`, description: `Send ${SITE.author.name} a note about ${SITE.name}: a question, a bug, an idea for a lesson or an experiment.` }
+    case 'news':
+      return { path, title: `What's New · ${SITE.name}`, description: `${NEWS.intro} The latest: ${POSTS[0].title}.` }
+    case 'post': {
+      const p = postById(route.id)!
+      return { path, title: `${p.title} · ${SITE.name}`, description: p.summary }
+    }
     case 'lesson': {
       const i = LESSONS.findIndex((l) => l.id === route.id)
       return { path, title: `${LESSONS[i].title} · Lesson ${i + 1} · ${SITE.name}`, description: LESSONS[i].summary }

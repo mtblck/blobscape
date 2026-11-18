@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Goal } from './progress.ts'
+import { POSTS } from './news.ts'
 
 /**
  * Pages are real paths (/lessons/one-blob/), each prerendered to its own HTML
@@ -7,7 +8,7 @@ import type { Goal } from './progress.ts'
  * previews see every page. In the browser it's still one app: links between
  * these pages swap the page without a reload (useLinkNavigation).
  */
-export type Route = { page: 'home' } | { page: 'lessons' } | { page: 'lesson'; id: string } | { page: 'sandbox' } | { page: 'fourways' } | { page: 'creature' } | { page: 'forest' } | { page: 'pond' } | { page: 'clockwork' } | { page: 'shift' } | { page: 'flow' } | { page: 'brush' } | { page: 'daynight' } | { page: 'diorama' } | { page: 'dungeon' } | { page: 'scan' } | { page: 'experiments' } | { page: 'engine' } | { page: 'spec' } | { page: 'api' } | { page: 'contact' } | { page: 'notfound' }
+export type Route = { page: 'home' } | { page: 'lessons' } | { page: 'lesson'; id: string } | { page: 'sandbox' } | { page: 'fourways' } | { page: 'creature' } | { page: 'forest' } | { page: 'pond' } | { page: 'clockwork' } | { page: 'shift' } | { page: 'flow' } | { page: 'brush' } | { page: 'daynight' } | { page: 'diorama' } | { page: 'dungeon' } | { page: 'scan' } | { page: 'experiments' } | { page: 'engine' } | { page: 'spec' } | { page: 'api' } | { page: 'contact' } | { page: 'news' } | { page: 'post'; id: string } | { page: 'notfound' }
 
 export const LESSONS = [
   { id: 'one-blob', title: 'One blob', summary: 'Five kinds of number, 14 in all, make one Gaussian. Pull each one and see what it does.' },
@@ -203,6 +204,8 @@ export function parsePath(pathname: string): Route | null {
   if (m.length === 2 && m[0] === 'engine' && m[1] === 'rigged-splats') return { page: 'spec' }
   if (m.length === 2 && m[0] === 'engine' && (m[1] === 'docs' || m[1] === 'api')) return { page: 'api' }
   if (m.length === 1 && m[0] === 'contact') return { page: 'contact' }
+  if (m.length === 1 && m[0] === 'whats-new') return { page: 'news' }
+  if (m.length === 2 && m[0] === 'whats-new' && POSTS.some((p) => p.id === m[1])) return { page: 'post', id: m[1] }
   if (m.length === 2 && m[0] === 'experiments' && m[1] === 'creature') return { page: 'creature' }
   if (m.length === 2 && m[0] === 'experiments' && m[1] === 'forest-walk') return { page: 'forest' }
   if (m.length === 2 && m[0] === 'experiments' && m[1] === 'wading-pond') return { page: 'pond' }
@@ -251,6 +254,8 @@ export function href(r: Route): string {
   if (r.page === 'spec') return '/engine/rigged-splats/'
   if (r.page === 'api') return '/engine/docs/'
   if (r.page === 'contact') return '/contact/'
+  if (r.page === 'news') return '/whats-new/'
+  if (r.page === 'post') return `/whats-new/${r.id}/`
   if (r.page === 'lessons') return '/lessons/'
   return '/'
 }
