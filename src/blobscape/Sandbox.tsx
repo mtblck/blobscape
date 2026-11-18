@@ -45,7 +45,7 @@ const TOOLS: { id: ToolId; name: string; note: string }[] = [
   { id: 'orbit', name: 'Look around', note: 'Drag to turn the view, scroll or pinch to zoom. With a mouse, right-drag (or Alt-drag) turns it whatever tool is held; on a touchscreen, two fingers do.' },
   { id: 'add', name: 'Add', note: 'Click to place one blob, on the floor or on the surface of whatever you click.' },
   { id: 'spray', name: 'Spray', note: 'Drag to spray blobs inside the ring. They stick to whatever is under them, so you can build up layers.' },
-  { id: 'paint', name: 'Paint', note: 'Drag to paint grass, fur, moss, stones or leaves onto whatever is under the ring. Pick which in the Brush tab.' },
+  { id: 'paint', name: 'Paint', note: 'Drag to paint grass, fur, moss, stones or leaves onto whatever is under the ring. Pick which below.' },
   { id: 'select', name: 'Select', note: 'Click a blob to select it, or drag a box around many. Hold Shift to add to the selection. Then change it in the Selection tab.' },
   { id: 'lasso', name: 'Lasso', note: 'Draw round the blobs you want. Hold Shift to add to the selection.' },
   { id: 'move', name: 'Move', note: 'Drag to slide the selection across the screen. With nothing selected, it grabs the blob or creature under the pointer. Drag a creature to walk it somewhere else.' },
@@ -53,6 +53,18 @@ const TOOLS: { id: ToolId; name: string; note: string }[] = [
   { id: 'fill', name: 'Fill', note: 'Click or drag over a hole. Blobs grow in from its edge, in the size, facing and colors of the ones beside them.' },
   { id: 'stamp', name: 'Stamp', note: 'Click what you want to copy, then drag somewhere else to paint a copy of it there.' },
 ]
+
+/** The settings a build tool uses, in the order its panel shows them. */
+type Knob = 'brush' | 'color' | 'size' | 'ring' | 'opacity' | 'density' | 'shape'
+const KNOB_NAMES: Record<Knob, string> = { brush: 'Brush', color: 'Color', size: 'Size', ring: 'Ring', opacity: 'Opacity', density: 'Density', shape: 'Shape' }
+const KNOBS_FOR: Record<BuildTool, Knob[]> = {
+  add: ['color', 'size', 'opacity', 'shape'],
+  spray: ['color', 'size', 'ring', 'opacity', 'density', 'shape'],
+  paint: ['brush', 'color', 'size', 'ring', 'density'],
+  erase: ['ring'],
+  fill: ['ring'],
+  stamp: ['ring'],
+}
 
 const STARTS = [
   ...PRESETS.map((p) => ({ id: p.id, name: p.name, make: () => blobsFromPreset(p) })),
@@ -105,6 +117,7 @@ export function Sandbox() {
   const { full, toggle: toggleFull } = useFullScreen(work)
   // The phone's tray: short, or dragged up for the rest of a panel
   const [tall, setTall] = useState(false)
+  const [pickedKnob, setKnob] = useState<Knob>('color')
   const trayDrag = useRef<number | null>(null)
   // While the workspace has the screen the floating tip button would sit on the view's controls: it waits for the footer
   useEffect(() => {
@@ -603,12 +616,14 @@ export function Sandbox() {
 
   /** Stamp: where it copies from (set by a click), and the stroke under way. */
   const stampFrom = useRef<Vec3 | null>(null)
+  const [hasSource, setHasSource] = useState(false)
   const stamping = useRef<{ p: Vec3; n: Vec3; shift: Vec3; count: number; done: Set<number>; added: number } | null>(null)
   const setStampFrom = (x: number, y: number) => {
     const b = blobsRef.current
     const at = b.count ? land(x, y) : null
     if (!at) { setMessage('Nothing here to copy'); return }
     stampFrom.current = at.p
+    setHasSource(true)
     setMessage('Copying from here. Now drag where the copy should go')
     view?.invalidate(1)
   }
@@ -1285,12 +1300,36 @@ export function Sandbox() {
     return <ToolButton key={t} name={it.name} note={it.note} held={held === t} onClick={() => setTool(t)} />
   })
   const heldNote = (t: ToolId) => TOOLS.find((x) => x.id === t)!.note
+  // Build shows only what the held tool uses; on a phone's short tray, one of them at a time
+  const knobs = KNOBS_FOR[buildTool].filter((k) => !(k === 'color' && buildTool === 'paint' && ownColors))
+  const knob = knobs.includes(pickedKnob) ? pickedKnob : knobs[0]
+  const knobShown = (k: Knob) => (k === knob || tall ? '' : 'max-lg:hidden')
   const panels: Record<ModeId, ReactNode> = {
     build: (
       <>
         <div role="group" aria-label="Build tools" className="-mx-4 flex gap-1.5 overflow-x-auto px-4 lg:mx-0 lg:flex-wrap lg:px-0 [&>*]:flex-none">{toolsHeld(BUILD_TOOLS, tool)}</div>
         <p className="text-xs leading-relaxed text-ink-faint">{lookAround ? heldNote('orbit') : heldNote(buildTool)}</p>
-            <Panel note="What Add, Spray and Paint put down. Each new blob takes the brush color, with a little variation so sprayed patches don't look flat.">
+        {knobs.length > 1 && (
+          <div role="group" aria-label="Show one setting" className={`-mx-4 flex gap-1.5 overflow-x-auto px-4 lg:hidden [&>*]:flex-none ${tall ? 'hidden' : ''}`}>
+            {knobs.map((k) => <Chip key={k} small active={knob === k} onClick={() => setKnob(k)}>{KNOB_NAMES[k]}</Chip>)}
+          </div>
+        )}
+        <div className="space-y-3">
+          {knobs.includes('brush') && (
+            <div className={knobShown('brush')}>
+              <div className="grid gap-3">
+                <Field label="Paint with">
+                  <div className="flex flex-wrap gap-1.5">
+                    {BRUSHES.map((k) => <Chip key={k.id} active={brush === k.id} onClick={() => setBrush(k.id)}>{k.name}</Chip>)}
+                  </div>
+                </Field>
+                <p className="text-xs text-ink-faint">{BRUSHES.find((k) => k.id === brush)!.note} Blob size sets how big they grow, Density how many a dab lays.</p>
+                <Toggle label="Their own colors (off = the brush color)" checked={ownColors} onChange={setOwnColors} />
+              </div>
+            </div>
+          )}
+          {knobs.includes('color') && (
+            <div className={knobShown('color')}>
               <Field label="Color">
                 <div className="flex flex-wrap items-center gap-1.5">
                   {SWATCHES.map((c) => (
@@ -1299,21 +1338,17 @@ export function Sandbox() {
                   <input type="color" aria-label="Any color" value={color} onChange={(e) => setColor(e.target.value)} className="h-7 w-9 cursor-pointer rounded border border-rule bg-transparent" />
                 </div>
               </Field>
-              <Slider label="Blob size" value={size} min={-7} max={-1} step={0.05} onChange={setSize} format={(v) => (2 ** v).toFixed(3)} />
-              <Slider label="Opacity" value={opacity} min={0.05} max={1} step={0.01} onChange={setOpacity} format={(v) => `${Math.round(v * 100)}%`} />
-              <Slider label="Brush radius" value={spread} min={4} max={120} step={1} onChange={setSpread} format={(v) => `${v}px`} hint="The ring for Spray, Paint, Erase, Fill and Stamp." />
-              <Slider label="Density" value={density} min={1} max={30} step={1} onChange={setDensity} format={(v) => `${v} per dab`} />
-              <Toggle label="Flat discs (off = round balls)" checked={flat} onChange={setFlat} />
-              <div className="grid gap-3">
-                <Field label="Paint with">
-                  <div className="flex flex-wrap gap-1.5">
-                    {BRUSHES.map((k) => <Chip key={k.id} active={brush === k.id} onClick={() => { setBrush(k.id); setTool('paint') }}>{k.name}</Chip>)}
-                  </div>
-                </Field>
-                <p className="text-sm text-ink-faint">{BRUSHES.find((k) => k.id === brush)!.note} Blob size sets how big they grow, Density how many a dab lays.</p>
-                <Toggle label="Their own colors (off = the brush color)" checked={ownColors} onChange={setOwnColors} />
-              </div>
-            </Panel>
+            </div>
+          )}
+          {knobs.includes('size') && <div className={knobShown('size')}><Slider label="Blob size" value={size} min={-7} max={-1} step={0.05} onChange={setSize} format={(v) => (2 ** v).toFixed(3)} /></div>}
+          {knobs.includes('ring') && <div className={knobShown('ring')}><Slider label="Brush radius" value={spread} min={4} max={120} step={1} onChange={setSpread} format={(v) => `${v}px`} hint="One ring for every tool that has one." /></div>}
+          {knobs.includes('opacity') && <div className={knobShown('opacity')}><Slider label="Opacity" value={opacity} min={0.05} max={1} step={0.01} onChange={setOpacity} format={(v) => `${Math.round(v * 100)}%`} /></div>}
+          {knobs.includes('density') && <div className={knobShown('density')}><Slider label="Density" value={density} min={1} max={30} step={1} onChange={setDensity} format={(v) => `${v} per dab`} /></div>}
+          {knobs.includes('shape') && <div className={knobShown('shape')}><Toggle label="Flat discs (off = round balls)" checked={flat} onChange={setFlat} /></div>}
+          {buildTool === 'stamp' && (
+            <p className="text-sm text-ink-muted" data-testid="stamp-source">{hasSource ? 'A source is set. Drag somewhere else to lay a copy; click (or Shift+Enter on the view) to copy from somewhere new.' : 'No source yet. Click what you want to copy (or press Shift+Enter on the view to copy from its center).'}</p>
+          )}
+        </div>
       </>
     ),
     select: (
