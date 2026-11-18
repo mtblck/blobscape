@@ -172,6 +172,22 @@ export default [
       if (same.bones !== m2.bones || same.seed !== m2.seed) fails.push(`blobscape creature monster link: ${JSON.stringify(same)} vs ${JSON.stringify(m2)}`)
       else ok(`blobscape creature monster: the link with seed ${m2.seed} opens the same monster`)
       await relink.ctx.close()
+      // the first fox, beside the furred one: its own address opens it at its own count, on the same bones, and it draws
+      const mini = await open('/experiments/creature/?offscreen=1&creature=minimalist-fox', { viewport: { width: 1280, height: 900 } })
+      await mini.page.waitForFunction(() => window.__creature?.blobs() > 0, null, { timeout: 60000 }).catch(() => {})
+      const plainFox = await mini.page.evaluate(async () => {
+        const cr = window.__creature
+        if (!cr) return {}
+        await cr.stage.frame(0.3)
+        const cv = document.querySelector('[data-testid=creature-view]')
+        const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+        let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i] > 150 && d[i + 1] > 50 && d[i + 1] < 140 && d[i + 2] < 80) n++
+        return { n, blobs: cr.blobs(), bones: cr.bones(), chip: [...document.querySelectorAll('button[aria-pressed=true]')].some((b) => b.textContent === 'Minimalist fox') }
+      })
+      if (!(plainFox.n > 2000 && plainFox.blobs > 3800 && plainFox.blobs < 4200 && plainFox.bones === 14 && plainFox.chip)) fails.push(`blobscape creature minimalist fox: ${JSON.stringify(plainFox)}`)
+      else ok(`blobscape creature: the minimalist fox opens from its address (${plainFox.blobs} blobs, ${plainFox.bones} bones) and draws`)
+      await mini.page.screenshot({ path: join(shots, 'blobscape-creature-minimalist-fox.png') })
+      await mini.ctx.close()
       // a file with morphs: the sample pufferfish opens, its puff clip swells it, Still hands the morphs to sliders,
       // a sprite sheet draws the swelling, and the file written back keeps its morph targets
       await tabClick(c.page.getByRole('button', { name: 'Fox', exact: true }))
