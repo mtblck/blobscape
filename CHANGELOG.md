@@ -6,6 +6,8 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 
 ## [Unreleased]
 
+- A link to Blobscape now shows a picture of what it leads to. Each experiment's page shares its own cover, and the front page shares the logo beside four experiments, in place of one plain logo card for every page.
+- Pixel Diorama's gallery loops are recorded again, so they show each scene as it is now: the koi pond's cherry tree, and every scene at 50% dither.
 - Pixel Diorama has a new scene, Fox and wisp: a furred fox trotting through tall grass round a standing stone at night while a wisp of light circles it and throws moving shadows. It is the fox scene from One Scene, Four Ways.
 - The fox has whiskers. The dark lines on its muzzle, which read as streaks across its face, are gone.
 - New experiment, One Scene, Four Ways: one pixel-art scene drawn at the same moment by a shader written with no engine, three.js meshes, Spark splats and Blobscape, all with the same pixel-art finish. Two scenes: a furred fox trotting through tall grass with a wisp of light circling it (its grass painted blade by blade with moonlight, darker the deeper it stands), and Pixel Diorama's campfire. One camera and one light slider drive all four, each picture shows how many frames a second it could draw, a phone shows one at a time, and cards below say what each is made of, what moves, what its light can do and where it stops.

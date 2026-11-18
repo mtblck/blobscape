@@ -28,3 +28,14 @@ test('every experiment has a kind the filter offers, and every kind has an exper
   const oldest = byPublished('oldest')
   assert.deepEqual(tagged(oldest, 'game').map((e) => e.id), oldest.filter((e) => (e.tags as readonly string[]).includes('game')).map((e) => e.id))
 })
+
+test('every experiment has a share picture cut from its cover, and its page points at it', async () => {
+  const { existsSync } = await import('node:fs')
+  const { pageMeta, shareImage } = await import('./meta.ts')
+  for (const e of EXPERIMENTS) {
+    assert.ok(existsSync(new URL(`../../public${e.cover}`, import.meta.url)), `${e.id} has no cover`)
+    assert.ok(existsSync(new URL(`../../public${shareImage(e)}`, import.meta.url)), `${e.id} has no share picture: run scripts/share-images.mjs`)
+  }
+  assert.equal(pageMeta({ page: 'diorama' }).image?.src, '/share/pixel-diorama.jpg')
+  assert.equal(pageMeta({ page: 'home' }).image, undefined)
+})

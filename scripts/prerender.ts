@@ -16,7 +16,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { LESSONS, href, type Route } from '../src/blobscape/routes.ts'
 import { SITE, byPublished, experimentAt, type Experiment } from '../src/blobscape/site.ts'
-import { DESCRIPTION, pageMeta } from '../src/blobscape/meta.ts'
+import { DESCRIPTION, SHARE, pageMeta } from '../src/blobscape/meta.ts'
 import { ENGINE } from '../src/blobscape/engineCopy.ts'
 import { SPEC, specTitle } from '../src/blobscape/specCopy.ts'
 import { API_DATA_ID, API_PAGE } from '../src/blobscape/api/types.ts'
@@ -134,6 +134,9 @@ function render(template: string, route: Route): string {
   html = setAttr(html, /<meta name="description"[^>]*>/, meta.description)
   html = setAttr(html, /<meta property="og:title"[^>]*>/, meta.title)
   html = setAttr(html, /<meta property="og:description"[^>]*>/, meta.description)
+  const image = meta.image ?? SHARE
+  html = setAttr(html, /<meta property="og:image"[^>]*>/, url(image.src))
+  html = setAttr(html, /<meta property="og:image:alt"[^>]*>/, image.alt)
   if (meta.path) {
     html = setAttr(html, /<link rel="canonical"[^>]*>/, url(meta.path))
     html = setAttr(html, /<meta property="og:url"[^>]*>/, url(meta.path))

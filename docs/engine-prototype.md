@@ -1,5 +1,7 @@
 # Animated-splat engine: prototype note
 
+> **A history note.** This records the go or stop decision on the engine's first prototype and the gaps found as it grew. The engine has since shipped: it is on npm as [`@blobscape/engine`](https://www.npmjs.com/package/@blobscape/engine), its docs are at [blobscape.dev/engine/docs](https://blobscape.dev/engine/docs/), and [the engine page](https://blobscape.dev/engine/) shows what it does now. Numbers, file names and "not done yet" lines below are as they stood when each part was written.
+
 November 2026. This covers the two-week prototype from the Blobscape roadmap, built in one night. The question is whether to keep building our own engine for animated splats.
 
 ## Recommendation: go
