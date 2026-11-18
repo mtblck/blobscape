@@ -159,7 +159,7 @@ function Drop({ button, buttonClass, label, width, testId, children }: { button:
   )
 }
 
-/** The phone's menu: every page, the engine's under their own heading. The theme has its own button beside it. */
+/** The phone's menu: every page, the engine's under their own heading, then the footer's About links (the sandbox's footer sits a screen down). The theme has its own button beside it. */
 function PhoneMenu({ here }: { here?: string }) {
   return (
     <Drop
@@ -185,6 +185,12 @@ function PhoneMenu({ here }: { here?: string }) {
           {ENGINE.map((p) => (
             <li key={p.path}><a href={p.path} aria-current={here === p.path ? 'page' : undefined} className={LINK}>{p.label}</a></li>
           ))}
+        </ul>
+        <p className={`${HEAD} mt-2 border-t border-rule px-3 pt-3 pb-1`}>About</p>
+        <ul className="flex flex-col">
+          <li><a href="/contact/" aria-current={here === '/contact/' ? 'page' : undefined} className={LINK}>Get in touch</a></li>
+          <li><a href={SITE.author.url} className={LINK}>Made by {SITE.author.name}</a></li>
+          <li><a href={SITE.tip} target="_blank" rel="noopener" className={LINK}>Support Blobscape<span className="sr-only"> on Ko-fi (opens in a new tab)</span></a></li>
         </ul>
       </nav>
     </Drop>

@@ -115,6 +115,14 @@ export function Sandbox() {
     io.observe(el)
     return () => { io.disconnect(); delete root.dataset.workspace }
   }, [])
+  // The footer waits under the workspace: this brings it up and puts the keyboard on its first link
+  const toFooter = () => {
+    const foot = document.querySelector('footer')
+    if (!foot) return
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    foot.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'start' })
+    foot.querySelector<HTMLElement>('a')?.focus({ preventScroll: true })
+  }
   const [handed] = useState(takeHandOff)
   // Built once: a useRef argument would be rebuilt (and thrown away) on every render
   const [initial] = useState(() => handed?.blobs ?? STARTS[0].make())
@@ -1550,8 +1558,13 @@ export function Sandbox() {
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row lg:gap-3 lg:px-4 lg:pb-4">
-        <div className="order-3 flex-none lg:order-1">
+        <div className="order-3 flex-none lg:order-1 lg:flex lg:flex-col lg:gap-2">
           <ModeBar mode={mode} setMode={setMode} base={base} marks={marks} />
+          {!full && (
+            <button type="button" onClick={toFooter} title="The site's links, below the sandbox" className="flex min-h-12 w-24 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-xl text-xs font-semibold text-ink-muted transition-colors hover:bg-paper-sunk hover:text-ink max-lg:hidden">
+              <Icon d="M12 5v14M6 13l6 6 6-6" className="h-4 w-4" />More below
+            </button>
+          )}
         </div>
 
         <section

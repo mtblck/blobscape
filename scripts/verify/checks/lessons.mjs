@@ -512,8 +512,8 @@ export default [
   },
   {
     name: 'sandbox-basics',
-    about: 'a lesson opens in the sandbox; spray, undo, redo, delete, keyboard, skip link',
-    entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/lessons/Many.tsx', 'src/blobscape/lessons/Footprint.tsx'],
+    about: 'a lesson opens in the sandbox; spray, undo, redo, delete, keyboard, the footer and phone Menu, skip link',
+    entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/lessons/Many.tsx', 'src/blobscape/lessons/Footprint.tsx', 'src/shared/SiteHeader.tsx'],
     async run({ base, fails, ok, open, axe, tabClick }) {
       const count = (page) => page.textContent('[data-testid=blob-count]').then((t) => Number(t.replace(/\D/g, '')))
       const { page, ctx } = await open('/', { viewport: { width: 1440, height: 1000 } })
@@ -556,6 +556,21 @@ export default [
       await page.keyboard.press('Enter')
       if ((await count(page)) !== beforeKey + 1) fails.push(`blobscape sandbox: Enter with Add went ${beforeKey} → ${await count(page)}`)
       else ok('blobscape sandbox: Enter on the view adds a blob at the center')
+      // The footer waits under the one-screen workspace: More below brings it up with the keyboard on its first link
+      await page.getByRole('button', { name: 'More below' }).click()
+      await page.waitForTimeout(900)
+      const foot = await page.evaluate(() => { const f = document.querySelector('footer').getBoundingClientRect(); return { top: Math.round(f.top), focused: !!document.activeElement?.closest('footer') } })
+      if (!(foot.top < 1000 && foot.focused)) fails.push(`blobscape sandbox: More below left the footer at ${foot.top} px, focus in it ${foot.focused}`)
+      else ok('blobscape sandbox: More below scrolls to the footer and focuses its first link')
+      await page.evaluate(() => window.scrollTo(0, 0))
+      // On a phone the footer's About links are in the Menu too
+      await page.setViewportSize({ width: 390, height: 844 })
+      await page.getByRole('button', { name: 'Menu' }).click()
+      const about = await page.locator(':popover-open a').evaluateAll((as) => as.map((a) => a.getAttribute('href')))
+      if (!about.includes('/contact/')) fails.push(`blobscape sandbox: the phone Menu has no Get in touch (${JSON.stringify(about)})`)
+      else ok('blobscape sandbox: the phone Menu lists the footer\'s About links')
+      await page.keyboard.press('Escape')
+      await page.setViewportSize({ width: 1440, height: 1000 })
       // The skip link jumps to the content without leaving the page
       await page.keyboard.press('Shift+Tab')
       await page.goto(base + '/lessons/footprint/')
