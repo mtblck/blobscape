@@ -629,8 +629,8 @@ export default [
       const sb = await open('/sandbox/', { viewport: { width: 1280, height: 900 } })
       await sb.page.waitForTimeout(1500)
       await sb.page.setInputFiles('input[type=file]', { name: 'frog-mesh.glb', mimeType: 'model/gltf-binary', buffer: meshBytes })
-      await sb.page.waitForFunction(() => /Added .* blobs on its \d+ bones/.test(document.body.textContent ?? ''), null, { timeout: 180000 }).catch(() => {})
-      const added = await sb.page.getByText(/Added .* blobs on its \d+ bones/).first().textContent().catch(() => '')
+      // the note is read in the same look that finds it: it is gone a few seconds later, and a second look at a busy page can come after that
+      const added = await sb.page.waitForFunction(() => [...document.querySelectorAll('[aria-live]')].map((e) => e.textContent ?? '').find((t) => /Added .* blobs on its \d+ bones/.test(t)), null, { timeout: 180000 }).then((h) => h.jsonValue(), () => '')
       if (!added) fails.push('blobscape sandbox creatures: the frog as a skinned mesh did not join the sandbox as a creature')
       else ok(`blobscape sandbox creatures: ${added.trim()}`)
       await sb.ctx.close()
