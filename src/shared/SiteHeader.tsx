@@ -30,9 +30,10 @@ const CURRENT = 'text-ink underline decoration-blob decoration-2 underline-offse
 /**
  * The sticky header every page shares: the Blobscape logo, the main pages with the engine's as a dropdown, and a
  * theme button. On a phone the pages fold into a menu button. `here` is the current page's path, so its link is
- * marked as the current page. Contact and support live in the footer and the floating tip button.
+ * marked as the current page. Contact and support live in the footer and the floating tip button. `wide` spans the
+ * window instead of the page width, logo at the left edge and menu at the right, for a full-width page (the sandbox).
  */
-export function SiteHeader({ here }: { here?: string }) {
+export function SiteHeader({ here, wide }: { here?: string; wide?: boolean }) {
   const inEngine = !!here?.startsWith('/engine/')
   return (
     <>
@@ -43,7 +44,7 @@ export function SiteHeader({ here }: { here?: string }) {
         Skip to content
       </a>
       <header className="sticky top-0 z-30 border-b border-rule bg-paper/85 backdrop-blur-md supports-[not(backdrop-filter:blur(0))]:bg-paper">
-        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-4 px-4">
+        <div className={`flex h-14 items-center justify-between gap-4 px-4 ${wide ? '' : 'mx-auto max-w-7xl'}`}>
           <a href="/" aria-current={here === '/' ? 'page' : undefined} className="-mx-1 shrink-0 rounded-md px-1 py-1.5 transition-transform hover:-translate-y-px">
             <Logo className="h-6 w-auto sm:h-7" title="Blobscape home" />
           </a>
