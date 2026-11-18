@@ -6,6 +6,18 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-18
+
+The headlines:
+
+- Three new experiments: **Wading Pond** (real water, reflections and a lens), **Day and Night** (a cabin and a city lit live through a whole day) and **One Scene, Four Ways** (one scene drawn by a bare shader, three.js meshes, Spark splats and Blobscape).
+- The sandbox is a workspace with five modes, and Sand, Snow and Goo is rebuilt so each material behaves like itself.
+- Pixel Diorama has two new scenes (Koi pond in the rain, Fox and wisp), and every gallery loop is recorded again.
+- In the engine: brush and ink outlines, clean cuts, colliders, water, mirrors, a lens, sunlight and steadier shadows.
+- Links to Blobscape now preview with a picture of the page they lead to.
+
+Everything, newest first:
+
 - The dragon's forelegs hang loose while it flies: elbows back, forearms dropping from them and paws limp with the claws down, swinging a little behind each wingbeat. They were held out stiffly in front with the paws turned up.
 - Skin no longer tears. The dragon's wings opened black seams and rows of holes as they beat, and the backs of the frog's legs came apart as it jumped. Blobs now stretch with the skin they are part of: where two bones pull skin out between them, each blob is pulled out by the same amount, on every creature, in files and in models opened from outside. Skin shared between more than four bones no longer splits along the lines where a bone was dropped, and thin sheets such as wing skin are cut without the rows of holes they had even at rest. In the engine: `weightGradients`, and `span` on a sculpted part for skin stretched between its bones.
 - A link to Blobscape now shows a picture of what it leads to. Each experiment's page shares its own cover, and the front page shares the logo beside four experiments, in place of one plain logo card for every page.
@@ -16,7 +28,7 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 - Pixel Diorama's koi pond has a cherry tree in full bloom in place of the maple: billows of pale and deep pink blossom over dark boughs, with petals drifting down and lying on the moss. Its stone lanterns no longer turn warm all over: each one's light used to sit inside solid stone and shine through it onto the cap and rim. The light boxes are now hollow with paper screens in their openings, and the light gets out only through those. The scene's daylight is an overcast day's, with no warm sun in it. The low lantern now stands wholly on the bank; one of its legs was in the water.
 - The sandbox's header spans the whole window like the page under it: the logo sits at the left edge and the menu at the right.
 - Pixel Diorama has a new scene, Koi pond in the rain: a pond in a moss garden with two stone lanterns, a red maple, bamboo and irises. The water is a real one. Every raindrop leaves a ring where it lands, the koi push wakes as they circle, and the rings spread, cross, bounce off the stepping stones and the banks and die away; with WebGPU the water also mirrors the lanterns and the maple. Any scene written as data can have it: a description's new `water` floods a basin, takes the scene's own rain and is moved by the bones named in `bodies`. In the engine: `SceneWater` works one loop of a scene's water out, and `Stage` takes extra actors, `reshape` and `setMirror`.
-- Pixel Diorama: every scene now starts with Dither at 50% (they started between 5% and 12%). The recorded loops in the gallery still show the old setting until they are recorded again.
+- Pixel Diorama: every scene now starts with Dither at 50% (they started between 5% and 12%).
 - Brush and Ink: the marks on a turning thing stay where they are. The stripes on the windmill's sails used to jump as each sail came round, because the marks were laid far to near and every blob on a sail changed places at the same moment. Each pixel now shows the mark nearest to it, so the order they are drawn in no longer matters. The scanned mug keeps its softer, layered marks (`soft` on a mark look in the engine).
 - Wading Pond and Forest Walk: the elf stands straight when she stops. She was squatting with her knees bent; her hips now ride as high as her legs allow on the ground under each foot.
 - Sandbox keys: 1 to 5 open the modes, a letter picks each tool (A, S, P, E, F, T, V, L, M) and Escape puts the tool down to look around, while the sandbox has focus; the Keys button on the view lists them. Each mode's panel starts with a line saying what it is for, and the phone tray leaves the view half the screen.
@@ -136,7 +148,8 @@ Our own renderer for animated splats, built on three.js with WebGPU and a WebGL 
 
 Some pixel-scene ideas come from Silicon Jungle's play kits (ideas, not code). The code is MIT licensed.
 
-[Unreleased]: https://github.com/mtblck/blobscape/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/mtblck/blobscape/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/mtblck/blobscape/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/mtblck/blobscape/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/mtblck/blobscape/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/mtblck/blobscape/releases/tag/v0.1.0
