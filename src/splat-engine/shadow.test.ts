@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { OCC_SCALE, REACH, blobSigma, occupancy, shadowBox, transmittance } from './shadow.ts'
+import { OCC_SCALE, REACH, SHADOW_CELLS, blobSigma, occupancy, shadowBox, steadyBox, transmittance } from './shadow.ts'
 
 // a floor of flat discs on y = 0, 4 m square, 5 cm apart, and a wall standing on it at x = 0.5
 function scene(wall = true) {
@@ -68,4 +68,34 @@ test('a denser shadow lets less through the same wall, and nothing changes where
   assert.ok(hard <= soft && soft < 1, `${soft} ${hard}`)
   assert.ok(hard < soft ** 3 + 1e-9)
   assert.equal(transmittance(g, box, [-0.5, 0, 0], [0, 1, 0], west, true, 5), 1)
+})
+
+test('a steady grid keeps its lattice while the bounds wander, and blobs that start to one side soften a shadow edge', () => {
+  // once the grid has held the widest the bounds get (a bird at the far end of its round), it keeps that size
+  const a = steadyBox([-2.05, -0.3, -1.8], [1.8, 2.05, 1.95])
+  // the bird flies in and out: the bounds change every frame, the cell and the lattice do not
+  for (const up of [1.7, 1.9, 2.05, 1.8, 1.65]) {
+    const b = steadyBox([-1.8 - up * 0.1, -0.3, -1.8], [1.8, up, 1.8 + up * 0.05], a)
+    assert.equal(b.cell, a.cell)
+    for (let k = 0; k < 3; k++) {
+      const steps = (b.origin[k] - a.origin[k]) / a.cell
+      assert.ok(Math.abs(steps - Math.round(steps)) < 1e-9, 'whole cells apart')
+      assert.ok(b.origin[k] <= [-1.8, -0.3, -1.8][k] && b.origin[k] + b.dims[k] * b.cell >= [1.8, up, 1.8][k])
+    }
+    assert.ok(b.dims[0] * b.dims[1] * b.dims[2] <= SHADOW_CELLS)
+  }
+  // bounds that grow well past the budget, or shrink to a fraction, get a new size
+  assert.ok(steadyBox([-9, -1, -9], [9, 6, 9], a).cell > a.cell * 2)
+  assert.ok(steadyBox([-0.4, 0, -0.4], [0.4, 0.5, 0.4], a).cell < a.cell / 2)
+  // spread: blobs at one spot with different offsets disagree at a shadow's edge, agree well inside and well outside
+  const post = { origin: [0, 0, 0] as [number, number, number], cell: 0.1, dims: [40, 20, 20] as [number, number, number] }
+  const g = new Uint32Array(40 * 20 * 20)
+  for (let y = 0; y < 14; y++) for (let z = 0; z < 20; z++) g[(z * 20 + y) * 40 + 20] = OCC_SCALE * 4
+  const sunWest = [-Math.cos(0.6), Math.sin(0.6), 0]
+  const share = (x: number) => { let s = 0; for (let k = 0; k < 40; k++) s += transmittance(g, post, [x, 0.05, 1], [0, 1, 0], sunWest, true, 5, [((k * 7) % 40) / 40 - 0.5, 0, ((k * 13) % 40) / 40 - 0.5]); return s / 40 }
+  // the wall is 1.4 high and the sun 34 degrees up, so its shadow reaches about 2 east of it
+  assert.ok(share(2.6) < 0.02 && share(3.4) < 0.02 && share(4.5) > 0.98, `${[2.6, 3.4, 4.5].map(share)}`)
+  const edge = [3.5, 3.7, 3.8, 3.9, 4.0, 4.1, 4.3].map(share)
+  assert.ok(edge.some((v) => v > 0.1 && v < 0.9), `${edge}`)
+  assert.ok(edge.every((v, k) => k === 0 || v >= edge[k - 1] - 1e-9), `${edge}`)
 })
