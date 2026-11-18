@@ -15,7 +15,7 @@ export const BEE: SceneDoc = {
     '#eaf6fb',
   ],
   sky: ['#0c1a14', '#234a2a'],
-  look: { dither: 0.05, glow: 1.25, outline: true, edges: true },
+  look: { dither: 0.5, glow: 1.25, outline: true, edges: true },
   camera: { target: [0, 1.3, 0.1], distance: 4.8, azimuth: 24, elevation: 9, swing: 14 },
   air: { haze: { color: '#16301f', from: 0.5, to: 7 }, shafts: [{ from: [-0.6, 3.2, -0.6], to: [0.2, 0, 0.6], r: 0.22, color: '#ffe58a', strength: 0.5 }, { from: [0.7, 3.2, -0.8], to: [1.1, 0, 0.4], r: 0.18, color: '#ffe58a', strength: 0.45 }], specks: [{ kind: 'dust', count: 40, from: [-1.3, 0.3, -0.8], to: [1.3, 2.4, 1.0], colors: ['#ffe58a', '#f7c341'], glow: true }] },
   bones: [

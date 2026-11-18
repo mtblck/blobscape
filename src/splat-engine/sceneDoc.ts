@@ -72,6 +72,52 @@ export interface SceneDoc {
   cover?: { kind: 'snow' | 'moss' | 'dust'; color: string; amount: number }
   /** Where the eye goes: within `r` of `at` the scene is cut at full detail, further out on a grid twice as coarse, in about a quarter of the blobs. */
   focus?: { at: Vec3; r: number }
+  /** A pond whose surface ripples where rain lands on it and where things move through it. */
+  water?: WaterDoc
+}
+
+/**
+ * Water that moves (water.ts): a pond, a pool or a puddle. Wherever the still ground inside the box `from` to `to`
+ * lies under `level` there is water, standing at that level, and its surface is a grid of heights stepped by the
+ * wave equation. Rain that lands (`air.specks` of `rain` with `land`) falls onto it and each drop leaves its splash
+ * where it comes down, so its rings spread from there, cross each other and bounce off the banks and whatever
+ * stands in the water. One whole loop of it is worked out when the scene is made (`SceneWater`), so it repeats with
+ * the scene. Dig the pond with a `cut` in the ground; float leaves on a bone that moves, since only what stays put
+ * holds water back.
+ */
+export interface WaterDoc {
+  /** The height its surface stands at. */
+  level: number
+  /** One corner of the ground looked over for water, [x, z]. */
+  from: [number, number]
+  /** The opposite corner. */
+  to: [number, number]
+  /** The water's own color, seen looking straight down into it. */
+  color: string
+  /** What its surface mirrors where nothing stands over it: the sky overhead, then the sky low down. The scene's `sky` when left out. */
+  sky?: [string, string]
+  /** How solid it is looking straight down, 0 to 1: 0.5 when left out. Lower shows more of the bed and what swims under it. */
+  clear?: number
+  /** A cell of its grid: 0.012 to 0.1, 0.022 when left out. The grid may hold 40,000 cells. */
+  cell?: number
+  /** How fast a ring travels, units a second: 0.32 when left out. */
+  speed?: number
+  /** The share of its motion the water loses a second, 0.05 to 0.95: 0.6 when left out. */
+  damping?: number
+  /** How many times steeper than it is the surface is drawn and lit, so small ripples read: 1 to 12, 4 when left out. */
+  ripple?: number
+  /** A raindrop's mark: a crater `r` across (half) and `depth` deep with a raised rim. About a cell and a half wide and a fifth of a cell deep when left out. */
+  splash?: { r: number; depth: number }
+  /** How deep the water is taken to be for the light a ripple gathers on the bed, which is what shows one from above: 0 to 2, 0.05 when left out. Too deep for the ripples' size and every crest is a white line. */
+  deep?: number
+  /**
+   * What swims or floats through the surface, at most twelve: a ball of radius `r` round the point `at`, riding
+   * `bone`. Where it breaks the surface it pushes aside the water it takes the place of, so a back that rises
+   * leaves a ring and one that moves along leaves a wake. `draft` is how deep the water it moves is where it
+   * crosses: a tenth of `r` when left out, which suits a fish whose back just shows; a post standing on the bed
+   * moves the whole depth.
+   */
+  bodies?: { bone: string; at: Vec3; r: number; draft?: number }[]
 }
 
 /** A scene's air: haze, mist, shafts of light and specks. */
@@ -385,6 +431,10 @@ const MAX_SURFACE = 200
 const MAX_MOVES_PER_BONE = 6
 /** Specks in a whole scene: each is a bone of its own, posed every frame. */
 const MAX_SPECKS = 300
+/** A cell of a scene's water when it names none, and the most cells its grid may hold. */
+const WATER_CELL = 0.022, MAX_WATER_CELLS = 40000
+/** How far under the level the ground must lie for there to be water over it. */
+const WATER_LEAST = 0.004
 const SPECK_KINDS: SpeckKind[] = ['dust', 'embers', 'rain', 'snow', 'leaves', 'fireflies', 'bubbles']
 /** A value for a message: only what is safe to print (anything can arrive from a prompt). */
 const COVERS = ['snow', 'moss', 'dust']
@@ -886,6 +936,36 @@ export function checkScene(doc: unknown): string[] {
       num(c.amount, 'cover.amount', 0, 1)
     }
   }
+  if (doc.water !== undefined) {
+    const w = doc.water
+    if (!obj(w)) bad('water', 'must be an object')
+    else {
+      num(w.level, 'water.level', -REACH, REACH)
+      const cell = opt(w.cell, 'water.cell', 0.012, 0.1) ? (w.cell as number | undefined) ?? WATER_CELL : WATER_CELL
+      if (vec(w.from, 'water.from', -REACH, REACH, 2) && vec(w.to, 'water.to', -REACH, REACH, 2)) {
+        const [a, b] = [w.from as number[], w.to as number[]], nx = Math.abs(b[0] - a[0]) / cell, nz = Math.abs(b[1] - a[1]) / cell
+        if (nx < 4 || nz < 4) bad('water.to', 'must be at least four cells from water.from each way')
+        else if (nx * nz > MAX_WATER_CELLS) bad('water.cell', `makes a grid of ${Math.round(nx * nz)} cells; the most is ${MAX_WATER_CELLS}, so make the box smaller or the cell bigger`)
+      }
+      hex(w.color, 'water.color')
+      if (w.sky !== undefined) hexes(w.sky, 'water.sky', 2, 2)
+      opt(w.clear, 'water.clear', 0, 1); opt(w.speed, 'water.speed', 0.05, 2); opt(w.damping, 'water.damping', 0.05, 0.95)
+      opt(w.ripple, 'water.ripple', 1, 12); opt(w.deep, 'water.deep', 0, 2)
+      if (w.splash !== undefined) {
+        if (!obj(w.splash)) bad('water.splash', 'must be an object')
+        else { num(w.splash.r, 'water.splash.r', 0.01, 0.5); num(w.splash.depth, 'water.splash.depth', 0, 0.1) }
+      }
+      if (w.bodies !== undefined) {
+        if (!Array.isArray(w.bodies) || w.bodies.length > 12) bad('water.bodies', 'must be a list of at most 12')
+        else w.bodies.forEach((b: unknown, i: number) => {
+          const at = `water.bodies[${i}]`
+          if (!obj(b)) { bad(at, 'must be an object'); return }
+          if (typeof b.bone !== 'string' || !names.has(b.bone)) bad(`${at}.bone`, `${show(b.bone)} is not a bone of this scene`)
+          vec(b.at, `${at}.at`); num(b.r, `${at}.r`, 0.005, 0.5); opt(b.draft, `${at}.draft`, 0, 0.5)
+        })
+      }
+    }
+  }
   if (doc.air !== undefined) {
     const air = doc.air
     const list = (v: unknown, at: string, max: number) => {
@@ -1116,6 +1196,48 @@ export interface CompiledScene {
   lights(t: number): PointLight[]
   /** Distance haze, if the scene asks for it: the color (linear) and where it starts and would be total, in units past the view's target. */
   haze?: { color: Vec3; from: number; to: number }
+  /** The scene's water, if it has any, with its defaults filled in: what `SceneWater` plays. */
+  water?: WaterPlan
+}
+
+/** A scene's water made ready (`CompiledScene.water`): its grid, its look, the rain that lands on it over one loop and what swims through it. */
+export interface WaterPlan {
+  /** The height the surface stands at. */
+  level: number
+  /** The grid's corner along x. */
+  x0: number
+  /** The grid's corner along z. */
+  z0: number
+  /** Cells along x. */
+  nx: number
+  /** Cells along z. */
+  nz: number
+  /** A cell's side. */
+  cell: number
+  /** How fast a ring travels, units a second. */
+  speed: number
+  /** The share of its motion the water loses a second. */
+  damping: number
+  /** How many times steeper than it is the surface is drawn and lit. */
+  ripple: number
+  /** How deep the water is taken to be for the light a ripple gathers on the bed. */
+  deep: number
+  /** How solid the surface is looking straight down. */
+  clear: number
+  /** A raindrop's mark: its half width and its depth. */
+  splash: { r: number; depth: number }
+  /** The water's own color, linear. */
+  body: Vec3
+  /** The sky overhead as the surface mirrors it, linear. */
+  sky: Vec3
+  /** The sky low down, linear. */
+  horizon: Vec3
+  /** Whether there is water at a point: the still ground there lies under the level. It measures the ground each time, so ask once a cell. */
+  wet(x: number, z: number): boolean
+  /** Every raindrop that lands on the water in one loop: where, and how many seconds into the loop. */
+  drops: { x: number; z: number; at: number }[]
+  /** What moves through the surface: a ball of radius `r` round the rest point `at`, riding the bone at index `bone`, moving water `draft` deep where it crosses. */
+  bodies: { bone: number; at: Vec3; r: number; draft: number }[]
 }
 
 // --- What hangs in the air
@@ -1140,6 +1262,11 @@ interface Speck {
   wind: [number, number]
   /** A falling speck's lean, so a streak of rain points along its fall. */
   lean?: [number, number, number, number]
+  /**
+   * Rain that lands comes down somewhere new each time it falls: for each of its `times` falls, how far from `at` it
+   * starts ([x, z]), how far it falls, and whether it lands on the scene's water.
+   */
+  falls?: { dx: number; dz: number; travel: number; wet: boolean }[]
 }
 
 const SPECK_SIZE: Record<SpeckKind, number> = { dust: 0.01, embers: 0.014, rain: 0.008, snow: 0.014, leaves: 0.022, fireflies: 0.018, bubbles: 0.02 }
@@ -1160,7 +1287,7 @@ function swayOf(p: Speck, life: number): [number, number] {
 }
 const BANK_BONES = 3
 
-function planSpecks(air: AirDoc | undefined, loop: number, ground: (x: number, z: number, top: number, bottom: number) => number): Speck[] {
+function planSpecks(air: AirDoc | undefined, loop: number, ground: (x: number, z: number, top: number, bottom: number) => number, water?: number): Speck[] {
   const out: Speck[] = []
   ;(air?.specks ?? []).forEach((sw, si) => {
     const lo: Vec3 = [Math.min(sw.from[0], sw.to[0]), Math.min(sw.from[1], sw.to[1]), Math.min(sw.from[2], sw.to[2])]
@@ -1188,6 +1315,14 @@ function planSpecks(air: AirDoc | undefined, loop: number, ground: (x: number, z
         const [sx, sz] = swayOf(p, 1)
         const rest = sw.kind === 'leaves' ? size * 0.3 : sw.kind === 'rain' ? 0 : size * 0.6
         p.travel = Math.max(0, hi[1] - (ground(at[0] + wind[0] + sx, at[2] + wind[1] + sz, hi[1], lo[1]) + rest))
+        // rain is a new drop each time: it comes down somewhere else in the box, onto whatever is under it there
+        if (sw.kind === 'rain') {
+          p.falls = Array.from({ length: times }, (_, n) => {
+            const x = n ? lo[0] + (hi[0] - lo[0]) * hash(si + 1, j + 1, 20 + n * 2) : at[0] + wind[0], z = n ? lo[2] + (hi[2] - lo[2]) * hash(si + 1, j + 1, 21 + n * 2) : at[2] + wind[1]
+            const floor = ground(x, z, hi[1], lo[1])
+            return { dx: x - wind[0] - at[0], dz: z - wind[1] - at[2], travel: Math.max(0, hi[1] - floor), wet: floor === water }
+          })
+        }
       }
       // a streak of rain leans along its fall
       if (sw.kind === 'rain' && (wind[0] || wind[1])) {
@@ -1202,6 +1337,35 @@ function planSpecks(air: AirDoc | undefined, loop: number, ground: (x: number, z
   return out
 }
 
+/** A scene's water with its defaults filled in, and every raindrop that lands on it in a loop. */
+function planWater(w: WaterDoc, box: { x0: number; x1: number; z0: number; z1: number }, doc: SceneDoc, specks: Speck[], bones: Bone[], wet: (x: number, z: number) => boolean): WaterPlan {
+  const cell = w.cell ?? WATER_CELL
+  const lin = (h: string) => unit(h).map(linear) as Vec3
+  const body = lin(w.color)
+  // with no sky named, a pale and a paler step of its own color: an overcast sky seen in dark water
+  const skies = w.sky ?? doc.sky
+  const sky = skies ? lin(skies[0]) : body.map((c) => Math.min(1, c * 2.5 + 0.08)) as Vec3, horizon = skies ? lin(skies[1]) : body.map((c) => Math.min(1, c * 4 + 0.2)) as Vec3
+  const drops: WaterPlan['drops'] = []
+  const share = fallShare('rain')
+  for (const p of specks) {
+    if (!p.falls) continue
+    p.falls.forEach((f, n) => {
+      if (!f.wet) return
+      // the drop is down when this fall's life reaches the share spent falling
+      const u = ((((n + share - p.phase[0]) / p.times) % 1) + 1) % 1
+      drops.push({ x: p.at[0] + f.dx + p.wind[0], z: p.at[2] + f.dz + p.wind[1], at: u * doc.loop })
+    })
+  }
+  drops.sort((a, b) => a.at - b.at)
+  return {
+    level: w.level, x0: box.x0, z0: box.z0, nx: Math.max(1, Math.ceil((box.x1 - box.x0) / cell)), nz: Math.max(1, Math.ceil((box.z1 - box.z0) / cell)), cell,
+    speed: w.speed ?? 0.32, damping: w.damping ?? 0.6, ripple: w.ripple ?? 4, deep: w.deep ?? 0.05, clear: w.clear ?? 0.5,
+    splash: w.splash ?? { r: cell * 1.5, depth: cell * 0.2 },
+    body, sky, horizon, wet, drops,
+    bodies: (w.bodies ?? []).map((b) => ({ bone: bones.findIndex((k) => k.name === b.bone), at: b.at, r: b.r, draft: b.draft ?? b.r * 0.1 })),
+  }
+}
+
 /** Poses one speck's bone for `u`, the share of the loop gone by. */
 function poseSpeck(sk: Skeleton, p: Speck, u: number) {
   const b = p.index
@@ -1211,7 +1375,8 @@ function poseSpeck(sk: Skeleton, p: Speck, u: number) {
   if (p.kind === 'rain' || p.kind === 'snow' || p.kind === 'leaves') {
     const f = p.land ? fallAt(p.kind, life) : { drop: life, lying: false, size: Math.sin(Math.PI * life) ** 0.25 }
     const [sx, sz] = swayOf(p, life)
-    dx = p.wind[0] * f.drop + sx; dz = p.wind[1] * f.drop + sz; dy = -p.travel * f.drop
+    const fall = p.falls?.[(((Math.floor(u * p.times + p.phase[0]) % p.times) + p.times) % p.times)]
+    dx = p.wind[0] * f.drop + sx + (fall?.dx ?? 0); dz = p.wind[1] * f.drop + sz + (fall?.dz ?? 0); dy = -(fall?.travel ?? p.travel) * f.drop
     size = f.size
     if (p.lean) sk.setRotation(b, p.lean)
     if (p.kind === 'leaves') {
@@ -1304,8 +1469,21 @@ export function compileScene(doc: SceneDoc, { puffs = true }: { puffs?: boolean 
   }
   // what hangs in the air rides bones of its own, after the scene's: a bone for each speck, a few for each bank of mist
   const lands = (doc.air?.specks ?? []).some((m) => m.land)
-  const ground = lands ? solidShapes(0.02).still : []
-  const specks = planSpecks(doc.air, doc.loop, (x, z, top, bottom) => groundUnder(ground, x, z, top, bottom))
+  const pond = doc.water
+  const ground = lands || pond ? solidShapes(0.02).still : []
+  const pondBox = pond && { x0: Math.min(pond.from[0], pond.to[0]), x1: Math.max(pond.from[0], pond.to[0]), z0: Math.min(pond.from[1], pond.to[1]), z1: Math.max(pond.from[1], pond.to[1]) }
+  /** Whether there is water at (x, z): inside the box, with a bed of still ground under the level to hold it (looked for from just over the surface, so a roof overhead is not in the way). */
+  const wetAt = (x: number, z: number) => {
+    if (!pond || !pondBox || x < pondBox.x0 || x > pondBox.x1 || z < pondBox.z0 || z > pondBox.z1) return false
+    const bed = groundUnder(ground, x, z, pond.level + 3 * (pond.cell ?? WATER_CELL), -REACH)
+    return bed > -REACH + 1e-6 && bed < pond.level - WATER_LEAST
+  }
+  const specks = planSpecks(doc.air, doc.loop, (x, z, top, bottom) => {
+    const g = groundUnder(ground, x, z, top, bottom)
+    // nothing between the sky and the water there: the water is what it lands on
+    return pond && g < pond.level && wetAt(x, z) ? pond.level : g
+  }, pond?.level)
+  const water = pond && pondBox ? planWater(pond, pondBox, doc, specks, bones, wetAt) : undefined
   const banks = doc.air?.mist ?? []
   banks.forEach((m, mi) => { for (let k = 0; k < BANK_BONES; k++) bones.push({ name: `~mist${mi}-${k}`, parent: 0, head: m.at }) })
   for (const p of specks) { p.index = bones.length; bones.push({ name: p.bone, parent: 0, head: p.at }) }
@@ -1402,6 +1580,7 @@ export function compileScene(doc: SceneDoc, { puffs = true }: { puffs?: boolean 
       sk.update()
     },
     haze: haze ? { color: unit(haze.color).map(linear) as Vec3, from: haze.from ?? 0, to: haze.to ?? 4 } : undefined,
+    water,
     lights(t) {
       const u = t / doc.loop
       return lights.map((l) => {

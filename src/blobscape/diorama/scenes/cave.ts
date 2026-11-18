@@ -18,7 +18,7 @@ export const CAVE: SceneDoc = {
   ],
   sky: ['#070a16', '#18264a'],
   skyReach: 0.6,
-  look: { dither: 0.1, glow: 1.8, outline: true, edges: true },
+  look: { dither: 0.5, glow: 1.8, outline: true, edges: true },
   disc: 0.7,
   camera: { target: [0, 0.65, -0.1], distance: 5.0, azimuth: 16, elevation: 14, swing: 6 },
   air: {

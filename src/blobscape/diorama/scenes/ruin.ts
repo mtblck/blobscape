@@ -18,7 +18,7 @@ export const RUIN: SceneDoc = {
   ],
   sky: ['#3b2a48', '#f0a070'],
   skyReach: 0.75,
-  look: { dither: 0.12, glow: 1.6, outline: true, edges: true },
+  look: { dither: 0.5, glow: 1.6, outline: true, edges: true },
   camera: { target: [0, 0.55, 0], distance: 5.3, azimuth: 22, elevation: 16, swing: 7 },
   cover: { kind: 'moss', color: '#466434', amount: 0.35 },
   air: {

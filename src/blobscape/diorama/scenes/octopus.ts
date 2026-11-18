@@ -15,7 +15,7 @@ export const OCTOPUS: SceneDoc = {
   ],
   sky: ['#12283c', '#05070f'],
   skyReach: 0.6,
-  look: { dither: 0.05, glow: 1.2, outline: true, edges: true },
+  look: { dither: 0.5, glow: 1.2, outline: true, edges: true },
   camera: { target: [0, 1.3, 0], distance: 5.7, azimuth: 18, elevation: 8, swing: 14 },
   air: { haze: { color: '#0b1424', from: 0.5, to: 6 }, mist: [{ at: [0, 0.12, 0], half: [1.5, 0.1, 1.2], color: '#2f6a7c', thick: 0.5 }], specks: [{ kind: 'rain', count: 130, size: 0.006, from: [-1.8, 0, -1.2], to: [1.8, 3.6, 1.4], colors: ['#7fb4b8', '#d8ecec'] }] },
   bones: [
