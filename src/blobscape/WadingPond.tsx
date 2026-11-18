@@ -51,6 +51,8 @@ export function WadingPond() {
   const calm0 = useMemo(() => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches, [])
   const [flicker, setFlicker] = useState(!calm0)
   const [shadows, setShadows] = useState(true)
+  // on where the stage starts with it on (WebGPU); known once the stage is up
+  const [mirror, setMirror] = useState<boolean>()
   const [rain, setRain] = useState(0)
   const [stats, setStats] = useState<Stats>({ blobs: 0, waded: 0, still: true, fps: 0 })
   const coarse = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
@@ -67,6 +69,7 @@ export function WadingPond() {
         setStage(s)
         // without WebGPU (where the CPU sorts every frame) the pond starts light; with it, full
         setDetail((d) => d ?? (s.backend === 'webgpu' ? 'full' : 'light'))
+        setMirror((m) => m ?? s.reflections)
       }, (e: unknown) => { console.warn(e); setFailed('This browser could not start WebGPU or WebGL 2, which the pond needs.') })
     return () => { gone = true; live?.dispose() }
   }, [offscreen, webgl])
@@ -93,6 +96,7 @@ export function WadingPond() {
   useEffect(() => { if (stage?.pond) stage.pond.calm = !flicker }, [stage, flicker])
   useEffect(() => { if (stage?.pond) stage.pond.rain = rain }, [stage, rain])
   useEffect(() => { if (stage) stage.shadows = shadows }, [stage, shadows])
+  useEffect(() => { if (stage && mirror !== undefined) stage.reflections = mirror }, [stage, mirror])
   useEffect(() => { if (stage) stage.orbit = orbit }, [stage, orbit])
 
   // --- wading: keys and the thumb stick both feed one input
@@ -230,6 +234,7 @@ export function WadingPond() {
                   </div>
                 </Field>
                 <div className="grid gap-2">
+                  <Toggle label="The water mirrors the scene" checked={mirror ?? false} onChange={setMirror} />
                   <Toggle label="Candles flicker" checked={flicker} onChange={setFlicker} />
                   <Toggle label="Candles cast shadows" checked={shadows} onChange={setShadows} />
                 </div>
@@ -301,9 +306,16 @@ export function WadingPond() {
           </p>
           <p>
             The surface is drawn as flat blobs, two to a cell, each lifted and tilted to the water under it. Its color comes from
-            where you look from: clear and green looking down into it, darker and more of a mirror at a low angle. What it mirrors for now is
-            the night sky, lighter toward the horizon, the moon, and each candle's flame, so a ripple shows by tipping the mirror
-            toward a lighter or darker part of the sky, and the flames stretch and break up as rings pass under them.
+            where you look from: clear and green looking down into it, darker and more of a mirror at a low angle.
+          </p>
+          <p>
+            What it mirrors is the scene itself. Each time the mirror is drawn, the whole ruin, the elf and the flames are
+            drawn once more as their mirror image, from where you are looking, leaving out whatever is under the water.
+            Each blob of the surface then looks up what lies along its own mirrored line of sight in that picture. A
+            ripple tips that line, so reflections wobble and break up as rings pass, and nothing in it is placed by
+            hand: move the elf in front of the candles and their reflection goes dark behind it. Where the picture
+            is empty the water mirrors the night sky, lighter toward the horizon. Because the mirror costs a second
+            sort of every blob, it starts switched off where the browser has no WebGPU.
           </p>
           <p>
             Each candle flame is a few dozen blobs on a bone that stretches and leans on its own rhythm. Their light is two of the

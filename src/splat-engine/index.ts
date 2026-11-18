@@ -55,6 +55,8 @@ export { InkLines } from './inkLines.ts'
 export * from './lod.ts'
 export * from './edit.ts'
 export * from './depth.ts'
+export * from './reflect.ts'
+export * from './mirror.ts'
 
 // files and sheets
 export * from './glb.ts'
