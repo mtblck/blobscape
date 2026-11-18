@@ -133,10 +133,19 @@ stay in your browser.
       The same blobs drawn as brush strokes or pen lines that stay put as the view turns.
     </td>
     <td valign="top">
+      <a href="https://blobscape.dev/experiments/wading-pond/"><img src="public/covers/wading-pond.webp" alt="An elf wading through a pond in a ruin at night, rings spreading from its legs, candles burning in a niche" /></a><br />
+      <a href="https://blobscape.dev/experiments/wading-pond/"><b>Wading Pond</b></a><br />
+      Wade through a ruin's pond by candlelight: every ring comes from a real footfall.
+    </td>
+  </tr>
+  <tr>
+    <td valign="top">
       <a href="https://blobscape.dev/experiments/day-and-night/"><img src="public/covers/day-and-night.webp" alt="A log cabin in a forest clearing at dusk, its windows and a lantern lit and fireflies out" /></a><br />
       <a href="https://blobscape.dev/experiments/day-and-night/"><b>Day and Night</b></a><br />
       Drag the hour: the sun and moon cross the sky, shadows turn, lamps come on and fireflies come out.
     </td>
+    <td valign="top"></td>
+    <td valign="top"></td>
   </tr>
 </table>
 

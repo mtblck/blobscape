@@ -1,4 +1,5 @@
 import { rng } from '../../splat-engine/body.ts'
+import type { Walker } from '../walkingElf.ts'
 
 /**
  * The forest's layout, without any drawing: where the path runs, which
@@ -126,14 +127,7 @@ export function obstacles(tiles: number[], seed: number) {
   return out
 }
 
-export interface Walker {
-  x: number
-  z: number
-  /** Which way it faces, radians: 0 is +z (down the path), positive turns toward +x (left, seen from behind). */
-  heading: number
-  /** Meters per second along its heading (negative backs up). */
-  speed: number
-}
+export type { Walker } from '../walkingElf.ts'
 
 export interface Input {
   /** −1 (back) to 1 (forward). */

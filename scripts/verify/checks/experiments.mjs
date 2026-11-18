@@ -1129,6 +1129,55 @@ export default [
     },
   },
   {
+    name: 'pond',
+    about: 'Wading Pond on both backends: the water fills the ruin, the elf wades and raises rings, the candles light it, rain falls',
+    entries: ['src/blobscape/WadingPond.tsx'],
+    async run({ shots, join, fails, ok, open, tabClick }) {
+      for (const gl of ['', '&webgl=1']) {
+        const on = gl ? 'WebGL' : 'WebGPU'
+        const f = await open(`/experiments/wading-pond/?offscreen=1${gl}`, { viewport: { width: 1280, height: 900 } })
+        if (!gl && !(await f.page.locator('[data-testid=pond-loading]').count())) fails.push('blobscape pond: no loading note while the engine starts')
+        await f.page.waitForFunction(() => window.__pond?.stage.pond, null, { timeout: 120000 }).catch(() => {})
+        // the water's teal, and the warm light of the candles
+        const look = (seconds, forward, turn = 0) => f.page.evaluate(async ([s, fw, t]) => {
+          const st = window.__pond.stage
+          await st.frame(s, { forward: fw, turn: t })
+          const cv = document.querySelector('[data-testid=pond-view]')
+          const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+          let teal = 0, warm = 0
+          for (let i = 0; i < d.length; i += 4) {
+            if (d[i + 1] > d[i] + 20 && d[i + 2] > d[i] + 12 && d[i + 1] > 45) teal++
+            if (d[i] > 170 && d[i] > d[i + 2] + 70 && d[i + 1] > d[i + 2] + 25) warm++
+          }
+          const p = st.pond, w = p.water
+          let high = 0
+          for (const h of w.h) high = Math.max(high, Math.abs(h))
+          return { backend: st.backend, teal, warm, wet: w.wetCount, still: w.still, energy: w.energy, high, volume: w.volume, waded: p.waded, steps: p.walking.steps.taken, inWater: w.roomAt(p.walker.x, p.walker.z, 0.29), lights: p.lights().length }
+        }, [seconds, forward, turn])
+        const start = await look(0.1, 0)
+        if (start.backend !== (gl ? 'webgl' : 'webgpu')) fails.push(`blobscape pond on ${on}: drawn by ${start.backend}`)
+        if (!(start.wet > 3000 && start.teal > 20000 && start.warm > 30 && start.still && start.lights >= 1)) fails.push(`blobscape pond on ${on}: first frame ${JSON.stringify(start)}`)
+        else ok(`blobscape pond on ${on}: still water over ${start.wet} cells (${start.teal} teal pixels), candles alight (${start.warm} warm pixels)`)
+        const walked = await look(3, 1, 0.2)
+        if (!(walked.waded > 2 && walked.steps > 4 && !walked.still && walked.energy > 1e-4 && walked.high > 0.005 && walked.high < 0.4 && Math.abs(walked.volume) < 1e-4 && walked.inWater)) fails.push(`blobscape pond on ${on}: after wading ${JSON.stringify(walked)}`)
+        else ok(`blobscape pond on ${on}: the elf wades ${walked.waded.toFixed(1)} m in ${walked.steps} steps and raises rings ${(walked.high * 100).toFixed(1)} cm high, with no water made or lost`)
+        await f.page.screenshot({ path: join(shots, `blobscape-pond${gl ? '-webgl' : ''}.png`) })
+        if (!gl) {
+          // standing, the rings die down; then, on water laid flat, rain sets the whole pond moving
+          const rested = await look(4, 0)
+          await f.page.evaluate(() => window.__pond.stage.pond.water.rest())
+          await tabClick(f.page.getByRole('button', { name: 'A shower' }))
+          const rained = await look(2, 0)
+          if (!(rested.energy < walked.energy / 4 && !rained.still && rained.energy > 1e-7 && rained.high > 2e-4)) fails.push(`blobscape pond: rest and rain ${JSON.stringify({ walked: walked.energy, rested: rested.energy, rained })}`)
+          else ok(`blobscape pond: the rings die down when the elf stands (${walked.energy.toExponential(1)} to ${rested.energy.toExponential(1)}) and a shower stirs still water (${(rained.high * 1000).toFixed(1)} mm)`)
+          if (await f.page.locator('[data-testid=pond-loading]').count()) fails.push('blobscape pond: the loading note stays after the pond is drawn')
+          await f.page.screenshot({ path: join(shots, 'blobscape-pond-rain.png') })
+        }
+        await f.ctx.close()
+      }
+    },
+  },
+  {
     name: 'shifter',
     about: 'Shape Shifter on both backends: from one creature to the other, the slider, random partners',
     entries: ['src/blobscape/ShapeShifter.tsx'],
@@ -1219,10 +1268,10 @@ export default [
     core: true,
     about: 'every experiment: same two columns, its own tabs, a preview that stays in sight on a phone',
     entries: ['src/shared/Workbench.tsx', 'src/shared/ui.tsx'],
-    files: ['src/shared/theme.css', 'src/blobscape/PixelDiorama.tsx', 'src/blobscape/Creature.tsx', 'src/blobscape/ForestWalk.tsx', 'src/blobscape/DungeonRun.tsx', 'src/blobscape/ScanStudio.tsx', 'src/blobscape/Clockwork.tsx', 'src/blobscape/ShapeShifter.tsx', 'src/blobscape/SandSnowGoo.tsx', 'src/blobscape/BrushInk.tsx', 'src/fit-a-picture/App.tsx', 'src/splat-to-sprite/App.tsx'],
+    files: ['src/shared/theme.css', 'src/blobscape/PixelDiorama.tsx', 'src/blobscape/Creature.tsx', 'src/blobscape/ForestWalk.tsx', 'src/blobscape/WadingPond.tsx', 'src/blobscape/DungeonRun.tsx', 'src/blobscape/ScanStudio.tsx', 'src/blobscape/Clockwork.tsx', 'src/blobscape/ShapeShifter.tsx', 'src/blobscape/SandSnowGoo.tsx', 'src/blobscape/BrushInk.tsx', 'src/fit-a-picture/App.tsx', 'src/splat-to-sprite/App.tsx'],
     async run({ join, fails, ok, open }) {
       const PAGES = [
-        ['pixel-diorama', 'Scene,Pixels,Finish'], ['creature', 'Creature Type,Movement & Details,Export & Import'], ['forest-walk', 'Forest Type,Character Style,View'],
+        ['pixel-diorama', 'Scene,Pixels,Finish'], ['creature', 'Creature Type,Movement & Details,Export & Import'], ['forest-walk', 'Forest Type,Character Style,View'], ['wading-pond', 'Water & Light,Character Style,View'],
         ['dungeon-run', 'Game Settings,Character Style,View'], ['scan-studio', 'Import,Level & Crop,Clean,Lighting,Colliders'], ['clockwork', 'Time,View'], ['shape-shifter', 'Shift,Creatures'], ['sand-snow-goo', 'Pour,Box'], ['brush-and-ink', 'Look,Subject'],
         ['fit-a-picture', 'Picture,Training'], ['splat-to-sprite', 'Prop Type,Pixels,Finish,View'],
       ]

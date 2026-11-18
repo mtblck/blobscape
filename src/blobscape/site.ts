@@ -38,6 +38,17 @@ export const EXPERIMENTS = [
     body: 'A cabin in a clearing through a whole day. Drag the time: the sun crosses the sky, shadows turn and stretch, the windows come on at dusk and fireflies come out under the moon.',
   },
   {
+    id: 'pond',
+    title: 'Wading Pond',
+    url: '/experiments/wading-pond/',
+    cover: '/covers/wading-pond.webp',
+    tags: ['game', 'creatures'],
+    needs: 'WebGPU or WebGL 2',
+    published: '2026-11-18',
+    updated: '2026-11-18',
+    body: 'Wade the elf through a shallow pond in a ruin by candlelight. Each footfall raises a real ring on the water, which spreads and bounces off the banks, and the candles throw the elf\'s shadow on the wall.',
+  },
+  {
     id: 'brush',
     title: 'Brush and Ink',
     url: '/experiments/brush-and-ink/',

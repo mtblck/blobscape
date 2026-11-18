@@ -503,6 +503,40 @@ export class SplatWorld extends Mesh {
     this.lightsDirty = true
   }
 
+  /**
+   * Takes one actor's blobs again after they were changed in place: centers, shapes, colors and opacities, as
+   * `refresh` does for every actor, for a surface that moves on its own (water). Its blobs must stay about where its
+   * bones' bounds were when the world was made, since those are not measured again.
+   */
+  reshape(actor: Actor) {
+    const ai = this.actors.indexOf(actor)
+    if (ai < 0) throw new Error('reshape: not an actor of this world')
+    let at = 0
+    for (let j = 0; j < ai; j++) at += this.actors[j].blobs.count
+    const b = this.buf
+    const center = b.centerAttr.array as Float32Array
+    packShape(actor.blobs, this.boneOffset[ai], at, center, b.scaleAttr.array as Float32Array, b.quatAttr.array as Float32Array)
+    packColors(actor.blobs, b.colorAttr.array as Uint32Array, at)
+    if (center !== b.srcCenterData) b.srcCenterData.set(center.subarray(at * 4, (at + actor.blobs.count) * 4), at * 4)
+    this.part(b.centerAttr, at * 4, actor.blobs.count * 4)
+    this.part(b.scaleAttr, at * 4, actor.blobs.count * 4)
+    this.part(b.quatAttr, at * 4, actor.blobs.count * 4)
+    this.part(b.colorAttr, at, actor.blobs.count)
+    this.restSigma = this.restOpacity = undefined
+    this.bonesDirty = true
+    this.lightsDirty = true
+  }
+
+  /**
+   * Marks a stretch of a buffer to go up, not all of it (WebGPU; the WebGL path's textures go up whole). If the whole
+   * buffer is already waiting to go up this frame, it still goes whole.
+   */
+  private part(a: StorageBufferAttribute, start: number, count: number) {
+    if (this.builtFor !== 'webgpu' || whole.has(a)) { bump(a); return }
+    ;(a as unknown as { addUpdateRange(start: number, count: number): void }).addUpdateRange(start, count)
+    a.needsUpdate = true
+  }
+
   private isWebGL(renderer: Renderer) {
     return (renderer as unknown as { backend?: { isWebGLBackend?: boolean } }).backend?.isWebGLBackend === true
   }
@@ -635,6 +669,8 @@ export class SplatWorld extends Mesh {
     }
     this.posed = true
     this.bonesDirty = false
+    // this frame's draw sends the buffers up: from here a changed stretch can go alone again
+    for (const a of [this.buf.centerAttr, this.buf.scaleAttr, this.buf.quatAttr, this.buf.colorAttr]) whole.delete(a)
     this.lastSortKey = key
   }
 
@@ -912,7 +948,12 @@ interface CameraUniforms {
   view: any; proj: any; viewport: any; depthRange: any
 }
 
+/** Buffers waiting to go up whole this frame: a stretch marked after that (`SplatWorld.reshape`) must not narrow what is sent. */
+const whole = new WeakSet<StorageBufferAttribute>()
+
 function bump(a: StorageBufferAttribute) {
+  ;(a as unknown as { updateRanges: unknown[] }).updateRanges.length = 0
+  whole.add(a)
   a.needsUpdate = true
   const pbo = (a as unknown as { pbo?: { needsUpdate: boolean } }).pbo
   if (pbo) pbo.needsUpdate = true

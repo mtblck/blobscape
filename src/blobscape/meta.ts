@@ -30,6 +30,8 @@ export function pageMeta(route: Route): PageMeta {
       return { path, title: `Splat Creatures · ${SITE.name}`, description: 'A crocodile, a jellyfish, an owl, a frog, a fox, an elf and an ice dragon made of blobs, moving on their own splat engine: a walk, a swim, a jump, a tongue flick, wing beats and fire. See the bones under the blobs, then download one as a rigged, animated .glb (as Gaussian splats or as a mesh for Blender and game engines) or as a pixel-art sprite sheet from 4 or 8 sides.' }
     case 'forest':
       return { path, title: `Forest Walk · ${SITE.name}`, description: 'Walk an elf made of blobs down an endless forest path, from behind, a fox trotting at its side, while trees, ferns, flowers and mushrooms grow out of the ground as you come. Every plant is a rig of Gaussian splats on our own splat engine.' }
+    case 'pond':
+      return { path, title: `Wading Pond · ${SITE.name}`, description: 'Wade an elf made of blobs through a shallow pond in a ruin by candlelight. The water is a grid of heights stepped by the wave equation: rings come from each footfall, spread, and bounce off the banks. The candles are live lights that cast shadows, all on our own Gaussian splat engine.' }
     case 'dungeon':
       return { path, title: `Dungeon Run · ${SITE.name}`, description: 'Fight slimes in a torchlit dungeon with a sword, fire and frost. The hero, the hall and five colors of slime are all Gaussian splats on our own splat engine, with fire and frost that spread across the floor, waves, and slimes that burst into splats.' }
     case 'scan':

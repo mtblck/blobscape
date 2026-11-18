@@ -47,6 +47,7 @@ export const TITLES = {
   'splat-engine/daylight': 'The sky through a day',
   'splat-engine/sceneDoc': 'Scenes written as data',
   'splat-engine/mpm': 'Sand, snow and goo',
+  'splat-engine/water': 'Water that ripples',
   'splat-engine/pixelPass': 'Pixel mode',
   'splat-core/pixel': 'Pixel art',
   'splat-core/marks': 'Brush and ink marks',
@@ -77,7 +78,7 @@ export const GROUPS = [
   { id: 'creatures', title: 'Creatures', doc: 'Cutting a creature out of shapes, hanging it on bones and growing its fur, and the creatures that come ready made.', modules: ['splat-engine/sculpt', 'splat-engine/body', 'splat-engine/fur', 'splat-engine/zoo/index', 'splat-engine/zoo/fox', 'splat-engine/zoo/frog', 'splat-engine/zoo/elf', 'splat-engine/zoo/dragon', 'splat-engine/zoo/monster'] },
   { id: 'scenes', title: 'Shapes and scenes', doc: 'Scenes written as data and the shapes they are cut from: buildings, rock, plants, worn land and weather, and the sun, moon and sky that light them through a day.', modules: ['splat-engine/sceneDoc', 'splat-engine/voxel', 'splat-engine/built', 'splat-engine/forms', 'splat-engine/life', 'splat-engine/erode', 'splat-engine/grow', 'splat-engine/weather', 'splat-engine/daylight'] },
   { id: 'pixels', title: 'Pixels and sprites', doc: 'Drawing a stage as pixel art or as brush and ink marks, and baking a creature into a sprite sheet.', modules: ['splat-engine/pixelPass', 'splat-core/pixel', 'splat-core/marks', 'splat-engine/inkLines', 'splat-engine/bakeSheet', 'splat-engine/spriteSheet'] },
-  { id: 'simulation', title: 'Simulation', doc: 'The solvers under cloth and under sand, snow and goo, for when you want to step them yourself.', modules: ['splat-engine/xpbd', 'splat-engine/mpm'] },
+  { id: 'simulation', title: 'Simulation', doc: 'The solvers under cloth, under sand, snow and goo, and under the ripples of a pond, for when you want to step them yourself.', modules: ['splat-engine/xpbd', 'splat-engine/mpm', 'splat-engine/water'] },
   { id: 'extras', title: 'Picking, detail and edits', doc: 'Finding what a tap hit, drawing fewer blobs far away, cutting and painting live, depth for effects after the draw, and solid shapes to stand on.', modules: ['splat-engine/pick', 'splat-engine/lod', 'splat-engine/edit', 'splat-engine/depth', 'splat-engine/colliders'] },
   { id: 'files', title: 'Files and models', doc: 'Writing and reading rigged .glb files, and turning an ordinary rigged model into splats.', modules: ['splat-engine/glb', 'splat-engine/skinnedModel'] },
 ]
