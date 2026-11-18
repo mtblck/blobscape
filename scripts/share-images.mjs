@@ -20,8 +20,13 @@ const data = (file, type) => `data:${type};base64,${readFileSync(join(root, file
 const cover = (e) => data(join('public', e.cover), 'image/webp')
 const font = (name) => data(`src/shared/fonts/${name}-latin-wght-normal.woff2`, 'font/woff2')
 
-/** The front page's picture: the logo and what the site is, beside four of the experiments. */
-const FRONT = ['diorama', 'creature', 'pond', 'daynight']
+/**
+ * The front page's picture: the logo and what the site is, beside four pictures. Two are
+ * experiments' covers; the dragon and the pond are Matt's own screenshots (2026-11-18), cut
+ * square in scripts/share-front/, because they show more than those experiments' covers do.
+ */
+const FRONT = ['diorama', 'share-front/dragon.jpg', 'share-front/pond.jpg', 'daynight']
+const frontPicture = (name) => name.includes('/') ? data(join('scripts', name), 'image/jpeg') : cover(EXPERIMENTS.find((e) => e.id === name))
 const front = `<!doctype html><meta charset="utf-8"><style>
   @font-face { font-family: Fredoka; src: url('${font('fredoka')}') format('woff2-variations'); font-weight: 300 700; }
   @font-face { font-family: Figtree; src: url('${font('figtree')}') format('woff2-variations'); font-weight: 300 900; }
@@ -39,7 +44,7 @@ const front = `<!doctype html><meta charset="utf-8"><style>
   <h1>Learn 3D Gaussian splats by taking them apart</h1>
   <p>Hands-on lessons, a sandbox and a shelf of experiments. Free, in your browser.</p>
 </div>
-<div class="pictures">${FRONT.map((id) => `<img src="${cover(EXPERIMENTS.find((e) => e.id === id))}" alt="">`).join('')}</div>`
+<div class="pictures">${FRONT.map((name) => `<img src="${frontPicture(name)}" alt="">`).join('')}</div>`
 
 const one = (e) => `<!doctype html><meta charset="utf-8"><style>* { margin: 0 } img { display: block; width: 1200px; height: 630px; object-fit: cover }</style><img src="${cover(e)}" alt="">`
 
