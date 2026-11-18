@@ -6,6 +6,8 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 
 ## [Unreleased]
 
+- Cuts with a clean edge. Scan Studio's crops and its table cut now trim each kept blob where the cut passes through it, so the edge is a straight line and not a row of whole blobs (Level & Crop tab, Trim blobs at the cut; a saved file still keeps whole blobs). In the engine it is the `cleanCuts` option: every pixel of a blob is tested against the cut shapes, on WebGPU and WebGL. Cuts can also be upright cylinders now.
+
 ## [0.3.0] - 2026-11-18
 
 - The sandbox's short notes ("Added…", "Opened…") now stay up for a moment after they are drawn. On a slow device a note set just before a big file was shown could be cleared before it ever appeared.

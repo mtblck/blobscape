@@ -2,6 +2,7 @@ import { Blobs, type Quat, type Vec3 } from '../../splat-core/blobs.ts'
 import { turnSH } from '../../splat-core/sh.ts'
 import type { PointLight } from '../../splat-engine/engine.ts'
 import { Skeleton, emptySkin } from '../../splat-engine/rig.ts'
+import type { ShapeEdit } from '../../splat-engine/edit.ts'
 import { both, coreBox, extent, faintMask, findFloor, floaterMask, floorMask, hugeMask, keepOnly, kept, leveling, mulQ, rotate, type Mask } from './clean.ts'
 
 /**
@@ -123,6 +124,21 @@ export function cleaner() {
     const all = both(floor, crop, faint, huge, floaters)
     return { floor, crop, faint, huge, floaters, all, kept: kept(all, b.count) }
   }
+}
+
+/**
+ * The crops and the table cut as shape edits for the view (the engine's clean cuts): the same lines `cropMask` and
+ * `floorMask` draw, so a kept blob that reaches over one is trimmed there. The masks still say which blobs are kept.
+ */
+export function trimEdits(c: Clean): ShapeEdit[] {
+  const FAR = 100
+  const out: ShapeEdit[] = []
+  if (c.radius !== null || c.top !== null) {
+    const top = c.top ?? FAR
+    out.push({ shape: 'cylinder', center: [0, top - FAR, 0], size: [c.radius ?? FAR, FAR, 0], op: 'cut', outside: true })
+  }
+  if (c.floor > 0) out.push({ shape: 'box', center: [0, c.floor - FAR, 0], size: [FAR, FAR, FAR], op: 'cut' })
+  return out
 }
 
 /** Keeps blobs within `radius` of the y axis and below `top`. */

@@ -689,18 +689,26 @@ export default [
         await window.__scan.stage.frame(0)
         const cv = document.querySelector('[data-testid=scan-view]')
         const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
-        let teal = 0, red = 0, sum = 0
+        let teal = 0, red = 0, sum = 0, solid = 0
         for (let i = 0; i < d.length; i += 4) {
+          if (d[i + 3] > 128) solid++
           if (d[i + 1] > 80 && d[i + 2] > 80 && d[i + 1] > d[i] * 1.4) teal++
           if (d[i] > 120 && d[i] > d[i + 1] * 2 && d[i] > d[i + 2] * 2) red++
           sum += d[i] + d[i + 1] + d[i + 2]
         }
-        return { teal, red, sum }
+        return { teal, red, sum, solid }
       })
       const st = await k.page.evaluate(() => ({ kept: window.__scan.kept(), total: window.__scan.total(), level: window.__scan.level() }))
       const a = await look()
       if (!(st.level === true && st.kept > 0.45 * st.total && st.kept < 0.7 * st.total && a.teal > 20000 && a.red < 500)) fails.push(`blobscape scan: sample ${JSON.stringify({ ...st, ...a })}`)
       else ok(`blobscape scan: the sample's table is found and the clean keeps ${st.kept.toLocaleString()} of ${st.total.toLocaleString()} blobs (${a.teal} mug pixels)`)
+      // the table cut trims the kept blobs that reach under its line; switched off, they hang over it again
+      await tabClick(k.page.getByTestId('scan-trim').getByRole('checkbox'))
+      const whole = await look()
+      await tabClick(k.page.getByTestId('scan-trim').getByRole('checkbox'))
+      const trimmed = await look()
+      if (!(whole.solid > a.solid + 200 && trimmed.solid === a.solid)) fails.push(`blobscape scan: trimming at the cut: ${JSON.stringify({ trimmed: a.solid, whole: whole.solid, again: trimmed.solid })}`)
+      else ok(`blobscape scan: blobs are trimmed at the table cut (${(whole.solid - a.solid).toLocaleString()} pixels of overhang gone)`)
       await tabClick(k.page.getByRole('button', { name: 'Kept and cut' }))
       const b = await look()
       await tabClick(k.page.getByRole('button', { name: 'Kept', exact: true }))

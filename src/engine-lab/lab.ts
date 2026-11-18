@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu'
 import { GaussianSplat } from 'three/addons/objects/GaussianSplat.js'
 import { createGaussianSplatGeometry } from 'three/addons/utils/GaussianSplatUtils.js'
-import { covariance, type Blobs } from '../splat-core/blobs.ts'
+import { Blobs, covariance } from '../splat-core/blobs.ts'
 import { placeCamera, type Orbit } from '../splat-core/view.ts'
 import { SplatWorld } from '../splat-engine/engine.ts'
 import { startRenderer } from '../splat-engine/startRenderer.ts'
@@ -9,7 +9,7 @@ import { DETAIL } from '../splat-engine/lod.ts'
 import { SplatDepth } from '../splat-engine/depth.ts'
 import type { ShapeEdit } from '../splat-engine/edit.ts'
 import { makeCreature, poseWalk, type Creature } from '../splat-engine/creature.ts'
-import type { SkinMode } from '../splat-engine/rig.ts'
+import { Skeleton, emptySkin, type SkinMode } from '../splat-engine/rig.ts'
 import { readbackToSrgb, srgbToLinear } from '../splat-core/color.ts'
 
 /**
@@ -43,6 +43,12 @@ export interface LabOptions {
   lod?: boolean
   /** Shape edits (ours only): a box cuts the herd's front half away and a soft sphere paints their middles blue. */
   edits?: boolean
+  /**
+   * A cut's edge (ours only): in place of the foxes, a floor of big flat blobs and a wall of big round ones, with
+   * everything right of the middle cut away, 'clean' (each pixel tested) or 'rough' (whole blobs). The camera stands in
+   * the cut's own plane, so a clean edge is the picture's middle column.
+   */
+  cut?: 'clean' | 'rough'
   /** Color by angle (ours only): every fox looks warmer from its left and bluer from its right. */
   sh?: boolean
   /** The full radix sort (ours only) in place of the counting sort over depth bins. */
@@ -60,6 +66,25 @@ export const DEMO_EDITS: ShapeEdit[] = [
   { shape: 'box', center: [0, 1, 5.35], size: [20, 20, 5], op: 'cut' },
   { shape: 'sphere', center: [0, 0.7, 0], size: [0.9, 0, 0], op: 'paint', color: [0.2, 0.45, 1], soft: 0.4 },
 ]
+
+/** The lab's cut: everything at x > 0. */
+export const HALF_CUT: ShapeEdit[] = [{ shape: 'box', center: [20, 0, 0], size: [20, 20, 20], op: 'cut' }]
+
+/** A floor of big flat blobs and a wall of big round ones behind it, on one still bone: something a cut's edge shows on. */
+export function cutCard(): Creature {
+  const b = new Blobs()
+  const rnd = (i: number, k: number) => { const v = Math.sin(i * 127.1 + k * 311.7) * 43758.5453; return v - Math.floor(v) }
+  let n = 0
+  for (let x = -1.4; x <= 1.401; x += 0.2) for (let z = -1.4; z <= 1.401; z += 0.2, n++) {
+    b.push({ center: [x + (rnd(n, 1) - 0.5) * 0.16, 0, z + (rnd(n, 2) - 0.5) * 0.16], scale: [0.16, 0.003, 0.16], quat: [0, 0, 0, 1], color: [0.35 + rnd(n, 3) * 0.3, 0.55, 0.3], opacity: 1 })
+  }
+  for (let x = -1.4; x <= 1.401; x += 0.25) for (let y = 0.15; y <= 1.5; y += 0.25, n++) {
+    b.push({ center: [x + (rnd(n, 1) - 0.5) * 0.2, y, -1.5], scale: [0.14, 0.14, 0.14], quat: [0, 0, 0, 1], color: [0.85, 0.45 + rnd(n, 3) * 0.3, 0.3], opacity: 1 })
+  }
+  const skin = emptySkin(b.count)
+  for (let i = 0; i < b.count; i++) skin.weights[i * 4] = 1
+  return { blobs: b, skin, skeleton: new Skeleton([{ name: 'card', parent: -1, head: [0, 0, 0] }]) }
+}
 
 /** The lab's color by angle: one degree-1 term along the fox's own x, warmer seen from one side and bluer from the other. */
 export function giveSheen(b: Blobs) {
@@ -141,11 +166,14 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
   const camera = new THREE.PerspectiveCamera(40, 1, 0.05, 100)
   const floor = new THREE.GridHelper(8, 16, 0x777777, 0x444444)
   floor.renderOrder = -1
-  scene.add(floor)
+  if (!o.cut) scene.add(floor)
 
   let orbit: Orbit = { target: [0, 0.75, 0], distance: o.herd > 1 ? 7 : 4, azimuth: 35, elevation: 14 }
   const foxes: Creature[] = []
-  for (let k = 0; k < Math.max(1, o.herd); k++) {
+  if (o.cut) {
+    foxes.push(cutCard())
+    orbit = { target: [0, 0.5, 0], distance: 5, azimuth: 0, elevation: 28 }
+  } else for (let k = 0; k < Math.max(1, o.herd); k++) {
     const c = makeCreature(Math.round(o.count / Math.max(1, o.herd)), 7 + k)
     // place the herd in a loose row
     const x = (k - (o.herd - 1) / 2) * 0.8, z = (k % 2) * 0.6 - 0.3
@@ -159,9 +187,10 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
   let mode = o.mode
   if (o.which === 'engine') {
     if (o.sh) for (const f of foxes) giveSheen(f.blobs)
-    world = new SplatWorld(foxes, { mode, paint: o.edits, sort: o.radix ? 'radix' : 'bins' })
+    world = new SplatWorld(foxes, { mode, paint: o.edits, sort: o.radix ? 'radix' : 'bins', cleanCuts: !!o.cut })
     if (o.lod) world.autoDetail = DETAIL
     if (o.edits) world.setEdits(DEMO_EDITS)
+    if (o.cut) { world.cleanCuts = o.cut === 'clean'; world.setEdits(HALF_CUT) }
     scene.add(world)
   } else {
     // three.js draws each object on its own; give it the foxes as separate meshes
@@ -216,7 +245,7 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
     if (!world) return
     for (const f of foxes) {
       // each fox a little out of step with its neighbors
-      if (walk) poseWalk(f.skeleton, t + f.skeleton.place[0])
+      if (walk && !o.cut) poseWalk(f.skeleton, t + f.skeleton.place[0])
       else { f.skeleton.reset(); f.skeleton.update() }
     }
     world.markPosed()

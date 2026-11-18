@@ -2,6 +2,7 @@ import * as THREE from 'three/webgpu'
 import { STAGE_FOV, placeCamera, type Orbit } from '../splat-core/orbit.ts'
 import { readbackToSrgb } from '../splat-core/color.ts'
 import { SplatWorld, type PointLight } from './engine.ts'
+import type { ShapeEdit } from './edit.ts'
 import { sampleClip, sampleWeights, type Clip } from './glb.ts'
 import type { Morph } from './morph.ts'
 import type { Skeleton, Skin, SkinMode } from './rig.ts'
@@ -55,6 +56,8 @@ export interface StageOptions {
   lights?: boolean
   /** Uses the WebGL 2 backend even where WebGPU would start: for testing the fallback. */
   webgl?: boolean
+  /** Builds each world so cuts (`setEdits`) have a clean edge, tested per pixel (`setCleanCuts` turns it off and on). */
+  cleanCuts?: boolean
 }
 
 /**
@@ -211,10 +214,12 @@ export class Stage {
   }
 
   private build(actor: Actor) {
-    this.world = new SplatWorld([actor], { mode: this.mode, lights: this.opts.lights, sort: this.sort })
+    this.world = new SplatWorld([actor], { mode: this.mode, lights: this.opts.lights, sort: this.sort, cleanCuts: this.opts.cleanCuts })
     if (this.opts.lights) this.world.setLights(this.lit.lights, this.lit.ambient)
     this.world.setFog(...this.fog)
     this.world.setMarks(this.marks)
+    this.world.cleanCuts = this.clean
+    if (this.edits.length) this.world.setEdits(this.edits)
     this.scene.add(this.world)
     if (this.painter) this.paintOver()
   }
@@ -338,6 +343,25 @@ export class Stage {
   setFog(color: [number, number, number], near: number, far: number) {
     this.fog = [color, near, far]
     this.world?.setFog(color, near, far)
+    this.invalidate()
+  }
+
+  private edits: ShapeEdit[] = []
+  private clean = true
+  /**
+   * Cuts by shape, live (edit.ts): spheres, boxes or upright cylinders in world space, kept for the next actor too;
+   * [] clears them. On a stage made with `cleanCuts` the edge is the shape's own line.
+   */
+  setEdits(edits: readonly ShapeEdit[]) {
+    this.edits = edits.filter((e) => e.op === 'cut' || this.opts.lights).map((e) => ({ ...e }))
+    this.world?.setEdits(this.edits)
+    this.invalidate()
+  }
+
+  /** On a stage made with `cleanCuts`: whether cuts have the clean edge (the default) or drop whole blobs. */
+  setCleanCuts(on: boolean) {
+    this.clean = on
+    if (this.world) this.world.cleanCuts = on
     this.invalidate()
   }
 

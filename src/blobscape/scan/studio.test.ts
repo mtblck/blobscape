@@ -2,7 +2,8 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { about, extent } from './clean.ts'
 import { sampleScan } from './sample.ts'
-import { DEFAULT_CLEAN, FINISHED, LIGHTS, UNTURNED, WORK, autoOrient, cleanMasks, finish, lightsFor, preview, tip, working } from './studio.ts'
+import { editAt } from '../../splat-engine/edit.ts'
+import { DEFAULT_CLEAN, FINISHED, LIGHTS, UNTURNED, WORK, autoOrient, cleanMasks, finish, lightsFor, preview, tip, trimEdits, working } from './studio.ts'
 
 const sample = sampleScan(3, 0.5)
 const mugShare = (m: Uint8Array | undefined) => {
@@ -69,4 +70,17 @@ test('every light preset gives lights in range near the object', () => {
       assert.ok(p.color.every((c) => c >= 0 && Number.isFinite(c)))
     }
   }
+})
+
+test('the view\'s trim lines are the masks\' own: a point is kept by the edits just when the crops and the table cut keep it', () => {
+  const rnd = (i: number) => { const v = Math.sin(i * 12.9898) * 43758.5453; return v - Math.floor(v) }
+  for (const c of [{ ...DEFAULT_CLEAN }, { ...DEFAULT_CLEAN, radius: 0.6 }, { ...DEFAULT_CLEAN, top: 0.9, floor: 0 }, { ...DEFAULT_CLEAN, radius: 0.5, top: 0.7, floor: 0.1 }]) {
+    const edits = trimEdits(c)
+    for (let i = 0; i < 400; i++) {
+      const p = [(rnd(i * 3) - 0.5) * 2, rnd(i * 3 + 1) * 1.4 - 0.2, (rnd(i * 3 + 2) - 0.5) * 2]
+      const want = Math.hypot(p[0], p[2]) <= (c.radius ?? Infinity) && p[1] <= (c.top ?? Infinity) && (c.floor > 0 ? p[1] > c.floor : true)
+      assert.equal(editAt(edits, p).keep, want, `${JSON.stringify(c)} at ${p}`)
+    }
+  }
+  assert.deepEqual(trimEdits({ ...DEFAULT_CLEAN, floor: 0 }), [])
 })
