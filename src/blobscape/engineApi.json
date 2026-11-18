@@ -795,6 +795,11 @@
        "doc": "Live lighting, when the world was made with `lights: true`."
       },
       {
+       "name": "glowGain",
+       "type": "number",
+       "doc": "How many times its own color a blob that gives all its own light (`Actor.glow`) is drawn, in a world with lights: 1\nto start with, so a lamp is as bright as white paper. A flame is far brighter than anything it lights; with a gain\nof several its color goes over white, which a picture that holds such light (a half-float target, as `SplatLens`\ndraws into) can tell from a pale thing in strong light, and let only the flame glow. Drawn straight to the screen\nit only clips to white, so leave it at 1 there."
+      },
+      {
        "name": "lightEase",
        "type": "number",
        "doc": "Eases the light on every blob over about this many frames (WebGPU; 0, the default, is none): a blob's lit color\ngoes a share of the way to its new one each frame, so a shadow's edge passing over it, or a lamp catching, fades\nand does not pop. For lights that move slowly, like a sun. A frame is then no longer a function of its moment alone."
@@ -8736,6 +8741,12 @@
        "optional": true,
        "type": "number",
        "doc": "How bright (linear, 0 to 1 and over) a pixel must be before it glows: 0.7 when left out."
+      },
+      {
+       "name": "shoulder",
+       "optional": true,
+       "type": "number",
+       "doc": "Where strong light starts to roll off toward white instead of running straight into it, as film does: about 0.7.\nLeft out, light over 1 clips, each of red, green and blue on its own, which turns a fair thing in strong light\ninto a flat pale patch."
       }
      ]
     },
@@ -8782,6 +8793,16 @@
      "signatures": [
       {
        "code": "glowShare(brightest: number, knee?: number): number"
+      }
+     ]
+    },
+    {
+     "name": "rolledOff",
+     "kind": "function",
+     "doc": "A brightness after the film's shoulder: unchanged up to `start`, then closing on 1 ever more slowly and never\npassing it. The lens scales a pixel's whole color by this over its brightest channel, so its hue holds. The CPU\ntwin of the shader's.",
+     "signatures": [
+      {
+       "code": "rolledOff(brightest: number, start: number): number"
       }
      ]
     }

@@ -252,6 +252,20 @@ export class SplatWorld extends Mesh {
   private shadowAt?: ShadowBox
   private lightsDirty = true
   /**
+   * How many times its own color a blob that gives all its own light (`Actor.glow`) is drawn, in a world with lights: 1
+   * to start with, so a lamp is as bright as white paper. A flame is far brighter than anything it lights; with a gain
+   * of several its color goes over white, which a picture that holds such light (a half-float target, as `SplatLens`
+   * draws into) can tell from a pale thing in strong light, and let only the flame glow. Drawn straight to the screen
+   * it only clips to white, so leave it at 1 there.
+   */
+  get glowGain() { return this.lighting ? this.lighting.emit.value as number : 1 }
+  set glowGain(v: number) {
+    if (!this.lighting || this.lighting.emit.value === v) return
+    this.lighting.emit.value = Math.max(0, v)
+    this.lightsDirty = true
+  }
+
+  /**
    * Eases the light on every blob over about this many frames (WebGPU; 0, the default, is none): a blob's lit color
    * goes a share of the way to its new one each frame, so a shadow's edge passing over it, or a lamp catching, fades
    * and does not pop. For lights that move slowly, like a sun. A frame is then no longer a function of its moment alone.
@@ -1495,7 +1509,7 @@ function makeProject(buf: ReturnType<typeof makeBuffers>, sort: Sorter, cam: Cam
 
 interface Fog { color: N; range: N }
 
-interface Lighting { pos: N; col: N; ambient: N; count: N; density: N; ease: N; attr: StorageBufferAttribute; litW: N; lit: N; gridAttr: StorageBufferAttribute; gridW: N; grid: N; box: N; dims: N }
+interface Lighting { pos: N; col: N; ambient: N; count: N; density: N; ease: N; emit: N; attr: StorageBufferAttribute; litW: N; lit: N; gridAttr: StorageBufferAttribute; gridW: N; grid: N; box: N; dims: N }
 
 function makeLighting(n: number): Lighting {
   // written only by the GPU, so no copy of it on the CPU
@@ -1517,6 +1531,8 @@ function makeLighting(n: number): Lighting {
     density: uniform(SHADOW_DENSITY),
     // the share of the way each light pass takes from the last pass's colors to this one's (`SplatWorld.lightEase`)
     ease: uniform(1),
+    // how many times its own color a blob that gives all its own light shows (`SplatWorld.glowGain`)
+    emit: uniform(1),
     count: uniform(0, 'int'),
     attr,
     litW: storage(attr, 'vec4', n),
@@ -1546,7 +1562,8 @@ function blobNormal(covA: N, covB: N) {
  * The blob's color under the lights: ambient times its own, plus each light by distance and by how its face turns
  * to it, and each of the first four by how much of it the blob can see (`seen`, a byte a light). A light from a
  * direction (its reach under 0) doesn't fade with distance. A blob that gives its own light (`Actor.glow`, in the
- * covariance's spare slot) is never darker than that share of its own color. CPU twin: `light.ts` (change both).
+ * covariance's spare slot) is never darker than that share of its own color, times the world's `glowGain`. CPU twin:
+ * `light.ts` (change both).
  */
 function lit(rgb: N, world: N, covA: N, covB: N, seen: N, L: Lighting) {
   const n = blobNormal(covA, covB).toVar()
@@ -1568,7 +1585,7 @@ function lit(rgb: N, world: N, covA: N, covB: N, seen: N, L: Lighting) {
     If(C.w.greaterThan(0.5).and(reach.greaterThan(0.001)), () => { through.assign(shadowMarch(world, n, to, d2, select(sun, TSL.int(SUN_MARCH), TSL.int(MAX_MARCH)), L)) })
     sum.addAssign(C.xyz.mul(reach.mul(through)))
   })
-  return rgb.mul(max(sum, vec3(covB.z)))
+  return rgb.mul(max(sum, vec3(covB.z.mul(L.emit))))
 }
 
 /** Whether a cell (ivec3) is inside the grid of shadows. */

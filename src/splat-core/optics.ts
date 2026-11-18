@@ -31,6 +31,12 @@ export interface OpticsLook {
   glow: number
   /** How bright (linear, 0 to 1 and over) a pixel must be before it glows: 0.7 when left out. */
   knee?: number
+  /**
+   * Where strong light starts to roll off toward white instead of running straight into it, as film does: about 0.7.
+   * Left out, light over 1 clips, each of red, green and blue on its own, which turns a fair thing in strong light
+   * into a flat pale patch.
+   */
+  shoulder?: number
 }
 
 /** A lens's focal length for a view `fov` degrees tall on film `film` high, in the film's units. */
@@ -65,4 +71,15 @@ export function sharpRange(look: OpticsLook, fov: number, height: number, sharp 
 export function glowShare(brightest: number, knee = 0.7): number {
   const t = Math.max(0, Math.min(1, (brightest - knee) / (knee / 3)))
   return t * t * (3 - 2 * t)
+}
+
+/**
+ * A brightness after the film's shoulder: unchanged up to `start`, then closing on 1 ever more slowly and never
+ * passing it. The lens scales a pixel's whole color by this over its brightest channel, so its hue holds. The CPU
+ * twin of the shader's.
+ */
+export function rolledOff(brightest: number, start: number): number {
+  if (!(start < 1) || brightest <= start) return Math.min(brightest, Math.max(1, start))
+  const room = 1 - start
+  return start + room * (1 - Math.exp(-(brightest - start) / room))
 }
