@@ -490,11 +490,14 @@ export default [
       await page.waitForTimeout(1000)
       await page.evaluate(() => window.__pixels?.stage.frame(0))
       // plays the scene in real time for a while, so the page's own looks at the picture see the light change
+      // `most` is the most the page's readout showed along the way: one look can fall between two flickers, more so on a slow machine with few frames a look
       const play = (ms) => page.evaluate(async (ms) => {
         const st = window.__pixels.stage, t0 = performance.now()
-        while (performance.now() - t0 < ms) { await st.frame((performance.now() - t0) / 1000); await new Promise((r) => setTimeout(r, 30)) }
-        return window.__pixels.seen()
-      }, ms)
+        let most = 0
+        while (performance.now() - t0 < ms) { await st.frame((performance.now() - t0) / 1000); await new Promise((r) => setTimeout(r, 30)); most = Math.max(most, window.__pixels.seen()?.flips ?? 0) }
+        const seen = window.__pixels.seen()
+        return seen && { ...seen, most }
+      }, ms * (Number(process.env.VERIFY_SLOW) || 1))
       await page.getByRole('checkbox', { name: 'Draw in pixels' }).check()
       const flickering = await play(3500)
       await page.getByRole('button', { name: '8', exact: true }).click()
@@ -503,7 +506,7 @@ export default [
       const held = await play(5000)
       const pixelCode = await page.textContent('[data-testid=lesson-code]')
       const shown = !!held && held.width <= 200 && held.colors <= 4 && held.flips <= 0.002 && /steady: 0\.04/.test(pixelCode)
-      if (!(flickering?.flips > 0.005 && shown && (await goalsAt(3)).startsWith('3 of'))) fails.push(`blobscape pixel art: goals ${await goalCount()}, flips ${flickering?.flips} then ${held?.flips}, picture ${held?.width} wide in ${held?.colors} colors, code follows: ${/steady: 0\.04/.test(pixelCode)}`)
+      if (!(flickering?.most > 0.005 && shown && (await goalsAt(3)).startsWith('3 of'))) fails.push(`blobscape pixel art: goals ${await goalCount()}, flips ${flickering?.most} at most then ${held?.flips}, picture ${held?.width} wide in ${held?.colors} colors, code follows: ${/steady: 0\.04/.test(pixelCode)}`)
       else ok(`blobscape pixel art: the lantern flipped ${(flickering.flips * 100).toFixed(1)}% of the pixels, steady pixels ${(held.flips * 100).toFixed(2)}%; ${held.width} pixels wide in ${held.colors} colors`)
       await page.screenshot({ path: join(shots, 'blobscape-pixel-art.png') })
       await axe(page, 'blobscape pixel art')

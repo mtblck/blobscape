@@ -264,21 +264,24 @@ export default [
       else ok('blobscape sandbox path: the filmstrip shows a picture of each stop')
       await axe(page, 'blobscape sandbox path')
       // Play: the view goes back to the first stop and glides; partway it is neither stop, and it ends at the second.
-      // The page's clock is stepped by hand to half way and Stop pressed there, because in software a picture of the
-      // view can take longer than the whole path; the picture is taken once the clock runs again (on a slow shared
-      // runner a picture asked for while the page's clock stood still never came)
-      await page.clock.install()
-      await page.clock.pauseAt(Date.now() + 1000)
+      // The path is made as long as it goes and Stop pressed half way, which leaves the view where it is: in software
+      // a picture of the view can take longer than the whole path. (The page's clock was stepped by hand here before;
+      // on a slow shared runner the stepped clock never caught up with frames that take seconds, and no picture came.)
+      const seconds = page.getByRole('slider', { name: 'Seconds a stop' })
+      await seconds.focus()
+      await page.keyboard.press('End')
       await play.click()
-      await page.clock.fastForward(1000)
-      await page.clock.runFor(100)
-      await page.getByRole('button', { name: 'Stop', exact: true }).click()
-      await page.clock.resume()
+      await page.waitForTimeout(3000)
+      // pressed from inside the page: a click from here first waits for the button to hold still, which on a busy page can outlast the path
+      const stopped = await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find((b) => b.textContent === 'Stop'); b?.click(); return !!b })
+      if (!stopped) fails.push('blobscape sandbox path: three seconds into a six second path there was no Stop button')
       const mid = await settled()
       const fromFirst = await differs(mid, first), fromSecond = await differs(mid, second)
+      await seconds.focus()
+      await page.keyboard.press('Home')
       await play.click()
-      await page.waitForTimeout(2500)
-      await page.waitForFunction(() => [...document.querySelectorAll('button')].find((b) => b.textContent === 'Play the path')?.getAttribute('aria-pressed') === 'false', null, { timeout: 15000 }).catch(() => {})
+      await page.waitForTimeout(1000)
+      await page.waitForFunction(() => [...document.querySelectorAll('button')].find((b) => b.textContent === 'Play the path')?.getAttribute('aria-pressed') === 'false', null, { timeout: 30000 }).catch(() => {})
       const end = await settled()
       const short = await differs(end, second)
       if (fromFirst < 500 || fromSecond < 500) fails.push(`blobscape sandbox path: partway through playing, the view is at a stop (${fromFirst} and ${fromSecond} pixels from them)`)
