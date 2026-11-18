@@ -111,7 +111,7 @@ export default [
       await page.getByRole('button', { name: 'Menu' }).click()
       const menuLinks = await openNow().locator('a').count()
       const fits = await page.evaluate(() => { const p = document.querySelector('[popover]:popover-open').getBoundingClientRect(); return p.left >= 0 && p.right <= window.innerWidth })
-      if (menuLinks !== 10 || !fits) fails.push(`blobscape menu: on a phone ${menuLinks} links, fits ${fits}`)
+      if (menuLinks !== 11 || !fits) fails.push(`blobscape menu: on a phone ${menuLinks} links, fits ${fits}`)
       else ok(`blobscape menu: on a phone it opens with ${menuLinks} links`)
       await axe(page, 'blobscape menu open')
       await page.keyboard.press('Escape')
