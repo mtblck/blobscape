@@ -6,6 +6,7 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 
 ## [Unreleased]
 
+- The sandbox's header spans the whole window like the page under it: the logo sits at the left edge and the menu at the right.
 - Pixel Diorama has a new scene, Koi pond in the rain: a pond in a moss garden with two stone lanterns, a red maple, bamboo and irises. The water is a real one. Every raindrop leaves a ring where it lands, the koi push wakes as they circle, and the rings spread, cross, bounce off the stepping stones and the banks and die away; with WebGPU the water also mirrors the lanterns and the maple. Any scene written as data can have it: a description's new `water` floods a basin, takes the scene's own rain and is moved by the bones named in `bodies`. In the engine: `SceneWater` works one loop of a scene's water out, and `Stage` takes extra actors, `reshape` and `setMirror`.
 - Pixel Diorama: every scene now starts with Dither at 50% (they started between 5% and 12%). The recorded loops in the gallery still show the old setting until they are recorded again.
 - Brush and Ink: the marks on a turning thing stay where they are. The stripes on the windmill's sails used to jump as each sail came round, because the marks were laid far to near and every blob on a sail changed places at the same moment. Each pixel now shows the mark nearest to it, so the order they are drawn in no longer matters. The scanned mug keeps its softer, layered marks (`soft` on a mark look in the engine).
