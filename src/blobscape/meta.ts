@@ -13,13 +13,28 @@ export interface PageMeta {
   description: string
   /** The page's path, '/' for the front page; null for the not-found page. */
   path: string | null
+  /** The picture a shared link shows, and what it is of. Left out, the site's own (`SHARE`). */
+  image?: { src: string; alt: string }
+}
+
+/** The picture a link shows when a page has none of its own (public/og.png, made by scripts/share-images.mjs). */
+export const SHARE = { src: '/og.png', alt: 'The Blobscape logo and the words "Learn 3D Gaussian splats by taking them apart", beside four experiments: a pixel-art lighthouse, a fox in fur, an elf wading through a pond by candlelight and a cabin at dusk.' } as const
+
+/** Where an experiment's share picture is: its cover cut to a link preview's shape (public/share/, made by scripts/share-images.mjs). */
+export const shareImage = (e: { cover: string }) => e.cover.replace('/covers/', '/share/').replace(/\.webp$/, '.jpg')
+
+/** A page's title, description and share picture. An experiment's page shows its own cover. */
+export function pageMeta(route: Route): PageMeta {
+  const meta = wordsFor(route)
+  const e = EXPERIMENTS.find((x) => x.id === route.page)
+  return e ? { ...meta, image: { src: shareImage(e), alt: `${e.title}, an experiment on ${SITE.name}. ${e.body}` } } : meta
 }
 
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1)
 
 export const DESCRIPTION = `Learn how 3D Gaussian splats work by pulling one blob apart, then thousands, then rigging them to walk: ${LESSON_COUNT} hands-on lessons, a sandbox for real captures and a creature to take away as a 3D model, free in your browser.`
 
-export function pageMeta(route: Route): PageMeta {
+function wordsFor(route: Route): PageMeta {
   const path = href(route)
   switch (route.page) {
     case 'lessons':

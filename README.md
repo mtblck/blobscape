@@ -10,7 +10,7 @@
 <h3 align="center">Learn 3D Gaussian splats by taking them apart.</h3>
 
 <p align="center">
-  Twenty-one hands-on lessons, a sandbox, and a shelf of experiments on our own animated-splat engine.<br />
+  Twenty-four hands-on lessons, a sandbox, and a shelf of experiments on our own animated-splat engine.<br />
   All of it runs in your browser. Free, no account.
 </p>
 
@@ -57,7 +57,8 @@ with a hint that points the way without giving it away, and every scene opens in
 | --- | --- | --- |
 | **1. One object** | 1–8 | What a blob is, how it lands on screen, why order matters, color by angle, painting, file formats, breaking a scene apart |
 | **2. Rigs and 3D models** | 9–16 | Bones, weights, twisting without tearing, a walk cycle, feet on uneven ground, saving a creature as a model, morphs, fur and grass |
-| **3. Real things from photos** | 17–20 | Training blobs from photos, fuzzy things meshes can't keep, cleaning up floaters, why lighting is baked |
+| **3. Real things from photos** | 17–21 | Training blobs from photos, fuzzy things meshes can't keep, cleaning up floaters, why lighting is baked, why small blobs shimmer |
+| **4. Build with the engine** | 22–24 | Your first creature in code, a scene written as data, pixel art that holds still |
 
 <p align="center">
   <a href="https://blobscape.dev/lessons/one-blob/"><img src=".github/readme/lesson.webp" alt="Lesson 1, One blob: goal cards above a dark display case holding a single orange blob with its axes, and sliders for its size, turn, color and opacity" width="880" /></a>
@@ -144,7 +145,11 @@ stay in your browser.
       <a href="https://blobscape.dev/experiments/day-and-night/"><b>Day and Night</b></a><br />
       Drag the hour: the sun and moon cross the sky, shadows turn, lamps come on and fireflies come out.
     </td>
-    <td valign="top"></td>
+    <td valign="top">
+      <a href="https://blobscape.dev/experiments/four-ways/"><img src="public/covers/four-ways.webp" alt="One scene drawn four ways in a grid: by a plain shader, by three.js meshes, by Spark splats and by Blobscape" /></a><br />
+      <a href="https://blobscape.dev/experiments/four-ways/"><b>One Scene, Four Ways</b></a><br />
+      The same scene drawn by a plain shader, three.js meshes, Spark splats and Blobscape, side by side.
+    </td>
     <td valign="top"></td>
   </tr>
 </table>
@@ -196,6 +201,7 @@ npm run dev          # http://localhost:5173/
 | `npm run preview` | Serve the build with the production headers |
 | `npm run verify` | Real Chromium against `dist` under the production CSP, with axe accessibility checks (all of them; `-- --changed` runs only those a change reaches) |
 | `npm run check` | Unit tests, build, then the browser checks the branch's changes reach: run this before merging ([testing](docs/testing.md)) |
+| `npm run loops` | Record Pixel Diorama's gallery loops from the build, several scenes at once (needs ffmpeg) |
 
 ## How the repo is laid out
 
@@ -209,11 +215,11 @@ src/
   splat-to-sprite/
 api/              the contact form's serverless function
 scripts/          prerender, hosting check and browser verify
-docs/             design notes, the engine note, the rigged-splat spec, scene descriptions
+docs/             design notes, the engine's history, the rigged-splat spec, scene descriptions
 ```
 
 Further reading: [design notes](docs/design-notes.md) ·
-[engine prototype](docs/engine-prototype.md) ·
+[how the engine began](docs/engine-prototype.md) ·
 [writing a scene as data](docs/scene-descriptions.md) ·
 [testing](docs/testing.md).
 

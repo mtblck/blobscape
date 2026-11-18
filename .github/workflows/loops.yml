@@ -1,0 +1,182 @@
+name: Loops
+
+# Records the Pixel Diorama gallery's loops (public/loops/) again and opens a pull request
+# with them, a scene a job, so every scene is recorded at once.
+#
+# It runs by itself when a push to main changes a scene's own file (its description, the
+# lighthouse's code, the fox meadow's builder: scripts/loops-changed.mjs), for those scenes
+# only. A change to something every scene shares (the cutter, the pixel pass) starts
+# nothing, because only a person can say whether the pictures changed: run it by hand then
+# (Actions, Loops, Run workflow), with the scenes' ids or `all`.
+#
+# The pull request holds only the new .webp and .png files. The 3× MP4s for posting are
+# kept with the run for two weeks (the `loops` download). Nothing is merged by this
+# workflow. For it to open the pull request, the repository's Settings, Actions, General
+# must have "Allow GitHub Actions to create and approve pull requests" ticked; without
+# it the branch `loops/<run>` is still pushed and the run says so.
+on:
+  push:
+    branches: [main]
+    paths:
+      - src/blobscape/diorama/scenes/**
+      - src/blobscape/diorama/scene.ts
+      - src/blobscape/fourways/meadow/build.ts
+      - src/blobscape/fourways/meadow/doc.ts
+  workflow_dispatch:
+    inputs:
+      scenes:
+        description: Scene ids with spaces between (koi windmill), or all
+        type: string
+        default: all
+
+concurrency:
+  group: loops
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      scenes: ${{ steps.plan.outputs.scenes }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Which scenes
+        id: plan
+        env:
+          ASKED: ${{ inputs.scenes }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            ids=$(node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/loops-changed.mjs "$BEFORE" "$GITHUB_SHA")
+          else
+            ids=$ASKED
+          fi
+          # checked against the gallery's own list, so nothing typed into the box reaches a command line as it is
+          scenes=$(IDS="$ids" node --experimental-strip-types --disable-warning=ExperimentalWarning -e "
+            import('./src/blobscape/diorama/loops.ts').then(({ LOOPS }) => {
+              const all = LOOPS.map((l) => l.id)
+              const asked = (process.env.IDS ?? '').split(/[\s,]+/).filter(Boolean)
+              const bad = asked.filter((id) => id !== 'all' && !all.includes(id))
+              if (bad.length) { console.error('no such scene: ' + bad.join(' ')); process.exit(1) }
+              console.log(JSON.stringify(asked.includes('all') ? all : all.filter((id) => asked.includes(id))))
+            })")
+          echo "scenes=$scenes" >> "$GITHUB_OUTPUT"
+          echo "Recording: $scenes" >> "$GITHUB_STEP_SUMMARY"
+      - run: npm run build
+        if: steps.plan.outputs.scenes != '[]'
+      - uses: actions/upload-artifact@v4
+        if: steps.plan.outputs.scenes != '[]'
+        with:
+          name: dist
+          path: dist/
+          retention-days: 1
+
+  record:
+    name: Record ${{ matrix.scene }}
+    needs: build
+    if: needs.build.outputs.scenes != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        scene: ${{ fromJSON(needs.build.outputs.scenes) }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Chromium and ffmpeg
+        run: |
+          # The Chromium the cloud sessions have (Playwright 1.63.0's), as in check.yml
+          npx --yes playwright@1.63.0 install --with-deps chromium
+          echo "CHROME_PATH=$(find "$HOME/.cache/ms-playwright" -path '*/chromium-*' -name chrome -type f | head -1)" >> "$GITHUB_ENV"
+          command -v ffmpeg || (sudo apt-get update && sudo apt-get install -y ffmpeg)
+      - name: Record
+        env:
+          SCENE: ${{ matrix.scene }}
+        run: npm run loops -- recorded "$SCENE" --lanes=1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: loop-${{ matrix.scene }}
+          path: |
+            recorded/*.webp
+            recorded/*.png
+            recorded/*.mp4
+          retention-days: 1
+
+  open:
+    name: Open the pull request
+    needs: [build, record]
+    # scenes that failed are left as they were; the ones that recorded still go in
+    if: always() && needs.build.outputs.scenes != '[]' && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: loop-*
+          path: recorded
+          merge-multiple: true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: loops
+          path: recorded/
+          retention-days: 14
+          if-no-files-found: ignore
+      - name: Branch and pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SCENES: ${{ needs.build.outputs.scenes }}
+          RECORDED: ${{ needs.record.result }}
+        run: |
+          shopt -s nullglob
+          for f in recorded/*.webp recorded/*.png; do cp "$f" public/loops/; done
+          if [ -z "$(git status --porcelain public/loops)" ]; then
+            echo "The recorded loops are the same as the ones in the gallery: nothing to open." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          names=$(git status --porcelain public/loops | sed 's|.*public/loops/||; s|\..*||' | sort -u | tr '\n' ' ' | sed 's/ $//')
+          branch="loops/$GITHUB_RUN_ID"
+          # Vercel deploys only commits by the repository's owner
+          git config user.name mtblck
+          git config user.email 105079242+mtblck@users.noreply.github.com
+          git checkout -b "$branch"
+          git add public/loops
+          git commit -m "Pixel Diorama: record the gallery's loops again ($names)"
+          git push origin "$branch"
+          body="Recorded again by the Loops workflow ([run $GITHUB_RUN_ID]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)), from main at ${GITHUB_SHA:0:7}: $names.
+
+          Only the gallery's .webp and .png files change. The 3× MP4s for posting are the run's \`loops\` download. Checks do not run on a pull request a workflow opens, so look at the pictures before merging."
+          [ "$RECORDED" = success ] || body="$body
+
+          Some scenes did not record (asked for: $SCENES); theirs are left as they were. See the run."
+          if ! gh pr create --base main --head "$branch" --title "Pixel Diorama: new gallery loops ($names)" --body "$body"; then
+            echo "The loops are on the branch \`$branch\`, but the pull request could not be opened. Tick \"Allow GitHub Actions to create and approve pull requests\" in Settings, Actions, General, or open it by hand." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi

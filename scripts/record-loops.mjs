@@ -4,13 +4,24 @@
  * are the engine's own art (`stage.pixelFrames().art`), stepped through
  * `stage.frame(t)`, so a loop is the same every run and joins up end to end.
  * Run `npm run build` first.
- *   node --experimental-strip-types scripts/record-loops.mjs [out] [ids…]   (default out: loops/; all scenes)
+ *   npm run loops -- [out] [ids…] [--lanes=N] [--site]   (default out: loops/; all scenes)
  * Writes <out>/<id>.webp (lossless, looping), <id>.mp4 (3× for posting), <id>.png (the first
  * frame) and <id>.json ({ width, height, fps, frames, loop }). Needs ffmpeg. PORT and KEEP_RAW=1 are optional.
+ *
+ * Several scenes are recorded at once, each in its own page: `--lanes=N` says how many (by default one
+ * for every processor but one, at most four; a scene is cut and drawn on the CPU here, so more lanes
+ * than processors only slows each one). `--site` also copies each scene's .webp and .png into
+ * public/loops/, where the gallery reads them. A scene that fails is named at the end and the run
+ * exits with an error, after the others have finished.
+ *
+ * .github/workflows/loops.yml runs this on GitHub, a scene a job, for the scenes a push to main
+ * changed (scripts/loops-changed.mjs) or the ones asked for by hand, and opens a pull request
+ * with the new loops.
  */
 import { chromium } from 'playwright-core'
 import { createServer } from 'node:http'
-import { readFileSync, existsSync, mkdirSync, statSync, writeFileSync, openSync, writeSync, closeSync } from 'node:fs'
+import { readFileSync, existsSync, mkdirSync, statSync, writeFileSync, openSync, writeSync, closeSync, copyFileSync } from 'node:fs'
+import { availableParallelism } from 'node:os'
 import { join, extname, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
@@ -19,7 +30,12 @@ import { DIORAMAS } from '../src/blobscape/diorama/scenes.ts'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const dist = join(root, 'dist')
-const [outArg, ...picked] = process.argv.slice(2)
+const args = process.argv.slice(2)
+const flags = args.filter((a) => a.startsWith('--'))
+const [outArg, ...picked] = args.filter((a) => !a.startsWith('--'))
+for (const f of flags) if (!/^--(site|lanes=\d+)$/.test(f)) throw new Error(`unknown option ${f}`)
+const toSite = flags.includes('--site')
+const asked = flags.find((f) => f.startsWith('--lanes='))
 const out = resolve(root, outArg ?? 'loops')
 mkdirSync(out, { recursive: true })
 /** Frames a second: 12 is one of the page's Motion choices and keeps a loop small. */
@@ -45,7 +61,9 @@ const browser = await chromium.launch({ executablePath, args: ['--enable-unsafe-
 const scenes = new Map(DIORAMAS.map((d) => [d.id, d]))
 const ids = picked.length ? picked : [...scenes.keys()]
 for (const id of ids) if (!scenes.has(id)) throw new Error(`no scene ${id}`)
-for (const id of ids) {
+const lanes = Math.max(1, Math.min(ids.length, asked ? Number(asked.slice(8)) : Math.min(4, availableParallelism() - 1)))
+
+async function record(id) {
   const started = Date.now()
   const ctx = await browser.newContext({ viewport: VIEW, deviceScaleFactor: 1 })
   const page = await ctx.newPage()
@@ -92,8 +110,19 @@ for (const id of ids) {
   execFileSync('ffmpeg', [...raw_, '-vf', 'select=eq(n\\,0)', '-frames:v', '1', join(out, `${id}.png`)])
   if (!process.env.KEEP_RAW) rmSync(join(out, `${id}.rgba`))
   writeFileSync(join(out, `${id}.json`), JSON.stringify({ id, ...size, fps: FPS, frames: count, loop }))
+  if (toSite) for (const ext of ['webp', 'png']) copyFileSync(join(out, `${id}.${ext}`), join(root, 'public', 'loops', `${id}.${ext}`))
   console.log(`${id}: ${count} frames at ${size.width} × ${size.height} in ${((Date.now() - started) / 1000).toFixed(0)} s`)
   await ctx.close()
 }
+
+// each lane takes the next scene not yet started, so a slow scene holds up only its own lane
+const waiting = [...ids]
+const failed = []
+await Promise.all(Array.from({ length: lanes }, async () => {
+  for (let id = waiting.shift(); id; id = waiting.shift()) {
+    try { await record(id) } catch (e) { failed.push(id); console.error(`${id}: ${e.message}`) }
+  }
+}))
 await browser.close()
 server.close()
+if (failed.length) { console.error(`not recorded: ${failed.join(' ')}`); process.exit(1) }
