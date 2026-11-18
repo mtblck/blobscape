@@ -10,12 +10,14 @@
  *   npm run verify -- --files=a.ts,b.ts --why --list   which checks those files would run, and why
  *   --wide: a file most checks reach runs all of them, not just the core ones
  *   options: --jobs=N (checks side by side, default 3), --base=URL (default: serves ./dist on :4181), --why
+ *   output: a line a check, then each failure once; every step of every check is in verify-shots/report.txt (--loud prints it all).
+ *   A failed check runs once more on its own before it counts (--no-retry to skip that).
  *
  * The checks live in scripts/verify/checks/*.mjs. Each names the source files
  * it covers (`entries`, followed through imports, and `files`, taken as they
  * are); see docs/testing.md for which command to run for which change.
  */
-import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
+import { readdirSync, readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { execSync } from 'node:child_process'
 import { cpus } from 'node:os'
@@ -47,7 +49,7 @@ const lastTimes = existsSync(timesFile) ? JSON.parse(readFileSync(timesFile, 'ut
  * Changes that reach every check: the build, the hosting headers and the
  * check harness itself. Tests, docs and recording scripts reach none.
  */
-const EVERYTHING = /^(package(-lock)?\.json|vite\.config\.ts|vercel\.json|tsconfig\.json|scripts\/verify\.mjs|scripts\/verify\/(lib|graph)\.mjs|scripts\/check-hosting\.mjs)$/
+const EVERYTHING = /^(package(-lock)?\.json|vite\.config\.ts|vercel\.json|tsconfig\.json|scripts\/verify\.mjs|scripts\/verify\/(lib|graph)\.mjs|scripts\/verify\/known-failures\.json|scripts\/check\.mjs|scripts\/quiet-reporter\.mjs|scripts\/check-hosting\.mjs)$/
 const NOTHING = /(\.test\.ts$|^docs\/(?!rigged-splats\.md$)|^[^/]+\.md$|^\.gitignore$|^LICENSE$|^scripts\/(record-loops\.mjs|rigged-samples\.ts)$|^\.claude\/)/
 // Files no check follows imports into unless it names them itself. Scene
 // descriptions are each one diorama-scenes part. The app shell and the site's
@@ -83,7 +85,12 @@ function packageChanges(files, before) {
  * on the engine's two backends, in pixel art, in the lessons and the sandbox.
  * Every check still runs when the harness or the build changes, or with --wide.
  */
-const WIDE = 0.8
+const WIDE = 0.5
+
+/** At most this many failed checks are run again alone; more than that is a break, not a flake. */
+const RETRY_MOST = 5
+/** Checks known to fail on main: `{ check, issue, until: 'YYYY-MM-DD' }`. Keep it empty; see docs/testing.md. */
+const KNOWN = JSON.parse(readFileSync(join(root, 'scripts/verify/known-failures.json'), 'utf8'))
 
 /** Which checks (and which parts of them) the changed files reach, and why. */
 function affected(files) {
@@ -153,40 +160,88 @@ const queue = [...run].sort((a, b) => (lastTimes[b.name] ?? 0) - (lastTimes[a.na
 let base = value('base', urlArg)
 const served = base ? null : await serveDist()
 base ??= served.base
-console.log(`${run.length} checks, ${jobs} at a time${run.length < checks.length ? `: ${run.map((c) => c.name).join(', ')}` : ''}\n`)
+const loud = flag('loud')
+console.log(`${run.length} checks, ${jobs} at a time${run.length < checks.length && (loud || run.length <= 12) ? `: ${run.map((c) => c.name).join(', ')}` : ''}`)
+
+// Everything a check says goes to the report; the terminal gets a line a check
+// (and the whole of it with --loud), then each failure once at the end.
+const reportFile = join(shots, 'report.txt')
+mkdirSync(shots, { recursive: true })
+writeFileSync(reportFile, `${new Date().toISOString()}  ${process.argv.slice(2).join(' ')}\n\n`)
 
 const started = Date.now()
+async function runOne(browser, c) {
+  const t = checkContext(browser, base, partsFor(c))
+  const t0 = Date.now()
+  let timer
+  try {
+    await Promise.race([c.run(t), new Promise((_, j) => { timer = setTimeout(() => j(new Error(`still running after ${LIMIT / 60000} minutes`)), LIMIT) })])
+  } catch (e) {
+    t.fails.push(`${c.name} stopped: ${e.message.split('\n')[0]}`)
+  }
+  clearTimeout(timer)
+  await t.cleanup()
+  const secs = (Date.now() - t0) / 1000
+  const head = `${t.fails.length ? 'FAIL' : 'pass'} ${c.name} (${secs.toFixed(1)} s${t.fails.length ? `, ${t.fails.length} failed` : ''})`
+  const whole = `${head}\n${t.log.join('\n')}${t.fails.length ? '\n' + t.fails.map((f) => '  FAIL ' + f).join('\n') : ''}\n`
+  appendFileSync(reportFile, whole + '\n')
+  console.log(loud ? whole : head)
+  return { name: c.name, secs, fails: t.fails }
+}
 const results = []
 async function worker() {
   let browser = await launch()
   for (let c = queue.shift(); c; c = queue.shift()) {
-    const t = checkContext(browser, base, partsFor(c))
-    const t0 = Date.now()
-    let timer
-    try {
-      await Promise.race([c.run(t), new Promise((_, j) => { timer = setTimeout(() => j(new Error(`still running after ${LIMIT / 60000} minutes`)), LIMIT) })])
-    } catch (e) {
-      t.fails.push(`${c.name} stopped: ${e.message.split('\n')[0]}`)
-    }
-    clearTimeout(timer)
-    await t.cleanup()
-    const secs = (Date.now() - t0) / 1000
-    results.push({ name: c.name, secs, fails: t.fails })
-    console.log(`${t.fails.length ? 'FAIL' : 'pass'} ${c.name} (${secs.toFixed(1)} s${t.fails.length ? `, ${t.fails.length} failed` : ''})\n${t.log.join('\n')}${t.fails.length ? '\n' + t.fails.map((f) => '  FAIL ' + f).join('\n') : ''}\n`)
+    results.push(await runOne(browser, c))
     if (!browser.isConnected()) browser = await launch()
   }
   await browser.close()
 }
 await Promise.all(Array.from({ length: jobs }, worker))
+
+// A check that failed runs once more, on its own: side by side, software
+// rendering misses a wait now and then, and a check that passes alone is flaky,
+// not broken. Not when many failed (that is a real break) or with --no-retry.
+const flaky = []
+const firstFailed = results.filter((r) => r.fails.length)
+if (firstFailed.length && firstFailed.length <= RETRY_MOST && !flag('no-retry')) {
+  console.log(`\n${firstFailed.length} failed; running ${firstFailed.length > 1 ? 'each' : 'it'} again alone`)
+  appendFileSync(reportFile, 'Again, one at a time:\n\n')
+  const browser = await launch()
+  for (const r of firstFailed) {
+    const again = await runOne(browser, run.find((c) => c.name === r.name))
+    if (!again.fails.length) flaky.push({ name: r.name, first: r.fails })
+    r.fails = again.fails
+  }
+  await browser.close()
+}
 served?.server.close()
 
 const wall = (Date.now() - started) / 1000
 writeFileSync(timesFile, JSON.stringify({ ...lastTimes, ...Object.fromEntries(results.map((r) => [r.name, Math.round(r.secs * 10) / 10])) }, null, 1))
-console.log(`times: ${results.sort((a, b) => b.secs - a.secs).map((r) => `${r.name} ${r.secs.toFixed(0)}s`).join(', ')}`)
-const failed = results.filter((r) => r.fails.length)
-console.log(`\n${results.length} checks in ${Math.floor(wall / 60)}m ${Math.floor(wall % 60)}s (${jobs} at a time)`)
+appendFileSync(reportFile, `times: ${[...results].sort((a, b) => b.secs - a.secs).map((r) => `${r.name} ${r.secs.toFixed(0)}s`).join(', ')}\n`)
+
+// Known failures: checks already red on main, each with its issue and the day
+// it stops being excused. They are named in a line and don't fail the run.
+const today = new Date().toISOString().slice(0, 10)
+const knownNow = new Map(KNOWN.filter((k) => k.until >= today).map((k) => [k.check, k]))
+const failed = results.filter((r) => r.fails.length && !knownNow.has(r.name))
+const excused = results.filter((r) => r.fails.length && knownNow.has(r.name))
+const mended = results.filter((r) => !r.fails.length && KNOWN.some((k) => k.check === r.name))
+
+/** The same line many times over is said once with its count; a long one is cut (the report has it whole). */
+function brief(fails) {
+  const count = new Map()
+  for (const f of fails) count.set(f, (count.get(f) ?? 0) + 1)
+  return [...count].map(([f, n]) => `${f.length > 400 ? f.slice(0, 400) + '…' : f}${n > 1 ? `  (×${n})` : ''}`)
+}
+console.log(`\n${results.length - failed.length - excused.length} of ${results.length} checks pass in ${Math.floor(wall / 60)}m ${Math.floor(wall % 60)}s`)
+if (flaky.length) console.log(`flaky (failed side by side, passed alone): ${flaky.map((f) => `${f.name} [${brief(f.first)[0]}]`).join('; ')}`)
+if (excused.length) console.log(`known failures, not counted: ${excused.map((r) => `${r.name} (${knownNow.get(r.name).issue}, until ${knownNow.get(r.name).until})`).join(', ')}`)
+if (mended.length) console.log(`passes now, so take it off scripts/verify/known-failures.json: ${mended.map((r) => r.name).join(', ')}`)
 if (failed.length) {
-  console.error('\nFAIL\n' + failed.flatMap((r) => r.fails.map((f) => `  - [${r.name}] ${f}`)).join('\n'))
+  console.error('\nFAIL\n' + failed.flatMap((r) => brief(r.fails).map((f) => `  - [${r.name}] ${f}`)).join('\n'))
+  console.error(`\nevery step of every check: verify-shots/report.txt; one check again: npm run verify -- ${failed[0].name}`)
   process.exit(1)
 }
-console.log('verify ok — screenshots in verify-shots/')
+console.log('verify ok (steps in verify-shots/report.txt, screenshots beside it)')

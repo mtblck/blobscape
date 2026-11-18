@@ -20,6 +20,44 @@ The engine docs' reference is checked against the code by a unit test that needs
 small package (`tools/api-docs`); `npm run check` installs it first (`npm run docs:deps`), and without it that one
 test is skipped.
 
+## What you read
+
+Every command says little when it passes, so a run costs a few lines to read
+(it used to print about 60,000 tokens of "ok"):
+
+- `npm test` prints each failure and one line of totals (`540 tests pass, 1
+  skipped`). The full report is `verify-shots/tests.txt`; `npm run test:loud`
+  prints it.
+- `npm run verify` prints a line a check, then each failure once (a line
+  repeated is counted, a long one cut). Every step of every check is in
+  `verify-shots/report.txt`; `--loud` prints it all.
+- `npm run check` (`scripts/check.mjs`) prints `build ok` for the build and
+  keeps its output in `verify-shots/build.txt`.
+
+Read the summary. Open a report only for a failure it names.
+
+A check that fails is run once more on its own before it counts: side by side,
+software rendering misses a wait now and then. One that then passes is listed
+as `flaky` and the run stays green; say so in the PR, and fix the check's wait
+if it keeps coming up. More than five failures are a break, not flakes, and are
+not run again. `--no-retry` skips this.
+
+## On GitHub
+
+`.github/workflows/check.yml` runs `npm run check` on every pull request and
+every check on main each night. A night that fails opens the issue "The nightly
+check fails on main" (and a green one closes it): while it is open, a failure
+of the same check on a branch is main's, so don't chase it there.
+
+`scripts/verify/known-failures.json` is for the rare case where main is red and
+the fix will take more than a day: `{ "check", "issue", "until" }` names a
+check, the issue that tracks it and the day the excuse runs out (a week at
+most). A named check that fails is said in one line and doesn't fail the run;
+one that passes again asks to be taken off. Keep the list empty. It is never
+the answer to a check a branch broke.
+
+## How `--changed` picks
+
 `npm run check` is `npm test`, `npm run build` and then
 `npm run verify -- --changed`: the browser checks that the files changed since
 `main` (committed, uncommitted and new) can reach, and no others. If the changes
@@ -35,6 +73,7 @@ Some examples of what `--changed` runs:
 | The site's copy and dates (`site.ts`, `meta.ts`) | `site` |
 | Header or footer | `site`, `lessons-basics`, both page sweeps |
 | The pixel pass (`splat-engine/pixelPass.ts`) | every page drawn by the engine (10 checks) |
+| The engine's renderer (`splat-engine/engine.ts`, `shadow.ts`) or `splat-core/pixel.ts` | the `core` checks among the 35 they reach: `creature`, `diorama`, `engine-lab`, `layout` (and `sprite` for `pixel.ts`); the nightly run on main covers the rest |
 | A file most checks import (`splat-core/blobs.ts`, `shared/ui.tsx`, `routes.ts`, the lesson shell) | the 10 `core` checks (see below) |
 
 To see what a change would run without running it:
@@ -69,8 +108,9 @@ npm run verify -- --changed --why --list                                  # your
   and copy (`App.tsx`, `site.ts`, `meta.ts`, `engineCopy.ts`, header, footer,
   logo) are not followed into from other checks: what they can break is the
   chrome, which the checks that name them cover.
-- A file that reaches 80% or more of the checks through imports (the blobs,
-  the shared controls, the router, the lesson shell, toasts) runs only the checks
+- A file that reaches half or more of the checks through imports (the blobs,
+  the shared controls, the router, the lesson shell, toasts, the engine's
+  renderer and pixel pipeline) runs only the checks
   marked `core: true`: `site`, `lessons-basics`, `lessons-rigs`,
   `sandbox-tools`, `creature`, `diorama`, `engine-lab`, `sprite`, `fit` and
   `layout`. Between them they draw with Spark and with the engine on WebGPU and

@@ -1,0 +1,90 @@
+name: Check
+
+# The checks every change gets, run here so a session (or a person) doesn't have to sit
+# through them: `npm run check` on each pull request (unit tests, the build, then the
+# browser checks the changed files reach), and every browser check on main each night.
+# A night that fails opens one issue, "The nightly check fails on main", or adds to the
+# open one, so a break on main is found once; a green night closes it. See docs/testing.md.
+#
+# The browser is Playwright's Chromium, drawing WebGPU and WebGL in software, as the
+# cloud sessions' does. verify-shots/ (the report, every step, and the screenshots) is
+# kept with the run for a week.
+on:
+  pull_request:
+  schedule:
+    # 09:17 UTC, the small hours in the Americas.
+    - cron: '17 9 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Tests, build and browser checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # The whole history: `verify --changed` compares the branch with main.
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Chromium
+        run: |
+          npx playwright-core install --with-deps chromium
+          # The full browser, not the headless shell, as in the cloud sessions.
+          echo "CHROME_PATH=$(node -e "console.log(require('playwright-core').chromium.executablePath())")" >> "$GITHUB_ENV"
+      - name: Check what the change reaches
+        if: github.event_name == 'pull_request'
+        run: npm run check
+      - name: Check everything
+        if: github.event_name != 'pull_request'
+        run: |
+          npm run docs:deps
+          npm test
+          npm run build
+          npm run verify
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verify-shots
+          path: verify-shots/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  report:
+    name: Say so when main is red
+    needs: check
+    if: always() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RESULT: ${{ needs.check.result }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      TITLE: The nightly check fails on main
+    steps:
+      - run: |
+          open=$(gh issue list --state open --search "in:title \"$TITLE\"" --json number --jq '.[0].number // empty')
+          if [ "$RESULT" = success ]; then
+            if [ -n "$open" ]; then gh issue close "$open" --comment "Green again: $RUN_URL"; fi
+            exit 0
+          fi
+          body="Last night's full check on main did not pass ($RESULT): $RUN_URL
+
+          The run's verify-shots artifact has the report. Until this is closed, a failure of the same check on a branch is main's, not the branch's."
+          if [ -n "$open" ]; then gh issue comment "$open" --body "Still failing: $RUN_URL"
+          else gh issue create --title "$TITLE" --body "$body"; fi
