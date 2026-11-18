@@ -362,6 +362,10 @@ export interface WaterSurface extends Actor {
   size: Float32Array
   /** The surface's slope under each blob as `shapeSurface` last found it: along x then along z, a pair a blob. */
   slope: Float32Array
+  /** The surface's curvature under each blob as `shapeSurface` last found it: the sum of its second derivatives along x and z, per meter (under zero at a crest). */
+  curve: Float32Array
+  /** @internal The cell each blob lies in. */
+  home: Int32Array
   /** @internal The cells each blob reads, worked out once since a blob never moves across the pond: four to blend its height from (−1 for a dry one), then its slope's two along x and two along z. */
   taps: Int32Array
   /** @internal The four height cells' shares, summing to 1 over the wet ones. */
@@ -392,6 +396,13 @@ export interface WaterLook {
   reach?: number
   /** How many times steeper than it is the surface is drawn and lit, so ripples a few millimeters high read from across a scene: 1 when left out. */
   steep?: number
+  /**
+   * How deep the water is taken to be, meters, for the light its surface gathers: a crest is a lens that draws the
+   * light passing down through it together on the bed and a trough spreads it, so the water's own color is brighter
+   * under crests and darker under troughs. It is what shows a ripple from above, where the surface mirrors almost
+   * nothing. `steep` counts here too. None when left out.
+   */
+  deep?: number
 }
 
 /**
@@ -424,7 +435,7 @@ export function makeSurface(water: Water, { per = 2, seed = 1 }: { per?: number;
   const skin = emptySkin(blobs.count)
   for (let k = 0; k < blobs.count; k++) setWeights(skin, k, [[0, 1]])
   // the cells `Water.heightAt` and `Water.slopeAt` would read for each blob
-  const taps = new Int32Array(count * 8), shares = new Float32Array(count * 4)
+  const taps = new Int32Array(count * 8), shares = new Float32Array(count * 4), home = new Int32Array(count)
   const wetAt = (a: number, b: number) => a >= 0 && b >= 0 && a < nx && b < nz && water.wet[b * nx + a] === 1
   for (let k = 0; k < count; k++) {
     const fx = (at[k * 2] - x0) / cell - 0.5, fz = (at[k * 2 + 1] - z0) / cell - 0.5
@@ -440,14 +451,15 @@ export function makeSurface(water: Water, { per = 2, seed = 1 }: { per?: number;
     const ci = Math.floor((at[k * 2] - x0) / cell), cj = Math.floor((at[k * 2 + 1] - z0) / cell), here = cj * nx + ci
     const or = (a: number, b: number) => (wetAt(a, b) ? b * nx + a : here)
     taps.set([or(ci + 1, cj), or(ci - 1, cj), or(ci, cj + 1), or(ci, cj - 1)], k * 8 + 4)
+    home[k] = here
   }
-  return { blobs, skin, skeleton, at, size, slope: new Float32Array(count * 2), taps, shares }
+  return { blobs, skin, skeleton, at, size, slope: new Float32Array(count * 2), curve: new Float32Array(count), home, taps, shares }
 }
 
 /** Lifts each blob of a surface to the water under it and tilts it to the water's slope there. Call after the water moved, then hand the surface to `SplatWorld.reshape`. */
 export function shapeSurface(s: WaterSurface, water: Water, steep = 1) {
-  const { blobs, slope, taps, shares } = s, n = slope.length / 2
-  const up = blobs.quat, { level, cell } = water.spec, h = water.h, half = 1 / (2 * cell)
+  const { blobs, slope, curve, home, taps, shares } = s, n = slope.length / 2
+  const up = blobs.quat, { level, cell } = water.spec, h = water.h, half = 1 / (2 * cell), per = 1 / (cell * cell)
   for (let k = 0; k < n; k++) {
     // `Water.heightAt` and `Water.slopeAt` on the cells found when the surface was made: this runs for every blob, every frame the water moves
     const t = k * 8
@@ -457,6 +469,7 @@ export function shapeSurface(s: WaterSurface, water: Water, steep = 1) {
     const sx = (h[taps[t + 4]] - h[taps[t + 5]]) * half, sz = (h[taps[t + 6]] - h[taps[t + 7]]) * half
     slope[k * 2] = sx
     slope[k * 2 + 1] = sz
+    curve[k] = (h[taps[t + 4]] + h[taps[t + 5]] + h[taps[t + 6]] + h[taps[t + 7]] - 4 * h[home[k]]) * per
     // `quatFacing` of the normal (−sx, 1, −sz)·steep, written out
     const nx = -sx * steep, nz = -sz * steep, nl = Math.sqrt(nx * nx + 1 + nz * nz)
     const qx = -1 / nl, qy = nx / nl, qw = 1 + nz / nl, ql = Math.sqrt(qx * qx + qy * qy + qw * qw)
@@ -473,7 +486,7 @@ const shaded = new Float64Array(4)
 const seen = new Float64Array(4)
 
 /** `surfaceColor` on plain numbers, into `shaded`: nothing is made per call, since `shadeSurface` asks it for every blob. `sun` is the way to the sun, one long. */
-function shade(px: number, py: number, pz: number, nx: number, ny: number, nz: number, eye: ArrayLike<number>, look: WaterLook, sun: Vec3 | null, lamps: Lamp[], near = true) {
+function shade(px: number, py: number, pz: number, nx: number, ny: number, nz: number, eye: ArrayLike<number>, look: WaterLook, sun: Vec3 | null, lamps: Lamp[], near = true, curve = 0) {
   let vx = eye[0] - px, vy = eye[1] - py, vz = eye[2] - pz
   const vl = Math.sqrt(vx * vx + vy * vy + vz * vz) || 1
   vx /= vl; vy /= vl; vz /= vl
@@ -521,10 +534,27 @@ function shade(px: number, py: number, pz: number, nx: number, ny: number, nz: n
       sr = seen[0] + sr * clear; sg = seen[1] + sg * clear; sb = seen[2] + sb * clear
     }
   }
-  shaded[0] = b[0] * (1 - fresnel) + sr * fresnel + gr
-  shaded[1] = b[1] * (1 - fresnel) + sg * fresnel + gg
-  shaded[2] = b[2] * (1 - fresnel) + sb * fresnel + gb
-  shaded[3] = Math.min(1, look.clear + (1 - look.clear) * fresnel + Math.max(gr, gg, gb))
+  const lens = gathered(curve, look)
+  shaded[0] = b[0] * lens * (1 - fresnel) + sr * fresnel + gr
+  shaded[1] = b[1] * lens * (1 - fresnel) + sg * fresnel + gg
+  shaded[2] = b[2] * lens * (1 - fresnel) + sb * fresnel + gb
+  // gathered light is more light coming back up, so the water is more solid there too
+  shaded[3] = Math.min(1, look.clear * Math.max(1, lens) + (1 - look.clear) * fresnel + Math.max(gr, gg, gb))
+}
+
+/** The least and most light a ripple leaves or gathers on the bed, as a share of flat water's: past these the rays have crossed, and the thin-lens sum no longer holds. */
+export const GATHER_LEAST = 0.45, GATHER_MOST = 2.6
+
+/**
+ * How much light reaches the bed under a point of the surface, as a share of what flat water lets through, from the
+ * surface's curvature there (the sum of its second derivatives, per meter: under zero at a crest). Light from above
+ * bends toward the normal by (n − 1) / n of its tilt (a quarter, for water), so a patch of surface lights a patch of
+ * bed 1 + deep · curvature / 4 times as wide each way together. 1 for a look with no `deep`.
+ */
+export function gathered(curve: number, look: Pick<WaterLook, 'deep' | 'steep'>): number {
+  if (!look.deep || !curve) return 1
+  const spread = 1 + look.deep * 0.25 * (look.steep ?? 1) * curve
+  return Math.max(GATHER_LEAST, Math.min(GATHER_MOST, 1 / Math.max(spread, 1e-3)))
 }
 
 const sunOf = (look: WaterLook): Vec3 | null => {
@@ -551,7 +581,7 @@ const SRGB = Float32Array.from({ length: 4097 }, (_, i) => linearToSrgb(i / 4096
  * when the water (after `shapeSurface`) or the view moved, then hand the surface to `SplatWorld.reshape` or `recolor`.
  */
 export function shadeSurface(s: WaterSurface, look: WaterLook, eye: ArrayLike<number>, lights: readonly PointLight[] = []) {
-  const { blobs, at, slope } = s, n = at.length / 2, steep = look.steep ?? 1
+  const { blobs, at, slope, curve } = s, n = at.length / 2, steep = look.steep ?? 1
   const sun = sunOf(look), lamps = lampsOf(lights)
   const { color, opacity, center } = blobs
   // one ball round every lamp's reach: lamps stand together (candles in a niche), and most of a pond is outside it
@@ -562,7 +592,7 @@ export function shadeSurface(s: WaterSurface, look: WaterLook, eye: ArrayLike<nu
     const x = at[k * 2], z = at[k * 2 + 1]
     const nx = -slope[k * 2] * steep, nz = -slope[k * 2 + 1] * steep, nl = Math.sqrt(nx * nx + 1 + nz * nz)
     const y = center[k * 3 + 1]
-    shade(x, y, z, nx / nl, 1 / nl, nz / nl, eye, look, sun, lamps, (x - mx) * (x - mx) + (y - my) * (y - my) + (z - mz) * (z - mz) < reach * reach)
+    shade(x, y, z, nx / nl, 1 / nl, nz / nl, eye, look, sun, lamps, (x - mx) * (x - mx) + (y - my) * (y - my) + (z - mz) * (z - mz) < reach * reach, curve[k])
     color[k * 3] = SRGB[Math.round(Math.min(1, shaded[0]) * 4096)]
     color[k * 3 + 1] = SRGB[Math.round(Math.min(1, shaded[1]) * 4096)]
     color[k * 3 + 2] = SRGB[Math.round(Math.min(1, shaded[2]) * 4096)]

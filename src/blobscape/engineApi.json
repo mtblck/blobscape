@@ -7503,7 +7503,7 @@
    "id": "mpm",
    "title": "Sand, snow and goo",
    "group": "simulation",
-   "doc": "Sand, snow and goo that flow: a small 3D MLS-MPM (moving least\nsquares material point method, after Hu et al. 2018's 88-line version, in\n3D), on the CPU. Each particle carries its place, velocity, affine velocity\nfield `C` and deformation `F`; each step scatters mass and momentum to a\ncoarse grid with quadratic B-splines, moves the grid under gravity and the\nwalls, and gathers it back.\n\n- Sand: Hencky elasticity with a Drucker-Prager yield (Klár et al. 2016), so\n  it can't pull and slides once a slope passes its friction angle.\n- Snow: fixed corotated elasticity with Stomakhin et al. 2013's plasticity\n  and hardening, so it packs where it is pressed and breaks in clumps.\n- Goo: soft, and giving way at a small stretch, so it runs out flat and,\n  pulled, draws out slowly instead of flying apart.\n\nThe box is [0, 1] on each side (the page scales it), the floor y = 0.\nPure and tested.",
+   "doc": "",
    "entries": [
     {
      "name": "Material",
@@ -7538,7 +7538,7 @@
        "name": "dt",
        "optional": true,
        "type": "number",
-       "doc": "Seconds per substep."
+       "doc": "Seconds per substep: left out, as long as the grid's cell size allows."
       },
       {
        "name": "gravity",
@@ -7547,12 +7547,46 @@
        "doc": "Downward pull, box sides per second squared."
       },
       {
-       "name": "friction",
+       "name": "knobs",
        "optional": true,
-       "type": "number",
-       "doc": "Sand's friction angle in degrees: the steepest slope a pile keeps."
+       "type": "PartialKnobs",
+       "doc": "How each material behaves; what is left out comes from `KNOBS`."
       }
      ]
+    },
+    {
+     "name": "Knobs",
+     "kind": "interface",
+     "doc": "How each material behaves: the settings a visitor can change while it runs (`Mpm.set`).",
+     "props": [
+      {
+       "name": "sand",
+       "type": "{ friction: number; damp: number }",
+       "doc": "Sand: grains that can't pull on each other."
+      },
+      {
+       "name": "snow",
+       "type": "{ stick: number; pack: number }",
+       "doc": "Snow: grains that hold on to each other, break in clumps and pack down."
+      },
+      {
+       "name": "goo",
+       "type": "{ thick: number; hold: number }",
+       "doc": "Goo: keeps its volume, not its shape."
+      }
+     ]
+    },
+    {
+     "name": "PartialKnobs",
+     "kind": "type",
+     "doc": "Some of `Knobs`: any material, any of its settings.",
+     "type": "{ [M in Material]?: Partial<Knobs[M]> }"
+    },
+    {
+     "name": "KNOBS",
+     "kind": "const",
+     "doc": "What each material starts as.",
+     "type": "Knobs"
     },
     {
      "name": "PER_CELL",
@@ -7616,6 +7650,18 @@
        "doc": "Kirchhoff stress from the last step's F, so each step needs one decomposition."
       },
       {
+       "name": "Jp",
+       "readonly": true,
+       "type": "Float64Array",
+       "doc": "How well each snow particle still holds on to its neighbors: 1 as it fell, less where it has cracked, more where it was pressed."
+      },
+      {
+       "name": "packed",
+       "readonly": true,
+       "type": "Float64Array",
+       "doc": "How far each snow particle has been packed down for good, as log volume lost."
+      },
+      {
        "name": "mat",
        "readonly": true,
        "type": "Uint8Array",
@@ -7628,18 +7674,71 @@
        "doc": "Grid: velocity (momentum while scattering) and mass."
       },
       {
+       "name": "knobs",
+       "readonly": true,
+       "type": "Knobs",
+       "doc": "How each material behaves now. Change it with `set`."
+      },
+      {
        "name": "time",
        "type": "number",
        "doc": "Seconds simulated so far."
+      },
+      {
+       "name": "floorGrip",
+       "type": "number",
+       "doc": "How much the floor grips what slides on it: 0 is ice."
+      },
+      {
+       "name": "solids",
+       "readonly": true,
+       "type": "Solid[]",
+       "doc": "Solid things in the box: fixed ones the material piles on, and bodies it pushes about. Add with `addSolid`."
+      },
+      {
+       "name": "floor",
+       "readonly": true,
+       "type": "number",
+       "doc": "The height material rests at on the floor: a cell and a half up, where the grid's own floor holds it."
+      },
+      {
+       "name": "lo",
+       "readonly": true,
+       "type": "number",
+       "doc": "Where the near walls hold material: x and z stay above this."
+      },
+      {
+       "name": "hi",
+       "readonly": true,
+       "type": "number",
+       "doc": "Where the far walls hold material: x and z stay under this."
       }
      ],
      "methods": [
       {
-       "name": "setFriction",
-       "doc": "Sets sand's friction angle in degrees: the steepest slope a heap keeps.",
+       "name": "set",
+       "doc": "Changes how the materials behave, from now on: any material, any of its settings.",
        "signatures": [
         {
-         "code": "setFriction(degrees: number): void"
+         "code": "set(k: PartialKnobs): void"
+        }
+       ]
+      },
+      {
+       "name": "addSolid",
+       "doc": "Puts a solid in the box. Particles already inside it are pushed out over the next steps.",
+       "signatures": [
+        {
+         "code": "addSolid(s: Solid): Solid"
+        }
+       ]
+      },
+      {
+       "name": "removeSolid",
+       "doc": "Takes a solid out of the box, or every solid when none is named.",
+       "signatures": [
+        {
+         "code": "removeSolid(s?: Solid): void"
         }
        ]
       },
@@ -7654,10 +7753,10 @@
       },
       {
        "name": "fillBox",
-       "doc": "Fills a box (corners in box units) with particles on a jittered lattice, `PER_CELL` a cell a side. Returns how many went in.",
+       "doc": "Fills a box (corners in box units) with particles on a jittered lattice, `PER_CELL` a cell a side. Returns how many went in. With `inside`, only where it says yes, so the box can hold any shape.",
        "signatures": [
         {
-         "code": "fillBox(lo: ArrayLike<number>, hi: ArrayLike<number>, m: Material, seed?: number, vel?: ArrayLike<number>): number"
+         "code": "fillBox(lo: ArrayLike<number>, hi: ArrayLike<number>, m: Material, seed?: number, vel?: ArrayLike<number>, inside?: (x: number, y: number, z: number) => boolean): number"
         }
        ]
       },
@@ -7725,6 +7824,260 @@
      "signatures": [
       {
        "code": "slopeOf(sim: Mpm, material?: number): number"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "solids",
+   "title": "Solids for sand, snow and goo",
+   "group": "simulation",
+   "doc": "",
+   "entries": [
+    {
+     "name": "SolidOptions",
+     "kind": "interface",
+     "doc": "Options for a `Solid`.",
+     "props": [
+      {
+       "name": "at",
+       "optional": true,
+       "type": "Vec3",
+       "doc": "Where its middle starts (a body), in the simulation's units."
+      },
+      {
+       "name": "density",
+       "optional": true,
+       "type": "number",
+       "doc": "Its weight for its size, against the material's 1. Left out or 0, it is fixed in place and its shape is read where it is."
+      },
+      {
+       "name": "friction",
+       "optional": true,
+       "type": "number",
+       "doc": "How much it grips what slides on it: 0 is ice."
+      },
+      {
+       "name": "corners",
+       "optional": true,
+       "type": "Vec3[]",
+       "doc": "Points on its surface to meet the world with, on top of the ones found for it (a cube's corners)."
+      },
+      {
+       "name": "velocity",
+       "optional": true,
+       "type": "Vec3",
+       "doc": "Its starting speed."
+      },
+      {
+       "name": "round",
+       "optional": true,
+       "type": "number",
+       "doc": "For a ball: its radius. It then meets the world at the exact point under it, not at the nearest of its surface points, so it rolls instead of rocking."
+      }
+     ]
+    },
+    {
+     "name": "Room",
+     "kind": "interface",
+     "doc": "What a body can run into besides the material: the floor, the four walls and the fixed solids.",
+     "props": [
+      {
+       "name": "floor",
+       "type": "number",
+       "doc": "The floor's height."
+      },
+      {
+       "name": "lo",
+       "type": "number",
+       "doc": "The near walls: x and z stay above this."
+      },
+      {
+       "name": "hi",
+       "type": "number",
+       "doc": "The far walls: x and z stay under this."
+      },
+      {
+       "name": "gravity",
+       "type": "number",
+       "doc": "Downward pull."
+      },
+      {
+       "name": "fixed",
+       "type": "Solid[]",
+       "doc": "Fixed solids to stay out of."
+      }
+     ]
+    },
+    {
+     "name": "Solid",
+     "kind": "class",
+     "doc": "A solid thing in a material simulation: fixed, or a rigid body with weight. Its shape is a distance function; a\nbody's shape is given about its own middle and is carried by `pos` and `quat`.",
+     "ctor": [
+      {
+       "code": "new Solid(shape: Shape, o?: SolidOptions)"
+      }
+     ],
+     "props": [
+      {
+       "name": "shape",
+       "readonly": true,
+       "type": "Shape",
+       "doc": "Its shape: for a body, about its own middle."
+      },
+      {
+       "name": "fixed",
+       "readonly": true,
+       "type": "boolean",
+       "doc": "Whether it stays put."
+      },
+      {
+       "name": "pos",
+       "readonly": true,
+       "type": "Float64Array<ArrayBuffer>",
+       "doc": "Where its middle is (a body)."
+      },
+      {
+       "name": "quat",
+       "readonly": true,
+       "type": "Float64Array<ArrayBuffer>",
+       "doc": "How it is turned (x, y, z, w)."
+      },
+      {
+       "name": "vel",
+       "readonly": true,
+       "type": "Float64Array<ArrayBuffer>",
+       "doc": "Its speed."
+      },
+      {
+       "name": "spin",
+       "readonly": true,
+       "type": "Float64Array<ArrayBuffer>",
+       "doc": "How fast it turns, about each axis of the world."
+      },
+      {
+       "name": "mass",
+       "readonly": true,
+       "type": "number",
+       "doc": "Its mass: infinite when fixed."
+      },
+      {
+       "name": "volume",
+       "readonly": true,
+       "type": "number",
+       "doc": "Its volume."
+      },
+      {
+       "name": "inertia",
+       "readonly": true,
+       "type": "Vec3",
+       "doc": "Its resistance to turning about each of its own axes."
+      },
+      {
+       "name": "reach",
+       "readonly": true,
+       "type": "number",
+       "doc": "No part of it is further than this from its middle."
+      },
+      {
+       "name": "friction",
+       "type": "number",
+       "doc": "How much it grips."
+      },
+      {
+       "name": "held",
+       "type": "boolean",
+       "doc": "Whether the material was pressing on it in the last step."
+      },
+      {
+       "name": "asleep",
+       "type": "boolean",
+       "doc": "Whether it has come to rest: a sleeping body is fixed until something pushes it."
+      }
+     ],
+     "methods": [
+      {
+       "name": "distance",
+       "doc": "How far a point of the world is from its surface: negative inside.",
+       "signatures": [
+        {
+         "code": "distance(x: number, y: number, z: number): number"
+        }
+       ]
+      },
+      {
+       "name": "normal",
+       "doc": "The way out of it at a point of the world, as a unit vector written to `out`.",
+       "signatures": [
+        {
+         "code": "normal(x: number, y: number, z: number, out: number[] | Float64Array<ArrayBufferLike>): void"
+        }
+       ]
+      },
+      {
+       "name": "speedAt",
+       "doc": "The speed of the point of it at `r` from its middle, written to `out`.",
+       "signatures": [
+        {
+         "code": "speedAt(rx: number, ry: number, rz: number, out: number[] | Float64Array<ArrayBufferLike>): void"
+        }
+       ]
+      },
+      {
+       "name": "kick",
+       "doc": "Pushes it at the point `r` from its middle: a kick `j` (mass times change of speed). Wakes it.",
+       "signatures": [
+        {
+         "code": "kick(rx: number, ry: number, rz: number, jx: number, jy: number, jz: number): void"
+        }
+       ]
+      },
+      {
+       "name": "wake",
+       "doc": "Wakes a sleeping body.",
+       "signatures": [
+        {
+         "code": "wake(): void"
+        }
+       ]
+      },
+      {
+       "name": "fall",
+       "doc": "Gravity for one step: call before the material has pushed on it.",
+       "signatures": [
+        {
+         "code": "fall(room: Room, dt: number): void"
+        }
+       ]
+      },
+      {
+       "name": "move",
+       "doc": "Meets the floor, the walls and the fixed solids, then moves on by `dt`: call after the material has pushed on it.\n`held` says the material is holding it up too, which lets it sleep where it lies.",
+       "signatures": [
+        {
+         "code": "move(room: Room, dt: number, held?: boolean): void"
+        }
+       ]
+      },
+      {
+       "name": "turned",
+       "doc": "Works out `rot` from `quat`: call after setting `quat` by hand.",
+       "signatures": [
+        {
+         "code": "turned(): void"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "solve6",
+     "kind": "function",
+     "doc": "Solves the 6×6 `a x = b` in place (row-major `a`), leaving the answer in `b`. Returns false when it can't.",
+     "signatures": [
+      {
+       "code": "solve6(a: Float64Array, b: Float64Array): boolean"
       }
      ]
     }
@@ -8034,6 +8387,11 @@
        "name": "slope",
        "type": "Float32Array",
        "doc": "The surface's slope under each blob as `shapeSurface` last found it: along x then along z, a pair a blob."
+      },
+      {
+       "name": "curve",
+       "type": "Float32Array",
+       "doc": "The surface's curvature under each blob as `shapeSurface` last found it: the sum of its second derivatives along x and z, per meter (under zero at a crest)."
       }
      ]
     },
@@ -8092,6 +8450,12 @@
        "optional": true,
        "type": "number",
        "doc": "How many times steeper than it is the surface is drawn and lit, so ripples a few millimeters high read from across a scene: 1 when left out."
+      },
+      {
+       "name": "deep",
+       "optional": true,
+       "type": "number",
+       "doc": "How deep the water is taken to be, meters, for the light its surface gathers: a crest is a lens that draws the\nlight passing down through it together on the bed and a trough spreads it, so the water's own color is brighter\nunder crests and darker under troughs. It is what shows a ripple from above, where the surface mirrors almost\nnothing. `steep` counts here too. None when left out."
       }
      ]
     },
@@ -8112,6 +8476,28 @@
      "signatures": [
       {
        "code": "shapeSurface(s: WaterSurface, water: Water, steep?: number): void"
+      }
+     ]
+    },
+    {
+     "name": "GATHER_LEAST",
+     "kind": "const",
+     "doc": "The least and most light a ripple leaves or gathers on the bed, as a share of flat water's: past these the rays have crossed, and the thin-lens sum no longer holds.",
+     "type": "0.45"
+    },
+    {
+     "name": "GATHER_MOST",
+     "kind": "const",
+     "doc": "The least and most light a ripple leaves or gathers on the bed, as a share of flat water's: past these the rays have crossed, and the thin-lens sum no longer holds.",
+     "type": "2.6"
+    },
+    {
+     "name": "gathered",
+     "kind": "function",
+     "doc": "How much light reaches the bed under a point of the surface, as a share of what flat water lets through, from the\nsurface's curvature there (the sum of its second derivatives, per meter: under zero at a crest). Light from above\nbends toward the normal by (n − 1) / n of its tilt (a quarter, for water), so a patch of surface lights a patch of\nbed 1 + deep · curvature / 4 times as wide each way together. 1 for a look with no `deep`.",
+     "signatures": [
+      {
+       "code": "gathered(curve: number, look: Pick<WaterLook, \"deep\" | \"steep\">): number"
       }
      ]
     },
