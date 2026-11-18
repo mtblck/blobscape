@@ -214,7 +214,8 @@ export function FourWays() {
       if (stage && built && shown('blobscape') && now - lastTimed > 1000) {
         lastTimed = now
         timing = true
-        stage.timed().then((took) => { spent.current.blobscape = spent.current.blobscape === undefined ? took : spent.current.blobscape * 0.7 + took * 0.3 }, () => {}).finally(() => { timing = false })
+        // several frames to one wait where a frame is quick (see `timed`), one where it is slow
+        stage.timed((spent.current.blobscape ?? 100) > 25 ? 1 : 8).then((took) => { spent.current.blobscape = spent.current.blobscape === undefined ? took : spent.current.blobscape * 0.7 + took * 0.3 }, () => {}).finally(() => { timing = false })
       }
     }
     raf = requestAnimationFrame(tick)
