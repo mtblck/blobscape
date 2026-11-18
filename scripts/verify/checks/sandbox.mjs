@@ -6,9 +6,9 @@ export default [
     core: true,
     about: 'open a .ply, box and lasso select, move, a live effect, bake, save, bad files, keyboard',
     entries: ['src/blobscape/Sandbox.tsx'],
-    async run({ readFileSync, shots, join, fails, ok, open, axe, ballPly }) {
+    async run({ readFileSync, shots, join, fails, ok, open, axe, ballPly, tabClick }) {
       const B = '/'
-      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 900 }, acceptDownloads: true })
+      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 720 }, acceptDownloads: true })
       await page.waitForTimeout(1500)
       const count = async () => Number((await page.textContent('[data-testid=blob-count]')).replace(/\D/g, ''))
       const selected = async () => Number(((await page.textContent('[data-testid=selected-count]').catch(() => '0')) ?? '0').replace(/\D/g, ''))
@@ -30,7 +30,7 @@ export default [
       await page.waitForTimeout(1200)
 
       // Box select the middle of the view, then lasso the left half
-      await page.getByRole('button', { name: 'Select', exact: true }).click()
+      await tabClick(page.getByRole('button', { name: 'Select', exact: true }))
       const box = await page.getByTestId('viewport').boundingBox()
       const at = (fx, fy) => [box.x + box.width * fx, box.y + box.height * fy]
       await page.mouse.move(...at(0.3, 0.2)); await page.mouse.down()
@@ -39,7 +39,7 @@ export default [
       const boxed = await selected()
       if (boxed < 50 || boxed >= 2000) fails.push(`blobscape sandbox: box select picked ${boxed}`)
       else ok(`blobscape sandbox: box select picks ${boxed} blobs`)
-      await page.getByRole('button', { name: 'Lasso', exact: true }).click()
+      await tabClick(page.getByRole('button', { name: 'Lasso', exact: true }))
       const ring = [[0.15, 0.1], [0.5, 0.1], [0.5, 0.95], [0.15, 0.95]]
       await page.mouse.move(...at(...ring[0])); await page.mouse.down()
       for (const [i, j] of [[0, 1], [1, 2], [2, 3], [3, 0]]) for (let k = 1; k <= 6; k++) await page.mouse.move(...at(ring[i][0] + (ring[j][0] - ring[i][0]) * k / 6, ring[i][1] + (ring[j][1] - ring[i][1]) * k / 6))
@@ -50,7 +50,7 @@ export default [
 
       // Move the selection: the picture changes, and Undo puts it back
       const still = await shot()
-      await page.getByRole('button', { name: 'Move', exact: true }).click()
+      await tabClick(page.getByRole('button', { name: 'Move', exact: true }))
       await page.mouse.move(...at(0.3, 0.5)); await page.mouse.down(); await page.mouse.move(...at(0.2, 0.5), { steps: 5 }); await page.mouse.up()
       await page.waitForTimeout(600)
       const moved = await differs(still, await shot())
@@ -61,7 +61,7 @@ export default [
       // A live effect on the GPU: explode the whole scene
       await page.getByRole('tab', { name: /Effects/ }).click()
       const calm = await shot()
-      await page.getByRole('button', { name: 'Explode', exact: true }).click()
+      await tabClick(page.getByRole('button', { name: 'Explode', exact: true }))
       await page.getByRole('slider', { name: 'Amount' }).focus()
       await page.keyboard.press('End')
       // Software WebGL is slow to re-run the effect and re-sort; a real GPU does it within a frame
@@ -73,7 +73,7 @@ export default [
       await page.screenshot({ path: join(shots, 'blobscape-explode.png') })
       await axe(page, 'blobscape sandbox effects')
       // Make it permanent: the preview turns off and the blobs keep the look
-      await page.getByRole('button', { name: 'Make it permanent' }).click()
+      await tabClick(page.getByRole('button', { name: 'Make it permanent' }))
       await page.waitForTimeout(2500)
       const baked = await differs(blown, await shot())
       const noneOn = await page.getByRole('group', { name: 'Effect' }).getByRole('button', { name: 'None' }).getAttribute('aria-pressed')
@@ -81,15 +81,15 @@ export default [
       else if (baked > changed / 50) fails.push(`blobscape sandbox: baked picture differs from the preview in ${baked} pixels (the effect changed ${changed})`)
       else ok(`blobscape sandbox: a baked effect matches its preview (${baked} of ${changed} changed pixels differ)`)
       // Wave loops on its own clock
-      await page.getByRole('button', { name: 'Wave', exact: true }).click()
+      await tabClick(page.getByRole('button', { name: 'Wave', exact: true }))
       const w1 = await shot(); await page.waitForTimeout(500); const w2 = await shot()
       if ((await differs(w1, w2)) < 200) fails.push('blobscape sandbox: Wave does not animate')
       else ok('blobscape sandbox: Wave animates')
-      await page.getByRole('button', { name: 'None', exact: true }).click()
+      await tabClick(page.getByRole('button', { name: 'None', exact: true }))
 
       // Save as .ply: a standard header and every blob
       await page.getByRole('tab', { name: /Scene/ }).click()
-      const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Save as .ply' }).click()])
+      const [download] = await Promise.all([page.waitForEvent('download'), tabClick(page.getByRole('button', { name: 'Save as .ply' }))])
       const saved = readFileSync(await download.path())
       const head = saved.subarray(0, 400).toString('latin1')
       if (download.suggestedFilename() !== 'ball.ply' || !head.includes('element vertex 2000') || !head.includes('property float rot_3')) fails.push(`blobscape sandbox: saved ${download.suggestedFilename()} with header ${JSON.stringify(head.slice(0, 120))}`)
@@ -109,8 +109,8 @@ export default [
       if ((await count()) !== 500) fails.push(`blobscape sandbox: after a lying header, a good file gave ${await count()} blobs`)
       else ok('blobscape sandbox: a lying .ply header is refused and the next file still opens')
       // Keyboard: Move nudges the selection with the arrow keys; Delete keeps focus in the panel
-      await page.getByRole('tab', { name: /Selection/ }).click()
-      await page.getByRole('button', { name: 'Select all' }).click()
+      await page.getByRole('tab', { name: /^Select/ }).click()
+      await tabClick(page.getByRole('button', { name: 'Select all' }))
       await page.getByRole('button', { name: 'Delete' }).focus()
       await page.keyboard.press('Enter')
       await page.waitForFunction(() => document.activeElement && document.activeElement !== document.body, null, { timeout: 5000 }).catch(() => {})
@@ -125,8 +125,8 @@ export default [
     name: 'sandbox-mend',
     about: 'erase a hole, Fill grows it shut, Stamp copies one place to another, Undo',
     entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/patch.ts'],
-    async run({ shots, join, fails, ok, open, ballPly }) {
-      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 900 } })
+    async run({ shots, join, fails, ok, open, ballPly, tabClick }) {
+      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 720 } })
       await page.waitForTimeout(1500)
       const count = async () => Number((await page.textContent('[data-testid=blob-count]')).replace(/\D/g, ''))
       await page.getByRole('tab', { name: /Scene/ }).click()
@@ -138,10 +138,10 @@ export default [
       const click = async (fx, fy) => { await page.mouse.move(...at(fx, fy)); await page.mouse.down(); await page.mouse.up(); await page.waitForTimeout(400) }
 
       // Cut a hole in the middle, then grow it shut
-      await page.getByRole('button', { name: 'Erase', exact: true }).click()
+      await tabClick(page.getByRole('button', { name: 'Erase', exact: true }))
       await click(0.5, 0.5)
       const holed = await count()
-      await page.getByRole('button', { name: 'Fill', exact: true }).click()
+      await tabClick(page.getByRole('button', { name: 'Fill', exact: true }))
       await click(0.5, 0.5)
       const filled = await count()
       if (holed >= 2000 || filled <= holed) fails.push(`blobscape sandbox: erasing left ${holed} blobs and Fill made it ${filled}`)
@@ -149,12 +149,12 @@ export default [
       await page.waitForTimeout(2000)
       await page.screenshot({ path: join(shots, 'blobscape-sandbox-fill.png') })
       // Filling open space beside the ball adds nothing
-      await click(0.06, 0.08)
+      await click(0.8, 0.1)
       if ((await count()) !== filled) fails.push(`blobscape sandbox: Fill in open space added ${(await count()) - filled} blobs`)
       else ok('blobscape sandbox: Fill leaves open space empty')
 
       // Stamp: a drag before a click copies nothing; click the middle, then drag beside it
-      await page.getByRole('button', { name: 'Stamp', exact: true }).click()
+      await tabClick(page.getByRole('button', { name: 'Stamp', exact: true }))
       await click(0.5, 0.5)
       await page.mouse.move(...at(0.2, 0.5)); await page.mouse.down()
       for (let k = 1; k <= 6; k++) await page.mouse.move(...at(0.2 + k * 0.01, 0.5 + k * 0.02))
@@ -175,17 +175,17 @@ export default [
     name: 'sandbox-paint',
     about: 'the five brushes each paint onto the scene, one Undo a stroke',
     entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/brushes.ts'],
-    async run({ shots, join, fails, ok, open, axe }) {
-      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 900 } })
+    async run({ shots, join, fails, ok, open, axe, tabClick }) {
+      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 720 } })
       await page.waitForTimeout(1500)
       const count = async () => Number((await page.textContent('[data-testid=blob-count]')).replace(/\D/g, ''))
       const box = await page.getByTestId('viewport').boundingBox()
       const at = (fx, fy) => [box.x + box.width * fx, box.y + box.height * fy]
-      await page.getByRole('tab', { name: /Brush/ }).click()
+      await page.getByRole('tab', { name: /Build/ }).click()
       // Each brush on its own strip of the floor, left to right
       const kinds = ['Leaves', 'Grass', 'Fur', 'Moss', 'Stones']
       for (const [i, kind] of kinds.entries()) {
-        await page.getByRole('group', { name: 'Paint with' }).getByRole('button', { name: kind, exact: true }).click()
+        await tabClick(page.getByRole('group', { name: 'Paint with' }).getByRole('button', { name: kind, exact: true }))
         const before = await count()
         const fx = 0.14 + i * 0.18
         await page.mouse.move(...at(fx, 0.68)); await page.mouse.down()
@@ -215,8 +215,8 @@ export default [
     name: 'sandbox-path',
     about: 'camera stops and playing the path (saving the MP4 only with VERIFY_MP4=1)',
     entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/cameraPath.ts', 'src/blobscape/diorama/video.ts'],
-    async run({ readFileSync, shots, join, fails, ok, open, axe }) {
-      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 900 }, acceptDownloads: true })
+    async run({ readFileSync, shots, join, fails, ok, open, axe, tabClick }) {
+      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 720 }, acceptDownloads: true })
       await page.waitForTimeout(1500)
       const shot = async () => (await page.getByTestId('viewport').screenshot()).toString('base64')
       // The view once it has stopped changing: software rendering sorts seconds behind a turn
@@ -235,7 +235,7 @@ export default [
       }, [a, b])
       const box = await page.getByTestId('viewport').boundingBox()
       const at = (fx, fy) => [box.x + box.width * fx, box.y + box.height * fy]
-      await page.getByRole('button', { name: 'Look', exact: true }).click()
+      await tabClick(page.getByRole('button', { name: 'Look around', exact: true }))
       await page.getByRole('tab', { name: /Scene/ }).click()
       const add = page.getByRole('button', { name: 'Add this view as a stop' })
       const play = page.getByRole('button', { name: 'Play the path' })
@@ -276,7 +276,7 @@ export default [
       if (process.env.VERIFY_MP4) {
         await page.getByRole('slider', { name: 'Seconds a stop' }).focus()
         await page.keyboard.press('Home')
-        const [download] = await Promise.all([page.waitForEvent('download', { timeout: 240000 }), page.getByTestId('path-save').click()])
+        const [download] = await Promise.all([page.waitForEvent('download', { timeout: 240000 }), tabClick(page.getByTestId('path-save'))])
         const bytes = readFileSync(await download.path())
         if (!download.suggestedFilename().endsWith('-path.mp4') || bytes.subarray(4, 8).toString('latin1') !== 'ftyp' || bytes.length < 20000) fails.push(`blobscape sandbox path: saved ${download.suggestedFilename()}, ${bytes.length} bytes`)
         else ok(`blobscape sandbox path: saves an MP4 (${Math.round(bytes.length / 1024)} KB)`)
@@ -292,8 +292,8 @@ export default [
     name: 'sandbox-photo',
     about: 'one photo to a shallow scene: the depth model runs in the page, the view opens as the photo and has depth',
     entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/photo.ts', 'src/blobscape/photo/scene.ts', 'src/blobscape/photo/depth.worker.ts'],
-    async run({ readFileSync, root, shots, join, fails, ok, open }) {
-      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 900 } })
+    async run({ readFileSync, root, shots, join, fails, ok, open, tabClick }) {
+      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 720 } })
       // nothing but this site may be asked for anything
       const outside = []
       page.on('request', (r) => { if (!/^(http:\/\/localhost|data:|blob:)/.test(r.url())) outside.push(r.url()) })
@@ -313,7 +313,7 @@ export default [
       const front = await page.getByTestId('viewport').screenshot()
       await page.screenshot({ path: join(shots, 'blobscape-sandbox-photo.png') })
       // a small turn of the view
-      await page.getByRole('button', { name: 'Look', exact: true }).click()
+      await tabClick(page.getByRole('button', { name: 'Look around', exact: true }))
       const box = await page.getByTestId('viewport').boundingBox()
       await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.5); await page.mouse.down()
       await page.mouse.move(box.x + box.width * 0.36, box.y + box.height * 0.5, { steps: 6 }); await page.mouse.up()
@@ -393,13 +393,13 @@ export default [
     about: 'tap to select: with whole things on, a click on the toadstool selects it and not the scene, by a model run in the page',
     entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/tapSelect.ts', 'src/blobscape/select/thing.ts', 'src/blobscape/select/segment.worker.ts'],
     async run({ shots, join, fails, ok, open }) {
-      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 900 } })
+      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 720 } })
       const outside = []
       page.on('request', (r) => { if (!/^(http:\/\/localhost|data:|blob:)/.test(r.url())) outside.push(r.url()) })
       await page.waitForTimeout(2500)
       const total = Number((await page.textContent('[data-testid=blob-count]')).replace(/\D/g, ''))
-      const selected = async () => Number(((await page.getByRole('tab', { name: /Selection/ }).textContent()) ?? '').replace(/\D/g, '') || 0)
-      await page.getByRole('tab', { name: /Selection/ }).click()
+      const selected = async () => Number(((await page.getByRole('tab', { name: /^Select/ }).textContent()) ?? '').replace(/\D/g, '') || 0)
+      await page.getByRole('tab', { name: /^Select/ }).click()
       await page.getByRole('checkbox', { name: 'A click with Select takes the whole thing' }).check()
       if ((await page.getByRole('button', { name: 'Select', exact: true }).getAttribute('aria-pressed')) !== 'true') fails.push('blobscape sandbox thing: turning whole things on did not pick the Select tool')
       const box = await page.getByTestId('viewport').boundingBox()
@@ -425,7 +425,7 @@ export default [
       if (same !== got || again > first) fails.push(`blobscape sandbox thing: a second click on the same spot gave ${same} (was ${got}) in ${again} ms (the first took ${first})`)
       else ok(`blobscape sandbox thing: the same click again gives the same blobs, in ${(again / 1000).toFixed(1)} s`)
       // empty space selects nothing
-      await click(0.04, 0.06)
+      await click(0.8, 0.1)
       const none = await selected()
       if (none) fails.push(`blobscape sandbox thing: a click on nothing left ${none} selected`)
       if (outside.length) fails.push(`blobscape sandbox thing: asked another site for ${outside.slice(0, 3).join(', ')}`)
@@ -437,26 +437,26 @@ export default [
     name: 'sandbox-props',
     about: 'a slime that bursts and the watch, added from other experiments',
     entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/props.ts'],
-    async run({ shots, join, fails, ok, open, axe }) {
-      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 900 } })
+    async run({ shots, join, fails, ok, open, axe, tabClick }) {
+      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 720 } })
       await page.waitForTimeout(1500)
       // no count on the page is no creatures; where there is one, a busy page is given time to answer (a second was not enough in software, and read as 0)
       const inCreatures = async () => ((await page.locator('[data-testid=creature-blob-count]').count()) ? Number(((await page.textContent('[data-testid=creature-blob-count]', { timeout: 30000 }).catch(() => '0')) ?? '0').replace(/\D/g, '')) : 0)
       await page.getByRole('tab', { name: /Scene/ }).click()
-      await page.getByRole('button', { name: 'Empty' }).click()
+      await tabClick(page.getByRole('button', { name: 'Empty' }))
       await page.getByRole('tab', { name: /Creatures/ }).click()
-      await page.getByTestId('add-creature').getByRole('button', { name: 'Slime' }).click()
+      await tabClick(page.getByTestId('add-creature').getByRole('button', { name: 'Slime' }))
       await page.waitForTimeout(400)
       const slime = await inCreatures()
-      await page.getByRole('button', { name: 'Red', exact: true }).click()
-      await page.getByRole('button', { name: 'Burst', exact: true }).click()
-      await page.getByRole('button', { name: 'Bring to the middle of the view' }).click()
+      await tabClick(page.getByRole('button', { name: 'Red', exact: true }))
+      await tabClick(page.getByRole('button', { name: 'Burst', exact: true }))
+      await tabClick(page.getByRole('button', { name: 'Bring to the middle of the view' }))
       await page.waitForTimeout(2000)
       const a = await page.getByTestId('viewport').screenshot()
       // the burst moves on its own: look again until the view has changed (a few tries, as frames come slower when other checks share the machine)
       let b = a
       for (let k = 0; k < 6 && b.equals(a); k++) { await page.waitForTimeout(600); b = await page.getByTestId('viewport').screenshot() }
-      await page.getByTestId('add-creature').getByRole('button', { name: 'Watch' }).click()
+      await tabClick(page.getByTestId('add-creature').getByRole('button', { name: 'Watch' }))
       await page.waitForTimeout(800)
       const both = await inCreatures()
       if (!(slime >= 2500 && both - slime >= 25000 && !a.equals(b))) fails.push(`blobscape sandbox props: ${JSON.stringify({ slime, both, same: a.equals(b) })}`)
@@ -471,7 +471,7 @@ export default [
     about: 'add, play, drag with Move, bones, freeze, undo, walk about, look at, effects, save .ply and rigged .glb, open a rigged model; phone',
     entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/actors.ts', 'src/blobscape/wander.ts', 'src/splat-core/view.ts', 'src/blobscape/sceneFile.ts', 'src/blobscape/modelRig.ts', 'src/splat-engine/skinnedModel.ts'],
     async run({ readFileSync, shots, join, fails, ok, open, axe, tabClick }) {
-      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 900 }, acceptDownloads: true })
+      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 720 }, acceptDownloads: true })
       await page.waitForTimeout(1500)
       const count = async () => Number((await page.textContent('[data-testid=blob-count]')).replace(/\D/g, ''))
       // no count on the page is no creatures; where there is one, a busy page is given time to answer (a second was not enough in software, and read as 0)
@@ -486,14 +486,14 @@ export default [
       }, [a.toString('base64'), b.toString('base64')])
 
       await page.getByRole('tab', { name: /Scene/ }).click()
-      await page.getByRole('button', { name: 'Empty' }).click()
+      await tabClick(page.getByRole('button', { name: 'Empty' }))
       await page.getByRole('tab', { name: /Creatures/ }).click()
-      await page.getByTestId('add-creature').getByRole('button', { name: 'Fox' }).click()
+      await tabClick(page.getByTestId('add-creature').getByRole('button', { name: 'Fox' }))
       await page.waitForTimeout(400)
       const foxBlobs = await inCreatures()
       if (foxBlobs < 4000) fails.push(`blobscape sandbox creatures: a fox added ${foxBlobs} blobs`)
       else ok(`blobscape sandbox creatures: adds a fox of ${foxBlobs.toLocaleString()} blobs beside the scene`)
-      await page.getByRole('button', { name: 'Bring to the middle of the view' }).click()
+      await tabClick(page.getByRole('button', { name: 'Bring to the middle of the view' }))
       await page.waitForTimeout(2500)
       // It moves on its own
       const a = await shot()
@@ -502,10 +502,10 @@ export default [
       if (moving < 200) fails.push(`blobscape sandbox creatures: the fox didn't move (${moving} px)`)
       else ok(`blobscape sandbox creatures: the fox trots (${moving} px changed)`)
       // Still, then a drag with Move takes it across the floor
-      await page.getByRole('button', { name: 'Still', exact: true }).click()
+      await tabClick(page.getByRole('button', { name: 'Still', exact: true }))
       await page.waitForTimeout(1500)
       const still = await shot()
-      await page.getByRole('button', { name: 'Move', exact: true }).click()
+      await tabClick(page.getByRole('button', { name: 'Move', exact: true }))
       const box = await page.getByTestId('viewport').boundingBox()
       const cx = box.x + box.width / 2, cy = box.y + box.height / 2
       let grabbed = false
@@ -523,19 +523,19 @@ export default [
       if ((await count()) !== 0) fails.push(`blobscape sandbox creatures: dragging the fox added ${await count()} scene blobs`)
       // Bones over the blobs
       const blobsOnly = await shot()
-      await page.getByRole('group', { name: 'Show creatures as' }).getByRole('button', { name: 'Bones' }).click()
+      await tabClick(page.getByRole('group', { name: 'Show creatures as' }).getByRole('button', { name: 'Bones' }))
       await page.waitForTimeout(1200)
       if ((await differs(blobsOnly, await shot())) < 500) fails.push('blobscape sandbox creatures: Bones looks the same as Blobs')
       else ok('blobscape sandbox creatures: shows the bones instead of the blobs')
-      await page.getByRole('group', { name: 'Show creatures as' }).getByRole('button', { name: 'Blobs' }).click()
+      await tabClick(page.getByRole('group', { name: 'Show creatures as' }).getByRole('button', { name: 'Blobs' }))
       // Saved files hold the creature as it stands
-      const [dl] = await Promise.all([page.waitForEvent('download'), (async () => { await page.getByRole('tab', { name: /Scene/ }).click(); await page.getByRole('button', { name: 'Save as .ply' }).click() })()])
+      const [dl] = await Promise.all([page.waitForEvent('download'), (async () => { await page.getByRole('tab', { name: /Scene/ }).click(); await tabClick(page.getByRole('button', { name: 'Save as .ply' })) })()])
       const saved = readFileSync(await dl.path(), 'latin1').match(/element vertex (\d+)/)?.[1]
       if (Number(saved) !== foxBlobs) fails.push(`blobscape sandbox creatures: saved .ply has ${saved} blobs, expected the fox's ${foxBlobs}`)
       else ok('blobscape sandbox creatures: Save as .ply includes the fox')
       // Freeze: its blobs join the scene; Undo brings the creature back
       await page.getByRole('tab', { name: /Creatures/ }).click()
-      await page.getByRole('button', { name: 'Freeze into the scene' }).click()
+      await tabClick(page.getByRole('button', { name: 'Freeze into the scene' }))
       await page.waitForTimeout(500)
       if ((await count()) !== foxBlobs || (await inCreatures()) !== 0) fails.push(`blobscape sandbox creatures: freezing gave ${await count()} scene blobs and ${await inCreatures()} in creatures`)
       else ok('blobscape sandbox creatures: Freeze turns the fox into ordinary blobs')
@@ -544,7 +544,7 @@ export default [
       if ((await count()) !== 0 || (await inCreatures()) !== foxBlobs) fails.push(`blobscape sandbox creatures: undoing the freeze gave ${await count()} / ${await inCreatures()}`)
       else ok('blobscape sandbox creatures: Undo brings the live fox back')
       // Walk about (issue #132): even set to Still, it trots off round its spot, and stands again when switched off
-      await page.getByRole('button', { name: 'Still', exact: true }).click()
+      await tabClick(page.getByRole('button', { name: 'Still', exact: true }))
       await page.waitForTimeout(800)
       const standing = await shot()
       await page.getByLabel('Walk about').check()
@@ -558,32 +558,33 @@ export default [
       else ok('blobscape sandbox creatures: switched off, it stands on its spot again')
       // Looks at (issue #133): standing still, it turns its head to the camera
       const ahead = await shot()
-      await page.getByRole('group', { name: 'Looks at' }).getByRole('button', { name: 'You' }).click()
+      await tabClick(page.getByRole('group', { name: 'Looks at' }).getByRole('button', { name: 'You' }))
       await page.waitForTimeout(800)
       const turned = await differs(ahead, await shot())
       if (turned < 150) fails.push(`blobscape sandbox creatures: Looks at You didn't turn the fox's head (${turned} px)`)
       else ok(`blobscape sandbox creatures: Looks at You turns the fox's head to the camera (${turned} px changed)`)
-      await page.getByRole('group', { name: 'Looks at' }).getByRole('button', { name: 'Ahead' }).click()
+      await tabClick(page.getByRole('group', { name: 'Looks at' }).getByRole('button', { name: 'Ahead' }))
       // Effects (issue #134): on the whole scene they move the creatures too; on a selection, not
+      // open Effects first: the view's Look around button leaves with the mode, and would count as a change
+      await page.getByRole('tab', { name: /Effects/ }).click()
       await page.waitForTimeout(800)
       const whole = await shot()
-      await page.getByRole('tab', { name: /Effects/ }).click()
-      await page.getByRole('button', { name: 'Explode', exact: true }).click()
+      await tabClick(page.getByRole('button', { name: 'Explode', exact: true }))
       await page.getByRole('slider', { name: 'Amount' }).focus()
       await page.keyboard.press('End')
       await page.waitForTimeout(2500)
       const blownFox = await differs(whole, await shot())
       if (blownFox < 1000) fails.push(`blobscape sandbox creatures: Explode on the whole scene left the fox alone (${blownFox} px)`)
       else ok(`blobscape sandbox creatures: Explode on the whole scene blows the fox apart too (${blownFox} px changed)`)
-      await page.getByRole('group', { name: 'Apply to' }).getByRole('button', { name: 'Selection only' }).click()
+      await tabClick(page.getByRole('group', { name: 'Apply to' }).getByRole('button', { name: 'Selection only' }))
       await page.waitForTimeout(1500)
       const spared = await differs(whole, await shot())
       if (spared > 200) fails.push(`blobscape sandbox creatures: an effect on the selection still moved the fox (${spared} px)`)
       else ok('blobscape sandbox creatures: an effect on the selection leaves the fox alone')
-      await page.getByRole('group', { name: 'Apply to' }).getByRole('button', { name: 'Whole scene' }).click()
-      await page.getByRole('group', { name: 'Effect' }).getByRole('button', { name: 'None' }).click()
+      await tabClick(page.getByRole('group', { name: 'Apply to' }).getByRole('button', { name: 'Whole scene' }))
+      await tabClick(page.getByRole('group', { name: 'Effect' }).getByRole('button', { name: 'None' }))
       await page.getByRole('tab', { name: /Creatures/ }).click()
-      for (const n of ['Frog', 'Elf', 'Dragon']) await page.getByTestId('add-creature').getByRole('button', { name: n }).click()
+      for (const n of ['Frog', 'Elf', 'Dragon']) await tabClick(page.getByTestId('add-creature').getByRole('button', { name: n }))
       await page.waitForTimeout(2500)
       await page.screenshot({ path: join(shots, 'blobscape-sandbox-creatures.png') })
       await axe(page, 'blobscape sandbox with creatures')
@@ -592,9 +593,9 @@ export default [
       await page.getByText(/in 4 creatures/).first().waitFor({ timeout: 120000 }).catch(() => {})
       const live = await inCreatures(), sceneBefore = await count()
       await page.getByRole('tab', { name: /Scene/ }).click()
-      const [glbDl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Save as rigged .glb' }).click()])
+      const [glbDl] = await Promise.all([page.waitForEvent('download'), tabClick(page.getByRole('button', { name: 'Save as rigged .glb' }))])
       const glbPath = await glbDl.path()
-      await page.getByRole('button', { name: 'Empty' }).click()
+      await tabClick(page.getByRole('button', { name: 'Empty' }))
       await page.setInputFiles('input[type=file]', { name: 'saved-scene.glb', mimeType: 'model/gltf-binary', buffer: readFileSync(glbPath) })
       // Handing 55k blobs to the view holds the page a moment, so wait for the count rather than read it once
       await page.waitForFunction((n) => document.querySelector('[data-testid=creature-blob-count]')?.textContent?.replace(/\D/g, '') === String(n) && /in 4 creatures/.test(document.body.textContent), live, { timeout: 120000 }).catch(() => {})
@@ -626,7 +627,7 @@ export default [
       else ok(`blobscape sandbox creatures: a rigged model opens on Splat Creatures as blobs on its own bones (${meshNote})`)
       await cp.page.screenshot({ path: join(shots, 'blobscape-creature-from-model.png') })
       await cp.ctx.close()
-      const sb = await open('/sandbox/', { viewport: { width: 1280, height: 900 } })
+      const sb = await open('/sandbox/', { viewport: { width: 1280, height: 720 } })
       await sb.page.waitForTimeout(1500)
       await sb.page.setInputFiles('input[type=file]', { name: 'frog-mesh.glb', mimeType: 'model/gltf-binary', buffer: meshBytes })
       // the note is read in the same look that finds it: it is gone a few seconds later, and a second look at a busy page can come after that
@@ -637,7 +638,7 @@ export default [
       const phone = await open('/sandbox/', { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
       await phone.page.waitForTimeout(1500)
       await phone.page.getByRole('tab', { name: /Creatures/ }).click()
-      await phone.page.getByTestId('add-creature').getByRole('button', { name: 'Frog' }).click()
+      await tabClick(phone.page.getByTestId('add-creature').getByRole('button', { name: 'Frog' }))
       await phone.page.waitForTimeout(2000)
       await phone.page.screenshot({ path: join(shots, 'blobscape-sandbox-creatures-phone.png'), fullPage: true })
       await axe(phone.page, 'blobscape phone sandbox with creatures')
