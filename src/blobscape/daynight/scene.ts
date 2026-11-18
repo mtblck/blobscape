@@ -6,6 +6,7 @@ import type { Skeleton } from '../../splat-engine/rig.ts'
 import { compileScene, type SceneDoc } from '../../splat-engine/sceneDoc.ts'
 import { buildVoxels } from '../../splat-engine/voxel.ts'
 import { CLEARING } from './cabin.ts'
+import { CITY, WINDOW_GROUPS } from './city.ts'
 
 /**
  * Day and Night's scenes. A scene is a description (`SceneDoc`) built with no light baked in, plus what changes with
@@ -18,8 +19,8 @@ import { CLEARING } from './cabin.ts'
 export interface Lamp {
   /** The bone its lit glass rides: full size while it is on, none while off. */
   bone: string
-  /** Which of the description's `lights` it is. */
-  light: number
+  /** Which of the description's `lights` it throws; left out, it only glows (a far window lights nothing round it). */
+  light?: number
   /** How dark it must be for it to come on (`Daylight.dark`, 0 to 1). */
   on: number
   /** The hour it is put out for the night (after noon, so 23.5 is half past eleven; past 24 is the small hours); left out, it burns till morning. */
@@ -111,6 +112,7 @@ export function dayStage(scene: DayScene): DayStage {
       const lamps = c.lights(t)
       const out: Light[] = [...lights]
       for (const l of scene.lamps) {
+        if (l.light === undefined) continue
         const k = lampAt(l, hour, sky), L = lamps[l.light]
         if (k > 0 && L) out.push({ position: L.position, color: [L.color[0] * k, L.color[1] * k, L.color[2] * k], range: L.range, shadow: shadows && !!l.shadow })
       }
@@ -141,6 +143,29 @@ export const SCENES: DayScene[] = [
       { id: 'above', label: 'From above', orbit: { target: [0, 0.3, 0], distance: 6.2, azimuth: 30, elevation: 48 } },
       { id: 'east', label: 'From the east', orbit: { target: [0, 0.45, 0], distance: 5.0, azimuth: 82, elevation: 12 } },
       { id: 'porch', label: 'The porch', orbit: { target: [0.1, 0.35, 0.1], distance: 3.3, azimuth: 34, elevation: 8 } },
+    ],
+  },
+  {
+    id: 'city',
+    label: 'City blocks',
+    about: 'A few city blocks: glass towers and brick buildings round two streets, with street lamps, a rooftop sign, parked cars and a small park',
+    doc: CITY,
+    lamps: [
+      { bone: 'lamp0', light: 0, on: 0.3, shadow: true },
+      { bone: 'lamp1', light: 1, on: 0.34 },
+      { bone: 'lamp2', light: 2, on: 0.38 },
+      { bone: 'sign', light: 3, on: 0.42, out: 27 },
+      { bone: 'beacon', on: 0.25 },
+      // the windows: a group at a time from the first dimming to full dark; offices empty through the evening, some rooms burn all night
+      ...Array.from({ length: WINDOW_GROUPS }, (_, g): Lamp => ({ bone: `lit${g}`, on: 0.2 + (0.68 * ((g * 5) % WINDOW_GROUPS)) / WINDOW_GROUPS, out: g % 4 === 3 ? undefined : 21.25 + ((g * 7) % WINDOW_GROUPS) * 0.5 })),
+    ],
+    byDay: ['bird'],
+    views: [
+      { id: 'front', label: 'From the south', orbit: { target: [0, 0.95, 0], distance: 6.5, azimuth: 24, elevation: 8 } },
+      { id: 'west', label: 'Toward the sunset', orbit: { target: [0, 0.95, 0], distance: 6.5, azimuth: 75, elevation: 6 } },
+      { id: 'above', label: 'From above', orbit: { target: [0, 0.7, 0], distance: 6.8, azimuth: 30, elevation: 44 } },
+      { id: 'street', label: 'Down the street', orbit: { target: [0.05, 0.55, 0.5], distance: 4.8, azimuth: 84, elevation: 9 } },
+      { id: 'roofs', label: 'Over the roofs', orbit: { target: [0, 1.7, -0.4], distance: 4.6, azimuth: -28, elevation: 16 } },
     ],
   },
 ]

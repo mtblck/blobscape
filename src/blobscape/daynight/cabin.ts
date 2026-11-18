@@ -40,7 +40,7 @@ function pine(bone: string, x: number, z: number, k: number): PartDoc[] {
 }
 
 /** A leafy tree: a trunk and a crown of three rough balls. */
-function leafy(bone: string, x: number, z: number, k: number): PartDoc[] {
+export function leafy(bone: string, x: number, z: number, k: number): PartDoc[] {
   return [
     { shape: { kind: 'cylinder', at: [x, 0, z], height: 0.62 * k, r: 0.055 * k, rTop: 0.035 * k }, paint: BARK, bone },
     { shape: { kind: 'rough', shape: { kind: 'join', shapes: [
@@ -52,7 +52,7 @@ function leafy(bone: string, x: number, z: number, k: number): PartDoc[] {
 }
 
 /** A bird that circles `r` out from its bone: a body and two wings that beat. */
-function bird(n: number, at: [number, number, number], r: number): PartDoc[] {
+export function bird(n: number, at: [number, number, number], r: number): PartDoc[] {
   const [x, y, z] = at
   return [
     { shape: { kind: 'join', shapes: [{ kind: 'ball', at: [x + r, y, z], r: [0.016, 0.015, 0.045] }, { kind: 'cone', from: [x + r, y, z + 0.035], to: [x + r, y + 0.004, z + 0.075], r: 0.012, rTo: 0.004 }] }, paint: '#f0f0f4', bone: `bird${n}`, noShadow: true },

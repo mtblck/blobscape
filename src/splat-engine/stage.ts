@@ -134,6 +134,7 @@ export class Stage {
   /** How a blob on several bones takes its shape: see `SkinMode`. Change it with `setMode`. */
   mode: SkinMode = 'quat'
   private lit: { lights: Light[]; ambient: number | readonly [number, number, number] } = { lights: [], ambient: 1 }
+  private lightEase = 0
   /** Pixel mode: the scene drawn small and turned into pixel art (pixelPass.ts). */
   private pixel?: PixelPass
   /** How many CSS pixels across one art pixel is. */
@@ -160,7 +161,8 @@ export class Stage {
           moved = this.time !== this.posedAt
           if (moved) this.pose()
         }
-        if (!this.baking && (this.pending > 0 || moved)) {
+        // eased light that is still on its way needs drawing though nothing else changed
+        if (!this.baking && (this.pending > 0 || moved || this.world?.settling)) {
           this.pending = Math.max(0, this.pending - 1)
           this.resize()
           this.draw()
@@ -220,6 +222,7 @@ export class Stage {
   private build(actor: Actor) {
     this.world = new SplatWorld([actor], { mode: this.mode, lights: this.opts.lights, sort: this.sort, cleanCuts: this.opts.cleanCuts, shadowDensity: this.opts.shadowDensity })
     if (this.opts.lights) this.world.setLights(this.lit.lights, this.lit.ambient)
+    this.world.lightEase = this.lightEase
     this.world.setFog(...this.fog)
     this.world.setMarks(this.marks)
     this.world.cleanCuts = this.clean
@@ -343,6 +346,16 @@ export class Stage {
   }
 
   private fog: [color: [number, number, number], near: number, far: number] = [[0, 0, 0], 0, 0]
+  /**
+   * Eases live light over about `frames` frames (the world's `lightEase`; 0 is none; WebGPU only), kept for the next
+   * actor too: a shadow's edge crossing a blob fades instead of popping. For lights that move slowly, like a sun.
+   */
+  setLightEase(frames: number) {
+    this.lightEase = Math.max(0, frames)
+    if (this.world) this.world.lightEase = this.lightEase
+    this.invalidate()
+  }
+
   /** Distance fog toward `color` (linear) from `near` to `far` units from the camera (`far` 0 is none); kept for the next actor too. */
   setFog(color: [number, number, number], near: number, far: number) {
     this.fog = [color, near, far]

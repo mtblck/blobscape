@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { DEFAULT_PLACE, daylight, sunTimes } from '../../splat-engine/daylight.ts'
+import { DEFAULT_PLACE, daylight, moonWay, sunTimes } from '../../splat-engine/daylight.ts'
 import { checkScene } from '../../splat-engine/sceneDoc.ts'
 import { loopSnaps } from '../../splat-engine/sceneChecks.ts'
 import { SCENES, dayStage, lampAt, outByDay, outByNight } from './scene.ts'
-import { makeStars, onScreen, rowHeight, skyColor, starWay } from './sky.ts'
+import { facing, makeStars, onScreen, rowHeight, skyColor, starWay, upTimes } from './sky.ts'
 import { clockLabel, compass, hourFrom } from './words.ts'
 
 const P = DEFAULT_PLACE
@@ -15,14 +15,14 @@ test('every scene is a sound description with no light baked in, builds with all
     assert.deepEqual(JSON.parse(JSON.stringify(s.doc)), s.doc, `${s.id} is data alone`)
     assert.equal(s.doc.light?.ambient, 1)
     assert.equal(s.doc.light?.shadow, 0)
-    const st = dayStage(s), b = st.make(0.04)
+    const st = dayStage(s), b = st.make(0.036)
     assert.ok(b.blobs.count > 10000 && b.blobs.count < 80000, `${b.blobs.count}`)
     assert.equal(new Set(b.partOf).size, b.partOf.reduce((m, p) => Math.max(m, p), 0) + 1, `${s.id}: a part caught no grid cell`)
     // the glowing parts carry their own light, and only they do
-    assert.ok(b.glow && b.glow.some((g) => g === 255) && b.glow.filter((g) => g).length < b.blobs.count / 20)
+    assert.ok(b.glow && b.glow.some((g) => g === 255) && b.glow.filter((g) => g).length < b.blobs.count / 10)
     for (const l of s.lamps) {
       assert.ok(b.skeleton.index(l.bone) > 0, `${s.id}: no bone ${l.bone}`)
-      assert.ok(s.doc.lights?.[l.light], `${s.id}: no light ${l.light}`)
+      if (l.light !== undefined) assert.ok(s.doc.lights?.[l.light], `${s.id}: no light ${l.light}`)
     }
     assert.ok(s.byDay.every((p) => s.doc.bones?.some((k) => k.name.startsWith(p))))
     assert.deepEqual(loopSnaps(b.skeleton, (sk, t) => st.pose(sk, t, 12, daylight(12, P)), st.loop), [], `${s.id}: snaps`)
@@ -141,4 +141,51 @@ test('words: clock times to five minutes, compass points, and an hour from the a
   assert.equal(hourFrom(null), undefined)
   assert.equal(hourFrom('noon'), undefined)
   assert.equal(hourFrom('31'), undefined)
+})
+
+test('the city: its windows come on a group at a time through dusk, offices go dark in the evening, some rooms burn all night, and only four lamps throw light', () => {
+  const s = SCENES.find((x) => x.id === 'city')!, set = sunTimes(P).set
+  const windows = s.lamps.filter((l) => l.bone.startsWith('lit'))
+  assert.equal(windows.length, 12)
+  assert.ok(windows.every((l) => l.light === undefined))
+  const on = (h: number) => windows.filter((l) => lampAt(l, h, daylight(h, P)) > 0).length
+  assert.equal(on(12), 0)
+  const dusk = [0.1, 0.4, 0.7, 1.0].map((d) => on(set + d))
+  assert.ok(dusk.every((n, i) => i === 0 || n >= dusk[i - 1]) && dusk[0] < dusk[3], `${dusk}`)
+  assert.equal(on(21), 12)
+  assert.ok(on(23.5) < 12 && on(23.5) > on(3), 'offices go out one after another')
+  assert.equal(on(3), 3)
+  // every group has panes to show, on more than one building
+  const st = dayStage(s), b = st.make(0.036), sk = b.skeleton
+  st.pose(sk, 1, 21, daylight(21, P))
+  for (const l of windows) assert.equal(sk.size[sk.index(l.bone)], 1)
+  st.pose(sk, 1, 12, daylight(12, P))
+  for (const l of windows) assert.equal(sk.size[sk.index(l.bone)], 0)
+  const night = st.lights(1, 21.5, daylight(21.5, P), true)
+  assert.equal(night.lights.filter((l) => 'position' in l).length, 4)
+  assert.equal(night.lights.filter((l) => 'position' in l && l.shadow).length, 1)
+})
+
+test('every phase of the moon has its own hours, and turning to face it puts it in the view', () => {
+  // the sun's own times, found the same way, agree with the formula
+  const sun = upTimes((h) => daylight(h, P).sunHeight), want = sunTimes(P)
+  assert.ok(Math.abs(sun.rise! - want.rise) < 0.02 && Math.abs(sun.set! - want.set) < 0.02)
+  // a full moon rises about sunset and sets about sunrise; a half moon rises about midday and sets about midnight
+  const full = upTimes((h) => daylight(h, P).moonHeight), half = upTimes((h) => daylight(h, { ...P, moon: 0.25 }).moonHeight)
+  assert.ok(full.up && half.up)
+  assert.ok(Math.abs(full.rise! - want.set) < 2.5 && Math.abs(full.set! - want.rise) < 2.5, `${full.rise} ${full.set}`)
+  assert.ok(Math.abs(half.rise! - 12) < 1 && (half.set! < 1 || half.set! > 23), `${half.rise} ${half.set}`)
+  // so at 1 am a half moon is down, which is what "the moon disappears" was; at 9 pm it is up in the southwest
+  assert.ok(daylight(1, { ...P, moon: 0.25 }).moonHeight < 0 && daylight(21, { ...P, moon: 0.25 }).moonHeight > 20)
+  // never above the horizon: nothing to report
+  assert.deepEqual(upTimes(() => -5), { rise: undefined, set: undefined, up: false })
+  // facing it: the moon lands inside a 4:3 view, above the middle, from wherever the orbit was
+  const orbit = { target: [0, 0.62, 0] as [number, number, number], distance: 5.3, azimuth: 24, elevation: 9 }
+  for (const [age, hour] of [[0.5, 0], [0.5, 22], [0.25, 21], [0.12, 20.5], [0.5, 3.5]]) {
+    const way = moonWay(hour, { ...P, moon: age })
+    assert.ok(way[1] > 0, `${age} at ${hour} is up`)
+    assert.equal(onScreen(way, orbit, 800, 600) && way[2] > 0 ? 'seen' : 'unseen', 'unseen', 'a moon in the south is behind the first view')
+    const p = onScreen(way, facing(way, orbit), 800, 600)!
+    assert.ok(p && Math.abs(p.x - 400) < 1 && p.y > 20 && p.y < 300, `${age} at ${hour}: ${JSON.stringify(p)}`)
+  }
 })

@@ -316,6 +316,15 @@
        ]
       },
       {
+       "name": "setLightEase",
+       "doc": "Eases live light over about `frames` frames (the world's `lightEase`; 0 is none; WebGPU only), kept for the next\nactor too: a shadow's edge crossing a blob fades instead of popping. For lights that move slowly, like a sun.",
+       "signatures": [
+        {
+         "code": "setLightEase(frames: number): void"
+        }
+       ]
+      },
+      {
        "name": "setFog",
        "doc": "Distance fog toward `color` (linear) from `near` to `far` units from the camera (`far` 0 is none); kept for the next actor too.",
        "signatures": [
@@ -775,6 +784,17 @@
        "optional": true,
        "type": "Lighting",
        "doc": "Live lighting, when the world was made with `lights: true`."
+      },
+      {
+       "name": "lightEase",
+       "type": "number",
+       "doc": "Eases the light on every blob over about this many frames (WebGPU; 0, the default, is none): a blob's lit color\ngoes a share of the way to its new one each frame, so a shadow's edge passing over it, or a lamp catching, fades\nand does not pop. For lights that move slowly, like a sun. A frame is then no longer a function of its moment alone."
+      },
+      {
+       "name": "settling",
+       "readonly": true,
+       "type": "boolean",
+       "doc": "Whether eased light is still on its way: the scene needs drawing again though nothing else has changed."
       },
       {
        "name": "cleanCuts",
