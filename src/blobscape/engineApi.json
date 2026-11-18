@@ -28,7 +28,7 @@
   {
    "id": "simulation",
    "title": "Simulation",
-   "doc": "The solvers under cloth and under sand, snow and goo, for when you want to step them yourself."
+   "doc": "The solvers under cloth, under sand, snow and goo, and under the ripples of a pond, for when you want to step them yourself."
   },
   {
    "id": "extras",
@@ -832,6 +832,15 @@
        "signatures": [
         {
          "code": "recolor(actor: Actor): void"
+        }
+       ]
+      },
+      {
+       "name": "reshape",
+       "doc": "Takes one actor's blobs again after they were changed in place: centers, shapes, colors and opacities, as\n`refresh` does for every actor, for a surface that moves on its own (water). Its blobs must stay about where its\nbones' bounds were when the world was made, since those are not measured again.",
+       "signatures": [
+        {
+         "code": "reshape(actor: Actor): void"
         }
        ]
       },
@@ -7420,6 +7429,392 @@
      "signatures": [
       {
        "code": "slopeOf(sim: Mpm, material?: number): number"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "water",
+   "title": "Water that ripples",
+   "group": "simulation",
+   "doc": "Still water that moves when something moves through it: a pond as a grid of heights stepped by the wave equation,\nand the blobs that draw its surface.\n\n`Water` is the pond itself, in plain numbers so it runs in Node tests. Each wet cell holds how far its surface stands\nabove the level and how fast it is rising. A fixed tick moves every cell toward the mean of its neighbors, which is\nwhat makes a ring travel outward at `speed`; a dry cell gives its neighbor back its own height, so rings bounce off\nbanks, steps and pillars. Nothing draws rings: a body that enters, leaves or wades through the water (`body`) pushes\nthe water it displaces to the cells round it, and the rings are what the grid does with that.\n\n`makeSurface` lays flat blobs over the wet cells, `shapeSurface` lifts and tilts each to the water under it, and\n`shadeSurface` colors each from the view: clear looking straight down, a mirror of the sky at a low angle\n(Fresnel), with a glint where it throws the sun or a lamp at the eye.",
+   "entries": [
+    {
+     "name": "WaterSpec",
+     "kind": "interface",
+     "doc": "A pond for `Water`: its grid, where its surface stands and where there is water at all.",
+     "props": [
+      {
+       "name": "x0",
+       "type": "number",
+       "doc": "The grid's corner along x."
+      },
+      {
+       "name": "z0",
+       "type": "number",
+       "doc": "The grid's corner along z."
+      },
+      {
+       "name": "nx",
+       "type": "number",
+       "doc": "Cells along x."
+      },
+      {
+       "name": "nz",
+       "type": "number",
+       "doc": "Cells along z."
+      },
+      {
+       "name": "cell",
+       "type": "number",
+       "doc": "A cell's side, in meters."
+      },
+      {
+       "name": "level",
+       "type": "number",
+       "doc": "The height (y) the surface stands at when still."
+      },
+      {
+       "name": "wet",
+       "optional": true,
+       "type": "(x: number, z: number) => boolean",
+       "doc": "Whether there is water at a point. Left out, the whole grid is wet."
+      },
+      {
+       "name": "speed",
+       "optional": true,
+       "type": "number",
+       "doc": "How fast a ring travels, meters a second: 0.8 when left out."
+      },
+      {
+       "name": "damping",
+       "optional": true,
+       "type": "number",
+       "doc": "How quickly the water comes to rest: the share of its motion lost a second, 0.55 when left out."
+      }
+     ]
+    },
+    {
+     "name": "WATER_TICK",
+     "kind": "const",
+     "doc": "The water's fixed step, seconds: the same frames give the same water.",
+     "type": "number"
+    },
+    {
+     "name": "WATER_STILL",
+     "kind": "const",
+     "doc": "Once every cell is within this of the mean height and moving slower than this (meters, meters a second), the water counts as still and isn't stepped.",
+     "type": "0.00002"
+    },
+    {
+     "name": "BODY_SLACK",
+     "kind": "const",
+     "doc": "How far a body must move (or grow) where it crosses the surface before the water is told, meters: a standing leg's sway is not a wave.",
+     "type": "0.004"
+    },
+    {
+     "name": "Crossing",
+     "kind": "interface",
+     "doc": "Where a body crosses the water's surface: a disc.",
+     "props": [
+      {
+       "name": "x",
+       "type": "number",
+       "doc": "The disc's middle, along x."
+      },
+      {
+       "name": "z",
+       "type": "number",
+       "doc": "The disc's middle, along z."
+      },
+      {
+       "name": "r",
+       "type": "number",
+       "doc": "The disc's radius."
+      }
+     ]
+    },
+    {
+     "name": "crossing",
+     "kind": "function",
+     "doc": "Where a capsule from `a` to `b` of radius `r` crosses the level `y`: the disc it cuts out of the surface, or null\nwhen it is wholly above or below. A leg is such a capsule from knee to ankle.",
+     "signatures": [
+      {
+       "code": "crossing(a: ArrayLike<number>, b: ArrayLike<number>, r: number, y: number): Crossing | null"
+      }
+     ]
+    },
+    {
+     "name": "Water",
+     "kind": "class",
+     "doc": "A pond: heights on a grid, stepped by the wave equation, moved by what wades through it.",
+     "ctor": [
+      {
+       "code": "new Water(spec: WaterSpec)"
+      }
+     ],
+     "props": [
+      {
+       "name": "spec",
+       "readonly": true,
+       "type": "Required<Omit<WaterSpec, \"wet\">>",
+       "doc": "The pond's grid and level, with the defaults filled in."
+      },
+      {
+       "name": "h",
+       "readonly": true,
+       "type": "Float32Array",
+       "doc": "Each cell's height above the level, meters."
+      },
+      {
+       "name": "v",
+       "readonly": true,
+       "type": "Float32Array",
+       "doc": "Each cell's speed upward, meters a second."
+      },
+      {
+       "name": "wet",
+       "readonly": true,
+       "type": "Uint8Array",
+       "doc": "1 where a cell holds water."
+      },
+      {
+       "name": "wetCount",
+       "readonly": true,
+       "type": "number",
+       "doc": "How many cells hold water."
+      },
+      {
+       "name": "time",
+       "type": "number",
+       "doc": "Seconds stepped so far."
+      },
+      {
+       "name": "version",
+       "type": "number",
+       "doc": "Goes up whenever the heights change, so a view knows to draw again."
+      },
+      {
+       "name": "still",
+       "readonly": true,
+       "type": "boolean",
+       "doc": "Whether the water is at rest."
+      },
+      {
+       "name": "energy",
+       "readonly": true,
+       "type": "number",
+       "doc": "The water's energy per wet cell, 0 at rest: its motion (speed squared) plus its tilt (the squared slope between\nneighbors, times the wave speed squared), which trade places as a wave passes. Waves keep it, damping spends it,\nand nothing but a body or a drop adds to it."
+      },
+      {
+       "name": "volume",
+       "readonly": true,
+       "type": "number",
+       "doc": "How much water stands above the level in all, cubic meters: what a body pushed aside is put back round it, so this stays 0."
+      }
+     ],
+     "methods": [
+      {
+       "name": "index",
+       "doc": "The cell holding (x, z), or −1 off the grid.",
+       "signatures": [
+        {
+         "code": "index(x: number, z: number): number"
+        }
+       ]
+      },
+      {
+       "name": "wetAt",
+       "doc": "Whether there is water at (x, z).",
+       "signatures": [
+        {
+         "code": "wetAt(x: number, z: number): boolean"
+        }
+       ]
+      },
+      {
+       "name": "roomAt",
+       "doc": "Whether every point within `r` of (x, z) is water: room for a body that wide to stand.",
+       "signatures": [
+        {
+         "code": "roomAt(x: number, z: number, r: number): boolean"
+        }
+       ]
+      },
+      {
+       "name": "heightAt",
+       "doc": "The surface's height above the level at (x, z), blended between the four cells round it; 0 on dry ground.",
+       "signatures": [
+        {
+         "code": "heightAt(x: number, z: number): number"
+        }
+       ]
+      },
+      {
+       "name": "slopeAt",
+       "doc": "The surface's slope at (x, z): how much it rises per meter along x and along z. A dry neighbor counts as level with the cell, as it does to the waves.",
+       "signatures": [
+        {
+         "code": "slopeAt(x: number, z: number): [number, number]"
+        }
+       ]
+      },
+      {
+       "name": "body",
+       "doc": "Tells the water where a body crosses its surface now (`at`, from `crossing`; null when it is out of the water or\nwholly under it). `draft` is how deep the body stands in the water there, meters: a leg on the bed takes the place\nof the whole column, so its draft is the water's depth. Where the body newly stands, the water it takes the place\nof (a disc of its radius, `draft` deep, whatever the grid) is pressed out and put on the cells just round it;\nwhere it stood, the water comes back the same way. So stepping in raises a ring, wading pushes a wave ahead and\nleaves a trough behind, and stepping out lets the water fall back in. `id` names the body from call to call.",
+       "signatures": [
+        {
+         "code": "body(id: string, at: Crossing | null, draft?: number): void"
+        }
+       ]
+      },
+      {
+       "name": "rest",
+       "doc": "Lays the water flat and still at once, keeping what it knows of the bodies in it: for the start of a scene, where whoever stands in the pond has always stood there.",
+       "signatures": [
+        {
+         "code": "rest(): void"
+        }
+       ]
+      },
+      {
+       "name": "forget",
+       "doc": "Forgets every body, as when the scene is set again: the next `body` call for each is a fresh entry.",
+       "signatures": [
+        {
+         "code": "forget(): void"
+        }
+       ]
+      },
+      {
+       "name": "drop",
+       "doc": "Lets a drop of `volume` cubic meters fall at (x, z), spread over a radius `r`: a raindrop, a pebble, a tap. Nothing if it lands on dry ground.",
+       "signatures": [
+        {
+         "code": "drop(x: number, z: number, r: number, volume: number): void"
+        }
+       ]
+      },
+      {
+       "name": "step",
+       "doc": "Moves the water on by `dt` seconds, in whole ticks (what is left of a frame is carried to the next).",
+       "signatures": [
+        {
+         "code": "step(dt: number): void"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "WaterSurface",
+     "kind": "interface",
+     "doc": "The blobs that draw a pond's surface, from `makeSurface`.",
+     "extends": [
+      "Actor"
+     ],
+     "props": [
+      {
+       "name": "at",
+       "type": "Float32Array",
+       "doc": "Where each blob lies on the pond: x then z, a pair a blob."
+      },
+      {
+       "name": "size",
+       "type": "Float32Array",
+       "doc": "Each blob's size at rest, across the surface."
+      },
+      {
+       "name": "slope",
+       "type": "Float32Array",
+       "doc": "The surface's slope under each blob as `shapeSurface` last found it: along x then along z, a pair a blob."
+      }
+     ]
+    },
+    {
+     "name": "WaterLook",
+     "kind": "interface",
+     "doc": "How a pond's surface looks, for `shadeSurface`. Colors are linear RGB, 0 to 1.",
+     "props": [
+      {
+       "name": "body",
+       "type": "Vec3",
+       "doc": "The water's own color, seen looking straight down into it."
+      },
+      {
+       "name": "sky",
+       "type": "Vec3",
+       "doc": "What the surface mirrors: the sky overhead, or the dark over a night scene."
+      },
+      {
+       "name": "horizon",
+       "optional": true,
+       "type": "Vec3",
+       "doc": "The sky low down, where it is lighter: a ripple tips the mirror between the two, which is most of how one is seen. The same as `sky` when left out."
+      },
+      {
+       "name": "clear",
+       "type": "number",
+       "doc": "How solid it is looking straight down, 0 to 1: the rest of the way to 1 comes with the angle."
+      },
+      {
+       "name": "sun",
+       "optional": true,
+       "type": "{ toward: Vec3; color: Vec3; glow?: number }",
+       "doc": "The way to the sun (or moon), and its color: the surface glints where it throws it at the eye. `glow` is the share of that color the sky round it holds, fading over about a sixth of the sky; none when left out."
+      },
+      {
+       "name": "gloss",
+       "optional": true,
+       "type": "number",
+       "doc": "How tight a glint is: 120 when left out. Lower spreads it into a sheen."
+      },
+      {
+       "name": "steep",
+       "optional": true,
+       "type": "number",
+       "doc": "How many times steeper than it is the surface is drawn and lit, so ripples a few millimeters high read from across a scene: 1 when left out."
+      }
+     ]
+    },
+    {
+     "name": "makeSurface",
+     "kind": "function",
+     "doc": "Flat blobs over every wet cell of a pond, `per` to a cell (2 when left out), on one still bone: the surface that\n`shapeSurface` moves and `shadeSurface` colors. The count never changes afterward.",
+     "signatures": [
+      {
+       "code": "makeSurface(water: Water, options?: { per?: number; seed?: number }): WaterSurface"
+      }
+     ]
+    },
+    {
+     "name": "shapeSurface",
+     "kind": "function",
+     "doc": "Lifts each blob of a surface to the water under it and tilts it to the water's slope there. Call after the water moved, then hand the surface to `SplatWorld.reshape`.",
+     "signatures": [
+      {
+       "code": "shapeSurface(s: WaterSurface, water: Water, steep?: number): void"
+      }
+     ]
+    },
+    {
+     "name": "surfaceColor",
+     "kind": "function",
+     "doc": "What a point of the surface sends to an eye: its color (linear) and how solid it is. Clear and its own color seen\nfrom above, more of a mirror of the sky the lower the angle (Schlick's Fresnel for water), plus a glint where the\nmirrored line of sight runs at the sun or at a lamp. Pure, so tests can ask it.",
+     "signatures": [
+      {
+       "code": "surfaceColor(p: Vec3, normal: Vec3, eye: ArrayLike<number>, look: WaterLook, lights?: readonly PointLight[]): { color: Vec3; opacity: number }"
+      }
+     ]
+    },
+    {
+     "name": "shadeSurface",
+     "kind": "function",
+     "doc": "Colors every blob of a surface for an eye at `eye` (`surfaceColor`), on the slopes `shapeSurface` last left. Call\nwhen the water (after `shapeSurface`) or the view moved, then hand the surface to `SplatWorld.reshape` or `recolor`.",
+     "signatures": [
+      {
+       "code": "shadeSurface(s: WaterSurface, look: WaterLook, eye: ArrayLike<number>, lights?: readonly PointLight[]): void"
       }
      ]
     }

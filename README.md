@@ -132,6 +132,11 @@ stay in your browser.
       <a href="https://blobscape.dev/experiments/brush-and-ink/"><b>Brush and Ink</b></a><br />
       The same blobs drawn as brush strokes or pen lines that stay put as the view turns.
     </td>
+    <td valign="top">
+      <a href="https://blobscape.dev/experiments/wading-pond/"><img src="public/covers/wading-pond.webp" alt="An elf wading through a pond in a ruin at night, rings spreading from its legs, candles burning in a niche" /></a><br />
+      <a href="https://blobscape.dev/experiments/wading-pond/"><b>Wading Pond</b></a><br />
+      Wade through a ruin's pond by candlelight: every ring comes from a real footfall.
+    </td>
     <td valign="top"></td>
   </tr>
 </table>

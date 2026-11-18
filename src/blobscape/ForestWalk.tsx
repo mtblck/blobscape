@@ -8,6 +8,7 @@ import type { CameraView, ForestStage } from './forest/stage.ts'
 import { SEASONS, type Season } from './forest/plants.ts'
 import { RING, TILE } from './forest/world.ts'
 import type { Input } from './forest/world.ts'
+import { Stick } from './Stick.tsx'
 
 const LOOKS = [{ id: 'forest', label: 'Forest' }, { id: 'dusk', label: 'Dusk' }, { id: 'autumn', label: 'Autumn' }]
 const VIEWS: { id: CameraView; label: string }[] = [{ id: 'close', label: 'Close' }, { id: 'far', label: 'Far' }, { id: 'high', label: 'High' }]
@@ -157,7 +158,7 @@ export function ForestWalk() {
               {loading && <LoadingMark testid="forest-loading" />}
               <p role="status" className="sr-only">{loading ? loadingLabel : ''}</p>
               {failed && <div role="alert" className="absolute inset-4 grid place-items-center text-center text-sm text-ink">{failed}</div>}
-              <Stick onChange={(v) => { stick.current = v; push() }} />
+              <Stick testid="forest-stick" onChange={(v) => { stick.current = v; push() }} />
               <div className="absolute right-3 bottom-3 flex flex-col items-end gap-2">
                 <Button onClick={() => stage?.forest?.spark()} className="rounded-full bg-paper/85 font-medium text-ink shadow-sm backdrop-blur-sm hover:bg-paper">Light the grass</Button>
                 <Button onClick={() => stage?.forest?.wave()} className="rounded-full bg-paper/85 font-medium text-ink shadow-sm backdrop-blur-sm hover:bg-paper">Wave</Button>
@@ -265,45 +266,6 @@ export function ForestWalk() {
           </p>
         </div>
       </section>
-    </div>
-  )
-}
-
-/**
- * A thumb stick for touch (and mouse): push up to walk, down to back up,
- * sideways to turn. Keys do the same, so it's hidden from screen readers.
- */
-function Stick({ onChange }: { onChange: (v: Input) => void }) {
-  const pad = useRef<HTMLDivElement>(null)
-  const [knob, setKnob] = useState<[number, number]>([0, 0])
-  const id = useRef<number | null>(null)
-  const move = (x: number, y: number) => {
-    const r = pad.current!.getBoundingClientRect()
-    const R = r.width / 2
-    let dx = (x - (r.left + R)) / R, dy = (y - (r.top + R)) / R
-    const d = Math.hypot(dx, dy)
-    if (d > 1) { dx /= d; dy /= d }
-    setKnob([dx, dy])
-    // a little dead zone in the middle, so a resting thumb doesn't creep
-    const dead = (v: number) => (Math.abs(v) < 0.15 ? 0 : (v - Math.sign(v) * 0.15) / 0.85)
-    onChange({ forward: dead(-dy), turn: dead(dx) })
-  }
-  const end = () => { id.current = null; setKnob([0, 0]); onChange({ forward: 0, turn: 0 }) }
-  return (
-    <div
-      ref={pad}
-      aria-hidden
-      data-testid="forest-stick"
-      className="absolute bottom-3 left-3 size-28 cursor-grab touch-none rounded-full border border-white/25 bg-black/20 backdrop-blur-[2px] active:cursor-grabbing max-sm:size-24"
-      onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); id.current = e.pointerId; move(e.clientX, e.clientY) }}
-      onPointerMove={(e) => { if (id.current === e.pointerId) move(e.clientX, e.clientY) }}
-      onPointerUp={(e) => { if (id.current === e.pointerId) end() }}
-      onPointerCancel={(e) => { if (id.current === e.pointerId) end() }}
-    >
-      <div
-        className="pointer-events-none absolute top-1/2 left-1/2 size-11 rounded-full border border-white/50 bg-white/35 shadow"
-        style={{ transform: `translate(calc(-50% + ${knob[0] * 2.5}rem), calc(-50% + ${knob[1] * 2.5}rem))` }}
-      />
     </div>
   )
 }
