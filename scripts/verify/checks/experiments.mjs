@@ -1,7 +1,7 @@
 // The engine experiments, each on its own page.
 
 // the Pixel Diorama scenes written as descriptions, each checked as one part
-const SCENES = [['bee', 'Forest bee'], ['campfire', 'Campfire'], ['croc', 'Garden crocodile'], ['dragon', 'Lava dragon'], ['grove', 'Lantern grove'], ['hand', 'Stone hand'], ['harvest', 'Pumpkin watch'], ['hut', 'Heron hut'], ['isles', 'Sky islands'], ['lab', 'Sprout lab'], ['octopus', 'Storm octopus'], ['owl', 'Owl and cauldron'], ['reef', 'Jellyfish reef'], ['snail', 'Snail house'], ['spider', 'Lantern spider'], ['window', 'Sunrise window'], ['windmill', 'Windmill']]
+const SCENES = [['bee', 'Forest bee'], ['campfire', 'Campfire'], ['croc', 'Garden crocodile'], ['dragon', 'Lava dragon'], ['grove', 'Lantern grove'], ['hand', 'Stone hand'], ['harvest', 'Pumpkin watch'], ['hut', 'Heron hut'], ['isles', 'Sky islands'], ['lab', 'Sprout lab'], ['meadow', 'Fox and wisp'], ['octopus', 'Storm octopus'], ['owl', 'Owl and cauldron'], ['reef', 'Jellyfish reef'], ['snail', 'Snail house'], ['spider', 'Lantern spider'], ['window', 'Sunrise window'], ['windmill', 'Windmill']]
 
 export default [
   {

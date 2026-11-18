@@ -364,6 +364,10 @@ export class SplatWorld extends Mesh {
     M.paper.value.set(...lin(look?.paper ?? PAPER))
   }
 
+  /** How dark what stands in a casting light's way makes it (`EngineOptions.shadowDensity`): a world made without lights has none. */
+  set shadowDensity(density: number) { if (this.lighting) this.lighting.density.value = Math.max(0, density) }
+  get shadowDensity() { return this.lighting ? (this.lighting.density.value as number) : 0 }
+
   /** Fades blobs to `color` (linear RGB, 0–1) between `near` and `far` units from the camera; `far` 0 turns it off. */
   setFog(color: [number, number, number], near: number, far: number) {
     this.fog.color.value.set(color[0], color[1], color[2])

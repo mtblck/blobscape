@@ -68,7 +68,7 @@ const FOX: Record<PanelId, Words> = {
     what: 'The turf, the stone and the sky are a description. The fox is the Creature page’s, asked for by name: a sculpted skin on fourteen bones under strands of fur, each strand a blob. The grass is three blobs a blade. All of it is one actor on one skeleton.',
     realTime: 'Yes, after a wait while the fox and the scene are made. Each frame moves, lights and sorts every blob.',
     moves: 'Everything on a bone: the trot bends the skin and the fur with it, and the grass leans in the wind.',
-    light: 'The wisp is a live light on every blob. With WebGPU it casts shadows through a grid of what is in the way, worked out again each frame, so the fox’s and the stone’s shadows go round with it; with WebGL 2 the light is live and casts none. Moonlight is painted in.',
+    light: 'The wisp is a live light on every blob. With WebGPU it casts shadows through a grid of what is in the way, worked out again each frame, so the fox’s and the stone’s shadows go round with it; with WebGL 2 the light is live and casts none. Moonlight is painted in as each thing is made: every blade of grass takes it by how it faces the moon, how deep it stands among the others and whether the stone is in the way, but the fox casts no moon shadow.',
     limit: 'The shadow grid is coarse beside a mesh’s shadow map, so shadows are soft and a thin thing casts little. Making the fox takes seconds, and this draws slower than the meshes do.',
   },
 }

@@ -2,6 +2,7 @@ import * as THREE from 'three/webgpu'
 import { STAGE_FOV, placeCamera, type Orbit } from '../splat-core/orbit.ts'
 import { readbackToSrgb } from '../splat-core/color.ts'
 import { SplatWorld, type Light } from './engine.ts'
+import { SHADOW_DENSITY } from './shadow.ts'
 import type { ShapeEdit } from './edit.ts'
 import { sampleClip, sampleWeights, type Clip } from './glb.ts'
 import type { Morph } from './morph.ts'
@@ -415,6 +416,16 @@ export class Stage {
   setLightEase(frames: number) {
     this.lightEase = Math.max(0, frames)
     if (this.world) this.world.lightEase = this.lightEase
+    this.invalidate()
+  }
+
+  /**
+   * How dark what stands in a casting light's way makes it (the world's `shadowDensity`), kept for the next actor too:
+   * lower for fur and grass, which shade themselves dark at the engine's own.
+   */
+  setShadowDensity(density: number | undefined) {
+    this.opts.shadowDensity = density
+    if (this.world) this.world.shadowDensity = density ?? SHADOW_DENSITY
     this.invalidate()
   }
 

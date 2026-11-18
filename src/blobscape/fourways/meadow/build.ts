@@ -16,6 +16,8 @@ import { MEADOW } from './doc.ts'
  */
 export const SCENE = compileScene(MEADOW, { puffs: false })
 export const LOOP = MEADOW.loop ?? 12
+/** How many parts the description has: the fox is the part after them, and the grass the one after that. */
+export const SCENE_PARTS = MEADOW.parts.length
 const TAU = Math.PI * 2
 
 /** The ring the fox trots, how big it is beside the Creature page's fox, and its strides a lap (a whole number, so the loop joins). */
@@ -190,6 +192,27 @@ export function buildMeadow(spacing: number, foxBlobs: number, blades: number): 
     blobs, skin: { joints, weights }, skeleton: new Skeleton(bones), partOf, glow, fox: fox.skeleton, foxFrom, swayFrom,
     counts: { scene: scene.blobs.count, fox: fox.blobs.count, grass: blades * 3 },
   }
+}
+
+/** How many blobs the fox and how many blades the grass get on a grid of `spacing`: more as the scene is cut finer. */
+export function sharesAt(spacing: number) {
+  const k = 0.03 / spacing
+  return { fox: Math.round(Math.min(50000, 30000 * k)), blades: Math.round(Math.min(12000, 8000 * k)) }
+}
+
+const foxes = new WeakMap<Skeleton, Pick<Meadow, 'fox' | 'foxFrom' | 'swayFrom'>>()
+/**
+ * Poses a meadow given only its skeleton, as Pixel Diorama does: the fox's own bones are read back out of it once
+ * (the ones named `fox/…`) and kept.
+ */
+export function poseMeadowBones(sk: Skeleton, t: number) {
+  let m = foxes.get(sk)
+  if (!m) {
+    const foxFrom = sk.index('fox') + 1, own = sk.bones.filter((b) => b.name.startsWith('fox/'))
+    m = { fox: new Skeleton(own.map((b) => ({ ...b, name: b.name.slice(4), parent: b.parent < foxFrom ? -1 : b.parent - foxFrom }))), foxFrom, swayFrom: sk.index('sway0') }
+    foxes.set(sk, m)
+  }
+  poseMeadow(m, sk, t)
 }
 
 /** Poses the meadow's skeleton `t` seconds in: the description's bones, the wisp and its motes, the fox on its ring, the grass. */

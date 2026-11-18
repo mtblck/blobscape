@@ -200,6 +200,7 @@ export function PixelDiorama() {
     // lights move with the bones (the lamp's beam with its lens, the fire's glow with its flames), so both are set from the same time
     const d = scene.of
     posed.current = d
+    stage.setShadowDensity(d.shadowDensity)
     // a new scene brings its own palette, finish and view, now that it is the one in the view
     if (dressed.current !== d.id) {
       dressed.current = d.id
@@ -211,7 +212,7 @@ export function PixelDiorama() {
     stage.setPoser((sk: Skeleton, t: number) => {
       d.pose(sk, t)
       pokes.current?.apply(sk, performance.now() / 1000)
-      stage.setLights(d.lights(t), 1)
+      stage.setLights(d.lights(t, stage.backend === 'webgpu'), d.ambient ?? 1)
       // a scene that asks for it rocks the view gently as it plays, about wherever the view has been turned to
       if (d.swing && !calm) stage.orbit = swung(orbitNow.current, d.swing, d.loop, t)
       wet.current?.()
