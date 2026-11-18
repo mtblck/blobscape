@@ -18,7 +18,7 @@ export interface PageMeta {
 }
 
 /** The picture a link shows when a page has none of its own (public/og.png, made by scripts/share-images.mjs). */
-export const SHARE = { src: '/og.png', alt: 'The Blobscape logo and the words "Learn 3D Gaussian splats by taking them apart", beside four experiments: a pixel-art lighthouse, a fox in fur, an elf wading through a pond by candlelight and a cabin at dusk.' } as const
+export const SHARE = { src: '/og.png', alt: 'The Blobscape logo and the words "Learn 3D Gaussian splats by taking them apart", beside four experiments: a pixel-art lighthouse, an ice dragon breathing frost, an elf standing in a pond in the rain and a cabin at dusk.' } as const
 
 /** Where an experiment's share picture is: its cover cut to a link preview's shape (public/share/, made by scripts/share-images.mjs). */
 export const shareImage = (e: { cover: string }) => e.cover.replace('/covers/', '/share/').replace(/\.webp$/, '.jpg')
