@@ -167,11 +167,14 @@ export function Sandbox() {
   const blobs = blobsRef.current
   const sel = selRef.current
   const blobSize = 2 ** size
-  // Status messages ("Undone") fade after a moment
+  // Status messages ("Undone") fade a moment after they are drawn. Counted from the frame after the one that shows
+  // the message: counted from when it was set, a message set just before a long piece of work (a big file handed to
+  // the view) was cleared as that work ended, before it was ever on screen
   useEffect(() => {
     if (!message) return
-    const t = setTimeout(() => setMessage(''), 2500)
-    return () => clearTimeout(t)
+    let t: ReturnType<typeof setTimeout> | undefined
+    let raf = requestAnimationFrame(() => { raf = requestAnimationFrame(() => { t = setTimeout(() => setMessage(''), 2500) }) })
+    return () => { cancelAnimationFrame(raf); clearTimeout(t) }
   }, [message])
 
   // --- edits ---------------------------------------------------------------
