@@ -49,16 +49,17 @@ import { Contact } from './Contact.tsx'
 import { Engine } from './Engine.tsx'
 import { Spec } from './Spec.tsx'
 import { EngineApi } from './api/EngineApi.tsx'
+import { PostPage, WhatsNew } from './WhatsNew.tsx'
 
 const PAGES: Record<string, () => React.JSX.Element> = { 'first-creature': FirstCreature, 'scene-data': SceneData, 'pixel-art': PixelArt, 'one-blob': OneBlob, footprint: Footprint, order: Order, many: Many, angle: Angle, paint: Paint, formats: Formats, break: Break, 'one-bone': OneBone, weights: Weights, twist: Twist, walk: Walk, feet: FeetOnTheGround, model: Model, morphs: Morphs, fur: Fur, shoot: Shoot, fuzzy: Fuzzy, floaters: Floaters, lighting: Lighting, shimmer: Shimmer }
 
 /** The whole site. `route` is only for prerendering (scripts/prerender.ts), where there is no address bar to read. */
 /** Pages for reading, where the tip button shows whole; on the rest, which have controls, it is a circle. */
-const READING = new Set<Route['page']>(['home', 'lessons', 'experiments', 'engine', 'spec', 'api', 'contact', 'notfound'])
+const READING = new Set<Route['page']>(['home', 'lessons', 'experiments', 'engine', 'spec', 'api', 'contact', 'news', 'post', 'notfound'])
 
 export function App({ route: at }: { route?: Route } = {}) {
   const route = useRoute(at)
-  const key = route.page === 'lesson' ? route.id : route.page
+  const key = route.page === 'lesson' ? route.id : route.page === 'post' ? `post:${route.id}` : route.page
   const Lesson = route.page === 'lesson' ? PAGES[route.id] : null
   usePageMeta(route)
   useLinkNavigation()
@@ -69,7 +70,7 @@ export function App({ route: at }: { route?: Route } = {}) {
       <SiteHeader here={route.page === 'notfound' ? undefined : href(route)} wide={route.page === 'sandbox'} />
       {/* Keyed by page, so each one mounts fresh: its own view, its own state */}
       <main id="main" key={key} className={route.page === 'sandbox' ? 'w-full flex-1' : 'mx-auto w-full max-w-7xl flex-1 px-4 pb-16'}>
-        {route.page === 'sandbox' ? <Sandbox /> : route.page === 'creature' ? <Creature /> : route.page === 'forest' ? <ForestWalk /> : route.page === 'pond' ? <WadingPond /> : route.page === 'clockwork' ? <Clockwork /> : route.page === 'shift' ? <ShapeShifter /> : route.page === 'flow' ? <SandSnowGoo /> : route.page === 'brush' ? <BrushInk /> : route.page === 'fourways' ? <FourWays /> : route.page === 'daynight' ? <DayNight /> : route.page === 'diorama' ? <PixelDiorama /> : route.page === 'scan' ? <ScanStudio /> : route.page === 'dungeon' ? <DungeonRun /> : Lesson ? <Lesson /> : route.page === 'lessons' ? <LessonList /> : route.page === 'experiments' ? <Experiments /> : route.page === 'engine' ? <Engine /> : route.page === 'spec' ? <Spec /> : route.page === 'api' ? <EngineApi /> : route.page === 'contact' ? <Contact /> : route.page === 'notfound' ? <NotFound /> : <Landing />}
+        {route.page === 'sandbox' ? <Sandbox /> : route.page === 'creature' ? <Creature /> : route.page === 'forest' ? <ForestWalk /> : route.page === 'pond' ? <WadingPond /> : route.page === 'clockwork' ? <Clockwork /> : route.page === 'shift' ? <ShapeShifter /> : route.page === 'flow' ? <SandSnowGoo /> : route.page === 'brush' ? <BrushInk /> : route.page === 'fourways' ? <FourWays /> : route.page === 'daynight' ? <DayNight /> : route.page === 'diorama' ? <PixelDiorama /> : route.page === 'scan' ? <ScanStudio /> : route.page === 'dungeon' ? <DungeonRun /> : Lesson ? <Lesson /> : route.page === 'lessons' ? <LessonList /> : route.page === 'experiments' ? <Experiments /> : route.page === 'engine' ? <Engine /> : route.page === 'spec' ? <Spec /> : route.page === 'api' ? <EngineApi /> : route.page === 'contact' ? <Contact /> : route.page === 'news' ? <WhatsNew /> : route.page === 'post' ? <PostPage id={route.id} /> : route.page === 'notfound' ? <NotFound /> : <Landing />}
       </main>
       <Footer />
       <Toaster />

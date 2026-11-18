@@ -8,7 +8,9 @@ The site itself deploys from main on Vercel as always.
 2. On a branch, run `npm run release -- 0.2.0`. It moves the [Unreleased] entries under `## [0.2.0] - <today>`,
    updates the links at the foot, and sets the version in package.json, package-lock.json and
    `packages/engine/package.json` (the site and the package share one version).
-3. Open that as a PR. Merging it is the approval: `.github/workflows/release.yml` sees the version change on
+3. Write a What's New post for the release: a new entry first in `POSTS` (`src/blobscape/news.ts`) with its `version`, telling
+   the headlines in words for a visitor. It can go in the release PR.
+4. Open that as a PR. Merging it is the approval: `.github/workflows/release.yml` sees the version change on
    main, runs the unit tests, tags the merge commit `v0.2.0` with the run's own token and makes the release,
    then builds and publishes `@blobscape/engine` (skipped while its manifest says `private: true`, or when that
    version is already on npm). Merge a release PR only when Matt says go.

@@ -7,6 +7,7 @@ const PAGES = [
   { label: 'Lessons', path: '/lessons/' },
   { label: 'Experiments', path: '/experiments/' },
   { label: 'Sandbox', path: '/sandbox/' },
+  { label: "What's New", path: '/whats-new/' },
 ] as const
 
 /** What the Engine dropdown lists: the engine's pages, then the package where it lives outside the site. */
@@ -20,9 +21,11 @@ const ENGINE_OUT = [
   { label: 'GitHub', href: SITE.repo },
 ] as const
 
-/** True when `path` is the page we're on, or the list it belongs to (a lesson under Lessons, an experiment under Experiments). */
-const isHere = (here: string | undefined, path: string) =>
-  !!here && (here === path || (path === '/lessons/' && here.startsWith('/lessons/')) || (path === '/experiments/' && here.startsWith('/experiments/')))
+/** The lists whose own pages mark them as where we are. */
+const LISTS = ['/lessons/', '/experiments/', '/whats-new/']
+
+/** True when `path` is the page we're on, or the list it belongs to (a lesson under Lessons, an experiment under Experiments, a post under What's New). */
+const isHere = (here: string | undefined, path: string) => !!here && (here === path || (LISTS.includes(path) && here.startsWith(path)))
 
 const TOP = 'rounded-full px-3 py-1.5 text-[0.9375rem] font-medium text-ink-muted no-underline transition-colors hover:bg-paper-sunk hover:text-ink'
 const CURRENT = 'text-ink underline decoration-blob decoration-2 underline-offset-[6px]'

@@ -9,7 +9,7 @@ const PAGES = {
   formats: L('Formats'), break: L('Break'), 'one-bone': L('OneBone'), weights: L('Weights'), twist: L('Twist'), walk: L('Walk'), feet: L('Feet'), model: L('Model'),
   morphs: L('Morphs'), fur: L('Fur'), shoot: L('Shoot'), fuzzy: L('Fuzzy'), floaters: L('Floaters'), lighting: L('Lighting'), shimmer: L('Shimmer'), 'first-creature': L('FirstCreature'), 'scene-data': L('SceneData'), 'pixel-art': L('PixelArt'), sandbox: [`${B}Sandbox.tsx`],
   creature: [`${B}Creature.tsx`], 'forest-walk': [`${B}ForestWalk.tsx`], 'wading-pond': [`${B}WadingPond.tsx`], clockwork: [`${B}Clockwork.tsx`], 'shape-shifter': [`${B}ShapeShifter.tsx`], 'sand-snow-goo': [`${B}SandSnowGoo.tsx`], 'brush-and-ink': [`${B}BrushInk.tsx`], 'four-ways': [`${B}FourWays.tsx`], 'day-and-night': [`${B}DayNight.tsx`],
-  'pixel-diorama': [`${B}PixelDiorama.tsx`], 'dungeon-run': [`${B}DungeonRun.tsx`], 'scan-studio': [`${B}ScanStudio.tsx`], contact: [`${B}Contact.tsx`],
+  'pixel-diorama': [`${B}PixelDiorama.tsx`], 'dungeon-run': [`${B}DungeonRun.tsx`], 'scan-studio': [`${B}ScanStudio.tsx`], contact: [`${B}Contact.tsx`], 'whats-new': [`${B}WhatsNew.tsx`, `${B}news.ts`],
 }
 // the front page is a part of its own
 const PARTS = { home: [`${B}Landing.tsx`], ...PAGES }
@@ -20,7 +20,7 @@ const SHELL_FILES = [`${B}App.tsx`, `${B}main.tsx`, `${B}ssr.tsx`, 'src/shared/t
 const OFFSCREEN = ['creature', 'forest-walk', 'wading-pond', 'clockwork', 'shape-shifter', 'sand-snow-goo', 'brush-and-ink', 'four-ways', 'day-and-night', 'pixel-diorama', 'dungeon-run', 'scan-studio']
 // and so do the lessons drawn by the engine
 const ENGINE_LESSONS = ['first-creature', 'scene-data', 'pixel-art']
-const pathOf = (id) => (OFFSCREEN.includes(id) ? `/experiments/${id}/?offscreen=1` : ['sandbox', 'lessons', 'contact'].includes(id) ? `/${id}/` : `/lessons/${id}/${ENGINE_LESSONS.includes(id) ? '?offscreen=1' : ''}`)
+const pathOf = (id) => (OFFSCREEN.includes(id) ? `/experiments/${id}/?offscreen=1` : ['sandbox', 'lessons', 'contact', 'whats-new'].includes(id) ? `/${id}/` : `/lessons/${id}/${ENGINE_LESSONS.includes(id) ? '?offscreen=1' : ''}`)
 
 // each sweep in two halves that run side by side: the front page and lessons, then the rest
 const LESSON_PAGES = Object.keys(PAGES).filter((id) => pathOf(id).startsWith('/lessons/'))
