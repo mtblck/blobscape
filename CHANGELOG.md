@@ -6,6 +6,8 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-18
+
 - The sandbox's short notes ("Added…", "Opened…") now stay up for a moment after they are drawn. On a slow device a note set just before a big file was shown could be cleared before it ever appeared.
 
 - Brush and Ink, a new experiment: the same blobs drawn as marks instead of soft dots. Gouache and oil lay each blob down as an opaque brush stroke with bristle streaks and a ragged end; ink and wash and hatching draw it as line on paper, more lines where the picture is darker. The marks belong to the blobs, so they turn with the view and nothing swims. Try it on the windmill, the garden crocodile, the fox or a scanned mug. Scan Studio's Lighting tab offers the same looks (Drawn as), and the engine has them as `Stage.setMarks`.
@@ -99,6 +101,7 @@ Our own renderer for animated splats, built on three.js with WebGPU and a WebGL 
 
 Some pixel-scene ideas come from Silicon Jungle's play kits (ideas, not code). The code is MIT licensed.
 
-[Unreleased]: https://github.com/mtblck/blobscape/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/mtblck/blobscape/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/mtblck/blobscape/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/mtblck/blobscape/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/mtblck/blobscape/releases/tag/v0.1.0
