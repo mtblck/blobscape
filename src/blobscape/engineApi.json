@@ -1988,6 +1988,26 @@
      ]
     },
     {
+     "name": "hipShift",
+     "kind": "function",
+     "doc": "`hipDrop` with its sign kept: under zero is how far the hips could rise (meters) before the straightest leg is\ndown to `slack` of its length. A body that stands with it stands as tall as its legs allow on whatever is under\nits feet, where one posed at a fixed height squats when the ground is a little higher than the pose expects.",
+     "signatures": [
+      {
+       "code": "hipShift(sk: Skeleton, legs: Leg[], targets: ArrayLike<number>[], slack?: number): number"
+      }
+     ]
+    },
+    {
+     "name": "legShifts",
+     "kind": "function",
+     "doc": "`hipShift` leg by leg: how far each leg's own hip joint would come down (or, under zero, could rise) to leave that\nleg `slack` of its length. They differ when the feet stand at different heights: a leg a centimeter short of\nstraight has its knee well forward, so a body standing on uneven ground tips its pelvis to keep both legs straight.",
+     "signatures": [
+      {
+       "code": "legShifts(sk: Skeleton, legs: Leg[], targets: ArrayLike<number>[], slack?: number): number[]"
+      }
+     ]
+    },
+    {
      "name": "stepLegs",
      "kind": "function",
      "doc": "Bends each leg so its ankle lands on its target (from a footstep planner, say), and turns each foot bone level,\nfacing `facing[i]` (radians from +z toward +x) when given. Leaves the skeleton updated; returns each leg's miss.",
