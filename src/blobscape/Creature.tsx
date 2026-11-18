@@ -1,3 +1,4 @@
+import { startFailure } from '../shared/stale.tsx'
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { Orbit } from '../splat-core/view.ts'
 import type { Creature as Body } from '../splat-engine/body.ts'
@@ -184,7 +185,7 @@ export function Creature() {
         live = s
         s.onFirstFrame = () => setDrawn(true)
         setStage(s)
-      }, (e: unknown) => { console.warn(e); setFailed('This browser could not start WebGPU or WebGL 2, which the creature needs.') })
+      }, (e: unknown) => { console.warn(e); setFailed(startFailure('the creature needs')) })
     return () => { gone = true; live?.dispose() }
   }, [offscreen, webgl])
 

@@ -1,3 +1,4 @@
+import { startFailure } from '../shared/stale.tsx'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { LoadingMark } from '../shared/BlobLoader.tsx'
 import { Button, Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
@@ -83,7 +84,7 @@ export function WadingPond() {
         setMirror((m) => m ?? s.reflections)
         setGlow((g) => g ?? s.glow > 0)
         setBlur((b) => b ?? s.focusBlur)
-      }, (e: unknown) => { console.warn(e); setFailed('This browser could not start WebGPU or WebGL 2, which the pond needs.') })
+      }, (e: unknown) => { console.warn(e); setFailed(startFailure('the pond needs')) })
     return () => { gone = true; live?.dispose() }
   }, [offscreen, webgl])
 

@@ -1,3 +1,4 @@
+import { startFailure } from '../shared/stale.tsx'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Blobs, Quat } from '../splat-core/blobs.ts'
 import { ImportError, readSplatFile } from '../splat-core/importer.ts'
@@ -115,7 +116,7 @@ export function ScanStudio() {
         s.setFloor(0)
         s.playing = false
         setStage(s)
-      }, (e: unknown) => { console.warn(e); setFailed('This browser could not start WebGPU or WebGL 2, which Scan Studio needs.') })
+      }, (e: unknown) => { console.warn(e); setFailed(startFailure('Scan Studio needs')) })
     return () => { gone = true; live?.dispose() }
   }, [offscreen])
 

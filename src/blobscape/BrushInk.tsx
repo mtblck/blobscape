@@ -1,3 +1,4 @@
+import { startFailure } from '../shared/stale.tsx'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Orbit } from '../splat-core/view.ts'
 import type { MarkLook } from '../splat-core/marks.ts'
@@ -105,7 +106,7 @@ export function BrushInk() {
         s.onFirstFrame = () => setDrawn(true)
         s.setFloor(0)
         setStage(s)
-      }, (e: unknown) => { console.warn(e); setFailed('This browser could not start WebGPU or WebGL 2, which the engine needs.') })
+      }, (e: unknown) => { console.warn(e); setFailed(startFailure('the engine needs')) })
     return () => { gone = true; live?.dispose() }
   }, [offscreen])
 

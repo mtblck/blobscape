@@ -1,3 +1,4 @@
+import { startFailure } from '../shared/stale.tsx'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Orbit } from '../splat-core/view.ts'
 import { KNOBS, MATERIALS, type Knobs, type Material } from '../splat-engine/mpm.ts'
@@ -101,7 +102,7 @@ export function SandSnowGoo() {
         s.setFloor(SIZE * 1.6)
         s.orbit = HOME
         setStage(s)
-      }, (e: unknown) => { console.warn(e); setFailed('This browser could not start WebGPU or WebGL 2, which the blobs need.') })
+      }, (e: unknown) => { console.warn(e); setFailed(startFailure('the blobs need')) })
     return () => { gone = true; live?.dispose() }
   }, [offscreen, webgl])
 

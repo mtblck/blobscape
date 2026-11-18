@@ -1,3 +1,4 @@
+import { startFailure } from '../../shared/stale.tsx'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Orbit } from '../../splat-core/orbit.ts'
 import type { Stage } from '../../splat-engine/stage.ts'
@@ -74,7 +75,7 @@ export function StageView({ orbit, setOrbit, label, onStage, waiting }: {
       />
       {busy && <LoadingMark testid="stage-loading" />}
       <p role="status" className="sr-only">{failed ? '' : !stage ? 'Starting the splat engine…' : busy ? waiting ?? 'Drawing…' : ''}</p>
-      {failed && <div role="alert" className="absolute inset-4 grid place-items-center text-center text-sm text-ink">This browser could not start WebGPU or WebGL 2, which this lesson needs.</div>}
+      {failed && <div role="alert" className="absolute inset-4 grid place-items-center text-center text-sm text-ink">{startFailure('this lesson needs')}</div>}
     </div>
   )
 }

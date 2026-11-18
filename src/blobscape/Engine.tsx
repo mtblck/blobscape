@@ -1,3 +1,4 @@
+import { startFailure } from '../shared/stale.tsx'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Orbit } from '../splat-core/view.ts'
 import { STEADY, darkest, type PixelLook } from '../splat-core/pixel.ts'
@@ -27,7 +28,7 @@ declare global {
 const LINK = 'font-medium text-ink underline decoration-blob decoration-2 underline-offset-4 hover:text-accent'
 const H2 = 'font-display text-3xl leading-tight text-balance sm:text-4xl'
 const CANVAS = 'absolute inset-0 h-full w-full outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset'
-const FAILED = 'This browser could not start WebGPU or WebGL 2, which the engine needs.'
+
 
 const params = () => new URLSearchParams(typeof location === 'undefined' ? '' : location.search)
 const media = (q: string) => typeof window !== 'undefined' && window.matchMedia(q).matches
@@ -67,7 +68,7 @@ function OrbitDemo({ id, about, start, lights, dress, onState }: DemoProps & { i
             }, 60)
           })
         })
-      }, (e: unknown) => { console.warn(e); onState({ failed: FAILED }) })
+      }, (e: unknown) => { console.warn(e); onState({ failed: startFailure('the engine needs') }) })
     return () => { gone = true; cancelAnimationFrame(raf); clearTimeout(t); live?.dispose(); if (window.__engine?.stage === live) delete window.__engine }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (stage) { stage.orbit = orbit; stage.invalidate() } }, [stage, orbit])
@@ -175,7 +176,7 @@ function WorldDemo({ onState }: DemoProps) {
           }
           steer()
         }, 60)
-      }, (e: unknown) => { console.warn(e); onState({ failed: FAILED }) })
+      }, (e: unknown) => { console.warn(e); onState({ failed: startFailure('the engine needs') }) })
     return () => { gone = true; cancelAnimationFrame(raf); clearTimeout(t); live?.dispose(); if (window.__engine?.stage === live) delete window.__engine }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
   return <canvas ref={canvas} role="img" aria-label={DEMOS[1].about} data-testid="engine-view" className={CANVAS} />
