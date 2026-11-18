@@ -43,7 +43,7 @@ export function pageMeta(route: Route): PageMeta {
     case 'brush':
       return { path, title: `Brush and Ink · ${SITE.name}`, description: 'Gaussian splats drawn as brush marks and pen strokes in place of soft dots: gouache, oil, ink and wash, and hatching. Every mark belongs to one blob and takes its shape and direction from it, so a scene, a creature or a scan reads as a painting from any side and the strokes hold still as you turn it.' }
     case 'flow':
-      return { path, title: `Sand, Snow and Goo · ${SITE.name}`, description: 'A box of Gaussian splats that flow: every blob is a particle of sand, snow or goo in a small material point simulation (MLS-MPM), so a column of sand runs into a heap at its friction angle, snow stands until it is hit and goo spreads. Pour more in and tap to poke them.' }
+      return { path, title: `Sand, Snow and Goo · ${SITE.name}`, description: 'Gaussian splats that flow: every blob is a particle of sand, snow or goo in a small material point simulation (MLS-MPM). Pour it onto a block, steps or into a bowl, drop a ball, cube or rock into a pile of it, or let a column go: sand heaps at its friction angle, snow breaks into clumps and packs, goo spreads. Each material has its own settings, and all three can run side by side.' }
     case 'clockwork':
       return { path, title: `Clockwork · ${SITE.name}`, description: 'A watch movement made of Gaussian splats, keeping the real time: barrel, going train, escape wheel, pallet fork and a balance swinging five times a second, every wheel a bone turning by a real watch\'s ratios. Slow it down to see one tick, or speed it up to watch the hours go.' }
     case 'diorama':

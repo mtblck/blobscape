@@ -1275,14 +1275,13 @@ export default [
   },
   {
     name: 'flow',
-    about: 'Sand, Snow and Goo: three columns run, stand and spread; a poke and a pour',
+    about: 'Sand, Snow and Goo: three lanes collapse each their own way; pour, drop a rock, poke; both backends',
     entries: ['src/blobscape/SandSnowGoo.tsx'],
-    files: ['src/splat-engine/mpm.ts', 'src/blobscape/flow/flow.worker.ts', 'src/blobscape/flow/scenes.ts'],
+    files: ['src/splat-engine/mpm.ts', 'src/splat-engine/solids.ts', 'src/blobscape/flow/flow.worker.ts', 'src/blobscape/flow/box.ts', 'src/blobscape/flow/view.ts'],
     async run({ shots, join, fails, ok, open, tabClick, axe }) {
-      const k = await open('/experiments/sand-snow-goo/?offscreen=1&scene=three', { viewport: { width: 1280, height: 900 } })
-      await k.page.waitForFunction(() => window.__flow && window.__flow.count() > 0, null, { timeout: 90000 }).catch(() => {})
-      // stop the clock and run the same two seconds every time, then draw
-      const look = (seconds) => k.page.evaluate(async (s) => {
+      const ready = (page) => page.waitForFunction(() => window.__flow && window.__flow.lanes().every((l) => l.count > 0), null, { timeout: 90000 }).catch(() => {})
+      // stop the clock, run the same seconds every time, then draw and count each material's pixels
+      const look = (page, seconds) => page.evaluate(async (s) => {
         window.__flow.pause()
         if (s) await window.__flow.run(s)
         await window.__flow.stage.frame(0)
@@ -1291,24 +1290,59 @@ export default [
         let sand = 0, snow = 0, goo = 0
         for (let i = 0; i < d.length; i += 4) {
           if (d[i] > 150 && d[i] > d[i + 1] * 1.12 && d[i + 1] > d[i + 2] * 1.25) sand++
-          if (d[i] > 200 && d[i + 1] > 200 && d[i + 2] > 210) snow++
+          if (d[i] > 190 && d[i + 1] > 190 && d[i + 2] > 200) snow++
           if (d[i + 1] > 120 && d[i + 1] > d[i] * 1.4 && d[i + 1] > d[i + 2] * 1.6) goo++
         }
-        return { sand, snow, goo, count: window.__flow.count(), tops: window.__flow.heights() }
+        return { sand, snow, goo, count: window.__flow.count(), lanes: window.__flow.lanes(), thing: window.__flow.thing() }
       }, seconds)
-      const start = await look(0.05)
-      const later = await look(2)
-      const t = later.tops
-      if (!(start.count > 2000 && later.sand > 1500 && later.snow > 1500 && later.goo > 1000 && t.snow > t.sand + 0.15 && t.goo < t.sand)) fails.push(`blobscape sand snow goo: ${JSON.stringify({ start, later })}`)
-      else ok(`blobscape sand snow goo: ${later.count} particles; after 2 s sand stands ${t.sand.toFixed(2)}, snow ${t.snow.toFixed(2)}, goo ${t.goo.toFixed(2)} (${later.sand}, ${later.snow}, ${later.goo} pixels)`)
+      // all three, a column each: sand heaps, snow slumps part way and stays in a mound, goo runs widest and flattest
+      for (const backend of ['', '&webgl=1']) {
+        const k = await open(`/experiments/sand-snow-goo/?offscreen=1&material=all&test=collapse&ground=floor&detail=light${backend}`, { viewport: { width: 1280, height: 900 } })
+        await ready(k.page)
+        const r = await look(k.page, 4)
+        const [sand, snow, goo] = r.lanes
+        const name = `blobscape sand snow goo${backend ? ' (WebGL)' : ''}`
+        if (!(r.lanes.length === 3 && r.sand > 400 && r.snow > 300 && r.goo > 400 && snow.top > sand.top + 0.04 && snow.top < 0.38 && goo.top < sand.top && goo.width > snow.width + 0.1)) fails.push(`${name}: ${JSON.stringify(r)}`)
+        else ok(`${name}: after 4 s a column of sand stands ${sand.top.toFixed(2)}, snow ${snow.top.toFixed(2)} of 0.42, goo ${goo.top.toFixed(2)} and ${goo.width.toFixed(2)} wide (${r.sand}, ${r.snow}, ${r.goo} pixels)`)
+        if (!backend) await k.page.screenshot({ path: join(shots, 'blobscape-sand-snow-goo-lanes.png') })
+        await k.ctx.close()
+      }
+      // the page as it opens: the Material tab, and sand pouring onto a block
+      const k = await open('/experiments/sand-snow-goo/?offscreen=1&detail=light', { viewport: { width: 1280, height: 900 } })
+      await ready(k.page)
+      const tab = await k.page.locator('section[aria-label=Options] [role=tab][aria-selected=true]').innerText()
+      const pour = await look(k.page, 3)
+      if (!(tab === 'Material' && pour.lanes.length === 1 && pour.lanes[0].material === 'sand' && pour.count > 200 && pour.sand > 400)) fails.push(`blobscape sand snow goo opens: tab ${tab}, ${JSON.stringify(pour)}`)
+      else ok(`blobscape sand snow goo: opens on the Material tab with sand pouring onto a block, ${pour.count} particles after 3 s`)
       await k.page.screenshot({ path: join(shots, 'blobscape-sand-snow-goo.png') })
-      // a tap on the middle of the view pokes, and a pour adds particles
+      // the spout stops after one pour, and Pour more starts it again; a tap pokes
+      const done = await look(k.page, 6)
       const poked = await k.page.evaluate(() => { const c = document.querySelector('[data-testid=flow-view]'); return window.__flow.poke(c.clientWidth / 2, c.clientHeight * 0.6) })
-      await tabClick(k.page.getByRole('button', { name: 'Pour sand', exact: true }))
-      await k.page.waitForFunction((n) => window.__flow.count() > n, later.count, { timeout: 10000 }).catch(() => {})
-      const after = await k.page.evaluate(() => window.__flow.count())
-      if (!(poked && after > later.count)) fails.push(`blobscape sand snow goo: poke ${poked}, pour ${later.count} to ${after}`)
-      else ok(`blobscape sand snow goo: a tap pokes, and pouring sand brings ${later.count} to ${after}`)
+      const rested = await look(k.page, 0.5)
+      await tabClick(k.page.getByRole('button', { name: 'Pour more', exact: true }))
+      const more = await look(k.page, 1)
+      if (!(poked && rested.count === done.count && more.count > done.count + 50)) fails.push(`blobscape sand snow goo: poke ${poked}, pour ${done.count}, then ${rested.count}, more ${more.count}`)
+      else ok(`blobscape sand snow goo: the spout stops at ${done.count}, a tap pokes, and Pour more brings ${more.count}`)
+      // another material by its chip: a fresh box of goo, with goo's own sliders
+      await tabClick(k.page.getByTestId('flow-materials').getByRole('button', { name: 'Goo', exact: true }))
+      await k.page.waitForFunction(() => window.__flow.lanes()[0]?.material === 'goo' && window.__flow.count() > 0, null, { timeout: 30000 }).catch(() => {})
+      const goo = await look(k.page, 2)
+      const sliders = await k.page.locator('section[aria-label=Options] input[type=range]').count()
+      const thick = await k.page.getByRole('slider', { name: 'Thickness' }).count()
+      if (!(goo.lanes[0].material === 'goo' && goo.goo > 300 && goo.sand < 50 && sliders === 2 && thick === 1)) fails.push(`blobscape sand snow goo, goo chip: ${JSON.stringify({ goo, sliders, thick })}`)
+      else ok(`blobscape sand snow goo: the Goo chip starts a box of goo with its own two sliders (${goo.goo} pixels)`)
+      // drop a rock into a pile of it: it falls, lands in the goo and stays above the floor; Drop it again lifts a new one
+      await tabClick(k.page.getByTestId('flow-tests').getByRole('button', { name: 'Drop something in', exact: true }))
+      await tabClick(k.page.getByTestId('flow-things').getByRole('button', { name: 'Rock', exact: true }))
+      await k.page.waitForFunction(() => window.__flow.count() > 0 && window.__flow.lanes()[0].top < 0.3, null, { timeout: 30000 }).catch(() => {})
+      const before = await look(k.page, 0.2)
+      const landed = await look(k.page, 2.5)
+      await k.page.screenshot({ path: join(shots, 'blobscape-sand-snow-goo-drop.png') })
+      await tabClick(k.page.getByRole('button', { name: 'Drop it again', exact: true }))
+      await k.page.waitForFunction((y) => (window.__flow.thing()?.y ?? 0) > y + 0.2, landed.thing?.y ?? 0, { timeout: 10000 }).catch(() => {})
+      const again = await k.page.evaluate(() => window.__flow.thing())
+      if (!(before.thing === null && landed.thing && landed.thing.y < 0.3 && landed.thing.y > landed.thing.r * 0.5 && again && again.y > landed.thing.y + 0.2)) fails.push(`blobscape sand snow goo, drop: ${JSON.stringify({ before: before.thing, landed: landed.thing, again })}`)
+      else ok(`blobscape sand snow goo: a rock falls into the goo and comes to rest ${landed.thing.y.toFixed(2)} over the floor; Drop it again lets go a new one`)
       await axe(k.page, 'blobscape sand snow goo')
       await k.ctx.close()
     },
@@ -1322,7 +1356,7 @@ export default [
     async run({ join, fails, ok, open }) {
       const PAGES = [
         ['pixel-diorama', 'Scene,Pixels,Finish'], ['creature', 'Creature Type,Movement & Details,Export & Import'], ['forest-walk', 'Forest Type,Character Style,View'], ['wading-pond', 'Water & Light,Character Style,View'],
-        ['dungeon-run', 'Game Settings,Character Style,View'], ['scan-studio', 'Import,Level & Crop,Clean,Lighting,Colliders'], ['clockwork', 'Time,View'], ['shape-shifter', 'Shift,Creatures'], ['sand-snow-goo', 'Pour,Box'], ['brush-and-ink', 'Look,Subject'],
+        ['dungeon-run', 'Game Settings,Character Style,View'], ['scan-studio', 'Import,Level & Crop,Clean,Lighting,Colliders'], ['clockwork', 'Time,View'], ['shape-shifter', 'Shift,Creatures'], ['sand-snow-goo', 'Material,Test,View'], ['brush-and-ink', 'Look,Subject'],
         ['fit-a-picture', 'Picture,Training'], ['splat-to-sprite', 'Prop Type,Pixels,Finish,View'],
       ]
       const sizes = new Set()

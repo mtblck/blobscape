@@ -123,9 +123,9 @@ stay in your browser.
   </tr>
   <tr>
     <td valign="top">
-      <a href="https://blobscape.dev/experiments/sand-snow-goo/"><img src="public/covers/sand-snow-goo.webp" alt="A heap of sand, a standing column of snow and a slumped block of green goo, all made of blobs" /></a><br />
+      <a href="https://blobscape.dev/experiments/sand-snow-goo/"><img src="public/covers/sand-snow-goo.webp" alt="A heap of sand, a slumped mound of snow and a puddle of green goo, each in its own tray, all made of blobs" /></a><br />
       <a href="https://blobscape.dev/experiments/sand-snow-goo/"><b>Sand, Snow and Goo</b></a><br />
-      A box of blobs that flow: sand heaps, snow stands, goo spreads. Pour and poke.
+      Blobs that flow: pour sand, snow or goo, drop a rock in it, or let a column go.
     </td>
     <td valign="top">
       <a href="https://blobscape.dev/experiments/brush-and-ink/"><img src="public/covers/brush-and-ink.webp" alt="A windmill on a hill, half painted in gouache strokes and half drawn in ink on paper" /></a><br />

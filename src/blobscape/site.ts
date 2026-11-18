@@ -67,8 +67,8 @@ export const EXPERIMENTS = [
     tags: ['tool', 'watch'],
     needs: 'WebGPU or WebGL 2',
     published: '2026-11-17',
-    updated: '2026-11-17',
-    body: 'A box of blobs that flow: sand runs into a heap, snow stands until it is hit, goo spreads. Pour more in and tap to poke them.',
+    updated: '2026-11-18',
+    body: 'Blobs that flow. Pour sand, snow or goo onto a block, steps or into a bowl, drop a ball, cube or rock into a pile of it, or let a column go, and change how each one behaves as it runs.',
   },
   {
     id: 'shift',
