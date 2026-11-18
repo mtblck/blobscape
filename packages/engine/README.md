@@ -31,6 +31,31 @@ stage.orbit = FOX.view
 
 `Stage` plays a clip or a poser (`setPoser((skeleton, seconds) => ...)`), orbits, picks bones (`pick(x, y)`), shows the bones (`setShow('both')`), and bakes sprite sheets (`bake`). Under it, `SplatWorld` is a three.js object you can add to your own scene.
 
+## On any page, with one tag
+
+`<blobscape-creature>` plays a rigged-splat `.glb` with no build step and no code: one script, one element.
+
+```html
+<script type="module" src="https://blobscape.dev/embed/blobscape-creature.js"></script>
+
+<blobscape-creature src="fox.glb" move="trot" alt="A fox trotting"></blobscape-creature>
+```
+
+The script is one file with three.js inside (about 330 kB compressed). The address above always serves the newest; for a version that stays put, use the file from the package, `@blobscape/engine/blobscape-creature.js` (in `dist/`), from your own site or an npm CDN. In an app that already bundles three.js, `import '@blobscape/engine/element'` defines the same element on your copy. The script sends nothing anywhere; serving it yourself also keeps your visitors' browsers from asking blobscape.dev for it.
+
+- `src`: the file. A creature saved from [Splat Creatures](https://blobscape.dev/experiments/creature/) or written with `writeRiggedGlb`. From another site, that site must allow it (CORS).
+- `move`: the clip to play. Left out, the file's first.
+- `tap`: a clip played once when the creature is tapped, or Enter is pressed on it.
+- `hover`: a clip played while a mouse is over it.
+- `look="pointer"`: its head turns after the pointer. The creature should face +z, and have a bone called head.
+- `orbit="none"`: no turning by drag or arrow keys. On a phone a sideways drag turns it and an up or down drag scrolls the page.
+- `azimuth`, `elevation`: where it is seen from, in degrees. It is framed to fit.
+- `speed`: 1 is real time.
+- `poster`: a still picture, shown until the creature draws and instead of it where the browser has neither WebGPU nor WebGL 2.
+- `alt`: what it is, for people who can't see it.
+
+Size it with CSS; it is a square block unless you say otherwise. Nothing is fetched until it nears the screen, it stops drawing when it leaves, and it holds still for visitors who ask for reduced motion. Anything inside the element is shown if it can't draw and has no poster. It fires `ready` (with `detail.moves`) and `error`, and `element.stage` is the `Stage` below for anything more.
+
 ## Your own creature
 
 Shapes are distance functions on a grid of cells; every cell becomes a blob, weighted to the nearest bones so it bends.

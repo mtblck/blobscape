@@ -32,6 +32,21 @@ test('the engine package runs on three.js alone, with no Spark and no site code'
   assert.ok(files.length > 30, `only ${files.length} files reached`)
 })
 
+test('the <blobscape-creature> element is part of the package: engine files and three.js alone, and exported', () => {
+  const { files, outside } = graph(resolve(root, 'src/splat-engine/element.ts'))
+  assert.deepEqual(outside.filter((s) => s !== 'three' && !s.startsWith('three/')), [])
+  assert.deepEqual(files.filter((f) => !/^src\/(splat-engine|splat-core|splat-to-sprite)\//.test(f)), [])
+  const pkg = JSON.parse(readFileSync(resolve(root, 'packages/engine/package.json'), 'utf8'))
+  assert.equal(pkg.exports['./element'].import, './dist/element.js')
+  assert.equal(pkg.exports['./blobscape-creature.js'], './dist/blobscape-creature.js')
+  // importing it defines the element, so a bundler must not drop the import
+  assert.ok(pkg.sideEffects.includes('./dist/element.js'))
+  // the site serves the one-file build to other sites, which needs the header that lets them load it
+  const v = JSON.parse(readFileSync(resolve(root, 'vercel.json'), 'utf8'))
+  const open = v.headers.find((h) => new RegExp(`^${h.source}$`).test('/embed/blobscape-creature.js') && h.headers.some((x) => x.key === 'Access-Control-Allow-Origin' && x.value === '*'))
+  assert.ok(open && new RegExp(`^${open.source}$`).test('/rigged-splats/fox.glb'), 'vercel.json must send Access-Control-Allow-Origin: * for /embed/ and /rigged-splats/')
+})
+
 test('the package manifest is publishable (Matt said go, 2026-11-17), and three.js is a peer', () => {
   const pkg = JSON.parse(readFileSync(resolve(root, 'packages/engine/package.json'), 'utf8'))
   assert.equal(pkg.name, '@blobscape/engine')

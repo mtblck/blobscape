@@ -242,10 +242,19 @@
       },
       {
        "name": "setClip",
-       "doc": "Plays another clip on the creature shown, or none.",
+       "doc": "Plays another clip on the creature shown, or none. `from` is the time it starts at, in seconds (left out, time runs on).",
        "signatures": [
         {
-         "code": "setClip(clip?: Clip): void"
+         "code": "setClip(clip?: Clip, from?: number): void"
+        }
+       ]
+      },
+      {
+       "name": "setAfter",
+       "doc": "Runs `after` each time the creature is posed, once its clip or poser has set the bones and before loose parts\nswing: for a change laid on top of any move, such as a head turned to look at something. It must leave the\nskeleton updated. It stays through a new clip and goes with a new actor.",
+       "signatures": [
+        {
+         "code": "setAfter(after?: (sk: Skeleton, t: number) => void): void"
         }
        ]
       },
@@ -860,6 +869,12 @@
      "kind": "const",
      "doc": "The camera's vertical field of view, in degrees.",
      "type": "35"
+    },
+    {
+     "name": "STAGE_FOV",
+     "kind": "const",
+     "doc": "The vertical field of view of the engine's `Stage` camera, in degrees.",
+     "type": "40"
     },
     {
      "name": "placeCamera",
