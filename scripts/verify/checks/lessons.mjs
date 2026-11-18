@@ -104,14 +104,14 @@ export default [
       await page.waitForURL('**/engine/docs/')
       if (await openNow().count()) fails.push('blobscape header: following a link left the Engine list open')
       else ok('blobscape header: the Docs link goes to the docs and shuts the list')
-      // on a phone the pages fold into the menu, the engine's among them
+      // on a phone the pages fold into the menu, the engine's among them, then the footer's About links
       await page.setViewportSize({ width: 390, height: 800 })
       await page.goto(base + '/')
       await page.waitForTimeout(800)
       await page.getByRole('button', { name: 'Menu' }).click()
       const menuLinks = await openNow().locator('a').count()
       const fits = await page.evaluate(() => { const p = document.querySelector('[popover]:popover-open').getBoundingClientRect(); return p.left >= 0 && p.right <= window.innerWidth })
-      if (menuLinks !== 7 || !fits) fails.push(`blobscape menu: on a phone ${menuLinks} links, fits ${fits}`)
+      if (menuLinks !== 10 || !fits) fails.push(`blobscape menu: on a phone ${menuLinks} links, fits ${fits}`)
       else ok(`blobscape menu: on a phone it opens with ${menuLinks} links`)
       await axe(page, 'blobscape menu open')
       await page.keyboard.press('Escape')

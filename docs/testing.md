@@ -102,3 +102,9 @@ npm run verify -- --changed --why --list                                  # your
 - Anything that doesn't need a browser (data, math, file round trips, baking on
   the CPU) is a unit test next to its module instead: it runs in seconds and
   every time.
+- Click a control in a tab with `tabClick`: it opens the tab (the sandbox's
+  mode) and any folded section (`details`, as in the sandbox's Scene) that
+  holds it first. The sandbox's own layout (every mode on a desktop and a
+  390 px phone, the view keeping half the phone's height, `?mode=`, the mode
+  and tool keys) is `sandbox-modes`. The sandbox's checks are slow here: run
+  them with `--jobs=1` when one times out on a click.

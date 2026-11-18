@@ -6,6 +6,7 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 
 ## [Unreleased]
 
+- Sandbox keys: 1 to 5 open the modes, a letter picks each tool (A, S, P, E, F, T, V, L, M) and Escape puts the tool down to look around, while the sandbox has focus; the Keys button on the view lists them. Each mode's panel starts with a line saying what it is for, and the phone tray leaves the view half the screen.
 - The sandbox's Select, Creatures, Effects and Scene modes are regrouped. Select puts picking first and the changes after it, with Delete on its own and "Use an effect on it"; on a phone, once something is picked, the short tray offers Recolor, Grow, Shrink, Fade and Delete. Creatures has a grid of creatures to add with how many fit, and a drag on one walks it even while blobs are selected. Effects are picture tiles, with Play and Make it permanent on the view. Scene folds into Start from, Open, Save, Tidy, Camera path and View (the last one used opens first), and the camera path is a filmstrip of its stops: tap one to go back to it, remove any of them, or add the view with the plus.
 - The sandbox's Build mode shows only the settings the held tool uses (Erase, Fill and Stamp just the ring; Paint its brushes first), Stamp says whether it has something to copy, and on a phone the short tray shows one setting at a time, picked by name.
 - The sandbox's footer is a button away: "More below" at the foot of the mode rail brings it up, and on a phone the Menu now lists Get in touch, the maker and Support Blobscape on every page.

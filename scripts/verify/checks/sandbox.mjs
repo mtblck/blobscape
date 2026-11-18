@@ -655,4 +655,67 @@ export default [
       await phone.ctx.close()
     },
   },
+  {
+    name: 'sandbox-modes',
+    about: 'every mode opens on a desktop and a phone, ?mode= round-trips, keys, the view keeps half a phone screen',
+    entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/sandbox/modes.tsx'],
+    async run({ base, shots, join, fails, ok, open, axe }) {
+      const NAMES = ['Build', 'Select', 'Creatures', 'Effects', 'Scene']
+      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 720 } })
+      await page.waitForTimeout(1500)
+      // First visit: Build, with Spray held
+      const first = await page.getByRole('tab', { selected: true }).textContent()
+      const spray = await page.getByRole('button', { name: 'Spray', exact: true }).getAttribute('aria-pressed')
+      if (!/^Build/.test(first ?? '') || spray !== 'true') fails.push(`blobscape sandbox modes: the first visit opens ${first} with Spray ${spray}`)
+      else ok('blobscape sandbox modes: the first visit opens Build with Spray held')
+      // Each mode opens its own panel and goes into the address; a reload comes back to it
+      const seen = []
+      for (const name of NAMES) {
+        await page.getByRole('tab', { name: new RegExp('^' + name) }).click()
+        const panel = page.getByRole('tabpanel')
+        const heading = await panel.getByRole('heading', { level: 2 }).first().textContent()
+        const q = new URL(page.url()).searchParams.get('mode')
+        seen.push(`${name}:${heading}:${q ?? ''}`)
+        if (heading !== name || q !== (name === 'Build' ? null : name.toLowerCase())) fails.push(`blobscape sandbox modes: ${name} shows "${heading}", address mode ${q}`)
+      }
+      ok(`blobscape sandbox modes: each mode opens its panel and sets ?mode= (${seen.length})`)
+      await page.goto(base + '/sandbox/?mode=effects')
+      await page.waitForTimeout(1200)
+      const back = await page.getByRole('tab', { selected: true }).textContent()
+      if (!/^Effects/.test(back ?? '')) fails.push(`blobscape sandbox modes: ?mode=effects opened ${back}`)
+      else ok('blobscape sandbox modes: ?mode=effects opens Effects')
+      // Keys, while the sandbox has focus: 2 is Select, L the lasso, Escape puts it down to look around
+      await page.getByRole('heading', { level: 1, name: 'Sandbox' }).focus()
+      await page.keyboard.press('2')
+      await page.keyboard.press('l')
+      const lasso = await page.getByRole('button', { name: 'Lasso', exact: true }).getAttribute('aria-pressed')
+      await page.keyboard.press('Escape')
+      const looking = await page.getByRole('button', { name: 'Look around', exact: true }).getAttribute('aria-pressed')
+      const now = await page.getByRole('tab', { selected: true }).textContent()
+      if (!/^Select/.test(now ?? '') || lasso !== 'true' || looking !== 'true') fails.push(`blobscape sandbox modes: keys gave ${now}, Lasso ${lasso}, looking ${looking}`)
+      else ok('blobscape sandbox modes: 2 opens Select, L holds the lasso, Escape puts it down')
+      await page.getByRole('button', { name: 'Keys', exact: true }).click()
+      if (!(await page.getByTestId('sandbox-keys').isVisible())) fails.push('blobscape sandbox modes: Keys did not open the list of keys')
+      else ok('blobscape sandbox modes: Keys lists the keys')
+      await axe(page, 'blobscape sandbox keys')
+      await page.keyboard.press('Escape')
+      await ctx.close()
+      // A phone: every mode at the short tray leaves the view at least half the screen
+      const phone = await open('/sandbox/', { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+      await phone.page.waitForTimeout(1500)
+      const heights = []
+      for (const name of NAMES) {
+        await phone.page.getByRole('tab', { name: new RegExp('^' + name) }).click()
+        await phone.page.waitForTimeout(200)
+        const h = Math.round((await phone.page.getByTestId('viewport').boundingBox()).height)
+        const wide = await phone.page.evaluate(() => document.documentElement.scrollWidth)
+        heights.push(`${name} ${h}`)
+        if (h < 844 / 2 || wide > 390) fails.push(`blobscape sandbox modes: on a phone ${name} leaves the view ${h} px, the page ${wide} px wide`)
+        await phone.page.screenshot({ path: join(shots, `blobscape-sandbox-phone-${name.toLowerCase()}.png`) })
+      }
+      ok(`blobscape sandbox modes: on a phone the view keeps its height in every mode (${heights.join(', ')})`)
+      await axe(phone.page, 'blobscape phone sandbox modes')
+      await phone.ctx.close()
+    },
+  },
 ]

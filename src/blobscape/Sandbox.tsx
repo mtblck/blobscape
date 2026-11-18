@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Blobs, hexToRgb, pick, projectPoint, quatFacing, quatToMat, rgbToHex, type Lens, type Vec3 } from '../splat-core/blobs.ts'
 import type { Orbit, SplatView } from '../splat-core/view.ts'
 import { PRESETS } from '../splat-core/presets.ts'
@@ -78,6 +78,9 @@ const FX_ICONS: Record<string, string> = {
 }
 
 const SECTION_KEY = 'blobscape-sandbox-section'
+
+/** One key a tool, active while focus is in the sandbox (so typing elsewhere on the page is never taken). */
+const TOOL_KEYS: Partial<Record<ToolId, string>> = { add: 'A', spray: 'S', paint: 'P', erase: 'E', fill: 'F', stamp: 'T', select: 'V', lasso: 'L', move: 'M' }
 
 /** A section of the Scene mode that folds, with a line saying what is in it while shut. One is open at a time. */
 function Fold({ id, open, onOpen, title, summary, children }: { id: string; open: string; onOpen: (id: string | null) => void; title: string; summary: string; children: ReactNode }) {
@@ -312,6 +315,15 @@ export function Sandbox() {
       if (mod && ev.key.toLowerCase() === 'z') { ev.preventDefault(); if (ev.shiftKey) redo(); else undo() }
       else if (mod && ev.key.toLowerCase() === 'y') { ev.preventDefault(); redo() }
       else if ((ev.key === 'Delete' || ev.key === 'Backspace') && sel.count && t.closest('[data-testid=viewport]')) { ev.preventDefault(); deleteSelected() }
+      else if (!mod && !ev.altKey && work.current?.contains(t) && !t.closest('[popover], button[aria-expanded=true]')) {
+        // Keys for modes and tools, only while the sandbox has focus
+        const k = ev.key.toUpperCase()
+        const m = Number(ev.key) >= 1 && Number(ev.key) <= MODES.length ? MODES[Number(ev.key) - 1].id : null
+        const t2 = (Object.keys(TOOL_KEYS) as ToolId[]).find((id) => TOOL_KEYS[id] === k)
+        if (m) { ev.preventDefault(); setMode(m) }
+        else if (t2 && !ev.shiftKey) { ev.preventDefault(); setTool(t2) }
+        else if (ev.key === 'Escape' && !lookAround && (mode === 'build' || mode === 'select' || mode === 'creatures')) { setLookAround(true); setMessage('Looking around. Pick a tool to use it again') }
+      }
     }
     window.addEventListener('keydown', on)
     return () => window.removeEventListener('keydown', on)
@@ -1365,7 +1377,7 @@ export function Sandbox() {
 
   const toolsHeld = (list: (BuildTool | SelectTool)[], held: ToolId) => list.map((t) => {
     const it = TOOLS.find((x) => x.id === t)!
-    return <ToolButton key={t} name={it.name} note={it.note} held={held === t} onClick={() => setTool(t)} />
+    return <ToolButton key={t} name={it.name} note={it.note} held={held === t} onClick={() => setTool(t)} keys={coarse ? undefined : TOOL_KEYS[t]} />
   })
   const heldNote = (t: ToolId) => TOOLS.find((x) => x.id === t)!.note
   // Build shows only what the held tool uses; on a phone's short tray, one of them at a time
@@ -1724,7 +1736,7 @@ export function Sandbox() {
 
         <section
           aria-label="Tools and settings"
-          className={`order-2 flex min-h-0 flex-none flex-col border-t border-rule bg-paper-sunk lg:w-[22rem] lg:flex-none lg:rounded-2xl lg:border lg:transition-none ${tall ? 'h-[60%]' : 'h-[38%]'} lg:h-auto`}
+          className={`order-2 flex min-h-0 flex-none flex-col border-t border-rule bg-paper-sunk lg:w-[22rem] lg:flex-none lg:rounded-2xl lg:border lg:transition-none ${tall ? 'h-[60%]' : 'h-[33%]'} lg:h-auto`}
           onFocus={(ev) => { lastFocus.current = ev.target as HTMLElement }}
         >
           <button
@@ -1742,6 +1754,7 @@ export function Sandbox() {
             {MODES.map((m) => (
               <div key={m.id} role="tabpanel" id={panelId(base, m.id)} aria-labelledby={tabId(base, m.id)} hidden={m.id !== mode} className="space-y-3">
                 <h2 className="font-display text-xl max-lg:sr-only">{m.name}</h2>
+                <p className={`text-sm text-ink-muted ${rest}`}>{m.note}</p>
                 {panels[m.id]}
               </div>
             ))}
@@ -1784,6 +1797,24 @@ export function Sandbox() {
               <span aria-live="polite" className="min-h-0 rounded-md bg-paper/90 px-2 py-1 text-xs text-ink-muted empty:hidden">{message}</span>
               <p role="alert" className="basis-full rounded-md bg-paper/90 px-2 py-1 text-sm text-accent-ink empty:hidden">{error}</p>
             </div>
+            {!coarse && (
+              <>
+                <button type="button" popoverTarget={`${base}-keys`} title="Keyboard keys" className="absolute bottom-2.5 left-12 flex h-8 cursor-pointer items-center rounded-full border border-rule bg-paper px-3 text-xs font-semibold text-ink-muted hover:text-ink">Keys</button>
+                <div id={`${base}-keys`} popover="auto" aria-label="Keyboard keys" className="m-auto w-[min(22rem,calc(100vw-2rem))] rounded-2xl border border-rule bg-paper p-4 text-sm text-ink shadow-xl" data-testid="sandbox-keys">
+                  <h2 className="mb-2 font-display text-lg">Keys</h2>
+                  <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
+                    <dt><kbd>1</kbd> to <kbd>5</kbd></dt><dd>{MODES.map((m) => m.name).join(', ')}</dd>
+                    {(Object.keys(TOOL_KEYS) as ToolId[]).map((id) => <Fragment key={id}><dt><kbd>{TOOL_KEYS[id]}</kbd></dt><dd>{TOOLS.find((x) => x.id === id)!.name}</dd></Fragment>)}
+                    <dt><kbd>Esc</kbd></dt><dd>Put the tool down and look around</dd>
+                    <dt><kbd>Ctrl</kbd>+<kbd>Z</kbd></dt><dd>Undo (add Shift to redo)</dd>
+                    <dt>Arrows, <kbd>+</kbd> <kbd>−</kbd></dt><dd>Turn and zoom the view (with Move, slide)</dd>
+                    <dt><kbd>Enter</kbd></dt><dd>Use the tool at the middle of the view</dd>
+                    <dt><kbd>Delete</kbd></dt><dd>Delete the selection</dd>
+                  </dl>
+                  <p className="mt-2 text-xs text-ink-faint">Letter and number keys work while the sandbox has focus.</p>
+                </div>
+              </>
+            )}
             <button type="button" aria-label={full ? 'Leave full screen' : 'Full screen'} title={full ? 'Leave full screen' : 'Full screen'} onClick={toggleFull} data-testid="full-screen" className="zoom-btn absolute bottom-2.5 left-2.5">
               <svg viewBox="0 0 16 16" aria-hidden className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                 {full ? <path d="M6 2.5V6H2.5M10 2.5V6h3.5M6 13.5V10H2.5M10 13.5V10h3.5" /> : <path d="M2.5 6V2.5H6M13.5 6V2.5H10M2.5 10v3.5H6M13.5 10v3.5H10" />}
