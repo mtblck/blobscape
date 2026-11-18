@@ -40,7 +40,7 @@ const bright = (c: ArrayLike<number>) => c[0] + c[1] + c[2]
 export class Glow {
   private held: Held[] = []
 
-  /** Eases toward `wants` by `dt` seconds and returns the lights to draw, brightest first, at most `most`. */
+  /** Eases toward `wants` by `dt` seconds and returns the lights to draw, brightest first, at most `most`. A light casts shadows while the want it follows does. */
   update(wants: Want[], dt: number, most = Infinity): PointLight[] {
     for (const h of this.held) h.want = null
     // each want takes the nearest held light of its kind not yet taken, or starts dark where it is
@@ -69,7 +69,7 @@ export class Glow {
     }
     this.held = this.held.filter((h) => h.want || bright(h.color) > 0.02)
     return [...this.held].sort((a, b) => bright(b.color) - bright(a.color)).slice(0, most)
-      .map((h) => ({ position: [...h.position] as [number, number, number], color: [...h.color] as [number, number, number], range: h.range }))
+      .map((h) => ({ position: [...h.position] as [number, number, number], color: [...h.color] as [number, number, number], range: h.range, ...(h.want?.shadow ? { shadow: true } : {}) }))
   }
 
   /** Forgets every light (a new fight). */

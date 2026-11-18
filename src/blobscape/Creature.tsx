@@ -19,6 +19,7 @@ import { LESSONS, href } from './routes.ts'
 import type { CreatureStage, PickedBone, Show } from './creature/stage.ts'
 import { TAB_SECTIONS, Workbench } from '../shared/Workbench.tsx'
 import { Sprites } from './creature/Sprites.tsx'
+import { stageBreath, stagePlain } from './creature/breathStage.ts'
 
 const STILL = 'still'
 const MAX_FILE = 200 * 1024 * 1024
@@ -29,7 +30,7 @@ const SHOW: { id: Show; label: string }[] = [{ id: 'blobs', label: 'Blobs' }, { 
 const DEFAULT = 'fox'
 
 /** A file's body may carry morphs, which its clips key and the stage applies. */
-interface Shown { name: string; body: Body & { morphs?: Morph[] }; clips: Clip[]; species?: Species }
+interface Shown { name: string; body: Body & { morphs?: Morph[] }; clips: Clip[]; species?: Species; look?: string }
 
 /** A creature and its moves, each recorded into a clip once, when it's made. */
 function build(sp: Species, count: number, look: string): Shown {
@@ -37,7 +38,7 @@ function build(sp: Species, count: number, look: string): Shown {
   const clips = sp.moves.map((m) => recordClip(m.name, body.skeleton, m.pose, m.seconds, m.fps ?? 24))
   body.skeleton.reset()
   body.skeleton.update()
-  return { name: `blob ${sp.name}`, body, clips, species: sp }
+  return { name: `blob ${sp.name}`, body, clips, species: sp, look }
 }
 
 /** The creature a link asks for: one of the zoo, or a made-up monster (?creature=monster&seed=123). */
@@ -49,6 +50,11 @@ function speciesOf(params: URLSearchParams): Species {
   }
   return CREATURES.find((s) => s.id === id) ?? CREATURES.find((s) => s.id === DEFAULT)!
 }
+/** What the address turns off of the dragon's breath, for trying it on a slow device. */
+const plain = (() => {
+  const q = typeof location === 'undefined' ? new URLSearchParams() : new URLSearchParams(location.search)
+  return { breath: q.get('breath') !== 'plain', shadows: q.get('shadows') !== '0', glow: q.get('glow') !== '0' }
+})()
 const kilo = (n: number) => (n >= 1000 ? `${n / 1000}k` : String(n))
 
 declare global {
@@ -162,7 +168,12 @@ export function Creature() {
   }, [made]) // eslint-disable-line react-hooks/exhaustive-deps
   const scaleOf = shown.species ?? made.species ?? species
   const clip = move === STILL ? undefined : shown.clips.find((c) => c.name === move) ?? shown.clips[0]
-  const moveOf = (c: Clip) => shown.species?.moves.find((m) => m.name === c.name)
+  /** The move a clip plays, named for the look on show where that changes it (the ice dragon breathes frost). */
+  const moveOf = (c: Clip) => {
+    const m = shown.species?.moves.find((v) => v.name === c.name)
+    const by = m?.byLook?.[shown.look ?? '']
+    return m && by ? { ...m, ...by } : m
+  }
 
   useEffect(() => {
     let live: CreatureStage | undefined, gone = false
@@ -180,11 +191,18 @@ export function Creature() {
   // the placeholder cut is never shown: the view waits for the creature asked for
   const first = useRef(true)
   const inView = useRef<Body | undefined>(undefined)
+  // The dragon's breath acts on what is round it (creature/breathStage.ts): it gets a floor that burns, live lights
+  // that ride the flame, sparks and smoke, and on WebGPU a lens so only the flame glows. `?breath=plain` leaves all
+  // of that off, `?shadows=0` the shadows and `?glow=0` the lens.
+  const breathing = !loaded && shown.species?.id === 'dragon' && plain.breath
+  const moveNow = useRef(move)
+  moveNow.current = move
   useEffect(() => {
     if (!stage || (first.current && building && !loaded) || inView.current === shown.body) return
     first.current = false
     inView.current = shown.body
-    stage.setActor(shown.body, clip)
+    if (breathing) stageBreath(stage, shown.body, clip, shown.look ?? '', () => moveNow.current === 'fire', plain)
+    else { stagePlain(stage); stage.setActor(shown.body, clip) }
     setPicked(undefined)
   }, [stage, shown, building]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { stage?.setClip(clip) }, [stage, clip])
@@ -213,7 +231,8 @@ export function Creature() {
   const pressed = useRef<{ id: number; x: number; y: number; many: boolean } | null>(null)
   useEffect(() => { if (stage) stage.speed = speed }, [stage, speed])
   useEffect(() => { stage?.setShow(show) }, [stage, show])
-  useEffect(() => { stage?.setFloor(Math.max(8, 2 * Math.round(scaleOf.view.distance))) }, [stage, scaleOf])
+  // the dragon stands on its own floor of blobs, which its breath can burn
+  useEffect(() => { stage?.setFloor(breathing ? 0 : Math.max(8, 2 * Math.round(scaleOf.view.distance))) }, [stage, scaleOf, breathing])
   useEffect(() => { if (stage) { stage.orbit = orbit; stage.invalidate() } }, [stage, orbit])
 
   const splatGlb = () => writeRiggedGlb({ name: shown.name, ...shown.body, clips: shown.clips })

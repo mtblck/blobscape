@@ -54,7 +54,7 @@ export default [
           bone: (r, g, b) => r > 190 && g > 190 && b > 195 && Math.abs(r - b) < 30,
           frog: (r, g, b) => g > 120 && g > r * 1.4 && b < 110,
           elf: (r, g, b) => g > 90 && g > r * 1.5 && g > b * 1.3,
-          fire: (r, g, b) => r > 200 && g > 70 && g < 210 && b < 120,
+          frost: (r, g, b) => b > 200 && g > 140 && b > r * 1.12,
           // a monster's colors come from its seed: anything bright and saturated
           colorful: (r, g, b) => Math.max(r, g, b) > 110 && Math.max(r, g, b) - Math.min(r, g, b) > 50,
         }[kind]
@@ -84,7 +84,8 @@ export default [
         ['Owl', 8, 'colorful', 'Walk', 0.4],
         ['Frog', 20, 'frog', 'Tongue', 1.15],
         ['Elf', 29, 'elf', 'Wave', 1],
-        ['Dragon', 43, 'fire', 'Breathe fire', 2],
+        // the ice dragon comes first, and its breath is frost
+        ['Dragon', 44, 'frost', 'Breathe frost', 2],
       ]) {
         await tabClick(c.page.getByRole('button', { name, exact: true }))
         await c.page.waitForFunction((n) => window.__creature?.bones() === n && !document.querySelector('[data-testid=creature-loading]'), bonesWanted, { timeout: 60000 }).catch(() => {})
@@ -96,7 +97,7 @@ export default [
         else ok(`blobscape creature: the ${name.toLowerCase()} draws on ${got.bones} bones, playing ${clip.toLowerCase()} (${got.n} pixels of its color)`)
         await c.page.screenshot({ path: join(shots, `blobscape-creature-${name.toLowerCase()}.png`) })
       }
-      // the dragon's flame is bones that grow: it leaves in the file as scale keys, and comes back
+      // the dragon's breath is bones that grow, and so are its ribs: they leave in the file as scale keys, and come back
       const fire = await c.page.evaluate(() => {
         const bytes = window.__creature.glb()
         const len = new DataView(bytes.buffer, bytes.byteOffset).getUint32(12, true)
@@ -119,8 +120,8 @@ export default [
       if (!(ember.red > 2000 && ember.red > ember.ice)) fails.push(`blobscape creature: ember dragon ${JSON.stringify(ember)}`)
       else ok(`blobscape creature: the ember dragon is red (${ember.red} red, ${ember.ice} ice-blue pixels)`)
       await c.page.screenshot({ path: join(shots, 'blobscape-creature-ember.png') })
-      if (fire.scales !== 6) fails.push(`blobscape creature: dragon file ${JSON.stringify(fire)}`)
-      else ok(`blobscape creature: the dragon's .glb keys its fire as scale on six bones (${fire.kb} KB)`)
+      if (fire.scales !== 7) fails.push(`blobscape creature: dragon file ${JSON.stringify(fire)}`)
+      else ok(`blobscape creature: the dragon's .glb keys its breath and its ribs as scale on seven bones (${fire.kb} KB)`)
       // the Sprites panel: the frog's tongue flick and its still pose from 8 sides, as 32 px pixel art
       await tabClick(c.page.getByRole('button', { name: 'Frog', exact: true }))
       await c.page.waitForFunction(() => window.__creature?.bones() === 20 && !document.querySelector('[data-testid=creature-loading]'), null, { timeout: 60000 }).catch(() => {})

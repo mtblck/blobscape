@@ -13,10 +13,10 @@ export const DEMOS = [
   {
     id: 'creature',
     label: 'A creature',
-    title: 'A dragon on 43 bones',
-    body: 'Tens of thousands of blobs, each moved by its bones on the graphics card every frame. Its scales, shading and shadows are baked into the blobs. The fire is made of bones that grow out of its mouth.',
+    title: 'A dragon on 44 bones',
+    body: 'Tens of thousands of blobs, each moved by its bones on the graphics card every frame. Its scales, shading and shadows are baked into the blobs. The fire is made of bones that grow out of its mouth, and it gives light: it warms the hide, casts shadows and burns the floor it lands on.',
     link: { label: 'Open Splat Creatures', href: '/experiments/creature/' },
-    about: 'An ice dragon made of Gaussian splats, beating its wings and breathing fire',
+    about: 'An ember dragon made of Gaussian splats, rearing back and breathing fire onto the stone in front of it',
   },
   {
     id: 'world',

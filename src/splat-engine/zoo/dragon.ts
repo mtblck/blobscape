@@ -2,13 +2,13 @@ import type { Vec3 } from '../../splat-core/blobs.ts'
 import { boneTail, buildBody, mirror, mix, segDist, type BodySpec, type Part } from '../body.ts'
 import { joinBuilt, membrane, scales, sculptToCount, smooth, type SculptPart, type SculptSpec } from '../sculpt.ts'
 import { cone, displace, ellipsoid, sphere, type Shape } from '../voxel.ts'
-import { Skeleton, type Bone } from '../rig.ts'
-import { X, Y, Z, aim, dir, env, ramp, set, turn } from '../posing.ts'
+import { Skeleton, rotate, type Bone } from '../rig.ts'
+import { X, Y, Z, aim, dir, env, ramp, restDir, set, turn, worldQuat } from '../posing.ts'
 import type { SwingSpec } from '../swing.ts'
 import type { Species } from './species.ts'
 
 /**
- * A dragon, standing, facing +z, about eight units nose to tail: 43 bones.
+ * A dragon, standing, facing +z, about eight units nose to tail: 44 bones.
  * Its body is cut the way the pixel scenes are (sculpt.ts): every scale, tooth
  * and horn ring is a shape or a pattern on one, lit and shadowed once, and
  * weighted to the bones so the neck and tail still curve. Its wings are skin
@@ -20,6 +20,9 @@ import type { Species } from './species.ts'
  * so a file opened elsewhere shows a dragon with its mouth shut; breathing
  * fire grows the first fire bone by FLAME (a scale key, which glTF has) and
  * the chain unrolls and flickers. Nothing about it is a particle system.
+ * What it breathes goes with its look (`dragonBreath`): fire, frost, or a
+ * green venom that burns. One more bone, `lungs`, swells the ribs as it
+ * draws breath.
  */
 
 const SIDES = [['l', 1], ['r', -1]] as const
@@ -81,19 +84,34 @@ export function dragonBones(): Bone[] {
   for (let k = 0; k < FIRE; k++) {
     out.push({ name: `fire${k + 1}`, parent: k ? out.length - 1 : idx('head'), head: at((k / FIRE) * REACH), ...(k === FIRE - 1 ? { tail: at(REACH) } : {}) })
   }
+  // the ribs: low in the trunk, so the belly and flanks swell with a breath and the back hardly moves
+  out.push({ name: 'lungs', parent: idx('spine'), head: [0, 1.5, 0.45], tail: [0, 1.5, 0.75] })
   return out
 }
 
-interface Palette { label: string; body: Vec3; dark: Vec3; belly: Vec3; frost: Vec3; membrane: Vec3; claw: Vec3; gum: Vec3; eye: Vec3 }
+/** What a dragon breathes: fire, frost, or a green venom that burns where it lands. */
+export type BreathKind = 'fire' | 'frost' | 'venom'
 
-/** The dragon's looks. The fire is the same in every one; `frost` is the pale trim: spikes, horns, frills and the flecks in the hide. */
+/** A breath's colors, from its heart out to its edge, and what the last of it fades to. */
+const BREATHS: Record<BreathKind, { core: Vec3; mid: Vec3; edge: Vec3; end: Vec3 }> = {
+  fire: { core: [1, 0.98, 0.86], mid: [1, 0.78, 0.3], edge: [0.95, 0.28, 0.05], end: [0.4, 0.14, 0.08] },
+  frost: { core: [0.97, 1, 1], mid: [0.72, 0.92, 1], edge: [0.3, 0.6, 0.98], end: [0.78, 0.88, 0.98] },
+  venom: { core: [0.96, 1, 0.74], mid: [0.62, 0.96, 0.24], edge: [0.12, 0.62, 0.1], end: [0.1, 0.26, 0.08] },
+}
+
+interface Palette { label: string; breath: BreathKind; body: Vec3; dark: Vec3; belly: Vec3; frost: Vec3; membrane: Vec3; claw: Vec3; gum: Vec3; eye: Vec3 }
+
+/** The dragon's looks, each with its own breath; `frost` is the pale trim: spikes, horns, frills and the flecks in the hide. */
 const LOOKS: Record<string, Palette> = {
-  ice: { label: 'Ice', body: [0.46, 0.68, 0.88], dark: [0.2, 0.34, 0.58], belly: [0.86, 0.93, 0.99], frost: [0.93, 0.98, 1], membrane: [0.52, 0.74, 0.94], claw: [0.16, 0.2, 0.28], gum: [0.45, 0.12, 0.2], eye: [0.55, 0.97, 1] },
-  ember: { label: 'Ember', body: [0.62, 0.12, 0.08], dark: [0.16, 0.06, 0.06], belly: [0.98, 0.72, 0.32], frost: [1, 0.84, 0.42], membrane: [0.86, 0.3, 0.12], claw: [0.08, 0.06, 0.06], gum: [0.3, 0.05, 0.06], eye: [1, 0.78, 0.2] },
-  jade: { label: 'Jade', body: [0.2, 0.55, 0.38], dark: [0.07, 0.24, 0.2], belly: [0.93, 0.86, 0.58], frost: [0.95, 0.8, 0.4], membrane: [0.46, 0.76, 0.5], claw: [0.14, 0.12, 0.08], gum: [0.42, 0.12, 0.16], eye: [0.98, 0.9, 0.3] },
+  ice: { label: 'Ice', breath: 'frost', body: [0.46, 0.68, 0.88], dark: [0.2, 0.34, 0.58], belly: [0.86, 0.93, 0.99], frost: [0.93, 0.98, 1], membrane: [0.52, 0.74, 0.94], claw: [0.16, 0.2, 0.28], gum: [0.45, 0.12, 0.2], eye: [0.55, 0.97, 1] },
+  ember: { label: 'Ember', breath: 'fire', body: [0.62, 0.12, 0.08], dark: [0.16, 0.06, 0.06], belly: [0.98, 0.72, 0.32], frost: [1, 0.84, 0.42], membrane: [0.86, 0.3, 0.12], claw: [0.08, 0.06, 0.06], gum: [0.3, 0.05, 0.06], eye: [1, 0.78, 0.2] },
+  jade: { label: 'Jade', breath: 'venom', body: [0.2, 0.55, 0.38], dark: [0.07, 0.24, 0.2], belly: [0.93, 0.86, 0.58], frost: [0.95, 0.8, 0.4], membrane: [0.46, 0.76, 0.5], claw: [0.14, 0.12, 0.08], gum: [0.42, 0.12, 0.16], eye: [0.98, 0.9, 0.3] },
 }
 
 /** The ridge along the top, neck to tail, where the spikes grow. */
+/** What the dragon in a look breathes (the ice dragon frost, the ember dragon fire, the jade dragon venom). */
+export function dragonBreath(look: string): BreathKind { return (LOOKS[look] ?? LOOKS.ice).breath }
+
 const RIDGE: Vec3[] = [[0, 3.2, 1.9], [0, 2.6, 1.62], [0, 2.18, 1.25], [0, 2.3, 0.7], [0, 2.22, -0.1], [0, 2.02, -0.85], [0, 1.82, -1.35], [0, 1.6, -2.0], [0, 1.36, -2.7], [0, 1.12, -3.35], [0, 0.92, -3.95], [0, 0.8, -4.45]]
 
 function spec(c: Palette, s: number): SculptSpec {
@@ -122,7 +140,7 @@ function spec(c: Palette, s: number): SculptSpec {
     const d = Math.hypot(p[0] - root[0], p[1] - root[1], p[2] - root[2])
     return Math.sin(d * 48) > 0.55 ? mix(c.frost, c.dark, 0.4) : mix(c.frost, c.body, Math.max(0, 0.35 - d))
   }
-  const spine = ['hips', 'spine', 'chest', 'neck1', 'neck2', 'neck3', 'head', 'tail1', 'tail2', 'tail3', 'tail4', 'tail5']
+  const spine = ['hips', 'spine', 'chest', 'neck1', 'neck2', 'neck3', 'head', 'tail1', 'tail2', 'tail3', 'tail4', 'tail5', 'lungs']
   const tail: [Vec3, number][] = [[[0, 1.52, -1.0], 0.42], [[0, 1.35, -2.0], 0.31], [[0, 1.15, -2.7], 0.23], [[0, 0.95, -3.35], 0.16], [[0, 0.8, -3.95], 0.1], [[0, 0.72, -4.55], 0.05]]
   const parts: SculptPart[] = [
     // trunk, neck and tail as one skin
@@ -224,8 +242,12 @@ function spec(c: Palette, s: number): SculptSpec {
   return { bones: dragonBones(), parts, blend: 0.22, light: { ambient: 0.62, shadow: 0.5 } }
 }
 
-/** The flame, as body.ts makes it: a solid cone of glowing blobs, white-hot at its heart, thinning to red at its edges and end. */
-function flame(): BodySpec {
+/**
+ * The breath, as body.ts makes it: a solid cone of glowing blobs, brightest at its heart, thinning to its deepest
+ * color at its edges and end (white-hot to red for fire, white to blue for frost, pale to deep green for venom).
+ */
+function flame(kind: BreathKind): BodySpec {
+  const br = BREATHS[kind]
   const fireBones = Array.from({ length: FIRE }, (_, k) => `fire${k + 1}`)
   /** How far a point is from the flame's axis, as a share of the flame's radius there. */
   const offAxis = (p: Vec3, u: number) => {
@@ -237,8 +259,8 @@ function flame(): BodySpec {
     shape: { fill: [MOUTH, at(REACH)], r: [0.06, 0.75] },
     color: (p, _n, u) => {
       const heat = Math.max(0, 1 - offAxis(p, u) * 0.75 - u * 0.45)
-      const c = heat > 0.5 ? mix([1, 0.78, 0.3], [1, 0.98, 0.86], (heat - 0.5) / 0.5) : mix([0.95, 0.28, 0.05], [1, 0.78, 0.3], heat / 0.5)
-      return u > 0.8 ? mix(c, [0.4, 0.14, 0.08], (u - 0.8) / 0.2) : c
+      const c = heat > 0.5 ? mix(br.mid, br.core, (heat - 0.5) / 0.5) : mix(br.edge, br.mid, heat / 0.5)
+      return u > 0.8 ? mix(c, br.end, (u - 0.8) / 0.2) : c
     },
     opacity: (p, u) => (0.1 + 0.75 * (1 - u) ** 0.7) * (1 - 0.7 * offAxis(p, u) ** 2),
     bones: fireBones, glow: true,
@@ -250,13 +272,14 @@ function flame(): BodySpec {
 const FIRE_SHARE = 0.07
 
 /**
- * Builds the dragon with about `count` blobs, a small share of them the fire that waits in its mouth. `look` picks
- * its colors.
+ * Builds the dragon with about `count` blobs, a small share of them the breath that waits in its mouth. `look` picks
+ * its colors and what it breathes. `glow` marks the blobs that give their own light (the breath and the eyes), for a
+ * world with live lights.
  */
 export function makeDragon(count = 100000, look = 'ice') {
   const c = LOOKS[look] ?? LOOKS.ice
   const body = sculptToCount((s) => spec(c, s), Math.round(count * (1 - FIRE_SHARE)))
-  const fire = buildBody(flame(), Math.max(200, count - body.blobs.count), 3)
+  const fire = buildBody(flame(c.breath), Math.max(200, count - body.blobs.count), 3)
   const b = joinBuilt(body, fire)
   // shrink the flame into the mouth: its blobs and bones, about the mouth
   const shrink = (p: ArrayLike<number>): Vec3 => [MOUTH[0] + (p[0] - MOUTH[0]) / FLAME, MOUTH[1] + (p[1] - MOUTH[1]) / FLAME, MOUTH[2] + (p[2] - MOUTH[2]) / FLAME]
@@ -266,7 +289,11 @@ export function makeDragon(count = 100000, look = 'ice') {
   }
   const all = dragonBones()
   const rest = all.map((bone, i): Bone => (bone.name.startsWith('fire') ? { ...bone, head: shrink(bone.head), tail: shrink(boneTail(all, i)) } : bone))
-  return { blobs: b.blobs, skin: b.skin, skeleton: new Skeleton(rest) }
+  const glow = new Uint8Array(b.blobs.count)
+  // the eyes give some light of their own; the breath all of it
+  if (body.glow) for (let i = 0; i < b.from; i++) glow[i] = body.glow[i] ? 110 : 0
+  glow.fill(255, b.from)
+  return { blobs: b.blobs, skin: b.skin, skeleton: new Skeleton(rest), glow }
 }
 
 /** Wings half folded: the arm drawn back and the fingers closed together. */
@@ -343,24 +370,47 @@ export function dragonFlap(sk: Skeleton, t: number) {
   sk.update()
 }
 
-const BREATH = 3.4
+/** How long one breath takes, from the first drawing in to the mouth shut again, in seconds. */
+export const BREATH = 3.4
 
 /**
- * Fire: rearing back to draw breath, wings opening, then lunging forward
- * with the jaw open as the flame unrolls from the mouth, roaring and
- * flickering, until the last of it rolls away and the mouth shuts.
+ * Where a breath has got to `t` seconds in, each 0 to 1: how full the lungs are (`inhale`), how hot the throat is
+ * before the flame comes (`charge`), how much of the flame is out (`flame`), and how much is left hanging in the air
+ * once the mouth has shut, which runs on into the start of the next breath (`after`). The pose reads it, and so can
+ * a page that lights the breath.
+ */
+export function breathAt(t: number): { inhale: number; charge: number; flame: number; after: number } {
+  const u = (((t % BREATH) + BREATH) % BREATH) / BREATH
+  return {
+    inhale: env(u, 0.02, 0.26, 0.34, 0.5),
+    charge: env(u, 0.12, 0.33, 0.37, 0.52),
+    flame: ramp(u, 0.34, 0.4) * (1 - ramp(u, 0.8, 0.92)),
+    after: u < 0.5 ? 1 - ramp(u, 0, 0.16) : ramp(u, 0.86, 0.94),
+  }
+}
+
+/** How far the flame's side is from its middle at each fire bone's head, at life size. */
+const girth = (k: number) => 0.06 + 0.69 * (k / FIRE)
+
+/**
+ * Fire: rearing back to draw breath, ribs swelling, wings opening, then lunging forward and down with the jaw open
+ * as the flame unrolls from the mouth, roaring and flickering, onto the ground in front, where it turns and runs
+ * along it, until the last of it rolls away and the mouth shuts.
  */
 export function dragonFire(sk: Skeleton, t: number) {
   const u = (t % BREATH) / BREATH
   dragonIdle(sk, u * IDLE)
+  const { inhale } = breathAt(t)
   const rear = env(u, 0.02, 0.24, 0.26, 0.36)
   const lunge = env(u, 0.28, 0.38, 0.82, 0.95)
   const open = env(u, 0.3, 0.37, 0.84, 0.92)
-  set(sk, 'chest', X, -0.1 * rear + 0.06 * lunge)
-  set(sk, 'neck1', X, -0.35 * rear + 0.1 * lunge)
-  set(sk, 'neck2', X, -0.35 * rear + 0.12 * lunge)
-  set(sk, 'neck3', X, -0.2 * rear + 0.08 * lunge)
-  set(sk, 'head', X, 0.25 * rear + 0.06 * lunge + 0.02 * Math.sin(u * 90) * lunge)
+  // the ribs fill as it rears, and empty a little past rest as the breath goes out
+  sk.size[sk.index('lungs')] = 1 + 0.16 * inhale - 0.05 * lunge
+  set(sk, 'chest', X, -0.1 * rear + 0.1 * lunge)
+  set(sk, 'neck1', X, -0.35 * rear + 0.16 * lunge)
+  set(sk, 'neck2', X, -0.35 * rear + 0.16 * lunge)
+  set(sk, 'neck3', X, -0.2 * rear + 0.1 * lunge)
+  set(sk, 'head', X, 0.25 * rear + 0.08 * lunge + 0.02 * Math.sin(u * 90) * lunge)
   set(sk, 'jaw', X, 0.06 + 0.5 * open)
   fold(sk, 0.75 * (1 - env(u, 0.05, 0.3, 0.8, 0.98)))
   for (const [s, x] of SIDES) turn(sk, `${s}Wing1`, Z, x * 0.35 * env(u, 0.05, 0.3, 0.8, 0.98))
@@ -375,10 +425,25 @@ export function dragonFire(sk: Skeleton, t: number) {
   for (let k = 2; k <= FIRE; k++) {
     const b = sk.index(`fire${k}`)
     sk.size[b] = (0.35 + 0.65 * ramp(u, 0.34 + 0.02 * k, 0.4 + 0.025 * k)) * (1 + 0.08 * Math.sin(u * 140 + k * 1.7))
-    set(sk, `fire${k}`, X, 0.09 * Math.sin(u * 61 + k * 1.3))
-    turn(sk, `fire${k}`, Y, 0.09 * Math.sin(u * 47 + k * 2.1))
   }
   sk.update()
+  // where the flame would go into the ground it turns and runs along it: a link whose far end would come lower than
+  // half its own girth above the floor is lifted until it doesn't
+  const life = sk.scale[f1] / FLAME
+  for (let k = 2; k <= FIRE; k++) {
+    const name = `fire${k}`, b = sk.index(name)
+    if (life > 0.05) {
+      const now = rotate(worldQuat(sk, b), restDir(sk, b))
+      const rise = Math.min(0.25, (0.5 * girth(k) * life - sk.posedHead[b * 3 + 1]) / (seg * sk.scale[b]))
+      if (now[1] < rise) {
+        const flat = Math.hypot(now[0], now[2]) || 1, keep = Math.sqrt(1 - rise * rise) / flat
+        aim(sk, name, [now[0] * keep, rise, now[2] * keep])
+      }
+    }
+    turn(sk, name, X, 0.07 * Math.sin(u * 61 + k * 1.3))
+    turn(sk, name, Y, 0.09 * Math.sin(u * 47 + k * 2.1))
+    sk.update()
+  }
 }
 
 /** The tail, loose behind the body (swing.ts): five links, softer toward the spade, so a wingbeat sends a slow wave down it. */
@@ -388,16 +453,16 @@ export const DRAGON_SWING: SwingSpec = { parts: 'tail', chains: [{ bones: ['tail
 export const DRAGON: Species = {
   id: 'dragon',
   name: 'dragon',
-  blurb: 'A dragon of forty-three bones, in ice, ember or jade, scaled from snout to tail spade, with wings of skin stretched between finger bones, and fire made of bones too.',
+  blurb: 'A dragon of forty-four bones, in ice, ember or jade, scaled from snout to tail spade, with wings of skin stretched between finger bones, and a breath made of bones too: fire, frost or venom, by its look.',
   detail: [30000, 60000, 100000, 200000],
   start: 60000,
   looks: Object.entries(LOOKS).map(([id, l]) => ({ id, label: l.label })),
   make: (count, look) => makeDragon(count, look),
   moves: [
     { name: 'flap', label: 'Flap', doing: 'hovering on beating wings', seconds: FLAP, fps: 30, pose: dragonFlap },
-    { name: 'fire', label: 'Breathe fire', doing: 'breathing fire', seconds: BREATH, fps: 30, pose: dragonFire },
+    { name: 'fire', label: 'Breathe fire', doing: 'breathing fire', seconds: BREATH, fps: 30, pose: dragonFire, byLook: { ice: { label: 'Breathe frost', doing: 'breathing frost' }, jade: { label: 'Breathe venom', doing: 'breathing green venom' } } },
     { name: 'idle', label: 'Stand', doing: 'standing guard', seconds: IDLE, fps: 12, pose: dragonIdle },
   ],
-  view: { target: [0, 1.7, -0.4], distance: 11, azimuth: 40, elevation: 14 },
+  view: { target: [0, 1.5, 0.6], distance: 12.5, azimuth: 40, elevation: 14 },
   swing: DRAGON_SWING,
 }

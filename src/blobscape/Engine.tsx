@@ -10,6 +10,7 @@ import { Cover } from './Experiments.tsx'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
 import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitDrag } from './Viewport.tsx'
 import type { CreatureStage } from './creature/stage.ts'
+import { stageBreath } from './creature/breathStage.ts'
 import { DETAIL } from './diorama/scene.ts'
 import { DIORAMAS } from './diorama/scenes.ts'
 import { BESIDE, DEMOS, DOORS, ENGINE, ENGINE_BUILT, FEATURES, ONE_TAG, PIXEL_STRIP, type DemoId } from './engineCopy.ts'
@@ -113,9 +114,10 @@ function CreatureDemo(props: DemoProps) {
       {...props} id="creature" about={DEMOS[0].about} start={DRAGON.view}
       dress={(stage) => {
         // phones get the lighter dragon: it builds in about half the time
-        const body = DRAGON.make(media('(pointer: coarse)') ? DRAGON.detail[0] : DRAGON.start, DRAGON.looks[0].id)
+        const body = DRAGON.make(media('(pointer: coarse)') ? DRAGON.detail[0] : DRAGON.start, 'ember')
         const fire = DRAGON.moves.find((m) => m.name === 'fire') ?? DRAGON.moves[0]
-        stage.setActor(body, recordClip(fire.name, body.skeleton, fire.pose, fire.seconds, fire.fps ?? 24))
+        // with what its fire does: the light on its hide, the floor that burns, sparks and smoke
+        stageBreath(stage, body, recordClip(fire.name, body.skeleton, fire.pose, fire.seconds, fire.fps ?? 24), 'ember', () => true)
         return body.blobs.count
       }}
     />
