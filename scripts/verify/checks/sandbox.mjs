@@ -182,6 +182,9 @@ export default [
       const box = await page.getByTestId('viewport').boundingBox()
       const at = (fx, fy) => [box.x + box.width * fx, box.y + box.height * fy]
       await page.getByRole('tab', { name: /Build/ }).click()
+      // The brushes show only while Paint is held
+      if (await page.getByRole('group', { name: 'Paint with' }).count()) fails.push('blobscape sandbox: the brushes show while Spray is held')
+      await page.getByRole('button', { name: 'Paint', exact: true }).click()
       // Each brush on its own strip of the floor, left to right
       const kinds = ['Leaves', 'Grass', 'Fur', 'Moss', 'Stones']
       for (const [i, kind] of kinds.entries()) {
@@ -196,7 +199,7 @@ export default [
         if (added < 5) fails.push(`blobscape sandbox: the ${kind} brush added ${added} blobs`)
         else ok(`blobscape sandbox: the ${kind} brush paints ${added} blobs`)
       }
-      if ((await page.getByRole('button', { name: 'Paint', exact: true }).getAttribute('aria-pressed')) !== 'true') fails.push('blobscape sandbox: picking a brush did not pick the Paint tool')
+      if ((await page.getByRole('button', { name: 'Paint', exact: true }).getAttribute('aria-pressed')) !== 'true') fails.push('blobscape sandbox: Paint let go while picking brushes')
       await page.waitForTimeout(2000)
       await page.screenshot({ path: join(shots, 'blobscape-sandbox-paint.png') })
       await axe(page, 'blobscape sandbox brushes')
