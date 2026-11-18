@@ -54,8 +54,10 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         env:
           CHECKS: ${{ inputs.checks }}
+          # GitHub's runners are shared and their speed swings: two checks at a time, and three times the wait.
+          VERIFY_SLOW: 3
         # Word splitting is wanted: several names, or none.
-        run: npm run verify -- $CHECKS
+        run: npm run verify -- --jobs=2 $CHECKS
       - uses: actions/upload-artifact@v4
         if: always()
         with:

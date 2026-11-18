@@ -38,6 +38,9 @@ export function launch() {
   return chromium.launch({ executablePath, args: ['--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--ignore-gpu-blocklist', '--enable-unsafe-webgpu'] })
 }
 
+/** How many times longer than Playwright's 30 seconds an action may take: `VERIFY_SLOW=3` on a shared runner. */
+const SLOW = Number(process.env.VERIFY_SLOW) || 0
+
 export const DESKTOP = { viewport: { width: 1440, height: 1000 } }
 export const PHONE = { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }
 
@@ -67,9 +70,12 @@ export function checkContext(browser, base, parts) {
 
   async function open(path, opts = {}) {
     const ctx = await browser.newContext({ deviceScaleFactor: 1, ...opts })
+    // a shared runner (GitHub's) can be several times slower from one run to the next: clicks, loads and pictures get longer to finish there
+    if (SLOW) { ctx.setDefaultTimeout(30000 * SLOW); ctx.setDefaultNavigationTimeout(30000 * SLOW) }
     contexts.add(ctx)
     ctx.once('close', () => contexts.delete(ctx))
     const page = await ctx.newPage()
+    if (SLOW) { const wait = page.waitForFunction.bind(page); page.waitForFunction = (fn, arg, o) => wait(fn, arg, o?.timeout ? { ...o, timeout: o.timeout * SLOW } : o) }
     page.on('console', (m) => { if (m.type() === 'error') fails.push(`${path} console: ${m.text()}`) })
     page.on('pageerror', (e) => fails.push(`${path} pageerror: ${e.message}`))
     await page.addInitScript(() => document.addEventListener('securitypolicyviolation', (e) => console.error(`CSP blocked ${e.blockedURI} (${e.violatedDirective})`)))

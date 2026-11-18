@@ -238,7 +238,7 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
     const img = new ImageData(w, h)
     // the target holds linear, premultiplied color; ImageData wants sRGB, straight. WebGPU reads rows top-down, WebGL bottom-up.
     readbackToSrgb(px, w, h, { flip: backend === 'webgl', premultiplied: false }, img.data)
-    display.getContext('2d')!.putImageData(img, 0, 0)
+    display.getContext('2d', { willReadFrequently: true })!.putImageData(img, 0, 0)
   }
 
   const pose = (t: number) => {
