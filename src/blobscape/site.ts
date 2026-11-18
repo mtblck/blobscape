@@ -27,6 +27,17 @@ export const EXPERIMENTS_INTRO = "Small tools built from the same blobs as the l
  */
 export const EXPERIMENTS = [
   {
+    id: 'daynight',
+    title: 'Day and Night',
+    url: '/experiments/day-and-night/',
+    cover: '/covers/day-and-night.webp',
+    tags: ['watch'],
+    needs: 'WebGPU or WebGL 2',
+    published: '2026-11-18',
+    updated: '2026-11-18',
+    body: 'A cabin in a clearing through a whole day. Drag the time: the sun crosses the sky, shadows turn and stretch, the windows come on at dusk and fireflies come out under the moon.',
+  },
+  {
     id: 'brush',
     title: 'Brush and Ink',
     url: '/experiments/brush-and-ink/',
