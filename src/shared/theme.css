@@ -1,6 +1,4 @@
 @import "tailwindcss";
-/* The prerendered pages (scripts/prerender.ts) use these classes before the app starts */
-@source "../../scripts/prerender.ts";
 
 /* Blobscape's brand (brand kit web/palette.css), as the hex tokens the site and
    its canvases read. Light by default; dark follows the system unless the menu's

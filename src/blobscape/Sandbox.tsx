@@ -118,8 +118,8 @@ export function Sandbox() {
   const history = useRef(new History(160 * 1024 * 1024))
 
   // On a touchscreen one finger can't both orbit and paint, so start in Look there
-  const coarse = useMemo(() => window.matchMedia('(pointer: coarse)').matches, [])
-  const reducedMotion = useMemo(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches, [])
+  const coarse = useMemo(() => typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches, [])
+  const reducedMotion = useMemo(() => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches, [])
   // Phones run out of memory sooner
   const maxBlobs = coarse ? 400_000 : 1_000_000
   const [tool, setTool] = useState<ToolId>(coarse ? 'orbit' : 'spray')

@@ -7,7 +7,7 @@ export default [
     about: 'prerendered HTML for every page, 404, sitemap, in-place navigation, theme, Experiments list and dates, old #/ links',
     entries: ['scripts/prerender.ts', 'src/blobscape/routes.ts', 'src/blobscape/meta.ts', 'src/blobscape/site.ts', 'src/blobscape/Landing.tsx', 'src/blobscape/Experiments.tsx', 'src/blobscape/Chrome.tsx', 'src/shared/SiteHeader.tsx', 'src/shared/Footer.tsx', 'src/shared/Logo.tsx', 'src/blobscape/engineCopy.ts', 'src/blobscape/specCopy.ts'],
     files: ['src/blobscape/App.tsx', 'src/blobscape/main.tsx', 'src/blobscape/ssr.tsx', 'index.html', 'public/theme.js'],
-    async run({ base, join, fails, ok, open, axe }) {
+    async run({ base, join, fails, ok, open, axe, DESKTOP, PHONE }) {
       // Prerendered: each page's HTML carries its own title, canonical and content before any script runs
       for (const [path, title] of [['/', 'Blobscape: learn'], ['/lessons/', 'Lessons ·'], ['/lessons/order/', 'Order matters · Lesson 3'], ['/sandbox/', 'Sandbox ·'], ['/experiments/creature/', 'Splat Creatures ·'], ['/experiments/forest-walk/', 'Forest Walk ·'], ['/experiments/clockwork/', 'Clockwork ·'], ['/experiments/shape-shifter/', 'Shape Shifter ·'], ['/experiments/pixel-diorama/', 'Pixel Diorama ·'], ['/experiments/dungeon-run/', 'Dungeon Run ·'], ['/experiments/scan-studio/', 'Scan Studio ·'], ['/experiments/', 'Experiments ·'], ['/engine/', 'The Blobscape engine ·'], ['/engine/rigged-splats/', 'Rigged Gaussian splats in glTF ·']]) {
         const html = await (await fetch(base + path)).text()
@@ -15,6 +15,22 @@ export default [
         else if (!html.includes(`<link rel="canonical" href="https://blobscape.dev${path}"`)) fails.push(`${path}: prerendered canonical is wrong`)
         else if (!/<main id="main"[^>]*>[\s\S]*<h1/.test(html)) fails.push(`${path}: prerendered page has no content`)
         else ok(`${path} is prerendered with its own title, canonical and content`)
+      }
+      // The page before any script runs is the page the app then shows: the heading and the first paragraph are the same
+      // size in the same place (an experiment once started as a stand-in with bigger text, which jumped as the app took over)
+      const placed = (page) => page.evaluate(() => ['main h1', 'main p'].map((q) => { const el = document.querySelector(q); const r = el.getBoundingClientRect(); return [r.x, r.y, r.width, r.height, parseFloat(getComputedStyle(el).fontSize)].map(Math.round) }))
+      for (const path of ['/experiments/clockwork/', '/experiments/pixel-diorama/', '/sandbox/', '/lessons/one-blob/', '/lessons/']) {
+        for (const [size, device] of [['desktop', DESKTOP], ['phone', PHONE]]) {
+          const first = await open(path, { ...device, javaScriptEnabled: false })
+          const before = await placed(first.page)
+          await first.ctx.close()
+          const live = await open(path, device)
+          await live.page.waitForTimeout(800)
+          const after = await placed(live.page)
+          await live.ctx.close()
+          if (JSON.stringify(before) !== JSON.stringify(after)) fails.push(`${path} (${size}): the heading and first paragraph are at ${JSON.stringify(before)} before the app starts and ${JSON.stringify(after)} after`)
+          else ok(`${path} (${size}): the first paint has the heading and first paragraph where the app puts them`)
+        }
       }
       const missing = await fetch(base + '/no-such-page/')
       if (missing.status !== 404 || !(await missing.text()).includes('noindex')) fails.push('an unknown page is not a noindex 404')

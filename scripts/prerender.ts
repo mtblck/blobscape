@@ -1,24 +1,25 @@
 /**
  * After `vite build`: writes an HTML file for every Blobscape page, so each
  * address is a real file with its own title, description, canonical link,
- * link-preview tags, structured data and readable content. Search engines and
- * link previews read that; in a browser the app starts and replaces the
- * content with the live page. Also writes 404.html, sitemap.xml and robots.txt.
+ * link-preview tags, structured data and the page as the app first draws it
+ * (src/blobscape/ssr.tsx). Search engines and link previews read that; in a
+ * browser the app starts on the same markup, so nothing moves. Also writes
+ * 404.html, sitemap.xml and robots.txt.
  *
- * Run with node --experimental-strip-types (no JSX here: the content is plain
- * strings, and the Tailwind classes it uses are scanned via @source in theme.css).
+ * Run with node --experimental-strip-types (no JSX here: the app is loaded through Vite).
  */
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { createServer } from 'vite'
+import { createElement, type ReactElement } from 'react'
+import { renderToString } from 'react-dom/server'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { LESSONS, LESSON_GOALS, href, type Route } from '../src/blobscape/routes.ts'
-import { EXPERIMENTS, SITE, byPublished, experimentAt, longDate, type Experiment } from '../src/blobscape/site.ts'
+import { LESSONS, href, type Route } from '../src/blobscape/routes.ts'
+import { SITE, byPublished, experimentAt, type Experiment } from '../src/blobscape/site.ts'
 import { DESCRIPTION, pageMeta } from '../src/blobscape/meta.ts'
-import { BUILT_ON, ENGINE, ENGINE_BUILT } from '../src/blobscape/engineCopy.ts'
+import { ENGINE } from '../src/blobscape/engineCopy.ts'
 import { SPEC, specTitle } from '../src/blobscape/specCopy.ts'
 import { API_DATA_ID, API_PAGE } from '../src/blobscape/api/types.ts'
-import { AXIS, BLOB, WORD } from '../src/shared/logoPaths.ts'
 
 const DIST = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist')
 /** The rigged-splat spec, which its page shows (Spec.tsx reads the same file through Vite). */
@@ -27,69 +28,6 @@ const TOOLS = ['/experiments/fit-a-picture/', '/experiments/splat-to-sprite/']
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 const url = (path: string) => SITE.origin + path
-
-const LOGO = `<svg viewBox="0 0 1155.48 187.2" class="h-6 w-auto sm:h-7" role="img" aria-label="Blobscape home"><g transform="translate(-4 -80)"><path d="${BLOB}" fill="#f2553a" fill-rule="evenodd"/><path d="${AXIS}" fill="var(--c-logo-ink)"/></g><path d="${WORD}" fill="var(--c-logo-ink)"/></svg>`
-
-const LINK = 'text-ink underline decoration-rule underline-offset-2 hover:text-accent'
-
-/**
- * The app's header, as near as static HTML gets: the main links hide on a
- * phone and invisible stand-ins hold the theme and Menu buttons' places, so nothing
- * jumps when the app takes over.
- */
-function shell(main: string): string {
-  // Engine is a dropdown in the app: here it is a plain link, as wide as the button with its chevron
-  const nav = [['Lessons', '/lessons/'], ['Experiments', '/experiments/'], ['Sandbox', '/sandbox/'], ['Engine', '/engine/']]
-    .map(([label, path]) => `<li><a href="${path}" class="${label === 'Engine' ? 'flex items-center gap-1.5 ' : ''}rounded-full px-3 py-1.5 text-[0.9375rem] font-medium text-ink-muted no-underline hover:text-ink">${label}${label === 'Engine' ? '<span aria-hidden="true" class="size-3"></span>' : ''}</a></li>`)
-    .join('')
-  return `<div class="flex min-h-dvh flex-col"><a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded focus:bg-paper focus:px-3 focus:py-2 focus:text-sm">Skip to content</a><header class="sticky top-0 z-30 border-b border-rule bg-paper"><div class="mx-auto flex h-14 max-w-7xl items-center justify-between gap-4 px-4"><a href="/" class="-mx-1 shrink-0 rounded-md px-1 py-1.5">${LOGO}</a><div class="flex items-center gap-1"><nav aria-label="Main" class="max-md:hidden"><ul class="flex items-center gap-1">${nav}</ul></nav><span aria-hidden="true" class="size-9 shrink-0"></span><span aria-hidden="true" class="invisible flex h-9 items-center gap-2 rounded-full border px-3 text-sm font-medium md:hidden"><span class="h-4.5 w-4.5"></span>Menu</span></div></div></header><main id="main" class="mx-auto w-full max-w-7xl flex-1 px-4 pb-16">${main}</main></div>`
-}
-
-/** When an experiment was published, and when it last changed if that was another day (as `Dates` in Shell.tsx). */
-function dates(e: Experiment, testId?: string): string {
-  const day = (d: string) => `<time datetime="${d}">${longDate(d)}</time>`
-  return `<p class="text-sm text-ink-faint"${testId ? ` data-testid="${testId}"` : ''}>Published ${day(e.published)}${e.updated !== e.published ? ` · Updated ${day(e.updated)}` : ''}</p>`
-}
-
-function crumbs(here: string, parent?: [string, string]): string {
-  const up = parent ? `<a href="${parent[1]}" class="${LINK}">${esc(parent[0])}</a><span aria-hidden="true" class="px-1.5">/</span>` : ''
-  const dated = parent ? EXPERIMENTS.find((e) => e.title === here) : undefined
-  return `<div class="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 pt-6 text-sm text-ink-faint"><nav aria-label="Breadcrumb"><a href="/" class="${LINK}">Blobscape</a><span aria-hidden="true" class="px-1.5">/</span>${up}<span aria-current="page">${esc(here)}</span></nav>${dated ? `<div class="flex flex-wrap items-baseline gap-x-4 gap-y-1">${ENGINE_BUILT.includes(dated.id) ? `<a href="/engine/" class="${LINK}" data-testid="built-on">${BUILT_ON}</a>` : ''}${dates(dated, 'page-dates')}</div>` : ''}</div>`
-}
-
-/** A readable stand-in for a page that draws in WebGL, under the same header; the app replaces it. */
-function content(route: Route): string {
-  switch (route.page) {
-    case 'lesson': {
-      const i = LESSONS.findIndex((l) => l.id === route.id)
-      const l = LESSONS[i]
-      const prev = LESSONS[i - 1]
-      const next = LESSONS[i + 1]
-      return `<div class="max-w-3xl">${crumbs(`Lesson ${i + 1}`)}<p class="pt-6 text-sm font-semibold tracking-wider text-ink-faint uppercase">Lesson ${i + 1} of ${LESSONS.length}</p>
-<h1 class="mt-1 font-display text-4xl">${esc(l.title)}</h1><p class="mt-3 text-lg text-ink-muted">${esc(l.summary)}</p>
-<h2 class="mt-8 font-display text-2xl">Goals</h2><ul class="mt-2 list-disc pl-5 text-ink-muted">${LESSON_GOALS[l.id].map((g) => `<li>${esc(g.label)}</li>`).join('')}</ul>
-<p class="mt-8 text-sm text-ink-faint">This lesson draws live blobs in your browser, with JavaScript and WebGL.</p>
-<nav aria-label="Lessons" class="mt-8 flex flex-wrap gap-6">${prev ? `<a href="${href({ page: 'lesson', id: prev.id })}" class="${LINK}">← ${i}. ${esc(prev.title)}</a>` : ''}<a href="/lessons/" class="${LINK}">All lessons</a>${next ? `<a href="${href({ page: 'lesson', id: next.id })}" class="${LINK}">${i + 2}. ${esc(next.title)} →</a>` : ''}</nav></div>`
-    }
-    case 'sandbox':
-    case 'creature':
-    case 'forest':
-    case 'clockwork':
-    case 'shift':
-    case 'flow':
-    case 'brush':
-    case 'diorama':
-    case 'scan':
-    case 'dungeon': {
-      const title = route.page === 'sandbox' ? 'Sandbox' : route.page === 'creature' ? 'Splat Creatures' : route.page === 'clockwork' ? 'Clockwork' : route.page === 'shift' ? 'Shape Shifter' : route.page === 'flow' ? 'Sand, Snow and Goo' : route.page === 'brush' ? 'Brush and Ink' : route.page === 'diorama' ? 'Pixel Diorama' : route.page === 'scan' ? 'Scan Studio' : route.page === 'dungeon' ? 'Dungeon Run' : 'Forest Walk'
-      const tool = route.page !== 'sandbox'
-      return `${crumbs(title, tool ? ['Experiments', '/experiments/'] : undefined)}<div class="max-w-3xl"><h1 class="pt-6 font-display text-5xl">${title}</h1><p class="mt-4 text-xl leading-relaxed text-ink-muted">${esc(pageMeta(route).description)}</p><p class="mt-6 text-sm text-ink-faint">It runs in your browser, with JavaScript and WebGL${tool ? ' or WebGPU' : ''}.</p></div>`
-    }
-    default:
-      // the rest are drawn by the app itself (FROM_APP)
-      throw new Error(`prerender: no stand-in for ${route.page}`)
-  }
-}
 
 const PERSON = { '@type': 'Person', name: SITE.author.name, url: SITE.author.url }
 const COURSE = {
@@ -206,12 +144,13 @@ function render(template: string, route: Route): string {
   }
   const root = /<div id="root">[\s\S]*?<\/div>(?=\s*<\/body>|\s*<script)/
   if (!root.test(html)) throw new Error('prerender: the built page has no #root')
-  // Pages the app draws without WebGL are prerendered from the app itself, so its first frame matches this one;
-  // the rest get a readable stand-in under the same header
+  // Every page is prerendered from the app itself, so the first paint is the page the app then shows and nothing
+  // jumps or changes size. Pages that draw no WebGL at first are marked data-ssr and picked up as they stand
+  // (HYDRATED); the rest read the address and the browser as they start, so the app draws them afresh over this.
   // the API reference carries its data as JSON (not run, so the CSP allows it), so the page needn't load it again
   if (route.page === 'api') html = html.replace('</body>', () => `<script type="application/json" id="${API_DATA_ID}">${readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'blobscape', 'engineApi.json'), 'utf8').replace(/</g, '\\u003c').trim()}</script>\n  </body>`)
-  if (FROM_APP.has(route.page)) return html.replace(root, () => `<div id="root" data-ssr>${renderPage(route)}</div>`)
-  return html.replace(root, () => `<div id="root">${shell(content(route))}</div>`)
+  if (HYDRATED.has(route.page)) return html.replace(root, () => `<div id="root" data-ssr>${renderPage(route)}</div>`)
+  return html.replace(root, () => `${NO_SCRIPT}<div id="root">${renderPage(route)}</div>`)
 }
 
 function write(path: string, html: string) {
@@ -219,8 +158,10 @@ function write(path: string, html: string) {
   writeFileSync(path, html)
 }
 
-// The app, loaded the way Vite would for a server, to draw the pages in FROM_APP
-const FROM_APP = new Set<Route['page']>(['home', 'lessons', 'experiments', 'contact', 'engine', 'spec', 'api', 'notfound'])
+// Said above a page whose view and controls do nothing without scripts (classes the app's own pages use, so they are in the CSS)
+const NO_SCRIPT = '<noscript><p class="px-4 py-2 text-center text-sm text-ink-muted">This page draws live blobs in your browser, so it needs JavaScript.</p></noscript>'
+// The app, loaded the way Vite would for a server, to draw every page. These are the ones the browser hydrates.
+const HYDRATED = new Set<Route['page']>(['home', 'lessons', 'experiments', 'contact', 'engine', 'spec', 'api', 'notfound'])
 const vite = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'error' })
 const { renderPage } = (await vite.ssrLoadModule('/src/blobscape/ssr.tsx')) as typeof import('../src/blobscape/ssr.tsx')
 
@@ -241,10 +182,16 @@ for (const path of TOOLS) {
   const file = join(DIST, path, 'index.html')
   const e = experimentAt(path)
   if (!e) throw new Error(`prerender: ${path} is not in EXPERIMENTS`)
-  const html = readFileSync(file, 'utf8')
+  let html = readFileSync(file, 'utf8')
   if (html.includes('application/ld+json')) continue
   const json = JSON.stringify({ '@context': 'https://schema.org', '@graph': [work(e), breadcrumbs([[SITE.name, '/'], ['Experiments', '/experiments/'], [e.title, path]])] }).replace(/</g, '\\u003c')
-  write(file, html.replace('</head>', () => `  <script type="application/ld+json">${json}</script>\n  </head>`))
+  html = html.replace('</head>', () => `  <script type="application/ld+json">${json}</script>\n  </head>`)
+  // and, like the app's pages, the fonts up front and the page as its own app first draws it (which then draws over it)
+  const empty = /<div id="root">[\s\S]*?<\/div>(?=\s*<\/body>|\s*<script)/
+  if (!html.includes('<link rel="stylesheet"') || !empty.test(html)) throw new Error(`prerender: ${path} has no stylesheet link or no #root`)
+  const { App } = (await vite.ssrLoadModule(`/src${path.replace('/experiments', '').replace(/\/$/, '')}/App.tsx`)) as { App: () => ReactElement }
+  html = html.replace('<link rel="stylesheet"', () => `${preloads}\n    <link rel="stylesheet"`).replace(empty, () => `${NO_SCRIPT}<div id="root">${renderToString(createElement(App))}</div>`)
+  write(file, html)
 }
 
 const today = new Date().toISOString().slice(0, 10)
