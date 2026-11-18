@@ -240,6 +240,9 @@ export default [
       const at = (fx, fy) => [box.x + box.width * fx, box.y + box.height * fy]
       await tabClick(page.getByRole('button', { name: 'Look around', exact: true }))
       await page.getByRole('tab', { name: /Scene/ }).click()
+      // Scene folds into sections: open Camera path (unless it was the last one used)
+      const pathFold = page.locator('summary', { hasText: 'Camera path' })
+      if (!(await pathFold.evaluate((el) => el.parentElement.open))) await pathFold.click()
       const add = page.getByRole('button', { name: 'Add this view as a stop' })
       const play = page.getByRole('button', { name: 'Play the path' })
       if (!(await play.isDisabled())) fails.push('blobscape sandbox path: Play is on with no stops')
@@ -253,6 +256,10 @@ export default [
       const turned = await differs(first, second)
       if (turned < 2000 || !said.startsWith('2 stops, 2 seconds')) fails.push(`blobscape sandbox path: after two stops it says "${said.slice(0, 40)}"${turned < 2000 ? ' and the view did not turn' : ''}`)
       else ok('blobscape sandbox path: two views saved as stops')
+      await page.waitForFunction(() => [...document.querySelectorAll('[data-testid=path-strip] img')].filter((i) => i.complete && i.naturalWidth).length === 2, null, { timeout: 20000 }).catch(() => {})
+      const pics = await page.locator('[data-testid=path-strip] img').count()
+      if (pics !== 2) fails.push(`blobscape sandbox path: the filmstrip shows ${pics} pictures for two stops`)
+      else ok('blobscape sandbox path: the filmstrip shows a picture of each stop')
       await axe(page, 'blobscape sandbox path')
       // Play: the view goes back to the first stop and glides; partway it is neither stop, and it ends at the second
       // The page's clock is stepped by hand: in software a picture of the view can take longer than the whole path,
