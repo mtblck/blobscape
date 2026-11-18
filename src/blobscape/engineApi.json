@@ -33,7 +33,7 @@
   {
    "id": "extras",
    "title": "Picking, detail and edits",
-   "doc": "Finding what a tap hit, drawing fewer blobs far away, cutting and painting live, depth for effects after the draw, what a mirror shows, and solid shapes to stand on."
+   "doc": "Finding what a tap hit, drawing fewer blobs far away, cutting and painting live, depth for effects after the draw, what a mirror shows, a lens with glow and focus blur, and solid shapes to stand on."
   },
   {
    "id": "files",
@@ -348,6 +348,15 @@
        "signatures": [
         {
          "code": "setOutline(pen?: OutlinePen): void"
+        }
+       ]
+      },
+      {
+       "name": "setLens",
+       "doc": "Draws the picture through a lens (lens.ts): light spilling round bright things, and blur for whatever is nearer\nor farther than the distance in focus. Leave the look out to stop. Not in pixel mode, and outlines take its place\nwhile they are on.",
+       "signatures": [
+        {
+         "code": "setLens(look?: OpticsLook): void"
         }
        ]
       },
@@ -8586,6 +8595,164 @@
          "code": "dispose(): void"
         }
        ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "lens",
+   "title": "A lens: glow and focus blur",
+   "group": "extras",
+   "doc": "",
+   "entries": [
+    {
+     "name": "SplatLens",
+     "kind": "class",
+     "doc": "A lens in front of a stage: light that spills round bright things, and blur for whatever is nearer or farther\nthan the distance in focus. Both come from what the frame holds, nothing is placed by hand: the glow is the\npicture's own light over a knee, spread out, so a flame glows and a pale wall does not; the blur is the thin\nlens's circle of confusion for each pixel's depth (`SplatDepth`), so it follows the view and the scene as they\nmove. The numbers are `splat-core/optics.ts` (`blurRadius`, `glowShare`), the CPU twins of the shader here:\nchange both.\n\nThe frame is drawn twice with one sort (the picture into a half-float target, so light over 1 is kept, then the\nmap of depth), and a few small passes follow: the light over the knee at half size, blurred there (the tight\nhalo) and again at quarter size (the wide one); then one pass over the picture that looks at each pixel through\n`TAPS` points of the opening, spread as wide as the pixel's own blur or that of something nearer beside it. A point's color counts for a pixel when its own blur reaches it; something sharp\nin front is not smeared by what is blurred behind it, since a point behind counts no further than the pixel's\nown blur.",
+     "ctor": [
+      {
+       "code": "new SplatLens()"
+      }
+     ],
+     "props": [
+      {
+       "name": "picture",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
+       "doc": "The picture, as the stage draws it without the lens."
+      }
+     ],
+     "methods": [
+      {
+       "name": "setLook",
+       "doc": "The lens, for a view `fov` degrees tall.",
+       "signatures": [
+        {
+         "code": "setLook(look: OpticsLook, fov: number): void"
+        }
+       ]
+      },
+      {
+       "name": "setSize",
+       "doc": "Sizes the pass's targets, in device pixels.",
+       "signatures": [
+        {
+         "code": "setSize(width: number, height: number): void"
+        }
+       ]
+      },
+      {
+       "name": "render",
+       "doc": "Draws the scene through the lens into the renderer's current target, or onto the screen when it has none.",
+       "signatures": [
+        {
+         "code": "render(renderer: WebGPURenderer, scene: Object3D, camera: Camera): void"
+        }
+       ]
+      },
+      {
+       "name": "dispose",
+       "doc": "Frees its targets.",
+       "signatures": [
+        {
+         "code": "dispose(): void"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "optics",
+   "title": "A lens: the arithmetic",
+   "group": "extras",
+   "doc": "A camera's lens, in plain numbers: how far out of focus a thing at some distance is, and how much of a bright\nlight spills round it. `SplatLens` (splat-engine/lens.ts) draws with these; they are here apart from any\ndrawing so tests can ask them, and so the shader and the numbers shown on a page come from one place.\n\nFocus is the thin lens: a lens of focal length f, set to be sharp at distance s, draws a point at distance d as a\ndisc (its circle of confusion) of diameter A·f·|d − s| / (d·(s − f)) on the film, where A = f / N is the opening\nfor f-number N. So blur grows with the opening, grows fast for things nearer than the focus, and levels off behind\nit. The focal length follows from the view's angle and the film's height, taken as a 35 mm frame's 24 mm unless\ngiven: a scene a few meters across then blurs as a photograph of a small real place does.",
+   "entries": [
+    {
+     "name": "OpticsLook",
+     "kind": "interface",
+     "doc": "How a view is finished through a lens. Distances are in the scene's units (meters).",
+     "props": [
+      {
+       "name": "focus",
+       "type": "number",
+       "doc": "The distance in front of the camera that is sharp."
+      },
+      {
+       "name": "fNumber",
+       "type": "number",
+       "doc": "The f-number: 2 is a wide opening and a thin slice in focus, 16 keeps nearly everything sharp. 0 or less turns focus blur off."
+      },
+      {
+       "name": "film",
+       "optional": true,
+       "type": "number",
+       "doc": "The film's height, in the scene's units: 0.024 (a 35 mm frame) when left out. A bigger film blurs more at the\nsame f-number. A scene photographed as a model of itself, 1/n of its size, is the same as a film n times as high."
+      },
+      {
+       "name": "most",
+       "optional": true,
+       "type": "number",
+       "doc": "The widest blur drawn, as a share of the picture's height: 0.02 when left out."
+      },
+      {
+       "name": "glow",
+       "type": "number",
+       "doc": "How strongly the light over `knee` spills round it: 0 for none. A small bright thing's light is spread thin, so\nabout 1 suits a picture that holds light well over white, and several one that stops at white (where a flame is\ndrawn no brighter than paper)."
+      },
+      {
+       "name": "knee",
+       "optional": true,
+       "type": "number",
+       "doc": "How bright (linear, 0 to 1 and over) a pixel must be before it glows: 0.7 when left out."
+      }
+     ]
+    },
+    {
+     "name": "focalLength",
+     "kind": "const",
+     "doc": "A lens's focal length for a view `fov` degrees tall on film `film` high, in the film's units.",
+     "type": "(fov: number, film?: number) => number"
+    },
+    {
+     "name": "blurScale",
+     "kind": "function",
+     "doc": "The number the shader multiplies |d − s| / d by to get a blur radius in pixels: A·f / (s − f), halved (a radius),\nas a share of the film and so of the picture's `height` in pixels. 0 when focus blur is off or the focus is\ninside the lens.",
+     "signatures": [
+      {
+       "code": "blurScale(look: OpticsLook, fov: number, height: number): number"
+      }
+     ]
+    },
+    {
+     "name": "blurRadius",
+     "kind": "function",
+     "doc": "The radius, in pixels, of the disc a point `depth` in front of the camera is drawn as, for a picture `height` pixels tall: 0 at the focus, never over `most`. The CPU twin of the shader's.",
+     "signatures": [
+      {
+       "code": "blurRadius(depth: number, look: OpticsLook, fov: number, height: number): number"
+      }
+     ]
+    },
+    {
+     "name": "sharpRange",
+     "kind": "function",
+     "doc": "The nearest and farthest distances drawn no blurrier than `sharp` pixels: the slice in focus. `far` is Infinity when everything behind the focus is that sharp.",
+     "signatures": [
+      {
+       "code": "sharpRange(look: OpticsLook, fov: number, height: number, sharp?: number): { near: number; far: number }"
+      }
+     ]
+    },
+    {
+     "name": "glowShare",
+     "kind": "function",
+     "doc": "How much of a pixel's light glows: nothing under the knee, then rising smoothly to all of it a third of the knee higher. The CPU twin of the shader's.",
+     "signatures": [
+      {
+       "code": "glowShare(brightest: number, knee?: number): number"
       }
      ]
     }

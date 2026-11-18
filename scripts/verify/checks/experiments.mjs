@@ -1130,7 +1130,7 @@ export default [
   },
   {
     name: 'pond',
-    about: 'Wading Pond on both backends: the water fills the ruin, the elf wades and raises rings, the candles light it, the water mirrors the scene, rain falls',
+    about: 'Wading Pond on both backends: the water fills the ruin, the elf wades and raises rings, the candles light it, the water mirrors the scene, the lens glows and blurs, rain falls',
     entries: ['src/blobscape/WadingPond.tsx'],
     async run({ shots, join, fails, ok, open, tabClick }) {
       for (const gl of ['', '&webgl=1']) {
@@ -1187,6 +1187,31 @@ export default [
         if (!(pic && pic.low > pic.size * 0.05 && pic.low > pic.high * 1.5 && gone === null && Math.abs(withMirror - without) > 1e-3)) fails.push(`blobscape pond on ${on}: mirror ${JSON.stringify({ pic, gone, withMirror, without })}`)
         else ok(`blobscape pond on ${on}: the water mirrors the scene (${Math.round((100 * (pic.low + pic.high)) / pic.size)}% of the mirror's picture, hanging downward) and stops when switched off`)
         if (!gl) await tabClick(f.page.getByLabel('The water mirrors the scene'))
+        // the lens: on from the start with WebGPU, by its switches without. Glow adds light to the picture; focus blur
+        // (at a wide opening, so it shows from this far off) takes fine detail out of it
+        const picture = () => f.page.evaluate(async () => {
+          const st = window.__pond.stage
+          st.fNumber = 1.4
+          await st.frame(0, { forward: 0, turn: 0 })
+          const cv = document.querySelector('[data-testid=pond-view]')
+          const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+          let light = 0, detail = 0
+          for (let i = 0; i < d.length - 4; i += 4) { light += d[i]; detail += Math.abs(d[i + 1] - d[i + 5]) }
+          return { light: light / (d.length / 4), detail: detail / (d.length / 4), glow: st.glow, blur: st.focusBlur }
+        })
+        const glowing = f.page.getByLabel('Flames glow'), focusing = f.page.getByLabel('Focus on the elf, blur the rest')
+        const first = await picture()
+        if ((first.glow > 0) !== !gl || first.blur !== !gl) fails.push(`blobscape pond on ${on}: the lens starts ${JSON.stringify(first)}`)
+        if (gl) { await tabClick(glowing); await tabClick(focusing) }
+        const both = await picture()
+        await tabClick(focusing)
+        const glowOnly = await picture()
+        await tabClick(glowing)
+        const plain = await picture()
+        if (!(glowOnly.light > plain.light * 1.005 && both.detail < glowOnly.detail * 0.9 && plain.glow === 0 && !plain.blur)) fails.push(`blobscape pond on ${on}: lens ${JSON.stringify({ both, glowOnly, plain })}`)
+        else ok(`blobscape pond on ${on}: the flames glow (${((glowOnly.light / plain.light - 1) * 100).toFixed(1)}% more light) and focus blur softens what is off the elf's distance (${Math.round((1 - both.detail / glowOnly.detail) * 100)}% less fine detail)`)
+        if (!gl) { await tabClick(glowing); await tabClick(focusing) }
+        await f.page.screenshot({ path: join(shots, `blobscape-pond-lens${gl ? '-webgl' : ''}.png`) })
         if (!gl) {
           // standing, the rings die down; then, on water laid flat, rain sets the whole pond moving
           const rested = await look(4, 0)

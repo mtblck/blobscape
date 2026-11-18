@@ -3,6 +3,8 @@ import { readbackToSrgb } from '../../splat-core/color.ts'
 import { placeCamera, STAGE_FOV, type Orbit } from '../../splat-core/orbit.ts'
 import { SplatWorld } from '../../splat-engine/engine.ts'
 import { SplatMirror } from '../../splat-engine/mirror.ts'
+import { SplatLens } from '../../splat-engine/lens.ts'
+import type { OpticsLook } from '../../splat-core/optics.ts'
 import { levelPlane } from '../../splat-engine/reflect.ts'
 import { startRenderer } from '../../splat-engine/startRenderer.ts'
 import { Pond, WATER_LEVEL, type PondOptions } from './pond.ts'
@@ -33,6 +35,19 @@ const MIRROR_LIFT = 0.06
 const MIRROR_EVERY = 2
 /** The water as a mirror. */
 const MIRROR_PLANE = levelPlane(WATER_LEVEL)
+
+/**
+ * The camera's film, meters high. A small camera's 24 mm keeps a place this size sharp from front to back at any
+ * opening, as it would the real thing. The pond is photographed as a model of itself on a table, a twentieth of its
+ * size, would be: the same picture as a film twenty times as high in front of the full-size place.
+ */
+export const FILM = 0.024 * 20
+/** The opening the view starts at. */
+export const START_F = 5.6
+/** How strongly bright light glows to start with: the picture stops at white, so a flame's light is spread several times over. */
+export const START_GLOW = 4
+/** How fast the focus follows the elf, a second: a lens pulled by hand, not snapped. */
+const FOCUS_PULL = 4
 
 /** The night behind the scene (sRGB). */
 const NIGHT = 0x080b10
@@ -72,6 +87,15 @@ export class PondStage {
    */
   reflections: boolean
   private readonly mirror = new SplatMirror()
+  /** How much of the light of bright things spills round them: 0 for none. */
+  glow: number
+  /** Whether things nearer and farther than the elf are out of focus. */
+  focusBlur: boolean
+  /** The lens's opening as an f-number: smaller is wider, with a thinner slice in focus. */
+  fNumber = START_F
+  /** The distance in focus, meters in front of the camera: it follows the elf. */
+  focus = 0
+  private readonly optics = new SplatLens()
   /** Called after each drawn frame, at most ~4 times a second, with the pond as it is. */
   onTick?: (p: Pond, fps: number) => void
   onFirstFrame?: () => void
@@ -84,6 +108,8 @@ export class PondStage {
     this.backend = (renderer.backend as unknown as { isWebGPUBackend?: boolean }).isWebGPUBackend ? 'webgpu' : 'webgl'
     this.scene.background = new THREE.Color(NIGHT)
     this.reflections = this.backend === 'webgpu'
+    this.glow = this.backend === 'webgpu' ? START_GLOW : 0
+    this.focusBlur = this.backend === 'webgpu'
     if (!opts.offscreen) {
       const tick = (now: number) => {
         if (this.stopped) return
@@ -139,10 +165,31 @@ export class PondStage {
     world.setLights(p.lights().map((l) => ({ ...l, shadow: this.shadows })), AMBIENT)
     this.reflect(p)
     this.shade(p, world)
-    this.renderer.render(this.scene, this.camera)
+    const lens = this.lens(p)
+    if (lens) {
+      const size = this.target ? this.buffer.set(this.target.width, this.target.height) : this.renderer.getDrawingBufferSize(this.buffer)
+      this.optics.setSize(size.x, size.y)
+      this.optics.setLook(lens, STAGE_FOV)
+      this.optics.render(this.renderer, this.scene, this.camera)
+    } else this.renderer.render(this.scene, this.camera)
     if (!this.drawn) { this.drawn = true; this.onFirstFrame?.() }
     this.frames++
   }
+
+  /** The lens as it stands, focused on the elf; null when it would change nothing. */
+  lens(p: Pond): OpticsLook | null {
+    if (!this.focusBlur && !(this.glow > 0)) return null
+    const eye = this.camera.position, to = this.camera.getWorldDirection(this.looking)
+    // the elf's middle, about a meter over where it stands
+    const far = Math.max(0.5, (p.walker.x - eye.x) * to.x + (p.groundAt(p.walker.x, p.walker.z) + 1 - eye.y) * to.y + (p.walker.z - eye.z) * to.z)
+    const now = performance.now(), dt = this.focused ? Math.min(0.1, (now - this.focused) / 1000) : 1
+    this.focused = now
+    this.focus = this.focus > 0 && !this.opts.offscreen ? this.focus + (far - this.focus) * Math.min(1, dt * FOCUS_PULL) : far
+    return { focus: this.focus, fNumber: this.focusBlur ? this.fNumber : 0, film: FILM, glow: Math.max(0, this.glow) }
+  }
+  private readonly looking = new THREE.Vector3()
+  private readonly buffer = new THREE.Vector2()
+  private focused = 0
 
   /** The water, shaped and colored for the camera as it stands; only its own blobs go up again. */
   private shade(p: Pond, world: SplatWorld) {
@@ -241,6 +288,7 @@ export class PondStage {
     this.world?.dispose()
     this.target?.dispose()
     this.mirror.dispose()
+    this.optics.dispose()
     this.renderer.dispose()
   }
 }
