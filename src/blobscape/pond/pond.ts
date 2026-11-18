@@ -9,6 +9,7 @@ import { Water, crossing, makeSurface, shadeSurface, shapeSurface, type WaterLoo
 import { groundUnder } from '../../splat-engine/weather.ts'
 import { WAVE_SECONDS, WalkingElf, type Walker } from '../walkingElf.ts'
 import { candleGlints, candleLights, makeFlames, poseFlames } from './candles.ts'
+import { Rain } from './rain.ts'
 import { CANDLES, LEVEL, NICHE_FLOOR, POND_SCENE, SCALE } from './scene.ts'
 import { BODY, WADE_SPEED, stepWader, type Input } from './wade.ts'
 
@@ -36,8 +37,10 @@ export const WATER_LEVEL = LEVEL * SCALE
 export const WADE_STEPS: StepOptions = { reach: 0.3, duration: 0.5, lift: 0.2 }
 /** Where the elf starts. */
 const START: Walker = { x: -1, z: 3, heading: Math.PI, speed: 0 }
-/** A raindrop: how wide it lands and how much water it is. */
-const DROP_R = 0.05, DROP_VOLUME = 2.2e-5
+/** A tap's drop: how wide it lands and how much water it is. */
+const DROP_R = 0.08, DROP_VOLUME = 1.3e-4
+/** A raindrop's splash: the crater it leaves, meters across (half) and deep. The drop itself is too small for the grid and adds no water worth counting. */
+const SPLASH_R = 0.11, SPLASH_DEPTH = 0.02
 
 /** How the pond's surface looks: dark clear water under a night sky, catching the moon. */
 const LOOK: Omit<WaterLook, 'sun'> = { body: [0.012, 0.085, 0.075], sky: [0.012, 0.02, 0.035], horizon: [0.07, 0.11, 0.15], clear: 0.34, gloss: 70, steep: 2.5 }
@@ -87,6 +90,9 @@ export class Pond {
   private turned = 0
   private drawn = { version: -1, eye: [NaN, NaN, NaN], at: -1 }
   private rainDue = 0
+  private readonly solid: Shape[]
+  /** The rain in the air. */
+  readonly falling: Rain
   private seed = 12345
 
   constructor(opts: PondOptions) {
@@ -96,6 +102,7 @@ export class Pond {
     this.scene = buildVoxels(spec)
     // what holds the water: everything solid that stays put
     const solid = spec.parts.filter((p) => !p.glow && !p.bone.startsWith('~')).map((p) => p.shape)
+    this.solid = solid
     const { water, bed } = fill(solid)
     this.water = water
     this.bed = bed
@@ -103,7 +110,9 @@ export class Pond {
     this.walking = new WalkingElf(opts.elfBlobs ?? 20000, opts.look, this.walker, { steps: WADE_STEPS, pace: WADE_SPEED })
     this.wicks = CANDLES.map((c): Vec3 => [c.x * SCALE, (NICHE_FLOOR + c.h) * SCALE, c.z * SCALE])
     this.flames = makeFlames(this.wicks)
-    this.actors = [this.scene, this.walking.elf, this.flames, this.surface]
+    const { x0, z0, nx, nz, cell } = water.spec
+    this.falling = new Rain({ x0, x1: x0 + nx * cell, z0, z1: z0 + nz * cell, level: WATER_LEVEL })
+    this.actors = [this.scene, this.walking.elf, this.flames, this.surface, this.falling.actor]
     this.update(0, { forward: 0, turn: 0 })
     // the elf has been standing here: no splash for arriving
     this.water.rest()
@@ -116,6 +125,11 @@ export class Pond {
   groundAt = (x: number, z: number) => {
     const k = this.water.index(x, z)
     return k < 0 || !this.water.wet[k] ? 0 : this.bed[k]
+  }
+
+  /** The height of whatever a raindrop over dry (x, z) lands on, meters. */
+  private landAt(x: number, z: number) {
+    return groundUnder(this.solid, x / SCALE, z / SCALE, 3, -1) * SCALE
   }
 
   /** Stands the elf where another pond's was (a rebuild at a new detail), if there is water for it there. */
@@ -131,7 +145,7 @@ export class Pond {
   get waving() { return this.time < this.waveUntil }
 
   /** Lets a drop fall at (x, z), as a tap on the water does. */
-  drip(x: number, z: number) { this.water.drop(x, z, DROP_R * 1.6, DROP_VOLUME * 6) }
+  drip(x: number, z: number) { this.water.drop(x, z, DROP_R, DROP_VOLUME) }
 
   private random() {
     this.seed = (Math.imul(this.seed, 1664525) + 1013904223) >>> 0
@@ -156,15 +170,19 @@ export class Pond {
       this.water.body(l.id, c, c ? Math.max(0, WATER_LEVEL - this.groundAt(c.x, c.z)) : 0)
     }
 
-    // rain, each drop where the dice say
+    // rain: each drop starts falling where the dice say, and the water hears of it when it lands
     if (this.rain > 0 && dt > 0) {
       this.rainDue += this.rain * dt
       const { x0, z0, nx, nz, cell } = this.water.spec
       while (this.rainDue >= 1) {
         this.rainDue--
-        this.water.drop(x0 + this.random() * nx * cell, z0 + this.random() * nz * cell, DROP_R, DROP_VOLUME)
+        const x = x0 + this.random() * nx * cell, z = z0 + this.random() * nz * cell
+        const k = this.water.index(x, z)
+        this.falling.add(x, z, k >= 0 && this.water.wet[k] ? WATER_LEVEL : this.landAt(x, z))
       }
     }
+    this.falling.step(dt, (d) => { if (d.floor === WATER_LEVEL) this.water.splash(d.x, d.z, SPLASH_R, SPLASH_DEPTH) })
+    this.falling.place()
     this.water.step(dt)
 
     // the ruin's own moves (the tree, the fireflies), standing at the world's size

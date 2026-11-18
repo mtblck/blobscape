@@ -9,7 +9,7 @@ import { levelPlane } from '../../splat-engine/reflect.ts'
 import { startRenderer } from '../../splat-engine/startRenderer.ts'
 import { Pond, WATER_LEVEL, type PondOptions } from './pond.ts'
 import { SCALE, POND_SCENE } from './scene.ts'
-import type { Input } from './wade.ts'
+import { steer, type Input } from './wade.ts'
 
 /**
  * The wading pond's view: the ruin, the elf, the flames and the water's surface in one SplatWorld (so the elf's legs
@@ -31,8 +31,12 @@ export const START_ORBIT: Orbit = {
 const MIRROR_WIDTH = 320
 /** The water's own blobs, and whatever is under them, stay out of the mirror: everything lower than this over the level, meters. */
 const MIRROR_LIFT = 0.06
-/** The mirror is drawn again every this many frames: the water's blobs are colored from it, and at half the frame rate a reflection still follows what it mirrors. */
-const MIRROR_EVERY = 2
+/**
+ * The mirror is drawn again about this many times a second, however fast frames come: the water's blobs are colored
+ * from it on the CPU, and a reflection still follows what it mirrors at this pace. A slow device then spends no more
+ * of each second on it than a fast one.
+ */
+const MIRROR_PACE = 24
 /** The water as a mirror. */
 const MIRROR_PLANE = levelPlane(WATER_LEVEL)
 
@@ -60,6 +64,8 @@ export interface StageOptions {
   offscreen?: boolean
   /** Use the WebGL backend even where WebGPU is there, for testing. */
   webgl?: boolean
+  /** A phone or tablet: fewer device pixels a CSS pixel, and focus blur starts off. */
+  small?: boolean
 }
 
 export class PondStage {
@@ -109,7 +115,8 @@ export class PondStage {
     this.scene.background = new THREE.Color(NIGHT)
     this.reflections = this.backend === 'webgpu'
     this.glow = this.backend === 'webgpu' ? START_GLOW : 0
-    this.focusBlur = this.backend === 'webgpu'
+    // the blur looks at each pixel through forty points: too much for a phone to start with
+    this.focusBlur = this.backend === 'webgpu' && !opts.small
     if (!opts.offscreen) {
       const tick = (now: number) => {
         if (this.stopped) return
@@ -126,7 +133,7 @@ export class PondStage {
 
   static async start(display: HTMLCanvasElement, opts: StageOptions = {}) {
     const canvas = opts.offscreen ? document.createElement('canvas') : display
-    const renderer = await startRenderer({ canvas, antialias: false, alpha: false, forceWebGL: !!opts.webgl }, (r) => r.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)))
+    const renderer = await startRenderer({ canvas, antialias: false, alpha: false, forceWebGL: !!opts.webgl }, (r) => r.setPixelRatio(Math.min(opts.small ? 1.5 : 2, window.devicePixelRatio || 1)))
     return new PondStage(display, opts, renderer)
   }
 
@@ -153,8 +160,15 @@ export class PondStage {
   /** Moves the pond on by dt seconds with the current input. */
   step(dt: number) {
     if (!this.pond || !this.world) return
-    this.pond.update(dt, this.input)
+    this.pond.update(dt, this.steered(this.input))
     this.world.markPosed()
+  }
+
+  /** An input with a stick is steered by the picture: up on the stick is away from the camera as it stands now. */
+  private steered(input: Input): Input {
+    if (!input.stick) return input
+    const to = this.camera.getWorldDirection(this.looking)
+    return { forward: 0, turn: 0, ...steer(input.stick, Math.atan2(to.x, to.z)) }
   }
 
   private draw() {
@@ -190,6 +204,7 @@ export class PondStage {
   private readonly looking = new THREE.Vector3()
   private readonly buffer = new THREE.Vector2()
   private focused = 0
+  private mirrored = 0
 
   /** The water, shaped and colored for the camera as it stands; only its own blobs go up again. */
   private shade(p: Pond, world: SplatWorld) {
@@ -197,6 +212,7 @@ export class PondStage {
     p.draw([eye.x, eye.y, eye.z])
     if (p.surfaceMoved) world.reshape(p.surface)
     else if (p.surfaceChanged) world.recolor(p.surface)
+    if (p.falling.changed) world.reshape(p.falling.actor)
   }
 
   /**
@@ -206,7 +222,9 @@ export class PondStage {
    */
   private reflect(p: Pond, now = false): Promise<void> | null {
     if (!this.reflections) { p.setMirror(null); return null }
-    if (!now && this.frames % MIRROR_EVERY) return null
+    const t = performance.now()
+    if (!now && t - this.mirrored < 1000 / MIRROR_PACE) return null
+    this.mirrored = t
     const h = Math.max(1, Math.round(MIRROR_WIDTH / Math.max(0.2, this.camera.aspect)))
     this.mirror.setSize(MIRROR_WIDTH, h)
     this.camera.updateProjectionMatrix()
