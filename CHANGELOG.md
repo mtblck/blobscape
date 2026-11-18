@@ -6,6 +6,8 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-18
+
 - The sandbox's short notes ("Added…", "Opened…") now stay up for a moment after they are drawn. On a slow device a note set just before a big file was shown could be cleared before it ever appeared.
 
 - A creature on any web page from one tag: `<blobscape-creature src="fox.glb" move="trot">` plays a rigged-splat .glb with one script and no build step. Drag turns it, its head can follow the pointer, a tap or a hover can play another move, it waits until it nears the screen, stops when it leaves and holds still for reduced motion. The engine page shows one live beside its code, and the package ships it (`@blobscape/engine/element`, and one file with three.js inside for a plain script tag).
@@ -97,6 +99,7 @@ Our own renderer for animated splats, built on three.js with WebGPU and a WebGL 
 
 Some pixel-scene ideas come from Silicon Jungle's play kits (ideas, not code). The code is MIT licensed.
 
-[Unreleased]: https://github.com/mtblck/blobscape/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/mtblck/blobscape/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/mtblck/blobscape/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/mtblck/blobscape/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/mtblck/blobscape/releases/tag/v0.1.0
