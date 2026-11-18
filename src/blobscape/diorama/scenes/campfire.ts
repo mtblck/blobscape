@@ -15,7 +15,7 @@ export const CAMPFIRE: SceneDoc = {
     '#7b2f45', '#b9485a', '#e8dcc0', '#f4f1e4',
   ],
   sky: ['#0a0f1e', '#1f2d55'],
-  look: { dither: 0.1, glow: 1.75, outline: true, edges: true },
+  look: { dither: 0.5, glow: 1.75, outline: true, edges: true },
   camera: { target: [0, 1.0, 0], distance: 5.2, azimuth: 18, elevation: 13 },
   air: { haze: { color: '#141c36', from: 1, to: 7 }, specks: [{ kind: 'embers', count: 30, from: [-0.05, 0.25, 0.1], to: [0.25, 1.8, 0.4], colors: ['#f59a2a', '#ffd166', '#d9541e'] }] },
   bones: [

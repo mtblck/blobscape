@@ -310,7 +310,7 @@ export class PondStage {
     const { width: w, height: h } = this.target
     const img = new ImageData(w, h)
     readbackToSrgb(px, w, h, { flip: this.backend === 'webgl', premultiplied: false }, img.data)
-    this.display.getContext('2d')!.putImageData(img, 0, 0)
+    this.display.getContext('2d', { willReadFrequently: true })!.putImageData(img, 0, 0)
   }
 
   dispose() {

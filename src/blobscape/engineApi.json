@@ -49,6 +49,12 @@
    "doc": "",
    "entries": [
     {
+     "name": "MIRROR_PACE",
+     "kind": "const",
+     "doc": "How many times a second a stage draws its mirror's picture again, at most (`Stage.setMirror`).",
+     "type": "24"
+    },
+    {
      "name": "StageActor",
      "kind": "interface",
      "doc": "What a stage shows: blobs, the skin that ties them to bones, and the skeleton.",
@@ -227,10 +233,10 @@
       },
       {
        "name": "setActor",
-       "doc": "Shows a creature, replacing the last one, and plays `clip` on it.",
+       "doc": "Shows a creature, replacing the last one, and plays `clip` on it. `extras` are more actors drawn in the same\nworld, sorted blob by blob with the first: things that move on their own and not by its bones, such as the\nsurface of a pond (`reshape` sends one up again after its blobs were changed). Clips, posers, picking, tints and\nsheets are all about the first actor.",
        "signatures": [
         {
-         "code": "setActor(actor: StageActor, clip?: Clip): void"
+         "code": "setActor(actor: StageActor, clip?: Clip, extras?: StageActor[]): void"
         }
        ]
       },
@@ -303,6 +309,24 @@
        "signatures": [
         {
          "code": "refresh(): void"
+        }
+       ]
+      },
+      {
+       "name": "reshape",
+       "doc": "After one actor's blobs were changed in place (the one shown or one of its `extras`): the engine takes that\nactor's centers, shapes and colors again and leaves the rest alone, which is what a pond's surface wants each\nframe. The count must not change, and the blobs must stay about where they were.",
+       "signatures": [
+        {
+         "code": "reshape(actor: StageActor): void"
+        }
+       ]
+      },
+      {
+       "name": "setMirror",
+       "doc": "Draws what a flat mirror shows of the scene (`SplatMirror`) and hands each picture to `seen` as it is read back,\na frame or two later: for water, or a polished floor, whose blobs color themselves from it (`seenIn`). The\npicture is drawn again when the pose or the view changes, at most `MIRROR_PACE` times a second. `lift` leaves\nout blobs lower than that over the plane (the mirror's own). Offscreen, `frame` waits for the picture of its\nown moment before it draws. Left out, the mirror is taken away.",
+       "signatures": [
+        {
+         "code": "setMirror(mirror?: { plane: MirrorPlane; lift?: number; width?: number; seen: (image: MirrorImage) => void }): void"
         }
        ]
       },
@@ -3325,6 +3349,93 @@
        "optional": true,
        "type": "{ at: Vec3; r: number }",
        "doc": "Where the eye goes: within `r` of `at` the scene is cut at full detail, further out on a grid twice as coarse, in about a quarter of the blobs."
+      },
+      {
+       "name": "water",
+       "optional": true,
+       "type": "WaterDoc",
+       "doc": "A pond whose surface ripples where rain lands on it and where things move through it."
+      }
+     ]
+    },
+    {
+     "name": "WaterDoc",
+     "kind": "interface",
+     "doc": "Water that moves (water.ts): a pond, a pool or a puddle. Wherever the still ground inside the box `from` to `to`\nlies under `level` there is water, standing at that level, and its surface is a grid of heights stepped by the\nwave equation. Rain that lands (`air.specks` of `rain` with `land`) falls onto it and each drop leaves its splash\nwhere it comes down, so its rings spread from there, cross each other and bounce off the banks and whatever\nstands in the water. One whole loop of it is worked out when the scene is made (`SceneWater`), so it repeats with\nthe scene. Dig the pond with a `cut` in the ground; float leaves on a bone that moves, since only what stays put\nholds water back.",
+     "props": [
+      {
+       "name": "level",
+       "type": "number",
+       "doc": "The height its surface stands at."
+      },
+      {
+       "name": "from",
+       "type": "[number, number]",
+       "doc": "One corner of the ground looked over for water, [x, z]."
+      },
+      {
+       "name": "to",
+       "type": "[number, number]",
+       "doc": "The opposite corner."
+      },
+      {
+       "name": "color",
+       "type": "string",
+       "doc": "The water's own color, seen looking straight down into it."
+      },
+      {
+       "name": "sky",
+       "optional": true,
+       "type": "[string, string]",
+       "doc": "What its surface mirrors where nothing stands over it: the sky overhead, then the sky low down. The scene's `sky` when left out."
+      },
+      {
+       "name": "clear",
+       "optional": true,
+       "type": "number",
+       "doc": "How solid it is looking straight down, 0 to 1: 0.5 when left out. Lower shows more of the bed and what swims under it."
+      },
+      {
+       "name": "cell",
+       "optional": true,
+       "type": "number",
+       "doc": "A cell of its grid: 0.012 to 0.1, 0.022 when left out. The grid may hold 40,000 cells."
+      },
+      {
+       "name": "speed",
+       "optional": true,
+       "type": "number",
+       "doc": "How fast a ring travels, units a second: 0.32 when left out."
+      },
+      {
+       "name": "damping",
+       "optional": true,
+       "type": "number",
+       "doc": "The share of its motion the water loses a second, 0.05 to 0.95: 0.6 when left out."
+      },
+      {
+       "name": "ripple",
+       "optional": true,
+       "type": "number",
+       "doc": "How many times steeper than it is the surface is drawn and lit, so small ripples read: 1 to 12, 4 when left out."
+      },
+      {
+       "name": "splash",
+       "optional": true,
+       "type": "{ r: number; depth: number }",
+       "doc": "A raindrop's mark: a crater `r` across (half) and `depth` deep with a raised rim. About a cell and a half wide and a fifth of a cell deep when left out."
+      },
+      {
+       "name": "deep",
+       "optional": true,
+       "type": "number",
+       "doc": "How deep the water is taken to be for the light a ripple gathers on the bed, which is what shows one from above: 0 to 2, 0.05 when left out. Too deep for the ripples' size and every crest is a white line."
+      },
+      {
+       "name": "bodies",
+       "optional": true,
+       "type": "{ bone: string; at: Vec3; r: number; draft?: number }[]",
+       "doc": "What swims or floats through the surface, at most twelve: a ball of radius `r` round the point `at`, riding\n`bone`. Where it breaks the surface it pushes aside the water it takes the place of, so a back that rises\nleaves a ring and one that moves along leaves a wake. `draft` is how deep the water it moves is where it\ncrosses: a tenth of `r` when left out, which suits a fish whose back just shows; a post standing on the bed\nmoves the whole depth."
       }
      ]
     },
@@ -3704,6 +3815,12 @@
        "optional": true,
        "type": "{ color: Vec3; from: number; to: number }",
        "doc": "Distance haze, if the scene asks for it: the color (linear) and where it starts and would be total, in units past the view's target."
+      },
+      {
+       "name": "water",
+       "optional": true,
+       "type": "WaterPlan",
+       "doc": "The scene's water, if it has any, with its defaults filled in: what `SceneWater` plays."
       }
      ],
      "methods": [
@@ -3746,6 +3863,109 @@
      ]
     },
     {
+     "name": "WaterPlan",
+     "kind": "interface",
+     "doc": "A scene's water made ready (`CompiledScene.water`): its grid, its look, the rain that lands on it over one loop and what swims through it.",
+     "props": [
+      {
+       "name": "level",
+       "type": "number",
+       "doc": "The height the surface stands at."
+      },
+      {
+       "name": "x0",
+       "type": "number",
+       "doc": "The grid's corner along x."
+      },
+      {
+       "name": "z0",
+       "type": "number",
+       "doc": "The grid's corner along z."
+      },
+      {
+       "name": "nx",
+       "type": "number",
+       "doc": "Cells along x."
+      },
+      {
+       "name": "nz",
+       "type": "number",
+       "doc": "Cells along z."
+      },
+      {
+       "name": "cell",
+       "type": "number",
+       "doc": "A cell's side."
+      },
+      {
+       "name": "speed",
+       "type": "number",
+       "doc": "How fast a ring travels, units a second."
+      },
+      {
+       "name": "damping",
+       "type": "number",
+       "doc": "The share of its motion the water loses a second."
+      },
+      {
+       "name": "ripple",
+       "type": "number",
+       "doc": "How many times steeper than it is the surface is drawn and lit."
+      },
+      {
+       "name": "deep",
+       "type": "number",
+       "doc": "How deep the water is taken to be for the light a ripple gathers on the bed."
+      },
+      {
+       "name": "clear",
+       "type": "number",
+       "doc": "How solid the surface is looking straight down."
+      },
+      {
+       "name": "splash",
+       "type": "{ r: number; depth: number }",
+       "doc": "A raindrop's mark: its half width and its depth."
+      },
+      {
+       "name": "body",
+       "type": "Vec3",
+       "doc": "The water's own color, linear."
+      },
+      {
+       "name": "sky",
+       "type": "Vec3",
+       "doc": "The sky overhead as the surface mirrors it, linear."
+      },
+      {
+       "name": "horizon",
+       "type": "Vec3",
+       "doc": "The sky low down, linear."
+      },
+      {
+       "name": "drops",
+       "type": "{ x: number; z: number; at: number }[]",
+       "doc": "Every raindrop that lands on the water in one loop: where, and how many seconds into the loop."
+      },
+      {
+       "name": "bodies",
+       "type": "{ bone: number; at: Vec3; r: number; draft: number }[]",
+       "doc": "What moves through the surface: a ball of radius `r` round the rest point `at`, riding the bone at index `bone`, moving water `draft` deep where it crosses."
+      }
+     ],
+     "methods": [
+      {
+       "name": "wet",
+       "doc": "Whether there is water at a point: the still ground there lies under the level. It measures the ground each time, so ask once a cell.",
+       "signatures": [
+        {
+         "code": "wet(x: number, z: number): boolean"
+        }
+       ]
+      }
+     ]
+    },
+    {
      "name": "sprouted",
      "kind": "function",
      "doc": "A sprout's size through its life (0 to 1): grows from nothing over the first 40%, stands, and shrinks away over the last 15%.",
@@ -3762,6 +3982,76 @@
      "signatures": [
       {
        "code": "compileScene(doc: SceneDoc, options?: { puffs?: boolean }): CompiledScene"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "sceneWater",
+   "title": "Water in a scene written as data",
+   "group": "scenes",
+   "doc": "",
+   "entries": [
+    {
+     "name": "SceneWater",
+     "kind": "class",
+     "doc": "The water of a scene written as data (`SceneDoc.water`), played as the scene plays: from the time alone.\n\nA scene repeats, and can be shown at any moment of its loop in any order (paused, stepped frame by frame to record\nit), so its water can't be stepped along with the clock. Instead one whole loop of it is worked out here, once:\nthe pond (water.ts, the wave equation on a grid) is run through the loop with every raindrop of the scene's rain\nsplashing where and when it lands and every body the scene names pushing its own volume aside as its bone carries\nit through the surface. It is run through a few loops first, so that the rings still crossing the pond when the\nloop starts are the ones the end of the loop leaves, and the last run is kept as heights at `fps` moments a\nsecond. `show` then lays the heights for a time back on the pond and shapes and colors the surface's blobs.\n\nNothing is drawn or keyed by hand: change the rain, the banks or a fish's path and the rings follow.",
+     "ctor": [
+      {
+       "code": "new SceneWater(scene: CompiledScene, options?: { fps?: number; warm?: number })"
+      }
+     ],
+     "props": [
+      {
+       "name": "plan",
+       "readonly": true,
+       "type": "WaterPlan",
+       "doc": "The scene's water as it was planned."
+      },
+      {
+       "name": "water",
+       "readonly": true,
+       "type": "Water",
+       "doc": "The pond: its grid, and its heights at the time last shown."
+      },
+      {
+       "name": "surface",
+       "readonly": true,
+       "type": "WaterSurface",
+       "doc": "The blobs that draw the surface, for the world (`reshape` it after each `show`)."
+      },
+      {
+       "name": "loop",
+       "readonly": true,
+       "type": "number",
+       "doc": "Seconds before the water repeats: the scene's loop."
+      },
+      {
+       "name": "count",
+       "readonly": true,
+       "type": "number",
+       "doc": "How many moments of the loop are kept."
+      }
+     ],
+     "methods": [
+      {
+       "name": "set",
+       "doc": "Lays the water as it stands `t` seconds into the loop back on the pond (`water.h`), blended between the two kept moments round it.",
+       "signatures": [
+        {
+         "code": "set(t: number): void"
+        }
+       ]
+      },
+      {
+       "name": "show",
+       "doc": "Makes the surface's blobs ready for the scene at `t` seconds, seen from `eye`: lifted and tilted to the water,\nand colored for that eye. `mirror` is a picture of what the water mirrors (`SplatMirror`), `lights` the lamps\nwhose glints it catches. Hand `surface` to `SplatWorld.reshape` (or `Stage.reshape`) afterward.",
+       "signatures": [
+        {
+         "code": "show(t: number, eye: ArrayLike<number>, options?: { mirror?: MirrorImage | null; lights?: readonly PointLight[] }): void"
+        }
+       ]
       }
      ]
     }

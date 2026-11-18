@@ -15,7 +15,7 @@ export const ISLES: SceneDoc = {
   ],
   sky: ['#060814', '#1a2450'],
   skyReach: 1,
-  look: { dither: 0.06, glow: 1.2, outline: true, edges: true },
+  look: { dither: 0.5, glow: 1.2, outline: true, edges: true },
   camera: { target: [0, 1.55, 0], distance: 6.4, azimuth: 16, elevation: 6, swing: 16 },
   air: { haze: { color: '#0e1430', from: 1, to: 7 }, specks: [{ kind: 'snow', count: 120, from: [-2.2, 0, -1.4], to: [2.2, 3.6, 1.4], colors: ['#f4f8ff', '#c8d8f0'] }] },
   cover: { kind: 'snow', color: '#f4f8ff', amount: 0.55 },

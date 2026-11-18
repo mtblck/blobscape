@@ -15,7 +15,7 @@ export const GROVE: SceneDoc = {
   ],
   sky: ['#0c1224', '#1c2848'],
   skyReach: 0.8,
-  look: { dither: 0.05, glow: 1.15, outline: true, edges: true },
+  look: { dither: 0.5, glow: 1.15, outline: true, edges: true },
   camera: { target: [0, 1.4, 0], distance: 6.4, azimuth: 14, elevation: 7, swing: 14 },
   air: { haze: { color: '#0c1224', from: 0.5, to: 7 }, mist: [{ at: [0, 0.06, 0.2], half: [1.8, 0.06, 1.2], color: '#34487c', thick: 0.4 }], specks: [{ kind: 'snow', count: 120, from: [-2.4, 0, -1.6], to: [2.4, 4.0, 1.6], colors: ['#e4f0f8', '#a8c0dc'] }] },
   cover: { kind: 'snow', color: '#e4f0f8', amount: 0.3 },

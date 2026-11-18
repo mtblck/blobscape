@@ -22,7 +22,7 @@ export const CABIN: SceneDoc = {
   ],
   sky: ['#0b1020', '#34486e'],
   skyReach: 0.8,
-  look: { dither: 0.1, glow: 1.4, outline: true, edges: true },
+  look: { dither: 0.5, glow: 1.4, outline: true, edges: true },
   camera: { target: [0, 0.32, 0.05], distance: 5.0, azimuth: 22, elevation: 22, swing: 8 },
   cover: { kind: 'snow', color: '#f4f8ff', amount: 0.5 },
   air: {

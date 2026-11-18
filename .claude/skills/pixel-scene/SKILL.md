@@ -11,7 +11,7 @@ A scene is data alone: shapes, paints, bones and moves in one `SceneDoc` object.
 
 1. `docs/scene-descriptions.md`: every field, shape and paint, the twelve rules that make a scene work, and the habits of a showpiece. Read all of it once.
 2. The type: `src/splat-engine/sceneDoc.ts` down to the end of `LightDoc`. Every field has a comment.
-3. One scene close to what is asked. `npm run scene -- --list` names them with what is in each; `npm run scene -- --example campfire` prints one as JSON. `campfire` is the plainest, `dragon` a showpiece built from many small parts, `windmill` a thing that turns, `ruin`, `cave`, `canyon` and `cabin` use the built things, formations, worn land and weather.
+3. One scene close to what is asked. `npm run scene -- --list` names them with what is in each; `npm run scene -- --example campfire` prints one as JSON. `campfire` is the plainest, `dragon` a showpiece built from many small parts, `windmill` a thing that turns, `ruin`, `cave`, `canyon` and `cabin` use the built things, formations, worn land and weather, and `koi` has real water (`water`: rain that rings it and fish that push wakes).
 
 ## The loop
 

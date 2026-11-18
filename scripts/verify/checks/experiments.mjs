@@ -392,6 +392,53 @@ export default [
     },
   },
   {
+    name: 'diorama-water',
+    about: 'Pixel Diorama, the koi pond on WebGPU and WebGL: the water moves with the rain, a moment drawn twice is the same, and the loop joins',
+    entries: ['src/blobscape/PixelDiorama.tsx'],
+    files: ['src/splat-engine/sceneWater.ts', 'src/splat-engine/water.ts', 'src/splat-engine/mirror.ts', 'src/blobscape/diorama/scenes/koi.ts'],
+    async run({ shots, join, fails, ok, open }) {
+      for (const q of ['', '&webgl=1']) {
+        const d = await open(`/experiments/pixel-diorama/?offscreen=1&scene=koi${q}`, { viewport: { width: 1280, height: 900 } })
+        // an off-screen scene draws nothing until it is asked for a frame, so ask until its art is there
+        const ready = () => d.page.waitForFunction(async () => {
+          const s = window.__diorama
+          if (!s || !s.blobs() || !s.water()) return false
+          await s.stage.frame(0)
+          return !document.querySelector('[data-testid=diorama-loading]') && !!s.stage.artSize
+        }, null, { timeout: 240000, polling: 1000 }).catch(() => {})
+        await ready(); await d.page.waitForTimeout(1500); await ready()
+        // the pond's heights and the picture at a time: drawn twice, so the mirror's picture is that moment's too
+        const at = (t) => d.page.evaluate(async (t) => {
+          const { stage, water } = window.__diorama
+          await stage.frame(t); await stage.frame(t)
+          const f = await stage.pixelFrames()
+          const pond = water()
+          let most = 0
+          for (const h of pond.water.h) most = Math.max(most, Math.abs(h))
+          return { art: Array.from(f.art.data), h: Array.from(pond.water.h), most, wet: pond.water.wetCount, drops: pond.plan.drops.length, bodies: pond.plan.bodies.length, backend: stage.backend, mirrored: window.__diorama.mirrored, cell: pond.plan.cell }
+        }, t)
+        const differ = (a, b) => { let n = 0; for (let i = 0; i < a.length; i += 4) if (a[i] !== b[i] || a[i + 1] !== b[i + 1] || a[i + 2] !== b[i + 2] || a[i + 3] !== b[i + 3]) n++; return n / (a.length / 4) }
+        // steady pixels remember the frame before, so the moment and the same moment a loop later are each drawn after the same other one
+        const a = await at(2), again = await at(2), later = await at(4.5), back = await at(2)
+        await at(4.5)
+        const round = await at(14)
+        const label = `blobscape pixel diorama water on ${a?.backend}`
+        await d.page.getByTestId('diorama-view').screenshot({ path: join(shots, `diorama-water-${q ? 'webgl' : 'webgpu'}.png`) }).catch(() => {})
+        let moved = 0
+        for (let k = 0; k < a.h.length; k++) moved = Math.max(moved, Math.abs(a.h[k] - later.h[k]))
+        let joined = 0
+        for (let k = 0; k < a.h.length; k++) joined = Math.max(joined, Math.abs(a.h[k] - round.h[k]))
+        const m = { wet: a.wet, drops: a.drops, bodies: a.bodies, most: a.most, moved, joined, same: differ(a.art, again.art), changed: differ(a.art, later.art), looped: differ(back.art, round.art), mirrored: a.mirrored }
+        // ripples are a few thousandths of a unit high: under a tenth of a cell, or something is pouring water in
+        const sound = m.wet > 2000 && m.drops > 20 && m.bodies > 0 && m.most > 2e-4 && m.most < a.cell && m.moved > 1e-4 && m.joined < 1e-9
+          && m.same < 0.002 && m.changed > 0.01 && m.looped < 0.01 && m.mirrored === (a.backend === 'webgpu')
+        if (!sound) fails.push(`${label}: ${JSON.stringify(m)}`)
+        else ok(`${label}: ${m.wet} cells of water take ${m.drops} raindrops a loop and ${m.bodies} swimming bodies, rings up to ${(m.most * 1000).toFixed(1)} thousandths high, ${(m.changed * 100).toFixed(0)}% of the picture changes in 2.5 s, a moment drawn twice differs in ${(m.same * 100).toFixed(2)}% and a loop later in ${(m.looped * 100).toFixed(2)}%${m.mirrored ? ', with the mirror on' : ''}`)
+        await d.ctx.close()
+      }
+    },
+  },
+  {
     name: 'diorama-picker',
     about: "Pixel Diorama: details dialog, How it's made, picking a scene swaps the palette on arrival, the gallery of loops, opening a description",
     entries: ['src/blobscape/PixelDiorama.tsx'],

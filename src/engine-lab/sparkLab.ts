@@ -105,7 +105,7 @@ export async function startSparkLab(display: HTMLCanvasElement, o: LabOptions): 
       renderer.render(scene, camera)
     }
     settle()
-    if (o.offscreen) display.getContext('2d')!.drawImage(canvas, 0, 0)
+    if (o.offscreen) display.getContext('2d', { willReadFrequently: true })!.drawImage(canvas, 0, 0)
   }
 
   let raf = 0, stopped = false, busy = 0

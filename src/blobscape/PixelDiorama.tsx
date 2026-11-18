@@ -18,6 +18,8 @@ import { DIORAMAS, described, type Diorama } from './diorama/scenes.ts'
 import { SceneDetails, kilobytes, type SceneFacts } from './diorama/SceneDetails.tsx'
 import type { Skeleton } from '../splat-engine/rig.ts'
 import { Pokes } from '../splat-engine/poke.ts'
+import { levelPlane, type MirrorImage } from '../splat-engine/reflect.ts'
+import type { SceneWater } from '../splat-engine/sceneWater.ts'
 import { browserDeflate, encodeApng } from '../splat-core/apng.ts'
 import type { Texture } from '../splat-engine/meshShape.ts'
 import { decodeTexture } from './modelRig.ts'
@@ -26,7 +28,7 @@ const SIZES = [2, 3, 4, 6]
 /** Frames a second the scene moves at: 0 is every frame the screen shows. */
 const RATES = [0, 12, 8]
 declare global {
-  interface Window { __diorama?: { stage: CreatureStage; blobs: () => number; bones: () => number; look: () => PixelLook } }
+  interface Window { __diorama?: { stage: CreatureStage; blobs: () => number; bones: () => number; look: () => PixelLook; water: () => SceneWater | undefined; mirrored: boolean } }
 }
 
 /** The view `orbit`, rocked `swing` degrees to either side once every `loop` seconds, as it is at `t`. */
@@ -65,6 +67,8 @@ export function PixelDiorama() {
   const h1 = useFocusHeading()
   const canvas = useRef<HTMLCanvasElement>(null)
   const [stage, setStage] = useState<CreatureStage>()
+  // water mirrors the scene where the GPU sorts (WebGPU); `?mirror=0` leaves it the sky alone
+  const mirrored = stage?.backend === 'webgpu' && new URLSearchParams(location.search).get('mirror') !== '0'
   const [drawn, setDrawn] = useState(false)
   const [failed, setFailed] = useState<string>()
   const offscreen = useMemo(() => new URLSearchParams(location.search).get('offscreen') === '1', [])
@@ -134,6 +138,8 @@ export function PixelDiorama() {
       raf = requestAnimationFrame(() => {
         t = setTimeout(() => {
           if (!settled) { setPalette('own'); setSteps(diorama.finish.steps) }
+          // a scene with water works one loop of its ripples out here too, while the waiting mark shows
+          diorama.water?.()
           setScene({ built: diorama.make(spacing, stepColors.length ? stepColors : undefined), of: diorama, detail, paint })
         }, 60)
       })
@@ -177,7 +183,19 @@ export function PixelDiorama() {
   useEffect(() => {
     if (!stage || !scene) return
     const from = stage.time
-    stage.setActor(scene.built)
+    // a scene's water is drawn by blobs of its own, in the same world: they move with the water, not with a bone
+    const pond = scene.of.water?.()
+    stage.setActor(scene.built, undefined, pond ? [pond.surface] : [])
+    seen.current = null
+    // the surface as it stands at the stage's time, for the eye as it stands: after a pose, a turn of the view or a new picture in the mirror
+    wet.current = pond && (() => {
+      const o = stage.orbit, a = (o.azimuth * Math.PI) / 180, e = (o.elevation * Math.PI) / 180
+      const eye = [o.target[0] + o.distance * Math.sin(a) * Math.cos(e), o.target[1] + o.distance * Math.sin(e), o.target[2] + o.distance * Math.cos(a) * Math.cos(e)]
+      pond.show(stage.time, eye, { mirror: seen.current })
+      stage.reshape(pond.surface)
+    })
+    // it mirrors what stands round it: the scene drawn once more as its mirror image (a second sort and a small draw, so only with WebGPU)
+    stage.setMirror(pond && mirrored ? { plane: levelPlane(pond.plan.level), lift: pond.plan.cell * 0.75, seen: (image) => { seen.current = image; wet.current?.() } } : undefined)
     pokes.current = new Pokes(scene.built.skeleton)
     // lights move with the bones (the lamp's beam with its lens, the fire's glow with its flames), so both are set from the same time
     const d = scene.of
@@ -196,8 +214,9 @@ export function PixelDiorama() {
       stage.setLights(d.lights(t), 1)
       // a scene that asks for it rocks the view gently as it plays, about wherever the view has been turned to
       if (d.swing && !calm) stage.orbit = swung(orbitNow.current, d.swing, d.loop, t)
+      wet.current?.()
     }, from)
-  }, [stage, scene, calm])
+  }, [stage, scene, calm, mirrored])
   // the walk-through's fourth step is about the four samples, so it draws them whatever the switch says
   const sampling = touring?.id === 'samples'
   useEffect(() => { stage?.setPixels(asPixels ? (sampling ? { ...look, fine: true } : look) : undefined, size) }, [stage, asPixels, sampling, look, size])
@@ -210,6 +229,9 @@ export function PixelDiorama() {
   useEffect(() => { if (stage) stage.playing = playing }, [stage, playing])
   useEffect(() => { if (stage) { stage.step = pixels && rate ? 1 / rate : 0; stage.invalidate() } }, [stage, pixels, rate])
   const orbitNow = useRef(orbit)
+  /** A scene's water: shapes and colors its surface for the moment and the view, and the last picture of what it mirrors. */
+  const wet = useRef<(() => void) | undefined>(undefined)
+  const seen = useRef<MirrorImage | null>(null)
   const posed = useRef<Diorama | undefined>(undefined)
   /** Taps on the scene: a part leans and wobbles, the land throws sparkles. */
   const pokes = useRef<Pokes | undefined>(undefined)
@@ -222,6 +244,7 @@ export function PixelDiorama() {
     // haze is measured from the view's target, so it stays put on the scene as the view moves in and out
     const h = d?.haze
     stage.setFog(h?.color ?? [0, 0, 0], h ? orbit.distance + h.from : 0, h ? orbit.distance + h.to : 0)
+    wet.current?.()
     stage.invalidate()
   }, [stage, orbit, scene, calm])
   // the art's size follows the view's; read it now and then for the caption (it's text, not every frame)
@@ -267,9 +290,9 @@ export function PixelDiorama() {
   // For verify: the stage and the look in use, without clicking
   useEffect(() => {
     if (!stage || !scene) return
-    window.__diorama = { stage, blobs: () => stage.blobCount, bones: () => scene.built.skeleton.count, look: () => look }
+    window.__diorama = { stage, blobs: () => stage.blobCount, bones: () => scene.built.skeleton.count, look: () => look, water: () => scene.of.water?.(), mirrored }
     return () => { delete window.__diorama }
-  }, [stage, scene, look])
+  }, [stage, scene, look, mirrored])
 
   /**
    * Records one whole loop as the art stands (palette, size, finish), stepped frame by frame from the time so it joins

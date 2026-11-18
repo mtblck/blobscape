@@ -4,6 +4,7 @@ import type { Built } from '../../splat-engine/body.ts'
 import type { PointLight } from '../../splat-engine/engine.ts'
 import type { Skeleton } from '../../splat-engine/rig.ts'
 import { compileScene, type SceneDoc } from '../../splat-engine/sceneDoc.ts'
+import { SceneWater } from '../../splat-engine/sceneWater.ts'
 import { buildVoxels } from '../../splat-engine/voxel.ts'
 import { LOOP, PALETTES, lampLights, makeDiorama, poseDiorama } from './scene.ts'
 import { CAMPFIRE } from './scenes/campfire.ts'
@@ -27,6 +28,7 @@ import { RUIN } from './scenes/ruin.ts'
 import { CAVE } from './scenes/cave.ts'
 import { CANYON } from './scenes/canyon.ts'
 import { CABIN } from './scenes/cabin.ts'
+import { KOI } from './scenes/koi.ts'
 
 /** A scene Pixel Diorama can show: how to build it, move it and light it, and how it asks to be drawn. */
 export interface Diorama {
@@ -58,6 +60,11 @@ export interface Diorama {
   moves?: number
   /** How many parts its description lists: specks and mist in the air are not counted. */
   parts?: number
+  /**
+   * Its water, for a scene that has some: one loop of ripples worked out the first time it is asked for (it takes a
+   * moment), then kept. The page draws its `surface` with the scene and shows it for each moment.
+   */
+  water?: () => SceneWater
 }
 
 /** The name of the palette chosen for a scene, on its chip. */
@@ -70,7 +77,7 @@ const LIGHTHOUSE: Diorama = {
   loop: LOOP,
   palette: { label: OWN_PALETTE, colors: PALETTES[0].colors },
   sky: [[9, 13, 32], [60, 94, 164]],
-  finish: { dither: 0.05, glow: 1.5, outline: true, edges: true, sky: true, steps: false },
+  finish: { dither: 0.5, glow: 1.5, outline: true, edges: true, sky: true, steps: false },
   views: [
     { id: 'shore', label: 'From the shore', orbit: { target: [0.05, 0.84, 0.05], distance: 3.7, azimuth: 28, elevation: 10 } },
     { id: 'above', label: 'From above', orbit: { target: [0, 0.6, 0], distance: 5.2, azimuth: 40, elevation: 38 } },
@@ -94,6 +101,7 @@ const night = (palette: Rgb[]): [Rgb, Rgb] => {
 
 export function described(id: string, doc: SceneDoc, about: string): Diorama {
   const c = compileScene(doc)
+  let pond: SceneWater | undefined
   return {
     id,
     label: c.name,
@@ -122,6 +130,7 @@ export function described(id: string, doc: SceneDoc, about: string): Diorama {
     pose: c.pose,
     lights: c.lights,
     haze: c.haze,
+    water: c.water ? () => (pond ??= new SceneWater(c)) : undefined,
   }
 }
 
@@ -148,4 +157,5 @@ export const DIORAMAS: Diorama[] = [
   described('cave', CAVE, 'An ice cave cut open at night, with icicles along its broken roof, stalactites joining stalagmites, flowstone, basalt columns stepping into a still pool, a geode broken open and glowing crystals, one growing as you watch'),
   described('canyon', CANYON, 'A desert canyon at sunset worn by water, with banded cliffs and ledges, scree, a mesa, hoodoos, a natural arch, a dry stream bed of pebbles and cracked mud, saguaros, a gnarled tree, a ram skull with curled horns, old ribs, a fossil shell and a circling hawk'),
   described('cabin', CABIN, 'A log cabin snowed in on a winter night: snow falling and settling where it lands, drifts piled deep downwind of the cabin, rocks and fence, a path trodden to the gate, frost growing across the lit window, chimney smoke, a woodpile and a lantern'),
+  described('koi', KOI, 'A koi pond in a moss garden on a rainy day: raindrops ring the water where they land, the rings cross and bounce off the banks and stepping stones, koi circle under the surface and leave wakes, and a tall stone lantern and a low snow-viewing lantern glow beside a red maple, bamboo, irises and lily pads'),
 ]

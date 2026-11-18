@@ -223,7 +223,7 @@ export default [
       const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 720 }, acceptDownloads: true })
       await page.waitForTimeout(1500)
       // a picture of the view waits on Spark's frames, which software rendering can take most of a minute over on a busy machine
-      const shot = async () => (await page.getByTestId('viewport').screenshot({ timeout: 120000 })).toString('base64')
+      const shot = async () => (await page.getByTestId('viewport').screenshot({ timeout: 120000 * (Number(process.env.VERIFY_SLOW) || 1) })).toString('base64')
       // The view once it has stopped changing: software rendering sorts seconds behind a turn
       const settled = async () => {
         let was = await shot()
@@ -263,20 +263,25 @@ export default [
       if (pics !== 2) fails.push(`blobscape sandbox path: the filmstrip shows ${pics} pictures for two stops`)
       else ok('blobscape sandbox path: the filmstrip shows a picture of each stop')
       await axe(page, 'blobscape sandbox path')
-      // Play: the view goes back to the first stop and glides; partway it is neither stop, and it ends at the second
-      // The page's clock is stepped by hand: in software a picture of the view can take longer than the whole path,
-      // so on the real clock the play was over before the first look at it
-      await page.clock.install()
-      await page.clock.pauseAt(Date.now() + 1000)
+      // Play: the view goes back to the first stop and glides; partway it is neither stop, and it ends at the second.
+      // The path is made as long as it goes and Stop pressed half way, which leaves the view where it is: in software
+      // a picture of the view can take longer than the whole path. (The page's clock was stepped by hand here before;
+      // on a slow shared runner the stepped clock never caught up with frames that take seconds, and no picture came.)
+      const seconds = page.getByRole('slider', { name: 'Seconds a stop' })
+      await seconds.focus()
+      await page.keyboard.press('End')
       await play.click()
-      await page.clock.fastForward(1000)
-      await page.clock.runFor(100)
-      const mid = await shot()
+      await page.waitForTimeout(3000)
+      // pressed from inside the page: a click from here first waits for the button to hold still, which on a busy page can outlast the path
+      const stopped = await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find((b) => b.textContent === 'Stop'); b?.click(); return !!b })
+      if (!stopped) fails.push('blobscape sandbox path: three seconds into a six second path there was no Stop button')
+      const mid = await settled()
       const fromFirst = await differs(mid, first), fromSecond = await differs(mid, second)
-      await page.clock.fastForward(1500)
-      await page.clock.runFor(100)
-      await page.clock.resume()
-      await page.waitForFunction(() => [...document.querySelectorAll('button')].find((b) => b.textContent === 'Play the path')?.getAttribute('aria-pressed') === 'false', null, { timeout: 15000 }).catch(() => {})
+      await seconds.focus()
+      await page.keyboard.press('Home')
+      await play.click()
+      await page.waitForTimeout(1000)
+      await page.waitForFunction(() => [...document.querySelectorAll('button')].find((b) => b.textContent === 'Play the path')?.getAttribute('aria-pressed') === 'false', null, { timeout: 30000 }).catch(() => {})
       const end = await settled()
       const short = await differs(end, second)
       if (fromFirst < 500 || fromSecond < 500) fails.push(`blobscape sandbox path: partway through playing, the view is at a stop (${fromFirst} and ${fromSecond} pixels from them)`)
@@ -557,16 +562,19 @@ export default [
       else ok('blobscape sandbox creatures: Undo brings the live fox back')
       // Walk about (issue #132): even set to Still, it trots off round its spot, and stands again when switched off
       await tabClick(page.getByRole('button', { name: 'Still', exact: true }))
-      await page.waitForTimeout(800)
-      const standing = await shot()
+      // the fox standing still, once the view has stopped changing: on a slow machine the last move is still being drawn after most of a second
+      let standing = await shot()
+      for (let k = 0; k < 20; k++) { await page.waitForTimeout(800); const now = await shot(); const moved = await differs(standing, now); standing = now; if (moved < 50) break }
       await page.getByLabel('Walk about').check()
       await page.waitForTimeout(2500)
       const roamed = await differs(standing, await shot())
       if (roamed < 500 || !(await page.getByRole('slider', { name: /How far/ }).isVisible())) fails.push(`blobscape sandbox creatures: Walk about didn't take the fox anywhere (${roamed} px)`)
       else ok(`blobscape sandbox creatures: Walk about takes the fox round its spot (${roamed} px changed)`)
       await page.getByLabel('Walk about').uncheck()
-      await page.waitForTimeout(800)
-      if ((await differs(standing, await shot())) > 200) fails.push('blobscape sandbox creatures: switching Walk about off left the fox away from its spot')
+      // software rendering draws the fox back on its spot a while after the switch: look until it is there
+      let away = Infinity
+      for (let k = 0; k < 12 && away > 200; k++) { await page.waitForTimeout(800); away = await differs(standing, await shot()) }
+      if (away > 200) fails.push(`blobscape sandbox creatures: switching Walk about off left the fox away from its spot (${away} px differ)`)
       else ok('blobscape sandbox creatures: switched off, it stands on its spot again')
       // Looks at (issue #133): standing still, it turns its head to the camera
       const ahead = await shot()

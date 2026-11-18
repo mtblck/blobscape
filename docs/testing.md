@@ -45,12 +45,24 @@ not run again. `--no-retry` skips this.
 ## On GitHub
 
 `.github/workflows/check.yml` runs the unit tests and the build on every pull
-request. It does not run the browser checks there yet: two trial runs on
-GitHub's runners took 32 and 44 minutes and failed checks that pass in a cloud
-session (waits timing out on a runner whose speed changes from run to run, and
-two checks whose twice-drawn frame differs by a few pixels there). They can be
-run there by hand (Actions, Check, Run workflow) to try again. Until then a
-session runs `npm run check` itself before merging.
+request, and every browser check as well each night on `main` (and by hand:
+Actions, Check, Run workflow, with an optional list of check names). A night
+that fails opens one issue, "Nightly browser checks are failing", with a link to
+the run; later failed nights add a line to it, and the first green night closes
+it. The run keeps `verify-shots/` for a week.
+
+The browser checks are not run on pull requests there: every check takes about
+40 minutes on GitHub's shared runners, against a few minutes for the checks one
+change reaches in a session. So a session still runs `npm run check` itself
+before merging, and the nightly run is the net under it: it catches what
+`--changed` did not think to run.
+
+Two things made the checks hold on those runners. `VERIFY_SLOW=3` gives every
+wait three times as long (a runner's speed swings a lot from run to run), with
+two checks at a time instead of three. And an `offscreen` stage copies its
+frames to a CPU canvas (`willReadFrequently`): on a GPU canvas the first read
+of a picture came back with a few faint pixels rounded differently from every
+later read, which a check that draws one moment twice took for a flicker.
 
 `scripts/verify/known-failures.json` is for the rare case where main is red and
 the fix will take more than a day: `{ "check", "issue", "until" }` names a
