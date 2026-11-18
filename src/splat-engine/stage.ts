@@ -399,6 +399,13 @@ export class Stage {
   /** Seconds into the clip, or the time a poser is showing. */
   get time() { return this.step > 0 ? Math.floor(this.t / this.step + 1e-6) * this.step : this.t }
 
+  /** Moves the clock to `seconds` and draws that moment: for a page that kept its own time while this stage was paused. */
+  seek(seconds: number) {
+    this.t = seconds
+    this.pose()
+    this.invalidate()
+  }
+
   /** Changes how a blob on several bones takes its shape: see `SkinMode`. */
   setMode(m: SkinMode) {
     this.mode = m

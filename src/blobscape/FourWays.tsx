@@ -164,7 +164,14 @@ export function FourWays() {
     }, clock.current.t)
   }, [stage, built])
   useEffect(() => { stage?.setPixels(look, scale / ratio) }, [stage, look, scale, ratio])
-  useEffect(() => { if (stage) stage.playing = playing }, [stage, playing])
+  // Blobscape draws only while its picture is on show: hidden, the page's clock runs on for the others, and the stage
+  // takes that time up again when it comes back
+  const blobscapeShown = only === 'all' || only === 'blobscape'
+  useEffect(() => {
+    if (!stage) return
+    if (blobscapeShown) stage.seek(clock.current.t)
+    stage.playing = playing && blobscapeShown
+  }, [stage, playing, blobscapeShown])
   // the fire's brightness shows at once, playing or not
   useEffect(() => { if (stage && built) stage.setLights(built.scene.lights(stage.time, fire, built.scene.shadows && stage.backend === 'webgpu'), built.scene.ambient) }, [stage, built, fire])
   useEffect(() => {
@@ -202,7 +209,7 @@ export function FourWays() {
       const dt = c.last ? Math.min(0.1, (now - c.last) / 1000) : 0
       c.last = now
       // the engine keeps the time while it is running, so its own picture and the others never drift apart
-      if (stage && built) c.t = stage.time
+      if (stage && built && shown('blobscape')) c.t = stage.time
       else if (playing) c.t += dt
       if (document.hidden || timing) return
       const o = orbitNow.current
@@ -270,7 +277,8 @@ export function FourWays() {
   const sky = `linear-gradient(${scene.look.sky ? `rgb(${scene.look.sky[0].join(' ')}), rgb(${scene.look.sky[1].join(' ')})` : '#0a0f1e, #1f2d55'})`
   const facts = written(scene.id)
   const words = WORDS[scene.id]
-  const pick = (next: typeof scene) => { if (next === scene) return; setScene(next); setOrbit(next.orbit); setDrawn(false) }
+  // the stage says it has drawn only once, so `drawn` stays: the wait for the next scene is the wait for `built`
+  const pick = (next: typeof scene) => { if (next === scene) return; setScene(next); setOrbit(next.orbit) }
 
   return (
     <div className="pb-4">

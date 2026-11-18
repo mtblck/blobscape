@@ -331,6 +331,15 @@
        ]
       },
       {
+       "name": "seek",
+       "doc": "Moves the clock to `seconds` and draws that moment: for a page that kept its own time while this stage was paused.",
+       "signatures": [
+        {
+         "code": "seek(seconds: number): void"
+        }
+       ]
+      },
+      {
        "name": "setMode",
        "doc": "Changes how a blob on several bones takes its shape: see `SkinMode`.",
        "signatures": [
