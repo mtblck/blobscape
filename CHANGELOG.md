@@ -6,6 +6,8 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 
 ## [Unreleased]
 
+- A creature on any web page from one tag: `<blobscape-creature src="fox.glb" move="trot">` plays a rigged-splat .glb with one script and no build step. Drag turns it, its head can follow the pointer, a tap or a hover can play another move, it waits until it nears the screen, stops when it leaves and holds still for reduced motion. The engine page shows one live beside its code, and the package ships it (`@blobscape/engine/element`, and one file with three.js inside for a plain script tag).
+
 - The elf's plait now hangs outside the cloak, beside the quiver, instead of cutting through them (Forest Walk, Splat Creatures, Dungeon Run and the engine page). The fox's brush in Forest Walk sways slowly as it trots instead of wagging on every step.
 
 - Pixel Diorama draws cleaner pixels. Each pixel is now settled from four samples (Finish tab, Four samples a pixel): it takes whichever thing most of them show, so edges are one thing or the other and thin parts stop breaking up. Outlines take a darker tone of the thing they are round instead of one color for everything. And a scene can be painted in steps of its palette as it is cut, so shade falls in flat bands (the windmill is; Paint in steps of the palette).

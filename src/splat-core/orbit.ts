@@ -16,6 +16,9 @@ export interface Orbit {
 /** The camera's vertical field of view, in degrees. */
 export const FOV = 35
 
+/** The vertical field of view of the engine's `Stage` camera, in degrees. */
+export const STAGE_FOV = 40
+
 /** Places a three.js camera for an orbit and a canvas aspect. */
 export function placeCamera(cam: THREE.PerspectiveCamera, o: Orbit, aspect: number) {
   const { target, distance, azimuth, elevation } = o

@@ -45,6 +45,24 @@ export const PIXEL_STRIP = {
   link: { label: 'See all of them in Pixel Diorama', href: '/experiments/pixel-diorama/' },
 } as const
 
+/** The creature element: one script and one tag on any page. The code is what the page shows and what a visitor copies. */
+export const ONE_TAG = {
+  title: 'One tag on any page',
+  body: 'A creature saved from Splat Creatures plays on any web page from one script and one element, with no build step. It is an ordinary .glb, so the same file opens in Blender and three.js.',
+  try: 'Drag to turn the fox. It watches your pointer, and a tap makes it stop and look round.',
+  alt: 'A fox made of Gaussian splats, trotting on the spot',
+  script: 'https://blobscape.dev/embed/blobscape-creature.js',
+  file: '/rigged-splats/fox.glb',
+  poster: '/rigged-splats/fox.png',
+  code: `<script type="module" src="https://blobscape.dev/embed/blobscape-creature.js"></script>
+
+<blobscape-creature
+  src="https://blobscape.dev/rigged-splats/fox.glb"
+  move="trot" tap="idle" look="pointer"
+  alt="A fox trotting"></blobscape-creature>`,
+  link: { label: 'Every attribute, in the docs', href: '/engine/docs/#on-any-page-with-one-tag' },
+} as const
+
 export const FEATURES = [
   { title: 'Bones for blobs', body: 'Every blob follows up to four bones, blended on the graphics card. Bones turn, slide and grow, so a tongue shoots out, a tree sprouts and a slime bursts.' },
   { title: 'One world, one sort', body: 'Every actor shares one set of blobs, sorted together each frame. A hero, forty slimes and the hall round them overlap the way they should.' },
