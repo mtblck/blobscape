@@ -1789,7 +1789,7 @@ export function Sandbox() {
                 </button>
               )}
               {mode === 'effects' && fx && (
-              <div className="pointer-events-auto flex gap-2">
+              <div className="pointer-events-auto flex gap-2" data-view-controls>
                 <button type="button" onClick={() => setRunning((r) => !r)} aria-pressed={fx.loops ? running : undefined} className="flex h-11 cursor-pointer items-center rounded-full border border-rule bg-paper px-4 text-sm font-semibold text-ink hover:border-ink-faint">{running ? (fx.loops ? 'Pause' : 'Stop') : 'Play'}</button>
                 <button type="button" onClick={bake} disabled={!fxCount} className="flex h-11 cursor-pointer items-center rounded-full border border-accent bg-accent px-4 text-sm font-semibold text-paper hover:brightness-110 disabled:cursor-default disabled:opacity-50">Make it permanent</button>
               </div>

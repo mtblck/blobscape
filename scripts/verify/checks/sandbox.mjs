@@ -12,7 +12,8 @@ export default [
       await page.waitForTimeout(1500)
       const count = async () => Number((await page.textContent('[data-testid=blob-count]')).replace(/\D/g, ''))
       const selected = async () => Number(((await page.textContent('[data-testid=selected-count]').catch(() => '0')) ?? '0').replace(/\D/g, ''))
-      const shot = async () => page.getByTestId('viewport').screenshot()
+      // the effect's Play and Make it permanent sit on the view and go with the effect: leave them out of the picture
+      const shot = async () => page.getByTestId('viewport').screenshot({ style: '[data-view-controls] { visibility: hidden }' })
       // Pixels that changed clearly (any channel by more than 24), decoded in the page
       const differs = (a, b) => page.evaluate(async ([a, b]) => {
         const px = async (s) => { const i = await createImageBitmap(new Blob([Uint8Array.from(atob(s), (ch) => ch.charCodeAt(0))], { type: 'image/png' })); const c = new OffscreenCanvas(i.width, i.height); const x = c.getContext('2d'); x.drawImage(i, 0, 0); return x.getImageData(0, 0, i.width, i.height).data }
