@@ -3118,7 +3118,7 @@
     {
      "name": "ZOO",
      "kind": "const",
-     "doc": "Every creature on the Creature page, simplest first.",
+     "doc": "Every creature on the Creature page, simplest first, with the first fox beside the one that took its place.",
      "type": "Species[]"
     },
     {
