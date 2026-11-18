@@ -1327,9 +1327,9 @@ export default [
       await tabClick(k.page.getByTestId('flow-materials').getByRole('button', { name: 'Goo', exact: true }))
       await k.page.waitForFunction(() => window.__flow.lanes()[0]?.material === 'goo' && window.__flow.count() > 0, null, { timeout: 30000 }).catch(() => {})
       const goo = await look(k.page, 2)
-      const sliders = await k.page.locator('section[aria-label=Options] input[type=range]').count()
+      const sliders = (await k.page.getByRole('slider', { name: 'Friction' }).count()) === 0 && (await k.page.getByRole('slider', { name: 'Holds its shape' }).count()) === 1
       const thick = await k.page.getByRole('slider', { name: 'Thickness' }).count()
-      if (!(goo.lanes[0].material === 'goo' && goo.goo > 300 && goo.sand < 50 && sliders === 2 && thick === 1)) fails.push(`blobscape sand snow goo, goo chip: ${JSON.stringify({ goo, sliders, thick })}`)
+      if (!(goo.lanes[0].material === 'goo' && goo.goo > 300 && goo.sand < 50 && sliders && thick === 1)) fails.push(`blobscape sand snow goo, goo chip: ${JSON.stringify({ goo, sliders, thick })}`)
       else ok(`blobscape sand snow goo: the Goo chip starts a box of goo with its own two sliders (${goo.goo} pixels)`)
       // drop a rock into a pile of it: it falls, lands in the goo and stays above the floor; Drop it again lifts a new one
       await tabClick(k.page.getByTestId('flow-tests').getByRole('button', { name: 'Drop something in', exact: true }))
