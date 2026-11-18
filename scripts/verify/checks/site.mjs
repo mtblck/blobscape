@@ -195,9 +195,9 @@ export default [
       w.page.removeAllListeners('pageerror')
       await w.ctx.close()
 
-      // at a tablet's width the header still fits on one line, and on a phone the page and the menu hold it
+      // at a tablet's width the header still fits on one line (the Engine button sits a pixel or two off the links, so a wrapped line is a jump of more than 20), and on a phone the page and the menu hold it
       const t = await open('/whats-new/', { viewport: { width: 768, height: 900 } })
-      const bar = await t.page.evaluate(() => { const tops = [...document.querySelectorAll('header nav[aria-label=Main] > ul > li')].map((li) => Math.round(li.getBoundingClientRect().top)); return { lines: new Set(tops).size, wide: document.documentElement.scrollWidth - window.innerWidth } })
+      const bar = await t.page.evaluate(() => { const tops = [...document.querySelectorAll('header nav[aria-label=Main] > ul > li')].map((li) => Math.round(li.getBoundingClientRect().top)); return { lines: Math.max(...tops) - Math.min(...tops) > 20 ? 2 : 1, wide: document.documentElement.scrollWidth - window.innerWidth } })
       if (bar.lines !== 1 || bar.wide > 0) fails.push(`header at 768px: ${JSON.stringify(bar)}`)
       else ok('header fits on one line at a tablet width')
       await t.ctx.close()
