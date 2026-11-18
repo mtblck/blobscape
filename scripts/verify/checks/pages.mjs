@@ -8,7 +8,7 @@ const PAGES = {
   lessons: [`${B}routes.ts`], 'one-blob': L('OneBlob'), footprint: L('Footprint'), order: L('Order'), many: L('Many'), angle: L('Angle'), paint: L('Paint'),
   formats: L('Formats'), break: L('Break'), 'one-bone': L('OneBone'), weights: L('Weights'), twist: L('Twist'), walk: L('Walk'), feet: L('Feet'), model: L('Model'),
   morphs: L('Morphs'), fur: L('Fur'), shoot: L('Shoot'), fuzzy: L('Fuzzy'), floaters: L('Floaters'), lighting: L('Lighting'), shimmer: L('Shimmer'), 'first-creature': L('FirstCreature'), 'scene-data': L('SceneData'), 'pixel-art': L('PixelArt'), sandbox: [`${B}Sandbox.tsx`],
-  creature: [`${B}Creature.tsx`], 'forest-walk': [`${B}ForestWalk.tsx`], clockwork: [`${B}Clockwork.tsx`], 'shape-shifter': [`${B}ShapeShifter.tsx`], 'sand-snow-goo': [`${B}SandSnowGoo.tsx`], 'brush-and-ink': [`${B}BrushInk.tsx`],
+  creature: [`${B}Creature.tsx`], 'forest-walk': [`${B}ForestWalk.tsx`], 'wading-pond': [`${B}WadingPond.tsx`], clockwork: [`${B}Clockwork.tsx`], 'shape-shifter': [`${B}ShapeShifter.tsx`], 'sand-snow-goo': [`${B}SandSnowGoo.tsx`], 'brush-and-ink': [`${B}BrushInk.tsx`], 'day-and-night': [`${B}DayNight.tsx`],
   'pixel-diorama': [`${B}PixelDiorama.tsx`], 'dungeon-run': [`${B}DungeonRun.tsx`], 'scan-studio': [`${B}ScanStudio.tsx`], contact: [`${B}Contact.tsx`],
 }
 // the front page is a part of its own
@@ -17,7 +17,7 @@ const PARTS = { home: [`${B}Landing.tsx`], ...PAGES }
 const SHELL = ['src/shared/SiteHeader.tsx', 'src/shared/Footer.tsx', 'src/shared/Logo.tsx', `${B}Chrome.tsx`, `${B}Shell.tsx`]
 const SHELL_FILES = [`${B}App.tsx`, `${B}main.tsx`, `${B}ssr.tsx`, 'src/shared/theme.css', 'index.html']
 // headless WebGPU can't present to a canvas, so the engine pages draw off-screen here
-const OFFSCREEN = ['creature', 'forest-walk', 'clockwork', 'shape-shifter', 'sand-snow-goo', 'brush-and-ink', 'pixel-diorama', 'dungeon-run', 'scan-studio']
+const OFFSCREEN = ['creature', 'forest-walk', 'wading-pond', 'clockwork', 'shape-shifter', 'sand-snow-goo', 'brush-and-ink', 'day-and-night', 'pixel-diorama', 'dungeon-run', 'scan-studio']
 // and so do the lessons drawn by the engine
 const ENGINE_LESSONS = ['first-creature', 'scene-data', 'pixel-art']
 const pathOf = (id) => (OFFSCREEN.includes(id) ? `/experiments/${id}/?offscreen=1` : ['sandbox', 'lessons', 'contact'].includes(id) ? `/${id}/` : `/lessons/${id}/${ENGINE_LESSONS.includes(id) ? '?offscreen=1' : ''}`)

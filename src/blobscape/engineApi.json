@@ -18,7 +18,7 @@
   {
    "id": "scenes",
    "title": "Shapes and scenes",
-   "doc": "Scenes written as data and the shapes they are cut from: buildings, rock, plants, worn land and weather."
+   "doc": "Scenes written as data and the shapes they are cut from: buildings, rock, plants, worn land and weather, and the sun, moon and sky that light them through a day."
   },
   {
    "id": "pixels",
@@ -28,12 +28,12 @@
   {
    "id": "simulation",
    "title": "Simulation",
-   "doc": "The solvers under cloth and under sand, snow and goo, for when you want to step them yourself."
+   "doc": "The solvers under cloth, under sand, snow and goo, and under the ripples of a pond, for when you want to step them yourself."
   },
   {
    "id": "extras",
    "title": "Picking, detail and edits",
-   "doc": "Finding what a tap hit, drawing fewer blobs far away, cutting and painting live, depth for effects after the draw, and solid shapes to stand on."
+   "doc": "Finding what a tap hit, drawing fewer blobs far away, cutting and painting live, depth for effects after the draw, what a mirror shows, and solid shapes to stand on."
   },
   {
    "id": "files",
@@ -120,6 +120,12 @@
        "optional": true,
        "type": "boolean",
        "doc": "Builds each world with live lights (`setLights`), as Scan Studio does."
+      },
+      {
+       "name": "shadowDensity",
+       "optional": true,
+       "type": "number",
+       "doc": "How dark what stands in a casting light's way makes it (the world's `shadowDensity`): left out, soft shadows that thin things let light through."
       },
       {
        "name": "webgl",
@@ -356,10 +362,10 @@
       },
       {
        "name": "setLights",
-       "doc": "Live lights on the world (needs the `lights` option); kept for the next actor too.",
+       "doc": "Live lights on the world (needs the `lights` option); kept for the next actor too. A light is at a place or from a\ndirection (a sun); `ambient` is one brightness or a linear color.",
        "signatures": [
         {
-         "code": "setLights(lights: PointLight[], ambient?: number): void"
+         "code": "setLights(lights: Light[], ambient?: number | readonly [number, number, number]): void"
         }
        ]
       },
@@ -538,6 +544,12 @@
        "doc": "How much of each of the first four live lights a blob can see, four bytes a blob (255 sees it all): baked lamp\nshadows (voxel.ts `lamps`). The light pass scales light k by byte k, so a flickering lamp's shadows flicker with it.\nLeft out, every light reaches every blob."
       },
       {
+       "name": "glow",
+       "optional": true,
+       "type": "Uint8Array<ArrayBufferLike>",
+       "doc": "How much of its own light each blob gives, a byte a blob (255 all of it): a lit window, a firefly, the moon. Under\nlive lights such a blob is never drawn darker than this share of its own color, so it stays bright when the scene\ngoes dark. Left out, nothing glows."
+      },
+      {
        "name": "morphs",
        "optional": true,
        "type": "Morph[]",
@@ -581,6 +593,12 @@
        "doc": "Live lights (`setLights`): each blob is lit every frame from its normal. Off unless asked for, as it costs a pass."
       },
       {
+       "name": "shadowDensity",
+       "optional": true,
+       "type": "number",
+       "doc": "How dark what stands in a casting light's way makes it (`SHADOW_DENSITY`, 1.5, where left out): low, a shadow is\nsoft and thin things let light through; about 5, a wall one blob thick blocks nearly all of it, which suits solid\nscenes under a sun."
+      },
+      {
        "name": "paint",
        "optional": true,
        "type": "boolean",
@@ -621,6 +639,35 @@
        "doc": "Whether it casts shadows (`shadow.ts`): blobs between a blob and the light take some of it. Off unless set."
       }
      ]
+    },
+    {
+     "name": "SunLight",
+     "kind": "interface",
+     "doc": "A light from one direction that reaches everything, for `setLights`: the sun, or the moon. It doesn't fade with\ndistance, and its shadows (with `shadow`) fall the same way everywhere.",
+     "props": [
+      {
+       "name": "direction",
+       "type": "[number, number, number]",
+       "doc": "The way toward the light from anywhere in the scene (any length but zero): [0, 1, 0] is straight overhead."
+      },
+      {
+       "name": "color",
+       "type": "[number, number, number]",
+       "doc": "Linear RGB, times its strength: [1.1, 1, 0.9] is a midday sun."
+      },
+      {
+       "name": "shadow",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Whether it casts shadows (`shadow.ts`). Off unless set."
+      }
+     ]
+    },
+    {
+     "name": "Light",
+     "kind": "type",
+     "doc": "A light `setLights` takes: one at a place, or one from a direction.",
+     "type": "PointLight | SunLight"
     },
     {
      "name": "MAX_LIGHTS",
@@ -741,6 +788,11 @@
        "doc": "The share of each actor's blobs being drawn."
       },
       {
+       "name": "clip",
+       "type": "[number, number, number, number] | null",
+       "doc": "A plane that hides every blob whose center is behind it, as [nx, ny, nz, d]: a blob at p is drawn while\nn·p + d is 0 or more. null (the start) draws them all. It acts where blobs are projected, so it can change from\none draw to the next in a frame: `SplatMirror` sets it for its mirrored draw and puts it back."
+      },
+      {
        "name": "sortKind",
        "readonly": true,
        "type": "\"bins\" | \"radix\"",
@@ -774,10 +826,10 @@
       },
       {
        "name": "setLights",
-       "doc": "Lights the blobs with up to MAX_LIGHTS point lights, on top of `ambient`\ntimes their own (baked) color. Each blob's normal is its flattest axis, so\na light reaches the side of a surface that faces it. Needs `lights: true`.",
+       "doc": "Lights the blobs with up to MAX_LIGHTS lights, on top of `ambient` times their own (baked) color: point lights\nthat fade with distance, and lights from a direction (a sun, a moon) that don't. `ambient` is one brightness or a\nlinear color, for light from the whole sky. Each blob's normal is its flattest axis, so a light reaches the side\nof a surface that faces it. Needs `lights: true`.",
        "signatures": [
         {
-         "code": "setLights(lights: PointLight[], ambient?: number): void"
+         "code": "setLights(lights: Light[], ambient?: number | readonly [number, number, number]): void"
         }
        ]
       },
@@ -832,6 +884,15 @@
        "signatures": [
         {
          "code": "recolor(actor: Actor): void"
+        }
+       ]
+      },
+      {
+       "name": "reshape",
+       "doc": "Takes one actor's blobs again after they were changed in place: centers, shapes, colors and opacities, as\n`refresh` does for every actor, for a surface that moves on its own (water). Its blobs must stay about where its\nbones' bounds were when the world was made, since those are not measured again.",
+       "signatures": [
+        {
+         "code": "reshape(actor: Actor): void"
         }
        ]
       },
@@ -2683,6 +2744,12 @@
        "optional": true,
        "type": "Uint8Array<ArrayBufferLike>",
        "doc": "How much of each baked lamp a blob can see, four bytes a blob (voxel.ts `lamps`); left out, every lamp is seen."
+      },
+      {
+       "name": "glow",
+       "optional": true,
+       "type": "Uint8Array<ArrayBufferLike>",
+       "doc": "How much of its own light each blob gives, a byte a blob (the engine's `Actor.glow`): 255 for a voxel scene's `glow` parts; left out, nothing glows."
       }
      ]
     },
@@ -6332,6 +6399,204 @@
    ]
   },
   {
+   "id": "daylight",
+   "title": "The sky through a day",
+   "group": "scenes",
+   "doc": "The sky over a scene through a day: where the sun and the moon stand for a time, a latitude and a day of the year,\nand the light that follows from it, ready for `setLights`. The sun's path is the real one (declination by the day,\nhour angle by the clock); its color comes from how much air its light crosses (red and dim at the horizon, white\noverhead); the sky's own light, the sky's colors and the stars follow the sun's height. The moon is kept simple: it\ntrails the sun by its age, a full one rides high in winter and low in summer, and it gives light by how much of it\nis lit. Pure numbers, so a page, a test and a recording get the same sky.\n\nDirections are in the scene's frame: +x east, +y up, +z south. Strengths are set for a picture, not for a light\nmeter: real moonlight is a millionth of sunlight, and an eye (or a camera) opens up at night, so here the night is\ndim, not black.",
+   "entries": [
+    {
+     "name": "SkyPlace",
+     "kind": "interface",
+     "doc": "Where and when the sky is: what `daylight` needs besides the hour.",
+     "props": [
+      {
+       "name": "latitude",
+       "type": "number",
+       "doc": "Degrees north of the equator (south is negative)."
+      },
+      {
+       "name": "day",
+       "type": "number",
+       "doc": "The day of the year, 1 to 365: 80 is the March equinox, 172 the June solstice."
+      },
+      {
+       "name": "moon",
+       "type": "number",
+       "doc": "The moon's age: 0 new, 0.25 first quarter, 0.5 full, 0.75 last quarter."
+      }
+     ]
+    },
+    {
+     "name": "DEFAULT_PLACE",
+     "kind": "const",
+     "doc": "A temperate place at midsummer under a full moon: what `daylight` uses where none is given.",
+     "type": "SkyPlace"
+    },
+    {
+     "name": "Daylight",
+     "kind": "interface",
+     "doc": "The sky at one moment, from `daylight`. Colors are linear RGB; a light's color already holds its strength.",
+     "props": [
+      {
+       "name": "sun",
+       "type": "Vec3",
+       "doc": "The way toward the sun (a unit vector), below the horizon too."
+      },
+      {
+       "name": "sunHeight",
+       "type": "number",
+       "doc": "The sun's height over the horizon, in degrees (negative when it is down)."
+      },
+      {
+       "name": "sunColor",
+       "type": "Vec3",
+       "doc": "The sun's light: white overhead, redder and weaker toward the horizon, nothing once it is down."
+      },
+      {
+       "name": "moon",
+       "type": "Vec3",
+       "doc": "The way toward the moon (a unit vector)."
+      },
+      {
+       "name": "moonHeight",
+       "type": "number",
+       "doc": "The moon's height over the horizon, in degrees."
+      },
+      {
+       "name": "moonColor",
+       "type": "Vec3",
+       "doc": "The moon's light, by how much of it is lit and how dark the sky is: nothing by day."
+      },
+      {
+       "name": "moonLit",
+       "type": "number",
+       "doc": "How much of the moon's face is lit, 0 (new) to 1 (full)."
+      },
+      {
+       "name": "ambient",
+       "type": "Vec3",
+       "doc": "Light from the whole sky, which reaches into shade: blue by day, warm at dusk, dim and blue at night."
+      },
+      {
+       "name": "zenith",
+       "type": "Vec3",
+       "doc": "The sky's color straight up."
+      },
+      {
+       "name": "horizon",
+       "type": "Vec3",
+       "doc": "The sky's color at the horizon, away from the sun."
+      },
+      {
+       "name": "sunGlow",
+       "type": "Vec3",
+       "doc": "The warm glow low in the sky round the sun as it rises and sets: nothing while it is high or well down."
+      },
+      {
+       "name": "stars",
+       "type": "number",
+       "doc": "How clearly the stars show, 0 by day to 1 in full night (less under a bright moon)."
+      },
+      {
+       "name": "dark",
+       "type": "number",
+       "doc": "How dark it has grown, 0 in daylight to 1 once the sun is well down: when lamps come on."
+      }
+     ]
+    },
+    {
+     "name": "skyWay",
+     "kind": "function",
+     "doc": "The way toward a point of the sky (a unit vector: +x east, +y up, +z south) from its hour angle (degrees west of\ndue south, 15 an hour), its declination (degrees north of the sky's equator) and the latitude it is seen from.",
+     "signatures": [
+      {
+       "code": "skyWay(hourAngle: number, declination: number, latitude: number): Vec3"
+      }
+     ]
+    },
+    {
+     "name": "sunDeclination",
+     "kind": "function",
+     "doc": "How far north of the sky's equator the sun is on a day of the year, in degrees: 23.44 at the June solstice.",
+     "signatures": [
+      {
+       "code": "sunDeclination(day: number): number"
+      }
+     ]
+    },
+    {
+     "name": "sunWay",
+     "kind": "function",
+     "doc": "The way toward the sun at an hour of the day (0 to 24 by the sun: 12 is when it is highest).",
+     "signatures": [
+      {
+       "code": "sunWay(hour: number, place?: SkyPlace): Vec3"
+      }
+     ]
+    },
+    {
+     "name": "moonWay",
+     "kind": "function",
+     "doc": "The way toward the moon at an hour of the day. It trails the sun across the sky by its age (a full moon is opposite\nthe sun, so it rises as the sun sets), and its declination is the sun's turned by its age, so a full moon is high in\nwinter and low in summer.",
+     "signatures": [
+      {
+       "code": "moonWay(hour: number, place?: SkyPlace): Vec3"
+      }
+     ]
+    },
+    {
+     "name": "moonLit",
+     "kind": "function",
+     "doc": "How much of the moon's face is lit at an age: 0 new, 1 full.",
+     "signatures": [
+      {
+       "code": "moonLit(age: number): number"
+      }
+     ]
+    },
+    {
+     "name": "sunTimes",
+     "kind": "function",
+     "doc": "When the sun rises and sets, in hours by the sun, from where its center crosses the horizon. Where it never sets\n(a polar summer) `rise` is 0 and `set` 24; where it never rises, both are 12.",
+     "signatures": [
+      {
+       "code": "sunTimes(place?: SkyPlace): { rise: number; set: number }"
+      }
+     ]
+    },
+    {
+     "name": "airMass",
+     "kind": "function",
+     "doc": "How much air light crosses on its way down from a height over the horizon (degrees), as a multiple of the air\nstraight overhead: 1 at the zenith, about 38 at the horizon (Kasten and Young's fit).",
+     "signatures": [
+      {
+       "code": "airMass(height: number): number"
+      }
+     ]
+    },
+    {
+     "name": "daylight",
+     "kind": "function",
+     "doc": "The sky and its light at an hour of the day (0 to 24 by the sun; any number wraps) at a place: where the sun and\nmoon stand, their light, the sky's own light and colors, how clearly stars show and how dark it has grown. Every\nvalue changes smoothly through the day, so an hour hand dragged across it never jumps.",
+     "signatures": [
+      {
+       "code": "daylight(hour: number, place?: SkyPlace): Daylight"
+      }
+     ]
+    },
+    {
+     "name": "skyLights",
+     "kind": "function",
+     "doc": "The lights a sky gives a scene, for `setLights`: the sun and the moon as lights from a direction (each only while\nit gives light, so a march for shadows is never spent on a light that is down), casting shadows if asked, and the\nsky's own light as the ambient color.",
+     "signatures": [
+      {
+       "code": "skyLights(sky: Daylight, shadows?: boolean): { lights: { direction: Vec3; color: Vec3; shadow: boolean }[]; ambient: Vec3 }"
+      }
+     ]
+    }
+   ]
+  },
+  {
    "id": "pixelPass",
    "title": "Pixel mode",
    "group": "pixels",
@@ -7426,6 +7691,404 @@
    ]
   },
   {
+   "id": "water",
+   "title": "Water that ripples",
+   "group": "simulation",
+   "doc": "Still water that moves when something moves through it: a pond as a grid of heights stepped by the wave equation,\nand the blobs that draw its surface.\n\n`Water` is the pond itself, in plain numbers so it runs in Node tests. Each wet cell holds how far its surface stands\nabove the level and how fast it is rising. A fixed tick moves every cell toward the mean of its neighbors, which is\nwhat makes a ring travel outward at `speed`; a dry cell gives its neighbor back its own height, so rings bounce off\nbanks, steps and pillars. Nothing draws rings: a body that enters, leaves or wades through the water (`body`) pushes\nthe water it displaces to the cells round it, and the rings are what the grid does with that.\n\n`makeSurface` lays flat blobs over the wet cells, `shapeSurface` lifts and tilts each to the water under it, and\n`shadeSurface` colors each from the view: clear looking straight down, a mirror of the sky at a low angle\n(Fresnel), with a glint where it throws the sun or a lamp at the eye.",
+   "entries": [
+    {
+     "name": "WaterSpec",
+     "kind": "interface",
+     "doc": "A pond for `Water`: its grid, where its surface stands and where there is water at all.",
+     "props": [
+      {
+       "name": "x0",
+       "type": "number",
+       "doc": "The grid's corner along x."
+      },
+      {
+       "name": "z0",
+       "type": "number",
+       "doc": "The grid's corner along z."
+      },
+      {
+       "name": "nx",
+       "type": "number",
+       "doc": "Cells along x."
+      },
+      {
+       "name": "nz",
+       "type": "number",
+       "doc": "Cells along z."
+      },
+      {
+       "name": "cell",
+       "type": "number",
+       "doc": "A cell's side, in meters."
+      },
+      {
+       "name": "level",
+       "type": "number",
+       "doc": "The height (y) the surface stands at when still."
+      },
+      {
+       "name": "wet",
+       "optional": true,
+       "type": "(x: number, z: number) => boolean",
+       "doc": "Whether there is water at a point. Left out, the whole grid is wet."
+      },
+      {
+       "name": "speed",
+       "optional": true,
+       "type": "number",
+       "doc": "How fast a ring travels, meters a second: 0.8 when left out."
+      },
+      {
+       "name": "damping",
+       "optional": true,
+       "type": "number",
+       "doc": "How quickly the water comes to rest: the share of its motion lost a second, 0.55 when left out."
+      }
+     ]
+    },
+    {
+     "name": "WATER_TICK",
+     "kind": "const",
+     "doc": "The water's fixed step, seconds: the same frames give the same water.",
+     "type": "number"
+    },
+    {
+     "name": "WATER_STILL",
+     "kind": "const",
+     "doc": "Once every cell is within this of the mean height and moving slower than this (meters, meters a second), the water counts as still and isn't stepped.",
+     "type": "0.00002"
+    },
+    {
+     "name": "BODY_SLACK",
+     "kind": "const",
+     "doc": "How far a body must move (or grow) where it crosses the surface before the water is told, meters: a standing leg's sway is not a wave.",
+     "type": "0.004"
+    },
+    {
+     "name": "Crossing",
+     "kind": "interface",
+     "doc": "Where a body crosses the water's surface: a disc.",
+     "props": [
+      {
+       "name": "x",
+       "type": "number",
+       "doc": "The disc's middle, along x."
+      },
+      {
+       "name": "z",
+       "type": "number",
+       "doc": "The disc's middle, along z."
+      },
+      {
+       "name": "r",
+       "type": "number",
+       "doc": "The disc's radius."
+      }
+     ]
+    },
+    {
+     "name": "crossing",
+     "kind": "function",
+     "doc": "Where a capsule from `a` to `b` of radius `r` crosses the level `y`: the disc it cuts out of the surface, or null\nwhen it is wholly above or below. A leg is such a capsule from knee to ankle.",
+     "signatures": [
+      {
+       "code": "crossing(a: ArrayLike<number>, b: ArrayLike<number>, r: number, y: number): Crossing | null"
+      }
+     ]
+    },
+    {
+     "name": "Water",
+     "kind": "class",
+     "doc": "A pond: heights on a grid, stepped by the wave equation, moved by what wades through it.",
+     "ctor": [
+      {
+       "code": "new Water(spec: WaterSpec)"
+      }
+     ],
+     "props": [
+      {
+       "name": "spec",
+       "readonly": true,
+       "type": "Required<Omit<WaterSpec, \"wet\">>",
+       "doc": "The pond's grid and level, with the defaults filled in."
+      },
+      {
+       "name": "h",
+       "readonly": true,
+       "type": "Float32Array",
+       "doc": "Each cell's height above the level, meters."
+      },
+      {
+       "name": "v",
+       "readonly": true,
+       "type": "Float32Array",
+       "doc": "Each cell's speed upward, meters a second."
+      },
+      {
+       "name": "wet",
+       "readonly": true,
+       "type": "Uint8Array",
+       "doc": "1 where a cell holds water."
+      },
+      {
+       "name": "wetCount",
+       "readonly": true,
+       "type": "number",
+       "doc": "How many cells hold water."
+      },
+      {
+       "name": "time",
+       "type": "number",
+       "doc": "Seconds stepped so far."
+      },
+      {
+       "name": "version",
+       "type": "number",
+       "doc": "Goes up whenever the heights change, so a view knows to draw again."
+      },
+      {
+       "name": "still",
+       "readonly": true,
+       "type": "boolean",
+       "doc": "Whether the water is at rest."
+      },
+      {
+       "name": "energy",
+       "readonly": true,
+       "type": "number",
+       "doc": "The water's energy per wet cell, 0 at rest: its motion (speed squared) plus its tilt (the squared slope between\nneighbors, times the wave speed squared), which trade places as a wave passes. Waves keep it, damping spends it,\nand nothing but a body or a drop adds to it."
+      },
+      {
+       "name": "volume",
+       "readonly": true,
+       "type": "number",
+       "doc": "How much water stands above the level in all, cubic meters: what a body pushed aside is put back round it, so this stays 0."
+      }
+     ],
+     "methods": [
+      {
+       "name": "index",
+       "doc": "The cell holding (x, z), or −1 off the grid.",
+       "signatures": [
+        {
+         "code": "index(x: number, z: number): number"
+        }
+       ]
+      },
+      {
+       "name": "wetAt",
+       "doc": "Whether there is water at (x, z).",
+       "signatures": [
+        {
+         "code": "wetAt(x: number, z: number): boolean"
+        }
+       ]
+      },
+      {
+       "name": "roomAt",
+       "doc": "Whether every point within `r` of (x, z) is water: room for a body that wide to stand.",
+       "signatures": [
+        {
+         "code": "roomAt(x: number, z: number, r: number): boolean"
+        }
+       ]
+      },
+      {
+       "name": "heightAt",
+       "doc": "The surface's height above the level at (x, z), blended between the four cells round it; 0 on dry ground.",
+       "signatures": [
+        {
+         "code": "heightAt(x: number, z: number): number"
+        }
+       ]
+      },
+      {
+       "name": "slopeAt",
+       "doc": "The surface's slope at (x, z): how much it rises per meter along x and along z. A dry neighbor counts as level with the cell, as it does to the waves.",
+       "signatures": [
+        {
+         "code": "slopeAt(x: number, z: number): [number, number]"
+        }
+       ]
+      },
+      {
+       "name": "body",
+       "doc": "Tells the water where a body crosses its surface now (`at`, from `crossing`; null when it is out of the water or\nwholly under it). `draft` is how deep the body stands in the water there, meters: a leg on the bed takes the place\nof the whole column, so its draft is the water's depth. Where the body newly stands, the water it takes the place\nof (a disc of its radius, `draft` deep, whatever the grid) is pressed out and put on the cells just round it;\nwhere it stood, the water comes back the same way. So stepping in raises a ring, wading pushes a wave ahead and\nleaves a trough behind, and stepping out lets the water fall back in. `id` names the body from call to call.",
+       "signatures": [
+        {
+         "code": "body(id: string, at: Crossing | null, draft?: number): void"
+        }
+       ]
+      },
+      {
+       "name": "rest",
+       "doc": "Lays the water flat and still at once, keeping what it knows of the bodies in it: for the start of a scene, where whoever stands in the pond has always stood there.",
+       "signatures": [
+        {
+         "code": "rest(): void"
+        }
+       ]
+      },
+      {
+       "name": "forget",
+       "doc": "Forgets every body, as when the scene is set again: the next `body` call for each is a fresh entry.",
+       "signatures": [
+        {
+         "code": "forget(): void"
+        }
+       ]
+      },
+      {
+       "name": "drop",
+       "doc": "Lets a drop of `volume` cubic meters fall at (x, z), spread over a radius `r`: a raindrop, a pebble, a tap. Nothing if it lands on dry ground.",
+       "signatures": [
+        {
+         "code": "drop(x: number, z: number, r: number, volume: number): void"
+        }
+       ]
+      },
+      {
+       "name": "step",
+       "doc": "Moves the water on by `dt` seconds, in whole ticks (what is left of a frame is carried to the next).",
+       "signatures": [
+        {
+         "code": "step(dt: number): void"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "WaterSurface",
+     "kind": "interface",
+     "doc": "The blobs that draw a pond's surface, from `makeSurface`.",
+     "extends": [
+      "Actor"
+     ],
+     "props": [
+      {
+       "name": "at",
+       "type": "Float32Array",
+       "doc": "Where each blob lies on the pond: x then z, a pair a blob."
+      },
+      {
+       "name": "size",
+       "type": "Float32Array",
+       "doc": "Each blob's size at rest, across the surface."
+      },
+      {
+       "name": "slope",
+       "type": "Float32Array",
+       "doc": "The surface's slope under each blob as `shapeSurface` last found it: along x then along z, a pair a blob."
+      }
+     ]
+    },
+    {
+     "name": "WaterLook",
+     "kind": "interface",
+     "doc": "How a pond's surface looks, for `shadeSurface`. Colors are linear RGB, 0 to 1.",
+     "props": [
+      {
+       "name": "body",
+       "type": "Vec3",
+       "doc": "The water's own color, seen looking straight down into it."
+      },
+      {
+       "name": "sky",
+       "type": "Vec3",
+       "doc": "What the surface mirrors: the sky overhead, or the dark over a night scene."
+      },
+      {
+       "name": "horizon",
+       "optional": true,
+       "type": "Vec3",
+       "doc": "The sky low down, where it is lighter: a ripple tips the mirror between the two, which is most of how one is seen. The same as `sky` when left out."
+      },
+      {
+       "name": "clear",
+       "type": "number",
+       "doc": "How solid it is looking straight down, 0 to 1: the rest of the way to 1 comes with the angle."
+      },
+      {
+       "name": "sun",
+       "optional": true,
+       "type": "{ toward: Vec3; color: Vec3; glow?: number }",
+       "doc": "The way to the sun (or moon), and its color: the surface glints where it throws it at the eye. `glow` is the share of that color the sky round it holds, fading over about a sixth of the sky; none when left out."
+      },
+      {
+       "name": "gloss",
+       "optional": true,
+       "type": "number",
+       "doc": "How tight a glint is: 120 when left out. Lower spreads it into a sheen."
+      },
+      {
+       "name": "mirror",
+       "optional": true,
+       "type": "MirrorImage | null",
+       "doc": "What the surface mirrors of the scene round it: a picture from `SplatMirror` for this pond's level. Where the\npicture shows something, the surface mirrors that and not the sky; a ripple tips the mirrored line of sight,\nso reflections wobble and break up. Left out, it mirrors the sky alone."
+      },
+      {
+       "name": "reach",
+       "optional": true,
+       "type": "number",
+       "doc": "How far off the things mirrored are taken to stand, meters, when a ripple tips the line of sight: farther makes reflections wobble more. 1.5 when left out."
+      },
+      {
+       "name": "steep",
+       "optional": true,
+       "type": "number",
+       "doc": "How many times steeper than it is the surface is drawn and lit, so ripples a few millimeters high read from across a scene: 1 when left out."
+      }
+     ]
+    },
+    {
+     "name": "makeSurface",
+     "kind": "function",
+     "doc": "Flat blobs over every wet cell of a pond, `per` to a cell (2 when left out), on one still bone: the surface that\n`shapeSurface` moves and `shadeSurface` colors. The count never changes afterward.",
+     "signatures": [
+      {
+       "code": "makeSurface(water: Water, options?: { per?: number; seed?: number }): WaterSurface"
+      }
+     ]
+    },
+    {
+     "name": "shapeSurface",
+     "kind": "function",
+     "doc": "Lifts each blob of a surface to the water under it and tilts it to the water's slope there. Call after the water moved, then hand the surface to `SplatWorld.reshape`.",
+     "signatures": [
+      {
+       "code": "shapeSurface(s: WaterSurface, water: Water, steep?: number): void"
+      }
+     ]
+    },
+    {
+     "name": "surfaceColor",
+     "kind": "function",
+     "doc": "What a point of the surface sends to an eye: its color (linear) and how solid it is. Clear and its own color seen\nfrom above, more of a mirror of the sky the lower the angle (Schlick's Fresnel for water), plus a glint where the\nmirrored line of sight runs at the sun or at a lamp. Pure, so tests can ask it.",
+     "signatures": [
+      {
+       "code": "surfaceColor(p: Vec3, normal: Vec3, eye: ArrayLike<number>, look: WaterLook, lights?: readonly PointLight[]): { color: Vec3; opacity: number }"
+      }
+     ]
+    },
+    {
+     "name": "shadeSurface",
+     "kind": "function",
+     "doc": "Colors every blob of a surface for an eye at `eye` (`surfaceColor`), on the slopes `shapeSurface` last left. Call\nwhen the water (after `shapeSurface`) or the view moved, then hand the surface to `SplatWorld.reshape` or `recolor`.",
+     "signatures": [
+      {
+       "code": "shadeSurface(s: WaterSurface, look: WaterLook, eye: ArrayLike<number>, lights?: readonly PointLight[]): void"
+      }
+     ]
+    }
+   ]
+  },
+  {
    "id": "pick",
    "title": "Picking",
    "group": "extras",
@@ -7749,6 +8412,169 @@
        "signatures": [
         {
          "code": "read(renderer: WebGPURenderer): Promise<{ width: number; height: number; depth: Float32Array }>"
+        }
+       ]
+      },
+      {
+       "name": "dispose",
+       "doc": "Frees its render target.",
+       "signatures": [
+        {
+         "code": "dispose(): void"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "reflect",
+   "title": "Mirrors: the arithmetic",
+   "group": "extras",
+   "doc": "A flat mirror, and what is seen in it: the plain arithmetic of a planar reflection, apart from any drawing.\n\nThe world seen in a mirror is the world itself, flipped through the mirror's plane, seen from where the eye\nreally stands. So `SplatMirror` (mirror.ts) draws the scene once more with every point flipped (`mirrorMatrix`),\nleaving out what lies behind the mirror, and keeps the picture with the camera it belongs to (`MirrorImage`).\nA point of the mirror's surface then finds what it reflects by asking that picture (`seenIn`) where its\nmirrored line of sight lands: for a flat mirror that is the very pixel the surface point itself is drawn at, and\nfor a rippled one (water) the line is tipped by the ripple first, which is what makes reflections wobble.",
+   "entries": [
+    {
+     "name": "MirrorPlane",
+     "kind": "interface",
+     "doc": "A plane: the points p with normal·p + offset = 0. `normal` is one long and points out of the mirror's face.",
+     "props": [
+      {
+       "name": "normal",
+       "type": "Vec3",
+       "doc": "The way the mirror faces, one long."
+      },
+      {
+       "name": "offset",
+       "type": "number",
+       "doc": "Minus how far the plane is from the origin along the normal."
+      }
+     ]
+    },
+    {
+     "name": "levelPlane",
+     "kind": "const",
+     "doc": "A level mirror at height y, facing up: a pond.",
+     "type": "(y: number) => MirrorPlane"
+    },
+    {
+     "name": "inFront",
+     "kind": "const",
+     "doc": "How far `p` stands in front of the plane (negative behind it).",
+     "type": "(p: ArrayLike<number>, m: MirrorPlane) => number"
+    },
+    {
+     "name": "reflectPoint",
+     "kind": "function",
+     "doc": "`p` flipped through the plane: where it is seen in the mirror.",
+     "signatures": [
+      {
+       "code": "reflectPoint(p: ArrayLike<number>, m: MirrorPlane): Vec3"
+      }
+     ]
+    },
+    {
+     "name": "mirrorMatrix",
+     "kind": "function",
+     "doc": "The matrix that flips every point through the plane, 16 numbers by columns (as three.js keeps a Matrix4). It is its own inverse.",
+     "signatures": [
+      {
+       "code": "mirrorMatrix(m: MirrorPlane): number[]"
+      }
+     ]
+    },
+    {
+     "name": "MirrorImage",
+     "kind": "interface",
+     "doc": "A picture of the mirrored world, with the camera it was drawn for.",
+     "props": [
+      {
+       "name": "width",
+       "type": "number",
+       "doc": "Pixels across."
+      },
+      {
+       "name": "height",
+       "type": "number",
+       "doc": "Pixels down."
+      },
+      {
+       "name": "pixels",
+       "type": "Float32Array",
+       "doc": "Red, green, blue (linear, multiplied by cover) and cover, four numbers a pixel, rows from the top. Cover is 0 where the mirror shows nothing but sky."
+      },
+      {
+       "name": "viewProj",
+       "type": "ArrayLike<number>",
+       "doc": "The eye's own projection times view matrix when the picture was drawn, 16 numbers by columns: where a point of the mirrored world lands in the picture."
+      },
+      {
+       "name": "plane",
+       "type": "MirrorPlane",
+       "doc": "The mirror."
+      }
+     ]
+    },
+    {
+     "name": "seenIn",
+     "kind": "function",
+     "doc": "What the picture shows where the world point (x, y, z) is seen in the mirror: writes red, green, blue (times\ncover) and cover into `out` and returns true, or returns false (and writes zeros) when the point is behind the\neye or off the picture. Blended between the four pixels round it.",
+     "signatures": [
+      {
+       "code": "seenIn(img: MirrorImage, x: number, y: number, z: number, out: number[] | Float32Array<ArrayBufferLike> | Float64Array<ArrayBufferLike>): boolean"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "mirror",
+   "title": "Mirrors: what a flat mirror shows",
+   "group": "extras",
+   "doc": "",
+   "entries": [
+    {
+     "name": "SplatMirror",
+     "kind": "class",
+     "doc": "What a flat mirror shows of a scene drawn by the engine: the scene drawn once more as its mirror image, from the\nsame eye, into a target of its own. Water, a polished floor or a looking glass then reads it (`read`, then\n`seenIn` in reflect.ts) to color itself, so whatever stands, moves or burns in the scene is in the reflection,\nwith nothing set up per scene.\n\nDraw it before the frame's own render, with the frame's camera. The mirrored view puts the blobs in another\norder than the frame's, so it costs a sort and a draw of its own (at the target's size, which can be small: a\nrippled surface blurs what it mirrors anyway). Blobs whose centers are under the mirror, or within `lift` over\nit, are left out through `SplatWorld.clip`: the bed of a pond is not in its reflection, and neither are the\nblobs of the water's own surface. Lines and points are left out; ordinary meshes are drawn, but show their back\nfaces (a mirror image turns triangles round).",
+     "ctor": [
+      {
+       "code": "new SplatMirror(width?: number, height?: number)"
+      }
+     ],
+     "props": [
+      {
+       "name": "target",
+       "readonly": true,
+       "type": "RenderTarget",
+       "doc": "The mirrored picture: linear color times cover, and cover."
+      }
+     ],
+     "methods": [
+      {
+       "name": "setSize",
+       "doc": "Sizes the picture, in pixels.",
+       "signatures": [
+        {
+         "code": "setSize(width: number, height: number): void"
+        }
+       ]
+      },
+      {
+       "name": "render",
+       "doc": "Draws `scene` as the mirror `plane` shows it to `camera`, leaving out blobs less than `lift` in front of the plane.",
+       "signatures": [
+        {
+         "code": "render(renderer: WebGPURenderer, scene: Object3D, camera: Camera, plane: MirrorPlane, lift?: number): void"
+        }
+       ]
+      },
+      {
+       "name": "read",
+       "doc": "The picture last drawn, read back for `seenIn`, with the camera it was drawn for. Reading takes a frame or\ntwo; while one read is under way another returns null, so call it every frame and keep the last picture.",
+       "signatures": [
+        {
+         "code": "read(renderer: WebGPURenderer): Promise<MirrorImage | null>"
         }
        ]
       },

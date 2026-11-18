@@ -4,9 +4,9 @@ import { poseIdle } from '../../splat-engine/creature.ts'
 import { hipDrop, stepLegs, type Leg } from '../../splat-engine/ik.ts'
 import { blendPose } from '../../splat-engine/mix.ts'
 import { axisAngle, mulQ, rotate, type Skeleton } from '../../splat-engine/rig.ts'
-import { Steps, type StepBody } from '../../splat-engine/steps.ts'
-import { elfIdle, elfWalk, elfWave, makeElf } from '../../splat-engine/zoo/elf.ts'
-import { ElfCloth } from '../../splat-engine/zoo/elfCloth.ts'
+import { Steps } from '../../splat-engine/steps.ts'
+import type { ElfCloth } from '../../splat-engine/zoo/elfCloth.ts'
+import { WAVE_SECONDS, WalkingElf, easeDrop, stepBody, strideAt, toward } from '../walkingElf.ts'
 import { FOX_SWING, makeFox, trot } from '../../splat-engine/zoo/fox.ts'
 import { Swing } from '../../splat-engine/swing.ts'
 import { Meadow } from '../../splat-engine/meadow.ts'
@@ -57,38 +57,16 @@ export const FOX_BLOBS = 9000
 export const FOX_SIZE = 0.55
 /** How often the walking fox's brush sways side to side, a second, and how far each way (radians at each of its two bones). */
 const TAIL_BEAT = 0.55, TAIL_SWAY = 0.26
-/** The elf's walk clip's cycle: its arms and body swing once a stride; the legs go where the footsteps say. */
-const STRIDE_SECONDS = 1.1
-const WAVE_SECONDS = 4
 const TAU = Math.PI * 2
 
-/** The elf's legs, left first, as the footstep planner numbers its feet. */
-const ELF_LEGS: Leg[] = ['l', 'r'].map((s) => ({ upper: `${s}Thigh`, lower: `${s}Shin`, foot: `${s}Foot`, pole: [0, 0, 1] }))
-const ELF_STEPS = { reach: 0.33, duration: 0.4, lift: 0.1 }
-/** The most either comes down to reach a stride, meters. */
-const ELF_CROUCH = 0.12
 /** The fox's legs, front left, front right, back left, back right; a trot moves them in diagonal pairs. */
 const FOX_LEGS = ['fl', 'fr', 'bl', 'br'].map((l) => ({ upper: `${l}Upper`, lower: `${l}Lower`, pole: [0, 0, l[0] === 'f' ? 1 : -1] as Vec3 }))
 const FOX_CROUCH = 0.09 * FOX_SIZE / 0.55
 const FOX_STEPS = { reach: 0.13 * FOX_SIZE / 0.55, duration: 0.22, lift: 0.06, groups: [[0, 3], [1, 2]] }
 
-/** Where the walk clip is in its cycle, from which foot is stepping and how far: the swing follows the steps. */
-function strideAt(steps: Steps, starts: number[]): number | null {
-  for (let g = 0; g < steps.opts.groups.length; g++) {
-    const f = steps.feet[steps.opts.groups[g][0]]
-    if (f.t >= 0) return starts[g] + Math.PI * Math.min(1, f.t)
-  }
-  return null
-}
-
-/** Eases an angle toward another the short way round, at `rate` a second. */
-function toward(a: number, b: number, rate: number, dt: number) {
-  const d = Math.atan2(Math.sin(b - a), Math.cos(b - a))
-  return a + d * (1 - Math.exp(-rate * dt))
-}
-
 export class Forest {
-  readonly elf: Creature
+  /** The elf on its own feet: the footstep planner, the bent legs and the swinging cloak. */
+  readonly walking: WalkingElf
   /** A fox that walks with the elf, on the same kind of footsteps, four feet in two pairs. */
   readonly fox: Creature
   readonly grounds: GroundTile[]
@@ -103,8 +81,7 @@ export class Forest {
   readonly actors: Creature[]
   walker: Walker = { x: 0, z: 0, heading: 0, speed: 0 }
   foxWalker: Walker = { x: FOX_SPOT[0], z: FOX_SPOT[1], heading: 0, speed: 0 }
-  /** Where each foot goes: the elf's two and the fox's four. Planted feet never slide. */
-  readonly elfSteps: Steps
+  /** Where each of the fox's four feet goes. Planted feet never slide. */
   readonly foxSteps: Steps
   /** The fox's legs, each ending at its paw. */
   private readonly foxLegs: Leg[]
@@ -116,11 +93,8 @@ export class Forest {
   /** Meters walked, either way. */
   walked = 0
   private tileOf = new Array<number | null>(RING).fill(null)
-  private stride = 0
   private foxStride = 0
-  private walkWeight = 0
   private foxWeight = 0
-  private elfDrop = 0
   private foxDrop = 0
   private turned = { elf: 0, fox: 0 }
   private idleT = 0
@@ -129,28 +103,23 @@ export class Forest {
   private solidFor = ''
 
   readonly opts: ForestOptions
-  /** The elf's cloak and plait, swinging after its body. */
-  private readonly cloth: ElfCloth
   /** The fox's brush, swinging after it (measured at the fox's size here). */
   readonly foxTail: Swing
 
   constructor(opts: ForestOptions) {
     this.opts = opts
     this.seed = opts.seed
-    this.elf = makeElf(Math.round(ELF_BLOBS * Math.max(0.5, opts.detail)), opts.look)
+    this.walking = new WalkingElf(Math.round(ELF_BLOBS * Math.max(0.5, opts.detail)), opts.look, this.walker, { pace: WALK_SPEED })
     this.fox = makeFox(Math.round(FOX_BLOBS * Math.max(0.5, opts.detail)), 'red')
-    const esk = this.elf.skeleton, fsk = this.fox.skeleton
-    this.cloth = new ElfCloth(esk)
+    const fsk = this.fox.skeleton
     fsk.rootScale = FOX_SIZE
     this.foxTail = new Swing(fsk, FOX_SWING)
-    const ankle = (i: number): [number, number] => [esk.bones[i].head[0], esk.bones[i].head[2]]
-    this.elfSteps = new Steps(ELF_LEGS.map((l) => ({ home: ankle(esk.index(l.foot!)) })), this.body(this.walker, 0), ELF_STEPS)
     const hips = fsk.bones[0].head
     this.foxLegs = FOX_LEGS.map((l) => ({ ...l, tip: fsk.bones[fsk.index(l.lower)].tail! }))
     this.foxSteps = new Steps(FOX_LEGS.map((l) => {
       const paw = fsk.bones[fsk.index(l.lower)].tail!
       return { home: [(paw[0] - hips[0]) * FOX_SIZE, (paw[2] - hips[2]) * FOX_SIZE] as [number, number] }
-    }), this.body(this.foxWalker, 0), FOX_STEPS)
+    }), stepBody(this.foxWalker, 0), FOX_STEPS)
     this.grounds = Array.from({ length: RING }, (_, j) => makeGround(j, opts.detail, opts.season))
     // the field covers the forest's width round the path's widest swing; the path itself has no grass to burn
     const wide = HALF_WIDTH + 2.2
@@ -171,6 +140,13 @@ export class Forest {
     this.update(0, { forward: 0, turn: 0 })
   }
 
+  /** The elf itself. */
+  get elf(): Creature { return this.walking.elf }
+  /** Where each of the elf's two feet goes. */
+  get elfSteps(): Steps { return this.walking.steps }
+  /** The elf's cloak and plait, swinging after its body. */
+  get cloth(): ElfCloth { return this.walking.cloth }
+
   get blobCount() { return this.actors.reduce((s, a) => s + a.blobs.count, 0) }
   get plantCount() { return this.slots.reduce((s, row) => s + row.length, 0) }
   /** Plants standing (or growing) right now. */
@@ -189,8 +165,8 @@ export class Forest {
   standAt(elf: Walker, fox: Walker) {
     this.walker = { ...elf, speed: 0 }
     this.foxWalker = { ...fox, speed: 0 }
-    this.elfSteps.reset(this.body(this.walker, 0))
-    this.foxSteps.reset(this.body(this.foxWalker, 0))
+    this.walking.standAt(this.walker)
+    this.foxSteps.reset(stepBody(this.foxWalker, 0))
   }
 
   wave() { this.waveUntil = this.time + WAVE_SECONDS }
@@ -246,7 +222,8 @@ export class Forest {
       sk.place.set([s.at.x, 0, s.at.z])
       s.plant.pose(this.time - s.since, this.time, s.at.yaw, s.at.scale, this.wind)
     }
-    this.poseElf(dt)
+    this.walking.pose(this.walker, this.turned.elf, dt, this.waving ? WAVE_SECONDS - (this.waveUntil - this.time) : null)
+    this.idleT += dt
     this.poseFox(dt)
     this.burn(dt)
   }
@@ -272,11 +249,6 @@ export class Forest {
     }
   }
 
-  /** The body as the footstep planner sees it. */
-  private body(w: Walker, turn: number): StepBody {
-    return { x: w.x, z: w.z, heading: w.heading, vx: Math.sin(w.heading) * w.speed, vz: Math.cos(w.heading) * w.speed, turn }
-  }
-
   /** Hands ring slot i % RING the tile i, if it doesn't hold it already. */
   private give(i: number) {
     const j = slotOf(i)
@@ -295,44 +267,9 @@ export class Forest {
     }
   }
 
-  private poseElf(dt: number) {
-    const sk = this.elf.skeleton
-    const { heading } = this.walker
-    this.idleT += dt
-    const placed = this.elfSteps.update(this.body(this.walker, this.turned.elf), dt)
-    // the arms and body swing with the steps: the left foot comes forward over the first half of the clip's cycle
-    const at = strideAt(this.elfSteps, [-Math.PI / 2, Math.PI / 2])
-    if (at !== null) this.stride = toward(this.stride, at, 18, dt)
-    const stepping = at !== null || Math.abs(this.walker.speed) > 0.3
-    this.walkWeight += ((stepping ? Math.min(1, Math.abs(this.walker.speed) / (WALK_SPEED * 0.45) + 0.35) : 0) - this.walkWeight) * (1 - Math.exp(-dt * 6))
-    if (this.waving) elfWave(sk, WAVE_SECONDS - (this.waveUntil - this.time))
-    else elfIdle(sk, this.idleT)
-    const rest = { rotation: sk.rotation.slice(), offset: sk.offset.slice() }
-    if (this.walkWeight > 0.01) {
-      elfWalk(sk, ((((this.stride / TAU) * STRIDE_SECONDS) % STRIDE_SECONDS) + STRIDE_SECONDS) % STRIDE_SECONDS)
-      blendPose(sk, rest, this.walkWeight)
-    } else {
-      sk.rotation.set(rest.rotation)
-      sk.offset.set(rest.offset)
-    }
-    // turn the whole elf to its heading, about the hips
-    const turn = axisAngle([0, 1, 0], heading)
-    sk.setRotation(0, mulQ(turn, sk.rotation.subarray(0, 4)))
-    sk.offset.set(rotate(turn, sk.offset.subarray(0, 3)), 0)
-    sk.place.set([this.walker.x, 0, this.walker.z])
-    // each foot where the planner put it, the hips low enough for a long stride to reach
-    const ankles = ELF_LEGS.map((l) => sk.bones[sk.index(l.foot!)].head[1])
-    const targets = placed.map((p, i): Vec3 => [p[0], ankles[i] + p[1], p[2]])
-    this.elfDrop = this.ease(this.elfDrop, Math.min(ELF_CROUCH, hipDrop(sk, ELF_LEGS, targets)), dt)
-    sk.offset[1] -= this.elfDrop
-    stepLegs(sk, ELF_LEGS, targets, placed.map((_, i) => this.elfSteps.turned(i)))
-    // the cloak and plait swing after the body, then clear the legs as they are now
-    this.cloth.update(sk, dt)
-  }
-
   private poseFox(dt: number) {
     const sk = this.fox.skeleton, w = this.foxWalker
-    const placed = this.foxSteps.update(this.body(w, this.turned.fox), dt)
+    const placed = this.foxSteps.update(stepBody(w, this.turned.fox), dt)
     // the trot's front left paw is lifted through the second half of its cycle
     const at = strideAt(this.foxSteps, [Math.PI / 2, (3 * Math.PI) / 2])
     if (at !== null) this.foxStride = toward(this.foxStride, at, 24, dt)
@@ -355,16 +292,11 @@ export class Forest {
     sk.offset.set([o[0] * FOX_SIZE - hips[0], o[1] * FOX_SIZE - hips[1] * (1 - FOX_SIZE), o[2] * FOX_SIZE - hips[2]], 0)
     sk.place.set([w.x, 0, w.z])
     const targets = placed.map((p): Vec3 => [p[0], p[1], p[2]])
-    this.foxDrop = this.ease(this.foxDrop, Math.min(FOX_CROUCH, hipDrop(sk, this.foxLegs, targets)), dt)
+    this.foxDrop = easeDrop(this.foxDrop, Math.min(FOX_CROUCH, hipDrop(sk, this.foxLegs, targets)), dt)
     sk.offset[1] -= this.foxDrop
     stepLegs(sk, this.foxLegs, targets)
     // the brush trails the trot and swings out on a turn
     this.foxTail.update(sk, dt)
-  }
-
-  /** Eases the hips toward a new drop: down at once (a leg must reach), back up gently. */
-  private ease(was: number, want: number, dt: number) {
-    return want > was ? want : was + (want - was) * (1 - Math.exp(-dt * 4))
   }
 }
 

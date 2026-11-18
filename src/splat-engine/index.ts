@@ -40,8 +40,10 @@ export * from './life.ts'
 export * from './erode.ts'
 export * from './grow.ts'
 export * from './weather.ts'
+export * from './daylight.ts'
 export * from './sceneDoc.ts'
 export * from './mpm.ts'
+export * from './water.ts'
 
 // what's drawn
 export * from './pixelPass.ts'
@@ -53,6 +55,8 @@ export { InkLines } from './inkLines.ts'
 export * from './lod.ts'
 export * from './edit.ts'
 export * from './depth.ts'
+export * from './reflect.ts'
+export * from './mirror.ts'
 
 // files and sheets
 export * from './glb.ts'

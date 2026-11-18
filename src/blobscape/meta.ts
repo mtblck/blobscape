@@ -30,12 +30,16 @@ export function pageMeta(route: Route): PageMeta {
       return { path, title: `Splat Creatures · ${SITE.name}`, description: 'A crocodile, a jellyfish, an owl, a frog, a fox, an elf and an ice dragon made of blobs, moving on their own splat engine: a walk, a swim, a jump, a tongue flick, wing beats and fire. See the bones under the blobs, then download one as a rigged, animated .glb (as Gaussian splats or as a mesh for Blender and game engines) or as a pixel-art sprite sheet from 4 or 8 sides.' }
     case 'forest':
       return { path, title: `Forest Walk · ${SITE.name}`, description: 'Walk an elf made of blobs down an endless forest path, from behind, a fox trotting at its side, while trees, ferns, flowers and mushrooms grow out of the ground as you come. Every plant is a rig of Gaussian splats on our own splat engine.' }
+    case 'pond':
+      return { path, title: `Wading Pond · ${SITE.name}`, description: 'Wade an elf made of blobs through a shallow pond in a ruin by candlelight. The water is a grid of heights stepped by the wave equation: rings come from each footfall, spread, and bounce off the banks. The candles are live lights that cast shadows, all on our own Gaussian splat engine.' }
     case 'dungeon':
       return { path, title: `Dungeon Run · ${SITE.name}`, description: 'Fight slimes in a torchlit dungeon with a sword, fire and frost. The hero, the hall and five colors of slime are all Gaussian splats on our own splat engine, with fire and frost that spread across the floor, waves, and slimes that burst into splats.' }
     case 'scan':
       return { path, title: `Scan Studio · ${SITE.name}`, description: 'Open a Gaussian splat scan of an object from your phone (Scaniverse, Polycam and others export .ply or .spz), find the table and turn it level, cut away the floor and the floaters, relight it with live lights, then take it into the sandbox or save it. Everything stays on your device.' }
     case 'shift':
       return { path, title: `Shape Shifter · ${SITE.name}`, description: 'One creature made of Gaussian splats turns into another: a frog into a dragon, an owl into a crocodile. Every blob finds a partner in the other creature and travels to it, blending its size, facing and color on the way. Pick the pair, send the blobs straight, in a swirl, through a puddle or out in a burst, and see what pairing by place is for.' }
+    case 'daynight':
+      return { path, title: `Day and Night · ${SITE.name}`, description: 'A cabin in a forest clearing made of Gaussian splats, lit live through a whole day: drag the time and the sun follows its real path for the latitude and season, shadows turn and stretch, the sky reddens, the windows and a lantern come on at dusk, and birds give way to fireflies under the moon and stars.' }
     case 'brush':
       return { path, title: `Brush and Ink · ${SITE.name}`, description: 'Gaussian splats drawn as brush marks and pen strokes in place of soft dots: gouache, oil, ink and wash, and hatching. Every mark belongs to one blob and takes its shape and direction from it, so a scene, a creature or a scan reads as a painting from any side and the strokes hold still as you turn it.' }
     case 'flow':

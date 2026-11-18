@@ -149,7 +149,7 @@ export default [
       await page.waitForTimeout(2000)
       await page.screenshot({ path: join(shots, 'blobscape-sandbox-fill.png') })
       // Filling open space beside the ball adds nothing
-      await click(0.06, 0.08)
+      await click(0.8, 0.1)
       if ((await count()) !== filled) fails.push(`blobscape sandbox: Fill in open space added ${(await count()) - filled} blobs`)
       else ok('blobscape sandbox: Fill leaves open space empty')
 
@@ -425,7 +425,7 @@ export default [
       if (same !== got || again > first) fails.push(`blobscape sandbox thing: a second click on the same spot gave ${same} (was ${got}) in ${again} ms (the first took ${first})`)
       else ok(`blobscape sandbox thing: the same click again gives the same blobs, in ${(again / 1000).toFixed(1)} s`)
       // empty space selects nothing
-      await click(0.04, 0.06)
+      await click(0.8, 0.1)
       const none = await selected()
       if (none) fails.push(`blobscape sandbox thing: a click on nothing left ${none} selected`)
       if (outside.length) fails.push(`blobscape sandbox thing: asked another site for ${outside.slice(0, 3).join(', ')}`)
