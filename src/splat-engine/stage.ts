@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu'
-import { placeCamera, type Orbit } from '../splat-core/orbit.ts'
+import { STAGE_FOV, placeCamera, type Orbit } from '../splat-core/orbit.ts'
 import { readbackToSrgb } from '../splat-core/color.ts'
 import { SplatWorld, type PointLight } from './engine.ts'
 import { sampleClip, sampleWeights, type Clip } from './glb.ts'
@@ -78,7 +78,7 @@ export class Stage {
   /** Which backend the renderer started on: WebGPU, or WebGL 2 where a browser has none. */
   readonly backend: 'webgpu' | 'webgl'
   private readonly scene = new THREE.Scene()
-  private readonly camera = new THREE.PerspectiveCamera(40, 1, 0.05, 100)
+  private readonly camera = new THREE.PerspectiveCamera(STAGE_FOV, 1, 0.05, 100)
   private world?: SplatWorld
   private rig?: BoneView
   private floor?: THREE.GridHelper
@@ -93,6 +93,7 @@ export class Stage {
   private heldW = new Float32Array(0)
   /** Poses the actor straight from the time, for motion that never loops (a watch keeping time): used instead of a clip. */
   private poser?: (sk: Skeleton, t: number) => void
+  private after?: (sk: Skeleton, t: number) => void
   /** Loose parts that swing on top of the move while it plays live (`Swing`); never in a sheet. */
   private swing?: { update(sk: Skeleton, dt: number): void; reset(): void }
   private target?: THREE.RenderTarget
@@ -203,6 +204,7 @@ export class Stage {
     this.setShow(this.show)
     // a new actor plays its clip; a caller that poses from the time sets its poser again after
     this.poser = undefined
+    this.after = undefined
     this.swing = undefined
     this.setClip(clip)
   }
@@ -265,9 +267,20 @@ export class Stage {
     this.pose()
   }
 
-  /** Plays another clip on the creature shown, or none. */
-  setClip(clip?: Clip) {
+  /** Plays another clip on the creature shown, or none. `from` is the time it starts at, in seconds (left out, time runs on). */
+  setClip(clip?: Clip, from = this.t) {
     this.clip = clip
+    this.t = from
+    this.pose()
+  }
+
+  /**
+   * Runs `after` each time the creature is posed, once its clip or poser has set the bones and before loose parts
+   * swing: for a change laid on top of any move, such as a head turned to look at something. It must leave the
+   * skeleton updated. It stays through a new clip and goes with a new actor.
+   */
+  setAfter(after?: (sk: Skeleton, t: number) => void) {
+    this.after = after
     this.pose()
   }
 
@@ -496,6 +509,7 @@ export class Stage {
     if (this.poser) this.poser(sk, t)
     else if (this.clip) sampleClip(this.clip, sk, t)
     else { sk.reset(); sk.update() }
+    this.after?.(sk, t)
     if (this.swing && (this.poser || this.clip)) this.swing.update(sk, Number.isFinite(was) ? Math.min(0.1, Math.max(0, t - was)) : 0)
     else this.swing?.reset()
     this.reshape(this.poser ? undefined : this.clip, t)

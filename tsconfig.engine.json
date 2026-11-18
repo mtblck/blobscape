@@ -10,5 +10,5 @@
     "rootDir": "src",
     "types": []
   },
-  "include": ["src/splat-engine/index.ts"]
+  "include": ["src/splat-engine/index.ts", "src/splat-engine/element.ts"]
 }

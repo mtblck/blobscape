@@ -3,7 +3,7 @@
   "version": "0.2.0",
   "scripts": {
     "dev": "vite",
-    "build": "npm run hosting:check && tsc && vite build && npm run prerender",
+    "build": "npm run hosting:check && tsc && vite build && node scripts/build-element.mjs && npm run prerender",
     "engine:build": "node scripts/build-engine.mjs",
     "docs:deps": "test -d tools/api-docs/node_modules/typedoc || npm --prefix tools/api-docs ci --ignore-scripts",
     "docs": "npm run docs:deps && npm --prefix tools/api-docs run build",

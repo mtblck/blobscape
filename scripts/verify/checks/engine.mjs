@@ -1,4 +1,5 @@
 // The engine page, the rigged-splat spec page and the unlisted engine lab.
+import { createServer } from 'node:http'
 
 export default [
   {
@@ -51,6 +52,152 @@ export default [
       if (link !== '/engine/' || !html.includes('data-testid="built-on"')) fails.push(`an engine experiment's link to the engine page: ${link}, prerendered ${html.includes('data-testid="built-on"')}`)
       else ok('an experiment built on the engine links to the engine page, in its prerendered HTML too')
       await x.ctx.close()
+    },
+  },
+  {
+    name: 'creature-element',
+    about: "the <blobscape-creature> tag on another site's plain page: draws on both backends, turns, taps, waits off screen, holds still for reduced motion; live on the engine page",
+    entries: ['src/splat-engine/element.ts'],
+    files: ['scripts/build-element.mjs', 'public/rigged-splats/', 'src/blobscape/Engine.tsx', 'src/blobscape/engineCopy.ts'],
+    async run({ base, shots, join, fails, ok, open }) {
+      // a page on another site with nothing but the script tag and the element: the script and the file come from this one
+      // another origin on this machine, really served (a browser won't let a page it takes for public reach into localhost); 127.0.0.1 still counts as secure, which WebGPU needs
+      let body = ''
+      const other = createServer((_req, res) => { res.setHeader('Content-Type', 'text/html'); res.end(body) })
+      await new Promise((r) => other.listen(0, '127.0.0.1', r))
+      const site = `http://127.0.0.1:${other.address().port}/`
+      const page = (attrs, extra = '') => `<!doctype html><html lang="en"><meta charset="utf-8"><title>Another site</title><body style="margin:0;background:#f4efe6">${extra}<script type="module" src="${base}/embed/blobscape-creature.js"></script><blobscape-creature id="c" ${attrs} style="width:400px"><p id="inside">No creature.</p></blobscape-creature></body></html>`
+      const visit = async (attrs, opts = {}, extra = '') => {
+        const v = await open('/rigged-splats/fox.png', { viewport: { width: 800, height: 600 }, ...opts })
+        body = page(attrs, extra)
+        await v.page.goto(site)
+        return v
+      }
+      try {
+      const fox = `src="${base}/rigged-splats/fox.glb" alt="A fox trotting"`
+      const drawn = (v) => v.page.waitForFunction(() => document.querySelector('#c')?.stage, null, { timeout: 90000 }).then(() => true, () => false)
+
+      // off-screen drawing can be read back, on WebGPU and on WebGL: the fox shows, and it moves
+      for (const backend of ['webgpu', 'webgl']) {
+        const v = await visit(`${fox} move="trot" offscreen ${backend === 'webgl' ? 'backend="webgl"' : ''}`)
+        const got = (await drawn(v)) && await v.page.evaluate(async () => {
+          const el = document.querySelector('#c')
+          const cv = el.shadowRoot.querySelector('canvas')
+          const read = async (t) => {
+            await el.stage.frame(t)
+            return cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+          }
+          const a = await read(0.1), b = await read(0.4)
+          let solid = 0, changed = 0
+          for (let i = 3; i < a.length; i += 4) { if (a[i] > 128) solid++; if (Math.abs(a[i] - b[i]) > 60) changed++ }
+          return { backend: el.stage.backend, moves: el.moves, move: el.currentMove, status: el.getAttribute('status'), share: solid / (a.length / 4), changed, label: cv.getAttribute('aria-label'), role: cv.getAttribute('role') }
+        })
+        if (!got) { fails.push(`creature element on ${backend}: never started`); await v.ctx.close(); return }
+        if (got.backend !== backend || got.move !== 'trot' || got.status !== 'ready' || !(got.share > 0.04 && got.share < 0.6) || !(got.changed > 50) || got.role !== 'application' || !/^A fox trotting\. Drag/.test(got.label)) fails.push(`creature element on ${backend}: ${JSON.stringify(got)}`)
+        else ok(`creature element on another site's page, ${backend}: the fox fills ${(got.share * 100).toFixed(0)}% of its box and moves (${got.changed} pixels changed between two moments)`)
+        await v.ctx.close()
+      }
+
+      // on screen (WebGL here): it draws itself, a drag and the arrow keys turn it, a tap plays its move once
+      {
+        const v = await visit(`${fox} move="trot" tap="idle" look="pointer" backend="webgl"`)
+        const ready = await v.page.waitForFunction(() => document.querySelector('#c')?.getAttribute('status') === 'ready', null, { timeout: 90000 }).then(() => true, () => false)
+        if (!ready) fails.push(`creature element: never drew on screen (${await v.page.evaluate(() => document.querySelector('#c')?.getAttribute('status'))})`)
+        else {
+          const az = () => v.page.evaluate(() => document.querySelector('#c').stage.orbit.azimuth)
+          const a0 = await az()
+          await v.page.mouse.move(200, 200)
+          await v.page.mouse.down()
+          await v.page.mouse.move(300, 210, { steps: 5 })
+          await v.page.mouse.up()
+          const a1 = await az()
+          await v.page.locator('#c canvas').focus()
+          await v.page.keyboard.press('ArrowRight')
+          const a2 = await az()
+          if (!(a1 < a0 - 20) || !(a2 > a1)) fails.push(`creature element: a drag took the view from ${a0} to ${a1}, an arrow key to ${a2}`)
+          else ok(`creature element: a drag turns it (${a0}° to ${a1.toFixed(0)}°) and so do the arrow keys`)
+          await v.page.mouse.click(200, 200)
+          const tapped = await v.page.evaluate(() => document.querySelector('#c').currentMove)
+          await v.page.waitForFunction(() => document.querySelector('#c').currentMove === 'trot', null, { timeout: 30000 }).catch(() => {})
+          const back = await v.page.evaluate(() => document.querySelector('#c').currentMove)
+          if (tapped !== 'idle' || back !== 'trot') fails.push(`creature element: a tap played ${tapped}, and then ${back}`)
+          else ok('creature element: a tap plays its move once, then the first move comes back')
+          await v.page.screenshot({ path: join(shots, 'creature-element.png') })
+        }
+        await v.ctx.close()
+      }
+
+      // far down a page it fetches nothing until it nears the screen
+      {
+        const v = await visit(`${fox} backend="webgl"`, {}, '<div style="height:4000px"></div>')
+        let asked = false
+        v.page.on('request', (r) => { if (r.url().endsWith('fox.glb')) asked = true })
+        await v.page.waitForFunction(() => document.querySelector('#c')?.getAttribute('status'), null, { timeout: 20000 }).catch(() => {})
+        await v.page.waitForTimeout(500)
+        const before = asked
+        await v.page.evaluate(() => document.querySelector('#c').scrollIntoView())
+        const then = await v.page.waitForFunction(() => document.querySelector('#c').getAttribute('status') === 'ready', null, { timeout: 90000 }).then(() => true, () => false)
+        // and stops again once it is off screen
+        await v.page.evaluate(() => scrollTo(0, 0))
+        const stopped = await v.page.waitForFunction(() => document.querySelector('#c').stage.playing === false, null, { timeout: 10000 }).then(() => true, () => false)
+        if (before || !then || !stopped) fails.push(`creature element far down a page: fetched before it was near ${before}, drew once scrolled to ${then}, stopped when scrolled away ${stopped}`)
+        else ok('creature element: fetches nothing until it nears the screen, and stops when it leaves')
+        await v.ctx.close()
+      }
+
+      // reduced motion: it shows, holding still, and a tap doesn't start it
+      {
+        const v = await visit(`${fox} tap="idle" backend="webgl"`, { reducedMotion: 'reduce' })
+        const ready = await v.page.waitForFunction(() => document.querySelector('#c')?.getAttribute('status') === 'ready', null, { timeout: 90000 }).then(() => true, () => false)
+        await v.page.mouse.click(200, 200)
+        const got = ready && await v.page.evaluate(async () => {
+          const el = document.querySelector('#c')
+          const t = el.stage.time
+          await new Promise((r) => setTimeout(r, 400))
+          return { playing: el.stage.playing, moved: el.stage.time - t, move: el.currentMove }
+        })
+        if (!got || got.playing || got.moved !== 0 || got.move !== 'trot') fails.push(`creature element with reduced motion: ${JSON.stringify(got)}`)
+        else ok('creature element: holds still for a visitor who asked for reduced motion')
+        await v.ctx.close()
+      }
+
+      // a file that isn't there: what is inside the element shows instead, and the page hears of it
+      {
+        const v = await visit(`src="${base}/rigged-splats/nobody.glb" backend="webgl"`, {}, '<script>window.heard = []; addEventListener("error", (e) => { if (e.target.id === "c") heard.push(e.type) }, true)</script>')
+        await v.page.waitForFunction(() => document.querySelector('#c')?.getAttribute('status') === 'failed', null, { timeout: 30000 }).catch(() => {})
+        const got = await v.page.evaluate(() => ({ status: document.querySelector('#c').getAttribute('status'), shown: document.querySelector('#inside').getBoundingClientRect().height > 0, heard: window.heard }))
+        // the browser logs the missing file itself: those console errors are the point of this part
+        const noise = fails.filter((f) => /console: (Failed to load resource|Access to fetch at \S+nobody\.glb)/.test(f))
+        for (const f of noise) fails.splice(fails.indexOf(f), 1)
+        if (got.status !== 'failed' || !got.shown || !got.heard.includes('error')) fails.push(`creature element with a missing file: ${JSON.stringify(got)}`)
+        else ok('creature element: a missing file shows what is inside the element and fires an error event')
+        await v.ctx.close()
+      }
+
+      } finally { other.close() }
+
+      // live on the engine page, and in its prerendered HTML with a still picture inside
+      {
+        const e = await open('/engine/?offscreen=1', { viewport: { width: 1280, height: 900 } })
+        await e.page.waitForFunction(() => window.__engine?.blobs() > 0, null, { timeout: 120000 }).catch(() => {})
+        await e.page.getByTestId('engine-tag').scrollIntoViewIfNeeded()
+        const up = await e.page.waitForFunction(() => document.querySelector('[data-testid=engine-tag]')?.stage, null, { timeout: 90000 }).then(() => true, () => false)
+        const got = up && await e.page.evaluate(async () => {
+          const el = document.querySelector('[data-testid=engine-tag]')
+          await el.stage.frame(0.2)
+          const cv = el.shadowRoot.querySelector('canvas')
+          const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+          let solid = 0
+          for (let i = 3; i < d.length; i += 4) if (d[i] > 128) solid++
+          return { solid, status: el.getAttribute('status'), code: document.querySelector('[data-testid=engine-tag-code]').textContent }
+        })
+        const html = await (await fetch(base + '/engine/')).text()
+        const pre = /<blobscape-creature[^>]*src="\/rigged-splats\/fox\.glb"[^>]*>\s*(<!--.*?-->)?\s*<img[^>]*src="\/rigged-splats\/fox\.png"/.test(html)
+        if (!got || !(got.solid > 3000) || got.status !== 'ready' || !got.code.includes('<blobscape-creature') || !pre) fails.push(`creature element on the engine page: ${JSON.stringify(got)}, prerendered with its picture ${pre}`)
+        else ok(`creature element: live on the engine page beside its code (${got.solid} solid pixels), and prerendered with a still picture inside`)
+        await e.page.getByTestId('engine-tag').screenshot({ path: join(shots, 'engine-tag.png') })
+        await e.ctx.close()
+      }
     },
   },
   {

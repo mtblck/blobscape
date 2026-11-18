@@ -5,14 +5,14 @@ import { recordClip } from '../splat-engine/glb.ts'
 import type { Skeleton } from '../splat-engine/rig.ts'
 import { ZOO } from '../splat-engine/zoo/index.ts'
 import { LoadingMark } from '../shared/BlobLoader.tsx'
-import { Chip } from '../shared/ui.tsx'
+import { Button, Chip } from '../shared/ui.tsx'
 import { Cover } from './Experiments.tsx'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
 import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitDrag } from './Viewport.tsx'
 import type { CreatureStage } from './creature/stage.ts'
 import { DETAIL } from './diorama/scene.ts'
 import { DIORAMAS } from './diorama/scenes.ts'
-import { BESIDE, DEMOS, DOORS, ENGINE, ENGINE_BUILT, FEATURES, PIXEL_STRIP, type DemoId } from './engineCopy.ts'
+import { BESIDE, DEMOS, DOORS, ENGINE, ENGINE_BUILT, FEATURES, ONE_TAG, PIXEL_STRIP, type DemoId } from './engineCopy.ts'
 import { Gallery } from './diorama/Gallery.tsx'
 import { ENGINE_LOOPS } from './diorama/loops.ts'
 import type { ForestStage } from './forest/stage.ts'
@@ -216,6 +216,50 @@ function Demos() {
   )
 }
 
+/**
+ * The creature element, live beside the code that makes it. The element is the package's own (`splat-engine/element.ts`),
+ * loaded when this section is reached; until then, and where it can't draw, its poster shows.
+ */
+function OneTag() {
+  const [copied, setCopied] = useState(false)
+  const [offscreen] = useState(() => params().get('offscreen') === '1')
+  useEffect(() => { void import('../splat-engine/element.ts') }, [])
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(ONE_TAG.code)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch { setCopied(false) }
+  }
+  return (
+    <section aria-labelledby="tag-title" className="pt-16 lg:pt-20">
+      <h2 id="tag-title" className={H2}>{ONE_TAG.title}</h2>
+      <p className="mt-4 max-w-3xl text-lg leading-relaxed text-ink-muted">{ONE_TAG.body}</p>
+      <div className="mt-8 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+        <div className="rounded-2xl border border-rule bg-paper-sunk/60 p-2">
+          <blobscape-creature
+            src={ONE_TAG.file} move="trot" tap="idle" look="pointer" alt={ONE_TAG.alt} poster={ONE_TAG.poster}
+            offscreen={offscreen ? '' : undefined}
+            data-testid="engine-tag" className="block aspect-[4/3] w-full text-accent"
+          >
+            {/* what a browser shows before the script has run, or without it */}
+            <img src={ONE_TAG.poster} alt="" width={640} height={480} className="h-full w-full object-contain" />
+          </blobscape-creature>
+          <p className="px-2 pt-1 pb-2 text-sm text-ink-muted">{ONE_TAG.try}</p>
+        </div>
+        <div className="relative min-w-0">
+          <div className="absolute top-2 right-2">
+            <Button small onClick={() => void copy()}>{copied ? 'Copied' : 'Copy the code'}</Button>
+          </div>
+          <pre data-testid="engine-tag-code" tabIndex={0} aria-label="The code for the fox" className="h-full overflow-auto rounded-2xl border border-rule bg-paper-sunk p-4 pt-12 text-[0.8rem] leading-relaxed text-ink"><code>{ONE_TAG.code}</code></pre>
+          <p aria-live="polite" className="sr-only">{copied ? 'Copied the code.' : ''}</p>
+        </div>
+      </div>
+      <p className="mt-5"><a href={ONE_TAG.link.href} className={LINK}>{ONE_TAG.link.label} →</a></p>
+    </section>
+  )
+}
+
 /** The engine page: what the engine is, three live demos, what it does, where it sits and how to use it. */
 export function Engine() {
   const h1 = useFocusHeading()
@@ -240,6 +284,8 @@ export function Engine() {
         <div className="mt-8"><Gallery ids={ENGINE_LOOPS} testId="engine-loops" /></div>
         <p className="mt-5"><a href={PIXEL_STRIP.link.href} className={LINK}>{PIXEL_STRIP.link.label} →</a></p>
       </section>
+
+      <OneTag />
 
       <section aria-labelledby="does-title" className="pt-16 lg:pt-20">
         <h2 id="does-title" className={H2}>What it does</h2>

@@ -7,9 +7,11 @@
   "homepage": "https://blobscape.dev/engine/",
   "repository": { "type": "git", "url": "git+https://github.com/mtblck/blobscape.git", "directory": "packages/engine" },
   "keywords": ["gaussian-splatting", "splats", "three.js", "webgpu", "animation", "skinning", "pixel-art", "gltf"],
-  "sideEffects": false,
+  "sideEffects": ["./dist/element.js", "./dist/blobscape-creature.js"],
   "exports": {
-    ".": { "types": "./dist/types/splat-engine/index.d.ts", "import": "./dist/index.js" }
+    ".": { "types": "./dist/types/splat-engine/index.d.ts", "import": "./dist/index.js" },
+    "./element": { "types": "./dist/types/splat-engine/element.d.ts", "import": "./dist/element.js" },
+    "./blobscape-creature.js": "./dist/blobscape-creature.js"
   },
   "types": "./dist/types/splat-engine/index.d.ts",
   "publishConfig": { "access": "public" },
