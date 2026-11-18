@@ -27,6 +27,17 @@ export const EXPERIMENTS_INTRO = "Small tools built from the same blobs as the l
  */
 export const EXPERIMENTS = [
   {
+    id: 'fourways',
+    title: 'One Scene, Four Ways',
+    url: '/experiments/four-ways/',
+    cover: '/covers/four-ways.webp',
+    tags: ['pixel', 'watch'],
+    needs: 'WebGPU or WebGL 2',
+    published: '2026-11-18',
+    updated: '2026-11-18',
+    body: 'One pixel-art campfire drawn at the same moment by a plain shader, three.js meshes, Spark splats and Blobscape. Turn it, dim the fire, and see what each one is made of and what it can do.',
+  },
+  {
     id: 'daynight',
     title: 'Day and Night',
     url: '/experiments/day-and-night/',

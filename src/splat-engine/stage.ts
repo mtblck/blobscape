@@ -649,6 +649,22 @@ export class Stage {
     }
   }
 
+  /**
+   * @internal Poses and draws the frame as it stands once more and waits until the GPU has finished it: how long that
+   * took, in milliseconds. For a page that times this stage beside other renderers (One Scene, Four Ways).
+   */
+  async timed(): Promise<number> {
+    const t0 = performance.now()
+    this.pose()
+    this.resize()
+    this.draw()
+    const b = this.renderer.backend as unknown as { device?: { queue: { onSubmittedWorkDone(): Promise<void> } }; gl?: WebGL2RenderingContext }
+    if (b.device) await b.device.queue.onSubmittedWorkDone()
+    // reading one pixel back can't finish before the frame does
+    else b.gl?.readPixels(0, 0, 1, 1, b.gl.RGBA, b.gl.UNSIGNED_BYTE, new Uint8Array(4))
+    return performance.now() - t0
+  }
+
   /** Offscreen only: draws the frame `t` seconds into the clip and copies it to the page. */
   async frame(t: number) {
     this.t = t
