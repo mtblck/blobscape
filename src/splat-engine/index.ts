@@ -43,6 +43,7 @@ export * from './weather.ts'
 export * from './daylight.ts'
 export * from './sceneDoc.ts'
 export * from './mpm.ts'
+export * from './solids.ts'
 export * from './water.ts'
 
 // what's drawn
