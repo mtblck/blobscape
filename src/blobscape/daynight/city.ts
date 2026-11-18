@@ -1,5 +1,6 @@
 import type { PaintDoc, PartDoc, SceneDoc, ShapeDoc } from '../../splat-engine/sceneDoc.ts'
 import { bird, leafy } from './cabin.ts'
+import { GRASS, SNOW, SNOW_SHADE, falling, type Season } from './season.ts'
 
 /**
  * A few city blocks for Day and Night: towers and low brick buildings round two streets, a small park, street lamps,
@@ -116,7 +117,8 @@ const CARS: [number, number, boolean, string][] = [
 
 const panes = TOWERS.map(litPanes)
 
-export const CITY: SceneDoc = {
+/** The city in a season: the park's trees and grass turn with it, petals and leaves fall in the park, and in winter snow falls on all of it and lies on the roofs and streets. */
+export const city = (season: Season): SceneDoc => ({
   name: 'City blocks',
   loop: 12,
   // nothing baked but the creases: the sun, moon, sky and lamps are live
@@ -124,7 +126,10 @@ export const CITY: SceneDoc = {
   palette: [
     '#14141e', '#1e2a40', '#2a2a34', '#4a4a56', '#5a6e8a', '#7a8498', '#9a9aa8', '#b8a890',
     '#8a4a3c', '#a05a48', '#4a8a3c', '#6aa84a', '#e8e4d8', '#ffc864', '#d8ecff', '#ff5a8a', '#ff4030',
+    ...(season === 'fall' ? ['#e8862a', '#f0b030'] : season === 'winter' ? [SNOW, SNOW_SHADE] : season === 'spring' ? ['#f8c8dc'] : []),
   ],
+  ...(season === 'winter' ? { cover: { kind: 'snow' as const, color: SNOW, amount: 0.7 } } : {}),
+  ...(season === 'summer' ? {} : { air: { specks: season === 'winter' ? falling(season, [-1.5, 0, -1.5], [1.5, 2.6, 1.5], 1.15) : falling(season, [-0.75, 0, 0.7], [-0.1, 0.75, 1.45], 0.3, 0.55) } }),
   look: { dither: 0.1, glow: 1.2, outline: true, edges: true },
   disc: 0.78,
   camera: { target: [0, 0.95, 0], distance: 6.5, azimuth: 24, elevation: 8 },
@@ -147,7 +152,7 @@ export const CITY: SceneDoc = {
     { shape: { kind: 'box', at: [0, -0.15, 0], half: [1.55, 0.15, 1.55], round: 0.03 }, paint: { kind: 'faces', top: { kind: 'speckle', size: 0.08, colors: ['#9a9aa8', '#8e8e9c', '#a4a4b0'] }, side: { kind: 'bands', axis: 'y', size: 0.06, colors: ['#5a5a66', '#4a4a56'] } } },
     { shape: { kind: 'box', at: [0, 0.004, 0.5], half: [1.5, 0.008, 0.13] }, paint: { kind: 'speckle', size: 0.06, colors: ['#3a3a44', '#34343e'] }, noShadow: true },
     { shape: { kind: 'box', at: [0.05, 0.004, 0], half: [0.13, 0.008, 1.5] }, paint: { kind: 'speckle', size: 0.06, colors: ['#3a3a44', '#34343e'] }, noShadow: true },
-    { shape: { kind: 'box', at: [-0.42, 0.006, 1.08], half: [0.24, 0.01, 0.3], round: 0.01 }, paint: { kind: 'patches', size: 0.2, colors: ['#5a9844', '#6aa84a', '#4a8a3c'] }, noShadow: true },
+    { shape: { kind: 'box', at: [-0.42, 0.006, 1.08], half: [0.24, 0.01, 0.3], round: 0.01 }, paint: { kind: 'patches', size: 0.2, colors: GRASS[season] }, noShadow: true },
     // the buildings, each with a parapet round its roof
     ...TOWERS.flatMap((t): PartDoc[] => [
       { shape: { kind: 'box', at: v3(t.x, t.h / 2, t.z), half: v3(t.hw, t.h / 2, t.hd) }, paint: wallPaint(t) },
@@ -177,10 +182,10 @@ export const CITY: SceneDoc = {
       ] },
       paint: { kind: 'split', axis: 'y', at: 0.054, below: color, above: GLASS }, noShadow: true,
     })),
-    ...leafy('tree0', -0.5, 1.0, 0.42),
-    ...leafy('tree1', -0.3, 1.3, 0.34),
+    ...leafy('tree0', -0.5, 1.0, 0.42, season),
+    ...leafy('tree1', -0.3, 1.3, 0.34, season),
     // steam off the tall roof, and pigeons over the towers
-    ...[0, 1, 2, 3].map((k): PartDoc => ({ shape: { kind: 'rough', shape: { kind: 'ball', at: VENT, r: [0.04, 0.032, 0.038] }, by: 0.01, scale: 0.05 }, paint: k % 2 ? '#e4e4ec' : '#d0d0dc', bone: `steam${k}`, noShadow: true })),
+    ...[0, 1, 2, 3].map((k): PartDoc => ({ shape: { kind: 'rough', shape: { kind: 'ball', at: VENT, r: [0.04, 0.032, 0.038] }, by: 0.01, scale: 0.05 }, paint: k % 2 ? '#e4e4ec' : '#d0d0dc', bone: `steam${k}`, noShadow: true, bare: true })),
     ...BIRDS.flatMap((b, n) => bird(n, b.at, b.r)),
   ],
   moves: [
@@ -199,4 +204,7 @@ export const CITY: SceneDoc = {
     ...STREET_LAMPS.map((_, k) => ({ at: v3(lampHead(k)[0], LAMP_H - 0.06, lampHead(k)[2]), color: '#ffd090', strength: 1.7, range: 0.75 })),
     { at: v3(SIGN[0], SIGN[1], SIGN[2] + 0.3), color: '#ff5a8a', strength: 1.3, range: 0.8, flicker: { by: 0.08, times: 7 } },
   ],
-}
+})
+
+/** The city in summer. */
+export const CITY: SceneDoc = city('summer')

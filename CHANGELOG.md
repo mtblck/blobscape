@@ -6,6 +6,7 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 
 ## [Unreleased]
 
+- Day and Night has seasons. The Sky tab is now Season, and picking one changes the scene as well as the sun's path: in spring the leafy trees blossom and petals drift down, summer is full leaf, in fall the leaves turn yellow and orange and come down, and in winter the trees are bare and snow falls and lies on the roofs, the pines and the ground. Fireflies come out in spring and summer only. The city's park and roofs follow the season too (`?season=spring|fall|winter`). The latitude and the moon are still in the same tab.
 - New page, What's New, in the header between Sandbox and Engine: posts about what has been added and why, newest first, going back to the first two tools. Each post has its own page and picture, releases are marked, and there is a feed for readers (/whats-new/feed.xml).
 - Splat Creatures has a second fox, the Minimalist fox: the plain capsule fox from the engine page's one-tag example, with the same coats, moves and controls as the others. It is in the sandbox and Shape Shifter too.
 - The dragon's breath ends by leaving its mouth and thinning away out in front, instead of shrinking back in. On Splat Creatures the waiting mark now stays until a detailed creature is really on screen.

@@ -4,6 +4,7 @@ import { DEFAULT_PLACE, daylight, moonWay, sunTimes } from '../../splat-engine/d
 import { checkScene } from '../../splat-engine/sceneDoc.ts'
 import { loopSnaps } from '../../splat-engine/sceneChecks.ts'
 import { SCENES, dayStage, lampAt, outByDay, outByNight } from './scene.ts'
+import { SEASONS, seasonFrom } from './season.ts'
 import { facing, makeStars, onScreen, rowHeight, skyColor, starWay, upTimes } from './sky.ts'
 import { clockLabel, compass, hourFrom } from './words.ts'
 
@@ -188,4 +189,48 @@ test('every phase of the moon has its own hours, and turning to face it puts it 
     const p = onScreen(way, facing(way, orbit), 800, 600)!
     assert.ok(p && Math.abs(p.x - 400) < 1 && p.y > 20 && p.y < 300, `${age} at ${hour}: ${JSON.stringify(p)}`)
   }
+})
+
+test('every scene has four seasons: the same bones and lamps, the trees and the air changed, and fireflies only in spring and summer', () => {
+  assert.deepEqual(SEASONS.map((s) => s.id), ['spring', 'summer', 'fall', 'winter'])
+  assert.equal(seasonFrom('fall'), 'fall')
+  assert.equal(seasonFrom(null), 'summer')
+  assert.equal(seasonFrom('monsoon'), 'summer')
+  const night = daylight(0, P), noon = daylight(12, P)
+  for (const s of SCENES) {
+    assert.deepEqual(s.inSeason('summer'), s.doc)
+    for (const { id } of SEASONS) {
+      const doc = s.inSeason(id)
+      assert.deepEqual(checkScene(doc), [], `${s.id} ${id}`)
+      assert.deepEqual(JSON.parse(JSON.stringify(doc)), doc, `${s.id} ${id} is data alone`)
+      assert.deepEqual(doc.bones, s.doc.bones)
+      assert.deepEqual(doc.lights, s.doc.lights)
+      const st = dayStage(s, id), b = st.make(0.036), sk = b.skeleton
+      assert.equal(new Set(b.partOf).size, b.partOf.reduce((m, p) => Math.max(m, p), 0) + 1, `${s.id} ${id}: a part caught no grid cell`)
+      // a blob names its bones in a byte each
+      assert.ok(sk.count <= 255, `${s.id} ${id}: ${sk.count} bones`)
+      for (const l of s.lamps) assert.ok(sk.index(l.bone) > 0)
+      // what falls is in the air at noon and at midnight alike; fireflies only at night
+      const specks = doc.air?.specks ?? [], flies = specks[0]?.kind === 'fireflies' ? specks[0].count : 0
+      assert.equal(flies > 0, s.id === 'clearing' && (id === 'spring' || id === 'summer'), `${s.id} ${id}`)
+      assert.equal(specks.some((k) => k.kind === 'snow'), id === 'winter')
+      assert.equal(specks.some((k) => k.kind === 'leaves'), id === 'spring' || id === 'fall')
+      assert.equal(doc.cover?.kind, id === 'winter' ? 'snow' : undefined)
+      const total = specks.reduce((n, k) => n + k.count, 0)
+      const out = (sky: typeof noon, from: number, to: number) => {
+        let n = 0
+        for (let t = 0; t < st.loop; t += st.loop / 6) {
+          st.pose(sk, t, sky === noon ? 12 : 0, sky)
+          for (let k = from; k < to; k++) if (sk.size[sk.index(`~speck${k}`)] > 0.05) n++
+        }
+        return n
+      }
+      if (flies) { assert.equal(out(noon, 0, flies), 0); assert.ok(out(night, 0, flies) > flies) }
+      if (total > flies) { assert.ok(out(noon, flies, total) > total - flies, 'falls by day'); assert.ok(out(night, flies, total) > total - flies, 'falls by night') }
+    }
+  }
+  // bare boughs hold far fewer blobs than a crown, and snow whitens the clearing
+  const count = (id: 'summer' | 'winter') => dayStage(SCENES[0], id).make(0.036)
+  const white = (b: ReturnType<typeof count>) => { let n = 0; for (let i = 0; i < b.blobs.count; i++) if (b.blobs.color[i * 3] > 0.75 && b.blobs.color[i * 3 + 2] > 0.8) n++; return n / b.blobs.count }
+  assert.ok(white(count('winter')) > white(count('summer')) + 0.25)
 })

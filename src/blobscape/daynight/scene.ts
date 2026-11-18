@@ -5,8 +5,9 @@ import type { Light } from '../../splat-engine/engine.ts'
 import type { Skeleton } from '../../splat-engine/rig.ts'
 import { compileScene, type SceneDoc } from '../../splat-engine/sceneDoc.ts'
 import { buildVoxels } from '../../splat-engine/voxel.ts'
-import { CLEARING } from './cabin.ts'
-import { CITY, WINDOW_GROUPS } from './city.ts'
+import { CLEARING, clearing } from './cabin.ts'
+import { CITY, WINDOW_GROUPS, city } from './city.ts'
+import type { Season } from './season.ts'
 
 /**
  * Day and Night's scenes. A scene is a description (`SceneDoc`) built with no light baked in, plus what changes with
@@ -35,7 +36,10 @@ export interface DayScene {
   label: string
   /** For the view's label: what is in the picture. */
   about: string
+  /** The scene in summer. */
   doc: SceneDoc
+  /** The scene in a season: the same bones, lamps and lights, with the trees, the ground and what falls changed. */
+  inSeason(season: Season): SceneDoc
   lamps: Lamp[]
   /** Bones (by the start of their names) that are out by day and gone at night, such as birds. */
   byDay: string[]
@@ -89,12 +93,16 @@ export interface DayStage {
   lights(t: number, hour: number, sky: Daylight, shadows: boolean): { lights: Light[]; ambient: [number, number, number] }
 }
 
-/** Makes a scene ready: compiles its description once. */
-export function dayStage(scene: DayScene): DayStage {
-  const c = compileScene(scene.doc, { puffs: false })
+/** Makes a scene ready in a season (summer, left out): compiles its description once. */
+export function dayStage(scene: DayScene, season: Season = 'summer'): DayStage {
+  const doc = season === 'summer' ? scene.doc : scene.inSeason(season)
+  const c = compileScene(doc, { puffs: false })
   const names = c.bones.map((b) => b.name)
   const day = names.map((n, i) => ({ n, i })).filter(({ n, i }) => scene.byDay.some((p) => n.startsWith(p)) && !scene.byDay.some((p) => names[c.bones[i].parent]?.startsWith(p)))
-  const night = names.map((n, i) => ({ n, i })).filter(({ n }) => n.startsWith('~speck'))
+  // fireflies, when a season has them, are its first swarm of specks; what falls after them (petals, leaves, snow) falls at every hour
+  const swarm = doc.air?.specks?.[0]
+  const flies = swarm?.kind === 'fireflies' ? swarm.count : 0
+  const night = names.map((n, i) => ({ n, i })).filter(({ n }) => n.startsWith('~speck') && Number(n.slice(6)) < flies)
   const lampBones = scene.lamps.map((l) => names.indexOf(l.bone))
   return {
     scene,
@@ -130,6 +138,7 @@ export const SCENES: DayScene[] = [
     label: 'Cabin in a clearing',
     about: 'A log cabin in a forest clearing with pines and leafy trees, a lantern by the path, a fence, flowers and chimney smoke',
     doc: CLEARING,
+    inSeason: clearing,
     lamps: [
       { bone: 'flame', light: 3, on: 0.3, shadow: true },
       { bone: 'win0', light: 0, on: 0.45, out: 23.5 },
@@ -150,6 +159,7 @@ export const SCENES: DayScene[] = [
     label: 'City blocks',
     about: 'A few city blocks: glass towers and brick buildings round two streets, with street lamps, a rooftop sign, parked cars and a small park',
     doc: CITY,
+    inSeason: city,
     lamps: [
       { bone: 'lamp0', light: 0, on: 0.3, shadow: true },
       { bone: 'lamp1', light: 1, on: 0.34 },

@@ -46,7 +46,7 @@ export const EXPERIMENTS = [
     needs: 'WebGPU or WebGL 2',
     published: '2026-11-18',
     updated: '2026-11-18',
-    body: 'A cabin in a clearing, or a few city blocks, through a whole day. Drag the time: the sun crosses the sky, shadows turn and stretch, the windows come on at dusk and fireflies and stars come out under the moon.',
+    body: 'A cabin in a clearing, or a few city blocks, through a whole day. Drag the time: the sun crosses the sky, shadows turn and stretch, the windows come on at dusk and fireflies and stars come out under the moon. Pick a season and the trees blossom, turn, or stand bare in falling snow.',
   },
   {
     id: 'pond',
