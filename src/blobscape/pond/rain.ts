@@ -16,7 +16,7 @@ export const FALL = 9
 /** How high over the water a drop is first seen, meters. */
 export const FALL_FROM = 5
 /** The most drops in the air at once. */
-export const RAIN_MOST = 160
+export const RAIN_MOST = 320
 /** A streak's half length and half width, meters: about what a drop covers in a sixtieth of a second. */
 const LONG = 0.07, WIDE = 0.006
 

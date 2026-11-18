@@ -22,11 +22,17 @@ export default [
       for (const path of ['/experiments/clockwork/', '/experiments/pixel-diorama/', '/sandbox/', '/lessons/one-blob/', '/lessons/']) {
         for (const [size, device] of [['desktop', DESKTOP], ['phone', PHONE]]) {
           const first = await open(path, { ...device, javaScriptEnabled: false })
+          // scripts are off only to hold the app back: the notice for visitors without scripts is not part of anyone's first paint
+          await first.page.evaluate(() => document.body.querySelectorAll('noscript').forEach((n) => n.remove()))
           const before = await placed(first.page)
           await first.ctx.close()
-          const live = await open(path, device)
+          // off-screen, as every check opens an engine page: headless Chromium can lose the GPU device presenting to a canvas
+          const live = await open(`${path}?offscreen=1`, device)
           await live.page.waitForTimeout(800)
           const after = await placed(live.page)
+          // closing a page whose engine is still starting drops its GPU device, which the page reports as errors: stop listening first
+          live.page.removeAllListeners('console')
+          live.page.removeAllListeners('pageerror')
           await live.ctx.close()
           if (JSON.stringify(before) !== JSON.stringify(after)) fails.push(`${path} (${size}): the heading and first paragraph are at ${JSON.stringify(before)} before the app starts and ${JSON.stringify(after)} after`)
           else ok(`${path} (${size}): the first paint has the heading and first paragraph where the app puts them`)
@@ -111,7 +117,7 @@ export default [
         const html = await (await fetch(base + '/experiments/creature/')).text()
         await ex.page.goto(base + '/experiments/fit-a-picture/')
         const pageDates = await ex.page.getByTestId('page-dates').textContent({ timeout: 10000 }).catch(() => '')
-        if (!/^Published [A-Z][a-z]{2} \d{1,2}, \d{4}( · Updated [A-Z][a-z]{2} \d{1,2}, \d{4})?$/.test(pageDates ?? '') || !/data-testid="page-dates">Published <time datetime="\d{4}-\d\d-\d\d">/.test(html) || !/"datePublished":"\d{4}-\d\d-\d\d","dateModified":"\d{4}-\d\d-\d\d"/.test(html)) fails.push(`experiment page dates: the page reads "${pageDates}", or the prerendered HTML lacks them`)
+        if (!/^Published [A-Z][a-z]{2} \d{1,2}, \d{4}( · Updated [A-Z][a-z]{2} \d{1,2}, \d{4})?$/.test(pageDates ?? '') || !/data-testid="page-dates">Published (?:<!-- -->)?<time date[tT]ime="\d{4}-\d\d-\d\d">/.test(html) || !/"datePublished":"\d{4}-\d\d-\d\d","dateModified":"\d{4}-\d\d-\d\d"/.test(html)) fails.push(`experiment page dates: the page reads "${pageDates}", or the prerendered HTML lacks them`)
         else ok(`an experiment's page says when it was published ("${pageDates}"), and its HTML carries published and updated dates`)
         await ex.ctx.close()
       }

@@ -1,0 +1,58 @@
+name: Check
+
+# On every pull request: the unit tests and the build, which give the same answer on any
+# machine. By hand (Actions, Check, Run workflow): every browser check as well.
+#
+# The browser checks are not run on pull requests yet. Two trial runs on GitHub's runners
+# (2026-11-18) took 32 and 44 minutes and failed 3 and then 9 of 49 checks that pass in a
+# cloud session: the runner's speed changes a lot from run to run, so waits time out, and
+# two checks (day-and-night, brush-and-ink) draw one moment twice and get pictures a few
+# pixels apart there, with either Chromium build. Until that is understood, sessions run
+# `npm run check` themselves. See docs/testing.md.
+#
+# verify-shots/ (the reports and the screenshots) is kept with the run for a week.
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Tests and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run docs:deps
+      - run: npm test
+      - run: npm run build
+      - name: Chromium
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          # The Chromium the cloud sessions have (Playwright 1.63.0's): the full browser, not the headless shell.
+          npx --yes playwright@1.63.0 install --with-deps chromium
+          echo "CHROME_PATH=$(find "$HOME/.cache/ms-playwright" -path '*/chromium-*' -name chrome -type f | head -1)" >> "$GITHUB_ENV"
+      - name: Every browser check
+        if: github.event_name == 'workflow_dispatch'
+        run: npm run verify
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verify-shots
+          path: verify-shots/
+          retention-days: 7
+          if-no-files-found: ignore
+

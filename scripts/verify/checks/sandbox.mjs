@@ -221,7 +221,8 @@ export default [
     async run({ readFileSync, shots, join, fails, ok, open, axe, tabClick }) {
       const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 720 }, acceptDownloads: true })
       await page.waitForTimeout(1500)
-      const shot = async () => (await page.getByTestId('viewport').screenshot()).toString('base64')
+      // a picture of the view waits on Spark's frames, which software rendering can take most of a minute over on a busy machine
+      const shot = async () => (await page.getByTestId('viewport').screenshot({ timeout: 120000 })).toString('base64')
       // The view once it has stopped changing: software rendering sorts seconds behind a turn
       const settled = async () => {
         let was = await shot()
