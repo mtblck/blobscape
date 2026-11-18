@@ -1094,10 +1094,13 @@ export function buildVoxels(spec: VoxelSpec): Built {
     seen = new Uint8Array(blobs.count * MAX_LAMPS).fill(255)
     seen.set(sight.subarray(0, Math.min(sight.length, cutCount * MAX_LAMPS)))
   }
+  // parts that glow give their own light: under live lights they stay bright when the scene goes dark
+  const glow = spec.parts.some((p) => p.glow) ? new Uint8Array(blobs.count) : undefined
   for (let i = 0; i < blobs.count; i++) {
     partOf[i] = parts[i]
     const pi = parts[i]
     setWeights(skin, i, [[pi < boneOf.length ? boneOf[pi] : looseBone[pi - boneOf.length], 1]])
+    if (glow && spec.parts[pi]?.glow) glow[i] = 255
   }
-  return { blobs, skin, skeleton, partOf, seen }
+  return { blobs, skin, skeleton, partOf, seen, glow }
 }

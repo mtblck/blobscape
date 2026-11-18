@@ -14,6 +14,10 @@ import { ZoomBar, beginOrbitDrag, dragOrbit, useWheelZoom, type OrbitDrag } from
 const LOOKS = [{ id: 'forest', label: 'Forest' }, { id: 'dusk', label: 'Dusk' }, { id: 'autumn', label: 'Autumn' }]
 /** Detail: the grid the ruin is cut on (smaller is finer) and the elf's blobs. Phones without WebGPU start on the lightest. */
 const DETAIL = [{ id: 'light', label: 'Light', spacing: 0.034, elf: 12000 }, { id: 'full', label: 'Full', spacing: 0.02, elf: 20000 }, { id: 'fine', label: 'Fine', spacing: 0.015, elf: 30000 }]
+/** The lens openings on offer, as f-numbers: each lets in half the light of the one before. */
+const STOPS = [1.4, 2, 2.8, 4, 5.6, 8, 11, 16]
+/** How strongly bright light glows when the switch is on (the stage's own start). */
+const GLOW = 4
 const RAIN = [{ id: 0, label: 'None' }, { id: 6, label: 'A few drops' }, { id: 40, label: 'A shower' }]
 
 const at = (azimuth: number, elevation: number, distance = POND_SCENE.camera.distance): Orbit => ({ target: POND_SCENE.camera.target.map((v) => v * SCALE) as [number, number, number], distance: distance * SCALE, azimuth, elevation })
@@ -51,6 +55,12 @@ export function WadingPond() {
   const calm0 = useMemo(() => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches, [])
   const [flicker, setFlicker] = useState(!calm0)
   const [shadows, setShadows] = useState(true)
+  // on where the stage starts with it on (WebGPU); known once the stage is up
+  const [mirror, setMirror] = useState<boolean>()
+  // the lens: on where the stage starts with it on (WebGPU)
+  const [glow, setGlow] = useState<boolean>()
+  const [blur, setBlur] = useState<boolean>()
+  const [stop, setStop] = useState(STOPS.indexOf(5.6))
   const [rain, setRain] = useState(0)
   const [stats, setStats] = useState<Stats>({ blobs: 0, waded: 0, still: true, fps: 0 })
   const coarse = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
@@ -67,6 +77,9 @@ export function WadingPond() {
         setStage(s)
         // without WebGPU (where the CPU sorts every frame) the pond starts light; with it, full
         setDetail((d) => d ?? (s.backend === 'webgpu' ? 'full' : 'light'))
+        setMirror((m) => m ?? s.reflections)
+        setGlow((g) => g ?? s.glow > 0)
+        setBlur((b) => b ?? s.focusBlur)
       }, (e: unknown) => { console.warn(e); setFailed('This browser could not start WebGPU or WebGL 2, which the pond needs.') })
     return () => { gone = true; live?.dispose() }
   }, [offscreen, webgl])
@@ -93,6 +106,10 @@ export function WadingPond() {
   useEffect(() => { if (stage?.pond) stage.pond.calm = !flicker }, [stage, flicker])
   useEffect(() => { if (stage?.pond) stage.pond.rain = rain }, [stage, rain])
   useEffect(() => { if (stage) stage.shadows = shadows }, [stage, shadows])
+  useEffect(() => { if (stage && mirror !== undefined) stage.reflections = mirror }, [stage, mirror])
+  useEffect(() => { if (stage && glow !== undefined) stage.glow = glow ? GLOW : 0 }, [stage, glow])
+  useEffect(() => { if (stage && blur !== undefined) stage.focusBlur = blur }, [stage, blur])
+  useEffect(() => { if (stage) stage.fNumber = STOPS[stop] }, [stage, stop])
   useEffect(() => { if (stage) stage.orbit = orbit }, [stage, orbit])
 
   // --- wading: keys and the thumb stick both feed one input
@@ -230,6 +247,7 @@ export function WadingPond() {
                   </div>
                 </Field>
                 <div className="grid gap-2">
+                  <Toggle label="The water mirrors the scene" checked={mirror ?? false} onChange={setMirror} />
                   <Toggle label="Candles flicker" checked={flicker} onChange={setFlicker} />
                   <Toggle label="Candles cast shadows" checked={shadows} onChange={setShadows} />
                 </div>
@@ -262,6 +280,11 @@ export function WadingPond() {
                   </div>
                 </Field>
                 <Slider label="Turn" value={((Math.round(orbit.azimuth) % 360) + 360) % 360} min={0} max={359} step={1} onChange={(v) => setOrbit((o) => ({ ...o, azimuth: v }))} format={(v) => `${v}°`} />
+                <div className="grid gap-2">
+                  <Toggle label="Flames glow" checked={glow ?? false} onChange={setGlow} />
+                  <Toggle label="Focus on the elf, blur the rest" checked={blur ?? false} onChange={setBlur} />
+                  {blur && <Slider label="Lens opening" value={stop} min={0} max={STOPS.length - 1} step={1} onChange={setStop} format={(v) => `f/${STOPS[v]}`} />}
+                </div>
                 <Field label="Detail">
                   <div className="flex flex-wrap gap-1.5">
                     {DETAIL.map((d) => <Chip key={d.id} active={detail === d.id} onClick={() => setDetail(d.id)}>{d.label}</Chip>)}
@@ -301,9 +324,26 @@ export function WadingPond() {
           </p>
           <p>
             The surface is drawn as flat blobs, two to a cell, each lifted and tilted to the water under it. Its color comes from
-            where you look from: clear and green looking down into it, darker and more of a mirror at a low angle. What it mirrors for now is
-            the night sky, lighter toward the horizon, the moon, and each candle's flame, so a ripple shows by tipping the mirror
-            toward a lighter or darker part of the sky, and the flames stretch and break up as rings pass under them.
+            where you look from: clear and green looking down into it, darker and more of a mirror at a low angle.
+          </p>
+          <p>
+            What it mirrors is the scene itself. Each time the mirror is drawn, the whole ruin, the elf and the flames are
+            drawn once more as their mirror image, from where you are looking, leaving out whatever is under the water.
+            Each blob of the surface then looks up what lies along its own mirrored line of sight in that picture. A
+            ripple tips that line, so reflections wobble and break up as rings pass, and nothing in it is placed by
+            hand: move the elf in front of the candles and their reflection goes dark behind it. Where the picture
+            is empty the water mirrors the night sky, lighter toward the horizon. Because the mirror costs a second
+            sort of every blob, it starts switched off where the browser has no WebGPU.
+          </p>
+          <p>
+            The view is finished through a lens, and that is worked out as well. The glow is the picture's own light:
+            whatever is brighter than a set level spills some of that light round itself, so the flames and their
+            reflections glow and the pale stone does not. The blur is a camera's: the lens is kept focused on the elf,
+            and every other point is drawn as wide as a real lens of that opening would draw something at its distance,
+            read from a map of how far away each pixel is. A wider opening (a smaller f-number) leaves a thinner slice
+            sharp. The pond is photographed the way a model of it on a table would be, a twentieth of its size: a camera
+            in front of the real place would keep all of it sharp, so from far off the blur is slight, and close in
+            it is strong.
           </p>
           <p>
             Each candle flame is a few dozen blobs on a bone that stretches and leans on its own rhythm. Their light is two of the

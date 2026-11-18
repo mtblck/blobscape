@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu'
 import { STAGE_FOV, placeCamera, type Orbit } from '../splat-core/orbit.ts'
 import { readbackToSrgb } from '../splat-core/color.ts'
-import { SplatWorld, type PointLight } from './engine.ts'
+import { SplatWorld, type Light } from './engine.ts'
 import type { ShapeEdit } from './edit.ts'
 import { sampleClip, sampleWeights, type Clip } from './glb.ts'
 import type { Morph } from './morph.ts'
@@ -16,6 +16,8 @@ import { boneLabel, boneShare, pickActors } from './pick.ts'
 import { lookColors, snapColors, type Frame, type PixelLook } from '../splat-core/pixel.ts'
 import { INK, type MarkLook, type OutlinePen } from '../splat-core/marks.ts'
 import { InkLines } from './inkLines.ts'
+import { SplatLens } from './lens.ts'
+import type { OpticsLook } from '../splat-core/optics.ts'
 import { srgbToLinear } from '../splat-core/color.ts'
 
 /** What a stage shows: blobs, the skin that ties them to bones, and the skeleton. */
@@ -56,6 +58,8 @@ export interface StageOptions {
   offscreen?: boolean
   /** Builds each world with live lights (`setLights`), as Scan Studio does. */
   lights?: boolean
+  /** How dark what stands in a casting light's way makes it (the world's `shadowDensity`): left out, soft shadows that thin things let light through. */
+  shadowDensity?: number
   /** Uses the WebGL 2 backend even where WebGPU would start: for testing the fallback. */
   webgl?: boolean
   /** Builds each world so cuts (`setEdits`) have a clean edge, tested per pixel (`setCleanCuts` turns it off and on). */
@@ -131,7 +135,7 @@ export class Stage {
   private queued?: { actor: Actor; clip?: Clip }
   /** How a blob on several bones takes its shape: see `SkinMode`. Change it with `setMode`. */
   mode: SkinMode = 'quat'
-  private lit: { lights: PointLight[]; ambient: number } = { lights: [], ambient: 1 }
+  private lit: { lights: Light[]; ambient: number | readonly [number, number, number] } = { lights: [], ambient: 1 }
   /** Pixel mode: the scene drawn small and turned into pixel art (pixelPass.ts). */
   private pixel?: PixelPass
   /** How many CSS pixels across one art pixel is. */
@@ -216,7 +220,7 @@ export class Stage {
   }
 
   private build(actor: Actor) {
-    this.world = new SplatWorld([actor], { mode: this.mode, lights: this.opts.lights, sort: this.sort, cleanCuts: this.opts.cleanCuts })
+    this.world = new SplatWorld([actor], { mode: this.mode, lights: this.opts.lights, sort: this.sort, cleanCuts: this.opts.cleanCuts, shadowDensity: this.opts.shadowDensity })
     if (this.opts.lights) this.world.setLights(this.lit.lights, this.lit.ambient)
     this.world.setFog(...this.fog)
     this.world.setMarks(this.marks)
@@ -379,6 +383,20 @@ export class Stage {
     this.invalidate()
   }
 
+  private lens?: SplatLens
+  private lensLook?: OpticsLook
+  /**
+   * Draws the picture through a lens (lens.ts): light spilling round bright things, and blur for whatever is nearer
+   * or farther than the distance in focus. Leave the look out to stop. Not in pixel mode, and outlines take its place
+   * while they are on.
+   */
+  setLens(look?: OpticsLook) {
+    this.lensLook = look
+    if (!look) { this.lens?.dispose(); this.lens = undefined }
+    else this.lens ??= new SplatLens()
+    this.invalidate()
+  }
+
   private marks?: MarkLook
   /**
    * Draws every blob as a brush mark or an ink stroke, or as soft dots again when left out; kept for the next actor
@@ -390,8 +408,11 @@ export class Stage {
     this.invalidate()
   }
 
-  /** Live lights on the world (needs the `lights` option); kept for the next actor too. */
-  setLights(lights: PointLight[], ambient = 1) {
+  /**
+   * Live lights on the world (needs the `lights` option); kept for the next actor too. A light is at a place or from a
+   * direction (a sun); `ambient` is one brightness or a linear color.
+   */
+  setLights(lights: Light[], ambient: number | readonly [number, number, number] = 1) {
     this.lit = { lights, ambient }
     this.world?.setLights(lights, ambient)
     this.invalidate()
@@ -444,6 +465,13 @@ export class Stage {
       this.lines.setSize(x, y)
       this.lines.setPen((this.pen.ink ?? INK).map(srgbToLinear), (this.pen.width ?? 1.5) * this.renderer.getPixelRatio())
       this.lines.render(this.renderer, this.scene, this.camera)
+      return
+    }
+    if (!this.pixel && this.lens && this.lensLook) {
+      const { x, y } = this.target ? { x: this.target.width, y: this.target.height } : this.renderer.getDrawingBufferSize(this.buffer)
+      this.lens.setSize(x, y)
+      this.lens.setLook(this.lensLook, this.camera.fov)
+      this.lens.render(this.renderer, this.scene, this.camera)
       return
     }
     if (!this.pixel) { this.renderer.render(this.scene, this.camera); return }
@@ -674,6 +702,7 @@ export class Stage {
     this.world?.dispose()
     this.rig?.dispose()
     this.lines?.dispose()
+    this.lens?.dispose()
     this.target?.dispose()
     this.pixel?.dispose()
     this.renderer.dispose()

@@ -656,6 +656,102 @@ export default [
     },
   },
   {
+    name: 'day-and-night',
+    about: 'Day and Night: the same scene lit by the hour on both backends: shadows that follow the sun, a dark night with lit windows, a sky that matches',
+    entries: ['src/blobscape/DayNight.tsx'],
+    async run({ shots, join, fails, ok, open, tabClick, axe }) {
+      // the scene at an hour: the view's pixels, and the sky's behind it
+      const read = (page, hour, t = 1.3) => page.evaluate(async ([hour, t]) => {
+        window.__daynight.setHour(hour)
+        await window.__daynight.stage.frame(t)
+        const cv = document.querySelector('[data-testid=daynight-view]'), sky = document.querySelector('[data-testid=daynight-sky]')
+        const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+        const s = sky.getContext('2d').getImageData(0, 0, sky.width, Math.max(1, Math.floor(sky.height / 4))).data
+        const top = [0, 0, 0]
+        for (let i = 0; i < s.length; i += 4) { top[0] += s[i]; top[1] += s[i + 1]; top[2] += s[i + 2] }
+        return { d: Array.from(d), width: cv.width, sky: top.map((v) => v / (s.length / 4)), lights: window.__daynight.lights() }
+      }, [hour, t])
+      const stats = (f) => {
+        let n = 0, sum = 0, warm = 0
+        for (let i = 0; i < f.d.length; i += 4) {
+          if (f.d[i + 3] < 128) continue
+          n++
+          sum += f.d[i] + f.d[i + 1] + f.d[i + 2]
+          // a lit window or the lantern: bright and yellow
+          if (f.d[i] > 220 && f.d[i + 1] > 160 && f.d[i + 2] < 170 && f.d[i] > f.d[i + 2] * 1.4) warm++
+        }
+        return { solid: n / (f.d.length / 4), mean: sum / (3 * Math.max(1, n)), warm }
+      }
+      // where one frame is darker than another: how many pixels, and the middle of them from left (0) to right (1)
+      const shade = (lit, shaded) => {
+        let n = 0, x = 0
+        for (let i = 0; i < lit.d.length; i += 4) {
+          if (shaded.d[i + 3] < 128) continue
+          if (lit.d[i] + lit.d[i + 1] + lit.d[i + 2] - shaded.d[i] - shaded.d[i + 1] - shaded.d[i + 2] > 60) { n++; x += ((i / 4) % lit.width) / lit.width }
+        }
+        return { share: n / (lit.d.length / 4), x: n ? x / n : 0.5 }
+      }
+      const differ = (a, b, by = 0) => { let n = 0; for (let i = 0; i < a.d.length; i += 4) if (Math.abs(a.d[i] - b.d[i]) + Math.abs(a.d[i + 1] - b.d[i + 1]) + Math.abs(a.d[i + 2] - b.d[i + 2]) + Math.abs(a.d[i + 3] - b.d[i + 3]) > by) n++; return n / (a.d.length / 4) }
+      const pictures = {}
+      for (const backend of ['webgpu', 'webgl']) {
+        const k = await open(`/experiments/day-and-night/?offscreen=1&hour=12&shadows=1${backend === 'webgl' ? '&webgl=1' : ''}`, { viewport: { width: 1280, height: 900 } })
+        const up = await k.page.waitForFunction(() => window.__daynight?.blobs() > 0, null, { timeout: 120000 }).then(() => true, () => false)
+        if (!up) { fails.push(`day and night on ${backend}: the scene never came up`); await k.ctx.close(); continue }
+        const got = await k.page.evaluate(() => window.__daynight.stage.backend)
+        const noon = await read(k.page, 12), again = await read(k.page, 12)
+        const morning = await read(k.page, 8), evening = await read(k.page, 16), night = await read(k.page, 22.5)
+        // the same hours with the shadows off: what the shadows took away
+        const box = k.page.getByRole('checkbox', { name: /^Shadows/ })
+        await tabClick(box)
+        await k.page.waitForFunction(() => !document.querySelector('input[type=checkbox]:checked'), null, { timeout: 5000 }).catch(() => {})
+        const morningBare = await read(k.page, 8), eveningBare = await read(k.page, 16)
+        await tabClick(box)
+        const am = shade(morningBare, morning), pm = shade(eveningBare, evening)
+        const n = stats(noon), d = stats(night)
+        pictures[backend] = { noon, night, morning }
+        const m = { backend: got, same: differ(noon, again), solid: n.solid, noonMean: n.mean, nightMean: d.mean, noonWarm: n.warm, nightWarm: d.warm, am, pm, noonLights: noon.lights, nightLights: night.lights, noonSky: noon.sky, nightSky: night.sky }
+        const lightsRight = noon.lights.sun && !noon.lights.moon && noon.lights.lamps === 0 && noon.lights.count === 1 && night.lights.moon && !night.lights.sun && night.lights.lamps === 4
+        // by day the sky is blue and bright, at night dark; the scene is clearly darker at night (dim, not black, under a full moon and its lamps) and its windows are lit;
+        // shadows fall west (left, seen from the south) in the morning and east in the evening
+        const skyRight = noon.sky[2] > noon.sky[0] * 1.2 && noon.sky[2] > 150 && night.sky[2] < 60
+        if (m.backend !== backend || m.same !== 0 || !(n.solid > 0.15) || !(n.mean > d.mean * 1.4) || !(d.warm > 150 && n.warm < d.warm / 5) || !(am.share > 0.01 && pm.share > 0.01 && am.x < pm.x - 0.04) || !lightsRight || !skyRight) fails.push(`day and night on ${backend}: ${JSON.stringify(m)}`)
+        else ok(`day and night on ${backend}: noon is ${(n.mean / d.mean).toFixed(1)} times as bright as night, ${d.warm} pixels of lit window at night, shadows cover ${(am.share * 100).toFixed(1)}% of the view at 8 am and lie ${((pm.x - am.x) * 100).toFixed(0)}% of its width further east by 4 pm, and a frame drawn twice is the same`)
+        if (backend === 'webgpu') {
+          // the controls: a jump to noon, and the slider by keyboard
+          await tabClick(k.page.getByTestId('daynight-jumps').getByRole('button', { name: 'Midnight', exact: true }))
+          const midnight = await k.page.getByTestId('daynight-clock').textContent()
+          const slider = k.page.getByRole('slider', { name: 'Time of day' })
+          await slider.focus()
+          for (let i = 0; i < 6; i++) await slider.press('ArrowRight')
+          const later = await k.page.getByTestId('daynight-clock').textContent()
+          if (midnight !== '12:00 am' || later !== '12:30 am') fails.push(`day and night: the clock read "${midnight}" at midnight and "${later}" six steps on`)
+          else ok('day and night: Midnight sets the clock, and the slider moves it five minutes a step')
+          // toward the sunset: the sky is warm where the sun goes down
+          await tabClick(k.page.getByRole('button', { name: 'Toward the sunset', exact: true }))
+          const set = await k.page.evaluate(() => { const b = [...document.querySelectorAll('[data-testid=daynight-jumps] button')].find((e) => e.textContent === 'Sunset'); b.click(); return window.__daynight.hour() })
+          await k.page.waitForTimeout(100)
+          const dusk = await read(k.page, await k.page.evaluate(() => window.__daynight.hour()))
+          if (!(dusk.sky[0] > dusk.sky[2] * 1.15 && dusk.lights.sun)) fails.push(`day and night: at sunset (${set}) the sky toward it is ${dusk.sky.map(Math.round)}`)
+          else ok(`day and night: at sunset the sky toward the sun is warm (${dusk.sky.map(Math.round).join(', ')})`)
+          await k.page.screenshot({ path: join(shots, 'blobscape-day-and-night-sunset.png') })
+          await tabClick(k.page.getByRole('button', { name: 'From the south', exact: true }))
+          await read(k.page, 22.5)
+          await k.page.screenshot({ path: join(shots, 'blobscape-day-and-night-night.png') })
+          await read(k.page, 8)
+          await k.page.screenshot({ path: join(shots, 'blobscape-day-and-night.png') })
+          await axe(k.page, 'day and night')
+        }
+        await k.ctx.close()
+      }
+      // the two backends light the scene alike, shadows and all
+      if (pictures.webgpu && pictures.webgl) {
+        const a = differ(pictures.webgpu.noon, pictures.webgl.noon, 90), b = differ(pictures.webgpu.night, pictures.webgl.night, 90), c = differ(pictures.webgpu.morning, pictures.webgl.morning, 90)
+        if (!(a < 0.02 && b < 0.02 && c < 0.02)) fails.push(`day and night: WebGPU and WebGL differ at ${(a * 100).toFixed(2)}% of pixels at noon, ${(c * 100).toFixed(2)}% at 8 am, ${(b * 100).toFixed(2)}% at night`)
+        else ok(`day and night: WebGPU and WebGL light it alike (${(a * 100).toFixed(2)}% of pixels differ at noon, ${(c * 100).toFixed(2)}% at 8 am with its shadows, ${(b * 100).toFixed(2)}% at night)`)
+      }
+    },
+  },
+  {
     name: 'clockwork',
     about: 'Clockwork: the watch draws, the train turns by the right amount, the hands read the time',
     entries: ['src/blobscape/Clockwork.tsx'],
@@ -1036,7 +1132,7 @@ export default [
   },
   {
     name: 'pond',
-    about: 'Wading Pond on both backends: the water fills the ruin, the elf wades and raises rings, the candles light it, rain falls',
+    about: 'Wading Pond on both backends: the water fills the ruin, the elf wades and raises rings, the candles light it, the water mirrors the scene, the lens glows and blurs, rain falls',
     entries: ['src/blobscape/WadingPond.tsx'],
     async run({ shots, join, fails, ok, open, tabClick }) {
       for (const gl of ['', '&webgl=1']) {
@@ -1068,6 +1164,56 @@ export default [
         if (!(walked.waded > 2 && walked.steps > 4 && !walked.still && walked.energy > 1e-4 && walked.high > 0.005 && walked.high < 0.4 && Math.abs(walked.volume) < 1e-4 && walked.inWater)) fails.push(`blobscape pond on ${on}: after wading ${JSON.stringify(walked)}`)
         else ok(`blobscape pond on ${on}: the elf wades ${walked.waded.toFixed(1)} m in ${walked.steps} steps and raises rings ${(walked.high * 100).toFixed(1)} cm high, with no water made or lost`)
         await f.page.screenshot({ path: join(shots, `blobscape-pond${gl ? '-webgl' : ''}.png`) })
+        // the water mirrors the scene: on from the start with WebGPU, by its switch without. The mirror's picture holds the
+        // scene upside down (so mostly in its lower half), and the water's color changes with it
+        const mirrored = () => f.page.evaluate(() => {
+          const m = window.__pond.stage.pond.mirror
+          if (!m) return null
+          let high = 0, low = 0
+          for (let j = 0; j < m.height; j++) for (let i = 0; i < m.width; i++) if (m.pixels[(j * m.width + i) * 4 + 3] > 0.5) { if (j < m.height / 2) high++; else low++ }
+          return { size: m.width * m.height, high, low }
+        })
+        const water = () => f.page.evaluate(async () => {
+          await window.__pond.stage.frame(0, { forward: 0, turn: 0 })
+          const b = window.__pond.stage.pond.surface.blobs
+          let sum = 0
+          for (let k = 0; k < b.count * 3; k++) sum += b.color[k]
+          return sum / b.count
+        })
+        const before = await mirrored()
+        if (!!before !== !gl) fails.push(`blobscape pond on ${on}: the mirror starts ${before ? 'on' : 'off'}`)
+        if (gl) await tabClick(f.page.getByLabel('The water mirrors the scene'))
+        const withMirror = await water(), pic = await mirrored()
+        await tabClick(f.page.getByLabel('The water mirrors the scene'))
+        const without = await water(), gone = await mirrored()
+        if (!(pic && pic.low > pic.size * 0.05 && pic.low > pic.high * 1.5 && gone === null && Math.abs(withMirror - without) > 1e-3)) fails.push(`blobscape pond on ${on}: mirror ${JSON.stringify({ pic, gone, withMirror, without })}`)
+        else ok(`blobscape pond on ${on}: the water mirrors the scene (${Math.round((100 * (pic.low + pic.high)) / pic.size)}% of the mirror's picture, hanging downward) and stops when switched off`)
+        if (!gl) await tabClick(f.page.getByLabel('The water mirrors the scene'))
+        // the lens: on from the start with WebGPU, by its switches without. Glow adds light to the picture; focus blur
+        // (at a wide opening, so it shows from this far off) takes fine detail out of it
+        const picture = () => f.page.evaluate(async () => {
+          const st = window.__pond.stage
+          st.fNumber = 1.4
+          await st.frame(0, { forward: 0, turn: 0 })
+          const cv = document.querySelector('[data-testid=pond-view]')
+          const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+          let light = 0, detail = 0
+          for (let i = 0; i < d.length - 4; i += 4) { light += d[i]; detail += Math.abs(d[i + 1] - d[i + 5]) }
+          return { light: light / (d.length / 4), detail: detail / (d.length / 4), glow: st.glow, blur: st.focusBlur }
+        })
+        const glowing = f.page.getByLabel('Flames glow'), focusing = f.page.getByLabel('Focus on the elf, blur the rest')
+        const first = await picture()
+        if ((first.glow > 0) !== !gl || first.blur !== !gl) fails.push(`blobscape pond on ${on}: the lens starts ${JSON.stringify(first)}`)
+        if (gl) { await tabClick(glowing); await tabClick(focusing) }
+        const both = await picture()
+        await tabClick(focusing)
+        const glowOnly = await picture()
+        await tabClick(glowing)
+        const plain = await picture()
+        if (!(glowOnly.light > plain.light * 1.005 && both.detail < glowOnly.detail * 0.9 && plain.glow === 0 && !plain.blur)) fails.push(`blobscape pond on ${on}: lens ${JSON.stringify({ both, glowOnly, plain })}`)
+        else ok(`blobscape pond on ${on}: the flames glow (${((glowOnly.light / plain.light - 1) * 100).toFixed(1)}% more light) and focus blur softens what is off the elf's distance (${Math.round((1 - both.detail / glowOnly.detail) * 100)}% less fine detail)`)
+        if (!gl) { await tabClick(glowing); await tabClick(focusing) }
+        await f.page.screenshot({ path: join(shots, `blobscape-pond-lens${gl ? '-webgl' : ''}.png`) })
         if (!gl) {
           // standing, the rings die down; then, on water laid flat, rain sets the whole pond moving
           const rested = await look(4, 0)

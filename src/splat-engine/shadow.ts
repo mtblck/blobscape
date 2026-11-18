@@ -19,8 +19,10 @@ export const SHADOW_DENSITY = 1.5
 export const REACH = 1.5
 /** How far the march starts off the surface and toward the light, in cells, so a surface doesn't shadow itself. */
 export const LIFT = 1.5
-/** The longest march, in cells. */
+/** The longest march toward a light at a place, in cells. */
 export const MAX_MARCH = 48
+/** The longest march toward a light from a direction (a sun), in cells: far enough to cross the grid, so a low sun's long shadows are whole. */
+export const SUN_MARCH = 112
 
 /** The grid's place: its lowest corner, the side of one cell, and how many cells it has each way. */
 export interface ShadowBox { origin: [number, number, number]; cell: number; dims: [number, number, number] }
@@ -81,28 +83,37 @@ export function occupancy(
 /**
  * The share of a light that reaches a blob at `p` (normal `n`, either sign) from a light at `light`: the march starts
  * `LIFT` cells off the surface on the light's side and as far toward it, so a blob doesn't shadow itself, and stops short of the
- * light, so a lamp's own blobs don't hide it.
+ * light, so a lamp's own blobs don't hide it. With `sun`, `light` is the way toward a light from a direction (a unit
+ * vector) and the march goes on up to `SUN_MARCH` cells. A march that has left the grid going away from it stops.
+ * `density` is how dark what it passes makes it (the world's `shadowDensity`).
  */
 export function transmittance(
-  grid: Uint32Array<ArrayBufferLike>, box: ShadowBox, p: ArrayLike<number>, n: ArrayLike<number>, light: ArrayLike<number>,
+  grid: Uint32Array<ArrayBufferLike>, box: ShadowBox, p: ArrayLike<number>, n: ArrayLike<number>, light: ArrayLike<number>, sun = false, density = SHADOW_DENSITY,
 ): number {
-  const { origin: o, cell, dims: [nx, ny, nz] } = box
-  const to = [light[0] - p[0], light[1] - p[1], light[2] - p[2]]
-  const dist = Math.hypot(to[0], to[1], to[2])
-  if (dist < 1e-6) return 1
-  const dir = to.map((v) => v / dist)
+  const { origin: o, cell, dims } = box
+  const [nx, ny] = dims
+  const to = sun ? [light[0], light[1], light[2]] : [light[0] - p[0], light[1] - p[1], light[2] - p[2]]
+  const len = Math.hypot(to[0], to[1], to[2])
+  if (len < 1e-6) return 1
+  const dist = sun ? Infinity : len
+  const dir = to.map((v) => v / len)
   const side = n[0] * dir[0] + n[1] * dir[1] + n[2] * dir[2] < 0 ? -1 : 1
   const start = [0, 1, 2].map((k) => p[k] + (n[k] * side + dir[k]) * LIFT * cell)
-  const steps = Math.floor(Math.min(Math.max((dist - 2.5 * cell) / cell, 0), MAX_MARCH))
+  const steps = Math.floor(Math.min(Math.max((dist - 2.5 * cell) / cell, 0), sun ? SUN_MARCH : MAX_MARCH))
   let acc = 0
-  for (let i = 0; i < steps; i++) {
+  march: for (let i = 0; i < steps; i++) {
     const t = (i + 0.5) * cell
-    const x = Math.floor((start[0] + dir[0] * t - o[0]) / cell)
-    const y = Math.floor((start[1] + dir[1] * t - o[1]) / cell)
-    const z = Math.floor((start[2] + dir[2] * t - o[2]) / cell)
-    if (x < 0 || y < 0 || z < 0 || x >= nx || y >= ny || z >= nz) continue
-    acc += grid[(z * ny + y) * nx + x] / OCC_SCALE
+    const q = [0, 1, 2].map((k) => Math.floor((start[k] + dir[k] * t - o[k]) / cell))
+    let out = false
+    for (let k = 0; k < 3; k++) {
+      if (q[k] >= 0 && q[k] < dims[k]) continue
+      out = true
+      // out of the grid and heading further out on this axis: it can't come back in
+      if (q[k] < 0 ? dir[k] <= 0 : dir[k] >= 0) break march
+    }
+    if (out) continue
+    acc += grid[(q[2] * ny + q[1]) * nx + q[0]] / OCC_SCALE
     if (acc > 6) break
   }
-  return Math.exp(-SHADOW_DENSITY * acc)
+  return Math.exp(-density * acc)
 }

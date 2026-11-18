@@ -1,6 +1,7 @@
 import { Blobs, quatFacing, type Vec3 } from '../splat-core/blobs.ts'
 import { linearToSrgb } from '../splat-core/color.ts'
 import type { Actor, PointLight } from './engine.ts'
+import { seenIn, type MirrorImage } from './reflect.ts'
 import { Skeleton, emptySkin, setWeights } from './rig.ts'
 
 /**
@@ -358,6 +359,14 @@ export interface WaterLook {
   sun?: { toward: Vec3; color: Vec3; glow?: number }
   /** How tight a glint is: 120 when left out. Lower spreads it into a sheen. */
   gloss?: number
+  /**
+   * What the surface mirrors of the scene round it: a picture from `SplatMirror` for this pond's level. Where the
+   * picture shows something, the surface mirrors that and not the sky; a ripple tips the mirrored line of sight,
+   * so reflections wobble and break up. Left out, it mirrors the sky alone.
+   */
+  mirror?: MirrorImage | null
+  /** How far off the things mirrored are taken to stand, meters, when a ripple tips the line of sight: farther makes reflections wobble more. 1.5 when left out. */
+  reach?: number
   /** How many times steeper than it is the surface is drawn and lit, so ripples a few millimeters high read from across a scene: 1 when left out. */
   steep?: number
 }
@@ -437,6 +446,8 @@ interface Lamp { x: number; y: number; z: number; r: number; g: number; b: numbe
 const lampsOf = (lights: readonly PointLight[]): Lamp[] => lights.map((l) => ({ x: l.position[0], y: l.position[1], z: l.position[2], r: l.color[0], g: l.color[1], b: l.color[2], range: l.range }))
 /** Where `shade` leaves its answer: red, green, blue (linear), then how solid. */
 const shaded = new Float64Array(4)
+/** What the mirror shows at a point. */
+const seen = new Float64Array(4)
 
 /** `surfaceColor` on plain numbers, into `shaded`: nothing is made per call, since `shadeSurface` asks it for every blob. `sun` is the way to the sun, one long. */
 function shade(px: number, py: number, pz: number, nx: number, ny: number, nz: number, eye: ArrayLike<number>, look: WaterLook, sun: Vec3 | null, lamps: Lamp[], near = true) {
@@ -477,9 +488,19 @@ function shade(px: number, py: number, pz: number, nx: number, ny: number, nz: n
   const b = look.body, up = look.sky, low = look.horizon ?? up
   // the sky where the mirrored line of sight meets it: lighter toward the horizon
   const down = 1 - Math.max(0, Math.min(1, ry)), h = down * down * down
-  shaded[0] = b[0] * (1 - fresnel) + (up[0] + (low[0] - up[0]) * h + mr) * fresnel + gr
-  shaded[1] = b[1] * (1 - fresnel) + (up[1] + (low[1] - up[1]) * h + mg) * fresnel + gg
-  shaded[2] = b[2] * (1 - fresnel) + (up[2] + (low[2] - up[2]) * h + mb) * fresnel + gb
+  let sr = up[0] + (low[0] - up[0]) * h + mr, sg = up[1] + (low[1] - up[1]) * h + mg, sb = up[2] + (low[2] - up[2]) * h + mb
+  if (look.mirror) {
+    // the scene, where the mirrored line of sight meets it: taken to be `reach` along that line, which for a flat
+    // surface is the pixel this point is itself drawn at whatever the reach. The sky shows through where nothing stands
+    const t = look.reach ?? 1.5, lift = Math.max(ry, 0.02)
+    if (seenIn(look.mirror, px + rx * t, py + lift * t, pz + rz * t, seen)) {
+      const clear = 1 - Math.min(1, seen[3])
+      sr = seen[0] + sr * clear; sg = seen[1] + sg * clear; sb = seen[2] + sb * clear
+    }
+  }
+  shaded[0] = b[0] * (1 - fresnel) + sr * fresnel + gr
+  shaded[1] = b[1] * (1 - fresnel) + sg * fresnel + gg
+  shaded[2] = b[2] * (1 - fresnel) + sb * fresnel + gb
   shaded[3] = Math.min(1, look.clear + (1 - look.clear) * fresnel + Math.max(gr, gg, gb))
 }
 
