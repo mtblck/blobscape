@@ -209,7 +209,7 @@ export function WadingPond() {
               <Stick testid="pond-stick" onChange={(v) => { stick.current = v; push() }} />
               <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => pick(view)} />
               <p aria-hidden className="pointer-events-none absolute top-2 right-14 rounded-full bg-paper/80 px-2.5 py-0.5 text-xs text-ink backdrop-blur-sm">
-                {coarse ? 'stick to wade · drag to turn the view · tap the water' : 'arrow keys or WASD to wade · drag to turn the view · click the water'}
+                {coarse ? 'stick to wade · tap the water' : 'arrow keys or WASD to wade · drag to turn the view · click the water'}
               </p>
         </>}
         status={<div data-testid="pond-stats">
