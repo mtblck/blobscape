@@ -505,7 +505,7 @@ export default [
       await page.getByRole('tab', { name: /Scene/ }).click()
       await tabClick(page.getByRole('button', { name: 'Empty' }))
       await page.getByRole('tab', { name: /Creatures/ }).click()
-      await tabClick(page.getByTestId('add-creature').getByRole('button', { name: 'Fox' }))
+      await tabClick(page.getByTestId('add-creature').getByRole('button', { name: 'Add a fox', exact: true }))
       await page.waitForTimeout(400)
       const foxBlobs = await inCreatures()
       if (foxBlobs < 4000) fails.push(`blobscape sandbox creatures: a fox added ${foxBlobs} blobs`)
