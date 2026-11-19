@@ -30,3 +30,21 @@ export function celLook(c: CelChoice): CelLook {
 
 /** Flat fills take out speckle finer than this many of a typical blob's size; an eye or an apple a few blobs across stays. */
 export const FILL_REACH = 2.2
+
+/** A sky this dark or darker (the mean lightness of its top and bottom, sRGB 0–1) is night, and one this light or lighter is day. */
+export const NIGHT_SKY = 0.18
+export const DAY_SKY = 0.42
+/** What a night's light multiplies every tone by (linear): dim and blue, as moonlight is painted. */
+export const MOONLIGHT: readonly [number, number, number] = [0.3, 0.38, 0.62]
+
+/** How much a sky (top and bottom, sRGB 0–255) is a night's: 0 by day, 1 at night, between at dusk. */
+export function nightOf(sky: readonly [readonly number[], readonly number[]]): number {
+  const light = (c: readonly number[]) => (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255
+  const t = Math.max(0, Math.min(1, (DAY_SKY - (light(sky[0]) + light(sky[1])) / 2) / (DAY_SKY - NIGHT_SKY)))
+  return t * t * (3 - 2 * t)
+}
+
+/** What cel shading's tones are multiplied by under a sky that much a night's (`CelLook.ambient`): nothing by day, `MOONLIGHT` at night. */
+export function nightLight(night: number): [number, number, number] {
+  return [1 + (MOONLIGHT[0] - 1) * night, 1 + (MOONLIGHT[1] - 1) * night, 1 + (MOONLIGHT[2] - 1) * night]
+}

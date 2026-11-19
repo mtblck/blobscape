@@ -14,7 +14,7 @@ import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitD
 import { href } from './routes.ts'
 import { download } from './files.ts'
 import type { CreatureStage } from './creature/stage.ts'
-import { TAB_SECTIONS, Workbench } from '../shared/Workbench.tsx'
+import { TAB_SECTIONS, ViewPopup, Workbench } from '../shared/Workbench.tsx'
 import { DETAIL, PALETTES } from './diorama/scene.ts'
 import { DIORAMAS, described, type Diorama } from './diorama/scenes.ts'
 import { SceneDetails, kilobytes, type SceneFacts } from './diorama/SceneDetails.tsx'
@@ -22,13 +22,16 @@ import type { Skeleton } from '../splat-engine/rig.ts'
 import { Pokes } from '../splat-engine/poke.ts'
 import { levelPlane, type MirrorImage } from '../splat-engine/reflect.ts'
 import type { SceneWater } from '../splat-engine/sceneWater.ts'
-import { browserDeflate, encodeApng, enlarged } from '../splat-core/apng.ts'
+import { browserDeflate, encodeApng, enlarged, startApng } from '../splat-core/apng.ts'
+import { watchDraws } from '../splat-core/drawn.ts'
+import { EXPORT_RATES, exportName, exportSize, leadIn, loopTimes, sideFor, sidesFor } from './diorama/exportLoop.ts'
+import { paintView } from '../shared/record.ts'
 import type { Texture } from '../splat-engine/meshShape.ts'
 import { decodeTexture } from './modelRig.ts'
 import { detailAsked, labelNames, writeDetail } from '../shared/detail.ts'
 import { unlit } from '../splat-engine/voxel.ts'
 import { STYLES, styleAsked, styleWords, type Style } from './diorama/styles.ts'
-import { useDrawnLook } from './drawnLook.tsx'
+import { useDrawnLook, wantsPlain } from './drawnLook.tsx'
 
 const SIZES = [2, 3, 4, 6]
 /** Frames a second the scene moves at: 0 is every frame the screen shows. */
@@ -66,10 +69,6 @@ async function toPng(f: Frame, scale: number): Promise<Uint8Array> {
 /** What one blob holds: a center, three sizes, a facing, a color and an opacity, each number four bytes. */
 const BLOB_BYTES = (3 + 3 + 4 + 3 + 1) * 4
 
-/** Frames a second in a recorded loop: one of the page's Motion choices, as the gallery's loops are. */
-const RECORD_FPS = 12
-/** The frame rates a loop can be recorded at: more frames, and anything that moves fast takes smaller steps. */
-const RECORD_RATES = [12, 24]
 
 export function PixelDiorama() {
   const h1 = useFocusHeading()
@@ -97,12 +96,15 @@ export function PixelDiorama() {
   /** The scene picker: the modal of every scene's card. */
   const [picking, setPicking] = useState(false)
   const [playing, setPlaying] = useState(!calm)
-  const [detail, setDetail] = useState<string>(() => detailAsked(DETAIL, labelNames)?.id ?? (coarse ? DETAIL[1].id : DETAIL[2].id))
+  // a phone starts a step lighter, and a step lighter again for the styles that draw the scene several times a frame
+  // (outlines, ASCII, cel shading), as Brush and Ink does; once the visitor picks a detail it is theirs for every style
+  const [chosen, setChosen] = useState<string | undefined>(() => detailAsked(DETAIL, labelNames)?.id)
   /** How the scene is drawn: as pixel art, or as one of Brush and Ink's looks. `?style=oil` opens on that one. */
   const [style, setStyle] = useState<Style>(() => styleAsked(new URLSearchParams(location.search).get('style')))
   const pixels = style === 'pixel'
   // cel shading lights the blobs itself, so its scene is cut with no light baked in
-  const plain = style === 'cel'
+  const plain = wantsPlain(style === 'pixel' ? undefined : style)
+  const detail = chosen ?? (coarse ? DETAIL[pixels ? 1 : 0].id : DETAIL[2].id)
   const [palette, setPalette] = useState('own')
   const [size, setSize] = useState(2)
   const [dither, setDither] = useState(diorama.finish.dither)
@@ -129,13 +131,21 @@ export function PixelDiorama() {
   const [art, setArt] = useState<{ width: number; height: number }>()
   const [saving, setSaving] = useState(false)
   const [note, setNote] = useState('')
-  /** Frames recorded so far while Record the loop runs. */
+  /** Frames drawn so far while the Export tab's Export the loop runs. */
   const [recording, setRecording] = useState<number | null>(null)
-  /** What Record the loop saves: a lossless animated PNG at the art's own size, or an MP4 scaled up in whole pixels. */
-  const [recordAs, setRecordAs] = useState<'png' | 'mp4'>('png')
+  /** What an export saves, once the visitor has picked: until then pixel art is a lossless animated PNG and the other styles an MP4. */
+  const [asPicked, setRecordAs] = useState<'png' | 'mp4'>()
+  const recordAs = asPicked ?? (pixels ? 'png' : 'mp4')
   const [videoSize, setVideoSize] = useState(6)
   const [pngSize, setPngSize] = useState(4)
-  const [recordFps, setRecordFps] = useState(RECORD_FPS)
+  /** The long side, in pixels, a style other than pixel art is exported at (an animated PNG takes the smaller ones). */
+  const [side, setSide] = useState(1080)
+  const [fpsPicked, setRecordFps] = useState(EXPORT_RATES[0])
+  // pixel art moves in few, clear steps, so it has no 30
+  const rates = pixels ? EXPORT_RATES.slice(0, 2) : EXPORT_RATES
+  const recordFps = rates.includes(fpsPicked) ? fpsPicked : rates[rates.length - 1]
+  /** The view an export holds: as it stood when the button was pressed, whatever is turned or zoomed meanwhile (it still rocks about it when Rock the view is on). */
+  const held = useRef<Orbit | undefined>(undefined)
 
   // built after a paint, so the waiting mark shows first
   const [made, setScene] = useState<{ built: Built; of: Diorama; detail: string; paint: string; plain: boolean }>()
@@ -235,20 +245,27 @@ export function PixelDiorama() {
     }
     stage.setPoser((sk: Skeleton, t: number) => {
       d.pose(sk, t)
-      pokes.current?.apply(sk, performance.now() / 1000)
+      // an export is the scene's own loop: no pokes, and the view as it stood when it began
+      if (!held.current) pokes.current?.apply(sk, performance.now() / 1000)
       stage.setLights(castBy(d.lights(t, stage.backend === 'webgpu'), glowGain(glowNow.current, d.finish.glow)), d.ambientAt?.(t) ?? d.ambient ?? 1)
       // a scene whose sky turns as it plays (day to night) hands the pixel pass each moment's sky
       skyNow.current?.(d, t)
-      // a scene that asks for it rocks the view gently as it plays, about wherever the view has been turned to
-      if (d.swing && !calm && rock) stage.orbit = swung(orbitNow.current, d.swing, d.loop, t)
+      // a scene that asks for it rocks the view gently as it plays, about wherever the view has been turned to;
+      // an export holds the view it was started from, and rocks about it when the switch is on (once a loop, so it still joins)
+      const about = held.current ?? orbitNow.current
+      if (d.swing && !calm && rock) stage.orbit = swung(about, d.swing, d.loop, t)
+      else if (held.current) stage.orbit = held.current
       wet.current?.()
     }, from)
   }, [stage, scene, calm, rock, mirrored])
   // one of Brush and Ink's looks in place of pixel art: marks, outlines, characters or cel tones, with their own settings
-  const drawing = useDrawnLook(stage, pixels || touring ? undefined : style, { actor: scene?.built, plain: !!scene?.plain, azimuth: shown.views[0].orbit.azimuth, offscreen })
+  const drawing = useDrawnLook(stage, pixels || touring ? undefined : style, { actor: scene?.built, plain: !!scene?.plain, azimuth: shown.views[0].orbit.azimuth, offscreen, light: coarse, loop: shown.loop, sky: shown.finish.sky ? [shown.sky[0], shown.sky[1]] : undefined })
   // the walk-through's fourth step is about the four samples, so it draws them whatever the switch says
   const sampling = touring?.id === 'samples'
   const drawnLook = useMemo(() => (asPixels ? (sampling ? { ...look, fine: true } : look) : undefined), [asPixels, sampling, look])
+  // on a phone the styles that fill the whole screen (pixel art fills a small frame) are drawn at one and a half device
+  // pixels to a CSS pixel, not two: every pass has near half the pixels to fill, and the marks are no finer than that
+  useEffect(() => { stage?.setSharpness(coarse && !asPixels ? 1.5 : 2) }, [stage, coarse, asPixels])
   useEffect(() => {
     if (!stage) return
     stage.setPixels(drawnLook, size)
@@ -291,13 +308,15 @@ export function PixelDiorama() {
   useEffect(() => {
     if (!stage) return
     const d = posed.current
+    // while a loop is exported the view stays as it was when it began; what is turned meanwhile shows afterwards
+    if (held.current) return
     stage.orbit = d && !calm && rock ? swung(orbit, d.swing, d.loop, stage.time) : orbit
     // haze is measured from the view's target, so it stays put on the scene as the view moves in and out
     const h = d?.haze
     stage.setFog(h?.color ?? [0, 0, 0], h ? orbit.distance + h.from : 0, h ? orbit.distance + h.to : 0)
     wet.current?.()
     stage.invalidate()
-  }, [stage, orbit, scene, calm, rock])
+  }, [stage, orbit, scene, calm, rock, recording === null])
   // the art's size follows the view's; read it now and then for the caption (it's text, not every frame)
   useEffect(() => {
     if (!stage) return
@@ -346,67 +365,167 @@ export function PixelDiorama() {
   }, [stage, scene, look, style, mirrored])
 
   /**
-   * Records one whole loop as the art stands (palette, size, finish), stepped frame by frame from the time so it joins
-   * up end to end, and saves it as a lossless animated PNG (each art pixel `pngSize` pixels a side) or an MP4.
+   * The view as it is drawn by a style other than pixel art: its canvas over the color behind it, copied in the moment
+   * after a draw (the only time a canvas a GPU draws to can be read). `take` is called with each picture.
+   */
+  const pictures = (W: number, H: number, take: (sheet: HTMLCanvasElement, ctx: CanvasRenderingContext2D) => void) => {
+    const cv = canvas.current!, box = cv.parentElement!
+    const sheet = document.createElement('canvas')
+    sheet.width = W
+    sheet.height = H
+    const ctx = sheet.getContext('2d', { alpha: false, willReadFrequently: true })!
+    return watchDraws((drawn) => {
+      if (drawn !== cv) return
+      paintView(ctx, box, W, H, (el) => el)
+      take(sheet, ctx)
+    })
+  }
+
+  /**
+   * Exports one whole loop in the style and settings on show, stepped frame by frame from the time so it joins up end
+   * to end and no frame is dropped, as a lossless animated PNG or an MP4. The view is held as it stands when this is
+   * called: it rocks only if Rock the view is on, and turning or zooming while it runs changes nothing. Pixel art saves
+   * the art itself, each pixel a whole square; the other styles save the view's own picture.
    */
   const record = async () => {
     if (!stage || recording !== null) return
-    const fps = recordFps, loop = shown.loop, count = Math.round(loop * fps), was = playing
+    const fps = recordFps, loop = shown.loop, times = loopTimes(loop, fps), count = times.length, was = playing, kind = recordAs
+    held.current = orbit
+    stage.orbit = orbit
     setPlaying(false)
     stage.playing = false
     setRecording(0)
-    setNote('Recording the loop, one frame at a time…')
+    setNote('Exporting the loop, one frame at a time…')
+    let unwatch: (() => void) | undefined
     try {
-      // the half second before the start first, so steady pixels have a frame before frame 0
-      for (let i = Math.round(fps / 2); i > 0; i--) await stage.frame(loop - i / fps)
-      const frames: Frame[] = []
-      for (let f = 0; f < count; f++) {
-        await stage.frame(f / fps)
-        const got = await stage.pixelFrames()
-        if (!got) throw new Error('pixel art went away')
-        frames.push(got.art)
-        if (f % 6 === 0) setRecording(f)
-      }
-      setRecording(count)
-      const { width: w, height: h } = frames[0]
-      if (recordAs === 'mp4') {
-        const { encodeVideo, videoScale } = await import('./diorama/video.ts')
-        const s = videoScale(w, h, videoSize)
-        const bytes = await encodeVideo(frames, fps, s)
-        download(bytes, `pixel-diorama-${shown.id}-loop.mp4`, 'video/mp4')
-        setNote(`Saved the loop: ${count} frames at ${w * s} × ${h * s}, an MP4 of ${kilobytes(bytes.length)}.`)
+      // the end of the loop first, so looks that settle against the frame before have what comes before frame 0
+      for (const t of leadIn(loop, fps)) await stage.frame(t)
+      let bytes: Uint8Array, W: number, H: number
+      if (pixels) {
+        const frames: Frame[] = []
+        for (let f = 0; f < count; f++) {
+          await stage.frame(times[f])
+          const got = await stage.pixelFrames()
+          if (!got) throw new Error('pixel art went away')
+          frames.push(got.art)
+          if (f % 6 === 0) setRecording(f)
+        }
+        setRecording(count)
+        const { width: w, height: h } = frames[0]
+        if (kind === 'mp4') {
+          const { encodeVideo, videoScale } = await import('./diorama/video.ts')
+          const s = videoScale(w, h, videoSize)
+          bytes = await encodeVideo(frames, fps, s)
+          W = w * s; H = h * s
+        } else {
+          // each art pixel a square of whole pixels, so a bigger picture is as crisp as the art
+          bytes = await encodeApng(frames.map((f) => enlarged(f, pngSize)), fps, browserDeflate)
+          W = w * pngSize; H = h * pngSize
+        }
       } else {
-        // each art pixel a square of whole pixels, so a bigger picture is as crisp as the art
-        const bytes = await encodeApng(frames.map((f) => enlarged(f, pngSize)), fps, browserDeflate)
-        download(bytes, `pixel-diorama-${shown.id}-loop.png`, 'image/png')
-        setNote(`Saved the loop: ${count} frames at ${w * pngSize} × ${h * pngSize}, an animated PNG of ${kilobytes(bytes.length)}.`)
+        const cv = canvas.current!
+        ;[W, H] = exportSize(cv.width, cv.height, sideFor(kind, side))
+        const video = kind === 'mp4' ? await (await import('./diorama/video.ts')).startVideo(W, H, fps) : undefined
+        const png = video ? undefined : startApng(W, H, count, fps, browserDeflate)
+        // each frame is handed on as soon as it is drawn, so no more than one raw picture is held at a time
+        let taken: Promise<void> | undefined
+        // the view may also draw by itself between frames (a setting that asked for one): only the frame asked for is taken
+        unwatch = pictures(W, H, (sheet, ctx) => { if (!taken) taken = video ? video.add(sheet) : png!.add({ width: W, height: H, data: ctx.getImageData(0, 0, W, H).data }) })
+        for (let f = 0; f < count; f++) {
+          taken = undefined
+          await stage.frame(times[f])
+          if (!taken) throw new Error('the view gave no picture')
+          await taken
+          if (f % 6 === 0) setRecording(f)
+        }
+        setRecording(count)
+        bytes = video ? await video.finish() : png!.finish()
       }
+      download(bytes, exportName(shown.id, style, 'loop', kind), kind === 'mp4' ? 'video/mp4' : 'image/png')
+      setNote(`Saved the loop: ${count} frames at ${W} × ${H}, ${kind === 'mp4' ? 'an MP4' : 'an animated PNG'} of ${kilobytes(bytes.length)}.`)
     } catch (e) {
       console.warn(e)
-      setNote(recordAs === 'mp4' && String(e).includes('MP4') ? 'This browser can’t make an MP4. The animated PNG works everywhere.' : 'The loop could not be recorded. Keep the settings and size as they are while it records.')
+      setNote(kind === 'mp4' && String(e).includes('MP4') ? 'This browser can’t make an MP4. The animated PNG works everywhere.' : 'The loop could not be exported. Keep the settings and the window’s size as they are while it runs.')
     } finally {
+      unwatch?.()
+      held.current = undefined
       setRecording(null)
       stage.playing = was
       setPlaying(was)
+      stage.invalidate()
     }
   }
 
+  /** Saves the picture on show: pixel art as its own pixels four times the size, another style as the view draws it. */
   const save = async () => {
     if (!stage) return
     setSaving(true)
     setNote('')
+    let unwatch: (() => void) | undefined
     try {
-      const frames = await stage.pixelFrames()
-      if (!frames) return
-      download(await toPng(frames.art, 4), `pixel-diorama-${shown.id}.png`, 'image/png')
-      setNote(`Saved a ${frames.art.width * 4} × ${frames.art.height * 4} PNG.`)
+      if (pixels) {
+        const frames = await stage.pixelFrames()
+        if (!frames) return
+        download(await toPng(frames.art, 4), exportName(shown.id, style, 'frame', 'png'), 'image/png')
+        setNote(`Saved a ${frames.art.width * 4} × ${frames.art.height * 4} PNG.`)
+        return
+      }
+      const cv = canvas.current!, W = cv.width, H = cv.height
+      let got: Promise<Blob | null> | undefined
+      unwatch = pictures(W, H, (sheet) => { got ??= new Promise((done) => sheet.toBlob(done, 'image/png')) })
+      await stage.frame(stage.time)
+      const blob = await got
+      if (!blob) throw new Error('the view gave no picture')
+      download(new Uint8Array(await blob.arrayBuffer()), exportName(shown.id, style, 'frame', 'png'), 'image/png')
+      setNote(`Saved a ${W} × ${H} PNG.`)
     } catch (e) {
       console.warn(e)
       setNote('The picture could not be saved.')
     } finally {
+      unwatch?.()
       setSaving(false)
     }
   }
+
+  /** What an export saves and how big: the Export tab's choices, and the same ones in the full screen view's Export popup. */
+  const exportChoices = (inFull: boolean) => (
+                <div className="grid gap-3">
+                <Field label="Save the loop as">
+                  <div className="flex flex-wrap gap-1.5">
+                    <Chip active={recordAs === 'png'} onClick={() => setRecordAs('png')}>Animated PNG</Chip>
+                    <Chip active={recordAs === 'mp4'} onClick={() => setRecordAs('mp4')}>MP4 video</Chip>
+                  </div>
+                  {!pixels && recordAs === 'png' && <p className="mt-1.5 text-xs text-ink-faint">Lossless, so the file is large for this style. An MP4 is far smaller and can be bigger across.</p>}
+                </Field>
+                <Field label="Frames a second">
+                  <div className="flex flex-wrap gap-1.5">
+                    {rates.map((r) => <Chip key={r} active={recordFps === r} onClick={() => setRecordFps(r)}>{String(r)}</Chip>)}
+                  </div>
+                  <p className="mt-1.5 text-xs text-ink-faint">More frames take longer to export and suit a scene where things move fast.</p>
+                </Field>
+                {pixels && recordAs === 'png' && <Field label="Picture size">
+                  <div className="flex flex-wrap gap-1.5">
+                    {[1, 2, 4, 6].map((s) => <Chip key={s} active={pngSize === s} onClick={() => setPngSize(s)}>{`${s}×`}</Chip>)}
+                  </div>
+                  <p className="mt-1.5 text-xs text-ink-faint">How many pixels wide each pixel of the art is saved. 1× is the art's own size.</p>
+                </Field>}
+                {pixels && recordAs === 'mp4' && <Field label="Video size">
+                  <div className="flex flex-wrap gap-1.5">
+                    {[4, 6, 8].map((s) => <Chip key={s} active={videoSize === s} onClick={() => setVideoSize(s)}>{`${s}×`}</Chip>)}
+                  </div>
+                  <p className="mt-1.5 text-xs text-ink-faint">How many pixels wide each pixel of the art is in the video.</p>
+                </Field>}
+                {!pixels && <Field label="Longest side">
+                  <div className="flex flex-wrap gap-1.5">
+                    {sidesFor(recordAs).map((s) => <Chip key={s} active={sideFor(recordAs, side) === s} onClick={() => setSide(s)}>{`${s} px`}</Chip>)}
+                  </div>
+                  <p className="mt-1.5 text-xs text-ink-faint">{inFull ? 'Never bigger than the view itself, which is as big as it gets in full screen.' : 'Never bigger than the view itself: for a bigger picture, make the view full screen first and use its Export button.'}</p>
+                </Field>}
+                </div>
+  )
+  const exportLabel = recording === null ? 'Export the loop' : recording >= Math.round(shown.loop * recordFps) ? 'Saving the loop…' : `Frame ${recording} of ${Math.round(shown.loop * recordFps)}…`
+  const exportNote = touring ? 'Close How it\'s made to save a frame or export the loop.' : note
+  const cantExport = !!touring || !drawn || saving || recording !== null
 
   const drag = useRef<OrbitDrag | null>(null)
   const pointers = useRef(new Map<number, { x: number; y: number }>())
@@ -506,6 +625,19 @@ export function PixelDiorama() {
       {facts && <SceneDetails open={details} onClose={() => setDetails(false)} facts={facts} />}
       <Workbench
         viewLabel="The scene"
+        fullTools={
+          <ViewPopup label="Export" title="Export the loop" testId="diorama-full-export">
+            {exportChoices(true)}
+            <div className="grid gap-2">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Button small disabled={cantExport} onClick={record} data-testid="diorama-full-record">{exportLabel}</Button>
+                <Button small disabled={cantExport} onClick={save}>{saving ? 'Saving…' : 'Save this frame'}</Button>
+              </div>
+              <p role="status" className="text-xs text-ink-faint empty:hidden">{exportNote}</p>
+              <p className="text-xs text-ink-faint">Uses the view as it is when you press the button. It rocks only if Rock the view is on in the Finish tab, and turning or zooming while it runs changes nothing.</p>
+            </div>
+          </ViewPopup>
+        }
         view={<>
               {drawing.ground && <div aria-hidden className="absolute inset-0" style={{ background: drawing.ground }} data-testid="diorama-ground" />}
               <canvas
@@ -597,7 +729,7 @@ export function PixelDiorama() {
                 </Field>
                 <Field label="Blobs">
                   <div className="flex flex-wrap gap-1.5">
-                    {DETAIL.map((d) => <Chip key={d.id} active={detail === d.id} onClick={() => { setDetail(d.id); writeDetail(d.id) }}>{d.label}</Chip>)}
+                    {DETAIL.map((d) => <Chip key={d.id} active={detail === d.id} onClick={() => { setChosen(d.id); writeDetail(d.id) }}>{d.label}</Chip>)}
                   </div>
                 </Field>
                 <div className="grid gap-2">
@@ -649,7 +781,8 @@ export function PixelDiorama() {
             id: 'finish', label: 'Finish', content: (
               <div className={TAB_SECTIONS}>
                 {pixels && <Slider label="Dither" value={dither} min={0} max={1} step={0.05} onChange={setDither} format={(v) => `${Math.round(v * 100)}%`} hint={colors.length ? (sky ? 'Checkers two palette colors to fake the ones between. The sky is always dithered, so its bands blend.' : 'Checkers two palette colors to fake the ones between.') : 'Needs a palette: Full color has none to mix.'} />}
-                <Slider label="Glow" value={glow} min={0} max={4} step={0.25} onChange={setGlow} format={(v) => (v ? `${v.toFixed(2)}×` : 'off')} hint={pixels ? 'How strongly lamps, fires and other glowing things light what is round them, and how far bright pixels shine into the ones beside them.' : 'How strongly lamps, fires and other glowing things light what is round them.'} />
+                {/* neon and stained glass put the scene's lights by (neon has a Glow of its own in the Style tab), so this one would do nothing there */}
+                {style !== 'neon' && style !== 'glass' && <Slider label="Glow" value={glow} min={0} max={4} step={0.25} onChange={setGlow} format={(v) => (v ? `${v.toFixed(2)}×` : 'off')} hint={pixels ? 'How strongly lamps, fires and other glowing things light what is round them, and how far bright pixels shine into the ones beside them.' : 'How strongly lamps, fires and other glowing things light what is round them.'} />}
                 <div className="grid gap-3">
                 {!pixels && <p className="text-xs text-ink-faint">Dither, outlines and the sky belong to the Pixel art style. Pick it in the Style tab to change them.</p>}
                 {pixels && <>
@@ -669,40 +802,22 @@ export function PixelDiorama() {
                 <Toggle label="Exact sort (slower)" checked={exact} onChange={setExact} />
                 <p className="text-xs text-ink-faint">Draws blobs at the same depth in one fixed order, so flat walls can't flicker. It costs about 10 ms a frame on a phone at 500,000 blobs.</p>
                 </div>
-                {pixels && <div className="grid gap-3">
-                <Field label="Record the loop as">
-                  <div className="flex flex-wrap gap-1.5">
-                    <Chip active={recordAs === 'png'} onClick={() => setRecordAs('png')}>Animated PNG</Chip>
-                    <Chip active={recordAs === 'mp4'} onClick={() => setRecordAs('mp4')}>MP4 video</Chip>
-                  </div>
-                </Field>
-                <Field label="Frames a second">
-                  <div className="flex flex-wrap gap-1.5">
-                    {RECORD_RATES.map((r) => <Chip key={r} active={recordFps === r} onClick={() => setRecordFps(r)}>{String(r)}</Chip>)}
-                  </div>
-                  <p className="mt-1.5 text-xs text-ink-faint">24 takes twice as long to record and suits a scene where things move fast.</p>
-                </Field>
-                {recordAs === 'png' && <Field label="Picture size">
-                  <div className="flex flex-wrap gap-1.5">
-                    {[1, 2, 4, 6].map((s) => <Chip key={s} active={pngSize === s} onClick={() => setPngSize(s)}>{`${s}×`}</Chip>)}
-                  </div>
-                  <p className="mt-1.5 text-xs text-ink-faint">How many pixels wide each pixel of the art is saved. 1× is the art's own size.</p>
-                </Field>}
-                {recordAs === 'mp4' && <Field label="Video size">
-                  <div className="flex flex-wrap gap-1.5">
-                    {[4, 6, 8].map((s) => <Chip key={s} active={videoSize === s} onClick={() => setVideoSize(s)}>{`${s}×`}</Chip>)}
-                  </div>
-                  <p className="mt-1.5 text-xs text-ink-faint">How many pixels wide each pixel of the art is in the video.</p>
-                </Field>}
+              </div>
+            ),
+          },
+          {
+            id: 'export', label: 'Export', content: (
+              <div className={TAB_SECTIONS}>
+                <p className="text-sm text-ink-muted">Saves the scene in the style it is drawn in now. A loop is drawn one frame at a time from start to end, so it joins up when it repeats and no frame is dropped, however slow the device.</p>
+                {exportChoices(false)}
                 <div className="grid gap-2">
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <Button small disabled={!!touring || !drawn || saving || recording !== null} onClick={save}>{saving ? 'Saving…' : 'Save this frame'}</Button>
-                  <Button small disabled={!!touring || !drawn || saving || recording !== null} onClick={record} data-testid="diorama-record">{recording === null ? 'Record the loop' : recording >= Math.round(shown.loop * recordFps) ? 'Saving the loop…' : `Recording ${recording} of ${Math.round(shown.loop * recordFps)}…`}</Button>
+                  <Button small disabled={cantExport} onClick={record} data-testid="diorama-record">{exportLabel}</Button>
+                  <Button small disabled={cantExport} onClick={save}>{saving ? 'Saving…' : 'Save this frame'}</Button>
                 </div>
-                <p role="status" className="text-xs text-ink-faint empty:-mt-2">{touring ? 'Close How it\'s made to save a frame or record the loop.' : note}</p>
+                <p role="status" className="text-xs text-ink-faint empty:-mt-2">{exportNote}</p>
+                <p className="text-xs text-ink-faint">The loop is exported from the view as it is when you press the button. It rocks only if Rock the view is on in the Finish tab, and turning or zooming while it runs changes nothing. For a clip of whatever you do on the page, use the record button on the view.</p>
                 </div>
-                </div>}
-                {!pixels && <p className="text-xs text-ink-faint">Saving a frame and recording the loop are for pixel art. For this style, the record button on the view saves a video of what it shows.</p>}
               </div>
             ),
           },

@@ -2,7 +2,7 @@ import { drawsTo, markDrawn } from '../splat-core/drawn.ts'
 import * as THREE from 'three/webgpu'
 import { STAGE_FOV, placeCamera, type Orbit } from '../splat-core/orbit.ts'
 import { readbackToSrgb } from '../splat-core/color.ts'
-import { SplatWorld, type Light } from './engine.ts'
+import { MAX_LIGHTS, SplatWorld, type Light } from './engine.ts'
 import { SHADOW_DENSITY } from './shadow.ts'
 import type { ShapeEdit } from './edit.ts'
 import { sampleClip, sampleWeights, type Clip } from './glb.ts'
@@ -19,7 +19,13 @@ import { lookColors, snapColors, type Frame, type PixelLook } from '../splat-cor
 import { INK, type MarkLook, type OutlinePen } from '../splat-core/marks.ts'
 import { InkLines } from './inkLines.ts'
 import { CelPass } from './celPass.ts'
-import { CEL_FROM, type CelLook } from '../splat-core/cel.ts'
+import { CEL_FROM, lampTint, type CelLook } from '../splat-core/cel.ts'
+import { NeonPass } from './neonPass.ts'
+import { NEON_EMIT, type NeonLook } from '../splat-core/neon.ts'
+import { GlassPass } from './glassPass.ts'
+import type { GlassLook } from '../splat-core/glass.ts'
+import { WashPass } from './washPass.ts'
+import type { WashLook } from '../splat-core/wash.ts'
 import { GlyphPass } from './glyphPass.ts'
 import { glyphScale, glyphText, type GlyphLook } from '../splat-core/glyphs.ts'
 import { SplatLens } from './lens.ts'
@@ -201,6 +207,20 @@ export class Stage {
     }
   }
 
+  /**
+   * How many device pixels to a CSS pixel the stage draws at, at most (2 where never set; the screen's own where that
+   * is less). Under 2 on a sharp screen every pass has fewer pixels to fill, for a softer picture: a page may ask for
+   * it on a phone while it draws a costly look.
+   */
+  setSharpness(most: number) {
+    const ratio = Math.min(Math.max(0.5, most), window.devicePixelRatio || 1)
+    if (ratio === this.renderer.getPixelRatio()) return
+    this.renderer.setPixelRatio(ratio)
+    // sized again at the next frame
+    this.lastW = 0
+    this.invalidate()
+  }
+
   /** Starts a stage on a canvas: makes the renderer (WebGPU, or WebGL 2 where there is none) and begins drawing. */
   static async start(display: HTMLCanvasElement, opts: StageOptions = {}) {
     const canvas = opts.offscreen ? document.createElement('canvas') : display
@@ -277,7 +297,7 @@ export class Stage {
 
   private build(actor: Actor) {
     this.world = new SplatWorld([actor, ...this.extras], { mode: this.mode, lights: this.opts.lights, sort: this.sort, cleanCuts: this.opts.cleanCuts, shadowDensity: this.opts.shadowDensity })
-    this.world.glowGain = this.glowGain
+    this.world.glowGain = this.emits
     this.world.lightEase = this.lightEase
     this.world.setFog(...this.fog)
     this.dress()
@@ -533,8 +553,9 @@ export class Stage {
   /**
    * Cel shading (splat-core/cel.ts), on a stage made with `lights`: every blob flat in its own color, the light cut
    * into two or three tones with clean edges, shadows cast by what stands in the light's way, and an even outline.
-   * The look's light takes the place of the stage's lights and its fill the place of its marks while it is on; leave
-   * the look out to have them back. Kept for the next actor too. It shades the blobs' own colors, so it suits blobs
+   * The tones are cut from the look's own light, and the stage's lights (`setLights`) stay as the scene's lamps: where
+   * they reach is one more tone in their color, and the ambient light dims both tones. Its fill takes the place of the
+   * stage's marks while it is on; leave the look out to have them back. Kept for the next actor too. It shades the blobs' own colors, so it suits blobs
    * that have no light baked into them. Not in pixel mode.
    */
   setCel(look?: CelLook) {
@@ -545,15 +566,82 @@ export class Stage {
     this.invalidate()
   }
 
-  /** Hands the world what it is drawn with: cel shading's flat fill and one light, or the stage's own marks and lights. */
+  private neon?: NeonPass
+  private neonLook?: NeonLook
+  /**
+   * Neon (splat-core/neon.ts): tubes of glowing light along the outlines, in each thing's own color at full strength
+   * or the look's colors, with pulses of light running along them by the stage's clock; the bodies are kept dark and
+   * catch the light as it passes. On a stage made with `lights`, whatever gives its own light (`Actor.glow`: a lamp, a
+   * lit window, a flame) is filled with it and lights the bodies round it too. Every blob is drawn flat in its own color while it is on, with the stage's lights
+   * put by, so it suits blobs that have no light baked into them. Leave the look out to stop. Kept for the next
+   * actor too. Not in pixel mode; ASCII and cel shading come first if set, and outlines and the lens wait.
+   */
+  setNeon(look?: NeonLook) {
+    this.neonLook = look
+    if (!look) { this.neon?.dispose(); this.neon = undefined }
+    else this.neon ??= new NeonPass()
+    this.dress()
+    this.invalidate()
+  }
+
+  private wash?: WashPass
+  private washLook?: WashLook
+  /**
+   * Watercolor (splat-core/wash.ts): the picture laid on paper as thin see-through washes whose edges run and dry
+   * darker, with the paper's grain showing through, the lightest places left bare, a wash of the look's sky behind
+   * and a faint pencil line underneath. The paper covers the canvas. Every blob is drawn flat in its own color while
+   * it is on, under the stage's own lights. Leave the look out to stop. Kept for the next actor too. Not in pixel
+   * mode; ASCII, cel shading, neon and stained glass come first if set, and outlines and the lens wait.
+   */
+  setWash(look?: WashLook) {
+    this.washLook = look
+    if (!look) { this.wash?.dispose(); this.wash = undefined }
+    else this.wash ??= new WashPass()
+    this.dress()
+    this.invalidate()
+  }
+
+  private glass?: GlassPass
+  private glassLook?: GlassLook
+  /**
+   * Stained glass (splat-core/glass.ts): every surface cut into panes of flat colored glass that stay on it as the
+   * view turns, lead between the panes and round every part, the light behind, and the empty picture round the
+   * subject glazed too, so the canvas is covered. Every blob is drawn flat in its own color while it is on, with
+   * the stage's lights put by, and lead runs wherever that color changes, so it suits blobs in flat colors with no
+   * light baked into them. Leave the look out to stop. Kept for the next actor too. Not in pixel mode; ASCII, cel
+   * shading and neon come first if set, and outlines and the lens wait.
+   */
+  setGlass(look?: GlassLook) {
+    this.glassLook = look
+    if (!look) { this.glass?.dispose(); this.glass = undefined }
+    else this.glass ??= new GlassPass()
+    this.dress()
+    this.invalidate()
+  }
+
+  /** Hands the world what it is drawn with: cel shading's flat fill and one light, neon's flat fill and none, stained glass's flat fill, or the stage's own marks and lights. */
   private dress() {
     const world = this.world
     if (!world) return
     const cel = this.opts.lights ? this.celLook : undefined
     world.cel = !!cel
-    world.setMarks(cel ? { kind: 'flat' } : this.marks)
+    world.setMarks(cel || this.neonLook || this.glassLook || this.washLook ? { kind: 'flat' } : this.marks)
     if (!this.opts.lights) return
-    if (cel) world.setLights([{ direction: [...(cel.from ?? CEL_FROM)] as [number, number, number], color: [1, 1, 1] }], 1)
+    this.light()
+  }
+
+  /**
+   * Hands the world its lights: the stage's own, or for cel shading the one the tones are cut from and then the
+   * stage's own, which the pass adds as one more tone where they reach (their shadows are the baked ones: the grid
+   * of shadows is not asked).
+   */
+  private light() {
+    const world = this.world
+    if (!world || !this.opts.lights) return
+    const cel = this.celLook
+    world.glowGain = this.emits
+    if (!cel && (this.neonLook || this.glassLook)) world.setLights([], 1)
+    else if (cel) world.setLights([{ direction: [...(cel.from ?? CEL_FROM)] as [number, number, number], color: [1, 1, 1] }, ...this.lit.lights.slice(0, MAX_LIGHTS - 1).map((l) => ({ ...l, shadow: false }))], 1)
     else world.setLights(this.lit.lights, this.lit.ambient)
   }
 
@@ -614,11 +702,13 @@ export class Stage {
    */
   setLights(lights: Light[], ambient: number | readonly [number, number, number] = 1) {
     this.lit = { lights, ambient }
-    if (!this.celLook) this.world?.setLights(lights, ambient)
+    this.light()
     this.invalidate()
   }
 
   private glowGain = 1
+  /** What the world's `glowGain` is: the stage's own, or neon's, which tells lamps from pale things by it. */
+  private get emits() { return this.neonLook && !(this.opts.lights && this.celLook) ? NEON_EMIT : this.glowGain }
   /**
    * How many times its own color a blob that gives its own light (`Actor.glow`) is drawn under live lights (the
    * world's `glowGain`), kept for the next actor too. Over 1 only with a lens (`setLens`), which lets what is brighter
@@ -626,7 +716,7 @@ export class Stage {
    */
   setGlowGain(gain: number) {
     this.glowGain = Math.max(0, gain)
-    if (this.world) this.world.glowGain = this.glowGain
+    if (this.world) this.world.glowGain = this.emits
     this.invalidate()
   }
 
@@ -682,8 +772,32 @@ export class Stage {
     if (!this.pixel && this.cel && this.celLook && this.opts.lights) {
       const { x, y } = this.target ? { x: this.target.width, y: this.target.height } : this.renderer.getDrawingBufferSize(this.buffer)
       this.cel.setSize(x, y)
-      this.cel.setLook(this.celLook, this.renderer.getPixelRatio())
+      const amb = this.lit.ambient
+      this.cel.setLook({ ...this.celLook, lamps: this.celLook.lamps ?? lampTint(this.lit.lights), ambient: [0, 1, 2].map((k) => (this.celLook!.ambient?.[k] ?? 1) * (typeof amb === 'number' ? amb : amb[k])) as [number, number, number] }, this.renderer.getPixelRatio())
       this.cel.render(this.renderer, this.scene, this.camera)
+      return
+    }
+    if (!this.pixel && this.neon && this.neonLook && this.world) {
+      const { x, y } = this.target ? { x: this.target.width, y: this.target.height } : this.renderer.getDrawingBufferSize(this.buffer)
+      this.neon.setSize(x, y)
+      const { lo, hi } = this.world.posedBox()
+      this.neon.setLook(this.neonLook, this.renderer.getPixelRatio(), Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]), this.time)
+      this.neon.render(this.renderer, this.scene, this.camera)
+      return
+    }
+    if (!this.pixel && this.glass && this.glassLook && this.world) {
+      const { x, y } = this.target ? { x: this.target.width, y: this.target.height } : this.renderer.getDrawingBufferSize(this.buffer)
+      this.glass.setSize(x, y)
+      const { lo, hi } = this.world.posedBox()
+      this.glass.setLook(this.glassLook, this.renderer.getPixelRatio(), Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]))
+      this.glass.render(this.renderer, this.scene, this.camera)
+      return
+    }
+    if (!this.pixel && this.wash && this.washLook) {
+      const { x, y } = this.target ? { x: this.target.width, y: this.target.height } : this.renderer.getDrawingBufferSize(this.buffer)
+      this.wash.setSize(x, y)
+      this.wash.setLook(this.washLook, this.renderer.getPixelRatio())
+      this.wash.render(this.renderer, this.scene, this.camera)
       return
     }
     if (!this.pixel && this.lines) {
@@ -890,6 +1004,8 @@ export class Stage {
     // the mirror's picture of this very moment, so what a test or a recording sees does not depend on timing
     await this.reflect(true)
     this.draw()
+    // on the page itself, a loop being exported copies the picture now, while it can still be read
+    if (!this.target) markDrawn(this.display)
     if (this.actor) this.firstFrame()
     if (!this.target) return
     // read back by checks: a CPU canvas, because a GPU one gives a few faint pixels a different rounding the first time it is read
@@ -939,7 +1055,7 @@ export class Stage {
       this.baking = false
       if (this.floor) this.floor.visible = true
       this.extras.forEach((e, k) => { e.blobs.opacity.set(solid[k]); world.recolor(e) })
-      if (this.opts.lights) { this.dress(); world.glowGain = this.glowGain }
+      if (this.opts.lights) { this.dress(); world.glowGain = this.emits }
       const next = this.queued
       this.queued = undefined
       if (next) this.setActor(next.actor, next.clip, next.extras)
@@ -957,6 +1073,9 @@ export class Stage {
     this.world?.dispose()
     this.rig?.dispose()
     this.lines?.dispose()
+    this.neon?.dispose()
+    this.glass?.dispose()
+    this.wash?.dispose()
     this.glyphs?.dispose()
     this.lens?.dispose()
     this.cel?.dispose()

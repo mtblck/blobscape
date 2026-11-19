@@ -23,7 +23,7 @@
   {
    "id": "pixels",
    "title": "Pixels and sprites",
-   "doc": "Drawing a stage as pixel art, as brush and ink marks, as characters or cel shaded, and baking a creature into a sprite sheet."
+   "doc": "Drawing a stage as pixel art, as brush and ink marks, as characters, cel shaded, in neon, as stained glass or in watercolor, and baking a creature into a sprite sheet."
   },
   {
    "id": "simulation",
@@ -227,6 +227,15 @@
       }
      ],
      "methods": [
+      {
+       "name": "setSharpness",
+       "doc": "How many device pixels to a CSS pixel the stage draws at, at most (2 where never set; the screen's own where that\nis less). Under 2 on a sharp screen every pass has fewer pixels to fill, for a softer picture: a page may ask for\nit on a phone while it draws a costly look.",
+       "signatures": [
+        {
+         "code": "setSharpness(most: number): void"
+        }
+       ]
+      },
       {
        "name": "start",
        "static": true,
@@ -437,10 +446,37 @@
       },
       {
        "name": "setCel",
-       "doc": "Cel shading (splat-core/cel.ts), on a stage made with `lights`: every blob flat in its own color, the light cut\ninto two or three tones with clean edges, shadows cast by what stands in the light's way, and an even outline.\nThe look's light takes the place of the stage's lights and its fill the place of its marks while it is on; leave\nthe look out to have them back. Kept for the next actor too. It shades the blobs' own colors, so it suits blobs\nthat have no light baked into them. Not in pixel mode.",
+       "doc": "Cel shading (splat-core/cel.ts), on a stage made with `lights`: every blob flat in its own color, the light cut\ninto two or three tones with clean edges, shadows cast by what stands in the light's way, and an even outline.\nThe tones are cut from the look's own light, and the stage's lights (`setLights`) stay as the scene's lamps: where\nthey reach is one more tone in their color, and the ambient light dims both tones. Its fill takes the place of the\nstage's marks while it is on; leave the look out to have them back. Kept for the next actor too. It shades the blobs' own colors, so it suits blobs\nthat have no light baked into them. Not in pixel mode.",
        "signatures": [
         {
          "code": "setCel(look?: CelLook): void"
+        }
+       ]
+      },
+      {
+       "name": "setNeon",
+       "doc": "Neon (splat-core/neon.ts): tubes of glowing light along the outlines, in each thing's own color at full strength\nor the look's colors, with pulses of light running along them by the stage's clock; the bodies are kept dark and\ncatch the light as it passes. On a stage made with `lights`, whatever gives its own light (`Actor.glow`: a lamp, a\nlit window, a flame) is filled with it and lights the bodies round it too. Every blob is drawn flat in its own color while it is on, with the stage's lights\nput by, so it suits blobs that have no light baked into them. Leave the look out to stop. Kept for the next\nactor too. Not in pixel mode; ASCII and cel shading come first if set, and outlines and the lens wait.",
+       "signatures": [
+        {
+         "code": "setNeon(look?: NeonLook): void"
+        }
+       ]
+      },
+      {
+       "name": "setWash",
+       "doc": "Watercolor (splat-core/wash.ts): the picture laid on paper as thin see-through washes whose edges run and dry\ndarker, with the paper's grain showing through, the lightest places left bare, a wash of the look's sky behind\nand a faint pencil line underneath. The paper covers the canvas. Every blob is drawn flat in its own color while\nit is on, under the stage's own lights. Leave the look out to stop. Kept for the next actor too. Not in pixel\nmode; ASCII, cel shading, neon and stained glass come first if set, and outlines and the lens wait.",
+       "signatures": [
+        {
+         "code": "setWash(look?: WashLook): void"
+        }
+       ]
+      },
+      {
+       "name": "setGlass",
+       "doc": "Stained glass (splat-core/glass.ts): every surface cut into panes of flat colored glass that stay on it as the\nview turns, lead between the panes and round every part, the light behind, and the empty picture round the\nsubject glazed too, so the canvas is covered. Every blob is drawn flat in its own color while it is on, with\nthe stage's lights put by, and lead runs wherever that color changes, so it suits blobs in flat colors with no\nlight baked into them. Leave the look out to stop. Kept for the next actor too. Not in pixel mode; ASCII, cel\nshading and neon come first if set, and outlines and the lens wait.",
+       "signatures": [
+        {
+         "code": "setGlass(look?: GlassLook): void"
         }
        ]
       },
@@ -8072,6 +8108,30 @@
        "optional": true,
        "type": "Rgb",
        "doc": "The outline's color, sRGB 0–1 (default near black)."
+      },
+      {
+       "name": "shadowSize",
+       "optional": true,
+       "type": "number",
+       "doc": "How many pixels a side the light's view of the scene is, which cast shadows are read from (default and most 2048): fewer is cheaper to draw and gives softer shadow edges."
+      },
+      {
+       "name": "shadowEvery",
+       "optional": true,
+       "type": "number",
+       "doc": "The light's view is drawn again at most every this many frames (default 1, every frame something moves): 2 halves its cost and leaves cast shadows a frame behind."
+      },
+      {
+       "name": "lamps",
+       "optional": true,
+       "type": "Rgb",
+       "doc": "What the scene's own lights add to a color where they reach it (linear, added to what the tone multiplies it by).\nLeft out, a `Stage` works it out from the lights set on it (`lampTint`); black takes the lamps away."
+      },
+      {
+       "name": "ambient",
+       "optional": true,
+       "type": "Rgb",
+       "doc": "What both tones are multiplied by (linear), such as a night's dim blue. On a `Stage` its ambient light multiplies them too, so a scene that dims dims here."
       }
      ]
     },
@@ -8112,6 +8172,24 @@
      "type": "0.5"
     },
     {
+     "name": "CEL_LAMP",
+     "kind": "const",
+     "doc": "A surface is in a lamp's light when the scene's lamps reach it by this much or more (`toneAt`'s `lamps` in splat-engine/light.ts).",
+     "type": "0.16"
+    },
+    {
+     "name": "CEL_GLOWS",
+     "kind": "const",
+     "doc": "From this much, what reaches a surface is its own light (a flame, a lit pane): it is never darker than its own color.",
+     "type": "0.9"
+    },
+    {
+     "name": "LAMP_ADD",
+     "kind": "const",
+     "doc": "How strong the color lamps add is, where the lights set no more: the brightest channel of `lampTint`.",
+     "type": "1"
+    },
+    {
      "name": "CEL_EDGE",
      "kind": "const",
      "doc": "The least width of a tone's edge, in the units of what is cut (facing and share of light, both 0–1), so the edge is not stepped.",
@@ -8136,10 +8214,20 @@
     {
      "name": "celColor",
      "kind": "function",
-     "doc": "A color (linear RGB) under the tones `celTones` gives: `shade` (linear) multiplies it in shade, and the brightest tone goes toward white.",
+     "doc": "A color (linear RGB) under the tones `celTones` gives: `shade` (linear) multiplies it in shade, and the brightest\ntone goes toward white. `by` is the scene's own light: `ambient` multiplies both tones, `lamps` is added where the\nscene's lamps reach (`reach`, from `toneAt`: one more tone, cut at `CEL_LAMP`), and from `CEL_GLOWS` the color is\nnever darker than itself.",
      "signatures": [
       {
-       "code": "celColor(rgb: ArrayLike<number>, tones: { lit: number; bright: number }, shade: ArrayLike<number>, bright?: number): [number, number, number]"
+       "code": "celColor(rgb: ArrayLike<number>, tones: { lit: number; bright: number }, shade: ArrayLike<number>, bright?: number, by?: { reach: number; lamps?: ArrayLike<number>; ambient?: ArrayLike<number> }): [number, number, number]"
+      }
+     ]
+    },
+    {
+     "name": "lampTint",
+     "kind": "function",
+     "doc": "The color the scene's lamps add in cel shading (linear): the color of its point lights taken together, each by its\nbrightness, with its strongest channel at `LAMP_ADD`. Black where there are none.",
+     "signatures": [
+      {
+       "code": "lampTint(lights: readonly { color: ArrayLike<number>; position?: unknown }[]): [number, number, number]"
       }
      ]
     },
@@ -8172,6 +8260,699 @@
      "signatures": [
       {
        "code": "gatherColors(color: ArrayLike<number>, partOf?: ArrayLike<number>, most?: number, round?: { at: ArrayLike<number>; reach: number }): Float32Array"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "neonPass",
+   "title": "Neon",
+   "group": "pixels",
+   "doc": "",
+   "entries": [
+    {
+     "name": "NeonPass",
+     "kind": "class",
+     "doc": "Neon (splat-core/neon.ts): tubes of light along the picture's outlines, over bodies kept dark that catch the\ntubes' light. The frame is drawn three times with the same moved and sorted blobs (the picture in the blobs' own\nflat colors, a map of depth and a map of parts), as outlines are (inkLines.ts), and the tubes run where those\nlines would: round the subject, where one thing passes in front of another, and between its parts. A tube takes\nthe color of the thing it goes round at full strength (`neonColor`), or one of the look's colors by its part, and\nshines by where it is in the world: pulses of light run through the scene two ways (`shineAt`), so the light\ntravels along the tubes. The tubes' light is then spread at three sizes, and the last pass paints each body in its\nown color times the light that reaches it, with the glow and the tubes over it. Whatever gives its own light\n(`Actor.glow`) is a lamp: filled with its color and spread onto the bodies round it as the tubes' light is.\n\nThe world should be drawing flat marks with no light of its own and a `glowGain` of `NEON_EMIT` (`Stage.setNeon` sets all three). The frame's camera\nmust be a perspective camera.",
+     "ctor": [
+      {
+       "code": "new NeonPass()"
+      }
+     ],
+     "props": [
+      {
+       "name": "picture",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
+       "doc": "The picture: every blob flat in its own color, with what gives its own light drawn over white (`NEON_EMIT`), which is how the pass knows a lamp."
+      },
+      {
+       "name": "ids",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
+       "doc": "The map of parts the tubes between parts come from."
+      }
+     ],
+     "methods": [
+      {
+       "name": "setLook",
+       "doc": "The look, how many device pixels a CSS pixel is, the scene's size in the world (which the pulses are spaced by)\nand the stage's time in seconds.",
+       "signatures": [
+        {
+         "code": "setLook(look: NeonLook, ratio: number, size: number, time: number): void"
+        }
+       ]
+      },
+      {
+       "name": "setSize",
+       "doc": "Sizes the pass's targets, in device pixels.",
+       "signatures": [
+        {
+         "code": "setSize(width: number, height: number): void"
+        }
+       ]
+      },
+      {
+       "name": "render",
+       "doc": "Draws the scene in neon into the renderer's current target, or onto the screen when it has none.",
+       "signatures": [
+        {
+         "code": "render(renderer: WebGPURenderer, scene: Object3D, camera: Camera): void"
+        }
+       ]
+      },
+      {
+       "name": "dispose",
+       "doc": "Frees its targets.",
+       "signatures": [
+        {
+         "code": "dispose(): void"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "neon",
+   "title": "Neon: the arithmetic",
+   "group": "pixels",
+   "doc": "Neon (Matt's idea, 2026-11-19): a scene drawn as tubes of glowing light along its outlines, over bodies kept dark\nthat catch the light as it runs along the tubes. The arithmetic here is pure; `splat-engine/neonPass.ts` is its\nshader twin (change both).",
+   "entries": [
+    {
+     "name": "NeonLook",
+     "kind": "interface",
+     "doc": "How a stage draws neon (`Stage.setNeon`).",
+     "props": [
+      {
+       "name": "line",
+       "optional": true,
+       "type": "number",
+       "doc": "How wide a tube is, in CSS pixels (2)."
+      },
+      {
+       "name": "glow",
+       "optional": true,
+       "type": "number",
+       "doc": "How strongly the tubes' light spills round them and onto the bodies: 0 none, 1 as designed, up to 2."
+      },
+      {
+       "name": "body",
+       "optional": true,
+       "type": "number",
+       "doc": "How lit the bodies are with no tube near, as a share of their own color (`NEON_BODY`)."
+      },
+      {
+       "name": "colors",
+       "optional": true,
+       "type": "readonly (readonly [number, number, number])[]",
+       "doc": "The tubes' colors (sRGB 0–1), dealt out part by part. Left out, each tube takes the color of the thing it goes round, at full strength."
+      },
+      {
+       "name": "period",
+       "optional": true,
+       "type": "number",
+       "doc": "How many seconds a pulse of light takes to come round again; 0 holds the light still (4). A scene that loops wants a whole number of these in its loop."
+      },
+      {
+       "name": "apart",
+       "optional": true,
+       "type": "number",
+       "doc": "How far apart two pulses run, as a share of the scene's size (0.45)."
+      }
+     ]
+    },
+    {
+     "name": "NEON_BODY",
+     "kind": "const",
+     "doc": "Bodies with no tube near keep this share of their own color.",
+     "type": "0.05"
+    },
+    {
+     "name": "NEON_REST",
+     "kind": "const",
+     "doc": "A tube between pulses shines this much of its full light.",
+     "type": "0.22"
+    },
+    {
+     "name": "NEON_TAIL",
+     "kind": "const",
+     "doc": "How fast a pulse dies away behind its head: its light is (1 − how far behind, as a share of the way to the next) to this power.",
+     "type": "3.5"
+    },
+    {
+     "name": "NEON_FLOOR",
+     "kind": "const",
+     "doc": "A tube's color keeps at least this much of each channel, so a pure red still has a hot core.",
+     "type": "0.06"
+    },
+    {
+     "name": "NEON_BLACK",
+     "kind": "const",
+     "doc": "A thing darker than this in every channel (linear) has no hue to speak of, and its tube is white.",
+     "type": "0.001"
+    },
+    {
+     "name": "NEON_VIVID",
+     "kind": "const",
+     "doc": "How much stronger than its own a tube's color is made, about its gray.",
+     "type": "2.4"
+    },
+    {
+     "name": "NEON_EMIT",
+     "kind": "const",
+     "doc": "How many times its own color a thing that gives its own light (`Actor.glow`: a lamp, a lit window, a flame) is\ndrawn into neon's picture, so the pass can tell it from a pale thing: its color goes over white (`lampShare`).",
+     "type": "4"
+    },
+    {
+     "name": "NEON_LAMP",
+     "kind": "const",
+     "doc": "A pixel whose brightest channel is over the first of these is partly a lamp, and over the second wholly one.",
+     "type": "readonly [number, number]"
+    },
+    {
+     "name": "NEON_LAMP_SHINE",
+     "kind": "const",
+     "doc": "How brightly a lamp shines beside a tube at a pulse's head.",
+     "type": "0.85"
+    },
+    {
+     "name": "NEON_COLORS",
+     "kind": "const",
+     "doc": "The most colors a look may deal out.",
+     "type": "6"
+    },
+    {
+     "name": "NEON_WAYS",
+     "kind": "const",
+     "doc": "The two ways pulses run through a scene (not unit: the second set of pulses lies closer together).",
+     "type": "readonly [readonly [number, number, number], readonly [number, number, number]]"
+    },
+    {
+     "name": "NEON_SECOND",
+     "kind": "const",
+     "doc": "The second set of pulses' share of the first's light.",
+     "type": "0.7"
+    },
+    {
+     "name": "NEON_SHIFT",
+     "kind": "const",
+     "doc": "How far a part's own number shifts its pulses, in pulses.",
+     "type": "1"
+    },
+    {
+     "name": "neonColor",
+     "kind": "function",
+     "doc": "The color of the tube round a thing of color `rgb` (linear, 0–1): the same hue at full strength, however dark the\nthing is. A gray thing gets a white tube.",
+     "signatures": [
+      {
+       "code": "neonColor(rgb: readonly number[]): [number, number, number]"
+      }
+     ]
+    },
+    {
+     "name": "pulse",
+     "kind": "function",
+     "doc": "One set of pulses: 1 at a pulse's head, dying away behind it to nothing just before the next. `phase` counts pulses.",
+     "signatures": [
+      {
+       "code": "pulse(phase: number): number"
+      }
+     ]
+    },
+    {
+     "name": "shineAt",
+     "kind": "function",
+     "doc": "How brightly a tube shines at a place: `along` is the place measured along each of the two ways, in pulses (its\npart's shift included), `turn` how many pulses have gone by. Never under `NEON_REST`, 1 at a head.",
+     "signatures": [
+      {
+       "code": "shineAt(along: readonly [number, number], turn: number): number"
+      }
+     ]
+    },
+    {
+     "name": "lampShare",
+     "kind": "function",
+     "doc": "How much of a pixel of neon's picture is a lamp, from its brightest channel (`top`): nothing up to white, all of\nit well over. A lamp is filled with its own light, steady, and that light is spread onto the bodies round it as\nthe tubes' is.",
+     "signatures": [
+      {
+       "code": "lampShare(top: number): number"
+      }
+     ]
+    },
+    {
+     "name": "colorOf",
+     "kind": "const",
+     "doc": "Which of `count` colors a part takes, from the part's shift (0–1).",
+     "type": "(shift: number, count: number) => number"
+    },
+    {
+     "name": "bodyColor",
+     "kind": "function",
+     "doc": "A body's color (linear) under the tubes' light: its own color times what it keeps unlit plus the light that\nreaches it (`light`, the tubes' light spread out, linear).",
+     "signatures": [
+      {
+       "code": "bodyColor(own: readonly number[], light: readonly number[], body?: number, glow?: number): [number, number, number]"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "glassPass",
+   "title": "Stained glass",
+   "group": "pixels",
+   "doc": "",
+   "entries": [
+    {
+     "name": "GlassPass",
+     "kind": "class",
+     "doc": "Stained glass (splat-core/glass.ts). The frame is drawn three times with the same moved and sorted blobs (the\npicture in the blobs' own flat colors, a map of depth and a map of parts), as outlines are (inkLines.ts). One pass\nthen puts each pixel back in the world from its depth and asks which pane it is in: panes are the cells nearest a\nscatter of points fixed in the world, so they stay on their surfaces as the view turns. A pane's glass is the\npicture's own color there, made richer and lighter and a little different from the next pane's, with the light\nbehind it. Lead runs between panes, round every part, where one thing passes in front of another, round the\nsubject, and wherever the picture's color changes, so each piece between leads is one color: it wants blobs in\nflat colors with no light baked in. Pixels the subject leaves empty are panes too, fixed on the screen and colored as the look's sky, so the\nwhole picture is a window.\n\nThe world should be drawing flat marks with no light of its own (`Stage.setGlass` sets both). The frame's camera must be a perspective camera.",
+     "ctor": [
+      {
+       "code": "new GlassPass()"
+      }
+     ],
+     "props": [
+      {
+       "name": "picture",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
+       "doc": "The picture: every blob flat in its own color."
+      },
+      {
+       "name": "ids",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
+       "doc": "The map of parts the lead between parts comes from."
+      }
+     ],
+     "methods": [
+      {
+       "name": "setLook",
+       "doc": "The look, how many device pixels a CSS pixel is, and the scene's size in the world (which panes are sized by).",
+       "signatures": [
+        {
+         "code": "setLook(look: GlassLook, ratio: number, size: number): void"
+        }
+       ]
+      },
+      {
+       "name": "setSize",
+       "doc": "Sizes the pass's targets, in device pixels.",
+       "signatures": [
+        {
+         "code": "setSize(width: number, height: number): void"
+        }
+       ]
+      },
+      {
+       "name": "render",
+       "doc": "Draws the scene as stained glass into the renderer's current target, or onto the screen when it has none.",
+       "signatures": [
+        {
+         "code": "render(renderer: WebGPURenderer, scene: Object3D, camera: Camera): void"
+        }
+       ]
+      },
+      {
+       "name": "dispose",
+       "doc": "Frees its targets.",
+       "signatures": [
+        {
+         "code": "dispose(): void"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "glass",
+   "title": "Stained glass: the arithmetic",
+   "group": "pixels",
+   "doc": "Stained glass (Matt picked it, 2026-11-19): a scene drawn as a leaded window. Every surface is cut into panes of\nflat colored glass that stay on it as the view turns, with lead between the panes, round every part, wherever\nthe color changes and round the subject, and the light comes from behind. The arithmetic here is pure; `splat-engine/glassPass.ts` is its\nshader twin (change both).",
+   "entries": [
+    {
+     "name": "GlassLook",
+     "kind": "interface",
+     "doc": "How a stage draws stained glass (`Stage.setGlass`).",
+     "props": [
+      {
+       "name": "pane",
+       "optional": true,
+       "type": "number",
+       "doc": "How big a pane is, as a share of the scene's size (0.06)."
+      },
+      {
+       "name": "lead",
+       "optional": true,
+       "type": "number",
+       "doc": "How wide the lead is, in CSS pixels (3)."
+      },
+      {
+       "name": "ink",
+       "optional": true,
+       "type": "readonly [number, number, number]",
+       "doc": "The lead's color (sRGB 0–1)."
+      },
+      {
+       "name": "sky",
+       "optional": true,
+       "type": "readonly [readonly [number, number, number], readonly [number, number, number]]",
+       "doc": "The window round the subject, top and bottom (sRGB 0–1): empty pixels are panes of these. Left out, pale blue over warm white."
+      },
+      {
+       "name": "light",
+       "optional": true,
+       "type": "readonly [number, number]",
+       "doc": "Where the light behind the window is brightest, across and down the picture (0–1; [0.5, 0.3])."
+      },
+      {
+       "name": "shine",
+       "optional": true,
+       "type": "number",
+       "doc": "How much brighter the glass is at the light than far from it: 0 lights the window evenly (0.5)."
+      },
+      {
+       "name": "vary",
+       "optional": true,
+       "type": "number",
+       "doc": "How much one pane's glass differs from the next's, 0 to 1 (0.5)."
+      }
+     ]
+    },
+    {
+     "name": "GLASS_RICH",
+     "kind": "const",
+     "doc": "Glass is richer than paint: its color is made this much stronger about its gray.",
+     "type": "1.45"
+    },
+    {
+     "name": "GLASS_LIFT",
+     "kind": "const",
+     "doc": "And lighter, since the light comes through it: its color is raised to this power (under 1 lightens).",
+     "type": "0.8"
+    },
+    {
+     "name": "GLASS_VARY",
+     "kind": "const",
+     "doc": "One pane's glass is lighter or darker than the next's by up to this share, at full `vary`.",
+     "type": "0.3"
+    },
+    {
+     "name": "GLASS_SKY_PANE",
+     "kind": "const",
+     "doc": "The window round the subject is cut into panes this many times a scene pane's size on screen, as a share of the picture's height.",
+     "type": "0.11"
+    },
+    {
+     "name": "GLASS_JUMP",
+     "kind": "const",
+     "doc": "Lead also runs where the picture's own color (linear) changes by more than this from one pixel to one a lead's width away.",
+     "type": "0.18"
+    },
+    {
+     "name": "GLASS_LEAD",
+     "kind": "const",
+     "doc": "The lead (sRGB 0–1): near black, a little warm.",
+     "type": "readonly [number, number, number]"
+    },
+    {
+     "name": "GLASS_SKY",
+     "kind": "const",
+     "doc": "The window with no sky of the subject's own, top and bottom (sRGB 0–1).",
+     "type": "readonly [readonly [number, number, number], readonly [number, number, number]]"
+    },
+    {
+     "name": "cellHash",
+     "kind": "function",
+     "doc": "A number from 0 to 1 for a grid cell, different for each `salt`.",
+     "signatures": [
+      {
+       "code": "cellHash(x: number, y: number, z: number, salt: number): number"
+      }
+     ]
+    },
+    {
+     "name": "seedOf",
+     "kind": "function",
+     "doc": "Where a grid cell's pane has its middle: somewhere in the cell.",
+     "signatures": [
+      {
+       "code": "seedOf(x: number, y: number, z: number): [number, number, number]"
+      }
+     ]
+    },
+    {
+     "name": "paneOf",
+     "kind": "function",
+     "doc": "The pane a point is in, with panes one unit across: the grid cell whose seed is nearest (`cell`, `seed`) and how\nfar the point is from the nearest other pane (`edge`: its distance to the plane halfway between the two seeds).\nLead is drawn where `edge` is under half the lead's width.",
+     "signatures": [
+      {
+       "code": "paneOf(p: readonly number[]): { cell: [number, number, number]; seed: [number, number, number]; edge: number }"
+      }
+     ]
+    },
+    {
+     "name": "glassColor",
+     "kind": "function",
+     "doc": "A color (linear, 0–1) as glass with the light behind it: richer and lighter.",
+     "signatures": [
+      {
+       "code": "glassColor(rgb: readonly number[]): [number, number, number]"
+      }
+     ]
+    },
+    {
+     "name": "paneTint",
+     "kind": "function",
+     "doc": "What a pane's glass is multiplied by: each pane a little lighter or darker than the next, by its cell.",
+     "signatures": [
+      {
+       "code": "paneTint(cell: readonly number[], vary?: number): number"
+      }
+     ]
+    },
+    {
+     "name": "backLight",
+     "kind": "function",
+     "doc": "How bright the light behind the window is at a place in the picture (`at` and `light` across and down, 0–1; `aspect` is width over height): 1 at the light, falling to 1 − `shine` far from it.",
+     "signatures": [
+      {
+       "code": "backLight(at: readonly number[], light: readonly number[], shine?: number, aspect?: number): number"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "washPass",
+   "title": "Watercolor",
+   "group": "pixels",
+   "doc": "",
+   "entries": [
+    {
+     "name": "WashPass",
+     "kind": "class",
+     "doc": "Watercolor (splat-core/wash.ts). The frame is drawn three times with the same moved and sorted blobs (the picture\nin the blobs' own flat colors, and for the pencil a map of depth and a map of parts). The picture is softened at\nhalf and at a quarter of its size, and one pass paints the paper: each pixel reads the softened picture a little\nto one side (the paper's own wander, fixed on the screen, so a wash's edge runs unevenly), takes its color as\npigment, and lays it on the paper as see-through paint (`washed`): thinner and thicker from place to place,\ngathered into the paper's grain, darker where the wash ends or its color changes (the softened picture against\nthe more softened one), and not at all where the picture is lightest. A look's sky is a wash behind the subject\nthat stops short of the paper's edge; a faint pencil line runs where outlines would.\n\nThe world should be drawing flat marks (`Stage.setWash` sets them).",
+     "ctor": [
+      {
+       "code": "new WashPass()"
+      }
+     ],
+     "props": [
+      {
+       "name": "picture",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
+       "doc": "The picture: every blob flat in its own color."
+      },
+      {
+       "name": "ids",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
+       "doc": "The map of parts the pencil's lines between parts come from."
+      }
+     ],
+     "methods": [
+      {
+       "name": "setLook",
+       "doc": "The look, and how many device pixels a CSS pixel is.",
+       "signatures": [
+        {
+         "code": "setLook(look: WashLook, ratio: number): void"
+        }
+       ]
+      },
+      {
+       "name": "setSize",
+       "doc": "Sizes the pass's targets, in device pixels.",
+       "signatures": [
+        {
+         "code": "setSize(width: number, height: number): void"
+        }
+       ]
+      },
+      {
+       "name": "render",
+       "doc": "Draws the scene in watercolor into the renderer's current target, or onto the screen when it has none.",
+       "signatures": [
+        {
+         "code": "render(renderer: WebGPURenderer, scene: Object3D, camera: Camera): void"
+        }
+       ]
+      },
+      {
+       "name": "dispose",
+       "doc": "Frees its targets.",
+       "signatures": [
+        {
+         "code": "dispose(): void"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "wash",
+   "title": "Watercolor: the arithmetic",
+   "group": "pixels",
+   "doc": "Watercolor (Matt picked it, 2026-11-19): a scene painted in thin washes on paper. Paint is see-through, so a wash\ndarkens the paper under it and never covers it; its edges run a little and dry darker where the pigment pools;\nthe paper's grain shows through; the lightest places are left as bare paper. The arithmetic here is pure;\n`splat-engine/washPass.ts` is its shader twin (change both).",
+   "entries": [
+    {
+     "name": "WashLook",
+     "kind": "interface",
+     "doc": "How a stage draws watercolor (`Stage.setWash`).",
+     "props": [
+      {
+       "name": "bleed",
+       "optional": true,
+       "type": "number",
+       "doc": "How far a wash's edge runs and wanders, in CSS pixels (4)."
+      },
+      {
+       "name": "pool",
+       "optional": true,
+       "type": "number",
+       "doc": "How much darker a wash dries at its edges, 0 to 1 (0.6)."
+      },
+      {
+       "name": "grain",
+       "optional": true,
+       "type": "number",
+       "doc": "How much the paper's grain shows in the paint, 0 to 1 (0.55)."
+      },
+      {
+       "name": "strength",
+       "optional": true,
+       "type": "number",
+       "doc": "How strong the paint is, 0 to 1: lower is paler, with more paper showing (0.7)."
+      },
+      {
+       "name": "pencil",
+       "optional": true,
+       "type": "number",
+       "doc": "A pencil line under the paint, 0 for none to 1 (0.55)."
+      },
+      {
+       "name": "paper",
+       "optional": true,
+       "type": "readonly [number, number, number]",
+       "doc": "The paper (sRGB 0–1)."
+      },
+      {
+       "name": "sky",
+       "optional": true,
+       "type": "readonly [readonly [number, number, number], readonly [number, number, number]]",
+       "doc": "A wash behind the subject, top and bottom (sRGB 0–1), laid short of the paper's edge. Left out, the paper is bare."
+      }
+     ]
+    },
+    {
+     "name": "WASH_PAPER",
+     "kind": "const",
+     "doc": "The paper (sRGB 0–1): a warm white.",
+     "type": "readonly [number, number, number]"
+    },
+    {
+     "name": "WASH_PENCIL",
+     "kind": "const",
+     "doc": "The pencil (sRGB 0–1).",
+     "type": "readonly [number, number, number]"
+    },
+    {
+     "name": "WASH_WHITE",
+     "kind": "const",
+     "doc": "A color this light or lighter (its brightest channel, linear) is left as bare paper, and one under the second is painted at full strength.",
+     "type": "readonly [number, number]"
+    },
+    {
+     "name": "WASH_RICH",
+     "kind": "const",
+     "doc": "Paint is richer wet than the picture's color: made this much stronger about its gray.",
+     "type": "1.25"
+    },
+    {
+     "name": "WASH_UNEVEN",
+     "kind": "const",
+     "doc": "A wash is this much thinner or thicker from place to place, as water carries the pigment about.",
+     "type": "0.22"
+    },
+    {
+     "name": "WASH_MARGIN",
+     "kind": "const",
+     "doc": "The wash behind the subject stops this far short of the paper's edge, as a share of the picture's height, give or take as much again.",
+     "type": "0.05"
+    },
+    {
+     "name": "WASH_SKY",
+     "kind": "const",
+     "doc": "And is laid this thin beside the subject's own paint.",
+     "type": "0.55"
+    },
+    {
+     "name": "washed",
+     "kind": "function",
+     "doc": "Paper with one wash on it: `paint` is the pigment's color (linear, 0–1), `density` how much of it lies there (0\nnone, 1 a full wash, more where it pooled). Paint only ever takes light away, so the result is never lighter\nthan the paper.",
+     "signatures": [
+      {
+       "code": "washed(paper: readonly number[], paint: readonly number[], density: number): [number, number, number]"
+      }
+     ]
+    },
+    {
+     "name": "pigment",
+     "kind": "function",
+     "doc": "The pigment for a picture's color (linear): a little richer, and never quite black.",
+     "signatures": [
+      {
+       "code": "pigment(rgb: readonly number[]): [number, number, number]"
+      }
+     ]
+    },
+    {
+     "name": "kept",
+     "kind": "function",
+     "doc": "How much of a color is painted at all: nothing for the lightest (bare paper stands for it), all of it for the rest. `top` is its brightest channel.",
+     "signatures": [
+      {
+       "code": "kept(top: number): number"
+      }
+     ]
+    },
+    {
+     "name": "density",
+     "kind": "function",
+     "doc": "How much paint lies at a place: the wash's `cover` there (0 off it, 1 well inside), thinned or thickened by the\nwater (`water`, 0–1), gathered into the paper's grain (`tooth`, 0–1, by `grain`), and more where it pooled as it\ndried (`edge`, 0–1: how near the wash's edge or a change of color, by `pool`).",
+     "signatures": [
+      {
+       "code": "density(cover: number, water: number, tooth: number, edge: number, look?: { strength?: number; grain?: number; pool?: number }): number"
       }
      ]
     }
