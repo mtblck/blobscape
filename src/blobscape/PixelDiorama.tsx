@@ -30,7 +30,9 @@ import type { Texture } from '../splat-engine/meshShape.ts'
 import { decodeTexture } from './modelRig.ts'
 import { detailAsked, labelNames, writeDetail } from '../shared/detail.ts'
 import { unlit } from '../splat-engine/voxel.ts'
-import { STYLES, styleAsked, styleWords, type Style } from './diorama/styles.ts'
+import { STYLES, isPixelStyle, styleAsked, styleWords, type Style } from './diorama/styles.ts'
+import { glitchArt } from '../splat-core/glitch.ts'
+import { GLITCH_AMOUNTS, GLITCH_PACE_CHOICES, GLITCH_START, glitchLook, type GlitchChoice } from './glitchLooks.ts'
 import { useDrawnLook, wantsPlain } from './drawnLook.tsx'
 
 const SIZES = [2, 3, 4, 6]
@@ -101,9 +103,14 @@ export function PixelDiorama() {
   const [chosen, setChosen] = useState<string | undefined>(() => detailAsked(DETAIL, labelNames)?.id)
   /** How the scene is drawn: as pixel art, or as one of Brush and Ink's looks. `?style=oil` opens on that one. */
   const [style, setStyle] = useState<Style>(() => styleAsked(new URLSearchParams(location.search).get('style')))
-  const pixels = style === 'pixel'
+  // tech glitch is pixel art underneath: pixel mode, its palette and its finish, with bursts laid on as it goes to the screen
+  const pixels = isPixelStyle(style)
+  const glitching = style === 'glitch'
+  /** The look Brush and Ink would draw, where the style is one of theirs. */
+  const drawnStyle = isPixelStyle(style) ? undefined : style
+  const [glitch, setGlitch] = useState<GlitchChoice>(GLITCH_START)
   // cel shading lights the blobs itself, so its scene is cut with no light baked in
-  const plain = wantsPlain(style === 'pixel' ? undefined : style)
+  const plain = wantsPlain(drawnStyle)
   const detail = chosen ?? (coarse ? DETAIL[pixels ? 1 : 0].id : DETAIL[2].id)
   const [palette, setPalette] = useState('own')
   const [size, setSize] = useState(2)
@@ -259,7 +266,7 @@ export function PixelDiorama() {
     }, from)
   }, [stage, scene, calm, rock, mirrored])
   // one of Brush and Ink's looks in place of pixel art: marks, outlines, characters or cel tones, with their own settings
-  const drawing = useDrawnLook(stage, pixels || touring ? undefined : style, { actor: scene?.built, plain: !!scene?.plain, azimuth: shown.views[0].orbit.azimuth, offscreen, light: coarse, loop: shown.loop, sky: shown.finish.sky ? [shown.sky[0], shown.sky[1]] : undefined })
+  const drawing = useDrawnLook(stage, touring ? undefined : drawnStyle, { actor: scene?.built, plain: !!scene?.plain, azimuth: shown.views[0].orbit.azimuth, offscreen, light: coarse, loop: shown.loop, sky: shown.finish.sky ? [shown.sky[0], shown.sky[1]] : undefined })
   // the walk-through's fourth step is about the four samples, so it draws them whatever the switch says
   const sampling = touring?.id === 'samples'
   const drawnLook = useMemo(() => (asPixels ? (sampling ? { ...look, fine: true } : look) : undefined), [asPixels, sampling, look])
@@ -288,6 +295,8 @@ export function PixelDiorama() {
     stage.tint(touring?.clay ? (c, i) => [...clay(c), kept(i, keep) ? 1 : 0] : undefined)
   }, [stage, touring])
   useEffect(() => { if (stage) stage.playing = playing }, [stage, playing])
+  // the glitch's bursts come in steps of the scene's own clock, a whole number of steps a loop, so an export joins up
+  useEffect(() => { stage?.setGlitch(glitching && !touring ? glitchLook(glitch, shown.loop, calm && !offscreen) : undefined) }, [stage, glitching, touring, glitch, shown.loop, calm, offscreen])
   useEffect(() => { if (stage) { stage.step = pixels && rate ? 1 / rate : 0; stage.invalidate() } }, [stage, pixels, rate])
   const orbitNow = useRef(orbit)
   /** A scene's water: shapes and colors its surface for the moment and the view, and the last picture of what it mirrors. */
@@ -407,7 +416,8 @@ export function PixelDiorama() {
           await stage.frame(times[f])
           const got = await stage.pixelFrames()
           if (!got) throw new Error('pixel art went away')
-          frames.push(got.art)
+          // the art read back is clean: the glitch drawn over it on screen is laid on again here, by its CPU twin
+          frames.push(stage.glitchNow ? glitchArt(got.art, stage.glitchNow) : got.art)
           if (f % 6 === 0) setRecording(f)
         }
         setRecording(count)
@@ -466,7 +476,7 @@ export function PixelDiorama() {
       if (pixels) {
         const frames = await stage.pixelFrames()
         if (!frames) return
-        download(await toPng(frames.art, 4), exportName(shown.id, style, 'frame', 'png'), 'image/png')
+        download(await toPng(stage.glitchNow ? glitchArt(frames.art, stage.glitchNow) : frames.art, 4), exportName(shown.id, style, 'frame', 'png'), 'image/png')
         setNote(`Saved a ${frames.art.width * 4} × ${frames.art.height * 4} PNG.`)
         return
       }
@@ -644,7 +654,7 @@ export function PixelDiorama() {
                 ref={canvas}
                 role="application"
                 aria-roledescription="3D view"
-                aria-label={`${shown.about}, ${asPixels ? 'drawn as pixel art' : touring?.clay ? 'drawn as blobs in plain clay' : `drawn ${styleWords(touring ? 'blobs' : style)}`}, ${failed ? 'not drawn' : playing ? 'moving' : 'paused'}. Drag or use the arrow keys to orbit; scroll, pinch or press plus and minus to zoom.${canPoke ? ' Tap or press Enter to poke it.' : ''}`}
+                aria-label={`${shown.about}, ${asPixels ? `drawn ${styleWords(touring ? 'pixel' : style)}` : touring?.clay ? 'drawn as blobs in plain clay' : `drawn ${styleWords(touring ? 'blobs' : style)}`}, ${failed ? 'not drawn' : playing ? 'moving' : 'paused'}. Drag or use the arrow keys to orbit; scroll, pinch or press plus and minus to zoom.${canPoke ? ' Tap or press Enter to poke it.' : ''}`}
                 tabIndex={0}
                 data-testid="diorama-view"
                 className="absolute inset-0 h-full w-full cursor-grab touch-none outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset active:cursor-grabbing"
@@ -751,6 +761,32 @@ export function PixelDiorama() {
                   <p className="mt-1.5 text-xs text-ink-faint">{STYLES.find((l) => l.id === style)?.note}</p>
                 </Field>
                 {drawing.controls}
+                {glitching && (
+                  <div className="space-y-4" data-testid="diorama-glitch">
+                    <Field label="Bursts">
+                      <div className="flex flex-wrap gap-1.5">
+                        {GLITCH_AMOUNTS.map((a) => <Chip key={a.id} active={glitch.amount === a.amount} onClick={() => setGlitch((g) => ({ ...g, amount: a.amount }))}>{a.label}</Chip>)}
+                      </div>
+                      {calm && <p className="mt-1.5 text-xs text-ink-faint">Your device asks for less motion, so the picture holds still and no burst comes.</p>}
+                    </Field>
+                    <Slider label="Strength" value={glitch.strength} min={0.1} max={1} step={0.05} onChange={(strength) => setGlitch((g) => ({ ...g, strength }))} format={(v) => `${Math.round(v * 100)}%`} hint="How far rows slide, how far the colors split and how many blocks break up in a burst." />
+                    <Field label="Steps a second">
+                      <div className="flex flex-wrap gap-1.5">
+                        {GLITCH_PACE_CHOICES.map((p) => <Chip key={p} active={glitch.pace === p} onClick={() => setGlitch((g) => ({ ...g, pace: p }))}>{String(p)}</Chip>)}
+                      </div>
+                      <p className="mt-1.5 text-xs text-ink-faint">A burst jumps from one state to the next this often, with nothing in between.</p>
+                    </Field>
+                    <div className="grid gap-3">
+                      <Toggle label="Scanline jitter" checked={glitch.jitter} onChange={(jitter) => setGlitch((g) => ({ ...g, jitter }))} />
+                      <Toggle label="Color split" checked={glitch.split} onChange={(split) => setGlitch((g) => ({ ...g, split }))} />
+                      <Toggle label="Broken blocks" checked={glitch.blocks} onChange={(blocks) => setGlitch((g) => ({ ...g, blocks }))} />
+                    </div>
+                    <div>
+                      <Button small onClick={() => setGlitch((g) => ({ ...g, seed: g.seed + 1 }))}>New bursts</Button>
+                      <p className="mt-1.5 text-xs text-ink-faint">The bursts follow the scene's loop, so an exported loop joins up. This picks another run of them.</p>
+                    </div>
+                  </div>
+                )}
                 {pixels && <Field label="Palette">
                   <div className="flex flex-wrap gap-1.5">
                     {palettes.map((p) => <Chip key={p.id} active={palette === p.id} onClick={() => setPalette(p.id)}>{p.label}</Chip>)}

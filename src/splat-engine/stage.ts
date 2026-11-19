@@ -16,6 +16,7 @@ import type { SheetMove } from './spriteSheet.ts'
 import { PixelPass } from './pixelPass.ts'
 import { boneLabel, boneShare, pickActors } from './pick.ts'
 import { lookColors, snapColors, type Frame, type PixelLook } from '../splat-core/pixel.ts'
+import { glitchArt, glitchAt, type GlitchLook, type GlitchState } from '../splat-core/glitch.ts'
 import { INK, type MarkLook, type OutlinePen } from '../splat-core/marks.ts'
 import { InkLines } from './inkLines.ts'
 import { CelPass } from './celPass.ts'
@@ -755,6 +756,21 @@ export class Stage {
     this.invalidate()
   }
 
+  private glitchLook?: GlitchLook
+  /** The glitch laid on the last frame drawn (none while no burst is on). */
+  glitchNow?: GlitchState
+
+  /**
+   * Tech glitch over pixel mode's art (splat-core/glitch.ts): now and then a burst of slid rows, split color and
+   * corrupted blocks, in steps of the stage's own clock, so a loop drawn frame by frame joins up. The art read back
+   * (`pixelFrames`) stays clean: `glitchArt(art, stage.glitchNow)` lays the same glitch on it. Leave the look out to
+   * stop. Only in pixel mode.
+   */
+  setGlitch(look?: GlitchLook) {
+    this.glitchLook = look
+    this.invalidate()
+  }
+
   /** Pixel mode's art size in pixels, once a frame has been drawn. */
   get artSize() { return this.pixel && this.pixel.width > 1 ? { width: this.pixel.width, height: this.pixel.height } : undefined }
 
@@ -816,6 +832,8 @@ export class Stage {
     }
     if (!this.pixel) { this.renderer.render(this.scene, this.camera); return }
     const scale = this.pixelScale
+    this.glitchNow = this.glitchLook ? glitchAt(this.time, this.glitchLook) : undefined
+    this.pixel.setGlitch(this.glitchNow)
     if (this.target) {
       this.pixel.setSize(Math.ceil(this.target.width / scale), Math.ceil(this.target.height / scale))
       this.pixel.render(this.renderer, this.scene, this.camera)
@@ -1012,7 +1030,8 @@ export class Stage {
     const ctx = this.display.getContext('2d', { willReadFrequently: true })!
     if (this.pixel) {
       // the art, scaled up in whole pixels
-      const art = await this.read(this.pixel.art, true)
+      const clean = await this.read(this.pixel.art, true)
+      const art = this.glitchNow ? glitchArt(clean, this.glitchNow) : clean
       const c = document.createElement('canvas')
       c.width = art.width
       c.height = art.height

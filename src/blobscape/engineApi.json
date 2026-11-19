@@ -23,7 +23,7 @@
   {
    "id": "pixels",
    "title": "Pixels and sprites",
-   "doc": "Drawing a stage as pixel art, as brush and ink marks, as characters, cel shaded, in neon, as stained glass or in watercolor, and baking a creature into a sprite sheet."
+   "doc": "Drawing a stage as pixel art, as brush and ink marks, as characters, cel shaded, in neon, as stained glass, in watercolor or glitching, and baking a creature into a sprite sheet."
   },
   {
    "id": "simulation",
@@ -218,6 +218,12 @@
        "readonly": true,
        "type": "number",
        "doc": "Seconds into the clip, or the time a poser is showing."
+      },
+      {
+       "name": "glitchNow",
+       "optional": true,
+       "type": "GlitchState",
+       "doc": "The glitch laid on the last frame drawn (none while no burst is on)."
       },
       {
        "name": "artSize",
@@ -558,6 +564,15 @@
        "signatures": [
         {
          "code": "setPixels(look?: PixelLook, size?: number): void"
+        }
+       ]
+      },
+      {
+       "name": "setGlitch",
+       "doc": "Tech glitch over pixel mode's art (splat-core/glitch.ts): now and then a burst of slid rows, split color and\ncorrupted blocks, in steps of the stage's own clock, so a loop drawn frame by frame joins up. The art read back\n(`pixelFrames`) stays clean: `glitchArt(art, stage.glitchNow)` lays the same glitch on it. Leave the look out to\nstop. Only in pixel mode.",
+       "signatures": [
+        {
+         "code": "setGlitch(look?: GlitchLook): void"
         }
        ]
       },
@@ -7351,6 +7366,15 @@
        ]
       },
       {
+       "name": "setGlitch",
+       "doc": "This frame's glitch, laid on as the art goes to the screen (the art itself, `art`, stays clean: `glitchArt` lays\nthe same on a frame read back). Left out, none.",
+       "signatures": [
+        {
+         "code": "setGlitch(g?: GlitchState): void"
+        }
+       ]
+      },
+      {
        "name": "setSize",
        "doc": "The art's size in pixels.",
        "signatures": [
@@ -8744,6 +8768,256 @@
      "signatures": [
       {
        "code": "backLight(at: readonly number[], light: readonly number[], shine?: number, aspect?: number): number"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "glitch",
+   "title": "Tech glitch",
+   "group": "pixels",
+   "doc": "",
+   "entries": [
+    {
+     "name": "GlitchLook",
+     "kind": "interface",
+     "doc": "What the page's controls make.",
+     "props": [
+      {
+       "name": "amount",
+       "type": "number",
+       "doc": "How often a burst comes, 0 (never) to 1 (most of the time)."
+      },
+      {
+       "name": "strength",
+       "type": "number",
+       "doc": "How hard a burst is, 0 to 1: how far rows slide, channels split and how many blocks go."
+      },
+      {
+       "name": "jitter",
+       "type": "boolean",
+       "doc": "A burst slides bands of rows sideways."
+      },
+      {
+       "name": "split",
+       "type": "boolean",
+       "doc": "A burst reads red to one side and blue to the other."
+      },
+      {
+       "name": "blocks",
+       "type": "boolean",
+       "doc": "A burst takes blocks of the art from somewhere else."
+      },
+      {
+       "name": "pace",
+       "type": "number",
+       "doc": "Steps a second: a burst changes this often, never in between."
+      },
+      {
+       "name": "loop",
+       "optional": true,
+       "type": "number",
+       "doc": "The scene's loop in seconds, where it has one: steps and bursts repeat with it."
+      },
+      {
+       "name": "still",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Under reduced motion: no bursts at all (a flicker is exactly what that asks to be spared)."
+      },
+      {
+       "name": "seed",
+       "optional": true,
+       "type": "number",
+       "doc": "Picks another run of bursts."
+      }
+     ]
+    },
+    {
+     "name": "GlitchState",
+     "kind": "interface",
+     "doc": "One step's glitch, in art pixels: what the pass is handed each frame. All whole numbers.",
+     "props": [
+      {
+       "name": "on",
+       "type": "boolean",
+       "doc": "A burst is on."
+      },
+      {
+       "name": "key",
+       "type": "number",
+       "doc": "The step's own number for `glitchHash`, under 2^24."
+      },
+      {
+       "name": "jitter",
+       "type": "number",
+       "doc": "Most a row band slides either way, in art pixels (0: no jitter)."
+      },
+      {
+       "name": "band",
+       "type": "number",
+       "doc": "Rows to a band."
+      },
+      {
+       "name": "rows",
+       "type": "number",
+       "doc": "The share of bands that slide, as a threshold over 2^24."
+      },
+      {
+       "name": "split",
+       "type": "number",
+       "doc": "How far red and blue are read to each side (0: no split)."
+      },
+      {
+       "name": "block",
+       "type": "number",
+       "doc": "A corrupted block's height in art pixels (it is `BLOCK_WIDE` times as wide)."
+      },
+      {
+       "name": "blocks",
+       "type": "number",
+       "doc": "The share of blocks corrupted, as a threshold over 2^24 (0: none)."
+      }
+     ]
+    },
+    {
+     "name": "RUN_MOST",
+     "kind": "const",
+     "doc": "A burst lasts this many steps at most.",
+     "type": "4"
+    },
+    {
+     "name": "START_MOST",
+     "kind": "const",
+     "doc": "The share of steps a burst starts on at `amount` 1.",
+     "type": "0.3"
+    },
+    {
+     "name": "JITTER_MOST",
+     "kind": "const",
+     "doc": "At full strength, how far a band of rows slides either way.",
+     "type": "14"
+    },
+    {
+     "name": "SPLIT_MOST",
+     "kind": "const",
+     "doc": "At full strength, how far red and blue are read to each side.",
+     "type": "3"
+    },
+    {
+     "name": "BLOCKS_MOST",
+     "kind": "const",
+     "doc": "At full strength, the share of blocks corrupted.",
+     "type": "0.12"
+    },
+    {
+     "name": "GLITCH_PACES",
+     "kind": "const",
+     "doc": "Steps a second the page offers.",
+     "type": "readonly [8, 12, 20]"
+    },
+    {
+     "name": "MIX_A",
+     "kind": "const",
+     "doc": "Two primes under 2^31 that spread a cell's two numbers before the hash.",
+     "type": "739982445"
+    },
+    {
+     "name": "MIX_B",
+     "kind": "const",
+     "doc": "Two primes under 2^31 that spread a cell's two numbers before the hash.",
+     "type": "695872825"
+    },
+    {
+     "name": "SALT",
+     "kind": "const",
+     "doc": "The salts that keep a cell's draws apart: each is one question about a row band or a block.",
+     "type": "{ slides: 1; slide: 2; broken: 3; fromX: 4; fromY: 5; turned: 6; strip: 7 }"
+    },
+    {
+     "name": "STRIPS",
+     "kind": "const",
+     "doc": "Broken blocks gather in strips: this share of rows of blocks can break at all (a threshold over 2^24).",
+     "type": "5592405"
+    },
+    {
+     "name": "BLOCK_WIDE",
+     "kind": "const",
+     "doc": "A broken block is this many times as wide as it is high, as a torn line of a picture is.",
+     "type": "3"
+    },
+    {
+     "name": "TURNED",
+     "kind": "const",
+     "doc": "The share of broken blocks whose channels are turned (a threshold over 2^24).",
+     "type": "4194304"
+    },
+    {
+     "name": "glitchHash",
+     "kind": "function",
+     "doc": "The 24-bit hash of a row band or block (`a`, `b`, whole and not negative) for one question (`salt`) in the step\n`key`: the GPU's `glitchHash` in pixelPass.ts, in the same unsigned 32-bit steps.",
+     "signatures": [
+      {
+       "code": "glitchHash(a: number, b: number, key: number, salt: number): number"
+      }
+     ]
+    },
+    {
+     "name": "pickOf",
+     "kind": "const",
+     "doc": "A whole number from 0 to `m` − 1 out of a 24-bit hash, exact on both sides: (h · m) >> 24.",
+     "type": "(h: number, m: number) => number"
+    },
+    {
+     "name": "stepsIn",
+     "kind": "const",
+     "doc": "How many steps a loop of `loop` seconds holds at `pace` a second: whole, and at least one.",
+     "type": "(loop: number, pace: number) => number"
+    },
+    {
+     "name": "stepAt",
+     "kind": "function",
+     "doc": "The step a moment falls in, and how many steps go round (0 where nothing loops).",
+     "signatures": [
+      {
+       "code": "stepAt(t: number, look: GlitchLook): { k: number; n: number }"
+      }
+     ]
+    },
+    {
+     "name": "glitchAt",
+     "kind": "function",
+     "doc": "The glitch at a moment: whether a burst is on and, if so, how it reads the art this step.",
+     "signatures": [
+      {
+       "code": "glitchAt(t: number, look: GlitchLook): GlitchState"
+      }
+     ]
+    },
+    {
+     "name": "readFrom",
+     "kind": "function",
+     "doc": "Where the art pixel at column `x`, row `y` (from the top) reads from, in a picture `w` wide and `h` high:\n`x` for green, red `split` to the right of it and blue `split` to the left, and whether its channels are turned.",
+     "signatures": [
+      {
+       "code": "readFrom(x: number, y: number, w: number, h: number, g: GlitchState): { x: number; y: number; turned: boolean }"
+      }
+     ]
+    },
+    {
+     "name": "wrapX",
+     "kind": "const",
+     "doc": "A column slid off one side comes in at the other.",
+     "type": "(x: number, w: number) => number"
+    },
+    {
+     "name": "glitchArt",
+     "kind": "function",
+     "doc": "The finished art with this step's glitch laid on: the CPU twin of the live pass's last step (pixelPass.ts\n`toScreen`). Off, it is the art itself.",
+     "signatures": [
+      {
+       "code": "glitchArt(art: Frame, g: GlitchState): Frame"
       }
      ]
     }
