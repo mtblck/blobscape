@@ -264,7 +264,7 @@ export default [
             solid++
             if (!pal.has((f.art.data[i] << 16) | (f.art.data[i + 1] << 8) | f.art.data[i + 2])) off++
           }
-          return { backend: stage.backend, w: f.art.width, h: f.art.height, solid, off, soft, small: Array.from(f.small.data), art: Array.from(f.art.data), before: f.before && Array.from(f.before.data), parts: f.parts && Array.from(f.parts.data), ranks: f.ranks && Array.from(f.ranks.data), fine: f.fine && { small: Array.from(f.fine.small.data), parts: Array.from(f.fine.parts.data) }, look: look() }
+          return { backend: stage.backend, w: f.art.width, h: f.art.height, solid, off, soft, small: Array.from(f.small.data), art: Array.from(f.art.data), before: f.before && Array.from(f.before.data), parts: f.parts && Array.from(f.parts.data), ranks: f.ranks && Array.from(f.ranks.data), time: f.time, fine: f.fine && { small: Array.from(f.fine.small.data), parts: Array.from(f.fine.parts.data) }, look: look() }
         }, t)
         const a = await shot(2), b = await shot(5)
         // the same frame through the CPU twin (the page's own module isn't reachable from a production build, so it runs here)
@@ -285,7 +285,7 @@ export default [
           if (!(solid > 3000 && cover === 0 && part === 0 && tone < solid * 0.02)) fails.push(`blobscape pixel diorama (${a.backend}): four samples a pixel differs from its twin: ${JSON.stringify({ solid, cover, part, tone })}`)
           else ok(`blobscape pixel diorama (${a.backend}): four samples a pixel: ${solid} pixels settled as the CPU twin settles them (which thing shows: all; which sample: all but ${tone})`)
         }
-        const want = pixelArt(frame(a.small), a.look, frame(a.before), frame(a.parts), frame(a.ranks))
+        const want = pixelArt(frame(a.small), a.look, frame(a.before), frame(a.parts), frame(a.ranks), a.time)
         let alpha = 0, color = 0, moved = 0
         for (let i = 0; i < want.data.length; i += 4) {
           if (want.data[i + 3] !== a.art[i + 3]) alpha++
@@ -301,7 +301,7 @@ export default [
         else ok(`${label}: the pixel pass matches its CPU twin (same shape, ${color} of ${a.solid} pixels a neighboring color)`)
         // lines between parts: the pass drew a map of the scene's parts beside the picture, and the lines it adds are the ones the twin adds
         {
-          const none = pixelArt(frame(a.small), { ...a.look, parts: false }, frame(a.before), undefined, frame(a.ranks))
+          const none = pixelArt(frame(a.small), { ...a.look, parts: false }, frame(a.before), undefined, frame(a.ranks), a.time)
           const ids = new Set()
           let lines = 0
           for (let i = 0; i < want.data.length; i += 4) {
@@ -313,7 +313,7 @@ export default [
         }
         // lone pixels: the pass cleaned some up, and (above) the same ones its twin does
       {
-        const untidy = pixelArt(frame(a.small), { ...a.look, tidy: false }, frame(a.before), frame(a.parts), frame(a.ranks))
+        const untidy = pixelArt(frame(a.small), { ...a.look, tidy: false }, frame(a.before), frame(a.parts), frame(a.ranks), a.time)
         let cleaned = 0
         for (let i = 0; i < want.data.length; i += 4) if (want.data[i] !== untidy.data[i] || want.data[i + 1] !== untidy.data[i + 1] || want.data[i + 2] !== untidy.data[i + 2]) cleaned++
         if (!(a.look.tidy && cleaned > 0 && cleaned < a.solid * 0.05)) fails.push(`${label}: lone-pixel cleanup: ${JSON.stringify({ on: a.look.tidy, cleaned })}`)
@@ -324,15 +324,33 @@ export default [
         // steady pixels: the frame after is drawn against this one, as the CPU twin does given the same two; and fewer pixels flip there and back than with it off
         {
           const c = await shot(5 + 1 / 60)
-          const again = pixelArt(frame(c.small), c.look, frame(c.before), frame(c.parts), frame(c.ranks))
+          const again = pixelArt(frame(c.small), c.look, frame(c.before), frame(c.parts), frame(c.ranks), c.time)
           let held = 0, differ = 0
-          const plain = pixelArt(frame(c.small), { ...c.look, steady: 0 }, undefined, frame(c.parts), frame(c.ranks))
+          const plain = pixelArt(frame(c.small), { ...c.look, steady: 0 }, undefined, frame(c.parts), frame(c.ranks), c.time)
           for (let i = 0; i < again.data.length; i += 4) {
             if (Math.abs(again.data[i] - c.art[i]) + Math.abs(again.data[i + 1] - c.art[i + 1]) + Math.abs(again.data[i + 2] - c.art[i + 2]) > 6 || again.data[i + 3] !== c.art[i + 3]) differ++
             if (plain.data[i] !== again.data[i] || plain.data[i + 1] !== again.data[i + 1] || plain.data[i + 2] !== again.data[i + 2]) held++
           }
           if (!(c.look.steady > 0 && c.before && differ < a.solid * 0.05 && held > 20)) fails.push(`${label}: steady pixels: ${JSON.stringify({ steady: c.look.steady, before: !!c.before, differ, held })}`)
           else ok(`${label}: steady pixels: drawn against the frame before as the CPU twin is (${differ} pixels a neighboring color), ${held} pixels keep their color that would have flipped`)
+        }
+        // art-pixel effects: glow in rings, heat haze and softer lit outlines on, drawn as the CPU twin draws them at the same time
+        {
+          const toggles = ['Glow in rings', 'Heat haze over glowing things', 'Softer outline on lit sides']
+          for (const t of toggles) { const box = d.page.getByLabel(t); if (!(await box.isChecked())) await tabClick(box) }
+          await d.page.waitForFunction(() => { const l = window.__diorama.look(); return l.bands > 0 && l.heat && l.selout }, null, { timeout: 10000 }).catch(() => {})
+          const e = await shot(2.3)
+          const fx = pixelArt(frame(e.small), e.look, frame(e.before), frame(e.parts), frame(e.ranks), e.time)
+          const bare = pixelArt(frame(e.small), { ...e.look, bands: 0, heat: undefined, selout: false }, frame(e.before), frame(e.parts), frame(e.ranks), e.time)
+          let differ = 0, shape = 0, made = 0
+          for (let i = 0; i < fx.data.length; i += 4) {
+            if (fx.data[i + 3] !== e.art[i + 3]) shape++
+            else if (Math.abs(fx.data[i] - e.art[i]) + Math.abs(fx.data[i + 1] - e.art[i + 1]) + Math.abs(fx.data[i + 2] - e.art[i + 2]) > 6) differ++
+            if (fx.data[i] !== bare.data[i] || fx.data[i + 1] !== bare.data[i + 1] || fx.data[i + 2] !== bare.data[i + 2]) made++
+          }
+          for (const t of toggles) { const box = d.page.getByLabel(t); if (await box.isChecked()) await tabClick(box) }
+          if (!(e.look.bands > 0 && e.look.heat && e.look.selout && shape === 0 && differ < e.solid * 0.05 && made > 20)) fails.push(`${label}: art-pixel effects: ${JSON.stringify({ bands: e.look.bands, heat: e.look.heat, selout: e.look.selout, shape, differ, made })}`)
+          else ok(`${label}: art-pixel effects: rings, haze and softer lit outlines change ${made} pixels, as the CPU twin draws them (${differ} a neighboring color)`)
         }
         // Exact sort: the stage swaps in the radix sort and the art still draws, every pixel a palette color
         {
@@ -673,7 +691,7 @@ export default [
               if (!pal.has(c)) off++
               used.add(c)
             }
-            return { off, used: used.size, bones: bones(), turned: stage.orbit.azimuth, art: Array.from(f.art.data), small: Array.from(f.small.data), before: f.before && Array.from(f.before.data), parts: f.parts && Array.from(f.parts.data), ranks: f.ranks && Array.from(f.ranks.data), w: f.art.width, h: f.art.height, look: look() }
+            return { off, used: used.size, bones: bones(), turned: stage.orbit.azimuth, art: Array.from(f.art.data), small: Array.from(f.small.data), before: f.before && Array.from(f.before.data), parts: f.parts && Array.from(f.parts.data), ranks: f.ranks && Array.from(f.ranks.data), time: f.time, w: f.art.width, h: f.art.height, look: look() }
           }, t)
           // a view that swings stands at the same angle at t and at half a loop less t (half a loop is given here), so what changes between those is the scene itself
           const half = { bee: 6, dragon: 8, hand: 8, reef: 6 }[id]
@@ -686,7 +704,7 @@ export default [
           if (id === 'dragon') {
             // the one scene whose sky stops short: that path of the pass against its CPU twin
             const { pixelArt } = await import('../../../src/splat-core/pixel.ts')
-            const want = pixelArt({ width: a.w, height: a.h, data: Uint8ClampedArray.from(a.small) }, a.look, a.before && { width: a.w, height: a.h, data: Uint8ClampedArray.from(a.before) }, a.parts && { width: a.w, height: a.h, data: Uint8ClampedArray.from(a.parts) }, a.ranks && { width: a.w, height: a.h, data: Uint8ClampedArray.from(a.ranks) })
+            const want = pixelArt({ width: a.w, height: a.h, data: Uint8ClampedArray.from(a.small) }, a.look, a.before && { width: a.w, height: a.h, data: Uint8ClampedArray.from(a.before) }, a.parts && { width: a.w, height: a.h, data: Uint8ClampedArray.from(a.parts) }, a.ranks && { width: a.w, height: a.h, data: Uint8ClampedArray.from(a.ranks) }, a.time)
             let alpha = 0, color = 0
             for (let i = 0; i < want.data.length; i += 4) {
               if (want.data[i + 3] !== a.art[i + 3]) alpha++
