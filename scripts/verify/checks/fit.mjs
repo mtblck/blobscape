@@ -131,7 +131,9 @@ export default [
         const { page, ctx } = await open(path, { viewport: { width: 1280, height: 900 } })
         await page.waitForFunction(ready, null, { timeout: 30000 }).catch(() => {})
         await page.waitForTimeout(3000)
-        await page.getByTestId('record').click()
+        // clicked from the page: a view still loading in software can hold a pointer click past its timeout
+        const press = () => page.evaluate(() => document.querySelector('[data-testid=record]').click())
+        await press()
         const on = await page.waitForFunction(() => document.querySelector('[data-testid=record]')?.getAttribute('aria-pressed') === 'true', null, { timeout: 15000 }).then(() => true, () => false)
         if (!on) { fails.push(`record, ${label}: recording never began (${await page.getByTestId('record-note').textContent()})`); await ctx.close(); continue }
         // turn the view (or add blobs) while it records: a picture that changes takes far more bytes than a blank one
@@ -142,7 +144,7 @@ export default [
         await page.mouse.up()
         await page.waitForTimeout(500)
         const waiting = page.waitForEvent('download', { timeout: 30000 })
-        await page.getByTestId('record').click()
+        await press()
         const file = await waiting.catch(() => null)
         if (!file) { fails.push(`record, ${label}: no video was saved (${await page.getByTestId('record-note').textContent()})`); await ctx.close(); continue }
         const { readFileSync } = await import('node:fs')
