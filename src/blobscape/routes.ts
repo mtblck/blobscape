@@ -8,7 +8,7 @@ import { POSTS } from './news.ts'
  * previews see every page. In the browser it's still one app: links between
  * these pages swap the page without a reload (useLinkNavigation).
  */
-export type Route = { page: 'home' } | { page: 'lessons' } | { page: 'lesson'; id: string } | { page: 'sandbox' } | { page: 'fourways' } | { page: 'creature' } | { page: 'forest' } | { page: 'pond' } | { page: 'clockwork' } | { page: 'shift' } | { page: 'flow' } | { page: 'brush' } | { page: 'daynight' } | { page: 'diorama' } | { page: 'dungeon' } | { page: 'scan' } | { page: 'experiments' } | { page: 'engine' } | { page: 'spec' } | { page: 'api' } | { page: 'contact' } | { page: 'news' } | { page: 'post'; id: string } | { page: 'notfound' }
+export type Route = { page: 'home' } | { page: 'lessons' } | { page: 'lesson'; id: string } | { page: 'sandbox' } | { page: 'fourways' } | { page: 'creature' } | { page: 'forest' } | { page: 'pond' } | { page: 'clockwork' } | { page: 'shift' } | { page: 'flow' } | { page: 'brush' } | { page: 'daynight' } | { page: 'bouquet' } | { page: 'diorama' } | { page: 'dungeon' } | { page: 'scan' } | { page: 'experiments' } | { page: 'engine' } | { page: 'spec' } | { page: 'api' } | { page: 'contact' } | { page: 'news' } | { page: 'post'; id: string } | { page: 'notfound' }
 
 export const LESSONS = [
   { id: 'one-blob', title: 'One blob', summary: 'Five kinds of number, 14 in all, make one Gaussian. Pull each one and see what it does.' },
@@ -215,6 +215,7 @@ export function parsePath(pathname: string): Route | null {
   if (m.length === 2 && m[0] === 'experiments' && m[1] === 'brush-and-ink') return { page: 'brush' }
   if (m.length === 2 && m[0] === 'experiments' && m[1] === 'four-ways') return { page: 'fourways' }
   if (m.length === 2 && m[0] === 'experiments' && m[1] === 'day-and-night') return { page: 'daynight' }
+  if (m.length === 2 && m[0] === 'experiments' && m[1] === 'seasonal-bouquets') return { page: 'bouquet' }
   if (m.length === 2 && m[0] === 'experiments' && m[1] === 'pixel-diorama') return { page: 'diorama' }
   if (m.length === 2 && m[0] === 'experiments' && m[1] === 'scan-studio') return { page: 'scan' }
   if (m.length === 2 && m[0] === 'experiments' && m[1] === 'dungeon-run') return { page: 'dungeon' }
@@ -246,6 +247,7 @@ export function href(r: Route): string {
   if (r.page === 'brush') return '/experiments/brush-and-ink/'
   if (r.page === 'fourways') return '/experiments/four-ways/'
   if (r.page === 'daynight') return '/experiments/day-and-night/'
+  if (r.page === 'bouquet') return '/experiments/seasonal-bouquets/'
   if (r.page === 'diorama') return '/experiments/pixel-diorama/'
   if (r.page === 'scan') return '/experiments/scan-studio/'
   if (r.page === 'dungeon') return '/experiments/dungeon-run/'
