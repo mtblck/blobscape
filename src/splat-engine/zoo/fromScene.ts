@@ -1,7 +1,7 @@
 import type { Vec3 } from '../../splat-core/blobs.ts'
 import type { Built } from '../body.ts'
 import { axisAngle, mulQ, type Skeleton } from '../rig.ts'
-import { compileScene, sprouted, type BoneDoc, type MoveDoc, type SceneDoc, type ShapeDoc } from '../sceneDoc.ts'
+import { compileScene, passed, sprouted, type BoneDoc, type MoveDoc, type SceneDoc, type ShapeDoc } from '../sceneDoc.ts'
 import { toCount } from '../sculpt.ts'
 import { buildVoxels, type VoxelSpec } from '../voxel.ts'
 
@@ -137,6 +137,10 @@ function applyMove(sk: Skeleton, m: MoveDoc, u: number, dir: (v: Vec3) => Vec3) 
     sk.size[b] *= Math.sin(Math.PI * life) ** 0.6 * (g0 + (g1 - g0) * life)
   } else if (m.kind === 'sprout') {
     sk.size[b] *= sprouted(((at % 1) + 1) % 1)
+  } else if (m.kind === 'pass') {
+    const by = dir(m.by), [along, size] = passed(((at % 1) + 1) % 1, m.phase ?? 0)
+    for (let i = 0; i < 3; i++) sk.offset[b * 3 + i] += by[i] * along
+    sk.size[b] *= size
   } else {
     sk.size[b] *= m.size[0] + (m.size[1] - m.size[0]) * (0.5 + 0.5 * Math.sin(at * TAU))
   }

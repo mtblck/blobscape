@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { checkScene, compileScene, type SceneDoc } from './sceneDoc.ts'
+import { PASS_EDGE, checkScene, compileScene, passed, type SceneDoc } from './sceneDoc.ts'
 import { buildVoxels } from './voxel.ts'
 import { PUFFS } from './poke.ts'
 import { Skeleton } from './rig.ts'
@@ -220,4 +220,30 @@ test('more shapes: each is checked, and each builds; a key paints a model by its
   const colors = new Map<string, number>()
   for (let i = 0; i < b.blobs.count; i++) if (b.partOf[i] === n + 4) { const g = b.blobs.color[i * 3 + 1] > b.blobs.color[i * 3] + 0.05 ? 'green' : 'dark'; colors.set(g, (colors.get(g) ?? 0) + 1) }
   assert.ok((colors.get('green') ?? 0) > 20 && (colors.get('dark') ?? 0) > 10, JSON.stringify([...colors]))
+})
+
+test('a pass goes by at an even speed from where it is drawn, is gone at both ends of its way, and loops', () => {
+  // drawn 0.3 along its way: there as the loop starts, and a steady share further on after each share of its time
+  assert.ok(Math.abs(passed(0.3, 0.3)[0]) < 1e-9 && passed(0.3, 0.3)[1] === 1)
+  assert.ok(Math.abs(passed(0.5, 0.3)[0] - 0.2) < 1e-9 && Math.abs(passed(0.1, 0.3)[0] + 0.2) < 1e-9)
+  assert.equal(passed(0, 0.3)[1], 0)
+  assert.ok(passed(0.9999, 0.3)[1] < 1e-4 && passed(PASS_EDGE, 0)[1] === 1 && passed(1 - PASS_EDGE, 0)[1] === 1)
+  const doc = sound()
+  doc.bones!.push({ name: 'post', at: [0.5, 0, 0.5] })
+  doc.parts.push({ shape: { kind: 'cylinder', at: [0.5, 0, 0.5], height: 0.3, r: 0.03 }, paint: '#f4f1e4', bone: 'post' })
+  doc.moves!.push({ kind: 'pass', bone: 'post', by: [-2, 0, 0], times: 2, phase: 0.25 })
+  assert.deepEqual(checkScene(doc), [])
+  const c = compileScene(doc), sk = new Skeleton(c.bones), b = sk.index('post')
+  const x = (t: number) => { c.pose(sk, t); return sk.matrix[b * 16 + 12] }
+  const size = (t: number) => { c.pose(sk, t); return Math.hypot(sk.matrix[b * 16], sk.matrix[b * 16 + 1], sk.matrix[b * 16 + 2]) }
+  const x0 = x(0)
+  assert.ok(Math.abs(size(0) - 1) < 1e-6, 'whole where it is drawn')
+  // a loop of 8 s and twice a loop: 2 units in 4 s
+  assert.ok(Math.abs(x(1) - x0 + 0.5) < 1e-5 && Math.abs(x(2) - x(1) + 0.5) < 1e-5)
+  // three quarters of the way are left, so it is gone at 3 s and back at the start of its way after
+  assert.ok(size(3) < 1e-6 && x(3.5) > x0)
+  assert.ok(Math.abs(x(4.7) - x(0.7)) < 1e-5 && Math.abs(x(8.7) - x(0.7)) < 1e-5)
+  const bad = sound()
+  bad.moves!.push({ kind: 'pass', bone: 'puff', by: [1, 0, 0], times: -1 })
+  assert.ok(checkScene(bad).some((e) => e.includes('must be over 0 for a pass')))
 })
