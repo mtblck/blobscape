@@ -1,7 +1,7 @@
-import { NearestFilter, NoBlending, NodeMaterial, QuadMesh, RenderTarget, Vector2, Vector3, type Camera, type Object3D, type WebGPURenderer } from 'three/webgpu'
+import { Matrix4, NearestFilter, NoBlending, NodeMaterial, QuadMesh, RenderTarget, Vector2, Vector3, type Camera, type Object3D, type WebGPURenderer } from 'three/webgpu'
 import * as TSLTyped from 'three/tsl'
 import { BLOCK_WIDE, MIX_A, MIX_B, SALT, STRIPS, TURNED, type GlitchState } from '../splat-core/glitch.ts'
-import { BAYER4, EDGE_DARK, EDGE_JUMP, GLOW_FROM, GLOW_SHOWS, GLOW_TAPS, MAX_PALETTE_SIZE, OWN_C, OWN_L, OWN_UNDER, PIXEL_CUT, SKY_DITHER, oklab, skyReach, type PixelLook } from '../splat-core/pixel.ts'
+import { BAYER4, EDGE_DARK, snapShift, EDGE_JUMP, GLOW_FROM, GLOW_SHOWS, GLOW_TAPS, HALO_R, HALO_SHARE, HEAT_R, HEAT_UP, HEAT_WAVE, MAX_PALETTE_SIZE, OWN_C, OWN_L, OWN_UNDER, PIXEL_CUT, SELOUT_FROM, SELOUT_L, SKY_DITHER, cycleTurns, oklab, skyReach, type PixelLook } from '../splat-core/pixel.ts'
 
 // As in engine.ts: the shader builders use TSL untyped.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -42,6 +42,8 @@ export class PixelPass {
   readonly small = new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter })
   /** The scene's parts, drawn small (`SplatWorld.parts`): where the color changes, one part ends and another begins. Only drawn for a look with `parts`. */
   readonly ids = new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter })
+  /** Each art pixel's step of the dither pattern, from the blob there (red, a byte), for a look with `surface`. */
+  readonly ranks = new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter })
   private readonly parted = uniform(0)
   /** The scene and its map of parts at twice the art's size, for a look with `fine`: what `small` and `ids` are settled from. */
   readonly fineSmall = new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter })
@@ -76,6 +78,7 @@ export class PixelPass {
   private readonly cells = uniform(new Vector2(1, 1))
   private readonly count = uniform(0)
   private readonly dither = uniform(0)
+  private readonly surface = uniform(0)
   private readonly glow = uniform(0)
   private readonly edges = uniform(0)
   private readonly lined = uniform(0)
@@ -88,6 +91,16 @@ export class PixelPass {
   private readonly skyReach = uniform(1)
   /** Tech glitch over the finished art (splat-core/glitch.ts), set each frame by `setGlitch`: all whole numbers. */
   private readonly glitch = { on: uniform(0), key: uniform(0), jitter: uniform(0), band: uniform(1), rows: uniform(0), split: uniform(0), block: uniform(1), blocks: uniform(0) }
+  /** Glow in bands (0 for the soft spill), heat haze's most shift (0 for none) and this frame's step of its waves, selout. */
+  private readonly bands = uniform(0)
+  private readonly heatPx = uniform(0)
+  private readonly heatTick = uniform(0)
+  private readonly selout = uniform(0)
+  /** Color cycling at this frame's time (`cycleTurns`): the palette index each is drawn as, and whether it cycles. */
+  private readonly turns = Array.from({ length: MAX_PALETTE }, (_, i) => i)
+  private readonly members = Array.from({ length: MAX_PALETTE }, () => 0)
+  private readonly turnU = uniformArray(this.turns, 'float')
+  private readonly memberU = uniformArray(this.members, 'float')
   private readonly palLab = Array.from({ length: MAX_PALETTE }, () => new Vector3())
   /** The palette as it is stored in the art: sRGB, 0–1. */
   private readonly palShown = Array.from({ length: MAX_PALETTE }, () => new Vector3())
@@ -142,6 +155,7 @@ export class PixelPass {
     }
     this.count.value = n
     this.dither.value = look.dither
+    this.surface.value = look.surface ? 1 : 0
     this.glow.value = look.glow
     this.edges.value = look.edges ?? 0
     this.parted.value = look.parts ? 1 : 0
@@ -151,6 +165,25 @@ export class PixelPass {
     this.skied.value = look.sky ? 1 : 0
     if (look.sky) { this.skyTop.value.set(...look.sky[0]); this.skyLow.value.set(...look.sky[1]); this.skyReach.value = skyReach(look.sky) }
     if (look.outline) this.line.value.set(look.outline[0] / 255, look.outline[1] / 255, look.outline[2] / 255)
+    this.bands.value = Math.min(2, Math.max(0, Math.round(look.bands ?? 0)))
+    this.heatPx.value = look.heat && look.heat.pixels > 0 ? look.heat.pixels : 0
+    this.selout.value = look.selout ? 1 : 0
+    this.setTime(this.time)
+  }
+
+  private time = 0
+  /** The time the last frame was drawn for (`setTime`): what `pixelArt` needs as its `time`. */
+  get drawnAt() { return this.time }
+
+  /** The scene's time for this frame: what heat haze's waves and color cycling step by (`pixelArt`'s `time`). */
+  setTime(t: number) {
+    this.time = t
+    const look = this.look
+    this.heatTick.value = look.heat ? Math.floor(t * look.heat.pace + 1e-6) : 0
+    const { turn, member } = cycleTurns(look, t)
+    for (let i = 0; i < MAX_PALETTE; i++) { this.turns[i] = i < turn.length ? turn[i] : i; this.members[i] = i < member.length ? member[i] : 0 }
+    this.turnU.array = this.turns
+    this.memberU.array = this.members
   }
 
   /**
@@ -171,6 +204,7 @@ export class PixelPass {
     if (this.small.width === w && this.small.height === h) return
     this.small.setSize(w, h)
     this.ids.setSize(w, h)
+    this.ranks.setSize(w, h)
     for (const f of this.frames) f.setSize(w, h)
     this.tidied.setSize(w, h)
     this.kept = false
@@ -196,6 +230,33 @@ export class PixelPass {
    * current output; without, into `art` at one to one.
    */
   render(renderer: WebGPURenderer, scene: Object3D, camera: Camera, screen?: { width: number; height: number; scale: number }) {
+    const undo = this.look.snap ? this.snapCamera(camera) : undefined
+    try { this.draw(renderer, scene, camera, screen) } finally { undo?.() }
+  }
+
+  private readonly kept4 = [new Matrix4(), new Matrix4()]
+  private readonly origin = new Vector3()
+
+  /**
+   * `snap`: shifts the camera's picture by under an art pixel so the world's origin lands on the art's grid, and gives
+   * back what puts it as it was. A shift of the projection's third column moves every point on the screen alike.
+   */
+  private snapCamera(camera: Camera) {
+    camera.updateMatrixWorld()
+    const p = this.origin.set(0, 0, 0).applyMatrix4(camera.matrixWorldInverse).applyMatrix4(camera.projectionMatrix)
+    if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) return undefined
+    const dx = snapShift(p.x, this.small.width), dy = snapShift(p.y, this.small.height)
+    const [proj, inv] = this.kept4
+    proj.copy(camera.projectionMatrix)
+    inv.copy(camera.projectionMatrixInverse)
+    // ndc = clip / −z, and the third column adds its value times z to clip: so taking dx away moves ndc on by dx
+    camera.projectionMatrix.elements[8] -= dx
+    camera.projectionMatrix.elements[9] -= dy
+    camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert()
+    return () => { camera.projectionMatrix.copy(proj); camera.projectionMatrixInverse.copy(inv) }
+  }
+
+  private draw(renderer: WebGPURenderer, scene: Object3D, camera: Camera, screen?: { width: number; height: number; scale: number }) {
     const to = renderer.getRenderTarget()
     const fine = !!this.look.fine
     renderer.setRenderTarget(fine ? this.fineSmall : this.small)
@@ -203,6 +264,8 @@ export class PixelPass {
     renderer.render(scene, camera)
     // four samples a pixel go by the parts too: which thing most of a pixel's samples show
     if (fine || this.look.parts) this.drawParts(renderer, scene, camera, fine ? this.fineIds : this.ids)
+    // dither that stays on things: each pixel's step from the blob there, at the art's own size
+    if (this.look.surface && this.look.dither > 0) this.drawParts(renderer, scene, camera, this.ranks, 'ranks')
     if (fine) {
       renderer.setRenderTarget(this.small)
       this.settleQuad.render(renderer)
@@ -230,10 +293,11 @@ export class PixelPass {
   }
 
   private fragment() {
-    const small = this.small.texture, ids = this.ids.texture
+    const small = this.small.texture, ids = this.ids.texture, ranks = this.ranks.texture
     const { res } = this
     const palLab = uniformArray(this.palLab, 'vec3'), palShown = uniformArray(this.palShown, 'vec3')
     const bayer = uniformArray(BAYER4, 'float')
+    const heatWave = uniformArray(HEAT_WAVE, 'float')
     const toSrgb = (c: unknown) => select(float(c).lessThanEqual(0.0031308), float(c).mul(12.92), pow(max(c, 0), 1 / 2.4).mul(1.055).sub(0.055))
     const toLinear = (c: unknown) => select(float(c).lessThanEqual(0.04045), float(c).div(12.92), pow(float(c).add(0.055).div(1.055), 2.4))
     const each = (v: { x: unknown; y: unknown; z: unknown }, f: (c: unknown) => unknown) => vec3(f(v.x), f(v.y), f(v.z))
@@ -254,18 +318,37 @@ export class PixelPass {
     return Fn(() => {
       // which art pixel this is, counted from the left and from the bottom of the picture
       const st = uv()
-      const cell = floor(vec2(st.x, float(1).sub(st.y)).mul(res)).toVar()
+      const home = floor(vec2(st.x, float(1).sub(st.y)).mul(res)).toVar()
       // the picture's row, from its top: what the dither and the sky go by (the CPU twin's y)
-      const row = res.y.sub(1).sub(cell.y).toVar()
-      /** The small render at an art pixel `dx, dy` away: straight sRGB (0–255) and whether it is solid. */
-      const at = (dx: number, dy: number) => {
-        const c = cell.add(vec2(dx, dy))
-        const inside = c.x.greaterThanEqual(0).and(c.y.greaterThanEqual(0)).and(c.x.lessThan(res.x)).and(c.y.lessThan(res.y))
-        const s = texture(small, vec2(c.x.add(0.5).div(res.x), float(1).sub(c.y.add(0.5).div(res.y))))
+      const row = res.y.sub(1).sub(home.y).toVar()
+      /** The small render at art pixel `c`: straight sRGB (0–255) and whether it is solid. */
+      const sample = (c: unknown) => {
+        const cc = vec2(c)
+        const inside = cc.x.greaterThanEqual(0).and(cc.y.greaterThanEqual(0)).and(cc.x.lessThan(res.x)).and(cc.y.lessThan(res.y))
+        const s = texture(small, vec2(cc.x.add(0.5).div(res.x), float(1).sub(cc.y.add(0.5).div(res.y))))
         const solid = inside.and(s.a.greaterThanEqual(PIXEL_CUT))
         const rgb = each(s.rgb.div(max(s.a, 1e-5)).clamp(0, 1), toSrgb).mul(255)
         return { rgb, solid }
       }
+      /** How bright a sample glows (`brightOf`), 0 where it is empty. */
+      const brightOf = (t: { rgb: { x: unknown; y: unknown; z: unknown }; solid: unknown }) => select(t.solid, smoothstep(GLOW_FROM, 1, max(t.rgb.x, max(t.rgb.y, t.rgb.z)).div(255)), 0)
+      // heat haze: above something glowing (and not glowing itself), this pixel is drawn from one beside it
+      const cell = vec2(home).toVar()
+      If(this.heatPx.greaterThan(0), () => {
+        If(brightOf(sample(home)).lessThanEqual(0.5), () => {
+          const near = float(0).toVar()
+          Loop({ start: int(HEAT_UP - HEAT_R), end: int(HEAT_UP + HEAT_R), type: 'int', condition: '<=', name: 'hb' }, { start: int(-HEAT_R), end: int(HEAT_R), type: 'int', condition: '<=', name: 'ha' }, ({ hb, ha }: { hb: unknown; ha: unknown }) => {
+            // `hb` rows below in the picture, which is down the cells' y
+            near.assign(max(near, select(brightOf(sample(home.add(vec2(float(ha), float(hb).negate())))).greaterThan(0.5), 1, 0)))
+          })
+          If(near.greaterThan(0.5), () => {
+            const k = int(mod(row.mul(2).add(home.x).add(this.heatTick.mul(3)), 16))
+            cell.x.assign(home.x.add(heatWave.element(k).mul(this.heatPx)).clamp(0, res.x.sub(1)))
+          })
+        })
+      })
+      /** The small render at an art pixel `dx, dy` away: straight sRGB (0–255) and whether it is solid. */
+      const at = (dx: number, dy: number) => sample(cell.add(vec2(dx, dy)))
 
       /** The part at an art pixel `dx, dy` away, as the part map has it (alpha 0 where it has none). */
       const partAt = (dx: number, dy: number) => {
@@ -274,7 +357,24 @@ export class PixelPass {
       }
       const here = at(0, 0)
       const spill = vec3(0).toVar()
-      If(this.glow.greaterThan(0), () => {
+      If(this.glow.greaterThan(0).and(this.bands.greaterThan(0)), () => {
+        // banded glow: the brightest light near, by its strength over distance, lends a flat share by its ring
+        const best = float(0).toVar(), bd = float(0).toVar(), bk = float(0).toVar(), bc = vec3(0).toVar()
+        Loop({ start: int(-HALO_R), end: int(HALO_R), type: 'int', condition: '<=', name: 'gy' }, { start: int(-HALO_R), end: int(HALO_R), type: 'int', condition: '<=', name: 'gx' }, ({ gy, gx }: { gy: unknown; gx: unknown }) => {
+          const d = float(max(abs(gx), abs(gy))).toVar()
+          If(d.greaterThan(0), () => {
+            // `gy` counts down the picture, as the CPU twin's rows do
+            const t = sample(cell.add(vec2(float(gx), float(gy).negate())))
+            const k = float(brightOf(t)).toVar()
+            const score = k.div(d.add(1))
+            If(score.greaterThan(best), () => { best.assign(score); bd.assign(d); bk.assign(k); bc.assign(t.rgb) })
+          })
+        })
+        If(best.greaterThan(0), () => {
+          const band = min(this.bands.sub(1), floor(bd.sub(1).mul(this.bands).div(HALO_R)))
+          spill.assign(bc.mul(bk.mul(this.bands.sub(band).sub(0.5).div(this.bands)).mul(this.glow).mul(HALO_SHARE)))
+        })
+      }).ElseIf(this.glow.greaterThan(0), () => {
         for (const [dx, dy] of GLOW_TAPS) {
           const t = at(dx, dy)
           const bright = smoothstep(GLOW_FROM, 1, max(t.rgb.x, max(t.rgb.y, t.rgb.z)).div(255))
@@ -316,12 +416,28 @@ export class PixelPass {
       })
         .ElseIf(this.lined.greaterThan(0).and(beside), () => {
           out.assign(vec4(this.line, 1))
-          // in the scene's own colors: a darker tone of the scene pixel beside it, the first of right, left, below, above
-          If(this.own.greaterThan(0), () => {
-            const [right, left, above, below] = sides
-            const n = vec3(select(right.solid, right.rgb, select(left.solid, left.rgb, select(below.solid, below.rgb, above.rgb)))).toVar()
+          // the scene pixel beside it, the first of right, left, below, above
+          const [right, left, above, below] = sides
+          const n = vec3(select(right.solid, right.rgb, select(left.solid, left.rgb, select(below.solid, below.rgb, above.rgb)))).toVar()
+          const lit = toLab(n).toVar()
+          // selout: on a lit side, a shade just under the thing's own color
+          If(this.selout.greaterThan(0).and(lit.x.greaterThanEqual(SELOUT_FROM)), () => {
             If(this.count.greaterThan(0), () => {
-              const a = toLab(n).toVar()
+              const aim = lit.mul(vec3(SELOUT_L, 1, 1)).toVar()
+              const best = float(1e9).toVar()
+              Loop(MAX_PALETTE, ({ i }: { i: unknown }) => {
+                If(float(i).lessThan(this.count), () => {
+                  const d = aim.sub(palLab.element(i))
+                  const dd = dot(d, d)
+                  If(dd.lessThan(best), () => { best.assign(dd); out.assign(vec4(palShown.element(i), 1)) })
+                })
+              })
+            }).Else(() => { out.assign(vec4(n.mul(SELOUT_L / 255), 1)) })
+          })
+          // in the scene's own colors: a darker tone of the scene pixel beside it
+          .ElseIf(this.own.greaterThan(0), () => {
+            If(this.count.greaterThan(0), () => {
+              const a = lit
               const aim = a.mul(vec3(OWN_L, OWN_C, OWN_C)).toVar()
               const best = float(1e9).toVar()
               Loop(MAX_PALETTE, ({ i }: { i: unknown }) => {
@@ -347,28 +463,38 @@ export class PixelPass {
       If(shown.greaterThan(0), () => {
         color.assign(min(color, 255))
         If(this.count.greaterThan(0), () => {
-          const off = bayer.element(int(mod(row, 4).mul(4).add(mod(cell.x, 4)))).div(16).sub(0.5).mul(spread.mul(48))
+          // the step of the pattern: the screen's, or (surface dither) the blob's own where the scene is
+          const step = float(bayer.element(int(mod(row, 4).mul(4).add(mod(home.x, 4))))).toVar()
+          If(this.surface.greaterThan(0).and(here.solid), () => {
+            const r = texture(ranks, vec2(cell.x.add(0.5).div(res.x), float(1).sub(cell.y.add(0.5).div(res.y))))
+            If(r.a.greaterThanEqual(0.5), () => { step.assign(floor(r.r.mul(255).add(0.5))) })
+          })
+          const off = step.div(16).sub(0.5).mul(spread.mul(48))
           const lab = toLab(color.add(off)).toVar()
           const best = float(1e9).toVar()
-          const pick = vec3(0).toVar()
+          const pick = float(0).toVar()
           // steady pixels: the palette color this pixel had the frame before, and how far that is from what it wants now
-          const was = this.beforeTex.sample(vec2(cell.x.add(0.5).div(res.x), float(1).sub(cell.y.add(0.5).div(res.y))))
+          const was = this.beforeTex.sample(vec2(home.x.add(0.5).div(res.x), float(1).sub(home.y.add(0.5).div(res.y))))
           const wasLab = toLab(was.rgb.mul(255)).toVar()
           const wasOff = float(1e9).toVar()
           const wasFar = float(1e9).toVar()
-          const wasPick = vec3(0).toVar()
+          const wasPick = float(0).toVar()
           Loop(MAX_PALETTE, ({ i }: { i: unknown }) => {
             If(float(i).lessThan(this.count), () => {
               const d = lab.sub(palLab.element(i))
               const dd = dot(d, d)
-              If(dd.lessThan(best), () => { best.assign(dd); pick.assign(palShown.element(i)) })
+              If(dd.lessThan(best), () => { best.assign(dd); pick.assign(float(i)) })
               const w = wasLab.sub(palLab.element(i))
               const ww = dot(w, w)
-              If(ww.lessThan(wasOff), () => { wasOff.assign(ww); wasFar.assign(dd); wasPick.assign(palShown.element(i)) })
+              If(ww.lessThan(wasOff), () => { wasOff.assign(ww); wasFar.assign(dd); wasPick.assign(float(i)) })
             })
           })
-          If(this.sticky.greaterThan(0).and(here.solid).and(was.a.greaterThan(0.5)).and(wasOff.lessThan(SAME * SAME)).and(sqrt(wasFar).lessThanEqual(sqrt(best).add(this.sticky))), () => { pick.assign(wasPick) })
-          out.assign(vec4(pick, 1))
+          // colors that cycle are left to move
+          const moves = this.memberU.element(int(pick)).add(this.memberU.element(int(wasPick)))
+          If(this.sticky.greaterThan(0).and(here.solid).and(was.a.greaterThan(0.5)).and(wasOff.lessThan(SAME * SAME)).and(moves.lessThan(0.5)).and(sqrt(wasFar).lessThanEqual(sqrt(best).add(this.sticky))), () => { pick.assign(wasPick) })
+          // color cycling, on the scene's own pixels
+          const shownAs = select(here.solid, this.turnU.element(int(pick)), pick)
+          out.assign(vec4(palShown.element(int(shownAs)), 1))
         }).Else(() => {
           out.assign(vec4(color.div(255), 1))
         })
@@ -428,13 +554,13 @@ export class PixelPass {
   }
 
   /** The same view as a map of parts: only the blobs, as they were just drawn (nothing is moved or sorted again). */
-  private drawParts(renderer: WebGPURenderer, scene: Object3D, camera: Camera, into: RenderTarget) {
-    type World = Object3D & { isSplatWorld?: boolean; parts: boolean; hold: boolean }
+  private drawParts(renderer: WebGPURenderer, scene: Object3D, camera: Camera, into: RenderTarget, map: 'parts' | 'ranks' = 'parts') {
+    type World = Object3D & { isSplatWorld?: boolean; parts: boolean; ranks: boolean; hold: boolean }
     const worlds: { w: World; hold: boolean }[] = []
     const hidden: Object3D[] = []
     scene.traverse((o) => {
       const w = o as World
-      if (w.isSplatWorld) { worlds.push({ w, hold: w.hold }); w.parts = true; w.hold = true }
+      if (w.isSplatWorld) { worlds.push({ w, hold: w.hold }); w[map] = true; w.hold = true }
       else {
         const d = o as { isMesh?: boolean; isLine?: boolean; isPoints?: boolean }
         if ((d.isMesh || d.isLine || d.isPoints) && o.visible) { o.visible = false; hidden.push(o) }
@@ -445,7 +571,7 @@ export class PixelPass {
       renderer.clear()
       renderer.render(scene, camera)
     } finally {
-      for (const { w, hold } of worlds) { w.parts = false; w.hold = hold }
+      for (const { w, hold } of worlds) { w[map] = false; w.hold = hold }
       for (const o of hidden) o.visible = true
     }
   }
@@ -557,6 +683,7 @@ export class PixelPass {
   dispose() {
     this.small.dispose()
     this.ids.dispose()
+    this.ranks.dispose()
     this.fineSmall.dispose()
     this.fineIds.dispose()
     this.settleMat.dispose()

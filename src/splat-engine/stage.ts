@@ -834,6 +834,7 @@ export class Stage {
     const scale = this.pixelScale
     this.glitchNow = this.glitchLook ? glitchAt(this.time, this.glitchLook) : undefined
     this.pixel.setGlitch(this.glitchNow)
+    this.pixel.setTime(this.time)
     if (this.target) {
       this.pixel.setSize(Math.ceil(this.target.width / scale), Math.ceil(this.target.height / scale))
       this.pixel.render(this.renderer, this.scene, this.camera)
@@ -852,7 +853,7 @@ export class Stage {
   }
 
   /** Pixel mode's last frame as it was drawn small, and as finished art (exactly in the look's colors): for tests and for saving. */
-  async pixelFrames(): Promise<{ small: Frame; art: Frame; before?: Frame; parts?: Frame; fine?: { small: Frame; parts: Frame } } | undefined> {
+  async pixelFrames(): Promise<{ small: Frame; art: Frame; before?: Frame; parts?: Frame; ranks?: Frame; time: number; fine?: { small: Frame; parts: Frame } } | undefined> {
     // a sheet being drawn has the renderer to itself
     if (!this.pixel || this.baking) return
     // pixel mode can be switched off, or the view resized, while the reads are out: hold the pass and start every read now
@@ -860,12 +861,13 @@ export class Stage {
     if (!this.target) pass.render(this.renderer, this.scene, this.camera)
     const colors = lookColors(pass.look)
     const fine = !!pass.look.fine
-    const [small, art, before, parts, fineSmall, fineParts] = await Promise.all([
+    const surface = !!pass.look.surface && pass.look.dither > 0
+    const [small, art, before, parts, fineSmall, fineParts, ranks] = await Promise.all([
       this.read(pass.small), this.read(pass.art, true), pass.before ? this.read(pass.before, true) : undefined, pass.look.parts || fine ? this.read(pass.ids, true) : undefined,
-      fine ? this.read(pass.fineSmall) : undefined, fine ? this.read(pass.fineIds, true) : undefined,
+      fine ? this.read(pass.fineSmall) : undefined, fine ? this.read(pass.fineIds, true) : undefined, surface ? this.read(pass.ranks, true) : undefined,
     ])
     // a look with four samples a pixel also gives what it was settled from: the scene and its map of parts at twice the size
-    return { small, art: snapColors(art, colors), before: before && snapColors(before, colors), parts, fine: fineSmall && fineParts && { small: fineSmall, parts: fineParts } }
+    return { small, art: snapColors(art, colors), before: before && snapColors(before, colors), parts, ranks, time: pass.drawnAt, fine: fineSmall && fineParts && { small: fineSmall, parts: fineParts } }
   }
 
   /**

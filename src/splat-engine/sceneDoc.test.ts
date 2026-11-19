@@ -307,3 +307,19 @@ test('a pass goes by at an even speed from where it is drawn, is gone at both en
   bad.moves!.push({ kind: 'pass', bone: 'puff', by: [1, 0, 0], times: -1 })
   assert.ok(checkScene(bad).some((e) => e.includes('must be over 0 for a pass')))
 })
+
+test('a description can ask for art-pixel effects, and they come out as the pixel look has them', () => {
+  const d = sound()
+  d.look = { bands: 2, heat: 1, selout: true, cycle: [{ colors: ['#3f7a45', '#f4f1e4'], times: 16 }] }
+  assert.deepEqual(checkScene(d), [])
+  const look = compileScene(d).look
+  assert.equal(look.bands, 2)
+  assert.equal(look.selout, true)
+  assert.equal(look.heat!.pixels, 1)
+  assert.ok(Number.isInteger(look.heat!.pace * d.loop), 'the haze changes a whole number of times a loop')
+  assert.deepEqual(look.cycle, [{ colors: [[63, 122, 69], [244, 241, 228]], pace: 2 }])
+  const wrong = sound()
+  wrong.look = { bands: 3, heat: 1.5, cycle: [{ colors: ['#3f7a45'], times: 0.5 }] } as SceneDoc['look']
+  const errs = checkScene(wrong)
+  for (const at of [/^look\.bands:/, /^look\.heat:/, /^look\.cycle\[0\]\.colors:/, /^look\.cycle\[0\]\.times:/]) assert.ok(errs.some((e) => at.test(e)), `${at} in ${errs.join('; ')}`)
+})

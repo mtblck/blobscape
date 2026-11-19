@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { alphaCut, autoPalette, downsample, makeFrame, outline, pixelArt, quantize, lookColors, snapColors, removeStrays, countSolid, tidyLone, resolveFine, type Rgb } from './pixel.ts'
+import { alphaCut, autoPalette, downsample, makeFrame, outline, pixelArt, quantize, lookColors, snapColors, removeStrays, countSolid, tidyLone, resolveFine, ditherRank, typicalSpacing, surfaceRanks, snapShift, cycleTurns, heatPace, heatShift, HALO_R, HEAT_UP, SELOUT_FROM, oklab, type Rgb, type PixelLook } from './pixel.ts'
 
 const solid = (w: number, h: number, on: (x: number, y: number) => boolean, rgb = [200, 40, 40]) => {
   const f = makeFrame(w, h)
@@ -289,4 +289,143 @@ test('pixelArt with own draws the outline in a darker palette step of the thing 
   const free = pixelArt(f, { ...look, palette: [] })
   assert.deepEqual(Array.from(free.data.slice(0, 3)), [0, 0, 0])
   assert.deepEqual(Array.from(free.data.slice((1 * 9 + 0) * 4, (1 * 9 + 0) * 4 + 3)), pal[2].map((v) => Math.round(v * 0.38)))
+})
+
+test('surface dither: a blob keeps its step wherever it lands, and a face runs through the whole pattern', () => {
+  // a face of blobs on a grid 0.1 apart, in each of the three ways a face can lie
+  for (const axis of [0, 1, 2]) {
+    const seen = new Set<number>()
+    for (let a = 0; a < 8; a++) for (let b = 0; b < 8; b++) {
+      const p = [0.05, 0.05, 0.05]
+      p[(axis + 1) % 3] += a * 0.1; p[(axis + 2) % 3] += b * 0.1
+      seen.add(ditherRank(p[0], p[1], p[2], 0.1))
+    }
+    assert.equal(seen.size, 16, `a face across axis ${axis} uses every step`)
+  }
+  // the step depends on the blob's rest place alone, so moving the picture leaves it
+  assert.equal(ditherRank(0.31, 0.72, -0.4, 0.1), ditherRank(0.31, 0.72, -0.4, 0.1))
+})
+
+test('typicalSpacing finds a grid\'s spacing, and surfaceRanks gives a step a blob', () => {
+  const n = 20 * 20
+  const center = new Float32Array(n * 3), scale = new Float32Array(n * 3).fill(0.04)
+  for (let i = 0; i < n; i++) { center[i * 3] = (i % 20) * 0.08; center[i * 3 + 2] = Math.floor(i / 20) * 0.08 }
+  const blobs = { count: n, center, scale }
+  assert.ok(Math.abs(typicalSpacing(blobs) - 0.08) < 1e-6)
+  const ranks = surfaceRanks(blobs)
+  assert.equal(ranks.length, n)
+  assert.equal(new Set(ranks).size, 16)
+})
+
+test('pixelArt with surface dither reads each pixel\'s step from the map, and the sky keeps the screen\'s', () => {
+  const pal: Rgb[] = [[0, 0, 0], [120, 120, 120], [240, 240, 240]]
+  const f = solid(4, 4, () => true, [60, 60, 60])
+  const look: PixelLook = { palette: pal, dither: 1, outline: null, glow: 0, surface: true }
+  const steps = (step: number) => ({ width: 4, height: 4, data: new Uint8ClampedArray(64).map((_, i) => (i % 4 === 3 ? 255 : i % 4 === 0 ? step : 0)) })
+  // every pixel on one step: one color for the whole face, darker at a low step than at a high one
+  const low = pixelArt(f, look, undefined, undefined, steps(0)), high = pixelArt(f, look, undefined, undefined, steps(15))
+  assert.equal(new Set(Array.from({ length: 16 }, (_, i) => low.data[i * 4])).size, 1)
+  assert.ok(low.data[0] < high.data[0])
+  // without the map, the screen's pattern as before
+  assert.deepEqual([...pixelArt(f, look).data], [...pixelArt(f, { ...look, surface: false }).data])
+})
+
+test('snapShift lands a point on the edge of a whole art pixel', () => {
+  for (const ndc of [-0.73, 0.001, 0.5, 0.91]) {
+    const px = ((ndc + snapShift(ndc, 160)) * 0.5 + 0.5) * 160
+    assert.ok(Math.abs(px - Math.round(px)) < 1e-9)
+    assert.ok(Math.abs(snapShift(ndc, 160)) <= 1 / 160 + 1e-12)
+  }
+})
+
+// art-pixel effects (after Ink Studio's): glow in rings, heat haze, color cycling, softer outlines on lit sides
+
+/** A dark floor with one white-hot pixel at `(lx, ly)`. */
+const lamp = (w: number, h: number, lx: number, ly: number) => {
+  const f = solid(w, h, () => true, [30, 30, 40])
+  f.data.set([255, 255, 255, 255], (ly * w + lx) * 4)
+  return f
+}
+const rgbAt = (f: { width: number; data: Uint8ClampedArray }, x: number, y: number) => Array.from(f.data.slice((y * f.width + x) * 4, (y * f.width + x) * 4 + 3))
+
+test('glow in rings lights the pixels round a lamp in flat bands, nearer brighter, and none past its reach', () => {
+  const f = lamp(11, 11, 5, 5)
+  const look: PixelLook = { palette: [], dither: 0, outline: null, glow: 1, bands: 2 }
+  const art = pixelArt(f, look)
+  const at = (d: number) => rgbAt(art, 5 + d, 5)[0]
+  assert.equal(at(1), at(2), 'one band holds one value')
+  assert.ok(at(1) > at(3) && at(3) > 30, `the far ring is dimmer but lit: ${[at(1), at(2), at(3)]}`)
+  assert.equal(at(HALO_R + 1), 30, 'nothing past the reach')
+  // the soft spill gives a different falloff: the rings are a look of their own
+  const soft = pixelArt(f, { ...look, bands: 0 })
+  assert.notEqual(rgbAt(soft, 7, 5)[0], at(2))
+})
+
+test('heat haze moves pixels only above something glowing, and the same frame and time give the same picture', () => {
+  // vertical stripes, so a sideways shift shows; the lamp near the bottom
+  const f = solid(16, 16, () => true, [30, 30, 40])
+  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x += 2) f.data.set([90, 60, 50, 255], (y * 16 + x) * 4)
+  f.data.set([255, 255, 255, 255], (13 * 16 + 8) * 4)
+  const look: PixelLook = { palette: [], dither: 0, outline: null, glow: 0, heat: { pixels: 1, pace: 8 } }
+  const plain = pixelArt(f, { ...look, heat: undefined })
+  let moved = 0, outside = 0
+  for (const t of [0, 0.125, 0.25, 0.375]) {
+    const art = pixelArt(f, look, undefined, undefined, undefined, t)
+    assert.deepEqual([...art.data], [...pixelArt(f, look, undefined, undefined, undefined, t).data])
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+      if (rgbAt(art, x, y).join() === rgbAt(plain, x, y).join()) continue
+      const above = 13 - y >= HEAT_UP - 3 && 13 - y <= HEAT_UP + 3 && Math.abs(x - 8) <= 3
+      if (above) moved++
+      else outside++
+    }
+  }
+  assert.ok(moved > 10, `the air above the lamp shimmers: ${moved}`)
+  assert.equal(outside, 0)
+  assert.equal(rgbAt(pixelArt(f, look, undefined, undefined, undefined, 0.3), 8, 13).join(), '255,255,255', 'the lamp itself holds still')
+  // the waves are whole pixels, at most `pixels`, and change with the step
+  const shifts = new Set(Array.from({ length: 16 }, (_, t) => heatShift(3, 4, t, 2)))
+  assert.deepEqual([...shifts].sort(), [-2, 0, 2])
+})
+
+test('heat haze and color cycling fit a whole number of steps into a loop, so an export joins', () => {
+  for (const loop of [6, 8, 9.5, 12, 16]) assert.ok(Math.abs(heatPace(loop) * loop - Math.round(heatPace(loop) * loop)) < 1e-9)
+})
+
+test('color cycling steps scene pixels of a cycle round its list and leaves other colors and the sky alone', () => {
+  const pal: Rgb[] = [[20, 20, 30], [40, 90, 200], [80, 140, 230], [150, 200, 250], [200, 60, 40]]
+  const look: PixelLook = { palette: pal, dither: 0, outline: null, glow: 0, sky: [[20, 20, 30], [40, 90, 200]], cycle: [{ colors: [[40, 90, 200], [80, 140, 230], [150, 200, 250]], pace: 2 }] }
+  const f = makeFrame(3, 2)
+  f.data.set([40, 90, 200, 255, 150, 200, 250, 255, 200, 60, 40, 255], 0)
+  const at = (t: number) => pixelArt(f, look, undefined, undefined, undefined, t)
+  assert.deepEqual(rgbAt(at(0), 0, 0), [40, 90, 200])
+  assert.deepEqual(rgbAt(at(0.5), 0, 0), [80, 140, 230], 'one step on')
+  assert.deepEqual(rgbAt(at(0.5), 1, 0), [40, 90, 200], 'the last wraps to the first')
+  assert.deepEqual(rgbAt(at(1.5), 0, 0), [40, 90, 200], 'three steps round')
+  assert.deepEqual(rgbAt(at(0.5), 2, 0), [200, 60, 40], 'a color not in the cycle stays')
+  assert.deepEqual(rgbAt(at(0.5), 0, 1), rgbAt(at(0), 0, 1), 'the sky does not cycle')
+  // colors are matched to the palette, so a visitor's own palette still cycles; one that has a single match does not
+  const { member } = cycleTurns({ ...look, cycle: [{ colors: [[41, 91, 199], [79, 139, 231]], pace: 1 }] }, 0)
+  assert.deepEqual([...member], [0, 1, 1, 0, 0])
+  assert.deepEqual([...cycleTurns({ ...look, cycle: [{ colors: [[41, 91, 199], [40, 90, 200]], pace: 1 }] }, 3).member], [0, 0, 0, 0, 0])
+})
+
+test('steady pixels leave cycling colors free to move', () => {
+  const pal: Rgb[] = [[40, 90, 200], [80, 140, 230]]
+  const look: PixelLook = { palette: pal, dither: 0, outline: null, glow: 0, steady: 1, cycle: [{ colors: pal, pace: 1 }] }
+  const f = solid(1, 1, () => true, [40, 90, 200])
+  const before = pixelArt(f, look, undefined, undefined, undefined, 0)
+  assert.deepEqual(rgbAt(pixelArt(f, look, before, undefined, undefined, 1), 0, 0), [80, 140, 230])
+})
+
+test('a softer outline on lit sides: beside something light the line is a shade of it, beside something dark it stays', () => {
+  const pal: Rgb[] = [[10, 10, 20], [60, 50, 40], [200, 180, 120], [240, 220, 160]]
+  const f = makeFrame(4, 1)
+  f.data.set([240, 220, 160, 255], 1 * 4)
+  f.data.set([60, 50, 40, 255], 2 * 4)
+  assert.ok(oklab(240, 220, 160)[0] >= SELOUT_FROM && oklab(60, 50, 40)[0] < SELOUT_FROM)
+  const look: PixelLook = { palette: pal, dither: 0, outline: pal[0], glow: 0, selout: true }
+  const art = pixelArt(f, look)
+  assert.deepEqual(rgbAt(art, 0, 0), [200, 180, 120], 'lit side: a shade under the light thing')
+  assert.deepEqual(rgbAt(art, 3, 0), [10, 10, 20], 'shaded side: the outline')
+  assert.deepEqual(rgbAt(pixelArt(f, { ...look, selout: false }), 0, 0), [10, 10, 20])
 })

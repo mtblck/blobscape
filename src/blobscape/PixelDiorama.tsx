@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Orbit } from '../splat-core/view.ts'
 import { Magnifier, TourStrip } from './diorama/HowItsMade.tsx'
 import { TOUR, clay, kept } from './diorama/tour.ts'
-import { STEADY, countColors, darkest, type PixelLook } from '../splat-core/pixel.ts'
+import { STEADY, countColors, darkest, heatPace, type PixelLook } from '../splat-core/pixel.ts'
 import type { Built } from '../splat-engine/body.ts'
 import { LoadingMark } from '../shared/BlobLoader.tsx'
 import { castBy, glowGain } from './diorama/glow.ts'
@@ -106,6 +106,15 @@ export function PixelDiorama() {
   // a scene's own gentle rocking of the view: every pixel of a still thing changes as the view turns, so it can be held
   const [rock, setRock] = useState(() => new URLSearchParams(location.search).get('rock') !== '0')
   const [tidy, setTidy] = useState(() => new URLSearchParams(location.search).get('tidy') !== '0')
+  // dither that stays on things as they move, not on the screen (`PixelLook.surface`); `?surface=0` starts it off
+  const [surface, setSurface] = useState(() => new URLSearchParams(location.search).get('surface') !== '0')
+  // art-pixel effects (after Ink Studio's): glow in rings, heat haze, softer outlines on lit sides, color cycling. The
+  // scene's own choice unless the address says (`?bands=0|1|2`, `?heat=0..3`, `?selout=0|1`, `?cycle=0`)
+  const asked = (key: string, most: number, own: number) => { const q = new URLSearchParams(location.search).get(key), v = q === null ? NaN : Number(q); return Number.isInteger(v) ? Math.min(most, Math.max(0, v)) : own }
+  const [bands, setBands] = useState(() => asked('bands', 2, diorama.finish.bands ?? 0))
+  const [heat, setHeat] = useState(() => asked('heat', 3, diorama.finish.heat ?? 0))
+  const [selout, setSelout] = useState(() => asked('selout', 1, diorama.finish.selout ? 1 : 0) > 0)
+  const [cycling, setCycling] = useState(() => new URLSearchParams(location.search).get('cycle') !== '0')
   const [fine, setFine] = useState(() => new URLSearchParams(location.search).get('fine') !== '0')
   const [own, setOwn] = useState(() => new URLSearchParams(location.search).get('own') !== '0')
   /** Painted in steps of the palette as the scene is cut: the scene's own choice unless the address says. */
@@ -184,7 +193,8 @@ export function PixelDiorama() {
   const closeTour = () => { setTour(null); setStyle(styleBefore.current); requestAnimationFrame(() => tourOpener.current?.focus()) }
   // a step of the walk-through says how the scene is drawn, whatever the switch says
   const asPixels = touring ? touring.pixels : pixels
-  const look = useMemo<PixelLook>(() => ({ palette: colors, dither, outline: outline ? (colors.length ? darkest(colors) : [11, 16, 38]) : null, glow, edges: edges ? 1 : 0, parts, sky: sky ? shown.sky : undefined, steady: steady ? STEADY : 0, tidy, fine, own }), [colors, dither, outline, glow, edges, parts, sky, shown, steady, tidy, fine, own])
+  const look = useMemo<PixelLook>(() => ({ palette: colors, dither, outline: outline ? (colors.length ? darkest(colors) : [11, 16, 38]) : null, glow, edges: edges ? 1 : 0, parts, sky: sky ? shown.sky : undefined, steady: steady ? STEADY : 0, tidy, fine, own, surface, snap: true,
+    bands, heat: heat ? { pixels: heat, pace: heatPace(shown.loop) } : undefined, selout, cycle: cycling ? shown.finish.cycle : undefined }), [colors, dither, outline, glow, edges, parts, sky, shown, steady, tidy, fine, own, surface, bands, heat, selout, cycling])
 
   // the exact (radix) sort: the stage rebuilds its world, keeping the moment and the poser
   useEffect(() => { stage?.setSort(exact ? 'radix' : 'bins') }, [stage, exact])
@@ -216,6 +226,7 @@ export function PixelDiorama() {
       dressed.current = d.id
       setPalette('own')
       setDither(d.finish.dither); setGlow(d.finish.glow); setOutline(d.finish.outline); setEdges(d.finish.edges); setSky(d.finish.sky)
+      setBands(d.finish.bands ?? 0); setHeat(d.finish.heat ?? 0); setSelout(!!d.finish.selout)
       setView(d.views[0].id); setOrbit(d.views[0].orbit)
     }
     stage.setPoser((sk: Skeleton, t: number) => {
@@ -610,11 +621,17 @@ export function PixelDiorama() {
                 <p className="text-xs text-ink-faint">{colors.length ? 'Cuts the scene again with every blob in one palette color, a step of its own paint from shade to sun, so shade falls in flat bands.' : 'Needs a palette: Full color has no steps.'}</p>
                 <Toggle label="Outline the scene" checked={outline} onChange={setOutline} />
                 <Toggle label="Outline in each thing's own color" checked={own} onChange={setOwn} disabled={!outline} />
+                <Toggle label="Softer outline on lit sides" checked={selout} onChange={setSelout} disabled={!outline} />
                 <Toggle label="Lines where colors meet" checked={edges} onChange={setEdges} />
                 <Toggle label="Lines between parts" checked={parts} onChange={setParts} />
                 <Toggle label="Sky behind" checked={sky} onChange={setSky} />
                 <Toggle label="Steady pixels" checked={steady} onChange={setSteady} />
                 <Toggle label="Clean up lone pixels" checked={tidy} onChange={setTidy} />
+                <Toggle label="Dither moves with things" checked={surface} onChange={setSurface} />
+                <Toggle label="Glow in rings" checked={bands > 0} onChange={(on) => setBands(on ? shown.finish.bands || 2 : 0)} disabled={!glow} />
+                <Toggle label="Heat haze over glowing things" checked={heat > 0} onChange={(on) => setHeat(on ? shown.finish.heat || 1 : 0)} />
+                {shown.finish.cycle && <Toggle label="Color cycling" checked={cycling} onChange={setCycling} />}
+                <p className="text-xs text-ink-faint">Rings, haze{shown.finish.cycle ? ', cycling' : ''} and softer lit outlines follow Ink Studio's art-pixel effects.</p>
                 </>}
                 <Toggle label="Rock the view" checked={rock} onChange={setRock} disabled={calm} />
                 <Toggle label="Exact sort (slower)" checked={exact} onChange={setExact} />

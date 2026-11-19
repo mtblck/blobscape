@@ -581,7 +581,7 @@
        "doc": "Pixel mode's last frame as it was drawn small, and as finished art (exactly in the look's colors): for tests and for saving.",
        "signatures": [
         {
-         "code": "pixelFrames(): Promise<{ small: Frame; art: Frame; before?: Frame; parts?: Frame; fine?: { small: Frame; parts: Frame } } | undefined>"
+         "code": "pixelFrames(): Promise<{ small: Frame; art: Frame; before?: Frame; parts?: Frame; ranks?: Frame; time: number; fine?: { small: Frame; parts: Frame } } | undefined>"
         }
        ]
       },
@@ -967,6 +967,11 @@
        "name": "lieMap",
        "type": "boolean",
        "doc": "While true, the draw is a map of how the blobs lie on the screen: every blob a hard disc whose color says which\nway its long axis runs and how much longer than wide it is there (`lieColor` in splat-core/glyphs.ts is the CPU\ntwin of the color). A strand of fur or a blade of grass is long and thin from any side; a disc on a surface is\nonly so where the surface is seen nearly edge on. Drawing as characters reads it for strokes along strands."
+      },
+      {
+       "name": "ranks",
+       "type": "boolean",
+       "doc": "While true, the draw is a map of dither steps: every blob a hard disc (as in the map of parts) whose red is its\nstep of the Bayer pattern (0 to 15, as a byte), from where it sits at rest (`surfaceRanks` in splat-core/pixel.ts).\nPixel mode draws it for dither that stays on things (`PixelLook.surface`)."
       },
       {
        "name": "autoDetail",
@@ -3543,8 +3548,8 @@
       {
        "name": "look",
        "optional": true,
-       "type": "{ dither?: number; glow?: number; outline?: boolean; edges?: boolean; steps?: boolean }",
-       "doc": "The pixel look it asks for: how much dither and glow, and whether to draw an outline and edge lines. `steps` paints\nthe scene in steps of its palette as it is cut (each blob takes one palette color, a step of its own paint from shade\nto sun), so shade falls in flat bands; left out, shading is smooth and the picture is matched to the palette pixel by pixel."
+       "type": "{ dither?: number; glow?: number; outline?: boolean; edges?: boolean; steps?: boolean; bands?: number; heat?: number; selout?: boolean; cycle?: { colors: string[]; times: number }[] }",
+       "doc": "The pixel look it asks for: how much dither and glow, and whether to draw an outline and edge lines. `steps` paints\nthe scene in steps of its palette as it is cut (each blob takes one palette color, a step of its own paint from shade\nto sun), so shade falls in flat bands; left out, shading is smooth and the picture is matched to the palette pixel by pixel.\nArt-pixel effects (after Ink Studio's, MIT): `bands` (1 or 2) draws glow in flat rings, `heat` (1 to 3 pixels) makes\nthe air shimmer above anything glowing, `selout` softens the outline where it goes round something lit, and `cycle`\nsteps scene pixels of a few palette colors round their list a whole number of `times` a loop, as old games ran\nwater, fire and lights."
       },
       {
        "name": "disc",
@@ -7327,6 +7332,12 @@
        "doc": "The scene's parts, drawn small (`SplatWorld.parts`): where the color changes, one part ends and another begins. Only drawn for a look with `parts`."
       },
       {
+       "name": "ranks",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
+       "doc": "Each art pixel's step of the dither pattern, from the blob there (red, a byte), for a look with `surface`."
+      },
+      {
        "name": "fineSmall",
        "readonly": true,
        "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
@@ -7354,6 +7365,12 @@
        "name": "look",
        "type": "PixelLook",
        "doc": "The look in use."
+      },
+      {
+       "name": "drawnAt",
+       "readonly": true,
+       "type": "number",
+       "doc": "The time the last frame was drawn for (`setTime`): what `pixelArt` needs as its `time`."
       },
       {
        "name": "width",
@@ -7384,6 +7401,15 @@
        "signatures": [
         {
          "code": "setLook(look: PixelLook): void"
+        }
+       ]
+      },
+      {
+       "name": "setTime",
+       "doc": "The scene's time for this frame: what heat haze's waves and color cycling step by (`pixelArt`'s `time`).",
+       "signatures": [
+        {
+         "code": "setTime(t: number): void"
         }
        ]
       },
@@ -7527,6 +7553,42 @@
        "optional": true,
        "type": "boolean",
        "doc": "Lone-pixel cleanup, as a pixel artist does it: a scene pixel whose color none of its eight neighbors shares, while\nsix or more of them share one other color, takes that color. With a map of parts, only a pixel inside its own\npart (four or more neighbors of its part) is touched, so a speck, an eye or a firefly in front of something stays.\nA checkerboard dither keeps its pixels: each has its own color on the diagonals."
+      },
+      {
+       "name": "surface",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Dither that stays on the things it falls on: each blob takes one step of the Bayer pattern from where it sits in\nits own rest pose (`ditherRank`), not from the pixel it lands on, so the pattern rides with a turning view or a\nmoving creature instead of standing still on the screen while they slide under it. Needs a map of each pixel's\nstep drawn beside the scene (`pixelArt`'s `ranks`; the live pass draws its own). The sky keeps the screen's pattern.\nAfter Silicon Jungle's Ink Studio (object-space dither, MIT), with their agreement."
+      },
+      {
+       "name": "snap",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Holds the picture on the art's grid: the world's origin always lands on a whole art pixel, so when the view slides\n(a pan, a zoom, a camera that follows) the scene moves by whole pixels instead of smearing across them. The live\npass only (`snapShift`). After Ink Studio's camera snap, which does it for a flat view; here it holds for a\nperspective view at the origin's depth."
+      },
+      {
+       "name": "bands",
+       "optional": true,
+       "type": "number",
+       "doc": "Glow in bands (1 or 2): in place of the soft spill round bright pixels, each pixel within `HALO_R` art pixels of a\nglowing one takes a flat share of its light by how far it is, in rings, as hand-drawn pixel art lights a lamp.\nAfter Ink Studio's banded glow (MIT), with their agreement."
+      },
+      {
+       "name": "heat",
+       "optional": true,
+       "type": "{ pixels: number; pace: number }",
+       "doc": "Heat haze: pixels above anything glowing (within `HEAT_R` across and up to `HEAT_UP` more above) are drawn from a\npixel or so to one side, the shift running in waves that change `pace` times a second (a whole number a loop, so a\nrecording joins). `pixels` is the most a pixel moves, 1 to 3. After Ink Studio's heat effect (MIT)."
+      },
+      {
+       "name": "cycle",
+       "optional": true,
+       "type": "{ colors: Rgb[]; pace: number }[]",
+       "doc": "Color cycling: scene pixels whose palette color is one of `colors` step along the list `pace` times a second, as\nold games ran water and fire. Each color is taken to its nearest in the palette, so a visitor's own palette still\ncycles. Steady pixels leave these colors alone. After Ink Studio's palette cycles (MIT)."
+      },
+      {
+       "name": "selout",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Lighter outlines on lit sides (\"selout\"): an outline beside a scene pixel lighter than `SELOUT_FROM` takes a shade\njust under that pixel's own color instead of the outline, so the line shows only where the thing is in shade. Needs\n`outline`. After Ink Studio's lit and shadow line colors (MIT)."
       }
      ]
     },
@@ -7536,7 +7598,7 @@
      "doc": "One frame of a scene to pixel art, the CPU twin of the live pixel pass\n(change one, change both). `f` is the scene drawn small: straight sRGB.\n\n  alpha cut → glow (bright pixels light their neighbors, and empty pixels\n  beside them) → edge lines (the darker side of a jump in color) →\n  palette + dither → outline on the empty pixels that touch the scene →\n  sky on the rest, if the look has one\n\n`before` is the art of the frame before, for a look with `steady`: where it\nholds a palette color that is nearly as close as the best one, that pixel\nkeeps it. `parts` is the scene's map of parts for a look with `parts`: the\nsame view with every part in its own flat color (alpha 0 where there is none).",
      "signatures": [
       {
-       "code": "pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Frame): Frame"
+       "code": "pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Frame, ranks?: Frame, time?: number): Frame"
       }
      ]
     }
