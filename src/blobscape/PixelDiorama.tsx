@@ -216,7 +216,9 @@ export function PixelDiorama() {
     stage.setPoser((sk: Skeleton, t: number) => {
       d.pose(sk, t)
       pokes.current?.apply(sk, performance.now() / 1000)
-      stage.setLights(d.lights(t, stage.backend === 'webgpu'), d.ambient ?? 1)
+      stage.setLights(d.lights(t, stage.backend === 'webgpu'), d.ambientAt?.(t) ?? d.ambient ?? 1)
+      // a scene whose sky turns as it plays (day to night) hands the pixel pass each moment's sky
+      skyNow.current?.(d, t)
       // a scene that asks for it rocks the view gently as it plays, about wherever the view has been turned to
       if (d.swing && !calm) stage.orbit = swung(orbitNow.current, d.swing, d.loop, t)
       wet.current?.()
@@ -224,7 +226,22 @@ export function PixelDiorama() {
   }, [stage, scene, calm, mirrored])
   // the walk-through's fourth step is about the four samples, so it draws them whatever the switch says
   const sampling = touring?.id === 'samples'
-  useEffect(() => { stage?.setPixels(asPixels ? (sampling ? { ...look, fine: true } : look) : undefined, size) }, [stage, asPixels, sampling, look, size])
+  const drawnLook = useMemo(() => (asPixels ? (sampling ? { ...look, fine: true } : look) : undefined), [asPixels, sampling, look])
+  useEffect(() => {
+    if (!stage) return
+    stage.setPixels(drawnLook, size)
+    // set again only when the sky has changed, so a paused scene is not drawn over and over
+    let last = ''
+    skyNow.current = (d, t) => {
+      if (!d.skyAt || !drawnLook?.sky) return
+      const [top, low] = d.skyAt(t), key = `${top}|${low}`
+      if (key === last) return
+      last = key
+      stage.setPixels({ ...drawnLook, sky: [top, low, drawnLook.sky[2]] }, size)
+    }
+    const d = posed.current
+    if (d) skyNow.current(d, stage.time)
+  }, [stage, drawnLook, size])
   useEffect(() => {
     if (!stage) return
     const keep = touring?.keep ?? 1
@@ -238,6 +255,8 @@ export function PixelDiorama() {
   const wet = useRef<(() => void) | undefined>(undefined)
   const seen = useRef<MirrorImage | null>(null)
   const posed = useRef<Diorama | undefined>(undefined)
+  /** Hands the pixel pass the sky of the moment, for a scene whose sky turns as it plays. */
+  const skyNow = useRef<((d: Diorama, t: number) => void) | undefined>(undefined)
   /** Taps on the scene: a part leans and wobbles, the land throws sparkles. */
   const pokes = useRef<Pokes | undefined>(undefined)
   orbitNow.current = orbit
