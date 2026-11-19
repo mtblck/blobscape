@@ -837,8 +837,24 @@ export default [
           else ok(`brush and ink on ${backend}: cel shading draws the fox in flat tones (${(c.flat * 100).toFixed(0)}% of its pixels match their neighbor, ${(c.flatBlobs * 100).toFixed(0)}% as blobs), a third tone changes ${(c.three * 100).toFixed(2)}% of the view, and a frame drawn twice is the same`)
           if (backend === 'webgpu') await k.page.screenshot({ path: join(shots, 'blobscape-brush-cel.png') })
         }
+        // neon, stained glass and watercolor: each its own picture, the same when drawn twice; neon's light moves, and the other two cover the view
+        const styles = {}
+        for (const [name, look, plain] of [['Neon', 'neon', true], ['Stained glass', 'glass', true], ['Watercolor', 'watercolor', false]]) {
+          await pick(k.page, name, look)
+          const up = await k.page.waitForFunction(([look, plain]) => window.__brush?.look === look && window.__brush.plain === plain, [look, plain], { timeout: 120000 }).then(() => true, () => false)
+          if (!up) { fails.push(`brush and ink on ${backend}: the fox was never cut for ${name.toLowerCase()}`); continue }
+          // the first frame after changing look can still hold a few pixels of the look before (its colors are handed over a frame late), so one is drawn and let go
+          await read(k.page)
+          const one = await read(k.page), two = await read(k.page), later = await read(k.page, 1.3)
+          const v = { same: differ(one, two, 0), cover: solid(one), fromBlobs: differ(one, blobs), moved: differ(later, one, 12) }
+          const good = v.same === 0 && v.fromBlobs > 0.01 && (look === 'neon' ? v.cover > 0.03 && v.moved > 0.0005 : v.cover > 0.99)
+          if (!good) fails.push(`brush and ink on ${backend}: ${name.toLowerCase()} ${JSON.stringify(v)}`)
+          else { styles[look] = one; ok(`brush and ink on ${backend}: ${name.toLowerCase()} draws the fox (${(v.fromBlobs * 100).toFixed(0)}% of the view differs from the blobs${look === 'neon' ? `, its light moves ${(v.moved * 100).toFixed(2)}% of the view in a second` : ', the whole view covered'}), the same when drawn twice`) }
+          if (backend === 'webgpu') await k.page.screenshot({ path: join(shots, `blobscape-brush-${look}.png`) })
+        }
         await pick(k.page, 'Blobs', 'blobs')
-        pictures[backend] = { gouache, hatch, ink, text, cel }
+        await k.page.waitForFunction(() => window.__brush?.look === 'blobs' && !window.__brush.plain, null, { timeout: 120000 }).catch(() => {})
+        pictures[backend] = { gouache, hatch, ink, text, cel, styles }
         const m = { backend: got, same: differ(gouache, again, 0), cover: solid(gouache), blobs: solid(blobs), paint: differ(gouache, blobs), oil: differ(oil, gouache), ink: differ(ink, gouache), hatch: differ(hatch, ink), paper }
         // marks are opaque where soft dots fade, so the painted fox is at least as solid; each look is a different picture; a frame drawn twice is the same frame
         if (m.backend !== backend || m.same !== 0 || !(m.cover > 0.03 && m.cover >= m.blobs * 0.9) || !(m.paint > 0.01 && m.oil > 0.003 && m.ink > 0.01 && m.hatch > 0.005) || !/rgb\(2[0-9]{2}, 2[0-9]{2}, 2[0-9]{2}\)/.test(m.paper)) fails.push(`brush and ink on ${backend}: ${JSON.stringify(m)}`)
@@ -870,6 +886,13 @@ export default [
         const g = differ(pictures.webgpu.gouache, pictures.webgl.gouache, 90), h = differ(pictures.webgpu.hatch, pictures.webgl.hatch, 90), n = differ(pictures.webgpu.ink, pictures.webgl.ink, 90)
         if (!(g < 0.02 && h < 0.02 && n < 0.02)) fails.push(`brush and ink: WebGPU and WebGL differ at ${(g * 100).toFixed(2)}% of pixels in gouache, ${(h * 100).toFixed(2)}% hatched, ${(n * 100).toFixed(2)}% in ink and wash with its outlines`)
         else ok(`brush and ink: WebGPU and WebGL draw the same marks and outlines (${(g * 100).toFixed(2)}% of pixels differ in gouache, ${(h * 100).toFixed(2)}% hatched, ${(n * 100).toFixed(2)}% in ink and wash)`)
+        for (const look of ['neon', 'glass', 'watercolor']) {
+          const x = pictures.webgpu.styles[look], y = pictures.webgl.styles[look]
+          if (!x || !y) continue
+          const d = differ(x, y, 90)
+          if (!(d < 0.05)) fails.push(`brush and ink: WebGPU and WebGL differ at ${(d * 100).toFixed(2)}% of pixels in ${look}`)
+          else ok(`brush and ink: WebGPU and WebGL draw the same ${look} (${(d * 100).toFixed(2)}% of pixels differ)`)
+        }
         if (pictures.webgpu.cel && pictures.webgl.cel) {
           const c = differ(pictures.webgpu.cel, pictures.webgl.cel, 90)
           if (!(c < 0.03)) fails.push(`brush and ink: WebGPU and WebGL differ at ${(c * 100).toFixed(2)}% of pixels in cel shading`)
