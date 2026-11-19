@@ -11,7 +11,10 @@ import { NEWS, POSTS, postById } from './news.ts'
  */
 export interface PageMeta {
   title: string
+  /** The page in full: what a shared link shows under its title (og:description). */
   description: string
+  /** The page in one or two short sentences, at most `SEARCH_MOST` characters: the meta description, which a search result shows whole. */
+  search: string
   /** The page's path, '/' for the front page; null for the not-found page. */
   path: string | null
   /** The picture a shared link shows, and what it is of. Left out, the site's own (`SHARE`). */
@@ -24,13 +27,24 @@ export const SHARE = { src: '/og.png', alt: 'The Blobscape logo and the words "L
 /** Where an experiment's share picture is: its cover cut to a link preview's shape (public/share/, made by scripts/share-images.mjs). */
 export const shareImage = (e: { cover: string }) => e.cover.replace('/covers/', '/share/').replace(/\.webp$/, '.jpg')
 
+/** Where a post's share picture is: a cover's cut, or a picture of its own (public/news/) cut the same way as public/share/news-<name>.jpg. */
+export const postShare = (src: string) => (src.startsWith('/covers/') ? shareImage({ cover: src }) : src.startsWith('/news/') ? src.replace('/news/', '/share/news-').replace(/\.webp$/, '.jpg') : src)
+
+/** A search result shows about this much of a description and of a title; longer ones are cut off mid-sentence. */
+export const SEARCH_MOST = 160
+export const TITLE_MOST = 60
+
+/** A page's title with the site's name after it, where both fit in a search result. */
+export const named = (title: string) => (`${title} · ${SITE.name}`.length <= TITLE_MOST ? `${title} · ${SITE.name}` : title)
+
 /** A page's title, description and share picture. An experiment's page shows its own cover. */
 export function pageMeta(route: Route): PageMeta {
-  const meta = wordsFor(route)
+  const words = wordsFor(route)
+  const meta: PageMeta = { ...words, search: searchFor(route) ?? words.description }
   const e = EXPERIMENTS.find((x) => x.id === route.page)
   // a post shares its own picture, cut to a link preview's shape when it is an experiment's cover
   const post = route.page === 'post' ? postById(route.id) : undefined
-  if (post) return { ...meta, image: { src: post.image.src.startsWith('/covers/') ? shareImage({ cover: post.image.src }) : post.image.src, alt: post.image.alt } }
+  if (post) return { ...meta, image: { src: postShare(post.image.src), alt: post.image.alt } }
   return e ? { ...meta, image: { src: shareImage(e), alt: `${e.title}, an experiment on ${SITE.name}. ${e.body}` } } : meta
 }
 
@@ -38,7 +52,40 @@ const cap = (s: string) => s[0].toUpperCase() + s.slice(1)
 
 export const DESCRIPTION = `Learn how 3D Gaussian splats work by pulling one blob apart, then thousands, then rigging them to walk: ${LESSON_COUNT} hands-on lessons, a sandbox for real captures and a creature to take away as a 3D model, free in your browser.`
 
-function wordsFor(route: Route): PageMeta {
+/**
+ * What a search result says under each page's title: the page in at most `SEARCH_MOST` characters, so it is shown whole.
+ * A page not listed here uses its description as it stands (a test holds that it fits).
+ */
+const SEARCH: Partial<Record<Route['page'], string>> = {
+  home: `Learn how 3D Gaussian splats work by taking them apart: ${LESSON_COUNT} hands-on lessons, a sandbox for your own captures and a shelf of experiments.`,
+  lessons: `${cap(LESSON_COUNT)} short, hands-on lessons on Gaussian splats, from one blob and its 14 numbers to rigs that walk, real captures and scenes built in code.`,
+  creature: 'A crocodile, a jellyfish, an owl, a frog, a fox, an elf and a dragon made of Gaussian splats. Watch them move, then save one as a rigged .glb or sprite sheet.',
+  forest: 'Walk an elf made of Gaussian splats down an endless forest path, a fox trotting at its side, while trees, ferns and flowers grow out of the ground as you come.',
+  pond: 'Wade an elf made of Gaussian splats through a candlelit pond. The water is a real wave simulation: rings spread from each footfall and bounce off the banks.',
+  dungeon: 'Fight slimes in a torchlit dungeon with a sword, fire and frost. Hero, hall and slimes are all Gaussian splats, with fire that spreads across the floor.',
+  scan: 'Open a Gaussian splat scan from your phone, turn it level, cut away the floor and the floaters, relight it and save it. Everything stays on your device.',
+  shift: 'One creature made of Gaussian splats turns into another: a frog into a dragon, an owl into a crocodile. Every blob finds a partner and travels to it.',
+  bouquet: 'A florist that never makes the same bouquet twice: pick a season and it grows every flower petal by petal out of Gaussian splats and stands them in a vase.',
+  daynight: 'A cabin in a forest clearing made of Gaussian splats, lit live through a whole day. Drag the time and the sun follows its real path for the place and season.',
+  fourways: 'One pixel-art scene drawn four ways at the same moment: a hand-written shader, three.js meshes, Spark splats and Blobscape, on one clock, camera and light.',
+  brush: 'Gaussian splats drawn as brush marks and pen strokes: gouache, oil, ink and wash, hatching, ASCII and cel shading. The strokes hold still as you turn the scene.',
+  flow: 'Gaussian splats that flow: every blob is a particle of sand, snow or goo in a small material point simulation. Pour it, drop things in it, or let a column go.',
+  clockwork: "A watch movement made of Gaussian splats, keeping the real time. Every wheel turns by a real watch's ratios: slow it down to see one tick of the escapement.",
+  diorama: 'Moving pixel art made from Gaussian splats: 3D scenes cut into solid blobs, moved by bones, drawn small and snapped to a palette. Turn them and change the look.',
+  experiments: `${EXPERIMENTS.length} small things to play with, all built from Gaussian splats: games, simulations, pixel art, creatures and tools. Free, in your browser.`,
+  engine: 'A small engine for Gaussian splats that move, built on three.js: creatures on bones, live lights, pixel art from 3D and rigged splats saved as .glb.',
+  spec: 'A draft glTF extension for rigged, animated Gaussian splats: how a skinned splat turns and grows with its bones, with examples and sample .glb files.',
+  api: 'How to use the @blobscape/engine package, and a reference for every name it exports: Stage, SplatWorld, bones, posing, cloth, morphs, scenes and pixel mode.',
+  news: NEWS.intro,
+}
+
+function searchFor(route: Route): string | undefined {
+  if (route.page === 'post') return postById(route.id)?.search
+  if (route.page === 'notfound') return SEARCH.home
+  return SEARCH[route.page]
+}
+
+function wordsFor(route: Route): Omit<PageMeta, 'search'> {
   const path = href(route)
   switch (route.page) {
     case 'lessons':
@@ -85,7 +132,7 @@ function wordsFor(route: Route): PageMeta {
       return { path, title: `What's New · ${SITE.name}`, description: `${NEWS.intro} The latest: ${POSTS[0].title}.` }
     case 'post': {
       const p = postById(route.id)!
-      return { path, title: `${p.title} · ${SITE.name}`, description: p.summary }
+      return { path, title: named(p.title), description: p.summary }
     }
     case 'lesson': {
       const i = LESSONS.findIndex((l) => l.id === route.id)
