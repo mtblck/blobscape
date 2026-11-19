@@ -411,6 +411,13 @@ export type MoveDoc =
    * posts, trees, a sign.
    */
   | { kind: 'pass'; bone: string; by: Vec3; times: number; phase?: number; during?: During }
+  /**
+   * Gathers out of drifting motes, stands, and dissolves into them again, `times` per loop: the parts on this bone
+   * itself (not on its children) come and go a blob at a time, each drifting up to about `by` (0.4 when left out)
+   * as it shrinks to nothing. `rise` and `fall` are the shares of its time spent gathering and dissolving (0.3 and
+   * 0.5 when left out; together at most 1). A beam of light that breaks up, a ghost, smoke.
+   */
+  | { kind: 'dissolve'; bone: string; times: number; by?: number; phase?: number; during?: During; rise?: number; fall?: number }
 
 /** A point light in a scene. */
 export interface LightDoc {
@@ -943,7 +950,12 @@ export function checkScene(doc: unknown): string[] {
           vec(m.by, `${at}.by`)
           if (typeof m.times === 'number' && m.times < 0) bad(`${at}.times`, 'must be over 0 for a pass')
           break
-        default: bad(`${at}.kind`, `${show(m.kind)} is not a move (spin, sway, bob, drift, pulse, sprout, pass)`)
+        case 'dissolve':
+          if (typeof m.times === 'number' && m.times < 0) bad(`${at}.times`, 'must be over 0 for a dissolve')
+          opt(m.by, `${at}.by`, 0, 4); opt(m.rise, `${at}.rise`, 0.01, 1); opt(m.fall, `${at}.fall`, 0.01, 1)
+          if (((typeof m.rise === 'number' ? m.rise : DISSOLVE_RISE) + (typeof m.fall === 'number' ? m.fall : DISSOLVE_FALL)) > 1 + 1e-9) bad(`${at}.rise`, 'rise and fall together must be at most 1')
+          break
+        default: bad(`${at}.kind`, `${show(m.kind)} is not a move (spin, sway, bob, drift, pulse, sprout, pass, dissolve)`)
       }
     })
   }
@@ -1489,6 +1501,17 @@ export function sprouted(life: number, rise = 0.4, fall = 0.15) {
 }
 
 /** How long a `during` lasts, as a share of the loop: one that ends before it starts runs across the seam. */
+/** The shares of a dissolve's time spent gathering and dissolving where it doesn't say. */
+export const DISSOLVE_RISE = 0.3, DISSOLVE_FALL = 0.5
+/** How far a dissolve's blobs drift where it doesn't say. */
+export const DISSOLVE_BY = 0.4
+/** Poses a `dissolve` move `life` (0 to 1) through its time: how far gone the bone's blobs are, and their drift. */
+export function dissolving(sk: Skeleton, b: number, life: number, m: { by?: number; rise?: number; fall?: number }) {
+  const rise = m.rise ?? DISSOLVE_RISE, fall = m.fall ?? DISSOLVE_FALL
+  const here = life < 1 - fall ? Math.min(1, life / rise) : Math.min(1, (1 - life) / fall)
+  sk.gone[b] = Math.max(sk.gone[b], 1 - here)
+  sk.lift[b] = m.by ?? DISSOLVE_BY
+}
 const spanOf = (d: During) => (((d[1] - d[0]) % 1) + 1) % 1
 
 /**
@@ -1636,6 +1659,8 @@ export function compileScene(doc: SceneDoc, { puffs = true }: { puffs?: boolean 
           const life = ((at % 1) + 1) % 1, [along, size] = passed(life, m.phase ?? 0)
           for (let i = 0; i < 3; i++) sk.offset[b * 3 + i] += m.by[i] * along
           sk.size[b] *= size
+        } else if (m.kind === 'dissolve') {
+          dissolving(sk, b, ((at % 1) + 1) % 1, m)
         } else {
           sk.size[b] *= m.size[0] + (m.size[1] - m.size[0]) * (0.5 + 0.5 * Math.sin(at * TAU))
         }

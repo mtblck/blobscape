@@ -1455,6 +1455,18 @@
        "doc": "Where the actor stands: added to every root bone, and kept by `reset()` (a pose isn't a placement)."
       },
       {
+       "name": "gone",
+       "readonly": true,
+       "type": "Float32Array",
+       "doc": "Pose: how far each bone's own blobs have dissolved, 0 (whole) to 1 (gone); see dissolve.ts. Children don't inherit it."
+      },
+      {
+       "name": "lift",
+       "readonly": true,
+       "type": "Float32Array",
+       "doc": "Pose: how far each bone's blobs drift up as they dissolve, in world units."
+      },
+      {
        "name": "matrix",
        "readonly": true,
        "type": "Float32Array",
@@ -1646,7 +1658,7 @@
     {
      "name": "skinCenters",
      "kind": "function",
-     "doc": "Moves only the centers of many blobs, fast: what the sort needs on the CPU\nwhen the GPU does the rest of the skinning. No allocation per blob.\n\n- `src`: rest centers as vec4s, with each blob's first bone (its actor's\n  offset into `bones`) in w;\n- `skin`: two words per blob, four joint bytes then four weight bytes summing to 255;\n- `bones`: 20 floats per bone, the first 16 its column-major skin matrix.\n\nWrites xyz into `out` (3 floats per blob). Matches `skinBlob`'s center.",
+     "doc": "Moves only the centers of many blobs, fast: what the sort needs on the CPU\nwhen the GPU does the rest of the skinning. No allocation per blob.\n\n- `src`: rest centers as vec4s, with each blob's first bone (its actor's\n  offset into `bones`) in w;\n- `skin`: two words per blob, four joint bytes then four weight bytes summing to 255;\n- `bones`: 20 floats per bone, the first 16 its column-major skin matrix, with how far the bone has dissolved\n  and its drift (dissolve.ts) in the matrix's unused slots 7 and 11.\n\nWrites xyz into `out` (3 floats per blob). Matches `skinBlob`'s center, plus a dissolving blob's drift.",
      "signatures": [
       {
        "code": "skinCenters(src: Float32Array, skin: Uint32Array, bones: Float32Array, count: number, out: Float32Array): void"
@@ -3894,7 +3906,7 @@
      "name": "MoveDoc",
      "kind": "type",
      "doc": "Every move repeats a whole number of `times` in the loop (or in its `during`), so the scene loops.",
-     "type": "{ kind: \"spin\"; bone: string; axis: \"x\" | \"y\" | \"z\"; times: number; phase?: number; during?: During } | { kind: \"sway\"; bone: string; axis: \"x\" | \"y\" | \"z\"; degrees: number; times: number; phase?: number; during?: During } | { kind: \"bob\"; bone: string; by: Vec3; times: number; phase?: number; during?: During } | { kind: \"drift\"; bone: string; by: Vec3; times: number; grow?: [number, number]; phase?: number; during?: During } | { kind: \"pulse\"; bone: string; size: [number, number]; times: number; phase?: number; during?: During } | { kind: \"sprout\"; bone: string; times: number; phase?: number; during?: During; rise?: number; fall?: number } | { kind: \"pass\"; bone: string; by: Vec3; times: number; phase?: number; during?: During }"
+     "type": "{ kind: \"spin\"; bone: string; axis: \"x\" | \"y\" | \"z\"; times: number; phase?: number; during?: During } | { kind: \"sway\"; bone: string; axis: \"x\" | \"y\" | \"z\"; degrees: number; times: number; phase?: number; during?: During } | { kind: \"bob\"; bone: string; by: Vec3; times: number; phase?: number; during?: During } | { kind: \"drift\"; bone: string; by: Vec3; times: number; grow?: [number, number]; phase?: number; during?: During } | { kind: \"pulse\"; bone: string; size: [number, number]; times: number; phase?: number; during?: During } | { kind: \"sprout\"; bone: string; times: number; phase?: number; during?: During; rise?: number; fall?: number } | { kind: \"pass\"; bone: string; by: Vec3; times: number; phase?: number; during?: During } | { kind: \"dissolve\"; bone: string; times: number; by?: number; phase?: number; during?: During; rise?: number; fall?: number }"
     },
     {
      "name": "LightDoc",
@@ -4175,6 +4187,34 @@
      "signatures": [
       {
        "code": "sprouted(life: number, rise?: number, fall?: number): number"
+      }
+     ]
+    },
+    {
+     "name": "DISSOLVE_RISE",
+     "kind": "const",
+     "doc": "The shares of a dissolve's time spent gathering and dissolving where it doesn't say.",
+     "type": "0.3"
+    },
+    {
+     "name": "DISSOLVE_FALL",
+     "kind": "const",
+     "doc": "The shares of a dissolve's time spent gathering and dissolving where it doesn't say.",
+     "type": "0.5"
+    },
+    {
+     "name": "DISSOLVE_BY",
+     "kind": "const",
+     "doc": "How far a dissolve's blobs drift where it doesn't say.",
+     "type": "0.4"
+    },
+    {
+     "name": "dissolving",
+     "kind": "function",
+     "doc": "Poses a `dissolve` move `life` (0 to 1) through its time: how far gone the bone's blobs are, and their drift.",
+     "signatures": [
+      {
+       "code": "dissolving(sk: Skeleton, b: number, life: number, m: { by?: number; rise?: number; fall?: number }): void"
       }
      ]
     },

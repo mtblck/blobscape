@@ -1,4 +1,5 @@
 import type { Quat, Vec3 } from '../splat-core/blobs.ts'
+import { dissolved } from './dissolve.ts'
 
 /**
  * A skeleton: bones in a tree, each placed by its head in the rest pose (world
@@ -39,6 +40,10 @@ export class Skeleton {
   rootScale = 1
   /** Where the actor stands: added to every root bone, and kept by `reset()` (a pose isn't a placement). */
   readonly place = new Float32Array(3)
+  /** Pose: how far each bone's own blobs have dissolved, 0 (whole) to 1 (gone); see dissolve.ts. Children don't inherit it. */
+  readonly gone: Float32Array
+  /** Pose: how far each bone's blobs drift up as they dissolve, in world units. */
+  readonly lift: Float32Array
 
   /** Output, per bone: skin matrix (16), skin rotation quaternion (4), skin uniform scale (1). */
   readonly matrix: Float32Array
@@ -57,6 +62,8 @@ export class Skeleton {
     for (let i = 0; i < n; i++) this.rotation[i * 4 + 3] = 1
     this.offset = new Float32Array(n * 3)
     this.size = new Float32Array(n).fill(1)
+    this.gone = new Float32Array(n)
+    this.lift = new Float32Array(n)
     this.matrix = new Float32Array(n * 16)
     this.quat = new Float32Array(n * 4)
     this.scale = new Float32Array(n)
@@ -83,6 +90,8 @@ export class Skeleton {
     for (let i = 0; i < this.count; i++) this.rotation[i * 4 + 3] = 1
     this.offset.fill(0)
     this.size.fill(1)
+    this.gone.fill(0)
+    this.lift.fill(0)
     this.rootScale = 1
   }
 
@@ -334,26 +343,30 @@ export function quatMat3(q: ArrayLike<number>): number[] {
  * - `src`: rest centers as vec4s, with each blob's first bone (its actor's
  *   offset into `bones`) in w;
  * - `skin`: two words per blob, four joint bytes then four weight bytes summing to 255;
- * - `bones`: 20 floats per bone, the first 16 its column-major skin matrix.
+ * - `bones`: 20 floats per bone, the first 16 its column-major skin matrix, with how far the bone has dissolved
+ *   and its drift (dissolve.ts) in the matrix's unused slots 7 and 11.
  *
- * Writes xyz into `out` (3 floats per blob). Matches `skinBlob`'s center.
+ * Writes xyz into `out` (3 floats per blob). Matches `skinBlob`'s center, plus a dissolving blob's drift.
  */
 export function skinCenters(src: Float32Array, skin: Uint32Array, bones: Float32Array, count: number, out: Float32Array) {
   for (let i = 0; i < count; i++) {
     const x = src[i * 4], y = src[i * 4 + 1], z = src[i * 4 + 2], base = src[i * 4 + 3]
     const jw = skin[i * 2], ww = skin[i * 2 + 1]
-    let ox = 0, oy = 0, oz = 0
+    let ox = 0, oy = 0, oz = 0, gone = 0, lift = 0
     for (let k = 0; k < 4; k++) {
       const w = ((ww >>> (k * 8)) & 255) / 255
       if (!w) continue
       const m = (base + ((jw >>> (k * 8)) & 255)) * 20
+      gone += w * bones[m + 7]; lift += w * bones[m + 11]
       ox += w * (bones[m] * x + bones[m + 4] * y + bones[m + 8] * z + bones[m + 12])
       oy += w * (bones[m + 1] * x + bones[m + 5] * y + bones[m + 9] * z + bones[m + 13])
       oz += w * (bones[m + 2] * x + bones[m + 6] * y + bones[m + 10] * z + bones[m + 14])
     }
+    if (gone > 0) { dissolved(i, gone, lift, DRIFT); ox += DRIFT[1]; oy += DRIFT[2]; oz += DRIFT[3] }
     out[i * 3] = ox; out[i * 3 + 1] = oy; out[i * 3 + 2] = oz
   }
 }
+const DRIFT = new Float32Array(4)
 
 /** A point carried by bone `bone`'s current pose: where its rest position `p` has moved to. */
 export function posedPoint(sk: { matrix: ArrayLike<number> }, bone: number, p: ArrayLike<number>): [number, number, number] {

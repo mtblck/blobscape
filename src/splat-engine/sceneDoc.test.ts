@@ -263,6 +263,25 @@ test('a move with `during` happens once, between two moments of the loop, and wa
   assert.match(errs({ kind: 'sprout', bone: 'arm', times: 1, rise: 0.7, fall: 0.6 }), /rise and fall together/)
 })
 
+test('a dissolve gathers a bone\'s blobs, leaves them whole and takes them away again, by itself looping', () => {
+  const doc = sound()
+  doc.moves = [{ kind: 'dissolve', bone: 'puff', times: 1, by: 0.8, during: [0.2, 0.6], rise: 0.1, fall: 0.5 }]
+  assert.deepEqual(checkScene(doc), [])
+  const c = compileScene(doc), sk = new Skeleton(c.bones), b = sk.index('puff')
+  const gone = (u: number) => { c.pose(sk, u * c.loop); return sk.gone[b] }
+  assert.equal(gone(0), 1, 'not there before its time')
+  assert.equal(gone(0.3), 0, 'whole')
+  assert.ok(Math.abs(gone(0.5) - 0.5) < 1e-6, 'half gone half way through its fall')
+  assert.equal(gone(0.7), 1)
+  assert.equal(sk.lift[b], Math.fround(0.8))
+  assert.equal(sk.size[b], 1, 'the bone itself keeps its size')
+  sk.reset()
+  assert.equal(sk.gone[b], 0)
+  const errs = (m: unknown) => checkScene({ ...sound(), moves: [m as never] }).join('; ')
+  assert.match(errs({ kind: 'dissolve', bone: 'puff', times: 1, rise: 0.7, fall: 0.6 }), /rise and fall together/)
+  assert.match(errs({ kind: 'dissolve', bone: 'puff', times: 1, by: 9 }), /by/)
+})
+
 test('a pass goes by at an even speed from where it is drawn, is gone at both ends of its way, and loops', () => {
   // drawn 0.3 along its way: there as the loop starts, and a steady share further on after each share of its time
   assert.ok(Math.abs(passed(0.3, 0.3)[0]) < 1e-9 && passed(0.3, 0.3)[1] === 1)

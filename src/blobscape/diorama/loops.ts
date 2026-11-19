@@ -36,7 +36,7 @@ export const LOOPS: readonly { id: string; label: string }[] = [
   { id: 'koi', label: 'Koi pond in the rain' },
   { id: 'whales', label: 'Space whales' },
   { id: 'turkey', label: 'Turkey Run' },
-  { id: 'henge', label: 'Cat wizard at the henge' },
+  { id: 'henge', label: 'White witch at the henge' },
   { id: 'meadow', label: 'Fox and wisp' },
   { id: 'fishing', label: 'Fishing for the moon' },
 ]

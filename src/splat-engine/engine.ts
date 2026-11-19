@@ -22,6 +22,7 @@ import { RadixSort } from './radix.ts'
 
 /** Either depth sort: the counting sort over bins, or the full radix sort. */
 type Sorter = DepthSort | RadixSort
+import { DISSOLVE_ASIDE, DISSOLVE_SOFT, DISSOLVE_TURN, DISSOLVE_WAY, dissolved } from './dissolve.ts'
 import { detailFor, lodRank, screenRadius, type DetailRule } from './lod.ts'
 import { CLEAN_MARGIN, MAX_EDITS, blobReach, editAt, type ShapeEdit } from './edit.ts'
 import { applyMorphs, shares, type Morph } from './morph.ts'
@@ -668,6 +669,9 @@ export class SplatWorld extends Mesh {
         data.set(sk.matrix.subarray(b * 16, b * 16 + 16), g * 20)
         // the matrix's bottom row is never read: its first slot carries the actor's share dropped (lod.ts)
         data[g * 20 + 3] = this.drop[a]
+        // and its next two, how far the bone's blobs have dissolved and how far they drift (dissolve.ts)
+        data[g * 20 + 7] = sk.gone[b]
+        data[g * 20 + 11] = sk.lift[b]
         data.set(sk.quat.subarray(b * 4, b * 4 + 4), g * 20 + 16)
       }
     }
@@ -968,8 +972,13 @@ export class SplatWorld extends Mesh {
           this.buf.grads[a] ?? undefined, k * GRAD_STRIDE,
         )
         center[i * 4 + 3] = 1
+        // dissolving, as the GPU does it: smaller, and drifted
+        let gone = 0, lift = 0
+        for (let j = 0; j < 4; j++) { const bn = skin.joints[k * 4 + j]; gone += w[j] * skeleton.gone[bn]; lift += w[j] * skeleton.lift[bn] }
+        const [left, dx, dy, dz] = dissolved(i, gone, lift)
+        center[i * 4] += dx; center[i * 4 + 1] += dy; center[i * 4 + 2] += dz
         // level of detail, as the GPU does it: left out (no size), or grown to cover for those that are
-        let f = lodRank(i) < drop ? 0 : 1 / Math.max(1 - drop, 1e-4)
+        let f = (lodRank(i) < drop ? 0 : 1 / Math.max(1 - drop, 1e-4)) * left * left
         // shape edits, as the GPU does them: a cut blob has no size
         if (this.edits.length && !editAt(this.edits, center.subarray(i * 4, i * 4 + 3), this.cleanCuts ? CLEAN_MARGIN * blobReach(cov, i * 6) : 0).keep) f = 0
         if (f !== 1) for (let j = 0; j < 6; j++) cov[i * 6 + j] *= f
@@ -1444,13 +1453,16 @@ function deformBlob(buf: ReturnType<typeof makeBuffers>, i: N, mode: SkinMode, M
   const c0 = vec3(0).toVar(), c1 = vec3(0).toVar(), c2 = vec3(0).toVar(), c3 = vec3(0).toVar()
   const Q = vec4(0).toVar()
   const S = float(0).toVar()
-  const drop = float(0).toVar()
+  const drop = float(0).toVar(), gone = float(0).toVar(), lift = float(0).toVar()
   const q0 = col(0, 4).toVar()
   for (let k = 0; k < 4; k++) {
     const wk = ws[k]
     const a0 = col(k, 0).xyz
     // every bone of an actor carries the same share dropped in its matrix's spare slot, so the blend is that share
     drop.addAssign(col(k, 0).w.mul(wk))
+    // and how far it has dissolved, and its drift, in the next two (dissolve.ts)
+    gone.addAssign(col(k, 1).w.mul(wk))
+    lift.addAssign(col(k, 2).w.mul(wk))
     c0.addAssign(a0.mul(wk))
     c1.addAssign(col(k, 1).xyz.mul(wk))
     c2.addAssign(col(k, 2).xyz.mul(wk))
@@ -1515,6 +1527,14 @@ function deformBlob(buf: ReturnType<typeof makeBuffers>, i: N, mode: SkinMode, M
   // level of detail (lod.ts): a blob ranked under the share dropped has no size, and is culled where it is projected;
   // the rest grow to cover for it
   const f = select(lodRankNode(i).lessThan(drop), float(0), float(1).div(max(float(1).sub(drop), 0.0001))).toVar()
+  // dissolving (dissolve.ts `dissolved` is the twin): each blob shrinks to nothing in its own turn, drifting up and a little aside
+  const turnOf = lodRankNode(uint(i).bitXor(uint(DISSOLVE_TURN))).toVar()
+  const waits = turnOf.mul(1 - DISSOLVE_SOFT)
+  const going = select(gone.greaterThan(0), smoothstep(waits, waits.add(DISSOLVE_SOFT), gone), float(0)).toVar()
+  const way = lodRankNode(uint(i).bitXor(uint(DISSOLVE_WAY))).mul(Math.PI * 2).toVar()
+  const drift = going.mul(lift).toVar()
+  world.addAssign(vec3(cos(way).mul(DISSOLVE_ASIDE), turnOf.add(0.5), sin(way).mul(DISSOLVE_ASIDE)).mul(drift))
+  f.mulAssign(float(1).sub(going).mul(float(1).sub(going)))
   // shape edits: a cut blob has no size either (with clean cuts, only one well inside the cut: the draw trims the rest)
   f.mulAssign(editsAt(buf.edits, world, buf.edits.clean.mul(CLEAN_MARGIN).mul(sqrt(max(e('x', 'x').add(e('y', 'y')).add(e('z', 'z')), 0)))).keep)
   return { world, covA: vec4(e('x', 'x'), e('x', 'y'), e('x', 'z'), e('y', 'y')).mul(f).toVar(), covB: vec4(vec2(e('y', 'z'), e('z', 'z')).mul(f), glow, 0).toVar() }
