@@ -4,10 +4,9 @@ import type { Vec3 } from '../splat-core/blobs.ts'
 import { STEADY, darkest, type PixelLook } from '../splat-core/pixel.ts'
 import type { Built } from '../splat-engine/body.ts'
 import { pickActors } from '../splat-engine/pick.ts'
-import { PlacedPoser, SIZE_RANGE, landSpec, type Placement, type SceneProject } from '../splat-engine/project.ts'
+import { PlacedPoser, SIZE_RANGE, compileProject, type Placement, type SceneProject } from '../splat-engine/project.ts'
 import type { Skeleton } from '../splat-engine/rig.ts'
 import type { Shape } from '../splat-engine/voxel.ts'
-import { groundUnder } from '../splat-engine/weather.ts'
 import { LoadingMark } from '../shared/BlobLoader.tsx'
 import { Chip, Slider, Toggle } from '../shared/ui.tsx'
 import { useFullScreen } from '../shared/Workbench.tsx'
@@ -20,6 +19,8 @@ import { ModeBar, useWorkspaceScreen, panelId, tabId, type Mode } from './sandbo
 import type { CutJob } from './creator/cut.ts'
 import { unpack, type PackedCut } from './creator/pack.ts'
 import { START_LANDS, START_SCENES, openingAsked, openingLand, openingScene, queryFor, shownOf, type Opened } from './creator/shown.ts'
+import { BLOB_ROOM, CARDS, added, cardsFound, groundOf, heightAt, landSwapped, liftOn, roomOf, whyNot } from './creator/adding.ts'
+import { libraryProp, type LibraryEntry } from './creator/library.ts'
 import { arrowWay, begin, copied, did, moved, onGround, redo, redrawn, removed, sized, stepFor, stilled, turned, undo, wrapTurn, type History } from './creator/arrange.ts'
 
 /**
@@ -27,14 +28,15 @@ import { arrowWay, begin, copied, did, moved, onGround, redo, redrawn, removed, 
  * (#335) is the sandbox's Modes layout, each piece cut in a worker and drawn as its own actor on one stage; Arrange
  * (#336) picks a prop by a tap or from the list and moves, turns, sizes, copies and deletes it, with undo. A prop is
  * cut where it stands, so while it is dragged or turned the cut it has is drawn where it is going (`redrawn`), and it
- * is cut again once let go. The library, light, style and export follow in their own issues.
+ * is cut again once let go. Props (#337) adds from the library and swaps the land. Light, style and export follow in
+ * their own issues.
  */
 
 type CreatorMode = 'scene' | 'props' | 'arrange' | 'light' | 'style' | 'export'
 
 const MODES: Mode<CreatorMode>[] = [
   { id: 'scene', name: 'Scene', note: 'Start from one of the scenes or a bare land.', icon: 'M3 5h18v14H3zM3 16l5-5 4 4 3-3 6 6' },
-  { id: 'props', name: 'Props', note: 'The library of props to add: coming next.', icon: 'M4 7l8-4 8 4-8 4zM4 7v10l8 4 8-4V7M12 11v10' },
+  { id: 'props', name: 'Props', note: 'Tap a card to set it down in the middle of the view, or drag it onto the view. A land swaps what everything stands on.', icon: 'M4 7l8-4 8 4-8 4zM4 7v10l8 4 8-4V7M12 11v10' },
   { id: 'arrange', name: 'Arrange', note: 'Tap a prop in the view, or pick one below, then move, turn and size it. Drag it along the ground to move it.', icon: 'M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3' },
   { id: 'light', name: 'Light', note: 'The sun, the sky and lamps: coming next.', icon: 'M12 4V2M12 22v-2M4 12H2M22 12h-2M5.6 5.6 4.2 4.2M19.8 19.8l-1.4-1.4M5.6 18.4l-1.4 1.4M19.8 4.2l-1.4 1.4M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10z' },
   { id: 'style', name: 'Style', note: 'Pixel art and the other looks: coming next.', icon: 'M12 3a9 9 0 1 0 0 18c1 0 1.5-.8 1.5-1.6 0-1.4-1-1.6-1-2.6 0-.8.6-1.3 1.5-1.3H16a5 5 0 0 0 5-5c0-4-4-7.5-9-7.5zM7.5 11h.01M10 7h.01M15 7h.01' },
@@ -55,6 +57,9 @@ const SETTLE_MS = 250
 const TAP = 6
 const LIFT_MOST = 0.6
 const fmt = (v: number, k = 2) => v.toFixed(k)
+/** What a library card carries when it is dragged onto the view. */
+const DRAG_TYPE = 'application/x-blobscape-prop'
+const CARD_BY_ID = new Map(CARDS.map((e) => [e.id, e]))
 
 /** How far a cut reaches from its foot along the ground, the stand-in shadow left out. */
 function reachOf(p: PackedCut, at: Placement): number {
@@ -276,16 +281,12 @@ export function SceneCreator() {
 
   // the land's still shapes, for dragging along the ground and standing a prop on it
   const landRef = project ? JSON.stringify(project.land) : ''
-  const ground = useMemo<Shape[]>(() => {
-    if (!cp) return []
-    const spec = landSpec(cp, DETAIL[0].spacing)
-    const root = spec.bones[0]?.name
-    return spec.parts.filter((p) => p.bone === root && !p.glow && (p.opacity ?? 1) >= 0.9).map((p) => p.shape)
+  const ground = useMemo<Shape[]>(() => (cp ? groundOf(cp, DETAIL[0].spacing) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [landRef])
+    [landRef])
   // off the land, a prop keeps its height
-  const groundAt = (x: number, z: number, y: number) => { const g = groundUnder(ground, x, z, y + 3, y - 3); return g <= y - 3 ? y : g }
-  const liftOf = (pl: Placement) => { const l = pl.at[1] - groundAt(pl.at[0], pl.at[2], pl.at[1]); return l < 0.015 ? 0 : l }
+  const groundAt = (x: number, z: number, y: number) => heightAt(ground, x, z, y)
+  const liftOf = (pl: Placement) => liftOn(ground, pl)
   const nameOfProp = (i: number) => shown.items[i + 1]?.name ?? 'Prop'
 
   const edit = (next: SceneProject, words: string) => {
@@ -309,7 +310,7 @@ export function SceneCreator() {
   const pick = (i: number | undefined) => {
     setPicked(i)
     setPreview(undefined)
-    if (i !== undefined) { if (mode !== 'arrange') setMode('arrange'); say(`Picked ${nameOfProp(i)}.`) }
+    if (i !== undefined) { if (mode !== 'arrange' && mode !== 'props') setMode('arrange'); say(`Picked ${nameOfProp(i)}.`) }
     else say('Nothing picked.')
   }
   const standAt = (i: number, x: number, z: number, lift: number): Vec3 => {
@@ -336,6 +337,41 @@ export function SceneCreator() {
     edit(removed(project!, i), `Deleted ${nameOfProp(i)}.`)
     setPicked(undefined)
   }
+  // --- adding from the library ----------------------------------------------
+
+  const [query, setQuery] = useState('')
+  const [refused, setRefused] = useState('')
+  const found = useMemo(() => cardsFound(query), [query])
+  const lastBlobs = useRef(0)
+  if (built) lastBlobs.current = built.reduce((n, b) => n + b.blobs.count, 0)
+  const room = cp ? roomOf(cp, lastBlobs.current, coarse ? BLOB_ROOM.phone : BLOB_ROOM.other) : undefined
+
+  /** Where a press at (x, y) on the view meets the ground; the middle of the view when left out. */
+  const groundAtView = (x?: number, y?: number): Vec3 => {
+    const r = canvas.current?.getBoundingClientRect()
+    const level = orbit.target[1]
+    const g = r ? groundFrom(x ?? r.width / 2, y ?? r.height / 2, level) : undefined
+    const [gx, , gz] = g ?? orbit.target
+    return [gx, groundAt(gx, gz, level), gz]
+  }
+  /** Sets a library prop down where (x, y) on the view meets the ground, picked and ready to drag; or swaps the land. */
+  const addEntry = (e: LibraryEntry, x?: number, y?: number) => {
+    if (!project || !cp || !room) return
+    if (e.kind === 'land') { swapLand(e); return }
+    const next = added(project, e.id, groundAtView(x, y))
+    const why = whyNot(e.name, room, roomOf(compileProject(next, libraryProp), room.blobs[0], room.blobs[1]))
+    setRefused(why ?? '')
+    if (why) { say(why); return }
+    edit(next, `Added ${e.name.toLowerCase()}. Drag it to move it, or open Arrange to turn and size it.`)
+    setPicked(next.props.length - 1)
+  }
+  const swapLand = (e: LibraryEntry) => {
+    if (!project || project.land === e.id) return
+    const to = groundOf(compileProject({ ...project, land: e.id, props: [] }, libraryProp), DETAIL[0].spacing)
+    setRefused('')
+    edit(landSwapped(project, e.id, ground, to), `Everything now stands on ${e.name.toLowerCase()}.`)
+  }
+
   const doUndo = () => { if (hist?.past.length) { setHist(undo(hist)); setPreview(undefined); setPicked((p) => (p !== undefined && p < hist.past[hist.past.length - 1].props.length ? p : undefined)); say('Undone.') } }
   const doRedo = () => { if (hist?.future.length) { setHist(redo(hist)); setPreview(undefined); setPicked((p) => (p !== undefined && p < hist.future[0].props.length ? p : undefined)); say('Redone.') } }
 
@@ -415,7 +451,7 @@ export function SceneCreator() {
     if (!offscreen || !stage) return
     ;(window as unknown as { __creator: unknown }).__creator = {
       stage, items: () => shown.items, ready: () => !!done, blobs: () => (built ? built.reduce((n, b) => n + b.blobs.count, 0) : 0),
-      props: () => project?.props ?? [], picked: () => picked, said: () => said,
+      props: () => project?.props ?? [], land: () => project?.land, picked: () => picked, said: () => said,
       // where a prop's blobs are on the view, in CSS pixels: the middle of those that stand above its foot
       screenOf: (i: number) => {
         const b = built?.[i + 1]
@@ -430,7 +466,7 @@ export function SceneCreator() {
     }
   }, [offscreen, stage, shown, built, done, project, picked, said])
 
-  const blobs = built ? built.reduce((n, b) => n + b.blobs.count, 0) : 0
+  const blobs = lastBlobs.current
   const props = project?.props.length ?? 0
   const waiting = !done && !failed
   const pickedCut = picked !== undefined ? chosen[picked + 1] : undefined
@@ -471,7 +507,7 @@ export function SceneCreator() {
             {MODES.map((m) => (
               <div key={m.id} role="tabpanel" id={panelId(base, m.id)} aria-labelledby={tabId(base, m.id)} hidden={m.id !== mode} className="space-y-4">
                 <h2 className="font-display text-xl max-lg:sr-only">{m.name}</h2>
-                {!(m.id === 'arrange' && picked !== undefined) && <p className="text-sm text-ink-muted">{m.id === 'arrange' && !project ? 'This scene opened whole, so it has no props to arrange.' : m.note}</p>}
+                {!(m.id === 'arrange' && picked !== undefined) && <p className={`text-sm text-ink-muted ${m.id === 'props' && project ? 'max-lg:hidden' : ''}`}>{m.id === 'arrange' && !project ? 'This scene opened whole, so it has no props to arrange.' : m.id === 'props' && !project ? 'This scene opened whole, so nothing can be added to it. Start from a scene that comes apart, or a bare land.' : m.note}</p>}
                 {m.id === 'scene' && (
                   <>
                     <div className="space-y-2">
@@ -511,6 +547,38 @@ export function SceneCreator() {
                       </ul>
                     </div>
                   </>
+                )}
+                {m.id === 'props' && project && room && (
+                  <div className="space-y-3" data-testid="creator-library">
+                    <p className="text-xs tabular-nums text-ink-muted" data-testid="creator-room">
+                      Room for {room.props[1] - room.props[0]} more {room.props[1] - room.props[0] === 1 ? 'prop' : 'props'} · {room.blobs[0].toLocaleString('en-US')} of {room.blobs[1].toLocaleString('en-US')} blobs
+                    </p>
+                    {refused && <p className="text-sm text-ink" data-testid="creator-refused">{refused}</p>}
+                    <input type="search" value={query} onChange={(ev) => setQuery(ev.target.value)} placeholder="Find a prop or land" aria-label="Find a prop or land" className="min-h-10 w-full rounded-full border border-rule bg-paper px-4 text-sm outline-none focus-visible:border-accent" />
+                    {!found.length && <p className="text-sm text-ink-muted">Nothing in the library matches “{query}”.</p>}
+                    {found.map((g) => (
+                      <div key={g.id}>
+                        <h3 id={`creator-group-${g.id}`} className="mb-2 text-sm font-semibold">{g.name}</h3>
+                        <ul aria-labelledby={`creator-group-${g.id}`} className="flex gap-2 overflow-x-auto overscroll-x-contain pb-1 lg:grid lg:grid-cols-2 lg:overflow-visible">
+                          {g.cards.map((e) => {
+                            const on = e.kind === 'land' && project.land === e.id
+                            return (
+                              <li key={e.id} className="w-28 flex-none lg:w-auto">
+                                <button type="button" aria-pressed={e.kind === 'land' ? on : undefined} title={e.about} draggable={!coarse && e.kind !== 'land'}
+                                  onDragStart={(ev) => { ev.dataTransfer.setData(DRAG_TYPE, e.id); ev.dataTransfer.effectAllowed = 'copy' }}
+                                  onClick={() => addEntry(e)} data-testid={`creator-card-${e.id}`}
+                                  className={`w-full cursor-pointer overflow-hidden rounded-lg border bg-paper text-left text-xs font-semibold transition-colors ${on ? 'border-accent' : 'border-rule hover:border-ink-faint'}`}>
+                                  <img src={e.picture} alt="" width={320} height={240} loading="lazy" draggable={false} className="aspect-[4/3] w-full object-cover" />
+                                  <span className="block truncate px-2 py-1">{e.name}{e.kind === 'land' && <span className="sr-only">{on ? ', the land now' : ', swap the land'}</span>}</span>
+                                </button>
+                              </li>
+                            )
+                          })}
+                        </ul>
+                      </div>
+                    ))}
+                    {picked !== undefined && <p className="text-xs text-ink-faint">{nameOfProp(picked)} is picked: drag it in the view, or open Arrange to turn and size it.</p>}
+                  </div>
                 )}
                 {m.id === 'arrange' && project && (picked === undefined || !pickedAt ? (
                   <div>
@@ -604,6 +672,15 @@ export function SceneCreator() {
                 const hit = hitProp(p.x, p.y)
                 if (hit !== picked) pick(hit)
               }
+            }}
+            onDragOver={(ev) => { if (project && ev.dataTransfer.types.includes(DRAG_TYPE)) { ev.preventDefault(); ev.dataTransfer.dropEffect = 'copy' } }}
+            onDrop={(ev) => {
+              const id = ev.dataTransfer.getData(DRAG_TYPE)
+              const e = CARD_BY_ID.get(id)
+              if (!e) return
+              ev.preventDefault()
+              const p = local(ev)
+              addEntry(e, p.x, p.y)
             }}
             onPointerCancel={(ev) => { pointers.current.delete(ev.pointerId); grab.current = null; drag.current = null; setPreview(undefined) }}
             onKeyDown={(ev) => {
