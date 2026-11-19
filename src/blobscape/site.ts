@@ -67,7 +67,7 @@ export const EXPERIMENTS = [
     tags: ['watch', 'tool'],
     needs: 'WebGPU or WebGL 2',
     published: '2026-11-18',
-    updated: '2026-11-18',
+    updated: '2026-11-19',
     body: 'A windmill, a fox and a scanned mug drawn as brush marks or pen strokes in place of soft dots. Every mark belongs to one blob, so the painting holds still as you turn it.',
   },
   {
