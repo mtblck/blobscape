@@ -34,14 +34,26 @@ export interface LibraryEntry {
   from: string
   /** Its card picture, under the site's root (`npm run props` records them). */
   picture: string
+  /** Which of Props mode's groups it is in. */
+  group: LibraryGroup
 }
+
+/** Props mode's groups, in its order: what a card is filed under. */
+export type LibraryGroup = 'buildings' | 'living' | 'small' | 'lands'
+
+export const GROUPS: { id: LibraryGroup; name: string }[] = [
+  { id: 'buildings', name: 'Buildings' },
+  { id: 'living', name: 'Creatures' },
+  { id: 'small', name: 'Plants and small things' },
+  { id: 'lands', name: 'Lands' },
+]
 
 /** One way of splitting a scene: its picks, and which of them (by pick name) and its land go in the library. */
 interface Source {
   from: string
   doc: SceneDoc
   picks: PropPick[]
-  props: { id: string; pick: string; about: string }[]
+  props: { id: string; pick: string; about: string; group?: LibraryGroup }[]
   land?: { id: string; name: string; about: string }
 }
 
@@ -49,12 +61,12 @@ const SOURCES: Source[] = [
   {
     from: 'lighthouse', doc: LIGHTHOUSE, picks: LIGHTHOUSE_PICKS,
     props: [
-      { id: 'lighthouse', pick: 'Lighthouse', about: 'A red and white lighthouse with a turning lamp that sweeps two beams of light round it' },
-      { id: 'keepers-cottage', pick: "Keeper's cottage", about: 'A white cottage with a red tiled roof, a lit window and smoke rising from its chimney' },
+      { id: 'lighthouse', pick: 'Lighthouse', about: 'A red and white lighthouse with a turning lamp that sweeps two beams of light round it', group: 'buildings' },
+      { id: 'keepers-cottage', pick: "Keeper's cottage", about: 'A white cottage with a red tiled roof, a lit window and smoke rising from its chimney', group: 'buildings' },
       { id: 'tall-pine', pick: 'Tall pine', about: 'A tall pine that sways in the wind' },
       { id: 'pine', pick: 'Pine', about: 'A pine that sways in the wind' },
       { id: 'small-pine', pick: 'Small pine', about: 'A small pine that sways in the wind' },
-      { id: 'jetty', pick: 'Jetty', about: 'A wooden jetty on posts with a lantern at its end' },
+      { id: 'jetty', pick: 'Jetty', about: 'A wooden jetty on posts with a lantern at its end', group: 'buildings' },
       { id: 'sailing-boat', pick: 'Sailing boat', about: 'A small sailing boat with a lantern, rocking on the swell' },
       { id: 'buoy', pick: 'Buoy', about: 'A red and white buoy with a light on top, nodding in the swell' },
     ],
@@ -63,22 +75,22 @@ const SOURCES: Source[] = [
   {
     from: 'windmill', doc: WINDMILL, picks: WINDMILL_PICKS,
     props: [
-      { id: 'windmill', pick: 'Windmill', about: 'A windmill whose sails turn' },
+      { id: 'windmill', pick: 'Windmill', about: 'A windmill whose sails turn', group: 'buildings' },
       { id: 'apple-tree', pick: 'Apple tree', about: 'An apple tree' },
       { id: 'big-apple-tree', pick: 'Big apple tree', about: 'A big apple tree' },
       { id: 'small-apple-tree', pick: 'Small apple tree', about: 'A small apple tree' },
-      { id: 'duck', pick: 'Duck', about: 'A duck' },
+      { id: 'duck', pick: 'Duck', about: 'A duck', group: 'living' },
       { id: 'haystack', pick: 'Haystack', about: 'A haystack' },
-      { id: 'sheep', pick: 'Sheep', about: 'A grazing sheep' },
+      { id: 'sheep', pick: 'Sheep', about: 'A grazing sheep', group: 'living' },
     ],
     land: { id: 'windmill-hill', name: 'Windmill hill', about: 'The green hill the windmill stands on, with its path and fields' },
   },
   {
     from: 'turkey', doc: TURKEY, picks: TURKEY_PICKS,
     props: [
-      { id: 'giant-turkey', pick: 'Giant turkey', about: 'A giant turkey running, kicking up dust and losing feathers' },
-      { id: 'cook', pick: 'Cook', about: 'A cook in an apron running for her life' },
-      { id: 'billboard', pick: 'Billboard', about: 'A roadside billboard on two posts' },
+      { id: 'giant-turkey', pick: 'Giant turkey', about: 'A giant turkey running, kicking up dust and losing feathers', group: 'living' },
+      { id: 'cook', pick: 'Cook', about: 'A cook in an apron running for her life', group: 'living' },
+      { id: 'billboard', pick: 'Billboard', about: 'A roadside billboard on two posts', group: 'buildings' },
       { id: 'mailbox', pick: 'Mailbox', about: 'A mailbox on a post' },
       { id: 'roadside-haystack', pick: 'Roadside haystack', about: 'A tall haystack' },
       { id: 'roadside-tree', pick: 'Roadside tree', about: 'A roadside tree' },
@@ -88,18 +100,18 @@ const SOURCES: Source[] = [
   {
     from: 'henge', doc: HENGE, picks: HENGE_PICKS,
     props: [
-      { id: 'white-witch', pick: 'White witch', about: 'A witch in a white robe and hat, holding a wand' },
+      { id: 'white-witch', pick: 'White witch', about: 'A witch in a white robe and hat, holding a wand', group: 'living' },
       { id: 'magic-circle', pick: 'Magic circle', about: 'A glowing circle of rings and a star turning on the ground, giving off blue light' },
     ],
     land: { id: 'henge-turf', name: 'Henge turf', about: 'A ring of standing stones on dark turf under the stars' },
   },
   {
     from: 'henge', doc: HENGE, picks: WITCH_IN_SPARKS_PICKS,
-    props: [{ id: 'white-witch-sparks', pick: 'White witch, coming and going', about: 'The white witch arriving in a burst of sparks, waving her wand with two flashes, and leaving again' }],
+    props: [{ id: 'white-witch-sparks', pick: 'White witch, coming and going', about: 'The white witch arriving in a burst of sparks, waving her wand with two flashes, and leaving again', group: 'living' }],
   },
   {
     from: 'dragon', doc: DRAGON, picks: LAVA_DRAGON_PICKS,
-    props: [{ id: 'lava-dragon', pick: 'Lava dragon', about: 'A red dragon with spread wings, swaying its neck and opening its jaw' }],
+    props: [{ id: 'lava-dragon', pick: 'Lava dragon', about: 'A red dragon with spread wings, swaying its neck and opening its jaw', group: 'living' }],
   },
 ]
 
@@ -131,10 +143,10 @@ const picture = (id: string) => `/props/${id}.png`
 
 /** Every entry: props, then lands, then creatures. */
 export const LIBRARY: LibraryEntry[] = [
-  ...SOURCES.flatMap((s) => s.props.map((p): LibraryEntry => ({ id: p.id, name: p.pick, about: p.about, kind: 'prop', from: s.from, picture: picture(p.id) }))),
-  ...SOURCES.filter((s) => s.land).map((s): LibraryEntry => ({ id: s.land!.id, name: s.land!.name, about: s.land!.about, kind: 'land', from: s.from, picture: picture(s.land!.id) })),
-  ...WHOLE_LANDS.map((l): LibraryEntry => ({ id: l.id, name: l.name, about: l.about, kind: 'land', from: l.from, picture: picture(l.id) })),
-  ...CREATURES.map((c): LibraryEntry => ({ id: `creature-${c.id}`, name: c.name[0].toUpperCase() + c.name.slice(1), about: c.blurb, kind: 'creature', from: 'creatures', picture: picture(`creature-${c.id}`) })),
+  ...SOURCES.flatMap((s) => s.props.map((p): LibraryEntry => ({ id: p.id, name: p.pick, about: p.about, kind: 'prop', from: s.from, picture: picture(p.id), group: p.group ?? 'small' }))),
+  ...SOURCES.filter((s) => s.land).map((s): LibraryEntry => ({ id: s.land!.id, name: s.land!.name, about: s.land!.about, kind: 'land', from: s.from, picture: picture(s.land!.id), group: 'lands' })),
+  ...WHOLE_LANDS.map((l): LibraryEntry => ({ id: l.id, name: l.name, about: l.about, kind: 'land', from: l.from, picture: picture(l.id), group: 'lands' })),
+  ...CREATURES.map((c): LibraryEntry => ({ id: `creature-${c.id}`, name: c.name[0].toUpperCase() + c.name.slice(1), about: c.blurb, kind: 'creature', from: 'creatures', picture: picture(`creature-${c.id}`), group: 'living' })),
 ]
 
 const split = new Map<Source, ReturnType<typeof splitScene>>()
