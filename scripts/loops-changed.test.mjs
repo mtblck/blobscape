@@ -6,7 +6,8 @@ import { sceneFor, scenesFor } from './loops-changed.mjs'
 
 test('a changed file names the scene it is the own file of, and shared files name none', () => {
   assert.equal(sceneFor('src/blobscape/diorama/scenes/koi.ts'), 'koi')
-  assert.equal(sceneFor('src/blobscape/diorama/scene.ts'), 'lighthouse')
+  assert.equal(sceneFor('src/blobscape/diorama/scenes/lighthouse.ts'), 'lighthouse')
+  assert.equal(sceneFor('src/blobscape/diorama/scene.ts'), undefined)
   assert.equal(sceneFor('src/blobscape/fourways/meadow/build.ts'), 'meadow')
   assert.equal(sceneFor('src/blobscape/diorama/scenes/koi.test.ts'), undefined)
   assert.equal(sceneFor('src/splat-engine/voxel.ts'), undefined)
@@ -15,7 +16,7 @@ test('a changed file names the scene it is the own file of, and shared files nam
 })
 
 test('every scene in the gallery has a file that names it', () => {
-  const own = (id) => id === 'lighthouse' ? 'src/blobscape/diorama/scene.ts' : id === 'meadow' ? 'src/blobscape/fourways/meadow/build.ts' : `src/blobscape/diorama/scenes/${id}.ts`
+  const own = (id) => id === 'meadow' ? 'src/blobscape/fourways/meadow/build.ts' : `src/blobscape/diorama/scenes/${id}.ts`
   for (const { id } of LOOPS) {
     assert.ok(existsSync(new URL(`../${own(id)}`, import.meta.url)), `${id}: no ${own(id)}`)
     assert.equal(sceneFor(own(id)), id)

@@ -52,6 +52,12 @@ export interface SceneDoc {
    * parts are much darker or lighter than its near side (a head over an open jaw) wants 0.75, as creatures use.
    */
   disc?: number
+  /**
+   * The grid it is cut on, as a share of the detail's own: 0.5 to 1, 1 when left out. A small subject in a scene of
+   * open water or sky (the lighthouse on its rock) takes a finer grid, so its bricks and windows get as many cells as
+   * a bigger subject's would. It costs blobs: 0.72 is about twice as many.
+   */
+  grid?: number
   /** Where the view starts. `swing` rocks it gently from side to side by that many degrees, once a loop. */
   camera: Orbit & { swing?: number }
   /** Things that move. The land itself needs none: parts with no bone stand still. */
@@ -371,12 +377,20 @@ export type PaintDoc =
   | { kind: 'patches'; size: number; colors: string[] }
   /** For a `blocks` shape: each letter of the model takes its color. */
   | { kind: 'key'; colors: Record<string, string> }
-  /** One paint where the surface faces up, another on the sides, another underneath. */
-  | { kind: 'faces'; top?: PaintDoc; side: PaintDoc; under?: PaintDoc }
+  /** One paint where the surface faces up, another on the sides, another underneath. `up` (0 to 1, 0.6) is how near level a face must be to count as a top or an underside: higher keeps grass off steep banks. */
+  | { kind: 'faces'; top?: PaintDoc; side: PaintDoc; under?: PaintDoc; up?: number }
   /** One paint under a height (or left of x, or behind z), another over it. */
   | { kind: 'split'; axis: 'x' | 'y' | 'z'; at: number; below: PaintDoc; above: PaintDoc }
   /** For a shape made of pieces (wall, steps, fence, arcade and the rest): each brick, block, post or stone takes one of `colors` (earlier ones commoner), and what lies between them `line`. `ordered` takes the colors in turn by the piece's number instead (a geode's rind and bands). */
   | { kind: 'pieces'; colors: string[]; line?: string; ordered?: boolean }
+  /**
+   * One paint within `within` of a shape, another further off: a pale shore where the sea meets a rock, a worn path
+   * across grass. `at` measures at that height instead of the point's own, so the shape's outline at that level is a
+   * line on the map (a path drawn as a `sweep` at height 0 marks the grass over it whatever its height).
+   */
+  | { kind: 'near'; shape: ShapeDoc; within: number; at?: number; near: PaintDoc; far: PaintDoc }
+  /** Open water seen from above: broken wave lines across z, `size` apart, in `colors` [water, crest, trough]. */
+  | { kind: 'waves'; size: number; colors: [string, string, string] }
 
 /**
  * When in the loop a move happens: [from, to] as shares of the loop (0 to 1). The move's `times` then fit between the
@@ -431,8 +445,8 @@ export interface LightDoc {
   range: number
   /** Flickers by this share of its strength, `times` per loop. */
   flicker?: { by: number; times: number }
-  /** Goes round a circle of this radius about `at`, `times` per loop. */
-  circle?: { r: number; times: number }
+  /** Goes round a circle of this radius about `at`, `times` per loop, starting `phase` (0 to 1) of the way round. */
+  circle?: { r: number; times: number; phase?: number }
   /**
    * Casts shadows, worked out once when the scene is built, so they cost nothing as it plays and flicker with it. Only
    * the first four lights can, and not one that goes round a circle. Give it to a lamp or fire out in the open: a light
@@ -614,6 +628,7 @@ export function checkScene(doc: unknown): string[] {
   if (doc.sky !== undefined) hexes(doc.sky, 'sky', 2, 2)
   opt(doc.skyReach, 'skyReach', 0.05, 1)
   opt(doc.disc, 'disc', 0.4, 1)
+  opt(doc.grid, 'grid', 0.5, 1)
   if (doc.look !== undefined) {
     if (!obj(doc.look)) bad('look', 'must be an object')
     else {
@@ -858,6 +873,7 @@ export function checkScene(doc: unknown): string[] {
         break
       case 'speckle': case 'patches': num(p.size, `${at}.size`, 0.005, REACH); hexes(p.colors, `${at}.colors`, 2, 8); break
       case 'faces':
+        opt(p.up, `${at}.up`, 0, 1)
         paint(p.side, `${at}.side`, depth + 1)
         if (p.top !== undefined) paint(p.top, `${at}.top`, depth + 1)
         if (p.under !== undefined) paint(p.under, `${at}.under`, depth + 1)
@@ -867,7 +883,12 @@ export function checkScene(doc: unknown): string[] {
         hexes(p.colors, `${at}.colors`, 1, 8); if (p.line !== undefined) hex(p.line, `${at}.line`)
         if (p.ordered !== undefined && typeof p.ordered !== 'boolean') bad(`${at}.ordered`, 'must be true or false')
         break
-      default: bad(`${at}.kind`, `${show(p.kind)} is not a paint (bands, bricks, hex, speckle, patches, faces, split, key, pieces)`)
+      case 'near':
+        shape(p.shape, `${at}.shape`, depth + 1); num(p.within, `${at}.within`, 0, REACH); opt(p.at, `${at}.at`, -REACH, REACH)
+        paint(p.near, `${at}.near`, depth + 1); paint(p.far, `${at}.far`, depth + 1)
+        break
+      case 'waves': num(p.size, `${at}.size`, 0.02, REACH); hexes(p.colors, `${at}.colors`, 3, 3); break
+      default: bad(`${at}.kind`, `${show(p.kind)} is not a paint (bands, bricks, hex, speckle, patches, faces, split, near, waves, key, pieces)`)
     }
   }
   if (!Array.isArray(doc.parts) || !doc.parts.length || doc.parts.length > MAX_PARTS) bad('parts', `must be a list of 1 to ${MAX_PARTS} parts`)
@@ -974,7 +995,7 @@ export function checkScene(doc: unknown): string[] {
       if (l.clear !== undefined) num(l.clear, `${at}.clear`, 0.01, 1)
       if (l.circle !== undefined) {
         if (!obj(l.circle)) bad(`${at}.circle`, 'must be an object')
-        else { num(l.circle.r, `${at}.circle.r`, 0, REACH); whole(l.circle.times, `${at}.circle.times`) }
+        else { num(l.circle.r, `${at}.circle.r`, 0, REACH); whole(l.circle.times, `${at}.circle.times`); opt(l.circle.phase, `${at}.circle.phase`, -1, 1) }
       }
     })
   }
@@ -1212,11 +1233,26 @@ function toPaint(p: PaintDoc, cell: number, letterAt?: (p: Vec3, n: Vec3) => str
     }
     case 'faces': {
       const side = toPaint(p.side, cell, letterAt, pieceAt), top = p.top === undefined ? side : toPaint(p.top, cell, letterAt, pieceAt), under = p.under === undefined ? side : toPaint(p.under, cell, letterAt, pieceAt)
-      return (q, n) => (n[1] > 0.6 ? top : n[1] < -0.6 ? under : side)(q, n)
+      const up = p.up ?? 0.6
+      return (q, n) => (n[1] > up ? top : n[1] < -up ? under : side)(q, n)
     }
     case 'split': {
       const below = toPaint(p.below, cell, letterAt, pieceAt), above = toPaint(p.above, cell, letterAt, pieceAt), i = IDX[p.axis]
       return (q, n) => (q[i] < p.at ? below : above)(q, n)
+    }
+    case 'near': {
+      const near = toPaint(p.near, cell, letterAt, pieceAt), far = toPaint(p.far, cell, letterAt, pieceAt), sh = toShape(p.shape, 0)
+      return (q, n) => (sh.sdf(q[0], p.at ?? q[1], q[2]) < p.within ? near : far)(q, n)
+    }
+    case 'waves': {
+      const [water, crest, trough] = p.colors.map(unit), k = (2 * Math.PI) / p.size, m = p.size / ((2 * Math.PI) / 40)
+      // a crest a cell or two thick whatever the grid, broken into runs
+      const top = Math.cos(Math.min(0.9, 20 * cell * (0.157 / p.size)))
+      return (q) => {
+        const line = Math.sin(q[2] * k + Math.sin((q[0] * 5) / m) * 2.2)
+        const run = hash(Math.floor((q[0] * 3 + q[2] * 9) / m), Math.floor((q[2] * 6.4) / m), 4)
+        return line > top && run > 0.5 ? crest : line < -0.8 && run < 0.6 ? trough : water
+      }
     }
   }
 }
@@ -1603,7 +1639,8 @@ export function compileScene(doc: SceneDoc, { puffs = true }: { puffs?: boolean 
     },
     steps: doc.look?.steps ?? false,
     touching: doc.parts.map((p, i) => (p.touches ? i : -1)).filter((i) => i >= 0),
-    spec(spacing, steps) {
+    spec(detail, steps) {
+      const spacing = detail * (doc.grid ?? 1)
       const thin = spacing * 0.75
       const shapes = solidShapes(thin).out
       const parts: VoxelPart[] = doc.parts.map((p, i) => {
@@ -1686,7 +1723,7 @@ export function compileScene(doc: SceneDoc, { puffs = true }: { puffs?: boolean 
         // two flickers out of step, so it doesn't beat like a clock, but still loops
         const on = l.during ? sprouted(duringAt(u, l.during) % 1, 0.2, 0.2) : 1
         const k = on * l.strength * (l.flicker ? 1 + l.flicker.by * (0.6 * Math.sin(u * l.flicker.times * TAU) + 0.4 * Math.sin(u * l.flicker.times * 3 * TAU + 1.3)) : 1)
-        const a = l.circle ? u * l.circle.times * TAU : 0, r = l.circle?.r ?? 0
+        const a = l.circle ? (u * l.circle.times + (l.circle.phase ?? 0)) * TAU : 0, r = l.circle?.r ?? 0
         return { position: [l.at[0] + Math.cos(a) * r, l.at[1], l.at[2] - Math.sin(a) * r], color: [linear(c[0]) * k, linear(c[1]) * k, linear(c[2]) * k], range: l.range }
       })
     },

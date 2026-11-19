@@ -1,7 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { DIORAMAS } from './scenes.ts'
-import { DETAIL, FINER } from './scene.ts'
+import { DETAIL } from './scene.ts'
+import { LIGHTHOUSE } from './scenes/lighthouse.ts'
 import { CAMPFIRE } from './scenes/campfire.ts'
 import { BEE } from './scenes/bee.ts'
 import { DRAGON } from './scenes/dragon.ts'
@@ -13,7 +14,7 @@ import { MAX_PALETTE_SIZE } from '../../splat-core/pixel.ts'
 import { MAX_MUD, MIN_VALUE_RANGE, loopSnaps, partClashes, valuesOf } from '../../splat-engine/sceneChecks.ts'
 
 test('the described scenes are sound, and are data alone', () => {
-  for (const doc of [BEE, CAMPFIRE, DRAGON, HAND, REEF, WINDMILL]) {
+  for (const doc of [BEE, CAMPFIRE, DRAGON, HAND, REEF, WINDMILL, LIGHTHOUSE]) {
     assert.deepEqual(checkScene(doc), [], doc.name)
     // nothing but what a .json file could hold
     assert.deepEqual(JSON.parse(JSON.stringify(doc)), doc, doc.name)
@@ -37,7 +38,7 @@ test('every scene builds at every detail with all of its parts, reads in graysca
     assert.ok(v.mud <= MAX_MUD, `${d.id}: ${Math.round(v.mud * 100)}% gray mud`)
     assert.deepEqual(loopSnaps(sk, d.pose, d.loop), [], `${d.id}: snaps`)
     // and no part turns or swings through another (the lighthouse is cut on a finer grid)
-    const clashes = partClashes(built, d.pose, d.loop, DETAIL[0].spacing * (d.id === 'lighthouse' ? FINER : 1))
+    const clashes = partClashes(built, d.pose, d.loop, DETAIL[0].spacing * (d.id === 'lighthouse' ? LIGHTHOUSE.grid! : 1))
       .filter((c) => !d.touching?.includes(c.part) && !d.touching?.includes(c.into))
     assert.deepEqual(clashes, [], `${d.id}: parts pass through each other`)
     const [l0, l1] = [d.lights(0.9), d.lights(0.9 + d.loop)]
