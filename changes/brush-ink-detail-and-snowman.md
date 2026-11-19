@@ -1,0 +1,2 @@
+- Brush and Ink has a Detail choice in its Subject tab (Light, Full, Fine), kept in the address like the others (`?detail=fine`): more blobs make finer marks.
+- Seasonal Bouquets: the ceramic snowman's coal mouth and buttons sit on its surface instead of sinking into it, and its hat no longer shows through its head from low down.

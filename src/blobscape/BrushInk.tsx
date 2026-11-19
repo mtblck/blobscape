@@ -8,6 +8,7 @@ import type { Skeleton } from '../splat-engine/rig.ts'
 import { ZOO } from '../splat-engine/zoo/index.ts'
 import { LoadingMark } from '../shared/BlobLoader.tsx'
 import { Button, Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
+import { detailAsked, labelNames, writeDetail } from '../shared/detail.ts'
 import { TAB_SECTIONS, Workbench } from '../shared/Workbench.tsx'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
 import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitDrag } from './Viewport.tsx'
@@ -31,6 +32,14 @@ type Look = LookId | typeof CEL.id
 const ALL_LOOKS: { id: Look; label: string; note: string }[] = [...LOOKS.slice(0, -1), CEL, LOOKS[LOOKS.length - 1]]
 
 /** What is on show: how to build it, and how it moves. */
+/**
+ * How finely a subject is cut (Matt asked for the choice, 2026-11-19): a scene's first three levels of Pixel
+ * Diorama's, the fox's lightest, starting and finest counts, the scan's share of its blobs. A touchscreen starts on
+ * Light and anything else on Full, as before there was a choice.
+ */
+const DETAILS = [{ id: 'light', label: 'Light' }, { id: 'full', label: 'Full' }, { id: 'fine', label: 'Fine' }] as const
+type Detail = 0 | 1 | 2
+
 interface Subject {
   id: string
   label: string
@@ -41,14 +50,14 @@ interface Subject {
   /** A scan: its marks are laid softly, one over another (`MarkLook.soft`). */
   soft?: boolean
   /** `plain` leaves the baked light out of what is built (`unlit`), for a look that lights it live. */
-  make(coarse: boolean, plain: boolean): { actor: Actor; pose?: (sk: Skeleton, t: number) => void; lights?: (t: number) => PointLight[]; ambient?: Parameters<CreatureStage['setLights']>[1]; clip?: ReturnType<typeof recordClip> }
+  make(detail: Detail, plain: boolean): { actor: Actor; pose?: (sk: Skeleton, t: number) => void; lights?: (t: number) => PointLight[]; ambient?: Parameters<CreatureStage['setLights']>[1]; clip?: ReturnType<typeof recordClip> }
 }
 
 function scene(id: string, label: string): Subject {
   const d = DIORAMAS.find((x) => x.id === id) ?? DIORAMAS[0]
   return {
     id, label, about: d.about, from: 'a scene written as data', orbit: d.views[0].orbit,
-    make: (coarse, plain) => ({ actor: plain ? unlit(() => d.make(DETAIL[coarse ? 0 : 1].spacing)) : d.make(DETAIL[coarse ? 0 : 1].spacing), pose: d.pose, lights: d.lights, ambient: d.ambient }),
+    make: (detail, plain) => ({ actor: plain ? unlit(() => d.make(DETAIL[detail].spacing)) : d.make(DETAIL[detail].spacing), pose: d.pose, lights: d.lights, ambient: d.ambient }),
   }
 }
 
@@ -60,8 +69,8 @@ const SUBJECTS: Subject[] = [
   scene('meadow', 'Fox in the grass'),
   {
     id: 'fox', label: 'Fox', about: 'A fox with a coat of fur, trotting on the spot', from: 'a creature on bones', orbit: FOX.view,
-    make: (coarse, plain) => {
-      const cut = () => FOX.make(coarse ? FOX.detail[0] : FOX.start, FOX.looks[0].id)
+    make: (detail, plain) => {
+      const cut = () => FOX.make([FOX.detail[0], FOX.start, FOX.detail[FOX.detail.length - 1]][detail], FOX.looks[0].id)
       const actor = plain ? unlit(cut) : cut()
       const m = FOX.moves[0]
       return { actor, clip: recordClip(m.name, actor.skeleton, m.pose, m.seconds, m.fps ?? 24) }
@@ -70,8 +79,8 @@ const SUBJECTS: Subject[] = [
   {
     id: 'mug', soft: true, label: 'Scanned mug', about: 'A mug, as a phone scan of one would be, with its table cut away', from: 'a made-up phone scan',
     orbit: { target: [0, 0.75, 0], distance: 4.6, azimuth: 35, elevation: 18 },
-    make: (coarse) => {
-      const raw = sampleScan(7, coarse ? 0.6 : 1, 0.12).blobs
+    make: (detail) => {
+      const raw = sampleScan(7, [0.6, 1, 1.5][detail], 0.12).blobs
       const work = working(raw, autoOrient(raw) ?? UNTURNED).blobs
       return { actor: stillActor(finish(work, cleanMasks(work, DEFAULT_CLEAN).all)) }
     },
@@ -99,6 +108,7 @@ export function BrushInk() {
   const calm = useMemo(() => media('(prefers-reduced-motion: reduce)'), [])
   const [playing, setPlaying] = useState(!calm)
   const [subject, setSubject] = useState(() => SUBJECTS.find((s) => s.id === params().get('subject'))?.id ?? SUBJECTS[0].id)
+  const [detail, setDetail] = useState<Detail>(() => { const asked = detailAsked(DETAILS, labelNames); return asked ? (DETAILS.indexOf(asked) as Detail) : coarse ? 0 : 1 })
   const [look, setLook] = useState<Look>(() => ALL_LOOKS.find((l) => l.id === params().get('look'))?.id ?? 'gouache')
   const [cel, setCel] = useState<CelChoice>(() => {
     const q = params(), n = (k: string, d: number) => (q.get(k) !== null && Number.isFinite(Number(q.get(k))) ? Number(q.get(k)) : d)
@@ -144,7 +154,7 @@ export function BrushInk() {
     setBuilt(undefined)
     const s = SUBJECTS.find((x) => x.id === subject)!
     const t = setTimeout(() => {
-      const made = s.make(coarse, plain)
+      const made = s.make(detail, plain)
       stage.setActor(made.actor, made.clip)
       shown.current = made.actor
       if (made.pose) stage.setPoser((sk, time) => { made.pose!(sk, time); stage.setLights(made.lights?.(time) ?? [], made.ambient ?? 1) })
@@ -155,7 +165,7 @@ export function BrushInk() {
       setBuilt({ id: s.id, plain, count: made.actor.blobs.count })
     }, 30)
     return () => clearTimeout(t)
-  }, [stage, subject, coarse, plain])
+  }, [stage, subject, detail, plain])
 
   const sheet = PAPERS.find((p) => p.id === paper)!
   const marks = useMemo<MarkLook | undefined>(() => (look !== 'cel' && isMark(look) ? { kind: look, size, ink: sheet.ink, paper: sheet.paper, soft: sub.soft } : undefined), [look, size, sheet, sub.soft])
@@ -353,6 +363,12 @@ export function BrushInk() {
                     {SUBJECTS.map((s) => <Chip key={s.id} active={subject === s.id} onClick={() => setSubject(s.id)}>{s.label}</Chip>)}
                   </div>
                   <p className="mt-1.5 text-xs text-ink-faint">Three scenes from Pixel Diorama, a creature on bones and a scan: the marks need nothing but the blobs.</p>
+                </Field>
+                <Field label="Detail">
+                  <div className="flex flex-wrap gap-1.5" data-testid="brush-detail">
+                    {DETAILS.map((d, i) => <Chip key={d.id} active={detail === i} onClick={() => { setDetail(i as Detail); writeDetail(d.id) }}>{d.label}</Chip>)}
+                  </div>
+                  <p className="mt-1.5 text-xs text-ink-faint">More blobs make finer marks and take longer to cut.</p>
                 </Field>
                 <div className="flex flex-wrap gap-1.5">
                   <Button small onClick={() => setPlaying((p) => !p)}>{playing ? 'Stop' : 'Play'}</Button>
