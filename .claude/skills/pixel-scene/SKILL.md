@@ -40,7 +40,7 @@ The same file opens on the site itself: Pixel Diorama, Scene tab, Open a file. T
 1. Save it as `src/blobscape/diorama/scenes/<id>.ts`, exporting the object typed `SceneDoc`, with a comment on top saying what is in the picture.
 2. Add it to `DIORAMAS` in `src/blobscape/diorama/scenes.ts` with `described(id, DOC, 'what is in the picture')`.
 3. Record its loop (`scripts/record-loops.mjs`, see CLAUDE.md) and list it in `diorama/loops.ts`; `loops.test.ts` fails until both exist.
-4. `npm test`, then `npm run check`. Add a line to `CHANGELOG.md` under `[Unreleased]`.
+4. `npm test`, then `npm run check`. Add a file to `changes/` with a line for the changelog (`changes/README.md`).
 
 ## When the description can't say it
 

@@ -1,8 +1,9 @@
 # Changelog
 
 What changed on blobscape.dev, newest first. Releases follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-Add entries under [Unreleased] as work lands; `npm run release -- x.y.z` moves them under a new version, and
-merging that PR makes the tag and the GitHub release (see docs/releasing.md).
+Each change waiting for a release is a small file of its own in [changes/](changes/), not a line here, so two pull
+requests never edit the same lines; `npm run release -- x.y.z` joins them under a new version, and merging that PR
+makes the tag and the GitHub release (see docs/releasing.md).
 
 ## [Unreleased]
 
