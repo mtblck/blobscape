@@ -141,7 +141,7 @@ export function PixelDiorama() {
   // pixel art moves in few, clear steps, so it has no 30
   const rates = pixels ? EXPORT_RATES.slice(0, 2) : EXPORT_RATES
   const recordFps = rates.includes(fpsPicked) ? fpsPicked : rates[rates.length - 1]
-  /** The view an export holds: as it stood when the button was pressed, whatever is turned, zoomed or rocked meanwhile. */
+  /** The view an export holds: as it stood when the button was pressed, whatever is turned or zoomed meanwhile (it still rocks about it when Rock the view is on). */
   const held = useRef<Orbit | undefined>(undefined)
 
   // built after a paint, so the waiting mark shows first
@@ -247,9 +247,11 @@ export function PixelDiorama() {
       stage.setLights(castBy(d.lights(t, stage.backend === 'webgpu'), glowGain(glowNow.current, d.finish.glow)), d.ambientAt?.(t) ?? d.ambient ?? 1)
       // a scene whose sky turns as it plays (day to night) hands the pixel pass each moment's sky
       skyNow.current?.(d, t)
-      // a scene that asks for it rocks the view gently as it plays, about wherever the view has been turned to
-      if (held.current) stage.orbit = held.current
-      else if (d.swing && !calm && rock) stage.orbit = swung(orbitNow.current, d.swing, d.loop, t)
+      // a scene that asks for it rocks the view gently as it plays, about wherever the view has been turned to;
+      // an export holds the view it was started from, and rocks about it when the switch is on (once a loop, so it still joins)
+      const about = held.current ?? orbitNow.current
+      if (d.swing && !calm && rock) stage.orbit = swung(about, d.swing, d.loop, t)
+      else if (held.current) stage.orbit = held.current
       wet.current?.()
     }, from)
   }, [stage, scene, calm, rock, mirrored])
@@ -376,8 +378,8 @@ export function PixelDiorama() {
   /**
    * Exports one whole loop in the style and settings on show, stepped frame by frame from the time so it joins up end
    * to end and no frame is dropped, as a lossless animated PNG or an MP4. The view is held as it stands when this is
-   * called: no rocking, and turning or zooming while it runs changes nothing. Pixel art saves the art itself, each
-   * pixel a whole square; the other styles save the view's own picture.
+   * called: it rocks only if Rock the view is on, and turning or zooming while it runs changes nothing. Pixel art saves
+   * the art itself, each pixel a whole square; the other styles save the view's own picture.
    */
   const record = async () => {
     if (!stage || recording !== null) return
@@ -626,7 +628,7 @@ export function PixelDiorama() {
                 <Button small disabled={cantExport} onClick={save}>{saving ? 'Saving…' : 'Save this frame'}</Button>
               </div>
               <p role="status" className="text-xs text-ink-faint empty:hidden">{exportNote}</p>
-              <p className="text-xs text-ink-faint">Uses the view as it is when you press the button. It doesn't rock, and turning or zooming while it runs changes nothing.</p>
+              <p className="text-xs text-ink-faint">Uses the view as it is when you press the button. It rocks only if Rock the view is on in the Finish tab, and turning or zooming while it runs changes nothing.</p>
             </div>
           </ViewPopup>
         }
@@ -807,7 +809,7 @@ export function PixelDiorama() {
                   <Button small disabled={cantExport} onClick={save}>{saving ? 'Saving…' : 'Save this frame'}</Button>
                 </div>
                 <p role="status" className="text-xs text-ink-faint empty:-mt-2">{exportNote}</p>
-                <p className="text-xs text-ink-faint">The loop is exported from the view as it is when you press the button. It doesn't rock, and turning or zooming while it runs changes nothing. For a clip of whatever you do on the page, use the record button on the view.</p>
+                <p className="text-xs text-ink-faint">The loop is exported from the view as it is when you press the button. It rocks only if Rock the view is on in the Finish tab, and turning or zooming while it runs changes nothing. For a clip of whatever you do on the page, use the record button on the view.</p>
                 </div>
               </div>
             ),
