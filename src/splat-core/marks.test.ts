@@ -100,3 +100,11 @@ test('flat blobs lying in one plane are at one depth wherever they overlap, howe
   // the lift that settles which of two is on top is far smaller than a blob, so it never reaches another surface
   assert.ok(MARK_LIFT > 0 && MARK_LIFT < 0.5 && MARK_CUT > 0 && MARK_CUT < 1)
 })
+
+test('a flat mark is the whole disc in the blob\'s own color, whatever its seed or size', () => {
+  for (const seed of [0.1, 0.9]) for (const size of [0.5, 1.3]) {
+    const mid = markAt('flat', 0.4, -0.3, seed, [0.3, 0.2, 0.1], size), out = markAt('flat', 1.6, 1.4, seed, [0.3, 0.2, 0.1], size)
+    assert.deepEqual(mid, { cover: 1, color: [0.3, 0.2, 0.1] })
+    assert.equal(out.cover, 0)
+  }
+})

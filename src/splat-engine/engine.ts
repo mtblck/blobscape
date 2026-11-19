@@ -24,10 +24,11 @@ type Sorter = DepthSort | RadixSort
 import { detailFor, lodRank, screenRadius, type DetailRule } from './lod.ts'
 import { CLEAN_MARGIN, MAX_EDITS, blobReach, editAt, type ShapeEdit } from './edit.ts'
 import { applyMorphs, shares, type Morph } from './morph.ts'
+import { FLAT_FULL, FLAT_NONE } from './light.ts'
 import { LIFT, MAX_MARCH, OCC_SCALE, REACH, SHADOW_CELLS, SHADOW_DENSITY, SPREAD, SUN_MARCH, blobSigma, occupancy, steadyBox, type ShadowBox } from './shadow.ts'
 import { linearToSrgb, srgbToLinear } from '../splat-core/color.ts'
 import { viewColor } from '../splat-core/sh.ts'
-import { INK, MARK_CUT, MARK_KINDS, MARK_LIFT, MARK_LONG, MARK_MOST, MARK_SOLID, MARK_WIDE, PAPER, SHADE_FROM, SHADE_FULL, WASH_LEAST, WASH_MOST, type MarkLook } from '../splat-core/marks.ts'
+import { FLAT_CUT, INK, MARK_CUT, MARK_KINDS, MARK_LIFT, MARK_LONG, MARK_MOST, MARK_SOLID, MARK_WIDE, PAPER, SHADE_FROM, SHADE_FULL, WASH_LEAST, WASH_MOST, type MarkLook } from '../splat-core/marks.ts'
 
 /**
  * Blobscape's splat engine: one mesh that draws every blob of every object in a
@@ -193,6 +194,43 @@ export class SplatWorld extends Mesh {
    */
   get depthMap() { return this.flat.value === 2 }
   set depthMap(on: boolean) { this.flat.value = on ? 2 : 0 }
+  private readonly depthBase = uniform(0)
+  /**
+   * A depth map's depths are counted from this far in front of the camera (0 unless set): a map drawn from far off,
+   * as a light's view of the scene is, keeps its half floats for the scene's own depth, not the way to it.
+   */
+  get depthFrom() { return this.depthBase.value as number }
+  set depthFrom(d: number) { this.depthBase.value = d }
+  private readonly depthSlope = uniform(0)
+  /**
+   * While true, a depth map gives each pixel of a blob its own depth, along the blob's slope to the line of sight (a
+   * flat blob's own plane), where it otherwise gives the whole disc the depth of its middle. For a pass that works out
+   * where each pixel is in the world, as cel shading's shadows do.
+   */
+  get depthSloped() { return this.depthSlope.value === 1 }
+  set depthSloped(on: boolean) { this.depthSlope.value = on ? 1 : 0 }
+  /** Whether the blobs must be moved before they are next drawn: bones posed, or blobs changed, since the last draw. */
+  get stale() { return this.bonesDirty || !this.posed }
+  /** How many times the blobs have been moved: it goes up with each draw that found the world `stale`. */
+  poses = 0
+  /**
+   * While true, the draw is a map of tones, for cel shading (`cel`): every blob a hard disc whose red is how it faces
+   * the first light (0 away, 0.5 edge on, 1 toward), green the share of that light that reaches it past what stands
+   * in the way, and blue how flat it is (how far its facing can be trusted). `CelPass` (celPass.ts) draws it.
+   */
+  get tones() { return this.flat.value === 3 }
+  set tones(on: boolean) { this.flat.value = on ? 3 : 0 }
+  /**
+   * Cel shading, in a world with `lights`: while true the lights no longer change the blobs' colors (each is drawn in
+   * its own), and each blob's tone under the first light is worked out in their place, for the map of tones
+   * (`tones`). The tone takes the side of a blob the camera sees for its outside, so it is redone as the view moves.
+   */
+  get cel() { return this.lighting?.cel.value === 1 }
+  set cel(on: boolean) {
+    if (!this.lighting || this.cel === on) return
+    this.lighting.cel.value = on ? 1 : 0
+    this.lightsDirty = true
+  }
 
   private readonly boneOffset: number[]
   /** Per actor, the share of its blobs left out (0: all drawn). Sent to the GPU in each of its bones' spare matrix slot. */
@@ -604,9 +642,9 @@ export class SplatWorld extends Mesh {
       // the WebGL vertex shader reads the grid of shadows as a texture, like the other buffers
       if (this.lighting) (this.lighting.grid as { setPBO: (b: boolean) => void }).setPBO(true)
       if (this.sh) (this.sh.data as { setPBO: (b: boolean) => void }).setPBO(true)
-      material.vertexNode = makeVertexWebGL(this.buf, this.sort, this.mode, this.fog, this.flat, this.cam.clip, this.lighting, this.sh, this.clean) as never
+      material.vertexNode = makeVertexWebGL(this.buf, this.sort, this.mode, this.fog, { mode: this.flat, base: this.depthBase, slope: this.depthSlope }, this.cam.clip, this.lighting, this.sh, this.clean) as never
     } else {
-      material.vertexNode = makeVertexWebGPU(this.buf, this.sort, this.fog, this.flat, this.lighting, this.clean) as never
+      material.vertexNode = makeVertexWebGPU(this.buf, this.sort, this.fog, { mode: this.flat, base: this.depthBase, slope: this.depthSlope }, this.lighting, this.clean) as never
     }
     material.needsUpdate = true
     this.builtFor = key
@@ -671,6 +709,7 @@ export class SplatWorld extends Mesh {
     this.cam.viewport.value.copy(this.size)
     this.cam.depthRange.value.set(near, far)
     if (this.sh) this.sh.eye.value.setFromMatrixPosition(camera.matrixWorld)
+    if (this.lighting) this.lighting.eye.value.setFromMatrixPosition(camera.matrixWorld)
     const k = this.cam.clip.value
     return `${e.join(',')}|${camera.projectionMatrix.elements.join(',')}|${this.size.x}x${this.size.y}|${k.x},${k.y},${k.z},${k.w}`
   }
@@ -682,6 +721,7 @@ export class SplatWorld extends Mesh {
     this.build(webgl)
     let deformed = this.bonesDirty || !this.posed
     if (deformed) {
+      this.poses++
       this.uploadBones()
       this.updateBounds()
     }
@@ -714,11 +754,11 @@ export class SplatWorld extends Mesh {
       }
       // lights move on their own: the lit colors are redone whenever they or the blobs moved
       // and with color by angle, whenever the view moved
-      const changed = deformed || this.lightsDirty || (this.sh && key !== this.lastSortKey)
+      const changed = deformed || this.lightsDirty || ((this.sh || this.cel) && key !== this.lastSortKey)
       if (this.lightNode && (changed || this.easeLeft > 0)) {
         // eased light: each pass goes a share of the way from the colors the last pass left, for a few passes after the
         // last change; the first pass after the blobs were packed has nothing to ease from
-        const frames = this.sh ? 0 : this.lightEase
+        const frames = this.sh || this.cel ? 0 : this.lightEase
         this.easeLeft = changed && frames > 1 ? Math.ceil(frames * 5) : Math.max(0, this.easeLeft - 1)
         this.lighting!.ease.value = frames > 1 && this.eased ? 1 / frames : 1
         this.eased = true
@@ -737,8 +777,21 @@ export class SplatWorld extends Mesh {
 
   /** Lays the grid of shadows over the world's bounds as they are this frame, on the lattice the last frame's lay on (`steadyBox`). */
   private placeShadowBox() {
+    const { lo, hi } = this.posedBox()
+    const b = this.shadowAt = steadyBox(lo, hi, this.shadowAt)
+    const L = this.lighting!
+    L.box.value.set(b.origin[0], b.origin[1], b.origin[2], b.cell)
+    L.dims.value.set(b.dims[0], b.dims[1], b.dims[2])
+    return b
+  }
+
+  /**
+   * The box that holds every blob as the bones stand now, in the world: closer than `bounds`, which is a ball round
+   * the bones' reaches. What a light's view of the scene is fitted to.
+   */
+  posedBox(): { lo: [number, number, number]; hi: [number, number, number] } {
     // each bone's box at rest, carried by its matrix: the middle moves, the half sizes go through |M|
-    const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity]
+    const lo: [number, number, number] = [Infinity, Infinity, Infinity], hi: [number, number, number] = [-Infinity, -Infinity, -Infinity]
     for (let a = 0; a < this.actors.length; a++) {
       const sk = this.actors[a].skeleton, m = sk.matrix
       for (let b = 0; b < sk.count; b++) {
@@ -755,11 +808,7 @@ export class SplatWorld extends Mesh {
       }
     }
     if (!(lo[0] <= hi[0])) { lo.fill(-1); hi.fill(1) }
-    const b = this.shadowAt = steadyBox(lo, hi, this.shadowAt)
-    const L = this.lighting!
-    L.box.value.set(b.origin[0], b.origin[1], b.origin[2], b.cell)
-    L.dims.value.set(b.dims[0], b.dims[1], b.dims[2])
-    return b
+    return { lo, hi }
   }
 
   /** WebGL: the grid of shadows built on the CPU from the moved centers and each blob's reach at rest (`shadow.ts`). */
@@ -1569,7 +1618,7 @@ function makeProject(buf: ReturnType<typeof makeBuffers>, sort: Sorter, cam: Cam
 
 interface Fog { color: N; range: N }
 
-interface Lighting { pos: N; col: N; ambient: N; count: N; density: N; ease: N; emit: N; attr: StorageBufferAttribute; litW: N; lit: N; gridAttr: StorageBufferAttribute; gridW: N; grid: N; box: N; dims: N }
+interface Lighting { cel: N; eye: N; pos: N; col: N; ambient: N; count: N; density: N; ease: N; emit: N; attr: StorageBufferAttribute; litW: N; lit: N; gridAttr: StorageBufferAttribute; gridW: N; grid: N; box: N; dims: N }
 
 function makeLighting(n: number): Lighting {
   // written only by the GPU, so no copy of it on the CPU
@@ -1587,6 +1636,9 @@ function makeLighting(n: number): Lighting {
     pos: uniformArray(Array.from({ length: MAX_LIGHTS }, () => new Vector4(0, 0, 0, 1)), 'vec4'),
     col: uniformArray(Array.from({ length: MAX_LIGHTS }, () => new Vector4()), 'vec4'),
     ambient: uniform(new Vector3(1, 1, 1)),
+    // cel shading (`SplatWorld.cel`): the blobs keep their own colors and carry their tone beside them; and where the camera is
+    cel: uniform(0),
+    eye: uniform(new Vector3()),
     // how dark a cell's occupancy makes a casting light (`EngineOptions.shadowDensity`)
     density: uniform(SHADOW_DENSITY),
     // the share of the way each light pass takes from the last pass's colors to this one's (`SplatWorld.lightEase`)
@@ -1646,6 +1698,40 @@ function lit(rgb: N, world: N, covA: N, covB: N, seen: N, L: Lighting) {
     sum.addAssign(C.xyz.mul(reach.mul(through)))
   })
   return rgb.mul(max(sum, vec3(covB.z.mul(L.emit))))
+}
+
+/** How flat a blob is, 1 for a disc and 0 for a needle or a ball. CPU twin: `flatness` in light.ts (change both). */
+function flatness(covA: N, covB: N) {
+  const a = covA.x, b = covA.y, c = covA.z, d = covA.w, e = covB.x, f = covB.y
+  const q = a.add(d).add(f).div(3).toVar()
+  const p = sqrt(max(a.sub(q).pow2().add(d.sub(q).pow2()).add(f.sub(q).pow2()).add(b.mul(b).add(c.mul(c)).add(e.mul(e)).mul(2)).div(6), 1e-30)).toVar()
+  const A = a.sub(q).div(p).toVar(), B = b.div(p).toVar(), C = c.div(p).toVar(), D = d.sub(q).div(p).toVar(), E = e.div(p).toVar(), F = f.sub(q).div(p).toVar()
+  const half = A.mul(D.mul(F).sub(E.mul(E))).sub(B.mul(B.mul(F).sub(C.mul(E)))).add(C.mul(B.mul(E).sub(C.mul(D)))).div(2)
+  const phi = TSL.acos(half.clamp(-1, 1)).div(3).toVar()
+  const most = q.add(p.mul(2).mul(cos(phi))), least = q.add(p.mul(2).mul(cos(phi.add((2 * Math.PI) / 3)))).toVar()
+  const mid = q.mul(3).sub(most).sub(least)
+  return float(1).sub(smoothstep(FLAT_FULL, FLAT_NONE, sqrt(max(least, 0).div(max(mid, 1e-30)))))
+}
+
+/**
+ * What cel shading cuts into tones, for one blob under the first light: how it faces the light (0 away, 0.5 edge on, 1
+ * toward; the side the camera sees is its outside), the share of the light that reaches it through the grid of
+ * shadows, and how flat it is (how far its facing can be trusted). A blob that gives its own light is fully lit. CPU
+ * twin: `toneAt` in light.ts, with shadow.ts's `transmittance` (change both).
+ */
+function toned(world: N, covA: N, covB: N, L: Lighting) {
+  const out = vec3(1, 1, flatness(covA, covB)).toVar()
+  If(L.count.greaterThan(0).and(covB.z.lessThan(0.5)), () => {
+    const n = blobNormal(covA, covB).toVar()
+    n.assign(select(dot(n, L.eye.sub(world)).lessThan(0), n.negate(), n))
+    const P = L.pos.element(0), C = L.col.element(0)
+    const sun = P.w.lessThan(0).toVar()
+    const to = select(sun, P.xyz.mul(SUN_FAR), P.xyz.sub(world)).toVar()
+    const d2 = dot(to, to).toVar()
+    out.x.assign(dot(n, to.mul(TSL.inverseSqrt(max(d2, 1e-6)))).mul(0.5).add(0.5))
+    If(C.w.greaterThan(0.5), () => { out.y.assign(shadowMarch(world, n, to, d2, select(sun, TSL.int(SUN_MARCH), TSL.int(MAX_MARCH)), L)) })
+  })
+  return out
 }
 
 /** Whether a cell (ivec3) is inside the grid of shadows. */
@@ -1735,9 +1821,17 @@ function makeLight(buf: ReturnType<typeof makeBuffers>, L: Lighting, viewed: boo
     // with color by angle, `makeViewColor` has just written the blob's color for this view into the same buffer
     const color = (viewed ? L.litW.element(i) : unpackUnorm4x8(buf.color.element(i))).toVar()
     const world = buf.worldCenter.element(i).xyz.toVar()
-    const now = vec4(lit(painted(color.rgb, world, buf.edits), world, buf.covA.element(i), buf.covB.element(i), buf.seen.element(i), L), color.a)
-    // with color by angle the buffer holds this view's color, not the last pass's light, so there is nothing to ease from
-    L.litW.element(i).assign(viewed ? now : mix(L.litW.element(i), now, L.ease))
+    const own = painted(color.rgb, world, buf.edits).toVar()
+    If(L.cel.greaterThan(0.5), () => {
+      // cel shading: the blob's own color, a whole byte a channel, with its tone as the fraction beside each (the draw
+      // may bind no more buffers than it does, so the tone rides in the same one)
+      const tone = toned(world, buf.covA.element(i), buf.covB.element(i), L)
+      L.litW.element(i).assign(vec4(floor(own.clamp(0, 1).mul(255).add(0.5)).add(tone.clamp(0, 1).mul(TONE_SHARE)), color.a))
+    }).Else(() => {
+      const now = vec4(lit(own, world, buf.covA.element(i), buf.covB.element(i), buf.seen.element(i), L), color.a)
+      // with color by angle the buffer holds this view's color, not the last pass's light, so there is nothing to ease from
+      L.litW.element(i).assign(viewed ? now : mix(L.litW.element(i), now, L.ease))
+    })
   })().compute(buf.count, [WORKGROUP]).setName('SplatWorldLight')
 }
 
@@ -1845,6 +1939,9 @@ function fogged(rgb: N, depth: N, fog: Fog) {
   return rgb.add(fog.color.sub(rgb).mul(f))
 }
 
+/** Cel shading packs a blob's tone beside its color as this share of the fraction, so a full tone never carries into the color. */
+const TONE_SHARE = 0.98
+
 const splatUv = () => varyingProperty('vec2', 'vSplatUv')
 const splatColor = () => varyingProperty('vec4', 'vSplatColor')
 /** The blob's own number, 0–1 (the same hash as `lodRank`): what makes its mark its own. */
@@ -1899,10 +1996,14 @@ function markOf(M: Marks, uv: N, seed: N, rgb: N) {
     const half = dark.mul(0.16).add(0.04).mul(k).mul(sqrt(reach)).mul(s.mul(0.6).add(0.7)).toVar()
     const pen = select(reach.greaterThan(0), float(1).sub(smoothstep(half.mul(0.6), half.add(0.02), abs(v))).mul(smoothstep(SHADE_FROM, SHADE_FULL, dark)), float(0))
     color.assign(mix(wash, M.ink, pen))
-  }).Else(() => {
+  }).ElseIf(M.kind.lessThan(4.5), () => {
     const line = abs(fract(abs(v).div(k.mul(0.42)).add(seed)).sub(0.5)).mul(2)
     const pen = float(1).sub(smoothstep(dark.mul(0.7), dark.mul(0.7).add(0.25), line)).mul(smoothstep(0.06, 0.2, dark))
     color.assign(mix(M.paper, M.ink, pen))
+  }).Else(() => {
+    // flat: all of the blob's disc in its own color
+    color.assign(rgb)
+    cover.assign(select(exp(dot(uv, uv).mul(-0.5)).lessThan(FLAT_CUT), float(0), float(1)))
   })
   return vec4(color, cover)
 }
@@ -1912,14 +2013,19 @@ function markOf(M: Marks, uv: N, seed: N, rgb: N) {
  * below 1/255 sooner than two standard deviations out, so its quad shrinks and
  * covers fewer pixels.
  */
-function placeQuad(ndc: N, axes: N, tilt: N, rgba: N, idx: N, cut?: { covA: N; covB: N }) {
+function placeQuad(ndc: N, axes: N, tilt: N, rgba: N, idx: N, flat: Flat, cut?: { covA: N; covB: N }) {
   const seed = lodRankNode(idx).toVar()
   splatSeed().assign(seed)
   const alpha = rgba.a
   const reach = sqrt(max(TSL.log(alpha.mul(255)).mul(2), 0)).min(2).toVar()
   const uv = positionGeometry.xy.mul(reach).toVar()
   splatUv().assign(uv)
-  splatColor().assign(rgba)
+  // how much nearer or further this corner is than the blob's middle, along the blob's own slope, and no further than the blob reaches
+  const most = tilt.z.mul(2 / MARK_LIFT)
+  const slope = tilt.x.mul(uv.x).add(tilt.y.mul(uv.y)).toVar()
+  // a sloped depth map (`depthSloped`): this corner's own depth in front of the camera, from its screen depth as in `makeVertexWebGPU`
+  const own = cameraProjectionMatrix[3].z.div(ndc.z.add(slope.clamp(most.negate(), most)).add(cameraProjectionMatrix[2].z)).sub(flat.base)
+  splatColor().assign(vec4(select(flat.mode.greaterThan(1.5).and(flat.mode.lessThan(2.5)).and(flat.slope.greaterThan(0.5)), vec3(own), rgba.rgb), rgba.a))
   const at = ndc.xy.add(axes.xy.mul(uv.x)).add(axes.zw.mul(uv.y)).toVar()
   if (cut) {
     // clean cuts: the fragment finds where on the blob its line of sight is densest (edit.ts `densestAlong`). It gets
@@ -1935,39 +2041,54 @@ function placeQuad(ndc: N, axes: N, tilt: N, rgba: N, idx: N, cut?: { covA: N; c
   // each corner at its own depth on the blob, so blobs that lie in one plane are at one depth wherever they overlap,
   // and a small lift by the blob's seed settles which of them is on top there: the same one from every side. It
   // matters only to marks, which write depth (`setMarks`)
-  return vec4(at, ndc.z.add(tilt.x.mul(uv.x)).add(tilt.y.mul(uv.y)).add(tilt.z.mul(seed.sub(0.5))), 1)
+  return vec4(at, ndc.z.add(slope).add(tilt.z.mul(seed.sub(0.5))), 1)
 }
 
-/** What a blob draws as: its picture color, its part's flat color (map of parts), or its depth (depth map). */
-function flatColor(flat: N, part: N, depth: N, picture: N) {
-  return select(flat.greaterThan(1.5), vec3(depth), select(flat.greaterThan(0.5), part, picture))
+/** Which map the draw is (0 the picture, 1 parts, 2 depth, 3 tones), where a depth map's depths are counted from, and whether each blob's depth follows its own slope. */
+interface Flat { mode: N; base: N; slope: N }
+
+/** What a blob draws as: its picture color, its part's flat color (map of parts), its depth (depth map) or its tone (map of tones). */
+function flatColor(flat: Flat, part: N, depth: N, picture: N, tone: N) {
+  return select(flat.mode.greaterThan(2.5), tone, select(flat.mode.greaterThan(1.5), vec3(depth.sub(flat.base)), select(flat.mode.greaterThan(0.5), part, picture)))
 }
 
-function makeVertexWebGPU(buf: ReturnType<typeof makeBuffers>, sort: Sorter, fog: Fog, flat: N, L?: Lighting, clean = false) {
+function makeVertexWebGPU(buf: ReturnType<typeof makeBuffers>, sort: Sorter, fog: Fog, flat: Flat, L?: Lighting, clean = false) {
   return Fn(() => {
     const idx = sort.orderRead.element(instanceIndex).toVar()
     const A = buf.splatA.element(idx).toVar()
     // lit: the light pass's color, in place of the packed one (so the draw binds no more buffers than before)
     const color = (L ? L.lit.element(idx) : unpackUnorm4x8(buf.color.element(idx))).toVar()
+    // cel shading: the light pass left the blob's own color in whole bytes and its tone in the fractions
+    const tone = vec3(1).toVar()
+    if (L) If(L.cel.greaterThan(0.5), () => {
+      tone.assign(fract(color.rgb).div(TONE_SHARE).min(1))
+      color.rgb.assign(floor(color.rgb).div(255))
+    })
     // depth in front of the camera from the screen depth the project pass wrote, so the draw binds no extra buffer:
     // ndc z = −(P22·z + P32) / z for a perspective camera, so −z = P32 / (ndc z + P22)
     const depth = cameraProjectionMatrix[3].z.div(A.z.add(cameraProjectionMatrix[2].z))
     const part = unpackUnorm4x8(buf.part.element(idx))
-    return placeQuad(A.xyz, buf.splatB.element(idx), buf.splatC.element(idx).xyz, vec4(flatColor(flat, part.rgb, depth, fogged(color.rgb, depth, fog)), color.a.mul(A.w)), idx, clean ? { covA: buf.covA.element(idx), covB: buf.covB.element(idx) } : undefined)
+    return placeQuad(A.xyz, buf.splatB.element(idx), buf.splatC.element(idx).xyz, vec4(flatColor(flat, part.rgb, depth, fogged(color.rgb, depth, fog), tone), color.a.mul(A.w)), idx, flat, clean ? { covA: buf.covA.element(idx), covB: buf.covB.element(idx) } : undefined)
   })()
 }
 
 /** WebGL has no compute: each corner moves its blob through the bones and projects it, like a skinned mesh. */
-function makeVertexWebGL(buf: ReturnType<typeof makeBuffers>, sort: Sorter, mode: SkinMode, fog: Fog, flat: N, clip: N, L?: Lighting, S?: ViewSH, clean = false) {
+function makeVertexWebGL(buf: ReturnType<typeof makeBuffers>, sort: Sorter, mode: SkinMode, fog: Fog, flat: Flat, clip: N, L?: Lighting, S?: ViewSH, clean = false) {
   return Fn(() => {
     const idx = sort.orderRead.element(instanceIndex).toVar()
     const d = deformBlob(buf, idx, mode)
     const p = projectSplat(d.world, d.covA, d.covB, cameraViewMatrix, cameraProjectionMatrix, cameraViewport.zw, clip)
     const color = unpackUnorm4x8(buf.color.element(idx)).toVar()
     const own = S ? viewed(color.rgb, idx, d.world, buf, S) : color.rgb
-    const rgb = L ? lit(painted(own, d.world, buf.edits), d.world, d.covA, d.covB, buf.seen.element(idx), L) : own
+    const rgb = vec3(own).toVar(), tone = vec3(1).toVar()
+    if (L) {
+      rgb.assign(painted(own, d.world, buf.edits))
+      // cel shading: the blob keeps its own color, and its tone goes to the map of tones
+      If(L.cel.greaterThan(0.5), () => { tone.assign(toned(d.world, d.covA, d.covB, L)) })
+        .Else(() => { rgb.assign(lit(rgb, d.world, d.covA, d.covB, buf.seen.element(idx), L)) })
+    }
     const part = unpackUnorm4x8(buf.part.element(idx))
-    return placeQuad(p.ndc, p.axes, p.tilt, vec4(flatColor(flat, part.rgb, p.depth, fogged(rgb, p.depth, fog)), color.a.mul(p.alphaScale)), idx, clean ? d : undefined)
+    return placeQuad(p.ndc, p.axes, p.tilt, vec4(flatColor(flat, part.rgb, p.depth, fogged(rgb, p.depth, fog), tone), color.a.mul(p.alphaScale)), idx, flat, clean ? d : undefined)
   })()
 }
 
