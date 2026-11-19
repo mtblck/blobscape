@@ -5,8 +5,9 @@ import { TOUR, clay, kept } from './diorama/tour.ts'
 import { STEADY, countColors, darkest, type Frame, type PixelLook } from '../splat-core/pixel.ts'
 import type { Built } from '../splat-engine/body.ts'
 import { LoadingMark } from '../shared/BlobLoader.tsx'
-import { Gallery } from './diorama/Gallery.tsx'
 import { castBy, glowGain } from './diorama/glow.ts'
+import { ScenePicker } from './diorama/ScenePicker.tsx'
+import { stepped } from './diorama/pick.ts'
 import { Button, Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
 import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitDrag } from './Viewport.tsx'
@@ -88,6 +89,8 @@ export function PixelDiorama() {
   const diorama = scenes.find((d) => d.id === which) ?? DIORAMAS[0]
   /** The scene whose palette, finish and view are set. */
   const dressed = useRef(which)
+  /** The scene picker: the modal of every scene's card. */
+  const [picking, setPicking] = useState(false)
   const [playing, setPlaying] = useState(!calm)
   const [detail, setDetail] = useState<string>(() => detailAsked(DETAIL, labelNames)?.id ?? (coarse ? DETAIL[1].id : DETAIL[2].id))
   const [pixels, setPixels] = useState(true)
@@ -217,7 +220,9 @@ export function PixelDiorama() {
     stage.setPoser((sk: Skeleton, t: number) => {
       d.pose(sk, t)
       pokes.current?.apply(sk, performance.now() / 1000)
-      stage.setLights(castBy(d.lights(t, stage.backend === 'webgpu'), glowGain(glowNow.current, d.finish.glow)), d.ambient ?? 1)
+      stage.setLights(castBy(d.lights(t, stage.backend === 'webgpu'), glowGain(glowNow.current, d.finish.glow)), d.ambientAt?.(t) ?? d.ambient ?? 1)
+      // a scene whose sky turns as it plays (day to night) hands the pixel pass each moment's sky
+      skyNow.current?.(d, t)
       // a scene that asks for it rocks the view gently as it plays, about wherever the view has been turned to
       if (d.swing && !calm) stage.orbit = swung(orbitNow.current, d.swing, d.loop, t)
       wet.current?.()
@@ -225,7 +230,22 @@ export function PixelDiorama() {
   }, [stage, scene, calm, mirrored])
   // the walk-through's fourth step is about the four samples, so it draws them whatever the switch says
   const sampling = touring?.id === 'samples'
-  useEffect(() => { stage?.setPixels(asPixels ? (sampling ? { ...look, fine: true } : look) : undefined, size) }, [stage, asPixels, sampling, look, size])
+  const drawnLook = useMemo(() => (asPixels ? (sampling ? { ...look, fine: true } : look) : undefined), [asPixels, sampling, look])
+  useEffect(() => {
+    if (!stage) return
+    stage.setPixels(drawnLook, size)
+    // set again only when the sky has changed, so a paused scene is not drawn over and over
+    let last = ''
+    skyNow.current = (d, t) => {
+      if (!d.skyAt || !drawnLook?.sky) return
+      const [top, low] = d.skyAt(t), key = `${top}|${low}`
+      if (key === last) return
+      last = key
+      stage.setPixels({ ...drawnLook, sky: [top, low, drawnLook.sky[2]] }, size)
+    }
+    const d = posed.current
+    if (d) skyNow.current(d, stage.time)
+  }, [stage, drawnLook, size])
   useEffect(() => {
     if (!stage) return
     const keep = touring?.keep ?? 1
@@ -239,13 +259,15 @@ export function PixelDiorama() {
   const wet = useRef<(() => void) | undefined>(undefined)
   const seen = useRef<MirrorImage | null>(null)
   const posed = useRef<Diorama | undefined>(undefined)
+  /** Hands the pixel pass the sky of the moment, for a scene whose sky turns as it plays. */
+  const skyNow = useRef<((d: Diorama, t: number) => void) | undefined>(undefined)
   /** Taps on the scene: a part leans and wobbles, the land throws sparkles. */
   const pokes = useRef<Pokes | undefined>(undefined)
   orbitNow.current = orbit
   // Glow turns the scene's own lights up and down, so a paused scene is lit again for the moment it shows
   useEffect(() => {
     const d = posed.current
-    if (stage && d) stage.setLights(castBy(d.lights(stage.time, stage.backend === 'webgpu'), glowGain(glow, d.finish.glow)), d.ambient ?? 1)
+    if (stage && d) stage.setLights(castBy(d.lights(stage.time, stage.backend === 'webgpu'), glowGain(glow, d.finish.glow)), d.ambientAt?.(stage.time) ?? d.ambient ?? 1)
   }, [stage, glow])
   // the scene being posed, which is the one whose swing applies: a scene just picked is not in the view until it is cut
   useEffect(() => {
@@ -522,11 +544,18 @@ export function PixelDiorama() {
           {
             id: 'scene', label: 'Scene', content: (
               <div className={TAB_SECTIONS}>
-                <Field label="Scene">
-                  <div className="flex flex-wrap gap-1.5">
-                    {scenes.map((d) => <Chip key={d.id} active={which === d.id} onClick={() => show(d.id)}>{d.label}</Chip>)}
+                <div className="grid gap-2">
+                  <p className="text-sm text-ink-muted">Current scene selected: <span className="font-medium text-ink" data-testid="diorama-current">{diorama.label}</span></p>
+                  <div className="flex items-stretch gap-1.5">
+                    <Button aria-label="Previous scene" className="cursor-pointer" onClick={() => show(stepped(scenes, which, -1).id)} data-testid="diorama-previous">
+                      <svg aria-hidden viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 5l-7 7 7 7" /></svg>
+                    </Button>
+                    <Button primary className="flex-1 cursor-pointer" aria-haspopup="dialog" onClick={() => setPicking(true)} data-testid="diorama-picker-open">Select a Scene</Button>
+                    <Button aria-label="Next scene" className="cursor-pointer" onClick={() => show(stepped(scenes, which, 1).id)} data-testid="diorama-next">
+                      <svg aria-hidden viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 5l7 7-7 7" /></svg>
+                    </Button>
                   </div>
-                </Field>
+                </div>
                 <div className="grid gap-2">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <Button small disabled={opening} onClick={() => modelInput.current?.click()}>{opening ? 'Opening…' : 'Open a file'}</Button>
@@ -630,23 +659,8 @@ export function PixelDiorama() {
         ]}
       />
 
-      <section aria-labelledby="every-title" className="mt-14 border-t border-rule pt-10 lg:pt-14" data-testid="diorama-gallery">
-        <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-3 pb-6">
-          <div>
-            <p className="text-sm text-ink-faint">Every scene</p>
-            <h2 id="every-title" className="mt-1 font-display text-4xl leading-[1.05] sm:text-5xl">{DIORAMAS.length} scenes, one loop each</h2>
-          </div>
-          <p className="max-w-xl text-ink-muted">
-            Each scene plays once through, recorded from this page at 12 frames a second with its own palette. Pick one to
-            open it in the view above, where you can turn it and change how it's drawn.
-          </p>
-        </div>
-        <Gallery current={which} testId="diorama-loops" onPick={(id) => {
-          show(id)
-          window.scrollTo({ top: 0, behavior: calm ? 'auto' : 'smooth' })
-          canvas.current?.focus({ preventScroll: true })
-        }} />
-      </section>
+      <ScenePicker open={picking} onClose={() => setPicking(false)} current={which} onPick={show}
+        scenes={scenes.map((d) => ({ id: d.id, label: d.label, about: d.about, loop: d !== model }))} />
 
       <section aria-labelledby="how-title" className="mt-14 border-t border-rule pt-10 lg:grid lg:grid-cols-12 lg:gap-x-5 lg:pt-14">
         <div className="lg:col-span-5">
