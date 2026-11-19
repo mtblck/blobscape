@@ -14,7 +14,7 @@ import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitD
 import { href } from './routes.ts'
 import { download } from './files.ts'
 import type { CreatureStage } from './creature/stage.ts'
-import { TAB_SECTIONS, Workbench } from '../shared/Workbench.tsx'
+import { TAB_SECTIONS, ViewPopup, Workbench } from '../shared/Workbench.tsx'
 import { DETAIL, PALETTES } from './diorama/scene.ts'
 import { DIORAMAS, described, type Diorama } from './diorama/scenes.ts'
 import { SceneDetails, kilobytes, type SceneFacts } from './diorama/SceneDetails.tsx'
@@ -479,6 +479,46 @@ export function PixelDiorama() {
     }
   }
 
+  /** What an export saves and how big: the Export tab's choices, and the same ones in the full screen view's Export popup. */
+  const exportChoices = (inFull: boolean) => (
+                <div className="grid gap-3">
+                <Field label="Save the loop as">
+                  <div className="flex flex-wrap gap-1.5">
+                    <Chip active={recordAs === 'png'} onClick={() => setRecordAs('png')}>Animated PNG</Chip>
+                    <Chip active={recordAs === 'mp4'} onClick={() => setRecordAs('mp4')}>MP4 video</Chip>
+                  </div>
+                  {!pixels && recordAs === 'png' && <p className="mt-1.5 text-xs text-ink-faint">Lossless, so the file is large for this style. An MP4 is far smaller and can be bigger across.</p>}
+                </Field>
+                <Field label="Frames a second">
+                  <div className="flex flex-wrap gap-1.5">
+                    {rates.map((r) => <Chip key={r} active={recordFps === r} onClick={() => setRecordFps(r)}>{String(r)}</Chip>)}
+                  </div>
+                  <p className="mt-1.5 text-xs text-ink-faint">More frames take longer to export and suit a scene where things move fast.</p>
+                </Field>
+                {pixels && recordAs === 'png' && <Field label="Picture size">
+                  <div className="flex flex-wrap gap-1.5">
+                    {[1, 2, 4, 6].map((s) => <Chip key={s} active={pngSize === s} onClick={() => setPngSize(s)}>{`${s}×`}</Chip>)}
+                  </div>
+                  <p className="mt-1.5 text-xs text-ink-faint">How many pixels wide each pixel of the art is saved. 1× is the art's own size.</p>
+                </Field>}
+                {pixels && recordAs === 'mp4' && <Field label="Video size">
+                  <div className="flex flex-wrap gap-1.5">
+                    {[4, 6, 8].map((s) => <Chip key={s} active={videoSize === s} onClick={() => setVideoSize(s)}>{`${s}×`}</Chip>)}
+                  </div>
+                  <p className="mt-1.5 text-xs text-ink-faint">How many pixels wide each pixel of the art is in the video.</p>
+                </Field>}
+                {!pixels && <Field label="Longest side">
+                  <div className="flex flex-wrap gap-1.5">
+                    {sidesFor(recordAs).map((s) => <Chip key={s} active={sideFor(recordAs, side) === s} onClick={() => setSide(s)}>{`${s} px`}</Chip>)}
+                  </div>
+                  <p className="mt-1.5 text-xs text-ink-faint">{inFull ? 'Never bigger than the view itself, which is as big as it gets in full screen.' : 'Never bigger than the view itself: for a bigger picture, make the view full screen first and use its Export button.'}</p>
+                </Field>}
+                </div>
+  )
+  const exportLabel = recording === null ? 'Export the loop' : recording >= Math.round(shown.loop * recordFps) ? 'Saving the loop…' : `Frame ${recording} of ${Math.round(shown.loop * recordFps)}…`
+  const exportNote = touring ? 'Close How it\'s made to save a frame or export the loop.' : note
+  const cantExport = !!touring || !drawn || saving || recording !== null
+
   const drag = useRef<OrbitDrag | null>(null)
   const pointers = useRef(new Map<number, { x: number; y: number }>())
   /** Where and when a press began, so a short press that hardly moves pokes instead of orbiting. */
@@ -577,6 +617,19 @@ export function PixelDiorama() {
       {facts && <SceneDetails open={details} onClose={() => setDetails(false)} facts={facts} />}
       <Workbench
         viewLabel="The scene"
+        fullTools={
+          <ViewPopup label="Export" title="Export the loop" testId="diorama-full-export">
+            {exportChoices(true)}
+            <div className="grid gap-2">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Button small disabled={cantExport} onClick={record} data-testid="diorama-full-record">{exportLabel}</Button>
+                <Button small disabled={cantExport} onClick={save}>{saving ? 'Saving…' : 'Save this frame'}</Button>
+              </div>
+              <p role="status" className="text-xs text-ink-faint empty:hidden">{exportNote}</p>
+              <p className="text-xs text-ink-faint">Uses the view as it is when you press the button. It doesn't rock, and turning or zooming while it runs changes nothing.</p>
+            </div>
+          </ViewPopup>
+        }
         view={<>
               {drawing.ground && <div aria-hidden className="absolute inset-0" style={{ background: drawing.ground }} data-testid="diorama-ground" />}
               <canvas
@@ -747,45 +800,13 @@ export function PixelDiorama() {
             id: 'export', label: 'Export', content: (
               <div className={TAB_SECTIONS}>
                 <p className="text-sm text-ink-muted">Saves the scene in the style it is drawn in now. A loop is drawn one frame at a time from start to end, so it joins up when it repeats and no frame is dropped, however slow the device.</p>
-                <div className="grid gap-3">
-                <Field label="Save the loop as">
-                  <div className="flex flex-wrap gap-1.5">
-                    <Chip active={recordAs === 'png'} onClick={() => setRecordAs('png')}>Animated PNG</Chip>
-                    <Chip active={recordAs === 'mp4'} onClick={() => setRecordAs('mp4')}>MP4 video</Chip>
-                  </div>
-                  {!pixels && recordAs === 'png' && <p className="mt-1.5 text-xs text-ink-faint">Lossless, so the file is large for this style. An MP4 is far smaller and can be bigger across.</p>}
-                </Field>
-                <Field label="Frames a second">
-                  <div className="flex flex-wrap gap-1.5">
-                    {rates.map((r) => <Chip key={r} active={recordFps === r} onClick={() => setRecordFps(r)}>{String(r)}</Chip>)}
-                  </div>
-                  <p className="mt-1.5 text-xs text-ink-faint">More frames take longer to export and suit a scene where things move fast.</p>
-                </Field>
-                {pixels && recordAs === 'png' && <Field label="Picture size">
-                  <div className="flex flex-wrap gap-1.5">
-                    {[1, 2, 4, 6].map((s) => <Chip key={s} active={pngSize === s} onClick={() => setPngSize(s)}>{`${s}×`}</Chip>)}
-                  </div>
-                  <p className="mt-1.5 text-xs text-ink-faint">How many pixels wide each pixel of the art is saved. 1× is the art's own size.</p>
-                </Field>}
-                {pixels && recordAs === 'mp4' && <Field label="Video size">
-                  <div className="flex flex-wrap gap-1.5">
-                    {[4, 6, 8].map((s) => <Chip key={s} active={videoSize === s} onClick={() => setVideoSize(s)}>{`${s}×`}</Chip>)}
-                  </div>
-                  <p className="mt-1.5 text-xs text-ink-faint">How many pixels wide each pixel of the art is in the video.</p>
-                </Field>}
-                {!pixels && <Field label="Longest side">
-                  <div className="flex flex-wrap gap-1.5">
-                    {sidesFor(recordAs).map((s) => <Chip key={s} active={sideFor(recordAs, side) === s} onClick={() => setSide(s)}>{`${s} px`}</Chip>)}
-                  </div>
-                  <p className="mt-1.5 text-xs text-ink-faint">Never bigger than the view itself: for a bigger picture, make the view full screen first.</p>
-                </Field>}
-                </div>
+                {exportChoices(false)}
                 <div className="grid gap-2">
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <Button small disabled={!!touring || !drawn || saving || recording !== null} onClick={record} data-testid="diorama-record">{recording === null ? 'Export the loop' : recording >= Math.round(shown.loop * recordFps) ? 'Saving the loop…' : `Frame ${recording} of ${Math.round(shown.loop * recordFps)}…`}</Button>
-                  <Button small disabled={!!touring || !drawn || saving || recording !== null} onClick={save}>{saving ? 'Saving…' : 'Save this frame'}</Button>
+                  <Button small disabled={cantExport} onClick={record} data-testid="diorama-record">{exportLabel}</Button>
+                  <Button small disabled={cantExport} onClick={save}>{saving ? 'Saving…' : 'Save this frame'}</Button>
                 </div>
-                <p role="status" className="text-xs text-ink-faint empty:-mt-2">{touring ? 'Close How it\'s made to save a frame or export the loop.' : note}</p>
+                <p role="status" className="text-xs text-ink-faint empty:-mt-2">{exportNote}</p>
                 <p className="text-xs text-ink-faint">The loop is exported from the view as it is when you press the button. It doesn't rock, and turning or zooming while it runs changes nothing. For a clip of whatever you do on the page, use the record button on the view.</p>
                 </div>
               </div>
