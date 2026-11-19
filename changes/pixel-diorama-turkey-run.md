@@ -1,2 +1,3 @@
 - Pixel Diorama: a new scene, Turkey Run. A giant turkey chases a cook in an apron down a country road in the fall, past a fence, trees, pumpkins and a billboard that never stop coming.
+- Pixel Diorama: a recorded loop saved as an animated PNG can be made bigger. Picture size saves each pixel of the art 1, 2, 4 or 6 pixels wide, and starts at 4.
 - Engine: scene descriptions have a new move, `pass`, for things that go by at an even speed over and over, such as what a runner on the spot runs past.

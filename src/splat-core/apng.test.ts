@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { deflateSync, inflateSync } from 'node:zlib'
-import { crc32, encodeApng, type RgbaFrame } from './apng.ts'
+import { crc32, encodeApng, enlarged, type RgbaFrame } from './apng.ts'
 
 const deflate = async (b: Uint8Array) => new Uint8Array(deflateSync(b))
 
@@ -54,4 +54,15 @@ test('an APNG holds every frame exactly, loops forever at the frame rate, with c
 
 test('frames of different sizes are refused', async () => {
   await assert.rejects(encodeApng([{ width: 1, height: 1, data: new Uint8Array(4) }, { width: 2, height: 1, data: new Uint8Array(8) }], 12, deflate))
+})
+
+test('a frame enlarged draws each pixel as a square of its own color, and at 1 is itself', () => {
+  const f: RgbaFrame = { width: 2, height: 2, data: Uint8Array.from([1, 2, 3, 255, 4, 5, 6, 255, 7, 8, 9, 255, 10, 11, 12, 0]) }
+  assert.equal(enlarged(f, 1), f)
+  const big = enlarged(f, 3)
+  assert.deepEqual([big.width, big.height, big.data.length], [6, 6, 144])
+  for (let y = 0; y < 6; y++) for (let x = 0; x < 6; x++) {
+    const from = ((y / 3 | 0) * 2 + (x / 3 | 0)) * 4, at = (y * 6 + x) * 4
+    assert.deepEqual([...big.data.subarray(at, at + 4)], [...f.data.subarray(from, from + 4)], `${x},${y}`)
+  }
 })

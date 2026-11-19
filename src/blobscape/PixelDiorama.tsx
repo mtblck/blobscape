@@ -21,7 +21,7 @@ import type { Skeleton } from '../splat-engine/rig.ts'
 import { Pokes } from '../splat-engine/poke.ts'
 import { levelPlane, type MirrorImage } from '../splat-engine/reflect.ts'
 import type { SceneWater } from '../splat-engine/sceneWater.ts'
-import { browserDeflate, encodeApng } from '../splat-core/apng.ts'
+import { browserDeflate, encodeApng, enlarged } from '../splat-core/apng.ts'
 import type { Texture } from '../splat-engine/meshShape.ts'
 import { decodeTexture } from './modelRig.ts'
 import { detailAsked, labelNames, writeDetail } from '../shared/detail.ts'
@@ -119,6 +119,7 @@ export function PixelDiorama() {
   /** What Record the loop saves: a lossless animated PNG at the art's own size, or an MP4 scaled up in whole pixels. */
   const [recordAs, setRecordAs] = useState<'png' | 'mp4'>('png')
   const [videoSize, setVideoSize] = useState(6)
+  const [pngSize, setPngSize] = useState(4)
 
   // built after a paint, so the waiting mark shows first
   const [made, setScene] = useState<{ built: Built; of: Diorama; detail: string; paint: string }>()
@@ -301,7 +302,7 @@ export function PixelDiorama() {
 
   /**
    * Records one whole loop as the art stands (palette, size, finish), stepped frame by frame from the time so it joins
-   * up end to end, and saves it as a lossless animated PNG, one art pixel per image pixel, as the gallery's loops are.
+   * up end to end, and saves it as a lossless animated PNG (each art pixel `pngSize` pixels a side) or an MP4.
    */
   const record = async () => {
     if (!stage || recording !== null) return
@@ -330,9 +331,10 @@ export function PixelDiorama() {
         download(bytes, `pixel-diorama-${shown.id}-loop.mp4`, 'video/mp4')
         setNote(`Saved the loop: ${count} frames at ${w * s} × ${h * s}, an MP4 of ${kilobytes(bytes.length)}.`)
       } else {
-        const bytes = await encodeApng(frames, RECORD_FPS, browserDeflate)
+        // each art pixel a square of whole pixels, so a bigger picture is as crisp as the art
+        const bytes = await encodeApng(frames.map((f) => enlarged(f, pngSize)), RECORD_FPS, browserDeflate)
         download(bytes, `pixel-diorama-${shown.id}-loop.png`, 'image/png')
-        setNote(`Saved the loop: ${count} frames at ${w} × ${h}, an animated PNG of ${kilobytes(bytes.length)}.`)
+        setNote(`Saved the loop: ${count} frames at ${w * pngSize} × ${h * pngSize}, an animated PNG of ${kilobytes(bytes.length)}.`)
       }
     } catch (e) {
       console.warn(e)
@@ -612,10 +614,17 @@ export function PixelDiorama() {
                     <Chip active={recordAs === 'mp4'} onClick={() => setRecordAs('mp4')}>MP4 video</Chip>
                   </div>
                 </Field>
+                {recordAs === 'png' && <Field label="Picture size">
+                  <div className="flex flex-wrap gap-1.5">
+                    {[1, 2, 4, 6].map((s) => <Chip key={s} active={pngSize === s} onClick={() => setPngSize(s)}>{`${s}×`}</Chip>)}
+                  </div>
+                  <p className="mt-1.5 text-xs text-ink-faint">How many pixels wide each pixel of the art is saved. 1× is the art's own size.</p>
+                </Field>}
                 {recordAs === 'mp4' && <Field label="Video size">
                   <div className="flex flex-wrap gap-1.5">
                     {[4, 6, 8].map((s) => <Chip key={s} active={videoSize === s} onClick={() => setVideoSize(s)}>{`${s}×`}</Chip>)}
                   </div>
+                  <p className="mt-1.5 text-xs text-ink-faint">How many pixels wide each pixel of the art is in the video.</p>
                 </Field>}
                 <div className="grid gap-2">
                 <div className="flex flex-wrap items-center gap-1.5">
