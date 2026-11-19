@@ -71,40 +71,66 @@ function scanlines(f: RgbaFrame): Uint8Array {
   return out
 }
 
-/** Writes `frames` (all one size) as an APNG that loops forever at `fps`. */
-export async function encodeApng(frames: RgbaFrame[], fps: number, deflate: Deflate): Promise<Uint8Array> {
-  if (!frames.length) throw new Error('no frames')
-  const { width, height } = frames[0]
-  if (frames.some((f) => f.width !== width || f.height !== height)) throw new Error('every frame must be the same size')
+/** An animated PNG written a frame at a time, so a long or large loop never has every raw frame in memory at once. */
+export interface ApngWriter {
+  /** Adds the next frame, which must be the size given at the start. */
+  add(frame: RgbaFrame): Promise<void>
+  /** The finished file, once every frame promised has been added. */
+  finish(): Uint8Array
+}
+
+/** Starts an APNG of `count` frames, each `width` by `height`, that loops forever at `fps`. */
+export function startApng(width: number, height: number, count: number, fps: number, deflate: Deflate): ApngWriter {
+  if (!(count >= 1)) throw new Error('no frames')
   const parts: Uint8Array[] = [new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])]
   const ihdr = new Uint8Array(13)
   new DataView(ihdr.buffer).setUint32(0, width)
   new DataView(ihdr.buffer).setUint32(4, height)
   ihdr.set([8, 6, 0, 0, 0], 8)
-  parts.push(chunk('IHDR', ihdr), chunk('acTL', u32s(frames.length, 0)))
+  parts.push(chunk('IHDR', ihdr), chunk('acTL', u32s(count, 0)))
   // the delay as a fraction of a second: 1/fps, kept whole
   const den = Math.round(fps * 1000), num = 1000
-  let seq = 0
-  for (let i = 0; i < frames.length; i++) {
-    const fc = new Uint8Array(26)
-    const v = new DataView(fc.buffer)
-    v.setUint32(0, seq++); v.setUint32(4, width); v.setUint32(8, height); v.setUint32(12, 0); v.setUint32(16, 0)
-    v.setUint16(20, Math.min(num, 65535)); v.setUint16(22, Math.min(den, 65535)); fc[24] = 0; fc[25] = 0
-    parts.push(chunk('fcTL', fc))
-    const z = await deflate(scanlines(frames[i]))
-    if (i === 0) parts.push(chunk('IDAT', z))
-    else {
-      const fd = new Uint8Array(4 + z.length)
-      new DataView(fd.buffer).setUint32(0, seq++)
-      fd.set(z, 4)
-      parts.push(chunk('fdAT', fd))
-    }
+  let seq = 0, added = 0
+  return {
+    async add(frame) {
+      if (frame.width !== width || frame.height !== height) throw new Error('every frame must be the same size')
+      if (added >= count) throw new Error('more frames than promised')
+      const i = added++
+      // the frame's place in the file is taken now, so frames stay in order whatever the deflate's timing
+      const fc = new Uint8Array(26)
+      const v = new DataView(fc.buffer)
+      v.setUint32(0, seq++); v.setUint32(4, width); v.setUint32(8, height); v.setUint32(12, 0); v.setUint32(16, 0)
+      v.setUint16(20, Math.min(num, 65535)); v.setUint16(22, Math.min(den, 65535)); fc[24] = 0; fc[25] = 0
+      const own = i === 0 ? -1 : seq++
+      const at = parts.push(chunk('fcTL', fc), new Uint8Array(0)) - 1
+      const z = await deflate(scanlines(frame))
+      if (own < 0) parts[at] = chunk('IDAT', z)
+      else {
+        const fd = new Uint8Array(4 + z.length)
+        new DataView(fd.buffer).setUint32(0, own)
+        fd.set(z, 4)
+        parts[at] = chunk('fdAT', fd)
+      }
+    },
+    finish() {
+      if (added !== count) throw new Error(`${count} frames were promised and ${added} added`)
+      const all = [...parts, chunk('IEND', new Uint8Array(0))]
+      const out = new Uint8Array(all.reduce((n, p) => n + p.length, 0))
+      let at = 0
+      for (const p of all) { out.set(p, at); at += p.length }
+      return out
+    },
   }
-  parts.push(chunk('IEND', new Uint8Array(0)))
-  const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0))
-  let at = 0
-  for (const p of parts) { out.set(p, at); at += p.length }
-  return out
+}
+
+/** Writes `frames` (all one size) as an APNG that loops forever at `fps`. */
+export async function encodeApng(frames: RgbaFrame[], fps: number, deflate: Deflate): Promise<Uint8Array> {
+  if (!frames.length) throw new Error('no frames')
+  const { width, height } = frames[0]
+  if (frames.some((f) => f.width !== width || f.height !== height)) throw new Error('every frame must be the same size')
+  const w = startApng(width, height, frames.length, fps, deflate)
+  for (const f of frames) await w.add(f)
+  return w.finish()
 }
 
 /** Deflate in the browser, through CompressionStream (zlib format, as PNG wants). */

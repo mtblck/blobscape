@@ -1004,6 +1004,8 @@ export class Stage {
     // the mirror's picture of this very moment, so what a test or a recording sees does not depend on timing
     await this.reflect(true)
     this.draw()
+    // on the page itself, a loop being exported copies the picture now, while it can still be read
+    if (!this.target) markDrawn(this.display)
     if (this.actor) this.firstFrame()
     if (!this.target) return
     // read back by checks: a CPU canvas, because a GPU one gives a few faint pixels a different rounding the first time it is read

@@ -121,6 +121,48 @@ function colorBehind(el: Element): string {
 const boxOf = (r: DOMRect): Box => ({ x: r.left, y: r.top, w: r.width, h: r.height })
 
 /**
+ * Draws `view` as it stands onto a `W` by `H` sheet: every canvas inside it, in page order, over the colors behind
+ * them. Nothing that is HTML is drawn. `pictureOf` gives what to draw for a canvas (a copy kept from its last draw,
+ * or the canvas itself straight after one); undefined leaves it out.
+ */
+export function paintView(ctx: CanvasRenderingContext2D, view: HTMLElement, W: number, H: number, pictureOf: (canvas: HTMLCanvasElement) => HTMLCanvasElement | undefined) {
+  const whole = boxOf(view.getBoundingClientRect())
+  if (whole.w < 2 || whole.h < 2) return
+  ctx.globalAlpha = 1
+  ctx.fillStyle = colorBehind(view)
+  ctx.fillRect(0, 0, W, H)
+  ctx.save()
+  const frame = fitInto(whole, whole, W, H)
+  ctx.beginPath()
+  ctx.rect(frame.x, frame.y, frame.w, frame.h)
+  ctx.clip()
+  // in the page's own order: what comes later lies on top
+  for (const el of view.querySelectorAll('*')) {
+    const isCanvas = el instanceof HTMLCanvasElement
+    // a ground is the color behind a canvas: something that holds one, or an empty box put behind them for show
+    const holds = !isCanvas && !!el.querySelector('canvas')
+    if (!isCanvas && !holds && !(el.getAttribute('aria-hidden') === 'true' && !el.firstElementChild && !el.textContent)) continue
+    const r = el.getBoundingClientRect()
+    if (r.width < 1 || r.height < 1) continue
+    // an empty box is a backdrop only if it is a good part of the view (a button's dot is not)
+    if (!isCanvas && !holds && r.width * r.height < 0.25 * whole.w * whole.h) continue
+    const style = getComputedStyle(el)
+    if (style.visibility === 'hidden' || style.display === 'none') continue
+    const at = fitInto(whole, boxOf(r), W, H)
+    if (!isCanvas) { paintGround(ctx, style, at); continue }
+    const from = pictureOf(el)
+    if (!from || !from.width || !from.height) continue
+    paintGround(ctx, style, at)
+    ctx.globalAlpha = Number(style.opacity) || (style.opacity === '0' ? 0 : 1)
+    ctx.imageSmoothingEnabled = !/pixelated|crisp-edges/.test(style.imageRendering)
+    ctx.imageSmoothingQuality = 'high'
+    try { ctx.drawImage(from, at.x, at.y, at.w, at.h) } catch { /* a canvas that can't be read is left out */ }
+    ctx.globalAlpha = 1
+  }
+  ctx.restore()
+}
+
+/**
  * Starts recording the canvases inside `view`. `kind` forces the file type (the page's `?record=webm`, which the
  * browser checks use: headless Chromium claims H.264 and never delivers). `onEnd` is called if it stops by itself
  * (at `RECORD_MOST` seconds, or when the encoder fails), with the file or the error.
@@ -148,42 +190,7 @@ export async function startRecording(view: HTMLElement, opts: { kind?: 'mp4' | '
   for (const canvas of view.querySelectorAll('canvas')) askRedraw(canvas)
 
   /** Draws the view as it stands onto the sheet. */
-  const compose = () => {
-    const whole = boxOf(view.getBoundingClientRect())
-    if (whole.w < 2 || whole.h < 2) return
-    ctx.globalAlpha = 1
-    ctx.fillStyle = colorBehind(view)
-    ctx.fillRect(0, 0, W, H)
-    ctx.save()
-    const frame = fitInto(whole, whole, W, H)
-    ctx.beginPath()
-    ctx.rect(frame.x, frame.y, frame.w, frame.h)
-    ctx.clip()
-    // in the page's own order: what comes later lies on top
-    for (const el of view.querySelectorAll('*')) {
-      const isCanvas = el instanceof HTMLCanvasElement
-      // a ground is the color behind a canvas: something that holds one, or an empty box put behind them for show
-      const holds = !isCanvas && !!el.querySelector('canvas')
-      if (!isCanvas && !holds && !(el.getAttribute('aria-hidden') === 'true' && !el.firstElementChild && !el.textContent)) continue
-      const r = el.getBoundingClientRect()
-      if (r.width < 1 || r.height < 1) continue
-      // an empty box is a backdrop only if it is a good part of the view (a button's dot is not)
-      if (!isCanvas && !holds && r.width * r.height < 0.25 * whole.w * whole.h) continue
-      const style = getComputedStyle(el)
-      if (style.visibility === 'hidden' || style.display === 'none') continue
-      const at = fitInto(whole, boxOf(r), W, H)
-      if (!isCanvas) { paintGround(ctx, style, at); continue }
-      const from = isDrawnTo(el) ? kept.get(el) : el
-      if (!from || !from.width || !from.height) continue
-      paintGround(ctx, style, at)
-      ctx.globalAlpha = Number(style.opacity) || (style.opacity === '0' ? 0 : 1)
-      ctx.imageSmoothingEnabled = !/pixelated|crisp-edges/.test(style.imageRendering)
-      ctx.imageSmoothingQuality = 'high'
-      try { ctx.drawImage(from, at.x, at.y, at.w, at.h) } catch { /* a canvas that can't be read is left out */ }
-      ctx.globalAlpha = 1
-    }
-    ctx.restore()
-  }
+  const compose = () => paintView(ctx, view, W, H, (el) => (isDrawnTo(el) ? kept.get(el) : el))
 
   let writer: Awaited<ReturnType<typeof import('../blobscape/diorama/video.ts').startVideo>> | undefined
   let media: MediaRecorder | undefined
