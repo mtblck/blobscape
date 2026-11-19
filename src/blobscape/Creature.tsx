@@ -20,6 +20,7 @@ import type { CreatureStage, PickedBone, Show } from './creature/stage.ts'
 import { TAB_SECTIONS, Workbench } from '../shared/Workbench.tsx'
 import { Sprites } from './creature/Sprites.tsx'
 import { stageBreath, stagePlain } from './creature/breathStage.ts'
+import { countAsked, detailInAddress, writeDetail } from '../shared/detail.ts'
 
 const STILL = 'still'
 const MAX_FILE = 200 * 1024 * 1024
@@ -84,7 +85,7 @@ export function Creature() {
   const webgl = useMemo(() => new URLSearchParams(location.search).get('webgl') === '1', [])
   // which creature is in the address (?creature=dragon), so a link can show one
   const [species, setSpecies] = useState<Species>(() => speciesOf(new URLSearchParams(location.search)))
-  const [count, setCount] = useState(species.start)
+  const [count, setCount] = useState(() => levelFor(species, countAsked(detailInAddress())))
   const [look, setLook] = useState(species.looks[0].id)
   const [move, setMove] = useState<string>(species.moves[0].name)
   const [show, setShow] = useState<Show>('blobs')
@@ -114,7 +115,7 @@ export function Creature() {
   /** The Monster chip brings back the last one made, not a new one. */
   const lastMonster = useRef<Species | undefined>(species.seed ? species : undefined)
   /** The blob count the visitor chose, kept from creature to creature (each takes its level nearest to it). */
-  const asked = useRef<number | undefined>(undefined)
+  const asked = useRef<number | undefined>(countAsked(detailInAddress()))
   const pick = (sp: Species) => {
     if (sp.seed) lastMonster.current = sp
     setLoaded(undefined)
@@ -420,7 +421,7 @@ export function Creature() {
                 )}
                 <Field label="Blobs">
                   <div className="flex flex-wrap gap-1.5">
-                    {species.detail.map((n) => <Chip key={n} active={!loaded && count === n} onClick={() => { asked.current = n; setLoaded(undefined); setCount(n) }}>{kilo(n)}</Chip>)}
+                    {species.detail.map((n) => <Chip key={n} active={!loaded && count === n} onClick={() => { asked.current = n; setLoaded(undefined); setCount(n); writeDetail(kilo(n)) }}>{kilo(n)}</Chip>)}
                   </div>
                 </Field>
               </div>

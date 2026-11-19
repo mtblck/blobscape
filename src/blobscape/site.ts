@@ -7,7 +7,8 @@ export const SITE = {
   tagline: 'Learn 3D Gaussian splats by taking them apart',
   /** The canonical address, no trailing slash: page paths start with one. */
   origin: 'https://blobscape.dev',
-  author: { name: 'Matt Black', url: 'https://mattblack.space/' },
+  /** Who makes it. `profiles` are the same person elsewhere (the Person's `sameAs` in each page's JSON-LD). */
+  author: { name: 'Matt Black', url: 'https://mattblack.space/', profiles: ['https://github.com/mtblck'] },
   tip: 'https://ko-fi.com/mtblck',
   /** The site's and the engine's source. */
   repo: 'https://github.com/mtblck/blobscape',

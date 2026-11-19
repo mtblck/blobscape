@@ -6,6 +6,7 @@ import { TAB_SECTIONS, Workbench } from '../shared/Workbench.tsx'
 import { href } from './routes.ts'
 import type { CameraView, DungeonStage } from './dungeon/stage.ts'
 import { GOLD_HEAL, MAX_HP, MAX_MP, SPELL_COST, type Difficulty, type GameEvent } from './dungeon/game.ts'
+import { detailAsked, labelNames, writeDetail } from '../shared/detail.ts'
 
 const LOOKS = [{ id: 'forest', label: 'Forest' }, { id: 'dusk', label: 'Dusk' }, { id: 'autumn', label: 'Autumn' }]
 const VIEWS: { id: CameraView; label: string }[] = [{ id: 'close', label: 'Close' }, { id: 'far', label: 'Far' }, { id: 'high', label: 'High' }]
@@ -46,7 +47,7 @@ export function DungeonRun() {
   const offscreen = useMemo(() => new URLSearchParams(location.search).get('offscreen') === '1', [])
   const webgl = useMemo(() => new URLSearchParams(location.search).get('webgl') === '1', [])
   const [look, setLook] = useState('forest')
-  const [detail, setDetail] = useState<number>()
+  const [detail, setDetail] = useState<number | undefined>(() => detailAsked(DETAIL, labelNames)?.id)
   const [view, setView] = useState<CameraView>('far')
   const [light, setLight] = useState<'live' | 'baked'>()
   const [shadows, setShadows] = useState(true)
@@ -357,7 +358,7 @@ export function DungeonRun() {
                 </Field>
                 <Field label="Detail">
                   <div className="flex flex-wrap gap-1.5">
-                    {DETAIL.map((d) => <Chip key={d.id} active={detail === d.id} onClick={() => setDetail(d.id)}>{d.label}</Chip>)}
+                    {DETAIL.map((d) => <Chip key={d.id} active={detail === d.id} onClick={() => { setDetail(d.id); writeDetail(d.label.toLowerCase()) }}>{d.label}</Chip>)}
                   </div>
                 </Field>
                 <p className="text-xs text-ink-faint">Lighter detail runs smoother on older phones.</p>

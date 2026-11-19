@@ -2,7 +2,8 @@
  * Makes the pictures a link to the site shows when it is shared (og:image):
  * public/og.png for the front page and every page without its own, and
  * public/share/<name>.jpg for each experiment, cut from its cover to the
- * 1200 × 630 that link previews use (two use a screenshot instead: `OWN`). Run it after adding or changing a cover:
+ * 1200 × 630 that link previews use (two use a screenshot instead: `OWN`), and the same cut of each post's own
+ * picture (public/news/) as public/share/news-<name>.jpg. Run it after adding or changing a cover or a post's picture:
  *   node --experimental-strip-types scripts/share-images.mjs
  * meta.ts points each experiment's page at its picture (`shareImage`), and a
  * test holds that every experiment has one.
@@ -12,7 +13,8 @@ import { readFileSync, existsSync, mkdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { EXPERIMENTS } from '../src/blobscape/site.ts'
-import { shareImage } from '../src/blobscape/meta.ts'
+import { postShare, shareImage } from '../src/blobscape/meta.ts'
+import { POSTS } from '../src/blobscape/news.ts'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const SIZE = { width: 1200, height: 630 }
@@ -62,5 +64,9 @@ const shoot = async (html, file, options) => {
 mkdirSync(join(root, 'public', 'share'), { recursive: true })
 await shoot(front, 'og.png', { type: 'png' })
 for (const e of EXPERIMENTS) await shoot(one(e), shareImage(e), { type: 'jpeg', quality: 88 })
+// a post with a picture of its own (public/news/, 16:10) gets the same cut, so its link preview is the shape its tags say
+const own = [...new Set(POSTS.map((p) => p.image.src).filter((src) => src.startsWith('/news/')))]
+const cut = (src) => `<!doctype html><meta charset="utf-8"><style>* { margin: 0 } img { display: block; width: 1200px; height: 630px; object-fit: cover }</style><img src="${data(join('public', src), 'image/webp')}" alt="">`
+for (const src of own) await shoot(cut(src), postShare(src), { type: 'jpeg', quality: 88 })
 await browser.close()
-console.log(`share images: og.png and ${EXPERIMENTS.length} experiments`)
+console.log(`share images: og.png, ${EXPERIMENTS.length} experiments and ${own.length} post pictures`)

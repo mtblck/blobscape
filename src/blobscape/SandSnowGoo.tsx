@@ -11,6 +11,7 @@ import { DETAILS, GROUNDS, SETUP, TESTS, THINGS, groundFor, type Detail, type Gr
 import type { FromFlow, ToFlow } from './flow/flow.worker.ts'
 import { LANE_GAP, LOOK, SIZE, flowActor, laneX, poseThings, showLane, type FlowActor } from './flow/view.ts'
 import { href } from './routes.ts'
+import { writeDetail } from '../shared/detail.ts'
 
 /** Which material the box holds, or all three, each in its own lane. */
 type Pick = Material | 'all'
@@ -405,7 +406,7 @@ export function SandSnowGoo() {
               <div className={TAB_SECTIONS}>
                 <Field label="Detail">
                   <div className="flex flex-wrap gap-1.5" data-testid="flow-detail">
-                    {(Object.keys(DETAILS) as Detail[]).map((d) => <Chip key={d} active={detail === d} onClick={() => setDetail(d)}>{DETAILS[d].label}</Chip>)}
+                    {(Object.keys(DETAILS) as Detail[]).map((d) => <Chip key={d} active={detail === d} onClick={() => { setDetail(d); writeDetail(d) }}>{DETAILS[d].label}</Chip>)}
                   </div>
                   <p className="mt-1.5 text-xs text-ink-faint">Finer is more and smaller particles, and more work: where a device can't keep up, the box runs slower than real time.</p>
                 </Field>

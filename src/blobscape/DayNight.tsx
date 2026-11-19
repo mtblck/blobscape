@@ -14,6 +14,7 @@ import { SCENES, dayStage, lampAt } from './daynight/scene.ts'
 import { SEASONS, seasonFrom, type Season } from './daynight/season.ts'
 import { facing, makeStars, paintSky, upTimes } from './daynight/sky.ts'
 import { clockLabel, compass, hourFrom } from './daynight/words.ts'
+import { detailAsked, labelNames, writeDetail } from '../shared/detail.ts'
 
 const DETAIL = [
   { id: 'chunky', label: 'Chunky', spacing: 0.036 },
@@ -99,7 +100,7 @@ export function DayNight() {
   const [moon, setMoon] = useState(0.5)
   const place = useMemo<SkyPlace>(() => ({ latitude, day: SEASONS.find((s) => s.id === season)!.day, moon }), [latitude, season, moon])
   const [shadows, setShadows] = useState<boolean>()
-  const [detail, setDetail] = useState<(typeof DETAIL)[number]['id']>(phone ? 'chunky' : 'medium')
+  const [detail, setDetail] = useState<(typeof DETAIL)[number]['id']>(() => detailAsked(DETAIL, labelNames)?.id ?? (phone ? 'chunky' : 'medium'))
   const [view, setView] = useState(scene.views[0].id)
   const [orbit, setOrbit] = useState<Orbit>(scene.views[0].orbit)
 
@@ -363,7 +364,7 @@ export function DayNight() {
                 </div>
                 <Field label="Detail">
                   <div className="flex flex-wrap gap-1.5">
-                    {DETAIL.map((d) => <Chip key={d.id} active={detail === d.id} onClick={() => setDetail(d.id)}>{d.label}</Chip>)}
+                    {DETAIL.map((d) => <Chip key={d.id} active={detail === d.id} onClick={() => { setDetail(d.id); writeDetail(d.id) }}>{d.label}</Chip>)}
                   </div>
                 </Field>
               </div>

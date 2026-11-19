@@ -1,0 +1,1 @@
+Every experiment's preview has a Record button beside Full screen: press it, turn the view, change a look or a season, press it again, and a video of just the picture is saved (an MP4 where the browser can make one), with none of the buttons or hints over it. A recording stops by itself after three minutes.

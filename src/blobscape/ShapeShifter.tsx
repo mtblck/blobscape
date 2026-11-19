@@ -11,6 +11,7 @@ import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitD
 import { CREATURES } from './creature/fromScenes.ts'
 import type { CreatureStage } from './creature/stage.ts'
 import { href } from './routes.ts'
+import { countNames, detailAsked, writeDetail } from '../shared/detail.ts'
 
 const DETAIL = [15000, 40000, 80000]
 /** Every creature is shown this long on its longest side, so a frog and a dragon meet as equals. */
@@ -69,7 +70,7 @@ export function ShapeShifter() {
   const coarse = useMemo(() => typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches, [])
   const [from, setFrom] = useState(() => named(params.get('from') ?? 'frog').id)
   const [to, setTo] = useState(() => { const id = named(params.get('to') ?? 'dragon').id; return id === named(params.get('from') ?? 'frog').id ? CREATURES.find((c) => c.id !== id)!.id : id })
-  const [count, setCount] = useState(coarse ? DETAIL[0] : DETAIL[1])
+  const [count, setCount] = useState(() => detailAsked(DETAIL, countNames) ?? (coarse ? DETAIL[0] : DETAIL[1]))
   const [pairing, setPairing] = useState<Pairing>('place')
   const [path, setPath] = useState<Path>('straight')
   const [order, setOrder] = useState<Order>('rise')
@@ -305,7 +306,7 @@ export function ShapeShifter() {
                 </Field>
                 <Field label="Blobs">
                   <div className="flex flex-wrap gap-1.5">
-                    {DETAIL.map((n) => <Chip key={n} active={count === n} onClick={() => setCount(n)}>{kilo(n)}</Chip>)}
+                    {DETAIL.map((n) => <Chip key={n} active={count === n} onClick={() => { setCount(n); writeDetail(kilo(n)) }}>{kilo(n)}</Chip>)}
                   </div>
                   <p className="mt-1.5 text-xs text-ink-faint">For each creature. The one that comes out with fewer lends some of its blobs twice.</p>
                 </Field>

@@ -11,7 +11,9 @@ import { BACKDROPS as CEL_BACKDROPS, CEL_START, celLook } from './celLooks.ts'
 import { ROLE_NOTES, SHAPES, SIZES, inWords, type Shape, type Size } from './bouquet/arrange.ts'
 import { DETAILS, fallen, makeBouquet, poseBouquet, setShedding, shedOne, type Bouquet } from './bouquet/bouquet.ts'
 import { PALETTES, SEASONS, seasonOn, type Role, type Season } from './bouquet/flowers.ts'
+import { TABLES, type TableKind } from './bouquet/tables.ts'
 import { VASES, type VaseKind } from './bouquet/vases.ts'
+import { detailAsked, labelNames, writeDetail } from '../shared/detail.ts'
 import type { CreatureStage } from './creature/stage.ts'
 import { href } from './routes.ts'
 
@@ -34,7 +36,7 @@ const oneOf = <T extends string>(list: readonly { id: T }[], s: string | null): 
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1)
 
 declare global {
-  interface Window { __bouquet?: { stage: CreatureStage; blobs: () => number; bones: () => number; stems: () => number; fallen: () => number; shed: () => boolean; lines: () => string[]; vase: () => string } }
+  interface Window { __bouquet?: { stage: CreatureStage; blobs: () => number; bones: () => number; stems: () => number; fallen: () => number; shed: () => boolean; lines: () => string[]; vase: () => string; table: () => string } }
 }
 
 /** The camera for a bouquet: the whole of it, table to tallest stem, keeping the side it was looked at from. */
@@ -64,9 +66,11 @@ export function Bouquets() {
   const [shape, setShape] = useState<Shape>(() => oneOf(SHAPES, params().get('shape')) ?? 'round')
   const [palette, setPalette] = useState<string>(() => params().get('palette') ?? '')
   const [vase, setVase] = useState<VaseKind | ''>(() => oneOf(VASES, params().get('vase')) ?? '')
-  const [detail, setDetail] = useState(() => oneOf(DETAILS, params().get('detail')) ?? (coarse ? 'light' : 'fine'))
-  const [draft, setDraft] = useState(1)
-  const [shedding, setShedding_] = useState(true)
+  const [table, setTable] = useState<TableKind | ''>(() => oneOf(TABLES, params().get('table')) ?? '')
+  const [detail, setDetail] = useState(() => detailAsked(DETAILS, labelNames)?.id ?? (coarse ? 'light' : 'fine'))
+  // the draft and the petals are in the address only once the visitor has moved them from how they start
+  const [draft, setDraft] = useState(() => { const q = params().get('draft'), n = Number(q); return q !== null && q !== '' && n >= 0 && n <= 2 ? Math.round(n * 10) / 10 : 1 })
+  const [shedding, setShedding_] = useState(() => params().get('petals') !== '0')
   const [look, setLook] = useState<(typeof LOOKS)[number]['id']>(() => oneOf(LOOKS, params().get('look')) ?? 'blobs')
   const [backdrop, setBackdrop] = useState(() => oneOf(BACKDROPS, params().get('backdrop')) ?? 'linen')
   const [orbit, setOrbit] = useState<Orbit>({ target: [0, 0.65, 0], distance: 3.2, azimuth: 24, elevation: 12 })
@@ -96,11 +100,11 @@ export function Bouquets() {
   useEffect(() => {
     setMaking(true)
     const t = setTimeout(() => {
-      setBouquet(makeBouquet({ season, seed, size, shape, palette: paletteHere, vase: vase || undefined }, DETAILS.find((d) => d.id === detail)!.spacing, plain))
+      setBouquet(makeBouquet({ season, seed, size, shape, palette: paletteHere, vase: vase || undefined, table: table || undefined }, DETAILS.find((d) => d.id === detail)!.spacing, plain))
       setMaking(false)
     }, 30)
     return () => clearTimeout(t)
-  }, [season, seed, size, shape, paletteHere, vase, detail, plain])
+  }, [season, seed, size, shape, paletteHere, vase, table, detail, plain])
 
   const live = useRef({ draft, shedding })
   live.current = { draft, shedding }
@@ -136,15 +140,15 @@ export function Bouquets() {
     const url = new URL(location.href)
     const put = (k: string, v: string | undefined) => { if (v) url.searchParams.set(k, v); else url.searchParams.delete(k) }
     put('season', season); put('seed', String(seed)); put('size', size === 'bouquet' ? undefined : size); put('shape', shape === 'round' ? undefined : shape)
-    put('palette', paletteHere); put('vase', vase || undefined); put('look', look === 'blobs' ? undefined : look); put('backdrop', backdrop === 'linen' ? undefined : backdrop)
+    put('palette', paletteHere); put('vase', vase || undefined); put('table', table || undefined); put('draft', draft === 1 ? undefined : String(draft)); put('petals', shedding ? undefined : '0'); put('look', look === 'blobs' ? undefined : look); put('backdrop', backdrop === 'linen' ? undefined : backdrop)
     history.replaceState(history.state, '', url)
-  }, [season, seed, size, shape, paletteHere, vase, look, backdrop])
+  }, [season, seed, size, shape, paletteHere, vase, table, draft, shedding, look, backdrop])
 
   const drop = useCallback(() => { if (bouquet && stage) { const did = shedOne(bouquet, stage.time); stage.invalidate(); return did } return false }, [bouquet, stage])
   // For verify: the stage and the bouquet, without clicking
   useEffect(() => {
     if (!stage || !bouquet) return
-    window.__bouquet = { stage, blobs: () => stage.blobCount, bones: () => bouquet.skeleton.count, stems: () => bouquet.stems.length, fallen: () => fallen(bouquet, stage.time), shed: drop, lines: () => bouquet.plan.lines.map(inWords), vase: () => bouquet.vase.name }
+    window.__bouquet = { stage, blobs: () => stage.blobCount, bones: () => bouquet.skeleton.count, stems: () => bouquet.stems.length, fallen: () => fallen(bouquet, stage.time), shed: drop, lines: () => bouquet.plan.lines.map(inWords), vase: () => bouquet.vase.name, table: () => bouquet.table.name }
     return () => { delete window.__bouquet }
   }, [stage, bouquet, drop])
 
@@ -261,6 +265,13 @@ export function Bouquets() {
                   </div>
                   <p className="mt-1.5 text-xs text-ink-faint">Each season has its own: a rain boot in spring, a watering can in summer, a pumpkin in fall and a snowman in winter. Its color and shape change with the bouquet.</p>
                 </Field>
+                <Field label="Stands on">
+                  <div className="flex flex-wrap gap-1.5" data-testid="bouquet-tables">
+                    <Chip active={!table} onClick={() => setTable('')}>Any table</Chip>
+                    {TABLES.map((t) => <Chip key={t.id} active={table === t.id} onClick={() => setTable(t.id)}>{t.label}</Chip>)}
+                  </div>
+                  <p className="mt-1.5 text-xs text-ink-faint">{bouquet ? `${cap(bouquet.table.name)}. ` : ''}Tip the view down to see its legs.</p>
+                </Field>
                 <Field label="Behind it">
                   <div className="flex flex-wrap gap-1.5">
                     {BACKDROPS.map((b) => <Chip key={b.id} active={backdrop === b.id} onClick={() => setBackdrop(b.id)}>{b.label}</Chip>)}
@@ -289,7 +300,7 @@ export function Bouquets() {
                 </Field>
                 <Field label="Detail">
                   <div className="flex flex-wrap gap-1.5">
-                    {DETAILS.map((d) => <Chip key={d.id} active={detail === d.id} onClick={() => setDetail(d.id)}>{d.label}</Chip>)}
+                    {DETAILS.map((d) => <Chip key={d.id} active={detail === d.id} onClick={() => { setDetail(d.id); writeDetail(d.id) }}>{d.label}</Chip>)}
                   </div>
                 </Field>
               </div>

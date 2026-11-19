@@ -9,6 +9,7 @@ import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitD
 import { href } from './routes.ts'
 import type { CreatureStage, Show } from './creature/stage.ts'
 import { TAB_SECTIONS, Workbench } from '../shared/Workbench.tsx'
+import { countNames, detailAsked, writeDetail } from '../shared/detail.ts'
 
 const SHOW: { id: Show; label: string }[] = [{ id: 'blobs', label: 'Blobs' }, { id: 'bones', label: 'Bones' }, { id: 'both', label: 'Both' }]
 const SPEEDS = [
@@ -57,7 +58,7 @@ export function Clockwork() {
   const [playing, setPlaying] = useState(!calm)
   const [speed, setSpeed] = useState(1)
   // phones start lighter: building the watch takes a moment on the main thread
-  const [count, setCount] = useState(() => (typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches ? DETAIL[0] : DETAIL[1]))
+  const [count, setCount] = useState(() => detailAsked(DETAIL, countNames) ?? (typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches ? DETAIL[0] : DETAIL[1]))
   const [show, setShow] = useState<Show>('blobs')
   const [view, setView] = useState('angle')
   const [orbit, setOrbit] = useState<Orbit>(VIEWS[1].orbit)
@@ -225,7 +226,7 @@ export function Clockwork() {
                 </Field>
                 <Field label="Blobs">
                   <div className="flex flex-wrap gap-1.5">
-                    {DETAIL.map((n) => <Chip key={n} active={count === n} onClick={() => setCount(n)}>{kilo(n)}</Chip>)}
+                    {DETAIL.map((n) => <Chip key={n} active={count === n} onClick={() => { setCount(n); writeDetail(kilo(n)) }}>{kilo(n)}</Chip>)}
                   </div>
                 </Field>
               </div>
