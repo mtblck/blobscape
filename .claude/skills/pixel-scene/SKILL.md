@@ -9,7 +9,7 @@ A scene is data alone: shapes, paints, bones and moves in one `SceneDoc` object.
 
 ## Read first
 
-1. `docs/scene-descriptions.md`: every field, shape and paint, the twelve rules that make a scene work, and the habits of a showpiece. Read all of it once.
+1. `docs/scene-descriptions.md`: every field, shape and paint, the thirteen rules that make a scene work, and the habits of a showpiece. Read all of it once.
 2. The type: `src/splat-engine/sceneDoc.ts` down to the end of `LightDoc`. Every field has a comment.
 3. One scene close to what is asked. `npm run scene -- --list` names them with what is in each; `npm run scene -- --example campfire` prints one as JSON. `campfire` is the plainest, `dragon` a showpiece built from many small parts, `windmill` a thing that turns, `ruin`, `cave`, `canyon` and `cabin` use the built things, formations, worn land and weather, `koi` has real water (`water`: rain that rings it and fish that push wakes), and `turkey` has figures that run on the spot while the road goes by (`pass` moves).
 
@@ -40,8 +40,9 @@ The same file opens on the site itself: Pixel Diorama, Scene tab, Open a file. T
 
 1. Save it as `src/blobscape/diorama/scenes/<id>.ts`, exporting the object typed `SceneDoc`, with a comment on top saying what is in the picture.
 2. Add it to `DIORAMAS` in `src/blobscape/diorama/scenes.ts` with `described(id, DOC, 'what is in the picture')`.
-3. Record its loop (`scripts/record-loops.mjs`, see CLAUDE.md) and list it in `diorama/loops.ts`; `loops.test.ts` fails until both exist.
-4. `npm test`, then `npm run check`. Add a file to `changes/` with a line for the changelog (`changes/README.md`).
+3. Mark each distinct thing as a prop: put it on a bone of its own at the point it stands on, with `prop: 'Its name'` (rule 13 in `docs/scene-descriptions.md`). Scene Creator splits the scene by these marks; `library.test.ts` fails for a new scene with none. Then `npm run build` and `npm run props` record each prop's card picture.
+4. Record its loop (`scripts/record-loops.mjs`, see CLAUDE.md) and list it in `diorama/loops.ts`; `loops.test.ts` fails until both exist.
+5. `npm test`, then `npm run check`. Add a file to `changes/` with a line for the changelog (`changes/README.md`).
 
 ## When the description can't say it
 

@@ -1,9 +1,27 @@
-import { useRef, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode, type RefObject } from 'react'
+
+/**
+ * While a workspace has the screen the floating tip button would sit on its controls (the mode bar along a phone's
+ * foot): it waits for the footer, through `html[data-workspace]`.
+ */
+export function useWorkspaceScreen(work: RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const el = work.current
+    if (!el || typeof IntersectionObserver === 'undefined') return
+    const root = document.documentElement
+    const io = new IntersectionObserver(([e]) => { if (e.intersectionRatio > 0.5) root.dataset.workspace = ''; else delete root.dataset.workspace }, { threshold: [0, 0.5, 1] })
+    io.observe(el)
+    return () => { io.disconnect(); delete root.dataset.workspace }
+  }, [work])
+}
 
 /** The sandbox shows one mode at a time: its tools, its panel. */
 export type ModeId = 'build' | 'select' | 'creatures' | 'effects' | 'scene'
 
-export const MODES: { id: ModeId; name: string; note: string; icon: string; dashed?: boolean }[] = [
+/** A mode on the bar: what it is called, what it is for, and its icon's path. */
+export interface Mode<M extends string = ModeId> { id: M; name: string; note: string; icon: string; dashed?: boolean }
+
+export const MODES: Mode[] = [
   { id: 'build', name: 'Build', note: 'Put blobs down, rub them out, patch holes and copy things.', icon: 'M14 4l6 6-9 9H5v-6z' },
   { id: 'select', name: 'Select', note: 'Pick blobs, then move, recolor, resize or delete them.', icon: 'M4 4h16v16H4z', dashed: true },
   { id: 'creatures', name: 'Creatures', note: 'Add creatures that move in your scene.', icon: 'M5 19c0-7 3-12 7-12s7 5 7 12zM10 14h.01M14 14h.01' },
@@ -29,26 +47,26 @@ export const Icon = ({ d, dashed, className = 'h-5 w-5' }: { d: string; dashed?:
   <svg viewBox="0 0 24 24" aria-hidden className={`flex-none ${className}`} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" strokeDasharray={dashed ? '3 3' : undefined}><path d={d} /></svg>
 )
 
-export const tabId = (base: string, mode: ModeId) => `${base}-mode-${mode}`
-export const panelId = (base: string, mode: ModeId) => `${base}-panel-${mode}`
+export const tabId = (base: string, mode: string) => `${base}-mode-${mode}`
+export const panelId = (base: string, mode: string) => `${base}-panel-${mode}`
 
 /**
- * The five modes as a tab list: a rail down the left on a wide screen, a bar
+ * The modes as a tab list: a rail down the left on a wide screen, a bar
  * along the bottom on a phone. Arrow keys in either direction move between them.
  */
-export function ModeBar({ mode, setMode, base, marks }: { mode: ModeId; setMode: (m: ModeId) => void; base: string; marks?: Partial<Record<ModeId, ReactNode>> }) {
+export function ModeBar<M extends string = ModeId>({ mode, setMode, base, marks, modes = MODES as unknown as Mode<M>[], label = 'Sandbox modes' }: { mode: M; setMode: (m: M) => void; base: string; marks?: Partial<Record<M, ReactNode>>; modes?: Mode<M>[]; label?: string }) {
   const refs = useRef<(HTMLButtonElement | null)[]>([])
   const onKeyDown = (ev: React.KeyboardEvent, i: number) => {
-    const n = MODES.length
+    const n = modes.length
     const to = ev.key === 'ArrowRight' || ev.key === 'ArrowDown' ? (i + 1) % n : ev.key === 'ArrowLeft' || ev.key === 'ArrowUp' ? (i - 1 + n) % n : ev.key === 'Home' ? 0 : ev.key === 'End' ? n - 1 : -1
     if (to < 0) return
     ev.preventDefault()
-    setMode(MODES[to].id)
+    setMode(modes[to].id)
     refs.current[to]?.focus()
   }
   return (
-    <div role="tablist" aria-label="Sandbox modes" className="flex gap-1 border-t border-rule bg-paper px-1 py-1 lg:min-h-0 lg:flex-1 lg:w-24 lg:flex-col lg:items-center lg:rounded-2xl lg:border lg:bg-paper-sunk lg:p-2">
-      {MODES.map((m, i) => {
+    <div role="tablist" aria-label={label} className="flex gap-1 border-t border-rule bg-paper px-1 py-1 lg:min-h-0 lg:flex-1 lg:w-24 lg:flex-col lg:items-center lg:rounded-2xl lg:border lg:bg-paper-sunk lg:p-2">
+      {modes.map((m, i) => {
         const on = m.id === mode
         return (
           <button

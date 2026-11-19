@@ -3867,6 +3867,12 @@
        "optional": true,
        "type": "string",
        "doc": "Another bone it rides on (named earlier in the list)."
+      },
+      {
+       "name": "prop",
+       "optional": true,
+       "type": "string",
+       "doc": "Marks a thing of its own (a mill, a tree, a sheep): its name as a prop in Scene Creator. The parts on this bone and\non the bones under it are the prop, and the scene comes apart into props by these marks with nothing picked by\nhand. Not on a bone under another marked one."
       }
      ]
     },

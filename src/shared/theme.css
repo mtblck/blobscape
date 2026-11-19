@@ -365,5 +365,5 @@
 
 /* A preview that fills the window (Workbench, where the browser has no element full screen) has the screen to itself. */
 html[data-full] .tipjar { display: none; }
-/* The sandbox's workspace fills the screen; the tip button comes back with the footer. */
+/* A workspace (the sandbox, Scene Creator) fills the screen; the tip button comes back with the footer. */
 html[data-workspace] .tipjar { display: none; }

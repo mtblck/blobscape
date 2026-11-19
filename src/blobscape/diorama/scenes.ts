@@ -71,6 +71,8 @@ export interface Diorama {
   touching?: number[]
   /** How big its description is, in bytes, written out as JSON: only for a scene that is data alone. */
   bytes?: number
+  /** Its description, for a scene that is one: what Scene Creator splits by the props it marks. */
+  doc?: SceneDoc
   /** How many moves its description lists. */
   moves?: number
   /** How many parts its description lists: specks and mist in the air are not counted. */
@@ -112,6 +114,7 @@ export function described(id: string, doc: SceneDoc, about: string): Diorama {
     id,
     label: c.name,
     about,
+    doc,
     bytes: new TextEncoder().encode(JSON.stringify(doc)).length,
     moves: doc.moves?.length ?? 0,
     parts: doc.parts.length,
