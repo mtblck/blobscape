@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { Tabs } from './ui.tsx'
 import { recordName, type Recorded, type Recording } from './record.ts'
 
@@ -12,7 +12,7 @@ export const TAB_SECTIONS = 'grid gap-5 pt-1 [&>*+*]:border-t [&>*+*]:border-rul
  * every page. Anything that does not act on the preview (a write-up, a finished sheet) goes in a card
  * below, outside this.
  */
-export function Workbench({ viewLabel, view, status, tabsLabel, tabs, footer, fullScreenAt = 'bottom-3 left-3 max-sm:bottom-2 max-sm:left-2' }: {
+export function Workbench({ viewLabel, view, status, tabsLabel, tabs, footer, fullTools, fullScreenAt = 'bottom-3 left-3 max-sm:bottom-2 max-sm:left-2' }: {
   /** Names the preview region for screen readers. */
   viewLabel: string
   /** The canvas and whatever lies over it. It fills a positioned box. */
@@ -23,6 +23,8 @@ export function Workbench({ viewLabel, view, status, tabsLabel, tabs, footer, fu
   tabs: { id: string; label: string; content: ReactNode }[]
   /** Stays at the foot of the panel whichever tab is open: what you do with the result (save it, send it on). */
   footer?: ReactNode
+  /** Buttons that join Record on the preview only while it fills the screen, when the options panel can't be reached (a `ViewPopup`). */
+  fullTools?: ReactNode
   /** Where on the preview the full screen button sits (position classes): bottom left unless a game's thumb stick is there. */
   fullScreenAt?: string
 }) {
@@ -42,6 +44,7 @@ export function Workbench({ viewLabel, view, status, tabsLabel, tabs, footer, fu
                 </svg>
               </button>
               <RecordButton view={pictures} />
+              {full && fullTools}
             </div>
           </div>
           {status && <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-t border-rule-soft px-4 py-2 text-xs leading-relaxed text-ink-muted sm:text-sm">{status}</div>}
@@ -155,5 +158,41 @@ function RecordButton({ view }: { view: React.RefObject<HTMLDivElement | null> }
       </button>
       <span role="status" data-testid="record-note" className={note ? 'rounded-full bg-paper/80 px-2.5 py-1 text-xs text-ink' : 'sr-only'}>{note || (on ? 'Recording.' : '')}</span>
     </>
+  )
+}
+
+/**
+ * A button on the preview that opens a small panel of options above itself, for what must be reached while the
+ * preview fills the screen and the options panel is out of sight. The panel lives inside the preview, so it shows in
+ * full screen; Escape or a press outside closes it and hands focus back to the button.
+ */
+export function ViewPopup({ label, title, testId, children }: { label: string; title: string; testId?: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false)
+  const box = useRef<HTMLDivElement>(null)
+  const opener = useRef<HTMLButtonElement>(null)
+  const id = useId()
+  useEffect(() => {
+    if (!open) return
+    const out = (ev: PointerEvent) => { if (!box.current?.contains(ev.target as Node)) setOpen(false) }
+    const key = (ev: KeyboardEvent) => {
+      if (ev.key !== 'Escape') return
+      // the browser's own Escape leaves full screen: this one only closes the panel
+      ev.preventDefault()
+      ev.stopPropagation()
+      setOpen(false)
+      opener.current?.focus()
+    }
+    document.addEventListener('pointerdown', out, true)
+    document.addEventListener('keydown', key, true)
+    return () => { document.removeEventListener('pointerdown', out, true); document.removeEventListener('keydown', key, true) }
+  }, [open])
+  return (
+    <div ref={box} className="relative">
+      <button ref={opener} type="button" aria-expanded={open} aria-controls={open ? id : undefined} onClick={() => setOpen((o) => !o)} data-testid={testId} className="zoom-btn !w-auto px-2.5 text-xs font-medium">{label}</button>
+      {open && <div id={id} role="group" aria-label={title} className="stack-controls absolute bottom-full left-0 z-10 mb-2 grid max-h-[min(70vh,32rem)] w-[min(20rem,calc(100vw-1.5rem))] gap-4 overflow-y-auto rounded-2xl border border-rule bg-paper p-4 text-ink shadow-lg">
+        <p className="font-display text-base">{title}</p>
+        {children}
+      </div>}
+    </div>
   )
 }
