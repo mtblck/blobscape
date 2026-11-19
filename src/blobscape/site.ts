@@ -171,6 +171,17 @@ export const EXPERIMENTS = [
     body: 'A crocodile, a jellyfish, an owl, a fox, an elf and a dragon that breathes fire, frost or venom, made of blobs and moving on our own splat engine. See their bones, then take one away as a rigged 3D model for Blender or a game engine, or as a pixel-art sprite sheet.',
   },
   {
+    id: 'sandbox',
+    title: 'Sandbox',
+    url: '/experiments/sandbox/',
+    cover: '/covers/sandbox.webp',
+    tags: ['tool', 'creatures'],
+    needs: 'WebGL 2',
+    published: '2026-11-11',
+    updated: '2026-11-18',
+    body: 'Every tool from the lessons on a whole scene: spray, select, move, recolor and blow up blobs, paint grass and fur, add creatures that walk about, turn a photo into a scene you can walk round, or open your own capture.',
+  },
+  {
     id: 'fit',
     title: 'Fit a Picture',
     url: '/experiments/fit-a-picture/',

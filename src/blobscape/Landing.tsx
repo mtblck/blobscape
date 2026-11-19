@@ -53,7 +53,7 @@ export function Landing() {
             <a href={href({ page: 'lesson', id: next.id })} className={PRIMARY}>
               {started ? `Carry on: ${next.title}` : 'Start with one blob'}
             </a>
-            <a href={href({ page: 'sandbox' })} className={QUIET}>Open the sandbox</a>
+            <a href={href({ page: 'creator' })} className={QUIET}>Make a scene</a>
           </div>
         </div>
         <HeroDiagram />

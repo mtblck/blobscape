@@ -44,6 +44,10 @@ The same file opens on the site itself: Pixel Diorama, Scene tab, Open a file. T
 4. Record its loop (`scripts/record-loops.mjs`, see CLAUDE.md) and list it in `diorama/loops.ts`; `loops.test.ts` fails until both exist.
 5. `npm test`, then `npm run check`. Add a file to `changes/` with a line for the changelog (`changes/README.md`).
 
+## Scene Creator projects are not descriptions
+
+A visitor's Scene Creator project (`.blobscape.json`, `SceneProject` in `splat-engine/project.ts`) only places library props on a library land, each cut from a description by its `prop` marks. If someone asks for a scene and hands you a project, or wants one of your scenes usable there, the work is still a description: write it, mark its props, add it to the site (above), and its props join the library.
+
 ## When the description can't say it
 
 A new shape, paint or move needs a case in the type, the checker and the builder in `sceneDoc.ts`, a test, and a line in `docs/scene-descriptions.md`. Ask before adding one: most things can be built from what is there (see "What it can't do yet" in the guide).

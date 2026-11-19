@@ -198,7 +198,6 @@ export function parsePath(pathname: string): Route | null {
   if (m.length === 1 && m[0] === '') return { page: 'home' }
   if (m[0] === 'lessons' && m.length === 1) return { page: 'lessons' }
   if (m[0] === 'lessons' && m.length === 2 && LESSONS.some((l) => l.id === m[1])) return { page: 'lesson', id: m[1] }
-  if (m.length === 1 && m[0] === 'sandbox') return { page: 'sandbox' }
   if (m.length === 1 && m[0] === 'scene-creator') return { page: 'creator' }
   if (m.length === 1 && m[0] === 'experiments') return { page: 'experiments' }
   if (m.length === 1 && m[0] === 'engine') return { page: 'engine' }
@@ -220,8 +219,11 @@ export function parsePath(pathname: string): Route | null {
   if (m.length === 2 && m[0] === 'experiments' && m[1] === 'pixel-diorama') return { page: 'diorama' }
   if (m.length === 2 && m[0] === 'experiments' && m[1] === 'scan-studio') return { page: 'scan' }
   if (m.length === 2 && m[0] === 'experiments' && m[1] === 'dungeon-run') return { page: 'dungeon' }
+  if (m.length === 2 && m[0] === 'experiments' && m[1] === 'sandbox') return { page: 'sandbox' }
   // The old address, before every experiment moved under /experiments/ (Vercel redirects it too)
   if (m.length === 1 && m[0] === 'creature') return { page: 'creature' }
+  // the sandbox's address before Scene Creator took its place in the header (#341; Vercel redirects it too)
+  if (m.length === 1 && m[0] === 'sandbox') return { page: 'sandbox' }
   return null
 }
 
@@ -238,7 +240,7 @@ export function parseLegacyHash(hash: string): Route | null {
 
 export function href(r: Route): string {
   if (r.page === 'lesson') return `/lessons/${r.id}/`
-  if (r.page === 'sandbox') return '/sandbox/'
+  if (r.page === 'sandbox') return '/experiments/sandbox/'
   if (r.page === 'creator') return '/scene-creator/'
   if (r.page === 'creature') return '/experiments/creature/'
   if (r.page === 'forest') return '/experiments/forest-walk/'

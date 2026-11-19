@@ -8,7 +8,7 @@ export default [
     entries: ['src/blobscape/Sandbox.tsx'],
     async run({ readFileSync, shots, join, fails, ok, open, axe, ballPly, tabClick }) {
       const B = '/'
-      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 720 }, acceptDownloads: true })
+      const { page, ctx } = await open('/experiments/sandbox/', { viewport: { width: 1280, height: 720 }, acceptDownloads: true })
       await page.waitForTimeout(1500)
       const count = async () => Number((await page.textContent('[data-testid=blob-count]')).replace(/\D/g, ''))
       const selected = async () => Number(((await page.textContent('[data-testid=selected-count]').catch(() => '0')) ?? '0').replace(/\D/g, ''))
@@ -127,7 +127,7 @@ export default [
     about: 'erase a hole, Fill grows it shut, Stamp copies one place to another, Undo',
     entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/patch.ts'],
     async run({ shots, join, fails, ok, open, ballPly, tabClick }) {
-      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 720 } })
+      const { page, ctx } = await open('/experiments/sandbox/', { viewport: { width: 1280, height: 720 } })
       await page.waitForTimeout(1500)
       const count = async () => Number((await page.textContent('[data-testid=blob-count]')).replace(/\D/g, ''))
       await page.getByRole('tab', { name: /Scene/ }).click()
@@ -177,7 +177,7 @@ export default [
     about: 'the five brushes each paint onto the scene, one Undo a stroke',
     entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/brushes.ts'],
     async run({ shots, join, fails, ok, open, axe, tabClick }) {
-      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 720 } })
+      const { page, ctx } = await open('/experiments/sandbox/', { viewport: { width: 1280, height: 720 } })
       await page.waitForTimeout(1500)
       const count = async () => Number((await page.textContent('[data-testid=blob-count]')).replace(/\D/g, ''))
       const box = await page.getByTestId('viewport').boundingBox()
@@ -220,7 +220,7 @@ export default [
     about: 'camera stops and playing the path (saving the MP4 only with VERIFY_MP4=1)',
     entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/cameraPath.ts', 'src/blobscape/diorama/video.ts'],
     async run({ readFileSync, shots, join, fails, ok, open, axe, tabClick }) {
-      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 720 }, acceptDownloads: true })
+      const { page, ctx } = await open('/experiments/sandbox/', { viewport: { width: 1280, height: 720 }, acceptDownloads: true })
       await page.waitForTimeout(1500)
       // a picture of the view waits on Spark's frames, which software rendering can take most of a minute over on a busy machine
       const shot = async () => (await page.getByTestId('viewport').screenshot({ timeout: 120000 * (Number(process.env.VERIFY_SLOW) || 1) })).toString('base64')
@@ -310,7 +310,7 @@ export default [
     about: 'one photo to a shallow scene: the depth model runs in the page, the view opens as the photo and has depth',
     entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/photo.ts', 'src/blobscape/photo/scene.ts', 'src/blobscape/photo/depth.worker.ts'],
     async run({ readFileSync, root, shots, join, fails, ok, open, tabClick }) {
-      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 720 } })
+      const { page, ctx } = await open('/experiments/sandbox/', { viewport: { width: 1280, height: 720 } })
       // nothing but this site may be asked for anything
       const outside = []
       page.on('request', (r) => { if (!/^(http:\/\/localhost|data:|blob:)/.test(r.url())) outside.push(r.url()) })
@@ -353,7 +353,7 @@ export default [
         const tools = (window.__tools = new Map())
         Object.defineProperty(document, 'modelContext', { configurable: true, value: { registerTool(t, o) { tools.set(t.name, t); o?.signal?.addEventListener('abort', () => tools.delete(t.name)); return Promise.resolve() } } })
       })
-      await page.locator('a[href="/sandbox/"]').first().click()
+      await page.locator('a[href="/experiments/sandbox/"]').first().click()
       await page.waitForSelector('[data-testid=blob-count]')
       await page.waitForTimeout(1500)
       const count = async () => Number((await page.textContent('[data-testid=blob-count]')).replace(/\D/g, ''))
@@ -410,7 +410,7 @@ export default [
     about: 'tap to select: with whole things on, a click on the toadstool selects it and not the scene, by a model run in the page',
     entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/tapSelect.ts', 'src/blobscape/select/thing.ts', 'src/blobscape/select/segment.worker.ts'],
     async run({ shots, join, fails, ok, open }) {
-      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 720 } })
+      const { page, ctx } = await open('/experiments/sandbox/', { viewport: { width: 1280, height: 720 } })
       const outside = []
       page.on('request', (r) => { if (!/^(http:\/\/localhost|data:|blob:)/.test(r.url())) outside.push(r.url()) })
       await page.waitForTimeout(2500)
@@ -455,7 +455,7 @@ export default [
     about: 'a slime that bursts and the watch, added from other experiments',
     entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/props.ts'],
     async run({ shots, join, fails, ok, open, axe, tabClick }) {
-      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 720 } })
+      const { page, ctx } = await open('/experiments/sandbox/', { viewport: { width: 1280, height: 720 } })
       await page.waitForTimeout(1500)
       // no count on the page is no creatures; where there is one, a busy page is given time to answer (a second was not enough in software, and read as 0)
       const inCreatures = async () => ((await page.locator('[data-testid=creature-blob-count]').count()) ? Number(((await page.textContent('[data-testid=creature-blob-count]', { timeout: 30000 }).catch(() => '0')) ?? '0').replace(/\D/g, '')) : 0)
@@ -488,7 +488,7 @@ export default [
     about: 'add, play, drag with Move, bones, freeze, undo, walk about, look at, effects, save .ply and rigged .glb, open a rigged model; phone',
     entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/actors.ts', 'src/blobscape/wander.ts', 'src/splat-core/view.ts', 'src/blobscape/sceneFile.ts', 'src/blobscape/modelRig.ts', 'src/splat-engine/skinnedModel.ts'],
     async run({ readFileSync, shots, join, fails, ok, open, axe, tabClick }) {
-      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 720 }, acceptDownloads: true })
+      const { page, ctx } = await open('/experiments/sandbox/', { viewport: { width: 1280, height: 720 }, acceptDownloads: true })
       await page.waitForTimeout(1500)
       const count = async () => Number((await page.textContent('[data-testid=blob-count]')).replace(/\D/g, ''))
       // no count on the page is no creatures; where there is one, a busy page is given time to answer (a second was not enough in software, and read as 0)
@@ -647,7 +647,7 @@ export default [
       else ok(`blobscape sandbox creatures: a rigged model opens on Splat Creatures as blobs on its own bones (${meshNote})`)
       await cp.page.screenshot({ path: join(shots, 'blobscape-creature-from-model.png') })
       await cp.ctx.close()
-      const sb = await open('/sandbox/', { viewport: { width: 1280, height: 720 } })
+      const sb = await open('/experiments/sandbox/', { viewport: { width: 1280, height: 720 } })
       await sb.page.waitForTimeout(1500)
       await sb.page.setInputFiles('input[type=file]', { name: 'frog-mesh.glb', mimeType: 'model/gltf-binary', buffer: meshBytes })
       // the note is read in the same look that finds it: it is gone a few seconds later, and a second look at a busy page can come after that
@@ -655,7 +655,7 @@ export default [
       if (!added) fails.push('blobscape sandbox creatures: the frog as a skinned mesh did not join the sandbox as a creature')
       else ok(`blobscape sandbox creatures: ${added.trim()}`)
       await sb.ctx.close()
-      const phone = await open('/sandbox/', { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+      const phone = await open('/experiments/sandbox/', { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
       await phone.page.waitForTimeout(1500)
       await phone.page.getByRole('tab', { name: /Creatures/ }).click()
       await tabClick(phone.page.getByTestId('add-creature').getByRole('button', { name: 'Frog' }))
@@ -671,7 +671,7 @@ export default [
     entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/sandbox/modes.tsx'],
     async run({ base, shots, join, fails, ok, open, axe }) {
       const NAMES = ['Build', 'Select', 'Creatures', 'Effects', 'Scene']
-      const { page, ctx } = await open('/sandbox/', { viewport: { width: 1280, height: 720 } })
+      const { page, ctx } = await open('/experiments/sandbox/', { viewport: { width: 1280, height: 720 } })
       await page.waitForTimeout(1500)
       // First visit: Build, with Spray held
       const first = await page.getByRole('tab', { selected: true }).textContent()
@@ -689,7 +689,7 @@ export default [
         if (heading !== name || q !== (name === 'Build' ? null : name.toLowerCase())) fails.push(`blobscape sandbox modes: ${name} shows "${heading}", address mode ${q}`)
       }
       ok(`blobscape sandbox modes: each mode opens its panel and sets ?mode= (${seen.length})`)
-      await page.goto(base + '/sandbox/?mode=effects')
+      await page.goto(base + '/experiments/sandbox/?mode=effects')
       await page.waitForTimeout(1200)
       const back = await page.getByRole('tab', { selected: true }).textContent()
       if (!/^Effects/.test(back ?? '')) fails.push(`blobscape sandbox modes: ?mode=effects opened ${back}`)
@@ -711,7 +711,7 @@ export default [
       await page.keyboard.press('Escape')
       await ctx.close()
       // A phone: every mode at the short tray leaves the view at least half the screen
-      const phone = await open('/sandbox/', { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+      const phone = await open('/experiments/sandbox/', { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
       await phone.page.waitForTimeout(1500)
       const heights = []
       for (const name of NAMES) {

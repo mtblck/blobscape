@@ -592,7 +592,7 @@ export default [
     entries: ['src/blobscape/Sandbox.tsx', 'src/blobscape/lessons/Footprint.tsx', 'src/blobscape/Landing.tsx', 'src/blobscape/lessons/Angle.tsx'],
     files: ['src/shared/theme.css'],
     async run({ base, shots, join, open, axe }) {
-      const dark = await open('/sandbox/', { colorScheme: 'dark', viewport: { width: 1280, height: 900 } })
+      const dark = await open('/experiments/sandbox/', { colorScheme: 'dark', viewport: { width: 1280, height: 900 } })
       await dark.page.waitForTimeout(2500)
       await axe(dark.page, 'blobscape dark sandbox')
       await dark.page.screenshot({ path: join(shots, 'blobscape-dark.png') })

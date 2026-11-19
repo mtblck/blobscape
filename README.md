@@ -10,14 +10,14 @@
 <h3 align="center">Learn 3D Gaussian splats by taking them apart.</h3>
 
 <p align="center">
-  Twenty-four hands-on lessons, a sandbox, and a shelf of experiments on our own animated-splat engine.<br />
+  Twenty-four hands-on lessons, a scene maker, and a shelf of experiments on our own animated-splat engine.<br />
   All of it runs in your browser. Free, no account.
 </p>
 
 <p align="center">
   <a href="https://blobscape.dev/"><b>Website</b></a> ·
   <a href="https://blobscape.dev/lessons/">Lessons</a> ·
-  <a href="https://blobscape.dev/sandbox/">Sandbox</a> ·
+  <a href="https://blobscape.dev/scene-creator/">Scene Creator</a> ·
   <a href="https://blobscape.dev/experiments/">Experiments</a> ·
   <a href="https://blobscape.dev/engine/">Engine</a> ·
   <a href="https://blobscape.dev/engine/rigged-splats/">Rigged-splat spec</a>
@@ -64,9 +64,15 @@ with a hint that points the way without giving it away, and every scene opens in
   <a href="https://blobscape.dev/lessons/one-blob/"><img src=".github/readme/lesson.webp" alt="Lesson 1, One blob: goal cards above a dark display case holding a single orange blob with its axes, and sliders for its size, turn, color and opacity" width="880" /></a>
 </p>
 
-The [**Sandbox**](https://blobscape.dev/sandbox/) is where you make a mess: spray, select, recolor
-and explode blobs, add creatures, or open your own capture (.ply, .spz, .splat, .ksplat, .sog). Files
-stay in your browser.
+[**Scene Creator**](https://blobscape.dev/scene-creator/) makes your own pixel diorama: start from
+one of the scenes or a bare land, set down props from a library cut out of the scenes, arrange and
+light them, pick a style and export the loop. Your scenes are kept in your own browser, or saved as a
+`.blobscape.json` file: a project, which names its land and props from the library and says where
+each stands, rather than a description of its own (see `docs/scene-descriptions.md`).
+
+The [**Sandbox**](https://blobscape.dev/experiments/sandbox/) is where you make a mess: spray, select,
+recolor and explode blobs, add creatures, or open your own capture (.ply, .spz, .splat, .ksplat, .sog).
+Files stay in your browser.
 
 ## Experiments
 

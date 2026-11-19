@@ -79,7 +79,9 @@ function structured(route: Route): object[] {
       ]
     }
     case 'sandbox':
-      return [breadcrumbs([home, ['Sandbox', href(route)]])]
+      return [work(experimentAt(href(route))!), breadcrumbs([home, ['Experiments', '/experiments/'], ['Sandbox', href(route)]])]
+    case 'creator':
+      return [{ '@type': 'WebApplication', name: 'Scene Creator', url: url(href(route)), applicationCategory: 'DesignApplication', operatingSystem: 'Any (in a browser with WebGPU or WebGL 2)', isAccessibleForFree: true, description: pageMeta(route).description, author: PERSON }, breadcrumbs([home, ['Scene Creator', href(route)]])]
     case 'experiments':
       return [
         { '@type': 'ItemList', name: 'Blobscape experiments', itemListElement: byPublished('newest').map((e, i) => ({ '@type': 'ListItem', position: i + 1, name: e.title, url: url(e.url) })) },
@@ -191,8 +193,8 @@ function write(path: string, html: string) {
 // Said above a page whose view and controls do nothing without scripts (classes the app's own pages use, so they are in the CSS)
 const NO_SCRIPT = '<noscript><p class="px-4 py-2 text-center text-sm text-ink-muted">This page draws live blobs in your browser, so it needs JavaScript.</p></noscript>'
 // The app, loaded the way Vite would for a server, to draw every page. These are the ones the browser hydrates.
-/** Pages built and served but kept out of search, the sitemap and llms.txt until they are ready (Scene Creator until it takes the sandbox's place, #341). */
-const UNLISTED = new Set<Route['page']>(['creator'])
+/** Pages built and served but kept out of search, the sitemap and llms.txt until they are ready (none now: Scene Creator was until it took the sandbox's place, #341). */
+const UNLISTED = new Set<Route['page']>([])
 const HYDRATED = new Set<Route['page']>(['home', 'lessons', 'experiments', 'contact', 'engine', 'spec', 'api', 'news', 'post', 'notfound'])
 const vite = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'error' })
 const { renderPage } = (await vite.ssrLoadModule('/src/blobscape/ssr.tsx')) as typeof import('../src/blobscape/ssr.tsx')
@@ -251,7 +253,7 @@ write(
     `## Lessons\n${LESSONS.map((l, i) => line(href({ page: 'lesson', id: l.id }), `${i + 1}. ${l.title}`, l.summary)).join('\n')}`,
     `## Experiments\n${byPublished('newest').map((e) => line(e.url, e.title, e.body)).join('\n')}`,
     `## The engine\n${(['engine', 'api', 'spec'] as const).map((page) => line(href({ page }), pageMeta({ page }).title.replace(` · ${SITE.name}`, ''), pageMeta({ page }).search)).join('\n')}`,
-    `## More\n${[line('/sandbox/', 'Sandbox', pageMeta({ page: 'sandbox' }).search), line(NEWS.path, "What's New", NEWS.intro), line(href({ page: 'contact' }), 'Get in touch', pageMeta({ page: 'contact' }).search)].join('\n')}`,
+    `## More\n${[line(href({ page: 'creator' }), 'Scene Creator', pageMeta({ page: 'creator' }).search), line(NEWS.path, "What's New", NEWS.intro), line(href({ page: 'contact' }), 'Get in touch', pageMeta({ page: 'contact' }).search)].join('\n')}`,
   ].join('\n\n') + '\n',
 )
 // What's New as a feed, for readers that follow one: each post whole, links made absolute
