@@ -308,6 +308,72 @@ export interface PixelLook {
    * perspective view at the origin's depth.
    */
   snap?: boolean
+  /**
+   * Glow in bands (1 or 2): in place of the soft spill round bright pixels, each pixel within `HALO_R` art pixels of a
+   * glowing one takes a flat share of its light by how far it is, in rings, as hand-drawn pixel art lights a lamp.
+   * After Ink Studio's banded glow (MIT), with their agreement.
+   */
+  bands?: number
+  /**
+   * Heat haze: pixels above anything glowing (within `HEAT_R` across and up to `HEAT_UP` more above) are drawn from a
+   * pixel or so to one side, the shift running in waves that change `pace` times a second (a whole number a loop, so a
+   * recording joins). `pixels` is the most a pixel moves, 1 to 3. After Ink Studio's heat effect (MIT).
+   */
+  heat?: { pixels: number; pace: number }
+  /**
+   * Color cycling: scene pixels whose palette color is one of `colors` step along the list `pace` times a second, as
+   * old games ran water and fire. Each color is taken to its nearest in the palette, so a visitor's own palette still
+   * cycles. Steady pixels leave these colors alone. After Ink Studio's palette cycles (MIT).
+   */
+  cycle?: { colors: Rgb[]; pace: number }[]
+  /**
+   * Lighter outlines on lit sides ("selout"): an outline beside a scene pixel lighter than `SELOUT_FROM` takes a shade
+   * just under that pixel's own color instead of the outline, so the line shows only where the thing is in shade. Needs
+   * `outline`. After Ink Studio's lit and shadow line colors (MIT).
+   */
+  selout?: boolean
+}
+
+/** Banded glow reaches this many art pixels from a glowing one, and lends this share of its light at the nearest band. */
+export const HALO_R = 3, HALO_SHARE = 0.5
+/** Heat haze: how far across and how far above a glowing pixel the air shimmers, and its waves (a step of 16, in −1..1). */
+export const HEAT_R = 3, HEAT_UP = 3
+export const HEAT_WAVE = [0, 0, 1, 1, 1, 1, 1, 0, 0, 0, -1, -1, -1, -1, -1, 0]
+/** Heat haze's waves change about this many times a second (a page fits it to a whole number a loop). */
+export const HEAT_PACE = 8
+/** Heat haze's pace for a scene that loops every `loop` seconds: about `HEAT_PACE` a second, a whole number a loop. */
+export const heatPace = (loop: number): number => Math.max(1, Math.round(HEAT_PACE * loop)) / loop
+/** Selout: an outline beside a pixel at least this light (OKLab) takes a shade of it, this share of its lightness. */
+export const SELOUT_FROM = 0.62, SELOUT_L = 0.82
+
+/** How bright a pixel glows, 0 to 1, from its brightest channel (0–255): the glow's own measure. */
+export const brightOf = (r: number, g: number, b: number): number => smooth(GLOW_FROM, 1, Math.max(r, g, b) / 255)
+
+/**
+ * The haze's shift for column `x` and row `y` (from the top) at step `tick`: whole art pixels, `pixels` at most.
+ * Integers only, so the live pass gives the same.
+ */
+export function heatShift(x: number, y: number, tick: number, pixels: number): number {
+  return HEAT_WAVE[(y * 2 + x + tick * 3) & 15] * pixels
+}
+
+/**
+ * Color cycling at time `t`: for each palette index, the index it is drawn as (`turn`), and whether it is in a cycle
+ * at all (`member`, which steady pixels leave alone). The live pass reads both from uniforms.
+ */
+export function cycleTurns(look: PixelLook, t: number): { turn: Int32Array; member: Uint8Array } {
+  const n = look.palette.length
+  const turn = Int32Array.from({ length: n }, (_, i) => i), member = new Uint8Array(n)
+  if (!look.cycle?.length || !n) return { turn, member }
+  const pl = look.palette.map((c) => oklab(...c))
+  for (const c of look.cycle) {
+    const ids: number[] = []
+    for (const col of c.colors) { const k = nearest(oklab(...col), pl); if (!ids.includes(k)) ids.push(k) }
+    if (ids.length < 2) continue
+    const shift = Math.floor(t * c.pace + 1e-6)
+    ids.forEach((k, i) => { if (member[k]) return; member[k] = 1; turn[k] = ids[(((i + shift) % ids.length) + ids.length) % ids.length] })
+  }
+  return { turn, member }
 }
 
 /**
@@ -422,11 +488,13 @@ const smooth = (a: number, b: number, x: number) => { const t = Math.min(1, Math
  * keeps it. `parts` is the scene's map of parts for a look with `parts`: the
  * same view with every part in its own flat color (alpha 0 where there is none).
  */
-export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Frame, ranks?: Frame): Frame {
+export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Frame, ranks?: Frame, time = 0): Frame {
   const { width: w, height: h } = f
   const out = makeFrame(w, h)
   const cut = PIXEL_CUT * 255
   const solid = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h && f.data[(y * w + x) * 4 + 3] >= cut
+  /** A glowing pixel, by the glow's own measure: what banded glow and heat haze start from. */
+  const brightAt = (x: number, y: number) => { if (!solid(x, y)) return 0; const j = (y * w + x) * 4; return brightOf(f.data[j], f.data[j + 1], f.data[j + 2]) }
   const pl = look.palette.map((c) => oklab(...c))
   const amp = look.dither * 48
   const edges = look.edges ?? 0
@@ -435,12 +503,38 @@ export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Fram
   // surface dither: each pixel's step from the map of steps, where the scene has one
   const steps = look.surface && ranks && ranks.width === w && ranks.height === h ? ranks.data : undefined
   const slot = new Map(look.palette.map((c, k) => [(c[0] << 16) | (c[1] << 8) | c[2], k]))
+  const bands = Math.min(2, Math.max(0, Math.round(look.bands ?? 0)))
+  const heat = look.heat && look.heat.pixels > 0 ? look.heat : undefined
+  const tick = heat ? Math.floor(time * heat.pace + 1e-6) : 0
+  const { turn, member } = cycleTurns(look, time)
   const g: Rgb = [0, 0, 0]
   for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
+    for (let x0 = 0; x0 < w; x0++) {
+      const o = (y * w + x0) * 4
+      // heat haze: above something glowing (and not glowing itself), this pixel is drawn from one beside it
+      let x = x0
+      if (heat && brightAt(x0, y) <= 0.5) {
+        let near = false
+        for (let b = HEAT_UP - HEAT_R; b <= HEAT_UP + HEAT_R && !near; b++) for (let a = -HEAT_R; a <= HEAT_R && !near; a++) near = brightAt(x0 + a, y + b) > 0.5
+        if (near) x = Math.min(w - 1, Math.max(0, x0 + heatShift(x0, y, tick, heat.pixels)))
+      }
       const i = (y * w + x) * 4
       g[0] = g[1] = g[2] = 0
-      if (look.glow > 0) {
+      if (look.glow > 0 && bands > 0) {
+        // banded glow: the brightest light near, by its strength over distance, lends a flat share by its ring
+        let best = 0, bd = 0, bk = 0, bj = 0
+        for (let dy = -HALO_R; dy <= HALO_R; dy++) for (let dx = -HALO_R; dx <= HALO_R; dx++) {
+          const d = Math.max(Math.abs(dx), Math.abs(dy))
+          if (d === 0) continue
+          const k = brightAt(x + dx, y + dy)
+          if (k / (1 + d) > best) { best = k / (1 + d); bd = d; bk = k; bj = ((y + dy) * w + x + dx) * 4 }
+        }
+        if (best > 0) {
+          const band = Math.min(bands - 1, Math.floor(((bd - 1) * bands) / HALO_R))
+          const s = bk * ((bands - band - 0.5) / bands) * look.glow * HALO_SHARE
+          g[0] = f.data[bj] * s; g[1] = f.data[bj + 1] * s; g[2] = f.data[bj + 2] * s
+        }
+      } else if (look.glow > 0) {
         for (const [dx, dy] of GLOW_TAPS) {
           if (!solid(x + dx, y + dy)) continue
           const j = ((y + dy) * w + x + dx) * 4
@@ -470,10 +564,21 @@ export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Fram
       }
       else if (look.outline && N4.some(([dx, dy]) => solid(x + dx, y + dy))) {
         let c = look.outline
-        if (look.own) {
-          // a darker tone of the scene pixel beside it: the first of right, left, below, above
-          const [dx, dy] = N4.find(([dx, dy]) => solid(x + dx, y + dy))!
-          const j = ((y + dy) * w + x + dx) * 4
+        // the scene pixel beside it: the first of right, left, below, above
+        const [nx, ny] = N4.find(([dx, dy]) => solid(x + dx, y + dy))!
+        const j = ((y + ny) * w + x + nx) * 4
+        const lit = look.selout ? oklab(f.data[j], f.data[j + 1], f.data[j + 2]) : undefined
+        if (lit && lit[0] >= SELOUT_FROM) {
+          // selout: on a lit side, a shade just under the thing's own color
+          if (pl.length) {
+            let bestD = Infinity
+            for (let k = 0; k < pl.length; k++) {
+              const d = (pl[k][0] - lit[0] * SELOUT_L) ** 2 + (pl[k][1] - lit[1]) ** 2 + (pl[k][2] - lit[2]) ** 2
+              if (d < bestD) { bestD = d; c = look.palette[k] }
+            }
+          } else c = [f.data[j] * SELOUT_L, f.data[j + 1] * SELOUT_L, f.data[j + 2] * SELOUT_L]
+        } else if (look.own) {
+          // a darker tone of the scene pixel beside it
           if (pl.length) {
             const a = oklab(f.data[j], f.data[j + 1], f.data[j + 2])
             let bestD = Infinity
@@ -484,7 +589,7 @@ export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Fram
             }
           } else c = [f.data[j] * (1 - EDGE_DARK), f.data[j + 1] * (1 - EDGE_DARK), f.data[j + 2] * (1 - EDGE_DARK)]
         }
-        out.data[i] = c[0]; out.data[i + 1] = c[1]; out.data[i + 2] = c[2]; out.data[i + 3] = 255
+        out.data[o] = c[0]; out.data[o + 1] = c[1]; out.data[o + 2] = c[2]; out.data[o + 3] = 255
         continue
       } else if (look.sky) {
         const [top, low] = look.sky, reach = skyReach(look.sky), t = Math.min(1, (y + 0.5) / h / reach)
@@ -495,20 +600,22 @@ export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Fram
       else continue
       r = Math.min(255, r); gg = Math.min(255, gg); b = Math.min(255, b)
       if (pl.length) {
-        const step = steps && solid(x, y) && steps[i + 3] >= 128 ? steps[i] : BAYER4[(y & 3) * 4 + (x & 3)]
+        const step = steps && solid(x, y) && steps[i + 3] >= 128 ? steps[i] : BAYER4[(y & 3) * 4 + (x0 & 3)]
         const off = spread > 0 ? (step / 16 - 0.5) * spread : 0
         const lab = oklab(Math.max(0, r + off), Math.max(0, gg + off), Math.max(0, b + off))
         let k = nearest(lab, pl)
         // only the scene's own pixels: the sky is the same every frame, and a pixel the scene has left must not keep its color
-        if (steady > 0 && solid(x, y) && before!.data[i + 3] === 255) {
-          const was = slot.get((before!.data[i] << 16) | (before!.data[i + 1] << 8) | before!.data[i + 2])
+        if (steady > 0 && solid(x, y) && before!.data[o + 3] === 255) {
+          const was = slot.get((before!.data[o] << 16) | (before!.data[o + 1] << 8) | before!.data[o + 2])
           const far = (p: Rgb) => Math.hypot(lab[0] - p[0], lab[1] - p[1], lab[2] - p[2])
-          if (was !== undefined && was !== k && far(pl[was]) <= far(pl[k]) + steady) k = was
+          // colors that cycle are left to move
+          if (was !== undefined && was !== k && !member[was] && !member[k] && far(pl[was]) <= far(pl[k]) + steady) k = was
         }
-        const c = look.palette[k]
+        // color cycling, on the scene's own pixels
+        const c = look.palette[solid(x, y) ? turn[k] : k]
         r = c[0]; gg = c[1]; b = c[2]
       }
-      out.data[i] = r; out.data[i + 1] = gg; out.data[i + 2] = b; out.data[i + 3] = 255
+      out.data[o] = r; out.data[o + 1] = gg; out.data[o + 2] = b; out.data[o + 3] = 255
     }
   }
   return look.tidy ? tidyLone(out, f, map) : out

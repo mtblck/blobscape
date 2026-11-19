@@ -581,7 +581,7 @@
        "doc": "Pixel mode's last frame as it was drawn small, and as finished art (exactly in the look's colors): for tests and for saving.",
        "signatures": [
         {
-         "code": "pixelFrames(): Promise<{ small: Frame; art: Frame; before?: Frame; parts?: Frame; ranks?: Frame; fine?: { small: Frame; parts: Frame } } | undefined>"
+         "code": "pixelFrames(): Promise<{ small: Frame; art: Frame; before?: Frame; parts?: Frame; ranks?: Frame; time: number; fine?: { small: Frame; parts: Frame } } | undefined>"
         }
        ]
       },
@@ -3548,8 +3548,8 @@
       {
        "name": "look",
        "optional": true,
-       "type": "{ dither?: number; glow?: number; outline?: boolean; edges?: boolean; steps?: boolean }",
-       "doc": "The pixel look it asks for: how much dither and glow, and whether to draw an outline and edge lines. `steps` paints\nthe scene in steps of its palette as it is cut (each blob takes one palette color, a step of its own paint from shade\nto sun), so shade falls in flat bands; left out, shading is smooth and the picture is matched to the palette pixel by pixel."
+       "type": "{ dither?: number; glow?: number; outline?: boolean; edges?: boolean; steps?: boolean; bands?: number; heat?: number; selout?: boolean; cycle?: { colors: string[]; times: number }[] }",
+       "doc": "The pixel look it asks for: how much dither and glow, and whether to draw an outline and edge lines. `steps` paints\nthe scene in steps of its palette as it is cut (each blob takes one palette color, a step of its own paint from shade\nto sun), so shade falls in flat bands; left out, shading is smooth and the picture is matched to the palette pixel by pixel.\nArt-pixel effects (after Ink Studio's, MIT): `bands` (1 or 2) draws glow in flat rings, `heat` (1 to 3 pixels) makes\nthe air shimmer above anything glowing, `selout` softens the outline where it goes round something lit, and `cycle`\nsteps scene pixels of a few palette colors round their list a whole number of `times` a loop, as old games ran\nwater, fire and lights."
       },
       {
        "name": "disc",
@@ -7367,6 +7367,12 @@
        "doc": "The look in use."
       },
       {
+       "name": "drawnAt",
+       "readonly": true,
+       "type": "number",
+       "doc": "The time the last frame was drawn for (`setTime`): what `pixelArt` needs as its `time`."
+      },
+      {
        "name": "width",
        "readonly": true,
        "type": "number",
@@ -7395,6 +7401,15 @@
        "signatures": [
         {
          "code": "setLook(look: PixelLook): void"
+        }
+       ]
+      },
+      {
+       "name": "setTime",
+       "doc": "The scene's time for this frame: what heat haze's waves and color cycling step by (`pixelArt`'s `time`).",
+       "signatures": [
+        {
+         "code": "setTime(t: number): void"
         }
        ]
       },
@@ -7550,6 +7565,30 @@
        "optional": true,
        "type": "boolean",
        "doc": "Holds the picture on the art's grid: the world's origin always lands on a whole art pixel, so when the view slides\n(a pan, a zoom, a camera that follows) the scene moves by whole pixels instead of smearing across them. The live\npass only (`snapShift`). After Ink Studio's camera snap, which does it for a flat view; here it holds for a\nperspective view at the origin's depth."
+      },
+      {
+       "name": "bands",
+       "optional": true,
+       "type": "number",
+       "doc": "Glow in bands (1 or 2): in place of the soft spill round bright pixels, each pixel within `HALO_R` art pixels of a\nglowing one takes a flat share of its light by how far it is, in rings, as hand-drawn pixel art lights a lamp.\nAfter Ink Studio's banded glow (MIT), with their agreement."
+      },
+      {
+       "name": "heat",
+       "optional": true,
+       "type": "{ pixels: number; pace: number }",
+       "doc": "Heat haze: pixels above anything glowing (within `HEAT_R` across and up to `HEAT_UP` more above) are drawn from a\npixel or so to one side, the shift running in waves that change `pace` times a second (a whole number a loop, so a\nrecording joins). `pixels` is the most a pixel moves, 1 to 3. After Ink Studio's heat effect (MIT)."
+      },
+      {
+       "name": "cycle",
+       "optional": true,
+       "type": "{ colors: Rgb[]; pace: number }[]",
+       "doc": "Color cycling: scene pixels whose palette color is one of `colors` step along the list `pace` times a second, as\nold games ran water and fire. Each color is taken to its nearest in the palette, so a visitor's own palette still\ncycles. Steady pixels leave these colors alone. After Ink Studio's palette cycles (MIT)."
+      },
+      {
+       "name": "selout",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Lighter outlines on lit sides (\"selout\"): an outline beside a scene pixel lighter than `SELOUT_FROM` takes a shade\njust under that pixel's own color instead of the outline, so the line shows only where the thing is in shade. Needs\n`outline`. After Ink Studio's lit and shadow line colors (MIT)."
       }
      ]
     },
@@ -7559,7 +7598,7 @@
      "doc": "One frame of a scene to pixel art, the CPU twin of the live pixel pass\n(change one, change both). `f` is the scene drawn small: straight sRGB.\n\n  alpha cut → glow (bright pixels light their neighbors, and empty pixels\n  beside them) → edge lines (the darker side of a jump in color) →\n  palette + dither → outline on the empty pixels that touch the scene →\n  sky on the rest, if the look has one\n\n`before` is the art of the frame before, for a look with `steady`: where it\nholds a palette color that is nearly as close as the best one, that pixel\nkeeps it. `parts` is the scene's map of parts for a look with `parts`: the\nsame view with every part in its own flat color (alpha 0 where there is none).",
      "signatures": [
       {
-       "code": "pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Frame, ranks?: Frame): Frame"
+       "code": "pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Frame, ranks?: Frame, time?: number): Frame"
       }
      ]
     }

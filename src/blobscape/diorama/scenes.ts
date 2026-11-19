@@ -48,7 +48,8 @@ export interface Diorama {
   palette: { label: string; colors: Rgb[] }
   sky: NonNullable<PixelLook['sky']>
   /** How it starts out: the Finish controls. */
-  finish: { dither: number; glow: number; outline: boolean; edges: boolean; sky: boolean; steps: boolean }
+  /** The finish the scene asks for; the art-pixel effects (`bands`, `heat`, `selout`, `cycle`) are as `PixelLook` has them. */
+  finish: { dither: number; glow: number; outline: boolean; edges: boolean; sky: boolean; steps: boolean; bands?: number; heat?: number; selout?: boolean; cycle?: PixelLook['cycle'] }
   views: { id: string; label: string; orbit: Orbit }[]
   /** Degrees the view rocks to either side while it plays, once a loop. */
   swing: number
@@ -123,7 +124,7 @@ export function described(id: string, doc: SceneDoc, about: string): Diorama {
     palette: { label: OWN_PALETTE, colors: c.palette },
     // with no sky of its own, the switch gives it a night made of its two darkest colors
     sky: c.look.sky ?? night(c.palette),
-    finish: { dither: c.look.dither, glow: c.look.glow, outline: !!c.look.outline, edges: !!c.look.edges, sky: !!c.look.sky, steps: c.steps },
+    finish: { dither: c.look.dither, glow: c.look.glow, outline: !!c.look.outline, edges: !!c.look.edges, sky: !!c.look.sky, steps: c.steps, bands: c.look.bands, heat: c.look.heat?.pixels, selout: c.look.selout, cycle: c.look.cycle },
     views: [
       { id: 'start', label: 'From the front', orbit: c.orbit },
       { id: 'above', label: 'From above', orbit: { ...c.orbit, elevation: 40, distance: c.orbit.distance * 1.25 } },

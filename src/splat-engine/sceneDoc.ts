@@ -1,6 +1,6 @@
 import type { Vec3 } from '../splat-core/blobs.ts'
 import type { Orbit } from '../splat-core/orbit.ts'
-import { MAX_PALETTE_SIZE, darkest, type PixelLook, type Rgb } from '../splat-core/pixel.ts'
+import { MAX_PALETTE_SIZE, darkest, heatPace, type PixelLook, type Rgb } from '../splat-core/pixel.ts'
 import type { PointLight } from './engine.ts'
 import { axisAngle, mulQ, type Bone, type Skeleton } from './rig.ts'
 import { INK_MARKS, LETTERS, MAX_LAMPS, PAINTED, blend, box, many, lathe, letterGrid, pixelText, sweep, cone, cut, cylinder, displace, ellipsoid, roof, sphere, torus, union, type LooseBlob, type Shape, type VoxelPart, type VoxelSpec } from './voxel.ts'
@@ -44,8 +44,12 @@ export interface SceneDoc {
    * The pixel look it asks for: how much dither and glow, and whether to draw an outline and edge lines. `steps` paints
    * the scene in steps of its palette as it is cut (each blob takes one palette color, a step of its own paint from shade
    * to sun), so shade falls in flat bands; left out, shading is smooth and the picture is matched to the palette pixel by pixel.
+   * Art-pixel effects (after Ink Studio's, MIT): `bands` (1 or 2) draws glow in flat rings, `heat` (1 to 3 pixels) makes
+   * the air shimmer above anything glowing, `selout` softens the outline where it goes round something lit, and `cycle`
+   * steps scene pixels of a few palette colors round their list a whole number of `times` a loop, as old games ran
+   * water, fire and lights.
    */
-  look?: { dither?: number; glow?: number; outline?: boolean; edges?: boolean; steps?: boolean }
+  look?: { dither?: number; glow?: number; outline?: boolean; edges?: boolean; steps?: boolean; bands?: number; heat?: number; selout?: boolean; cycle?: { colors: string[]; times: number }[] }
   /**
    * How wide each surface disc is, as a share of the grid: 0.4 to 1, 0.55 when left out. Small discs keep paint
    * crisp but let about a tenth of what lies behind a surface show through; a subject whose far side or inner
@@ -640,7 +644,16 @@ export function checkScene(doc: unknown): string[] {
     else {
       opt(doc.look.dither, 'look.dither', 0, 1)
       opt(doc.look.glow, 'look.glow', 0, 4)
-      for (const k of ['outline', 'edges', 'steps']) if (doc.look[k] !== undefined && typeof doc.look[k] !== 'boolean') bad(`look.${k}`, 'must be true or false')
+      for (const k of ['outline', 'edges', 'steps', 'selout']) if (doc.look[k] !== undefined && typeof doc.look[k] !== 'boolean') bad(`look.${k}`, 'must be true or false')
+      for (const [k, most] of [['bands', 2], ['heat', 3]] as const) if (doc.look[k] !== undefined && (typeof doc.look[k] !== 'number' || !Number.isInteger(doc.look[k]) || doc.look[k] < 0 || doc.look[k] > most)) bad(`look.${k}`, `must be a whole number from 0 to ${most}`)
+      if (doc.look.cycle !== undefined) {
+        if (!Array.isArray(doc.look.cycle) || doc.look.cycle.length > 4) bad('look.cycle', 'must be a list of at most 4 cycles')
+        else doc.look.cycle.forEach((c: unknown, i: number) => {
+          if (!obj(c)) { bad(`look.cycle[${i}]`, 'must be an object'); return }
+          hexes(c.colors, `look.cycle[${i}].colors`, 2, 8)
+          if (typeof c.times !== 'number' || !Number.isInteger(c.times) || c.times < 1 || c.times > 600) bad(`look.cycle[${i}].times`, 'must be a whole number of steps a loop, 1 to 600, so the scene loops')
+        })
+      }
     }
   }
   if (!obj(doc.camera)) bad('camera', 'must be an object')
@@ -1653,6 +1666,10 @@ export function compileScene(doc: SceneDoc, { puffs = true }: { puffs?: boolean 
       outline: doc.look?.outline === false ? null : darkest(palette),
       edges: doc.look?.edges === false ? 0 : 1,
       sky: doc.sky ? [rgb(doc.sky[0]), rgb(doc.sky[1]), doc.skyReach ?? 1] : undefined,
+      bands: doc.look?.bands || undefined,
+      heat: doc.look?.heat ? { pixels: doc.look.heat, pace: heatPace(doc.loop) } : undefined,
+      selout: doc.look?.selout || undefined,
+      cycle: doc.look?.cycle?.map((c) => ({ colors: c.colors.map(rgb), pace: c.times / doc.loop })),
     },
     steps: doc.look?.steps ?? false,
     touching: doc.parts.map((p, i) => (p.touches ? i : -1)).filter((i) => i >= 0),
