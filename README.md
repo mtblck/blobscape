@@ -233,7 +233,11 @@ Pixel Diorama was inspired by the pixel-art Gaussian splat scenes that
 [Silicon Jungle](https://x.com/JungleSilicon) shared: the idea of drawing voxel scenes as small solid
 blobs and cutting them to a palette, and the themes of several scenes. The world-building shapes
 (brick walls, steps and fences, formations, weather that lands, worn rock) follow ideas from their
-Ink Studio kit. The scenes, the engine and the code here are our own.
+Ink Studio kit. Since November 2026 the two projects build on each other's work by agreement: where an
+idea or code comes from [Ink Studio](https://github.com/siliconjungle/shapeshift-labs-ink-studio)
+(MIT, © siliconjungle), the code says so where it is used. Ink Studio also gave us ideas for smaller
+improvements to Pixel Diorama's pixel art, such as dither that moves with things and the picture held on
+the art's grid.
 
 The sandbox's One photo to a scene guesses depth with
 [Depth Anything V2](https://github.com/DepthAnything/Depth-Anything-V2) Small (Yang et al., 2024, Apache 2.0),

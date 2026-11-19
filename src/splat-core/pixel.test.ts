@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { alphaCut, autoPalette, downsample, makeFrame, outline, pixelArt, quantize, lookColors, snapColors, removeStrays, countSolid, tidyLone, resolveFine, type Rgb } from './pixel.ts'
+import { alphaCut, autoPalette, downsample, makeFrame, outline, pixelArt, quantize, lookColors, snapColors, removeStrays, countSolid, tidyLone, resolveFine, ditherRank, typicalSpacing, surfaceRanks, snapShift, type Rgb, type PixelLook } from './pixel.ts'
 
 const solid = (w: number, h: number, on: (x: number, y: number) => boolean, rgb = [200, 40, 40]) => {
   const f = makeFrame(w, h)
@@ -289,4 +289,51 @@ test('pixelArt with own draws the outline in a darker palette step of the thing 
   const free = pixelArt(f, { ...look, palette: [] })
   assert.deepEqual(Array.from(free.data.slice(0, 3)), [0, 0, 0])
   assert.deepEqual(Array.from(free.data.slice((1 * 9 + 0) * 4, (1 * 9 + 0) * 4 + 3)), pal[2].map((v) => Math.round(v * 0.38)))
+})
+
+test('surface dither: a blob keeps its step wherever it lands, and a face runs through the whole pattern', () => {
+  // a face of blobs on a grid 0.1 apart, in each of the three ways a face can lie
+  for (const axis of [0, 1, 2]) {
+    const seen = new Set<number>()
+    for (let a = 0; a < 8; a++) for (let b = 0; b < 8; b++) {
+      const p = [0.05, 0.05, 0.05]
+      p[(axis + 1) % 3] += a * 0.1; p[(axis + 2) % 3] += b * 0.1
+      seen.add(ditherRank(p[0], p[1], p[2], 0.1))
+    }
+    assert.equal(seen.size, 16, `a face across axis ${axis} uses every step`)
+  }
+  // the step depends on the blob's rest place alone, so moving the picture leaves it
+  assert.equal(ditherRank(0.31, 0.72, -0.4, 0.1), ditherRank(0.31, 0.72, -0.4, 0.1))
+})
+
+test('typicalSpacing finds a grid\'s spacing, and surfaceRanks gives a step a blob', () => {
+  const n = 20 * 20
+  const center = new Float32Array(n * 3), scale = new Float32Array(n * 3).fill(0.04)
+  for (let i = 0; i < n; i++) { center[i * 3] = (i % 20) * 0.08; center[i * 3 + 2] = Math.floor(i / 20) * 0.08 }
+  const blobs = { count: n, center, scale }
+  assert.ok(Math.abs(typicalSpacing(blobs) - 0.08) < 1e-6)
+  const ranks = surfaceRanks(blobs)
+  assert.equal(ranks.length, n)
+  assert.equal(new Set(ranks).size, 16)
+})
+
+test('pixelArt with surface dither reads each pixel\'s step from the map, and the sky keeps the screen\'s', () => {
+  const pal: Rgb[] = [[0, 0, 0], [120, 120, 120], [240, 240, 240]]
+  const f = solid(4, 4, () => true, [60, 60, 60])
+  const look: PixelLook = { palette: pal, dither: 1, outline: null, glow: 0, surface: true }
+  const steps = (step: number) => ({ width: 4, height: 4, data: new Uint8ClampedArray(64).map((_, i) => (i % 4 === 3 ? 255 : i % 4 === 0 ? step : 0)) })
+  // every pixel on one step: one color for the whole face, darker at a low step than at a high one
+  const low = pixelArt(f, look, undefined, undefined, steps(0)), high = pixelArt(f, look, undefined, undefined, steps(15))
+  assert.equal(new Set(Array.from({ length: 16 }, (_, i) => low.data[i * 4])).size, 1)
+  assert.ok(low.data[0] < high.data[0])
+  // without the map, the screen's pattern as before
+  assert.deepEqual([...pixelArt(f, look).data], [...pixelArt(f, { ...look, surface: false }).data])
+})
+
+test('snapShift lands a point on the edge of a whole art pixel', () => {
+  for (const ndc of [-0.73, 0.001, 0.5, 0.91]) {
+    const px = ((ndc + snapShift(ndc, 160)) * 0.5 + 0.5) * 160
+    assert.ok(Math.abs(px - Math.round(px)) < 1e-9)
+    assert.ok(Math.abs(snapShift(ndc, 160)) <= 1 / 160 + 1e-12)
+  }
 })

@@ -293,6 +293,90 @@ export interface PixelLook {
    * A checkerboard dither keeps its pixels: each has its own color on the diagonals.
    */
   tidy?: boolean
+  /**
+   * Dither that stays on the things it falls on: each blob takes one step of the Bayer pattern from where it sits in
+   * its own rest pose (`ditherRank`), not from the pixel it lands on, so the pattern rides with a turning view or a
+   * moving creature instead of standing still on the screen while they slide under it. Needs a map of each pixel's
+   * step drawn beside the scene (`pixelArt`'s `ranks`; the live pass draws its own). The sky keeps the screen's pattern.
+   * After Silicon Jungle's Ink Studio (object-space dither, MIT), with their agreement.
+   */
+  surface?: boolean
+  /**
+   * Holds the picture on the art's grid: the world's origin always lands on a whole art pixel, so when the view slides
+   * (a pan, a zoom, a camera that follows) the scene moves by whole pixels instead of smearing across them. The live
+   * pass only (`snapShift`). After Ink Studio's camera snap, which does it for a flat view; here it holds for a
+   * perspective view at the origin's depth.
+   */
+  snap?: boolean
+}
+
+/**
+ * The Bayer step (0 to 15) that a blob at rest place `x, y, z` takes, on a lattice `spacing` apart. The three axes are
+ * mixed so that any face, whichever way it lies, runs through the whole 4 × 4 pattern (as Ink Studio does).
+ */
+export function ditherRank(x: number, y: number, z: number, spacing: number): number {
+  const ix = Math.floor(x / spacing), iy = Math.floor(y / spacing), iz = Math.floor(z / spacing)
+  const dx = ix + 3 * iy + 2 * iz, dy = 2 * ix + iy + 3 * iz
+  return BAYER4[(dy & 3) * 4 + (dx & 3)]
+}
+
+/**
+ * How far apart a set of blobs typically sits: the middle distance from a sample of them to their nearest neighbor.
+ * For a cut scene or creature it is the grid's spacing; the lattice of `surfaceRanks` goes by it.
+ */
+export function typicalSpacing(blobs: { count: number; center: ArrayLike<number>; scale: ArrayLike<number> }): number {
+  const n = blobs.count
+  if (n < 2) return 1
+  const sizes: number[] = []
+  const every = Math.max(1, Math.floor(n / 2048))
+  for (let i = 0; i < n; i += every) {
+    const a = blobs.scale[i * 3], b = blobs.scale[i * 3 + 1], c = blobs.scale[i * 3 + 2]
+    sizes.push(a + b + c - Math.max(a, b, c) - Math.min(a, b, c))
+  }
+  sizes.sort((p, q) => p - q)
+  const cell = Math.max(sizes[sizes.length >> 1] * 4, 1e-6)
+  const grid = new Map<string, number[]>()
+  const key = (x: number, y: number, z: number) => `${x},${y},${z}`
+  for (let i = 0; i < n; i++) {
+    const k = key(Math.floor(blobs.center[i * 3] / cell), Math.floor(blobs.center[i * 3 + 1] / cell), Math.floor(blobs.center[i * 3 + 2] / cell))
+    const list = grid.get(k)
+    if (list) list.push(i); else grid.set(k, [i])
+  }
+  const near: number[] = []
+  const step = Math.max(1, Math.floor(n / 512))
+  for (let i = 0; i < n; i += step) {
+    const x = blobs.center[i * 3], y = blobs.center[i * 3 + 1], z = blobs.center[i * 3 + 2]
+    const cx = Math.floor(x / cell), cy = Math.floor(y / cell), cz = Math.floor(z / cell)
+    let best = Infinity
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (let c = -1; c <= 1; c++) {
+      for (const j of grid.get(key(cx + a, cy + b, cz + c)) ?? []) {
+        if (j === i) continue
+        const d = (blobs.center[j * 3] - x) ** 2 + (blobs.center[j * 3 + 1] - y) ** 2 + (blobs.center[j * 3 + 2] - z) ** 2
+        if (d > 0 && d < best) best = d
+      }
+    }
+    if (best < Infinity) near.push(Math.sqrt(best))
+  }
+  if (!near.length) return cell
+  near.sort((p, q) => p - q)
+  return near[near.length >> 1]
+}
+
+/** Every blob's Bayer step for `surface` dither (`ditherRank` on a lattice of the blobs' own `typicalSpacing`). */
+export function surfaceRanks(blobs: { count: number; center: ArrayLike<number>; scale: ArrayLike<number> }): Uint8Array {
+  const s = typicalSpacing(blobs)
+  const out = new Uint8Array(blobs.count)
+  for (let i = 0; i < blobs.count; i++) out[i] = ditherRank(blobs.center[i * 3], blobs.center[i * 3 + 1], blobs.center[i * 3 + 2], s)
+  return out
+}
+
+/**
+ * For `snap`: how far to shift the picture, in normalized device units, so a point drawn at `ndc` lands on the edge of
+ * a whole art pixel in a picture `size` art pixels across that axis.
+ */
+export function snapShift(ndc: number, size: number): number {
+  const px = (ndc * 0.5 + 0.5) * size
+  return ((Math.round(px) - px) * 2) / size
 }
 
 /** A good `steady` for a moving scene: under the gap between neighboring palette colors, so shapes still move freely. */
@@ -338,7 +422,7 @@ const smooth = (a: number, b: number, x: number) => { const t = Math.min(1, Math
  * keeps it. `parts` is the scene's map of parts for a look with `parts`: the
  * same view with every part in its own flat color (alpha 0 where there is none).
  */
-export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Frame): Frame {
+export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Frame, ranks?: Frame): Frame {
   const { width: w, height: h } = f
   const out = makeFrame(w, h)
   const cut = PIXEL_CUT * 255
@@ -348,6 +432,8 @@ export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Fram
   const edges = look.edges ?? 0
   const map = look.parts && parts && parts.width === w && parts.height === h ? parts.data : undefined
   const steady = before && before.width === w && before.height === h ? look.steady ?? 0 : 0
+  // surface dither: each pixel's step from the map of steps, where the scene has one
+  const steps = look.surface && ranks && ranks.width === w && ranks.height === h ? ranks.data : undefined
   const slot = new Map(look.palette.map((c, k) => [(c[0] << 16) | (c[1] << 8) | c[2], k]))
   const g: Rgb = [0, 0, 0]
   for (let y = 0; y < h; y++) {
@@ -409,7 +495,8 @@ export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Fram
       else continue
       r = Math.min(255, r); gg = Math.min(255, gg); b = Math.min(255, b)
       if (pl.length) {
-        const off = spread > 0 ? (BAYER4[(y & 3) * 4 + (x & 3)] / 16 - 0.5) * spread : 0
+        const step = steps && solid(x, y) && steps[i + 3] >= 128 ? steps[i] : BAYER4[(y & 3) * 4 + (x & 3)]
+        const off = spread > 0 ? (step / 16 - 0.5) * spread : 0
         const lab = oklab(Math.max(0, r + off), Math.max(0, gg + off), Math.max(0, b + off))
         let k = nearest(lab, pl)
         // only the scene's own pixels: the sky is the same every frame, and a pixel the scene has left must not keep its color

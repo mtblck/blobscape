@@ -264,7 +264,7 @@ export default [
             solid++
             if (!pal.has((f.art.data[i] << 16) | (f.art.data[i + 1] << 8) | f.art.data[i + 2])) off++
           }
-          return { backend: stage.backend, w: f.art.width, h: f.art.height, solid, off, soft, small: Array.from(f.small.data), art: Array.from(f.art.data), before: f.before && Array.from(f.before.data), parts: f.parts && Array.from(f.parts.data), fine: f.fine && { small: Array.from(f.fine.small.data), parts: Array.from(f.fine.parts.data) }, look: look() }
+          return { backend: stage.backend, w: f.art.width, h: f.art.height, solid, off, soft, small: Array.from(f.small.data), art: Array.from(f.art.data), before: f.before && Array.from(f.before.data), parts: f.parts && Array.from(f.parts.data), ranks: f.ranks && Array.from(f.ranks.data), fine: f.fine && { small: Array.from(f.fine.small.data), parts: Array.from(f.fine.parts.data) }, look: look() }
         }, t)
         const a = await shot(2), b = await shot(5)
         // the same frame through the CPU twin (the page's own module isn't reachable from a production build, so it runs here)
@@ -285,7 +285,7 @@ export default [
           if (!(solid > 3000 && cover === 0 && part === 0 && tone < solid * 0.02)) fails.push(`blobscape pixel diorama (${a.backend}): four samples a pixel differs from its twin: ${JSON.stringify({ solid, cover, part, tone })}`)
           else ok(`blobscape pixel diorama (${a.backend}): four samples a pixel: ${solid} pixels settled as the CPU twin settles them (which thing shows: all; which sample: all but ${tone})`)
         }
-        const want = pixelArt(frame(a.small), a.look, frame(a.before), frame(a.parts))
+        const want = pixelArt(frame(a.small), a.look, frame(a.before), frame(a.parts), frame(a.ranks))
         let alpha = 0, color = 0, moved = 0
         for (let i = 0; i < want.data.length; i += 4) {
           if (want.data[i + 3] !== a.art[i + 3]) alpha++
@@ -301,7 +301,7 @@ export default [
         else ok(`${label}: the pixel pass matches its CPU twin (same shape, ${color} of ${a.solid} pixels a neighboring color)`)
         // lines between parts: the pass drew a map of the scene's parts beside the picture, and the lines it adds are the ones the twin adds
         {
-          const none = pixelArt(frame(a.small), { ...a.look, parts: false }, frame(a.before))
+          const none = pixelArt(frame(a.small), { ...a.look, parts: false }, frame(a.before), undefined, frame(a.ranks))
           const ids = new Set()
           let lines = 0
           for (let i = 0; i < want.data.length; i += 4) {
@@ -313,7 +313,7 @@ export default [
         }
         // lone pixels: the pass cleaned some up, and (above) the same ones its twin does
       {
-        const untidy = pixelArt(frame(a.small), { ...a.look, tidy: false }, frame(a.before), frame(a.parts))
+        const untidy = pixelArt(frame(a.small), { ...a.look, tidy: false }, frame(a.before), frame(a.parts), frame(a.ranks))
         let cleaned = 0
         for (let i = 0; i < want.data.length; i += 4) if (want.data[i] !== untidy.data[i] || want.data[i + 1] !== untidy.data[i + 1] || want.data[i + 2] !== untidy.data[i + 2]) cleaned++
         if (!(a.look.tidy && cleaned > 0 && cleaned < a.solid * 0.05)) fails.push(`${label}: lone-pixel cleanup: ${JSON.stringify({ on: a.look.tidy, cleaned })}`)
@@ -324,9 +324,9 @@ export default [
         // steady pixels: the frame after is drawn against this one, as the CPU twin does given the same two; and fewer pixels flip there and back than with it off
         {
           const c = await shot(5 + 1 / 60)
-          const again = pixelArt(frame(c.small), c.look, frame(c.before), frame(c.parts))
+          const again = pixelArt(frame(c.small), c.look, frame(c.before), frame(c.parts), frame(c.ranks))
           let held = 0, differ = 0
-          const plain = pixelArt(frame(c.small), { ...c.look, steady: 0 }, undefined, frame(c.parts))
+          const plain = pixelArt(frame(c.small), { ...c.look, steady: 0 }, undefined, frame(c.parts), frame(c.ranks))
           for (let i = 0; i < again.data.length; i += 4) {
             if (Math.abs(again.data[i] - c.art[i]) + Math.abs(again.data[i + 1] - c.art[i + 1]) + Math.abs(again.data[i + 2] - c.art[i + 2]) > 6 || again.data[i + 3] !== c.art[i + 3]) differ++
             if (plain.data[i] !== again.data[i] || plain.data[i + 1] !== again.data[i + 1] || plain.data[i + 2] !== again.data[i + 2]) held++
@@ -673,7 +673,7 @@ export default [
               if (!pal.has(c)) off++
               used.add(c)
             }
-            return { off, used: used.size, bones: bones(), turned: stage.orbit.azimuth, art: Array.from(f.art.data), small: Array.from(f.small.data), before: f.before && Array.from(f.before.data), parts: f.parts && Array.from(f.parts.data), w: f.art.width, h: f.art.height, look: look() }
+            return { off, used: used.size, bones: bones(), turned: stage.orbit.azimuth, art: Array.from(f.art.data), small: Array.from(f.small.data), before: f.before && Array.from(f.before.data), parts: f.parts && Array.from(f.parts.data), ranks: f.ranks && Array.from(f.ranks.data), w: f.art.width, h: f.art.height, look: look() }
           }, t)
           // a view that swings stands at the same angle at t and at half a loop less t (half a loop is given here), so what changes between those is the scene itself
           const half = { bee: 6, dragon: 8, hand: 8, reef: 6 }[id]
@@ -686,7 +686,7 @@ export default [
           if (id === 'dragon') {
             // the one scene whose sky stops short: that path of the pass against its CPU twin
             const { pixelArt } = await import('../../../src/splat-core/pixel.ts')
-            const want = pixelArt({ width: a.w, height: a.h, data: Uint8ClampedArray.from(a.small) }, a.look, a.before && { width: a.w, height: a.h, data: Uint8ClampedArray.from(a.before) }, a.parts && { width: a.w, height: a.h, data: Uint8ClampedArray.from(a.parts) })
+            const want = pixelArt({ width: a.w, height: a.h, data: Uint8ClampedArray.from(a.small) }, a.look, a.before && { width: a.w, height: a.h, data: Uint8ClampedArray.from(a.before) }, a.parts && { width: a.w, height: a.h, data: Uint8ClampedArray.from(a.parts) }, a.ranks && { width: a.w, height: a.h, data: Uint8ClampedArray.from(a.ranks) })
             let alpha = 0, color = 0
             for (let i = 0; i < want.data.length; i += 4) {
               if (want.data[i + 3] !== a.art[i + 3]) alpha++
