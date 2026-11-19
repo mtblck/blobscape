@@ -2,12 +2,15 @@
 import { INK, PAPER, type MarkKind } from '../splat-core/marks.ts'
 
 /** How the blobs are drawn: as they are, or as one of the marks. */
-export type LookId = 'blobs' | MarkKind
+export type LookId = 'blobs' | 'ascii' | MarkKind
+/** Whether a look is one of the marks drawn blob by blob. */
+export const isMark = (id: LookId): id is MarkKind => id !== 'blobs' && id !== 'ascii'
 export const LOOKS: { id: LookId; label: string; note: string }[] = [
   { id: 'gouache', label: 'Gouache', note: 'Flat, opaque dabs with the streaks of a dry brush.' },
   { id: 'oil', label: 'Oil', note: 'Thick paint: ridges between the bristles catch the light.' },
   { id: 'ink', label: 'Ink and wash', note: 'A thin wash of each color that leaves the paper showing in the light, pen strokes only in the shade, and a pen outline round everything.' },
   { id: 'hatch', label: 'Hatching', note: 'Pen lines on bare paper, drawn closer where it is darker.' },
+  { id: 'ascii', label: 'ASCII', note: 'A grid of characters: heavier ones where there is more to show, and strokes along the edges.' },
   { id: 'blobs', label: 'Blobs', note: 'The soft dots underneath, as every other page draws them.' },
 ]
 
@@ -22,3 +25,5 @@ export const PAPERS: { id: string; label: string; paper: readonly [number, numbe
 export const GROUND = '#26221f'
 /** A color (sRGB 0–1) as CSS. */
 export const css = (c: readonly number[]) => `rgb(${c.map((v) => Math.round(v * 255)).join(' ')})`
+/** What the characters stand on, by default: near black, as a terminal. */
+export const SCREEN: readonly [number, number, number] = [0.05, 0.06, 0.07]

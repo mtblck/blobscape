@@ -669,7 +669,7 @@ export default [
   })),
   {
     name: 'brush-and-ink',
-    about: 'Brush and Ink: each look redraws the same blobs as marks on both backends, a frame drawn twice is the same, the scan draws too',
+    about: 'Brush and Ink: each look redraws the same blobs as marks on both backends, ASCII as a grid of characters, a frame drawn twice is the same, the scan draws too',
     entries: ['src/blobscape/BrushInk.tsx'],
     async run({ shots, join, fails, ok, open, tabClick, axe }) {
       const read = (page, t = 0.4) => page.evaluate(async (t) => {
@@ -712,7 +712,18 @@ export default [
         const paper = await k.page.getByTestId('brush-ground').evaluate((e) => getComputedStyle(e).backgroundColor)
         await pick(k.page, 'Blobs', 'blobs')
         const blobs = await read(k.page)
-        pictures[backend] = { gouache, hatch, ink }
+        // ASCII: a grid of characters on a dark screen, the same picture when drawn twice, and the same grid as text
+        await pick(k.page, 'ASCII', 'ascii')
+        const ascii = await read(k.page), asciiAgain = await read(k.page)
+        const text = (await k.page.evaluate(() => window.__brush.text())) ?? ''
+        const screen = await k.page.getByTestId('brush-ground').evaluate((e) => getComputedStyle(e).backgroundColor)
+        const rows = text.split('\n'), chars = text.replace(/\s/g, '')
+        const heavy = (chars.match(/[%8#@]/g) ?? []).length, strokes = (chars.match(/[|_/\\]/g) ?? []).length
+        const lit = solid(ascii)
+        if (!(differ(ascii, blobs) > 0.01) || differ(ascii, asciiAgain, 0) !== 0 || !(rows.length > 15 && chars.length > 300 && heavy > 5 && strokes > 20 && strokes < chars.length * 0.6) || !(lit > 0.005 && lit < solid(blobs)) || !/rgb\((1?[0-9]), (1?[0-9]), (1?[0-9])\)/.test(screen)) fails.push(`brush and ink on ${backend}: ASCII: ${differ(ascii, blobs)} of the view changed from blobs, twice differs ${differ(ascii, asciiAgain, 0)}, ${rows.length} lines, ${chars.length} characters (${heavy} heavy, ${strokes} strokes), ${lit} of the view lit against ${solid(blobs)} as blobs, screen ${screen}`)
+        else ok(`brush and ink on ${backend}: ASCII draws the fox as ${chars.length} characters in ${rows.length} lines (${strokes} of them strokes along edges), the same when drawn twice`)
+        await pick(k.page, 'Blobs', 'blobs')
+        pictures[backend] = { gouache, hatch, ink, text }
         const m = { backend: got, same: differ(gouache, again, 0), cover: solid(gouache), blobs: solid(blobs), paint: differ(gouache, blobs), oil: differ(oil, gouache), ink: differ(ink, gouache), hatch: differ(hatch, ink), paper }
         // marks are opaque where soft dots fade, so the painted fox is at least as solid; each look is a different picture; a frame drawn twice is the same frame
         if (m.backend !== backend || m.same !== 0 || !(m.cover > 0.03 && m.cover >= m.blobs * 0.9) || !(m.paint > 0.01 && m.oil > 0.003 && m.ink > 0.01 && m.hatch > 0.005) || !/rgb\(2[0-9]{2}, 2[0-9]{2}, 2[0-9]{2}\)/.test(m.paper)) fails.push(`brush and ink on ${backend}: ${JSON.stringify(m)}`)
@@ -744,6 +755,14 @@ export default [
         const g = differ(pictures.webgpu.gouache, pictures.webgl.gouache, 90), h = differ(pictures.webgpu.hatch, pictures.webgl.hatch, 90), n = differ(pictures.webgpu.ink, pictures.webgl.ink, 90)
         if (!(g < 0.02 && h < 0.02 && n < 0.02)) fails.push(`brush and ink: WebGPU and WebGL differ at ${(g * 100).toFixed(2)}% of pixels in gouache, ${(h * 100).toFixed(2)}% hatched, ${(n * 100).toFixed(2)}% in ink and wash with its outlines`)
         else ok(`brush and ink: WebGPU and WebGL draw the same marks and outlines (${(g * 100).toFixed(2)}% of pixels differ in gouache, ${(h * 100).toFixed(2)}% hatched, ${(n * 100).toFixed(2)}% in ink and wash)`)
+      }
+      // and the same characters: a cell here and there may fall the other side of a line
+      if (pictures.webgpu?.text && pictures.webgl?.text) {
+        const a = pictures.webgpu.text.split('\n'), b = pictures.webgl.text.split('\n')
+        let n = 0, off = 0
+        for (let y = 0; y < Math.max(a.length, b.length); y++) for (let x = 0; x < Math.max(a[y]?.length ?? 0, b[y]?.length ?? 0); x++) { const u = a[y]?.[x] ?? ' ', v = b[y]?.[x] ?? ' '; if (u !== ' ' || v !== ' ') { n++; if (u !== v) off++ } }
+        if (!(n > 300 && off < n * 0.08)) fails.push(`brush and ink: WebGPU and WebGL differ at ${off} of ${n} characters in ASCII`)
+        else ok(`brush and ink: WebGPU and WebGL write the same characters (${off} of ${n} differ)`)
       }
       // Scan Studio offers the looks on its Lighting tab
       const s = await open('/experiments/scan-studio/?offscreen=1', { viewport: { width: 1280, height: 900 } })
