@@ -32,6 +32,10 @@ import { GlitchControls } from './diorama/GlitchControls.tsx'
 import { useDrawnLook, wantsPlain } from './drawnLook.tsx'
 import { download } from './files.ts'
 import { blocksToMesh } from '../splat-engine/blockMesh.ts'
+import { TRANSITIONS, type TransitionKind } from '../splat-core/transition.ts'
+import { TransitionOverlay } from './diorama/transitionOverlay.ts'
+import { watchDraws } from '../splat-core/drawn.ts'
+import { paintView } from '../shared/record.ts'
 import { blobsToMesh } from '../splat-engine/mesh.ts'
 import { recordClip, writeRiggedMeshGlb } from '../splat-engine/glb.ts'
 import { Skeleton as Bones } from '../splat-engine/rig.ts'
@@ -135,6 +139,15 @@ export function PixelDiorama() {
   const [blockSize, setBlockSize] = useState(2)
   const [glbNote, setGlbNote] = useState('')
   const [modelBusy, setModelBusy] = useState(false)
+  /** How one scene gives way to the next (`splat-core/transition.ts`), or a plain cut; never under reduced motion. */
+  const [transition, setTransition] = useState<TransitionKind | 'cut'>(() => {
+    const q = new URLSearchParams(location.search).get('transition')
+    return q === 'cut' ? 'cut' : TRANSITIONS.find((t) => t.id === q)?.id ?? TRANSITIONS[0].id
+  })
+  const changing = useRef<{ stop: () => void; sheet: HTMLCanvasElement; got: boolean } | null>(null)
+  const overlayCanvas = useRef<HTMLCanvasElement>(null)
+  const overlayOf = useRef<TransitionOverlay | null>(null)
+  const [passing, setPassing] = useState(false)
 
   // built after a paint, so the waiting mark shows first
   const [made, setScene] = useState<{ built: Built; of: Diorama; detail: string; paint: string; plain: boolean }>()
@@ -238,6 +251,7 @@ export function PixelDiorama() {
       setDither(d.finish.dither); setGlow(d.finish.glow); setOutline(d.finish.outline); setEdges(d.finish.edges); setSky(d.finish.sky)
       setBands(d.finish.bands ?? 0); setHeat(d.finish.heat ?? 0); setSelout(!!d.finish.selout)
       setView(d.views[0].id); setOrbit(d.views[0].orbit)
+      arrive.current()
     }
     stage.setPoser((sk: Skeleton, t: number) => {
       d.pose(sk, t)
@@ -413,10 +427,76 @@ export function PixelDiorama() {
     else url.searchParams.set('style', id)
     history.replaceState(history.state, '', url)
   }
+  /**
+   * Keeps a copy of each picture the old scene draws until the new one arrives, so the transition can start from its
+   * last moment (a GPU canvas can only be read straight after a draw).
+   */
+  const keepLastFrame = () => {
+    if (transition === 'cut' || calm || !drawn || changing.current || !canvas.current) return
+    const cv = canvas.current, box = cv.parentElement!
+    const sheet = document.createElement('canvas')
+    sheet.width = cv.width
+    sheet.height = cv.height
+    const ctx = sheet.getContext('2d', { alpha: false })!
+    const kept = { sheet, got: false, stop: () => {} }
+    const copy = () => {
+      if (sheet.width < 2) return
+      paintView(ctx, box, sheet.width, sheet.height, (el) => (el === overlayCanvas.current ? undefined : el))
+      kept.got = true
+    }
+    // drawn off screen, the page's canvas is a plain one that holds its picture: it is copied as the new scene arrives
+    kept.stop = offscreen ? copy : watchDraws((drawnTo) => { if (drawnTo === cv) copy() })
+    changing.current = kept
+    stage?.invalidate()
+  }
+  /** The new scene is in the view: the old picture gives way to it. */
+  const arrive = useRef<() => void>(() => {})
+  arrive.current = () => {
+    const kept = changing.current
+    changing.current = null
+    if (!kept) return
+    kept.stop()
+    const t = TRANSITIONS.find((x) => x.id === transition)
+    const el = overlayCanvas.current
+    if (!t || !kept.got || !el || !stage) return
+    let overlay: TransitionOverlay
+    try { overlay = overlayOf.current ??= new TransitionOverlay(el) } catch (e) { console.warn(e); return }
+    overlay.setFrom(kept.sheet)
+    // an art pixel in device pixels, so pixel art's transitions keep to its own pixels
+    const cell = pixels && stage.artSize ? Math.max(1, Math.round(kept.sheet.width / stage.artSize.width)) : Math.max(1, Math.round(6 * devicePixelRatio))
+    const dark = colors.length ? darkest(colors) : [11, 16, 38]
+    const cover: [number, number, number] = [dark[0] / 255, dark[1] / 255, dark[2] / 255]
+    const seed = Math.floor(Math.random() * 1000)
+    overlay.draw(t, 0, cell, cover, seed)
+    // shown at once, before the stage draws the new scene
+    el.hidden = false
+    setPassing(true)
+    // it starts once the new scene has been drawn, so it opens onto the scene and not onto a blank view
+    void (offscreen ? Promise.resolve() : stage.shown()).then(() => {
+      // off screen it keeps the stage's clock, which moves only as a check draws, so a check sees it go by
+      const now = () => (offscreen ? stage.time : performance.now() / 1000)
+      const start = now()
+      const step = () => {
+        const p = Math.min(1, Math.max(0, now() - start) / t.seconds)
+        overlay.draw(t, p, cell, cover, seed)
+        if (p < 1) requestAnimationFrame(step)
+        else { el.hidden = true; setPassing(false) }
+      }
+      requestAnimationFrame(step)
+    })
+  }
+  const pickTransition = (id: TransitionKind | 'cut') => {
+    setTransition(id)
+    const url = new URL(location.href)
+    if (id === TRANSITIONS[0].id) url.searchParams.delete('transition')
+    else url.searchParams.set('transition', id)
+    history.replaceState(history.state, '', url)
+  }
   /** Another scene. It is cut first; its palette, finish and view follow when it reaches the view. */
   const show = (id: string) => {
     if (id === which) return
     setWhich(id)
+    keepLastFrame()
     setNote('')
     // the address names the scene, so a reload or a shared link opens the same one (an opened model can't be)
     const url = new URL(location.href)
@@ -548,6 +628,7 @@ export function PixelDiorama() {
                   setOrbit((o) => orbitKey(ev, o) ?? o)
                 }}
               />
+              <canvas ref={overlayCanvas} aria-hidden hidden={!passing} className="pointer-events-none absolute inset-0 h-full w-full" data-testid="diorama-transition" />
               {loading && <LoadingMark testid="diorama-loading" />}
               <p role="status" className="sr-only">{loading ? loadingLabel : ''}</p>
               {failed && <div role="alert" className="absolute inset-4 grid place-items-center text-center text-sm text-ink">{failed}</div>}
@@ -579,6 +660,13 @@ export function PixelDiorama() {
                     </Button>
                   </div>
                 </div>
+                <Field label="Changing scenes">
+                  <div className="flex flex-wrap gap-1.5" data-testid="diorama-transitions">
+                    <Chip active={transition === 'cut'} onClick={() => pickTransition('cut')}>Cut</Chip>
+                    {TRANSITIONS.map((t) => <Chip key={t.id} active={transition === t.id} onClick={() => pickTransition(t.id)}>{t.name}</Chip>)}
+                  </div>
+                  <p className="mt-1.5 text-xs text-ink-faint">{calm ? 'Your device asks for less motion, so scenes change with a cut.' : 'How the last scene gives way to the next. An idea from Silicon Jungle\'s Ink Studio.'}</p>
+                </Field>
                 <div className="grid gap-2">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <Button small disabled={opening} onClick={() => modelInput.current?.click()}>{opening ? 'Opening…' : 'Open a file'}</Button>
