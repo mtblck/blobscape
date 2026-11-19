@@ -12,6 +12,7 @@ import { CREATURES } from '../creature/fromScenes.ts'
 import { DIORAMAS } from '../diorama/scenes.ts'
 import { HENGE_PICKS, LAVA_DRAGON_PICKS, LIGHTHOUSE_PICKS, TURKEY_PICKS, WINDMILL_PICKS, WITCH_IN_SPARKS_PICKS } from './picks.ts'
 import { PLAIN_ROCK, PLAIN_TURF } from './lands.ts'
+import { KIT } from './kit.ts'
 
 /**
  * Scene Creator's library (issue #334): props lifted out of Pixel Diorama's scenes, the lands they stood on and a few
@@ -113,6 +114,24 @@ const SOURCES: Source[] = [
     from: 'dragon', doc: DRAGON, picks: LAVA_DRAGON_PICKS,
     props: [{ id: 'lava-dragon', pick: 'Lava dragon', about: 'A red dragon with spread wings, swaying its neck and opening its jaw', group: 'living' }],
   },
+  {
+    // kit pieces, made by rules rather than lifted from a scene (an idea from Silicon Jungle's Ink Studio)
+    from: 'kit', doc: KIT, picks: markedPicks(KIT),
+    props: [
+      { id: 'kit-brick-wall', pick: 'Brick wall', about: 'A straight length of red brick wall, a meter long', group: 'buildings' },
+      { id: 'kit-ruined-wall', pick: 'Ruined wall', about: 'A stone wall fallen in places, its stones lying at its feet', group: 'buildings' },
+      { id: 'kit-fence', pick: 'Wooden fence', about: 'A leaning wooden fence of three bays with two rails', group: 'buildings' },
+      { id: 'kit-steps', pick: 'Stone steps', about: 'Four worn stone steps', group: 'buildings' },
+      { id: 'kit-arch', pick: 'Stone arch', about: 'A single round arch of coursed stone', group: 'buildings' },
+      { id: 'kit-columns', pick: 'Stone columns', about: 'A cluster of six-sided stone columns rising in steps', group: 'buildings' },
+      { id: 'kit-oak', pick: 'Oak tree', about: 'A small oak whose crown sways' },
+      { id: 'kit-cactus', pick: 'Cactus', about: 'A ribbed cactus with two arms' },
+      { id: 'kit-crystals', pick: 'Crystal cluster', about: 'A cluster of violet crystals' },
+      { id: 'kit-boulder', pick: 'Boulder', about: 'A rough gray boulder, half sunk' },
+      { id: 'kit-stump', pick: 'Tree stump', about: 'A tree stump, pale where it was cut' },
+      { id: 'kit-bush', pick: 'Round bush', about: 'A round green bush' },
+    ],
+  },
 ]
 
 /** Scenes whose picture is more than their description (code poses them, or adds to them), so they are never split. */
@@ -170,7 +189,7 @@ export function libraryProp(id: string): PropDoc | undefined {
 export const libraryCreature = (id: string) => (id.startsWith('creature-') ? CREATURES.find((c) => `creature-${c.id}` === id) : undefined)
 
 /** The scenes Scene Creator opens split into a land and props: those the library has picks for. */
-export const SPLIT_SCENES: readonly string[] = [...new Set(SOURCES.map((s) => s.from))]
+export const SPLIT_SCENES: readonly string[] = [...new Set(SOURCES.map((s) => s.from))].filter((id) => id !== 'kit')
 
 /**
  * A scene opened as a project: its land and every prop its first set of picks lifts out, each standing where it stood.

@@ -22,6 +22,7 @@ import { unpack, type PackedCut } from './creator/pack.ts'
 import { START_LANDS, START_SCENES, nameFor, openingAsked, openingLand, openingScene, queryFor, shownOf, type Opened } from './creator/shown.ts'
 import { AUTOSAVE_MS, FILE_END, cleanName, copyName, fileName, fileText, mergedLike, newId, openShelf, readFile, renamed, type SavedScene, type Shelf } from './creator/store.ts'
 import { download } from './files.ts'
+import { PACKS, packAdded } from './creator/packs.ts'
 import { BLOB_ROOM, CARDS, added, cardsFound, groundOf, heightAt, landSwapped, liftOn, roomOf, whyNot } from './creator/adding.ts'
 import { libraryProp, type LibraryEntry } from './creator/library.ts'
 import { budget, clock, lampAdded, lampLights, lampRemoved, lit, liveSky, liveSkyColors, rgbOf, shadeNow, sunNow } from './creator/lighting.ts'
@@ -597,7 +598,9 @@ export function SceneCreator() {
 
   const [query, setQuery] = useState('')
   const [refused, setRefused] = useState('')
-  const found = useMemo(() => cardsFound(query), [query])
+  const [pack, setPack] = useState<string>()
+  const packOn = PACKS.find((k) => k.id === pack)
+  const found = useMemo(() => cardsFound(query, packOn ? packOn.items.map((id) => CARD_BY_ID.get(id)!).filter(Boolean) : CARDS), [query, packOn])
   const lastBlobs = useRef(0)
   if (built) lastBlobs.current = built.reduce((n, b) => n + b.blobs.count, 0)
   const room = cp ? roomOf(cp, lastBlobs.current, coarse ? BLOB_ROOM.phone : BLOB_ROOM.other) : undefined
@@ -620,6 +623,19 @@ export function SceneCreator() {
     if (why) { say(why); return }
     edit(next, `Added ${e.name.toLowerCase()}. Drag it to move it, or open Arrange to turn and size it.`)
     setPicked(next.props.length - 1)
+  }
+  /** Sets the whole of a pack down round the middle of the view, in one step to undo. */
+  const addPack = () => {
+    if (!project || !cp || !room || !packOn) return
+    const middle = groundAtView()
+    const next = packAdded(project, packOn, middle, (x, z) => groundAt(x, z, middle[1]))
+    const why = next === project
+      ? `A scene holds ${room.props[1]} props at most, and the ${packOn.name.toLowerCase()} pack has ${packOn.items.length}: delete some to make room.`
+      : whyNot(packOn.name, room, roomOf(compileProject(next, libraryProp), room.blobs[0], room.blobs[1]))
+    setRefused(why ?? '')
+    if (why) { say(why); return }
+    edit(next, `Set down the ${packOn.name.toLowerCase()} pack: ${packOn.items.length} props. Drag any of them, or open Arrange.`)
+    setPicked(undefined)
   }
   const swapLand = (e: LibraryEntry) => {
     if (!project || project.land === e.id) return
@@ -903,7 +919,21 @@ export function SceneCreator() {
                     </p>
                     {refused && <p className="text-sm text-ink" data-testid="creator-refused">{refused}</p>}
                     <input type="search" value={query} onChange={(ev) => setQuery(ev.target.value)} placeholder="Find a prop or land" aria-label="Find a prop or land" className="min-h-10 w-full rounded-full border border-rule bg-paper px-4 text-sm outline-none focus-visible:border-accent" />
-                    {!found.length && <p className="text-sm text-ink-muted">Nothing in the library matches “{query}”.</p>}
+                    <div>
+                      <h3 id="creator-packs" className="mb-2 text-sm font-semibold">Packs</h3>
+                      <div className="flex flex-wrap gap-2" role="group" aria-labelledby="creator-packs" data-testid="creator-packs">
+                        <Chip active={!packOn} onClick={() => setPack(undefined)}>Everything</Chip>
+                        {PACKS.map((k) => <Chip key={k.id} active={pack === k.id} onClick={() => setPack(k.id)}>{k.name}</Chip>)}
+                      </div>
+                      {packOn && <p className="mt-2 text-xs text-ink-muted">{packOn.about}.</p>}
+                      {packOn && (
+                        <button type="button" onClick={addPack} data-testid="creator-pack-add"
+                          className="mt-2 min-h-10 cursor-pointer rounded-full border border-rule bg-paper px-4 text-sm font-semibold hover:border-ink-faint">
+                          Set the whole pack down
+                        </button>
+                      )}
+                    </div>
+                    {!found.length && <p className="text-sm text-ink-muted">Nothing {packOn ? `in the ${packOn.name.toLowerCase()} pack` : 'in the library'} matches “{query}”.</p>}
                     {found.map((g) => (
                       <div key={g.id}>
                         <h3 id={`creator-group-${g.id}`} className="mb-2 text-sm font-semibold">{g.name}</h3>
