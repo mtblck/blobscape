@@ -257,7 +257,7 @@ export const KOI: SceneDoc = {
     { kind: 'sway', bone: 'tail4', axis: 'y', degrees: 22, times: 18, phase: 0.569 },
   ],
   lights: [
-    { at: [1.07, 0.36, 0.7], color: '#ffd27a', strength: 1.6, range: 0.8, flicker: { by: 0.14, times: 7 }, shadows: true },
-    { at: [-0.98, 0.787, -0.6], color: '#ffd27a', strength: 1.8, range: 1, flicker: { by: 0.12, times: 5 }, shadows: true },
+    { at: [1.07, 0.36, 0.7], color: '#ffd27a', strength: 1.6, range: 0.8, flicker: { by: 0.14, times: 7 }, shadows: true, clear: 0.05 },
+    { at: [-0.98, 0.787, -0.6], color: '#ffd27a', strength: 1.8, range: 1, flicker: { by: 0.12, times: 5 }, shadows: true, clear: 0.07 },
   ],
 }

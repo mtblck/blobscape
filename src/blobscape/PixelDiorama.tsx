@@ -5,6 +5,7 @@ import { TOUR, clay, kept } from './diorama/tour.ts'
 import { STEADY, countColors, darkest, type Frame, type PixelLook } from '../splat-core/pixel.ts'
 import type { Built } from '../splat-engine/body.ts'
 import { LoadingMark } from '../shared/BlobLoader.tsx'
+import { castBy, glowGain } from './diorama/glow.ts'
 import { ScenePicker } from './diorama/ScenePicker.tsx'
 import { stepped } from './diorama/pick.ts'
 import { Button, Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
@@ -98,7 +99,10 @@ export function PixelDiorama() {
   const [palette, setPalette] = useState('own')
   const [size, setSize] = useState(2)
   const [dither, setDither] = useState(diorama.finish.dither)
-  const [glow, setGlow] = useState(diorama.finish.glow)
+  const [glow, setGlow] = useState(() => { const q = new URLSearchParams(location.search).get('glow'), v = q === null ? NaN : Number(q); return Number.isFinite(v) ? Math.min(4, Math.max(0, v)) : diorama.finish.glow })
+  /** Glow as the poser reads it: it scales the light the scene's lamps and fires cast, as well as the shine round bright pixels. */
+  const glowNow = useRef(glow)
+  glowNow.current = glow
   const [outline, setOutline] = useState(diorama.finish.outline)
   const [edges, setEdges] = useState(diorama.finish.edges)
   const [sky, setSky] = useState(diorama.finish.sky)
@@ -222,7 +226,7 @@ export function PixelDiorama() {
     stage.setPoser((sk: Skeleton, t: number) => {
       d.pose(sk, t)
       pokes.current?.apply(sk, performance.now() / 1000)
-      stage.setLights(d.lights(t, stage.backend === 'webgpu'), d.ambientAt?.(t) ?? d.ambient ?? 1)
+      stage.setLights(castBy(d.lights(t, stage.backend === 'webgpu'), glowGain(glowNow.current, d.finish.glow)), d.ambientAt?.(t) ?? d.ambient ?? 1)
       // a scene whose sky turns as it plays (day to night) hands the pixel pass each moment's sky
       skyNow.current?.(d, t)
       // a scene that asks for it rocks the view gently as it plays, about wherever the view has been turned to
@@ -266,6 +270,11 @@ export function PixelDiorama() {
   /** Taps on the scene: a part leans and wobbles, the land throws sparkles. */
   const pokes = useRef<Pokes | undefined>(undefined)
   orbitNow.current = orbit
+  // Glow turns the scene's own lights up and down, so a paused scene is lit again for the moment it shows
+  useEffect(() => {
+    const d = posed.current
+    if (stage && d) stage.setLights(castBy(d.lights(stage.time, stage.backend === 'webgpu'), glowGain(glow, d.finish.glow)), d.ambientAt?.(stage.time) ?? d.ambient ?? 1)
+  }, [stage, glow])
   // the scene being posed, which is the one whose swing applies: a scene just picked is not in the view until it is cut
   useEffect(() => {
     if (!stage) return
@@ -615,7 +624,7 @@ export function PixelDiorama() {
             id: 'finish', label: 'Finish', content: (
               <div className={TAB_SECTIONS}>
                 <Slider label="Dither" value={dither} min={0} max={1} step={0.05} onChange={setDither} format={(v) => `${Math.round(v * 100)}%`} hint={!pixels ? 'Applies to Pixel art.' : colors.length ? (sky ? 'Checkers two palette colors to fake the ones between. The sky is always dithered, so its bands blend.' : 'Checkers two palette colors to fake the ones between.') : 'Needs a palette: Full color has none to mix.'} />
-                <Slider label="Glow" value={glow} min={0} max={4} step={0.25} onChange={setGlow} format={(v) => (v ? `${v.toFixed(2)}×` : 'off')} hint={pixels ? 'Bright pixels light the ones beside them.' : 'Applies to Pixel art.'} />
+                <Slider label="Glow" value={glow} min={0} max={4} step={0.25} onChange={setGlow} format={(v) => (v ? `${v.toFixed(2)}×` : 'off')} hint={pixels ? 'How strongly lamps, fires and other glowing things light what is round them, and how far bright pixels shine into the ones beside them.' : 'How strongly lamps, fires and other glowing things light what is round them.'} />
                 <div className="grid gap-3">
                 <Toggle label={pixels ? 'Four samples a pixel' : 'Four samples a pixel (in Pixel art)'} checked={fine} onChange={setFine} />
                 <p className="text-xs text-ink-faint">Draws the scene at twice the size and gives each pixel the thing most of its four samples show, so edges are one thing or the other, never a mix.</p>

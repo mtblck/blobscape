@@ -3932,6 +3932,12 @@
        "optional": true,
        "type": "boolean",
        "doc": "Casts shadows, worked out once when the scene is built, so they cost nothing as it plays and flicker with it. Only\nthe first four lights can, and not one that goes round a circle. Give it to a lamp or fire out in the open: a light\nset inside something (a jar, a window, a hollow) to stand for its glow would shade everything outside."
+      },
+      {
+       "name": "clear",
+       "optional": true,
+       "type": "number",
+       "doc": "With `shadows`: how much open room there is round the light, 0.15 where left out. Nothing nearer the light than\nthis shades it. A light in a small hollow (a stone lantern's light box) sets it to the hollow's size, or the stone\nright round it is taken for part of the lamp and lets the light through."
       }
      ]
     },
@@ -4707,6 +4713,12 @@
        "name": "reach",
        "type": "number",
        "doc": "How far its light reaches: blobs further off are not looked at (their byte stays full)."
+      },
+      {
+       "name": "clear",
+       "optional": true,
+       "type": "number",
+       "doc": "How far short of it the look toward it stops, so its own housing doesn't shade everything: `LAMP_CLEAR` where\nleft out. Blobs nearer than this are always lit. Set it to the room round a lamp that sits in a small hollow,\nor the hollow's own walls and roof let its light through."
       }
      ]
     },

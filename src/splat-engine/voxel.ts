@@ -273,6 +273,12 @@ export interface Lamp {
   at: Vec3
   /** How far its light reaches: blobs further off are not looked at (their byte stays full). */
   reach: number
+  /**
+   * How far short of it the look toward it stops, so its own housing doesn't shade everything: `LAMP_CLEAR` where
+   * left out. Blobs nearer than this are always lit. Set it to the room round a lamp that sits in a small hollow,
+   * or the hollow's own walls and roof let its light through.
+   */
+  clear?: number
 }
 
 /** How far bounced light comes from, in world units. */
@@ -280,7 +286,7 @@ const BOUNCE_REACH = 0.5
 
 /** How many lamps' shadows a blob carries, one byte each. */
 export const MAX_LAMPS = 4
-/** How far short of a lamp the look toward it stops, so the lamp's own housing doesn't shade everything. */
+/** How far short of a lamp the look toward it stops, so the lamp's own housing doesn't shade everything, unless the lamp says (`Lamp.clear`). */
 const LAMP_CLEAR = 0.15
 /** Cells a side of the blocks that share one look toward a lamp. */
 const LAMP_BLOCK = 2.5
@@ -1057,12 +1063,13 @@ export function buildVoxels(spec: VoxelSpec): Built {
             const to: Vec3 = [l.at[0] - q[0], l.at[1] - q[1], l.at[2] - q[2]]
             const dist = Math.hypot(to[0], to[1], to[2])
             // past twice its reach the light is gone anyway (see the engine's falloff)
-            if (dist < l.reach * 2 && dist > LAMP_CLEAR) {
+            const clear = l.clear ?? LAMP_CLEAR
+            if (dist < l.reach * 2 && dist > clear) {
               // shadows from a lamp are soft, so neighbors share one look: cells are taken a few at a time
               const B = s * LAMP_BLOCK
               const key = ((k * 2048 + Math.floor(q[0] / B) + 1024) * 2048 + Math.floor(q[1] / B) + 1024) * 2048 + Math.floor(q[2] / B) + 1024
               let got = lampSeen.get(key)
-              if (got === undefined) { got = Math.round(255 * sunlight(lampCasters[k] ?? casters, q, norm(to), s, dist - LAMP_CLEAR)); lampSeen.set(key, got) }
+              if (got === undefined) { got = Math.round(255 * sunlight(lampCasters[k] ?? casters, q, norm(to), s, dist - clear)); lampSeen.set(key, got) }
               v = got
             }
           }
