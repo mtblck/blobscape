@@ -59,3 +59,36 @@ test('a light from a direction is as strong everywhere, and the sky\'s light may
   assert.deepEqual(ownLight([1.4, 0.2, 0.1], 0.5), [1.4, 0.5, 0.5])
   assert.deepEqual(ownLight([0.3, 0.2, 0.1], 0), [0.3, 0.2, 0.1])
 })
+
+test('a disc is flat and a needle or a ball is not, however it is turned', async () => {
+  const { flatness } = await import('./light.ts')
+  const turned = (scale: [number, number, number]) => {
+    const b = new Blobs(1)
+    b.scale.set(scale, 0)
+    b.quat.set(quatFacing([0.3, 0.8, -0.52]), 0)
+    return covariance(b, 0)
+  }
+  assert.equal(flatness(turned([0.03, 0.03, 0.001])), 1, 'a thin disc')
+  assert.equal(flatness(turned([0.0275, 0.0275, 0.015])), 1, 'a scene\'s disc, half as thick as it is wide')
+  assert.equal(flatness(turned([0.05, 0.004, 0.004])), 0, 'a strand')
+  assert.equal(flatness(turned([0.02, 0.02, 0.02])), 0, 'a ball')
+  assert.ok(flatness(turned([0.05, 0.004, 0.002])) === 1, 'a ribbon has a flat side')
+})
+
+test('cel shading faces a blob by the side the eye sees', async () => {
+  const { toneAt } = await import('./light.ts')
+  // a disc lying flat at the origin, lit from above
+  const b = new Blobs(1)
+  b.scale.set([0.03, 0.03, 0.002], 0)
+  b.quat.set(quatFacing([0, 1, 0]), 0)
+  const cov = covariance(b, 0), sun = { direction: [0, 1, 0] as [number, number, number], color: [1, 1, 1] as [number, number, number] }
+  assert.ok(Math.abs(toneAt([0, 0, 0], cov, [0, 3, 2], sun).facing - 1) < 1e-6, 'seen from above, it faces the light')
+  assert.ok(Math.abs(toneAt([0, 0, 0], cov, [0, -3, 2], sun).facing) < 1e-6, 'seen from below, its seen side faces away')
+  // edge on to the light is a half
+  const low = { direction: [1, 0, 0] as [number, number, number], color: [1, 1, 1] as [number, number, number] }
+  assert.ok(Math.abs(toneAt([0, 0, 0], cov, [0, 3, 2], low).facing - 0.5) < 1e-6)
+  // a light at a place: toward it
+  const lamp = { position: [0, 2, 0] as [number, number, number], range: 5, color: [1, 1, 1] as [number, number, number] }
+  assert.ok(toneAt([0, 0, 0], cov, [0, 3, 2], lamp).facing > 0.99)
+  assert.deepEqual(toneAt([0, 0, 0], cov, [0, 3, 2], undefined), { facing: 1, sure: 1 })
+})
