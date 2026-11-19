@@ -905,12 +905,17 @@
       {
        "name": "tones",
        "type": "boolean",
-       "doc": "While true, the draw is a map of tones, for cel shading (`cel`): every blob a hard disc whose red is how it faces\nthe first light (0 away, 0.5 edge on, 1 toward), green the share of that light that reaches it past what stands\nin the way, and blue how flat it is (how far its facing can be trusted). `CelPass` (celPass.ts) draws it."
+       "doc": "While true, the draw is a map of tones, for cel shading (`cel`): every blob a hard disc whose red is how it faces\nthe first light (0 away, 0.5 edge on, 1 toward), green 1 (cast shadows are `CelPass`'s own), and blue how flat it\nis (how far its facing can be trusted). `CelPass` (celPass.ts) draws it."
       },
       {
        "name": "cel",
        "type": "boolean",
        "doc": "Cel shading, in a world with `lights`: while true the lights no longer change the blobs' colors (each is drawn in\nits own), and each blob's tone under the first light is worked out in their place, for the map of tones\n(`tones`). The tone takes the side of a blob the camera sees for its outside, so it is redone as the view moves."
+      },
+      {
+       "name": "lieMap",
+       "type": "boolean",
+       "doc": "While true, the draw is a map of how the blobs lie on the screen: every blob a hard disc whose color says which\nway its long axis runs and how much longer than wide it is there (`lieColor` in splat-core/glyphs.ts is the CPU\ntwin of the color). A strand of fur or a blade of grass is long and thin from any side; a disc on a surface is\nonly so where the surface is seen nearly edge on. Drawing as characters reads it for strokes along strands."
       },
       {
        "name": "autoDetail",
@@ -7627,6 +7632,12 @@
        "doc": "Draw a stroke where an edge runs through a cell: where the picture ends, one thing stands in front of another, two parts meet, or the tone changes sharply (default true)."
       },
       {
+       "name": "strands",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Draw a stroke along what is long and thin on the screen, such as strands of fur and blades of grass, where a cell\nis mostly that (default true). The stroke is the one of `|`, `_`, `/` and `` nearest the way they run."
+      },
+      {
        "name": "steady",
        "optional": true,
        "type": "number",
@@ -7717,10 +7728,10 @@
     {
      "name": "glyphCell",
      "kind": "function",
-     "doc": "One cell: its character and color from the picture's mean over the cell (`rgb` linear and premultiplied, `cover`\nits alpha), the two rings of probes when edges are wanted (the inner eight, then the outer eight), and the character\nit had the frame before (-1 for none). `ink` here is linear.",
+     "doc": "One cell: its character and color from the picture's mean over the cell (`rgb` linear and premultiplied, `cover`\nits alpha), the two rings of probes when edges are wanted (the inner eight, then the outer eight), and the character\nit had the frame before (-1 for none). `ink` here is linear. `lie` is the cell's mean lie (`strandFor`) when strands\nare wanted: a cell of strands takes their stroke, lit by its tone, before any edge is looked for.",
      "signatures": [
       {
-       "code": "glyphCell(rgb: ArrayLike<number>, cover: number, probes: readonly Probe[] | undefined, look?: GlyphLook, before?: number, ink?: ArrayLike<number>): GlyphCell"
+       "code": "glyphCell(rgb: ArrayLike<number>, cover: number, probes: readonly Probe[] | undefined, look?: GlyphLook, before?: number, ink?: ArrayLike<number>, lie?: ArrayLike<number>): GlyphCell"
       }
      ]
     },

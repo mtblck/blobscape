@@ -722,6 +722,15 @@ export default [
         const lit = solid(ascii)
         if (!(differ(ascii, blobs) > 0.01) || differ(ascii, asciiAgain, 0) !== 0 || !(rows.length > 15 && chars.length > 300 && heavy > 5 && strokes > 20 && strokes < chars.length * 0.6) || !(lit > 0.005 && lit < solid(blobs)) || !/rgb\((1?[0-9]), (1?[0-9]), (1?[0-9])\)/.test(screen)) fails.push(`brush and ink on ${backend}: ASCII: ${differ(ascii, blobs)} of the view changed from blobs, twice differs ${differ(ascii, asciiAgain, 0)}, ${rows.length} lines, ${chars.length} characters (${heavy} heavy, ${strokes} strokes), ${lit} of the view lit against ${solid(blobs)} as blobs, screen ${screen}`)
         else ok(`brush and ink on ${backend}: ASCII draws the fox as ${chars.length} characters in ${rows.length} lines (${strokes} of them strokes along edges), the same when drawn twice`)
+        // strokes along the fur: switching them off leaves fewer strokes and the same picture otherwise
+        const furBox = k.page.getByTestId('brush-strands').getByRole('checkbox')
+        await tabClick(furBox)
+        await read(k.page)
+        const plainText = (await k.page.evaluate(() => window.__brush.text())) ?? ''
+        await tabClick(furBox)
+        const unfurred = (plainText.match(/[|_/\\]/g) ?? []).length
+        if (!(strokes > unfurred + 20)) fails.push(`brush and ink on ${backend}: ASCII strokes along fur: ${strokes} strokes with them, ${unfurred} without`)
+        else ok(`brush and ink on ${backend}: ASCII draws the fox's fur as strokes the way it runs (${strokes} strokes, ${unfurred} without them)`)
         await pick(k.page, 'Blobs', 'blobs')
         // cel shading: the fox is cut again without its baked light, lit live and cut into tones
         await pick(k.page, 'Cel shading', 'cel')
@@ -1534,13 +1543,13 @@ export default [
         const same = differ(first, again), swayed = differ(first, later, 24)
         if (got !== backend || same !== 0 || !(first.solid > 0.12) || !(swayed > 0.002) || !(facts.stems >= 20 && facts.bones < 256 && facts.blobs > 50000 && facts.lines.length >= 8)) fails.push(`seasonal bouquets on ${backend}: ${JSON.stringify({ got, same, solid: first.solid, swayed, ...facts })}`)
         else ok(`seasonal bouquets on ${backend}: ${facts.stems} stems (${facts.lines.length} kinds) in ${facts.vase}, ${facts.blobs.toLocaleString('en-US')} blobs on ${facts.bones} bones; drawn twice it is the same, and ${(swayed * 100).toFixed(1)}% of the view moves in a second and a half`)
-        // a petal let go is on the table a few seconds later, and the picture shows it
+        // a petal let go is on the table a few seconds later, and the picture shows it (another may have fallen by itself by then)
         const before = await k.page.evaluate(() => window.__bouquet.fallen())
         const did = await k.page.evaluate(() => window.__bouquet.shed())
         const landed = await read(k.page, 9), still = await read(k.page, 9)
         const after = await k.page.evaluate(() => window.__bouquet.fallen())
         const without = await k.page.evaluate(() => window.__bouquet.fallen())
-        if (!did || before !== 0 || after !== 1 || without !== 1 || differ(landed, still) !== 0) fails.push(`seasonal bouquets on ${backend}: shaking a petal loose gave ${JSON.stringify({ did, before, after })}`)
+        if (!did || before !== 0 || after < 1 || without !== after || differ(landed, still) !== 0) fails.push(`seasonal bouquets on ${backend}: shaking a petal loose gave ${JSON.stringify({ did, before, after })}`)
         else ok(`seasonal bouquets on ${backend}: a petal shaken loose is counted as fallen and the frame holds still when drawn again`)
         if (backend === 'webgpu') {
           await k.page.screenshot({ path: join(shots, 'blobscape-seasonal-bouquets.png') })

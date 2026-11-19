@@ -41,14 +41,14 @@ interface Subject {
   /** A scan: its marks are laid softly, one over another (`MarkLook.soft`). */
   soft?: boolean
   /** `plain` leaves the baked light out of what is built (`unlit`), for a look that lights it live. */
-  make(coarse: boolean, plain: boolean): { actor: Actor; pose?: (sk: Skeleton, t: number) => void; lights?: (t: number) => PointLight[]; clip?: ReturnType<typeof recordClip> }
+  make(coarse: boolean, plain: boolean): { actor: Actor; pose?: (sk: Skeleton, t: number) => void; lights?: (t: number) => PointLight[]; ambient?: Parameters<CreatureStage['setLights']>[1]; clip?: ReturnType<typeof recordClip> }
 }
 
 function scene(id: string, label: string): Subject {
   const d = DIORAMAS.find((x) => x.id === id) ?? DIORAMAS[0]
   return {
     id, label, about: d.about, from: 'a scene written as data', orbit: d.views[0].orbit,
-    make: (coarse, plain) => ({ actor: plain ? unlit(() => d.make(DETAIL[coarse ? 0 : 1].spacing)) : d.make(DETAIL[coarse ? 0 : 1].spacing), pose: d.pose, lights: d.lights }),
+    make: (coarse, plain) => ({ actor: plain ? unlit(() => d.make(DETAIL[coarse ? 0 : 1].spacing)) : d.make(DETAIL[coarse ? 0 : 1].spacing), pose: d.pose, lights: d.lights, ambient: d.ambient }),
   }
 }
 
@@ -57,6 +57,7 @@ const FOX = ZOO.find((s) => s.id === 'fox') ?? ZOO[0]
 const SUBJECTS: Subject[] = [
   scene('windmill', 'Windmill'),
   scene('croc', 'Garden crocodile'),
+  scene('meadow', 'Fox in the grass'),
   {
     id: 'fox', label: 'Fox', about: 'A fox with a coat of fur, trotting on the spot', from: 'a creature on bones', orbit: FOX.view,
     make: (coarse, plain) => {
@@ -114,6 +115,7 @@ export function BrushInk() {
   const [letter, setLetter] = useState(12)
   const [own, setOwn] = useState(true)
   const [strokes, setStrokes] = useState(true)
+  const [strands, setStrands] = useState(true)
   const [weight, setWeight] = useState(1)
   const [copied, setCopied] = useState('')
   const sub = SUBJECTS.find((s) => s.id === subject)!
@@ -145,7 +147,7 @@ export function BrushInk() {
       const made = s.make(coarse, plain)
       stage.setActor(made.actor, made.clip)
       shown.current = made.actor
-      if (made.pose) stage.setPoser((sk, time) => { made.pose!(sk, time); stage.setLights(made.lights?.(time) ?? [], 1) })
+      if (made.pose) stage.setPoser((sk, time) => { made.pose!(sk, time); stage.setLights(made.lights?.(time) ?? [], made.ambient ?? 1) })
       else stage.setLights([], 1)
       // the view stays where it is when only the light in the blobs changed
       setOrbit((o) => (kept.current === s.id ? o : s.orbit))
@@ -162,7 +164,7 @@ export function BrushInk() {
   const lum = (c: readonly number[]) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
   // off screen a frame is drawn only when asked for, and must not depend on the one before (`?steady=` says otherwise, for the checks)
   const held = useMemo(() => { const v = params().get('steady'); return v !== null && Number.isFinite(+v) ? +v : offscreen ? 0 : undefined }, [offscreen])
-  const glyphs = useMemo<GlyphLook | undefined>(() => (ascii ? { size: letter, ink: own ? undefined : sheet.ink, light: !own && lum(sheet.paper) > lum(sheet.ink), edges: strokes, gain: weight * (own ? SCREEN_GAIN : 1), steady: held } : undefined), [ascii, letter, own, sheet, strokes, weight, held])
+  const glyphs = useMemo<GlyphLook | undefined>(() => (ascii ? { size: letter, ink: own ? undefined : sheet.ink, light: !own && lum(sheet.paper) > lum(sheet.ink), edges: strokes, strands, gain: weight * (own ? SCREEN_GAIN : 1), steady: held } : undefined), [ascii, letter, own, sheet, strokes, strands, weight, held])
   useEffect(() => { stage?.setGlyphs(glyphs) }, [stage, glyphs])
   useEffect(() => { setCopied('') }, [look, subject])
   const outline = !ascii && (outlined ?? (look === 'ink' || look === 'hatch' || look === 'cel'))
@@ -302,6 +304,12 @@ export function BrushInk() {
                   </div>
                 )}
                 {ascii && (
+                  <div data-testid="brush-strands">
+                    <Toggle label="Strokes along fur and grass" checked={strands} onChange={setStrands} />
+                    <p className="mt-1.5 text-xs text-ink-faint">A cell that is mostly long thin blobs, such as strands of fur or blades of grass, gets the stroke nearest the way they run.</p>
+                  </div>
+                )}
+                {ascii && (
                   <div data-testid="brush-own">
                     <Toggle label="Their own colors" checked={own} onChange={setOwn} />
                     <p className="mt-1.5 text-xs text-ink-faint">Each character takes the color of what it stands for, on a dark screen. Off, they are one ink on paper.</p>
@@ -344,7 +352,7 @@ export function BrushInk() {
                   <div className="flex flex-wrap gap-1.5" data-testid="brush-subjects">
                     {SUBJECTS.map((s) => <Chip key={s.id} active={subject === s.id} onClick={() => setSubject(s.id)}>{s.label}</Chip>)}
                   </div>
-                  <p className="mt-1.5 text-xs text-ink-faint">Two scenes from Pixel Diorama, a creature on bones and a scan: the marks need nothing but the blobs.</p>
+                  <p className="mt-1.5 text-xs text-ink-faint">Three scenes from Pixel Diorama, a creature on bones and a scan: the marks need nothing but the blobs.</p>
                 </Field>
                 <div className="flex flex-wrap gap-1.5">
                   <Button small onClick={() => setPlaying((p) => !p)}>{playing ? 'Stop' : 'Play'}</Button>
@@ -382,7 +390,7 @@ export function BrushInk() {
             ASCII is the odd one out. Characters only read standing upright in rows, so they can't turn with the blobs: the view is
             cut into a grid of cells that stays put on the screen, and each cell gets the character whose ink matches how much there
             is to show in it. Where an edge runs through a cell (the picture ends, one thing stands in front of another, two parts
-            meet) it gets a stroke along the edge. A cell keeps its character until another is clearly a better fit, so the text
+            meet) it gets a stroke along the edge, and a cell full of fur or grass gets a stroke the way the strands run. A cell keeps its character until another is clearly a better fit, so the text
             doesn't flicker as the view turns, and Copy as text gives you the picture in plain characters.
           </p>
           <p>

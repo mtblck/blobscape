@@ -38,6 +38,26 @@ export interface VaseInfo {
   clear: boolean
   /** How far its foot reaches from the middle, for shadows and for petals to land clear of. */
   foot: number
+  /** For a clear vase: how far from the middle its inside wall stands at a height, so stems can be kept within it. */
+  inside?: (y: number) => number
+}
+
+/** The glass is this thick, as stems see it. */
+const WALL = 0.012
+
+/** The narrowest a turned profile is at a height, less its wall. */
+export function insideOf(profile: [number, number][]): (y: number) => number {
+  return (y) => {
+    let r = Infinity
+    for (let i = 1; i < profile.length; i++) {
+      const [r0, y0] = profile[i - 1], [r1, y1] = profile[i]
+      const lo = Math.min(y0, y1), hi = Math.max(y0, y1)
+      if (y < lo - 1e-9 || y > hi + 1e-9) continue
+      r = Math.min(r, hi - lo < 1e-9 ? Math.max(r0, r1) : r0 + (r1 - r0) * (y - y0) / (y1 - y0))
+    }
+    if (r === Infinity) r = y > profile[profile.length - 1][1] ? profile[profile.length - 1][0] : profile[0][0]
+    return Math.max(0, r - WALL)
+  }
 }
 
 const AZ = Math.atan2(LAMP[2], LAMP[0])
@@ -92,7 +112,7 @@ export function makeVase(m: Maker, kind: VaseKind, seed: number): VaseInfo {
     const top = profile[profile.length - 1][1]
     glass(m, profile, tint, top * 0.62, kind === 'jar' ? (t) => (t > 0.9 && Math.sin(t * 150) > 0 ? 1 : 0) : undefined)
     if (kind === 'jar') { m.newPart(); m.lathe([[0.121, 0.425], [0.124, 0.432], [0.121, 0.44]], (a) => mul(hex('#b89a6a'), 0.8 + 0.3 * hash(Math.floor(a * 40), 3)), {}) }
-    return { kind, name: kind === 'jar' ? 'a jam jar tied with twine' : pickOf(['a glass cylinder', 'a flared glass vase', 'a round glass vase'], shape / 3), mouth: profile[profile.length - 1][0] - 0.012, top, floor: 0.03, clear: true, foot: Math.max(...profile.map((p) => p[0])) }
+    return { kind, name: kind === 'jar' ? 'a jam jar tied with twine' : pickOf(['a glass cylinder', 'a flared glass vase', 'a round glass vase'], shape / 3), mouth: profile[profile.length - 1][0] - WALL, top, floor: 0.03, clear: true, foot: Math.max(...profile.map((p) => p[0])), inside: insideOf(profile) }
   }
   if (kind === 'ceramic') {
     const shape = Math.floor(rand() * 4), g = pickOf(GLAZES, rand()), pattern = Math.floor(rand() * 4)

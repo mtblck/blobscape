@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { COUNTS, SHAPES, SIZES, inWords, plan, varietiesIn, type Choice } from './arrange.ts'
-import { DETAILS, MAX_FALLING, fallen, lowestOf, makeBouquet, poseBouquet, setShedding, shedOne } from './bouquet.ts'
+import { DETAILS, MAX_FALLING, fallen, lowestOf, makeBouquet, poseBouquet, setShedding, shedOne, stemInVase } from './bouquet.ts'
 import { FLOWERS, PALETTES, SEASONS, flower, inSeason, seasonOn, type Role } from './flowers.ts'
 import { head } from './heads.ts'
 import { Maker } from './make.ts'
@@ -112,6 +112,24 @@ test('every vase builds, stands on the table and has a mouth for the stems', () 
       let low = Infinity
       for (let i = 0; i < m.blobs.count; i++) low = Math.min(low, m.blobs.center[i * 3 + 1])
       assert.ok(low > -0.03, `${id} goes ${low} under the table`)
+    }
+  }
+})
+
+test('a stem in a clear vase stays inside the glass from the floor to the mouth', () => {
+  for (const id of ['glass', 'jar'] as const) {
+    for (let seed = 1; seed <= 12; seed++) {
+      const v = makeVase(new Maker(COARSE), id, seed)
+      assert.ok(v.clear && v.inside, `${id} ${seed} has no inside`)
+      for (let k = 0; k < 16; k++) {
+        const a = k * 0.7, r = 0.004 + 0.002 * (k % 4)
+        // the widest a stem is asked to stand, leaving by the far side of the mouth
+        const foot: [number, number, number] = [-Math.cos(a) * v.mouth * 0.7 - 0.015, v.floor + 0.01, -Math.sin(a) * v.mouth * 0.7 + 0.015]
+        const mouth: [number, number, number] = [Math.cos(a) * v.mouth * 0.62, v.top - 0.01, Math.sin(a) * v.mouth * 0.62]
+        for (const p of stemInVase(v, foot, mouth, r)) {
+          assert.ok(Math.hypot(p[0], p[2]) + r <= v.inside!(p[1]) + 1e-9, `${v.name} (${seed}): a stem ${Math.hypot(p[0], p[2])} out at ${p[1]}, where the glass is ${v.inside!(p[1])}`)
+        }
+      }
     }
   }
 })
