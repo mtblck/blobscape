@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Orbit } from '../splat-core/view.ts'
 import type { Vec3 } from '../splat-core/blobs.ts'
-import { STEADY, darkest, type PixelLook } from '../splat-core/pixel.ts'
+import type { PixelLook } from '../splat-core/pixel.ts'
 import type { Built } from '../splat-engine/body.ts'
 import { pickActors } from '../splat-engine/pick.ts'
 import { MAX_PROJECT_LAMPS, PlacedPoser, SIZE_RANGE, compileProject, cutLight, type Placement, type ProjectLight, type SceneProject } from '../splat-engine/project.ts'
@@ -9,7 +9,7 @@ import type { Light, PointLight } from '../splat-engine/engine.ts'
 import type { Skeleton } from '../splat-engine/rig.ts'
 import type { Shape } from '../splat-engine/voxel.ts'
 import { LoadingMark } from '../shared/BlobLoader.tsx'
-import { Chip, Slider, Toggle } from '../shared/ui.tsx'
+import { Button, Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
 import { useFullScreen } from '../shared/Workbench.tsx'
 import { detailAsked, labelNames, writeDetail } from '../shared/detail.ts'
 import type { CreatureStage } from './creature/stage.ts'
@@ -24,6 +24,13 @@ import { BLOB_ROOM, CARDS, added, cardsFound, groundOf, heightAt, landSwapped, l
 import { libraryProp, type LibraryEntry } from './creator/library.ts'
 import { budget, clock, lampAdded, lampLights, lampRemoved, lit, liveSky, liveSkyColors, rgbOf, shadeNow, sunNow } from './creator/lighting.ts'
 import { castBy, glowGain } from './diorama/glow.ts'
+import { STYLES, isPixelStyle, styleAsked, styleWords, type Style } from './diorama/styles.ts'
+import { useDrawnLook, wantsPlain } from './drawnLook.tsx'
+import { GLITCH_START, glitchLook, type GlitchChoice } from './glitchLooks.ts'
+import { GlitchControls } from './diorama/GlitchControls.tsx'
+import { useExport } from './diorama/useExport.tsx'
+import { MAX_STOPS, pathAt, pathSeconds } from './cameraPath.ts'
+import { PIXEL_RATES, PIXEL_SIZES, paletteChoices, pixelLook, pixelStart, type PixelChoice } from './creator/styling.ts'
 import { arrowWay, begin, copied, did, moved, onGround, redo, redrawn, removed, sized, stepFor, stilled, turned, undo, wrapTurn, type History } from './creator/arrange.ts'
 
 /**
@@ -32,7 +39,7 @@ import { arrowWay, begin, copied, did, moved, onGround, redo, redrawn, removed, 
  * (#336) picks a prop by a tap or from the list and moves, turns, sizes, copies and deletes it, with undo. A prop is
  * cut where it stands, so while it is dragged or turned the cut it has is drawn where it is going (`redrawn`), and it
  * is cut again once let go. Props (#337) adds from the library and swaps the land. Light, style and export follow in
- * their own issues.
+ * their own issues: Light (#338) and Style and Export (#339).
  */
 
 type CreatorMode = 'scene' | 'props' | 'arrange' | 'light' | 'style' | 'export'
@@ -42,17 +49,17 @@ const MODES: Mode<CreatorMode>[] = [
   { id: 'props', name: 'Props', note: 'Tap a card to set it down in the middle of the view, or drag it onto the view. A land swaps what everything stands on.', icon: 'M4 7l8-4 8 4-8 4zM4 7v10l8 4 8-4V7M12 11v10' },
   { id: 'arrange', name: 'Arrange', note: 'Tap a prop in the view, or pick one below, then move, turn and size it. Drag it along the ground to move it.', icon: 'M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3' },
   { id: 'light', name: 'Light', note: 'The sun and sky, lamps, glow and air. A baked sun is cut into the scene, so changing it cuts again; a live sun moves its light and shadows as you drag.', icon: 'M12 4V2M12 22v-2M4 12H2M22 12h-2M5.6 5.6 4.2 4.2M19.8 19.8l-1.4-1.4M5.6 18.4l-1.4 1.4M19.8 4.2l-1.4 1.4M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10z' },
-  { id: 'style', name: 'Style', note: 'Pixel art and the other looks: coming next.', icon: 'M12 3a9 9 0 1 0 0 18c1 0 1.5-.8 1.5-1.6 0-1.4-1-1.6-1-2.6 0-.8.6-1.3 1.5-1.3H16a5 5 0 0 0 5-5c0-4-4-7.5-9-7.5zM7.5 11h.01M10 7h.01M15 7h.01' },
-  { id: 'export', name: 'Export', note: 'Save a picture, the loop or the project: coming next.', icon: 'M12 3v12M7 10l5 5 5-5M4 19h16' },
+  { id: 'style', name: 'Style', note: 'How the scene is drawn: pixel art, or one of the painted and drawn looks.', icon: 'M12 3a9 9 0 1 0 0 18c1 0 1.5-.8 1.5-1.6 0-1.4-1-1.6-1-2.6 0-.8.6-1.3 1.5-1.3H16a5 5 0 0 0 5-5c0-4-4-7.5-9-7.5zM7.5 11h.01M10 7h.01M15 7h.01' },
+  { id: 'export', name: 'Export', note: 'Save a picture, the loop, or a flight along a camera path, in the style on show.', icon: 'M12 3v12M7 10l5 5 5-5M4 19h16' },
 ]
 
 const modeAsked = (search: string): CreatorMode => MODES.find((m) => m.id === new URLSearchParams(search).get('mode'))?.id ?? 'scene'
 
 /** A piece cut: the packed cut, the placement it was cut at, and how far it reaches from its foot along the ground. */
-interface Cut { id: number; thing: string; packed: PackedCut; at: Placement; reach: number }
+interface Cut { id: number; thing: string; packed: PackedCut; at: Placement; reach: number; plain: boolean }
 
 /** One piece of what is open: what its cut is kept under, and the job that cuts it. */
-interface Piece { key: string; thing: string; job: (spacing: number) => CutJob }
+interface Piece { key: string; thing: string; plain: boolean; job: (spacing: number) => CutJob }
 
 /** How long the cutter waits after the last edit before it starts, so a run of key presses cuts once. */
 const SETTLE_MS = 250
@@ -97,6 +104,16 @@ export function SceneCreator() {
   const [lightDraft, setLightDraft] = useState<ProjectLight>()
   const lightNow = lightDraft ?? project?.light
   const [lampPicked, setLampPicked] = useState<number>()
+  // how the scene is drawn (`?style=`), and pixel art's own settings
+  const calm = useMemo(() => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches, [])
+  const [style, setStyleState] = useState<Style>(() => styleAsked(typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('style')))
+  const pixels = isPixelStyle(style)
+  const glitching = style === 'glitch'
+  const drawnStyle = pixels ? undefined : style
+  // cel shading, neon and stained glass light the blobs themselves, so every piece is cut with no light baked in
+  const plain = wantsPlain(drawnStyle)
+  const [px, setPx] = useState<PixelChoice>(() => pixelStart(shown.finish))
+  const [glitch, setGlitch] = useState<GlitchChoice>(GLITCH_START)
   const work = useRef<HTMLDivElement>(null)
   const canvas = useRef<HTMLCanvasElement>(null)
   useWorkspaceScreen(work)
@@ -121,6 +138,7 @@ export function SceneCreator() {
     setPicked(undefined)
     setPreview(undefined)
     setOrbit(shownOf(o).orbit)
+    setPx(pixelStart(shownOf(o).finish))
     const url = new URL(location.href)
     url.searchParams.delete('scene'); url.searchParams.delete('land')
     const [k, v] = queryFor(o)
@@ -147,15 +165,15 @@ export function SceneCreator() {
   // The pieces and what each is cut under. A prop's cut doesn't change as it moves (its light comes from the way it
   // faces, not where it stands), so its place is left out: a moved or copied prop needs no cut of its own.
   const pieces = useMemo<Piece[]>(() => {
-    if (opened.kind === 'whole' || !project || !cp) return [{ key: `whole:${opened.kind === 'whole' ? opened.scene : ''}`, thing: 'whole', job: (spacing) => ({ kind: 'whole', scene: opened.kind === 'whole' ? opened.scene : '', spacing }) }]
+    if (opened.kind === 'whole' || !project || !cp) return [{ key: JSON.stringify([`whole:${opened.kind === 'whole' ? opened.scene : ''}`, plain]), thing: 'whole', plain, job: (spacing) => ({ kind: 'whole', scene: opened.kind === 'whole' ? opened.scene : '', spacing, plain }) }]
     const steps = cp.land.c.steps ? cp.palette : null
     const light = cutLight(project.light)
-    const land = JSON.stringify([project.land, project.loop, steps, light])
+    const land = JSON.stringify([project.land, project.loop, steps, light, plain])
     return [
-      { key: land, thing: 'land', job: (spacing) => ({ kind: 'land', project, spacing }) },
-      ...project.props.map((p, i): Piece => ({ key: JSON.stringify([p.prop, p.turn, p.size, project.loop, project.land, steps, light]), thing: JSON.stringify(p.prop), job: (spacing) => ({ kind: 'prop', project, i, spacing }) })),
+      { key: land, thing: 'land', plain, job: (spacing) => ({ kind: 'land', project, spacing, plain }) },
+      ...project.props.map((p, i): Piece => ({ key: JSON.stringify([p.prop, p.turn, p.size, project.loop, project.land, steps, light, plain]), thing: JSON.stringify(p.prop), plain, job: (spacing) => ({ kind: 'prop', project, i, spacing, plain }) })),
     ]
-  }, [opened, project, cp])
+  }, [opened, project, cp, plain])
 
   // cuts kept by detail and key, for as long as the page is open, and the worker that makes them
   const cuts = useRef(new Map<string, Cut>())
@@ -198,7 +216,7 @@ export function SceneCreator() {
             try {
               const packed = await asker.current!(job)
               const at = job.kind === 'prop' ? job.project.props[job.i] : { at: [0, 0, 0] as Vec3, turn: 0, size: 1 }
-              cuts.current.set(k, { id: ++nextCut.current, thing: pc.thing, packed, at, reach: reachOf(packed, at) })
+              cuts.current.set(k, { id: ++nextCut.current, thing: pc.thing, packed, at, reach: reachOf(packed, at), plain: pc.plain })
               added = true
             } catch (e) {
               if (!gone) setFailed(`Could not cut ${shown.name}: ${e instanceof Error ? e.message : e}`)
@@ -286,26 +304,67 @@ export function SceneCreator() {
 
   // a live sun paints the sky behind at its hour
   const liveHour = lightNow?.live?.hour
-  const sky = useMemo<PixelLook['sky']>(() => {
-    if (liveHour === undefined) return shown.finish.sky || lightNow?.sky ? shown.sky : undefined
+  const skyColors = useMemo<NonNullable<PixelLook['sky']>>(() => {
+    if (liveHour === undefined) return shown.sky
     const [top, low] = liveSkyColors(liveSky(liveHour, false).sky)
     return [rgbOf(top), rgbOf(low)]
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [liveHour, shown.sky, shown.finish.sky, !!lightNow?.sky])
+  }, [liveHour, shown.sky])
+  // a sky the Light mode set (its colors, or a live sun's) is always behind; otherwise Style's switch says
+  const skyForced = liveHour !== undefined || !!lightNow?.sky
   const glow = lightNow?.glow ?? shown.finish.glow
-  const look = useMemo<PixelLook>(() => ({
-    palette: shown.palette, dither: shown.finish.dither, outline: shown.finish.outline ? darkest(shown.palette) : null, glow,
-    edges: shown.finish.edges ? 1 : 0, parts: true, sky, steady: STEADY, tidy: true, fine: true, own: true,
-  }), [shown.palette, shown.finish, sky, glow])
-  useEffect(() => { stage?.setPixels(look, 2) }, [stage, look])
+  const palettes = useMemo(() => paletteChoices(shown.palette), [shown.palette])
+  const look = useMemo<PixelLook>(() => pixelLook({ ...px, sky: px.sky || skyForced }, palettes, skyColors, glow), [px, skyForced, palettes, skyColors, glow])
+  useEffect(() => { stage?.setPixels(pixels ? look : undefined, px.size) }, [stage, pixels, look, px.size])
+  // pixel art can move in held steps; the other styles move every frame
+  useEffect(() => { if (stage) { stage.step = pixels && px.rate ? 1 / px.rate : 0; stage.invalidate() } }, [stage, pixels, px.rate])
+  // the glitch's bursts come in steps of the scene's own clock, a whole number of steps a loop, so an export joins up
+  useEffect(() => { stage?.setGlitch(glitching ? glitchLook(glitch, shown.loop, calm && !offscreen) : undefined) }, [stage, glitching, glitch, shown.loop, calm, offscreen])
+  // on a phone the styles that fill the whole screen are drawn at one and a half device pixels to a CSS pixel, as Pixel Diorama does
+  useEffect(() => { stage?.setSharpness(coarse && !pixels ? 1.5 : 2) }, [stage, coarse, pixels])
+  // one of Brush and Ink's looks in place of pixel art. Cel shading's and stained glass's flat fills are gathered on the land
+  const drawing = useDrawnLook(stage, drawnStyle, {
+    actor: built?.[0], plain: !!chosen[0]?.plain, azimuth: shown.orbit.azimuth, offscreen, light: coarse, loop: shown.loop,
+    sky: px.sky || skyForced ? [skyColors[0], skyColors[1]] : undefined,
+  })
+  const drawStyle = (id: Style) => {
+    setStyleState(id)
+    const url = new URL(location.href)
+    if (id === 'pixel') url.searchParams.delete('style')
+    else url.searchParams.set('style', id)
+    history.replaceState(history.state, '', url.pathname + url.search + url.hash)
+    say(`Drawn as ${STYLES.find((x) => x.id === id)!.label.toLowerCase()}.`)
+  }
+
+  // --- export ----------------------------------------------------------------
+
+  const exporting = useExport({ stage, canvas, pixels, style, page: 'scene-creator', name: opened.kind === 'whole' ? opened.scene : 'scene' in opened.from ? opened.from.scene : opened.from.land, loop: shown.loop, orbit })
+  // a camera path: views saved as stops, flown through smoothly (cameraPath.ts)
+  const [stops, setStops] = useState<Orbit[]>([])
+  const [leg, setLeg] = useState(3)
+  const [flying, setFlying] = useState(false)
+  const pathLength = pathSeconds(stops.length, leg)
   useEffect(() => {
-    if (!stage) return
+    if (!flying || stops.length < 2) return
+    let raf = 0
+    const start = performance.now()
+    const tick = () => {
+      const u = (performance.now() - start) / 1000 / pathLength
+      setOrbit(pathAt(stops, Math.min(1, u)))
+      if (u < 1) raf = requestAnimationFrame(tick)
+      else setFlying(false)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [flying, stops, pathLength])
+  useEffect(() => {
+    // while an export runs it holds the view; what is turned meanwhile shows afterwards
+    if (!stage || exporting.held.current) return
     stage.orbit = orbit
     // haze is measured from the view's target, so it stays put on the scene as the view moves in and out
     const h = shown.haze
     stage.setFog(h?.color ?? [0, 0, 0], h ? orbit.distance + h.from : 0, h ? orbit.distance + h.to : 0)
     stage.invalidate()
-  }, [stage, orbit, shown.haze])
+  }, [stage, orbit, shown.haze, exporting.recording === null])
   useEffect(() => { stage?.invalidate() }, [stage, lightNow])
   useWheelZoom(canvas, setOrbit)
 
@@ -512,7 +571,7 @@ export function SceneCreator() {
     if (!offscreen || !stage) return
     ;(window as unknown as { __creator: unknown }).__creator = {
       stage, items: () => shown.items, ready: () => !!done, blobs: () => (built ? built.reduce((n, b) => n + b.blobs.count, 0) : 0),
-      props: () => project?.props ?? [], land: () => project?.land, light: () => lightNow, lampAt: (i: number) => { const l = lightNow?.lamps?.[i]; return l && stage.screenAt(l.at) }, picked: () => picked, said: () => said,
+      props: () => project?.props ?? [], land: () => project?.land, style, plain: () => !!chosen[0]?.plain, loopFrames: exporting.loopFrames, exportNote: () => exporting.note, light: () => lightNow, lampAt: (i: number) => { const l = lightNow?.lamps?.[i]; return l && stage.screenAt(l.at) }, picked: () => picked, said: () => said,
       // where a prop's blobs are on the view, in CSS pixels: the middle of those that stand above its foot
       screenOf: (i: number) => {
         const b = built?.[i + 1]
@@ -525,7 +584,7 @@ export function SceneCreator() {
         return stage.screenAt([sum[0] / n, sum[1] / n, sum[2] / n])
       },
     }
-  }, [offscreen, stage, shown, built, done, project, picked, said, lightNow])
+  }, [offscreen, stage, shown, built, done, project, picked, said, lightNow, style, chosen, exporting.loopFrames, exporting.note])
 
   const blobs = lastBlobs.current
   const props = project?.props.length ?? 0
@@ -715,6 +774,86 @@ export function SceneCreator() {
                     </div>
                   )
                 })()}
+                {m.id === 'style' && (
+                  <div className="stack-controls space-y-5" data-testid="creator-style">
+                    <Field label="Drawn as">
+                      <div className="flex flex-wrap gap-1.5" data-testid="creator-styles">
+                        {STYLES.map((l) => <Chip key={l.id} active={style === l.id} onClick={() => drawStyle(l.id)}>{l.label}</Chip>)}
+                      </div>
+                      <p className="mt-1.5 text-xs text-ink-faint">{STYLES.find((l) => l.id === style)?.note}{plain ? ' The scene is cut again with no light baked in, since this look lights it itself.' : ''}</p>
+                    </Field>
+                    {drawing.controls}
+                    {glitching && <GlitchControls glitch={glitch} setGlitch={setGlitch} calm={calm} />}
+                    {pixels && (() => {
+                      const pal = palettes.find((p) => p.id === px.palette) ?? palettes[0]
+                      return (
+                        <>
+                          <Field label="Palette">
+                            <div className="flex flex-wrap gap-1.5" data-testid="creator-palettes">
+                              {palettes.map((p) => <Chip key={p.id} active={pal.id === p.id} onClick={() => setPx((c) => ({ ...c, palette: p.id }))}>{p.label}</Chip>)}
+                            </div>
+                            <div aria-hidden className="mt-3 flex h-3 overflow-hidden rounded ring-1 ring-rule">
+                              {pal.colors.length ? pal.colors.map((c, i) => <span key={i} className="flex-1" style={{ background: `rgb(${c[0]} ${c[1]} ${c[2]})` }} />) : <span className="flex-1 bg-paper-sunk" />}
+                            </div>
+                            <p className="mt-1.5 text-xs text-ink-faint">{!pal.colors.length ? 'No palette: every pixel keeps the color the scene gives it.' : pal.id === 'own' ? `${pal.colors.length} colors from the land and every prop on it. Every pixel snaps to the closest one.` : `${pal.note ?? `A shared palette of ${pal.colors.length} colors.`} Every pixel snaps to the closest one.`}</p>
+                          </Field>
+                          <Field label="Pixel size">
+                            <div className="flex flex-wrap gap-1.5">
+                              {PIXEL_SIZES.map((n) => <Chip key={n} active={px.size === n} onClick={() => setPx((c) => ({ ...c, size: n }))}>{`${n}×`}</Chip>)}
+                            </div>
+                          </Field>
+                          <Field label="Motion">
+                            <div className="flex flex-wrap gap-1.5">
+                              {PIXEL_RATES.map((n) => <Chip key={n} active={px.rate === n} onClick={() => setPx((c) => ({ ...c, rate: n }))}>{n ? `${n} a second` : 'Smooth'}</Chip>)}
+                            </div>
+                          </Field>
+                          <Slider label="Dither" value={px.dither} min={0} max={1} step={0.05} onChange={(v) => setPx((c) => ({ ...c, dither: v }))} format={(v) => `${Math.round(v * 100)}%`} hint={pal.colors.length ? 'Checkers two palette colors to fake the ones between.' : 'Needs a palette: Full color has none to mix.'} />
+                          <div className="grid gap-3">
+                            <Toggle label="Outline the scene" checked={px.outline} onChange={(v) => setPx((c) => ({ ...c, outline: v }))} />
+                            <Toggle label="Lines where colors meet" checked={px.edges} onChange={(v) => setPx((c) => ({ ...c, edges: v }))} />
+                            <Toggle label="Lines between parts" checked={px.parts} onChange={(v) => setPx((c) => ({ ...c, parts: v }))} />
+                            <Toggle label="Sky behind" checked={px.sky || skyForced} disabled={skyForced} onChange={(v) => setPx((c) => ({ ...c, sky: v }))} />
+                            {skyForced && <p className="text-xs text-ink-faint">The sky set in Light mode is always behind.</p>}
+                          </div>
+                        </>
+                      )
+                    })()}
+                  </div>
+                )}
+                {m.id === 'export' && (
+                  <div className="stack-controls space-y-5" data-testid="creator-export">
+                    <p className="text-sm text-ink-muted">Saves the scene in the style it is drawn in now. A loop is drawn one frame at a time from start to end, so it joins up when it repeats and no frame is dropped, however slow the device.</p>
+                    {exporting.choices(!!full)}
+                    <div className="grid gap-2">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Button small disabled={!done || exporting.busy} onClick={exporting.record} data-testid="creator-record">{exporting.label()}</Button>
+                        <Button small disabled={!done || exporting.busy} onClick={exporting.save} data-testid="creator-save-frame">{exporting.saving ? 'Saving…' : 'Save this frame'}</Button>
+                      </div>
+                      <p role="status" className="text-xs text-ink-faint empty:hidden" data-testid="creator-export-note">{exporting.note}</p>
+                      <p className="text-xs text-ink-faint">The loop is {exporting.loopFrames} frames of the view as it is when you press the button. Turning or zooming while it runs changes nothing.</p>
+                    </div>
+                    <div>
+                      <h3 id="creator-path" className="mb-1 text-sm font-semibold">Camera path</h3>
+                      <p className="mb-2 text-xs text-ink-faint">Save views as stops; the camera flies smoothly from one to the next while the scene plays.</p>
+                      {stops.length > 0 && (
+                        <ol aria-labelledby="creator-path" className="mb-2 flex flex-wrap gap-1.5" data-testid="creator-stops">
+                          {stops.map((st, i) => (
+                            <li key={i} className="flex items-center overflow-hidden rounded-full border border-rule text-sm">
+                              <button type="button" onClick={() => { setFlying(false); setOrbit(st) }} className="min-h-9 cursor-pointer px-3 hover:bg-paper-sunk" aria-label={`Go to stop ${i + 1}`}>{i + 1}</button>
+                              <button type="button" onClick={() => setStops((all) => all.filter((_, k) => k !== i))} className="min-h-9 cursor-pointer border-l border-rule px-2 text-ink-muted hover:bg-paper-sunk hover:text-ink" aria-label={`Remove stop ${i + 1}`}>×</button>
+                            </li>
+                          ))}
+                        </ol>
+                      )}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Button small disabled={stops.length >= MAX_STOPS || exporting.busy} onClick={() => { setStops((all) => [...all, { ...orbit, target: [...orbit.target] }]); say(`Stop ${stops.length + 1} saved.`) }} data-testid="creator-add-stop">Add this view</Button>
+                        <Button small disabled={stops.length < 2 || exporting.busy} onClick={() => setFlying((f) => !f)}>{flying ? 'Stop' : 'Play the path'}</Button>
+                        <Button small disabled={stops.length < 2 || !done || exporting.busy} onClick={() => { setFlying(false); void exporting.recordPath((u) => pathAt(stops, u), pathLength) }} data-testid="creator-record-path">{exporting.label('Export the path')}</Button>
+                      </div>
+                      {stops.length >= 2 && <div className="mt-3"><Slider label="Between stops" value={leg} min={1} max={8} step={0.5} onChange={setLeg} format={(v) => `${v} s`} hint={`The whole path takes ${pathLength} seconds.`} /></div>}
+                    </div>
+                  </div>
+                )}
                 {m.id === 'arrange' && project && (picked === undefined || !pickedAt ? (
                   <div>
                     <h3 id="creator-arrange-list" className="mb-2 text-sm font-semibold">Props</h3>
@@ -752,12 +891,12 @@ export function SceneCreator() {
           </div>
         </section>
 
-        <section aria-label="Scene" className="relative order-1 min-h-0 flex-1 overflow-hidden bg-paper-sunk lg:order-3 lg:rounded-2xl lg:border lg:border-rule">
+        <section aria-label="Scene" className="relative order-1 min-h-0 flex-1 overflow-hidden bg-paper-sunk lg:order-3 lg:rounded-2xl lg:border lg:border-rule" style={drawing.ground ? { background: drawing.ground } : undefined}>
           <canvas
             ref={canvas}
             role="application"
             aria-roledescription="3D view"
-            aria-label={`${shown.name}: ${shown.items.length === 1 ? 'one piece' : `a land and ${props} props`}, drawn as pixel art. Drag or use the arrow keys to orbit; scroll, pinch or press plus and minus to zoom.${project ? ' Tap a prop to pick it; with one picked, the arrow keys move it, brackets turn it, Delete removes it and Escape lets it go.' : ''}`}
+            aria-label={`${shown.name}: ${shown.items.length === 1 ? 'one piece' : `a land and ${props} props`}, drawn ${styleWords(style)}. Drag or use the arrow keys to orbit; scroll, pinch or press plus and minus to zoom.${project ? ' Tap a prop to pick it; with one picked, the arrow keys move it, brackets turn it, Delete removes it and Escape lets it go.' : ''}`}
             tabIndex={0}
             data-testid="creator-view"
             className="absolute inset-0 h-full w-full cursor-grab touch-none outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset active:cursor-grabbing"
