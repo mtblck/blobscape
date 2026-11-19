@@ -81,14 +81,22 @@ function drawCard({ title, line, logo, last }) {
 
 /** In the page: the view alone, filling the window. Everything over the canvas that is not a canvas or its backdrop is hidden. */
 function bareView({ view }) {
+  // kept on the window: if the page draws its view afresh, the next frame lays it bare again
+  window.__bare = () => bareView({ view })
   const canvas = document.querySelector(view)
   const box = canvas.parentElement
+  document.querySelectorAll('[data-reel-caption]').forEach((e) => e.remove())
   document.documentElement.style.overflow = 'hidden'
+  // a see-through backdrop must not show the page behind: give the box the color of the frame it sits in
+  let behind = 'transparent'
+  for (let e = box.parentElement; e && behind === 'transparent'; e = e.parentElement) { const c = getComputedStyle(e).backgroundColor; if (c && !/rgba\(.*,\s*0\)$/.test(c) && c !== 'transparent') behind = c }
+  box.style.background = behind
   Object.assign(box.style, { position: 'fixed', left: '0', top: '0', width: '100vw', height: '100vh', maxHeight: 'none', minHeight: '0', aspectRatio: 'auto', zIndex: '99999' })
   for (let e = box.parentElement; e && e !== document.body; e = e.parentElement) Object.assign(e.style, { zIndex: '99999', overflow: 'visible', transform: 'none', contain: 'none' })
   const keep = (el) => el instanceof HTMLCanvasElement || !!el.querySelector('canvas') || (el.getAttribute('aria-hidden') === 'true' && !el.firstElementChild && !el.textContent && el.getBoundingClientRect().width > innerWidth / 2)
   for (const el of box.children) if (!keep(el)) el.style.display = 'none'
   const caption = document.createElement('div')
+  caption.dataset.reelCaption = '1'
   caption.style.cssText = "position:absolute;left:5vw;bottom:8vh;z-index:5;font-family:'Fredoka Variable',sans-serif;font-weight:600;font-size:9vh;line-height:1;letter-spacing:-0.01em;pointer-events:none;opacity:0"
   const small = document.createElement('div')
   small.style.cssText = "font-family:'Figtree Variable',sans-serif;font-weight:600;font-size:2.6vh;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:1.4vh;opacity:0.75"
@@ -105,7 +113,7 @@ function bareView({ view }) {
     // in from the left over the first fifth, away over the last tenth
     const a = Math.min(1, u / 0.2), z = Math.min(1, (1 - u) / 0.1)
     caption.style.opacity = String(Math.min(a, z))
-    caption.style.transform = `translateX(${-(1 - a) ** 3 * 4}vw)`
+    caption.style.transform = `translateX(${-((1 - a) ** 3) * 4}vw)`
   }
 }
 
@@ -120,7 +128,7 @@ async function record(i) {
   page.on('pageerror', (e) => console.error(`shot ${i}: ${e.message}`))
   const enc = stills ? undefined : encoder(file)
   let still
-  const take = async () => { const png = await page.screenshot({ type: 'png' }); if (enc) await enc.add(png); else still = png }
+  const take = async () => { const png = await page.screenshot({ type: 'png' }); if (enc) await enc.add(png); else { still = png; writeFileSync(join(shotsDir, `still-${pad(i)}.png`), png) } }
   const uOf = (f) => (stills ? 0.6 : count > 1 ? f / (count - 1) : 0)
   if (shot.card) {
     await page.goto(`${base}/contact/`)
@@ -141,7 +149,7 @@ async function record(i) {
     await ready()
     await page.evaluate(() => document.fonts.ready.then(() => true))
     // the view the page itself starts from: a shot's camera is told from it
-    const home = await page.evaluate(({ hook }) => { const s = window[hook].stage; s.playing = false; return s.orbit }, { hook: reel.hook })
+    const home = await page.evaluate(async ({ hook }) => { while (!window[hook]) await new Promise((r) => setTimeout(r, 50)); const s = window[hook].stage; s.playing = false; return s.orbit }, { hook: reel.hook })
     const from = { azimuth: home.azimuth, elevation: home.elevation, zoom: 1, lift: 0, ...shot.from }, to = { ...from, ...shot.to }
     const ease = EASE[shot.ease ?? 'linear']
     const done = new Set()
@@ -152,13 +160,18 @@ async function record(i) {
       const orbit = { target: [home.target[0], home.target[1] + mix('lift') * home.distance, home.target[2]], distance: home.distance / mix('zoom'), azimuth: mix('azimuth'), elevation: mix('elevation') }
       // things the page can be asked to do at a moment of the shot (a petal let go)
       const calls = (shot.calls ?? []).filter((c, k) => c.at <= at && !done.has(k) && done.add(k)).map((c) => c.call)
-      await page.evaluate(async ({ hook, orbit, t, calls, caption, u, dark }) => {
+      await page.evaluate(async ({ hook, view, orbit, t, calls, caption, u, dark }) => {
+        // the page sets its hook again whenever the bouquet changes, so wait out the moment it is gone
+        while (!window[hook]) await new Promise((r) => setTimeout(r, 50))
+        // a page that draws its view afresh (or React putting its own styles back) undoes the bare view: lay it bare again
+        const c = document.querySelector(view)
+        if (!c || getComputedStyle(c.parentElement).position !== 'fixed' || !c.parentElement.querySelector('[data-reel-caption]')) window.__bare()
         const h = window[hook]
         h.stage.orbit = orbit
         await h.stage.frame(t)
         if (calls.length) { for (const c of calls) h[c](); await h.stage.frame(t) }
         window.__caption(caption, u, dark)
-      }, { hook: reel.hook, orbit, t, calls, caption: shot.caption, u, dark: !!shot.dark })
+      }, { hook: reel.hook, view: reel.view, orbit, t, calls, caption: shot.caption, u, dark: !!shot.dark })
       await take()
     }
   }
@@ -177,10 +190,11 @@ await Promise.all(Array.from({ length: lanes }, async () => {
 }))
 await browser.close()
 server.close()
-if (failed.length) { console.error(`not recorded: ${failed.join(' ')}`); process.exit(1) }
+if (failed.length) { console.error(`not recorded: ${failed.join(' ')} (--only=${failed.join(',')} records them again)`); process.exit(1) }
 
 if (stills) {
-  const files = [...sheet.keys()].sort((a, b) => a - b).map((i) => { const f = join(shotsDir, `still-${pad(i)}.png`); writeFileSync(f, sheet.get(i)); return f })
+  // the stills of shots not asked for this time are the ones already there
+  const files = shots.map((_, i) => join(shotsDir, `still-${pad(i)}.png`)).filter((f) => existsSync(f))
   const cols = Math.ceil(Math.sqrt(files.length))
   execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', ...files.flatMap((f) => ['-i', f]), '-filter_complex', `${files.map((_, k) => `[${k}:v]scale=640:-2[s${k}]`).join(';')};${files.map((_, k) => `[s${k}]`).join('')}xstack=inputs=${files.length}:layout=${files.map((_, k) => `${(k % cols) * 640}_${Math.floor(k / cols) * Math.round((640 * H) / W / 2) * 2}`).join('|')}:fill=black`, '-frames:v', '1', join(out, `${name}-stills.png`)])
   console.log(`${join(out, `${name}-stills.png`)}`)
