@@ -32,6 +32,15 @@ export const NEON_FLOOR = 0.06
 export const NEON_BLACK = 1e-3
 /** How much stronger than its own a tube's color is made, about its gray. */
 export const NEON_VIVID = 2.4
+/**
+ * How many times its own color a thing that gives its own light (`Actor.glow`: a lamp, a lit window, a flame) is
+ * drawn into neon's picture, so the pass can tell it from a pale thing: its color goes over white (`lampShare`).
+ */
+export const NEON_EMIT = 4
+/** A pixel whose brightest channel is over the first of these is partly a lamp, and over the second wholly one. */
+export const NEON_LAMP: readonly [number, number] = [1.05, 1.6]
+/** How brightly a lamp shines beside a tube at a pulse's head. */
+export const NEON_LAMP_SHINE = 0.85
 /** The most colors a look may deal out. */
 export const NEON_COLORS = 6
 /** The two ways pulses run through a scene (not unit: the second set of pulses lies closer together). */
@@ -68,6 +77,16 @@ export function pulse(phase: number): number {
 export function shineAt(along: readonly [number, number], turn: number): number {
   const p = Math.max(pulse(along[0] - turn), NEON_SECOND * pulse(along[1] - turn))
   return NEON_REST + (1 - NEON_REST) * p
+}
+
+/**
+ * How much of a pixel of neon's picture is a lamp, from its brightest channel (`top`): nothing up to white, all of
+ * it well over. A lamp is filled with its own light, steady, and that light is spread onto the bodies round it as
+ * the tubes' is.
+ */
+export function lampShare(top: number): number {
+  const t = Math.min(1, Math.max(0, (top - NEON_LAMP[0]) / (NEON_LAMP[1] - NEON_LAMP[0])))
+  return t * t * (3 - 2 * t)
 }
 
 /** Which of `count` colors a part takes, from the part's shift (0–1). */

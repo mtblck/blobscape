@@ -588,9 +588,9 @@ export default [
         const loaded = await d.page.waitForFunction(() => { const im = [...document.querySelectorAll('[data-testid=scene-picker] img')].slice(0, 4); return im.length === 4 && im.every((i) => i.complete && i.naturalWidth) }, null, { timeout: 30000 }).then(() => true, () => false)
         await d.page.screenshot({ path: join(shots, 'blobscape-pixel-diorama-picker.png') })
         if (opened) await axe(d.page, 'blobscape pixel diorama scene picker')
-        // scrolling to the end brings the rest of the cards
+        // scrolling to the end brings the rest of the cards (the playing scene's own batch may already be the last: scenes are listed newest first)
         await d.page.evaluate(() => { const l = document.querySelector('[data-testid=scene-picker] [role=listbox]').parentElement; l.scrollTo(0, l.scrollHeight) })
-        const total = await d.page.waitForFunction((was) => { const l = document.querySelector('[data-testid=scene-picker] [role=listbox]'); l.parentElement.scrollTo(0, l.parentElement.scrollHeight); const n = l.children.length; return n > was && !l.nextElementSibling ? n : 0 }, first.cards, { timeout: 15000 }).then((h) => h.jsonValue(), () => 0)
+        const total = await d.page.waitForFunction((was) => { const l = document.querySelector('[data-testid=scene-picker] [role=listbox]'); l.parentElement.scrollTo(0, l.parentElement.scrollHeight); const n = l.children.length; return n >= was && !l.nextElementSibling ? n : 0 }, first.cards, { timeout: 15000 }).then((h) => h.jsonValue(), () => 0)
         // the arrows move the mark from the playing scene, typing narrows the list, Enter opens the one marked
         const from = await marked()
         await d.page.keyboard.press('ArrowDown')
@@ -618,11 +618,11 @@ export default [
         await d.page.keyboard.press('Escape')
         const closed = await picker.evaluate((el) => !el.open)
         await d.page.setViewportSize({ width: 1280, height: 900 })
-        const good = !gallery && !chips && opened && focused && first.cards >= 12 && first.cards < total && first.lazy && first.playing.join() === 'windmill' && loaded
+        const good = !gallery && !chips && opened && focused && first.cards >= 12 && first.cards <= total && first.lazy && first.playing.join() === 'windmill' && loaded
           && from === 'windmill' && down && down !== from && up === from && /^No scene matches/.test(none) && narrowed === 1 && /^1 of \d+ scenes/.test(said)
           && picked && named === 'Snail house' && next[1] && next[1] !== 'snail' && next[0] !== named && prev.join() === 'Snail house,snail' && phone && closed
         if (!good) fails.push(`blobscape pixel diorama scene picker: ${JSON.stringify({ gallery, chips, opened, focused, first, loaded, total, from, down, up, none, narrowed, said, picked, named, next, prev, phone, closed })}`)
-        else ok(`blobscape pixel diorama: Select a Scene opens a modal of ${total} cards (${first.cards} at first, the rest as it scrolls) on the playing scene with the search ready; arrows, typing and Enter pick one, previous and next step through, and on a phone it fills the screen`)
+        else ok(`blobscape pixel diorama: Select a Scene opens a modal of ${total} cards (${first.cards} at first, any others as it scrolls) on the playing scene with the search ready; arrows, typing and Enter pick one, previous and next step through, and on a phone it fills the screen`)
       }
       // a scene description opened from a file is drawn as one more scene, and a broken one says where it is broken
       {

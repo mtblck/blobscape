@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { NEON_FLOOR, NEON_REST, bodyColor, colorOf, neonColor, pulse, shineAt } from './neon.ts'
+import { NEON_EMIT, NEON_FLOOR, NEON_REST, lampShare, bodyColor, colorOf, neonColor, pulse, shineAt } from './neon.ts'
 
 test('a tube takes its thing\'s hue at full strength, however dark the thing', () => {
   const dark = neonColor([0.02, 0.005, 0.005]), bright = neonColor([0.8, 0.2, 0.2])
@@ -38,4 +38,11 @@ test('a body is dark away from the tubes and takes the light\'s color near them'
   const far = bodyColor([0.5, 0.5, 0.5], [0, 0, 0]), near = bodyColor([0.5, 0.5, 0.5], [1, 0, 0.5])
   assert.ok(far[0] < 0.05)
   assert.ok(near[0] > near[2] && near[2] > near[1])
+})
+
+test('a lamp is told from a pale thing by going over white', () => {
+  assert.equal(lampShare(1), 0)
+  assert.equal(lampShare(0.95), 0)
+  assert.equal(lampShare(0.6 * NEON_EMIT), 1)
+  assert.ok(lampShare(1.3) > 0 && lampShare(1.3) < 1)
 })

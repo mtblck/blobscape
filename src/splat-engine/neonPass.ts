@@ -3,12 +3,12 @@ import * as TSLTyped from 'three/tsl'
 import { SplatDepth } from './depth.ts'
 import { srgbToLinear } from '../splat-core/color.ts'
 import { LINE_DEPTH, LINE_PART } from '../splat-core/marks.ts'
-import { NEON_BLACK, NEON_BODY, NEON_COLORS, NEON_FLOOR, NEON_REST, NEON_SECOND, NEON_SHIFT, NEON_TAIL, NEON_VIVID, NEON_WAYS, type NeonLook } from '../splat-core/neon.ts'
+import { NEON_BLACK, NEON_BODY, NEON_COLORS, NEON_FLOOR, NEON_LAMP, NEON_LAMP_SHINE, NEON_REST, NEON_SECOND, NEON_SHIFT, NEON_TAIL, NEON_VIVID, NEON_WAYS, type NeonLook } from '../splat-core/neon.ts'
 
 // As in engine.ts: the shader builders use TSL untyped.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const TSL = TSLTyped as unknown as Record<string, any>
-const { Fn, abs, clamp, dot, float, floor, fract, max, min, pow, select, sin, texture, uniform, uv, vec2, vec3, vec4 } = TSL
+const { Fn, abs, clamp, dot, float, floor, fract, max, min, mix, pow, select, sin, smoothstep, texture, uniform, uv, vec2, vec3, vec4 } = TSL
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type N = any
 
@@ -39,14 +39,15 @@ function taps(sigma: number): [number, number][] {
  * the color of the thing it goes round at full strength (`neonColor`), or one of the look's colors by its part, and
  * shines by where it is in the world: pulses of light run through the scene two ways (`shineAt`), so the light
  * travels along the tubes. The tubes' light is then spread at three sizes, and the last pass paints each body in its
- * own color times the light that reaches it, with the glow and the tubes over it.
+ * own color times the light that reaches it, with the glow and the tubes over it. Whatever gives its own light
+ * (`Actor.glow`) is a lamp: filled with its color and spread onto the bodies round it as the tubes' light is.
  *
- * The world should be drawing flat marks with no light of its own (`Stage.setNeon` sets both). The frame's camera
+ * The world should be drawing flat marks with no light of its own and a `glowGain` of `NEON_EMIT` (`Stage.setNeon` sets all three). The frame's camera
  * must be a perspective camera.
  */
 export class NeonPass {
-  /** The picture: every blob flat in its own color. */
-  readonly picture = new RenderTarget(1, 1)
+  /** The picture: every blob flat in its own color, with what gives its own light drawn over white (`NEON_EMIT`), which is how the pass knows a lamp. */
+  readonly picture = new RenderTarget(1, 1, { type: HalfFloatType })
   /** The map of parts the tubes between parts come from. */
   readonly ids = new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter })
   /** The tubes alone: their light, and how much of the pixel they cover. */
@@ -219,7 +220,11 @@ export class NeonPass {
       const beat = (phase: N) => pow(float(1).sub(fract(phase)), NEON_TAIL)
       const lit = max(beat(dot(world, this.ways[0]).add(shift.mul(NEON_SHIFT)).sub(this.turn)), beat(dot(world, this.ways[1]).add(shift.mul(NEON_SHIFT)).sub(this.turn)).mul(NEON_SECOND))
       const shine = lit.mul(1 - NEON_REST).add(NEON_REST)
-      return vec4(tube.mul(shine).mul(a), a)
+      // a lamp, a lit window, a flame: the whole of it shines in its own color, steadily (CPU twin: `lampShare`)
+      const mine = c.rgb.div(max(c.a, 0.001)).toVar()
+      const lamp = smoothstep(NEON_LAMP[0], NEON_LAMP[1], max(mine.r, max(mine.g, mine.b))).mul(select(shown0, float(1), float(0))).toVar()
+      const cover = max(a, lamp)
+      return vec4(mix(tube.mul(shine).mul(a), neonColorNode(mine).mul(NEON_LAMP_SHINE), lamp), cover)
     })()
   }
 
@@ -242,7 +247,7 @@ export class NeonPass {
       const c = texture(this.picture.texture, st).toVar()
       const tube = texture(this.tubes.texture, st).toVar()
       const near = texture(h.texture, st).rgb.toVar(), mid = texture(q.texture, st).rgb.toVar(), far = texture(e.texture, st).rgb.toVar()
-      const own = c.rgb.div(max(c.a, 0.001))
+      const own = min(c.rgb.div(max(c.a, 0.001)), 1)
       const light = near.mul(CATCH[0]).add(mid.mul(CATCH[1])).add(far.mul(CATCH[2])).mul(this.glow)
       const body = own.mul(light.add(this.body)).mul(c.a)
       const halo = near.mul(HALO[0]).add(mid.mul(HALO[1])).add(far.mul(HALO[2])).mul(this.glow).toVar()

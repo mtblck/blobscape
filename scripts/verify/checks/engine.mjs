@@ -1,5 +1,9 @@
 // The engine page, the rigged-splat spec page and the unlisted engine lab.
 import { createServer } from 'node:http'
+import { readFileSync } from 'node:fs'
+
+/** How many experiments the engine page should list: every id in `ENGINE_BUILT`, so a new one needs no change here. */
+const built = () => (readFileSync(new URL('../../../src/blobscape/engineCopy.ts', import.meta.url), 'utf8').match(/ENGINE_BUILT[^=]*=\s*\[([^\]]*)\]/)?.[1].match(/'[^']+'/g) ?? []).length
 
 export default [
   {
@@ -42,7 +46,8 @@ export default [
       await p.page.waitForFunction(() => window.__engine?.blobs() > 0, null, { timeout: 120000 }).catch(() => {})
       const wide = await p.page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
       const cards = await p.page.locator('[data-testid=engine-built] a').count()
-      if (wide > 0 || cards !== 12) fails.push(`engine page on a phone: ${wide}px wider than the screen, ${cards} experiments listed`)
+      const want = built()
+      if (wide > 0 || !want || cards !== want) fails.push(`engine page on a phone: ${wide}px wider than the screen, ${cards} experiments listed of ${want}`)
       else ok(`engine page: fits a phone and lists the ${cards} experiments built on the engine`)
       await axe(p.page, 'engine page on a phone')
       await p.ctx.close()
