@@ -5,7 +5,8 @@ import { TOUR, clay, kept } from './diorama/tour.ts'
 import { STEADY, countColors, darkest, type Frame, type PixelLook } from '../splat-core/pixel.ts'
 import type { Built } from '../splat-engine/body.ts'
 import { LoadingMark } from '../shared/BlobLoader.tsx'
-import { Gallery } from './diorama/Gallery.tsx'
+import { ScenePicker } from './diorama/ScenePicker.tsx'
+import { stepped } from './diorama/pick.ts'
 import { Button, Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
 import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitDrag } from './Viewport.tsx'
@@ -87,6 +88,8 @@ export function PixelDiorama() {
   const diorama = scenes.find((d) => d.id === which) ?? DIORAMAS[0]
   /** The scene whose palette, finish and view are set. */
   const dressed = useRef(which)
+  /** The scene picker: the modal of every scene's card. */
+  const [picking, setPicking] = useState(false)
   const [playing, setPlaying] = useState(!calm)
   const [detail, setDetail] = useState<string>(() => detailAsked(DETAIL, labelNames)?.id ?? (coarse ? DETAIL[1].id : DETAIL[2].id))
   const [pixels, setPixels] = useState(true)
@@ -513,11 +516,18 @@ export function PixelDiorama() {
           {
             id: 'scene', label: 'Scene', content: (
               <div className={TAB_SECTIONS}>
-                <Field label="Scene">
-                  <div className="flex flex-wrap gap-1.5">
-                    {scenes.map((d) => <Chip key={d.id} active={which === d.id} onClick={() => show(d.id)}>{d.label}</Chip>)}
+                <div className="grid gap-2">
+                  <p className="text-sm text-ink-muted">Current scene selected: <span className="font-medium text-ink" data-testid="diorama-current">{diorama.label}</span></p>
+                  <div className="flex items-stretch gap-1.5">
+                    <Button aria-label="Previous scene" className="cursor-pointer" onClick={() => show(stepped(scenes, which, -1).id)} data-testid="diorama-previous">
+                      <svg aria-hidden viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 5l-7 7 7 7" /></svg>
+                    </Button>
+                    <Button primary className="flex-1 cursor-pointer" aria-haspopup="dialog" onClick={() => setPicking(true)} data-testid="diorama-picker-open">Select a Scene</Button>
+                    <Button aria-label="Next scene" className="cursor-pointer" onClick={() => show(stepped(scenes, which, 1).id)} data-testid="diorama-next">
+                      <svg aria-hidden viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 5l7 7-7 7" /></svg>
+                    </Button>
                   </div>
-                </Field>
+                </div>
                 <div className="grid gap-2">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <Button small disabled={opening} onClick={() => modelInput.current?.click()}>{opening ? 'Opening…' : 'Open a file'}</Button>
@@ -621,23 +631,8 @@ export function PixelDiorama() {
         ]}
       />
 
-      <section aria-labelledby="every-title" className="mt-14 border-t border-rule pt-10 lg:pt-14" data-testid="diorama-gallery">
-        <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-3 pb-6">
-          <div>
-            <p className="text-sm text-ink-faint">Every scene</p>
-            <h2 id="every-title" className="mt-1 font-display text-4xl leading-[1.05] sm:text-5xl">{DIORAMAS.length} scenes, one loop each</h2>
-          </div>
-          <p className="max-w-xl text-ink-muted">
-            Each scene plays once through, recorded from this page at 12 frames a second with its own palette. Pick one to
-            open it in the view above, where you can turn it and change how it's drawn.
-          </p>
-        </div>
-        <Gallery current={which} testId="diorama-loops" onPick={(id) => {
-          show(id)
-          window.scrollTo({ top: 0, behavior: calm ? 'auto' : 'smooth' })
-          canvas.current?.focus({ preventScroll: true })
-        }} />
-      </section>
+      <ScenePicker open={picking} onClose={() => setPicking(false)} current={which} onPick={show}
+        scenes={scenes.map((d) => ({ id: d.id, label: d.label, about: d.about, loop: d !== model }))} />
 
       <section aria-labelledby="how-title" className="mt-14 border-t border-rule pt-10 lg:grid lg:grid-cols-12 lg:gap-x-5 lg:pt-14">
         <div className="lg:col-span-5">

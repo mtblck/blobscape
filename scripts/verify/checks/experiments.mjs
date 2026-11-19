@@ -457,10 +457,10 @@ export default [
   },
   {
     name: 'diorama-picker',
-    about: "Pixel Diorama: details dialog, How it's made, picking a scene swaps the palette on arrival, the gallery of loops, opening a description",
+    about: "Pixel Diorama: details dialog, How it's made, picking a scene swaps the palette on arrival, the scene picker (search, keys, previous and next, a phone), opening a description",
     entries: ['src/blobscape/PixelDiorama.tsx'],
     files: ['public/loops/'],
-    async run({ shots, join, fails, ok, open, axe }) {
+    async run({ shots, join, fails, ok, open, tabClick, axe }) {
       const d = await open('/experiments/pixel-diorama/?offscreen=1&scene=campfire', { viewport: { width: 1280, height: 900 } })
       await d.page.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).catch(() => {})
       // the details panel: one short line under the view, and Full details opens a dialog with the scene's numbers that Escape closes
@@ -511,7 +511,7 @@ export default [
             await axe(d.page, 'blobscape pixel diorama how it is made')
           }
           steps.push({ words, spot, focus: await d.page.evaluate(() => document.activeElement?.textContent), ...await seen() })
-          if (i < 4) await d.page.getByRole('button', { name: 'Next' }).click()
+          if (i < 4) await d.page.getByRole('button', { name: 'Next', exact: true }).click()
         }
         await d.page.getByRole('button', { name: 'Done' }).click()
         const back = await d.page.waitForFunction(() => document.activeElement?.getAttribute('data-testid') === 'diorama-tour-open', null, { timeout: 5000 }).then(() => true, () => false)
@@ -525,20 +525,72 @@ export default [
       }
       const strip = () => [...document.querySelectorAll('[data-testid=palette-strip] span')].map((e) => e.style.background).join()
       const before = await d.page.evaluate(strip)
+      // through the picker: its search finds the windmill, which is further down the list than the cards drawn at first
+      await d.page.getByTestId('diorama-picker-open').click()
+      await d.page.getByTestId('scene-search').fill('windm')
+      await d.page.waitForSelector('[data-testid=scene-picker] [data-scene=windmill]', { timeout: 10000 }).catch(() => {})
       const justAfter = await d.page.evaluate(() => {
-        [...document.querySelectorAll('button')].find((b) => b.textContent === 'Windmill').click()
+        document.querySelector('[data-testid=scene-picker] [data-scene=windmill]').click()
         return [...document.querySelectorAll('[data-testid=palette-strip] span')].map((e) => e.style.background).join()
       }).catch(() => '')
       const changed = await d.page.waitForFunction((was) => { const now = [...document.querySelectorAll('[data-testid=palette-strip] span')].map((e) => e.style.background).join(); return !!window.__diorama && now !== was }, before, { timeout: 90000 }).then(() => true, () => false)
       if (!before || justAfter !== before || !changed) fails.push(`blobscape pixel diorama: on picking another scene the palette ${justAfter !== before ? 'changed before the scene did' : 'never changed'}`)
       else ok('blobscape pixel diorama: a newly picked scene brings its palette only when it reaches the view')
-      // the gallery of recorded loops: every tile's loop loads, and a tile opens its scene in the view
-      await d.page.getByTestId('diorama-loops').scrollIntoViewIfNeeded()
-      const loops = await d.page.waitForFunction(() => { const im = [...document.querySelectorAll('[data-testid=diorama-loops] img')]; return im.length && im.every((i) => i.complete && i.naturalWidth) ? im.length : 0 }, null, { timeout: 30000 }).then((h) => h.jsonValue(), () => 0)
-      await d.page.getByTestId('diorama-loops').getByRole('button', { name: 'Snail house, open in the view above' }).click()
-      const picked = await d.page.waitForFunction(() => location.search.includes('scene=snail') && scrollY < 50 && document.activeElement?.dataset.testid === 'diorama-view', null, { timeout: 20000 }).then(() => true, () => false)
-      if (loops < 18 || !picked) fails.push(`blobscape pixel diorama gallery: ${loops} loops loaded, picking a tile ${picked ? 'worked' : 'did not open the scene above'}`)
-      else ok(`blobscape pixel diorama: the gallery's ${loops} loops load, and a tile opens its scene in the view`)
+      // the scene picker: a modal of every scene's card that opens on the playing one with the search ready, loads loops
+      // only for the cards near the screen, and is worked from the search box by typing, the arrows and Enter
+      {
+        const picker = d.page.getByTestId('scene-picker')
+        const current = () => d.page.getByTestId('diorama-current').innerText().catch(() => '')
+        const marked = () => d.page.evaluate(() => document.querySelector('[data-testid=scene-picker] [data-marked]')?.dataset.scene)
+        const gallery = await d.page.locator('[data-testid=diorama-loops], [data-testid=diorama-gallery]').count()
+        const chips = await d.page.getByRole('button', { name: 'Lighthouse', exact: true }).count()
+        await d.page.getByTestId('diorama-picker-open').click()
+        const opened = await picker.evaluate((el) => el.open && el.matches(':modal')).catch(() => false)
+        const focused = await d.page.evaluate(() => document.activeElement?.dataset.testid === 'scene-search')
+        const first = await d.page.evaluate(() => {
+          const cards = [...document.querySelectorAll('[data-testid=scene-picker] [role=option]')]
+          const playing = cards.filter((c) => c.getAttribute('aria-selected') === 'true').map((c) => c.dataset.scene)
+          return { cards: cards.length, playing, lazy: cards.every((c) => c.querySelector('img')?.loading === 'lazy') }
+        })
+        const loaded = await d.page.waitForFunction(() => { const im = [...document.querySelectorAll('[data-testid=scene-picker] img')].slice(0, 4); return im.length === 4 && im.every((i) => i.complete && i.naturalWidth) }, null, { timeout: 30000 }).then(() => true, () => false)
+        await d.page.screenshot({ path: join(shots, 'blobscape-pixel-diorama-picker.png') })
+        if (opened) await axe(d.page, 'blobscape pixel diorama scene picker')
+        // scrolling to the end brings the rest of the cards
+        await d.page.evaluate(() => { const l = document.querySelector('[data-testid=scene-picker] [role=listbox]').parentElement; l.scrollTo(0, l.scrollHeight) })
+        const total = await d.page.waitForFunction((was) => { const l = document.querySelector('[data-testid=scene-picker] [role=listbox]'); l.parentElement.scrollTo(0, l.parentElement.scrollHeight); const n = l.children.length; return n > was && !l.nextElementSibling ? n : 0 }, first.cards, { timeout: 15000 }).then((h) => h.jsonValue(), () => 0)
+        // the arrows move the mark from the playing scene, typing narrows the list, Enter opens the one marked
+        const from = await marked()
+        await d.page.keyboard.press('ArrowDown')
+        const down = await marked()
+        await d.page.keyboard.press('ArrowUp')
+        const up = await marked()
+        await d.page.keyboard.type('zzzz')
+        const none = await d.page.getByTestId('scene-count').innerText()
+        await d.page.getByTestId('scene-search').fill('snail')
+        const narrowed = await picker.locator('[role=option]').count()
+        const said = await d.page.getByTestId('scene-count').innerText()
+        await d.page.keyboard.press('Enter')
+        const picked = await d.page.waitForFunction(() => location.search.includes('scene=snail') && !document.querySelector('[data-testid=scene-picker]').open && document.activeElement?.dataset.testid === 'diorama-picker-open', null, { timeout: 20000 }).then(() => true, () => false)
+        const named = await current()
+        // previous and next step through the list beside the button
+        await d.page.getByTestId('diorama-next').click()
+        const next = [await current(), await d.page.evaluate(() => new URL(location.href).searchParams.get('scene'))]
+        await d.page.getByTestId('diorama-previous').click()
+        const prev = [await current(), await d.page.evaluate(() => new URL(location.href).searchParams.get('scene'))]
+        // on a phone the picker is the whole screen, and Escape closes it
+        await d.page.setViewportSize({ width: 390, height: 780 })
+        await tabClick(d.page.getByTestId('diorama-picker-open'))
+        const phone = await picker.evaluate((el) => { const r = el.getBoundingClientRect(); return el.open && Math.round(r.width) === innerWidth && Math.round(r.height) === innerHeight })
+        await d.page.screenshot({ path: join(shots, 'blobscape-pixel-diorama-picker-phone.png') })
+        await d.page.keyboard.press('Escape')
+        const closed = await picker.evaluate((el) => !el.open)
+        await d.page.setViewportSize({ width: 1280, height: 900 })
+        const good = !gallery && !chips && opened && focused && first.cards >= 12 && first.cards < total && first.lazy && first.playing.join() === 'windmill' && loaded
+          && from === 'windmill' && down && down !== from && up === from && /^No scene matches/.test(none) && narrowed === 1 && /^1 of \d+ scenes/.test(said)
+          && picked && named === 'Snail house' && next[1] && next[1] !== 'snail' && next[0] !== named && prev.join() === 'Snail house,snail' && phone && closed
+        if (!good) fails.push(`blobscape pixel diorama scene picker: ${JSON.stringify({ gallery, chips, opened, focused, first, loaded, total, from, down, up, none, narrowed, said, picked, named, next, prev, phone, closed })}`)
+        else ok(`blobscape pixel diorama: Select a Scene opens a modal of ${total} cards (${first.cards} at first, the rest as it scrolls) on the playing scene with the search ready; arrows, typing and Enter pick one, previous and next step through, and on a phone it fills the screen`)
+      }
       // a scene description opened from a file is drawn as one more scene, and a broken one says where it is broken
       {
         const { BEE } = await import('../../../src/blobscape/diorama/scenes/bee.ts')
@@ -551,7 +603,7 @@ export default [
         await input.setInputFiles({ name: 'bee.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ ...BEE, name: 'Opened bee' })) })
         const opened = await said(/^Opened bee\.json/)
         const drawn = await d.page.waitForFunction(() => document.querySelector('[data-testid=diorama-view]')?.getAttribute('aria-label')?.startsWith('Opened bee') && window.__diorama?.blobs() > 5000, null, { timeout: 120000 }).then(() => true, () => false)
-        const chip = await d.page.getByRole('button', { name: 'Opened bee', exact: true }).count()
+        const chip = (await d.page.getByTestId('diorama-current').innerText().catch(() => '')) === 'Opened bee' ? 1 : 0
         if (!(/loop: /.test(refused) && /parts\[0\]/.test(refused) && still && /224 parts/.test(opened) && drawn && chip === 1)) fails.push(`blobscape pixel diorama open a description: ${JSON.stringify({ refused, still, opened, drawn, chip })}`)
         else ok('blobscape pixel diorama: a broken description is turned away with where it is broken, and a sound one opens as one more scene')
       }
