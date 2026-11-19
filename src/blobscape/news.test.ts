@@ -34,6 +34,8 @@ test('every post has a picture that exists, a summary a link preview can hold, a
     const meta = pageMeta({ page: 'post', id: p.id })
     assert.ok(meta.image && inPublic(meta.image.src), `${p.id}: no share picture`)
     assert.ok(meta.title.startsWith(p.title))
+    // a link preview's tags say 1200 × 630, so a post's own picture is shared as its cut of that shape
+    assert.ok(meta.image.src.startsWith('/share/'), `${p.id}: no 1200 × 630 share picture: run scripts/share-images.mjs`)
   }
 })
 
