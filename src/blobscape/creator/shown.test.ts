@@ -71,3 +71,13 @@ test('a cut packs and unpacks to the same blobs', () => {
   assert.deepEqual([...u.skin.joints.slice(0, 40)], [...b.skin.joints.slice(0, 40)])
   assert.equal(u.skeleton.count, b.skeleton.count)
 })
+
+test('a plain cut has no light baked in, for the styles that light the blobs themselves', () => {
+  const job = shownOf(openingLand('plain-turf')!).jobs(CHUNKY)[0]
+  const lit = cut(job), plain = cut({ ...job, plain: true })
+  assert.equal(plain.blobs.count, lit.blobs.count)
+  const mean = (b: typeof lit) => { let s = 0; for (let i = 0; i < b.blobs.count * 3; i++) s += b.blobs.color[i]; return s / (b.blobs.count * 3) }
+  assert.notEqual(mean(plain), mean(lit))
+  // the flag is put back: a lit cut after a plain one is lit
+  assert.deepEqual([...cut(job).blobs.color.slice(0, 30)], [...lit.blobs.color.slice(0, 30)])
+})
