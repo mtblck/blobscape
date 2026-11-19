@@ -523,6 +523,28 @@ export default [
     },
   },
   {
+    name: 'diorama-model',
+    about: 'Pixel Diorama: Save as a 3D model writes a rigged .glb of blocks (or a smooth surface) with the loop as an animation',
+    entries: ['src/blobscape/PixelDiorama.tsx', 'src/splat-engine/blockMesh.ts'],
+    async run({ fails, ok, open, tabClick }) {
+      const d = await open('/experiments/pixel-diorama/?offscreen=1&scene=campfire&detail=chunky', { viewport: { width: 1280, height: 900 } })
+      await d.page.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).catch(() => {})
+      await d.page.evaluate(async () => { await window.__diorama.stage.frame(0.5) })
+      for (const shape of ['Blocks', 'Smooth']) {
+        await tabClick(d.page.getByTestId('diorama-glb').getByRole('button', { name: shape, exact: true }))
+        const [dl] = await Promise.all([d.page.waitForEvent('download', { timeout: 120000 }), tabClick(d.page.getByTestId('diorama-glb-save'))])
+        const bytes = await (await import('node:fs/promises')).readFile(await dl.path())
+        const len = bytes.readUInt32LE(12), json = JSON.parse(bytes.subarray(20, 20 + len).toString())
+        const prim = json.meshes?.[0]?.primitives?.[0]
+        const tris = prim ? json.accessors[prim.indices].count / 3 : 0
+        const anim = json.animations?.[0]?.channels?.length ?? 0
+        if (bytes.readUInt32LE(0) !== 0x46546c67 || !(tris > 1000) || !(anim > 0) || !json.skins?.length || !prim.attributes.COLOR_0) fails.push(`diorama model (${shape}): ${tris} triangles, ${anim} animated channels, skins ${json.skins?.length}`)
+        else ok(`diorama model (${shape}): a rigged .glb of ${tris} triangles with ${anim} animated channels (the engine lab checks three.js opens this kind of file)`)
+      }
+      await d.ctx.close()
+    },
+  },
+  {
     name: 'diorama-picker',
     about: "Pixel Diorama: details dialog, How it's made, picking a scene swaps the palette on arrival, the scene picker (search, keys, previous and next, a phone), opening a description",
     entries: ['src/blobscape/PixelDiorama.tsx'],

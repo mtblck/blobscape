@@ -30,6 +30,11 @@ import { STYLES, isPixelStyle, styleAsked, styleWords, type Style } from './dior
 import { GLITCH_START, glitchLook, type GlitchChoice } from './glitchLooks.ts'
 import { GlitchControls } from './diorama/GlitchControls.tsx'
 import { useDrawnLook, wantsPlain } from './drawnLook.tsx'
+import { download } from './files.ts'
+import { blocksToMesh } from '../splat-engine/blockMesh.ts'
+import { blobsToMesh } from '../splat-engine/mesh.ts'
+import { recordClip, writeRiggedMeshGlb } from '../splat-engine/glb.ts'
+import { Skeleton as Bones } from '../splat-engine/rig.ts'
 
 const SIZES = [2, 3, 4, 6]
 /** Frames a second the scene moves at: 0 is every frame the screen shows. */
@@ -125,6 +130,11 @@ export function PixelDiorama() {
   const [view, setView] = useState(diorama.views[0].id)
   const [orbit, setOrbit] = useState<Orbit>(diorama.views[0].orbit)
   const [art, setArt] = useState<{ width: number; height: number }>()
+  /** The 3D model export: blocks on the scene's grid (and how many grid cells a block is) or a smooth surface. */
+  const [modelShape, setModelShape] = useState<'blocks' | 'smooth'>('blocks')
+  const [blockSize, setBlockSize] = useState(2)
+  const [glbNote, setGlbNote] = useState('')
+  const [modelBusy, setModelBusy] = useState(false)
 
   // built after a paint, so the waiting mark shows first
   const [made, setScene] = useState<{ built: Built; of: Diorama; detail: string; paint: string; plain: boolean }>()
@@ -354,6 +364,34 @@ export function PixelDiorama() {
 
   const exportNote = touring ? 'Close How it\'s made to save a frame or export the loop.' : note
   const cantExport = !!touring || !drawn || exporting.busy
+
+  /**
+   * Saves the scene as polygons in a rigged .glb: blocks on the grid it was cut on (or a smooth surface round it),
+   * colored as it is painted, on its bones, with one loop as its animation. An idea from Silicon Jungle's Ink Studio.
+   */
+  const saveModel = () => {
+    if (!scene || modelBusy) return
+    setModelBusy(true)
+    setGlbNote('Making the model…')
+    // a moment for the note to show: the mesh is made in one go
+    setTimeout(() => {
+      try {
+        const { built, of } = scene
+        const spacing = DETAIL.find((d) => d.id === scene.detail)!.spacing
+        const mesh = modelShape === 'blocks' ? blocksToMesh(built.blobs, built.skin, { cell: spacing * blockSize }) : blobsToMesh(built.blobs, built.skin, { cells: 140, level: 1 })
+        const sk = new Bones(built.skeleton.bones)
+        const clip = recordClip('loop', sk, (k, t) => of.pose(k, t), of.loop, 24)
+        const bytes = writeRiggedMeshGlb({ name: of.label, mesh, skeleton: sk, clips: [clip] })
+        download(bytes, `${of.id}-${modelShape}.glb`, 'model/gltf-binary')
+        setGlbNote(`Saved ${mesh.triangleCount.toLocaleString()} triangles with ${sk.count} bones and its ${of.loop} second loop: ${kilobytes(bytes.length)}.`)
+      } catch (e) {
+        console.warn(e)
+        setGlbNote(`The model could not be made: ${e instanceof Error ? e.message : String(e)}`)
+      } finally {
+        setModelBusy(false)
+      }
+    }, 30)
+  }
 
   const drag = useRef<OrbitDrag | null>(null)
   const pointers = useRef(new Map<number, { x: number; y: number }>())
@@ -652,6 +690,25 @@ export function PixelDiorama() {
                 </div>
                 <p role="status" className="text-xs text-ink-faint empty:-mt-2">{exportNote}</p>
                 <p className="text-xs text-ink-faint">The loop is exported from the view as it is when you press the button. It rocks only if Rock the view is on in the Finish tab, and turning or zooming while it runs changes nothing. For a clip of whatever you do on the page, use the record button on the view.</p>
+                </div>
+                <div className="grid gap-3" data-testid="diorama-glb">
+                  <Field label="3D model">
+                    <div className="flex flex-wrap gap-1.5">
+                      <Chip active={modelShape === 'blocks'} onClick={() => setModelShape('blocks')}>Blocks</Chip>
+                      <Chip active={modelShape === 'smooth'} onClick={() => setModelShape('smooth')}>Smooth</Chip>
+                    </div>
+                  </Field>
+                  {modelShape === 'blocks' && <Field label="Block size">
+                    <div className="flex flex-wrap gap-1.5">
+                      {[1, 2, 4].map((n) => <Chip key={n} active={blockSize === n} onClick={() => setBlockSize(n)}>{n === 1 ? 'One cell' : `${n} cells`}</Chip>)}
+                    </div>
+                    <p className="mt-1.5 text-xs text-ink-faint">How many cells of the grid the scene was cut on make one block. Bigger blocks make a smaller file.</p>
+                  </Field>}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <Button small disabled={cantExport || !scene || modelBusy} onClick={saveModel} data-testid="diorama-glb-save">Save as a 3D model (.glb)</Button>
+                  </div>
+                  <p role="status" className="text-xs text-ink-faint empty:hidden">{glbNote}</p>
+                  <p className="text-xs text-ink-faint">Polygons for a game engine or a 3D app, at the detail on show: colored as the scene is painted, light and shade included, for an unlit material, on the scene's bones with one loop as its animation. Live lights, the sky, water and the style stay behind. An idea from Silicon Jungle's Ink Studio.</p>
                 </div>
               </div>
             ),
