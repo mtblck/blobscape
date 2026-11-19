@@ -1,7 +1,7 @@
-# Plan: the sandbox becomes a scene editor
+# Plan: Scene Creator, a scene editor in the sandbox's place
 
-Status: a plan, not built. Written 2026-11-19 from Matt's direction. Nothing here is decided until
-he says so; the choices that are his to make are listed under [Decisions](#decisions-for-matt).
+Status: a plan, not built. Written 2026-11-19 from Matt's direction. His answers so far are under
+[Decisions](#decisions), with what is still open.
 
 ## The idea
 
@@ -11,8 +11,9 @@ thing: scenes written as data, cut and lit by our engine, and shown in eleven st
 gouache, oil, ink and wash, hatching, cel shading, neon, stained glass, watercolor, ASCII and plain
 blobs) with a loop export.
 
-The plan is to point the sandbox at that. It keeps its layout (the Modes workspace, epic #254) and
-becomes the place where a visitor makes and edits dioramas:
+The plan is a new page, **Scene Creator** (Matt's name), that takes the sandbox's place in the header.
+It keeps the sandbox's layout (the Modes workspace, epic #254) and is where a visitor makes and edits
+dioramas:
 
 1. open a scene, move things around in it, add props from a library, change the light, pick a style
 2. bring in a model of their own as a prop
@@ -21,8 +22,8 @@ becomes the place where a visitor makes and edits dioramas:
 5. later, and only for those who choose it: an account that keeps their work, and credits to have
    Claude write a scene
 
-Building with loose blobs is not thrown away. It moves out of the way and can come back as a mode
-once the editor stands (see [What happens to today's sandbox](#what-happens-to-todays-sandbox)).
+Building with loose blobs is not thrown away. The sandbox moves as it is into the experiments (see
+[What happens to today's sandbox](#what-happens-to-todays-sandbox)).
 
 ### Should we?
 
@@ -39,9 +40,8 @@ mostly joining them, not inventing.
 
 The caution: the sandbox as it stands is 1,800 lines on Spark, and almost none of that code carries
 over, because the editor has to be drawn by our engine's `Stage` for the styles and lights to work.
-So this is a new page in the old layout, not a refit. The plan below builds it beside the current
-sandbox and swaps them only when the first phase is usable, so the site never has a half-built
-sandbox.
+So this is a new page in the old layout, not a refit. The plan below builds it at its own
+address beside the current sandbox, and the header changes only when the first phase is usable.
 
 ## What the code gives us, and where it pushes back
 
@@ -179,7 +179,7 @@ First library, from Matt's list:
 | White witch | `scenes/henge.ts` | Waits on PR #316 merging. Her arriving and leaving in sparks becomes an optional move; standing is the default. |
 | Lighthouse | `diorama/scene.ts` | Code today. Rewritten as a description first (tower, lamp, cottage, jetty and boat as separate props; the lamp's two turning lights come along). |
 | Windmill | `scenes/windmill.ts` | Mill with turning sails; the scene's `focus` and `steps` stay with the scene, not the prop. |
-| Dragon | `scenes/dragon.ts` and the zoo | Two entries: the lava dragon as the scene has it (a bust, made to rise out of whatever it stands in) and the whole zoo dragon with its breath. |
+| Dragon | `scenes/dragon.ts` and the zoo | Two entries (Matt: both): the lava dragon as the scene has it (a bust, made to rise out of whatever it stands in) and the whole zoo dragon with its breath. |
 | Giant turkey | `scenes/turkey.ts` | And the cook, the billboard, the mailbox, haystack and trees as their own props. |
 | Lands | several | The lighthouse rock, the sky islands, the canyon floor, the henge's turf, the windmill's hill, the meadow, plus a plain round turf and a plain rock to start from. |
 
@@ -209,8 +209,8 @@ in the browser and as a file. No imports of outside files yet.
 4. **The lighthouse as a description.** So its tower, lamp, cottage and boat can be props, and the
    scene is data like the rest. Its picture must not change (the recorded loop is the check).
 5. **The first library.** The table above, with card pictures.
-6. **The editor workspace.** A new page in the Modes layout on `CreatureStage`, at an address of
-   its own until the swap. Scene mode: start from a scene, see it split into land and props.
+6. **The editor workspace.** A new page in the Modes layout on `CreatureStage`, at
+   `/scene-creator/`, unlisted until the swap. Scene mode: start from a scene, see it split into land and props.
 7. **Pick and arrange.** Tap to pick, drag along the ground (`groundUnder` gives the height), turn,
    size, copy, delete, undo and redo; every action reachable from the keyboard and by a screen
    reader (a list of what is in the scene, not only the picture).
@@ -221,7 +221,8 @@ in the browser and as a file. No imports of outside files yet.
     `PixelDiorama.tsx` into something both pages use.
 11. **Keep it in the browser.** Autosave to IndexedDB, a list of saved projects, save and open a
     project file (`.blobscape.json`).
-12. **The swap.** The editor takes `/sandbox/`; today's sandbox moves (see below); header, front
+12. **The swap.** Scene Creator goes in the header where Sandbox was; today's sandbox moves to
+    `/experiments/sandbox/` (see below); front
     page, lessons' links, Scan Studio's hand-off, the assistant tools, verify checks, docs and a
     What's New post.
 
@@ -346,9 +347,11 @@ It is linked from the header, the front page and What's New posts; every lesson 
 the sandbox", which hands the lesson's blobs over, as Scan Studio's Open in the sandbox does; and it holds real work: brushes, fill and stamp, tap to
 select with SlimSAM, one photo to a scene, the camera path, the assistant tools.
 
-Proposal: when the editor takes `/sandbox/`, the blob sandbox moves whole to
-`/experiments/blob-sandbox/` as an experiment, with a redirect for old `?mode=` links. Nothing is
-deleted and the lessons' links point at the new address. Later, "bring back splat building" can
+Matt's call (2026-11-19): it moves as it is into the experiments. So at the swap it becomes the
+experiment `/experiments/sandbox/`, still called Sandbox, with nothing changed inside it, and
+`/sandbox/` (with any `?mode=`) redirects there, as the old `/creature/` and `/tools/*` addresses do.
+The lessons' and Scan Studio's hand-offs point at the new address. Scene Creator lives at
+`/scene-creator/` (my choice of address), so the two never share one. Later, "bring back splat building" can
 mean a Sculpt mode in the editor that edits a prop's blobs with our engine, once the editor's
 needs are clear, taking the brushes and the fill tool across (their arithmetic is pure and
 Spark-free already).
@@ -370,13 +373,17 @@ a scene you made is the obvious thing to share.
 - **Two formats.** Projects sit on top of descriptions. `docs/scene-descriptions.md` and the
   `pixel-scene` skill must say how the two relate, or the next scene gets written in the wrong one.
 
-## Decisions for Matt
+## Decisions
 
-1. **Where today's sandbox goes** at the swap: an experiment at its own address (proposed), a mode
-   inside the editor, or retired.
-2. **Names:** the editor keeps the name Sandbox (proposed, since the header and links say it) or
-   takes a new one; the mode names in the table above; "project" for a saved scene.
-3. **Which dragon** is the library's: the lava dragon from the scene, the zoo dragon, or both
-   (proposed).
-4. **Phase 5 at all, and when.** Nothing in phases 1 to 4 depends on it. The rules under "What
-   changes" are worth agreeing to now even if accounts never come.
+Matt's answers (2026-11-19):
+
+1. **Today's sandbox** moves as it is into the experiments.
+2. **The name** is Scene Creator.
+3. **Both dragons** go in the library: the lava dragon from the scene and the whole zoo dragon.
+
+Still open:
+
+- The address `/scene-creator/`, the mode names in the table above, and "project" for a saved scene
+  are mine.
+- **Phase 5 at all, and when.** Nothing in phases 1 to 4 depends on it. The rules under "What
+  changes" are worth agreeing to now even if accounts never come.
