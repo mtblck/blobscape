@@ -30,6 +30,26 @@ const CHANGES = 'https://github.com/mtblck/blobscape/blob/main/CHANGELOG.md'
 
 export const POSTS: Post[] = [
   {
+    id: 'pixel-diorama-styles',
+    date: '2026-11-19',
+    title: 'Pixel Diorama learns to paint',
+    summary: 'Pixel Diorama used to draw every scene as pixel art and nothing else. Its new Style tab draws the same scene as neon tubes, stained glass, watercolor, cel shading, ASCII and more, and a new Export tab saves any of them as a loop that joins up.',
+    search: 'Pixel Diorama has a Style tab: draw any scene as neon, stained glass, watercolor, cel shading or ASCII, then export it as a loop that joins up.',
+    image: { src: '/news/diorama-styles.webp', alt: 'The same lighthouse on its island at night drawn three ways side by side: as glowing neon tubes on black, as a stained glass window with dark lead lines, and as a watercolor on paper.' },
+    body: [
+      'A scene in [Pixel Diorama](/experiments/pixel-diorama/) is blobs in three dimensions, and pixel art was only ever the last step: one way of finishing the picture. So the Pixels tab is now the Style tab. Pixel art is still how a scene opens, and beside it is every look from [Brush and Ink](/experiments/brush-and-ink/) and three new ones. Each has its own settings, and the style is kept in the address, so a link opens the scene the way you left it.',
+      '## Three new styles',
+      '- **Neon.** Every outline becomes a tube of glowing light, and pulses run through the scene along them. The bodies are dark and catch the light as it passes. Lamps, lit windows and flames shine in their own color and light what is round them. [See the lighthouse in neon](/experiments/pixel-diorama/?scene=lighthouse&style=neon).\n- **Stained glass.** The scene is cut into panes that stay on their surfaces as the view turns, with lead between them and wherever a color changes, and a light behind the window. [See it in glass](/experiments/pixel-diorama/?scene=lighthouse&style=glass).\n- **Watercolor.** Thin paint on paper: washes that run unevenly at their edges and pool where they end, grain that shows through, bare paper for the lightest parts and a pencil line if you want one. [See it in watercolor](/experiments/pixel-diorama/?scene=lighthouse&style=watercolor).',
+      '## And the ones that were already there',
+      'Gouache, oil, ink and wash, hatching, ASCII and cel shading all work on every scene now. Cel shading learned to follow a scene\'s own lights on the way: at night both of its tones dim to moonlight, lamps and lit windows stand out, and the lighthouse\'s beam still sweeps the ground. On a phone the styles start lighter and draw at a size a phone can keep up with.',
+      '## Take it with you',
+      'The new Export tab saves one whole loop of a scene, in whichever style it is in, as an MP4 or an animated PNG. It steps through the loop frame by frame instead of filming the screen, so the file ends exactly where it began and plays round without a jump. The view is held where it stood when you pressed the button, and it rocks gently if Rock the view is on. In full screen there is an Export button on the view itself.',
+      '## New scenes to try them on',
+      '- **[Turkey Run](/experiments/pixel-diorama/?scene=turkey).** A giant turkey chases a cook in an apron down a country road, past a billboard, a mailbox and a lost hat.\n- **[Fishing for the moon](/experiments/pixel-diorama/?scene=fishing).** The first scene that tells a story in order: a boy on a floating island casts into a cloud and hauls up the moon, the day turns to a starry night, and his next cast brings back the sun.',
+      'With the list of scenes this long, the Scene tab now opens a picker with a search box and a moving preview of every scene. The three new styles are on Brush and Ink too.',
+    ],
+  },
+  {
     id: 'seasonal-bouquets',
     date: '2026-11-19',
     title: 'A florist made of blobs',

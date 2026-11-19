@@ -1491,6 +1491,18 @@
        "doc": "Where the actor stands: added to every root bone, and kept by `reset()` (a pose isn't a placement)."
       },
       {
+       "name": "gone",
+       "readonly": true,
+       "type": "Float32Array",
+       "doc": "Pose: how far each bone's own blobs have dissolved, 0 (whole) to 1 (gone); see dissolve.ts. Children don't inherit it."
+      },
+      {
+       "name": "lift",
+       "readonly": true,
+       "type": "Float32Array",
+       "doc": "Pose: how far each bone's blobs drift up as they dissolve, in world units."
+      },
+      {
        "name": "matrix",
        "readonly": true,
        "type": "Float32Array",
@@ -1682,7 +1694,7 @@
     {
      "name": "skinCenters",
      "kind": "function",
-     "doc": "Moves only the centers of many blobs, fast: what the sort needs on the CPU\nwhen the GPU does the rest of the skinning. No allocation per blob.\n\n- `src`: rest centers as vec4s, with each blob's first bone (its actor's\n  offset into `bones`) in w;\n- `skin`: two words per blob, four joint bytes then four weight bytes summing to 255;\n- `bones`: 20 floats per bone, the first 16 its column-major skin matrix.\n\nWrites xyz into `out` (3 floats per blob). Matches `skinBlob`'s center.",
+     "doc": "Moves only the centers of many blobs, fast: what the sort needs on the CPU\nwhen the GPU does the rest of the skinning. No allocation per blob.\n\n- `src`: rest centers as vec4s, with each blob's first bone (its actor's\n  offset into `bones`) in w;\n- `skin`: two words per blob, four joint bytes then four weight bytes summing to 255;\n- `bones`: 20 floats per bone, the first 16 its column-major skin matrix, with how far the bone has dissolved\n  and its drift (dissolve.ts) in the matrix's unused slots 7 and 11.\n\nWrites xyz into `out` (3 floats per blob). Matches `skinBlob`'s center, plus a dissolving blob's drift.",
      "signatures": [
       {
        "code": "skinCenters(src: Float32Array, skin: Uint32Array, bones: Float32Array, count: number, out: Float32Array): void"
@@ -3921,10 +3933,16 @@
      "type": "string | { kind: \"bands\"; axis: \"x\" | \"y\" | \"z\"; size: number; colors: string[] } | { kind: \"bricks\"; size: [number, number]; colors: string[]; line: string } | { kind: \"hex\"; size: number; colors: string[]; line: string; deep?: string } | { kind: \"speckle\"; size: number; colors: string[] } | { kind: \"patches\"; size: number; colors: string[] } | { kind: \"key\"; colors: Record<string, string> } | { kind: \"faces\"; top?: PaintDoc; side: PaintDoc; under?: PaintDoc } | { kind: \"split\"; axis: \"x\" | \"y\" | \"z\"; at: number; below: PaintDoc; above: PaintDoc } | { kind: \"pieces\"; colors: string[]; line?: string; ordered?: boolean }"
     },
     {
+     "name": "During",
+     "kind": "type",
+     "doc": "When in the loop a move happens: [from, to] as shares of the loop (0 to 1). The move's `times` then fit between the\ntwo, and for the rest of the loop the bone waits as the move starts and ends: a sprout or drift at nothing, a sway,\nbob or pulse where its `phase` leaves it. `from` may be later than `to`, for a move that runs across the loop's\nseam. This is how a scene tells a story: something appears at one moment, waves once at another and is gone.",
+     "type": "[number, number]"
+    },
+    {
      "name": "MoveDoc",
      "kind": "type",
-     "doc": "Every move repeats a whole number of `times` in the loop, so the scene loops.",
-     "type": "{ kind: \"spin\"; bone: string; axis: \"x\" | \"y\" | \"z\"; times: number; phase?: number } | { kind: \"sway\"; bone: string; axis: \"x\" | \"y\" | \"z\"; degrees: number; times: number; phase?: number } | { kind: \"bob\"; bone: string; by: Vec3; times: number; phase?: number } | { kind: \"drift\"; bone: string; by: Vec3; times: number; grow?: [number, number]; phase?: number } | { kind: \"pulse\"; bone: string; size: [number, number]; times: number; phase?: number } | { kind: \"sprout\"; bone: string; times: number; phase?: number } | { kind: \"pass\"; bone: string; by: Vec3; times: number; phase?: number }"
+     "doc": "Every move repeats a whole number of `times` in the loop (or in its `during`), so the scene loops.",
+     "type": "{ kind: \"spin\"; bone: string; axis: \"x\" | \"y\" | \"z\"; times: number; phase?: number; during?: During } | { kind: \"sway\"; bone: string; axis: \"x\" | \"y\" | \"z\"; degrees: number; times: number; phase?: number; during?: During } | { kind: \"bob\"; bone: string; by: Vec3; times: number; phase?: number; during?: During } | { kind: \"drift\"; bone: string; by: Vec3; times: number; grow?: [number, number]; phase?: number; during?: During } | { kind: \"pulse\"; bone: string; size: [number, number]; times: number; phase?: number; during?: During } | { kind: \"sprout\"; bone: string; times: number; phase?: number; during?: During; rise?: number; fall?: number } | { kind: \"pass\"; bone: string; by: Vec3; times: number; phase?: number; during?: During } | { kind: \"dissolve\"; bone: string; times: number; by?: number; phase?: number; during?: During; rise?: number; fall?: number }"
     },
     {
      "name": "LightDoc",
@@ -3968,6 +3986,12 @@
        "optional": true,
        "type": "boolean",
        "doc": "Casts shadows, worked out once when the scene is built, so they cost nothing as it plays and flicker with it. Only\nthe first four lights can, and not one that goes round a circle. Give it to a lamp or fire out in the open: a light\nset inside something (a jar, a window, a hollow) to stand for its glow would shade everything outside."
+      },
+      {
+       "name": "during",
+       "optional": true,
+       "type": "During",
+       "doc": "Shines only for this share of the loop, [from, to], coming up over the first fifth of it and dying away over the last: a flash, a spell."
       },
       {
        "name": "clear",
@@ -4195,10 +4219,48 @@
     {
      "name": "sprouted",
      "kind": "function",
-     "doc": "A sprout's size through its life (0 to 1): grows from nothing over the first 40%, stands, and shrinks away over the last 15%.",
+     "doc": "A sprout's size through its life (0 to 1): grows from nothing over the first `rise` (40%), stands, and shrinks away over the last `fall` (15%).",
      "signatures": [
       {
-       "code": "sprouted(life: number): number"
+       "code": "sprouted(life: number, rise?: number, fall?: number): number"
+      }
+     ]
+    },
+    {
+     "name": "DISSOLVE_RISE",
+     "kind": "const",
+     "doc": "The shares of a dissolve's time spent gathering and dissolving where it doesn't say.",
+     "type": "0.3"
+    },
+    {
+     "name": "DISSOLVE_FALL",
+     "kind": "const",
+     "doc": "The shares of a dissolve's time spent gathering and dissolving where it doesn't say.",
+     "type": "0.5"
+    },
+    {
+     "name": "DISSOLVE_BY",
+     "kind": "const",
+     "doc": "How far a dissolve's blobs drift where it doesn't say.",
+     "type": "0.4"
+    },
+    {
+     "name": "dissolving",
+     "kind": "function",
+     "doc": "Poses a `dissolve` move `life` (0 to 1) through its time: how far gone the bone's blobs are, and their drift.",
+     "signatures": [
+      {
+       "code": "dissolving(sk: Skeleton, b: number, life: number, m: { by?: number; rise?: number; fall?: number }): void"
+      }
+     ]
+    },
+    {
+     "name": "duringAt",
+     "kind": "function",
+     "doc": "How far through its `during` a move is at `u` of the loop: 0 as it starts, 1 from its end until it starts again.\nWith none, `u` itself, so the move fills the loop.",
+     "signatures": [
+      {
+       "code": "duringAt(u: number, d?: During): number"
       }
      ]
     },

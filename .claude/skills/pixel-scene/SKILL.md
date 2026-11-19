@@ -18,6 +18,7 @@ A scene is data alone: shapes, paints, bones and moves in one `SceneDoc` object.
 Work in a scratch folder (`scratch/` is git-ignored), on a `.json` file. The checker also takes a `.ts` or `.mjs` module, which it runs: only hand it one you wrote.
 
 1. **Plan in words before shapes.** One subject that fills the scene, where the light comes from, what moves, and the palette: a dark ramp for the setting, a ramp of three or four steps for each main hue, two or three warm steps kept for light sources. Write the palette first and paint only in its colors.
+   If the scene tells a story (someone arrives, does a thing once, leaves), give each move a `during: [from, to]` and plan the moments of the loop first; the white witch scene (`henge`) is the example. The checker's pictures are taken at 10% and 60% of the loop, so put something worth seeing there or draw other moments yourself.
 2. **Write the description.** Block the big shapes first (ground, the subject's body), check, look, and only then add the small parts. Sixty to ninety parts make a full scene.
 3. **Check it:** `npm run scene -- scratch/my-scene.json`. It takes a second or two. Every `fix` line is `where: what` and must go; `look` lines are advice. It ends with status 1 while anything must be fixed. It tells you about:
    - mistakes in the description, with the field (`parts[12].shape.r: must be a number`)

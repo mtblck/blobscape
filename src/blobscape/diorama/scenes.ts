@@ -30,6 +30,7 @@ import { CAVE } from './scenes/cave.ts'
 import { CANYON } from './scenes/canyon.ts'
 import { CABIN } from './scenes/cabin.ts'
 import { KOI } from './scenes/koi.ts'
+import { HENGE } from './scenes/henge.ts'
 import { WHALES } from './scenes/whales.ts'
 import { TURKEY } from './scenes/turkey.ts'
 import { FISHING } from './scenes/fishing.ts'
@@ -213,6 +214,7 @@ export const DIORAMAS: Diorama[] = [
   described('koi', KOI, 'A koi pond in a moss garden on a rainy day: raindrops ring the water where they land, the rings cross and bounce off the banks and stepping stones, koi circle under the surface and leave wakes, and a tall stone lantern and a low snow-viewing lantern glow under a cherry tree in full bloom that sheds its petals, with bamboo, irises and lily pads'),
   described('whales', WHALES, 'A pod of whales swimming through space, a mother and two calves with stars on their backs, their tails and flippers beating slowly, past a ringed planet and its moon, banks of nebula, a far sun, tumbling rocks and stardust streaming by'),
   described('turkey', TURKEY, 'A giant turkey chasing a cook in an apron and chef’s hat down a country road in the fall, past a rail fence, trees in fall color, pumpkins, a mailbox and a billboard, with dust at their heels, loose feathers and falling leaves'),
+  described('henge', HENGE, 'A ring of standing stones at night where a magic circle flares to life, sparks gather into a witch in a white robe and a tall white hat, who draws a wand, waves it once and vanishes in a shower of sparks'),
   FOX_MEADOW,
   SKY_FISHING,
 ]
