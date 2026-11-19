@@ -57,6 +57,8 @@ function wordsFor(route: Route): PageMeta {
       return { path, title: `Scan Studio · ${SITE.name}`, description: 'Open a Gaussian splat scan of an object from your phone (Scaniverse, Polycam and others export .ply or .spz), find the table and turn it level, cut away the floor and the floaters, relight it with live lights, then take it into the sandbox or save it. Everything stays on your device.' }
     case 'shift':
       return { path, title: `Shape Shifter · ${SITE.name}`, description: 'One creature made of Gaussian splats turns into another: a frog into a dragon, an owl into a crocodile. Every blob finds a partner in the other creature and travels to it, blending its size, facing and color on the way. Pick the pair, send the blobs straight, in a swirl, through a puddle or out in a burst, and see what pairing by place is for.' }
+    case 'bouquet':
+      return { path, title: `Seasonal Bouquets · ${SITE.name}`, description: 'A florist that never makes the same bouquet twice. Pick a season and it grows every flower from a recipe, petal by petal, out of Gaussian splats (peonies and tulips in spring, dahlias and wheat in fall, amaryllis and pine in winter), arranges them by the rules florists use, and stands them in a glass vase, a bucket, a pumpkin, a rain boot or a ceramic snowman. The stems sway and petals fall.' }
     case 'daynight':
       return { path, title: `Day and Night · ${SITE.name}`, description: 'A cabin in a forest clearing made of Gaussian splats, lit live through a whole day: drag the time and the sun follows its real path for the latitude and season, shadows turn and stretch, the sky reddens, the windows and a lantern come on at dusk, and birds give way to fireflies under the moon and stars.' }
     case 'fourways':

@@ -28,6 +28,22 @@ const CHANGES = 'https://github.com/mtblck/blobscape/blob/main/CHANGELOG.md'
 
 export const POSTS: Post[] = [
   {
+    id: 'seasonal-bouquets',
+    date: '2026-11-19',
+    title: 'A florist made of blobs',
+    summary: 'Seasonal Bouquets is a new experiment: pick a season and it grows every flower from a recipe, arranges them the way florists do and stands them in a vase, a bucket, a pumpkin or a rain boot. No two come out alike.',
+    image: { src: '/covers/seasonal-bouquets.webp', alt: 'An armful of fall flowers in a sage green pumpkin on a round table: red winterberry, plum roses, red zinnias, purple asters and oak leaves.' },
+    body: [
+      '[Seasonal Bouquets](/experiments/seasonal-bouquets/) started as a question: could the engine that moves creatures and grows a forest also arrange flowers? It can, and nothing in it is a model someone made.',
+      '## Flowers from recipes',
+      'A petal is a surface with about a dozen numbers: how long and wide it is, where it is widest, the angle it leaves the flower at, how its edge cups and ruffles. A flower is a recipe that says how many petals, in how many rings, and what is in the middle. There are 48 recipes so far, about ten flowers for each season plus greenery: peonies, tulips and lilac in spring, roses, sunflowers and delphiniums in summer, dahlias, wheat and Chinese lanterns in fall, amaryllis, winterberry and pine in winter. Every petal gets its own small differences, so two roses in one bouquet are never copies.',
+      '## Arranged by the rules',
+      '- **Roles.** A few big focal blooms, smaller second blooms round them, line flowers for height, fillers for the gaps and greenery to frame it.\n- **Odd numbers.** Three of this, five of that, as florists count.\n- **One palette.** Each season has three, and the flowers are picked in its colors.\n- **Room.** Focal blooms sit low in the middle, stems of a kind stay near each other, and every head goes where it has the most space.',
+      '## And then a vase',
+      'A glass vase with the stems showing through, a jam jar, a ceramic vase, a zinc bucket, a watering can, a rain boot, a pumpkin for fall and a ceramic snowman for winter. The stems sway in a draft you can turn up, and now and then a petal lets go and settles on the table. The address names the bouquet, so the one you like is the one a friend sees.',
+    ],
+  },
+  {
     id: 'dragon-breath',
     date: '2026-11-18',
     title: 'The dragon breathes for real',

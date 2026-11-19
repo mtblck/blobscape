@@ -27,6 +27,17 @@ export const EXPERIMENTS_INTRO = "Small tools built from the same blobs as the l
  */
 export const EXPERIMENTS = [
   {
+    id: 'bouquet',
+    title: 'Seasonal Bouquets',
+    url: '/experiments/seasonal-bouquets/',
+    cover: '/covers/seasonal-bouquets.webp',
+    tags: ['watch'],
+    needs: 'WebGPU or WebGL 2',
+    published: '2026-11-19',
+    updated: '2026-11-19',
+    body: 'A florist that never makes the same bouquet twice. Pick a season and it grows every flower petal by petal, arranges them the way florists do, and stands them in a vase, a bucket, a pumpkin, a rain boot or a ceramic snowman. The stems sway and now and then a petal falls.',
+  },
+  {
     id: 'fourways',
     title: 'One Scene, Four Ways',
     url: '/experiments/four-ways/',

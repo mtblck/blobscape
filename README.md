@@ -150,7 +150,11 @@ stay in your browser.
       <a href="https://blobscape.dev/experiments/four-ways/"><b>One Scene, Four Ways</b></a><br />
       The same scene drawn by a plain shader, three.js meshes, Spark splats and Blobscape, side by side.
     </td>
-    <td valign="top"></td>
+    <td valign="top">
+      <a href="https://blobscape.dev/experiments/seasonal-bouquets/"><img src="public/covers/seasonal-bouquets.webp" alt="An armful of fall flowers in a sage green pumpkin on a round table: red winterberry, plum roses, red zinnias, purple asters and oak leaves" /></a><br />
+      <a href="https://blobscape.dev/experiments/seasonal-bouquets/"><b>Seasonal Bouquets</b></a><br />
+      A florist that grows every flower from a recipe and never arranges the same bouquet twice.
+    </td>
   </tr>
 </table>
 
