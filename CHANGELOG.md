@@ -7,8 +7,6 @@ makes the tag and the GitHub release (see docs/releasing.md).
 
 ## [Unreleased]
 
-- Seasonal Bouquets: the ceramic snowman's coal mouth and buttons sit on its surface instead of sinking into it, and its hat no longer shows through its head from low down.
-- Brush and Ink has a Detail choice in its Subject tab (Light, Full, Fine), kept in the address like the others (`?detail=fine`): more blobs make finer marks.
 - Seasonal Bouquets stands its vase on one of four tables, picked with the bouquet or by hand: a long rustic wooden table, a round wooden top on a turned pedestal, a round glass top on a metal frame, and a white garden table of pierced metal. Every table has legs down to the ground; tip the view down to see them. The address now also keeps the table, the draft and whether petals fall (`?table=long|round|glass|garden`, `?draft=0` to `2`, `?petals=0`).
 - Every experiment with a Detail choice takes it from the address and writes it there when you pick one (`?detail=fine`, or a blob count such as `?detail=200k` on Splat Creatures, Clockwork and Shape Shifter), so a link opens at the detail you chose.
 - Fixed: Day and Night had lost its shadows where the browser has no WebGPU, since cel shading was added.
