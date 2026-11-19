@@ -1646,7 +1646,7 @@ export default [
     files: ['src/shared/theme.css', 'src/blobscape/Bouquets.tsx', 'src/blobscape/PixelDiorama.tsx', 'src/blobscape/Creature.tsx', 'src/blobscape/ForestWalk.tsx', 'src/blobscape/WadingPond.tsx', 'src/blobscape/DungeonRun.tsx', 'src/blobscape/ScanStudio.tsx', 'src/blobscape/Clockwork.tsx', 'src/blobscape/ShapeShifter.tsx', 'src/blobscape/SandSnowGoo.tsx', 'src/blobscape/BrushInk.tsx', 'src/blobscape/FourWays.tsx', 'src/fit-a-picture/App.tsx', 'src/splat-to-sprite/App.tsx'],
     async run({ join, fails, ok, open }) {
       const PAGES = [
-        ['pixel-diorama', 'Scene,Pixels,Finish'], ['creature', 'Creature Type,Movement & Details,Export & Import'], ['forest-walk', 'Forest Type,Character Style,View'], ['wading-pond', 'Water & Light,Character Style,View'],
+        ['pixel-diorama', 'Scene,Style,Finish'], ['creature', 'Creature Type,Movement & Details,Export & Import'], ['forest-walk', 'Forest Type,Character Style,View'], ['wading-pond', 'Water & Light,Character Style,View'],
         ['dungeon-run', 'Game Settings,Character Style,View'], ['scan-studio', 'Import,Level & Crop,Clean,Lighting,Colliders'], ['clockwork', 'Time,View'], ['shape-shifter', 'Shift,Creatures'], ['sand-snow-goo', 'Material,Test,View'], ['brush-and-ink', 'Look,Subject'], ['four-ways', 'Compare,Pixels'], ['seasonal-bouquets', 'Bouquet,Vase,View'],
         ['fit-a-picture', 'Picture,Training'], ['splat-to-sprite', 'Prop Type,Pixels,Finish,View'],
       ]
