@@ -72,6 +72,11 @@ export interface GlyphLook {
   light?: boolean
   /** Draw a stroke where an edge runs through a cell: where the picture ends, one thing stands in front of another, two parts meet, or the tone changes sharply (default true). */
   edges?: boolean
+  /**
+   * Draw a stroke along what is long and thin on the screen, such as strands of fur and blades of grass, where a cell
+   * is mostly that (default true). The stroke is the one of `|`, `_`, `/` and `\` nearest the way they run.
+   */
+  strands?: boolean
   /** How much closer another character's tone has to be before a cell gives up the one it has, 0–0.5 of the whole range (default `STICK`; 0 never keeps one). */
   steady?: number
   /** Tones are multiplied by this before a character is picked (default 1): over 1 for a dim scene. */
@@ -163,6 +168,50 @@ export function strokeHeld(inner: readonly Probe[], outer: readonly Probe[], bef
   return a === b ? a : -1
 }
 
+/** A blob counts as long and thin on the screen from this much longer than wide (1 less its width over its length)... */
+export const LIE_FROM = 0.7
+/** ...and fully from this. */
+export const LIE_FULL = 0.9
+/** A cell is drawn as a strand's stroke when its mean lie is this strong... */
+export const STRAND = 0.3
+/** ...and one that was stays one down to this. */
+export const STRAND_HOLD = 0.2
+/** A cell keeps its strand stroke while the strands run within this of it, as the cosine of twice the angle between (a fresh pick is within 0.707). */
+export const STRAND_KEEP = 0.5
+
+/**
+ * How a blob lies on the screen, as the color the engine's map of it holds: `x, y` is its long axis there in pixels
+ * (y up; either way along it), `thin` its width over its length. Red and green are 0.5 plus half the cosine and sine
+ * of twice the axis's angle, times how long and thin the blob is (0 under `LIE_FROM`, 1 from `LIE_FULL`), which is
+ * blue. Twice the angle, so a line and the same line turned end for end are one color, and the mean of many is the way
+ * most of them run.
+ */
+export function lieColor(x: number, y: number, thin: number): [number, number, number] {
+  const l2 = Math.max(x * x + y * y, 1e-12)
+  const t = Math.min(1, Math.max(0, (1 - thin - LIE_FROM) / (LIE_FULL - LIE_FROM))), e = t * t * (3 - 2 * t)
+  return [0.5 + (0.5 * e * (x * x - y * y)) / l2, 0.5 + (0.5 * e * 2 * x * y) / l2, e]
+}
+
+/** The four strokes as ways to run, each the cosine and sine of twice its angle: upright, level, rising, falling (the order of `STROKES`). */
+const WAYS: readonly [number, number][] = [[-1, 0], [1, 0], [0, 1], [0, -1]]
+
+/**
+ * The stroke for a cell that is mostly strands, as a number in `GLYPHS`, or -1 when it is not. `lie` is the mean over
+ * the cell of the map's red and green, each less 0.5 and doubled: its length says how much of the cell is long thin
+ * blobs running one way, its direction which way. A cell that had a stroke (`before`) keeps it while the strands
+ * still run near it and there are still about enough of them, when `steady` is over 0.
+ */
+export function strandFor(lie: ArrayLike<number>, before = -1, steady = STICK): number {
+  const strength = Math.hypot(lie[0], lie[1])
+  if (strength < STRAND_HOLD) return -1
+  const was = before - STROKE_FROM
+  if (steady > 0 && was >= 0 && was < WAYS.length && (lie[0] * WAYS[was][0] + lie[1] * WAYS[was][1]) / strength >= STRAND_KEEP) return before
+  if (strength < STRAND) return -1
+  let best = 0
+  for (let i = 1; i < WAYS.length; i++) if (lie[0] * WAYS[i][0] + lie[1] * WAYS[i][1] > lie[0] * WAYS[best][0] + lie[1] * WAYS[best][1]) best = i
+  return STROKE_FROM + best
+}
+
 /** A cell as drawn: its character and that character's color. */
 export interface GlyphCell {
   /** The character's number in `GLYPHS` (0 is a space). */
@@ -174,12 +223,21 @@ export interface GlyphCell {
 /**
  * One cell: its character and color from the picture's mean over the cell (`rgb` linear and premultiplied, `cover`
  * its alpha), the two rings of probes when edges are wanted (the inner eight, then the outer eight), and the character
- * it had the frame before (-1 for none). `ink` here is linear.
+ * it had the frame before (-1 for none). `ink` here is linear. `lie` is the cell's mean lie (`strandFor`) when strands
+ * are wanted: a cell of strands takes their stroke, lit by its tone, before any edge is looked for.
  */
-export function glyphCell(rgb: ArrayLike<number>, cover: number, probes: readonly Probe[] | undefined, look: GlyphLook = {}, before = -1, ink?: ArrayLike<number>): GlyphCell {
+export function glyphCell(rgb: ArrayLike<number>, cover: number, probes: readonly Probe[] | undefined, look: GlyphLook = {}, before = -1, ink?: ArrayLike<number>, lie?: ArrayLike<number>): GlyphCell {
   const tone = toneOf(rgb, cover, look)
-  const stroke = probes && look.edges !== false && cover >= EDGE_COVER ? strokeHeld(probes.slice(0, 8), probes.slice(8, 16), before, look.steady ?? STICK) : -1
-  const glyph = stroke >= 0 ? stroke : rampFor(tone, before, look.steady ?? STICK)
+  const steady = look.steady ?? STICK
+  const strand = lie && look.strands !== false && cover >= EDGE_COVER ? strandFor(lie, before, steady) : -1
+  if (strand >= 0) {
+    if (ink) return { glyph: strand, color: [ink[0], ink[1], ink[2]] }
+    const top = Math.max(rgb[0], rgb[1], rgb[2], cover / LIFT_MOST, 1e-4)
+    const level = look.light ? 0.6 - 0.45 * tone : 0.45 + 0.55 * tone
+    return { glyph: strand, color: [(rgb[0] / top) * level, (rgb[1] / top) * level, (rgb[2] / top) * level] }
+  }
+  const stroke = probes && look.edges !== false && cover >= EDGE_COVER ? strokeHeld(probes.slice(0, 8), probes.slice(8, 16), before, steady) : -1
+  const glyph = stroke >= 0 ? stroke : rampFor(tone, before, steady)
   if (ink) return { glyph, color: [ink[0], ink[1], ink[2]] }
   // its own color, brought up to full strength, since the character's ink already says how light or dark it is; but
   // only so far (`LIFT_MOST` times), or the faint tint of something near black would come out as a bright color
