@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { CELL_H, CELL_W, EDGE_TONE, GLYPHS, RAMP, RAMP_INK, STICK, STROKES, STROKE_FROM, glyphAtlas, glyphBit, glyphCell, glyphScale, glyphText, rampFor, strokeFor, strokeHeld, toneOf, type Probe } from './glyphs.ts'
+import { CELL_H, CELL_W, EDGE_TONE, GLYPHS, RAMP, RAMP_INK, STICK, STROKES, STROKE_FROM, glyphAtlas, glyphBit, glyphCell, glyphScale, glyphText, rampFor, strokeFor, strokeHeld, toneOf, lieColor, strandFor, LIE_FROM, LIE_FULL, STRAND, STRAND_HOLD, type Probe } from './glyphs.ts'
 
 const on: Probe = { shown: true, tone: 0.5, depth: 4, part: 1 }
 const off: Probe = { shown: false, tone: 0, depth: 0, part: 0 }
@@ -130,4 +130,50 @@ test('a pixel of the font is a whole number of device pixels', () => {
   assert.equal(glyphScale(12, 1), 2)
   assert.equal(glyphScale(12, 2), 3)
   assert.equal(glyphScale(2, 1), 1)
+})
+
+/** A map color back to the lie a cell would average: red and green less a half, doubled. */
+const lieOf = (c: number[]) => [(c[0] - 0.5) * 2, (c[1] - 0.5) * 2]
+
+test('how a blob lies: nothing for a round one, the same either way along a long one, and each stroke for its own way', () => {
+  assert.deepEqual(lieOf(lieColor(1, 0, 1)), [0, 0])
+  assert.deepEqual(lieOf(lieColor(1, 0, 1 - LIE_FROM)), [0, 0])
+  assert.equal(lieColor(3, 1, 1 - LIE_FULL)[2], 1)
+  for (const [x, y] of [[1, 0], [0.3, 0.9], [-0.7, 0.2]]) {
+    const a = lieColor(x, y, 0.05), b = lieColor(-x, -y, 0.05)
+    assert.ok(a.every((v, i) => Math.abs(v - b[i]) < 1e-12))
+  }
+  const stroke = (x: number, y: number) => GLYPHS[strandFor(lieOf(lieColor(x, y, 0.05)))]
+  assert.equal(stroke(1, 0), '_')
+  assert.equal(stroke(0, 1), '|')
+  assert.equal(stroke(1, 1), '/')
+  assert.equal(stroke(1, -1), '\\')
+  assert.equal(stroke(1, 0.2), '_')
+  assert.equal(stroke(0.2, 1), '|')
+})
+
+test('a cell is strands only when enough of it runs one way, and keeps its stroke while they still nearly do', () => {
+  assert.equal(strandFor([0, 0]), -1)
+  assert.equal(strandFor([STRAND - 0.02, 0]), -1)
+  const level = GLYPHS.indexOf('_'), rising = GLYPHS.indexOf('/')
+  assert.equal(strandFor([STRAND + 0.02, 0]), level)
+  // fewer strands than would start one, but one was there
+  assert.equal(strandFor([STRAND - 0.02, 0], level), level)
+  assert.equal(strandFor([STRAND - 0.02, 0], level, 0), -1)
+  assert.equal(strandFor([STRAND_HOLD - 0.02, 0], level), -1)
+  // strands that cross cancel: half one way and half the other is no way at all
+  assert.equal(strandFor([0.5 * 1 + 0.5 * -1, 0]), -1)
+  // just past the line between level and rising: a fresh cell takes rising, one that was level stays level
+  const v = [Math.cos(0.9) * 0.6, Math.sin(0.9) * 0.6]
+  assert.equal(strandFor(v), rising)
+  assert.equal(strandFor(v, level), level)
+  assert.equal(strandFor([0, 0.6], level), rising)
+})
+
+test('a cell of strands takes their stroke, lit by its tone, before any edge', () => {
+  const edge = [...cell((x) => (x < 0 ? on : off)), ...cell((x) => (x < 0 ? on : off))]
+  const dim = glyphCell([0.05, 0.05, 0.05], 1, edge, {}, -1, undefined, [0.8, 0]), lit = glyphCell([0.8, 0.8, 0.8], 1, edge, {}, -1, undefined, [0.8, 0])
+  assert.equal(GLYPHS[dim.glyph], '_')
+  assert.ok(lit.color[0] > dim.color[0])
+  assert.equal(GLYPHS[glyphCell([0.5, 0.5, 0.5], 1, edge, { strands: false }, -1, undefined, [0.8, 0]).glyph], '|')
 })
