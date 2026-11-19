@@ -1,7 +1,7 @@
-import { NearestFilter, NoBlending, NodeMaterial, QuadMesh, RenderTarget, Vector2, Vector3, type Camera, type Object3D, type WebGPURenderer } from 'three/webgpu'
+import { Matrix4, NearestFilter, NoBlending, NodeMaterial, QuadMesh, RenderTarget, Vector2, Vector3, type Camera, type Object3D, type WebGPURenderer } from 'three/webgpu'
 import * as TSLTyped from 'three/tsl'
 import { BLOCK_WIDE, MIX_A, MIX_B, SALT, STRIPS, TURNED, type GlitchState } from '../splat-core/glitch.ts'
-import { BAYER4, EDGE_DARK, EDGE_JUMP, GLOW_FROM, GLOW_SHOWS, GLOW_TAPS, MAX_PALETTE_SIZE, OWN_C, OWN_L, OWN_UNDER, PIXEL_CUT, SKY_DITHER, oklab, skyReach, type PixelLook } from '../splat-core/pixel.ts'
+import { BAYER4, EDGE_DARK, snapShift, EDGE_JUMP, GLOW_FROM, GLOW_SHOWS, GLOW_TAPS, MAX_PALETTE_SIZE, OWN_C, OWN_L, OWN_UNDER, PIXEL_CUT, SKY_DITHER, oklab, skyReach, type PixelLook } from '../splat-core/pixel.ts'
 
 // As in engine.ts: the shader builders use TSL untyped.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -42,6 +42,8 @@ export class PixelPass {
   readonly small = new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter })
   /** The scene's parts, drawn small (`SplatWorld.parts`): where the color changes, one part ends and another begins. Only drawn for a look with `parts`. */
   readonly ids = new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter })
+  /** Each art pixel's step of the dither pattern, from the blob there (red, a byte), for a look with `surface`. */
+  readonly ranks = new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter })
   private readonly parted = uniform(0)
   /** The scene and its map of parts at twice the art's size, for a look with `fine`: what `small` and `ids` are settled from. */
   readonly fineSmall = new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter })
@@ -76,6 +78,7 @@ export class PixelPass {
   private readonly cells = uniform(new Vector2(1, 1))
   private readonly count = uniform(0)
   private readonly dither = uniform(0)
+  private readonly surface = uniform(0)
   private readonly glow = uniform(0)
   private readonly edges = uniform(0)
   private readonly lined = uniform(0)
@@ -142,6 +145,7 @@ export class PixelPass {
     }
     this.count.value = n
     this.dither.value = look.dither
+    this.surface.value = look.surface ? 1 : 0
     this.glow.value = look.glow
     this.edges.value = look.edges ?? 0
     this.parted.value = look.parts ? 1 : 0
@@ -171,6 +175,7 @@ export class PixelPass {
     if (this.small.width === w && this.small.height === h) return
     this.small.setSize(w, h)
     this.ids.setSize(w, h)
+    this.ranks.setSize(w, h)
     for (const f of this.frames) f.setSize(w, h)
     this.tidied.setSize(w, h)
     this.kept = false
@@ -196,6 +201,33 @@ export class PixelPass {
    * current output; without, into `art` at one to one.
    */
   render(renderer: WebGPURenderer, scene: Object3D, camera: Camera, screen?: { width: number; height: number; scale: number }) {
+    const undo = this.look.snap ? this.snapCamera(camera) : undefined
+    try { this.draw(renderer, scene, camera, screen) } finally { undo?.() }
+  }
+
+  private readonly kept4 = [new Matrix4(), new Matrix4()]
+  private readonly origin = new Vector3()
+
+  /**
+   * `snap`: shifts the camera's picture by under an art pixel so the world's origin lands on the art's grid, and gives
+   * back what puts it as it was. A shift of the projection's third column moves every point on the screen alike.
+   */
+  private snapCamera(camera: Camera) {
+    camera.updateMatrixWorld()
+    const p = this.origin.set(0, 0, 0).applyMatrix4(camera.matrixWorldInverse).applyMatrix4(camera.projectionMatrix)
+    if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) return undefined
+    const dx = snapShift(p.x, this.small.width), dy = snapShift(p.y, this.small.height)
+    const [proj, inv] = this.kept4
+    proj.copy(camera.projectionMatrix)
+    inv.copy(camera.projectionMatrixInverse)
+    // ndc = clip / −z, and the third column adds its value times z to clip: so taking dx away moves ndc on by dx
+    camera.projectionMatrix.elements[8] -= dx
+    camera.projectionMatrix.elements[9] -= dy
+    camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert()
+    return () => { camera.projectionMatrix.copy(proj); camera.projectionMatrixInverse.copy(inv) }
+  }
+
+  private draw(renderer: WebGPURenderer, scene: Object3D, camera: Camera, screen?: { width: number; height: number; scale: number }) {
     const to = renderer.getRenderTarget()
     const fine = !!this.look.fine
     renderer.setRenderTarget(fine ? this.fineSmall : this.small)
@@ -203,6 +235,8 @@ export class PixelPass {
     renderer.render(scene, camera)
     // four samples a pixel go by the parts too: which thing most of a pixel's samples show
     if (fine || this.look.parts) this.drawParts(renderer, scene, camera, fine ? this.fineIds : this.ids)
+    // dither that stays on things: each pixel's step from the blob there, at the art's own size
+    if (this.look.surface && this.look.dither > 0) this.drawParts(renderer, scene, camera, this.ranks, 'ranks')
     if (fine) {
       renderer.setRenderTarget(this.small)
       this.settleQuad.render(renderer)
@@ -230,7 +264,7 @@ export class PixelPass {
   }
 
   private fragment() {
-    const small = this.small.texture, ids = this.ids.texture
+    const small = this.small.texture, ids = this.ids.texture, ranks = this.ranks.texture
     const { res } = this
     const palLab = uniformArray(this.palLab, 'vec3'), palShown = uniformArray(this.palShown, 'vec3')
     const bayer = uniformArray(BAYER4, 'float')
@@ -347,7 +381,13 @@ export class PixelPass {
       If(shown.greaterThan(0), () => {
         color.assign(min(color, 255))
         If(this.count.greaterThan(0), () => {
-          const off = bayer.element(int(mod(row, 4).mul(4).add(mod(cell.x, 4)))).div(16).sub(0.5).mul(spread.mul(48))
+          // the step of the pattern: the screen's, or (surface dither) the blob's own where the scene is
+          const step = float(bayer.element(int(mod(row, 4).mul(4).add(mod(cell.x, 4))))).toVar()
+          If(this.surface.greaterThan(0).and(here.solid), () => {
+            const r = texture(ranks, vec2(cell.x.add(0.5).div(res.x), float(1).sub(cell.y.add(0.5).div(res.y))))
+            If(r.a.greaterThanEqual(0.5), () => { step.assign(floor(r.r.mul(255).add(0.5))) })
+          })
+          const off = step.div(16).sub(0.5).mul(spread.mul(48))
           const lab = toLab(color.add(off)).toVar()
           const best = float(1e9).toVar()
           const pick = vec3(0).toVar()
@@ -428,13 +468,13 @@ export class PixelPass {
   }
 
   /** The same view as a map of parts: only the blobs, as they were just drawn (nothing is moved or sorted again). */
-  private drawParts(renderer: WebGPURenderer, scene: Object3D, camera: Camera, into: RenderTarget) {
-    type World = Object3D & { isSplatWorld?: boolean; parts: boolean; hold: boolean }
+  private drawParts(renderer: WebGPURenderer, scene: Object3D, camera: Camera, into: RenderTarget, map: 'parts' | 'ranks' = 'parts') {
+    type World = Object3D & { isSplatWorld?: boolean; parts: boolean; ranks: boolean; hold: boolean }
     const worlds: { w: World; hold: boolean }[] = []
     const hidden: Object3D[] = []
     scene.traverse((o) => {
       const w = o as World
-      if (w.isSplatWorld) { worlds.push({ w, hold: w.hold }); w.parts = true; w.hold = true }
+      if (w.isSplatWorld) { worlds.push({ w, hold: w.hold }); w[map] = true; w.hold = true }
       else {
         const d = o as { isMesh?: boolean; isLine?: boolean; isPoints?: boolean }
         if ((d.isMesh || d.isLine || d.isPoints) && o.visible) { o.visible = false; hidden.push(o) }
@@ -445,7 +485,7 @@ export class PixelPass {
       renderer.clear()
       renderer.render(scene, camera)
     } finally {
-      for (const { w, hold } of worlds) { w.parts = false; w.hold = hold }
+      for (const { w, hold } of worlds) { w[map] = false; w.hold = hold }
       for (const o of hidden) o.visible = true
     }
   }
@@ -557,6 +597,7 @@ export class PixelPass {
   dispose() {
     this.small.dispose()
     this.ids.dispose()
+    this.ranks.dispose()
     this.fineSmall.dispose()
     this.fineIds.dispose()
     this.settleMat.dispose()

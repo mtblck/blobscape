@@ -126,6 +126,8 @@ export function PixelDiorama() {
   // a scene's own gentle rocking of the view: every pixel of a still thing changes as the view turns, so it can be held
   const [rock, setRock] = useState(() => new URLSearchParams(location.search).get('rock') !== '0')
   const [tidy, setTidy] = useState(() => new URLSearchParams(location.search).get('tidy') !== '0')
+  // dither that stays on things as they move, not on the screen (`PixelLook.surface`); `?surface=0` starts it off
+  const [surface, setSurface] = useState(() => new URLSearchParams(location.search).get('surface') !== '0')
   const [fine, setFine] = useState(() => new URLSearchParams(location.search).get('fine') !== '0')
   const [own, setOwn] = useState(() => new URLSearchParams(location.search).get('own') !== '0')
   /** Painted in steps of the palette as the scene is cut: the scene's own choice unless the address says. */
@@ -216,7 +218,7 @@ export function PixelDiorama() {
   const closeTour = () => { setTour(null); setStyle(styleBefore.current); requestAnimationFrame(() => tourOpener.current?.focus()) }
   // a step of the walk-through says how the scene is drawn, whatever the switch says
   const asPixels = touring ? touring.pixels : pixels
-  const look = useMemo<PixelLook>(() => ({ palette: colors, dither, outline: outline ? (colors.length ? darkest(colors) : [11, 16, 38]) : null, glow, edges: edges ? 1 : 0, parts, sky: sky ? shown.sky : undefined, steady: steady ? STEADY : 0, tidy, fine, own }), [colors, dither, outline, glow, edges, parts, sky, shown, steady, tidy, fine, own])
+  const look = useMemo<PixelLook>(() => ({ palette: colors, dither, outline: outline ? (colors.length ? darkest(colors) : [11, 16, 38]) : null, glow, edges: edges ? 1 : 0, parts, sky: sky ? shown.sky : undefined, steady: steady ? STEADY : 0, tidy, fine, own, surface, snap: true }), [colors, dither, outline, glow, edges, parts, sky, shown, steady, tidy, fine, own, surface])
 
   // the exact (radix) sort: the stage rebuilds its world, keeping the moment and the poser
   useEffect(() => { stage?.setSort(exact ? 'radix' : 'bins') }, [stage, exact])
@@ -833,6 +835,7 @@ export function PixelDiorama() {
                 <Toggle label="Sky behind" checked={sky} onChange={setSky} />
                 <Toggle label="Steady pixels" checked={steady} onChange={setSteady} />
                 <Toggle label="Clean up lone pixels" checked={tidy} onChange={setTidy} />
+                <Toggle label="Dither moves with things" checked={surface} onChange={setSurface} />
                 </>}
                 <Toggle label="Rock the view" checked={rock} onChange={setRock} disabled={calm} />
                 <Toggle label="Exact sort (slower)" checked={exact} onChange={setExact} />

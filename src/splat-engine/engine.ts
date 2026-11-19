@@ -29,6 +29,7 @@ import { applyMorphs, shares, type Morph } from './morph.ts'
 import { FLAT_FULL, FLAT_NONE, LAMP_MOST } from './light.ts'
 import { LIFT, MAX_MARCH, OCC_SCALE, REACH, SHADOW_CELLS, SHADOW_DENSITY, SPREAD, SUN_MARCH, blobSigma, occupancy, steadyBox, type ShadowBox } from './shadow.ts'
 import { linearToSrgb, srgbToLinear } from '../splat-core/color.ts'
+import { surfaceRanks } from '../splat-core/pixel.ts'
 import { viewColor } from '../splat-core/sh.ts'
 import { FLAT_CUT, INK, MARK_CUT, MARK_KINDS, MARK_LIFT, MARK_LONG, MARK_MOST, MARK_SOLID, MARK_WIDE, PAPER, SHADE_FROM, SHADE_FULL, WASH_LEAST, WASH_MOST, type MarkLook } from '../splat-core/marks.ts'
 
@@ -241,6 +242,13 @@ export class SplatWorld extends Mesh {
    */
   get lieMap() { return this.flat.value === 4 }
   set lieMap(on: boolean) { this.flat.value = on ? 4 : 0 }
+  /**
+   * While true, the draw is a map of dither steps: every blob a hard disc (as in the map of parts) whose red is its
+   * step of the Bayer pattern (0 to 15, as a byte), from where it sits at rest (`surfaceRanks` in splat-core/pixel.ts).
+   * Pixel mode draws it for dither that stays on things (`PixelLook.surface`).
+   */
+  get ranks() { return this.flat.value === 5 }
+  set ranks(on: boolean) { this.flat.value = on ? 5 : 0 }
 
   private readonly boneOffset: number[]
   /** Per actor, the share of its blobs left out (0: all drawn). Sent to the GPU in each of its bones' spare matrix slot. */
@@ -1138,6 +1146,8 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
   // how each blob's weights change across the skin (stretch.ts), for actors with skin between bones; none, and the
   // GPU's copy of the skin is those two words alone
   const grads = actors.map((a) => weightGradients(a.blobs, a.skin, a.partOf))
+  // each blob's step of the dither pattern, from where it sits at rest: it rides in the part word's top byte
+  const steps = actors.map((a) => surfaceRanks(a.blobs))
   const stretch = grads.some((g) => g)
   // with them, the gradients ride behind the two words as the bits of nine floats, in the same buffer for the same reason
   const skinStride = stretch ? 2 + GRAD_STRIDE : 2
@@ -1151,7 +1161,7 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
     const { blobs, skin } = a
     for (let k = 0; k < blobs.count; k++, i++) {
       const p = Math.min(65535, (a.partOf?.[k] ?? 0) + 1), who = Math.min(255, ai + 1)
-      part[i] = ((p & 255) | ((p >> 8) << 8) | (who << 16)) >>> 0
+      part[i] = ((p & 255) | ((p >> 8) << 8) | (who << 16) | (steps[ai][k] << 24)) >>> 0
       skinWords[i * 2] = (skin.joints[k * 4] | (skin.joints[k * 4 + 1] << 8) | (skin.joints[k * 4 + 2] << 16) | (skin.joints[k * 4 + 3] << 24)) >>> 0
       skinWords[i * 2 + 1] = packWeights(skin.weights, k * 4)
       if (stretch) {
@@ -2089,11 +2099,14 @@ function placeQuad(ndc: N, axes: N, tilt: N, rgba: N, idx: N, flat: Flat, cut?: 
   return vec4(at, ndc.z.add(slope).add(tilt.z.mul(seed.sub(0.5))), 1)
 }
 
-/** Which map the draw is (0 the picture, 1 parts, 2 depth, 3 tones, 4 how the blobs lie), where a depth map's depths are counted from, and whether each blob's depth follows its own slope. */
+/** Which map the draw is (0 the picture, 1 parts, 2 depth, 3 tones, 4 how the blobs lie, 5 dither steps), where a depth map's depths are counted from, and whether each blob's depth follows its own slope. */
 interface Flat { mode: N; base: N; slope: N }
 
 /** What a blob draws as: its picture color, its part's flat color (map of parts), its depth (depth map) its tone (map of tones) or how it lies (`lieMap`). */
 function flatColor(flat: Flat, part: N, depth: N, picture: N, tone: N, axes: N) {
+  return select(flat.mode.greaterThan(4.5), vec3(part.a, 0, 0), flatOf(flat, part.rgb, depth, picture, tone, axes))
+}
+function flatOf(flat: Flat, part: N, depth: N, picture: N, tone: N, axes: N) {
   return select(flat.mode.greaterThan(3.5), lieOf(axes), select(flat.mode.greaterThan(2.5), tone, select(flat.mode.greaterThan(1.5), vec3(depth.sub(flat.base)), select(flat.mode.greaterThan(0.5), part, picture))))
 }
 
@@ -2127,7 +2140,7 @@ function makeVertexWebGPU(buf: ReturnType<typeof makeBuffers>, sort: Sorter, fog
     // ndc z = −(P22·z + P32) / z for a perspective camera, so −z = P32 / (ndc z + P22)
     const depth = cameraProjectionMatrix[3].z.div(A.z.add(cameraProjectionMatrix[2].z))
     const part = unpackUnorm4x8(buf.part.element(idx))
-    return placeQuad(A.xyz, buf.splatB.element(idx), buf.splatC.element(idx).xyz, vec4(flatColor(flat, part.rgb, depth, fogged(color.rgb, depth, fog), tone, buf.splatB.element(idx)), color.a.mul(A.w)), idx, flat, clean ? { covA: buf.covA.element(idx), covB: buf.covB.element(idx) } : undefined)
+    return placeQuad(A.xyz, buf.splatB.element(idx), buf.splatC.element(idx).xyz, vec4(flatColor(flat, part, depth, fogged(color.rgb, depth, fog), tone, buf.splatB.element(idx)), color.a.mul(A.w)), idx, flat, clean ? { covA: buf.covA.element(idx), covB: buf.covB.element(idx) } : undefined)
   })()
 }
 
@@ -2150,7 +2163,7 @@ function makeVertexWebGL(buf: ReturnType<typeof makeBuffers>, sort: Sorter, mode
       If(L.cel.greaterThan(0.5), () => { tone.assign(toned(d.world, d.covA, d.covB, buf.seen.element(idx), L)) })
     }
     const part = unpackUnorm4x8(buf.part.element(idx))
-    return placeQuad(p.ndc, p.axes, p.tilt, vec4(flatColor(flat, part.rgb, p.depth, fogged(rgb, p.depth, fog), tone, p.axes), color.a.mul(p.alphaScale)), idx, flat, clean ? d : undefined)
+    return placeQuad(p.ndc, p.axes, p.tilt, vec4(flatColor(flat, part, p.depth, fogged(rgb, p.depth, fog), tone, p.axes), color.a.mul(p.alphaScale)), idx, flat, clean ? d : undefined)
   })()
 }
 

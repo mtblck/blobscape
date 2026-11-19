@@ -1,0 +1,1 @@
+Pixel Diorama: the dither pattern now moves with the things it falls on instead of standing still on the screen while they turn under it (Dither moves with things, on by default), and the picture keeps to whole art pixels as the view moves. After Silicon Jungle's Ink Studio.
