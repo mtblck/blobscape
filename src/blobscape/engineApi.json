@@ -8872,7 +8872,7 @@
       {
        "name": "block",
        "type": "number",
-       "doc": "A corrupted block's side, in art pixels."
+       "doc": "A corrupted block's height in art pixels (it is `BLOCK_WIDE` times as wide)."
       },
       {
        "name": "blocks",
@@ -8933,7 +8933,25 @@
      "name": "SALT",
      "kind": "const",
      "doc": "The salts that keep a cell's draws apart: each is one question about a row band or a block.",
-     "type": "{ slides: 1; slide: 2; broken: 3; fromX: 4; fromY: 5; turned: 6 }"
+     "type": "{ slides: 1; slide: 2; broken: 3; fromX: 4; fromY: 5; turned: 6; strip: 7 }"
+    },
+    {
+     "name": "STRIPS",
+     "kind": "const",
+     "doc": "Broken blocks gather in strips: this share of rows of blocks can break at all (a threshold over 2^24).",
+     "type": "5592405"
+    },
+    {
+     "name": "BLOCK_WIDE",
+     "kind": "const",
+     "doc": "A broken block is this many times as wide as it is high, as a torn line of a picture is.",
+     "type": "3"
+    },
+    {
+     "name": "TURNED",
+     "kind": "const",
+     "doc": "The share of broken blocks whose channels are turned (a threshold over 2^24).",
+     "type": "4194304"
     },
     {
      "name": "glitchHash",
