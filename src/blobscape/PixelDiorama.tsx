@@ -26,12 +26,15 @@ import { browserDeflate, encodeApng, enlarged } from '../splat-core/apng.ts'
 import type { Texture } from '../splat-engine/meshShape.ts'
 import { decodeTexture } from './modelRig.ts'
 import { detailAsked, labelNames, writeDetail } from '../shared/detail.ts'
+import { unlit } from '../splat-engine/voxel.ts'
+import { STYLES, styleAsked, styleWords, type Style } from './diorama/styles.ts'
+import { useDrawnLook } from './drawnLook.tsx'
 
 const SIZES = [2, 3, 4, 6]
 /** Frames a second the scene moves at: 0 is every frame the screen shows. */
 const RATES = [0, 12, 8]
 declare global {
-  interface Window { __diorama?: { stage: CreatureStage; blobs: () => number; bones: () => number; look: () => PixelLook; water: () => SceneWater | undefined; mirrored: boolean } }
+  interface Window { __diorama?: { stage: CreatureStage; blobs: () => number; bones: () => number; look: () => PixelLook; style: Style; water: () => SceneWater | undefined; mirrored: boolean } }
 }
 
 /** The view `orbit`, rocked `swing` degrees to either side once every `loop` seconds, as it is at `t`. */
@@ -95,7 +98,11 @@ export function PixelDiorama() {
   const [picking, setPicking] = useState(false)
   const [playing, setPlaying] = useState(!calm)
   const [detail, setDetail] = useState<string>(() => detailAsked(DETAIL, labelNames)?.id ?? (coarse ? DETAIL[1].id : DETAIL[2].id))
-  const [pixels, setPixels] = useState(true)
+  /** How the scene is drawn: as pixel art, or as one of Brush and Ink's looks. `?style=oil` opens on that one. */
+  const [style, setStyle] = useState<Style>(() => styleAsked(new URLSearchParams(location.search).get('style')))
+  const pixels = style === 'pixel'
+  // cel shading lights the blobs itself, so its scene is cut with no light baked in
+  const plain = style === 'cel'
   const [palette, setPalette] = useState('own')
   const [size, setSize] = useState(2)
   const [dither, setDither] = useState(diorama.finish.dither)
@@ -131,7 +138,7 @@ export function PixelDiorama() {
   const [recordFps, setRecordFps] = useState(RECORD_FPS)
 
   // built after a paint, so the waiting mark shows first
-  const [made, setScene] = useState<{ built: Built; of: Diorama; detail: string; paint: string }>()
+  const [made, setScene] = useState<{ built: Built; of: Diorama; detail: string; paint: string; plain: boolean }>()
   // Painting in steps happens as a scene is cut, in the palette picked. While another scene is being cut the controls
   // are still the old one's, so the new one is cut with its own palette and its own choice, which it then brings along.
   const settled = !made || made.of === diorama
@@ -139,7 +146,7 @@ export function PixelDiorama() {
   const stepColors = (settled ? steps : diorama.finish.steps) ? (paintId === 'own' ? diorama.palette.colors : PALETTES.find((p) => p.id === paintId)?.colors ?? []) : []
   const paint = stepColors.length ? paintId : ''
   // the scene asked for, once it is cut: until then the loading note (and its announcement) shows
-  const scene = made?.of === diorama && made.detail === detail && made.paint === paint ? made : undefined
+  const scene = made?.of === diorama && made.detail === detail && made.paint === paint && made.plain === plain ? made : undefined
   // what is in the view now: the last scene built, which lags the one picked while it is being cut.
   // It is kept until the new one replaces it, so the old scene never wears the new one's palette or sky.
   const shown = made?.of ?? diorama
@@ -154,14 +161,15 @@ export function PixelDiorama() {
           if (!settled) { setPalette('own'); setSteps(diorama.finish.steps) }
           // a scene with water works one loop of its ripples out here too, while the waiting mark shows
           diorama.water?.()
-          setScene({ built: diorama.make(spacing, stepColors.length ? stepColors : undefined), of: diorama, detail, paint })
+          const cut = () => diorama.make(spacing, stepColors.length ? stepColors : undefined)
+          setScene({ built: plain ? unlit(cut) : cut(), of: diorama, detail, paint, plain })
         }, 60)
       })
     })
     return () => { cancelAnimationFrame(raf); clearTimeout(t) }
     // `paint` stands for the colors and for whose controls these are
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detail, diorama, paint])
+  }, [detail, diorama, paint, plain])
 
   useEffect(() => {
     let live: CreatureStage | undefined, gone = false
@@ -185,7 +193,10 @@ export function PixelDiorama() {
   const [tour, setTour] = useState<number | null>(null)
   const touring = tour === null ? undefined : TOUR[tour]
   const tourOpener = useRef<HTMLButtonElement>(null)
-  const closeTour = () => { setTour(null); requestAnimationFrame(() => tourOpener.current?.focus()) }
+  /** The style the walk-through was opened from: it is about pixel art, so it shows that and hands the style back after. */
+  const styleBefore = useRef<Style>('pixel')
+  const openTour = () => { styleBefore.current = style; setStyle('pixel'); setTour(0) }
+  const closeTour = () => { setTour(null); setStyle(styleBefore.current); requestAnimationFrame(() => tourOpener.current?.focus()) }
   // a step of the walk-through says how the scene is drawn, whatever the switch says
   const asPixels = touring ? touring.pixels : pixels
   const look = useMemo<PixelLook>(() => ({ palette: colors, dither, outline: outline ? (colors.length ? darkest(colors) : [11, 16, 38]) : null, glow, edges: edges ? 1 : 0, parts, sky: sky ? shown.sky : undefined, steady: steady ? STEADY : 0, tidy, fine, own }), [colors, dither, outline, glow, edges, parts, sky, shown, steady, tidy, fine, own])
@@ -218,7 +229,6 @@ export function PixelDiorama() {
     // a new scene brings its own palette, finish and view, now that it is the one in the view
     if (dressed.current !== d.id) {
       dressed.current = d.id
-      setPixels(true)
       setPalette('own')
       setDither(d.finish.dither); setGlow(d.finish.glow); setOutline(d.finish.outline); setEdges(d.finish.edges); setSky(d.finish.sky)
       setView(d.views[0].id); setOrbit(d.views[0].orbit)
@@ -234,6 +244,8 @@ export function PixelDiorama() {
       wet.current?.()
     }, from)
   }, [stage, scene, calm, rock, mirrored])
+  // one of Brush and Ink's looks in place of pixel art: marks, outlines, characters or cel tones, with their own settings
+  const drawing = useDrawnLook(stage, pixels || touring ? undefined : style, { actor: scene?.built, plain: !!scene?.plain, azimuth: shown.views[0].orbit.azimuth, offscreen })
   // the walk-through's fourth step is about the four samples, so it draws them whatever the switch says
   const sampling = touring?.id === 'samples'
   const drawnLook = useMemo(() => (asPixels ? (sampling ? { ...look, fine: true } : look) : undefined), [asPixels, sampling, look])
@@ -329,9 +341,9 @@ export function PixelDiorama() {
   // For verify: the stage and the look in use, without clicking
   useEffect(() => {
     if (!stage || !scene) return
-    window.__diorama = { stage, blobs: () => stage.blobCount, bones: () => scene.built.skeleton.count, look: () => look, water: () => scene.of.water?.(), mirrored }
+    window.__diorama = { stage, blobs: () => stage.blobCount, bones: () => scene.built.skeleton.count, look: () => look, style, water: () => scene.of.water?.(), mirrored }
     return () => { delete window.__diorama }
-  }, [stage, scene, look, mirrored])
+  }, [stage, scene, look, style, mirrored])
 
   /**
    * Records one whole loop as the art stands (palette, size, finish), stepped frame by frame from the time so it joins
@@ -407,6 +419,15 @@ export function PixelDiorama() {
   }
   useWheelZoom(canvas, setOrbit)
   const pick = (id: string) => { setView(id); setOrbit((shown.views.find((v) => v.id === id) ?? shown.views[0]).orbit) }
+  /** Another style. The address names it, as it names the scene, so a shared link opens the same picture. */
+  const draw = (id: Style) => {
+    setStyle(id)
+    setNote('')
+    const url = new URL(location.href)
+    if (id === 'pixel') url.searchParams.delete('style')
+    else url.searchParams.set('style', id)
+    history.replaceState(history.state, '', url)
+  }
   /** Another scene. It is cut first; its palette, finish and view follow when it reaches the view. */
   const show = (id: string) => {
     if (id === which) return
@@ -479,18 +500,19 @@ export function PixelDiorama() {
         <p className="max-w-xl text-lg text-ink-muted">
           Small scenes made of blobs and drawn as pixel art while they move. Each one is real 3D, so you can turn it,
           and every frame is cut down to a few colors on a coarse grid of pixels. Pick a scene, change the palette and
-          the pixel size, or switch the pixels off to see the blobs underneath.
+          the pixel size, or pick another style to see it painted, inked, cel shaded or typed out in characters.
         </p>
       </header>
       {facts && <SceneDetails open={details} onClose={() => setDetails(false)} facts={facts} />}
       <Workbench
         viewLabel="The scene"
         view={<>
+              {drawing.ground && <div aria-hidden className="absolute inset-0" style={{ background: drawing.ground }} data-testid="diorama-ground" />}
               <canvas
                 ref={canvas}
                 role="application"
                 aria-roledescription="3D view"
-                aria-label={`${shown.about}, ${asPixels ? 'drawn as pixel art' : touring?.clay ? 'drawn as blobs in plain clay' : 'drawn as blobs'}, ${failed ? 'not drawn' : playing ? 'moving' : 'paused'}. Drag or use the arrow keys to orbit; scroll, pinch or press plus and minus to zoom.${canPoke ? ' Tap or press Enter to poke it.' : ''}`}
+                aria-label={`${shown.about}, ${asPixels ? 'drawn as pixel art' : touring?.clay ? 'drawn as blobs in plain clay' : `drawn ${styleWords(touring ? 'blobs' : style)}`}, ${failed ? 'not drawn' : playing ? 'moving' : 'paused'}. Drag or use the arrow keys to orbit; scroll, pinch or press plus and minus to zoom.${canPoke ? ' Tap or press Enter to poke it.' : ''}`}
                 tabIndex={0}
                 data-testid="diorama-view"
                 className="absolute inset-0 h-full w-full cursor-grab touch-none outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset active:cursor-grabbing"
@@ -531,18 +553,14 @@ export function PixelDiorama() {
               {loading && <LoadingMark testid="diorama-loading" />}
               <p role="status" className="sr-only">{loading ? loadingLabel : ''}</p>
               {failed && <div role="alert" className="absolute inset-4 grid place-items-center text-center text-sm text-ink">{failed}</div>}
-              {!touring && <div role="group" aria-label="Draw the scene as" className="absolute top-3 left-3 flex gap-1.5 max-sm:top-2 max-sm:left-2">
-                <Chip small active={pixels} onClick={() => setPixels(true)}>Pixel art</Chip>
-                <Chip small active={!pixels} onClick={() => setPixels(false)}>Blobs</Chip>
-              </div>}
               {touring?.id === 'samples' && stage && scene && <Magnifier stage={stage} />}
               <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => pick(view)} />
               {!sampling && <p aria-hidden className="pointer-events-none absolute right-14 bottom-2 rounded bg-paper/80 px-1.5 py-0.5 text-xs text-ink-muted">{coarse ? 'drag to orbit · pinch to zoom' : 'drag to orbit · scroll to zoom'}</p>}
         </>}
         status={tour !== null && made ? <TourStrip step={tour} facts={{ parts: made.of.parts ?? new Set(made.built.partOf).size, descriptionBytes: made.of.bytes, blobs: made.built.blobs.count, colors: colors.length, steps: made.paint !== '', lines: !outline ? 'none' : own ? 'own' : 'one' }} onStep={setTour} onClose={closeTour} /> : <>
-              <span>{scene ? <><span className="tabular-nums text-ink" data-testid="diorama-blobs">{scene.built.blobs.count.toLocaleString()}</span> blobs<span data-testid="diorama-art">{pixels && art ? <>, drawn at <span className="tabular-nums text-ink">{art.width} × {art.height}</span>{png ? <>, <span className="tabular-nums text-ink" data-testid="diorama-png-size">{kilobytes(png.bytes)}</span> a frame</> : ''}</> : ', drawn as blobs'}</span>.</> : loadingLabel}</span>
+              <span>{scene ? <><span className="tabular-nums text-ink" data-testid="diorama-blobs">{scene.built.blobs.count.toLocaleString()}</span> blobs<span data-testid="diorama-art">{pixels && art ? <>, drawn at <span className="tabular-nums text-ink">{art.width} × {art.height}</span>{png ? <>, <span className="tabular-nums text-ink" data-testid="diorama-png-size">{kilobytes(png.bytes)}</span> a frame</> : ''}</> : `, drawn ${styleWords(style)}`}</span>.</> : loadingLabel}</span>
               <span className="flex gap-x-4">
-              {scene && <button type="button" ref={tourOpener} onClick={() => setTour(0)} data-testid="diorama-tour-open" className="cursor-pointer text-ink underline decoration-rule underline-offset-2 hover:text-accent">How it's made</button>}
+              {scene && <button type="button" ref={tourOpener} onClick={openTour} data-testid="diorama-tour-open" className="cursor-pointer text-ink underline decoration-rule underline-offset-2 hover:text-accent">How it's made</button>}
               {facts && <button type="button" onClick={() => setDetails(true)} aria-haspopup="dialog" data-testid="diorama-details-open" className="cursor-pointer text-ink underline decoration-rule underline-offset-2 hover:text-accent">Full details</button>}
               </span>
         </>}
@@ -592,11 +610,18 @@ export function PixelDiorama() {
             ),
           },
           {
-            id: 'pixels', label: 'Pixels', content: (
+            id: 'style', label: 'Style', content: (
               <div className={TAB_SECTIONS}>
-                <Field label="Palette">
+                <Field label="Drawn as">
+                  <div className="flex flex-wrap gap-1.5" data-testid="diorama-styles">
+                    {STYLES.map((l) => <Chip key={l.id} active={style === l.id} onClick={() => draw(l.id)}>{l.label}</Chip>)}
+                  </div>
+                  <p className="mt-1.5 text-xs text-ink-faint">{STYLES.find((l) => l.id === style)?.note}</p>
+                </Field>
+                {drawing.controls}
+                {pixels && <Field label="Palette">
                   <div className="flex flex-wrap gap-1.5">
-                    {palettes.map((p) => <Chip key={p.id} active={palette === p.id} onClick={() => { setPalette(p.id); setPixels(true) }}>{p.label}</Chip>)}
+                    {palettes.map((p) => <Chip key={p.id} active={palette === p.id} onClick={() => setPalette(p.id)}>{p.label}</Chip>)}
                   </div>
                   <div data-testid="palette-strip" aria-hidden className="mt-5 flex h-3 overflow-hidden rounded ring-1 ring-rule">
                     {colors.length ? colors.map((c, i) => <span key={i} className="flex-1" style={{ background: `rgb(${c[0]} ${c[1]} ${c[2]})` }} />) : <span className="flex-1 bg-paper-sunk" />}
@@ -606,42 +631,45 @@ export function PixelDiorama() {
                       : palette === 'own' ? `The ${colors.length} colors chosen for this scene. Every pixel snaps to the closest one.`
                         : `${('note' in picked && picked.note) || `A borrowed palette of ${colors.length} colors.`} Every pixel snaps to the closest one.`}
                   </p>
-                </Field>
-                <Field label="Pixel size">
+                </Field>}
+                {pixels && <Field label="Pixel size">
                   <div className="flex flex-wrap gap-1.5">
-                    {SIZES.map((n) => <Chip key={n} active={size === n} onClick={() => { setSize(n); setPixels(true) }}>{n}×</Chip>)}
+                    {SIZES.map((n) => <Chip key={n} active={size === n} onClick={() => setSize(n)}>{n}×</Chip>)}
                   </div>
-                </Field>
-                <Field label="Motion">
+                </Field>}
+                {pixels && <Field label="Motion">
                   <div className="flex flex-wrap gap-1.5">
-                    {RATES.map((n) => <Chip key={n} active={rate === n} onClick={() => { setRate(n); setPixels(true) }}>{n ? `${n} a second` : 'Smooth'}</Chip>)}
+                    {RATES.map((n) => <Chip key={n} active={rate === n} onClick={() => setRate(n)}>{n ? `${n} a second` : 'Smooth'}</Chip>)}
                   </div>
-                </Field>
+                </Field>}
               </div>
             ),
           },
           {
             id: 'finish', label: 'Finish', content: (
               <div className={TAB_SECTIONS}>
-                <Slider label="Dither" value={dither} min={0} max={1} step={0.05} onChange={setDither} format={(v) => `${Math.round(v * 100)}%`} hint={!pixels ? 'Applies to Pixel art.' : colors.length ? (sky ? 'Checkers two palette colors to fake the ones between. The sky is always dithered, so its bands blend.' : 'Checkers two palette colors to fake the ones between.') : 'Needs a palette: Full color has none to mix.'} />
+                {pixels && <Slider label="Dither" value={dither} min={0} max={1} step={0.05} onChange={setDither} format={(v) => `${Math.round(v * 100)}%`} hint={colors.length ? (sky ? 'Checkers two palette colors to fake the ones between. The sky is always dithered, so its bands blend.' : 'Checkers two palette colors to fake the ones between.') : 'Needs a palette: Full color has none to mix.'} />}
                 <Slider label="Glow" value={glow} min={0} max={4} step={0.25} onChange={setGlow} format={(v) => (v ? `${v.toFixed(2)}×` : 'off')} hint={pixels ? 'How strongly lamps, fires and other glowing things light what is round them, and how far bright pixels shine into the ones beside them.' : 'How strongly lamps, fires and other glowing things light what is round them.'} />
                 <div className="grid gap-3">
-                <Toggle label={pixels ? 'Four samples a pixel' : 'Four samples a pixel (in Pixel art)'} checked={fine} onChange={setFine} />
+                {!pixels && <p className="text-xs text-ink-faint">Dither, outlines and the sky belong to the Pixel art style. Pick it in the Style tab to change them.</p>}
+                {pixels && <>
+                <Toggle label="Four samples a pixel" checked={fine} onChange={setFine} />
                 <p className="text-xs text-ink-faint">Draws the scene at twice the size and gives each pixel the thing most of its four samples show, so edges are one thing or the other, never a mix.</p>
                 <Toggle label="Paint in steps of the palette" checked={steps} onChange={setSteps} disabled={!colors.length} />
                 <p className="text-xs text-ink-faint">{colors.length ? 'Cuts the scene again with every blob in one palette color, a step of its own paint from shade to sun, so shade falls in flat bands.' : 'Needs a palette: Full color has no steps.'}</p>
-                <Toggle label={pixels ? 'Outline the scene' : 'Outline the scene (in Pixel art)'} checked={outline} onChange={setOutline} />
-                <Toggle label={pixels ? 'Outline in each thing\'s own color' : 'Outline in each thing\'s own color (in Pixel art)'} checked={own} onChange={setOwn} disabled={!outline} />
-                <Toggle label={pixels ? 'Lines where colors meet' : 'Lines where colors meet (in Pixel art)'} checked={edges} onChange={setEdges} />
-                <Toggle label={pixels ? 'Lines between parts' : 'Lines between parts (in Pixel art)'} checked={parts} onChange={setParts} />
-                <Toggle label={pixels ? 'Sky behind' : 'Sky behind (in Pixel art)'} checked={sky} onChange={setSky} />
-                <Toggle label={pixels ? 'Steady pixels' : 'Steady pixels (in Pixel art)'} checked={steady} onChange={setSteady} />
+                <Toggle label="Outline the scene" checked={outline} onChange={setOutline} />
+                <Toggle label="Outline in each thing's own color" checked={own} onChange={setOwn} disabled={!outline} />
+                <Toggle label="Lines where colors meet" checked={edges} onChange={setEdges} />
+                <Toggle label="Lines between parts" checked={parts} onChange={setParts} />
+                <Toggle label="Sky behind" checked={sky} onChange={setSky} />
+                <Toggle label="Steady pixels" checked={steady} onChange={setSteady} />
+                <Toggle label="Clean up lone pixels" checked={tidy} onChange={setTidy} />
+                </>}
                 <Toggle label="Rock the view" checked={rock} onChange={setRock} disabled={calm} />
-                <Toggle label={pixels ? 'Clean up lone pixels' : 'Clean up lone pixels (in Pixel art)'} checked={tidy} onChange={setTidy} />
                 <Toggle label="Exact sort (slower)" checked={exact} onChange={setExact} />
                 <p className="text-xs text-ink-faint">Draws blobs at the same depth in one fixed order, so flat walls can't flicker. It costs about 10 ms a frame on a phone at 500,000 blobs.</p>
                 </div>
-                <div className="grid gap-3">
+                {pixels && <div className="grid gap-3">
                 <Field label="Record the loop as">
                   <div className="flex flex-wrap gap-1.5">
                     <Chip active={recordAs === 'png'} onClick={() => setRecordAs('png')}>Animated PNG</Chip>
@@ -668,12 +696,13 @@ export function PixelDiorama() {
                 </Field>}
                 <div className="grid gap-2">
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <Button small disabled={!pixels || !!touring || !drawn || saving || recording !== null} onClick={save}>{saving ? 'Saving…' : 'Save this frame'}</Button>
-                  <Button small disabled={!pixels || !!touring || !drawn || saving || recording !== null} onClick={record} data-testid="diorama-record">{recording === null ? 'Record the loop' : recording >= Math.round(shown.loop * recordFps) ? 'Saving the loop…' : `Recording ${recording} of ${Math.round(shown.loop * recordFps)}…`}</Button>
+                  <Button small disabled={!!touring || !drawn || saving || recording !== null} onClick={save}>{saving ? 'Saving…' : 'Save this frame'}</Button>
+                  <Button small disabled={!!touring || !drawn || saving || recording !== null} onClick={record} data-testid="diorama-record">{recording === null ? 'Record the loop' : recording >= Math.round(shown.loop * recordFps) ? 'Saving the loop…' : `Recording ${recording} of ${Math.round(shown.loop * recordFps)}…`}</Button>
                 </div>
-                <p role="status" className="text-xs text-ink-faint empty:-mt-2">{touring ? 'Close How it\'s made to save a frame or record the loop.' : pixels ? note : 'Switch back to Pixel art to save a frame or record the loop.'}</p>
+                <p role="status" className="text-xs text-ink-faint empty:-mt-2">{touring ? 'Close How it\'s made to save a frame or record the loop.' : note}</p>
                 </div>
-                </div>
+                </div>}
+                {!pixels && <p className="text-xs text-ink-faint">Saving a frame and recording the loop are for pixel art. For this style, the record button on the view saves a video of what it shows.</p>}
               </div>
             ),
           },
