@@ -121,8 +121,9 @@ What that costs, and the answer to each:
 - **Parts of different actors do not cull each other**, so a prop sunk into a hill shows its buried
   blobs through thin places. Acceptable while editing.
 
-**Finish** (a button, and what export uses) merges the project into one description where it fits
-the limits, and cuts it as today's scenes are cut: one grid, real baked shadows, the full detail.
+**Finish** (a button, and what export uses) merges the project onto one grid where it fits the
+limits (the land's and every placed prop's cut joined, each prop's shapes seen through its placement,
+so distances stay exact and no description is rewritten), and cuts it as today's scenes are cut: one grid, real baked shadows, the full detail.
 Where it does not fit (too many bones), the finished scene stays as several actors and says so.
 
 #### Measured (issue #330, 2026-11-19)
@@ -244,10 +245,11 @@ in the browser and as a file. No imports of outside files yet.
 1. **Measure the two ways to draw a project.** Done (#330): props are drawn apart while editing, and
    Finish merges; numbers under "Measured" above.
 2. **The project and prop formats.** `SceneProject`, `PropDoc`, a checker with `where: what`
-   messages like `checkScene`, compile to actors, merge to one `SceneDoc` (Finish). Pure, tested, in
-   `splat-engine` so the package gets it.
-3. **Lift props out of descriptions.** `propFrom`, the palette and loop fitting above, and the
-   library test.
+   messages like `checkScene`, compile to actors, merge onto one grid (Finish). Pure, tested, in
+   `splat-engine/project.ts`. Done in the first code PR.
+3. **Lift props out of descriptions.** `splitScene` (picks of parts and bones; called `propFrom`
+   above), the palette and loop fitting, and the library test. Done for the windmill and Turkey Run
+   (`src/blobscape/creator/picks.ts`); the other scenes follow with the library (#334).
 4. **The lighthouse as a description.** So its tower, lamp, cottage and boat can be props, and the
    scene is data like the rest. Its picture must not change (the recorded loop is the check).
 5. **The first library.** The table above, with card pictures.
