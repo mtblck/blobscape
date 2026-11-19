@@ -2,7 +2,7 @@ import type { Rgb } from '../../splat-core/pixel.ts'
 import type { Orbit } from '../../splat-core/view.ts'
 import type { PointLight } from '../../splat-engine/engine.ts'
 import type { Skeleton } from '../../splat-engine/rig.ts'
-import { compileProject, poseApart, projectLights, type SceneProject } from '../../splat-engine/project.ts'
+import { compileProject, poseApart, projectLights, type CompiledProject, type SceneProject } from '../../splat-engine/project.ts'
 import { DIORAMAS, described, type Diorama } from '../diorama/scenes.ts'
 import type { CutJob } from './cut.ts'
 import { LIBRARY, SPLIT_SCENES, libraryProp, nameOf, openLand, openScene } from './library.ts'
@@ -40,6 +40,8 @@ export interface Shown {
   jobs(spacing: number): CutJob[]
   /** Why a scene opened whole, when it did. */
   note?: string
+  /** The project compiled, when what is open is one. */
+  cp?: CompiledProject
 }
 
 /** Scenes that cannot be split, and why: said in the page. */
@@ -118,5 +120,6 @@ export function shownOf(o: Opened): Shown {
     poseProp: (i, sk, t) => poseApart(cp, i, sk, t),
     items: [{ name: nameOf(project.land), kind: 'land' }, ...project.props.map((p): Item => ({ name: nameOf(p.prop), kind: 'prop' }))],
     jobs: (spacing) => [{ kind: 'land', project, spacing }, ...project.props.map((_, i): CutJob => ({ kind: 'prop', project, i, spacing }))],
+    cp,
   }
 }
