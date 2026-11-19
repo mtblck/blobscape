@@ -1,5 +1,6 @@
 import type * as THREE from 'three'
 import type { SparkRenderer } from '@sparkjsdev/spark'
+import { drawsTo, markDrawn } from './drawn.ts'
 
 /**
  * Draws a Spark scene only when something changed, not 60 times a second:
@@ -21,6 +22,7 @@ export class RenderLoop {
     private spark: SparkRenderer,
     private draw: () => void,
   ) {
+    drawsTo(renderer.domElement, () => this.invalidate(2))
     const tick = () => {
       if (this.stopped) return
       if (this.resize()) this.invalidate(2)
@@ -28,6 +30,7 @@ export class RenderLoop {
       if ((this.framesLeft > 0 || busy) && this.hold === 0) {
         this.framesLeft = Math.max(0, this.framesLeft - 1)
         this.draw()
+        markDrawn(this.renderer.domElement)
       }
       this.raf = requestAnimationFrame(tick)
     }

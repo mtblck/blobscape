@@ -355,7 +355,7 @@ export function Creature() {
               </div>
               <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => setOrbit(scaleOf.view)} />
               {picked ? (
-                <div role="group" aria-label="Bone lit up" data-testid="picked-bone" className="absolute bottom-2 left-12 flex max-w-[calc(100%-7rem)] items-center gap-1 rounded-full border border-rule bg-paper/90 py-0.5 pr-0.5 pl-1 text-xs text-ink shadow-sm backdrop-blur">
+                <div role="group" aria-label="Bone lit up" data-testid="picked-bone" className="absolute bottom-2 left-[5.25rem] flex max-w-[calc(100%-9.25rem)] items-center gap-1 rounded-full border border-rule bg-paper/90 py-0.5 pr-0.5 pl-1 text-xs text-ink shadow-sm backdrop-blur">
                   <button type="button" aria-label="Previous bone" onClick={() => stepBone(-1)} className="grid size-7 cursor-pointer place-items-center rounded-full text-ink-muted hover:bg-rule/60 hover:text-ink">‹</button>
                   <span className="truncate px-1"><b className="font-semibold">{picked.label[0].toUpperCase() + picked.label.slice(1)}</b> moves <span className="tabular-nums">{picked.blobs.toLocaleString()}</span> blobs</span>
                   <button type="button" aria-label="Next bone" onClick={() => stepBone(1)} className="grid size-7 cursor-pointer place-items-center rounded-full text-ink-muted hover:bg-rule/60 hover:text-ink">›</button>

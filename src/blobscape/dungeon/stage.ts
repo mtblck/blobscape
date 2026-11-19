@@ -1,3 +1,4 @@
+import { drawsTo, markDrawn } from '../../splat-core/drawn.ts'
 import * as THREE from 'three/webgpu'
 import { mix, positionView, smoothstep, uniform } from 'three/tsl'
 import { readbackToSrgb, srgbToLinear } from '../../splat-core/color.ts'
@@ -84,12 +85,14 @@ export class DungeonStage {
     this.scene.add(this.floor)
     this.scene.background = new THREE.Color(GLOOM)
     if (!opts.offscreen) {
+      drawsTo(display)
       const tick = (now: number) => {
         if (this.stopped) return
         const dt = this.last ? Math.min(0.1, (now - this.last) / 1000) : 0
         this.last = now
         if (this.dungeon && !this.paused) this.step(dt)
         this.draw()
+        markDrawn(this.display)
         this.report(now)
         this.raf = requestAnimationFrame(tick)
       }
