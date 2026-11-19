@@ -207,6 +207,13 @@ export interface PropPick {
   bones?: string[]
   /** The point it stands on; the middle of the bottom of its box when left out. */
   foot?: Vec3
+  /**
+   * Moves and lights it leaves behind: `during` drops whatever happens only in part of the loop (a witch who appears
+   * and goes stands there instead), `pass` drops going by (a billboard Turkey Run slides past stands still).
+   */
+  drop?: ('during' | 'pass')[]
+  /** The scene's lights it takes, by their place in its list; left out, those its box holds. */
+  lights?: number[]
 }
 
 /** The part indices a pick takes from a scene. */
@@ -236,7 +243,7 @@ function keepOnly(doc: SceneDoc, parts: number[]): SceneDoc {
 }
 
 /** A coarse look at where a description's parts are: the box round all of them. */
-function boxOf(doc: SceneDoc): { lo: Vec3; hi: Vec3 } {
+export function boxOf(doc: SceneDoc): { lo: Vec3; hi: Vec3 } {
   const spec = compileScene({ ...doc, lights: [], air: undefined, water: undefined }, { puffs: false }).spec(0.08)
   const lo: Vec3 = [Infinity, Infinity, Infinity], hi: Vec3 = [-Infinity, -Infinity, -Infinity]
   for (const p of spec.parts) for (let i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], p.shape.min[i]); hi[i] = Math.max(hi[i], p.shape.max[i]) }
@@ -257,11 +264,19 @@ export function splitScene(doc: SceneDoc, picks: PropPick[]): { land: PropDoc; p
     const idx = pickedParts(doc, pick).filter((i) => !taken.has(i))
     if (!idx.length) throw new Error(`${pick.name}: picks no parts`)
     idx.forEach((i) => taken.add(i))
-    const own = keepOnly(doc, idx)
+    const kept = keepOnly(doc, idx)
+    const drop = new Set(pick.drop ?? [])
+    const own = { ...kept, moves: kept.moves?.filter((m) => !(drop.has('during') && m.during) && !(drop.has('pass') && m.kind === 'pass')) }
     const box = boxOf(own)
     const pad = 0.05 * Math.max(box.hi[0] - box.lo[0], box.hi[1] - box.lo[1], box.hi[2] - box.lo[2])
     const lights: LightDoc[] = []
-    for (const i of [...lightsLeft]) { const l = doc.lights![i]; if (inBox(l.at, box, pad)) { lights.push(l); lightsLeft.delete(i) } }
+    for (const i of [...lightsLeft]) {
+      const l = doc.lights![i]
+      if (pick.lights ? pick.lights.includes(i) : inBox(l.at, box, pad)) {
+        if (drop.has('during') && l.during) { const { during: _d, ...always } = l; lights.push(always) } else lights.push(l)
+        lightsLeft.delete(i)
+      }
+    }
     const foot = pick.foot ?? [(box.lo[0] + box.hi[0]) / 2, box.lo[1], (box.lo[2] + box.hi[2]) / 2]
     const { air: _air, water: _water, cover: _cover, focus: _focus, ...rest } = own
     return { name: pick.name, foot, doc: { ...rest, name: pick.name, lights } }
