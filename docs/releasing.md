@@ -4,12 +4,15 @@ A release is a tag (`vX.Y.Z`), a GitHub release whose notes are that version's s
 `CHANGELOG.md`, and, once the engine package isn't private, `@blobscape/engine` at the same version on npm.
 The site itself deploys from main on Vercel as always.
 
-1. As work lands, add a line under `## [Unreleased]` in `CHANGELOG.md` for anything a visitor would notice.
-2. On a branch, run `npm run release -- 0.2.0`. It moves the [Unreleased] entries under `## [0.2.0] - <today>`,
+1. As work lands, each pull request adds one small file to `changes/` for anything a visitor would notice
+   (`changes/README.md` says how). Don't add lines to `CHANGELOG.md` by hand: every pull request doing that edited
+   the same spot, and each merge put the others in conflict.
+2. On a branch, run `npm run release -- 0.2.0`. It joins the files in `changes/`, newest first, with anything
+   still under [Unreleased], puts them under `## [0.2.0] - <today>`, removes the files,
    updates the links at the foot, and sets the version in package.json, package-lock.json and
    `packages/engine/package.json` (the site and the package share one version).
 3. Write a What's New post for the release: a new entry first in `POSTS` (`src/blobscape/news.ts`) with its `version`, telling
-   the headlines in words for a visitor. It can go in the release PR.
+   the headlines in words for a visitor (the new section of `CHANGELOG.md` is the list to pick them from). It can go in the release PR.
 4. Open that as a PR. Merging it is the approval: `.github/workflows/release.yml` sees the version change on
    main, runs the unit tests, tags the merge commit `v0.2.0` with the run's own token and makes the release,
    then builds and publishes `@blobscape/engine` (skipped while its manifest says `private: true`, or when that
