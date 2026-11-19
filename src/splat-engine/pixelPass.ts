@@ -1,11 +1,12 @@
 import { NearestFilter, NoBlending, NodeMaterial, QuadMesh, RenderTarget, Vector2, Vector3, type Camera, type Object3D, type WebGPURenderer } from 'three/webgpu'
 import * as TSLTyped from 'three/tsl'
+import { BLOCK_WIDE, MIX_A, MIX_B, SALT, STRIPS, TURNED, type GlitchState } from '../splat-core/glitch.ts'
 import { BAYER4, EDGE_DARK, EDGE_JUMP, GLOW_FROM, GLOW_SHOWS, GLOW_TAPS, MAX_PALETTE_SIZE, OWN_C, OWN_L, OWN_UNDER, PIXEL_CUT, SKY_DITHER, oklab, skyReach, type PixelLook } from '../splat-core/pixel.ts'
 
 // As in engine.ts: the shader builders use TSL untyped.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const TSL = TSLTyped as unknown as Record<string, any>
-const { Fn, If, Loop, abs, dot, float, floor, int, max, min, mod, pow, select, smoothstep, sqrt, texture, uniform, uniformArray, uv, vec2, vec3, vec4 } = TSL
+const { Fn, If, Loop, abs, dot, float, floor, int, max, min, mod, pow, select, smoothstep, sqrt, texture, uint, uniform, uniformArray, uv, vec2, vec3, vec4 } = TSL
 
 const SIDES: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]]
 /** The four samples of an art pixel, across the top then the bottom: `QUAD` in pixel.ts. */
@@ -85,6 +86,8 @@ export class PixelPass {
   private readonly skyLow = uniform(new Vector3())
   /** How far down the picture the sky's blend runs (above 0, up to 1). */
   private readonly skyReach = uniform(1)
+  /** Tech glitch over the finished art (splat-core/glitch.ts), set each frame by `setGlitch`: all whole numbers. */
+  private readonly glitch = { on: uniform(0), key: uniform(0), jitter: uniform(0), band: uniform(1), rows: uniform(0), split: uniform(0), block: uniform(1), blocks: uniform(0) }
   private readonly palLab = Array.from({ length: MAX_PALETTE }, () => new Vector3())
   /** The palette as it is stored in the art: sRGB, 0–1. */
   private readonly palShown = Array.from({ length: MAX_PALETTE }, () => new Vector3())
@@ -148,6 +151,18 @@ export class PixelPass {
     this.skied.value = look.sky ? 1 : 0
     if (look.sky) { this.skyTop.value.set(...look.sky[0]); this.skyLow.value.set(...look.sky[1]); this.skyReach.value = skyReach(look.sky) }
     if (look.outline) this.line.value.set(look.outline[0] / 255, look.outline[1] / 255, look.outline[2] / 255)
+  }
+
+  /**
+   * This frame's glitch, laid on as the art goes to the screen (the art itself, `art`, stays clean: `glitchArt` lays
+   * the same on a frame read back). Left out, none.
+   */
+  setGlitch(g?: GlitchState) {
+    const u = this.glitch
+    u.on.value = g?.on ? 1 : 0
+    if (!g?.on) return
+    u.key.value = g.key; u.jitter.value = g.jitter; u.band.value = g.band; u.rows.value = g.rows
+    u.split.value = g.split; u.block.value = g.block; u.blocks.value = g.blocks
   }
 
   /** The art's size in pixels. */
@@ -478,14 +493,63 @@ export class PixelPass {
     })()
   }
 
-  /** The art onto the output: every screen pixel inside one art pixel takes that pixel's color. */
+  /**
+   * The art onto the output: every screen pixel inside one art pixel takes that pixel's color. With a glitch on, the
+   * art pixel is read from where `readFrom` in glitch.ts says, red and blue to either side: `glitchArt` there is the
+   * CPU twin (change one, change both). The hash is the same unsigned 32-bit arithmetic as `glitchHash`.
+   */
   private toScreen() {
     const toLinear = (c: unknown) => select(float(c).lessThanEqual(0.04045), float(c).div(12.92), pow(float(c).add(0.055).div(1.055), 2.4))
+    const g = this.glitch
+    /** `glitchHash`: the 24-bit hash of a row band or block for one question, as a float (exact under 2^24). */
+    const glitchHash = (a: unknown, b: unknown, salt: number) => {
+      const h = uint(a).mul(uint(MIX_A)).bitXor(uint(b).mul(uint(MIX_B))).bitXor(uint(g.key).add(uint(salt))).toVar()
+      h.assign(h.bitXor(uint(61)).bitXor(h.shiftRight(uint(16))))
+      h.assign(h.mul(uint(9)))
+      h.assign(h.bitXor(h.shiftRight(uint(4))))
+      h.assign(h.mul(uint(0x27d4eb2d)))
+      h.assign(h.bitXor(h.shiftRight(uint(15))))
+      return h.shiftRight(uint(8)).toVar()
+    }
+    /** `pickOf`: a whole number from 0 to m − 1 out of a 24-bit hash. */
+    const pickOf = (h: { mul: (x: unknown) => { shiftRight: (x: unknown) => unknown } }, m: unknown) => float(h.mul(uint(m)).shiftRight(uint(24)))
+    // whole columns round the picture's width: a division may land a step off either way, which the two corrections undo
+    const wrapX = (x: unknown) => {
+      const m = float(x).sub(floor(float(x).div(this.res.x)).mul(this.res.x))
+      const up = select(m.lessThan(0), m.add(this.res.x), m)
+      return select(up.greaterThanEqual(this.res.x), up.sub(this.res.x), up)
+    }
     return Fn(() => {
       const st = uv()
-      const cell = floor(vec2(st.x, float(1).sub(st.y)).mul(this.cells))
-      const c = this.artTex.sample(vec2(cell.x.add(0.5).div(this.res.x), float(1).sub(cell.y.add(0.5).div(this.res.y))))
-      return vec4(toLinear(c.x), toLinear(c.y), toLinear(c.z), c.a)
+      const cell = floor(vec2(st.x, float(1).sub(st.y)).mul(this.cells)).toVar()
+      /** The art pixel at column `x` and row `y` from the top. */
+      const art = (x: unknown, y: unknown) => this.artTex.sample(vec2(float(x).add(0.5).div(this.res.x), float(y).add(0.5).div(this.res.y)))
+      const row = this.res.y.sub(1).sub(cell.y).toVar()
+      const c = vec4(art(cell.x, row)).toVar()
+      If(g.on.greaterThan(0.5), () => {
+        const sx = float(cell.x).toVar(), sy = float(row).toVar(), turned = float(0).toVar()
+        If(g.jitter.greaterThan(0), () => {
+          const b = floor(row.div(g.band))
+          If(float(glitchHash(b, 0, SALT.slides)).lessThan(g.rows), () => {
+            sx.addAssign(pickOf(glitchHash(b, 0, SALT.slide), g.jitter.mul(2).add(1)).sub(g.jitter))
+          })
+        })
+        If(g.blocks.greaterThan(0), () => {
+          const bx = floor(cell.x.div(g.block.mul(BLOCK_WIDE))).toVar(), by = floor(row.div(g.block)).toVar()
+          If(float(glitchHash(by, 0, SALT.strip)).lessThan(STRIPS).and(float(glitchHash(bx, by, SALT.broken)).lessThan(g.blocks)), () => {
+            sx.addAssign(pickOf(glitchHash(bx, by, SALT.fromX), 7).sub(3).mul(g.block).mul(BLOCK_WIDE))
+            sy.addAssign(pickOf(glitchHash(bx, by, SALT.fromY), 5).sub(2).mul(g.block))
+            turned.assign(select(float(glitchHash(bx, by, SALT.turned)).lessThan(TURNED), 1, 0))
+          })
+        })
+        const x = wrapX(sx).toVar(), y = sy.clamp(0, this.res.y.sub(1)).toVar()
+        const mid = vec4(art(x, y)).toVar()
+        const red = vec4(art(wrapX(x.add(g.split)), y)).toVar()
+        const blue = vec4(art(wrapX(x.sub(g.split)), y)).toVar()
+        const rgb = vec3(red.x, mid.y, blue.z).toVar()
+        c.assign(vec4(select(turned.greaterThan(0.5), vec3(rgb.y, rgb.z, rgb.x), rgb), max(red.w, max(mid.w, blue.w))))
+      })
+      return vec4(toLinear(c.x), toLinear(c.y), toLinear(c.z), c.w)
     })()
   }
 

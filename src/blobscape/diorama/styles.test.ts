@@ -5,14 +5,16 @@ import { LOOKS } from '../brushLooks.ts'
 import { CEL } from '../celLooks.ts'
 import { WASH, WASH_PAPERS, WASH_START, washLook } from '../washLooks.ts'
 import { GLASS, glassLook, GLASS_START } from '../glassLooks.ts'
+import { GLITCH, GLITCH_START, glitchLook } from '../glitchLooks.ts'
 import { NEON, NEON_PACES, neonLook, NEON_START, periodIn } from '../neonLooks.ts'
 
 test('pixel art comes first, then every look Brush and Ink offers, each once', () => {
   assert.equal(STYLES[0].id, 'pixel')
   const ids = STYLES.map((s) => s.id)
   assert.equal(new Set(ids).size, ids.length)
-  for (const l of [...LOOKS, CEL, NEON, GLASS, WASH]) assert.ok(ids.includes(l.id), `${l.id} is offered`)
-  assert.equal(ids.length, LOOKS.length + 5)
+  for (const l of [...LOOKS, GLITCH, CEL, NEON, GLASS, WASH]) assert.ok(ids.includes(l.id), `${l.id} is offered`)
+  assert.equal(ids.length, LOOKS.length + 6)
+  assert.equal(STYLES[1].id, 'glitch')
 })
 
 test('an address picks a style, and anything else is pixel art', () => {
@@ -56,4 +58,11 @@ test('watercolor is laid on a light paper, with a scene\'s own sky behind', () =
   assert.equal(washLook(WASH_START).sky, undefined)
   assert.deepEqual(washLook(WASH_START, [[255, 255, 255], [0, 0, 0]]).sky, [[1, 1, 1], [0, 0, 0]])
   assert.equal(styleWords('watercolor'), 'in watercolor')
+})
+
+test('tech glitch is pixel art underneath, and holds still under reduced motion', () => {
+  assert.equal(styleAsked('glitch'), 'glitch')
+  assert.equal(styleWords('glitch'), 'as glitching pixel art')
+  assert.equal(glitchLook(GLITCH_START, 8, true).still, true)
+  assert.equal(glitchLook(GLITCH_START, 8).loop, 8)
 })
