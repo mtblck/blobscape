@@ -17,6 +17,7 @@
     "prerender": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/prerender.ts",
     "release": "node scripts/release.mjs",
     "loops": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/record-loops.mjs",
+    "reel": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/record-reel.mjs",
     "scene": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/scene.mjs"
   },
   "dependencies": {

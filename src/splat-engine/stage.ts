@@ -1,3 +1,4 @@
+import { drawsTo, markDrawn } from '../splat-core/drawn.ts'
 import * as THREE from 'three/webgpu'
 import { STAGE_FOV, placeCamera, type Orbit } from '../splat-core/orbit.ts'
 import { readbackToSrgb } from '../splat-core/color.ts'
@@ -172,6 +173,7 @@ export class Stage {
     this.backend = (renderer.backend as unknown as { isWebGPUBackend?: boolean }).isWebGPUBackend ? 'webgpu' : 'webgl'
     this.setFloor(8)
     if (!opts.offscreen) {
+      drawsTo(display, () => this.invalidate())
       const tick = (now: number) => {
         if (this.stopped) return
         const dt = this.last ? Math.min(0.1, (now - this.last) / 1000) : 0
@@ -189,6 +191,7 @@ export class Stage {
           // a picture that is due but held back by the pace is drawn on a later frame
           if (this.reflect() === null && this.mirrorFor && this.mirrorDue) this.pending = Math.max(this.pending, 1)
           this.draw()
+          markDrawn(this.display)
           if (this.actor) this.firstFrame()
           if (this.waiting.length) this.tellShown()
         }

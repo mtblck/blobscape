@@ -1,3 +1,4 @@
+import { drawsTo, markDrawn } from '../../splat-core/drawn.ts'
 import * as THREE from 'three/webgpu'
 import { readbackToSrgb } from '../../splat-core/color.ts'
 import { placeCamera, STAGE_FOV, type Orbit } from '../../splat-core/orbit.ts'
@@ -128,12 +129,14 @@ export class PondStage {
     // the blur looks at each pixel through forty points: too much for a phone to start with
     this.focusBlur = this.backend === 'webgpu' && !opts.small
     if (!opts.offscreen) {
+      drawsTo(display)
       const tick = (now: number) => {
         if (this.stopped) return
         const dt = this.last ? Math.min(0.1, (now - this.last) / 1000) : 0
         this.last = now
         if (this.pond && !this.paused) this.step(dt)
         this.draw()
+        markDrawn(this.display)
         this.report(now)
         this.raf = requestAnimationFrame(tick)
       }

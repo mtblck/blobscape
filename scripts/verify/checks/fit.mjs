@@ -118,4 +118,44 @@ export default [
       await ctx.close()
     },
   },
+  {
+    name: 'record',
+    about: 'the Record button on a preview: a video of the canvases alone, from a page drawn in 2D and one drawn by the GPU',
+    entries: ['src/shared/record.ts', 'src/splat-core/drawn.ts', 'src/blobscape/diorama/video.ts'],
+    async run({ fails, ok, open }) {
+      // ?record=webm: headless Chromium claims H.264 and never delivers, so the browser's own recorder writes the file
+      for (const [label, path, ready] of [
+        ['fit a picture (2D canvases)', '/experiments/fit-a-picture/?record=webm', () => Number(document.querySelector('[data-testid=step]')?.textContent?.replace(/,/g, '')) > 10],
+        ['splat to sprite (a GPU canvas)', '/experiments/splat-to-sprite/?record=webm', () => !!document.querySelector('[data-testid=record]')],
+      ]) {
+        const { page, ctx } = await open(path, { viewport: { width: 1280, height: 900 } })
+        await page.waitForFunction(ready, null, { timeout: 30000 }).catch(() => {})
+        await page.waitForTimeout(3000)
+        // clicked from the page: a view still loading in software can hold a pointer click past its timeout
+        const press = () => page.evaluate(() => document.querySelector('[data-testid=record]').click())
+        await press()
+        const on = await page.waitForFunction(() => document.querySelector('[data-testid=record]')?.getAttribute('aria-pressed') === 'true', null, { timeout: 15000 }).then(() => true, () => false)
+        if (!on) { fails.push(`record, ${label}: recording never began (${await page.getByTestId('record-note').textContent()})`); await ctx.close(); continue }
+        // turn the view (or add blobs) while it records: a picture that changes takes far more bytes than a blank one
+        const box = await page.locator('canvas').first().boundingBox()
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+        await page.mouse.down()
+        for (let i = 1; i <= 12; i++) { await page.mouse.move(box.x + box.width / 2 + i * 15, box.y + box.height / 2); await page.waitForTimeout(150) }
+        await page.mouse.up()
+        await page.waitForTimeout(500)
+        const waiting = page.waitForEvent('download', { timeout: 30000 })
+        await press()
+        const file = await waiting.catch(() => null)
+        if (!file) { fails.push(`record, ${label}: no video was saved (${await page.getByTestId('record-note').textContent()})`); await ctx.close(); continue }
+        const { readFileSync } = await import('node:fs')
+        const bytes = readFileSync(await file.path())
+        const webm = bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3
+        const named = /^blobscape-[a-z-]+-\d{8}-\d{6}\.webm$/.test(file.suggestedFilename())
+        // a video of one flat color is a few thousand bytes; a picture that turns is far more
+        if (!webm || !named || bytes.length < 20000) fails.push(`record, ${label}: ${JSON.stringify({ webm, name: file.suggestedFilename(), bytes: bytes.length })}`)
+        else ok(`record, ${label}: saved ${file.suggestedFilename()} (${(bytes.length / 1024).toFixed(0)} KB)`)
+        await ctx.close()
+      }
+    },
+  },
 ]

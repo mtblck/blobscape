@@ -64,8 +64,11 @@ const STALL = 8000
 
 /** An MP4 written a frame at a time, for pictures drawn as they are recorded (the sandbox's camera path). */
 export interface VideoWriter {
-  /** Adds the next frame: anything a 2D canvas can draw, already `width` by `height`. */
-  add(picture: CanvasImageSource): Promise<void>
+  /**
+   * Adds the next frame: anything a 2D canvas can draw, already `width` by `height`. `at` is when it is shown, in
+   * seconds from the start, for frames taken as they happen (the Record button); without it frames are `1 / fps` apart.
+   */
+  add(picture: CanvasImageSource, at?: number): Promise<void>
   /** The finished file. */
   finish(): Promise<Uint8Array>
 }
@@ -83,12 +86,15 @@ export async function startVideo(width: number, height: number, fps: number): Pr
   const encoder = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: (e) => { failed = e } })
   // soft blobs compress well: about a seventh of a bit a pixel a frame, at most 40 Mb/s
   encoder.configure({ codec: 'avc1.640034', width, height, bitrate: Math.min(40e6, width * height * fps * 0.15), framerate: fps, avc: { format: 'avc' } })
-  let n = 0
+  let n = 0, keyAt = -Infinity
   return {
-    async add(picture) {
+    async add(picture, at = n / fps) {
       if (failed) throw failed
-      const vf = new VideoFrame(picture, { timestamp: Math.round((n * 1e6) / fps), duration: Math.round(1e6 / fps) })
-      encoder.encode(vf, { keyFrame: n % (fps * 2) === 0 })
+      const vf = new VideoFrame(picture, { timestamp: Math.round(at * 1e6), duration: Math.round(1e6 / fps) })
+      // a key frame every two seconds
+      const key = at - keyAt >= 2 - 0.5 / fps
+      if (key) keyAt = at
+      encoder.encode(vf, { keyFrame: key })
       vf.close()
       n++
       // an encoder that stops answering (some browsers claim H.264 and never deliver) must not hang the page
