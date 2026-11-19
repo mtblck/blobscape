@@ -1,0 +1,1 @@
+Scene Creator: twelve kit pieces made by rules (walls, a fence, steps, an arch, columns, trees, a cactus, crystals, a boulder, a stump and a bush) join the library, and Props mode has packs that narrow the cards to a theme and set a whole pack down at once; an idea from Silicon Jungle's Ink Studio.

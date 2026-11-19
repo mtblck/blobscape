@@ -129,8 +129,8 @@ export default [
   },
   {
     name: 'scene-creator-props',
-    about: 'Scene Creator, Props: the giant turkey found by search and added to the windmill hill, another prop dragged onto the view, the land swapped under them; the counts and the picture follow, and undo takes each back',
-    entries: ['src/blobscape/SceneCreator.tsx', 'src/blobscape/creator/adding.ts', 'src/blobscape/creator/library.ts'],
+    about: 'Scene Creator, Props: the giant turkey found by search and added to the windmill hill, another prop dragged onto the view, the land swapped under them, a pack of kit pieces set down; the counts and the picture follow, and undo takes each back',
+    entries: ['src/blobscape/SceneCreator.tsx', 'src/blobscape/creator/adding.ts', 'src/blobscape/creator/library.ts', 'src/blobscape/creator/packs.ts', 'src/blobscape/creator/kit.ts'],
     async run({ shots, join, fails, ok, open, axe }) {
       const c = await open('/scene-creator/?offscreen=1&detail=chunky&mode=props', { viewport: { width: 1280, height: 900 } })
       const p = c.page
@@ -176,15 +176,26 @@ export default [
         ['props keep their places', swapped.props.every((x, i) => x.at[0] === dropped.props[i].at[0] && x.at[2] === dropped.props[i].at[2])],
         ['picture follows the land', differ(withTurkey, onTurf) > 200])
       await p.screenshot({ path: join(shots, 'blobscape-scene-creator-props-land.png') })
-      // undo takes the land, the drop and the turkey back
-      await p.getByTestId('creator-undo').click(); await p.getByTestId('creator-undo').click(); await p.getByTestId('creator-undo').click()
+      // a pack of kit pieces narrows the cards to it and sets the whole of it down in one step
+      await p.getByRole('group', { name: 'Packs' }).getByRole('button', { name: 'Old ruins' }).click()
+      const packCards = await p.locator('[data-testid^=creator-card-]').count()
+      await p.getByTestId('creator-pack-add').click()
+      await ready()
+      const packed = await state(), withPack = await picture()
+      const kit = packed.props.slice(swapped.props.length).map((x) => x.prop)
+      steps.push(['pack narrows the cards', packCards === 6],
+        ['pack set down', kit.length === 6 && kit.every((id) => id.startsWith('kit-'))],
+        ['picture follows the pack', differ(onTurf, withPack) > 40])
+      await p.screenshot({ path: join(shots, 'blobscape-scene-creator-pack.png') })
+      // undo takes the pack, the land, the drop and the turkey back
+      for (let i = 0; i < 4; i++) await p.getByTestId('creator-undo').click()
       await ready()
       const back = await state()
       steps.push(['undone', back.land === start.land && JSON.stringify(back.props) === JSON.stringify(start.props)])
       const room = await p.getByTestId('creator-room').innerText().catch(() => '')
       const bad = steps.filter(([, good]) => !good).map(([name]) => name)
       if (bad.length) fails.push(`blobscape scene creator props: ${bad.join(', ')} failed ${JSON.stringify({ start: start.props.length, turkey: turkey.props.length, dropped: dropped.props.length, land: swapped.land, room })}`)
-      else ok(`blobscape scene creator props: the turkey found and added to the windmill hill, a haystack dropped on the view, the land swapped to turf, counts and picture following, and all undone ("${room}")`)
+      else ok(`blobscape scene creator props: the turkey found and added to the windmill hill, a haystack dropped on the view, the land swapped to turf, the old ruins pack set down, counts and picture following, and all undone ("${room}")`)
     },
   },
   {

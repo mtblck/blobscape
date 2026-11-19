@@ -30,6 +30,15 @@ import { STYLES, isPixelStyle, styleAsked, styleWords, type Style } from './dior
 import { GLITCH_START, glitchLook, type GlitchChoice } from './glitchLooks.ts'
 import { GlitchControls } from './diorama/GlitchControls.tsx'
 import { useDrawnLook, wantsPlain } from './drawnLook.tsx'
+import { download } from './files.ts'
+import { blocksToMesh } from '../splat-engine/blockMesh.ts'
+import { TRANSITIONS, type TransitionKind } from '../splat-core/transition.ts'
+import { TransitionOverlay } from './diorama/transitionOverlay.ts'
+import { watchDraws } from '../splat-core/drawn.ts'
+import { paintView } from '../shared/record.ts'
+import { blobsToMesh } from '../splat-engine/mesh.ts'
+import { recordClip, writeRiggedMeshGlb } from '../splat-engine/glb.ts'
+import { Skeleton as Bones } from '../splat-engine/rig.ts'
 
 const SIZES = [2, 3, 4, 6]
 /** Frames a second the scene moves at: 0 is every frame the screen shows. */
@@ -125,6 +134,20 @@ export function PixelDiorama() {
   const [view, setView] = useState(diorama.views[0].id)
   const [orbit, setOrbit] = useState<Orbit>(diorama.views[0].orbit)
   const [art, setArt] = useState<{ width: number; height: number }>()
+  /** The 3D model export: blocks on the scene's grid (and how many grid cells a block is) or a smooth surface. */
+  const [modelShape, setModelShape] = useState<'blocks' | 'smooth'>('blocks')
+  const [blockSize, setBlockSize] = useState(2)
+  const [glbNote, setGlbNote] = useState('')
+  const [modelBusy, setModelBusy] = useState(false)
+  /** How one scene gives way to the next (`splat-core/transition.ts`), or a plain cut; never under reduced motion. */
+  const [transition, setTransition] = useState<TransitionKind | 'cut'>(() => {
+    const q = new URLSearchParams(location.search).get('transition')
+    return q === 'cut' ? 'cut' : TRANSITIONS.find((t) => t.id === q)?.id ?? TRANSITIONS[0].id
+  })
+  const changing = useRef<{ stop: () => void; sheet: HTMLCanvasElement; got: boolean } | null>(null)
+  const overlayCanvas = useRef<HTMLCanvasElement>(null)
+  const overlayOf = useRef<TransitionOverlay | null>(null)
+  const [passing, setPassing] = useState(false)
 
   // built after a paint, so the waiting mark shows first
   const [made, setScene] = useState<{ built: Built; of: Diorama; detail: string; paint: string; plain: boolean }>()
@@ -228,6 +251,7 @@ export function PixelDiorama() {
       setDither(d.finish.dither); setGlow(d.finish.glow); setOutline(d.finish.outline); setEdges(d.finish.edges); setSky(d.finish.sky)
       setBands(d.finish.bands ?? 0); setHeat(d.finish.heat ?? 0); setSelout(!!d.finish.selout)
       setView(d.views[0].id); setOrbit(d.views[0].orbit)
+      arrive.current()
     }
     stage.setPoser((sk: Skeleton, t: number) => {
       d.pose(sk, t)
@@ -355,6 +379,34 @@ export function PixelDiorama() {
   const exportNote = touring ? 'Close How it\'s made to save a frame or export the loop.' : note
   const cantExport = !!touring || !drawn || exporting.busy
 
+  /**
+   * Saves the scene as polygons in a rigged .glb: blocks on the grid it was cut on (or a smooth surface round it),
+   * colored as it is painted, on its bones, with one loop as its animation. An idea from Silicon Jungle's Ink Studio.
+   */
+  const saveModel = () => {
+    if (!scene || modelBusy) return
+    setModelBusy(true)
+    setGlbNote('Making the model…')
+    // a moment for the note to show: the mesh is made in one go
+    setTimeout(() => {
+      try {
+        const { built, of } = scene
+        const spacing = DETAIL.find((d) => d.id === scene.detail)!.spacing
+        const mesh = modelShape === 'blocks' ? blocksToMesh(built.blobs, built.skin, { cell: spacing * blockSize }) : blobsToMesh(built.blobs, built.skin, { cells: 140, level: 1 })
+        const sk = new Bones(built.skeleton.bones)
+        const clip = recordClip('loop', sk, (k, t) => of.pose(k, t), of.loop, 24)
+        const bytes = writeRiggedMeshGlb({ name: of.label, mesh, skeleton: sk, clips: [clip] })
+        download(bytes, `${of.id}-${modelShape}.glb`, 'model/gltf-binary')
+        setGlbNote(`Saved ${mesh.triangleCount.toLocaleString()} triangles with ${sk.count} bones and its ${of.loop} second loop: ${kilobytes(bytes.length)}.`)
+      } catch (e) {
+        console.warn(e)
+        setGlbNote(`The model could not be made: ${e instanceof Error ? e.message : String(e)}`)
+      } finally {
+        setModelBusy(false)
+      }
+    }, 30)
+  }
+
   const drag = useRef<OrbitDrag | null>(null)
   const pointers = useRef(new Map<number, { x: number; y: number }>())
   /** Where and when a press began, so a short press that hardly moves pokes instead of orbiting. */
@@ -375,10 +427,76 @@ export function PixelDiorama() {
     else url.searchParams.set('style', id)
     history.replaceState(history.state, '', url)
   }
+  /**
+   * Keeps a copy of each picture the old scene draws until the new one arrives, so the transition can start from its
+   * last moment (a GPU canvas can only be read straight after a draw).
+   */
+  const keepLastFrame = () => {
+    if (transition === 'cut' || calm || !drawn || changing.current || !canvas.current) return
+    const cv = canvas.current, box = cv.parentElement!
+    const sheet = document.createElement('canvas')
+    sheet.width = cv.width
+    sheet.height = cv.height
+    const ctx = sheet.getContext('2d', { alpha: false })!
+    const kept = { sheet, got: false, stop: () => {} }
+    const copy = () => {
+      if (sheet.width < 2) return
+      paintView(ctx, box, sheet.width, sheet.height, (el) => (el === overlayCanvas.current ? undefined : el))
+      kept.got = true
+    }
+    // drawn off screen, the page's canvas is a plain one that holds its picture: it is copied as the new scene arrives
+    kept.stop = offscreen ? copy : watchDraws((drawnTo) => { if (drawnTo === cv) copy() })
+    changing.current = kept
+    stage?.invalidate()
+  }
+  /** The new scene is in the view: the old picture gives way to it. */
+  const arrive = useRef<() => void>(() => {})
+  arrive.current = () => {
+    const kept = changing.current
+    changing.current = null
+    if (!kept) return
+    kept.stop()
+    const t = TRANSITIONS.find((x) => x.id === transition)
+    const el = overlayCanvas.current
+    if (!t || !kept.got || !el || !stage) return
+    let overlay: TransitionOverlay
+    try { overlay = overlayOf.current ??= new TransitionOverlay(el) } catch (e) { console.warn(e); return }
+    overlay.setFrom(kept.sheet)
+    // an art pixel in device pixels, so pixel art's transitions keep to its own pixels
+    const cell = pixels && stage.artSize ? Math.max(1, Math.round(kept.sheet.width / stage.artSize.width)) : Math.max(1, Math.round(6 * devicePixelRatio))
+    const dark = colors.length ? darkest(colors) : [11, 16, 38]
+    const cover: [number, number, number] = [dark[0] / 255, dark[1] / 255, dark[2] / 255]
+    const seed = Math.floor(Math.random() * 1000)
+    overlay.draw(t, 0, cell, cover, seed)
+    // shown at once, before the stage draws the new scene
+    el.hidden = false
+    setPassing(true)
+    // it starts once the new scene has been drawn, so it opens onto the scene and not onto a blank view
+    void (offscreen ? Promise.resolve() : stage.shown()).then(() => {
+      // off screen it keeps the stage's clock, which moves only as a check draws, so a check sees it go by
+      const now = () => (offscreen ? stage.time : performance.now() / 1000)
+      const start = now()
+      const step = () => {
+        const p = Math.min(1, Math.max(0, now() - start) / t.seconds)
+        overlay.draw(t, p, cell, cover, seed)
+        if (p < 1) requestAnimationFrame(step)
+        else { el.hidden = true; setPassing(false) }
+      }
+      requestAnimationFrame(step)
+    })
+  }
+  const pickTransition = (id: TransitionKind | 'cut') => {
+    setTransition(id)
+    const url = new URL(location.href)
+    if (id === TRANSITIONS[0].id) url.searchParams.delete('transition')
+    else url.searchParams.set('transition', id)
+    history.replaceState(history.state, '', url)
+  }
   /** Another scene. It is cut first; its palette, finish and view follow when it reaches the view. */
   const show = (id: string) => {
     if (id === which) return
     setWhich(id)
+    keepLastFrame()
     setNote('')
     // the address names the scene, so a reload or a shared link opens the same one (an opened model can't be)
     const url = new URL(location.href)
@@ -510,6 +628,7 @@ export function PixelDiorama() {
                   setOrbit((o) => orbitKey(ev, o) ?? o)
                 }}
               />
+              <canvas ref={overlayCanvas} aria-hidden hidden={!passing} className="pointer-events-none absolute inset-0 h-full w-full" data-testid="diorama-transition" />
               {loading && <LoadingMark testid="diorama-loading" />}
               <p role="status" className="sr-only">{loading ? loadingLabel : ''}</p>
               {failed && <div role="alert" className="absolute inset-4 grid place-items-center text-center text-sm text-ink">{failed}</div>}
@@ -541,6 +660,13 @@ export function PixelDiorama() {
                     </Button>
                   </div>
                 </div>
+                <Field label="Changing scenes">
+                  <div className="flex flex-wrap gap-1.5" data-testid="diorama-transitions">
+                    <Chip active={transition === 'cut'} onClick={() => pickTransition('cut')}>Cut</Chip>
+                    {TRANSITIONS.map((t) => <Chip key={t.id} active={transition === t.id} onClick={() => pickTransition(t.id)}>{t.name}</Chip>)}
+                  </div>
+                  <p className="mt-1.5 text-xs text-ink-faint">{calm ? 'Your device asks for less motion, so scenes change with a cut.' : 'How the last scene gives way to the next. An idea from Silicon Jungle\'s Ink Studio.'}</p>
+                </Field>
                 <div className="grid gap-2">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <Button small disabled={opening} onClick={() => modelInput.current?.click()}>{opening ? 'Opening…' : 'Open a file'}</Button>
@@ -652,6 +778,25 @@ export function PixelDiorama() {
                 </div>
                 <p role="status" className="text-xs text-ink-faint empty:-mt-2">{exportNote}</p>
                 <p className="text-xs text-ink-faint">The loop is exported from the view as it is when you press the button. It rocks only if Rock the view is on in the Finish tab, and turning or zooming while it runs changes nothing. For a clip of whatever you do on the page, use the record button on the view.</p>
+                </div>
+                <div className="grid gap-3" data-testid="diorama-glb">
+                  <Field label="3D model">
+                    <div className="flex flex-wrap gap-1.5">
+                      <Chip active={modelShape === 'blocks'} onClick={() => setModelShape('blocks')}>Blocks</Chip>
+                      <Chip active={modelShape === 'smooth'} onClick={() => setModelShape('smooth')}>Smooth</Chip>
+                    </div>
+                  </Field>
+                  {modelShape === 'blocks' && <Field label="Block size">
+                    <div className="flex flex-wrap gap-1.5">
+                      {[1, 2, 4].map((n) => <Chip key={n} active={blockSize === n} onClick={() => setBlockSize(n)}>{n === 1 ? 'One cell' : `${n} cells`}</Chip>)}
+                    </div>
+                    <p className="mt-1.5 text-xs text-ink-faint">How many cells of the grid the scene was cut on make one block. Bigger blocks make a smaller file.</p>
+                  </Field>}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <Button small disabled={cantExport || !scene || modelBusy} onClick={saveModel} data-testid="diorama-glb-save">Save as a 3D model (.glb)</Button>
+                  </div>
+                  <p role="status" className="text-xs text-ink-faint empty:hidden">{glbNote}</p>
+                  <p className="text-xs text-ink-faint">Polygons for a game engine or a 3D app, at the detail on show: colored as the scene is painted, light and shade included, for an unlit material, on the scene's bones with one loop as its animation. Live lights, the sky, water and the style stay behind. An idea from Silicon Jungle's Ink Studio.</p>
                 </div>
               </div>
             ),
