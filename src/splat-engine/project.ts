@@ -59,6 +59,90 @@ export interface SceneProject {
   camera?: Orbit
   /** How it is drawn: a style's id (Pixel Diorama's `STYLES`) and its settings, kept as the page gives them. */
   style?: { id: string; settings?: Record<string, unknown> }
+  /** The light, sky and air, where they differ from the land's own. */
+  light?: ProjectLight
+}
+
+/**
+ * A project's light, each left out where the land's own stands. The sun is baked into the cut (so a change cuts again)
+ * unless it is `live`: then everything is cut unlit and the sun, the moon and the sky's own light shine live at the
+ * hour (`daylight`), with shadows where the device draws them. Lamps are always live, so they move without a cut.
+ */
+export interface ProjectLight {
+  /** The baked sun: `turn` degrees round from +z (counterclockwise seen from above, as props turn) and `height` degrees up. */
+  sun?: { turn: number; height: number }
+  /** How much light reaches what the sun doesn't: 0 to 1. */
+  shade?: number
+  /** The sky behind, top and bottom. */
+  sky?: [string, string]
+  /** The sun live, at this hour of the day (0 to 24). */
+  live?: { hour: number }
+  /** Lamps the visitor set down, at most `MAX_PROJECT_LAMPS`. */
+  lamps?: LightDoc[]
+  /** How strongly glowing things light what is round them and shine in the picture, as Pixel Diorama's Glow (0 to 4): the land's own when left out. */
+  glow?: number
+  /** Far things fade into the sky's lower color, total this far past the view's target; 0 is clear air. */
+  haze?: number
+  /** Rain, snow or leaves falling over the land and lying where they land. */
+  weather?: 'rain' | 'snow' | 'leaves'
+}
+
+/** Most lamps a project may add of its own. */
+export const MAX_PROJECT_LAMPS = 8
+
+const RAD = 180 / Math.PI
+
+/** The way toward a sun `turn` degrees round from +z and `height` degrees up. */
+export const sunFrom = (turn: number, height: number): Vec3 => {
+  const t = turn / RAD, h = height / RAD
+  return [Math.sin(t) * Math.cos(h), Math.sin(h), Math.cos(t) * Math.cos(h)]
+}
+
+/** A description's sun as a turn and a height, the default `light.from` when it has none. */
+export function sunOf(from: Vec3 = [0.45, 0.8, 0.4]): { turn: number; height: number } {
+  const len = Math.hypot(from[0], from[1], from[2]) || 1
+  return { turn: Math.round(Math.atan2(from[0], from[2]) * RAD), height: Math.round(Math.asin(Math.max(-1, Math.min(1, from[1] / len))) * RAD) }
+}
+
+/** What of a project's light the cut depends on: the lamps, the glow and a live sun's hour change nothing that is cut. */
+export const cutLight = (l: ProjectLight | undefined) => (l ? { sun: l.sun, shade: l.shade, sky: l.sky, live: !!l.live, haze: l.haze, weather: l.weather } : undefined)
+
+/**
+ * The land's description under a project's light: its sun, shade and sky, unlit for a live sun, with haze and weather
+ * in its air. Props are cut under the land's light, so they follow it.
+ */
+export function litLand(doc: SceneDoc, l: ProjectLight | undefined): SceneDoc {
+  if (!l) return doc
+  const light = { ...doc.light }
+  if (l.live) Object.assign(light, { from: [0, 1, 0] as Vec3, ambient: 1, shadow: 0, ramp: 0 })
+  else {
+    if (l.sun) light.from = sunFrom(l.sun.turn, Math.max(2, l.sun.height))
+    if (l.shade !== undefined) light.ambient = l.shade
+  }
+  const sky = l.sky ?? doc.sky
+  const air = { ...doc.air }
+  if (l.haze !== undefined) air.haze = l.haze > 0 ? { color: sky?.[1] ?? '#c8d0dc', from: 0, to: l.haze } : undefined
+  if (l.weather) {
+    // in place of any weather the land has, within the 300 specks a scene may hold
+    const kept = (air.specks ?? []).filter((x) => x.kind !== 'rain' && x.kind !== 'snow' && x.kind !== 'leaves').slice(0, 7)
+    const left = 300 - kept.reduce((n, x) => n + x.count, 0)
+    const w = weatherOf(l.weather, doc.camera)
+    air.specks = left >= 10 ? [...kept, { ...w, count: Math.min(w.count, left) }] : kept
+  }
+  return { ...doc, light, sky, air }
+}
+
+const WEATHER: Record<NonNullable<ProjectLight['weather']>, { count: number; colors: string[] }> = {
+  rain: { count: 140, colors: ['#9fb4d0', '#c4d4e8'] },
+  snow: { count: 120, colors: ['#ffffff', '#e6eef8'] },
+  leaves: { count: 40, colors: ['#c8642a', '#e0a030', '#a83c20'] },
+}
+
+/** A swarm of rain, snow or leaves over the view's middle, falling onto whatever stands there. */
+function weatherOf(kind: NonNullable<ProjectLight['weather']>, camera: Orbit) {
+  const [x, y, z] = camera.target, r = Math.max(0.8, camera.distance * 0.45)
+  const w = WEATHER[kind]
+  return { kind, count: w.count, colors: w.colors, from: [x - r, y - 1, z - r] as Vec3, to: [x + r, y + 1.6, z + r] as Vec3, land: true, wind: kind === 'rain' ? [0.15, 0.05] as [number, number] : undefined }
 }
 
 /** Most props in one project: each is an actor of its own while editing, and frames slow down as they are added (#330). */
@@ -357,8 +441,31 @@ export function checkProject(x: unknown, known: (id: string) => boolean): string
     const c = x.camera
     if (!isObj(c) || !isVec(c.target) || [c.distance, c.azimuth, c.elevation].some((n) => typeof n !== 'number' || !Number.isFinite(n))) bad('camera', 'must be { target, distance, azimuth, elevation }')
   }
+  if (x.light !== undefined) checkLight(x.light, bad)
   if (x.style !== undefined && (!isObj(x.style) || typeof x.style.id !== 'string' || (x.style.settings !== undefined && !isObj(x.style.settings)))) bad('style', 'must be { id, settings }')
   return errs
+}
+
+const HEX = /^#[0-9a-f]{6}$/i
+function checkLight(l: unknown, bad: (at: string, what: string) => void) {
+  if (!isObj(l)) return bad('light', 'must be an object')
+  const num = (v: unknown, at: string, lo: number, hi: number) => { if (v !== undefined && (typeof v !== 'number' || !(v >= lo && v <= hi))) bad(at, `must be ${lo} to ${hi}`) }
+  if (l.sun !== undefined) { if (!isObj(l.sun)) bad('light.sun', 'must be { turn, height }'); else { num(l.sun.turn, 'light.sun.turn', -180, 180); num(l.sun.height, 'light.sun.height', 0, 90) } }
+  num(l.shade, 'light.shade', 0, 1)
+  if (l.sky !== undefined && !(Array.isArray(l.sky) && l.sky.length === 2 && l.sky.every((c) => typeof c === 'string' && HEX.test(c)))) bad('light.sky', 'must be two colors like "#88aadd"')
+  if (l.live !== undefined) { if (!isObj(l.live)) bad('light.live', 'must be { hour }'); else num(l.live.hour, 'light.live.hour', 0, 24) }
+  num(l.glow, 'light.glow', 0, 4)
+  num(l.haze, 'light.haze', 0, 16)
+  if (l.weather !== undefined && !['rain', 'snow', 'leaves'].includes(l.weather as string)) bad('light.weather', 'must be rain, snow or leaves')
+  if (l.lamps !== undefined) {
+    if (!Array.isArray(l.lamps) || l.lamps.length > MAX_PROJECT_LAMPS) bad('light.lamps', `must be a list of at most ${MAX_PROJECT_LAMPS}`)
+    else l.lamps.forEach((m, i) => {
+      const at = `light.lamps[${i}]`
+      if (!isObj(m) || !isVec(m.at) || typeof m.color !== 'string' || !HEX.test(m.color)) return bad(at, 'must be { at, color, strength, range }')
+      num(m.strength, `${at}.strength`, 0, 8); num(m.range, `${at}.range`, 0.01, 20)
+      if (m.flicker !== undefined && (!isObj(m.flicker) || typeof m.flicker.by !== 'number' || !Number.isInteger(m.flicker.times))) bad(`${at}.flicker`, 'must be { by, times }')
+    })
+  }
 }
 
 /** A project file's text read and checked: the project, or what is wrong with it. */
@@ -392,7 +499,7 @@ export function compileProject(project: SceneProject, find: (id: string) => Prop
     return p
   }
   const landProp = get(project.land, 'land')
-  const land = { prop: landProp, c: compileScene(refit(landProp.doc, project.loop)) }
+  const land = { prop: landProp, c: compileScene(refit(litLand(landProp.doc, project.light), project.loop)) }
   const props = project.props.map((placed, i) => {
     const prop = get(placed.prop, `props[${i}]`)
     const c = compileScene(refit(prop.doc, project.loop), { puffs: false })

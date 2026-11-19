@@ -4316,6 +4316,16 @@
        "code": "compileScene(doc: SceneDoc, options?: { puffs?: boolean }): CompiledScene"
       }
      ]
+    },
+    {
+     "name": "lightsAt",
+     "kind": "function",
+     "doc": "Described lights as they shine `u` of the way through the loop (0 to 1): flickering, going round, coming and going.",
+     "signatures": [
+      {
+       "code": "lightsAt(lights: readonly LightDoc[], u: number): PointLight[]"
+      }
+     ]
     }
    ]
   },

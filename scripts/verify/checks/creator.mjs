@@ -186,4 +186,65 @@ export default [
       else ok(`blobscape scene creator props: the turkey found and added to the windmill hill, a haystack dropped on the view, the land swapped to turf, counts and picture following, and all undone ("${room}")`)
     },
   },
+  {
+    name: 'scene-creator-light',
+    about: 'Scene Creator, Light: turning the baked sun changes the lit side, a live sun at night darkens the scene and a lamp brightens what is round it, on both backends, each step undone',
+    entries: ['src/blobscape/SceneCreator.tsx', 'src/blobscape/creator/lighting.ts', 'src/splat-engine/project.ts'],
+    async run({ shots, join, fails, ok, open, axe }) {
+      for (const webgl of [false, true]) {
+        const tag = webgl ? 'WebGL' : 'WebGPU'
+        const c = await open(`/scene-creator/?offscreen=1&detail=chunky&mode=light${webgl ? '&webgl=1' : ''}`, { viewport: { width: 1280, height: 900 } })
+        const p = c.page
+        const ready = () => p.waitForFunction(() => window.__creator?.ready(), null, { timeout: 180000 }).then(() => true, () => false)
+        if (!(await ready())) { fails.push(`blobscape scene creator light (${tag}): the windmill never opened`); continue }
+        // the picture, small; and how bright it is round a point of the view (CSS pixels)
+        const picture = () => p.evaluate(async () => {
+          const s = window.__creator.stage
+          await s.frame(1); await s.frame(1)
+          const cv = document.querySelector('[data-testid=creator-view]')
+          const t = document.createElement('canvas'); t.width = cv.clientWidth; t.height = cv.clientHeight
+          const g = t.getContext('2d', { willReadFrequently: true }); g.drawImage(cv, 0, 0, t.width, t.height)
+          return { w: t.width, h: t.height, px: Array.from(g.getImageData(0, 0, t.width, t.height).data) }
+        })
+        const differ = (a, b) => { let n = 0; for (let i = 0; i < a.px.length; i += 16) if (Math.abs(a.px[i] - b.px[i]) + Math.abs(a.px[i + 1] - b.px[i + 1]) + Math.abs(a.px[i + 2] - b.px[i + 2]) > 30) n++; return n }
+        const around = (f, x, y, r = 60) => { let sum = 0, n = 0; for (let j = Math.max(0, y - r); j < Math.min(f.h, y + r); j += 2) for (let i = Math.max(0, x - r); i < Math.min(f.w, x + r); i += 2) { const k = (j * f.w + i) * 4; sum += f.px[k] + f.px[k + 1] + f.px[k + 2]; n++ } return sum / n / 3 }
+        const light = () => p.evaluate(() => window.__creator.light())
+        const steps = []
+        const first = await picture()
+        // the baked sun turned round: cut again, and the lit side changes
+        const sunFrom = p.getByRole('slider', { name: 'Sun from' })
+        await sunFrom.focus(); await sunFrom.press('Home')
+        await p.waitForTimeout(400); await ready()
+        const turned = await picture()
+        steps.push(['sun turns', (await light())?.sun?.turn === -180 && differ(first, turned) > 400])
+        // a live sun at night: the picture goes dark
+        await p.getByRole('button', { name: 'Live, by the hour' }).click()
+        const hour = p.getByRole('slider', { name: 'Time of day' })
+        await hour.focus(); await hour.press('Home')
+        await p.waitForTimeout(400); await ready()
+        const night = await picture()
+        const mid = (f) => around(f, Math.round(f.w / 2), Math.round(f.h * 0.55), 200)
+        steps.push(['night falls', (await light())?.live?.hour === 0 && mid(night) < mid(turned) - 8])
+        // a lamp, set down in the middle of the view, lights what is round it
+        await p.getByTestId('creator-add-lamp').click()
+        const strength = p.getByRole('slider', { name: 'Strength' })
+        await strength.focus(); await strength.press('End')
+        const reach = p.getByRole('slider', { name: 'Reach' })
+        await reach.focus(); await reach.press('End')
+        await p.waitForTimeout(200)
+        const lamp = await p.evaluate(() => window.__creator.lampAt(0))
+        const lampLit = await picture()
+        const lx = Math.round(lamp?.x ?? 0), ly = Math.round(lamp?.y ?? 0)
+        steps.push(['lamp lights round it', !!lamp && around(lampLit, lx, ly) > around(night, lx, ly) + 6])
+        await p.screenshot({ path: join(shots, `blobscape-scene-creator-light${webgl ? '-webgl' : ''}.png`) })
+        if (!webgl) await axe(p, 'blobscape scene creator light')
+        // undo takes it all back
+        for (let k = 0; k < 6; k++) await p.getByTestId('creator-undo').click().catch(() => {})
+        steps.push(['undone', (await light()) === undefined])
+        const bad = steps.filter(([, good]) => !good).map(([name]) => name)
+        if (bad.length) fails.push(`blobscape scene creator light (${tag}): ${bad.join(', ')} failed ${JSON.stringify({ diff: differ(first, turned), mid: [mid(turned), mid(night)], lamp: lamp && [around(night, lx, ly), around(lampLit, lx, ly)] })}`)
+        else ok(`blobscape scene creator light (${tag}): the turned sun changes the lit side, a live night darkens it, a lamp lights what is round it, all undone`)
+      }
+    },
+  },
 ]

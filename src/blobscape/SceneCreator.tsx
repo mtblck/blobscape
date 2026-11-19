@@ -4,7 +4,8 @@ import type { Vec3 } from '../splat-core/blobs.ts'
 import { STEADY, darkest, type PixelLook } from '../splat-core/pixel.ts'
 import type { Built } from '../splat-engine/body.ts'
 import { pickActors } from '../splat-engine/pick.ts'
-import { PlacedPoser, SIZE_RANGE, compileProject, type Placement, type SceneProject } from '../splat-engine/project.ts'
+import { MAX_PROJECT_LAMPS, PlacedPoser, SIZE_RANGE, compileProject, cutLight, type Placement, type ProjectLight, type SceneProject } from '../splat-engine/project.ts'
+import type { Light, PointLight } from '../splat-engine/engine.ts'
 import type { Skeleton } from '../splat-engine/rig.ts'
 import type { Shape } from '../splat-engine/voxel.ts'
 import { LoadingMark } from '../shared/BlobLoader.tsx'
@@ -21,6 +22,8 @@ import { unpack, type PackedCut } from './creator/pack.ts'
 import { START_LANDS, START_SCENES, openingAsked, openingLand, openingScene, queryFor, shownOf, type Opened } from './creator/shown.ts'
 import { BLOB_ROOM, CARDS, added, cardsFound, groundOf, heightAt, landSwapped, liftOn, roomOf, whyNot } from './creator/adding.ts'
 import { libraryProp, type LibraryEntry } from './creator/library.ts'
+import { budget, clock, lampAdded, lampLights, lampRemoved, lit, liveSky, liveSkyColors, rgbOf, shadeNow, sunNow } from './creator/lighting.ts'
+import { castBy, glowGain } from './diorama/glow.ts'
 import { arrowWay, begin, copied, did, moved, onGround, redo, redrawn, removed, sized, stepFor, stilled, turned, undo, wrapTurn, type History } from './creator/arrange.ts'
 
 /**
@@ -38,7 +41,7 @@ const MODES: Mode<CreatorMode>[] = [
   { id: 'scene', name: 'Scene', note: 'Start from one of the scenes or a bare land.', icon: 'M3 5h18v14H3zM3 16l5-5 4 4 3-3 6 6' },
   { id: 'props', name: 'Props', note: 'Tap a card to set it down in the middle of the view, or drag it onto the view. A land swaps what everything stands on.', icon: 'M4 7l8-4 8 4-8 4zM4 7v10l8 4 8-4V7M12 11v10' },
   { id: 'arrange', name: 'Arrange', note: 'Tap a prop in the view, or pick one below, then move, turn and size it. Drag it along the ground to move it.', icon: 'M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3' },
-  { id: 'light', name: 'Light', note: 'The sun, the sky and lamps: coming next.', icon: 'M12 4V2M12 22v-2M4 12H2M22 12h-2M5.6 5.6 4.2 4.2M19.8 19.8l-1.4-1.4M5.6 18.4l-1.4 1.4M19.8 4.2l-1.4 1.4M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10z' },
+  { id: 'light', name: 'Light', note: 'The sun and sky, lamps, glow and air. A baked sun is cut into the scene, so changing it cuts again; a live sun moves its light and shadows as you drag.', icon: 'M12 4V2M12 22v-2M4 12H2M22 12h-2M5.6 5.6 4.2 4.2M19.8 19.8l-1.4-1.4M5.6 18.4l-1.4 1.4M19.8 4.2l-1.4 1.4M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10z' },
   { id: 'style', name: 'Style', note: 'Pixel art and the other looks: coming next.', icon: 'M12 3a9 9 0 1 0 0 18c1 0 1.5-.8 1.5-1.6 0-1.4-1-1.6-1-2.6 0-.8.6-1.3 1.5-1.3H16a5 5 0 0 0 5-5c0-4-4-7.5-9-7.5zM7.5 11h.01M10 7h.01M15 7h.01' },
   { id: 'export', name: 'Export', note: 'Save a picture, the loop or the project: coming next.', icon: 'M12 3v12M7 10l5 5 5-5M4 19h16' },
 ]
@@ -90,12 +93,16 @@ export function SceneCreator() {
   const [preview, setPreview] = useState<{ i: number; at: Placement }>()
   const [said, say] = useState('')
   const [version, setVersion] = useState(0)
+  // the light while a slider or a lamp is still being dragged, and the lamp picked
+  const [lightDraft, setLightDraft] = useState<ProjectLight>()
+  const lightNow = lightDraft ?? project?.light
+  const [lampPicked, setLampPicked] = useState<number>()
   const work = useRef<HTMLDivElement>(null)
   const canvas = useRef<HTMLCanvasElement>(null)
   useWorkspaceScreen(work)
   const pointers = useRef(new Map<number, { x: number; y: number }>())
   const drag = useRef<OrbitDrag | null>(null)
-  const grab = useRef<{ kind: 'move' | 'turn'; i: number; from: { x: number; y: number }; offset: [number, number]; turn0: number; angle0: number; moved: boolean } | null>(null)
+  const grab = useRef<{ kind: 'move' | 'turn' | 'lamp'; i: number; from: { x: number; y: number }; offset: [number, number]; turn0: number; angle0: number; moved: boolean } | null>(null)
   const press = useRef<{ x: number; y: number } | null>(null)
   const { full, toggle: toggleFull } = useFullScreen(work)
   const base = 'creator'
@@ -142,10 +149,11 @@ export function SceneCreator() {
   const pieces = useMemo<Piece[]>(() => {
     if (opened.kind === 'whole' || !project || !cp) return [{ key: `whole:${opened.kind === 'whole' ? opened.scene : ''}`, thing: 'whole', job: (spacing) => ({ kind: 'whole', scene: opened.kind === 'whole' ? opened.scene : '', spacing }) }]
     const steps = cp.land.c.steps ? cp.palette : null
-    const land = JSON.stringify([project.land, project.loop, steps])
+    const light = cutLight(project.light)
+    const land = JSON.stringify([project.land, project.loop, steps, light])
     return [
       { key: land, thing: 'land', job: (spacing) => ({ kind: 'land', project, spacing }) },
-      ...project.props.map((p, i): Piece => ({ key: JSON.stringify([p.prop, p.turn, p.size, project.loop, project.land, steps]), thing: JSON.stringify(p.prop), job: (spacing) => ({ kind: 'prop', project, i, spacing }) })),
+      ...project.props.map((p, i): Piece => ({ key: JSON.stringify([p.prop, p.turn, p.size, project.loop, project.land, steps, light]), thing: JSON.stringify(p.prop), job: (spacing) => ({ kind: 'prop', project, i, spacing }) })),
     ]
   }, [opened, project, cp])
 
@@ -228,8 +236,8 @@ export function SceneCreator() {
   // --- posing ---------------------------------------------------------------
 
   // what the poser reads each frame, kept current without rebuilding the stage
-  const live = useRef({ shown, chosen, project, preview, posers: new Map<string, PlacedPoser>() })
-  live.current = { ...live.current, shown, chosen, project, preview }
+  const live = useRef({ shown, chosen, project, preview, light: lightNow, posers: new Map<string, PlacedPoser>() })
+  live.current = { ...live.current, shown, chosen, project, preview, light: lightNow }
   /** Where prop `i` stands now: mid-gesture where it is going, else where the project says. */
   const placementOf = (i: number): Placement | undefined => (preview?.i === i ? preview.at : project?.props[i])
 
@@ -255,12 +263,19 @@ export function SceneCreator() {
           redrawn(b.skeleton, cut.at, now)
           b.skeleton.update()
         })
-        // lights from where everything stands now
-        const lights = [...cpNow.land.c.lights(t), ...cpNow.props.flatMap((p, i) => {
+        // lights from where everything stands now, the visitor's lamps, and glow as the Glow slider has it
+        const l = L.light
+        const points: PointLight[] = [...cpNow.land.c.lights(t), ...cpNow.props.flatMap((p, i) => {
           const now = L.preview?.i === i ? L.preview.at : L.project!.props[i]
           return now ? new PlacedPoser(p.c, p.prop.foot, now, L.project!.props[i].still).lights(t) : []
-        })]
-        stage.setLights(lights, 1)
+        }), ...lampLights(l, t, cpNow.loop)]
+        const own = L.shown.finish.glow
+        const lights: Light[] = castBy(points, glowGain(l?.glow ?? own, own))
+        if (l?.live) {
+          // the sun, the moon and the sky's own light at the hour, the sun casting shadows where the device draws them
+          const sky = liveSky(l.live.hour, stage.backend === 'webgpu')
+          stage.setLights([...sky.lights, ...lights], sky.ambient)
+        } else stage.setLights(lights, 1)
       } else {
         props.forEach((b, i) => L.shown.poseProp(i, b.skeleton, t))
         stage.setLights(L.shown.lights(t, stage.backend === 'webgpu'), L.shown.ambient)
@@ -269,12 +284,29 @@ export function SceneCreator() {
   }, [stage, built])
   useEffect(() => { stage?.invalidate() }, [stage, project, preview])
 
+  // a live sun paints the sky behind at its hour
+  const liveHour = lightNow?.live?.hour
+  const sky = useMemo<PixelLook['sky']>(() => {
+    if (liveHour === undefined) return shown.finish.sky || lightNow?.sky ? shown.sky : undefined
+    const [top, low] = liveSkyColors(liveSky(liveHour, false).sky)
+    return [rgbOf(top), rgbOf(low)]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveHour, shown.sky, shown.finish.sky, !!lightNow?.sky])
+  const glow = lightNow?.glow ?? shown.finish.glow
   const look = useMemo<PixelLook>(() => ({
-    palette: shown.palette, dither: shown.finish.dither, outline: shown.finish.outline ? darkest(shown.palette) : null, glow: shown.finish.glow,
-    edges: shown.finish.edges ? 1 : 0, parts: true, sky: shown.finish.sky ? shown.sky : undefined, steady: STEADY, tidy: true, fine: true, own: true,
-  }), [shown.palette, shown.finish, shown.sky])
+    palette: shown.palette, dither: shown.finish.dither, outline: shown.finish.outline ? darkest(shown.palette) : null, glow,
+    edges: shown.finish.edges ? 1 : 0, parts: true, sky, steady: STEADY, tidy: true, fine: true, own: true,
+  }), [shown.palette, shown.finish, sky, glow])
   useEffect(() => { stage?.setPixels(look, 2) }, [stage, look])
-  useEffect(() => { if (stage) { stage.orbit = orbit; stage.invalidate() } }, [stage, orbit])
+  useEffect(() => {
+    if (!stage) return
+    stage.orbit = orbit
+    // haze is measured from the view's target, so it stays put on the scene as the view moves in and out
+    const h = shown.haze
+    stage.setFog(h?.color ?? [0, 0, 0], h ? orbit.distance + h.from : 0, h ? orbit.distance + h.to : 0)
+    stage.invalidate()
+  }, [stage, orbit, shown.haze])
+  useEffect(() => { stage?.invalidate() }, [stage, lightNow])
   useWheelZoom(canvas, setOrbit)
 
   // --- the ground and arranging --------------------------------------------
@@ -372,8 +404,37 @@ export function SceneCreator() {
     edit(landSwapped(project, e.id, ground, to), `Everything now stands on ${e.name.toLowerCase()}.`)
   }
 
-  const doUndo = () => { if (hist?.past.length) { setHist(undo(hist)); setPreview(undefined); setPicked((p) => (p !== undefined && p < hist.past[hist.past.length - 1].props.length ? p : undefined)); say('Undone.') } }
-  const doRedo = () => { if (hist?.future.length) { setHist(redo(hist)); setPreview(undefined); setPicked((p) => (p !== undefined && p < hist.future[0].props.length ? p : undefined)); say('Redone.') } }
+  // --- light -----------------------------------------------------------------
+
+  /** A light change while a slider or a lamp is still moving: shown, not yet a step to undo. */
+  const draftLight = (change: Partial<ProjectLight>) => setLightDraft({ ...lightNow, ...change })
+  /** A light change made at once, one step to undo. */
+  const setLight = (change: Partial<ProjectLight>, words: string) => { if (project) { setLightDraft(undefined); edit(lit(project, { ...lightDraft, ...change }), words) } }
+  /** Ends a light gesture: what it was going to becomes the project. */
+  const commitLight = (words = 'Light changed.') => {
+    if (!lightDraft || !project) return
+    const next = lit(project, lightDraft)
+    setLightDraft(undefined)
+    edit(next, words)
+  }
+  const lamps = lightNow?.lamps ?? []
+  const lampsNow = (i: number, change: Partial<NonNullable<ProjectLight['lamps']>[number]>) => lamps.map((l, k) => (k === i ? { ...l, ...change } : l))
+  const addLamp = () => {
+    if (!project) return
+    const g = groundAtView()
+    const next = lampAdded(lightDraft ? lit(project, lightDraft) : project, [g[0], g[1] + 0.25, g[2]])
+    if (next === project) { say(`A scene takes ${MAX_PROJECT_LAMPS} lamps of its own at most.`); return }
+    setLightDraft(undefined)
+    edit(next, 'Added a lamp. Drag it in the view to move it.')
+    setLampPicked(next.light!.lamps!.length - 1)
+  }
+  const removeLamp = (i: number) => { if (project) { setLightDraft(undefined); edit(lampRemoved(project, i), 'Deleted the lamp.'); setLampPicked(undefined) } }
+  const lampLift = (i: number) => { const l = lamps[i]; return l ? Math.max(0, l.at[1] - groundAt(l.at[0], l.at[2], l.at[1] - 0.3)) : 0 }
+  /** On a light slider's box: dragging shows the change, letting go makes it one step to undo. */
+  const lightGesture = { onPointerUp: () => commitLight(), onKeyUp: () => commitLight(), onBlur: () => commitLight() }
+
+  const doUndo = () => { if (hist?.past.length) { setHist(undo(hist)); setPreview(undefined); setLightDraft(undefined); setPicked((p) => (p !== undefined && p < hist.past[hist.past.length - 1].props.length ? p : undefined)); say('Undone.') } }
+  const doRedo = () => { if (hist?.future.length) { setHist(redo(hist)); setPreview(undefined); setLightDraft(undefined); setPicked((p) => (p !== undefined && p < hist.future[0].props.length ? p : undefined)); say('Redone.') } }
 
   // the picked prop's ring on the ground and its turn handle, where the view shows them
   const pickedAt = picked !== undefined ? placementOf(picked) : undefined
@@ -451,7 +512,7 @@ export function SceneCreator() {
     if (!offscreen || !stage) return
     ;(window as unknown as { __creator: unknown }).__creator = {
       stage, items: () => shown.items, ready: () => !!done, blobs: () => (built ? built.reduce((n, b) => n + b.blobs.count, 0) : 0),
-      props: () => project?.props ?? [], land: () => project?.land, picked: () => picked, said: () => said,
+      props: () => project?.props ?? [], land: () => project?.land, light: () => lightNow, lampAt: (i: number) => { const l = lightNow?.lamps?.[i]; return l && stage.screenAt(l.at) }, picked: () => picked, said: () => said,
       // where a prop's blobs are on the view, in CSS pixels: the middle of those that stand above its foot
       screenOf: (i: number) => {
         const b = built?.[i + 1]
@@ -464,7 +525,7 @@ export function SceneCreator() {
         return stage.screenAt([sum[0] / n, sum[1] / n, sum[2] / n])
       },
     }
-  }, [offscreen, stage, shown, built, done, project, picked, said])
+  }, [offscreen, stage, shown, built, done, project, picked, said, lightNow])
 
   const blobs = lastBlobs.current
   const props = project?.props.length ?? 0
@@ -580,6 +641,80 @@ export function SceneCreator() {
                     {picked !== undefined && <p className="text-xs text-ink-faint">{nameOfProp(picked)} is picked: drag it in the view, or open Arrange to turn and size it.</p>}
                   </div>
                 )}
+                {m.id === 'light' && project && cp && (() => {
+                  const sun = sunNow(cp, lightNow), shade = shadeNow(cp, lightNow), b = budget(cp, lightNow)
+                  const skyNow = lightNow?.sky ?? cp.land.prop.doc.sky ?? ['#1a2440', '#5a6a8a']
+                  const lamp = lampPicked !== undefined ? lamps[lampPicked] : undefined
+                  return (
+                    <div className="space-y-4" data-testid="creator-light">
+                      <div>
+                        <h3 className="mb-2 text-sm font-semibold">Sun</h3>
+                        <div className="flex flex-wrap gap-2" role="group" aria-label="Sun">
+                          <Chip active={!lightNow?.live} onClick={() => setLight({ live: undefined }, 'The sun is baked into the scene.')}>Baked</Chip>
+                          <Chip active={!!lightNow?.live} onClick={() => setLight({ live: { hour: lightNow?.live?.hour ?? 15 } }, 'The sun shines live, at the time of day.')}>Live, by the hour</Chip>
+                        </div>
+                      </div>
+                      {lightNow?.live ? (
+                        <div {...lightGesture}>
+                          <Slider label="Time of day" value={lightNow.live.hour} min={0} max={24} step={0.25} format={clock} onChange={(v) => draftLight({ live: { hour: v } })}
+                            hint={stage?.backend === 'webgpu' ? 'The sun and moon cross the sky and their shadows move as you drag.' : 'The sun and moon cross the sky as you drag. This browser draws without shadows from them.'} />
+                        </div>
+                      ) : (
+                        <>
+                          <div {...lightGesture}>
+                            <Slider label="Sun from" value={sun.turn} min={-180} max={180} step={5} format={(v) => `${v}°`} onChange={(v) => draftLight({ sun: { ...sun, turn: v } })} />
+                          </div>
+                          <div {...lightGesture}>
+                            <Slider label="Sun height" value={sun.height} min={5} max={85} step={5} format={(v) => `${v}°`} onChange={(v) => draftLight({ sun: { ...sun, height: v } })} />
+                          </div>
+                          <div {...lightGesture}>
+                            <Slider label="Shade" value={Math.round(shade * 100) / 100} min={0} max={1} step={0.05} format={(v) => `${Math.round(v * 100)}%`} onChange={(v) => draftLight({ shade: v })} hint="How much light reaches what the sun doesn't." />
+                          </div>
+                          <div className="flex items-center gap-4 text-sm text-ink-muted">
+                            <span>Sky</span>
+                            <label className="flex items-center gap-1.5">Top <input type="color" value={skyNow[0]} onChange={(ev) => draftLight({ sky: [ev.target.value, skyNow[1]] })} onBlur={() => commitLight('Sky changed.')} className="h-8 w-10 cursor-pointer rounded border border-rule bg-paper" /></label>
+                            <label className="flex items-center gap-1.5">Bottom <input type="color" value={skyNow[1]} onChange={(ev) => draftLight({ sky: [skyNow[0], ev.target.value] })} onBlur={() => commitLight('Sky changed.')} className="h-8 w-10 cursor-pointer rounded border border-rule bg-paper" /></label>
+                          </div>
+                          {lightDraft && !lightDraft.live && <p className="text-xs text-ink-faint">The scene is cut again under the new sun once you let go.</p>}
+                        </>
+                      )}
+                      <div {...lightGesture}>
+                        <Slider label="Glow" value={glow} min={0} max={4} step={0.25} format={(v) => (v ? `${v.toFixed(2)}×` : 'off')} onChange={(v) => draftLight({ glow: v })} hint="How strongly lamps, fires and other glowing things light what is round them." />
+                      </div>
+                      <div>
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <h3 id="creator-lamps" className="text-sm font-semibold">Lamps</h3>
+                          <button type="button" onClick={addLamp} data-testid="creator-add-lamp" className="min-h-9 cursor-pointer rounded-full border border-rule bg-paper px-3 text-sm font-semibold hover:border-ink-faint">Add a lamp</button>
+                        </div>
+                        {lamps.length > 0 && (
+                          <ul aria-labelledby="creator-lamps" className="mb-3 flex flex-wrap gap-2">
+                            {lamps.map((l, i) => <li key={i}><Chip active={i === lampPicked} onClick={() => setLampPicked(i === lampPicked ? undefined : i)}><span className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: l.color }} aria-hidden />Lamp {i + 1}</Chip></li>)}
+                          </ul>
+                        )}
+                        {lamp && lampPicked !== undefined && (
+                          <div className="space-y-3" data-testid="creator-lamp">
+                            <label className="flex items-center gap-2 text-sm text-ink-muted">Color <input type="color" value={lamp.color} onChange={(ev) => draftLight({ lamps: lampsNow(lampPicked, { color: ev.target.value }) })} onBlur={() => commitLight('Lamp color changed.')} className="h-8 w-10 cursor-pointer rounded border border-rule bg-paper" /></label>
+                            <div {...lightGesture}><Slider label="Strength" value={lamp.strength} min={0.25} max={4} step={0.25} format={(v) => `${v.toFixed(2)}×`} onChange={(v) => draftLight({ lamps: lampsNow(lampPicked, { strength: v }) })} /></div>
+                            <div {...lightGesture}><Slider label="Reach" value={lamp.range} min={0.1} max={3} step={0.05} format={(v) => v.toFixed(2)} onChange={(v) => draftLight({ lamps: lampsNow(lampPicked, { range: v }) })} /></div>
+                            <div {...lightGesture}><Slider label="Height" value={Math.round(lampLift(lampPicked) * 100) / 100} min={0} max={1.5} step={0.05} format={(v) => v.toFixed(2)} onChange={(v) => { const at = lamp.at; draftLight({ lamps: lampsNow(lampPicked, { at: [at[0], groundAt(at[0], at[2], at[1] - lampLift(lampPicked)) + v, at[2]] }) }) }} /></div>
+                            <div {...lightGesture}><Slider label="Flicker" value={lamp.flicker?.by ?? 0} min={0} max={0.6} step={0.05} format={(v) => (v ? `${Math.round(v * 100)}%` : 'steady')} onChange={(v) => draftLight({ lamps: lampsNow(lampPicked, { flicker: v ? { by: v, times: 12 } : undefined }) })} /></div>
+                            <button type="button" onClick={() => removeLamp(lampPicked)} className="min-h-9 cursor-pointer rounded-full border border-rule bg-paper px-3 text-sm font-semibold hover:border-ink-faint">Delete lamp</button>
+                          </div>
+                        )}
+                        <p className="mt-2 text-xs tabular-nums text-ink-muted" data-testid="creator-light-budget">{b.live[0]} of {b.live[1]} live lights · {b.baked[0]} of {b.baked[1]} with baked shadows</p>
+                      </div>
+                      <div>
+                        <h3 className="mb-2 text-sm font-semibold">Air</h3>
+                        <div {...lightGesture}>
+                          <Slider label="Haze" value={lightNow?.haze ?? (cp.land.c.haze ? Math.round(cp.land.c.haze.to) : 0)} min={0} max={12} step={0.5} format={(v) => (v ? `${v.toFixed(1)} away` : 'clear')} onChange={(v) => draftLight({ haze: v })} hint="Far things fade into the sky; lower is thicker." />
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Weather">
+                          {([undefined, 'rain', 'snow', 'leaves'] as const).map((w) => <Chip key={w ?? 'none'} active={lightNow?.weather === w} onClick={() => setLight({ weather: w }, w ? `${w[0].toUpperCase()}${w.slice(1)} falling.` : 'Nothing falling.')}>{w ? `${w[0].toUpperCase()}${w.slice(1)}` : 'None'}</Chip>)}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })()}
                 {m.id === 'arrange' && project && (picked === undefined || !pickedAt ? (
                   <div>
                     <h3 id="creator-arrange-list" className="mb-2 text-sm font-semibold">Props</h3>
@@ -649,6 +784,13 @@ export function SceneCreator() {
                 const p = local(ev)
                 if (!g.moved && Math.hypot(p.x - g.from.x, p.y - g.from.y) < TAP) return
                 g.moved = true
+                if (g.kind === 'lamp') {
+                  // along the ground, keeping its height over it (kept in turn0)
+                  const l = lamps[g.i]
+                  const hit = l && groundFrom(p.x, p.y, l.at[1] - g.turn0)
+                  if (hit) draftLight({ lamps: lampsNow(g.i, { at: [hit[0], groundAt(hit[0], hit[2], l.at[1] - g.turn0) + g.turn0, hit[2]] }) })
+                  return
+                }
                 const now = placementOf(g.i)!
                 const hitG = groundFrom(p.x, p.y, now.at[1])
                 if (!hitG) return
@@ -666,7 +808,8 @@ export function SceneCreator() {
               pointers.current.delete(ev.pointerId)
               const g = grab.current, p = local(ev), was = press.current
               grab.current = null; drag.current = null; press.current = null
-              if (g?.moved) { commit(); return }
+              if (g?.moved) { if (g.kind === 'lamp') commitLight('Lamp moved.'); else commit(); return }
+              if (g?.kind === 'lamp') return
               // a tap picks the prop under it, or lets the picked one go
               if (was && Math.hypot(p.x - was.x, p.y - was.y) < TAP && project) {
                 const hit = hitProp(p.x, p.y)
@@ -695,6 +838,21 @@ export function SceneCreator() {
               <polyline points={ring.points} fill="none" stroke="#fff" strokeOpacity="0.9" strokeWidth="2" strokeDasharray="5 4" />
               {ring.middle && ring.handle && <line x1={ring.middle.x} y1={ring.middle.y} x2={ring.handle.x} y2={ring.handle.y} stroke="#fff" strokeOpacity="0.7" strokeWidth="1.5" />}
               {ring.handle && <circle cx={ring.handle.x} cy={ring.handle.y} r="9" fill="var(--c-blob)" stroke="#fff" strokeWidth="2" className="pointer-events-auto cursor-grab" onPointerDown={startTurn} data-testid="creator-turn-handle" />}
+            </svg>
+          )}
+          {mode === 'light' && stage && lamps.length > 0 && (
+            <svg className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden data-testid="creator-lamps">
+              {lamps.map((l, i) => {
+                const s = stage.screenAt(l.at, orbit)
+                if (!s) return null
+                return <circle key={i} cx={s.x} cy={s.y} r={i === lampPicked ? 11 : 9} fill={l.color} stroke={i === lampPicked ? 'var(--c-blob)' : '#fff'} strokeWidth="2.5" className="pointer-events-auto cursor-grab" data-testid={`creator-lamp-${i}`}
+                  onPointerDown={(ev) => {
+                    ev.stopPropagation()
+                    canvas.current!.setPointerCapture(ev.pointerId)
+                    setLampPicked(i)
+                    grab.current = { kind: 'lamp', i, from: local(ev), offset: [0, 0], turn0: lampLift(i), angle0: 0, moved: false }
+                  }} />
+              })}
             </svg>
           )}
           {waiting && <LoadingMark testid="creator-loading" />}
