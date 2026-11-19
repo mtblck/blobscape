@@ -3538,6 +3538,12 @@
        "doc": "How wide each surface disc is, as a share of the grid: 0.4 to 1, 0.55 when left out. Small discs keep paint\ncrisp but let about a tenth of what lies behind a surface show through; a subject whose far side or inner\nparts are much darker or lighter than its near side (a head over an open jaw) wants 0.75, as creatures use."
       },
       {
+       "name": "grid",
+       "optional": true,
+       "type": "number",
+       "doc": "The grid it is cut on, as a share of the detail's own: 0.5 to 1, 1 when left out. A small subject in a scene of\nopen water or sky (the lighthouse on its rock) takes a finer grid, so its bricks and windows get as many cells as\na bigger subject's would. It costs blobs: 0.72 is about twice as many."
+      },
+      {
        "name": "camera",
        "type": "Orbit & { swing?: number }",
        "doc": "Where the view starts. `swing` rocks it gently from side to side by that many degrees, once a loop."
@@ -3930,7 +3936,7 @@
      "name": "PaintDoc",
      "kind": "type",
      "doc": "A part's paint: one color, or a pattern of several.",
-     "type": "string | { kind: \"bands\"; axis: \"x\" | \"y\" | \"z\"; size: number; colors: string[] } | { kind: \"bricks\"; size: [number, number]; colors: string[]; line: string } | { kind: \"hex\"; size: number; colors: string[]; line: string; deep?: string } | { kind: \"speckle\"; size: number; colors: string[] } | { kind: \"patches\"; size: number; colors: string[] } | { kind: \"key\"; colors: Record<string, string> } | { kind: \"faces\"; top?: PaintDoc; side: PaintDoc; under?: PaintDoc } | { kind: \"split\"; axis: \"x\" | \"y\" | \"z\"; at: number; below: PaintDoc; above: PaintDoc } | { kind: \"pieces\"; colors: string[]; line?: string; ordered?: boolean }"
+     "type": "string | { kind: \"bands\"; axis: \"x\" | \"y\" | \"z\"; size: number; colors: string[] } | { kind: \"bricks\"; size: [number, number]; colors: string[]; line: string } | { kind: \"hex\"; size: number; colors: string[]; line: string; deep?: string } | { kind: \"speckle\"; size: number; colors: string[] } | { kind: \"patches\"; size: number; colors: string[] } | { kind: \"key\"; colors: Record<string, string> } | { kind: \"faces\"; top?: PaintDoc; side: PaintDoc; under?: PaintDoc; up?: number } | { kind: \"split\"; axis: \"x\" | \"y\" | \"z\"; at: number; below: PaintDoc; above: PaintDoc } | { kind: \"pieces\"; colors: string[]; line?: string; ordered?: boolean } | { kind: \"near\"; shape: ShapeDoc; within: number; at?: number; near: PaintDoc; far: PaintDoc } | { kind: \"waves\"; size: number; colors: [string, string, string] }"
     },
     {
      "name": "During",
@@ -3978,8 +3984,8 @@
       {
        "name": "circle",
        "optional": true,
-       "type": "{ r: number; times: number }",
-       "doc": "Goes round a circle of this radius about `at`, `times` per loop."
+       "type": "{ r: number; times: number; phase?: number }",
+       "doc": "Goes round a circle of this radius about `at`, `times` per loop, starting `phase` (0 to 1) of the way round."
       },
       {
        "name": "shadows",
