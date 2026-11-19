@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { checkScene, compileScene, type SceneDoc } from './sceneDoc.ts'
+import { checkScene, compileScene, duringAt, sprouted, type SceneDoc } from './sceneDoc.ts'
 import { buildVoxels } from './voxel.ts'
 import { PUFFS } from './poke.ts'
 import { Skeleton } from './rig.ts'
@@ -220,4 +220,45 @@ test('more shapes: each is checked, and each builds; a key paints a model by its
   const colors = new Map<string, number>()
   for (let i = 0; i < b.blobs.count; i++) if (b.partOf[i] === n + 4) { const g = b.blobs.color[i * 3 + 1] > b.blobs.color[i * 3] + 0.05 ? 'green' : 'dark'; colors.set(g, (colors.get(g) ?? 0) + 1) }
   assert.ok((colors.get('green') ?? 0) > 20 && (colors.get('dark') ?? 0) > 10, JSON.stringify([...colors]))
+})
+
+test('a move with `during` happens once, between two moments of the loop, and waits the rest of it', () => {
+  assert.equal(duringAt(0.3), 0.3)
+  assert.equal(duringAt(0.1, [0.2, 0.6]), 1, 'before it starts, as after it ends')
+  assert.equal(duringAt(0.2, [0.2, 0.6]), 0)
+  assert.ok(Math.abs(duringAt(0.4, [0.2, 0.6]) - 0.5) < 1e-9)
+  assert.equal(duringAt(0.9, [0.2, 0.6]), 1)
+  // across the seam
+  assert.ok(Math.abs(duringAt(0.05, [0.9, 0.2]) - 0.5) < 1e-9)
+  assert.equal(duringAt(0.5, [0.9, 0.2]), 1)
+  assert.ok(Math.abs(sprouted(0.05, 0.1, 0.1) - 0.5) < 1e-9 && sprouted(0.5, 0.1, 0.1) === 1 && Math.abs(sprouted(0.95, 0.1, 0.1) - 0.5) < 1e-9)
+
+  const doc = sound()
+  doc.moves = [
+    { kind: 'sprout', bone: 'arm', times: 1, during: [0.25, 0.75], rise: 0.1, fall: 0.1 },
+    { kind: 'sway', bone: 'hand', axis: 'z', degrees: 40, times: 1, during: [0.4, 0.5] },
+    { kind: 'drift', bone: 'puff', by: [0, 1, 0], times: 1, during: [0.9, 0.1] },
+  ]
+  doc.lights = [{ at: [0, 0.3, 0], color: '#ffd166', strength: 2, range: 0.8, during: [0.5, 0.75] }]
+  assert.deepEqual(checkScene(doc), [])
+  const c = compileScene(doc), sk = new Skeleton(c.bones)
+  const arm = sk.index('arm'), hand = sk.index('hand'), puff = sk.index('puff')
+  const at = (u: number) => { c.pose(sk, u * c.loop); return { arm: sk.size[arm], hand: Array.from(sk.rotation.subarray(hand * 4, hand * 4 + 4)), puff: sk.size[puff], light: c.lights(u * c.loop)[0].color[0] } }
+  const still = at(0).hand
+  assert.equal(at(0.1).arm, 0, 'not there yet')
+  assert.equal(at(0.5).arm, 1, 'standing')
+  assert.equal(at(0.8).arm, 0, 'gone again')
+  assert.deepEqual(at(0.39).hand, still)
+  assert.notDeepEqual(at(0.425).hand, still, 'the wave')
+  for (let i = 0; i < 4; i++) assert.ok(Math.abs(at(0.5).hand[i] - still[i]) < 1e-6, 'back where it began')
+  assert.deepEqual(at(0.6).hand, still)
+  assert.ok(at(0.5).puff < 1e-6 && at(0).puff > 0.9, 'the puff lives across the seam')
+  assert.equal(at(0.3).light, 0)
+  assert.ok(at(0.625).light > 0.5)
+  assert.equal(at(0.76).light, 0)
+
+  const errs = (m: unknown) => checkScene({ ...sound(), moves: [m as never] }).join('; ')
+  assert.match(errs({ kind: 'sprout', bone: 'arm', times: 1, during: [0.2, 1.4] }), /during: must be \[from, to\]/)
+  assert.match(errs({ kind: 'sprout', bone: 'arm', times: 1, during: [0.2, 0.2] }), /during: must last at least/)
+  assert.match(errs({ kind: 'sprout', bone: 'arm', times: 1, rise: 0.7, fall: 0.6 }), /rise and fall together/)
 })

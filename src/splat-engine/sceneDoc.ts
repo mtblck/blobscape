@@ -378,20 +378,32 @@ export type PaintDoc =
   /** For a shape made of pieces (wall, steps, fence, arcade and the rest): each brick, block, post or stone takes one of `colors` (earlier ones commoner), and what lies between them `line`. `ordered` takes the colors in turn by the piece's number instead (a geode's rind and bands). */
   | { kind: 'pieces'; colors: string[]; line?: string; ordered?: boolean }
 
-/** Every move repeats a whole number of `times` in the loop, so the scene loops. */
+/**
+ * When in the loop a move happens: [from, to] as shares of the loop (0 to 1). The move's `times` then fit between the
+ * two, and for the rest of the loop the bone waits as the move starts and ends: a sprout or drift at nothing, a sway,
+ * bob or pulse where its `phase` leaves it. `from` may be later than `to`, for a move that runs across the loop's
+ * seam. This is how a scene tells a story: something appears at one moment, waves once at another and is gone.
+ */
+export type During = [number, number]
+
+/** Every move repeats a whole number of `times` in the loop (or in its `during`), so the scene loops. */
 export type MoveDoc =
   /** Turns right round, `times` per loop (negative turns the other way). */
-  | { kind: 'spin'; bone: string; axis: 'x' | 'y' | 'z'; times: number; phase?: number }
+  | { kind: 'spin'; bone: string; axis: 'x' | 'y' | 'z'; times: number; phase?: number; during?: During }
   /** Rocks to and fro by `degrees`. */
-  | { kind: 'sway'; bone: string; axis: 'x' | 'y' | 'z'; degrees: number; times: number; phase?: number }
+  | { kind: 'sway'; bone: string; axis: 'x' | 'y' | 'z'; degrees: number; times: number; phase?: number; during?: During }
   /** Slides to and fro by `by`. */
-  | { kind: 'bob'; bone: string; by: Vec3; times: number; phase?: number }
+  | { kind: 'bob'; bone: string; by: Vec3; times: number; phase?: number; during?: During }
   /** Is born, travels `by`, and fades away, over and over: smoke, sparks, bubbles, foam. `grow` is its size at birth and at the end. */
-  | { kind: 'drift'; bone: string; by: Vec3; times: number; grow?: [number, number]; phase?: number }
+  | { kind: 'drift'; bone: string; by: Vec3; times: number; grow?: [number, number]; phase?: number; during?: During }
   /** Swells and shrinks between two sizes. */
-  | { kind: 'pulse'; bone: string; size: [number, number]; times: number; phase?: number }
-  /** Grows from nothing as you watch, stands, and shrinks away again before it starts over, `times` per loop: crystals, icicles, a sprout. */
-  | { kind: 'sprout'; bone: string; times: number; phase?: number }
+  | { kind: 'pulse'; bone: string; size: [number, number]; times: number; phase?: number; during?: During }
+  /**
+   * Grows from nothing as you watch, stands, and shrinks away again before it starts over, `times` per loop: crystals,
+   * icicles, a sprout. `rise` and `fall` are the shares of its time spent growing and shrinking (0.4 and 0.15 when left
+   * out; together at most 1): small ones make a thing appear and vanish.
+   */
+  | { kind: 'sprout'; bone: string; times: number; phase?: number; during?: During; rise?: number; fall?: number }
 
 /** A point light in a scene. */
 export interface LightDoc {
@@ -413,6 +425,8 @@ export interface LightDoc {
    * set inside something (a jar, a window, a hollow) to stand for its glow would shade everything outside.
    */
   shadows?: boolean
+  /** Shines only for this share of the loop, [from, to], coming up over the first fifth of it and dying away over the last: a flash, a spell. */
+  during?: During
 }
 
 // --- Checking
@@ -559,6 +573,11 @@ export function checkScene(doc: unknown): string[] {
     v.forEach((b, i) => { if (!obj(b)) bad(`${at}[${i}]`, 'must be an object'); else { num(b.thick, `${at}[${i}].thick`, 0.01, 2); num(b.hard, `${at}[${i}].hard`, 0, 1) } })
   }
   const seed = (v: unknown, at: string) => { if (typeof v !== 'number' || !Number.isInteger(v) || v < 0) bad(at, 'must be a whole number, 0 or more') }
+  const during = (v: unknown, at: string) => {
+    if (v === undefined) return
+    if (!Array.isArray(v) || v.length !== 2 || v.some((k) => typeof k !== 'number' || !Number.isFinite(k) || k < 0 || k > 1)) bad(at, 'must be [from, to], two shares of the loop from 0 to 1')
+    else if (spanOf(v as During) < 0.005) bad(at, 'must last at least 0.005 of the loop')
+  }
   const whole = (v: unknown, at: string) => { if (typeof v !== 'number' || !Number.isInteger(v) || v === 0 || Math.abs(v) > 60) bad(at, 'must be a whole number of times per loop (not 0), so the scene loops') }
 
   if (!obj(doc)) return ['scene: must be an object']
@@ -891,6 +910,7 @@ export function checkScene(doc: unknown): string[] {
       if (perBone.get(m.bone) === MAX_MOVES_PER_BONE + 1) bad(`${at}.bone`, `${show(m.bone)} has more than ${MAX_MOVES_PER_BONE} moves`)
       whole(m.times, `${at}.times`)
       opt(m.phase, `${at}.phase`, -1, 1)
+      during(m.during, `${at}.during`)
       switch (m.kind) {
         case 'spin': axis(m.axis, `${at}.axis`); break
         case 'sway': axis(m.axis, `${at}.axis`); num(m.degrees, `${at}.degrees`, -180, 180); break
@@ -901,7 +921,11 @@ export function checkScene(doc: unknown): string[] {
           if (typeof m.times === 'number' && m.times < 0) bad(`${at}.times`, 'must be over 0 for a drift')
           break
         case 'pulse': vec(m.size, `${at}.size`, 0, 4, 2); break
-        case 'sprout': if (typeof m.times === 'number' && m.times < 0) bad(`${at}.times`, 'must be over 0 for a sprout'); break
+        case 'sprout':
+          if (typeof m.times === 'number' && m.times < 0) bad(`${at}.times`, 'must be over 0 for a sprout')
+          opt(m.rise, `${at}.rise`, 0.01, 1); opt(m.fall, `${at}.fall`, 0.01, 1)
+          if (((typeof m.rise === 'number' ? m.rise : 0.4) + (typeof m.fall === 'number' ? m.fall : 0.15)) > 1 + 1e-9) bad(`${at}.rise`, 'rise and fall together must be at most 1')
+          break
         default: bad(`${at}.kind`, `${show(m.kind)} is not a move (spin, sway, bob, drift, pulse, sprout)`)
       }
     })
@@ -917,6 +941,7 @@ export function checkScene(doc: unknown): string[] {
         else { num(l.flicker.by, `${at}.flicker.by`, 0, 1); whole(l.flicker.times, `${at}.flicker.times`) }
       }
       if (l.shadows !== undefined && typeof l.shadows !== 'boolean') bad(`${at}.shadows`, 'must be true or false')
+      during(l.during, `${at}.during`)
       if (l.circle !== undefined) {
         if (!obj(l.circle)) bad(`${at}.circle`, 'must be an object')
         else { num(l.circle.r, `${at}.circle.r`, 0, REACH); whole(l.circle.times, `${at}.circle.times`) }
@@ -1438,10 +1463,24 @@ function looseAir(air: AirDoc | undefined): LooseBlob[] {
   return out
 }
 
-/** A sprout's size through its life (0 to 1): grows from nothing over the first 40%, stands, and shrinks away over the last 15%. */
-export function sprouted(life: number) {
-  const ease = (t: number) => { const k = Math.min(1, Math.max(0, t)); return k * k * (3 - 2 * k) }
-  return life < 0.85 ? ease(life / 0.4) : ease((1 - life) / 0.15)
+const eased = (t: number) => { const k = Math.min(1, Math.max(0, t)); return k * k * (3 - 2 * k) }
+
+/** A sprout's size through its life (0 to 1): grows from nothing over the first `rise` (40%), stands, and shrinks away over the last `fall` (15%). */
+export function sprouted(life: number, rise = 0.4, fall = 0.15) {
+  return life < 1 - fall ? eased(life / rise) : eased((1 - life) / fall)
+}
+
+/** How long a `during` lasts, as a share of the loop: one that ends before it starts runs across the seam. */
+const spanOf = (d: During) => (((d[1] - d[0]) % 1) + 1) % 1
+
+/**
+ * How far through its `during` a move is at `u` of the loop: 0 as it starts, 1 from its end until it starts again.
+ * With none, `u` itself, so the move fills the loop.
+ */
+export function duringAt(u: number, d?: During) {
+  if (!d) return u
+  const k = (((u - d[0]) % 1) + 1) % 1
+  return Math.min(1, k / spanOf(d))
 }
 
 /** A sound description (see `checkScene`) made ready to build and play. Throws on an unsound one. */
@@ -1549,7 +1588,7 @@ export function compileScene(doc: SceneDoc, { puffs = true }: { puffs?: boolean 
       sk.reset()
       const u = t / doc.loop
       for (const m of moves) {
-        const b = sk.index(m.bone), at = u * m.times + (m.phase ?? 0)
+        const b = sk.index(m.bone), at = duringAt(u, m.during) * m.times + (m.phase ?? 0)
         if (m.kind === 'spin' || m.kind === 'sway') {
           const turn = axisAngle(AXIS[m.axis], m.kind === 'spin' ? at * TAU : Math.sin(at * TAU) * m.degrees * (Math.PI / 180))
           // moves on one bone add up, in the order they are written
@@ -1562,7 +1601,7 @@ export function compileScene(doc: SceneDoc, { puffs = true }: { puffs?: boolean 
           for (let i = 0; i < 3; i++) sk.offset[b * 3 + i] += m.by[i] * life
           sk.size[b] *= Math.sin(Math.PI * life) ** 0.6 * (g0 + (g1 - g0) * life)
         } else if (m.kind === 'sprout') {
-          sk.size[b] *= sprouted(((at % 1) + 1) % 1)
+          sk.size[b] *= sprouted(((at % 1) + 1) % 1, m.rise, m.fall)
         } else {
           sk.size[b] *= m.size[0] + (m.size[1] - m.size[0]) * (0.5 + 0.5 * Math.sin(at * TAU))
         }
@@ -1586,7 +1625,8 @@ export function compileScene(doc: SceneDoc, { puffs = true }: { puffs?: boolean 
       return lights.map((l) => {
         const c = unit(l.color)
         // two flickers out of step, so it doesn't beat like a clock, but still loops
-        const k = l.strength * (l.flicker ? 1 + l.flicker.by * (0.6 * Math.sin(u * l.flicker.times * TAU) + 0.4 * Math.sin(u * l.flicker.times * 3 * TAU + 1.3)) : 1)
+        const on = l.during ? sprouted(duringAt(u, l.during) % 1, 0.2, 0.2) : 1
+        const k = on * l.strength * (l.flicker ? 1 + l.flicker.by * (0.6 * Math.sin(u * l.flicker.times * TAU) + 0.4 * Math.sin(u * l.flicker.times * 3 * TAU + 1.3)) : 1)
         const a = l.circle ? u * l.circle.times * TAU : 0, r = l.circle?.r ?? 0
         return { position: [l.at[0] + Math.cos(a) * r, l.at[1], l.at[2] - Math.sin(a) * r], color: [linear(c[0]) * k, linear(c[1]) * k, linear(c[2]) * k], range: l.range }
       })

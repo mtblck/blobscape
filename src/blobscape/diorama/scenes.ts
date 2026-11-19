@@ -30,6 +30,7 @@ import { CAVE } from './scenes/cave.ts'
 import { CANYON } from './scenes/canyon.ts'
 import { CABIN } from './scenes/cabin.ts'
 import { KOI } from './scenes/koi.ts'
+import { HENGE } from './scenes/henge.ts'
 import { WHALES } from './scenes/whales.ts'
 
 /** A scene Pixel Diorama can show: how to build it, move it and light it, and how it asks to be drawn. */
@@ -194,5 +195,6 @@ export const DIORAMAS: Diorama[] = [
   described('cabin', CABIN, 'A log cabin snowed in on a winter night: snow falling and settling where it lands, drifts piled deep downwind of the cabin, rocks and fence, a path trodden to the gate, frost growing across the lit window, chimney smoke, a woodpile and a lantern'),
   described('koi', KOI, 'A koi pond in a moss garden on a rainy day: raindrops ring the water where they land, the rings cross and bounce off the banks and stepping stones, koi circle under the surface and leave wakes, and a tall stone lantern and a low snow-viewing lantern glow under a cherry tree in full bloom that sheds its petals, with bamboo, irises and lily pads'),
   described('whales', WHALES, 'A pod of whales swimming through space, a mother and two calves with stars on their backs, their tails and flippers beating slowly, past a ringed planet and its moon, banks of nebula, a far sun, tumbling rocks and stardust streaming by'),
+  described('henge', HENGE, 'A ring of standing stones at night where a magic circle flares to life, a wizard with the face of a black cat appears in a purple and gold robe, draws a wand, waves it once and vanishes in a shower of sparks'),
   FOX_MEADOW,
 ]

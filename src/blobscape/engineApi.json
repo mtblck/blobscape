@@ -3885,10 +3885,16 @@
      "type": "string | { kind: \"bands\"; axis: \"x\" | \"y\" | \"z\"; size: number; colors: string[] } | { kind: \"bricks\"; size: [number, number]; colors: string[]; line: string } | { kind: \"hex\"; size: number; colors: string[]; line: string; deep?: string } | { kind: \"speckle\"; size: number; colors: string[] } | { kind: \"patches\"; size: number; colors: string[] } | { kind: \"key\"; colors: Record<string, string> } | { kind: \"faces\"; top?: PaintDoc; side: PaintDoc; under?: PaintDoc } | { kind: \"split\"; axis: \"x\" | \"y\" | \"z\"; at: number; below: PaintDoc; above: PaintDoc } | { kind: \"pieces\"; colors: string[]; line?: string; ordered?: boolean }"
     },
     {
+     "name": "During",
+     "kind": "type",
+     "doc": "When in the loop a move happens: [from, to] as shares of the loop (0 to 1). The move's `times` then fit between the\ntwo, and for the rest of the loop the bone waits as the move starts and ends: a sprout or drift at nothing, a sway,\nbob or pulse where its `phase` leaves it. `from` may be later than `to`, for a move that runs across the loop's\nseam. This is how a scene tells a story: something appears at one moment, waves once at another and is gone.",
+     "type": "[number, number]"
+    },
+    {
      "name": "MoveDoc",
      "kind": "type",
-     "doc": "Every move repeats a whole number of `times` in the loop, so the scene loops.",
-     "type": "{ kind: \"spin\"; bone: string; axis: \"x\" | \"y\" | \"z\"; times: number; phase?: number } | { kind: \"sway\"; bone: string; axis: \"x\" | \"y\" | \"z\"; degrees: number; times: number; phase?: number } | { kind: \"bob\"; bone: string; by: Vec3; times: number; phase?: number } | { kind: \"drift\"; bone: string; by: Vec3; times: number; grow?: [number, number]; phase?: number } | { kind: \"pulse\"; bone: string; size: [number, number]; times: number; phase?: number } | { kind: \"sprout\"; bone: string; times: number; phase?: number }"
+     "doc": "Every move repeats a whole number of `times` in the loop (or in its `during`), so the scene loops.",
+     "type": "{ kind: \"spin\"; bone: string; axis: \"x\" | \"y\" | \"z\"; times: number; phase?: number; during?: During } | { kind: \"sway\"; bone: string; axis: \"x\" | \"y\" | \"z\"; degrees: number; times: number; phase?: number; during?: During } | { kind: \"bob\"; bone: string; by: Vec3; times: number; phase?: number; during?: During } | { kind: \"drift\"; bone: string; by: Vec3; times: number; grow?: [number, number]; phase?: number; during?: During } | { kind: \"pulse\"; bone: string; size: [number, number]; times: number; phase?: number; during?: During } | { kind: \"sprout\"; bone: string; times: number; phase?: number; during?: During; rise?: number; fall?: number }"
     },
     {
      "name": "LightDoc",
@@ -3932,6 +3938,12 @@
        "optional": true,
        "type": "boolean",
        "doc": "Casts shadows, worked out once when the scene is built, so they cost nothing as it plays and flicker with it. Only\nthe first four lights can, and not one that goes round a circle. Give it to a lamp or fire out in the open: a light\nset inside something (a jar, a window, a hollow) to stand for its glow would shade everything outside."
+      },
+      {
+       "name": "during",
+       "optional": true,
+       "type": "During",
+       "doc": "Shines only for this share of the loop, [from, to], coming up over the first fifth of it and dying away over the last: a flash, a spell."
       }
      ]
     },
@@ -4153,10 +4165,20 @@
     {
      "name": "sprouted",
      "kind": "function",
-     "doc": "A sprout's size through its life (0 to 1): grows from nothing over the first 40%, stands, and shrinks away over the last 15%.",
+     "doc": "A sprout's size through its life (0 to 1): grows from nothing over the first `rise` (40%), stands, and shrinks away over the last `fall` (15%).",
      "signatures": [
       {
-       "code": "sprouted(life: number): number"
+       "code": "sprouted(life: number, rise?: number, fall?: number): number"
+      }
+     ]
+    },
+    {
+     "name": "duringAt",
+     "kind": "function",
+     "doc": "How far through its `during` a move is at `u` of the loop: 0 as it starts, 1 from its end until it starts again.\nWith none, `u` itself, so the move fills the loop.",
+     "signatures": [
+      {
+       "code": "duringAt(u: number, d?: During): number"
       }
      ]
     },

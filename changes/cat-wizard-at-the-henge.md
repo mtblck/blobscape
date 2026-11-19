@@ -1,0 +1,2 @@
+- Pixel Diorama: a new scene, Cat wizard at the henge. A magic circle wakes among standing stones at night, a wizard with the face of a black cat appears in a purple and gold robe, waves his wand once and vanishes in a shower of sparks.
+- Engine: a move in a scene description can take `during: [from, to]`, so it happens once at its own moment of the loop instead of all the way through it, a sprout can set how quickly it grows and shrinks (`rise`, `fall`), and a light can shine for part of the loop only. Scenes can now tell a short story.
