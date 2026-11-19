@@ -6,7 +6,7 @@ import { FLOWERS, PALETTES, SEASONS, flower, inSeason, seasonOn, type Role } fro
 import { head } from './heads.ts'
 import { Maker } from './make.ts'
 import { TABLES, TABLE_HEIGHT, makeTable, tableFor } from './tables.ts'
-import { SEASON_VASES, VASES, makeVase } from './vases.ts'
+import { SEASON_VASES, VASES, makeVase, radiusOf } from './vases.ts'
 
 const ROLES: Role[] = ['focal', 'second', 'line', 'filler', 'green']
 const COARSE = 0.014
@@ -115,6 +115,12 @@ test('every vase builds, stands on the table and has a mouth for the stems', () 
       assert.ok(low > -0.03, `${id} goes ${low} under the table`)
     }
   }
+})
+
+test('a turned shape says how far out its surface is at each height', () => {
+  const r = radiusOf([[0, 0], [0.2, 0], [0.3, 0.2], [0.1, 0.4]])
+  assert.ok(Math.abs(r(0.1) - 0.25) < 1e-9 && Math.abs(r(0.3) - 0.2) < 1e-9)
+  assert.equal(r(0.9), 0.1)
 })
 
 test('a stem in a clear vase stays inside the glass from the floor to the mouth', () => {

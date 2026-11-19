@@ -47,6 +47,12 @@ const WALL = 0.012
 
 /** The narrowest a turned profile is at a height, less its wall. */
 export function insideOf(profile: [number, number][]): (y: number) => number {
+  const r = radiusOf(profile)
+  return (y) => Math.max(0, r(y) - WALL)
+}
+
+/** How far out a turned profile's surface is at a height (the narrowest, where it passes a height twice). */
+export function radiusOf(profile: [number, number][]): (y: number) => number {
   return (y) => {
     let r = Infinity
     for (let i = 1; i < profile.length; i++) {
@@ -56,7 +62,7 @@ export function insideOf(profile: [number, number][]): (y: number) => number {
       r = Math.min(r, hi - lo < 1e-9 ? Math.max(r0, r1) : r0 + (r1 - r0) * (y - y0) / (y1 - y0))
     }
     if (r === Infinity) r = y > profile[profile.length - 1][1] ? profile[profile.length - 1][0] : profile[0][0]
-    return Math.max(0, r - WALL)
+    return r
   }
 }
 
@@ -184,17 +190,22 @@ export function makeVase(m: Maker, kind: VaseKind, seed: number): VaseInfo {
     const profile = outline([[0, 0], [0.18, 0.005], [0.27, 0.1], [0.29, 0.24], [0.25, 0.39], [0.175, 0.47], [0.16, 0.5], [0.19, 0.56], [0.2, 0.64], [0.17, 0.73], [0.12, 0.775]], 10) as [number, number][]
     m.newPart()
     m.lathe(profile, (_a, _t, p) => mul(mix(hex('#dfe6ee'), white, smooth(0.4 + 0.6 * noise(p, 6, seed))), 1), { shine: 0.4, shade: 0.7 })
+    // a second wall just inside the first, or the dark hat behind shows through the head when seen from low down
+    m.lathe(profile.map(([r, y]) => [Math.max(0, r - 0.012), y] as [number, number]), () => mul(white, 0.86), { glow: true })
+    const out = radiusOf(profile)
     // a top hat for a mouth
     m.newPart()
     m.lathe([[0.11, 0.765], [0.2, 0.765], [0.205, 0.775], [0.2, 0.785], [0.135, 0.785], [0.135, 0.92], [0.122, 0.92]], (_a, _t, p) => (p[1] > 0.79 && p[1] < 0.825 ? scarf : coal), { shine: 0.25 })
     plug(m, 0.125, 0.92, coal)
     // the face looks along +z
     m.newPart()
-    for (const s of [-1, 1]) m.ball([s * 0.07, 0.67, 0.178], [0.02, 0.022, 0.012], () => coal, { shine: 0.5 })
-    for (let i = 0; i < 5; i++) { const x = (i - 2) * 0.03; m.ball([x, 0.585 + 0.012 * Math.abs(i - 2) ** 1.5, 0.19 - Math.abs(x) * 0.25], [0.01, 0.01, 0.007], () => coal) }
-    for (let i = 0; i < 3; i++) { const y = 0.16 + i * 0.09; const r = 0.283 - Math.abs(y - 0.24) * 0.3; m.ball([0, y, r], [0.02, 0.02, 0.012], () => coal, { shine: 0.5 }) }
+    // every piece of coal sits on the surface where it is, half sunk and half proud (Matt saw the mouth and two buttons sunk in)
+    const onFront = (x: number, y: number): Vec3 => [x, y, Math.sqrt(Math.max(0, out(y) ** 2 - x * x)) + 0.003]
+    for (const s of [-1, 1]) m.ball(onFront(s * 0.07, 0.67), [0.02, 0.022, 0.012], () => coal, { shine: 0.5 })
+    for (let i = 0; i < 5; i++) { const x = (i - 2) * 0.03; m.ball(onFront(x, 0.585 + 0.012 * Math.abs(i - 2) ** 1.5), [0.011, 0.011, 0.008], () => coal) }
+    for (let i = 0; i < 3; i++) m.ball(onFront(0, 0.16 + i * 0.09), [0.02, 0.02, 0.012], () => coal, { shine: 0.5 })
     m.newPart()
-    const nose: Vec3[] = [[0, 0.635, 0.19], [0, 0.63, 0.32]]
+    const nose: Vec3[] = [[0, 0.635, 0.185], [0, 0.63, 0.32]]
     m.tube(nose, (t) => lerp(0.025, 0.004, t), (t) => mul(hex('#ee7a22'), 0.9 + 0.2 * Math.sin(t * 40)))
     // a scarf round the neck, and its end hanging down the front
     m.newPart()
