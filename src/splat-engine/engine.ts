@@ -16,6 +16,7 @@ const {
 } = TSL
 import { MAX_STRETCH, packWeights, skinBlob, skinCenters, type Skeleton, type Skin, type SkinMode } from './rig.ts'
 import { GRAD_STRIDE, weightGradients } from './stretch.ts'
+import { LIE_FROM, LIE_FULL } from '../splat-core/glyphs.ts'
 import { DepthSort } from './sort.ts'
 import { RadixSort } from './radix.ts'
 
@@ -231,6 +232,14 @@ export class SplatWorld extends Mesh {
     this.lighting.cel.value = on ? 1 : 0
     this.lightsDirty = true
   }
+  /**
+   * While true, the draw is a map of how the blobs lie on the screen: every blob a hard disc whose color says which
+   * way its long axis runs and how much longer than wide it is there (`lieColor` in splat-core/glyphs.ts is the CPU
+   * twin of the color). A strand of fur or a blade of grass is long and thin from any side; a disc on a surface is
+   * only so where the surface is seen nearly edge on. Drawing as characters reads it for strokes along strands.
+   */
+  get lieMap() { return this.flat.value === 4 }
+  set lieMap(on: boolean) { this.flat.value = on ? 4 : 0 }
 
   private readonly boneOffset: number[]
   /** Per actor, the share of its blobs left out (0: all drawn). Sent to the GPU in each of its bones' spare matrix slot. */
@@ -2041,12 +2050,26 @@ function placeQuad(ndc: N, axes: N, tilt: N, rgba: N, idx: N, flat: Flat, cut?: 
   return vec4(at, ndc.z.add(slope).add(tilt.z.mul(seed.sub(0.5))), 1)
 }
 
-/** Which map the draw is (0 the picture, 1 parts, 2 depth, 3 tones), where a depth map's depths are counted from, and whether each blob's depth follows its own slope. */
+/** Which map the draw is (0 the picture, 1 parts, 2 depth, 3 tones, 4 how the blobs lie), where a depth map's depths are counted from, and whether each blob's depth follows its own slope. */
 interface Flat { mode: N; base: N; slope: N }
 
-/** What a blob draws as: its picture color, its part's flat color (map of parts), its depth (depth map) or its tone (map of tones). */
-function flatColor(flat: Flat, part: N, depth: N, picture: N, tone: N) {
-  return select(flat.mode.greaterThan(2.5), tone, select(flat.mode.greaterThan(1.5), vec3(depth.sub(flat.base)), select(flat.mode.greaterThan(0.5), part, picture)))
+/** What a blob draws as: its picture color, its part's flat color (map of parts), its depth (depth map) its tone (map of tones) or how it lies (`lieMap`). */
+function flatColor(flat: Flat, part: N, depth: N, picture: N, tone: N, axes: N) {
+  return select(flat.mode.greaterThan(3.5), lieOf(axes), select(flat.mode.greaterThan(2.5), tone, select(flat.mode.greaterThan(1.5), vec3(depth.sub(flat.base)), select(flat.mode.greaterThan(0.5), part, picture))))
+}
+
+/** How a blob lies on the screen, as a color, from its two screen axes (NDC): `lieColor` in splat-core/glyphs.ts is the CPU twin (change both). */
+function lieOf(axes: N) {
+  const a = axes.xy.mul(cameraViewport.zw).toVar(), b = axes.zw.mul(cameraViewport.zw).toVar()
+  const la = dot(a, a), lb = dot(b, b)
+  const long = select(la.greaterThanEqual(lb), a, b).toVar()
+  const l2 = max(la, lb).max(1e-12), s2 = min(la, lb)
+  // how much longer than wide: nothing under `LIE_FROM`, all of it from `LIE_FULL`
+  const t = float(1).sub(sqrt(s2.div(l2))).sub(LIE_FROM).div(LIE_FULL - LIE_FROM).clamp(0, 1).toVar()
+  const e = t.mul(t).mul(float(3).sub(t.mul(2)))
+  // twice the angle, so a line and the same line turned end for end are one color
+  const c = long.x.mul(long.x).sub(long.y.mul(long.y)).div(l2), sn = long.x.mul(long.y).mul(2).div(l2)
+  return vec3(c.mul(e).mul(0.5).add(0.5), sn.mul(e).mul(0.5).add(0.5), e)
 }
 
 function makeVertexWebGPU(buf: ReturnType<typeof makeBuffers>, sort: Sorter, fog: Fog, flat: Flat, L?: Lighting, clean = false) {
@@ -2065,7 +2088,7 @@ function makeVertexWebGPU(buf: ReturnType<typeof makeBuffers>, sort: Sorter, fog
     // ndc z = −(P22·z + P32) / z for a perspective camera, so −z = P32 / (ndc z + P22)
     const depth = cameraProjectionMatrix[3].z.div(A.z.add(cameraProjectionMatrix[2].z))
     const part = unpackUnorm4x8(buf.part.element(idx))
-    return placeQuad(A.xyz, buf.splatB.element(idx), buf.splatC.element(idx).xyz, vec4(flatColor(flat, part.rgb, depth, fogged(color.rgb, depth, fog), tone), color.a.mul(A.w)), idx, flat, clean ? { covA: buf.covA.element(idx), covB: buf.covB.element(idx) } : undefined)
+    return placeQuad(A.xyz, buf.splatB.element(idx), buf.splatC.element(idx).xyz, vec4(flatColor(flat, part.rgb, depth, fogged(color.rgb, depth, fog), tone, buf.splatB.element(idx)), color.a.mul(A.w)), idx, flat, clean ? { covA: buf.covA.element(idx), covB: buf.covB.element(idx) } : undefined)
   })()
 }
 
@@ -2088,7 +2111,7 @@ function makeVertexWebGL(buf: ReturnType<typeof makeBuffers>, sort: Sorter, mode
       If(L.cel.greaterThan(0.5), () => { tone.assign(toned(d.world, d.covA, d.covB, L)) })
     }
     const part = unpackUnorm4x8(buf.part.element(idx))
-    return placeQuad(p.ndc, p.axes, p.tilt, vec4(flatColor(flat, part.rgb, p.depth, fogged(rgb, p.depth, fog), tone), color.a.mul(p.alphaScale)), idx, flat, clean ? d : undefined)
+    return placeQuad(p.ndc, p.axes, p.tilt, vec4(flatColor(flat, part.rgb, p.depth, fogged(rgb, p.depth, fog), tone, p.axes), color.a.mul(p.alphaScale)), idx, flat, clean ? d : undefined)
   })()
 }
 

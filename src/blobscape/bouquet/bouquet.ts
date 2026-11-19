@@ -24,6 +24,23 @@ export const DETAILS: { id: string; label: string; spacing: number }[] = [
 
 /** How many petals at most have a bone of their own and may fall. */
 export const MAX_FALLING = 18
+/**
+ * A stem's way through a clear vase, from where it stands on the floor to where it leaves the mouth, kept
+ * inside the glass all the way: a straight line from a wide mouth to a narrow foot, or past a waist, went
+ * through the wall.
+ */
+export function stemInVase(vase: VaseInfo, foot: Vec3, mouth: Vec3, r: number): Vec3[] {
+  const inside = vase.inside
+  if (!inside) return [foot, mouth]
+  const path: Vec3[] = []
+  for (let i = 0; i <= 10; i++) {
+    const p = mix(foot, mouth, i / 10)
+    const room = Math.max(0, inside(p[1]) - r - 0.004), far = Math.hypot(p[0], p[2])
+    path.push(far > room ? [p[0] * room / far, p[1], p[2] * room / far] : p)
+  }
+  return path
+}
+
 /** The table's top is at height 0; a lying petal's lowest blob is this far above it. */
 const LIE = 0.004
 
@@ -109,7 +126,7 @@ export function makeBouquet(choice: Choice, spacing: number, plain = false): Bou
     bones.push({ name: `s${i}h`, parent: a + 1, head: tip, tail: add(tip, mul(end, 0.08)) })
     stems.push({ a, b: a + 1, head: a + 2, sway: f.sway ?? 1, phase: rand() * 100, flower: f.id })
 
-    // the stem, bending between its two lower bones; in a clear vase it shows all the way down
+    // the stem, bending between its two lower bones; in a clear vase it shows all the way down, kept inside the glass by `stemInVase`
     let along = 0
     m.newPart()
     if (vase.clear) {
@@ -117,7 +134,7 @@ export function makeBouquet(choice: Choice, spacing: number, plain = false): Bou
       m.blend = undefined
       const footR = Math.max(0.02, vase.mouth * 0.7)
       const foot: Vec3 = [-flat[0] * footR * (0.3 + 0.7 * lean) + (rand() - 0.5) * 0.03, vase.floor + 0.01, -flat[2] * footR * (0.3 + 0.7 * lean) + (rand() - 0.5) * 0.03]
-      m.tube([foot, mouth], () => f.stem.r, () => mul(f.stem.color, 0.8))
+      m.tube(stemInVase(vase, foot, mouth, f.stem.r), () => f.stem.r, () => mul(f.stem.color, 0.8))
     }
     m.onBone = a
     m.blend = () => [a + 1, smooth((along - 0.3) / 0.4)]
