@@ -5,10 +5,11 @@ import { TURKEY } from '../diorama/scenes/turkey.ts'
 import { checkScene, compileScene, type SceneDoc } from '../../splat-engine/sceneDoc.ts'
 import { buildVoxels } from '../../splat-engine/voxel.ts'
 import { checkProject, compileProject, mergedSpec, pickedParts, propSpec, landSpec, splitScene, type PropPick } from '../../splat-engine/project.ts'
-import { TURKEY_PICKS, WINDMILL_PICKS } from './picks.ts'
+import { LIGHTHOUSE_PICKS, TURKEY_PICKS, WINDMILL_PICKS } from './picks.ts'
+import { LIGHTHOUSE } from '../diorama/scenes/lighthouse.ts'
 
 const CHUNKY = 0.042
-const scenes: [string, SceneDoc, PropPick[]][] = [['windmill', WINDMILL, WINDMILL_PICKS], ['turkey', TURKEY, TURKEY_PICKS]]
+const scenes: [string, SceneDoc, PropPick[]][] = [['windmill', WINDMILL, WINDMILL_PICKS], ['turkey', TURKEY, TURKEY_PICKS], ['lighthouse', LIGHTHOUSE, LIGHTHOUSE_PICKS]]
 
 for (const [id, doc, picks] of scenes) {
   test(`${id}: every pick takes parts no other pick takes`, () => {

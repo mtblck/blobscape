@@ -137,7 +137,7 @@ export type Setting = Pick<VoxelSpec, 'light' | 'cover' | 'eye' | 'sky'>
 export const settingOf = (spec: VoxelSpec): Setting => ({ light: spec.light, cover: spec.cover, eye: spec.eye, sky: spec.sky })
 
 /**
- * A prop's cut where it is placed, on a grid of `spacing` in the scene's units. Its bones are named `prefix` + their
+ * A prop's cut where it is placed, for a detail of `spacing` in the scene's units (times its description's `grid`). Its bones are named `prefix` + their
  * own name (its root bone included). `steps` is the palette to paint in steps of, when the scene asks for that.
  */
 export function placedSpec(c: CompiledScene, foot: Vec3, pl: Placement, spacing: number, setting: Setting, { prefix = '', steps }: { prefix?: string; steps?: Rgb[] } = {}): VoxelSpec {
@@ -148,7 +148,8 @@ export function placedSpec(c: CompiledScene, foot: Vec3, pl: Placement, spacing:
   const parts = base.parts.map((p) => placedPart(p, t, prefix + p.bone))
   const lamps = (base.lamps ?? []).map((l) => l && placedLamp(l, t))
   const loose = (base.loose ?? []).map((b) => ({ ...b, center: t.point(b.center), scale: scale(b.scale, t.size), bone: prefix + b.bone }))
-  return { ...base, ...setting, bones, parts, lamps, loose, beams: [], focus: undefined, spacing }
+  // the prop's own grid where it stands (a description may ask for a finer one than the detail's, as the lighthouse does)
+  return { ...base, ...setting, bones, parts, lamps, loose, beams: [], focus: undefined, spacing: base.spacing * t.size }
 }
 
 const placedLamp = (l: Lamp, t: Placer): Lamp => ({ ...l, at: t.point(l.at), reach: l.reach * t.size, clear: l.clear === undefined ? undefined : l.clear * t.size })

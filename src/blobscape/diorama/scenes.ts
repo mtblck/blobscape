@@ -6,7 +6,6 @@ import type { Skeleton } from '../../splat-engine/rig.ts'
 import { compileScene, type SceneDoc } from '../../splat-engine/sceneDoc.ts'
 import { SceneWater } from '../../splat-engine/sceneWater.ts'
 import { buildVoxels } from '../../splat-engine/voxel.ts'
-import { LOOP, PALETTES, lampLights, makeDiorama, poseDiorama } from './scene.ts'
 import * as meadow from '../fourways/meadow/build.ts'
 import { CAMPFIRE } from './scenes/campfire.ts'
 import { BEE } from './scenes/bee.ts'
@@ -34,6 +33,7 @@ import { HENGE } from './scenes/henge.ts'
 import { WHALES } from './scenes/whales.ts'
 import { TURKEY } from './scenes/turkey.ts'
 import { FISHING } from './scenes/fishing.ts'
+import { LIGHTHOUSE as LIGHTHOUSE_DOC } from './scenes/lighthouse.ts'
 import { ambientAt, lightsAt, poseFishing, skyAt } from './fishing.ts'
 
 /** A scene Pixel Diorama can show: how to build it, move it and light it, and how it asks to be drawn. */
@@ -85,14 +85,9 @@ export interface Diorama {
 /** The name of the palette chosen for a scene, on its chip. */
 const OWN_PALETTE = 'Made for it'
 
+/** The lighthouse, the first scene, keeps its own five views and does not rock. */
 const LIGHTHOUSE: Diorama = {
-  id: 'lighthouse',
-  label: 'Lighthouse',
-  about: 'A lighthouse and a cottage on a rock in the sea at dusk, with a turning lamp, pines, a jetty, a small boat, gulls and clouds',
-  loop: LOOP,
-  palette: { label: OWN_PALETTE, colors: PALETTES[0].colors },
-  sky: [[9, 13, 32], [60, 94, 164]],
-  finish: { dither: 0.5, glow: 1.5, outline: true, edges: true, sky: true, steps: false },
+  ...described('lighthouse', LIGHTHOUSE_DOC, 'A lighthouse and a cottage on a rock in the sea at dusk, with a turning lamp, pines, a jetty, a small boat, gulls and clouds'),
   views: [
     { id: 'shore', label: 'From the shore', orbit: { target: [0.05, 0.84, 0.05], distance: 3.7, azimuth: 28, elevation: 10 } },
     { id: 'above', label: 'From above', orbit: { target: [0, 0.6, 0], distance: 5.2, azimuth: 40, elevation: 38 } },
@@ -100,10 +95,6 @@ const LIGHTHOUSE: Diorama = {
     { id: 'cottage', label: 'The cottage', orbit: { target: [-0.3, 0.4, 0.15], distance: 2.0, azimuth: 10, elevation: 14 } },
     { id: 'boat', label: 'The boat', orbit: { target: [0.82, 0.2, 0.65], distance: 2.0, azimuth: 55, elevation: 16 } },
   ],
-  swing: 0,
-  make: makeDiorama,
-  pose: poseDiorama,
-  lights: lampLights,
 }
 
 const night = (palette: Rgb[]): [Rgb, Rgb] => {
