@@ -1733,16 +1733,18 @@ export function compileScene(doc: SceneDoc, { puffs = true }: { puffs?: boolean 
     },
     haze: haze ? { color: unit(haze.color).map(linear) as Vec3, from: haze.from ?? 0, to: haze.to ?? 4 } : undefined,
     water,
-    lights(t) {
-      const u = t / doc.loop
-      return lights.map((l) => {
-        const c = unit(l.color)
-        // two flickers out of step, so it doesn't beat like a clock, but still loops
-        const on = l.during ? sprouted(duringAt(u, l.during) % 1, 0.2, 0.2) : 1
-        const k = on * l.strength * (l.flicker ? 1 + l.flicker.by * (0.6 * Math.sin(u * l.flicker.times * TAU) + 0.4 * Math.sin(u * l.flicker.times * 3 * TAU + 1.3)) : 1)
-        const a = l.circle ? (u * l.circle.times + (l.circle.phase ?? 0)) * TAU : 0, r = l.circle?.r ?? 0
-        return { position: [l.at[0] + Math.cos(a) * r, l.at[1], l.at[2] - Math.sin(a) * r], color: [linear(c[0]) * k, linear(c[1]) * k, linear(c[2]) * k], range: l.range }
-      })
-    },
+    lights: (t) => lightsAt(lights, t / doc.loop),
   }
+}
+
+/** Described lights as they shine `u` of the way through the loop (0 to 1): flickering, going round, coming and going. */
+export function lightsAt(lights: readonly LightDoc[], u: number): PointLight[] {
+  return lights.map((l) => {
+    const c = unit(l.color)
+    // two flickers out of step, so it doesn't beat like a clock, but still loops
+    const on = l.during ? sprouted(duringAt(u, l.during) % 1, 0.2, 0.2) : 1
+    const k = on * l.strength * (l.flicker ? 1 + l.flicker.by * (0.6 * Math.sin(u * l.flicker.times * TAU) + 0.4 * Math.sin(u * l.flicker.times * 3 * TAU + 1.3)) : 1)
+    const a = l.circle ? (u * l.circle.times + (l.circle.phase ?? 0)) * TAU : 0, r = l.circle?.r ?? 0
+    return { position: [l.at[0] + Math.cos(a) * r, l.at[1], l.at[2] - Math.sin(a) * r], color: [linear(c[0]) * k, linear(c[1]) * k, linear(c[2]) * k], range: l.range }
+  })
 }
