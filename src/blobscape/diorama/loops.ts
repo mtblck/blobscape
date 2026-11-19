@@ -36,6 +36,7 @@ export const LOOPS: readonly { id: string; label: string }[] = [
   { id: 'koi', label: 'Koi pond in the rain' },
   { id: 'whales', label: 'Space whales' },
   { id: 'meadow', label: 'Fox and wisp' },
+  { id: 'fishing', label: 'Fishing for the moon' },
 ]
 
 /** Every loop's size in art pixels (the recorder's page is always the same size). */

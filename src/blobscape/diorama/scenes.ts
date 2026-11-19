@@ -31,6 +31,8 @@ import { CANYON } from './scenes/canyon.ts'
 import { CABIN } from './scenes/cabin.ts'
 import { KOI } from './scenes/koi.ts'
 import { WHALES } from './scenes/whales.ts'
+import { FISHING } from './scenes/fishing.ts'
+import { ambientAt, lightsAt, poseFishing, skyAt } from './fishing.ts'
 
 /** A scene Pixel Diorama can show: how to build it, move it and light it, and how it asks to be drawn. */
 export interface Diorama {
@@ -55,6 +57,10 @@ export interface Diorama {
   lights(t: number, shadows?: boolean): PointLight[]
   /** How much of its painted color everything keeps before its lights are added: 1 where left out, less for a scene lit mostly live. */
   ambient?: number
+  /** The same, for a scene whose light changes as it plays (day turning to night): a share or a color, `t` seconds in. It is used in place of `ambient`. */
+  ambientAt?: (t: number) => number | [number, number, number]
+  /** The sky `t` seconds in, top and bottom, for a scene whose sky changes as it plays: used in place of `sky`, with its reach. */
+  skyAt?: (t: number) => [Rgb, Rgb]
   /** How dark what stands in a casting light's way makes it, for a scene whose lights cast shadows: the engine's own where left out. */
   shadowDensity?: number
   /** Distance haze: its color (linear) and where it starts and would be total, in units past the view's target. */
@@ -169,6 +175,17 @@ const FOX_MEADOW: Diorama = {
   touching: [meadow.SCENE_PARTS, meadow.SCENE_PARTS + 1],
 }
 
+/**
+ * The boy fishing the moon and the sun out of a cloud: its island, boy and clouds are a description (scenes/fishing.ts),
+ * but its story is told in order, which a description's repeating moves can't do, so it is posed by diorama/fishing.ts,
+ * which also turns the sky and the light from day to night and back.
+ */
+const SKY_FISHING: Diorama = (() => {
+  const d = described('fishing', FISHING, 'A boy on the edge of a floating island casts his fishing line into a cloud, feels two tugs, and hauls up the moon, flinging it over his head into the sky as the sun sinks and the day turns to a starry night; then he casts again and pulls up the sun, and the day comes back')
+  const base = d.pose
+  return { ...d, pose: (sk, t) => poseFishing(sk, t, base), lights: (t) => lightsAt(t), ambientAt, skyAt }
+})()
+
 export const DIORAMAS: Diorama[] = [
   LIGHTHOUSE,
   described('campfire', CAMPFIRE, 'A camp in a clearing among pines at night, with a flickering fire throwing sparks, a tent, a lantern, fireflies and the moon'),
@@ -195,4 +212,5 @@ export const DIORAMAS: Diorama[] = [
   described('koi', KOI, 'A koi pond in a moss garden on a rainy day: raindrops ring the water where they land, the rings cross and bounce off the banks and stepping stones, koi circle under the surface and leave wakes, and a tall stone lantern and a low snow-viewing lantern glow under a cherry tree in full bloom that sheds its petals, with bamboo, irises and lily pads'),
   described('whales', WHALES, 'A pod of whales swimming through space, a mother and two calves with stars on their backs, their tails and flippers beating slowly, past a ringed planet and its moon, banks of nebula, a far sun, tumbling rocks and stardust streaming by'),
   FOX_MEADOW,
+  SKY_FISHING,
 ]
