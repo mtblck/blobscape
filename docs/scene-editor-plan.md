@@ -124,7 +124,50 @@ What that costs, and the answer to each:
 **Finish** (a button, and what export uses) merges the project into one description where it fits
 the limits, and cuts it as today's scenes are cut: one grid, real baked shadows, the full detail.
 Where it does not fit (too many bones), the finished scene stays as several actors and says so.
-The first issue of phase 1 measures both paths before anything is built on them.
+
+#### Measured (issue #330, 2026-11-19)
+
+The windmill, split by hand into its land and ten props (the mill with its sails, three trees, the
+duck, two haystacks, three sheep), each cut by itself at Fine and drawn on one `CreatureStage`
+with `setActor(land, undefined, props)`, beside the scene as Pixel Diorama cuts it. Headless
+Chromium with a software GPU, so frame times are only good for comparing with each other.
+
+| | Merged (today) | Apart |
+| --- | --- | --- |
+| Blobs at Chunky | 12,542 | 14,162 (13% more: what a prop stands on is no longer culled) |
+| Blobs at Fine | 44,550 | 46,421 (4% more) |
+| Cut at Chunky (Node) | 205 ms | 151 ms in all: land 95, mill 19, each other prop 1 to 13 |
+| Cut at Fine (Node) | 753 ms | 564 ms in all: land 395, mill 91, each other prop 1 to 33 |
+| Cut at Fine (in the page, WebGPU) | | land 401 ms, mill 86, others 1 to 37 |
+| Frame, WebGPU (software) | 1,816 ms | 1,802 ms with 11 actors |
+| Frame, WebGL (software) | 1,620 ms | 1,635 ms with 11 actors |
+
+More actors, the same props copied round the land (WebGPU / WebGL, ms a frame): 1 prop 1,491 /
+1,388, 5 props 1,784 / 1,586, 15 props 2,336 / 2,198, 30 props 2,842 / 2,848. Some of that is the
+extra blobs, some is per actor; on a real GPU the gap should be smaller, but it is a reason to cap
+the number of props (say 40) and to join props that never move into the land at Finish.
+
+What it looks like (pictures: project files `blobscape/scene-creator/`):
+
+- **Apart against merged:** 1.3% of the view's pixels differ, almost all in the shade under the mill
+  and the sheep (their baked shadows are gone) and in the hashed speckle of the tree crowns. Side by
+  side I could not tell which was which without the difference picture.
+- **A moved prop** goes where it is put with nothing left behind: the land was cut without it, so
+  there is no hole. Its own shadow is missing, which shows only as the ground under it being a shade
+  lighter.
+- **A turned prop** works through its root bone (compileScene's bone 0, `land`, at the origin), with
+  `place` putting the foot back; the sails keep spinning on their own bone inside the turn. Its baked
+  light turns with it, as expected: the mill turned a quarter showed its shaded side lit flat toward
+  the camera. Recutting the mill alone takes about 90 ms at Fine, so a recut on letting go is cheap.
+- **Nothing culls between actors**, so a prop dragged over the wheat stands in it rather than on it.
+  The editor should sit props on `groundUnder` anyway.
+
+**Decision: props are drawn apart while editing.** Cuts are faster than cutting the whole scene,
+the picture is all but the same, and moving costs nothing. Finish (merge and cut once) stays for
+export and for the scene's real baked shadows. The fallback (merged recuts in a worker with a
+coarse preview) is not needed. Two things to build in: a prop is cut with its foot at the origin so
+the root bone turns it about itself (`propFrom` does this), and a prop is recut by itself after a
+turn or a size change.
 
 ### Light the visitor can change
 
@@ -198,9 +241,8 @@ The editor opens any scene from Pixel Diorama as a land and its props, lets the 
 and remove props from the library, change the light, pick a style, and export. It keeps its work
 in the browser and as a file. No imports of outside files yet.
 
-1. **Measure the two ways to draw a project.** A spike: one scene as land + separate actors versus
-   merged and cut once. Cut times, frame times on WebGPU and WebGL, what the missing shadows and
-   culling look like. Settles "each prop is its own actor" before anything rests on it.
+1. **Measure the two ways to draw a project.** Done (#330): props are drawn apart while editing, and
+   Finish merges; numbers under "Measured" above.
 2. **The project and prop formats.** `SceneProject`, `PropDoc`, a checker with `where: what`
    messages like `checkScene`, compile to actors, merge to one `SceneDoc` (Finish). Pure, tested, in
    `splat-engine` so the package gets it.
@@ -362,8 +404,9 @@ a scene you made is the obvious thing to share.
 ## Risks
 
 - **Editing light is the hard part.** Baked light is why the scenes look as good as they do, and it
-  is what makes moving things slow. If the spike shows separate actors look poor, the fallback is
-  merged recuts in a worker with a coarse preview, which is slower to use but looks right.
+  is what would make moving things slow. The spike (#330) found that drawing props apart keeps the
+  picture and makes moving free; what it has not seen is a real phone, or a scene with many props on
+  a real GPU. If either is poor, the fallback is merged recuts in a worker with a coarse preview.
 - **Phones.** A fine scene is near the limit already. The editor starts at Chunky detail on a
   phone, as the styles do, and Finish is where full detail is spent.
 - **Scope.** Twelve issues in phase 1 is a lot. The first usable cut is items 1 to 3, 5 to 8 and
