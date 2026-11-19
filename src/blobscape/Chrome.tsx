@@ -39,7 +39,7 @@ export function usePageMeta(route: Route) {
   useEffect(() => {
     const meta = pageMeta(route)
     document.title = meta.title
-    document.querySelector('meta[name="description"]')?.setAttribute('content', meta.description)
+    document.querySelector('meta[name="description"]')?.setAttribute('content', meta.search)
     const canonical = document.querySelector('link[rel="canonical"]')
     if (meta.path) canonical?.setAttribute('href', SITE.origin + meta.path)
   }, [route])

@@ -31,7 +31,7 @@ const TOOLS = ['/experiments/fit-a-picture/', '/experiments/splat-to-sprite/']
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 const url = (path: string) => SITE.origin + path
 
-const PERSON = { '@type': 'Person', name: SITE.author.name, url: SITE.author.url }
+const PERSON = { '@type': 'Person', name: SITE.author.name, url: SITE.author.url, sameAs: SITE.author.profiles }
 const COURSE = {
   '@type': 'Course',
   '@id': url('/lessons/#course'),
@@ -149,7 +149,8 @@ function setAttr(html: string, tag: RegExp, value: string): string {
 function render(template: string, route: Route): string {
   const meta = pageMeta(route)
   let html = template.replace(/<title>[^<]*<\/title>/, () => `<title>${esc(meta.title)}</title>`)
-  html = setAttr(html, /<meta name="description"[^>]*>/, meta.description)
+  // a search result shows the short one whole; a shared link has room for the long one
+  html = setAttr(html, /<meta name="description"[^>]*>/, meta.search)
   html = setAttr(html, /<meta property="og:title"[^>]*>/, meta.title)
   html = setAttr(html, /<meta property="og:description"[^>]*>/, meta.description)
   const image = meta.image ?? SHARE
@@ -221,13 +222,33 @@ for (const path of TOOLS) {
   write(file, html)
 }
 
-const today = new Date().toISOString().slice(0, 10)
 /** The day a What's New page last changed: a post's own day, the newest post's for the list. */
 const postDay = (path: string) => (path === NEWS.path ? POSTS[0].date : POSTS.find((p) => href({ page: 'post', id: p.id }) === path)?.date)
+const newest = byPublished('newest')[0]
+/**
+ * The day a page last really changed, where we know it: an experiment's `updated`, a post's day, and for the pages that
+ * list them (the front page, Experiments) the newest experiment's. The rest say nothing: the day of the build on every
+ * page would teach a search engine to ignore the dates we do know.
+ */
+const changed = (p: string) => experimentAt(p)?.updated ?? postDay(p) ?? (p === '/' || p === '/experiments/' ? [newest.updated, newest.published, POSTS[0].date].sort().at(-1) : undefined)
 const paths = [...routes.map(href), ...TOOLS]
 write(
   join(DIST, 'sitemap.xml'),
-  `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${paths.map((p) => `  <url><loc>${url(p)}</loc><lastmod>${experimentAt(p)?.updated ?? postDay(p) ?? today}</lastmod></url>`).join('\n')}\n</urlset>\n`,
+  `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${paths.map((p) => `  <url><loc>${url(p)}</loc>${changed(p) ? `<lastmod>${changed(p)}</lastmod>` : ''}</url>`).join('\n')}\n</urlset>\n`,
+)
+// llms.txt: the site as a short Markdown list, for assistants that read one before the pages (llmstxt.org)
+const line = (path: string, name: string, about: string) => `- [${name}](${url(path)}): ${about}`
+write(
+  join(DIST, 'llms.txt'),
+  [
+    `# ${SITE.name}`,
+    `> ${DESCRIPTION}`,
+    `${SITE.name} is made by ${SITE.author.name} (${SITE.author.url}). Its code is public under the MIT license at ${SITE.repo}. Every page is plain HTML with its text in it; the live views need JavaScript and WebGL or WebGPU.`,
+    `## Lessons\n${LESSONS.map((l, i) => line(href({ page: 'lesson', id: l.id }), `${i + 1}. ${l.title}`, l.summary)).join('\n')}`,
+    `## Experiments\n${byPublished('newest').map((e) => line(e.url, e.title, e.body)).join('\n')}`,
+    `## The engine\n${(['engine', 'api', 'spec'] as const).map((page) => line(href({ page }), pageMeta({ page }).title.replace(` · ${SITE.name}`, ''), pageMeta({ page }).search)).join('\n')}`,
+    `## More\n${[line('/sandbox/', 'Sandbox', pageMeta({ page: 'sandbox' }).search), line(NEWS.path, "What's New", NEWS.intro), line(href({ page: 'contact' }), 'Get in touch', pageMeta({ page: 'contact' }).search)].join('\n')}`,
+  ].join('\n\n') + '\n',
 )
 // What's New as a feed, for readers that follow one: each post whole, links made absolute
 const abs = (html: string) => html.replace(/href="\//g, `href="${SITE.origin}/`)
@@ -240,5 +261,5 @@ write(
 )
 // Nothing disallowed: the engine lab carries its own noindex, which crawlers only see if they may fetch it
 write(join(DIST, 'robots.txt'), `User-agent: *\nAllow: /\n\nSitemap: ${url('/sitemap.xml')}\n`)
-console.log(`prerender: ${routes.length} pages, 404.html, sitemap.xml (${paths.length} URLs), robots.txt`)
+console.log(`prerender: ${routes.length} pages, 404.html, sitemap.xml (${paths.length} URLs), robots.txt, llms.txt`)
 await vite.close()

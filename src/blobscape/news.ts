@@ -16,6 +16,8 @@ export interface Post {
   title: string
   /** Two or three sentences: the list shows them, and so does a link preview. */
   summary: string
+  /** The post in at most 160 characters, for a search result (the meta description), which cuts anything longer mid-sentence. */
+  search: string
   /** A 16:10 picture from public/ (an experiment's cover, or one in public/news/), and what it shows. */
   image: { src: string; alt: string }
   /** The release this post is about, if it is about one. */
@@ -32,6 +34,7 @@ export const POSTS: Post[] = [
     date: '2026-11-19',
     title: 'A florist made of blobs',
     summary: 'Seasonal Bouquets is a new experiment: pick a season and it grows every flower from a recipe, arranges them the way florists do and stands them in a vase, a bucket, a pumpkin or a rain boot. No two come out alike.',
+    search: 'Seasonal Bouquets is a new experiment: pick a season and it grows every flower from a recipe and arranges them the way florists do. No two come out alike.',
     image: { src: '/covers/seasonal-bouquets.webp', alt: 'An armful of fall flowers in a sage green pumpkin on a round table: red winterberry, plum roses, red zinnias, purple asters and oak leaves.' },
     body: [
       '[Seasonal Bouquets](/experiments/seasonal-bouquets/) started as a question: could the engine that moves creatures and grows a forest also arrange flowers? It can, and nothing in it is a model someone made.',
@@ -48,6 +51,7 @@ export const POSTS: Post[] = [
     date: '2026-11-18',
     title: 'The dragon breathes for real',
     summary: 'The dragon on Splat Creatures used to puff a flame and pull it back in. Now its ribs fill, its throat glows, and the breath lights the hide, burns the floor and drifts away. Each of its three looks has a breath of its own.',
+    search: 'The dragon on Splat Creatures now breathes for real: its ribs fill, its throat glows, and the breath lights the hide, burns the floor and drifts away.',
     image: { src: '/share/splat-creatures.jpg', alt: 'An ice dragon made of blobs breathing a stream of frost onto a stone floor.' },
     body: [
       'The dragon on [Splat Creatures](/experiments/creature/?creature=dragon) has had a breath move since its first day, but it was only a cone of flame that grew out of the mouth and shrank back in. This is that move done properly.',
@@ -64,6 +68,7 @@ export const POSTS: Post[] = [
     version: '0.4.0',
     title: 'Water, daylight and one scene drawn four ways',
     summary: 'Three new experiments: a pond that ripples from real footfalls, a cabin and a city lit through a whole day, and one scene drawn by four different kinds of renderer at once. The sandbox became a workspace, and Sand, Snow and Goo was rebuilt.',
+    search: 'Three new experiments: a pond that ripples from real footfalls, a cabin and a city lit through a whole day, and one scene drawn by four renderers at once.',
     image: { src: '/covers/wading-pond.webp', alt: 'An elf made of blobs standing in a shallow pond inside a ruin, lit by candles in a niche, with rings spreading on the water.' },
     body: [
       'Version 0.4.0 is the biggest release so far. Its theme, if it has one, is doing things for real instead of faking them.',
@@ -84,6 +89,7 @@ export const POSTS: Post[] = [
     version: '0.3.0',
     title: 'A photo becomes a scene, and blobs become brush marks',
     summary: 'The sandbox learned a lot at once: open a photo and walk round it, tap a thing to select all of it, paint grass and fur, mend holes, and fly a camera path. Brush and Ink draws splats as paint, and a creature now fits on any web page with one tag.',
+    search: 'The sandbox turns a photo into a scene you can walk round, Brush and Ink draws splats as paint, and a creature now fits on any web page with one tag.',
     image: { src: '/covers/brush-and-ink.webp', alt: 'A windmill on a small island with trees and a pond, drawn as brush marks and pen strokes, half on dark ground and half on paper.' },
     body: [
       'Version 0.3.0 is mostly about the [sandbox](/sandbox/), which went from a place to spray blobs to a place to work on a scene.',
@@ -104,6 +110,7 @@ export const POSTS: Post[] = [
     version: '0.2.0',
     title: 'The engine is a package you can install',
     summary: 'The engine behind the experiments is on npm as @blobscape/engine, with docs and three new lessons that end in code you can copy. Sand, Snow and Goo arrives too: a box of blobs that flow.',
+    search: 'The engine behind the experiments is on npm as @blobscape/engine, with docs and three new lessons that end in code you can copy. Plus Sand, Snow and Goo.',
     image: { src: '/covers/sand-snow-goo.webp', alt: 'Three trays side by side, each holding a heap made of blobs: sand, snow and green goo.' },
     body: [
       'Until now the engine that draws the creatures, the forest, the dungeon and the pixel scenes lived inside this site. With version 0.2.0 it is a package for three.js that anyone can install:',
@@ -125,6 +132,7 @@ export const POSTS: Post[] = [
     version: '0.1.0',
     title: 'The first release: 21 lessons, nine experiments and an engine',
     summary: 'Blobscape gets its first version number, and its code is public under the MIT license. Here is what the site held on that day, and what had just been added: worlds with weather, feet that find the ground, and sandbox creatures that walk about.',
+    search: 'Blobscape gets its first version number, and its code is public under the MIT license. Here is what the site held that day and what had just been added.',
     image: { src: '/covers/forest-walk.webp', alt: 'An elf made of blobs, seen from behind, walking down a forest path between trees and tall grass.' },
     body: [
       'A week after the first experiment went up, Blobscape got a version number. Version 0.1.0 marks the site as it stood: 21 lessons in three parts, a sandbox, nine experiments, and the engine they run on. The code went public under the MIT license the day before.',
@@ -140,6 +148,7 @@ export const POSTS: Post[] = [
     date: '2026-11-16',
     title: 'Fur, a pufferfish and a new cast of creatures',
     summary: 'Every creature was rebuilt with the same cutter that makes the pixel scenes. The fox grew fur, the monsters grew scales, and two new lessons teach morphs and fur. Shape Shifter turns any one of them into another.',
+    search: 'Every creature was rebuilt with the cutter that makes the pixel scenes. The fox grew fur, the monsters grew scales, and two new lessons teach morphs and fur.',
     image: { src: '/covers/shape-shifter.webp', alt: 'A creature made of blobs caught halfway as a frog turns into another creature, its head still that of a frog.' },
     body: [
       'The creatures were the oldest things on the engine, and they looked it. This was the day they caught up.',
@@ -160,6 +169,7 @@ export const POSTS: Post[] = [
     date: '2026-11-15',
     title: 'Pixel Diorama: pixel art cut from splats',
     summary: 'A new experiment that draws moving 3D scenes as pixel art: shapes cut into a grid of solid blobs, moved by bones, drawn small and snapped to a palette. It opened with a lighthouse and had more than a dozen scenes two days later.',
+    search: 'A new experiment that draws moving 3D scenes as pixel art: shapes cut into a grid of solid blobs, moved by bones, drawn small and snapped to a palette.',
     image: { src: '/covers/pixel-diorama.webp', alt: 'A pixel-art lighthouse on a small island in a dark blue sea under a night sky with clouds.' },
     body: [
       'Splats are usually soft and see-through. [Pixel Diorama](/experiments/pixel-diorama/) uses them the other way: every blob is a small solid disc lying on a surface, with sun and shadow painted into its color. Draw that small, cut it to a palette, add an outline, and it reads as pixel art that you can turn.',
@@ -177,6 +187,7 @@ export const POSTS: Post[] = [
     date: '2026-11-12',
     title: 'A forest, a dungeon, a watch and a scan',
     summary: 'Four experiments in two days, each one asking the new engine for something more: a whole world, a game, a mechanism and a real capture. The lessons grew a third part about splats made from photos.',
+    search: 'Four experiments in two days, each asking the new engine for something more: a whole world, a game, a mechanism and a real capture.',
     image: { src: '/covers/dungeon-run.webp', alt: 'An elf hero made of blobs raising a sword among yellow, red, purple and green slimes in a torchlit dungeon hall.' },
     body: [
       'With an engine that could move one creature, the next question was what else it could carry.',
@@ -192,6 +203,7 @@ export const POSTS: Post[] = [
     date: '2026-11-11',
     title: 'An engine of our own, and creatures that walk',
     summary: 'Existing splat renderers draw still scenes well, but none could give a splat bones. So Blobscape got its own small engine for splats that move, five lessons on rigs, and a page of creatures to download as animated 3D models.',
+    search: 'Splat renderers draw still scenes well, but none could give a splat bones. So Blobscape got its own small engine, five lessons on rigs and a page of creatures.',
     image: { src: '/covers/splat-creatures.webp', alt: 'Three foxes made of blobs trotting in a row: a white one, a red one and a gray one.' },
     body: [
       'The first lessons were drawn with Spark, a renderer for splats, and it draws still scenes very well. But the plan was creatures that walk, and for that a blob has to follow a bone the way the skin of a game character does.',
@@ -209,6 +221,7 @@ export const POSTS: Post[] = [
     date: '2026-11-11',
     title: 'Blobscape opens: eight lessons and a sandbox',
     summary: 'The lessons that give the site its name: start with one blob, learn what each of its numbers does, then pile up thousands. With a sandbox for your own captures, and a home of its own at blobscape.dev.',
+    search: 'The lessons that give the site its name: start with one blob, learn what each of its numbers does, then pile up thousands. With a sandbox for your own captures.',
     image: { src: '/news/first-lessons.webp', alt: 'The first lesson, One blob: a single soft blob in a dark display case, with sliders for its numbers below.' },
     body: [
       'A Gaussian splat is a 3D scene made of nothing but soft, see-through, colored blobs. That is easy to say and hard to picture, so Blobscape teaches it by letting you pull the thing apart.',
@@ -227,6 +240,7 @@ export const POSTS: Post[] = [
     date: '2026-11-10',
     title: 'Two tools to start: Splat to Sprite and Fit a Picture',
     summary: 'Before there were lessons, there were two small tools. One turns a 3D splat into a pixel-art sprite sheet. The other shows the training loop that makes a splat, in two dimensions, slowly enough to watch.',
+    search: 'Before there were lessons, there were two small tools: one turns a 3D splat into a pixel-art sprite sheet, the other shows how a splat is trained.',
     image: { src: '/covers/splat-to-sprite.webp', alt: 'A round flask shown half as a soft 3D splat and half as the pixel-art sprite made from it.' },
     body: [
       'This is where it began: two tools built in a day, each a first try at one half of what Blobscape became.',
