@@ -421,7 +421,8 @@ export function PixelDiorama() {
         const png = video ? undefined : startApng(W, H, count, fps, browserDeflate)
         // each frame is handed on as soon as it is drawn, so no more than one raw picture is held at a time
         let taken: Promise<void> | undefined
-        unwatch = pictures(W, H, (sheet, ctx) => { taken = video ? video.add(sheet) : png!.add({ width: W, height: H, data: ctx.getImageData(0, 0, W, H).data }) })
+        // the view may also draw by itself between frames (a setting that asked for one): only the frame asked for is taken
+        unwatch = pictures(W, H, (sheet, ctx) => { if (!taken) taken = video ? video.add(sheet) : png!.add({ width: W, height: H, data: ctx.getImageData(0, 0, W, H).data }) })
         for (let f = 0; f < count; f++) {
           taken = undefined
           await stage.frame(times[f])
@@ -463,7 +464,7 @@ export function PixelDiorama() {
       }
       const cv = canvas.current!, W = cv.width, H = cv.height
       let got: Promise<Blob | null> | undefined
-      unwatch = pictures(W, H, (sheet) => { got = new Promise((done) => sheet.toBlob(done, 'image/png')) })
+      unwatch = pictures(W, H, (sheet) => { got ??= new Promise((done) => sheet.toBlob(done, 'image/png')) })
       await stage.frame(stage.time)
       const blob = await got
       if (!blob) throw new Error('the view gave no picture')
