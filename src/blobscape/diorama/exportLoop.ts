@@ -47,7 +47,7 @@ export function sideFor(kind: 'png' | 'mp4', asked: number): number {
   return on.includes(asked) ? asked : on.filter((s) => s <= asked).pop() ?? on[0]
 }
 
-/** A file name for an export: the scene, the style when it is not pixel art, and what it is. */
-export function exportName(scene: string, style: string, what: 'loop' | 'frame', ext: 'png' | 'mp4'): string {
-  return `pixel-diorama-${scene}${style === 'pixel' ? '' : `-${style}`}${what === 'loop' ? '-loop' : ''}.${ext}`
+/** A file name for an export: the page, the scene, the style when it is not pixel art, and what it is. */
+export function exportName(scene: string, style: string, what: 'loop' | 'frame' | 'path', ext: 'png' | 'mp4', page = 'pixel-diorama'): string {
+  return `${page}-${scene}${style === 'pixel' ? '' : `-${style}`}${what === 'frame' ? '' : `-${what}`}.${ext}`
 }

@@ -51,4 +51,5 @@ test('file names say the scene, the style and what it is', () => {
   assert.equal(exportName('koi', 'pixel', 'loop', 'png'), 'pixel-diorama-koi-loop.png')
   assert.equal(exportName('koi', 'oil', 'loop', 'mp4'), 'pixel-diorama-koi-oil-loop.mp4')
   assert.equal(exportName('koi', 'cel', 'frame', 'png'), 'pixel-diorama-koi-cel.png')
+  assert.equal(exportName('my-scene', 'pixel', 'path', 'mp4', 'scene-creator'), 'scene-creator-my-scene-path.mp4')
 })

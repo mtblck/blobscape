@@ -247,4 +247,68 @@ export default [
       }
     },
   },
+  {
+    name: 'scene-creator-style',
+    about: 'Scene Creator, Style and Export: oil, then cel shading (cut again with no light baked in), then pixel art in another palette each change the picture; a frame saves as a PNG and a two-stop camera path as an animated PNG of every frame',
+    entries: ['src/blobscape/SceneCreator.tsx', 'src/blobscape/creator/styling.ts', 'src/blobscape/diorama/useExport.tsx', 'src/blobscape/creator/cut.ts'],
+    async run({ shots, join, fails, ok, open, axe }) {
+      const c = await open('/scene-creator/?offscreen=1&detail=chunky&mode=style', { viewport: { width: 1280, height: 900 } })
+      const p = c.page
+      const ready = () => p.waitForFunction(() => window.__creator?.ready(), null, { timeout: 180000 }).then(() => true, () => false)
+      if (!(await ready())) { fails.push('blobscape scene creator style: the windmill never opened'); return }
+      const picture = () => p.evaluate(async () => {
+        const s = window.__creator.stage
+        await s.frame(1); await s.frame(1)
+        const t = document.createElement('canvas'); t.width = 96; t.height = 72
+        const g = t.getContext('2d', { willReadFrequently: true }); g.drawImage(document.querySelector('[data-testid=creator-view]'), 0, 0, 96, 72)
+        return Array.from(g.getImageData(0, 0, 96, 72).data)
+      })
+      const differ = (a, b) => { let n = 0; for (let i = 0; i < a.length; i += 4) if (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]) > 30) n++; return n }
+      const chip = (name) => p.getByTestId('creator-styles').getByRole('button', { name, exact: true }).click()
+      const steps = [], diffs = {}
+      const first = await picture()
+      await chip('Oil')
+      await p.waitForTimeout(300)
+      const oil = await picture()
+      diffs.oil = differ(first, oil)
+      steps.push(['oil', (await p.evaluate(() => window.__creator.style)) === 'oil' && diffs.oil > 200])
+      await chip('Cel shading')
+      const plain = await p.waitForFunction(() => window.__creator.ready() && window.__creator.plain(), null, { timeout: 180000 }).then(() => true, () => false)
+      const cel = await picture()
+      diffs.cel = differ(oil, cel)
+      steps.push(['cel shading cut plain', plain && diffs.cel > 200])
+      await chip('Pixel art')
+      await p.waitForFunction(() => window.__creator.ready() && !window.__creator.plain(), null, { timeout: 180000 }).catch(() => {})
+      const art = await picture()
+      await p.getByTestId('creator-palettes').getByRole('button', { name: '1-bit' }).click()
+      await p.waitForTimeout(300)
+      const onebit = await picture()
+      diffs.palette = differ(art, onebit)
+      steps.push(['palette', diffs.palette > 200])
+      await p.screenshot({ path: join(shots, 'blobscape-scene-creator-style.png') })
+      await axe(p, 'blobscape scene creator style')
+      // Export: a frame, then a path of two stops a second apart, as an animated PNG at the art's own size
+      await p.getByRole('tab', { name: 'Export' }).click()
+      const [frame] = await Promise.all([p.waitForEvent('download', { timeout: 60000 }), p.getByTestId('creator-save-frame').click()])
+      const frameName = frame.suggestedFilename()
+      const frameBytes = (await import('node:fs')).readFileSync(await frame.path())
+      steps.push(['frame saved', frameName === 'scene-creator-windmill.png' && frameBytes.length > 1000])
+      await p.getByTestId('creator-add-stop').click()
+      const view = p.getByTestId('creator-view')
+      await view.focus()
+      for (let k = 0; k < 3; k++) await view.press('ArrowLeft')
+      await p.getByTestId('creator-add-stop').click()
+      const between = p.getByRole('slider', { name: 'Between stops' })
+      await between.focus(); await between.press('Home')
+      await p.getByRole('button', { name: 'Animated PNG' }).click()
+      await p.getByRole('button', { name: '1×' }).click()
+      const [path] = await Promise.all([p.waitForEvent('download', { timeout: 300000 }), p.getByTestId('creator-record-path').click()])
+      const png = (await import('node:fs')).readFileSync(await path.path())
+      const at = png.indexOf('acTL'), frames = at > 0 ? png.readUInt32BE(at + 4) : 0
+      steps.push(['path saved', path.suggestedFilename() === 'scene-creator-windmill-path.png' && frames === 13])
+      const bad = steps.filter(([, good]) => !good).map(([name]) => name)
+      if (bad.length) fails.push(`blobscape scene creator style: ${bad.join(', ')} failed ${JSON.stringify({ diffs, frameName, frames, note: await p.evaluate(() => window.__creator.exportNote()) })}`)
+      else ok(`blobscape scene creator style: oil, cel shading (cut plain) and a 1-bit palette each change the picture; a frame and a ${frames}-frame camera path save`)
+    },
+  },
 ]
