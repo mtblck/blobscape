@@ -905,7 +905,7 @@
       {
        "name": "tones",
        "type": "boolean",
-       "doc": "While true, the draw is a map of tones, for cel shading (`cel`): every blob a hard disc whose red is how it faces\nthe first light (0 away, 0.5 edge on, 1 toward), green the share of that light that reaches it past what stands\nin the way, and blue how flat it is (how far its facing can be trusted). `CelPass` (celPass.ts) draws it."
+       "doc": "While true, the draw is a map of tones, for cel shading (`cel`): every blob a hard disc whose red is how it faces\nthe first light (0 away, 0.5 edge on, 1 toward), green 1 (cast shadows are `CelPass`'s own), and blue how flat it\nis (how far its facing can be trusted). `CelPass` (celPass.ts) draws it."
       },
       {
        "name": "cel",
