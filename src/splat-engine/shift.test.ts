@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { Blobs } from '../splat-core/blobs.ts'
-import { amountAt, pairUp, shiftBlobs, sized, timeAt, type Order, type Path } from './shift.ts'
+import { amountAt, pairCost, pairUp, shiftBlobs, sized, timeAt, type Order, type Path } from './shift.ts'
 
 /** Blobs on a grid in a box, colored and sized by `tint`. */
 function box(nx: number, ny: number, nz: number, size: [number, number, number], at: [number, number, number], tint: number) {
@@ -142,4 +142,32 @@ test('sizing: the longest side becomes the size asked for, on the floor over the
   assert.ok(Math.abs(s.scale[0] - b.scale[0] * f) < 1e-7)
   // the blobs given are left alone
   assert.ok(Math.abs(b.center[0] - (0.1 + (0.5 / 24 - 0.5) * 2.4)) < 1e-6)
+})
+
+test('matched pairing costs less than by place, still uses every blob, and is the same every time', () => {
+  const a = tall(), b = box(10, 12, 8, [1, 1.4, 0.8], [0.1, 0, 0], 2)
+  const place = pairUp(a, b), match = pairUp(a, b, 'match')
+  assert.ok(pairCost(match) < pairCost(place) * 0.99, `matched ${pairCost(match)}, by place ${pairCost(place)}`)
+  assert.ok(match.trip <= place.trip, `matched trip ${match.trip}, by place ${place.trip}`)
+  // the same blobs of b, each once
+  const ids = (s: typeof match) => [...Array(s.count).keys()].map((i) => [0, 1, 2].map((k) => s.to.center[i * 3 + k].toFixed(4)).join()).sort()
+  assert.deepEqual(ids(match), ids(place))
+  assert.deepEqual([...pairUp(a, b, 'match').to.center.subarray(0, 60)], [...match.to.center.subarray(0, 60)])
+})
+
+test('matched pairing sends a blob to the part of the other shape with its color, where place leaves a choice', () => {
+  // two rows of the same places, red and blue taking turns, the other way round in one: by place pairs each with the
+  // blob in its own place, so every pair changes color; a step aside to a neighbor costs less than that
+  const row = (first: number) => {
+    const b = new Blobs(40)
+    for (let i = 0; i < 40; i++) {
+      const red = i % 2 === first
+      b.push({ center: [i * 0.0025, 0, 0], scale: [0.01, 0.01, 0.01], quat: [0, 0, 0, 1], color: red ? [1, 0, 0] : [0, 0, 1], opacity: 1 })
+    }
+    return b
+  }
+  const a = row(0), b = row(1)
+  const same = (s: ReturnType<typeof pairUp>) => { let n = 0; for (let i = 0; i < s.count; i++) if (s.from.color[i * 3] === s.to.color[i * 3]) n++; return n / s.count }
+  assert.ok(same(pairUp(a, b)) < 0.1)
+  assert.ok(same(pairUp(a, b, 'match')) > 0.9, `matched ${same(pairUp(a, b, 'match'))}`)
 })

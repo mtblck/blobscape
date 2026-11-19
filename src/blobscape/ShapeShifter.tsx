@@ -27,7 +27,11 @@ const ORDERS: { id: Order; label: string; note: string }[] = [
   { id: 'rise', label: 'From the floor up', note: 'The lowest blobs go first.' },
   { id: 'scatter', label: 'Scattered', note: 'Each blob sets off in its own time.' },
 ]
-const PAIRINGS: { id: Pairing; label: string }[] = [{ id: 'place', label: 'By place' }, { id: 'random', label: 'At random' }]
+const PAIRINGS: { id: Pairing; label: string; note: string }[] = [
+  { id: 'match', label: 'Matched', note: 'Paired by place, then near blobs swap partners wherever that makes trips shorter or keeps colors closer, so paths don\'t cross. An idea from Silicon Jungle\'s Ink Studio.' },
+  { id: 'place', label: 'By place', note: 'A blob goes to a partner near where it already is.' },
+  { id: 'random', label: 'At random', note: 'A blob goes to any blob at all. Stop it halfway to see why that matters.' },
+]
 const SPEEDS = [{ id: 6, label: 'Slow' }, { id: 3, label: 'Medium' }, { id: 1.5, label: 'Fast' }]
 const kilo = (n: number) => `${n / 1000}k`
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1)
@@ -71,7 +75,7 @@ export function ShapeShifter() {
   const [from, setFrom] = useState(() => named(params.get('from') ?? 'frog').id)
   const [to, setTo] = useState(() => { const id = named(params.get('to') ?? 'dragon').id; return id === named(params.get('from') ?? 'frog').id ? CREATURES.find((c) => c.id !== id)!.id : id })
   const [count, setCount] = useState(() => detailAsked(DETAIL, countNames) ?? (coarse ? DETAIL[0] : DETAIL[1]))
-  const [pairing, setPairing] = useState<Pairing>('place')
+  const [pairing, setPairing] = useState<Pairing>('match')
   const [path, setPath] = useState<Path>('straight')
   const [order, setOrder] = useState<Order>('rise')
   const [seconds, setSeconds] = useState(3)
@@ -113,7 +117,7 @@ export function ShapeShifter() {
         const b = make(to)
         later(() => {
           const shift = pairUp(a, b, pairing)
-          const other = pairUp(a, b, pairing === 'place' ? 'random' : 'place').trip
+          const other = pairUp(a, b, pairing === 'random' ? 'match' : 'random').trip
           setPair({ shift, other, out: new Blobs(shift.count), key: `${from}>${to}:${count}:${pairing}` })
         })
       })
@@ -252,7 +256,7 @@ export function ShapeShifter() {
             ? <><span className="tabular-nums text-ink" data-testid="shift-blobs">{pair.shift.count.toLocaleString()}</span> blobs, each paired with one of the {b.name}'s.</>
             : `Cutting the ${a.name} and the ${b.name}…`}</span>
           {pair && !building && <span data-testid="shift-trip">
-            The average blob travels <span className="tabular-nums text-ink">{pair.shift.trip.toFixed(2)}</span> units; paired {pairing === 'place' ? 'at random' : 'by place'} it would be{' '}
+            The average blob travels <span className="tabular-nums text-ink">{pair.shift.trip.toFixed(2)}</span> units; {pairing === 'random' ? 'with matched partners' : 'paired at random'} it would be{' '}
             <span className="tabular-nums text-ink">{pair.other.toFixed(2)}</span>.
           </span>}
         </>}
@@ -286,7 +290,7 @@ export function ShapeShifter() {
                   <div className="flex flex-wrap gap-1.5">
                     {PAIRINGS.map((p) => <Chip key={p.id} active={pairing === p.id} onClick={() => setPairing(p.id)}>{p.label}</Chip>)}
                   </div>
-                  <p className="mt-1.5 text-xs text-ink-faint">{pairing === 'place' ? 'A blob goes to a partner near where it already is.' : 'A blob goes to any blob at all. Stop it halfway to see why that matters.'}</p>
+                  <p className="mt-1.5 text-xs text-ink-faint">{PAIRINGS.find((p) => p.id === pairing)!.note}</p>
                 </Field>
               </div>
             ),
@@ -327,7 +331,9 @@ export function ShapeShifter() {
             same blobs throughout. Two creatures share nothing: each was cut on its own, with its own number of blobs in its own
             order. Here they are also brought to one size, so a frog and a dragon meet as equals. Then the first job is to pair them up. Both creatures are cut in half across their longest way, half matched with
             half, and each half is cut again until one blob is left on each side. That keeps tops with tops and fronts with
-            fronts, even when one creature is tall and the other long.
+            fronts, even when one creature is tall and the other long. Matched partners go one step further: each blob looks at
+            the blobs near it and swaps partners with one wherever that makes the two trips shorter together, or keeps each
+            blob nearer its own color, so paths stop crossing and an eye tends to become an eye.
           </p>
           <p>
             Then each blob blends the five kinds of number it is made of. Its center follows the path you picked, its sizes change
