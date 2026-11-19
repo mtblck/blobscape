@@ -174,9 +174,12 @@ export function SceneCreator() {
     const steps = cp.land.c.steps ? cp.palette : null
     const light = cutLight(project.light)
     const land = JSON.stringify([project.land, project.loop, steps, light, plain])
+    // haze and weather go into the land's air alone (a prop is cut with none), so they cut the land again and no prop:
+    // rain first cut every piece again, and on a phone the scene stood still while they came
+    const propLight = light && { ...light, haze: undefined, weather: undefined }
     return [
       { key: land, thing: 'land', plain, job: (spacing) => ({ kind: 'land', project, spacing, plain }) },
-      ...project.props.map((p, i): Piece => ({ key: JSON.stringify([p.prop, p.turn, p.size, project.loop, project.land, steps, light, plain]), thing: JSON.stringify(p.prop), plain, job: (spacing) => ({ kind: 'prop', project, i, spacing, plain }) })),
+      ...project.props.map((p, i): Piece => ({ key: JSON.stringify([p.prop, p.turn, p.size, project.loop, project.land, steps, propLight, plain]), thing: JSON.stringify(p.prop), plain, job: (spacing) => ({ kind: 'prop', project, i, spacing, plain }) })),
     ]
   }, [opened, project, cp, plain])
 
@@ -671,7 +674,10 @@ export function SceneCreator() {
     setLampPicked(next.light!.lamps!.length - 1)
   }
   const removeLamp = (i: number) => { if (project) { setLightDraft(undefined); edit(lampRemoved(project, i), 'Deleted the lamp.'); setLampPicked(undefined) } }
-  const lampLift = (i: number) => { const l = lamps[i]; return l ? Math.max(0, l.at[1] - groundAt(l.at[0], l.at[2], l.at[1] - 0.3)) : 0 }
+  // how high a lamp stands over the first ground under it. Looked for from the lamp itself: from lower down, a lamp
+  // nearer the ground than that started inside it and read as higher, so the Height slider sprang back (Matt saw it)
+  const lampGround = (at: Vec3) => groundAt(at[0], at[2], at[1])
+  const lampLift = (i: number) => { const l = lamps[i]; return l ? Math.max(0, l.at[1] - lampGround(l.at)) : 0 }
   /** On a light slider's box: dragging shows the change, letting go makes it one step to undo. */
   const lightGesture = { onPointerUp: () => commitLight(), onKeyUp: () => commitLight(), onBlur: () => commitLight() }
 
@@ -1081,7 +1087,7 @@ export function SceneCreator() {
                             <label className="flex items-center gap-2 text-sm text-ink-muted">Color <input type="color" value={lamp.color} onChange={(ev) => draftLight({ lamps: lampsNow(lampPicked, { color: ev.target.value }) })} onBlur={() => commitLight('Lamp color changed.')} className="h-8 w-10 cursor-pointer rounded border border-rule bg-paper" /></label>
                             <div {...lightGesture}><Slider label="Strength" value={lamp.strength} min={0.25} max={4} step={0.25} format={(v) => `${v.toFixed(2)}×`} onChange={(v) => draftLight({ lamps: lampsNow(lampPicked, { strength: v }) })} /></div>
                             <div {...lightGesture}><Slider label="Reach" value={lamp.range} min={0.1} max={3} step={0.05} format={(v) => v.toFixed(2)} onChange={(v) => draftLight({ lamps: lampsNow(lampPicked, { range: v }) })} /></div>
-                            <div {...lightGesture}><Slider label="Height" value={Math.round(lampLift(lampPicked) * 100) / 100} min={0} max={1.5} step={0.05} format={(v) => v.toFixed(2)} onChange={(v) => { const at = lamp.at; draftLight({ lamps: lampsNow(lampPicked, { at: [at[0], groundAt(at[0], at[2], at[1] - lampLift(lampPicked)) + v, at[2]] }) }) }} /></div>
+                            <div {...lightGesture}><Slider label="Height" value={Math.round(lampLift(lampPicked) * 100) / 100} min={0} max={1.5} step={0.05} format={(v) => v.toFixed(2)} onChange={(v) => { const at = lamp.at; draftLight({ lamps: lampsNow(lampPicked, { at: [at[0], lampGround(at) + v, at[2]] }) }) }} /></div>
                             <div {...lightGesture}><Slider label="Flicker" value={lamp.flicker?.by ?? 0} min={0} max={0.6} step={0.05} format={(v) => (v ? `${Math.round(v * 100)}%` : 'steady')} onChange={(v) => draftLight({ lamps: lampsNow(lampPicked, { flicker: v ? { by: v, times: 12 } : undefined }) })} /></div>
                             <button type="button" onClick={() => removeLamp(lampPicked)} className="min-h-9 cursor-pointer rounded-full border border-rule bg-paper px-3 text-sm font-semibold hover:border-ink-faint">Delete lamp</button>
                           </div>
@@ -1306,17 +1312,23 @@ export function SceneCreator() {
             </svg>
           )}
           {mode === 'light' && stage && lamps.length > 0 && (
-            <svg className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden data-testid="creator-lamps">
+            <svg className="pointer-events-none absolute inset-0 h-full w-full touch-none" aria-hidden data-testid="creator-lamps">
               {lamps.map((l, i) => {
                 const s = stage.screenAt(l.at, orbit)
                 if (!s) return null
-                return <circle key={i} cx={s.x} cy={s.y} r={i === lampPicked ? 11 : 9} fill={l.color} stroke={i === lampPicked ? 'var(--c-blob)' : '#fff'} strokeWidth="2.5" className="pointer-events-auto cursor-grab" data-testid={`creator-lamp-${i}`}
+                // the dot as drawn, inside a wider clear ring that takes a finger; touch-action none on the ring, or a
+                // phone takes the press for a scroll and cancels the drag (Matt couldn't move a lamp with his finger)
+                return <g key={i} data-testid={`creator-lamp-${i}`} className="pointer-events-auto cursor-grab" style={{ touchAction: 'none' }}
                   onPointerDown={(ev) => {
                     ev.stopPropagation()
+                    ev.preventDefault()
                     canvas.current!.setPointerCapture(ev.pointerId)
                     setLampPicked(i)
                     grab.current = { kind: 'lamp', i, from: local(ev), offset: [0, 0], turn0: lampLift(i), angle0: 0, moved: false }
-                  }} />
+                  }}>
+                  <circle cx={s.x} cy={s.y} r={coarse ? 24 : 14} fill="transparent" />
+                  <circle cx={s.x} cy={s.y} r={i === lampPicked ? 11 : 9} fill={l.color} stroke={i === lampPicked ? 'var(--c-blob)' : '#fff'} strokeWidth="2.5" />
+                </g>
               })}
             </svg>
           )}
