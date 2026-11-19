@@ -3888,7 +3888,7 @@
      "name": "MoveDoc",
      "kind": "type",
      "doc": "Every move repeats a whole number of `times` in the loop, so the scene loops.",
-     "type": "{ kind: \"spin\"; bone: string; axis: \"x\" | \"y\" | \"z\"; times: number; phase?: number } | { kind: \"sway\"; bone: string; axis: \"x\" | \"y\" | \"z\"; degrees: number; times: number; phase?: number } | { kind: \"bob\"; bone: string; by: Vec3; times: number; phase?: number } | { kind: \"drift\"; bone: string; by: Vec3; times: number; grow?: [number, number]; phase?: number } | { kind: \"pulse\"; bone: string; size: [number, number]; times: number; phase?: number } | { kind: \"sprout\"; bone: string; times: number; phase?: number }"
+     "type": "{ kind: \"spin\"; bone: string; axis: \"x\" | \"y\" | \"z\"; times: number; phase?: number } | { kind: \"sway\"; bone: string; axis: \"x\" | \"y\" | \"z\"; degrees: number; times: number; phase?: number } | { kind: \"bob\"; bone: string; by: Vec3; times: number; phase?: number } | { kind: \"drift\"; bone: string; by: Vec3; times: number; grow?: [number, number]; phase?: number } | { kind: \"pulse\"; bone: string; size: [number, number]; times: number; phase?: number } | { kind: \"sprout\"; bone: string; times: number; phase?: number } | { kind: \"pass\"; bone: string; by: Vec3; times: number; phase?: number }"
     },
     {
      "name": "LightDoc",
@@ -4157,6 +4157,22 @@
      "signatures": [
       {
        "code": "sprouted(life: number): number"
+      }
+     ]
+    },
+    {
+     "name": "PASS_EDGE",
+     "kind": "const",
+     "doc": "The share of its way at each end over which a passing thing grows in and shrinks away.",
+     "type": "0.06"
+    },
+    {
+     "name": "passed",
+     "kind": "function",
+     "doc": "A `pass` move at `life` (0 to 1 along its way) for a thing drawn `phase` along it: how far it stands from where it\nis drawn, as a share of the way, and its size, which is 0 at both ends so the jump back is never seen.",
+     "signatures": [
+      {
+       "code": "passed(life: number, phase: number): [number, number]"
       }
      ]
     },
