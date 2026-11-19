@@ -1,0 +1,1 @@
+Pixel Diorama: Glow now turns up the light that lamps, fires and other glowing things cast on what stands round them, not only the shine round bright pixels. A scene opens lit as before; `?glow=` sets it in the address.

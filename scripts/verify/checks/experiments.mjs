@@ -456,6 +456,37 @@ export default [
     },
   },
   {
+    name: 'diorama-glow',
+    about: 'Pixel Diorama: Glow turns up the light a fire casts on what stands round it, not only the shine round bright pixels',
+    entries: ['src/blobscape/PixelDiorama.tsx'],
+    async run({ fails, ok, open, tabClick }) {
+      const d = await open('/experiments/pixel-diorama/?offscreen=1&scene=campfire', { viewport: { width: 1280, height: 900 } })
+      await d.page.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).catch(() => {})
+      // the scene as it is drawn small, before the pixel pass adds any shine of its own: how bright its solid pixels are
+      const lit = () => d.page.evaluate(async () => {
+        while (!window.__diorama) await new Promise((r) => setTimeout(r, 50))
+        const { stage } = window.__diorama
+        await stage.frame(2); await stage.frame(2)
+        const { small } = await stage.pixelFrames()
+        let sum = 0, n = 0
+        for (let i = 0; i < small.data.length; i += 4) if (small.data[i + 3] > 128) { sum += small.data[i] + small.data[i + 1] + small.data[i + 2]; n++ }
+        return n ? sum / n / 3 : 0
+      })
+      const own = await lit()
+      const slider = d.page.getByRole('slider', { name: 'Glow' })
+      await tabClick(slider)
+      await slider.fill('3')
+      await d.page.waitForTimeout(300)
+      const more = await lit()
+      await slider.fill('0')
+      await d.page.waitForTimeout(300)
+      const none = await lit()
+      if (!(own > 0 && more > own * 1.04 && none < own * 0.98)) fails.push(`blobscape pixel diorama glow: the scene should brighten with more glow and dim with none: ${JSON.stringify({ own, more, none })}`)
+      else ok(`blobscape pixel diorama: Glow lights the scene round the fire (mean ${own.toFixed(1)} at its own, ${more.toFixed(1)} at 3×, ${none.toFixed(1)} with it off)`)
+      await d.ctx.close()
+    },
+  },
+  {
     name: 'diorama-picker',
     about: "Pixel Diorama: details dialog, How it's made, picking a scene swaps the palette on arrival, the gallery of loops, opening a description",
     entries: ['src/blobscape/PixelDiorama.tsx'],
