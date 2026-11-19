@@ -1514,15 +1514,86 @@ export default [
     },
   },
   {
+    name: 'seasonal-bouquets',
+    about: 'Seasonal Bouquets: a bouquet grown and arranged on both backends, the same when drawn twice, swaying, dropping a petal, and changing with the season',
+    entries: ['src/blobscape/Bouquets.tsx'],
+    async run({ shots, join, fails, ok, open, tabClick, axe }) {
+      const read = (page, t) => page.evaluate(async (t) => {
+        await window.__bouquet.stage.frame(t)
+        const cv = document.querySelector('[data-testid=bouquet-view]')
+        const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+        let n = 0
+        const sum = [0, 0, 0]
+        for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 128) { n++; sum[0] += d[i]; sum[1] += d[i + 1]; sum[2] += d[i + 2] }
+        return { d: Array.from(d), solid: n / (d.length / 4), mean: sum.map((v) => v / Math.max(1, n)) }
+      }, t)
+      const differ = (a, b, by = 0) => { let n = 0; for (let i = 0; i < a.d.length; i += 4) if (Math.abs(a.d[i] - b.d[i]) + Math.abs(a.d[i + 1] - b.d[i + 1]) + Math.abs(a.d[i + 2] - b.d[i + 2]) + Math.abs(a.d[i + 3] - b.d[i + 3]) > by) n++; return n / (a.d.length / 4) }
+      const pictures = {}
+      for (const backend of ['webgpu', 'webgl']) {
+        const k = await open(`/experiments/seasonal-bouquets/?offscreen=1&season=fall&seed=3&detail=light${backend === 'webgl' ? '&webgl=1' : ''}`, { viewport: { width: 1280, height: 900 } })
+        const up = await k.page.waitForFunction(() => window.__bouquet?.blobs() > 0, null, { timeout: 120000 }).then(() => true, () => false)
+        if (!up) { fails.push(`seasonal bouquets on ${backend}: the bouquet never came up`); await k.ctx.close(); continue }
+        // the first frame can be drawn before the view has framed the bouquet
+        await read(k.page, 1)
+        await k.page.waitForTimeout(400)
+        const got = await k.page.evaluate(() => window.__bouquet.stage.backend)
+        const facts = await k.page.evaluate(() => ({ blobs: window.__bouquet.blobs(), bones: window.__bouquet.bones(), stems: window.__bouquet.stems(), lines: window.__bouquet.lines(), vase: window.__bouquet.vase() }))
+        const first = await read(k.page, 1), again = await read(k.page, 1), later = await read(k.page, 2.5)
+        pictures[backend] = first
+        const same = differ(first, again), swayed = differ(first, later, 24)
+        if (got !== backend || same !== 0 || !(first.solid > 0.12) || !(swayed > 0.002) || !(facts.stems >= 20 && facts.bones < 256 && facts.blobs > 50000 && facts.lines.length >= 8)) fails.push(`seasonal bouquets on ${backend}: ${JSON.stringify({ got, same, solid: first.solid, swayed, ...facts })}`)
+        else ok(`seasonal bouquets on ${backend}: ${facts.stems} stems (${facts.lines.length} kinds) in ${facts.vase}, ${facts.blobs.toLocaleString('en-US')} blobs on ${facts.bones} bones; drawn twice it is the same, and ${(swayed * 100).toFixed(1)}% of the view moves in a second and a half`)
+        // a petal let go is on the table a few seconds later, and the picture shows it
+        const before = await k.page.evaluate(() => window.__bouquet.fallen())
+        const did = await k.page.evaluate(() => window.__bouquet.shed())
+        const landed = await read(k.page, 9), still = await read(k.page, 9)
+        const after = await k.page.evaluate(() => window.__bouquet.fallen())
+        const without = await k.page.evaluate(() => window.__bouquet.fallen())
+        if (!did || before !== 0 || after !== 1 || without !== 1 || differ(landed, still) !== 0) fails.push(`seasonal bouquets on ${backend}: shaking a petal loose gave ${JSON.stringify({ did, before, after })}`)
+        else ok(`seasonal bouquets on ${backend}: a petal shaken loose is counted as fallen and the frame holds still when drawn again`)
+        if (backend === 'webgpu') {
+          await k.page.screenshot({ path: join(shots, 'blobscape-seasonal-bouquets.png') })
+          // another season is another bouquet, and the address names it
+          const name = () => k.page.getByTestId('bouquet-name').textContent()
+          await tabClick(k.page.getByTestId('bouquet-seasons').getByRole('button', { name: 'Winter', exact: true }))
+          const winter = await k.page.waitForFunction(() => document.querySelector('[data-testid=bouquet-name]')?.textContent?.startsWith('Winter'), null, { timeout: 60000 }).then(() => true, () => false)
+          await k.page.waitForTimeout(400)
+          const snow = await read(k.page, 1)
+          await tabClick(k.page.getByTestId('bouquet-vases').getByRole('button', { name: 'Snowman', exact: true }))
+          const inSnowman = await k.page.waitForFunction(() => /snowman/.test(window.__bouquet?.vase() ?? ''), null, { timeout: 60000 }).then(() => true, () => false)
+          await k.page.waitForTimeout(400)
+          const snowman = await read(k.page, 1)
+          const url = new URL(k.page.url())
+          if (!winter || !inSnowman || url.searchParams.get('season') !== 'winter' || url.searchParams.get('vase') !== 'snowman' || !(differ(first, snow, 24) > 0.02) || !(differ(snow, snowman, 24) > 0.01)) fails.push(`seasonal bouquets: picking winter and the snowman gave "${await name()}" at ${url.search}`)
+          else ok(`seasonal bouquets: winter and the snowman give another bouquet ("${await name()}"), and the address says so`)
+          await k.page.screenshot({ path: join(shots, 'blobscape-seasonal-bouquets-winter.png') })
+          const seed = url.searchParams.get('seed')
+          await k.page.getByTestId('bouquet-another').click()
+          const moved = await k.page.waitForFunction((seed) => new URL(location.href).searchParams.get('seed') !== seed, seed, { timeout: 10000 }).then(() => true, () => false)
+          if (!moved) fails.push('seasonal bouquets: Another bouquet did not change the address')
+          else ok('seasonal bouquets: Another bouquet picks a new one')
+          await axe(k.page, 'blobscape seasonal bouquets')
+        }
+        await k.ctx.close()
+      }
+      if (pictures.webgpu && pictures.webgl) {
+        const a = pictures.webgpu, b = pictures.webgl
+        const off = Math.max(...a.mean.map((v, i) => Math.abs(v - b.mean[i])))
+        if (!(Math.abs(a.solid - b.solid) < 0.02 && off < 12)) fails.push(`seasonal bouquets: WebGPU and WebGL differ (cover ${a.solid.toFixed(3)} and ${b.solid.toFixed(3)}, mean color ${off.toFixed(1)} apart)`)
+        else ok(`seasonal bouquets: WebGPU and WebGL draw the same bouquet (cover within ${(Math.abs(a.solid - b.solid) * 100).toFixed(2)}%, mean color within ${off.toFixed(1)})`)
+      }
+    },
+  },
+  {
     name: 'layout',
     core: true,
     about: 'every experiment: same two columns, its own tabs, a preview that stays in sight on a phone',
     entries: ['src/shared/Workbench.tsx', 'src/shared/ui.tsx'],
-    files: ['src/shared/theme.css', 'src/blobscape/PixelDiorama.tsx', 'src/blobscape/Creature.tsx', 'src/blobscape/ForestWalk.tsx', 'src/blobscape/WadingPond.tsx', 'src/blobscape/DungeonRun.tsx', 'src/blobscape/ScanStudio.tsx', 'src/blobscape/Clockwork.tsx', 'src/blobscape/ShapeShifter.tsx', 'src/blobscape/SandSnowGoo.tsx', 'src/blobscape/BrushInk.tsx', 'src/blobscape/FourWays.tsx', 'src/fit-a-picture/App.tsx', 'src/splat-to-sprite/App.tsx'],
+    files: ['src/shared/theme.css', 'src/blobscape/Bouquets.tsx', 'src/blobscape/PixelDiorama.tsx', 'src/blobscape/Creature.tsx', 'src/blobscape/ForestWalk.tsx', 'src/blobscape/WadingPond.tsx', 'src/blobscape/DungeonRun.tsx', 'src/blobscape/ScanStudio.tsx', 'src/blobscape/Clockwork.tsx', 'src/blobscape/ShapeShifter.tsx', 'src/blobscape/SandSnowGoo.tsx', 'src/blobscape/BrushInk.tsx', 'src/blobscape/FourWays.tsx', 'src/fit-a-picture/App.tsx', 'src/splat-to-sprite/App.tsx'],
     async run({ join, fails, ok, open }) {
       const PAGES = [
         ['pixel-diorama', 'Scene,Pixels,Finish'], ['creature', 'Creature Type,Movement & Details,Export & Import'], ['forest-walk', 'Forest Type,Character Style,View'], ['wading-pond', 'Water & Light,Character Style,View'],
-        ['dungeon-run', 'Game Settings,Character Style,View'], ['scan-studio', 'Import,Level & Crop,Clean,Lighting,Colliders'], ['clockwork', 'Time,View'], ['shape-shifter', 'Shift,Creatures'], ['sand-snow-goo', 'Material,Test,View'], ['brush-and-ink', 'Look,Subject'], ['four-ways', 'Compare,Pixels'],
+        ['dungeon-run', 'Game Settings,Character Style,View'], ['scan-studio', 'Import,Level & Crop,Clean,Lighting,Colliders'], ['clockwork', 'Time,View'], ['shape-shifter', 'Shift,Creatures'], ['sand-snow-goo', 'Material,Test,View'], ['brush-and-ink', 'Look,Subject'], ['four-ways', 'Compare,Pixels'], ['seasonal-bouquets', 'Bouquet,Vase,View'],
         ['fit-a-picture', 'Picture,Training'], ['splat-to-sprite', 'Prop Type,Pixels,Finish,View'],
       ]
       const sizes = new Set()
