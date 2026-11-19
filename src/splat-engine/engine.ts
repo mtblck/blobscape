@@ -215,8 +215,8 @@ export class SplatWorld extends Mesh {
   poses = 0
   /**
    * While true, the draw is a map of tones, for cel shading (`cel`): every blob a hard disc whose red is how it faces
-   * the first light (0 away, 0.5 edge on, 1 toward), green the share of that light that reaches it past what stands
-   * in the way, and blue how flat it is (how far its facing can be trusted). `CelPass` (celPass.ts) draws it.
+   * the first light (0 away, 0.5 edge on, 1 toward), green 1 (cast shadows are `CelPass`'s own), and blue how flat it
+   * is (how far its facing can be trusted). `CelPass` (celPass.ts) draws it.
    */
   get tones() { return this.flat.value === 3 }
   set tones(on: boolean) { this.flat.value = on ? 3 : 0 }
@@ -1715,21 +1715,18 @@ function flatness(covA: N, covB: N) {
 
 /**
  * What cel shading cuts into tones, for one blob under the first light: how it faces the light (0 away, 0.5 edge on, 1
- * toward; the side the camera sees is its outside), the share of the light that reaches it through the grid of
- * shadows, and how flat it is (how far its facing can be trusted). A blob that gives its own light is fully lit. CPU
- * twin: `toneAt` in light.ts, with shadow.ts's `transmittance` (change both).
+ * toward; the side the camera sees is its outside), 1 (cast shadows are `CelPass`'s own, from the light's view of the
+ * scene, never the grid of shadows), and how flat it is (how far its facing can be trusted). A blob that gives its own
+ * light faces it fully. CPU twin: `toneAt` in light.ts (change both).
  */
 function toned(world: N, covA: N, covB: N, L: Lighting) {
   const out = vec3(1, 1, flatness(covA, covB)).toVar()
   If(L.count.greaterThan(0).and(covB.z.lessThan(0.5)), () => {
     const n = blobNormal(covA, covB).toVar()
     n.assign(select(dot(n, L.eye.sub(world)).lessThan(0), n.negate(), n))
-    const P = L.pos.element(0), C = L.col.element(0)
-    const sun = P.w.lessThan(0).toVar()
-    const to = select(sun, P.xyz.mul(SUN_FAR), P.xyz.sub(world)).toVar()
-    const d2 = dot(to, to).toVar()
-    out.x.assign(dot(n, to.mul(TSL.inverseSqrt(max(d2, 1e-6)))).mul(0.5).add(0.5))
-    If(C.w.greaterThan(0.5), () => { out.y.assign(shadowMarch(world, n, to, d2, select(sun, TSL.int(SUN_MARCH), TSL.int(MAX_MARCH)), L)) })
+    const P = L.pos.element(0)
+    const to = select(P.w.lessThan(0), P.xyz.mul(SUN_FAR), P.xyz.sub(world)).toVar()
+    out.x.assign(dot(n, to.mul(TSL.inverseSqrt(max(dot(to, to), 1e-6)))).mul(0.5).add(0.5))
   })
   return out
 }
@@ -2080,12 +2077,15 @@ function makeVertexWebGL(buf: ReturnType<typeof makeBuffers>, sort: Sorter, mode
     const p = projectSplat(d.world, d.covA, d.covB, cameraViewMatrix, cameraProjectionMatrix, cameraViewport.zw, clip)
     const color = unpackUnorm4x8(buf.color.element(idx)).toVar()
     const own = S ? viewed(color.rgb, idx, d.world, buf, S) : color.rgb
-    const rgb = vec3(own).toVar(), tone = vec3(1).toVar()
+    let rgb = own
+    const tone = vec3(1).toVar()
     if (L) {
-      rgb.assign(painted(own, d.world, buf.edits))
+      // the light is worked out where it always was, outside any branch: inside one, its march through the grid of
+      // shadows found nothing in the way on WebGL (Day and Night lost its shadows there)
+      const mine = painted(own, d.world, buf.edits)
       // cel shading: the blob keeps its own color, and its tone goes to the map of tones
+      rgb = select(L.cel.greaterThan(0.5), mine, lit(mine, d.world, d.covA, d.covB, buf.seen.element(idx), L))
       If(L.cel.greaterThan(0.5), () => { tone.assign(toned(d.world, d.covA, d.covB, L)) })
-        .Else(() => { rgb.assign(lit(rgb, d.world, d.covA, d.covB, buf.seen.element(idx), L)) })
     }
     const part = unpackUnorm4x8(buf.part.element(idx))
     return placeQuad(p.ndc, p.axes, p.tilt, vec4(flatColor(flat, part.rgb, p.depth, fogged(rgb, p.depth, fog), tone), color.a.mul(p.alphaScale)), idx, flat, clean ? d : undefined)
