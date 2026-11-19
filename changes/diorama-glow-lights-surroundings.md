@@ -1,1 +1,2 @@
-Pixel Diorama: Glow now turns up the light that lamps, fires and other glowing things cast on what stands round them, not only the shine round bright pixels. A scene opens lit as before; `?glow=` sets it in the address.
+- Pixel Diorama: Glow now turns up the light that lamps, fires and other glowing things cast on what stands round them, not only the shine round bright pixels. A scene opens lit as before; `?glow=` sets it in the address.
+- Pixel Diorama: the koi pond's lantern light no longer passes through the stone caps; it leaves only by the openings. Engine: a scene light that casts shadows can set `clear`, the open room round it, for a lamp in a small hollow.

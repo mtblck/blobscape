@@ -426,6 +426,8 @@ export default [
         await ready(); await d.page.waitForTimeout(1500); await ready()
         // the pond's heights and the picture at a time: drawn twice, so the mirror's picture is that moment's too
         const at = (t) => d.page.evaluate(async (t) => {
+          // the page takes its hook away and puts it back as its state settles, so wait for it
+          while (!window.__diorama) await new Promise((r) => setTimeout(r, 50))
           const { stage, water } = window.__diorama
           await stage.frame(t); await stage.frame(t)
           const f = await stage.pixelFrames()
@@ -1638,7 +1640,7 @@ export default [
         w.page.removeAllListeners('pageerror')
         await w.page.getByRole('tab').first().waitFor({ timeout: 30000 }).catch(() => {})
         const at = await w.page.evaluate(() => {
-          const view = document.querySelector('[data-testid=full-screen]')?.parentElement.getBoundingClientRect()
+          const view = document.querySelector('[data-testid=full-screen]')?.parentElement.parentElement.getBoundingClientRect()
           const panel = document.querySelector('section[aria-label=Options]')?.getBoundingClientRect()
           return {
             tabs: [...document.querySelectorAll('section[aria-label=Options] [role=tab]')].map((t) => t.textContent).join(),
@@ -1652,7 +1654,7 @@ export default [
         await w.page.evaluate(() => window.scrollTo(0, 420))
         await w.page.waitForTimeout(150)
         const phone = await w.page.evaluate(() => {
-          const r = document.querySelector('[data-testid=full-screen]')?.parentElement.getBoundingClientRect()
+          const r = document.querySelector('[data-testid=full-screen]')?.parentElement.parentElement.getBoundingClientRect()
           return { stuck: !!r && r.top >= 0 && r.bottom <= innerHeight && r.height > 200, wide: document.documentElement.scrollWidth - innerWidth }
         })
         sizes.add(`${at.view}+${at.panel}`)
