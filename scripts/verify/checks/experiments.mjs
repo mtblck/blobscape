@@ -1534,13 +1534,13 @@ export default [
         const same = differ(first, again), swayed = differ(first, later, 24)
         if (got !== backend || same !== 0 || !(first.solid > 0.12) || !(swayed > 0.002) || !(facts.stems >= 20 && facts.bones < 256 && facts.blobs > 50000 && facts.lines.length >= 8)) fails.push(`seasonal bouquets on ${backend}: ${JSON.stringify({ got, same, solid: first.solid, swayed, ...facts })}`)
         else ok(`seasonal bouquets on ${backend}: ${facts.stems} stems (${facts.lines.length} kinds) in ${facts.vase}, ${facts.blobs.toLocaleString('en-US')} blobs on ${facts.bones} bones; drawn twice it is the same, and ${(swayed * 100).toFixed(1)}% of the view moves in a second and a half`)
-        // a petal let go is on the table a few seconds later, and the picture shows it
+        // a petal let go is on the table a few seconds later, and the picture shows it (another may have fallen by itself by then)
         const before = await k.page.evaluate(() => window.__bouquet.fallen())
         const did = await k.page.evaluate(() => window.__bouquet.shed())
         const landed = await read(k.page, 9), still = await read(k.page, 9)
         const after = await k.page.evaluate(() => window.__bouquet.fallen())
         const without = await k.page.evaluate(() => window.__bouquet.fallen())
-        if (!did || before !== 0 || after !== 1 || without !== 1 || differ(landed, still) !== 0) fails.push(`seasonal bouquets on ${backend}: shaking a petal loose gave ${JSON.stringify({ did, before, after })}`)
+        if (!did || before !== 0 || after < 1 || without !== after || differ(landed, still) !== 0) fails.push(`seasonal bouquets on ${backend}: shaking a petal loose gave ${JSON.stringify({ did, before, after })}`)
         else ok(`seasonal bouquets on ${backend}: a petal shaken loose is counted as fallen and the frame holds still when drawn again`)
         if (backend === 'webgpu') {
           await k.page.screenshot({ path: join(shots, 'blobscape-seasonal-bouquets.png') })
