@@ -2080,8 +2080,8 @@ function makeVertexWebGL(buf: ReturnType<typeof makeBuffers>, sort: Sorter, mode
     let rgb = own
     const tone = vec3(1).toVar()
     if (L) {
-      // the light is worked out where it always was, outside any branch: inside one, its march through the grid of
-      // shadows found nothing in the way on WebGL (Day and Night lost its shadows there)
+      // the light is worked out outside any branch and picked with a select: with `lit` in the Else of an If on `cel`
+      // (and a second march through the grid of shadows in `toned`), Day and Night lost its shadows on WebGL
       const mine = painted(own, d.world, buf.edits)
       // cel shading: the blob keeps its own color, and its tone goes to the map of tones
       rgb = select(L.cel.greaterThan(0.5), mine, lit(mine, d.world, d.covA, d.covB, buf.seen.element(idx), L))
