@@ -12,6 +12,22 @@ export interface RgbaFrame {
   data: Uint8Array | Uint8ClampedArray
 }
 
+/** A frame with every pixel drawn as a square `scale` pixels a side (a whole number), so small pixel art can be saved big and stay crisp. */
+export function enlarged(frame: RgbaFrame, scale: number): RgbaFrame {
+  const s = Math.max(1, Math.round(scale)), { width: w, height: h, data } = frame
+  if (s === 1) return frame
+  const W = w * s, out = new Uint8Array(W * h * s * 4)
+  for (let y = 0; y < h; y++) {
+    const row = y * s * W * 4
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4
+      for (let k = 0; k < s; k++) out.set(data.subarray(i, i + 4), row + (x * s + k) * 4)
+    }
+    for (let k = 1; k < s; k++) out.copyWithin(row + k * W * 4, row, row + W * 4)
+  }
+  return { width: W, height: h * s, data: out }
+}
+
 /** zlib-wrapped deflate (what PNG's image data is). */
 export type Deflate = (bytes: Uint8Array) => Promise<Uint8Array>
 

@@ -1,0 +1,1 @@
+Pixel Diorama: the Pixels tab is now Style. Pixel art is still how a scene starts, and every look from Brush and Ink can be picked in its place: gouache, oil, ink and wash, hatching, cel shading, ASCII or the plain blobs, each with its own settings. The style is kept in the page's address.

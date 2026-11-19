@@ -4,7 +4,7 @@
  *   node --experimental-strip-types scripts/loops-changed.mjs <before> <after>
  * prints the scene ids on one line, or nothing.
  *
- * Only a scene's own files count (`sceneFor`): its description, the lighthouse's code, the fox
+ * Only a scene's own files count (`sceneFor`): its description, the lighthouse's code, the sky fishing story, the fox
  * meadow's builder. A change to something every scene shares (the cutter, the pixel pass, the
  * recorder) could change every loop or none, and only a person can say which, so that is left
  * to a run by hand (Actions, Loops, Run workflow).
@@ -18,6 +18,7 @@ export function sceneFor(file) {
   const own = /^src\/blobscape\/diorama\/scenes\/([^/.]+)\.ts$/.exec(file)
   if (own) return LOOPS.some((l) => l.id === own[1]) ? own[1] : undefined
   if (file === 'src/blobscape/diorama/scene.ts') return 'lighthouse'
+  if (file === 'src/blobscape/diorama/fishing.ts') return 'fishing'
   if (/^src\/blobscape\/fourways\/meadow\/(build|doc)\.ts$/.test(file)) return 'meadow'
   return undefined
 }

@@ -401,7 +401,7 @@ export default [
           const filled = await d.page.waitForFunction(() => { const c = document.querySelector('[data-testid=diorama-view]'); return !!document.querySelector('[data-full]') && c.clientWidth >= innerWidth - 2 && c.clientHeight > innerHeight * 0.8 }, null, { timeout: 5000 }).then(() => true, () => false)
           await d.page.getByTestId('full-screen').click()
           const back = await d.page.waitForFunction(() => !document.querySelector('[data-full]'), null, { timeout: 5000 }).then(() => true, () => false)
-          if (tabNames.join() !== 'Scene,Pixels,Finish' || !finishShown || !stuck || !filled || !back) fails.push(`${label} layout: ${JSON.stringify({ tabNames, finishShown, stuck, filled, back })}`)
+          if (tabNames.join() !== 'Scene,Style,Finish' || !finishShown || !stuck || !filled || !back) fails.push(`${label} layout: ${JSON.stringify({ tabNames, finishShown, stuck, filled, back })}`)
           else ok(`${label} layout: options in ${tabNames.length} tabs, the preview stays in sight on a phone as the page scrolls, and it fills the screen and comes back`)
         }
         await d.ctx.close()
@@ -426,6 +426,8 @@ export default [
         await ready(); await d.page.waitForTimeout(1500); await ready()
         // the pond's heights and the picture at a time: drawn twice, so the mirror's picture is that moment's too
         const at = (t) => d.page.evaluate(async (t) => {
+          // the page takes its hook away and puts it back as its state settles, so wait for it
+          while (!window.__diorama) await new Promise((r) => setTimeout(r, 50))
           const { stage, water } = window.__diorama
           await stage.frame(t); await stage.frame(t)
           const f = await stage.pixelFrames()
@@ -453,6 +455,37 @@ export default [
         else ok(`${label}: ${m.wet} cells of water take ${m.drops} raindrops a loop and ${m.bodies} swimming bodies, rings up to ${(m.most * 1000).toFixed(1)} thousandths high, ${(m.changed * 100).toFixed(0)}% of the picture changes in 2.5 s, a moment drawn twice differs in ${(m.same * 100).toFixed(2)}% and a loop later in ${(m.looped * 100).toFixed(2)}%${m.mirrored ? ', with the mirror on' : ''}`)
         await d.ctx.close()
       }
+    },
+  },
+  {
+    name: 'diorama-glow',
+    about: 'Pixel Diorama: Glow turns up the light a fire casts on what stands round it, not only the shine round bright pixels',
+    entries: ['src/blobscape/PixelDiorama.tsx'],
+    async run({ fails, ok, open, tabClick }) {
+      const d = await open('/experiments/pixel-diorama/?offscreen=1&scene=campfire', { viewport: { width: 1280, height: 900 } })
+      await d.page.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).catch(() => {})
+      // the scene as it is drawn small, before the pixel pass adds any shine of its own: how bright its solid pixels are
+      const lit = () => d.page.evaluate(async () => {
+        while (!window.__diorama) await new Promise((r) => setTimeout(r, 50))
+        const { stage } = window.__diorama
+        await stage.frame(2); await stage.frame(2)
+        const { small } = await stage.pixelFrames()
+        let sum = 0, n = 0
+        for (let i = 0; i < small.data.length; i += 4) if (small.data[i + 3] > 128) { sum += small.data[i] + small.data[i + 1] + small.data[i + 2]; n++ }
+        return n ? sum / n / 3 : 0
+      })
+      const own = await lit()
+      const slider = d.page.getByRole('slider', { name: 'Glow' })
+      await tabClick(slider)
+      await slider.fill('3')
+      await d.page.waitForTimeout(300)
+      const more = await lit()
+      await slider.fill('0')
+      await d.page.waitForTimeout(300)
+      const none = await lit()
+      if (!(own > 0 && more > own * 1.04 && none < own * 0.98)) fails.push(`blobscape pixel diorama glow: the scene should brighten with more glow and dim with none: ${JSON.stringify({ own, more, none })}`)
+      else ok(`blobscape pixel diorama: Glow lights the scene round the fire (mean ${own.toFixed(1)} at its own, ${more.toFixed(1)} at 3×, ${none.toFixed(1)} with it off)`)
+      await d.ctx.close()
     },
   },
   {
@@ -664,8 +697,9 @@ export default [
           }
           let moved = 0
           for (let i = 0; i < a.art.length; i += 4) if (a.art[i] !== b.art[i] || a.art[i + 1] !== b.art[i + 1] || a.art[i + 2] !== b.art[i + 2]) moved++
-          const chip = await d.page.getByRole('button', { name, exact: true }).getAttribute('aria-pressed')
-          if (!(a.off === 0 && a.used >= 12 && a.bones > 10 && moved > 100 && chip === 'true')) fails.push(`${label}: ${JSON.stringify({ offPalette: a.off, colors: a.used, bones: a.bones, moved, chip })}`)
+          // the Scene tab names the scene that is playing (the scenes are picked in a window now, not from chips)
+          const chip = await d.page.getByTestId('diorama-current').textContent()
+          if (!(a.off === 0 && a.used >= 12 && a.bones > 10 && moved > 100 && chip === name)) fails.push(`${label}: ${JSON.stringify({ offPalette: a.off, colors: a.used, bones: a.bones, moved, chip })}`)
           else ok(`${label}: built from its description (${a.bones} bones), ${a.used} palette colors in the picture, ${moved} pixels change in a few seconds`)
           await d.page.screenshot({ path: join(shots, `blobscape-pixel-diorama-${id}.png`) })
           await d.ctx.close()
@@ -1646,7 +1680,7 @@ export default [
     files: ['src/shared/theme.css', 'src/blobscape/Bouquets.tsx', 'src/blobscape/PixelDiorama.tsx', 'src/blobscape/Creature.tsx', 'src/blobscape/ForestWalk.tsx', 'src/blobscape/WadingPond.tsx', 'src/blobscape/DungeonRun.tsx', 'src/blobscape/ScanStudio.tsx', 'src/blobscape/Clockwork.tsx', 'src/blobscape/ShapeShifter.tsx', 'src/blobscape/SandSnowGoo.tsx', 'src/blobscape/BrushInk.tsx', 'src/blobscape/FourWays.tsx', 'src/fit-a-picture/App.tsx', 'src/splat-to-sprite/App.tsx'],
     async run({ join, fails, ok, open }) {
       const PAGES = [
-        ['pixel-diorama', 'Scene,Pixels,Finish'], ['creature', 'Creature Type,Movement & Details,Export & Import'], ['forest-walk', 'Forest Type,Character Style,View'], ['wading-pond', 'Water & Light,Character Style,View'],
+        ['pixel-diorama', 'Scene,Style,Finish'], ['creature', 'Creature Type,Movement & Details,Export & Import'], ['forest-walk', 'Forest Type,Character Style,View'], ['wading-pond', 'Water & Light,Character Style,View'],
         ['dungeon-run', 'Game Settings,Character Style,View'], ['scan-studio', 'Import,Level & Crop,Clean,Lighting,Colliders'], ['clockwork', 'Time,View'], ['shape-shifter', 'Shift,Creatures'], ['sand-snow-goo', 'Material,Test,View'], ['brush-and-ink', 'Look,Subject'], ['four-ways', 'Compare,Pixels'], ['seasonal-bouquets', 'Bouquet,Vase,View'],
         ['fit-a-picture', 'Picture,Training'], ['splat-to-sprite', 'Prop Type,Pixels,Finish,View'],
       ]
@@ -1659,7 +1693,7 @@ export default [
         w.page.removeAllListeners('pageerror')
         await w.page.getByRole('tab').first().waitFor({ timeout: 30000 }).catch(() => {})
         const at = await w.page.evaluate(() => {
-          const view = document.querySelector('[data-testid=full-screen]')?.parentElement.getBoundingClientRect()
+          const view = document.querySelector('[data-testid=full-screen]')?.parentElement.parentElement.getBoundingClientRect()
           const panel = document.querySelector('section[aria-label=Options]')?.getBoundingClientRect()
           return {
             tabs: [...document.querySelectorAll('section[aria-label=Options] [role=tab]')].map((t) => t.textContent).join(),
@@ -1673,7 +1707,7 @@ export default [
         await w.page.evaluate(() => window.scrollTo(0, 420))
         await w.page.waitForTimeout(150)
         const phone = await w.page.evaluate(() => {
-          const r = document.querySelector('[data-testid=full-screen]')?.parentElement.getBoundingClientRect()
+          const r = document.querySelector('[data-testid=full-screen]')?.parentElement.parentElement.getBoundingClientRect()
           return { stuck: !!r && r.top >= 0 && r.bottom <= innerHeight && r.height > 200, wide: document.documentElement.scrollWidth - innerWidth }
         })
         sizes.add(`${at.view}+${at.panel}`)
