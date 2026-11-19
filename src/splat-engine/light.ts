@@ -90,18 +90,34 @@ export const FLAT_FULL = 0.7
 /** See `FLAT_FULL`. */
 export const FLAT_NONE = 0.95
 
+/** The most the scene's lamps count for in a blob's tone (`toneAt`'s `lamps`): over it is a blob that gives its own light. */
+export const LAMP_MOST = 0.8
+
 /**
  * What cel shading cuts into tones (splat-core/cel.ts), for a blob at `p` with covariance `cov` seen from `eye` under
  * the first light: how it faces the light (0 away, 0.5 edge on, 1 toward), with the side of the blob that the eye sees
  * taken for its outside (a blob doesn't know its outside, but the side in view is the one being drawn), and how sure
  * that is (`flatness`). The share of the light that reaches it past what is in the way is the shadows' own answer
- * (`transmittance` in shadow.ts). CPU twin of `toned` in engine.ts: change both.
+ * (`transmittance` in shadow.ts). `lamps` is how much the scene's own lights (`others`: those set on the stage, which
+ * come after cel shading's) reach it: each point light's brightness by its distance, the blob's facing and its baked
+ * lamp shadow (`seen`, a byte for each of the first four), as `lightAt` counts them, at most `LAMP_MOST`. CPU twin of
+ * `toned` in engine.ts: change both.
  */
-export function toneAt(p: ArrayLike<number>, cov: ArrayLike<number>, eye: ArrayLike<number>, light: Light | undefined): { facing: number; sure: number } {
-  if (!light) return { facing: 1, sure: flatness(cov) }
+export function toneAt(p: ArrayLike<number>, cov: ArrayLike<number>, eye: ArrayLike<number>, light: Light | undefined, others: Light[] = [], seen?: ArrayLike<number>): { facing: number; sure: number; lamps: number } {
+  if (!light) return { facing: 1, sure: flatness(cov), lamps: 0 }
   const n = blobNormal(cov)
   const side = n[0] * (eye[0] - p[0]) + n[1] * (eye[1] - p[1]) + n[2] * (eye[2] - p[2]) < 0 ? -1 : 1
   const to = 'direction' in light ? light.direction : [light.position[0] - p[0], light.position[1] - p[1], light.position[2] - p[2]]
   const inv = 1 / Math.sqrt(Math.max(to[0] * to[0] + to[1] * to[1] + to[2] * to[2], 1e-6))
-  return { facing: side * (n[0] * to[0] + n[1] * to[1] + n[2] * to[2]) * inv * 0.5 + 0.5, sure: flatness(cov) }
+  let lamps = 0
+  for (const [j, L] of others.entries()) {
+    if ('direction' in L) continue
+    const at = [L.position[0] - p[0], L.position[1] - p[1], L.position[2] - p[2]]
+    const d2 = at[0] * at[0] + at[1] * at[1] + at[2] * at[2]
+    const r2 = Math.max(1e-3, L.range) ** 2
+    const fade = Math.max(1 - d2 / (r2 * 4), 0)
+    const facing = Math.abs((n[0] * at[0] + n[1] * at[1] + n[2] * at[2]) / Math.sqrt(Math.max(d2, 1e-6))) * 0.65 + 0.35
+    lamps += (0.2126 * L.color[0] + 0.7152 * L.color[1] + 0.0722 * L.color[2]) * ((fade * fade) / (1 + d2 / r2)) * facing * (seen && j < 4 ? seen[j] / 255 : 1)
+  }
+  return { facing: side * (n[0] * to[0] + n[1] * to[1] + n[2] * to[2]) * inv * 0.5 + 0.5, sure: flatness(cov), lamps: Math.min(lamps, LAMP_MOST) }
 }

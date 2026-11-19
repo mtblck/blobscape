@@ -36,6 +36,17 @@ export interface CelLook {
   line?: number
   /** The outline's color, sRGB 0–1 (default near black). */
   ink?: Rgb
+  /** How many pixels a side the light's view of the scene is, which cast shadows are read from (default and most 2048): fewer is cheaper to draw and gives softer shadow edges. */
+  shadowSize?: number
+  /** The light's view is drawn again at most every this many frames (default 1, every frame something moves): 2 halves its cost and leaves cast shadows a frame behind. */
+  shadowEvery?: number
+  /**
+   * What the scene's own lights add to a color where they reach it (linear, added to what the tone multiplies it by).
+   * Left out, a `Stage` works it out from the lights set on it (`lampTint`); black takes the lamps away.
+   */
+  lamps?: Rgb
+  /** What both tones are multiplied by (linear), such as a night's dim blue. On a `Stage` its ambient light multiplies them too, so a scene that dims dims here. */
+  ambient?: Rgb
 }
 
 /** The default way to the light. */
@@ -55,6 +66,12 @@ export const CEL_TURN = 0.54
 export const CEL_BRIGHT = 0.9
 /** A blob is in a cast shadow when less than this share of the light gets to it. */
 export const CEL_CAST = 0.5
+/** A surface is in a lamp's light when the scene's lamps reach it by this much or more (`toneAt`'s `lamps` in splat-engine/light.ts). */
+export const CEL_LAMP = 0.16
+/** From this much, what reaches a surface is its own light (a flame, a lit pane): it is never darker than its own color. */
+export const CEL_GLOWS = 0.9
+/** How strong the color lamps add is, where the lights set no more: the brightest channel of `lampTint`. */
+export const LAMP_ADD = 1
 /** The least width of a tone's edge, in the units of what is cut (facing and share of light, both 0–1), so the edge is not stepped. */
 export const CEL_EDGE = 0.02
 /** A blob with no flat side has no facing of its own; where nothing round a pixel has one, it is taken to face the light this much. */
@@ -74,14 +91,33 @@ export function celTones(facing: number, through: number, look: CelLook = {}): {
   return { lit, bright }
 }
 
-/** A color (linear RGB) under the tones `celTones` gives: `shade` (linear) multiplies it in shade, and the brightest tone goes toward white. */
-export function celColor(rgb: ArrayLike<number>, tones: { lit: number; bright: number }, shade: ArrayLike<number>, bright = 0.2): [number, number, number] {
+/**
+ * A color (linear RGB) under the tones `celTones` gives: `shade` (linear) multiplies it in shade, and the brightest
+ * tone goes toward white. `by` is the scene's own light: `ambient` multiplies both tones, `lamps` is added where the
+ * scene's lamps reach (`reach`, from `toneAt`: one more tone, cut at `CEL_LAMP`), and from `CEL_GLOWS` the color is
+ * never darker than itself.
+ */
+export function celColor(rgb: ArrayLike<number>, tones: { lit: number; bright: number }, shade: ArrayLike<number>, bright = 0.2, by?: { reach: number; lamps?: ArrayLike<number>; ambient?: ArrayLike<number> }): [number, number, number] {
   const out: [number, number, number] = [0, 0, 0]
+  const lamp = by ? smooth(CEL_LAMP - CEL_EDGE, CEL_LAMP + CEL_EDGE, by.reach) : 0, glows = by ? smooth(CEL_GLOWS - CEL_EDGE, CEL_GLOWS + CEL_EDGE, by.reach) : 0
   for (let k = 0; k < 3; k++) {
-    const c = rgb[k] * (shade[k] + (1 - shade[k]) * tones.lit)
-    out[k] = c + (1 - c) * bright * tones.bright
+    let m = (by?.ambient?.[k] ?? 1) * (shade[k] + (1 - shade[k]) * tones.lit) + (by?.lamps?.[k] ?? 0) * lamp
+    m += (Math.max(m, 1) - m) * glows
+    const c = rgb[k] * m
+    out[k] = c + Math.max(1 - c, 0) * bright * tones.bright
   }
   return out
+}
+
+/**
+ * The color the scene's lamps add in cel shading (linear): the color of its point lights taken together, each by its
+ * brightness, with its strongest channel at `LAMP_ADD`. Black where there are none.
+ */
+export function lampTint(lights: readonly { color: ArrayLike<number>; position?: unknown }[]): [number, number, number] {
+  const sum = [0, 0, 0]
+  for (const L of lights) if (L.position) for (let k = 0; k < 3; k++) sum[k] += L.color[k]
+  const most = Math.max(sum[0], sum[1], sum[2])
+  return most > 1e-6 ? [(sum[0] / most) * LAMP_ADD, (sum[1] / most) * LAMP_ADD, (sum[2] / most) * LAMP_ADD] : [0, 0, 0]
 }
 
 /** How many times the scene's size away the light's view of it is taken from: far enough that its shadows fall nearly side by side. */

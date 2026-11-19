@@ -588,9 +588,9 @@ export default [
         const loaded = await d.page.waitForFunction(() => { const im = [...document.querySelectorAll('[data-testid=scene-picker] img')].slice(0, 4); return im.length === 4 && im.every((i) => i.complete && i.naturalWidth) }, null, { timeout: 30000 }).then(() => true, () => false)
         await d.page.screenshot({ path: join(shots, 'blobscape-pixel-diorama-picker.png') })
         if (opened) await axe(d.page, 'blobscape pixel diorama scene picker')
-        // scrolling to the end brings the rest of the cards
+        // scrolling to the end brings the rest of the cards (the playing scene's own batch may already be the last: scenes are listed newest first)
         await d.page.evaluate(() => { const l = document.querySelector('[data-testid=scene-picker] [role=listbox]').parentElement; l.scrollTo(0, l.scrollHeight) })
-        const total = await d.page.waitForFunction((was) => { const l = document.querySelector('[data-testid=scene-picker] [role=listbox]'); l.parentElement.scrollTo(0, l.parentElement.scrollHeight); const n = l.children.length; return n > was && !l.nextElementSibling ? n : 0 }, first.cards, { timeout: 15000 }).then((h) => h.jsonValue(), () => 0)
+        const total = await d.page.waitForFunction((was) => { const l = document.querySelector('[data-testid=scene-picker] [role=listbox]'); l.parentElement.scrollTo(0, l.parentElement.scrollHeight); const n = l.children.length; return n >= was && !l.nextElementSibling ? n : 0 }, first.cards, { timeout: 15000 }).then((h) => h.jsonValue(), () => 0)
         // the arrows move the mark from the playing scene, typing narrows the list, Enter opens the one marked
         const from = await marked()
         await d.page.keyboard.press('ArrowDown')
@@ -618,11 +618,11 @@ export default [
         await d.page.keyboard.press('Escape')
         const closed = await picker.evaluate((el) => !el.open)
         await d.page.setViewportSize({ width: 1280, height: 900 })
-        const good = !gallery && !chips && opened && focused && first.cards >= 12 && first.cards < total && first.lazy && first.playing.join() === 'windmill' && loaded
+        const good = !gallery && !chips && opened && focused && first.cards >= 12 && first.cards <= total && first.lazy && first.playing.join() === 'windmill' && loaded
           && from === 'windmill' && down && down !== from && up === from && /^No scene matches/.test(none) && narrowed === 1 && /^1 of \d+ scenes/.test(said)
           && picked && named === 'Snail house' && next[1] && next[1] !== 'snail' && next[0] !== named && prev.join() === 'Snail house,snail' && phone && closed
         if (!good) fails.push(`blobscape pixel diorama scene picker: ${JSON.stringify({ gallery, chips, opened, focused, first, loaded, total, from, down, up, none, narrowed, said, picked, named, next, prev, phone, closed })}`)
-        else ok(`blobscape pixel diorama: Select a Scene opens a modal of ${total} cards (${first.cards} at first, the rest as it scrolls) on the playing scene with the search ready; arrows, typing and Enter pick one, previous and next step through, and on a phone it fills the screen`)
+        else ok(`blobscape pixel diorama: Select a Scene opens a modal of ${total} cards (${first.cards} at first, any others as it scrolls) on the playing scene with the search ready; arrows, typing and Enter pick one, previous and next step through, and on a phone it fills the screen`)
       }
       // a scene description opened from a file is drawn as one more scene, and a broken one says where it is broken
       {
@@ -837,8 +837,24 @@ export default [
           else ok(`brush and ink on ${backend}: cel shading draws the fox in flat tones (${(c.flat * 100).toFixed(0)}% of its pixels match their neighbor, ${(c.flatBlobs * 100).toFixed(0)}% as blobs), a third tone changes ${(c.three * 100).toFixed(2)}% of the view, and a frame drawn twice is the same`)
           if (backend === 'webgpu') await k.page.screenshot({ path: join(shots, 'blobscape-brush-cel.png') })
         }
+        // neon, stained glass and watercolor: each its own picture, the same when drawn twice; neon's light moves, and the other two cover the view
+        const styles = {}
+        for (const [name, look, plain] of [['Neon', 'neon', true], ['Stained glass', 'glass', true], ['Watercolor', 'watercolor', false]]) {
+          await pick(k.page, name, look)
+          const up = await k.page.waitForFunction(([look, plain]) => window.__brush?.look === look && window.__brush.plain === plain, [look, plain], { timeout: 120000 }).then(() => true, () => false)
+          if (!up) { fails.push(`brush and ink on ${backend}: the fox was never cut for ${name.toLowerCase()}`); continue }
+          // the first frame after changing look can still hold a few pixels of the look before (its colors are handed over a frame late), so one is drawn and let go
+          await read(k.page)
+          const one = await read(k.page), two = await read(k.page), later = await read(k.page, 1.3)
+          const v = { same: differ(one, two, 0), cover: solid(one), fromBlobs: differ(one, blobs), moved: differ(later, one, 12) }
+          const good = v.same === 0 && v.fromBlobs > 0.01 && (look === 'neon' ? v.cover > 0.03 && v.moved > 0.0005 : v.cover > 0.99)
+          if (!good) fails.push(`brush and ink on ${backend}: ${name.toLowerCase()} ${JSON.stringify(v)}`)
+          else { styles[look] = one; ok(`brush and ink on ${backend}: ${name.toLowerCase()} draws the fox (${(v.fromBlobs * 100).toFixed(0)}% of the view differs from the blobs${look === 'neon' ? `, its light moves ${(v.moved * 100).toFixed(2)}% of the view in a second` : ', the whole view covered'}), the same when drawn twice`) }
+          if (backend === 'webgpu') await k.page.screenshot({ path: join(shots, `blobscape-brush-${look}.png`) })
+        }
         await pick(k.page, 'Blobs', 'blobs')
-        pictures[backend] = { gouache, hatch, ink, text, cel }
+        await k.page.waitForFunction(() => window.__brush?.look === 'blobs' && !window.__brush.plain, null, { timeout: 120000 }).catch(() => {})
+        pictures[backend] = { gouache, hatch, ink, text, cel, styles }
         const m = { backend: got, same: differ(gouache, again, 0), cover: solid(gouache), blobs: solid(blobs), paint: differ(gouache, blobs), oil: differ(oil, gouache), ink: differ(ink, gouache), hatch: differ(hatch, ink), paper }
         // marks are opaque where soft dots fade, so the painted fox is at least as solid; each look is a different picture; a frame drawn twice is the same frame
         if (m.backend !== backend || m.same !== 0 || !(m.cover > 0.03 && m.cover >= m.blobs * 0.9) || !(m.paint > 0.01 && m.oil > 0.003 && m.ink > 0.01 && m.hatch > 0.005) || !/rgb\(2[0-9]{2}, 2[0-9]{2}, 2[0-9]{2}\)/.test(m.paper)) fails.push(`brush and ink on ${backend}: ${JSON.stringify(m)}`)
@@ -870,6 +886,13 @@ export default [
         const g = differ(pictures.webgpu.gouache, pictures.webgl.gouache, 90), h = differ(pictures.webgpu.hatch, pictures.webgl.hatch, 90), n = differ(pictures.webgpu.ink, pictures.webgl.ink, 90)
         if (!(g < 0.02 && h < 0.02 && n < 0.02)) fails.push(`brush and ink: WebGPU and WebGL differ at ${(g * 100).toFixed(2)}% of pixels in gouache, ${(h * 100).toFixed(2)}% hatched, ${(n * 100).toFixed(2)}% in ink and wash with its outlines`)
         else ok(`brush and ink: WebGPU and WebGL draw the same marks and outlines (${(g * 100).toFixed(2)}% of pixels differ in gouache, ${(h * 100).toFixed(2)}% hatched, ${(n * 100).toFixed(2)}% in ink and wash)`)
+        for (const look of ['neon', 'glass', 'watercolor']) {
+          const x = pictures.webgpu.styles[look], y = pictures.webgl.styles[look]
+          if (!x || !y) continue
+          const d = differ(x, y, 90)
+          if (!(d < 0.05)) fails.push(`brush and ink: WebGPU and WebGL differ at ${(d * 100).toFixed(2)}% of pixels in ${look}`)
+          else ok(`brush and ink: WebGPU and WebGL draw the same ${look} (${(d * 100).toFixed(2)}% of pixels differ)`)
+        }
         if (pictures.webgpu.cel && pictures.webgl.cel) {
           const c = differ(pictures.webgpu.cel, pictures.webgl.cel, 90)
           if (!(c < 0.03)) fails.push(`brush and ink: WebGPU and WebGL differ at ${(c * 100).toFixed(2)}% of pixels in cel shading`)
@@ -1647,13 +1670,16 @@ export default [
           const winter = await k.page.waitForFunction(() => document.querySelector('[data-testid=bouquet-name]')?.textContent?.startsWith('Winter'), null, { timeout: 60000 }).then(() => true, () => false)
           await k.page.waitForTimeout(400)
           const snow = await read(k.page, 1)
-          await tabClick(k.page.getByTestId('bouquet-vases').getByRole('button', { name: 'Snowman', exact: true }))
-          const inSnowman = await k.page.waitForFunction(() => /snowman/.test(window.__bouquet?.vase() ?? ''), null, { timeout: 60000 }).then(() => true, () => false)
+          // a season picks its own vase from the seed (winter's is often the snowman), so ask for one this bouquet doesn't stand in
+          const had = await k.page.evaluate(() => window.__bouquet?.vase() ?? '')
+          const want = /snowman/.test(had) ? { label: 'Rain boot', id: 'boot', said: 'rain boot' } : { label: 'Snowman', id: 'snowman', said: 'snowman' }
+          await tabClick(k.page.getByTestId('bouquet-vases').getByRole('button', { name: want.label, exact: true }))
+          const inVase = await k.page.waitForFunction((said) => (window.__bouquet?.vase() ?? '').includes(said), want.said, { timeout: 60000 }).then(() => true, () => false)
           await k.page.waitForTimeout(400)
-          const snowman = await read(k.page, 1)
+          const vased = await read(k.page, 1)
           const url = new URL(k.page.url())
-          if (!winter || !inSnowman || url.searchParams.get('season') !== 'winter' || url.searchParams.get('vase') !== 'snowman' || !(differ(first, snow, 24) > 0.02) || !(differ(snow, snowman, 24) > 0.01)) fails.push(`seasonal bouquets: picking winter and the snowman gave "${await name()}" at ${url.search}`)
-          else ok(`seasonal bouquets: winter and the snowman give another bouquet ("${await name()}"), and the address says so`)
+          if (!winter || !inVase || url.searchParams.get('season') !== 'winter' || url.searchParams.get('vase') !== want.id || !(differ(first, snow, 24) > 0.02) || !(differ(snow, vased, 24) > 0.01)) fails.push(`seasonal bouquets: picking winter and the ${want.said} (from ${had}) gave "${await name()}" at ${url.search}`)
+          else ok(`seasonal bouquets: winter and the ${want.said} give another bouquet ("${await name()}"), and the address says so`)
           await k.page.screenshot({ path: join(shots, 'blobscape-seasonal-bouquets-winter.png') })
           const seed = url.searchParams.get('seed')
           await k.page.getByTestId('bouquet-another').click()

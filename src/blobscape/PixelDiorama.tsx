@@ -31,7 +31,7 @@ import { decodeTexture } from './modelRig.ts'
 import { detailAsked, labelNames, writeDetail } from '../shared/detail.ts'
 import { unlit } from '../splat-engine/voxel.ts'
 import { STYLES, styleAsked, styleWords, type Style } from './diorama/styles.ts'
-import { useDrawnLook } from './drawnLook.tsx'
+import { useDrawnLook, wantsPlain } from './drawnLook.tsx'
 
 const SIZES = [2, 3, 4, 6]
 /** Frames a second the scene moves at: 0 is every frame the screen shows. */
@@ -96,12 +96,15 @@ export function PixelDiorama() {
   /** The scene picker: the modal of every scene's card. */
   const [picking, setPicking] = useState(false)
   const [playing, setPlaying] = useState(!calm)
-  const [detail, setDetail] = useState<string>(() => detailAsked(DETAIL, labelNames)?.id ?? (coarse ? DETAIL[1].id : DETAIL[2].id))
+  // a phone starts a step lighter, and a step lighter again for the styles that draw the scene several times a frame
+  // (outlines, ASCII, cel shading), as Brush and Ink does; once the visitor picks a detail it is theirs for every style
+  const [chosen, setChosen] = useState<string | undefined>(() => detailAsked(DETAIL, labelNames)?.id)
   /** How the scene is drawn: as pixel art, or as one of Brush and Ink's looks. `?style=oil` opens on that one. */
   const [style, setStyle] = useState<Style>(() => styleAsked(new URLSearchParams(location.search).get('style')))
   const pixels = style === 'pixel'
   // cel shading lights the blobs itself, so its scene is cut with no light baked in
-  const plain = style === 'cel'
+  const plain = wantsPlain(style === 'pixel' ? undefined : style)
+  const detail = chosen ?? (coarse ? DETAIL[pixels ? 1 : 0].id : DETAIL[2].id)
   const [palette, setPalette] = useState('own')
   const [size, setSize] = useState(2)
   const [dither, setDither] = useState(diorama.finish.dither)
@@ -256,10 +259,13 @@ export function PixelDiorama() {
     }, from)
   }, [stage, scene, calm, rock, mirrored])
   // one of Brush and Ink's looks in place of pixel art: marks, outlines, characters or cel tones, with their own settings
-  const drawing = useDrawnLook(stage, pixels || touring ? undefined : style, { actor: scene?.built, plain: !!scene?.plain, azimuth: shown.views[0].orbit.azimuth, offscreen })
+  const drawing = useDrawnLook(stage, pixels || touring ? undefined : style, { actor: scene?.built, plain: !!scene?.plain, azimuth: shown.views[0].orbit.azimuth, offscreen, light: coarse, loop: shown.loop, sky: shown.finish.sky ? [shown.sky[0], shown.sky[1]] : undefined })
   // the walk-through's fourth step is about the four samples, so it draws them whatever the switch says
   const sampling = touring?.id === 'samples'
   const drawnLook = useMemo(() => (asPixels ? (sampling ? { ...look, fine: true } : look) : undefined), [asPixels, sampling, look])
+  // on a phone the styles that fill the whole screen (pixel art fills a small frame) are drawn at one and a half device
+  // pixels to a CSS pixel, not two: every pass has near half the pixels to fill, and the marks are no finer than that
+  useEffect(() => { stage?.setSharpness(coarse && !asPixels ? 1.5 : 2) }, [stage, coarse, asPixels])
   useEffect(() => {
     if (!stage) return
     stage.setPixels(drawnLook, size)
@@ -723,7 +729,7 @@ export function PixelDiorama() {
                 </Field>
                 <Field label="Blobs">
                   <div className="flex flex-wrap gap-1.5">
-                    {DETAIL.map((d) => <Chip key={d.id} active={detail === d.id} onClick={() => { setDetail(d.id); writeDetail(d.id) }}>{d.label}</Chip>)}
+                    {DETAIL.map((d) => <Chip key={d.id} active={detail === d.id} onClick={() => { setChosen(d.id); writeDetail(d.id) }}>{d.label}</Chip>)}
                   </div>
                 </Field>
                 <div className="grid gap-2">
@@ -775,7 +781,8 @@ export function PixelDiorama() {
             id: 'finish', label: 'Finish', content: (
               <div className={TAB_SECTIONS}>
                 {pixels && <Slider label="Dither" value={dither} min={0} max={1} step={0.05} onChange={setDither} format={(v) => `${Math.round(v * 100)}%`} hint={colors.length ? (sky ? 'Checkers two palette colors to fake the ones between. The sky is always dithered, so its bands blend.' : 'Checkers two palette colors to fake the ones between.') : 'Needs a palette: Full color has none to mix.'} />}
-                <Slider label="Glow" value={glow} min={0} max={4} step={0.25} onChange={setGlow} format={(v) => (v ? `${v.toFixed(2)}×` : 'off')} hint={pixels ? 'How strongly lamps, fires and other glowing things light what is round them, and how far bright pixels shine into the ones beside them.' : 'How strongly lamps, fires and other glowing things light what is round them.'} />
+                {/* neon and stained glass put the scene's lights by (neon has a Glow of its own in the Style tab), so this one would do nothing there */}
+                {style !== 'neon' && style !== 'glass' && <Slider label="Glow" value={glow} min={0} max={4} step={0.25} onChange={setGlow} format={(v) => (v ? `${v.toFixed(2)}×` : 'off')} hint={pixels ? 'How strongly lamps, fires and other glowing things light what is round them, and how far bright pixels shine into the ones beside them.' : 'How strongly lamps, fires and other glowing things light what is round them.'} />}
                 <div className="grid gap-3">
                 {!pixels && <p className="text-xs text-ink-faint">Dither, outlines and the sky belong to the Pixel art style. Pick it in the Style tab to change them.</p>}
                 {pixels && <>

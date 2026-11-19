@@ -25,7 +25,7 @@ type Sorter = DepthSort | RadixSort
 import { detailFor, lodRank, screenRadius, type DetailRule } from './lod.ts'
 import { CLEAN_MARGIN, MAX_EDITS, blobReach, editAt, type ShapeEdit } from './edit.ts'
 import { applyMorphs, shares, type Morph } from './morph.ts'
-import { FLAT_FULL, FLAT_NONE } from './light.ts'
+import { FLAT_FULL, FLAT_NONE, LAMP_MOST } from './light.ts'
 import { LIFT, MAX_MARCH, OCC_SCALE, REACH, SHADOW_CELLS, SHADOW_DENSITY, SPREAD, SUN_MARCH, blobSigma, occupancy, steadyBox, type ShadowBox } from './shadow.ts'
 import { linearToSrgb, srgbToLinear } from '../splat-core/color.ts'
 import { viewColor } from '../splat-core/sh.ts'
@@ -1723,19 +1723,38 @@ function flatness(covA: N, covB: N) {
 }
 
 /**
- * What cel shading cuts into tones, for one blob under the first light: how it faces the light (0 away, 0.5 edge on, 1
- * toward; the side the camera sees is its outside), 1 (cast shadows are `CelPass`'s own, from the light's view of the
- * scene, never the grid of shadows), and how flat it is (how far its facing can be trusted). A blob that gives its own
- * light faces it fully. CPU twin: `toneAt` in light.ts (change both).
+ * What cel shading cuts into tones, for one blob: how it faces the first light (0 away, 0.5 edge on, 1 toward; the
+ * side the camera sees is its outside), how much the lights after the first reach it (`lampReach`: the scene's own
+ * lamps, each by its brightness, distance, facing and baked lamp shadow, as in `lit`, at most `LAMP_MOST`; 1 for a blob
+ * that gives its own light), and how flat it is (how far its facing can be trusted). Cast shadows of the first light
+ * are `CelPass`'s own, from the light's view of the scene, never the grid of shadows. CPU twin: `toneAt` in light.ts
+ * (change both).
  */
-function toned(world: N, covA: N, covB: N, L: Lighting) {
-  const out = vec3(1, 1, flatness(covA, covB)).toVar()
-  If(L.count.greaterThan(0).and(covB.z.lessThan(0.5)), () => {
+function toned(world: N, covA: N, covB: N, seen: N, L: Lighting) {
+  const glows = covB.z.greaterThanEqual(0.5)
+  const out = vec3(1, select(glows, float(1), float(0)), flatness(covA, covB)).toVar()
+  If(L.count.greaterThan(0).and(glows.not()), () => {
     const n = blobNormal(covA, covB).toVar()
-    n.assign(select(dot(n, L.eye.sub(world)).lessThan(0), n.negate(), n))
     const P = L.pos.element(0)
     const to = select(P.w.lessThan(0), P.xyz.mul(SUN_FAR), P.xyz.sub(world)).toVar()
-    out.x.assign(dot(n, to.mul(TSL.inverseSqrt(max(dot(to, to), 1e-6)))).mul(0.5).add(0.5))
+    const out0 = select(dot(n, L.eye.sub(world)).lessThan(0), n.negate(), n)
+    out.x.assign(dot(out0, to.mul(TSL.inverseSqrt(max(dot(to, to), 1e-6)))).mul(0.5).add(0.5))
+    const lamps = float(0).toVar()
+    TSL.Loop(L.count, ({ i }: { i: N }) => {
+      const Q = L.pos.element(i), C = L.col.element(i)
+      const at = Q.xyz.sub(world).toVar()
+      const d2 = dot(at, at).toVar()
+      const r2 = Q.w.mul(Q.w)
+      const fade = max(float(1).sub(d2.div(r2.mul(4))), 0)
+      const fall = fade.mul(fade).div(float(1).add(d2.div(r2)))
+      const facing = abs(dot(n, at.mul(TSL.inverseSqrt(max(d2, 1e-6))))).mul(0.65).add(0.35)
+      // the scene's lights come after cel shading's own, so its first four baked lamp shadows are lights 1 to 4 here
+      const sees = select(i.lessThan(5), float(seen.shiftRight(uint(select(i.greaterThan(0), i.sub(1), i)).mul(8)).bitAnd(255)).div(255), float(1))
+      // not the first light, which the tones are cut from, nor a light from a direction, which reaches everything
+      const counts = select(i.greaterThan(0).and(Q.w.greaterThan(0)), float(1), float(0))
+      lamps.addAssign(dot(C.xyz, vec3(0.2126, 0.7152, 0.0722)).mul(fall).mul(facing).mul(sees).mul(counts))
+    })
+    out.y.assign(min(lamps, LAMP_MOST))
   })
   return out
 }
@@ -1831,7 +1850,7 @@ function makeLight(buf: ReturnType<typeof makeBuffers>, L: Lighting, viewed: boo
     If(L.cel.greaterThan(0.5), () => {
       // cel shading: the blob's own color, a whole byte a channel, with its tone as the fraction beside each (the draw
       // may bind no more buffers than it does, so the tone rides in the same one)
-      const tone = toned(world, buf.covA.element(i), buf.covB.element(i), L)
+      const tone = toned(world, buf.covA.element(i), buf.covB.element(i), buf.seen.element(i), L)
       L.litW.element(i).assign(vec4(floor(own.clamp(0, 1).mul(255).add(0.5)).add(tone.clamp(0, 1).mul(TONE_SHARE)), color.a))
     }).Else(() => {
       const now = vec4(lit(own, world, buf.covA.element(i), buf.covB.element(i), buf.seen.element(i), L), color.a)
@@ -2108,7 +2127,7 @@ function makeVertexWebGL(buf: ReturnType<typeof makeBuffers>, sort: Sorter, mode
       const mine = painted(own, d.world, buf.edits)
       // cel shading: the blob keeps its own color, and its tone goes to the map of tones
       rgb = select(L.cel.greaterThan(0.5), mine, lit(mine, d.world, d.covA, d.covB, buf.seen.element(idx), L))
-      If(L.cel.greaterThan(0.5), () => { tone.assign(toned(d.world, d.covA, d.covB, L)) })
+      If(L.cel.greaterThan(0.5), () => { tone.assign(toned(d.world, d.covA, d.covB, buf.seen.element(idx), L)) })
     }
     const part = unpackUnorm4x8(buf.part.element(idx))
     return placeQuad(p.ndc, p.axes, p.tilt, vec4(flatColor(flat, part.rgb, p.depth, fogged(rgb, p.depth, fog), tone, p.axes), color.a.mul(p.alphaScale)), idx, flat, clean ? d : undefined)
