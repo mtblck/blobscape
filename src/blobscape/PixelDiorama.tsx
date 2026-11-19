@@ -23,6 +23,7 @@ import type { SceneWater } from '../splat-engine/sceneWater.ts'
 import { browserDeflate, encodeApng } from '../splat-core/apng.ts'
 import type { Texture } from '../splat-engine/meshShape.ts'
 import { decodeTexture } from './modelRig.ts'
+import { detailAsked, labelNames, writeDetail } from '../shared/detail.ts'
 
 const SIZES = [2, 3, 4, 6]
 /** Frames a second the scene moves at: 0 is every frame the screen shows. */
@@ -87,7 +88,7 @@ export function PixelDiorama() {
   /** The scene whose palette, finish and view are set. */
   const dressed = useRef(which)
   const [playing, setPlaying] = useState(!calm)
-  const [detail, setDetail] = useState<string>(coarse ? DETAIL[1].id : DETAIL[2].id)
+  const [detail, setDetail] = useState<string>(() => detailAsked(DETAIL, labelNames)?.id ?? (coarse ? DETAIL[1].id : DETAIL[2].id))
   const [pixels, setPixels] = useState(true)
   const [palette, setPalette] = useState('own')
   const [size, setSize] = useState(2)
@@ -533,7 +534,7 @@ export function PixelDiorama() {
                 </Field>
                 <Field label="Blobs">
                   <div className="flex flex-wrap gap-1.5">
-                    {DETAIL.map((d) => <Chip key={d.id} active={detail === d.id} onClick={() => setDetail(d.id)}>{d.label}</Chip>)}
+                    {DETAIL.map((d) => <Chip key={d.id} active={detail === d.id} onClick={() => { setDetail(d.id); writeDetail(d.id) }}>{d.label}</Chip>)}
                   </div>
                 </Field>
                 <div className="grid gap-2">

@@ -1530,14 +1530,16 @@ export default [
       const differ = (a, b, by = 0) => { let n = 0; for (let i = 0; i < a.d.length; i += 4) if (Math.abs(a.d[i] - b.d[i]) + Math.abs(a.d[i + 1] - b.d[i + 1]) + Math.abs(a.d[i + 2] - b.d[i + 2]) + Math.abs(a.d[i + 3] - b.d[i + 3]) > by) n++; return n / (a.d.length / 4) }
       const pictures = {}
       for (const backend of ['webgpu', 'webgl']) {
-        const k = await open(`/experiments/seasonal-bouquets/?offscreen=1&season=fall&seed=3&detail=light${backend === 'webgl' ? '&webgl=1' : ''}`, { viewport: { width: 1280, height: 900 } })
+        const k = await open(`/experiments/seasonal-bouquets/?offscreen=1&season=fall&seed=3&detail=light&table=garden${backend === 'webgl' ? '&webgl=1' : ''}`, { viewport: { width: 1280, height: 900 } })
         const up = await k.page.waitForFunction(() => window.__bouquet?.blobs() > 0, null, { timeout: 120000 }).then(() => true, () => false)
         if (!up) { fails.push(`seasonal bouquets on ${backend}: the bouquet never came up`); await k.ctx.close(); continue }
         // the first frame can be drawn before the view has framed the bouquet
         await read(k.page, 1)
         await k.page.waitForTimeout(400)
         const got = await k.page.evaluate(() => window.__bouquet.stage.backend)
-        const facts = await k.page.evaluate(() => ({ blobs: window.__bouquet.blobs(), bones: window.__bouquet.bones(), stems: window.__bouquet.stems(), lines: window.__bouquet.lines(), vase: window.__bouquet.vase() }))
+        const facts = await k.page.evaluate(() => ({ blobs: window.__bouquet.blobs(), bones: window.__bouquet.bones(), stems: window.__bouquet.stems(), lines: window.__bouquet.lines(), vase: window.__bouquet.vase(), table: window.__bouquet.table(), address: location.search }))
+        // the table and the detail asked for in the address are the ones on show, and stay in it
+        if (facts.table !== 'a white garden table' || !facts.address.includes('table=garden') || !facts.address.includes('detail=light')) fails.push(`seasonal bouquets on ${backend}: asked for the garden table at light detail, got ${facts.table} at ${facts.address}`)
         const first = await read(k.page, 1), again = await read(k.page, 1), later = await read(k.page, 2.5)
         pictures[backend] = first
         const same = differ(first, again), swayed = differ(first, later, 24)

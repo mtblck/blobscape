@@ -5,6 +5,7 @@ import { DETAILS, MAX_FALLING, fallen, lowestOf, makeBouquet, poseBouquet, setSh
 import { FLOWERS, PALETTES, SEASONS, flower, inSeason, seasonOn, type Role } from './flowers.ts'
 import { head } from './heads.ts'
 import { Maker } from './make.ts'
+import { TABLES, TABLE_HEIGHT, makeTable, tableFor } from './tables.ts'
 import { SEASON_VASES, VASES, makeVase } from './vases.ts'
 
 const ROLES: Role[] = ['focal', 'second', 'line', 'filler', 'green']
@@ -132,6 +133,43 @@ test('a stem in a clear vase stays inside the glass from the floor to the mouth'
       }
     }
   }
+})
+
+test('every table has a top at the vase\'s foot and legs down to the ground, and a seed picks each of them', () => {
+  for (const { id } of TABLES) {
+    for (let seed = 1; seed <= 3; seed++) {
+      const m = new Maker(COARSE)
+      const t = makeTable(m, id, 0.15, seed)
+      assert.ok(m.blobs.count > 500 && t.name.length > 5, `${id}: ${m.blobs.count} blobs`)
+      assert.equal(m.spacing, COARSE, `${id} left the maker coarser than it found it`)
+      let high = -Infinity, low = Infinity, under = 0
+      for (let i = 0; i < m.blobs.count; i++) {
+        const y = m.blobs.center[i * 3 + 1]
+        high = Math.max(high, y); low = Math.min(low, y)
+        if (y < -TABLE_HEIGHT * 0.5) under++
+      }
+      assert.ok(Math.abs(high) < 0.005, `${id}: its top is at ${high}`)
+      assert.ok(low < t.ground + 0.08 && low > t.ground - 0.03, `${id}: it goes down to ${low}, the ground is ${t.ground}`)
+      assert.ok(under > 100, `${id}: ${under} blobs of leg`)
+      for (let a = 0; a < 6.28; a += 0.3) assert.ok(t.reach(Math.cos(a), Math.sin(a)) > 0.5, `${id} reaches ${t.reach(Math.cos(a), Math.sin(a))}`)
+    }
+  }
+  const picked = new Set(Array.from({ length: 60 }, (_, i) => tableFor(i + 1)))
+  assert.equal(picked.size, TABLES.length)
+})
+
+test('a chosen table is kept, changes nothing else, and every petal lands on it', () => {
+  const c: Choice = { season: 'spring', seed: 3, size: 'bouquet', shape: 'round' }
+  for (const { id } of TABLES) {
+    const b = makeBouquet({ ...c, table: id }, COARSE)
+    assert.equal(b.table.kind, id)
+    assert.deepEqual({ ...b.plan, choice: c }, plan(c))
+    for (const f of b.falling) {
+      const far = Math.hypot(f.land[0], f.land[2])
+      assert.ok(far < b.table.reach(f.land[0] / far, f.land[2] / far) - 0.03, `${id}: a petal lands ${far} out`)
+    }
+  }
+  assert.equal(makeBouquet(c, COARSE).table.kind, tableFor(c.seed))
 })
 
 test('a bouquet is one actor: three bones a stem, every blob on a bone, well under the 256 a blob can name', () => {

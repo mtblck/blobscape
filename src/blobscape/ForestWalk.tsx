@@ -9,6 +9,7 @@ import { SEASONS, type Season } from './forest/plants.ts'
 import { RING, TILE } from './forest/world.ts'
 import type { Input } from './forest/world.ts'
 import { Stick } from './Stick.tsx'
+import { detailAsked, labelNames, writeDetail } from '../shared/detail.ts'
 
 const LOOKS = [{ id: 'forest', label: 'Forest' }, { id: 'dusk', label: 'Dusk' }, { id: 'autumn', label: 'Autumn' }]
 const VIEWS: { id: CameraView; label: string }[] = [{ id: 'close', label: 'Close' }, { id: 'far', label: 'Far' }, { id: 'high', label: 'High' }]
@@ -36,7 +37,7 @@ export function ForestWalk() {
   const offscreen = useMemo(() => new URLSearchParams(location.search).get('offscreen') === '1', [])
   const [season, setSeason] = useState<Season>('summer')
   const [look, setLook] = useState('forest')
-  const [detail, setDetail] = useState<number>()
+  const [detail, setDetail] = useState<number | undefined>(() => detailAsked(DETAIL, labelNames)?.id)
   const [view, setView] = useState<CameraView>('close')
   // under reduced motion the forest stands grown and still; both can be turned back on
   const calm = useMemo(() => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches, [])
@@ -220,7 +221,7 @@ export function ForestWalk() {
                 </Field>
                 <Field label="Detail">
                   <div className="flex flex-wrap gap-1.5">
-                    {DETAIL.map((d) => <Chip key={d.id} active={detail === d.id} onClick={() => setDetail(d.id)}>{d.label}</Chip>)}
+                    {DETAIL.map((d) => <Chip key={d.id} active={detail === d.id} onClick={() => { setDetail(d.id); writeDetail(d.label.toLowerCase()) }}>{d.label}</Chip>)}
                   </div>
                 </Field>
                 <p className="text-xs text-ink-faint">Lighter detail walks smoother on older phones.</p>

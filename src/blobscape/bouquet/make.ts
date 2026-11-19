@@ -119,7 +119,7 @@ export class Maker {
   blend?: (p: Vec3) => [bone: number, share: number]
 
   /** How far apart blobs lie on a surface. */
-  readonly spacing: number
+  spacing: number
 
   constructor(spacing: number) { this.spacing = spacing }
 
