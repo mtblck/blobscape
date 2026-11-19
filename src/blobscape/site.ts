@@ -100,7 +100,7 @@ export const EXPERIMENTS = [
     tags: ['pixel', 'tool'],
     needs: 'WebGPU or WebGL 2',
     published: '2026-11-15',
-    updated: '2026-11-18',
+    updated: '2026-11-19',
     body: 'A lighthouse, a dragon over lava, a bee in a forest and more, built from shapes and drawn as moving pixel art. It is real 3D underneath, so you can turn it, swap the palette, or switch the pixels off to see the blobs.',
   },
   {
