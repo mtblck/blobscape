@@ -177,3 +177,60 @@ test('a cell of strands takes their stroke, lit by its tone, before any edge', (
   assert.ok(lit.color[0] > dim.color[0])
   assert.equal(GLYPHS[glyphCell([0.5, 0.5, 0.5], 1, edge, { strands: false }, -1, undefined, [0.8, 0]).glyph], '|')
 })
+
+test('braille: each eighth of a cell lights its own dot, an even tone lights one dot more for each eighth, and dots hold at their step', async () => {
+  const { brailleFor, dotBit, DOT_STEP, charOf, setBit, DOT_X, DOT_Y } = await import('./glyphs.ts')
+  // only the part below right is heavy: the dot below right
+  assert.equal(brailleFor([0, 0, 0, 0, 0, 0, 0, 1]), 1 << dotBit(1, 3))
+  assert.equal(charOf('braille', brailleFor([0, 0, 0, 0, 0, 0, 0, 1])), '⢀')
+  assert.equal(charOf('braille', brailleFor([1, 1, 1, 1, 1, 1, 1, 1])), '⣿')
+  assert.equal(charOf('braille', brailleFor([1, 0, 1, 0, 1, 0, 0, 0])), '⠇')
+  const bitsOn = (b: number) => b.toString(2).split('1').length - 1
+  for (let k = 0; k <= 8; k++) assert.equal(bitsOn(brailleFor(new Array(8).fill((k + 0.01) / 8 - 0.001))), k)
+  // a tone just under a dot's step keeps it on if it was, and not otherwise
+  const just = DOT_STEP.map((v, i) => (i === 0 ? v - STICK / 2 : 0))
+  assert.equal(brailleFor(just), 0)
+  assert.equal(brailleFor(just, 1 << dotBit(0, 0)), 1 << dotBit(0, 0))
+  assert.equal(brailleFor(just, 1 << dotBit(0, 0), 0), 0)
+  // the drawn dots are where the bits say
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 2; c++) assert.ok(setBit('braille', 1 << dotBit(c, r), DOT_X[c], DOT_Y[r]))
+  let ink = 0
+  for (let y = 0; y < CELL_H; y++) for (let x = 0; x < CELL_W; x++) ink += setBit('braille', 255, x, y) ? 1 : 0
+  assert.equal(ink, 8)
+})
+
+test('blocks: a shape where the quarters differ, an even shade where they do not, each held near its edge', async () => {
+  const { blockFor, charOf, blockInk, setBit, BLOCK_SPLIT } = await import('./glyphs.ts')
+  assert.equal(charOf('blocks', blockFor([1, 0, 1, 0])), '▌')
+  assert.equal(charOf('blocks', blockFor([0.9, 0.9, 0.1, 0.9])), '▜')
+  assert.equal(charOf('blocks', blockFor([0.5, 0.5, 0.5, 0.5])), '▒')
+  assert.equal(charOf('blocks', blockFor([0, 0, 0, 0])), ' ')
+  assert.equal(charOf('blocks', blockFor([1, 1, 1, 0.9])), '█')
+  // a shade holds while its tone is within `steady` of the nearest
+  assert.equal(charOf('blocks', blockFor([0.4, 0.4, 0.4, 0.4], 18)), '▒')
+  assert.equal(charOf('blocks', blockFor([0.62, 0.62, 0.62, 0.62])), '▒')
+  assert.equal(charOf('blocks', blockFor([0.62, 0.62, 0.62, 0.62], 18)), '▓')
+  // a shape keeps the quarters it had while none is clearly on the other side of the middle
+  const q = [0.6, 0.6 - BLOCK_SPLIT, 0.6, 0.6 - BLOCK_SPLIT / 2 - 0.02]
+  assert.equal(charOf('blocks', blockFor(q)), '▌')
+  assert.equal(charOf('blocks', blockFor(q, 13)), '▙')
+  // what is drawn holds as much ink as the character's weight says
+  for (let g = 0; g < 19; g++) {
+    let ink = 0
+    for (let y = 0; y < CELL_H; y++) for (let x = 0; x < CELL_W; x++) ink += setBit('blocks', g, x, y) ? 1 : 0
+    assert.equal(ink / (CELL_W * CELL_H), blockInk(g), `block ${g}`)
+  }
+})
+
+test('a grid in braille or blocks reads back as their own characters', async () => {
+  const { glyphText } = await import('./glyphs.ts')
+  assert.equal(glyphText([255, 0, 1, 0], 2, 'braille'), '⣿\n⠁')
+  assert.equal(glyphText([15, 16, 5, 0], 2, 'blocks'), '█░\n▌')
+})
+
+test('a braille or blocks cell takes its color from its heaviest part', async () => {
+  const { shapeCell } = await import('./glyphs.ts')
+  const dim = shapeCell([0.2, 0.1, 0.05], 1, [0.1, 0.1, 0.1, 0.1], { set: 'blocks' }), bright = shapeCell([0.2, 0.1, 0.05], 1, [1, 0, 0, 0], { set: 'blocks' })
+  assert.ok(bright.color[0] > dim.color[0])
+  assert.deepEqual(shapeCell([0.2, 0.1, 0.05], 1, new Array(8).fill(1), { set: 'braille' }, -1, [0.1, 0.2, 0.3]).color, [0.1, 0.2, 0.3])
+})

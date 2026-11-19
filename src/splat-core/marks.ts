@@ -10,12 +10,13 @@
 /**
  * The kinds of mark: flat opaque dabs with bristle streaks, thicker dabs with ridges that catch light, a wash with a
  * pen stroke along each blob, hatching that is denser where it is darker, or a whole disc of the blob's own color with
- * no brushwork at all (`flat`: the fill under cel shading, where the discs of one surface close up into one color).
+ * no brushwork at all (`flat`: the fill under cel shading, where the discs of one surface close up into one color),
+ * or stippling: pen dots on bare paper, more of them and bigger where it is darker.
  */
-export type MarkKind = 'gouache' | 'oil' | 'ink' | 'hatch' | 'flat'
+export type MarkKind = 'gouache' | 'oil' | 'ink' | 'hatch' | 'flat' | 'stipple'
 
 /** The kinds, in the order the GPU numbers them (from 1; 0 is no marks). */
-export const MARK_KINDS: readonly MarkKind[] = ['gouache', 'oil', 'ink', 'hatch', 'flat']
+export const MARK_KINDS: readonly MarkKind[] = ['gouache', 'oil', 'ink', 'hatch', 'flat', 'stipple']
 
 /** How the blobs are drawn as marks. */
 export interface MarkLook {
@@ -23,9 +24,9 @@ export interface MarkLook {
   kind: MarkKind
   /** How big a mark is beside its blob: 1 reaches 1.5 standard deviations along the blob (default 1). */
   size?: number
-  /** Ink and hatch: the pen's color, sRGB 0–1 (default a blue-black). */
+  /** Ink, hatch and stipple: the pen's color, sRGB 0–1 (default a blue-black). */
   ink?: readonly [number, number, number]
-  /** Ink and hatch: the paper's color, sRGB 0–1 (default a warm white). Set the page behind the view to it too. */
+  /** Ink, hatch and stipple: the paper's color, sRGB 0–1 (default a warm white). Set the page behind the view to it too. */
   paper?: readonly [number, number, number]
   /**
    * Lay the marks one over another from far to near, with soft edges, as soft blobs are drawn. Without it (the
@@ -138,6 +139,26 @@ export const SHADE_FROM = 0.5
 /** See `SHADE_FROM`. */
 export const SHADE_FULL = 0.72
 
+/** How far apart stipple dots stand on a blob, in standard deviations at mark size 1. */
+export const DOT_STEP = 0.36
+/** A stipple dot's radius as a share of `DOT_STEP`: on a pale blob, then added on the darkest. */
+export const DOT_R: readonly [number, number] = [0.22, 0.12]
+
+/**
+ * How much of a stipple dot covers (u, v) on a blob of this darkness, 0–1. Dots stand on a grid on the blob, each
+ * nudged a little from its place and kept or left out by a hash of where it is, more of them kept the darker the blob:
+ * so the dots belong to the blob and turn with it. The nudge turns over and the hash stays the same when (u, v) does,
+ * so a blob whose long axis flips end for end on the screen shows the same dots.
+ */
+export function stippleAt(u: number, v: number, seed: number, dark: number, size = 1): number {
+  const step = DOT_STEP * size
+  const i = Math.round(u / step), j = Math.round(v / step)
+  const du = u / step - i - 0.15 * Math.sin(1.7 * i + 2.3 * j), dv = v / step - j - 0.15 * Math.sin(2.9 * i - 1.3 * j)
+  const keep = hash(i * i + 7 * j * j + 3 * i * j, seed) < smooth(0.04, 0.9, dark)
+  const r = DOT_R[0] + DOT_R[1] * dark
+  return keep ? 1 - smooth(r * 0.7, r, Math.hypot(du, dv)) : 0
+}
+
 /** What a mark is at one pixel. */
 export interface MarkSample {
   /** How much of the pixel the mark covers, 0–1. Marks are paint: its alpha is this times the blob's opacity times `MARK_SOLID`, at most 1. */
@@ -175,6 +196,7 @@ export function markAt(kind: MarkKind, u: number, v: number, seed: number, rgb: 
     return { cover, color: [rgb[0] * shade + shine, rgb[1] * shade + shine, rgb[2] * shade + shine] }
   }
   const dark = 1 - Math.min(1, Math.sqrt(Math.max(0, luma(rgb))))
+  if (kind === 'stipple') return { cover, color: [0, 1, 2].map((c) => paper[c] + (ink[c] - paper[c]) * stippleAt(u, v, seed, dark, k)) as [number, number, number] }
   if (kind === 'ink') {
     // line and wash: a wash of the blob's color, thinner the lighter it is so the lightest leave the paper nearly
     // bare; and the pen only in the shade, a stroke along the blob that is heavier where it is darker. The outlines

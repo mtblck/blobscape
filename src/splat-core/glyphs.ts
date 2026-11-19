@@ -81,7 +81,16 @@ export interface GlyphLook {
   steady?: number
   /** Tones are multiplied by this before a character is picked (default 1): over 1 for a dim scene. */
   gain?: number
+  /**
+   * Which characters (default 'ascii'): 'braille' draws each cell as the braille character whose eight dots are on
+   * where that eighth of the cell is heavy enough, and 'blocks' as the quarter blocks (▘ ▚ ▙ and so on) or, where a
+   * cell is even, one of the shades ░ ▒ ▓. Both show shapes within a cell, so `edges` and `strands` are not used.
+   */
+  set?: GlyphSet
 }
+
+/** The kinds of characters a picture can be drawn in (`GlyphLook.set`). */
+export type GlyphSet = 'ascii' | 'braille' | 'blocks'
 
 /** The default `GlyphLook.steady`. */
 export const STICK = 0.06
@@ -246,12 +255,118 @@ export function glyphCell(rgb: ArrayLike<number>, cover: number, probes: readonl
   return { glyph, color: [(rgb[0] / top) * level, (rgb[1] / top) * level, (rgb[2] / top) * level] }
 }
 
-/** A grid of characters (their numbers in `GLYPHS`, a row after another from the top) as lines of text, with spaces at line ends dropped. */
-export function glyphText(glyphs: ArrayLike<number>, columns: number): string {
+/** A cell's color from the picture's mean over it, brought up to full strength (`LIFT_MOST` at most) and set to `level`. */
+function lifted(rgb: ArrayLike<number>, cover: number, level: number, ink?: ArrayLike<number>): [number, number, number] {
+  if (ink) return [ink[0], ink[1], ink[2]]
+  const top = Math.max(rgb[0], rgb[1], rgb[2], cover / LIFT_MOST, 1e-4)
+  return [(rgb[0] / top) * level, (rgb[1] / top) * level, (rgb[2] / top) * level]
+}
+
+/**
+ * The tone at which each braille dot comes on, a dot a row from the top, left then right: spread like an ordered
+ * dither, so a cell of even tone lights its dots in an order that keeps them apart, one more for each eighth.
+ */
+export const DOT_STEP: readonly number[] = [0, 4, 6, 2, 3, 7, 5, 1].map((v) => (v + 0.5) / 8)
+
+/** The bit of the braille character (counted from U+2800) that holds the dot in column `c` and row `r` (from the top). */
+export const dotBit = (c: number, r: number) => (r < 3 ? r + 3 * c : 6 + c)
+
+/** Where a braille cell's dots sit in the font's 6 × 8 cell: columns, then rows. */
+export const DOT_X: readonly number[] = [1, 4]
+/** See `DOT_X`. */
+export const DOT_Y: readonly number[] = [0, 2, 4, 6]
+
+/**
+ * A braille cell's dots from the tones of its eight parts (two across, four down, a row after another from the top):
+ * as bits from U+2800. A dot is on where its part's tone reaches its `DOT_STEP`; one that was on the frame before
+ * (`before`, the same bits, or -1) stays on down to `steady` under it, so a dot at its step does not blink.
+ */
+export function brailleFor(tones: ArrayLike<number>, before = -1, steady = STICK): number {
+  let bits = 0
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 2; c++) {
+    const d = r * 2 + c, bit = dotBit(c, r), was = before >= 0 && steady > 0 && (before >> bit) & 1
+    if (tones[d] >= DOT_STEP[d] - (was ? steady : 0)) bits |= 1 << bit
+  }
+  return bits
+}
+
+/** The quarter blocks, by their bits: above left 1, above right 2, below left 4, below right 8. */
+export const QUADS = ' ▘▝▀▖▌▞▛▗▚▐▜▄▙▟█'
+/** The shades, light to dark, numbered after the quarter blocks. */
+export const SHADES = '░▒▓'
+/** A blocks cell whose quarters' tones lie closer than this is drawn as one even shade, not a shape. */
+export const BLOCK_SPLIT = 0.25
+/** The even blocks as tones: none, the three shades, full. */
+const EVEN: readonly [number, number][] = [[0, 0], [16, 0.25], [17, 0.5], [18, 0.75], [15, 1]]
+
+/**
+ * A blocks cell from the tones of its four quarters (above left, above right, below left, below right): an even cell
+ * is the shade nearest its mean (kept, like a ramp character, unless another is `steady` closer), and an uneven one is
+ * the quarter block with the quarters over the middle of its tones (kept while no quarter is clearly on the other side).
+ */
+export function blockFor(q: ArrayLike<number>, before = -1, steady = STICK): number {
+  const hi = Math.max(q[0], q[1], q[2], q[3]), lo = Math.min(q[0], q[1], q[2], q[3])
+  if (hi - lo < BLOCK_SPLIT) {
+    const mean = (q[0] + q[1] + q[2] + q[3]) / 4
+    let best = 0
+    for (let i = 1; i < EVEN.length; i++) if (Math.abs(EVEN[i][1] - mean) < Math.abs(EVEN[best][1] - mean)) best = i
+    const was = steady > 0 ? EVEN.findIndex(([g]) => g === before) : -1
+    return was >= 0 && Math.abs(EVEN[was][1] - mean) <= Math.abs(EVEN[best][1] - mean) + steady ? EVEN[was][0] : EVEN[best][0]
+  }
+  const mid = (hi + lo) / 2
+  let bits = 0
+  for (let i = 0; i < 4; i++) if (q[i] > mid) bits |= 1 << i
+  if (steady > 0 && before > 0 && before < 15 && before !== bits) {
+    let holds = true
+    for (let i = 0; i < 4; i++) if ((before >> i) & 1 ? q[i] < mid - steady : q[i] > mid + steady) holds = false
+    if (holds) return before
+  }
+  return bits
+}
+
+/** How heavy a blocks character is, 0–1. */
+export const blockInk = (g: number) => (g >= 16 ? EVEN[g - 15][1] : ((g & 1) + ((g >> 1) & 1) + ((g >> 2) & 1) + ((g >> 3) & 1)) / 4)
+
+/**
+ * One cell drawn in braille or blocks (`GlyphLook.set`): `parts` are the tones of its eighths or quarters (`toneOf` of
+ * each), the rest as for `glyphCell`. The color is the cell's own at the level its heaviest part asks for.
+ */
+export function shapeCell(rgb: ArrayLike<number>, cover: number, parts: ArrayLike<number>, look: GlyphLook = {}, before = -1, ink?: ArrayLike<number>): GlyphCell {
+  const steady = look.steady ?? STICK
+  const glyph = look.set === 'braille' ? brailleFor(parts, before, steady) : blockFor(parts, before, steady)
+  let top = 0
+  for (let i = 0; i < parts.length; i++) top = Math.max(top, parts[i])
+  return { glyph, color: lifted(rgb, cover, look.light ? 0.6 - 0.45 * top : 0.55 + 0.45 * top, ink) }
+}
+
+/** Whether a character of a set has ink at a pixel of its 6 × 8 cell (`x` from the left, `y` from the top): what the engine draws. */
+export function setBit(set: GlyphSet, glyph: number, x: number, y: number): boolean {
+  if (set === 'braille') {
+    const c = DOT_X.indexOf(x), r = DOT_Y.indexOf(y)
+    return c >= 0 && r >= 0 && ((glyph >> dotBit(c, r)) & 1) === 1
+  }
+  if (set === 'blocks') {
+    if (glyph === 16) return x % 2 === 0 && y % 2 === 0
+    if (glyph === 17) return (x + y) % 2 === 0
+    if (glyph === 18) return !(x % 2 === 1 && y % 2 === 1)
+    return ((glyph >> ((x >= CELL_W / 2 ? 1 : 0) + (y >= CELL_H / 2 ? 2 : 0))) & 1) === 1
+  }
+  return glyphBit(glyph, x, y)
+}
+
+/** A character of a set as text. */
+export function charOf(set: GlyphSet, glyph: number): string {
+  if (set === 'braille') return glyph ? String.fromCharCode(0x2800 + glyph) : ' '
+  if (set === 'blocks') return glyph >= 16 ? SHADES[glyph - 16] ?? ' ' : QUADS[glyph] ?? ' '
+  return GLYPHS[glyph] ?? ' '
+}
+
+/** A grid of characters (their numbers in `GLYPHS`, or a set's own numbers, a row after another from the top) as lines of text, with spaces at line ends dropped. */
+export function glyphText(glyphs: ArrayLike<number>, columns: number, set: GlyphSet = 'ascii'): string {
   const lines: string[] = []
   for (let at = 0; at < glyphs.length; at += columns) {
     let line = ''
-    for (let x = 0; x < columns && at + x < glyphs.length; x++) line += GLYPHS[glyphs[at + x]] ?? ' '
+    for (let x = 0; x < columns && at + x < glyphs.length; x++) line += charOf(set, glyphs[at + x])
     lines.push(line.replace(/ +$/, ''))
   }
   while (lines.length && !lines[lines.length - 1]) lines.pop()

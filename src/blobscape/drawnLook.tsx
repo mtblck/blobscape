@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { MarkLook } from '../splat-core/marks.ts'
-import type { GlyphLook } from '../splat-core/glyphs.ts'
+import type { GlyphLook, GlyphSet } from '../splat-core/glyphs.ts'
 import { gatherColors } from '../splat-core/cel.ts'
 import type { Blobs } from '../splat-core/blobs.ts'
 import { Button, Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
@@ -19,6 +19,13 @@ export const wantsPlain = (look: Look | undefined) => look === 'cel' || look ===
 
 /** On the dark screen characters are thin lines of light and read fainter than their share of ink, so tones are raised by this. */
 const SCREEN_GAIN = 1.5
+
+/** The character sets of the ASCII look (`GlyphLook.set`); braille and blocks came from Silicon Jungle's Ink Studio. */
+const CHAR_SETS: { id: GlyphSet; label: string; about: string }[] = [
+  { id: 'ascii', label: 'ASCII', about: 'Letters and signs by how much there is to show, and strokes along edges.' },
+  { id: 'braille', label: 'Braille', about: 'Eight dots a cell, each on where its eighth of the cell is heavy enough, so shapes come out finer than a character. Idea from Silicon Jungle\'s Ink Studio.' },
+  { id: 'blocks', label: 'Blocks', about: 'Quarter blocks where a cell is half one thing and half another, and the shades ░ ▒ ▓ where it is even. Idea from Silicon Jungle\'s Ink Studio.' },
+]
 
 const params = () => new URLSearchParams(typeof location === 'undefined' ? '' : location.search)
 const lum = (c: readonly number[]) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
@@ -67,6 +74,8 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   const [strokes, setStrokes] = useState(true)
   const [strands, setStrands] = useState(true)
   const [weight, setWeight] = useState(1)
+  // which characters: ASCII, braille or blocks (`?chars=`)
+  const [chars, setChars] = useState<GlyphSet>(() => (CHAR_SETS.find((c) => c.id === params().get('chars'))?.id ?? 'ascii'))
   const [copied, setCopied] = useState('')
   const { actor, plain, azimuth, soft, offscreen, sky, light, loop } = on
   // the subject's own sky is the first backdrop where it has one. Under a dark sky it is night: the shade and line are
@@ -84,7 +93,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   const ascii = look === 'ascii'
   // off screen a frame is drawn only when asked for, and must not depend on the one before (`?steady=` says otherwise, for the checks)
   const held = useMemo(() => { const v = params().get('steady'); return v !== null && v !== '' && Number.isFinite(+v) ? +v : offscreen ? 0 : undefined }, [offscreen])
-  const glyphs = useMemo<GlyphLook | undefined>(() => (ascii ? { size: letter, ink: own ? undefined : sheet.ink, light: !own && lum(sheet.paper) > lum(sheet.ink), edges: strokes, strands, gain: weight * (own ? SCREEN_GAIN : 1), steady: held } : undefined), [ascii, letter, own, sheet, strokes, strands, weight, held])
+  const glyphs = useMemo<GlyphLook | undefined>(() => (ascii ? { size: letter, ink: own ? undefined : sheet.ink, light: !own && lum(sheet.paper) > lum(sheet.ink), edges: strokes, strands, gain: weight * (own ? SCREEN_GAIN : 1), steady: held, set: chars } : undefined), [ascii, letter, own, sheet, strokes, strands, weight, held, chars])
   useEffect(() => { stage?.setGlyphs(glyphs) }, [stage, glyphs])
   useEffect(() => { setCopied('') }, [look])
   const lit = look === 'neon'
@@ -100,7 +109,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   const painted = look === 'watercolor'
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { stage?.setWash(painted ? washLook(wash, sky) : undefined) }, [stage, painted, wash, skyKey])
-  const outline = !!look && !ascii && !lit && !glazed && !painted && (outlined ?? (look === 'ink' || look === 'hatch' || look === 'cel'))
+  const outline = !!look && !ascii && !lit && !glazed && !painted && (outlined ?? (look === 'ink' || look === 'hatch' || look === 'stipple' || look === 'cel'))
   useEffect(() => { stage?.setCel(look === 'cel' ? { ...celLook({ ...cel, backdrop: celBase, turn: cel.turn + azimuth, line: outline ? pen : 0 }), ambient: nightLight(night), ...(light ? { shadowSize: 1024, shadowEvery: offscreen ? 1 : 2 } : {}) } : undefined) }, [stage, look, cel, celBase, night, outline, pen, azimuth, light, offscreen])
   // flat fills: each part's colors gathered into a few, shown in place of the blobs' own (which stay as they were)
   useEffect(() => {
@@ -113,9 +122,9 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
     stage.tint((_own, i) => [flat[i * 3], flat[i * 3 + 1], flat[i * 3 + 2]])
     return () => stage.tint()
   }, [stage, actor, plain, look, cel.fills])
-  useEffect(() => { stage?.setOutline(outline && look !== 'cel' ? { width: pen, ink: look === 'ink' || look === 'hatch' ? sheet.ink : undefined } : undefined) }, [stage, outline, pen, look, sheet])
+  useEffect(() => { stage?.setOutline(outline && look !== 'cel' ? { width: pen, ink: look === 'ink' || look === 'hatch' || look === 'stipple' ? sheet.ink : undefined } : undefined) }, [stage, outline, pen, look, sheet])
 
-  const drawnOn = look === 'ink' || look === 'hatch'
+  const drawnOn = look === 'ink' || look === 'hatch' || look === 'stipple'
   // paint covers its ground, so a subject with a sky of its own stands in front of that
   const isPaint = look === 'gouache' || look === 'oil'
   const backdrop = BACKDROPS.find((b) => b.id === celBase) ?? BACKDROPS[0]
@@ -187,18 +196,26 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
           <Slider label="Mark size" value={size} min={0.5} max={1.3} step={0.05} onChange={setSize} format={(v) => `${Math.round(v * 100)}%`} hint="Smaller marks leave gaps between them; bigger ones overlap more." />
         )}
         {ascii && (
+          <Field label="Characters">
+            <div className="flex flex-wrap gap-1.5" data-testid="brush-chars">
+              {CHAR_SETS.map((c) => <Chip key={c.id} active={chars === c.id} onClick={() => setChars(c.id)}>{c.label}</Chip>)}
+            </div>
+            <p className="mt-1.5 text-xs text-ink-faint">{CHAR_SETS.find((c) => c.id === chars)!.about}</p>
+          </Field>
+        )}
+        {ascii && (
           <Slider label="Character size" value={letter} min={8} max={24} step={2} onChange={setLetter} format={(v) => `${v} px`} hint="How tall a character is. Smaller ones show more of the picture; bigger ones are easier to read." />
         )}
         {ascii && (
           <Slider label="Weight" value={weight} min={0.5} max={2} step={0.1} onChange={setWeight} format={(v) => `${Math.round(v * 100)}%`} hint="Over 100% every cell takes a heavier character than its tone asks for, which suits a dim scene." />
         )}
-        {ascii && (
+        {ascii && chars === 'ascii' && (
           <div data-testid="brush-strokes">
             <Toggle label="Strokes along edges" checked={strokes} onChange={setStrokes} />
             <p className="mt-1.5 text-xs text-ink-faint">Where an edge runs through a cell it gets | _ / or \ by the way the edge runs, in place of a character for its tone.</p>
           </div>
         )}
-        {ascii && (
+        {ascii && chars === 'ascii' && (
           <div data-testid="brush-strands">
             <Toggle label="Strokes along fur and grass" checked={strands} onChange={setStrands} />
             <p className="mt-1.5 text-xs text-ink-faint">A cell that is mostly long thin blobs, such as strands of fur or blades of grass, gets the stroke nearest the way they run.</p>

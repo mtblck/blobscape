@@ -279,7 +279,7 @@ export function ScanStudio() {
   useEffect(() => {
     stage?.setMarks(isMark(drawnAs) ? { kind: drawnAs, soft: true } : undefined)
     stage?.setGlyphs(drawnAs === 'ascii' ? {} : undefined)
-    stage?.setOutline(drawnAs === 'ink' || drawnAs === 'hatch' ? {} : undefined)
+    stage?.setOutline(drawnAs === 'ink' || drawnAs === 'hatch' || drawnAs === 'stipple' ? {} : undefined)
   }, [stage, drawnAs])
 
   // For verify: the stage and the counts, without clicking
@@ -319,7 +319,7 @@ export function ScanStudio() {
             onDrop={(ev) => { ev.preventDefault(); setDragOver(false); const f = ev.dataTransfer.files[0]; if (f) void openFile(f) }}
           >
               {/* what the drawn looks stand on: paper for the pen, a dark ground for paint */}
-              {drawnAs !== 'blobs' && <div aria-hidden className="absolute inset-0" style={{ background: drawnAs === 'ascii' ? css(SCREEN) : drawnAs === 'ink' || drawnAs === 'hatch' ? css(PAPERS[0].paper) : GROUND }} />}
+              {drawnAs !== 'blobs' && <div aria-hidden className="absolute inset-0" style={{ background: drawnAs === 'ascii' ? css(SCREEN) : drawnAs === 'ink' || drawnAs === 'hatch' || drawnAs === 'stipple' ? css(PAPERS[0].paper) : GROUND }} />}
               <canvas
                 ref={canvas}
                 role="application"

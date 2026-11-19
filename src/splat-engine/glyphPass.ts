@@ -1,12 +1,12 @@
 import { DataTexture, LinearFilter, NearestFilter, NoBlending, NodeMaterial, QuadMesh, RedFormat, RenderTarget, UnsignedByteType, Vector2, Vector3, type Camera, type Object3D, type WebGPURenderer } from 'three/webgpu'
 import * as TSLTyped from 'three/tsl'
 import { SplatDepth } from './depth.ts'
-import { CELL_H, CELL_W, EDGE_COVER, EDGE_DEPTH, EDGE_TONE, GLYPHS, LIFT_MOST, PROBE, RAMP_INK, STICK, STRAND, STRAND_HOLD, STRAND_KEEP, STROKE_FROM, glyphAtlas, type GlyphLook } from '../splat-core/glyphs.ts'
+import { BLOCK_SPLIT, CELL_H, CELL_W, DOT_STEP, DOT_X, DOT_Y, EDGE_COVER, EDGE_DEPTH, EDGE_TONE, GLYPHS, LIFT_MOST, PROBE, RAMP_INK, STICK, STRAND, STRAND_HOLD, STRAND_KEEP, STROKE_FROM, dotBit, glyphAtlas, type GlyphLook, type GlyphSet } from '../splat-core/glyphs.ts'
 
 // As in engine.ts: the shader builders use TSL untyped.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const TSL = TSLTyped as unknown as Record<string, any>
-const { Fn, abs, dot, float, floor, max, min, select, sqrt, texture, uniform, uv, vec2, vec3, vec4 } = TSL
+const { Fn, abs, dot, float, floor, max, min, mod, select, sqrt, texture, uniform, uv, vec2, vec3, vec4 } = TSL
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type N = any
 
@@ -19,6 +19,20 @@ const TAPS: [number, number][] = Array.from({ length: 12 }, (_, i) => [((i % 3) 
 const LIE_TAPS: [number, number][] = Array.from({ length: CELL_W * CELL_H }, (_, i) => [((i % CELL_W) + 0.5) / CELL_W - 0.5, (Math.floor(i / CELL_W) + 0.5) / CELL_H - 0.5])
 /** The four strokes as ways to run (`WAYS` in glyphs.ts). */
 const WAYS: [number, number][] = [[-1, 0], [1, 0], [0, 1], [0, -1]]
+
+/** Where a braille cell's eight parts are read, in font pixels from the cell's top left: two taps in the middle row of each part (three across, two down). */
+const DOT_TAPS: [number, number][][] = Array.from({ length: 8 }, (_, d) => {
+  const c = d % 2, r = Math.floor(d / 2)
+  return [[3 * c + 0.75, 2 * r + 1], [3 * c + 2.25, 2 * r + 1]]
+})
+/** Where a blocks cell's four quarters are read: four taps in each (three across, four down). */
+const QUAD_TAPS: [number, number][][] = Array.from({ length: 4 }, (_, i) => {
+  const x = 3 * (i % 2), y = 4 * Math.floor(i / 2)
+  return [[x + 0.75, y + 1], [x + 2.25, y + 1], [x + 0.75, y + 3], [x + 2.25, y + 3]]
+})
+/** The even blocks (`EVEN` in glyphs.ts): their numbers and tones. */
+const EVEN: [number, number][] = [[0, 0], [16, 0.25], [17, 0.5], [18, 0.75], [15, 1]]
+const SETS: GlyphSet[] = ['ascii', 'braille', 'blocks']
 
 /**
  * The picture as characters (splat-core/glyphs.ts is the CPU twin: change one, change both). The frame is drawn three
@@ -59,6 +73,8 @@ export class GlyphPass {
   private readonly edges = uniform(1)
   private readonly sticky = uniform(0)
   private readonly gain = uniform(1)
+  /** Which characters: 0 ASCII, 1 braille, 2 blocks (`SETS`). */
+  private readonly set = uniform(0)
   private steady = STICK
 
   constructor() {
@@ -84,7 +100,11 @@ export class GlyphPass {
     this.edges.value = look.edges === false ? 0 : 1
     this.gain.value = look.gain ?? 1
     this.steady = look.steady ?? STICK
-    this.wantStrands = look.strands !== false
+    const set = Math.max(0, SETS.indexOf(look.set ?? 'ascii'))
+    // a cell's number means something else in another set
+    if (set !== this.set.value) this.kept = false
+    this.set.value = set
+    this.wantStrands = look.strands !== false && set === 0
     this.strands.value = this.wantStrands ? 1 : 0
   }
 
@@ -248,11 +268,56 @@ export class GlyphPass {
       const stranded = this.strands.greaterThan(0.5).and(cover.greaterThanEqual(EDGE_COVER)).and(strand.greaterThanEqual(0)).toVar()
       glyph.assign(select(stranded, strand, glyph))
 
+      // braille and blocks (`shapeCell`): the tones of the cell's eighths or quarters
+      const font = (x: number, y: number) => cell.add(vec2(x / CELL_W, y / CELL_H)).mul(size)
+      const partTone = (taps: [number, number][]) => {
+        const s = vec4(0).toVar()
+        for (const [x, y] of taps) s.addAssign(texture(picture, font(x, y)))
+        const m = s.div(taps.length)
+        return this.tone(m.rgb, m.a.clamp(0, 1)).toVar()
+      }
+      const bitOf = (n: N, bit: number) => mod(floor(n.div(2 ** bit).add(0.001)), 2)
+      const kept = this.sticky.greaterThan(0)
+      // `brailleFor`
+      const dots = DOT_TAPS.map(partTone)
+      const braille = float(0).toVar(), dotTop = float(0).toVar()
+      dots.forEach((t, d) => {
+        const bit = dotBit(d % 2, Math.floor(d / 2))
+        const wasOn = select(kept, bitOf(was, bit), float(0))
+        braille.addAssign(select(t.greaterThanEqual(float(DOT_STEP[d]).sub(wasOn.mul(this.sticky))), float(2 ** bit), float(0)))
+        dotTop.assign(max(dotTop, t))
+      })
+      // `blockFor`
+      const q = QUAD_TAPS.map(partTone)
+      const hi = max(max(q[0], q[1]), max(q[2], q[3])).toVar(), lo = min(min(q[0], q[1]), min(q[2], q[3])).toVar()
+      const qMean = q[0].add(q[1]).add(q[2]).add(q[3]).div(4).toVar()
+      const evenBest = float(EVEN[0][0]).toVar(), evenOff = abs(qMean.sub(EVEN[0][1])).toVar(), wasOff = float(-1).toVar()
+      for (let i = 1; i < EVEN.length; i++) {
+        const d = abs(qMean.sub(EVEN[i][1]))
+        const nearer = d.lessThan(evenOff)
+        evenBest.assign(select(nearer, float(EVEN[i][0]), evenBest))
+        evenOff.assign(select(nearer, d, evenOff))
+      }
+      for (const [g, v] of EVEN) wasOff.assign(select(abs(was.sub(g)).lessThan(0.5), abs(qMean.sub(v)), wasOff))
+      const evenGlyph = select(kept.and(wasOff.greaterThanEqual(0)).and(wasOff.lessThanEqual(evenOff.add(this.sticky))), was, evenBest)
+      const middle = hi.add(lo).div(2).toVar()
+      const split = float(0).toVar(), holds = kept.and(was.greaterThan(0.5)).and(was.lessThan(14.5)).toVar()
+      q.forEach((t, i) => {
+        split.addAssign(select(t.greaterThan(middle), float(2 ** i), float(0)))
+        const wasOn = bitOf(was, i).greaterThan(0.5)
+        holds.assign(holds.and(select(wasOn, t.greaterThanEqual(middle.sub(this.sticky)), t.lessThanEqual(middle.add(this.sticky)))))
+      })
+      const blocks = select(hi.sub(lo).lessThan(BLOCK_SPLIT), evenGlyph, select(holds, was, split))
+      const shaped = this.set.greaterThan(0.5).toVar()
+      glyph.assign(select(shaped, select(this.set.lessThan(1.5), braille, blocks), glyph))
+
       // its own color, brought up to full strength but no more than `LIFT_MOST` times
       const top = max(max(mean.r, mean.g), max(mean.b, max(cover.div(LIFT_MOST), 1e-4)))
       const lightOn = this.light.greaterThan(0.5)
-      const level = select(stranded, select(lightOn, float(0.6).sub(tone.mul(0.45)), tone.mul(0.55).add(0.45)),
-        select(stroked, select(lightOn, float(0.2), float(1)), select(lightOn, float(0.6).sub(tone.mul(0.45)), tone.mul(0.45).add(0.55))))
+      const partTop = select(this.set.lessThan(1.5), dotTop, hi)
+      const level = select(shaped, select(lightOn, float(0.6).sub(partTop.mul(0.45)), partTop.mul(0.45).add(0.55)),
+        select(stranded, select(lightOn, float(0.6).sub(tone.mul(0.45)), tone.mul(0.55).add(0.45)),
+          select(stroked, select(lightOn, float(0.2), float(1)), select(lightOn, float(0.6).sub(tone.mul(0.45)), tone.mul(0.45).add(0.55)))))
       const own = mean.rgb.div(top).mul(level)
       const color = select(this.inked.greaterThan(0.5), this.ink, own)
       // kept as the root of linear, which a byte holds evenly from dark to light
@@ -272,7 +337,25 @@ export class GlyphPass {
       const glyph = floor(g.a.mul(255).add(0.5))
       const inCell = floor(px.sub(cell.mul(box)).div(this.scale)).toVar()
       const bit = texture(font, vec2(glyph.mul(CELL_W).add(inCell.x).add(0.5).div(GLYPHS.length * CELL_W), inCell.y.add(0.5).div(CELL_H))).r
-      const on = select(bit.greaterThan(0.5), float(1), float(0)).toVar()
+      const ascii = bit.greaterThan(0.5)
+      // braille (`setBit`): a dot where a column and a row of dots cross, on when its bit is
+      const ix = inCell.x, iy = inCell.y
+      const col = select(abs(ix.sub(DOT_X[1])).lessThan(0.5), float(1), float(0))
+      const row = iy.div(2).floor()
+      const atDot = abs(ix.sub(DOT_X[0])).lessThan(0.5).or(abs(ix.sub(DOT_X[1])).lessThan(0.5))
+        .and(mod(iy, 2).lessThan(0.5)).and(iy.lessThanEqual(DOT_Y[3] + 0.5))
+      const dotBitN = select(row.lessThan(2.5), row.add(col.mul(3)), col.add(6))
+      const braille = atDot.and(mod(floor(glyph.div(dotBitN.exp2()).add(0.001)), 2).greaterThan(0.5))
+      // blocks: the shades as dither patterns, else the quarters
+      const quarter = select(ix.greaterThanEqual(CELL_W / 2), float(1), float(0)).add(select(iy.greaterThanEqual(CELL_H / 2), float(2), float(0)))
+      const ex = mod(ix, 2), ey = mod(iy, 2)
+      const f = (b: N) => select(b, float(1), float(0))
+      const blocks = select(abs(glyph.sub(16)).lessThan(0.5), f(ex.add(ey).lessThan(0.5)),
+        select(abs(glyph.sub(17)).lessThan(0.5), f(mod(ix.add(iy), 2).lessThan(0.5)),
+          select(abs(glyph.sub(18)).lessThan(0.5), f(ex.add(ey).lessThan(1.5)),
+            mod(floor(glyph.div(quarter.exp2()).add(0.001)), 2))))
+      const drawn = select(this.set.lessThan(0.5), f(ascii), select(this.set.lessThan(1.5), f(braille), blocks))
+      const on = f(drawn.greaterThan(0.5)).toVar()
       // linear and premultiplied, as the blobs' own draw gives
       return vec4(g.rgb.mul(g.rgb).mul(on), on)
     })()
