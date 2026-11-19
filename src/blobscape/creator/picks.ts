@@ -21,10 +21,40 @@ export const WINDMILL_PICKS: PropPick[] = [
   { name: 'Third sheep', parts: [38, 39], bones: ['sheep2'] },
 ]
 
-/** Turkey Run (scenes/turkey.ts): the giant turkey and the cook, each with the dust its feet kick up. */
+/**
+ * Turkey Run (scenes/turkey.ts): the giant turkey and the cook, each with the dust its feet kick up, and from along
+ * the road the billboard, the mailbox, the haystack and two trees, which stand still instead of going by.
+ */
 export const TURKEY_PICKS: PropPick[] = [
   { name: 'Giant turkey', bones: ['turkey', 'dustT0', 'dustT1', 'dustT2', 'feather0', 'feather1', 'feather2', 'feather3'] },
   { name: 'Cook', bones: ['cook', 'dustC0', 'dustC1'] },
+  { name: 'Billboard', bones: ['by11'], drop: ['pass'] },
+  { name: 'Mailbox', bones: ['by20'], drop: ['pass'] },
+  { name: 'Roadside haystack', bones: ['by10'], drop: ['pass'] },
+  { name: 'Roadside tree', bones: ['by8'], drop: ['pass'] },
+  { name: 'Second roadside tree', bones: ['by9'], drop: ['pass'] },
+]
+
+const SPARKS = Array.from({ length: 56 }, (_, i) => `spark${i}`)
+
+/**
+ * The henge (scenes/henge.ts): the white witch standing (her coming and going left behind) and the magic circle
+ * turning on the ground with its blue light always on. Her sparks are lifted out too, so the turf is left bare.
+ */
+export const HENGE_PICKS: PropPick[] = [
+  { name: 'Magic circle', bones: ['ringA', 'star', 'ringB'], drop: ['during'], lights: [0] },
+  { name: 'White witch', bones: ['wiz'], drop: ['during'], lights: [] },
+  { name: 'Sparks', bones: SPARKS, lights: [] },
+]
+
+/** The henge's witch as she is in the scene: she arrives in a burst of sparks, waves her wand with two flashes, and goes. */
+export const WITCH_IN_SPARKS_PICKS: PropPick[] = [
+  { name: 'White witch, coming and going', bones: ['wiz', ...SPARKS], lights: [1, 2] },
+]
+
+/** The lava dragon (scenes/dragon.ts): its body, wings and swaying neck; the pool's glow stays in the cave. Its body is sunk into the cave floor, so its foot is set at the floor. */
+export const LAVA_DRAGON_PICKS: PropPick[] = [
+  { name: 'Lava dragon', parts: Array.from({ length: 22 }, (_, i) => 27 + i), bones: ['lining', 'wingL', 'wingR', 'neck0'], lights: [], foot: [0, 0, -0.6] },
 ]
 
 /** The lighthouse (scenes/lighthouse.ts): the tower with its turning lamp and beams, the cottage, three pines, the jetty, the boat and the buoy. Gulls, clouds and foam stay with the sea. */
