@@ -22,6 +22,8 @@ import { unpack, type PackedCut } from './creator/pack.ts'
 import { START_LANDS, START_SCENES, nameFor, openingAsked, openingLand, openingScene, queryFor, shownOf, type Opened } from './creator/shown.ts'
 import { AUTOSAVE_MS, FILE_END, cleanName, copyName, fileName, fileText, mergedLike, newId, openShelf, readFile, renamed, type SavedScene, type Shelf } from './creator/store.ts'
 import { download } from './files.ts'
+import { registerTools } from './agentTools.ts'
+import { creatorTools, type CreatorApi } from './creator/agentTools.ts'
 import { BLOB_ROOM, CARDS, added, cardsFound, groundOf, heightAt, landSwapped, liftOn, roomOf, whyNot } from './creator/adding.ts'
 import { libraryProp, type LibraryEntry } from './creator/library.ts'
 import { budget, clock, lampAdded, lampLights, lampRemoved, lit, liveSky, liveSkyColors, rgbOf, shadeNow, sunNow } from './creator/lighting.ts'
@@ -730,6 +732,72 @@ export function SceneCreator() {
     if (ev.key === 'Escape') { ev.preventDefault(); pick(undefined); return true }
     return false
   }
+
+  // --- tools for an assistant in the browser (WebMCP, as the sandbox has) ----
+
+  const r2 = (v: number) => Math.round(v * 100) / 100
+  const toolApi: CreatorApi = {
+    describe: () => {
+      if (!project) return `${shown.name} is open whole: it cannot be taken apart, so nothing can be added or moved. Open a scene that comes apart or a bare land to work on it.`
+      const reach = chosen[0]?.reach
+      const l = project.light
+      const lines = [
+        `"${project.name}": ${shown.items[0].name} is the land${reach ? `, reaching about ${r2(reach)} units from its middle at [0, 0]` : ''}. y is up; places are [x, z].`,
+        project.props.length ? `Props (${project.props.length} of 40):` : 'No props yet.',
+        ...project.props.map((p, i) => `  ${i}. ${nameOfProp(i)} at [${r2(p.at[0])}, ${r2(p.at[2])}], turned ${Math.round(p.turn)}°, size ${r2(p.size)}${p.still ? ', held still' : ''}`),
+        `Light: ${l?.live ? `the sun live at ${r2(l.live.hour)} o'clock` : l?.sun ? `a baked sun from ${l.sun.turn}° round and ${l.sun.height}° up` : 'the land\'s own sun'}${l?.weather ? `, ${l.weather} falling` : ''}${l?.glow !== undefined ? `, glow ${r2(l.glow)}` : ''}${l?.haze ? `, haze ${r2(l.haze)}` : ''}${l?.lamps?.length ? `, ${l.lamps.length} lamps` : ''}.`,
+        `Drawn as ${STYLES.find((x) => x.id === style)!.label.toLowerCase()}. ${lastBlobs.current.toLocaleString('en-US')} blobs.`,
+      ]
+      return lines.join('\n')
+    },
+    props: () => CARDS.filter((e) => e.kind === 'prop').map((e) => e.id),
+    addProp: (id, at) => {
+      if (!project || !cp || !room) return 'Not done: this scene opened whole, so nothing can be added to it.'
+      const e = CARD_BY_ID.get(id)
+      if (!e || e.kind !== 'prop') return `Not done: there is no prop "${id}".`
+      const spot: Vec3 = at ? [at[0], groundAt(at[0], at[1], orbit.target[1]), at[1]] : groundAtView()
+      const next = added(project, id, spot)
+      const why = whyNot(e.name, room, roomOf(compileProject(next, libraryProp), room.blobs[0], room.blobs[1]))
+      if (why) return `Not done: ${why}`
+      edit(next, `Added ${e.name.toLowerCase()}.`)
+      setPicked(next.props.length - 1)
+      return `Added ${e.name} as prop ${next.props.length - 1} at [${r2(spot[0])}, ${r2(spot[2])}]. It is cut in a moment.`
+    },
+    moveProp: (i, change) => {
+      if (!project) return 'Not done: this scene opened whole, so it has no props.'
+      const now = project.props[i]
+      if (!now) return `Not done: there is no prop ${i}; the props are 0 to ${project.props.length - 1}.`
+      let next = project
+      if (change.size !== undefined) { if (change.size < SIZE_RANGE[0] || change.size > SIZE_RANGE[1]) return `Not done: a size is ${SIZE_RANGE[0]} to ${SIZE_RANGE[1]}.`; next = sized(next, i, change.size) }
+      if (change.turn !== undefined) next = turned(next, i, change.turn)
+      if (change.at) next = moved(next, i, [change.at[0], groundAt(change.at[0], change.at[1], now.at[1]) + liftOf(now), change.at[1]])
+      edit(next, `${nameOfProp(i)} changed.`)
+      const p = next.props[i]
+      return `${nameOfProp(i)} is at [${r2(p.at[0])}, ${r2(p.at[2])}], turned ${Math.round(p.turn)}°, size ${r2(p.size)}.`
+    },
+    setLight: (ask) => {
+      if (!project) return 'Not done: this scene opened whole, so its light is its own.'
+      const change: Partial<ProjectLight> = {}
+      if (ask.sun) change.sun = { turn: Math.round(ask.sun.turn), height: Math.round(ask.sun.height) }
+      if (ask.hour === null) change.live = undefined
+      else if (ask.hour !== undefined) change.live = { hour: ask.hour }
+      if (ask.weather !== undefined) change.weather = ask.weather ?? undefined
+      if (ask.glow !== undefined) change.glow = ask.glow
+      if (ask.haze !== undefined) change.haze = ask.haze
+      setLight(change, 'Light changed.')
+      return `Light changed${ask.sun || ask.hour !== undefined || ask.weather !== undefined || ask.haze !== undefined ? '; the scene is cut again in a moment' : ''}.`
+    },
+    styles: () => STYLES.map((x) => x.id),
+    setStyle: (id) => { const st = STYLES.find((x) => x.id === id); if (!st) return `Not done: there is no style "${id}".`; drawStyle(st.id); return `Drawn as ${st.label.toLowerCase()} now.` },
+    undo: () => { if (!hist?.past.length) return 'Nothing to take back.'; doUndo(); return 'Took back the last change.' },
+  }
+  // registered once, always reaching this render's page
+  const toolRef = useRef(toolApi)
+  toolRef.current = toolApi
+  useEffect(() => {
+    const live = Object.fromEntries(Object.keys(toolRef.current).map((k) => [k, (...args: unknown[]) => (toolRef.current[k as keyof CreatorApi] as (...a: unknown[]) => unknown)(...args)])) as unknown as CreatorApi
+    return registerTools(creatorTools(live)).remove
+  }, [])
 
   // for the browser checks
   useEffect(() => {

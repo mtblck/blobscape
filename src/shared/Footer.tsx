@@ -19,7 +19,7 @@ export function Footer() {
           <p className="mb-1 font-display text-base text-ink">Learn</p>
           <a href={href({ page: 'lessons' })} className={FOOT_LINK}>Lessons</a>
           <a href={href({ page: 'lesson', id: LESSONS[0].id })} className={FOOT_LINK}>Start with one blob</a>
-          <a href={href({ page: 'sandbox' })} className={FOOT_LINK}>Sandbox</a>
+          <a href={href({ page: 'creator' })} className={FOOT_LINK}>Scene Creator</a>
         </nav>
         <nav aria-label="Experiments" className="flex flex-col gap-1">
           <p className="mb-1 font-display text-base text-ink">Experiments</p>

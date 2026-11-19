@@ -6,7 +6,7 @@ import { SITE } from '../blobscape/site.ts'
 const PAGES = [
   { label: 'Lessons', path: '/lessons/' },
   { label: 'Experiments', path: '/experiments/' },
-  { label: 'Sandbox', path: '/sandbox/' },
+  { label: 'Scene Creator', path: '/scene-creator/' },
   { label: "What's New", path: '/whats-new/' },
 ] as const
 

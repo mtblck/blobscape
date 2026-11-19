@@ -1164,7 +1164,7 @@ export default [
       else ok(`blobscape scan: the saved .ply opens again with all ${back.toLocaleString()} kept blobs`)
       const kept = await k.page.evaluate(() => window.__scan.kept())
       await tabClick(k.page.getByRole('button', { name: 'Open in the sandbox' }))
-      await k.page.waitForURL('**/sandbox/', { timeout: 30000 }).catch(() => {})
+      await k.page.waitForURL('**/experiments/sandbox/', { timeout: 30000 }).catch(() => {})
       const count = (await k.page.getByTestId('blob-count').textContent({ timeout: 30000 }).catch(() => '')) ?? ''
       if (Number(count.replace(/\D/g, '')) !== kept) fails.push(`blobscape scan: the sandbox shows "${count}" for ${kept} kept blobs`)
       else ok(`blobscape scan: Open in the sandbox hands over the ${kept.toLocaleString()} kept blobs`)
@@ -1236,7 +1236,7 @@ export default [
       else ok(`scan colliders: the saved .glb opens again with all ${back.length} shapes in the same places (within ${off.toExponential(1)})`)
       // the shapes go to the sandbox with the scan
       await tabClick(k.page.getByRole('button', { name: 'Open in the sandbox' }))
-      await k.page.waitForURL('**/sandbox/', { timeout: 30000 }).catch(() => {})
+      await k.page.waitForURL('**/experiments/sandbox/', { timeout: 30000 }).catch(() => {})
       await k.page.getByTestId('blob-count').textContent({ timeout: 30000 }).catch(() => '')
       await tabClick(k.page.getByTestId('add-creature').getByRole('button').first()).catch(() => {})
       const note = (await k.page.getByTestId('scan-shapes').textContent({ timeout: 10000 }).catch(() => '')) ?? ''

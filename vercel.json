@@ -48,6 +48,16 @@
       "permanent": true
     },
     {
+      "source": "/sandbox",
+      "destination": "/experiments/sandbox/",
+      "permanent": true
+    },
+    {
+      "source": "/sandbox/:path*",
+      "destination": "/experiments/sandbox/",
+      "permanent": true
+    },
+    {
       "source": "/tools/fit-a-picture/:path*",
       "destination": "/experiments/fit-a-picture/",
       "permanent": true

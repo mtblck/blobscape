@@ -20,7 +20,7 @@ const SHELL_FILES = [`${B}App.tsx`, `${B}main.tsx`, `${B}ssr.tsx`, 'src/shared/t
 const OFFSCREEN = ['creature', 'forest-walk', 'wading-pond', 'clockwork', 'shape-shifter', 'sand-snow-goo', 'brush-and-ink', 'four-ways', 'day-and-night', 'seasonal-bouquets', 'pixel-diorama', 'dungeon-run', 'scan-studio']
 // and so do the lessons drawn by the engine
 const ENGINE_LESSONS = ['first-creature', 'scene-data', 'pixel-art']
-const pathOf = (id) => (OFFSCREEN.includes(id) ? `/experiments/${id}/?offscreen=1` : ['sandbox', 'lessons', 'contact', 'whats-new'].includes(id) ? `/${id}/` : `/lessons/${id}/${ENGINE_LESSONS.includes(id) ? '?offscreen=1' : ''}`)
+const pathOf = (id) => (OFFSCREEN.includes(id) ? `/experiments/${id}/?offscreen=1` : id === 'sandbox' ? '/experiments/sandbox/' : ['lessons', 'contact', 'whats-new'].includes(id) ? `/${id}/` : `/lessons/${id}/${ENGINE_LESSONS.includes(id) ? '?offscreen=1' : ''}`)
 
 // each sweep in two halves that run side by side: the front page and lessons, then the rest
 const LESSON_PAGES = Object.keys(PAGES).filter((id) => pathOf(id).startsWith('/lessons/'))

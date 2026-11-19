@@ -9,7 +9,7 @@ export default [
     files: ['src/blobscape/App.tsx', 'src/blobscape/main.tsx', 'src/blobscape/ssr.tsx', 'index.html', 'public/theme.js'],
     async run({ base, join, fails, ok, open, axe, DESKTOP, PHONE }) {
       // Prerendered: each page's HTML carries its own title, canonical and content before any script runs
-      for (const [path, title] of [['/', 'Blobscape: learn'], ['/lessons/', 'Lessons ·'], ['/lessons/order/', 'Order matters · Lesson 3'], ['/sandbox/', 'Sandbox ·'], ['/experiments/creature/', 'Splat Creatures ·'], ['/experiments/forest-walk/', 'Forest Walk ·'], ['/experiments/clockwork/', 'Clockwork ·'], ['/experiments/shape-shifter/', 'Shape Shifter ·'], ['/experiments/pixel-diorama/', 'Pixel Diorama ·'], ['/experiments/dungeon-run/', 'Dungeon Run ·'], ['/experiments/scan-studio/', 'Scan Studio ·'], ['/experiments/', 'Experiments ·'], ['/engine/', 'The Blobscape engine ·'], ['/engine/rigged-splats/', 'Rigged Gaussian splats in glTF ·'], ['/whats-new/', "What's New ·"], ['/whats-new/two-tools-to-start/', 'Two tools to start']]) {
+      for (const [path, title] of [['/', 'Blobscape: learn'], ['/lessons/', 'Lessons ·'], ['/lessons/order/', 'Order matters · Lesson 3'], ['/experiments/sandbox/', 'Sandbox ·'], ['/experiments/creature/', 'Splat Creatures ·'], ['/experiments/forest-walk/', 'Forest Walk ·'], ['/experiments/clockwork/', 'Clockwork ·'], ['/experiments/shape-shifter/', 'Shape Shifter ·'], ['/experiments/pixel-diorama/', 'Pixel Diorama ·'], ['/experiments/dungeon-run/', 'Dungeon Run ·'], ['/experiments/scan-studio/', 'Scan Studio ·'], ['/experiments/', 'Experiments ·'], ['/engine/', 'The Blobscape engine ·'], ['/engine/rigged-splats/', 'Rigged Gaussian splats in glTF ·'], ['/whats-new/', "What's New ·"], ['/whats-new/two-tools-to-start/', 'Two tools to start']]) {
         const html = await (await fetch(base + path)).text()
         if (!html.includes(`<title>${title}`)) fails.push(`${path}: prerendered title is not "${title}…"`)
         else if (!html.includes(`<link rel="canonical" href="https://blobscape.dev${path}"`)) fails.push(`${path}: prerendered canonical is wrong`)
@@ -19,7 +19,7 @@ export default [
       // The page before any script runs is the page the app then shows: the heading and the first paragraph are the same
       // size in the same place (an experiment once started as a stand-in with bigger text, which jumped as the app took over)
       const placed = (page) => page.evaluate(() => ['main h1', 'main p'].map((q) => { const el = document.querySelector(q); const r = el.getBoundingClientRect(); return [r.x, r.y, r.width, r.height, parseFloat(getComputedStyle(el).fontSize)].map(Math.round) }))
-      for (const path of ['/experiments/clockwork/', '/experiments/pixel-diorama/', '/sandbox/', '/lessons/one-blob/', '/lessons/']) {
+      for (const path of ['/experiments/clockwork/', '/experiments/pixel-diorama/', '/experiments/sandbox/', '/lessons/one-blob/', '/lessons/']) {
         for (const [size, device] of [['desktop', DESKTOP], ['phone', PHONE]]) {
           const first = await open(path, { ...device, javaScriptEnabled: false })
           // scripts are off only to hold the app back: the notice for visitors without scripts is not part of anyone's first paint
@@ -154,11 +154,11 @@ export default [
       if (items < 5 || linked.size !== items || !html.includes('"@type":"Blog"') || !post.includes('"@type":"BlogPosting"') || !/data-testid="post"[^>]*><p>/.test(post) || !feed.includes('<link>https://blobscape.dev/whats-new/')) fails.push(`what's new, prerendered: ${JSON.stringify({ items, linked: linked.size, blog: html.includes('"@type":"Blog"'), posting: post.includes('"@type":"BlogPosting"') })}`)
       else ok(`what's new: ${items} posts in the prerendered list and in the feed, each post a page with its words in the HTML`)
 
-      // the header: between Sandbox and Engine, on one line down to a tablet, and it marks the page
+      // the header: between Scene Creator and Engine, on one line down to a tablet, and it marks the page
       const w = await open('/', DESKTOP)
       const names = await w.page.getByRole('banner').getByRole('navigation', { name: 'Main' }).locator(':scope > ul > li').evaluateAll((lis) => lis.map((li) => li.textContent.trim()))
       const at = names.indexOf("What's New")
-      if (at < 1 || names[at - 1] !== 'Sandbox' || !names[at + 1]?.startsWith('Engine')) fails.push(`header order: ${JSON.stringify(names)}`)
+      if (at < 1 || names[at - 1] !== 'Scene Creator' || !names[at + 1]?.startsWith('Engine')) fails.push(`header order: ${JSON.stringify(names)}`)
       else ok(`header: ${names.join(', ')}`)
       await w.page.evaluate(() => { window.__stayed = true })
       await w.page.getByRole('banner').getByRole('link', { name: "What's New", exact: true }).click()

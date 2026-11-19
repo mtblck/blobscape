@@ -150,6 +150,10 @@ The same file opens on Pixel Diorama itself (Scene tab, Open a file), where it p
 
 For Claude Code there is a skill with the whole loop, `.claude/skills/pixel-scene/SKILL.md`: plan, write, check, look, fix.
 
+## Descriptions and Scene Creator projects
+
+A description is a whole scene: every shape, paint, bone, move and light. [Scene Creator](https://blobscape.dev/scene-creator/) works one step up. Its project (`SceneProject` in `src/splat-engine/project.ts`, saved as a `.blobscape.json` file) holds no shapes of its own: it names a land and props from the library, each a piece cut out of a description by its marks (rule 13), and says where each stands, how it is turned and sized, the light, and the style. Opening a project cuts each piece from its description again, so a fix to a scene's description reaches every project that uses its props. To bring something new into Scene Creator, write it as a description, mark its props, and add it to the site; a project can't carry new shapes.
+
 ## What it can't do yet
 
 - Turned boxes: a box or a roof is always square to the axes, and a bone has no resting turn. Build slanted things from cones (walls, fences and arcades can run any way along the ground).

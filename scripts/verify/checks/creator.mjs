@@ -3,7 +3,8 @@
 export default [
   {
     name: 'scene-creator',
-    about: 'Scene Creator: the windmill opens split into its hill and ten props, cut in a worker and drawn; a scene that cannot be split opens whole and says why; a bare land opens alone; unlisted',
+    core: true,
+    about: 'Scene Creator: the windmill opens split into its hill and ten props, cut in a worker and drawn; a scene that cannot be split opens whole and says why; a bare land opens alone; listed for search',
     entries: ['src/blobscape/SceneCreator.tsx'],
     async run({ shots, join, fails, ok, open, axe }) {
       const c = await open('/scene-creator/?offscreen=1', { viewport: { width: 1280, height: 900 } })
@@ -27,10 +28,10 @@ export default [
         const green = up ? await drawn() : 0
         const counted = await c.page.getByTestId('creator-prop-count').innerText().catch(() => '')
         const listed = await c.page.locator('[data-testid=creator-items] li').count()
-        const robots = await c.page.locator('meta[name=robots]').getAttribute('content').catch(() => null)
+        const robots = await c.page.locator('meta[name=robots]').count()
         await c.page.screenshot({ path: join(shots, 'blobscape-scene-creator.png') })
-        if (!(up && items[0]?.kind === 'land' && props === 10 && counted === '10' && listed === 11 && green > 800 && robots === 'noindex')) fails.push(`blobscape scene creator: windmill ${JSON.stringify({ up, land: items[0], props, counted, listed, green, robots })}`)
-        else ok(`blobscape scene creator: the windmill opens as its hill and ${props} props, listed beside the picture and drawn (${green} green pixels in 160 × 120); the page is noindex`)
+        if (!(up && items[0]?.kind === 'land' && props === 10 && counted === '10' && listed === 11 && green > 800 && robots === 0)) fails.push(`blobscape scene creator: windmill ${JSON.stringify({ up, land: items[0], props, counted, listed, green, robots })}`)
+        else ok(`blobscape scene creator: the windmill opens as its hill and ${props} props, listed beside the picture and drawn (${green} green pixels in 160 × 120); the page is listed`)
         await axe(c.page, 'blobscape scene creator')
       }
       // a scene drawn by code opens whole and says so
@@ -313,6 +314,7 @@ export default [
   },
   {
     name: 'scene-creator-storage',
+    core: true,
     about: 'Scene Creator, kept in the browser: an edit is kept a moment later and is there after a reload; copied, renamed and deleted in Your scenes; saved as a file and opened in a fresh browser; a broken file says where; nothing asked of another site',
     entries: ['src/blobscape/SceneCreator.tsx', 'src/blobscape/creator/store.ts'],
     async run({ shots, join, fails, ok, open, axe }) {
@@ -373,6 +375,40 @@ export default [
       const bad = steps.filter(([, good]) => !good).map(([name]) => name)
       if (bad.length) fails.push(`blobscape scene creator storage: ${bad.join(', ')} failed ${JSON.stringify({ outside: outside.slice(0, 3), said })}`)
       else ok('blobscape scene creator storage: an edit is kept and back after a reload; copy, rename and delete work; a file reopens in a fresh browser and a broken one says where; no other site asked')
+    },
+  },
+  {
+    name: 'scene-creator-agent',
+    about: 'WebMCP on Scene Creator: its tools are registered, an assistant can describe the scene, add a prop, move it, set the light and the style and undo, and a bad ask is refused in words',
+    entries: ['src/blobscape/SceneCreator.tsx', 'src/blobscape/creator/agentTools.ts'],
+    async run({ fails, ok, open }) {
+      const c = await open('/', { viewport: { width: 1280, height: 900 } })
+      const p = c.page
+      await p.evaluate(() => {
+        const tools = (window.__tools = new Map())
+        Object.defineProperty(document, 'modelContext', { configurable: true, value: { registerTool(t, o) { tools.set(t.name, t); o?.signal?.addEventListener('abort', () => tools.delete(t.name)); return Promise.resolve() } } })
+      })
+      // in-app, so the stand-in stays (as the header's link goes, with the stage drawing off screen as verify needs)
+      await p.evaluate(() => { history.pushState(null, '', '/scene-creator/?offscreen=1'); window.dispatchEvent(new Event('blobscape:navigate')) })
+      const up = await p.waitForFunction(() => window.__tools?.has('describe_scene'), null, { timeout: 60000 }).then(() => true, () => false)
+      const call = (name, input = {}) => p.evaluate(([n, i]) => window.__tools.get(n).execute(i), [name, input])
+      const steps = []
+      if (!up) { fails.push('blobscape scene creator agent: no tools were registered'); return }
+      await p.waitForFunction(() => document.querySelector('[data-testid=creator-prop-count]'), null, { timeout: 180000 }).catch(() => {})
+      const count = () => p.getByTestId('creator-prop-count').innerText().catch(() => '')
+      const described = await call('describe_scene')
+      steps.push(['describe', /Props \(10 of 40\)/.test(described) && /\b0\. /.test(described)])
+      const added = await call('add_prop', { prop: 'giant-turkey', at: [0.3, 0.2] })
+      steps.push(['add', /^Added/.test(added) && (await count()) === '11'])
+      steps.push(['move', /turned 90°/.test(await call('move_prop', { index: 10, turn: 90 }))])
+      steps.push(['light', /^Light changed/.test(await call('set_light', { weather: 'snow' }))])
+      steps.push(['style', /oil/.test(await call('set_style', { style: 'oil' })) && /style=oil/.test(await p.evaluate(() => location.search))])
+      steps.push(['refuse', /^Not done: /.test(await call('move_prop', { index: 99, turn: 10 })) && /^Not done: /.test(await call('add_prop', { prop: 'nothing' }))])
+      await call('undo'); await call('undo'); await call('undo')
+      steps.push(['undo', (await count()) === '10'])
+      const bad = steps.filter(([, good]) => !good).map(([name]) => name)
+      if (bad.length) fails.push(`blobscape scene creator agent: ${bad.join(', ')} failed ${JSON.stringify({ described: described.slice(0, 300), added })}`)
+      else ok('blobscape scene creator agent: an assistant describes the windmill, adds the turkey, turns it, brings snow, draws it in oil, is refused a bad ask and undoes')
     },
   },
 ]

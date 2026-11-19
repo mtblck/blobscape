@@ -30,6 +30,23 @@ const CHANGES = 'https://github.com/mtblck/blobscape/blob/main/CHANGELOG.md'
 
 export const POSTS: Post[] = [
   {
+    id: 'scene-creator',
+    date: '2026-11-19',
+    title: 'Scene Creator: make your own pixel diorama',
+    summary: 'Every Pixel Diorama scene now comes apart. Scene Creator takes the sandbox\'s place in the menu: start from a scene or a bare land, set down props from a library cut out of our scenes, light it, draw it in any style and export the loop. Your scenes are kept in your own browser.',
+    search: 'Scene Creator: start from a scene or a bare land, set down props cut from our pixel scenes, light it, pick a style and export the loop as a video.',
+    image: { src: '/news/scene-creator.webp', alt: 'Scene Creator open on the windmill\'s hill: the scene drawn as pixel art in the middle, the modes down the left and the scene\'s settings on the right.' },
+    body: [
+      'The scenes in [Pixel Diorama](/experiments/pixel-diorama/) are written as descriptions: shapes, paint and moves. Each now marks which parts are things in their own right, so a scene comes apart into the land it stands on and the props standing on it. [Scene Creator](/scene-creator/) is where you put them together again, your way.',
+      '## What you can do',
+      '- **Start from a scene or a bare land.** The windmill opens as its hill and ten props; a round of turf or a rock opens empty.\n- **Props from a library** cut out of the scenes: the lighthouse, the windmill, the witch, both dragons, the giant turkey and more. Tap one to set it down, or drag it onto the view.\n- **Arrange** them: drag one along the ground, turn it by its handle, size it, copy it or hold it still. Every change can be undone.\n- **Light** it: a baked sun from any side, or the sun live at an hour of the day, lamps you place, glow, haze, and rain, snow or falling leaves.\n- **Style** it as pixel art in any palette, or as oil, watercolor, neon, stained glass, cel shading and the rest.\n- **Export** a picture, the whole loop, or a flight along a camera path.',
+      '## Kept in your browser',
+      'Your scenes are saved in this browser a moment after each change, with a picture each, and are there when you come back. Nothing is sent anywhere. To keep one somewhere else, or to share it, save it as a file and open it again on any device.',
+      '## The sandbox moved',
+      'The sandbox is still here, unchanged, with the other experiments: [Sandbox](/experiments/sandbox/). Old links to it still work.',
+    ],
+  },
+  {
     id: 'pixel-diorama-styles',
     date: '2026-11-19',
     title: 'Pixel Diorama learns to paint',
@@ -99,7 +116,7 @@ export const POSTS: Post[] = [
       '## One Scene, Four Ways',
       '[One Scene, Four Ways](/experiments/four-ways/) answers a question: what do you get if you ask for the same scene with no engine at all, with three.js meshes, with Spark splats, or with Blobscape? All four draw a fox trotting through tall grass at the same moment, with the same pixel-art finish, and cards below say plainly what each one can and cannot do.',
       '## Also in this release',
-      '- **The sandbox is a workspace.** It fills the screen, with five modes (Build, Select, Creatures, Effects, Scene) and only the open mode\'s tools beside the view. [Open the sandbox](/sandbox/).\n- **Sand, Snow and Goo is rebuilt.** Snow breaks into clumps and packs down, goo keeps its volume and flows, and you can drop a ball, a cube or a rock into any of them. [Try it](/experiments/sand-snow-goo/).\n- **Two new pixel scenes:** a koi pond in the rain, with real water, and the fox and wisp. [See Pixel Diorama](/experiments/pixel-diorama/).\n- **Skin that stretches.** The dragon\'s wings and the frog\'s legs used to tear as they moved. Blobs now stretch with the skin they are part of.\n- **Brush and Ink draws outlines,** as a pen and wash drawing has.\n- **Links preview with a picture** of the page they lead to.',
+      '- **The sandbox is a workspace.** It fills the screen, with five modes (Build, Select, Creatures, Effects, Scene) and only the open mode\'s tools beside the view. [Open the sandbox](/experiments/sandbox/).\n- **Sand, Snow and Goo is rebuilt.** Snow breaks into clumps and packs down, goo keeps its volume and flows, and you can drop a ball, a cube or a rock into any of them. [Try it](/experiments/sand-snow-goo/).\n- **Two new pixel scenes:** a koi pond in the rain, with real water, and the fox and wisp. [See Pixel Diorama](/experiments/pixel-diorama/).\n- **Skin that stretches.** The dragon\'s wings and the frog\'s legs used to tear as they moved. Blobs now stretch with the skin they are part of.\n- **Brush and Ink draws outlines,** as a pen and wash drawing has.\n- **Links preview with a picture** of the page they lead to.',
       `Every change is in the [changelog](${CHANGES}).`,
     ],
   },
@@ -112,7 +129,7 @@ export const POSTS: Post[] = [
     search: 'The sandbox turns a photo into a scene you can walk round, Brush and Ink draws splats as paint, and a creature now fits on any web page with one tag.',
     image: { src: '/covers/brush-and-ink.webp', alt: 'A windmill on a small island with trees and a pond, drawn as brush marks and pen strokes, half on dark ground and half on paper.' },
     body: [
-      'Version 0.3.0 is mostly about the [sandbox](/sandbox/), which went from a place to spray blobs to a place to work on a scene.',
+      'Version 0.3.0 is mostly about the [sandbox](/experiments/sandbox/), which went from a place to spray blobs to a place to work on a scene.',
       '## New in the sandbox',
       '- **One photo to a scene.** Open a photo and it becomes a shallow scene, a blob for each pixel, set as far back as a depth model guesses. The model runs in the page and is served by this site, so the photo never leaves your device.\n- **Tap to select.** Click a mug, a leaf or a chair and everything that belongs to it is selected, the far side too.\n- **Brushes.** Paint grass that bends, fur that lies the way you drag, moss, stones that keep apart and leaves on sprigs.\n- **Fill and Stamp.** Fill grows blobs into a hole from its edge. Stamp copies what is round one place to another.\n- **A camera path.** Save a few views, play a smooth glide through them, and save it as an MP4 made on your device.\n- **Open a rigged model.** A .glb of triangles on bones, from Blender or a game kit, becomes blobs on its own bones and plays its own animations.',
       '## Brush and Ink',
@@ -157,7 +174,7 @@ export const POSTS: Post[] = [
     body: [
       'A week after the first experiment went up, Blobscape got a version number. Version 0.1.0 marks the site as it stood: 21 lessons in three parts, a sandbox, nine experiments, and the engine they run on. The code went public under the MIT license the day before.',
       '## What had just landed',
-      '- **Worlds and weather.** Scenes written as data can now hold brick walls that crumble, crystals, trees grown by rule, worn canyons, and snow that falls, lands and drifts. Four new scenes in [Pixel Diorama](/experiments/pixel-diorama/) show them: a ruined chapel, a crystal cave, a desert canyon and a snowed-in cabin.\n- **Feet on the ground.** In the [lesson](/lessons/feet/) the elf walks over a dirt path, up stone steps, up a slope and over rocks, with a walk for each and every foot planned so it never goes through a step. In [Forest Walk](/experiments/forest-walk/) the elf and the fox walk on planted feet that never slide.\n- **Grass fire.** Forest Walk\'s grass can catch, burn across the meadow and grow back.\n- **Sandbox creatures with a life.** A creature in the [sandbox](/sandbox/) can wander round its spot and look at you as you move, and the whole scene saves as one file with every creature still moving.\n- **A new lesson,** [Why small blobs shimmer](/lessons/shimmer/): a wire fence that blinks in the distance, and the blur that stops it.',
+      '- **Worlds and weather.** Scenes written as data can now hold brick walls that crumble, crystals, trees grown by rule, worn canyons, and snow that falls, lands and drifts. Four new scenes in [Pixel Diorama](/experiments/pixel-diorama/) show them: a ruined chapel, a crystal cave, a desert canyon and a snowed-in cabin.\n- **Feet on the ground.** In the [lesson](/lessons/feet/) the elf walks over a dirt path, up stone steps, up a slope and over rocks, with a walk for each and every foot planned so it never goes through a step. In [Forest Walk](/experiments/forest-walk/) the elf and the fox walk on planted feet that never slide.\n- **Grass fire.** Forest Walk\'s grass can catch, burn across the meadow and grow back.\n- **Sandbox creatures with a life.** A creature in the [sandbox](/experiments/sandbox/) can wander round its spot and look at you as you move, and the whole scene saves as one file with every creature still moving.\n- **A new lesson,** [Why small blobs shimmer](/lessons/shimmer/): a wire fence that blinks in the distance, and the blur that stops it.',
       '## The engine gets a page',
       'The [engine page](/engine/) shows what the engine is with three live demos, and the draft [file spec](/engine/rigged-splats/) says how a rigged, moving splat is saved as a .glb. Every pixel scene also has a recorded loop in a gallery, for anyone who would sooner watch than load one.',
       `Every change is in the [changelog](${CHANGES}).`,
@@ -233,7 +250,7 @@ export const POSTS: Post[] = [
       '## Rigs and 3D models',
       'A second part of the [lessons](/lessons/) teaches how that works: [One bone](/lessons/one-bone/), [Weights](/lessons/weights/), [Twist without tearing](/lessons/twist/), [Walk cycle](/lessons/walk/) and [Blobs to a model](/lessons/model/).',
       '## Splat Creatures',
-      '[Splat Creatures](/experiments/creature/) opened with a fox, then a frog, an elf and an ice dragon. Watch one move, see the bones under the blobs, and download it as a rigged model for Blender or a game engine. The same creatures can be dropped into the [sandbox](/sandbox/), where they move about in your scene.',
+      '[Splat Creatures](/experiments/creature/) opened with a fox, then a frog, an elf and an ice dragon. Watch one move, see the bones under the blobs, and download it as a rigged model for Blender or a game engine. The same creatures can be dropped into the [sandbox](/experiments/sandbox/), where they move about in your scene.',
     ],
   },
   {
@@ -250,7 +267,7 @@ export const POSTS: Post[] = [
       '- [One blob](/lessons/one-blob/): the 14 numbers that make one Gaussian.\n- [Footprint](/lessons/footprint/): how a 3D blob lands on screen as a 2D ellipse.\n- [Order matters](/lessons/order/): why see-through blobs must be drawn back to front.\n- [Many make a shape](/lessons/many/): from one blob to twenty thousand.\n- [Color by angle](/lessons/angle/): a blob that changes color as you walk round it.\n- [Paint](/lessons/paint/): spray blobs by hand.\n- [Splat files](/lessons/formats/): the same scene saved three ways.\n- [Break it](/lessons/break/): blow the scene apart and put it back.',
       'The goals point, and never give the answer. Progress is kept only in your browser.',
       '## A sandbox',
-      'The [sandbox](/sandbox/) is the lessons with the rails off. Spray blobs, select them with a box or a lasso, recolor them, run effects on them, or open your own capture. Nothing is uploaded.',
+      'The [sandbox](/experiments/sandbox/) is the lessons with the rails off. Spray blobs, select them with a box or a lasso, recolor them, run effects on them, or open your own capture. Nothing is uploaded.',
       '## A home of its own',
       'Blobscape started as one page among a few experiments. On this day it moved to blobscape.dev, with its own look and a real address for every page.',
     ],
