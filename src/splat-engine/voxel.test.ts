@@ -157,6 +157,25 @@ test('a lamp\'s shadow is baked per blob: the floor behind a wall can\'t see it,
   assert.equal(buildVoxels({ bones: [ROOT], spacing: 0.05, parts: [{ shape: sphere([0, 0, 0], 0.3), color: [1, 1, 1], bone: 'root' }] }).seen, undefined)
 })
 
+test('a lamp in a small hollow: with its own clear distance the roof right over it hides it, with the usual one the roof is taken for its housing', () => {
+  const made = (clear?: number) => buildVoxels({
+    bones: [ROOT], spacing: 0.02,
+    // a slab 0.06 over the lamp, 0.06 thick
+    parts: [{ shape: box([0, 0.39, 0], [0.2, 0.03, 0.2]), color: [0.5, 0.5, 0.5], bone: 'root' }],
+    lamps: [{ at: [0, 0.3, 0], reach: 0.8, clear }],
+  })
+  const top = (b: ReturnType<typeof buildVoxels>) => {
+    let best = -1, d = Infinity
+    for (let i = 0; i < b.blobs.count; i++) {
+      const e = Math.hypot(b.blobs.center[i * 3], b.blobs.center[i * 3 + 1] - 0.42, b.blobs.center[i * 3 + 2])
+      if (e < d) { d = e; best = i }
+    }
+    return b.seen![best * 4]
+  }
+  assert.equal(top(made()), 255)
+  assert.ok(top(made(0.04)) < 40, `top ${top(made(0.04))}`)
+})
+
 test('cover: snow on open tops only, moss in the corners first, dust under cover too, and bare parts keep their paint', () => {
   const spec = (cover?: VoxelSpec['cover'], bare = false): VoxelSpec => ({
     bones: [ROOT], spacing: 0.04, light: { ambient: 1, shadow: 0 }, cover,

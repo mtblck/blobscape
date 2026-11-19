@@ -392,6 +392,13 @@ export type MoveDoc =
   | { kind: 'pulse'; bone: string; size: [number, number]; times: number; phase?: number }
   /** Grows from nothing as you watch, stands, and shrinks away again before it starts over, `times` per loop: crystals, icicles, a sprout. */
   | { kind: 'sprout'; bone: string; times: number; phase?: number }
+  /**
+   * Goes by, over and over: it travels `by` at an even speed, `times` per loop, small for a moment where it comes in
+   * and where it leaves. `phase` (0 to 1) is how far along its way it is drawn in the description, so things spread
+   * along a road are each drawn where they stand as the loop starts. What a runner on the spot runs past: fence
+   * posts, trees, a sign.
+   */
+  | { kind: 'pass'; bone: string; by: Vec3; times: number; phase?: number }
 
 /** A point light in a scene. */
 export interface LightDoc {
@@ -413,6 +420,12 @@ export interface LightDoc {
    * set inside something (a jar, a window, a hollow) to stand for its glow would shade everything outside.
    */
   shadows?: boolean
+  /**
+   * With `shadows`: how much open room there is round the light, 0.15 where left out. Nothing nearer the light than
+   * this shades it. A light in a small hollow (a stone lantern's light box) sets it to the hollow's size, or the stone
+   * right round it is taken for part of the lamp and lets the light through.
+   */
+  clear?: number
 }
 
 // --- Checking
@@ -902,7 +915,11 @@ export function checkScene(doc: unknown): string[] {
           break
         case 'pulse': vec(m.size, `${at}.size`, 0, 4, 2); break
         case 'sprout': if (typeof m.times === 'number' && m.times < 0) bad(`${at}.times`, 'must be over 0 for a sprout'); break
-        default: bad(`${at}.kind`, `${show(m.kind)} is not a move (spin, sway, bob, drift, pulse, sprout)`)
+        case 'pass':
+          vec(m.by, `${at}.by`)
+          if (typeof m.times === 'number' && m.times < 0) bad(`${at}.times`, 'must be over 0 for a pass')
+          break
+        default: bad(`${at}.kind`, `${show(m.kind)} is not a move (spin, sway, bob, drift, pulse, sprout, pass)`)
       }
     })
   }
@@ -917,6 +934,7 @@ export function checkScene(doc: unknown): string[] {
         else { num(l.flicker.by, `${at}.flicker.by`, 0, 1); whole(l.flicker.times, `${at}.flicker.times`) }
       }
       if (l.shadows !== undefined && typeof l.shadows !== 'boolean') bad(`${at}.shadows`, 'must be true or false')
+      if (l.clear !== undefined) num(l.clear, `${at}.clear`, 0.01, 1)
       if (l.circle !== undefined) {
         if (!obj(l.circle)) bad(`${at}.circle`, 'must be an object')
         else { num(l.circle.r, `${at}.circle.r`, 0, REACH); whole(l.circle.times, `${at}.circle.times`) }
@@ -1444,6 +1462,18 @@ export function sprouted(life: number) {
   return life < 0.85 ? ease(life / 0.4) : ease((1 - life) / 0.15)
 }
 
+/** The share of its way at each end over which a passing thing grows in and shrinks away. */
+export const PASS_EDGE = 0.06
+
+/**
+ * A `pass` move at `life` (0 to 1 along its way) for a thing drawn `phase` along it: how far it stands from where it
+ * is drawn, as a share of the way, and its size, which is 0 at both ends so the jump back is never seen.
+ */
+export function passed(life: number, phase: number): [number, number] {
+  const ease = (t: number) => { const k = Math.min(1, Math.max(0, t)); return k * k * (3 - 2 * k) }
+  return [life - (((phase % 1) + 1) % 1), ease(life / PASS_EDGE) * ease((1 - life) / PASS_EDGE)]
+}
+
 /** A sound description (see `checkScene`) made ready to build and play. Throws on an unsound one. */
 /** `puffs` keeps hidden bones for a tap's puff of sparkles (`poke.ts`); a creature taken from a scene goes without. */
 export function compileScene(doc: SceneDoc, { puffs = true }: { puffs?: boolean } = {}): CompiledScene {
@@ -1532,7 +1562,7 @@ export function compileScene(doc: SceneDoc, { puffs = true }: { puffs?: boolean 
       if (steps?.length) light.steps = { palette: steps.map((c) => [c[0] / 255, c[1] / 255, c[2] / 255] as Vec3) }
       const beams = (doc.air?.shafts ?? []).map((b) => ({ from: b.from, to: b.to, r: b.r, color: unit(b.color), strength: b.strength ?? 0.6 }))
       // a lamp that stays put casts shadows baked once; byte k of each blob is light k
-      const lamps = lights.slice(0, MAX_LAMPS).map((l) => (!l.shadows || l.circle ? null : { at: l.at, reach: l.range }))
+      const lamps = lights.slice(0, MAX_LAMPS).map((l) => (!l.shadows || l.circle ? null : { at: l.at, reach: l.range, clear: l.clear }))
       const cover = doc.cover && { kind: doc.cover.kind, color: unit(doc.cover.color), amount: doc.cover.amount }
       const { target: tg, distance: dist, azimuth: az, elevation: el } = doc.camera
       const ra = (az * Math.PI) / 180, re = (el * Math.PI) / 180
@@ -1563,6 +1593,10 @@ export function compileScene(doc: SceneDoc, { puffs = true }: { puffs?: boolean 
           sk.size[b] *= Math.sin(Math.PI * life) ** 0.6 * (g0 + (g1 - g0) * life)
         } else if (m.kind === 'sprout') {
           sk.size[b] *= sprouted(((at % 1) + 1) % 1)
+        } else if (m.kind === 'pass') {
+          const life = ((at % 1) + 1) % 1, [along, size] = passed(life, m.phase ?? 0)
+          for (let i = 0; i < 3; i++) sk.offset[b * 3 + i] += m.by[i] * along
+          sk.size[b] *= size
         } else {
           sk.size[b] *= m.size[0] + (m.size[1] - m.size[0]) * (0.5 + 0.5 * Math.sin(at * TAU))
         }

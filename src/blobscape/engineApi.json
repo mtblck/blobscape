@@ -3888,7 +3888,7 @@
      "name": "MoveDoc",
      "kind": "type",
      "doc": "Every move repeats a whole number of `times` in the loop, so the scene loops.",
-     "type": "{ kind: \"spin\"; bone: string; axis: \"x\" | \"y\" | \"z\"; times: number; phase?: number } | { kind: \"sway\"; bone: string; axis: \"x\" | \"y\" | \"z\"; degrees: number; times: number; phase?: number } | { kind: \"bob\"; bone: string; by: Vec3; times: number; phase?: number } | { kind: \"drift\"; bone: string; by: Vec3; times: number; grow?: [number, number]; phase?: number } | { kind: \"pulse\"; bone: string; size: [number, number]; times: number; phase?: number } | { kind: \"sprout\"; bone: string; times: number; phase?: number }"
+     "type": "{ kind: \"spin\"; bone: string; axis: \"x\" | \"y\" | \"z\"; times: number; phase?: number } | { kind: \"sway\"; bone: string; axis: \"x\" | \"y\" | \"z\"; degrees: number; times: number; phase?: number } | { kind: \"bob\"; bone: string; by: Vec3; times: number; phase?: number } | { kind: \"drift\"; bone: string; by: Vec3; times: number; grow?: [number, number]; phase?: number } | { kind: \"pulse\"; bone: string; size: [number, number]; times: number; phase?: number } | { kind: \"sprout\"; bone: string; times: number; phase?: number } | { kind: \"pass\"; bone: string; by: Vec3; times: number; phase?: number }"
     },
     {
      "name": "LightDoc",
@@ -3932,6 +3932,12 @@
        "optional": true,
        "type": "boolean",
        "doc": "Casts shadows, worked out once when the scene is built, so they cost nothing as it plays and flicker with it. Only\nthe first four lights can, and not one that goes round a circle. Give it to a lamp or fire out in the open: a light\nset inside something (a jar, a window, a hollow) to stand for its glow would shade everything outside."
+      },
+      {
+       "name": "clear",
+       "optional": true,
+       "type": "number",
+       "doc": "With `shadows`: how much open room there is round the light, 0.15 where left out. Nothing nearer the light than\nthis shades it. A light in a small hollow (a stone lantern's light box) sets it to the hollow's size, or the stone\nright round it is taken for part of the lamp and lets the light through."
       }
      ]
     },
@@ -4157,6 +4163,22 @@
      "signatures": [
       {
        "code": "sprouted(life: number): number"
+      }
+     ]
+    },
+    {
+     "name": "PASS_EDGE",
+     "kind": "const",
+     "doc": "The share of its way at each end over which a passing thing grows in and shrinks away.",
+     "type": "0.06"
+    },
+    {
+     "name": "passed",
+     "kind": "function",
+     "doc": "A `pass` move at `life` (0 to 1 along its way) for a thing drawn `phase` along it: how far it stands from where it\nis drawn, as a share of the way, and its size, which is 0 at both ends so the jump back is never seen.",
+     "signatures": [
+      {
+       "code": "passed(life: number, phase: number): [number, number]"
       }
      ]
     },
@@ -4691,6 +4713,12 @@
        "name": "reach",
        "type": "number",
        "doc": "How far its light reaches: blobs further off are not looked at (their byte stays full)."
+      },
+      {
+       "name": "clear",
+       "optional": true,
+       "type": "number",
+       "doc": "How far short of it the look toward it stops, so its own housing doesn't shade everything: `LAMP_CLEAR` where\nleft out. Blobs nearer than this are always lit. Set it to the room round a lamp that sits in a small hollow,\nor the hollow's own walls and roof let its light through."
       }
      ]
     },

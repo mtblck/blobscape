@@ -5,6 +5,7 @@ import { TOUR, clay, kept } from './diorama/tour.ts'
 import { STEADY, countColors, darkest, type Frame, type PixelLook } from '../splat-core/pixel.ts'
 import type { Built } from '../splat-engine/body.ts'
 import { LoadingMark } from '../shared/BlobLoader.tsx'
+import { castBy, glowGain } from './diorama/glow.ts'
 import { ScenePicker } from './diorama/ScenePicker.tsx'
 import { stepped } from './diorama/pick.ts'
 import { Button, Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
@@ -21,7 +22,7 @@ import type { Skeleton } from '../splat-engine/rig.ts'
 import { Pokes } from '../splat-engine/poke.ts'
 import { levelPlane, type MirrorImage } from '../splat-engine/reflect.ts'
 import type { SceneWater } from '../splat-engine/sceneWater.ts'
-import { browserDeflate, encodeApng } from '../splat-core/apng.ts'
+import { browserDeflate, encodeApng, enlarged } from '../splat-core/apng.ts'
 import type { Texture } from '../splat-engine/meshShape.ts'
 import { decodeTexture } from './modelRig.ts'
 import { detailAsked, labelNames, writeDetail } from '../shared/detail.ts'
@@ -67,6 +68,8 @@ const BLOB_BYTES = (3 + 3 + 4 + 3 + 1) * 4
 
 /** Frames a second in a recorded loop: one of the page's Motion choices, as the gallery's loops are. */
 const RECORD_FPS = 12
+/** The frame rates a loop can be recorded at: more frames, and anything that moves fast takes smaller steps. */
+const RECORD_RATES = [12, 24]
 
 export function PixelDiorama() {
   const h1 = useFocusHeading()
@@ -103,11 +106,16 @@ export function PixelDiorama() {
   const [palette, setPalette] = useState('own')
   const [size, setSize] = useState(2)
   const [dither, setDither] = useState(diorama.finish.dither)
-  const [glow, setGlow] = useState(diorama.finish.glow)
+  const [glow, setGlow] = useState(() => { const q = new URLSearchParams(location.search).get('glow'), v = q === null ? NaN : Number(q); return Number.isFinite(v) ? Math.min(4, Math.max(0, v)) : diorama.finish.glow })
+  /** Glow as the poser reads it: it scales the light the scene's lamps and fires cast, as well as the shine round bright pixels. */
+  const glowNow = useRef(glow)
+  glowNow.current = glow
   const [outline, setOutline] = useState(diorama.finish.outline)
   const [edges, setEdges] = useState(diorama.finish.edges)
   const [sky, setSky] = useState(diorama.finish.sky)
   const [steady, setSteady] = useState(() => new URLSearchParams(location.search).get('steady') !== '0')
+  // a scene's own gentle rocking of the view: every pixel of a still thing changes as the view turns, so it can be held
+  const [rock, setRock] = useState(() => new URLSearchParams(location.search).get('rock') !== '0')
   const [tidy, setTidy] = useState(() => new URLSearchParams(location.search).get('tidy') !== '0')
   const [fine, setFine] = useState(() => new URLSearchParams(location.search).get('fine') !== '0')
   const [own, setOwn] = useState(() => new URLSearchParams(location.search).get('own') !== '0')
@@ -126,6 +134,8 @@ export function PixelDiorama() {
   /** What Record the loop saves: a lossless animated PNG at the art's own size, or an MP4 scaled up in whole pixels. */
   const [recordAs, setRecordAs] = useState<'png' | 'mp4'>('png')
   const [videoSize, setVideoSize] = useState(6)
+  const [pngSize, setPngSize] = useState(4)
+  const [recordFps, setRecordFps] = useState(RECORD_FPS)
 
   // built after a paint, so the waiting mark shows first
   const [made, setScene] = useState<{ built: Built; of: Diorama; detail: string; paint: string; plain: boolean }>()
@@ -226,14 +236,14 @@ export function PixelDiorama() {
     stage.setPoser((sk: Skeleton, t: number) => {
       d.pose(sk, t)
       pokes.current?.apply(sk, performance.now() / 1000)
-      stage.setLights(d.lights(t, stage.backend === 'webgpu'), d.ambientAt?.(t) ?? d.ambient ?? 1)
+      stage.setLights(castBy(d.lights(t, stage.backend === 'webgpu'), glowGain(glowNow.current, d.finish.glow)), d.ambientAt?.(t) ?? d.ambient ?? 1)
       // a scene whose sky turns as it plays (day to night) hands the pixel pass each moment's sky
       skyNow.current?.(d, t)
       // a scene that asks for it rocks the view gently as it plays, about wherever the view has been turned to
-      if (d.swing && !calm) stage.orbit = swung(orbitNow.current, d.swing, d.loop, t)
+      if (d.swing && !calm && rock) stage.orbit = swung(orbitNow.current, d.swing, d.loop, t)
       wet.current?.()
     }, from)
-  }, [stage, scene, calm, mirrored])
+  }, [stage, scene, calm, rock, mirrored])
   // one of Brush and Ink's looks in place of pixel art: marks, outlines, characters or cel tones, with their own settings
   const drawing = useDrawnLook(stage, pixels || touring ? undefined : style, { actor: scene?.built, plain: !!scene?.plain, azimuth: shown.views[0].orbit.azimuth, offscreen })
   // the walk-through's fourth step is about the four samples, so it draws them whatever the switch says
@@ -272,17 +282,22 @@ export function PixelDiorama() {
   /** Taps on the scene: a part leans and wobbles, the land throws sparkles. */
   const pokes = useRef<Pokes | undefined>(undefined)
   orbitNow.current = orbit
+  // Glow turns the scene's own lights up and down, so a paused scene is lit again for the moment it shows
+  useEffect(() => {
+    const d = posed.current
+    if (stage && d) stage.setLights(castBy(d.lights(stage.time, stage.backend === 'webgpu'), glowGain(glow, d.finish.glow)), d.ambientAt?.(stage.time) ?? d.ambient ?? 1)
+  }, [stage, glow])
   // the scene being posed, which is the one whose swing applies: a scene just picked is not in the view until it is cut
   useEffect(() => {
     if (!stage) return
     const d = posed.current
-    stage.orbit = d && !calm ? swung(orbit, d.swing, d.loop, stage.time) : orbit
+    stage.orbit = d && !calm && rock ? swung(orbit, d.swing, d.loop, stage.time) : orbit
     // haze is measured from the view's target, so it stays put on the scene as the view moves in and out
     const h = d?.haze
     stage.setFog(h?.color ?? [0, 0, 0], h ? orbit.distance + h.from : 0, h ? orbit.distance + h.to : 0)
     wet.current?.()
     stage.invalidate()
-  }, [stage, orbit, scene, calm])
+  }, [stage, orbit, scene, calm, rock])
   // the art's size follows the view's; read it now and then for the caption (it's text, not every frame)
   useEffect(() => {
     if (!stage) return
@@ -332,21 +347,21 @@ export function PixelDiorama() {
 
   /**
    * Records one whole loop as the art stands (palette, size, finish), stepped frame by frame from the time so it joins
-   * up end to end, and saves it as a lossless animated PNG, one art pixel per image pixel, as the gallery's loops are.
+   * up end to end, and saves it as a lossless animated PNG (each art pixel `pngSize` pixels a side) or an MP4.
    */
   const record = async () => {
     if (!stage || recording !== null) return
-    const loop = shown.loop, count = Math.round(loop * RECORD_FPS), was = playing
+    const fps = recordFps, loop = shown.loop, count = Math.round(loop * fps), was = playing
     setPlaying(false)
     stage.playing = false
     setRecording(0)
     setNote('Recording the loop, one frame at a time…')
     try {
       // the half second before the start first, so steady pixels have a frame before frame 0
-      for (let i = Math.round(RECORD_FPS / 2); i > 0; i--) await stage.frame(loop - i / RECORD_FPS)
+      for (let i = Math.round(fps / 2); i > 0; i--) await stage.frame(loop - i / fps)
       const frames: Frame[] = []
       for (let f = 0; f < count; f++) {
-        await stage.frame(f / RECORD_FPS)
+        await stage.frame(f / fps)
         const got = await stage.pixelFrames()
         if (!got) throw new Error('pixel art went away')
         frames.push(got.art)
@@ -357,13 +372,14 @@ export function PixelDiorama() {
       if (recordAs === 'mp4') {
         const { encodeVideo, videoScale } = await import('./diorama/video.ts')
         const s = videoScale(w, h, videoSize)
-        const bytes = await encodeVideo(frames, RECORD_FPS, s)
+        const bytes = await encodeVideo(frames, fps, s)
         download(bytes, `pixel-diorama-${shown.id}-loop.mp4`, 'video/mp4')
         setNote(`Saved the loop: ${count} frames at ${w * s} × ${h * s}, an MP4 of ${kilobytes(bytes.length)}.`)
       } else {
-        const bytes = await encodeApng(frames, RECORD_FPS, browserDeflate)
+        // each art pixel a square of whole pixels, so a bigger picture is as crisp as the art
+        const bytes = await encodeApng(frames.map((f) => enlarged(f, pngSize)), fps, browserDeflate)
         download(bytes, `pixel-diorama-${shown.id}-loop.png`, 'image/png')
-        setNote(`Saved the loop: ${count} frames at ${w} × ${h}, an animated PNG of ${kilobytes(bytes.length)}.`)
+        setNote(`Saved the loop: ${count} frames at ${w * pngSize} × ${h * pngSize}, an animated PNG of ${kilobytes(bytes.length)}.`)
       }
     } catch (e) {
       console.warn(e)
@@ -633,9 +649,9 @@ export function PixelDiorama() {
             id: 'finish', label: 'Finish', content: (
               <div className={TAB_SECTIONS}>
                 {pixels && <Slider label="Dither" value={dither} min={0} max={1} step={0.05} onChange={setDither} format={(v) => `${Math.round(v * 100)}%`} hint={colors.length ? (sky ? 'Checkers two palette colors to fake the ones between. The sky is always dithered, so its bands blend.' : 'Checkers two palette colors to fake the ones between.') : 'Needs a palette: Full color has none to mix.'} />}
-                {pixels && <Slider label="Glow" value={glow} min={0} max={4} step={0.25} onChange={setGlow} format={(v) => (v ? `${v.toFixed(2)}×` : 'off')} hint="Bright pixels light the ones beside them." />}
+                <Slider label="Glow" value={glow} min={0} max={4} step={0.25} onChange={setGlow} format={(v) => (v ? `${v.toFixed(2)}×` : 'off')} hint={pixels ? 'How strongly lamps, fires and other glowing things light what is round them, and how far bright pixels shine into the ones beside them.' : 'How strongly lamps, fires and other glowing things light what is round them.'} />
                 <div className="grid gap-3">
-                {!pixels && <p className="text-xs text-ink-faint">Dither, glow, outlines and the sky belong to the Pixel art style. Pick it in the Style tab to change them.</p>}
+                {!pixels && <p className="text-xs text-ink-faint">Dither, outlines and the sky belong to the Pixel art style. Pick it in the Style tab to change them.</p>}
                 {pixels && <>
                 <Toggle label="Four samples a pixel" checked={fine} onChange={setFine} />
                 <p className="text-xs text-ink-faint">Draws the scene at twice the size and gives each pixel the thing most of its four samples show, so edges are one thing or the other, never a mix.</p>
@@ -649,6 +665,7 @@ export function PixelDiorama() {
                 <Toggle label="Steady pixels" checked={steady} onChange={setSteady} />
                 <Toggle label="Clean up lone pixels" checked={tidy} onChange={setTidy} />
                 </>}
+                <Toggle label="Rock the view" checked={rock} onChange={setRock} disabled={calm} />
                 <Toggle label="Exact sort (slower)" checked={exact} onChange={setExact} />
                 <p className="text-xs text-ink-faint">Draws blobs at the same depth in one fixed order, so flat walls can't flicker. It costs about 10 ms a frame on a phone at 500,000 blobs.</p>
                 </div>
@@ -659,15 +676,28 @@ export function PixelDiorama() {
                     <Chip active={recordAs === 'mp4'} onClick={() => setRecordAs('mp4')}>MP4 video</Chip>
                   </div>
                 </Field>
+                <Field label="Frames a second">
+                  <div className="flex flex-wrap gap-1.5">
+                    {RECORD_RATES.map((r) => <Chip key={r} active={recordFps === r} onClick={() => setRecordFps(r)}>{String(r)}</Chip>)}
+                  </div>
+                  <p className="mt-1.5 text-xs text-ink-faint">24 takes twice as long to record and suits a scene where things move fast.</p>
+                </Field>
+                {recordAs === 'png' && <Field label="Picture size">
+                  <div className="flex flex-wrap gap-1.5">
+                    {[1, 2, 4, 6].map((s) => <Chip key={s} active={pngSize === s} onClick={() => setPngSize(s)}>{`${s}×`}</Chip>)}
+                  </div>
+                  <p className="mt-1.5 text-xs text-ink-faint">How many pixels wide each pixel of the art is saved. 1× is the art's own size.</p>
+                </Field>}
                 {recordAs === 'mp4' && <Field label="Video size">
                   <div className="flex flex-wrap gap-1.5">
                     {[4, 6, 8].map((s) => <Chip key={s} active={videoSize === s} onClick={() => setVideoSize(s)}>{`${s}×`}</Chip>)}
                   </div>
+                  <p className="mt-1.5 text-xs text-ink-faint">How many pixels wide each pixel of the art is in the video.</p>
                 </Field>}
                 <div className="grid gap-2">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <Button small disabled={!!touring || !drawn || saving || recording !== null} onClick={save}>{saving ? 'Saving…' : 'Save this frame'}</Button>
-                  <Button small disabled={!!touring || !drawn || saving || recording !== null} onClick={record} data-testid="diorama-record">{recording === null ? 'Record the loop' : recording >= Math.round(shown.loop * RECORD_FPS) ? 'Saving the loop…' : `Recording ${recording} of ${Math.round(shown.loop * RECORD_FPS)}…`}</Button>
+                  <Button small disabled={!!touring || !drawn || saving || recording !== null} onClick={record} data-testid="diorama-record">{recording === null ? 'Record the loop' : recording >= Math.round(shown.loop * recordFps) ? 'Saving the loop…' : `Recording ${recording} of ${Math.round(shown.loop * recordFps)}…`}</Button>
                 </div>
                 <p role="status" className="text-xs text-ink-faint empty:-mt-2">{touring ? 'Close How it\'s made to save a frame or record the loop.' : note}</p>
                 </div>
