@@ -10,11 +10,12 @@ export const LOOKS: { id: LookId; label: string; note: string }[] = [
   { id: 'oil', label: 'Oil', note: 'Thick paint: ridges between the bristles catch the light.' },
   { id: 'ink', label: 'Ink and wash', note: 'A thin wash of each color that leaves the paper showing in the light, pen strokes only in the shade, and a pen outline round everything.' },
   { id: 'hatch', label: 'Hatching', note: 'Pen lines on bare paper, drawn closer where it is darker.' },
+  { id: 'stipple', label: 'Stipple', note: 'Pen dots on bare paper, more of them and bigger where it is darker. Idea from Silicon Jungle\'s Ink Studio.' },
   { id: 'ascii', label: 'ASCII', note: 'A grid of characters: heavier ones where there is more to show, and strokes along the edges.' },
   { id: 'blobs', label: 'Blobs', note: 'The soft dots underneath, as every other page draws them.' },
 ]
 
-/** Paper and pen for the two drawn looks. */
+/** Paper and pen for the drawn looks. */
 export const PAPERS: { id: string; label: string; paper: readonly [number, number, number]; ink: readonly [number, number, number] }[] = [
   { id: 'cream', label: 'Cream', paper: PAPER, ink: INK },
   { id: 'gray', label: 'Gray', paper: [0.74, 0.74, 0.72], ink: [0.08, 0.08, 0.1] },

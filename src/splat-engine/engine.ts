@@ -31,7 +31,7 @@ import { LIFT, MAX_MARCH, OCC_SCALE, REACH, SHADOW_CELLS, SHADOW_DENSITY, SPREAD
 import { linearToSrgb, srgbToLinear } from '../splat-core/color.ts'
 import { surfaceRanks } from '../splat-core/pixel.ts'
 import { viewColor } from '../splat-core/sh.ts'
-import { FLAT_CUT, INK, MARK_CUT, MARK_KINDS, MARK_LIFT, MARK_LONG, MARK_MOST, MARK_SOLID, MARK_WIDE, PAPER, SHADE_FROM, SHADE_FULL, WASH_LEAST, WASH_MOST, type MarkLook } from '../splat-core/marks.ts'
+import { DOT_R, DOT_STEP, FLAT_CUT, INK, MARK_CUT, MARK_KINDS, MARK_LIFT, MARK_LONG, MARK_MOST, MARK_SOLID, MARK_WIDE, PAPER, SHADE_FROM, SHADE_FULL, WASH_LEAST, WASH_MOST, type MarkLook } from '../splat-core/marks.ts'
 
 /**
  * Blobscape's splat engine: one mesh that draws every blob of every object in a
@@ -2055,10 +2055,20 @@ function markOf(M: Marks, uv: N, seed: N, rgb: N) {
     const line = abs(fract(abs(v).div(k.mul(0.42)).add(seed)).sub(0.5)).mul(2)
     const pen = float(1).sub(smoothstep(dark.mul(0.7), dark.mul(0.7).add(0.25), line)).mul(smoothstep(0.06, 0.2, dark))
     color.assign(mix(M.paper, M.ink, pen))
-  }).Else(() => {
+  }).ElseIf(M.kind.lessThan(5.5), () => {
     // flat: all of the blob's disc in its own color
     color.assign(rgb)
     cover.assign(select(exp(dot(uv, uv).mul(-0.5)).lessThan(FLAT_CUT), float(0), float(1)))
+  }).Else(() => {
+    // stipple (`stippleAt`): pen dots on a grid on the blob, nudged, kept by a hash of where they are, more the darker
+    const step = k.mul(DOT_STEP).toVar()
+    const i = TSL.round(u.div(step)).toVar(), j = TSL.round(v.div(step)).toVar()
+    const du = u.div(step).sub(i).sub(sin(i.mul(1.7).add(j.mul(2.3))).mul(0.15))
+    const dv = v.div(step).sub(j).sub(sin(i.mul(2.9).sub(j.mul(1.3))).mul(0.15))
+    const keep = hash(i.mul(i).add(j.mul(j).mul(7)).add(i.mul(j).mul(3)), seed).lessThan(smoothstep(0.04, 0.9, dark))
+    const r = dark.mul(DOT_R[1]).add(DOT_R[0]).toVar()
+    const pen = select(keep, float(1).sub(smoothstep(r.mul(0.7), r, vec2(du, dv).length())), float(0))
+    color.assign(mix(M.paper, M.ink, pen))
   })
   return vec4(color, cover)
 }

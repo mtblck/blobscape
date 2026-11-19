@@ -669,7 +669,7 @@ export class Stage {
     // WebGPU reads rows top-down, WebGL bottom-up
     const glyphs = new Uint8Array(width * height)
     for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) glyphs[y * width + x] = px[((this.backend === 'webgl' ? height - 1 - y : y) * width + x) * 4 + 3]
-    return glyphText(glyphs, width)
+    return glyphText(glyphs, width, this.glyphLook?.set)
   }
 
   private lens?: SplatLens

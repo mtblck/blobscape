@@ -813,6 +813,13 @@ export default [
         else ok(`brush and ink on ${backend}: ink and wash comes with outlines (${(lines * 100).toFixed(1)}% of the view is line, and off then on gives the same picture)`)
         await pick(k.page, 'Hatching', 'hatch')
         const hatch = await read(k.page)
+        // stipple: dots on the same paper, its own picture
+        await pick(k.page, 'Stipple', 'stipple')
+        const stipple = await read(k.page)
+        if (!(differ(stipple, hatch) > 0.005) || !(solid(stipple) > 0.01)) fails.push(`brush and ink on ${backend}: stipple differs from hatching in ${differ(stipple, hatch)} of the view, ${solid(stipple)} drawn`)
+        else ok(`brush and ink on ${backend}: stipple draws the fox in dots (${(differ(stipple, hatch) * 100).toFixed(1)}% of the view differs from hatching)`)
+        if (backend === 'webgpu') await k.page.screenshot({ path: join(shots, 'blobscape-brush-stipple.png') })
+        await pick(k.page, 'Hatching', 'hatch')
         const paper = await k.page.getByTestId('brush-ground').evaluate((e) => getComputedStyle(e).backgroundColor)
         await pick(k.page, 'Blobs', 'blobs')
         const blobs = await read(k.page)
@@ -835,6 +842,17 @@ export default [
         const unfurred = (plainText.match(/[|_/\\]/g) ?? []).length
         if (!(strokes > unfurred + 20)) fails.push(`brush and ink on ${backend}: ASCII strokes along fur: ${strokes} strokes with them, ${unfurred} without`)
         else ok(`brush and ink on ${backend}: ASCII draws the fox's fur as strokes the way it runs (${strokes} strokes, ${unfurred} without them)`)
+        // braille and blocks: the same grid in their own characters, a frame drawn twice the same
+        for (const [label, set, only] of [['Braille', 'braille', /^[\u2800-\u28ff\s]*$/], ['Blocks', 'blocks', /^[ ▘▝▀▖▌▞▛▗▚▐▜▄▙▟█░▒▓\n]*$/]]) {
+          await tabClick(k.page.getByTestId('brush-chars').getByRole('button', { name: label, exact: true }))
+          const a = await read(k.page), b = await read(k.page)
+          const t = (await k.page.evaluate(() => window.__brush.text())) ?? ''
+          const n = t.replace(/[\s\u2800]/g, '').length
+          if (!only.test(t) || !(n > 200) || differ(a, b, 0) !== 0 || !(differ(a, ascii) > 0.005) || !(solid(a) > 0.005)) fails.push(`brush and ink on ${backend}: ${set}: ${n} characters, only its own ${only.test(t)}, twice differs ${differ(a, b, 0)}, ${differ(a, ascii)} differs from ASCII, ${solid(a)} lit`)
+          else ok(`brush and ink on ${backend}: ${set} draws the fox as ${n} characters of its own, the same when drawn twice`)
+          if (backend === 'webgpu') await k.page.screenshot({ path: join(shots, `blobscape-brush-${set}.png`) })
+        }
+        await tabClick(k.page.getByTestId('brush-chars').getByRole('button', { name: 'ASCII', exact: true }))
         await pick(k.page, 'Blobs', 'blobs')
         // cel shading: the fox is cut again without its baked light, lit live and cut into tones
         await pick(k.page, 'Cel shading', 'cel')

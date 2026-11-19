@@ -7613,8 +7613,8 @@
     {
      "name": "MarkKind",
      "kind": "type",
-     "doc": "The kinds of mark: flat opaque dabs with bristle streaks, thicker dabs with ridges that catch light, a wash with a\npen stroke along each blob, hatching that is denser where it is darker, or a whole disc of the blob's own color with\nno brushwork at all (`flat`: the fill under cel shading, where the discs of one surface close up into one color).",
-     "type": "\"gouache\" | \"oil\" | \"ink\" | \"hatch\" | \"flat\""
+     "doc": "The kinds of mark: flat opaque dabs with bristle streaks, thicker dabs with ridges that catch light, a wash with a\npen stroke along each blob, hatching that is denser where it is darker, or a whole disc of the blob's own color with\nno brushwork at all (`flat`: the fill under cel shading, where the discs of one surface close up into one color),\nor stippling: pen dots on bare paper, more of them and bigger where it is darker.",
+     "type": "\"gouache\" | \"oil\" | \"ink\" | \"hatch\" | \"flat\" | \"stipple\""
     },
     {
      "name": "MARK_KINDS",
@@ -7642,13 +7642,13 @@
        "name": "ink",
        "optional": true,
        "type": "readonly [number, number, number]",
-       "doc": "Ink and hatch: the pen's color, sRGB 0–1 (default a blue-black)."
+       "doc": "Ink, hatch and stipple: the pen's color, sRGB 0–1 (default a blue-black)."
       },
       {
        "name": "paper",
        "optional": true,
        "type": "readonly [number, number, number]",
-       "doc": "Ink and hatch: the paper's color, sRGB 0–1 (default a warm white). Set the page behind the view to it too."
+       "doc": "Ink, hatch and stipple: the paper's color, sRGB 0–1 (default a warm white). Set the page behind the view to it too."
       },
       {
        "name": "soft",
@@ -7882,8 +7882,20 @@
        "optional": true,
        "type": "number",
        "doc": "Tones are multiplied by this before a character is picked (default 1): over 1 for a dim scene."
+      },
+      {
+       "name": "set",
+       "optional": true,
+       "type": "GlyphSet",
+       "doc": "Which characters (default 'ascii'): 'braille' draws each cell as the braille character whose eight dots are on\nwhere that eighth of the cell is heavy enough, and 'blocks' as the quarter blocks (▘ ▚ ▙ and so on) or, where a\ncell is even, one of the shades ░ ▒ ▓. Both show shapes within a cell, so `edges` and `strands` are not used."
       }
      ]
+    },
+    {
+     "name": "GlyphSet",
+     "kind": "type",
+     "doc": "The kinds of characters a picture can be drawn in (`GlyphLook.set`).",
+     "type": "\"ascii\" | \"braille\" | \"blocks\""
     },
     {
      "name": "toneOf",
@@ -7970,12 +7982,74 @@
      ]
     },
     {
-     "name": "glyphText",
+     "name": "brailleFor",
      "kind": "function",
-     "doc": "A grid of characters (their numbers in `GLYPHS`, a row after another from the top) as lines of text, with spaces at line ends dropped.",
+     "doc": "A braille cell's dots from the tones of its eight parts (two across, four down, a row after another from the top):\nas bits from U+2800. A dot is on where its part's tone reaches its `DOT_STEP`; one that was on the frame before\n(`before`, the same bits, or -1) stays on down to `steady` under it, so a dot at its step does not blink.",
      "signatures": [
       {
-       "code": "glyphText(glyphs: ArrayLike<number>, columns: number): string"
+       "code": "brailleFor(tones: ArrayLike<number>, before?: number, steady?: number): number"
+      }
+     ]
+    },
+    {
+     "name": "QUADS",
+     "kind": "const",
+     "doc": "The quarter blocks, by their bits: above left 1, above right 2, below left 4, below right 8.",
+     "type": "\" ▘▝▀▖▌▞▛▗▚▐▜▄▙▟█\""
+    },
+    {
+     "name": "SHADES",
+     "kind": "const",
+     "doc": "The shades, light to dark, numbered after the quarter blocks.",
+     "type": "\"░▒▓\""
+    },
+    {
+     "name": "blockFor",
+     "kind": "function",
+     "doc": "A blocks cell from the tones of its four quarters (above left, above right, below left, below right): an even cell\nis the shade nearest its mean (kept, like a ramp character, unless another is `steady` closer), and an uneven one is\nthe quarter block with the quarters over the middle of its tones (kept while no quarter is clearly on the other side).",
+     "signatures": [
+      {
+       "code": "blockFor(q: ArrayLike<number>, before?: number, steady?: number): number"
+      }
+     ]
+    },
+    {
+     "name": "shapeCell",
+     "kind": "function",
+     "doc": "One cell drawn in braille or blocks (`GlyphLook.set`): `parts` are the tones of its eighths or quarters (`toneOf` of\neach), the rest as for `glyphCell`. The color is the cell's own at the level its heaviest part asks for.",
+     "signatures": [
+      {
+       "code": "shapeCell(rgb: ArrayLike<number>, cover: number, parts: ArrayLike<number>, look?: GlyphLook, before?: number, ink?: ArrayLike<number>): GlyphCell"
+      }
+     ]
+    },
+    {
+     "name": "setBit",
+     "kind": "function",
+     "doc": "Whether a character of a set has ink at a pixel of its 6 × 8 cell (`x` from the left, `y` from the top): what the engine draws.",
+     "signatures": [
+      {
+       "code": "setBit(set: GlyphSet, glyph: number, x: number, y: number): boolean"
+      }
+     ]
+    },
+    {
+     "name": "charOf",
+     "kind": "function",
+     "doc": "A character of a set as text.",
+     "signatures": [
+      {
+       "code": "charOf(set: GlyphSet, glyph: number): string"
+      }
+     ]
+    },
+    {
+     "name": "glyphText",
+     "kind": "function",
+     "doc": "A grid of characters (their numbers in `GLYPHS`, or a set's own numbers, a row after another from the top) as lines of text, with spaces at line ends dropped.",
+     "signatures": [
+      {
+       "code": "glyphText(glyphs: ArrayLike<number>, columns: number, set?: GlyphSet): string"
       }
      ]
     },

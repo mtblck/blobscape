@@ -42,13 +42,15 @@ test('two blobs of one color get different marks, and a mark has streaks along i
 })
 
 test('ink is heavier where the blob is darker, and a pale blob is mostly wash; hatching leaves light things bare', () => {
-  const inked = (kind: 'ink' | 'hatch', rgb: number[]) => {
+  const inked = (kind: 'ink' | 'hatch' | 'stipple', rgb: number[]) => {
     let n = 0
     for (const u of GRID) for (const v of GRID) { const m = markAt(kind, u, v, 0.5, rgb); if (m.cover > 0.5 && m.color[0] < 0.2) n++ }
     return n
   }
-  for (const kind of ['ink', 'hatch'] as const) assert.ok(inked(kind, [0.02, 0.02, 0.02]) > inked(kind, [0.3, 0.3, 0.3]) && inked(kind, [0.3, 0.3, 0.3]) >= inked(kind, [0.9, 0.9, 0.9]), kind)
+  for (const kind of ['ink', 'hatch', 'stipple'] as const) assert.ok(inked(kind, [0.02, 0.02, 0.02]) > inked(kind, [0.3, 0.3, 0.3]) && inked(kind, [0.3, 0.3, 0.3]) >= inked(kind, [0.9, 0.9, 0.9]), kind)
   assert.equal(inked('hatch', [0.95, 0.95, 0.95]), 0)
+  assert.equal(inked('stipple', [0.95, 0.95, 0.95]), 0)
+  assert.ok(inked('stipple', [0.02, 0.02, 0.02]) > 20)
   assert.ok(inked('ink', [0.02, 0.02, 0.02]) > 20)
 })
 
