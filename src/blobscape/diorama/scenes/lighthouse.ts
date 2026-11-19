@@ -283,6 +283,8 @@ export const LIGHTHOUSE: SceneDoc = {
   look: { dither: 0.5, glow: 1.5, outline: true, edges: true },
   // the island is small beside the other scenes' subjects, so a brick, a tile or a window gets as many cells as a scale on the dragon
   grid: 0.72,
+  // round walls seen close: wider discs, or the far side and the lit windows show through the near one (Matt saw it)
+  disc: 0.75,
   camera: { target: [0.05, 0.84, 0.05], distance: 3.7, azimuth: 28, elevation: 10 },
   bones,
   parts,
