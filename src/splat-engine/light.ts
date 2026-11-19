@@ -65,3 +65,43 @@ export function bakeLights(b: Blobs, lights: Light[], ambient: number | ArrayLik
   }
   return out
 }
+
+/**
+ * How flat a blob is, from its covariance [xx, xy, xz, yy, yz, zz]: 1 for a disc (two long axes and a shorter one,
+ * which is its normal), 0 for a needle or a ball, which have no one side to turn to a light. It is how much shorter
+ * the shortest axis is than the middle one, from the covariance's eigenvalues (in closed form, by the angle of the
+ * cubic). CPU twin of `flatness` in engine.ts: change both.
+ */
+export function flatness(cov: ArrayLike<number>): number {
+  const [a, b, c, d, e, f] = [cov[0], cov[1], cov[2], cov[3], cov[4], cov[5]]
+  const q = (a + d + f) / 3
+  const p = Math.sqrt(Math.max(((a - q) ** 2 + (d - q) ** 2 + (f - q) ** 2 + 2 * (b * b + c * c + e * e)) / 6, 1e-30))
+  const A = (a - q) / p, B = b / p, C = c / p, D = (d - q) / p, E = e / p, F = (f - q) / p
+  const half = (A * (D * F - E * E) - B * (B * F - C * E) + C * (B * E - C * D)) / 2
+  const phi = Math.acos(Math.max(-1, Math.min(1, half))) / 3
+  const most = q + 2 * p * Math.cos(phi), least = q + 2 * p * Math.cos(phi + (2 * Math.PI) / 3)
+  const mid = 3 * q - most - least
+  const ratio = Math.sqrt(Math.max(least, 0) / Math.max(mid, 1e-30))
+  const t = Math.max(0, Math.min(1, (ratio - FLAT_FULL) / (FLAT_NONE - FLAT_FULL)))
+  return 1 - t * t * (3 - 2 * t)
+}
+/** A blob is flat when its shortest axis is at most this share of its middle one, and not at all from `FLAT_NONE`. */
+export const FLAT_FULL = 0.7
+/** See `FLAT_FULL`. */
+export const FLAT_NONE = 0.95
+
+/**
+ * What cel shading cuts into tones (splat-core/cel.ts), for a blob at `p` with covariance `cov` seen from `eye` under
+ * the first light: how it faces the light (0 away, 0.5 edge on, 1 toward), with the side of the blob that the eye sees
+ * taken for its outside (a blob doesn't know its outside, but the side in view is the one being drawn), and how sure
+ * that is (`flatness`). The share of the light that reaches it past what is in the way is the shadows' own answer
+ * (`transmittance` in shadow.ts). CPU twin of `toned` in engine.ts: change both.
+ */
+export function toneAt(p: ArrayLike<number>, cov: ArrayLike<number>, eye: ArrayLike<number>, light: Light | undefined): { facing: number; sure: number } {
+  if (!light) return { facing: 1, sure: flatness(cov) }
+  const n = blobNormal(cov)
+  const side = n[0] * (eye[0] - p[0]) + n[1] * (eye[1] - p[1]) + n[2] * (eye[2] - p[2]) < 0 ? -1 : 1
+  const to = 'direction' in light ? light.direction : [light.position[0] - p[0], light.position[1] - p[1], light.position[2] - p[2]]
+  const inv = 1 / Math.sqrt(Math.max(to[0] * to[0] + to[1] * to[1] + to[2] * to[2], 1e-6))
+  return { facing: side * (n[0] * to[0] + n[1] * to[1] + n[2] * to[2]) * inv * 0.5 + 0.5, sure: flatness(cov) }
+}

@@ -15,13 +15,20 @@ import type { Actor, CreatureStage } from './creature/stage.ts'
 import { DETAIL } from './diorama/scene.ts'
 import { DIORAMAS } from './diorama/scenes.ts'
 import { GROUND, LOOKS, PAPERS, SCREEN, css, isMark, type LookId } from './brushLooks.ts'
+import { BACKDROPS, CEL, CEL_START, FILL_REACH, celLook, type CelChoice } from './celLooks.ts'
+import { unlit } from '../splat-engine/voxel.ts'
+import { gatherColors } from '../splat-core/cel.ts'
 import { href } from './routes.ts'
 import { sampleScan } from './scan/sample.ts'
 import { DEFAULT_CLEAN, UNTURNED, autoOrient, cleanMasks, finish, stillActor, working } from './scan/studio.ts'
 
 declare global {
-  interface Window { __brush?: { stage: CreatureStage; blobs: () => number; subject: string; look: string; text: () => Promise<string | undefined> } }
+  interface Window { __brush?: { stage: CreatureStage; blobs: () => number; subject: string; look: string; plain: boolean; text: () => Promise<string | undefined> } }
 }
+
+/** Every look on the page: the marks, and cel shading. */
+type Look = LookId | typeof CEL.id
+const ALL_LOOKS: { id: Look; label: string; note: string }[] = [...LOOKS.slice(0, -1), CEL, LOOKS[LOOKS.length - 1]]
 
 /** What is on show: how to build it, and how it moves. */
 interface Subject {
@@ -33,14 +40,15 @@ interface Subject {
   orbit: Orbit
   /** A scan: its marks are laid softly, one over another (`MarkLook.soft`). */
   soft?: boolean
-  make(coarse: boolean): { actor: Actor; pose?: (sk: Skeleton, t: number) => void; lights?: (t: number) => PointLight[]; clip?: ReturnType<typeof recordClip> }
+  /** `plain` leaves the baked light out of what is built (`unlit`), for a look that lights it live. */
+  make(coarse: boolean, plain: boolean): { actor: Actor; pose?: (sk: Skeleton, t: number) => void; lights?: (t: number) => PointLight[]; clip?: ReturnType<typeof recordClip> }
 }
 
 function scene(id: string, label: string): Subject {
   const d = DIORAMAS.find((x) => x.id === id) ?? DIORAMAS[0]
   return {
     id, label, about: d.about, from: 'a scene written as data', orbit: d.views[0].orbit,
-    make: (coarse) => ({ actor: d.make(DETAIL[coarse ? 0 : 1].spacing), pose: d.pose, lights: d.lights }),
+    make: (coarse, plain) => ({ actor: plain ? unlit(() => d.make(DETAIL[coarse ? 0 : 1].spacing)) : d.make(DETAIL[coarse ? 0 : 1].spacing), pose: d.pose, lights: d.lights }),
   }
 }
 
@@ -51,8 +59,9 @@ const SUBJECTS: Subject[] = [
   scene('croc', 'Garden crocodile'),
   {
     id: 'fox', label: 'Fox', about: 'A fox with a coat of fur, trotting on the spot', from: 'a creature on bones', orbit: FOX.view,
-    make: (coarse) => {
-      const actor = FOX.make(coarse ? FOX.detail[0] : FOX.start, FOX.looks[0].id)
+    make: (coarse, plain) => {
+      const cut = () => FOX.make(coarse ? FOX.detail[0] : FOX.start, FOX.looks[0].id)
+      const actor = plain ? unlit(cut) : cut()
       const m = FOX.moves[0]
       return { actor, clip: recordClip(m.name, actor.skeleton, m.pose, m.seconds, m.fps ?? 24) }
     },
@@ -89,7 +98,13 @@ export function BrushInk() {
   const calm = useMemo(() => media('(prefers-reduced-motion: reduce)'), [])
   const [playing, setPlaying] = useState(!calm)
   const [subject, setSubject] = useState(() => SUBJECTS.find((s) => s.id === params().get('subject'))?.id ?? SUBJECTS[0].id)
-  const [look, setLook] = useState<LookId>(() => LOOKS.find((l) => l.id === params().get('look'))?.id ?? 'gouache')
+  const [look, setLook] = useState<Look>(() => ALL_LOOKS.find((l) => l.id === params().get('look'))?.id ?? 'gouache')
+  const [cel, setCel] = useState<CelChoice>(() => {
+    const q = params(), n = (k: string, d: number) => (q.get(k) !== null && Number.isFinite(Number(q.get(k))) ? Number(q.get(k)) : d)
+    return { ...CEL_START, turn: n('turn', CEL_START.turn), height: n('height', CEL_START.height), tones: q.get('tones') === '3' ? 3 : 2, shadows: q.get('shadows') !== '0', smooth: n('smooth', CEL_START.smooth), fills: Math.max(0, Math.min(4, Math.round(n('fills', CEL_START.fills)))) }
+  })
+  // cel shading lights the blobs itself, so its subjects are built with no light baked in
+  const plain = look === 'cel'
   const [size, setSize] = useState(1)
   // outlines: on for the two pen looks unless the visitor says otherwise
   const [outlined, setOutlined] = useState<boolean | null>(() => (params().get('outline') === '1' ? true : params().get('outline') === '0' ? false : null))
@@ -103,7 +118,7 @@ export function BrushInk() {
   const [copied, setCopied] = useState('')
   const sub = SUBJECTS.find((s) => s.id === subject)!
   const [orbit, setOrbit] = useState<Orbit>(sub.orbit)
-  const [built, setBuilt] = useState<{ id: string; count: number }>()
+  const [built, setBuilt] = useState<{ id: string; plain: boolean; count: number }>()
 
   useEffect(() => {
     let live: CreatureStage | undefined, gone = false
@@ -119,24 +134,29 @@ export function BrushInk() {
     return () => { gone = true; live?.dispose() }
   }, [offscreen])
 
+  const kept = useRef<string | undefined>(undefined)
+  const shown = useRef<Actor | undefined>(undefined)
   // built after a paint, so the waiting mark goes up first: cutting a scene holds the main thread
   useEffect(() => {
     if (!stage) return
     setBuilt(undefined)
     const s = SUBJECTS.find((x) => x.id === subject)!
     const t = setTimeout(() => {
-      const made = s.make(coarse)
+      const made = s.make(coarse, plain)
       stage.setActor(made.actor, made.clip)
+      shown.current = made.actor
       if (made.pose) stage.setPoser((sk, time) => { made.pose!(sk, time); stage.setLights(made.lights?.(time) ?? [], 1) })
       else stage.setLights([], 1)
-      setOrbit(s.orbit)
-      setBuilt({ id: s.id, count: made.actor.blobs.count })
+      // the view stays where it is when only the light in the blobs changed
+      setOrbit((o) => (kept.current === s.id ? o : s.orbit))
+      kept.current = s.id
+      setBuilt({ id: s.id, plain, count: made.actor.blobs.count })
     }, 30)
     return () => clearTimeout(t)
-  }, [stage, subject, coarse])
+  }, [stage, subject, coarse, plain])
 
   const sheet = PAPERS.find((p) => p.id === paper)!
-  const marks = useMemo<MarkLook | undefined>(() => (isMark(look) ? { kind: look, size, ink: sheet.ink, paper: sheet.paper, soft: sub.soft } : undefined), [look, size, sheet, sub.soft])
+  const marks = useMemo<MarkLook | undefined>(() => (look !== 'cel' && isMark(look) ? { kind: look, size, ink: sheet.ink, paper: sheet.paper, soft: sub.soft } : undefined), [look, size, sheet, sub.soft])
   useEffect(() => { stage?.setMarks(marks) }, [stage, marks, built])
   const ascii = look === 'ascii'
   const lum = (c: readonly number[]) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
@@ -145,8 +165,20 @@ export function BrushInk() {
   const glyphs = useMemo<GlyphLook | undefined>(() => (ascii ? { size: letter, ink: own ? undefined : sheet.ink, light: !own && lum(sheet.paper) > lum(sheet.ink), edges: strokes, gain: weight * (own ? SCREEN_GAIN : 1), steady: held } : undefined), [ascii, letter, own, sheet, strokes, weight, held])
   useEffect(() => { stage?.setGlyphs(glyphs) }, [stage, glyphs])
   useEffect(() => { setCopied('') }, [look, subject])
-  const outline = !ascii && (outlined ?? (look === 'ink' || look === 'hatch'))
-  useEffect(() => { stage?.setOutline(outline ? { width: pen, ink: look === 'ink' || look === 'hatch' ? sheet.ink : undefined } : undefined) }, [stage, outline, pen, look, sheet])
+  const outline = !ascii && (outlined ?? (look === 'ink' || look === 'hatch' || look === 'cel'))
+  useEffect(() => { stage?.setCel(look === 'cel' ? celLook({ ...cel, turn: cel.turn + sub.orbit.azimuth, line: outline ? pen : 0 }) : undefined) }, [stage, look, cel, outline, pen, sub])
+  // flat fills: each part's colors gathered into a few, shown in place of the blobs' own (which stay as they were)
+  useEffect(() => {
+    const actor = shown.current
+    if (!stage || !built || !actor) return
+    if (look !== 'cel' || !cel.fills || !built.plain) { stage.tint(); return }
+    // speckle is anything finer than about two blobs across, by a typical blob's middle size (a strand of fur's width, not its length)
+    const b = actor.blobs, sizes = Float32Array.from({ length: Math.min(b.count, 2000) }, (_, k) => { const i = Math.floor((k * b.count) / Math.min(b.count, 2000)); return [b.scale[i * 3], b.scale[i * 3 + 1], b.scale[i * 3 + 2]].sort((x, y) => x - y)[1] }).sort()
+    const flat = gatherColors(b.color.subarray(0, b.count * 3), (actor as { partOf?: ArrayLike<number> }).partOf, cel.fills, { at: b.center, reach: (sizes[sizes.length >> 1] || 0) * FILL_REACH })
+    stage.tint((_own, i) => [flat[i * 3], flat[i * 3 + 1], flat[i * 3 + 2]])
+    return () => stage.tint()
+  }, [stage, built, look, cel.fills])
+  useEffect(() => { stage?.setOutline(outline && look !== 'cel' ? { width: pen, ink: look === 'ink' || look === 'hatch' ? sheet.ink : undefined } : undefined) }, [stage, outline, pen, look, sheet])
   useEffect(() => { if (stage) stage.playing = playing }, [stage, playing])
   useEffect(() => { if (stage) { stage.orbit = orbit; stage.invalidate() } }, [stage, orbit])
 
@@ -161,16 +193,17 @@ export function BrushInk() {
   // For verify: the stage, without clicking
   useEffect(() => {
     if (!stage || !built) return
-    window.__brush = { stage, blobs: () => stage.blobCount, subject: built.id, look, text: () => stage.glyphText() }
+    window.__brush = { stage, blobs: () => stage.blobCount, subject: built.id, look, plain: built.plain, text: () => stage.glyphText() }
     return () => { delete window.__brush }
   }, [stage, built, look])
 
   const drag = useRef<OrbitDrag | null>(null)
   const pointers = useRef(new Map<number, { x: number; y: number }>())
   useWheelZoom(canvas, setOrbit)
-  const waiting = !failed && (!drawn || built?.id !== subject)
+  const waiting = !failed && (!drawn || built?.id !== subject || built.plain !== plain)
   const drawnOn = look === 'ink' || look === 'hatch'
-  const lookNow = LOOKS.find((l) => l.id === look)!
+  const lookNow = ALL_LOOKS.find((l) => l.id === look)!
+  const backdrop = BACKDROPS.find((b) => b.id === cel.backdrop) ?? BACKDROPS[0]
   const backend = stage ? (stage.backend === 'webgpu' ? 'WebGPU' : 'WebGL 2') : 'WebGPU or WebGL 2'
 
   return (
@@ -179,14 +212,14 @@ export function BrushInk() {
       <header className="flex flex-wrap items-end justify-between gap-x-8 gap-y-2 pt-4 pb-6">
         <h1 ref={h1} tabIndex={-1} className="font-display text-4xl outline-none sm:text-5xl">Brush and Ink</h1>
         <p className="max-w-xl text-lg text-ink-muted">
-          The same blobs, drawn as brush marks, pen strokes or plain characters in place of soft dots. Every mark belongs to one blob and takes its
+          The same blobs, drawn as brush marks, pen strokes, plain characters or flat cel tones in place of soft dots. Every mark belongs to one blob and takes its
           shape and direction from it, so the painting holds still as you turn it. Drag the view and watch the strokes stay put.
         </p>
       </header>
       <Workbench
         viewLabel="The picture"
         view={<>
-          <div aria-hidden className="absolute inset-0" style={{ background: look === 'blobs' ? undefined : ascii ? css(own ? SCREEN : sheet.paper) : drawnOn ? css(sheet.paper) : GROUND }} data-testid="brush-ground" />
+          <div aria-hidden className="absolute inset-0" style={{ background: look === 'blobs' ? undefined : look === 'cel' ? backdrop.back : ascii ? css(own ? SCREEN : sheet.paper) : drawnOn ? css(sheet.paper) : GROUND }} data-testid="brush-ground" />
           <canvas
             ref={canvas}
             role="application"
@@ -219,7 +252,7 @@ export function BrushInk() {
           <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => setOrbit(sub.orbit)} />
         </>}
         status={<>
-          <span>{built?.id === subject ? <><span className="tabular-nums text-ink" data-testid="brush-blobs">{built.count.toLocaleString()}</span> blobs from {sub.from}{look === 'blobs' ? '.' : ascii ? ', read off as characters.' : ', one mark each.'}</> : 'Making it…'}</span>
+          <span>{built?.id === subject && built.plain === plain ? <><span className="tabular-nums text-ink" data-testid="brush-blobs">{built.count.toLocaleString()}</span> blobs from {sub.from}{look === 'blobs' ? '.' : look === 'cel' ? ', lit as you see them.' : ascii ? ', read off as characters.' : ', one mark each.'}</> : 'Making it…'}</span>
           <span>{lookNow.label} on {backend}</span>
         </>}
         tabsLabel="Options"
@@ -229,11 +262,31 @@ export function BrushInk() {
               <div className={TAB_SECTIONS}>
                 <Field label="Drawn as">
                   <div className="flex flex-wrap gap-1.5" data-testid="brush-looks">
-                    {LOOKS.map((l) => <Chip key={l.id} active={look === l.id} onClick={() => setLook(l.id)}>{l.label}</Chip>)}
+                    {ALL_LOOKS.map((l) => <Chip key={l.id} active={look === l.id} onClick={() => setLook(l.id)}>{l.label}</Chip>)}
                   </div>
                   <p className="mt-1.5 text-xs text-ink-faint">{lookNow.note}</p>
                 </Field>
-                {isMark(look) && (
+                {look === 'cel' && (
+                  <div className="space-y-4" data-testid="brush-cel">
+                    <Slider label="Light from" value={cel.turn} min={-180} max={180} step={5} onChange={(turn) => setCel((c) => ({ ...c, turn }))} format={(v) => `${v}°`} hint="Round the subject, from where the view starts: 0° is from the front, 90° from the right. The shadows go with it." />
+                    <Slider label="Light height" value={cel.height} min={10} max={85} step={1} onChange={(height) => setCel((c) => ({ ...c, height }))} format={(v) => `${v}°`} />
+                    <Field label="Tones">
+                      <div className="flex flex-wrap gap-1.5">
+                        <Chip active={cel.tones === 2} onClick={() => setCel((c) => ({ ...c, tones: 2 }))}>Light and shade</Chip>
+                        <Chip active={cel.tones === 3} onClick={() => setCel((c) => ({ ...c, tones: 3 }))}>Three tones</Chip>
+                      </div>
+                    </Field>
+                    <Toggle label="Cast shadows" checked={cel.shadows} onChange={(shadows) => setCel((c) => ({ ...c, shadows }))} />
+                    <Slider label="Shadow shapes" value={cel.smooth} min={1} max={12} step={0.5} onChange={(smooth) => setCel((c) => ({ ...c, smooth }))} format={(v) => `${v} px`} hint="How far the light is smoothed over a surface before it is cut into tones: more gives rounder, simpler shapes." />
+                    <Slider label="Colors in each part" value={cel.fills} min={0} max={4} step={1} onChange={(fills) => setCel((c) => ({ ...c, fills }))} format={(v) => (v === 0 ? 'As painted' : `${v}`)} hint="Each part's colors gathered into a few flat ones, so a mottled surface becomes areas of one color and a stripe stays a stripe." />
+                    <Field label="Backdrop">
+                      <div className="flex flex-wrap gap-1.5">
+                        {BACKDROPS.map((b) => <Chip key={b.id} active={cel.backdrop === b.id} onClick={() => setCel((c) => ({ ...c, backdrop: b.id }))}>{b.label}</Chip>)}
+                      </div>
+                    </Field>
+                  </div>
+                )}
+                {look !== 'cel' && isMark(look) && (
                   <Slider label="Mark size" value={size} min={0.5} max={1.3} step={0.05} onChange={setSize} format={(v) => `${Math.round(v * 100)}%`} hint="Smaller marks leave gaps between them; bigger ones overlap more." />
                 )}
                 {ascii && (
@@ -268,7 +321,7 @@ export function BrushInk() {
                 {!ascii && (
                   <div data-testid="brush-outline">
                     <Toggle label="Outlines" checked={outline} onChange={setOutlined} />
-                    <p className="mt-1.5 text-xs text-ink-faint">A pen line round the subject, where one thing stands in front of another, and between its parts. Heavier against dark things, and it lifts off here and there against light ones.</p>
+                    <p className="mt-1.5 text-xs text-ink-faint">{look === 'cel' ? 'An even line round the subject, where one thing stands in front of another, and between its parts.' : 'A pen line round the subject, where one thing stands in front of another, and between its parts. Heavier against dark things, and it lifts off here and there against light ones.'}</p>
                   </div>
                 )}
                 {outline && (
@@ -331,6 +384,13 @@ export function BrushInk() {
             is to show in it. Where an edge runs through a cell (the picture ends, one thing stands in front of another, two parts
             meet) it gets a stroke along the edge. A cell keeps its character until another is clearly a better fit, so the text
             doesn't flicker as the view turns, and Copy as text gives you the picture in plain characters.
+          </p>
+          <p>
+            Cel shading is about the light. A cel is painted in flat colors with the light cut into two or three tones, and the
+            tones have clean edges. So the subject is built again with no light in its colors, each blob is drawn flat, and the
+            light is worked out live: how each blob faces it, and what stands in its way, seen from where the light is. That
+            light is smoothed a little over the surface it lies on and then cut, which is what gives a shadow one clean edge
+            instead of an edge of dots. Turn the light and the shadows of the sails go round the mill.
           </p>
         </div>
       </section>

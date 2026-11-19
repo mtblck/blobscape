@@ -101,6 +101,8 @@ export interface Loose { from: number; to: number; base: Vec3; normal: Vec3; bon
 
 export class Maker {
   readonly blobs = new Blobs(16384)
+  /** Leaves the lamp out of every color: for a look that lights the blobs itself, as cel shading does. */
+  unlit = false
   /** The bone each blob hangs on, and a second one with its share (0 for none). */
   bone: number[] = []
   bone2: number[] = []
@@ -149,7 +151,7 @@ export class Maker {
     let n = unit(cross(x, rotate(o.turn, tv)))
     const y = cross(n, x)
     let k = 1, hot = 0
-    if (!fin.glow) {
+    if (!fin.glow && !this.unlit) {
       const d = dot(n, LAMP)
       // a thin thing lets some light through: its far side is lit a little too
       const lit = fin.thin ? 0.5 + 0.5 * (0.6 * d + 0.4 * Math.abs(d)) : 0.5 + 0.5 * d

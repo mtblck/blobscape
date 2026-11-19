@@ -7,6 +7,7 @@ import { TAB_SECTIONS, Workbench } from '../shared/Workbench.tsx'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
 import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitDrag } from './Viewport.tsx'
 import { PAPERS, css } from './brushLooks.ts'
+import { BACKDROPS as CEL_BACKDROPS, CEL_START, celLook } from './celLooks.ts'
 import { ROLE_NOTES, SHAPES, SIZES, inWords, type Shape, type Size } from './bouquet/arrange.ts'
 import { DETAILS, fallen, makeBouquet, poseBouquet, setShedding, shedOne, type Bouquet } from './bouquet/bouquet.ts'
 import { PALETTES, SEASONS, seasonOn, type Role, type Season } from './bouquet/flowers.ts'
@@ -14,8 +15,8 @@ import { VASES, type VaseKind } from './bouquet/vases.ts'
 import type { CreatureStage } from './creature/stage.ts'
 import { href } from './routes.ts'
 
-/** How the bouquet is drawn: soft blobs, or one of the painted looks from Brush and Ink. */
-const LOOKS: { id: 'blobs' | 'gouache' | 'oil' | 'ink'; label: string }[] = [{ id: 'blobs', label: 'Soft' }, { id: 'gouache', label: 'Gouache' }, { id: 'oil', label: 'Oil' }, { id: 'ink', label: 'Ink and wash' }]
+/** How the bouquet is drawn: soft blobs, or one of the painted looks or cel shading from Brush and Ink. */
+const LOOKS: { id: 'blobs' | 'gouache' | 'oil' | 'ink' | 'cel'; label: string }[] = [{ id: 'blobs', label: 'Soft' }, { id: 'gouache', label: 'Gouache' }, { id: 'oil', label: 'Oil' }, { id: 'ink', label: 'Ink and wash' }, { id: 'cel', label: 'Cel shading' }]
 /** What stands behind the table. */
 const BACKDROPS: { id: string; label: string; color?: string; dark: boolean }[] = [
   { id: 'linen', label: 'Linen', color: '#ebe5d8', dark: false },
@@ -77,7 +78,7 @@ export function Bouquets() {
   useEffect(() => {
     let live: CreatureStage | undefined, gone = false
     import('./creature/stage.ts')
-      .then(({ CreatureStage }) => CreatureStage.start(canvas.current!, { offscreen, webgl: params().get('webgl') === '1' }))
+      .then(({ CreatureStage }) => CreatureStage.start(canvas.current!, { offscreen, lights: true, webgl: params().get('webgl') === '1' }))
       .then((s) => {
         if (gone) { s.dispose(); return }
         live = s
@@ -89,15 +90,17 @@ export function Bouquets() {
   }, [offscreen])
 
   // made after a paint, so the waiting mark goes up first; the bouquet on show stays until the next is ready
+  // cel shading lights the blobs itself, so its bouquet is grown with no light baked in
+  const plain = look === 'cel'
   const [making, setMaking] = useState(true)
   useEffect(() => {
     setMaking(true)
     const t = setTimeout(() => {
-      setBouquet(makeBouquet({ season, seed, size, shape, palette: paletteHere, vase: vase || undefined }, DETAILS.find((d) => d.id === detail)!.spacing))
+      setBouquet(makeBouquet({ season, seed, size, shape, palette: paletteHere, vase: vase || undefined }, DETAILS.find((d) => d.id === detail)!.spacing, plain))
       setMaking(false)
     }, 30)
     return () => clearTimeout(t)
-  }, [season, seed, size, shape, paletteHere, vase, detail])
+  }, [season, seed, size, shape, paletteHere, vase, detail, plain])
 
   const live = useRef({ draft, shedding })
   live.current = { draft, shedding }
@@ -106,6 +109,7 @@ export function Bouquets() {
     bouquet.draft = live.current.draft
     setShedding(bouquet, live.current.shedding, 0)
     stage.setActor(bouquet)
+    stage.setLights([], 1)
     stage.setPoser((sk, t) => poseBouquet(bouquet, sk, t), 0)
     setOrbit((o) => framed(bouquet, o))
     setDown(0)
@@ -122,7 +126,8 @@ export function Bouquets() {
   }, [stage, bouquet])
 
   const sheet = PAPERS[0]
-  const marks = useMemo<MarkLook | undefined>(() => (look === 'blobs' ? undefined : { kind: look, size: 1, ink: sheet.ink, paper: sheet.paper }), [look, sheet])
+  const dark = BACKDROPS.find((b) => b.id === backdrop)!.dark
+  const marks = useMemo<MarkLook | undefined>(() => (look === 'blobs' || look === 'cel' ? undefined : { kind: look, size: 1, ink: sheet.ink, paper: sheet.paper }), [look, sheet])
   useEffect(() => { stage?.setMarks(marks) }, [stage, marks, bouquet])
   useEffect(() => { stage?.setOutline(look === 'ink' ? { width: 1.5, ink: sheet.ink } : undefined) }, [stage, look, sheet, bouquet])
 
@@ -145,6 +150,10 @@ export function Bouquets() {
 
   const drag = useRef<OrbitDrag | null>(null)
   const pointers = useRef(new Map<number, { x: number; y: number }>())
+  // the cel's light comes from the front left of the view the bouquet starts in; its shade and line suit the backdrop
+  const cel = useMemo(() => (look === 'cel' ? { ...celLook({ ...CEL_START, turn: CEL_START.turn + 24 }), shade: CEL_BACKDROPS[dark ? 3 : 1].shade, ink: CEL_BACKDROPS[dark ? 3 : 1].ink } : undefined), [look, dark])
+  useEffect(() => { stage?.setCel(cel) }, [stage, cel, bouquet])
+
   useWheelZoom(canvas, setOrbit)
   const another = () => setSeed(1 + Math.floor(Math.random() * MAX_SEED))
   const back = BACKDROPS.find((b) => b.id === backdrop)!
@@ -276,7 +285,7 @@ export function Bouquets() {
                   <div className="flex flex-wrap gap-1.5">
                     {LOOKS.map((l) => <Chip key={l.id} active={look === l.id} onClick={() => setLook(l.id)}>{l.label}</Chip>)}
                   </div>
-                  <p className="mt-1.5 text-xs text-ink-faint">The painted looks are the ones from <a href={href({ page: 'brush' })} className="underline decoration-rule underline-offset-2 hover:text-accent">Brush and Ink</a>.</p>
+                  <p className="mt-1.5 text-xs text-ink-faint">The painted looks and cel shading are the ones from <a href={href({ page: 'brush' })} className="underline decoration-rule underline-offset-2 hover:text-accent">Brush and Ink</a>.</p>
                 </Field>
                 <Field label="Detail">
                   <div className="flex flex-wrap gap-1.5">

@@ -69,9 +69,10 @@ const UP: Vec3 = [0, 1, 0]
 const LEAVES = 0.7
 
 /** Builds the bouquet a choice asks for, with blobs `spacing` apart. */
-export function makeBouquet(choice: Choice, spacing: number): Bouquet {
+export function makeBouquet(choice: Choice, spacing: number, plain = false): Bouquet {
   const p = plan(choice)
   const m = new Maker(spacing)
+  m.unlit = plain
   const rand = rng(choice.seed * 48271 + 11)
   const bones: Bone[] = [{ name: 'root', parent: -1, head: [0, 0, 0], tail: [0, 0.3, 0] }]
 

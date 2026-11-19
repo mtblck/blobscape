@@ -40,7 +40,7 @@ export const POSTS: Post[] = [
       '## Arranged by the rules',
       '- **Roles.** A few big focal blooms, smaller second blooms round them, line flowers for height, fillers for the gaps and greenery to frame it.\n- **Odd numbers.** Three of this, five of that, as florists count.\n- **One palette.** Each season has three, and the flowers are picked in its colors.\n- **Room.** Focal blooms sit low in the middle, stems of a kind stay near each other, and every head goes where it has the most space.',
       '## And then a vase',
-      'A glass vase with the stems showing through, a jam jar, a ceramic vase, a zinc bucket, a watering can, a rain boot, a pumpkin for fall and a ceramic snowman for winter. The stems sway in a draft you can turn up, and now and then a petal lets go and settles on the table. The address names the bouquet, so the one you like is the one a friend sees.',
+      'A glass vase with the stems showing through, a jam jar, a ceramic vase, a zinc bucket, a watering can, a rain boot, a pumpkin for fall and a ceramic snowman for winter. The stems sway in a draft you can turn up, and now and then a petal lets go and settles on the table. Under Drawn as, the same bouquet can be painted in gouache, oil or ink, or cel shaded like a drawing. The address names the bouquet, so the one you like is the one a friend sees.',
     ],
   },
   {
