@@ -23,7 +23,7 @@
   {
    "id": "pixels",
    "title": "Pixels and sprites",
-   "doc": "Drawing a stage as pixel art, as brush and ink marks or as characters, and baking a creature into a sprite sheet."
+   "doc": "Drawing a stage as pixel art, as brush and ink marks, as characters or cel shaded, and baking a creature into a sprite sheet."
   },
   {
    "id": "simulation",
@@ -432,6 +432,15 @@
        "signatures": [
         {
          "code": "setOutline(pen?: OutlinePen): void"
+        }
+       ]
+      },
+      {
+       "name": "setCel",
+       "doc": "Cel shading (splat-core/cel.ts), on a stage made with `lights`: every blob flat in its own color, the light cut\ninto two or three tones with clean edges, shadows cast by what stands in the light's way, and an even outline.\nThe look's light takes the place of the stage's lights and its fill the place of its marks while it is on; leave\nthe look out to have them back. Kept for the next actor too. It shades the blobs' own colors, so it suits blobs\nthat have no light baked into them. Not in pixel mode.",
+       "signatures": [
+        {
+         "code": "setCel(look?: CelLook): void"
         }
        ]
       },
@@ -873,6 +882,37 @@
        "doc": "While true, the draw is a depth map: every blob a hard disc (as in the map of parts) whose color is its distance in\nfront of the camera, in units, in all three channels. Drawn after the frame's own render with `hold`, the frame's\nsort puts the nearest disc last, so each pixel keeps the nearest depth. `SplatDepth` (depth.ts) draws it."
       },
       {
+       "name": "depthFrom",
+       "type": "number",
+       "doc": "A depth map's depths are counted from this far in front of the camera (0 unless set): a map drawn from far off,\nas a light's view of the scene is, keeps its half floats for the scene's own depth, not the way to it."
+      },
+      {
+       "name": "depthSloped",
+       "type": "boolean",
+       "doc": "While true, a depth map gives each pixel of a blob its own depth, along the blob's slope to the line of sight (a\nflat blob's own plane), where it otherwise gives the whole disc the depth of its middle. For a pass that works out\nwhere each pixel is in the world, as cel shading's shadows do."
+      },
+      {
+       "name": "stale",
+       "readonly": true,
+       "type": "boolean",
+       "doc": "Whether the blobs must be moved before they are next drawn: bones posed, or blobs changed, since the last draw."
+      },
+      {
+       "name": "poses",
+       "type": "number",
+       "doc": "How many times the blobs have been moved: it goes up with each draw that found the world `stale`."
+      },
+      {
+       "name": "tones",
+       "type": "boolean",
+       "doc": "While true, the draw is a map of tones, for cel shading (`cel`): every blob a hard disc whose red is how it faces\nthe first light (0 away, 0.5 edge on, 1 toward), green the share of that light that reaches it past what stands\nin the way, and blue how flat it is (how far its facing can be trusted). `CelPass` (celPass.ts) draws it."
+      },
+      {
+       "name": "cel",
+       "type": "boolean",
+       "doc": "Cel shading, in a world with `lights`: while true the lights no longer change the blobs' colors (each is drawn in\nits own), and each blob's tone under the first light is worked out in their place, for the map of tones\n(`tones`). The tone takes the side of a blob the camera sees for its outside, so it is redone as the view moves."
+      },
+      {
        "name": "lieMap",
        "type": "boolean",
        "doc": "While true, the draw is a map of how the blobs lie on the screen: every blob a hard disc whose color says which\nway its long axis runs and how much longer than wide it is there (`lieColor` in splat-core/glyphs.ts is the CPU\ntwin of the color). A strand of fur or a blade of grass is long and thin from any side; a disc on a surface is\nonly so where the surface is seen nearly edge on. Drawing as characters reads it for strokes along strands."
@@ -1039,6 +1079,15 @@
        "signatures": [
         {
          "code": "reshape(actor: Actor): void"
+        }
+       ]
+      },
+      {
+       "name": "posedBox",
+       "doc": "The box that holds every blob as the bones stand now, in the world: closer than `bounds`, which is a ball round\nthe bones' reaches. What a light's view of the scene is fitted to.",
+       "signatures": [
+        {
+         "code": "posedBox(): { lo: [number, number, number]; hi: [number, number, number] }"
         }
        ]
       },
@@ -4892,6 +4941,16 @@
      ]
     },
     {
+     "name": "unlit",
+     "kind": "function",
+     "doc": "Runs `make` with every `buildVoxels` inside it leaving the light out: each blob keeps its paint (with its ink, cover\nand grime, which are paint), and no sun, shade, cast shadow, ramp, crevice, wear, bounce or beam is baked into it.\nFor a look that lights the blobs itself, such as cel shading (`Stage.setCel`), which would otherwise shade a shadow\ntwice. It reaches builders that take no light of their own to set, such as a creature's `make`.",
+     "signatures": [
+      {
+       "code": "unlit<T>(make: () => T): T"
+      }
+     ]
+    },
+    {
      "name": "buildVoxels",
      "kind": "function",
      "doc": "Builds the scene's blobs, skin and skeleton. Cells sit on one grid shared by\nevery part (multiples of `spacing` from the origin), so parts line up, and\nthe same spec always gives the same blobs.",
@@ -7320,8 +7379,8 @@
     {
      "name": "MarkKind",
      "kind": "type",
-     "doc": "The kinds of mark: flat opaque dabs with bristle streaks, thicker dabs with ridges that catch light, a wash with a pen stroke along each blob, or hatching that is denser where it is darker.",
-     "type": "\"gouache\" | \"oil\" | \"ink\" | \"hatch\""
+     "doc": "The kinds of mark: flat opaque dabs with bristle streaks, thicker dabs with ridges that catch light, a wash with a\npen stroke along each blob, hatching that is denser where it is darker, or a whole disc of the blob's own color with\nno brushwork at all (`flat`: the fill under cel shading, where the discs of one surface close up into one color).",
+     "type": "\"gouache\" | \"oil\" | \"ink\" | \"hatch\" | \"flat\""
     },
     {
      "name": "MARK_KINDS",
@@ -7772,6 +7831,257 @@
          "code": "dispose(): void"
         }
        ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "celPass",
+   "title": "Cel shading",
+   "group": "pixels",
+   "doc": "",
+   "entries": [
+    {
+     "name": "CelPass",
+     "kind": "class",
+     "doc": "Cel shading (splat-core/cel.ts). The frame is drawn four times with the same moved and sorted blobs: the picture in\nthe blobs' own flat colors, a map of depth, a map of parts and a map of tones (how each blob faces the light). The\nscene is also drawn once as the light sees it, as a map of depth (a shadow map), whenever the blobs or the light\nhave moved. One pass then finds, for each pixel, whether the light sees it; a second smooths that and the facing\nover each surface, cuts them into light and shade, paints the picture with them and draws an even line round the\nsubject, where one thing passes in front of another, and between its parts.\n\nThe world must be drawing for it: flat marks, `cel` on, and its first light the one to shade by (`Stage.setCel` sets\nall three). The frame's camera must be a perspective camera.",
+     "ctor": [
+      {
+       "code": "new CelPass()"
+      }
+     ],
+     "props": [
+      {
+       "name": "picture",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
+       "doc": "The picture: every blob flat in its own color."
+      },
+      {
+       "name": "ids",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
+       "doc": "The map of parts the lines between parts come from."
+      },
+      {
+       "name": "tones",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
+       "doc": "The map of tones (`SplatWorld.tones`)."
+      },
+      {
+       "name": "shadow",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
+       "doc": "The scene's depth as the light sees it, counted from the near side of the scene."
+      }
+     ],
+     "methods": [
+      {
+       "name": "setLook",
+       "doc": "The look, and how many device pixels a CSS pixel is.",
+       "signatures": [
+        {
+         "code": "setLook(look: CelLook, ratio: number): void"
+        }
+       ]
+      },
+      {
+       "name": "setSize",
+       "doc": "Sizes the pass's targets, in device pixels.",
+       "signatures": [
+        {
+         "code": "setSize(width: number, height: number): void"
+        }
+       ]
+      },
+      {
+       "name": "render",
+       "doc": "Draws the scene cel shaded into the renderer's current target, or onto the screen when it has none.",
+       "signatures": [
+        {
+         "code": "render(renderer: WebGPURenderer, scene: Object3D, camera: Camera): void"
+        }
+       ]
+      },
+      {
+       "name": "dispose",
+       "doc": "Frees its targets.",
+       "signatures": [
+        {
+         "code": "dispose(): void"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "cel",
+   "title": "Cel shading: the arithmetic",
+   "group": "pixels",
+   "doc": "Cel shading: the light on a picture cut into a few flat tones with clean edges, as an animation cel is painted, in\nplace of light that fades smoothly round a form.\n\nNothing is faked on the finished picture. Each blob is drawn flat in its own color (the `flat` mark), and the engine\nworks out, for each blob, how it faces the light and how much of the light gets to it past what stands in the way\n(`toneAt` in splat-engine/light.ts and its shader twin). Those two numbers are drawn as a picture of their own, and\nsmoothed a little over the surface they lie on before they are cut into tones: a blob is a disc some pixels across,\nand cutting first would leave every shadow with an edge of discs.\n\nThis file is the arithmetic of the cut, the CPU twin of the engine's pass (`CelPass` in splat-engine/celPass.ts):\nchange one, change both.",
+   "entries": [
+    {
+     "name": "CelLook",
+     "kind": "interface",
+     "doc": "How a picture is cel shaded (`Stage.setCel`).",
+     "props": [
+      {
+       "name": "from",
+       "optional": true,
+       "type": "Rgb",
+       "doc": "The way to the light, in the world (it needs no length). Default up, to the right and toward the front."
+      },
+      {
+       "name": "tones",
+       "optional": true,
+       "type": "3 | 2",
+       "doc": "How many tones the light is cut into: 2 is light and shade, 3 adds a brighter tone where a surface faces the light squarely (default 2)."
+      },
+      {
+       "name": "shade",
+       "optional": true,
+       "type": "Rgb",
+       "doc": "What shade multiplies a color by, sRGB 0–1: a cool violet gray by default, as shadows are painted on a cel."
+      },
+      {
+       "name": "bright",
+       "optional": true,
+       "type": "number",
+       "doc": "How far the brightest of three tones goes toward white, 0–1 (default 0.2)."
+      },
+      {
+       "name": "shadows",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Whether things cast shadows on one another (default true). Without them a surface is only lit by how it faces the light."
+      },
+      {
+       "name": "smooth",
+       "optional": true,
+       "type": "number",
+       "doc": "How far the light is smoothed over a surface before it is cut into tones, in CSS pixels (default 8): more gives rounder, simpler shadow shapes."
+      },
+      {
+       "name": "soft",
+       "optional": true,
+       "type": "number",
+       "doc": "How soft the edge between two tones is, 0–1 (default 0: as crisp as the screen's pixels allow)."
+      },
+      {
+       "name": "line",
+       "optional": true,
+       "type": "number",
+       "doc": "The outline's width in CSS pixels (default 1.5); 0 draws none."
+      },
+      {
+       "name": "ink",
+       "optional": true,
+       "type": "Rgb",
+       "doc": "The outline's color, sRGB 0–1 (default near black)."
+      }
+     ]
+    },
+    {
+     "name": "CEL_FROM",
+     "kind": "const",
+     "doc": "The default way to the light.",
+     "type": "Rgb"
+    },
+    {
+     "name": "CEL_SHADE",
+     "kind": "const",
+     "doc": "The default shade.",
+     "type": "Rgb"
+    },
+    {
+     "name": "CEL_INK",
+     "kind": "const",
+     "doc": "The default outline color.",
+     "type": "Rgb"
+    },
+    {
+     "name": "CEL_TURN",
+     "kind": "const",
+     "doc": "A surface is in the light when it faces the light by more than this: its `facing` is half the cosine of the angle\nbetween its normal and the way to the light, plus a half, so 0.5 is edge on. A little past edge on, as it is drawn by\nhand: a surface the light only grazes reads as shade.",
+     "type": "0.54"
+    },
+    {
+     "name": "CEL_BRIGHT",
+     "kind": "const",
+     "doc": "With three tones, a surface facing the light by this much or more takes the brightest.",
+     "type": "0.9"
+    },
+    {
+     "name": "CEL_CAST",
+     "kind": "const",
+     "doc": "A blob is in a cast shadow when less than this share of the light gets to it.",
+     "type": "0.5"
+    },
+    {
+     "name": "CEL_EDGE",
+     "kind": "const",
+     "doc": "The least width of a tone's edge, in the units of what is cut (facing and share of light, both 0–1), so the edge is not stepped.",
+     "type": "0.02"
+    },
+    {
+     "name": "CEL_UNSURE",
+     "kind": "const",
+     "doc": "A blob with no flat side has no facing of its own; where nothing round a pixel has one, it is taken to face the light this much.",
+     "type": "0.75"
+    },
+    {
+     "name": "celTones",
+     "kind": "function",
+     "doc": "The tones at a point: `lit` is 0 in shade and 1 in the light, `bright` 1 where the third tone is. `facing` is how\nthe surface faces the light (0 away, 0.5 edge on, 1 toward) and `through` the share of the light that reaches it.",
+     "signatures": [
+      {
+       "code": "celTones(facing: number, through: number, look?: CelLook): { lit: number; bright: number }"
+      }
+     ]
+    },
+    {
+     "name": "celColor",
+     "kind": "function",
+     "doc": "A color (linear RGB) under the tones `celTones` gives: `shade` (linear) multiplies it in shade, and the brightest tone goes toward white.",
+     "signatures": [
+      {
+       "code": "celColor(rgb: ArrayLike<number>, tones: { lit: number; bright: number }, shade: ArrayLike<number>, bright?: number): [number, number, number]"
+      }
+     ]
+    },
+    {
+     "name": "SHADOW_FAR",
+     "kind": "const",
+     "doc": "How many times the scene's size away the light's view of it is taken from: far enough that its shadows fall nearly side by side.",
+     "type": "6"
+    },
+    {
+     "name": "shadowView",
+     "kind": "function",
+     "doc": "Where to stand to see the scene as the light does, for a map of what the light reaches: a narrow view from\n`SHADOW_FAR` sizes away along the way to the light, round a ball that holds the scene. The ball's middle and size\nare rounded onto steps of their own, so a scene whose bounds wander as it moves keeps one view, and its shadows\nkeep their pixels. `fov` is in degrees.",
+     "signatures": [
+      {
+       "code": "shadowView(center: ArrayLike<number>, radius: number, from: ArrayLike<number>): { eye: [number, number, number]; target: [number, number, number]; up: [number, number, number]; fov: number; near: number; far: number; radius: number }"
+      }
+     ]
+    },
+    {
+     "name": "SAME_COLOR",
+     "kind": "const",
+     "doc": "Two colors of one part nearer than this in OKLab are gathered into one: the mottle of a painted surface, not a stripe.",
+     "type": "0.07"
+    },
+    {
+     "name": "gatherColors",
+     "kind": "function",
+     "doc": "Flat fills for a cel: each part's colors gathered into a few, so a mottled or textured surface becomes areas of one\ncolor and a stripe, a spot or a white chest stays its own. `color` holds a color a blob (sRGB, 0–1, three numbers\neach) and `partOf` each blob's part (left out, the blobs are one part); a part keeps at most `most` colors, and\nfewer where they are within `SAME_COLOR` of one another. The same blobs always give the same colors: the first\ncolor of a part is its commonest, and each next the one furthest from those chosen, before a few rounds settle them.\n\nWith `round` (where each blob is, three numbers each, and how far round it to look), a blob then takes the color most\nof its part's blobs within that reach have, twice over: speckle finer than the reach goes, and anything wider (a\nstripe, a patch, a checker) keeps its edge.",
+     "signatures": [
+      {
+       "code": "gatherColors(color: ArrayLike<number>, partOf?: ArrayLike<number>, most?: number, round?: { at: ArrayLike<number>; reach: number }): Float32Array"
       }
      ]
     }

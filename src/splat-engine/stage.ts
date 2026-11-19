@@ -17,6 +17,8 @@ import { boneLabel, boneShare, pickActors } from './pick.ts'
 import { lookColors, snapColors, type Frame, type PixelLook } from '../splat-core/pixel.ts'
 import { INK, type MarkLook, type OutlinePen } from '../splat-core/marks.ts'
 import { InkLines } from './inkLines.ts'
+import { CelPass } from './celPass.ts'
+import { CEL_FROM, type CelLook } from '../splat-core/cel.ts'
 import { GlyphPass } from './glyphPass.ts'
 import { glyphScale, glyphText, type GlyphLook } from '../splat-core/glyphs.ts'
 import { SplatLens } from './lens.ts'
@@ -272,11 +274,10 @@ export class Stage {
 
   private build(actor: Actor) {
     this.world = new SplatWorld([actor, ...this.extras], { mode: this.mode, lights: this.opts.lights, sort: this.sort, cleanCuts: this.opts.cleanCuts, shadowDensity: this.opts.shadowDensity })
-    if (this.opts.lights) this.world.setLights(this.lit.lights, this.lit.ambient)
     this.world.glowGain = this.glowGain
     this.world.lightEase = this.lightEase
     this.world.setFog(...this.fog)
-    this.world.setMarks(this.marks)
+    this.dress()
     this.world.cleanCuts = this.clean
     if (this.edits.length) this.world.setEdits(this.edits)
     this.scene.add(this.world)
@@ -524,6 +525,35 @@ export class Stage {
     this.invalidate()
   }
 
+  private cel?: CelPass
+  private celLook?: CelLook
+  /**
+   * Cel shading (splat-core/cel.ts), on a stage made with `lights`: every blob flat in its own color, the light cut
+   * into two or three tones with clean edges, shadows cast by what stands in the light's way, and an even outline.
+   * The look's light takes the place of the stage's lights and its fill the place of its marks while it is on; leave
+   * the look out to have them back. Kept for the next actor too. It shades the blobs' own colors, so it suits blobs
+   * that have no light baked into them. Not in pixel mode.
+   */
+  setCel(look?: CelLook) {
+    this.celLook = look
+    if (!look) { this.cel?.dispose(); this.cel = undefined }
+    else this.cel ??= new CelPass()
+    this.dress()
+    this.invalidate()
+  }
+
+  /** Hands the world what it is drawn with: cel shading's flat fill and one light, or the stage's own marks and lights. */
+  private dress() {
+    const world = this.world
+    if (!world) return
+    const cel = this.opts.lights ? this.celLook : undefined
+    world.cel = !!cel
+    world.setMarks(cel ? { kind: 'flat' } : this.marks)
+    if (!this.opts.lights) return
+    if (cel) world.setLights([{ direction: [...(cel.from ?? CEL_FROM)] as [number, number, number], color: [1, 1, 1] }], 1)
+    else world.setLights(this.lit.lights, this.lit.ambient)
+  }
+
   private glyphs?: GlyphPass
   private glyphLook?: GlyphLook
   /**
@@ -571,7 +601,7 @@ export class Stage {
    */
   setMarks(look?: MarkLook) {
     this.marks = look
-    this.world?.setMarks(look)
+    this.dress()
     this.invalidate()
   }
 
@@ -581,7 +611,7 @@ export class Stage {
    */
   setLights(lights: Light[], ambient: number | readonly [number, number, number] = 1) {
     this.lit = { lights, ambient }
-    this.world?.setLights(lights, ambient)
+    if (!this.celLook) this.world?.setLights(lights, ambient)
     this.invalidate()
   }
 
@@ -644,6 +674,13 @@ export class Stage {
       this.glyphs.setSize(x, y, glyphScale(this.glyphLook.size ?? 12, this.renderer.getPixelRatio()))
       this.glyphs.setLook(this.glyphLook, this.glyphLook.ink?.map(srgbToLinear))
       this.glyphs.render(this.renderer, this.scene, this.camera)
+      return
+    }
+    if (!this.pixel && this.cel && this.celLook && this.opts.lights) {
+      const { x, y } = this.target ? { x: this.target.width, y: this.target.height } : this.renderer.getDrawingBufferSize(this.buffer)
+      this.cel.setSize(x, y)
+      this.cel.setLook(this.celLook, this.renderer.getPixelRatio())
+      this.cel.render(this.renderer, this.scene, this.camera)
       return
     }
     if (!this.pixel && this.lines) {
@@ -889,7 +926,7 @@ export class Stage {
     // a sheet is the creature alone in its own colors: what stands with it is hidden, and live lights are put out
     const solid = this.extras.map((e) => e.blobs.opacity.slice(0, e.blobs.count))
     for (const e of this.extras) { e.blobs.opacity.fill(0, 0, e.blobs.count); world.recolor(e) }
-    if (this.opts.lights) { world.setLights([], 1); world.glowGain = 1 }
+    if (this.opts.lights) { world.cel = false; world.setMarks(this.marks); world.setLights([], 1); world.glowGain = 1 }
     try {
       const { bakeSheet } = await import('./bakeSheet.ts')
       // a sheet's frames are reshaped as they're drawn (and framed), each sent up whole, so the GPU never lags the CPU copy
@@ -899,7 +936,7 @@ export class Stage {
       this.baking = false
       if (this.floor) this.floor.visible = true
       this.extras.forEach((e, k) => { e.blobs.opacity.set(solid[k]); world.recolor(e) })
-      if (this.opts.lights) { world.setLights(this.lit.lights, this.lit.ambient); world.glowGain = this.glowGain }
+      if (this.opts.lights) { this.dress(); world.glowGain = this.glowGain }
       const next = this.queued
       this.queued = undefined
       if (next) this.setActor(next.actor, next.clip, next.extras)
@@ -919,6 +956,7 @@ export class Stage {
     this.lines?.dispose()
     this.glyphs?.dispose()
     this.lens?.dispose()
+    this.cel?.dispose()
     this.mirror?.dispose()
     this.target?.dispose()
     this.pixel?.dispose()

@@ -7,11 +7,15 @@
  * This file is the CPU twin of the engine's draw (`markOf` in splat-engine/engine.ts): change one, change both.
  */
 
-/** The kinds of mark: flat opaque dabs with bristle streaks, thicker dabs with ridges that catch light, a wash with a pen stroke along each blob, or hatching that is denser where it is darker. */
-export type MarkKind = 'gouache' | 'oil' | 'ink' | 'hatch'
+/**
+ * The kinds of mark: flat opaque dabs with bristle streaks, thicker dabs with ridges that catch light, a wash with a
+ * pen stroke along each blob, hatching that is denser where it is darker, or a whole disc of the blob's own color with
+ * no brushwork at all (`flat`: the fill under cel shading, where the discs of one surface close up into one color).
+ */
+export type MarkKind = 'gouache' | 'oil' | 'ink' | 'hatch' | 'flat'
 
 /** The kinds, in the order the GPU numbers them (from 1; 0 is no marks). */
-export const MARK_KINDS: readonly MarkKind[] = ['gouache', 'oil', 'ink', 'hatch']
+export const MARK_KINDS: readonly MarkKind[] = ['gouache', 'oil', 'ink', 'hatch', 'flat']
 
 /** How the blobs are drawn as marks. */
 export interface MarkLook {
@@ -54,6 +58,9 @@ export const MARK_CUT = 0.5
  * share of its own size, by its seed: which of two is on top is then a matter of the two blobs and never of the view.
  */
 export const MARK_LIFT = 0.35
+
+/** A `flat` mark is the blob's whole disc out to where a soft blob would have faded to this (the same disc as the engine's maps of parts and depth). */
+export const FLAT_CUT = 0.15
 
 /** A blob this opaque or more is solid paint (a mark's alpha is its cover times the blob's opacity times this, at most 1). */
 export const MARK_SOLID = 1.5
@@ -146,6 +153,8 @@ const luma = (c: ArrayLike<number>) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * 
  * blob's color (linear) and `seed` its own number, 0–1. `ink` and `paper` are linear too.
  */
 export function markAt(kind: MarkKind, u: number, v: number, seed: number, rgb: ArrayLike<number>, size = 1, ink: ArrayLike<number> = [0.01, 0.012, 0.025], paper: ArrayLike<number> = [0.91, 0.87, 0.77]): MarkSample {
+  // flat: all of the disc in the blob's own color, whatever the size
+  if (kind === 'flat') return { cover: Math.exp(-0.5 * (u * u + v * v)) >= FLAT_CUT ? 1 : 0, color: [rgb[0], rgb[1], rgb[2]] }
   const k = Math.min(MARK_MOST, Math.max(0.2, size))
   const s = streak(v / k, seed, 5)
   // a dab: a rounded slab whose ends are ragged, each bristle stopping where it ran dry
