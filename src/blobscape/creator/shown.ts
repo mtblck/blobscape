@@ -9,7 +9,7 @@ import { LIBRARY, SPLIT_SCENES, libraryProp, nameOf, openLand, openScene } from 
 
 /** What Scene Creator has open: a project (a land and props) and where it came from, or a scene that opens whole. */
 export type Opened =
-  | { kind: 'project'; from: { scene: string } | { land: string }; project: SceneProject }
+  | { kind: 'project'; from: { scene: string } | { land: string } | { saved: string }; project: SceneProject }
   | { kind: 'whole'; scene: string }
 
 /** One thing in the scene, as the list beside the picture names it. */
@@ -79,7 +79,15 @@ export function openingAsked(search: string): Opened {
 }
 
 /** The address's query for what is open. */
-export const queryFor = (o: Opened): [string, string] => (o.kind === 'whole' ? ['scene', o.scene] : 'scene' in o.from ? ['scene', o.from.scene] : ['land', o.from.land])
+export const queryFor = (o: Opened): [string, string] =>
+  o.kind === 'whole' ? ['scene', o.scene] : 'scene' in o.from ? ['scene', o.from.scene] : 'land' in o.from ? ['land', o.from.land] : ['project', o.from.saved]
+
+/** A short name for what is open, for file names: the scene's or land's id, or a saved project's name in plain letters. */
+export const nameFor = (o: Opened): string =>
+  o.kind === 'whole' ? o.scene : 'scene' in o.from ? o.from.scene : 'land' in o.from ? o.from.land : slug(o.project.name)
+
+/** A name in lowercase letters and digits joined by dashes, `scene` when nothing is left. */
+export const slug = (name: string): string => name.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/, '') || 'scene'
 
 /** What the page draws for what is open. */
 export function shownOf(o: Opened): Shown {

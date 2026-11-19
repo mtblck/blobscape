@@ -218,6 +218,53 @@ export function useExport(on: ExportOn) {
     }
   }
 
+  /**
+   * A small JPEG of the picture on show, its longer side `side` pixels, as a data address: Scene Creator's picture of a
+   * saved scene. Nothing is downloaded, and it gives nothing while an export runs or the view gives no picture.
+   */
+  const snapshot = async (side: number): Promise<string | undefined> => {
+    if (!stage || held.current) return
+    let unwatch: (() => void) | undefined
+    try {
+      let from: CanvasImageSource, W: number, H: number
+      if (pixels) {
+        const frames = await stage.pixelFrames()
+        if (!frames) return
+        const art = frames.art
+        const one = document.createElement('canvas')
+        one.width = W = art.width
+        one.height = H = art.height
+        one.getContext('2d')!.putImageData(new ImageData(new Uint8ClampedArray(art.data), W, H), 0, 0)
+        from = one
+      } else {
+        const cv = canvas.current!
+        W = cv.width
+        H = cv.height
+        let got: HTMLCanvasElement | undefined
+        unwatch = pictures(W, H, (sheet) => { got ??= sheet })
+        await stage.frame(stage.time)
+        if (!got) return
+        from = got
+      }
+      const k = side / Math.max(W, H)
+      const small = document.createElement('canvas')
+      small.width = Math.max(1, Math.round(W * k))
+      small.height = Math.max(1, Math.round(H * k))
+      const ctx = small.getContext('2d')!
+      // the art's own pixels stay square; a painted view is smoothed down
+      ctx.imageSmoothingEnabled = !pixels || k < 1
+      ctx.fillStyle = getComputedStyle(canvas.current!.parentElement!).backgroundColor || '#000'
+      ctx.fillRect(0, 0, small.width, small.height)
+      ctx.drawImage(from, 0, 0, small.width, small.height)
+      return small.toDataURL('image/jpeg', 0.8)
+    } catch (e) {
+      console.warn(e)
+      return
+    } finally {
+      unwatch?.()
+    }
+  }
+
   /** What an export saves and how big: an Export tab's choices, and the same ones in the full screen view's Export popup. */
   const choices = (inFull: boolean): ReactNode => (
     <div className="grid gap-3">
@@ -259,5 +306,5 @@ export function useExport(on: ExportOn) {
   /** The loop button's words: what it does, or how far it has got. */
   const label = (idle = 'Export the loop') => (recording === null ? idle : recording >= total ? 'Saving…' : `Frame ${recording} of ${total}…`)
 
-  return { held, recording, saving, note, setNote, busy: saving || recording !== null, record, recordPath, save, choices, label, fps, loopFrames }
+  return { held, recording, saving, note, setNote, busy: saving || recording !== null, record, recordPath, save, snapshot, choices, label, fps, loopFrames }
 }
