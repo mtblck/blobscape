@@ -14,7 +14,7 @@ import type { CreatureStage } from './creature/stage.ts'
 import { TAB_SECTIONS, Workbench } from '../shared/Workbench.tsx'
 import { about, extent, keepOnly } from './scan/clean.ts'
 import { sampleScan } from './scan/sample.ts'
-import { GROUND, LOOKS, PAPERS, css, type LookId } from './brushLooks.ts'
+import { GROUND, LOOKS, PAPERS, SCREEN, css, isMark, type LookId } from './brushLooks.ts'
 import { ColliderOverlay, ColliderPanel } from './scan/Colliders.tsx'
 import { ColliderFileError, guessColliders, pickCollider, placed, readColliderGlb, writeColliderGlb, type Collider } from '../splat-engine/colliders.ts'
 import { trimEdits, DEFAULT_CLEAN, LIGHTS, UNTURNED, autoOrient, cleaner, finish, finishing, lightsFor, preview, stillActor, tip, working, type Clean, type LightId, type Orient } from './scan/studio.ts'
@@ -277,7 +277,8 @@ export function ScanStudio() {
 
   // the two pen looks get their outlines, as on Brush and Ink
   useEffect(() => {
-    stage?.setMarks(drawnAs === 'blobs' ? undefined : { kind: drawnAs, soft: true })
+    stage?.setMarks(isMark(drawnAs) ? { kind: drawnAs, soft: true } : undefined)
+    stage?.setGlyphs(drawnAs === 'ascii' ? {} : undefined)
     stage?.setOutline(drawnAs === 'ink' || drawnAs === 'hatch' ? {} : undefined)
   }, [stage, drawnAs])
 
@@ -318,7 +319,7 @@ export function ScanStudio() {
             onDrop={(ev) => { ev.preventDefault(); setDragOver(false); const f = ev.dataTransfer.files[0]; if (f) void openFile(f) }}
           >
               {/* what the drawn looks stand on: paper for the pen, a dark ground for paint */}
-              {drawnAs !== 'blobs' && <div aria-hidden className="absolute inset-0" style={{ background: drawnAs === 'ink' || drawnAs === 'hatch' ? css(PAPERS[0].paper) : GROUND }} />}
+              {drawnAs !== 'blobs' && <div aria-hidden className="absolute inset-0" style={{ background: drawnAs === 'ascii' ? css(SCREEN) : drawnAs === 'ink' || drawnAs === 'hatch' ? css(PAPERS[0].paper) : GROUND }} />}
               <canvas
                 ref={canvas}
                 role="application"
@@ -435,7 +436,7 @@ export function ScanStudio() {
                   <div className="flex flex-wrap gap-1.5" data-testid="scan-looks">
                     {[LOOKS[LOOKS.length - 1], ...LOOKS.slice(0, -1)].map((l) => <Chip key={l.id} active={drawnAs === l.id} onClick={() => setDrawnAs(l.id)}>{l.label}</Chip>)}
                   </div>
-                  <p className="mt-1.5 text-xs text-ink-faint">{drawnAs === 'blobs' ? 'Or as brush marks and pen strokes, one for each blob. Only the view changes: the file keeps its blobs.' : `${LOOKS.find((l) => l.id === drawnAs)!.note} Only the view changes: the file keeps its blobs.`}</p>
+                  <p className="mt-1.5 text-xs text-ink-faint">{drawnAs === 'blobs' ? 'Or as brush marks, pen strokes or characters. Only the view changes: the file keeps its blobs.' : `${LOOKS.find((l) => l.id === drawnAs)!.note} Only the view changes: the file keeps its blobs.`}</p>
                 </Field>
                 {light !== 'scanned' && <>
                   <Slider label="Light from" value={angle} min={0} max={359} step={1} onChange={setAngle} format={(v) => `${v}°`} />

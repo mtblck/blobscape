@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Orbit } from '../splat-core/view.ts'
 import type { MarkLook } from '../splat-core/marks.ts'
+import type { GlyphLook } from '../splat-core/glyphs.ts'
 import { recordClip } from '../splat-engine/glb.ts'
 import type { PointLight } from '../splat-engine/engine.ts'
 import type { Skeleton } from '../splat-engine/rig.ts'
@@ -13,13 +14,13 @@ import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitD
 import type { Actor, CreatureStage } from './creature/stage.ts'
 import { DETAIL } from './diorama/scene.ts'
 import { DIORAMAS } from './diorama/scenes.ts'
-import { GROUND, LOOKS, PAPERS, css, type LookId } from './brushLooks.ts'
+import { GROUND, LOOKS, PAPERS, SCREEN, css, isMark, type LookId } from './brushLooks.ts'
 import { href } from './routes.ts'
 import { sampleScan } from './scan/sample.ts'
 import { DEFAULT_CLEAN, UNTURNED, autoOrient, cleanMasks, finish, stillActor, working } from './scan/studio.ts'
 
 declare global {
-  interface Window { __brush?: { stage: CreatureStage; blobs: () => number; subject: string; look: string } }
+  interface Window { __brush?: { stage: CreatureStage; blobs: () => number; subject: string; look: string; text: () => Promise<string | undefined> } }
 }
 
 /** What is on show: how to build it, and how it moves. */
@@ -67,6 +68,9 @@ const SUBJECTS: Subject[] = [
   },
 ]
 
+/** On the dark screen characters are thin lines of light and read fainter than their share of ink, so tones are raised by this. */
+const SCREEN_GAIN = 1.5
+
 const params = () => new URLSearchParams(typeof location === 'undefined' ? '' : location.search)
 const media = (q: string) => typeof window !== 'undefined' && window.matchMedia(q).matches
 
@@ -91,6 +95,12 @@ export function BrushInk() {
   const [outlined, setOutlined] = useState<boolean | null>(() => (params().get('outline') === '1' ? true : params().get('outline') === '0' ? false : null))
   const [pen, setPen] = useState(1.5)
   const [paper, setPaper] = useState(PAPERS[0].id)
+  // ASCII: how tall a character is, whether each takes the color of what it stands for, and strokes along edges
+  const [letter, setLetter] = useState(12)
+  const [own, setOwn] = useState(true)
+  const [strokes, setStrokes] = useState(true)
+  const [weight, setWeight] = useState(1)
+  const [copied, setCopied] = useState('')
   const sub = SUBJECTS.find((s) => s.id === subject)!
   const [orbit, setOrbit] = useState<Orbit>(sub.orbit)
   const [built, setBuilt] = useState<{ id: string; count: number }>()
@@ -126,9 +136,16 @@ export function BrushInk() {
   }, [stage, subject, coarse])
 
   const sheet = PAPERS.find((p) => p.id === paper)!
-  const marks = useMemo<MarkLook | undefined>(() => (look === 'blobs' ? undefined : { kind: look, size, ink: sheet.ink, paper: sheet.paper, soft: sub.soft }), [look, size, sheet, sub.soft])
+  const marks = useMemo<MarkLook | undefined>(() => (isMark(look) ? { kind: look, size, ink: sheet.ink, paper: sheet.paper, soft: sub.soft } : undefined), [look, size, sheet, sub.soft])
   useEffect(() => { stage?.setMarks(marks) }, [stage, marks, built])
-  const outline = outlined ?? (look === 'ink' || look === 'hatch')
+  const ascii = look === 'ascii'
+  const lum = (c: readonly number[]) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+  // off screen a frame is drawn only when asked for, and must not depend on the one before (`?steady=` says otherwise, for the checks)
+  const held = useMemo(() => { const v = params().get('steady'); return v !== null && Number.isFinite(+v) ? +v : offscreen ? 0 : undefined }, [offscreen])
+  const glyphs = useMemo<GlyphLook | undefined>(() => (ascii ? { size: letter, ink: own ? undefined : sheet.ink, light: !own && lum(sheet.paper) > lum(sheet.ink), edges: strokes, gain: weight * (own ? SCREEN_GAIN : 1), steady: held } : undefined), [ascii, letter, own, sheet, strokes, weight, held])
+  useEffect(() => { stage?.setGlyphs(glyphs) }, [stage, glyphs])
+  useEffect(() => { setCopied('') }, [look, subject])
+  const outline = !ascii && (outlined ?? (look === 'ink' || look === 'hatch'))
   useEffect(() => { stage?.setOutline(outline ? { width: pen, ink: look === 'ink' || look === 'hatch' ? sheet.ink : undefined } : undefined) }, [stage, outline, pen, look, sheet])
   useEffect(() => { if (stage) stage.playing = playing }, [stage, playing])
   useEffect(() => { if (stage) { stage.orbit = orbit; stage.invalidate() } }, [stage, orbit])
@@ -144,7 +161,7 @@ export function BrushInk() {
   // For verify: the stage, without clicking
   useEffect(() => {
     if (!stage || !built) return
-    window.__brush = { stage, blobs: () => stage.blobCount, subject: built.id, look }
+    window.__brush = { stage, blobs: () => stage.blobCount, subject: built.id, look, text: () => stage.glyphText() }
     return () => { delete window.__brush }
   }, [stage, built, look])
 
@@ -162,19 +179,19 @@ export function BrushInk() {
       <header className="flex flex-wrap items-end justify-between gap-x-8 gap-y-2 pt-4 pb-6">
         <h1 ref={h1} tabIndex={-1} className="font-display text-4xl outline-none sm:text-5xl">Brush and Ink</h1>
         <p className="max-w-xl text-lg text-ink-muted">
-          The same blobs, drawn as brush marks or pen strokes in place of soft dots. Every mark belongs to one blob and takes its
+          The same blobs, drawn as brush marks, pen strokes or plain characters in place of soft dots. Every mark belongs to one blob and takes its
           shape and direction from it, so the painting holds still as you turn it. Drag the view and watch the strokes stay put.
         </p>
       </header>
       <Workbench
         viewLabel="The picture"
         view={<>
-          <div aria-hidden className="absolute inset-0" style={{ background: look === 'blobs' ? undefined : drawnOn ? css(sheet.paper) : GROUND }} data-testid="brush-ground" />
+          <div aria-hidden className="absolute inset-0" style={{ background: look === 'blobs' ? undefined : ascii ? css(own ? SCREEN : sheet.paper) : drawnOn ? css(sheet.paper) : GROUND }} data-testid="brush-ground" />
           <canvas
             ref={canvas}
             role="application"
             aria-roledescription="3D view"
-            aria-label={`${sub.about}, drawn ${look === 'blobs' ? 'as soft blobs' : `in ${lookNow.label.toLowerCase()}`}. Drag or use the arrow keys to orbit; scroll, pinch or press plus and minus to zoom.`}
+            aria-label={`${sub.about}, drawn ${look === 'blobs' ? 'as soft blobs' : ascii ? 'as a grid of characters' : `in ${lookNow.label.toLowerCase()}`}. Drag or use the arrow keys to orbit; scroll, pinch or press plus and minus to zoom.`}
             tabIndex={0}
             data-testid="brush-view"
             className="absolute inset-0 h-full w-full cursor-grab touch-none outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset active:cursor-grabbing"
@@ -197,12 +214,12 @@ export function BrushInk() {
             }}
           />
           {waiting && <LoadingMark testid="brush-loading" />}
-          <p role="status" className="sr-only">{waiting ? (stage ? `Making the ${sub.label.toLowerCase()}…` : 'Starting the splat engine…') : `${sub.label}, ${lookNow.label.toLowerCase()}.`}</p>
+          <p role="status" className="sr-only">{waiting ? (stage ? `Making the ${sub.label.toLowerCase()}…` : 'Starting the splat engine…') : `${sub.label}, ${ascii ? 'as characters' : lookNow.label.toLowerCase()}.`}</p>
           {failed && <div role="alert" className="absolute inset-4 grid place-items-center text-center text-sm text-ink">{failed}</div>}
           <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => setOrbit(sub.orbit)} />
         </>}
         status={<>
-          <span>{built?.id === subject ? <><span className="tabular-nums text-ink" data-testid="brush-blobs">{built.count.toLocaleString()}</span> blobs from {sub.from}{look === 'blobs' ? '.' : ', one mark each.'}</> : 'Making it…'}</span>
+          <span>{built?.id === subject ? <><span className="tabular-nums text-ink" data-testid="brush-blobs">{built.count.toLocaleString()}</span> blobs from {sub.from}{look === 'blobs' ? '.' : ascii ? ', read off as characters.' : ', one mark each.'}</> : 'Making it…'}</span>
           <span>{lookNow.label} on {backend}</span>
         </>}
         tabsLabel="Options"
@@ -216,17 +233,48 @@ export function BrushInk() {
                   </div>
                   <p className="mt-1.5 text-xs text-ink-faint">{lookNow.note}</p>
                 </Field>
-                {look !== 'blobs' && (
+                {isMark(look) && (
                   <Slider label="Mark size" value={size} min={0.5} max={1.3} step={0.05} onChange={setSize} format={(v) => `${Math.round(v * 100)}%`} hint="Smaller marks leave gaps between them; bigger ones overlap more." />
                 )}
-                <div data-testid="brush-outline">
-                  <Toggle label="Outlines" checked={outline} onChange={setOutlined} />
-                  <p className="mt-1.5 text-xs text-ink-faint">A pen line round the subject, where one thing stands in front of another, and between its parts. Heavier against dark things, and it lifts off here and there against light ones.</p>
-                </div>
+                {ascii && (
+                  <Slider label="Character size" value={letter} min={8} max={24} step={2} onChange={setLetter} format={(v) => `${v} px`} hint="How tall a character is. Smaller ones show more of the picture; bigger ones are easier to read." />
+                )}
+                {ascii && (
+                  <Slider label="Weight" value={weight} min={0.5} max={2} step={0.1} onChange={setWeight} format={(v) => `${Math.round(v * 100)}%`} hint="Over 100% every cell takes a heavier character than its tone asks for, which suits a dim scene." />
+                )}
+                {ascii && (
+                  <div data-testid="brush-strokes">
+                    <Toggle label="Strokes along edges" checked={strokes} onChange={setStrokes} />
+                    <p className="mt-1.5 text-xs text-ink-faint">Where an edge runs through a cell it gets | _ / or \ by the way the edge runs, in place of a character for its tone.</p>
+                  </div>
+                )}
+                {ascii && (
+                  <div data-testid="brush-own">
+                    <Toggle label="Their own colors" checked={own} onChange={setOwn} />
+                    <p className="mt-1.5 text-xs text-ink-faint">Each character takes the color of what it stands for, on a dark screen. Off, they are one ink on paper.</p>
+                  </div>
+                )}
+                {ascii && (
+                  <div>
+                    <Button small onClick={() => {
+                      void stage?.glyphText().then((text) => {
+                        if (!text) { setCopied('Nothing to copy yet.'); return }
+                        return navigator.clipboard.writeText(text).then(() => setCopied(`Copied ${text.split('\n').length} lines of text.`))
+                      }).catch(() => setCopied('This browser would not let the page copy.'))
+                    }}>Copy as text</Button>
+                    <p role="status" className="mt-1.5 text-xs text-ink-faint" data-testid="brush-copied">{copied || 'The picture as it stands now, in plain characters: paste it anywhere with a fixed-width font.'}</p>
+                  </div>
+                )}
+                {!ascii && (
+                  <div data-testid="brush-outline">
+                    <Toggle label="Outlines" checked={outline} onChange={setOutlined} />
+                    <p className="mt-1.5 text-xs text-ink-faint">A pen line round the subject, where one thing stands in front of another, and between its parts. Heavier against dark things, and it lifts off here and there against light ones.</p>
+                  </div>
+                )}
                 {outline && (
                   <Slider label="Pen width" value={pen} min={0.75} max={3} step={0.25} onChange={setPen} format={(v) => `${v} px`} />
                 )}
-                {drawnOn && (
+                {(drawnOn || (ascii && !own)) && (
                   <Field label="Paper">
                     <div className="flex flex-wrap gap-1.5">
                       {PAPERS.map((p) => <Chip key={p.id} active={paper === p.id} onClick={() => setPaper(p.id)}>{p.label}</Chip>)}
@@ -276,6 +324,13 @@ export function BrushInk() {
             a different look, and it needs nothing but blobs, so it works on a scan as well as on a made scene. Marks are opaque, like
             paint, and drawn from the back to the front, so near things cover far ones. Hatching gets denser as a blob gets darker,
             which is how a pen makes a tone.
+          </p>
+          <p>
+            ASCII is the odd one out. Characters only read standing upright in rows, so they can't turn with the blobs: the view is
+            cut into a grid of cells that stays put on the screen, and each cell gets the character whose ink matches how much there
+            is to show in it. Where an edge runs through a cell (the picture ends, one thing stands in front of another, two parts
+            meet) it gets a stroke along the edge. A cell keeps its character until another is clearly a better fit, so the text
+            doesn't flicker as the view turns, and Copy as text gives you the picture in plain characters.
           </p>
         </div>
       </section>

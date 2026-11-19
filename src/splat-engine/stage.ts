@@ -17,6 +17,8 @@ import { boneLabel, boneShare, pickActors } from './pick.ts'
 import { lookColors, snapColors, type Frame, type PixelLook } from '../splat-core/pixel.ts'
 import { INK, type MarkLook, type OutlinePen } from '../splat-core/marks.ts'
 import { InkLines } from './inkLines.ts'
+import { GlyphPass } from './glyphPass.ts'
+import { glyphScale, glyphText, type GlyphLook } from '../splat-core/glyphs.ts'
 import { SplatLens } from './lens.ts'
 import { SplatMirror } from './mirror.ts'
 import type { MirrorImage, MirrorPlane } from './reflect.ts'
@@ -246,6 +248,7 @@ export class Stage {
     if (this.baking) { this.queued = { actor, clip, extras }; return }
     this.extras = extras
     this.pixel?.reset()
+    this.glyphs?.forget()
     if (this.world) { this.scene.remove(this.world); this.world.dispose() }
     if (this.rig) { this.scene.remove(this.rig); this.rig.dispose() }
     // the engine reshapes the blobs for the morphs (on the GPU where it can), so the blobs handed in stay as built
@@ -521,6 +524,32 @@ export class Stage {
     this.invalidate()
   }
 
+  private glyphs?: GlyphPass
+  private glyphLook?: GlyphLook
+  /**
+   * Draws the picture as characters (glyphPass.ts): a grid of cells fixed on the screen, each with the character whose
+   * ink matches how much of the cell there is to show, or a stroke along an edge that runs through it. Leave the look
+   * out to stop. Not in pixel mode; outlines and the lens wait while it is on.
+   */
+  setGlyphs(look?: GlyphLook) {
+    this.glyphLook = look
+    if (!look) { this.glyphs?.dispose(); this.glyphs = undefined }
+    else this.glyphs ??= new GlyphPass()
+    this.invalidate()
+  }
+
+  /** The picture as text, a line a row of cells, while it is drawn as characters (`setGlyphs`) and once a frame has been. */
+  async glyphText(): Promise<string | undefined> {
+    const pass = this.glyphs
+    if (!pass || this.baking || pass.grid.width < 2) return
+    const { width, height } = pass.grid
+    const px = await this.renderer.readRenderTargetPixelsAsync(pass.grid, 0, 0, width, height) as Uint8Array
+    // WebGPU reads rows top-down, WebGL bottom-up
+    const glyphs = new Uint8Array(width * height)
+    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) glyphs[y * width + x] = px[((this.backend === 'webgl' ? height - 1 - y : y) * width + x) * 4 + 3]
+    return glyphText(glyphs, width)
+  }
+
   private lens?: SplatLens
   private lensLook?: OpticsLook
   /**
@@ -610,6 +639,13 @@ export class Stage {
   private get pixelScale() { return Math.max(1, Math.round(this.pixelSize * this.renderer.getPixelRatio())) }
 
   private draw() {
+    if (!this.pixel && this.glyphs && this.glyphLook) {
+      const { x, y } = this.target ? { x: this.target.width, y: this.target.height } : this.renderer.getDrawingBufferSize(this.buffer)
+      this.glyphs.setSize(x, y, glyphScale(this.glyphLook.size ?? 12, this.renderer.getPixelRatio()))
+      this.glyphs.setLook(this.glyphLook, this.glyphLook.ink?.map(srgbToLinear))
+      this.glyphs.render(this.renderer, this.scene, this.camera)
+      return
+    }
     if (!this.pixel && this.lines) {
       const { x, y } = this.target ? { x: this.target.width, y: this.target.height } : this.renderer.getDrawingBufferSize(this.buffer)
       this.lines.setSize(x, y)
@@ -881,6 +917,7 @@ export class Stage {
     this.world?.dispose()
     this.rig?.dispose()
     this.lines?.dispose()
+    this.glyphs?.dispose()
     this.lens?.dispose()
     this.mirror?.dispose()
     this.target?.dispose()
