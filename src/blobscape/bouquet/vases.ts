@@ -196,6 +196,9 @@ export function makeVase(m: Maker, kind: VaseKind, seed: number): VaseInfo {
     // a top hat for a mouth
     m.newPart()
     m.lathe([[0.11, 0.765], [0.2, 0.765], [0.205, 0.775], [0.2, 0.785], [0.135, 0.785], [0.135, 0.92], [0.122, 0.92]], (_a, _t, p) => (p[1] > 0.79 && p[1] < 0.825 ? scarf : coal), { shine: 0.25 })
+    // a second layer through the brim and inside the crown: one layer of soft blobs lets the head and the far side of the band show through (Matt saw through the hat in the Soft look)
+    m.lathe([[0.125, 0.775], [0.198, 0.775]], () => coal, {})
+    m.lathe([[0.125, 0.78], [0.125, 0.915]], (_a, _t, p) => (p[1] > 0.79 && p[1] < 0.825 ? scarf : coal), {})
     plug(m, 0.125, 0.92, coal)
     // the face looks along +z
     m.newPart()
