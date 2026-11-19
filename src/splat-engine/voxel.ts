@@ -863,6 +863,19 @@ export function stepper(steps: NonNullable<VoxelLight['steps']>, light: VoxelLig
   }
 }
 
+let plain = false
+/**
+ * Runs `make` with every `buildVoxels` inside it leaving the light out: each blob keeps its paint (with its ink, cover
+ * and grime, which are paint), and no sun, shade, cast shadow, ramp, crevice, wear, bounce or beam is baked into it.
+ * For a look that lights the blobs itself, such as cel shading (`Stage.setCel`), which would otherwise shade a shadow
+ * twice. It reaches builders that take no light of their own to set, such as a creature's `make`.
+ */
+export function unlit<T>(make: () => T): T {
+  const was = plain
+  plain = true
+  try { return make() } finally { plain = was }
+}
+
 /**
  * Builds the scene's blobs, skin and skeleton. Cells sit on one grid shared by
  * every part (multiples of `spacing` from the origin), so parts line up, and
@@ -870,7 +883,7 @@ export function stepper(steps: NonNullable<VoxelLight['steps']>, light: VoxelLig
  */
 export function buildVoxels(spec: VoxelSpec): Built {
   const s = spec.spacing
-  const light = { ...DEFAULT_LIGHT, ...spec.light }
+  const light: VoxelLight = { ...DEFAULT_LIGHT, ...spec.light, ...(plain ? { ambient: 1, shadow: 0, ramp: 0, crevice: 0, wear: 0, bounce: 0, steps: undefined } : {}) }
   const L = norm(light.dir)
   const skeleton = new Skeleton(spec.bones)
   let cutCount = 0
@@ -880,7 +893,7 @@ export function buildVoxels(spec: VoxelSpec): Built {
   const far = Math.hypot(...[0, 1, 2].map((i) => Math.max(...spec.parts.map((p) => p.shape.max[i])) - Math.min(...spec.parts.map((p) => p.shape.min[i]))))
 
   const disc = spec.disc ?? 0.55
-  const beams = (spec.beams ?? []).map((b) => {
+  const beams = (plain ? [] : spec.beams ?? []).map((b) => {
     const axis: Vec3 = [b.to[0] - b.from[0], b.to[1] - b.from[1], b.to[2] - b.from[2]]
     return { ...b, axis, len: Math.hypot(...axis) || 1, dir: norm(axis) }
   })
@@ -986,7 +999,7 @@ export function buildVoxels(spec: VoxelSpec): Built {
       let color = base
       if (!part.glow) {
         const facing = Math.max(0, n[0] * L[0] + n[1] * L[1] + n[2] * L[2])
-        const sun = facing > 0 ? 1 - light.shadow * (1 - sunlight(casters, [x + n[0] * s, y + n[1] * s, z + n[2] * s], L, s, far)) : 0
+        const sun = facing > 0 ? (light.shadow > 0 ? 1 - light.shadow * (1 - sunlight(casters, [x + n[0] * s, y + n[1] * s, z + n[2] * s], L, s, far)) : 1) : 0
         let ambient = light.ambient
         let opened: number | undefined
         // looked at from the surface itself, not from the cell's middle, so a flat face is fully open

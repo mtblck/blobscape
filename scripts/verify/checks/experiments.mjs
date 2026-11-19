@@ -669,7 +669,7 @@ export default [
   })),
   {
     name: 'brush-and-ink',
-    about: 'Brush and Ink: each look redraws the same blobs as marks on both backends, ASCII as a grid of characters, a frame drawn twice is the same, the scan draws too',
+    about: 'Brush and Ink: each look redraws the same blobs as marks on both backends, cel shading cuts the light into flat tones, ASCII as a grid of characters, a frame drawn twice is the same, the scan draws too',
     entries: ['src/blobscape/BrushInk.tsx'],
     async run({ shots, join, fails, ok, open, tabClick, axe }) {
       const read = (page, t = 0.4) => page.evaluate(async (t) => {
@@ -723,7 +723,27 @@ export default [
         if (!(differ(ascii, blobs) > 0.01) || differ(ascii, asciiAgain, 0) !== 0 || !(rows.length > 15 && chars.length > 300 && heavy > 5 && strokes > 20 && strokes < chars.length * 0.6) || !(lit > 0.005 && lit < solid(blobs)) || !/rgb\((1?[0-9]), (1?[0-9]), (1?[0-9])\)/.test(screen)) fails.push(`brush and ink on ${backend}: ASCII: ${differ(ascii, blobs)} of the view changed from blobs, twice differs ${differ(ascii, asciiAgain, 0)}, ${rows.length} lines, ${chars.length} characters (${heavy} heavy, ${strokes} strokes), ${lit} of the view lit against ${solid(blobs)} as blobs, screen ${screen}`)
         else ok(`brush and ink on ${backend}: ASCII draws the fox as ${chars.length} characters in ${rows.length} lines (${strokes} of them strokes along edges), the same when drawn twice`)
         await pick(k.page, 'Blobs', 'blobs')
-        pictures[backend] = { gouache, hatch, ink, text }
+        // cel shading: the fox is cut again without its baked light, lit live and cut into tones
+        await pick(k.page, 'Cel shading', 'cel')
+        const celUp = await k.page.waitForFunction(() => window.__brush?.look === 'cel' && window.__brush.plain, null, { timeout: 120000 }).then(() => true, () => false)
+        let cel
+        if (!celUp) fails.push(`brush and ink on ${backend}: the fox was never cut again for cel shading`)
+        else {
+          cel = await read(k.page)
+          const celAgain = await read(k.page)
+          await tabClick(k.page.getByTestId('brush-cel').getByRole('button', { name: 'Three tones', exact: true }))
+          const three = await read(k.page)
+          await tabClick(k.page.getByTestId('brush-cel').getByRole('button', { name: 'Light and shade', exact: true }))
+          // flat color: the share of solid pixels the same as the one to their right (blobs fade into one another, a cel doesn't)
+          const flat = (a, w) => { let same = 0, n = 0; for (let i = 0; i + 4 < a.length; i += 4) { if ((i / 4) % w === w - 1 || a[i + 3] < 250 || a[i + 7] < 250) continue; n++; if (a[i] === a[i + 4] && a[i + 1] === a[i + 5] && a[i + 2] === a[i + 6]) same++ } return n ? same / n : 0 }
+          const w = await k.page.getByTestId('brush-view').evaluate((cv) => cv.width)
+          const c = { same: differ(cel, celAgain, 0), cover: solid(cel), fromBlobs: differ(cel, blobs), three: differ(three, cel), flat: flat(cel, w), flatBlobs: flat(blobs, w) }
+          if (c.same !== 0 || !(c.cover > 0.03) || !(c.fromBlobs > 0.01) || !(c.three > 0.0005) || !(c.flat > 0.8 && c.flat > c.flatBlobs + 0.2)) fails.push(`brush and ink on ${backend}: cel shading ${JSON.stringify(c)}`)
+          else ok(`brush and ink on ${backend}: cel shading draws the fox in flat tones (${(c.flat * 100).toFixed(0)}% of its pixels match their neighbor, ${(c.flatBlobs * 100).toFixed(0)}% as blobs), a third tone changes ${(c.three * 100).toFixed(2)}% of the view, and a frame drawn twice is the same`)
+          if (backend === 'webgpu') await k.page.screenshot({ path: join(shots, 'blobscape-brush-cel.png') })
+        }
+        await pick(k.page, 'Blobs', 'blobs')
+        pictures[backend] = { gouache, hatch, ink, text, cel }
         const m = { backend: got, same: differ(gouache, again, 0), cover: solid(gouache), blobs: solid(blobs), paint: differ(gouache, blobs), oil: differ(oil, gouache), ink: differ(ink, gouache), hatch: differ(hatch, ink), paper }
         // marks are opaque where soft dots fade, so the painted fox is at least as solid; each look is a different picture; a frame drawn twice is the same frame
         if (m.backend !== backend || m.same !== 0 || !(m.cover > 0.03 && m.cover >= m.blobs * 0.9) || !(m.paint > 0.01 && m.oil > 0.003 && m.ink > 0.01 && m.hatch > 0.005) || !/rgb\(2[0-9]{2}, 2[0-9]{2}, 2[0-9]{2}\)/.test(m.paper)) fails.push(`brush and ink on ${backend}: ${JSON.stringify(m)}`)
@@ -755,6 +775,11 @@ export default [
         const g = differ(pictures.webgpu.gouache, pictures.webgl.gouache, 90), h = differ(pictures.webgpu.hatch, pictures.webgl.hatch, 90), n = differ(pictures.webgpu.ink, pictures.webgl.ink, 90)
         if (!(g < 0.02 && h < 0.02 && n < 0.02)) fails.push(`brush and ink: WebGPU and WebGL differ at ${(g * 100).toFixed(2)}% of pixels in gouache, ${(h * 100).toFixed(2)}% hatched, ${(n * 100).toFixed(2)}% in ink and wash with its outlines`)
         else ok(`brush and ink: WebGPU and WebGL draw the same marks and outlines (${(g * 100).toFixed(2)}% of pixels differ in gouache, ${(h * 100).toFixed(2)}% hatched, ${(n * 100).toFixed(2)}% in ink and wash)`)
+        if (pictures.webgpu.cel && pictures.webgl.cel) {
+          const c = differ(pictures.webgpu.cel, pictures.webgl.cel, 90)
+          if (!(c < 0.03)) fails.push(`brush and ink: WebGPU and WebGL differ at ${(c * 100).toFixed(2)}% of pixels in cel shading`)
+          else ok(`brush and ink: WebGPU and WebGL cut the same tones in cel shading (${(c * 100).toFixed(2)}% of pixels differ)`)
+        }
       }
       // and the same characters: a cell here and there may fall the other side of a line
       if (pictures.webgpu?.text && pictures.webgl?.text) {
