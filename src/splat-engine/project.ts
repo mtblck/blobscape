@@ -228,6 +228,11 @@ export function pickedParts(doc: SceneDoc, pick: PropPick): number[] {
   return [...out].sort((a, b) => a - b)
 }
 
+/** The picks a description marks itself: one prop for each bone with a `prop` name, taking what rides on it. */
+export function markedPicks(doc: SceneDoc): PropPick[] {
+  return (doc.bones ?? []).filter((b) => b.prop).map((b) => ({ name: b.prop!, bones: [b.name] }))
+}
+
 /** The scene with only these parts, the bones they ride (and those bones' parents), and the moves on those bones. */
 function keepOnly(doc: SceneDoc, parts: number[]): SceneDoc {
   const ps = parts.map((i) => doc.parts[i])

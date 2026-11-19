@@ -200,6 +200,12 @@ export interface BoneDoc {
   at: Vec3
   /** Another bone it rides on (named earlier in the list). */
   parent?: string
+  /**
+   * Marks a thing of its own (a mill, a tree, a sheep): its name as a prop in Scene Creator. The parts on this bone and
+   * on the bones under it are the prop, and the scene comes apart into props by these marks with nothing picked by
+   * hand. Not on a bone under another marked one.
+   */
+  prop?: string
 }
 
 /** One part of a scene: a shape, its paint and the bone that carries it. */
@@ -647,6 +653,8 @@ export function checkScene(doc: unknown): string[] {
   }
 
   const names = new Set<string>()
+  // bones marked as props, and those riding on them
+  const marked = new Set<string>(), propNames = new Set<string>()
   if (doc.bones !== undefined) {
     if (!Array.isArray(doc.bones) || doc.bones.length > MAX_BONES) bad('bones', `must be a list of at most ${MAX_BONES}`)
     else doc.bones.forEach((b: unknown, i: number) => {
@@ -656,7 +664,16 @@ export function checkScene(doc: unknown): string[] {
       else if (names.has(b.name)) bad(`${at}.name`, `'${b.name}' is used twice`)
       vec(b.at, `${at}.at`)
       if (b.parent !== undefined && !names.has(b.parent as string)) bad(`${at}.parent`, `${show(b.parent)} is not a bone named earlier in the list`)
-      if (typeof b.name === 'string') names.add(b.name)
+      if (b.prop !== undefined) {
+        if (typeof b.prop !== 'string' || !b.prop.trim() || b.prop.length > 40) bad(`${at}.prop`, 'must be a name of at most 40 characters')
+        else if (propNames.has(b.prop)) bad(`${at}.prop`, `'${b.prop}' names two props`)
+        else propNames.add(b.prop)
+        if (typeof b.parent === 'string' && marked.has(b.parent)) bad(`${at}.prop`, `rides on '${b.parent}', which is a prop already: mark one or the other`)
+      }
+      if (typeof b.name === 'string') {
+        names.add(b.name)
+        if (b.prop !== undefined || (typeof b.parent === 'string' && marked.has(b.parent))) marked.add(b.name)
+      }
     })
   }
   const bone = (v: unknown, at: string) => { if (typeof v !== 'string' || !names.has(v)) bad(at, `${show(v)} is not one of the bones`) }

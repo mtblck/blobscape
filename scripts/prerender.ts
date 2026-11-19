@@ -164,6 +164,8 @@ function render(template: string, route: Route): string {
     html = html.replace(/\s*<link rel="canonical"[^>]*>/, '').replace(/\s*<meta property="og:url"[^>]*>/, '')
     html = html.replace('</title>', '</title>\n    <meta name="robots" content="noindex" />')
   }
+  // a page still being built is there to look at but not to be found yet
+  if (UNLISTED.has(route.page)) html = html.replace('</title>', '</title>\n    <meta name="robots" content="noindex" />')
   const data = structured(route)
   if (data.length) {
     // JSON-LD is data, so the CSP's script-src doesn't apply; escape < so it can't close the tag
@@ -189,6 +191,8 @@ function write(path: string, html: string) {
 // Said above a page whose view and controls do nothing without scripts (classes the app's own pages use, so they are in the CSS)
 const NO_SCRIPT = '<noscript><p class="px-4 py-2 text-center text-sm text-ink-muted">This page draws live blobs in your browser, so it needs JavaScript.</p></noscript>'
 // The app, loaded the way Vite would for a server, to draw every page. These are the ones the browser hydrates.
+/** Pages built and served but kept out of search, the sitemap and llms.txt until they are ready (Scene Creator until it takes the sandbox's place, #341). */
+const UNLISTED = new Set<Route['page']>(['creator'])
 const HYDRATED = new Set<Route['page']>(['home', 'lessons', 'experiments', 'contact', 'engine', 'spec', 'api', 'news', 'post', 'notfound'])
 const vite = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'error' })
 const { renderPage } = (await vite.ssrLoadModule('/src/blobscape/ssr.tsx')) as typeof import('../src/blobscape/ssr.tsx')
@@ -201,7 +205,7 @@ const preloads = fonts.map((f) => `<link rel="preload" href="/assets/${f}" as="f
 const built = readFileSync(join(DIST, 'index.html'), 'utf8')
 if (!built.includes('<link rel="stylesheet"')) throw new Error('prerender: the built page has no stylesheet link')
 const template = built.replace('<link rel="stylesheet"', () => `${preloads}\n    <link rel="stylesheet"`)
-const routes: Route[] = [{ page: 'home' }, { page: 'lessons' }, ...LESSONS.map((l) => ({ page: 'lesson' as const, id: l.id })), { page: 'sandbox' }, { page: 'experiments' }, { page: 'creature' }, { page: 'forest' }, { page: 'pond' }, { page: 'clockwork' }, { page: 'shift' }, { page: 'flow' }, { page: 'brush' }, { page: 'fourways' }, { page: 'daynight' }, { page: 'bouquet' }, { page: 'diorama' }, { page: 'dungeon' }, { page: 'scan' }, { page: 'engine' }, { page: 'spec' }, { page: 'api' }, { page: 'contact' }, { page: 'news' }, ...POSTS.map((p) => ({ page: 'post' as const, id: p.id }))]
+const routes: Route[] = [{ page: 'home' }, { page: 'lessons' }, ...LESSONS.map((l) => ({ page: 'lesson' as const, id: l.id })), { page: 'sandbox' }, { page: 'creator' }, { page: 'experiments' }, { page: 'creature' }, { page: 'forest' }, { page: 'pond' }, { page: 'clockwork' }, { page: 'shift' }, { page: 'flow' }, { page: 'brush' }, { page: 'fourways' }, { page: 'daynight' }, { page: 'bouquet' }, { page: 'diorama' }, { page: 'dungeon' }, { page: 'scan' }, { page: 'engine' }, { page: 'spec' }, { page: 'api' }, { page: 'contact' }, { page: 'news' }, ...POSTS.map((p) => ({ page: 'post' as const, id: p.id }))]
 for (const r of routes) write(join(DIST, href(r), 'index.html'), render(template, r))
 write(join(DIST, '404.html'), render(template, { page: 'notfound' }))
 
@@ -231,7 +235,7 @@ const newest = byPublished('newest')[0]
  * page would teach a search engine to ignore the dates we do know.
  */
 const changed = (p: string) => experimentAt(p)?.updated ?? postDay(p) ?? (p === '/' || p === '/experiments/' ? [newest.updated, newest.published, POSTS[0].date].sort().at(-1) : undefined)
-const paths = [...routes.map(href), ...TOOLS]
+const paths = [...routes.filter((r) => !UNLISTED.has(r.page)).map(href), ...TOOLS]
 write(
   join(DIST, 'sitemap.xml'),
   `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${paths.map((p) => `  <url><loc>${url(p)}</loc>${changed(p) ? `<lastmod>${changed(p)}</lastmod>` : ''}</url>`).join('\n')}\n</urlset>\n`,

@@ -1,5 +1,5 @@
 import type { SceneDoc } from '../../splat-engine/sceneDoc.ts'
-import { splitScene, type PropDoc, type PropPick } from '../../splat-engine/project.ts'
+import { markedPicks, splitScene, type PropDoc, type PropPick, type PropRef, type SceneProject } from '../../splat-engine/project.ts'
 import { DRAGON } from '../diorama/scenes/dragon.ts'
 import { HENGE } from '../diorama/scenes/henge.ts'
 import { LIGHTHOUSE } from '../diorama/scenes/lighthouse.ts'
@@ -9,6 +9,7 @@ import { ISLES } from '../diorama/scenes/isles.ts'
 import { CANYON } from '../diorama/scenes/canyon.ts'
 import { MEADOW } from '../fourways/meadow/doc.ts'
 import { CREATURES } from '../creature/fromScenes.ts'
+import { DIORAMAS } from '../diorama/scenes.ts'
 import { HENGE_PICKS, LAVA_DRAGON_PICKS, LIGHTHOUSE_PICKS, TURKEY_PICKS, WINDMILL_PICKS, WITCH_IN_SPARKS_PICKS } from './picks.ts'
 import { PLAIN_ROCK, PLAIN_TURF } from './lands.ts'
 
@@ -102,6 +103,21 @@ const SOURCES: Source[] = [
   },
 ]
 
+/** Scenes whose picture is more than their description (code poses them, or adds to them), so they are never split. */
+export const WHOLE_SCENES: readonly string[] = ['meadow', 'fishing']
+
+const slug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+
+/**
+ * Every other scene that marks its own props (`BoneDoc.prop`) comes apart by those marks, with nothing picked by hand:
+ * each prop is `<scene>-<its name>` in the library.
+ */
+for (const d of DIORAMAS) {
+  if (!d.doc || WHOLE_SCENES.includes(d.id) || SOURCES.some((s) => s.from === d.id)) continue
+  const picks = markedPicks(d.doc)
+  if (picks.length) SOURCES.push({ from: d.id, doc: d.doc, picks, props: picks.map((p) => ({ id: `${d.id}-${slug(p.name)}`, pick: p.name, about: `${p.name}, from ${d.label}` })) })
+}
+
 /** Lands taken whole: scenes whose ground is the point, and the plain ones to start from. */
 const WHOLE_LANDS: { id: string; name: string; about: string; from: string; doc: SceneDoc }[] = [
   { id: 'sky-islands', name: 'Sky islands', about: 'Snowy islands of rock adrift in a night sky, joined by rope bridges', from: 'isles', doc: ISLES },
@@ -140,3 +156,38 @@ export function libraryProp(id: string): PropDoc | undefined {
 
 /** The creature an entry is, as `CREATURES` lists it. */
 export const libraryCreature = (id: string) => (id.startsWith('creature-') ? CREATURES.find((c) => `creature-${c.id}` === id) : undefined)
+
+/** The scenes Scene Creator opens split into a land and props: those the library has picks for. */
+export const SPLIT_SCENES: readonly string[] = [...new Set(SOURCES.map((s) => s.from))]
+
+/**
+ * A scene opened as a project: its land and every prop its first set of picks lifts out, each standing where it stood.
+ * Props and the land are named by their library id where the library has them, so a saved project stays small; a
+ * prop the library leaves out (the windmill's second haystack) is written out in full. Undefined for a scene that
+ * opens whole.
+ */
+export function openScene(sceneId: string): SceneProject | undefined {
+  const s = SOURCES.find((x) => x.from === sceneId)
+  if (!s) return undefined
+  let done = split.get(s)
+  if (!done) { done = splitScene(s.doc, s.picks); split.set(s, done) }
+  const { project } = done
+  return {
+    ...project,
+    land: s.land?.id ?? project.land,
+    props: project.props.map((p, i) => {
+      const id = s.props.find((q) => q.pick === s.picks[i].name)?.id
+      return id ? { ...p, prop: id } : p
+    }),
+  }
+}
+
+/** A bare land opened as a project with nothing on it, in its own loop and from its own camera. */
+export function openLand(id: string): SceneProject | undefined {
+  const land = libraryProp(id)
+  if (!land || !LIBRARY.some((e) => e.id === id && e.kind === 'land')) return undefined
+  return { kind: 'blobscape-project', version: 1, name: land.name, loop: land.doc.loop, land: id, props: [], camera: { ...land.doc.camera } }
+}
+
+/** A library entry or a prop written out, as the list beside the picture names it. */
+export const nameOf = (ref: PropRef): string => (typeof ref === 'string' ? LIBRARY.find((e) => e.id === ref)?.name ?? ref : ref.name)

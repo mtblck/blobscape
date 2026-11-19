@@ -71,6 +71,7 @@ const SEARCH: Partial<Record<Route['page'], string>> = {
   brush: 'Gaussian splats drawn as brush marks and pen strokes: gouache, oil, ink and wash, hatching, ASCII and cel shading. The strokes hold still as you turn the scene.',
   flow: 'Gaussian splats that flow: every blob is a particle of sand, snow or goo in a small material point simulation. Pour it, drop things in it, or let a column go.',
   clockwork: "A watch movement made of Gaussian splats, keeping the real time. Every wheel turns by a real watch's ratios: slow it down to see one tick of the escapement.",
+  creator: 'Take a pixel-art scene made of Gaussian splats apart into its land and props, each drawn on its own and ready to move. A work in progress.',
   diorama: 'Moving pixel art made from Gaussian splats: 3D scenes cut into solid blobs, moved by bones, drawn small and snapped to a palette. Turn them and change the look.',
   experiments: `${EXPERIMENTS.length} small things to play with, all built from Gaussian splats: games, simulations, pixel art, creatures and tools. Free, in your browser.`,
   engine: 'A small engine for Gaussian splats that move, built on three.js: creatures on bones, live lights, pixel art from 3D and rigged splats saved as .glb.',
@@ -90,6 +91,8 @@ function wordsFor(route: Route): Omit<PageMeta, 'search'> {
   switch (route.page) {
     case 'lessons':
       return { path, title: `Lessons · ${SITE.name}`, description: `${cap(LESSON_COUNT)} short, hands-on lessons on Gaussian splats: ${LESSONS.map((l) => l.title.toLowerCase()).join(', ')}.` }
+    case 'creator':
+      return { path, title: `Scene Creator · ${SITE.name}`, description: 'Take a pixel-art scene made of Gaussian splats apart into the land it stands on and the things standing on it, each cut and drawn on its own, ready to be moved about. A work in progress, not yet listed.' }
     case 'sandbox':
       return { path, title: `Sandbox · ${SITE.name}`, description: 'Spray, select, move, recolor and explode Gaussian splats, or open your own .ply, .spz, .splat, .ksplat or .sog capture. Nothing is uploaded.' }
     case 'creature':

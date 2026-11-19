@@ -8,7 +8,7 @@ import { POSTS } from './news.ts'
  * previews see every page. In the browser it's still one app: links between
  * these pages swap the page without a reload (useLinkNavigation).
  */
-export type Route = { page: 'home' } | { page: 'lessons' } | { page: 'lesson'; id: string } | { page: 'sandbox' } | { page: 'fourways' } | { page: 'creature' } | { page: 'forest' } | { page: 'pond' } | { page: 'clockwork' } | { page: 'shift' } | { page: 'flow' } | { page: 'brush' } | { page: 'daynight' } | { page: 'bouquet' } | { page: 'diorama' } | { page: 'dungeon' } | { page: 'scan' } | { page: 'experiments' } | { page: 'engine' } | { page: 'spec' } | { page: 'api' } | { page: 'contact' } | { page: 'news' } | { page: 'post'; id: string } | { page: 'notfound' }
+export type Route = { page: 'home' } | { page: 'lessons' } | { page: 'lesson'; id: string } | { page: 'sandbox' } | { page: 'creator' } | { page: 'fourways' } | { page: 'creature' } | { page: 'forest' } | { page: 'pond' } | { page: 'clockwork' } | { page: 'shift' } | { page: 'flow' } | { page: 'brush' } | { page: 'daynight' } | { page: 'bouquet' } | { page: 'diorama' } | { page: 'dungeon' } | { page: 'scan' } | { page: 'experiments' } | { page: 'engine' } | { page: 'spec' } | { page: 'api' } | { page: 'contact' } | { page: 'news' } | { page: 'post'; id: string } | { page: 'notfound' }
 
 export const LESSONS = [
   { id: 'one-blob', title: 'One blob', summary: 'Five kinds of number, 14 in all, make one Gaussian. Pull each one and see what it does.' },
@@ -199,6 +199,7 @@ export function parsePath(pathname: string): Route | null {
   if (m[0] === 'lessons' && m.length === 1) return { page: 'lessons' }
   if (m[0] === 'lessons' && m.length === 2 && LESSONS.some((l) => l.id === m[1])) return { page: 'lesson', id: m[1] }
   if (m.length === 1 && m[0] === 'sandbox') return { page: 'sandbox' }
+  if (m.length === 1 && m[0] === 'scene-creator') return { page: 'creator' }
   if (m.length === 1 && m[0] === 'experiments') return { page: 'experiments' }
   if (m.length === 1 && m[0] === 'engine') return { page: 'engine' }
   if (m.length === 2 && m[0] === 'engine' && m[1] === 'rigged-splats') return { page: 'spec' }
@@ -238,6 +239,7 @@ export function parseLegacyHash(hash: string): Route | null {
 export function href(r: Route): string {
   if (r.page === 'lesson') return `/lessons/${r.id}/`
   if (r.page === 'sandbox') return '/sandbox/'
+  if (r.page === 'creator') return '/scene-creator/'
   if (r.page === 'creature') return '/experiments/creature/'
   if (r.page === 'forest') return '/experiments/forest-walk/'
   if (r.page === 'pond') return '/experiments/wading-pond/'
