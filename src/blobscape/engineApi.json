@@ -228,6 +228,15 @@
      ],
      "methods": [
       {
+       "name": "setSharpness",
+       "doc": "How many device pixels to a CSS pixel the stage draws at, at most (2 where never set; the screen's own where that\nis less). Under 2 on a sharp screen every pass has fewer pixels to fill, for a softer picture: a page may ask for\nit on a phone while it draws a costly look.",
+       "signatures": [
+        {
+         "code": "setSharpness(most: number): void"
+        }
+       ]
+      },
+      {
        "name": "start",
        "static": true,
        "doc": "Starts a stage on a canvas: makes the renderer (WebGPU, or WebGL 2 where there is none) and begins drawing.",
@@ -8010,6 +8019,18 @@
        "optional": true,
        "type": "Rgb",
        "doc": "The outline's color, sRGB 0–1 (default near black)."
+      },
+      {
+       "name": "shadowSize",
+       "optional": true,
+       "type": "number",
+       "doc": "How many pixels a side the light's view of the scene is, which cast shadows are read from (default and most 2048): fewer is cheaper to draw and gives softer shadow edges."
+      },
+      {
+       "name": "shadowEvery",
+       "optional": true,
+       "type": "number",
+       "doc": "The light's view is drawn again at most every this many frames (default 1, every frame something moves): 2 halves its cost and leaves cast shadows a frame behind."
       },
       {
        "name": "lamps",

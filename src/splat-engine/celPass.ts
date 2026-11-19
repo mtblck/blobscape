@@ -64,6 +64,11 @@ export class CelPass {
   private readonly sun = new PerspectiveCamera()
   private from: readonly number[] = CEL_FROM
   private shadowKey = ''
+  // how far round a point the light's view is read, as a share of that view (it follows the map's size)
+  private readonly spread = uniform((2 * SHADOW_SPREAD) / SHADOW_SIZE)
+  // the light's view is drawn again at most every this many frames, and how many have gone by since it was
+  private every = 1
+  private since = 0
   // the frame's camera: its place in the world and how its lens scales x and y
   private readonly camWorld = uniform(new Matrix4())
   private readonly camLens = uniform(new Vector2(1, 1))
@@ -112,6 +117,10 @@ export class CelPass {
     this.lamps.value.set(...((look.lamps ?? [0, 0, 0]) as [number, number, number]))
     this.ambient.value.set(...((look.ambient ?? [1, 1, 1]) as [number, number, number]))
     this.from = look.from ?? CEL_FROM
+    const size = Math.max(256, Math.min(SHADOW_SIZE, Math.round(look.shadowSize ?? SHADOW_SIZE)))
+    if (this.shadow.width !== size) { this.shadow.setSize(size, size); this.shadowKey = '' }
+    this.spread.value = (2 * SHADOW_SPREAD) / size
+    this.every = Math.max(1, Math.round(look.shadowEvery ?? 1))
     this.sunWay.value.set(this.from[0], this.from[1], this.from[2]).normalize()
   }
 
@@ -172,6 +181,9 @@ export class CelPass {
     const stale = worlds.some((w) => w.stale)
     const key = () => `${worlds.map((w) => `${w.uuid}:${w.poses}`).join(',')}|${this.from.join(',')}`
     if (!stale && key() === this.shadowKey) return
+    // a look may ask for the light's view less often than the frame (`CelLook.shadowEvery`): shadows a frame behind
+    if (!stale && this.shadowKey && ++this.since < this.every) return
+    this.since = 0
     // one view for every world: round them all
     const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity]
     for (const w of worlds) { const b = w.posedBox(); for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], b.lo[k]); hi[k] = Math.max(hi[k], b.hi[k]) } }
@@ -255,7 +267,7 @@ export class CelPass {
       // a point is in shadow only when what hides it is nearer the light by more than the roughness there
       const count = float(0).toVar(), sum = float(0).toVar(), squares = float(0).toVar()
       for (const [x, y] of SHADOW_TAPS) {
-        const s = at.add(vec2(x, y).mul((2 * SHADOW_SPREAD) / SHADOW_SIZE)).mul(vec2(0.5, -0.5)).add(0.5).toVar() as N
+        const s = at.add(vec2(x, y).mul(this.spread)).mul(vec2(0.5, -0.5)).add(0.5).toVar() as N
         const m = texture(shadow, s).toVar()
         const drawn = select(m.a.greaterThan(0.5), float(1), float(0))
         count.addAssign(drawn)

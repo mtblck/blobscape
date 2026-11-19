@@ -28,6 +28,8 @@ export interface DrawnSubject {
   azimuth: number
   /** The subject's own sky, top and bottom (sRGB 0–255), where it has one: cel shading starts in front of it, and under a dark sky in a night's light. */
   sky?: readonly [readonly number[], readonly number[]]
+  /** A phone or tablet: cel shading's cast shadows are drawn smaller and every other frame, which costs it less. */
+  light?: boolean
   /** A scan: its marks are laid softly, one over another (`MarkLook.soft`). */
   soft?: boolean
   /** Frames are drawn only when asked for, so one must not depend on the one before. */
@@ -56,7 +58,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   const [strands, setStrands] = useState(true)
   const [weight, setWeight] = useState(1)
   const [copied, setCopied] = useState('')
-  const { actor, plain, azimuth, soft, offscreen, sky } = on
+  const { actor, plain, azimuth, soft, offscreen, sky, light } = on
   // the subject's own sky is the first backdrop where it has one. Under a dark sky it is night: the shade and line are
   // the night's, and both tones are dimmed and cooled (`nightLight`), so the scene's lamps and lit windows stand out
   const skyDark = sky ? nightOf(sky) : 0
@@ -76,7 +78,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   useEffect(() => { stage?.setGlyphs(glyphs) }, [stage, glyphs])
   useEffect(() => { setCopied('') }, [look])
   const outline = !!look && !ascii && (outlined ?? (look === 'ink' || look === 'hatch' || look === 'cel'))
-  useEffect(() => { stage?.setCel(look === 'cel' ? { ...celLook({ ...cel, backdrop: celBase, turn: cel.turn + azimuth, line: outline ? pen : 0 }), ambient: nightLight(night) } : undefined) }, [stage, look, cel, celBase, night, outline, pen, azimuth])
+  useEffect(() => { stage?.setCel(look === 'cel' ? { ...celLook({ ...cel, backdrop: celBase, turn: cel.turn + azimuth, line: outline ? pen : 0 }), ambient: nightLight(night), ...(light ? { shadowSize: 1024, shadowEvery: offscreen ? 1 : 2 } : {}) } : undefined) }, [stage, look, cel, celBase, night, outline, pen, azimuth, light, offscreen])
   // flat fills: each part's colors gathered into a few, shown in place of the blobs' own (which stay as they were)
   useEffect(() => {
     if (!stage || !actor || look !== 'cel' || !cel.fills || !plain) return

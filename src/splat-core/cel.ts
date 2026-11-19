@@ -36,6 +36,10 @@ export interface CelLook {
   line?: number
   /** The outline's color, sRGB 0–1 (default near black). */
   ink?: Rgb
+  /** How many pixels a side the light's view of the scene is, which cast shadows are read from (default and most 2048): fewer is cheaper to draw and gives softer shadow edges. */
+  shadowSize?: number
+  /** The light's view is drawn again at most every this many frames (default 1, every frame something moves): 2 halves its cost and leaves cast shadows a frame behind. */
+  shadowEvery?: number
   /**
    * What the scene's own lights add to a color where they reach it (linear, added to what the tone multiplies it by).
    * Left out, a `Stage` works it out from the lights set on it (`lampTint`); black takes the lamps away.

@@ -201,6 +201,20 @@ export class Stage {
     }
   }
 
+  /**
+   * How many device pixels to a CSS pixel the stage draws at, at most (2 where never set; the screen's own where that
+   * is less). Under 2 on a sharp screen every pass has fewer pixels to fill, for a softer picture: a page may ask for
+   * it on a phone while it draws a costly look.
+   */
+  setSharpness(most: number) {
+    const ratio = Math.min(Math.max(0.5, most), window.devicePixelRatio || 1)
+    if (ratio === this.renderer.getPixelRatio()) return
+    this.renderer.setPixelRatio(ratio)
+    // sized again at the next frame
+    this.lastW = 0
+    this.invalidate()
+  }
+
   /** Starts a stage on a canvas: makes the renderer (WebGPU, or WebGL 2 where there is none) and begins drawing. */
   static async start(display: HTMLCanvasElement, opts: StageOptions = {}) {
     const canvas = opts.offscreen ? document.createElement('canvas') : display
