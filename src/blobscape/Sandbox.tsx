@@ -10,7 +10,7 @@ import { ImportError, readSplatFile } from '../splat-core/importer.ts'
 import { Button, Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
 import { useFocusHeading } from './Shell.tsx'
 import { useFullScreen } from '../shared/Workbench.tsx'
-import { MODES, ModeBar, ToolButton, Icon, addressFor, modeFrom, panelId, tabId, type ModeId } from './sandbox/modes.tsx'
+import { MODES, ModeBar, useWorkspaceScreen, ToolButton, Icon, addressFor, modeFrom, panelId, tabId, type ModeId } from './sandbox/modes.tsx'
 import { Viewport, type ToolHandlers } from './Viewport.tsx'
 import { drawBones, drawCenters, drawOutlines, themeColor, toScreen } from './overlay.ts'
 import { History } from './history.ts'
@@ -150,15 +150,7 @@ export function Sandbox() {
   const [tall, setTall] = useState(false)
   const [pickedKnob, setKnob] = useState<Knob>('color')
   const trayDrag = useRef<number | null>(null)
-  // While the workspace has the screen the floating tip button would sit on the view's controls: it waits for the footer
-  useEffect(() => {
-    const el = work.current
-    if (!el || typeof IntersectionObserver === 'undefined') return
-    const root = document.documentElement
-    const io = new IntersectionObserver(([e]) => { if (e.intersectionRatio > 0.5) root.dataset.workspace = ''; else delete root.dataset.workspace }, { threshold: [0, 0.5, 1] })
-    io.observe(el)
-    return () => { io.disconnect(); delete root.dataset.workspace }
-  }, [])
+  useWorkspaceScreen(work)
   // The footer waits under the workspace: this brings it up and puts the keyboard on its first link
   const toFooter = () => {
     const foot = document.querySelector('footer')

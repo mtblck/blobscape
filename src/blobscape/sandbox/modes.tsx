@@ -1,4 +1,19 @@
-import { useRef, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode, type RefObject } from 'react'
+
+/**
+ * While a workspace has the screen the floating tip button would sit on its controls (the mode bar along a phone's
+ * foot): it waits for the footer, through `html[data-workspace]`.
+ */
+export function useWorkspaceScreen(work: RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const el = work.current
+    if (!el || typeof IntersectionObserver === 'undefined') return
+    const root = document.documentElement
+    const io = new IntersectionObserver(([e]) => { if (e.intersectionRatio > 0.5) root.dataset.workspace = ''; else delete root.dataset.workspace }, { threshold: [0, 0.5, 1] })
+    io.observe(el)
+    return () => { io.disconnect(); delete root.dataset.workspace }
+  }, [work])
+}
 
 /** The sandbox shows one mode at a time: its tools, its panel. */
 export type ModeId = 'build' | 'select' | 'creatures' | 'effects' | 'scene'

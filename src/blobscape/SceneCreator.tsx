@@ -11,7 +11,7 @@ import type { CreatureStage } from './creature/stage.ts'
 import { DETAIL } from './diorama/scene.ts'
 import { ScenePicker } from './diorama/ScenePicker.tsx'
 import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitDrag } from './Viewport.tsx'
-import { ModeBar, panelId, tabId, type Mode } from './sandbox/modes.tsx'
+import { ModeBar, useWorkspaceScreen, panelId, tabId, type Mode } from './sandbox/modes.tsx'
 import type { CutJob } from './creator/cut.ts'
 import { unpack, type PackedCut } from './creator/pack.ts'
 import { START_LANDS, START_SCENES, openingAsked, openingLand, openingScene, queryFor, shownOf, type Opened } from './creator/shown.ts'
@@ -54,6 +54,7 @@ export function SceneCreator() {
   const [picking, setPicking] = useState(false)
   const work = useRef<HTMLDivElement>(null)
   const canvas = useRef<HTMLCanvasElement>(null)
+  useWorkspaceScreen(work)
   const pointers = useRef(new Map<number, { x: number; y: number }>())
   const drag = useRef<OrbitDrag | null>(null)
   const { full, toggle: toggleFull } = useFullScreen(work)
