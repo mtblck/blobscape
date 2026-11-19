@@ -1,0 +1,1 @@
+Scene Creator keeps your scenes in your own browser: an edit is saved a moment later and is there when you come back, Your scenes lists them with a picture each to open, rename, copy or delete, and a scene can be saved as a file and opened again anywhere.

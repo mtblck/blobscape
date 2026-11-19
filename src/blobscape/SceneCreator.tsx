@@ -19,7 +19,9 @@ import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitD
 import { ModeBar, useWorkspaceScreen, panelId, tabId, type Mode } from './sandbox/modes.tsx'
 import type { CutJob } from './creator/cut.ts'
 import { unpack, type PackedCut } from './creator/pack.ts'
-import { START_LANDS, START_SCENES, openingAsked, openingLand, openingScene, queryFor, shownOf, type Opened } from './creator/shown.ts'
+import { START_LANDS, START_SCENES, nameFor, openingAsked, openingLand, openingScene, queryFor, shownOf, type Opened } from './creator/shown.ts'
+import { AUTOSAVE_MS, FILE_END, cleanName, copyName, fileName, fileText, mergedLike, newId, openShelf, readFile, renamed, type SavedScene, type Shelf } from './creator/store.ts'
+import { download } from './files.ts'
 import { BLOB_ROOM, CARDS, added, cardsFound, groundOf, heightAt, landSwapped, liftOn, roomOf, whyNot } from './creator/adding.ts'
 import { libraryProp, type LibraryEntry } from './creator/library.ts'
 import { budget, clock, lampAdded, lampLights, lampRemoved, lit, liveSky, liveSkyColors, rgbOf, shadeNow, sunNow } from './creator/lighting.ts'
@@ -140,7 +142,7 @@ export function SceneCreator() {
     setOrbit(shownOf(o).orbit)
     setPx(pixelStart(shownOf(o).finish))
     const url = new URL(location.href)
-    url.searchParams.delete('scene'); url.searchParams.delete('land')
+    url.searchParams.delete('scene'); url.searchParams.delete('land'); url.searchParams.delete('project')
     const [k, v] = queryFor(o)
     url.searchParams.set(k, v)
     history.replaceState(history.state, '', url.pathname + url.search + url.hash)
@@ -337,7 +339,170 @@ export function SceneCreator() {
 
   // --- export ----------------------------------------------------------------
 
-  const exporting = useExport({ stage, canvas, pixels, style, page: 'scene-creator', name: opened.kind === 'whole' ? opened.scene : 'scene' in opened.from ? opened.from.scene : opened.from.land, loop: shown.loop, orbit })
+  const exporting = useExport({ stage, canvas, pixels, style, page: 'scene-creator', name: nameFor(opened), loop: shown.loop, orbit })
+  // --- kept in this browser (#340) ------------------------------------------
+
+  // the shelf: undefined while it opens, null where this browser keeps nothing
+  const [shelf, setShelf] = useState<Shelf | null>()
+  const [savedList, setSavedList] = useState<SavedScene[]>([])
+  const [fileProblems, setFileProblems] = useState<string[]>([])
+  const [renaming, setRenaming] = useState<string>()
+  const [deleting, setDeleting] = useState<string>()
+  const savedId = opened.kind === 'project' && 'saved' in opened.from ? opened.from.saved : undefined
+  /** The open project as it is kept: with the view, the style and pixel art's settings. */
+  const keeping = useMemo<SceneProject | undefined>(() => project && {
+    ...project, camera: orbit, style: { id: style, settings: { pixel: px, ...(glitching ? { glitch } : {}) } },
+  }, [project, orbit, style, px, glitch, glitching])
+  // what was kept last (so opening a scene doesn't count as a change) and each scene's picture
+  const keptText = useRef('')
+  const pictures = useRef(new Map<string, string>())
+  const pictureFor = useRef<string>(undefined)
+  const refreshList = async (sh: Shelf | null | undefined = shelf) => {
+    if (!sh) return
+    try {
+      const list = await sh.list()
+      for (const r of list) if (r.picture) pictures.current.set(r.id, r.picture)
+      setSavedList(list)
+    } catch (e) { console.warn(e) }
+  }
+  const lost = (e: unknown) => {
+    console.warn(e)
+    setShelf(null)
+    say('This browser stopped keeping your work. Save it as a file to keep it.')
+  }
+  /** Opens a kept scene: its project, its view, its style and settings. */
+  const openSaved = (r: SavedScene) => {
+    open({ kind: 'project', from: { saved: r.id }, project: r.project })
+    keptText.current = JSON.stringify(r.project)
+    pictureFor.current = undefined
+    const st = r.project.style
+    const id = STYLES.find((x) => x.id === st?.id)?.id
+    if (id && id !== style) drawStyle(id)
+    const settings = (st?.settings ?? {}) as { pixel?: unknown; glitch?: unknown }
+    setPx(mergedLike(pixelStart(shownOf({ kind: 'project', from: { saved: r.id }, project: r.project }).finish), settings.pixel))
+    setGlitch(mergedLike(GLITCH_START, settings.glitch))
+    void shelf?.setLast(r.id).catch(console.warn)
+    say(`Opened ${r.project.name}.`)
+  }
+  // opens the shelf once the page is in the browser, then what the address asks for or the scene open last
+  useEffect(() => {
+    let gone = false
+    void openShelf().then(async (sh) => {
+      if (gone) return
+      setShelf(sh ?? null)
+      if (!sh) return
+      await refreshList(sh)
+      const q = new URLSearchParams(location.search)
+      const asked = q.get('project')
+      const id = asked ?? (q.has('scene') || q.has('land') ? undefined : await sh.last().catch(() => undefined))
+      if (!id || gone) return
+      const r = await sh.get(id).catch(() => undefined)
+      if (gone) return
+      if (r) openSaved(r)
+      else if (asked) say('That saved scene is not in this browser.')
+    })
+    return () => { gone = true }
+    // once, on arrival
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  /** Keeps the open project under `id`, with its picture. */
+  const keep = async (id: string, p: SceneProject) => {
+    if (!shelf) return
+    try {
+      await shelf.put({ id, updated: Date.now(), project: p, picture: pictures.current.get(id) })
+      await shelf.setLast(id)
+      await refreshList()
+    } catch (e) { lost(e) }
+  }
+  // Saves a moment after each change: a project that was opened and not touched is not kept, but its first edit keeps it
+  // under a new id (the address then names it, `?project=`).
+  const warned = useRef(false)
+  useEffect(() => {
+    if (!keeping || !hist) return
+    const text = JSON.stringify(keeping)
+    if (text === keptText.current || (!savedId && !hist.past.length)) return
+    if (shelf === null) {
+      if (!warned.current && hist.past.length) { warned.current = true; say('This browser is not keeping anything for this page, so save your scene as a file to keep it.') }
+      return
+    }
+    if (!shelf) return
+    const timer = setTimeout(() => {
+      const id = savedId ?? newId()
+      keptText.current = text
+      if (!savedId) setOpened((o) => (o.kind === 'project' ? { ...o, from: { saved: id } } : o))
+      const url = new URL(location.href)
+      url.searchParams.delete('scene'); url.searchParams.delete('land'); url.searchParams.set('project', id)
+      history.replaceState(history.state, '', url.pathname + url.search + url.hash)
+      void keep(id, keeping)
+    }, AUTOSAVE_MS)
+    return () => clearTimeout(timer)
+    // keep and savedList change with every save
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keeping, savedId, shelf, hist])
+
+  /** Renames a kept scene: the open one as an edit (so it can be undone), another on the shelf. */
+  const renameSaved = async (r: SavedScene, name: string) => {
+    setRenaming(undefined)
+    const n = cleanName(name)
+    if (!n || n === r.project.name) return
+    if (r.id === savedId && project) { edit(renamed(project, n), `Renamed to ${n}.`); return }
+    try { await shelf?.put({ ...r, updated: Date.now(), project: renamed(r.project, n) }); await refreshList(); say(`Renamed to ${n}.`) } catch (e) { lost(e) }
+  }
+  const copySaved = async (r: SavedScene) => {
+    const from = r.id === savedId && keeping ? keeping : r.project
+    const name = copyName(from.name, savedList.map((x) => x.project.name))
+    const id = newId()
+    const picture = pictures.current.get(r.id)
+    if (picture) pictures.current.set(id, picture)
+    try { await shelf?.put({ id, updated: Date.now(), project: { ...from, name }, picture }); await refreshList(); say(`Copied as ${name}.`) } catch (e) { lost(e) }
+  }
+  const deleteSaved = async (r: SavedScene) => {
+    setDeleting(undefined)
+    try { await shelf?.remove(r.id) } catch (e) { lost(e); return }
+    pictures.current.delete(r.id)
+    await refreshList()
+    if (r.id === savedId) {
+      // it stays open, kept again under a new name only if it is changed
+      const id = newId()
+      setOpened((o) => (o.kind === 'project' ? { ...o, from: { saved: id } } : o))
+      const url = new URL(location.href)
+      url.searchParams.delete('project')
+      history.replaceState(history.state, '', url.pathname + url.search + url.hash)
+      say(`Deleted ${r.project.name}. It stays open here, and is kept again if you change it.`)
+    } else say(`Deleted ${r.project.name}.`)
+  }
+  const saveFile = () => {
+    if (!keeping) return
+    download(new TextEncoder().encode(fileText(keeping)), fileName(keeping), 'application/json')
+    say(`Saved ${fileName(keeping)}.`)
+  }
+  const fileInput = useRef<HTMLInputElement>(null)
+  const openFile = async (f: File) => {
+    const { project: p, problems } = readFile(await f.text())
+    setFileProblems(problems)
+    if (!p) { say(`${f.name} could not be opened.`); return }
+    const r: SavedScene = { id: newId(), updated: Date.now(), project: p }
+    openSaved(r)
+    // kept at once: it came from the visitor's own file
+    keptText.current = ''
+  }
+  // a picture of the open scene for its card, once everything is cut and whenever what it shows has changed
+  useEffect(() => {
+    if (!shelf || !savedId || !done || !keeping || exporting.busy) return
+    const key = JSON.stringify([keeping.land, keeping.props, keeping.light, style, px, glitch, detail])
+    if (key === pictureFor.current) return
+    const timer = setTimeout(() => {
+      void exporting.snapshot(240).then((pic) => {
+        if (!pic) return
+        pictureFor.current = key
+        pictures.current.set(savedId, pic)
+        void keep(savedId, keeping)
+      })
+    }, 1200)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shelf, savedId, done, keeping, exporting.busy, style, px, glitch, detail])
+
   // a camera path: views saved as stops, flown through smoothly (cameraPath.ts)
   const [stops, setStops] = useState<Orbit[]>([])
   const [leg, setLeg] = useState(3)
@@ -647,6 +812,69 @@ export function SceneCreator() {
                           )
                         })}
                       </div>
+                    </div>
+                    <div data-testid="creator-saved">
+                      <h3 id="creator-saved-heading" className="mb-1 text-sm font-semibold">Your scenes</h3>
+                      <p className="mb-2 text-xs text-ink-muted" data-testid="creator-where">
+                        {shelf === null
+                          ? 'This browser is not keeping anything for this page (a private window, or storage turned off), so your work goes when you leave. Save it as a file to keep it.'
+                          : 'Kept in this browser, on this device, and nowhere else. A scene is kept a moment after you change it. Clearing this site’s data removes them, so save a file of any you want to be sure of.'}
+                      </p>
+                      {savedList.length > 0 && (
+                        <ul aria-labelledby="creator-saved-heading" className="mb-2 divide-y divide-rule rounded-lg border border-rule bg-paper text-sm" data-testid="creator-saved-list">
+                          {savedList.map((r) => {
+                            const on = r.id === savedId
+                            const name = r.project.name
+                            return (
+                              <li key={r.id} className="flex gap-2 p-2" data-testid="creator-saved-item">
+                                {r.picture
+                                  ? <img src={r.picture} alt="" width={64} height={48} className="h-12 w-16 flex-none rounded object-cover" />
+                                  : <span aria-hidden className="h-12 w-16 flex-none rounded bg-paper-sunk" />}
+                                <div className="min-w-0 flex-1">
+                                  {renaming === r.id
+                                    ? <input type="text" defaultValue={name} autoFocus maxLength={80} aria-label={`New name for ${name}`} data-testid="creator-rename-box"
+                                        className="min-h-8 w-full rounded border border-rule bg-paper px-2 text-sm outline-none focus-visible:border-accent"
+                                        onKeyDown={(ev) => { if (ev.key === 'Enter') void renameSaved(r, ev.currentTarget.value); if (ev.key === 'Escape') { ev.stopPropagation(); setRenaming(undefined) } }}
+                                        onBlur={(ev) => void renameSaved(r, ev.currentTarget.value)} />
+                                    : <p className="truncate font-semibold">{name}{on && <span className="ml-1 text-xs font-normal text-ink-muted">(open)</span>}</p>}
+                                  <p className="text-xs text-ink-faint">{new Date(r.updated).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                                  {deleting === r.id
+                                    ? (
+                                      <div role="group" aria-label={`Delete ${name}?`} className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+                                        <span>Delete it for good?</span>
+                                        <button type="button" onClick={() => void deleteSaved(r)} data-testid="creator-delete-yes" className="cursor-pointer rounded-full border border-accent px-2 py-0.5 font-semibold text-accent hover:bg-accent hover:text-paper">Delete</button>
+                                        <button type="button" autoFocus onClick={() => setDeleting(undefined)} className="cursor-pointer rounded-full border border-rule px-2 py-0.5 font-semibold hover:border-ink-faint">Keep</button>
+                                      </div>
+                                    )
+                                    : (
+                                      <div className="mt-1 flex flex-wrap gap-x-3 text-xs font-semibold">
+                                        {!on && <button type="button" onClick={() => openSaved(r)} aria-label={`Open ${name}`} className="cursor-pointer text-accent hover:underline">Open</button>}
+                                        <button type="button" onClick={() => setRenaming(r.id)} aria-label={`Rename ${name}`} className="cursor-pointer text-ink-muted hover:text-ink">Rename</button>
+                                        <button type="button" onClick={() => void copySaved(r)} aria-label={`Copy ${name}`} className="cursor-pointer text-ink-muted hover:text-ink">Copy</button>
+                                        <button type="button" onClick={() => setDeleting(r.id)} aria-label={`Delete ${name}`} className="cursor-pointer text-ink-muted hover:text-ink">Delete</button>
+                                      </div>
+                                    )}
+                                </div>
+                              </li>
+                            )
+                          })}
+                        </ul>
+                      )}
+                      <div className="flex flex-wrap gap-2">
+                        {keeping && <Button onClick={saveFile} data-testid="creator-save-file">Save as a file</Button>}
+                        <Button onClick={() => fileInput.current?.click()} data-testid="creator-open-file">Open a file</Button>
+                        <input ref={fileInput} type="file" accept={`${FILE_END},.json,application/json`} className="sr-only" tabIndex={-1} aria-hidden data-testid="creator-file"
+                          onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void openFile(f) }} />
+                      </div>
+                      {fileProblems.length > 0 && (
+                        <div role="alert" className="mt-2 rounded-lg border border-rule bg-paper p-2 text-xs" data-testid="creator-file-problems">
+                          <p className="font-semibold">That file is not a scene this page can open:</p>
+                          <ul className="mt-1 list-disc pl-4 font-mono">
+                            {fileProblems.slice(0, 6).map((e) => <li key={e}>{e}</li>)}
+                          </ul>
+                          {fileProblems.length > 6 && <p className="mt-1">and {fileProblems.length - 6} more.</p>}
+                        </div>
+                      )}
                     </div>
                     <div>
                       <h3 className="mb-2 text-sm font-semibold">Detail</h3>

@@ -311,4 +311,68 @@ export default [
       else ok(`blobscape scene creator style: oil, cel shading (cut plain) and a 1-bit palette each change the picture; a frame and a ${frames}-frame camera path save`)
     },
   },
+  {
+    name: 'scene-creator-storage',
+    about: 'Scene Creator, kept in the browser: an edit is kept a moment later and is there after a reload; copied, renamed and deleted in Your scenes; saved as a file and opened in a fresh browser; a broken file says where; nothing asked of another site',
+    entries: ['src/blobscape/SceneCreator.tsx', 'src/blobscape/creator/store.ts'],
+    async run({ shots, join, fails, ok, open, axe }) {
+      const fs = await import('node:fs')
+      const outside = []
+      const watch = (page) => page.on('request', (r) => { if (!/^(http:\/\/(localhost|127\.0\.0\.1)|data:|blob:)/.test(r.url())) outside.push(r.url()) })
+      const at = '/scene-creator/?offscreen=1&detail=chunky'
+      const c = await open(at, { viewport: { width: 1280, height: 900 } })
+      const p = c.page
+      watch(p)
+      const props = (page) => page.evaluate(() => window.__creator?.props().length ?? -1)
+      const opened = (page, n) => page.waitForFunction((n) => window.__creator?.ready() && window.__creator.props().length === n, n, { timeout: 180000 }).then(() => true, () => false)
+      const kept = (page, n) => page.waitForFunction((n) => document.querySelectorAll('[data-testid=creator-saved-item]').length === n, n, { timeout: 15000 }).then(() => true, () => false)
+      const steps = []
+      if (!(await opened(p, 10))) { fails.push('blobscape scene creator storage: the windmill never opened'); return }
+      // opening a scene keeps nothing; the first edit keeps it
+      await p.waitForTimeout(1500)
+      steps.push(['nothing kept before an edit', (await p.getByTestId('creator-saved-item').count()) === 0])
+      await p.getByTestId('creator-items').getByRole('button').first().click()
+      const view = p.getByTestId('creator-view')
+      await view.focus()
+      await view.press('Delete')
+      steps.push(['kept after an edit', await kept(p, 1)])
+      steps.push(['address names it', /project=/.test(await p.evaluate(() => location.search))])
+      // a reload with a bare address reopens it
+      await p.goto(new URL(at, p.url()).href)
+      steps.push(['back after a reload', await opened(p, 9)])
+      await p.getByRole('tab', { name: 'Scene' }).click()
+      // copy, rename the copy, delete it
+      await p.getByRole('button', { name: /^Copy / }).first().click()
+      steps.push(['copied', await kept(p, 2)])
+      await p.getByRole('button', { name: /^Rename .* copy$/ }).click()
+      await p.getByTestId('creator-rename-box').fill('Hill without a fence')
+      await p.getByTestId('creator-rename-box').press('Enter')
+      steps.push(['renamed', await p.getByTestId('creator-saved-list').getByText('Hill without a fence').waitFor({ timeout: 5000 }).then(() => true, () => false)])
+      await p.getByRole('button', { name: 'Delete Hill without a fence' }).click()
+      await p.getByTestId('creator-delete-yes').click()
+      steps.push(['deleted', await kept(p, 1)])
+      await p.screenshot({ path: join(shots, 'blobscape-scene-creator-storage.png') })
+      await axe(p, 'blobscape scene creator storage')
+      // a file, opened in a fresh browser
+      const [down] = await Promise.all([p.waitForEvent('download', { timeout: 30000 }), p.getByTestId('creator-save-file').click()])
+      const file = await down.path()
+      const text = fs.readFileSync(file, 'utf8')
+      let parsed
+      try { parsed = JSON.parse(text) } catch { parsed = undefined }
+      steps.push(['file saved', down.suggestedFilename().endsWith('.blobscape.json') && parsed?.kind === 'blobscape-project' && parsed.props.length === 9])
+      const f = await open(`${at}&scene=windmill`, { viewport: { width: 1280, height: 900 } })
+      watch(f.page)
+      await opened(f.page, 10)
+      await f.page.getByTestId('creator-file').setInputFiles({ name: down.suggestedFilename(), mimeType: 'application/json', buffer: Buffer.from(text) })
+      steps.push(['file opened elsewhere', await opened(f.page, 9)])
+      steps.push(['opened file kept', await kept(f.page, 1)])
+      await f.page.getByTestId('creator-file').setInputFiles({ name: 'broken.blobscape.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ ...parsed, loop: 1 })) })
+      const said = await f.page.getByTestId('creator-file-problems').innerText().catch(() => '')
+      steps.push(['broken file says where', /loop: must be/.test(said) && (await props(f.page)) === 9])
+      steps.push(['nothing asked of another site', outside.length === 0])
+      const bad = steps.filter(([, good]) => !good).map(([name]) => name)
+      if (bad.length) fails.push(`blobscape scene creator storage: ${bad.join(', ')} failed ${JSON.stringify({ outside: outside.slice(0, 3), said })}`)
+      else ok('blobscape scene creator storage: an edit is kept and back after a reload; copy, rename and delete work; a file reopens in a fresh browser and a broken one says where; no other site asked')
+    },
+  },
 ]
