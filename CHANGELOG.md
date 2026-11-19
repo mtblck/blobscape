@@ -6,6 +6,7 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 
 ## [Unreleased]
 
+- Seasonal Bouquets: stems no longer poke out through the sides of a glass vase near its foot.
 - New experiment, Seasonal Bouquets: pick a season and a florist that never repeats itself grows every flower petal by petal from a recipe (48 flowers and greens: peonies, tulips and lilac in spring, roses, sunflowers and delphiniums in summer, dahlias, wheat and Chinese lanterns in fall, amaryllis, winterberry and pine in winter), arranges them by the rules florists use, and stands them in a glass vase, a jam jar, a ceramic vase, a bucket, a watering can, a rain boot, a pumpkin or a ceramic snowman. The stems sway in a draft, a petal falls now and then, it can be drawn soft, in gouache, oil, ink and wash or cel shading, and the address names the bouquet so you can send it to someone.
 - Pixel Diorama has a new scene, Space whales: a mother whale and two calves swimming through space with stars on their backs, their tails and flippers beating slowly, past a ringed planet and its moon, banks of nebula and stardust streaming by.
 - Brush and Ink's ASCII look draws fur and grass as strokes: a cell that is mostly long thin blobs gets the one of | _ / \\ nearest the way they run, so the fox's coat and a field of grass read as strokes that follow each strand (Look tab, Strokes along fur and grass). A new subject, Fox in the grass, shows both.
