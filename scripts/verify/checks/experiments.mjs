@@ -125,7 +125,23 @@ export default [
       // the Sprites panel: the frog's tongue flick and its still pose from 8 sides, as 32 px pixel art
       await tabClick(c.page.getByRole('button', { name: 'Frog', exact: true }))
       await c.page.waitForFunction(() => window.__creature?.bones() === 20 && !document.querySelector('[data-testid=creature-loading]'), null, { timeout: 60000 }).catch(() => {})
-      const sheet = await c.page.evaluate(() => window.__sprites({ moves: ['tongue', 'still'], directions: 8, size: 32, frames: 6, colors: 16, outline: true }))
+      const sheet = await c.page.evaluate(() => window.__sprites({ moves: ['tongue', 'still'], directions: 8, size: 32, frames: 6, colors: 16, outline: true, maps: true }))
+      // normal and depth maps: a pixel for every pixel of the sprite, the frog's left side facing left and its right side right
+      {
+        const f = 48, n = sheet.normals?.[f] ?? [], dm = sheet.depths?.[f] ?? []
+        let same = true, left = 0, nl = 0, right = 0, nr = 0, near = 255, far = 0
+        for (let k = 0; k < 32 * 32; k++) {
+          const solidHere = sheet.solid.length && n[k * 4 + 3] === 255
+          if ((n[k * 4 + 3] === 255) !== (dm[k * 4 + 3] === 255)) same = false
+          if (!solidHere) continue
+          const x = k % 32
+          if (x < 12) { left += n[k * 4]; nl++ } else if (x > 20) { right += n[k * 4]; nr++ }
+          near = Math.min(near, dm[k * 4]); far = Math.max(far, dm[k * 4])
+        }
+        const m = { frames: sheet.normals?.length, same, left: nl ? left / nl : 0, right: nr ? right / nr : 0, near, far }
+        if (m.frames !== 56 || !same || !(m.left < 120 && m.right > 136) || !(far - near > 20)) fails.push(`blobscape creature sprites: normal and depth maps ${JSON.stringify(m)}`)
+        else ok(`blobscape creature sprites: normal and depth maps for every frame, the frog's left side facing left (red ${m.left.toFixed(0)}) and its right side right (${m.right.toFixed(0)})`)
+      }
       const tongueLeft = Math.max(...sheet.solid.slice(12, 18)), stillLeft = sheet.solid[50]
       if (sheet.cols !== 6 || sheet.rows !== 16 || sheet.solid.length !== 56 || sheet.solid.some((k) => k < 20)) fails.push(`blobscape creature sprites: ${JSON.stringify({ ...sheet, solid: sheet.solid.slice(0, 8) })}`)
       else if (!(tongueLeft > stillLeft * 1.05)) fails.push(`blobscape creature sprites: the tongue doesn't show from the side (${tongueLeft} vs ${stillLeft} solid pixels)`)

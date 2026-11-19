@@ -9453,6 +9453,12 @@
        "name": "outline",
        "type": "boolean",
        "doc": "Whether each sprite gets a dark outline."
+      },
+      {
+       "name": "maps",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Bake a normal map and a depth map beside the sheet, frame for frame (`BakedSheet.normals`, `depths`), for a game that lights its sprites."
       }
      ]
     },
@@ -9490,6 +9496,24 @@
        "name": "png",
        "type": "() => Promise<Blob>",
        "doc": "The whole sheet as one PNG."
+      },
+      {
+       "name": "normals",
+       "optional": true,
+       "type": "Frame[]",
+       "doc": "With `BakeOptions.maps`: each frame's facing as a normal map (x right, y up, z toward the viewer; spriteMaps.ts)."
+      },
+      {
+       "name": "depths",
+       "optional": true,
+       "type": "Frame[]",
+       "doc": "With `BakeOptions.maps`: each frame's depth, white nearest and black furthest across the creature's framing."
+      },
+      {
+       "name": "mapPng",
+       "optional": true,
+       "type": "(which: \"normals\" | \"depths\") => Promise<Blob>",
+       "doc": "The normal or depth maps laid out as the sheet is, as one PNG."
       }
      ]
     },

@@ -13,7 +13,7 @@ const SIZES = [32, 48, 64, 96]
 const FRAMES = [6, 8, 12]
 const COLORS = [8, 16, 32]
 
-interface Settings { moves: number[]; directions: 4 | 8; size: number; frames: number; colors: number; outline: boolean }
+interface Settings { moves: number[]; directions: 4 | 8; size: number; frames: number; colors: number; outline: boolean; maps: boolean }
 
 /** For verify: the same settings, with moves by clip name ('still' for the rest pose). */
 export type SheetRequest = Omit<Settings, 'moves'> & { moves: string[] }
@@ -57,6 +57,7 @@ export function Sprites({ stage, name, clips, labelOf, current }: { stage?: Crea
   const [frames, setFrames] = useState(8)
   const [colors, setColors] = useState(16)
   const [outline, setOutline] = useState(true)
+  const [maps, setMaps] = useState(false)
   /** Announced: drawing started, the sheet is ready. */
   const [note, setNote] = useState('')
   const [error, setError] = useState<string>()
@@ -77,7 +78,7 @@ export function Sprites({ stage, name, clips, labelOf, current }: { stage?: Crea
   useEffect(() => () => { if (made) URL.revokeObjectURL(made.url) }, [made])
 
   const toggle = (id: number) => setChosen((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]))
-  const settings: Settings = { moves: [...chosen].sort((a, b) => a - b), directions, size, frames, colors, outline }
+  const settings: Settings = { moves: [...chosen].sort((a, b) => a - b), directions, size, frames, colors, outline, maps }
   const moves = sheetMoves(clips, chosen, frames)
   const plan = planSheet(moves, directions)
   const count = moves.reduce((s, m) => s + m.frames, 0) * directions
@@ -95,7 +96,7 @@ export function Sprites({ stage, name, clips, labelOf, current }: { stage?: Crea
     setNote(`Drawing ${total} frames…`)
     setProgress('Drawing…')
     try {
-      const sheet = await stage.bake(ms, { directions: r.directions, size: r.size, colors: r.colors, outline: r.outline }, (d, t) => setProgress(`Drawing frame ${d} of ${t}…`))
+      const sheet = await stage.bake(ms, { directions: r.directions, size: r.size, colors: r.colors, outline: r.outline, maps: r.maps }, (d, t) => setProgress(`Drawing frame ${d} of ${t}…`))
       if (gen !== generation.current) { setNote(''); return undefined }
       const png = await sheet.png()
       if (gen !== generation.current) { setNote(''); return undefined }
@@ -118,15 +119,19 @@ export function Sprites({ stage, name, clips, labelOf, current }: { stage?: Crea
       if (!req?.moves) delete over.moves
       const s = await make(over)
       if (!s) throw new Error('no sheet')
-      return { cols: s.plan.cols, rows: s.plan.rows.length, size: s.size, anchorY: s.anchorY, solid: s.frames.map((f) => { let k = 0; for (let i = 3; i < f.data.length; i += 4) if (f.data[i]) k++; return k }) }
+      return { cols: s.plan.cols, rows: s.plan.rows.length, size: s.size, anchorY: s.anchorY, normals: s.normals?.map((f) => Array.from(f.data)), depths: s.depths?.map((f) => Array.from(f.data)), solid: s.frames.map((f) => { let k = 0; for (let i = 3; i < f.data.length; i += 4) if (f.data[i]) k++; return k }) }
     }
     return () => { delete window.__sprites }
   })
 
-  const save = async (what: 'png' | 'tinkerkit' | 'aseprite') => {
+  const save = async (what: 'png' | 'tinkerkit' | 'aseprite' | 'normals' | 'depths') => {
     if (!made) return
     const image = `${made.file}.png`
     if (what === 'png') download(new Uint8Array(await made.png.arrayBuffer()), image, 'image/png')
+    else if (what === 'normals' || what === 'depths') {
+      const map = await made.sheet.mapPng?.(what)
+      if (map) download(new Uint8Array(await map.arrayBuffer()), `${made.file}-${what === 'normals' ? 'normal' : 'depth'}.png`, 'image/png')
+    }
     else {
       const json = what === 'tinkerkit'
         ? tinkerkitJson(made.name, image, made.sheet.plan, made.sheet.size, made.sheet.anchorY)
@@ -165,6 +170,10 @@ export function Sprites({ stage, name, clips, labelOf, current }: { stage?: Crea
           <Field label="Edges">
             <Toggle label="Dark outline" checked={outline} onChange={setOutline} />
           </Field>
+          <div className="sm:col-span-2" data-testid="sprites-maps">
+            <Toggle label="Normal and depth maps" checked={maps} onChange={setMaps} />
+            <p className="mt-1.5 text-xs text-ink-faint">Two more sheets laid out the same way: which way each pixel faces, for a game that lights its sprites, and how far off it is. An idea from Silicon Jungle's Ink Studio.</p>
+          </div>
           <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
             <Button primary disabled={!stage || !moves.length || drawing} onClick={() => void make()}>{made ? 'Draw again' : 'Draw the sheet'}</Button>
             <p className="text-xs text-ink-faint">
@@ -194,7 +203,10 @@ export function Sprites({ stage, name, clips, labelOf, current }: { stage?: Crea
                 <Button small onClick={() => void save('png')}>Download PNG ({kb(made.png.size)})</Button>
                 <Button small onClick={() => void save('tinkerkit')}>Tinkerkit sheet</Button>
                 <Button small onClick={() => void save('aseprite')}>JSON for Aseprite, Phaser…</Button>
+                {made.sheet.mapPng && <Button small onClick={() => void save('normals')}>Normal map</Button>}
+                {made.sheet.mapPng && <Button small onClick={() => void save('depths')}>Depth map</Button>}
               </div>
+              {made.sheet.mapPng && <p className="text-xs text-ink-faint">The normal map is the usual kind: red to the right, green up, blue toward you. The depth map is white nearest and black furthest.</p>}
               <p className="text-xs text-ink-faint">
                 Rows go move by move; each move has a row per side ({sides(made) === 8 ? 'clockwise from facing you' : 'down, left, right, up'}).
                 Animations are named like <code>{`${slug(made.sheet.plan.rows[0].move.name)}-${made.sheet.plan.rows[0].dir}`}</code>.
@@ -212,5 +224,5 @@ export function Sprites({ stage, name, clips, labelOf, current }: { stage?: Crea
 }
 
 declare global {
-  interface Window { __sprites?: (req?: Partial<SheetRequest>) => Promise<{ cols: number; rows: number; size: number; anchorY: number; solid: number[] }> }
+  interface Window { __sprites?: (req?: Partial<SheetRequest>) => Promise<{ cols: number; rows: number; size: number; anchorY: number; solid: number[]; normals?: number[][]; depths?: number[][] }> }
 }
