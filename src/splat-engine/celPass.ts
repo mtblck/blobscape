@@ -1,7 +1,7 @@
 import { Color, HalfFloatType, Matrix4, NearestFilter, NoBlending, NodeMaterial, PerspectiveCamera, QuadMesh, RenderTarget, Vector2, Vector3, type Camera, type Object3D, type WebGPURenderer } from 'three/webgpu'
 import * as TSLTyped from 'three/tsl'
 import { SplatDepth } from './depth.ts'
-import { CEL_BRIGHT, CEL_CAST, CEL_EDGE, CEL_FROM, CEL_INK, CEL_SHADE, CEL_TURN, CEL_UNSURE, shadowView, type CelLook } from '../splat-core/cel.ts'
+import { CEL_BRIGHT, CEL_CAST, CEL_EDGE, CEL_FROM, CEL_GLOWS, CEL_INK, CEL_LAMP, CEL_SHADE, CEL_TURN, CEL_UNSURE, shadowView, type CelLook } from '../splat-core/cel.ts'
 import { srgbToLinear } from '../splat-core/color.ts'
 import { LINE_DEPTH, LINE_PART } from '../splat-core/marks.ts'
 
@@ -82,6 +82,9 @@ export class CelPass {
   private readonly bright = uniform(0)
   private readonly cast = uniform(1)
   private readonly edge = uniform(CEL_EDGE)
+  /** The scene's own light: what its lamps add where they reach, and what its ambient light multiplies both tones by. */
+  private readonly lamps = uniform(new Vector3())
+  private readonly ambient = uniform(new Vector3(1, 1, 1))
 
   constructor() {
     this.material.fragmentNode = this.fragment()
@@ -106,6 +109,8 @@ export class CelPass {
     this.bright.value = (look.tones ?? 2) > 2 ? look.bright ?? 0.2 : 0
     this.cast.value = look.shadows === false ? 0 : 1
     this.edge.value = CEL_EDGE + 0.2 * Math.max(0, Math.min(1, look.soft ?? 0))
+    this.lamps.value.set(...((look.lamps ?? [0, 0, 0]) as [number, number, number]))
+    this.ambient.value.set(...((look.ambient ?? [1, 1, 1]) as [number, number, number]))
     this.from = look.from ?? CEL_FROM
     this.sunWay.value.set(this.from[0], this.from[1], this.from[2]).normalize()
   }
@@ -262,7 +267,7 @@ export class CelPass {
       const behind = far.sub(this.sunFrom).sub(mean).sub(rough.mul(SHADOW_ROUGH))
       // nothing drawn there: the light reaches it
       const seen = select(count.lessThan(0.5), float(1), float(1).sub(TSL.smoothstep(room, room.mul(2), behind)))
-      const through = mix(float(1), seen, this.cast).mul(t.g)
+      const through = mix(float(1), seen, this.cast)
       // the blob's own facing as far as it is sure of it, the form's for the rest
       const facing = mix(formFacing, t.r, t.b)
       const sure = max(t.b, formSure)
@@ -295,6 +300,8 @@ export class CelPass {
 
   private fragment() {
     const picture = this.picture.texture, ids = this.ids.texture, tones = this.light.texture, depth = this.depth.target.texture
+    // the blobs' own map of tones: its green is how much the scene's lamps reach each (`toned` in engine.ts)
+    const reached = this.tones.texture
     return Fn(() => {
       const st = uv().toVar()
       const px = vec2(1).div(this.res).toVar()
@@ -309,6 +316,7 @@ export class CelPass {
       const here = select(texture(tones, st).a.greaterThan(0.5), float(1), float(0)).toVar()
       const facing = t0.r.mul(t0.b).mul(here).toVar(), sure = t0.b.mul(here).toVar()
       const through = t0.g.mul(here).toVar(), n = float(here).toVar()
+      const lamp = texture(reached, st).g.mul(here).toVar()
       for (const [x, y] of SMOOTH) {
         const s = st.add(vec2(x, y).mul(px).mul(this.reach)).toVar()
         const t = texture(tones, s).toVar()
@@ -317,6 +325,7 @@ export class CelPass {
         facing.addAssign(t.r.mul(t.b).mul(w))
         sure.addAssign(t.b.mul(w))
         through.addAssign(t.g.mul(w))
+        lamp.addAssign(texture(reached, s).g.mul(w))
         n.addAssign(w)
       }
       // a pixel with nothing flat round it has no facing: it is taken as turned a little to the light
@@ -328,8 +337,13 @@ export class CelPass {
       const lit = smoothstep(float(CEL_TURN).sub(e), float(CEL_TURN).add(e), f).mul(cast).toVar()
       const brightest = lit.mul(smoothstep(float(CEL_BRIGHT).sub(e), float(CEL_BRIGHT).add(e), f)).mul(this.bright)
       const own = c.rgb.div(max(c.a, 0.001)).toVar()
-      const toned = own.mul(mix(this.shade, vec3(1), lit)).toVar()
-      const painted = toned.add(vec3(1).sub(toned).mul(brightest)).mul(c.a).toVar()
+      // the scene's own light: its ambient over both tones, one more tone where its lamps reach, and what gives its own
+      // light never darker than its own color
+      const lamped = select(n.greaterThan(0.5), lamp.div(max(n, 1)), float(0)).toVar()
+      const by = this.ambient.mul(mix(this.shade, vec3(1), lit)).add(this.lamps.mul(smoothstep(float(CEL_LAMP - CEL_EDGE), float(CEL_LAMP + CEL_EDGE), lamped))).toVar()
+      by.assign(mix(by, max(by, vec3(1)), smoothstep(float(CEL_GLOWS - CEL_EDGE), float(CEL_GLOWS + CEL_EDGE), lamped)))
+      const toned = own.mul(by).toVar()
+      const painted = toned.add(max(vec3(1).sub(toned), vec3(0)).mul(brightest)).mul(c.a).toVar()
 
       // the line: where the picture ends, where something is clearly nearer, and between parts at one depth
       const hits = float(0).toVar(), partHits = float(0).toVar()

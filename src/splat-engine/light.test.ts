@@ -90,5 +90,13 @@ test('cel shading faces a blob by the side the eye sees', async () => {
   // a light at a place: toward it
   const lamp = { position: [0, 2, 0] as [number, number, number], range: 5, color: [1, 1, 1] as [number, number, number] }
   assert.ok(toneAt([0, 0, 0], cov, [0, 3, 2], lamp).facing > 0.99)
-  assert.deepEqual(toneAt([0, 0, 0], cov, [0, 3, 2], undefined), { facing: 1, sure: 1 })
+  assert.deepEqual(toneAt([0, 0, 0], cov, [0, 3, 2], undefined), { facing: 1, sure: 1, lamps: 0 })
+  // the scene's own lamps: none without them, more the nearer one is, nothing from one whose baked shadow covers the blob
+  assert.equal(toneAt([0, 0, 0], cov, [0, 3, 2], sun).lamps, 0)
+  const near = toneAt([0, 0, 0], cov, [0, 3, 2], sun, [lamp]).lamps, far = toneAt([6, 0, 0], cov, [0, 3, 2], sun, [lamp]).lamps
+  assert.ok(near > 0.5 && far < near / 4 && far > 0, `${near} near, ${far} far`)
+  assert.equal(toneAt([0, 0, 0], cov, [0, 3, 2], sun, [lamp], [0, 255, 255, 255]).lamps, 0)
+  assert.equal(toneAt([0, 0, 0], cov, [0, 3, 2], sun, [sun]).lamps, 0, 'a light from a direction is no lamp')
+  const { LAMP_MOST } = await import('./light.ts')
+  assert.equal(toneAt([0, 0, 0], cov, [0, 3, 2], sun, [{ ...lamp, color: [9, 9, 9] }]).lamps, LAMP_MOST)
 })

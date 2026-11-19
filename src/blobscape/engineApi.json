@@ -437,7 +437,7 @@
       },
       {
        "name": "setCel",
-       "doc": "Cel shading (splat-core/cel.ts), on a stage made with `lights`: every blob flat in its own color, the light cut\ninto two or three tones with clean edges, shadows cast by what stands in the light's way, and an even outline.\nThe look's light takes the place of the stage's lights and its fill the place of its marks while it is on; leave\nthe look out to have them back. Kept for the next actor too. It shades the blobs' own colors, so it suits blobs\nthat have no light baked into them. Not in pixel mode.",
+       "doc": "Cel shading (splat-core/cel.ts), on a stage made with `lights`: every blob flat in its own color, the light cut\ninto two or three tones with clean edges, shadows cast by what stands in the light's way, and an even outline.\nThe tones are cut from the look's own light, and the stage's lights (`setLights`) stay as the scene's lamps: where\nthey reach is one more tone in their color, and the ambient light dims both tones. Its fill takes the place of the\nstage's marks while it is on; leave the look out to have them back. Kept for the next actor too. It shades the blobs' own colors, so it suits blobs\nthat have no light baked into them. Not in pixel mode.",
        "signatures": [
         {
          "code": "setCel(look?: CelLook): void"
@@ -8010,6 +8010,18 @@
        "optional": true,
        "type": "Rgb",
        "doc": "The outline's color, sRGB 0–1 (default near black)."
+      },
+      {
+       "name": "lamps",
+       "optional": true,
+       "type": "Rgb",
+       "doc": "What the scene's own lights add to a color where they reach it (linear, added to what the tone multiplies it by).\nLeft out, a `Stage` works it out from the lights set on it (`lampTint`); black takes the lamps away."
+      },
+      {
+       "name": "ambient",
+       "optional": true,
+       "type": "Rgb",
+       "doc": "What both tones are multiplied by (linear), such as a night's dim blue. On a `Stage` its ambient light multiplies them too, so a scene that dims dims here."
       }
      ]
     },
@@ -8050,6 +8062,24 @@
      "type": "0.5"
     },
     {
+     "name": "CEL_LAMP",
+     "kind": "const",
+     "doc": "A surface is in a lamp's light when the scene's lamps reach it by this much or more (`toneAt`'s `lamps` in splat-engine/light.ts).",
+     "type": "0.16"
+    },
+    {
+     "name": "CEL_GLOWS",
+     "kind": "const",
+     "doc": "From this much, what reaches a surface is its own light (a flame, a lit pane): it is never darker than its own color.",
+     "type": "0.9"
+    },
+    {
+     "name": "LAMP_ADD",
+     "kind": "const",
+     "doc": "How strong the color lamps add is, where the lights set no more: the brightest channel of `lampTint`.",
+     "type": "1"
+    },
+    {
      "name": "CEL_EDGE",
      "kind": "const",
      "doc": "The least width of a tone's edge, in the units of what is cut (facing and share of light, both 0–1), so the edge is not stepped.",
@@ -8074,10 +8104,20 @@
     {
      "name": "celColor",
      "kind": "function",
-     "doc": "A color (linear RGB) under the tones `celTones` gives: `shade` (linear) multiplies it in shade, and the brightest tone goes toward white.",
+     "doc": "A color (linear RGB) under the tones `celTones` gives: `shade` (linear) multiplies it in shade, and the brightest\ntone goes toward white. `by` is the scene's own light: `ambient` multiplies both tones, `lamps` is added where the\nscene's lamps reach (`reach`, from `toneAt`: one more tone, cut at `CEL_LAMP`), and from `CEL_GLOWS` the color is\nnever darker than itself.",
      "signatures": [
       {
-       "code": "celColor(rgb: ArrayLike<number>, tones: { lit: number; bright: number }, shade: ArrayLike<number>, bright?: number): [number, number, number]"
+       "code": "celColor(rgb: ArrayLike<number>, tones: { lit: number; bright: number }, shade: ArrayLike<number>, bright?: number, by?: { reach: number; lamps?: ArrayLike<number>; ambient?: ArrayLike<number> }): [number, number, number]"
+      }
+     ]
+    },
+    {
+     "name": "lampTint",
+     "kind": "function",
+     "doc": "The color the scene's lamps add in cel shading (linear): the color of its point lights taken together, each by its\nbrightness, with its strongest channel at `LAMP_ADD`. Black where there are none.",
+     "signatures": [
+      {
+       "code": "lampTint(lights: readonly { color: ArrayLike<number>; position?: unknown }[]): [number, number, number]"
       }
      ]
     },

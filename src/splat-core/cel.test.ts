@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { CEL_CAST, CEL_SHADE, CEL_TURN, SAME_COLOR, SHADOW_FAR, celColor, celTones, gatherColors, shadowView } from './cel.ts'
+import { CEL_CAST, CEL_LAMP, CEL_SHADE, LAMP_ADD, lampTint, CEL_TURN, SAME_COLOR, SHADOW_FAR, celColor, celTones, gatherColors, shadowView } from './cel.ts'
 import { toOklab } from './color.ts'
 
 test('light is cut into two tones, or three, and nothing in between away from an edge', () => {
@@ -27,6 +27,21 @@ test('shade multiplies a color, light leaves it, and the brightest tone goes tow
   celColor(rgb, { lit: 0, bright: 0 }, CEL_SHADE).forEach((c, k) => assert.ok(Math.abs(c - rgb[k] * CEL_SHADE[k]) < 1e-12))
   const top = celColor(rgb, { lit: 1, bright: 1 }, CEL_SHADE, 0.2)
   top.forEach((c, k) => assert.ok(c > rgb[k] && c < 1))
+})
+
+test("a scene's lamps add a tone where they reach, its ambient dims both, and what glows keeps its color", () => {
+  const rgb = [0.5, 0.25, 0.1], shade = [0.5, 0.5, 0.7], lamps = lampTint([{ color: [2, 1, 0.5], position: [0, 0, 0] }, { color: [9, 9, 9] }])
+  assert.deepEqual(lamps, [LAMP_ADD, LAMP_ADD / 2, LAMP_ADD / 4], 'the point lights\' color; a light from a direction is no lamp')
+  assert.deepEqual(lampTint([]), [0, 0, 0])
+  const dark = celColor(rgb, { lit: 0, bright: 0 }, shade, 0.2, { reach: 0, lamps })
+  assert.deepEqual(dark, celColor(rgb, { lit: 0, bright: 0 }, shade), 'out of reach, as without lamps')
+  const lamped = celColor(rgb, { lit: 0, bright: 0 }, shade, 0.2, { reach: CEL_LAMP + 0.1, lamps })
+  lamped.forEach((c, k) => assert.ok(Math.abs(c - rgb[k] * (shade[k] + lamps[k])) < 1e-12))
+  // one tone: twice the reach is the same color
+  assert.deepEqual(celColor(rgb, { lit: 0, bright: 0 }, shade, 0.2, { reach: 2 * CEL_LAMP + 0.2, lamps }), lamped)
+  const dim = celColor(rgb, { lit: 1, bright: 0 }, shade, 0.2, { reach: 0, ambient: [0.3, 0.3, 0.5] })
+  dim.forEach((c, k) => assert.ok(Math.abs(c - rgb[k] * [0.3, 0.3, 0.5][k]) < 1e-12))
+  assert.deepEqual(celColor(rgb, { lit: 0, bright: 0 }, shade, 0.2, { reach: 1, ambient: [0.3, 0.3, 0.5] }), rgb, 'a flame is its own color in the dark')
 })
 
 test('the light sees the whole scene from far off, and small moves of its bounds leave the view where it was', () => {

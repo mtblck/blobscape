@@ -6,7 +6,7 @@ import type { Blobs } from '../splat-core/blobs.ts'
 import { Button, Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
 import type { CreatureStage } from './creature/stage.ts'
 import { GROUND, LOOKS, PAPERS, SCREEN, css, isMark, type LookId } from './brushLooks.ts'
-import { BACKDROPS, CEL, CEL_START, FILL_REACH, celLook, type CelChoice } from './celLooks.ts'
+import { BACKDROPS, CEL, CEL_START, FILL_REACH, celLook, nightLight, nightOf, type CelChoice } from './celLooks.ts'
 
 /** Every drawn look a page can offer: the marks, cel shading, ASCII, and the plain blobs. */
 export type Look = LookId | typeof CEL.id
@@ -26,6 +26,8 @@ export interface DrawnSubject {
   plain: boolean
   /** The starting view's turn, which cel shading's light is measured from. */
   azimuth: number
+  /** The subject's own sky, top and bottom (sRGB 0–255), where it has one: cel shading starts in front of it, and under a dark sky in a night's light. */
+  sky?: readonly [readonly number[], readonly number[]]
   /** A scan: its marks are laid softly, one over another (`MarkLook.soft`). */
   soft?: boolean
   /** Frames are drawn only when asked for, so one must not depend on the one before. */
@@ -40,7 +42,7 @@ export interface DrawnSubject {
 export function useDrawnLook(stage: CreatureStage | undefined, look: Look | undefined, on: DrawnSubject): { controls: ReactNode; ground: string | undefined; forget: () => void } {
   const [cel, setCel] = useState<CelChoice>(() => {
     const q = params(), n = (k: string, d: number) => (q.get(k) !== null && Number.isFinite(Number(q.get(k))) ? Number(q.get(k)) : d)
-    return { ...CEL_START, turn: n('turn', CEL_START.turn), height: n('height', CEL_START.height), tones: q.get('tones') === '3' ? 3 : 2, shadows: q.get('shadows') !== '0', smooth: n('smooth', CEL_START.smooth), fills: Math.max(0, Math.min(4, Math.round(n('fills', CEL_START.fills)))) }
+    return { ...CEL_START, backdrop: '', turn: n('turn', CEL_START.turn), height: n('height', CEL_START.height), tones: q.get('tones') === '3' ? 3 : 2, shadows: q.get('shadows') !== '0', smooth: n('smooth', CEL_START.smooth), fills: Math.max(0, Math.min(4, Math.round(n('fills', CEL_START.fills)))) }
   })
   const [size, setSize] = useState(1)
   // outlines: on for the two pen looks and cel shading unless the visitor says otherwise
@@ -54,7 +56,15 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   const [strands, setStrands] = useState(true)
   const [weight, setWeight] = useState(1)
   const [copied, setCopied] = useState('')
-  const { actor, plain, azimuth, soft, offscreen } = on
+  const { actor, plain, azimuth, soft, offscreen, sky } = on
+  // the subject's own sky is the first backdrop where it has one. Under a dark sky it is night: the shade and line are
+  // the night's, and both tones are dimmed and cooled (`nightLight`), so the scene's lamps and lit windows stand out
+  const skyDark = sky ? nightOf(sky) : 0
+  const skyBack = sky ? { id: 'scene', label: "Scene's sky", back: `linear-gradient(${css(sky[0].map((v) => v / 255))}, ${css(sky[1].map((v) => v / 255))})`, like: skyDark > 0.5 ? 'night' : 'sky' } : undefined
+  const backId = cel.backdrop || (skyBack ? 'scene' : CEL_START.backdrop)
+  const inScene = backId === 'scene' && !!skyBack
+  const celBase = inScene ? skyBack.like : backId
+  const night = inScene ? skyDark : 0
 
   const sheet = PAPERS.find((p) => p.id === paper)!
   const marks = useMemo<MarkLook | undefined>(() => (look && look !== 'cel' && isMark(look) ? { kind: look, size, ink: sheet.ink, paper: sheet.paper, soft } : undefined), [look, size, sheet, soft])
@@ -66,7 +76,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   useEffect(() => { stage?.setGlyphs(glyphs) }, [stage, glyphs])
   useEffect(() => { setCopied('') }, [look])
   const outline = !!look && !ascii && (outlined ?? (look === 'ink' || look === 'hatch' || look === 'cel'))
-  useEffect(() => { stage?.setCel(look === 'cel' ? celLook({ ...cel, turn: cel.turn + azimuth, line: outline ? pen : 0 }) : undefined) }, [stage, look, cel, outline, pen, azimuth])
+  useEffect(() => { stage?.setCel(look === 'cel' ? { ...celLook({ ...cel, backdrop: celBase, turn: cel.turn + azimuth, line: outline ? pen : 0 }), ambient: nightLight(night) } : undefined) }, [stage, look, cel, celBase, night, outline, pen, azimuth])
   // flat fills: each part's colors gathered into a few, shown in place of the blobs' own (which stay as they were)
   useEffect(() => {
     if (!stage || !actor || look !== 'cel' || !cel.fills || !plain) return
@@ -79,8 +89,10 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   useEffect(() => { stage?.setOutline(outline && look !== 'cel' ? { width: pen, ink: look === 'ink' || look === 'hatch' ? sheet.ink : undefined } : undefined) }, [stage, outline, pen, look, sheet])
 
   const drawnOn = look === 'ink' || look === 'hatch'
-  const backdrop = BACKDROPS.find((b) => b.id === cel.backdrop) ?? BACKDROPS[0]
-  const ground = !look || look === 'blobs' ? undefined : look === 'cel' ? backdrop.back : ascii ? css(own ? SCREEN : sheet.paper) : drawnOn ? css(sheet.paper) : GROUND
+  // paint covers its ground, so a subject with a sky of its own stands in front of that
+  const isPaint = look === 'gouache' || look === 'oil'
+  const backdrop = BACKDROPS.find((b) => b.id === celBase) ?? BACKDROPS[0]
+  const ground = !look || look === 'blobs' ? undefined : look === 'cel' ? (inScene ? skyBack.back : backdrop.back) : ascii ? css(own ? SCREEN : sheet.paper) : drawnOn ? css(sheet.paper) : skyBack && isPaint ? skyBack.back : GROUND
 
   const controls = !look ? null : (
     <>
@@ -99,7 +111,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
             <Slider label="Colors in each part" value={cel.fills} min={0} max={4} step={1} onChange={(fills) => setCel((c) => ({ ...c, fills }))} format={(v) => (v === 0 ? 'As painted' : `${v}`)} hint="Each part's colors gathered into a few flat ones, so a mottled surface becomes areas of one color and a stripe stays a stripe." />
             <Field label="Backdrop">
               <div className="flex flex-wrap gap-1.5">
-                {BACKDROPS.map((b) => <Chip key={b.id} active={cel.backdrop === b.id} onClick={() => setCel((c) => ({ ...c, backdrop: b.id }))}>{b.label}</Chip>)}
+                {[...(skyBack ? [skyBack] : []), ...BACKDROPS].map((b) => <Chip key={b.id} active={backId === b.id} onClick={() => setCel((c) => ({ ...c, backdrop: b.id }))}>{b.label}</Chip>)}
               </div>
             </Field>
           </div>

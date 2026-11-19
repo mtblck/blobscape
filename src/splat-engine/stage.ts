@@ -2,7 +2,7 @@ import { drawsTo, markDrawn } from '../splat-core/drawn.ts'
 import * as THREE from 'three/webgpu'
 import { STAGE_FOV, placeCamera, type Orbit } from '../splat-core/orbit.ts'
 import { readbackToSrgb } from '../splat-core/color.ts'
-import { SplatWorld, type Light } from './engine.ts'
+import { MAX_LIGHTS, SplatWorld, type Light } from './engine.ts'
 import { SHADOW_DENSITY } from './shadow.ts'
 import type { ShapeEdit } from './edit.ts'
 import { sampleClip, sampleWeights, type Clip } from './glb.ts'
@@ -19,7 +19,7 @@ import { lookColors, snapColors, type Frame, type PixelLook } from '../splat-cor
 import { INK, type MarkLook, type OutlinePen } from '../splat-core/marks.ts'
 import { InkLines } from './inkLines.ts'
 import { CelPass } from './celPass.ts'
-import { CEL_FROM, type CelLook } from '../splat-core/cel.ts'
+import { CEL_FROM, lampTint, type CelLook } from '../splat-core/cel.ts'
 import { GlyphPass } from './glyphPass.ts'
 import { glyphScale, glyphText, type GlyphLook } from '../splat-core/glyphs.ts'
 import { SplatLens } from './lens.ts'
@@ -533,8 +533,9 @@ export class Stage {
   /**
    * Cel shading (splat-core/cel.ts), on a stage made with `lights`: every blob flat in its own color, the light cut
    * into two or three tones with clean edges, shadows cast by what stands in the light's way, and an even outline.
-   * The look's light takes the place of the stage's lights and its fill the place of its marks while it is on; leave
-   * the look out to have them back. Kept for the next actor too. It shades the blobs' own colors, so it suits blobs
+   * The tones are cut from the look's own light, and the stage's lights (`setLights`) stay as the scene's lamps: where
+   * they reach is one more tone in their color, and the ambient light dims both tones. Its fill takes the place of the
+   * stage's marks while it is on; leave the look out to have them back. Kept for the next actor too. It shades the blobs' own colors, so it suits blobs
    * that have no light baked into them. Not in pixel mode.
    */
   setCel(look?: CelLook) {
@@ -553,7 +554,19 @@ export class Stage {
     world.cel = !!cel
     world.setMarks(cel ? { kind: 'flat' } : this.marks)
     if (!this.opts.lights) return
-    if (cel) world.setLights([{ direction: [...(cel.from ?? CEL_FROM)] as [number, number, number], color: [1, 1, 1] }], 1)
+    this.light()
+  }
+
+  /**
+   * Hands the world its lights: the stage's own, or for cel shading the one the tones are cut from and then the
+   * stage's own, which the pass adds as one more tone where they reach (their shadows are the baked ones: the grid
+   * of shadows is not asked).
+   */
+  private light() {
+    const world = this.world
+    if (!world || !this.opts.lights) return
+    const cel = this.celLook
+    if (cel) world.setLights([{ direction: [...(cel.from ?? CEL_FROM)] as [number, number, number], color: [1, 1, 1] }, ...this.lit.lights.slice(0, MAX_LIGHTS - 1).map((l) => ({ ...l, shadow: false }))], 1)
     else world.setLights(this.lit.lights, this.lit.ambient)
   }
 
@@ -614,7 +627,7 @@ export class Stage {
    */
   setLights(lights: Light[], ambient: number | readonly [number, number, number] = 1) {
     this.lit = { lights, ambient }
-    if (!this.celLook) this.world?.setLights(lights, ambient)
+    this.light()
     this.invalidate()
   }
 
@@ -682,7 +695,8 @@ export class Stage {
     if (!this.pixel && this.cel && this.celLook && this.opts.lights) {
       const { x, y } = this.target ? { x: this.target.width, y: this.target.height } : this.renderer.getDrawingBufferSize(this.buffer)
       this.cel.setSize(x, y)
-      this.cel.setLook(this.celLook, this.renderer.getPixelRatio())
+      const amb = this.lit.ambient
+      this.cel.setLook({ ...this.celLook, lamps: this.celLook.lamps ?? lampTint(this.lit.lights), ambient: [0, 1, 2].map((k) => (this.celLook!.ambient?.[k] ?? 1) * (typeof amb === 'number' ? amb : amb[k])) as [number, number, number] }, this.renderer.getPixelRatio())
       this.cel.render(this.renderer, this.scene, this.camera)
       return
     }
