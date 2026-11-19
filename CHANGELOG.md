@@ -6,6 +6,7 @@ merging that PR makes the tag and the GitHub release (see docs/releasing.md).
 
 ## [Unreleased]
 
+- Pixel Diorama has a new scene, Space whales: a mother whale and two calves swimming through space with stars on their backs, their tails and flippers beating slowly, past a ringed planet and its moon, banks of nebula and stardust streaming by.
 - Brush and Ink has a new look, Cel shading: every blob flat in its own color, the light cut into two or three clean tones, shadows cast by whatever stands in the light, and an even outline. The light is live, so you can turn it round the subject and raise or lower it and the shadows follow. Each part's colors are gathered into a few flat ones (a mottled wall becomes one color, a stripe stays a stripe), and there are four backdrops (`?look=cel`).
 - Engine: `Stage.setCel` and `CelPass` (cel shading for any stage made with `lights`), `celTones`, `celColor`, `shadowView` and `gatherColors`, a `flat` mark, and `unlit` to cut a scene or creature with no light baked into it.
 - Brush and Ink has a new look, ASCII: the picture as a grid of characters, heavier ones where there is more to show and | _ / \\ strokes along the edges. The characters take the colors of what they stand for on a dark screen, or one ink on paper; a cell keeps its character until another clearly fits better, so the text holds steady as you turn the view, and Copy as text gives you the picture in plain characters. Scan Studio's Lighting tab offers it too, and the engine has it as `Stage.setGlyphs`.
