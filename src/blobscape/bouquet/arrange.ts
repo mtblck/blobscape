@@ -3,6 +3,7 @@ import { BLOOM, FLOWERS, PALETTES, flower, inSeason, type Flower, type Palette, 
 import { reach } from './heads.ts'
 import { rng, unit } from './make.ts'
 import { SEASON_VASES, type VaseKind } from './vases.ts'
+import type { TableKind } from './tables.ts'
 
 /**
  * Arranging, the way a florist does it, in plain numbers. A bouquet is
@@ -33,6 +34,8 @@ export interface Choice {
   shape: Shape
   palette?: string
   vase?: VaseKind
+  /** What it stands on; left out, the seed picks. It changes nothing else about the plan. */
+  table?: TableKind
 }
 
 /** One stem's place in the arrangement. */

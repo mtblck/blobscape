@@ -5,7 +5,8 @@ import { HEIGHTS, plan, type Choice, type Plan } from './arrange.ts'
 import { BLOOM, flower } from './flowers.ts'
 import { head, petal } from './heads.ts'
 import { Maker, add, arc, clamp, cross, dot, lerp, mix, mul, rng, smooth, sub, unit, upTo } from './make.ts'
-import { makeTable, makeVase, type VaseInfo } from './vases.ts'
+import { makeTable, tableFor, type TableInfo } from './tables.ts'
+import { makeVase, type VaseInfo } from './vases.ts'
 
 /**
  * A whole bouquet as one actor: the table, the vase, and every stem with its
@@ -66,6 +67,7 @@ export interface Falling {
 export interface Bouquet {
   plan: Plan
   vase: VaseInfo
+  table: TableInfo
   blobs: Blobs
   skin: Skin
   skeleton: Skeleton
@@ -95,7 +97,7 @@ export function makeBouquet(choice: Choice, spacing: number, plain = false): Bou
 
   m.onBone = 0
   const vase = makeVase(m, p.vase, choice.seed)
-  makeTable(m, vase.foot, choice.seed)
+  const table = makeTable(m, choice.table ?? tableFor(choice.seed), vase.foot, choice.seed)
   const flowersFrom = m.blobs.count
 
   // a tall vase carries a taller bouquet, a squat one a lower one: about one and a half times the vase, as florists reckon
@@ -186,8 +188,10 @@ export function makeBouquet(choice: Choice, spacing: number, plain = false): Bou
     for (let i = l.from; i < l.to; i++) m.bone[i] = bone
     // it comes down outside the vase's foot, a little further out than it started, and lies flat, either way up
     const away = Math.hypot(l.base[0], l.base[2]) > 0.03 ? unit([l.base[0], 0, l.base[2]]) : unit([Math.cos(k * 2.4), 0, Math.sin(k * 2.4)])
-    const far = clamp(Math.hypot(l.base[0], l.base[2]) + 0.06 + 0.3 * rand(), vase.foot + 0.08, 0.78)
+    const out = Math.hypot(l.base[0], l.base[2]) + 0.06 + 0.3 * rand()
     const bearing = Math.atan2(away[2], away[0]) + (rand() - 0.5) * 0.9
+    // and on the table, whatever its shape: a long table is narrow from front to back
+    const far = Math.max(Math.min(vase.foot + 0.08, table.reach(Math.cos(bearing), Math.sin(bearing)) - 0.05), Math.min(out, table.reach(Math.cos(bearing), Math.sin(bearing)) - 0.08))
     const lies = mulQ(axisAngle(UP, rand() * 6.28), fromTo(unit(l.normal), rand() < 0.5 ? UP : [0, -1, 0]))
     let low = Infinity
     for (let i = l.from; i < l.to; i++) low = Math.min(low, rotate(lies, sub(m.blobs.center.subarray(i * 3, i * 3 + 3), l.base))[1])
@@ -209,7 +213,7 @@ export function makeBouquet(choice: Choice, spacing: number, plain = false): Bou
     setWeights(skin, i, s > 0.001 ? [[m.bone[i], 1 - s], [m.bone2[i], s]] : [[m.bone[i], 1]])
     partOf[i] = m.part[i] % 65536
   }
-  return { plan: p, vase, blobs, skin, skeleton: new Skeleton(bones), partOf, stems, falling, draft: 1, height, width }
+  return { plan: p, vase, table, blobs, skin, skeleton: new Skeleton(bones), partOf, stems, falling, draft: 1, height, width }
 }
 
 /** How long between petals, in seconds: the first after `FIRST`, then one every `EVERY` or so. */

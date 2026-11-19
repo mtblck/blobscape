@@ -10,6 +10,7 @@ import { href } from './routes.ts'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
 import { Stick } from './Stick.tsx'
 import { ZoomBar, beginOrbitDrag, dragOrbit, useWheelZoom, type OrbitDrag } from './Viewport.tsx'
+import { detailAsked, labelNames, writeDetail } from '../shared/detail.ts'
 
 const LOOKS = [{ id: 'forest', label: 'Forest' }, { id: 'dusk', label: 'Dusk' }, { id: 'autumn', label: 'Autumn' }]
 /** Detail: the grid the ruin is cut on (smaller is finer) and the elf's blobs. Phones without WebGPU start on the lightest. */
@@ -50,7 +51,7 @@ export function WadingPond() {
   const offscreen = useMemo(() => new URLSearchParams(location.search).get('offscreen') === '1', [])
   const webgl = useMemo(() => new URLSearchParams(location.search).get('webgl') === '1', [])
   const [look, setLook] = useState('forest')
-  const [detail, setDetail] = useState<string>()
+  const [detail, setDetail] = useState<string | undefined>(() => detailAsked(DETAIL, labelNames)?.id)
   const [view, setView] = useState('start')
   const [orbit, setOrbit] = useState<Orbit>(VIEWS[0].orbit)
   // under reduced motion the candles burn steady and the air holds still; it can be turned back on
@@ -294,7 +295,7 @@ export function WadingPond() {
                 </div>
                 <Field label="Detail">
                   <div className="flex flex-wrap gap-1.5">
-                    {DETAIL.map((d) => <Chip key={d.id} active={detail === d.id} onClick={() => setDetail(d.id)}>{d.label}</Chip>)}
+                    {DETAIL.map((d) => <Chip key={d.id} active={detail === d.id} onClick={() => { setDetail(d.id); writeDetail(d.id) }}>{d.label}</Chip>)}
                   </div>
                 </Field>
                 <p className="text-xs text-ink-faint">Lighter detail runs smoother on older phones.</p>

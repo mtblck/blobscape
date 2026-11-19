@@ -247,26 +247,3 @@ export function makeVase(m: Maker, kind: VaseKind, seed: number): VaseInfo {
   plug(m, 0.2, 0.5, metal)
   return { kind: 'can', name: ['a zinc watering can', 'a green watering can', 'a yellow watering can'][which], mouth: 0.185, top: 0.5, floor: 0.04, clear: false, foot: 0.3 }
 }
-
-/** The round table the vase stands on: boards with a grain, a shadow under the vase, and an edge. */
-export function makeTable(m: Maker, foot: number, seed: number, radius = 0.85) {
-  const rand = rng(seed * 31 + 5)
-  const wood = hex(pickOf(['#b98a5e', '#8e6a4c', '#d8c3a0', '#6f5b4c', '#c9cdc6'], rand()))
-  m.newPart()
-  // a coarser cover than the flowers: a table needs no finer
-  const step = m.step * 1.8
-  m.cover(
-    (u, v) => [u * radius * Math.cos(v * 6.2832), 0, -u * radius * Math.sin(v * 6.2832)],
-    Math.round(radius / step), (u) => (6.2832 * u * radius) / step,
-    (_u, _v, p) => {
-      const board = Math.floor(p[0] / 0.16 + 100)
-      const grain = 0.9 + 0.16 * noise([p[0] * 6, 0, p[2] * 0.7 + board * 3.1], 9, seed) + (Math.abs(p[0] / 0.16 + 100 - board - 0.5) > 0.47 ? -0.18 : 0)
-      // the vase's shadow falls away from the lamp
-      const d = Math.hypot(p[0] - LAMP[0] * -0.12, p[2] - LAMP[2] * -0.12)
-      const shadow = 1 - 0.45 * smooth(1 - (d - foot * 0.7) / (foot * 0.9 + 0.12))
-      return mul(wood, grain * (0.9 + 0.1 * hash(board, 5)) * shadow)
-    },
-    { glow: true }, { wrap: true },
-  )
-  m.lathe([[radius, 0], [radius, -0.045], [radius - 0.04, -0.06]], (_a, _t, p) => mul(wood, 0.62 + 0.1 * noise(p, 12, seed)), {})
-}
