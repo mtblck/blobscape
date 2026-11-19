@@ -1578,7 +1578,7 @@ export default [
   },
   {
     name: 'shifter',
-    about: 'Shape Shifter on both backends: from one creature to the other, the slider, random partners',
+    about: 'Shape Shifter on both backends: from one creature to the other with matched partners, the slider, random partners',
     entries: ['src/blobscape/ShapeShifter.tsx'],
     async run({ shots, join, fails, ok, open, tabClick, axe }) {
       for (const gl of ['', '&webgl=1']) {
@@ -1602,7 +1602,7 @@ export default [
         const [near, wild] = [...trip.matchAll(/(\d+\.\d+)/g)].map((m) => Number(m[1]))
         if (!(a.amount === 0 && b.amount === 1 && Math.abs(mid.amount - 0.5) < 1e-6 && a.green > 4000 && a.orange < a.green / 4 && b.orange > 2500 && b.green < b.orange / 4 && mid.green > 300 && mid.orange > 150 && mid.green < a.green * 0.7 && near < wild * 0.8) || (gl && on !== 'webgl')) {
           fails.push(`blobscape shape shifter (${on}): ${JSON.stringify({ a, mid, b, trip })}`)
-        } else ok(`blobscape shape shifter (${on}): frog (${a.green} green pixels) to fox (${b.orange} orange), both halfway (${mid.green}, ${mid.orange}); blobs travel ${near} paired by place, ${wild} at random`)
+        } else ok(`blobscape shape shifter (${on}): frog (${a.green} green pixels) to fox (${b.orange} orange), both halfway (${mid.green}, ${mid.orange}); blobs travel ${near} matched, ${wild} at random`)
         if (!gl) {
           // the slider stops the loop and shows that amount; random partners make the trips longer
           await tabClick(k.page.getByRole('slider', { name: 'Shift', exact: true }))
@@ -1611,7 +1611,7 @@ export default [
           const held = await k.page.evaluate(() => window.__shift.amount())
           await tabClick(k.page.getByRole('button', { name: 'At random', exact: true }))
           // the wording changes at once and the numbers once the new pairs are made: wait for the numbers
-          await k.page.waitForFunction((was) => { const t = document.querySelector('[data-testid=shift-trip]')?.textContent ?? ''; return /paired by place it would be/.test(t) && Number(t.match(/\d+\.\d+/)?.[0]) !== was }, near, { timeout: 60000 }).catch(() => {})
+          await k.page.waitForFunction((was) => { const t = document.querySelector('[data-testid=shift-trip]')?.textContent ?? ''; return /with matched partners it would be/.test(t) && Number(t.match(/\d+\.\d+/)?.[0]) !== was }, near, { timeout: 60000 }).catch(() => {})
           const swapped = [...((await k.page.getByTestId('shift-trip').textContent()) ?? '').matchAll(/(\d+\.\d+)/g)].map((m) => Number(m[1]))
           if (!(held === 0.25 && swapped[0] === wild && swapped[1] === near && await k.page.getByRole('button', { name: 'Play', exact: true }).count() === 1)) fails.push(`blobscape shape shifter: slider holds ${held}, random trips ${swapped} (were ${near}, ${wild})`)
           else ok(`blobscape shape shifter: the slider stops the loop at 25%, and random partners travel ${swapped[0]}`)

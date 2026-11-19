@@ -15,7 +15,7 @@ import { Blobs } from '../splat-core/blobs.ts'
  * Both are plain numbers on typed arrays: no bones, and nothing the GPU has to
  * know about but the blobs that come out.
  */
-export type Pairing = 'place' | 'random'
+export type Pairing = 'place' | 'match' | 'random'
 export type Path = 'straight' | 'swirl' | 'melt' | 'burst'
 export type Order = 'together' | 'rise' | 'scatter'
 
@@ -94,6 +94,102 @@ function pairByPlace(a: Blobs, ia: Uint32Array, b: Blobs, ib: Uint32Array) {
   walk(0, ia.length)
 }
 
+/** How much a step of color counts against a step of place in `matchPairs`, as a share of the shapes' size: a color from black to white costs as much as moving this far. */
+export const COLOR_WEIGHT = 0.06
+/** How many times `matchPairs` goes over every blob, at most. */
+export const MATCH_PASSES = 4
+/** How many neighbors each blob tries swapping partners with in a pass, at most. */
+const MATCH_TRIES = 24
+/** How many blobs `matchPairs` wants in a cell of its grid. */
+const PER_CELL = 4
+/** A cell and the 26 round it, nearest first. */
+const AROUND: [number, number, number][] = [-1, 0, 1].flatMap((x) => [-1, 0, 1].flatMap((y) => [-1, 0, 1].map((z) => [x, y, z] as [number, number, number]))).sort((p, q) => Math.abs(p[0]) + Math.abs(p[1]) + Math.abs(p[2]) - Math.abs(q[0]) - Math.abs(q[1]) - Math.abs(q[2]))
+
+/**
+ * Pairs closer to the best there is, starting from pairing by place: as transport problems are solved, the cost of a
+ * pairing is the sum of each pair's squared distance plus its squared change of color (`COLOR_WEIGHT`), and each blob swaps
+ * partners with whichever of the blobs near it saves the most, while any swap costs less. Each swap only lowers the cost, so it settles;
+ * paths that cross are what a swap undoes, and a blob goes to the part of the other shape that has its color where
+ * there is a choice (an eye to an eye). Neighbors are found on a grid of `a`'s places, a few in each cell. An idea
+ * from Silicon Jungle's Ink Studio, which pairs by optimal transport.
+ */
+export function matchPairs(a: Blobs, ia: Uint32Array, b: Blobs, ib: Uint32Array, passes = MATCH_PASSES): number {
+  const n = ia.length
+  if (n < 2) return 0
+  const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity]
+  for (let i = 0; i < n; i++) for (let k = 0; k < 3; k++) { const v = a.center[ia[i] * 3 + k]; if (v < min[k]) min[k] = v; if (v > max[k]) max[k] = v }
+  const extent = Math.max(max[0] - min[0], max[1] - min[1], max[2] - min[2], 1e-6)
+  const w = (COLOR_WEIGHT * extent) ** 2
+  const cost = (i: number, j: number) => {
+    const p = ia[i] * 3, q = ib[j] * 3
+    const dx = a.center[p] - b.center[q], dy = a.center[p + 1] - b.center[q + 1], dz = a.center[p + 2] - b.center[q + 2]
+    const r = a.color[p] - b.color[q], g = a.color[p + 1] - b.color[q + 1], u = a.color[p + 2] - b.color[q + 2]
+    return dx * dx + dy * dy + dz * dz + w * (r * r + g * g + u * u)
+  }
+  // a grid of a's places with a few blobs in each cell that has any: a creature is a shell, so the cell is sized to
+  // what is filled, halved until the cells hold about `PER_CELL`
+  let cell = extent / Math.max(1, Math.cbrt(n / PER_CELL)), side = 1
+  const keys = new Float64Array(n), order = new Uint32Array(n)
+  const bin = () => {
+    side = Math.ceil(extent / cell) + 1
+    const filled = new Set<number>()
+    for (let i = 0; i < n; i++) {
+      const c = [0, 1, 2].map((k) => Math.min(side - 1, Math.floor((a.center[ia[i] * 3 + k] - min[k]) / cell)))
+      keys[i] = (c[0] * side + c[1]) * side + c[2]
+      filled.add(keys[i])
+    }
+    return n / filled.size
+  }
+  for (let tries = 0; tries < 6 && bin() > PER_CELL * 2 && side < 1024; tries++) cell /= 2
+  for (let i = 0; i < n; i++) order[i] = i
+  order.sort((x, y) => keys[x] - keys[y])
+  const starts = new Map<number, number>()
+  for (let k = n - 1; k >= 0; k--) starts.set(keys[order[k]], k)
+  // a pair's partners worth trying: the blobs in its own cell, then the 26 round it, `MATCH_TRIES` at most
+  const near = new Uint32Array(MATCH_TRIES)
+  const neighbors = (i: number) => {
+    const c = keys[i], cx = Math.floor(c / (side * side)), cy = Math.floor(c / side) % side, cz = c % side
+    let m = 0
+    for (const [dx, dy, dz] of AROUND) {
+      if (m >= MATCH_TRIES) break
+      const x = cx + dx, y = cy + dy, z = cz + dz
+      if (x < 0 || y < 0 || z < 0 || x >= side || y >= side || z >= side) continue
+      const key = (x * side + y) * side + z
+      const at = starts.get(key)
+      if (at === undefined) continue
+      for (let k = at; k < n && keys[order[k]] === key && m < MATCH_TRIES; k++) if (order[k] !== i) near[m++] = order[k]
+    }
+    return m
+  }
+  let swaps = 0
+  for (let pass = 0; pass < passes; pass++) {
+    let these = 0
+    for (let i = 0; i < n; i++) {
+      // the swap among the neighbors that saves the most
+      const m = neighbors(i), own = cost(i, i)
+      let best = -1, most = 1e-12
+      for (let t = 0; t < m; t++) {
+        const j = near[t], save = own + cost(j, j) - cost(i, j) - cost(j, i)
+        if (save > most) { most = save; best = j }
+      }
+      if (best >= 0) { const x = ib[i]; ib[i] = ib[best]; ib[best] = x; these++ }
+    }
+    swaps += these
+    if (!these) break
+  }
+  return swaps
+}
+
+/** The mean over pairs of squared distance plus squared change of color weighed by `COLOR_WEIGHT`: what `matchPairs` lowers. */
+export function pairCost(s: Shift): number {
+  const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity]
+  for (let i = 0; i < s.count * 3; i++) { const v = s.from.center[i], k = i % 3; if (v < min[k]) min[k] = v; if (v > max[k]) max[k] = v }
+  const w = (COLOR_WEIGHT * Math.max(max[0] - min[0], max[1] - min[1], max[2] - min[2], 1e-6)) ** 2
+  let total = 0
+  for (let i = 0; i < s.count * 3; i++) { const d = s.to.center[i] - s.from.center[i], c = s.to.color[i] - s.from.color[i]; total += d * d + w * c * c }
+  return total / s.count
+}
+
 function take(b: Blobs, ids: Uint32Array): Blobs {
   const out = new Blobs(ids.length)
   out.count = ids.length
@@ -110,14 +206,18 @@ function take(b: Blobs, ids: Uint32Array): Blobs {
 
 /**
  * Gives every blob of `a` a partner in `b`. The shape with fewer blobs uses
- * some of its blobs twice, so nothing appears from nowhere. 'random' pairs
- * with no regard to place, to show what pairing by place is for.
+ * some of its blobs twice, so nothing appears from nowhere. 'match' starts
+ * from pairing by place and swaps partners while that lowers the cost
+ * (`matchPairs`). 'random' pairs with no regard to place, to show what pairing
+ * by place is for.
  */
 export function pairUp(a: Blobs, b: Blobs, pairing: Pairing = 'place'): Shift {
   const n = Math.max(a.count, b.count, 1)
   const ia = stretched(a, n), ib = stretched(b, n)
-  if (pairing === 'place') pairByPlace(a, ia, b, ib)
-  else {
+  if (pairing !== 'random') {
+    pairByPlace(a, ia, b, ib)
+    if (pairing === 'match') matchPairs(a, ia, b, ib)
+  } else {
     // a shuffle that is the same every time
     for (let i = n - 1; i > 0; i--) { const j = Math.floor(hash(i) * (i + 1)), t = ib[i]; ib[i] = ib[j]; ib[j] = t }
   }

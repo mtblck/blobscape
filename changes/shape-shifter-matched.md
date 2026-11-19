@@ -1,0 +1,1 @@
+Shape Shifter: matched partners, the new default, swap blobs between nearby pairs wherever that shortens trips or keeps colors closer, so paths stop crossing; an idea from Silicon Jungle's Ink Studio.
