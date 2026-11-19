@@ -8,11 +8,12 @@ import type { CreatureStage } from './creature/stage.ts'
 import { GROUND, LOOKS, PAPERS, SCREEN, css, isMark, type LookId } from './brushLooks.ts'
 import { NEON, NEON_GROUND, NEON_PACES, NEON_SETS, NEON_START, neonLook, type NeonChoice } from './neonLooks.ts'
 import { GLASS, GLASS_FILLS, GLASS_GROUND, GLASS_START, glassLook, type GlassChoice } from './glassLooks.ts'
+import { WASH, WASH_PAPERS, WASH_START, washGround, washLook, type WashChoice } from './washLooks.ts'
 import { BACKDROPS, CEL, CEL_START, FILL_REACH, celLook, nightLight, nightOf, type CelChoice } from './celLooks.ts'
 
-/** Every drawn look a page can offer: the marks, ASCII, cel shading, neon, stained glass, and the plain blobs. */
-export type Look = LookId | typeof CEL.id | typeof NEON.id | typeof GLASS.id
-export const ALL_LOOKS: { id: Look; label: string; note: string }[] = [...LOOKS.slice(0, -1), CEL, NEON, GLASS, LOOKS[LOOKS.length - 1]]
+/** Every drawn look a page can offer: the marks, ASCII, cel shading, neon, stained glass, watercolor, and the plain blobs. */
+export type Look = LookId | typeof CEL.id | typeof NEON.id | typeof GLASS.id | typeof WASH.id
+export const ALL_LOOKS: { id: Look; label: string; note: string }[] = [...LOOKS.slice(0, -1), CEL, NEON, GLASS, WASH, LOOKS[LOOKS.length - 1]]
 /** The looks that light the blobs themselves, and so want them built with no light baked in (`unlit`). */
 export const wantsPlain = (look: Look | undefined) => look === 'cel' || look === 'neon' || look === 'glass'
 
@@ -54,6 +55,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   })
   const [neon, setNeon] = useState<NeonChoice>(NEON_START)
   const [glass, setGlass] = useState<GlassChoice>(GLASS_START)
+  const [wash, setWash] = useState<WashChoice>(WASH_START)
   const [size, setSize] = useState(1)
   // outlines: on for the two pen looks and cel shading unless the visitor says otherwise
   const [outlined, setOutlined] = useState<boolean | null>(() => (params().get('outline') === '1' ? true : params().get('outline') === '0' ? false : null))
@@ -77,7 +79,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   const night = inScene ? skyDark : 0
 
   const sheet = PAPERS.find((p) => p.id === paper)!
-  const marks = useMemo<MarkLook | undefined>(() => (look && look !== 'cel' && look !== 'neon' && look !== 'glass' && isMark(look) ? { kind: look, size, ink: sheet.ink, paper: sheet.paper, soft } : undefined), [look, size, sheet, soft])
+  const marks = useMemo<MarkLook | undefined>(() => (look && look !== 'cel' && look !== 'neon' && look !== 'glass' && look !== 'watercolor' && isMark(look) ? { kind: look, size, ink: sheet.ink, paper: sheet.paper, soft } : undefined), [look, size, sheet, soft])
   useEffect(() => { stage?.setMarks(marks) }, [stage, marks, actor])
   const ascii = look === 'ascii'
   // off screen a frame is drawn only when asked for, and must not depend on the one before (`?steady=` says otherwise, for the checks)
@@ -95,7 +97,10 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   const skyKey = sky ? sky.flat().join() : ''
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { stage?.setGlass(glazed ? glassLook(glass, sky) : undefined) }, [stage, glazed, glass, skyKey])
-  const outline = !!look && !ascii && !lit && !glazed && (outlined ?? (look === 'ink' || look === 'hatch' || look === 'cel'))
+  const painted = look === 'watercolor'
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { stage?.setWash(painted ? washLook(wash, sky) : undefined) }, [stage, painted, wash, skyKey])
+  const outline = !!look && !ascii && !lit && !glazed && !painted && (outlined ?? (look === 'ink' || look === 'hatch' || look === 'cel'))
   useEffect(() => { stage?.setCel(look === 'cel' ? { ...celLook({ ...cel, backdrop: celBase, turn: cel.turn + azimuth, line: outline ? pen : 0 }), ambient: nightLight(night), ...(light ? { shadowSize: 1024, shadowEvery: offscreen ? 1 : 2 } : {}) } : undefined) }, [stage, look, cel, celBase, night, outline, pen, azimuth, light, offscreen])
   // flat fills: each part's colors gathered into a few, shown in place of the blobs' own (which stay as they were)
   useEffect(() => {
@@ -114,7 +119,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   // paint covers its ground, so a subject with a sky of its own stands in front of that
   const isPaint = look === 'gouache' || look === 'oil'
   const backdrop = BACKDROPS.find((b) => b.id === celBase) ?? BACKDROPS[0]
-  const ground = !look || look === 'blobs' ? undefined : look === 'cel' ? (inScene ? skyBack.back : backdrop.back) : lit ? NEON_GROUND : glazed ? GLASS_GROUND : ascii ? css(own ? SCREEN : sheet.paper) : drawnOn ? css(sheet.paper) : skyBack && isPaint ? skyBack.back : GROUND
+  const ground = !look || look === 'blobs' ? undefined : look === 'cel' ? (inScene ? skyBack.back : backdrop.back) : lit ? NEON_GROUND : glazed ? GLASS_GROUND : painted ? washGround(wash) : ascii ? css(own ? SCREEN : sheet.paper) : drawnOn ? css(sheet.paper) : skyBack && isPaint ? skyBack.back : GROUND
 
   const controls = !look ? null : (
     <>
@@ -164,7 +169,21 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
             <Slider label="Glass varies" value={glass.vary} min={0} max={1} step={0.05} onChange={(vary) => setGlass((c) => ({ ...c, vary }))} format={(v) => `${Math.round(v * 100)}%`} hint="How much one pane's glass differs from the next's." />
           </div>
         )}
-        {look !== 'cel' && !lit && !glazed && isMark(look) && (
+        {painted && (
+          <div className="space-y-4" data-testid="brush-wash">
+            <Slider label="Edges run" value={wash.bleed} min={0} max={14} step={1} onChange={(bleed) => setWash((c) => ({ ...c, bleed }))} format={(v) => `${v} px`} hint="How far a wash's edge wanders over the paper." />
+            <Slider label="Dark edges" value={wash.pool} min={0} max={1} step={0.05} onChange={(pool) => setWash((c) => ({ ...c, pool }))} format={(v) => `${Math.round(v * 100)}%`} hint="Paint pools where a wash ends or its color changes, and dries darker there." />
+            <Slider label="Paper grain" value={wash.grain} min={0} max={1} step={0.05} onChange={(grain) => setWash((c) => ({ ...c, grain }))} format={(v) => `${Math.round(v * 100)}%`} />
+            <Slider label="Paint strength" value={wash.strength} min={0.3} max={1} step={0.05} onChange={(strength) => setWash((c) => ({ ...c, strength }))} format={(v) => `${Math.round(v * 100)}%`} hint="Lower is paler, with more of the paper showing through." />
+            <Slider label="Pencil" value={wash.pencil} min={0} max={1} step={0.05} onChange={(pencil) => setWash((c) => ({ ...c, pencil }))} format={(v) => (v === 0 ? 'None' : `${Math.round(v * 100)}%`)} hint="A pencil line under the paint, round each thing and between its parts." />
+            <Field label="Paper">
+              <div className="flex flex-wrap gap-1.5">
+                {WASH_PAPERS.map((p) => <Chip key={p.id} active={wash.paper === p.id} onClick={() => setWash((c) => ({ ...c, paper: p.id }))}>{p.label}</Chip>)}
+              </div>
+            </Field>
+          </div>
+        )}
+        {look !== 'cel' && !lit && !glazed && !painted && isMark(look) && (
           <Slider label="Mark size" value={size} min={0.5} max={1.3} step={0.05} onChange={setSize} format={(v) => `${Math.round(v * 100)}%`} hint="Smaller marks leave gaps between them; bigger ones overlap more." />
         )}
         {ascii && (
@@ -202,7 +221,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
             <p role="status" className="mt-1.5 text-xs text-ink-faint" data-testid="brush-copied">{copied || 'The picture as it stands now, in plain characters: paste it anywhere with a fixed-width font.'}</p>
           </div>
         )}
-        {!ascii && !lit && !glazed && (
+        {!ascii && !lit && !glazed && !painted && (
           <div data-testid="brush-outline">
             <Toggle label="Outlines" checked={outline} onChange={setOutlined} />
             <p className="mt-1.5 text-xs text-ink-faint">{look === 'cel' ? 'An even line round the subject, where one thing stands in front of another, and between its parts.' : 'A pen line round the subject, where one thing stands in front of another, and between its parts. Heavier against dark things, and it lifts off here and there against light ones.'}</p>

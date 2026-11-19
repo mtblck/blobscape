@@ -24,6 +24,8 @@ import { NeonPass } from './neonPass.ts'
 import { NEON_EMIT, type NeonLook } from '../splat-core/neon.ts'
 import { GlassPass } from './glassPass.ts'
 import type { GlassLook } from '../splat-core/glass.ts'
+import { WashPass } from './washPass.ts'
+import type { WashLook } from '../splat-core/wash.ts'
 import { GlyphPass } from './glyphPass.ts'
 import { glyphScale, glyphText, type GlyphLook } from '../splat-core/glyphs.ts'
 import { SplatLens } from './lens.ts'
@@ -582,6 +584,23 @@ export class Stage {
     this.invalidate()
   }
 
+  private wash?: WashPass
+  private washLook?: WashLook
+  /**
+   * Watercolor (splat-core/wash.ts): the picture laid on paper as thin see-through washes whose edges run and dry
+   * darker, with the paper's grain showing through, the lightest places left bare, a wash of the look's sky behind
+   * and a faint pencil line underneath. The paper covers the canvas. Every blob is drawn flat in its own color while
+   * it is on, under the stage's own lights. Leave the look out to stop. Kept for the next actor too. Not in pixel
+   * mode; ASCII, cel shading, neon and stained glass come first if set, and outlines and the lens wait.
+   */
+  setWash(look?: WashLook) {
+    this.washLook = look
+    if (!look) { this.wash?.dispose(); this.wash = undefined }
+    else this.wash ??= new WashPass()
+    this.dress()
+    this.invalidate()
+  }
+
   private glass?: GlassPass
   private glassLook?: GlassLook
   /**
@@ -606,7 +625,7 @@ export class Stage {
     if (!world) return
     const cel = this.opts.lights ? this.celLook : undefined
     world.cel = !!cel
-    world.setMarks(cel || this.neonLook || this.glassLook ? { kind: 'flat' } : this.marks)
+    world.setMarks(cel || this.neonLook || this.glassLook || this.washLook ? { kind: 'flat' } : this.marks)
     if (!this.opts.lights) return
     this.light()
   }
@@ -772,6 +791,13 @@ export class Stage {
       const { lo, hi } = this.world.posedBox()
       this.glass.setLook(this.glassLook, this.renderer.getPixelRatio(), Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]))
       this.glass.render(this.renderer, this.scene, this.camera)
+      return
+    }
+    if (!this.pixel && this.wash && this.washLook) {
+      const { x, y } = this.target ? { x: this.target.width, y: this.target.height } : this.renderer.getDrawingBufferSize(this.buffer)
+      this.wash.setSize(x, y)
+      this.wash.setLook(this.washLook, this.renderer.getPixelRatio())
+      this.wash.render(this.renderer, this.scene, this.camera)
       return
     }
     if (!this.pixel && this.lines) {
@@ -1047,6 +1073,7 @@ export class Stage {
     this.lines?.dispose()
     this.neon?.dispose()
     this.glass?.dispose()
+    this.wash?.dispose()
     this.glyphs?.dispose()
     this.lens?.dispose()
     this.cel?.dispose()

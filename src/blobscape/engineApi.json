@@ -23,7 +23,7 @@
   {
    "id": "pixels",
    "title": "Pixels and sprites",
-   "doc": "Drawing a stage as pixel art, as brush and ink marks, as characters, cel shaded, in neon or as stained glass, and baking a creature into a sprite sheet."
+   "doc": "Drawing a stage as pixel art, as brush and ink marks, as characters, cel shaded, in neon, as stained glass or in watercolor, and baking a creature into a sprite sheet."
   },
   {
    "id": "simulation",
@@ -459,6 +459,15 @@
        "signatures": [
         {
          "code": "setNeon(look?: NeonLook): void"
+        }
+       ]
+      },
+      {
+       "name": "setWash",
+       "doc": "Watercolor (splat-core/wash.ts): the picture laid on paper as thin see-through washes whose edges run and dry\ndarker, with the paper's grain showing through, the lightest places left bare, a wash of the look's sky behind\nand a faint pencil line underneath. The paper covers the canvas. Every blob is drawn flat in its own color while\nit is on, under the stage's own lights. Leave the look out to stop. Kept for the next actor too. Not in pixel\nmode; ASCII, cel shading, neon and stained glass come first if set, and outlines and the lens wait.",
+       "signatures": [
+        {
+         "code": "setWash(look?: WashLook): void"
         }
        ]
       },
@@ -8673,6 +8682,215 @@
      "signatures": [
       {
        "code": "backLight(at: readonly number[], light: readonly number[], shine?: number, aspect?: number): number"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "washPass",
+   "title": "Watercolor",
+   "group": "pixels",
+   "doc": "",
+   "entries": [
+    {
+     "name": "WashPass",
+     "kind": "class",
+     "doc": "Watercolor (splat-core/wash.ts). The frame is drawn three times with the same moved and sorted blobs (the picture\nin the blobs' own flat colors, and for the pencil a map of depth and a map of parts). The picture is softened at\nhalf and at a quarter of its size, and one pass paints the paper: each pixel reads the softened picture a little\nto one side (the paper's own wander, fixed on the screen, so a wash's edge runs unevenly), takes its color as\npigment, and lays it on the paper as see-through paint (`washed`): thinner and thicker from place to place,\ngathered into the paper's grain, darker where the wash ends or its color changes (the softened picture against\nthe more softened one), and not at all where the picture is lightest. A look's sky is a wash behind the subject\nthat stops short of the paper's edge; a faint pencil line runs where outlines would.\n\nThe world should be drawing flat marks (`Stage.setWash` sets them).",
+     "ctor": [
+      {
+       "code": "new WashPass()"
+      }
+     ],
+     "props": [
+      {
+       "name": "picture",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
+       "doc": "The picture: every blob flat in its own color."
+      },
+      {
+       "name": "ids",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
+       "doc": "The map of parts the pencil's lines between parts come from."
+      }
+     ],
+     "methods": [
+      {
+       "name": "setLook",
+       "doc": "The look, and how many device pixels a CSS pixel is.",
+       "signatures": [
+        {
+         "code": "setLook(look: WashLook, ratio: number): void"
+        }
+       ]
+      },
+      {
+       "name": "setSize",
+       "doc": "Sizes the pass's targets, in device pixels.",
+       "signatures": [
+        {
+         "code": "setSize(width: number, height: number): void"
+        }
+       ]
+      },
+      {
+       "name": "render",
+       "doc": "Draws the scene in watercolor into the renderer's current target, or onto the screen when it has none.",
+       "signatures": [
+        {
+         "code": "render(renderer: WebGPURenderer, scene: Object3D, camera: Camera): void"
+        }
+       ]
+      },
+      {
+       "name": "dispose",
+       "doc": "Frees its targets.",
+       "signatures": [
+        {
+         "code": "dispose(): void"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "wash",
+   "title": "Watercolor: the arithmetic",
+   "group": "pixels",
+   "doc": "Watercolor (Matt picked it, 2026-11-19): a scene painted in thin washes on paper. Paint is see-through, so a wash\ndarkens the paper under it and never covers it; its edges run a little and dry darker where the pigment pools;\nthe paper's grain shows through; the lightest places are left as bare paper. The arithmetic here is pure;\n`splat-engine/washPass.ts` is its shader twin (change both).",
+   "entries": [
+    {
+     "name": "WashLook",
+     "kind": "interface",
+     "doc": "How a stage draws watercolor (`Stage.setWash`).",
+     "props": [
+      {
+       "name": "bleed",
+       "optional": true,
+       "type": "number",
+       "doc": "How far a wash's edge runs and wanders, in CSS pixels (4)."
+      },
+      {
+       "name": "pool",
+       "optional": true,
+       "type": "number",
+       "doc": "How much darker a wash dries at its edges, 0 to 1 (0.6)."
+      },
+      {
+       "name": "grain",
+       "optional": true,
+       "type": "number",
+       "doc": "How much the paper's grain shows in the paint, 0 to 1 (0.55)."
+      },
+      {
+       "name": "strength",
+       "optional": true,
+       "type": "number",
+       "doc": "How strong the paint is, 0 to 1: lower is paler, with more paper showing (0.7)."
+      },
+      {
+       "name": "pencil",
+       "optional": true,
+       "type": "number",
+       "doc": "A pencil line under the paint, 0 for none to 1 (0.55)."
+      },
+      {
+       "name": "paper",
+       "optional": true,
+       "type": "readonly [number, number, number]",
+       "doc": "The paper (sRGB 0–1)."
+      },
+      {
+       "name": "sky",
+       "optional": true,
+       "type": "readonly [readonly [number, number, number], readonly [number, number, number]]",
+       "doc": "A wash behind the subject, top and bottom (sRGB 0–1), laid short of the paper's edge. Left out, the paper is bare."
+      }
+     ]
+    },
+    {
+     "name": "WASH_PAPER",
+     "kind": "const",
+     "doc": "The paper (sRGB 0–1): a warm white.",
+     "type": "readonly [number, number, number]"
+    },
+    {
+     "name": "WASH_PENCIL",
+     "kind": "const",
+     "doc": "The pencil (sRGB 0–1).",
+     "type": "readonly [number, number, number]"
+    },
+    {
+     "name": "WASH_WHITE",
+     "kind": "const",
+     "doc": "A color this light or lighter (its brightest channel, linear) is left as bare paper, and one under the second is painted at full strength.",
+     "type": "readonly [number, number]"
+    },
+    {
+     "name": "WASH_RICH",
+     "kind": "const",
+     "doc": "Paint is richer wet than the picture's color: made this much stronger about its gray.",
+     "type": "1.25"
+    },
+    {
+     "name": "WASH_UNEVEN",
+     "kind": "const",
+     "doc": "A wash is this much thinner or thicker from place to place, as water carries the pigment about.",
+     "type": "0.22"
+    },
+    {
+     "name": "WASH_MARGIN",
+     "kind": "const",
+     "doc": "The wash behind the subject stops this far short of the paper's edge, as a share of the picture's height, give or take as much again.",
+     "type": "0.05"
+    },
+    {
+     "name": "WASH_SKY",
+     "kind": "const",
+     "doc": "And is laid this thin beside the subject's own paint.",
+     "type": "0.55"
+    },
+    {
+     "name": "washed",
+     "kind": "function",
+     "doc": "Paper with one wash on it: `paint` is the pigment's color (linear, 0–1), `density` how much of it lies there (0\nnone, 1 a full wash, more where it pooled). Paint only ever takes light away, so the result is never lighter\nthan the paper.",
+     "signatures": [
+      {
+       "code": "washed(paper: readonly number[], paint: readonly number[], density: number): [number, number, number]"
+      }
+     ]
+    },
+    {
+     "name": "pigment",
+     "kind": "function",
+     "doc": "The pigment for a picture's color (linear): a little richer, and never quite black.",
+     "signatures": [
+      {
+       "code": "pigment(rgb: readonly number[]): [number, number, number]"
+      }
+     ]
+    },
+    {
+     "name": "kept",
+     "kind": "function",
+     "doc": "How much of a color is painted at all: nothing for the lightest (bare paper stands for it), all of it for the rest. `top` is its brightest channel.",
+     "signatures": [
+      {
+       "code": "kept(top: number): number"
+      }
+     ]
+    },
+    {
+     "name": "density",
+     "kind": "function",
+     "doc": "How much paint lies at a place: the wash's `cover` there (0 off it, 1 well inside), thinned or thickened by the\nwater (`water`, 0–1), gathered into the paper's grain (`tooth`, 0–1, by `grain`), and more where it pooled as it\ndried (`edge`, 0–1: how near the wash's edge or a change of color, by `pool`).",
+     "signatures": [
+      {
+       "code": "density(cover: number, water: number, tooth: number, edge: number, look?: { strength?: number; grain?: number; pool?: number }): number"
       }
      ]
     }

@@ -212,7 +212,7 @@ export function BrushInk() {
           <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => setOrbit(sub.orbit)} />
         </>}
         status={<>
-          <span>{built?.id === subject && built.plain === plain ? <><span className="tabular-nums text-ink" data-testid="brush-blobs">{built.count.toLocaleString()}</span> blobs from {sub.from}{look === 'blobs' ? '.' : look === 'cel' ? ', lit as you see them.' : look === 'neon' ? ', lit by their own outlines.' : look === 'glass' ? ', cut into panes.' : ascii ? ', read off as characters.' : ', one mark each.'}</> : 'Making it…'}</span>
+          <span>{built?.id === subject && built.plain === plain ? <><span className="tabular-nums text-ink" data-testid="brush-blobs">{built.count.toLocaleString()}</span> blobs from {sub.from}{look === 'blobs' ? '.' : look === 'cel' ? ', lit as you see them.' : look === 'neon' ? ', lit by their own outlines.' : look === 'glass' ? ', cut into panes.' : look === 'watercolor' ? ', laid on paper as washes.' : ascii ? ', read off as characters.' : ', one mark each.'}</> : 'Making it…'}</span>
           <span>{lookNow.label} on {backend}</span>
         </>}
         tabsLabel="Options"

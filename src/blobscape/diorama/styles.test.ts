@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { STYLES, styleAsked, styleWords } from './styles.ts'
 import { LOOKS } from '../brushLooks.ts'
 import { CEL } from '../celLooks.ts'
+import { WASH, WASH_PAPERS, WASH_START, washLook } from '../washLooks.ts'
 import { GLASS, glassLook, GLASS_START } from '../glassLooks.ts'
 import { NEON, NEON_PACES, neonLook, NEON_START, periodIn } from '../neonLooks.ts'
 
@@ -10,8 +11,8 @@ test('pixel art comes first, then every look Brush and Ink offers, each once', (
   assert.equal(STYLES[0].id, 'pixel')
   const ids = STYLES.map((s) => s.id)
   assert.equal(new Set(ids).size, ids.length)
-  for (const l of [...LOOKS, CEL, NEON, GLASS]) assert.ok(ids.includes(l.id), `${l.id} is offered`)
-  assert.equal(ids.length, LOOKS.length + 4)
+  for (const l of [...LOOKS, CEL, NEON, GLASS, WASH]) assert.ok(ids.includes(l.id), `${l.id} is offered`)
+  assert.equal(ids.length, LOOKS.length + 5)
 })
 
 test('an address picks a style, and anything else is pixel art', () => {
@@ -21,6 +22,7 @@ test('an address picks a style, and anything else is pixel art', () => {
   assert.equal(styleAsked('ascii'), 'ascii')
   assert.equal(styleAsked(null), 'pixel')
   assert.equal(styleAsked('glass'), 'glass')
+  assert.equal(styleAsked('watercolor'), 'watercolor')
   assert.equal(styleAsked('woodcut'), 'pixel')
 })
 
@@ -47,4 +49,11 @@ test('stained glass takes a scene\'s own sky for the window round it', () => {
   assert.equal(glassLook(GLASS_START).sky, undefined)
   assert.deepEqual(glassLook(GLASS_START, [[255, 0, 51], [0, 102, 255]]).sky, [[1, 0, 0.2], [0, 0.4, 1]])
   assert.equal(styleWords('glass'), 'in stained glass')
+})
+
+test('watercolor is laid on a light paper, with a scene\'s own sky behind', () => {
+  for (const p of WASH_PAPERS) assert.ok(Math.min(...p.paper) > 0.8, p.id)
+  assert.equal(washLook(WASH_START).sky, undefined)
+  assert.deepEqual(washLook(WASH_START, [[255, 255, 255], [0, 0, 0]]).sky, [[1, 1, 1], [0, 0, 0]])
+  assert.equal(styleWords('watercolor'), 'in watercolor')
 })
