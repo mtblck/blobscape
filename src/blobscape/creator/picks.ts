@@ -68,3 +68,15 @@ export const LIGHTHOUSE_PICKS: PropPick[] = [
   { name: 'Sailing boat', bones: ['boat'] },
   { name: 'Buoy', bones: ['buoy'] },
 ]
+
+/** The lighthouse (scenes/lighthouse.ts): the tower with its turning lamp and beams, the cottage, three pines, the jetty, the boat and the buoy. Gulls, clouds and foam stay with the sea. */
+export const LIGHTHOUSE_PICKS: PropPick[] = [
+  { name: 'Lighthouse', parts: [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23], bones: ['lamp'] },
+  { name: "Keeper's cottage", parts: [25, 26, 27, 28, 29, 30], bones: ['smoke0', 'smoke1', 'smoke2'] },
+  { name: 'Tall pine', bones: ['tree0'] },
+  { name: 'Pine', bones: ['tree1'] },
+  { name: 'Small pine', bones: ['tree2'] },
+  { name: 'Jetty', parts: [46, 47, 48, 49] },
+  { name: 'Sailing boat', bones: ['boat'] },
+  { name: 'Buoy', bones: ['buoy'] },
+]
