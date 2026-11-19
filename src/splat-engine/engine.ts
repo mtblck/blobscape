@@ -2102,6 +2102,15 @@ function placeQuad(ndc: N, axes: N, tilt: N, rgba: N, idx: N, flat: Flat, cut?: 
 /** Which map the draw is (0 the picture, 1 parts, 2 depth, 3 tones, 4 how the blobs lie, 5 dither steps), where a depth map's depths are counted from, and whether each blob's depth follows its own slope. */
 interface Flat { mode: N; base: N; slope: N }
 
+/**
+ * A blob's part word as four bytes, 0–1: part number (red, green), actor (blue) and dither step (alpha). Taken apart
+ * by shifts, not `unpackUnorm4x8`, which on the WebGL backend gave the wrong low byte once the top byte was set.
+ */
+function unpackPart(word: N) {
+  const w = uint(word).toVar()
+  return vec4(float(w.bitAnd(uint(255))), float(w.shiftRight(uint(8)).bitAnd(uint(255))), float(w.shiftRight(uint(16)).bitAnd(uint(255))), float(w.shiftRight(uint(24)).bitAnd(uint(255)))).div(255)
+}
+
 /** What a blob draws as: its picture color, its part's flat color (map of parts), its depth (depth map) its tone (map of tones) or how it lies (`lieMap`). */
 function flatColor(flat: Flat, part: N, depth: N, picture: N, tone: N, axes: N) {
   return select(flat.mode.greaterThan(4.5), vec3(part.a, 0, 0), flatOf(flat, part.rgb, depth, picture, tone, axes))
@@ -2139,7 +2148,7 @@ function makeVertexWebGPU(buf: ReturnType<typeof makeBuffers>, sort: Sorter, fog
     // depth in front of the camera from the screen depth the project pass wrote, so the draw binds no extra buffer:
     // ndc z = −(P22·z + P32) / z for a perspective camera, so −z = P32 / (ndc z + P22)
     const depth = cameraProjectionMatrix[3].z.div(A.z.add(cameraProjectionMatrix[2].z))
-    const part = unpackUnorm4x8(buf.part.element(idx))
+    const part = unpackPart(buf.part.element(idx))
     return placeQuad(A.xyz, buf.splatB.element(idx), buf.splatC.element(idx).xyz, vec4(flatColor(flat, part, depth, fogged(color.rgb, depth, fog), tone, buf.splatB.element(idx)), color.a.mul(A.w)), idx, flat, clean ? { covA: buf.covA.element(idx), covB: buf.covB.element(idx) } : undefined)
   })()
 }
@@ -2162,7 +2171,7 @@ function makeVertexWebGL(buf: ReturnType<typeof makeBuffers>, sort: Sorter, mode
       rgb = select(L.cel.greaterThan(0.5), mine, lit(mine, d.world, d.covA, d.covB, buf.seen.element(idx), L))
       If(L.cel.greaterThan(0.5), () => { tone.assign(toned(d.world, d.covA, d.covB, buf.seen.element(idx), L)) })
     }
-    const part = unpackUnorm4x8(buf.part.element(idx))
+    const part = unpackPart(buf.part.element(idx))
     return placeQuad(p.ndc, p.axes, p.tilt, vec4(flatColor(flat, part, p.depth, fogged(rgb, p.depth, fog), tone, p.axes), color.a.mul(p.alphaScale)), idx, flat, clean ? d : undefined)
   })()
 }
