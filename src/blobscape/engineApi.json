@@ -873,6 +873,11 @@
        "doc": "While true, the draw is a depth map: every blob a hard disc (as in the map of parts) whose color is its distance in\nfront of the camera, in units, in all three channels. Drawn after the frame's own render with `hold`, the frame's\nsort puts the nearest disc last, so each pixel keeps the nearest depth. `SplatDepth` (depth.ts) draws it."
       },
       {
+       "name": "lieMap",
+       "type": "boolean",
+       "doc": "While true, the draw is a map of how the blobs lie on the screen: every blob a hard disc whose color says which\nway its long axis runs and how much longer than wide it is there (`lieColor` in splat-core/glyphs.ts is the CPU\ntwin of the color). A strand of fur or a blade of grass is long and thin from any side; a disc on a surface is\nonly so where the surface is seen nearly edge on. Drawing as characters reads it for strokes along strands."
+      },
+      {
        "name": "autoDetail",
        "type": "false | DetailRule",
        "doc": "Level of detail: while set, each actor draws a share of its blobs by how big it is on screen (`detailFor`),\nthe rest grown to cover for them. Off (every blob drawn) unless asked for; turning it off draws every blob again."
@@ -7568,6 +7573,12 @@
        "doc": "Draw a stroke where an edge runs through a cell: where the picture ends, one thing stands in front of another, two parts meet, or the tone changes sharply (default true)."
       },
       {
+       "name": "strands",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Draw a stroke along what is long and thin on the screen, such as strands of fur and blades of grass, where a cell\nis mostly that (default true). The stroke is the one of `|`, `_`, `/` and `` nearest the way they run."
+      },
+      {
        "name": "steady",
        "optional": true,
        "type": "number",
@@ -7658,10 +7669,10 @@
     {
      "name": "glyphCell",
      "kind": "function",
-     "doc": "One cell: its character and color from the picture's mean over the cell (`rgb` linear and premultiplied, `cover`\nits alpha), the two rings of probes when edges are wanted (the inner eight, then the outer eight), and the character\nit had the frame before (-1 for none). `ink` here is linear.",
+     "doc": "One cell: its character and color from the picture's mean over the cell (`rgb` linear and premultiplied, `cover`\nits alpha), the two rings of probes when edges are wanted (the inner eight, then the outer eight), and the character\nit had the frame before (-1 for none). `ink` here is linear. `lie` is the cell's mean lie (`strandFor`) when strands\nare wanted: a cell of strands takes their stroke, lit by its tone, before any edge is looked for.",
      "signatures": [
       {
-       "code": "glyphCell(rgb: ArrayLike<number>, cover: number, probes: readonly Probe[] | undefined, look?: GlyphLook, before?: number, ink?: ArrayLike<number>): GlyphCell"
+       "code": "glyphCell(rgb: ArrayLike<number>, cover: number, probes: readonly Probe[] | undefined, look?: GlyphLook, before?: number, ink?: ArrayLike<number>, lie?: ArrayLike<number>): GlyphCell"
       }
      ]
     },

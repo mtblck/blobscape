@@ -722,6 +722,15 @@ export default [
         const lit = solid(ascii)
         if (!(differ(ascii, blobs) > 0.01) || differ(ascii, asciiAgain, 0) !== 0 || !(rows.length > 15 && chars.length > 300 && heavy > 5 && strokes > 20 && strokes < chars.length * 0.6) || !(lit > 0.005 && lit < solid(blobs)) || !/rgb\((1?[0-9]), (1?[0-9]), (1?[0-9])\)/.test(screen)) fails.push(`brush and ink on ${backend}: ASCII: ${differ(ascii, blobs)} of the view changed from blobs, twice differs ${differ(ascii, asciiAgain, 0)}, ${rows.length} lines, ${chars.length} characters (${heavy} heavy, ${strokes} strokes), ${lit} of the view lit against ${solid(blobs)} as blobs, screen ${screen}`)
         else ok(`brush and ink on ${backend}: ASCII draws the fox as ${chars.length} characters in ${rows.length} lines (${strokes} of them strokes along edges), the same when drawn twice`)
+        // strokes along the fur: switching them off leaves fewer strokes and the same picture otherwise
+        const furBox = k.page.getByTestId('brush-strands').getByRole('checkbox')
+        await tabClick(furBox)
+        await read(k.page)
+        const plainText = (await k.page.evaluate(() => window.__brush.text())) ?? ''
+        await tabClick(furBox)
+        const unfurred = (plainText.match(/[|_/\\]/g) ?? []).length
+        if (!(strokes > unfurred + 20)) fails.push(`brush and ink on ${backend}: ASCII strokes along fur: ${strokes} strokes with them, ${unfurred} without`)
+        else ok(`brush and ink on ${backend}: ASCII draws the fox's fur as strokes the way it runs (${strokes} strokes, ${unfurred} without them)`)
         await pick(k.page, 'Blobs', 'blobs')
         pictures[backend] = { gouache, hatch, ink, text }
         const m = { backend: got, same: differ(gouache, again, 0), cover: solid(gouache), blobs: solid(blobs), paint: differ(gouache, blobs), oil: differ(oil, gouache), ink: differ(ink, gouache), hatch: differ(hatch, ink), paper }

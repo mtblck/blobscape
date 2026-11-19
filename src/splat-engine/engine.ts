@@ -16,6 +16,7 @@ const {
 } = TSL
 import { MAX_STRETCH, packWeights, skinBlob, skinCenters, type Skeleton, type Skin, type SkinMode } from './rig.ts'
 import { GRAD_STRIDE, weightGradients } from './stretch.ts'
+import { LIE_FROM, LIE_FULL } from '../splat-core/glyphs.ts'
 import { DepthSort } from './sort.ts'
 import { RadixSort } from './radix.ts'
 
@@ -193,6 +194,14 @@ export class SplatWorld extends Mesh {
    */
   get depthMap() { return this.flat.value === 2 }
   set depthMap(on: boolean) { this.flat.value = on ? 2 : 0 }
+  /**
+   * While true, the draw is a map of how the blobs lie on the screen: every blob a hard disc whose color says which
+   * way its long axis runs and how much longer than wide it is there (`lieColor` in splat-core/glyphs.ts is the CPU
+   * twin of the color). A strand of fur or a blade of grass is long and thin from any side; a disc on a surface is
+   * only so where the surface is seen nearly edge on. Drawing as characters reads it for strokes along strands.
+   */
+  get lieMap() { return this.flat.value === 3 }
+  set lieMap(on: boolean) { this.flat.value = on ? 3 : 0 }
 
   private readonly boneOffset: number[]
   /** Per actor, the share of its blobs left out (0: all drawn). Sent to the GPU in each of its bones' spare matrix slot. */
@@ -1939,8 +1948,22 @@ function placeQuad(ndc: N, axes: N, tilt: N, rgba: N, idx: N, cut?: { covA: N; c
 }
 
 /** What a blob draws as: its picture color, its part's flat color (map of parts), or its depth (depth map). */
-function flatColor(flat: N, part: N, depth: N, picture: N) {
-  return select(flat.greaterThan(1.5), vec3(depth), select(flat.greaterThan(0.5), part, picture))
+function flatColor(flat: N, part: N, depth: N, picture: N, axes: N) {
+  return select(flat.greaterThan(2.5), lieOf(axes), select(flat.greaterThan(1.5), vec3(depth), select(flat.greaterThan(0.5), part, picture)))
+}
+
+/** How a blob lies on the screen, as a color, from its two screen axes (NDC): `lieColor` in splat-core/glyphs.ts is the CPU twin (change both). */
+function lieOf(axes: N) {
+  const a = axes.xy.mul(cameraViewport.zw).toVar(), b = axes.zw.mul(cameraViewport.zw).toVar()
+  const la = dot(a, a), lb = dot(b, b)
+  const long = select(la.greaterThanEqual(lb), a, b).toVar()
+  const l2 = max(la, lb).max(1e-12), s2 = min(la, lb)
+  // how much longer than wide: nothing under `LIE_FROM`, all of it from `LIE_FULL`
+  const t = float(1).sub(sqrt(s2.div(l2))).sub(LIE_FROM).div(LIE_FULL - LIE_FROM).clamp(0, 1).toVar()
+  const e = t.mul(t).mul(float(3).sub(t.mul(2)))
+  // twice the angle, so a line and the same line turned end for end are one color
+  const c = long.x.mul(long.x).sub(long.y.mul(long.y)).div(l2), sn = long.x.mul(long.y).mul(2).div(l2)
+  return vec3(c.mul(e).mul(0.5).add(0.5), sn.mul(e).mul(0.5).add(0.5), e)
 }
 
 function makeVertexWebGPU(buf: ReturnType<typeof makeBuffers>, sort: Sorter, fog: Fog, flat: N, L?: Lighting, clean = false) {
@@ -1953,7 +1976,7 @@ function makeVertexWebGPU(buf: ReturnType<typeof makeBuffers>, sort: Sorter, fog
     // ndc z = −(P22·z + P32) / z for a perspective camera, so −z = P32 / (ndc z + P22)
     const depth = cameraProjectionMatrix[3].z.div(A.z.add(cameraProjectionMatrix[2].z))
     const part = unpackUnorm4x8(buf.part.element(idx))
-    return placeQuad(A.xyz, buf.splatB.element(idx), buf.splatC.element(idx).xyz, vec4(flatColor(flat, part.rgb, depth, fogged(color.rgb, depth, fog)), color.a.mul(A.w)), idx, clean ? { covA: buf.covA.element(idx), covB: buf.covB.element(idx) } : undefined)
+    return placeQuad(A.xyz, buf.splatB.element(idx), buf.splatC.element(idx).xyz, vec4(flatColor(flat, part.rgb, depth, fogged(color.rgb, depth, fog), buf.splatB.element(idx)), color.a.mul(A.w)), idx, clean ? { covA: buf.covA.element(idx), covB: buf.covB.element(idx) } : undefined)
   })()
 }
 
@@ -1967,7 +1990,7 @@ function makeVertexWebGL(buf: ReturnType<typeof makeBuffers>, sort: Sorter, mode
     const own = S ? viewed(color.rgb, idx, d.world, buf, S) : color.rgb
     const rgb = L ? lit(painted(own, d.world, buf.edits), d.world, d.covA, d.covB, buf.seen.element(idx), L) : own
     const part = unpackUnorm4x8(buf.part.element(idx))
-    return placeQuad(p.ndc, p.axes, p.tilt, vec4(flatColor(flat, part.rgb, p.depth, fogged(rgb, p.depth, fog)), color.a.mul(p.alphaScale)), idx, clean ? d : undefined)
+    return placeQuad(p.ndc, p.axes, p.tilt, vec4(flatColor(flat, part.rgb, p.depth, fogged(rgb, p.depth, fog), p.axes), color.a.mul(p.alphaScale)), idx, clean ? d : undefined)
   })()
 }
 

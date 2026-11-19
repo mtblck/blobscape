@@ -1,7 +1,7 @@
-import { DataTexture, NearestFilter, NoBlending, NodeMaterial, QuadMesh, RedFormat, RenderTarget, UnsignedByteType, Vector2, Vector3, type Camera, type Object3D, type WebGPURenderer } from 'three/webgpu'
+import { DataTexture, LinearFilter, NearestFilter, NoBlending, NodeMaterial, QuadMesh, RedFormat, RenderTarget, UnsignedByteType, Vector2, Vector3, type Camera, type Object3D, type WebGPURenderer } from 'three/webgpu'
 import * as TSLTyped from 'three/tsl'
 import { SplatDepth } from './depth.ts'
-import { CELL_H, CELL_W, EDGE_COVER, EDGE_DEPTH, EDGE_TONE, GLYPHS, LIFT_MOST, PROBE, RAMP_INK, STICK, STROKE_FROM, glyphAtlas, type GlyphLook } from '../splat-core/glyphs.ts'
+import { CELL_H, CELL_W, EDGE_COVER, EDGE_DEPTH, EDGE_TONE, GLYPHS, LIFT_MOST, PROBE, RAMP_INK, STICK, STRAND, STRAND_HOLD, STRAND_KEEP, STROKE_FROM, glyphAtlas, type GlyphLook } from '../splat-core/glyphs.ts'
 
 // As in engine.ts: the shader builders use TSL untyped.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -15,6 +15,11 @@ const RING: [number, number][] = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1
 /** Where a cell's mean is taken: three across and four down. */
 const TAPS: [number, number][] = Array.from({ length: 12 }, (_, i) => [((i % 3) + 0.5) / 3 - 0.5, (Math.floor(i / 3) + 0.5) / 4 - 0.5])
 
+/** Where a cell's mean lie is taken: once for each pixel of the font. */
+const LIE_TAPS: [number, number][] = Array.from({ length: CELL_W * CELL_H }, (_, i) => [((i % CELL_W) + 0.5) / CELL_W - 0.5, (Math.floor(i / CELL_W) + 0.5) / CELL_H - 0.5])
+/** The four strokes as ways to run (`WAYS` in glyphs.ts). */
+const WAYS: [number, number][] = [[-1, 0], [1, 0], [0, 1], [0, -1]]
+
 /**
  * The picture as characters (splat-core/glyphs.ts is the CPU twin: change one, change both). The frame is drawn three
  * times with the same moved and sorted blobs, as for drawn outlines: the picture, a map of depth and a map of parts.
@@ -27,6 +32,10 @@ export class GlyphPass {
   readonly picture = new RenderTarget(1, 1)
   private readonly ids = new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter })
   private readonly depth = new SplatDepth()
+  /** How the blobs lie on the screen (`SplatWorld.lieMap`), for strokes along strands. */
+  private readonly lie = new RenderTarget(1, 1, { minFilter: LinearFilter, magFilter: LinearFilter })
+  private readonly strands = uniform(1)
+  private wantStrands = true
   /** The grid of this frame and of the one before: color in the root of linear, and the character's number over 255 in alpha. */
   private readonly grids = [0, 1].map(() => new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter, depthBuffer: false }))
   private now = 0
@@ -75,6 +84,8 @@ export class GlyphPass {
     this.edges.value = look.edges === false ? 0 : 1
     this.gain.value = look.gain ?? 1
     this.steady = look.steady ?? STICK
+    this.wantStrands = look.strands !== false
+    this.strands.value = this.wantStrands ? 1 : 0
   }
 
   /** Sizes the pass for a picture in device pixels, with `scale` of them to one pixel of the font. */
@@ -84,6 +95,7 @@ export class GlyphPass {
     if (this.picture.width !== width || this.picture.height !== height) {
       this.picture.setSize(width, height)
       this.ids.setSize(width, height)
+      this.lie.setSize(width, height)
       this.depth.setSize(width, height)
       this.res.value.set(width, height)
     }
@@ -107,7 +119,8 @@ export class GlyphPass {
     renderer.clear()
     renderer.render(scene, camera)
     this.depth.render(renderer, scene, camera)
-    this.drawParts(renderer, scene, camera)
+    this.drawFlat(renderer, scene, camera, 'parts', this.ids)
+    if (this.wantStrands) this.drawFlat(renderer, scene, camera, 'lieMap', this.lie)
     // the grid, into the older target, against the newer one
     this.sticky.value = this.kept ? this.steady : 0
     this.beforeTex.value = this.grids[this.now].texture
@@ -120,25 +133,25 @@ export class GlyphPass {
     this.showQuad.render(renderer)
   }
 
-  /** The same view as a map of parts: only the blobs, as they were just drawn (nothing is moved or sorted again). */
-  private drawParts(renderer: WebGPURenderer, scene: Object3D, camera: Camera) {
-    type World = Object3D & { isSplatWorld?: boolean; parts: boolean; hold: boolean }
+  /** The same view as a map of parts or of how the blobs lie: only the blobs, as they were just drawn (nothing is moved or sorted again). */
+  private drawFlat(renderer: WebGPURenderer, scene: Object3D, camera: Camera, map: 'parts' | 'lieMap', into: RenderTarget) {
+    type World = Object3D & { isSplatWorld?: boolean; parts: boolean; lieMap: boolean; hold: boolean }
     const worlds: { w: World; hold: boolean }[] = []
     const hidden: Object3D[] = []
     scene.traverse((o) => {
       const w = o as World
-      if (w.isSplatWorld) { worlds.push({ w, hold: w.hold }); w.parts = true; w.hold = true }
+      if (w.isSplatWorld) { worlds.push({ w, hold: w.hold }); w[map] = true; w.hold = true }
       else {
         const d = o as { isMesh?: boolean; isLine?: boolean; isPoints?: boolean }
         if ((d.isMesh || d.isLine || d.isPoints) && o.visible) { o.visible = false; hidden.push(o) }
       }
     })
     try {
-      renderer.setRenderTarget(this.ids)
+      renderer.setRenderTarget(into)
       renderer.clear()
       renderer.render(scene, camera)
     } finally {
-      for (const { w, hold } of worlds) { w.parts = false; w.hold = hold }
+      for (const { w, hold } of worlds) { w[map] = false; w.hold = hold }
       for (const o of hidden) o.visible = true
     }
   }
@@ -152,7 +165,7 @@ export class GlyphPass {
 
   /** Every cell's character and color: `glyphCell`. */
   private decideCells() {
-    const picture = this.picture.texture, ids = this.ids.texture, depth = this.depth.target.texture
+    const picture = this.picture.texture, ids = this.ids.texture, depth = this.depth.target.texture, lie = this.lie.texture
     return Fn(() => {
       const st = uv()
       // which cell, counted from the left and from the top, and its middle on the picture
@@ -209,10 +222,37 @@ export class GlyphPass {
       const stroked = this.edges.greaterThan(0.5).and(cover.greaterThanEqual(EDGE_COVER)).and(stroke.greaterThanEqual(0))
       glyph.assign(select(stroked, stroke, glyph))
 
+      // strands: the cell's mean lie, and `strandFor`
+      const lay = vec2(0).toVar(), drawn = float(0).toVar()
+      for (const [x, y] of LIE_TAPS) {
+        const s = texture(lie, mid.add(vec2(x, y).mul(size)))
+        // only where a blob was drawn: empty pixels hold no direction
+        lay.addAssign(s.rg.sub(0.5).mul(2).mul(s.a))
+        drawn.addAssign(1)
+      }
+      lay.divAssign(drawn)
+      const strength = lay.length().toVar()
+      const wayOf = (i: number) => lay.x.mul(WAYS[i][0]).add(lay.y.mul(WAYS[i][1]))
+      const bestWay = float(0).toVar(), bestDot = wayOf(0).toVar()
+      for (let i = 1; i < WAYS.length; i++) {
+        const d = wayOf(i)
+        const more = d.greaterThan(bestDot)
+        bestWay.assign(select(more, float(i), bestWay))
+        bestDot.assign(select(more, d, bestDot))
+      }
+      const wasDot = float(-1).toVar()
+      for (let i = 0; i < WAYS.length; i++) wasDot.assign(select(abs(was.sub(STROKE_FROM + i)).lessThan(0.5), wayOf(i), wasDot))
+      const wasStroke = was.greaterThan(STROKE_FROM - 0.5)
+      const keepStrand = this.sticky.greaterThan(0).and(wasStroke).and(strength.greaterThanEqual(STRAND_HOLD)).and(wasDot.greaterThanEqual(strength.mul(STRAND_KEEP)))
+      const strand = select(keepStrand, was, select(strength.greaterThanEqual(STRAND), bestWay.add(STROKE_FROM), float(-1)))
+      const stranded = this.strands.greaterThan(0.5).and(cover.greaterThanEqual(EDGE_COVER)).and(strand.greaterThanEqual(0)).toVar()
+      glyph.assign(select(stranded, strand, glyph))
+
       // its own color, brought up to full strength but no more than `LIFT_MOST` times
       const top = max(max(mean.r, mean.g), max(mean.b, max(cover.div(LIFT_MOST), 1e-4)))
       const lightOn = this.light.greaterThan(0.5)
-      const level = select(stroked, select(lightOn, float(0.2), float(1)), select(lightOn, float(0.6).sub(tone.mul(0.45)), tone.mul(0.45).add(0.55)))
+      const level = select(stranded, select(lightOn, float(0.6).sub(tone.mul(0.45)), tone.mul(0.55).add(0.45)),
+        select(stroked, select(lightOn, float(0.2), float(1)), select(lightOn, float(0.6).sub(tone.mul(0.45)), tone.mul(0.45).add(0.55))))
       const own = mean.rgb.div(top).mul(level)
       const color = select(this.inked.greaterThan(0.5), this.ink, own)
       // kept as the root of linear, which a byte holds evenly from dark to light
@@ -242,6 +282,7 @@ export class GlyphPass {
   dispose() {
     this.picture.dispose()
     this.ids.dispose()
+    this.lie.dispose()
     this.depth.dispose()
     for (const g of this.grids) g.dispose()
     this.font.dispose()
