@@ -13,7 +13,7 @@ import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitD
 import type { Actor, CreatureStage } from './creature/stage.ts'
 import { DETAIL } from './diorama/scene.ts'
 import { DIORAMAS } from './diorama/scenes.ts'
-import { ALL_LOOKS, useDrawnLook, type Look } from './drawnLook.tsx'
+import { ALL_LOOKS, useDrawnLook, wantsPlain, type Look } from './drawnLook.tsx'
 import { unlit } from '../splat-engine/voxel.ts'
 import { href } from './routes.ts'
 import { sampleScan } from './scan/sample.ts'
@@ -100,7 +100,7 @@ export function BrushInk() {
   const [detail, setDetail] = useState<Detail>(() => { const asked = detailAsked(DETAILS, labelNames); return asked ? (DETAILS.indexOf(asked) as Detail) : coarse ? 0 : 1 })
   const [look, setLook] = useState<Look>(() => ALL_LOOKS.find((l) => l.id === params().get('look'))?.id ?? 'gouache')
   // cel shading lights the blobs itself, so its subjects are built with no light baked in
-  const plain = look === 'cel'
+  const plain = wantsPlain(look)
   const sub = SUBJECTS.find((s) => s.id === subject)!
   const [orbit, setOrbit] = useState<Orbit>(sub.orbit)
   const [built, setBuilt] = useState<{ id: string; plain: boolean; count: number; actor: Actor }>()
@@ -212,7 +212,7 @@ export function BrushInk() {
           <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => setOrbit(sub.orbit)} />
         </>}
         status={<>
-          <span>{built?.id === subject && built.plain === plain ? <><span className="tabular-nums text-ink" data-testid="brush-blobs">{built.count.toLocaleString()}</span> blobs from {sub.from}{look === 'blobs' ? '.' : look === 'cel' ? ', lit as you see them.' : ascii ? ', read off as characters.' : ', one mark each.'}</> : 'Making it…'}</span>
+          <span>{built?.id === subject && built.plain === plain ? <><span className="tabular-nums text-ink" data-testid="brush-blobs">{built.count.toLocaleString()}</span> blobs from {sub.from}{look === 'blobs' ? '.' : look === 'cel' ? ', lit as you see them.' : look === 'neon' ? ', lit by their own outlines.' : ascii ? ', read off as characters.' : ', one mark each.'}</> : 'Making it…'}</span>
           <span>{lookNow.label} on {backend}</span>
         </>}
         tabsLabel="Options"

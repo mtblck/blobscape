@@ -28,7 +28,7 @@ import { decodeTexture } from './modelRig.ts'
 import { detailAsked, labelNames, writeDetail } from '../shared/detail.ts'
 import { unlit } from '../splat-engine/voxel.ts'
 import { STYLES, styleAsked, styleWords, type Style } from './diorama/styles.ts'
-import { useDrawnLook } from './drawnLook.tsx'
+import { useDrawnLook, wantsPlain } from './drawnLook.tsx'
 
 const SIZES = [2, 3, 4, 6]
 /** Frames a second the scene moves at: 0 is every frame the screen shows. */
@@ -104,7 +104,7 @@ export function PixelDiorama() {
   const [style, setStyle] = useState<Style>(() => styleAsked(new URLSearchParams(location.search).get('style')))
   const pixels = style === 'pixel'
   // cel shading lights the blobs itself, so its scene is cut with no light baked in
-  const plain = style === 'cel'
+  const plain = wantsPlain(style === 'pixel' ? undefined : style)
   const detail = chosen ?? (coarse ? DETAIL[pixels ? 1 : 0].id : DETAIL[2].id)
   const [palette, setPalette] = useState('own')
   const [size, setSize] = useState(2)
@@ -248,7 +248,7 @@ export function PixelDiorama() {
     }, from)
   }, [stage, scene, calm, rock, mirrored])
   // one of Brush and Ink's looks in place of pixel art: marks, outlines, characters or cel tones, with their own settings
-  const drawing = useDrawnLook(stage, pixels || touring ? undefined : style, { actor: scene?.built, plain: !!scene?.plain, azimuth: shown.views[0].orbit.azimuth, offscreen, light: coarse, sky: shown.finish.sky ? [shown.sky[0], shown.sky[1]] : undefined })
+  const drawing = useDrawnLook(stage, pixels || touring ? undefined : style, { actor: scene?.built, plain: !!scene?.plain, azimuth: shown.views[0].orbit.azimuth, offscreen, light: coarse, loop: shown.loop, sky: shown.finish.sky ? [shown.sky[0], shown.sky[1]] : undefined })
   // the walk-through's fourth step is about the four samples, so it draws them whatever the switch says
   const sampling = touring?.id === 'samples'
   const drawnLook = useMemo(() => (asPixels ? (sampling ? { ...look, fine: true } : look) : undefined), [asPixels, sampling, look])

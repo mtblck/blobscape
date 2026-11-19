@@ -23,7 +23,7 @@
   {
    "id": "pixels",
    "title": "Pixels and sprites",
-   "doc": "Drawing a stage as pixel art, as brush and ink marks, as characters or cel shaded, and baking a creature into a sprite sheet."
+   "doc": "Drawing a stage as pixel art, as brush and ink marks, as characters, cel shaded or in neon, and baking a creature into a sprite sheet."
   },
   {
    "id": "simulation",
@@ -450,6 +450,15 @@
        "signatures": [
         {
          "code": "setCel(look?: CelLook): void"
+        }
+       ]
+      },
+      {
+       "name": "setNeon",
+       "doc": "Neon (splat-core/neon.ts): tubes of glowing light along the outlines, in each thing's own color at full strength\nor the look's colors, with pulses of light running along them by the stage's clock; the bodies are kept dark and\ncatch the light as it passes. Every blob is drawn flat in its own color while it is on, with the stage's lights\nput by, so it suits blobs that have no light baked into them. Leave the look out to stop. Kept for the next\nactor too. Not in pixel mode; ASCII and cel shading come first if set, and outlines and the lens wait.",
+       "signatures": [
+        {
+         "code": "setNeon(look?: NeonLook): void"
         }
        ]
       },
@@ -8171,6 +8180,233 @@
      "signatures": [
       {
        "code": "gatherColors(color: ArrayLike<number>, partOf?: ArrayLike<number>, most?: number, round?: { at: ArrayLike<number>; reach: number }): Float32Array"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "neonPass",
+   "title": "Neon",
+   "group": "pixels",
+   "doc": "",
+   "entries": [
+    {
+     "name": "NeonPass",
+     "kind": "class",
+     "doc": "Neon (splat-core/neon.ts): tubes of light along the picture's outlines, over bodies kept dark that catch the\ntubes' light. The frame is drawn three times with the same moved and sorted blobs (the picture in the blobs' own\nflat colors, a map of depth and a map of parts), as outlines are (inkLines.ts), and the tubes run where those\nlines would: round the subject, where one thing passes in front of another, and between its parts. A tube takes\nthe color of the thing it goes round at full strength (`neonColor`), or one of the look's colors by its part, and\nshines by where it is in the world: pulses of light run through the scene two ways (`shineAt`), so the light\ntravels along the tubes. The tubes' light is then spread at three sizes, and the last pass paints each body in its\nown color times the light that reaches it, with the glow and the tubes over it.\n\nThe world should be drawing flat marks with no light of its own (`Stage.setNeon` sets both). The frame's camera\nmust be a perspective camera.",
+     "ctor": [
+      {
+       "code": "new NeonPass()"
+      }
+     ],
+     "props": [
+      {
+       "name": "picture",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
+       "doc": "The picture: every blob flat in its own color."
+      },
+      {
+       "name": "ids",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
+       "doc": "The map of parts the tubes between parts come from."
+      }
+     ],
+     "methods": [
+      {
+       "name": "setLook",
+       "doc": "The look, how many device pixels a CSS pixel is, the scene's size in the world (which the pulses are spaced by)\nand the stage's time in seconds.",
+       "signatures": [
+        {
+         "code": "setLook(look: NeonLook, ratio: number, size: number, time: number): void"
+        }
+       ]
+      },
+      {
+       "name": "setSize",
+       "doc": "Sizes the pass's targets, in device pixels.",
+       "signatures": [
+        {
+         "code": "setSize(width: number, height: number): void"
+        }
+       ]
+      },
+      {
+       "name": "render",
+       "doc": "Draws the scene in neon into the renderer's current target, or onto the screen when it has none.",
+       "signatures": [
+        {
+         "code": "render(renderer: WebGPURenderer, scene: Object3D, camera: Camera): void"
+        }
+       ]
+      },
+      {
+       "name": "dispose",
+       "doc": "Frees its targets.",
+       "signatures": [
+        {
+         "code": "dispose(): void"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "neon",
+   "title": "Neon: the arithmetic",
+   "group": "pixels",
+   "doc": "Neon (Matt's idea, 2026-11-19): a scene drawn as tubes of glowing light along its outlines, over bodies kept dark\nthat catch the light as it runs along the tubes. The arithmetic here is pure; `splat-engine/neonPass.ts` is its\nshader twin (change both).",
+   "entries": [
+    {
+     "name": "NeonLook",
+     "kind": "interface",
+     "doc": "How a stage draws neon (`Stage.setNeon`).",
+     "props": [
+      {
+       "name": "line",
+       "optional": true,
+       "type": "number",
+       "doc": "How wide a tube is, in CSS pixels (2)."
+      },
+      {
+       "name": "glow",
+       "optional": true,
+       "type": "number",
+       "doc": "How strongly the tubes' light spills round them and onto the bodies: 0 none, 1 as designed, up to 2."
+      },
+      {
+       "name": "body",
+       "optional": true,
+       "type": "number",
+       "doc": "How lit the bodies are with no tube near, as a share of their own color (`NEON_BODY`)."
+      },
+      {
+       "name": "colors",
+       "optional": true,
+       "type": "readonly (readonly [number, number, number])[]",
+       "doc": "The tubes' colors (sRGB 0–1), dealt out part by part. Left out, each tube takes the color of the thing it goes round, at full strength."
+      },
+      {
+       "name": "period",
+       "optional": true,
+       "type": "number",
+       "doc": "How many seconds a pulse of light takes to come round again; 0 holds the light still (4). A scene that loops wants a whole number of these in its loop."
+      },
+      {
+       "name": "apart",
+       "optional": true,
+       "type": "number",
+       "doc": "How far apart two pulses run, as a share of the scene's size (0.45)."
+      }
+     ]
+    },
+    {
+     "name": "NEON_BODY",
+     "kind": "const",
+     "doc": "Bodies with no tube near keep this share of their own color.",
+     "type": "0.05"
+    },
+    {
+     "name": "NEON_REST",
+     "kind": "const",
+     "doc": "A tube between pulses shines this much of its full light.",
+     "type": "0.22"
+    },
+    {
+     "name": "NEON_TAIL",
+     "kind": "const",
+     "doc": "How fast a pulse dies away behind its head: its light is (1 − how far behind, as a share of the way to the next) to this power.",
+     "type": "3.5"
+    },
+    {
+     "name": "NEON_FLOOR",
+     "kind": "const",
+     "doc": "A tube's color keeps at least this much of each channel, so a pure red still has a hot core.",
+     "type": "0.06"
+    },
+    {
+     "name": "NEON_BLACK",
+     "kind": "const",
+     "doc": "A thing darker than this in every channel (linear) has no hue to speak of, and its tube is white.",
+     "type": "0.001"
+    },
+    {
+     "name": "NEON_VIVID",
+     "kind": "const",
+     "doc": "How much stronger than its own a tube's color is made, about its gray.",
+     "type": "2.4"
+    },
+    {
+     "name": "NEON_COLORS",
+     "kind": "const",
+     "doc": "The most colors a look may deal out.",
+     "type": "6"
+    },
+    {
+     "name": "NEON_WAYS",
+     "kind": "const",
+     "doc": "The two ways pulses run through a scene (not unit: the second set of pulses lies closer together).",
+     "type": "readonly [readonly [number, number, number], readonly [number, number, number]]"
+    },
+    {
+     "name": "NEON_SECOND",
+     "kind": "const",
+     "doc": "The second set of pulses' share of the first's light.",
+     "type": "0.7"
+    },
+    {
+     "name": "NEON_SHIFT",
+     "kind": "const",
+     "doc": "How far a part's own number shifts its pulses, in pulses.",
+     "type": "1"
+    },
+    {
+     "name": "neonColor",
+     "kind": "function",
+     "doc": "The color of the tube round a thing of color `rgb` (linear, 0–1): the same hue at full strength, however dark the\nthing is. A gray thing gets a white tube.",
+     "signatures": [
+      {
+       "code": "neonColor(rgb: readonly number[]): [number, number, number]"
+      }
+     ]
+    },
+    {
+     "name": "pulse",
+     "kind": "function",
+     "doc": "One set of pulses: 1 at a pulse's head, dying away behind it to nothing just before the next. `phase` counts pulses.",
+     "signatures": [
+      {
+       "code": "pulse(phase: number): number"
+      }
+     ]
+    },
+    {
+     "name": "shineAt",
+     "kind": "function",
+     "doc": "How brightly a tube shines at a place: `along` is the place measured along each of the two ways, in pulses (its\npart's shift included), `turn` how many pulses have gone by. Never under `NEON_REST`, 1 at a head.",
+     "signatures": [
+      {
+       "code": "shineAt(along: readonly [number, number], turn: number): number"
+      }
+     ]
+    },
+    {
+     "name": "colorOf",
+     "kind": "const",
+     "doc": "Which of `count` colors a part takes, from the part's shift (0–1).",
+     "type": "(shift: number, count: number) => number"
+    },
+    {
+     "name": "bodyColor",
+     "kind": "function",
+     "doc": "A body's color (linear) under the tubes' light: its own color times what it keeps unlit plus the light that\nreaches it (`light`, the tubes' light spread out, linear).",
+     "signatures": [
+      {
+       "code": "bodyColor(own: readonly number[], light: readonly number[], body?: number, glow?: number): [number, number, number]"
       }
      ]
     }

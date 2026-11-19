@@ -20,6 +20,8 @@ import { INK, type MarkLook, type OutlinePen } from '../splat-core/marks.ts'
 import { InkLines } from './inkLines.ts'
 import { CelPass } from './celPass.ts'
 import { CEL_FROM, lampTint, type CelLook } from '../splat-core/cel.ts'
+import { NeonPass } from './neonPass.ts'
+import type { NeonLook } from '../splat-core/neon.ts'
 import { GlyphPass } from './glyphPass.ts'
 import { glyphScale, glyphText, type GlyphLook } from '../splat-core/glyphs.ts'
 import { SplatLens } from './lens.ts'
@@ -560,13 +562,30 @@ export class Stage {
     this.invalidate()
   }
 
-  /** Hands the world what it is drawn with: cel shading's flat fill and one light, or the stage's own marks and lights. */
+  private neon?: NeonPass
+  private neonLook?: NeonLook
+  /**
+   * Neon (splat-core/neon.ts): tubes of glowing light along the outlines, in each thing's own color at full strength
+   * or the look's colors, with pulses of light running along them by the stage's clock; the bodies are kept dark and
+   * catch the light as it passes. Every blob is drawn flat in its own color while it is on, with the stage's lights
+   * put by, so it suits blobs that have no light baked into them. Leave the look out to stop. Kept for the next
+   * actor too. Not in pixel mode; ASCII and cel shading come first if set, and outlines and the lens wait.
+   */
+  setNeon(look?: NeonLook) {
+    this.neonLook = look
+    if (!look) { this.neon?.dispose(); this.neon = undefined }
+    else this.neon ??= new NeonPass()
+    this.dress()
+    this.invalidate()
+  }
+
+  /** Hands the world what it is drawn with: cel shading's flat fill and one light, neon's flat fill and none, or the stage's own marks and lights. */
   private dress() {
     const world = this.world
     if (!world) return
     const cel = this.opts.lights ? this.celLook : undefined
     world.cel = !!cel
-    world.setMarks(cel ? { kind: 'flat' } : this.marks)
+    world.setMarks(cel || this.neonLook ? { kind: 'flat' } : this.marks)
     if (!this.opts.lights) return
     this.light()
   }
@@ -580,7 +599,8 @@ export class Stage {
     const world = this.world
     if (!world || !this.opts.lights) return
     const cel = this.celLook
-    if (cel) world.setLights([{ direction: [...(cel.from ?? CEL_FROM)] as [number, number, number], color: [1, 1, 1] }, ...this.lit.lights.slice(0, MAX_LIGHTS - 1).map((l) => ({ ...l, shadow: false }))], 1)
+    if (!cel && this.neonLook) world.setLights([], 1)
+    else if (cel) world.setLights([{ direction: [...(cel.from ?? CEL_FROM)] as [number, number, number], color: [1, 1, 1] }, ...this.lit.lights.slice(0, MAX_LIGHTS - 1).map((l) => ({ ...l, shadow: false }))], 1)
     else world.setLights(this.lit.lights, this.lit.ambient)
   }
 
@@ -712,6 +732,14 @@ export class Stage {
       const amb = this.lit.ambient
       this.cel.setLook({ ...this.celLook, lamps: this.celLook.lamps ?? lampTint(this.lit.lights), ambient: [0, 1, 2].map((k) => (this.celLook!.ambient?.[k] ?? 1) * (typeof amb === 'number' ? amb : amb[k])) as [number, number, number] }, this.renderer.getPixelRatio())
       this.cel.render(this.renderer, this.scene, this.camera)
+      return
+    }
+    if (!this.pixel && this.neon && this.neonLook && this.world) {
+      const { x, y } = this.target ? { x: this.target.width, y: this.target.height } : this.renderer.getDrawingBufferSize(this.buffer)
+      this.neon.setSize(x, y)
+      const { lo, hi } = this.world.posedBox()
+      this.neon.setLook(this.neonLook, this.renderer.getPixelRatio(), Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]), this.time)
+      this.neon.render(this.renderer, this.scene, this.camera)
       return
     }
     if (!this.pixel && this.lines) {
@@ -985,6 +1013,7 @@ export class Stage {
     this.world?.dispose()
     this.rig?.dispose()
     this.lines?.dispose()
+    this.neon?.dispose()
     this.glyphs?.dispose()
     this.lens?.dispose()
     this.cel?.dispose()

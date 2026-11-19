@@ -6,11 +6,14 @@ import type { Blobs } from '../splat-core/blobs.ts'
 import { Button, Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
 import type { CreatureStage } from './creature/stage.ts'
 import { GROUND, LOOKS, PAPERS, SCREEN, css, isMark, type LookId } from './brushLooks.ts'
+import { NEON, NEON_GROUND, NEON_PACES, NEON_SETS, NEON_START, neonLook, type NeonChoice } from './neonLooks.ts'
 import { BACKDROPS, CEL, CEL_START, FILL_REACH, celLook, nightLight, nightOf, type CelChoice } from './celLooks.ts'
 
-/** Every drawn look a page can offer: the marks, cel shading, ASCII, and the plain blobs. */
-export type Look = LookId | typeof CEL.id
-export const ALL_LOOKS: { id: Look; label: string; note: string }[] = [...LOOKS.slice(0, -1), CEL, LOOKS[LOOKS.length - 1]]
+/** Every drawn look a page can offer: the marks, ASCII, cel shading, neon, and the plain blobs. */
+export type Look = LookId | typeof CEL.id | typeof NEON.id
+export const ALL_LOOKS: { id: Look; label: string; note: string }[] = [...LOOKS.slice(0, -1), CEL, NEON, LOOKS[LOOKS.length - 1]]
+/** The looks that light the blobs themselves, and so want them built with no light baked in (`unlit`). */
+export const wantsPlain = (look: Look | undefined) => look === 'cel' || look === 'neon'
 
 /** On the dark screen characters are thin lines of light and read fainter than their share of ink, so tones are raised by this. */
 const SCREEN_GAIN = 1.5
@@ -32,6 +35,8 @@ export interface DrawnSubject {
   light?: boolean
   /** A scan: its marks are laid softly, one over another (`MarkLook.soft`). */
   soft?: boolean
+  /** How many seconds the subject takes to come round again, where it loops: neon's pulses go a whole number of times into it. */
+  loop?: number
   /** Frames are drawn only when asked for, so one must not depend on the one before. */
   offscreen: boolean
 }
@@ -46,6 +51,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
     const q = params(), n = (k: string, d: number) => (q.get(k) !== null && Number.isFinite(Number(q.get(k))) ? Number(q.get(k)) : d)
     return { ...CEL_START, backdrop: '', turn: n('turn', CEL_START.turn), height: n('height', CEL_START.height), tones: q.get('tones') === '3' ? 3 : 2, shadows: q.get('shadows') !== '0', smooth: n('smooth', CEL_START.smooth), fills: Math.max(0, Math.min(4, Math.round(n('fills', CEL_START.fills)))) }
   })
+  const [neon, setNeon] = useState<NeonChoice>(NEON_START)
   const [size, setSize] = useState(1)
   // outlines: on for the two pen looks and cel shading unless the visitor says otherwise
   const [outlined, setOutlined] = useState<boolean | null>(() => (params().get('outline') === '1' ? true : params().get('outline') === '0' ? false : null))
@@ -58,7 +64,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   const [strands, setStrands] = useState(true)
   const [weight, setWeight] = useState(1)
   const [copied, setCopied] = useState('')
-  const { actor, plain, azimuth, soft, offscreen, sky, light } = on
+  const { actor, plain, azimuth, soft, offscreen, sky, light, loop } = on
   // the subject's own sky is the first backdrop where it has one. Under a dark sky it is night: the shade and line are
   // the night's, and both tones are dimmed and cooled (`nightLight`), so the scene's lamps and lit windows stand out
   const skyDark = sky ? nightOf(sky) : 0
@@ -69,7 +75,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   const night = inScene ? skyDark : 0
 
   const sheet = PAPERS.find((p) => p.id === paper)!
-  const marks = useMemo<MarkLook | undefined>(() => (look && look !== 'cel' && isMark(look) ? { kind: look, size, ink: sheet.ink, paper: sheet.paper, soft } : undefined), [look, size, sheet, soft])
+  const marks = useMemo<MarkLook | undefined>(() => (look && look !== 'cel' && look !== 'neon' && isMark(look) ? { kind: look, size, ink: sheet.ink, paper: sheet.paper, soft } : undefined), [look, size, sheet, soft])
   useEffect(() => { stage?.setMarks(marks) }, [stage, marks, actor])
   const ascii = look === 'ascii'
   // off screen a frame is drawn only when asked for, and must not depend on the one before (`?steady=` says otherwise, for the checks)
@@ -77,7 +83,12 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   const glyphs = useMemo<GlyphLook | undefined>(() => (ascii ? { size: letter, ink: own ? undefined : sheet.ink, light: !own && lum(sheet.paper) > lum(sheet.ink), edges: strokes, strands, gain: weight * (own ? SCREEN_GAIN : 1), steady: held } : undefined), [ascii, letter, own, sheet, strokes, strands, weight, held])
   useEffect(() => { stage?.setGlyphs(glyphs) }, [stage, glyphs])
   useEffect(() => { setCopied('') }, [look])
-  const outline = !!look && !ascii && (outlined ?? (look === 'ink' || look === 'hatch' || look === 'cel'))
+  const lit = look === 'neon'
+  useEffect(() => {
+    const still = !offscreen && typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    stage?.setNeon(lit ? neonLook(neon, loop, still) : undefined)
+  }, [stage, lit, neon, loop, offscreen])
+  const outline = !!look && !ascii && !lit && (outlined ?? (look === 'ink' || look === 'hatch' || look === 'cel'))
   useEffect(() => { stage?.setCel(look === 'cel' ? { ...celLook({ ...cel, backdrop: celBase, turn: cel.turn + azimuth, line: outline ? pen : 0 }), ambient: nightLight(night), ...(light ? { shadowSize: 1024, shadowEvery: offscreen ? 1 : 2 } : {}) } : undefined) }, [stage, look, cel, celBase, night, outline, pen, azimuth, light, offscreen])
   // flat fills: each part's colors gathered into a few, shown in place of the blobs' own (which stay as they were)
   useEffect(() => {
@@ -94,7 +105,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   // paint covers its ground, so a subject with a sky of its own stands in front of that
   const isPaint = look === 'gouache' || look === 'oil'
   const backdrop = BACKDROPS.find((b) => b.id === celBase) ?? BACKDROPS[0]
-  const ground = !look || look === 'blobs' ? undefined : look === 'cel' ? (inScene ? skyBack.back : backdrop.back) : ascii ? css(own ? SCREEN : sheet.paper) : drawnOn ? css(sheet.paper) : skyBack && isPaint ? skyBack.back : GROUND
+  const ground = !look || look === 'blobs' ? undefined : look === 'cel' ? (inScene ? skyBack.back : backdrop.back) : lit ? NEON_GROUND : ascii ? css(own ? SCREEN : sheet.paper) : drawnOn ? css(sheet.paper) : skyBack && isPaint ? skyBack.back : GROUND
 
   const controls = !look ? null : (
     <>
@@ -118,7 +129,25 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
             </Field>
           </div>
         )}
-        {look !== 'cel' && isMark(look) && (
+        {lit && (
+          <div className="space-y-4" data-testid="brush-neon">
+            <Field label="Colors">
+              <div className="flex flex-wrap gap-1.5">
+                {NEON_SETS.map((s) => <Chip key={s.id} active={neon.set === s.id} onClick={() => setNeon((c) => ({ ...c, set: s.id }))}>{s.label}</Chip>)}
+              </div>
+              <p className="mt-1.5 text-xs text-ink-faint">Their own gives each tube the color of the thing it goes round, at full strength. The others deal a set of colors out part by part.</p>
+            </Field>
+            <Field label="Light runs">
+              <div className="flex flex-wrap gap-1.5">
+                {NEON_PACES.map((p) => <Chip key={p.id} active={neon.pace === p.id} onClick={() => setNeon((c) => ({ ...c, pace: p.id }))}>{p.label}</Chip>)}
+              </div>
+            </Field>
+            <Slider label="Tube width" value={neon.line} min={1} max={5} step={0.5} onChange={(line) => setNeon((c) => ({ ...c, line }))} format={(v) => `${v} px`} />
+            <Slider label="Glow" value={neon.glow} min={0} max={2} step={0.1} onChange={(glow) => setNeon((c) => ({ ...c, glow }))} format={(v) => `${Math.round(v * 100)}%`} hint="How far the tubes' light spills round them and onto the bodies beside them." />
+            <Slider label="Bodies" value={neon.body} min={0} max={0.3} step={0.01} onChange={(body) => setNeon((c) => ({ ...c, body }))} format={(v) => `${Math.round(v * 100)}%`} hint="How much of its own color a body keeps where no tube's light reaches it." />
+          </div>
+        )}
+        {look !== 'cel' && !lit && isMark(look) && (
           <Slider label="Mark size" value={size} min={0.5} max={1.3} step={0.05} onChange={setSize} format={(v) => `${Math.round(v * 100)}%`} hint="Smaller marks leave gaps between them; bigger ones overlap more." />
         )}
         {ascii && (
@@ -156,7 +185,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
             <p role="status" className="mt-1.5 text-xs text-ink-faint" data-testid="brush-copied">{copied || 'The picture as it stands now, in plain characters: paste it anywhere with a fixed-width font.'}</p>
           </div>
         )}
-        {!ascii && (
+        {!ascii && !lit && (
           <div data-testid="brush-outline">
             <Toggle label="Outlines" checked={outline} onChange={setOutlined} />
             <p className="mt-1.5 text-xs text-ink-faint">{look === 'cel' ? 'An even line round the subject, where one thing stands in front of another, and between its parts.' : 'A pen line round the subject, where one thing stands in front of another, and between its parts. Heavier against dark things, and it lifts off here and there against light ones.'}</p>
