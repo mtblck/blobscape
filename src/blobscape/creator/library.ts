@@ -1,4 +1,6 @@
 import type { SceneDoc } from '../../splat-engine/sceneDoc.ts'
+import type { Skeleton } from '../../splat-engine/rig.ts'
+import type { Species } from '../../splat-engine/zoo/species.ts'
 import { markedPicks, splitScene, type PropDoc, type PropPick, type PropRef, type SceneProject } from '../../splat-engine/project.ts'
 import { DRAGON } from '../diorama/scenes/dragon.ts'
 import { HENGE } from '../diorama/scenes/henge.ts'
@@ -160,18 +162,37 @@ const WHOLE_LANDS: { id: string; name: string; about: string; from: string; doc:
 
 const picture = (id: string) => `/props/${id}.png`
 
+/**
+ * Every creature in each of its looks, a card each (Matt asked for the dragon's ember and jade, 2026-11-19): the
+ * first look is `creature-<id>` and named for the creature alone, so projects saved before looks keep theirs; the
+ * others are `creature-<id>-<look>`, named with the look first ("Ember dragon").
+ */
+export const CREATURE_LOOKS: { id: string; name: string; species: Species; look: string }[] = CREATURES.flatMap((c) =>
+  c.looks.map((l, k) => ({
+    id: k ? `creature-${c.id}-${l.id}` : `creature-${c.id}`,
+    name: k ? `${l.label} ${c.name}` : c.name[0].toUpperCase() + c.name.slice(1),
+    species: c,
+    look: l.id,
+  })))
+const LOOK_BY_ID = new Map(CREATURE_LOOKS.map((x) => [x.id, x]))
+
 /** Every entry: props, then lands, then creatures. */
 export const LIBRARY: LibraryEntry[] = [
   ...SOURCES.flatMap((s) => s.props.map((p): LibraryEntry => ({ id: p.id, name: p.pick, about: p.about, kind: 'prop', from: s.from, picture: picture(p.id), group: p.group ?? 'small' }))),
   ...SOURCES.filter((s) => s.land).map((s): LibraryEntry => ({ id: s.land!.id, name: s.land!.name, about: s.land!.about, kind: 'land', from: s.from, picture: picture(s.land!.id), group: 'lands' })),
   ...WHOLE_LANDS.map((l): LibraryEntry => ({ id: l.id, name: l.name, about: l.about, kind: 'land', from: l.from, picture: picture(l.id), group: 'lands' })),
-  ...CREATURES.map((c): LibraryEntry => ({ id: `creature-${c.id}`, name: c.name[0].toUpperCase() + c.name.slice(1), about: c.blurb, kind: 'creature', from: 'creatures', picture: picture(`creature-${c.id}`), group: 'living' })),
+  ...CREATURE_LOOKS.map(({ id, name, species: c }): LibraryEntry => ({ id, name, about: c.blurb, kind: 'creature', from: 'creatures', picture: picture(id), group: 'living' })),
 ]
 
 const split = new Map<Source, ReturnType<typeof splitScene>>()
 
-/** A prop or land's description, cut out of its scene the first time it is asked for. Creatures have none. */
+/**
+ * A prop or land's description, cut out of its scene the first time it is asked for. A creature has no description:
+ * it gets a stand-in (`creatureProp`) so a project holds it as it holds any prop, and is built and posed its own way.
+ */
 export function libraryProp(id: string): PropDoc | undefined {
+  const creature = libraryCreature(id)
+  if (creature) return creatureProp(id, LOOK_BY_ID.get(id)!.name)
   const whole = WHOLE_LANDS.find((l) => l.id === id)
   if (whole) return { name: whole.name, foot: [0, 0, 0], doc: whole.doc }
   for (const s of SOURCES) {
@@ -186,7 +207,57 @@ export function libraryProp(id: string): PropDoc | undefined {
 }
 
 /** The creature an entry is, as `CREATURES` lists it. */
-export const libraryCreature = (id: string) => (id.startsWith('creature-') ? CREATURES.find((c) => `creature-${c.id}` === id) : undefined)
+export const libraryCreature = (id: string): Species | undefined => LOOK_BY_ID.get(id)?.species
+
+/** Which look of its creature an entry is. */
+export const creatureLook = (id: string): string | undefined => LOOK_BY_ID.get(id)?.look
+
+/** Whether a prop is one of the creatures. */
+export const isCreature = (ref: PropRef): ref is string => typeof ref === 'string' && !!libraryCreature(ref)
+
+const creatureProps = new Map<string, PropDoc>()
+/**
+ * A creature's stand-in description: one bone and one speck too small to cut, standing on its foot at the origin
+ * (every creature is made standing on the floor at the middle). It is never cut: Scene Creator builds the creature
+ * itself (`cut.ts`) and plays its own move (`creatureMove`). It has no lights or moves of its own, and only black and white (a description needs two colors): its own colors come with its cut (`colorsOf`).
+ */
+function creatureProp(id: string, name: string): PropDoc {
+  let p = creatureProps.get(id)
+  if (!p) {
+    const label = name[0].toUpperCase() + name.slice(1)
+    p = {
+      name: label,
+      foot: [0, 0, 0],
+      doc: {
+        name: label, loop: 12, light: { from: [0.4, 0.7, 0.6], ambient: 0.5, shadow: 0.7 }, palette: ['#000000', '#ffffff'], camera: { target: [0, 0.5, 0], distance: 4, azimuth: 0, elevation: 15 },
+        bones: [{ name: id, at: [0, 0, 0] }],
+        parts: [{ bone: id, shape: { kind: 'ball', at: [0, 0, 0], r: [0.001, 0.001, 0.001] }, paint: '#000000' }],
+      },
+    }
+    creatureProps.set(id, p)
+  }
+  return p
+}
+
+/**
+ * How big a creature is set down in a scene, as a share of the size it is made: each is made to its own scale (the
+ * fox is about three units long, the elf as tall as a door), so each is brought to its place beside the scenes' props
+ * (the cook is 1.3 tall, a sheep 0.3).
+ */
+const CREATURE_SIZE: Record<string, number> = { crocodile: 0.5, jellyfish: 0.5, owl: 0.45, frog: 1, fox: 0.35, 'minimalist-fox': 0.35, elf: 0.75, dragon: 0.45 }
+export const creatureSize = (id: string): number => CREATURE_SIZE[libraryCreature(id)?.id ?? ''] ?? 0.5
+
+/**
+ * The move a creature plays standing in a scene: one it does on the spot without walking (idle, stand, float), else
+ * its first; played a whole number of times a loop of `loop` seconds, so the scene still joins up.
+ */
+export function creatureMove(id: string, loop: number): { pose: (sk: Skeleton, t: number) => void; name: string } | undefined {
+  const c = libraryCreature(id)
+  if (!c) return undefined
+  const move = c.moves.find((m) => /^(idle|stand|float)$/.test(m.name)) ?? c.moves[0]
+  const times = Math.max(1, Math.round(loop / move.seconds))
+  return { name: move.name, pose: (sk, t) => move.pose(sk, (((t % loop) + loop) % loop) * (times * move.seconds) / loop) }
+}
 
 /** The scenes Scene Creator opens split into a land and props: those the library has picks for. */
 export const SPLIT_SCENES: readonly string[] = [...new Set(SOURCES.map((s) => s.from))].filter((id) => id !== 'kit')

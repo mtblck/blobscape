@@ -187,15 +187,28 @@ export default [
         ['pack set down', kit.length === 6 && kit.every((id) => id.startsWith('kit-'))],
         ['picture follows the pack', differ(onTurf, withPack) > 40])
       await p.screenshot({ path: join(shots, 'blobscape-scene-creator-pack.png') })
-      // undo takes the pack, the land, the drop and the turkey back
-      for (let i = 0; i < 4; i++) await p.getByTestId('creator-undo').click()
+      // a creature from Splat Creatures (#366): built, sized for the scene and playing its own move
+      await p.getByRole('group', { name: 'Packs' }).getByRole('button', { name: 'Everything' }).click()
+      await p.getByRole('searchbox', { name: 'Find a prop or land' }).fill('fox')
+      await p.getByTestId('creator-card-creature-fox').click()
+      await ready()
+      const foxed = await state(), withFox = await picture()
+      const fox = foxed.props[foxed.props.length - 1]
+      const later = await p.evaluate(async () => { const s = window.__creator.stage; await s.frame(2.7); await s.frame(2.7); return null }).then(() => picture())
+      steps.push(['fox set down', fox?.prop === 'creature-fox' && fox.size < 1 && foxed.blobs > packed.blobs],
+        ['picture follows the fox', differ(withPack, withFox) > 20],
+        ['the fox moves', differ(withFox, later) > 5])
+      await p.screenshot({ path: join(shots, 'blobscape-scene-creator-creature.png') })
+      await p.getByRole('searchbox', { name: 'Find a prop or land' }).fill('')
+      // undo takes the fox, the pack, the land, the drop and the turkey back
+      for (let i = 0; i < 5; i++) await p.getByTestId('creator-undo').click()
       await ready()
       const back = await state()
       steps.push(['undone', back.land === start.land && JSON.stringify(back.props) === JSON.stringify(start.props)])
       const room = await p.getByTestId('creator-room').innerText().catch(() => '')
       const bad = steps.filter(([, good]) => !good).map(([name]) => name)
       if (bad.length) fails.push(`blobscape scene creator props: ${bad.join(', ')} failed ${JSON.stringify({ start: start.props.length, turkey: turkey.props.length, dropped: dropped.props.length, land: swapped.land, room })}`)
-      else ok(`blobscape scene creator props: the turkey found and added to the windmill hill, a haystack dropped on the view, the land swapped to turf, the old ruins pack set down, counts and picture following, and all undone ("${room}")`)
+      else ok(`blobscape scene creator props: the turkey found and added to the windmill hill, a haystack dropped on the view, the land swapped to turf, the old ruins pack set down, the fox from Splat Creatures added and moving, counts and picture following, and all undone ("${room}")`)
     },
   },
   {

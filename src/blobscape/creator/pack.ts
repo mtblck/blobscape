@@ -19,6 +19,8 @@ export interface PackedCut {
   seen?: Uint8Array
   glow?: Uint8Array
   bones: Bone[]
+  /** A creature's own colors, for the palette (`colorsOf`); props bring theirs in their descriptions. */
+  colors?: string[]
 }
 
 /** A cut packed, its arrays trimmed to the blobs it has. */
