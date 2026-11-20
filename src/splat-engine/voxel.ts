@@ -224,6 +224,12 @@ export const MOTTLE = 0.35
 export const HUE_KEEP = 16
 /** The chroma (OKLab) under which a color counts as a gray for `HUE_KEEP`: a gray is a step of any paint's ramp. */
 export const HUE_FROM = 0.02
+/**
+ * How far round the hue circle (degrees) a near-gray palette color may sit from the way a gray paint's light tints it
+ * (cool in shade, warm in sun) or from the paint's own faint hue, and still be a step of its ramp (`stepper`). White
+ * sails in shade took the sky's palest blue, which read as holes through to the sky.
+ */
+export const GRAY_TURN = 40
 /** How many times closer a palette color off a paint's ramp must be before a blob takes it (`stepper`): only light of another color carries a blob that far. */
 export const ESCAPE = 9
 
@@ -867,11 +873,12 @@ export function stepper(steps: NonNullable<VoxelLight['steps']>, light: VoxelLig
       // keep the paint's own hue: a step that turns it to another hue (a red to brown in shade) is left out
       const [, pa, pb] = toOklab(base)
       const hued = Math.hypot(pa, pb) >= HUE_FROM
+      const away = (h: number, to: number) => Math.abs(Math.atan2(Math.sin(h - to), Math.cos(h - to))) * (180 / Math.PI)
       const own = [...seen].filter((q) => {
-        const [, a, b] = labs[q]
-        if (!hued || Math.hypot(a, b) < HUE_FROM) return true
-        const turn = Math.abs(Math.atan2(b, a) - Math.atan2(pb, pa)) * (180 / Math.PI)
-        return Math.min(turn, 360 - turn) <= HUE_KEEP
+        const [, a, b] = labs[q], c = Math.hypot(a, b), h = Math.atan2(b, a)
+        if (hued) return c < HUE_FROM || away(h, Math.atan2(pb, pa)) <= HUE_KEEP
+        // a gray paint's steps are grays tinted the way its own light turns it (cool in shade, warm in sun) or its own way
+        return c < HUE_FROM / 2 || [COOL, WARM, Math.atan2(pb, pa)].some((to) => away(h, to) <= GRAY_TURN)
       })
       got = own.length ? own : [...seen]
       ramps.set(key, got)

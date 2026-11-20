@@ -169,6 +169,19 @@ test('pixelArt with steady keeps a pixel on the color it had when the other is o
   assert.deepEqual(px(pixelArt(f, look, makeFrame(2, 1)), 0), [140, 140, 140, 255])
   before.data.set([101, 100, 100, 255])
   assert.deepEqual(px(pixelArt(f, look, before), 0), [140, 140, 140, 255])
+  // only one of the two colors a pixel lies between is kept: a sail turning over the sky never keeps the sky's blue
+  const near: Rgb[] = [[189, 186, 196], [235, 232, 226], [159, 208, 238]]
+  const g = makeFrame(1, 1), was = makeFrame(1, 1)
+  g.data.set([213, 210, 201, 255]); was.data.set([159, 208, 238, 255])
+  const wide = { palette: near, dither: 0, outline: null, glow: 0, steady: 0.2 }
+  assert.notDeepEqual(px(pixelArt(g, wide, was), 0), [159, 208, 238, 255])
+  was.data.set([189, 186, 196, 255])
+  assert.deepEqual(px(pixelArt(g, wide, was), 0), [189, 186, 196, 255])
+  // nor the sky's own color where it lies between that and another: a pixel the sky had a moment ago
+  g.data.set([180, 195, 215, 255]); was.data.set([159, 208, 238, 255])
+  const skyed = { ...wide, sky: [[159, 208, 238], [159, 208, 238]] as [Rgb, Rgb] }
+  assert.deepEqual(px(pixelArt(g, { ...wide, sky: undefined }, was), 0), [159, 208, 238, 255], 'with no sky, a blue is kept')
+  assert.deepEqual(px(pixelArt(g, skyed, was), 0), [189, 186, 196, 255])
   // the sky is the same every frame: it never takes the color a pixel had
   const sky = pixelArt(f, { ...look, sky: [[140, 140, 140], [140, 140, 140]] }, before)
   assert.deepEqual(px(sky, 2), [140, 140, 140, 255])
@@ -606,6 +619,9 @@ test('lighterStep and peakAt: a step up in the same hue; one highlight on a smoo
   assert.equal(lighterStep(pal[0], pal), 1)
   assert.equal(lighterStep(pal[3], pal), 4)
   assert.equal(lighterStep(pal[1], pal), -1)
+  // a gray steps up to a gray, never to the nearly gray palest sky blue (the windmill's sails)
+  const mill = ([[189, 186, 196], [235, 232, 226], [223, 241, 248], [251, 247, 234]] as Rgb[]).map((c) => oklab(...c))
+  assert.equal(lighterStep(mill[0], mill), 1)
   const w = 11, h = 11
   const dome = makeFrame(w, h)
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const v = 200 - 12 * Math.hypot(x - 5, y - 5); dome.data.set([v, v * 0.5, v * 0.5, 255], (y * w + x) * 4) }

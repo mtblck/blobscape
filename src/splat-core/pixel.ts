@@ -106,7 +106,7 @@ export function rgbToHex([r, g, b]: Rgb): string {
 /** How much lighter (OKLab L) `lighterStep` aims above a color. */
 export const STEP_UP = 0.12
 /**
- * The palette color one step lighter than `lab` in its own hue (among the grays, for a gray): the nearest to `lab`
+ * The palette color one step lighter than `lab` in its own hue (among the grays tinted its own way, for a gray): the nearest to `lab`
  * raised by `STEP_UP` of those at least a little lighter and of its hue (`HALO_HUE`), or -1 where there is none.
  */
 export function lighterStep(lab: Rgb, paletteLab: Rgb[]): number {
@@ -115,7 +115,11 @@ export function lighterStep(lab: Rgb, paletteLab: Rgb[]): number {
   for (let k = 0; k < paletteLab.length; k++) {
     const p = paletteLab[k], pc = Math.hypot(p[1], p[2])
     if (p[0] < lab[0] + 0.02) continue
-    const hued = cc >= HALO_GRAY ? pc >= HALO_GRAY && (p[1] * lab[1] + p[2] * lab[2]) >= HALO_HUE * pc * cc : pc < HALO_GRAY * 2
+    // a gray's lighter step is a plain gray or one tinted its own faint way: the palest sky blue is nearly gray, and a
+    // white sail's lit rim took it, which read as sky
+    const hued = cc >= HALO_GRAY
+      ? pc >= HALO_GRAY && (p[1] * lab[1] + p[2] * lab[2]) >= HALO_HUE * pc * cc
+      : pc < HALO_GRAY / 3 || (pc < HALO_GRAY * 2 && (p[1] * lab[1] + p[2] * lab[2]) >= HALO_HUE * pc * Math.max(cc, HALO_GRAY / 6))
     if (!hued) continue
     const d = (lab[0] + STEP_UP - p[0]) ** 2 + (lab[1] - p[1]) ** 2 + (lab[2] - p[2]) ** 2
     if (d < bestD) { bestD = d; best = k }
@@ -761,8 +765,18 @@ export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Fram
         if (steady > 0 && solid(x, y) && before!.data[o + 3] === 255) {
           const was = slot.get((before!.data[o] << 16) | (before!.data[o + 1] << 8) | before!.data[o + 2])
           const far = (p: Rgb) => Math.hypot(lab[0] - p[0], lab[1] - p[1], lab[2] - p[2])
-          // colors that cycle are left to move
-          if (was !== undefined && was !== k && !member[was] && !member[k] && far(pl[was]) <= far(pl[k]) + steady) k = was
+          // colors that cycle are left to move; and only one of the two colors this pixel lies between is kept, so a
+          // pixel the sky had a moment ago never keeps the sky's color as a sail turns over it
+          const between = was !== undefined && pl.filter((p) => far(p) < far(pl[was])).length <= 1
+          // and never the color the sky would take here
+          let skyK = -1
+          if (look.sky) {
+            const [top, low] = look.sky, reach = skyReach(look.sky), t = Math.min(1, (y + 0.5) / h / reach)
+            const off = (BAYER4[(y & 3) * 4 + (x0 & 3)] / 16 - 0.5) * Math.max(look.dither, SKY_DITHER * (reach < 1 ? Math.min(1, (1 - t) * 4) : 1)) * 48
+            const c = [0, 1, 2].map((q) => Math.max(0, Math.min(255, top[q] + (low[q] - top[q]) * t + g[q]) + off))
+            skyK = nearest(oklab(c[0], c[1], c[2]), pl)
+          }
+          if (was !== undefined && was !== k && was !== skyK && between && !member[was] && !member[k] && far(pl[was]) <= far(pl[k]) + steady) k = was
         }
         // color cycling, on the scene's own pixels
         const c = look.palette[solid(x, y) ? turn[k] : k]

@@ -4763,6 +4763,12 @@
      "type": "0.02"
     },
     {
+     "name": "GRAY_TURN",
+     "kind": "const",
+     "doc": "How far round the hue circle (degrees) a near-gray palette color may sit from the way a gray paint's light tints it\n(cool in shade, warm in sun) or from the paint's own faint hue, and still be a step of its ramp (`stepper`). White\nsails in shade took the sky's palest blue, which read as holes through to the sky.",
+     "type": "40"
+    },
+    {
      "name": "ESCAPE",
      "kind": "const",
      "doc": "How many times closer a palette color off a paint's ramp must be before a blob takes it (`stepper`): only light of another color carries a blob that far.",

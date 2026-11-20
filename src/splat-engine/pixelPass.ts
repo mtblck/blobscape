@@ -513,6 +513,14 @@ export class PixelPass {
           const lab = toLab(color.add(off)).toVar()
           const best = float(1e9).toVar()
           const pick = float(0).toVar()
+          // the second nearest: steady pixels keep only one of the two colors a pixel lies between
+          const second = float(1e9).toVar()
+          // and never the sky's: the color the sky would take here, so a sail turning over the sky keeps none of it
+          const tSky = min(row.add(0.5).div(res.y).div(this.skyReach), 1).toVar()
+          const skySpread = max(this.dither, select(this.skyReach.lessThan(1), min(float(1).sub(tSky).mul(4), 1), 1).mul(SKY_DITHER))
+          const screenStep = float(bayer.element(int(mod(row, 4).mul(4).add(mod(home.x, 4)))))
+          const skyLab = toLab(min(this.skyTop.add(this.skyLow.sub(this.skyTop).mul(tSky)).add(spill), 255).add(screenStep.div(16).sub(0.5).mul(skySpread.mul(48)))).toVar()
+          const skyBest = float(1e9).toVar(), skyPick = float(-1).toVar()
           // steady pixels: the palette color this pixel had the frame before, and how far that is from what it wants now
           const was = this.beforeTex.sample(vec2(home.x.add(0.5).div(res.x), float(1).sub(home.y.add(0.5).div(res.y))))
           const wasLab = toLab(was.rgb.mul(255)).toVar()
@@ -532,7 +540,9 @@ export class PixelPass {
               const pl = palLab.element(i)
               const d = lab.sub(pl)
               const dd = dot(d, d)
-              If(dd.lessThan(best), () => { best.assign(dd); pick.assign(float(i)) })
+              If(dd.lessThan(best), () => { second.assign(best); best.assign(dd); pick.assign(float(i)) }).Else(() => { If(dd.lessThan(second), () => { second.assign(dd) }) })
+              const ds = skyLab.sub(pl)
+              If(dot(ds, ds).lessThan(skyBest), () => { skyBest.assign(dot(ds, ds)); skyPick.assign(float(i)) })
               const allowed = length(vec2(pl.y, pl.z)).lessThan(HALO_GRAY).or(nearHue(pl, ownLab)).or(nearHue(pl, lightLab))
               If(halo.and(allowed).and(dd.lessThan(keptBest)), () => { keptBest.assign(dd); keptPick.assign(float(i)) })
               const w = wasLab.sub(pl)
@@ -574,7 +584,9 @@ export class PixelPass {
                 If(float(i).lessThan(this.count), () => {
                   const pl = palLab.element(i)
                   const pc = length(vec2(pl.y, pl.z))
-                  const hued = select(cc.greaterThanEqual(HALO_GRAY), pc.greaterThanEqual(HALO_GRAY).and(dot(vec2(pl.y, pl.z), vec2(me.y, me.z)).greaterThanEqual(pc.mul(cc).mul(HALO_HUE))), pc.lessThan(HALO_GRAY * 2))
+                  const along = dot(vec2(pl.y, pl.z), vec2(me.y, me.z))
+                  const hued = select(cc.greaterThanEqual(HALO_GRAY), pc.greaterThanEqual(HALO_GRAY).and(along.greaterThanEqual(pc.mul(cc).mul(HALO_HUE))),
+                    pc.lessThan(HALO_GRAY / 3).or(pc.lessThan(HALO_GRAY * 2).and(along.greaterThanEqual(pc.mul(max(cc, HALO_GRAY / 6)).mul(HALO_HUE)))))
                   const d = vec3(me.x.add(STEP_UP), me.y, me.z).sub(pl)
                   const dd = dot(d, d)
                   If(pl.x.greaterThanEqual(me.x.add(0.02)).and(hued).and(dd.lessThan(stepBest)), () => { stepBest.assign(dd); stepPick.assign(float(i)) })
@@ -585,7 +597,7 @@ export class PixelPass {
           })
           // colors that cycle are left to move
           const moves = this.memberU.element(int(pick)).add(this.memberU.element(int(wasPick)))
-          If(this.sticky.greaterThan(0).and(here.solid).and(was.a.greaterThan(0.5)).and(wasOff.lessThan(SAME * SAME)).and(moves.lessThan(0.5)).and(sqrt(wasFar).lessThanEqual(sqrt(best).add(this.sticky))), () => { pick.assign(wasPick) })
+          If(this.sticky.greaterThan(0).and(here.solid).and(was.a.greaterThan(0.5)).and(wasOff.lessThan(SAME * SAME)).and(moves.lessThan(0.5)).and(wasFar.lessThanEqual(second)).and(this.skied.lessThan(0.5).or(abs(wasPick.sub(skyPick)).greaterThan(0.5))).and(sqrt(wasFar).lessThanEqual(sqrt(best).add(this.sticky))), () => { pick.assign(wasPick) })
           // color cycling, on the scene's own pixels
           const shownAs = select(here.solid, this.turnU.element(int(pick)), pick)
           out.assign(vec4(palShown.element(int(shownAs)), 1))

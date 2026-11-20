@@ -393,6 +393,27 @@ test('painting in steps keeps a paint in its own hue: a red with no darker red s
   assert.ok(new Set([0, 0.5, 1].map((t) => at('#2c5a38', t).join())).size >= 2)
 })
 
+test('painting in steps keeps a gray paint in grays: white sails in shade never take the sky\'s pale blue', () => {
+  const hex = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255) as [number, number, number]
+  // the windmill's palette, light and white sail paint
+  const palette = [
+    '#22202b', '#3b2a20', '#5e4230', '#8a6242', '#b98d60', '#2f5d34', '#4a8a3c', '#76b04a', '#a8d05e', '#b88a2e', '#e0b648', '#f3d977',
+    '#ffd84a', '#5a5863', '#8b8894', '#bdbac4', '#ebe8e2', '#fbf7ea', '#8c2f2a', '#c4483a', '#e58fa8', '#2e62a8', '#3b6fb5', '#5fa8e0', '#9fd0ee', '#dff1f8',
+  ].map(hex)
+  const light = { ...PAINTED, dir: [0.4, 0.8, 0.6] as [number, number, number], ambient: 0.7, shadow: 0.5, steps: { palette } }
+  const step = stepper(light.steps, light)
+  // palette colors as the steps give them, held under the glow line
+  const held = (c: number[]) => { const top = Math.max(...c); return c.map((v) => (top > LIT_MAX ? (v * LIT_MAX) / top : v)) }
+  const blues = new Set(['#5fa8e0', '#9fd0ee', '#dff1f8'].map((h) => held(hex(h)).join()))
+  for (const paint of ['#fbf7ea', '#bdbac4'])
+    for (let q = 0; q <= 12; q++)
+      for (let i = 0; i < 30; i++) {
+        const base = hex(paint), t = q / 12
+        const got = step(base, bakedColor(base, (0.7 + 0.3 * t) * LIT_MAX, t, light.ramp, 0), i * 3, i, 7 - i)
+        assert.ok(!blues.has(got.join()), `${paint} at ${t} took a blue`)
+      }
+})
+
 test('light in bands: a sun share falls on one of a few steps, and a lit ball takes only that many shades', () => {
   assert.equal(bandOf(0.2, 3), 0)
   assert.equal(bandOf(0.5, 3), 0.5)
