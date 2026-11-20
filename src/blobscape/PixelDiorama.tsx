@@ -322,7 +322,7 @@ export function PixelDiorama() {
   // in the scene's own share of light in shade, a little cool, and all of it held under the baked light's brightest
   // (`LIT_MAX`), so only what gives its own light reaches the pixel pass's glow
   const pixelCel = useMemo<CelLook | undefined>(() => (pixels && shaded && !touring ? { from: shown.sun ? [...shown.sun] as [number, number, number] : undefined, tones: 2, smooth: PIXEL_SMOOTH, line: 0, ...shadedLight(shown.shade ?? 0.5) } : undefined), [pixels, shaded, touring, shown.sun, shown.shade])
-  const drawing = useDrawnLook(stage, touring ? undefined : drawnStyle, { pixelCel, actor: scene?.built, plain: !!scene?.plain, azimuth: shown.views[0].orbit.azimuth, offscreen, light: coarse, loop: shown.loop, sky: shown.finish.sky ? [styleSky[0], styleSky[1]] : undefined })
+  const drawing = useDrawnLook(stage, touring ? undefined : drawnStyle, { pixelCel, actor: scene?.built, spacing: DETAIL.find((d) => d.id === scene?.detail)?.spacing, plain: !!scene?.plain, azimuth: shown.views[0].orbit.azimuth, offscreen, light: coarse, loop: shown.loop, sky: shown.finish.sky ? [styleSky[0], styleSky[1]] : undefined })
   // the walk-through's fourth step is about the four samples, so it draws them whatever the switch says
   const sampling = touring?.id === 'samples'
   const drawnLook = useMemo(() => (asPixels ? (sampling ? { ...look, fine: true } : look) : undefined), [asPixels, sampling, look])

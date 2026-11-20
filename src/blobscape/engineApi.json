@@ -23,7 +23,7 @@
   {
    "id": "pixels",
    "title": "Pixels and sprites",
-   "doc": "Drawing a stage as pixel art, as brush and ink marks, as characters, cel shaded, in neon, as stained glass, in watercolor or glitching, and baking a creature into a sprite sheet."
+   "doc": "Drawing a stage as pixel art, as brush and ink marks, as characters, cel shaded, in neon, as stained glass, in watercolor, as blocks or glitching, and baking a creature into a sprite sheet."
   },
   {
    "id": "simulation",
@@ -208,6 +208,12 @@
        "doc": "How many blobs the creature shown has."
       },
       {
+       "name": "blockCount",
+       "readonly": true,
+       "type": "{ blocks: number; faces: number } | undefined",
+       "doc": "How many cubes and faces are on show while the scene is drawn as blocks."
+      },
+      {
        "name": "sortKind",
        "readonly": true,
        "type": "\"bins\" | \"radix\"",
@@ -267,6 +273,15 @@
        "signatures": [
         {
          "code": "setActor(actor: StageActor, clip?: Clip, extras?: StageActor[]): void"
+        }
+       ]
+      },
+      {
+       "name": "setBlocks",
+       "doc": "Draws the scene as blocks (blocks.ts): its blobs snapped onto a grid of `look.cell`, each filled cell a cube in\none flat color, lit face by face, with the shadows blocks cast on each other. Cubes ride the bones their blobs\ndid, so the scene still moves. The stage's lights (`setLights`) shine on the faces as lamps and its ambient light\ndims the look's own. It suits blobs with no light baked into them, and scenes more than small creatures. Leave\nthe look out to stop. Kept for the next actor too; the cubes are made again for each. Not in pixel mode, and it\ncomes before every other look.",
+       "signatures": [
+        {
+         "code": "setBlocks(look?: BlockLook): void"
         }
        ]
       },
@@ -9043,6 +9058,343 @@
      "signatures": [
       {
        "code": "backLight(at: readonly number[], light: readonly number[], shine?: number, aspect?: number): number"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "blockView",
+   "title": "Blocks",
+   "group": "pixels",
+   "doc": "",
+   "entries": [
+    {
+     "name": "BLOCK_LIGHTS",
+     "kind": "const",
+     "doc": "How many of the stage's lights reach the blocks; the rest are dropped.",
+     "type": "16"
+    },
+    {
+     "name": "EDGE_WIDTH",
+     "kind": "const",
+     "doc": "How far in from a face's edge its line reaches, as a share of the face.",
+     "type": "0.045"
+    },
+    {
+     "name": "LAMP_WRAP",
+     "kind": "const",
+     "doc": "How much of a lamp's light a face turned away from it still takes: lamps cast no shadows here, so a little wraps round.",
+     "type": "0.2"
+    },
+    {
+     "name": "BlockActor",
+     "kind": "type",
+     "doc": "What a view needs of an actor: what blocks are made from, and the posed bones that carry them.",
+     "type": "BlockSource & { skeleton: { matrix: Float32Array; scale: Float32Array; bones: readonly { name: string }[] } }"
+    },
+    {
+     "name": "BlockView",
+     "kind": "class",
+     "doc": "A scene drawn as blocks (blocks.ts): one mesh for each bone that carries cubes, moved by that bone whole, so cubes\nnever bend. The look's own light is in the corners already; this adds the stage's lamps to each face by where it\nis and which way it faces now, keeps a block that gives its own light at its own color, and draws a thin line\nround each face. It draws into a target with four samples a pixel and copies that out, since a cube's edges want\nsmoothing that soft blobs never did.",
+     "extends": [
+      "Group"
+     ],
+     "ctor": [
+      {
+       "code": "new BlockView(actors: readonly BlockActor[], look: BlockLook)"
+      }
+     ],
+     "props": [
+      {
+       "name": "blocks",
+       "readonly": true,
+       "type": "number",
+       "doc": "How many cubes it holds."
+      },
+      {
+       "name": "faces",
+       "readonly": true,
+       "type": "number",
+       "doc": "How many faces of them it draws: those with no cube of the same bone beside them."
+      }
+     ],
+     "methods": [
+      {
+       "name": "setLights",
+       "doc": "The stage's lights and ambient light, as `SplatWorld.setLights` takes them; `tint` multiplies the ambient (a night's light).",
+       "signatures": [
+        {
+         "code": "setLights(lights: readonly Light[], ambient?: number | readonly [number, number, number], tint?: readonly [number, number, number]): void"
+        }
+       ]
+      },
+      {
+       "name": "pose",
+       "doc": "Puts every piece where its bone is now.",
+       "signatures": [
+        {
+         "code": "pose(): void"
+        }
+       ]
+      },
+      {
+       "name": "render",
+       "doc": "Draws the scene (this view in it) into the renderer's current target, or onto the screen when it has none, with its edges smoothed.",
+       "signatures": [
+        {
+         "code": "render(renderer: WebGPURenderer, scene: Object3D, camera: Camera, width: number, height: number): void"
+        }
+       ]
+      },
+      {
+       "name": "dispose",
+       "doc": "Frees the meshes and the target.",
+       "signatures": [
+        {
+         "code": "dispose(): void"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "blocks",
+   "title": "Blocks: the arithmetic",
+   "group": "pixels",
+   "doc": "",
+   "entries": [
+    {
+     "name": "BlockLook",
+     "kind": "interface",
+     "doc": "Blocks: a scene's blobs snapped onto a grid and drawn as cubes (`Stage.setBlocks`). Every grid cell that holds a\nblob becomes one cube in the commonest color among its blobs, on the bone most of them ride, so a scene still\nmoves: its still parts stay on the grid and a moving part carries its cubes with it. The light is worked out here,\nonce, for the rest pose: each face is flat in one tone by which way it faces the light, a face something stands\nin front of is in shade as a whole, and corners where blocks meet are a little darker. That wants blobs with no\nlight baked into them. This file is the arithmetic (pure, tested); blockView.ts draws it.",
+     "props": [
+      {
+       "name": "cell",
+       "type": "number",
+       "doc": "A block's side, in the blobs' units: the grid a scene was cut on, or a whole number of it for bigger blocks."
+      },
+      {
+       "name": "from",
+       "optional": true,
+       "type": "readonly [number, number, number]",
+       "doc": "The way to the light (any length; default up, right and toward the front)."
+      },
+      {
+       "name": "shade",
+       "optional": true,
+       "type": "number",
+       "doc": "How much light a face in shade keeps, 0 to 1 (default 0.45)."
+      },
+      {
+       "name": "shadows",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Whether blocks cast shadows on the faces behind them (default true)."
+      },
+      {
+       "name": "corners",
+       "optional": true,
+       "type": "number",
+       "doc": "How much darker a face gets in a corner where blocks meet, 0 to 1 (default 0.5)."
+      },
+      {
+       "name": "vary",
+       "optional": true,
+       "type": "number",
+       "doc": "How much one block's color differs from the next's, 0 to 1 (default 0.35)."
+      },
+      {
+       "name": "edge",
+       "optional": true,
+       "type": "number",
+       "doc": "How dark the line round each face is, 0 to 1 (default 0.3); 0 for none."
+      },
+      {
+       "name": "ambient",
+       "optional": true,
+       "type": "readonly [number, number, number]",
+       "doc": "What the stage's ambient light is multiplied by, linear (a night's dim blue; default none)."
+      },
+      {
+       "name": "least",
+       "optional": true,
+       "type": "number",
+       "doc": "Blobs fainter than this are left out (mist, haze; default 0.3)."
+      }
+     ]
+    },
+    {
+     "name": "BLOCK_FROM",
+     "kind": "const",
+     "doc": "The default way to the light.",
+     "type": "readonly [number, number, number]"
+    },
+    {
+     "name": "BLOCK_SHADE",
+     "kind": "const",
+     "doc": "The default light a face in shade keeps.",
+     "type": "0.45"
+    },
+    {
+     "name": "CORNER_MOST",
+     "kind": "const",
+     "doc": "How much of its light a face loses with all of a corner shut in, at `corners` 1.",
+     "type": "0.6"
+    },
+    {
+     "name": "VARY_MOST",
+     "kind": "const",
+     "doc": "How far a block's lightness is from its color's own at most, at `vary` 1.",
+     "type": "0.09"
+    },
+    {
+     "name": "SKY_SHARE",
+     "kind": "const",
+     "doc": "A face in shade is this much darker again when it faces straight down, and as much lighter facing up.",
+     "type": "0.16"
+    },
+    {
+     "name": "SPECK_SIZE",
+     "kind": "const",
+     "doc": "Loose things in the air (rain, sparks, fireflies: bones whose names start with `~`) are cubes this share of a block\nacross, on a grid of their own, and take no part in shadows or corners.",
+     "type": "0.4"
+    },
+    {
+     "name": "GLOW_CLEAR",
+     "kind": "const",
+     "doc": "A block that gives this much of its own light or more (the mean of its blobs' `glow`) casts no shadow.",
+     "type": "0.5"
+    },
+    {
+     "name": "BlockSource",
+     "kind": "interface",
+     "doc": "What blocks are made from: an actor's blobs, its skin, the names of its bones and the light its blobs give.",
+     "props": [
+      {
+       "name": "blobs",
+       "type": "Blobs",
+       "doc": "The blobs in the rest pose."
+      },
+      {
+       "name": "skin",
+       "type": "Skin",
+       "doc": "Which bones move each blob: a block rides the bone most of its blobs do."
+      },
+      {
+       "name": "skeleton",
+       "type": "{ bones: readonly { name: string }[] }",
+       "doc": "The bones, for their names: one whose name starts with `~` carries loose specks."
+      },
+      {
+       "name": "glow",
+       "optional": true,
+       "type": "Uint8Array<ArrayBufferLike>",
+       "doc": "How much of its own light each blob gives, a byte a blob (`Actor.glow`)."
+      }
+     ]
+    },
+    {
+     "name": "BlockPiece",
+     "kind": "interface",
+     "doc": "The cubes on one bone of one actor, as a mesh: four corners a face, two triangles.",
+     "props": [
+      {
+       "name": "actor",
+       "type": "number",
+       "doc": "Which of the sources it came from."
+      },
+      {
+       "name": "bone",
+       "type": "number",
+       "doc": "Which of that source's bones carries it."
+      },
+      {
+       "name": "blocks",
+       "type": "number",
+       "doc": "How many cubes."
+      },
+      {
+       "name": "positions",
+       "type": "Float32Array",
+       "doc": "Corner places in the rest pose, three numbers each."
+      },
+      {
+       "name": "normals",
+       "type": "Float32Array",
+       "doc": "Each corner's face normal."
+      },
+      {
+       "name": "colors",
+       "type": "Float32Array",
+       "doc": "Each corner's color, linear, the block's own with no light on it."
+      },
+      {
+       "name": "light",
+       "type": "Float32Array",
+       "doc": "Three numbers a corner: the light its face has from the look's light (shade and shadow in), what is left of any light in its corner, and how much of its own light the block gives."
+      },
+      {
+       "name": "uvs",
+       "type": "Float32Array",
+       "doc": "Each corner's place on its face, 0 or 1 each way."
+      },
+      {
+       "name": "indices",
+       "type": "Uint32Array",
+       "doc": "Three corners a triangle."
+      }
+     ]
+    },
+    {
+     "name": "blockHash",
+     "kind": "function",
+     "doc": "A number from 0 to 1 for a cell, the same each time.",
+     "signatures": [
+      {
+       "code": "blockHash(x: number, y: number, z: number): number"
+      }
+     ]
+    },
+    {
+     "name": "faceLight",
+     "kind": "function",
+     "doc": "How much of the look's light each of a cube's six faces has when nothing is in the way, 0 to 1, in the order\n+x, -x, +y, -y, +z, -z: by how squarely it faces the light, with the face that faces it most at 1, so no two of\nthe three faces a view shows are alike unless the light lies evenly between them.",
+     "signatures": [
+      {
+       "code": "faceLight(from?: readonly [number, number, number]): number[]"
+      }
+     ]
+    },
+    {
+     "name": "faceTone",
+     "kind": "function",
+     "doc": "The light a face has: its shade (a little more of it facing the sky, less facing the ground) and its share of the light where that reaches it.",
+     "signatures": [
+      {
+       "code": "faceTone(face: number, lit: number, shade: number, sun: readonly number[]): number"
+      }
+     ]
+    },
+    {
+     "name": "faceLit",
+     "kind": "function",
+     "doc": "Whether the look's light reaches the face `face` of the cell at x, y, z: a walk from the face's middle toward the\nlight, half a cell at a time, until a solid cell is met or the walk is out of the box that holds them all.",
+     "signatures": [
+      {
+       "code": "faceLit(solid: (x: number, y: number, z: number) => boolean, x: number, y: number, z: number, face: number, from: readonly [number, number, number], lo: readonly number[], hi: readonly number[]): boolean"
+      }
+     ]
+    },
+    {
+     "name": "buildBlocks",
+     "kind": "function",
+     "doc": "The sources as blocks: a mesh for each bone that carries any (see `BlockLook`). A cell two bones' blobs share goes\nto the bone with more of them, so no two cubes ever stand in one place; faces between two cubes on one bone are\nleft out.",
+     "signatures": [
+      {
+       "code": "buildBlocks(sources: readonly BlockSource[], look: BlockLook): { pieces: BlockPiece[]; blocks: number; faces: number }"
       }
      ]
     }
