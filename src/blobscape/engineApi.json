@@ -5147,6 +5147,26 @@
      ]
     },
     {
+     "name": "hugged",
+     "kind": "function",
+     "doc": "Runs `make` with every `buildVoxels` inside it fitting the discs along a shape's outer edges to the edge: a disc whose\nsurface ends within its reach (the shape falls away from the disc's own plane, as past the top of a fence rail or the\nrim of a pond) is moved in and squeezed across the edge, long along it, so the row of discs ends in a straight line\nwhere the shape does instead of a row of round bumps standing past it. Inner corners are left alone: what meets them\ncovers them. See `edgeFit`.",
+     "signatures": [
+      {
+       "code": "hugged<T>(make: () => T): T"
+      }
+     ]
+    },
+    {
+     "name": "edgeFit",
+     "kind": "function",
+     "doc": "Where the surface of a shape ends within a disc's reach, in the disc's own plane: the way out to the nearest outer edge\n(a unit vector in the plane) and how far from the disc's middle the edge lies, or undefined when the surface carries on\nall round. `past(q)` is how far the shape lies off the disc's plane at `q`, counted as off past `least`; it is asked at\nthree distances along `EDGE_WAYS` ways, the nearer ones only where the farthest finds an edge.",
+     "signatures": [
+      {
+       "code": "edgeFit(p: Vec3, n: Vec3, reach: number, past: (q: Vec3) => number, least: number): { out: Vec3; at: number } | undefined"
+      }
+     ]
+    },
+    {
      "name": "bandOf",
      "kind": "function",
      "doc": "Moves a sun share (0 to 1) onto the nearest of `n` steps (`banded`).",
@@ -7573,6 +7593,12 @@
        "optional": true,
        "type": "boolean",
        "doc": "A line where one part of the scene meets another whose color is too close for `edges` to draw one (two things of one color, one in front of the other), at `edges`' strength or full strength without it.\nNeeds a map of the parts drawn beside the scene (`pixelArt`'s `parts`; the live pass draws its own)."
+      },
+      {
+       "name": "across",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Lines inside the scene only where one thing meets another: with a map of parts (`parts`, or `fine`, which draws one),\na jump in color within one part is its paint (grass, stonework) and takes no line, as a pixel artist outlines things\nand not their texture. Without a map it does nothing."
       },
       {
        "name": "sky",

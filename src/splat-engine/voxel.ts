@@ -914,6 +914,58 @@ export function banded<T>(n: number, make: () => T): T {
   try { return make() } finally { bands = was }
 }
 
+let hug = false
+/**
+ * Runs `make` with every `buildVoxels` inside it fitting the discs along a shape's outer edges to the edge: a disc whose
+ * surface ends within its reach (the shape falls away from the disc's own plane, as past the top of a fence rail or the
+ * rim of a pond) is moved in and squeezed across the edge, long along it, so the row of discs ends in a straight line
+ * where the shape does instead of a row of round bumps standing past it. Inner corners are left alone: what meets them
+ * covers them. See `edgeFit`.
+ */
+export function hugged<T>(make: () => T): T {
+  const was = hug
+  hug = true
+  try { return make() } finally { hug = was }
+}
+
+/** How far out from a disc's middle, in its σ, the picture's solid edge lies (a lone blob of full opacity reaches 0.5 there). */
+const SOLID_REACH = 1.18
+/** Ways round a disc that `edgeFit` looks for the edge. */
+const EDGE_WAYS = 8
+
+/**
+ * Where the surface of a shape ends within a disc's reach, in the disc's own plane: the way out to the nearest outer edge
+ * (a unit vector in the plane) and how far from the disc's middle the edge lies, or undefined when the surface carries on
+ * all round. `past(q)` is how far the shape lies off the disc's plane at `q`, counted as off past `least`; it is asked at
+ * three distances along `EDGE_WAYS` ways, the nearer ones only where the farthest finds an edge.
+ */
+export function edgeFit(p: Vec3, n: Vec3, reach: number, past: (q: Vec3) => number, least: number): { out: Vec3; at: number } | undefined {
+  const t = norm(Math.abs(n[1]) < 0.9 ? [n[2], 0, -n[0]] : [0, -n[2], n[1]])
+  const b: Vec3 = [n[1] * t[2] - n[2] * t[1], n[2] * t[0] - n[0] * t[2], n[0] * t[1] - n[1] * t[0]]
+  const steps = [0.35, 0.65, 1]
+  const out: Vec3 = [0, 0, 0]
+  let near = Infinity
+  for (let k = 0; k < EDGE_WAYS; k++) {
+    const a = (k / EDGE_WAYS) * Math.PI * 2, c = Math.cos(a), si = Math.sin(a)
+    const u: Vec3 = [t[0] * c + b[0] * si, t[1] * c + b[1] * si, t[2] * c + b[2] * si]
+    const at = (r: number): Vec3 => [p[0] + u[0] * r * reach, p[1] + u[1] * r * reach, p[2] + u[2] * r * reach]
+    if (past(at(1)) <= least) continue
+    let r = 1, by = 0
+    for (const f of steps) { const v = past(at(f)); if (v > least) { r = f; by = v; break } }
+    // the edge lies about as far back from the first point off the surface as that point lies off it (straight past an
+    // edge the shape's distance grows one for one), and no nearer than the last step still on it
+    const i = steps.indexOf(r), edge = Math.max(i > 0 ? steps[i - 1] : 0, r - by / reach)
+    const w = 1.2 - edge
+    out[0] += u[0] * w; out[1] += u[1] * w; out[2] += u[2] * w
+    near = Math.min(near, edge * reach)
+  }
+  if (near === Infinity) return
+  const len = Math.hypot(out[0], out[1], out[2])
+  // edges all round (a lone speck, the tip of a spike) have no one way out: leave the disc as it is
+  if (len < 0.35) return
+  return { out: [out[0] / len, out[1] / len, out[2] / len], at: near }
+}
+
 /** Moves a sun share (0 to 1) onto the nearest of `n` steps (`banded`). */
 export function bandOf(direct: number, n: number): number {
   if (n < 2) return direct
@@ -1115,9 +1167,21 @@ export function buildVoxels(spec: VoxelSpec): Built {
           sight[at + k] = v
         }
       }
+      let center = p, shape = dab(n, part.strokes ?? 0, wide ? 2 : 1)
+      if (hug && !wide) {
+        const solid = shape.scale[0] * SOLID_REACH
+        // the shape has left the disc's plane where it lies clearly farther off than the disc's middle does
+        const fit = edgeFit(p, n, solid * 1.25, (q) => sdf(q[0], q[1], q[2]) - d, s * 0.08)
+        if (fit && fit.at < solid) {
+          const reachOut = Math.max(fit.at, s * 0.1), half = (reachOut + solid) / 2, shift = (reachOut - solid) / 2
+          const m = fit.out, along: Vec3 = [m[1] * n[2] - m[2] * n[1], m[2] * n[0] - m[0] * n[2], m[0] * n[1] - m[1] * n[0]]
+          center = [p[0] + m[0] * shift, p[1] + m[1] * shift, p[2] + m[2] * shift]
+          shape = { scale: [Math.max(shape.scale[0], shape.scale[1]), half / SOLID_REACH, shape.scale[2]], quat: quatFromAxes(along, m, n) }
+        }
+      }
       blobs.push({
         // a disc lying on the surface: flat along the normal, which is what live lights read as the way it faces
-        center: p, ...dab(n, part.strokes ?? 0, wide ? 2 : 1),
+        center, ...shape,
         color, opacity: part.opacity ?? 0.96,
       })
       parts.push(pi)

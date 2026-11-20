@@ -374,6 +374,12 @@ export interface PixelLook {
    */
   parts?: boolean
   /**
+   * Lines inside the scene only where one thing meets another: with a map of parts (`parts`, or `fine`, which draws one),
+   * a jump in color within one part is its paint (grass, stonework) and takes no line, as a pixel artist outlines things
+   * and not their texture. Without a map it does nothing.
+   */
+  across?: boolean
+  /**
    * A backdrop behind the scene: its color at the top and at the bottom of the picture, blended between and dithered into the palette.
    * `reach` is how far down the picture the blend runs before it is all the bottom color (above 0, up to 1; the whole way when left out or not a sound number: `skyReach`).
    * Left out, empty pixels stay clear.
@@ -623,6 +629,8 @@ export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Fram
   const amp = look.dither * 48
   const edges = look.edges ?? 0
   const map = look.parts && parts && parts.width === w && parts.height === h ? parts.data : undefined
+  // `across` reads the map of parts whether or not part lines are drawn
+  const areas = look.across && parts && parts.width === w && parts.height === h ? parts.data : undefined
   const steady = before && before.width === w && before.height === h ? look.steady ?? 0 : 0
   // surface dither: each pixel's step from the map of steps, where the scene has one
   const steps = look.surface && ranks && ranks.width === w && ranks.height === h ? ranks.data : undefined
@@ -680,7 +688,8 @@ export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Fram
             const j = ((y + dy) * w + x + dx) * 4
             const n = oklab(f.data[j], f.data[j + 1], f.data[j + 2])
             const far = Math.hypot(n[0] - a[0], n[1] - a[1], n[2] - a[2]) > EDGE_JUMP
-            if (edges > 0 && far && n[0] > a[0]) return true
+            const apart = !areas || (areas[i + 3] >= 128 && areas[j + 3] >= 128 && (areas[i] !== areas[j] || areas[i + 1] !== areas[j + 1] || areas[i + 2] !== areas[j + 2]))
+            if (edges > 0 && far && n[0] > a[0] && apart) return true
             // and where another part begins in a color too close for that: on the lower-numbered part, so the line keeps its side as lights flicker
             if (far || !map || map[i + 3] < 128 || map[j + 3] < 128) return false
             return (map[i] | (map[i + 1] << 8) | (map[i + 2] << 16)) < (map[j] | (map[j + 1] << 8) | (map[j + 2] << 16))

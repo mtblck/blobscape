@@ -45,6 +45,8 @@ export class PixelPass {
   /** Each art pixel's step of the dither pattern, from the blob there (red, a byte), for a look with `surface`. */
   readonly ranks = new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter })
   private readonly parted = uniform(0)
+  /** Color lines only where another part begins (`PixelLook.across`), and only while a map of parts is drawn. */
+  private readonly across = uniform(0)
   /** `PixelLook.calm`, and whether the map of parts is drawn for it to go by. */
   private readonly calmed = uniform(0)
   private readonly calmParts = uniform(0)
@@ -167,6 +169,7 @@ export class PixelPass {
     this.glow.value = look.glow
     this.edges.value = look.edges ?? 0
     this.parted.value = look.parts ? 1 : 0
+    this.across.value = look.across && (look.parts || look.fine) ? 1 : 0
     this.calmed.value = look.calm ? 1 : 0
     this.flat.value = look.flat ? 1 : 0
     const rim = look.rim ? rimStep(look.rim) : undefined
@@ -427,7 +430,10 @@ export class PixelPass {
             const b = toLab(n.rgb).toVar()
             const d = b.sub(a)
             const far = dot(d, d).greaterThan(EDGE_JUMP * EDGE_JUMP)
-            jump.assign(max(jump, select(this.edges.greaterThan(0).and(n.solid).and(b.x.greaterThan(a.x)).and(far), 1, 0)))
+            // across: a jump in color within one thing is its paint, not an edge, and takes no line
+            const beyond = partAt(dx, dy).toVar()
+            const apart = this.across.lessThan(0.5).or(part.a.greaterThan(0.5).and(beyond.a.greaterThan(0.5)).and(max(abs(beyond.rgb.sub(part.rgb)).x, max(abs(beyond.rgb.sub(part.rgb)).y, abs(beyond.rgb.sub(part.rgb)).z)).greaterThan(0.5 / 255)))
+            jump.assign(max(jump, select(this.edges.greaterThan(0).and(n.solid).and(b.x.greaterThan(a.x)).and(far).and(apart), 1, 0)))
             // and where another part begins in a color too close for that: on the lower-numbered part, so the line keeps its side as lights flicker
             If(this.parted.greaterThan(0), () => {
               const other = partAt(dx, dy).toVar()

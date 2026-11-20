@@ -591,3 +591,15 @@ test('lighterStep and peakAt: a step up in the same hue; one highlight on a smoo
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if ((x * 7 + y * 3) % 5 === 0) dome.data.set([90, 45, 45], (y * w + x) * 4)
   assert.deepEqual(peaks(), [])
 })
+
+test('lines only across things: a jump in color within one part takes no line, the same jump between two parts does', async () => {
+  const { pixelArt } = await import('./pixel.ts')
+  const w = 4, h = 1
+  const frame = { width: w, height: h, data: new Uint8ClampedArray([40, 40, 40, 255, 40, 40, 40, 255, 220, 220, 220, 255, 220, 220, 220, 255]) }
+  const map = (ids: number[]) => ({ width: w, height: h, data: new Uint8ClampedArray(ids.flatMap((id) => [id, 0, 0, 255])) })
+  const look: PixelLook = { palette: [], dither: 0, outline: null, glow: 0, edges: 1 }
+  const lined = (f: { data: Uint8ClampedArray }) => f.data[4] < 40
+  assert.ok(lined(pixelArt(frame, look)))
+  assert.ok(!lined(pixelArt(frame, { ...look, across: true }, undefined, map([1, 1, 1, 1]))))
+  assert.ok(lined(pixelArt(frame, { ...look, across: true }, undefined, map([1, 1, 2, 2]))))
+})

@@ -27,7 +27,7 @@ import { toPng, useExport } from './diorama/useExport.tsx'
 import type { Texture } from '../splat-engine/meshShape.ts'
 import { decodeTexture } from './modelRig.ts'
 import { detailAsked, labelNames, writeDetail } from '../shared/detail.ts'
-import { LIT_MAX, banded, unlit } from '../splat-engine/voxel.ts'
+import { LIT_MAX, banded, hugged, unlit } from '../splat-engine/voxel.ts'
 import { zoomStep } from './diorama/zoom.ts'
 import { srgbToLinear } from '../splat-core/color.ts'
 import { STYLES, isPixelStyle, styleAsked, styleWords, type Style } from './diorama/styles.ts'
@@ -128,6 +128,8 @@ export function PixelDiorama() {
   const [palette, setPalette] = useState('own')
   const [baseSize, setSize] = useState(() => Number(new URLSearchParams(location.search).get('px')) || 2)
   // light in bands a blob at a time (`banded`): how many bands, 0 for smooth light; `?texel=0|2|3`
+  // discs along a shape's outer edges fitted to the edge (`hugged`), so edges are straight and lines sit on them; `?hug=0`
+  const [hug] = useState(() => new URLSearchParams(location.search).get('hug') !== '0')
   const [texel, setTexel] = useState(() => { const t = new URLSearchParams(location.search).get('texel'); return t === null ? 0 : Number(t) || 0 })
   const [dither, setDither] = useState(diorama.finish.dither)
   const [glow, setGlow] = useState(() => { const q = new URLSearchParams(location.search).get('glow'), v = q === null ? NaN : Number(q); return Number.isFinite(v) ? Math.min(4, Math.max(0, v)) : diorama.finish.glow })
@@ -164,6 +166,8 @@ export function PixelDiorama() {
   const [rate, setRate] = useState(0)
   const [exact, setExact] = useState(() => new URLSearchParams(location.search).get('sort') === 'radix')
   const [parts, setParts] = useState(() => new URLSearchParams(location.search).get('parts') !== '0')
+  // lines only where things meet, never through a thing's own paint (`PixelLook.across`; Matt saw stray lines in the grass, 2026-11-20); `?across=0`
+  const [across] = useState(() => new URLSearchParams(location.search).get('across') !== '0')
   const [view, setView] = useState(diorama.views[0].id)
   const [orbit, setOrbit] = useState<Orbit>(diorama.views[0].orbit)
   const [art, setArt] = useState<{ width: number; height: number }>()
@@ -212,7 +216,8 @@ export function PixelDiorama() {
           // a scene with water works one loop of its ripples out here too, while the waiting mark shows
           diorama.water?.()
           const make = () => diorama.make(spacing, stepColors.length ? stepColors : undefined)
-          const cut = () => (texel > 1 ? banded(texel, make) : make())
+          const lit = () => (texel > 1 ? banded(texel, make) : make())
+          const cut = () => (hug ? hugged(lit) : lit())
           setScene({ built: plain ? unlit(cut) : cut(), of: diorama, detail, paint, plain })
         }, 60)
       })
@@ -220,7 +225,7 @@ export function PixelDiorama() {
     return () => { cancelAnimationFrame(raf); clearTimeout(t) }
     // `paint` stands for the colors and for whose controls these are
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detail, diorama, paint, plain, texel])
+  }, [detail, diorama, paint, plain, texel, hug])
 
   useEffect(() => {
     let live: CreatureStage | undefined, gone = false
@@ -250,10 +255,10 @@ export function PixelDiorama() {
   const closeTour = () => { setTour(null); setStyle(styleBefore.current); requestAnimationFrame(() => tourOpener.current?.focus()) }
   // a step of the walk-through says how the scene is drawn, whatever the switch says
   const asPixels = touring ? touring.pixels : pixels
-  const look = useMemo<PixelLook>(() => ({ palette: colors, dither, outline: outline ? (colors.length ? darkest(colors) : [11, 16, 38]) : null, glow, edges: edges ? 1 : 0, parts, sky: sky ? shown.sky : undefined, steady: steady ? STEADY : 0, tidy, calm: calmer, flat, fine, shine,
+  const look = useMemo<PixelLook>(() => ({ palette: colors, dither, outline: outline ? (colors.length ? darkest(colors) : [11, 16, 38]) : null, glow, edges: edges ? 1 : 0, parts, across, sky: sky ? shown.sky : undefined, steady: steady ? STEADY : 0, tidy, calm: calmer, flat, fine, shine,
     // the rim goes by the scene's starting view, so it holds still while the view rocks
     rim: rimmed && shown.sun ? screenWay(shown.sun, shown.views[0].orbit.azimuth, shown.views[0].orbit.elevation) : undefined, own, surface, snap: true,
-    bands, heat: heat ? { pixels: heat, pace: heatPace(shown.loop) } : undefined, selout, cycle: cycling ? shown.finish.cycle : undefined }), [colors, dither, outline, glow, edges, parts, sky, shown, steady, tidy, calmer, flat, fine, shine, rimmed, own, surface, bands, heat, selout, cycling])
+    bands, heat: heat ? { pixels: heat, pace: heatPace(shown.loop) } : undefined, selout, cycle: cycling ? shown.finish.cycle : undefined }), [colors, dither, outline, glow, edges, parts, across, sky, shown, steady, tidy, calmer, flat, fine, shine, rimmed, own, surface, bands, heat, selout, cycling])
 
   // the exact (radix) sort: the stage rebuilds its world, keeping the moment and the poser
   useEffect(() => { stage?.setSort(exact ? 'radix' : 'bins') }, [stage, exact])

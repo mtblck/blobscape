@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { LIT_MAX, PAINTED, bakedColor, bandOf, banded, stepper, blend, box, buildVoxels, inkedAt, cylinder, cone, cut, lathe, letterGrid, pixelText, sphere, sweep, union, type VoxelSpec } from './voxel.ts'
+import { LIT_MAX, PAINTED, bakedColor, bandOf, banded, hugged, stepper, blend, box, buildVoxels, inkedAt, cylinder, cone, cut, lathe, letterGrid, pixelText, sphere, sweep, union, type VoxelSpec } from './voxel.ts'
 import { posedPoint, axisAngle } from './rig.ts'
 
 const ROOT = { name: 'root', parent: -1, head: [0, 0, 0] as [number, number, number] }
@@ -404,4 +404,31 @@ test('light in bands: a sun share falls on one of a few steps, and a lit ball ta
   const smooth = shades(ball()), stepped = shades(banded(3, ball))
   assert.ok(smooth > 20, `${smooth}`)
   assert.equal(stepped, 3)
+})
+
+test('discs along an outer edge are fitted to it: on a round table top none reaches past the rim, and most discs are untouched', () => {
+  const s = 0.05, r = 0.53
+  const make = () => buildVoxels({ bones: [ROOT], parts: [{ shape: cylinder([0, 0], 0, 0.2, r), color: [1, 1, 1], bone: 'root' }], spacing: s }).blobs
+  const plain = make(), fitted = hugged(make)
+  assert.equal(plain.count, fitted.count)
+  const past = (b: ReturnType<typeof make>) => {
+    let n = 0
+    for (let i = 0; i < b.count; i++) {
+      const [x, y, z] = b.center.subarray(i * 3, i * 3 + 3), [qx, qy, qz, qw] = b.quat.subarray(i * 4, i * 4 + 4), sc = b.scale.subarray(i * 3, i * 3 + 3)
+      const ax0 = [1 - 2 * (qy * qy + qz * qz), 2 * (qx * qy + qz * qw), 2 * (qx * qz - qy * qw)], ax1 = [2 * (qx * qy - qz * qw), 1 - 2 * (qx * qx + qz * qz), 2 * (qy * qz + qx * qw)]
+      const nUp = Math.abs(ax0[2] * ax1[0] - ax0[0] * ax1[2])
+      const d = Math.hypot(x, z)
+      // discs of the top face, near the rim
+      if (y < 0.15 || nUp < 0.9 || d < r - 2 * s) continue
+      const u = [x / d, 0, z / d]
+      const reach = 1.18 * Math.hypot((ax0[0] * u[0] + ax0[2] * u[2]) * sc[0], (ax1[0] * u[0] + ax1[2] * u[2]) * sc[1])
+      if (d + reach > r + s * 0.2) n++
+    }
+    return n
+  }
+  let moved = 0
+  for (let i = 0; i < fitted.count * 3; i++) if (fitted.center[i] !== plain.center[i]) moved++
+  assert.ok(past(plain) > 0)
+  assert.equal(past(fitted), 0)
+  assert.ok(moved > 0 && moved < fitted.count, `${moved} of ${fitted.count}`)
 })
