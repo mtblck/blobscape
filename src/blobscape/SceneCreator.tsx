@@ -19,7 +19,7 @@ import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitD
 import { ModeBar, useWorkspaceScreen, panelId, tabId, type Mode } from './sandbox/modes.tsx'
 import type { CutJob } from './creator/cut.ts'
 import { unpack, type PackedCut } from './creator/pack.ts'
-import { START_LANDS, START_SCENES, nameFor, openingAsked, openingLand, openingScene, queryFor, shownOf, type Opened } from './creator/shown.ts'
+import { START_LANDS, START_SCENES, nameFor, slug, openingAsked, openingLand, openingScene, queryFor, shownOf, type Opened } from './creator/shown.ts'
 import { isDescription, readDescribed } from './creator/described.ts'
 import { AUTOSAVE_MS, FILE_END, type ModelFile, cleanName, copyName, fileName, fileText, mergedLike, newId, openShelf, readFile, renamed, type SavedScene, type Shelf } from './creator/store.ts'
 import { download } from './files.ts'
@@ -31,7 +31,8 @@ import { PACKS, packAdded } from './creator/packs.ts'
 import { BLOB_ROOM, CARDS, spanOf, added, cardsFound, groundOf, heightAt, landSwapped, liftOn, roomOf, whyNot } from './creator/adding.ts'
 import { creatureMove, creatureSize, isCreature, libraryProp, openLand, type LibraryEntry } from './creator/library.ts'
 import { OPEN_MOST, SCATTERED, PlacedMorphs, rawTexture, scatteredStill, forgetKept, isModel, keepModel, keptModels, modelId, meshModelFrom, modelClip, modelFrom, modelJob, modelOf, modelSize, openShare, poseModel, type ModelProp, type RawImage, type SplatModel } from './creator/models.ts'
-import { GlbError, readRiggedGlb } from '../splat-engine/glb.ts'
+import { GlbError, readRiggedGlb, writeRiggedGlb } from '../splat-engine/glb.ts'
+import { sceneRig } from './creator/engineFile.ts'
 import { MeshFileError, openGlb, readMeshGlb, readMeshGlbParts, readObj, type MeshFile } from '../splat-engine/meshFile.ts'
 import { fileIdOf, isPart, partId, sceneLayout, sceneProject } from './creator/sceneModel.ts'
 import { landFromScan, scanGround, scanProject } from './creator/scanLand.ts'
@@ -396,12 +397,15 @@ export function SceneCreator() {
   /** Where prop `i` stands now: mid-gesture where it is going, else where the project says. */
   const placementOf = (i: number): Placement | undefined => (preview?.i === i ? preview.at : project?.props[i])
 
+  // the pieces on show and how they are posed, for saving them as one file for the engine (#387)
+  const posing = useRef<{ pieces: Built[]; pose: (t: number) => void }>(undefined)
   useEffect(() => {
     if (!stage || !built) return
     const [land, ...props] = built
     const from = stage.time
     stage.setActor(land, undefined, props)
-    stage.setPoser((sk: Skeleton, t: number) => {
+    posing.current = { pieces: built, pose: (t) => poseAll(land.skeleton, t) }
+    const poseAll = (sk: Skeleton, t: number) => {
       const L = live.current
       L.shown.poseLand(sk, t)
       const cpNow = L.shown.cp
@@ -449,7 +453,8 @@ export function SceneCreator() {
         props.forEach((b, i) => L.shown.poseProp(i, b.skeleton, t))
         stage.setLights(L.shown.lights(t, stage.backend === 'webgpu'), L.shown.ambient)
       }
-    }, from)
+    }
+    stage.setPoser(poseAll, from)
   }, [stage, built])
   useEffect(() => { stage?.invalidate() }, [stage, project, preview])
 
@@ -806,6 +811,22 @@ export function SceneCreator() {
   const groundAt = (x: number, z: number, y: number) => heightAt(ground, x, z, y)
   const liftOf = (pl: Placement) => liftOn(ground, pl)
   const nameOfProp = (i: number) => shown.items[i + 1]?.name ?? 'Prop'
+  /** The scene as one rigged splat .glb with a clip of its loop, for `@blobscape/engine` and `<blobscape-creature>` (#387). */
+  const saveForEngine = () => {
+    const P = posing.current
+    if (!P || !stage) return
+    const name = project?.name ?? shown.name
+    try {
+      const rig = sceneRig(name, P.pieces.map((b, i) => ({ name: i ? nameOfProp(i - 1) : 'land', blobs: b.blobs, skin: b.skin, skeleton: b.skeleton })), shown.loop, P.pose)
+      const file = `${slug(name)}.glb`
+      download(writeRiggedGlb(rig), file, 'model/gltf-binary')
+      say(`Saved ${file}: ${rig.blobs.count.toLocaleString('en-US')} blobs on ${rig.skeleton.count} bones, with its ${shown.loop}-second loop.`)
+    } catch (e) {
+      say(e instanceof RangeError ? e.message : 'The scene could not be saved for the engine.')
+      if (!(e instanceof RangeError)) console.warn(e)
+    }
+    stage.invalidate()
+  }
 
   const edit = (next: SceneProject, words: string) => {
     if (!hist || next === hist.now) return
@@ -1519,6 +1540,11 @@ export function SceneCreator() {
                       </div>
                       <p role="status" className="text-xs text-ink-faint empty:hidden" data-testid="creator-export-note">{exporting.note}</p>
                       <p className="text-xs text-ink-faint">The loop is {exporting.loopFrames} frames of the view as it is when you press the button. Turning or zooming while it runs changes nothing.</p>
+                    </div>
+                    <div>
+                      <h3 className="mb-1 text-sm font-semibold">For the engine</h3>
+                      <p className="mb-2 text-xs text-ink-faint">The scene as one rigged splat .glb with its loop, which <a href="/engine/" className="text-accent-ink underline underline-offset-2">the Blobscape engine</a> and its web tag play. It holds the blobs and their moves: lights, the sky and the style stay here.</p>
+                      <Button small disabled={!done || exporting.busy} onClick={saveForEngine} data-testid="creator-save-engine">Save for the engine (.glb)</Button>
                     </div>
                     <div>
                       <h3 id="creator-path" className="mb-1 text-sm font-semibold">Camera path</h3>

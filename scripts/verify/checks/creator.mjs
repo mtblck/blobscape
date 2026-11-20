@@ -414,8 +414,8 @@ export default [
   },
   {
     name: 'scene-creator-style',
-    about: 'Scene Creator, Style and Export: oil, then cel shading (cut again with no light baked in), then pixel art in another palette each change the picture; a frame saves as a PNG and a two-stop camera path as an animated PNG of every frame',
-    entries: ['src/blobscape/SceneCreator.tsx', 'src/blobscape/creator/styling.ts', 'src/blobscape/diorama/useExport.tsx', 'src/blobscape/creator/cut.ts'],
+    about: 'Scene Creator, Style and Export: oil, then cel shading (cut again with no light baked in), then pixel art in another palette each change the picture; a frame saves as a PNG, the scene as a rigged .glb the engine reads, and a two-stop camera path as an animated PNG of every frame',
+    entries: ['src/blobscape/SceneCreator.tsx', 'src/blobscape/creator/styling.ts', 'src/blobscape/diorama/useExport.tsx', 'src/blobscape/creator/cut.ts', 'src/blobscape/creator/engineFile.ts'],
     async run({ shots, join, fails, ok, open, axe }) {
       const c = await open('/scene-creator/?offscreen=1&detail=chunky&mode=style', { viewport: { width: 1280, height: 900 } })
       const p = c.page
@@ -458,6 +458,15 @@ export default [
       const frameName = frame.suggestedFilename()
       const frameBytes = (await import('node:fs')).readFileSync(await frame.path())
       steps.push(['frame saved', frameName === 'scene-creator-windmill.png' && frameBytes.length > 1000])
+      // for the engine (#387): one rigged .glb with the loop, read back by the engine's own reader
+      const [eng] = await Promise.all([p.waitForEvent('download', { timeout: 60000 }), p.getByTestId('creator-save-engine').click()])
+      const { readRiggedGlb } = await import(join(root, 'src/splat-engine/glb.ts'))
+      let engine = {}
+      try {
+        const r = readRiggedGlb(new Uint8Array((await import('node:fs')).readFileSync(await eng.path())))
+        engine = { name: eng.suggestedFilename(), blobs: r.blobs.count, shown: await p.evaluate(() => window.__creator.blobs()), bones: r.skeleton.count, clips: r.clips.map((c) => c.name) }
+      } catch (e) { engine = { error: String(e) } }
+      steps.push(['saved for the engine', /\.glb$/.test(engine.name ?? '') && engine.blobs === engine.shown && engine.bones > 11 && engine.clips?.join() === 'loop'])
       await p.getByTestId('creator-add-stop').click()
       const view = p.getByTestId('creator-view')
       await view.focus()
@@ -472,8 +481,8 @@ export default [
       const at = png.indexOf('acTL'), frames = at > 0 ? png.readUInt32BE(at + 4) : 0
       steps.push(['path saved', path.suggestedFilename() === 'scene-creator-windmill-path.png' && frames === 13])
       const bad = steps.filter(([, good]) => !good).map(([name]) => name)
-      if (bad.length) fails.push(`blobscape scene creator style: ${bad.join(', ')} failed ${JSON.stringify({ diffs, frameName, frames, note: await p.evaluate(() => window.__creator.exportNote()) })}`)
-      else ok(`blobscape scene creator style: oil, cel shading (cut plain) and a 1-bit palette each change the picture; a frame and a ${frames}-frame camera path save`)
+      if (bad.length) fails.push(`blobscape scene creator style: ${bad.join(', ')} failed ${JSON.stringify({ diffs, frameName, frames, engine, note: await p.evaluate(() => window.__creator.exportNote()) })}`)
+      else ok(`blobscape scene creator style: oil, cel shading (cut plain) and a 1-bit palette each change the picture; a frame, the scene for the engine (${engine.blobs} blobs, ${engine.bones} bones) and a ${frames}-frame camera path save`)
     },
   },
   {
