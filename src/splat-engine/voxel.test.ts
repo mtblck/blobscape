@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { LIT_MAX, PAINTED, bakedColor, stepper, blend, box, buildVoxels, inkedAt, cylinder, cone, cut, lathe, letterGrid, pixelText, sphere, sweep, union, type VoxelSpec } from './voxel.ts'
+import { LIT_MAX, PAINTED, bakedColor, bandOf, banded, stepper, blend, box, buildVoxels, inkedAt, cylinder, cone, cut, lathe, letterGrid, pixelText, sphere, sweep, union, type VoxelSpec } from './voxel.ts'
 import { posedPoint, axisAngle } from './rig.ts'
 
 const ROOT = { name: 'root', parent: -1, head: [0, 0, 0] as [number, number, number] }
@@ -391,4 +391,17 @@ test('painting in steps keeps a paint in its own hue: a red with no darker red s
   }
   // a green still runs through its greens
   assert.ok(new Set([0, 0.5, 1].map((t) => at('#2c5a38', t).join())).size >= 2)
+})
+
+test('light in bands: a sun share falls on one of a few steps, and a lit ball takes only that many shades', () => {
+  assert.equal(bandOf(0.2, 3), 0)
+  assert.equal(bandOf(0.5, 3), 0.5)
+  assert.equal(bandOf(0.9, 3), 1)
+  assert.equal(bandOf(1, 3), 1)
+  assert.equal(bandOf(0.42, 0), 0.42)
+  const ball = () => buildVoxels({ bones: [ROOT], parts: [{ shape: sphere([0, 0, 0], 0.5), color: [0.8, 0.6, 0.4], bone: 'root' }], spacing: 0.05, light: { dir: [0.3, 0.8, 0.5], ambient: 0.4, shadow: 0 } }).blobs
+  const shades = (b: ReturnType<typeof ball>) => { const seen = new Set<string>(); for (let i = 0; i < b.count; i++) seen.add([...b.color.subarray(i * 3, i * 3 + 3)].map((v) => v.toFixed(4)).join()); return seen.size }
+  const smooth = shades(ball()), stepped = shades(banded(3, ball))
+  assert.ok(smooth > 20, `${smooth}`)
+  assert.equal(stepped, 3)
 })

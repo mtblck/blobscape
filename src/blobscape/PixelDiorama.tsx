@@ -27,7 +27,7 @@ import { toPng, useExport } from './diorama/useExport.tsx'
 import type { Texture } from '../splat-engine/meshShape.ts'
 import { decodeTexture } from './modelRig.ts'
 import { detailAsked, labelNames, writeDetail } from '../shared/detail.ts'
-import { LIT_MAX, unlit } from '../splat-engine/voxel.ts'
+import { LIT_MAX, banded, unlit } from '../splat-engine/voxel.ts'
 import { srgbToLinear } from '../splat-core/color.ts'
 import { STYLES, isPixelStyle, styleAsked, styleWords, type Style } from './diorama/styles.ts'
 import { GLITCH_START, glitchLook, type GlitchChoice } from './glitchLooks.ts'
@@ -44,6 +44,8 @@ import { recordClip, writeRiggedMeshGlb } from '../splat-engine/glb.ts'
 import { Skeleton as Bones } from '../splat-engine/rig.ts'
 
 const SIZES = [2, 3, 4, 6]
+/** How many steps of sun Light in bands gives (`banded`): three, none, half and full, kept the paint's texture best. */
+const TEXEL_BANDS = 3
 /** Frames a second the scene moves at: 0 is every frame the screen shows. */
 const RATES = [0, 12, 8]
 /** The Finish tab's outline choice: none, one color round the scene, or a darker tone of each thing it goes round. */
@@ -123,7 +125,9 @@ export function PixelDiorama() {
   // Finest by default (Matt, 2026-11-20); a phone keeps Chunky for the styles that draw the whole screen several times
   const detail = chosen ?? (coarse && !pixels ? DETAIL[0].id : DETAIL[3].id)
   const [palette, setPalette] = useState('own')
-  const [size, setSize] = useState(2)
+  const [size, setSize] = useState(() => Number(new URLSearchParams(location.search).get('px')) || 2)
+  // light in bands a blob at a time (`banded`): how many bands, 0 for smooth light; `?texel=0|2|3`
+  const [texel, setTexel] = useState(() => { const t = new URLSearchParams(location.search).get('texel'); return t === null ? 0 : Number(t) || 0 })
   const [dither, setDither] = useState(diorama.finish.dither)
   const [glow, setGlow] = useState(() => { const q = new URLSearchParams(location.search).get('glow'), v = q === null ? NaN : Number(q); return Number.isFinite(v) ? Math.min(4, Math.max(0, v)) : diorama.finish.glow })
   /** Glow as the poser reads it: it scales the light the scene's lamps and fires cast, as well as the shine round bright pixels. */
@@ -206,7 +210,8 @@ export function PixelDiorama() {
           if (!settled) { setPalette('own'); setSteps(diorama.finish.steps) }
           // a scene with water works one loop of its ripples out here too, while the waiting mark shows
           diorama.water?.()
-          const cut = () => diorama.make(spacing, stepColors.length ? stepColors : undefined)
+          const make = () => diorama.make(spacing, stepColors.length ? stepColors : undefined)
+          const cut = () => (texel > 1 ? banded(texel, make) : make())
           setScene({ built: plain ? unlit(cut) : cut(), of: diorama, detail, paint, plain })
         }, 60)
       })
@@ -214,7 +219,7 @@ export function PixelDiorama() {
     return () => { cancelAnimationFrame(raf); clearTimeout(t) }
     // `paint` stands for the colors and for whose controls these are
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detail, diorama, paint, plain])
+  }, [detail, diorama, paint, plain, texel])
 
   useEffect(() => {
     let live: CreatureStage | undefined, gone = false
@@ -793,6 +798,8 @@ export function PixelDiorama() {
                 {pixels && <>
                 <Toggle label="Paint in steps of the palette" checked={steps} onChange={setSteps} disabled={!colors.length} />
                 <p className="text-xs text-ink-faint">{colors.length ? 'Cuts the scene again with every blob in one palette color, a step of its own paint from shade to sun, so shade falls in flat bands.' : 'Needs a palette: Full color has no steps.'}</p>
+                <Toggle label="Light in bands" checked={texel > 1} onChange={(on) => setTexel(on ? TEXEL_BANDS : 0)} />
+                <p className="text-xs text-ink-faint">Lights each blob as one block in a few flat steps of sun and shade, so light falls in crisp bands along the surface and each thing keeps its own paint. Cuts the scene again.</p>
                 <Toggle label="Shade each pixel" checked={shaded} onChange={setShaded} />
                 <p className="text-xs text-ink-faint">Works the light out a pixel at a time from the scene's sun and lamps, so light and shade fall in bands that follow each shape. Cuts the scene again.</p>
                 <Field label="Outline">

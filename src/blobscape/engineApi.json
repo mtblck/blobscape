@@ -5137,6 +5137,26 @@
      ]
     },
     {
+     "name": "banded",
+     "kind": "function",
+     "doc": "Runs `make` with every `buildVoxels` inside it lighting each blob as one texel in `n` flat bands: the sun's share that\nreaches a blob (its facing times its cast shadow) is moved onto the nearest of `n` steps from none to full before its\ncolor is worked out, so light and shade fall in whole blobs, crisp along the surface, while each blob keeps its own\npaint (bricks, planks, ripples). The ambient share is left as it is. 0 or 1 leaves the light smooth.",
+     "signatures": [
+      {
+       "code": "banded<T>(n: number, make: () => T): T"
+      }
+     ]
+    },
+    {
+     "name": "bandOf",
+     "kind": "function",
+     "doc": "Moves a sun share (0 to 1) onto the nearest of `n` steps (`banded`).",
+     "signatures": [
+      {
+       "code": "bandOf(direct: number, n: number): number"
+      }
+     ]
+    },
+    {
      "name": "buildVoxels",
      "kind": "function",
      "doc": "Builds the scene's blobs, skin and skeleton. Cells sit on one grid shared by\nevery part (multiples of `spacing` from the origin), so parts line up, and\nthe same spec always gives the same blobs.",

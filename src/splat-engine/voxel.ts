@@ -901,6 +901,25 @@ export function unlit<T>(make: () => T): T {
   try { return make() } finally { plain = was }
 }
 
+let bands = 0
+/**
+ * Runs `make` with every `buildVoxels` inside it lighting each blob as one texel in `n` flat bands: the sun's share that
+ * reaches a blob (its facing times its cast shadow) is moved onto the nearest of `n` steps from none to full before its
+ * color is worked out, so light and shade fall in whole blobs, crisp along the surface, while each blob keeps its own
+ * paint (bricks, planks, ripples). The ambient share is left as it is. 0 or 1 leaves the light smooth.
+ */
+export function banded<T>(n: number, make: () => T): T {
+  const was = bands
+  bands = n
+  try { return make() } finally { bands = was }
+}
+
+/** Moves a sun share (0 to 1) onto the nearest of `n` steps (`banded`). */
+export function bandOf(direct: number, n: number): number {
+  if (n < 2) return direct
+  return Math.min(n - 1, Math.floor(direct * n)) / (n - 1)
+}
+
 /**
  * Builds the scene's blobs, skin and skeleton. Cells sit on one grid shared by
  * every part (multiples of `spacing` from the origin), so parts line up, and
@@ -1043,10 +1062,11 @@ export function buildVoxels(spec: VoxelSpec): Built {
             base = [base[0] + (gr[0] - base[0]) * k, base[1] + (gr[1] - base[1]) * k, base[2] + (gr[2] - base[2]) * k]
           }
         }
-        const shade = (ambient + (1 - light.ambient) * facing * sun) * LIT_MAX
+        const direct = bands > 1 ? bandOf(facing * sun, bands) : facing * sun
+        const shade = (ambient + (1 - light.ambient) * direct) * LIT_MAX
         // how sharply the surface bends outward here (from the samples the normal came from): 0 flat, over 1 at an edge
         const edge = wear > 0 ? Math.min(1, Math.max(0, (((xa + xb + ya + yb + za + zb - 6 * d) / (e * e)) * s - 0.5) / 1.5)) : 0
-        color = bakedColor(base, shade, facing * sun, ramp, wear * edge)
+        color = bakedColor(base, shade, direct, ramp, wear * edge)
         if (bounce > 0) {
           const t = thrown(p, n, pi)
           color = [0, 1, 2].map((i) => Math.min(LIT_MAX, color[i] + base[i] * t[i] * bounce * 0.6)) as Vec3
