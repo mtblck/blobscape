@@ -38,6 +38,8 @@ const BEHIND = { distance: 1.8, elevation: 20 }
 /** How fast the view catches up with the elf, a second. */
 const FOLLOW = 5
 const DEG = 180 / Math.PI
+/** Shift held, or the stick pushed this far, walks rather than runs: a share of a run's speed. */
+const WALKING = 0.38
 
 /** The view of a whole world from the first island's own starting view: turned the same way, back far enough for all of it. */
 function overview(world: WorldPlan, first: Orbit): Orbit {
@@ -103,25 +105,33 @@ export function Islands() {
     return () => { gone = true; live?.dispose() }
   }, [offscreen])
 
-  // cut in a worker (an island takes seconds), and the island on show stays until the next is ready
-  const [made, setMade] = useState<{ built: Built; pieces: Built[]; of: typeof scene; scenes: typeof scenes; world: typeof world; detail: string; plain: boolean }>()
-  const ready = made?.of === scene && made.detail === detail && made.plain === blocky ? made : undefined
+  // cut in a worker (an island takes seconds), and the island on show stays until the next is ready. Blocks are cut at
+  // the size of a block: a block is one cell of the cut, so the same cubes come from a few times fewer blobs
+  const cutAt = DETAIL.find((d) => d.id === detail)!.spacing * (blocky ? blockSize : 1)
+  const [made, setMade] = useState<{ built: Built; pieces: Built[]; of: typeof scene; scenes: typeof scenes; world: typeof world; detail: string; plain: boolean; spacing: number }>()
+  const ready = made?.of === scene && made.detail === detail && made.plain === blocky && made.spacing === cutAt ? made : undefined
   const worker = useRef<Worker>(undefined)
   useEffect(() => () => worker.current?.terminate(), [])
   useEffect(() => {
-    const spacing = DETAIL.find((d) => d.id === detail)!.spacing
-    const w = (worker.current ??= new Worker(new URL('./islands/cut.worker.ts', import.meta.url), { type: 'module' }))
-    const id = Math.random(), pieces: Built[] = []
-    const heard = (ev: MessageEvent<IslandCut>) => {
-      if (ev.data.id !== id) return
-      if (ev.data.cut) pieces[ev.data.index!] = unpack(ev.data.cut)
-      else if (ev.data.done) setMade({ built: pieces[0], pieces, of: scene, scenes, world, detail, plain: blocky })
-      else setFailed(`The island could not be cut: ${ev.data.error}`)
+    let done = false
+    // a moment's wait, so dragging a slider asks for one cut, not one a step
+    const timer = setTimeout(() => {
+      const w = (worker.current ??= new Worker(new URL('./islands/cut.worker.ts', import.meta.url), { type: 'module' }))
+      const id = Math.random(), pieces: Built[] = []
+      w.onmessage = (ev: MessageEvent<IslandCut>) => {
+        if (ev.data.id !== id) return
+        if (ev.data.cut) pieces[ev.data.index!] = unpack(ev.data.cut)
+        else if (ev.data.done) { done = true; setMade({ built: pieces[0], pieces, of: scene, scenes, world, detail, plain: blocky, spacing: cutAt }) }
+        else setFailed(`The island could not be cut: ${ev.data.error}`)
+      }
+      w.postMessage({ id, biome: biomeId, seed, count, spacing: cutAt, plain: blocky } satisfies IslandJob)
+    }, 150)
+    return () => {
+      clearTimeout(timer)
+      // a cut still going is for something no longer asked for: stop it rather than wait for it
+      if (!done && worker.current) { worker.current.terminate(); worker.current = undefined }
     }
-    w.addEventListener('message', heard)
-    w.postMessage({ id, biome: biomeId, seed, count, spacing, plain: blocky } satisfies IslandJob)
-    return () => w.removeEventListener('message', heard)
-  }, [scene, scenes, world, biomeId, seed, count, detail, blocky])
+  }, [scene, scenes, world, biomeId, seed, count, detail, blocky, cutAt])
 
   const orbitNow = useRef(orbit)
   orbitNow.current = orbit
@@ -154,14 +164,16 @@ export function Islands() {
   const input = useRef<Input>({ forward: 0, turn: 0 })
   const push = () => {
     const k = keys.current
-    const y = (k.has('f') ? 1 : 0) - (k.has('b') ? 1 : 0) + stick.current.forward
-    const x = (k.has('r') ? 1 : 0) - (k.has('l') ? 1 : 0) + stick.current.turn
+    // keys run; Shift held walks (a run's speed times WALKING)
+    const by = k.has('walk') ? WALKING : 1
+    const y = ((k.has('f') ? 1 : 0) - (k.has('b') ? 1 : 0)) * by + stick.current.forward
+    const x = ((k.has('r') ? 1 : 0) - (k.has('l') ? 1 : 0)) * by + stick.current.turn
     input.current = { forward: 0, turn: 0, stick: { x: Math.max(-1, Math.min(1, x)), y: Math.max(-1, Math.min(1, y)) } }
   }
   const walkNow = useRef(walker)
   walkNow.current = walker
   useEffect(() => {
-    const KEYS: Record<string, string> = { ArrowUp: 'f', KeyW: 'f', ArrowDown: 'b', KeyS: 'b', ArrowLeft: 'l', KeyA: 'l', ArrowRight: 'r', KeyD: 'r' }
+    const KEYS: Record<string, string> = { ShiftLeft: 'walk', ShiftRight: 'walk', ArrowUp: 'f', KeyW: 'f', ArrowDown: 'b', KeyS: 'b', ArrowLeft: 'l', KeyA: 'l', ArrowRight: 'r', KeyD: 'r' }
     // keys move the elf from anywhere on the page, except where they already mean something (typing, a slider, tabs)
     const mine = (e: KeyboardEvent) => {
       const t = e.target
@@ -172,7 +184,7 @@ export function Islands() {
       if (e.code === 'KeyE') { walkNow.current.wave(); return }
       const k = KEYS[e.code]
       if (!k) return
-      e.preventDefault()
+      if (k !== 'walk') e.preventDefault()
       keys.current.add(k)
       push()
     }
@@ -240,12 +252,12 @@ export function Islands() {
   }, [pixels, shown, shownAll, elfColors])
   useEffect(() => { stage?.setPixels(look, 2) }, [stage, look])
   // blocks: cubes a whole number of the cut's cells across, lit from the starting view's left; only an island cut with no light of its own
-  const blockSpacing = ready?.plain ? DETAIL.find((d) => d.id === ready.detail)!.spacing : undefined
+  const blockSpacing = ready?.plain ? ready.spacing : undefined
   const blockAzimuth = shown.views[0].orbit.azimuth
   useEffect(() => {
     if (!stage) return
-    stage.setBlocks(blocky && blockSpacing ? blockLook({ ...BLOCK_START, size: blockSize }, blockSpacing, blockAzimuth) : undefined)
-  }, [stage, blocky, blockSpacing, blockSize, blockAzimuth])
+    stage.setBlocks(blocky && blockSpacing ? blockLook({ ...BLOCK_START, size: 1 }, blockSpacing, blockAzimuth) : undefined)
+  }, [stage, blocky, blockSpacing, blockAzimuth])
 
   // the address always names the island on show, so it can be sent to someone
   useEffect(() => {
@@ -303,7 +315,7 @@ export function Islands() {
             ref={canvas}
             role="application"
             aria-roledescription="3D view"
-            aria-label={walking ? `An elf on ${where}. Arrow keys or W, A, S and D walk the way they point on the screen; E waves. Drag to turn the view; scroll, pinch or press plus and minus to zoom.` : `${summary}. Drag or use the arrow keys to orbit; scroll, pinch or press plus and minus to zoom.`}
+            aria-label={walking ? `An elf on ${where}. Arrow keys or W, A, S and D run the way they point on the screen, Shift walks; E waves. Drag to turn the view; scroll, pinch or press plus and minus to zoom.` : `${summary}. Drag or use the arrow keys to orbit; scroll, pinch or press plus and minus to zoom.`}
             tabIndex={0}
             data-testid="islands-view"
             className="absolute inset-0 h-full w-full cursor-grab touch-none outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset active:cursor-grabbing"
@@ -336,7 +348,7 @@ export function Islands() {
           {walking && walker && <>
             <Stick testid="islands-stick" onChange={(v) => { stick.current = v; push() }} />
             <p aria-hidden className="pointer-events-none absolute top-3 right-14 rounded-full bg-paper/80 px-2.5 py-0.5 text-xs text-ink backdrop-blur-sm max-sm:hidden">
-              {coarse ? 'stick to walk · drag to look round' : 'arrow keys or WASD to walk · E to wave · drag to look round'}
+              {coarse ? 'stick to run, a little to walk · drag to look round' : 'arrow keys or WASD to run · Shift to walk · E to wave · drag to look round'}
             </p>
           </>}
           <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => setOrbit(walker ? { ...orbit, ...BEHIND, azimuth: walker.walker.heading * DEG + 180 } : overview(made?.world ?? world, shown.views[0].orbit))} />
@@ -396,7 +408,7 @@ export function Islands() {
                     <Chip active={style === 'blobs'} onClick={() => setStyle('blobs')}>Blobs</Chip>
                   </div>
                 </Field>
-                {blocky && <Slider label="Block size" value={blockSize} min={BLOCK_SIZES.min} max={BLOCK_SIZES.max} step={1} onChange={setBlockSize} format={(v) => `${v}×`} hint="How big a block is beside the grid the island was cut on." />}
+                {blocky && <Slider label="Block size" value={blockSize} min={BLOCK_SIZES.min} max={BLOCK_SIZES.max} step={1} onChange={setBlockSize} format={(v) => `${v}×`} hint="How big a block is, in steps of the detail. The island is cut again at that size." />}
                 <Field label="Detail">
                   <div className="flex flex-wrap gap-1.5">
                     {DETAIL.map((d) => <Chip key={d.id} active={detail === d.id} onClick={() => { setDetail(d.id); writeDetail(d.id) }}>{d.label}</Chip>)}

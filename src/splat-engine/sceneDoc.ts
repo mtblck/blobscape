@@ -70,6 +70,11 @@ export interface SceneDoc {
    */
   big?: boolean
   /**
+   * A place far bigger again, to explore on foot (Biome Islands): things may stand up to 20 from the middle and it may
+   * carry 230 bones; with its specks it must still stay inside the 255 one byte names. Implies `big`.
+   */
+  huge?: boolean
+  /**
    * The grid it is cut on, as a share of the detail's own: 0.5 to 1, 1 when left out. A small subject in a scene of
    * open water or sky (the lighthouse on its rock) takes a finer grid, so its bricks and windows get as many cells as
    * a bigger subject's would. It costs blobs: 0.72 is about twice as many.
@@ -501,6 +506,8 @@ const MAX_SHAPES = 600
 const SMALL_SURFACE = 200
 /** A `big` scene's room: reach, bones and surface. */
 const BIG = { reach: 8, bones: 128, surface: 800 }
+/** A `huge` scene's room. */
+const HUGE = { reach: 20, bones: 230, surface: 6000 }
 const MAX_MOVES_PER_BONE = 6
 /** Specks in a whole scene: each is a bone of its own, posed every frame. */
 const MAX_SPECKS = 300
@@ -598,8 +605,10 @@ const piecesIn = (p: unknown): boolean => {
 export function checkScene(doc: unknown): string[] {
   const errs: string[] = []
   // a big place has more room in every way
-  const big = typeof doc === 'object' && doc !== null && (doc as { big?: unknown }).big === true
-  const REACH = big ? BIG.reach : SMALL_REACH, MAX_BONES = big ? BIG.bones : SMALL_BONES, MAX_SURFACE = big ? BIG.surface : SMALL_SURFACE
+  const huge = typeof doc === 'object' && doc !== null && (doc as { huge?: unknown }).huge === true
+  const big = huge || (typeof doc === 'object' && doc !== null && (doc as { big?: unknown }).big === true)
+  const room = huge ? HUGE : big ? BIG : { reach: SMALL_REACH, bones: SMALL_BONES, surface: SMALL_SURFACE }
+  const REACH = room.reach, MAX_BONES = room.bones, MAX_SURFACE = room.surface
   // every mistake is counted, though only the first 40 are listed
   let found = 0
   const bad = (at: string, what: string) => { found++; if (errs.length < 40) errs.push(`${at}: ${what}`) }
@@ -656,7 +665,7 @@ export function checkScene(doc: unknown): string[] {
   if (doc.sky !== undefined) hexes(doc.sky, 'sky', 2, 2)
   opt(doc.skyReach, 'skyReach', 0.05, 1)
   opt(doc.disc, 'disc', 0.4, 1)
-  for (const k of ['trueShell', 'big']) if (doc[k] !== undefined && typeof doc[k] !== 'boolean') bad(k, 'must be true or false')
+  for (const k of ['trueShell', 'big', 'huge']) if (doc[k] !== undefined && typeof doc[k] !== 'boolean') bad(k, 'must be true or false')
   opt(doc.grid, 'grid', 0.5, 1)
   if (doc.look !== undefined) {
     if (!obj(doc.look)) bad('look', 'must be an object')
@@ -678,7 +687,7 @@ export function checkScene(doc: unknown): string[] {
   if (!obj(doc.camera)) bad('camera', 'must be an object')
   else {
     vec(doc.camera.target, 'camera.target')
-    num(doc.camera.distance, 'camera.distance', 0.5, 20)
+    num(doc.camera.distance, 'camera.distance', 0.5, huge ? 60 : 20)
     num(doc.camera.azimuth, 'camera.azimuth', -360, 360)
     num(doc.camera.elevation, 'camera.elevation', -10, 89)
     opt(doc.camera.swing, 'camera.swing', 0, 60)
@@ -940,7 +949,7 @@ export function checkScene(doc: unknown): string[] {
       default: bad(`${at}.kind`, `${show(p.kind)} is not a paint (bands, bricks, hex, speckle, patches, faces, split, near, waves, key, pieces)`)
     }
   }
-  if (!Array.isArray(doc.parts) || !doc.parts.length || doc.parts.length > MAX_PARTS) bad('parts', `must be a list of 1 to ${MAX_PARTS} parts`)
+  if (!Array.isArray(doc.parts) || !doc.parts.length || doc.parts.length > (huge ? MAX_PARTS * 3 : MAX_PARTS)) bad('parts', `must be a list of 1 to ${huge ? MAX_PARTS * 3 : MAX_PARTS} parts`)
   else doc.parts.forEach((p: unknown, i: number) => {
     const at = `parts[${i}]`
     if (!obj(p)) { bad(at, 'must be an object'); return }
@@ -951,7 +960,7 @@ export function checkScene(doc: unknown): string[] {
       // a sound shape: add its box's surface, and catch one so big it would take seconds to cut
       const [a, b, c] = halfSize(p.shape as ShapeDoc)
       const area = 8 * (a * b + b * c + c * a)
-      if (area > MAX_SURFACE / 2) bad(`${at}.shape`, `is too big: keep a part within about ${big ? 6 : 3} units across`)
+      if (area > MAX_SURFACE / 2) bad(`${at}.shape`, `is too big: keep a part within about ${huge ? 16 : big ? 6 : 3} units across`)
       surface += area
     }
     paint(p.paint, `${at}.paint`, 0)
@@ -986,7 +995,7 @@ export function checkScene(doc: unknown): string[] {
     }
   })
 
-  if (shapes > MAX_SHAPES) bad('parts', `hold ${shapes} shapes between them; the most is ${MAX_SHAPES}`)
+  if (shapes > (huge ? MAX_SHAPES * 5 : MAX_SHAPES)) bad('parts', `hold ${shapes} shapes between them; the most is ${huge ? MAX_SHAPES * 5 : MAX_SHAPES}`)
   if (surface > MAX_SURFACE) bad('parts', 'have too much surface between them to build quickly: make the scene smaller or use fewer big parts')
 
   const perBone = new Map<unknown, number>()

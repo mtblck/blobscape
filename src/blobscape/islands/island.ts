@@ -18,16 +18,23 @@ import { ROOM, makeThing, r3, type Thing } from './things.ts'
 export const MAX_SEED = 999999
 /** Seconds before an island's moves repeat. */
 export const LOOP = 12
-/** Half the block of land an island's outline is cut from: about seven units across, room to walk about. */
-const HALF = 3.35
+/**
+ * How much bigger across an island is than the first ones (Matt, 2026-11-20: two or three times bigger, so there is
+ * room for creatures and somewhere to go). Things keep their size; there are more of them.
+ */
+export const GROW = 2.2
+/** Half the block of land an island's outline is cut from: about fifteen units across, seventy meters beside the elf. */
+const HALF = 3.35 * GROW
 /** How deep the turf and earth are before the rock under them. */
 const SLAB = 0.34
 /** How wide the trodden path is, to each side of its middle. */
 const PATH = 0.08
 /** Room left along each side of the path for someone walking it, past its trodden width: no thing stands in the way. */
 const WALKER = 0.08
-/** The bones an island's things may take: a description's 128 less the clouds and the most drifting rocks. */
-const BONE_BUDGET = 116
+/** The bones an island's things may take: with the clouds, the drifting rocks and the specks, under the 255 a byte names. */
+const BONE_BUDGET = 190
+/** Specks in an island's air at most, of each kind: each is a bone, and bones and specks together must fit in a byte. */
+const SPECKS_EACH = 20
 
 /** A round piece of the island's outline, seen from above. */
 export interface Lobe { at: [number, number]; r: number }
@@ -101,19 +108,19 @@ export function planIsland(biome: Biome, seed: number, gates?: [number, number])
   const rnd = () => chance(seed, 1000 + salt++)
 
   // the outline: a broad middle and four to six lobes round it
-  const lobes: Lobe[] = [{ at: [0, 0], r: r3(1.85 + 0.25 * rnd()) }]
+  const lobes: Lobe[] = [{ at: [0, 0], r: r3((1.85 + 0.25 * rnd()) * GROW) }]
   const count = 4 + Math.floor(rnd() * 3), turn = rnd() * Math.PI * 2
   for (let i = 0; i < count; i++) {
-    const a = turn + ((i + 0.6 * (rnd() - 0.5)) / count) * Math.PI * 2, d = 1.15 + 0.45 * rnd()
-    lobes.push({ at: [r3(Math.cos(a) * d), r3(Math.sin(a) * d)], r: r3(0.95 + 0.4 * rnd()) })
+    const a = turn + ((i + 0.6 * (rnd() - 0.5)) / count) * Math.PI * 2, d = (1.15 + 0.45 * rnd()) * GROW
+    lobes.push({ at: [r3(Math.cos(a) * d), r3(Math.sin(a) * d)], r: r3((0.95 + 0.4 * rnd()) * GROW) })
   }
 
   // hills, each inside the outline
   const peaks: LandSpec['peaks'] = []
-  const hills = whole(biome.land.hills, rnd())
+  const hills = Math.round(whole(biome.land.hills, rnd()) * GROW)
   for (let i = 0; i < hills; i++) {
     const a = rnd() * Math.PI * 2, d = Math.sqrt(rnd()) * 0.75 * reach(lobes, a)
-    peaks.push({ at: [r3(Math.cos(a) * d), r3(Math.sin(a) * d)], h: r3(between(biome.land.height, rnd())), r: r3(0.8 + 0.8 * rnd()) })
+    peaks.push({ at: [r3(Math.cos(a) * d), r3(Math.sin(a) * d)], h: r3(between(biome.land.height, rnd())), r: r3((0.8 + 0.8 * rnd()) * Math.sqrt(GROW)) })
   }
   const land: IslandPlan['land'] = { at: [0, 0, 0], half: [HALF, HALF], base: SLAB, peaks, noise: biome.land.noise, drops: biome.land.drops, slump: biome.land.slump, seed: 1 + (hashOf(seed, 1) % 9999) }
   if (biome.land.beds) land.beds = biome.land.beds
@@ -122,11 +129,12 @@ export function planIsland(biome: Biome, seed: number, gates?: [number, number])
 
   // the kinds of place inside it, spread round the island
   const patches: PlacedPatch[] = []
-  const kinds = [...biome.patches].sort((x, y) => hashOf(seed, 60 + biome.patches.indexOf(x)) - hashOf(seed, 60 + biome.patches.indexOf(y)))
+  // each kind twice on a grown island, shuffled
+  const kinds = [...biome.patches, ...biome.patches].map((k, i) => ({ k, key: hashOf(seed, 60 + i) })).sort((x, y) => x.key - y.key).map((x) => x.k)
   const pturn = rnd() * Math.PI * 2
   kinds.forEach((k, i) => {
     const a = pturn + ((i + 0.4 * (rnd() - 0.5)) / kinds.length) * Math.PI * 2, d = (0.35 + 0.3 * rnd()) * reach(lobes, a)
-    patches.push({ name: k.name, at: [r3(Math.cos(a) * d), r3(Math.sin(a) * d)], r: r3(between(k.r, rnd())) })
+    patches.push({ name: k.name, at: [r3(Math.cos(a) * d), r3(Math.sin(a) * d)], r: r3(between(k.r, rnd()) * Math.sqrt(GROW)) })
   })
   const liking = (name: string, x: number, z: number) => {
     let got = 0
@@ -142,7 +150,7 @@ export function planIsland(biome: Biome, seed: number, gates?: [number, number])
   let path: Vec3[] = []
   let bones = 0
   const place = (p: Population, apart = 0) => {
-    const n = whole(p.count, rnd())
+    const n = Math.round(whole(p.count, rnd()) * (p.count[1] > 1 ? GROW * GROW : 1))
     for (let k = 0; k < n; k++) {
       const size = r3(between(p.size, rnd())), room = ROOM[p.kind] * size, own = hashOf(seed, 5000 + salt++)
       if (bones + bonesOf(p.kind) > BONE_BUDGET) return
@@ -198,13 +206,13 @@ export function planIsland(biome: Biome, seed: number, gates?: [number, number])
   // small rocks adrift beside it, and clouds below and behind
   const drifters: IslandPlan['drifters'] = []
   for (let i = 0, n = whole(biome.drifters, rnd()); i < n; i++) {
-    const a = rnd() * Math.PI * 2, d = reach(lobes, a) + 0.45 + 0.5 * rnd()
+    const a = rnd() * Math.PI * 2, d = reach(lobes, a) + 0.45 + 0.5 * rnd() * GROW
     drifters.push({ at: [r3(Math.cos(a) * d), r3(-0.8 + 1.3 * rnd()), r3(Math.sin(a) * d)], r: r3(0.16 + 0.16 * rnd()) })
   }
   const clouds: IslandPlan['clouds'] = []
   for (let i = 0; i < 4; i++) {
-    const a = turn + (i / 4 + 0.15 * rnd()) * Math.PI * 2, d = 3.7 + 0.8 * rnd()
-    clouds.push({ at: [r3(Math.cos(a) * d), r3(-2.4 + 1.4 * rnd()), r3(Math.sin(a) * d * 0.8 - 0.6)], r: r3(0.5 + 0.3 * rnd()) })
+    const a = turn + (i / 4 + 0.15 * rnd()) * Math.PI * 2, d = (3.7 + 0.8 * rnd()) * GROW
+    clouds.push({ at: [r3(Math.cos(a) * d), r3(-2.4 + 1.4 * rnd()), r3(Math.sin(a) * d * 0.8 - 0.6)], r: r3((0.5 + 0.3 * rnd()) * Math.sqrt(GROW)) })
   }
 
   return { biome: biome.id, seed, name: `${biome.name} island ${seed}`, lobes, land, rock: pickOf(biome.ground.rock, seed, 3), patches, path, things, landmarks, drifters, clouds }
@@ -288,6 +296,7 @@ export function islandScene(plan: IslandPlan): { doc: SceneDoc; solid: number[] 
     name: plan.name,
     // a place to walk about, and solid ground: nothing opaque may show what is behind it
     big: true,
+    huge: true,
     ...SOLID,
     loop: LOOP,
     light: biome.light,
@@ -295,8 +304,8 @@ export function islandScene(plan: IslandPlan): { doc: SceneDoc; solid: number[] 
     sky: biome.sky,
     skyReach: 1,
     look: { dither: 0.5, glow: 1, outline: true, edges: true },
-    camera: { target: [0, r3(top * 0.3 - 0.6), 0], distance: 12.5, azimuth: 24, elevation: 20, swing: 8 },
-    air: { specks: biome.air.map((a) => ({ ...a, from: [-HALF, 0, -HALF] as Vec3, to: [HALF, r3(top + 0.5), HALF] as Vec3 })) },
+    camera: { target: [0, r3(top * 0.3 - 0.6), 0], distance: r3(12.5 * GROW), azimuth: 24, elevation: 20, swing: 8 },
+    air: { specks: biome.air.map((a) => ({ ...a, count: Math.min(a.count, SPECKS_EACH), from: [-HALF, 0, -HALF] as Vec3, to: [HALF, r3(top + 0.5), HALF] as Vec3 })) },
     bones,
     parts,
     moves,

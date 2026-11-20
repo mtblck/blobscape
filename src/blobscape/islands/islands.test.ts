@@ -224,7 +224,7 @@ test('a world is a chain of islands apart in the sky, each a sound description, 
       if (j === k) return
       for (let n = 0; n < 64; n++) {
         const t = (n / 64) * Math.PI * 2
-        for (let r = 0; r < 6; r += 0.05) {
+        for (let r = 0; r < 16; r += 0.05) {
           const x = Math.cos(t) * r, z = Math.sin(t) * r
           if (inside(a.plan.lobes, x, z) < 0) break
           assert.ok(inside(b.plan.lobes, x + a.at[0] - b.at[0], z + a.at[2] - b.at[2]) < -GAP * 0.4, `${biome} ${seed}: island ${j} reaches island ${k}`)

@@ -18,10 +18,19 @@ import { inside, type IslandPlan } from './island.ts'
 export const SCALE = 5
 /** How fast the elf walks, meters a second. */
 export const WALK_SPEED = 1.5
+/**
+ * How fast it runs, meters a second: on islands seventy meters across it runs unless asked to walk (Matt, 2026-11-20:
+ * walking was too slow; a half push on the stick, or Shift, walks).
+ */
+export const RUN_SPEED = 4.2
+/** A run's footsteps: longer and quicker than a walk's, and lifted higher. */
+const RUN_STEPS = { reach: 0.6, duration: 0.3, lift: 0.17 }
 /** How much room the elf needs round it, meters. */
 export const BODY = 0.28
 /** The steepest ground it walks up or down: rise over run. Terrace faces and cliffs are steeper. */
 export const STEEPEST = 0.9
+/** How far down it steps at once, meters: off a rim onto a lower deck, or down a ledge. */
+export const STEP_DOWN = 0.25
 /** How close to the island's edge it may go, meters: near enough to look over, not to fall. */
 export const EDGE = 0.6
 /** The heights over the ground at which things are in its way, meters: a shin and a chest. Branches over its head are not. */
@@ -56,7 +65,9 @@ export interface WalkGround {
 export function passes(g: WalkGround, x0: number, z0: number, x1: number, z1: number): boolean {
   if (!g.standsAt(x1, z1)) return false
   const run = Math.hypot(x1 - x0, z1 - z0)
-  return Math.abs(g.groundAt(x1, z1) - g.groundAt(x0, z0)) <= run * STEEPEST + 0.004
+  const rise = g.groundAt(x1, z1) - g.groundAt(x0, z0)
+  // down a step, as off the rim onto a bridge's deck, is fine; up one is not
+  return rise <= run * STEEPEST + 0.004 && -rise <= run * STEEPEST + STEP_DOWN
 }
 
 /** The ground of an island and what stands on it, as the elf meets them. Lengths in meters. */
@@ -149,8 +160,9 @@ export function slide(was: Walker, now: Walker, dt: number, room: (x: number, z:
   const moved = Math.hypot(now.x - was.x, now.z - was.z)
   if (want < 1e-4 || moved > want * 0.5) return now
   const back = now.speed < 0 ? Math.PI : 0
-  for (const off of [0.5, -0.5, 1.0, -1.0]) {
-    const a = now.heading + back + off, step = want * Math.cos(off)
+  // a run's step is long, and a gap narrower than it is still a way through: shorter tries too
+  for (const part of [1, 0.5, 0.25]) for (const off of [0.5, -0.5, 1.0, -1.0]) {
+    const a = now.heading + back + off, step = want * part * Math.cos(off)
     const x = was.x + Math.sin(a) * step, z = was.z + Math.cos(a) * step
     if (room(x, z)) return { ...now, x, z, speed: Math.sign(now.speed || was.speed) * step / dt }
   }
@@ -184,7 +196,7 @@ export class IslandWalk {
       opts = c ?? {}
     }
     const { look = 'forest', blobs = 16000 } = opts
-    this.walking = new WalkingElf(blobs, look, this.walker, { pace: WALK_SPEED, rides: true })
+    this.walking = new WalkingElf(blobs, look, this.walker, { pace: RUN_SPEED, rides: true, steps: RUN_STEPS })
     this.update(0, { forward: 0, turn: 0 })
   }
 
@@ -201,7 +213,7 @@ export class IslandWalk {
     const was = this.walker
     const room = (x: number, z: number) => passes(this.ground, was.x, was.z, x, z)
     const going = (input.aim !== undefined && (input.go ?? 0) > 0.2) || input.forward > 0.2
-    this.walker = slide(was, stepWader(was, input, dt, room, WALK_SPEED), dt, room, going)
+    this.walker = slide(was, stepWader(was, input, dt, room, RUN_SPEED), dt, room, going)
     this.turned = dt > 0 ? (this.walker.heading - was.heading) / dt : 0
     this.walked += Math.hypot(this.walker.x - was.x, this.walker.z - was.z)
     if (Math.abs(this.walker.speed) > 0.3) this.waveUntil = -1
