@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { LIT_MAX, PAINTED, blend, box, buildVoxels, inkedAt, cylinder, cone, cut, lathe, letterGrid, pixelText, sphere, sweep, union, type VoxelSpec } from './voxel.ts'
+import { LIT_MAX, PAINTED, bakedColor, bandOf, banded, hugged, stepper, blend, box, buildVoxels, inkedAt, cylinder, cone, cut, lathe, letterGrid, pixelText, sphere, sweep, union, type VoxelSpec } from './voxel.ts'
 import { posedPoint, axisAngle } from './rig.ts'
 
 const ROOT = { name: 'root', parent: -1, head: [0, 0, 0] as [number, number, number] }
@@ -376,4 +376,80 @@ test('painted in steps: every lit blob takes a palette color of its own paint\'s
   // a palette color over the glow line is held under it, so nothing painted glows
   const white = buildVoxels({ bones: [ROOT], spacing: 0.1, parts: [{ shape: sphere([0, 0, 0], 0.5), color: [1, 1, 1], bone: 'root' }], light: { steps: { palette: [[1, 1, 1], [0.2, 0.2, 0.3]], mottle: 0 } } })
   for (let i = 0; i < white.blobs.count * 3; i++) assert.ok(white.blobs.color[i] <= LIT_MAX + 1e-6)
+})
+
+test('painting in steps keeps a paint in its own hue: a red with no darker red stays red in shade, not brown', () => {
+  const hex = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255) as [number, number, number]
+  const palette = ['#2a1c16', '#4a3020', '#8f2d1c', '#d9541e', '#7b2f45', '#b9485a', '#10241c', '#1b3a2a', '#2c5a38'].map(hex)
+  const light = { ...PAINTED, dir: [0, 1, 0] as [number, number, number], ambient: 0.5, shadow: 0.7, steps: { palette, mottle: 0 } }
+  const step = stepper(light.steps, light)
+  const at = (paint: string, t: number) => { const base = hex(paint); return step(base, bakedColor(base, (0.5 + 0.5 * t) * LIT_MAX, t, light.ramp, 0), 0, 0, 0) }
+  const red = hex('#7b2f45'), pink = hex('#b9485a')
+  for (let q = 0; q <= 8; q++) {
+    assert.deepEqual(at('#7b2f45', q / 8), red, `dark red at ${q / 8}`)
+    assert.ok([red, pink].some((c) => c.every((v, k) => v === at('#b9485a', q / 8)[k])), `light red at ${q / 8}`)
+  }
+  // a green still runs through its greens
+  assert.ok(new Set([0, 0.5, 1].map((t) => at('#2c5a38', t).join())).size >= 2)
+})
+
+test('painting in steps keeps a gray paint in grays: white sails in shade never take the sky\'s pale blue', () => {
+  const hex = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255) as [number, number, number]
+  // the windmill's palette, light and white sail paint
+  const palette = [
+    '#22202b', '#3b2a20', '#5e4230', '#8a6242', '#b98d60', '#2f5d34', '#4a8a3c', '#76b04a', '#a8d05e', '#b88a2e', '#e0b648', '#f3d977',
+    '#ffd84a', '#5a5863', '#8b8894', '#bdbac4', '#ebe8e2', '#fbf7ea', '#8c2f2a', '#c4483a', '#e58fa8', '#2e62a8', '#3b6fb5', '#5fa8e0', '#9fd0ee', '#dff1f8',
+  ].map(hex)
+  const light = { ...PAINTED, dir: [0.4, 0.8, 0.6] as [number, number, number], ambient: 0.7, shadow: 0.5, steps: { palette } }
+  const step = stepper(light.steps, light)
+  // palette colors as the steps give them, held under the glow line
+  const held = (c: number[]) => { const top = Math.max(...c); return c.map((v) => (top > LIT_MAX ? (v * LIT_MAX) / top : v)) }
+  const blues = new Set(['#5fa8e0', '#9fd0ee', '#dff1f8'].map((h) => held(hex(h)).join()))
+  for (const paint of ['#fbf7ea', '#bdbac4'])
+    for (let q = 0; q <= 12; q++)
+      for (let i = 0; i < 30; i++) {
+        const base = hex(paint), t = q / 12
+        const got = step(base, bakedColor(base, (0.7 + 0.3 * t) * LIT_MAX, t, light.ramp, 0), i * 3, i, 7 - i)
+        assert.ok(!blues.has(got.join()), `${paint} at ${t} took a blue`)
+      }
+})
+
+test('light in bands: a sun share falls on one of a few steps, and a lit ball takes only that many shades', () => {
+  assert.equal(bandOf(0.2, 3), 0)
+  assert.equal(bandOf(0.5, 3), 0.5)
+  assert.equal(bandOf(0.9, 3), 1)
+  assert.equal(bandOf(1, 3), 1)
+  assert.equal(bandOf(0.42, 0), 0.42)
+  const ball = () => buildVoxels({ bones: [ROOT], parts: [{ shape: sphere([0, 0, 0], 0.5), color: [0.8, 0.6, 0.4], bone: 'root' }], spacing: 0.05, light: { dir: [0.3, 0.8, 0.5], ambient: 0.4, shadow: 0 } }).blobs
+  const shades = (b: ReturnType<typeof ball>) => { const seen = new Set<string>(); for (let i = 0; i < b.count; i++) seen.add([...b.color.subarray(i * 3, i * 3 + 3)].map((v) => v.toFixed(4)).join()); return seen.size }
+  const smooth = shades(ball()), stepped = shades(banded(3, ball))
+  assert.ok(smooth > 20, `${smooth}`)
+  assert.equal(stepped, 3)
+})
+
+test('discs along an outer edge are fitted to it: on a round table top none reaches past the rim, and most discs are untouched', () => {
+  const s = 0.05, r = 0.53
+  const make = () => buildVoxels({ bones: [ROOT], parts: [{ shape: cylinder([0, 0], 0, 0.2, r), color: [1, 1, 1], bone: 'root' }], spacing: s }).blobs
+  const plain = make(), fitted = hugged(make)
+  assert.equal(plain.count, fitted.count)
+  const past = (b: ReturnType<typeof make>) => {
+    let n = 0
+    for (let i = 0; i < b.count; i++) {
+      const [x, y, z] = b.center.subarray(i * 3, i * 3 + 3), [qx, qy, qz, qw] = b.quat.subarray(i * 4, i * 4 + 4), sc = b.scale.subarray(i * 3, i * 3 + 3)
+      const ax0 = [1 - 2 * (qy * qy + qz * qz), 2 * (qx * qy + qz * qw), 2 * (qx * qz - qy * qw)], ax1 = [2 * (qx * qy - qz * qw), 1 - 2 * (qx * qx + qz * qz), 2 * (qy * qz + qx * qw)]
+      const nUp = Math.abs(ax0[2] * ax1[0] - ax0[0] * ax1[2])
+      const d = Math.hypot(x, z)
+      // discs of the top face, near the rim
+      if (y < 0.15 || nUp < 0.9 || d < r - 2 * s) continue
+      const u = [x / d, 0, z / d]
+      const reach = 1.18 * Math.hypot((ax0[0] * u[0] + ax0[2] * u[2]) * sc[0], (ax1[0] * u[0] + ax1[2] * u[2]) * sc[1])
+      if (d + reach > r + s * 0.2) n++
+    }
+    return n
+  }
+  let moved = 0
+  for (let i = 0; i < fitted.count * 3; i++) if (fitted.center[i] !== plain.center[i]) moved++
+  assert.ok(past(plain) > 0)
+  assert.equal(past(fitted), 0)
+  assert.ok(moved > 0 && moved < fitted.count, `${moved} of ${fitted.count}`)
 })

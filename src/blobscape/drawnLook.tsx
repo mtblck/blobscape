@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { MarkLook } from '../splat-core/marks.ts'
 import type { GlyphLook, GlyphSet } from '../splat-core/glyphs.ts'
-import { gatherColors } from '../splat-core/cel.ts'
+import { gatherColors, type CelLook } from '../splat-core/cel.ts'
 import type { Blobs } from '../splat-core/blobs.ts'
 import { Button, Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
 import type { CreatureStage } from './creature/stage.ts'
@@ -9,13 +9,14 @@ import { GROUND, LOOKS, PAPERS, SCREEN, css, isMark, type LookId } from './brush
 import { NEON, NEON_GROUND, NEON_PACES, NEON_SETS, NEON_START, neonLook, type NeonChoice } from './neonLooks.ts'
 import { GLASS, GLASS_FILLS, GLASS_GROUND, GLASS_START, glassLook, type GlassChoice } from './glassLooks.ts'
 import { WASH, WASH_PAPERS, WASH_START, washGround, washLook, type WashChoice } from './washLooks.ts'
+import { BLOCKS, BLOCK_SIZES, BLOCK_START, blockLook, gridOf, type BlockChoice } from './blockLooks.ts'
 import { BACKDROPS, CEL, CEL_START, FILL_REACH, celLook, nightLight, nightOf, type CelChoice } from './celLooks.ts'
 
 /** Every drawn look a page can offer: the marks, ASCII, cel shading, neon, stained glass, watercolor, and the plain blobs. */
-export type Look = LookId | typeof CEL.id | typeof NEON.id | typeof GLASS.id | typeof WASH.id
-export const ALL_LOOKS: { id: Look; label: string; note: string }[] = [...LOOKS.slice(0, -1), CEL, NEON, GLASS, WASH, LOOKS[LOOKS.length - 1]]
+export type Look = LookId | typeof CEL.id | typeof BLOCKS.id | typeof NEON.id | typeof GLASS.id | typeof WASH.id
+export const ALL_LOOKS: { id: Look; label: string; note: string }[] = [...LOOKS.slice(0, -1), CEL, BLOCKS, NEON, GLASS, WASH, LOOKS[LOOKS.length - 1]]
 /** The looks that light the blobs themselves, and so want them built with no light baked in (`unlit`). */
-export const wantsPlain = (look: Look | undefined) => look === 'cel' || look === 'neon' || look === 'glass'
+export const wantsPlain = (look: Look | undefined) => look === 'cel' || look === 'neon' || look === 'glass' || look === 'blocks'
 
 /** On the dark screen characters are thin lines of light and read fainter than their share of ink, so tones are raised by this. */
 const SCREEN_GAIN = 1.5
@@ -27,6 +28,9 @@ const CHAR_SETS: { id: GlyphSet; label: string; about: string }[] = [
   { id: 'blocks', label: 'Blocks', about: 'Quarter blocks where a cell is half one thing and half another, and the shades ░ ▒ ▓ where it is even. Idea from Silicon Jungle\'s Ink Studio.' },
 ]
 
+/** How many flat colors each part's own are gathered into for pixel art shaded a pixel at a time: the palette's ramps do the rest. */
+export const PIXEL_FILLS = 3
+
 const params = () => new URLSearchParams(typeof location === 'undefined' ? '' : location.search)
 const lum = (c: readonly number[]) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
 
@@ -34,6 +38,8 @@ const lum = (c: readonly number[]) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c
 export interface DrawnSubject {
   /** What is in the view, once it is: its colors are gathered into flat fills for cel shading. */
   actor?: { blobs: Blobs; partOf?: ArrayLike<number> }
+  /** The side of a cell of the grid it was cut on, where it was cut on one: blocks are whole numbers of it. */
+  spacing?: number
   /** Whether that was built with no light baked in (`unlit`), as cel shading needs. */
   plain: boolean
   /** The starting view's turn, which cel shading's light is measured from. */
@@ -48,6 +54,8 @@ export interface DrawnSubject {
   loop?: number
   /** Frames are drawn only when asked for, so one must not depend on the one before. */
   offscreen: boolean
+  /** With no look (the page draws pixel art): cel shading's light for the picture the pixel art is made from, shaded a pixel at a time, with the subject's colors gathered into flat fills. */
+  pixelCel?: CelLook
 }
 
 /**
@@ -63,6 +71,11 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   const [neon, setNeon] = useState<NeonChoice>(NEON_START)
   const [glass, setGlass] = useState<GlassChoice>(GLASS_START)
   const [wash, setWash] = useState<WashChoice>(WASH_START)
+  // blocks: `?block=` is the size, in cells of the subject's grid; a phone starts a size up, for fewer cubes
+  const [block, setBlock] = useState<BlockChoice>(() => {
+    const v = Number(params().get('block'))
+    return { ...BLOCK_START, size: Number.isFinite(v) && v >= BLOCK_SIZES.min && v <= BLOCK_SIZES.max ? Math.round(v) : BLOCK_START.size + (on.light ? 1 : 0) }
+  })
   const [size, setSize] = useState(1)
   // outlines: on for the two pen looks and cel shading unless the visitor says otherwise
   const [outlined, setOutlined] = useState<boolean | null>(() => (params().get('outline') === '1' ? true : params().get('outline') === '0' ? false : null))
@@ -77,7 +90,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   // which characters: ASCII, braille or blocks (`?chars=`)
   const [chars, setChars] = useState<GlyphSet>(() => (CHAR_SETS.find((c) => c.id === params().get('chars'))?.id ?? 'ascii'))
   const [copied, setCopied] = useState('')
-  const { actor, plain, azimuth, soft, offscreen, sky, light, loop } = on
+  const { actor, plain, azimuth, soft, offscreen, sky, light, loop, spacing } = on
   // the subject's own sky is the first backdrop where it has one. Under a dark sky it is night: the shade and line are
   // the night's, and both tones are dimmed and cooled (`nightLight`), so the scene's lamps and lit windows stand out
   const skyDark = sky ? nightOf(sky) : 0
@@ -88,7 +101,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   const night = inScene ? skyDark : 0
 
   const sheet = PAPERS.find((p) => p.id === paper)!
-  const marks = useMemo<MarkLook | undefined>(() => (look && look !== 'cel' && look !== 'neon' && look !== 'glass' && look !== 'watercolor' && isMark(look) ? { kind: look, size, ink: sheet.ink, paper: sheet.paper, soft } : undefined), [look, size, sheet, soft])
+  const marks = useMemo<MarkLook | undefined>(() => (look && look !== 'cel' && look !== 'blocks' && look !== 'neon' && look !== 'glass' && look !== 'watercolor' && isMark(look) ? { kind: look, size, ink: sheet.ink, paper: sheet.paper, soft } : undefined), [look, size, sheet, soft])
   useEffect(() => { stage?.setMarks(marks) }, [stage, marks, actor])
   const ascii = look === 'ascii'
   // off screen a frame is drawn only when asked for, and must not depend on the one before (`?steady=` says otherwise, for the checks)
@@ -109,26 +122,41 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   const painted = look === 'watercolor'
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { stage?.setWash(painted ? washLook(wash, sky) : undefined) }, [stage, painted, wash, skyKey])
-  const outline = !!look && !ascii && !lit && !glazed && !painted && (outlined ?? (look === 'ink' || look === 'hatch' || look === 'stipple' || look === 'cel'))
-  useEffect(() => { stage?.setCel(look === 'cel' ? { ...celLook({ ...cel, backdrop: celBase, turn: cel.turn + azimuth, line: outline ? pen : 0 }), ambient: nightLight(night), ...(light ? { shadowSize: 1024, shadowEvery: offscreen ? 1 : 2 } : {}) } : undefined) }, [stage, look, cel, celBase, night, outline, pen, azimuth, light, offscreen])
+  const blocky = look === 'blocks'
+  // blocks stand in front of the subject's own sky where it has one, in a night's light under a dark one
+  const blockBack = block.backdrop || (skyBack ? 'scene' : CEL_START.backdrop)
+  const blockScene = blockBack === 'scene' && !!skyBack
+  const blockNight = blockScene ? skyDark : 0
+  // the cubes are made again for each change, so a slider being dragged waits a moment for the hand to rest
+  useEffect(() => {
+    if (!stage) return
+    if (!blocky || !actor || !plain) { stage.setBlocks(); return }
+    const b = actor.blobs
+    const id = setTimeout(() => stage.setBlocks(blockLook(block, gridOf(spacing, b.center, b.count), azimuth, blockNight ? nightLight(blockNight) : undefined)), 120)
+    return () => clearTimeout(id)
+  }, [stage, blocky, actor, plain, block, spacing, azimuth, blockNight])
+  useEffect(() => () => stage?.setBlocks(), [stage])
+  const outline = !!look && !ascii && !lit && !glazed && !painted && !blocky && (outlined ?? (look === 'ink' || look === 'hatch' || look === 'stipple' || look === 'cel'))
+  const { pixelCel } = on
+  useEffect(() => { stage?.setCel(!look && pixelCel ? { ...pixelCel, ...(light ? { shadowSize: 1024, shadowEvery: offscreen ? 1 : 2 } : {}) } : look === 'cel' ? { ...celLook({ ...cel, backdrop: celBase, turn: cel.turn + azimuth, line: outline ? pen : 0 }), ambient: nightLight(night), ...(light ? { shadowSize: 1024, shadowEvery: offscreen ? 1 : 2 } : {}) } : undefined) }, [stage, look, cel, celBase, night, outline, pen, azimuth, light, offscreen, pixelCel])
   // flat fills: each part's colors gathered into a few, shown in place of the blobs' own (which stay as they were)
   useEffect(() => {
     // stained glass wants them too: lead runs wherever the color changes, so a mottled surface would be all lead
-    const fills = look === 'cel' ? cel.fills : look === 'glass' ? GLASS_FILLS : 0
+    const fills = look === 'cel' ? cel.fills : look === 'glass' ? GLASS_FILLS : !look && pixelCel ? PIXEL_FILLS : 0
     if (!stage || !actor || !fills || !plain) return
     // speckle is anything finer than about two blobs across, by a typical blob's middle size (a strand of fur's width, not its length)
     const b = actor.blobs, sizes = Float32Array.from({ length: Math.min(b.count, 2000) }, (_, k) => { const i = Math.floor((k * b.count) / Math.min(b.count, 2000)); return [b.scale[i * 3], b.scale[i * 3 + 1], b.scale[i * 3 + 2]].sort((x, y) => x - y)[1] }).sort()
     const flat = gatherColors(b.color.subarray(0, b.count * 3), actor.partOf, fills, { at: b.center, reach: (sizes[sizes.length >> 1] || 0) * FILL_REACH })
     stage.tint((_own, i) => [flat[i * 3], flat[i * 3 + 1], flat[i * 3 + 2]])
     return () => stage.tint()
-  }, [stage, actor, plain, look, cel.fills])
+  }, [stage, actor, plain, look, cel.fills, !!pixelCel])
   useEffect(() => { stage?.setOutline(outline && look !== 'cel' ? { width: pen, ink: look === 'ink' || look === 'hatch' || look === 'stipple' ? sheet.ink : undefined } : undefined) }, [stage, outline, pen, look, sheet])
 
   const drawnOn = look === 'ink' || look === 'hatch' || look === 'stipple'
   // paint covers its ground, so a subject with a sky of its own stands in front of that
   const isPaint = look === 'gouache' || look === 'oil'
   const backdrop = BACKDROPS.find((b) => b.id === celBase) ?? BACKDROPS[0]
-  const ground = !look || look === 'blobs' ? undefined : look === 'cel' ? (inScene ? skyBack.back : backdrop.back) : lit ? NEON_GROUND : glazed ? GLASS_GROUND : painted ? washGround(wash) : ascii ? css(own ? SCREEN : sheet.paper) : drawnOn ? css(sheet.paper) : skyBack && isPaint ? skyBack.back : GROUND
+  const ground = !look || look === 'blobs' ? undefined : look === 'cel' ? (inScene ? skyBack.back : backdrop.back) : blocky ? (blockScene ? skyBack.back : (BACKDROPS.find((b) => b.id === blockBack) ?? BACKDROPS[0]).back) : lit ? NEON_GROUND : glazed ? GLASS_GROUND : painted ? washGround(wash) : ascii ? css(own ? SCREEN : sheet.paper) : drawnOn ? css(sheet.paper) : skyBack && isPaint ? skyBack.back : GROUND
 
   const controls = !look ? null : (
     <>
@@ -148,6 +176,22 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
             <Field label="Backdrop">
               <div className="flex flex-wrap gap-1.5">
                 {[...(skyBack ? [skyBack] : []), ...BACKDROPS].map((b) => <Chip key={b.id} active={backId === b.id} onClick={() => setCel((c) => ({ ...c, backdrop: b.id }))}>{b.label}</Chip>)}
+              </div>
+            </Field>
+          </div>
+        )}
+        {blocky && (
+          <div className="space-y-4" data-testid="brush-blocks">
+            <Slider label="Block size" value={block.size} min={BLOCK_SIZES.min} max={BLOCK_SIZES.max} step={1} onChange={(size) => setBlock((c) => ({ ...c, size }))} format={(v) => `${v}×`} hint="How big a block is beside the grid the scene was cut on. Bigger blocks suit a big scene; a small creature loses its face." />
+            <Slider label="Light from" value={block.turn} min={-180} max={180} step={5} onChange={(turn) => setBlock((c) => ({ ...c, turn }))} format={(v) => `${v}°`} hint="Round the subject, from where the view starts: 0° is from the front, 90° from the right. The shadows go with it." />
+            <Slider label="Light height" value={block.height} min={10} max={85} step={1} onChange={(height) => setBlock((c) => ({ ...c, height }))} format={(v) => `${v}°`} />
+            <Toggle label="Cast shadows" checked={block.shadows} onChange={(shadows) => setBlock((c) => ({ ...c, shadows }))} />
+            <Slider label="Dark corners" value={block.corners} min={0} max={1} step={0.05} onChange={(corners) => setBlock((c) => ({ ...c, corners }))} format={(v) => `${Math.round(v * 100)}%`} hint="How much darker a face gets in a corner where blocks meet." />
+            <Slider label="Block edges" value={block.edge} min={0} max={1} step={0.05} onChange={(edge) => setBlock((c) => ({ ...c, edge }))} format={(v) => (v === 0 ? 'None' : `${Math.round(v * 100)}%`)} hint="A thin line round each face, so blocks of one color still read as blocks." />
+            <Slider label="Color varies" value={block.vary} min={0} max={1} step={0.05} onChange={(vary) => setBlock((c) => ({ ...c, vary }))} format={(v) => `${Math.round(v * 100)}%`} hint="How much one block's color differs from the next's." />
+            <Field label="Backdrop">
+              <div className="flex flex-wrap gap-1.5">
+                {[...(skyBack ? [skyBack] : []), ...BACKDROPS].map((b) => <Chip key={b.id} active={blockBack === b.id} onClick={() => setBlock((c) => ({ ...c, backdrop: b.id }))}>{b.label}</Chip>)}
               </div>
             </Field>
           </div>
@@ -192,7 +236,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
             </Field>
           </div>
         )}
-        {look !== 'cel' && !lit && !glazed && !painted && isMark(look) && (
+        {look !== 'cel' && !blocky && !lit && !glazed && !painted && isMark(look) && (
           <Slider label="Mark size" value={size} min={0.5} max={1.3} step={0.05} onChange={setSize} format={(v) => `${Math.round(v * 100)}%`} hint="Smaller marks leave gaps between them; bigger ones overlap more." />
         )}
         {ascii && (
@@ -238,7 +282,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
             <p role="status" className="mt-1.5 text-xs text-ink-faint" data-testid="brush-copied">{copied || 'The picture as it stands now, in plain characters: paste it anywhere with a fixed-width font.'}</p>
           </div>
         )}
-        {!ascii && !lit && !glazed && !painted && (
+        {!ascii && !lit && !glazed && !painted && !blocky && (
           <div data-testid="brush-outline">
             <Toggle label="Outlines" checked={outline} onChange={setOutlined} />
             <p className="mt-1.5 text-xs text-ink-faint">{look === 'cel' ? 'An even line round the subject, where one thing stands in front of another, and between its parts.' : 'A pen line round the subject, where one thing stands in front of another, and between its parts. Heavier against dark things, and it lifts off here and there against light ones.'}</p>

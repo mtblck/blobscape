@@ -280,7 +280,7 @@ export default [
             solid++
             if (!pal.has((f.art.data[i] << 16) | (f.art.data[i + 1] << 8) | f.art.data[i + 2])) off++
           }
-          return { backend: stage.backend, w: f.art.width, h: f.art.height, solid, off, soft, small: Array.from(f.small.data), art: Array.from(f.art.data), before: f.before && Array.from(f.before.data), parts: f.parts && Array.from(f.parts.data), ranks: f.ranks && Array.from(f.ranks.data), time: f.time, fine: f.fine && { small: Array.from(f.fine.small.data), parts: Array.from(f.fine.parts.data) }, look: look() }
+          return { backend: stage.backend, w: f.art.width, h: f.art.height, solid, off, soft, small: Array.from(f.small.data), art: Array.from(f.art.data), before: f.before && Array.from(f.before.data), parts: f.parts && Array.from(f.parts.data), ranks: f.ranks && Array.from(f.ranks.data), time: f.time, fine: f.fine && { small: Array.from(f.fine.small.data), parts: Array.from(f.fine.parts.data), solid: f.fine.solid && Array.from(f.fine.solid.data) }, look: look() }
         }, t)
         const a = await shot(2), b = await shot(5)
         // the same frame through the CPU twin (the page's own module isn't reachable from a production build, so it runs here)
@@ -290,7 +290,7 @@ export default [
         if (!a.look.fine || !a.fine) fails.push(`${`blobscape pixel diorama (${a.backend})`}: four samples a pixel is not on`)
         else {
           const big = (data) => ({ width: a.w * 2, height: a.h * 2, data: Uint8ClampedArray.from(data) })
-          const settled = resolveFine(big(a.fine.small), big(a.fine.parts))
+          const settled = resolveFine(big(a.fine.small), big(a.fine.parts), a.fine.solid && big(a.fine.solid))
           let solid = 0, cover = 0, tone = 0, part = 0
           for (let i = 0; i < settled.small.data.length; i += 4) {
             if (settled.small.data[i + 3] >= 128) solid++
@@ -327,13 +327,13 @@ export default [
           if (!(a.look.parts && ids.size > 20 && lines > 200)) fails.push(`${label}: lines between parts: ${JSON.stringify({ on: a.look.parts, parts: ids.size, lines })}`)
           else ok(`${label}: lines between parts: a map of ${ids.size} parts, ${lines} pixels of line that color alone would not draw`)
         }
-        // lone pixels: the pass cleaned some up, and (above) the same ones its twin does
+        // calmer pixels (in place of the lone-pixel cleanup): the pass calmed some, and (above) the same ones its twin does
       {
-        const untidy = pixelArt(frame(a.small), { ...a.look, tidy: false }, frame(a.before), frame(a.parts), frame(a.ranks), a.time)
+        const untidy = pixelArt(frame(a.small), { ...a.look, tidy: false, calm: false }, frame(a.before), frame(a.parts), frame(a.ranks), a.time)
         let cleaned = 0
         for (let i = 0; i < want.data.length; i += 4) if (want.data[i] !== untidy.data[i] || want.data[i + 1] !== untidy.data[i + 1] || want.data[i + 2] !== untidy.data[i + 2]) cleaned++
-        if (!(a.look.tidy && cleaned > 0 && cleaned < a.solid * 0.05)) fails.push(`${label}: lone-pixel cleanup: ${JSON.stringify({ on: a.look.tidy, cleaned })}`)
-        else ok(`${label}: lone-pixel cleanup took ${cleaned} stray pixels`)
+        if (!(a.look.calm && cleaned > 0 && cleaned < a.solid * 0.3)) fails.push(`${label}: calmer pixels: ${JSON.stringify({ on: a.look.calm, cleaned })}`)
+        else ok(`${label}: calmer pixels changed ${cleaned} of ${a.solid} pixels`)
       }
       if (!(moved > 150)) fails.push(`${label}: only ${moved} pixels change in a few seconds`)
         else ok(`${label}: ${moved} pixels change in a few seconds`)
@@ -352,8 +352,7 @@ export default [
         }
         // art-pixel effects: glow in rings, heat haze and softer lit outlines on, drawn as the CPU twin draws them at the same time
         {
-          const toggles = ['Glow in rings', 'Heat haze over glowing things', 'Softer outline on lit sides']
-          for (const t of toggles) { const box = d.page.getByLabel(t); if (!(await box.isChecked())) await tabClick(box) }
+          await d.page.evaluate(() => window.__diorama.finish({ bands: 2, heat: 1, selout: true }))
           await d.page.waitForFunction(() => { const l = window.__diorama.look(); return l.bands > 0 && l.heat && l.selout }, null, { timeout: 10000 }).catch(() => {})
           const e = await shot(2.3)
           const fx = pixelArt(frame(e.small), e.look, frame(e.before), frame(e.parts), frame(e.ranks), e.time)
@@ -364,17 +363,17 @@ export default [
             else if (Math.abs(fx.data[i] - e.art[i]) + Math.abs(fx.data[i + 1] - e.art[i + 1]) + Math.abs(fx.data[i + 2] - e.art[i + 2]) > 6) differ++
             if (fx.data[i] !== bare.data[i] || fx.data[i + 1] !== bare.data[i + 1] || fx.data[i + 2] !== bare.data[i + 2]) made++
           }
-          for (const t of toggles) { const box = d.page.getByLabel(t); if (await box.isChecked()) await tabClick(box) }
+          await d.page.evaluate(() => window.__diorama.finish({ bands: 0, heat: 0, selout: false }))
           if (!(e.look.bands > 0 && e.look.heat && e.look.selout && shape === 0 && differ < e.solid * 0.05 && made > 20)) fails.push(`${label}: art-pixel effects: ${JSON.stringify({ bands: e.look.bands, heat: e.look.heat, selout: e.look.selout, shape, differ, made })}`)
           else ok(`${label}: art-pixel effects: rings, haze and softer lit outlines change ${made} pixels, as the CPU twin draws them (${differ} a neighboring color)`)
         }
         // Exact sort: the stage swaps in the radix sort and the art still draws, every pixel a palette color
         {
-          await tabClick(d.page.getByLabel('Exact sort (slower)'))
+          await d.page.evaluate(() => window.__diorama.finish({ exact: true }))
           await d.page.waitForFunction(() => window.__diorama.stage.world?.sortKind === 'radix', null, { timeout: 30000 }).catch(() => {})
           const ex = await shot(2)
           const sort = await d.page.evaluate(() => window.__diorama.stage.world?.sortKind)
-          await tabClick(d.page.getByLabel('Exact sort (slower)'))
+          await d.page.evaluate(() => window.__diorama.finish({ exact: false }))
           await d.page.waitForFunction(() => window.__diorama.stage.world?.sortKind === 'bins', null, { timeout: 30000 }).catch(() => {})
           if (!(sort === 'radix' && ex.solid > a.solid * 0.9 && ex.off === 0)) fails.push(`${label}: exact sort: ${JSON.stringify({ sort, solid: ex.solid, before: a.solid, off: ex.off })}`)
           else ok(`${label}: Exact sort draws on the radix sort (${ex.solid} solid pixels, ${a.solid} before)`)

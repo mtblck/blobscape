@@ -5,7 +5,7 @@ import type { PointLight } from '../../splat-engine/engine.ts'
 import type { Skeleton } from '../../splat-engine/rig.ts'
 import { compileScene, type SceneDoc } from '../../splat-engine/sceneDoc.ts'
 import { SceneWater } from '../../splat-engine/sceneWater.ts'
-import { buildVoxels } from '../../splat-engine/voxel.ts'
+import { DEFAULT_LIGHT, buildVoxels } from '../../splat-engine/voxel.ts'
 import * as meadow from '../fourways/meadow/build.ts'
 import { CAMPFIRE } from './scenes/campfire.ts'
 import { BEE } from './scenes/bee.ts'
@@ -72,6 +72,10 @@ export interface Diorama {
   touching?: number[]
   /** How big its description is, in bytes, written out as JSON: only for a scene that is data alone. */
   bytes?: number
+  /** Which way its baked sun lies (a direction toward it, in the world), for the rim of light pixel art picks out: none for a scene with no sun. */
+  sun?: readonly [number, number, number]
+  /** How much light its baked shade keeps (the description's ambient share): pixel art shaded a pixel at a time shades by as much. */
+  shade?: number
   /** Its description, for a scene that is one: what Scene Creator splits by the props it marks. */
   doc?: SceneDoc
   /** How many moves its description lists. */
@@ -131,6 +135,8 @@ export function described(id: string, doc: SceneDoc, about: string): Diorama {
       { id: 'close', label: 'Close up', orbit: { ...c.orbit, target: [c.orbit.target[0], c.orbit.target[1] * 0.6, c.orbit.target[2]], distance: c.orbit.distance * 0.55 } },
     ],
     swing: c.swing,
+    sun: doc.light?.from ?? DEFAULT_LIGHT.dir,
+    shade: doc.light?.ambient ?? DEFAULT_LIGHT.ambient,
     make: (spacing, steps) => {
       const built = buildVoxels(c.spec(spacing, steps))
       const empty = c.empty(built)

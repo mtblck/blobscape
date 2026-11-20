@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { alphaCut, autoPalette, downsample, makeFrame, outline, pixelArt, quantize, lookColors, snapColors, removeStrays, countSolid, tidyLone, resolveFine, ditherRank, typicalSpacing, surfaceRanks, snapShift, cycleTurns, heatPace, heatShift, HALO_R, HEAT_UP, SELOUT_FROM, oklab, type Rgb, type PixelLook } from './pixel.ts'
+import { alphaCut, autoPalette, downsample, makeFrame, outline, pixelArt, quantize, lookColors, snapColors, removeStrays, countSolid, tidyLone, calmArt, calmEdge, lineFix, keptNearest, lighterStep, peakAt, rimStep, screenWay, CALM_MOST, resolveFine, ditherRank, typicalSpacing, surfaceRanks, snapShift, cycleTurns, heatPace, heatShift, HALO_R, HEAT_UP, SELOUT_FROM, oklab, type Rgb, type PixelLook } from './pixel.ts'
 
 const solid = (w: number, h: number, on: (x: number, y: number) => boolean, rgb = [200, 40, 40]) => {
   const f = makeFrame(w, h)
@@ -169,6 +169,19 @@ test('pixelArt with steady keeps a pixel on the color it had when the other is o
   assert.deepEqual(px(pixelArt(f, look, makeFrame(2, 1)), 0), [140, 140, 140, 255])
   before.data.set([101, 100, 100, 255])
   assert.deepEqual(px(pixelArt(f, look, before), 0), [140, 140, 140, 255])
+  // only one of the two colors a pixel lies between is kept: a sail turning over the sky never keeps the sky's blue
+  const near: Rgb[] = [[189, 186, 196], [235, 232, 226], [159, 208, 238]]
+  const g = makeFrame(1, 1), was = makeFrame(1, 1)
+  g.data.set([213, 210, 201, 255]); was.data.set([159, 208, 238, 255])
+  const wide = { palette: near, dither: 0, outline: null, glow: 0, steady: 0.2 }
+  assert.notDeepEqual(px(pixelArt(g, wide, was), 0), [159, 208, 238, 255])
+  was.data.set([189, 186, 196, 255])
+  assert.deepEqual(px(pixelArt(g, wide, was), 0), [189, 186, 196, 255])
+  // nor the sky's own color where it lies between that and another: a pixel the sky had a moment ago
+  g.data.set([180, 195, 215, 255]); was.data.set([159, 208, 238, 255])
+  const skyed = { ...wide, sky: [[159, 208, 238], [159, 208, 238]] as [Rgb, Rgb] }
+  assert.deepEqual(px(pixelArt(g, { ...wide, sky: undefined }, was), 0), [159, 208, 238, 255], 'with no sky, a blue is kept')
+  assert.deepEqual(px(pixelArt(g, skyed, was), 0), [189, 186, 196, 255])
   // the sky is the same every frame: it never takes the color a pixel had
   const sky = pixelArt(f, { ...look, sky: [[140, 140, 140], [140, 140, 140]] }, before)
   assert.deepEqual(px(sky, 2), [140, 140, 140, 255])
@@ -226,6 +239,71 @@ test('tidyLone: a stray in a flat patch takes its neighbors\' color; dither, edg
   assert.deepEqual(got(tidyLone(art, solid), 2, 2), B)
 })
 
+test('calmArt: a pixel takes a color most of its own part share; specks, line tips, gaps and other parts stay', () => {
+  const w = 9, h = 9
+  const solid = makeFrame(w, h), art = makeFrame(w, h)
+  const A: Rgb = [50, 70, 90], B: Rgb = [20, 40, 60], C: Rgb = [90, 200, 90]
+  const put = (x: number, y: number, c: Rgb) => { const i = (y * w + x) * 4; art.data[i] = c[0]; art.data[i + 1] = c[1]; art.data[i + 2] = c[2]; art.data[i + 3] = 255; solid.data[i + 3] = 255 }
+  const got = (f: ReturnType<typeof makeFrame>, x: number, y: number) => Array.from(f.data.slice((y * w + x) * 4, (y * w + x) * 4 + 3))
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) put(x, y, B)
+  // a pixel of A among B with one A beside it: five or more neighbors share B and fewer share A
+  put(4, 4, A); put(5, 4, A); put(3, 3, A)
+  assert.ok(CALM_MOST === 5)
+  assert.deepEqual(got(calmArt(art, solid), 4, 4), B)
+  // a checkerboard keeps its pixels: four neighbors share each color
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) put(x, y, (x + y) % 2 ? A : C)
+  const board = calmArt(art, solid)
+  for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) assert.deepEqual(got(board, x, y), got(art, x, y))
+  // with a map of parts, neighbors of another part do not count
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) put(x, y, B)
+  put(4, 4, A)
+  const map = makeFrame(w, h)
+  for (let i = 0; i < w * h; i++) { map.data[i * 4] = 1; map.data[i * 4 + 3] = 255 }
+  for (let y = 3; y <= 5; y++) for (let x = 3; x <= 5; x++) map.data[(y * w + x) * 4] = x === 4 && y === 4 ? 2 : 3
+  assert.deepEqual(got(calmArt(art, solid, map.data), 4, 4), A)
+})
+
+test('calmEdge: a bump on a wall is taken off and a notch filled; a speck, a line tip and a gap a pixel wide stay', () => {
+  const w = 9, h = 9
+  const on = new Set<string>()
+  const solid = (x: number, y: number) => on.has(`${x},${y}`)
+  const wall = () => { on.clear(); for (let y = 5; y < h; y++) for (let x = 0; x < w; x++) on.add(`${x},${y}`) }
+  // a bump on top of the wall takes the backdrop above it (N8 index 3, above)
+  wall(); on.add('4,4')
+  assert.equal(calmEdge(4, 4, w, h, solid), 3)
+  // a notch in the wall's top takes the wall below it (index 2)
+  wall(); on.delete('4,5')
+  assert.equal(calmEdge(4, 5, w, h, solid), 2)
+  // a lone speck (a star) stays
+  on.clear(); on.add('4,4')
+  assert.equal(calmEdge(4, 4, w, h, solid), -1)
+  // the tip of a line a pixel wide stays
+  on.clear(); for (let y = 2; y < 7; y++) on.add(`4,${y}`)
+  assert.equal(calmEdge(4, 2, w, h, solid), -1)
+  // a gap a pixel wide between two blocks stays
+  on.clear(); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (x !== 4) on.add(`${x},${y}`)
+  on.add('4,8')
+  assert.equal(calmEdge(4, 7, w, h, solid), -1)
+  // a hole is filled
+  on.clear(); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (x !== 4 || y !== 4) on.add(`${x},${y}`)
+  assert.ok(calmEdge(4, 4, w, h, solid) >= 0)
+})
+
+test('pixelArt with calm: the outline follows a silhouette with its bump taken off', () => {
+  const w = 9, h = 9
+  const f = makeFrame(w, h)
+  const fill = (x: number, y: number) => { const i = (y * w + x) * 4; f.data[i] = 200; f.data[i + 1] = 100; f.data[i + 2] = 50; f.data[i + 3] = 255 }
+  for (let y = 5; y < h; y++) for (let x = 0; x < w; x++) fill(x, y)
+  fill(4, 4)
+  const line: Rgb = [0, 0, 0]
+  const look: PixelLook = { palette: [], dither: 0, outline: line, glow: 0, calm: true }
+  const art = pixelArt(f, look)
+  const at = (x: number, y: number) => Array.from(art.data.slice((y * w + x) * 4, (y * w + x) * 4 + 4))
+  // the bump is now the line, and above it is clear, so the line runs flat along the wall's top
+  for (let x = 0; x < w; x++) assert.deepEqual(at(x, 4), [0, 0, 0, 255], `x ${x}`)
+  assert.equal(at(4, 3)[3], 0)
+})
+
 test('resolveFine: a pixel is scene with two samples or more, shows the part most samples show, and takes one of its samples whole', () => {
   // one art pixel a case, side by side: 2 samples down, 2 across each
   const cases = 6
@@ -260,6 +338,29 @@ test('resolveFine: a pixel is scene with two samples or more, shows the part mos
   // without a map, every sample counts as one thing
   assert.deepEqual(px(resolveFine(fine).small, 2), [...B, 255])
   assert.equal(resolveFine(fine).parts, undefined)
+})
+
+test('resolveFine with hard discs: where two things meet the samples come from the hard picture, elsewhere, and where light glows, from the soft one', () => {
+  // a 4×2 art row (8×4 samples): part 1 on the left half, part 2 on the right
+  const W = 8, H = 4
+  const soft = makeFrame(W, H), hard = makeFrame(W, H), map = makeFrame(W, H)
+  const G: Rgb = [40, 160, 40], Y: Rgb = [200, 160, 40], Gl: Rgb = [255, 250, 240]
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = (y * W + x) * 4, right = x >= 4
+    map.data.set([right ? 2 : 1, 0, 0, 255], i)
+    // the soft picture lets the grass behind show through the hay's fading edge next to it; the hard one doesn't
+    soft.data.set([...(right || x >= 2 ? G : Y), 255], i)
+    hard.data.set([...(right ? G : Y), 255], i)
+  }
+  const plain = resolveFine(soft, map).small, fixed = resolveFine(soft, map, hard).small
+  const px = (f: { data: Uint8ClampedArray; width: number }, x: number) => Array.from(f.data.slice(x * 4, x * 4 + 3))
+  assert.deepEqual(px(plain, 1), G)
+  assert.deepEqual(px(fixed, 1), Y)
+  // far from any meeting, nothing changes
+  assert.deepEqual(px(fixed, 3), G)
+  // a glowing sample keeps the soft picture
+  for (const [x, y] of [[2, 0], [3, 0], [2, 1], [3, 1]]) hard.data.set([...Gl, 255], (y * W + x) * 4)
+  assert.deepEqual(px(resolveFine(soft, map, hard).small, 1), G)
 })
 
 test('pixelArt with own draws the outline in a darker palette step of the thing beside it, and in the outline color where there is none', () => {
@@ -428,4 +529,116 @@ test('a softer outline on lit sides: beside something light the line is a shade 
   assert.deepEqual(rgbAt(art, 0, 0), [200, 180, 120], 'lit side: a shade under the light thing')
   assert.deepEqual(rgbAt(art, 3, 0), [10, 10, 20], 'shaded side: the outline')
   assert.deepEqual(rgbAt(pixelArt(f, { ...look, selout: false }), 0, 0), [10, 10, 20])
+})
+
+test('lineFix: a one-pixel kink in a straight edge is taken off, a doubled corner of a dark line goes, the rest stays', () => {
+  const paint = (rows: string[]) => {
+    const f = makeFrame(rows[0].length, rows.length)
+    const colors: Record<string, number[]> = { A: [240, 230, 200], B: [40, 30, 60], C: [200, 120, 60] }
+    rows.forEach((row, y) => [...row].forEach((ch, x) => { const i = (y * f.width + x) * 4; f.data.set([...colors[ch], 255], i) }))
+    return f
+  }
+  const color = (f: ReturnType<typeof makeFrame>, at: number) => Array.from(f.data.slice(at, at + 3))
+  // a straight edge between two colors with one pixel of the lower one poking up into the upper
+  const kink = paint(['AAAAAAA', 'AAAAAAA', 'AAACAAA', 'CCCCCCC', 'CCCCCCC'])
+  assert.deepEqual(color(kink, lineFix(kink, 3, 2)), [240, 230, 200])
+  assert.equal(lineFix(kink, 2, 3), -1)
+  // a dark line one pixel thick that turns a corner: the pixel in the corner is the double, and the line meets corner to corner
+  const double = paint(['AABAAAA', 'AABAAAA', 'AABAAAA', 'AABBBBB', 'AAAAAAA'])
+  const fixes: number[][] = []
+  for (let y = 0; y < 5; y++) for (let x = 0; x < 7; x++) if (lineFix(double, x, y) >= 0) fixes.push([x, y])
+  assert.deepEqual(fixes, [[2, 3]])
+  assert.deepEqual(color(double, lineFix(double, 2, 3)), [240, 230, 200])
+  // a plain straight line and a checkerboard are left alone
+  const line = paint(['AAAAA', 'BBBBB', 'AAAAA'])
+  for (let x = 0; x < 5; x++) assert.equal(lineFix(line, x, 1), -1)
+  const checks = paint(['ACACA', 'CACAC', 'ACACA', 'CACAC'])
+  for (let y = 1; y < 3; y++) for (let x = 1; x < 4; x++) assert.equal(lineFix(checks, x, y), -1)
+})
+
+test('pixelArt flat: surfaces are drawn without dither while the sky keeps it', () => {
+  const w = 16, h = 16
+  const f = makeFrame(w, h)
+  // a scene of one color halfway between two palette colors on the lower half, empty sky above
+  for (let y = 8; y < h; y++) for (let x = 0; x < w; x++) f.data.set([110, 28, 32, 255], (y * w + x) * 4)
+  const look: PixelLook = { palette: PAL, dither: 1, outline: null, glow: 0, sky: [[20, 16, 24], [250, 240, 200]] }
+  const colorsIn = (a: ReturnType<typeof makeFrame>, y0: number, y1: number) => { const s = new Set<string>(); for (let y = y0; y < y1; y++) for (let x = 0; x < w; x++) s.add(Array.from(a.data.slice((y * w + x) * 4, (y * w + x) * 4 + 3)).join()); return s.size }
+  const dithered = pixelArt(f, look), flat = pixelArt(f, { ...look, flat: true })
+  assert.ok(colorsIn(dithered, 9, h) > 1)
+  assert.equal(colorsIn(flat, 9, h), 1)
+  assert.ok(colorsIn(flat, 0, 7) > 1, 'the sky is still dithered')
+})
+
+test('keptNearest: a glow on gray stone snaps to stone or the light, never to the green between them', () => {
+  const pal = ([[59, 56, 72], [107, 100, 116], [255, 243, 176], [255, 209, 102], [63, 122, 69], [107, 74, 53]] as Rgb[]).map((c) => oklab(...c))
+  const own = oklab(59, 56, 72), light = oklab(255, 230, 120)
+  // the mix of the two, which plain nearest takes to the green
+  const mix = oklab(110, 112, 80)
+  const plain = pal.reduce((b, p, k) => (Math.hypot(...p.map((v, j) => v - mix[j])) < Math.hypot(...pal[b].map((v, j) => v - mix[j])) ? k : b), 0)
+  assert.equal(plain, 4)
+  const kept = keptNearest(mix, pal, own, light)
+  assert.ok([0, 1, 2, 3].includes(kept), String(kept))
+})
+
+test('calmArt specks: a patch of one or two pixels joins its neighbors, a highlight much lighter stays', () => {
+  const w = 9, h = 9
+  const f = makeFrame(w, h)
+  for (let i = 0; i < w * h; i++) f.data[i * 4 + 3] = 255
+  const art = makeFrame(w, h)
+  const paint = (x: number, y: number, c: number[]) => art.data.set([...c, 255], (y * w + x) * 4)
+  // two colors in halves, with a two-pixel patch of a third shade in the top half and a bright one-pixel highlight in the bottom
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) paint(x, y, y < 4 ? [120, 60, 60] : [80, 40, 40])
+  paint(3, 1, [140, 70, 70]); paint(4, 1, [140, 70, 70])
+  paint(4, 6, [250, 240, 230])
+  const out = calmArt(art, f)
+  const at = (x: number, y: number) => Array.from(out.data.slice((y * w + x) * 4, (y * w + x) * 4 + 3))
+  assert.deepEqual(at(3, 1), [120, 60, 60])
+  assert.deepEqual(at(4, 1), [120, 60, 60])
+  assert.deepEqual(at(4, 6), [250, 240, 230])
+})
+
+test('screenWay: the way across the picture to a light is where three.js projects a step toward it', async () => {
+  const THREE = await import('three')
+  const { placeCamera } = await import('./orbit.ts')
+  for (const [az, el, d] of [[18, 13, [-0.4, 0.8, 0.45]], [40, 12, [1, 0.2, 0]], [-70, 30, [0.3, 0.5, -0.8]]] as const) {
+    const cam = new THREE.PerspectiveCamera(50, 1, 0.1, 100)
+    placeCamera(cam, { target: [0, 0, 0], distance: 5, azimuth: az, elevation: el }, 1)
+    const p = new THREE.Vector3(0, 0, 0).project(cam), q = new THREE.Vector3(...d).normalize().multiplyScalar(0.05).project(cam)
+    const v = [q.x - p.x, -(q.y - p.y)], n = Math.hypot(v[0], v[1])
+    const got = screenWay(d, az, el)!
+    assert.ok(Math.abs(got[0] - v[0] / n) < 0.05 && Math.abs(got[1] - v[1] / n) < 0.05, JSON.stringify({ az, got, want: [v[0] / n, v[1] / n] }))
+  }
+  // straight behind the view: no side for a rim
+  assert.equal(screenWay([0, 0, 1], 0, 0), undefined)
+  assert.deepEqual(rimStep([-0.6, -0.8]), [-1, -1])
+  assert.deepEqual(rimStep([1, 0.1]), [1, 0])
+})
+
+test('lighterStep and peakAt: a step up in the same hue; one highlight on a smooth lit dome, none on a mottled one', () => {
+  const pal = ([[125, 40, 54], [201, 72, 90], [255, 209, 102], [59, 56, 72], [157, 151, 166], [211, 207, 214]] as Rgb[]).map((c) => oklab(...c))
+  assert.equal(lighterStep(pal[0], pal), 1)
+  assert.equal(lighterStep(pal[3], pal), 4)
+  assert.equal(lighterStep(pal[1], pal), -1)
+  // a gray steps up to a gray, never to the nearly gray palest sky blue (the windmill's sails)
+  const mill = ([[189, 186, 196], [235, 232, 226], [223, 241, 248], [251, 247, 234]] as Rgb[]).map((c) => oklab(...c))
+  assert.equal(lighterStep(mill[0], mill), 1)
+  const w = 11, h = 11
+  const dome = makeFrame(w, h)
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const v = 200 - 12 * Math.hypot(x - 5, y - 5); dome.data.set([v, v * 0.5, v * 0.5, 255], (y * w + x) * 4) }
+  const peaks = () => { const out: string[] = []; for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (peakAt(dome, x, y)) out.push(`${x},${y}`); return out }
+  assert.deepEqual(peaks(), ['5,5'])
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if ((x * 7 + y * 3) % 5 === 0) dome.data.set([90, 45, 45], (y * w + x) * 4)
+  assert.deepEqual(peaks(), [])
+})
+
+test('lines only across things: a jump in color within one part takes no line, the same jump between two parts does', async () => {
+  const { pixelArt } = await import('./pixel.ts')
+  const w = 4, h = 1
+  const frame = { width: w, height: h, data: new Uint8ClampedArray([40, 40, 40, 255, 40, 40, 40, 255, 220, 220, 220, 255, 220, 220, 220, 255]) }
+  const map = (ids: number[]) => ({ width: w, height: h, data: new Uint8ClampedArray(ids.flatMap((id) => [id, 0, 0, 255])) })
+  const look: PixelLook = { palette: [], dither: 0, outline: null, glow: 0, edges: 1 }
+  const lined = (f: { data: Uint8ClampedArray }) => f.data[4] < 40
+  assert.ok(lined(pixelArt(frame, look)))
+  assert.ok(!lined(pixelArt(frame, { ...look, across: true }, undefined, map([1, 1, 1, 1]))))
+  assert.ok(lined(pixelArt(frame, { ...look, across: true }, undefined, map([1, 1, 2, 2]))))
 })

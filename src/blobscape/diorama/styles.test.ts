@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { STYLES, styleAsked, styleWords } from './styles.ts'
 import { LOOKS } from '../brushLooks.ts'
 import { CEL } from '../celLooks.ts'
+import { BLOCKS, BLOCK_SPAN, BLOCK_START, blockLook, gridOf } from '../blockLooks.ts'
 import { WASH, WASH_PAPERS, WASH_START, washLook } from '../washLooks.ts'
 import { GLASS, glassLook, GLASS_START } from '../glassLooks.ts'
 import { GLITCH, GLITCH_START, glitchLook } from '../glitchLooks.ts'
@@ -12,8 +13,8 @@ test('pixel art comes first, then every look Brush and Ink offers, each once', (
   assert.equal(STYLES[0].id, 'pixel')
   const ids = STYLES.map((s) => s.id)
   assert.equal(new Set(ids).size, ids.length)
-  for (const l of [...LOOKS, GLITCH, CEL, NEON, GLASS, WASH]) assert.ok(ids.includes(l.id), `${l.id} is offered`)
-  assert.equal(ids.length, LOOKS.length + 6)
+  for (const l of [...LOOKS, GLITCH, CEL, BLOCKS, NEON, GLASS, WASH]) assert.ok(ids.includes(l.id), `${l.id} is offered`)
+  assert.equal(ids.length, LOOKS.length + 7)
   assert.equal(STYLES[1].id, 'glitch')
 })
 
@@ -65,4 +66,17 @@ test('tech glitch is pixel art underneath, and holds still under reduced motion'
   assert.equal(styleWords('glitch'), 'as glitching pixel art')
   assert.equal(glitchLook(GLITCH_START, 8, true).still, true)
   assert.equal(glitchLook(GLITCH_START, 8).loop, 8)
+})
+
+test('blocks are whole cells of the grid a scene was cut on, or a share of a subject cut on none', () => {
+  assert.equal(styleAsked('blocks'), 'blocks')
+  assert.equal(styleWords('blocks'), 'as blocks')
+  assert.equal(gridOf(0.03, [], 0), 0.03)
+  assert.ok(Math.abs(gridOf(undefined, [0, 0, 0, 4.8, 1, 0], 2) - 4.8 / BLOCK_SPAN) < 1e-9)
+  const look = blockLook({ ...BLOCK_START, size: 3 }, 0.02, 90)
+  assert.ok(Math.abs(look.cell - 0.06) < 1e-9)
+  // the light is measured from the starting view: a quarter turn of the view turns it with it
+  const straight = blockLook({ ...BLOCK_START, turn: 0, height: 0 }, 0.02, 90).from!
+  assert.ok(Math.abs(straight[0] - 1) < 1e-9 && Math.abs(straight[2]) < 1e-9)
+  assert.equal(blockLook({ ...BLOCK_START, size: 99 }, 1).cell, 8)
 })

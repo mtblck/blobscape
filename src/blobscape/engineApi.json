@@ -23,7 +23,7 @@
   {
    "id": "pixels",
    "title": "Pixels and sprites",
-   "doc": "Drawing a stage as pixel art, as brush and ink marks, as characters, cel shaded, in neon, as stained glass, in watercolor or glitching, and baking a creature into a sprite sheet."
+   "doc": "Drawing a stage as pixel art, as brush and ink marks, as characters, cel shaded, in neon, as stained glass, in watercolor, as blocks or glitching, and baking a creature into a sprite sheet."
   },
   {
    "id": "simulation",
@@ -208,6 +208,12 @@
        "doc": "How many blobs the creature shown has."
       },
       {
+       "name": "blockCount",
+       "readonly": true,
+       "type": "{ blocks: number; faces: number } | undefined",
+       "doc": "How many cubes and faces are on show while the scene is drawn as blocks."
+      },
+      {
        "name": "sortKind",
        "readonly": true,
        "type": "\"bins\" | \"radix\"",
@@ -267,6 +273,15 @@
        "signatures": [
         {
          "code": "setActor(actor: StageActor, clip?: Clip, extras?: StageActor[]): void"
+        }
+       ]
+      },
+      {
+       "name": "setBlocks",
+       "doc": "Draws the scene as blocks (blocks.ts): its blobs snapped onto a grid of `look.cell`, each filled cell a cube in\none flat color, lit face by face, with the shadows blocks cast on each other. Cubes ride the bones their blobs\ndid, so the scene still moves. The stage's lights (`setLights`) shine on the faces as lamps and its ambient light\ndims the look's own. It suits blobs with no light baked into them, and scenes more than small creatures. Leave\nthe look out to stop. Kept for the next actor too; the cubes are made again for each. Not in pixel mode, and it\ncomes before every other look.",
+       "signatures": [
+        {
+         "code": "setBlocks(look?: BlockLook): void"
         }
        ]
       },
@@ -452,7 +467,7 @@
       },
       {
        "name": "setCel",
-       "doc": "Cel shading (splat-core/cel.ts), on a stage made with `lights`: every blob flat in its own color, the light cut\ninto two or three tones with clean edges, shadows cast by what stands in the light's way, and an even outline.\nThe tones are cut from the look's own light, and the stage's lights (`setLights`) stay as the scene's lamps: where\nthey reach is one more tone in their color, and the ambient light dims both tones. Its fill takes the place of the\nstage's marks while it is on; leave the look out to have them back. Kept for the next actor too. It shades the blobs' own colors, so it suits blobs\nthat have no light baked into them. Not in pixel mode.",
+       "doc": "Cel shading (splat-core/cel.ts), on a stage made with `lights`: every blob flat in its own color, the light cut\ninto two or three tones with clean edges, shadows cast by what stands in the light's way, and an even outline.\nThe tones are cut from the look's own light, and the stage's lights (`setLights`) stay as the scene's lamps: where\nthey reach is one more tone in their color, and the ambient light dims both tones. Its fill takes the place of the\nstage's marks while it is on; leave the look out to have them back. Kept for the next actor too. It shades the blobs' own colors, so it suits blobs\nthat have no light baked into them. In pixel mode it shades the small picture the pixel art is made from, so the\nlight falls in bands that follow each form a pixel at a time; the outline is the pixel art's own then.",
        "signatures": [
         {
          "code": "setCel(look?: CelLook): void"
@@ -581,7 +596,7 @@
        "doc": "Pixel mode's last frame as it was drawn small, and as finished art (exactly in the look's colors): for tests and for saving.",
        "signatures": [
         {
-         "code": "pixelFrames(): Promise<{ small: Frame; art: Frame; before?: Frame; parts?: Frame; ranks?: Frame; time: number; fine?: { small: Frame; parts: Frame } } | undefined>"
+         "code": "pixelFrames(): Promise<{ small: Frame; art: Frame; before?: Frame; parts?: Frame; ranks?: Frame; time: number; fine?: { small: Frame; parts: Frame; solid?: Frame } } | undefined>"
         }
        ]
       },
@@ -972,6 +987,11 @@
        "name": "ranks",
        "type": "boolean",
        "doc": "While true, the draw is a map of dither steps: every blob a hard disc (as in the map of parts) whose red is its\nstep of the Bayer pattern (0 to 15, as a byte), from where it sits at rest (`surfaceRanks` in splat-core/pixel.ts).\nPixel mode draws it for dither that stays on things (`PixelLook.surface`)."
+      },
+      {
+       "name": "solid",
+       "type": "boolean",
+       "doc": "While true, the draw is the picture with every blob a hard disc (as in the map of parts: solid out to where it has\nfaded to the same share, in the same order), each in its own lit color. Pixel mode draws its picture so\n(`PixelLook.solid`), so a pixel's color always comes from the thing the map of parts says is there, never partly\nfrom what is behind a fading edge."
       },
       {
        "name": "autoDetail",
@@ -4758,6 +4778,30 @@
      "type": "0.35"
     },
     {
+     "name": "HUE_KEEP",
+     "kind": "const",
+     "doc": "How far round the hue circle (degrees, in OKLab) a palette color may sit from a paint's own and still be a step of its\nramp (`stepper`), where both have color enough to have a hue (`HUE_FROM`). A red that has no darker red in the palette\nstays its own darkest red in shade rather than turning brown or orange, as a hand-made ramp would.",
+     "type": "16"
+    },
+    {
+     "name": "HUE_FROM",
+     "kind": "const",
+     "doc": "The chroma (OKLab) under which a color counts as a gray for `HUE_KEEP`: a gray is a step of any paint's ramp.",
+     "type": "0.02"
+    },
+    {
+     "name": "GRAY_TURN",
+     "kind": "const",
+     "doc": "How far round the hue circle (degrees) a near-gray palette color may sit from the way a gray paint's light tints it\n(cool in shade, warm in sun) or from the paint's own faint hue, and still be a step of its ramp (`stepper`). White\nsails in shade took the sky's palest blue, which read as holes through to the sky.",
+     "type": "40"
+    },
+    {
+     "name": "ESCAPE",
+     "kind": "const",
+     "doc": "How many times closer a palette color off a paint's ramp must be before a blob takes it (`stepper`): only light of another color carries a blob that far.",
+     "type": "9"
+    },
+    {
      "name": "VoxelSpec",
      "kind": "interface",
      "doc": "A voxel scene for `buildVoxels`: its bones, its parts and the grid's cell size.",
@@ -5113,7 +5157,7 @@
     {
      "name": "stepper",
      "kind": "function",
-     "doc": "Painting in steps (`VoxelLight.steps`): gives the function that moves a blob's finished color onto its paint's ramp.\nA paint's ramp is the palette colors it passes through as its light goes from a deep corner to full sun (found once\nper paint, to 1/64 a channel); a finished color takes the nearest of them, after `mottle` has pushed its lightness up\nor down by patch. Light of another color (a beam, a bounce, a mirror) can carry a blob well off its ramp: when a\npalette color outside it is more than twice as close, that one is taken. Palette colors over `LIT_MAX` are held at\nit, as every lit color is, so nothing painted starts to glow.",
+     "doc": "Painting in steps (`VoxelLight.steps`): gives the function that moves a blob's finished color onto its paint's ramp.\nA paint's ramp is the palette colors it passes through as its light goes from a deep corner to full sun (found once\nper paint, to 1/64 a channel); a finished color takes the nearest of them, after `mottle` has pushed its lightness up\nor down by patch. Light of another color (a beam, a bounce, a mirror) can carry a blob well off its ramp: when a\npalette color outside it is `ESCAPE` times as close or more, that one is taken. A ramp keeps to its paint's own hue (`HUE_KEEP`). Palette colors over `LIT_MAX` are held at\nit, as every lit color is, so nothing painted starts to glow.",
      "signatures": [
       {
        "code": "stepper(steps: { palette: Vec3[]; mottle?: number }, light: VoxelLight): (base: Vec3, color: Vec3, i: number, j: number, k: number) => Vec3"
@@ -5127,6 +5171,46 @@
      "signatures": [
       {
        "code": "unlit<T>(make: () => T): T"
+      }
+     ]
+    },
+    {
+     "name": "banded",
+     "kind": "function",
+     "doc": "Runs `make` with every `buildVoxels` inside it lighting each blob as one texel in `n` flat bands: the sun's share that\nreaches a blob (its facing times its cast shadow) is moved onto the nearest of `n` steps from none to full before its\ncolor is worked out, so light and shade fall in whole blobs, crisp along the surface, while each blob keeps its own\npaint (bricks, planks, ripples). The ambient share is left as it is. 0 or 1 leaves the light smooth.",
+     "signatures": [
+      {
+       "code": "banded<T>(n: number, make: () => T): T"
+      }
+     ]
+    },
+    {
+     "name": "hugged",
+     "kind": "function",
+     "doc": "Runs `make` with every `buildVoxels` inside it fitting the discs along a shape's outer edges to the edge: a disc whose\nsurface ends within its reach (the shape falls away from the disc's own plane, as past the top of a fence rail or the\nrim of a pond) is moved in and squeezed across the edge, long along it, so the row of discs ends in a straight line\nwhere the shape does instead of a row of round bumps standing past it. Inner corners are left alone: what meets them\ncovers them. See `edgeFit`.",
+     "signatures": [
+      {
+       "code": "hugged<T>(make: () => T): T"
+      }
+     ]
+    },
+    {
+     "name": "edgeFit",
+     "kind": "function",
+     "doc": "Where the surface of a shape ends within a disc's reach, in the disc's own plane: the way out to the nearest outer edge\n(a unit vector in the plane) and how far from the disc's middle the edge lies, or undefined when the surface carries on\nall round. `past(q)` is how far the shape lies off the disc's plane at `q`, counted as off past `least`; it is asked at\nthree distances along `EDGE_WAYS` ways, the nearer ones only where the farthest finds an edge.",
+     "signatures": [
+      {
+       "code": "edgeFit(p: Vec3, n: Vec3, reach: number, past: (q: Vec3) => number, least: number): { out: Vec3; at: number } | undefined"
+      }
+     ]
+    },
+    {
+     "name": "bandOf",
+     "kind": "function",
+     "doc": "Moves a sun share (0 to 1) onto the nearest of `n` steps (`banded`).",
+     "signatures": [
+      {
+       "code": "bandOf(direct: number, n: number): number"
       }
      ]
     },
@@ -7359,7 +7443,7 @@
        "name": "fineIds",
        "readonly": true,
        "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
-       "doc": "The map of parts at twice the art's size, which four samples a pixel settles from."
+       "doc": "The map of parts at twice the art's size, which four samples a pixel settles from (its first texture), and in the\nsame draw the picture with every blob a hard disc in its own color, as the map cuts it (its second, read with\n`PixelLook.solid`): one draw of every blob for both, which on a phone is most of what either costs."
       },
       {
        "name": "art",
@@ -7549,6 +7633,18 @@
        "doc": "A line where one part of the scene meets another whose color is too close for `edges` to draw one (two things of one color, one in front of the other), at `edges`' strength or full strength without it.\nNeeds a map of the parts drawn beside the scene (`pixelArt`'s `parts`; the live pass draws its own)."
       },
       {
+       "name": "across",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Lines inside the scene only where one thing meets another: with a map of parts (`parts`, or `fine`, which draws one),\na jump in color within one part is its paint (grass, stonework) and takes no line, as a pixel artist outlines things\nand not their texture. Without a map it does nothing."
+      },
+      {
+       "name": "solid",
+       "optional": true,
+       "type": "boolean",
+       "doc": "The scene's picture drawn with every blob a hard disc in its own color, cut where the map of parts cuts it, so a\nthing's edge never shows a little of what is behind it (the stage draws it; the picture handed in is already so)."
+      },
+      {
        "name": "sky",
        "optional": true,
        "type": "[top: Rgb, bottom: Rgb, reach?: number]",
@@ -7567,10 +7663,34 @@
        "doc": "Lone-pixel cleanup, as a pixel artist does it: a scene pixel whose color none of its eight neighbors shares, while\nsix or more of them share one other color, takes that color. With a map of parts, only a pixel inside its own\npart (four or more neighbors of its part) is touched, so a speck, an eye or a firefly in front of something stays.\nA checkerboard dither keeps its pixels: each has its own color on the diagonals."
       },
       {
+       "name": "calm",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Calmer pixels, in place of `tidy` (an idea from Silicon Jungle's Ink Studio, whose cleanup pass this follows in\npart): a pixel art piece is flat patches of color with dither only where one gives way to the next, while a scene\nof small blobs comes out speckled. So, reading only the art as drawn: a scene pixel takes the color `CALM_MOST` or\nmore of its eight neighbors share when fewer share its own (with a map of parts, only neighbors of its own part\ncount, so one thing never bleeds into another); a scene pixel with the empty backdrop on three or four sides (a\none-pixel bump on a silhouette) takes the backdrop's color beside it, and an empty pixel with the scene on three or\nfour sides (a notch) takes the scene's, so an outline runs clean; and lines are cleaned (`lineFix`: one-pixel kinks off\nstraight edges, doubled pixels off the corners of dark lines); and a patch of one or two pixels joins its\nneighbors' color unless it is a highlight or a detail (`SPECK_MOST`, `SPECK_KEEP`). `calmArt` is the CPU twin of the pass."
+      },
+      {
+       "name": "flat",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Dither only where a pixel artist puts it: the sky's blend and the light a glow spills onto the scene keep `dither`,\nwhile the scene's own surfaces are drawn flat, each pixel its nearest palette color, so shade falls in bands. A\npixel a glow lights snaps only to a color of its own hue, the light's, or a gray (`keptNearest`)."
+      },
+      {
+       "name": "rim",
+       "optional": true,
+       "type": "readonly [number, number]",
+       "doc": "A rim of light: a scene pixel whose neighbor toward the light (this way across the picture, x right and y down;\n`rimStep`) is backdrop takes the palette color a step lighter in its own hue (`lighterStep`), as a pixel artist\npicks out the lit edge of a form."
+      },
+      {
+       "name": "shine",
+       "optional": true,
+       "type": "boolean",
+       "doc": "A highlight on the peak of each smooth lit form (`peakAt`): that pixel one step lighter in its own hue."
+      },
+      {
        "name": "surface",
        "optional": true,
        "type": "boolean",
-       "doc": "Dither that stays on the things it falls on: each blob takes one step of the Bayer pattern from where it sits in\nits own rest pose (`ditherRank`), not from the pixel it lands on, so the pattern rides with a turning view or a\nmoving creature instead of standing still on the screen while they slide under it. Needs a map of each pixel's\nstep drawn beside the scene (`pixelArt`'s `ranks`; the live pass draws its own). The sky keeps the screen's pattern.\nAfter Silicon Jungle's Ink Studio (object-space dither, MIT), with their agreement."
+       "doc": "Dither that stays on the things it falls on: each blob takes one step of the Bayer pattern from where it sits in\nits own rest pose (`ditherRank`), not from the pixel it lands on, so the pattern rides with a turning view or a\nmoving creature instead of standing still on the screen while they slide under it. Needs a map of each pixel's\nstep drawn beside the scene (`pixelArt`'s `ranks`; the live pass draws its own). The sky keeps the screen's pattern.\nLeft out with `flat`: there only a glow's spill is dithered, and the map cost a whole extra draw of every blob.\nAfter Silicon Jungle's Ink Studio (object-space dither, MIT), with their agreement."
       },
       {
        "name": "snap",
@@ -8938,6 +9058,343 @@
      "signatures": [
       {
        "code": "backLight(at: readonly number[], light: readonly number[], shine?: number, aspect?: number): number"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "blockView",
+   "title": "Blocks",
+   "group": "pixels",
+   "doc": "",
+   "entries": [
+    {
+     "name": "BLOCK_LIGHTS",
+     "kind": "const",
+     "doc": "How many of the stage's lights reach the blocks; the rest are dropped.",
+     "type": "16"
+    },
+    {
+     "name": "EDGE_WIDTH",
+     "kind": "const",
+     "doc": "How far in from a face's edge its line reaches, as a share of the face.",
+     "type": "0.045"
+    },
+    {
+     "name": "LAMP_WRAP",
+     "kind": "const",
+     "doc": "How much of a lamp's light a face turned away from it still takes: lamps cast no shadows here, so a little wraps round.",
+     "type": "0.2"
+    },
+    {
+     "name": "BlockActor",
+     "kind": "type",
+     "doc": "What a view needs of an actor: what blocks are made from, and the posed bones that carry them.",
+     "type": "BlockSource & { skeleton: { matrix: Float32Array; scale: Float32Array; bones: readonly { name: string }[] } }"
+    },
+    {
+     "name": "BlockView",
+     "kind": "class",
+     "doc": "A scene drawn as blocks (blocks.ts): one mesh for each bone that carries cubes, moved by that bone whole, so cubes\nnever bend. The look's own light is in the corners already; this adds the stage's lamps to each face by where it\nis and which way it faces now, keeps a block that gives its own light at its own color, and draws a thin line\nround each face. It draws into a target with four samples a pixel and copies that out, since a cube's edges want\nsmoothing that soft blobs never did.",
+     "extends": [
+      "Group"
+     ],
+     "ctor": [
+      {
+       "code": "new BlockView(actors: readonly BlockActor[], look: BlockLook)"
+      }
+     ],
+     "props": [
+      {
+       "name": "blocks",
+       "readonly": true,
+       "type": "number",
+       "doc": "How many cubes it holds."
+      },
+      {
+       "name": "faces",
+       "readonly": true,
+       "type": "number",
+       "doc": "How many faces of them it draws: those with no cube of the same bone beside them."
+      }
+     ],
+     "methods": [
+      {
+       "name": "setLights",
+       "doc": "The stage's lights and ambient light, as `SplatWorld.setLights` takes them; `tint` multiplies the ambient (a night's light).",
+       "signatures": [
+        {
+         "code": "setLights(lights: readonly Light[], ambient?: number | readonly [number, number, number], tint?: readonly [number, number, number]): void"
+        }
+       ]
+      },
+      {
+       "name": "pose",
+       "doc": "Puts every piece where its bone is now.",
+       "signatures": [
+        {
+         "code": "pose(): void"
+        }
+       ]
+      },
+      {
+       "name": "render",
+       "doc": "Draws the scene (this view in it) into the renderer's current target, or onto the screen when it has none, with its edges smoothed.",
+       "signatures": [
+        {
+         "code": "render(renderer: WebGPURenderer, scene: Object3D, camera: Camera, width: number, height: number): void"
+        }
+       ]
+      },
+      {
+       "name": "dispose",
+       "doc": "Frees the meshes and the target.",
+       "signatures": [
+        {
+         "code": "dispose(): void"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "blocks",
+   "title": "Blocks: the arithmetic",
+   "group": "pixels",
+   "doc": "",
+   "entries": [
+    {
+     "name": "BlockLook",
+     "kind": "interface",
+     "doc": "Blocks: a scene's blobs snapped onto a grid and drawn as cubes (`Stage.setBlocks`). Every grid cell that holds a\nblob becomes one cube in the commonest color among its blobs, on the bone most of them ride, so a scene still\nmoves: its still parts stay on the grid and a moving part carries its cubes with it. The light is worked out here,\nonce, for the rest pose: each face is flat in one tone by which way it faces the light, a face something stands\nin front of is in shade as a whole, and corners where blocks meet are a little darker. That wants blobs with no\nlight baked into them. This file is the arithmetic (pure, tested); blockView.ts draws it.",
+     "props": [
+      {
+       "name": "cell",
+       "type": "number",
+       "doc": "A block's side, in the blobs' units: the grid a scene was cut on, or a whole number of it for bigger blocks."
+      },
+      {
+       "name": "from",
+       "optional": true,
+       "type": "readonly [number, number, number]",
+       "doc": "The way to the light (any length; default up, right and toward the front)."
+      },
+      {
+       "name": "shade",
+       "optional": true,
+       "type": "number",
+       "doc": "How much light a face in shade keeps, 0 to 1 (default 0.45)."
+      },
+      {
+       "name": "shadows",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Whether blocks cast shadows on the faces behind them (default true)."
+      },
+      {
+       "name": "corners",
+       "optional": true,
+       "type": "number",
+       "doc": "How much darker a face gets in a corner where blocks meet, 0 to 1 (default 0.5)."
+      },
+      {
+       "name": "vary",
+       "optional": true,
+       "type": "number",
+       "doc": "How much one block's color differs from the next's, 0 to 1 (default 0.35)."
+      },
+      {
+       "name": "edge",
+       "optional": true,
+       "type": "number",
+       "doc": "How dark the line round each face is, 0 to 1 (default 0.3); 0 for none."
+      },
+      {
+       "name": "ambient",
+       "optional": true,
+       "type": "readonly [number, number, number]",
+       "doc": "What the stage's ambient light is multiplied by, linear (a night's dim blue; default none)."
+      },
+      {
+       "name": "least",
+       "optional": true,
+       "type": "number",
+       "doc": "Blobs fainter than this are left out (mist, haze; default 0.3)."
+      }
+     ]
+    },
+    {
+     "name": "BLOCK_FROM",
+     "kind": "const",
+     "doc": "The default way to the light.",
+     "type": "readonly [number, number, number]"
+    },
+    {
+     "name": "BLOCK_SHADE",
+     "kind": "const",
+     "doc": "The default light a face in shade keeps.",
+     "type": "0.45"
+    },
+    {
+     "name": "CORNER_MOST",
+     "kind": "const",
+     "doc": "How much of its light a face loses with all of a corner shut in, at `corners` 1.",
+     "type": "0.6"
+    },
+    {
+     "name": "VARY_MOST",
+     "kind": "const",
+     "doc": "How far a block's lightness is from its color's own at most, at `vary` 1.",
+     "type": "0.09"
+    },
+    {
+     "name": "SKY_SHARE",
+     "kind": "const",
+     "doc": "A face in shade is this much darker again when it faces straight down, and as much lighter facing up.",
+     "type": "0.16"
+    },
+    {
+     "name": "SPECK_SIZE",
+     "kind": "const",
+     "doc": "Loose things in the air (rain, sparks, fireflies: bones whose names start with `~`) are cubes this share of a block\nacross, on a grid of their own, and take no part in shadows or corners.",
+     "type": "0.4"
+    },
+    {
+     "name": "GLOW_CLEAR",
+     "kind": "const",
+     "doc": "A block that gives this much of its own light or more (the mean of its blobs' `glow`) casts no shadow.",
+     "type": "0.5"
+    },
+    {
+     "name": "BlockSource",
+     "kind": "interface",
+     "doc": "What blocks are made from: an actor's blobs, its skin, the names of its bones and the light its blobs give.",
+     "props": [
+      {
+       "name": "blobs",
+       "type": "Blobs",
+       "doc": "The blobs in the rest pose."
+      },
+      {
+       "name": "skin",
+       "type": "Skin",
+       "doc": "Which bones move each blob: a block rides the bone most of its blobs do."
+      },
+      {
+       "name": "skeleton",
+       "type": "{ bones: readonly { name: string }[] }",
+       "doc": "The bones, for their names: one whose name starts with `~` carries loose specks."
+      },
+      {
+       "name": "glow",
+       "optional": true,
+       "type": "Uint8Array<ArrayBufferLike>",
+       "doc": "How much of its own light each blob gives, a byte a blob (`Actor.glow`)."
+      }
+     ]
+    },
+    {
+     "name": "BlockPiece",
+     "kind": "interface",
+     "doc": "The cubes on one bone of one actor, as a mesh: four corners a face, two triangles.",
+     "props": [
+      {
+       "name": "actor",
+       "type": "number",
+       "doc": "Which of the sources it came from."
+      },
+      {
+       "name": "bone",
+       "type": "number",
+       "doc": "Which of that source's bones carries it."
+      },
+      {
+       "name": "blocks",
+       "type": "number",
+       "doc": "How many cubes."
+      },
+      {
+       "name": "positions",
+       "type": "Float32Array",
+       "doc": "Corner places in the rest pose, three numbers each."
+      },
+      {
+       "name": "normals",
+       "type": "Float32Array",
+       "doc": "Each corner's face normal."
+      },
+      {
+       "name": "colors",
+       "type": "Float32Array",
+       "doc": "Each corner's color, linear, the block's own with no light on it."
+      },
+      {
+       "name": "light",
+       "type": "Float32Array",
+       "doc": "Three numbers a corner: the light its face has from the look's light (shade and shadow in), what is left of any light in its corner, and how much of its own light the block gives."
+      },
+      {
+       "name": "uvs",
+       "type": "Float32Array",
+       "doc": "Each corner's place on its face, 0 or 1 each way."
+      },
+      {
+       "name": "indices",
+       "type": "Uint32Array",
+       "doc": "Three corners a triangle."
+      }
+     ]
+    },
+    {
+     "name": "blockHash",
+     "kind": "function",
+     "doc": "A number from 0 to 1 for a cell, the same each time.",
+     "signatures": [
+      {
+       "code": "blockHash(x: number, y: number, z: number): number"
+      }
+     ]
+    },
+    {
+     "name": "faceLight",
+     "kind": "function",
+     "doc": "How much of the look's light each of a cube's six faces has when nothing is in the way, 0 to 1, in the order\n+x, -x, +y, -y, +z, -z: by how squarely it faces the light, with the face that faces it most at 1, so no two of\nthe three faces a view shows are alike unless the light lies evenly between them.",
+     "signatures": [
+      {
+       "code": "faceLight(from?: readonly [number, number, number]): number[]"
+      }
+     ]
+    },
+    {
+     "name": "faceTone",
+     "kind": "function",
+     "doc": "The light a face has: its shade (a little more of it facing the sky, less facing the ground) and its share of the light where that reaches it.",
+     "signatures": [
+      {
+       "code": "faceTone(face: number, lit: number, shade: number, sun: readonly number[]): number"
+      }
+     ]
+    },
+    {
+     "name": "faceLit",
+     "kind": "function",
+     "doc": "Whether the look's light reaches the face `face` of the cell at x, y, z: a walk from the face's middle toward the\nlight, half a cell at a time, until a solid cell is met or the walk is out of the box that holds them all.",
+     "signatures": [
+      {
+       "code": "faceLit(solid: (x: number, y: number, z: number) => boolean, x: number, y: number, z: number, face: number, from: readonly [number, number, number], lo: readonly number[], hi: readonly number[]): boolean"
+      }
+     ]
+    },
+    {
+     "name": "buildBlocks",
+     "kind": "function",
+     "doc": "The sources as blocks: a mesh for each bone that carries any (see `BlockLook`). A cell two bones' blobs share goes\nto the bone with more of them, so no two cubes ever stand in one place; faces between two cubes on one bone are\nleft out. Shadows and corners are worked out within each source, never from one to another.",
+     "signatures": [
+      {
+       "code": "buildBlocks(sources: readonly BlockSource[], look: BlockLook): { pieces: BlockPiece[]; blocks: number; faces: number }"
       }
      ]
     }

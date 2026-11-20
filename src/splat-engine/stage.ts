@@ -33,6 +33,8 @@ import { SplatLens } from './lens.ts'
 import { SplatMirror } from './mirror.ts'
 import type { MirrorImage, MirrorPlane } from './reflect.ts'
 import type { OpticsLook } from '../splat-core/optics.ts'
+import { BlockView } from './blockView.ts'
+import type { BlockLook } from './blocks.ts'
 import { srgbToLinear } from '../splat-core/color.ts'
 
 /** How many times a second a stage draws its mirror's picture again, at most (`Stage.setMirror`). */
@@ -306,6 +308,37 @@ export class Stage {
     if (this.edits.length) this.world.setEdits(this.edits)
     this.scene.add(this.world)
     if (this.painter) this.paintOver()
+    this.block()
+  }
+
+  private blocks?: BlockView
+  private blockLook?: BlockLook
+  /**
+   * Draws the scene as blocks (blocks.ts): its blobs snapped onto a grid of `look.cell`, each filled cell a cube in
+   * one flat color, lit face by face, with the shadows blocks cast on each other. Cubes ride the bones their blobs
+   * did, so the scene still moves. The stage's lights (`setLights`) shine on the faces as lamps and its ambient light
+   * dims the look's own. It suits blobs with no light baked into them, and scenes more than small creatures. Leave
+   * the look out to stop. Kept for the next actor too; the cubes are made again for each. Not in pixel mode, and it
+   * comes before every other look.
+   */
+  setBlocks(look?: BlockLook) {
+    this.blockLook = look
+    this.block()
+    this.invalidate()
+  }
+
+  /** How many cubes and faces are on show while the scene is drawn as blocks. */
+  get blockCount() { return this.blocks ? { blocks: this.blocks.blocks, faces: this.blocks.faces } : undefined }
+
+  /** Makes the cubes for the actors on show (again), or puts them away. */
+  private block() {
+    if (this.blocks) { this.scene.remove(this.blocks); this.blocks.dispose(); this.blocks = undefined }
+    if (this.blockLook && this.actor) {
+      this.blocks = new BlockView([this.actor, ...this.extras], this.blockLook)
+      this.blocks.setLights(this.lit.lights, this.lit.ambient, this.blockLook.ambient)
+      this.scene.add(this.blocks)
+    }
+    this.setShow(this.show)
   }
 
   /**
@@ -551,13 +584,23 @@ export class Stage {
 
   private cel?: CelPass
   private celLook?: CelLook
+  /** Cel shading drawn into the pixel pass's small picture, at that picture's size, with no line of its own. */
+  private readonly celInPixels = (renderer: THREE.WebGPURenderer, scene: THREE.Object3D, camera: THREE.Camera) => {
+    const into = renderer.getRenderTarget()
+    if (!this.cel || !this.celLook || !into) { renderer.render(scene, camera); return }
+    this.cel.setSize(into.width, into.height)
+    const amb = this.lit.ambient
+    this.cel.setLook({ ...this.celLook, line: 0, lamps: this.celLook.lamps ?? lampTint(this.lit.lights), ambient: [0, 1, 2].map((k) => (this.celLook!.ambient?.[k] ?? 1) * (typeof amb === 'number' ? amb : amb[k])) as [number, number, number] }, 1)
+    this.cel.render(renderer, scene, camera)
+  }
   /**
    * Cel shading (splat-core/cel.ts), on a stage made with `lights`: every blob flat in its own color, the light cut
    * into two or three tones with clean edges, shadows cast by what stands in the light's way, and an even outline.
    * The tones are cut from the look's own light, and the stage's lights (`setLights`) stay as the scene's lamps: where
    * they reach is one more tone in their color, and the ambient light dims both tones. Its fill takes the place of the
    * stage's marks while it is on; leave the look out to have them back. Kept for the next actor too. It shades the blobs' own colors, so it suits blobs
-   * that have no light baked into them. Not in pixel mode.
+   * that have no light baked into them. In pixel mode it shades the small picture the pixel art is made from, so the
+   * light falls in bands that follow each form a pixel at a time; the outline is the pixel art's own then.
    */
   setCel(look?: CelLook) {
     this.celLook = look
@@ -703,6 +746,7 @@ export class Stage {
    */
   setLights(lights: Light[], ambient: number | readonly [number, number, number] = 1) {
     this.lit = { lights, ambient }
+    this.blocks?.setLights(lights, ambient, this.blockLook?.ambient)
     this.light()
     this.invalidate()
   }
@@ -739,7 +783,8 @@ export class Stage {
   setShow(s: Show) {
     this.show = s
     if (this.baking) return
-    if (this.world) this.world.visible = s !== 'bones'
+    if (this.world) this.world.visible = s !== 'bones' && !(this.blocks && !this.pixel)
+    if (this.blocks) this.blocks.visible = s !== 'bones' && !this.pixel
     if (this.rig) { this.rig.visible = s !== 'blobs'; this.rig.onTop = s === 'both'; this.rig.update() }
     this.invalidate()
   }
@@ -753,6 +798,7 @@ export class Stage {
     if (!look) { this.pixel?.dispose(); this.pixel = undefined }
     else if (this.pixel) this.pixel.setLook(look)
     else this.pixel = new PixelPass(look)
+    if (this.blocks) this.setShow(this.show)
     this.invalidate()
   }
 
@@ -778,6 +824,11 @@ export class Stage {
   private get pixelScale() { return Math.max(1, Math.round(this.pixelSize * this.renderer.getPixelRatio())) }
 
   private draw() {
+    if (!this.pixel && this.blocks) {
+      const { x, y } = this.target ? { x: this.target.width, y: this.target.height } : this.renderer.getDrawingBufferSize(this.buffer)
+      this.blocks.render(this.renderer, this.scene, this.camera, x, y)
+      return
+    }
     if (!this.pixel && this.glyphs && this.glyphLook) {
       const { x, y } = this.target ? { x: this.target.width, y: this.target.height } : this.renderer.getDrawingBufferSize(this.buffer)
       this.glyphs.setSize(x, y, glyphScale(this.glyphLook.size ?? 12, this.renderer.getPixelRatio()))
@@ -835,6 +886,7 @@ export class Stage {
     this.glitchNow = this.glitchLook ? glitchAt(this.time, this.glitchLook) : undefined
     this.pixel.setGlitch(this.glitchNow)
     this.pixel.setTime(this.time)
+    this.pixel.drawScene = this.cel && this.celLook && this.opts.lights ? this.celInPixels : undefined
     if (this.target) {
       this.pixel.setSize(Math.ceil(this.target.width / scale), Math.ceil(this.target.height / scale))
       this.pixel.render(this.renderer, this.scene, this.camera)
@@ -845,15 +897,15 @@ export class Stage {
     this.pixel.render(this.renderer, this.scene, this.camera, { width: x, height: y, scale })
   }
 
-  private async read(target: THREE.RenderTarget, encoded = false): Promise<Frame> {
+  private async read(target: THREE.RenderTarget, encoded = false, index = 0): Promise<Frame> {
     const { width, height } = target
-    const px = await this.renderer.readRenderTargetPixelsAsync(target, 0, 0, width, height) as Uint8Array
+    const px = await this.renderer.readRenderTargetPixelsAsync(target, 0, 0, width, height, index) as Uint8Array
     // a target holds linear, premultiplied color (pixel mode's art, `encoded`, already holds sRGB); a frame is sRGB, straight, top row first. WebGPU reads rows top-down, WebGL bottom-up.
     return { width, height, data: readbackToSrgb(px, width, height, { flip: this.backend === 'webgl', premultiplied: false, encoded }) }
   }
 
   /** Pixel mode's last frame as it was drawn small, and as finished art (exactly in the look's colors): for tests and for saving. */
-  async pixelFrames(): Promise<{ small: Frame; art: Frame; before?: Frame; parts?: Frame; ranks?: Frame; time: number; fine?: { small: Frame; parts: Frame } } | undefined> {
+  async pixelFrames(): Promise<{ small: Frame; art: Frame; before?: Frame; parts?: Frame; ranks?: Frame; time: number; fine?: { small: Frame; parts: Frame; solid?: Frame } } | undefined> {
     // a sheet being drawn has the renderer to itself
     if (!this.pixel || this.baking) return
     // pixel mode can be switched off, or the view resized, while the reads are out: hold the pass and start every read now
@@ -862,12 +914,14 @@ export class Stage {
     const colors = lookColors(pass.look)
     const fine = !!pass.look.fine
     const surface = !!pass.look.surface && pass.look.dither > 0
-    const [small, art, before, parts, fineSmall, fineParts, ranks] = await Promise.all([
+    const hard = fine && !!pass.look.solid
+    const [small, art, before, parts, fineSmall, fineParts, ranks, fineSolid] = await Promise.all([
       this.read(pass.small), this.read(pass.art, true), pass.before ? this.read(pass.before, true) : undefined, pass.look.parts || fine ? this.read(pass.ids, true) : undefined,
       fine ? this.read(pass.fineSmall) : undefined, fine ? this.read(pass.fineIds, true) : undefined, surface ? this.read(pass.ranks, true) : undefined,
+      hard ? this.read(pass.fineIds, false, 1) : undefined,
     ])
-    // a look with four samples a pixel also gives what it was settled from: the scene and its map of parts at twice the size
-    return { small, art: snapColors(art, colors), before: before && snapColors(before, colors), parts, ranks, time: pass.drawnAt, fine: fineSmall && fineParts && { small: fineSmall, parts: fineParts } }
+    // a look with four samples a pixel also gives what it was settled from: the scene and its map of parts at twice the size, and with `solid` the hard discs
+    return { small, art: snapColors(art, colors), before: before && snapColors(before, colors), parts, ranks, time: pass.drawnAt, fine: fineSmall && fineParts && { small: fineSmall, parts: fineParts, solid: fineSolid } }
   }
 
   /**
@@ -1063,6 +1117,7 @@ export class Stage {
     if (this.floor) this.floor.visible = false
     if (this.rig) this.rig.visible = false
     world.visible = true
+    if (this.blocks) this.blocks.visible = false
     // a sheet is the creature alone in its own colors: what stands with it is hidden, and live lights are put out
     const solid = this.extras.map((e) => e.blobs.opacity.slice(0, e.blobs.count))
     for (const e of this.extras) { e.blobs.opacity.fill(0, 0, e.blobs.count); world.recolor(e) }
@@ -1092,6 +1147,7 @@ export class Stage {
     this.stopped = true
     cancelAnimationFrame(this.raf)
     this.world?.dispose()
+    this.blocks?.dispose()
     this.rig?.dispose()
     this.lines?.dispose()
     this.neon?.dispose()
