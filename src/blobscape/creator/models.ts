@@ -68,10 +68,13 @@ export function modelId(bytes: Uint8Array): string {
 const models = new Map<string, ModelProp>()
 /** The model a prop names, if the page has it. */
 export const modelOf = (id: string): ModelProp | undefined => models.get(id)
+const forgotten = new Set<string>()
 /** Keeps a model for the page's life. */
-export const keepModel = (m: ModelProp) => { models.set(m.id, m) }
-/** Every model the page has, oldest first. */
-export const keptModels = (): ModelProp[] => [...models.values()]
+export const keepModel = (m: ModelProp) => { models.set(m.id, m); forgotten.delete(m.id) }
+/** Takes a model out of the list; a scene using it still has it until the page closes. */
+export const forgetKept = (id: string) => { forgotten.add(id) }
+/** Every model the page lists, oldest first. */
+export const keptModels = (): ModelProp[] => [...models.values()].filter((m) => !forgotten.has(m.id))
 
 /** A rigged file as a model: moved so its foot is the origin (the clips only turn and shift bones, so they still fit). */
 export function modelFrom(r: Rigged, file: string, bytes: Uint8Array): SplatModel {

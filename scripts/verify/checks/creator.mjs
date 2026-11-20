@@ -417,8 +417,8 @@ export default [
   {
     name: 'scene-creator-storage',
     core: true,
-    about: 'Scene Creator, kept in the browser: an edit is kept a moment later and is there after a reload; copied, renamed and deleted in Your scenes; saved as a file and opened in a fresh browser; a broken file says where; nothing asked of another site',
-    entries: ['src/blobscape/SceneCreator.tsx', 'src/blobscape/creator/store.ts'],
+    about: 'Scene Creator, kept in the browser: an edit is kept a moment later and is there after a reload; copied, renamed and deleted in Your scenes; a model of your own kept and carried by the file; saved as a file and opened in a fresh browser; a broken file says where; nothing asked of another site',
+    entries: ['src/blobscape/SceneCreator.tsx', 'src/blobscape/creator/store.ts', 'src/blobscape/creator/models.ts'],
     async run({ shots, join, fails, ok, open, axe }) {
       const fs = await import('node:fs')
       const outside = []
@@ -457,22 +457,40 @@ export default [
       steps.push(['deleted', await kept(p, 1)])
       await p.screenshot({ path: join(shots, 'blobscape-scene-creator-storage.png') })
       await axe(p, 'blobscape scene creator storage')
+      // a model of your own (#370): kept in the browser with the scene, and carried by its file
+      await p.getByRole('tab', { name: 'Props' }).click()
+      await p.getByTestId('creator-model-file').setInputFiles(join(root, 'public/rigged-splats/puffer.glb'))
+      steps.push(['model added', await opened(p, 10)])
+      const withModel = await p.evaluate(() => window.__creator.blobs())
+      // kept once it has settled (its colors join the palette as it arrives, which changes what is kept)
+      await p.waitForFunction(() => window.__creator.kept(), null, { timeout: 15000 }).catch(() => {})
+      await p.waitForTimeout(500)
+      await p.goto(new URL(at, p.url()).href)
+      steps.push(['model back after a reload', await opened(p, 10)])
+      // the model opens again from the shelf and its prop is cut again with it, not left a speck
+      steps.push(['model cut again', await p.waitForFunction((n) => window.__creator.ready() && window.__creator.blobs() >= n - 50, withModel, { timeout: 60000 }).then(() => true, () => false)])
+      await p.getByRole('tab', { name: 'Props' }).click()
+      steps.push(['model listed after a reload', await p.getByRole('button', { name: /^Add Blob pufferfish/ }).waitFor({ timeout: 15000 }).then(() => true, () => false)])
+      await p.getByRole('tab', { name: 'Scene' }).click()
       // a file, opened in a fresh browser
       const [down] = await Promise.all([p.waitForEvent('download', { timeout: 30000 }), p.getByTestId('creator-save-file').click()])
       const file = await down.path()
       const text = fs.readFileSync(file, 'utf8')
       let parsed
       try { parsed = JSON.parse(text) } catch { parsed = undefined }
-      steps.push(['file saved', down.suggestedFilename().endsWith('.blobscape.json') && parsed?.kind === 'blobscape-project' && parsed.props.length === 9])
+      steps.push(['file saved', down.suggestedFilename().endsWith('.blobscape.json') && parsed?.kind === 'blobscape-project' && parsed.props.length === 10 && parsed.models?.length === 1])
       const f = await open(`${at}&scene=windmill`, { viewport: { width: 1280, height: 900 } })
       watch(f.page)
       await opened(f.page, 10)
       await f.page.getByTestId('creator-file').setInputFiles({ name: down.suggestedFilename(), mimeType: 'application/json', buffer: Buffer.from(text) })
-      steps.push(['file opened elsewhere', await opened(f.page, 9)])
+      steps.push(['file opened elsewhere', await opened(f.page, 10)])
       steps.push(['opened file kept', await kept(f.page, 1)])
+      await f.page.getByRole('tab', { name: 'Props' }).click()
+      steps.push(['file brought its model', await f.page.getByRole('button', { name: /^Add Blob pufferfish/ }).waitFor({ timeout: 15000 }).then(() => true, () => false)])
+      await f.page.getByRole('tab', { name: 'Scene' }).click()
       await f.page.getByTestId('creator-file').setInputFiles({ name: 'broken.blobscape.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ ...parsed, loop: 1 })) })
       const said = await f.page.getByTestId('creator-file-problems').innerText().catch(() => '')
-      steps.push(['broken file says where', /loop: must be/.test(said) && (await props(f.page)) === 9])
+      steps.push(['broken file says where', /loop: must be/.test(said) && (await props(f.page)) === 10])
       steps.push(['nothing asked of another site', outside.length === 0])
       const bad = steps.filter(([, good]) => !good).map(([name]) => name)
       if (bad.length) fails.push(`blobscape scene creator storage: ${bad.join(', ')} failed ${JSON.stringify({ outside: outside.slice(0, 3), said })}`)
