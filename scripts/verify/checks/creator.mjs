@@ -1,6 +1,9 @@
 // Scene Creator (epic #329): the workspace that opens a scene split into a land and props.
 import { root } from '../lib.mjs'
 
+/** A small scene description with two things marked as props. */
+const TWO_POSTS = '{"name":"Two posts","loop":4,"palette":["#1f2d55","#4a6fae","#1b3a2a","#c79a63","#f4f1e4","#0a0f1e"],"camera":{"target":[0,0.3,0],"distance":3,"azimuth":18,"elevation":13},"bones":[{"name":"post","at":[-0.4,0,0],"prop":"Post"},{"name":"lamp","at":[0.4,0,0],"prop":"Lamp"}],"parts":[{"paint":"#1f2d55","shape":{"kind":"box","at":[0,-0.05,0],"half":[1,0.05,1]}},{"bone":"post","paint":"#4a6fae","shape":{"kind":"box","at":[-0.4,0.3,0],"half":[0.06,0.3,0.06]}},{"bone":"lamp","paint":"#1b3a2a","shape":{"kind":"sphere","at":[0.4,0.2,0],"r":0.2}}]}'
+
 // a hut as an .obj: a box of walls and a roof, each closed, in two colors from its .mtl
 const HUT_OBJ = `mtllib hut.mtl
 v -1 0 -1
@@ -418,7 +421,7 @@ export default [
     name: 'scene-creator-storage',
     core: true,
     about: 'Scene Creator, kept in the browser: an edit is kept a moment later and is there after a reload; copied, renamed and deleted in Your scenes; a model of your own kept and carried by the file; saved as a file and opened in a fresh browser; a broken file says where; nothing asked of another site',
-    entries: ['src/blobscape/SceneCreator.tsx', 'src/blobscape/creator/store.ts', 'src/blobscape/creator/models.ts'],
+    entries: ['src/blobscape/SceneCreator.tsx', 'src/blobscape/creator/store.ts', 'src/blobscape/creator/models.ts', 'src/blobscape/creator/described.ts'],
     async run({ shots, join, fails, ok, open, axe }) {
       const fs = await import('node:fs')
       const outside = []
@@ -491,10 +494,13 @@ export default [
       await f.page.getByTestId('creator-file').setInputFiles({ name: 'broken.blobscape.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ ...parsed, loop: 1 })) })
       const said = await f.page.getByTestId('creator-file-problems').innerText().catch(() => '')
       steps.push(['broken file says where', /loop: must be/.test(said) && (await props(f.page)) === 10])
+      // a scene description, as Pixel Diorama opens, comes in as a project of its two marked props (#379)
+      await f.page.getByTestId('creator-file').setInputFiles({ name: 'two-posts.json', mimeType: 'application/json', buffer: Buffer.from(TWO_POSTS) })
+      steps.push(['a description opens as a project', await opened(f.page, 2) && await f.page.evaluate(() => window.__creator.props().map((p) => typeof p.prop === 'string' ? p.prop : p.prop.name).join()) === 'Post,Lamp'])
       steps.push(['nothing asked of another site', outside.length === 0])
       const bad = steps.filter(([, good]) => !good).map(([name]) => name)
       if (bad.length) fails.push(`blobscape scene creator storage: ${bad.join(', ')} failed ${JSON.stringify({ outside: outside.slice(0, 3), said })}`)
-      else ok('blobscape scene creator storage: an edit is kept and back after a reload; copy, rename and delete work; a file reopens in a fresh browser and a broken one says where; no other site asked')
+      else ok('blobscape scene creator storage: an edit is kept and back after a reload; copy, rename and delete work; a file reopens in a fresh browser, a broken one says where and a scene description opens as its props; no other site asked')
     },
   },
   {
