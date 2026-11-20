@@ -327,13 +327,13 @@ export default [
           if (!(a.look.parts && ids.size > 20 && lines > 200)) fails.push(`${label}: lines between parts: ${JSON.stringify({ on: a.look.parts, parts: ids.size, lines })}`)
           else ok(`${label}: lines between parts: a map of ${ids.size} parts, ${lines} pixels of line that color alone would not draw`)
         }
-        // lone pixels: the pass cleaned some up, and (above) the same ones its twin does
+        // calmer pixels (in place of the lone-pixel cleanup): the pass calmed some, and (above) the same ones its twin does
       {
-        const untidy = pixelArt(frame(a.small), { ...a.look, tidy: false }, frame(a.before), frame(a.parts), frame(a.ranks), a.time)
+        const untidy = pixelArt(frame(a.small), { ...a.look, tidy: false, calm: false }, frame(a.before), frame(a.parts), frame(a.ranks), a.time)
         let cleaned = 0
         for (let i = 0; i < want.data.length; i += 4) if (want.data[i] !== untidy.data[i] || want.data[i + 1] !== untidy.data[i + 1] || want.data[i + 2] !== untidy.data[i + 2]) cleaned++
-        if (!(a.look.tidy && cleaned > 0 && cleaned < a.solid * 0.05)) fails.push(`${label}: lone-pixel cleanup: ${JSON.stringify({ on: a.look.tidy, cleaned })}`)
-        else ok(`${label}: lone-pixel cleanup took ${cleaned} stray pixels`)
+        if (!(a.look.calm && cleaned > 0 && cleaned < a.solid * 0.3)) fails.push(`${label}: calmer pixels: ${JSON.stringify({ on: a.look.calm, cleaned })}`)
+        else ok(`${label}: calmer pixels changed ${cleaned} of ${a.solid} pixels`)
       }
       if (!(moved > 150)) fails.push(`${label}: only ${moved} pixels change in a few seconds`)
         else ok(`${label}: ${moved} pixels change in a few seconds`)
