@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import type { Orbit } from '../splat-core/view.ts'
 import { Magnifier, TourStrip } from './diorama/HowItsMade.tsx'
 import { TOUR, clay, kept } from './diorama/tour.ts'
@@ -281,7 +282,11 @@ export function PixelDiorama() {
     }, from)
   }, [stage, scene, calm, rock, mirrored])
   // one of Brush and Ink's looks in place of pixel art: marks, outlines, characters or cel tones, with their own settings
-  const drawing = useDrawnLook(stage, touring ? undefined : drawnStyle, { actor: scene?.built, plain: !!scene?.plain, azimuth: shown.views[0].orbit.azimuth, offscreen, light: coarse, loop: shown.loop, sky: shown.finish.sky ? [shown.sky[0], shown.sky[1]] : undefined })
+  // a scene whose sky turns as it plays hands the styles each moment's sky too (their backdrop, cel shading's night,
+  // the glass's window and the watercolor's wash), not only the one it opens with
+  const [liveSky, setLiveSky] = useState<{ of: string; sky: readonly [readonly number[], readonly number[]] } | undefined>(undefined)
+  const styleSky = liveSky && liveSky.of === shown.id && shown.skyAt ? liveSky.sky : shown.sky
+  const drawing = useDrawnLook(stage, touring ? undefined : drawnStyle, { actor: scene?.built, plain: !!scene?.plain, azimuth: shown.views[0].orbit.azimuth, offscreen, light: coarse, loop: shown.loop, sky: shown.finish.sky ? [styleSky[0], styleSky[1]] : undefined })
   // the walk-through's fourth step is about the four samples, so it draws them whatever the switch says
   const sampling = touring?.id === 'samples'
   const drawnLook = useMemo(() => (asPixels ? (sampling ? { ...look, fine: true } : look) : undefined), [asPixels, sampling, look])
@@ -293,15 +298,24 @@ export function PixelDiorama() {
     stage.setPixels(drawnLook, size)
     // set again only when the sky has changed, so a paused scene is not drawn over and over
     let last = ''
+    let now = false
     skyNow.current = (d, t) => {
-      if (!d.skyAt || !drawnLook?.sky) return
-      const [top, low] = d.skyAt(t), key = `${top}|${low}`
+      if (!d.skyAt) return
+      const [top, low] = d.skyAt(t), key = `${d.id}|${top}|${low}`
       if (key === last) return
       last = key
-      stage.setPixels({ ...drawnLook, sky: [top, low, drawnLook.sky[2]] }, size)
+      if (drawnLook?.sky) stage.setPixels({ ...drawnLook, sky: [top, low, drawnLook.sky[2]] }, size)
+      else if (!drawnLook) {
+        // another style: the page's own state, and at once while posing, so the color behind the canvas is the
+        // moment's when the frame drawn next is painted over it (an export reads it straight after the draw)
+        const put = () => setLiveSky({ of: d.id, sky: [top, low] })
+        if (now) flushSync(put)
+        else put()
+      }
     }
     const d = posed.current
     if (d) skyNow.current(d, stage.time)
+    now = true
   }, [stage, drawnLook, size])
   useEffect(() => {
     if (!stage) return
@@ -318,7 +332,7 @@ export function PixelDiorama() {
   const wet = useRef<(() => void) | undefined>(undefined)
   const seen = useRef<MirrorImage | null>(null)
   const posed = useRef<Diorama | undefined>(undefined)
-  /** Hands the pixel pass the sky of the moment, for a scene whose sky turns as it plays. */
+  /** Hands the pixel pass, or the style drawn in its place, the sky of the moment, for a scene whose sky turns as it plays. */
   const skyNow = useRef<((d: Diorama, t: number) => void) | undefined>(undefined)
   /** Taps on the scene: a part leans and wobbles, the land throws sparkles. */
   const pokes = useRef<Pokes | undefined>(undefined)
