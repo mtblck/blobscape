@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Orbit } from '../splat-core/view.ts'
 import { Magnifier, TourStrip } from './diorama/HowItsMade.tsx'
 import { TOUR, clay, kept } from './diorama/tour.ts'
-import { STEADY, countColors, darkest, heatPace, type PixelLook } from '../splat-core/pixel.ts'
+import { STEADY, countColors, darkest, heatPace, screenWay, type PixelLook } from '../splat-core/pixel.ts'
 import type { Built } from '../splat-engine/body.ts'
 import { LoadingMark } from '../shared/BlobLoader.tsx'
 import { castBy, glowGain } from './diorama/glow.ts'
@@ -102,7 +102,8 @@ export function PixelDiorama() {
   const [glitch, setGlitch] = useState<GlitchChoice>(GLITCH_START)
   // cel shading lights the blobs itself, so its scene is cut with no light baked in
   const plain = wantsPlain(drawnStyle)
-  const detail = chosen ?? (coarse ? DETAIL[pixels ? 1 : 0].id : DETAIL[2].id)
+  // Finest by default (Matt, 2026-11-20); a phone keeps Chunky for the styles that draw the whole screen several times
+  const detail = chosen ?? (coarse && !pixels ? DETAIL[0].id : DETAIL[3].id)
   const [palette, setPalette] = useState('own')
   const [size, setSize] = useState(2)
   const [dither, setDither] = useState(diorama.finish.dither)
@@ -121,6 +122,9 @@ export function PixelDiorama() {
   const [calmer] = useState(() => new URLSearchParams(location.search).get('calm') !== '0')
   /** Flat surfaces, dither only on the sky and glows (`PixelLook.flat`): no switch, `?flat=0` turns it off. */
   const [flat] = useState(() => new URLSearchParams(location.search).get('flat') !== '0')
+  /** Deliberate light: a rim toward the scene's sun and a highlight on each lit form's peak (`PixelLook.rim`, `shine`); `?rim=0`, `?shine=0`. */
+  const [rimmed] = useState(() => new URLSearchParams(location.search).get('rim') !== '0')
+  const [shine] = useState(() => new URLSearchParams(location.search).get('shine') !== '0')
   // dither that stays on things as they move, not on the screen (`PixelLook.surface`); `?surface=0` starts it off
   const [surface] = useState(() => new URLSearchParams(location.search).get('surface') !== '0')
   // art-pixel effects (after Ink Studio's): glow in rings, heat haze, softer outlines on lit sides, color cycling. The
@@ -222,8 +226,10 @@ export function PixelDiorama() {
   const closeTour = () => { setTour(null); setStyle(styleBefore.current); requestAnimationFrame(() => tourOpener.current?.focus()) }
   // a step of the walk-through says how the scene is drawn, whatever the switch says
   const asPixels = touring ? touring.pixels : pixels
-  const look = useMemo<PixelLook>(() => ({ palette: colors, dither, outline: outline ? (colors.length ? darkest(colors) : [11, 16, 38]) : null, glow, edges: edges ? 1 : 0, parts, sky: sky ? shown.sky : undefined, steady: steady ? STEADY : 0, tidy, calm: calmer, flat, fine, own, surface, snap: true,
-    bands, heat: heat ? { pixels: heat, pace: heatPace(shown.loop) } : undefined, selout, cycle: cycling ? shown.finish.cycle : undefined }), [colors, dither, outline, glow, edges, parts, sky, shown, steady, tidy, calmer, flat, fine, own, surface, bands, heat, selout, cycling])
+  const look = useMemo<PixelLook>(() => ({ palette: colors, dither, outline: outline ? (colors.length ? darkest(colors) : [11, 16, 38]) : null, glow, edges: edges ? 1 : 0, parts, sky: sky ? shown.sky : undefined, steady: steady ? STEADY : 0, tidy, calm: calmer, flat, fine, shine,
+    // the rim goes by the scene's starting view, so it holds still while the view rocks
+    rim: rimmed && shown.sun ? screenWay(shown.sun, shown.views[0].orbit.azimuth, shown.views[0].orbit.elevation) : undefined, own, surface, snap: true,
+    bands, heat: heat ? { pixels: heat, pace: heatPace(shown.loop) } : undefined, selout, cycle: cycling ? shown.finish.cycle : undefined }), [colors, dither, outline, glow, edges, parts, sky, shown, steady, tidy, calmer, flat, fine, shine, rimmed, own, surface, bands, heat, selout, cycling])
 
   // the exact (radix) sort: the stage rebuilds its world, keeping the moment and the poser
   useEffect(() => { stage?.setSort(exact ? 'radix' : 'bins') }, [stage, exact])

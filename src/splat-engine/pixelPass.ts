@@ -1,7 +1,7 @@
 import { Matrix4, NearestFilter, NoBlending, NodeMaterial, QuadMesh, RenderTarget, Vector2, Vector3, type Camera, type Object3D, type WebGPURenderer } from 'three/webgpu'
 import * as TSLTyped from 'three/tsl'
 import { BLOCK_WIDE, MIX_A, MIX_B, SALT, STRIPS, TURNED, type GlitchState } from '../splat-core/glitch.ts'
-import { BAYER4, CALM_MOST, HALO_GRAY, HALO_HUE, LINE_LIFT, LINE_LUMA, EDGE_DARK, snapShift, EDGE_JUMP, GLOW_FROM, GLOW_SHOWS, GLOW_TAPS, HALO_R, HALO_SHARE, HEAT_R, HEAT_UP, HEAT_WAVE, MAX_PALETTE_SIZE, OWN_C, OWN_L, OWN_UNDER, PIXEL_CUT, SELOUT_FROM, SELOUT_L, SKY_DITHER, cycleTurns, oklab, skyReach, type PixelLook } from '../splat-core/pixel.ts'
+import { BAYER4, CALM_MOST, SHINE_FROM, SHINE_SMOOTH, STEP_UP, rimStep, SPECK_KEEP, SPECK_MOST, HALO_GRAY, HALO_HUE, LINE_LIFT, LINE_LUMA, EDGE_DARK, snapShift, EDGE_JUMP, GLOW_FROM, GLOW_SHOWS, GLOW_TAPS, HALO_R, HALO_SHARE, HEAT_R, HEAT_UP, HEAT_WAVE, MAX_PALETTE_SIZE, OWN_C, OWN_L, OWN_UNDER, PIXEL_CUT, SELOUT_FROM, SELOUT_L, SKY_DITHER, cycleTurns, oklab, skyReach, type PixelLook } from '../splat-core/pixel.ts'
 
 // As in engine.ts: the shader builders use TSL untyped.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -49,6 +49,10 @@ export class PixelPass {
   private readonly calmed = uniform(0)
   private readonly calmParts = uniform(0)
   private readonly flat = uniform(0)
+  private readonly rimOn = uniform(0)
+  private readonly rimX = uniform(0)
+  private readonly rimY = uniform(0)
+  private readonly shine = uniform(0)
   /** The scene and its map of parts at twice the art's size, for a look with `fine`: what `small` and `ids` are settled from. */
   readonly fineSmall = new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter })
   /** The map of parts at twice the art's size, which four samples a pixel settles from. */
@@ -165,6 +169,11 @@ export class PixelPass {
     this.parted.value = look.parts ? 1 : 0
     this.calmed.value = look.calm ? 1 : 0
     this.flat.value = look.flat ? 1 : 0
+    const rim = look.rim ? rimStep(look.rim) : undefined
+    this.rimOn.value = rim ? 1 : 0
+    this.rimX.value = rim?.[0] ?? 0
+    this.rimY.value = rim?.[1] ?? 0
+    this.shine.value = look.shine ? 1 : 0
     this.calmParts.value = look.parts || look.fine ? 1 : 0
     this.lined.value = look.outline ? 1 : 0
     this.own.value = look.own ? 1 : 0
@@ -510,6 +519,48 @@ export class PixelPass {
             })
           })
           If(keptPick.greaterThanEqual(0), () => { pick.assign(keptPick); best.assign(keptBest) })
+          // deliberate light: a rim a step lighter on the side toward the light, a highlight on the peak of a lit form
+          // (`rimStep`, `peakAt` and `lighterStep` in pixel.ts are the twins; this pass counts rows up, so the rim's y turns over)
+          If(here.solid.and(this.rimOn.greaterThan(0.5).or(this.shine.greaterThan(0.5))).and(max(spill.x, max(spill.y, spill.z)).lessThanEqual(GLOW_SHOWS)), () => {
+            const up = float(0).toVar()
+            If(this.rimOn.greaterThan(0.5), () => {
+              const toward = sample(cell.add(vec2(this.rimX, this.rimY.negate()))), away = sample(cell.sub(vec2(this.rimX, this.rimY.negate())))
+              If(toward.solid.not().and(away.solid), () => { up.assign(1) })
+            })
+            If(up.lessThan(0.5).and(this.shine.greaterThan(0.5)), () => {
+              const luma = (c: unknown) => dot(vec3(c), vec3(...LINE_LUMA)).div(255)
+              const y0 = luma(here.rgb).toVar()
+              const inside = cell.x.greaterThanEqual(2).and(cell.y.greaterThanEqual(2)).and(cell.x.lessThan(res.x.sub(2))).and(cell.y.lessThan(res.y.sub(2)))
+              const ok = float(select(inside, 1, 0)).toVar(), sum = float(0).toVar(), lo = float(1e9).toVar(), hi = float(-1e9).toVar()
+              const mine = partAt(0, 0)
+              for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+                if (!dx && !dy) continue
+                const t = at(dx, dy), v = luma(t.rgb)
+                const other = partAt(dx, dy)
+                const gap = abs(other.rgb.sub(mine.rgb))
+                const apart = this.parted.greaterThan(0.5).and(other.a.lessThan(0.5).or(max(gap.x, max(gap.y, gap.z)).greaterThan(0.5 / 255)))
+                If(t.solid.not().or(apart).or(v.greaterThanEqual(y0)), () => { ok.assign(0) })
+                sum.addAssign(v); lo.assign(min(lo, v)); hi.assign(max(hi, v))
+              }
+              If(ok.greaterThan(0.5).and(y0.sub(sum.div(24)).greaterThanEqual(SHINE_FROM)).and(hi.sub(lo).lessThanEqual(SHINE_SMOOTH)), () => { up.assign(1) })
+            })
+            If(up.greaterThan(0.5), () => {
+              const me = palLab.element(int(pick)).toVar()
+              const cc = length(vec2(me.y, me.z))
+              const stepBest = float(1e9).toVar(), stepPick = float(-1).toVar()
+              Loop(MAX_PALETTE, ({ i }: { i: unknown }) => {
+                If(float(i).lessThan(this.count), () => {
+                  const pl = palLab.element(i)
+                  const pc = length(vec2(pl.y, pl.z))
+                  const hued = select(cc.greaterThanEqual(HALO_GRAY), pc.greaterThanEqual(HALO_GRAY).and(dot(vec2(pl.y, pl.z), vec2(me.y, me.z)).greaterThanEqual(pc.mul(cc).mul(HALO_HUE))), pc.lessThan(HALO_GRAY * 2))
+                  const d = vec3(me.x.add(STEP_UP), me.y, me.z).sub(pl)
+                  const dd = dot(d, d)
+                  If(pl.x.greaterThanEqual(me.x.add(0.02)).and(hued).and(dd.lessThan(stepBest)), () => { stepBest.assign(dd); stepPick.assign(float(i)) })
+                })
+              })
+              If(stepPick.greaterThanEqual(0), () => { pick.assign(stepPick); const d = lab.sub(palLab.element(int(stepPick))); best.assign(dot(d, d)) })
+            })
+          })
           // colors that cycle are left to move
           const moves = this.memberU.element(int(pick)).add(this.memberU.element(int(wasPick)))
           If(this.sticky.greaterThan(0).and(here.solid).and(was.a.greaterThan(0.5)).and(wasOff.lessThan(SAME * SAME)).and(moves.lessThan(0.5)).and(sqrt(wasFar).lessThanEqual(sqrt(best).add(this.sticky))), () => { pick.assign(wasPick) })
@@ -683,7 +734,37 @@ export class PixelPass {
             ns.forEach((b, m) => If(counts[k].and(counts[m]).and(same(a.rgb, b.rgb)), () => { n.addAssign(1) }))
             If(n.greaterThan(most), () => { most.assign(n); best.assign(a.rgb) })
           })
-          If(most.greaterThanEqual(CALM_MOST).and(most.greaterThan(own)), () => { out.assign(vec4(best, 1)); changed.assign(1) })
+          const lum = (c: unknown) => dot(vec3(c), vec3(...LINE_LUMA))
+          // a pixel much lighter or darker than the patch round it is a highlight or a detail, not speckle
+          If(most.greaterThanEqual(CALM_MOST).and(most.greaterThan(own)).and(abs(lum(best).sub(lum(here.rgb))).lessThan(SPECK_KEEP)), () => { out.assign(vec4(best, 1)); changed.assign(1) })
+        })
+        // a speck of one or two pixels on a part takes the color three or more of its neighbors there share, unless it is
+        // much lighter or darker (a highlight, an eye): the speck step of `calmArt` in pixel.ts (change both)
+        If(changed.lessThan(0.5).and(here.solid), () => {
+          const partOk = (n: { part: { x: unknown; y: unknown; z: unknown; w: unknown } }) =>
+            this.calmParts.lessThan(0.5).or(float(n.part.w).lessThan(0.5).and(float(here.part.w).lessThan(0.5))).or(samePart(n.part, here.part))
+          const likeMe = (ox: number, oy: number) => { const n = read(ox, oy); return n.solid.and(partOk(n)).and(same(n.rgb, here.rgb)) }
+          const mine = float(0).toVar(), second = float(0).toVar()
+          for (const [dx, dy] of N8) {
+            If(likeMe(dx, dy), () => {
+              mine.addAssign(1)
+              const k = float(0).toVar()
+              for (const [ex, ey] of N8) If(likeMe(dx + ex, dy + ey), () => { k.addAssign(1) })
+              second.assign(k)
+            })
+          }
+          If(mine.equal(0).or(mine.equal(1).and(second.equal(1))), () => {
+            const ns = N8.map(([dx, dy]) => read(dx, dy))
+            const ok = ns.map((n) => n.solid.and(partOk(n)).and(same(n.rgb, here.rgb).not()))
+            const most = float(0).toVar(), best = vec3(0).toVar()
+            ns.forEach((a, k) => {
+              const n = float(0).toVar()
+              ns.forEach((b, m) => If(ok[k].and(ok[m]).and(same(a.rgb, b.rgb)), () => { n.addAssign(1) }))
+              If(n.greaterThan(most), () => { most.assign(n); best.assign(a.rgb) })
+            })
+            const luma = (c: unknown) => dot(vec3(c), vec3(...LINE_LUMA))
+            If(most.greaterThanEqual(SPECK_MOST).and(abs(luma(best).sub(luma(here.rgb))).lessThan(SPECK_KEEP)), () => { out.assign(vec4(best, 1)); changed.assign(1) })
+          })
         })
         // the line cleaner, on the art as drawn: `lineFix` in pixel.ts is the CPU twin (change both)
         If(changed.lessThan(0.5), () => {

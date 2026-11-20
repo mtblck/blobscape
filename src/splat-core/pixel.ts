@@ -103,6 +103,82 @@ export function rgbToHex([r, g, b]: Rgb): string {
   return '#' + [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')
 }
 
+/** How much lighter (OKLab L) `lighterStep` aims above a color. */
+export const STEP_UP = 0.12
+/**
+ * The palette color one step lighter than `lab` in its own hue (among the grays, for a gray): the nearest to `lab`
+ * raised by `STEP_UP` of those at least a little lighter and of its hue (`HALO_HUE`), or -1 where there is none.
+ */
+export function lighterStep(lab: Rgb, paletteLab: Rgb[]): number {
+  const cc = Math.hypot(lab[1], lab[2])
+  let best = -1, bestD = Infinity
+  for (let k = 0; k < paletteLab.length; k++) {
+    const p = paletteLab[k], pc = Math.hypot(p[1], p[2])
+    if (p[0] < lab[0] + 0.02) continue
+    const hued = cc >= HALO_GRAY ? pc >= HALO_GRAY && (p[1] * lab[1] + p[2] * lab[2]) >= HALO_HUE * pc * cc : pc < HALO_GRAY * 2
+    if (!hued) continue
+    const d = (lab[0] + STEP_UP - p[0]) ** 2 + (lab[1] - p[1]) ** 2 + (lab[2] - p[2]) ** 2
+    if (d < bestD) { bestD = d; best = k }
+  }
+  return best
+}
+
+/**
+ * Which way across the picture (x right, y down, unit length) a light lies from a view orbiting at `azimuth` and
+ * `elevation` degrees (as `placeCamera` places it), given `toward`, a direction toward the light in the world; none
+ * when it lies nearly straight behind or in front of the view, where a rim would have no side to go on.
+ */
+export function screenWay(toward: readonly number[], azimuth: number, elevation: number): [number, number] | undefined {
+  const az = (azimuth * Math.PI) / 180, el = (elevation * Math.PI) / 180
+  // the camera's right and up, looking from the orbit toward its target
+  const f = [-Math.sin(az) * Math.cos(el), -Math.sin(el), -Math.cos(az) * Math.cos(el)]
+  const r = [-f[2], 0, f[0]], rl = Math.hypot(r[0], r[2]) || 1
+  const right = [r[0] / rl, 0, r[2] / rl]
+  const up = [right[1] * f[2] - right[2] * f[1], right[2] * f[0] - right[0] * f[2], right[0] * f[1] - right[1] * f[0]]
+  const sx = toward[0] * right[0] + toward[1] * right[1] + toward[2] * right[2]
+  const sy = -(toward[0] * up[0] + toward[1] * up[1] + toward[2] * up[2])
+  const n = Math.hypot(sx, sy), all = Math.hypot(toward[0], toward[1], toward[2]) || 1
+  return n / all < 0.3 ? undefined : [sx / n, sy / n]
+}
+
+/** The art-pixel step toward the light for a rim (`PixelLook.rim`): the way rounded to one of the eight neighbors. */
+export function rimStep(way: readonly [number, number]): [number, number] {
+  const a = Math.atan2(way[1], way[0]), q = Math.round(a / (Math.PI / 4))
+  const dx = Math.round(Math.cos(q * Math.PI / 4)), dy = Math.round(Math.sin(q * Math.PI / 4))
+  return [dx === 0 ? 0 : dx, dy === 0 ? 0 : dy]
+}
+
+/** How much lighter (0 to 1, by `LINE_LUMA`) than the mean round it the peak of a lit form must be for a highlight. */
+export const SHINE_FROM = 0.05
+/** How far the most varied of a highlight's neighbors may spread in lightness: a smooth form, not a mottled paint. */
+export const SHINE_SMOOTH = 0.12
+
+/**
+ * Whether (x, y) of the small frame `f` is the peak of a lit form (`PixelLook.shine`): every other pixel within two
+ * is scene, of its part (with a map), and darker; it stands `SHINE_FROM` above their mean; and they spread no more
+ * than `SHINE_SMOOTH`, so a smooth round thing gets one and a mottled surface none.
+ */
+export function peakAt(f: Frame, x: number, y: number, map?: Uint8ClampedArray | Uint8Array): boolean {
+  const { width: w, height: h, data } = f
+  if (x < 2 || y < 2 || x >= w - 2 || y >= h - 2) return false
+  const cut = PIXEL_CUT * 255
+  const at = (px: number, py: number) => (py * w + px) * 4
+  const luma = (i: number) => (data[i] * LINE_LUMA[0] + data[i + 1] * LINE_LUMA[1] + data[i + 2] * LINE_LUMA[2]) / 255
+  const me = at(x, y), y0 = luma(me)
+  const part = map ? map[me] | (map[me + 1] << 8) | (map[me + 2] << 16) : 0
+  let sum = 0, lo = Infinity, hi = -Infinity
+  for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+    if (!dx && !dy) continue
+    const i = at(x + dx, y + dy)
+    if (data[i + 3] < cut) return false
+    if (map && (map[i + 3] < 128 || (map[i] | (map[i + 1] << 8) | (map[i + 2] << 16)) !== part)) return false
+    const v = luma(i)
+    if (v >= y0) return false
+    sum += v; lo = Math.min(lo, v); hi = Math.max(hi, v)
+  }
+  return y0 - sum / 24 >= SHINE_FROM && hi - lo <= SHINE_SMOOTH
+}
+
 /** How near in hue (the cosine of the angle in OKLab's a and b) a palette color must be to count as a glow-lit pixel's own or its light's (`keptNearest`). */
 export const HALO_HUE = Math.cos((28 * Math.PI) / 180)
 /** The chroma under which a color counts as gray for `HALO_HUE`: a gray is always allowed. */
@@ -323,7 +399,8 @@ export interface PixelLook {
    * count, so one thing never bleeds into another); a scene pixel with the empty backdrop on three or four sides (a
    * one-pixel bump on a silhouette) takes the backdrop's color beside it, and an empty pixel with the scene on three or
    * four sides (a notch) takes the scene's, so an outline runs clean; and lines are cleaned (`lineFix`: one-pixel kinks off
-   * straight edges, doubled pixels off the corners of dark lines). `calmArt` is the CPU twin of the pass.
+   * straight edges, doubled pixels off the corners of dark lines); and a patch of one or two pixels joins its
+   * neighbors' color unless it is a highlight or a detail (`SPECK_MOST`, `SPECK_KEEP`). `calmArt` is the CPU twin of the pass.
    */
   calm?: boolean
   /**
@@ -332,6 +409,14 @@ export interface PixelLook {
    * pixel a glow lights snaps only to a color of its own hue, the light's, or a gray (`keptNearest`).
    */
   flat?: boolean
+  /**
+   * A rim of light: a scene pixel whose neighbor toward the light (this way across the picture, x right and y down;
+   * `rimStep`) is backdrop takes the palette color a step lighter in its own hue (`lighterStep`), as a pixel artist
+   * picks out the lit edge of a form.
+   */
+  rim?: readonly [number, number]
+  /** A highlight on the peak of each smooth lit form (`peakAt`): that pixel one step lighter in its own hue. */
+  shine?: boolean
   /**
    * Dither that stays on the things it falls on: each blob takes one step of the Bayer pattern from where it sits in
    * its own rest pose (`ditherRank`), not from the pixel it lands on, so the pattern rides with a turning view or a
@@ -651,6 +736,13 @@ export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Fram
           const kept = keptNearest(lab, pl, own, light)
           if (kept >= 0) k = kept
         }
+        // deliberate light: a rim one step lighter along the side that faces the light, and a highlight on the peak of a lit form
+        if (solid(x, y) && (look.rim || look.shine) && Math.max(g[0], g[1], g[2]) <= GLOW_SHOWS) {
+          let up = false
+          if (look.rim) { const [sx, sy] = rimStep(look.rim); up = !solid(x + sx, y + sy) && solid(x - sx, y - sy) }
+          if (!up && look.shine) up = peakAt(f, x, y, map)
+          if (up) { const k2 = lighterStep(pl[k], pl); if (k2 >= 0) k = k2 }
+        }
         // only the scene's own pixels: the sky is the same every frame, and a pixel the scene has left must not keep its color
         if (steady > 0 && solid(x, y) && before!.data[o + 3] === 255) {
           const was = slot.get((before!.data[o] << 16) | (before!.data[o + 1] << 8) | before!.data[o + 2])
@@ -761,6 +853,10 @@ export function calmEdge(x: number, y: number, w: number, h: number, solid: (x: 
 
 /** How much brighter (by `LINE_LUMA`, 0 to 1) both sides of a corner must be than a line for its doubled pixel to go. */
 export const LINE_LIFT = 0.06
+/** How many neighbors of one color a speck of one or two pixels needs round it to take that color (`calmArt`). */
+export const SPECK_MOST = 3
+/** How much lighter or darker (by `LINE_LUMA`, 0 to 1) a speck may be and still be cleaned up: past it, it is a highlight or a detail. */
+export const SPECK_KEEP = 0.3
 /** The weights `lineFix` takes a pixel's lightness by. */
 export const LINE_LUMA: [number, number, number] = [0.3, 0.55, 0.15]
 
@@ -808,6 +904,39 @@ export function calmArt(art: Frame, f: Frame, map?: Uint8ClampedArray | Uint8Arr
   const copy = (x: number, y: number, fx: number, fy: number) => { const i = (y * w + x) * 4, j = (fy * w + fx) * 4; for (let k = 0; k < 4; k++) out.data[i + k] = art.data[j + k] }
   // the line cleaner, on the art as drawn (`lineFix`)
   const line = (x: number, y: number) => { const from = lineFix(art, x, y); if (from >= 0) { const i = (y * w + x) * 4; for (let k = 0; k < 4; k++) out.data[i + k] = art.data[from + k] } }
+  const luma = (c: number) => ((c >> 16) * LINE_LUMA[0] + ((c >> 8) & 255) * LINE_LUMA[1] + (c & 255) * LINE_LUMA[2]) / 255
+  /** The neighbors of (x, y) on its part and of color `c`: how many, and the last. */
+  const likes = (x: number, y: number, c: number, part: number) => {
+    let n = 0, at = -1
+    for (const [dx, dy] of N8) {
+      const nx = x + dx, ny = y + dy
+      if (!solid(nx, ny) || (map && partAt(nx, ny) !== part) || colorAt(nx, ny) !== c) continue
+      n++; at = ny * w + nx
+    }
+    return [n, at] as const
+  }
+  /**
+   * A patch of one or two pixels (`SPECK_MOST`) takes the color most of its neighbors on its part share, when three or
+   * more do and it is no more than `SPECK_KEEP` lighter or darker, so a highlight, an eye or a spark stays. After Ink
+   * Studio's speck cleanup (MIT).
+   */
+  const speck = (x: number, y: number, mine: number, part: number) => {
+    const [n, at] = likes(x, y, mine, part)
+    if (!(n === 0 || (n === 1 && likes(at % w, Math.floor(at / w), mine, part)[0] === 1))) return false
+    let best = -1, most = 0
+    for (const [dx, dy] of N8) {
+      const nx = x + dx, ny = y + dy
+      if (!solid(nx, ny) || (map && partAt(nx, ny) !== part)) continue
+      const c = colorAt(nx, ny)
+      if (c === mine) continue
+      const [k] = likes(x, y, c, part)
+      if (k > most) { most = k; best = c }
+    }
+    if (most < SPECK_MOST || Math.abs(luma(mine) - luma(best)) >= SPECK_KEEP) return false
+    const i = (y * w + x) * 4
+    out.data[i] = best >> 16; out.data[i + 1] = (best >> 8) & 255; out.data[i + 2] = best & 255
+    return true
+  }
   const near: number[] = []
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
@@ -841,7 +970,8 @@ export function calmArt(art: Frame, f: Frame, map?: Uint8ClampedArray | Uint8Arr
       for (const c of near) if (c === mine) own++
       let best = -1, most = 0
       for (const c of near) { let n = 0; for (const d of near) if (d === c) n++; if (n > most) { most = n; best = c } }
-      if (most < CALM_MOST || most <= own) { line(x, y); continue }
+      // a pixel much lighter or darker than the patch round it is a highlight or a detail, not speckle
+      if (most < CALM_MOST || most <= own || Math.abs(luma(mine) - luma(best)) >= SPECK_KEEP) { if (!speck(x, y, mine, part)) line(x, y); continue }
       const i = (y * w + x) * 4
       out.data[i] = best >> 16; out.data[i + 1] = (best >> 8) & 255; out.data[i + 2] = best & 255
     }

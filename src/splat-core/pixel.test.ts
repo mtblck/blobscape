@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { alphaCut, autoPalette, downsample, makeFrame, outline, pixelArt, quantize, lookColors, snapColors, removeStrays, countSolid, tidyLone, calmArt, calmEdge, lineFix, keptNearest, CALM_MOST, resolveFine, ditherRank, typicalSpacing, surfaceRanks, snapShift, cycleTurns, heatPace, heatShift, HALO_R, HEAT_UP, SELOUT_FROM, oklab, type Rgb, type PixelLook } from './pixel.ts'
+import { alphaCut, autoPalette, downsample, makeFrame, outline, pixelArt, quantize, lookColors, snapColors, removeStrays, countSolid, tidyLone, calmArt, calmEdge, lineFix, keptNearest, lighterStep, peakAt, rimStep, screenWay, CALM_MOST, resolveFine, ditherRank, typicalSpacing, surfaceRanks, snapShift, cycleTurns, heatPace, heatShift, HALO_R, HEAT_UP, SELOUT_FROM, oklab, type Rgb, type PixelLook } from './pixel.ts'
 
 const solid = (w: number, h: number, on: (x: number, y: number) => boolean, rgb = [200, 40, 40]) => {
   const f = makeFrame(w, h)
@@ -229,7 +229,7 @@ test('tidyLone: a stray in a flat patch takes its neighbors\' color; dither, edg
 test('calmArt: a pixel takes a color most of its own part share; specks, line tips, gaps and other parts stay', () => {
   const w = 9, h = 9
   const solid = makeFrame(w, h), art = makeFrame(w, h)
-  const A: Rgb = [200, 100, 50], B: Rgb = [20, 40, 60], C: Rgb = [90, 200, 90]
+  const A: Rgb = [50, 70, 90], B: Rgb = [20, 40, 60], C: Rgb = [90, 200, 90]
   const put = (x: number, y: number, c: Rgb) => { const i = (y * w + x) * 4; art.data[i] = c[0]; art.data[i + 1] = c[1]; art.data[i + 2] = c[2]; art.data[i + 3] = 255; solid.data[i + 3] = 255 }
   const got = (f: ReturnType<typeof makeFrame>, x: number, y: number) => Array.from(f.data.slice((y * w + x) * 4, (y * w + x) * 4 + 3))
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) put(x, y, B)
@@ -542,4 +542,52 @@ test('keptNearest: a glow on gray stone snaps to stone or the light, never to th
   assert.equal(plain, 4)
   const kept = keptNearest(mix, pal, own, light)
   assert.ok([0, 1, 2, 3].includes(kept), String(kept))
+})
+
+test('calmArt specks: a patch of one or two pixels joins its neighbors, a highlight much lighter stays', () => {
+  const w = 9, h = 9
+  const f = makeFrame(w, h)
+  for (let i = 0; i < w * h; i++) f.data[i * 4 + 3] = 255
+  const art = makeFrame(w, h)
+  const paint = (x: number, y: number, c: number[]) => art.data.set([...c, 255], (y * w + x) * 4)
+  // two colors in halves, with a two-pixel patch of a third shade in the top half and a bright one-pixel highlight in the bottom
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) paint(x, y, y < 4 ? [120, 60, 60] : [80, 40, 40])
+  paint(3, 1, [140, 70, 70]); paint(4, 1, [140, 70, 70])
+  paint(4, 6, [250, 240, 230])
+  const out = calmArt(art, f)
+  const at = (x: number, y: number) => Array.from(out.data.slice((y * w + x) * 4, (y * w + x) * 4 + 3))
+  assert.deepEqual(at(3, 1), [120, 60, 60])
+  assert.deepEqual(at(4, 1), [120, 60, 60])
+  assert.deepEqual(at(4, 6), [250, 240, 230])
+})
+
+test('screenWay: the way across the picture to a light is where three.js projects a step toward it', async () => {
+  const THREE = await import('three')
+  const { placeCamera } = await import('./orbit.ts')
+  for (const [az, el, d] of [[18, 13, [-0.4, 0.8, 0.45]], [40, 12, [1, 0.2, 0]], [-70, 30, [0.3, 0.5, -0.8]]] as const) {
+    const cam = new THREE.PerspectiveCamera(50, 1, 0.1, 100)
+    placeCamera(cam, { target: [0, 0, 0], distance: 5, azimuth: az, elevation: el }, 1)
+    const p = new THREE.Vector3(0, 0, 0).project(cam), q = new THREE.Vector3(...d).normalize().multiplyScalar(0.05).project(cam)
+    const v = [q.x - p.x, -(q.y - p.y)], n = Math.hypot(v[0], v[1])
+    const got = screenWay(d, az, el)!
+    assert.ok(Math.abs(got[0] - v[0] / n) < 0.05 && Math.abs(got[1] - v[1] / n) < 0.05, JSON.stringify({ az, got, want: [v[0] / n, v[1] / n] }))
+  }
+  // straight behind the view: no side for a rim
+  assert.equal(screenWay([0, 0, 1], 0, 0), undefined)
+  assert.deepEqual(rimStep([-0.6, -0.8]), [-1, -1])
+  assert.deepEqual(rimStep([1, 0.1]), [1, 0])
+})
+
+test('lighterStep and peakAt: a step up in the same hue; one highlight on a smooth lit dome, none on a mottled one', () => {
+  const pal = ([[125, 40, 54], [201, 72, 90], [255, 209, 102], [59, 56, 72], [157, 151, 166], [211, 207, 214]] as Rgb[]).map((c) => oklab(...c))
+  assert.equal(lighterStep(pal[0], pal), 1)
+  assert.equal(lighterStep(pal[3], pal), 4)
+  assert.equal(lighterStep(pal[1], pal), -1)
+  const w = 11, h = 11
+  const dome = makeFrame(w, h)
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const v = 200 - 12 * Math.hypot(x - 5, y - 5); dome.data.set([v, v * 0.5, v * 0.5, 255], (y * w + x) * 4) }
+  const peaks = () => { const out: string[] = []; for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (peakAt(dome, x, y)) out.push(`${x},${y}`); return out }
+  assert.deepEqual(peaks(), ['5,5'])
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if ((x * 7 + y * 3) % 5 === 0) dome.data.set([90, 45, 45], (y * w + x) * 4)
+  assert.deepEqual(peaks(), [])
 })
