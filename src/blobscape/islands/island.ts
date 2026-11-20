@@ -91,8 +91,11 @@ const whole = (range: [number, number], u: number) => range[0] + Math.floor(u * 
 /** Bones a thing takes: a tree's crown sways on a second. */
 const bonesOf = (kind: Thing['kind']) => (kind === 'tree' || kind === 'pine' ? 2 : 1)
 
-/** Plans island `seed` of a biome. */
-export function planIsland(biome: Biome, seed: number): IslandPlan {
+/**
+ * Plans island `seed` of a biome. `gates` are the angles (radians, x = cos, z = sin) at which its path comes in and
+ * goes out, where an island in a world meets its neighbors' bridges; left out, the seed picks them.
+ */
+export function planIsland(biome: Biome, seed: number, gates?: [number, number]): IslandPlan {
   let salt = 0
   // every call takes the next number of this island's own run, so adding a decision later leaves earlier ones alone
   const rnd = () => chance(seed, 1000 + salt++)
@@ -170,7 +173,9 @@ export function planIsland(biome: Biome, seed: number): IslandPlan {
   const landmarks = things.length
 
   // the path: in at one edge, past each landmark, out at about the far edge
-  const a0 = rnd() * Math.PI * 2, a1 = a0 + Math.PI + (rnd() - 0.5) * 1.2
+  // drawn whether or not the angles are given, so the rest of the island is the same either way
+  let a0 = rnd() * Math.PI * 2, a1 = a0 + Math.PI + (rnd() - 0.5) * 1.2
+  if (gates) [a0, a1] = gates
   const gate = (a: number): Vec3 => { const d = reach(lobes, a); return [r3(Math.cos(a) * d), 0, r3(Math.sin(a) * d)] }
   const g0 = gate(a0), g1 = gate(a1)
   const dx = g1[0] - g0[0], dz = g1[2] - g0[2], len = Math.hypot(dx, dz) || 1
@@ -300,8 +305,8 @@ export function islandScene(plan: IslandPlan): { doc: SceneDoc; solid: number[] 
 }
 
 /** Island `seed` of a biome: its plan and its description. */
-export function makeIsland(biomeId: string | null | undefined, seed: number): { biome: Biome; plan: IslandPlan; doc: SceneDoc; solid: number[] } {
-  const biome = biomeOf(biomeId), plan = planIsland(biome, seed)
+export function makeIsland(biomeId: string | null | undefined, seed: number, gates?: [number, number]): { biome: Biome; plan: IslandPlan; doc: SceneDoc; solid: number[] } {
+  const biome = biomeOf(biomeId), plan = planIsland(biome, seed, gates)
   return { biome, plan, ...islandScene(plan) }
 }
 
