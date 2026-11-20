@@ -1,5 +1,6 @@
 import { readProject, type SceneProject } from '../../splat-engine/project.ts'
 import { LIBRARY } from './library.ts'
+import { isModel, modelId } from './models.ts'
 import { slug } from './shown.ts'
 
 /**
@@ -19,7 +20,22 @@ export interface SavedScene {
   picture?: string
 }
 
-/** The scenes kept, and which was open last. Every call may throw when the browser refuses storage. */
+/**
+ * A model of your own as its file (#370), kept so it opens again with the page and travels in a project file: the
+ * file's own bytes, and an .obj's .mtl text beside it.
+ */
+export interface ModelFile {
+  /** `modelId` of the bytes. */
+  id: string
+  /** The file's name. */
+  file: string
+  bytes: Uint8Array
+  mtl?: string
+  /** When it was opened, in milliseconds since 1970. */
+  added: number
+}
+
+/** The scenes kept, which was open last, and your own models. Every call may throw when the browser refuses storage. */
 export interface Shelf {
   /** Every scene, the most recently changed first. */
   list(): Promise<SavedScene[]>
@@ -29,6 +45,10 @@ export interface Shelf {
   /** The scene open last, if any. */
   last(): Promise<string | undefined>
   setLast(id: string | undefined): Promise<void>
+  /** Your own models, oldest first. */
+  models(): Promise<ModelFile[]>
+  putModel(m: ModelFile): Promise<void>
+  removeModel(id: string): Promise<void>
 }
 
 /** The longest a name may be (`checkProject` holds a project to it). */
@@ -38,8 +58,8 @@ export const FILE_END = '.blobscape.json'
 /** How long after the last change the open project is saved. */
 export const AUTOSAVE_MS = 600
 
-/** Whether a library id exists, for checking a project. */
-export const known = (id: string) => LIBRARY.some((e) => e.id === id)
+/** Whether a library id exists, or names a model of your own, for checking a project. */
+export const known = (id: string) => isModel(id) || LIBRARY.some((e) => e.id === id)
 
 /** Newest first. */
 export const newestFirst = (list: SavedScene[]): SavedScene[] => [...list].sort((a, b) => b.updated - a.updated)
@@ -69,11 +89,56 @@ export function renamed(p: SceneProject, name: string): SceneProject {
 /** A project file's name. */
 export const fileName = (p: SceneProject) => `${slug(p.name)}${FILE_END}`
 
-/** A project as a file's text. */
-export const fileText = (p: SceneProject) => `${JSON.stringify(p, null, 1)}\n`
+/** The most a project file may be with the models it carries: a few phone scans' worth. */
+export const FILE_MOST = 160_000_000
 
-/** A project file read and checked: the project, or what is wrong with it as `where: what`. */
-export const readFile = (text: string) => readProject(text, known)
+/** A project as a file's text, carrying the models of your own it uses (their bytes as base64, under `models`). */
+export function fileText(p: SceneProject, models: readonly ModelFile[] = []): string {
+  const used = models.filter((m) => p.props.some((x) => x.prop === m.id))
+  if (!used.length) return `${JSON.stringify(p, null, 1)}\n`
+  const carried = used.map((m) => ({ id: m.id, file: m.file, ...(m.mtl !== undefined ? { mtl: m.mtl } : {}), data: toBase64(m.bytes) }))
+  return `${JSON.stringify({ ...p, models: carried }, null, 1)}\n`
+}
+
+/**
+ * A project file read and checked: the project and the models it carries, or what is wrong with it as `where: what`.
+ * A model is taken only when its bytes are the ones its id names.
+ */
+export function readFile(text: string): { project?: SceneProject; models: ModelFile[]; problems: string[] } {
+  if (text.length > FILE_MOST) return { models: [], problems: [`file: over ${FILE_MOST / 1e6} MB`] }
+  let x: unknown
+  try { x = JSON.parse(text) } catch (e) { return { models: [], problems: [`file: not JSON (${(e as Error).message})`] } }
+  const models: ModelFile[] = [], problems: string[] = []
+  if (x && typeof x === 'object' && 'models' in x) {
+    const { models: carried, ...rest } = x as { models: unknown }
+    x = rest
+    if (!Array.isArray(carried)) problems.push('models: must be a list')
+    else carried.forEach((m, i) => {
+      const at = `models[${i}]`
+      const o = m as Record<string, unknown>
+      if (!o || typeof o !== 'object' || typeof o.id !== 'string' || typeof o.file !== 'string' || typeof o.data !== 'string' || (o.mtl !== undefined && typeof o.mtl !== 'string')) return problems.push(`${at}: must be { id, file, data }`)
+      let bytes: Uint8Array
+      try { bytes = fromBase64(o.data) } catch { return problems.push(`${at}.data: not base64`) }
+      if (modelId(bytes) !== o.id) return problems.push(`${at}.data: not the model ${o.id} names`)
+      models.push({ id: o.id, file: o.file.slice(0, 200), bytes, mtl: o.mtl as string | undefined, added: Date.now() })
+    })
+  }
+  const read = readProject(JSON.stringify(x), known)
+  return read.project && !problems.length ? { project: read.project, models, problems: [] } : { models: [], problems: [...problems, ...read.problems] }
+}
+
+function toBase64(bytes: Uint8Array): string {
+  let s = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+  return btoa(s)
+}
+
+function fromBase64(text: string): Uint8Array {
+  const s = atob(text)
+  const out = new Uint8Array(s.length)
+  for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i)
+  return out
+}
 
 /** A new id, unique enough for one browser's shelf. */
 export function newId(): string {
@@ -84,6 +149,7 @@ export function newId(): string {
 /** A shelf in memory: the same rules, gone with the page. */
 export function memoryShelf(): Shelf {
   const kept = new Map<string, SavedScene>()
+  const models = new Map<string, ModelFile>()
   let lastId: string | undefined
   // copies in and out, as IndexedDB's structured clone makes them
   const copy = <T>(x: T): T => structuredClone(x)
@@ -94,12 +160,16 @@ export function memoryShelf(): Shelf {
     remove: async (id) => { kept.delete(id); if (lastId === id) lastId = undefined },
     last: async () => (lastId && kept.has(lastId) ? lastId : undefined),
     setLast: async (id) => { lastId = id },
+    models: async () => [...models.values()].sort((a, b) => a.added - b.added).map(copy),
+    putModel: async (m) => { models.set(m.id, copy(m)) },
+    removeModel: async (id) => { models.delete(id) },
   }
 }
 
 const DB = 'blobscape-scene-creator'
 const SCENES = 'scenes'
 const META = 'meta'
+const MODELS = 'models'
 
 const done = <T>(r: IDBRequest<T>) => new Promise<T>((resolve, reject) => { r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error) })
 const finished = (t: IDBTransaction) => new Promise<void>((resolve, reject) => { t.oncomplete = () => resolve(); t.onerror = () => reject(t.error); t.onabort = () => reject(t.error) })
@@ -109,10 +179,13 @@ export async function openShelf(idb: IDBFactory | undefined = globalThis.indexed
   if (!idb) return undefined
   let db: IDBDatabase
   try {
-    const req = idb.open(DB, 1)
+    // version 2 added your own models (#370)
+    const req = idb.open(DB, 2)
     req.onupgradeneeded = () => {
-      req.result.createObjectStore(SCENES, { keyPath: 'id' })
-      req.result.createObjectStore(META)
+      const names = req.result.objectStoreNames
+      if (!names.contains(SCENES)) req.result.createObjectStore(SCENES, { keyPath: 'id' })
+      if (!names.contains(META)) req.result.createObjectStore(META)
+      if (!names.contains(MODELS)) req.result.createObjectStore(MODELS, { keyPath: 'id' })
     }
     db = await done(req)
     // a private window may open the database and refuse the first write: try one
@@ -142,6 +215,9 @@ export async function openShelf(idb: IDBFactory | undefined = globalThis.indexed
       return id && (await shelf.get(id)) ? id : undefined
     },
     setLast: (id) => write(META, (st) => (id ? st.put(id, 'last') : st.delete('last'))),
+    models: async () => (await read<ModelFile[]>(MODELS, (s) => s.getAll())).sort((a, b) => a.added - b.added),
+    putModel: (m) => write(MODELS, (st) => st.put(m)),
+    removeModel: (id) => write(MODELS, (st) => st.delete(id)),
   }
   return shelf
 }

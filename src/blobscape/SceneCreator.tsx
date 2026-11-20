@@ -20,14 +20,14 @@ import { ModeBar, useWorkspaceScreen, panelId, tabId, type Mode } from './sandbo
 import type { CutJob } from './creator/cut.ts'
 import { unpack, type PackedCut } from './creator/pack.ts'
 import { START_LANDS, START_SCENES, nameFor, openingAsked, openingLand, openingScene, queryFor, shownOf, type Opened } from './creator/shown.ts'
-import { AUTOSAVE_MS, FILE_END, cleanName, copyName, fileName, fileText, mergedLike, newId, openShelf, readFile, renamed, type SavedScene, type Shelf } from './creator/store.ts'
+import { AUTOSAVE_MS, FILE_END, type ModelFile, cleanName, copyName, fileName, fileText, mergedLike, newId, openShelf, readFile, renamed, type SavedScene, type Shelf } from './creator/store.ts'
 import { download } from './files.ts'
 import { registerTools } from './agentTools.ts'
 import { creatorTools, type CreatorApi } from './creator/agentTools.ts'
 import { PACKS, packAdded } from './creator/packs.ts'
 import { BLOB_ROOM, CARDS, added, cardsFound, groundOf, heightAt, landSwapped, liftOn, roomOf, whyNot } from './creator/adding.ts'
 import { creatureMove, creatureSize, isCreature, libraryProp, type LibraryEntry } from './creator/library.ts'
-import { OPEN_MOST, SCATTERED, PlacedMorphs, rawTexture, scatteredStill, isModel, keepModel, keptModels, meshModelFrom, modelClip, modelFrom, modelJob, modelOf, modelSize, openShare, poseModel, type ModelProp, type RawImage, type SplatModel } from './creator/models.ts'
+import { OPEN_MOST, SCATTERED, PlacedMorphs, rawTexture, scatteredStill, forgetKept, isModel, keepModel, keptModels, modelId, meshModelFrom, modelClip, modelFrom, modelJob, modelOf, modelSize, openShare, poseModel, type ModelProp, type RawImage, type SplatModel } from './creator/models.ts'
 import { GlbError, readRiggedGlb } from '../splat-engine/glb.ts'
 import { MeshFileError, openGlb, readMeshGlb, readObj, type MeshFile } from '../splat-engine/meshFile.ts'
 import { isMeshGlb, rigFromModel } from './modelRig.ts'
@@ -81,6 +81,28 @@ function creaturePosable(id: string, bones: readonly Bone[], at: Placement, loop
 function modelPosable(m: SplatModel, bones: readonly Bone[], at: Placement, loop: number): Posable {
   const t = placer([0, 0, 0], at)
   return { bones: bones.map((x) => ({ ...x, head: t.back(x.head), tail: x.tail && t.back(x.tail) })), pose: (sk, time) => poseModel(m, sk, loop, time), lights: () => [] }
+}
+
+/**
+ * Opens a model of your own from its file: a rigged splat .glb plays its moves; a rigged mesh is covered in blobs on
+ * its bones; a still mesh (.obj with its .mtl text, or a .glb) is cut on the scene's grid when it is closed, and covered
+ * in blobs when it isn't (`open`).
+ */
+async function readModel(mf: ModelFile): Promise<{ model: ModelProp; open: boolean }> {
+  const { file, bytes } = mf
+  let m: ModelProp
+  if (/\.glb$/i.test(file)) {
+    try {
+      m = modelFrom(readRiggedGlb(bytes), file, bytes)
+    } catch (e) {
+      if (!isMeshGlb(e)) throw e
+      m = isSkinned(bytes)
+        ? { ...modelFrom(await rigFromModel(bytes, file, SCATTERED), file, bytes), scattered: true }
+        : await meshModel(readMeshGlb(bytes), file, bytes)
+    }
+  } else m = await meshModel(readObj(new TextDecoder().decode(bytes), mf.mtl), file, bytes)
+  if (m.kind === 'mesh' && openShare(m.mesh) > OPEN_MOST) return { model: { ...modelFrom(scatteredStill(m.mesh, m.name, m.images.map(rawTexture)), file, bytes), scattered: true }, open: true }
+  return { model: m, open: false }
 }
 
 /** A still mesh as a model, its textures decoded here (the cut worker takes their pixels). */
@@ -213,6 +235,8 @@ export function SceneCreator() {
   const [modelsVersion, setModelsVersion] = useState(0)
   const [modelNote, setModelNote] = useState('')
   const modelInput = useRef<HTMLInputElement>(null)
+  // each model's own file, for the shelf and for project files to carry
+  const modelFiles = useRef(new Map<string, ModelFile>())
   // The pieces and what each is cut under. A prop's cut doesn't change as it moves (its light comes from the way it
   // faces, not where it stands), so its place is left out: a moved or copied prop needs no cut of its own.
   const pieces = useMemo<Piece[]>(() => {
@@ -466,6 +490,8 @@ export function SceneCreator() {
       setShelf(sh ?? null)
       if (!sh) return
       await refreshList(sh)
+      // your own models open again in the background; scenes using them are cut again as each arrives
+      void sh.models().then((list) => takeModels(list, 'this browser')).catch(console.warn)
       const q = new URLSearchParams(location.search)
       const asked = q.get('project')
       const id = asked ?? (q.has('scene') || q.has('land') ? undefined : await sh.last().catch(() => undefined))
@@ -547,14 +573,19 @@ export function SceneCreator() {
   }
   const saveFile = () => {
     if (!keeping) return
-    download(new TextEncoder().encode(fileText(keeping)), fileName(keeping), 'application/json')
+    download(new TextEncoder().encode(fileText(keeping, [...modelFiles.current.values()])), fileName(keeping), 'application/json')
     say(`Saved ${fileName(keeping)}.`)
   }
   const fileInput = useRef<HTMLInputElement>(null)
   const openFile = async (f: File) => {
-    const { project: p, problems } = readFile(await f.text())
+    const { project: p, models, problems } = readFile(await f.text())
     setFileProblems(problems)
     if (!p) { say(`${f.name} could not be opened.`); return }
+    // the models it carries are kept as if opened here
+    if (models.length) {
+      await takeModels(models, f.name)
+      for (const mf of models) shelf?.putModel(mf).catch(console.warn)
+    }
     const r: SavedScene = { id: newId(), updated: Date.now(), project: p }
     openSaved(r)
     // kept at once: it came from the visitor's own file
@@ -719,29 +750,13 @@ export function SceneCreator() {
     setModelNote(`Opening ${file.name}…`)
     try {
       const bytes = new Uint8Array(await file.arrayBuffer())
-      let m: ModelProp
-      if (/\.glb$/i.test(file.name)) {
-        try {
-          m = modelFrom(readRiggedGlb(bytes), file.name, bytes)
-        } catch (e) {
-          if (!isMeshGlb(e)) throw e
-          // a rigged mesh keeps its bones and clips as blobs scattered over its surface; a still one is a mesh
-          m = isSkinned(bytes)
-            ? { ...modelFrom(await rigFromModel(bytes, file.name, SCATTERED), file.name, bytes), scattered: true }
-            : await meshModel(readMeshGlb(bytes), file.name, bytes)
-        }
-      } else {
-        const mtl = files.find((f) => /\.mtl$/i.test(f.name))
-        m = await meshModel(readObj(new TextDecoder().decode(bytes), mtl && await mtl.text()), file.name, bytes)
-      }
-      // an open surface can't be cut as a solid: it is covered in blobs instead
-      let open = false
-      if (m.kind === 'mesh' && openShare(m.mesh) > OPEN_MOST) {
-        open = true
-        m = { ...modelFrom(scatteredStill(m.mesh, m.name, m.images.map(rawTexture)), file.name, bytes), scattered: true }
-      }
+      const mtlFile = files.find((f) => /\.mtl$/i.test(f.name))
+      const mf: ModelFile = { id: modelId(bytes), file: file.name, bytes, mtl: mtlFile && /\.obj$/i.test(file.name) ? await mtlFile.text() : undefined, added: Date.now() }
+      const { model: m, open } = await readModel(mf)
       keepModel(m)
+      modelFiles.current.set(m.id, mf)
       setModelsVersion((v) => v + 1)
+      if (shelf) shelf.putModel(mf).catch((e) => { console.warn(e); say(`${m.name} is in the scene, but this browser would not keep its file: save the scene as a file to keep it.`) })
       if (m.kind === 'splats') {
         const clip = modelClip(m)
         setModelNote(`Opened ${m.name}: ${m.rest.count.toLocaleString('en-US')} blobs${open ? ' over its surface, since it is not closed to cut as a solid' : ''}${clip ? `, playing ${clip.name}` : ', standing still'}${m.morphs ? `, with ${m.morphs.length} blend ${m.morphs.length === 1 ? 'shape' : 'shapes'}` : ''}.`)
@@ -750,6 +765,32 @@ export function SceneCreator() {
     } catch (e) {
       setModelNote(`Could not open ${file.name}: ${e instanceof GlbError || e instanceof MeshFileError ? e.message : 'it is not a model this page can read'}.`)
     }
+  }
+  /** Lets go of one of your models: off the shelf and out of the list. Scenes using it keep it while the page is open. */
+  const forgetModel = async (m: ModelProp) => {
+    try { await shelf?.removeModel(m.id) } catch (e) { lost(e); return }
+    forgetKept(m.id)
+    modelFiles.current.delete(m.id)
+    setModelsVersion((v) => v + 1)
+    setModelNote(`Forgot ${m.name}. A scene using it shows it until the page is closed; open its file again to keep it.`)
+  }
+  /** Takes in models a file or the shelf brought, as they open: the scenes using them are cut again with them. */
+  const takeModels = async (files: ModelFile[], from: string) => {
+    const failed: string[] = []
+    for (const mf of files) {
+      const had = modelOf(mf.id)
+      if (had) { keepModel(had); modelFiles.current.set(mf.id, mf); continue }
+      try {
+        const { model } = await readModel(mf)
+        keepModel(model)
+        modelFiles.current.set(mf.id, mf)
+      } catch (e) {
+        console.warn(e)
+        failed.push(mf.file)
+      }
+    }
+    setModelsVersion((v) => v + 1)
+    if (failed.length) say(`${failed.join(', ')} from ${from} could not be opened again.`)
   }
   /** Sets the whole of a pack down round the middle of the view, in one step to undo. */
   const addPack = () => {
@@ -949,6 +990,8 @@ export function SceneCreator() {
     ;(window as unknown as { __creator: unknown }).__creator = {
       stage, items: () => shown.items, ready: () => !!done, blobs: () => (built ? built.reduce((n, b) => n + b.blobs.count, 0) : 0),
       props: () => project?.props ?? [], land: () => project?.land, style, plain: () => !!chosen[0]?.plain, loopFrames: exporting.loopFrames, exportNote: () => exporting.note, light: () => lightNow, lampAt: (i: number) => { const l = lightNow?.lamps?.[i]; return l && stage.screenAt(l.at) }, picked: () => picked, said: () => said,
+      // whether the open project as it stands now is what was last kept
+      kept: () => !!keeping && keptText.current === JSON.stringify(keeping),
       // where a prop's blobs are on the view, in CSS pixels: the middle of those that stand above its foot
       screenOf: (i: number) => {
         const b = built?.[i + 1]
@@ -961,7 +1004,7 @@ export function SceneCreator() {
         return stage.screenAt([sum[0] / n, sum[1] / n, sum[2] / n])
       },
     }
-  }, [offscreen, stage, shown, built, done, project, picked, said, lightNow, style, chosen, exporting.loopFrames, exporting.note])
+  }, [offscreen, stage, shown, built, done, project, picked, said, lightNow, style, chosen, exporting.loopFrames, exporting.note, keeping])
 
   const blobs = lastBlobs.current
   const props = project?.props.length ?? 0
@@ -1116,8 +1159,8 @@ export function SceneCreator() {
                     {refused && <p className="text-sm text-ink" data-testid="creator-refused">{refused}</p>}
                     <input type="search" value={query} onChange={(ev) => setQuery(ev.target.value)} placeholder="Find a prop or land" aria-label="Find a prop or land" className="min-h-10 w-full rounded-full border border-rule bg-paper px-4 text-sm outline-none focus-visible:border-accent" />
                     <div>
-                      <h3 id="creator-models" className="mb-1 text-sm font-semibold">Your models</h3>
-                      <p className="mb-2 text-xs text-ink-muted">A rigged .glb plays its moves: splats, such as one saved from Splat Creatures, or a mesh from Blender or a game kit, covered in blobs. A still model (.obj with its .mtl, or .glb) is cut into the scene under its light. It stays while this page is open.</p>
+                      <h3 id="creator-models" className="mb-1 text-sm font-semibold">Your props</h3>
+                      <p className="mb-2 text-xs text-ink-muted">A rigged .glb plays its moves: splats, such as one saved from Splat Creatures, or a mesh from Blender or a game kit, covered in blobs. A still model (.obj with its .mtl, or .glb) is cut into the scene under its light. They are kept in this browser, and a scene saved as a file carries the ones it uses.</p>
                       <input ref={modelInput} type="file" accept=".glb,.obj,.mtl,model/gltf-binary" className="sr-only" tabIndex={-1} aria-hidden="true" data-testid="creator-model-file"
                         multiple onChange={(ev) => { const f = [...(ev.target.files ?? [])]; ev.target.value = ''; if (f.length) void openModel(f) }} />
                       <button type="button" onClick={() => modelInput.current?.click()} data-testid="creator-model-open"
@@ -1125,10 +1168,15 @@ export function SceneCreator() {
                         Open a model…
                       </button>
                       <p role="status" className="mt-2 text-xs text-ink-muted" data-testid="creator-model-note">{modelNote}</p>
-                      {modelsVersion > 0 && (
+                      {modelsVersion > 0 && keptModels().length > 0 && (
                         <ul aria-labelledby="creator-models" className="mt-2 flex flex-wrap gap-2">
                           {keptModels().map((m) => (
-                            <li key={m.id}><button type="button" onClick={() => addModel(m)} data-testid={`creator-model-${m.id}`} className="min-h-10 cursor-pointer rounded-full border border-rule bg-paper px-4 text-sm hover:border-ink-faint">Add {m.name}</button></li>
+                            <li key={m.id} className="flex items-center gap-1">
+                              <button type="button" onClick={() => addModel(m)} data-testid={`creator-model-${m.id}`} className="min-h-10 cursor-pointer rounded-full border border-rule bg-paper px-4 text-sm hover:border-ink-faint">Add {m.name}</button>
+                              <button type="button" onClick={() => void forgetModel(m)} aria-label={`Forget ${m.name}`} title={`Forget ${m.name}`} className="grid size-10 cursor-pointer place-items-center rounded-full text-ink-muted hover:bg-paper-sunk hover:text-ink">
+                                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
+                              </button>
+                            </li>
                           ))}
                         </ul>
                       )}
