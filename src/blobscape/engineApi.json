@@ -452,7 +452,7 @@
       },
       {
        "name": "setCel",
-       "doc": "Cel shading (splat-core/cel.ts), on a stage made with `lights`: every blob flat in its own color, the light cut\ninto two or three tones with clean edges, shadows cast by what stands in the light's way, and an even outline.\nThe tones are cut from the look's own light, and the stage's lights (`setLights`) stay as the scene's lamps: where\nthey reach is one more tone in their color, and the ambient light dims both tones. Its fill takes the place of the\nstage's marks while it is on; leave the look out to have them back. Kept for the next actor too. It shades the blobs' own colors, so it suits blobs\nthat have no light baked into them. Not in pixel mode.",
+       "doc": "Cel shading (splat-core/cel.ts), on a stage made with `lights`: every blob flat in its own color, the light cut\ninto two or three tones with clean edges, shadows cast by what stands in the light's way, and an even outline.\nThe tones are cut from the look's own light, and the stage's lights (`setLights`) stay as the scene's lamps: where\nthey reach is one more tone in their color, and the ambient light dims both tones. Its fill takes the place of the\nstage's marks while it is on; leave the look out to have them back. Kept for the next actor too. It shades the blobs' own colors, so it suits blobs\nthat have no light baked into them. In pixel mode it shades the small picture the pixel art is made from, so the\nlight falls in bands that follow each form a pixel at a time; the outline is the pixel art's own then.",
        "signatures": [
         {
          "code": "setCel(look?: CelLook): void"
@@ -581,7 +581,7 @@
        "doc": "Pixel mode's last frame as it was drawn small, and as finished art (exactly in the look's colors): for tests and for saving.",
        "signatures": [
         {
-         "code": "pixelFrames(): Promise<{ small: Frame; art: Frame; before?: Frame; parts?: Frame; ranks?: Frame; time: number; fine?: { small: Frame; parts: Frame } } | undefined>"
+         "code": "pixelFrames(): Promise<{ small: Frame; art: Frame; before?: Frame; parts?: Frame; ranks?: Frame; time: number; fine?: { small: Frame; parts: Frame; solid?: Frame } } | undefined>"
         }
        ]
       },
@@ -972,6 +972,11 @@
        "name": "ranks",
        "type": "boolean",
        "doc": "While true, the draw is a map of dither steps: every blob a hard disc (as in the map of parts) whose red is its\nstep of the Bayer pattern (0 to 15, as a byte), from where it sits at rest (`surfaceRanks` in splat-core/pixel.ts).\nPixel mode draws it for dither that stays on things (`PixelLook.surface`)."
+      },
+      {
+       "name": "solid",
+       "type": "boolean",
+       "doc": "While true, the draw is the picture with every blob a hard disc (as in the map of parts: solid out to where it has\nfaded to the same share, in the same order), each in its own lit color. Pixel mode draws its picture so\n(`PixelLook.solid`), so a pixel's color always comes from the thing the map of parts says is there, never partly\nfrom what is behind a fading edge."
       },
       {
        "name": "autoDetail",
@@ -4758,6 +4763,30 @@
      "type": "0.35"
     },
     {
+     "name": "HUE_KEEP",
+     "kind": "const",
+     "doc": "How far round the hue circle (degrees, in OKLab) a palette color may sit from a paint's own and still be a step of its\nramp (`stepper`), where both have color enough to have a hue (`HUE_FROM`). A red that has no darker red in the palette\nstays its own darkest red in shade rather than turning brown or orange, as a hand-made ramp would.",
+     "type": "16"
+    },
+    {
+     "name": "HUE_FROM",
+     "kind": "const",
+     "doc": "The chroma (OKLab) under which a color counts as a gray for `HUE_KEEP`: a gray is a step of any paint's ramp.",
+     "type": "0.02"
+    },
+    {
+     "name": "GRAY_TURN",
+     "kind": "const",
+     "doc": "How far round the hue circle (degrees) a near-gray palette color may sit from the way a gray paint's light tints it\n(cool in shade, warm in sun) or from the paint's own faint hue, and still be a step of its ramp (`stepper`). White\nsails in shade took the sky's palest blue, which read as holes through to the sky.",
+     "type": "40"
+    },
+    {
+     "name": "ESCAPE",
+     "kind": "const",
+     "doc": "How many times closer a palette color off a paint's ramp must be before a blob takes it (`stepper`): only light of another color carries a blob that far.",
+     "type": "9"
+    },
+    {
      "name": "VoxelSpec",
      "kind": "interface",
      "doc": "A voxel scene for `buildVoxels`: its bones, its parts and the grid's cell size.",
@@ -5113,7 +5142,7 @@
     {
      "name": "stepper",
      "kind": "function",
-     "doc": "Painting in steps (`VoxelLight.steps`): gives the function that moves a blob's finished color onto its paint's ramp.\nA paint's ramp is the palette colors it passes through as its light goes from a deep corner to full sun (found once\nper paint, to 1/64 a channel); a finished color takes the nearest of them, after `mottle` has pushed its lightness up\nor down by patch. Light of another color (a beam, a bounce, a mirror) can carry a blob well off its ramp: when a\npalette color outside it is more than twice as close, that one is taken. Palette colors over `LIT_MAX` are held at\nit, as every lit color is, so nothing painted starts to glow.",
+     "doc": "Painting in steps (`VoxelLight.steps`): gives the function that moves a blob's finished color onto its paint's ramp.\nA paint's ramp is the palette colors it passes through as its light goes from a deep corner to full sun (found once\nper paint, to 1/64 a channel); a finished color takes the nearest of them, after `mottle` has pushed its lightness up\nor down by patch. Light of another color (a beam, a bounce, a mirror) can carry a blob well off its ramp: when a\npalette color outside it is `ESCAPE` times as close or more, that one is taken. A ramp keeps to its paint's own hue (`HUE_KEEP`). Palette colors over `LIT_MAX` are held at\nit, as every lit color is, so nothing painted starts to glow.",
      "signatures": [
       {
        "code": "stepper(steps: { palette: Vec3[]; mottle?: number }, light: VoxelLight): (base: Vec3, color: Vec3, i: number, j: number, k: number) => Vec3"
@@ -5127,6 +5156,46 @@
      "signatures": [
       {
        "code": "unlit<T>(make: () => T): T"
+      }
+     ]
+    },
+    {
+     "name": "banded",
+     "kind": "function",
+     "doc": "Runs `make` with every `buildVoxels` inside it lighting each blob as one texel in `n` flat bands: the sun's share that\nreaches a blob (its facing times its cast shadow) is moved onto the nearest of `n` steps from none to full before its\ncolor is worked out, so light and shade fall in whole blobs, crisp along the surface, while each blob keeps its own\npaint (bricks, planks, ripples). The ambient share is left as it is. 0 or 1 leaves the light smooth.",
+     "signatures": [
+      {
+       "code": "banded<T>(n: number, make: () => T): T"
+      }
+     ]
+    },
+    {
+     "name": "hugged",
+     "kind": "function",
+     "doc": "Runs `make` with every `buildVoxels` inside it fitting the discs along a shape's outer edges to the edge: a disc whose\nsurface ends within its reach (the shape falls away from the disc's own plane, as past the top of a fence rail or the\nrim of a pond) is moved in and squeezed across the edge, long along it, so the row of discs ends in a straight line\nwhere the shape does instead of a row of round bumps standing past it. Inner corners are left alone: what meets them\ncovers them. See `edgeFit`.",
+     "signatures": [
+      {
+       "code": "hugged<T>(make: () => T): T"
+      }
+     ]
+    },
+    {
+     "name": "edgeFit",
+     "kind": "function",
+     "doc": "Where the surface of a shape ends within a disc's reach, in the disc's own plane: the way out to the nearest outer edge\n(a unit vector in the plane) and how far from the disc's middle the edge lies, or undefined when the surface carries on\nall round. `past(q)` is how far the shape lies off the disc's plane at `q`, counted as off past `least`; it is asked at\nthree distances along `EDGE_WAYS` ways, the nearer ones only where the farthest finds an edge.",
+     "signatures": [
+      {
+       "code": "edgeFit(p: Vec3, n: Vec3, reach: number, past: (q: Vec3) => number, least: number): { out: Vec3; at: number } | undefined"
+      }
+     ]
+    },
+    {
+     "name": "bandOf",
+     "kind": "function",
+     "doc": "Moves a sun share (0 to 1) onto the nearest of `n` steps (`banded`).",
+     "signatures": [
+      {
+       "code": "bandOf(direct: number, n: number): number"
       }
      ]
     },
@@ -7359,7 +7428,7 @@
        "name": "fineIds",
        "readonly": true,
        "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
-       "doc": "The map of parts at twice the art's size, which four samples a pixel settles from."
+       "doc": "The map of parts at twice the art's size, which four samples a pixel settles from (its first texture), and in the\nsame draw the picture with every blob a hard disc in its own color, as the map cuts it (its second, read with\n`PixelLook.solid`): one draw of every blob for both, which on a phone is most of what either costs."
       },
       {
        "name": "art",
@@ -7549,6 +7618,18 @@
        "doc": "A line where one part of the scene meets another whose color is too close for `edges` to draw one (two things of one color, one in front of the other), at `edges`' strength or full strength without it.\nNeeds a map of the parts drawn beside the scene (`pixelArt`'s `parts`; the live pass draws its own)."
       },
       {
+       "name": "across",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Lines inside the scene only where one thing meets another: with a map of parts (`parts`, or `fine`, which draws one),\na jump in color within one part is its paint (grass, stonework) and takes no line, as a pixel artist outlines things\nand not their texture. Without a map it does nothing."
+      },
+      {
+       "name": "solid",
+       "optional": true,
+       "type": "boolean",
+       "doc": "The scene's picture drawn with every blob a hard disc in its own color, cut where the map of parts cuts it, so a\nthing's edge never shows a little of what is behind it (the stage draws it; the picture handed in is already so)."
+      },
+      {
        "name": "sky",
        "optional": true,
        "type": "[top: Rgb, bottom: Rgb, reach?: number]",
@@ -7567,10 +7648,34 @@
        "doc": "Lone-pixel cleanup, as a pixel artist does it: a scene pixel whose color none of its eight neighbors shares, while\nsix or more of them share one other color, takes that color. With a map of parts, only a pixel inside its own\npart (four or more neighbors of its part) is touched, so a speck, an eye or a firefly in front of something stays.\nA checkerboard dither keeps its pixels: each has its own color on the diagonals."
       },
       {
+       "name": "calm",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Calmer pixels, in place of `tidy` (an idea from Silicon Jungle's Ink Studio, whose cleanup pass this follows in\npart): a pixel art piece is flat patches of color with dither only where one gives way to the next, while a scene\nof small blobs comes out speckled. So, reading only the art as drawn: a scene pixel takes the color `CALM_MOST` or\nmore of its eight neighbors share when fewer share its own (with a map of parts, only neighbors of its own part\ncount, so one thing never bleeds into another); a scene pixel with the empty backdrop on three or four sides (a\none-pixel bump on a silhouette) takes the backdrop's color beside it, and an empty pixel with the scene on three or\nfour sides (a notch) takes the scene's, so an outline runs clean; and lines are cleaned (`lineFix`: one-pixel kinks off\nstraight edges, doubled pixels off the corners of dark lines); and a patch of one or two pixels joins its\nneighbors' color unless it is a highlight or a detail (`SPECK_MOST`, `SPECK_KEEP`). `calmArt` is the CPU twin of the pass."
+      },
+      {
+       "name": "flat",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Dither only where a pixel artist puts it: the sky's blend and the light a glow spills onto the scene keep `dither`,\nwhile the scene's own surfaces are drawn flat, each pixel its nearest palette color, so shade falls in bands. A\npixel a glow lights snaps only to a color of its own hue, the light's, or a gray (`keptNearest`)."
+      },
+      {
+       "name": "rim",
+       "optional": true,
+       "type": "readonly [number, number]",
+       "doc": "A rim of light: a scene pixel whose neighbor toward the light (this way across the picture, x right and y down;\n`rimStep`) is backdrop takes the palette color a step lighter in its own hue (`lighterStep`), as a pixel artist\npicks out the lit edge of a form."
+      },
+      {
+       "name": "shine",
+       "optional": true,
+       "type": "boolean",
+       "doc": "A highlight on the peak of each smooth lit form (`peakAt`): that pixel one step lighter in its own hue."
+      },
+      {
        "name": "surface",
        "optional": true,
        "type": "boolean",
-       "doc": "Dither that stays on the things it falls on: each blob takes one step of the Bayer pattern from where it sits in\nits own rest pose (`ditherRank`), not from the pixel it lands on, so the pattern rides with a turning view or a\nmoving creature instead of standing still on the screen while they slide under it. Needs a map of each pixel's\nstep drawn beside the scene (`pixelArt`'s `ranks`; the live pass draws its own). The sky keeps the screen's pattern.\nAfter Silicon Jungle's Ink Studio (object-space dither, MIT), with their agreement."
+       "doc": "Dither that stays on the things it falls on: each blob takes one step of the Bayer pattern from where it sits in\nits own rest pose (`ditherRank`), not from the pixel it lands on, so the pattern rides with a turning view or a\nmoving creature instead of standing still on the screen while they slide under it. Needs a map of each pixel's\nstep drawn beside the scene (`pixelArt`'s `ranks`; the live pass draws its own). The sky keeps the screen's pattern.\nLeft out with `flat`: there only a glow's spill is dithered, and the map cost a whole extra draw of every blob.\nAfter Silicon Jungle's Ink Studio (object-space dither, MIT), with their agreement."
       },
       {
        "name": "snap",

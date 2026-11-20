@@ -551,13 +551,23 @@ export class Stage {
 
   private cel?: CelPass
   private celLook?: CelLook
+  /** Cel shading drawn into the pixel pass's small picture, at that picture's size, with no line of its own. */
+  private readonly celInPixels = (renderer: THREE.WebGPURenderer, scene: THREE.Object3D, camera: THREE.Camera) => {
+    const into = renderer.getRenderTarget()
+    if (!this.cel || !this.celLook || !into) { renderer.render(scene, camera); return }
+    this.cel.setSize(into.width, into.height)
+    const amb = this.lit.ambient
+    this.cel.setLook({ ...this.celLook, line: 0, lamps: this.celLook.lamps ?? lampTint(this.lit.lights), ambient: [0, 1, 2].map((k) => (this.celLook!.ambient?.[k] ?? 1) * (typeof amb === 'number' ? amb : amb[k])) as [number, number, number] }, 1)
+    this.cel.render(renderer, scene, camera)
+  }
   /**
    * Cel shading (splat-core/cel.ts), on a stage made with `lights`: every blob flat in its own color, the light cut
    * into two or three tones with clean edges, shadows cast by what stands in the light's way, and an even outline.
    * The tones are cut from the look's own light, and the stage's lights (`setLights`) stay as the scene's lamps: where
    * they reach is one more tone in their color, and the ambient light dims both tones. Its fill takes the place of the
    * stage's marks while it is on; leave the look out to have them back. Kept for the next actor too. It shades the blobs' own colors, so it suits blobs
-   * that have no light baked into them. Not in pixel mode.
+   * that have no light baked into them. In pixel mode it shades the small picture the pixel art is made from, so the
+   * light falls in bands that follow each form a pixel at a time; the outline is the pixel art's own then.
    */
   setCel(look?: CelLook) {
     this.celLook = look
@@ -835,6 +845,7 @@ export class Stage {
     this.glitchNow = this.glitchLook ? glitchAt(this.time, this.glitchLook) : undefined
     this.pixel.setGlitch(this.glitchNow)
     this.pixel.setTime(this.time)
+    this.pixel.drawScene = this.cel && this.celLook && this.opts.lights ? this.celInPixels : undefined
     if (this.target) {
       this.pixel.setSize(Math.ceil(this.target.width / scale), Math.ceil(this.target.height / scale))
       this.pixel.render(this.renderer, this.scene, this.camera)
@@ -845,15 +856,15 @@ export class Stage {
     this.pixel.render(this.renderer, this.scene, this.camera, { width: x, height: y, scale })
   }
 
-  private async read(target: THREE.RenderTarget, encoded = false): Promise<Frame> {
+  private async read(target: THREE.RenderTarget, encoded = false, index = 0): Promise<Frame> {
     const { width, height } = target
-    const px = await this.renderer.readRenderTargetPixelsAsync(target, 0, 0, width, height) as Uint8Array
+    const px = await this.renderer.readRenderTargetPixelsAsync(target, 0, 0, width, height, index) as Uint8Array
     // a target holds linear, premultiplied color (pixel mode's art, `encoded`, already holds sRGB); a frame is sRGB, straight, top row first. WebGPU reads rows top-down, WebGL bottom-up.
     return { width, height, data: readbackToSrgb(px, width, height, { flip: this.backend === 'webgl', premultiplied: false, encoded }) }
   }
 
   /** Pixel mode's last frame as it was drawn small, and as finished art (exactly in the look's colors): for tests and for saving. */
-  async pixelFrames(): Promise<{ small: Frame; art: Frame; before?: Frame; parts?: Frame; ranks?: Frame; time: number; fine?: { small: Frame; parts: Frame } } | undefined> {
+  async pixelFrames(): Promise<{ small: Frame; art: Frame; before?: Frame; parts?: Frame; ranks?: Frame; time: number; fine?: { small: Frame; parts: Frame; solid?: Frame } } | undefined> {
     // a sheet being drawn has the renderer to itself
     if (!this.pixel || this.baking) return
     // pixel mode can be switched off, or the view resized, while the reads are out: hold the pass and start every read now
@@ -862,12 +873,14 @@ export class Stage {
     const colors = lookColors(pass.look)
     const fine = !!pass.look.fine
     const surface = !!pass.look.surface && pass.look.dither > 0
-    const [small, art, before, parts, fineSmall, fineParts, ranks] = await Promise.all([
+    const hard = fine && !!pass.look.solid
+    const [small, art, before, parts, fineSmall, fineParts, ranks, fineSolid] = await Promise.all([
       this.read(pass.small), this.read(pass.art, true), pass.before ? this.read(pass.before, true) : undefined, pass.look.parts || fine ? this.read(pass.ids, true) : undefined,
       fine ? this.read(pass.fineSmall) : undefined, fine ? this.read(pass.fineIds, true) : undefined, surface ? this.read(pass.ranks, true) : undefined,
+      hard ? this.read(pass.fineIds, false, 1) : undefined,
     ])
-    // a look with four samples a pixel also gives what it was settled from: the scene and its map of parts at twice the size
-    return { small, art: snapColors(art, colors), before: before && snapColors(before, colors), parts, ranks, time: pass.drawnAt, fine: fineSmall && fineParts && { small: fineSmall, parts: fineParts } }
+    // a look with four samples a pixel also gives what it was settled from: the scene and its map of parts at twice the size, and with `solid` the hard discs
+    return { small, art: snapColors(art, colors), before: before && snapColors(before, colors), parts, ranks, time: pass.drawnAt, fine: fineSmall && fineParts && { small: fineSmall, parts: fineParts, solid: fineSolid } }
   }
 
   /**

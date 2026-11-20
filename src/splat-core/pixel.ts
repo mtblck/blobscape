@@ -103,6 +103,108 @@ export function rgbToHex([r, g, b]: Rgb): string {
   return '#' + [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')
 }
 
+/** How much lighter (OKLab L) `lighterStep` aims above a color. */
+export const STEP_UP = 0.12
+/**
+ * The palette color one step lighter than `lab` in its own hue (among the grays tinted its own way, for a gray): the nearest to `lab`
+ * raised by `STEP_UP` of those at least a little lighter and of its hue (`HALO_HUE`), or -1 where there is none.
+ */
+export function lighterStep(lab: Rgb, paletteLab: Rgb[]): number {
+  const cc = Math.hypot(lab[1], lab[2])
+  let best = -1, bestD = Infinity
+  for (let k = 0; k < paletteLab.length; k++) {
+    const p = paletteLab[k], pc = Math.hypot(p[1], p[2])
+    if (p[0] < lab[0] + 0.02) continue
+    // a gray's lighter step is a plain gray or one tinted its own faint way: the palest sky blue is nearly gray, and a
+    // white sail's lit rim took it, which read as sky
+    const hued = cc >= HALO_GRAY
+      ? pc >= HALO_GRAY && (p[1] * lab[1] + p[2] * lab[2]) >= HALO_HUE * pc * cc
+      : pc < HALO_GRAY / 3 || (pc < HALO_GRAY * 2 && (p[1] * lab[1] + p[2] * lab[2]) >= HALO_HUE * pc * Math.max(cc, HALO_GRAY / 6))
+    if (!hued) continue
+    const d = (lab[0] + STEP_UP - p[0]) ** 2 + (lab[1] - p[1]) ** 2 + (lab[2] - p[2]) ** 2
+    if (d < bestD) { bestD = d; best = k }
+  }
+  return best
+}
+
+/**
+ * Which way across the picture (x right, y down, unit length) a light lies from a view orbiting at `azimuth` and
+ * `elevation` degrees (as `placeCamera` places it), given `toward`, a direction toward the light in the world; none
+ * when it lies nearly straight behind or in front of the view, where a rim would have no side to go on.
+ */
+export function screenWay(toward: readonly number[], azimuth: number, elevation: number): [number, number] | undefined {
+  const az = (azimuth * Math.PI) / 180, el = (elevation * Math.PI) / 180
+  // the camera's right and up, looking from the orbit toward its target
+  const f = [-Math.sin(az) * Math.cos(el), -Math.sin(el), -Math.cos(az) * Math.cos(el)]
+  const r = [-f[2], 0, f[0]], rl = Math.hypot(r[0], r[2]) || 1
+  const right = [r[0] / rl, 0, r[2] / rl]
+  const up = [right[1] * f[2] - right[2] * f[1], right[2] * f[0] - right[0] * f[2], right[0] * f[1] - right[1] * f[0]]
+  const sx = toward[0] * right[0] + toward[1] * right[1] + toward[2] * right[2]
+  const sy = -(toward[0] * up[0] + toward[1] * up[1] + toward[2] * up[2])
+  const n = Math.hypot(sx, sy), all = Math.hypot(toward[0], toward[1], toward[2]) || 1
+  return n / all < 0.3 ? undefined : [sx / n, sy / n]
+}
+
+/** The art-pixel step toward the light for a rim (`PixelLook.rim`): the way rounded to one of the eight neighbors. */
+export function rimStep(way: readonly [number, number]): [number, number] {
+  const a = Math.atan2(way[1], way[0]), q = Math.round(a / (Math.PI / 4))
+  const dx = Math.round(Math.cos(q * Math.PI / 4)), dy = Math.round(Math.sin(q * Math.PI / 4))
+  return [dx === 0 ? 0 : dx, dy === 0 ? 0 : dy]
+}
+
+/** How much lighter (0 to 1, by `LINE_LUMA`) than the mean round it the peak of a lit form must be for a highlight. */
+export const SHINE_FROM = 0.05
+/** How far the most varied of a highlight's neighbors may spread in lightness: a smooth form, not a mottled paint. */
+export const SHINE_SMOOTH = 0.12
+
+/**
+ * Whether (x, y) of the small frame `f` is the peak of a lit form (`PixelLook.shine`): every other pixel within two
+ * is scene, of its part (with a map), and darker; it stands `SHINE_FROM` above their mean; and they spread no more
+ * than `SHINE_SMOOTH`, so a smooth round thing gets one and a mottled surface none.
+ */
+export function peakAt(f: Frame, x: number, y: number, map?: Uint8ClampedArray | Uint8Array): boolean {
+  const { width: w, height: h, data } = f
+  if (x < 2 || y < 2 || x >= w - 2 || y >= h - 2) return false
+  const cut = PIXEL_CUT * 255
+  const at = (px: number, py: number) => (py * w + px) * 4
+  const luma = (i: number) => (data[i] * LINE_LUMA[0] + data[i + 1] * LINE_LUMA[1] + data[i + 2] * LINE_LUMA[2]) / 255
+  const me = at(x, y), y0 = luma(me)
+  const part = map ? map[me] | (map[me + 1] << 8) | (map[me + 2] << 16) : 0
+  let sum = 0, lo = Infinity, hi = -Infinity
+  for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+    if (!dx && !dy) continue
+    const i = at(x + dx, y + dy)
+    if (data[i + 3] < cut) return false
+    if (map && (map[i + 3] < 128 || (map[i] | (map[i + 1] << 8) | (map[i + 2] << 16)) !== part)) return false
+    const v = luma(i)
+    if (v >= y0) return false
+    sum += v; lo = Math.min(lo, v); hi = Math.max(hi, v)
+  }
+  return y0 - sum / 24 >= SHINE_FROM && hi - lo <= SHINE_SMOOTH
+}
+
+/** How near in hue (the cosine of the angle in OKLab's a and b) a palette color must be to count as a glow-lit pixel's own or its light's (`keptNearest`). */
+export const HALO_HUE = Math.cos((28 * Math.PI) / 180)
+/** The chroma under which a color counts as gray for `HALO_HUE`: a gray is always allowed. */
+export const HALO_GRAY = 0.03
+
+/**
+ * The palette color nearest `lab` among those of `own`'s hue or `light`'s, or a gray (`HALO_HUE`, `HALO_GRAY`), or -1
+ * where none is: for a pixel a glow lights, so a lamp's halo on gray stone turns lighter stone or the lamp's own
+ * yellow, never the olive green the mix would snap to. The pass's twin is in pixelPass.ts (change both).
+ */
+export function keptNearest(lab: Rgb, paletteLab: Rgb[], own: Rgb, light: Rgb): number {
+  const near = (p: Rgb, c: Rgb) => { const cc = Math.hypot(c[1], c[2]); return cc >= HALO_GRAY && (p[1] * c[1] + p[2] * c[2]) >= HALO_HUE * Math.hypot(p[1], p[2]) * cc }
+  let best = -1, bestD = Infinity
+  for (let k = 0; k < paletteLab.length; k++) {
+    const p = paletteLab[k]
+    if (Math.hypot(p[1], p[2]) >= HALO_GRAY && !near(p, own) && !near(p, light)) continue
+    const d = (lab[0] - p[0]) ** 2 + (lab[1] - p[1]) ** 2 + (lab[2] - p[2]) ** 2
+    if (d < bestD) { bestD = d; best = k }
+  }
+  return best
+}
+
 function nearest(lab: Rgb, paletteLab: Rgb[]): number {
   let best = 0, bestD = Infinity
   for (let i = 0; i < paletteLab.length; i++) {
@@ -276,6 +378,17 @@ export interface PixelLook {
    */
   parts?: boolean
   /**
+   * Lines inside the scene only where one thing meets another: with a map of parts (`parts`, or `fine`, which draws one),
+   * a jump in color within one part is its paint (grass, stonework) and takes no line, as a pixel artist outlines things
+   * and not their texture. Without a map it does nothing.
+   */
+  across?: boolean
+  /**
+   * The scene's picture drawn with every blob a hard disc in its own color, cut where the map of parts cuts it, so a
+   * thing's edge never shows a little of what is behind it (the stage draws it; the picture handed in is already so).
+   */
+  solid?: boolean
+  /**
    * A backdrop behind the scene: its color at the top and at the bottom of the picture, blended between and dithered into the palette.
    * `reach` is how far down the picture the blend runs before it is all the bottom color (above 0, up to 1; the whole way when left out or not a sound number: `skyReach`).
    * Left out, empty pixels stay clear.
@@ -294,10 +407,37 @@ export interface PixelLook {
    */
   tidy?: boolean
   /**
+   * Calmer pixels, in place of `tidy` (an idea from Silicon Jungle's Ink Studio, whose cleanup pass this follows in
+   * part): a pixel art piece is flat patches of color with dither only where one gives way to the next, while a scene
+   * of small blobs comes out speckled. So, reading only the art as drawn: a scene pixel takes the color `CALM_MOST` or
+   * more of its eight neighbors share when fewer share its own (with a map of parts, only neighbors of its own part
+   * count, so one thing never bleeds into another); a scene pixel with the empty backdrop on three or four sides (a
+   * one-pixel bump on a silhouette) takes the backdrop's color beside it, and an empty pixel with the scene on three or
+   * four sides (a notch) takes the scene's, so an outline runs clean; and lines are cleaned (`lineFix`: one-pixel kinks off
+   * straight edges, doubled pixels off the corners of dark lines); and a patch of one or two pixels joins its
+   * neighbors' color unless it is a highlight or a detail (`SPECK_MOST`, `SPECK_KEEP`). `calmArt` is the CPU twin of the pass.
+   */
+  calm?: boolean
+  /**
+   * Dither only where a pixel artist puts it: the sky's blend and the light a glow spills onto the scene keep `dither`,
+   * while the scene's own surfaces are drawn flat, each pixel its nearest palette color, so shade falls in bands. A
+   * pixel a glow lights snaps only to a color of its own hue, the light's, or a gray (`keptNearest`).
+   */
+  flat?: boolean
+  /**
+   * A rim of light: a scene pixel whose neighbor toward the light (this way across the picture, x right and y down;
+   * `rimStep`) is backdrop takes the palette color a step lighter in its own hue (`lighterStep`), as a pixel artist
+   * picks out the lit edge of a form.
+   */
+  rim?: readonly [number, number]
+  /** A highlight on the peak of each smooth lit form (`peakAt`): that pixel one step lighter in its own hue. */
+  shine?: boolean
+  /**
    * Dither that stays on the things it falls on: each blob takes one step of the Bayer pattern from where it sits in
    * its own rest pose (`ditherRank`), not from the pixel it lands on, so the pattern rides with a turning view or a
    * moving creature instead of standing still on the screen while they slide under it. Needs a map of each pixel's
    * step drawn beside the scene (`pixelArt`'s `ranks`; the live pass draws its own). The sky keeps the screen's pattern.
+   * Left out with `flat`: there only a glow's spill is dithered, and the map cost a whole extra draw of every blob.
    * After Silicon Jungle's Ink Studio (object-space dither, MIT), with their agreement.
    */
   surface?: boolean
@@ -499,9 +639,11 @@ export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Fram
   const amp = look.dither * 48
   const edges = look.edges ?? 0
   const map = look.parts && parts && parts.width === w && parts.height === h ? parts.data : undefined
+  // `across` reads the map of parts whether or not part lines are drawn
+  const areas = look.across && parts && parts.width === w && parts.height === h ? parts.data : undefined
   const steady = before && before.width === w && before.height === h ? look.steady ?? 0 : 0
   // surface dither: each pixel's step from the map of steps, where the scene has one
-  const steps = look.surface && ranks && ranks.width === w && ranks.height === h ? ranks.data : undefined
+  const steps = look.surface && !look.flat && ranks && ranks.width === w && ranks.height === h ? ranks.data : undefined
   const slot = new Map(look.palette.map((c, k) => [(c[0] << 16) | (c[1] << 8) | c[2], k]))
   const bands = Math.min(2, Math.max(0, Math.round(look.bands ?? 0)))
   const heat = look.heat && look.heat.pixels > 0 ? look.heat : undefined
@@ -546,6 +688,8 @@ export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Fram
       let spread = amp
       if (solid(x, y)) {
         r = f.data[i] + g[0]; gg = f.data[i + 1] + g[1]; b = f.data[i + 2] + g[2]
+        // flat surfaces: dither only where a glow spills onto the scene
+        if (look.flat && Math.max(g[0], g[1], g[2]) <= GLOW_SHOWS) spread = 0
         if (edges > 0 || map) {
           // a line on the darker side of a jump: one pixel wide, and never on the light thing itself
           const a = oklab(f.data[i], f.data[i + 1], f.data[i + 2])
@@ -554,7 +698,8 @@ export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Fram
             const j = ((y + dy) * w + x + dx) * 4
             const n = oklab(f.data[j], f.data[j + 1], f.data[j + 2])
             const far = Math.hypot(n[0] - a[0], n[1] - a[1], n[2] - a[2]) > EDGE_JUMP
-            if (edges > 0 && far && n[0] > a[0]) return true
+            const apart = !areas || (areas[i + 3] >= 128 && areas[j + 3] >= 128 && (areas[i] !== areas[j] || areas[i + 1] !== areas[j + 1] || areas[i + 2] !== areas[j + 2]))
+            if (edges > 0 && far && n[0] > a[0] && apart) return true
             // and where another part begins in a color too close for that: on the lower-numbered part, so the line keeps its side as lights flicker
             if (far || !map || map[i + 3] < 128 || map[j + 3] < 128) return false
             return (map[i] | (map[i + 1] << 8) | (map[i + 2] << 16)) < (map[j] | (map[j + 1] << 8) | (map[j + 2] << 16))
@@ -604,12 +749,35 @@ export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Fram
         const off = spread > 0 ? (step / 16 - 0.5) * spread : 0
         const lab = oklab(Math.max(0, r + off), Math.max(0, gg + off), Math.max(0, b + off))
         let k = nearest(lab, pl)
+        // flat: a pixel a glow lights snaps to a color of its own hue or the light's, never a third the mix lands near
+        if (look.flat && solid(x, y) && Math.max(g[0], g[1], g[2]) > GLOW_SHOWS) {
+          const own = oklab(f.data[i], f.data[i + 1], f.data[i + 2]), light = oklab(g[0], g[1], g[2])
+          const kept = keptNearest(lab, pl, own, light)
+          if (kept >= 0) k = kept
+        }
+        // deliberate light: a rim one step lighter along the side that faces the light, and a highlight on the peak of a lit form
+        if (solid(x, y) && (look.rim || look.shine) && Math.max(g[0], g[1], g[2]) <= GLOW_SHOWS) {
+          let up = false
+          if (look.rim) { const [sx, sy] = rimStep(look.rim); up = !solid(x + sx, y + sy) && solid(x - sx, y - sy) }
+          if (!up && look.shine) up = peakAt(f, x, y, map)
+          if (up) { const k2 = lighterStep(pl[k], pl); if (k2 >= 0) k = k2 }
+        }
         // only the scene's own pixels: the sky is the same every frame, and a pixel the scene has left must not keep its color
         if (steady > 0 && solid(x, y) && before!.data[o + 3] === 255) {
           const was = slot.get((before!.data[o] << 16) | (before!.data[o + 1] << 8) | before!.data[o + 2])
           const far = (p: Rgb) => Math.hypot(lab[0] - p[0], lab[1] - p[1], lab[2] - p[2])
-          // colors that cycle are left to move
-          if (was !== undefined && was !== k && !member[was] && !member[k] && far(pl[was]) <= far(pl[k]) + steady) k = was
+          // colors that cycle are left to move; and only one of the two colors this pixel lies between is kept, so a
+          // pixel the sky had a moment ago never keeps the sky's color as a sail turns over it
+          const between = was !== undefined && pl.filter((p) => far(p) < far(pl[was])).length <= 1
+          // and never the color the sky would take here
+          let skyK = -1
+          if (look.sky) {
+            const [top, low] = look.sky, reach = skyReach(look.sky), t = Math.min(1, (y + 0.5) / h / reach)
+            const off = (BAYER4[(y & 3) * 4 + (x0 & 3)] / 16 - 0.5) * Math.max(look.dither, SKY_DITHER * (reach < 1 ? Math.min(1, (1 - t) * 4) : 1)) * 48
+            const c = [0, 1, 2].map((q) => Math.max(0, Math.min(255, top[q] + (low[q] - top[q]) * t + g[q]) + off))
+            skyK = nearest(oklab(c[0], c[1], c[2]), pl)
+          }
+          if (was !== undefined && was !== k && was !== skyK && between && !member[was] && !member[k] && far(pl[was]) <= far(pl[k]) + steady) k = was
         }
         // color cycling, on the scene's own pixels
         const c = look.palette[solid(x, y) ? turn[k] : k]
@@ -618,6 +786,7 @@ export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Fram
       out.data[o] = r; out.data[o + 1] = gg; out.data[o + 2] = b; out.data[o + 3] = 255
     }
   }
+  if (look.calm) return calmArt(out, f, parts && parts.width === w && parts.height === h ? parts.data : undefined)
   return look.tidy ? tidyLone(out, f, map) : out
 }
 
@@ -635,10 +804,11 @@ const QUAD = [[0, 0], [1, 0], [0, 1], [1, 1]] as const
  *
  * Gives the frame and the map of parts at the art's size, as `pixelArt` takes them.
  */
-export function resolveFine(fine: Frame, parts?: Frame): { small: Frame; parts?: Frame } {
-  const w = fine.width >> 1, h = fine.height >> 1
+export function resolveFine(given: Frame, parts?: Frame, hard?: Frame): { small: Frame; parts?: Frame } {
+  const w = given.width >> 1, h = given.height >> 1
   const small = makeFrame(w, h)
-  const map = parts && parts.width === fine.width && parts.height === fine.height ? parts.data : undefined
+  const map = parts && parts.width === given.width && parts.height === given.height ? parts.data : undefined
+  const fine = map && hard && hard.width === given.width && hard.height === given.height ? seamed(given, hard, map) : given
   const ids = map ? makeFrame(w, h) : undefined
   const cut = PIXEL_CUT * 255
   const NONE = 1 << 24
@@ -680,6 +850,195 @@ export function resolveFine(fine: Frame, parts?: Frame): { small: Frame; parts?:
 }
 
 const N8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]] as const
+
+/**
+ * Four samples a pixel with `PixelLook.solid`: an art pixel where one thing meets another anywhere in the four by four
+ * samples round its own (the map of parts says) takes its samples from `hard`, the picture drawn as hard discs, so it
+ * never shows a little of what is behind a fading edge; elsewhere they stay the soft picture's. Only a sample both
+ * cover, where neither gives off light (`GLOW_FROM`), changes: the cover stays the soft picture's, and so does light, or
+ * a spark smaller than a pixel would be drawn as a whole disc. The pass's settle step is the twin (change both).
+ */
+export function seamed(fine: Frame, hard: Frame, map: Uint8ClampedArray | Uint8Array): Frame {
+  const out = makeFrame(fine.width, fine.height)
+  out.data.set(fine.data)
+  const W = fine.width, H = fine.height, cut = PIXEL_CUT * 255
+  const glows = (d: ArrayLike<number>, j: number) => Math.max(d[j], d[j + 1], d[j + 2]) >= GLOW_FROM * 255
+  const number = (x: number, y: number) => { const j = (y * W + x) * 4; return map[j + 3] >= 128 ? map[j] | (map[j + 1] << 8) | (map[j + 2] << 16) : -1 }
+  for (let y = 0; y < H >> 1; y++) {
+    for (let x = 0; x < W >> 1; x++) {
+      const first = number(x * 2, y * 2)
+      let edge = false
+      for (let dy = -1; dy <= 2 && !edge; dy++) for (let dx = -1; dx <= 2; dx++) {
+        if (number(Math.min(W - 1, Math.max(0, x * 2 + dx)), Math.min(H - 1, Math.max(0, y * 2 + dy))) !== first) { edge = true; break }
+      }
+      if (!edge) continue
+      for (const [sx, sy] of QUAD) {
+        const j = ((y * 2 + sy) * W + x * 2 + sx) * 4
+        if (fine.data[j + 3] < cut || hard.data[j + 3] < cut || glows(fine.data, j) || glows(hard.data, j)) continue
+        for (let c = 0; c < 4; c++) out.data[j + c] = hard.data[j + c]
+      }
+    }
+  }
+  return out
+}
+
+/** How many of a pixel's eight neighbors (of its own part) must share a color for `calm` to give it that color. */
+export const CALM_MOST = 5
+
+/**
+ * `art` made calmer (see `PixelLook.calm`): `f` is the small frame it was drawn from (which pixels are scene), `map`
+ * the map of parts if there is one. Reads only `art`, so a pixel changed never changes its neighbors; ties go to the
+ * first color met in `N8`'s order. The live pass does the same (pixelPass.ts `tidy`): change one, change both.
+ */
+/**
+ * For `calm`: which of the four sides (an index into `N8`) a pixel on a silhouette should take its color from, or -1.
+ * A bump (a scene pixel with the backdrop on three sides) takes the backdrop beside it, but only where it stands on a
+ * wall at least three pixels wide, so the tip of a line a pixel wide, a star or a spark stays. A notch (a backdrop pixel
+ * with the scene on three sides) takes the scene's color across from its open side, but only where that side opens onto
+ * open backdrop, so a gap a pixel wide between two things stays; a hole (scene on all four sides) is filled.
+ */
+export function calmEdge(x: number, y: number, w: number, h: number, solid: (x: number, y: number) => boolean): number {
+  const me = solid(x, y)
+  const inside = (a: number, b: number) => a >= 0 && b >= 0 && a < w && b < h
+  let other = 0, odd = -1
+  for (let q = 0; q < 4; q++) { const [dx, dy] = N8[q]; if (inside(x + dx, y + dy) && solid(x + dx, y + dy) !== me) other++; else odd = q }
+  if (other === 4) return me ? -1 : 0
+  if (other !== 3 || odd < 0) return -1
+  // the one side like this pixel, and the two pixels either side of it across the way it lies
+  const [dx, dy] = N8[odd], ax = x + dx, ay = y + dy
+  if (!inside(ax, ay) || !inside(ax + dy, ay + dx) || !inside(ax - dy, ay - dx)) return -1
+  if (solid(ax + dy, ay + dx) !== me || solid(ax - dy, ay - dx) !== me) return -1
+  // take the other kind's color from the side across from that one
+  return odd ^ 1
+}
+
+/** How much brighter (by `LINE_LUMA`, 0 to 1) both sides of a corner must be than a line for its doubled pixel to go. */
+export const LINE_LIFT = 0.06
+/** How many neighbors of one color a speck of one or two pixels needs round it to take that color (`calmArt`). */
+export const SPECK_MOST = 3
+/** How much lighter or darker (by `LINE_LUMA`, 0 to 1) a speck may be and still be cleaned up: past it, it is a highlight or a detail. */
+export const SPECK_KEEP = 0.3
+/** The weights `lineFix` takes a pixel's lightness by. */
+export const LINE_LUMA: [number, number, number] = [0.3, 0.55, 0.15]
+
+/**
+ * The line cleaner of `PixelLook.calm`, after Silicon Jungle's Ink Studio (MIT, with their agreement): where in `art`
+ * pixel (x, y) should take its color from, as an index into `art.data`, or -1 to keep its own. Two cases, read on
+ * the art as drawn (colors equal or not, alpha too; outside the picture is its nearest edge pixel):
+ * a kink, a pixel with one color ahead of it and on both sides while its own color runs straight on behind it in
+ * three pixels, takes the color ahead (a one-pixel bump or dent in a straight edge between two colors); and a double,
+ * the extra pixel at the inside corner of a step in a dark line one pixel thick (the line goes on past both arms, and
+ * both pixels outside the corner are `LINE_LIFT` lighter), takes the color outside the corner, so the line meets
+ * corner to corner as a pixel artist draws it.
+ */
+export function lineFix(art: Frame, x: number, y: number): number {
+  const { width: w, height: h, data } = art
+  const at = (ax: number, ay: number) => (Math.min(h - 1, Math.max(0, ay)) * w + Math.min(w - 1, Math.max(0, ax))) * 4
+  const like = (a: number, b: number) => data[a] === data[b] && data[a + 1] === data[b + 1] && data[a + 2] === data[b + 2] && data[a + 3] === data[b + 3]
+  const luma = (a: number) => (data[a] * LINE_LUMA[0] + data[a + 1] * LINE_LUMA[1] + data[a + 2] * LINE_LUMA[2]) / 255
+  const me = at(x, y)
+  for (let k = 0; k < 4; k++) {
+    const [dx, dy] = N8[k], ex = dy, ey = dx
+    const ahead = at(x + dx, y + dy)
+    if (like(ahead, me) || !like(at(x + ex, y + ey), ahead) || !like(at(x - ex, y - ey), ahead)) continue
+    if (like(at(x - dx, y - dy), me) && like(at(x - dx + ex, y - dy + ey), me) && like(at(x - dx - ex, y - dy - ey), me)) return ahead
+  }
+  const l0 = luma(me)
+  for (let k = 4; k < 8; k++) {
+    const [gx, gy] = N8[k]
+    if (!like(at(x + gx, y), me) || !like(at(x, y + gy), me) || like(at(x + gx, y + gy), me) || like(at(x - gx, y), me) || like(at(x, y - gy), me)) continue
+    const goH = like(at(x + 2 * gx, y), me) || like(at(x + 2 * gx, y - gy), me), goV = like(at(x, y + 2 * gy), me) || like(at(x - gx, y + 2 * gy), me)
+    const a = at(x - gx, y), b = at(x, y - gy)
+    if (goH && goV && luma(a) > l0 + LINE_LIFT && luma(b) > l0 + LINE_LIFT) return like(a, b) ? a : at(x - gx, y - gy)
+  }
+  return -1
+}
+
+export function calmArt(art: Frame, f: Frame, map?: Uint8ClampedArray | Uint8Array): Frame {
+  const { width: w, height: h } = art
+  const out = makeFrame(w, h)
+  out.data.set(art.data)
+  const cut = PIXEL_CUT * 255
+  const solid = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h && f.data[(y * w + x) * 4 + 3] >= cut
+  const colorAt = (x: number, y: number) => { const j = (y * w + x) * 4; return (art.data[j] << 16) | (art.data[j + 1] << 8) | art.data[j + 2] }
+  const partAt = (x: number, y: number) => { const j = (y * w + x) * 4; return map![j + 3] < 128 ? -1 : map![j] | (map![j + 1] << 8) | (map![j + 2] << 16) }
+  const copy = (x: number, y: number, fx: number, fy: number) => { const i = (y * w + x) * 4, j = (fy * w + fx) * 4; for (let k = 0; k < 4; k++) out.data[i + k] = art.data[j + k] }
+  // the line cleaner, on the art as drawn (`lineFix`)
+  const line = (x: number, y: number) => { const from = lineFix(art, x, y); if (from >= 0) { const i = (y * w + x) * 4; for (let k = 0; k < 4; k++) out.data[i + k] = art.data[from + k] } }
+  const luma = (c: number) => ((c >> 16) * LINE_LUMA[0] + ((c >> 8) & 255) * LINE_LUMA[1] + (c & 255) * LINE_LUMA[2]) / 255
+  /** The neighbors of (x, y) on its part and of color `c`: how many, and the last. */
+  const likes = (x: number, y: number, c: number, part: number) => {
+    let n = 0, at = -1
+    for (const [dx, dy] of N8) {
+      const nx = x + dx, ny = y + dy
+      if (!solid(nx, ny) || (map && partAt(nx, ny) !== part) || colorAt(nx, ny) !== c) continue
+      n++; at = ny * w + nx
+    }
+    return [n, at] as const
+  }
+  /**
+   * A patch of one or two pixels (`SPECK_MOST`) takes the color most of its neighbors on its part share, when three or
+   * more do and it is no more than `SPECK_KEEP` lighter or darker, so a highlight, an eye or a spark stays. After Ink
+   * Studio's speck cleanup (MIT).
+   */
+  const speck = (x: number, y: number, mine: number, part: number) => {
+    const [n, at] = likes(x, y, mine, part)
+    if (!(n === 0 || (n === 1 && likes(at % w, Math.floor(at / w), mine, part)[0] === 1))) return false
+    let best = -1, most = 0
+    for (const [dx, dy] of N8) {
+      const nx = x + dx, ny = y + dy
+      if (!solid(nx, ny) || (map && partAt(nx, ny) !== part)) continue
+      const c = colorAt(nx, ny)
+      if (c === mine) continue
+      const [k] = likes(x, y, c, part)
+      if (k > most) { most = k; best = c }
+    }
+    if (most < SPECK_MOST || Math.abs(luma(mine) - luma(best)) >= SPECK_KEEP) return false
+    const i = (y * w + x) * 4
+    out.data[i] = best >> 16; out.data[i + 1] = (best >> 8) & 255; out.data[i + 2] = best & 255
+    return true
+  }
+  const near: number[] = []
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const me = solid(x, y)
+      const step = calmEdge(x, y, w, h, solid)
+      if (step >= 0) { copy(x, y, x + N8[step][0], y + N8[step][1]); continue }
+      if (!me) {
+        // the line round a silhouette follows it: beside a bump taken off, this pixel takes what lies beyond it; beyond
+        // a notch filled, it takes the notch's own color, which is what the line was there
+        let solids = 0
+        for (let q = 0; q < 4; q++) if (solid(x + N8[q][0], y + N8[q][1])) solids++
+        let followed = false
+        for (let q = 0; q < 4; q++) {
+          const nx = x + N8[q][0], ny = y + N8[q][1]
+          if (nx < 0 || ny < 0 || nx >= w || ny >= h || calmEdge(nx, ny, w, h, solid) < 0) continue
+          if (solid(nx, ny)) { if (solids === 1) { const fx = x - N8[q][0], fy = y - N8[q][1]; if (fx >= 0 && fy >= 0 && fx < w && fy < h) { copy(x, y, fx, fy); followed = true } } }
+          else { copy(x, y, nx, ny); followed = true }
+          break
+        }
+        // the outline's own pixels only: the sky's dither is no line
+        if (!followed && solids > 0) line(x, y)
+        continue
+      }
+      const mine = colorAt(x, y), part = map ? partAt(x, y) : -1
+      near.length = 0
+      for (const [dx, dy] of N8) {
+        if (!solid(x + dx, y + dy) || (map && partAt(x + dx, y + dy) !== part)) continue
+        near.push(colorAt(x + dx, y + dy))
+      }
+      let own = 0
+      for (const c of near) if (c === mine) own++
+      let best = -1, most = 0
+      for (const c of near) { let n = 0; for (const d of near) if (d === c) n++; if (n > most) { most = n; best = c } }
+      // a pixel much lighter or darker than the patch round it is a highlight or a detail, not speckle
+      if (most < CALM_MOST || most <= own || Math.abs(luma(mine) - luma(best)) >= SPECK_KEEP) { if (!speck(x, y, mine, part)) line(x, y); continue }
+      const i = (y * w + x) * 4
+      out.data[i] = best >> 16; out.data[i + 1] = (best >> 8) & 255; out.data[i + 2] = best & 255
+    }
+  }
+  return out
+}
 
 /**
  * `art` with its lone pixels cleaned up (see `PixelLook.tidy`): `f` is the small frame it was drawn from (which pixels

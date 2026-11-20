@@ -216,6 +216,22 @@ export interface VoxelLight {
 export const STEP_L = 0.7
 /** How ragged the edge between two steps is, where a scene doesn't say (`VoxelLight.steps`). */
 export const MOTTLE = 0.35
+/**
+ * How far round the hue circle (degrees, in OKLab) a palette color may sit from a paint's own and still be a step of its
+ * ramp (`stepper`), where both have color enough to have a hue (`HUE_FROM`). A red that has no darker red in the palette
+ * stays its own darkest red in shade rather than turning brown or orange, as a hand-made ramp would.
+ */
+export const HUE_KEEP = 16
+/** The chroma (OKLab) under which a color counts as a gray for `HUE_KEEP`: a gray is a step of any paint's ramp. */
+export const HUE_FROM = 0.02
+/**
+ * How far round the hue circle (degrees) a near-gray palette color may sit from the way a gray paint's light tints it
+ * (cool in shade, warm in sun) or from the paint's own faint hue, and still be a step of its ramp (`stepper`). White
+ * sails in shade took the sky's palest blue, which read as holes through to the sky.
+ */
+export const GRAY_TURN = 40
+/** How many times closer a palette color off a paint's ramp must be before a blob takes it (`stepper`): only light of another color carries a blob that far. */
+export const ESCAPE = 9
 
 /** A voxel scene for `buildVoxels`: its bones, its parts and the grid's cell size. */
 export interface VoxelSpec {
@@ -825,7 +841,7 @@ export function bakedColor(base: Vec3, shade: number, lit: number, ramp: number,
  * A paint's ramp is the palette colors it passes through as its light goes from a deep corner to full sun (found once
  * per paint, to 1/64 a channel); a finished color takes the nearest of them, after `mottle` has pushed its lightness up
  * or down by patch. Light of another color (a beam, a bounce, a mirror) can carry a blob well off its ramp: when a
- * palette color outside it is more than twice as close, that one is taken. Palette colors over `LIT_MAX` are held at
+ * palette color outside it is `ESCAPE` times as close or more, that one is taken. A ramp keeps to its paint's own hue (`HUE_KEEP`). Palette colors over `LIT_MAX` are held at
  * it, as every lit color is, so nothing painted starts to glow.
  */
 export function stepper(steps: NonNullable<VoxelLight['steps']>, light: VoxelLight): (base: Vec3, color: Vec3, i: number, j: number, k: number) => Vec3 {
@@ -854,7 +870,17 @@ export function stepper(steps: NonNullable<VoxelLight['steps']>, light: VoxelLig
       for (const k of [0.3, 0.6]) add(light.ambient * k, 0)
       for (let q = 0; q <= 12; q++) add(light.ambient + (1 - light.ambient) * (q / 12), q / 12)
       add(1, 1, light.wear ?? 0)
-      got = [...seen]
+      // keep the paint's own hue: a step that turns it to another hue (a red to brown in shade) is left out
+      const [, pa, pb] = toOklab(base)
+      const hued = Math.hypot(pa, pb) >= HUE_FROM
+      const away = (h: number, to: number) => Math.abs(Math.atan2(Math.sin(h - to), Math.cos(h - to))) * (180 / Math.PI)
+      const own = [...seen].filter((q) => {
+        const [, a, b] = labs[q], c = Math.hypot(a, b), h = Math.atan2(b, a)
+        if (hued) return c < HUE_FROM || away(h, Math.atan2(pb, pa)) <= HUE_KEEP
+        // a gray paint's steps are grays tinted the way its own light turns it (cool in shade, warm in sun) or its own way
+        return c < HUE_FROM / 2 || [COOL, WARM, Math.atan2(pb, pa)].some((to) => away(h, to) <= GRAY_TURN)
+      })
+      got = own.length ? own : [...seen]
       ramps.set(key, got)
     }
     return got
@@ -865,7 +891,7 @@ export function stepper(steps: NonNullable<VoxelLight['steps']>, light: VoxelLig
     if (mottle > 0) lab[0] += (ihash(Math.floor(i / 3), Math.floor(j / 3), Math.floor(k / 3), 91) - 0.5 + (ihash(i, j, k, 93) - 0.5) * 0.3) * mottle * 0.1
     const [own, ownD] = nearestOf(lab, rampOf(base))
     const [any, anyD] = nearestOf(lab)
-    return shown[anyD * 4 < ownD ? any : own]
+    return shown[anyD * ESCAPE < ownD ? any : own]
   }
 }
 
@@ -880,6 +906,77 @@ export function unlit<T>(make: () => T): T {
   const was = plain
   plain = true
   try { return make() } finally { plain = was }
+}
+
+let bands = 0
+/**
+ * Runs `make` with every `buildVoxels` inside it lighting each blob as one texel in `n` flat bands: the sun's share that
+ * reaches a blob (its facing times its cast shadow) is moved onto the nearest of `n` steps from none to full before its
+ * color is worked out, so light and shade fall in whole blobs, crisp along the surface, while each blob keeps its own
+ * paint (bricks, planks, ripples). The ambient share is left as it is. 0 or 1 leaves the light smooth.
+ */
+export function banded<T>(n: number, make: () => T): T {
+  const was = bands
+  bands = n
+  try { return make() } finally { bands = was }
+}
+
+let hug = false
+/**
+ * Runs `make` with every `buildVoxels` inside it fitting the discs along a shape's outer edges to the edge: a disc whose
+ * surface ends within its reach (the shape falls away from the disc's own plane, as past the top of a fence rail or the
+ * rim of a pond) is moved in and squeezed across the edge, long along it, so the row of discs ends in a straight line
+ * where the shape does instead of a row of round bumps standing past it. Inner corners are left alone: what meets them
+ * covers them. See `edgeFit`.
+ */
+export function hugged<T>(make: () => T): T {
+  const was = hug
+  hug = true
+  try { return make() } finally { hug = was }
+}
+
+/** How far out from a disc's middle, in its σ, the picture's solid edge lies (a lone blob of full opacity reaches 0.5 there). */
+const SOLID_REACH = 1.18
+/** Ways round a disc that `edgeFit` looks for the edge. */
+const EDGE_WAYS = 8
+
+/**
+ * Where the surface of a shape ends within a disc's reach, in the disc's own plane: the way out to the nearest outer edge
+ * (a unit vector in the plane) and how far from the disc's middle the edge lies, or undefined when the surface carries on
+ * all round. `past(q)` is how far the shape lies off the disc's plane at `q`, counted as off past `least`; it is asked at
+ * three distances along `EDGE_WAYS` ways, the nearer ones only where the farthest finds an edge.
+ */
+export function edgeFit(p: Vec3, n: Vec3, reach: number, past: (q: Vec3) => number, least: number): { out: Vec3; at: number } | undefined {
+  const t = norm(Math.abs(n[1]) < 0.9 ? [n[2], 0, -n[0]] : [0, -n[2], n[1]])
+  const b: Vec3 = [n[1] * t[2] - n[2] * t[1], n[2] * t[0] - n[0] * t[2], n[0] * t[1] - n[1] * t[0]]
+  const steps = [0.35, 0.65, 1]
+  const out: Vec3 = [0, 0, 0]
+  let near = Infinity
+  for (let k = 0; k < EDGE_WAYS; k++) {
+    const a = (k / EDGE_WAYS) * Math.PI * 2, c = Math.cos(a), si = Math.sin(a)
+    const u: Vec3 = [t[0] * c + b[0] * si, t[1] * c + b[1] * si, t[2] * c + b[2] * si]
+    const at = (r: number): Vec3 => [p[0] + u[0] * r * reach, p[1] + u[1] * r * reach, p[2] + u[2] * r * reach]
+    if (past(at(1)) <= least) continue
+    let r = 1, by = 0
+    for (const f of steps) { const v = past(at(f)); if (v > least) { r = f; by = v; break } }
+    // the edge lies about as far back from the first point off the surface as that point lies off it (straight past an
+    // edge the shape's distance grows one for one), and no nearer than the last step still on it
+    const i = steps.indexOf(r), edge = Math.max(i > 0 ? steps[i - 1] : 0, r - by / reach)
+    const w = 1.2 - edge
+    out[0] += u[0] * w; out[1] += u[1] * w; out[2] += u[2] * w
+    near = Math.min(near, edge * reach)
+  }
+  if (near === Infinity) return
+  const len = Math.hypot(out[0], out[1], out[2])
+  // edges all round (a lone speck, the tip of a spike) have no one way out: leave the disc as it is
+  if (len < 0.35) return
+  return { out: [out[0] / len, out[1] / len, out[2] / len], at: near }
+}
+
+/** Moves a sun share (0 to 1) onto the nearest of `n` steps (`banded`). */
+export function bandOf(direct: number, n: number): number {
+  if (n < 2) return direct
+  return Math.min(n - 1, Math.floor(direct * n)) / (n - 1)
 }
 
 /**
@@ -1024,10 +1121,11 @@ export function buildVoxels(spec: VoxelSpec): Built {
             base = [base[0] + (gr[0] - base[0]) * k, base[1] + (gr[1] - base[1]) * k, base[2] + (gr[2] - base[2]) * k]
           }
         }
-        const shade = (ambient + (1 - light.ambient) * facing * sun) * LIT_MAX
+        const direct = bands > 1 ? bandOf(facing * sun, bands) : facing * sun
+        const shade = (ambient + (1 - light.ambient) * direct) * LIT_MAX
         // how sharply the surface bends outward here (from the samples the normal came from): 0 flat, over 1 at an edge
         const edge = wear > 0 ? Math.min(1, Math.max(0, (((xa + xb + ya + yb + za + zb - 6 * d) / (e * e)) * s - 0.5) / 1.5)) : 0
-        color = bakedColor(base, shade, facing * sun, ramp, wear * edge)
+        color = bakedColor(base, shade, direct, ramp, wear * edge)
         if (bounce > 0) {
           const t = thrown(p, n, pi)
           color = [0, 1, 2].map((i) => Math.min(LIT_MAX, color[i] + base[i] * t[i] * bounce * 0.6)) as Vec3
@@ -1076,9 +1174,21 @@ export function buildVoxels(spec: VoxelSpec): Built {
           sight[at + k] = v
         }
       }
+      let center = p, shape = dab(n, part.strokes ?? 0, wide ? 2 : 1)
+      if (hug && !wide) {
+        const solid = shape.scale[0] * SOLID_REACH
+        // the shape has left the disc's plane where it lies clearly farther off than the disc's middle does
+        const fit = edgeFit(p, n, solid * 1.25, (q) => sdf(q[0], q[1], q[2]) - d, s * 0.08)
+        if (fit && fit.at < solid) {
+          const reachOut = Math.max(fit.at, s * 0.1), half = (reachOut + solid) / 2, shift = (reachOut - solid) / 2
+          const m = fit.out, along: Vec3 = [m[1] * n[2] - m[2] * n[1], m[2] * n[0] - m[0] * n[2], m[0] * n[1] - m[1] * n[0]]
+          center = [p[0] + m[0] * shift, p[1] + m[1] * shift, p[2] + m[2] * shift]
+          shape = { scale: [Math.max(shape.scale[0], shape.scale[1]), half / SOLID_REACH, shape.scale[2]], quat: quatFromAxes(along, m, n) }
+        }
+      }
       blobs.push({
         // a disc lying on the surface: flat along the normal, which is what live lights read as the way it faces
-        center: p, ...dab(n, part.strokes ?? 0, wide ? 2 : 1),
+        center, ...shape,
         color, opacity: part.opacity ?? 0.96,
       })
       parts.push(pi)
