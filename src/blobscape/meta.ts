@@ -65,6 +65,7 @@ const SEARCH: Partial<Record<Route['page'], string>> = {
   dungeon: 'Fight slimes in a torchlit dungeon with a sword, fire and frost. Hero, hall and slimes are all Gaussian splats, with fire that spreads across the floor.',
   scan: 'Open a Gaussian splat scan from your phone, turn it level, cut away the floor and the floaters, relight it and save it. Everything stays on your device.',
   shift: 'One creature made of Gaussian splats turns into another: a frog into a dragon, an owl into a crocodile. Every blob finds a partner and travels to it.',
+  islands: 'A floating island grown from a biome recipe and a number, out of Gaussian splats: hills, a path, trees and stones, each made of materials from one library.',
   bouquet: 'A florist that never makes the same bouquet twice: pick a season and it grows every flower petal by petal out of Gaussian splats and stands them in a vase.',
   daynight: 'A cabin in a forest clearing made of Gaussian splats, lit live through a whole day. Drag the time and the sun follows its real path for the place and season.',
   fourways: 'One pixel-art scene drawn four ways at the same moment: a hand-written shader, three.js meshes, Spark splats and Blobscape, on one clock, camera and light.',
@@ -108,6 +109,8 @@ function wordsFor(route: Route): Omit<PageMeta, 'search'> {
       return { path, title: `Scan Studio · ${SITE.name}`, description: 'Open a Gaussian splat scan of an object from your phone (Scaniverse, Polycam and others export .ply or .spz), find the table and turn it level, cut away the floor and the floaters, relight it with live lights, then take it into the sandbox or save it. Everything stays on your device.' }
     case 'shift':
       return { path, title: `Shape Shifter · ${SITE.name}`, description: 'One creature made of Gaussian splats turns into another: a frog into a dragon, an owl into a crocodile. Every blob finds a partner in the other creature and travels to it, blending its size, facing and color on the way. Pick the pair, send the blobs straight, in a swirl, through a puddle or out in a burst, and see what pairing by place is for.' }
+    case 'islands':
+      return { path, title: `Biome Islands · ${SITE.name}`, description: 'A floating island grown from a biome recipe and a number, out of Gaussian splats. The recipe says what kind of place it is and names its materials from one library (oak, birch, granite, loam, meadow turf); the number decides its outline, its hills, its path and where every tree and stone stands. The first step of a sky world of islands to walk across. A work in progress.' }
     case 'bouquet':
       return { path, title: `Seasonal Bouquets · ${SITE.name}`, description: 'A florist that never makes the same bouquet twice. Pick a season and it grows every flower from a recipe, petal by petal, out of Gaussian splats (peonies and tulips in spring, dahlias and wheat in fall, amaryllis and pine in winter), arranges them by the rules florists use, and stands them in a glass vase, a bucket, a pumpkin, a rain boot or a ceramic snowman. The stems sway and petals fall.' }
     case 'daynight':

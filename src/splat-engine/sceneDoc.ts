@@ -57,6 +57,19 @@ export interface SceneDoc {
    */
   disc?: number
   /**
+   * Cut every surface one cell deep in true distance, not in the shape's own units: a shape whose distance changes
+   * faster than one for one (anything `rough`, worn land on a slope) otherwise leaves its skin thinner than a cell in
+   * places, and the inside of the far side shows through. With `disc` 0.75 it is what keeps solid ground solid from
+   * every side (the floating islands are checked for it). It costs a few blobs more.
+   */
+  trueShell?: boolean
+  /**
+   * A big place to walk round rather than a diorama: things may stand up to 8 from the middle, it may carry 128 bones,
+   * a part may be about 6 units across and the parts four times the surface between them. It takes about four times as
+   * long to cut, so a scene is big only when it needs the room.
+   */
+  big?: boolean
+  /**
    * The grid it is cut on, as a share of the detail's own: 0.5 to 1, 1 when left out. A small subject in a scene of
    * open water or sky (the lighthouse on its rock) takes a finer grid, so its bricks and windows get as many cells as
    * a bigger subject's would. It costs blobs: 0.72 is about twice as many.
@@ -477,15 +490,17 @@ export interface LightDoc {
 
 const HEX = /^#[0-9a-f]{6}$/i
 const AXES = ['x', 'y', 'z']
-const REACH = 4
+const SMALL_REACH = 4
 const MAX_PARTS = 240
-const MAX_BONES = 64
+const SMALL_BONES = 64
 const MAX_DEPTH = 6
 const MAX_SCENE_LIGHTS = 4
 /** Simple shapes in the whole scene, however they are joined. */
 const MAX_SHAPES = 600
 /** The most surface a scene's parts may have between them, by their boxes, in square units: a third over the fullest scene we ship (the dragon, about 160). Past it the build takes seconds and the blobs run to millions. */
-const MAX_SURFACE = 200
+const SMALL_SURFACE = 200
+/** A `big` scene's room: reach, bones and surface. */
+const BIG = { reach: 8, bones: 128, surface: 800 }
 const MAX_MOVES_PER_BONE = 6
 /** Specks in a whole scene: each is a bone of its own, posed every frame. */
 const MAX_SPECKS = 300
@@ -582,6 +597,9 @@ const piecesIn = (p: unknown): boolean => {
  */
 export function checkScene(doc: unknown): string[] {
   const errs: string[] = []
+  // a big place has more room in every way
+  const big = typeof doc === 'object' && doc !== null && (doc as { big?: unknown }).big === true
+  const REACH = big ? BIG.reach : SMALL_REACH, MAX_BONES = big ? BIG.bones : SMALL_BONES, MAX_SURFACE = big ? BIG.surface : SMALL_SURFACE
   // every mistake is counted, though only the first 40 are listed
   let found = 0
   const bad = (at: string, what: string) => { found++; if (errs.length < 40) errs.push(`${at}: ${what}`) }
@@ -638,6 +656,7 @@ export function checkScene(doc: unknown): string[] {
   if (doc.sky !== undefined) hexes(doc.sky, 'sky', 2, 2)
   opt(doc.skyReach, 'skyReach', 0.05, 1)
   opt(doc.disc, 'disc', 0.4, 1)
+  for (const k of ['trueShell', 'big']) if (doc[k] !== undefined && typeof doc[k] !== 'boolean') bad(k, 'must be true or false')
   opt(doc.grid, 'grid', 0.5, 1)
   if (doc.look !== undefined) {
     if (!obj(doc.look)) bad('look', 'must be an object')
@@ -932,7 +951,7 @@ export function checkScene(doc: unknown): string[] {
       // a sound shape: add its box's surface, and catch one so big it would take seconds to cut
       const [a, b, c] = halfSize(p.shape as ShapeDoc)
       const area = 8 * (a * b + b * c + c * a)
-      if (area > MAX_SURFACE / 2) bad(`${at}.shape`, 'is too big: keep a part within about 3 units across')
+      if (area > MAX_SURFACE / 2) bad(`${at}.shape`, `is too big: keep a part within about ${big ? 6 : 3} units across`)
       surface += area
     }
     paint(p.paint, `${at}.paint`, 0)
@@ -1633,8 +1652,8 @@ export function compileScene(doc: SceneDoc, { puffs = true }: { puffs?: boolean 
   /** Whether there is water at (x, z): inside the box, with a bed of still ground under the level to hold it (looked for from just over the surface, so a roof overhead is not in the way). */
   const wetAt = (x: number, z: number) => {
     if (!pond || !pondBox || x < pondBox.x0 || x > pondBox.x1 || z < pondBox.z0 || z > pondBox.z1) return false
-    const bed = groundUnder(ground, x, z, pond.level + 3 * (pond.cell ?? WATER_CELL), -REACH)
-    return bed > -REACH + 1e-6 && bed < pond.level - WATER_LEAST
+    const bed = groundUnder(ground, x, z, pond.level + 3 * (pond.cell ?? WATER_CELL), -SMALL_REACH * 2)
+    return bed > -SMALL_REACH * 2 + 1e-6 && bed < pond.level - WATER_LEAST
   }
   const specks = planSpecks(doc.air, doc.loop, (x, z, top, bottom) => {
     const g = groundUnder(ground, x, z, top, bottom)
@@ -1701,7 +1720,7 @@ export function compileScene(doc: SceneDoc, { puffs = true }: { puffs?: boolean 
       const ra = (az * Math.PI) / 180, re = (el * Math.PI) / 180
       const eye: Vec3 = [tg[0] + dist * Math.sin(ra) * Math.cos(re), tg[1] + dist * Math.sin(re), tg[2] + dist * Math.cos(ra) * Math.cos(re)]
       const sky: [Vec3, Vec3] | undefined = doc.sky ? [unit(doc.sky[0]), unit(doc.sky[1])] : doc.air?.haze ? [unit(doc.air.haze.color), unit(doc.air.haze.color)] : undefined
-      return { bones, parts, spacing, light, loose: looseAir(doc.air), beams, lamps, cover, eye, sky, focus: doc.focus, disc: doc.disc }
+      return { bones, parts, spacing, light, loose: looseAir(doc.air), beams, lamps, cover, eye, sky, focus: doc.focus, disc: doc.disc, trueShell: doc.trueShell }
     },
     empty(built) {
       const seen = new Set<number>()
