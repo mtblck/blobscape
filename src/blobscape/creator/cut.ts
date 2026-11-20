@@ -4,7 +4,7 @@ import type { Built } from '../../splat-engine/body.ts'
 import { Skeleton, mulQ } from '../../splat-engine/rig.ts'
 import { oklab } from '../../splat-core/pixel.ts'
 import { DIORAMAS } from '../diorama/scenes.ts'
-import { isCreature, libraryCreature, libraryProp } from './library.ts'
+import { creatureLook, isCreature, libraryCreature, libraryProp } from './library.ts'
 import { placer, type Placement } from '../../splat-engine/project.ts'
 import { DETAIL } from '../diorama/scene.ts'
 import type { Species } from '../../splat-engine/zoo/species.ts'
@@ -38,7 +38,7 @@ export function cut(job: CutJob): Built {
   if (job.kind === 'prop') {
     const placed = job.project.props[job.i]
     const c = isCreature(placed.prop) ? libraryCreature(placed.prop) : undefined
-    if (c) return withShadow(placedCreature(c, placed, job.spacing), placed.at)
+    if (c) return withShadow(placedCreature(c, placed, job.spacing, creatureLook(placed.prop as string)), placed.at)
   }
   const cp = compiled(job.project)
   const land = landSpec(cp, job.spacing)
@@ -78,13 +78,13 @@ export function withShadow(b: Built, foot: ArrayLike<number>): Built {
 }
 
 /**
- * A creature from Splat Creatures, made in its first look at the blob count of its own detail chip that matches the
+ * A creature from Splat Creatures, made in `look` (its first when left out) at the blob count of its own detail chip that matches the
  * page's detail (Chunky its lightest), and stood where it is placed: blobs and bones moved, turned and sized as a
  * placed prop's cut would be. Made standing on the floor at the middle, so its foot is the origin.
  */
-export function placedCreature(c: Species, pl: Placement, spacing: number): Built {
+export function placedCreature(c: Species, pl: Placement, spacing: number, look = c.looks[0].id): Built {
   const level = Math.max(0, DETAIL.findIndex((d) => Math.abs(d.spacing - spacing) < 1e-6))
-  const made = c.make(c.detail[Math.min(level, c.detail.length - 1)], c.looks[0].id) as Partial<Built> & Built
+  const made = c.make(c.detail[Math.min(level, c.detail.length - 1)], look) as Partial<Built> & Built
   const t = placer([0, 0, 0], pl)
   const b = made.blobs, n = b.count
   for (let i = 0; i < n; i++) {

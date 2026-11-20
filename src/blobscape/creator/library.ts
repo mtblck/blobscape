@@ -1,5 +1,6 @@
 import type { SceneDoc } from '../../splat-engine/sceneDoc.ts'
 import type { Skeleton } from '../../splat-engine/rig.ts'
+import type { Species } from '../../splat-engine/zoo/species.ts'
 import { markedPicks, splitScene, type PropDoc, type PropPick, type PropRef, type SceneProject } from '../../splat-engine/project.ts'
 import { DRAGON } from '../diorama/scenes/dragon.ts'
 import { HENGE } from '../diorama/scenes/henge.ts'
@@ -161,12 +162,26 @@ const WHOLE_LANDS: { id: string; name: string; about: string; from: string; doc:
 
 const picture = (id: string) => `/props/${id}.png`
 
+/**
+ * Every creature in each of its looks, a card each (Matt asked for the dragon's ember and jade, 2026-11-19): the
+ * first look is `creature-<id>` and named for the creature alone, so projects saved before looks keep theirs; the
+ * others are `creature-<id>-<look>`, named with the look first ("Ember dragon").
+ */
+export const CREATURE_LOOKS: { id: string; name: string; species: Species; look: string }[] = CREATURES.flatMap((c) =>
+  c.looks.map((l, k) => ({
+    id: k ? `creature-${c.id}-${l.id}` : `creature-${c.id}`,
+    name: k ? `${l.label} ${c.name}` : c.name[0].toUpperCase() + c.name.slice(1),
+    species: c,
+    look: l.id,
+  })))
+const LOOK_BY_ID = new Map(CREATURE_LOOKS.map((x) => [x.id, x]))
+
 /** Every entry: props, then lands, then creatures. */
 export const LIBRARY: LibraryEntry[] = [
   ...SOURCES.flatMap((s) => s.props.map((p): LibraryEntry => ({ id: p.id, name: p.pick, about: p.about, kind: 'prop', from: s.from, picture: picture(p.id), group: p.group ?? 'small' }))),
   ...SOURCES.filter((s) => s.land).map((s): LibraryEntry => ({ id: s.land!.id, name: s.land!.name, about: s.land!.about, kind: 'land', from: s.from, picture: picture(s.land!.id), group: 'lands' })),
   ...WHOLE_LANDS.map((l): LibraryEntry => ({ id: l.id, name: l.name, about: l.about, kind: 'land', from: l.from, picture: picture(l.id), group: 'lands' })),
-  ...CREATURES.map((c): LibraryEntry => ({ id: `creature-${c.id}`, name: c.name[0].toUpperCase() + c.name.slice(1), about: c.blurb, kind: 'creature', from: 'creatures', picture: picture(`creature-${c.id}`), group: 'living' })),
+  ...CREATURE_LOOKS.map(({ id, name, species: c }): LibraryEntry => ({ id, name, about: c.blurb, kind: 'creature', from: 'creatures', picture: picture(id), group: 'living' })),
 ]
 
 const split = new Map<Source, ReturnType<typeof splitScene>>()
@@ -177,7 +192,7 @@ const split = new Map<Source, ReturnType<typeof splitScene>>()
  */
 export function libraryProp(id: string): PropDoc | undefined {
   const creature = libraryCreature(id)
-  if (creature) return creatureProp(id, creature.name)
+  if (creature) return creatureProp(id, LOOK_BY_ID.get(id)!.name)
   const whole = WHOLE_LANDS.find((l) => l.id === id)
   if (whole) return { name: whole.name, foot: [0, 0, 0], doc: whole.doc }
   for (const s of SOURCES) {
@@ -192,7 +207,10 @@ export function libraryProp(id: string): PropDoc | undefined {
 }
 
 /** The creature an entry is, as `CREATURES` lists it. */
-export const libraryCreature = (id: string) => (id.startsWith('creature-') ? CREATURES.find((c) => `creature-${c.id}` === id) : undefined)
+export const libraryCreature = (id: string): Species | undefined => LOOK_BY_ID.get(id)?.species
+
+/** Which look of its creature an entry is. */
+export const creatureLook = (id: string): string | undefined => LOOK_BY_ID.get(id)?.look
 
 /** Whether a prop is one of the creatures. */
 export const isCreature = (ref: PropRef): ref is string => typeof ref === 'string' && !!libraryCreature(ref)
