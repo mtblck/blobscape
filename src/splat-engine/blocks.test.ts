@@ -152,3 +152,15 @@ test('each source keeps its own pieces', () => {
   const b = buildBlocks([source([blob(0, 0, 0)]), source([blob(0, 0, 0), blob(0.5, 0, 0)])], plain)
   assert.deepEqual(b.pieces.map((p) => [p.actor, p.blocks]), [[0, 1], [1, 2]])
 })
+
+test('one source never shades another: each has its own rest pose and may stand anywhere', () => {
+  const floor = []
+  for (let x = -2; x <= 2; x++) for (let z = -2; z <= 2; z++) floor.push(blob(x * 0.1, 0, z * 0.1))
+  const look = { ...plain, corners: 1, from: [0, 1, 0] as Rgb }
+  const b = buildBlocks([source(floor), source([blob(0, 0.1, 0), blob(0, 0.2, 0)])], look)
+  const ground = b.pieces.find((p) => p.actor === 0)!
+  for (let v = 0; v < ground.light.length / 3; v++) {
+    assert.equal(ground.light[v * 3 + 1], 1)
+    if (ground.normals[v * 3 + 1] === 1) assert.ok(ground.light[v * 3] > 0.9)
+  }
+})

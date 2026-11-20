@@ -9391,7 +9391,7 @@
     {
      "name": "buildBlocks",
      "kind": "function",
-     "doc": "The sources as blocks: a mesh for each bone that carries any (see `BlockLook`). A cell two bones' blobs share goes\nto the bone with more of them, so no two cubes ever stand in one place; faces between two cubes on one bone are\nleft out.",
+     "doc": "The sources as blocks: a mesh for each bone that carries any (see `BlockLook`). A cell two bones' blobs share goes\nto the bone with more of them, so no two cubes ever stand in one place; faces between two cubes on one bone are\nleft out. Shadows and corners are worked out within each source, never from one to another.",
      "signatures": [
       {
        "code": "buildBlocks(sources: readonly BlockSource[], look: BlockLook): { pieces: BlockPiece[]; blocks: number; faces: number }"

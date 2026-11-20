@@ -185,7 +185,7 @@ export function faceLit(solid: (x: number, y: number, z: number) => boolean, x: 
 /**
  * The sources as blocks: a mesh for each bone that carries any (see `BlockLook`). A cell two bones' blobs share goes
  * to the bone with more of them, so no two cubes ever stand in one place; faces between two cubes on one bone are
- * left out.
+ * left out. Shadows and corners are worked out within each source, never from one to another.
  */
 export function buildBlocks(sources: readonly BlockSource[], look: BlockLook): { pieces: BlockPiece[]; blocks: number; faces: number } {
   const least = look.least ?? 0.3, from = look.from ?? BLOCK_FROM
@@ -266,8 +266,8 @@ export function buildBlocks(sources: readonly BlockSource[], look: BlockLook): {
   }
   const count = owner.length
   const cells = Int32Array.from(where)
-  const solid = solidGrid(cells, count, (k) => !loose[k] && glows[k] < GLOW_CLEAR) as ((x: number, y: number, z: number) => boolean) & { lo?: number[]; hi?: number[] }
-  const lo = solid.lo ?? [0, 0, 0], hi = solid.hi ?? [0, 0, 0]
+  // what is solid, a source at a time: each source has its own rest pose and may be stood anywhere, so one never shades another
+  const solids = sources.map((_, a) => solidGrid(cells, count, (k) => owner[k] === a && !loose[k] && glows[k] < GLOW_CLEAR) as ((x: number, y: number, z: number) => boolean) & { lo?: number[]; hi?: number[] })
 
   // which faces show, cell by cell, and how many each piece gets
   const open = new Uint8Array(count)
@@ -293,6 +293,7 @@ export function buildBlocks(sources: readonly BlockSource[], look: BlockLook): {
     const positions = new Float32Array(nv * 3), normals = new Float32Array(nv * 3), colors = new Float32Array(nv * 3), light = new Float32Array(nv * 3), uvs = new Float32Array(nv * 2)
     const indices = new Uint32Array(p.faces * 6)
     let v = 0, t = 0
+    const solid = solids[p.actor], lo = solid.lo ?? [0, 0, 0], hi = solid.hi ?? [0, 0, 0]
     for (const k of p.cells) {
       const x = cells[k * 3], y = cells[k * 3 + 1], z = cells[k * 3 + 2], speck = !!loose[k]
       const side = speck ? look.cell * SPECK_SIZE : look.cell
