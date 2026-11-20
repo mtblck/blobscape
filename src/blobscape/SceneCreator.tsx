@@ -482,7 +482,7 @@ export function SceneCreator() {
   useEffect(() => { stage?.setSharpness(coarse && !pixels ? 1.5 : 2) }, [stage, coarse, pixels])
   // one of Brush and Ink's looks in place of pixel art. Cel shading's and stained glass's flat fills are gathered on the land
   const drawing = useDrawnLook(stage, drawnStyle, {
-    actor: built?.[0], plain: !!chosen[0]?.plain, azimuth: shown.orbit.azimuth, offscreen, light: coarse, loop: shown.loop,
+    actor: built?.[0], spacing: DETAIL.find((d) => d.id === detail)?.spacing, plain: !!chosen[0]?.plain, azimuth: shown.orbit.azimuth, offscreen, light: coarse, loop: shown.loop,
     sky: px.sky || skyForced ? [skyColors[0], skyColors[1]] : undefined,
   })
   const drawStyle = (id: Style) => {

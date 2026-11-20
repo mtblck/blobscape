@@ -4,7 +4,8 @@ import { STEADY, darkest, type PixelLook } from '../splat-core/pixel.ts'
 import type { Built } from '../splat-engine/body.ts'
 import type { Skeleton } from '../splat-engine/rig.ts'
 import { LoadingMark } from '../shared/BlobLoader.tsx'
-import { Button, Chip, Field, Toggle } from '../shared/ui.tsx'
+import { Button, Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
+import { BLOCK_SIZES, BLOCK_START, blockLook } from './blockLooks.ts'
 import { TAB_SECTIONS, Workbench } from '../shared/Workbench.tsx'
 import { detailAsked, labelNames, writeDetail } from '../shared/detail.ts'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
@@ -60,7 +61,10 @@ export function Islands() {
   const [biomeId, setBiomeId] = useState(() => biomeOf(params().get('biome')).id)
   const [seed, setSeed] = useState(() => { const n = Math.floor(Number(params().get('seed'))); return n >= 1 && n <= MAX_SEED ? n : typeof window === 'undefined' ? 1 : 1 + Math.floor(Math.random() * MAX_SEED) })
   const [detail, setDetail] = useState<string>(() => detailAsked(DETAIL, labelNames)?.id ?? (coarse ? 'chunky' : 'medium'))
-  const [pixels, setPixels] = useState(() => params().get('style') !== 'blobs')
+  // how the island is drawn: built from blocks (Matt, 2026-11-20: the style to drive these islands), as pixel art, or as the blobs themselves
+  const [style, setStyle] = useState<'blocks' | 'pixel' | 'blobs'>(() => { const s = params().get('style'); return s === 'pixel' || s === 'blobs' ? s : 'blocks' })
+  const pixels = style === 'pixel', blocky = style === 'blocks'
+  const [blockSize, setBlockSize] = useState(() => { const v = Math.round(Number(params().get('block'))); return v >= BLOCK_SIZES.min && v <= BLOCK_SIZES.max ? v : BLOCK_START.size })
   const [orbit, setOrbit] = useState<Orbit>({ target: [0, 0, 0], distance: 12.5, azimuth: 24, elevation: 20 })
   const [walking, setWalking] = useState(() => params().get('walk') === '1')
 
@@ -84,8 +88,8 @@ export function Islands() {
   }, [offscreen])
 
   // cut in a worker (an island takes seconds), and the island on show stays until the next is ready
-  const [made, setMade] = useState<{ built: Built; of: typeof scene; detail: string }>()
-  const ready = made?.of === scene && made.detail === detail ? made : undefined
+  const [made, setMade] = useState<{ built: Built; of: typeof scene; detail: string; plain: boolean }>()
+  const ready = made?.of === scene && made.detail === detail && made.plain === blocky ? made : undefined
   const worker = useRef<Worker>(undefined)
   useEffect(() => () => worker.current?.terminate(), [])
   useEffect(() => {
@@ -94,13 +98,13 @@ export function Islands() {
     const id = Math.random()
     const heard = (ev: MessageEvent<{ id: number; cut?: PackedCut; error?: string }>) => {
       if (ev.data.id !== id) return
-      if (ev.data.cut) setMade({ built: unpack(ev.data.cut), of: scene, detail })
+      if (ev.data.cut) setMade({ built: unpack(ev.data.cut), of: scene, detail, plain: blocky })
       else setFailed(`The island could not be cut: ${ev.data.error}`)
     }
     w.addEventListener('message', heard)
-    w.postMessage({ id, biome: island.plan.biome, seed: island.plan.seed, spacing } satisfies IslandJob)
+    w.postMessage({ id, biome: island.plan.biome, seed: island.plan.seed, spacing, plain: blocky } satisfies IslandJob)
     return () => w.removeEventListener('message', heard)
-  }, [scene, island, detail])
+  }, [scene, island, detail, blocky])
 
   const orbitNow = useRef(orbit)
   orbitNow.current = orbit
@@ -203,14 +207,21 @@ export function Islands() {
     return { palette: colors, dither: shown.finish.dither, outline: darkest(colors), glow: shown.finish.glow, edges: 1, parts: true, sky: shown.sky, steady: STEADY, tidy: true, fine: true, own: true, surface: true, snap: true }
   }, [pixels, shown, elfColors])
   useEffect(() => { stage?.setPixels(look, 2) }, [stage, look])
+  // blocks: cubes a whole number of the cut's cells across, lit from the starting view's left; only an island cut with no light of its own
+  const blockSpacing = ready?.plain ? DETAIL.find((d) => d.id === ready.detail)!.spacing : undefined
+  const blockAzimuth = shown.views[0].orbit.azimuth
+  useEffect(() => {
+    if (!stage) return
+    stage.setBlocks(blocky && blockSpacing ? blockLook({ ...BLOCK_START, size: blockSize }, blockSpacing, blockAzimuth) : undefined)
+  }, [stage, blocky, blockSpacing, blockSize, blockAzimuth])
 
   // the address always names the island on show, so it can be sent to someone
   useEffect(() => {
     const url = new URL(location.href)
     const put = (k: string, v: string | undefined) => { if (v) url.searchParams.set(k, v); else url.searchParams.delete(k) }
-    put('biome', BIOMES.length > 1 ? biomeId : undefined); put('seed', String(seed)); put('style', pixels ? undefined : 'blobs'); put('rock', rock ? undefined : '0'); put('walk', walking ? '1' : undefined)
+    put('biome', BIOMES.length > 1 ? biomeId : undefined); put('seed', String(seed)); put('style', blocky ? undefined : style); put('block', blocky && blockSize !== BLOCK_START.size ? String(blockSize) : undefined); put('rock', rock ? undefined : '0'); put('walk', walking ? '1' : undefined)
     history.replaceState(history.state, '', url)
-  }, [biomeId, seed, pixels, rock, walking])
+  }, [biomeId, seed, style, blocky, blockSize, rock, walking])
 
   // For verify: the stage and the island, without clicking
   useEffect(() => {
@@ -335,10 +346,12 @@ export function Islands() {
               <div className={TAB_SECTIONS}>
                 <Field label="Drawn as">
                   <div className="flex flex-wrap gap-1.5">
-                    <Chip active={pixels} onClick={() => setPixels(true)}>Pixel art</Chip>
-                    <Chip active={!pixels} onClick={() => setPixels(false)}>Blobs</Chip>
+                    <Chip active={blocky} onClick={() => setStyle('blocks')}>Blocks</Chip>
+                    <Chip active={pixels} onClick={() => setStyle('pixel')}>Pixel art</Chip>
+                    <Chip active={style === 'blobs'} onClick={() => setStyle('blobs')}>Blobs</Chip>
                   </div>
                 </Field>
+                {blocky && <Slider label="Block size" value={blockSize} min={BLOCK_SIZES.min} max={BLOCK_SIZES.max} step={1} onChange={setBlockSize} format={(v) => `${v}×`} hint="How big a block is beside the grid the island was cut on." />}
                 <Field label="Detail">
                   <div className="flex flex-wrap gap-1.5">
                     {DETAIL.map((d) => <Chip key={d.id} active={detail === d.id} onClick={() => { setDetail(d.id); writeDetail(d.id) }}>{d.label}</Chip>)}
