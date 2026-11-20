@@ -15,6 +15,7 @@ import { DIORAMAS } from '../diorama/scenes.ts'
 import { HENGE_PICKS, LAVA_DRAGON_PICKS, LIGHTHOUSE_PICKS, TURKEY_PICKS, WINDMILL_PICKS, WITCH_IN_SPARKS_PICKS } from './picks.ts'
 import { PLAIN_ROCK, PLAIN_TURF } from './lands.ts'
 import { KIT } from './kit.ts'
+import { isModel, modelOf } from './models.ts'
 
 /**
  * Scene Creator's library (issue #334): props lifted out of Pixel Diorama's scenes, the lands they stood on and a few
@@ -193,6 +194,7 @@ const split = new Map<Source, ReturnType<typeof splitScene>>()
 export function libraryProp(id: string): PropDoc | undefined {
   const creature = libraryCreature(id)
   if (creature) return creatureProp(id, LOOK_BY_ID.get(id)!.name)
+  if (isModel(id)) return creatureProp(id, modelOf(id)?.name ?? 'Your model')
   const whole = WHOLE_LANDS.find((l) => l.id === id)
   if (whole) return { name: whole.name, foot: [0, 0, 0], doc: whole.doc }
   for (const s of SOURCES) {
@@ -292,4 +294,4 @@ export function openLand(id: string): SceneProject | undefined {
 }
 
 /** A library entry or a prop written out, as the list beside the picture names it. */
-export const nameOf = (ref: PropRef): string => (typeof ref === 'string' ? LIBRARY.find((e) => e.id === ref)?.name ?? ref : ref.name)
+export const nameOf = (ref: PropRef): string => (typeof ref === 'string' ? LIBRARY.find((e) => e.id === ref)?.name ?? (isModel(ref) ? modelOf(ref)?.name ?? 'Your model' : ref) : ref.name)

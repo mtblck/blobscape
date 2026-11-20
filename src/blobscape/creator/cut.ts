@@ -4,6 +4,9 @@ import type { Built } from '../../splat-engine/body.ts'
 import { Skeleton, mulQ } from '../../splat-engine/rig.ts'
 import { oklab } from '../../splat-core/pixel.ts'
 import { DIORAMAS } from '../diorama/scenes.ts'
+import { isModel } from './models.ts'
+import { unpack, type PackedCut } from './pack.ts'
+import { Blobs } from '../../splat-core/blobs.ts'
 import { creatureLook, isCreature, libraryCreature, libraryProp } from './library.ts'
 import { placer, type Placement } from '../../splat-engine/project.ts'
 import { DETAIL } from '../diorama/scene.ts'
@@ -17,7 +20,7 @@ import type { Species } from '../../splat-engine/zoo/species.ts'
 export type CutJob =
   | { kind: 'whole'; scene: string; spacing: number; plain?: boolean }
   | { kind: 'land'; project: SceneProject; spacing: number; plain?: boolean }
-  | { kind: 'prop'; project: SceneProject; i: number; spacing: number; plain?: boolean }
+  | { kind: 'prop'; project: SceneProject; i: number; spacing: number; plain?: boolean; model?: PackedCut }
 
 // one project is compiled once and kept while the jobs that follow ask for its pieces
 let kept: { key: string; cp: CompiledProject } | undefined
@@ -39,6 +42,8 @@ export function cut(job: CutJob): Built {
     const placed = job.project.props[job.i]
     const c = isCreature(placed.prop) ? libraryCreature(placed.prop) : undefined
     if (c) return withShadow(placedCreature(c, placed, job.spacing, creatureLook(placed.prop as string)), placed.at)
+    // a model of your own comes with the job, already standing on its foot; one the page no longer has is a speck
+    if (isModel(placed.prop)) return withShadow(placedBuilt(job.model ? unpack(copied(job.model)) : speck(), placed), placed.at)
   }
   const cp = compiled(job.project)
   const land = landSpec(cp, job.spacing)
@@ -84,7 +89,11 @@ export function withShadow(b: Built, foot: ArrayLike<number>): Built {
  */
 export function placedCreature(c: Species, pl: Placement, spacing: number, look = c.looks[0].id): Built {
   const level = Math.max(0, DETAIL.findIndex((d) => Math.abs(d.spacing - spacing) < 1e-6))
-  const made = c.make(c.detail[Math.min(level, c.detail.length - 1)], look) as Partial<Built> & Built
+  return placedBuilt(c.make(c.detail[Math.min(level, c.detail.length - 1)], look) as Partial<Built> & Built, pl)
+}
+
+/** Something made standing on its foot at the origin (a creature, a model) stood where it is placed: blobs and bones moved, turned and sized. Changes `made`'s blobs. */
+export function placedBuilt(made: Partial<Built> & Pick<Built, 'blobs' | 'skin' | 'skeleton'>, pl: Placement): Built {
   const t = placer([0, 0, 0], pl)
   const b = made.blobs, n = b.count
   for (let i = 0; i < n; i++) {
@@ -118,4 +127,19 @@ export function colorsOf(b: Built, most = 8): string[] {
     if (out.length >= most) break
   }
   return out.map((c) => `#${c.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`)
+}
+
+/** A packed cut with arrays of its own, so placing it leaves the one handed in alone. */
+const copied = (p: PackedCut): PackedCut => ({
+  ...p,
+  center: p.center.slice(), scale: p.scale.slice(), quat: p.quat.slice(), color: p.color.slice(), opacity: p.opacity.slice(),
+  joints: p.joints.slice(), weights: p.weights.slice(), partOf: p.partOf.slice(), seen: p.seen?.slice(), glow: p.glow?.slice(),
+  bones: p.bones.map((x) => ({ ...x, head: [...x.head] as typeof x.head })),
+})
+
+/** A stand-in for a model the page no longer has (#370 keeps them): one clear speck on one bone. */
+function speck(): Built {
+  const blobs = new Blobs(1)
+  blobs.push({ center: [0, 0.01, 0], scale: [0.01, 0.01, 0.01], quat: [0, 0, 0, 1], color: [0.5, 0.5, 0.5], opacity: 0 })
+  return { blobs, skin: { joints: new Uint8Array(4), weights: new Float32Array([1, 0, 0, 0]) }, skeleton: new Skeleton([{ name: 'model', head: [0, 0, 0], parent: -1 }]), partOf: new Uint16Array(1) }
 }
