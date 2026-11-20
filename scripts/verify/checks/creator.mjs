@@ -414,8 +414,8 @@ export default [
   },
   {
     name: 'scene-creator-style',
-    about: 'Scene Creator, Style and Export: oil, then cel shading (cut again with no light baked in), then pixel art in another palette each change the picture; a frame saves as a PNG and a two-stop camera path as an animated PNG of every frame',
-    entries: ['src/blobscape/SceneCreator.tsx', 'src/blobscape/creator/styling.ts', 'src/blobscape/diorama/useExport.tsx', 'src/blobscape/creator/cut.ts'],
+    about: 'Scene Creator, Style and Export: oil, then cel shading (cut again with no light baked in), then pixel art in another palette each change the picture; a frame saves as a PNG, the scene as a rigged .glb the engine reads, and a two-stop camera path as an animated PNG of every frame',
+    entries: ['src/blobscape/SceneCreator.tsx', 'src/blobscape/creator/styling.ts', 'src/blobscape/diorama/useExport.tsx', 'src/blobscape/creator/cut.ts', 'src/blobscape/creator/engineFile.ts'],
     async run({ shots, join, fails, ok, open, axe }) {
       const c = await open('/scene-creator/?offscreen=1&detail=chunky&mode=style', { viewport: { width: 1280, height: 900 } })
       const p = c.page
@@ -458,6 +458,15 @@ export default [
       const frameName = frame.suggestedFilename()
       const frameBytes = (await import('node:fs')).readFileSync(await frame.path())
       steps.push(['frame saved', frameName === 'scene-creator-windmill.png' && frameBytes.length > 1000])
+      // for the engine (#387): one rigged .glb with the loop, read back by the engine's own reader
+      const [eng] = await Promise.all([p.waitForEvent('download', { timeout: 60000 }), p.getByTestId('creator-save-engine').click()])
+      const { readRiggedGlb } = await import(join(root, 'src/splat-engine/glb.ts'))
+      let engine = {}
+      try {
+        const r = readRiggedGlb(new Uint8Array((await import('node:fs')).readFileSync(await eng.path())))
+        engine = { name: eng.suggestedFilename(), blobs: r.blobs.count, shown: await p.evaluate(() => window.__creator.blobs()), bones: r.skeleton.count, clips: r.clips.map((c) => c.name) }
+      } catch (e) { engine = { error: String(e) } }
+      steps.push(['saved for the engine', /\.glb$/.test(engine.name ?? '') && engine.blobs === engine.shown && engine.bones > 11 && engine.clips?.join() === 'loop'])
       await p.getByTestId('creator-add-stop').click()
       const view = p.getByTestId('creator-view')
       await view.focus()
@@ -472,16 +481,16 @@ export default [
       const at = png.indexOf('acTL'), frames = at > 0 ? png.readUInt32BE(at + 4) : 0
       steps.push(['path saved', path.suggestedFilename() === 'scene-creator-windmill-path.png' && frames === 13])
       const bad = steps.filter(([, good]) => !good).map(([name]) => name)
-      if (bad.length) fails.push(`blobscape scene creator style: ${bad.join(', ')} failed ${JSON.stringify({ diffs, frameName, frames, note: await p.evaluate(() => window.__creator.exportNote()) })}`)
-      else ok(`blobscape scene creator style: oil, cel shading (cut plain) and a 1-bit palette each change the picture; a frame and a ${frames}-frame camera path save`)
+      if (bad.length) fails.push(`blobscape scene creator style: ${bad.join(', ')} failed ${JSON.stringify({ diffs, frameName, frames, engine, note: await p.evaluate(() => window.__creator.exportNote()) })}`)
+      else ok(`blobscape scene creator style: oil, cel shading (cut plain) and a 1-bit palette each change the picture; a frame, the scene for the engine (${engine.blobs} blobs, ${engine.bones} bones) and a ${frames}-frame camera path save`)
     },
   },
   {
     name: 'scene-creator-storage',
     core: true,
     about: 'Scene Creator, kept in the browser: an edit is kept a moment later and is there after a reload; copied, renamed and deleted in Your scenes; a model of your own kept and carried by the file; saved as a file and opened in a fresh browser; a broken file says where; nothing asked of another site',
-    entries: ['src/blobscape/SceneCreator.tsx', 'src/blobscape/creator/store.ts', 'src/blobscape/creator/models.ts', 'src/blobscape/creator/described.ts', 'src/blobscape/creator/sceneModel.ts', 'src/blobscape/creator/scanLand.ts', 'src/splat-engine/meshFile.ts'],
-    async run({ shots, join, fails, ok, open, axe }) {
+    entries: ['src/blobscape/SceneCreator.tsx', 'src/blobscape/creator/store.ts', 'src/blobscape/creator/models.ts', 'src/blobscape/creator/described.ts', 'src/blobscape/creator/sceneModel.ts', 'src/blobscape/creator/scanLand.ts', 'src/blobscape/creator/link.ts', 'src/splat-engine/meshFile.ts'],
+    async run({ shots, join, fails, ok, open, axe, tabClick }) {
       const fs = await import('node:fs')
       const outside = []
       const watch = (page) => page.on('request', (r) => { if (!/^(http:\/\/(localhost|127\.0\.0\.1)|data:|blob:)/.test(r.url())) outside.push(r.url()) })
@@ -517,6 +526,19 @@ export default [
       await p.getByRole('button', { name: 'Delete Hill without a fence' }).click()
       await p.getByTestId('creator-delete-yes').click()
       steps.push(['deleted', await kept(p, 1)])
+      // a link holds the whole scene after its # (#386): it opens in a fresh browser, kept nowhere until changed
+      await tabClick(p.getByTestId('creator-copy-link'))
+      const link = await p.getByTestId('creator-link').inputValue({ timeout: 10000 }).catch(() => '')
+      steps.push(['a link is given', /#shared=[\w-]+$/.test(link)])
+      if (link) {
+        const u = new URL(link)
+        const l = await open(`${u.pathname}?offscreen=1&detail=chunky${u.hash}`, { viewport: { width: 1280, height: 900 } })
+        watch(l.page)
+        steps.push(['the link opens in a fresh browser', await opened(l.page, 9)])
+        await l.page.waitForTimeout(1500)
+        steps.push(['a link keeps nothing before an edit', (await l.page.getByTestId('creator-saved-item').count()) === 0 && /#shared=/.test(await l.page.evaluate(() => location.hash))])
+        await l.ctx.close()
+      }
       await p.screenshot({ path: join(shots, 'blobscape-scene-creator-storage.png') })
       await axe(p, 'blobscape scene creator storage')
       // a model of your own (#370): kept in the browser with the scene, and carried by its file
@@ -571,7 +593,7 @@ export default [
       steps.push(['nothing asked of another site', outside.length === 0])
       const bad = steps.filter(([, good]) => !good).map(([name]) => name)
       if (bad.length) fails.push(`blobscape scene creator storage: ${bad.join(', ')} failed ${JSON.stringify({ outside: outside.slice(0, 3), said })}`)
-      else ok('blobscape scene creator storage: an edit is kept and back after a reload; copy, rename and delete work; a file reopens in a fresh browser, a broken one says where, a scene description and a whole-scene model open as their props, and a splat scan as the land; no other site asked')
+      else ok('blobscape scene creator storage: an edit is kept and back after a reload; copy, rename and delete work; a file reopens in a fresh browser, a broken one says where, a link opens the scene in a fresh browser, a scene description and a whole-scene model open as their props, and a splat scan as the land; no other site asked')
     },
   },
   {

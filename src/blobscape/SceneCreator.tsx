@@ -19,18 +19,20 @@ import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitD
 import { ModeBar, useWorkspaceScreen, panelId, tabId, type Mode } from './sandbox/modes.tsx'
 import type { CutJob } from './creator/cut.ts'
 import { unpack, type PackedCut } from './creator/pack.ts'
-import { START_LANDS, START_SCENES, nameFor, openingAsked, openingLand, openingScene, queryFor, shownOf, type Opened } from './creator/shown.ts'
+import { START_LANDS, START_SCENES, nameFor, slug, openingAsked, openingLand, openingScene, queryFor, shownOf, type Opened } from './creator/shown.ts'
 import { isDescription, readDescribed } from './creator/described.ts'
 import { AUTOSAVE_MS, FILE_END, type ModelFile, cleanName, copyName, fileName, fileText, mergedLike, newId, openShelf, readFile, renamed, type SavedScene, type Shelf } from './creator/store.ts'
 import { download } from './files.ts'
 import { takeScan } from './handoff.ts'
+import { isLink, linkFor, readLink } from './creator/link.ts'
 import { registerTools } from './agentTools.ts'
 import { creatorTools, type CreatorApi } from './creator/agentTools.ts'
 import { PACKS, packAdded } from './creator/packs.ts'
 import { BLOB_ROOM, CARDS, spanOf, added, cardsFound, groundOf, heightAt, landSwapped, liftOn, roomOf, whyNot } from './creator/adding.ts'
 import { creatureMove, creatureSize, isCreature, libraryProp, openLand, type LibraryEntry } from './creator/library.ts'
 import { OPEN_MOST, SCATTERED, PlacedMorphs, rawTexture, scatteredStill, forgetKept, isModel, keepModel, keptModels, modelId, meshModelFrom, modelClip, modelFrom, modelJob, modelOf, modelSize, openShare, poseModel, type ModelProp, type RawImage, type SplatModel } from './creator/models.ts'
-import { GlbError, readRiggedGlb } from '../splat-engine/glb.ts'
+import { GlbError, readRiggedGlb, writeRiggedGlb } from '../splat-engine/glb.ts'
+import { sceneRig } from './creator/engineFile.ts'
 import { MeshFileError, openGlb, readMeshGlb, readMeshGlbParts, readObj, type MeshFile } from '../splat-engine/meshFile.ts'
 import { fileIdOf, isPart, partId, sceneLayout, sceneProject } from './creator/sceneModel.ts'
 import { landFromScan, scanGround, scanProject } from './creator/scanLand.ts'
@@ -263,7 +265,7 @@ export function SceneCreator() {
     url.searchParams.delete('scene'); url.searchParams.delete('land'); url.searchParams.delete('project')
     const [k, v] = queryFor(o)
     url.searchParams.set(k, v)
-    history.replaceState(history.state, '', url.pathname + url.search + url.hash)
+    history.replaceState(history.state, '', url.pathname + url.search + (isLink(url.hash) ? '' : url.hash))
   }
 
   // the stage: pixel art, so with lights, on its own canvas
@@ -395,12 +397,15 @@ export function SceneCreator() {
   /** Where prop `i` stands now: mid-gesture where it is going, else where the project says. */
   const placementOf = (i: number): Placement | undefined => (preview?.i === i ? preview.at : project?.props[i])
 
+  // the pieces on show and how they are posed, for saving them as one file for the engine (#387)
+  const posing = useRef<{ pieces: Built[]; pose: (t: number) => void }>(undefined)
   useEffect(() => {
     if (!stage || !built) return
     const [land, ...props] = built
     const from = stage.time
     stage.setActor(land, undefined, props)
-    stage.setPoser((sk: Skeleton, t: number) => {
+    posing.current = { pieces: built, pose: (t) => poseAll(land.skeleton, t) }
+    const poseAll = (sk: Skeleton, t: number) => {
       const L = live.current
       L.shown.poseLand(sk, t)
       const cpNow = L.shown.cp
@@ -448,7 +453,8 @@ export function SceneCreator() {
         props.forEach((b, i) => L.shown.poseProp(i, b.skeleton, t))
         stage.setLights(L.shown.lights(t, stage.backend === 'webgpu'), L.shown.ambient)
       }
-    }, from)
+    }
+    stage.setPoser(poseAll, from)
   }, [stage, built])
   useEffect(() => { stage?.invalidate() }, [stage, project, preview])
 
@@ -521,25 +527,68 @@ export function SceneCreator() {
     setShelf(null)
     say('This browser stopped keeping your work. Save it as a file to keep it.')
   }
-  /** Opens a kept scene: its project, its view, its style and settings. */
-  const openSaved = (r: SavedScene) => {
-    open({ kind: 'project', from: { saved: r.id }, project: r.project })
-    keptText.current = JSON.stringify(r.project)
+  /** Opens a project with its view, its style and settings: kept under `from.saved`, or unkept until its first edit. */
+  const openProject = (p: SceneProject, from: Extract<Opened, { kind: 'project' }>['from']) => {
+    const o: Opened = { kind: 'project', from, project: p }
+    open(o)
     pictureFor.current = undefined
-    const st = r.project.style
+    const st = p.style
     const id = STYLES.find((x) => x.id === st?.id)?.id
     if (id && id !== style) drawStyle(id)
     const settings = (st?.settings ?? {}) as { pixel?: unknown; glitch?: unknown }
-    setPx(mergedLike(pixelStart(shownOf({ kind: 'project', from: { saved: r.id }, project: r.project }).finish), settings.pixel))
+    setPx(mergedLike(pixelStart(shownOf(o).finish), settings.pixel))
     setGlitch(mergedLike(GLITCH_START, settings.glitch))
+  }
+  /** Opens a kept scene: its project, its view, its style and settings. */
+  const openSaved = (r: SavedScene) => {
+    openProject(r.project, { saved: r.id })
+    keptText.current = JSON.stringify(r.project)
     void shelf?.setLast(r.id).catch(console.warn)
     say(`Opened ${r.project.name}.`)
+  }
+  /**
+   * Opens a scene shared as a link (#386): unkept, as an opened scene is, until its first edit keeps it here. The link
+   * stays in the address until then, so a reload opens it again.
+   */
+  const openLink = async (hash: string) => {
+    const { project: p, problems } = await readLink(hash)
+    if (!p) { setFileProblems(problems); say('That link does not hold a scene this page can open.'); return false }
+    setFileProblems([])
+    openProject(p, { land: typeof p.land === 'string' ? p.land : START_LANDS[0].id })
+    keptText.current = ''
+    history.replaceState(history.state, '', location.pathname + location.search + hash)
+    say(`Opened ${p.name} from its link. Change anything and it is kept in this browser.`)
+    return true
+  }
+  const [linking, setLinking] = useState<string>()
+  // a link that is old news once the scene changes
+  useEffect(() => setLinking(undefined), [keeping])
+  // a shared link pasted into the address while the page is open
+  useEffect(() => {
+    const on = () => { if (isLink(location.hash)) void openLink(location.hash) }
+    addEventListener('hashchange', on)
+    return () => removeEventListener('hashchange', on)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  /** Copies a link holding the whole open scene, or says why it can't be one. */
+  const copyLink = async () => {
+    if (!keeping) return
+    const { hash, why } = await linkFor(keeping)
+    if (!hash) { setLinking(why); say(why ?? ''); return }
+    const url = `${location.origin}${location.pathname}${hash}`
+    setLinking(url)
+    try {
+      await navigator.clipboard.writeText(url)
+      say('Copied a link to this scene. The link holds the whole scene, so nothing is stored anywhere.')
+    } catch { say('Here is a link to this scene, below. The link holds the whole scene, so nothing is stored anywhere.') }
   }
   // opens the shelf once the page is in the browser, then what the address asks for or the scene open last
   useEffect(() => {
     let gone = false
-    // a scan Scan Studio handed over (#385) opens as the land, in place of the scene open last
+    // a scan Scan Studio handed over (#385) opens as the land, in place of the scene open last; so does a shared link (#386)
     const handed = takeScan()
+    const linked = !handed && isLink(location.hash) ? location.hash : undefined
+    if (linked) void openLink(linked)
     void openShelf().then(async (sh) => {
       if (gone) return
       setShelf(sh ?? null)
@@ -550,7 +599,7 @@ export function SceneCreator() {
       void sh.models().then((list) => takeModels(list, 'this browser')).catch(console.warn)
       const q = new URLSearchParams(location.search)
       const asked = q.get('project')
-      const id = asked ?? (handed || q.has('scene') || q.has('land') ? undefined : await sh.last().catch(() => undefined))
+      const id = linked ? undefined : asked ?? (handed || q.has('scene') || q.has('land') ? undefined : await sh.last().catch(() => undefined))
       if (!id || gone) return
       const r = await sh.get(id).catch(() => undefined)
       if (gone) return
@@ -588,7 +637,7 @@ export function SceneCreator() {
       if (!savedId) setOpened((o) => (o.kind === 'project' ? { ...o, from: { saved: id } } : o))
       const url = new URL(location.href)
       url.searchParams.delete('scene'); url.searchParams.delete('land'); url.searchParams.set('project', id)
-      history.replaceState(history.state, '', url.pathname + url.search + url.hash)
+      history.replaceState(history.state, '', url.pathname + url.search + (isLink(url.hash) ? '' : url.hash))
       void keep(id, keeping)
     }, AUTOSAVE_MS)
     return () => clearTimeout(timer)
@@ -762,6 +811,22 @@ export function SceneCreator() {
   const groundAt = (x: number, z: number, y: number) => heightAt(ground, x, z, y)
   const liftOf = (pl: Placement) => liftOn(ground, pl)
   const nameOfProp = (i: number) => shown.items[i + 1]?.name ?? 'Prop'
+  /** The scene as one rigged splat .glb with a clip of its loop, for `@blobscape/engine` and `<blobscape-creature>` (#387). */
+  const saveForEngine = () => {
+    const P = posing.current
+    if (!P || !stage) return
+    const name = project?.name ?? shown.name
+    try {
+      const rig = sceneRig(name, P.pieces.map((b, i) => ({ name: i ? nameOfProp(i - 1) : 'land', blobs: b.blobs, skin: b.skin, skeleton: b.skeleton })), shown.loop, P.pose)
+      const file = `${slug(name)}.glb`
+      download(writeRiggedGlb(rig), file, 'model/gltf-binary')
+      say(`Saved ${file}: ${rig.blobs.count.toLocaleString('en-US')} blobs on ${rig.skeleton.count} bones, with its ${shown.loop}-second loop.`)
+    } catch (e) {
+      say(e instanceof RangeError ? e.message : 'The scene could not be saved for the engine.')
+      if (!(e instanceof RangeError)) console.warn(e)
+    }
+    stage.invalidate()
+  }
 
   const edit = (next: SceneProject, words: string) => {
     if (!hist || next === hist.now) return
@@ -1236,11 +1301,15 @@ export function SceneCreator() {
                       )}
                       <div className="flex flex-wrap gap-2">
                         {keeping && <Button onClick={saveFile} data-testid="creator-save-file">Save as a file</Button>}
+                        {keeping && <Button onClick={() => void copyLink()} data-testid="creator-copy-link">Copy a link</Button>}
                         <Button onClick={() => fileInput.current?.click()} data-testid="creator-open-file">Open a file</Button>
                         <input ref={fileInput} type="file" accept={`${FILE_END},.json,application/json,.glb,model/gltf-binary,.ply,.spz,.splat,.ksplat`} className="sr-only" tabIndex={-1} aria-hidden data-testid="creator-file"
                           onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void openFile(f) }} />
                       </div>
-                      <p className="mt-1 text-xs text-ink-soft">A file saved here; a scene description (.json) as Pixel Diorama opens, the things it marks (or else what stands on bones of its own) coming in as props; a model of a whole scene (.glb), each thing at the top of its tree a prop, on a round of turf; or a splat scan (.ply, .spz, .splat, .ksplat) as the land, leveled and cleaned, in the light it was captured in.</p>
+                      {linking && (/^https?:/.test(linking)
+                        ? <input readOnly value={linking} aria-label="Link to this scene" onFocus={(e) => e.currentTarget.select()} className="w-full rounded-lg border border-rule bg-paper px-2 py-1 text-xs" data-testid="creator-link" />
+                        : <p className="text-xs text-ink-soft" data-testid="creator-link">{linking}</p>)}
+                      <p className="mt-1 text-xs text-ink-soft">A link holds the whole scene in the address after its #, which browsers never send to a server, so nothing is stored anywhere; your own models need a file. Open a file takes a file saved here; a scene description (.json) as Pixel Diorama opens, the things it marks (or else what stands on bones of its own) coming in as props; a model of a whole scene (.glb), each thing at the top of its tree a prop, on a round of turf; or a splat scan (.ply, .spz, .splat, .ksplat) as the land, leveled and cleaned, in the light it was captured in.</p>
                       {fileProblems.length > 0 && (
                         <div role="alert" className="mt-2 rounded-lg border border-rule bg-paper p-2 text-xs" data-testid="creator-file-problems">
                           <p className="font-semibold">That file is not a scene this page can open:</p>
@@ -1471,6 +1540,11 @@ export function SceneCreator() {
                       </div>
                       <p role="status" className="text-xs text-ink-faint empty:hidden" data-testid="creator-export-note">{exporting.note}</p>
                       <p className="text-xs text-ink-faint">The loop is {exporting.loopFrames} frames of the view as it is when you press the button. Turning or zooming while it runs changes nothing.</p>
+                    </div>
+                    <div>
+                      <h3 className="mb-1 text-sm font-semibold">For the engine</h3>
+                      <p className="mb-2 text-xs text-ink-faint">The scene as one rigged splat .glb with its loop, which <a href="/engine/" className="text-accent-ink underline underline-offset-2">the Blobscape engine</a> and its web tag play. It holds the blobs and their moves: lights, the sky and the style stay here.</p>
+                      <Button small disabled={!done || exporting.busy} onClick={saveForEngine} data-testid="creator-save-engine">Save for the engine (.glb)</Button>
                     </div>
                     <div>
                       <h3 id="creator-path" className="mb-1 text-sm font-semibold">Camera path</h3>
