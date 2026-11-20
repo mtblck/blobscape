@@ -300,9 +300,15 @@ export interface PixelLook {
    * more of its eight neighbors share when fewer share its own (with a map of parts, only neighbors of its own part
    * count, so one thing never bleeds into another); a scene pixel with the empty backdrop on three or four sides (a
    * one-pixel bump on a silhouette) takes the backdrop's color beside it, and an empty pixel with the scene on three or
-   * four sides (a notch) takes the scene's, so an outline runs clean. `calmArt` is the CPU twin of the pass.
+   * four sides (a notch) takes the scene's, so an outline runs clean; and lines are cleaned (`lineFix`: one-pixel kinks off
+   * straight edges, doubled pixels off the corners of dark lines). `calmArt` is the CPU twin of the pass.
    */
   calm?: boolean
+  /**
+   * Dither only where a pixel artist puts it: the sky's blend and the light a glow spills onto the scene keep `dither`,
+   * while the scene's own surfaces are drawn flat, each pixel its nearest palette color, so shade falls in bands.
+   */
+  flat?: boolean
   /**
    * Dither that stays on the things it falls on: each blob takes one step of the Bayer pattern from where it sits in
    * its own rest pose (`ditherRank`), not from the pixel it lands on, so the pattern rides with a turning view or a
@@ -556,6 +562,8 @@ export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Fram
       let spread = amp
       if (solid(x, y)) {
         r = f.data[i] + g[0]; gg = f.data[i + 1] + g[1]; b = f.data[i + 2] + g[2]
+        // flat surfaces: dither only where a glow spills onto the scene
+        if (look.flat && Math.max(g[0], g[1], g[2]) <= GLOW_SHOWS) spread = 0
         if (edges > 0 || map) {
           // a line on the darker side of a jump: one pixel wide, and never on the light thing itself
           const a = oklab(f.data[i], f.data[i + 1], f.data[i + 2])
@@ -722,6 +730,44 @@ export function calmEdge(x: number, y: number, w: number, h: number, solid: (x: 
   return odd ^ 1
 }
 
+/** How much brighter (by `LINE_LUMA`, 0 to 1) both sides of a corner must be than a line for its doubled pixel to go. */
+export const LINE_LIFT = 0.06
+/** The weights `lineFix` takes a pixel's lightness by. */
+export const LINE_LUMA: [number, number, number] = [0.3, 0.55, 0.15]
+
+/**
+ * The line cleaner of `PixelLook.calm`, after Silicon Jungle's Ink Studio (MIT, with their agreement): where in `art`
+ * pixel (x, y) should take its color from, as an index into `art.data`, or -1 to keep its own. Two cases, read on
+ * the art as drawn (colors equal or not, alpha too; outside the picture is its nearest edge pixel):
+ * a kink, a pixel with one color ahead of it and on both sides while its own color runs straight on behind it in
+ * three pixels, takes the color ahead (a one-pixel bump or dent in a straight edge between two colors); and a double,
+ * the extra pixel at the inside corner of a step in a dark line one pixel thick (the line goes on past both arms, and
+ * both pixels outside the corner are `LINE_LIFT` lighter), takes the color outside the corner, so the line meets
+ * corner to corner as a pixel artist draws it.
+ */
+export function lineFix(art: Frame, x: number, y: number): number {
+  const { width: w, height: h, data } = art
+  const at = (ax: number, ay: number) => (Math.min(h - 1, Math.max(0, ay)) * w + Math.min(w - 1, Math.max(0, ax))) * 4
+  const like = (a: number, b: number) => data[a] === data[b] && data[a + 1] === data[b + 1] && data[a + 2] === data[b + 2] && data[a + 3] === data[b + 3]
+  const luma = (a: number) => (data[a] * LINE_LUMA[0] + data[a + 1] * LINE_LUMA[1] + data[a + 2] * LINE_LUMA[2]) / 255
+  const me = at(x, y)
+  for (let k = 0; k < 4; k++) {
+    const [dx, dy] = N8[k], ex = dy, ey = dx
+    const ahead = at(x + dx, y + dy)
+    if (like(ahead, me) || !like(at(x + ex, y + ey), ahead) || !like(at(x - ex, y - ey), ahead)) continue
+    if (like(at(x - dx, y - dy), me) && like(at(x - dx + ex, y - dy + ey), me) && like(at(x - dx - ex, y - dy - ey), me)) return ahead
+  }
+  const l0 = luma(me)
+  for (let k = 4; k < 8; k++) {
+    const [gx, gy] = N8[k]
+    if (!like(at(x + gx, y), me) || !like(at(x, y + gy), me) || like(at(x + gx, y + gy), me) || like(at(x - gx, y), me) || like(at(x, y - gy), me)) continue
+    const goH = like(at(x + 2 * gx, y), me) || like(at(x + 2 * gx, y - gy), me), goV = like(at(x, y + 2 * gy), me) || like(at(x - gx, y + 2 * gy), me)
+    const a = at(x - gx, y), b = at(x, y - gy)
+    if (goH && goV && luma(a) > l0 + LINE_LIFT && luma(b) > l0 + LINE_LIFT) return like(a, b) ? a : at(x - gx, y - gy)
+  }
+  return -1
+}
+
 export function calmArt(art: Frame, f: Frame, map?: Uint8ClampedArray | Uint8Array): Frame {
   const { width: w, height: h } = art
   const out = makeFrame(w, h)
@@ -731,6 +777,8 @@ export function calmArt(art: Frame, f: Frame, map?: Uint8ClampedArray | Uint8Arr
   const colorAt = (x: number, y: number) => { const j = (y * w + x) * 4; return (art.data[j] << 16) | (art.data[j + 1] << 8) | art.data[j + 2] }
   const partAt = (x: number, y: number) => { const j = (y * w + x) * 4; return map![j + 3] < 128 ? -1 : map![j] | (map![j + 1] << 8) | (map![j + 2] << 16) }
   const copy = (x: number, y: number, fx: number, fy: number) => { const i = (y * w + x) * 4, j = (fy * w + fx) * 4; for (let k = 0; k < 4; k++) out.data[i + k] = art.data[j + k] }
+  // the line cleaner, on the art as drawn (`lineFix`)
+  const line = (x: number, y: number) => { const from = lineFix(art, x, y); if (from >= 0) { const i = (y * w + x) * 4; for (let k = 0; k < 4; k++) out.data[i + k] = art.data[from + k] } }
   const near: number[] = []
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
@@ -742,13 +790,16 @@ export function calmArt(art: Frame, f: Frame, map?: Uint8ClampedArray | Uint8Arr
         // a notch filled, it takes the notch's own color, which is what the line was there
         let solids = 0
         for (let q = 0; q < 4; q++) if (solid(x + N8[q][0], y + N8[q][1])) solids++
+        let followed = false
         for (let q = 0; q < 4; q++) {
           const nx = x + N8[q][0], ny = y + N8[q][1]
           if (nx < 0 || ny < 0 || nx >= w || ny >= h || calmEdge(nx, ny, w, h, solid) < 0) continue
-          if (solid(nx, ny)) { if (solids === 1) { const fx = x - N8[q][0], fy = y - N8[q][1]; if (fx >= 0 && fy >= 0 && fx < w && fy < h) copy(x, y, fx, fy) } }
-          else copy(x, y, nx, ny)
+          if (solid(nx, ny)) { if (solids === 1) { const fx = x - N8[q][0], fy = y - N8[q][1]; if (fx >= 0 && fy >= 0 && fx < w && fy < h) { copy(x, y, fx, fy); followed = true } } }
+          else { copy(x, y, nx, ny); followed = true }
           break
         }
+        // the outline's own pixels only: the sky's dither is no line
+        if (!followed && solids > 0) line(x, y)
         continue
       }
       const mine = colorAt(x, y), part = map ? partAt(x, y) : -1
@@ -761,7 +812,7 @@ export function calmArt(art: Frame, f: Frame, map?: Uint8ClampedArray | Uint8Arr
       for (const c of near) if (c === mine) own++
       let best = -1, most = 0
       for (const c of near) { let n = 0; for (const d of near) if (d === c) n++; if (n > most) { most = n; best = c } }
-      if (most < CALM_MOST || most <= own) continue
+      if (most < CALM_MOST || most <= own) { line(x, y); continue }
       const i = (y * w + x) * 4
       out.data[i] = best >> 16; out.data[i + 1] = (best >> 8) & 255; out.data[i + 2] = best & 255
     }

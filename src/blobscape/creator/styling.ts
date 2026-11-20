@@ -38,6 +38,6 @@ export function pixelLook(c: PixelChoice, palettes: Palette[], sky: PixelLook['s
   const colors = (palettes.find((p) => p.id === c.palette) ?? palettes[0]).colors
   return {
     palette: colors, dither: c.dither, outline: c.outline ? (colors.length ? darkest(colors) : [11, 16, 38]) : null, glow,
-    edges: c.edges ? 1 : 0, parts: c.parts, sky: c.sky ? sky : undefined, steady: STEADY, tidy: true, calm: true, fine: true, own: true,
+    edges: c.edges ? 1 : 0, parts: c.parts, sky: c.sky ? sky : undefined, steady: STEADY, tidy: true, calm: true, flat: true, fine: true, own: true,
   }
 }

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { alphaCut, autoPalette, downsample, makeFrame, outline, pixelArt, quantize, lookColors, snapColors, removeStrays, countSolid, tidyLone, calmArt, calmEdge, CALM_MOST, resolveFine, ditherRank, typicalSpacing, surfaceRanks, snapShift, cycleTurns, heatPace, heatShift, HALO_R, HEAT_UP, SELOUT_FROM, oklab, type Rgb, type PixelLook } from './pixel.ts'
+import { alphaCut, autoPalette, downsample, makeFrame, outline, pixelArt, quantize, lookColors, snapColors, removeStrays, countSolid, tidyLone, calmArt, calmEdge, lineFix, CALM_MOST, resolveFine, ditherRank, typicalSpacing, surfaceRanks, snapShift, cycleTurns, heatPace, heatShift, HALO_R, HEAT_UP, SELOUT_FROM, oklab, type Rgb, type PixelLook } from './pixel.ts'
 
 const solid = (w: number, h: number, on: (x: number, y: number) => boolean, rgb = [200, 40, 40]) => {
   const f = makeFrame(w, h)
@@ -493,4 +493,42 @@ test('a softer outline on lit sides: beside something light the line is a shade 
   assert.deepEqual(rgbAt(art, 0, 0), [200, 180, 120], 'lit side: a shade under the light thing')
   assert.deepEqual(rgbAt(art, 3, 0), [10, 10, 20], 'shaded side: the outline')
   assert.deepEqual(rgbAt(pixelArt(f, { ...look, selout: false }), 0, 0), [10, 10, 20])
+})
+
+test('lineFix: a one-pixel kink in a straight edge is taken off, a doubled corner of a dark line goes, the rest stays', () => {
+  const paint = (rows: string[]) => {
+    const f = makeFrame(rows[0].length, rows.length)
+    const colors: Record<string, number[]> = { A: [240, 230, 200], B: [40, 30, 60], C: [200, 120, 60] }
+    rows.forEach((row, y) => [...row].forEach((ch, x) => { const i = (y * f.width + x) * 4; f.data.set([...colors[ch], 255], i) }))
+    return f
+  }
+  const color = (f: ReturnType<typeof makeFrame>, at: number) => Array.from(f.data.slice(at, at + 3))
+  // a straight edge between two colors with one pixel of the lower one poking up into the upper
+  const kink = paint(['AAAAAAA', 'AAAAAAA', 'AAACAAA', 'CCCCCCC', 'CCCCCCC'])
+  assert.deepEqual(color(kink, lineFix(kink, 3, 2)), [240, 230, 200])
+  assert.equal(lineFix(kink, 2, 3), -1)
+  // a dark line one pixel thick that turns a corner: the pixel in the corner is the double, and the line meets corner to corner
+  const double = paint(['AABAAAA', 'AABAAAA', 'AABAAAA', 'AABBBBB', 'AAAAAAA'])
+  const fixes: number[][] = []
+  for (let y = 0; y < 5; y++) for (let x = 0; x < 7; x++) if (lineFix(double, x, y) >= 0) fixes.push([x, y])
+  assert.deepEqual(fixes, [[2, 3]])
+  assert.deepEqual(color(double, lineFix(double, 2, 3)), [240, 230, 200])
+  // a plain straight line and a checkerboard are left alone
+  const line = paint(['AAAAA', 'BBBBB', 'AAAAA'])
+  for (let x = 0; x < 5; x++) assert.equal(lineFix(line, x, 1), -1)
+  const checks = paint(['ACACA', 'CACAC', 'ACACA', 'CACAC'])
+  for (let y = 1; y < 3; y++) for (let x = 1; x < 4; x++) assert.equal(lineFix(checks, x, y), -1)
+})
+
+test('pixelArt flat: surfaces are drawn without dither while the sky keeps it', () => {
+  const w = 16, h = 16
+  const f = makeFrame(w, h)
+  // a scene of one color halfway between two palette colors on the lower half, empty sky above
+  for (let y = 8; y < h; y++) for (let x = 0; x < w; x++) f.data.set([110, 28, 32, 255], (y * w + x) * 4)
+  const look: PixelLook = { palette: PAL, dither: 1, outline: null, glow: 0, sky: [[20, 16, 24], [250, 240, 200]] }
+  const colorsIn = (a: ReturnType<typeof makeFrame>, y0: number, y1: number) => { const s = new Set<string>(); for (let y = y0; y < y1; y++) for (let x = 0; x < w; x++) s.add(Array.from(a.data.slice((y * w + x) * 4, (y * w + x) * 4 + 3)).join()); return s.size }
+  const dithered = pixelArt(f, look), flat = pixelArt(f, { ...look, flat: true })
+  assert.ok(colorsIn(dithered, 9, h) > 1)
+  assert.equal(colorsIn(flat, 9, h), 1)
+  assert.ok(colorsIn(flat, 0, 7) > 1, 'the sky is still dithered')
 })

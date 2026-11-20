@@ -4746,6 +4746,24 @@
      "type": "0.35"
     },
     {
+     "name": "HUE_KEEP",
+     "kind": "const",
+     "doc": "How far round the hue circle (degrees, in OKLab) a palette color may sit from a paint's own and still be a step of its\nramp (`stepper`), where both have color enough to have a hue (`HUE_FROM`). A red that has no darker red in the palette\nstays its own darkest red in shade rather than turning brown or orange, as a hand-made ramp would.",
+     "type": "16"
+    },
+    {
+     "name": "HUE_FROM",
+     "kind": "const",
+     "doc": "The chroma (OKLab) under which a color counts as a gray for `HUE_KEEP`: a gray is a step of any paint's ramp.",
+     "type": "0.02"
+    },
+    {
+     "name": "ESCAPE",
+     "kind": "const",
+     "doc": "How many times closer a palette color off a paint's ramp must be before a blob takes it (`stepper`): only light of another color carries a blob that far.",
+     "type": "9"
+    },
+    {
      "name": "VoxelSpec",
      "kind": "interface",
      "doc": "A voxel scene for `buildVoxels`: its bones, its parts and the grid's cell size.",
@@ -5101,7 +5119,7 @@
     {
      "name": "stepper",
      "kind": "function",
-     "doc": "Painting in steps (`VoxelLight.steps`): gives the function that moves a blob's finished color onto its paint's ramp.\nA paint's ramp is the palette colors it passes through as its light goes from a deep corner to full sun (found once\nper paint, to 1/64 a channel); a finished color takes the nearest of them, after `mottle` has pushed its lightness up\nor down by patch. Light of another color (a beam, a bounce, a mirror) can carry a blob well off its ramp: when a\npalette color outside it is more than twice as close, that one is taken. Palette colors over `LIT_MAX` are held at\nit, as every lit color is, so nothing painted starts to glow.",
+     "doc": "Painting in steps (`VoxelLight.steps`): gives the function that moves a blob's finished color onto its paint's ramp.\nA paint's ramp is the palette colors it passes through as its light goes from a deep corner to full sun (found once\nper paint, to 1/64 a channel); a finished color takes the nearest of them, after `mottle` has pushed its lightness up\nor down by patch. Light of another color (a beam, a bounce, a mirror) can carry a blob well off its ramp: when a\npalette color outside it is `ESCAPE` times as close or more, that one is taken. A ramp keeps to its paint's own hue (`HUE_KEEP`). Palette colors over `LIT_MAX` are held at\nit, as every lit color is, so nothing painted starts to glow.",
      "signatures": [
       {
        "code": "stepper(steps: { palette: Vec3[]; mottle?: number }, light: VoxelLight): (base: Vec3, color: Vec3, i: number, j: number, k: number) => Vec3"
@@ -7553,6 +7571,12 @@
        "optional": true,
        "type": "boolean",
        "doc": "Lone-pixel cleanup, as a pixel artist does it: a scene pixel whose color none of its eight neighbors shares, while\nsix or more of them share one other color, takes that color. With a map of parts, only a pixel inside its own\npart (four or more neighbors of its part) is touched, so a speck, an eye or a firefly in front of something stays.\nA checkerboard dither keeps its pixels: each has its own color on the diagonals."
+      },
+      {
+       "name": "calm",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Calmer pixels, in place of `tidy` (an idea from Silicon Jungle's Ink Studio, whose cleanup pass this follows in\npart): a pixel art piece is flat patches of color with dither only where one gives way to the next, while a scene\nof small blobs comes out speckled. So, reading only the art as drawn: a scene pixel takes the color `CALM_MOST` or\nmore of its eight neighbors share when fewer share its own (with a map of parts, only neighbors of its own part\ncount, so one thing never bleeds into another); a scene pixel with the empty backdrop on three or four sides (a\none-pixel bump on a silhouette) takes the backdrop's color beside it, and an empty pixel with the scene on three or\nfour sides (a notch) takes the scene's, so an outline runs clean. `calmArt` is the CPU twin of the pass."
       },
       {
        "name": "surface",

@@ -1,7 +1,7 @@
 import { Matrix4, NearestFilter, NoBlending, NodeMaterial, QuadMesh, RenderTarget, Vector2, Vector3, type Camera, type Object3D, type WebGPURenderer } from 'three/webgpu'
 import * as TSLTyped from 'three/tsl'
 import { BLOCK_WIDE, MIX_A, MIX_B, SALT, STRIPS, TURNED, type GlitchState } from '../splat-core/glitch.ts'
-import { BAYER4, CALM_MOST, EDGE_DARK, snapShift, EDGE_JUMP, GLOW_FROM, GLOW_SHOWS, GLOW_TAPS, HALO_R, HALO_SHARE, HEAT_R, HEAT_UP, HEAT_WAVE, MAX_PALETTE_SIZE, OWN_C, OWN_L, OWN_UNDER, PIXEL_CUT, SELOUT_FROM, SELOUT_L, SKY_DITHER, cycleTurns, oklab, skyReach, type PixelLook } from '../splat-core/pixel.ts'
+import { BAYER4, CALM_MOST, LINE_LIFT, LINE_LUMA, EDGE_DARK, snapShift, EDGE_JUMP, GLOW_FROM, GLOW_SHOWS, GLOW_TAPS, HALO_R, HALO_SHARE, HEAT_R, HEAT_UP, HEAT_WAVE, MAX_PALETTE_SIZE, OWN_C, OWN_L, OWN_UNDER, PIXEL_CUT, SELOUT_FROM, SELOUT_L, SKY_DITHER, cycleTurns, oklab, skyReach, type PixelLook } from '../splat-core/pixel.ts'
 
 // As in engine.ts: the shader builders use TSL untyped.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -48,6 +48,7 @@ export class PixelPass {
   /** `PixelLook.calm`, and whether the map of parts is drawn for it to go by. */
   private readonly calmed = uniform(0)
   private readonly calmParts = uniform(0)
+  private readonly flat = uniform(0)
   /** The scene and its map of parts at twice the art's size, for a look with `fine`: what `small` and `ids` are settled from. */
   readonly fineSmall = new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter })
   /** The map of parts at twice the art's size, which four samples a pixel settles from. */
@@ -163,6 +164,7 @@ export class PixelPass {
     this.edges.value = look.edges ?? 0
     this.parted.value = look.parts ? 1 : 0
     this.calmed.value = look.calm ? 1 : 0
+    this.flat.value = look.flat ? 1 : 0
     this.calmParts.value = look.parts || look.fine ? 1 : 0
     this.lined.value = look.outline ? 1 : 0
     this.own.value = look.own ? 1 : 0
@@ -396,6 +398,8 @@ export class PixelPass {
       If(here.solid, () => {
         color.assign(here.rgb.add(spill))
         shown.assign(1)
+        // flat surfaces: dither only where a glow spills onto the scene
+        If(this.flat.greaterThan(0.5).and(max(spill.x, max(spill.y, spill.z)).lessThanEqual(GLOW_SHOWS)), () => { spread.assign(0) })
         // a line on the darker side of a jump in color
         If(this.edges.greaterThan(0).or(this.parted.greaterThan(0)), () => {
           const a = toLab(here.rgb).toVar()
@@ -639,16 +643,19 @@ export class PixelPass {
           return select(s.equal(0), rawAt(ox + 1, oy), select(s.equal(1), rawAt(ox - 1, oy), select(s.equal(2), rawAt(ox, oy + 1), rawAt(ox, oy - 1))))
         }
         const step = edgeAt(0, 0)
-        If(step.greaterThanEqual(0), () => { out.assign(sideRaw(step, 0, 0)) }).ElseIf(here.solid.not(), () => {
+        const changed = float(0).toVar()
+        If(step.greaterThanEqual(0), () => { out.assign(sideRaw(step, 0, 0)); changed.assign(1) }).ElseIf(here.solid.not(), () => {
           const solids = float(0).toVar()
           for (const [dx, dy] of SIDES) solids.addAssign(sol(dx, dy))
+          // the outline's own pixels only: the sky's dither is no line
+          If(solids.lessThan(0.5), () => { changed.assign(1) })
           const met = float(0).toVar()
           for (const [dx, dy] of SIDES) {
             If(met.lessThan(0.5).and(inside(dx, dy)).and(edgeAt(dx, dy).greaterThanEqual(0)), () => {
               met.assign(1)
               If(sol(dx, dy).greaterThan(0.5), () => {
-                If(solids.equal(1).and(inside(-dx, -dy)), () => { out.assign(rawAt(-dx, -dy)) })
-              }).Else(() => { out.assign(rawAt(dx, dy)) })
+                If(solids.equal(1).and(inside(-dx, -dy)), () => { out.assign(rawAt(-dx, -dy)); changed.assign(1) })
+              }).Else(() => { out.assign(rawAt(dx, dy)); changed.assign(1) })
             })
           }
         }).Else(() => {
@@ -664,7 +671,30 @@ export class PixelPass {
             ns.forEach((b, m) => If(counts[k].and(counts[m]).and(same(a.rgb, b.rgb)), () => { n.addAssign(1) }))
             If(n.greaterThan(most), () => { most.assign(n); best.assign(a.rgb) })
           })
-          If(most.greaterThanEqual(CALM_MOST).and(most.greaterThan(own)), () => { out.assign(vec4(best, 1)) })
+          If(most.greaterThanEqual(CALM_MOST).and(most.greaterThan(own)), () => { out.assign(vec4(best, 1)); changed.assign(1) })
+        })
+        // the line cleaner, on the art as drawn: `lineFix` in pixel.ts is the CPU twin (change both)
+        If(changed.lessThan(0.5), () => {
+          const like = (a: unknown, b: unknown) => { const d = vec4(a).sub(b); return dot(d, d).lessThan(1e-5) }
+          const luma = (a: unknown) => dot(vec4(a).rgb, vec3(...LINE_LUMA))
+          const me = rawAt(0, 0).toVar()
+          const fixed = float(0).toVar()
+          for (let k = 0; k < 4; k++) {
+            const [dx, dy] = N8[k], ex = dy, ey = dx
+            const ahead = rawAt(dx, dy)
+            const kink = like(ahead, me).not().and(like(rawAt(ex, ey), ahead)).and(like(rawAt(-ex, -ey), ahead))
+              .and(like(rawAt(-dx, -dy), me)).and(like(rawAt(-dx + ex, -dy + ey), me)).and(like(rawAt(-dx - ex, -dy - ey), me))
+            If(fixed.lessThan(0.5).and(kink), () => { out.assign(ahead); fixed.assign(1) })
+          }
+          for (let k = 4; k < 8; k++) {
+            const [gx, gy] = N8[k]
+            const a = rawAt(-gx, 0), b = rawAt(0, -gy)
+            const corner = like(rawAt(gx, 0), me).and(like(rawAt(0, gy), me)).and(like(rawAt(gx, gy), me).not()).and(like(a, me).not()).and(like(b, me).not())
+            const goH = like(rawAt(2 * gx, 0), me).or(like(rawAt(2 * gx, -gy), me)), goV = like(rawAt(0, 2 * gy), me).or(like(rawAt(-gx, 2 * gy), me))
+            const l0 = luma(me)
+            const lighter = luma(a).greaterThan(l0.add(LINE_LIFT)).and(luma(b).greaterThan(l0.add(LINE_LIFT)))
+            If(fixed.lessThan(0.5).and(corner).and(goH).and(goV).and(lighter), () => { out.assign(select(like(a, b), a, rawAt(-gx, -gy))); fixed.assign(1) })
+          }
         })
       })
       If(done.lessThan(0.5).and(here.solid), () => {

@@ -352,8 +352,7 @@ export default [
         }
         // art-pixel effects: glow in rings, heat haze and softer lit outlines on, drawn as the CPU twin draws them at the same time
         {
-          const toggles = ['Glow in rings', 'Heat haze over glowing things', 'Softer outline on lit sides']
-          for (const t of toggles) { const box = d.page.getByLabel(t); if (!(await box.isChecked())) await tabClick(box) }
+          await d.page.evaluate(() => window.__diorama.finish({ bands: 2, heat: 1, selout: true }))
           await d.page.waitForFunction(() => { const l = window.__diorama.look(); return l.bands > 0 && l.heat && l.selout }, null, { timeout: 10000 }).catch(() => {})
           const e = await shot(2.3)
           const fx = pixelArt(frame(e.small), e.look, frame(e.before), frame(e.parts), frame(e.ranks), e.time)
@@ -364,17 +363,17 @@ export default [
             else if (Math.abs(fx.data[i] - e.art[i]) + Math.abs(fx.data[i + 1] - e.art[i + 1]) + Math.abs(fx.data[i + 2] - e.art[i + 2]) > 6) differ++
             if (fx.data[i] !== bare.data[i] || fx.data[i + 1] !== bare.data[i + 1] || fx.data[i + 2] !== bare.data[i + 2]) made++
           }
-          for (const t of toggles) { const box = d.page.getByLabel(t); if (await box.isChecked()) await tabClick(box) }
+          await d.page.evaluate(() => window.__diorama.finish({ bands: 0, heat: 0, selout: false }))
           if (!(e.look.bands > 0 && e.look.heat && e.look.selout && shape === 0 && differ < e.solid * 0.05 && made > 20)) fails.push(`${label}: art-pixel effects: ${JSON.stringify({ bands: e.look.bands, heat: e.look.heat, selout: e.look.selout, shape, differ, made })}`)
           else ok(`${label}: art-pixel effects: rings, haze and softer lit outlines change ${made} pixels, as the CPU twin draws them (${differ} a neighboring color)`)
         }
         // Exact sort: the stage swaps in the radix sort and the art still draws, every pixel a palette color
         {
-          await tabClick(d.page.getByLabel('Exact sort (slower)'))
+          await d.page.evaluate(() => window.__diorama.finish({ exact: true }))
           await d.page.waitForFunction(() => window.__diorama.stage.world?.sortKind === 'radix', null, { timeout: 30000 }).catch(() => {})
           const ex = await shot(2)
           const sort = await d.page.evaluate(() => window.__diorama.stage.world?.sortKind)
-          await tabClick(d.page.getByLabel('Exact sort (slower)'))
+          await d.page.evaluate(() => window.__diorama.finish({ exact: false }))
           await d.page.waitForFunction(() => window.__diorama.stage.world?.sortKind === 'bins', null, { timeout: 30000 }).catch(() => {})
           if (!(sort === 'radix' && ex.solid > a.solid * 0.9 && ex.off === 0)) fails.push(`${label}: exact sort: ${JSON.stringify({ sort, solid: ex.solid, before: a.solid, off: ex.off })}`)
           else ok(`${label}: Exact sort draws on the radix sort (${ex.solid} solid pixels, ${a.solid} before)`)
