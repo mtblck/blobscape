@@ -14,10 +14,11 @@ import { DETAIL } from './diorama/scene.ts'
 import { described } from './diorama/scenes.ts'
 import { download } from './files.ts'
 import { BIOMES, biomeOf } from './islands/biomes.ts'
-import { MAX_SEED, census, makeIsland } from './islands/island.ts'
+import { MAX_SEED, census } from './islands/island.ts'
+import { WORLD_ISLANDS, placeIsland, planWorld, poseBridge, type WorldPlan } from './islands/world.ts'
 import { material } from './islands/materials.ts'
-import type { IslandJob } from './islands/cut.worker.ts'
-import { unpack, type PackedCut } from './creator/pack.ts'
+import type { IslandCut, IslandJob } from './islands/cut.worker.ts'
+import { unpack } from './creator/pack.ts'
 import { href } from './routes.ts'
 import { Stick } from './Stick.tsx'
 import { steer, type Input } from './pond/wade.ts'
@@ -36,6 +37,14 @@ const BEHIND = { distance: 1.8, elevation: 20 }
 /** How fast the view catches up with the elf, a second. */
 const FOLLOW = 5
 const DEG = 180 / Math.PI
+
+/** The view of a whole world from the first island's own starting view: turned the same way, back far enough for all of it. */
+function overview(world: WorldPlan, first: Orbit): Orbit {
+  if (world.islands.length === 1) return first
+  const n = world.islands.length, c = [0, 1, 2].map((k) => world.islands.reduce((a, i) => a + i.at[k], 0) / n)
+  const far = Math.max(...world.islands.map((i) => Math.hypot(i.at[0] - c[0], i.at[2] - c[2]))) + 3.2
+  return { ...first, target: [c[0], c[1] + 0.3, c[2]], distance: far * 2.8, elevation: 32 }
+}
 
 declare global {
   interface Window { __islands?: { stage: CreatureStage; blobs: () => number; bones: () => number; things: () => string[]; name: () => string; walk: () => IslandWalk | undefined } }
@@ -63,10 +72,17 @@ export function Islands() {
   const [pixels, setPixels] = useState(() => params().get('style') !== 'blobs')
   const [orbit, setOrbit] = useState<Orbit>({ target: [0, 0, 0], distance: 12.5, azimuth: 24, elevation: 20 })
   const [walking, setWalking] = useState(() => params().get('walk') === '1')
+  const [count, setCount] = useState(() => (params().get('islands') === '1' ? 1 : WORLD_ISLANDS))
 
-  // the island: a plan and its description, then the scene Pixel Diorama's own code makes of a description
-  const island = useMemo(() => makeIsland(biomeId, seed), [biomeId, seed])
-  const scene = useMemo(() => described('island', island.doc, `${island.plan.name}: ${island.biome.about.toLowerCase()}`), [island])
+  // the world: its islands and bridges planned from the first island, each a description, then the scenes Pixel
+  // Diorama's own code makes of them
+  const world = useMemo(() => planWorld(biomeId, seed, count), [biomeId, seed, count])
+  const island = useMemo(() => ({ ...world.islands[0], biome: biomeOf(world.islands[0].biome) }), [world])
+  const scenes = useMemo(() => [
+    ...world.islands.map((i) => described('island', i.doc, `${i.plan.name}: ${biomeOf(i.biome).about.toLowerCase()}`)),
+    ...world.bridges.map((b) => described('bridge', b.doc, 'A rope bridge')),
+  ], [world])
+  const scene = scenes[0]
   const lines = useMemo(() => census(island.plan), [island])
 
   useEffect(() => {
@@ -84,23 +100,24 @@ export function Islands() {
   }, [offscreen])
 
   // cut in a worker (an island takes seconds), and the island on show stays until the next is ready
-  const [made, setMade] = useState<{ built: Built; of: typeof scene; detail: string }>()
+  const [made, setMade] = useState<{ built: Built; pieces: Built[]; of: typeof scene; scenes: typeof scenes; world: typeof world; detail: string }>()
   const ready = made?.of === scene && made.detail === detail ? made : undefined
   const worker = useRef<Worker>(undefined)
   useEffect(() => () => worker.current?.terminate(), [])
   useEffect(() => {
     const spacing = DETAIL.find((d) => d.id === detail)!.spacing
     const w = (worker.current ??= new Worker(new URL('./islands/cut.worker.ts', import.meta.url), { type: 'module' }))
-    const id = Math.random()
-    const heard = (ev: MessageEvent<{ id: number; cut?: PackedCut; error?: string }>) => {
+    const id = Math.random(), pieces: Built[] = []
+    const heard = (ev: MessageEvent<IslandCut>) => {
       if (ev.data.id !== id) return
-      if (ev.data.cut) setMade({ built: unpack(ev.data.cut), of: scene, detail })
+      if (ev.data.cut) pieces[ev.data.index!] = unpack(ev.data.cut)
+      else if (ev.data.done) setMade({ built: pieces[0], pieces, of: scene, scenes, world, detail })
       else setFailed(`The island could not be cut: ${ev.data.error}`)
     }
     w.addEventListener('message', heard)
-    w.postMessage({ id, biome: island.plan.biome, seed: island.plan.seed, spacing } satisfies IslandJob)
+    w.postMessage({ id, biome: biomeId, seed, count, spacing } satisfies IslandJob)
     return () => w.removeEventListener('message', heard)
-  }, [scene, island, detail])
+  }, [scene, scenes, world, biomeId, seed, count, detail])
 
   const orbitNow = useRef(orbit)
   orbitNow.current = orbit
@@ -115,16 +132,17 @@ export function Islands() {
     let gone = false
     const spacing = DETAIL.find((d) => d.id === ready.detail)!.spacing
     const timer = setTimeout(() => {
-      import('./islands/walk.ts').then(({ IslandWalk }) => {
+      Promise.all([import('./islands/walk.ts'), import('./islands/world.ts')]).then(([{ IslandWalk }, { WorldGround, worldStart }]) => {
         if (gone) return
-        const w = new IslandWalk(island.doc, island.plan, spacing, { blobs: coarse ? 10000 : 16000 })
+        const ground = new WorldGround(ready.world, spacing)
+        const w = new IslandWalk(ground, worldStart(ready.world, ground), { blobs: coarse ? 10000 : 16000 })
         // the view starts behind the elf, looking the way it faces
         setOrbit((o) => ({ ...o, ...BEHIND, azimuth: w.walker.heading * DEG + 180 }))
         setWalk({ walk: w, of: ready.built })
       })
     }, 30)
     return () => { gone = true; clearTimeout(timer) }
-  }, [walking, ready, walk, island, coarse])
+  }, [walking, ready, walk, coarse])
 
   // keys and the thumb stick both steer the elf by the picture: up is away from you, whichever way it faces
   const keys = useRef(new Set<string>())
@@ -164,15 +182,23 @@ export function Islands() {
 
   useEffect(() => {
     if (!stage || !ready) return
-    const d = ready.of
-    stage.setActor(ready.built, undefined, walker ? [walker.elf] : [])
+    const d = ready.of, { pieces, scenes: all, world: wd } = ready
+    const others = pieces.slice(1)
+    stage.setActor(ready.built, undefined, walker ? [...others, walker.elf] : others)
     // a new island brings its own starting view; a new detail keeps the view it had
-    if (dressed.current !== d) { dressed.current = d; if (!walker) { setOrbit(d.views[0].orbit); orbitNow.current = d.views[0].orbit } }
+    const start = overview(wd, d.views[0].orbit)
+    if (dressed.current !== d) { dressed.current = d; if (!walker) { setOrbit(start); orbitNow.current = start } }
     let last = stage.time, eye: number[] | undefined
     stage.setPoser((sk: Skeleton, t: number) => {
       d.pose(sk, calm ? 0 : t)
       sk.rootScale = SCALE
       sk.update()
+      // the other islands sway on their own clocks where they stand, and the bridges hang between them
+      for (let j = 1; j < pieces.length; j++) {
+        const s = pieces[j].skeleton
+        if (j < wd.islands.length) { all[j].pose(s, calm ? 0 : t); placeIsland(wd.islands[j], s) }
+        else poseBridge(wd.bridges[j - wd.islands.length], s)
+      }
       stage.setLights(d.lights(t, stage.backend === 'webgpu'), 1)
       if (walker) {
         const dt = Math.max(0, Math.min(0.1, t - last))
@@ -194,23 +220,26 @@ export function Islands() {
 
   // what is in the view now lags the island asked for while it is cut, and keeps its own palette and sky until then
   const shown = made?.of ?? scene
-  // the elf is made with its colors baked in: the island's palette gains the ones it lacks
+  const shownAll = made?.scenes ?? scenes
+  // the elf is made with its colors baked in: the island's palette gains the ones it lacks, and the other islands' theirs
   const elfColors = useMemo(() => (walker ? colorsOf(walker.elf) : undefined), [walker])
   const look = useMemo<PixelLook | undefined>(() => {
     if (!pixels) return undefined
-    const own = shown.palette.colors
-    const colors = elfColors ? joinPalettes([own.map((c) => `#${c.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`), elfColors]) : own
+    const hex = (cs: readonly (readonly number[])[]) => cs.map((c) => `#${c.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`)
+    const lists = [...new Set(shownAll.map((s) => s.palette))].map((p) => hex(p.colors))
+    if (elfColors) lists.push(elfColors)
+    const colors = lists.length > 1 ? joinPalettes(lists) : shown.palette.colors
     return { palette: colors, dither: shown.finish.dither, outline: darkest(colors), glow: shown.finish.glow, edges: 1, parts: true, sky: shown.sky, steady: STEADY, tidy: true, fine: true, own: true, surface: true, snap: true }
-  }, [pixels, shown, elfColors])
+  }, [pixels, shown, shownAll, elfColors])
   useEffect(() => { stage?.setPixels(look, 2) }, [stage, look])
 
   // the address always names the island on show, so it can be sent to someone
   useEffect(() => {
     const url = new URL(location.href)
     const put = (k: string, v: string | undefined) => { if (v) url.searchParams.set(k, v); else url.searchParams.delete(k) }
-    put('biome', BIOMES.length > 1 ? biomeId : undefined); put('seed', String(seed)); put('style', pixels ? undefined : 'blobs'); put('rock', rock ? undefined : '0'); put('walk', walking ? '1' : undefined)
+    put('biome', BIOMES.length > 1 ? biomeId : undefined); put('seed', String(seed)); put('style', pixels ? undefined : 'blobs'); put('rock', rock ? undefined : '0'); put('walk', walking ? '1' : undefined); put('islands', count === 1 ? '1' : undefined)
     history.replaceState(history.state, '', url)
-  }, [biomeId, seed, pixels, rock, walking])
+  }, [biomeId, seed, pixels, rock, walking, count])
 
   // For verify: the stage and the island, without clicking
   useEffect(() => {
@@ -226,14 +255,20 @@ export function Islands() {
   // leaving the walk, the view goes back to the whole island
   const leftWalk = useRef(walking)
   useEffect(() => {
-    if (leftWalk.current && !walking) setOrbit(shown.views[0].orbit)
+    if (leftWalk.current && !walking) setOrbit(overview(made?.world ?? world, shown.views[0].orbit))
     leftWalk.current = walking
   }, [walking]) // eslint-disable-line react-hooks/exhaustive-deps
   const save = () => download(new TextEncoder().encode(JSON.stringify(island.doc, null, 1)), `${island.plan.biome}-island-${seed}.json`, 'application/json')
   const waiting = !failed && (!drawn || !ready || (walking && !walker))
   const backend = stage ? (stage.backend === 'webgpu' ? 'WebGPU' : 'WebGL 2') : 'WebGPU or WebGL 2'
-  const summary = `${island.plan.name}, with ${lines.map((l) => l.words).join(', ')}`
-  const used = useMemo(() => [...new Set([island.biome.ground.top, island.biome.ground.soil, island.plan.rock, ...island.plan.things.flatMap((t) => Object.values(t.made))])].map(material), [island])
+  const names = world.islands.map((i) => i.plan.name)
+  const where = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}, joined by rope bridges`
+  const summary = names.length === 1 ? `${island.plan.name}, with ${lines.map((l) => l.words).join(', ')}` : where
+  const used = useMemo(() => [...new Set(world.islands.flatMap((i) => {
+    const b = biomeOf(i.biome)
+    return [b.ground.top, b.ground.soil, i.plan.rock, ...i.plan.things.flatMap((t) => Object.values(t.made))]
+  }))].map(material), [world])
+  const things = world.islands.reduce((a, i) => a + i.plan.things.length, 0)
 
   return (
     <div className="pb-4">
@@ -242,7 +277,7 @@ export function Islands() {
         <h1 ref={h1} tabIndex={-1} className="font-display text-4xl outline-none sm:text-5xl">Biome Islands</h1>
         <p className="max-w-xl text-lg text-ink-muted">
           A floating island grown from a recipe and a number. The recipe says what kind of place it is and what it is made of; the number
-          decides the rest. This is an early step of a sky world: one island from one of three biomes, big enough to walk about on.
+          decides the rest. This is an early step of a sky world: islands from three biomes, joined by rope bridges, big enough to walk about on.
         </p>
       </header>
       <Workbench
@@ -254,7 +289,7 @@ export function Islands() {
             ref={canvas}
             role="application"
             aria-roledescription="3D view"
-            aria-label={walking ? `An elf on ${island.plan.name}. Arrow keys or W, A, S and D walk the way they point on the screen; E waves. Drag to turn the view; scroll, pinch or press plus and minus to zoom.` : `${summary}. Drag or use the arrow keys to orbit; scroll, pinch or press plus and minus to zoom.`}
+            aria-label={walking ? `An elf on ${where}. Arrow keys or W, A, S and D walk the way they point on the screen; E waves. Drag to turn the view; scroll, pinch or press plus and minus to zoom.` : `${summary}. Drag or use the arrow keys to orbit; scroll, pinch or press plus and minus to zoom.`}
             tabIndex={0}
             data-testid="islands-view"
             className="absolute inset-0 h-full w-full cursor-grab touch-none outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset active:cursor-grabbing"
@@ -278,7 +313,7 @@ export function Islands() {
             }}
           />
           {waiting && <LoadingMark testid="islands-loading" />}
-          <p role="status" className="sr-only">{waiting ? (stage ? (ready ? 'Bringing the elf…' : 'Growing the island…') : 'Starting the splat engine…') : walking ? `The elf stands on ${island.plan.name}.` : `${summary}.`}</p>
+          <p role="status" className="sr-only">{waiting ? (stage ? (ready ? 'Bringing the elf…' : 'Growing the island…') : 'Starting the splat engine…') : walking ? `The elf stands on ${island.plan.name}${names.length > 1 ? ', the first of ' + names.length + ' islands' : ''}.` : `${summary}.`}</p>
           {failed && <div role="alert" className="absolute inset-4 grid place-items-center text-center text-sm text-ink">{failed}</div>}
           <div className="absolute top-3 left-3 flex gap-2 max-sm:top-2 max-sm:left-2">
             <Button small primary onClick={() => setWalking((w) => !w)} data-testid="islands-walk">{walking ? 'See the whole island' : 'Walk on it'}</Button>
@@ -290,12 +325,12 @@ export function Islands() {
               {coarse ? 'stick to walk · drag to look round' : 'arrow keys or WASD to walk · E to wave · drag to look round'}
             </p>
           </>}
-          <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => setOrbit(walker ? { ...orbit, ...BEHIND, azimuth: walker.walker.heading * DEG + 180 } : shown.views[0].orbit)} />
+          <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => setOrbit(walker ? { ...orbit, ...BEHIND, azimuth: walker.walker.heading * DEG + 180 } : overview(made?.world ?? world, shown.views[0].orbit))} />
         </>}
         status={<>
-          <span><span className="text-ink" data-testid="islands-name">{island.plan.name}</span></span>
+          <span><span className="text-ink" data-testid="islands-name">{names.length === 1 ? island.plan.name : `${island.plan.name} and ${names.length - 1} more`}</span></span>
           {walker && <span data-testid="islands-walked">walked <WalkedMeters walk={walker} /></span>}
-          <span>{ready && <><span className="tabular-nums text-ink">{island.plan.things.length}</span> things, <span className="tabular-nums text-ink" data-testid="islands-blobs">{ready.built.blobs.count.toLocaleString()}</span> blobs</>}</span>
+          <span>{ready && <><span className="tabular-nums text-ink">{things}</span> things, <span className="tabular-nums text-ink" data-testid="islands-blobs">{ready.pieces.reduce((a, p) => a + p.blobs.count, 0).toLocaleString()}</span> blobs</>}</span>
         </>}
         tabsLabel="Options"
         tabs={[
@@ -307,6 +342,13 @@ export function Islands() {
                     {BIOMES.map((b) => <Chip key={b.id} active={biomeId === b.id} onClick={() => setBiomeId(b.id)}>{b.name}</Chip>)}
                   </div>
                   <p className="mt-1.5 text-xs text-ink-faint">{island.biome.about}. More biomes are on the way.</p>
+                </Field>
+                <Field label="Islands">
+                  <div className="flex flex-wrap gap-1.5">
+                    <Chip active={count === 1} onClick={() => setCount(1)}>One</Chip>
+                    <Chip active={count > 1} onClick={() => setCount(WORLD_ISLANDS)}>{WORLD_ISLANDS}, joined by bridges</Chip>
+                  </div>
+                  {count > 1 && <p className="mt-1.5 text-xs text-ink-faint">The first island is the biome and number you pick; each one after it is the next biome round, from a number of its own.</p>}
                 </Field>
                 <div>
                   <label className="grid gap-1 text-sm">
@@ -321,7 +363,7 @@ export function Islands() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Button primary onClick={another}>Another island</Button>
-                  <Button onClick={save} data-testid="islands-save">Save its description</Button>
+                  <Button onClick={save} data-testid="islands-save">{count === 1 ? 'Save its description' : 'Save the first island’s description'}</Button>
                 </div>
                 <p className="text-xs text-ink-faint">
                   The saved file opens in <a href={href({ page: 'creator' })} className="underline decoration-rule underline-offset-2 hover:text-accent">Scene Creator</a> (Scene, Open a file), where its first 40 trees and stones are props you can move, and
@@ -355,16 +397,21 @@ export function Islands() {
       />
 
       <section aria-labelledby="on-title" className="mt-10 rounded-2xl border border-rule bg-paper-sunk/60 px-5 py-5" data-testid="islands-list">
-        <h2 id="on-title" className="font-display text-2xl">On this island</h2>
+        <h2 id="on-title" className="font-display text-2xl">{count === 1 ? 'On this island' : 'On these islands'}</h2>
         <div className="mt-3 grid gap-x-8 gap-y-4 sm:grid-cols-2">
-          <div>
-            <h3 className="text-sm font-bold">Kinds of place on it</h3>
-            <ul className="mt-1 grid gap-0.5 text-sm text-ink">{island.plan.patches.map((p) => <li key={p.name}>{p.name[0].toUpperCase() + p.name.slice(1)}</li>)}</ul>
-            <h3 className="mt-4 text-sm font-bold">What stands on it</h3>
-            <ul className="mt-1 grid gap-0.5 text-sm text-ink">{lines.map((l) => <li key={l.words}>{l.words}</li>)}</ul>
+          <div className="grid gap-5">
+            {world.islands.map((i) => (
+              <div key={i.plan.name}>
+                {count > 1 && <h3 className="font-display text-lg">{i.plan.name}</h3>}
+                <h3 className="text-sm font-bold">Kinds of place on it</h3>
+                <ul className="mt-1 grid gap-0.5 text-sm text-ink">{i.plan.patches.map((p) => <li key={p.name}>{p.name[0].toUpperCase() + p.name.slice(1)}</li>)}</ul>
+                <h3 className="mt-4 text-sm font-bold">What stands on it</h3>
+                <ul className="mt-1 grid gap-0.5 text-sm text-ink">{census(i.plan).map((l) => <li key={l.words}>{l.words}</li>)}</ul>
+              </div>
+            ))}
           </div>
           <div>
-            <h3 className="text-sm font-bold">What it is made of</h3>
+            <h3 className="text-sm font-bold">What {count === 1 ? 'it is' : 'they are'} made of</h3>
             <ul className="mt-1 grid gap-1 text-sm text-ink">
               {used.map((m) => (
                 <li key={m.id} className="flex items-center gap-2">
@@ -408,6 +455,12 @@ export function Islands() {
             flowers. Its feet are placed one step at a time on the ground under them, as in the{' '}
             <a href={href({ page: 'pond' })} className="underline decoration-rule underline-offset-2 hover:text-accent">Wading Pond</a>, and the path is kept clear of
             anything that would stand in its way.
+          </p>
+          <p>
+            A world is a chain of islands, each the next biome round. The first island's number sets which way each one lies from the
+            last, a little higher or lower, and the gap between them; each island's path is grown to come in where the bridge from
+            the last one lands and leave where the next one starts. The rope bridges are scene descriptions too, planks on two
+            sagging ropes with rails a meter up, and the elf walks across on their deck.
           </p>
         </div>
       </section>

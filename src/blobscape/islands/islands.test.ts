@@ -12,7 +12,8 @@ import { BIOMES, MEADOW } from './biomes.ts'
 import { MAX_SEED, census, fromPath, inside, islandDoc, makeIsland, planIsland } from './island.ts'
 import { MATERIALS, SOLID, colorsOf, dressed, family, leaning, letsThrough, material, opaque, paintOf } from './materials.ts'
 import { ROOM } from './things.ts'
-import { IslandWalk, SCALE as WALK_SCALE } from './walk.ts'
+import { IslandWalk, SCALE as WALK_SCALE, passes } from './walk.ts'
+import { GAP, WORLD_ISLANDS, WorldGround, deckAt, planWorld, worldStart } from './world.ts'
 
 const SEEDS = [1, 2, 3, 7, 42, 77, 500, 4242, 31337, 90210, 123456, MAX_SEED]
 
@@ -208,4 +209,87 @@ test('the elf stays on the island, out of things, and its feet on the ground', (
   // walking into a thing stops at it: no thing on the island lets the elf through its middle
   const t = plan.things.find((th) => th.kind === 'boulder' || th.kind === 'stump' || th.kind === 'bush')!
   assert.equal(walk.ground.standsAt(t.at[0] * WALK_SCALE, t.at[2] * WALK_SCALE), false, `the elf may stand in a ${t.name}`)
+})
+
+test('a world is a chain of islands apart in the sky, each a sound description, joined by bridges that sound too', () => {
+  for (const [biome, seed] of [['meadow', 37], ['pinewood', 7], ['mesa', 500]] as const) {
+    const w = planWorld(biome, seed)
+    assert.deepEqual(planWorld(biome, seed), w, 'the same first island plans the same world')
+    assert.equal(w.islands.length, WORLD_ISLANDS)
+    assert.equal(w.bridges.length, WORLD_ISLANDS - 1)
+    assert.equal(new Set(w.islands.map((i) => i.biome)).size, WORLD_ISLANDS, 'each island is another biome')
+    for (const doc of [...w.islands.map((i) => i.doc), ...w.bridges.map((b) => b.doc)]) assert.deepEqual(checkScene(doc), [], doc.name)
+    // no island reaches into another: every point of one's outline is well outside the others
+    w.islands.forEach((a, j) => w.islands.forEach((b, k) => {
+      if (j === k) return
+      for (let n = 0; n < 64; n++) {
+        const t = (n / 64) * Math.PI * 2
+        for (let r = 0; r < 6; r += 0.05) {
+          const x = Math.cos(t) * r, z = Math.sin(t) * r
+          if (inside(a.plan.lobes, x, z) < 0) break
+          assert.ok(inside(b.plan.lobes, x + a.at[0] - b.at[0], z + a.at[2] - b.at[2]) < -GAP * 0.4, `${biome} ${seed}: island ${j} reaches island ${k}`)
+        }
+      }
+    }))
+    // a bridge's ends are on its two islands' ground, and its deck runs over open sky between
+    w.bridges.forEach((br, j) => {
+      for (const [end, isl] of [[br.from, w.islands[j]], [br.to, w.islands[j + 1]]] as const) {
+        const x = end[0] - isl.at[0], z = end[2] - isl.at[2]
+        assert.ok(inside(isl.plan.lobes, x, z) > 0.1, `${biome} ${seed}: bridge ${j} ends off its island`)
+        assert.ok(Math.abs(end[1] - isl.at[1] - wornLand(isl.plan.land).at(x, z)) < 0.01, `${biome} ${seed}: bridge ${j} ends off the ground`)
+      }
+      const mx = (br.from[0] + br.to[0]) / 2, mz = (br.from[2] + br.to[2]) / 2
+      for (const isl of w.islands) assert.ok(inside(isl.plan.lobes, mx - isl.at[0], mz - isl.at[2]) < 0, `${biome} ${seed}: bridge ${j}'s middle is over an island`)
+      const len = Math.hypot(br.to[0] - br.from[0], br.to[2] - br.from[2])
+      assert.ok(deckAt(br.from[1], br.to[1], len, 0.5) < Math.max(br.from[1], br.to[1]), 'the deck sags')
+    })
+  }
+})
+
+test('the elf can walk from where it starts to the far end of the last island, over every bridge', () => {
+  // every place the elf may reach, by steps it may take, from where it starts: both ends of every bridge must be among them
+  for (const [biome, seed] of [['meadow', 37], ['mesa', 500], ['pinewood', 99]] as const) {
+    const w = planWorld(biome, seed), g = new WorldGround(w, DETAIL[1].spacing), start = worldStart(w, g), STEP = 0.2
+    const key = (i: number, j: number) => i * 100000 + j
+    const at = (x: number, z: number) => [Math.round(x / STEP), Math.round(z / STEP)] as const
+    const seen = new Set<number>(), todo: (readonly [number, number])[] = [at(start.x, start.z)]
+    seen.add(key(...todo[0]))
+    while (todo.length) {
+      const [i, j] = todo.pop()!
+      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+        const ni = i + di, nj = j + dj, k = key(ni, nj)
+        if (!seen.has(k) && passes(g, i * STEP, j * STEP, ni * STEP, nj * STEP)) { seen.add(k); todo.push([ni, nj]) }
+      }
+    }
+    const reached = (x: number, z: number) => {
+      const [i, j] = at(x * WALK_SCALE, z * WALK_SCALE)
+      for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) if (seen.has(key(i + a, j + b))) return true
+      return false
+    }
+    w.bridges.forEach((br, j) => {
+      assert.ok(reached(br.from[0], br.from[2]), `${biome} ${seed}: can't reach bridge ${j}`)
+      assert.ok(reached((br.from[0] + br.to[0]) / 2, (br.from[2] + br.to[2]) / 2), `${biome} ${seed}: can't cross bridge ${j}`)
+      assert.ok(reached(br.to[0], br.to[2]), `${biome} ${seed}: can't step off bridge ${j}`)
+    })
+    const last = w.islands[w.islands.length - 1], end = last.plan.path[last.plan.path.length - 2]
+    assert.ok(reached(end[0] + last.at[0], end[2] + last.at[2]), `${biome} ${seed}: can't reach the last island's far side`)
+    // and off a bridge's side there is nothing to stand on
+    const br = w.bridges[0], dx = br.to[0] - br.from[0], dz = br.to[2] - br.from[2], len = Math.hypot(dx, dz)
+    const mx = ((br.from[0] + br.to[0]) / 2 - (dz / len) * 0.3) * WALK_SCALE, mz = ((br.from[2] + br.to[2]) / 2 + (dx / len) * 0.3) * WALK_SCALE
+    assert.equal(g.standsAt(mx, mz), false, 'the elf may stand in the air beside a bridge')
+  }
+})
+
+test('walking onto a bridge at a slant, the elf slides along the rail onto the deck and crosses', () => {
+  const w = planWorld('meadow', 37), g = new WorldGround(w, DETAIL[1].spacing), br = w.bridges[0]
+  const dx = br.to[0] - br.from[0], dz = br.to[2] - br.from[2], len = Math.hypot(dx, dz), ux = dx / len, uz = dz / len
+  // a meter and a half back from the deck's start and a meter to one side, heading for the far end
+  const x0 = (br.from[0] - ux * 0.3 + uz * 0.2) * WALK_SCALE, z0 = (br.from[2] - uz * 0.3 - ux * 0.2) * WALK_SCALE
+  assert.ok(g.standsAt(x0, z0), 'the start is on the island')
+  const walk = new IslandWalk(g, { x: x0, z: z0, heading: Math.atan2(dx, dz), speed: 0 }, { blobs: 2000 })
+  const tx = br.to[0] * WALK_SCALE, tz = br.to[2] * WALK_SCALE
+  for (let f = 0; f < 30 * 30 && Math.hypot(tx - walk.walker.x, tz - walk.walker.z) > 0.5; f++) {
+    walk.update(1 / 30, { forward: 0, turn: 0, aim: Math.atan2(tx - walk.walker.x, tz - walk.walker.z), go: 1 })
+  }
+  assert.ok(Math.hypot(tx - walk.walker.x, tz - walk.walker.z) <= 0.5, `stuck at ${walk.walker.x.toFixed(1)}, ${walk.walker.z.toFixed(1)}`)
 })
