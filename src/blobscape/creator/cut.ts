@@ -4,7 +4,8 @@ import type { Built } from '../../splat-engine/body.ts'
 import { Skeleton, mulQ } from '../../splat-engine/rig.ts'
 import { oklab } from '../../splat-core/pixel.ts'
 import { DIORAMAS } from '../diorama/scenes.ts'
-import { isModel } from './models.ts'
+import { isModel, rawTexture, type ModelJob } from './models.ts'
+import { meshColor, meshShape } from '../../splat-engine/meshShape.ts'
 import { unpack, type PackedCut } from './pack.ts'
 import { Blobs } from '../../splat-core/blobs.ts'
 import { creatureLook, isCreature, libraryCreature, libraryProp } from './library.ts'
@@ -20,7 +21,7 @@ import type { Species } from '../../splat-engine/zoo/species.ts'
 export type CutJob =
   | { kind: 'whole'; scene: string; spacing: number; plain?: boolean }
   | { kind: 'land'; project: SceneProject; spacing: number; plain?: boolean }
-  | { kind: 'prop'; project: SceneProject; i: number; spacing: number; plain?: boolean; model?: PackedCut }
+  | { kind: 'prop'; project: SceneProject; i: number; spacing: number; plain?: boolean; model?: ModelJob }
 
 // one project is compiled once and kept while the jobs that follow ask for its pieces
 let kept: { key: string; cp: CompiledProject } | undefined
@@ -43,7 +44,8 @@ export function cut(job: CutJob): Built {
     const c = isCreature(placed.prop) ? libraryCreature(placed.prop) : undefined
     if (c) return withShadow(placedCreature(c, placed, job.spacing, creatureLook(placed.prop as string)), placed.at)
     // a model of your own comes with the job, already standing on its foot; one the page no longer has is a speck
-    if (isModel(placed.prop)) return withShadow(placedBuilt(job.model ? unpack(copied(job.model)) : speck(), placed), placed.at)
+    if (isModel(placed.prop) && job.model?.kind === 'mesh') return withShadow(placedMesh(job, job.model), placed.at)
+    if (isModel(placed.prop)) return withShadow(placedBuilt(job.model?.kind === 'splats' ? unpack(copied(job.model.rest)) : speck(), placed), placed.at)
   }
   const cp = compiled(job.project)
   const land = landSpec(cp, job.spacing)
@@ -142,4 +144,22 @@ function speck(): Built {
   const blobs = new Blobs(1)
   blobs.push({ center: [0, 0.01, 0], scale: [0.01, 0.01, 0.01], quat: [0, 0, 0, 1], color: [0.5, 0.5, 0.5], opacity: 0 })
   return { blobs, skin: { joints: new Uint8Array(4), weights: new Float32Array([1, 0, 0, 0]) }, skeleton: new Skeleton([{ name: 'model', head: [0, 0, 0], parent: -1 }]), partOf: new Uint16Array(1) }
+}
+
+/**
+ * A still mesh of your own cut as one part of the prop, on the land's grid and under its light: the stand-in's
+ * place, bone and setting, its speck swapped for the mesh stood where it is placed. Its distance is found on a grid
+ * half a cell apart, fine enough that a thin part keeps its own.
+ */
+function placedMesh(job: Extract<CutJob, { kind: 'prop' }>, model: Extract<ModelJob, { kind: 'mesh' }>): Built {
+  const cp = compiled(job.project)
+  const spec = propSpec(cp, job.i, job.spacing, settingOf(landSpec(cp, job.spacing)))
+  const t = placer([0, 0, 0], job.project.props[job.i])
+  const P = model.mesh.positions, positions = new Float32Array(P.length)
+  for (let i = 0; i < P.length; i += 3) positions.set(t.point(P.subarray(i, i + 3)), i)
+  const mesh = { ...model.mesh, positions }
+  const shape = meshShape(mesh, job.spacing * 0.5)
+  spec.parts = [{ shape, color: meshColor(mesh, shape, undefined, model.images.map(rawTexture)), bone: spec.bones[0].name }]
+  spec.loose = []
+  return buildVoxels(spec)
 }

@@ -3,32 +3,53 @@ import { mulQ, Skeleton } from '../../splat-engine/rig.ts'
 import { sampleClip, sampleWeights, type Clip, type Rigged } from '../../splat-engine/glb.ts'
 import { applyMorphs, type Morph } from '../../splat-engine/morph.ts'
 import { SIZE_RANGE, placer, type Placement, type Placer, type PropRef } from '../../splat-engine/project.ts'
+import { fitMesh, type Mesh, type Texture } from '../../splat-engine/meshShape.ts'
 import { pack, unpack, type PackedCut } from './pack.ts'
 
 /**
- * Your own models as props (Scene Creator phase 2, #367): a rigged splat .glb (ours, as Splat Creatures saves them)
- * opened in the page. A project names one as `model-<hash of its bytes>`; the model itself is kept here, in the
- * page, for as long as it is open (#370 keeps it in the browser), and handed to the cut worker with each job, already
- * stood on its foot (`rest`). It plays its clips and morphs as Splat Creatures plays them.
+ * Your own models as props (Scene Creator phase 2): a rigged splat .glb (ours, as Splat Creatures saves them, #367),
+ * which plays its clips and morphs as Splat Creatures plays them, or a still mesh (.obj, .glb, #368), which is cut on
+ * the scene's grid like any described part, so it takes the land's baked light, every style and the pixel palette.
+ * A project names one as `model-<hash of its bytes>`; the model itself is kept here, in the page, for as long as it
+ * is open (#370 keeps it in the browser), and handed to the cut worker with each job, already stood on its foot.
  */
 
 /** What a model's id starts with. */
 export const MODEL_PREFIX = 'model-'
 
-/** A model opened as a prop. */
-export interface ModelProp {
+/** A model opened as a prop: rigged splats, or a still mesh. */
+export type ModelProp = SplatModel | MeshModel
+
+interface ModelBase {
   /** `model-` and a hash of the file's bytes, so opening the same file twice is one model. */
   id: string
   /** Its own name, else the file's. */
   name: string
+  /** The file's name. */
+  file: string
+}
+
+/** A rigged splat .glb. */
+export interface SplatModel extends ModelBase {
+  kind: 'splats'
   /** Its blobs, skin and bones, standing with its foot at the origin: the middle of its footprint on its lowest blob. */
   rest: PackedCut
   /** Its clips, as the file has them. */
   clips: Clip[]
   /** Its blend shapes, which the clips key. */
   morphs?: Morph[]
-  /** The file's name. */
-  file: string
+}
+
+/** A texture's pixels, decoded by the page (a worker and the tests take them as they are). */
+export interface RawImage { width: number; height: number; data: Uint8ClampedArray }
+
+/** A still mesh, cut like a scene's part. */
+export interface MeshModel extends ModelBase {
+  kind: 'mesh'
+  /** Its triangles, standing with their foot at the origin, the longest side 1. */
+  mesh: Mesh
+  /** The textures `mesh.tex` points at. */
+  images: RawImage[]
 }
 
 /** Whether a prop is a model opened in the page. */
@@ -50,7 +71,7 @@ export const keepModel = (m: ModelProp) => { models.set(m.id, m) }
 export const keptModels = (): ModelProp[] => [...models.values()]
 
 /** A rigged file as a model: moved so its foot is the origin (the clips only turn and shift bones, so they still fit). */
-export function modelFrom(r: Rigged, file: string, bytes: Uint8Array): ModelProp {
+export function modelFrom(r: Rigged, file: string, bytes: Uint8Array): SplatModel {
   const b = r.blobs, n = b.count
   const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity]
   for (let i = 0; i < n; i++) for (let k = 0; k < 3; k++) { const v = b.center[i * 3 + k]; lo[k] = Math.min(lo[k], v); hi[k] = Math.max(hi[k], v) }
@@ -65,8 +86,65 @@ export function modelFrom(r: Rigged, file: string, bytes: Uint8Array): ModelProp
   blobs.opacity.set(b.opacity.subarray(0, n))
   const bones = r.skeleton.bones.map((x) => ({ ...x, head: moved(x.head), tail: x.tail && moved(x.tail) }))
   const rest = pack({ blobs, skin: r.skin, skeleton: new Skeleton(bones), partOf: new Uint16Array(n) })
-  const name = r.name?.trim() || file.replace(/\.[^.]*$/, '') || 'Model'
-  return { id: modelId(bytes), name: name[0].toUpperCase() + name.slice(1), rest, clips: r.clips, morphs: r.morphs?.length ? r.morphs : undefined, file }
+  return { kind: 'splats', id: modelId(bytes), name: named(r.name, file), rest, clips: r.clips, morphs: r.morphs?.length ? r.morphs : undefined, file }
+}
+
+const named = (own: string | undefined, file: string): string => {
+  const name = own?.trim() || file.replace(/\.[^.]*$/, '').trim() || 'Your model'
+  return name[0].toUpperCase() + name.slice(1)
+}
+
+/** A still mesh as a model: stood on its foot, its longest side 1 (`modelSize` sets it down at its height). */
+export function meshModelFrom(mesh: Mesh, images: RawImage[], file: string, bytes: Uint8Array): MeshModel {
+  return { kind: 'mesh', id: modelId(bytes), name: named(undefined, file), mesh: fitMesh(mesh, 1), images, file }
+}
+
+/**
+ * How much of a mesh is open: the share of its edges not shared by exactly two triangles, its corners joined where
+ * they lie within a hair of each other (files often split a corner by its normals or texture). A mesh is cut by
+ * which side of its surface a point is on, so an open one cuts wrongly.
+ */
+export function openShare(m: Mesh): number {
+  const P = m.positions, I = m.indices
+  let size = 0
+  for (let i = 0; i < P.length; i++) size = Math.max(size, Math.abs(P[i]))
+  const q = 1e5 / Math.max(size, 1e-9)
+  const at = new Map<string, number>(), id = new Uint32Array(P.length / 3)
+  for (let v = 0; v < id.length; v++) {
+    const key = `${Math.round(P[v * 3] * q)},${Math.round(P[v * 3 + 1] * q)},${Math.round(P[v * 3 + 2] * q)}`
+    let k = at.get(key)
+    if (k === undefined) { k = at.size; at.set(key, k) }
+    id[v] = k
+  }
+  const edges = new Map<number, number>(), n = at.size
+  for (let t = 0; t + 2 < I.length; t += 3) {
+    for (let e = 0; e < 3; e++) {
+      const a = id[I[t + e]], b = id[I[t + (e + 1) % 3]]
+      if (a === b) continue
+      const key = Math.min(a, b) * n + Math.max(a, b)
+      edges.set(key, (edges.get(key) ?? 0) + 1)
+    }
+  }
+  let open = 0
+  for (const c of edges.values()) if (c !== 2) open++
+  return edges.size ? open / edges.size : 1
+}
+
+/** The most of a mesh's edges that may be open for it to be cut as a solid. */
+export const OPEN_MOST = 0.01
+
+/** What the cut worker needs of a model: a rigged one's blobs at rest, or a mesh and its textures. */
+export type ModelJob = { kind: 'splats'; rest: PackedCut } | { kind: 'mesh'; mesh: Mesh; images: RawImage[] }
+export const modelJob = (m: ModelProp): ModelJob => (m.kind === 'mesh' ? { kind: 'mesh', mesh: m.mesh, images: m.images } : { kind: 'splats', rest: m.rest })
+
+/** A texture to read from a decoded image, nearest pixel and repeating, as glTF's default sampler wraps. */
+export function rawTexture(im: RawImage): Texture {
+  const { data, width: w, height: h } = im
+  const wrap = (x: number, n: number) => ((Math.floor(x * n) % n) + n) % n
+  return (u, v) => {
+    const i = (wrap(v, h) * w + wrap(u, w)) * 4
+    return [data[i] / 255, data[i + 1] / 255, data[i + 2] / 255]
+  }
 }
 
 /** How tall a model is set down, before it is fitted to the land (#371): about a door's half, between a sheep and the cook. */
@@ -75,13 +153,14 @@ export const MODEL_HEIGHT = 0.6
 /** The size a model is set down at, so it stands `MODEL_HEIGHT` tall. */
 export function modelSize(m: ModelProp): number {
   let top = 0
-  for (let i = 0; i < m.rest.count; i++) top = Math.max(top, m.rest.center[i * 3 + 1])
+  if (m.kind === 'mesh') for (let i = 1; i < m.mesh.positions.length; i += 3) top = Math.max(top, m.mesh.positions[i])
+  else for (let i = 0; i < m.rest.count; i++) top = Math.max(top, m.rest.center[i * 3 + 1])
   const s = top > 0 ? MODEL_HEIGHT / top : 1
   return Math.round(Math.min(SIZE_RANGE[1], Math.max(SIZE_RANGE[0], s)) * 1e4) / 1e4
 }
 
 /** The clip a model plays in a scene: one that stays on the spot by its name (idle, stand, float, rest), else its first. */
-export const modelClip = (m: ModelProp): Clip | undefined => m.clips.find((c) => /idle|stand|float|rest|breath/i.test(c.name)) ?? m.clips[0]
+export const modelClip = (m: SplatModel): Clip | undefined => m.clips.find((c) => /idle|stand|float|rest|breath/i.test(c.name)) ?? m.clips[0]
 
 /** A clip's time `t` seconds into a scene's loop: played a whole number of times a loop, so the scene still joins. */
 export function clipTime(clip: Clip, loop: number, t: number): number {
@@ -92,7 +171,7 @@ export function clipTime(clip: Clip, loop: number, t: number): number {
 }
 
 /** Poses a model's own bones `t` seconds into a scene's loop, from its clip; at rest when it has none. */
-export function poseModel(m: ModelProp, sk: Skeleton, loop: number, t: number) {
+export function poseModel(m: SplatModel, sk: Skeleton, loop: number, t: number) {
   const clip = modelClip(m)
   if (clip) sampleClip(clip, sk, clipTime(clip, loop, t))
   else sk.reset()
@@ -104,13 +183,13 @@ export function poseModel(m: ModelProp, sk: Skeleton, loop: number, t: number) {
  * whether anything changed, so the page sends the shapes up only then.
  */
 export class PlacedMorphs {
-  private readonly m: ModelProp & { morphs: Morph[] }
+  private readonly m: SplatModel & { morphs: Morph[] }
   private readonly rest: Blobs
   private readonly out: Blobs
   private readonly t: Placer
   private readonly w: Float32Array
   private readonly was: Float32Array
-  constructor(m: ModelProp & { morphs: Morph[] }, at: Placement) {
+  constructor(m: SplatModel & { morphs: Morph[] }, at: Placement) {
     this.m = m
     this.rest = unpack(m.rest).blobs
     this.out = new Blobs(this.rest.count)

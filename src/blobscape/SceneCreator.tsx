@@ -27,8 +27,9 @@ import { creatorTools, type CreatorApi } from './creator/agentTools.ts'
 import { PACKS, packAdded } from './creator/packs.ts'
 import { BLOB_ROOM, CARDS, added, cardsFound, groundOf, heightAt, landSwapped, liftOn, roomOf, whyNot } from './creator/adding.ts'
 import { creatureMove, creatureSize, isCreature, libraryProp, type LibraryEntry } from './creator/library.ts'
-import { PlacedMorphs, isModel, keepModel, keptModels, modelClip, modelFrom, modelOf, modelSize, poseModel, type ModelProp } from './creator/models.ts'
+import { OPEN_MOST, PlacedMorphs, isModel, keepModel, keptModels, meshModelFrom, modelClip, modelFrom, modelJob, modelOf, modelSize, openShare, poseModel, type ModelProp, type RawImage, type SplatModel } from './creator/models.ts'
 import { GlbError, readRiggedGlb } from '../splat-engine/glb.ts'
+import { MeshFileError, openGlb, readMeshGlb, readObj, type MeshFile } from '../splat-engine/meshFile.ts'
 import { isMeshGlb } from './modelRig.ts'
 import { budget, clock, lampAdded, lampLights, lampRemoved, lit, liveSky, liveSkyColors, rgbOf, shadeNow, sunNow } from './creator/lighting.ts'
 import { castBy, glowGain } from './diorama/glow.ts'
@@ -77,9 +78,31 @@ function creaturePosable(id: string, bones: readonly Bone[], at: Placement, loop
 }
 
 /** A model's clip to play on its own bones: its cut's bones taken back to where they stood before it was placed. */
-function modelPosable(m: ModelProp, bones: readonly Bone[], at: Placement, loop: number): Posable {
+function modelPosable(m: SplatModel, bones: readonly Bone[], at: Placement, loop: number): Posable {
   const t = placer([0, 0, 0], at)
   return { bones: bones.map((x) => ({ ...x, head: t.back(x.head), tail: x.tail && t.back(x.tail) })), pose: (sk, time) => poseModel(m, sk, loop, time), lights: () => [] }
+}
+
+/** A still mesh as a model, its textures decoded here (the cut worker takes their pixels). */
+async function meshModel(f: MeshFile, name: string, bytes: Uint8Array): Promise<ModelProp> {
+  const images = await Promise.all(f.images.map((im) => decodeImage(im.bytes, im.mime).catch((): RawImage => ({ width: 1, height: 1, data: new Uint8ClampedArray([255, 255, 255, 255]) }))))
+  return meshModelFrom(f.mesh, images, name, bytes)
+}
+
+/** A .glb's image as pixels. */
+async function decodeImage(bytes: Uint8Array, mime: string): Promise<RawImage> {
+  const bitmap = await createImageBitmap(new Blob([bytes as BlobPart], { type: mime }))
+  const c = new OffscreenCanvas(bitmap.width, bitmap.height)
+  const g = c.getContext('2d')!
+  g.drawImage(bitmap, 0, 0)
+  const { data, width, height } = g.getImageData(0, 0, bitmap.width, bitmap.height)
+  bitmap.close()
+  return { width, height, data }
+}
+
+/** Whether a .glb's mesh has a skin (a rigged mesh, not a still one). */
+function isSkinned(bytes: Uint8Array): boolean {
+  try { return !!openGlb(bytes).json.skins?.length } catch { return false }
 }
 
 /** One piece of what is open: what its cut is kept under, and the job that cuts it. */
@@ -204,7 +227,8 @@ export function SceneCreator() {
       { key: land, thing: 'land', plain, job: (spacing) => ({ kind: 'land', project, spacing, plain }) },
       ...project.props.map((p, i): Piece => {
         // a model of your own goes to the cutter with its job; whether the page has it is part of what it is cut as
-        const model = isModel(p.prop) ? modelOf(p.prop)?.rest : undefined
+        const known = isModel(p.prop) ? modelOf(p.prop) : undefined
+        const model = known && modelJob(known)
         return { key: JSON.stringify([p.prop, p.turn, p.size, project.loop, project.land, steps, propLight, plain, !!model]), thing: JSON.stringify(p.prop), plain, job: (spacing) => ({ kind: 'prop', project, i, spacing, plain, model }) }
       }),
     ]
@@ -315,14 +339,14 @@ export function SceneCreator() {
             // a creature plays its own move on its own bones, as it stood before it was placed
             const model = isModel(placed.prop) ? modelOf(placed.prop) : undefined
             const own = isCreature(placed.prop) ? creaturePosable(placed.prop, b.skeleton.bones, cut.at, cpNow.loop)
-              : model ? modelPosable(model, b.skeleton.bones, cut.at, cpNow.loop) : undefined
+              : model?.kind === 'splats' ? modelPosable(model, b.skeleton.bones, cut.at, cpNow.loop) : undefined
             poser = new PlacedPoser(own ?? p.c, p.prop.foot, cut.at, placed.still)
             L.posers.set(key, poser)
           }
           poser.pose(b.skeleton, t)
           // a model's blend shapes, as its clip weighs them, reshape its blobs, which go up again only when they change
           const m = isModel(placed.prop) && !placed.still ? modelOf(placed.prop) : undefined
-          if (m?.morphs && m.rest.count + 1 === b.blobs.count) {
+          if (m?.kind === 'splats' && m.morphs && m.rest.count + 1 === b.blobs.count) {
             let mo = L.morphs.get(cut.id)
             if (!mo) { mo = new PlacedMorphs({ ...m, morphs: m.morphs }, cut.at); L.morphs.set(cut.id, mo) }
             if (mo.update(b.blobs, cpNow.loop, t)) stage.reshape(b)
@@ -677,7 +701,7 @@ export function SceneCreator() {
   const addModel = (m: ModelProp) => {
     if (!project || !cp || !room) return
     const next = added(project, m.id, groundAtView(), modelSize(m))
-    const why = room.blobs[0] + m.rest.count > room.blobs[1]
+    const why = m.kind === 'splats' && room.blobs[0] + m.rest.count > room.blobs[1]
       ? `${m.name} has ${m.rest.count.toLocaleString('en-US')} blobs, and the scene has room for ${(room.blobs[1] - room.blobs[0]).toLocaleString('en-US')} more.`
       : whyNot(m.name, room, roomOf(compileProject(next, libraryProp), room.blobs[0], room.blobs[1]))
     setRefused(why ?? '')
@@ -685,25 +709,48 @@ export function SceneCreator() {
     edit(next, `Added ${m.name}. Drag it to move it, or open Arrange to turn and size it.`)
     setPicked(next.props.length - 1)
   }
-  /** Opens a rigged splat .glb as a model of your own and sets it down. */
-  const openModel = async (file: File) => {
+  /**
+   * Opens a model of your own and sets it down: a rigged splat .glb plays its moves; a still mesh (.obj, with its .mtl
+   * picked beside it, or a .glb) is cut on the scene's grid like any part, when it is closed.
+   */
+  const openModel = async (files: File[]) => {
+    const file = files.find((f) => /\.(glb|obj)$/i.test(f.name))
+    if (!file) { setModelNote('Pick a .glb or an .obj (with its .mtl beside it, if it has one).'); return }
     setModelNote(`Opening ${file.name}…`)
     try {
       const bytes = new Uint8Array(await file.arrayBuffer())
-      let r
-      try { r = readRiggedGlb(bytes) } catch (e) {
-        if (!isMeshGlb(e)) throw e
-        setModelNote(`${file.name} is a mesh model, not splats. Meshes as props are coming next; for now, open a rigged splat .glb, such as one saved from Splat Creatures.`)
-        return
+      let m: ModelProp
+      if (/\.glb$/i.test(file.name)) {
+        try {
+          m = modelFrom(readRiggedGlb(bytes), file.name, bytes)
+        } catch (e) {
+          if (!isMeshGlb(e)) throw e
+          if (isSkinned(bytes)) {
+            setModelNote(`${file.name} is a rigged mesh. Rigged meshes as props are coming next; for now, open a rigged splat .glb or a still model.`)
+            return
+          }
+          m = await meshModel(readMeshGlb(bytes), file.name, bytes)
+        }
+      } else {
+        const mtl = files.find((f) => /\.mtl$/i.test(f.name))
+        m = await meshModel(readObj(new TextDecoder().decode(bytes), mtl && await mtl.text()), file.name, bytes)
       }
-      const m = modelFrom(r, file.name, bytes)
+      if (m.kind === 'mesh') {
+        const open = openShare(m.mesh)
+        if (open > OPEN_MOST) {
+          setModelNote(`${file.name} isn't a closed surface (${Math.round(open * 100)}% of its edges are open), so it can't be cut as a solid. Open models as props are coming next.`)
+          return
+        }
+      }
       keepModel(m)
       setModelsVersion((v) => v + 1)
-      const clip = modelClip(m)
-      setModelNote(`Opened ${m.name}: ${m.rest.count.toLocaleString('en-US')} blobs${clip ? `, playing ${clip.name}` : ', standing still'}${m.morphs ? `, with ${m.morphs.length} blend ${m.morphs.length === 1 ? 'shape' : 'shapes'}` : ''}.`)
+      if (m.kind === 'splats') {
+        const clip = modelClip(m)
+        setModelNote(`Opened ${m.name}: ${m.rest.count.toLocaleString('en-US')} blobs${clip ? `, playing ${clip.name}` : ', standing still'}${m.morphs ? `, with ${m.morphs.length} blend ${m.morphs.length === 1 ? 'shape' : 'shapes'}` : ''}.`)
+      } else setModelNote(`Opened ${m.name}: ${(m.mesh.indices.length / 3).toLocaleString('en-US')} triangles, cut on the scene's grid under its light.`)
       addModel(m)
     } catch (e) {
-      setModelNote(`Could not open ${file.name}: ${e instanceof GlbError ? e.message : 'it is not a .glb this page can read'}.`)
+      setModelNote(`Could not open ${file.name}: ${e instanceof GlbError || e instanceof MeshFileError ? e.message : 'it is not a model this page can read'}.`)
     }
   }
   /** Sets the whole of a pack down round the middle of the view, in one step to undo. */
@@ -1072,9 +1119,9 @@ export function SceneCreator() {
                     <input type="search" value={query} onChange={(ev) => setQuery(ev.target.value)} placeholder="Find a prop or land" aria-label="Find a prop or land" className="min-h-10 w-full rounded-full border border-rule bg-paper px-4 text-sm outline-none focus-visible:border-accent" />
                     <div>
                       <h3 id="creator-models" className="mb-1 text-sm font-semibold">Your models</h3>
-                      <p className="mb-2 text-xs text-ink-muted">A rigged splat .glb, such as one saved from Splat Creatures, with its moves and blend shapes. It stays while this page is open.</p>
-                      <input ref={modelInput} type="file" accept=".glb,model/gltf-binary" className="sr-only" tabIndex={-1} aria-hidden="true" data-testid="creator-model-file"
-                        onChange={(ev) => { const f = ev.target.files?.[0]; ev.target.value = ''; if (f) void openModel(f) }} />
+                      <p className="mb-2 text-xs text-ink-muted">A rigged splat .glb, such as one saved from Splat Creatures, plays its moves. A still model (.obj with its .mtl, or .glb) is cut into the scene under its light. It stays while this page is open.</p>
+                      <input ref={modelInput} type="file" accept=".glb,.obj,.mtl,model/gltf-binary" className="sr-only" tabIndex={-1} aria-hidden="true" data-testid="creator-model-file"
+                        multiple onChange={(ev) => { const f = [...(ev.target.files ?? [])]; ev.target.value = ''; if (f.length) void openModel(f) }} />
                       <button type="button" onClick={() => modelInput.current?.click()} data-testid="creator-model-open"
                         className="min-h-10 cursor-pointer rounded-full border border-rule bg-paper px-4 text-sm font-semibold hover:border-ink-faint">
                         Open a model…

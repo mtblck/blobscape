@@ -1,6 +1,42 @@
 // Scene Creator (epic #329): the workspace that opens a scene split into a land and props.
 import { root } from '../lib.mjs'
 
+// a hut as an .obj: a box of walls and a roof, each closed, in two colors from its .mtl
+const HUT_OBJ = `mtllib hut.mtl
+v -1 0 -1
+v 1 0 -1
+v 1 0 1
+v -1 0 1
+v -1 1.2 -1
+v 1 1.2 -1
+v 1 1.2 1
+v -1 1.2 1
+v 0 2 -1.1
+v 0 2 1.1
+v -1.2 1.2 -1.1
+v 1.2 1.2 -1.1
+v 1.2 1.2 1.1
+v -1.2 1.2 1.1
+usemtl walls
+f 1 2 3 4
+f 5 8 7 6
+f 1 5 6 2
+f 2 6 7 3
+f 3 7 8 4
+f 4 8 5 1
+usemtl roof
+f 11 12 9
+f 13 14 10
+f 11 9 10 14
+f 12 13 10 9
+f 11 14 13 12
+`
+const HUT_MTL = `newmtl walls
+Kd 0.85 0.75 0.55
+newmtl roof
+Kd 0.6 0.15 0.1
+`
+
 export default [
   {
     name: 'scene-creator',
@@ -212,15 +248,26 @@ export default [
         ['picture follows the model', differ(withFox, withModel) > 20],
         ['the model moves', differ(withModel, puffed) > 5])
       await p.screenshot({ path: join(shots, 'blobscape-scene-creator-model.png') })
-      // undo takes the model, the fox, the pack, the land, the drop and the turkey back
-      for (let i = 0; i < 6; i++) await p.getByTestId('creator-undo').click()
+      // a still mesh (#368): a little house as an .obj with its .mtl, cut on the scene's grid in its own colors
+      await p.getByTestId('creator-model-file').setInputFiles([
+        { name: 'hut.obj', mimeType: 'text/plain', buffer: Buffer.from(HUT_OBJ) },
+        { name: 'hut.mtl', mimeType: 'text/plain', buffer: Buffer.from(HUT_MTL) },
+      ])
+      const hutOpened = await p.waitForFunction(() => /^Opened Hut/.test(document.querySelector('[data-testid=creator-model-note]')?.textContent ?? ''), null, { timeout: 30000 }).then(() => true, () => false)
+      await ready()
+      const hutted = await state(), withHut = await picture()
+      steps.push(['mesh opened', hutOpened && hutted.props.length === modeled.props.length + 1 && hutted.blobs > modeled.blobs],
+        ['picture follows the mesh', differ(withModel, withHut) > 20])
+      await p.screenshot({ path: join(shots, 'blobscape-scene-creator-mesh.png') })
+      // undo takes the mesh, the model, the fox, the pack, the land, the drop and the turkey back
+      for (let i = 0; i < 7; i++) await p.getByTestId('creator-undo').click()
       await ready()
       const back = await state()
       steps.push(['undone', back.land === start.land && JSON.stringify(back.props) === JSON.stringify(start.props)])
       const room = await p.getByTestId('creator-room').innerText().catch(() => '')
       const bad = steps.filter(([, good]) => !good).map(([name]) => name)
       if (bad.length) fails.push(`blobscape scene creator props: ${bad.join(', ')} failed ${JSON.stringify({ start: start.props.length, turkey: turkey.props.length, dropped: dropped.props.length, land: swapped.land, room })}`)
-      else ok(`blobscape scene creator props: the turkey found and added to the windmill hill, a haystack dropped on the view, the land swapped to turf, the old ruins pack set down, the fox from Splat Creatures added and moving, the puffer's .glb opened as a model and moving, counts and picture following, and all undone ("${room}")`)
+      else ok(`blobscape scene creator props: the turkey found and added to the windmill hill, a haystack dropped on the view, the land swapped to turf, the old ruins pack set down, the fox from Splat Creatures added and moving, the puffer's .glb opened as a model and moving, an .obj hut cut on the grid, counts and picture following, and all undone ("${room}")`)
     },
   },
   {
