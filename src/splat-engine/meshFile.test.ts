@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { MeshFileError, readMeshFile, readMeshGlb, readObj } from './meshFile.ts'
+import { MeshFileError, readMeshFile, readMeshGlb, readMeshGlbParts, readObj } from './meshFile.ts'
 import { meshColor, meshShape } from './meshShape.ts'
 
 test('an .obj: polygons fan into triangles, negative indices count back, .mtl colors land on their faces', () => {
@@ -18,7 +18,7 @@ test('an .obj: polygons fan into triangles, negative indices count back, .mtl co
 })
 
 /** A .glb with one textured triangle under a moved, scaled node, colors as normalized bytes, indices as u16. */
-function tinyGlb(): Uint8Array {
+function tinyGlb(nodes: object[] = [{ translation: [0, 2, 0], children: [1] }, { mesh: 0, scale: [2, 2, 2] }]): Uint8Array {
   const parts: Uint8Array[] = []
   let at = 0
   const views: object[] = []
@@ -30,7 +30,7 @@ function tinyGlb(): Uint8Array {
   const png = add(new Uint8Array([0x89, 0x50, 0x4e, 0x47]))
   const json = {
     asset: { version: '2.0' }, scene: 0, scenes: [{ nodes: [0] }],
-    nodes: [{ translation: [0, 2, 0], children: [1] }, { mesh: 0, scale: [2, 2, 2] }],
+    nodes,
     meshes: [{ primitives: [{ attributes: { POSITION: 0, COLOR_0: 1, TEXCOORD_0: 2 }, indices: 3, material: 0 }] }],
     materials: [{ pbrMetallicRoughness: { baseColorFactor: [1, 1, 1, 1], baseColorTexture: { index: 0 } } }],
     textures: [{ source: 0 }], images: [{ bufferView: png, mimeType: 'image/png' }],
@@ -68,4 +68,21 @@ test('a .glb: triangles placed by the node tree, colors from bytes, the texture 
   const c = meshColor(mesh, s, undefined, [() => [1, 1, 1]])([1.9, 2.05, 0])
   assert.ok(c[0] > 0.8 && c[1] < 0.2, `${c}`)
   assert.throws(() => readMeshGlb(new Uint8Array(30)), /Not a \.glb/)
+})
+
+test('a .glb of a whole scene: each node at the top its own part, placed as in the file, inside a lone wrapper', () => {
+  const { parts, images } = readMeshGlbParts(tinyGlb([
+    { name: 'Scene', translation: [0, 1, 0], children: [1, 2, 3] },
+    { name: 'House', mesh: 0, translation: [1, 0, 0] },
+    { translation: [-1, 0, 0], children: [4] },
+    { name: 'Empty' },
+    { mesh: 0 },
+  ]))
+  assert.deepEqual(parts.map((p) => p.name), ['House', 'Part 2'])
+  assert.deepEqual([...parts[0].mesh.positions], [1, 1, 0, 2, 1, 0, 1, 2, 0])
+  assert.deepEqual([...parts[1].mesh.positions], [-1, 1, 0, 0, 1, 0, -1, 2, 0])
+  assert.equal(images.length, 1)
+  assert.deepEqual([...parts[1].mesh.tex!], [0])
+  // a single mesh at the top is one part, as a still model is
+  assert.equal(readMeshGlbParts(tinyGlb()).parts.length, 1)
 })

@@ -1,6 +1,43 @@
 // Scene Creator (epic #329): the workspace that opens a scene split into a land and props.
 import { root } from '../lib.mjs'
 
+/** A .glb of a whole scene (#380): a slab of ground, a box of a house on it and an open sheet of a sign, under one root. */
+function farmGlb() {
+  const views = [], accessors = [], meshes = [], chunks = []
+  let at = 0
+  const add = (arr) => { const b = new Uint8Array(arr.buffer); views.push({ buffer: 0, byteOffset: at, byteLength: b.byteLength }); chunks.push(b); at += b.byteLength; return views.length - 1 }
+  const mesh = (pos, idx, color) => {
+    const pv = add(new Float32Array(pos)), iv = add(new Uint32Array(idx))
+    const lo = [0, 1, 2].map((k) => Math.min(...pos.filter((_, i) => i % 3 === k))), hi = [0, 1, 2].map((k) => Math.max(...pos.filter((_, i) => i % 3 === k)))
+    accessors.push({ bufferView: pv, componentType: 5126, count: pos.length / 3, type: 'VEC3', min: lo, max: hi }, { bufferView: iv, componentType: 5125, count: idx.length, type: 'SCALAR' })
+    meshes.push({ primitives: [{ attributes: { POSITION: accessors.length - 2 }, indices: accessors.length - 1, material: meshes.length }] })
+    return { color }
+  }
+  const box = (x0, y0, z0, x1, y1, z1) => {
+    const p = [], idx = []
+    for (let i = 0; i < 8; i++) p.push(i & 1 ? x1 : x0, i & 2 ? y1 : y0, i & 4 ? z1 : z0)
+    for (const [a, b, c, d] of [[0, 2, 3, 1], [4, 5, 7, 6], [0, 1, 5, 4], [2, 6, 7, 3], [0, 4, 6, 2], [1, 3, 7, 5]]) idx.push(a, b, c, a, c, d)
+    return [p, idx]
+  }
+  const mats = [mesh(...box(-4, -0.5, -4, 4, 0, 4), [0.2, 0.5, 0.15]), mesh(...box(-1, 0, -1, 1, 2, 1), [0.8, 0.3, 0.2]), mesh([2, 0, 0, 3, 0, 0, 3, 1, 0, 2, 1, 0], [0, 1, 2, 0, 2, 3], [0.9, 0.9, 0.3])]
+  const json = {
+    asset: { version: '2.0' }, scene: 0, scenes: [{ nodes: [0] }],
+    nodes: [{ name: 'Farm', children: [1, 2, 3] }, { name: 'Field', mesh: 0 }, { name: 'Barn', mesh: 1, translation: [1, 0, 0] }, { name: 'Sign', mesh: 2 }],
+    meshes, materials: mats.map((m) => ({ pbrMetallicRoughness: { baseColorFactor: [...m.color, 1] } })),
+    accessors, bufferViews: views, buffers: [{ byteLength: at }],
+  }
+  let text = new TextEncoder().encode(JSON.stringify(json))
+  const padded = new Uint8Array(Math.ceil(text.length / 4) * 4).fill(0x20); padded.set(text); text = padded
+  const out = new Uint8Array(20 + text.length + 8 + at)
+  const dv = new DataView(out.buffer)
+  dv.setUint32(0, 0x46546c67, true); dv.setUint32(4, 2, true); dv.setUint32(8, out.length, true)
+  dv.setUint32(12, text.length, true); dv.setUint32(16, 0x4e4f534a, true); out.set(text, 20)
+  dv.setUint32(20 + text.length, at, true); dv.setUint32(24 + text.length, 0x004e4942, true)
+  let o = 28 + text.length
+  for (const c of chunks) { out.set(c, o); o += c.byteLength }
+  return Buffer.from(out)
+}
+
 /** A small scene description with two things marked as props. */
 const TWO_POSTS = '{"name":"Two posts","loop":4,"palette":["#1f2d55","#4a6fae","#1b3a2a","#c79a63","#f4f1e4","#0a0f1e"],"camera":{"target":[0,0.3,0],"distance":3,"azimuth":18,"elevation":13},"bones":[{"name":"post","at":[-0.4,0,0],"prop":"Post"},{"name":"lamp","at":[0.4,0,0],"prop":"Lamp"}],"parts":[{"paint":"#1f2d55","shape":{"kind":"box","at":[0,-0.05,0],"half":[1,0.05,1]}},{"bone":"post","paint":"#4a6fae","shape":{"kind":"box","at":[-0.4,0.3,0],"half":[0.06,0.3,0.06]}},{"bone":"lamp","paint":"#1b3a2a","shape":{"kind":"sphere","at":[0.4,0.2,0],"r":0.2}}]}'
 
@@ -421,7 +458,7 @@ export default [
     name: 'scene-creator-storage',
     core: true,
     about: 'Scene Creator, kept in the browser: an edit is kept a moment later and is there after a reload; copied, renamed and deleted in Your scenes; a model of your own kept and carried by the file; saved as a file and opened in a fresh browser; a broken file says where; nothing asked of another site',
-    entries: ['src/blobscape/SceneCreator.tsx', 'src/blobscape/creator/store.ts', 'src/blobscape/creator/models.ts', 'src/blobscape/creator/described.ts'],
+    entries: ['src/blobscape/SceneCreator.tsx', 'src/blobscape/creator/store.ts', 'src/blobscape/creator/models.ts', 'src/blobscape/creator/described.ts', 'src/blobscape/creator/sceneModel.ts', 'src/splat-engine/meshFile.ts'],
     async run({ shots, join, fails, ok, open, axe }) {
       const fs = await import('node:fs')
       const outside = []
@@ -497,10 +534,16 @@ export default [
       // a scene description, as Pixel Diorama opens, comes in as a project of its two marked props (#379)
       await f.page.getByTestId('creator-file').setInputFiles({ name: 'two-posts.json', mimeType: 'application/json', buffer: Buffer.from(TWO_POSTS) })
       steps.push(['a description opens as a project', await opened(f.page, 2) && await f.page.evaluate(() => window.__creator.props().map((p) => typeof p.prop === 'string' ? p.prop : p.prop.name).join()) === 'Post,Lamp'])
+      // a model of a whole scene: each thing at the top of its tree a prop, the open sheet covered in blobs (#380)
+      await f.page.getByTestId('creator-file').setInputFiles({ name: 'farm.glb', mimeType: 'model/gltf-binary', buffer: farmGlb() })
+      steps.push(['a whole-scene model opens as its things', await opened(f.page, 3) && await f.page.evaluate(() => window.__creator.props().every((p) => typeof p.prop === 'string' && /^model-.*-\d+$/.test(p.prop)))])
+      await f.page.waitForFunction(() => window.__creator.blobs() > 5000, undefined, { timeout: 60000 }).catch(() => {})
+      await f.page.evaluate(async () => { const s = window.__creator.stage; await s.frame(1); await s.frame(1) })
+      await f.page.screenshot({ path: join(shots, 'blobscape-scene-creator-scene-model.png') })
       steps.push(['nothing asked of another site', outside.length === 0])
       const bad = steps.filter(([, good]) => !good).map(([name]) => name)
       if (bad.length) fails.push(`blobscape scene creator storage: ${bad.join(', ')} failed ${JSON.stringify({ outside: outside.slice(0, 3), said })}`)
-      else ok('blobscape scene creator storage: an edit is kept and back after a reload; copy, rename and delete work; a file reopens in a fresh browser, a broken one says where and a scene description opens as its props; no other site asked')
+      else ok('blobscape scene creator storage: an edit is kept and back after a reload; copy, rename and delete work; a file reopens in a fresh browser, a broken one says where, and a scene description and a whole-scene model open as their props; no other site asked')
     },
   },
   {

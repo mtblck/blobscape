@@ -170,7 +170,60 @@ export function openGlb(bytes: Uint8Array): OpenGlb {
 
 /** Reads a .glb's triangles, placed by its node tree, with colors and the base color texture. */
 export function readMeshGlb(bytes: Uint8Array): MeshFile {
-  const { json, read, images, textureImage } = openGlb(bytes)
+  const g = openGlb(bytes)
+  const mesh = gather(g, rootsOf(g.json).map((ni) => ({ ni, m: IDENTITY })))
+  if (!mesh) throw new MeshFileError('The file has no triangles')
+  return { mesh, images: g.images }
+}
+
+/** One thing in a model of a whole scene: a node at the top of its tree, with everything under it. */
+export interface MeshPart {
+  /** The node's own name, or "Part n". */
+  name: string
+  mesh: Mesh
+}
+
+/** Most things a whole scene is split into. */
+export const MAX_MESH_PARTS = 40
+
+/**
+ * Reads a .glb of a whole scene as its things (#380): each node at the top of the tree with its children, placed as
+ * in the file, so they stand where they stood. A lone node holding everything (as many exporters write a scene) is
+ * looked inside. Nodes with no triangles are left out; the images are shared, as `tex` points into them.
+ */
+export function readMeshGlbParts(bytes: Uint8Array): { parts: MeshPart[]; images: MeshImage[] } {
+  const g = openGlb(bytes)
+  const { json } = g
+  let tops = rootsOf(json).map((ni) => ({ ni, m: IDENTITY }))
+  // a lone wrapper with no mesh of its own: its children are the scene's things
+  for (let d = 0; d < 8 && tops.length === 1; d++) {
+    const nd = json.nodes?.[tops[0].ni]
+    if (!nd || nd.mesh !== undefined || !nd.children?.length) break
+    const m = mul(tops[0].m, nodeMatrix(nd))
+    tops = (nd.children as number[]).map((ni) => ({ ni, m }))
+  }
+  const parts: MeshPart[] = []
+  let count = 0
+  for (const t of tops) {
+    const mesh = gather(g, [t], count)
+    if (!mesh) continue
+    count += mesh.indices.length / 3
+    const own = json.nodes?.[t.ni]?.name
+    parts.push({ name: typeof own === 'string' && own.trim() ? own.trim().slice(0, 60) : `Part ${parts.length + 1}`, mesh })
+    if (parts.length > MAX_MESH_PARTS) throw new MeshFileError(`The scene has more than ${MAX_MESH_PARTS} things at the top of its tree`)
+  }
+  if (!parts.length) throw new MeshFileError('The file has no triangles')
+  return { parts, images: g.images }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function rootsOf(json: any): number[] {
+  const scene = json.scenes?.[json.scene ?? 0]
+  return scene?.nodes ?? (json.nodes ?? []).map((_: unknown, i: number) => i).filter((i: number) => !(json.nodes as { children?: number[] }[]).some((p) => p.children?.includes(i)))
+}
+
+/** The triangles under these nodes, placed by the tree; undefined when there are none. `before` counts triangles already read, against the most. */
+function gather({ json, read, textureImage }: OpenGlb, starts: { ni: number; m: M4 }[], before = 0): Mesh | undefined {
   const pos: number[] = [], col: number[] = [], uv: number[] = [], idx: number[] = [], tex: number[] = []
   let anyColor = false, anyTex = false
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -202,7 +255,7 @@ export function readMeshGlb(bytes: Uint8Array): MeshFile {
         tex.push(T ? img : -1)
       }
       if (T) anyTex = true
-      if (idx.length / 3 > MAX_TRIANGLES) throw new MeshFileError(`The model has more than ${MAX_TRIANGLES.toLocaleString('en-US')} triangles`)
+      if (before + idx.length / 3 > MAX_TRIANGLES) throw new MeshFileError(`The model has more than ${MAX_TRIANGLES.toLocaleString('en-US')} triangles`)
     }
   }
   const seen = new Set<number>()
@@ -215,19 +268,14 @@ export function readMeshGlb(bytes: Uint8Array): MeshFile {
     if (nd.mesh !== undefined) addMesh(json.meshes[nd.mesh], m)
     for (const c of nd.children ?? []) walk(c, m)
   }
-  const scene = json.scenes?.[json.scene ?? 0]
-  const roots: number[] = scene?.nodes ?? (json.nodes ?? []).map((_: unknown, i: number) => i).filter((i: number) => !(json.nodes as { children?: number[] }[]).some((p) => p.children?.includes(i)))
-  for (const r of roots) walk(r, IDENTITY)
-  if (!idx.length) throw new MeshFileError('The file has no triangles')
+  for (const st of starts) walk(st.ni, st.m)
+  if (!idx.length) return undefined
   return {
-    mesh: {
-      positions: new Float32Array(pos),
-      indices: new Uint32Array(idx),
-      colors: anyColor ? new Float32Array(col) : undefined,
-      uvs: anyTex ? new Float32Array(uv) : undefined,
-      tex: anyTex ? Int16Array.from(tex) : undefined,
-    },
-    images,
+    positions: new Float32Array(pos),
+    indices: new Uint32Array(idx),
+    colors: anyColor ? new Float32Array(col) : undefined,
+    uvs: anyTex ? new Float32Array(uv) : undefined,
+    tex: anyTex ? Int16Array.from(tex) : undefined,
   }
 }
 

@@ -27,10 +27,11 @@ import { registerTools } from './agentTools.ts'
 import { creatorTools, type CreatorApi } from './creator/agentTools.ts'
 import { PACKS, packAdded } from './creator/packs.ts'
 import { BLOB_ROOM, CARDS, spanOf, added, cardsFound, groundOf, heightAt, landSwapped, liftOn, roomOf, whyNot } from './creator/adding.ts'
-import { creatureMove, creatureSize, isCreature, libraryProp, type LibraryEntry } from './creator/library.ts'
+import { creatureMove, creatureSize, isCreature, libraryProp, openLand, type LibraryEntry } from './creator/library.ts'
 import { OPEN_MOST, SCATTERED, PlacedMorphs, rawTexture, scatteredStill, forgetKept, isModel, keepModel, keptModels, modelId, meshModelFrom, modelClip, modelFrom, modelJob, modelOf, modelSize, openShare, poseModel, type ModelProp, type RawImage, type SplatModel } from './creator/models.ts'
 import { GlbError, readRiggedGlb } from '../splat-engine/glb.ts'
-import { MeshFileError, openGlb, readMeshGlb, readObj, type MeshFile } from '../splat-engine/meshFile.ts'
+import { MeshFileError, openGlb, readMeshGlb, readMeshGlbParts, readObj, type MeshFile } from '../splat-engine/meshFile.ts'
+import { fileIdOf, isPart, partId, sceneLayout, sceneProject } from './creator/sceneModel.ts'
 import { isMeshGlb, rigFromModel } from './modelRig.ts'
 import { meshBounds } from '../splat-engine/meshShape.ts'
 import { readSkinnedGlb } from '../splat-engine/skinnedModel.ts'
@@ -108,6 +109,26 @@ async function readModel(mf: ModelFile): Promise<{ model: ModelProp; open: boole
   return { model: m, open: false }
 }
 
+/** The least blobs a thing of a whole scene is covered in when it is open: the scene shares `SCATTERED` among them. */
+const PART_SCATTERED_LEAST = 4000
+
+/**
+ * A model of a whole scene (#380): each thing at the top of its tree a model of its own (`partId`), cut as a still
+ * mesh, or covered in blobs where it is open, with its box in the file's own units for laying the scene out.
+ */
+async function readSceneModels(mf: ModelFile): Promise<{ model: ModelProp; box: { min: Vec3; max: Vec3; byHeight?: boolean } }[]> {
+  const { parts, images } = readMeshGlbParts(mf.bytes)
+  const decoded = await Promise.all(images.map((im) => decodeImage(im.bytes, im.mime).catch((): RawImage => ({ width: 1, height: 1, data: new Uint8ClampedArray([255, 255, 255, 255]) }))))
+  const each = Math.max(PART_SCATTERED_LEAST, Math.floor(SCATTERED / parts.length))
+  return parts.map((part, i) => {
+    const id = partId(mf.id, i)
+    const box = meshBounds(part.mesh)
+    const m = { ...meshModelFrom(part.mesh, decoded, part.name, mf.bytes), id }
+    if (openShare(m.mesh) <= OPEN_MOST) return { model: m, box }
+    return { model: { ...modelFrom(scatteredStill(m.mesh, m.name, decoded.map(rawTexture), each), part.name, mf.bytes, m.tall), id, scattered: true }, box: { ...box, byHeight: true } }
+  })
+}
+
 /** A still mesh as a model, its textures decoded here (the cut worker takes their pixels). */
 async function meshModel(f: MeshFile, name: string, bytes: Uint8Array): Promise<ModelProp> {
   const images = await Promise.all(f.images.map((im) => decodeImage(im.bytes, im.mime).catch((): RawImage => ({ width: 1, height: 1, data: new Uint8ClampedArray([255, 255, 255, 255]) }))))
@@ -140,6 +161,8 @@ interface Piece { key: string; thing: string; plain: boolean; job: (spacing: num
 
 /** How long the cutter waits after the last edit before it starts, so a run of key presses cuts once. */
 const SETTLE_MS = 250
+/** The land a model of a whole scene opens on (#380): level, so the scene's own ground stands on it as it was. */
+const SCENE_LAND = 'plain-turf'
 /** A press that moves less than this many pixels is a tap. */
 const TAP = 6
 const LIFT_MOST = 0.6
@@ -585,7 +608,35 @@ export function SceneCreator() {
     say(`Saved ${fileName(keeping)}.`)
   }
   const fileInput = useRef<HTMLInputElement>(null)
+  /** A model of a whole scene (#380) opened as a new scene on the round of turf: each thing a prop, standing where it stood. */
+  const openSceneModel = async (f: File) => {
+    setFileProblems([])
+    say(`Opening ${f.name}…`)
+    try {
+      const bytes = new Uint8Array(await f.arrayBuffer())
+      const mf: ModelFile = { id: modelId(bytes), file: f.name, bytes, scene: true, added: Date.now() }
+      const read = await readSceneModels(mf)
+      for (const { model } of read) keepModel(model)
+      modelFiles.current.set(mf.id, mf)
+      setModelsVersion((v) => v + 1)
+      shelf?.putModel(mf).catch((e) => { console.warn(e); say(`This browser would not keep ${f.name}: save the scene as a file to keep it.`) })
+      const base = openLand(SCENE_LAND)!
+      const under = groundOf(compileProject(base, libraryProp), DETAIL[0].spacing)
+      const layout = sceneLayout(read.map((r) => r.box), spanOf(under), heightAt(under, 0, 0, 0))
+      const bare = cleanName(f.name.replace(/\.glb$/i, ''))
+      const name = bare ? bare[0].toUpperCase() + bare.slice(1) : 'Your scene'
+      const p = sceneProject(base, name, read.map((r, i) => ({ id: r.model.id, ...layout[i] })))
+      openSaved({ id: newId(), updated: Date.now(), project: p })
+      keptText.current = ''
+      const covered = read.filter((r) => r.model.kind === 'splats').length
+      say(`Opened ${name}: ${read.length} ${read.length === 1 ? 'thing' : 'things'}, each a prop${covered ? `, ${covered} covered in blobs since ${covered === 1 ? 'it is' : 'they are'} not closed` : ''}.`)
+    } catch (e) {
+      setFileProblems([`file: ${e instanceof GlbError || e instanceof MeshFileError ? e.message : 'not a model this page can read'}`])
+      say(`${f.name} could not be opened.`)
+    }
+  }
   const openFile = async (f: File) => {
+    if (/\.glb$/i.test(f.name)) { await openSceneModel(f); return }
     const text = await f.text()
     // a scene description (what Pixel Diorama opens) comes in as a project of its own props and land (#379)
     const { project: p, models, problems } = isDescription(text) ? { ...readDescribed(text), models: [] as ModelFile[] } : readFile(text)
@@ -778,21 +829,25 @@ export function SceneCreator() {
   }
   /** Lets go of one of your models: off the shelf and out of the list. Scenes using it keep it while the page is open. */
   const forgetModel = async (m: ModelProp) => {
-    try { await shelf?.removeModel(m.id) } catch (e) { lost(e); return }
-    forgetKept(m.id)
-    modelFiles.current.delete(m.id)
+    // a thing of a whole scene is kept with its file, so the file goes, and every thing in it
+    const file = fileIdOf(m.id)
+    try { await shelf?.removeModel(file) } catch (e) { lost(e); return }
+    const gone = isPart(m.id) ? keptModels().filter((x) => fileIdOf(x.id) === file) : [m]
+    for (const x of gone) forgetKept(x.id)
+    const what = isPart(m.id) ? `${modelFiles.current.get(file)?.file ?? m.name} and its ${gone.length} things` : m.name
+    modelFiles.current.delete(file)
     setModelsVersion((v) => v + 1)
-    setModelNote(`Forgot ${m.name}. A scene using it shows it until the page is closed; open its file again to keep it.`)
+    setModelNote(`Forgot ${what}. A scene using ${gone.length > 1 ? 'them' : 'it'} shows ${gone.length > 1 ? 'them' : 'it'} until the page is closed; open the file again to keep ${gone.length > 1 ? 'them' : 'it'}.`)
   }
   /** Takes in models a file or the shelf brought, as they open: the scenes using them are cut again with them. */
   const takeModels = async (files: ModelFile[], from: string) => {
     const failed: string[] = []
     for (const mf of files) {
-      const had = modelOf(mf.id)
+      const had = mf.scene ? undefined : modelOf(mf.id)
       if (had) { keepModel(had); modelFiles.current.set(mf.id, mf); continue }
       try {
-        const { model } = await readModel(mf)
-        keepModel(model)
+        if (mf.scene) for (const { model } of await readSceneModels(mf)) keepModel(model)
+        else keepModel((await readModel(mf)).model)
         modelFiles.current.set(mf.id, mf)
       } catch (e) {
         console.warn(e)
@@ -1128,10 +1183,10 @@ export function SceneCreator() {
                       <div className="flex flex-wrap gap-2">
                         {keeping && <Button onClick={saveFile} data-testid="creator-save-file">Save as a file</Button>}
                         <Button onClick={() => fileInput.current?.click()} data-testid="creator-open-file">Open a file</Button>
-                        <input ref={fileInput} type="file" accept={`${FILE_END},.json,application/json`} className="sr-only" tabIndex={-1} aria-hidden data-testid="creator-file"
+                        <input ref={fileInput} type="file" accept={`${FILE_END},.json,application/json,.glb,model/gltf-binary`} className="sr-only" tabIndex={-1} aria-hidden data-testid="creator-file"
                           onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void openFile(f) }} />
                       </div>
-                      <p className="mt-1 text-xs text-ink-soft">A file saved here, or a scene description (.json) as Pixel Diorama opens: the things it marks as props, or else what stands on bones of its own, come in as props.</p>
+                      <p className="mt-1 text-xs text-ink-soft">A file saved here; a scene description (.json) as Pixel Diorama opens, the things it marks (or else what stands on bones of its own) coming in as props; or a model of a whole scene (.glb), each thing at the top of its tree a prop, on a round of turf.</p>
                       {fileProblems.length > 0 && (
                         <div role="alert" className="mt-2 rounded-lg border border-rule bg-paper p-2 text-xs" data-testid="creator-file-problems">
                           <p className="font-semibold">That file is not a scene this page can open:</p>
