@@ -34,6 +34,8 @@ export interface ModelFile {
   mtl?: string
   /** A model of a whole scene (#380): each thing at the top of its tree is a model of its own, `partId(id, i)`. */
   scene?: boolean
+  /** A splat scan for a land (#381), leveled and cleaned as it is opened. */
+  scan?: boolean
   /** When it was opened, in milliseconds since 1970. */
   added: number
 }
@@ -97,9 +99,9 @@ export const FILE_MOST = 160_000_000
 
 /** A project as a file's text, carrying the models of your own it uses (their bytes as base64, under `models`). */
 export function fileText(p: SceneProject, models: readonly ModelFile[] = []): string {
-  const used = models.filter((m) => p.props.some((x) => typeof x.prop === 'string' && fileIdOf(x.prop) === m.id))
+  const used = models.filter((m) => p.land === m.id || p.props.some((x) => typeof x.prop === 'string' && fileIdOf(x.prop) === m.id))
   if (!used.length) return `${JSON.stringify(p, null, 1)}\n`
-  const carried = used.map((m) => ({ id: m.id, file: m.file, ...(m.mtl !== undefined ? { mtl: m.mtl } : {}), ...(m.scene ? { scene: true } : {}), data: toBase64(m.bytes) }))
+  const carried = used.map((m) => ({ id: m.id, file: m.file, ...(m.mtl !== undefined ? { mtl: m.mtl } : {}), ...(m.scene ? { scene: true } : {}), ...(m.scan ? { scan: true } : {}), data: toBase64(m.bytes) }))
   return `${JSON.stringify({ ...p, models: carried }, null, 1)}\n`
 }
 
@@ -123,7 +125,7 @@ export function readFile(text: string): { project?: SceneProject; models: ModelF
       let bytes: Uint8Array
       try { bytes = fromBase64(o.data) } catch { return problems.push(`${at}.data: not base64`) }
       if (modelId(bytes) !== o.id) return problems.push(`${at}.data: not the model ${o.id} names`)
-      models.push({ id: o.id, file: o.file.slice(0, 200), bytes, mtl: o.mtl as string | undefined, ...(o.scene === true ? { scene: true } : {}), added: Date.now() })
+      models.push({ id: o.id, file: o.file.slice(0, 200), bytes, mtl: o.mtl as string | undefined, ...(o.scene === true ? { scene: true } : {}), ...(o.scan === true ? { scan: true } : {}), added: Date.now() })
     })
   }
   const read = readProject(JSON.stringify(x), known)
