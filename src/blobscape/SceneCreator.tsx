@@ -32,6 +32,9 @@ import { OPEN_MOST, SCATTERED, PlacedMorphs, rawTexture, scatteredStill, forgetK
 import { GlbError, readRiggedGlb } from '../splat-engine/glb.ts'
 import { MeshFileError, openGlb, readMeshGlb, readMeshGlbParts, readObj, type MeshFile } from '../splat-engine/meshFile.ts'
 import { fileIdOf, isPart, partId, sceneLayout, sceneProject } from './creator/sceneModel.ts'
+import { landFromScan, scanGround, scanProject } from './creator/scanLand.ts'
+import { stillActor } from './scan/studio.ts'
+import { ImportError, readSplatFile } from '../splat-core/importer.ts'
 import { isMeshGlb, rigFromModel } from './modelRig.ts'
 import { meshBounds } from '../splat-engine/meshShape.ts'
 import { readSkinnedGlb } from '../splat-engine/skinnedModel.ts'
@@ -94,6 +97,7 @@ function modelPosable(m: SplatModel, bones: readonly Bone[], at: Placement, loop
  */
 async function readModel(mf: ModelFile): Promise<{ model: ModelProp; open: boolean }> {
   const { file, bytes } = mf
+  if (mf.scan) return { model: await scanModel(mf), open: false }
   let m: ModelProp
   if (/\.glb$/i.test(file)) {
     try {
@@ -107,6 +111,19 @@ async function readModel(mf: ModelFile): Promise<{ model: ModelProp; open: boole
   } else m = await meshModel(readObj(new TextDecoder().decode(bytes), mf.mtl), file, bytes)
   if (m.kind === 'mesh' && openShare(m.mesh) > OPEN_MOST) return { model: { ...modelFrom(scatteredStill(m.mesh, m.name, m.images.map(rawTexture)), file, bytes, m.tall), scattered: true }, open: true }
   return { model: m, open: false }
+}
+
+/** Most blobs a scan for a land is read with, on a phone and elsewhere: the rest of the room is for props. */
+const SCAN_MOST = { phone: 200_000, other: 400_000 }
+
+/** A splat scan as a land (#381): read, leveled and cleaned, and kept as a model on one still bone. */
+async function scanModel(mf: ModelFile): Promise<SplatModel> {
+  const phone = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
+  const { blobs } = await readSplatFile(mf.bytes.slice().buffer, mf.file, phone ? SCAN_MOST.phone : SCAN_MOST.other)
+  const land = landFromScan(blobs)
+  if (!land.count) throw new MeshFileError('Nothing was left of the scan once it was cleaned')
+  const name = mf.file.replace(/\.[^.]*$/, '')
+  return { ...modelFrom({ name, ...stillActor(land), clips: [] }, mf.file, mf.bytes), scan: true }
 }
 
 /** The least blobs a thing of a whole scene is covered in when it is open: the scene shares `SCATTERED` among them. */
@@ -161,6 +178,8 @@ interface Piece { key: string; thing: string; plain: boolean; job: (spacing: num
 
 /** How long the cutter waits after the last edit before it starts, so a run of key presses cuts once. */
 const SETTLE_MS = 250
+/** The splat files a scan for a land comes in. */
+const SCAN_FILE = /\.(ply|spz|splat|ksplat)$/i
 /** The land a model of a whole scene opens on (#380): level, so the scene's own ground stands on it as it was. */
 const SCENE_LAND = 'plain-turf'
 /** A press that moves less than this many pixels is a tap. */
@@ -278,8 +297,10 @@ export function SceneCreator() {
     // haze and weather go into the land's air alone (a prop is cut with none), so they cut the land again and no prop:
     // rain first cut every piece again, and on a phone the scene stood still while they came
     const propLight = light && { ...light, haze: undefined, weather: undefined }
+    const landModel = typeof project.land === 'string' && isModel(project.land) ? modelOf(project.land) : undefined
+    const landJob = landModel && modelJob(landModel)
     return [
-      { key: land, thing: 'land', plain, job: (spacing) => ({ kind: 'land', project, spacing, plain }) },
+      { key: JSON.stringify([land, !!landJob]), thing: 'land', plain, job: (spacing) => ({ kind: 'land', project, spacing, plain, model: landJob }) },
       ...project.props.map((p, i): Piece => {
         // a model of your own goes to the cutter with its job; whether the page has it is part of what it is cut as
         const known = isModel(p.prop) ? modelOf(p.prop) : undefined
@@ -635,8 +656,30 @@ export function SceneCreator() {
       say(`${f.name} could not be opened.`)
     }
   }
+  /** A splat scan opened as the land of a new scene (#381): leveled and cleaned, drawn as captured. */
+  const openScanLand = async (f: File) => {
+    setFileProblems([])
+    say(`Opening ${f.name}: leveling and cleaning it…`)
+    try {
+      const bytes = new Uint8Array(await f.arrayBuffer())
+      const mf: ModelFile = { id: modelId(bytes), file: f.name, bytes, scan: true, added: Date.now() }
+      const m = await scanModel(mf)
+      keepModel(m)
+      modelFiles.current.set(mf.id, mf)
+      setModelsVersion((v) => v + 1)
+      shelf?.putModel(mf).catch((e) => { console.warn(e); say(`This browser would not keep ${f.name}: save the scene as a file to keep it.`) })
+      const bare = cleanName(f.name.replace(/\.[^.]*$/, ''))
+      openSaved({ id: newId(), updated: Date.now(), project: scanProject(m.id, bare ? bare[0].toUpperCase() + bare.slice(1) : 'Your scan') })
+      keptText.current = ''
+      say(`Opened ${f.name} as the land: ${m.rest.count.toLocaleString('en-US')} blobs. Its light is the light it was captured in, so live light adds to it.`)
+    } catch (e) {
+      setFileProblems([`file: ${e instanceof ImportError || e instanceof MeshFileError ? e.message : 'not a splat scan this page can read'}`])
+      say(`${f.name} could not be opened.`)
+    }
+  }
   const openFile = async (f: File) => {
     if (/\.glb$/i.test(f.name)) { await openSceneModel(f); return }
+    if (SCAN_FILE.test(f.name)) { await openScanLand(f); return }
     const text = await f.text()
     // a scene description (what Pixel Diorama opens) comes in as a project of its own props and land (#379)
     const { project: p, models, problems } = isDescription(text) ? { ...readDescribed(text), models: [] as ModelFile[] } : readFile(text)
@@ -703,9 +746,14 @@ export function SceneCreator() {
 
   // the land's still shapes, for dragging along the ground and standing a prop on it
   const landRef = project ? JSON.stringify(project.land) : ''
-  const ground = useMemo<Shape[]>(() => (cp ? groundOf(cp, DETAIL[0].spacing) : []),
+  const ground = useMemo<Shape[]>(() => {
+    // a scan for a land (#381) has no shapes: its ground is read from its blobs
+    const scan = project && typeof project.land === 'string' && isModel(project.land) ? modelOf(project.land) : undefined
+    if (scan?.kind === 'splats') return [scanGround(unpack(scan.rest).blobs)]
+    return cp ? groundOf(cp, DETAIL[0].spacing) : []
+  },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [landRef])
+    [landRef, modelsVersion])
   // off the land, a prop keeps its height
   const groundAt = (x: number, z: number, y: number) => heightAt(ground, x, z, y)
   const liftOf = (pl: Placement) => liftOn(ground, pl)
@@ -790,6 +838,8 @@ export function SceneCreator() {
     setPicked(next.props.length - 1)
   }
   /** Sets one of your models down at the middle of the view, picked, at the height models start at. */
+  // your models that can be set down: a scan opened as a land (#381) is not a prop
+  const yourProps = modelsVersion >= 0 ? keptModels().filter((m) => !(m.kind === 'splats' && m.scan)) : []
   const addModel = (m: ModelProp) => {
     if (!project || !cp || !room) return
     const next = added(project, m.id, groundAtView(), modelSize(m, spanOf(ground)))
@@ -1183,10 +1233,10 @@ export function SceneCreator() {
                       <div className="flex flex-wrap gap-2">
                         {keeping && <Button onClick={saveFile} data-testid="creator-save-file">Save as a file</Button>}
                         <Button onClick={() => fileInput.current?.click()} data-testid="creator-open-file">Open a file</Button>
-                        <input ref={fileInput} type="file" accept={`${FILE_END},.json,application/json,.glb,model/gltf-binary`} className="sr-only" tabIndex={-1} aria-hidden data-testid="creator-file"
+                        <input ref={fileInput} type="file" accept={`${FILE_END},.json,application/json,.glb,model/gltf-binary,.ply,.spz,.splat,.ksplat`} className="sr-only" tabIndex={-1} aria-hidden data-testid="creator-file"
                           onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void openFile(f) }} />
                       </div>
-                      <p className="mt-1 text-xs text-ink-soft">A file saved here; a scene description (.json) as Pixel Diorama opens, the things it marks (or else what stands on bones of its own) coming in as props; or a model of a whole scene (.glb), each thing at the top of its tree a prop, on a round of turf.</p>
+                      <p className="mt-1 text-xs text-ink-soft">A file saved here; a scene description (.json) as Pixel Diorama opens, the things it marks (or else what stands on bones of its own) coming in as props; a model of a whole scene (.glb), each thing at the top of its tree a prop, on a round of turf; or a splat scan (.ply, .spz, .splat, .ksplat) as the land, leveled and cleaned, in the light it was captured in.</p>
                       {fileProblems.length > 0 && (
                         <div role="alert" className="mt-2 rounded-lg border border-rule bg-paper p-2 text-xs" data-testid="creator-file-problems">
                           <p className="font-semibold">That file is not a scene this page can open:</p>
@@ -1234,9 +1284,9 @@ export function SceneCreator() {
                         Open a model…
                       </button>
                       <p role="status" className="mt-2 text-xs text-ink-muted" data-testid="creator-model-note">{modelNote}</p>
-                      {modelsVersion > 0 && keptModels().length > 0 && (
+                      {modelsVersion > 0 && yourProps.length > 0 && (
                         <ul aria-labelledby="creator-models" className="mt-2 flex flex-wrap gap-2">
-                          {keptModels().map((m) => (
+                          {yourProps.map((m) => (
                             <li key={m.id} className="flex items-center gap-1">
                               <button type="button" onClick={() => addModel(m)} data-testid={`creator-model-${m.id}`} className="min-h-10 cursor-pointer rounded-full border border-rule bg-paper px-4 text-sm hover:border-ink-faint">Add {m.name}</button>
                               <button type="button" onClick={() => void forgetModel(m)} aria-label={`Forget ${m.name}`} title={`Forget ${m.name}`} className="grid size-10 cursor-pointer place-items-center rounded-full text-ink-muted hover:bg-paper-sunk hover:text-ink">

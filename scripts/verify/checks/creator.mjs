@@ -38,6 +38,28 @@ function farmGlb() {
   return Buffer.from(out)
 }
 
+/** A small splat scan in the .splat layout (#381): a level tabletop of flat blobs with a block standing on it, a little tipped, and a floater. */
+function deskSplat() {
+  const rows = []
+  const tip = 0.12 // radians about x, so leveling has something to undo
+  const put = (x, y, z, s, rgb) => {
+    const c = Math.cos(tip), sn = Math.sin(tip)
+    rows.push([x, y * c - z * sn, y * sn + z * c, s, rgb])
+  }
+  for (let i = 0; i < 70; i++) for (let j = 0; j < 70; j++) put(-1 + i / 35, 0, -1 + j / 35, 0.02, [150, 110, 70])
+  for (let i = 0; i < 14; i++) for (let j = 0; j < 14; j++) for (let k = 0; k < 14; k++) if ([i, j, k].some((v) => v === 0 || v === 13)) put(-0.2 + i / 35, 0.02 + j / 35, -0.2 + k / 35, 0.02, [60, 90, 170])
+  put(0.6, 1.5, 0.6, 0.05, [255, 255, 255])
+  const out = Buffer.alloc(rows.length * 32)
+  rows.forEach(([x, y, z, s, rgb], n) => {
+    const o = n * 32
+    out.writeFloatLE(x, o); out.writeFloatLE(y, o + 4); out.writeFloatLE(z, o + 8)
+    out.writeFloatLE(s, o + 12); out.writeFloatLE(s, o + 16); out.writeFloatLE(s * 0.3, o + 20)
+    out[o + 24] = rgb[0]; out[o + 25] = rgb[1]; out[o + 26] = rgb[2]; out[o + 27] = 255
+    out[o + 28] = 255; out[o + 29] = 128; out[o + 30] = 128; out[o + 31] = 128
+  })
+  return out
+}
+
 /** A small scene description with two things marked as props. */
 const TWO_POSTS = '{"name":"Two posts","loop":4,"palette":["#1f2d55","#4a6fae","#1b3a2a","#c79a63","#f4f1e4","#0a0f1e"],"camera":{"target":[0,0.3,0],"distance":3,"azimuth":18,"elevation":13},"bones":[{"name":"post","at":[-0.4,0,0],"prop":"Post"},{"name":"lamp","at":[0.4,0,0],"prop":"Lamp"}],"parts":[{"paint":"#1f2d55","shape":{"kind":"box","at":[0,-0.05,0],"half":[1,0.05,1]}},{"bone":"post","paint":"#4a6fae","shape":{"kind":"box","at":[-0.4,0.3,0],"half":[0.06,0.3,0.06]}},{"bone":"lamp","paint":"#1b3a2a","shape":{"kind":"sphere","at":[0.4,0.2,0],"r":0.2}}]}'
 
@@ -458,7 +480,7 @@ export default [
     name: 'scene-creator-storage',
     core: true,
     about: 'Scene Creator, kept in the browser: an edit is kept a moment later and is there after a reload; copied, renamed and deleted in Your scenes; a model of your own kept and carried by the file; saved as a file and opened in a fresh browser; a broken file says where; nothing asked of another site',
-    entries: ['src/blobscape/SceneCreator.tsx', 'src/blobscape/creator/store.ts', 'src/blobscape/creator/models.ts', 'src/blobscape/creator/described.ts', 'src/blobscape/creator/sceneModel.ts', 'src/splat-engine/meshFile.ts'],
+    entries: ['src/blobscape/SceneCreator.tsx', 'src/blobscape/creator/store.ts', 'src/blobscape/creator/models.ts', 'src/blobscape/creator/described.ts', 'src/blobscape/creator/sceneModel.ts', 'src/blobscape/creator/scanLand.ts', 'src/splat-engine/meshFile.ts'],
     async run({ shots, join, fails, ok, open, axe }) {
       const fs = await import('node:fs')
       const outside = []
@@ -540,10 +562,16 @@ export default [
       await f.page.waitForFunction(() => window.__creator.blobs() > 5000, undefined, { timeout: 60000 }).catch(() => {})
       await f.page.evaluate(async () => { const s = window.__creator.stage; await s.frame(1); await s.frame(1) })
       await f.page.screenshot({ path: join(shots, 'blobscape-scene-creator-scene-model.png') })
+      // a splat scan as the land: leveled, a prop set on it stands on its tabletop (#381)
+      await f.page.getByTestId('creator-file').setInputFiles({ name: 'desk.splat', mimeType: 'application/octet-stream', buffer: deskSplat() })
+      const scanned = await f.page.waitForFunction(() => window.__creator?.ready() && /^model-/.test(String(window.__creator.land())) && window.__creator.props().length === 0, undefined, { timeout: 60000 }).then(() => true, () => false)
+      await f.page.evaluate(async () => { const s = window.__creator.stage; await s.frame(1); await s.frame(1) })
+      await f.page.screenshot({ path: join(shots, 'blobscape-scene-creator-scan-land.png') })
+      steps.push(['a splat scan opens as the land', scanned && (await f.page.evaluate(() => window.__creator.blobs())) > 4000])
       steps.push(['nothing asked of another site', outside.length === 0])
       const bad = steps.filter(([, good]) => !good).map(([name]) => name)
       if (bad.length) fails.push(`blobscape scene creator storage: ${bad.join(', ')} failed ${JSON.stringify({ outside: outside.slice(0, 3), said })}`)
-      else ok('blobscape scene creator storage: an edit is kept and back after a reload; copy, rename and delete work; a file reopens in a fresh browser, a broken one says where, and a scene description and a whole-scene model open as their props; no other site asked')
+      else ok('blobscape scene creator storage: an edit is kept and back after a reload; copy, rename and delete work; a file reopens in a fresh browser, a broken one says where, a scene description and a whole-scene model open as their props, and a splat scan as the land; no other site asked')
     },
   },
   {

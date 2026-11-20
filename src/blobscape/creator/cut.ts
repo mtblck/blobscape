@@ -21,7 +21,7 @@ import type { Species } from '../../splat-engine/zoo/species.ts'
  */
 export type CutJob =
   | { kind: 'whole'; scene: string; spacing: number; plain?: boolean }
-  | { kind: 'land'; project: SceneProject; spacing: number; plain?: boolean }
+  | { kind: 'land'; project: SceneProject; spacing: number; plain?: boolean; model?: ModelJob }
   | { kind: 'prop'; project: SceneProject; i: number; spacing: number; plain?: boolean; model?: ModelJob }
 
 // one project is compiled once and kept while the jobs that follow ask for its pieces
@@ -41,6 +41,8 @@ export function cut(job: CutJob): Built {
     if (!job.plain) sunlit(b, { ...DEFAULT_LIGHT, ...landSpec(compiled(job.project), job.spacing).light })
     return withShadow(b, placed.at)
   }
+  // a scan for a land (#381) is drawn as captured, its light its own; one the page no longer has is a speck
+  if (job.kind === 'land' && typeof job.project.land === 'string' && isModel(job.project.land)) return job.model?.kind === 'splats' ? unpack(copied(job.model.rest)) : speck()
   if (job.plain) return unlit(() => cut({ ...job, plain: false }))
   if (job.kind === 'whole') {
     const d = DIORAMAS.find((x) => x.id === job.scene)
