@@ -27,20 +27,20 @@ export const BODY = 0.3
 
 /**
  * One step of the wader: it turns, eases toward the speed asked for, and moves only where `room(x, z)` says there is
- * water to stand in. Meeting a bank at a slant it slides along it; head on, it stops.
+ * water to stand in (`pace` is its full speed, meters a second). Meeting a bank at a slant it slides along it; head on, it stops.
  */
-export function stepWader(w: Walker, input: Input, dt: number, room: (x: number, z: number) => boolean): Walker {
+export function stepWader(w: Walker, input: Input, dt: number, room: (x: number, z: number) => boolean, pace = WADE_SPEED): Walker {
   let heading: number, want: number
   if (input.aim !== undefined && (input.go ?? 0) > 0) {
     // sent a way: it turns to face it, and walks as far as it already faces it (so about-face is a turn on the spot, not a wide arc)
     const off = Math.atan2(Math.sin(input.aim - w.heading), Math.cos(input.aim - w.heading))
     const by = Math.max(-AIM_RATE * dt, Math.min(AIM_RATE * dt, off))
     heading = w.heading + by
-    want = input.go! * WADE_SPEED * Math.max(0, Math.cos(off - by)) ** 2
+    want = input.go! * pace * Math.max(0, Math.cos(off - by)) ** 2
   } else {
     // seen from behind (looking down +z), screen right is −x
     heading = w.heading - input.turn * TURN_RATE * dt
-    want = input.forward >= 0 ? input.forward * WADE_SPEED : input.forward * BACK_SPEED
+    want = input.forward >= 0 ? input.forward * pace : input.forward * BACK_SPEED
   }
   let speed = w.speed + (want - w.speed) * (1 - Math.exp(-dt * 5))
   const dx = Math.sin(heading) * speed * dt, dz = Math.cos(heading) * speed * dt

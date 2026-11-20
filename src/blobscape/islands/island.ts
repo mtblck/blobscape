@@ -24,6 +24,8 @@ const HALF = 3.35
 const SLAB = 0.34
 /** How wide the trodden path is, to each side of its middle. */
 const PATH = 0.08
+/** Room left along each side of the path for someone walking it, past its trodden width: no thing stands in the way. */
+const WALKER = 0.08
 /** The bones an island's things may take: a description's 128 less the clouds and the most drifting rocks. */
 const BONE_BUDGET = 116
 
@@ -145,7 +147,7 @@ export function planIsland(biome: Biome, seed: number): IslandPlan {
       for (let tries = 0; tries < 50; tries++) {
         const a = rnd() * Math.PI * 2, d = between(p.zone, Math.sqrt(rnd())) * reach(lobes, a), x = Math.cos(a) * d, z = Math.sin(a) * d
         const luck = rnd()
-        if (inside(lobes, x, z) < room * 0.6 + 0.08 || (path.length && fromPath(path, x, z) < room * 0.5 + PATH + 0.04)) continue
+        if (inside(lobes, x, z) < room * 0.6 + 0.08 || (path.length && fromPath(path, x, z) < room * 1.25 + PATH + WALKER)) continue
         let clear = Infinity
         for (const t of things) clear = Math.min(clear, Math.hypot(x - t.at[0], z - t.at[2]) - (room + ROOM[t.kind] * t.size) * 0.8)
         if (clear < 0.02) continue

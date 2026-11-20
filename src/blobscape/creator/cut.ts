@@ -122,7 +122,7 @@ export function placedBuilt(made: Partial<Built> & Pick<Built, 'blobs' | 'skin' 
  * A creature's own colors, for the palette pixel art snaps to: its most common colors, at most `most`, each clearly
  * apart from the others (it is made with its colors baked in, so the scene's palette may lack them).
  */
-export function colorsOf(b: Built, most = 8): string[] {
+export function colorsOf(b: Pick<Built, 'blobs'>, most = 8): string[] {
   const n = b.blobs.count, counts = new Map<number, number>()
   const to = (v: number) => Math.round(Math.max(0, Math.min(1, v)) * 31)
   for (let i = 0; i < n; i++) {

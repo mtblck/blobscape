@@ -80,13 +80,17 @@ export class WalkingElf {
   private stride = 0
   private walkWeight = 0
   private drop = 0
+  private base = 0
   private idleT = 0
   private posed = false
   private readonly tips = [0, 0]
+  /** Whether the body stands at the height of the ground under it, not at 0: for ground that rises well past a hip's reach. */
+  private readonly rides: boolean
 
-  constructor(blobs: number, look: string, start: Walker, { steps = ELF_STEPS, pace = 1.45 }: { steps?: StepOptions; pace?: number } = {}) {
+  constructor(blobs: number, look: string, start: Walker, { steps = ELF_STEPS, pace = 1.45, rides = false }: { steps?: StepOptions; pace?: number; rides?: boolean } = {}) {
     this.elf = makeElf(blobs, look)
     this.pace = pace
+    this.rides = rides
     const sk = this.elf.skeleton
     this.cloth = new ElfCloth(sk)
     const ankle = (i: number): [number, number] => [sk.bones[i].head[0], sk.bones[i].head[2]]
@@ -125,7 +129,10 @@ export class WalkingElf {
     const turn = axisAngle([0, 1, 0], w.heading)
     sk.setRotation(0, mulQ(turn, sk.rotation.subarray(0, 4)))
     sk.offset.set(rotate(turn, sk.offset.subarray(0, 3)), 0)
-    sk.place.set([w.x, 0, w.z])
+    // on hills the body rides the ground's height, eased so a step up doesn't jolt it; the legs reach the rest
+    const base = this.rides && ground ? ground(w.x, w.z) : 0
+    this.base = this.posed ? this.base + (base - this.base) * (1 - Math.exp(-dt * 8)) : base
+    sk.place.set([w.x, this.base, w.z])
     // each foot where the planner put it, the hips low enough for a long stride to reach
     const ankles = ELF_LEGS.map((l) => sk.bones[sk.index(l.foot!)].head[1])
     const under = (i: number) => {
@@ -133,7 +140,8 @@ export class WalkingElf {
       const f = this.steps.feet[i]
       if (f.t < 0) return ground(f.at[0], f.at[1])
       const k = f.t * f.t * (3 - 2 * f.t)
-      return ground(f.at[0], f.at[1]) * (1 - k) + ground(f.to[0], f.to[1]) * k
+      // in the air it rises from where it left to where it lands, and over any rise of the ground between
+      return Math.max(ground(f.at[0], f.at[1]) * (1 - k) + ground(f.to[0], f.to[1]) * k, ground(placed[i][0], placed[i][2]))
     }
     const targets = placed.map((p, i): Vec3 => [p[0], ankles[i] + p[1] + under(i), p[2]])
     // standing, the legs are all but straight; walking they keep some bend for the stride
