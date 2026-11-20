@@ -25,12 +25,14 @@ import { download } from './files.ts'
 import { registerTools } from './agentTools.ts'
 import { creatorTools, type CreatorApi } from './creator/agentTools.ts'
 import { PACKS, packAdded } from './creator/packs.ts'
-import { BLOB_ROOM, CARDS, added, cardsFound, groundOf, heightAt, landSwapped, liftOn, roomOf, whyNot } from './creator/adding.ts'
+import { BLOB_ROOM, CARDS, spanOf, added, cardsFound, groundOf, heightAt, landSwapped, liftOn, roomOf, whyNot } from './creator/adding.ts'
 import { creatureMove, creatureSize, isCreature, libraryProp, type LibraryEntry } from './creator/library.ts'
 import { OPEN_MOST, SCATTERED, PlacedMorphs, rawTexture, scatteredStill, forgetKept, isModel, keepModel, keptModels, modelId, meshModelFrom, modelClip, modelFrom, modelJob, modelOf, modelSize, openShare, poseModel, type ModelProp, type RawImage, type SplatModel } from './creator/models.ts'
 import { GlbError, readRiggedGlb } from '../splat-engine/glb.ts'
 import { MeshFileError, openGlb, readMeshGlb, readObj, type MeshFile } from '../splat-engine/meshFile.ts'
 import { isMeshGlb, rigFromModel } from './modelRig.ts'
+import { meshBounds } from '../splat-engine/meshShape.ts'
+import { readSkinnedGlb } from '../splat-engine/skinnedModel.ts'
 import { budget, clock, lampAdded, lampLights, lampRemoved, lit, liveSky, liveSkyColors, rgbOf, shadeNow, sunNow } from './creator/lighting.ts'
 import { castBy, glowGain } from './diorama/glow.ts'
 import { STYLES, isPixelStyle, styleAsked, styleWords, type Style } from './diorama/styles.ts'
@@ -97,11 +99,11 @@ async function readModel(mf: ModelFile): Promise<{ model: ModelProp; open: boole
     } catch (e) {
       if (!isMeshGlb(e)) throw e
       m = isSkinned(bytes)
-        ? { ...modelFrom(await rigFromModel(bytes, file, SCATTERED), file, bytes), scattered: true }
+        ? { ...modelFrom(await rigFromModel(bytes, file, SCATTERED), file, bytes, skinnedTall(bytes)), scattered: true }
         : await meshModel(readMeshGlb(bytes), file, bytes)
     }
   } else m = await meshModel(readObj(new TextDecoder().decode(bytes), mf.mtl), file, bytes)
-  if (m.kind === 'mesh' && openShare(m.mesh) > OPEN_MOST) return { model: { ...modelFrom(scatteredStill(m.mesh, m.name, m.images.map(rawTexture)), file, bytes), scattered: true }, open: true }
+  if (m.kind === 'mesh' && openShare(m.mesh) > OPEN_MOST) return { model: { ...modelFrom(scatteredStill(m.mesh, m.name, m.images.map(rawTexture)), file, bytes, m.tall), scattered: true }, open: true }
   return { model: m, open: false }
 }
 
@@ -120,6 +122,11 @@ async function decodeImage(bytes: Uint8Array, mime: string): Promise<RawImage> {
   const { data, width, height } = g.getImageData(0, 0, bitmap.width, bitmap.height)
   bitmap.close()
   return { width, height, data }
+}
+
+/** How tall a skinned .glb's mesh stands in its own units, before it is fitted. */
+function skinnedTall(bytes: Uint8Array): number | undefined {
+  try { const { min, max } = meshBounds(readSkinnedGlb(bytes, 'model').mesh); return max[1] - min[1] } catch { return undefined }
 }
 
 /** Whether a .glb's mesh has a skin (a rigged mesh, not a still one). */
@@ -731,7 +738,7 @@ export function SceneCreator() {
   /** Sets one of your models down at the middle of the view, picked, at the height models start at. */
   const addModel = (m: ModelProp) => {
     if (!project || !cp || !room) return
-    const next = added(project, m.id, groundAtView(), modelSize(m))
+    const next = added(project, m.id, groundAtView(), modelSize(m, spanOf(ground)))
     const why = m.kind === 'splats' && room.blobs[0] + m.rest.count > room.blobs[1]
       ? `${m.name} has ${m.rest.count.toLocaleString('en-US')} blobs, and the scene has room for ${(room.blobs[1] - room.blobs[0]).toLocaleString('en-US')} more.`
       : whyNot(m.name, room, roomOf(compileProject(next, libraryProp), room.blobs[0], room.blobs[1]))

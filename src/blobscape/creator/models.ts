@@ -3,7 +3,7 @@ import { mulQ, Skeleton } from '../../splat-engine/rig.ts'
 import { sampleClip, sampleWeights, type Clip, type Rigged } from '../../splat-engine/glb.ts'
 import { applyMorphs, type Morph } from '../../splat-engine/morph.ts'
 import { SIZE_RANGE, placer, type Placement, type Placer, type PropRef } from '../../splat-engine/project.ts'
-import { fitMesh, type Mesh, type Texture } from '../../splat-engine/meshShape.ts'
+import { fitMesh, meshBounds, type Mesh, type Texture } from '../../splat-engine/meshShape.ts'
 import { splatModel } from '../../splat-engine/skinnedModel.ts'
 import { pack, unpack, type PackedCut } from './pack.ts'
 
@@ -28,6 +28,8 @@ interface ModelBase {
   name: string
   /** The file's name. */
   file: string
+  /** How tall it is in the file's own units (meters, in a glTF file), for fitting it to the scene (#371). */
+  tall?: number
 }
 
 /** A rigged splat .glb. */
@@ -77,7 +79,7 @@ export const forgetKept = (id: string) => { forgotten.add(id) }
 export const keptModels = (): ModelProp[] => [...models.values()].filter((m) => !forgotten.has(m.id))
 
 /** A rigged file as a model: moved so its foot is the origin (the clips only turn and shift bones, so they still fit). */
-export function modelFrom(r: Rigged, file: string, bytes: Uint8Array): SplatModel {
+export function modelFrom(r: Rigged, file: string, bytes: Uint8Array, tall?: number): SplatModel {
   const b = r.blobs, n = b.count
   const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity]
   for (let i = 0; i < n; i++) for (let k = 0; k < 3; k++) { const v = b.center[i * 3 + k]; lo[k] = Math.min(lo[k], v); hi[k] = Math.max(hi[k], v) }
@@ -92,7 +94,7 @@ export function modelFrom(r: Rigged, file: string, bytes: Uint8Array): SplatMode
   blobs.opacity.set(b.opacity.subarray(0, n))
   const bones = r.skeleton.bones.map((x) => ({ ...x, head: moved(x.head), tail: x.tail && moved(x.tail) }))
   const rest = pack({ blobs, skin: r.skin, skeleton: new Skeleton(bones), partOf: new Uint16Array(n) })
-  return { kind: 'splats', id: modelId(bytes), name: named(r.name, file), rest, clips: r.clips, morphs: r.morphs?.length ? r.morphs : undefined, file }
+  return { kind: 'splats', id: modelId(bytes), name: named(r.name, file), rest, clips: r.clips, morphs: r.morphs?.length ? r.morphs : undefined, file, tall: tall ?? (n ? hi[1] - lo[1] : undefined) }
 }
 
 const named = (own: string | undefined, file: string): string => {
@@ -102,7 +104,8 @@ const named = (own: string | undefined, file: string): string => {
 
 /** A still mesh as a model: stood on its foot, its longest side 1 (`modelSize` sets it down at its height). */
 export function meshModelFrom(mesh: Mesh, images: RawImage[], file: string, bytes: Uint8Array): MeshModel {
-  return { kind: 'mesh', id: modelId(bytes), name: named(undefined, file), mesh: fitMesh(mesh, 1), images, file }
+  const { min, max } = meshBounds(mesh)
+  return { kind: 'mesh', id: modelId(bytes), name: named(undefined, file), mesh: fitMesh(mesh, 1), images, file, tall: max[1] - min[1] }
 }
 
 /**
@@ -170,15 +173,32 @@ export function rawTexture(im: RawImage): Texture {
   }
 }
 
-/** How tall a model is set down, before it is fitted to the land (#371): about a door's half, between a sheep and the cook. */
+/** How tall a model is set down when its own height says nothing: between a sheep and the cook. */
 export const MODEL_HEIGHT = 0.6
 
-/** The size a model is set down at, so it stands `MODEL_HEIGHT` tall. */
-export function modelSize(m: ModelProp): number {
+/** Scene units to a meter: the scenes' people (the cook, the elf) stand about 1.3, as a person stands 1.7 m. */
+export const PER_METER = 0.75
+
+/** The least a model is set down tall, and the most as a share of the land's width, so it fits on it. */
+export const FIT = { least: 0.15, share: 0.4 }
+
+/**
+ * How tall a model is set down on a land `span` across (#371): its own height in meters at the scenes' scale, as a
+ * glTF file's units are, kept between `FIT.least` and `FIT.share` of the land, so a house fits on the hill and a
+ * mouse can be seen; `MODEL_HEIGHT` when it has no height of its own.
+ */
+export function fittedHeight(tall: number | undefined, span: number): number {
+  const most = Math.max(FIT.least * 2, span * FIT.share)
+  if (!(tall && tall > 0 && Number.isFinite(tall))) return Math.min(MODEL_HEIGHT, most)
+  return Math.min(most, Math.max(FIT.least, tall * PER_METER))
+}
+
+/** The size a model is set down at on a land `span` across, so it stands `fittedHeight` tall. */
+export function modelSize(m: ModelProp, span = 3): number {
   let top = 0
   if (m.kind === 'mesh') for (let i = 1; i < m.mesh.positions.length; i += 3) top = Math.max(top, m.mesh.positions[i])
   else for (let i = 0; i < m.rest.count; i++) top = Math.max(top, m.rest.center[i * 3 + 1])
-  const s = top > 0 ? MODEL_HEIGHT / top : 1
+  const s = top > 0 ? fittedHeight(m.tall, span) / top : 1
   return Math.round(Math.min(SIZE_RANGE[1], Math.max(SIZE_RANGE[0], s)) * 1e4) / 1e4
 }
 

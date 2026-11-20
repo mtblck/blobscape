@@ -30,6 +30,13 @@ export function groundOf(cp: CompiledProject, spacing: number): Shape[] {
   return spec.parts.filter((p) => p.bone === root && !p.glow && (p.opacity ?? 1) >= 0.9).map((p) => p.shape)
 }
 
+/** How wide the ground is: the longer side of its box seen from above. */
+export function spanOf(ground: readonly Shape[]): number {
+  let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity
+  for (const s of ground) { x0 = Math.min(x0, s.min[0]); z0 = Math.min(z0, s.min[2]); x1 = Math.max(x1, s.max[0]); z1 = Math.max(z1, s.max[2]) }
+  return Number.isFinite(x0) ? Math.max(x1 - x0, z1 - z0) : 3
+}
+
 /** The ground's height under (x, z) near `y`; off the land, `y` itself, so a prop keeps its height there. */
 export function heightAt(ground: Shape[], x: number, z: number, y: number): number {
   const g = groundUnder(ground, x, z, y + 3, y - 3)
