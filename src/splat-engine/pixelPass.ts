@@ -241,17 +241,17 @@ export class PixelPass {
   get height() { return this.small.height }
 
   /**
-   * Draws `scene` as pixel art. With `screen` (the output's size in device
-   * pixels and how many of them make one art pixel) it goes to the renderer's
-   * current output; without, into `art` at one to one.
-   */
-  /**
    * Draws the scene into the small picture (the renderer's current target) in place of a plain draw: how the stage
    * shades it a pixel at a time (cel shading's light). It must leave the blobs as last placed for the maps that follow.
    * @internal
    */
   drawScene?: (renderer: WebGPURenderer, scene: Object3D, camera: Camera) => void
 
+  /**
+   * Draws `scene` as pixel art. With `screen` (the output's size in device
+   * pixels and how many of them make one art pixel) it goes to the renderer's
+   * current output; without, into `art` at one to one.
+   */
   render(renderer: WebGPURenderer, scene: Object3D, camera: Camera, screen?: { width: number; height: number; scale: number }) {
     const undo = this.look.snap ? this.snapCamera(camera) : undefined
     try { this.draw(renderer, scene, camera, screen) } finally { undo?.() }

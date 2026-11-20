@@ -7451,7 +7451,7 @@
       },
       {
        "name": "render",
-       "doc": "",
+       "doc": "Draws `scene` as pixel art. With `screen` (the output's size in device\npixels and how many of them make one art pixel) it goes to the renderer's\ncurrent output; without, into `art` at one to one.",
        "signatures": [
         {
          "code": "render(renderer: WebGPURenderer, scene: Object3D, camera: Camera, screen?: { width: number; height: number; scale: number }): void"
