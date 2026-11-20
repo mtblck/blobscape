@@ -16,6 +16,8 @@ import { download } from './files.ts'
 import { BIOMES, biomeOf } from './islands/biomes.ts'
 import { MAX_SEED, census, makeIsland } from './islands/island.ts'
 import { material } from './islands/materials.ts'
+import type { IslandJob } from './islands/cut.worker.ts'
+import { unpack, type PackedCut } from './creator/pack.ts'
 import { href } from './routes.ts'
 
 const params = () => new URLSearchParams(typeof location === 'undefined' ? '' : location.search)
@@ -45,9 +47,9 @@ export function Islands() {
 
   const [biomeId, setBiomeId] = useState(() => biomeOf(params().get('biome')).id)
   const [seed, setSeed] = useState(() => { const n = Math.floor(Number(params().get('seed'))); return n >= 1 && n <= MAX_SEED ? n : typeof window === 'undefined' ? 1 : 1 + Math.floor(Math.random() * MAX_SEED) })
-  const [detail, setDetail] = useState<string>(() => detailAsked(DETAIL, labelNames)?.id ?? (coarse ? 'medium' : 'fine'))
+  const [detail, setDetail] = useState<string>(() => detailAsked(DETAIL, labelNames)?.id ?? (coarse ? 'chunky' : 'medium'))
   const [pixels, setPixels] = useState(() => params().get('style') !== 'blobs')
-  const [orbit, setOrbit] = useState<Orbit>({ target: [0, 0, 0], distance: 6.2, azimuth: 24, elevation: 14 })
+  const [orbit, setOrbit] = useState<Orbit>({ target: [0, 0, 0], distance: 12.5, azimuth: 24, elevation: 20 })
 
   // the island: a plan and its description, then the scene Pixel Diorama's own code makes of a description
   const island = useMemo(() => makeIsland(biomeId, seed), [biomeId, seed])
@@ -68,17 +70,24 @@ export function Islands() {
     return () => { gone = true; live?.dispose() }
   }, [offscreen])
 
-  // cut after a paint, so the waiting mark goes up first; the island on show stays until the next is ready
+  // cut in a worker (an island takes seconds), and the island on show stays until the next is ready
   const [made, setMade] = useState<{ built: Built; of: typeof scene; detail: string }>()
   const ready = made?.of === scene && made.detail === detail ? made : undefined
+  const worker = useRef<Worker>(undefined)
+  useEffect(() => () => worker.current?.terminate(), [])
   useEffect(() => {
     const spacing = DETAIL.find((d) => d.id === detail)!.spacing
-    let t: ReturnType<typeof setTimeout> | undefined
-    let raf = requestAnimationFrame(() => {
-      raf = requestAnimationFrame(() => { t = setTimeout(() => setMade({ built: scene.make(spacing), of: scene, detail }), 60) })
-    })
-    return () => { cancelAnimationFrame(raf); clearTimeout(t) }
-  }, [scene, detail])
+    const w = (worker.current ??= new Worker(new URL('./islands/cut.worker.ts', import.meta.url), { type: 'module' }))
+    const id = Math.random()
+    const heard = (ev: MessageEvent<{ id: number; cut?: PackedCut; error?: string }>) => {
+      if (ev.data.id !== id) return
+      if (ev.data.cut) setMade({ built: unpack(ev.data.cut), of: scene, detail })
+      else setFailed(`The island could not be cut: ${ev.data.error}`)
+    }
+    w.addEventListener('message', heard)
+    w.postMessage({ id, biome: island.plan.biome, seed: island.plan.seed, spacing } satisfies IslandJob)
+    return () => w.removeEventListener('message', heard)
+  }, [scene, island, detail])
 
   const orbitNow = useRef(orbit)
   orbitNow.current = orbit
@@ -141,7 +150,7 @@ export function Islands() {
         <h1 ref={h1} tabIndex={-1} className="font-display text-4xl outline-none sm:text-5xl">Biome Islands</h1>
         <p className="max-w-xl text-lg text-ink-muted">
           A floating island grown from a recipe and a number. The recipe says what kind of place it is and what it is made of; the number
-          decides the rest. This is the first step of a sky world you will be able to walk across: one meadow island to look at.
+          decides the rest. This is an early step of a sky world you will be able to walk across: one island to look at, from one of three biomes.
         </p>
       </header>
       <Workbench
@@ -213,7 +222,7 @@ export function Islands() {
                   <Button onClick={save} data-testid="islands-save">Save its description</Button>
                 </div>
                 <p className="text-xs text-ink-faint">
-                  The saved file opens in <a href={href({ page: 'creator' })} className="underline decoration-rule underline-offset-2 hover:text-accent">Scene Creator</a> (Scene, Open a file), where every tree and stone is a prop you can move, and
+                  The saved file opens in <a href={href({ page: 'creator' })} className="underline decoration-rule underline-offset-2 hover:text-accent">Scene Creator</a> (Scene, Open a file), where its first 40 trees and stones are props you can move, and
                   in <a href={href({ page: 'diorama' })} className="underline decoration-rule underline-offset-2 hover:text-accent">Pixel Diorama</a>.
                 </p>
               </div>
@@ -247,7 +256,9 @@ export function Islands() {
         <h2 id="on-title" className="font-display text-2xl">On this island</h2>
         <div className="mt-3 grid gap-x-8 gap-y-4 sm:grid-cols-2">
           <div>
-            <h3 className="text-sm font-bold">What stands on it</h3>
+            <h3 className="text-sm font-bold">Kinds of place on it</h3>
+            <ul className="mt-1 grid gap-0.5 text-sm text-ink">{island.plan.patches.map((p) => <li key={p.name}>{p.name[0].toUpperCase() + p.name.slice(1)}</li>)}</ul>
+            <h3 className="mt-4 text-sm font-bold">What stands on it</h3>
             <ul className="mt-1 grid gap-0.5 text-sm text-ink">{lines.map((l) => <li key={l.words}>{l.words}</li>)}</ul>
           </div>
           <div>
@@ -272,13 +283,16 @@ export function Islands() {
         <div className="mt-8 max-w-[36em] space-y-4 text-lg leading-relaxed text-ink-muted lg:col-span-7 lg:mt-0 lg:text-xl">
           <p>
             A biome is a recipe written as data: how hilly the land is, what the ground, earth and rock are made of, which things live
-            there, how many, and whether each likes high ground or low. The island's number picks everything the recipe leaves open: the
-            outline, where the hills rise, where the path runs, and where each tree and stone stands so that none crowds another.
+            there, how many, whether each likes high ground or low, and the kinds of place inside an island (an oak grove, a flower glade, a
+            stony rise) that each thing crowds into. The island's number picks everything the recipe leaves open: the outline, where the hills
+            rise, where those places lie, where the path runs past its two landmarks, and where each tree and stone stands so that none crowds another.
           </p>
           <p>
             Nothing carries its own paint. A recipe names materials from one library (oak, birch, granite, loam, meadow turf), and each
             material knows its colors from shade to light, how they lie on a surface, and the marks drawn over it. The number leans
-            each one a little lighter or darker, so two oaks are never quite the same.
+            each one a little lighter or darker, so two oaks are never quite the same. The library also knows what lets light through
+            (ice, water, cloud) and what does not, and everything that should be solid is cut so that it is: a test looks at every island's
+            ground, rock and stones from above, beside and below and fails if more than one part in fifty shows what lies behind.
           </p>
           <p>
             The result is an ordinary scene description, the same kind every <a href={href({ page: 'diorama' })} className="underline decoration-rule underline-offset-2 hover:text-accent">Pixel Diorama</a> scene

@@ -1,4 +1,4 @@
-import type { PaintDoc, PartDoc } from '../../splat-engine/sceneDoc.ts'
+import type { PaintDoc, PartDoc, SceneDoc } from '../../splat-engine/sceneDoc.ts'
 
 /**
  * The materials library: what a thing is made of, as one named entry of data, so a biome recipe can say "oak,
@@ -56,8 +56,10 @@ const m = (id: string, name: string, family: Family, ramp: string[], pattern: Pa
 export const MATERIALS: Material[] = [
   // ground
   m('meadow-turf', 'Meadow turf', 'turf', ['#2c5a38', '#3f7a45', '#69b05a', '#a8d67a'], { kind: 'patches', size: 0.2 }, { ink: { kind: 'tufts', amount: 0.3 } }),
+  m('alpine-turf', 'Alpine turf', 'turf', ['#1f4a3c', '#2f6a4a', '#4f8c5a', '#86b478'], { kind: 'patches', size: 0.22 }, { ink: { kind: 'tufts', amount: 0.35 } }),
   m('dry-turf', 'Dry turf', 'turf', ['#5a5a2a', '#7e7a3a', '#a8a052', '#d0c878'], { kind: 'patches', size: 0.24 }, { ink: { kind: 'tufts', amount: 0.25 } }),
   m('loam', 'Loam', 'soil', ['#2a1c16', '#4a3020', '#6e4a2e', '#93693e'], { kind: 'layers', size: 0.045 }),
+  m('red-earth', 'Red earth', 'soil', ['#4a1e18', '#7a3424', '#a04e30', '#c87a4a'], { kind: 'layers', size: 0.06 }),
   m('sand', 'Sand', 'sand', ['#a37a52', '#d8b07a', '#ecd9b0'], { kind: 'speckle', size: 0.05 }, { body: 'grain' }),
   // rock
   m('granite', 'Granite', 'rock', ['#2f2d3a', '#4a4758', '#6b6474', '#9d97a6'], { kind: 'speckle', size: 0.06 }, { grime: 'moss' }),
@@ -66,17 +68,23 @@ export const MATERIALS: Material[] = [
   // wood
   m('oak', 'Oak', 'wood', ['#2a1c16', '#4e3a2a', '#6e4c30'], { kind: 'layers', size: 0.05 }, { ink: { kind: 'grain', amount: 0.4 }, strokes: 0.6 }),
   m('birch', 'Birch', 'wood', ['#4a4758', '#d3cfd6', '#f4f1e4'], { kind: 'layers', size: 0.07 }, { strokes: 0.6 }),
+  m('driftwood', 'Bleached wood', 'wood', ['#6b6474', '#a89a88', '#d8ccb4'], { kind: 'layers', size: 0.05 }, { ink: { kind: 'grain', amount: 0.5 }, strokes: 0.6 }),
   m('pine', 'Pine', 'wood', ['#2a1c16', '#5a3e28', '#7a5234'], { kind: 'layers', size: 0.04 }, { ink: { kind: 'grain', amount: 0.3 }, strokes: 0.6 }),
   // leaves and plants
   m('oak-leaf', 'Oak leaves', 'leaf', ['#1b3a2a', '#2c5a38', '#466434', '#6c8a40'], { kind: 'speckle', size: 0.05 }),
   m('birch-leaf', 'Birch leaves', 'leaf', ['#466434', '#6c8a40', '#9aae52', '#c8d67a'], { kind: 'speckle', size: 0.04 }),
   m('pine-needle', 'Pine needles', 'leaf', ['#0e2a2a', '#1a4a40', '#2f7058'], { kind: 'speckle', size: 0.04 }),
+  m('fern', 'Ferns', 'leaf', ['#14382a', '#22573a', '#3f7a45', '#69a058'], { kind: 'speckle', size: 0.045 }),
+  m('sage', 'Sagebrush', 'leaf', ['#4a5a48', '#6e8068', '#98a888', '#c0c8a8'], { kind: 'speckle', size: 0.04 }),
+  m('cactus', 'Cactus', 'leaf', ['#1c4030', '#2e6a48', '#4a9060', '#86b878'], { kind: 'layers', size: 0.03 }, { ink: { kind: 'stipple', amount: 0.4 } }),
   m('moss', 'Moss', 'moss', ['#2c4428', '#466434', '#6c8a40'], { kind: 'patches', size: 0.1 }),
   // blooms stay readable when small, so they glow a little (rule 3 of the scene guide)
   m('poppy', 'Poppies', 'bloom', ['#7d2836', '#c9485a', '#ff7a6a'], { kind: 'speckle', size: 0.03 }, { glow: true }),
   m('buttercup', 'Buttercups', 'bloom', ['#c98a1c', '#ffd166', '#fff3b0'], { kind: 'speckle', size: 0.03 }, { glow: true }),
   m('daisy', 'Daisies', 'bloom', ['#d3cfd6', '#f4f1e4', '#ffd166'], { kind: 'speckle', size: 0.03 }, { glow: true }),
   m('bluebell', 'Bluebells', 'bloom', ['#3f4aa8', '#6f7ae0', '#a8b0ff'], { kind: 'speckle', size: 0.03 }, { glow: true }),
+  m('heather', 'Heather', 'bloom', ['#5a2a6a', '#9446ac', '#c070d0'], { kind: 'speckle', size: 0.03 }, { glow: true }),
+  m('cactus-flower', 'Cactus flowers', 'bloom', ['#a02860', '#e04a88', '#ff9ac0'], { kind: 'speckle', size: 0.03 }, { glow: true }),
   // cold and bright things, and what is not solid: here for the biomes to come
   m('snow', 'Snow', 'snow', ['#8fa8d0', '#c8d8f0', '#f4f8ff'], { kind: 'patches', size: 0.3 }, { body: 'grain' }),
   m('ice', 'Ice', 'ice', ['#1c6a8c', '#3ab0d0', '#a0ecf8'], { kind: 'patches', size: 0.2 }, { glass: { see: 0.5, mirror: 0.4 } }),
@@ -84,6 +92,28 @@ export const MATERIALS: Material[] = [
   m('pond-water', 'Pond water', 'water', ['#12303a', '#1c5a6a', '#3a9aa8'], { kind: 'patches', size: 0.3 }, { body: 'liquid', glass: { see: 0.6, mirror: 0.3, top: true } }),
   m('cloud', 'Cloud', 'cloud', ['#9fb4d0', '#d8e6f4', '#ffffff'], { kind: 'patches', size: 0.3 }, { body: 'gas' }),
 ]
+
+/**
+ * How much light a material lets through by nature: what it shows of what lies behind it. Glass says; a gas lets it
+ * all through; solids and grains none. A part of a material that lets none through must be cut `SOLID`, and the
+ * islands' tests hold every such part to it from every side (`seeThrough`).
+ */
+export function letsThrough(mat: Material): number {
+  if (mat.glass) return mat.glass.see ?? 0.5
+  if (mat.body === 'gas') return 1
+  return 0
+}
+
+/** Lets no light through: solid ground, rock, wood, stone. */
+export const opaque = (mat: Material): boolean => letsThrough(mat) === 0
+
+/**
+ * How a scene with opaque things in it must be cut so nothing shows through them. A scene's skin of discs is hollow
+ * and one cell deep: at the default disc size (0.55 of the grid) about a quarter of the light got through an island's
+ * earth wall and rock seen at a slant, so the turf's underside showed through the earth, and rough shapes thinned the
+ * skin further. Wider discs and a skin one cell deep in true distance bring it under one part in a hundred.
+ */
+export const SOLID: Required<Pick<SceneDoc, 'disc' | 'trueShell'>> = { disc: 0.75, trueShell: true }
 
 const BY_ID = new Map(MATERIALS.map((x) => [x.id, x]))
 

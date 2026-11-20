@@ -3558,6 +3558,18 @@
        "doc": "How wide each surface disc is, as a share of the grid: 0.4 to 1, 0.55 when left out. Small discs keep paint\ncrisp but let about a tenth of what lies behind a surface show through; a subject whose far side or inner\nparts are much darker or lighter than its near side (a head over an open jaw) wants 0.75, as creatures use."
       },
       {
+       "name": "trueShell",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Cut every surface one cell deep in true distance, not in the shape's own units: a shape whose distance changes\nfaster than one for one (anything `rough`, worn land on a slope) otherwise leaves its skin thinner than a cell in\nplaces, and the inside of the far side shows through. With `disc` 0.75 it is what keeps solid ground solid from\nevery side (the floating islands are checked for it). It costs a few blobs more."
+      },
+      {
+       "name": "big",
+       "optional": true,
+       "type": "boolean",
+       "doc": "A big place to walk round rather than a diorama: things may stand up to 8 from the middle, it may carry 128 bones,\na part may be about 6 units across and the parts four times the surface between them. It takes about four times as\nlong to cut, so a scene is big only when it needs the room."
+      },
+      {
        "name": "grid",
        "optional": true,
        "type": "number",
