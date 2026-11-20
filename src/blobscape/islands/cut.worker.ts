@@ -2,7 +2,7 @@
 import { described } from '../diorama/scenes.ts'
 import { movable, pack } from '../creator/pack.ts'
 import { planWorld } from './world.ts'
-import { unlit } from '../../splat-engine/voxel.ts'
+import { hugged, unlit } from '../../splat-engine/voxel.ts'
 
 /**
  * Cuts a world of islands off the page's thread: an island is about three times the ground of a Pixel Diorama scene
@@ -22,7 +22,8 @@ self.onmessage = (ev: MessageEvent<IslandJob>) => {
     const docs = [...world.islands.map((i) => i.doc), ...world.bridges.map((b) => b.doc)]
     docs.forEach((doc, index) => {
       const scene = described('island', doc, doc.name)
-      const cut = pack(plain ? unlit(() => scene.make(spacing)) : scene.make(spacing))
+      // baked light: discs fitted to the shapes' outer edges, as Pixel Diorama cuts, so edges are straight and lines sit on them
+      const cut = pack(plain ? unlit(() => scene.make(spacing)) : hugged(() => scene.make(spacing)))
       post({ id, index, cut }, movable(cut))
     })
     post({ id, done: true })

@@ -233,7 +233,10 @@ export function Islands() {
     const lists = [...new Set(shownAll.map((s) => s.palette))].map((p) => hex(p.colors))
     if (elfColors) lists.push(elfColors)
     const colors = lists.length > 1 ? joinPalettes(lists) : shown.palette.colors
-    return { palette: colors, dither: shown.finish.dither, outline: darkest(colors), glow: shown.finish.glow, edges: 1, parts: true, sky: shown.sky, steady: STEADY, tidy: true, fine: true, own: true, surface: true, snap: true }
+    return { palette: colors, dither: shown.finish.dither, outline: darkest(colors), glow: shown.finish.glow, edges: 1, parts: true, sky: shown.sky, steady: STEADY,
+      // Pixel Diorama's finish: calmer pixels, flat surfaces, lines only across things, hard discs where things meet, a shine
+      // on lit forms. No rim: it goes by a fixed view, and here the view turns with the walker.
+      tidy: true, calm: true, flat: true, across: true, solid: true, shine: true, selout: true, fine: true, own: true, surface: true, snap: true }
   }, [pixels, shown, shownAll, elfColors])
   useEffect(() => { stage?.setPixels(look, 2) }, [stage, look])
   // blocks: cubes a whole number of the cut's cells across, lit from the starting view's left; only an island cut with no light of its own
