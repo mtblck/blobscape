@@ -7582,7 +7582,7 @@
        "name": "flat",
        "optional": true,
        "type": "boolean",
-       "doc": "Dither only where a pixel artist puts it: the sky's blend and the light a glow spills onto the scene keep `dither`,\nwhile the scene's own surfaces are drawn flat, each pixel its nearest palette color, so shade falls in bands."
+       "doc": "Dither only where a pixel artist puts it: the sky's blend and the light a glow spills onto the scene keep `dither`,\nwhile the scene's own surfaces are drawn flat, each pixel its nearest palette color, so shade falls in bands. A\npixel a glow lights snaps only to a color of its own hue, the light's, or a gray (`keptNearest`)."
       },
       {
        "name": "surface",

@@ -1,12 +1,12 @@
 import { Matrix4, NearestFilter, NoBlending, NodeMaterial, QuadMesh, RenderTarget, Vector2, Vector3, type Camera, type Object3D, type WebGPURenderer } from 'three/webgpu'
 import * as TSLTyped from 'three/tsl'
 import { BLOCK_WIDE, MIX_A, MIX_B, SALT, STRIPS, TURNED, type GlitchState } from '../splat-core/glitch.ts'
-import { BAYER4, CALM_MOST, LINE_LIFT, LINE_LUMA, EDGE_DARK, snapShift, EDGE_JUMP, GLOW_FROM, GLOW_SHOWS, GLOW_TAPS, HALO_R, HALO_SHARE, HEAT_R, HEAT_UP, HEAT_WAVE, MAX_PALETTE_SIZE, OWN_C, OWN_L, OWN_UNDER, PIXEL_CUT, SELOUT_FROM, SELOUT_L, SKY_DITHER, cycleTurns, oklab, skyReach, type PixelLook } from '../splat-core/pixel.ts'
+import { BAYER4, CALM_MOST, HALO_GRAY, HALO_HUE, LINE_LIFT, LINE_LUMA, EDGE_DARK, snapShift, EDGE_JUMP, GLOW_FROM, GLOW_SHOWS, GLOW_TAPS, HALO_R, HALO_SHARE, HEAT_R, HEAT_UP, HEAT_WAVE, MAX_PALETTE_SIZE, OWN_C, OWN_L, OWN_UNDER, PIXEL_CUT, SELOUT_FROM, SELOUT_L, SKY_DITHER, cycleTurns, oklab, skyReach, type PixelLook } from '../splat-core/pixel.ts'
 
 // As in engine.ts: the shader builders use TSL untyped.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const TSL = TSLTyped as unknown as Record<string, any>
-const { Fn, If, Loop, abs, dot, float, floor, int, max, min, mod, pow, select, smoothstep, sqrt, texture, uint, uniform, uniformArray, uv, vec2, vec3, vec4 } = TSL
+const { Fn, If, Loop, abs, dot, float, floor, int, length, max, min, mod, pow, select, smoothstep, sqrt, texture, uint, uniform, uniformArray, uv, vec2, vec3, vec4 } = TSL
 
 const SIDES: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]]
 /** The four samples of an art pixel, across the top then the bottom: `QUAD` in pixel.ts. */
@@ -488,16 +488,28 @@ export class PixelPass {
           const wasOff = float(1e9).toVar()
           const wasFar = float(1e9).toVar()
           const wasPick = float(0).toVar()
+          // flat: a pixel a glow lights snaps to a color of its own hue, the light's or a gray (`keptNearest` in pixel.ts, the twin)
+          const halo = this.flat.greaterThan(0.5).and(here.solid).and(max(spill.x, max(spill.y, spill.z)).greaterThan(GLOW_SHOWS))
+          const ownLab = toLab(here.rgb).toVar(), lightLab = toLab(spill).toVar()
+          const keptBest = float(1e9).toVar(), keptPick = float(-1).toVar()
+          const nearHue = (p: { y: unknown; z: unknown }, c: { y: unknown; z: unknown }) => {
+            const pc = length(vec2(p.y, p.z)), cc = length(vec2(c.y, c.z))
+            return cc.greaterThanEqual(HALO_GRAY).and(dot(vec2(p.y, p.z), vec2(c.y, c.z)).greaterThanEqual(pc.mul(cc).mul(HALO_HUE)))
+          }
           Loop(MAX_PALETTE, ({ i }: { i: unknown }) => {
             If(float(i).lessThan(this.count), () => {
-              const d = lab.sub(palLab.element(i))
+              const pl = palLab.element(i)
+              const d = lab.sub(pl)
               const dd = dot(d, d)
               If(dd.lessThan(best), () => { best.assign(dd); pick.assign(float(i)) })
-              const w = wasLab.sub(palLab.element(i))
+              const allowed = length(vec2(pl.y, pl.z)).lessThan(HALO_GRAY).or(nearHue(pl, ownLab)).or(nearHue(pl, lightLab))
+              If(halo.and(allowed).and(dd.lessThan(keptBest)), () => { keptBest.assign(dd); keptPick.assign(float(i)) })
+              const w = wasLab.sub(pl)
               const ww = dot(w, w)
               If(ww.lessThan(wasOff), () => { wasOff.assign(ww); wasFar.assign(dd); wasPick.assign(float(i)) })
             })
           })
+          If(keptPick.greaterThanEqual(0), () => { pick.assign(keptPick); best.assign(keptBest) })
           // colors that cycle are left to move
           const moves = this.memberU.element(int(pick)).add(this.memberU.element(int(wasPick)))
           If(this.sticky.greaterThan(0).and(here.solid).and(was.a.greaterThan(0.5)).and(wasOff.lessThan(SAME * SAME)).and(moves.lessThan(0.5)).and(sqrt(wasFar).lessThanEqual(sqrt(best).add(this.sticky))), () => { pick.assign(wasPick) })

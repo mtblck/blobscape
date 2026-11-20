@@ -103,6 +103,28 @@ export function rgbToHex([r, g, b]: Rgb): string {
   return '#' + [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')
 }
 
+/** How near in hue (the cosine of the angle in OKLab's a and b) a palette color must be to count as a glow-lit pixel's own or its light's (`keptNearest`). */
+export const HALO_HUE = Math.cos((28 * Math.PI) / 180)
+/** The chroma under which a color counts as gray for `HALO_HUE`: a gray is always allowed. */
+export const HALO_GRAY = 0.03
+
+/**
+ * The palette color nearest `lab` among those of `own`'s hue or `light`'s, or a gray (`HALO_HUE`, `HALO_GRAY`), or -1
+ * where none is: for a pixel a glow lights, so a lamp's halo on gray stone turns lighter stone or the lamp's own
+ * yellow, never the olive green the mix would snap to. The pass's twin is in pixelPass.ts (change both).
+ */
+export function keptNearest(lab: Rgb, paletteLab: Rgb[], own: Rgb, light: Rgb): number {
+  const near = (p: Rgb, c: Rgb) => { const cc = Math.hypot(c[1], c[2]); return cc >= HALO_GRAY && (p[1] * c[1] + p[2] * c[2]) >= HALO_HUE * Math.hypot(p[1], p[2]) * cc }
+  let best = -1, bestD = Infinity
+  for (let k = 0; k < paletteLab.length; k++) {
+    const p = paletteLab[k]
+    if (Math.hypot(p[1], p[2]) >= HALO_GRAY && !near(p, own) && !near(p, light)) continue
+    const d = (lab[0] - p[0]) ** 2 + (lab[1] - p[1]) ** 2 + (lab[2] - p[2]) ** 2
+    if (d < bestD) { bestD = d; best = k }
+  }
+  return best
+}
+
 function nearest(lab: Rgb, paletteLab: Rgb[]): number {
   let best = 0, bestD = Infinity
   for (let i = 0; i < paletteLab.length; i++) {
@@ -306,7 +328,8 @@ export interface PixelLook {
   calm?: boolean
   /**
    * Dither only where a pixel artist puts it: the sky's blend and the light a glow spills onto the scene keep `dither`,
-   * while the scene's own surfaces are drawn flat, each pixel its nearest palette color, so shade falls in bands.
+   * while the scene's own surfaces are drawn flat, each pixel its nearest palette color, so shade falls in bands. A
+   * pixel a glow lights snaps only to a color of its own hue, the light's, or a gray (`keptNearest`).
    */
   flat?: boolean
   /**
@@ -622,6 +645,12 @@ export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Fram
         const off = spread > 0 ? (step / 16 - 0.5) * spread : 0
         const lab = oklab(Math.max(0, r + off), Math.max(0, gg + off), Math.max(0, b + off))
         let k = nearest(lab, pl)
+        // flat: a pixel a glow lights snaps to a color of its own hue or the light's, never a third the mix lands near
+        if (look.flat && solid(x, y) && Math.max(g[0], g[1], g[2]) > GLOW_SHOWS) {
+          const own = oklab(f.data[i], f.data[i + 1], f.data[i + 2]), light = oklab(g[0], g[1], g[2])
+          const kept = keptNearest(lab, pl, own, light)
+          if (kept >= 0) k = kept
+        }
         // only the scene's own pixels: the sky is the same every frame, and a pixel the scene has left must not keep its color
         if (steady > 0 && solid(x, y) && before!.data[o + 3] === 255) {
           const was = slot.get((before!.data[o] << 16) | (before!.data[o + 1] << 8) | before!.data[o + 2])

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { alphaCut, autoPalette, downsample, makeFrame, outline, pixelArt, quantize, lookColors, snapColors, removeStrays, countSolid, tidyLone, calmArt, calmEdge, lineFix, CALM_MOST, resolveFine, ditherRank, typicalSpacing, surfaceRanks, snapShift, cycleTurns, heatPace, heatShift, HALO_R, HEAT_UP, SELOUT_FROM, oklab, type Rgb, type PixelLook } from './pixel.ts'
+import { alphaCut, autoPalette, downsample, makeFrame, outline, pixelArt, quantize, lookColors, snapColors, removeStrays, countSolid, tidyLone, calmArt, calmEdge, lineFix, keptNearest, CALM_MOST, resolveFine, ditherRank, typicalSpacing, surfaceRanks, snapShift, cycleTurns, heatPace, heatShift, HALO_R, HEAT_UP, SELOUT_FROM, oklab, type Rgb, type PixelLook } from './pixel.ts'
 
 const solid = (w: number, h: number, on: (x: number, y: number) => boolean, rgb = [200, 40, 40]) => {
   const f = makeFrame(w, h)
@@ -531,4 +531,15 @@ test('pixelArt flat: surfaces are drawn without dither while the sky keeps it', 
   assert.ok(colorsIn(dithered, 9, h) > 1)
   assert.equal(colorsIn(flat, 9, h), 1)
   assert.ok(colorsIn(flat, 0, 7) > 1, 'the sky is still dithered')
+})
+
+test('keptNearest: a glow on gray stone snaps to stone or the light, never to the green between them', () => {
+  const pal = ([[59, 56, 72], [107, 100, 116], [255, 243, 176], [255, 209, 102], [63, 122, 69], [107, 74, 53]] as Rgb[]).map((c) => oklab(...c))
+  const own = oklab(59, 56, 72), light = oklab(255, 230, 120)
+  // the mix of the two, which plain nearest takes to the green
+  const mix = oklab(110, 112, 80)
+  const plain = pal.reduce((b, p, k) => (Math.hypot(...p.map((v, j) => v - mix[j])) < Math.hypot(...pal[b].map((v, j) => v - mix[j])) ? k : b), 0)
+  assert.equal(plain, 4)
+  const kept = keptNearest(mix, pal, own, light)
+  assert.ok([0, 1, 2, 3].includes(kept), String(kept))
 })
