@@ -7669,7 +7669,7 @@
        "name": "surface",
        "optional": true,
        "type": "boolean",
-       "doc": "Dither that stays on the things it falls on: each blob takes one step of the Bayer pattern from where it sits in\nits own rest pose (`ditherRank`), not from the pixel it lands on, so the pattern rides with a turning view or a\nmoving creature instead of standing still on the screen while they slide under it. Needs a map of each pixel's\nstep drawn beside the scene (`pixelArt`'s `ranks`; the live pass draws its own). The sky keeps the screen's pattern.\nAfter Silicon Jungle's Ink Studio (object-space dither, MIT), with their agreement."
+       "doc": "Dither that stays on the things it falls on: each blob takes one step of the Bayer pattern from where it sits in\nits own rest pose (`ditherRank`), not from the pixel it lands on, so the pattern rides with a turning view or a\nmoving creature instead of standing still on the screen while they slide under it. Needs a map of each pixel's\nstep drawn beside the scene (`pixelArt`'s `ranks`; the live pass draws its own). The sky keeps the screen's pattern.\nLeft out with `flat`: there only a glow's spill is dithered, and the map cost a whole extra draw of every blob.\nAfter Silicon Jungle's Ink Studio (object-space dither, MIT), with their agreement."
       },
       {
        "name": "snap",

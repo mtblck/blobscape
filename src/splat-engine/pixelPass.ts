@@ -168,7 +168,8 @@ export class PixelPass {
     }
     this.count.value = n
     this.dither.value = look.dither
-    this.surface.value = look.surface ? 1 : 0
+    // flat surfaces dither only where a glow spills, so the map of steps is not worth a draw of every blob
+    this.surface.value = look.surface && !look.flat ? 1 : 0
     this.glow.value = look.glow
     this.edges.value = look.edges ?? 0
     this.parted.value = look.parts ? 1 : 0
@@ -298,7 +299,7 @@ export class PixelPass {
     // four samples a pixel go by the parts too: which thing most of a pixel's samples show
     if (fine || this.look.parts) this.drawParts(renderer, scene, camera, fine ? this.fineIds : this.ids)
     // dither that stays on things: each pixel's step from the blob there, at the art's own size
-    if (this.look.surface && this.look.dither > 0) this.drawParts(renderer, scene, camera, this.ranks, 'ranks')
+    if (this.look.surface && !this.look.flat && this.look.dither > 0) this.drawParts(renderer, scene, camera, this.ranks, 'ranks')
     // hard discs in their own colors, for the samples where one thing meets another (`PixelLook.solid`)
     if (fine && this.look.solid) this.drawParts(renderer, scene, camera, this.fineSolid, 'solid')
     if (fine) {

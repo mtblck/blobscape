@@ -437,6 +437,7 @@ export interface PixelLook {
    * its own rest pose (`ditherRank`), not from the pixel it lands on, so the pattern rides with a turning view or a
    * moving creature instead of standing still on the screen while they slide under it. Needs a map of each pixel's
    * step drawn beside the scene (`pixelArt`'s `ranks`; the live pass draws its own). The sky keeps the screen's pattern.
+   * Left out with `flat`: there only a glow's spill is dithered, and the map cost a whole extra draw of every blob.
    * After Silicon Jungle's Ink Studio (object-space dither, MIT), with their agreement.
    */
   surface?: boolean
@@ -642,7 +643,7 @@ export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Fram
   const areas = look.across && parts && parts.width === w && parts.height === h ? parts.data : undefined
   const steady = before && before.width === w && before.height === h ? look.steady ?? 0 : 0
   // surface dither: each pixel's step from the map of steps, where the scene has one
-  const steps = look.surface && ranks && ranks.width === w && ranks.height === h ? ranks.data : undefined
+  const steps = look.surface && !look.flat && ranks && ranks.width === w && ranks.height === h ? ranks.data : undefined
   const slot = new Map(look.palette.map((c, k) => [(c[0] << 16) | (c[1] << 8) | c[2], k]))
   const bands = Math.min(2, Math.max(0, Math.round(look.bands ?? 0)))
   const heat = look.heat && look.heat.pixels > 0 ? look.heat : undefined
