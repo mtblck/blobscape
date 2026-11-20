@@ -20,6 +20,7 @@ import { ModeBar, useWorkspaceScreen, panelId, tabId, type Mode } from './sandbo
 import type { CutJob } from './creator/cut.ts'
 import { unpack, type PackedCut } from './creator/pack.ts'
 import { START_LANDS, START_SCENES, nameFor, openingAsked, openingLand, openingScene, queryFor, shownOf, type Opened } from './creator/shown.ts'
+import { isDescription, readDescribed } from './creator/described.ts'
 import { AUTOSAVE_MS, FILE_END, type ModelFile, cleanName, copyName, fileName, fileText, mergedLike, newId, openShelf, readFile, renamed, type SavedScene, type Shelf } from './creator/store.ts'
 import { download } from './files.ts'
 import { registerTools } from './agentTools.ts'
@@ -585,7 +586,9 @@ export function SceneCreator() {
   }
   const fileInput = useRef<HTMLInputElement>(null)
   const openFile = async (f: File) => {
-    const { project: p, models, problems } = readFile(await f.text())
+    const text = await f.text()
+    // a scene description (what Pixel Diorama opens) comes in as a project of its own props and land (#379)
+    const { project: p, models, problems } = isDescription(text) ? { ...readDescribed(text), models: [] as ModelFile[] } : readFile(text)
     setFileProblems(problems)
     if (!p) { say(`${f.name} could not be opened.`); return }
     // the models it carries are kept as if opened here
@@ -1128,6 +1131,7 @@ export function SceneCreator() {
                         <input ref={fileInput} type="file" accept={`${FILE_END},.json,application/json`} className="sr-only" tabIndex={-1} aria-hidden data-testid="creator-file"
                           onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void openFile(f) }} />
                       </div>
+                      <p className="mt-1 text-xs text-ink-soft">A file saved here, or a scene description (.json) as Pixel Diorama opens: the things it marks as props, or else what stands on bones of its own, come in as props.</p>
                       {fileProblems.length > 0 && (
                         <div role="alert" className="mt-2 rounded-lg border border-rule bg-paper p-2 text-xs" data-testid="creator-file-problems">
                           <p className="font-semibold">That file is not a scene this page can open:</p>
