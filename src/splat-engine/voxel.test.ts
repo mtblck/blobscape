@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { LIT_MAX, PAINTED, blend, box, buildVoxels, inkedAt, cylinder, cone, cut, lathe, letterGrid, pixelText, sphere, sweep, union, type VoxelSpec } from './voxel.ts'
+import { LIT_MAX, PAINTED, bakedColor, stepper, blend, box, buildVoxels, inkedAt, cylinder, cone, cut, lathe, letterGrid, pixelText, sphere, sweep, union, type VoxelSpec } from './voxel.ts'
 import { posedPoint, axisAngle } from './rig.ts'
 
 const ROOT = { name: 'root', parent: -1, head: [0, 0, 0] as [number, number, number] }
@@ -376,4 +376,19 @@ test('painted in steps: every lit blob takes a palette color of its own paint\'s
   // a palette color over the glow line is held under it, so nothing painted glows
   const white = buildVoxels({ bones: [ROOT], spacing: 0.1, parts: [{ shape: sphere([0, 0, 0], 0.5), color: [1, 1, 1], bone: 'root' }], light: { steps: { palette: [[1, 1, 1], [0.2, 0.2, 0.3]], mottle: 0 } } })
   for (let i = 0; i < white.blobs.count * 3; i++) assert.ok(white.blobs.color[i] <= LIT_MAX + 1e-6)
+})
+
+test('painting in steps keeps a paint in its own hue: a red with no darker red stays red in shade, not brown', () => {
+  const hex = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255) as [number, number, number]
+  const palette = ['#2a1c16', '#4a3020', '#8f2d1c', '#d9541e', '#7b2f45', '#b9485a', '#10241c', '#1b3a2a', '#2c5a38'].map(hex)
+  const light = { ...PAINTED, dir: [0, 1, 0] as [number, number, number], ambient: 0.5, shadow: 0.7, steps: { palette, mottle: 0 } }
+  const step = stepper(light.steps, light)
+  const at = (paint: string, t: number) => { const base = hex(paint); return step(base, bakedColor(base, (0.5 + 0.5 * t) * LIT_MAX, t, light.ramp, 0), 0, 0, 0) }
+  const red = hex('#7b2f45'), pink = hex('#b9485a')
+  for (let q = 0; q <= 8; q++) {
+    assert.deepEqual(at('#7b2f45', q / 8), red, `dark red at ${q / 8}`)
+    assert.ok([red, pink].some((c) => c.every((v, k) => v === at('#b9485a', q / 8)[k])), `light red at ${q / 8}`)
+  }
+  // a green still runs through its greens
+  assert.ok(new Set([0, 0.5, 1].map((t) => at('#2c5a38', t).join())).size >= 2)
 })

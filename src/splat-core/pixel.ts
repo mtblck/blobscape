@@ -294,6 +294,16 @@ export interface PixelLook {
    */
   tidy?: boolean
   /**
+   * Calmer pixels, in place of `tidy` (an idea from Silicon Jungle's Ink Studio, whose cleanup pass this follows in
+   * part): a pixel art piece is flat patches of color with dither only where one gives way to the next, while a scene
+   * of small blobs comes out speckled. So, reading only the art as drawn: a scene pixel takes the color `CALM_MOST` or
+   * more of its eight neighbors share when fewer share its own (with a map of parts, only neighbors of its own part
+   * count, so one thing never bleeds into another); a scene pixel with the empty backdrop on three or four sides (a
+   * one-pixel bump on a silhouette) takes the backdrop's color beside it, and an empty pixel with the scene on three or
+   * four sides (a notch) takes the scene's, so an outline runs clean. `calmArt` is the CPU twin of the pass.
+   */
+  calm?: boolean
+  /**
    * Dither that stays on the things it falls on: each blob takes one step of the Bayer pattern from where it sits in
    * its own rest pose (`ditherRank`), not from the pixel it lands on, so the pattern rides with a turning view or a
    * moving creature instead of standing still on the screen while they slide under it. Needs a map of each pixel's
@@ -618,6 +628,7 @@ export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Fram
       out.data[o] = r; out.data[o + 1] = gg; out.data[o + 2] = b; out.data[o + 3] = 255
     }
   }
+  if (look.calm) return calmArt(out, f, parts && parts.width === w && parts.height === h ? parts.data : undefined)
   return look.tidy ? tidyLone(out, f, map) : out
 }
 
@@ -680,6 +691,83 @@ export function resolveFine(fine: Frame, parts?: Frame): { small: Frame; parts?:
 }
 
 const N8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]] as const
+
+/** How many of a pixel's eight neighbors (of its own part) must share a color for `calm` to give it that color. */
+export const CALM_MOST = 5
+
+/**
+ * `art` made calmer (see `PixelLook.calm`): `f` is the small frame it was drawn from (which pixels are scene), `map`
+ * the map of parts if there is one. Reads only `art`, so a pixel changed never changes its neighbors; ties go to the
+ * first color met in `N8`'s order. The live pass does the same (pixelPass.ts `tidy`): change one, change both.
+ */
+/**
+ * For `calm`: which of the four sides (an index into `N8`) a pixel on a silhouette should take its color from, or -1.
+ * A bump (a scene pixel with the backdrop on three sides) takes the backdrop beside it, but only where it stands on a
+ * wall at least three pixels wide, so the tip of a line a pixel wide, a star or a spark stays. A notch (a backdrop pixel
+ * with the scene on three sides) takes the scene's color across from its open side, but only where that side opens onto
+ * open backdrop, so a gap a pixel wide between two things stays; a hole (scene on all four sides) is filled.
+ */
+export function calmEdge(x: number, y: number, w: number, h: number, solid: (x: number, y: number) => boolean): number {
+  const me = solid(x, y)
+  const inside = (a: number, b: number) => a >= 0 && b >= 0 && a < w && b < h
+  let other = 0, odd = -1
+  for (let q = 0; q < 4; q++) { const [dx, dy] = N8[q]; if (inside(x + dx, y + dy) && solid(x + dx, y + dy) !== me) other++; else odd = q }
+  if (other === 4) return me ? -1 : 0
+  if (other !== 3 || odd < 0) return -1
+  // the one side like this pixel, and the two pixels either side of it across the way it lies
+  const [dx, dy] = N8[odd], ax = x + dx, ay = y + dy
+  if (!inside(ax, ay) || !inside(ax + dy, ay + dx) || !inside(ax - dy, ay - dx)) return -1
+  if (solid(ax + dy, ay + dx) !== me || solid(ax - dy, ay - dx) !== me) return -1
+  // take the other kind's color from the side across from that one
+  return odd ^ 1
+}
+
+export function calmArt(art: Frame, f: Frame, map?: Uint8ClampedArray | Uint8Array): Frame {
+  const { width: w, height: h } = art
+  const out = makeFrame(w, h)
+  out.data.set(art.data)
+  const cut = PIXEL_CUT * 255
+  const solid = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h && f.data[(y * w + x) * 4 + 3] >= cut
+  const colorAt = (x: number, y: number) => { const j = (y * w + x) * 4; return (art.data[j] << 16) | (art.data[j + 1] << 8) | art.data[j + 2] }
+  const partAt = (x: number, y: number) => { const j = (y * w + x) * 4; return map![j + 3] < 128 ? -1 : map![j] | (map![j + 1] << 8) | (map![j + 2] << 16) }
+  const copy = (x: number, y: number, fx: number, fy: number) => { const i = (y * w + x) * 4, j = (fy * w + fx) * 4; for (let k = 0; k < 4; k++) out.data[i + k] = art.data[j + k] }
+  const near: number[] = []
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const me = solid(x, y)
+      const step = calmEdge(x, y, w, h, solid)
+      if (step >= 0) { copy(x, y, x + N8[step][0], y + N8[step][1]); continue }
+      if (!me) {
+        // the line round a silhouette follows it: beside a bump taken off, this pixel takes what lies beyond it; beyond
+        // a notch filled, it takes the notch's own color, which is what the line was there
+        let solids = 0
+        for (let q = 0; q < 4; q++) if (solid(x + N8[q][0], y + N8[q][1])) solids++
+        for (let q = 0; q < 4; q++) {
+          const nx = x + N8[q][0], ny = y + N8[q][1]
+          if (nx < 0 || ny < 0 || nx >= w || ny >= h || calmEdge(nx, ny, w, h, solid) < 0) continue
+          if (solid(nx, ny)) { if (solids === 1) { const fx = x - N8[q][0], fy = y - N8[q][1]; if (fx >= 0 && fy >= 0 && fx < w && fy < h) copy(x, y, fx, fy) } }
+          else copy(x, y, nx, ny)
+          break
+        }
+        continue
+      }
+      const mine = colorAt(x, y), part = map ? partAt(x, y) : -1
+      near.length = 0
+      for (const [dx, dy] of N8) {
+        if (!solid(x + dx, y + dy) || (map && partAt(x + dx, y + dy) !== part)) continue
+        near.push(colorAt(x + dx, y + dy))
+      }
+      let own = 0
+      for (const c of near) if (c === mine) own++
+      let best = -1, most = 0
+      for (const c of near) { let n = 0; for (const d of near) if (d === c) n++; if (n > most) { most = n; best = c } }
+      if (most < CALM_MOST || most <= own) continue
+      const i = (y * w + x) * 4
+      out.data[i] = best >> 16; out.data[i + 1] = (best >> 8) & 255; out.data[i + 2] = best & 255
+    }
+  }
+  return out
+}
 
 /**
  * `art` with its lone pixels cleaned up (see `PixelLook.tidy`): `f` is the small frame it was drawn from (which pixels

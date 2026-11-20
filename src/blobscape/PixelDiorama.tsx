@@ -115,6 +115,8 @@ export function PixelDiorama() {
   // a scene's own gentle rocking of the view: every pixel of a still thing changes as the view turns, so it can be held
   const [rock, setRock] = useState(() => new URLSearchParams(location.search).get('rock') !== '0')
   const [tidy, setTidy] = useState(() => new URLSearchParams(location.search).get('tidy') !== '0')
+  /** Calmer pixels (`PixelLook.calm`): flat patches and clean outlines, in place of the lone-pixel cleanup. `?calm=0` starts it off. */
+  const [calmer, setCalmer] = useState(() => new URLSearchParams(location.search).get('calm') !== '0')
   // dither that stays on things as they move, not on the screen (`PixelLook.surface`); `?surface=0` starts it off
   const [surface, setSurface] = useState(() => new URLSearchParams(location.search).get('surface') !== '0')
   // art-pixel effects (after Ink Studio's): glow in rings, heat haze, softer outlines on lit sides, color cycling. The
@@ -216,8 +218,8 @@ export function PixelDiorama() {
   const closeTour = () => { setTour(null); setStyle(styleBefore.current); requestAnimationFrame(() => tourOpener.current?.focus()) }
   // a step of the walk-through says how the scene is drawn, whatever the switch says
   const asPixels = touring ? touring.pixels : pixels
-  const look = useMemo<PixelLook>(() => ({ palette: colors, dither, outline: outline ? (colors.length ? darkest(colors) : [11, 16, 38]) : null, glow, edges: edges ? 1 : 0, parts, sky: sky ? shown.sky : undefined, steady: steady ? STEADY : 0, tidy, fine, own, surface, snap: true,
-    bands, heat: heat ? { pixels: heat, pace: heatPace(shown.loop) } : undefined, selout, cycle: cycling ? shown.finish.cycle : undefined }), [colors, dither, outline, glow, edges, parts, sky, shown, steady, tidy, fine, own, surface, bands, heat, selout, cycling])
+  const look = useMemo<PixelLook>(() => ({ palette: colors, dither, outline: outline ? (colors.length ? darkest(colors) : [11, 16, 38]) : null, glow, edges: edges ? 1 : 0, parts, sky: sky ? shown.sky : undefined, steady: steady ? STEADY : 0, tidy, calm: calmer, fine, own, surface, snap: true,
+    bands, heat: heat ? { pixels: heat, pace: heatPace(shown.loop) } : undefined, selout, cycle: cycling ? shown.finish.cycle : undefined }), [colors, dither, outline, glow, edges, parts, sky, shown, steady, tidy, calmer, fine, own, surface, bands, heat, selout, cycling])
 
   // the exact (radix) sort: the stage rebuilds its world, keeping the moment and the poser
   useEffect(() => { stage?.setSort(exact ? 'radix' : 'bins') }, [stage, exact])
@@ -752,7 +754,9 @@ export function PixelDiorama() {
                 <Toggle label="Lines between parts" checked={parts} onChange={setParts} />
                 <Toggle label="Sky behind" checked={sky} onChange={setSky} />
                 <Toggle label="Steady pixels" checked={steady} onChange={setSteady} />
-                <Toggle label="Clean up lone pixels" checked={tidy} onChange={setTidy} />
+                <Toggle label="Calmer pixels" checked={calmer} onChange={setCalmer} />
+                <p className="text-xs text-ink-faint">A pixel takes the color most of its neighbors on the same thing share, and one-pixel bumps and notches come off outlines, so surfaces read as flat patches. After Ink Studio's cleanup pass.</p>
+                <Toggle label="Clean up lone pixels" checked={tidy || calmer} onChange={setTidy} disabled={calmer} />
                 <Toggle label="Dither moves with things" checked={surface} onChange={setSurface} />
                 <Toggle label="Glow in rings" checked={bands > 0} onChange={(on) => setBands(on ? shown.finish.bands || 2 : 0)} disabled={!glow} />
                 <Toggle label="Heat haze over glowing things" checked={heat > 0} onChange={(on) => setHeat(on ? shown.finish.heat || 1 : 0)} />

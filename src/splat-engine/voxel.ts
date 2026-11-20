@@ -216,6 +216,16 @@ export interface VoxelLight {
 export const STEP_L = 0.7
 /** How ragged the edge between two steps is, where a scene doesn't say (`VoxelLight.steps`). */
 export const MOTTLE = 0.35
+/**
+ * How far round the hue circle (degrees, in OKLab) a palette color may sit from a paint's own and still be a step of its
+ * ramp (`stepper`), where both have color enough to have a hue (`HUE_FROM`). A red that has no darker red in the palette
+ * stays its own darkest red in shade rather than turning brown or orange, as a hand-made ramp would.
+ */
+export const HUE_KEEP = 16
+/** The chroma (OKLab) under which a color counts as a gray for `HUE_KEEP`: a gray is a step of any paint's ramp. */
+export const HUE_FROM = 0.02
+/** How many times closer a palette color off a paint's ramp must be before a blob takes it (`stepper`): only light of another color carries a blob that far. */
+export const ESCAPE = 9
 
 /** A voxel scene for `buildVoxels`: its bones, its parts and the grid's cell size. */
 export interface VoxelSpec {
@@ -825,7 +835,7 @@ export function bakedColor(base: Vec3, shade: number, lit: number, ramp: number,
  * A paint's ramp is the palette colors it passes through as its light goes from a deep corner to full sun (found once
  * per paint, to 1/64 a channel); a finished color takes the nearest of them, after `mottle` has pushed its lightness up
  * or down by patch. Light of another color (a beam, a bounce, a mirror) can carry a blob well off its ramp: when a
- * palette color outside it is more than twice as close, that one is taken. Palette colors over `LIT_MAX` are held at
+ * palette color outside it is `ESCAPE` times as close or more, that one is taken. A ramp keeps to its paint's own hue (`HUE_KEEP`). Palette colors over `LIT_MAX` are held at
  * it, as every lit color is, so nothing painted starts to glow.
  */
 export function stepper(steps: NonNullable<VoxelLight['steps']>, light: VoxelLight): (base: Vec3, color: Vec3, i: number, j: number, k: number) => Vec3 {
@@ -854,7 +864,16 @@ export function stepper(steps: NonNullable<VoxelLight['steps']>, light: VoxelLig
       for (const k of [0.3, 0.6]) add(light.ambient * k, 0)
       for (let q = 0; q <= 12; q++) add(light.ambient + (1 - light.ambient) * (q / 12), q / 12)
       add(1, 1, light.wear ?? 0)
-      got = [...seen]
+      // keep the paint's own hue: a step that turns it to another hue (a red to brown in shade) is left out
+      const [, pa, pb] = toOklab(base)
+      const hued = Math.hypot(pa, pb) >= HUE_FROM
+      const own = [...seen].filter((q) => {
+        const [, a, b] = labs[q]
+        if (!hued || Math.hypot(a, b) < HUE_FROM) return true
+        const turn = Math.abs(Math.atan2(b, a) - Math.atan2(pb, pa)) * (180 / Math.PI)
+        return Math.min(turn, 360 - turn) <= HUE_KEEP
+      })
+      got = own.length ? own : [...seen]
       ramps.set(key, got)
     }
     return got
@@ -865,7 +884,7 @@ export function stepper(steps: NonNullable<VoxelLight['steps']>, light: VoxelLig
     if (mottle > 0) lab[0] += (ihash(Math.floor(i / 3), Math.floor(j / 3), Math.floor(k / 3), 91) - 0.5 + (ihash(i, j, k, 93) - 0.5) * 0.3) * mottle * 0.1
     const [own, ownD] = nearestOf(lab, rampOf(base))
     const [any, anyD] = nearestOf(lab)
-    return shown[anyD * 4 < ownD ? any : own]
+    return shown[anyD * ESCAPE < ownD ? any : own]
   }
 }
 

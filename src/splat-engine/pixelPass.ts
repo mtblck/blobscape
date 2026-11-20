@@ -1,7 +1,7 @@
 import { Matrix4, NearestFilter, NoBlending, NodeMaterial, QuadMesh, RenderTarget, Vector2, Vector3, type Camera, type Object3D, type WebGPURenderer } from 'three/webgpu'
 import * as TSLTyped from 'three/tsl'
 import { BLOCK_WIDE, MIX_A, MIX_B, SALT, STRIPS, TURNED, type GlitchState } from '../splat-core/glitch.ts'
-import { BAYER4, EDGE_DARK, snapShift, EDGE_JUMP, GLOW_FROM, GLOW_SHOWS, GLOW_TAPS, HALO_R, HALO_SHARE, HEAT_R, HEAT_UP, HEAT_WAVE, MAX_PALETTE_SIZE, OWN_C, OWN_L, OWN_UNDER, PIXEL_CUT, SELOUT_FROM, SELOUT_L, SKY_DITHER, cycleTurns, oklab, skyReach, type PixelLook } from '../splat-core/pixel.ts'
+import { BAYER4, CALM_MOST, EDGE_DARK, snapShift, EDGE_JUMP, GLOW_FROM, GLOW_SHOWS, GLOW_TAPS, HALO_R, HALO_SHARE, HEAT_R, HEAT_UP, HEAT_WAVE, MAX_PALETTE_SIZE, OWN_C, OWN_L, OWN_UNDER, PIXEL_CUT, SELOUT_FROM, SELOUT_L, SKY_DITHER, cycleTurns, oklab, skyReach, type PixelLook } from '../splat-core/pixel.ts'
 
 // As in engine.ts: the shader builders use TSL untyped.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -45,6 +45,9 @@ export class PixelPass {
   /** Each art pixel's step of the dither pattern, from the blob there (red, a byte), for a look with `surface`. */
   readonly ranks = new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter })
   private readonly parted = uniform(0)
+  /** `PixelLook.calm`, and whether the map of parts is drawn for it to go by. */
+  private readonly calmed = uniform(0)
+  private readonly calmParts = uniform(0)
   /** The scene and its map of parts at twice the art's size, for a look with `fine`: what `small` and `ids` are settled from. */
   readonly fineSmall = new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter })
   /** The map of parts at twice the art's size, which four samples a pixel settles from. */
@@ -133,7 +136,7 @@ export class PixelPass {
   }
 
   /** The finished art at its own size, in display color, for reading back (tests, saving) and for the screen. */
-  get art() { return this.look.tidy ? this.tidied : this.frames[this.now] }
+  get art() { return this.look.tidy || this.look.calm ? this.tidied : this.frames[this.now] }
   /** The art of the frame before, when this frame was drawn against it (a look with `steady`): what `pixelArt` needs to give the same answer. */
   get before() { return this.used ? this.frames[1 - this.now] : undefined }
 
@@ -159,6 +162,8 @@ export class PixelPass {
     this.glow.value = look.glow
     this.edges.value = look.edges ?? 0
     this.parted.value = look.parts ? 1 : 0
+    this.calmed.value = look.calm ? 1 : 0
+    this.calmParts.value = look.parts || look.fine ? 1 : 0
     this.lined.value = look.outline ? 1 : 0
     this.own.value = look.own ? 1 : 0
     this.sizeFine()
@@ -280,7 +285,7 @@ export class PixelPass {
     renderer.setRenderTarget(this.frames[this.now])
     this.quad.render(renderer)
     this.kept = true
-    if (this.look.tidy) {
+    if (this.look.tidy || this.look.calm) {
       this.rawTex.value = this.frames[this.now].texture
       renderer.setRenderTarget(this.tidied)
       this.tidyQuad.render(renderer)
@@ -576,7 +581,10 @@ export class PixelPass {
     }
   }
 
-  /** Lone-pixel cleanup over the art just drawn: `tidyLone` in pixel.ts is its CPU twin (change one, change both). */
+  /**
+   * Lone-pixel cleanup over the art just drawn, or with `calm` the calmer pass: `tidyLone`, and `calmArt` with
+   * `calmEdge`, in pixel.ts are its CPU twins (change one, change both).
+   */
   private tidy() {
     const small = this.small.texture, ids = this.ids.texture
     const { res } = this
@@ -597,7 +605,69 @@ export class PixelPass {
       }
       const here = read(0, 0)
       const out = vec4(here.rgb, this.rawTex.sample(where(0, 0).st).a).toVar()
-      If(here.solid, () => {
+      const done = float(0).toVar()
+      If(this.calmed.greaterThan(0.5), () => {
+        done.assign(1)
+        const inside = (dx: number, dy: number) => { const c = cell.add(vec2(dx, dy)); return c.x.greaterThanEqual(0).and(c.y.greaterThanEqual(0)).and(c.x.lessThan(res.x)).and(c.y.lessThan(res.y)) }
+        const solidF = new Map<string, unknown>()
+        /** 1 where the art pixel at this offset is scene, 0 where it is backdrop or off the picture. */
+        const sol = (dx: number, dy: number) => {
+          const key = `${dx},${dy}`
+          if (!solidF.has(key)) solidF.set(key, float(select(read(dx, dy).solid, 1, 0)).toVar())
+          return solidF.get(key) as { equal: (x: unknown) => unknown; notEqual: (x: unknown) => unknown; greaterThan: (x: number) => unknown }
+        }
+        const rawAt = (dx: number, dy: number) => this.rawTex.sample(where(dx, dy).st)
+        /** `calmEdge` at an offset: the side (0 to 3) to take a color from, or −1. */
+        const edgeAt = (ox: number, oy: number) => {
+          const me = sol(ox, oy)
+          const other = float(0).toVar(), odd = float(-1).toVar()
+          SIDES.forEach(([dx, dy], q) => {
+            const diff = inside(ox + dx, oy + dy).and(sol(ox + dx, oy + dy).notEqual(me))
+            If(diff, () => { other.addAssign(1) }).Else(() => { odd.assign(q) })
+          })
+          const walls = SIDES.map(([dx, dy]) => {
+            const ax = ox + dx, ay = oy + dy
+            return inside(ax + dy, ay + dx).and(inside(ax - dy, ay - dx)).and(inside(ax, ay)).and(sol(ax + dy, ay + dx).equal(me)).and(sol(ax - dy, ay - dx).equal(me))
+          })
+          const wall = select(odd.equal(0), walls[0], select(odd.equal(1), walls[1], select(odd.equal(2), walls[2], walls[3])))
+          // the side across from the odd one: 0 and 1, 2 and 3 pair up
+          const across = select(odd.equal(0), 1, select(odd.equal(1), 0, select(odd.equal(2), 3, 2)))
+          return float(select(other.equal(4), select(me.greaterThan(0.5), -1, 0), select(other.equal(3).and(wall), across, -1))).toVar()
+        }
+        const sideRaw = (step: unknown, ox: number, oy: number) => {
+          const s = float(step)
+          return select(s.equal(0), rawAt(ox + 1, oy), select(s.equal(1), rawAt(ox - 1, oy), select(s.equal(2), rawAt(ox, oy + 1), rawAt(ox, oy - 1))))
+        }
+        const step = edgeAt(0, 0)
+        If(step.greaterThanEqual(0), () => { out.assign(sideRaw(step, 0, 0)) }).ElseIf(here.solid.not(), () => {
+          const solids = float(0).toVar()
+          for (const [dx, dy] of SIDES) solids.addAssign(sol(dx, dy))
+          const met = float(0).toVar()
+          for (const [dx, dy] of SIDES) {
+            If(met.lessThan(0.5).and(inside(dx, dy)).and(edgeAt(dx, dy).greaterThanEqual(0)), () => {
+              met.assign(1)
+              If(sol(dx, dy).greaterThan(0.5), () => {
+                If(solids.equal(1).and(inside(-dx, -dy)), () => { out.assign(rawAt(-dx, -dy)) })
+              }).Else(() => { out.assign(rawAt(dx, dy)) })
+            })
+          }
+        }).Else(() => {
+          const ns = N8.map(([dx, dy]) => read(dx, dy))
+          const partSame = (n: { part: { x: unknown; y: unknown; z: unknown; w: unknown } }) =>
+            this.calmParts.lessThan(0.5).or(float(n.part.w).lessThan(0.5).and(float(here.part.w).lessThan(0.5))).or(samePart(n.part, here.part))
+          const counts = ns.map((n) => n.solid.and(partSame(n)))
+          const own = float(0).toVar()
+          ns.forEach((n, k) => If(counts[k].and(same(n.rgb, here.rgb)), () => { own.addAssign(1) }))
+          const most = float(0).toVar(), best = vec3(0).toVar()
+          ns.forEach((a, k) => {
+            const n = float(0).toVar()
+            ns.forEach((b, m) => If(counts[k].and(counts[m]).and(same(a.rgb, b.rgb)), () => { n.addAssign(1) }))
+            If(n.greaterThan(most), () => { most.assign(n); best.assign(a.rgb) })
+          })
+          If(most.greaterThanEqual(CALM_MOST).and(most.greaterThan(own)), () => { out.assign(vec4(best, 1)) })
+        })
+      })
+      If(done.lessThan(0.5).and(here.solid), () => {
         const ns = N8.map(([dx, dy]) => read(dx, dy))
         const mine = float(0).toVar(), count = float(0).toVar(), ofPart = float(0).toVar()
         for (const n of ns) {

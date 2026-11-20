@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { alphaCut, autoPalette, downsample, makeFrame, outline, pixelArt, quantize, lookColors, snapColors, removeStrays, countSolid, tidyLone, resolveFine, ditherRank, typicalSpacing, surfaceRanks, snapShift, cycleTurns, heatPace, heatShift, HALO_R, HEAT_UP, SELOUT_FROM, oklab, type Rgb, type PixelLook } from './pixel.ts'
+import { alphaCut, autoPalette, downsample, makeFrame, outline, pixelArt, quantize, lookColors, snapColors, removeStrays, countSolid, tidyLone, calmArt, calmEdge, CALM_MOST, resolveFine, ditherRank, typicalSpacing, surfaceRanks, snapShift, cycleTurns, heatPace, heatShift, HALO_R, HEAT_UP, SELOUT_FROM, oklab, type Rgb, type PixelLook } from './pixel.ts'
 
 const solid = (w: number, h: number, on: (x: number, y: number) => boolean, rgb = [200, 40, 40]) => {
   const f = makeFrame(w, h)
@@ -224,6 +224,71 @@ test('tidyLone: a stray in a flat patch takes its neighbors\' color; dither, edg
   // an empty pixel (sky) is never touched
   solid.data[(2 * w + 2) * 4 + 3] = 0
   assert.deepEqual(got(tidyLone(art, solid), 2, 2), B)
+})
+
+test('calmArt: a pixel takes a color most of its own part share; specks, line tips, gaps and other parts stay', () => {
+  const w = 9, h = 9
+  const solid = makeFrame(w, h), art = makeFrame(w, h)
+  const A: Rgb = [200, 100, 50], B: Rgb = [20, 40, 60], C: Rgb = [90, 200, 90]
+  const put = (x: number, y: number, c: Rgb) => { const i = (y * w + x) * 4; art.data[i] = c[0]; art.data[i + 1] = c[1]; art.data[i + 2] = c[2]; art.data[i + 3] = 255; solid.data[i + 3] = 255 }
+  const got = (f: ReturnType<typeof makeFrame>, x: number, y: number) => Array.from(f.data.slice((y * w + x) * 4, (y * w + x) * 4 + 3))
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) put(x, y, B)
+  // a pixel of A among B with one A beside it: five or more neighbors share B and fewer share A
+  put(4, 4, A); put(5, 4, A); put(3, 3, A)
+  assert.ok(CALM_MOST === 5)
+  assert.deepEqual(got(calmArt(art, solid), 4, 4), B)
+  // a checkerboard keeps its pixels: four neighbors share each color
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) put(x, y, (x + y) % 2 ? A : C)
+  const board = calmArt(art, solid)
+  for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) assert.deepEqual(got(board, x, y), got(art, x, y))
+  // with a map of parts, neighbors of another part do not count
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) put(x, y, B)
+  put(4, 4, A)
+  const map = makeFrame(w, h)
+  for (let i = 0; i < w * h; i++) { map.data[i * 4] = 1; map.data[i * 4 + 3] = 255 }
+  for (let y = 3; y <= 5; y++) for (let x = 3; x <= 5; x++) map.data[(y * w + x) * 4] = x === 4 && y === 4 ? 2 : 3
+  assert.deepEqual(got(calmArt(art, solid, map.data), 4, 4), A)
+})
+
+test('calmEdge: a bump on a wall is taken off and a notch filled; a speck, a line tip and a gap a pixel wide stay', () => {
+  const w = 9, h = 9
+  const on = new Set<string>()
+  const solid = (x: number, y: number) => on.has(`${x},${y}`)
+  const wall = () => { on.clear(); for (let y = 5; y < h; y++) for (let x = 0; x < w; x++) on.add(`${x},${y}`) }
+  // a bump on top of the wall takes the backdrop above it (N8 index 3, above)
+  wall(); on.add('4,4')
+  assert.equal(calmEdge(4, 4, w, h, solid), 3)
+  // a notch in the wall's top takes the wall below it (index 2)
+  wall(); on.delete('4,5')
+  assert.equal(calmEdge(4, 5, w, h, solid), 2)
+  // a lone speck (a star) stays
+  on.clear(); on.add('4,4')
+  assert.equal(calmEdge(4, 4, w, h, solid), -1)
+  // the tip of a line a pixel wide stays
+  on.clear(); for (let y = 2; y < 7; y++) on.add(`4,${y}`)
+  assert.equal(calmEdge(4, 2, w, h, solid), -1)
+  // a gap a pixel wide between two blocks stays
+  on.clear(); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (x !== 4) on.add(`${x},${y}`)
+  on.add('4,8')
+  assert.equal(calmEdge(4, 7, w, h, solid), -1)
+  // a hole is filled
+  on.clear(); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (x !== 4 || y !== 4) on.add(`${x},${y}`)
+  assert.ok(calmEdge(4, 4, w, h, solid) >= 0)
+})
+
+test('pixelArt with calm: the outline follows a silhouette with its bump taken off', () => {
+  const w = 9, h = 9
+  const f = makeFrame(w, h)
+  const fill = (x: number, y: number) => { const i = (y * w + x) * 4; f.data[i] = 200; f.data[i + 1] = 100; f.data[i + 2] = 50; f.data[i + 3] = 255 }
+  for (let y = 5; y < h; y++) for (let x = 0; x < w; x++) fill(x, y)
+  fill(4, 4)
+  const line: Rgb = [0, 0, 0]
+  const look: PixelLook = { palette: [], dither: 0, outline: line, glow: 0, calm: true }
+  const art = pixelArt(f, look)
+  const at = (x: number, y: number) => Array.from(art.data.slice((y * w + x) * 4, (y * w + x) * 4 + 4))
+  // the bump is now the line, and above it is clear, so the line runs flat along the wall's top
+  for (let x = 0; x < w; x++) assert.deepEqual(at(x, 4), [0, 0, 0, 255], `x ${x}`)
+  assert.equal(at(4, 3)[3], 0)
 })
 
 test('resolveFine: a pixel is scene with two samples or more, shows the part most samples show, and takes one of its samples whole', () => {

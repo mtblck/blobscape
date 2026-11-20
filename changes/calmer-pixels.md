@@ -1,0 +1,2 @@
+- Pixel Diorama: Calmer pixels, on by default on the Finish tab (`?calm=0` turns it off): a pixel takes the color most of its neighbors on the same thing share, and one-pixel bumps and notches come off outlines, so surfaces read as flat patches instead of speckle. After Ink Studio's cleanup pass. Scene Creator's pixel art uses it too.
+- Engine: painting in steps keeps each paint in its own hue, so a red with no darker red in the palette stays red in shade instead of turning brown or orange.
