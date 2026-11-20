@@ -95,6 +95,8 @@ function structured(route: Route): object[] {
       return [work(experimentAt(href(route))!), breadcrumbs([home, ['Experiments', '/experiments/'], ['Wading Pond', href(route)]])]
     case 'shift':
       return [work(experimentAt(href(route))!), breadcrumbs([home, ['Experiments', '/experiments/'], ['Shape Shifter', href(route)]])]
+    case 'islands':
+      return [breadcrumbs([home, ['Experiments', '/experiments/'], ['Biome Islands', href(route)]])]
     case 'bouquet':
       return [work(experimentAt(href(route))!), breadcrumbs([home, ['Experiments', '/experiments/'], ['Seasonal Bouquets', href(route)]])]
     case 'daynight':
@@ -193,8 +195,8 @@ function write(path: string, html: string) {
 // Said above a page whose view and controls do nothing without scripts (classes the app's own pages use, so they are in the CSS)
 const NO_SCRIPT = '<noscript><p class="px-4 py-2 text-center text-sm text-ink-muted">This page draws live blobs in your browser, so it needs JavaScript.</p></noscript>'
 // The app, loaded the way Vite would for a server, to draw every page. These are the ones the browser hydrates.
-/** Pages built and served but kept out of search, the sitemap and llms.txt until they are ready (none now: Scene Creator was until it took the sandbox's place, #341). */
-const UNLISTED = new Set<Route['page']>([])
+/** Pages built and served but kept out of search, the sitemap and llms.txt until they are ready (Biome Islands while it is one island to look at; Scene Creator was until it took the sandbox's place, #341). */
+const UNLISTED = new Set<Route['page']>(['islands'])
 const HYDRATED = new Set<Route['page']>(['home', 'lessons', 'experiments', 'contact', 'engine', 'spec', 'api', 'news', 'post', 'notfound'])
 const vite = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'error' })
 const { renderPage } = (await vite.ssrLoadModule('/src/blobscape/ssr.tsx')) as typeof import('../src/blobscape/ssr.tsx')
@@ -207,7 +209,7 @@ const preloads = fonts.map((f) => `<link rel="preload" href="/assets/${f}" as="f
 const built = readFileSync(join(DIST, 'index.html'), 'utf8')
 if (!built.includes('<link rel="stylesheet"')) throw new Error('prerender: the built page has no stylesheet link')
 const template = built.replace('<link rel="stylesheet"', () => `${preloads}\n    <link rel="stylesheet"`)
-const routes: Route[] = [{ page: 'home' }, { page: 'lessons' }, ...LESSONS.map((l) => ({ page: 'lesson' as const, id: l.id })), { page: 'sandbox' }, { page: 'creator' }, { page: 'experiments' }, { page: 'creature' }, { page: 'forest' }, { page: 'pond' }, { page: 'clockwork' }, { page: 'shift' }, { page: 'flow' }, { page: 'brush' }, { page: 'fourways' }, { page: 'daynight' }, { page: 'bouquet' }, { page: 'diorama' }, { page: 'dungeon' }, { page: 'scan' }, { page: 'engine' }, { page: 'spec' }, { page: 'api' }, { page: 'contact' }, { page: 'news' }, ...POSTS.map((p) => ({ page: 'post' as const, id: p.id }))]
+const routes: Route[] = [{ page: 'home' }, { page: 'lessons' }, ...LESSONS.map((l) => ({ page: 'lesson' as const, id: l.id })), { page: 'sandbox' }, { page: 'creator' }, { page: 'experiments' }, { page: 'creature' }, { page: 'forest' }, { page: 'pond' }, { page: 'clockwork' }, { page: 'shift' }, { page: 'flow' }, { page: 'brush' }, { page: 'fourways' }, { page: 'daynight' }, { page: 'bouquet' }, { page: 'islands' }, { page: 'diorama' }, { page: 'dungeon' }, { page: 'scan' }, { page: 'engine' }, { page: 'spec' }, { page: 'api' }, { page: 'contact' }, { page: 'news' }, ...POSTS.map((p) => ({ page: 'post' as const, id: p.id }))]
 for (const r of routes) write(join(DIST, href(r), 'index.html'), render(template, r))
 write(join(DIST, '404.html'), render(template, { page: 'notfound' }))
 
