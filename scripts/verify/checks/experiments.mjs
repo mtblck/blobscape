@@ -1137,7 +1137,7 @@ export default [
   {
     name: 'scan-studio',
     about: 'Scan Studio: the sample is leveled and cleaned, cut blobs show red, a lamp relights, .ply round trip, hand-off to the sandbox',
-    entries: ['src/blobscape/ScanStudio.tsx'],
+    entries: ['src/blobscape/ScanStudio.tsx', 'src/blobscape/handoff.ts'],
     async run({ shots, join, fails, ok, open, tabClick, axe }) {
       const k = await open('/experiments/scan-studio/?offscreen=1', { viewport: { width: 1280, height: 900 } })
       await k.page.waitForFunction(() => window.__scan?.kept() > 0, null, { timeout: 90000 }).catch(() => {})
@@ -1190,6 +1190,14 @@ export default [
       const count = (await k.page.getByTestId('blob-count').textContent({ timeout: 30000 }).catch(() => '')) ?? ''
       if (Number(count.replace(/\D/g, '')) !== kept) fails.push(`blobscape scan: the sandbox shows "${count}" for ${kept} kept blobs`)
       else ok(`blobscape scan: Open in the sandbox hands over the ${kept.toLocaleString()} kept blobs`)
+      // Open in Scene Creator (#385): back in Scan Studio, the kept blobs become the land of a new scene
+      await k.page.goBack()
+      await k.page.waitForFunction(() => window.__scan?.kept() > 0, null, { timeout: 90000 }).catch(() => {})
+      await tabClick(k.page.getByRole('button', { name: 'Open in Scene Creator' }))
+      await k.page.waitForURL('**/scene-creator/**', { timeout: 30000 }).catch(() => {})
+      const landed = await k.page.waitForFunction(() => window.__creator?.ready() && /^model-/.test(String(window.__creator.land())) && window.__creator.blobs() > 1000, undefined, { timeout: 90000 }).then(() => true, () => false)
+      if (!landed) fails.push(`blobscape scan: Open in Scene Creator did not open the scan as the land (${await k.page.evaluate(() => document.querySelector('[role=status]')?.textContent ?? '')})`)
+      else ok('blobscape scan: Open in Scene Creator opens the kept blobs as the land of a new scene')
       await k.ctx.close()
     },
   },
