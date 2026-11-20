@@ -1,1 +1,1 @@
-Pixel Diorama: pixel art draws each frame about a quarter faster, most noticeably on big scenes like the dragon.
+Pixel Diorama: pixel art draws each frame about half as hard as this morning, and phones start it at Fine detail.

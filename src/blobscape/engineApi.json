@@ -7416,13 +7416,7 @@
        "name": "fineIds",
        "readonly": true,
        "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
-       "doc": "The map of parts at twice the art's size, which four samples a pixel settles from."
-      },
-      {
-       "name": "fineSolid",
-       "readonly": true,
-       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
-       "doc": "With `PixelLook.solid`: the picture at twice the art's size with every blob a hard disc in its own color, as the map of parts cuts it."
+       "doc": "The map of parts at twice the art's size, which four samples a pixel settles from (its first texture), and in the\nsame draw the picture with every blob a hard disc in its own color, as the map cuts it (its second, read with\n`PixelLook.solid`): one draw of every blob for both, which on a phone is most of what either costs."
       },
       {
        "name": "art",

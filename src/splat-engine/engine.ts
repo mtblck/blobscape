@@ -2007,6 +2007,17 @@ const TONE_SHARE = 0.98
 
 const splatUv = () => varyingProperty('vec2', 'vSplatUv')
 const splatColor = () => varyingProperty('vec4', 'vSplatColor')
+/** The blob's picture color, whatever map the draw is: what `solidOutput` writes beside a map of parts. */
+const splatPicture = () => varyingProperty('vec3', 'vSplatPicture')
+
+/**
+ * @internal A second output for a draw of the map of parts (`SplatWorld.parts`): the picture as hard discs in their own
+ * colors, cut as the map is (what `solid` draws on its own), so one draw of every blob gives both. For a pass that
+ * renders the map into a target with two textures through `renderer.setMRT`.
+ */
+export function solidOutput() {
+  return vec4(splatPicture(), splatColor().a.mul(2).min(1))
+}
 /** The blob's own number, 0–1 (the same hash as `lodRank`): what makes its mark its own. */
 const splatSeed = () => varyingProperty('float', 'vSplatSeed')
 /** Clean cuts: this pixel's world point on the camera-facing plane through its blob's center; the center; the covariance's adjugate (xx, xy, xz and yy, yz, zz). */
@@ -2086,8 +2097,9 @@ function markOf(M: Marks, uv: N, seed: N, rgb: N) {
  * below 1/255 sooner than two standard deviations out, so its quad shrinks and
  * covers fewer pixels.
  */
-function placeQuad(ndc: N, axes: N, tilt: N, rgba: N, idx: N, flat: Flat, cut?: { covA: N; covB: N }) {
+function placeQuad(ndc: N, axes: N, tilt: N, rgba: N, idx: N, flat: Flat, picture: N, cut?: { covA: N; covB: N }) {
   const seed = lodRankNode(idx).toVar()
+  splatPicture().assign(picture)
   splatSeed().assign(seed)
   const alpha = rgba.a
   const reach = sqrt(max(TSL.log(alpha.mul(255)).mul(2), 0)).min(2).toVar()
@@ -2167,7 +2179,8 @@ function makeVertexWebGPU(buf: ReturnType<typeof makeBuffers>, sort: Sorter, fog
     // ndc z = −(P22·z + P32) / z for a perspective camera, so −z = P32 / (ndc z + P22)
     const depth = cameraProjectionMatrix[3].z.div(A.z.add(cameraProjectionMatrix[2].z))
     const part = unpackPart(buf.part.element(idx))
-    return placeQuad(A.xyz, buf.splatB.element(idx), buf.splatC.element(idx).xyz, vec4(flatColor(flat, part, depth, fogged(color.rgb, depth, fog), tone, buf.splatB.element(idx)), color.a.mul(A.w)), idx, flat, clean ? { covA: buf.covA.element(idx), covB: buf.covB.element(idx) } : undefined)
+    const picture = fogged(color.rgb, depth, fog).toVar()
+    return placeQuad(A.xyz, buf.splatB.element(idx), buf.splatC.element(idx).xyz, vec4(flatColor(flat, part, depth, picture, tone, buf.splatB.element(idx)), color.a.mul(A.w)), idx, flat, picture, clean ? { covA: buf.covA.element(idx), covB: buf.covB.element(idx) } : undefined)
   })()
 }
 
@@ -2190,7 +2203,8 @@ function makeVertexWebGL(buf: ReturnType<typeof makeBuffers>, sort: Sorter, mode
       If(L.cel.greaterThan(0.5), () => { tone.assign(toned(d.world, d.covA, d.covB, buf.seen.element(idx), L)) })
     }
     const part = unpackPart(buf.part.element(idx))
-    return placeQuad(p.ndc, p.axes, p.tilt, vec4(flatColor(flat, part, p.depth, fogged(rgb, p.depth, fog), tone, p.axes), color.a.mul(p.alphaScale)), idx, flat, clean ? d : undefined)
+    const picture = fogged(rgb, p.depth, fog).toVar()
+    return placeQuad(p.ndc, p.axes, p.tilt, vec4(flatColor(flat, part, p.depth, picture, tone, p.axes), color.a.mul(p.alphaScale)), idx, flat, picture, clean ? d : undefined)
   })()
 }
 

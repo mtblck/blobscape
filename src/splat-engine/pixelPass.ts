@@ -1,12 +1,13 @@
-import { Matrix4, NearestFilter, NoBlending, NodeMaterial, QuadMesh, RenderTarget, Vector2, Vector3, type Camera, type Object3D, type WebGPURenderer } from 'three/webgpu'
+import { BlendMode, MaterialBlending, Matrix4, NearestFilter, NoBlending, NodeMaterial, QuadMesh, RenderTarget, Vector2, Vector3, type Camera, type Object3D, type WebGPURenderer } from 'three/webgpu'
 import * as TSLTyped from 'three/tsl'
+import { solidOutput } from './engine.ts'
 import { BLOCK_WIDE, MIX_A, MIX_B, SALT, STRIPS, TURNED, type GlitchState } from '../splat-core/glitch.ts'
 import { BAYER4, CALM_MOST, SHINE_FROM, SHINE_SMOOTH, STEP_UP, rimStep, SPECK_KEEP, SPECK_MOST, HALO_GRAY, HALO_HUE, LINE_LIFT, LINE_LUMA, EDGE_DARK, snapShift, EDGE_JUMP, GLOW_FROM, GLOW_SHOWS, GLOW_TAPS, HALO_R, HALO_SHARE, HEAT_R, HEAT_UP, HEAT_WAVE, MAX_PALETTE_SIZE, OWN_C, OWN_L, OWN_UNDER, PIXEL_CUT, SELOUT_FROM, SELOUT_L, SKY_DITHER, cycleTurns, oklab, skyReach, type PixelLook } from '../splat-core/pixel.ts'
 
 // As in engine.ts: the shader builders use TSL untyped.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const TSL = TSLTyped as unknown as Record<string, any>
-const { Fn, If, Loop, abs, dot, float, floor, int, length, max, min, mod, pow, select, smoothstep, sqrt, texture, uint, uniform, uniformArray, uv, vec2, vec3, vec4 } = TSL
+const { Fn, If, Loop, abs, mrt, output, dot, float, floor, int, length, max, min, mod, pow, select, smoothstep, sqrt, texture, uint, uniform, uniformArray, uv, vec2, vec3, vec4 } = TSL
 
 const SIDES: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]]
 /** The four samples of an art pixel, across the top then the bottom: `QUAD` in pixel.ts. */
@@ -58,10 +59,19 @@ export class PixelPass {
   private readonly shine = uniform(0)
   /** The scene and its map of parts at twice the art's size, for a look with `fine`: what `small` and `ids` are settled from. */
   readonly fineSmall = new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter })
-  /** The map of parts at twice the art's size, which four samples a pixel settles from. */
-  readonly fineIds = new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter })
-  /** With `PixelLook.solid`: the picture at twice the art's size with every blob a hard disc in its own color, as the map of parts cuts it. */
-  readonly fineSolid = new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter })
+  /**
+   * The map of parts at twice the art's size, which four samples a pixel settles from (its first texture), and in the
+   * same draw the picture with every blob a hard disc in its own color, as the map cuts it (its second, read with
+   * `PixelLook.solid`): one draw of every blob for both, which on a phone is most of what either costs.
+   */
+  readonly fineIds = (() => {
+    const t = new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter, count: 2 })
+    t.textures[0].name = 'output'
+    t.textures[1].name = 'solid'
+    return t
+  })()
+  /** Writes the hard discs beside the map of parts, laid as the picture is (`solidOutput`). */
+  private readonly withSolid = mrt({ output, solid: solidOutput() }).setBlendMode('solid', new BlendMode(MaterialBlending))
   private readonly settleMat = new NodeMaterial()
   private readonly settleIdsMat = new NodeMaterial()
   private readonly settleQuad: QuadMesh
@@ -241,8 +251,6 @@ export class PixelPass {
     const k = this.look?.fine ? 2 : 0
     const w = Math.max(1, this.small.width * k), h = Math.max(1, this.small.height * k)
     if (this.fineSmall.width !== w || this.fineSmall.height !== h) { this.fineSmall.setSize(w, h); this.fineIds.setSize(w, h) }
-    const k2 = this.look?.fine && this.look.solid ? 2 : 0, w2 = Math.max(1, this.small.width * k2), h2 = Math.max(1, this.small.height * k2)
-    if (this.fineSolid.width !== w2 || this.fineSolid.height !== h2) this.fineSolid.setSize(w2, h2)
   }
 
   /** The art's width, in art pixels. */
@@ -297,11 +305,9 @@ export class PixelPass {
     if (this.drawScene) this.drawScene(renderer, scene, camera)
     else renderer.render(scene, camera)
     // four samples a pixel go by the parts too: which thing most of a pixel's samples show
-    if (fine || this.look.parts) this.drawParts(renderer, scene, camera, fine ? this.fineIds : this.ids)
+    if (fine || this.look.parts) this.drawParts(renderer, scene, camera, fine ? this.fineIds : this.ids, 'parts', fine)
     // dither that stays on things: each pixel's step from the blob there, at the art's own size
     if (this.look.surface && !this.look.flat && this.look.dither > 0) this.drawParts(renderer, scene, camera, this.ranks, 'ranks')
-    // hard discs in their own colors, for the samples where one thing meets another (`PixelLook.solid`)
-    if (fine && this.look.solid) this.drawParts(renderer, scene, camera, this.fineSolid, 'solid')
     if (fine) {
       renderer.setRenderTarget(this.small)
       this.settleQuad.render(renderer)
@@ -617,7 +623,7 @@ export class PixelPass {
    * of that part's samples the one nearest their average, copied whole.
    */
   private settle(parts: boolean) {
-    const fine = this.fineSmall.texture, ids = this.fineIds.texture, hard = this.fineSolid.texture
+    const fine = this.fineSmall.texture, ids = this.fineIds.textures[0], hard = this.fineIds.textures[1]
     const { res } = this
     const toSrgb = (c: unknown) => select(float(c).lessThanEqual(0.0031308), float(c).mul(12.92), pow(max(c, 0), 1 / 2.4).mul(1.055).sub(0.055))
     return Fn(() => {
@@ -680,8 +686,8 @@ export class PixelPass {
   }
 
   /** The same view as a map of parts: only the blobs, as they were just drawn (nothing is moved or sorted again). */
-  private drawParts(renderer: WebGPURenderer, scene: Object3D, camera: Camera, into: RenderTarget, map: 'parts' | 'ranks' | 'solid' = 'parts') {
-    type World = Object3D & { isSplatWorld?: boolean; parts: boolean; ranks: boolean; solid: boolean; hold: boolean }
+  private drawParts(renderer: WebGPURenderer, scene: Object3D, camera: Camera, into: RenderTarget, map: 'parts' | 'ranks' = 'parts', solid = false) {
+    type World = Object3D & { isSplatWorld?: boolean; parts: boolean; ranks: boolean; hold: boolean }
     const worlds: { w: World; hold: boolean }[] = []
     const hidden: Object3D[] = []
     scene.traverse((o) => {
@@ -692,11 +698,15 @@ export class PixelPass {
         if ((d.isMesh || d.isLine || d.isPoints) && o.visible) { o.visible = false; hidden.push(o) }
       }
     })
+    // hard discs in their own colors beside the map, for the samples where one thing meets another (`PixelLook.solid`)
+    const was = renderer.getMRT()
     try {
       renderer.setRenderTarget(into)
+      if (solid) renderer.setMRT(this.withSolid)
       renderer.clear()
       renderer.render(scene, camera)
     } finally {
+      renderer.setMRT(was)
       for (const { w, hold } of worlds) { w[map] = false; w.hold = hold }
       for (const o of hidden) o.visible = true
     }
@@ -933,7 +943,6 @@ export class PixelPass {
     this.ranks.dispose()
     this.fineSmall.dispose()
     this.fineIds.dispose()
-    this.fineSolid.dispose()
     this.settleMat.dispose()
     this.settleIdsMat.dispose()
     for (const f of this.frames) f.dispose()

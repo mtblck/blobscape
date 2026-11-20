@@ -856,9 +856,9 @@ export class Stage {
     this.pixel.render(this.renderer, this.scene, this.camera, { width: x, height: y, scale })
   }
 
-  private async read(target: THREE.RenderTarget, encoded = false): Promise<Frame> {
+  private async read(target: THREE.RenderTarget, encoded = false, index = 0): Promise<Frame> {
     const { width, height } = target
-    const px = await this.renderer.readRenderTargetPixelsAsync(target, 0, 0, width, height) as Uint8Array
+    const px = await this.renderer.readRenderTargetPixelsAsync(target, 0, 0, width, height, index) as Uint8Array
     // a target holds linear, premultiplied color (pixel mode's art, `encoded`, already holds sRGB); a frame is sRGB, straight, top row first. WebGPU reads rows top-down, WebGL bottom-up.
     return { width, height, data: readbackToSrgb(px, width, height, { flip: this.backend === 'webgl', premultiplied: false, encoded }) }
   }
@@ -877,7 +877,7 @@ export class Stage {
     const [small, art, before, parts, fineSmall, fineParts, ranks, fineSolid] = await Promise.all([
       this.read(pass.small), this.read(pass.art, true), pass.before ? this.read(pass.before, true) : undefined, pass.look.parts || fine ? this.read(pass.ids, true) : undefined,
       fine ? this.read(pass.fineSmall) : undefined, fine ? this.read(pass.fineIds, true) : undefined, surface ? this.read(pass.ranks, true) : undefined,
-      hard ? this.read(pass.fineSolid) : undefined,
+      hard ? this.read(pass.fineIds, false, 1) : undefined,
     ])
     // a look with four samples a pixel also gives what it was settled from: the scene and its map of parts at twice the size, and with `solid` the hard discs
     return { small, art: snapColors(art, colors), before: before && snapColors(before, colors), parts, ranks, time: pass.drawnAt, fine: fineSmall && fineParts && { small: fineSmall, parts: fineParts, solid: fineSolid } }

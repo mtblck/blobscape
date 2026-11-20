@@ -123,8 +123,9 @@ export function PixelDiorama() {
   const [shaded, setShaded] = useState(() => new URLSearchParams(location.search).get('shade') === '1')
   // cel shading lights the blobs itself, so its scene is cut with no light baked in; so does pixel art shaded a pixel at a time
   const plain = wantsPlain(drawnStyle) || (pixels && shaded)
-  // Finest by default (Matt, 2026-11-20); a phone keeps Chunky for the styles that draw the whole screen several times
-  const detail = chosen ?? (coarse && !pixels ? DETAIL[0].id : DETAIL[3].id)
+  // Finest by default (Matt, 2026-11-20); a phone starts pixel art at Fine (Matt found the dragon slow at Finest on his,
+  // 2026-11-20) and keeps Chunky for the styles that draw the whole screen several times
+  const detail = chosen ?? (coarse ? (pixels ? DETAIL[2].id : DETAIL[0].id) : DETAIL[3].id)
   const [palette, setPalette] = useState('own')
   const [baseSize, setSize] = useState(() => Number(new URLSearchParams(location.search).get('px')) || 2)
   // light in bands a blob at a time (`banded`): how many bands, 0 for smooth light; `?texel=0|2|3`
