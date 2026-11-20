@@ -7576,7 +7576,13 @@
        "name": "calm",
        "optional": true,
        "type": "boolean",
-       "doc": "Calmer pixels, in place of `tidy` (an idea from Silicon Jungle's Ink Studio, whose cleanup pass this follows in\npart): a pixel art piece is flat patches of color with dither only where one gives way to the next, while a scene\nof small blobs comes out speckled. So, reading only the art as drawn: a scene pixel takes the color `CALM_MOST` or\nmore of its eight neighbors share when fewer share its own (with a map of parts, only neighbors of its own part\ncount, so one thing never bleeds into another); a scene pixel with the empty backdrop on three or four sides (a\none-pixel bump on a silhouette) takes the backdrop's color beside it, and an empty pixel with the scene on three or\nfour sides (a notch) takes the scene's, so an outline runs clean. `calmArt` is the CPU twin of the pass."
+       "doc": "Calmer pixels, in place of `tidy` (an idea from Silicon Jungle's Ink Studio, whose cleanup pass this follows in\npart): a pixel art piece is flat patches of color with dither only where one gives way to the next, while a scene\nof small blobs comes out speckled. So, reading only the art as drawn: a scene pixel takes the color `CALM_MOST` or\nmore of its eight neighbors share when fewer share its own (with a map of parts, only neighbors of its own part\ncount, so one thing never bleeds into another); a scene pixel with the empty backdrop on three or four sides (a\none-pixel bump on a silhouette) takes the backdrop's color beside it, and an empty pixel with the scene on three or\nfour sides (a notch) takes the scene's, so an outline runs clean; and lines are cleaned (`lineFix`: one-pixel kinks off\nstraight edges, doubled pixels off the corners of dark lines). `calmArt` is the CPU twin of the pass."
+      },
+      {
+       "name": "flat",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Dither only where a pixel artist puts it: the sky's blend and the light a glow spills onto the scene keep `dither`,\nwhile the scene's own surfaces are drawn flat, each pixel its nearest palette color, so shade falls in bands."
       },
       {
        "name": "surface",
