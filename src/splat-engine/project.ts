@@ -238,6 +238,9 @@ export function placedSpec(c: CompiledScene, foot: Vec3, pl: Placement, spacing:
 
 const placedLamp = (l: Lamp, t: Placer): Lamp => ({ ...l, at: t.point(l.at), reach: l.reach * t.size, clear: l.clear === undefined ? undefined : l.clear * t.size })
 
+/** What `PlacedPoser` plays: bones as they stand where they were written, a pose for a time, and live lights. */
+export type Posable = Pick<CompiledScene, 'bones' | 'pose' | 'lights'>
+
 /**
  * Poses a placed prop: its description's own pose, played on a skeleton of its own as it was written, then turned as
  * the prop was (each bone's turn as R q R⁻¹, each slide by R and the size), so a sail that spun about z spins about the
@@ -247,9 +250,9 @@ export class PlacedPoser {
   private readonly own: Skeleton
   private readonly t: Placer
   private readonly still: boolean
-  /** The prop's compiled description. */
-  readonly c: CompiledScene
-  constructor(c: CompiledScene, foot: Vec3, pl: Placement, still = false) {
+  /** The prop's compiled description, or anything else with bones that poses itself (a creature). */
+  readonly c: Posable
+  constructor(c: Posable, foot: Vec3, pl: Placement, still = false) {
     this.c = c
     this.still = still
     this.own = new Skeleton(c.bones)

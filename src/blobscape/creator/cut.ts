@@ -1,8 +1,13 @@
 import { buildVoxels, unlit } from '../../splat-engine/voxel.ts'
 import { compileProject, landSpec, propSpec, settingOf, type CompiledProject, type SceneProject } from '../../splat-engine/project.ts'
 import type { Built } from '../../splat-engine/body.ts'
+import { Skeleton, mulQ } from '../../splat-engine/rig.ts'
+import { oklab } from '../../splat-core/pixel.ts'
 import { DIORAMAS } from '../diorama/scenes.ts'
-import { libraryProp } from './library.ts'
+import { isCreature, libraryCreature, libraryProp } from './library.ts'
+import { placer, type Placement } from '../../splat-engine/project.ts'
+import { DETAIL } from '../diorama/scene.ts'
+import type { Species } from '../../splat-engine/zoo/species.ts'
 
 /**
  * What Scene Creator asks to have cut, in a worker so the page keeps drawing: a scene that opens whole, or a
@@ -29,6 +34,11 @@ export function cut(job: CutJob): Built {
     const d = DIORAMAS.find((x) => x.id === job.scene)
     if (!d) throw new Error(`no scene called "${job.scene}"`)
     return d.make(job.spacing)
+  }
+  if (job.kind === 'prop') {
+    const placed = job.project.props[job.i]
+    const c = isCreature(placed.prop) ? libraryCreature(placed.prop) : undefined
+    if (c) return withShadow(placedCreature(c, placed, job.spacing), placed.at)
   }
   const cp = compiled(job.project)
   const land = landSpec(cp, job.spacing)
@@ -65,4 +75,47 @@ export function withShadow(b: Built, foot: ArrayLike<number>): Built {
     seen: b.seen && grow(b.seen, 4, [255, 255, 255, 255]),
     glow: b.glow && grow(b.glow, 1, [0]),
   }
+}
+
+/**
+ * A creature from Splat Creatures, made in its first look at the blob count of its own detail chip that matches the
+ * page's detail (Chunky its lightest), and stood where it is placed: blobs and bones moved, turned and sized as a
+ * placed prop's cut would be. Made standing on the floor at the middle, so its foot is the origin.
+ */
+export function placedCreature(c: Species, pl: Placement, spacing: number): Built {
+  const level = Math.max(0, DETAIL.findIndex((d) => Math.abs(d.spacing - spacing) < 1e-6))
+  const made = c.make(c.detail[Math.min(level, c.detail.length - 1)], c.looks[0].id) as Partial<Built> & Built
+  const t = placer([0, 0, 0], pl)
+  const b = made.blobs, n = b.count
+  for (let i = 0; i < n; i++) {
+    const p = t.point(b.center.subarray(i * 3, i * 3 + 3))
+    b.center.set(p, i * 3)
+    for (let k = 0; k < 3; k++) b.scale[i * 3 + k] *= t.size
+    b.quat.set(mulQ(t.q, b.quat.subarray(i * 4, i * 4 + 4)), i * 4)
+  }
+  const bones = made.skeleton.bones.map((x) => ({ ...x, head: t.point(x.head), tail: x.tail && t.point(x.tail) }))
+  return { blobs: b, skin: made.skin, skeleton: new Skeleton(bones), partOf: made.partOf ?? new Uint16Array(n), seen: made.seen, glow: made.glow }
+}
+
+/**
+ * A creature's own colors, for the palette pixel art snaps to: its most common colors, at most `most`, each clearly
+ * apart from the others (it is made with its colors baked in, so the scene's palette may lack them).
+ */
+export function colorsOf(b: Built, most = 8): string[] {
+  const n = b.blobs.count, counts = new Map<number, number>()
+  const to = (v: number) => Math.round(Math.max(0, Math.min(1, v)) * 31)
+  for (let i = 0; i < n; i++) {
+    if (b.blobs.opacity[i] < 0.5) continue
+    const key = (to(b.blobs.color[i * 3]) << 10) | (to(b.blobs.color[i * 3 + 1]) << 5) | to(b.blobs.color[i * 3 + 2])
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  }
+  const out: [number, number, number][] = []
+  for (const [key] of [...counts].sort((a, b) => b[1] - a[1])) {
+    const rgb: [number, number, number] = [((key >> 10) & 31) * 255 / 31, ((key >> 5) & 31) * 255 / 31, (key & 31) * 255 / 31]
+    const lab = oklab(...rgb)
+    if (out.some((o) => { const l = oklab(...o); return Math.hypot(l[0] - lab[0], l[1] - lab[1], l[2] - lab[2]) < 0.06 })) continue
+    out.push(rgb)
+    if (out.length >= most) break
+  }
+  return out.map((c) => `#${c.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`)
 }

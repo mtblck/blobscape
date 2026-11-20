@@ -8,9 +8,10 @@ import { openScene } from './library.ts'
 
 const flat = (y: number): Shape => ({ sdf: (_x, py) => py - y, min: [-2, y - 1, -2], max: [2, y, 2] })
 
-test('cards: props and lands, every one in a group, found by name or what is in it', () => {
+test('cards: props, lands and creatures, every one in a group, found by name or what is in it', () => {
   assert.ok(CARDS.length > 20)
-  assert.ok(CARDS.every((c) => c.kind !== 'creature' && GROUPS.some((g) => g.id === c.group)))
+  assert.ok(CARDS.every((c) => GROUPS.some((g) => g.id === c.group)))
+  assert.ok(cardsFound('fox').find((g) => g.id === 'living')!.cards.some((c) => c.id === 'creature-fox'))
   const all = cardsFound('')
   assert.deepEqual(all.map((g) => g.name), ['Buildings', 'Creatures', 'Plants and small things', 'Lands'])
   assert.equal(all.reduce((n, g) => n + g.cards.length, 0), CARDS.length)
