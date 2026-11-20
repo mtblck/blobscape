@@ -327,6 +327,29 @@ test('resolveFine: a pixel is scene with two samples or more, shows the part mos
   assert.equal(resolveFine(fine).parts, undefined)
 })
 
+test('resolveFine with hard discs: where two things meet the samples come from the hard picture, elsewhere, and where light glows, from the soft one', () => {
+  // a 4×2 art row (8×4 samples): part 1 on the left half, part 2 on the right
+  const W = 8, H = 4
+  const soft = makeFrame(W, H), hard = makeFrame(W, H), map = makeFrame(W, H)
+  const G: Rgb = [40, 160, 40], Y: Rgb = [200, 160, 40], Gl: Rgb = [255, 250, 240]
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = (y * W + x) * 4, right = x >= 4
+    map.data.set([right ? 2 : 1, 0, 0, 255], i)
+    // the soft picture lets the grass behind show through the hay's fading edge next to it; the hard one doesn't
+    soft.data.set([...(right || x >= 2 ? G : Y), 255], i)
+    hard.data.set([...(right ? G : Y), 255], i)
+  }
+  const plain = resolveFine(soft, map).small, fixed = resolveFine(soft, map, hard).small
+  const px = (f: { data: Uint8ClampedArray; width: number }, x: number) => Array.from(f.data.slice(x * 4, x * 4 + 3))
+  assert.deepEqual(px(plain, 1), G)
+  assert.deepEqual(px(fixed, 1), Y)
+  // far from any meeting, nothing changes
+  assert.deepEqual(px(fixed, 3), G)
+  // a glowing sample keeps the soft picture
+  for (const [x, y] of [[2, 0], [3, 0], [2, 1], [3, 1]]) hard.data.set([...Gl, 255], (y * W + x) * 4)
+  assert.deepEqual(px(resolveFine(soft, map, hard).small, 1), G)
+})
+
 test('pixelArt with own draws the outline in a darker palette step of the thing beside it, and in the outline color where there is none', () => {
   const pal: Rgb[] = [[12, 10, 20], [70, 30, 30], [200, 60, 50], [30, 50, 110], [90, 140, 230]]
   // a red thing on the left, a blue one on the right, a gap between

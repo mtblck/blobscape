@@ -47,6 +47,7 @@ export class PixelPass {
   private readonly parted = uniform(0)
   /** Color lines only where another part begins (`PixelLook.across`), and only while a map of parts is drawn. */
   private readonly across = uniform(0)
+  private readonly solid = uniform(0)
   /** `PixelLook.calm`, and whether the map of parts is drawn for it to go by. */
   private readonly calmed = uniform(0)
   private readonly calmParts = uniform(0)
@@ -59,6 +60,8 @@ export class PixelPass {
   readonly fineSmall = new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter })
   /** The map of parts at twice the art's size, which four samples a pixel settles from. */
   readonly fineIds = new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter })
+  /** With `PixelLook.solid`: the picture at twice the art's size with every blob a hard disc in its own color, as the map of parts cuts it. */
+  readonly fineSolid = new RenderTarget(1, 1, { minFilter: NearestFilter, magFilter: NearestFilter })
   private readonly settleMat = new NodeMaterial()
   private readonly settleIdsMat = new NodeMaterial()
   private readonly settleQuad: QuadMesh
@@ -170,6 +173,7 @@ export class PixelPass {
     this.edges.value = look.edges ?? 0
     this.parted.value = look.parts ? 1 : 0
     this.across.value = look.across && (look.parts || look.fine) ? 1 : 0
+    this.solid.value = look.solid && look.fine ? 1 : 0
     this.calmed.value = look.calm ? 1 : 0
     this.flat.value = look.flat ? 1 : 0
     const rim = look.rim ? rimStep(look.rim) : undefined
@@ -236,6 +240,8 @@ export class PixelPass {
     const k = this.look?.fine ? 2 : 0
     const w = Math.max(1, this.small.width * k), h = Math.max(1, this.small.height * k)
     if (this.fineSmall.width !== w || this.fineSmall.height !== h) { this.fineSmall.setSize(w, h); this.fineIds.setSize(w, h) }
+    const k2 = this.look?.fine && this.look.solid ? 2 : 0, w2 = Math.max(1, this.small.width * k2), h2 = Math.max(1, this.small.height * k2)
+    if (this.fineSolid.width !== w2 || this.fineSolid.height !== h2) this.fineSolid.setSize(w2, h2)
   }
 
   /** The art's width, in art pixels. */
@@ -293,6 +299,8 @@ export class PixelPass {
     if (fine || this.look.parts) this.drawParts(renderer, scene, camera, fine ? this.fineIds : this.ids)
     // dither that stays on things: each pixel's step from the blob there, at the art's own size
     if (this.look.surface && this.look.dither > 0) this.drawParts(renderer, scene, camera, this.ranks, 'ranks')
+    // hard discs in their own colors, for the samples where one thing meets another (`PixelLook.solid`)
+    if (fine && this.look.solid) this.drawParts(renderer, scene, camera, this.fineSolid, 'solid')
     if (fine) {
       renderer.setRenderTarget(this.small)
       this.settleQuad.render(renderer)
@@ -596,16 +604,35 @@ export class PixelPass {
    * of that part's samples the one nearest their average, copied whole.
    */
   private settle(parts: boolean) {
-    const fine = this.fineSmall.texture, ids = this.fineIds.texture
+    const fine = this.fineSmall.texture, ids = this.fineIds.texture, hard = this.fineSolid.texture
     const { res } = this
     const toSrgb = (c: unknown) => select(float(c).lessThanEqual(0.0031308), float(c).mul(12.92), pow(max(c, 0), 1 / 2.4).mul(1.055).sub(0.055))
     return Fn(() => {
       const st = uv()
       const cell = floor(vec2(st.x, float(1).sub(st.y)).mul(res)).toVar()
       const row = res.y.sub(1).sub(cell.y).toVar()
+      const byteOf = (v: unknown) => floor(float(v).mul(255).add(0.5))
+      const numberAt = (fx: unknown, fy: unknown) => {
+        const p = vec4(texture(ids, vec2(float(fx).add(0.5).div(res.x.mul(2)), float(fy).add(0.5).div(res.y.mul(2)))))
+        return float(select(p.a.greaterThanEqual(0.5), byteOf(p.x).add(byteOf(p.y).mul(256)).add(byteOf(p.z).mul(65536)), NO_PART))
+      }
+      // where one thing meets another within a sample of this pixel's (`PixelLook.solid`): its samples come from the
+      // hard discs, so none shows a little of what is behind a fading edge. `seamAt` in pixel.ts is the twin
+      const edge = float(0).toVar()
+      If(this.solid.greaterThan(0.5), () => {
+        const first = numberAt(cell.x.mul(2), row.mul(2)).toVar()
+        for (let dy = -1; dy <= 2; dy++) for (let dx = -1; dx <= 2; dx++) {
+          const fx = cell.x.mul(2).add(dx).clamp(0, res.x.mul(2).sub(1)), fy = row.mul(2).add(dy).clamp(0, res.y.mul(2).sub(1))
+          If(abs(numberAt(fx, fy).sub(first)).greaterThan(0.5), () => { edge.assign(1) })
+        }
+      })
       const s = QUAD.map(([sx, sy]) => {
         const at = vec2(cell.x.mul(2).add(sx + 0.5).div(res.x.mul(2)), row.mul(2).add(sy + 0.5).div(res.y.mul(2)))
-        const c = vec4(texture(fine, at)).toVar()
+        const soft = vec4(texture(fine, at)).toVar(), firm = vec4(texture(hard, at)).toVar()
+        const glows = (t: { x: unknown; y: unknown; z: unknown; w: unknown }) => toSrgb(max(float(t.x), max(float(t.y), float(t.z))).div(max(float(t.w), 1e-5)).clamp(0, 1)).greaterThanEqual(GLOW_FROM)
+        // only where both cover the sample and neither gives off light: the cover stays the soft picture's, and light stays soft
+        const take = edge.greaterThan(0.5).and(soft.a.greaterThanEqual(PIXEL_CUT)).and(firm.a.greaterThanEqual(PIXEL_CUT)).and(glows(soft).not()).and(glows(firm).not())
+        const c = vec4(select(take, firm, soft)).toVar()
         const p = vec4(texture(ids, at)).toVar()
         const solid = float(select(c.a.greaterThanEqual(PIXEL_CUT), 1, 0)).toVar()
         const byte = (v: unknown) => floor(float(v).mul(255).add(0.5))
@@ -640,8 +667,8 @@ export class PixelPass {
   }
 
   /** The same view as a map of parts: only the blobs, as they were just drawn (nothing is moved or sorted again). */
-  private drawParts(renderer: WebGPURenderer, scene: Object3D, camera: Camera, into: RenderTarget, map: 'parts' | 'ranks' = 'parts') {
-    type World = Object3D & { isSplatWorld?: boolean; parts: boolean; ranks: boolean; hold: boolean }
+  private drawParts(renderer: WebGPURenderer, scene: Object3D, camera: Camera, into: RenderTarget, map: 'parts' | 'ranks' | 'solid' = 'parts') {
+    type World = Object3D & { isSplatWorld?: boolean; parts: boolean; ranks: boolean; solid: boolean; hold: boolean }
     const worlds: { w: World; hold: boolean }[] = []
     const hidden: Object3D[] = []
     scene.traverse((o) => {
@@ -893,6 +920,7 @@ export class PixelPass {
     this.ranks.dispose()
     this.fineSmall.dispose()
     this.fineIds.dispose()
+    this.fineSolid.dispose()
     this.settleMat.dispose()
     this.settleIdsMat.dispose()
     for (const f of this.frames) f.dispose()

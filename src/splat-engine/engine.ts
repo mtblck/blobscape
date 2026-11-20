@@ -249,6 +249,14 @@ export class SplatWorld extends Mesh {
    */
   get ranks() { return this.flat.value === 5 }
   set ranks(on: boolean) { this.flat.value = on ? 5 : 0 }
+  /**
+   * While true, the draw is the picture with every blob a hard disc (as in the map of parts: solid out to where it has
+   * faded to the same share, in the same order), each in its own lit color. Pixel mode draws its picture so
+   * (`PixelLook.solid`), so a pixel's color always comes from the thing the map of parts says is there, never partly
+   * from what is behind a fading edge.
+   */
+  get solid() { return this.flat.value === 6 }
+  set solid(on: boolean) { this.flat.value = on ? 6 : 0 }
 
   private readonly boneOffset: number[]
   /** Per actor, the share of its blobs left out (0: all drawn). Sent to the GPU in each of its bones' spare matrix slot. */
@@ -2121,9 +2129,9 @@ function unpackPart(word: N) {
   return vec4(float(w.bitAnd(uint(255))), float(w.shiftRight(uint(8)).bitAnd(uint(255))), float(w.shiftRight(uint(16)).bitAnd(uint(255))), float(w.shiftRight(uint(24)).bitAnd(uint(255)))).div(255)
 }
 
-/** What a blob draws as: its picture color, its part's flat color (map of parts), its depth (depth map) its tone (map of tones) or how it lies (`lieMap`). */
+/** What a blob draws as: its picture color, its part's flat color (map of parts), its depth (depth map) its tone (map of tones), how it lies (`lieMap`), its dither step (`ranks`) or its picture color as a hard disc (`solid`). */
 function flatColor(flat: Flat, part: N, depth: N, picture: N, tone: N, axes: N) {
-  return select(flat.mode.greaterThan(4.5), vec3(part.a, 0, 0), flatOf(flat, part.rgb, depth, picture, tone, axes))
+  return select(flat.mode.greaterThan(5.5), picture, select(flat.mode.greaterThan(4.5), vec3(part.a, 0, 0), flatOf(flat, part.rgb, depth, picture, tone, axes)))
 }
 function flatOf(flat: Flat, part: N, depth: N, picture: N, tone: N, axes: N) {
   return select(flat.mode.greaterThan(3.5), lieOf(axes), select(flat.mode.greaterThan(2.5), tone, select(flat.mode.greaterThan(1.5), vec3(depth.sub(flat.base)), select(flat.mode.greaterThan(0.5), part, picture))))
@@ -2210,7 +2218,8 @@ function makeFragment(flat: N, M: Marks, E?: Edits) {
       If(flat.greaterThan(0), () => {
         // well out from the middle, so the discs of one surface close up and nothing behind shows between them
         If(alpha.lessThan(PART_CUT), () => { Discard() })
-        alpha.assign(1)
+        // a hard disc of the picture (`solid`) keeps a faint blob faint, so a fading spark is not drawn whole
+        alpha.assign(select(flat.greaterThan(5.5), splatColor().a.mul(2).min(1), float(1)))
       })
       out.assign(vec4(splatColor().rgb, alpha))
     })

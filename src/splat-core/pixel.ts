@@ -380,6 +380,11 @@ export interface PixelLook {
    */
   across?: boolean
   /**
+   * The scene's picture drawn with every blob a hard disc in its own color, cut where the map of parts cuts it, so a
+   * thing's edge never shows a little of what is behind it (the stage draws it; the picture handed in is already so).
+   */
+  solid?: boolean
+  /**
    * A backdrop behind the scene: its color at the top and at the bottom of the picture, blended between and dithered into the palette.
    * `reach` is how far down the picture the blend runs before it is all the bottom color (above 0, up to 1; the whole way when left out or not a sound number: `skyReach`).
    * Left out, empty pixels stay clear.
@@ -784,10 +789,11 @@ const QUAD = [[0, 0], [1, 0], [0, 1], [1, 1]] as const
  *
  * Gives the frame and the map of parts at the art's size, as `pixelArt` takes them.
  */
-export function resolveFine(fine: Frame, parts?: Frame): { small: Frame; parts?: Frame } {
-  const w = fine.width >> 1, h = fine.height >> 1
+export function resolveFine(given: Frame, parts?: Frame, hard?: Frame): { small: Frame; parts?: Frame } {
+  const w = given.width >> 1, h = given.height >> 1
   const small = makeFrame(w, h)
-  const map = parts && parts.width === fine.width && parts.height === fine.height ? parts.data : undefined
+  const map = parts && parts.width === given.width && parts.height === given.height ? parts.data : undefined
+  const fine = map && hard && hard.width === given.width && hard.height === given.height ? seamed(given, hard, map) : given
   const ids = map ? makeFrame(w, h) : undefined
   const cut = PIXEL_CUT * 255
   const NONE = 1 << 24
@@ -829,6 +835,37 @@ export function resolveFine(fine: Frame, parts?: Frame): { small: Frame; parts?:
 }
 
 const N8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]] as const
+
+/**
+ * Four samples a pixel with `PixelLook.solid`: an art pixel where one thing meets another anywhere in the four by four
+ * samples round its own (the map of parts says) takes its samples from `hard`, the picture drawn as hard discs, so it
+ * never shows a little of what is behind a fading edge; elsewhere they stay the soft picture's. Only a sample both
+ * cover, where neither gives off light (`GLOW_FROM`), changes: the cover stays the soft picture's, and so does light, or
+ * a spark smaller than a pixel would be drawn as a whole disc. The pass's settle step is the twin (change both).
+ */
+export function seamed(fine: Frame, hard: Frame, map: Uint8ClampedArray | Uint8Array): Frame {
+  const out = makeFrame(fine.width, fine.height)
+  out.data.set(fine.data)
+  const W = fine.width, H = fine.height, cut = PIXEL_CUT * 255
+  const glows = (d: ArrayLike<number>, j: number) => Math.max(d[j], d[j + 1], d[j + 2]) >= GLOW_FROM * 255
+  const number = (x: number, y: number) => { const j = (y * W + x) * 4; return map[j + 3] >= 128 ? map[j] | (map[j + 1] << 8) | (map[j + 2] << 16) : -1 }
+  for (let y = 0; y < H >> 1; y++) {
+    for (let x = 0; x < W >> 1; x++) {
+      const first = number(x * 2, y * 2)
+      let edge = false
+      for (let dy = -1; dy <= 2 && !edge; dy++) for (let dx = -1; dx <= 2; dx++) {
+        if (number(Math.min(W - 1, Math.max(0, x * 2 + dx)), Math.min(H - 1, Math.max(0, y * 2 + dy))) !== first) { edge = true; break }
+      }
+      if (!edge) continue
+      for (const [sx, sy] of QUAD) {
+        const j = ((y * 2 + sy) * W + x * 2 + sx) * 4
+        if (fine.data[j + 3] < cut || hard.data[j + 3] < cut || glows(fine.data, j) || glows(hard.data, j)) continue
+        for (let c = 0; c < 4; c++) out.data[j + c] = hard.data[j + c]
+      }
+    }
+  }
+  return out
+}
 
 /** How many of a pixel's eight neighbors (of its own part) must share a color for `calm` to give it that color. */
 export const CALM_MOST = 5

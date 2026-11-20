@@ -581,7 +581,7 @@
        "doc": "Pixel mode's last frame as it was drawn small, and as finished art (exactly in the look's colors): for tests and for saving.",
        "signatures": [
         {
-         "code": "pixelFrames(): Promise<{ small: Frame; art: Frame; before?: Frame; parts?: Frame; ranks?: Frame; time: number; fine?: { small: Frame; parts: Frame } } | undefined>"
+         "code": "pixelFrames(): Promise<{ small: Frame; art: Frame; before?: Frame; parts?: Frame; ranks?: Frame; time: number; fine?: { small: Frame; parts: Frame; solid?: Frame } } | undefined>"
         }
        ]
       },
@@ -972,6 +972,11 @@
        "name": "ranks",
        "type": "boolean",
        "doc": "While true, the draw is a map of dither steps: every blob a hard disc (as in the map of parts) whose red is its\nstep of the Bayer pattern (0 to 15, as a byte), from where it sits at rest (`surfaceRanks` in splat-core/pixel.ts).\nPixel mode draws it for dither that stays on things (`PixelLook.surface`)."
+      },
+      {
+       "name": "solid",
+       "type": "boolean",
+       "doc": "While true, the draw is the picture with every blob a hard disc (as in the map of parts: solid out to where it has\nfaded to the same share, in the same order), each in its own lit color. Pixel mode draws its picture so\n(`PixelLook.solid`), so a pixel's color always comes from the thing the map of parts says is there, never partly\nfrom what is behind a fading edge."
       },
       {
        "name": "autoDetail",
@@ -7408,6 +7413,12 @@
        "doc": "The map of parts at twice the art's size, which four samples a pixel settles from."
       },
       {
+       "name": "fineSolid",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
+       "doc": "With `PixelLook.solid`: the picture at twice the art's size with every blob a hard disc in its own color, as the map of parts cuts it."
+      },
+      {
        "name": "art",
        "readonly": true,
        "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
@@ -7599,6 +7610,12 @@
        "optional": true,
        "type": "boolean",
        "doc": "Lines inside the scene only where one thing meets another: with a map of parts (`parts`, or `fine`, which draws one),\na jump in color within one part is its paint (grass, stonework) and takes no line, as a pixel artist outlines things\nand not their texture. Without a map it does nothing."
+      },
+      {
+       "name": "solid",
+       "optional": true,
+       "type": "boolean",
+       "doc": "The scene's picture drawn with every blob a hard disc in its own color, cut where the map of parts cuts it, so a\nthing's edge never shows a little of what is behind it (the stage draws it; the picture handed in is already so)."
       },
       {
        "name": "sky",

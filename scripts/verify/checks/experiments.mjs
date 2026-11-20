@@ -280,7 +280,7 @@ export default [
             solid++
             if (!pal.has((f.art.data[i] << 16) | (f.art.data[i + 1] << 8) | f.art.data[i + 2])) off++
           }
-          return { backend: stage.backend, w: f.art.width, h: f.art.height, solid, off, soft, small: Array.from(f.small.data), art: Array.from(f.art.data), before: f.before && Array.from(f.before.data), parts: f.parts && Array.from(f.parts.data), ranks: f.ranks && Array.from(f.ranks.data), time: f.time, fine: f.fine && { small: Array.from(f.fine.small.data), parts: Array.from(f.fine.parts.data) }, look: look() }
+          return { backend: stage.backend, w: f.art.width, h: f.art.height, solid, off, soft, small: Array.from(f.small.data), art: Array.from(f.art.data), before: f.before && Array.from(f.before.data), parts: f.parts && Array.from(f.parts.data), ranks: f.ranks && Array.from(f.ranks.data), time: f.time, fine: f.fine && { small: Array.from(f.fine.small.data), parts: Array.from(f.fine.parts.data), solid: f.fine.solid && Array.from(f.fine.solid.data) }, look: look() }
         }, t)
         const a = await shot(2), b = await shot(5)
         // the same frame through the CPU twin (the page's own module isn't reachable from a production build, so it runs here)
@@ -290,7 +290,7 @@ export default [
         if (!a.look.fine || !a.fine) fails.push(`${`blobscape pixel diorama (${a.backend})`}: four samples a pixel is not on`)
         else {
           const big = (data) => ({ width: a.w * 2, height: a.h * 2, data: Uint8ClampedArray.from(data) })
-          const settled = resolveFine(big(a.fine.small), big(a.fine.parts))
+          const settled = resolveFine(big(a.fine.small), big(a.fine.parts), a.fine.solid && big(a.fine.solid))
           let solid = 0, cover = 0, tone = 0, part = 0
           for (let i = 0; i < settled.small.data.length; i += 4) {
             if (settled.small.data[i + 3] >= 128) solid++

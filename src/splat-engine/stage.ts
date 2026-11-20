@@ -864,7 +864,7 @@ export class Stage {
   }
 
   /** Pixel mode's last frame as it was drawn small, and as finished art (exactly in the look's colors): for tests and for saving. */
-  async pixelFrames(): Promise<{ small: Frame; art: Frame; before?: Frame; parts?: Frame; ranks?: Frame; time: number; fine?: { small: Frame; parts: Frame } } | undefined> {
+  async pixelFrames(): Promise<{ small: Frame; art: Frame; before?: Frame; parts?: Frame; ranks?: Frame; time: number; fine?: { small: Frame; parts: Frame; solid?: Frame } } | undefined> {
     // a sheet being drawn has the renderer to itself
     if (!this.pixel || this.baking) return
     // pixel mode can be switched off, or the view resized, while the reads are out: hold the pass and start every read now
@@ -873,12 +873,14 @@ export class Stage {
     const colors = lookColors(pass.look)
     const fine = !!pass.look.fine
     const surface = !!pass.look.surface && pass.look.dither > 0
-    const [small, art, before, parts, fineSmall, fineParts, ranks] = await Promise.all([
+    const hard = fine && !!pass.look.solid
+    const [small, art, before, parts, fineSmall, fineParts, ranks, fineSolid] = await Promise.all([
       this.read(pass.small), this.read(pass.art, true), pass.before ? this.read(pass.before, true) : undefined, pass.look.parts || fine ? this.read(pass.ids, true) : undefined,
       fine ? this.read(pass.fineSmall) : undefined, fine ? this.read(pass.fineIds, true) : undefined, surface ? this.read(pass.ranks, true) : undefined,
+      hard ? this.read(pass.fineSolid) : undefined,
     ])
-    // a look with four samples a pixel also gives what it was settled from: the scene and its map of parts at twice the size
-    return { small, art: snapColors(art, colors), before: before && snapColors(before, colors), parts, ranks, time: pass.drawnAt, fine: fineSmall && fineParts && { small: fineSmall, parts: fineParts } }
+    // a look with four samples a pixel also gives what it was settled from: the scene and its map of parts at twice the size, and with `solid` the hard discs
+    return { small, art: snapColors(art, colors), before: before && snapColors(before, colors), parts, ranks, time: pass.drawnAt, fine: fineSmall && fineParts && { small: fineSmall, parts: fineParts, solid: fineSolid } }
   }
 
   /**
