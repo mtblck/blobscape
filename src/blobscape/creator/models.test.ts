@@ -1,13 +1,16 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { readRiggedGlb } from '../../splat-engine/glb.ts'
+import { readRiggedGlb, recordClip, writeRiggedMeshGlb } from '../../splat-engine/glb.ts'
+import { makeCreature, poseWalk } from '../../splat-engine/creature.ts'
+import { blobsToMesh } from '../../splat-engine/mesh.ts'
+import { readSkinnedGlb, splatModel } from '../../splat-engine/skinnedModel.ts'
 import { compileProject, type SceneProject } from '../../splat-engine/project.ts'
 import { Skeleton } from '../../splat-engine/rig.ts'
 import { added } from './adding.ts'
 import { cut } from './cut.ts'
 import { libraryProp, nameOf, openLand } from './library.ts'
-import { OPEN_MOST, meshModelFrom, modelJob, openShare, rawTexture, MODEL_HEIGHT, PlacedMorphs, clipTime, isModel, keepModel, modelClip, modelFrom, modelId, modelOf, modelSize, poseModel } from './models.ts'
+import { OPEN_MOST, meshModelFrom, scatteredStill, modelJob, openShare, rawTexture, MODEL_HEIGHT, PlacedMorphs, clipTime, isModel, keepModel, modelClip, modelFrom, modelId, modelOf, modelSize, poseModel } from './models.ts'
 
 const file = (name: string) => new Uint8Array(readFileSync(new URL(`../../../public/rigged-splats/${name}`, import.meta.url)))
 const project = (): SceneProject => openLand('plain-turf')!
@@ -125,4 +128,38 @@ test('a texture is read nearest pixel and repeats', () => {
   assert.deepEqual(tx(0.25, 0), [1, 0, 0])
   assert.deepEqual(tx(0.75, 0), [0, 0, 1])
   assert.deepEqual(tx(1.25, 0), [1, 0, 0])
+})
+
+test('an open mesh is covered in blobs instead, lit by the land’s sun unless the style lights it', () => {
+  const open = box([0, 0, 0], [1, 1, 1], [0.8, 0.8, 0.8], 1)
+  const r = scatteredStill(open, 'Crate', [], 4000)
+  const bytes = new TextEncoder().encode('an open box')
+  const m = { ...modelFrom(r, 'crate.obj', bytes), scattered: true }
+  assert.ok(m.rest.count >= 3900 && m.rest.bones.length === 1)
+  keepModel(m)
+  const p = added(project(), m.id, [0, 0, 0], modelSize(m))
+  const lit = cut({ kind: 'prop', project: p, i: 0, spacing: 0.042, model: modelJob(m) })
+  const flat = cut({ kind: 'prop', project: p, i: 0, spacing: 0.042, model: modelJob(m), plain: true })
+  assert.equal(lit.blobs.count, m.rest.count + 1)
+  // flat keeps the mesh's color; lit runs from shade to sun
+  let lo = Infinity, hi = 0
+  for (let i = 0; i < m.rest.count; i++) {
+    assert.ok(Math.abs(flat.blobs.color[i * 3] - 0.8) < 0.02)
+    lo = Math.min(lo, lit.blobs.color[i * 3]); hi = Math.max(hi, lit.blobs.color[i * 3])
+  }
+  assert.ok(hi - lo > 0.2, `${lo} to ${hi}`)
+})
+
+test('a rigged mesh, as a game kit or Blender saves one, becomes blobs on its own bones with its clip', () => {
+  const fox = makeCreature(3000)
+  const mesh = blobsToMesh(fox.blobs, fox.skin, { cells: 40, level: 1 })
+  const bytes = writeRiggedMeshGlb({ name: 'fox', mesh, skeleton: fox.skeleton, clips: [recordClip('trot', fox.skeleton, poseWalk, 1 / 1.4, 12)] })
+  assert.throws(() => readRiggedGlb(bytes))
+  const m = { ...modelFrom(splatModel(readSkinnedGlb(bytes, 'fox'), { count: 3000, height: 1 }), 'fox.glb', bytes), scattered: true }
+  assert.equal(m.rest.count, 3000)
+  assert.equal(modelClip(m)?.name, 'trot')
+  const a = new Skeleton(m.rest.bones), b = new Skeleton(m.rest.bones)
+  poseModel(m, a, 12, 0)
+  poseModel(m, b, 12, 0.3)
+  assert.notDeepEqual([...a.rotation], [...b.rotation])
 })

@@ -31,6 +31,18 @@ f 11 9 10 14
 f 12 13 10 9
 f 11 14 13 12
 `
+// a tent with no floor: open, so it is covered in blobs rather than cut
+const TENT_OBJ = `v -0.8 0 -1
+v 0.8 0 -1
+v 0.8 0 1
+v -0.8 0 1
+v 0 1.1 -1
+v 0 1.1 1
+f 1 5 6 4
+f 2 3 6 5
+f 1 2 5
+f 4 6 3
+`
 const HUT_MTL = `newmtl walls
 Kd 0.85 0.75 0.55
 newmtl roof
@@ -259,15 +271,22 @@ export default [
       steps.push(['mesh opened', hutOpened && hutted.props.length === modeled.props.length + 1 && hutted.blobs > modeled.blobs],
         ['picture follows the mesh', differ(withModel, withHut) > 20])
       await p.screenshot({ path: join(shots, 'blobscape-scene-creator-mesh.png') })
-      // undo takes the mesh, the model, the fox, the pack, the land, the drop and the turkey back
-      for (let i = 0; i < 7; i++) await p.getByTestId('creator-undo').click()
+      // an open mesh (#369): a tent with no floor can't be cut as a solid, so it is covered in blobs
+      await p.getByTestId('creator-model-file').setInputFiles({ name: 'tent.obj', mimeType: 'text/plain', buffer: Buffer.from(TENT_OBJ) })
+      const tentOpened = await p.waitForFunction(() => /^Opened Tent: [\d,]+ blobs over its surface/.test(document.querySelector('[data-testid=creator-model-note]')?.textContent ?? ''), null, { timeout: 30000 }).then(() => true, () => false)
+      await ready()
+      const tented = await state(), withTent = await picture()
+      steps.push(['open mesh covered', tentOpened && tented.props.length === hutted.props.length + 1 && tented.blobs > hutted.blobs + 10000],
+        ['picture follows the tent', differ(withHut, withTent) > 20])
+      // undo takes the tent, the mesh, the model, the fox, the pack, the land, the drop and the turkey back
+      for (let i = 0; i < 8; i++) await p.getByTestId('creator-undo').click()
       await ready()
       const back = await state()
       steps.push(['undone', back.land === start.land && JSON.stringify(back.props) === JSON.stringify(start.props)])
       const room = await p.getByTestId('creator-room').innerText().catch(() => '')
       const bad = steps.filter(([, good]) => !good).map(([name]) => name)
       if (bad.length) fails.push(`blobscape scene creator props: ${bad.join(', ')} failed ${JSON.stringify({ start: start.props.length, turkey: turkey.props.length, dropped: dropped.props.length, land: swapped.land, room })}`)
-      else ok(`blobscape scene creator props: the turkey found and added to the windmill hill, a haystack dropped on the view, the land swapped to turf, the old ruins pack set down, the fox from Splat Creatures added and moving, the puffer's .glb opened as a model and moving, an .obj hut cut on the grid, counts and picture following, and all undone ("${room}")`)
+      else ok(`blobscape scene creator props: the turkey found and added to the windmill hill, a haystack dropped on the view, the land swapped to turf, the old ruins pack set down, the fox from Splat Creatures added and moving, the puffer's .glb opened as a model and moving, an .obj hut cut on the grid, an open tent covered in blobs, counts and picture following, and all undone ("${room}")`)
     },
   },
   {

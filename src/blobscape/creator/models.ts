@@ -4,6 +4,7 @@ import { sampleClip, sampleWeights, type Clip, type Rigged } from '../../splat-e
 import { applyMorphs, type Morph } from '../../splat-engine/morph.ts'
 import { SIZE_RANGE, placer, type Placement, type Placer, type PropRef } from '../../splat-engine/project.ts'
 import { fitMesh, type Mesh, type Texture } from '../../splat-engine/meshShape.ts'
+import { splatModel } from '../../splat-engine/skinnedModel.ts'
 import { pack, unpack, type PackedCut } from './pack.ts'
 
 /**
@@ -38,6 +39,8 @@ export interface SplatModel extends ModelBase {
   clips: Clip[]
   /** Its blend shapes, which the clips key. */
   morphs?: Morph[]
+  /** Scattered over a mesh in its own flat colors (#369), so the cut lights it by the land's sun. */
+  scattered?: boolean
 }
 
 /** A texture's pixels, decoded by the page (a worker and the tests take them as they are). */
@@ -133,9 +136,26 @@ export function openShare(m: Mesh): number {
 /** The most of a mesh's edges that may be open for it to be cut as a solid. */
 export const OPEN_MOST = 0.01
 
+/** How many blobs a mesh is scattered into when it is not cut (rigged, or open): a prop's share of a phone's room. */
+export const SCATTERED = 30_000
+
+/**
+ * A still mesh that is open, as rigged splats on one bone (#369): flat blobs scattered over its triangles by area
+ * (`splatModel`), a unit tall, in its own colors. An open surface can't be cut as a solid, but it can be covered.
+ */
+export function scatteredStill(mesh: Mesh, name: string, textures: Texture[] = [], count = SCATTERED): Rigged {
+  const n = mesh.positions.length / 3
+  const weights = new Float32Array(n * 4)
+  for (let v = 0; v < n; v++) weights[v * 4] = 1
+  return splatModel(
+    { name, mesh, joints: new Uint8Array(n * 4), weights, bones: [{ name: 'model', head: [0, 0, 0], parent: -1 }], clips: [], images: [] },
+    { count, height: 1, textures },
+  )
+}
+
 /** What the cut worker needs of a model: a rigged one's blobs at rest, or a mesh and its textures. */
-export type ModelJob = { kind: 'splats'; rest: PackedCut } | { kind: 'mesh'; mesh: Mesh; images: RawImage[] }
-export const modelJob = (m: ModelProp): ModelJob => (m.kind === 'mesh' ? { kind: 'mesh', mesh: m.mesh, images: m.images } : { kind: 'splats', rest: m.rest })
+export type ModelJob = { kind: 'splats'; rest: PackedCut; scattered?: boolean } | { kind: 'mesh'; mesh: Mesh; images: RawImage[] }
+export const modelJob = (m: ModelProp): ModelJob => (m.kind === 'mesh' ? { kind: 'mesh', mesh: m.mesh, images: m.images } : { kind: 'splats', rest: m.rest, scattered: m.scattered })
 
 /** A texture to read from a decoded image, nearest pixel and repeating, as glTF's default sampler wraps. */
 export function rawTexture(im: RawImage): Texture {

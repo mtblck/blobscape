@@ -27,10 +27,10 @@ import { creatorTools, type CreatorApi } from './creator/agentTools.ts'
 import { PACKS, packAdded } from './creator/packs.ts'
 import { BLOB_ROOM, CARDS, added, cardsFound, groundOf, heightAt, landSwapped, liftOn, roomOf, whyNot } from './creator/adding.ts'
 import { creatureMove, creatureSize, isCreature, libraryProp, type LibraryEntry } from './creator/library.ts'
-import { OPEN_MOST, PlacedMorphs, isModel, keepModel, keptModels, meshModelFrom, modelClip, modelFrom, modelJob, modelOf, modelSize, openShare, poseModel, type ModelProp, type RawImage, type SplatModel } from './creator/models.ts'
+import { OPEN_MOST, SCATTERED, PlacedMorphs, rawTexture, scatteredStill, isModel, keepModel, keptModels, meshModelFrom, modelClip, modelFrom, modelJob, modelOf, modelSize, openShare, poseModel, type ModelProp, type RawImage, type SplatModel } from './creator/models.ts'
 import { GlbError, readRiggedGlb } from '../splat-engine/glb.ts'
 import { MeshFileError, openGlb, readMeshGlb, readObj, type MeshFile } from '../splat-engine/meshFile.ts'
-import { isMeshGlb } from './modelRig.ts'
+import { isMeshGlb, rigFromModel } from './modelRig.ts'
 import { budget, clock, lampAdded, lampLights, lampRemoved, lit, liveSky, liveSkyColors, rgbOf, shadeNow, sunNow } from './creator/lighting.ts'
 import { castBy, glowGain } from './diorama/glow.ts'
 import { STYLES, isPixelStyle, styleAsked, styleWords, type Style } from './diorama/styles.ts'
@@ -725,28 +725,26 @@ export function SceneCreator() {
           m = modelFrom(readRiggedGlb(bytes), file.name, bytes)
         } catch (e) {
           if (!isMeshGlb(e)) throw e
-          if (isSkinned(bytes)) {
-            setModelNote(`${file.name} is a rigged mesh. Rigged meshes as props are coming next; for now, open a rigged splat .glb or a still model.`)
-            return
-          }
-          m = await meshModel(readMeshGlb(bytes), file.name, bytes)
+          // a rigged mesh keeps its bones and clips as blobs scattered over its surface; a still one is a mesh
+          m = isSkinned(bytes)
+            ? { ...modelFrom(await rigFromModel(bytes, file.name, SCATTERED), file.name, bytes), scattered: true }
+            : await meshModel(readMeshGlb(bytes), file.name, bytes)
         }
       } else {
         const mtl = files.find((f) => /\.mtl$/i.test(f.name))
         m = await meshModel(readObj(new TextDecoder().decode(bytes), mtl && await mtl.text()), file.name, bytes)
       }
-      if (m.kind === 'mesh') {
-        const open = openShare(m.mesh)
-        if (open > OPEN_MOST) {
-          setModelNote(`${file.name} isn't a closed surface (${Math.round(open * 100)}% of its edges are open), so it can't be cut as a solid. Open models as props are coming next.`)
-          return
-        }
+      // an open surface can't be cut as a solid: it is covered in blobs instead
+      let open = false
+      if (m.kind === 'mesh' && openShare(m.mesh) > OPEN_MOST) {
+        open = true
+        m = { ...modelFrom(scatteredStill(m.mesh, m.name, m.images.map(rawTexture)), file.name, bytes), scattered: true }
       }
       keepModel(m)
       setModelsVersion((v) => v + 1)
       if (m.kind === 'splats') {
         const clip = modelClip(m)
-        setModelNote(`Opened ${m.name}: ${m.rest.count.toLocaleString('en-US')} blobs${clip ? `, playing ${clip.name}` : ', standing still'}${m.morphs ? `, with ${m.morphs.length} blend ${m.morphs.length === 1 ? 'shape' : 'shapes'}` : ''}.`)
+        setModelNote(`Opened ${m.name}: ${m.rest.count.toLocaleString('en-US')} blobs${open ? ' over its surface, since it is not closed to cut as a solid' : ''}${clip ? `, playing ${clip.name}` : ', standing still'}${m.morphs ? `, with ${m.morphs.length} blend ${m.morphs.length === 1 ? 'shape' : 'shapes'}` : ''}.`)
       } else setModelNote(`Opened ${m.name}: ${(m.mesh.indices.length / 3).toLocaleString('en-US')} triangles, cut on the scene's grid under its light.`)
       addModel(m)
     } catch (e) {
@@ -1119,7 +1117,7 @@ export function SceneCreator() {
                     <input type="search" value={query} onChange={(ev) => setQuery(ev.target.value)} placeholder="Find a prop or land" aria-label="Find a prop or land" className="min-h-10 w-full rounded-full border border-rule bg-paper px-4 text-sm outline-none focus-visible:border-accent" />
                     <div>
                       <h3 id="creator-models" className="mb-1 text-sm font-semibold">Your models</h3>
-                      <p className="mb-2 text-xs text-ink-muted">A rigged splat .glb, such as one saved from Splat Creatures, plays its moves. A still model (.obj with its .mtl, or .glb) is cut into the scene under its light. It stays while this page is open.</p>
+                      <p className="mb-2 text-xs text-ink-muted">A rigged .glb plays its moves: splats, such as one saved from Splat Creatures, or a mesh from Blender or a game kit, covered in blobs. A still model (.obj with its .mtl, or .glb) is cut into the scene under its light. It stays while this page is open.</p>
                       <input ref={modelInput} type="file" accept=".glb,.obj,.mtl,model/gltf-binary" className="sr-only" tabIndex={-1} aria-hidden="true" data-testid="creator-model-file"
                         multiple onChange={(ev) => { const f = [...(ev.target.files ?? [])]; ev.target.value = ''; if (f.length) void openModel(f) }} />
                       <button type="button" onClick={() => modelInput.current?.click()} data-testid="creator-model-open"
