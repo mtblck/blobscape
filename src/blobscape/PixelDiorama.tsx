@@ -28,6 +28,7 @@ import type { Texture } from '../splat-engine/meshShape.ts'
 import { decodeTexture } from './modelRig.ts'
 import { detailAsked, labelNames, writeDetail } from '../shared/detail.ts'
 import { LIT_MAX, banded, unlit } from '../splat-engine/voxel.ts'
+import { zoomStep } from './diorama/zoom.ts'
 import { srgbToLinear } from '../splat-core/color.ts'
 import { STYLES, isPixelStyle, styleAsked, styleWords, type Style } from './diorama/styles.ts'
 import { GLITCH_START, glitchLook, type GlitchChoice } from './glitchLooks.ts'
@@ -125,7 +126,7 @@ export function PixelDiorama() {
   // Finest by default (Matt, 2026-11-20); a phone keeps Chunky for the styles that draw the whole screen several times
   const detail = chosen ?? (coarse && !pixels ? DETAIL[0].id : DETAIL[3].id)
   const [palette, setPalette] = useState('own')
-  const [size, setSize] = useState(() => Number(new URLSearchParams(location.search).get('px')) || 2)
+  const [baseSize, setSize] = useState(() => Number(new URLSearchParams(location.search).get('px')) || 2)
   // light in bands a blob at a time (`banded`): how many bands, 0 for smooth light; `?texel=0|2|3`
   const [texel, setTexel] = useState(() => { const t = new URLSearchParams(location.search).get('texel'); return t === null ? 0 : Number(t) || 0 })
   const [dither, setDither] = useState(diorama.finish.dither)
@@ -320,6 +321,11 @@ export function PixelDiorama() {
   // on a phone the styles that fill the whole screen (pixel art fills a small frame) are drawn at one and a half device
   // pixels to a CSS pixel, not two: every pass has near half the pixels to fill, and the marks are no finer than that
   useEffect(() => { stage?.setSharpness(coarse && !asPixels ? 1.5 : 2) }, [stage, coarse, asPixels])
+  // zooming in on pixel art makes the pixels bigger, a whole step at a time, rather than the blobs: a blob stays about
+  // one art pixel however close the view comes, so edges stay pixel edges and lines stay on what they outline
+  // (Matt saw scalloped edges and lines standing off their things when zoomed in, 2026-11-20); `?pixelzoom=0` turns it off
+  const [pixelZoom] = useState(() => new URLSearchParams(location.search).get('pixelzoom') !== '0')
+  const size = pixelZoom ? baseSize * zoomStep(shown.views[0].orbit.distance, orbit.distance) : baseSize
   useEffect(() => {
     if (!stage) return
     stage.setPixels(drawnLook, size)
@@ -776,7 +782,7 @@ export function PixelDiorama() {
                 </Field>}
                 {pixels && <Field label="Pixel size">
                   <div className="flex flex-wrap gap-1.5">
-                    {SIZES.map((n) => <Chip key={n} active={size === n} onClick={() => setSize(n)}>{n}×</Chip>)}
+                    {SIZES.map((n) => <Chip key={n} active={baseSize === n} onClick={() => setSize(n)}>{n}×</Chip>)}
                   </div>
                 </Field>}
                 {pixels && <Field label="Motion">
