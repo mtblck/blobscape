@@ -551,13 +551,23 @@ export class Stage {
 
   private cel?: CelPass
   private celLook?: CelLook
+  /** Cel shading drawn into the pixel pass's small picture, at that picture's size, with no line of its own. */
+  private readonly celInPixels = (renderer: THREE.WebGPURenderer, scene: THREE.Object3D, camera: THREE.Camera) => {
+    const into = renderer.getRenderTarget()
+    if (!this.cel || !this.celLook || !into) { renderer.render(scene, camera); return }
+    this.cel.setSize(into.width, into.height)
+    const amb = this.lit.ambient
+    this.cel.setLook({ ...this.celLook, line: 0, lamps: this.celLook.lamps ?? lampTint(this.lit.lights), ambient: [0, 1, 2].map((k) => (this.celLook!.ambient?.[k] ?? 1) * (typeof amb === 'number' ? amb : amb[k])) as [number, number, number] }, 1)
+    this.cel.render(renderer, scene, camera)
+  }
   /**
    * Cel shading (splat-core/cel.ts), on a stage made with `lights`: every blob flat in its own color, the light cut
    * into two or three tones with clean edges, shadows cast by what stands in the light's way, and an even outline.
    * The tones are cut from the look's own light, and the stage's lights (`setLights`) stay as the scene's lamps: where
    * they reach is one more tone in their color, and the ambient light dims both tones. Its fill takes the place of the
    * stage's marks while it is on; leave the look out to have them back. Kept for the next actor too. It shades the blobs' own colors, so it suits blobs
-   * that have no light baked into them. Not in pixel mode.
+   * that have no light baked into them. In pixel mode it shades the small picture the pixel art is made from, so the
+   * light falls in bands that follow each form a pixel at a time; the outline is the pixel art's own then.
    */
   setCel(look?: CelLook) {
     this.celLook = look
@@ -835,6 +845,7 @@ export class Stage {
     this.glitchNow = this.glitchLook ? glitchAt(this.time, this.glitchLook) : undefined
     this.pixel.setGlitch(this.glitchNow)
     this.pixel.setTime(this.time)
+    this.pixel.drawScene = this.cel && this.celLook && this.opts.lights ? this.celInPixels : undefined
     if (this.target) {
       this.pixel.setSize(Math.ceil(this.target.width / scale), Math.ceil(this.target.height / scale))
       this.pixel.render(this.renderer, this.scene, this.camera)

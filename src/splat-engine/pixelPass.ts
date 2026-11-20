@@ -245,6 +245,13 @@ export class PixelPass {
    * pixels and how many of them make one art pixel) it goes to the renderer's
    * current output; without, into `art` at one to one.
    */
+  /**
+   * Draws the scene into the small picture (the renderer's current target) in place of a plain draw: how the stage
+   * shades it a pixel at a time (cel shading's light). It must leave the blobs as last placed for the maps that follow.
+   * @internal
+   */
+  drawScene?: (renderer: WebGPURenderer, scene: Object3D, camera: Camera) => void
+
   render(renderer: WebGPURenderer, scene: Object3D, camera: Camera, screen?: { width: number; height: number; scale: number }) {
     const undo = this.look.snap ? this.snapCamera(camera) : undefined
     try { this.draw(renderer, scene, camera, screen) } finally { undo?.() }
@@ -277,7 +284,8 @@ export class PixelPass {
     const fine = !!this.look.fine
     renderer.setRenderTarget(fine ? this.fineSmall : this.small)
     renderer.clear()
-    renderer.render(scene, camera)
+    if (this.drawScene) this.drawScene(renderer, scene, camera)
+    else renderer.render(scene, camera)
     // four samples a pixel go by the parts too: which thing most of a pixel's samples show
     if (fine || this.look.parts) this.drawParts(renderer, scene, camera, fine ? this.fineIds : this.ids)
     // dither that stays on things: each pixel's step from the blob there, at the art's own size

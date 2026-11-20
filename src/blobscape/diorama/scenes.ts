@@ -74,6 +74,8 @@ export interface Diorama {
   bytes?: number
   /** Which way its baked sun lies (a direction toward it, in the world), for the rim of light pixel art picks out: none for a scene with no sun. */
   sun?: readonly [number, number, number]
+  /** How much light its baked shade keeps (the description's ambient share): pixel art shaded a pixel at a time shades by as much. */
+  shade?: number
   /** Its description, for a scene that is one: what Scene Creator splits by the props it marks. */
   doc?: SceneDoc
   /** How many moves its description lists. */
@@ -134,6 +136,7 @@ export function described(id: string, doc: SceneDoc, about: string): Diorama {
     ],
     swing: c.swing,
     sun: doc.light?.from ?? DEFAULT_LIGHT.dir,
+    shade: doc.light?.ambient ?? DEFAULT_LIGHT.ambient,
     make: (spacing, steps) => {
       const built = buildVoxels(c.spec(spacing, steps))
       const empty = c.empty(built)

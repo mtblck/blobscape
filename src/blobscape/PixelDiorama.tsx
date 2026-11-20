@@ -3,6 +3,7 @@ import { flushSync } from 'react-dom'
 import type { Orbit } from '../splat-core/view.ts'
 import { Magnifier, TourStrip } from './diorama/HowItsMade.tsx'
 import { TOUR, clay, kept } from './diorama/tour.ts'
+import type { CelLook } from '../splat-core/cel.ts'
 import { STEADY, countColors, darkest, heatPace, screenWay, type PixelLook } from '../splat-core/pixel.ts'
 import type { Built } from '../splat-engine/body.ts'
 import { LoadingMark } from '../shared/BlobLoader.tsx'
@@ -26,7 +27,8 @@ import { toPng, useExport } from './diorama/useExport.tsx'
 import type { Texture } from '../splat-engine/meshShape.ts'
 import { decodeTexture } from './modelRig.ts'
 import { detailAsked, labelNames, writeDetail } from '../shared/detail.ts'
-import { unlit } from '../splat-engine/voxel.ts'
+import { LIT_MAX, unlit } from '../splat-engine/voxel.ts'
+import { srgbToLinear } from '../splat-core/color.ts'
 import { STYLES, isPixelStyle, styleAsked, styleWords, type Style } from './diorama/styles.ts'
 import { GLITCH_START, glitchLook, type GlitchChoice } from './glitchLooks.ts'
 import { GlitchControls } from './diorama/GlitchControls.tsx'
@@ -45,6 +47,16 @@ const SIZES = [2, 3, 4, 6]
 /** Frames a second the scene moves at: 0 is every frame the screen shows. */
 const RATES = [0, 12, 8]
 /** The Finish tab's outline choice: none, one color round the scene, or a darker tone of each thing it goes round. */
+/** How far cel shading's light is smoothed over a surface for pixel art shaded a pixel at a time, in the small picture's pixels (two to an art pixel with four samples). */
+const PIXEL_SMOOTH = 3
+
+/** Cel shading's tones for a scene whose baked shade keeps `share` of the light: shade that much of full light, a touch cool, and full light at `LIT_MAX`. */
+function shadedLight(share: number): { shade: [number, number, number]; ambient: [number, number, number] } {
+  // the shade is sRGB and the ambient linear, as `CelLook` takes them
+  const s = Math.min(0.9, share / LIT_MAX), top = srgbToLinear(LIT_MAX)
+  return { shade: [s * 0.96, s * 0.96, Math.min(1, s * 1.12)], ambient: [top, top, top] }
+}
+
 const OUTLINES = [['none', 'None'], ['one', 'One color'], ['own', 'Each thing\u2019s own']] as const
 declare global {
   interface Window { __diorama?: { stage: CreatureStage; blobs: () => number; bones: () => number; look: () => PixelLook; style: Style; water: () => SceneWater | undefined; mirrored: boolean; finish: (set: { bands?: number; heat?: number; selout?: boolean; exact?: boolean }) => void } }
@@ -101,8 +113,13 @@ export function PixelDiorama() {
   /** The look Brush and Ink would draw, where the style is one of theirs. */
   const drawnStyle = isPixelStyle(style) ? undefined : style
   const [glitch, setGlitch] = useState<GlitchChoice>(GLITCH_START)
-  // cel shading lights the blobs itself, so its scene is cut with no light baked in
-  const plain = wantsPlain(drawnStyle)
+  /**
+   * Light worked out a pixel at a time (`?shade=1`): pixel art made from a picture cel shading lit, so light and shade
+   * fall in bands that follow each form, not blob by blob as the baked light does.
+   */
+  const [shaded, setShaded] = useState(() => new URLSearchParams(location.search).get('shade') === '1')
+  // cel shading lights the blobs itself, so its scene is cut with no light baked in; so does pixel art shaded a pixel at a time
+  const plain = wantsPlain(drawnStyle) || (pixels && shaded)
   // Finest by default (Matt, 2026-11-20); a phone keeps Chunky for the styles that draw the whole screen several times
   const detail = chosen ?? (coarse && !pixels ? DETAIL[0].id : DETAIL[3].id)
   const [palette, setPalette] = useState('own')
@@ -286,7 +303,12 @@ export function PixelDiorama() {
   // the glass's window and the watercolor's wash), not only the one it opens with
   const [liveSky, setLiveSky] = useState<{ of: string; sky: readonly [readonly number[], readonly number[]] } | undefined>(undefined)
   const styleSky = liveSky && liveSky.of === shown.id && shown.skyAt ? liveSky.sky : shown.sky
-  const drawing = useDrawnLook(stage, touring ? undefined : drawnStyle, { actor: scene?.built, plain: !!scene?.plain, azimuth: shown.views[0].orbit.azimuth, offscreen, light: coarse, loop: shown.loop, sky: shown.finish.sky ? [styleSky[0], styleSky[1]] : undefined })
+  // the scene's own sun lights it, as its baked light would have: light and shade (a third, brighter tone goes toward
+  // white, which turns dark paint gray; the pixel pass's own highlights do that job)
+  // in the scene's own share of light in shade, a little cool, and all of it held under the baked light's brightest
+  // (`LIT_MAX`), so only what gives its own light reaches the pixel pass's glow
+  const pixelCel = useMemo<CelLook | undefined>(() => (pixels && shaded && !touring ? { from: shown.sun ? [...shown.sun] as [number, number, number] : undefined, tones: 2, smooth: PIXEL_SMOOTH, line: 0, ...shadedLight(shown.shade ?? 0.5) } : undefined), [pixels, shaded, touring, shown.sun, shown.shade])
+  const drawing = useDrawnLook(stage, touring ? undefined : drawnStyle, { pixelCel, actor: scene?.built, plain: !!scene?.plain, azimuth: shown.views[0].orbit.azimuth, offscreen, light: coarse, loop: shown.loop, sky: shown.finish.sky ? [styleSky[0], styleSky[1]] : undefined })
   // the walk-through's fourth step is about the four samples, so it draws them whatever the switch says
   const sampling = touring?.id === 'samples'
   const drawnLook = useMemo(() => (asPixels ? (sampling ? { ...look, fine: true } : look) : undefined), [asPixels, sampling, look])
@@ -771,6 +793,8 @@ export function PixelDiorama() {
                 {pixels && <>
                 <Toggle label="Paint in steps of the palette" checked={steps} onChange={setSteps} disabled={!colors.length} />
                 <p className="text-xs text-ink-faint">{colors.length ? 'Cuts the scene again with every blob in one palette color, a step of its own paint from shade to sun, so shade falls in flat bands.' : 'Needs a palette: Full color has no steps.'}</p>
+                <Toggle label="Shade each pixel" checked={shaded} onChange={setShaded} />
+                <p className="text-xs text-ink-faint">Works the light out a pixel at a time from the scene's sun and lamps, so light and shade fall in bands that follow each shape. Cuts the scene again.</p>
                 <Field label="Outline">
                   <div className="flex flex-wrap gap-1.5">
                     {OUTLINES.map(([id, name]) => <Chip key={id} active={(!outline ? 'none' : own ? 'own' : 'one') === id} onClick={() => { setOutline(id !== 'none'); if (id !== 'none') setOwn(id === 'own') }}>{name}</Chip>)}

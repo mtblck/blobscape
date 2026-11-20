@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { MarkLook } from '../splat-core/marks.ts'
 import type { GlyphLook, GlyphSet } from '../splat-core/glyphs.ts'
-import { gatherColors } from '../splat-core/cel.ts'
+import { gatherColors, type CelLook } from '../splat-core/cel.ts'
 import type { Blobs } from '../splat-core/blobs.ts'
 import { Button, Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
 import type { CreatureStage } from './creature/stage.ts'
@@ -27,6 +27,9 @@ const CHAR_SETS: { id: GlyphSet; label: string; about: string }[] = [
   { id: 'blocks', label: 'Blocks', about: 'Quarter blocks where a cell is half one thing and half another, and the shades ░ ▒ ▓ where it is even. Idea from Silicon Jungle\'s Ink Studio.' },
 ]
 
+/** How many flat colors each part's own are gathered into for pixel art shaded a pixel at a time: the palette's ramps do the rest. */
+export const PIXEL_FILLS = 3
+
 const params = () => new URLSearchParams(typeof location === 'undefined' ? '' : location.search)
 const lum = (c: readonly number[]) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
 
@@ -48,6 +51,8 @@ export interface DrawnSubject {
   loop?: number
   /** Frames are drawn only when asked for, so one must not depend on the one before. */
   offscreen: boolean
+  /** With no look (the page draws pixel art): cel shading's light for the picture the pixel art is made from, shaded a pixel at a time, with the subject's colors gathered into flat fills. */
+  pixelCel?: CelLook
 }
 
 /**
@@ -110,18 +115,19 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { stage?.setWash(painted ? washLook(wash, sky) : undefined) }, [stage, painted, wash, skyKey])
   const outline = !!look && !ascii && !lit && !glazed && !painted && (outlined ?? (look === 'ink' || look === 'hatch' || look === 'stipple' || look === 'cel'))
-  useEffect(() => { stage?.setCel(look === 'cel' ? { ...celLook({ ...cel, backdrop: celBase, turn: cel.turn + azimuth, line: outline ? pen : 0 }), ambient: nightLight(night), ...(light ? { shadowSize: 1024, shadowEvery: offscreen ? 1 : 2 } : {}) } : undefined) }, [stage, look, cel, celBase, night, outline, pen, azimuth, light, offscreen])
+  const { pixelCel } = on
+  useEffect(() => { stage?.setCel(!look && pixelCel ? { ...pixelCel, ...(light ? { shadowSize: 1024, shadowEvery: offscreen ? 1 : 2 } : {}) } : look === 'cel' ? { ...celLook({ ...cel, backdrop: celBase, turn: cel.turn + azimuth, line: outline ? pen : 0 }), ambient: nightLight(night), ...(light ? { shadowSize: 1024, shadowEvery: offscreen ? 1 : 2 } : {}) } : undefined) }, [stage, look, cel, celBase, night, outline, pen, azimuth, light, offscreen, pixelCel])
   // flat fills: each part's colors gathered into a few, shown in place of the blobs' own (which stay as they were)
   useEffect(() => {
     // stained glass wants them too: lead runs wherever the color changes, so a mottled surface would be all lead
-    const fills = look === 'cel' ? cel.fills : look === 'glass' ? GLASS_FILLS : 0
+    const fills = look === 'cel' ? cel.fills : look === 'glass' ? GLASS_FILLS : !look && pixelCel ? PIXEL_FILLS : 0
     if (!stage || !actor || !fills || !plain) return
     // speckle is anything finer than about two blobs across, by a typical blob's middle size (a strand of fur's width, not its length)
     const b = actor.blobs, sizes = Float32Array.from({ length: Math.min(b.count, 2000) }, (_, k) => { const i = Math.floor((k * b.count) / Math.min(b.count, 2000)); return [b.scale[i * 3], b.scale[i * 3 + 1], b.scale[i * 3 + 2]].sort((x, y) => x - y)[1] }).sort()
     const flat = gatherColors(b.color.subarray(0, b.count * 3), actor.partOf, fills, { at: b.center, reach: (sizes[sizes.length >> 1] || 0) * FILL_REACH })
     stage.tint((_own, i) => [flat[i * 3], flat[i * 3 + 1], flat[i * 3 + 2]])
     return () => stage.tint()
-  }, [stage, actor, plain, look, cel.fills])
+  }, [stage, actor, plain, look, cel.fills, !!pixelCel])
   useEffect(() => { stage?.setOutline(outline && look !== 'cel' ? { width: pen, ink: look === 'ink' || look === 'hatch' || look === 'stipple' ? sheet.ink : undefined } : undefined) }, [stage, outline, pen, look, sheet])
 
   const drawnOn = look === 'ink' || look === 'hatch' || look === 'stipple'

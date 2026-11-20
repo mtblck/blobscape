@@ -452,7 +452,7 @@
       },
       {
        "name": "setCel",
-       "doc": "Cel shading (splat-core/cel.ts), on a stage made with `lights`: every blob flat in its own color, the light cut\ninto two or three tones with clean edges, shadows cast by what stands in the light's way, and an even outline.\nThe tones are cut from the look's own light, and the stage's lights (`setLights`) stay as the scene's lamps: where\nthey reach is one more tone in their color, and the ambient light dims both tones. Its fill takes the place of the\nstage's marks while it is on; leave the look out to have them back. Kept for the next actor too. It shades the blobs' own colors, so it suits blobs\nthat have no light baked into them. Not in pixel mode.",
+       "doc": "Cel shading (splat-core/cel.ts), on a stage made with `lights`: every blob flat in its own color, the light cut\ninto two or three tones with clean edges, shadows cast by what stands in the light's way, and an even outline.\nThe tones are cut from the look's own light, and the stage's lights (`setLights`) stay as the scene's lamps: where\nthey reach is one more tone in their color, and the ambient light dims both tones. Its fill takes the place of the\nstage's marks while it is on; leave the look out to have them back. Kept for the next actor too. It shades the blobs' own colors, so it suits blobs\nthat have no light baked into them. In pixel mode it shades the small picture the pixel art is made from, so the\nlight falls in bands that follow each form a pixel at a time; the outline is the pixel art's own then.",
        "signatures": [
         {
          "code": "setCel(look?: CelLook): void"
@@ -7451,7 +7451,7 @@
       },
       {
        "name": "render",
-       "doc": "Draws `scene` as pixel art. With `screen` (the output's size in device\npixels and how many of them make one art pixel) it goes to the renderer's\ncurrent output; without, into `art` at one to one.",
+       "doc": "",
        "signatures": [
         {
          "code": "render(renderer: WebGPURenderer, scene: Object3D, camera: Camera, screen?: { width: number; height: number; scale: number }): void"
