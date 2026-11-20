@@ -2,6 +2,7 @@ import { readProject, type SceneProject } from '../../splat-engine/project.ts'
 import { LIBRARY } from './library.ts'
 import { isModel, modelId } from './models.ts'
 import { slug } from './shown.ts'
+import { fileIdOf } from './sceneModel.ts'
 
 /**
  * Where Scene Creator keeps a visitor's scenes (#340): IndexedDB in their own browser, nothing sent anywhere. A shelf
@@ -31,6 +32,8 @@ export interface ModelFile {
   file: string
   bytes: Uint8Array
   mtl?: string
+  /** A model of a whole scene (#380): each thing at the top of its tree is a model of its own, `partId(id, i)`. */
+  scene?: boolean
   /** When it was opened, in milliseconds since 1970. */
   added: number
 }
@@ -94,9 +97,9 @@ export const FILE_MOST = 160_000_000
 
 /** A project as a file's text, carrying the models of your own it uses (their bytes as base64, under `models`). */
 export function fileText(p: SceneProject, models: readonly ModelFile[] = []): string {
-  const used = models.filter((m) => p.props.some((x) => x.prop === m.id))
+  const used = models.filter((m) => p.props.some((x) => typeof x.prop === 'string' && fileIdOf(x.prop) === m.id))
   if (!used.length) return `${JSON.stringify(p, null, 1)}\n`
-  const carried = used.map((m) => ({ id: m.id, file: m.file, ...(m.mtl !== undefined ? { mtl: m.mtl } : {}), data: toBase64(m.bytes) }))
+  const carried = used.map((m) => ({ id: m.id, file: m.file, ...(m.mtl !== undefined ? { mtl: m.mtl } : {}), ...(m.scene ? { scene: true } : {}), data: toBase64(m.bytes) }))
   return `${JSON.stringify({ ...p, models: carried }, null, 1)}\n`
 }
 
@@ -120,7 +123,7 @@ export function readFile(text: string): { project?: SceneProject; models: ModelF
       let bytes: Uint8Array
       try { bytes = fromBase64(o.data) } catch { return problems.push(`${at}.data: not base64`) }
       if (modelId(bytes) !== o.id) return problems.push(`${at}.data: not the model ${o.id} names`)
-      models.push({ id: o.id, file: o.file.slice(0, 200), bytes, mtl: o.mtl as string | undefined, added: Date.now() })
+      models.push({ id: o.id, file: o.file.slice(0, 200), bytes, mtl: o.mtl as string | undefined, ...(o.scene === true ? { scene: true } : {}), added: Date.now() })
     })
   }
   const read = readProject(JSON.stringify(x), known)
