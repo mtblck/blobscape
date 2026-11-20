@@ -1,7 +1,8 @@
-import { buildVoxels, unlit } from '../../splat-engine/voxel.ts'
+import { DEFAULT_LIGHT, bakedColor, buildVoxels, unlit, type VoxelLight } from '../../splat-engine/voxel.ts'
 import { compileProject, landSpec, propSpec, settingOf, type CompiledProject, type SceneProject } from '../../splat-engine/project.ts'
 import type { Built } from '../../splat-engine/body.ts'
-import { Skeleton, mulQ } from '../../splat-engine/rig.ts'
+import { Skeleton, mulQ, rotate } from '../../splat-engine/rig.ts'
+import type { Vec3 } from '../../splat-core/blobs.ts'
 import { oklab } from '../../splat-core/pixel.ts'
 import { DIORAMAS } from '../diorama/scenes.ts'
 import { isModel, rawTexture, type ModelJob } from './models.ts'
@@ -33,6 +34,13 @@ const compiled = (project: SceneProject): CompiledProject => {
 
 /** Cuts what a job asks for. */
 export function cut(job: CutJob): Built {
+  // a model scattered over a mesh is lit here by the land's sun, unless the style lights it itself
+  if (job.kind === 'prop' && job.model?.kind === 'splats' && job.model.scattered && isModel(job.project.props[job.i].prop)) {
+    const placed = job.project.props[job.i]
+    const b = placedBuilt(unpack(copied(job.model.rest)), placed)
+    if (!job.plain) sunlit(b, { ...DEFAULT_LIGHT, ...landSpec(compiled(job.project), job.spacing).light })
+    return withShadow(b, placed.at)
+  }
   if (job.plain) return unlit(() => cut({ ...job, plain: false }))
   if (job.kind === 'whole') {
     const d = DIORAMAS.find((x) => x.id === job.scene)
@@ -162,4 +170,32 @@ function placedMesh(job: Extract<CutJob, { kind: 'prop' }>, model: Extract<Model
   spec.parts = [{ shape, color: meshColor(mesh, shape, undefined, model.images.map(rawTexture)), bone: spec.bones[0].name }]
   spec.loose = []
   return buildVoxels(spec)
+}
+
+/**
+ * Blobs that came with no light in them (scattered over a mesh in its own flat colors) lit as the cutter lights a
+ * part: each flat blob by how its face turns to the sun (the face that looks away from the model's middle axis is
+ * its outside), over the ambient, with the light's painted ramp. No cast shadows.
+ */
+export function sunlit(b: Built, light: VoxelLight) {
+  const B = b.blobs, n = B.count
+  let mx = 0, mz = 0
+  for (let i = 0; i < n; i++) { mx += B.center[i * 3]; mz += B.center[i * 3 + 2] }
+  mx /= n || 1; mz /= n || 1
+  const d = light.dir, dl = Math.hypot(d[0], d[1], d[2]) || 1
+  const sun = [d[0] / dl, d[1] / dl, d[2] / dl]
+  for (let i = 0; i < n; i++) {
+    // the thinnest axis is the blob's face
+    const s = B.scale.subarray(i * 3, i * 3 + 3)
+    const k = s[0] <= s[1] && s[0] <= s[2] ? 0 : s[1] <= s[2] ? 1 : 2
+    const axis: Vec3 = [0, 0, 0]
+    axis[k] = 1
+    let f = rotate(B.quat.subarray(i * 4, i * 4 + 4), axis)
+    const out = [B.center[i * 3] - mx, 0.3, B.center[i * 3 + 2] - mz]
+    if (f[0] * out[0] + f[1] * out[1] + f[2] * out[2] < 0) f = [-f[0], -f[1], -f[2]]
+    const lit = Math.max(0, f[0] * sun[0] + f[1] * sun[1] + f[2] * sun[2])
+    const shade = light.ambient + (1 - light.ambient) * lit
+    const c = bakedColor([B.color[i * 3], B.color[i * 3 + 1], B.color[i * 3 + 2]], shade, lit, light.ramp ?? 0)
+    B.color.set(c, i * 3)
+  }
 }
