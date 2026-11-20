@@ -23,6 +23,7 @@ import { START_LANDS, START_SCENES, nameFor, openingAsked, openingLand, openingS
 import { isDescription, readDescribed } from './creator/described.ts'
 import { AUTOSAVE_MS, FILE_END, type ModelFile, cleanName, copyName, fileName, fileText, mergedLike, newId, openShelf, readFile, renamed, type SavedScene, type Shelf } from './creator/store.ts'
 import { download } from './files.ts'
+import { takeScan } from './handoff.ts'
 import { registerTools } from './agentTools.ts'
 import { creatorTools, type CreatorApi } from './creator/agentTools.ts'
 import { PACKS, packAdded } from './creator/packs.ts'
@@ -537,16 +538,19 @@ export function SceneCreator() {
   // opens the shelf once the page is in the browser, then what the address asks for or the scene open last
   useEffect(() => {
     let gone = false
+    // a scan Scan Studio handed over (#385) opens as the land, in place of the scene open last
+    const handed = takeScan()
     void openShelf().then(async (sh) => {
       if (gone) return
       setShelf(sh ?? null)
+      if (handed) void openScanLand(handed, sh ?? null)
       if (!sh) return
       await refreshList(sh)
       // your own models open again in the background; scenes using them are cut again as each arrives
       void sh.models().then((list) => takeModels(list, 'this browser')).catch(console.warn)
       const q = new URLSearchParams(location.search)
       const asked = q.get('project')
-      const id = asked ?? (q.has('scene') || q.has('land') ? undefined : await sh.last().catch(() => undefined))
+      const id = asked ?? (handed || q.has('scene') || q.has('land') ? undefined : await sh.last().catch(() => undefined))
       if (!id || gone) return
       const r = await sh.get(id).catch(() => undefined)
       if (gone) return
@@ -657,7 +661,7 @@ export function SceneCreator() {
     }
   }
   /** A splat scan opened as the land of a new scene (#381): leveled and cleaned, drawn as captured. */
-  const openScanLand = async (f: File) => {
+  const openScanLand = async (f: File, sh = shelf) => {
     setFileProblems([])
     say(`Opening ${f.name}: leveling and cleaning it…`)
     try {
@@ -667,7 +671,7 @@ export function SceneCreator() {
       keepModel(m)
       modelFiles.current.set(mf.id, mf)
       setModelsVersion((v) => v + 1)
-      shelf?.putModel(mf).catch((e) => { console.warn(e); say(`This browser would not keep ${f.name}: save the scene as a file to keep it.`) })
+      sh?.putModel(mf).catch((e) => { console.warn(e); say(`This browser would not keep ${f.name}: save the scene as a file to keep it.`) })
       const bare = cleanName(f.name.replace(/\.[^.]*$/, ''))
       openSaved({ id: newId(), updated: Date.now(), project: scanProject(m.id, bare ? bare[0].toUpperCase() + bare.slice(1) : 'Your scan') })
       keptText.current = ''

@@ -8,7 +8,7 @@ import { Button, Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
 import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitDrag } from './Viewport.tsx'
 import { href } from './routes.ts'
-import { handOff } from './handoff.ts'
+import { handOff, handOffScan } from './handoff.ts'
 import { download, kb } from './files.ts'
 import type { CreatureStage } from './creature/stage.ts'
 import { TAB_SECTIONS, Workbench } from '../shared/Workbench.tsx'
@@ -228,6 +228,10 @@ export function ScanStudio() {
     } finally { setBusy(false) }
   }
   const toSandbox = () => exporting('Packing it for the sandbox', async () => { const r = await result(); if (r) handOff(scan?.name ?? 'Your scan', r.blobs, r.shapes) })
+  const toCreator = () => exporting('Packing it for Scene Creator', async () => {
+    const b = (await result())?.blobs
+    if (b) handOffScan(new File([writePly(b) as Uint8Array<ArrayBuffer>], `${base}.ply`))
+  })
   const save = () => exporting('Writing the .ply', async () => {
     const b = (await result())?.blobs
     if (!b) return
@@ -464,10 +468,11 @@ export function ScanStudio() {
             <h2 id="s-take" className="text-sm font-bold">Take it</h2>
                 <div className="flex flex-wrap gap-1.5">
                   <Button small primary disabled={!masks?.kept || busy} onClick={() => void toSandbox()}>Open in the sandbox</Button>
+                  <Button small disabled={!masks?.kept || busy} onClick={() => void toCreator()}>Open in Scene Creator</Button>
                   <Button small disabled={!masks?.kept || busy} onClick={() => void save()}>Download .ply</Button>
                 </div>
                 {light !== 'scanned' && <Toggle label="Keep the lighting in its colors" checked={keepLight} onChange={setKeepLight} />}
-                <p className="text-xs leading-relaxed text-ink-faint">The kept blobs, stood on the floor and sized to sit beside the sandbox's own scenes.</p>
+                <p className="text-xs leading-relaxed text-ink-faint">The kept blobs, stood on the floor and sized to sit beside the sandbox's own scenes. In Scene Creator they become the land, for props to stand on.</p>
                 <p role="status" className="text-xs text-ink-muted empty:-mt-3">{message}</p>
                 {error && <p role="alert" className="text-xs text-accent-ink">{error}</p>}
           </div>
