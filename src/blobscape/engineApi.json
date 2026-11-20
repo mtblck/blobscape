@@ -3590,6 +3590,12 @@
        "doc": "A big place to walk round rather than a diorama: things may stand up to 8 from the middle, it may carry 128 bones,\na part may be about 6 units across and the parts four times the surface between them. It takes about four times as\nlong to cut, so a scene is big only when it needs the room."
       },
       {
+       "name": "huge",
+       "optional": true,
+       "type": "boolean",
+       "doc": "A place far bigger again, to explore on foot (Biome Islands): things may stand up to 20 from the middle and it may\ncarry 230 bones; with its specks it must still stay inside the 255 one byte names. Implies `big`."
+      },
+      {
        "name": "grid",
        "optional": true,
        "type": "number",
