@@ -1,4 +1,5 @@
 // Scene Creator (epic #329): the workspace that opens a scene split into a land and props.
+import { root } from '../lib.mjs'
 
 export default [
   {
@@ -200,15 +201,26 @@ export default [
         ['the fox moves', differ(withFox, later) > 5])
       await p.screenshot({ path: join(shots, 'blobscape-scene-creator-creature.png') })
       await p.getByRole('searchbox', { name: 'Find a prop or land' }).fill('')
-      // undo takes the fox, the pack, the land, the drop and the turkey back
-      for (let i = 0; i < 5; i++) await p.getByTestId('creator-undo').click()
+      // a model of your own (#367): the puffer's rigged splat .glb, playing its clip and its blend shapes
+      await p.getByTestId('creator-model-file').setInputFiles(join(root, 'public/rigged-splats/puffer.glb'))
+      const opened = await p.waitForFunction(() => /^Opened /.test(document.querySelector('[data-testid=creator-model-note]')?.textContent ?? ''), null, { timeout: 30000 }).then(() => true, () => false)
+      await ready()
+      const modeled = await state(), withModel = await picture()
+      const model = modeled.props[modeled.props.length - 1]
+      const puffed = await p.evaluate(async () => { const s = window.__creator.stage; await s.frame(4.1); await s.frame(4.1); return null }).then(() => picture())
+      steps.push(['model opened', opened && /^model-/.test(String(model?.prop)) && modeled.blobs > foxed.blobs],
+        ['picture follows the model', differ(withFox, withModel) > 20],
+        ['the model moves', differ(withModel, puffed) > 5])
+      await p.screenshot({ path: join(shots, 'blobscape-scene-creator-model.png') })
+      // undo takes the model, the fox, the pack, the land, the drop and the turkey back
+      for (let i = 0; i < 6; i++) await p.getByTestId('creator-undo').click()
       await ready()
       const back = await state()
       steps.push(['undone', back.land === start.land && JSON.stringify(back.props) === JSON.stringify(start.props)])
       const room = await p.getByTestId('creator-room').innerText().catch(() => '')
       const bad = steps.filter(([, good]) => !good).map(([name]) => name)
       if (bad.length) fails.push(`blobscape scene creator props: ${bad.join(', ')} failed ${JSON.stringify({ start: start.props.length, turkey: turkey.props.length, dropped: dropped.props.length, land: swapped.land, room })}`)
-      else ok(`blobscape scene creator props: the turkey found and added to the windmill hill, a haystack dropped on the view, the land swapped to turf, the old ruins pack set down, the fox from Splat Creatures added and moving, counts and picture following, and all undone ("${room}")`)
+      else ok(`blobscape scene creator props: the turkey found and added to the windmill hill, a haystack dropped on the view, the land swapped to turf, the old ruins pack set down, the fox from Splat Creatures added and moving, the puffer's .glb opened as a model and moving, counts and picture following, and all undone ("${room}")`)
     },
   },
   {

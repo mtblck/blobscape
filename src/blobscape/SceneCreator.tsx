@@ -27,6 +27,9 @@ import { creatorTools, type CreatorApi } from './creator/agentTools.ts'
 import { PACKS, packAdded } from './creator/packs.ts'
 import { BLOB_ROOM, CARDS, added, cardsFound, groundOf, heightAt, landSwapped, liftOn, roomOf, whyNot } from './creator/adding.ts'
 import { creatureMove, creatureSize, isCreature, libraryProp, type LibraryEntry } from './creator/library.ts'
+import { PlacedMorphs, isModel, keepModel, keptModels, modelClip, modelFrom, modelOf, modelSize, poseModel, type ModelProp } from './creator/models.ts'
+import { GlbError, readRiggedGlb } from '../splat-engine/glb.ts'
+import { isMeshGlb } from './modelRig.ts'
 import { budget, clock, lampAdded, lampLights, lampRemoved, lit, liveSky, liveSkyColors, rgbOf, shadeNow, sunNow } from './creator/lighting.ts'
 import { castBy, glowGain } from './diorama/glow.ts'
 import { STYLES, isPixelStyle, styleAsked, styleWords, type Style } from './diorama/styles.ts'
@@ -71,6 +74,12 @@ function creaturePosable(id: string, bones: readonly Bone[], at: Placement, loop
   if (!move) return undefined
   const t = placer([0, 0, 0], at)
   return { bones: bones.map((x) => ({ ...x, head: t.back(x.head), tail: x.tail && t.back(x.tail) })), pose: (sk, time) => move.pose(sk, time), lights: () => [] }
+}
+
+/** A model's clip to play on its own bones: its cut's bones taken back to where they stood before it was placed. */
+function modelPosable(m: ModelProp, bones: readonly Bone[], at: Placement, loop: number): Posable {
+  const t = placer([0, 0, 0], at)
+  return { bones: bones.map((x) => ({ ...x, head: t.back(x.head), tail: x.tail && t.back(x.tail) })), pose: (sk, time) => poseModel(m, sk, loop, time), lights: () => [] }
 }
 
 /** One piece of what is open: what its cut is kept under, and the job that cuts it. */
@@ -177,6 +186,10 @@ export function SceneCreator() {
 
   // --- cutting ---------------------------------------------------------------
 
+  // your own models opened in the page (kept for its life), and what opening the last one said
+  const [modelsVersion, setModelsVersion] = useState(0)
+  const [modelNote, setModelNote] = useState('')
+  const modelInput = useRef<HTMLInputElement>(null)
   // The pieces and what each is cut under. A prop's cut doesn't change as it moves (its light comes from the way it
   // faces, not where it stands), so its place is left out: a moved or copied prop needs no cut of its own.
   const pieces = useMemo<Piece[]>(() => {
@@ -189,9 +202,13 @@ export function SceneCreator() {
     const propLight = light && { ...light, haze: undefined, weather: undefined }
     return [
       { key: land, thing: 'land', plain, job: (spacing) => ({ kind: 'land', project, spacing, plain }) },
-      ...project.props.map((p, i): Piece => ({ key: JSON.stringify([p.prop, p.turn, p.size, project.loop, project.land, steps, propLight, plain]), thing: JSON.stringify(p.prop), plain, job: (spacing) => ({ kind: 'prop', project, i, spacing, plain }) })),
+      ...project.props.map((p, i): Piece => {
+        // a model of your own goes to the cutter with its job; whether the page has it is part of what it is cut as
+        const model = isModel(p.prop) ? modelOf(p.prop)?.rest : undefined
+        return { key: JSON.stringify([p.prop, p.turn, p.size, project.loop, project.land, steps, propLight, plain, !!model]), thing: JSON.stringify(p.prop), plain, job: (spacing) => ({ kind: 'prop', project, i, spacing, plain, model }) }
+      }),
     ]
-  }, [opened, project, cp, plain])
+  }, [opened, project, cp, plain, modelsVersion])
 
   // cuts kept by detail and key, for as long as the page is open, and the worker that makes them
   const cuts = useRef(new Map<string, Cut>())
@@ -272,7 +289,7 @@ export function SceneCreator() {
   // --- posing ---------------------------------------------------------------
 
   // what the poser reads each frame, kept current without rebuilding the stage
-  const live = useRef({ shown, chosen, project, preview, light: lightNow, posers: new Map<string, PlacedPoser>() })
+  const live = useRef({ shown, chosen, project, preview, light: lightNow, posers: new Map<string, PlacedPoser>(), morphs: new Map<number, PlacedMorphs>() })
   live.current = { ...live.current, shown, chosen, project, preview, light: lightNow }
   /** Where prop `i` stands now: mid-gesture where it is going, else where the project says. */
   const placementOf = (i: number): Placement | undefined => (preview?.i === i ? preview.at : project?.props[i])
@@ -296,11 +313,20 @@ export function SceneCreator() {
           let poser = L.posers.get(key)
           if (!poser) {
             // a creature plays its own move on its own bones, as it stood before it was placed
-            const own = isCreature(placed.prop) ? creaturePosable(placed.prop, b.skeleton.bones, cut.at, cpNow.loop) : undefined
+            const model = isModel(placed.prop) ? modelOf(placed.prop) : undefined
+            const own = isCreature(placed.prop) ? creaturePosable(placed.prop, b.skeleton.bones, cut.at, cpNow.loop)
+              : model ? modelPosable(model, b.skeleton.bones, cut.at, cpNow.loop) : undefined
             poser = new PlacedPoser(own ?? p.c, p.prop.foot, cut.at, placed.still)
             L.posers.set(key, poser)
           }
           poser.pose(b.skeleton, t)
+          // a model's blend shapes, as its clip weighs them, reshape its blobs, which go up again only when they change
+          const m = isModel(placed.prop) && !placed.still ? modelOf(placed.prop) : undefined
+          if (m?.morphs && m.rest.count + 1 === b.blobs.count) {
+            let mo = L.morphs.get(cut.id)
+            if (!mo) { mo = new PlacedMorphs({ ...m, morphs: m.morphs }, cut.at); L.morphs.set(cut.id, mo) }
+            if (mo.update(b.blobs, cpNow.loop, t)) stage.reshape(b)
+          }
           redrawn(b.skeleton, cut.at, now)
           b.skeleton.update()
         })
@@ -646,6 +672,39 @@ export function SceneCreator() {
     if (why) { say(why); return }
     edit(next, `Added ${e.name.toLowerCase()}. Drag it to move it, or open Arrange to turn and size it.`)
     setPicked(next.props.length - 1)
+  }
+  /** Sets one of your models down at the middle of the view, picked, at the height models start at. */
+  const addModel = (m: ModelProp) => {
+    if (!project || !cp || !room) return
+    const next = added(project, m.id, groundAtView(), modelSize(m))
+    const why = room.blobs[0] + m.rest.count > room.blobs[1]
+      ? `${m.name} has ${m.rest.count.toLocaleString('en-US')} blobs, and the scene has room for ${(room.blobs[1] - room.blobs[0]).toLocaleString('en-US')} more.`
+      : whyNot(m.name, room, roomOf(compileProject(next, libraryProp), room.blobs[0], room.blobs[1]))
+    setRefused(why ?? '')
+    if (why) { say(why); return }
+    edit(next, `Added ${m.name}. Drag it to move it, or open Arrange to turn and size it.`)
+    setPicked(next.props.length - 1)
+  }
+  /** Opens a rigged splat .glb as a model of your own and sets it down. */
+  const openModel = async (file: File) => {
+    setModelNote(`Opening ${file.name}…`)
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer())
+      let r
+      try { r = readRiggedGlb(bytes) } catch (e) {
+        if (!isMeshGlb(e)) throw e
+        setModelNote(`${file.name} is a mesh model, not splats. Meshes as props are coming next; for now, open a rigged splat .glb, such as one saved from Splat Creatures.`)
+        return
+      }
+      const m = modelFrom(r, file.name, bytes)
+      keepModel(m)
+      setModelsVersion((v) => v + 1)
+      const clip = modelClip(m)
+      setModelNote(`Opened ${m.name}: ${m.rest.count.toLocaleString('en-US')} blobs${clip ? `, playing ${clip.name}` : ', standing still'}${m.morphs ? `, with ${m.morphs.length} blend ${m.morphs.length === 1 ? 'shape' : 'shapes'}` : ''}.`)
+      addModel(m)
+    } catch (e) {
+      setModelNote(`Could not open ${file.name}: ${e instanceof GlbError ? e.message : 'it is not a .glb this page can read'}.`)
+    }
   }
   /** Sets the whole of a pack down round the middle of the view, in one step to undo. */
   const addPack = () => {
@@ -1011,6 +1070,24 @@ export function SceneCreator() {
                     </p>
                     {refused && <p className="text-sm text-ink" data-testid="creator-refused">{refused}</p>}
                     <input type="search" value={query} onChange={(ev) => setQuery(ev.target.value)} placeholder="Find a prop or land" aria-label="Find a prop or land" className="min-h-10 w-full rounded-full border border-rule bg-paper px-4 text-sm outline-none focus-visible:border-accent" />
+                    <div>
+                      <h3 id="creator-models" className="mb-1 text-sm font-semibold">Your models</h3>
+                      <p className="mb-2 text-xs text-ink-muted">A rigged splat .glb, such as one saved from Splat Creatures, with its moves and blend shapes. It stays while this page is open.</p>
+                      <input ref={modelInput} type="file" accept=".glb,model/gltf-binary" className="sr-only" tabIndex={-1} aria-hidden="true" data-testid="creator-model-file"
+                        onChange={(ev) => { const f = ev.target.files?.[0]; ev.target.value = ''; if (f) void openModel(f) }} />
+                      <button type="button" onClick={() => modelInput.current?.click()} data-testid="creator-model-open"
+                        className="min-h-10 cursor-pointer rounded-full border border-rule bg-paper px-4 text-sm font-semibold hover:border-ink-faint">
+                        Open a model…
+                      </button>
+                      <p role="status" className="mt-2 text-xs text-ink-muted" data-testid="creator-model-note">{modelNote}</p>
+                      {modelsVersion > 0 && (
+                        <ul aria-labelledby="creator-models" className="mt-2 flex flex-wrap gap-2">
+                          {keptModels().map((m) => (
+                            <li key={m.id}><button type="button" onClick={() => addModel(m)} data-testid={`creator-model-${m.id}`} className="min-h-10 cursor-pointer rounded-full border border-rule bg-paper px-4 text-sm hover:border-ink-faint">Add {m.name}</button></li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
                     <div>
                       <h3 id="creator-packs" className="mb-2 text-sm font-semibold">Packs</h3>
                       <div className="flex flex-wrap gap-2" role="group" aria-labelledby="creator-packs" data-testid="creator-packs">
