@@ -4,9 +4,9 @@ import type { Vec3 } from '../splat-core/blobs.ts'
 import type { PixelLook } from '../splat-core/pixel.ts'
 import type { Built } from '../splat-engine/body.ts'
 import { pickActors } from '../splat-engine/pick.ts'
-import { MAX_PROJECT_LAMPS, PlacedPoser, SIZE_RANGE, compileProject, cutLight, type Placement, type ProjectLight, type SceneProject } from '../splat-engine/project.ts'
+import { MAX_PROJECT_LAMPS, PlacedPoser, SIZE_RANGE, compileProject, cutLight, joinPalettes, placer, type Placement, type Posable, type ProjectLight, type SceneProject } from '../splat-engine/project.ts'
 import type { Light, PointLight } from '../splat-engine/engine.ts'
-import type { Skeleton } from '../splat-engine/rig.ts'
+import type { Bone, Skeleton } from '../splat-engine/rig.ts'
 import type { Shape } from '../splat-engine/voxel.ts'
 import { LoadingMark } from '../shared/BlobLoader.tsx'
 import { Button, Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
@@ -26,7 +26,7 @@ import { registerTools } from './agentTools.ts'
 import { creatorTools, type CreatorApi } from './creator/agentTools.ts'
 import { PACKS, packAdded } from './creator/packs.ts'
 import { BLOB_ROOM, CARDS, added, cardsFound, groundOf, heightAt, landSwapped, liftOn, roomOf, whyNot } from './creator/adding.ts'
-import { libraryProp, type LibraryEntry } from './creator/library.ts'
+import { creatureMove, creatureSize, isCreature, libraryProp, type LibraryEntry } from './creator/library.ts'
 import { budget, clock, lampAdded, lampLights, lampRemoved, lit, liveSky, liveSkyColors, rgbOf, shadeNow, sunNow } from './creator/lighting.ts'
 import { castBy, glowGain } from './diorama/glow.ts'
 import { STYLES, isPixelStyle, styleAsked, styleWords, type Style } from './diorama/styles.ts'
@@ -62,6 +62,16 @@ const modeAsked = (search: string): CreatorMode => MODES.find((m) => m.id === ne
 
 /** A piece cut: the packed cut, the placement it was cut at, and how far it reaches from its foot along the ground. */
 interface Cut { id: number; thing: string; packed: PackedCut; at: Placement; reach: number; plain: boolean }
+
+const hexOf = (c: ArrayLike<number>) => `#${Array.from(c, (v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`
+
+/** A creature's move to play on its own bones: its cut's bones taken back to where they stood before it was placed. */
+function creaturePosable(id: string, bones: readonly Bone[], at: Placement, loop: number): Posable | undefined {
+  const move = creatureMove(id, loop)
+  if (!move) return undefined
+  const t = placer([0, 0, 0], at)
+  return { bones: bones.map((x) => ({ ...x, head: t.back(x.head), tail: x.tail && t.back(x.tail) })), pose: (sk, time) => move.pose(sk, time), lights: () => [] }
+}
 
 /** One piece of what is open: what its cut is kept under, and the job that cuts it. */
 interface Piece { key: string; thing: string; plain: boolean; job: (spacing: number) => CutJob }
@@ -284,7 +294,12 @@ export function SceneCreator() {
           // posed as it was cut, then drawn where it now stands
           const key = `${cut.id}|${placed.still ? 1 : 0}|${JSON.stringify(placed.prop)}`
           let poser = L.posers.get(key)
-          if (!poser) { poser = new PlacedPoser(p.c, p.prop.foot, cut.at, placed.still); L.posers.set(key, poser) }
+          if (!poser) {
+            // a creature plays its own move on its own bones, as it stood before it was placed
+            const own = isCreature(placed.prop) ? creaturePosable(placed.prop, b.skeleton.bones, cut.at, cpNow.loop) : undefined
+            poser = new PlacedPoser(own ?? p.c, p.prop.foot, cut.at, placed.still)
+            L.posers.set(key, poser)
+          }
           poser.pose(b.skeleton, t)
           redrawn(b.skeleton, cut.at, now)
           b.skeleton.update()
@@ -320,7 +335,10 @@ export function SceneCreator() {
   // a sky the Light mode set (its colors, or a live sun's) is always behind; otherwise Style's switch says
   const skyForced = liveHour !== undefined || !!lightNow?.sky
   const glow = lightNow?.glow ?? shown.finish.glow
-  const palettes = useMemo(() => paletteChoices(shown.palette), [shown.palette])
+  // the scene's palette, with the colors of any creature in it, which its description can't bring
+  const creatureColors = chosen.flatMap((c) => c?.packed.colors ?? []).join(',')
+  const palette = useMemo(() => (creatureColors ? joinPalettes([shown.palette.map(hexOf), creatureColors.split(',')]) : shown.palette), [shown.palette, creatureColors])
+  const palettes = useMemo(() => paletteChoices(palette), [palette])
   const look = useMemo<PixelLook>(() => pixelLook({ ...px, sky: px.sky || skyForced }, palettes, skyColors, glow), [px, skyForced, palettes, skyColors, glow])
   useEffect(() => { stage?.setPixels(pixels ? look : undefined, px.size) }, [stage, pixels, look, px.size])
   // pixel art can move in held steps; the other styles move every frame
@@ -622,7 +640,7 @@ export function SceneCreator() {
   const addEntry = (e: LibraryEntry, x?: number, y?: number) => {
     if (!project || !cp || !room) return
     if (e.kind === 'land') { swapLand(e); return }
-    const next = added(project, e.id, groundAtView(x, y))
+    const next = added(project, e.id, groundAtView(x, y), e.kind === 'creature' ? creatureSize(e.id) : 1)
     const why = whyNot(e.name, room, roomOf(compileProject(next, libraryProp), room.blobs[0], room.blobs[1]))
     setRefused(why ?? '')
     if (why) { say(why); return }
@@ -772,13 +790,13 @@ export function SceneCreator() {
       ]
       return lines.join('\n')
     },
-    props: () => CARDS.filter((e) => e.kind === 'prop').map((e) => e.id),
+    props: () => CARDS.filter((e) => e.kind !== 'land').map((e) => e.id),
     addProp: (id, at) => {
       if (!project || !cp || !room) return 'Not done: this scene opened whole, so nothing can be added to it.'
       const e = CARD_BY_ID.get(id)
-      if (!e || e.kind !== 'prop') return `Not done: there is no prop "${id}".`
+      if (!e || e.kind === 'land') return `Not done: there is no prop "${id}".`
       const spot: Vec3 = at ? [at[0], groundAt(at[0], at[1], orbit.target[1]), at[1]] : groundAtView()
-      const next = added(project, id, spot)
+      const next = added(project, id, spot, e.kind === 'creature' ? creatureSize(id) : 1)
       const why = whyNot(e.name, room, roomOf(compileProject(next, libraryProp), room.blobs[0], room.blobs[1]))
       if (why) return `Not done: ${why}`
       edit(next, `Added ${e.name.toLowerCase()}.`)

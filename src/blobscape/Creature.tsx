@@ -86,7 +86,8 @@ export function Creature() {
   // which creature is in the address (?creature=dragon), so a link can show one
   const [species, setSpecies] = useState<Species>(() => speciesOf(new URLSearchParams(location.search)))
   const [count, setCount] = useState(() => levelFor(species, countAsked(detailInAddress())))
-  const [look, setLook] = useState(species.looks[0].id)
+  // a look a link asks for (?look=ember), else the creature's first
+  const [look, setLook] = useState(() => species.looks.find((l) => l.id === new URLSearchParams(location.search).get('look'))?.id ?? species.looks[0].id)
   const [move, setMove] = useState<string>(species.moves[0].name)
   const [show, setShow] = useState<Show>('blobs')
   const [speed, setSpeed] = useState(1)

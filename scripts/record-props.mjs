@@ -14,7 +14,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { serveDist, launch, dist, root } from './verify/lib.mjs'
 
-const { LIBRARY, libraryProp, libraryCreature } = await import('../src/blobscape/creator/library.ts')
+const { LIBRARY, libraryProp, libraryCreature, creatureLook } = await import('../src/blobscape/creator/library.ts')
 const { boxOf } = await import('../src/splat-engine/project.ts')
 
 const args = process.argv.slice(2)
@@ -63,7 +63,7 @@ try {
       let png
       if (e.kind === 'creature') {
         const c = libraryCreature(e.id)
-        await page.goto(`${served.base}/experiments/creature/?creature=${c.id}&offscreen=1`)
+        await page.goto(`${served.base}/experiments/creature/?creature=${c.id}&look=${creatureLook(e.id)}&offscreen=1`)
         await page.waitForFunction(() => window.__creature?.blobs() > 0, null, { timeout: 240000 })
         await page.evaluate(async () => { const s = window.__creature.stage; await s.frame(1); await s.frame(1) })
         await bare(page, 'creature-view')

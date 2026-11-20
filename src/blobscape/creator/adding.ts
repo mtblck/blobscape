@@ -12,11 +12,8 @@ import { GROUPS, LIBRARY, type LibraryEntry, type LibraryGroup } from './library
 
 // --- Cards -----------------------------------------------------------------
 
-/**
- * The cards Props mode offers: props and lands. Creatures from Splat Creatures are posed by their own moves, not by a
- * description, so a project can't hold one yet; they wait for a later step.
- */
-export const CARDS: LibraryEntry[] = LIBRARY.filter((e) => e.kind !== 'creature')
+/** The cards Props mode offers: props, lands, and Splat Creatures' creatures (filed with the living props). */
+export const CARDS: LibraryEntry[] = LIBRARY
 
 /** The cards a search finds, in their groups and the groups' order; a group with nothing found is left out. */
 export function cardsFound(query: string, cards: readonly LibraryEntry[] = CARDS): { id: LibraryGroup; name: string; cards: LibraryEntry[] }[] {
@@ -47,11 +44,11 @@ export function liftOn(ground: Shape[], pl: Placement): number {
 
 // --- Edits -----------------------------------------------------------------
 
-/** A library prop set down at `at`, facing the way it was written, last in the list; the project as it was when full. */
-export function added(p: SceneProject, id: string, at: Vec3): SceneProject {
+/** A library prop set down at `at`, facing the way it was written, `size` times its own size, last in the list; the project as it was when full. */
+export function added(p: SceneProject, id: string, at: Vec3, size = 1): SceneProject {
   if (p.props.length >= MAX_PROPS) return p
   const r = (v: number) => Math.round(v * 1e4) / 1e4
-  return { ...p, props: [...p.props, { prop: id, at: [r(at[0]), r(at[1]), r(at[2])], turn: 0, size: 1 }] }
+  return { ...p, props: [...p.props, { prop: id, at: [r(at[0]), r(at[1]), r(at[2])], turn: 0, size }] }
 }
 
 /**
