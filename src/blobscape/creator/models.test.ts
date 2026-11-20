@@ -10,7 +10,7 @@ import { Skeleton } from '../../splat-engine/rig.ts'
 import { added } from './adding.ts'
 import { cut } from './cut.ts'
 import { libraryProp, nameOf, openLand } from './library.ts'
-import { OPEN_MOST, meshModelFrom, scatteredStill, modelJob, openShare, rawTexture, MODEL_HEIGHT, PlacedMorphs, clipTime, isModel, keepModel, modelClip, modelFrom, modelId, modelOf, modelSize, poseModel } from './models.ts'
+import { FIT, PER_METER, fittedHeight, OPEN_MOST, meshModelFrom, scatteredStill, modelJob, openShare, rawTexture, MODEL_HEIGHT, PlacedMorphs, clipTime, isModel, keepModel, modelClip, modelFrom, modelId, modelOf, modelSize, poseModel } from './models.ts'
 
 const file = (name: string) => new Uint8Array(readFileSync(new URL(`../../../public/rigged-splats/${name}`, import.meta.url)))
 const project = (): SceneProject => openLand('plain-turf')!
@@ -24,8 +24,8 @@ test('a rigged file is a model standing on its foot, named by its bytes', () => 
   for (let i = 0; i < m.rest.count; i++) for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], m.rest.center[i * 3 + k]); hi[k] = Math.max(hi[k], m.rest.center[i * 3 + k]) }
   assert.ok(Math.abs(lo[1]) < 1e-5 && Math.abs(lo[0] + hi[0]) < 1e-4 && Math.abs(lo[2] + hi[2]) < 1e-4)
   assert.ok(m.clips.length && modelClip(m))
-  // set down to the height models start at
-  assert.ok(Math.abs(hi[1] * modelSize(m) - MODEL_HEIGHT) < 0.01)
+  // set down at its own height at the scenes' scale, within what fits the land
+  assert.ok(Math.abs(hi[1] * modelSize(m, 3) - fittedHeight(m.tall, 3)) < 0.01)
 })
 
 test('a clip plays a whole number of times a loop, so the scene still joins', () => {
@@ -105,10 +105,12 @@ test('a still mesh stands on its foot and is cut on the grid where it is placed,
   let lo = Infinity, top = 0
   for (let i = 1; i < m.mesh.positions.length; i += 3) { lo = Math.min(lo, m.mesh.positions[i]); top = Math.max(top, m.mesh.positions[i]) }
   assert.ok(Math.abs(lo) < 1e-6 && Math.abs(top - 1) < 1e-6)
-  assert.ok(Math.abs(modelSize(m) - MODEL_HEIGHT) < 1e-3)
+  // two units tall in its file: 1.5 at the scenes' scale, which fits a land 4 across
+  assert.equal(m.tall, 2)
+  assert.ok(Math.abs(modelSize(m, 4) - 1.5) < 1e-3)
   keepModel(m)
   const at: [number, number, number] = [0.4, 0.1, -0.2]
-  const p = added(project(), m.id, at, modelSize(m))
+  const p = added(project(), m.id, at, MODEL_HEIGHT)
   const b = cut({ kind: 'prop', project: p, i: 0, spacing: 0.042, model: modelJob(m) })
   const n = b.blobs.count - 1
   assert.ok(n > 100, `${n} blobs`)
@@ -162,4 +164,11 @@ test('a rigged mesh, as a game kit or Blender saves one, becomes blobs on its ow
   poseModel(m, a, 12, 0)
   poseModel(m, b, 12, 0.3)
   assert.notDeepEqual([...a.rotation], [...b.rotation])
+})
+
+test('a model is fitted to the land: its own height in meters at the scenes\' scale, never lost or too big', () => {
+  assert.equal(fittedHeight(1.7, 3.5), 1.7 * PER_METER) // a person stands as the scenes' people do
+  assert.equal(fittedHeight(30, 3.5), 3.5 * FIT.share) // a tower fits on the land
+  assert.equal(fittedHeight(0.02, 3.5), FIT.least) // a coin can still be seen
+  assert.equal(fittedHeight(undefined, 3.5), MODEL_HEIGHT)
 })
