@@ -12,6 +12,7 @@ import { BIOMES, MEADOW } from './biomes.ts'
 import { MAX_SEED, census, fromPath, inside, islandDoc, makeIsland, planIsland } from './island.ts'
 import { MATERIALS, SOLID, colorsOf, dressed, family, leaning, letsThrough, material, opaque, paintOf } from './materials.ts'
 import { ROOM } from './things.ts'
+import { IslandWalk, SCALE as WALK_SCALE } from './walk.ts'
 
 const SEEDS = [1, 2, 3, 7, 42, 77, 500, 4242, 31337, 90210, 123456, MAX_SEED]
 
@@ -169,3 +170,42 @@ test('an island passes the checks a scene written by hand passes', () => {
   }
 })
 
+
+test('the path is clear to walk, from where the elf starts to its far end', () => {
+  // nothing stands in the way of someone on the path, and the ground along it is no steeper than the elf climbs
+  for (const b of BIOMES) for (const seed of [7, 37, 500]) {
+    const { doc, plan } = makeIsland(b.id, seed)
+    const walk = new IslandWalk(doc, plan, DETAIL[1].spacing, { blobs: 2000 })
+    const goals = plan.path.slice(1).map((p) => [p[0] * WALK_SCALE, p[2] * WALK_SCALE])
+    let k = 0
+    for (let f = 0; f < 30 * 90 && k < goals.length; f++) {
+      const dx = goals[k][0] - walk.walker.x, dz = goals[k][1] - walk.walker.z
+      if (Math.hypot(dx, dz) < 1.5) { k++; continue }
+      walk.update(1 / 30, { forward: 0, turn: 0, aim: Math.atan2(dx, dz), go: 1 })
+    }
+    assert.equal(k, goals.length, `${b.id} ${seed}: stuck at ${walk.walker.x.toFixed(1)}, ${walk.walker.z.toFixed(1)} on the way to the path's point ${k + 1}`)
+    assert.ok(walk.walked > 10, `${b.id} ${seed}: walked only ${walk.walked.toFixed(1)} m`)
+  }
+})
+
+test('the elf stays on the island, out of things, and its feet on the ground', () => {
+  const { doc, plan } = makeIsland('meadow', 42)
+  const walk = new IslandWalk(doc, plan, DETAIL[1].spacing, { blobs: 2000 })
+  const sk = walk.elf.skeleton, feet = ['lFoot', 'rFoot'].map((n) => sk.index(n))
+  // walk straight on, turning now and then, for a minute: it meets the edge and things and must stop or slide at each
+  for (let f = 0; f < 30 * 60; f++) {
+    walk.update(1 / 30, { forward: 1, turn: Math.sin(f / 70) * 0.6 })
+    const { x, z } = walk.walker
+    assert.ok(inside(plan.lobes, x / WALK_SCALE, z / WALK_SCALE) > 0, `off the island at ${x}, ${z}`)
+    assert.ok(walk.ground.standsAt(x, z), `in a thing at ${x}, ${z}`)
+    // a planted foot's ankle is over the ground, not under it or far above it
+    for (const i of feet) {
+      const ankle = sk.posedHead.subarray(i * 3, i * 3 + 3), g = walk.ground.groundAt(ankle[0], ankle[2])
+      assert.ok(ankle[1] > g - 0.02, `a foot in the ground by ${(g - ankle[1]).toFixed(3)} m`)
+    }
+  }
+  assert.ok(walk.walked > 20, `walked ${walk.walked.toFixed(1)} m`)
+  // walking into a thing stops at it: no thing on the island lets the elf through its middle
+  const t = plan.things.find((th) => th.kind === 'boulder' || th.kind === 'stump' || th.kind === 'bush')!
+  assert.equal(walk.ground.standsAt(t.at[0] * WALK_SCALE, t.at[2] * WALK_SCALE), false, `the elf may stand in a ${t.name}`)
+})
