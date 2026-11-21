@@ -344,6 +344,7 @@ test('lamps wait for the dark: by day a light is out, its glass is dull and no l
   assert.equal(day.parts.length, n - 1, 'only the flame is gone by day; the sun is up')
   const glass = day.parts[2]
   assert.ok(!glass.glow && !glass.lit && glass.paint === dulled('#ffd166'), 'the glass is a dull shade of itself and takes light like anything else')
+  assert.equal(glass.laid, true, 'and its face stays whole over what it lies on, so a pane leaves no hole in its frame')
   assert.ok(day.palette.includes(dulled('#ffd166')) && day.palette.includes('#101018'))
   assert.equal(day.parts[n - 2].paint, '#101018', 'a part with its own unlit color takes it whole')
   assert.deepEqual(day.lights!.map((l) => l.strength), [0, 1], 'the lamp is out and keeps its place; what always shines does')

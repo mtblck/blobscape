@@ -91,6 +91,7 @@ export function withShadow(b: Built, foot: ArrayLike<number>): Built {
     partOf: grow(b.partOf, 1, [part + 1]),
     seen: b.seen && grow(b.seen, 4, [255, 255, 255, 255]),
     glow: b.glow && grow(b.glow, 1, [0]),
+    laid: b.laid && grow(b.laid, 1, [0]),
   }
 }
 
@@ -115,7 +116,7 @@ export function placedBuilt(made: Partial<Built> & Pick<Built, 'blobs' | 'skin' 
     b.quat.set(mulQ(t.q, b.quat.subarray(i * 4, i * 4 + 4)), i * 4)
   }
   const bones = made.skeleton.bones.map((x) => ({ ...x, head: t.point(x.head), tail: x.tail && t.point(x.tail) }))
-  return { blobs: b, skin: made.skin, skeleton: new Skeleton(bones), partOf: made.partOf ?? new Uint16Array(n), seen: made.seen, glow: made.glow }
+  return { blobs: b, skin: made.skin, skeleton: new Skeleton(bones), partOf: made.partOf ?? new Uint16Array(n), seen: made.seen, glow: made.glow, laid: made.laid }
 }
 
 /**
@@ -145,7 +146,7 @@ export function colorsOf(b: Pick<Built, 'blobs'>, most = 8): string[] {
 const copied = (p: PackedCut): PackedCut => ({
   ...p,
   center: p.center.slice(), scale: p.scale.slice(), quat: p.quat.slice(), color: p.color.slice(), opacity: p.opacity.slice(),
-  joints: p.joints.slice(), weights: p.weights.slice(), partOf: p.partOf.slice(), seen: p.seen?.slice(), glow: p.glow?.slice(),
+  joints: p.joints.slice(), weights: p.weights.slice(), partOf: p.partOf.slice(), seen: p.seen?.slice(), glow: p.glow?.slice(), laid: p.laid?.slice(),
   bones: p.bones.map((x) => ({ ...x, head: [...x.head] as typeof x.head })),
 })
 

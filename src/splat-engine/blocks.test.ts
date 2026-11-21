@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { Blobs } from '../splat-core/blobs.ts'
-import { BLOCK_FROM, BLOCK_SHADE, FLOW_DROP, FLOW_MOST, FLOW_STEPS, FLOW_SWELL, SPECK_SIZE, blockHash, buildBlocks, faceLight, faceTone, faceSeesLamp, flowMesh, flowStep, lampSight, lampsOf, planFlow, shapeFlow, type BlockSource } from './blocks.ts'
+import { BLOCK_FROM, BLOCK_SHADE, FACE_VOTE, FLOW_DROP, FLOW_MOST, FLOW_STEPS, FLOW_SWELL, SPECK_SIZE, blockHash, buildBlocks, faceLight, faceTone, faceSeesLamp, flowMesh, flowStep, lampSight, lampsOf, planFlow, shapeFlow, type BlockSource } from './blocks.ts'
 import { emptySkin } from './rig.ts'
 
 type Rgb = [number, number, number]
@@ -48,6 +48,17 @@ test('a block takes the commonest color among its blobs, not their mix, and fain
   assert.equal(b.blocks, 1)
   const c = b.pieces[0].colors
   assert.ok(c[0] > 0.5 && c[1] < 0.05 && c[2] < 0.05, `${[...c.slice(0, 3)]}`)
+})
+
+test('a pane laid on its frame, or a lamp, gives its cell its color though the frame has more blobs there', () => {
+  const frame: Rgb = [0.1, 0.1, 0.15], pane: Rgb = [0.66, 0.76, 0.83]
+  const list = [blob(0, 0, 0, frame), blob(0.01, 0, 0, frame), blob(0.02, 0, 0, frame), blob(0, 0.01, 0, pane)]
+  const color = (s: BlockSource) => { const m = buildBlocks([s], plain).pieces[0]; return m.colors[0] }
+  assert.ok(color(source(list)) < 0.05, 'by count the frame takes it')
+  const laid = source(list); laid.laid = Uint8Array.from([0, 0, 0, 1])
+  assert.ok(color(laid) > 0.3, 'a laid face is what is seen')
+  assert.ok(color(source(list, [], ['root'], [0, 0, 0, 255])) > 0.3, 'and so is a lit one')
+  assert.ok(FACE_VOTE >= 2)
 })
 
 test('a cell two bones share goes to the bone with more blobs in it, so no two cubes stand in one place', () => {

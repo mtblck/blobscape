@@ -33,7 +33,8 @@ import { srgbToLinear } from '../splat-core/color.ts'
 import { STYLES, isPixelStyle, styleAsked, styleWords, type Style } from './diorama/styles.ts'
 import { GLITCH_START, glitchLook, type GlitchChoice } from './glitchLooks.ts'
 import { GlitchControls } from './diorama/GlitchControls.tsx'
-import { useDrawnLook, wantsPlain } from './drawnLook.tsx'
+import { useDrawnLook, useHeld, wantsPlain } from './drawnLook.tsx'
+import { TIMES, timeAsked, timeOf, type TimeId } from './timeOfDay.ts'
 import { download } from './files.ts'
 import { blocksToMesh } from '../splat-engine/blockMesh.ts'
 import { TRANSITIONS, type TransitionKind } from '../splat-core/transition.ts'
@@ -100,9 +101,13 @@ export function PixelDiorama() {
   const modelInput = useRef<HTMLInputElement>(null)
   const scenes = model ? [...DIORAMAS, model] : DIORAMAS
   const picked0 = scenes.find((d) => d.id === which) ?? DIORAMAS[0]
-  /** Whether the style's time of day is night, where it has one: the scene's lamps and lit windows go by it (`Diorama.timed`). */
-  const [dark, setDark] = useState<boolean>()
-  const diorama = dark === undefined ? picked0 : picked0.timed?.(dark) ?? picked0
+  /**
+   * The time of day the scene is set in (`?time=night`), or none for the scene as it is written: a setting of the
+   * scene, which every style respects (Matt, 2026-11-21). It brings its sky and light, and the scene's lamps, lit
+   * windows and fires go by it (`Diorama.timed`).
+   */
+  const [time, setTime] = useState<TimeId | undefined>(() => timeAsked(new URLSearchParams(location.search).get('time')))
+  const diorama = time ? picked0.timed?.(time) ?? picked0 : picked0
   /** The scene whose palette, finish and view are set. */
   const dressed = useRef(which)
   /** The scene picker: the modal of every scene's card. */
@@ -113,11 +118,6 @@ export function PixelDiorama() {
   const [chosen, setChosen] = useState<string | undefined>(() => detailAsked(DETAIL, labelNames)?.id)
   /** How the scene is drawn: as pixel art, or as one of Brush and Ink's looks. `?style=oil` opens on that one. */
   const [style, setStyle] = useState<Style>(() => styleAsked(new URLSearchParams(location.search).get('style')))
-  // tech glitch is pixel art underneath: pixel mode, its palette and its finish, with bursts laid on as it goes to the screen
-  const pixels = isPixelStyle(style)
-  const glitching = style === 'glitch'
-  /** The look Brush and Ink would draw, where the style is one of theirs. */
-  const drawnStyle = isPixelStyle(style) ? undefined : style
   const [glitch, setGlitch] = useState<GlitchChoice>(GLITCH_START)
   /**
    * Light worked out a pixel at a time (`?shade=1`): pixel art made from a picture cel shading lit, so light and shade
@@ -125,10 +125,10 @@ export function PixelDiorama() {
    */
   const [shaded, setShaded] = useState(() => new URLSearchParams(location.search).get('shade') === '1')
   // cel shading lights the blobs itself, so its scene is cut with no light baked in; so does pixel art shaded a pixel at a time
-  const plain = wantsPlain(drawnStyle) || (pixels && shaded)
+  const plain = isPixelStyle(style) ? shaded : wantsPlain(style)
   // Finest by default (Matt, 2026-11-20); a phone starts pixel art at Fine (Matt found the dragon slow at Finest on his,
   // 2026-11-20) and keeps Chunky for the styles that draw the whole screen several times
-  const detail = chosen ?? (coarse ? (pixels ? DETAIL[2].id : DETAIL[0].id) : DETAIL[3].id)
+  const detail = chosen ?? (coarse ? (isPixelStyle(style) ? DETAIL[2].id : DETAIL[0].id) : DETAIL[3].id)
   const [palette, setPalette] = useState('own')
   const [baseSize, setSize] = useState(() => Number(new URLSearchParams(location.search).get('px')) || 2)
   // light in bands a blob at a time (`banded`): how many bands, 0 for smooth light; `?texel=0|2|3`
@@ -205,6 +205,18 @@ export function PixelDiorama() {
   // what is in the view now: the last scene built, which lags the one picked while it is being cut.
   // It is kept until the new one replaces it, so the old scene never wears the new one's palette or sky.
   const shown = made?.of ?? diorama
+  // What the view is drawn in lags what is picked while the scene is cut again for it (a style that lights the scene
+  // itself wants it cut with no light baked in; a time of day wants its lamps lit or out): the picture on show keeps
+  // its own style until the new cut is on the stage, so the bare blobs never show in between (Matt saw them, 2026-11-21)
+  const onStage = useHeld(scene, !!scene)
+  const styleNow = useHeld(style, !!scene)
+  const shadedNow = useHeld(shaded, !!scene)
+  const pixels = isPixelStyle(styleNow)
+  const glitching = styleNow === 'glitch'
+  /** The look Brush and Ink would draw, where the style is one of theirs. */
+  const drawnStyle = isPixelStyle(styleNow) ? undefined : styleNow
+  /** The time of day the scene in the view is set in, where it is. */
+  const timeNow = shown.at ? timeOf(shown.at) : undefined
   /** Saving a frame, the loop or a path: the view an export holds is `held`, which the poser and the view leave alone. */
   const exporting = useExport({ stage, canvas, pixels, style, name: shown.id, loop: shown.loop, orbit, setPlaying })
   const { held, recording, saving, note, setNote, record, save } = exporting
@@ -261,7 +273,7 @@ export function PixelDiorama() {
   const closeTour = () => { setTour(null); setStyle(styleBefore.current); requestAnimationFrame(() => tourOpener.current?.focus()) }
   // a step of the walk-through says how the scene is drawn, whatever the switch says
   const asPixels = touring ? touring.pixels : pixels
-  const look = useMemo<PixelLook>(() => ({ palette: colors, dither, outline: outline ? (colors.length ? darkest(colors) : [11, 16, 38]) : null, glow, edges: edges ? 1 : 0, parts, across, solid, sky: sky ? shown.sky : undefined, steady: steady ? STEADY : 0, tidy, calm: calmer, flat, fine, shine,
+  const look = useMemo<PixelLook>(() => ({ palette: colors, dither, outline: outline ? (colors.length ? darkest(colors) : [11, 16, 38]) : null, glow, edges: edges ? 1 : 0, parts, across, solid, sky: sky || shown.at ? shown.sky : undefined, steady: steady ? STEADY : 0, tidy, calm: calmer, flat, fine, shine,
     // the rim goes by the scene's starting view, so it holds still while the view rocks
     rim: rimmed && shown.sun ? screenWay(shown.sun, shown.views[0].orbit.azimuth, shown.views[0].orbit.elevation) : undefined, own, surface, snap: true,
     bands, heat: heat ? { pixels: heat, pace: heatPace(shown.loop) } : undefined, selout, cycle: cycling ? shown.finish.cycle : undefined }), [colors, dither, outline, glow, edges, parts, across, solid, sky, shown, steady, tidy, calmer, flat, fine, shine, rimmed, own, surface, bands, heat, selout, cycling])
@@ -324,9 +336,8 @@ export function PixelDiorama() {
   // white, which turns dark paint gray; the pixel pass's own highlights do that job)
   // in the scene's own share of light in shade, a little cool, and all of it held under the baked light's brightest
   // (`LIT_MAX`), so only what gives its own light reaches the pixel pass's glow
-  const pixelCel = useMemo<CelLook | undefined>(() => (pixels && shaded && !touring ? { from: shown.sun ? [...shown.sun] as [number, number, number] : undefined, tones: 2, smooth: PIXEL_SMOOTH, line: 0, ...shadedLight(shown.shade ?? 0.5) } : undefined), [pixels, shaded, touring, shown.sun, shown.shade])
-  const drawing = useDrawnLook(stage, touring ? undefined : drawnStyle, { pixelCel, actor: scene?.built, water: !!scene?.of.water, spacing: DETAIL.find((d) => d.id === scene?.detail)?.spacing, plain: !!scene?.plain, azimuth: shown.views[0].orbit.azimuth, offscreen, light: coarse, loop: shown.loop, sky: shown.finish.sky ? [styleSky[0], styleSky[1]] : undefined })
-  useEffect(() => setDark(drawing.dark), [drawing.dark])
+  const pixelCel = useMemo<CelLook | undefined>(() => (pixels && shadedNow && !touring ? { from: shown.sun ? [...shown.sun] as [number, number, number] : undefined, tones: 2, smooth: PIXEL_SMOOTH, line: 0, ...shadedLight(shown.shade ?? 0.5) } : undefined), [pixels, shadedNow, touring, shown.sun, shown.shade])
+  const drawing = useDrawnLook(stage, touring ? undefined : drawnStyle, { pixelCel, actor: onStage?.built, water: !!onStage?.of.water, spacing: DETAIL.find((d) => d.id === onStage?.detail)?.spacing, plain: !!onStage?.plain, time: timeNow, azimuth: shown.views[0].orbit.azimuth, offscreen, light: coarse, loop: shown.loop, sky: shown.finish.sky ? [styleSky[0], styleSky[1]] : undefined })
   // the walk-through's fourth step is about the four samples, so it draws them whatever the switch says
   const sampling = touring?.id === 'samples'
   const drawnLook = useMemo(() => (asPixels ? (sampling ? { ...look, fine: true } : look) : undefined), [asPixels, sampling, look])
@@ -491,6 +502,14 @@ export function PixelDiorama() {
   }
   useWheelZoom(canvas, setOrbit)
   const pick = (id: string) => { setView(id); setOrbit((shown.views.find((v) => v.id === id) ?? shown.views[0]).orbit) }
+  /** Another time of day, or the scene as it is written. The address names it too. */
+  const setTimeOfDay = (id: TimeId | undefined) => {
+    setTime(id)
+    const url = new URL(location.href)
+    if (id) url.searchParams.set('time', id)
+    else url.searchParams.delete('time')
+    history.replaceState(history.state, '', url)
+  }
   /** Another style. The address names it, as it names the scene, so a shared link opens the same picture. */
   const draw = (id: Style) => {
     setStyle(id)
@@ -733,6 +752,13 @@ export function PixelDiorama() {
                     </Button>
                   </div>
                 </div>
+                <Field label="Time of day">
+                  <div className="flex flex-wrap gap-1.5" data-testid="diorama-time">
+                    <Chip active={!time || !picked0.timed} onClick={() => setTimeOfDay(undefined)}>Scene's own</Chip>
+                    {picked0.timed && TIMES.map((t) => <Chip key={t.id} active={time === t.id} onClick={() => setTimeOfDay(t.id)}>{t.label}</Chip>)}
+                  </div>
+                  <p className="mt-1.5 text-xs text-ink-faint">{!picked0.timed ? 'This scene keeps its own time of day.' : time ? 'The scene under this time\'s sky and light, in every style. Its lamps, lit windows and fires wait for the dark.' : 'The scene as it was written, with everything lit. Pick a time to set it in a morning, an afternoon or a night, in every style.'}</p>
+                </Field>
                 <Field label="Changing scenes">
                   <div className="flex flex-wrap gap-1.5" data-testid="diorama-transitions">
                     <Chip active={transition === 'cut'} onClick={() => pickTransition('cut')}>Cut</Chip>

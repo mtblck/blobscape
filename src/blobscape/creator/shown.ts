@@ -29,7 +29,7 @@ export interface Shown {
   orbit: Orbit
   swing: number
   lights(t: number, shadows: boolean): PointLight[]
-  ambient: number
+  ambient: number | readonly [number, number, number]
   /** Poses the land (or the whole scene). */
   poseLand(sk: Skeleton, t: number): void
   /** Poses prop `i`, cut apart, on its own skeleton. */

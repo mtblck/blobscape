@@ -25,8 +25,28 @@ test('colors stay colors: nothing below 0, paint no brighter than a ridge of lig
   for (const kind of MARK_KINDS) for (const rgb of [[0, 0, 0], [1, 1, 1], [0.8, 0.1, 0.05]]) for (const u of GRID) for (const v of GRID) {
     const { cover, color } = markAt(kind, u, v, 0.31, rgb)
     assert.ok(cover >= 0 && cover <= 1)
-    for (const c of color) assert.ok(c >= 0 && c <= 1.45, `${kind}: ${c}`)
+    for (const c of color) assert.ok(c >= 0 && c <= 1.7, `${kind}: ${c}`)
   }
+})
+
+test('gouache and oil are different paint: flat chalky dabs beside long ridged strokes of richer color', () => {
+  const rgb = [0.6, 0.25, 0.1]
+  const swing = (kind: 'gouache' | 'oil') => { const c = GRID.filter((v) => Math.abs(v) < 0.7).map((v) => markAt(kind, 0, v, 0.4, rgb).color[1]); return Math.max(...c) - Math.min(...c) }
+  assert.ok(swing('oil') > 4 * swing('gouache'), 'oil has ridges where gouache is nearly flat')
+  // a stroke of oil reaches further along its blob and is narrower across it
+  const reach = (kind: 'gouache' | 'oil', across: boolean) => GRID.filter((t) => t >= 0 && markAt(kind, across ? 0 : t, across ? t : 0, 0.4, rgb).cover > 0.5).length
+  assert.ok(reach('oil', false) > reach('gouache', false) && reach('oil', true) < reach('gouache', true))
+  // oil is richer than the blob's own color and gouache chalkier, the same seed and place
+  const chroma = (c: number[]) => Math.max(...c) - Math.min(...c)
+  const gray = [0.3, 0.3, 0.3]
+  assert.ok(markAt('gouache', 0, 0, 0.5, [0, 0, 0]).color[0] > 0.02, 'chalk lifts gouache off black')
+  assert.ok(markAt('oil', 0, 0, 0.5, [0, 0, 0]).color[0] < 0.21)
+  let richer = 0
+  for (const v of GRID) { const o = markAt('oil', 0, v, 0.5, rgb), g = markAt('gouache', 0, v, 0.5, rgb); if (o.cover && g.cover && chroma(o.color) / (o.color[0] + 1e-6) > chroma(g.color) / (g.color[0] + 1e-6)) richer++ }
+  assert.ok(richer > 5)
+  // a stroke of oil leans warm or cool by its seed; a gray stays gray in gouache
+  assert.ok(markAt('oil', 0, 0, 0.9, gray).color[0] > markAt('oil', 0, 0, 0.9, gray).color[2] && markAt('oil', 0, 0, 0.1, gray).color[0] < markAt('oil', 0, 0, 0.1, gray).color[2])
+  assert.ok(Math.abs(markAt('gouache', 0, 0, 0.9, gray).color[0] - markAt('gouache', 0, 0, 0.9, gray).color[2]) < 1e-9)
 })
 
 test('two blobs of one color get different marks, and a mark has streaks along it', () => {

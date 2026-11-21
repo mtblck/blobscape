@@ -54,6 +54,13 @@ export const SKY_SHARE = 0.16
  * across, on a grid of their own, and take no part in shadows or corners.
  */
 export const SPECK_SIZE = 0.4
+/**
+ * How many blobs one blob that glows or is laid over another (`laid`) counts for when a cell's color is picked: a
+ * window is a small pane in a bigger dark frame, and by count the frame took every cell (Matt saw windows as solid
+ * black blocks, 2026-11-21).
+ */
+export const FACE_VOTE = 4
+
 /** A block that gives this much of its own light or more (the mean of its blobs' `glow`) casts no shadow. */
 export const GLOW_CLEAR = 0.5
 
@@ -67,6 +74,8 @@ export interface BlockSource {
   skeleton: { bones: readonly { name: string }[] }
   /** How much of its own light each blob gives, a byte a blob (`Actor.glow`). */
   glow?: Uint8Array
+  /** Blobs of a face laid over another part (voxel.ts `laid`: a pane on its frame), a byte a blob: drawn as blocks, a cell takes their color before the color of what they lie on. */
+  laid?: Uint8Array
   /** How much of each of the first four lights each blob sees, four bytes a blob (`Actor.seen`): a light some blob sees less than all of is a lamp that stays put, and casts block shadows (`lampSight`). */
   seen?: Uint8Array
   /** A surface that moves by itself (a pond): its blobs are sent up again as they change, and its cubes are columns that follow them (`planFlow`). */
@@ -217,7 +226,9 @@ export function buildBlocks(sources: readonly BlockSource[], look: BlockLook): {
   const where: number[] = [], owner: number[] = [], bones: number[] = [], loose: number[] = [], paint: number[] = [], glows: number[] = []
   const groups: Map<number, number>[] = []
   for (let a = 0; a < sources.length; a++) {
-    const { blobs, skin, skeleton, glow } = sources[a]
+    const { blobs, skin, skeleton, glow, laid } = sources[a]
+    // a lamp, a lit window or a pane laid on its frame is what the eye reads there, however small beside its housing
+    const vote = (i: number) => (glow?.[i] || laid?.[i] ? FACE_VOTE : 1)
     // a surface that moves is columns of its own (`planFlow`), or stays blobs
     if (sources[a].flows) { groups.push(new Map(), new Map()); continue }
     // twice: the grid's own blocks, then the loose specks on their finer grid
@@ -263,20 +274,21 @@ export function buildBlocks(sources: readonly BlockSource[], look: BlockLook): {
         for (let j = start[k]; j < start[k + 1]; j++) {
           const i = list[j]
           if (boneAt[i] !== bone) continue
-          const q = bucketOf(i), c = (tally.get(q) ?? 0) + 1
+          const q = bucketOf(i), c = (tally.get(q) ?? 0) + vote(i)
           tally.set(q, c)
           if (c > most) { most = c; bucket = q }
         }
-        let r = 0, g = 0, b = 0, own = 0
+        let r = 0, g = 0, b = 0, own = 0, had = 0
         for (let j = start[k]; j < start[k + 1]; j++) {
           const i = list[j]
           if (boneAt[i] !== bone || bucketOf(i) !== bucket) continue
           r += blobs.color[i * 3]; g += blobs.color[i * 3 + 1]; b += blobs.color[i * 3 + 2]
           own += glow ? glow[i] / 255 : 0
+          had++
         }
         owner.push(a); bones.push(bone); loose.push(specks ? 1 : 0)
-        paint.push(srgbToLinear(r / most), srgbToLinear(g / most), srgbToLinear(b / most))
-        glows.push(own / most)
+        paint.push(srgbToLinear(r / had), srgbToLinear(g / had), srgbToLinear(b / had))
+        glows.push(own / had)
       }
       // which cells are one bone's, for leaving out the faces between them
       const group = new Map<number, number>()

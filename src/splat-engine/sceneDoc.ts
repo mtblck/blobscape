@@ -269,6 +269,12 @@ export interface PartDoc {
   unlit?: string
   /** Casts no shadow: thin things in the air. */
   noShadow?: boolean
+  /**
+   * Laid on other parts (a pane on its frame): its own face is cut whole, and the face under it is what is left out.
+   * `litFor` sets it on a lamp's part it has put out: a glowing pane and the dark frame it lies in would otherwise
+   * each lose the face inside the other and leave a hole (Matt saw black windows by day, 2026-11-21).
+   */
+  laid?: boolean
   /** A color that gathers in its corners and cracks, as moss or soot does. */
   grime?: string
   /** Takes none of the scene's `cover`: water, glass, a fresh fire. */
@@ -1013,7 +1019,7 @@ export function checkScene(doc: unknown): string[] {
     }
     if (piecesIn(p.paint) && !hasPieces(p.shape)) bad(`${at}.paint`, `pieces paints a shape made of pieces only (${PIECED.join(', ')})`)
     if (p.bone !== undefined) bone(p.bone, `${at}.bone`)
-    for (const k of ['glow', 'noShadow', 'bare', 'touches']) if (p[k] !== undefined && typeof p[k] !== 'boolean') bad(`${at}.${k}`, 'must be true or false')
+    for (const k of ['glow', 'noShadow', 'laid', 'bare', 'touches']) if (p[k] !== undefined && typeof p[k] !== 'boolean') bad(`${at}.${k}`, 'must be true or false')
     litWhen(p.lit, `${at}.lit`)
     if (p.unlit !== undefined) {
       if (p.lit === undefined) bad(`${at}.unlit`, 'is for a part that says when it is lit (lit)')
@@ -1796,7 +1802,7 @@ export function compileScene(doc: SceneDoc, { puffs = true }: { puffs?: boolean 
       const parts: VoxelPart[] = doc.parts.map((p, i) => {
         const shape = shapes[i]
         return {
-        shape, color: toPaint(p.paint, spacing, 'letterAt' in shape ? (shape.letterAt as (p: Vec3, n: Vec3) => string | undefined) : undefined, shape.pieceAt), bone: p.bone ?? 'land', glow: p.glow, noShadow: p.noShadow,
+        shape, color: toPaint(p.paint, spacing, 'letterAt' in shape ? (shape.letterAt as (p: Vec3, n: Vec3) => string | undefined) : undefined, shape.pieceAt), bone: p.bone ?? 'land', glow: p.glow, laid: p.laid, noShadow: p.noShadow,
         grime: p.grime === undefined ? undefined : unit(p.grime), bare: p.bare,
         glass: p.glass, strokes: p.strokes,
         ink: p.ink && { kind: p.ink.kind, amount: p.ink.amount, color: p.ink.color === undefined ? undefined : unit(p.ink.color) },
@@ -1935,7 +1941,8 @@ export function litFor(doc: SceneDoc, dark: boolean, lamps: 'dark' | 'always' | 
     else if (p.unlit !== 'gone') {
       const { glow: _glow, lit: _lit, unlit, ...rest } = p
       if (unlit) added.add(unlit)
-      parts.push({ ...rest, paint: unlit ?? repaint(p.paint, dull) })
+      // its face stays whole over whatever it lies on (`laid`), or a pane and its frame would each lose the face inside the other
+      parts.push({ ...rest, paint: unlit ?? repaint(p.paint, dull), ...(p.glow ? { laid: true } : {}) })
     }
   }
   const palette = [...doc.palette]

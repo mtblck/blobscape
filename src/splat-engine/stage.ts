@@ -52,6 +52,8 @@ export interface Actor {
   morphs?: Morph[]
   /** How much of its own light each blob gives, a byte a blob (255 all of it): a flame, a lit window. It only matters under live lights. */
   glow?: Uint8Array
+  /** Blobs of a face laid over another part (voxel.ts `laid`: a pane on its frame), a byte a blob: drawn as blocks, a cell takes their color before the color of what they lie on. */
+  laid?: Uint8Array
   /** Stays blobs while the stage draws blocks (`setBlocks`): grass and the like, drawn among the cubes. It makes no cubes. */
   soft?: boolean
   /** A surface that moves by itself and is sent up again with `reshape` (a pond's): while the stage draws blocks it is columns that follow it, or stays blobs, as the look's `flow` says. */

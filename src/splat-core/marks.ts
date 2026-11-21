@@ -53,6 +53,9 @@ export const MARK_MOST = 1.3
  * The engine draws a mark where its cover is at least this, and nothing of it elsewhere: marks write depth so that
  * each pixel shows the nearest one, and an edge that faded out would hide what lies under it.
  */
+/** However big, a mark ends this far along its blob, inside the quad it is drawn on. */
+export const MARK_END = 1.85
+
 export const MARK_CUT = 0.5
 /**
  * Marks that lie in one plane are at one depth, so each is lifted toward or away from the eye by up to half this
@@ -159,6 +162,17 @@ export function stippleAt(u: number, v: number, seed: number, dark: number, size
   return keep ? 1 - smooth(r * 0.7, r, Math.hypot(du, dv)) : 0
 }
 
+/**
+ * How a dab is cut for each kind of paint: its length as a share of `MARK_LONG` (a base and how much the streak adds)
+ * and its width as a share of `MARK_WIDE`. Gouache goes on in short square dabs, oil in long narrow strokes: Matt
+ * found the two almost identical when they shared one dab (2026-11-21).
+ */
+export const DAB = { gouache: [0.66, 0.2, 1.05], oil: [0.95, 0.3, 0.78], pen: [0.78, 0.3, 1] } as const
+/** Gouache: how much one dab differs from the next, how deep its streaks go, the chalk in its color, and how far along a dab the brush starts running dry. */
+export const GOUACHE = { own: 0.07, streak: 0.05, chalk: 0.045, dry: 0.5 } as const
+/** Oil: how much one stroke differs from the next, its ridges' dark and light, the bead at its edges, the shine on a crest, how much richer than the blob's color, and its lean toward warm or cool. */
+export const OIL = { own: 0.2, ridge: [0.6, 0.55], bead: 0.16, shine: 0.2, rich: 1.18, lean: 0.16 } as const
+
 /** What a mark is at one pixel. */
 export interface MarkSample {
   /** How much of the pixel the mark covers, 0–1. Marks are paint: its alpha is this times the blob's opacity times `MARK_SOLID`, at most 1. */
@@ -178,22 +192,31 @@ export function markAt(kind: MarkKind, u: number, v: number, seed: number, rgb: 
   if (kind === 'flat') return { cover: Math.exp(-0.5 * (u * u + v * v)) >= FLAT_CUT ? 1 : 0, color: [rgb[0], rgb[1], rgb[2]] }
   const k = Math.min(MARK_MOST, Math.max(0.2, size))
   const s = streak(v / k, seed, 5)
-  // a dab: a rounded slab whose ends are ragged, each bristle stopping where it ran dry
-  const long = MARK_LONG * k * (0.78 + 0.3 * s), wide = MARK_WIDE * k
+  // a dab: a rounded slab whose ends are ragged, each bristle stopping where it ran dry. Gouache is laid in short
+  // square dabs and oil in long narrow strokes (`DAB`)
+  const dab = kind === 'gouache' ? DAB.gouache : kind === 'oil' ? DAB.oil : DAB.pen
+  const long = Math.min(MARK_END, MARK_LONG * k * (dab[0] + dab[1] * s)), wide = MARK_WIDE * k * dab[2]
   const d = Math.pow(Math.abs(u) / long, 4) + Math.pow(Math.abs(v) / wide, 4)
   const cover = 1 - smooth(0.8, 1, d)
   // every blob a touch lighter or darker than the next, as mixed paint is
-  const own = 1 + 0.12 * (seed - 0.5)
   if (kind === 'gouache') {
-    const shade = own * (0.94 + 0.12 * s)
-    return { cover, color: [rgb[0] * shade, rgb[1] * shade, rgb[2] * shade] }
+    // matte and flat: hardly a streak in it, and a little chalk in every color, as gouache dries
+    const shade = (1 + GOUACHE.own * (seed - 0.5)) * (1 - GOUACHE.streak / 2 + GOUACHE.streak * s) * (1 - GOUACHE.chalk)
+    // a dry brush: toward its ends the dab breaks up into the gaps between bristles
+    const dry = smooth(GOUACHE.dry, 1, Math.abs(u) / long)
+    const gaps = smooth(0.36, 0.46, streak(v / k, seed + 0.71, 14))
+    return { cover: cover * (1 - dry * (1 - gaps)), color: [rgb[0] * shade + GOUACHE.chalk, rgb[1] * shade + GOUACHE.chalk, rgb[2] * shade + GOUACHE.chalk] }
   }
   if (kind === 'oil') {
-    // thick paint: ridges between the bristles, lit along one side of each
+    // thick paint: deep ridges between the bristles, lit along their crests, and a bead pushed out to the stroke's edges
     const ridge = streak(v / k, seed + 0.37, 9)
-    const shade = own * (0.8 + 0.4 * ridge)
-    const shine = 0.1 * smooth(0.62, 0.9, ridge)
-    return { cover, color: [rgb[0] * shade + shine, rgb[1] * shade + shine, rgb[2] * shade + shine] }
+    const bead = smooth(0.55, 0.85, Math.abs(v) / wide)
+    const shade = (1 + OIL.own * (seed - 0.5)) * (OIL.ridge[0] + OIL.ridge[1] * ridge) * (1 + OIL.bead * bead)
+    const shine = OIL.shine * smooth(0.66, 0.9, ridge)
+    // richer than the blob's own color, and each stroke leaning warm or cool, as paint mixed on a palette does
+    const l = luma(rgb), lean = OIL.lean * (seed - 0.5)
+    const rich = [0, 1, 2].map((c) => Math.max(0, l + (rgb[c] - l) * OIL.rich) * (c === 0 ? 1 + lean : c === 2 ? 1 - lean : 1))
+    return { cover, color: [rich[0] * shade + shine, rich[1] * shade + shine, rich[2] * shade + shine] }
   }
   const dark = 1 - Math.min(1, Math.sqrt(Math.max(0, luma(rgb))))
   if (kind === 'stipple') return { cover, color: [0, 1, 2].map((c) => paper[c] + (ink[c] - paper[c]) * stippleAt(u, v, seed, dark, k)) as [number, number, number] }

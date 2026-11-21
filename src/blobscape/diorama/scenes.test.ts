@@ -67,7 +67,11 @@ test('every light in every scene says when it shines, and a scene is sound by da
       at.lights?.forEach((l) => assert.ok(isLit(l.lit, dark, doc.lamps) || l.strength === 0))
       assert.equal(at.lights?.length, doc.lights?.length, `${d.id}: lights keep their places`)
     }
-    const timed = d.timed?.(false)
-    if (timed) { assert.equal(timed.id, d.id); assert.equal(timed.timed?.(false), timed, `${d.id}: a time of day is cut once`) }
+    const timed = d.timed?.('night')
+    if (timed) {
+      assert.equal(timed.id, d.id); assert.equal(timed.timed?.('night'), timed, `${d.id}: a time of day is made once`)
+      assert.equal(timed.at, 'night'); assert.equal(timed.of?.id, d.id)
+      assert.ok(timed.finish.sky && timed.palette.colors.length <= 32 && Array.isArray(timed.ambient), `${d.id}: a time brings its sky, palette and light`)
+    }
   }
 })

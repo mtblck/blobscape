@@ -49,7 +49,7 @@ export const CABIN: SceneDoc = {
     { shape: { kind: 'box', at: [0.42, 0.82, -0.42], half: [0.07, 0.28, 0.07] }, paint: { kind: 'bricks', size: [0.06, 0.035], colors: ['#5a5a6e', '#8a8aa0'], line: '#22304e' } },
     { shape: { kind: 'box', at: [-0.14, 0.22, 0.03], half: [0.1, 0.22, 0.02] }, paint: { kind: 'bands', axis: 'x', size: 0.04, colors: ['#4a2e22', '#2a1a18'] } },
     { shape: { kind: 'box', at: [0.27, 0.34, 0.03], half: [0.13, 0.11, 0.015] }, paint: '#2a1a18' },
-    { shape: { kind: 'box', at: [0.27, 0.34, 0.035], half: [0.1, 0.085, 0.012] }, paint: '#ffb840', glow: true, lit: 'dark', unlit: '#28303c', bare: true },
+    { shape: { kind: 'box', at: [0.27, 0.34, 0.035], half: [0.1, 0.085, 0.012] }, paint: '#ffb840', glow: true, lit: 'dark', unlit: '#a9c3d4', bare: true },
     // a woodpile against the west wall, rocks, three pines and a fence
     { shape: { kind: 'join', shapes: [
       { kind: 'cone', from: [-0.42, 0.05, -0.5], to: [-0.42, 0.05, -0.1], r: 0.045 },

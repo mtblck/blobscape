@@ -13,7 +13,8 @@ import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitD
 import type { Actor, CreatureStage } from './creature/stage.ts'
 import { DETAIL } from './diorama/scene.ts'
 import { DIORAMAS } from './diorama/scenes.ts'
-import { ALL_LOOKS, useDrawnLook, wantsPlain, type Look } from './drawnLook.tsx'
+import { ALL_LOOKS, useDrawnLook, useHeld, wantsPlain, type Look } from './drawnLook.tsx'
+import { TIMES, timeAsked, timeOf, type TimeId } from './timeOfDay.ts'
 import { unlit } from '../splat-engine/voxel.ts'
 import { href } from './routes.ts'
 import { sampleScan } from './scan/sample.ts'
@@ -41,20 +42,21 @@ interface Subject {
   orbit: Orbit
   /** A scan: its marks are laid softly, one over another (`MarkLook.soft`). */
   soft?: boolean
-  /** It has lamps that go by the time of day. */
+  /** A scene, which can be set in a time of day. */
   timed?: boolean
   /** `plain` leaves the baked light out of what is built (`unlit`), for a look that lights it live. */
-  /** `dark` is the look's time of day, where it has one: a scene's lamps go by it. */
-  make(detail: Detail, plain: boolean, dark?: boolean): { actor: Actor; pose?: (sk: Skeleton, t: number) => void; lights?: (t: number) => PointLight[]; ambient?: Parameters<CreatureStage['setLights']>[1]; clip?: ReturnType<typeof recordClip> }
+  /** `time` is the time of day the subject is set in, where it is: a scene's sky, light and lamps go by it. */
+  make(detail: Detail, plain: boolean, time?: TimeId): { sky?: readonly [readonly number[], readonly number[]]; actor: Actor; pose?: (sk: Skeleton, t: number) => void; lights?: (t: number) => PointLight[]; ambient?: Parameters<CreatureStage['setLights']>[1]; clip?: ReturnType<typeof recordClip> }
 }
 
 function scene(id: string, label: string): Subject {
   const d = DIORAMAS.find((x) => x.id === id) ?? DIORAMAS[0]
   return {
     id, label, about: d.about, from: 'a scene written as data', orbit: d.views[0].orbit, timed: !!d.timed,
-    make: (detail, plain, dark) => {
-      const at = dark === undefined ? d : d.timed?.(dark) ?? d
-      return { actor: plain ? unlit(() => at.make(DETAIL[detail].spacing)) : at.make(DETAIL[detail].spacing), pose: at.pose, lights: at.lights, ambient: at.ambient }
+    make: (detail, plain, time) => {
+      const at = time ? d.timed?.(time) ?? d : d
+      // set in a time of day it stands under that time's sky; as written, in front of each look's own ground, as before
+      return { sky: time && at.at ? [at.sky[0], at.sky[1]] : undefined, actor: plain ? unlit(() => at.make(DETAIL[detail].spacing)) : at.make(DETAIL[detail].spacing), pose: at.pose, lights: at.lights, ambient: at.ambient }
     },
   }
 }
@@ -109,9 +111,10 @@ export function BrushInk() {
   const plain = wantsPlain(look)
   const sub = SUBJECTS.find((s) => s.id === subject)!
   const [orbit, setOrbit] = useState<Orbit>(sub.orbit)
-  const [built, setBuilt] = useState<{ id: string; plain: boolean; count: number; actor: Actor }>()
-  /** Whether the look's time of day is night, where it has one. */
-  const [dark, setDark] = useState<boolean>()
+  const [built, setBuilt] = useState<{ id: string; plain: boolean; time: TimeId | undefined; sky?: readonly [readonly number[], readonly number[]]; count: number; actor: Actor }>()
+  /** The time of day a scene is set in (`?time=night`), or none for the scene as it is written. */
+  const [time, setTime] = useState<TimeId | undefined>(() => timeAsked(params().get('time')))
+  const timeFor = sub.timed ? time : undefined
 
   useEffect(() => {
     let live: CreatureStage | undefined, gone = false
@@ -131,23 +134,24 @@ export function BrushInk() {
   // built after a paint, so the waiting mark goes up first: cutting a scene holds the main thread
   useEffect(() => {
     if (!stage) return
-    setBuilt(undefined)
     const s = SUBJECTS.find((x) => x.id === subject)!
     const t = setTimeout(() => {
-      const made = s.make(detail, plain, dark)
+      const made = s.make(detail, plain, timeFor)
       stage.setActor(made.actor, made.clip)
       if (made.pose) stage.setPoser((sk, time) => { made.pose!(sk, time); stage.setLights(made.lights?.(time) ?? [], made.ambient ?? 1) })
       else stage.setLights([], 1)
       // the view stays where it is when only the light in the blobs changed
       setOrbit((o) => (kept.current === s.id ? o : s.orbit))
       kept.current = s.id
-      setBuilt({ id: s.id, plain, count: made.actor.blobs.count, actor: made.actor })
+      setBuilt({ id: s.id, plain, time: timeFor, sky: made.sky, count: made.actor.blobs.count, actor: made.actor })
     }, 30)
     return () => clearTimeout(t)
-  }, [stage, subject, detail, plain, dark])
+  }, [stage, subject, detail, plain, timeFor])
 
-  const drawing = useDrawnLook(stage, look, { actor: built?.id === subject ? built.actor : undefined, plain: !!built?.plain, azimuth: sub.orbit.azimuth, soft: sub.soft, offscreen })
-  useEffect(() => setDark(sub.timed ? drawing.dark : undefined), [drawing.dark, sub.timed])
+  // the picture on show keeps its look until the subject is cut again for the one picked, so the bare blobs never show between
+  const ready = built?.id === subject && built.plain === plain && built.time === timeFor
+  const lookNow0 = useHeld(look, !!ready)
+  const drawing = useDrawnLook(stage, lookNow0, { actor: built?.actor, plain: !!built?.plain, azimuth: sub.orbit.azimuth, soft: sub.soft, offscreen, sky: built?.sky, time: built?.time ? timeOf(built.time) : undefined })
   useEffect(() => { drawing.forget() }, [subject]) // eslint-disable-line react-hooks/exhaustive-deps
   const ascii = look === 'ascii'
   useEffect(() => { if (stage) stage.playing = playing }, [stage, playing])
@@ -158,8 +162,10 @@ export function BrushInk() {
     const q = params()
     q.set('subject', subject)
     q.set('look', look)
+    if (timeFor) q.set('time', timeFor)
+    else q.delete('time')
     history.replaceState(history.state, '', `${location.pathname}?${q}`)
-  }, [subject, look])
+  }, [subject, look, timeFor])
 
   // For verify: the stage, without clicking
   useEffect(() => {
@@ -171,7 +177,7 @@ export function BrushInk() {
   const drag = useRef<OrbitDrag | null>(null)
   const pointers = useRef(new Map<number, { x: number; y: number }>())
   useWheelZoom(canvas, setOrbit)
-  const waiting = !failed && (!drawn || built?.id !== subject || built.plain !== plain)
+  const waiting = !failed && (!drawn || !ready)
   const lookNow = ALL_LOOKS.find((l) => l.id === look)!
   const backend = stage ? (stage.backend === 'webgpu' ? 'WebGPU' : 'WebGL 2') : 'WebGPU or WebGL 2'
 
@@ -254,6 +260,15 @@ export function BrushInk() {
                   </div>
                   <p className="mt-1.5 text-xs text-ink-faint">More blobs make finer marks and take longer to cut.</p>
                 </Field>
+                {sub.timed && (
+                  <Field label="Time of day">
+                    <div className="flex flex-wrap gap-1.5" data-testid="brush-time">
+                      <Chip active={!time} onClick={() => setTime(undefined)}>Scene's own</Chip>
+                      {TIMES.map((t) => <Chip key={t.id} active={time === t.id} onClick={() => setTime(t.id)}>{t.label}</Chip>)}
+                    </div>
+                    <p className="mt-1.5 text-xs text-ink-faint">{time ? 'The scene under this time\'s sky and light, in every look. Its lamps and fires wait for the dark.' : 'The scene as it was written. Pick a time to set it in a morning, an afternoon or a night.'}</p>
+                  </Field>
+                )}
                 <div className="flex flex-wrap gap-1.5">
                   <Button small onClick={() => setPlaying((p) => !p)}>{playing ? 'Stop' : 'Play'}</Button>
                   <Button small onClick={() => setOrbit(sub.orbit)}>Reset the view</Button>

@@ -1,6 +1,6 @@
 /** Blocks as Brush and Ink and Pixel Diorama offer them: the chip, the choices and the look they make for the stage. */
 import { FLOW_SWELL, type BlockLook } from '../splat-engine/blocks.ts'
-import { MOONLIGHT, lightFrom, nightLight } from './celLooks.ts'
+import { lightFrom, nightLight } from './celLooks.ts'
 
 /** The chip beside the drawn looks (brushLooks.ts). */
 export const BLOCKS = { id: 'blocks' as const, label: 'Blocks', note: 'Built from cubes on a grid: every block one flat color, every face one tone, with the shadows blocks cast on each other.' }
@@ -17,7 +17,7 @@ export interface BlockChoice {
   corners: number
   vary: number
   edge: number
-  /** What stands behind, a time of day (`BLOCK_TIMES`, or 'scene' for the subject's own sky) or a plain color (`BLOCK_GROUNDS`): '' is the subject's own sky where it has one, else the afternoon. */
+  /** What stands behind: 'scene' for the subject's own sky, or a plain color (`BLOCK_GROUNDS`); '' is the subject's own sky where it has one, else daylight. */
   backdrop: string
   /** A subject's water: columns of blocks that rise and fall, or the blobs it is among the cubes. */
   water: 'blocks' | 'blobs'
@@ -26,17 +26,11 @@ export interface BlockChoice {
 }
 export const BLOCK_START: BlockChoice = { size: 2, turn: -50, height: 50, shadows: true, corners: 0.5, vary: 0.35, edge: 0.3, backdrop: '', water: 'blobs', swell: FLOW_SWELL }
 /**
- * Times of day (Matt, 2026-11-21: the backdrop is either a time of day, with its sky and its light, or a plain color in
- * day's light). `light` multiplies everything but the scene's own lamps (linear), `height` is where the Light height
- * slider goes when the time is picked.
+ * What to stand in front of when it is not the subject's own sky: daylight, or a plain color. The time of day is the
+ * scene's own setting (timeOfDay.ts), not this look's: it reaches here as the subject's sky and the stage's light.
  */
-export const BLOCK_TIMES: { id: string; label: string; back: string; light: readonly [number, number, number]; height: number }[] = [
-  { id: 'morning', label: 'Morning', back: 'linear-gradient(#9cc4e4, #f6d7b0 70%, #f9c58d)', light: [1, 0.86, 0.68], height: 20 },
-  { id: 'afternoon', label: 'Afternoon', back: 'linear-gradient(#6fb1e6, #cfe6f4)', light: [1, 1, 1], height: 55 },
-  { id: 'night', label: 'Night', back: 'linear-gradient(#0d1228, #27325a)', light: MOONLIGHT, height: 40 },
-]
-/** Plain colors to stand in front of, always in day's light. */
 export const BLOCK_GROUNDS: { id: string; label: string; back: string }[] = [
+  { id: 'day', label: 'Daylight', back: 'linear-gradient(#6fb1e6, #cfe6f4)' },
   { id: 'sky', label: 'Sky blue', back: '#bfdcec' },
   { id: 'cream', label: 'Cream', back: '#f1e9d6' },
   { id: 'white', label: 'White', back: '#ffffff' },
@@ -44,20 +38,18 @@ export const BLOCK_GROUNDS: { id: string; label: string; back: string }[] = [
   { id: 'black', label: 'Black', back: '#101014' },
 ]
 
-/** What a choice of backdrop comes to: whether it is a time of day, what goes behind the canvas and what light it gives (none is day's). */
-export interface BlockBack { id: string; time: boolean; back: string; light?: readonly [number, number, number] }
+/** What a choice of backdrop comes to: what goes behind the canvas and what light it gives (none is day's). */
+export interface BlockBack { id: string; back: string; light?: readonly [number, number, number] }
 /**
  * The backdrop for a choice. `sky` is the subject's own sky as CSS and how much it is a night's (`nightOf`), where it
- * has one: it goes with the plain colors (Matt, 2026-11-21: a time of day overrides whatever time the scene has), keeps a
- * night's light under a dark sky, and is what an empty choice means.
+ * has one: it is what an empty choice means, and under a dark one the light is a night's, unless the page has set a
+ * time of day (`timed`), whose light is already the stage's.
  */
-export function blockBack(choice: string, sky?: { back: string; night: number }): BlockBack {
-  const id = choice || (sky ? 'scene' : 'afternoon')
-  if (id === 'scene' && sky) return { id, time: false, back: sky.back, light: sky.night ? nightLight(sky.night) : undefined }
-  const ground = BLOCK_GROUNDS.find((g) => g.id === id)
-  if (ground) return { id, time: false, back: ground.back }
-  const t = BLOCK_TIMES.find((x) => x.id === id) ?? BLOCK_TIMES[1]
-  return { id: t.id, time: true, back: t.back, light: t.id === 'afternoon' ? undefined : t.light }
+export function blockBack(choice: string, sky?: { back: string; night: number }, timed = false): BlockBack {
+  const id = choice || (sky ? 'scene' : BLOCK_GROUNDS[0].id)
+  if (id === 'scene' && sky) return { id, back: sky.back, light: sky.night && !timed ? nightLight(sky.night) : undefined }
+  const ground = BLOCK_GROUNDS.find((g) => g.id === id) ?? BLOCK_GROUNDS[0]
+  return { id: ground.id, back: ground.back }
 }
 
 /** The most a ripple's height is multiplied by. */

@@ -87,6 +87,12 @@
        "doc": "How much of its own light each blob gives, a byte a blob (255 all of it): a flame, a lit window. It only matters under live lights."
       },
       {
+       "name": "laid",
+       "optional": true,
+       "type": "Uint8Array<ArrayBufferLike>",
+       "doc": "Blobs of a face laid over another part (voxel.ts `laid`: a pane on its frame), a byte a blob: drawn as blocks, a cell takes their color before the color of what they lie on."
+      },
+      {
        "name": "soft",
        "optional": true,
        "type": "boolean",
@@ -3131,6 +3137,12 @@
        "optional": true,
        "type": "Uint8Array<ArrayBufferLike>",
        "doc": "How much of its own light each blob gives, a byte a blob (the engine's `Actor.glow`): 255 for a voxel scene's `glow` parts; left out, nothing glows."
+      },
+      {
+       "name": "laid",
+       "optional": true,
+       "type": "Uint8Array<ArrayBufferLike>",
+       "doc": "Blobs of a face laid over another part (voxel.ts `laid`: a pane on its frame), a byte a blob: drawn as blocks, a cell takes their color before the color of what they lie on."
       }
      ]
     },
@@ -4019,6 +4031,12 @@
        "doc": "Casts no shadow: thin things in the air."
       },
       {
+       "name": "laid",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Laid on other parts (a pane on its frame): its own face is cut whole, and the face under it is what is left out.\n`litFor` sets it on a lamp's part it has put out: a glowing pane and the dark frame it lies in would otherwise\neach lose the face inside the other and leave a hole (Matt saw black windows by day, 2026-11-21)."
+      },
+      {
        "name": "grime",
        "optional": true,
        "type": "string",
@@ -4625,6 +4643,12 @@
        "optional": true,
        "type": "boolean",
        "doc": "Unlit and casting no shadow: lamps, windows, beams of light."
+      },
+      {
+       "name": "laid",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Laid on other parts (a pane on its frame): none of its cells is left out for lying inside a neighbor, so its face is whole and the face under it is what goes."
       },
       {
        "name": "opacity",
@@ -9422,6 +9446,12 @@
      "type": "0.4"
     },
     {
+     "name": "FACE_VOTE",
+     "kind": "const",
+     "doc": "How many blobs one blob that glows or is laid over another (`laid`) counts for when a cell's color is picked: a\nwindow is a small pane in a bigger dark frame, and by count the frame took every cell (Matt saw windows as solid\nblack blocks, 2026-11-21).",
+     "type": "4"
+    },
+    {
      "name": "GLOW_CLEAR",
      "kind": "const",
      "doc": "A block that gives this much of its own light or more (the mean of its blobs' `glow`) casts no shadow.",
@@ -9452,6 +9482,12 @@
        "optional": true,
        "type": "Uint8Array<ArrayBufferLike>",
        "doc": "How much of its own light each blob gives, a byte a blob (`Actor.glow`)."
+      },
+      {
+       "name": "laid",
+       "optional": true,
+       "type": "Uint8Array<ArrayBufferLike>",
+       "doc": "Blobs of a face laid over another part (voxel.ts `laid`: a pane on its frame), a byte a blob: drawn as blocks, a cell takes their color before the color of what they lie on."
       },
       {
        "name": "seen",

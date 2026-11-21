@@ -45,7 +45,7 @@ import { readSkinnedGlb } from '../splat-engine/skinnedModel.ts'
 import { budget, clock, lampAdded, lampLights, lampRemoved, lit, liveSky, liveSkyColors, rgbOf, shadeNow, sunNow } from './creator/lighting.ts'
 import { castBy, glowGain } from './diorama/glow.ts'
 import { STYLES, isPixelStyle, styleAsked, styleWords, type Style } from './diorama/styles.ts'
-import { useDrawnLook, wantsPlain } from './drawnLook.tsx'
+import { useDrawnLook, useHeld, wantsPlain } from './drawnLook.tsx'
 import { GLITCH_START, glitchLook, type GlitchChoice } from './glitchLooks.ts'
 import { GlitchControls } from './diorama/GlitchControls.tsx'
 import { useExport } from './diorama/useExport.tsx'
@@ -386,6 +386,10 @@ export function SceneCreator() {
   const ready = chosen.every((c) => c)
   const done = ready && pieces.every((pc) => cuts.current.has(`${detail}|${pc.key}`))
   const signature = ready ? chosen.map((c) => c!.id).join(',') : ''
+  // the style the view is drawn in lags the one picked until every piece on show is cut for it (with or without baked
+  // light), so the picture keeps its own style meanwhile and the bare blobs never show between the two
+  const styleNow = useHeld(style, chosen.every((c) => c && c.plain === plain))
+  const pixelsNow = isPixelStyle(styleNow), glitchingNow = styleNow === 'glitch'
   const built = useMemo<Built[] | undefined>(() => (ready ? chosen.map((c) => unpack(c!.packed)) : undefined),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [signature])
@@ -474,15 +478,15 @@ export function SceneCreator() {
   const palette = useMemo(() => (creatureColors ? joinPalettes([shown.palette.map(hexOf), creatureColors.split(',')]) : shown.palette), [shown.palette, creatureColors])
   const palettes = useMemo(() => paletteChoices(palette), [palette])
   const look = useMemo<PixelLook>(() => pixelLook({ ...px, sky: px.sky || skyForced }, palettes, skyColors, glow), [px, skyForced, palettes, skyColors, glow])
-  useEffect(() => { stage?.setPixels(pixels ? look : undefined, px.size) }, [stage, pixels, look, px.size])
+  useEffect(() => { stage?.setPixels(pixelsNow ? look : undefined, px.size) }, [stage, pixelsNow, look, px.size])
   // pixel art can move in held steps; the other styles move every frame
-  useEffect(() => { if (stage) { stage.step = pixels && px.rate ? 1 / px.rate : 0; stage.invalidate() } }, [stage, pixels, px.rate])
+  useEffect(() => { if (stage) { stage.step = pixelsNow && px.rate ? 1 / px.rate : 0; stage.invalidate() } }, [stage, pixelsNow, px.rate])
   // the glitch's bursts come in steps of the scene's own clock, a whole number of steps a loop, so an export joins up
-  useEffect(() => { stage?.setGlitch(glitching ? glitchLook(glitch, shown.loop, calm && !offscreen) : undefined) }, [stage, glitching, glitch, shown.loop, calm, offscreen])
+  useEffect(() => { stage?.setGlitch(glitchingNow ? glitchLook(glitch, shown.loop, calm && !offscreen) : undefined) }, [stage, glitchingNow, glitch, shown.loop, calm, offscreen])
   // on a phone the styles that fill the whole screen are drawn at one and a half device pixels to a CSS pixel, as Pixel Diorama does
-  useEffect(() => { stage?.setSharpness(coarse && !pixels ? 1.5 : 2) }, [stage, coarse, pixels])
+  useEffect(() => { stage?.setSharpness(coarse && !pixelsNow ? 1.5 : 2) }, [stage, coarse, pixelsNow])
   // one of Brush and Ink's looks in place of pixel art. Cel shading's and stained glass's flat fills are gathered on the land
-  const drawing = useDrawnLook(stage, drawnStyle, {
+  const drawing = useDrawnLook(stage, pixelsNow ? undefined : styleNow, {
     actor: built?.[0], spacing: DETAIL.find((d) => d.id === detail)?.spacing, plain: !!chosen[0]?.plain, azimuth: shown.orbit.azimuth, offscreen, light: coarse, loop: shown.loop,
     sky: px.sky || skyForced ? [skyColors[0], skyColors[1]] : undefined,
   })

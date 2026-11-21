@@ -47,6 +47,8 @@ export interface VoxelPart {
   bone: string
   /** Unlit and casting no shadow: lamps, windows, beams of light. */
   glow?: boolean
+  /** Laid on other parts (a pane on its frame): none of its cells is left out for lying inside a neighbor, so its face is whole and the face under it is what goes. */
+  laid?: boolean
   /** How solid its blobs are, 0–1. */
   opacity?: number
   /** Casts no shadow on other parts (thin things far from the ground, like birds). */
@@ -1081,7 +1083,7 @@ export function buildVoxels(spec: VoxelSpec): Built {
   spec.parts.forEach((part, pi) => {
     const { sdf, min, max } = part.shape
     // parts on the same bone never move apart, so a cell buried in a neighbor is never seen
-    const same = spec.parts.filter((q, qi) => qi !== pi && boneOf[qi] === boneOf[pi] && !q.glow && (q.opacity ?? 1) >= 0.9).map((q) => q.shape)
+    const same = spec.parts.filter((q, qi) => qi !== pi && !part.laid && boneOf[qi] === boneOf[pi] && !q.glow && (q.opacity ?? 1) >= 0.9).map((q) => q.shape)
     // only shapes within reach of this part can shut its surface in
     const reach = Math.max(SHUT_REACH[SHUT_REACH.length - 1], s * 1.5) + s
     const cover = part.bare || part.glow ? undefined : spec.cover
@@ -1243,11 +1245,13 @@ export function buildVoxels(spec: VoxelSpec): Built {
   }
   // parts that glow give their own light: under live lights they stay bright when the scene goes dark
   const glow = spec.parts.some((p) => p.glow) ? new Uint8Array(blobs.count) : undefined
+  const laid = spec.parts.some((p) => p.laid) ? new Uint8Array(blobs.count) : undefined
   for (let i = 0; i < blobs.count; i++) {
     partOf[i] = parts[i]
     const pi = parts[i]
     setWeights(skin, i, [[pi < boneOf.length ? boneOf[pi] : looseBone[pi - boneOf.length], 1]])
     if (glow && spec.parts[pi]?.glow) glow[i] = 255
+    if (laid && spec.parts[pi]?.laid) laid[i] = 1
   }
-  return { blobs, skin, skeleton, partOf, seen, glow }
+  return { blobs, skin, skeleton, partOf, seen, glow, laid }
 }

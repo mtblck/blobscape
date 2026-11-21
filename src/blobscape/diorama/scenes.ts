@@ -3,7 +3,8 @@ import type { PixelLook, Rgb } from '../../splat-core/pixel.ts'
 import type { Built } from '../../splat-engine/body.ts'
 import type { PointLight } from '../../splat-engine/engine.ts'
 import type { Skeleton } from '../../splat-engine/rig.ts'
-import { compileScene, hasLamps, litFor, type SceneDoc } from '../../splat-engine/sceneDoc.ts'
+import { compileScene, litFor, type SceneDoc } from '../../splat-engine/sceneDoc.ts'
+import { paletteAt, timeOf, type TimeId } from '../timeOfDay.ts'
 import { SceneWater } from '../../splat-engine/sceneWater.ts'
 import { DEFAULT_LIGHT, buildVoxels } from '../../splat-engine/voxel.ts'
 import * as meadow from '../fourways/meadow/build.ts'
@@ -59,7 +60,7 @@ export interface Diorama {
   /** Its live lights `t` seconds in. `shadows` says whether one that can cast shadows should (the page asks only where the GPU works them out). */
   lights(t: number, shadows?: boolean): PointLight[]
   /** How much of its painted color everything keeps before its lights are added: 1 where left out, less for a scene lit mostly live. */
-  ambient?: number
+  ambient?: number | readonly [number, number, number]
   /** The same, for a scene whose light changes as it plays (day turning to night): a share or a color, `t` seconds in. It is used in place of `ambient`. */
   ambientAt?: (t: number) => number | [number, number, number]
   /** The sky `t` seconds in, top and bottom, for a scene whose sky changes as it plays: used in place of `sky`, with its reach. */
@@ -88,13 +89,16 @@ export interface Diorama {
    */
   water?: () => SceneWater
   /**
-   * The scene at a time of day, where a page sets one: its lamps, lit windows and fires lit only in the dark (those the
-   * description says wait for it), its sun only by day. The scene itself where nothing in it changes. Left out for a
-   * scene that is not a description alone.
+   * The scene at a time of day, where a page sets one (timeOfDay.ts): under that time's sky and light, in a palette
+   * that has its colors as that light leaves them, with its lamps, lit windows and fires lit only in the dark (those
+   * the description says wait for it) and its sun only by day. Every style draws it. Left out for a scene that is not
+   * a description alone.
    */
-  timed?: (dark: boolean) => Diorama
+  timed?: (time: TimeId) => Diorama
   /** For a scene `timed` made: the scene it is a time of day of. */
   of?: Diorama
+  /** For a scene `timed` made: which time of day it is. */
+  at?: TimeId
 }
 
 /** A described scene with some of it replaced, at every time of day (`make` is called when the list is put together, so `described` is defined by then). */
@@ -102,9 +106,8 @@ function withOver(make: () => Diorama, over: Partial<Diorama>): Diorama {
   const d = make()
   const out: Diorama = { ...d, ...over }
   const kept = new Map<Diorama, Diorama>()
-  if (d.timed) out.timed = (dark) => {
-    const t = d.timed!(dark)
-    if (t === d) return out
+  if (d.timed) out.timed = (time) => {
+    const t = d.timed!(time)
     let k = kept.get(t)
     if (!k) kept.set(t, (k = { ...t, ...over, timed: out.timed, of: out }))
     return k
@@ -142,7 +145,7 @@ const night = (palette: Rgb[]): [Rgb, Rgb] => {
 export function described(id: string, doc: SceneDoc, about: string): Diorama {
   const c = compileScene(doc)
   let pond: SceneWater | undefined
-  const times = new Map<boolean, Diorama>()
+  const times = new Map<TimeId, Diorama>()
   const self: Diorama = {
     id,
     label: c.name,
@@ -175,18 +178,21 @@ export function described(id: string, doc: SceneDoc, about: string): Diorama {
     lights: c.lights,
     haze: c.haze,
     water: c.water ? () => (pond ??= new SceneWater(c)) : undefined,
-    timed: hasLamps(doc)
-      ? (dark) => {
-          let d = times.get(dark)
-          if (!d) {
-            const at = litFor(doc, dark)
-            // the time changes what is lit, never what the scene is: its description, size and palette stay its own
-            d = at === doc ? self : { ...described(id, at, about), doc, bytes: self.bytes, palette: self.palette, timed: self.timed, of: self }
-            times.set(dark, d)
-          }
-          return d
-        }
-      : undefined,
+    timed: (when) => {
+      let d = times.get(when)
+      if (!d) {
+        const time = timeOf(when)
+        // the time changes the sky, the light and what is lit, never what the scene is: its description and size stay its own
+        const lit = litFor(doc, time.dark)
+        // at night what glows only to keep its own color (a cloud, a flower, a gull: no `lit`) takes the night's light like the rest
+        const parts = time.dark ? lit.parts.map((p) => (p.glow && !p.lit ? { ...p, glow: undefined, laid: true } : p)) : lit.parts
+        const at: SceneDoc = { ...lit, parts, sky: time.sky, skyReach: undefined }
+        const t = described(id, at, about)
+        d = { ...t, doc, bytes: self.bytes, ambient: time.light, palette: { label: OWN_PALETTE, colors: paletteAt(t.palette.colors, time) }, timed: self.timed, of: self, at: when }
+        times.set(when, d)
+      }
+      return d
+    },
   }
   return self
 }

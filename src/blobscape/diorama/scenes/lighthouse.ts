@@ -115,7 +115,7 @@ parts.push({ shape: { kind: 'box', at: [r3(tx + 0.125), 0.32, r3(tz + 0.155)], h
 parts.push({ shape: { kind: 'box', at: [r3(tx + 0.135), 0.3, r3(tz + 0.165)], half: [0.05, 0.09, 0.05] }, paint: { kind: 'bands', axis: 'x', size: 0.03, colors: [c(0.42, 0.27, 0.18), c(0.34, 0.21, 0.15)] } })
 for (const [y, out, r] of [[0.72, 0.105, 0.035], [1.05, 0.09, 0.03]]) {
   parts.push({ shape: { kind: 'box', at: [r3(tx + out), y, r3(tz + out + 0.02)], half: [r3(r + THIN), r3(r + 0.015 + THIN), r] }, paint: DARK })
-  parts.push({ shape: { kind: 'box', at: [r3(tx + out + 0.012), y, r3(tz + out + 0.032)], half: [r, r3(r + 0.015), r] }, paint: LAMP, glow: true, lit: 'dark', unlit: '#28303c' })
+  parts.push({ shape: { kind: 'box', at: [r3(tx + out + 0.012), y, r3(tz + out + 0.032)], half: [r, r3(r + 0.015), r] }, paint: LAMP, glow: true, lit: 'dark', unlit: '#a9c3d4' })
 }
 // the lens: a bright bar through the lamp room, turning with the lamp (its two beams are the scene's lights)
 parts.push({ shape: { kind: 'box', at: [tx, LAMP_Y, tz], half: [0.17, 0.035, 0.035] }, paint: c(1, 1, 0.85), bone: 'lamp', glow: true, lit: 'dark', unlit: 'gone' })
@@ -131,7 +131,7 @@ parts.push({
 })
 parts.push({ shape: { kind: 'box', at: [r3(cx - 0.07), r3(WALL_TOP + 0.13), cz], half: [0.03, 0.07, 0.03] }, paint: { kind: 'split', axis: 'y', at: r3(WALL_TOP + 0.17), below: c(0.52, 0.42, 0.4), above: c(0.3, 0.27, 0.31) } })
 parts.push({ shape: { kind: 'box', at: [r3(cx + 0.06), r3(CY + 0.14), r3(cz + 0.105)], half: [r3(0.042 + THIN), r3(0.04 + THIN), 0.02] }, paint: DARK })
-parts.push({ shape: { kind: 'box', at: [r3(cx + 0.06), r3(CY + 0.14), r3(cz + 0.115)], half: [0.042, 0.04, 0.02] }, paint: LAMP, glow: true, lit: 'dark', unlit: '#28303c' })
+parts.push({ shape: { kind: 'box', at: [r3(cx + 0.06), r3(CY + 0.14), r3(cz + 0.115)], half: [0.042, 0.04, 0.02] }, paint: LAMP, glow: true, lit: 'dark', unlit: '#a9c3d4' })
 parts.push({ shape: { kind: 'box', at: [r3(cx - 0.07), r3(CY + 0.11), r3(cz + 0.11)], half: [0.035, 0.075, 0.02] }, paint: c(0.25, 0.42, 0.5) })
 
 // pines on bones of their own that lean a little downwind and sway, and bushes

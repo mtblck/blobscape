@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { MarkLook } from '../splat-core/marks.ts'
 import type { GlyphLook, GlyphSet } from '../splat-core/glyphs.ts'
 import { gatherColors, type CelLook } from '../splat-core/cel.ts'
@@ -9,7 +9,8 @@ import { GROUND, LOOKS, PAPERS, SCREEN, css, isMark, type LookId } from './brush
 import { NEON, NEON_GROUND, NEON_PACES, NEON_SETS, NEON_START, neonLook, type NeonChoice } from './neonLooks.ts'
 import { GLASS, GLASS_FILLS, GLASS_GROUND, GLASS_START, glassLook, type GlassChoice } from './glassLooks.ts'
 import { WASH, WASH_PAPERS, WASH_START, washGround, washLook, type WashChoice } from './washLooks.ts'
-import { BLOCKS, BLOCK_GROUNDS, BLOCK_SIZES, BLOCK_START, BLOCK_TIMES, SWELL_MOST, blockBack, blockLook, gridOf, type BlockChoice } from './blockLooks.ts'
+import { BLOCKS, BLOCK_GROUNDS, BLOCK_SIZES, BLOCK_START, SWELL_MOST, blockBack, blockLook, gridOf, type BlockChoice } from './blockLooks.ts'
+import type { TimeOfDay } from './timeOfDay.ts'
 import { BACKDROPS, CEL, CEL_START, FILL_REACH, celLook, nightLight, nightOf, type CelChoice } from './celLooks.ts'
 
 /** Every drawn look a page can offer: the marks, ASCII, cel shading, neon, stained glass, watercolor, and the plain blobs. */
@@ -56,6 +57,12 @@ export interface DrawnSubject {
   water?: boolean
   /** Frames are drawn only when asked for, so one must not depend on the one before. */
   offscreen: boolean
+  /**
+   * The time of day the page has set the subject in, where it has: the subject's `sky` is then that time's and the
+   * stage's ambient light carries its light, so no look dims the scene for a dark sky a second time, and a look with a
+   * sun of its own stands it at the time's height.
+   */
+  time?: TimeOfDay
   /** With no look (the page draws pixel art): cel shading's light for the picture the pixel art is made from, shaded a pixel at a time, with the subject's colors gathered into flat fills. */
   pixelCel?: CelLook
 }
@@ -63,10 +70,9 @@ export interface DrawnSubject {
 /**
  * One drawn look on a stage, with its settings: the marks, outlines, ASCII and cel shading of Brush and Ink, shared
  * with Pixel Diorama's Style tab. `look` undefined puts them all away (the page draws some other way, as pixel art).
- * Gives back the look's controls, each a section for a tab, the color to put behind the transparent canvas, and
- * `dark`: whether the look's time of day is night, where it has one (blocks), for the page to light the subject's lamps by.
+ * Gives back the look's controls, each a section for a tab, and the color to put behind the transparent canvas.
  */
-export function useDrawnLook(stage: CreatureStage | undefined, look: Look | undefined, on: DrawnSubject): { controls: ReactNode; ground: string | undefined; dark: boolean | undefined; forget: () => void } {
+export function useDrawnLook(stage: CreatureStage | undefined, look: Look | undefined, on: DrawnSubject): { controls: ReactNode; ground: string | undefined; forget: () => void } {
   const [cel, setCel] = useState<CelChoice>(() => {
     const q = params(), n = (k: string, d: number) => (q.get(k) !== null && Number.isFinite(Number(q.get(k))) ? Number(q.get(k)) : d)
     return { ...CEL_START, backdrop: '', turn: n('turn', CEL_START.turn), height: n('height', CEL_START.height), tones: q.get('tones') === '3' ? 3 : 2, shadows: q.get('shadows') !== '0', smooth: n('smooth', CEL_START.smooth), fills: Math.max(0, Math.min(4, Math.round(n('fills', CEL_START.fills)))) }
@@ -79,9 +85,13 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
     const v = Number(params().get('block')), swell = Number(params().get('swell'))
     // water as blobs or as blocks (`?water=blocks`), and how high its ripples stand as blocks (`?swell=`)
     const back = params().get('backdrop') ?? ''
-    // a time of day or a plain color to stand in (`?backdrop=`); a time brings the height of its sun
-    return { ...BLOCK_START, height: BLOCK_TIMES.find((t) => t.id === back)?.height ?? BLOCK_START.height, backdrop: back === 'scene' || BLOCK_TIMES.some((t) => t.id === back) || BLOCK_GROUNDS.some((g) => g.id === back) ? back : '', water: params().get('water') === 'blocks' ? 'blocks' : 'blobs', swell: params().get('swell') !== null && Number.isFinite(swell) ? Math.max(0, Math.min(SWELL_MOST, swell)) : BLOCK_START.swell, size: Number.isFinite(v) && v >= BLOCK_SIZES.min && v <= BLOCK_SIZES.max ? Math.round(v) : BLOCK_START.size + (on.light ? 1 : 0) }
+    // the subject's own sky or a plain color to stand in (`?backdrop=`)
+    return { ...BLOCK_START, height: on.time?.height ?? BLOCK_START.height, backdrop: back === 'scene' || BLOCK_GROUNDS.some((g) => g.id === back) ? back : '', water: params().get('water') === 'blocks' ? 'blocks' : 'blobs', swell: params().get('swell') !== null && Number.isFinite(swell) ? Math.max(0, Math.min(SWELL_MOST, swell)) : BLOCK_START.swell, size: Number.isFinite(v) && v >= BLOCK_SIZES.min && v <= BLOCK_SIZES.max ? Math.round(v) : BLOCK_START.size + (on.light ? 1 : 0) }
   })
+  // a time of day stands the blocks' sun at its own height; the slider moves it from there
+  const timeId = on.time?.id, timeHeight = on.time?.height
+  const [sunFor, setSunFor] = useState(timeId)
+  if (sunFor !== timeId) { setSunFor(timeId); setBlock((c) => ({ ...c, height: timeHeight ?? BLOCK_START.height })) }
   const [size, setSize] = useState(1)
   // outlines: on for the two pen looks and cel shading unless the visitor says otherwise
   const [outlined, setOutlined] = useState<boolean | null>(() => (params().get('outline') === '1' ? true : params().get('outline') === '0' ? false : null))
@@ -129,22 +139,28 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { stage?.setWash(painted ? washLook(wash, sky) : undefined) }, [stage, painted, wash, skyKey])
   const blocky = look === 'blocks'
-  // blocks stand in a time of day (the subject's own sky first, where it has one), with its light, or in front of a
-  // plain color in day's light
+  const blocksUp = useRef(false)
+  // blocks stand in front of the subject's own sky, where it has one (a night's light under a dark one, unless the
+  // page's time of day already dims the stage), or in front of a plain color
   const skyCss = skyBack?.back
-  const blockBehind = useMemo(() => blockBack(block.backdrop, skyCss ? { back: skyCss, night: skyDark } : undefined), [block.backdrop, skyCss, skyDark])
+  const blockBehind = useMemo(() => blockBack(block.backdrop, skyCss ? { back: skyCss, night: skyDark } : undefined, !!timeId), [block.backdrop, skyCss, skyDark, timeId])
   const blockTint = blockBehind.light
   useEffect(() => {
     if (!stage) return
-    if (!blocky || !actor || !plain) { stage.setBlocks(); return }
+    if (!blocky) { stage.setBlocks(); blocksUp.current = false; return }
+    // while the subject is cut again the cubes on show stay: the stage makes them again for the next actor itself
+    if (!actor || !plain) return
     const b = actor.blobs
-    const id = setTimeout(() => stage.setBlocks(blockLook(block, gridOf(spacing, b.center, b.count), azimuth, blockTint)), 120)
+    const set = () => { blocksUp.current = true; stage.setBlocks(blockLook(block, gridOf(spacing, b.center, b.count), azimuth, blockTint)) }
+    // the first cubes go up at once, so no frame shows the bare blobs under them; a slider's changes wait a moment
+    if (!blocksUp.current) { set(); return }
+    const id = setTimeout(set, 120)
     return () => clearTimeout(id)
   }, [stage, blocky, actor, plain, block, spacing, azimuth, blockTint])
   useEffect(() => () => stage?.setBlocks(), [stage])
   const outline = !!look && !ascii && !lit && !glazed && !painted && !blocky && (outlined ?? (look === 'ink' || look === 'hatch' || look === 'stipple' || look === 'cel'))
   const { pixelCel } = on
-  useEffect(() => { stage?.setCel(!look && pixelCel ? { ...pixelCel, ...(light ? { shadowSize: 1024, shadowEvery: offscreen ? 1 : 2 } : {}) } : look === 'cel' ? { ...celLook({ ...cel, backdrop: celBase, turn: cel.turn + azimuth, line: outline ? pen : 0 }), ambient: nightLight(night), ...(light ? { shadowSize: 1024, shadowEvery: offscreen ? 1 : 2 } : {}) } : undefined) }, [stage, look, cel, celBase, night, outline, pen, azimuth, light, offscreen, pixelCel])
+  useEffect(() => { stage?.setCel(!look && pixelCel ? { ...pixelCel, ...(light ? { shadowSize: 1024, shadowEvery: offscreen ? 1 : 2 } : {}) } : look === 'cel' ? { ...celLook({ ...cel, backdrop: celBase, turn: cel.turn + azimuth, line: outline ? pen : 0 }), ambient: timeId ? undefined : nightLight(night), ...(light ? { shadowSize: 1024, shadowEvery: offscreen ? 1 : 2 } : {}) } : undefined) }, [stage, look, cel, celBase, night, timeId, outline, pen, azimuth, light, offscreen, pixelCel])
   // flat fills: each part's colors gathered into a few, shown in place of the blobs' own (which stay as they were)
   useEffect(() => {
     // stained glass wants them too: lead runs wherever the color changes, so a mottled surface would be all lead
@@ -209,18 +225,9 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
             )}
             <Field label="Backdrop">
               <div className="flex flex-wrap gap-1.5" data-testid="block-backdrop">
-                <Chip active={blockBehind.time} onClick={() => setBlock((c) => (blockBehind.time ? c : { ...c, backdrop: BLOCK_TIMES[1].id, height: BLOCK_TIMES[1].height }))}>Time of day</Chip>
-                <Chip active={!blockBehind.time} onClick={() => setBlock((c) => (blockBehind.time ? { ...c, backdrop: skyBack ? 'scene' : BLOCK_GROUNDS[0].id, height: BLOCK_START.height } : c))}>Background</Chip>
+                {skyBack && <Chip active={blockBehind.id === 'scene'} onClick={() => setBlock((c) => ({ ...c, backdrop: 'scene' }))}>{timeId ? 'Sky' : "Scene's own"}</Chip>}
+                {BLOCK_GROUNDS.map((g) => <Chip key={g.id} active={blockBehind.id === g.id} onClick={() => setBlock((c) => ({ ...c, backdrop: g.id }))}>{g.label}</Chip>)}
               </div>
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {blockBehind.time
-                  ? BLOCK_TIMES.map((t) => <Chip key={t.id} active={blockBehind.id === t.id} onClick={() => setBlock((c) => ({ ...c, backdrop: t.id, height: t.height }))}>{t.label}</Chip>)
-                  : <>
-                      {skyBack && <Chip active={blockBehind.id === 'scene'} onClick={() => setBlock((c) => ({ ...c, backdrop: 'scene' }))}>Scene's own</Chip>}
-                      {BLOCK_GROUNDS.map((g) => <Chip key={g.id} active={blockBehind.id === g.id} onClick={() => setBlock((c) => ({ ...c, backdrop: g.id }))}>{g.label}</Chip>)}
-                    </>}
-              </div>
-              <p className="mt-1.5 text-xs text-ink-faint">{blockBehind.time ? 'A time of day brings its own sky and light, in place of the scene\'s: a low warm sun in the morning, moonlight at night.' : blockBehind.id === 'scene' ? 'The scene\'s own sky, and its own light.' : 'A plain color behind, always in day\'s light.'}</p>
             </Field>
           </div>
         )}
@@ -328,6 +335,17 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
         )}
     </>
   )
-  // a time of day says whether it is dark, which is what a scene's lamps go by; anything else leaves them as the scene was made
-  return { controls, ground, dark: blocky && blockBehind.time ? blockBehind.id === 'night' : undefined, forget: () => setCopied('') }
+  return { controls, ground, forget: () => setCopied('') }
+}
+
+/**
+ * A choice that waits for what it needs: `value` once `ready`, and until then the last value that was. A style that
+ * wants its subject cut again (with no light baked in, or for another time of day) is drawn only when that cut is on
+ * the stage, so the old picture stays up in its own style and the bare blobs never show between the two (Matt saw
+ * them each time a scene was cut again, 2026-11-21).
+ */
+export function useHeld<T>(value: T, ready: boolean): T {
+  const [held, setHeld] = useState(value)
+  if (ready && held !== value) setHeld(value)
+  return ready ? value : held
 }

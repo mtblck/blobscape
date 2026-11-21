@@ -18,6 +18,7 @@ export interface PackedCut {
   partOf: Uint16Array
   seen?: Uint8Array
   glow?: Uint8Array
+  laid?: Uint8Array
   bones: Bone[]
   /** A creature's own colors, for the palette (`colorsOf`); props bring theirs in their descriptions. */
   colors?: string[]
@@ -38,13 +39,14 @@ export function pack(b: Built): PackedCut {
     partOf: b.partOf.slice(0, n),
     seen: b.seen?.slice(0, n * 4),
     glow: b.glow?.slice(0, n),
+    laid: b.laid?.slice(0, n),
     bones: b.skeleton.bones.map((x) => ({ ...x, head: [...x.head] as Bone['head'] })),
   }
 }
 
 /** The buffers a packed cut can hand over with it. */
 export const movable = (p: PackedCut): ArrayBuffer[] =>
-  [p.center, p.scale, p.quat, p.color, p.opacity, p.joints, p.weights, p.partOf, p.seen, p.glow].filter((a) => !!a).map((a) => a!.buffer as ArrayBuffer)
+  [p.center, p.scale, p.quat, p.color, p.opacity, p.joints, p.weights, p.partOf, p.seen, p.glow, p.laid].filter((a) => !!a).map((a) => a!.buffer as ArrayBuffer)
 
 /** A packed cut as a cut again, with a skeleton of its own at rest. */
 export function unpack(p: PackedCut): Built {
@@ -55,5 +57,5 @@ export function unpack(p: PackedCut): Built {
   blobs.quat = p.quat
   blobs.color = p.color
   blobs.opacity = p.opacity
-  return { blobs, skin: { joints: p.joints, weights: p.weights }, skeleton: new Skeleton(p.bones), partOf: p.partOf, seen: p.seen, glow: p.glow }
+  return { blobs, skin: { joints: p.joints, weights: p.weights }, skeleton: new Skeleton(p.bones), partOf: p.partOf, seen: p.seen, glow: p.glow, laid: p.laid }
 }
