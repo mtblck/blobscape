@@ -2,6 +2,7 @@
 import { described } from '../diorama/scenes.ts'
 import { movable, pack } from '../creator/pack.ts'
 import { planWorld } from './world.ts'
+import { withoutClouds } from './island.ts'
 import { hugged, unlit } from '../../splat-engine/voxel.ts'
 
 /**
@@ -11,7 +12,7 @@ import { hugged, unlit } from '../../splat-engine/voxel.ts'
  */
 export interface IslandJob {
   id: number; biome: string; seed: number; count: number; spacing: number
-  /** No light baked in, for a look that lights it itself (blocks). */
+  /** No light baked in and no clouds, for a look that lights it itself and draws its clouds as soft blobs (blocks). */
   plain?: boolean
   /** Which pieces this worker cuts (islands first, then bridges); left out, all of them. Big islands are cut a worker each. */
   only?: number[]
@@ -28,7 +29,7 @@ self.onmessage = (ev: MessageEvent<IslandJob>) => {
     const docs = [...world.islands.map((i) => i.doc), ...world.bridges.map((b) => b.doc)]
     docs.forEach((doc, index) => {
       if (only && !only.includes(index)) return
-      const scene = described('island', doc, doc.name)
+      const scene = described('island', plain && index < world.islands.length ? withoutClouds(doc) : doc, doc.name)
       // baked light: discs fitted to the shapes' outer edges, as Pixel Diorama cuts, so edges are straight and lines sit on them
       const cut = pack(plain ? unlit(() => scene.make(spacing)) : hugged(() => scene.make(spacing)))
       post({ id, index, cut }, movable(cut))

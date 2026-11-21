@@ -19,6 +19,7 @@ import { MAX_SEED, census } from './islands/island.ts'
 import { WORLD_ISLANDS, placeIsland, planWorld, poseBridge, type WorldGround, type WorldPlan } from './islands/world.ts'
 import { material } from './islands/materials.ts'
 import { grassActor, growGrass } from './islands/grass.ts'
+import { cloudActor, poseClouds } from './islands/clouds.ts'
 import type { IslandCut, IslandJob } from './islands/cut.worker.ts'
 import { unpack } from './creator/pack.ts'
 import { href } from './routes.ts'
@@ -201,6 +202,9 @@ export function Islands() {
   const nearNow = useRef(near)
   // leaving the walk, the first island is the one looked at again
   useEffect(() => { if (!walking) { nearNow.current = 0; setNear(0) } }, [walking])
+  // in blocks the clouds are soft blobs of their own, light and wispy among the cubes (Matt, 2026-11-21)
+  const clouds = useMemo(() => (ready && blocky ? ready.world.islands.map((isl) => cloudActor(isl.plan)) : []), [ready, blocky])
+
   const orbitNow = useRef(orbit)
   orbitNow.current = orbit
   const rocking = useRef(rock && !calm)
@@ -269,7 +273,7 @@ export function Islands() {
     if (!stage || !ready) return
     const d = ready.of, { scenes: all, world: wd } = ready
     const others = pieces.slice(1)
-    stage.setActor(pieces[0], undefined, [...others, ...grown, ...(walker ? [walker.elf] : [])])
+    stage.setActor(pieces[0], undefined, [...others, ...grown, ...clouds, ...(walker ? [walker.elf] : [])])
     const ground = walker?.ground as WorldGround | undefined
     // a new island brings its own starting view; a new detail keeps the view it had
     const start = overview(wd, d.views[0].orbit)
@@ -286,6 +290,7 @@ export function Islands() {
         else poseBridge(wd.bridges[j - wd.islands.length], s)
       }
       grown.forEach((g, j) => placeIsland(wd.islands[j], g.skeleton))
+      clouds.forEach((c, j) => { poseClouds(wd.islands[j].plan, c.skeleton, calm ? 0 : t, d.loop); placeIsland(wd.islands[j], c.skeleton) })
       stage.setLights(d.lights(t, stage.backend === 'webgpu'), 1)
       if (walker) {
         const dt = Math.max(0, Math.min(0.1, t - last))
@@ -302,7 +307,7 @@ export function Islands() {
         stage.orbit = { ...inMeters(o), target: [eye[0], eye[1], eye[2]] }
       } else if (d.swing && rocking.current) stage.orbit = inMeters(swung(orbitNow.current, d.swing, d.loop, t))
     }, stage.time)
-  }, [stage, ready, pieces, walker, calm, grown])
+  }, [stage, ready, pieces, walker, calm, grown, clouds])
   // walking needs the clock to run, whether or not the island's own moves do
   useEffect(() => { if (stage) stage.playing = playing || !!walker }, [stage, playing, walker])
   useEffect(() => { if (stage) { if (!walkNow.current) stage.orbit = inMeters(orbit); stage.invalidate() } }, [stage, orbit, rock])

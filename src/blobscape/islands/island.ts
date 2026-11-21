@@ -349,6 +349,11 @@ export function islandScene(plan: IslandPlan): { doc: SceneDoc; solid: number[] 
   return { doc, solid }
 }
 
+/** A description without its clouds, for a look that draws them as soft blobs of their own (`clouds.ts`) instead of cutting them. */
+export function withoutClouds(doc: SceneDoc): SceneDoc {
+  return { ...doc, parts: doc.parts.filter((p) => !p.bone?.startsWith('cloud')) }
+}
+
 /** Island `seed` of a biome: its plan and its description. */
 export function makeIsland(biomeId: string | null | undefined, seed: number, gates?: [number, number]): { biome: Biome; plan: IslandPlan; doc: SceneDoc; solid: number[] } {
   const biome = biomeOf(biomeId), plan = planIsland(biome, seed, gates)
