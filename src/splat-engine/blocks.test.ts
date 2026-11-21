@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { Blobs } from '../splat-core/blobs.ts'
-import { BLOCK_FROM, BLOCK_SHADE, SPECK_SIZE, blockHash, buildBlocks, faceLight, faceTone, type BlockSource } from './blocks.ts'
+import { BLOCK_FROM, BLOCK_SHADE, FLOW_DROP, FLOW_MOST, FLOW_STEPS, FLOW_SWELL, SPECK_SIZE, blockHash, buildBlocks, faceLight, faceTone, flowMesh, flowStep, planFlow, shapeFlow, type BlockSource } from './blocks.ts'
 import { emptySkin } from './rig.ts'
 
 type Rgb = [number, number, number]
@@ -172,4 +172,112 @@ test('a source cut on a grid of its own makes cubes that size', () => {
   assert.deepEqual(b.pieces.map((p) => p.blocks), [1, 2])
   const xs = Array.from({ length: b.pieces[1].positions.length / 3 }, (_, i) => b.pieces[1].positions[i * 3])
   assert.ok(Math.abs(Math.min(...xs) + 0.025) < 1e-6 && Math.abs(Math.max(...xs) - 0.075) < 1e-6)
+})
+
+/** A flat sheet of blobs over x and z, `n` a side and `gap` apart, at height `y`: a pond's surface. */
+function sheet(n: number, gap: number, y: number, r = gap * 0.6): Blobs {
+  const blobs = new Blobs()
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) blobs.push({ center: [i * gap, y, j * gap], scale: [r, r, r * 0.08], quat: [0, 0, 0, 1], color: [0.2, 0.4, 0.5], opacity: 0.5 })
+  return blobs
+}
+
+test('a surface that moves makes no cubes of its own, only columns', () => {
+  const blobs = sheet(6, 0.1, 0.02)
+  const skin = emptySkin(blobs.count)
+  const source: BlockSource = { blobs, skin, skeleton: { bones: [{ name: 'water' }] }, flows: true }
+  assert.equal(buildBlocks([source], { cell: 0.1 }).blocks, 0)
+  const plan = planFlow(blobs, 0.1)
+  assert.equal(plan.count, 36)
+  // every blob is read by the column it lies in
+  const read = new Set(plan.list)
+  assert.equal(read.size, blobs.count)
+})
+
+test('a grid finer than the blobs are spread leaves no holes in the columns', () => {
+  const blobs = sheet(5, 0.1, 0)
+  const plan = planFlow(blobs, 0.05)
+  // 5 blobs a side, 0.1 apart, on cells of 0.05: nine columns a side with the ones between
+  const has = new Set<string>()
+  for (let k = 0; k < plan.count; k++) has.add(`${plan.cells[k * 2]},${plan.cells[k * 2 + 1]}`)
+  for (let z = 0; z <= 8; z++) for (let x = 0; x <= 8; x++) assert.ok(has.has(`${x},${z}`), `column ${x},${z}`)
+  for (let k = 0; k < plan.count; k++) assert.ok(plan.start[k + 1] > plan.start[k], 'every column reads a blob')
+})
+
+test('a surface rests a little under the top of its layer, and columns know the ones beside them', () => {
+  const plan = planFlow(sheet(3, 0.1, 0.02), 0.1)
+  assert.ok(Math.abs(plan.level - 0.02) < 1e-6)
+  assert.ok(Math.abs(plan.rest - (0.05 - 0.1 * FLOW_DROP)) < 1e-6)
+  const k = [...Array(plan.count).keys()].find((c) => plan.cells[c * 2] === 1 && plan.cells[c * 2 + 1] === 1)!
+  const at = (c: number) => [plan.cells[c * 2], plan.cells[c * 2 + 1]]
+  assert.deepEqual([0, 1, 2, 3].map((q) => at(plan.beside[k * 4 + q])), [[2, 1], [0, 1], [1, 2], [1, 0]])
+  const corner = [...Array(plan.count).keys()].find((c) => plan.cells[c * 2] === 0 && plan.cells[c * 2 + 1] === 0)!
+  assert.equal(plan.beside[corner * 4 + 1], -1)
+  assert.equal(plan.beside[corner * 4 + 3], -1)
+})
+
+test('a ripple stands in whole steps, the same up as down, and never past its most', () => {
+  const cell = 0.08, step = cell / FLOW_STEPS
+  assert.equal(flowStep(0, cell), 0)
+  assert.equal(flowStep(step * 0.4 / FLOW_SWELL, cell), 0)
+  assert.ok(Math.abs(flowStep(step / FLOW_SWELL, cell) - step) < 1e-9)
+  assert.equal(flowStep(-0.003, cell), -flowStep(0.003, cell))
+  assert.equal(flowStep(10, cell), FLOW_MOST * cell)
+  assert.equal(flowStep(0.01, cell, 0), 0)
+  for (const lift of [0.0007, 0.002, 0.004, -0.0031]) {
+    const s = flowStep(lift, cell) / step
+    assert.ok(Math.abs(s - Math.round(s)) < 1e-9)
+  }
+})
+
+test('columns follow the blobs: a crest lifts its top, risers join it to the ones beside, and it takes the blobs\' color', () => {
+  const cell = 0.1, blobs = sheet(3, cell, 0, 0.02)
+  const look = { cell, vary: 0 }
+  const plan = planFlow(blobs, cell), mesh = flowMesh(plan, look)
+  shapeFlow(plan, mesh, blobs, look)
+  // level: every top at rest, every riser between columns of no height, the outer ones a block deep
+  for (let k = 0; k < plan.count; k++) {
+    assert.equal(mesh.tops[k], Math.fround(plan.rest))
+    for (let q = 1; q < 5; q++) {
+      const ys = [0, 1, 2, 3].map((c) => mesh.positions[(k * 20 + q * 4 + c) * 3 + 1])
+      const tall = Math.max(...ys) - Math.min(...ys)
+      assert.ok(Math.abs(tall - (plan.beside[k * 4 + q - 1] < 0 ? cell : 0)) < 1e-6)
+    }
+  }
+  // lift the middle blob by a step's worth and paint it
+  const step = cell / FLOW_STEPS, mid = 4
+  blobs.center[mid * 3 + 1] = (2 * step) / FLOW_SWELL + plan.level
+  blobs.color.set([1, 1, 1], mid * 3)
+  blobs.opacity[mid] = 1
+  shapeFlow(plan, mesh, blobs, look)
+  const k = [...Array(plan.count).keys()].find((c) => plan.list[plan.start[c]] === mid)!
+  assert.ok(Math.abs(mesh.tops[k] - (plan.rest + 2 * step)) < 1e-6)
+  for (let c = 0; c < 4; c++) assert.ok(Math.abs(mesh.positions[(k * 20 + c) * 3 + 1] - mesh.tops[k]) < 1e-6)
+  // its own risers are two steps tall; the neighbors' toward it have none (they are the lower)
+  for (let q = 1; q < 5; q++) {
+    const ys = [0, 1, 2, 3].map((c) => mesh.positions[(k * 20 + q * 4 + c) * 3 + 1])
+    assert.ok(Math.abs(Math.max(...ys) - Math.min(...ys) - 2 * step) < 1e-6)
+    const nb = plan.beside[k * 4 + q - 1], back = [1, 0, 3, 2][q - 1]
+    assert.equal(plan.beside[nb * 4 + back], k)
+    const theirs = [0, 1, 2, 3].map((c) => mesh.positions[(nb * 20 + (back + 1) * 4 + c) * 3 + 1])
+    assert.ok(Math.max(...theirs) - Math.min(...theirs) < 1e-6)
+  }
+  assert.deepEqual([...mesh.colors.subarray(k * 80, k * 80 + 4)], [1, 1, 1, 1])
+  // half-solid blobs, two deep, are three quarters solid
+  const other = (k + 1) % plan.count
+  assert.ok(Math.abs(mesh.colors[other * 80 + 3] - 0.75) < 1e-6)
+})
+
+test('a column\'s faces look outward: each triangle turns the way its normal points', () => {
+  const cell = 0.1, blobs = sheet(1, cell, 0, 0.02), look = { cell }
+  const plan = planFlow(blobs, cell), mesh = flowMesh(plan, look)
+  shapeFlow(plan, mesh, blobs, look)
+  const p = (v: number) => [mesh.positions[v * 3], mesh.positions[v * 3 + 1], mesh.positions[v * 3 + 2]]
+  for (let t = 0; t < mesh.indices.length; t += 3) {
+    const [a, b, c] = [p(mesh.indices[t]), p(mesh.indices[t + 1]), p(mesh.indices[t + 2])]
+    const e1 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], e2 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]]
+    const n = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]]
+    const v = mesh.indices[t]
+    const dot = n[0] * mesh.normals[v * 3] + n[1] * mesh.normals[v * 3 + 1] + n[2] * mesh.normals[v * 3 + 2]
+    assert.ok(dot > 0, `triangle ${t / 3}`)
+  }
 })

@@ -1,5 +1,5 @@
 /** Blocks as Brush and Ink and Pixel Diorama offer them: the chip, the choices and the look they make for the stage. */
-import type { BlockLook } from '../splat-engine/blocks.ts'
+import { FLOW_SWELL, type BlockLook } from '../splat-engine/blocks.ts'
 import { lightFrom } from './celLooks.ts'
 
 /** The chip beside the drawn looks (brushLooks.ts). */
@@ -19,8 +19,14 @@ export interface BlockChoice {
   edge: number
   /** What stands behind: '' is the subject's own sky where it has one. */
   backdrop: string
+  /** A subject's water: columns of blocks that rise and fall, or the blobs it is among the cubes. */
+  water: 'blocks' | 'blobs'
+  /** How many times higher than it stands a ripple is drawn as blocks. */
+  swell: number
 }
-export const BLOCK_START: BlockChoice = { size: 2, turn: -50, height: 50, shadows: true, corners: 0.5, vary: 0.35, edge: 0.3, backdrop: '' }
+export const BLOCK_START: BlockChoice = { size: 2, turn: -50, height: 50, shadows: true, corners: 0.5, vary: 0.35, edge: 0.3, backdrop: '', water: 'blocks', swell: FLOW_SWELL }
+/** The most a ripple's height is multiplied by. */
+export const SWELL_MOST = 16
 /** The sizes on offer, in cells of the subject's grid. */
 export const BLOCK_SIZES = { min: 1, max: 8 }
 /** A subject cut on no grid gets blocks as if its longest side were this many cells. */
@@ -37,5 +43,5 @@ export function gridOf(spacing: number | undefined, centers: ArrayLike<number>, 
 
 /** The look for the stage: `grid` is one cell's side, `azimuth` the starting view's turn, `ambient` a night's light. */
 export function blockLook(c: BlockChoice, grid: number, azimuth = 0, ambient?: readonly [number, number, number]): BlockLook {
-  return { cell: grid * Math.max(BLOCK_SIZES.min, Math.min(BLOCK_SIZES.max, c.size)), from: lightFrom(c.turn + azimuth, c.height), shadows: c.shadows, corners: c.corners, vary: c.vary, edge: c.edge, ambient }
+  return { cell: grid * Math.max(BLOCK_SIZES.min, Math.min(BLOCK_SIZES.max, c.size)), from: lightFrom(c.turn + azimuth, c.height), shadows: c.shadows, corners: c.corners, vary: c.vary, edge: c.edge, ambient, flow: c.water, swell: c.swell }
 }

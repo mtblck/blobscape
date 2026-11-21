@@ -453,7 +453,7 @@ export function makeSurface(water: Water, { per = 2, seed = 1 }: { per?: number;
     taps.set([or(ci + 1, cj), or(ci - 1, cj), or(ci, cj + 1), or(ci, cj - 1)], k * 8 + 4)
     home[k] = here
   }
-  return { blobs, skin, skeleton, at, size, slope: new Float32Array(count * 2), curve: new Float32Array(count), home, taps, shares }
+  return { blobs, skin, skeleton, flows: true, at, size, slope: new Float32Array(count * 2), curve: new Float32Array(count), home, taps, shares }
 }
 
 /** Lifts each blob of a surface to the water under it and tilts it to the water's slope there. Call after the water moved, then hand the surface to `SplatWorld.reshape`. */

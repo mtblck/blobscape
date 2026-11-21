@@ -1,6 +1,6 @@
-import { BufferAttribute, BufferGeometry, Group, Mesh, NoBlending, NodeMaterial, QuadMesh, RenderTarget, Vector3, Vector4, type Camera, type Object3D, type WebGPURenderer } from 'three/webgpu'
+import { BufferAttribute, BufferGeometry, DynamicDrawUsage, Group, Mesh, NoBlending, NodeMaterial, QuadMesh, RenderTarget, Vector3, Vector4, type Camera, type Object3D, type WebGPURenderer } from 'three/webgpu'
 import * as TSLTyped from 'three/tsl'
-import { buildBlocks, type BlockLook, type BlockSource } from './blocks.ts'
+import { buildBlocks, flowMesh, planFlow, shapeFlow, type BlockLook, type BlockSource, type FlowMesh, type FlowPlan } from './blocks.ts'
 import type { Light } from './engine.ts'
 
 // As in engine.ts: the shader builders use TSL untyped.
@@ -24,16 +24,19 @@ export type BlockActor = BlockSource & { skeleton: { matrix: Float32Array; scale
  * A scene drawn as blocks (blocks.ts): one mesh for each bone that carries cubes, moved by that bone whole, so cubes
  * never bend. The look's own light is in the corners already; this adds the stage's lamps to each face by where it
  * is and which way it faces now, keeps a block that gives its own light at its own color, and draws a thin line
- * round each face. It draws into a target with four samples a pixel and copies that out, since a cube's edges want
+ * round each face. A surface that moves by itself (an actor with `flows`: a pond) is columns whose tops follow its
+ * blobs (`reshape` after they change), drawn after the cubes and as see-through as its blobs are. It draws into a target with four samples a pixel and copies that out, since a cube's edges want
  * smoothing that soft blobs never did.
  */
 export class BlockView extends Group {
   /** How many cubes it holds. */
-  readonly blocks: number
+  blocks: number
   /** How many faces of them it draws: those with no cube of the same bone beside them. */
-  readonly faces: number
+  faces: number
   private readonly material = new NodeMaterial()
+  private readonly liquid = new NodeMaterial()
   private readonly pieces: { mesh: Mesh; actor: number; bone: number }[] = []
+  private readonly flows: { mesh: Mesh; actor: number; plan: FlowPlan; shape: FlowMesh }[] = []
   private readonly pos = uniformArray(Array.from({ length: BLOCK_LIGHTS }, () => new Vector4(0, 0, 0, 1)), 'vec4')
   private readonly col = uniformArray(Array.from({ length: BLOCK_LIGHTS }, () => new Vector4()), 'vec4')
   private readonly ambient = uniform(new Vector3(1, 1, 1))
@@ -43,10 +46,12 @@ export class BlockView extends Group {
   private readonly out = new NodeMaterial()
   private readonly quad: QuadMesh
 
-  constructor(private readonly actors: readonly BlockActor[], look: BlockLook) {
+  constructor(private readonly actors: readonly BlockActor[], private readonly look: BlockLook) {
     super()
-    this.material.fragmentNode = this.fragment()
+    this.material.fragmentNode = this.fragment(false)
     this.material.blending = NoBlending
+    this.liquid.fragmentNode = this.fragment(true)
+    this.liquid.transparent = true
     this.out.fragmentNode = texture(this.picture.texture, uv())
     this.out.blending = NoBlending
     this.out.depthTest = false
@@ -71,13 +76,46 @@ export class BlockView extends Group {
       this.add(mesh)
       this.pieces.push({ mesh, actor: p.actor, bone: p.bone })
     }
+    actors.forEach((a, actor) => {
+      if (!a.flows) return
+      const plan = planFlow(a.blobs, a.blockCell ?? look.cell), shape = flowMesh(plan, look)
+      shapeFlow(plan, shape, a.blobs, look)
+      const g = new BufferGeometry()
+      g.setAttribute('position', new BufferAttribute(shape.positions, 3).setUsage(DynamicDrawUsage))
+      g.setAttribute('normal', new BufferAttribute(shape.normals, 3))
+      g.setAttribute('wash', new BufferAttribute(shape.colors, 4).setUsage(DynamicDrawUsage))
+      g.setAttribute('blockLight', new BufferAttribute(shape.light, 3))
+      g.setAttribute('uv', new BufferAttribute(shape.uvs, 2))
+      g.setIndex(new BufferAttribute(shape.indices, 1))
+      const mesh = new Mesh(g, this.liquid)
+      mesh.matrixAutoUpdate = false
+      mesh.frustumCulled = false
+      // after every cube, so what lies under it shows through
+      mesh.renderOrder = 1
+      this.add(mesh)
+      this.flows.push({ mesh, actor, plan, shape })
+      this.pieces.push({ mesh, actor, bone: 0 })
+      this.blocks += plan.count
+      this.faces += plan.count * 5
+    })
     this.pose()
   }
 
+  /** After an actor's blobs were changed in place: a surface that moves (`flows`) lays its columns to them again. Any other actor's cubes stay as built. */
+  reshape(actor: BlockSource) {
+    for (const f of this.flows) {
+      if (this.actors[f.actor] !== actor) continue
+      shapeFlow(f.plan, f.shape, actor.blobs, this.look)
+      f.mesh.geometry.getAttribute('position').needsUpdate = true
+      f.mesh.geometry.getAttribute('wash').needsUpdate = true
+    }
+  }
+
   /** A face's color: its block's own, times the look's light and the lamps' on it (never less than the light the block gives itself), with a line near its edge. */
-  private fragment() {
+  private fragment(liquid: boolean) {
     return Fn(() => {
-      const paint = attribute('paint', 'vec3'), light = attribute('blockLight', 'vec3')
+      const wash = liquid ? attribute('wash', 'vec4') : undefined
+      const paint = wash ? wash.xyz : attribute('paint', 'vec3'), light = attribute('blockLight', 'vec3')
       const n = normalWorld, world = positionWorld
       const sum = vec3(this.ambient).mul(light.x).toVar()
       TSL.Loop(this.lightCount, ({ i }: { i: N }) => {
@@ -98,7 +136,7 @@ export class BlockView extends Group {
       const d = min(min(at.x, float(1).sub(at.x)), min(at.y, float(1).sub(at.y)))
       const w = max(TSL.fwidth(at.x), TSL.fwidth(at.y)).toVar()
       const line = float(1).sub(smoothstep(float(EDGE_WIDTH).sub(w.mul(0.5)), float(EDGE_WIDTH).add(w.mul(0.5)), d)).mul(clamp(float(EDGE_WIDTH * 4).div(max(w, 1e-5)), 0, 1))
-      return vec4(paint.mul(lit).mul(float(1).sub(line.mul(this.edge))), 1)
+      return vec4(paint.mul(lit).mul(float(1).sub(line.mul(this.edge))), wash ? wash.w : 1)
     })()
   }
 
@@ -144,6 +182,7 @@ export class BlockView extends Group {
   dispose() {
     for (const p of this.pieces) p.mesh.geometry.dispose()
     this.material.dispose()
+    this.liquid.dispose()
     this.out.dispose()
     this.picture.dispose()
   }

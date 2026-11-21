@@ -9,7 +9,7 @@ import { GROUND, LOOKS, PAPERS, SCREEN, css, isMark, type LookId } from './brush
 import { NEON, NEON_GROUND, NEON_PACES, NEON_SETS, NEON_START, neonLook, type NeonChoice } from './neonLooks.ts'
 import { GLASS, GLASS_FILLS, GLASS_GROUND, GLASS_START, glassLook, type GlassChoice } from './glassLooks.ts'
 import { WASH, WASH_PAPERS, WASH_START, washGround, washLook, type WashChoice } from './washLooks.ts'
-import { BLOCKS, BLOCK_SIZES, BLOCK_START, blockLook, gridOf, type BlockChoice } from './blockLooks.ts'
+import { BLOCKS, BLOCK_SIZES, BLOCK_START, SWELL_MOST, blockLook, gridOf, type BlockChoice } from './blockLooks.ts'
 import { BACKDROPS, CEL, CEL_START, FILL_REACH, celLook, nightLight, nightOf, type CelChoice } from './celLooks.ts'
 
 /** Every drawn look a page can offer: the marks, ASCII, cel shading, neon, stained glass, watercolor, and the plain blobs. */
@@ -52,6 +52,8 @@ export interface DrawnSubject {
   soft?: boolean
   /** How many seconds the subject takes to come round again, where it loops: neon's pulses go a whole number of times into it. */
   loop?: number
+  /** It has water that moves (an extra actor with `flows`): blocks offer it as blocks or as blobs. */
+  water?: boolean
   /** Frames are drawn only when asked for, so one must not depend on the one before. */
   offscreen: boolean
   /** With no look (the page draws pixel art): cel shading's light for the picture the pixel art is made from, shaded a pixel at a time, with the subject's colors gathered into flat fills. */
@@ -73,8 +75,9 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   const [wash, setWash] = useState<WashChoice>(WASH_START)
   // blocks: `?block=` is the size, in cells of the subject's grid; a phone starts a size up, for fewer cubes
   const [block, setBlock] = useState<BlockChoice>(() => {
-    const v = Number(params().get('block'))
-    return { ...BLOCK_START, size: Number.isFinite(v) && v >= BLOCK_SIZES.min && v <= BLOCK_SIZES.max ? Math.round(v) : BLOCK_START.size + (on.light ? 1 : 0) }
+    const v = Number(params().get('block')), swell = Number(params().get('swell'))
+    // water as blocks or as blobs (`?water=blobs`), and how high its ripples stand as blocks (`?swell=`)
+    return { ...BLOCK_START, water: params().get('water') === 'blobs' ? 'blobs' : 'blocks', swell: params().get('swell') !== null && Number.isFinite(swell) ? Math.max(0, Math.min(SWELL_MOST, swell)) : BLOCK_START.swell, size: Number.isFinite(v) && v >= BLOCK_SIZES.min && v <= BLOCK_SIZES.max ? Math.round(v) : BLOCK_START.size + (on.light ? 1 : 0) }
   })
   const [size, setSize] = useState(1)
   // outlines: on for the two pen looks and cel shading unless the visitor says otherwise
@@ -189,6 +192,18 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
             <Slider label="Dark corners" value={block.corners} min={0} max={1} step={0.05} onChange={(corners) => setBlock((c) => ({ ...c, corners }))} format={(v) => `${Math.round(v * 100)}%`} hint="How much darker a face gets in a corner where blocks meet." />
             <Slider label="Block edges" value={block.edge} min={0} max={1} step={0.05} onChange={(edge) => setBlock((c) => ({ ...c, edge }))} format={(v) => (v === 0 ? 'None' : `${Math.round(v * 100)}%`)} hint="A thin line round each face, so blocks of one color still read as blocks." />
             <Slider label="Color varies" value={block.vary} min={0} max={1} step={0.05} onChange={(vary) => setBlock((c) => ({ ...c, vary }))} format={(v) => `${Math.round(v * 100)}%`} hint="How much one block's color differs from the next's." />
+            {on.water && (
+              <Field label="Water ripples">
+                <div className="flex flex-wrap gap-1.5" data-testid="block-water">
+                  <Chip active={block.water === 'blocks'} onClick={() => setBlock((c) => ({ ...c, water: 'blocks' }))}>As blocks</Chip>
+                  <Chip active={block.water === 'blobs'} onClick={() => setBlock((c) => ({ ...c, water: 'blobs' }))}>As blobs</Chip>
+                </div>
+                <p className="mt-1.5 text-xs text-ink-faint">{block.water === 'blocks' ? 'The water is columns of blocks: each rises and falls in quarter steps of a block as the ripples pass.' : 'The water stays soft blobs among the cubes, as in the other styles.'}</p>
+              </Field>
+            )}
+            {on.water && block.water === 'blocks' && (
+              <Slider label="Ripple height" value={block.swell} min={0} max={SWELL_MOST} step={1} onChange={(swell) => setBlock((c) => ({ ...c, swell }))} format={(v) => (v === 0 ? 'Flat' : `${v}×`)} hint="How many times higher than it really stands a ripple is built. Flat keeps the tops level, so only the color moves." />
+            )}
             <Field label="Backdrop">
               <div className="flex flex-wrap gap-1.5">
                 {[...(skyBack ? [skyBack] : []), ...BACKDROPS].map((b) => <Chip key={b.id} active={blockBack === b.id} onClick={() => setBlock((c) => ({ ...c, backdrop: b.id }))}>{b.label}</Chip>)}

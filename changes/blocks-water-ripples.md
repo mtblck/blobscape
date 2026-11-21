@@ -1,0 +1,2 @@
+- Pixel Diorama: in the Blocks style a scene's water now moves. The koi pond's rain and fish make ripples as columns of blocks that rise and fall in steps, see-through enough to show the koi under them, or as soft blobs among the cubes: pick with Water ripples on the Style tab, and set how high the blocks stand with Ripple height.
+- Engine: `Actor.flows` marks a surface that moves by itself (a pond's is marked already); `BlockLook.flow` draws it as blocks or leaves it blobs, and `BlockLook.swell` sets how high its ripples stand.
