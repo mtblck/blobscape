@@ -9,7 +9,7 @@ import { GROUND, LOOKS, PAPERS, SCREEN, css, isMark, type LookId } from './brush
 import { NEON, NEON_GROUND, NEON_PACES, NEON_SETS, NEON_START, neonLook, type NeonChoice } from './neonLooks.ts'
 import { GLASS, GLASS_FILLS, GLASS_GROUND, GLASS_START, glassLook, type GlassChoice } from './glassLooks.ts'
 import { WASH, WASH_PAPERS, WASH_START, washGround, washLook, type WashChoice } from './washLooks.ts'
-import { BLOCKS, BLOCK_SIZES, BLOCK_START, blockLook, gridOf, type BlockChoice } from './blockLooks.ts'
+import { BLOCKS, BLOCK_GROUNDS, BLOCK_SIZES, BLOCK_START, BLOCK_TIMES, SWELL_MOST, blockBack, blockLook, gridOf, type BlockChoice } from './blockLooks.ts'
 import { BACKDROPS, CEL, CEL_START, FILL_REACH, celLook, nightLight, nightOf, type CelChoice } from './celLooks.ts'
 
 /** Every drawn look a page can offer: the marks, ASCII, cel shading, neon, stained glass, watercolor, and the plain blobs. */
@@ -52,6 +52,8 @@ export interface DrawnSubject {
   soft?: boolean
   /** How many seconds the subject takes to come round again, where it loops: neon's pulses go a whole number of times into it. */
   loop?: number
+  /** It has water that moves (an extra actor with `flows`): blocks offer it as blocks or as blobs. */
+  water?: boolean
   /** Frames are drawn only when asked for, so one must not depend on the one before. */
   offscreen: boolean
   /** With no look (the page draws pixel art): cel shading's light for the picture the pixel art is made from, shaded a pixel at a time, with the subject's colors gathered into flat fills. */
@@ -73,8 +75,11 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   const [wash, setWash] = useState<WashChoice>(WASH_START)
   // blocks: `?block=` is the size, in cells of the subject's grid; a phone starts a size up, for fewer cubes
   const [block, setBlock] = useState<BlockChoice>(() => {
-    const v = Number(params().get('block'))
-    return { ...BLOCK_START, size: Number.isFinite(v) && v >= BLOCK_SIZES.min && v <= BLOCK_SIZES.max ? Math.round(v) : BLOCK_START.size + (on.light ? 1 : 0) }
+    const v = Number(params().get('block')), swell = Number(params().get('swell'))
+    // water as blobs or as blocks (`?water=blocks`), and how high its ripples stand as blocks (`?swell=`)
+    const back = params().get('backdrop') ?? ''
+    // a time of day or a plain color to stand in (`?backdrop=`); a time brings the height of its sun
+    return { ...BLOCK_START, height: BLOCK_TIMES.find((t) => t.id === back)?.height ?? BLOCK_START.height, backdrop: back === 'scene' || BLOCK_TIMES.some((t) => t.id === back) || BLOCK_GROUNDS.some((g) => g.id === back) ? back : '', water: params().get('water') === 'blocks' ? 'blocks' : 'blobs', swell: params().get('swell') !== null && Number.isFinite(swell) ? Math.max(0, Math.min(SWELL_MOST, swell)) : BLOCK_START.swell, size: Number.isFinite(v) && v >= BLOCK_SIZES.min && v <= BLOCK_SIZES.max ? Math.round(v) : BLOCK_START.size + (on.light ? 1 : 0) }
   })
   const [size, setSize] = useState(1)
   // outlines: on for the two pen looks and cel shading unless the visitor says otherwise
@@ -123,18 +128,18 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { stage?.setWash(painted ? washLook(wash, sky) : undefined) }, [stage, painted, wash, skyKey])
   const blocky = look === 'blocks'
-  // blocks stand in front of the subject's own sky where it has one, in a night's light under a dark one
-  const blockBack = block.backdrop || (skyBack ? 'scene' : CEL_START.backdrop)
-  const blockScene = blockBack === 'scene' && !!skyBack
-  const blockNight = blockScene ? skyDark : 0
-  // the cubes are made again for each change, so a slider being dragged waits a moment for the hand to rest
+  // blocks stand in a time of day (the subject's own sky first, where it has one), with its light, or in front of a
+  // plain color in day's light
+  const skyCss = skyBack?.back
+  const blockBehind = useMemo(() => blockBack(block.backdrop, skyCss ? { back: skyCss, night: skyDark } : undefined), [block.backdrop, skyCss, skyDark])
+  const blockTint = blockBehind.light
   useEffect(() => {
     if (!stage) return
     if (!blocky || !actor || !plain) { stage.setBlocks(); return }
     const b = actor.blobs
-    const id = setTimeout(() => stage.setBlocks(blockLook(block, gridOf(spacing, b.center, b.count), azimuth, blockNight ? nightLight(blockNight) : undefined)), 120)
+    const id = setTimeout(() => stage.setBlocks(blockLook(block, gridOf(spacing, b.center, b.count), azimuth, blockTint)), 120)
     return () => clearTimeout(id)
-  }, [stage, blocky, actor, plain, block, spacing, azimuth, blockNight])
+  }, [stage, blocky, actor, plain, block, spacing, azimuth, blockTint])
   useEffect(() => () => stage?.setBlocks(), [stage])
   const outline = !!look && !ascii && !lit && !glazed && !painted && !blocky && (outlined ?? (look === 'ink' || look === 'hatch' || look === 'stipple' || look === 'cel'))
   const { pixelCel } = on
@@ -156,7 +161,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   // paint covers its ground, so a subject with a sky of its own stands in front of that
   const isPaint = look === 'gouache' || look === 'oil'
   const backdrop = BACKDROPS.find((b) => b.id === celBase) ?? BACKDROPS[0]
-  const ground = !look || look === 'blobs' ? undefined : look === 'cel' ? (inScene ? skyBack.back : backdrop.back) : blocky ? (blockScene ? skyBack.back : (BACKDROPS.find((b) => b.id === blockBack) ?? BACKDROPS[0]).back) : lit ? NEON_GROUND : glazed ? GLASS_GROUND : painted ? washGround(wash) : ascii ? css(own ? SCREEN : sheet.paper) : drawnOn ? css(sheet.paper) : skyBack && isPaint ? skyBack.back : GROUND
+  const ground = !look || look === 'blobs' ? undefined : look === 'cel' ? (inScene ? skyBack.back : backdrop.back) : blocky ? blockBehind.back : lit ? NEON_GROUND : glazed ? GLASS_GROUND : painted ? washGround(wash) : ascii ? css(own ? SCREEN : sheet.paper) : drawnOn ? css(sheet.paper) : skyBack && isPaint ? skyBack.back : GROUND
 
   const controls = !look ? null : (
     <>
@@ -189,10 +194,32 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
             <Slider label="Dark corners" value={block.corners} min={0} max={1} step={0.05} onChange={(corners) => setBlock((c) => ({ ...c, corners }))} format={(v) => `${Math.round(v * 100)}%`} hint="How much darker a face gets in a corner where blocks meet." />
             <Slider label="Block edges" value={block.edge} min={0} max={1} step={0.05} onChange={(edge) => setBlock((c) => ({ ...c, edge }))} format={(v) => (v === 0 ? 'None' : `${Math.round(v * 100)}%`)} hint="A thin line round each face, so blocks of one color still read as blocks." />
             <Slider label="Color varies" value={block.vary} min={0} max={1} step={0.05} onChange={(vary) => setBlock((c) => ({ ...c, vary }))} format={(v) => `${Math.round(v * 100)}%`} hint="How much one block's color differs from the next's." />
+            {on.water && (
+              <Field label="Water ripples">
+                <div className="flex flex-wrap gap-1.5" data-testid="block-water">
+                  <Chip active={block.water === 'blobs'} onClick={() => setBlock((c) => ({ ...c, water: 'blobs' }))}>As blobs</Chip>
+                  <Chip active={block.water === 'blocks'} onClick={() => setBlock((c) => ({ ...c, water: 'blocks' }))}>As blocks</Chip>
+                </div>
+                <p className="mt-1.5 text-xs text-ink-faint">{block.water === 'blocks' ? 'The water is columns of blocks: each rises and falls in quarter steps of a block as the ripples pass.' : 'The water stays soft blobs among the cubes, as in the other styles.'}</p>
+              </Field>
+            )}
+            {on.water && block.water === 'blocks' && (
+              <Slider label="Ripple height" value={block.swell} min={0} max={SWELL_MOST} step={1} onChange={(swell) => setBlock((c) => ({ ...c, swell }))} format={(v) => (v === 0 ? 'Flat' : `${v}×`)} hint="How many times higher than it really stands a ripple is built. Flat keeps the tops level, so only the color moves." />
+            )}
             <Field label="Backdrop">
-              <div className="flex flex-wrap gap-1.5">
-                {[...(skyBack ? [skyBack] : []), ...BACKDROPS].map((b) => <Chip key={b.id} active={blockBack === b.id} onClick={() => setBlock((c) => ({ ...c, backdrop: b.id }))}>{b.label}</Chip>)}
+              <div className="flex flex-wrap gap-1.5" data-testid="block-backdrop">
+                <Chip active={blockBehind.time} onClick={() => setBlock((c) => (blockBehind.time ? c : { ...c, backdrop: BLOCK_TIMES[1].id, height: BLOCK_TIMES[1].height }))}>Time of day</Chip>
+                <Chip active={!blockBehind.time} onClick={() => setBlock((c) => (blockBehind.time ? { ...c, backdrop: skyBack ? 'scene' : BLOCK_GROUNDS[0].id, height: BLOCK_START.height } : c))}>Background</Chip>
               </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {blockBehind.time
+                  ? BLOCK_TIMES.map((t) => <Chip key={t.id} active={blockBehind.id === t.id} onClick={() => setBlock((c) => ({ ...c, backdrop: t.id, height: t.height }))}>{t.label}</Chip>)
+                  : <>
+                      {skyBack && <Chip active={blockBehind.id === 'scene'} onClick={() => setBlock((c) => ({ ...c, backdrop: 'scene' }))}>Scene's own</Chip>}
+                      {BLOCK_GROUNDS.map((g) => <Chip key={g.id} active={blockBehind.id === g.id} onClick={() => setBlock((c) => ({ ...c, backdrop: g.id }))}>{g.label}</Chip>)}
+                    </>}
+              </div>
+              <p className="mt-1.5 text-xs text-ink-faint">{blockBehind.time ? 'A time of day brings its own sky and light, in place of the scene\'s: a low warm sun in the morning, moonlight at night.' : blockBehind.id === 'scene' ? 'The scene\'s own sky, and its own light.' : 'A plain color behind, always in day\'s light.'}</p>
             </Field>
           </div>
         )}

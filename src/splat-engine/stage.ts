@@ -54,6 +54,8 @@ export interface Actor {
   glow?: Uint8Array
   /** Stays blobs while the stage draws blocks (`setBlocks`): grass and the like, drawn among the cubes. It makes no cubes. */
   soft?: boolean
+  /** A surface that moves by itself and is sent up again with `reshape` (a pond's): while the stage draws blocks it is columns that follow it, or stays blobs, as the look's `flow` says. */
+  flows?: boolean
   /** The side of its cubes while the stage draws blocks (`setBlocks`), where it was cut on a grid of its own; left out, the look's `cell`. */
   blockCell?: number
 }
@@ -344,7 +346,7 @@ export class Stage {
     const all = this.actor ? [this.actor, ...this.extras] : []
     if (this.blockLook && this.actor) {
       // soft actors are a small world of their own, drawn among the cubes, so the scene's own world is not drawn at all
-      const soft = all.filter((a) => a.soft)
+      const soft = all.filter((a) => a.soft || (a.flows && this.blockLook!.flow !== 'blocks'))
       if (soft.length) {
         this.soft = new SplatWorld(soft, { mode: this.mode, lights: this.opts.lights, sort: this.sort })
         this.soft.setFog(...this.fog)
@@ -352,7 +354,7 @@ export class Stage {
         if (this.opts.lights) this.soft.setLights(this.lit.lights, this.lit.ambient)
         this.scene.add(this.soft)
       }
-      this.blocks = new BlockView(all.filter((a) => !a.soft), this.blockLook)
+      this.blocks = new BlockView(all.filter((a) => !soft.includes(a)), this.blockLook)
       this.blocks.setLights(this.lit.lights, this.lit.ambient, this.blockLook.ambient)
       this.scene.add(this.blocks)
     }
@@ -489,6 +491,9 @@ export class Stage {
    */
   reshape(actor: Actor) {
     this.world?.reshape(actor)
+    // drawn as blocks it is columns that follow it, or blobs of the soft world
+    if (this.soft?.actors.includes(actor)) this.soft.reshape(actor)
+    this.blocks?.reshape(actor)
     // not `invalidate`: a mirror's picture is what colored these blobs, and need not be drawn again for them
     this.pending = Math.max(this.pending, 2)
   }

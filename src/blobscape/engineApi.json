@@ -93,6 +93,12 @@
        "doc": "Stays blobs while the stage draws blocks (`setBlocks`): grass and the like, drawn among the cubes. It makes no cubes."
       },
       {
+       "name": "flows",
+       "optional": true,
+       "type": "boolean",
+       "doc": "A surface that moves by itself and is sent up again with `reshape` (a pond's): while the stage draws blocks it is columns that follow it, or stays blobs, as the look's `flow` says."
+      },
+      {
        "name": "blockCell",
        "optional": true,
        "type": "number",
@@ -767,6 +773,12 @@
        "optional": true,
        "type": "boolean",
        "doc": "Stays blobs while the stage draws blocks (`Stage.setBlocks`): grass, flowers and the like, too fine to be cubes,\ndrawn among them and hidden by them where they stand in front. It makes no cubes."
+      },
+      {
+       "name": "flows",
+       "optional": true,
+       "type": "boolean",
+       "doc": "A surface that moves by itself and is sent up again with `reshape` (a pond's): while the stage draws blocks it is columns that follow it, or stays blobs, as the look's `flow` says."
       },
       {
        "name": "blockCell",
@@ -9136,7 +9148,7 @@
     {
      "name": "BlockView",
      "kind": "class",
-     "doc": "A scene drawn as blocks (blocks.ts): one mesh for each bone that carries cubes, moved by that bone whole, so cubes\nnever bend. The look's own light is in the corners already; this adds the stage's lamps to each face by where it\nis and which way it faces now, keeps a block that gives its own light at its own color, and draws a thin line\nround each face. It draws into a target with four samples a pixel and copies that out, since a cube's edges want\nsmoothing that soft blobs never did.",
+     "doc": "A scene drawn as blocks (blocks.ts): one mesh for each bone that carries cubes, moved by that bone whole, so cubes\nnever bend. The look's own light is in the corners already; this adds the stage's lamps to each face by where it\nis and which way it faces now, keeps a block that gives its own light at its own color, and draws a thin line\nround each face. A surface that moves by itself (an actor with `flows`: a pond) is columns whose tops follow its\nblobs (`reshape` after they change), drawn after the cubes and as see-through as its blobs are. It draws into a target with four samples a pixel and copies that out, since a cube's edges want\nsmoothing that soft blobs never did.",
      "extends": [
       "Group"
      ],
@@ -9148,18 +9160,25 @@
      "props": [
       {
        "name": "blocks",
-       "readonly": true,
        "type": "number",
        "doc": "How many cubes it holds."
       },
       {
        "name": "faces",
-       "readonly": true,
        "type": "number",
        "doc": "How many faces of them it draws: those with no cube of the same bone beside them."
       }
      ],
      "methods": [
+      {
+       "name": "reshape",
+       "doc": "After an actor's blobs were changed in place: a surface that moves (`flows`) lays its columns to them again. Any other actor's cubes stay as built.",
+       "signatures": [
+        {
+         "code": "reshape(actor: BlockSource): void"
+        }
+       ]
+      },
       {
        "name": "setLights",
        "doc": "The stage's lights and ambient light, as `SplatWorld.setLights` takes them; `tint` multiplies the ambient (a night's light).",
@@ -9263,6 +9282,18 @@
        "optional": true,
        "type": "number",
        "doc": "Blobs fainter than this are left out (mist, haze; default 0.3)."
+      },
+      {
+       "name": "flow",
+       "optional": true,
+       "type": "\"blobs\" | \"blocks\"",
+       "doc": "How a surface that moves by itself is drawn (a source with `flows`: a pond): 'blocks', as columns of cubes whose\ntops rise and fall with it in steps, or 'blobs', left as the blobs it is among the cubes (default 'blobs': Matt found\nthey have more definition, 2026-11-21)."
+      },
+      {
+       "name": "swell",
+       "optional": true,
+       "type": "number",
+       "doc": "How many times higher than it stands a ripple is drawn as blocks (default `FLOW_SWELL`); 0 keeps the tops level, so only their color moves."
       }
      ]
     },
@@ -9335,6 +9366,18 @@
        "doc": "How much of its own light each blob gives, a byte a blob (`Actor.glow`)."
       },
       {
+       "name": "seen",
+       "optional": true,
+       "type": "Uint8Array<ArrayBufferLike>",
+       "doc": "How much of each of the first four lights each blob sees, four bytes a blob (`Actor.seen`): a light some blob sees less than all of is a lamp that stays put, and casts block shadows (`lampSight`)."
+      },
+      {
+       "name": "flows",
+       "optional": true,
+       "type": "boolean",
+       "doc": "A surface that moves by itself (a pond): its blobs are sent up again as they change, and its cubes are columns that follow them (`planFlow`)."
+      },
+      {
        "name": "blockCell",
        "optional": true,
        "type": "number",
@@ -9391,8 +9434,24 @@
        "name": "indices",
        "type": "Uint32Array",
        "doc": "Three corners a triangle."
+      },
+      {
+       "name": "faceCells",
+       "type": "Int32Array",
+       "doc": "Each face's cell and which of the six faces it is, four whole numbers a face in the order of the corners; the face is -1 for a loose speck."
+      },
+      {
+       "name": "side",
+       "type": "number",
+       "doc": "The side of its cubes."
       }
      ]
+    },
+    {
+     "name": "SolidCells",
+     "kind": "type",
+     "doc": "What is solid in a source's rest pose, a cell at a time, and the box that holds it all.",
+     "type": "(x: number, y: number, z: number) => boolean & { lo?: number[]; hi?: number[] }"
     },
     {
      "name": "blockHash",
@@ -9440,7 +9499,196 @@
      "doc": "The sources as blocks: a mesh for each bone that carries any (see `BlockLook`). A cell two bones' blobs share goes\nto the bone with more of them, so no two cubes ever stand in one place; faces between two cubes on one bone are\nleft out. Shadows and corners are worked out within each source, never from one to another.",
      "signatures": [
       {
-       "code": "buildBlocks(sources: readonly BlockSource[], look: BlockLook): { pieces: BlockPiece[]; blocks: number; faces: number }"
+       "code": "buildBlocks(sources: readonly BlockSource[], look: BlockLook): { pieces: BlockPiece[]; blocks: number; faces: number; solids: SolidCells[] }"
+      }
+     ]
+    },
+    {
+     "name": "lampsOf",
+     "kind": "function",
+     "doc": "Which of the first four lights are lamps that stay put, by a source's `seen`: those some blob of it sees less than all of.",
+     "signatures": [
+      {
+       "code": "lampsOf(seen: Uint8Array<ArrayBufferLike> | undefined): boolean[]"
+      }
+     ]
+    },
+    {
+     "name": "faceSeesLamp",
+     "kind": "function",
+     "doc": "Whether a lamp at `at` (in cells) lights the face `face` of the cell at x, y, z: not when the face is turned away\nfrom it, and not when a walk from just outside the face toward the lamp, half a cell at a time, meets a solid cell\nbefore it is within a cell of the lamp. The lamp's own cell never counts, since a lamp sits inside its housing.",
+     "signatures": [
+      {
+       "code": "faceSeesLamp(solid: SolidCells, x: number, y: number, z: number, face: number, at: readonly [number, number, number]): boolean"
+      }
+     ]
+    },
+    {
+     "name": "lampSight",
+     "kind": "function",
+     "doc": "How much of a lamp each of a piece's faces sees, 1 or 0 a face (`faceSeesLamp`), for a lamp at `at` in the rest\npose's own units with a reach of `range`: faces further than twice its reach are left lit, since its light is gone\nthere anyway, and so are loose specks.",
+     "signatures": [
+      {
+       "code": "lampSight(piece: BlockPiece, solid: SolidCells, at: readonly [number, number, number], range: number): Float32Array"
+      }
+     ]
+    },
+    {
+     "name": "FLOW_STEPS",
+     "kind": "const",
+     "doc": "A ripple's height as blocks is snapped to this many steps a block.",
+     "type": "4"
+    },
+    {
+     "name": "FLOW_SWELL",
+     "kind": "const",
+     "doc": "How many times higher than it stands a ripple is drawn as blocks, when the look does not say.",
+     "type": "6"
+    },
+    {
+     "name": "FLOW_DROP",
+     "kind": "const",
+     "doc": "How far under its layer's top a surface rests, as a share of a block: the banks beside it stand a little proud, and no two faces lie in one plane.",
+     "type": "number"
+    },
+    {
+     "name": "FLOW_MOST",
+     "kind": "const",
+     "doc": "A column's top is never further than this many blocks from where it rests.",
+     "type": "1"
+    },
+    {
+     "name": "FLOW_REACH",
+     "kind": "const",
+     "doc": "A blob of a moving surface lies over a cell's middle when it is within this many of its own sizes of it.",
+     "type": "1.5"
+    },
+    {
+     "name": "FlowPlan",
+     "kind": "interface",
+     "doc": "A moving surface as columns on the blocks' grid: which columns there are and which of its blobs each one reads.",
+     "props": [
+      {
+       "name": "cell",
+       "type": "number",
+       "doc": "A column's side."
+      },
+      {
+       "name": "count",
+       "type": "number",
+       "doc": "How many columns."
+      },
+      {
+       "name": "cells",
+       "type": "Int32Array",
+       "doc": "Each column's place on the grid: along x then along z, a pair a column."
+      },
+      {
+       "name": "level",
+       "type": "number",
+       "doc": "The height the blobs lay at, on the whole, when the plan was made: a ripple is measured from it."
+      },
+      {
+       "name": "rest",
+       "type": "number",
+       "doc": "Where a column's top is with the surface at rest."
+      },
+      {
+       "name": "beside",
+       "type": "Int32Array",
+       "doc": "The columns beside each one, toward +x, -x, +z and -z: four a column, -1 where there is none."
+      },
+      {
+       "name": "start",
+       "type": "Int32Array",
+       "doc": "Where each column's blobs start in `list`, and one more for the end."
+      },
+      {
+       "name": "list",
+       "type": "Int32Array",
+       "doc": "The blobs each column reads, a column after another."
+      }
+     ]
+    },
+    {
+     "name": "planFlow",
+     "kind": "function",
+     "doc": "Plans a moving surface's columns: one for every cell of the grid, seen from above, that holds one of its blobs\nor whose middle one of them reaches over, so a grid finer than the blobs are spread still has no holes. A column\nreads every blob in it or over its middle.",
+     "signatures": [
+      {
+       "code": "planFlow(blobs: Blobs, cell: number): FlowPlan"
+      }
+     ]
+    },
+    {
+     "name": "flowStep",
+     "kind": "function",
+     "doc": "How far from rest a column's top stands for a surface `lift` over its level there: `swell` times as high, in\nwhole steps of a block's `FLOW_STEPS`th, and never more than `FLOW_MOST` blocks.",
+     "signatures": [
+      {
+       "code": "flowStep(lift: number, cell: number, swell?: number): number"
+      }
+     ]
+    },
+    {
+     "name": "FlowMesh",
+     "kind": "interface",
+     "doc": "A moving surface's columns as a mesh: a top and four sides each, twenty corners a column in that order (top, +x, -x, +z, -z), which `shapeFlow` moves and colors.",
+     "props": [
+      {
+       "name": "positions",
+       "type": "Float32Array",
+       "doc": "Corner places, three numbers each: `shapeFlow` writes the heights."
+      },
+      {
+       "name": "normals",
+       "type": "Float32Array",
+       "doc": "Each corner's face normal."
+      },
+      {
+       "name": "colors",
+       "type": "Float32Array",
+       "doc": "Each corner's color, linear, and how solid it is: four numbers, written by `shapeFlow`."
+      },
+      {
+       "name": "light",
+       "type": "Float32Array",
+       "doc": "As a block's (`BlockPiece.light`): the face's light, 1 for no corner, 0 for no light of its own."
+      },
+      {
+       "name": "uvs",
+       "type": "Float32Array",
+       "doc": "Each corner's place on its face."
+      },
+      {
+       "name": "indices",
+       "type": "Uint32Array",
+       "doc": "Three corners a triangle."
+      },
+      {
+       "name": "tops",
+       "type": "Float32Array",
+       "doc": "Each column's top as `shapeFlow` last left it."
+      }
+     ]
+    },
+    {
+     "name": "flowMesh",
+     "kind": "function",
+     "doc": "The mesh for a plan's columns, level at rest and with no color yet: `shapeFlow` it before drawing.",
+     "signatures": [
+      {
+       "code": "flowMesh(plan: FlowPlan, look: BlockLook): FlowMesh"
+      }
+     ]
+    },
+    {
+     "name": "shapeFlow",
+     "kind": "function",
+     "doc": "Lays a mesh's columns to the surface as its blobs stand now: each top at its blobs' mean height over the level,\nin steps (`flowStep`); each side from its own top down to the top of the column beside it, so only the risers\nbetween columns are drawn (where it is the lower of the two it has no height; where there is no column beside it,\nit goes a block down, into the bank); and each column in the mean of its blobs' colors, as solid as they make it\ntwo deep.",
+     "signatures": [
+      {
+       "code": "shapeFlow(plan: FlowPlan, mesh: FlowMesh, blobs: Blobs, look: BlockLook): void"
       }
      ]
     }

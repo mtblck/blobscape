@@ -29,6 +29,14 @@ export interface BlockLook {
   ambient?: readonly [number, number, number]
   /** Blobs fainter than this are left out (mist, haze; default 0.3). */
   least?: number
+  /**
+   * How a surface that moves by itself is drawn (a source with `flows`: a pond): 'blocks', as columns of cubes whose
+   * tops rise and fall with it in steps, or 'blobs', left as the blobs it is among the cubes (default 'blobs': Matt found
+   * they have more definition, 2026-11-21).
+   */
+  flow?: 'blocks' | 'blobs'
+  /** How many times higher than it stands a ripple is drawn as blocks (default `FLOW_SWELL`); 0 keeps the tops level, so only their color moves. */
+  swell?: number
 }
 
 /** The default way to the light. */
@@ -59,6 +67,10 @@ export interface BlockSource {
   skeleton: { bones: readonly { name: string }[] }
   /** How much of its own light each blob gives, a byte a blob (`Actor.glow`). */
   glow?: Uint8Array
+  /** How much of each of the first four lights each blob sees, four bytes a blob (`Actor.seen`): a light some blob sees less than all of is a lamp that stays put, and casts block shadows (`lampSight`). */
+  seen?: Uint8Array
+  /** A surface that moves by itself (a pond): its blobs are sent up again as they change, and its cubes are columns that follow them (`planFlow`). */
+  flows?: boolean
   /** The side of this source's blocks, where it was cut on a grid of its own (a finer cut of the place underfoot); left out, the look's `cell`. */
   blockCell?: number
 }
@@ -83,7 +95,14 @@ export interface BlockPiece {
   uvs: Float32Array
   /** Three corners a triangle. */
   indices: Uint32Array
+  /** Each face's cell and which of the six faces it is, four whole numbers a face in the order of the corners; the face is -1 for a loose speck. */
+  faceCells: Int32Array
+  /** The side of its cubes. */
+  side: number
 }
+
+/** What is solid in a source's rest pose, a cell at a time, and the box that holds it all. */
+export type SolidCells = ((x: number, y: number, z: number) => boolean) & { lo?: number[]; hi?: number[] }
 
 /** A cell's place as one number: three signed whole numbers of up to 17 bits (so it stays exact in a double). */
 const SPAN = 1 << 17, HALF = SPAN / 2
@@ -189,7 +208,7 @@ export function faceLit(solid: (x: number, y: number, z: number) => boolean, x: 
  * to the bone with more of them, so no two cubes ever stand in one place; faces between two cubes on one bone are
  * left out. Shadows and corners are worked out within each source, never from one to another.
  */
-export function buildBlocks(sources: readonly BlockSource[], look: BlockLook): { pieces: BlockPiece[]; blocks: number; faces: number } {
+export function buildBlocks(sources: readonly BlockSource[], look: BlockLook): { pieces: BlockPiece[]; blocks: number; faces: number; solids: SolidCells[] } {
   const least = look.least ?? 0.3, from = look.from ?? BLOCK_FROM
   const shade = look.shade ?? BLOCK_SHADE, corners = (look.corners ?? 0.5) * CORNER_MOST, vary = (look.vary ?? 0.35) * VARY_MOST
   const sun = faceLight(from)
@@ -199,6 +218,8 @@ export function buildBlocks(sources: readonly BlockSource[], look: BlockLook): {
   const groups: Map<number, number>[] = []
   for (let a = 0; a < sources.length; a++) {
     const { blobs, skin, skeleton, glow } = sources[a]
+    // a surface that moves is columns of its own (`planFlow`), or stays blobs
+    if (sources[a].flows) { groups.push(new Map(), new Map()); continue }
     // twice: the grid's own blocks, then the loose specks on their finer grid
     for (const specks of [false, true]) {
       const own = sources[a].blockCell ?? look.cell, cell = specks ? own * SPECK_SIZE : own
@@ -269,7 +290,7 @@ export function buildBlocks(sources: readonly BlockSource[], look: BlockLook): {
   const count = owner.length
   const cells = Int32Array.from(where)
   // what is solid, a source at a time: each source has its own rest pose and may be stood anywhere, so one never shades another
-  const solids = sources.map((_, a) => solidGrid(cells, count, (k) => owner[k] === a && !loose[k] && glows[k] < GLOW_CLEAR) as ((x: number, y: number, z: number) => boolean) & { lo?: number[]; hi?: number[] })
+  const solids = sources.map((_, a) => solidGrid(cells, count, (k) => owner[k] === a && !loose[k] && glows[k] < GLOW_CLEAR) as SolidCells)
 
   // which faces show, cell by cell, and how many each piece gets
   const open = new Uint8Array(count)
@@ -293,7 +314,7 @@ export function buildBlocks(sources: readonly BlockSource[], look: BlockLook): {
   for (const p of pieceOf.values()) {
     const nv = p.faces * 4
     const positions = new Float32Array(nv * 3), normals = new Float32Array(nv * 3), colors = new Float32Array(nv * 3), light = new Float32Array(nv * 3), uvs = new Float32Array(nv * 2)
-    const indices = new Uint32Array(p.faces * 6)
+    const indices = new Uint32Array(p.faces * 6), faceCells = new Int32Array(p.faces * 4)
     let v = 0, t = 0
     const solid = solids[p.actor], lo = solid.lo ?? [0, 0, 0], hi = solid.hi ?? [0, 0, 0]
     for (const k of p.cells) {
@@ -305,6 +326,7 @@ export function buildBlocks(sources: readonly BlockSource[], look: BlockLook): {
         const { n, u, v: w } = FACES[f]
         const lit = speck || look.shadows === false || sun[f] <= 0 ? 1 : faceLit(solid, x, y, z, f, from, lo, hi) ? 1 : 0
         const tone = faceTone(f, lit, shade, sun)
+        faceCells.set([x, y, z, speck ? -1 : f], v)
         const shut = [0, 0, 0, 0]
         for (let c = 0; c < 4; c++) {
           const [a, b] = CORNERS[c]
@@ -331,7 +353,230 @@ export function buildBlocks(sources: readonly BlockSource[], look: BlockLook): {
         t += 6
       }
     }
-    pieces.push({ actor: p.actor, bone: p.bone, blocks: p.cells.length, positions, normals, colors, light, uvs, indices })
+    pieces.push({ actor: p.actor, bone: p.bone, blocks: p.cells.length, positions, normals, colors, light, uvs, indices, faceCells, side: sources[p.actor].blockCell ?? look.cell })
   }
-  return { pieces, blocks: count, faces }
+  return { pieces, blocks: count, faces, solids }
+}
+
+/** Which of the first four lights are lamps that stay put, by a source's `seen`: those some blob of it sees less than all of. */
+export function lampsOf(seen: Uint8Array | undefined): boolean[] {
+  const casts = [false, false, false, false]
+  if (seen) for (let i = 0; i < seen.length; i++) if (seen[i] < 255) casts[i & 3] = true
+  return casts
+}
+
+/**
+ * Whether a lamp at `at` (in cells) lights the face `face` of the cell at x, y, z: not when the face is turned away
+ * from it, and not when a walk from just outside the face toward the lamp, half a cell at a time, meets a solid cell
+ * before it is within a cell of the lamp. The lamp's own cell never counts, since a lamp sits inside its housing.
+ */
+export function faceSeesLamp(solid: SolidCells, x: number, y: number, z: number, face: number, at: readonly [number, number, number]): boolean {
+  const n = FACES[face].n
+  let px = x + n[0] * 0.56, py = y + n[1] * 0.56, pz = z + n[2] * 0.56
+  let dx = at[0] - px, dy = at[1] - py, dz = at[2] - pz
+  if (dx * n[0] + dy * n[1] + dz * n[2] <= 0) return false
+  const dist = Math.hypot(dx, dy, dz), steps = Math.floor((dist - 1) * 2)
+  dx /= dist * 2; dy /= dist * 2; dz /= dist * 2
+  const lx = Math.round(at[0]), ly = Math.round(at[1]), lz = Math.round(at[2])
+  for (let step = 0; step < steps; step++) {
+    px += dx; py += dy; pz += dz
+    const cx = Math.round(px), cy = Math.round(py), cz = Math.round(pz)
+    if (cx === x && cy === y && cz === z) continue
+    if (cx === lx && cy === ly && cz === lz) return true
+    if (solid(cx, cy, cz)) return false
+  }
+  return true
+}
+
+/**
+ * How much of a lamp each of a piece's faces sees, 1 or 0 a face (`faceSeesLamp`), for a lamp at `at` in the rest
+ * pose's own units with a reach of `range`: faces further than twice its reach are left lit, since its light is gone
+ * there anyway, and so are loose specks.
+ */
+export function lampSight(piece: BlockPiece, solid: SolidCells, at: readonly [number, number, number], range: number): Float32Array {
+  const n = piece.faceCells.length / 4, out = new Float32Array(n).fill(1)
+  const c: [number, number, number] = [at[0] / piece.side, at[1] / piece.side, at[2] / piece.side], far = (range * 2) / piece.side
+  for (let i = 0; i < n; i++) {
+    const x = piece.faceCells[i * 4], y = piece.faceCells[i * 4 + 1], z = piece.faceCells[i * 4 + 2], f = piece.faceCells[i * 4 + 3]
+    if (f < 0 || Math.hypot(x - c[0], y - c[1], z - c[2]) > far + 1) continue
+    out[i] = faceSeesLamp(solid, x, y, z, f, c) ? 1 : 0
+  }
+  return out
+}
+
+/** A ripple's height as blocks is snapped to this many steps a block. */
+export const FLOW_STEPS = 4
+/** How many times higher than it stands a ripple is drawn as blocks, when the look does not say. */
+export const FLOW_SWELL = 6
+/** How far under its layer's top a surface rests, as a share of a block: the banks beside it stand a little proud, and no two faces lie in one plane. */
+export const FLOW_DROP = 1 / 8
+/** A column's top is never further than this many blocks from where it rests. */
+export const FLOW_MOST = 1
+
+/** A blob of a moving surface lies over a cell's middle when it is within this many of its own sizes of it. */
+export const FLOW_REACH = 1.5
+
+/** A moving surface as columns on the blocks' grid: which columns there are and which of its blobs each one reads. */
+export interface FlowPlan {
+  /** A column's side. */
+  cell: number
+  /** How many columns. */
+  count: number
+  /** Each column's place on the grid: along x then along z, a pair a column. */
+  cells: Int32Array
+  /** The height the blobs lay at, on the whole, when the plan was made: a ripple is measured from it. */
+  level: number
+  /** Where a column's top is with the surface at rest. */
+  rest: number
+  /** The columns beside each one, toward +x, -x, +z and -z: four a column, -1 where there is none. */
+  beside: Int32Array
+  /** Where each column's blobs start in `list`, and one more for the end. */
+  start: Int32Array
+  /** The blobs each column reads, a column after another. */
+  list: Int32Array
+}
+
+const flatKey = (x: number, z: number) => (x + HALF) * SPAN + (z + HALF)
+
+/**
+ * Plans a moving surface's columns: one for every cell of the grid, seen from above, that holds one of its blobs
+ * or whose middle one of them reaches over, so a grid finer than the blobs are spread still has no holes. A column
+ * reads every blob in it or over its middle.
+ */
+export function planFlow(blobs: Blobs, cell: number): FlowPlan {
+  const at = new Map<number, number>(), cells: number[] = [], lists: number[][] = []
+  const col = (x: number, z: number) => {
+    const key = flatKey(x, z)
+    let k = at.get(key)
+    if (k === undefined) { k = lists.length; at.set(key, k); cells.push(x, z); lists.push([]) }
+    return k
+  }
+  let level = 0
+  for (let i = 0; i < blobs.count; i++) {
+    const x = blobs.center[i * 3], z = blobs.center[i * 3 + 2]
+    level += blobs.center[i * 3 + 1] / blobs.count
+    const ix = Math.round(x / cell), iz = Math.round(z / cell)
+    lists[col(ix, iz)].push(i)
+    // and the cells beside it whose middles it lies over
+    const r = Math.max(blobs.scale[i * 3], blobs.scale[i * 3 + 1], blobs.scale[i * 3 + 2]) * FLOW_REACH
+    const reach = Math.ceil(r / cell)
+    for (let dz = -reach; dz <= reach; dz++) for (let dx = -reach; dx <= reach; dx++) {
+      if (!dx && !dz) continue
+      const cx = (ix + dx) * cell - x, cz = (iz + dz) * cell - z
+      if (cx * cx + cz * cz <= r * r) lists[col(ix + dx, iz + dz)].push(i)
+    }
+  }
+  const count = lists.length
+  const start = new Int32Array(count + 1)
+  for (let k = 0; k < count; k++) start[k + 1] = start[k] + lists[k].length
+  const list = new Int32Array(start[count])
+  for (let k = 0; k < count; k++) list.set(lists[k], start[k])
+  const beside = new Int32Array(count * 4)
+  for (let k = 0; k < count; k++) {
+    const x = cells[k * 2], z = cells[k * 2 + 1]
+    beside[k * 4] = at.get(flatKey(x + 1, z)) ?? -1
+    beside[k * 4 + 1] = at.get(flatKey(x - 1, z)) ?? -1
+    beside[k * 4 + 2] = at.get(flatKey(x, z + 1)) ?? -1
+    beside[k * 4 + 3] = at.get(flatKey(x, z - 1)) ?? -1
+  }
+  return { cell, count, cells: Int32Array.from(cells), level, rest: (Math.round(level / cell) + 0.5 - FLOW_DROP) * cell, beside, start, list }
+}
+
+/**
+ * How far from rest a column's top stands for a surface `lift` over its level there: `swell` times as high, in
+ * whole steps of a block's `FLOW_STEPS`th, and never more than `FLOW_MOST` blocks.
+ */
+export function flowStep(lift: number, cell: number, swell = FLOW_SWELL): number {
+  const step = cell / FLOW_STEPS, most = FLOW_MOST * FLOW_STEPS
+  return Math.max(-most, Math.min(most, Math.round((lift * swell) / step))) * step
+}
+
+/** A moving surface's columns as a mesh: a top and four sides each, twenty corners a column in that order (top, +x, -x, +z, -z), which `shapeFlow` moves and colors. */
+export interface FlowMesh {
+  /** Corner places, three numbers each: `shapeFlow` writes the heights. */
+  positions: Float32Array
+  /** Each corner's face normal. */
+  normals: Float32Array
+  /** Each corner's color, linear, and how solid it is: four numbers, written by `shapeFlow`. */
+  colors: Float32Array
+  /** As a block's (`BlockPiece.light`): the face's light, 1 for no corner, 0 for no light of its own. */
+  light: Float32Array
+  /** Each corner's place on its face. */
+  uvs: Float32Array
+  /** Three corners a triangle. */
+  indices: Uint32Array
+  /** Each column's top as `shapeFlow` last left it. */
+  tops: Float32Array
+}
+
+/** The faces of a column, in the mesh's order: its top, then the sides in `FlowPlan.beside`'s order. */
+const FLOW_FACES = [2, 0, 1, 4, 5]
+
+/** The mesh for a plan's columns, level at rest and with no color yet: `shapeFlow` it before drawing. */
+export function flowMesh(plan: FlowPlan, look: BlockLook): FlowMesh {
+  const n = plan.count, cell = plan.cell
+  const sun = faceLight(look.from ?? BLOCK_FROM), shade = look.shade ?? BLOCK_SHADE
+  const positions = new Float32Array(n * 60), normals = new Float32Array(n * 60), colors = new Float32Array(n * 80), light = new Float32Array(n * 60), uvs = new Float32Array(n * 40)
+  const indices = new Uint32Array(n * 30)
+  for (let k = 0; k < n; k++) {
+    const x = plan.cells[k * 2], z = plan.cells[k * 2 + 1]
+    for (let q = 0; q < 5; q++) {
+      const f = FLOW_FACES[q], { n: fn, u, v: w } = FACES[f]
+      const tone = faceTone(f, 1, shade, sun)
+      for (let c = 0; c < 4; c++) {
+        const [a, b] = CORNERS[c], v = k * 20 + q * 4 + c
+        positions[v * 3] = (x + (fn[0] + u[0] * a + w[0] * b) / 2) * cell
+        positions[v * 3 + 1] = plan.rest
+        positions[v * 3 + 2] = (z + (fn[2] + u[2] * a + w[2] * b) / 2) * cell
+        for (let j = 0; j < 3; j++) normals[v * 3 + j] = fn[j]
+        light[v * 3] = tone
+        light[v * 3 + 1] = 1
+        uvs[v * 2] = (a + 1) / 2
+        uvs[v * 2 + 1] = (b + 1) / 2
+      }
+      const v = k * 20 + q * 4
+      indices.set([v, v + 1, v + 2, v, v + 2, v + 3], (k * 5 + q) * 6)
+    }
+  }
+  return { positions, normals, colors, light, uvs, indices, tops: new Float32Array(n).fill(plan.rest) }
+}
+
+/**
+ * Lays a mesh's columns to the surface as its blobs stand now: each top at its blobs' mean height over the level,
+ * in steps (`flowStep`); each side from its own top down to the top of the column beside it, so only the risers
+ * between columns are drawn (where it is the lower of the two it has no height; where there is no column beside it,
+ * it goes a block down, into the bank); and each column in the mean of its blobs' colors, as solid as they make it
+ * two deep.
+ */
+export function shapeFlow(plan: FlowPlan, mesh: FlowMesh, blobs: Blobs, look: BlockLook) {
+  const { count, cell, start, list, cells, beside } = plan, { positions, colors, tops } = mesh
+  const vary = (look.vary ?? 0.35) * VARY_MOST, swell = look.swell ?? FLOW_SWELL
+  for (let k = 0; k < count; k++) {
+    let y = 0, r = 0, g = 0, b = 0, o = 0
+    const m = start[k + 1] - start[k]
+    for (let j = start[k]; j < start[k + 1]; j++) {
+      const i = list[j]
+      y += blobs.center[i * 3 + 1]
+      r += srgbToLinear(blobs.color[i * 3]); g += srgbToLinear(blobs.color[i * 3 + 1]); b += srgbToLinear(blobs.color[i * 3 + 2])
+      o += blobs.opacity[i]
+    }
+    tops[k] = plan.rest + flowStep(y / m - plan.level, cell, swell)
+    const tint = (1 + (blockHash(cells[k * 2], 0, cells[k * 2 + 1]) * 2 - 1) * vary) / m
+    const solid = 1 - (1 - Math.min(1, o / m)) ** 2
+    for (let v = k * 20; v < k * 20 + 20; v++) {
+      colors[v * 4] = r * tint; colors[v * 4 + 1] = g * tint; colors[v * 4 + 2] = b * tint; colors[v * 4 + 3] = solid
+    }
+  }
+  for (let k = 0; k < count; k++) {
+    const top = tops[k]
+    for (let c = 0; c < 4; c++) positions[(k * 20 + c) * 3 + 1] = top
+    for (let q = 1; q < 5; q++) {
+      const nb = beside[k * 4 + q - 1], low = nb < 0 ? plan.rest - cell : Math.min(top, tops[nb])
+      const { u, v: w } = FACES[FLOW_FACES[q]]
+      for (let c = 0; c < 4; c++) {
+        const [a, b2] = CORNERS[c]
+        positions[(k * 20 + q * 4 + c) * 3 + 1] = u[1] * a + w[1] * b2 > 0 ? top : low
+      }
+    }
+  }
 }
