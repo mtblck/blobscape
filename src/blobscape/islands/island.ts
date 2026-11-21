@@ -84,11 +84,21 @@ export function inside(lobes: Lobe[], x: number, z: number): number {
 
 /** How far the island reaches from its middle along an angle. */
 export function reach(lobes: Lobe[], angle: number): number {
-  const c = Math.cos(angle), s = Math.sin(angle)
-  let d = 0
-  while (d < HALF * 1.5 && inside(lobes, c * (d + 0.03), s * (d + 0.03)) >= 0) d += 0.03
-  return d
+  const c = Math.cos(angle), s = Math.sin(angle), last = REACHES.length - 1
+  // a walk out in steps of 0.03 to the first step whose next is outside. A point `v` inside the outline has everything
+  // within `v` of it inside too, so the steps that far on need not be asked: the same answer in a tenth of the looks
+  let k = 0
+  while (k < last) {
+    const d = REACHES[k] + 0.03, v = inside(lobes, c * d, s * d)
+    if (!(v >= 0)) break
+    k = Math.min(last, k + 1 + Math.max(0, Math.floor(v / 0.03) - 2))
+  }
+  return REACHES[k]
 }
+
+/** Every distance `reach` can give: 0.03 added again and again (so each is the very sum a step-by-step walk comes to), ending with the first at or past the furthest it looks. */
+const REACHES: number[] = [0]
+while (REACHES[REACHES.length - 1] < HALF * 1.5) REACHES.push(REACHES[REACHES.length - 1] + 0.03)
 
 /** How far a point is from a path of straight runs, seen from above. */
 export function fromPath(path: Vec3[], x: number, z: number): number {

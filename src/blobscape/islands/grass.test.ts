@@ -8,10 +8,14 @@ import { PER_BLADE, PER_FLOWER, growGrass } from './grass.ts'
 
 const unit = (h: string) => [1, 3, 5].map((k) => parseInt(h.slice(k, k + 2), 16) / 255)
 
+// one island, cut once for both tests (the cut is most of their time)
+const cell = 0.12
+const made = makeIsland('meadow', 7)
+let kept: ReturnType<ReturnType<typeof described>['make']> | undefined
+const cutOnce = () => (kept ??= unlit(() => described('island', made.doc, 'test').make(cell)))
+
 test('grass grows on the turf tops of an island cut for blocks, each blade standing on a cube', () => {
-  const made = makeIsland('meadow', 7)
-  const cell = 0.12
-  const cut = unlit(() => described('island', made.doc, 'test').make(cell))
+  const cut = cutOnce()
   const ramp = material(made.biome.ground.top).ramp.map(unit)
   const grass = growGrass({ blobs: cut.blobs, joints: cut.skin.joints }, { cell, ramp, blades: 3000, seed: 7 })
   const blades = grass.count / PER_BLADE
@@ -26,9 +30,7 @@ test('grass grows on the turf tops of an island cut for blocks, each blade stand
 })
 
 test('wildflowers grow in bunches of their own colors on the turf', () => {
-  const made = makeIsland('meadow', 7)
-  const cell = 0.12
-  const cut = unlit(() => described('island', made.doc, 'test').make(cell))
+  const cut = cutOnce()
   const ramp = material(made.biome.ground.top).ramp.map(unit)
   const kinds = made.biome.wildflowers.map((id) => material(id).ramp.map(unit))
   const plain = growGrass({ blobs: cut.blobs, joints: cut.skin.joints }, { cell, ramp, blades: 2000, seed: 7 })

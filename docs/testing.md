@@ -20,6 +20,22 @@ The engine docs' reference is checked against the code by a unit test that needs
 small package (`tools/api-docs`); `npm run check` installs it first (`npm run docs:deps`), and without it that one
 test is skipped.
 
+## Keeping the unit tests quick
+
+`npm test` runs on every pull request, so it should stay a few minutes. Test files run side by side, one for each
+processor but one; the tests inside a file run one after another. So:
+
+- Plan or cut a heavy thing once in a file and share it between its tests (`islands.test.ts` keeps each island and
+  world it plans; `grass.test.ts` cuts its island once).
+- Cut far coarser than the page does. What a test measures seldom depends on the grid: `islands/cut.test.ts` cuts an
+  island at a ninth of the page's blobs and gets the same answers.
+- Inside a loop over blobs or pixels, build no message for a check that passes: `if (!ok) assert.fail(...)`, not
+  `assert.ok(ok, \`...\`)`, which writes the message out every time.
+- A test that has to stay heavy gets a file of its own, or is dealt over several (`diorama/scenesBuild.ts` and its
+  four `scenes.build<n>.test.ts` files), so it runs beside the others and not after them.
+
+`node --test --experimental-strip-types --test-reporter=spec <file>` prints each test's time.
+
 ## What you read
 
 Every command says little when it passes, so a run costs a few lines to read
