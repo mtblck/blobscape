@@ -1,1 +1,1 @@
-Watercolor, a new style on Pixel Diorama and Brush and Ink: thin washes on paper with edges that run and dry darker, the grain showing through, a wash of the scene's sky behind and a faint pencil line underneath.
+Watercolor, a new style on Diorama and Brush and Ink: thin washes on paper with edges that run and dry darker, the grain showing through, a wash of the scene's sky behind and a faint pencil line underneath.

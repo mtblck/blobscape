@@ -9,7 +9,7 @@ export default [
     files: ['src/blobscape/App.tsx', 'src/blobscape/main.tsx', 'src/blobscape/ssr.tsx', 'index.html', 'public/theme.js'],
     async run({ base, join, fails, ok, open, axe, DESKTOP, PHONE }) {
       // Prerendered: each page's HTML carries its own title, canonical and content before any script runs
-      for (const [path, title] of [['/', 'Blobscape: learn'], ['/lessons/', 'Lessons ·'], ['/lessons/order/', 'Order matters · Lesson 3'], ['/experiments/sandbox/', 'Sandbox ·'], ['/experiments/creature/', 'Splat Creatures ·'], ['/experiments/forest-walk/', 'Forest Walk ·'], ['/experiments/clockwork/', 'Clockwork ·'], ['/experiments/shape-shifter/', 'Shape Shifter ·'], ['/experiments/pixel-diorama/', 'Pixel Diorama ·'], ['/experiments/dungeon-run/', 'Dungeon Run ·'], ['/experiments/scan-studio/', 'Scan Studio ·'], ['/experiments/', 'Experiments ·'], ['/engine/', 'The Blobscape engine ·'], ['/engine/rigged-splats/', 'Rigged Gaussian splats in glTF ·'], ['/whats-new/', "What's New ·"], ['/whats-new/two-tools-to-start/', 'Two tools to start']]) {
+      for (const [path, title] of [['/', 'Blobscape: learn'], ['/lessons/', 'Lessons ·'], ['/lessons/order/', 'Order matters · Lesson 3'], ['/experiments/sandbox/', 'Sandbox ·'], ['/experiments/creature/', 'Splat Creatures ·'], ['/experiments/forest-walk/', 'Forest Walk ·'], ['/experiments/clockwork/', 'Clockwork ·'], ['/experiments/shape-shifter/', 'Shape Shifter ·'], ['/experiments/diorama/', 'Diorama ·'], ['/experiments/dungeon-run/', 'Dungeon Run ·'], ['/experiments/scan-studio/', 'Scan Studio ·'], ['/experiments/', 'Experiments ·'], ['/engine/', 'The Blobscape engine ·'], ['/engine/rigged-splats/', 'Rigged Gaussian splats in glTF ·'], ['/whats-new/', "What's New ·"], ['/whats-new/two-tools-to-start/', 'Two tools to start']]) {
         const html = await (await fetch(base + path)).text()
         if (!html.includes(`<title>${title}`)) fails.push(`${path}: prerendered title is not "${title}…"`)
         else if (!html.includes(`<link rel="canonical" href="https://blobscape.dev${path}"`)) fails.push(`${path}: prerendered canonical is wrong`)
@@ -19,7 +19,7 @@ export default [
       // The page before any script runs is the page the app then shows: the heading and the first paragraph are the same
       // size in the same place (an experiment once started as a stand-in with bigger text, which jumped as the app took over)
       const placed = (page) => page.evaluate(() => ['main h1', 'main p'].map((q) => { const el = document.querySelector(q); const r = el.getBoundingClientRect(); return [r.x, r.y, r.width, r.height, parseFloat(getComputedStyle(el).fontSize)].map(Math.round) }))
-      for (const path of ['/experiments/clockwork/', '/experiments/pixel-diorama/', '/experiments/sandbox/', '/lessons/one-blob/', '/lessons/']) {
+      for (const path of ['/experiments/clockwork/', '/experiments/diorama/', '/experiments/sandbox/', '/lessons/one-blob/', '/lessons/']) {
         for (const [size, device] of [['desktop', DESKTOP], ['phone', PHONE]]) {
           const first = await open(path, { ...device, javaScriptEnabled: false })
           // scripts are off only to hold the app back: the notice for visitors without scripts is not part of anyone's first paint
@@ -42,7 +42,7 @@ export default [
       if (missing.status !== 404 || !(await missing.text()).includes('noindex')) fails.push('an unknown page is not a noindex 404')
       else ok('unknown pages get the noindex 404 page')
       const sitemap = await (await fetch(base + '/sitemap.xml')).text()
-      if (!sitemap.includes('https://blobscape.dev/lessons/model/') || !sitemap.includes('/experiments/fit-a-picture/') || !sitemap.includes('/experiments/creature/') || !sitemap.includes('/experiments/forest-walk/') || !sitemap.includes('/experiments/clockwork/') || !sitemap.includes('/experiments/shape-shifter/') || !sitemap.includes('/experiments/pixel-diorama/') || !sitemap.includes('/experiments/dungeon-run/') || !sitemap.includes('/experiments/scan-studio/')) fails.push('sitemap.xml is missing pages')
+      if (!sitemap.includes('https://blobscape.dev/lessons/model/') || !sitemap.includes('/experiments/fit-a-picture/') || !sitemap.includes('/experiments/creature/') || !sitemap.includes('/experiments/forest-walk/') || !sitemap.includes('/experiments/clockwork/') || !sitemap.includes('/experiments/shape-shifter/') || !sitemap.includes('/experiments/diorama/') || !sitemap.includes('/experiments/dungeon-run/') || !sitemap.includes('/experiments/scan-studio/')) fails.push('sitemap.xml is missing pages')
       else ok('sitemap.xml lists the lessons and tools')
 
       const { page, res, ctx } = await open('/')
@@ -110,7 +110,7 @@ export default [
         const pixel = (await listed()).map((c) => c[0])
         await ex.page.getByRole('group', { name: 'Show' }).getByRole('button', { name: 'All' }).click()
         const all = await listed()
-        if (JSON.stringify(games) !== JSON.stringify(['Wading Pond', 'Dungeon Run', 'Forest Walk']) || gameUrl !== 'game' || !pixel.includes('Pixel Diorama') || pixel.includes('Dungeon Run') || all.length !== newest.length) fails.push(`experiments page filter: ${JSON.stringify({ games, gameUrl, pixel, all: all.length })}`)
+        if (JSON.stringify(games) !== JSON.stringify(['Wading Pond', 'Dungeon Run', 'Forest Walk']) || gameUrl !== 'game' || !pixel.includes('Diorama') || pixel.includes('Dungeon Run') || all.length !== newest.length) fails.push(`experiments page filter: ${JSON.stringify({ games, gameUrl, pixel, all: all.length })}`)
         else ok(`experiments page: Games shows ${games.join(' and ')}, ?tag=pixel opens on ${pixel.length} pixel-art experiments, All shows every one`)
         await axe(ex.page, 'experiments page')
         // an experiment's own page carries the dates too: drawn by the app, and in the HTML a crawler reads

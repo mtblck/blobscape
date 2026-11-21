@@ -1,4 +1,4 @@
-/** Blocks as Brush and Ink and Pixel Diorama offer them: the chip, the choices and the look they make for the stage. */
+/** Blocks as Brush and Ink and Diorama offer them: the chip, the choices and the look they make for the stage. */
 import { FLOW_SWELL, type BlockLook } from '../splat-engine/blocks.ts'
 import { lightFrom, nightLight } from './celLooks.ts'
 

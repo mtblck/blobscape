@@ -326,7 +326,7 @@ export function WadingPond() {
           </p>
           <p>
             Where the water lies is worked out too. The ruin is a scene written as shapes, like the ones in{' '}
-            <a href={href({ page: 'diorama' })} className="underline decoration-rule underline-offset-2 hover:text-accent">Pixel Diorama</a>,
+            <a href={href({ page: 'diorama' })} className="underline decoration-rule underline-offset-2 hover:text-accent">Diorama</a>,
             and the pond floods outward from the elf through every cell whose ground is under the surface. The elf's feet stand on
             that same ground, stones and all.
           </p>

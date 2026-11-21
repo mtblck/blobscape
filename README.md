@@ -31,9 +31,9 @@
 </p>
 
 <p align="center">
-  <a href="https://blobscape.dev/experiments/pixel-diorama/"><img src=".github/readme/hero.webp" alt="Five Pixel Diorama scenes drawn as pixel art from Gaussian splats: a lighthouse on a small island at night, a red dragon over a lava pool, an owl in a wizard hat beside a cauldron, snowy floating islands with a waterfall, and a scarecrow in a pumpkin patch under a full moon" width="880" /></a>
+  <a href="https://blobscape.dev/experiments/diorama/"><img src=".github/readme/hero.webp" alt="Five Diorama scenes drawn as pixel art from Gaussian splats: a lighthouse on a small island at night, a red dragon over a lava pool, an owl in a wizard hat beside a cauldron, snowy floating islands with a waterfall, and a scarecrow in a pumpkin patch under a full moon" width="880" /></a>
 </p>
-<p align="center"><sub>Every one of these is real 3D, made of blobs and drawn live as pixel art. <a href="https://blobscape.dev/experiments/pixel-diorama/">Turn them in Pixel Diorama</a>.</sub></p>
+<p align="center"><sub>Every one of these is real 3D, made of blobs and drawn live as pixel art. <a href="https://blobscape.dev/experiments/diorama/">Turn them in Diorama</a>.</sub></p>
 
 ## What is a Gaussian splat?
 
@@ -84,8 +84,8 @@ Files stay in your browser.
       Creatures made of blobs, moving on bones. Take one away as a rigged .glb or a sprite sheet.
     </td>
     <td width="33%" valign="top">
-      <a href="https://blobscape.dev/experiments/pixel-diorama/"><img src="public/covers/pixel-diorama.webp" alt="A pixel-art lighthouse on a small island at night" /></a><br />
-      <a href="https://blobscape.dev/experiments/pixel-diorama/"><b>Pixel Diorama</b></a><br />
+      <a href="https://blobscape.dev/experiments/diorama/"><img src="public/covers/pixel-diorama.webp" alt="A pixel-art lighthouse on a small island at night" /></a><br />
+      <a href="https://blobscape.dev/experiments/diorama/"><b>Diorama</b></a><br />
       Scenes built from shapes and drawn as moving pixel art. Turn them, or switch the pixels off.
     </td>
     <td width="33%" valign="top">
@@ -211,7 +211,7 @@ npm run dev          # http://localhost:5173/
 | `npm run preview` | Serve the build with the production headers |
 | `npm run verify` | Real Chromium against `dist` under the production CSP, with axe accessibility checks (all of them; `-- --changed` runs only those a change reaches) |
 | `npm run check` | Unit tests, build, then the browser checks the branch's changes reach: run this before merging ([testing](docs/testing.md)) |
-| `npm run loops` | Record Pixel Diorama's gallery loops from the build, several scenes at once (needs ffmpeg) |
+| `npm run loops` | Record Diorama's gallery loops from the build, several scenes at once (needs ffmpeg) |
 
 ## How the repo is laid out
 
@@ -235,14 +235,14 @@ Further reading: [design notes](docs/design-notes.md) ·
 
 ## Thanks
 
-Pixel Diorama was inspired by the pixel-art Gaussian splat scenes that
+Diorama was inspired by the pixel-art Gaussian splat scenes that
 [Silicon Jungle](https://x.com/JungleSilicon) shared: the idea of drawing voxel scenes as small solid
 blobs and cutting them to a palette, and the themes of several scenes. The world-building shapes
 (brick walls, steps and fences, formations, weather that lands, worn rock) follow ideas from their
 Ink Studio kit. Since November 2026 the two projects build on each other's work by agreement: where an
 idea or code comes from [Ink Studio](https://github.com/siliconjungle/shapeshift-labs-ink-studio)
 (MIT, © siliconjungle), the code says so where it is used. Ink Studio also gave us ideas for smaller
-improvements to Pixel Diorama's pixel art, such as dither that moves with things and the picture held on
+improvements to Diorama's pixel art, such as dither that moves with things and the picture held on
 the art's grid.
 
 The sandbox's One photo to a scene guesses depth with

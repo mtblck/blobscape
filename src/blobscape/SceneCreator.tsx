@@ -54,7 +54,7 @@ import { PIXEL_RATES, PIXEL_SIZES, paletteChoices, pixelLook, pixelStart, type P
 import { arrowWay, begin, copied, did, lamped, moved, onGround, redo, redrawn, removed, sized, stepFor, stilled, turned, undo, wrapTurn, type History } from './creator/arrange.ts'
 
 /**
- * Scene Creator (epic #329): Pixel Diorama's scenes taken apart into a land and props to arrange. The workspace
+ * Scene Creator (epic #329): Diorama's scenes taken apart into a land and props to arrange. The workspace
  * (#335) is the sandbox's Modes layout, each piece cut in a worker and drawn as its own actor on one stage; Arrange
  * (#336) picks a prop by a tap or from the list and moves, turns, sizes, copies and deletes it, with undo. A prop is
  * cut where it stands, so while it is dragged or turned the cut it has is drawn where it is going (`redrawn`), and it
@@ -212,7 +212,7 @@ export function SceneCreator() {
   const project = hist?.now
   const shown = useMemo(() => shownOf(opened.kind === 'project' && project ? { ...opened, project } : opened), [opened, project])
   const cp = shown.cp
-  // a phone starts on Chunky, as Pixel Diorama starts it a step lighter
+  // a phone starts on Chunky, as Diorama starts it a step lighter
   const [detail, setDetail] = useState<string>(() => detailAsked(DETAIL, labelNames)?.id ?? (coarse ? DETAIL[0].id : DETAIL[2].id))
   const [orbit, setOrbit] = useState<Orbit>(shown.orbit)
   const [stage, setStage] = useState<CreatureStage>()
@@ -483,7 +483,7 @@ export function SceneCreator() {
   useEffect(() => { if (stage) { stage.step = pixelsNow && px.rate ? 1 / px.rate : 0; stage.invalidate() } }, [stage, pixelsNow, px.rate])
   // the glitch's bursts come in steps of the scene's own clock, a whole number of steps a loop, so an export joins up
   useEffect(() => { stage?.setGlitch(glitchingNow ? glitchLook(glitch, shown.loop, calm && !offscreen) : undefined) }, [stage, glitchingNow, glitch, shown.loop, calm, offscreen])
-  // on a phone the styles that fill the whole screen are drawn at one and a half device pixels to a CSS pixel, as Pixel Diorama does
+  // on a phone the styles that fill the whole screen are drawn at one and a half device pixels to a CSS pixel, as Diorama does
   useEffect(() => { stage?.setSharpness(coarse && !pixelsNow ? 1.5 : 2) }, [stage, coarse, pixelsNow])
   // one of Brush and Ink's looks in place of pixel art. Cel shading's and stained glass's flat fills are gathered on the land
   const drawing = useDrawnLook(stage, pixelsNow ? undefined : styleNow, {
@@ -739,7 +739,7 @@ export function SceneCreator() {
     if (/\.glb$/i.test(f.name)) { await openSceneModel(f); return }
     if (SCAN_FILE.test(f.name)) { await openScanLand(f); return }
     const text = await f.text()
-    // a scene description (what Pixel Diorama opens) comes in as a project of its own props and land (#379)
+    // a scene description (what Diorama opens) comes in as a project of its own props and land (#379)
     const { project: p, models, problems } = isDescription(text) ? { ...readDescribed(text), models: [] as ModelFile[] } : readFile(text)
     setFileProblems(problems)
     if (!p) { say(`${f.name} could not be opened.`); return }
@@ -1314,7 +1314,7 @@ export function SceneCreator() {
                       {linking && (/^https?:/.test(linking)
                         ? <input readOnly value={linking} aria-label="Link to this scene" onFocus={(e) => e.currentTarget.select()} className="w-full rounded-lg border border-rule bg-paper px-2 py-1 text-xs" data-testid="creator-link" />
                         : <p className="text-xs text-ink-soft" data-testid="creator-link">{linking}</p>)}
-                      <p className="mt-1 text-xs text-ink-soft">A link holds the whole scene in the address after its #, which browsers never send to a server, so nothing is stored anywhere; your own models need a file. Open a file takes a file saved here; a scene description (.json) as Pixel Diorama opens, the things it marks (or else what stands on bones of its own) coming in as props; a model of a whole scene (.glb), each thing at the top of its tree a prop, on a round of turf; or a splat scan (.ply, .spz, .splat, .ksplat) as the land, leveled and cleaned, in the light it was captured in.</p>
+                      <p className="mt-1 text-xs text-ink-soft">A link holds the whole scene in the address after its #, which browsers never send to a server, so nothing is stored anywhere; your own models need a file. Open a file takes a file saved here; a scene description (.json) as Diorama opens, the things it marks (or else what stands on bones of its own) coming in as props; a model of a whole scene (.glb), each thing at the top of its tree a prop, on a round of turf; or a splat scan (.ply, .spz, .splat, .ksplat) as the land, leveled and cleaned, in the light it was captured in.</p>
                       {fileProblems.length > 0 && (
                         <div role="alert" className="mt-2 rounded-lg border border-rule bg-paper p-2 text-xs" data-testid="creator-file-problems">
                           <p className="font-semibold">That file is not a scene this page can open:</p>

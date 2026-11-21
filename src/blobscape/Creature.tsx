@@ -136,7 +136,7 @@ export function Creature() {
 
   // A detailed creature takes a second or more to cut, and cutting holds the main thread. So the page opens on the
   // lightest cut (quick, and enough for the options to describe the creature), and the one asked for is cut after the
-  // waiting mark has been painted and handed to the compositor: two frames, then a beat (as Pixel Diorama does).
+  // waiting mark has been painted and handed to the compositor: two frames, then a beat (as Diorama does).
   const [made, setMade] = useState<Shown>(() => build(species, species.detail[0], look))
   const madeFor = useRef({ species, count: species.detail[0], look })
   const [building, setBuilding] = useState(count !== species.detail[0])

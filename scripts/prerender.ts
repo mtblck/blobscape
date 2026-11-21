@@ -110,7 +110,7 @@ function structured(route: Route): object[] {
     case 'clockwork':
       return [work(experimentAt(href(route))!), breadcrumbs([home, ['Experiments', '/experiments/'], ['Clockwork', href(route)]])]
     case 'diorama':
-      return [work(experimentAt(href(route))!), breadcrumbs([home, ['Experiments', '/experiments/'], ['Pixel Diorama', href(route)]])]
+      return [work(experimentAt(href(route))!), breadcrumbs([home, ['Experiments', '/experiments/'], ['Diorama', href(route)]])]
     case 'scan':
       return [work(experimentAt(href(route))!), breadcrumbs([home, ['Experiments', '/experiments/'], ['Scan Studio', href(route)]])]
     case 'dungeon':

@@ -10,7 +10,7 @@ import { under } from '../timeOfDay.ts'
 import type { Diorama } from './scenes.ts'
 
 /**
- * Weather laid over a Pixel Diorama scene (splat-engine/skyRecipes.ts has the recipes): the rain, snow and clouds as
+ * Weather laid over a Diorama scene (splat-engine/skyRecipes.ts has the recipes): the rain, snow and clouds as
  * three actors of their own beside the scene's, and the scene as it stands under a sky that may be on its way from one
  * weather to another. The scene itself is never cut again for the weather.
  */

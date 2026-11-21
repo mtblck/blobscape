@@ -126,7 +126,7 @@ function CreatureDemo(props: DemoProps) {
 
 const OWL = DIORAMAS.find((d) => d.id === 'owl') ?? DIORAMAS[0]
 
-/** A Pixel Diorama scene in pixel mode, with its own palette and finish. */
+/** A Diorama scene in pixel mode, with its own palette and finish. */
 function PixelDemo(props: DemoProps) {
   return (
     <OrbitDemo

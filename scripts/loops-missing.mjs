@@ -1,5 +1,5 @@
 /**
- * Names the Pixel Diorama scenes in the gallery that have no recorded loop yet at a commit,
+ * Names the Diorama scenes in the gallery that have no recorded loop yet at a commit,
  * for .github/workflows/loops.yml to record:
  *   node --experimental-strip-types scripts/loops-missing.mjs [commit]
  * prints the scene ids on one line, or nothing.

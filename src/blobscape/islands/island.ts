@@ -9,7 +9,7 @@ import { BIGGER, ROOM, makeThing, r3, type Thing } from './things.ts'
 /**
  * A floating island from a biome recipe and a seed. `planIsland` decides everything (the island's outline, its
  * hills, the path across it, what stands where and what it is made of) and `islandDoc` writes the plan out as an
- * ordinary scene description with every thing marked as a prop, so the island plays in Pixel Diorama, opens in Scene
+ * ordinary scene description with every thing marked as a prop, so the island plays in Diorama, opens in Scene
  * Creator as a land and props, and is checked by the same checks as a scene written by hand. Pure: the same biome and
  * seed give the same island.
  */

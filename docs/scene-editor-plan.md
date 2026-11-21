@@ -6,7 +6,7 @@ Status: a plan, not built. Written 2026-11-19 from Matt's direction. His answers
 ## The idea
 
 Today the sandbox is a place to build with loose blobs: add, spray, paint, erase, select, drop in
-creatures, run effects. It is drawn by Spark. Pixel Diorama is where the site has become its own
+creatures, run effects. It is drawn by Spark. Diorama is where the site has become its own
 thing: scenes written as data, cut and lit by our engine, and shown in eleven styles (pixel art,
 gouache, oil, ink and wash, hatching, cel shading, neon, stained glass, watercolor, ASCII and plain
 blobs) with a loop export.
@@ -130,7 +130,7 @@ Where it does not fit (too many bones), the finished scene stays as several acto
 
 The windmill, split by hand into its land and ten props (the mill with its sails, three trees, the
 duck, two haystacks, three sheep), each cut by itself at Fine and drawn on one `CreatureStage`
-with `setActor(land, undefined, props)`, beside the scene as Pixel Diorama cuts it. Headless
+with `setActor(land, undefined, props)`, beside the scene as Diorama cuts it. Headless
 Chromium with a software GPU, so frame times are only good for comparing with each other.
 
 | | Merged (today) | Apart |
@@ -238,7 +238,7 @@ limits.
 
 ### Phase 1: edit our scenes (the epic's first issues)
 
-The editor opens any scene from Pixel Diorama as a land and its props, lets the visitor move, add
+The editor opens any scene from Diorama as a land and its props, lets the visitor move, add
 and remove props from the library, change the light, pick a style, and export. It keeps its work
 in the browser and as a file. No imports of outside files yet.
 
@@ -292,7 +292,7 @@ which is the first thing to try.
 
 "Bring your scene" means three different files, in rising order of difficulty:
 
-1. **A description (.json).** Works today in Pixel Diorama (`readScene`). In the editor it opens as
+1. **A description (.json).** Works today in Diorama (`readScene`). In the editor it opens as
    a project, with its bones' parts offered as props.
 2. **A model of a whole scene (.glb with many meshes).** Each top-level node becomes a prop and
    what is left becomes the land. Cut unlit, so the live light and all the styles apply in full.

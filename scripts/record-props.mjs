@@ -5,7 +5,7 @@
  *   npm run props -- --all        every entry
  *   npm run props -- lighthouse duck creature-fox
  *
- * Needs the built site (`npm run build`). A prop or land is handed to Pixel Diorama as a scene description, as
+ * Needs the built site (`npm run build`). A prop or land is handed to Diorama as a scene description, as
  * `npm run scene -- --shots` does, framed on its own box, and its pixel art is shrunk to the card keeping only the colors it was drawn in (some tens of kB each).
  * A creature is drawn on Splat Creatures and its view shrunk to the same card size.
  */
@@ -23,7 +23,7 @@ mkdirSync(out, { recursive: true })
 const wanted = args.filter((a) => !a.startsWith('--'))
 const todo = LIBRARY.filter((e) => (wanted.length ? wanted.includes(e.id) : args.includes('--all') || !existsSync(join(root, 'public', e.picture))))
 if (!todo.length) { console.log('Every entry has its picture.'); process.exit(0) }
-if (!existsSync(join(dist, 'experiments', 'pixel-diorama', 'index.html'))) { console.error('No built site to draw with: run `npm run build` first.'); process.exit(2) }
+if (!existsSync(join(dist, 'experiments', 'diorama', 'index.html'))) { console.error('No built site to draw with: run `npm run build` first.'); process.exit(2) }
 
 /** When in its loop a card is drawn, as a share of it: a tenth in, unless the thing is only there later. */
 const MOMENT = { 'white-witch-sparks': 0.5 }
@@ -73,7 +73,7 @@ try {
         const doc = e.kind === 'land' ? prop.doc : framed(prop)
         const json = join(tmp, `${e.id}.json`)
         writeFileSync(json, JSON.stringify(doc))
-        await page.goto(`${served.base}/experiments/pixel-diorama/?offscreen=1`)
+        await page.goto(`${served.base}/experiments/diorama/?offscreen=1`)
         await page.waitForFunction(() => window.__diorama, null, { timeout: 180000 })
         await page.getByTestId('diorama-model').setInputFiles(json)
         await page.waitForFunction(() => /^(Opened|Could not)/.test(document.querySelector('[data-testid=diorama-model-note]')?.textContent ?? ''), null, { timeout: 120000 })

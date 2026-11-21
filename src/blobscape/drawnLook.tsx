@@ -71,7 +71,7 @@ export interface DrawnSubject {
 
 /**
  * One drawn look on a stage, with its settings: the marks, outlines, ASCII and cel shading of Brush and Ink, shared
- * with Pixel Diorama's Style tab. `look` undefined puts them all away (the page draws some other way, as pixel art).
+ * with Diorama's Style tab. `look` undefined puts them all away (the page draws some other way, as pixel art).
  * Gives back the look's controls, each a section for a tab, and the color to put behind the transparent canvas.
  */
 export function useDrawnLook(stage: CreatureStage | undefined, look: Look | undefined, on: DrawnSubject): { controls: ReactNode; ground: string | undefined; forget: () => void } {

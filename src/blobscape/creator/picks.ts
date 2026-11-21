@@ -1,7 +1,7 @@
 import type { PropPick } from '../../splat-engine/project.ts'
 
 /**
- * Which parts of a Pixel Diorama scene make which prop for Scene Creator (docs/scene-editor-plan.md): the start of
+ * Which parts of a Diorama scene make which prop for Scene Creator (docs/scene-editor-plan.md): the start of
  * its library. A scene's parts are listed by their place in its description, so a pick by part number must follow
  * the description when it changes; `picks.test.ts` holds that every pick still takes something and that a scene
  * split into its land and props cuts as it did whole.

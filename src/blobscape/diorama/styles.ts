@@ -1,4 +1,4 @@
-/** Pixel Diorama's Style tab (Matt asked, 2026-11-19): pixel art first, tech glitch on top of it, then every look Brush and Ink offers. */
+/** Diorama's Style tab (Matt asked, 2026-11-19): pixel art first, tech glitch on top of it, then every look Brush and Ink offers. */
 import { LOOKS } from '../brushLooks.ts'
 import { CEL } from '../celLooks.ts'
 import { BLOCKS } from '../blockLooks.ts'

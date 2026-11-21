@@ -252,7 +252,7 @@ export function BrushInk() {
                   <div className="flex flex-wrap gap-1.5" data-testid="brush-subjects">
                     {SUBJECTS.map((s) => <Chip key={s.id} active={subject === s.id} onClick={() => setSubject(s.id)}>{s.label}</Chip>)}
                   </div>
-                  <p className="mt-1.5 text-xs text-ink-faint">Three scenes from Pixel Diorama, a creature on bones and a scan: the marks need nothing but the blobs.</p>
+                  <p className="mt-1.5 text-xs text-ink-faint">Three scenes from Diorama, a creature on bones and a scan: the marks need nothing but the blobs.</p>
                 </Field>
                 <Field label="Detail">
                   <div className="flex flex-wrap gap-1.5" data-testid="brush-detail">
@@ -296,7 +296,7 @@ export function BrushInk() {
             frame to the next. Turn the view and each mark turns with its blob.
           </p>
           <p>
-            It is the same idea as the steady pixels in <a href={href({ page: 'diorama' })} className="underline decoration-rule underline-offset-2 hover:text-accent">Pixel Diorama</a>, for
+            It is the same idea as the steady pixels in <a href={href({ page: 'diorama' })} className="underline decoration-rule underline-offset-2 hover:text-accent">Diorama</a>, for
             a different look, and it needs nothing but blobs, so it works on a scan as well as on a made scene. Marks are opaque, like
             paint, and drawn from the back to the front, so near things cover far ones. Hatching gets denser as a blob gets darker,
             which is how a pen makes a tone.

@@ -403,7 +403,7 @@ export function DayNight() {
           <p>
             Blobscape's own splat engine draws it here on {backend}. The lights and their shadows are the ones
             in <a href={href({ page: 'dungeon' })} className="underline decoration-rule underline-offset-2 hover:text-accent">Dungeon Run</a>, and
-            the scene is written as data, like the ones in <a href={href({ page: 'diorama' })} className="underline decoration-rule underline-offset-2 hover:text-accent">Pixel Diorama</a>.
+            the scene is written as data, like the ones in <a href={href({ page: 'diorama' })} className="underline decoration-rule underline-offset-2 hover:text-accent">Diorama</a>.
           </p>
         </div>
       </section>

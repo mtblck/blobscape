@@ -106,14 +106,14 @@ export const EXPERIMENTS = [
   },
   {
     id: 'diorama',
-    title: 'Pixel Diorama',
-    url: '/experiments/pixel-diorama/',
+    title: 'Diorama',
+    url: '/experiments/diorama/',
     cover: '/covers/pixel-diorama.webp',
     tags: ['pixel', 'tool'],
     needs: 'WebGPU or WebGL 2',
     published: '2026-11-15',
-    updated: '2026-11-19',
-    body: 'A lighthouse, a dragon over lava, a bee in a forest and more, built from shapes and drawn as moving pixel art. It is real 3D underneath, so you can turn it, swap the palette, or switch the pixels off to see the blobs.',
+    updated: '2026-11-21',
+    body: 'A lighthouse, a dragon over lava, a bee in a forest and more, built from shapes and drawn as moving pixel art, blocks, neon, stained glass, watercolor or ink. It is real 3D underneath, so you can turn it, change the time of day, or draw it as the plain blobs it is made of.',
   },
   {
     id: 'scan',

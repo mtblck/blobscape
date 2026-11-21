@@ -74,7 +74,7 @@ const SEARCH: Partial<Record<Route['page'], string>> = {
   clockwork: "A watch movement made of Gaussian splats, keeping the real time. Every wheel turns by a real watch's ratios: slow it down to see one tick of the escapement.",
   sandbox: 'Spray, select, recolor and blow up Gaussian splats, paint grass and fur, add creatures that walk about, or open your own capture. Nothing is uploaded.',
   creator: 'Make a moving pixel-art scene from Gaussian splats: set down props from a library, arrange them, light them, pick a style and export the loop as a video.',
-  diorama: 'Moving pixel art made from Gaussian splats: 3D scenes cut into solid blobs, moved by bones, drawn small and snapped to a palette. Turn them and change the look.',
+  diorama: 'Moving 3D scenes made from Gaussian splats, drawn as pixel art, blocks, neon, stained glass, watercolor or ink. Turn them and change the style.',
   experiments: `${EXPERIMENTS.length} small things to play with, all built from Gaussian splats: games, simulations, pixel art, creatures and tools. Free, in your browser.`,
   engine: 'A small engine for Gaussian splats that move, built on three.js: creatures on bones, live lights, pixel art from 3D and rigged splats saved as .glb.',
   spec: 'A draft glTF extension for rigged, animated Gaussian splats: how a skinned splat turns and grows with its bones, with examples and sample .glb files.',
@@ -94,7 +94,7 @@ function wordsFor(route: Route): Omit<PageMeta, 'search'> {
     case 'lessons':
       return { path, title: `Lessons · ${SITE.name}`, description: `${cap(LESSON_COUNT)} short, hands-on lessons on Gaussian splats: ${LESSONS.map((l) => l.title.toLowerCase()).join(', ')}.` }
     case 'creator':
-      return { path, title: `Scene Creator · ${SITE.name}`, description: 'Make a moving pixel-art scene out of Gaussian splats: start from a scene or a bare land, set down props from a library cut out of the Pixel Diorama scenes (a lighthouse, a windmill, a witch, dragons, a giant turkey), arrange them, set the sun, lamps and weather, pick pixel art or a painted look, and export the loop as a video. Your scenes are kept in your own browser.' }
+      return { path, title: `Scene Creator · ${SITE.name}`, description: 'Make a moving pixel-art scene out of Gaussian splats: start from a scene or a bare land, set down props from a library cut out of the Diorama scenes (a lighthouse, a windmill, a witch, dragons, a giant turkey), arrange them, set the sun, lamps and weather, pick pixel art or a painted look, and export the loop as a video. Your scenes are kept in your own browser.' }
     case 'sandbox':
       return { path, title: `Sandbox · ${SITE.name}`, description: 'Spray, select, move, recolor and explode Gaussian splats, paint grass and fur, add creatures that walk about, or open your own .ply, .spz, .splat, .ksplat or .sog capture or a photo. Nothing is uploaded.' }
     case 'creature':
@@ -124,7 +124,7 @@ function wordsFor(route: Route): Omit<PageMeta, 'search'> {
     case 'clockwork':
       return { path, title: `Clockwork · ${SITE.name}`, description: 'A watch movement made of Gaussian splats, keeping the real time: barrel, going train, escape wheel, pallet fork and a balance swinging five times a second, every wheel a bone turning by a real watch\'s ratios. Slow it down to see one tick, or speed it up to watch the hours go.' }
     case 'diorama':
-      return { path, title: `Pixel Diorama · ${SITE.name}`, description: 'A lighthouse at dusk made of Gaussian splats and drawn as moving pixel art: shapes written in code, cut into a grid of solid blobs, moved by bones, then rendered small and snapped to a palette. Turn the scene, change the palette, pixel size, dither and glow, or switch the pixels off to see the blobs.' }
+      return { path, title: `Diorama · ${SITE.name}`, description: 'Moving scenes made of Gaussian splats, a lighthouse, a dragon, a koi pond and more: shapes written as data, cut into a grid of solid blobs and moved by bones, then drawn as pixel art, blocks, neon, stained glass, watercolor, ink or ASCII. Turn a scene, change its time of day and style, and export the loop.' }
     case 'experiments':
       return { path, title: `Experiments · ${SITE.name}`, description: `Small tools built from Gaussian splats: ${EXPERIMENTS.map((e) => e.title).join(', ')}. Free, in your browser.` }
     case 'engine':

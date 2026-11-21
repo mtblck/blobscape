@@ -1,6 +1,6 @@
 // The engine experiments, each on its own page.
 
-// the Pixel Diorama scenes written as descriptions, each checked as one part
+// the Diorama scenes written as descriptions, each checked as one part
 const SCENES = [['bee', 'Forest bee'], ['campfire', 'Campfire'], ['croc', 'Garden crocodile'], ['dragon', 'Lava dragon'], ['grove', 'Lantern grove'], ['hand', 'Stone hand'], ['harvest', 'Pumpkin watch'], ['hut', 'Heron hut'], ['isles', 'Sky islands'], ['lab', 'Sprout lab'], ['meadow', 'Fox and wisp'], ['octopus', 'Storm octopus'], ['owl', 'Owl and cauldron'], ['reef', 'Jellyfish reef'], ['snail', 'Snail house'], ['spider', 'Lantern spider'], ['window', 'Sunrise window'], ['windmill', 'Windmill']]
 
 export default [
@@ -261,11 +261,11 @@ export default [
   {
     name: 'diorama',
     core: true,
-    about: 'Pixel Diorama on WebGPU and WebGL: pixel art in palette, the GPU pass matches its CPU twin, motion, steady pixels, layout',
+    about: 'Diorama on WebGPU and WebGL: pixel art in palette, the GPU pass matches its CPU twin, motion, steady pixels, layout',
     entries: ['src/blobscape/PixelDiorama.tsx'],
     async run({ shots, join, fails, ok, open, tabClick, axe }) {
       for (const q of ['', '&webgl=1']) {
-        const d = await open(`/experiments/pixel-diorama/?offscreen=1${q}`, { viewport: { width: 1280, height: 900 } })
+        const d = await open(`/experiments/diorama/?offscreen=1${q}`, { viewport: { width: 1280, height: 900 } })
         await d.page.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).catch(() => {})
         const shot = (t) => d.page.evaluate(async (t) => {
           const { stage, look } = window.__diorama
@@ -443,12 +443,12 @@ export default [
   },
   {
     name: 'diorama-water',
-    about: 'Pixel Diorama, the koi pond on WebGPU and WebGL: the water moves with the rain, a moment drawn twice is the same, and the loop joins',
+    about: 'Diorama, the koi pond on WebGPU and WebGL: the water moves with the rain, a moment drawn twice is the same, and the loop joins',
     entries: ['src/blobscape/PixelDiorama.tsx'],
     files: ['src/splat-engine/sceneWater.ts', 'src/splat-engine/water.ts', 'src/splat-engine/mirror.ts', 'src/blobscape/diorama/scenes/koi.ts'],
     async run({ shots, join, fails, ok, open }) {
       for (const q of ['', '&webgl=1']) {
-        const d = await open(`/experiments/pixel-diorama/?offscreen=1&scene=koi${q}`, { viewport: { width: 1280, height: 900 } })
+        const d = await open(`/experiments/diorama/?offscreen=1&scene=koi${q}`, { viewport: { width: 1280, height: 900 } })
         // an off-screen scene draws nothing until it is asked for a frame, so ask until its art is there
         const ready = () => d.page.waitForFunction(async () => {
           const s = window.__diorama
@@ -492,10 +492,10 @@ export default [
   },
   {
     name: 'diorama-glow',
-    about: 'Pixel Diorama: Glow turns up the light a fire casts on what stands round it, not only the shine round bright pixels',
+    about: 'Diorama: Glow turns up the light a fire casts on what stands round it, not only the shine round bright pixels',
     entries: ['src/blobscape/PixelDiorama.tsx'],
     async run({ fails, ok, open, tabClick }) {
-      const d = await open('/experiments/pixel-diorama/?offscreen=1&scene=campfire', { viewport: { width: 1280, height: 900 } })
+      const d = await open('/experiments/diorama/?offscreen=1&scene=campfire', { viewport: { width: 1280, height: 900 } })
       await d.page.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).catch(() => {})
       // the scene as it is drawn small, before the pixel pass adds any shine of its own: how bright its solid pixels are
       const lit = () => d.page.evaluate(async () => {
@@ -523,10 +523,10 @@ export default [
   },
   {
     name: 'diorama-model',
-    about: 'Pixel Diorama: Save as a 3D model writes a rigged .glb of blocks (or a smooth surface) with the loop as an animation',
+    about: 'Diorama: Save as a 3D model writes a rigged .glb of blocks (or a smooth surface) with the loop as an animation',
     entries: ['src/blobscape/PixelDiorama.tsx', 'src/splat-engine/blockMesh.ts'],
     async run({ fails, ok, open, tabClick }) {
-      const d = await open('/experiments/pixel-diorama/?offscreen=1&scene=campfire&detail=chunky', { viewport: { width: 1280, height: 900 } })
+      const d = await open('/experiments/diorama/?offscreen=1&scene=campfire&detail=chunky', { viewport: { width: 1280, height: 900 } })
       await d.page.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).catch(() => {})
       await d.page.evaluate(async () => { await window.__diorama.stage.frame(0.5) })
       for (const shape of ['Blocks', 'Smooth']) {
@@ -545,11 +545,11 @@ export default [
   },
   {
     name: 'diorama-picker',
-    about: "Pixel Diorama: details dialog, How it's made, picking a scene swaps the palette on arrival, the scene picker (search, keys, previous and next, a phone), opening a description",
+    about: "Diorama: details dialog, How it's made, picking a scene swaps the palette on arrival, the scene picker (search, keys, previous and next, a phone), opening a description",
     entries: ['src/blobscape/PixelDiorama.tsx'],
     files: ['public/loops/'],
     async run({ shots, join, fails, ok, open, tabClick, axe }) {
-      const d = await open('/experiments/pixel-diorama/?offscreen=1&scene=campfire', { viewport: { width: 1280, height: 900 } })
+      const d = await open('/experiments/diorama/?offscreen=1&scene=campfire', { viewport: { width: 1280, height: 900 } })
       await d.page.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).catch(() => {})
       // the details panel: one short line under the view, and Full details opens a dialog with the scene's numbers that Escape closes
       {
@@ -707,7 +707,7 @@ export default [
       async run({ shots, join, fails, ok, open, wants }) {
         for (const [id, name] of scenes) {
           if (!wants(id)) continue
-          const d = await open(`/experiments/pixel-diorama/?offscreen=1&scene=${id}`, { viewport: { width: 1280, height: 900 } })
+          const d = await open(`/experiments/diorama/?offscreen=1&scene=${id}`, { viewport: { width: 1280, height: 900 } })
           const label = `blobscape pixel diorama ${id}`
           if (!await d.page.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).then(() => true, () => false)) {
             fails.push(`${label}: the scene never started`)
@@ -1787,7 +1787,7 @@ export default [
     files: ['src/shared/theme.css', 'src/blobscape/Bouquets.tsx', 'src/blobscape/PixelDiorama.tsx', 'src/blobscape/Creature.tsx', 'src/blobscape/ForestWalk.tsx', 'src/blobscape/WadingPond.tsx', 'src/blobscape/DungeonRun.tsx', 'src/blobscape/ScanStudio.tsx', 'src/blobscape/Clockwork.tsx', 'src/blobscape/ShapeShifter.tsx', 'src/blobscape/SandSnowGoo.tsx', 'src/blobscape/BrushInk.tsx', 'src/blobscape/FourWays.tsx', 'src/fit-a-picture/App.tsx', 'src/splat-to-sprite/App.tsx'],
     async run({ join, fails, ok, open }) {
       const PAGES = [
-        ['pixel-diorama', 'Scene,Style,Finish,Export'], ['creature', 'Creature Type,Movement & Details,Export & Import'], ['forest-walk', 'Forest Type,Character Style,View'], ['wading-pond', 'Water & Light,Character Style,View'],
+        ['diorama', 'Scene,Style,Finish,Export'], ['creature', 'Creature Type,Movement & Details,Export & Import'], ['forest-walk', 'Forest Type,Character Style,View'], ['wading-pond', 'Water & Light,Character Style,View'],
         ['dungeon-run', 'Game Settings,Character Style,View'], ['scan-studio', 'Import,Level & Crop,Clean,Lighting,Colliders'], ['clockwork', 'Time,View'], ['shape-shifter', 'Shift,Creatures'], ['sand-snow-goo', 'Material,Test,View'], ['brush-and-ink', 'Look,Subject'], ['four-ways', 'Compare,Pixels'], ['seasonal-bouquets', 'Bouquet,Vase,View'],
         ['fit-a-picture', 'Picture,Training'], ['splat-to-sprite', 'Prop Type,Pixels,Finish,View'],
       ]

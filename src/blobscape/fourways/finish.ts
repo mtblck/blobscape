@@ -2,7 +2,7 @@ import { makeFrame, pixelArt, resolveFine, tidyLone, type Frame, type PixelLook 
 
 /**
  * The same finish for every panel that is not drawn by Blobscape's own pixel pass: the panel hands over its scene
- * drawn at twice the art's size, and this settles each art pixel from its four samples and runs Pixel Diorama's
+ * drawn at twice the art's size, and this settles each art pixel from its four samples and runs Diorama's
  * finish on it (`pixelArt`, the CPU twin of the engine's pass): palette, dither, glow, lines, outline and sky. So the
  * four pictures differ by how the scene was drawn, never by how it was finished.
  */

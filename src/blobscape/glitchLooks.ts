@@ -1,4 +1,4 @@
-/** Tech glitch as Pixel Diorama offers it (Matt's idea, 2026-11-19): its chip, the page's choices and the look for the stage. */
+/** Tech glitch as Diorama offers it (Matt's idea, 2026-11-19): its chip, the page's choices and the look for the stage. */
 import { GLITCH_PACES, type GlitchLook } from '../splat-core/glitch.ts'
 
 /** The chip in the Style tab, after pixel art: it is pixel art with bursts of corruption laid on. */

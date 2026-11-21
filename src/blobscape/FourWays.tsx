@@ -45,7 +45,7 @@ const rate = (v: number) => { const f = 1000 / Math.max(v, 0.01); return f >= 10
 const fps = (v: number | undefined) => (v === undefined ? 'not timed yet' : `up to ${rate(v).toLocaleString()} fps`)
 
 /**
- * One Scene, Four Ways: Pixel Diorama's campfire drawn by four different things at once, each given the same
+ * One Scene, Four Ways: Diorama's campfire drawn by four different things at once, each given the same
  * pixel-art finish: a shader written with no engine, three.js meshes, Spark's splats and Blobscape. One clock, one
  * camera and one fire slider drive all four, so what each can and cannot do shows side by side.
  */
@@ -373,7 +373,7 @@ export function FourWays() {
                   <div className="flex flex-wrap gap-1.5" data-testid="four-across">
                     {ACROSS.map((a) => <Chip key={a.id} active={across === a.id} onClick={() => setAcross(a.id)}>{a.label}</Chip>)}
                   </div>
-                  <p className="mt-1.5 text-xs text-ink-faint">The same for all four, with the scene’s own palette and Pixel Diorama’s dither.</p>
+                  <p className="mt-1.5 text-xs text-ink-faint">The same for all four, with the scene’s own palette and Diorama’s dither.</p>
                 </Field>
                 <Toggle label="Outline" checked={outline} onChange={setOutline} />
                 <div>
