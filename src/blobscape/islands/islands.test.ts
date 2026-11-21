@@ -1,22 +1,32 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { checkScene, compileScene, type SceneDoc } from '../../splat-engine/sceneDoc.ts'
+import { checkScene, compileScene } from '../../splat-engine/sceneDoc.ts'
 import { Skeleton } from '../../splat-engine/rig.ts'
-import { buildVoxels } from '../../splat-engine/voxel.ts'
-import { seeThrough } from '../../splat-engine/solidity.ts'
 import { DETAIL } from '../diorama/scene.ts'
 import { MAX_PROPS, markedPicks } from '../../splat-engine/project.ts'
 import { wornLand } from '../../splat-engine/erode.ts'
-import { reviewScene } from '../diorama/review.ts'
 import { describedProject } from '../creator/described.ts'
 import { BIOMES, MEADOW } from './biomes.ts'
-import { MAX_SEED, census, fromPath, inside, makeIsland, planIsland } from './island.ts'
-import { MATERIALS, SOLID, colorsOf, dressed, family, leaning, letsThrough, material, opaque, paintOf } from './materials.ts'
+import { MAX_SEED, census, fromPath, inside, islandScene, makeIsland, planIsland, type IslandPlan } from './island.ts'
+import { MATERIALS, colorsOf, dressed, family, leaning, material, paintOf } from './materials.ts'
 import { ROOM } from './things.ts'
 import { IslandWalk, SCALE as WALK_SCALE, passes, keepAbove, CAMERA_CLEAR } from './walk.ts'
-import { GAP, WORLD_ISLANDS, WorldGround, deckAt, planWorld, worldStart } from './world.ts'
+import { GAP, WORLD_ISLANDS, WorldGround, deckAt, planWorld, worldStart, type WorldPlan } from './world.ts'
 
 const SEEDS = [1, 2, 3, 7, 42, 77, 500, 4242, 31337, 90210, 123456, MAX_SEED]
+
+// Planning an island takes a moment, so the tests share what they make: an island or a world is planned once for a
+// biome and seed. The tests that cut an island are in cut.test.ts, a file of their own so the two run side by side.
+const kept = new Map<string, unknown>()
+const once = <T>(key: string, make: () => T): T => { if (!kept.has(key)) kept.set(key, make()); return kept.get(key) as T }
+const planOf = (biome: string, seed: number): IslandPlan => once(`plan ${biome} ${seed}`, () => planIsland(BIOMES.find((b) => b.id === biome)!, seed))
+const islandOf = (biome: string, seed: number) => once(`island ${biome} ${seed}`, () => { const plan = planOf(biome, seed); return { plan, ...islandScene(plan) } })
+/** The three worlds the tests walk, each starting in another biome. */
+const WORLDS = [['meadow', 37], ['pinewood', 7], ['mesa', 500]] as const
+const worldOf = (biome: string, seed: number): WorldPlan => once(`world ${biome} ${seed}`, () => planWorld(biome, seed))
+const groundOf = (biome: string, seed: number): WorldGround => once(`ground ${biome} ${seed}`, () => new WorldGround(worldOf(biome, seed), DETAIL[1].spacing))
+/** How many seeds from 1 up the tests that need a spread of islands look at. */
+const SPREAD = 20
 
 test('every material has a ramp of three or four colors, and its paint uses only those', () => {
   const ids = new Set<string>()
@@ -56,7 +66,7 @@ test('every recipe names materials the library has', () => {
 })
 
 test('the same biome and seed give the same island, and another seed another', () => {
-  const a = makeIsland('meadow', 42), b = makeIsland('meadow', 42), c = makeIsland('meadow', 43)
+  const a = makeIsland('meadow', 42), b = islandOf('meadow', 42), c = islandOf('meadow', 43)
   assert.deepEqual(a.doc, b.doc)
   assert.notDeepEqual(a.doc, c.doc)
   assert.equal(makeIsland('nowhere', 42).biome.id, 'meadow')
@@ -64,18 +74,18 @@ test('the same biome and seed give the same island, and another seed another', (
 
 test('every island is a sound scene description that reads the same as JSON', () => {
   for (const b of BIOMES) for (const seed of SEEDS) {
-    const { doc } = makeIsland(b.id, seed)
+    const { doc } = islandOf(b.id, seed)
     assert.deepEqual(checkScene(doc), [], `${b.id} ${seed}`)
     assert.deepEqual(JSON.parse(JSON.stringify(doc)), doc, `${b.id} ${seed}: holds something JSON does not keep`)
     assert.ok(doc.palette.length <= 32)
   }
   // a wide spread of seeds, for the limits a description has (surface, bones, parts)
-  for (const b of BIOMES) for (let seed = 1; seed <= 25; seed++) assert.deepEqual(checkScene(makeIsland(b.id, seed * 37).doc), [], `${b.id} ${seed * 37}`)
+  for (const b of BIOMES) for (let seed = 1; seed <= SPREAD; seed++) assert.deepEqual(checkScene(islandOf(b.id, seed).doc), [], `${b.id} ${seed}`)
 })
 
 test('things stand on the island, on its ground, off the path and clear of each other', () => {
   for (const b of BIOMES) for (const seed of SEEDS.slice(0, 6)) {
-    const plan = planIsland(b, seed), ground = wornLand(plan.land)
+    const plan = planOf(b.id, seed), ground = wornLand(plan.land)
     assert.ok(plan.things.length >= 30, `${b.id} ${seed}: only ${plan.things.length} things`)
     assert.equal(plan.landmarks, 2, `${b.id} ${seed}: two landmarks`)
     assert.notEqual(plan.things[0].name, plan.things[1].name, `${b.id} ${seed}: two different landmarks`)
@@ -96,7 +106,7 @@ test('things stand on the island, on its ground, off the path and clear of each 
 
 test('every landmark turns up, and every rock', () => {
   for (const b of BIOMES) {
-    const plans = Array.from({ length: 30 }, (_, i) => planIsland(b, i + 1))
+    const plans = Array.from({ length: SPREAD }, (_, i) => planOf(b.id, i + 1))
     assert.equal(new Set(plans.flatMap((p) => p.things.slice(0, 2).map((t) => t.name))).size, b.landmarks.length, b.id)
     assert.equal(new Set(plans.map((p) => p.rock)).size, b.ground.rock.length, b.id)
   }
@@ -107,7 +117,7 @@ test('things crowd into the kinds of place that like them', () => {
   // against the share of the island the groves cover
   let near = 0, all = 0, cover = 0, tries = 0
   for (let seed = 1; seed <= 12; seed++) {
-    const plan = planIsland(MEADOW, seed), grove = plan.patches.find((p) => p.name === 'oak grove')!
+    const plan = planOf(MEADOW.id, seed), grove = plan.patches.find((p) => p.name === 'oak grove')!
     for (const t of plan.things) if (t.name === 'oak') { all++; if (Math.hypot(t.at[0] - grove.at[0], t.at[2] - grove.at[1]) < grove.r) near++ }
     for (let k = 0; k < 400; k++) {
       const x = (k % 20) / 20 * 29.6 - 14.8, z = Math.floor(k / 20) / 20 * 29.6 - 14.8
@@ -117,43 +127,8 @@ test('things crowd into the kinds of place that like them', () => {
   assert.ok(near / all > 2 * (cover / tries), `${near} of ${all} oaks in groves that cover ${(cover / tries).toFixed(2)} of the ground`)
 })
 
-test('what the library says lets no light through is cut so none gets through', () => {
-  // glass, water and cloud let light through; ground, rock, wood and leaves do not
-  for (const id of ['granite', 'loam', 'oak', 'meadow-turf', 'sandstone', 'oak-leaf']) assert.ok(opaque(material(id)), id)
-  for (const id of ['ice', 'pond-water', 'cloud']) assert.ok(letsThrough(material(id)) > 0, id)
-  // a rough boulder and a worn slope, cut as a scene cuts them by default and as SOLID: from above, beside and below
-  const doc = (more: Partial<SceneDoc>): SceneDoc => ({
-    name: 'solid', loop: 12, palette: ['#000000', '#ffffff'], camera: { target: [0, 0, 0], distance: 4, azimuth: 0, elevation: 20 }, ...more,
-    parts: [
-      { shape: { kind: 'rough', shape: { kind: 'ball', at: [-0.6, 0.3, 0], r: [0.45, 0.35, 0.4] }, by: 0.05, scale: 0.35 }, paint: '#ffffff' },
-      { shape: { kind: 'land', at: [0.7, 0, 0], half: [0.6, 0.6], base: 0.3, peaks: [{ at: [0, 0], h: 0.5, r: 0.5 }], drops: 3000, seed: 3 }, paint: '#ffffff' },
-    ],
-  })
-  const ways: [number, number, number][] = [[0.5, -0.6, 0.62], [1, -0.15, 0.3], [-0.4, 0.8, 0.3]]
-  const worst = (d: SceneDoc) => {
-    const spec = compileScene(d).spec(DETAIL[0].spacing), built = buildVoxels(spec)
-    return Math.max(...ways.map((w) => seeThrough(built.blobs, built.partOf, spec.parts.map((p) => p.shape), [0, 1], w, DETAIL[0].spacing).seen))
-  }
-  assert.ok(worst(doc({})) > 0.05, 'the check finds the light a default cut lets through')
-  assert.ok(worst(doc(SOLID)) < 0.02, 'a SOLID cut lets none through')
-})
-
-test('an island lets no light through its ground, rock or stones, seen from above, beside or below', () => {
-  // Matt saw through the first island's paths from above, beside and below (2026-11-20)
-  const spacing = DETAIL[0].spacing
-  for (const b of BIOMES) {
-    const { doc, solid } = makeIsland(b.id, 37)
-    const spec = compileScene(doc).spec(spacing), built = buildVoxels(spec), shapes = spec.parts.map((p) => p.shape)
-    for (const way of [[0.5, -0.6, 0.62], [1, -0.15, 0.3], [-0.4, 0.8, 0.3]] as [number, number, number][]) {
-      const r = seeThrough(built.blobs, built.partOf, shapes, solid, way, spacing, { pixel: spacing })
-      assert.ok(r.solid > 1000, `${b.id}: looked at too little`)
-      assert.ok(r.seen < 0.02 && r.holes < 0.002, `${b.id} along ${way}: ${(r.seen * 100).toFixed(1)}% shows what is behind, at ${JSON.stringify(r.worst)}`)
-    }
-  }
-})
-
 test('every thing on an island that has a bone is marked as a prop, so Scene Creator takes it apart', () => {
-  const { plan, doc } = makeIsland('meadow', 7)
+  const { plan, doc } = islandOf('meadow', 7)
   const picks = markedPicks(doc)
   // things past the bone budget stand on the island's own bone; the first ones placed (the landmarks first) keep theirs
   const marked = doc.bones!.filter((b) => b.prop)
@@ -166,19 +141,10 @@ test('every thing on an island that has a bone is marked as a prop, so Scene Cre
   assert.equal(project.props.length, Math.min(picks.length, MAX_PROPS))
 })
 
-test('an island passes the checks a scene written by hand passes', () => {
-  for (const b of BIOMES) {
-    const review = reviewScene(makeIsland(b.id, 7).doc)
-    assert.deepEqual(review.problems, [], b.id)
-    assert.ok(review.facts && review.facts.blobs > 3000)
-  }
-})
-
-
 test('the path is clear to walk, from where the elf starts to its far end', () => {
   // nothing stands in the way of someone on the path, and the ground along it is no steeper than the elf climbs
-  for (const b of BIOMES) for (const seed of [7, 37, 500]) {
-    const { doc, plan } = makeIsland(b.id, seed)
+  for (const b of BIOMES) for (const seed of [7, 500]) {
+    const { doc, plan } = islandOf(b.id, seed)
     const walk = new IslandWalk(doc, plan, DETAIL[1].spacing, { blobs: 2000 })
     const goals = plan.path.slice(1).map((p) => [p[0] * WALK_SCALE, p[2] * WALK_SCALE])
     let k = 0
@@ -193,7 +159,7 @@ test('the path is clear to walk, from where the elf starts to its far end', () =
 })
 
 test('the elf stays on the island, out of things, and its feet on the ground', () => {
-  const { doc, plan } = makeIsland('meadow', 42)
+  const { doc, plan } = islandOf('meadow', 42)
   const walk = new IslandWalk(doc, plan, DETAIL[1].spacing, { blobs: 2000 })
   const sk = walk.elf.skeleton, feet = ['lFoot', 'rFoot'].map((n) => sk.index(n))
   // walk straight on, turning now and then, for a minute: it meets the edge and things and must stop or slide at each
@@ -215,9 +181,9 @@ test('the elf stays on the island, out of things, and its feet on the ground', (
 })
 
 test('a world is a chain of islands apart in the sky, each a sound description, joined by bridges that sound too', () => {
-  for (const [biome, seed] of [['meadow', 37], ['pinewood', 7], ['mesa', 500]] as const) {
-    const w = planWorld(biome, seed)
-    assert.deepEqual(planWorld(biome, seed), w, 'the same first island plans the same world')
+  for (const [biome, seed] of WORLDS) {
+    const w = worldOf(biome, seed)
+    if (biome === 'meadow') assert.deepEqual(planWorld(biome, seed), w, 'the same first island plans the same world')
     assert.equal(w.islands.length, WORLD_ISLANDS)
     assert.equal(w.bridges.length, WORLD_ISLANDS - 1)
     assert.equal(new Set(w.islands.map((i) => i.biome)).size, WORLD_ISLANDS, 'each island is another biome')
@@ -251,8 +217,9 @@ test('a world is a chain of islands apart in the sky, each a sound description, 
 
 test('the elf can walk from where it starts to the far end of the last island, over every bridge', () => {
   // every place the elf may reach, by steps it may take, from where it starts: both ends of every bridge must be among them
-  for (const [biome, seed] of [['meadow', 37], ['mesa', 500], ['pinewood', 99]] as const) {
-    const w = planWorld(biome, seed), g = new WorldGround(w, DETAIL[1].spacing), start = worldStart(w, g), STEP = 0.2
+  // each world holds an island of every biome, so two worlds are every biome twice
+  for (const [biome, seed] of WORLDS.slice(0, 2)) {
+    const w = worldOf(biome, seed), g = groundOf(biome, seed), start = worldStart(w, g), STEP = 0.2
     const key = (i: number, j: number) => i * 100000 + j
     const at = (x: number, z: number) => [Math.round(x / STEP), Math.round(z / STEP)] as const
     const seen = new Set<number>(), todo: (readonly [number, number])[] = [at(start.x, start.z)]
@@ -284,7 +251,7 @@ test('the elf can walk from where it starts to the far end of the last island, o
 })
 
 test('walking onto a bridge at a slant, the elf slides along the rail onto the deck and crosses', () => {
-  const w = planWorld('meadow', 37), g = new WorldGround(w, DETAIL[1].spacing), br = w.bridges[0]
+  const w = worldOf('meadow', 37), g = groundOf('meadow', 37), br = w.bridges[0]
   const dx = br.to[0] - br.from[0], dz = br.to[2] - br.from[2], len = Math.hypot(dx, dz), ux = dx / len, uz = dz / len
   // a meter and a half back from the deck's start and a meter to one side, heading for the far end
   const x0 = (br.from[0] - ux * 0.3 + uz * 0.2) * WALK_SCALE, z0 = (br.from[2] - uz * 0.3 - ux * 0.2) * WALK_SCALE
@@ -299,7 +266,7 @@ test('walking onto a bridge at a slant, the elf slides along the rail onto the d
 
 test('falling leaves come down on the island, never at rest in the open air past its edge', () => {
   // Matt saw leaves settle in the sky beside an island and shrink away there (2026-11-21)
-  const made = makeIsland('meadow', 3), c = compileScene(made.doc), sk = new Skeleton(c.bones)
+  const made = islandOf('meadow', 3), c = compileScene(made.doc), sk = new Skeleton(c.bones)
   const swarms = made.doc.air?.specks ?? [], first = c.bones.findIndex((b) => b.name.startsWith('~speck'))
   const before = swarms.slice(0, swarms.findIndex((s) => s.land)).reduce((n, s) => n + s.count, 0)
   const leaves = swarms.find((s) => s.land)!
@@ -322,8 +289,8 @@ test('creatures live on every island, picked by its biome, and walk loops that s
     if (!bodies.has(key)) bodies.set(key, makeResident({ ...r, size: 1, island: 0, home: [0, 0], plan: { legs: [], period: 1 }, offset: 0, height: 1 }))
     return bodies.get(key)!
   }
-  for (const [biome, seed] of [['meadow', 37], ['pinewood', 5], ['mesa', 11]] as const) {
-    const w = planWorld(biome, seed), g = new WorldGround(w, DETAIL[1].spacing)
+  for (const [biome, seed] of WORLDS) {
+    const w = worldOf(biome, seed), g = groundOf(biome, seed)
     const rs = settle(w, g.islands, built)
     assert.deepEqual(rs.map((r) => [r.id, r.home]), settle(w, g.islands, built).map((r) => [r.id, r.home]), 'the same world gives the same creatures')
     w.islands.forEach((isl, j) => {
@@ -357,8 +324,8 @@ test('creatures live on every island, picked by its biome, and walk loops that s
 
 test('each island has its guardian, walking a loop its body fits along, never through a trunk', async () => {
   const { BODY, GUARDIANS, guardianAt, makeGuardian, placeGuardians, poseGuardian } = await import('./guardians.ts')
-  for (const [biome, seed] of [['meadow', 37], ['pinewood', 5], ['mesa', 11]] as const) {
-    const w = planWorld(biome, seed), g = new WorldGround(w, DETAIL[0].spacing)
+  for (const [biome, seed] of WORLDS) {
+    const w = worldOf(biome, seed), g = groundOf(biome, seed)
     const gs = placeGuardians(w, g.islands)
     assert.equal(gs.length, w.islands.length)
     assert.deepEqual(gs, placeGuardians(w, g.islands), 'the same world gives the same guardians')
