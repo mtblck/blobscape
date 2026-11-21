@@ -43,6 +43,8 @@ const BEHIND = { distance: 1.8, elevation: 20 }
 /** How fast the view catches up with the elf, a second. */
 const FOLLOW = 5
 const DEG = 180 / Math.PI
+/** The smallest block size on the islands. */
+const ISLAND_BLOCK_LEAST = 2
 /** Shift held, or the stick pushed this far, walks rather than runs: a share of a run's speed. */
 const WALKING = 0.38
 
@@ -81,7 +83,8 @@ export function Islands() {
   // how the island is drawn: built from blocks (Matt, 2026-11-20: the style to drive these islands), as pixel art, or as the blobs themselves
   const [style, setStyle] = useState<'blocks' | 'pixel' | 'blobs'>(() => { const s = params().get('style'); return s === 'pixel' || s === 'blobs' ? s : 'blocks' })
   const pixels = style === 'pixel', blocky = style === 'blocks'
-  const [blockSize, setBlockSize] = useState(() => { const v = Math.round(Number(params().get('block'))); return v >= BLOCK_SIZES.min && v <= BLOCK_SIZES.max ? v : BLOCK_START.size })
+  // 2× at the smallest here: a whole island at 1× is some 800,000 cubes, which hung loading on Matt's phone (he chose this, 2026-11-21)
+  const [blockSize, setBlockSize] = useState(() => { const v = Math.round(Number(params().get('block'))); return v >= ISLAND_BLOCK_LEAST && v <= BLOCK_SIZES.max ? v : BLOCK_START.size })
   const [orbit, setOrbit] = useState<Orbit>({ target: [0, 0, 0], distance: 12.5, azimuth: 24, elevation: 20 })
   const [walking, setWalking] = useState(() => params().get('walk') === '1')
   const [count, setCount] = useState(() => (params().get('islands') === String(WORLD_ISLANDS) ? WORLD_ISLANDS : 1))
@@ -122,7 +125,7 @@ export function Islands() {
   // island is some 850,000 blobs and close to a minute's cut, and the whole world at it never arrived on a phone
   // in Blocks the block size alone says how fine the island is cut (Matt, 2026-11-21: Detail changed nothing there)
   const cutAt = blocky ? DETAIL[0].spacing * blockSize : DETAIL.find((d) => d.id === detail)!.spacing
-  const baseAt = DETAIL[0].spacing * (blocky ? Math.max(2, blockSize) : 1)
+  const baseAt = DETAIL[0].spacing * (blocky ? blockSize : 1)
   const [made, setMade] = useState<{ built: Built; pieces: Built[]; of: typeof scene; scenes: typeof scenes; world: typeof world; plain: boolean; spacing: number }>()
   const ready = made?.of === scene && made.plain === blocky && made.spacing === baseAt ? made : undefined
   // a worker an island (each takes seconds), the bridges with the first; kept between cuts while nothing is stopped
@@ -576,7 +579,7 @@ export function Islands() {
                     </div>
                   </Field>
                 )}
-                {blocky && <Slider label="Block size" value={blockSize} min={BLOCK_SIZES.min} max={BLOCK_SIZES.max} step={1} onChange={setBlockSize} format={(v) => `${v}×`} hint="How big a block is. The island is cut again at that size." />}
+                {blocky && <Slider label="Block size" value={blockSize} min={ISLAND_BLOCK_LEAST} max={BLOCK_SIZES.max} step={1} onChange={setBlockSize} format={(v) => `${v}×`} hint="How big a block is. The island is cut again at that size." />}
                 {!blocky && (
                   <Field label="Detail">
                     <div className="flex flex-wrap gap-1.5">
