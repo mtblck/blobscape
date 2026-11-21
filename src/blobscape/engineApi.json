@@ -3706,6 +3706,12 @@
        "optional": true,
        "type": "WaterDoc",
        "doc": "A pond whose surface ripples where rain lands on it and where things move through it."
+      },
+      {
+       "name": "heavens",
+       "optional": true,
+       "type": "HeavensDoc",
+       "doc": "The moon, the sun, the stars and how cloudy the sky is, from the shared recipes (heavens.ts): say where and how\nmany, and every scene's moon looks the same, cloud cover puts them out, and time of day brings the right ones. A\nscene with a sky of its own (an eclipse, a red sun, three moons) draws it as parts instead."
       }
      ]
     },
@@ -4455,7 +4461,7 @@
      "doc": "`ground` is the ground what falls lands on, in place of the description's own parts: weather laid over another scene (skyRecipes.ts) lands on that scene's.",
      "signatures": [
       {
-       "code": "compileScene(doc: SceneDoc, options?: { puffs?: boolean; ground?: (x: number, z: number, top: number, bottom: number) => number }): CompiledScene"
+       "code": "compileScene(given: SceneDoc, options?: { puffs?: boolean; ground?: (x: number, z: number, top: number, bottom: number) => number }): CompiledScene"
       }
      ]
     },
@@ -4517,7 +4523,7 @@
      "doc": "A description as it stands by day (`dark` false) or in the dark: every light, glowing part and swarm of specks whose\n`lit` says it is not lit now is put out. A light shines at strength 0 (it keeps its place in the list, which baked\nlamp shadows and props' picks go by); a part stops glowing and takes its `unlit` color, or a dull shade of its own\npaint (`dulled`), or is left out where it is `unlit: 'gone'`; specks are left out. `lamps` (the scene's own where\nleft out) set to 'always' keeps everything that waits for the dark lit. Colors it adds join the palette while there\nis room. A description nothing changes in comes back as it is, so a caller can tell there is nothing to cut again.",
      "signatures": [
       {
-       "code": "litFor(doc: SceneDoc, dark: boolean, lamps?: \"dark\" | \"always\"): SceneDoc"
+       "code": "litFor(given: SceneDoc, dark: boolean, lamps?: \"dark\" | \"always\"): SceneDoc"
       }
      ]
     }

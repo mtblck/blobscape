@@ -12,6 +12,8 @@ import { antler, brackets, brain, cactus, horn, ribs, rosette, shell, tree } fro
 import { MAX_DROPS, arch, butte, hoodoo, land, mud, pebbles } from './erode.ts'
 import { RISES, cluster, columns, crystal, drips, flowstone, geode, icicles } from './forms.ts'
 import { drift, fallAt, fallShare, frost, groundUnder, type Falling } from './weather.ts'
+import { MOST_STARS, withHeavens, type HeavensDoc } from './heavens.ts'
+import { CLOUD_COVERS } from './skyRecipes.ts'
 
 /**
  * A pixel-art scene written as data: no code, so it can be typed by hand, kept
@@ -108,6 +110,12 @@ export interface SceneDoc {
   focus?: { at: Vec3; r: number }
   /** A pond whose surface ripples where rain lands on it and where things move through it. */
   water?: WaterDoc
+  /**
+   * The moon, the sun, the stars and how cloudy the sky is, from the shared recipes (heavens.ts): say where and how
+   * many, and every scene's moon looks the same, cloud cover puts them out, and time of day brings the right ones. A
+   * scene with a sky of its own (an eclipse, a red sun, three moons) draws it as parts instead.
+   */
+  heavens?: HeavensDoc
 }
 
 /**
@@ -1193,6 +1201,44 @@ export function checkScene(doc: unknown): string[] {
       if (specks > MAX_SPECKS) bad('air.specks', `hold ${specks} specks between them; the most is ${MAX_SPECKS}`)
     }
   }
+  if (doc.heavens !== undefined) {
+    const h = doc.heavens
+    if (!obj(h)) bad('heavens', 'must be an object')
+    else {
+      const body = (b: unknown, at: string) => {
+        if (b === undefined) return undefined
+        if (!obj(b)) { bad(at, 'must be an object'); return undefined }
+        vec(b.at, `${at}.at`, -4 * REACH, 4 * REACH); num(b.r, `${at}.r`, 0.02, 1)
+        return b
+      }
+      const moon = body(h.moon, 'heavens.moon')
+      if (moon?.colors !== undefined) hexes(moon.colors, 'heavens.moon.colors', 2, 2)
+      const sun = body(h.sun, 'heavens.sun')
+      if (sun?.color !== undefined) hex(sun.color, 'heavens.sun.color')
+      if (h.stars !== undefined) {
+        const s = h.stars
+        if (!obj(s)) bad('heavens.stars', 'must be an object')
+        else {
+          num(s.count, 'heavens.stars.count', 1, MOST_STARS)
+          if ((s.from === undefined) !== (s.to === undefined)) bad('heavens.stars', 'give both from and to, or neither')
+          if (s.from !== undefined) { vec(s.from, 'heavens.stars.from', -4 * REACH, 4 * REACH); vec(s.to, 'heavens.stars.to', -4 * REACH, 4 * REACH) }
+          opt(s.size, 'heavens.stars.size', 0.005, 0.1)
+          if (s.colors !== undefined) hexes(s.colors, 'heavens.stars.colors', 1, 4)
+        }
+      }
+      if (h.clouds !== undefined) {
+        const c = h.clouds
+        if (!obj(c)) bad('heavens.clouds', 'must be an object')
+        else {
+          if (!CLOUD_COVERS.some((k) => k.id === c.cover)) bad('heavens.clouds.cover', `${show(c.cover)} is not a cloud cover (${CLOUD_COVERS.map((k) => k.id).join(', ')})`)
+          if (c.colors !== undefined) hexes(c.colors, 'heavens.clouds.colors', 3, 3)
+          if (c.glow !== undefined && typeof c.glow !== 'boolean') bad('heavens.clouds.glow', 'must be true or false')
+        }
+      }
+      const added = (moon ? 1 : 0) + (sun ? 1 : 0) + (obj(h.stars) && typeof h.stars.count === 'number' ? Math.min(MOST_STARS, h.stars.count) : 0)
+      if ((Array.isArray(doc.bones) ? doc.bones.length : 0) + added > MAX_BONES) bad('heavens', `its moon, sun and stars take a bone each, ${added} in all, past the ${MAX_BONES} bones a scene may carry`)
+    }
+  }
   return errs
 }
 
@@ -1732,9 +1778,11 @@ export function passed(life: number, phase: number): [number, number] {
 /** A sound description (see `checkScene`) made ready to build and play. Throws on an unsound one. */
 /** `puffs` keeps hidden bones for a tap's puff of sparkles (`poke.ts`); a creature taken from a scene goes without. */
 /** `ground` is the ground what falls lands on, in place of the description's own parts: weather laid over another scene (skyRecipes.ts) lands on that scene's. */
-export function compileScene(doc: SceneDoc, { puffs = true, ground: under }: { puffs?: boolean; ground?: (x: number, z: number, top: number, bottom: number) => number } = {}): CompiledScene {
-  const errs = checkScene(doc)
-  if (errs.length) throw new Error(`Scene "${String((doc as { name?: unknown })?.name)}" has ${errs.length} mistake${errs.length > 1 ? 's' : ''}: ${errs.slice(0, 5).join('; ')}`)
+export function compileScene(given: SceneDoc, { puffs = true, ground: under }: { puffs?: boolean; ground?: (x: number, z: number, top: number, bottom: number) => number } = {}): CompiledScene {
+  const errs = checkScene(given)
+  if (errs.length) throw new Error(`Scene "${String((given as { name?: unknown })?.name)}" has ${errs.length} mistake${errs.length > 1 ? 's' : ''}: ${errs.slice(0, 5).join('; ')}`)
+  // the shared moon, sun and stars are parts like any other from here on
+  const doc = withHeavens(given)
   const bones: Bone[] = [{ name: 'land', parent: -1, head: [0, 0, 0] }]
   for (const b of doc.bones ?? []) bones.push({ name: b.name, parent: b.parent ? bones.findIndex((k) => k.name === b.parent) : 0, head: b.at })
   const palette = doc.palette.map(rgb)
@@ -1940,7 +1988,9 @@ const repaint = (p: PaintDoc, f: (c: string) => string): PaintDoc => {
  * left out) set to 'always' keeps everything that waits for the dark lit. Colors it adds join the palette while there
  * is room. A description nothing changes in comes back as it is, so a caller can tell there is nothing to cut again.
  */
-export function litFor(doc: SceneDoc, dark: boolean, lamps: 'dark' | 'always' | undefined = doc.lamps): SceneDoc {
+export function litFor(given: SceneDoc, dark: boolean, lamps: 'dark' | 'always' | undefined = given.lamps): SceneDoc {
+  // the shared moon and stars wait for the night, and the sun for the day, as parts written out do
+  const doc = withHeavens(given)
   const on = (w: LitWhen | undefined) => isLit(w, dark, lamps)
   if (doc.parts.every((p) => on(p.lit)) && (doc.lights ?? []).every((l) => on(l.lit)) && (doc.air?.specks ?? []).every((k) => on(k.lit))) return doc
   const added = new Set<string>()

@@ -6,6 +6,7 @@ import { Skeleton, axisAngle, mulQ, rotate, type Bone } from './rig.ts'
 import { daylight } from './daylight.ts'
 import { checkScene, compileScene, litFor, type CompiledScene, type LightDoc, type MoveDoc, type SceneDoc, type SpeckDoc } from './sceneDoc.ts'
 import { falling } from './skyRecipes.ts'
+import { withHeavens } from './heavens.ts'
 import { MAX_LAMPS, type Lamp, type Shape, type VoxelPart, type VoxelSpec } from './voxel.ts'
 
 /**
@@ -390,7 +391,9 @@ const inBox = (p: Vec3, b: { lo: Vec3; hi: Vec3 }, pad: number) => p.every((v, i
  * box holds it (a lantern's flame), else stays with the land. A prop takes the scene's palette, light, look and loop
  * but none of its air, water, cover or focus: those belong to the land.
  */
-export function splitScene(doc: SceneDoc, picks: PropPick[]): { land: PropDoc; props: PropDoc[]; project: SceneProject } {
+export function splitScene(given: SceneDoc, picks: PropPick[]): { land: PropDoc; props: PropDoc[]; project: SceneProject } {
+  // the shared moon, sun and stars are written out after every other part, so a pick's numbers still name the same parts, and stay with the land
+  const doc = withHeavens(given)
   const taken = new Set<number>()
   const lightsLeft = new Set((doc.lights ?? []).map((_, i) => i))
   const props: PropDoc[] = picks.map((pick) => {

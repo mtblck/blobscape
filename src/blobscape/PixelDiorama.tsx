@@ -37,6 +37,7 @@ import { useDrawnLook, useHeld, wantsPlain } from './drawnLook.tsx'
 import { TIMES, timeAsked, timeOf, type TimeId } from './timeOfDay.ts'
 import { CLOUD_COVERS, SkyEase, WEATHERS, cloudsAsked, gloomy, isClear, skyState, weatherAsked, type CloudId, type WeatherId } from '../splat-engine/skyRecipes.ts'
 import { SceneWeather, paletteUnder, underSky } from './diorama/weather.ts'
+import { heavenBones, ownClouds, showHeavens } from '../splat-engine/heavens.ts'
 import { download } from './files.ts'
 import { blocksToMesh } from '../splat-engine/blockMesh.ts'
 import { TRANSITIONS, type TransitionKind } from '../splat-core/transition.ts'
@@ -314,12 +315,16 @@ export function PixelDiorama() {
     // a scene's water is drawn by blobs of its own, in the same world: they move with the water, not with a bone
     const pond = scene.of.water?.()
     // rain, snow and clouds are actors of their own beside the scene's, made once a scene and shown by the sky's numbers
+    // (a scene with clouds of its own has them drawn this way too, whatever the weather)
     let fall: SceneWeather | undefined
-    if (weathered) {
-      const of = sceneOf(scene.of)
+    if (weathered || scene.of.heavens?.clouds) {
+      const of = scene.of
       fall = falls.current.get(of)
       if (!fall) falls.current.set(of, (fall = new SceneWeather(of)))
     }
+    // the shared moon, sun and stars, which cloud cover puts out
+    const heavens = heavenBones(scene.built.skeleton.bones.map((b) => b.name))
+    const own = ownClouds(scene.of)
     stage.setActor(scene.built, undefined, [...(pond ? [pond.surface] : []), ...(fall?.actors ?? [])])
     seen.current = null
     // the surface as it stands at the stage's time, for the eye as it stands: after a pose, a turn of the view or a new picture in the mirror
@@ -347,7 +352,9 @@ export function PixelDiorama() {
     }
     stage.setPoser((sk: Skeleton, t: number) => {
       d.pose(sk, t)
-      fall?.pose(t, skyEase.current.at(skyClock.current()))
+      const now = skyEase.current.at(skyClock.current())
+      fall?.pose(t, now)
+      showHeavens(sk.size, heavens, Math.max(now.clouds, own))
       // an export is the scene's own loop: no pokes, and the view as it stood when it began
       if (!held.current) pokes.current?.apply(sk, performance.now() / 1000)
       stage.setLights(castBy(d.lights(t, stage.backend === 'webgpu'), glowGain(glowNow.current, d.finish.glow)), d.ambientAt?.(t) ?? d.ambient ?? 1)

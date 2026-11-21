@@ -53,7 +53,7 @@ export interface CloudCover {
 
 /** The numbers are mine, not Matt's yet. */
 export const CLOUD_COVERS: CloudCover[] = [
-  { id: 'partly', label: 'Partly cloudy', clouds: 0.4, light: [0.97, 0.97, 0.98], gray: 0.1, dark: 0 },
+  { id: 'partly', label: 'Partly cloudy', clouds: 0.375, light: [0.97, 0.97, 0.98], gray: 0.1, dark: 0 },
   { id: 'cloudy', label: 'Cloudy', clouds: 0.75, light: [0.86, 0.88, 0.92], gray: 0.55, dark: 0.08 },
   { id: 'overcast', label: 'Heavy clouds', clouds: 1, light: [0.74, 0.77, 0.84], gray: 0.9, dark: 0.22 },
 ]
@@ -259,7 +259,11 @@ export function cloudAt(i: number, camera: View): Vec3 {
   return [round(x + dx * r), round(cloudBase(camera) + 0.02 * camera.distance * hash(i + 1, 3, 2)), round(z + dz * r)]
 }
 
-function cloudPart(i: number, camera: View): PartDoc {
+/** How a sky's clouds look: their colors from underneath up, and whether they glow to keep them. The recipe's own when left out. */
+export interface CloudLook { colors?: readonly [string, string, string]; glow?: boolean }
+
+function cloudPart(i: number, camera: View, look: CloudLook = {}): PartDoc {
+  const [under, middle, top] = look.colors ?? [CLOUD_COLORS[2], CLOUD_COLORS[1], CLOUD_COLORS[0]]
   const p = cloudAt(i, camera), s = (camera.distance / 3.7) * (1 + 0.4 * hash(i + 1, 3, 3))
   // heaped, flat underneath, wide enough that together they roof the scene
   const a = (camera.azimuth * Math.PI) / 180, ax = Math.cos(a), az = -Math.sin(a)
@@ -272,8 +276,8 @@ function cloudPart(i: number, camera: View): PartDoc {
       { kind: 'sphere', at: at(0.28, 0.1, 0.1), r: round(0.12 * s) },
       { kind: 'sphere', at: at(0, 0.24, 0.1), r: round(0.13 * s) },
     ] },
-    paint: { kind: 'split', axis: 'y', at: round(p[1] + 0.07 * s), below: CLOUD_COLORS[2], above: { kind: 'split', axis: 'y', at: round(p[1] + 0.16 * s), below: CLOUD_COLORS[1], above: CLOUD_COLORS[0] } },
-    bone: `cloud${i}`, noShadow: true, bare: true,
+    paint: { kind: 'split', axis: 'y', at: round(p[1] + 0.07 * s), below: under, above: { kind: 'split', axis: 'y', at: round(p[1] + 0.16 * s), below: middle, above: top } },
+    bone: `cloud${i}`, noShadow: true, bare: true, ...(look.glow ? { glow: true } : {}),
   }
 }
 
@@ -282,12 +286,12 @@ function cloudPart(i: number, camera: View): PartDoc {
  * the most there can be; `poseWeather` shows the share a sky asks for. Compile them with the scene's `ground`, so what
  * falls lands on the scene.
  */
-export function weatherDocs(camera: View, loop: number): { clouds: SceneDoc; rain: SceneDoc; snow: SceneDoc } {
+export function weatherDocs(camera: View, loop: number, look: CloudLook = {}): { clouds: SceneDoc; rain: SceneDoc; snow: SceneDoc } {
   const view = { target: camera.target, distance: camera.distance, azimuth: camera.azimuth, elevation: camera.elevation }
   const bones: BoneDoc[] = [], parts: PartDoc[] = [], moves: MoveDoc[] = []
   for (let i = 0; i < CLOUDS; i++) {
     bones.push({ name: `cloud${i}`, at: cloudAt(i, camera) })
-    parts.push(cloudPart(i, camera))
+    parts.push(cloudPart(i, camera, look))
     const a = (camera.azimuth * Math.PI) / 180, by = camera.distance * 0.06
     // each drifts to and fro across the view once a loop, out of step with the next
     moves.push({ kind: 'bob', bone: `cloud${i}`, by: [round(Math.cos(a) * by), 0, round(-Math.sin(a) * by)], times: 1, phase: round(hash(i + 1, 3, 4)) })
@@ -296,7 +300,7 @@ export function weatherDocs(camera: View, loop: number): { clouds: SceneDoc; rai
   // a description must hold a part: this one is never shown
   const none = { bones: [{ name: HIDDEN, at: camera.target }] as BoneDoc[], parts: [{ shape: { kind: 'sphere', at: camera.target, r: 0.02 }, paint: SNOW_COLORS[0], bone: HIDDEN, noShadow: true, bare: true }] as PartDoc[] }
   return {
-    clouds: { ...base, name: 'Clouds', palette: CLOUD_COLORS, bones, parts, moves },
+    clouds: { ...base, name: 'Clouds', palette: [...(look.colors ?? CLOUD_COLORS)], bones, parts, moves },
     rain: { ...base, ...none, name: 'Rain', palette: RAIN_COLORS, air: { specks: [falling('rain', camera)] } },
     snow: { ...base, ...none, name: 'Snow', palette: SNOW_COLORS, air: { specks: [falling('snow', camera)] } },
   }

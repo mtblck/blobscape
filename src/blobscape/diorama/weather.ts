@@ -4,6 +4,7 @@ import { joinPalettes } from '../../splat-engine/project.ts'
 import { compileScene, type CompiledScene } from '../../splat-engine/sceneDoc.ts'
 import { FLASH_SKY, WEATHER_COLORS, hazeUnder, isClear, lightUnder, lightningAt, showWeather, skyUnder, weatherBones, weatherDocs, type SkyState, type WeatherBones } from '../../splat-engine/skyRecipes.ts'
 import { buildVoxels } from '../../splat-engine/voxel.ts'
+import { ownClouds } from '../../splat-engine/heavens.ts'
 import { under } from '../timeOfDay.ts'
 import type { Diorama } from './scenes.ts'
 
@@ -27,8 +28,14 @@ export class SceneWeather {
   readonly actors: Actor[]
   private readonly layers: { clouds: Layer; rain: Layer; snow: Layer }
 
+  /** The share of the clouds the scene's own sky has out, whatever the weather. */
+  private readonly own: number
+
   constructor(d: Diorama) {
-    const docs = weatherDocs(d.views[0].orbit, d.loop)
+    const clouds = d.heavens?.clouds
+    this.own = ownClouds(d)
+    // a scene that asks for clouds of its own colors has every cloud in them, so the few it has and a storm's many match
+    const docs = weatherDocs(d.views[0].orbit, d.loop, { colors: clouds?.colors, glow: clouds?.glow })
     const ground = d.ground ?? ((_x: number, _z: number, _top: number, bottom: number) => bottom)
     const layer = (doc: typeof docs.rain, spacing: number): Layer => {
       const c = compileScene(doc, { puffs: false, ground })
@@ -43,7 +50,7 @@ export class SceneWeather {
 
   /** Poses both for `t` seconds under a sky. */
   pose(t: number, s: SkyState) {
-    for (const [l, falls, clouds] of [[this.layers.clouds, 0, s.clouds], [this.layers.rain, s.rain, 0], [this.layers.snow, s.snow, 0]] as const) {
+    for (const [l, falls, clouds] of [[this.layers.clouds, 0, Math.max(s.clouds, this.own)], [this.layers.rain, s.rain, 0], [this.layers.snow, s.snow, 0]] as const) {
       const sk = l.actor.skeleton
       l.c.pose(sk, t)
       showWeather(sk.size, l.bones, falls, clouds)
