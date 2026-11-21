@@ -84,6 +84,10 @@ export interface Actor {
   soft?: boolean
   /** A surface that moves by itself and is sent up again with `reshape` (a pond's): while the stage draws blocks it is columns that follow it, or stays blobs, as the look's `flow` says. */
   flows?: boolean
+  /** Weather laid over a scene (its clouds, rain, snow): while the stage draws blocks it is cubes too, or stays blobs among them, as the look's `weather` says. */
+  weather?: boolean
+  /** Lies on the scene's surfaces (snow lying): see the stage's `Actor.lies`. */
+  lies?: boolean
   /** The side of its cubes while the stage draws blocks, where it was cut on a grid of its own; left out, the look's `cell`. */
   blockCell?: number
 }

@@ -4,7 +4,9 @@ import { oklab } from '../splat-core/pixel.ts'
 import type { PointLight } from './engine.ts'
 import { Skeleton, axisAngle, mulQ, rotate, type Bone } from './rig.ts'
 import { daylight } from './daylight.ts'
-import { checkScene, compileScene, litFor, type CompiledScene, type LightDoc, type MoveDoc, type SceneDoc } from './sceneDoc.ts'
+import { checkScene, compileScene, litFor, type CompiledScene, type LightDoc, type MoveDoc, type SceneDoc, type SpeckDoc } from './sceneDoc.ts'
+import { falling } from './skyRecipes.ts'
+import { withHeavens } from './heavens.ts'
 import { MAX_LAMPS, type Lamp, type Shape, type VoxelPart, type VoxelSpec } from './voxel.ts'
 
 /**
@@ -156,17 +158,16 @@ export function litLand(doc: SceneDoc, l: ProjectLight | undefined): SceneDoc {
   return { ...doc, light, sky, air }
 }
 
-const WEATHER: Record<NonNullable<ProjectLight['weather']>, { count: number; colors: string[] }> = {
-  rain: { count: 140, colors: ['#9fb4d0', '#c4d4e8'] },
-  snow: { count: 120, colors: ['#ffffff', '#e6eef8'] },
-  leaves: { count: 40, colors: ['#c8642a', '#e0a030', '#a83c20'] },
-}
+/** How many drops, flakes or leaves a project's weather is: fewer than a sky's most, since they share the land's bones. */
+const WEATHER_COUNT = { rain: 140, snow: 120, leaves: 40 }
 
-/** A swarm of rain, snow or leaves over the view's middle, falling onto whatever stands there. */
-function weatherOf(kind: NonNullable<ProjectLight['weather']>, camera: Orbit) {
-  const [x, y, z] = camera.target, r = Math.max(0.8, camera.distance * 0.45)
-  const w = WEATHER[kind]
-  return { kind, count: w.count, colors: w.colors, from: [x - r, y - 1, z - r] as Vec3, to: [x + r, y + 1.6, z + r] as Vec3, land: true, wind: kind === 'rain' ? [0.15, 0.05] as [number, number] : undefined }
+/**
+ * A swarm of rain, snow or leaves over the view's middle, falling onto whatever stands there. Rain and snow are the
+ * shared recipe's (skyRecipes.ts `falling`), so a change to rain there is a change here.
+ */
+function weatherOf(kind: NonNullable<ProjectLight['weather']>, camera: Orbit): SpeckDoc {
+  if (kind !== 'leaves') return falling(kind, camera, WEATHER_COUNT[kind])
+  return { ...falling('snow', camera, WEATHER_COUNT.leaves), kind, colors: ['#c8642a', '#e0a030', '#a83c20'] }
 }
 
 /** Most props in one project: each is an actor of its own while editing, and frames slow down as they are added (#330). */
@@ -390,7 +391,9 @@ const inBox = (p: Vec3, b: { lo: Vec3; hi: Vec3 }, pad: number) => p.every((v, i
  * box holds it (a lantern's flame), else stays with the land. A prop takes the scene's palette, light, look and loop
  * but none of its air, water, cover or focus: those belong to the land.
  */
-export function splitScene(doc: SceneDoc, picks: PropPick[]): { land: PropDoc; props: PropDoc[]; project: SceneProject } {
+export function splitScene(given: SceneDoc, picks: PropPick[]): { land: PropDoc; props: PropDoc[]; project: SceneProject } {
+  // the shared moon, sun and stars are written out after every other part, so a pick's numbers still name the same parts, and stay with the land
+  const doc = withHeavens(given)
   const taken = new Set<number>()
   const lightsLeft = new Set((doc.lights ?? []).map((_, i) => i))
   const props: PropDoc[] = picks.map((pick) => {

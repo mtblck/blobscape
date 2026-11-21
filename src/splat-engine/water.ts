@@ -249,6 +249,21 @@ export class Water {
     this.version++
   }
 
+  /**
+   * Presses on the surface for `dt` seconds with `push`, an upward pull a cell (meters a second a second; one a cell
+   * of the grid, wet or not): what wind does to water. Its mean over the wet cells is taken off first, so the water
+   * is pushed about, never made or lost.
+   */
+  press(push: ArrayLike<number>, dt: number) {
+    const { h, v, wet } = this
+    let sum = 0
+    for (let k = 0; k < h.length; k++) if (wet[k]) sum += push[k]
+    const mean = this.wetCount ? sum / this.wetCount : 0
+    for (let k = 0; k < h.length; k++) if (wet[k]) v[k] += (push[k] - mean) * dt
+    this.moving = true
+    this.version++
+  }
+
   /** Lays the water flat and still at once, keeping what it knows of the bodies in it: for the start of a scene, where whoever stands in the pond has always stood there. */
   rest() {
     this.h.fill(0)
