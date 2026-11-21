@@ -41,11 +41,16 @@ export function seeThrough(blobs: Blobs, partOf: ArrayLike<number>, shapes: Soli
   const w = norm(way), u = norm(cross(Math.abs(w[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0], w)), v = cross(w, u)
   const own = parts.map((i) => shapes[i])
   // a shape is asked only near its own box: far off, the box's distance is enough to know it is not the nearest
+  // (plain arithmetic, no square root until a box is the nearest thing yet: this is asked millions of times)
+  const far = spacing * 2 * (spacing * 2)
   const sdf = (p: Vec3) => {
+    const x = p[0], y = p[1], z = p[2]
     let d = Infinity
     for (const s of own) {
-      const out = Math.hypot(Math.max(s.min[0] - p[0], 0, p[0] - s.max[0]), Math.max(s.min[1] - p[1], 0, p[1] - s.max[1]), Math.max(s.min[2] - p[2], 0, p[2] - s.max[2]))
-      d = Math.min(d, out > spacing * 2 ? out : s.sdf(p[0], p[1], p[2]))
+      const mn = s.min, mx = s.max
+      const dx = x < mn[0] ? mn[0] - x : x > mx[0] ? x - mx[0] : 0, dy = y < mn[1] ? mn[1] - y : y > mx[1] ? y - mx[1] : 0, dz = z < mn[2] ? mn[2] - z : z > mx[2] ? z - mx[2] : 0
+      const out = dx * dx + dy * dy + dz * dz
+      if (out > far) { if (out < d * d) d = Math.sqrt(out) } else d = Math.min(d, s.sdf(x, y, z))
     }
     return d
   }
