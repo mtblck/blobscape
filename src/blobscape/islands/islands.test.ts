@@ -354,3 +354,31 @@ test('creatures live on every island, picked by its biome, and walk loops that s
     assert.equal(among.standsAt(at.x + 0.25, at.z), g.standsAt(at.x + 0.25, at.z))
   }
 })
+
+test('each island has its landmark creature, standing on open ground, the same number of pieces at every moment', async () => {
+  const { LANDMARKS, ROOM, landmarkActor, piecesAt, placeLandmarks, poseLandmark } = await import('./landmark.ts')
+  for (const [biome, seed] of [['meadow', 37], ['pinewood', 5], ['mesa', 11]] as const) {
+    const w = planWorld(biome, seed), g = new WorldGround(w, DETAIL[0].spacing)
+    const ms = placeLandmarks(w, g.islands)
+    assert.equal(ms.length, w.islands.length)
+    assert.deepEqual(ms, placeLandmarks(w, g.islands), 'the same world gives the same places')
+    for (const m of ms) {
+      const isl = g.islands[m.island]
+      assert.equal(m.kind, LANDMARKS[w.islands[m.island].biome])
+      assert.ok(isl.standsAt(m.at[0], m.at[2]) && isl.insideAt(m.at[0], m.at[2]) > ROOM[m.kind] * 0.6, `${biome} ${seed}: the ${m.kind} stands off open ground`)
+    }
+  }
+  for (const kind of ['grazer', 'stag', 'serpent'] as const) {
+    const a = landmarkActor(kind), n = a.rest.length
+    let low = Infinity, high = -Infinity
+    for (let t = 0; t < 30; t += 0.7) {
+      const ps = piecesAt(kind, t)
+      assert.equal(ps.length, n, `${kind} keeps its pieces`)
+      for (const p of ps) { assert.ok(p.at.every(Number.isFinite)); if (kind !== 'serpent') low = Math.min(low, p.at[1] - p.size[1]); high = Math.max(high, p.at[1]) }
+      poseLandmark({ kind, island: 0, at: [0, 0, 0], yaw: 0, seed: 1 }, a.rest, a.skeleton, t)
+      for (let k = 0; k < ps.length; k++) assert.ok(Math.abs(a.skeleton.posedHead[(k + 1) * 3 + 1] - ps[k].at[1]) < 1e-3, `${kind} piece ${k} posed where it is`)
+    }
+    if (kind !== 'serpent') assert.ok(low > -0.3 && low < 0.4, `${kind}'s feet at ${low.toFixed(2)}`)
+    assert.ok(high > 5, `${kind} stands ${high.toFixed(1)} m: a landmark`)
+  }
+})

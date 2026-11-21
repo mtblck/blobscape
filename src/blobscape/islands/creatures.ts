@@ -195,9 +195,11 @@ export class AmongCreatures implements WalkGround {
     }
     return this.ground.standsAt(x, z)
   }
+  /** Ground taken by things that stay where they are (the islands' landmark creatures), meters. */
+  fixed: { x: number; z: number; r: number }[] = []
   /** Sets where everyone is at a time, and where the elf stands. */
   update(residents: readonly Resident[], t: number, elf: { x: number; z: number }) {
     this.from = { x: elf.x, z: elf.z }
-    this.at = residents.map((r) => { const w = residentAt(r, t); return { x: w.x, z: w.z, r: Math.max(0.3, r.height * ROOM) } })
+    this.at = [...this.fixed, ...residents.map((r) => { const w = residentAt(r, t); return { x: w.x, z: w.z, r: Math.max(0.3, r.height * ROOM) } })]
   }
 }
