@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { checkScene, compileScene, type SceneDoc } from '../../splat-engine/sceneDoc.ts'
+import { Skeleton } from '../../splat-engine/rig.ts'
 import { buildVoxels } from '../../splat-engine/voxel.ts'
 import { seeThrough } from '../../splat-engine/solidity.ts'
 import { DETAIL } from '../diorama/scene.ts'
@@ -294,4 +295,21 @@ test('walking onto a bridge at a slant, the elf slides along the rail onto the d
     walk.update(1 / 30, { forward: 0, turn: 0, aim: Math.atan2(tx - walk.walker.x, tz - walk.walker.z), go: 1 })
   }
   assert.ok(Math.hypot(tx - walk.walker.x, tz - walk.walker.z) <= 0.5, `stuck at ${walk.walker.x.toFixed(1)}, ${walk.walker.z.toFixed(1)}`)
+})
+
+test('falling leaves come down on the island, never at rest in the open air past its edge', () => {
+  // Matt saw leaves settle in the sky beside an island and shrink away there (2026-11-21)
+  const made = makeIsland('meadow', 3), c = compileScene(made.doc), sk = new Skeleton(c.bones)
+  const swarms = made.doc.air?.specks ?? [], first = c.bones.findIndex((b) => b.name.startsWith('~speck'))
+  const before = swarms.slice(0, swarms.findIndex((s) => s.land)).reduce((n, s) => n + s.count, 0)
+  const leaves = swarms.find((s) => s.land)!
+  const low = new Array(leaves.count).fill(Infinity)
+  for (let t = 0; t < c.loop; t += 0.25) {
+    sk.reset(); c.pose(sk, t)
+    for (let k = 0; k < leaves.count; k++) {
+      const i = first + before + k
+      if (sk.size[i] > 0.5) low[k] = Math.min(low[k], c.bones[i].head[1] + sk.offset[i * 3 + 1])
+    }
+  }
+  assert.equal(low.filter((y) => y < 0.02).length, 0)
 })

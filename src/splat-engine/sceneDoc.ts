@@ -208,7 +208,7 @@ export interface SpeckDoc {
   size?: number
   /** Whether they give off light; left out, embers and fireflies do. */
   glow?: boolean
-  /** Rain, snow and leaves only: each lands on whatever stands still under it (or the box's floor), lies a while and goes, then falls again. */
+  /** Rain, snow and leaves only: each lands on whatever stands still under it, lies a while and goes, then falls again. One whose spot has nothing under it comes down somewhere that has (the box's floor only when none is found). */
   land?: boolean
   /** Rain, snow and leaves only: how far the wind carries each sideways over its whole fall, [x, z]; rain slants along it. */
   wind?: [number, number]
@@ -1466,6 +1466,8 @@ function swayOf(p: Speck, life: number): [number, number] {
   return [a * Math.sin((l0 * p.wander[0] * n + p.phase[1]) * TAU), a * 0.8 * Math.sin((l0 * p.wander[2] * n + p.phase[3]) * TAU)]
 }
 const BANK_BONES = 3
+/** Other spots a landing speck tries when nothing stands under where it would come down. */
+const LAND_TRIES = 12
 
 function planSpecks(air: AirDoc | undefined, loop: number, ground: (x: number, z: number, top: number, bottom: number) => number, water?: number): Speck[] {
   const out: Speck[] = []
@@ -1494,12 +1496,25 @@ function planSpecks(air: AirDoc | undefined, loop: number, ground: (x: number, z
         // it falls to whatever is under where it comes down, resting on it
         const [sx, sz] = swayOf(p, 1)
         const rest = sw.kind === 'leaves' ? size * 0.3 : sw.kind === 'rain' ? 0 : size * 0.6
-        p.travel = Math.max(0, hi[1] - (ground(at[0] + wind[0] + sx, at[2] + wind[1] + sz, hi[1], lo[1]) + rest))
+        // where nothing stands under it (past an island's edge), it comes down somewhere that has ground, so it never
+        // lies on the open air at the box's floor; the floor is kept only when no try finds ground
+        const groundAt = (x: number, z: number) => ground(x, z, hi[1], lo[1])
+        let g = groundAt(at[0] + wind[0] + sx, at[2] + wind[1] + sz)
+        for (let t = 0; t < LAND_TRIES && g <= lo[1] + 1e-6; t++) {
+          const x = across(0, 40 + t * 2) - wind[0], z = across(2, 41 + t * 2) - wind[1], h = groundAt(x + wind[0] + sx, z + wind[1] + sz)
+          if (h > lo[1] + 1e-6) { at[0] = x; at[2] = z; g = h }
+        }
+        p.travel = Math.max(0, hi[1] - (g + rest))
         // rain is a new drop each time: it comes down somewhere else in the box, onto whatever is under it there
         if (sw.kind === 'rain') {
           p.falls = Array.from({ length: times }, (_, n) => {
-            const x = n ? lo[0] + (hi[0] - lo[0]) * hash(si + 1, j + 1, 20 + n * 2) : at[0] + wind[0], z = n ? lo[2] + (hi[2] - lo[2]) * hash(si + 1, j + 1, 21 + n * 2) : at[2] + wind[1]
-            const floor = ground(x, z, hi[1], lo[1])
+            let x = at[0] + wind[0], z = at[2] + wind[1], floor = g
+            for (let t = 0; n && t <= LAND_TRIES; t++) {
+              x = lo[0] + (hi[0] - lo[0]) * hash(si + 1, j + 1, 20 + n * 2 + t * 977)
+              z = lo[2] + (hi[2] - lo[2]) * hash(si + 1, j + 1, 21 + n * 2 + t * 977)
+              floor = ground(x, z, hi[1], lo[1])
+              if (floor > lo[1] + 1e-6) break
+            }
             return { dx: x - wind[0] - at[0], dz: z - wind[1] - at[2], travel: Math.max(0, hi[1] - floor), wet: floor === water }
           })
         }

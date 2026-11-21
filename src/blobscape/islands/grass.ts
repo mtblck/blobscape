@@ -36,6 +36,8 @@ export const PER_BLADE = 3
 export const BLADE_HEIGHT: [number, number] = [0.05, 0.12]
 /** Blobs a flower: a stem, its petals and its middle. */
 export const PER_FLOWER = 3
+/** Blades one cube's top holds at most. */
+export const MOST_A_CELL = 4
 /** Flowers a bunch, least and most. */
 const BUNCH: [number, number] = [5, 11]
 /** How far a bunch's flowers stand from its middle, in cells. */
@@ -93,16 +95,17 @@ export function growGrass(from: GrassFrom, look: GrassLook): Blobs {
     if (was === undefined || blobs.center[was * 3 + 1] < blobs.center[i * 3 + 1]) cells.set(key, i)
   }
   const tops = [...cells.values()]
-  // a blade a cell where it is thickest, fewer between, scaled to the budget
-  const share = Math.min(1, look.blades / Math.max(1, tops.length * 0.6))
+  // up to MOST_A_CELL blades a cell where it is thickest, fewer between, scaled to the budget
+  const per = Math.max(1, Math.min(MOST_A_CELL, Math.ceil(look.blades / Math.max(1, tops.length * 0.6))))
+  const share = Math.min(1, look.blades / Math.max(1, tops.length * 0.6 * per))
   const fl = look.flowers, most = fl && fl.kinds.length ? Math.ceil(fl.bunches * 1.5) * BUNCH[1] * PER_FLOWER : 0
-  const out = new Blobs(Math.min(look.blades, tops.length) * PER_BLADE + most)
+  const out = new Blobs(Math.min(look.blades, tops.length * per) * PER_BLADE + most)
   let n = 0
-  for (const i of tops) {
+  for (const i of tops) for (let b = 0; b < per; b++) {
     if (n >= look.blades) break
     const cx = Math.round(blobs.center[i * 3] / cell) * cell, cz = Math.round(blobs.center[i * 3 + 2] / cell) * cell
     const top = Math.round(blobs.center[i * 3 + 1] / cell) * cell + cell / 2
-    const h = hashOf(seed, i), r = (k: number) => chance(h, k)
+    const h = hashOf(seed, i * MOST_A_CELL + b), r = (k: number) => chance(h, k)
     const thick = tussock(cx, cz, seed)
     if (r(0) > share * (0.25 + 1.5 * thick)) continue
     n++

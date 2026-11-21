@@ -194,8 +194,8 @@ export function Islands() {
     const unit = (h: string) => [1, 3, 5].map((k) => parseInt(h.slice(k, k + 2), 16) / 255)
     return ready.world.islands.map((isl, j) => {
       const piece = pieces[j] as Built & { blockCell?: number }, b = biomeOf(isl.biome), ramp = material(b.ground.top).ramp.map(unit)
-      const flowers = { kinds: b.wildflowers.map((id) => material(id).ramp.map(unit)), bunches: (coarse ? 100 : 160) * (j ? 0.5 : 1) }
-      return grassActor(growGrass({ blobs: piece.blobs, joints: piece.skin.joints }, { cell: piece.blockCell ?? ready.spacing, ramp, blades: (coarse ? 10000 : 20000) * (j ? 0.5 : 1), seed: isl.seed, flowers }))
+      const flowers = { kinds: b.wildflowers.map((id) => material(id).ramp.map(unit)), bunches: (coarse ? 220 : 340) * (j ? 0.4 : 1) }
+      return grassActor(growGrass({ blobs: piece.blobs, joints: piece.skin.joints }, { cell: piece.blockCell ?? ready.spacing, ramp, blades: (coarse ? 24000 : 40000) * (j ? 0.4 : 1), seed: isl.seed, flowers }))
     })
   }, [ready, pieces, blocky, grass, coarse])
 
