@@ -44,3 +44,16 @@ test('every light in every scene says when it shines, and a scene is sound by da
     }
   }
 })
+
+test('the koi pond is made from props: the library pieces, its own rain gone, and the shared light rain to start under', () => {
+  const koi = DIORAMAS.find((d) => d.id === 'koi')!
+  assert.ok(koi.project, 'it keeps the land and props it is made of')
+  assert.equal(koi.weather, 'light-rain')
+  assert.ok(!(koi.doc!.air?.specks ?? []).some((s) => s.kind === 'rain'), 'no rain of its own')
+  // the project, written as data, makes the very description Diorama draws
+  assert.deepEqual(JSON.parse(JSON.stringify(koi.project)), koi.project)
+  assert.ok(koi.project.props.filter((p) => p.prop === 'bamboo').length > 1, 'one prop set down more than once')
+  // both lanterns still wait for the dark, and light the pond once it comes
+  assert.equal(koi.doc!.lights!.length, 2)
+  for (const l of koi.doc!.lights!) assert.equal(l.lit, 'dark')
+})

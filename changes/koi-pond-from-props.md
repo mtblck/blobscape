@@ -1,0 +1,3 @@
+- Diorama: the koi pond is now made from Scene Creator props (two stone lanterns, a cherry tree, bamboo, irises, lily pads, stones and stepping posts set down on the pond), opens in Scene Creator as those pieces, and starts under the shared Light rain in place of its own drizzle.
+- Diorama: a Light rain weather, a drizzle with no wind, for every scene.
+- Scene Creator: the koi pond's thirteen pieces and the pond itself are in the library.

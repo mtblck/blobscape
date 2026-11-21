@@ -15,7 +15,7 @@ import type { BoneDoc, MoveDoc, PartDoc, SceneDoc, SpeckDoc } from './sceneDoc.t
  * numbers, eased by `SkyEase`, and the scene is never cut again for it.
  */
 
-export type WeatherId = 'rain' | 'heavy-rain' | 'thunderstorm' | 'snow' | 'heavy-snow' | 'fog'
+export type WeatherId = 'light-rain' | 'rain' | 'heavy-rain' | 'thunderstorm' | 'snow' | 'heavy-snow' | 'fog'
 export type CloudId = 'partly' | 'cloudy' | 'overcast'
 export type WindId = 'calm' | 'breeze' | 'windy' | 'gale'
 
@@ -82,6 +82,8 @@ export interface WeatherRecipe {
 
 /** The numbers are mine, not Matt's yet. */
 export const WEATHERS: WeatherRecipe[] = [
+  // a drizzle with no wind of its own, so still water shows each drop's ring (the koi pond starts in it)
+  { id: 'light-rain', label: 'Light rain', clouds: 'cloudy', rain: 0.15, haze: 0.12 },
   { id: 'rain', label: 'Rain', clouds: 'cloudy', rain: 0.4, haze: 0.2, wind: 1 },
   { id: 'heavy-rain', label: 'Heavy rain', clouds: 'overcast', rain: 1, haze: 0.35, light: [0.92, 0.92, 0.94], dark: 0.1, wind: 2, gloom: true },
   { id: 'thunderstorm', label: 'Thunderstorm', clouds: 'overcast', rain: 1, haze: 0.35, light: [0.8, 0.82, 0.9], dark: 0.3, lightning: 1, wind: 3, gloom: true },

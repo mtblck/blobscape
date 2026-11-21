@@ -1,7 +1,7 @@
 import type { Vec3 } from '../../splat-core/blobs.ts'
 import type { Built } from '../body.ts'
 import { axisAngle, mulQ, type Skeleton } from '../rig.ts'
-import { compileScene, dissolving, passed, sprouted, type BoneDoc, type MoveDoc, type SceneDoc, type ShapeDoc } from '../sceneDoc.ts'
+import { compileScene, dissolving, moveAxis, passed, sprouted, type BoneDoc, type MoveDoc, type SceneDoc, type ShapeDoc } from '../sceneDoc.ts'
 import { toCount } from '../sculpt.ts'
 import { buildVoxels, type VoxelSpec } from '../voxel.ts'
 
@@ -41,7 +41,6 @@ export interface SceneCreature {
 }
 
 const TAU = Math.PI * 2
-const AXIS: Record<'x' | 'y' | 'z', Vec3> = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] }
 
 export function sceneCreature(c: FromScene): SceneCreature {
   // a quarter turn about y is exact: no rounding to blur the grid
@@ -126,7 +125,7 @@ function order(bones: BoneDoc[]): BoneDoc[] {
 function applyMove(sk: Skeleton, m: MoveDoc, u: number, dir: (v: Vec3) => Vec3) {
   const b = sk.index(m.bone), at = u * m.times + (m.phase ?? 0)
   if (m.kind === 'spin' || m.kind === 'sway') {
-    const q = axisAngle(dir(AXIS[m.axis]), m.kind === 'spin' ? at * TAU : Math.sin(at * TAU) * m.degrees * (Math.PI / 180))
+    const q = axisAngle(dir(moveAxis(m.axis)), m.kind === 'spin' ? at * TAU : Math.sin(at * TAU) * m.degrees * (Math.PI / 180))
     sk.setRotation(b, mulQ(sk.rotation.subarray(b * 4, b * 4 + 4), q))
   } else if (m.kind === 'bob') {
     const by = dir(m.by), k = Math.sin(at * TAU)

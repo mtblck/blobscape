@@ -116,8 +116,10 @@ export function PixelDiorama() {
    * every scene takes the same way (Matt, 2026-11-21; splat-engine/skyRecipes.ts). They are laid over the scene, so it
    * is not cut again for them, and the sky eases from one to the next.
    */
-  const [weather, setWeather] = useState<WeatherId | undefined>(() => weatherAsked(new URLSearchParams(location.search).get('weather')))
+  const [weatherPick, setWeather] = useState<WeatherId | 'none' | undefined>(() => { const q = new URLSearchParams(location.search).get('weather'); return q === 'none' ? 'none' : weatherAsked(q) })
   const [clouds, setClouds] = useState<CloudId | undefined>(() => cloudsAsked(new URLSearchParams(location.search).get('clouds')))
+  // a scene may start under a shared weather of its own (the koi pond's light rain) until another, or none, is picked
+  const weather: WeatherId | undefined = weatherPick === 'none' ? undefined : weatherPick ?? (clouds ? undefined : picked0.weather)
   /** The wind (`?wind=gale`): weather brings at least its own; it slants what falls and raises waves on water. */
   const [wind, setWind] = useState<WindId | undefined>(() => windAsked(new URLSearchParams(location.search).get('wind')))
   // a storm by day is dark enough that lamps waiting for the dark come on: the one thing weather cuts the scene again for
@@ -601,10 +603,11 @@ export function PixelDiorama() {
     // weather and cloud cover are one choice: a weather brings its own clouds and wind, a cover is clouds alone
     if (key === 'wind') { setWind(id as WindId | undefined); put('wind', id) }
     else {
-      setWeather(key === 'weather' ? (id as WeatherId | undefined) : undefined)
+      setWeather(key === 'weather' ? (id as WeatherId | undefined) ?? 'none' : 'none')
       setClouds(key === 'clouds' ? (id as CloudId | undefined) : undefined)
       setWind(undefined)
-      put('weather', key === 'weather' ? id : undefined); put('clouds', key === 'clouds' ? id : undefined); put('wind', undefined)
+      // no weather on a scene that starts under one of its own is said in the address too
+      put('weather', key === 'weather' ? id ?? (picked0.weather ? 'none' : undefined) : undefined); put('clouds', key === 'clouds' ? id : undefined); put('wind', undefined)
     }
     history.replaceState(history.state, '', url)
   }
