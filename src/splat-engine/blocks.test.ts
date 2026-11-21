@@ -164,3 +164,12 @@ test('one source never shades another: each has its own rest pose and may stand 
     if (ground.normals[v * 3 + 1] === 1) assert.ok(ground.light[v * 3] > 0.9)
   }
 })
+
+test('a source cut on a grid of its own makes cubes that size', () => {
+  const fine = { ...source([blob(0, 0, 0), blob(0.05, 0, 0)]), blockCell: 0.05 }
+  const b = buildBlocks([source([blob(0, 0, 0), blob(0.03, 0, 0)]), fine], plain)
+  // on the look's grid the two blobs fall in one cell; on the finer one they are two cubes, each 0.05 across
+  assert.deepEqual(b.pieces.map((p) => p.blocks), [1, 2])
+  const xs = Array.from({ length: b.pieces[1].positions.length / 3 }, (_, i) => b.pieces[1].positions[i * 3])
+  assert.ok(Math.abs(Math.min(...xs) + 0.025) < 1e-6 && Math.abs(Math.max(...xs) - 0.075) < 1e-6)
+})

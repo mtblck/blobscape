@@ -16,7 +16,7 @@ import { described } from './diorama/scenes.ts'
 import { download } from './files.ts'
 import { BIOMES, biomeOf } from './islands/biomes.ts'
 import { MAX_SEED, census } from './islands/island.ts'
-import { WORLD_ISLANDS, placeIsland, planWorld, poseBridge, type WorldPlan } from './islands/world.ts'
+import { WORLD_ISLANDS, placeIsland, planWorld, poseBridge, type WorldGround, type WorldPlan } from './islands/world.ts'
 import { material } from './islands/materials.ts'
 import { grassActor, growGrass } from './islands/grass.ts'
 import type { IslandCut, IslandJob } from './islands/cut.worker.ts'
@@ -112,10 +112,13 @@ export function Islands() {
   }, [offscreen])
 
   // cut in a worker (an island takes seconds), and the island on show stays until the next is ready. Blocks are cut at
-  // the size of a block: a block is one cell of the cut, so the same cubes come from a few times fewer blobs
+  // the size of a block: a block is one cell of the cut, so the same cubes come from a few times fewer blobs. Every
+  // island is cut at Chunky; a finer detail is cut for the island underfoot alone, after (`finer`), since at Fine one
+  // island is some 850,000 blobs and close to a minute's cut, and the whole world at it never arrived on a phone
   const cutAt = DETAIL.find((d) => d.id === detail)!.spacing * (blocky ? blockSize : 1)
-  const [made, setMade] = useState<{ built: Built; pieces: Built[]; of: typeof scene; scenes: typeof scenes; world: typeof world; detail: string; plain: boolean; spacing: number }>()
-  const ready = made?.of === scene && made.detail === detail && made.plain === blocky && made.spacing === cutAt ? made : undefined
+  const baseAt = DETAIL[0].spacing * (blocky ? blockSize : 1)
+  const [made, setMade] = useState<{ built: Built; pieces: Built[]; of: typeof scene; scenes: typeof scenes; world: typeof world; plain: boolean; spacing: number }>()
+  const ready = made?.of === scene && made.plain === blocky && made.spacing === baseAt ? made : undefined
   // a worker an island (each takes seconds), the bridges with the first; kept between cuts while nothing is stopped
   const workers = useRef<Worker[]>([])
   useEffect(() => () => workers.current.forEach((w) => w.terminate()), [])
@@ -135,10 +138,10 @@ export function Islands() {
           if (ev.data.id !== id) return
           if (ev.data.cut) {
             pieces[ev.data.index!] = unpack(ev.data.cut)
-            if (++got === all) { done = true; setMade({ built: pieces[0], pieces, of: scene, scenes, world, detail, plain: blocky, spacing: cutAt }) }
+            if (++got === all) { done = true; setMade({ built: pieces[0], pieces, of: scene, scenes, world, plain: blocky, spacing: baseAt }) }
           } else if (ev.data.error) setFailed(`The island could not be cut: ${ev.data.error}`)
         }
-        w.postMessage({ id, biome: biomeId, seed, count, spacing: cutAt, plain: blocky, only } satisfies IslandJob)
+        w.postMessage({ id, biome: biomeId, seed, count, spacing: baseAt, plain: blocky, only } satisfies IslandJob)
       }
     }, 150)
     return () => {
@@ -146,30 +149,71 @@ export function Islands() {
       // a cut still going is for something no longer asked for: stop it rather than wait for it
       if (!done) { workers.current.forEach((w) => w.terminate()); workers.current = [] }
     }
-  }, [scene, scenes, world, biomeId, seed, count, detail, blocky, cutAt])
+  }, [scene, scenes, world, biomeId, seed, count, blocky, baseAt])
+
+  // the island underfoot (the first while nobody walks), and its finer cut when a finer detail is asked for: kept for
+  // the last two islands cut finer, so walking back and forth across a bridge doesn't cut again
+  const [near, setNear] = useState(0)
+  const finerCuts = useRef<{ of?: typeof made; kept: { key: string; piece: Built }[] }>({ kept: [] })
+  const [finer, setFiner] = useState<{ of: NonNullable<typeof made>; index: number; spacing: number; piece: Built }>()
+  const fineWorker = useRef<Worker | undefined>(undefined)
+  useEffect(() => () => fineWorker.current?.terminate(), [])
+  useEffect(() => {
+    if (!ready || cutAt === ready.spacing) return
+    const index = Math.min(near, ready.world.islands.length - 1), key = `${index}:${cutAt}`
+    if (finerCuts.current.of !== ready) finerCuts.current = { of: ready, kept: [] }
+    const kept = finerCuts.current.kept.find((k) => k.key === key)
+    if (kept) { setFiner({ of: ready, index, spacing: cutAt, piece: kept.piece }); return }
+    let done = false
+    const timer = setTimeout(() => {
+      const w = (fineWorker.current ??= new Worker(new URL('./islands/cut.worker.ts', import.meta.url), { type: 'module' }))
+      const id = Math.random()
+      w.onmessage = (ev: MessageEvent<IslandCut>) => {
+        if (ev.data.id !== id || !ev.data.cut) return
+        done = true
+        const piece = unpack(ev.data.cut)
+        finerCuts.current.kept = [{ key, piece }, ...finerCuts.current.kept].slice(0, 2)
+        setFiner({ of: ready, index, spacing: cutAt, piece })
+      }
+      w.postMessage({ id, biome: biomeId, seed, count, spacing: cutAt, plain: blocky, only: [index] } satisfies IslandJob)
+    }, 300)
+    return () => { clearTimeout(timer); if (!done) { fineWorker.current?.terminate(); fineWorker.current = undefined } }
+  }, [ready, near, cutAt, biomeId, seed, count, blocky])
+  // what is drawn: every island at Chunky, but the one underfoot finer once it is cut; blocks a cut's own cells across
+  const pieces = useMemo(() => {
+    if (!ready) return []
+    const fine = finer?.of === ready && finer.spacing === cutAt ? finer : undefined
+    return ready.pieces.map((p, j): Built & { blockCell?: number } => (fine && j === fine.index ? { ...fine.piece, blockCell: blocky ? fine.spacing : undefined } : p))
+  }, [ready, finer, cutAt, blocky])
+  const finerWaits = !!ready && cutAt !== ready.spacing && !(finer?.of === ready && finer.spacing === cutAt && finer.index === Math.min(near, ready.world.islands.length - 1))
 
   // the grass on each island's turf, grown from its cut: thick on the island underfoot, thinner on the others
   const grown = useMemo(() => {
     if (!ready || !blocky || !grass) return []
     const unit = (h: string) => [1, 3, 5].map((k) => parseInt(h.slice(k, k + 2), 16) / 255)
     return ready.world.islands.map((isl, j) => {
-      const piece = ready.pieces[j], ramp = material(biomeOf(isl.biome).ground.top).ramp.map(unit)
-      return grassActor(growGrass({ blobs: piece.blobs, joints: piece.skin.joints }, { cell: ready.spacing, ramp, blades: (coarse ? 10000 : 20000) * (j ? 0.5 : 1), seed: isl.seed }))
+      const piece = pieces[j] as Built & { blockCell?: number }, b = biomeOf(isl.biome), ramp = material(b.ground.top).ramp.map(unit)
+      const flowers = { kinds: b.wildflowers.map((id) => material(id).ramp.map(unit)), bunches: (coarse ? 100 : 160) * (j ? 0.5 : 1) }
+      return grassActor(growGrass({ blobs: piece.blobs, joints: piece.skin.joints }, { cell: piece.blockCell ?? ready.spacing, ramp, blades: (coarse ? 10000 : 20000) * (j ? 0.5 : 1), seed: isl.seed, flowers }))
     })
-  }, [ready, blocky, grass, coarse])
+  }, [ready, pieces, blocky, grass, coarse])
 
+  const nearNow = useRef(near)
+  // leaving the walk, the first island is the one looked at again
+  useEffect(() => { if (!walking) { nearNow.current = 0; setNear(0) } }, [walking])
   const orbitNow = useRef(orbit)
   orbitNow.current = orbit
   const rocking = useRef(rock && !calm)
   rocking.current = rock && !calm
   const dressed = useRef<typeof scene | undefined>(undefined)
   // the elf, made once an island is cut (it takes a moment, so the waiting mark shows first) and again for a new island
-  const [walk, setWalk] = useState<{ walk: IslandWalk; of: Built }>()
-  const walker = walking && walk && walk.of === ready?.built ? walk.walk : undefined
+  const [walk, setWalk] = useState<{ walk: IslandWalk; of: NonNullable<typeof made> }>()
+  const walker = walking && walk && walk.of === ready ? walk.walk : undefined
   useEffect(() => {
-    if (!walking || !ready || walk?.of === ready.built) return
+    if (!walking || !ready || walk?.of === ready) return
     let gone = false
-    const spacing = DETAIL.find((d) => d.id === ready.detail)!.spacing
+    // the ground is asked of the shapes, not the cut, so one spacing serves every detail and a finer cut keeps the elf where it stands
+    const spacing = DETAIL[0].spacing
     const timer = setTimeout(() => {
       Promise.all([import('./islands/walk.ts'), import('./islands/world.ts')]).then(([{ IslandWalk }, { WorldGround, worldStart }]) => {
         if (gone) return
@@ -177,7 +221,7 @@ export function Islands() {
         const w = new IslandWalk(ground, worldStart(ready.world, ground), { blobs: coarse ? 10000 : 16000 })
         // the view starts behind the elf, looking the way it faces
         setOrbit((o) => ({ ...o, ...BEHIND, azimuth: w.walker.heading * DEG + 180 }))
-        setWalk({ walk: w, of: ready.built })
+        setWalk({ walk: w, of: ready })
       })
     }, 30)
     return () => { gone = true; clearTimeout(timer) }
@@ -223,9 +267,10 @@ export function Islands() {
 
   useEffect(() => {
     if (!stage || !ready) return
-    const d = ready.of, { pieces, scenes: all, world: wd } = ready
+    const d = ready.of, { scenes: all, world: wd } = ready
     const others = pieces.slice(1)
-    stage.setActor(ready.built, undefined, [...others, ...grown, ...(walker ? [walker.elf] : [])])
+    stage.setActor(pieces[0], undefined, [...others, ...grown, ...(walker ? [walker.elf] : [])])
+    const ground = walker?.ground as WorldGround | undefined
     // a new island brings its own starting view; a new detail keeps the view it had
     const start = overview(wd, d.views[0].orbit)
     if (dressed.current !== d) { dressed.current = d; if (!walker) { setOrbit(start); orbitNow.current = start } }
@@ -252,10 +297,12 @@ export function Islands() {
         // the view follows the elf, catching up rather than jumping
         const m = walker.middle, k = eye ? 1 - Math.exp(-dt * FOLLOW) : 1
         eye = eye ? eye.map((v, j) => v + (m[j] - v) * k) : m
+        // which island is underfoot, for its finer cut
+        if (ground?.islandAt) { const j = ground.islandAt(m[0], m[2]); if (j !== nearNow.current) { nearNow.current = j; setNear(j) } }
         stage.orbit = { ...inMeters(o), target: [eye[0], eye[1], eye[2]] }
       } else if (d.swing && rocking.current) stage.orbit = inMeters(swung(orbitNow.current, d.swing, d.loop, t))
     }, stage.time)
-  }, [stage, ready, walker, calm, grown])
+  }, [stage, ready, pieces, walker, calm, grown])
   // walking needs the clock to run, whether or not the island's own moves do
   useEffect(() => { if (stage) stage.playing = playing || !!walker }, [stage, playing, walker])
   useEffect(() => { if (stage) { if (!walkNow.current) stage.orbit = inMeters(orbit); stage.invalidate() } }, [stage, orbit, rock])
@@ -385,7 +432,7 @@ export function Islands() {
         status={<>
           <span><span className="text-ink" data-testid="islands-name">{names.length === 1 ? island.plan.name : `${island.plan.name} and ${names.length - 1} more`}</span></span>
           {walker && <span data-testid="islands-walked">walked <WalkedMeters walk={walker} /></span>}
-          <span>{ready && <><span className="tabular-nums text-ink">{things}</span> things, <span className="tabular-nums text-ink" data-testid="islands-blobs">{ready.pieces.reduce((a, p) => a + p.blobs.count, 0).toLocaleString()}</span> blobs</>}</span>
+          <span>{ready && <><span className="tabular-nums text-ink">{things}</span> things, <span className="tabular-nums text-ink" data-testid="islands-blobs">{pieces.reduce((a, p) => a + p.blobs.count, 0).toLocaleString()}</span> blobs{finerWaits && ', the island underfoot coming finer'}</>}</span>
         </>}
         tabsLabel="Options"
         tabs={[

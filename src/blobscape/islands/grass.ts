@@ -26,12 +26,20 @@ export interface GrassLook {
   /** How tall a blade is, least and most, in the island's units. */
   height?: [number, number]
   seed?: number
+  /** Bunches of wildflowers through the grass: each kind's colors (sRGB 0–1, shade to light, as a bloom material's ramp), commonest first, and about how many bunches. */
+  flowers?: { kinds: readonly (readonly (readonly number[])[])[]; bunches: number }
 }
 
 /** Blobs a blade. */
 export const PER_BLADE = 3
 /** How tall a blade stands by default, in the island's units (a fifth of a meter on the island's scale times five). */
 export const BLADE_HEIGHT: [number, number] = [0.05, 0.12]
+/** Blobs a flower: a stem, its petals and its middle. */
+export const PER_FLOWER = 3
+/** Flowers a bunch, least and most. */
+const BUNCH: [number, number] = [5, 11]
+/** How far a bunch's flowers stand from its middle, in cells. */
+const BUNCH_REACH = 1.8
 /** How far a face must face up to grow grass: the dot of its normal with up. */
 const UPRIGHT = 0.7
 /** How near a color's hue must be to one of the turf's to count as turf (channels over the brightest, summed). The cut darkens paint a little even unlit, so lightness is let go within `DIMMED`. */
@@ -87,7 +95,8 @@ export function growGrass(from: GrassFrom, look: GrassLook): Blobs {
   const tops = [...cells.values()]
   // a blade a cell where it is thickest, fewer between, scaled to the budget
   const share = Math.min(1, look.blades / Math.max(1, tops.length * 0.6))
-  const out = new Blobs(Math.min(look.blades, tops.length) * PER_BLADE)
+  const fl = look.flowers, most = fl && fl.kinds.length ? Math.ceil(fl.bunches * 1.5) * BUNCH[1] * PER_FLOWER : 0
+  const out = new Blobs(Math.min(look.blades, tops.length) * PER_BLADE + most)
   let n = 0
   for (const i of tops) {
     if (n >= look.blades) break
@@ -115,7 +124,37 @@ export function growGrass(from: GrassFrom, look: GrassLook): Blobs {
       })
     }
   }
+  if (fl && fl.kinds.length) flowersIn(out, blobs, cells, tops, cell, [lo, hi], fl, seed, most)
   return out
+}
+
+/** Bunches of wildflowers on the turf's tops: a few to a dozen flowers of one kind (now and then two), each a stem with a flat head of petals and a middle, standing a little over the grass. */
+function flowersIn(out: Blobs, blobs: Blobs, cells: Map<string, number>, tops: number[], cell: number, [lo, hi]: [number, number], fl: NonNullable<GrassLook['flowers']>, seed: number, most: number) {
+  const c = blobs.color, end = out.count + most, chanceOf = fl.bunches / Math.max(1, tops.length)
+  const pickKind = (v: number) => fl.kinds[Math.min(fl.kinds.length - 1, Math.floor(v ** 1.5 * fl.kinds.length))]
+  for (const i of tops) {
+    const h = hashOf(seed + 7919, i), r = (k: number) => chance(h, k)
+    if (r(0) >= chanceOf) continue
+    const gx = Math.round(blobs.center[i * 3] / cell), gz = Math.round(blobs.center[i * 3 + 2] / cell)
+    const kinds = [pickKind(r(1)), pickKind(r(2))], n = BUNCH[0] + Math.floor(r(3) * (BUNCH[1] - BUNCH[0] + 1))
+    for (let f = 0; f < n; f++) {
+      if (out.count + PER_FLOWER > end) return
+      // nearer the middle more often, so a bunch is thick in the middle and thins out
+      const a = r(10 + f) * Math.PI * 2, d = Math.sqrt(r(30 + f)) * BUNCH_REACH * cell * (0.4 + 0.6 * r(50 + f))
+      const x = gx * cell + Math.cos(a) * d, z = gz * cell + Math.sin(a) * d
+      const under = cells.get(`${Math.round(x / cell)},${Math.round(z / cell)}`)
+      if (under === undefined) continue
+      const top = Math.round(blobs.center[under * 3 + 1] / cell) * cell + cell / 2
+      const ramp = r(70 + f) < 0.75 ? kinds[0] : kinds[1], light = ramp[ramp.length - 1], mid = ramp[Math.min(1, ramp.length - 1)]
+      const tall = (hi + (hi - lo) * 0.3) * (0.7 + 0.5 * r(90 + f)), yaw = r(110 + f) * Math.PI * 2, lean = 0.1 + 0.2 * r(130 + f)
+      const head = cell * (0.13 + 0.08 * r(150 + f)), tip: Vec3 = [x + Math.sin(yaw) * Math.sin(lean) * tall, top + tall * Math.cos(lean), z + Math.cos(yaw) * Math.sin(lean) * tall]
+      const stem = mix([c[under * 3], c[under * 3 + 1], c[under * 3 + 2]], [0, 0, 0], 0.25)
+      out.push({ center: [(x + tip[0]) / 2, top + tall * 0.5 * Math.cos(lean), (z + tip[2]) / 2], scale: [cell * 0.035, tall / 3.6, cell * 0.035], quat: bladeQuat(yaw, lean), color: stem, opacity: 1 })
+      // the head faces up and a little the way the stem leans
+      out.push({ center: tip, scale: [head, head * 0.22, head], quat: bladeQuat(yaw, lean * 1.5), color: mix(mid, light, 0.5 * r(170 + f)), opacity: 1 })
+      out.push({ center: [tip[0], tip[1] + head * 0.2, tip[2]], scale: [head * 0.4, head * 0.3, head * 0.4], quat: [0, 0, 0, 1], color: mix(light, [1, 0.85, 0.4], 0.5), opacity: 1 })
+    }
+  }
 }
 
 /** Grass as an actor of its own on one bone, `soft` so a stage drawing blocks keeps it as blobs among the cubes. Pose it as its island is placed. */

@@ -82,6 +82,8 @@ export interface Actor {
    * drawn among them and hidden by them where they stand in front. It makes no cubes.
    */
   soft?: boolean
+  /** The side of its cubes while the stage draws blocks, where it was cut on a grid of its own; left out, the look's `cell`. */
+  blockCell?: number
 }
 
 /** How many morph targets a world takes, over all its actors. */

@@ -53,6 +53,8 @@ export interface Biome {
   light: NonNullable<SceneDoc['light']>
   /** The ground: its top, the earth at its broken edge, and the rock hanging under it (one of these by the seed). */
   ground: { top: string; soil: string; rock: string[]; path: string }
+  /** The wildflowers that grow in bunches through its grass (bloom materials), commonest first. */
+  wildflowers: string[]
   /** The shape of the land: how many hills, how high, how rough, how worn by water, and its beds of rock if it is terraced. */
   land: { hills: [number, number]; height: [number, number]; noise: number; drops: number; slump: number; beds?: Bed[] }
   /** What lives there. The first population listed is placed first, so it gets the best spots. */
@@ -75,6 +77,7 @@ export const MEADOW: Biome = {
   skyBetween: ['#6fa3d8', '#9cc4e8'],
   light: { from: [0.5, 0.75, 0.55], ambient: 0.5, shadow: 0.65 },
   ground: { top: 'meadow-turf', soil: 'loam', rock: ['granite', 'slate'], path: 'loam' },
+  wildflowers: ['buttercup', 'daisy', 'poppy', 'bluebell'],
   land: { hills: [4, 7], height: [0.18, 0.55], noise: 0.06, drops: 12000, slump: 0.3 },
   lives: [
     { kind: 'tree', name: 'oak', plural: 'oaks', count: [6, 9], size: [0.8, 1.2], zone: [0.05, 0.85], made: { wood: ['oak'], leaf: ['oak-leaf'] }, high: 0.5 },
@@ -110,6 +113,7 @@ export const PINEWOOD: Biome = {
   skyBetween: ['#5871a3', '#7c93bb', '#a0b4d2'],
   light: { from: [-0.55, 0.65, 0.5], ambient: 0.48, shadow: 0.7 },
   ground: { top: 'alpine-turf', soil: 'loam', rock: ['granite', 'slate'], path: 'loam' },
+  wildflowers: ['heather', 'bluebell', 'daisy'],
   land: { hills: [3, 5], height: [0.4, 0.85], noise: 0.05, drops: 9000, slump: 0.5, beds: [{ thick: 0.12, hard: 0.9 }, { thick: 0.16, hard: 0.3 }, { thick: 0.1, hard: 0.85 }, { thick: 0.18, hard: 0.35 }] },
   lives: [
     { kind: 'pine', name: 'pine', plural: 'pines', count: [13, 18], size: [0.75, 1.3], zone: [0.05, 0.9], made: { wood: ['pine'], leaf: ['pine-needle'] }, high: 0.3 },
@@ -143,6 +147,7 @@ export const MESA: Biome = {
   skyBetween: ['#7a86c0', '#c8b8c0'],
   light: { from: [0.6, 0.7, 0.4], ambient: 0.52, shadow: 0.7 },
   ground: { top: 'dry-turf', soil: 'red-earth', rock: ['sandstone'], path: 'sand' },
+  wildflowers: ['buttercup', 'cactus-flower', 'daisy'],
   land: { hills: [3, 5], height: [0.3, 0.75], noise: 0.04, drops: 14000, slump: 0.25, beds: [{ thick: 0.1, hard: 0.95 }, { thick: 0.2, hard: 0.2 }, { thick: 0.08, hard: 0.9 }, { thick: 0.16, hard: 0.25 }] },
   lives: [
     { kind: 'cactus', name: 'cactus', plural: 'cacti', count: [11, 15], size: [0.7, 1.4], zone: [0.05, 0.9], made: { leaf: ['cactus'] }, high: -0.2 },

@@ -39,6 +39,8 @@ const THICK = 0.3
  * names. Things past it are set on the island's own bone: they stand still and are not props.
  */
 const BONE_BUDGET = 190
+/** Clouds round an island, each a bone. */
+const CLOUDS = 6
 /** Specks in an island's air at most, of each kind: each is a bone, and bones and specks together must fit in a byte. */
 const SPECKS_EACH = 20
 
@@ -213,9 +215,9 @@ export function planIsland(biome: Biome, seed: number, gates?: [number, number])
     drifters.push({ at: [r3(Math.cos(a) * d), r3(-0.8 + 1.3 * rnd()), r3(Math.sin(a) * d)], r: r3(0.16 + 0.16 * rnd()) })
   }
   const clouds: IslandPlan['clouds'] = []
-  for (let i = 0; i < 4; i++) {
-    const a = turn + (i / 4 + 0.15 * rnd()) * Math.PI * 2, d = (3.7 + 0.8 * rnd()) * GROW
-    clouds.push({ at: [r3(Math.cos(a) * d), r3(-2.4 + 1.4 * rnd()), r3(Math.sin(a) * d * 0.8 - 0.6)], r: r3((0.5 + 0.3 * rnd()) * Math.sqrt(GROW)) })
+  for (let i = 0; i < CLOUDS; i++) {
+    const a = turn + (i / CLOUDS + 0.12 * rnd()) * Math.PI * 2, d = (3.4 + 1.2 * rnd()) * GROW
+    clouds.push({ at: [r3(Math.cos(a) * d), r3(-3 + 2.6 * rnd()), r3(Math.sin(a) * d * 0.8 - 0.6)], r: r3((0.45 + 0.5 * rnd() ** 2) * Math.sqrt(GROW)) })
   }
 
   return { biome: biome.id, seed, name: `${biome.name} island ${seed}`, lobes, land, rock: pickOf(biome.ground.rock, seed, 3), patches, path, things, landmarks, drifters, clouds }
@@ -246,8 +248,9 @@ export function islandDoc(plan: IslandPlan): SceneDoc {
  * shares beside them, and bare earth and stone the rare ends, which come out as clumps a few meters across.
  */
 export function coverOf(turf: Material, soil: Material, rock: Material, seed: number): PaintDoc {
-  const main = turf.ramp[1], size = r3(0.5 * (0.85 + 0.3 * chance(seed, 13)))
-  return { kind: 'patches', size, colors: [soil.ramp[2], turf.ramp[0], main, main, main, main, turf.ramp[2], rock.ramp[2]] }
+  // one main grass, with clumps of darker and lighter grass, bare earth and stone here and there (never a lattice of them)
+  const size = r3(0.65 * (0.85 + 0.3 * chance(seed, 13)))
+  return { kind: 'clumps', size, base: turf.ramp[1], colors: [turf.ramp[0], turf.ramp[2], soil.ramp[2], rock.ramp[2]], amount: 0.24, seed }
 }
 
 export function islandScene(plan: IslandPlan): { doc: SceneDoc; solid: number[] } {
@@ -301,13 +304,26 @@ export function islandScene(plan: IslandPlan): { doc: SceneDoc; solid: number[] 
     moves.push({ kind: 'bob', bone, by: [0, r3(0.03 + 0.04 * chance(seed, 300 + i)), 0], times: 1 + (hashOf(seed, 310 + i) % 2), phase: r3(chance(seed, 320 + i)) })
   })
 
-  // clouds: a few soft lumps each, sliding a little to and fro
+  // clouds: heaped cumulus, a flat base under puffs that rise toward the middle, each its own size and lay, sliding a little to and fro
   const mist = material('cloud')
   plan.clouds.forEach((c, i) => {
-    const bone = `cloud${i}`
+    const bone = `cloud${i}`, h = hashOf(seed, 500 + i), r = (k: number) => chance(h, k)
     bones.push({ name: bone, at: c.at })
-    const lumps: ShapeDoc[] = [-1, 0, 1].map((k): ShapeDoc => ({ kind: 'ball', at: [r3(c.at[0] + k * c.r * 0.8), r3(c.at[1] + (k === 0 ? c.r * 0.12 : 0)), c.at[2]], r: [r3(c.r * (k === 0 ? 1 : 0.7)), r3(c.r * (k === 0 ? 0.42 : 0.3)), r3(c.r * 0.6)] }))
-    parts.push({ shape: { kind: 'join', blend: 'smooth', by: r3(c.r * 0.3), shapes: lumps }, paint: { kind: 'faces', up: 0.3, top: mist.ramp[2], side: mist.ramp[1], under: mist.ramp[0] }, bone, noShadow: true, bare: true })
+    const yaw = r(0) * Math.PI, ax = Math.cos(yaw), az = Math.sin(yaw), long = c.r * (1.6 + 1.2 * r(1)), floor = c.at[1] - c.r * 0.15
+    const along = (u: number, side: number, y: number): Vec3 => [r3(c.at[0] + ax * u - az * side), r3(y), r3(c.at[2] + az * u + ax * side)]
+    const lumps: ShapeDoc[] = []
+    // the base: wide, low lumps end to end
+    for (let k = 0; k < 3; k++) lumps.push({ kind: 'ball', at: along((k - 1) * long * 0.55, 0, floor + c.r * 0.12), r: [0.62, 0.4, 0.62].map((v) => r3(c.r * v * (k === 1 ? 1 : 0.78))) as Vec3 })
+    // the heap: puffs over it, biggest and highest near the middle, a few to either side
+    const n = 5 + (h % 4)
+    for (let k = 0; k < n; k++) {
+      const u = (r(10 + k) * 2 - 1) * long * 0.8, bell = 1 - (u / long) ** 2, size = c.r * (0.28 + 0.4 * bell) * (0.8 + 0.4 * r(20 + k))
+      lumps.push({ kind: 'ball', at: along(u, (r(30 + k) - 0.5) * c.r * 0.7, floor + c.r * 0.15 + size * (0.6 + 0.6 * bell)), r: [r3(size), r3(size * 0.9), r3(size)] })
+    }
+    const heap: ShapeDoc = { kind: 'join', blend: 'smooth', by: r3(c.r * 0.22), shapes: lumps }
+    // flat underneath, as cumulus is where the air below stops lifting it
+    const shape: ShapeDoc = { kind: 'cut', shape: heap, hole: { kind: 'box', at: [c.at[0], r3(floor - c.r * 2), c.at[2]], half: [r3(long * 2), r3(c.r * 2), r3(long * 2)] } }
+    parts.push({ shape, paint: { kind: 'faces', up: 0.45, top: mist.ramp[2], side: mist.ramp[1], under: mist.ramp[0] }, bone, noShadow: true, bare: true })
     moves.push({ kind: 'bob', bone, by: [r3(0.1 + 0.1 * chance(seed, 400 + i)), 0, 0], times: 1, phase: r3(chance(seed, 410 + i)) })
   })
 

@@ -403,6 +403,8 @@ export type PaintDoc =
   | { kind: 'speckle'; size: number; colors: string[] }
   /** Soft-edged patches `size` across, as moss on rock or light on water. */
   | { kind: 'patches'; size: number; colors: string[] }
+  /** One `base` color with clumps of the others scattered through it, as grass with patches of other grass, earth and stone: clumps about `size` across, ragged at the edges, covering about `amount` (0 to 0.8, 0.3) of the surface and placed by `seed`; each clump takes one of `colors` (earlier ones commoner). Unlike `patches` it never falls into a repeating pattern, however big the surface. */
+  | { kind: 'clumps'; size: number; base: string; colors: string[]; amount?: number; seed?: number }
   /** For a `blocks` shape: each letter of the model takes its color. */
   | { kind: 'key'; colors: Record<string, string> }
   /** One paint where the surface faces up, another on the sides, another underneath. `up` (0 to 1, 0.6) is how near level a face must be to count as a top or an underside: higher keeps grass off steep banks. */
@@ -930,6 +932,7 @@ export function checkScene(doc: unknown): string[] {
         else for (const [k, c] of Object.entries(p.colors)) { if ([...k].length !== 1) bad(`${at}.colors`, `${show(k)} is not one letter`); hex(c, `${at}.colors.${k}`) }
         break
       case 'speckle': case 'patches': num(p.size, `${at}.size`, 0.005, REACH); hexes(p.colors, `${at}.colors`, 2, 8); break
+      case 'clumps': num(p.size, `${at}.size`, 0.02, REACH); hex(p.base, `${at}.base`); hexes(p.colors, `${at}.colors`, 1, 8); opt(p.amount, `${at}.amount`, 0, 0.8); opt(p.seed, `${at}.seed`, 0, 1e9); break
       case 'faces':
         opt(p.up, `${at}.up`, 0, 1)
         paint(p.side, `${at}.side`, depth + 1)
@@ -1153,6 +1156,14 @@ const unit = (h: string): Vec3 => { const c = rgb(h); return [c[0] / 255, c[1] /
 const linear = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)
 /** A repeatable number in 0..1 for three whole numbers. */
 const hash = (a: number, b: number, c: number) => { const v = Math.sin(a * 127.1 + b * 311.7 + c * 74.7) * 43758.5453; return v - Math.floor(v) }
+/** Smooth value noise on a unit grid, 0..1: no repeat, unlike `wobble`'s sines, which line up into a lattice over a big surface. */
+function valueNoise(x: number, z: number): number {
+  const fx = Math.floor(x), fz = Math.floor(z), u = x - fx, v = z - fz
+  const s = (t: number) => t * t * (3 - 2 * t), a = s(u), b = s(v)
+  const h = (i: number, j: number) => hash(fx + i, fz + j, 11)
+  return (h(0, 0) * (1 - a) + h(1, 0) * a) * (1 - b) + (h(0, 1) * (1 - a) + h(1, 1) * a) * b
+}
+
 /** A smooth wobble, about -1..1. */
 const wobble = (x: number, y: number, z: number) => (Math.sin(x * 7.3 + z * 3.1 + y * 1.7) + Math.sin(z * 8.7 - x * 2.3 + y * 5.1) + Math.sin((x + z) * 13.1 + y * 9.7) * 0.5) / 2.5
 const AXIS: Record<string, Vec3> = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] }
@@ -1288,6 +1299,26 @@ function toPaint(p: PaintDoc, cell: number, letterAt?: (p: Vec3, n: Vec3) => str
     case 'patches': {
       const cs = p.colors.map(unit), k = 0.5 / Math.max(p.size, cell * 2)
       return (q) => cs[Math.min(cs.length - 1, Math.floor(((wobble(q[0] * k, q[1] * k, q[2] * k) + 1) / 2) * cs.length))]
+    }
+    case 'clumps': {
+      const base = unit(p.base), cs = p.colors.map(unit), size = Math.max(p.size, cell * 3), seed = ((p.seed ?? 0) % 9973) * 7.31
+      // where clumps are: smooth value noise over the ground (two octaves, so edges are ragged), cut at the level that
+      // leaves `amount` of it covered (found by sampling, since the noise's spread isn't even)
+      const k = 1 / size, at = (x: number, z: number) => valueNoise(x * k + seed, z * k - seed) * 0.7 + valueNoise(x * k * 2.7 - seed, z * k * 2.7 + 3.1) * 0.3
+      const tries = Array.from({ length: 2048 }, (_, i) => at(hash(i, 1, 9) * 97, hash(i, 2, 9) * 97)).sort((a, b) => a - b)
+      const cut = tries[Math.floor((1 - (p.amount ?? 0.3)) * (tries.length - 1))]
+      // which color a clump takes: by the nearest of points on a jittered grid a clump and a half apart, so a clump is mostly one color
+      const g = size * 1.5
+      const which = (x: number, z: number) => {
+        const cx = Math.floor(x / g), cz = Math.floor(z / g)
+        let best = Infinity, pick = 0
+        for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+          const a = cx + i, b = cz + j, px = (a + hash(a, b, seed + 5)) * g, pz = (b + hash(a, b, seed + 6)) * g, d = (px - x) ** 2 + (pz - z) ** 2
+          if (d < best) { best = d; pick = Math.floor(hash(a, b, seed + 7) ** 1.6 * cs.length) }
+        }
+        return cs[Math.min(cs.length - 1, pick)]
+      }
+      return (q) => (at(q[0] + q[1] * 0.3, q[2] - q[1] * 0.3) > cut ? which(q[0], q[2]) : base)
     }
     case 'faces': {
       const side = toPaint(p.side, cell, letterAt, pieceAt), top = p.top === undefined ? side : toPaint(p.top, cell, letterAt, pieceAt), under = p.under === undefined ? side : toPaint(p.under, cell, letterAt, pieceAt)

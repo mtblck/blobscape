@@ -91,6 +91,12 @@
        "optional": true,
        "type": "boolean",
        "doc": "Stays blobs while the stage draws blocks (`setBlocks`): grass and the like, drawn among the cubes. It makes no cubes."
+      },
+      {
+       "name": "blockCell",
+       "optional": true,
+       "type": "number",
+       "doc": "The side of its cubes while the stage draws blocks (`setBlocks`), where it was cut on a grid of its own; left out, the look's `cell`."
       }
      ]
     },
@@ -761,6 +767,12 @@
        "optional": true,
        "type": "boolean",
        "doc": "Stays blobs while the stage draws blocks (`Stage.setBlocks`): grass, flowers and the like, too fine to be cubes,\ndrawn among them and hidden by them where they stand in front. It makes no cubes."
+      },
+      {
+       "name": "blockCell",
+       "optional": true,
+       "type": "number",
+       "doc": "The side of its cubes while the stage draws blocks, where it was cut on a grid of its own; left out, the look's `cell`."
       }
      ]
     },
@@ -4012,7 +4024,7 @@
      "name": "PaintDoc",
      "kind": "type",
      "doc": "A part's paint: one color, or a pattern of several.",
-     "type": "string | { kind: \"bands\"; axis: \"x\" | \"y\" | \"z\"; size: number; colors: string[] } | { kind: \"bricks\"; size: [number, number]; colors: string[]; line: string } | { kind: \"hex\"; size: number; colors: string[]; line: string; deep?: string } | { kind: \"speckle\"; size: number; colors: string[] } | { kind: \"patches\"; size: number; colors: string[] } | { kind: \"key\"; colors: Record<string, string> } | { kind: \"faces\"; top?: PaintDoc; side: PaintDoc; under?: PaintDoc; up?: number } | { kind: \"split\"; axis: \"x\" | \"y\" | \"z\"; at: number; below: PaintDoc; above: PaintDoc } | { kind: \"pieces\"; colors: string[]; line?: string; ordered?: boolean } | { kind: \"near\"; shape: ShapeDoc; within: number; at?: number; near: PaintDoc; far: PaintDoc } | { kind: \"waves\"; size: number; colors: [string, string, string] }"
+     "type": "string | { kind: \"bands\"; axis: \"x\" | \"y\" | \"z\"; size: number; colors: string[] } | { kind: \"bricks\"; size: [number, number]; colors: string[]; line: string } | { kind: \"hex\"; size: number; colors: string[]; line: string; deep?: string } | { kind: \"speckle\"; size: number; colors: string[] } | { kind: \"patches\"; size: number; colors: string[] } | { kind: \"clumps\"; size: number; base: string; colors: string[]; amount?: number; seed?: number } | { kind: \"key\"; colors: Record<string, string> } | { kind: \"faces\"; top?: PaintDoc; side: PaintDoc; under?: PaintDoc; up?: number } | { kind: \"split\"; axis: \"x\" | \"y\" | \"z\"; at: number; below: PaintDoc; above: PaintDoc } | { kind: \"pieces\"; colors: string[]; line?: string; ordered?: boolean } | { kind: \"near\"; shape: ShapeDoc; within: number; at?: number; near: PaintDoc; far: PaintDoc } | { kind: \"waves\"; size: number; colors: [string, string, string] }"
     },
     {
      "name": "During",
@@ -9311,6 +9323,12 @@
        "optional": true,
        "type": "Uint8Array<ArrayBufferLike>",
        "doc": "How much of its own light each blob gives, a byte a blob (`Actor.glow`)."
+      },
+      {
+       "name": "blockCell",
+       "optional": true,
+       "type": "number",
+       "doc": "The side of this source's blocks, where it was cut on a grid of its own (a finer cut of the place underfoot); left out, the look's `cell`."
       }
      ]
     },

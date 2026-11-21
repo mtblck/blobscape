@@ -219,6 +219,13 @@ export class WorldGround implements WalkGround {
     return deepest > -1 ? best : -1e9
   }
 
+  /** Which island (x, z) is over or nearest, by how far inside its outline it is: the one underfoot, even on a bridge's near half. */
+  islandAt(x: number, z: number): number {
+    let best = 0, deepest = -Infinity
+    this.islands.forEach((g, j) => { const d = g.insideAt(x, z); if (d > deepest) { deepest = d; best = j } })
+    return best
+  }
+
   standsAt(x: number, z: number): boolean {
     if (this.deck(x, z, ROOM)) return true
     if (this.islands.some((g) => g.standsAt(x, z))) return true

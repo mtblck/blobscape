@@ -54,6 +54,8 @@ export interface Actor {
   glow?: Uint8Array
   /** Stays blobs while the stage draws blocks (`setBlocks`): grass and the like, drawn among the cubes. It makes no cubes. */
   soft?: boolean
+  /** The side of its cubes while the stage draws blocks (`setBlocks`), where it was cut on a grid of its own; left out, the look's `cell`. */
+  blockCell?: number
 }
 
 /** What the view shows: the blobs, the bones that move them, or both (bones on top). */

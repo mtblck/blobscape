@@ -59,6 +59,8 @@ export interface BlockSource {
   skeleton: { bones: readonly { name: string }[] }
   /** How much of its own light each blob gives, a byte a blob (`Actor.glow`). */
   glow?: Uint8Array
+  /** The side of this source's blocks, where it was cut on a grid of its own (a finer cut of the place underfoot); left out, the look's `cell`. */
+  blockCell?: number
 }
 
 /** The cubes on one bone of one actor, as a mesh: four corners a face, two triangles. */
@@ -199,7 +201,7 @@ export function buildBlocks(sources: readonly BlockSource[], look: BlockLook): {
     const { blobs, skin, skeleton, glow } = sources[a]
     // twice: the grid's own blocks, then the loose specks on their finer grid
     for (const specks of [false, true]) {
-      const cell = specks ? look.cell * SPECK_SIZE : look.cell
+      const own = sources[a].blockCell ?? look.cell, cell = specks ? own * SPECK_SIZE : own
       const at = new Map<number, number>()
       const first = where.length / 3
       const cellOf = new Int32Array(blobs.count).fill(-1), boneAt = new Uint8Array(blobs.count)
@@ -296,7 +298,7 @@ export function buildBlocks(sources: readonly BlockSource[], look: BlockLook): {
     const solid = solids[p.actor], lo = solid.lo ?? [0, 0, 0], hi = solid.hi ?? [0, 0, 0]
     for (const k of p.cells) {
       const x = cells[k * 3], y = cells[k * 3 + 1], z = cells[k * 3 + 2], speck = !!loose[k]
-      const side = speck ? look.cell * SPECK_SIZE : look.cell
+      const own = sources[p.actor].blockCell ?? look.cell, side = speck ? own * SPECK_SIZE : own
       const tint = 1 + (blockHash(x, y, z) * 2 - 1) * vary
       for (let f = 0; f < 6; f++) {
         if (!(open[k] & (1 << f))) continue
