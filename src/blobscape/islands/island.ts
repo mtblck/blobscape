@@ -1,10 +1,10 @@
 import type { Vec3 } from '../../splat-core/blobs.ts'
 import { wornLand, type LandSpec } from '../../splat-engine/erode.ts'
-import type { BoneDoc, MoveDoc, PartDoc, SceneDoc, ShapeDoc } from '../../splat-engine/sceneDoc.ts'
+import type { BoneDoc, MoveDoc, PaintDoc, PartDoc, SceneDoc, ShapeDoc } from '../../splat-engine/sceneDoc.ts'
 import { joinPalettes } from '../../splat-engine/project.ts'
 import { biomeOf, type Biome, type Population } from './biomes.ts'
-import { SOLID, chance, colorsOf, dressed, hashOf, material, paintOf, pickOf } from './materials.ts'
-import { ROOM, makeThing, r3, type Thing } from './things.ts'
+import { SOLID, chance, colorsOf, dressed, hashOf, material, paintOf, pickOf, type Material } from './materials.ts'
+import { BIGGER, ROOM, makeThing, r3, type Thing } from './things.ts'
 
 /**
  * A floating island from a biome recipe and a seed. `planIsland` decides everything (the island's outline, its
@@ -18,16 +18,31 @@ import { ROOM, makeThing, r3, type Thing } from './things.ts'
 export const MAX_SEED = 999999
 /** Seconds before an island's moves repeat. */
 export const LOOP = 12
-/** Half the block of land an island's outline is cut from: about seven units across, room to walk about. */
-const HALF = 3.35
+/**
+ * How much bigger across an island is than the first ones (Matt, 2026-11-20: two or three times bigger, so there is
+ * room for creatures and somewhere to go; then twice that again, toward a place the size of a game's level). Things
+ * keep their size; there are more of them (`THICK`).
+ */
+export const GROW = 4.4
+/** Half the block of land an island's outline is cut from: about thirty units across, a hundred and fifty meters beside the elf. */
+const HALF = 3.35 * GROW
 /** How deep the turf and earth are before the rock under them. */
 const SLAB = 0.34
 /** How wide the trodden path is, to each side of its middle. */
-const PATH = 0.08
+const PATH = 0.14
 /** Room left along each side of the path for someone walking it, past its trodden width: no thing stands in the way. */
 const WALKER = 0.08
-/** The bones an island's things may take: a description's 128 less the clouds and the most drifting rocks. */
-const BONE_BUDGET = 116
+/** How thickly things stand, beside the first islands: the island's ground grows by GROW², its things by this share of it. */
+const THICK = 0.3
+/**
+ * The bones an island's things may take: with the clouds, the drifting rocks and the specks, under the 255 a byte
+ * names. Things past it are set on the island's own bone: they stand still and are not props.
+ */
+const BONE_BUDGET = 190
+/** Clouds round an island, each a bone. */
+const CLOUDS = 6
+/** Specks in an island's air at most, of each kind: each is a bone, and bones and specks together must fit in a byte. */
+const SPECKS_EACH = 20
 
 /** A round piece of the island's outline, seen from above. */
 export interface Lobe { at: [number, number]; r: number }
@@ -89,7 +104,6 @@ export function fromPath(path: Vec3[], x: number, z: number): number {
 const between = (range: [number, number], u: number) => range[0] + (range[1] - range[0]) * u
 const whole = (range: [number, number], u: number) => range[0] + Math.floor(u * (range[1] - range[0] + 1))
 /** Bones a thing takes: a tree's crown sways on a second. */
-const bonesOf = (kind: Thing['kind']) => (kind === 'tree' || kind === 'pine' ? 2 : 1)
 
 /**
  * Plans island `seed` of a biome. `gates` are the angles (radians, x = cos, z = sin) at which its path comes in and
@@ -101,19 +115,20 @@ export function planIsland(biome: Biome, seed: number, gates?: [number, number])
   const rnd = () => chance(seed, 1000 + salt++)
 
   // the outline: a broad middle and four to six lobes round it
-  const lobes: Lobe[] = [{ at: [0, 0], r: r3(1.85 + 0.25 * rnd()) }]
+  const lobes: Lobe[] = [{ at: [0, 0], r: r3((1.85 + 0.25 * rnd()) * GROW) }]
   const count = 4 + Math.floor(rnd() * 3), turn = rnd() * Math.PI * 2
   for (let i = 0; i < count; i++) {
-    const a = turn + ((i + 0.6 * (rnd() - 0.5)) / count) * Math.PI * 2, d = 1.15 + 0.45 * rnd()
-    lobes.push({ at: [r3(Math.cos(a) * d), r3(Math.sin(a) * d)], r: r3(0.95 + 0.4 * rnd()) })
+    const a = turn + ((i + 0.6 * (rnd() - 0.5)) / count) * Math.PI * 2, d = (1.15 + 0.45 * rnd()) * GROW
+    lobes.push({ at: [r3(Math.cos(a) * d), r3(Math.sin(a) * d)], r: r3((0.95 + 0.4 * rnd()) * GROW) })
   }
 
   // hills, each inside the outline
   const peaks: LandSpec['peaks'] = []
-  const hills = whole(biome.land.hills, rnd())
+  // a scene description takes 16 peaks at most: on the biggest islands each is a little wider instead
+  const hills = Math.min(16, Math.round(whole(biome.land.hills, rnd()) * GROW))
   for (let i = 0; i < hills; i++) {
     const a = rnd() * Math.PI * 2, d = Math.sqrt(rnd()) * 0.75 * reach(lobes, a)
-    peaks.push({ at: [r3(Math.cos(a) * d), r3(Math.sin(a) * d)], h: r3(between(biome.land.height, rnd())), r: r3(0.8 + 0.8 * rnd()) })
+    peaks.push({ at: [r3(Math.cos(a) * d), r3(Math.sin(a) * d)], h: r3(between(biome.land.height, rnd())), r: r3((0.8 + 0.8 * rnd()) * Math.sqrt(GROW) * (GROW > 3 ? 1.2 : 1)) })
   }
   const land: IslandPlan['land'] = { at: [0, 0, 0], half: [HALF, HALF], base: SLAB, peaks, noise: biome.land.noise, drops: biome.land.drops, slump: biome.land.slump, seed: 1 + (hashOf(seed, 1) % 9999) }
   if (biome.land.beds) land.beds = biome.land.beds
@@ -122,11 +137,12 @@ export function planIsland(biome: Biome, seed: number, gates?: [number, number])
 
   // the kinds of place inside it, spread round the island
   const patches: PlacedPatch[] = []
-  const kinds = [...biome.patches].sort((x, y) => hashOf(seed, 60 + biome.patches.indexOf(x)) - hashOf(seed, 60 + biome.patches.indexOf(y)))
+  // each kind twice on a grown island, shuffled
+  const kinds = [...biome.patches, ...biome.patches].map((k, i) => ({ k, key: hashOf(seed, 60 + i) })).sort((x, y) => x.key - y.key).map((x) => x.k)
   const pturn = rnd() * Math.PI * 2
   kinds.forEach((k, i) => {
     const a = pturn + ((i + 0.4 * (rnd() - 0.5)) / kinds.length) * Math.PI * 2, d = (0.35 + 0.3 * rnd()) * reach(lobes, a)
-    patches.push({ name: k.name, at: [r3(Math.cos(a) * d), r3(Math.sin(a) * d)], r: r3(between(k.r, rnd())) })
+    patches.push({ name: k.name, at: [r3(Math.cos(a) * d), r3(Math.sin(a) * d)], r: r3(between(k.r, rnd()) * Math.sqrt(GROW)) })
   })
   const liking = (name: string, x: number, z: number) => {
     let got = 0
@@ -140,12 +156,10 @@ export function planIsland(biome: Biome, seed: number, gates?: [number, number])
   // what stands on it: each thing the best of some tries, by room from the others, the height and place it likes, and luck
   const things: Thing[] = []
   let path: Vec3[] = []
-  let bones = 0
   const place = (p: Population, apart = 0) => {
-    const n = whole(p.count, rnd())
+    const n = Math.round(whole(p.count, rnd()) * (p.count[1] > 1 ? GROW * GROW * THICK : 1))
     for (let k = 0; k < n; k++) {
-      const size = r3(between(p.size, rnd())), room = ROOM[p.kind] * size, own = hashOf(seed, 5000 + salt++)
-      if (bones + bonesOf(p.kind) > BONE_BUDGET) return
+      const size = r3(between(p.size, rnd()) * BIGGER[p.kind]), room = ROOM[p.kind] * size, own = hashOf(seed, 5000 + salt++)
       let best: { x: number; z: number; score: number } | undefined
       for (let tries = 0; tries < 50; tries++) {
         const a = rnd() * Math.PI * 2, d = between(p.zone, Math.sqrt(rnd())) * reach(lobes, a), x = Math.cos(a) * d, z = Math.sin(a) * d
@@ -163,7 +177,6 @@ export function planIsland(biome: Biome, seed: number, gates?: [number, number])
       const made: Record<string, string> = {}
       Object.keys(p.made).forEach((use, j) => { made[use] = pickOf(p.made[use], own, j) })
       things.push({ kind: p.kind, name: p.name, plural: p.plural, at: [r3(best.x), r3(ground.at(best.x, best.z)), r3(best.z)], size, seed: own, made })
-      bones += bonesOf(p.kind)
     }
   }
   // two landmarks, different ones, far apart
@@ -198,13 +211,13 @@ export function planIsland(biome: Biome, seed: number, gates?: [number, number])
   // small rocks adrift beside it, and clouds below and behind
   const drifters: IslandPlan['drifters'] = []
   for (let i = 0, n = whole(biome.drifters, rnd()); i < n; i++) {
-    const a = rnd() * Math.PI * 2, d = reach(lobes, a) + 0.45 + 0.5 * rnd()
+    const a = rnd() * Math.PI * 2, d = reach(lobes, a) + 0.45 + 0.5 * rnd() * GROW
     drifters.push({ at: [r3(Math.cos(a) * d), r3(-0.8 + 1.3 * rnd()), r3(Math.sin(a) * d)], r: r3(0.16 + 0.16 * rnd()) })
   }
   const clouds: IslandPlan['clouds'] = []
-  for (let i = 0; i < 4; i++) {
-    const a = turn + (i / 4 + 0.15 * rnd()) * Math.PI * 2, d = 3.7 + 0.8 * rnd()
-    clouds.push({ at: [r3(Math.cos(a) * d), r3(-2.4 + 1.4 * rnd()), r3(Math.sin(a) * d * 0.8 - 0.6)], r: r3(0.5 + 0.3 * rnd()) })
+  for (let i = 0; i < CLOUDS; i++) {
+    const a = turn + (i / CLOUDS + 0.12 * rnd()) * Math.PI * 2, d = (3.4 + 1.2 * rnd()) * GROW
+    clouds.push({ at: [r3(Math.cos(a) * d), r3(-3 + 2.6 * rnd()), r3(Math.sin(a) * d * 0.8 - 0.6)], r: r3((0.45 + 0.5 * rnd() ** 2) * Math.sqrt(GROW)) })
   }
 
   return { biome: biome.id, seed, name: `${biome.name} island ${seed}`, lobes, land, rock: pickOf(biome.ground.rock, seed, 3), patches, path, things, landmarks, drifters, clouds }
@@ -227,6 +240,19 @@ export function islandDoc(plan: IslandPlan): SceneDoc {
  * A plan written out as a scene description, with which of its parts are opaque bodies (by index in `parts`): the
  * ground, the rock under it, every stone and stump. Those must let no light through from any side.
  */
+/**
+ * The turf on an island's top: one main grass over most of it, and the rest in clumps (Matt, 2026-11-20: three or more
+ * colors of ground block everywhere read as noise; a biome has one general grass, with other grasses, dirt and stone in
+ * places). The patches pattern hands out its colors by the height of a smooth noise, whose middle is far commoner than
+ * its ends, so the main grass takes the four middle shares (about three quarters), the darker and lighter grass the
+ * shares beside them, and bare earth and stone the rare ends, which come out as clumps a few meters across.
+ */
+export function coverOf(turf: Material, soil: Material, rock: Material, seed: number): PaintDoc {
+  // one main grass, with clumps of darker and lighter grass, bare earth and stone here and there (never a lattice of them)
+  const size = r3(0.65 * (0.85 + 0.3 * chance(seed, 13)))
+  return { kind: 'clumps', size, base: turf.ramp[1], colors: [turf.ramp[0], turf.ramp[2], soil.ramp[2], rock.ramp[2]], amount: 0.24, seed }
+}
+
 export function islandScene(plan: IslandPlan): { doc: SceneDoc; solid: number[] } {
   const biome = biomeOf(plan.biome), seed = plan.seed
   const bones: BoneDoc[] = [], parts: PartDoc[] = [], moves: MoveDoc[] = [], solid: number[] = [0, 1]
@@ -240,25 +266,30 @@ export function islandScene(plan: IslandPlan): { doc: SceneDoc; solid: number[] 
     paint: {
       kind: 'faces', up: 0.55,
       // the path is trodden earth, found at the ground's own height wherever the hills take it
-      top: { kind: 'near', shape: { kind: 'sweep', path: plan.path, r: 0.02 }, within: PATH, at: 0, near: paintOf(material(biome.ground.path), seed, 0.6), far: paintOf(turf, seed) },
+      top: { kind: 'near', shape: { kind: 'sweep', path: plan.path, r: 0.02 }, within: PATH, at: 0, near: paintOf(material(biome.ground.path), seed, 0.6), far: coverOf(turf, soil, rock, seed) },
       side: paintOf(soil, seed),
     },
-    ink: turf.ink,
   })
 
   // the underside: rock hanging under each lobe, widest just under the turf and coming to a point, joined and roughened
   const hanging: ShapeDoc[] = plan.lobes.map((l, i): ShapeDoc => {
-    const deep = l.r * (1.0 + 0.45 * chance(seed, 200 + i))
+    // on the biggest islands shallower than wide (the rock under them was most of the cut, and seldom seen), but not so
+    // shallow that its slope is seen nearly edge on, where a skin of discs lets light through
+    const deep = Math.min(l.r * (1.0 + 0.45 * chance(seed, 200 + i)), Math.max(4, l.r * 0.85) + 0.8 * chance(seed, 200 + i))
     return { kind: 'cylinder', at: [l.at[0], r3(-0.12 - deep), l.at[1]], height: r3(deep), r: 0.04, rTop: r3(l.r * 0.96) }
   })
   parts.push({ shape: { kind: 'rough', shape: { kind: 'join', blend: 'smooth', by: 0.1, shapes: hanging }, by: 0.06, scale: 0.4 }, ...dressed(rock, seed), ink: { kind: 'cracks', amount: 0.25 } })
 
   // what stands on it
   const counts = new Map<string, number>()
+  let thingBones = 0
   plan.things.forEach((t, i) => {
     const n = (counts.get(t.name) ?? 0) + 1
     counts.set(t.name, n)
-    const piece = makeThing(t, i, n)
+    let piece = makeThing(t, i, n)
+    // past the budget a thing stands on the island's own bone: still, and not a prop
+    if (thingBones + piece.bones.length > BONE_BUDGET) piece = { ...piece, bones: [], moves: [], parts: piece.parts.map(({ bone: _, ...part }) => part) }
+    thingBones += piece.bones.length
     solid.push(...piece.solid.map((k) => parts.length + k))
     bones.push(...piece.bones); parts.push(...piece.parts); moves.push(...piece.moves)
   })
@@ -273,13 +304,26 @@ export function islandScene(plan: IslandPlan): { doc: SceneDoc; solid: number[] 
     moves.push({ kind: 'bob', bone, by: [0, r3(0.03 + 0.04 * chance(seed, 300 + i)), 0], times: 1 + (hashOf(seed, 310 + i) % 2), phase: r3(chance(seed, 320 + i)) })
   })
 
-  // clouds: a few soft lumps each, sliding a little to and fro
+  // clouds: heaped cumulus, a flat base under puffs that rise toward the middle, each its own size and lay, sliding a little to and fro
   const mist = material('cloud')
   plan.clouds.forEach((c, i) => {
-    const bone = `cloud${i}`
+    const bone = `cloud${i}`, h = hashOf(seed, 500 + i), r = (k: number) => chance(h, k)
     bones.push({ name: bone, at: c.at })
-    const lumps: ShapeDoc[] = [-1, 0, 1].map((k): ShapeDoc => ({ kind: 'ball', at: [r3(c.at[0] + k * c.r * 0.8), r3(c.at[1] + (k === 0 ? c.r * 0.12 : 0)), c.at[2]], r: [r3(c.r * (k === 0 ? 1 : 0.7)), r3(c.r * (k === 0 ? 0.42 : 0.3)), r3(c.r * 0.6)] }))
-    parts.push({ shape: { kind: 'join', blend: 'smooth', by: r3(c.r * 0.3), shapes: lumps }, paint: { kind: 'faces', up: 0.3, top: mist.ramp[2], side: mist.ramp[1], under: mist.ramp[0] }, bone, noShadow: true, bare: true })
+    const yaw = r(0) * Math.PI, ax = Math.cos(yaw), az = Math.sin(yaw), long = c.r * (1.6 + 1.2 * r(1)), floor = c.at[1] - c.r * 0.15
+    const along = (u: number, side: number, y: number): Vec3 => [r3(c.at[0] + ax * u - az * side), r3(y), r3(c.at[2] + az * u + ax * side)]
+    const lumps: ShapeDoc[] = []
+    // the base: wide, low lumps end to end
+    for (let k = 0; k < 3; k++) lumps.push({ kind: 'ball', at: along((k - 1) * long * 0.55, 0, floor + c.r * 0.12), r: [0.62, 0.4, 0.62].map((v) => r3(c.r * v * (k === 1 ? 1 : 0.78))) as Vec3 })
+    // the heap: puffs over it, biggest and highest near the middle, a few to either side
+    const n = 5 + (h % 4)
+    for (let k = 0; k < n; k++) {
+      const u = (r(10 + k) * 2 - 1) * long * 0.8, bell = 1 - (u / long) ** 2, size = c.r * (0.28 + 0.4 * bell) * (0.8 + 0.4 * r(20 + k))
+      lumps.push({ kind: 'ball', at: along(u, (r(30 + k) - 0.5) * c.r * 0.7, floor + c.r * 0.15 + size * (0.6 + 0.6 * bell)), r: [r3(size), r3(size * 0.9), r3(size)] })
+    }
+    const heap: ShapeDoc = { kind: 'join', blend: 'smooth', by: r3(c.r * 0.22), shapes: lumps }
+    // flat underneath, as cumulus is where the air below stops lifting it
+    const shape: ShapeDoc = { kind: 'cut', shape: heap, hole: { kind: 'box', at: [c.at[0], r3(floor - c.r * 2), c.at[2]], half: [r3(long * 2), r3(c.r * 2), r3(long * 2)] } }
+    parts.push({ shape, paint: { kind: 'faces', up: 0.45, top: mist.ramp[2], side: mist.ramp[1], under: mist.ramp[0] }, bone, noShadow: true, bare: true })
     moves.push({ kind: 'bob', bone, by: [r3(0.1 + 0.1 * chance(seed, 400 + i)), 0, 0], times: 1, phase: r3(chance(seed, 410 + i)) })
   })
 
@@ -288,6 +332,7 @@ export function islandScene(plan: IslandPlan): { doc: SceneDoc; solid: number[] 
     name: plan.name,
     // a place to walk about, and solid ground: nothing opaque may show what is behind it
     big: true,
+    huge: true,
     ...SOLID,
     loop: LOOP,
     light: biome.light,
@@ -295,13 +340,18 @@ export function islandScene(plan: IslandPlan): { doc: SceneDoc; solid: number[] 
     sky: biome.sky,
     skyReach: 1,
     look: { dither: 0.5, glow: 1, outline: true, edges: true },
-    camera: { target: [0, r3(top * 0.3 - 0.6), 0], distance: 12.5, azimuth: 24, elevation: 20, swing: 8 },
-    air: { specks: biome.air.map((a) => ({ ...a, from: [-HALF, 0, -HALF] as Vec3, to: [HALF, r3(top + 0.5), HALF] as Vec3 })) },
+    camera: { target: [0, r3(top * 0.3 - 0.6), 0], distance: r3(12.5 * GROW), azimuth: 24, elevation: 20, swing: 8 },
+    air: { specks: biome.air.map((a) => ({ ...a, count: Math.min(a.count, SPECKS_EACH), from: [-HALF, 0, -HALF] as Vec3, to: [HALF, r3(top + 0.5), HALF] as Vec3 })) },
     bones,
     parts,
     moves,
   }
   return { doc, solid }
+}
+
+/** A description without its clouds, for a look that draws them as soft blobs of their own (`clouds.ts`) instead of cutting them. */
+export function withoutClouds(doc: SceneDoc): SceneDoc {
+  return { ...doc, parts: doc.parts.filter((p) => !p.bone?.startsWith('cloud')) }
 }
 
 /** Island `seed` of a biome: its plan and its description. */

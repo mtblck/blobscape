@@ -70,6 +70,11 @@ export interface SceneDoc {
    */
   big?: boolean
   /**
+   * A place far bigger again, to explore on foot (Biome Islands): things may stand up to 20 from the middle and it may
+   * carry 230 bones; with its specks it must still stay inside the 255 one byte names. Implies `big`.
+   */
+  huge?: boolean
+  /**
    * The grid it is cut on, as a share of the detail's own: 0.5 to 1, 1 when left out. A small subject in a scene of
    * open water or sky (the lighthouse on its rock) takes a finer grid, so its bricks and windows get as many cells as
    * a bigger subject's would. It costs blobs: 0.72 is about twice as many.
@@ -203,7 +208,7 @@ export interface SpeckDoc {
   size?: number
   /** Whether they give off light; left out, embers and fireflies do. */
   glow?: boolean
-  /** Rain, snow and leaves only: each lands on whatever stands still under it (or the box's floor), lies a while and goes, then falls again. */
+  /** Rain, snow and leaves only: each lands on whatever stands still under it, lies a while and goes, then falls again. One whose spot has nothing under it comes down somewhere that has (the box's floor only when none is found). */
   land?: boolean
   /** Rain, snow and leaves only: how far the wind carries each sideways over its whole fall, [x, z]; rain slants along it. */
   wind?: [number, number]
@@ -398,6 +403,8 @@ export type PaintDoc =
   | { kind: 'speckle'; size: number; colors: string[] }
   /** Soft-edged patches `size` across, as moss on rock or light on water. */
   | { kind: 'patches'; size: number; colors: string[] }
+  /** One `base` color with clumps of the others scattered through it, as grass with patches of other grass, earth and stone: clumps about `size` across, ragged at the edges, covering about `amount` (0 to 0.8, 0.3) of the surface and placed by `seed`; each clump takes one of `colors` (earlier ones commoner). Unlike `patches` it never falls into a repeating pattern, however big the surface. */
+  | { kind: 'clumps'; size: number; base: string; colors: string[]; amount?: number; seed?: number }
   /** For a `blocks` shape: each letter of the model takes its color. */
   | { kind: 'key'; colors: Record<string, string> }
   /** One paint where the surface faces up, another on the sides, another underneath. `up` (0 to 1, 0.6) is how near level a face must be to count as a top or an underside: higher keeps grass off steep banks. */
@@ -501,6 +508,8 @@ const MAX_SHAPES = 600
 const SMALL_SURFACE = 200
 /** A `big` scene's room: reach, bones and surface. */
 const BIG = { reach: 8, bones: 128, surface: 800 }
+/** A `huge` scene's room. */
+const HUGE = { reach: 40, bones: 230, surface: 24000 }
 const MAX_MOVES_PER_BONE = 6
 /** Specks in a whole scene: each is a bone of its own, posed every frame. */
 const MAX_SPECKS = 300
@@ -598,8 +607,10 @@ const piecesIn = (p: unknown): boolean => {
 export function checkScene(doc: unknown): string[] {
   const errs: string[] = []
   // a big place has more room in every way
-  const big = typeof doc === 'object' && doc !== null && (doc as { big?: unknown }).big === true
-  const REACH = big ? BIG.reach : SMALL_REACH, MAX_BONES = big ? BIG.bones : SMALL_BONES, MAX_SURFACE = big ? BIG.surface : SMALL_SURFACE
+  const huge = typeof doc === 'object' && doc !== null && (doc as { huge?: unknown }).huge === true
+  const big = huge || (typeof doc === 'object' && doc !== null && (doc as { big?: unknown }).big === true)
+  const room = huge ? HUGE : big ? BIG : { reach: SMALL_REACH, bones: SMALL_BONES, surface: SMALL_SURFACE }
+  const REACH = room.reach, MAX_BONES = room.bones, MAX_SURFACE = room.surface
   // every mistake is counted, though only the first 40 are listed
   let found = 0
   const bad = (at: string, what: string) => { found++; if (errs.length < 40) errs.push(`${at}: ${what}`) }
@@ -656,7 +667,7 @@ export function checkScene(doc: unknown): string[] {
   if (doc.sky !== undefined) hexes(doc.sky, 'sky', 2, 2)
   opt(doc.skyReach, 'skyReach', 0.05, 1)
   opt(doc.disc, 'disc', 0.4, 1)
-  for (const k of ['trueShell', 'big']) if (doc[k] !== undefined && typeof doc[k] !== 'boolean') bad(k, 'must be true or false')
+  for (const k of ['trueShell', 'big', 'huge']) if (doc[k] !== undefined && typeof doc[k] !== 'boolean') bad(k, 'must be true or false')
   opt(doc.grid, 'grid', 0.5, 1)
   if (doc.look !== undefined) {
     if (!obj(doc.look)) bad('look', 'must be an object')
@@ -678,7 +689,7 @@ export function checkScene(doc: unknown): string[] {
   if (!obj(doc.camera)) bad('camera', 'must be an object')
   else {
     vec(doc.camera.target, 'camera.target')
-    num(doc.camera.distance, 'camera.distance', 0.5, 20)
+    num(doc.camera.distance, 'camera.distance', 0.5, huge ? 120 : 20)
     num(doc.camera.azimuth, 'camera.azimuth', -360, 360)
     num(doc.camera.elevation, 'camera.elevation', -10, 89)
     opt(doc.camera.swing, 'camera.swing', 0, 60)
@@ -921,6 +932,7 @@ export function checkScene(doc: unknown): string[] {
         else for (const [k, c] of Object.entries(p.colors)) { if ([...k].length !== 1) bad(`${at}.colors`, `${show(k)} is not one letter`); hex(c, `${at}.colors.${k}`) }
         break
       case 'speckle': case 'patches': num(p.size, `${at}.size`, 0.005, REACH); hexes(p.colors, `${at}.colors`, 2, 8); break
+      case 'clumps': num(p.size, `${at}.size`, 0.02, REACH); hex(p.base, `${at}.base`); hexes(p.colors, `${at}.colors`, 1, 8); opt(p.amount, `${at}.amount`, 0, 0.8); opt(p.seed, `${at}.seed`, 0, 1e9); break
       case 'faces':
         opt(p.up, `${at}.up`, 0, 1)
         paint(p.side, `${at}.side`, depth + 1)
@@ -940,7 +952,7 @@ export function checkScene(doc: unknown): string[] {
       default: bad(`${at}.kind`, `${show(p.kind)} is not a paint (bands, bricks, hex, speckle, patches, faces, split, near, waves, key, pieces)`)
     }
   }
-  if (!Array.isArray(doc.parts) || !doc.parts.length || doc.parts.length > MAX_PARTS) bad('parts', `must be a list of 1 to ${MAX_PARTS} parts`)
+  if (!Array.isArray(doc.parts) || !doc.parts.length || doc.parts.length > (huge ? MAX_PARTS * 6 : MAX_PARTS)) bad('parts', `must be a list of 1 to ${huge ? MAX_PARTS * 6 : MAX_PARTS} parts`)
   else doc.parts.forEach((p: unknown, i: number) => {
     const at = `parts[${i}]`
     if (!obj(p)) { bad(at, 'must be an object'); return }
@@ -951,7 +963,7 @@ export function checkScene(doc: unknown): string[] {
       // a sound shape: add its box's surface, and catch one so big it would take seconds to cut
       const [a, b, c] = halfSize(p.shape as ShapeDoc)
       const area = 8 * (a * b + b * c + c * a)
-      if (area > MAX_SURFACE / 2) bad(`${at}.shape`, `is too big: keep a part within about ${big ? 6 : 3} units across`)
+      if (area > MAX_SURFACE / 2) bad(`${at}.shape`, `is too big: keep a part within about ${huge ? 32 : big ? 6 : 3} units across`)
       surface += area
     }
     paint(p.paint, `${at}.paint`, 0)
@@ -986,7 +998,7 @@ export function checkScene(doc: unknown): string[] {
     }
   })
 
-  if (shapes > MAX_SHAPES) bad('parts', `hold ${shapes} shapes between them; the most is ${MAX_SHAPES}`)
+  if (shapes > (huge ? MAX_SHAPES * 10 : MAX_SHAPES)) bad('parts', `hold ${shapes} shapes between them; the most is ${huge ? MAX_SHAPES * 10 : MAX_SHAPES}`)
   if (surface > MAX_SURFACE) bad('parts', 'have too much surface between them to build quickly: make the scene smaller or use fewer big parts')
 
   const perBone = new Map<unknown, number>()
@@ -1144,6 +1156,14 @@ const unit = (h: string): Vec3 => { const c = rgb(h); return [c[0] / 255, c[1] /
 const linear = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)
 /** A repeatable number in 0..1 for three whole numbers. */
 const hash = (a: number, b: number, c: number) => { const v = Math.sin(a * 127.1 + b * 311.7 + c * 74.7) * 43758.5453; return v - Math.floor(v) }
+/** Smooth value noise on a unit grid, 0..1: no repeat, unlike `wobble`'s sines, which line up into a lattice over a big surface. */
+function valueNoise(x: number, z: number): number {
+  const fx = Math.floor(x), fz = Math.floor(z), u = x - fx, v = z - fz
+  const s = (t: number) => t * t * (3 - 2 * t), a = s(u), b = s(v)
+  const h = (i: number, j: number) => hash(fx + i, fz + j, 11)
+  return (h(0, 0) * (1 - a) + h(1, 0) * a) * (1 - b) + (h(0, 1) * (1 - a) + h(1, 1) * a) * b
+}
+
 /** A smooth wobble, about -1..1. */
 const wobble = (x: number, y: number, z: number) => (Math.sin(x * 7.3 + z * 3.1 + y * 1.7) + Math.sin(z * 8.7 - x * 2.3 + y * 5.1) + Math.sin((x + z) * 13.1 + y * 9.7) * 0.5) / 2.5
 const AXIS: Record<string, Vec3> = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] }
@@ -1279,6 +1299,26 @@ function toPaint(p: PaintDoc, cell: number, letterAt?: (p: Vec3, n: Vec3) => str
     case 'patches': {
       const cs = p.colors.map(unit), k = 0.5 / Math.max(p.size, cell * 2)
       return (q) => cs[Math.min(cs.length - 1, Math.floor(((wobble(q[0] * k, q[1] * k, q[2] * k) + 1) / 2) * cs.length))]
+    }
+    case 'clumps': {
+      const base = unit(p.base), cs = p.colors.map(unit), size = Math.max(p.size, cell * 3), seed = ((p.seed ?? 0) % 9973) * 7.31
+      // where clumps are: smooth value noise over the ground (two octaves, so edges are ragged), cut at the level that
+      // leaves `amount` of it covered (found by sampling, since the noise's spread isn't even)
+      const k = 1 / size, at = (x: number, z: number) => valueNoise(x * k + seed, z * k - seed) * 0.7 + valueNoise(x * k * 2.7 - seed, z * k * 2.7 + 3.1) * 0.3
+      const tries = Array.from({ length: 2048 }, (_, i) => at(hash(i, 1, 9) * 97, hash(i, 2, 9) * 97)).sort((a, b) => a - b)
+      const cut = tries[Math.floor((1 - (p.amount ?? 0.3)) * (tries.length - 1))]
+      // which color a clump takes: by the nearest of points on a jittered grid a clump and a half apart, so a clump is mostly one color
+      const g = size * 1.5
+      const which = (x: number, z: number) => {
+        const cx = Math.floor(x / g), cz = Math.floor(z / g)
+        let best = Infinity, pick = 0
+        for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+          const a = cx + i, b = cz + j, px = (a + hash(a, b, seed + 5)) * g, pz = (b + hash(a, b, seed + 6)) * g, d = (px - x) ** 2 + (pz - z) ** 2
+          if (d < best) { best = d; pick = Math.floor(hash(a, b, seed + 7) ** 1.6 * cs.length) }
+        }
+        return cs[Math.min(cs.length - 1, pick)]
+      }
+      return (q) => (at(q[0] + q[1] * 0.3, q[2] - q[1] * 0.3) > cut ? which(q[0], q[2]) : base)
     }
     case 'faces': {
       const side = toPaint(p.side, cell, letterAt, pieceAt), top = p.top === undefined ? side : toPaint(p.top, cell, letterAt, pieceAt), under = p.under === undefined ? side : toPaint(p.under, cell, letterAt, pieceAt)
@@ -1426,6 +1466,8 @@ function swayOf(p: Speck, life: number): [number, number] {
   return [a * Math.sin((l0 * p.wander[0] * n + p.phase[1]) * TAU), a * 0.8 * Math.sin((l0 * p.wander[2] * n + p.phase[3]) * TAU)]
 }
 const BANK_BONES = 3
+/** Other spots a landing speck tries when nothing stands under where it would come down. */
+const LAND_TRIES = 12
 
 function planSpecks(air: AirDoc | undefined, loop: number, ground: (x: number, z: number, top: number, bottom: number) => number, water?: number): Speck[] {
   const out: Speck[] = []
@@ -1454,12 +1496,25 @@ function planSpecks(air: AirDoc | undefined, loop: number, ground: (x: number, z
         // it falls to whatever is under where it comes down, resting on it
         const [sx, sz] = swayOf(p, 1)
         const rest = sw.kind === 'leaves' ? size * 0.3 : sw.kind === 'rain' ? 0 : size * 0.6
-        p.travel = Math.max(0, hi[1] - (ground(at[0] + wind[0] + sx, at[2] + wind[1] + sz, hi[1], lo[1]) + rest))
+        // where nothing stands under it (past an island's edge), it comes down somewhere that has ground, so it never
+        // lies on the open air at the box's floor; the floor is kept only when no try finds ground
+        const groundAt = (x: number, z: number) => ground(x, z, hi[1], lo[1])
+        let g = groundAt(at[0] + wind[0] + sx, at[2] + wind[1] + sz)
+        for (let t = 0; t < LAND_TRIES && g <= lo[1] + 1e-6; t++) {
+          const x = across(0, 40 + t * 2) - wind[0], z = across(2, 41 + t * 2) - wind[1], h = groundAt(x + wind[0] + sx, z + wind[1] + sz)
+          if (h > lo[1] + 1e-6) { at[0] = x; at[2] = z; g = h }
+        }
+        p.travel = Math.max(0, hi[1] - (g + rest))
         // rain is a new drop each time: it comes down somewhere else in the box, onto whatever is under it there
         if (sw.kind === 'rain') {
           p.falls = Array.from({ length: times }, (_, n) => {
-            const x = n ? lo[0] + (hi[0] - lo[0]) * hash(si + 1, j + 1, 20 + n * 2) : at[0] + wind[0], z = n ? lo[2] + (hi[2] - lo[2]) * hash(si + 1, j + 1, 21 + n * 2) : at[2] + wind[1]
-            const floor = ground(x, z, hi[1], lo[1])
+            let x = at[0] + wind[0], z = at[2] + wind[1], floor = g
+            for (let t = 0; n && t <= LAND_TRIES; t++) {
+              x = lo[0] + (hi[0] - lo[0]) * hash(si + 1, j + 1, 20 + n * 2 + t * 977)
+              z = lo[2] + (hi[2] - lo[2]) * hash(si + 1, j + 1, 21 + n * 2 + t * 977)
+              floor = ground(x, z, hi[1], lo[1])
+              if (floor > lo[1] + 1e-6) break
+            }
             return { dx: x - wind[0] - at[0], dz: z - wind[1] - at[2], travel: Math.max(0, hi[1] - floor), wet: floor === water }
           })
         }

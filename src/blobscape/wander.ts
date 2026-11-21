@@ -113,10 +113,15 @@ export function wanderPlan(seed: number, radius: number, pace: number, startYaw:
     }
     stops.push(p)
   }
+  return loopThrough(stops, pace, startYaw)
+}
+
+/** A loop through `stops` in order and back to the first: turn on the spot toward the next, go there at `pace`, rest. */
+export function loopThrough(stops: readonly (readonly [number, number])[], pace: number, startYaw: number): WanderPlan {
   const legs: Leg[] = []
   let yaw = startYaw, time = 0
-  for (let i = 0; i < STOPS; i++) {
-    const from = stops[i], to = stops[(i + 1) % STOPS]
+  for (let i = 0; i < stops.length; i++) {
+    const from = stops[i] as [number, number], to = stops[(i + 1) % stops.length] as [number, number]
     const dist = Math.hypot(to[0] - from[0], to[1] - from[1])
     const yaw1 = yaw + turnBy(yaw, (Math.atan2(to[0] - from[0], to[1] - from[1]) * 180) / Math.PI)
     const turn = Math.abs(yaw1 - yaw) / TURN, go = dist / Math.max(1e-6, pace)

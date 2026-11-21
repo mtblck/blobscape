@@ -52,6 +52,10 @@ export interface Actor {
   morphs?: Morph[]
   /** How much of its own light each blob gives, a byte a blob (255 all of it): a flame, a lit window. It only matters under live lights. */
   glow?: Uint8Array
+  /** Stays blobs while the stage draws blocks (`setBlocks`): grass and the like, drawn among the cubes. It makes no cubes. */
+  soft?: boolean
+  /** The side of its cubes while the stage draws blocks (`setBlocks`), where it was cut on a grid of its own; left out, the look's `cell`. */
+  blockCell?: number
 }
 
 /** What the view shows: the blobs, the bones that move them, or both (bones on top). */
@@ -327,14 +331,28 @@ export class Stage {
     this.invalidate()
   }
 
+  /** The soft actors (`Actor.soft`), a world of their own while the scene is drawn as blocks. */
+  private soft?: SplatWorld
+
   /** How many cubes and faces are on show while the scene is drawn as blocks. */
   get blockCount() { return this.blocks ? { blocks: this.blocks.blocks, faces: this.blocks.faces } : undefined }
 
   /** Makes the cubes for the actors on show (again), or puts them away. */
   private block() {
     if (this.blocks) { this.scene.remove(this.blocks); this.blocks.dispose(); this.blocks = undefined }
+    if (this.soft) { this.scene.remove(this.soft); this.soft.dispose(); this.soft = undefined }
+    const all = this.actor ? [this.actor, ...this.extras] : []
     if (this.blockLook && this.actor) {
-      this.blocks = new BlockView([this.actor, ...this.extras], this.blockLook)
+      // soft actors are a small world of their own, drawn among the cubes, so the scene's own world is not drawn at all
+      const soft = all.filter((a) => a.soft)
+      if (soft.length) {
+        this.soft = new SplatWorld(soft, { mode: this.mode, lights: this.opts.lights, sort: this.sort })
+        this.soft.setFog(...this.fog)
+        this.soft.setMarks(this.marks)
+        if (this.opts.lights) this.soft.setLights(this.lit.lights, this.lit.ambient)
+        this.scene.add(this.soft)
+      }
+      this.blocks = new BlockView(all.filter((a) => !a.soft), this.blockLook)
       this.blocks.setLights(this.lit.lights, this.lit.ambient, this.blockLook.ambient)
       this.scene.add(this.blocks)
     }
@@ -548,6 +566,7 @@ export class Stage {
   setFog(color: [number, number, number], near: number, far: number) {
     this.fog = [color, near, far]
     this.world?.setFog(color, near, far)
+    this.soft?.setFog(color, near, far)
     this.invalidate()
   }
 
@@ -670,6 +689,7 @@ export class Stage {
     const cel = this.opts.lights ? this.celLook : undefined
     world.cel = !!cel
     world.setMarks(cel || this.neonLook || this.glassLook || this.washLook ? { kind: 'flat' } : this.marks)
+    this.soft?.setMarks(this.marks)
     if (!this.opts.lights) return
     this.light()
   }
@@ -747,6 +767,7 @@ export class Stage {
   setLights(lights: Light[], ambient: number | readonly [number, number, number] = 1) {
     this.lit = { lights, ambient }
     this.blocks?.setLights(lights, ambient, this.blockLook?.ambient)
+    if (this.soft && this.opts.lights) this.soft.setLights(lights, ambient)
     this.light()
     this.invalidate()
   }
@@ -784,6 +805,7 @@ export class Stage {
     this.show = s
     if (this.baking) return
     if (this.world) this.world.visible = s !== 'bones' && !(this.blocks && !this.pixel)
+    if (this.soft) this.soft.visible = s !== 'bones' && !this.pixel
     if (this.blocks) this.blocks.visible = s !== 'bones' && !this.pixel
     if (this.rig) { this.rig.visible = s !== 'blobs'; this.rig.onTop = s === 'both'; this.rig.update() }
     this.invalidate()
@@ -1148,6 +1170,7 @@ export class Stage {
     cancelAnimationFrame(this.raf)
     this.world?.dispose()
     this.blocks?.dispose()
+    this.soft?.dispose()
     this.rig?.dispose()
     this.lines?.dispose()
     this.neon?.dispose()

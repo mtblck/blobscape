@@ -18,10 +18,19 @@ import { inside, type IslandPlan } from './island.ts'
 export const SCALE = 5
 /** How fast the elf walks, meters a second. */
 export const WALK_SPEED = 1.5
+/**
+ * How fast it runs, meters a second: on islands seventy meters across it runs unless asked to walk (Matt, 2026-11-20:
+ * walking was too slow; a half push on the stick, or Shift, walks).
+ */
+export const RUN_SPEED = 4.2
+/** A run's footsteps: longer and quicker than a walk's, and lifted higher. */
+const RUN_STEPS = { reach: 0.6, duration: 0.3, lift: 0.17 }
 /** How much room the elf needs round it, meters. */
 export const BODY = 0.28
 /** The steepest ground it walks up or down: rise over run. Terrace faces and cliffs are steeper. */
 export const STEEPEST = 0.9
+/** How far down it steps at once, meters: off a rim onto a lower deck, or down a ledge. */
+export const STEP_DOWN = 0.25
 /** How close to the island's edge it may go, meters: near enough to look over, not to fall. */
 export const EDGE = 0.6
 /** The heights over the ground at which things are in its way, meters: a shin and a chest. Branches over its head are not. */
@@ -56,7 +65,9 @@ export interface WalkGround {
 export function passes(g: WalkGround, x0: number, z0: number, x1: number, z1: number): boolean {
   if (!g.standsAt(x1, z1)) return false
   const run = Math.hypot(x1 - x0, z1 - z0)
-  return Math.abs(g.groundAt(x1, z1) - g.groundAt(x0, z0)) <= run * STEEPEST + 0.004
+  const rise = g.groundAt(x1, z1) - g.groundAt(x0, z0)
+  // down a step, as off the rim onto a bridge's deck, is fine; up one is not
+  return rise <= run * STEEPEST + 0.004 && -rise <= run * STEEPEST + STEP_DOWN
 }
 
 /** The ground of an island and what stands on it, as the elf meets them. Lengths in meters. */
@@ -149,8 +160,9 @@ export function slide(was: Walker, now: Walker, dt: number, room: (x: number, z:
   const moved = Math.hypot(now.x - was.x, now.z - was.z)
   if (want < 1e-4 || moved > want * 0.5) return now
   const back = now.speed < 0 ? Math.PI : 0
-  for (const off of [0.5, -0.5, 1.0, -1.0]) {
-    const a = now.heading + back + off, step = want * Math.cos(off)
+  // a run's step is long, and a gap narrower than it is still a way through: shorter tries too
+  for (const part of [1, 0.5, 0.25]) for (const off of [0.5, -0.5, 1.0, -1.0]) {
+    const a = now.heading + back + off, step = want * part * Math.cos(off)
     const x = was.x + Math.sin(a) * step, z = was.z + Math.cos(a) * step
     if (room(x, z)) return { ...now, x, z, speed: Math.sign(now.speed || was.speed) * step / dt }
   }
@@ -184,7 +196,7 @@ export class IslandWalk {
       opts = c ?? {}
     }
     const { look = 'forest', blobs = 16000 } = opts
-    this.walking = new WalkingElf(blobs, look, this.walker, { pace: WALK_SPEED, rides: true })
+    this.walking = new WalkingElf(blobs, look, this.walker, { pace: RUN_SPEED, rides: true, steps: RUN_STEPS })
     this.update(0, { forward: 0, turn: 0 })
   }
 
@@ -201,11 +213,38 @@ export class IslandWalk {
     const was = this.walker
     const room = (x: number, z: number) => passes(this.ground, was.x, was.z, x, z)
     const going = (input.aim !== undefined && (input.go ?? 0) > 0.2) || input.forward > 0.2
-    this.walker = slide(was, stepWader(was, input, dt, room, WALK_SPEED), dt, room, going)
+    this.walker = slide(was, stepWader(was, input, dt, room, RUN_SPEED), dt, room, going)
     this.turned = dt > 0 ? (this.walker.heading - was.heading) / dt : 0
     this.walked += Math.hypot(this.walker.x - was.x, this.walker.z - was.z)
     if (Math.abs(this.walker.speed) > 0.3) this.waveUntil = -1
     const waving = this.time < this.waveUntil ? WAVE_SECONDS - (this.waveUntil - this.time) : null
     this.walking.pose(this.walker, this.turned, dt, waving, this.ground.groundAt)
   }
+}
+
+/** How far above the ground a walking view's camera stays, meters. */
+export const CAMERA_CLEAR = 0.5
+/** The nearest a walking view's camera comes to what it looks at, meters. */
+const CAMERA_NEAREST = 0.8
+
+/**
+ * A walking view kept out of the ground (Matt, 2026-11-21: it flipped through the ground and could not look up):
+ * where the camera of orbit `o` (meters) would be under the ground, or the ground rises between it and what it looks
+ * at, it comes in along its own line toward the target until it is clear, so turning the view down past level brings
+ * it low by the elf, looking up, instead of underneath.
+ */
+export function keepAbove<O extends { target: [number, number, number]; distance: number; azimuth: number; elevation: number }>(o: O, groundAt: (x: number, z: number) => number, clear = CAMERA_CLEAR): O {
+  const az = (o.azimuth * Math.PI) / 180, el = (Math.max(-89, Math.min(89, o.elevation)) * Math.PI) / 180
+  const way = [Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)]
+  const under = (d: number) => {
+    const x = o.target[0] + way[0] * d, y = o.target[1] + way[1] * d, z = o.target[2] + way[2] * d
+    return y < groundAt(x, z) + clear
+  }
+  // the nearest point along the line from the target outward that is under the ground stops the camera there
+  const STEPS = 24
+  for (let k = 1; k <= STEPS; k++) {
+    const d = (o.distance * k) / STEPS
+    if (d > CAMERA_NEAREST && under(d)) return { ...o, distance: Math.max(CAMERA_NEAREST, (o.distance * (k - 1)) / STEPS) }
+  }
+  return o
 }

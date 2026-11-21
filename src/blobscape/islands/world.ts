@@ -4,7 +4,7 @@ import type { PartDoc, SceneDoc } from '../../splat-engine/sceneDoc.ts'
 import { axisAngle } from '../../splat-engine/rig.ts'
 import type { Skeleton } from '../../splat-engine/rig.ts'
 import { BIOMES, biomeOf } from './biomes.ts'
-import { MAX_SEED, makeIsland, reach, type IslandPlan } from './island.ts'
+import { MAX_SEED, inside, makeIsland, reach, type IslandPlan } from './island.ts'
 import { SOLID, chance, hashOf, material, paintOf } from './materials.ts'
 import { BODY, SCALE, startOf, type WalkGround, IslandGround } from './walk.ts'
 import type { Walker } from '../walkingElf.ts'
@@ -22,7 +22,7 @@ export const GAP = 1.6
 /** How far into each island a bridge's deck runs past its edge, in the islands' units, so the two grounds meet. */
 const INTO = 0.25
 /** Half a bridge's width, in the islands' units: room for the elf between the rails. */
-export const BRIDGE_HALF = 0.12
+export const BRIDGE_HALF = 0.25
 /** How far a bridge's middle sags, as a share of its length. */
 const SAG = 0.035
 /** How far a plank is from the next, its half length along the bridge and its thickness, in the islands' units. */
@@ -51,6 +51,18 @@ function inFrom(plan: IslandPlan, angle: number, d: number): Vec3 {
   return [x, wornLand(plan.land).at(x, z), z]
 }
 
+/** Whether every point of island a's outline is at least half a GAP outside island b's. */
+function clearOf(a: WorldIsland, b: WorldIsland): boolean {
+  for (let n = 0; n < 64; n++) {
+    const t = (n / 64) * Math.PI * 2, far = reach(a.plan.lobes, t)
+    for (let r = 0; r <= far; r += 0.1) {
+      const x = Math.cos(t) * r, z = Math.sin(t) * r
+      if (inside(b.plan.lobes, x + a.at[0] - b.at[0], z + a.at[2] - b.at[2]) > -GAP * 0.5) return false
+    }
+  }
+  return true
+}
+
 /** Plans the world whose first island is `seed` of `biome`, of `count` islands. */
 export function planWorld(biomeId: string, seed: number, count = WORLD_ISLANDS): WorldPlan {
   const first = BIOMES.indexOf(biomeOf(biomeId))
@@ -71,8 +83,13 @@ export function planWorld(biomeId: string, seed: number, count = WORLD_ISLANDS):
   for (let j = 1; j < count; j++) {
     const w = ways[j - 1], u: Vec3 = [Math.cos(w), 0, Math.sin(w)]
     const was = islands[j - 1], from = reach(was.plan.lobes, w), to = reach(islands[j].plan.lobes, w + Math.PI)
-    const d = from + GAP + to, rise = (chance(seed, 730 + j) - 0.5) * 0.5
-    islands[j].at = [r3(was.at[0] + u[0] * d), r3(was.at[1] + rise), r3(was.at[2] + u[2] * d)]
+    const rise = (chance(seed, 730 + j) - 0.5) * 0.5
+    // along the way the edges are GAP apart; a lobe out to one side may still reach an island set before, so it goes
+    // further until every point of its outline is well clear of them all
+    for (let d = from + GAP + to; ; d += 0.2) {
+      islands[j].at = [r3(was.at[0] + u[0] * d), r3(was.at[1] + rise), r3(was.at[2] + u[2] * d)]
+      if (islands.slice(0, j).every((o) => clearOf(islands[j], o))) break
+    }
   }
   const bridges: Bridge[] = []
   for (let j = 0; j + 1 < count; j++) {
@@ -200,6 +217,13 @@ export class WorldGround implements WalkGround {
     const apron = this.landing(x, z)
     if (apron !== null && deepest > 0) return Math.max(best, apron)
     return deepest > -1 ? best : -1e9
+  }
+
+  /** Which island (x, z) is over or nearest, by how far inside its outline it is: the one underfoot, even on a bridge's near half. */
+  islandAt(x: number, z: number): number {
+    let best = 0, deepest = -Infinity
+    this.islands.forEach((g, j) => { const d = g.insideAt(x, z); if (d > deepest) { deepest = d; best = j } })
+    return best
   }
 
   standsAt(x: number, z: number): boolean {

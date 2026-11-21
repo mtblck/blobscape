@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { checkScene, compileScene, type SceneDoc } from '../../splat-engine/sceneDoc.ts'
+import { Skeleton } from '../../splat-engine/rig.ts'
 import { buildVoxels } from '../../splat-engine/voxel.ts'
 import { seeThrough } from '../../splat-engine/solidity.ts'
 import { DETAIL } from '../diorama/scene.ts'
@@ -9,10 +10,10 @@ import { wornLand } from '../../splat-engine/erode.ts'
 import { reviewScene } from '../diorama/review.ts'
 import { describedProject } from '../creator/described.ts'
 import { BIOMES, MEADOW } from './biomes.ts'
-import { MAX_SEED, census, fromPath, inside, islandDoc, makeIsland, planIsland } from './island.ts'
+import { MAX_SEED, census, fromPath, inside, makeIsland, planIsland } from './island.ts'
 import { MATERIALS, SOLID, colorsOf, dressed, family, leaning, letsThrough, material, opaque, paintOf } from './materials.ts'
 import { ROOM } from './things.ts'
-import { IslandWalk, SCALE as WALK_SCALE, passes } from './walk.ts'
+import { IslandWalk, SCALE as WALK_SCALE, passes, keepAbove, CAMERA_CLEAR } from './walk.ts'
 import { GAP, WORLD_ISLANDS, WorldGround, deckAt, planWorld, worldStart } from './world.ts'
 
 const SEEDS = [1, 2, 3, 7, 42, 77, 500, 4242, 31337, 90210, 123456, MAX_SEED]
@@ -109,7 +110,7 @@ test('things crowd into the kinds of place that like them', () => {
     const plan = planIsland(MEADOW, seed), grove = plan.patches.find((p) => p.name === 'oak grove')!
     for (const t of plan.things) if (t.name === 'oak') { all++; if (Math.hypot(t.at[0] - grove.at[0], t.at[2] - grove.at[1]) < grove.r) near++ }
     for (let k = 0; k < 400; k++) {
-      const x = (k % 20) / 20 * 6.6 - 3.3, z = Math.floor(k / 20) / 20 * 6.6 - 3.3
+      const x = (k % 20) / 20 * 29.6 - 14.8, z = Math.floor(k / 20) / 20 * 29.6 - 14.8
       if (inside(plan.lobes, x, z) > 0) { tries++; if (Math.hypot(x - grove.at[0], z - grove.at[1]) < grove.r) cover++ }
     }
   }
@@ -151,16 +152,18 @@ test('an island lets no light through its ground, rock or stones, seen from abov
   }
 })
 
-test('every thing on an island is marked as a prop, so Scene Creator takes it apart', () => {
+test('every thing on an island that has a bone is marked as a prop, so Scene Creator takes it apart', () => {
   const { plan, doc } = makeIsland('meadow', 7)
   const picks = markedPicks(doc)
-  assert.equal(doc.bones!.length, picks.length + plan.clouds.length + plan.things.filter((t) => t.kind === 'tree' || t.kind === 'pine').length)
-  assert.equal(picks.length, plan.things.length + plan.drifters.length)
+  // things past the bone budget stand on the island's own bone; the first ones placed (the landmarks first) keep theirs
+  const marked = doc.bones!.filter((b) => b.prop)
+  assert.equal(picks.length, marked.length)
+  assert.ok(picks.length >= MAX_PROPS && picks.length < plan.things.length + plan.drifters.length, `${picks.length} props of ${plan.things.length} things`)
+  for (const name of ['Ring of standing stones 1', 'Great oak 1', 'Granite tor 1']) if (plan.things.slice(0, 2).some((t) => name.startsWith(t.name[0].toUpperCase() + t.name.slice(1)))) assert.ok(marked.some((b) => b.prop === name), name)
+  assert.ok(doc.bones!.length + doc.air!.specks!.reduce((a, s) => a + s.count, 0) < 255)
   const project = describedProject(doc)
   // Scene Creator takes at most MAX_PROPS of them as props
   assert.equal(project.props.length, Math.min(picks.length, MAX_PROPS))
-  // the land keeps the ground, the rock under it and the clouds
-  assert.equal(islandDoc(plan).parts.filter((p) => !p.bone).length, 2)
 })
 
 test('an island passes the checks a scene written by hand passes', () => {
@@ -224,7 +227,7 @@ test('a world is a chain of islands apart in the sky, each a sound description, 
       if (j === k) return
       for (let n = 0; n < 64; n++) {
         const t = (n / 64) * Math.PI * 2
-        for (let r = 0; r < 6; r += 0.05) {
+        for (let r = 0; r < 32; r += 0.05) {
           const x = Math.cos(t) * r, z = Math.sin(t) * r
           if (inside(a.plan.lobes, x, z) < 0) break
           assert.ok(inside(b.plan.lobes, x + a.at[0] - b.at[0], z + a.at[2] - b.at[2]) < -GAP * 0.4, `${biome} ${seed}: island ${j} reaches island ${k}`)
@@ -292,4 +295,115 @@ test('walking onto a bridge at a slant, the elf slides along the rail onto the d
     walk.update(1 / 30, { forward: 0, turn: 0, aim: Math.atan2(tx - walk.walker.x, tz - walk.walker.z), go: 1 })
   }
   assert.ok(Math.hypot(tx - walk.walker.x, tz - walk.walker.z) <= 0.5, `stuck at ${walk.walker.x.toFixed(1)}, ${walk.walker.z.toFixed(1)}`)
+})
+
+test('falling leaves come down on the island, never at rest in the open air past its edge', () => {
+  // Matt saw leaves settle in the sky beside an island and shrink away there (2026-11-21)
+  const made = makeIsland('meadow', 3), c = compileScene(made.doc), sk = new Skeleton(c.bones)
+  const swarms = made.doc.air?.specks ?? [], first = c.bones.findIndex((b) => b.name.startsWith('~speck'))
+  const before = swarms.slice(0, swarms.findIndex((s) => s.land)).reduce((n, s) => n + s.count, 0)
+  const leaves = swarms.find((s) => s.land)!
+  const low = new Array(leaves.count).fill(Infinity)
+  for (let t = 0; t < c.loop; t += 0.25) {
+    sk.reset(); c.pose(sk, t)
+    for (let k = 0; k < leaves.count; k++) {
+      const i = first + before + k
+      if (sk.size[i] > 0.5) low[k] = Math.min(low[k], c.bones[i].head[1] + sk.offset[i * 3 + 1])
+    }
+  }
+  assert.equal(low.filter((y) => y < 0.02).length, 0)
+})
+
+test('creatures live on every island, picked by its biome, and walk loops that stay on their island and clear of things', async () => {
+  const { LIVES, LEAST, AmongCreatures, makeResident, poseResident, residentAt, settle } = await import('./creatures.ts')
+  const bodies = new Map<string, ReturnType<typeof makeResident>>()
+  const built = (r: { id: string; seed: number }) => {
+    const key = `${r.id}:${r.seed}`
+    if (!bodies.has(key)) bodies.set(key, makeResident({ ...r, size: 1, island: 0, home: [0, 0], plan: { legs: [], period: 1 }, offset: 0, height: 1 }))
+    return bodies.get(key)!
+  }
+  for (const [biome, seed] of [['meadow', 37], ['pinewood', 5], ['mesa', 11]] as const) {
+    const w = planWorld(biome, seed), g = new WorldGround(w, DETAIL[1].spacing)
+    const rs = settle(w, g.islands, built)
+    assert.deepEqual(rs.map((r) => [r.id, r.home]), settle(w, g.islands, built).map((r) => [r.id, r.home]), 'the same world gives the same creatures')
+    w.islands.forEach((isl, j) => {
+      const mine = rs.filter((r) => r.island === j)
+      assert.ok(mine.length >= LEAST, `${biome} ${seed}, island ${j}: ${mine.length} creatures`)
+      for (const r of mine) assert.ok(LIVES[isl.biome].some((k) => k.id === r.id), `${r.id} doesn't live in a ${isl.biome}`)
+    })
+    for (const r of rs) {
+      const isl = g.islands[r.island]
+      assert.ok(r.plan.legs.length >= 2, `${r.id} on island ${r.island} has ${r.plan.legs.length} stops`)
+      for (let t = 0; t < r.plan.period; t += 0.25) {
+        const at = residentAt(r, t)
+        assert.ok(isl.insideAt(at.x, at.z) > 0.5 && isl.standsAt(at.x, at.z), `${biome} ${seed}: the ${r.id} walks off its island or into something at ${t.toFixed(2)} s`)
+      }
+      // posed, its lowest point is near the ground under it
+      const body = built(r), sk = body.skeleton
+      poseResident(r, sk, 1.3, g.groundAt)
+      let low = Infinity
+      for (let b = 0; b < sk.count; b++) low = Math.min(low, sk.posedHead[b * 3 + 1])
+      const at = residentAt(r, 1.3)
+      assert.ok(low > g.groundAt(at.x, at.z) - 0.3, `${r.id}: a bone ${(g.groundAt(at.x, at.z) - low).toFixed(2)} m under the ground`)
+    }
+    // the elf can't walk into a creature, but can always step away from one
+    const among = new AmongCreatures(g), r = rs[0], at = residentAt(r, 0)
+    among.update(rs, 0, { x: at.x + 2, z: at.z })
+    assert.equal(among.standsAt(at.x, at.z), false)
+    among.update(rs, 0, { x: at.x + 0.1, z: at.z })
+    assert.equal(among.standsAt(at.x + 0.25, at.z), g.standsAt(at.x + 0.25, at.z))
+  }
+})
+
+test('each island has its guardian, walking a loop its body fits along, never through a trunk', async () => {
+  const { BODY, GUARDIANS, guardianAt, makeGuardian, placeGuardians, poseGuardian } = await import('./guardians.ts')
+  for (const [biome, seed] of [['meadow', 37], ['pinewood', 5], ['mesa', 11]] as const) {
+    const w = planWorld(biome, seed), g = new WorldGround(w, DETAIL[0].spacing)
+    const gs = placeGuardians(w, g.islands)
+    assert.equal(gs.length, w.islands.length)
+    assert.deepEqual(gs, placeGuardians(w, g.islands), 'the same world gives the same guardians')
+    for (const gd of gs) {
+      const isl = g.islands[gd.island]
+      assert.equal(gd.kind, GUARDIANS[w.islands[gd.island].biome])
+      for (let t = 0; t < gd.period; t += 0.5) {
+        const at = guardianAt(gd, t)
+        assert.ok(isl.standsAt(at.x, at.z) && isl.insideAt(at.x, at.z) > BODY[gd.kind], `${biome} ${seed}: the ${gd.kind} stands somewhere it can't at ${t} s`)
+      }
+    }
+  }
+  for (const kind of ['fox', 'deer', 'cactus'] as const) {
+    const b = makeGuardian(kind, 0.2), sk = b.skeleton
+    let high = -Infinity
+    for (let i = 0; i < b.blobs.count; i++) high = Math.max(high, b.blobs.center[i * 3 + 1])
+    assert.ok(high > 4.5, `the ${kind} stands ${high.toFixed(1)} m: a guardian`)
+    // walking and resting, its feet stay near the ground and nothing goes far under it
+    const gd = { kind, island: 0, legs: [{ from: [0, 0] as [number, number], to: [10, 0] as [number, number], yaw0: 0, yaw1: Math.PI / 2, start: 0, turn: 2, go: 8, rest: 6 }], period: 16, offset: 0 }
+    for (let t = 0; t < 16; t += 0.7) {
+      poseGuardian(gd, sk, t, () => 0)
+      let low = Infinity
+      for (let k = 0; k < sk.count; k++) if (sk.size[k] > 0.1) low = Math.min(low, sk.posedHead[k * 3 + 1])
+      assert.ok(low > -0.5, `the ${kind} at ${t.toFixed(1)} s has a bone ${(-low).toFixed(2)} m under the ground`)
+    }
+  }
+})
+
+test('a walking view stays above the ground, and can look up from low by the elf', () => {
+  // a hill rising behind the elf: ground at 0 here, climbing toward +z
+  const ground = (_x: number, z: number) => Math.max(0, z - 2)
+  const placed = (o: { target: [number, number, number]; distance: number; azimuth: number; elevation: number }) => {
+    const az = (o.azimuth * Math.PI) / 180, el = (o.elevation * Math.PI) / 180
+    return [o.target[0] + o.distance * Math.sin(az) * Math.cos(el), o.target[1] + o.distance * Math.sin(el), o.target[2] + o.distance * Math.cos(az) * Math.cos(el)]
+  }
+  for (const elevation of [30, 5, -10, -40, -80]) {
+    for (const azimuth of [0, 90, 180]) {
+      const o = keepAbove({ target: [0, 1, 0] as [number, number, number], distance: 9, azimuth, elevation }, ground)
+      const c = placed(o)
+      assert.ok(c[1] >= ground(c[0], c[2]) + CAMERA_CLEAR - 1e-6 || o.distance <= 0.8 + 1e-9, `${azimuth} ${elevation}: under the ground`)
+      // a view turned below level ends up looking up at the elf
+      if (elevation < 0) assert.ok(c[1] < 1, `${azimuth} ${elevation}: looks up`)
+    }
+  }
+  // over open ground the view is left alone
+  const high = { target: [0, 1, 0] as [number, number, number], distance: 9, azimuth: 180, elevation: 30 }
+  assert.deepEqual(keepAbove(high, () => 0), high)
 })

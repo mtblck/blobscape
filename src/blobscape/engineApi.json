@@ -85,6 +85,18 @@
        "optional": true,
        "type": "Uint8Array<ArrayBufferLike>",
        "doc": "How much of its own light each blob gives, a byte a blob (255 all of it): a flame, a lit window. It only matters under live lights."
+      },
+      {
+       "name": "soft",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Stays blobs while the stage draws blocks (`setBlocks`): grass and the like, drawn among the cubes. It makes no cubes."
+      },
+      {
+       "name": "blockCell",
+       "optional": true,
+       "type": "number",
+       "doc": "The side of its cubes while the stage draws blocks (`setBlocks`), where it was cut on a grid of its own; left out, the look's `cell`."
       }
      ]
     },
@@ -749,6 +761,18 @@
        "optional": true,
        "type": "Morph[]",
        "doc": "Blend shapes (morph.ts), set with `SplatWorld.setMorphWeights`: on WebGPU a pass before the deform reshapes the blobs; on WebGL the CPU does and uploads them."
+      },
+      {
+       "name": "soft",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Stays blobs while the stage draws blocks (`Stage.setBlocks`): grass, flowers and the like, too fine to be cubes,\ndrawn among them and hidden by them where they stand in front. It makes no cubes."
+      },
+      {
+       "name": "blockCell",
+       "optional": true,
+       "type": "number",
+       "doc": "The side of its cubes while the stage draws blocks, where it was cut on a grid of its own; left out, the look's `cell`."
       }
      ]
     },
@@ -3590,6 +3614,12 @@
        "doc": "A big place to walk round rather than a diorama: things may stand up to 8 from the middle, it may carry 128 bones,\na part may be about 6 units across and the parts four times the surface between them. It takes about four times as\nlong to cut, so a scene is big only when it needs the room."
       },
       {
+       "name": "huge",
+       "optional": true,
+       "type": "boolean",
+       "doc": "A place far bigger again, to explore on foot (Biome Islands): things may stand up to 20 from the middle and it may\ncarry 230 bones; with its specks it must still stay inside the 255 one byte names. Implies `big`."
+      },
+      {
        "name": "grid",
        "optional": true,
        "type": "number",
@@ -3874,7 +3904,7 @@
        "name": "land",
        "optional": true,
        "type": "boolean",
-       "doc": "Rain, snow and leaves only: each lands on whatever stands still under it (or the box's floor), lies a while and goes, then falls again."
+       "doc": "Rain, snow and leaves only: each lands on whatever stands still under it, lies a while and goes, then falls again. One whose spot has nothing under it comes down somewhere that has (the box's floor only when none is found)."
       },
       {
        "name": "wind",
@@ -3994,7 +4024,7 @@
      "name": "PaintDoc",
      "kind": "type",
      "doc": "A part's paint: one color, or a pattern of several.",
-     "type": "string | { kind: \"bands\"; axis: \"x\" | \"y\" | \"z\"; size: number; colors: string[] } | { kind: \"bricks\"; size: [number, number]; colors: string[]; line: string } | { kind: \"hex\"; size: number; colors: string[]; line: string; deep?: string } | { kind: \"speckle\"; size: number; colors: string[] } | { kind: \"patches\"; size: number; colors: string[] } | { kind: \"key\"; colors: Record<string, string> } | { kind: \"faces\"; top?: PaintDoc; side: PaintDoc; under?: PaintDoc; up?: number } | { kind: \"split\"; axis: \"x\" | \"y\" | \"z\"; at: number; below: PaintDoc; above: PaintDoc } | { kind: \"pieces\"; colors: string[]; line?: string; ordered?: boolean } | { kind: \"near\"; shape: ShapeDoc; within: number; at?: number; near: PaintDoc; far: PaintDoc } | { kind: \"waves\"; size: number; colors: [string, string, string] }"
+     "type": "string | { kind: \"bands\"; axis: \"x\" | \"y\" | \"z\"; size: number; colors: string[] } | { kind: \"bricks\"; size: [number, number]; colors: string[]; line: string } | { kind: \"hex\"; size: number; colors: string[]; line: string; deep?: string } | { kind: \"speckle\"; size: number; colors: string[] } | { kind: \"patches\"; size: number; colors: string[] } | { kind: \"clumps\"; size: number; base: string; colors: string[]; amount?: number; seed?: number } | { kind: \"key\"; colors: Record<string, string> } | { kind: \"faces\"; top?: PaintDoc; side: PaintDoc; under?: PaintDoc; up?: number } | { kind: \"split\"; axis: \"x\" | \"y\" | \"z\"; at: number; below: PaintDoc; above: PaintDoc } | { kind: \"pieces\"; colors: string[]; line?: string; ordered?: boolean } | { kind: \"near\"; shape: ShapeDoc; within: number; at?: number; near: PaintDoc; far: PaintDoc } | { kind: \"waves\"; size: number; colors: [string, string, string] }"
     },
     {
      "name": "During",
@@ -5171,6 +5201,16 @@
      "signatures": [
       {
        "code": "unlit<T>(make: () => T): T"
+      }
+     ]
+    },
+    {
+     "name": "within",
+     "kind": "function",
+     "doc": "Runs `make` with every `buildVoxels` inside it cutting only the grid points within a box (in the spec's own units,\nthe rest pose): a finer cut of the ground round one place of a scene too big to cut fine whole.",
+     "signatures": [
+      {
+       "code": "within<T>(box: { min: Vec3; max: Vec3 }, make: () => T): T"
       }
      ]
     },
@@ -9293,6 +9333,12 @@
        "optional": true,
        "type": "Uint8Array<ArrayBufferLike>",
        "doc": "How much of its own light each blob gives, a byte a blob (`Actor.glow`)."
+      },
+      {
+       "name": "blockCell",
+       "optional": true,
+       "type": "number",
+       "doc": "The side of this source's blocks, where it was cut on a grid of its own (a finer cut of the place underfoot); left out, the look's `cell`."
       }
      ]
     },

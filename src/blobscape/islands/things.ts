@@ -27,6 +27,13 @@ export interface Thing {
 /** How much ground a thing of each kind keeps to itself at size 1: nothing else stands within it. */
 export const ROOM: Record<ThingKind, number> = { tree: 0.2, pine: 0.18, bush: 0.26, boulder: 0.3, flowers: 0.18, stump: 0.17, cactus: 0.16, stones: 0.42, tor: 0.4, hoodoos: 0.4 }
 
+/**
+ * How much bigger than its own size each kind is drawn on an island, so things stand right beside the elf (Matt,
+ * 2026-11-20: with the elf four blocks tall, a trunk must be at least that, and trees big enough to walk under). The
+ * planner multiplies a population's size by it, so the room a thing keeps grows with it.
+ */
+export const BIGGER: Record<ThingKind, number> = { tree: 2, pine: 2, bush: 1.4, boulder: 1.8, flowers: 1.3, stump: 1.6, cactus: 1.8, stones: 1.6, tor: 1.7, hoodoos: 1.7 }
+
 /** The bones, parts and moves of one thing, and which of its parts are opaque bodies (`solid`, by index in `parts`), which must let no light through. */
 export interface Piece { bones: BoneDoc[]; parts: PartDoc[]; moves: MoveDoc[]; solid: number[] }
 
@@ -72,7 +79,7 @@ export function makeThing(t: Thing, i: number, n: number): Piece {
       const h = (0.62 + 0.12 * rnd(1)) * s, tiers = 3 + Math.floor(rnd(2) * 2), wide = (0.2 + 0.04 * rnd(3)) * s
       const at = v3(x, y - 0.03 * s, z), cones: ShapeDoc[] = []
       for (let k = 0; k < tiers; k++) {
-        const lo = y + h * (0.25 + (0.6 * k) / tiers), r = wide * (1 - (0.55 * k) / tiers)
+        const lo = y + h * (0.34 + (0.52 * k) / tiers), r = wide * (1 - (0.55 * k) / tiers)
         cones.push({ kind: 'cone', from: v3(x, lo, z), to: v3(x, lo + h * 0.42, z), r: r3(r), rTo: r3(r * 0.08) })
       }
       return {

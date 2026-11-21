@@ -77,6 +77,13 @@ export interface Actor {
   glow?: Uint8Array
   /** Blend shapes (morph.ts), set with `SplatWorld.setMorphWeights`: on WebGPU a pass before the deform reshapes the blobs; on WebGL the CPU does and uploads them. */
   morphs?: Morph[]
+  /**
+   * Stays blobs while the stage draws blocks (`Stage.setBlocks`): grass, flowers and the like, too fine to be cubes,
+   * drawn among them and hidden by them where they stand in front. It makes no cubes.
+   */
+  soft?: boolean
+  /** The side of its cubes while the stage draws blocks, where it was cut on a grid of its own; left out, the look's `cell`. */
+  blockCell?: number
 }
 
 /** How many morph targets a world takes, over all its actors. */
