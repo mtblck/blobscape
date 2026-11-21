@@ -14,8 +14,8 @@
  * public/loops/, where the gallery reads them. A scene that fails is named at the end and the run
  * exits with an error, after the others have finished.
  *
- * .github/workflows/loops.yml runs this on GitHub, a scene a job, for the scenes a push to main
- * changed (scripts/loops-changed.mjs) or the ones asked for by hand, and opens a pull request
+ * .github/workflows/loops.yml runs this on GitHub, a scene a job, for brand new scenes a push to
+ * main left with no loop (scripts/loops-missing.mjs) or the ones asked for by hand, and opens a pull request
  * with the new loops.
  */
 import { chromium } from 'playwright-core'

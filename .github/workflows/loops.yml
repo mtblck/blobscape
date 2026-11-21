@@ -3,11 +3,11 @@ name: Loops
 # Records the Pixel Diorama gallery's loops (public/loops/) again and opens a pull request
 # with them, a scene a job, so every scene is recorded at once.
 #
-# It runs by itself when a push to main changes a scene's own file (its description, the
-# lighthouse's code, the fox meadow's builder: scripts/loops-changed.mjs), for those scenes
-# only. A change to something every scene shares (the cutter, the pixel pass) starts
-# nothing, because only a person can say whether the pictures changed: run it by hand then
-# (Actions, Loops, Run workflow), with the scenes' ids or `all`.
+# It runs by itself only for brand new scenes: when a push to main leaves a scene in the
+# gallery's list (src/blobscape/diorama/loops.ts) with no loop in public/loops/
+# (scripts/loops-missing.mjs). A change to a scene that already has a loop, or to something
+# every scene shares (the cutter, the pixel pass), starts nothing: run it by hand then
+# (Actions, Loops, Run workflow), with the scenes' ids or `all`, when the pictures changed.
 #
 # The pull request holds only the new .webp and .png files. The 3× MP4s for posting are
 # kept with the run for two weeks (the `loops` download). Nothing is merged by this
@@ -18,10 +18,7 @@ on:
   push:
     branches: [main]
     paths:
-      - src/blobscape/diorama/scenes/**
-      - src/blobscape/diorama/scene.ts
-      - src/blobscape/fourways/meadow/build.ts
-      - src/blobscape/fourways/meadow/doc.ts
+      - src/blobscape/diorama/loops.ts
   workflow_dispatch:
     inputs:
       scenes:
@@ -57,10 +54,9 @@ jobs:
         id: plan
         env:
           ASKED: ${{ inputs.scenes }}
-          BEFORE: ${{ github.event.before }}
         run: |
           if [ "$GITHUB_EVENT_NAME" = push ]; then
-            ids=$(node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/loops-changed.mjs "$BEFORE" "$GITHUB_SHA")
+            ids=$(node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/loops-missing.mjs "$GITHUB_SHA")
           else
             ids=$ASKED
           fi
