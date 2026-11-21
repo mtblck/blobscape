@@ -18,7 +18,7 @@ import { BIOMES, biomeOf } from './islands/biomes.ts'
 import { MAX_SEED, census } from './islands/island.ts'
 import { WORLD_ISLANDS, placeIsland, planWorld, poseBridge, type WorldGround, type WorldPlan } from './islands/world.ts'
 import type { AmongCreatures, Resident } from './islands/creatures.ts'
-import type { Landmark } from './islands/landmark.ts'
+import type { Guardian } from './islands/guardians.ts'
 import { material } from './islands/materials.ts'
 import { grassActor, growGrass } from './islands/grass.ts'
 import { cloudActor, poseClouds } from './islands/clouds.ts'
@@ -54,7 +54,7 @@ function overview(world: WorldPlan, first: Orbit): Orbit {
 }
 
 declare global {
-  interface Window { __islands?: { stage: CreatureStage; blobs: () => number; bones: () => number; things: () => string[]; name: () => string; walk: () => IslandWalk | undefined; creatures: () => { id: string; at: number[] }[]; landmarks: () => { kind: string; at: number[] }[] } }
+  interface Window { __islands?: { stage: CreatureStage; blobs: () => number; bones: () => number; things: () => string[]; name: () => string; walk: () => IslandWalk | undefined; creatures: () => { id: string; at: number[] }[]; guardians: () => { kind: string; at: number[] }[] } }
 }
 
 /**
@@ -216,14 +216,14 @@ export function Islands() {
   // the creatures that live there, made once a world is cut (several an island, picked by its biome; islands/creatures.ts),
   // with the world's ground they walk on. The ground is asked of the shapes, not the cut, so one spacing serves every
   // detail and a finer cut keeps everyone where they stand.
-  const [life, setLife] = useState<{ of: NonNullable<typeof made>; ground: WorldGround; residents: Resident[]; bodies: Built[]; pose: typeof import('./islands/creatures.ts').poseResident; landmarks: Landmark[]; bigs: ReturnType<typeof import('./islands/landmark.ts').landmarkActor>[]; poseBig: typeof import('./islands/landmark.ts').poseLandmark }>()
+  const [life, setLife] = useState<{ of: NonNullable<typeof made>; ground: WorldGround; residents: Resident[]; bodies: Built[]; pose: typeof import('./islands/creatures.ts').poseResident; guardians: Guardian[]; bigs: (Built & { blockCell: number })[]; guards: typeof import('./islands/guardians.ts') }>()
   const lifeNow = life && life.of === ready ? life : undefined
   const living = creatures ? lifeNow : undefined
   useEffect(() => {
     if (!ready || life?.of === ready) return
     let gone = false
     const timer = setTimeout(() => {
-      Promise.all([import('./islands/world.ts'), import('./islands/creatures.ts'), import('./islands/landmark.ts')]).then(([{ WorldGround }, { another, makeResident, poseResident, settle }, { landmarkActor, placeLandmarks, poseLandmark }]) => {
+      Promise.all([import('./islands/world.ts'), import('./islands/creatures.ts'), import('./islands/guardians.ts')]).then(([{ WorldGround }, { another, makeResident, poseResident, settle }, guards]) => {
         if (gone) return
         const ground = new WorldGround(ready.world, DETAIL[0].spacing)
         // each kind of body is built once; the others of its kind share its blobs on skeletons of their own
@@ -236,9 +236,16 @@ export function Islands() {
         const residents = settle(ready.world, ground.islands, bodyOf)
         const used = new Set<Built>()
         const bodies = residents.map((r) => { const b = bodyOf(r); if (used.has(b)) return another(b); used.add(b); return b })
-        // and each island's landmark creature, in the most open place on it
-        const landmarks = placeLandmarks(ready.world, ground.islands)
-        setLife({ of: ready, ground, residents, bodies, pose: poseResident, landmarks, bigs: landmarks.map((m) => landmarkActor(m.kind)), poseBig: poseLandmark })
+        // and each island's guardian, wandering a wide loop from the most open place on it, cut in fine cubes of its own
+        const guardians = guards.placeGuardians(ready.world, ground.islands)
+        const cuts = new Map<string, Built>()
+        const bigs = guardians.map((gd) => {
+          const cut = cuts.get(gd.kind)
+          const b = cut ? another(cut) : guards.makeGuardian(gd.kind)
+          cuts.set(gd.kind, b)
+          return { ...b, blockCell: guards.GUARDIAN_CELL }
+        })
+        setLife({ of: ready, ground, residents, bodies, pose: poseResident, guardians, bigs, guards })
       })
     }, 30)
     return () => { gone = true; clearTimeout(timer) }
@@ -256,7 +263,6 @@ export function Islands() {
         if (gone) return
         // the elf walks round the creatures, not through them
         const ground = new AmongCreatures(lifeNow.ground)
-        if (creatures) ground.fixed = lifeNow.landmarks.map((m) => ({ x: m.at[0], z: m.at[2], r: m.kind === 'serpent' ? 5 : 3.5 }))
         const w = new IslandWalk(ground, worldStart(ready.world, lifeNow.ground), { blobs: coarse ? 10000 : 16000 })
         // the view starts behind the elf, looking the way it faces
         setOrbit((o) => ({ ...o, ...BEHIND, azimuth: w.walker.heading * DEG + 180 }))
@@ -329,7 +335,9 @@ export function Islands() {
       clouds.forEach((c, j) => { poseClouds(wd.islands[j].plan, c.skeleton, calm ? 0 : t, d.loop); placeIsland(wd.islands[j], c.skeleton) })
       // the creatures walk their loops on the world's own clock, so where each is depends on the time alone
       residents.forEach((r, j) => living!.pose(r, bodies[j].skeleton, t, living!.ground.groundAt, calm))
-      bigs.forEach((b, j) => living!.poseBig(living!.landmarks[j], b.rest, b.skeleton, calm ? 0 : t))
+      bigs.forEach((b, j) => living!.guards.poseGuardian(living!.guardians[j], b.skeleton, calm ? 0 : t, living!.ground.groundAt))
+      // the elf can't walk through a guardian either
+      if (among) among.fixed = (living?.guardians ?? []).map((gd) => { const w = living!.guards.guardianAt(gd, calm ? 0 : t); return { x: w.x, z: w.z, r: living!.guards.BODY[gd.kind] + 0.4 } })
       stage.setLights(d.lights(t, stage.backend === 'webgpu'), 1)
       if (walker) {
         among?.update(residents, calm ? 0 : t, walker.walker)
@@ -393,7 +401,7 @@ export function Islands() {
   // For verify: the stage and the island, without clicking
   useEffect(() => {
     if (!stage || !ready) return
-    window.__islands = { stage, blobs: () => stage.blobCount, bones: () => ready.built.skeleton.count, things: () => lines.map((l) => l.words), name: () => island.plan.name, walk: () => walkNow.current, creatures: () => living?.residents.map((r, j) => ({ id: r.id, at: [...living.bodies[j].skeleton.posedHead.subarray(0, 3)] })) ?? [], landmarks: () => living?.landmarks.map((m) => ({ kind: m.kind, at: [...m.at] })) ?? [] }
+    window.__islands = { stage, blobs: () => stage.blobCount, bones: () => ready.built.skeleton.count, things: () => lines.map((l) => l.words), name: () => island.plan.name, walk: () => walkNow.current, creatures: () => living?.residents.map((r, j) => ({ id: r.id, at: [...living.bodies[j].skeleton.posedHead.subarray(0, 3)] })) ?? [], guardians: () => living?.guardians.map((gd, j) => ({ kind: gd.kind, at: [...living.bigs[j].skeleton.place] })) ?? [] }
     return () => { delete window.__islands }
   }, [stage, ready, lines, island, living])
 

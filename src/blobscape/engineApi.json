@@ -3904,7 +3904,7 @@
        "name": "land",
        "optional": true,
        "type": "boolean",
-       "doc": "Rain, snow and leaves only: each lands on whatever stands still under it (or the box's floor), lies a while and goes, then falls again."
+       "doc": "Rain, snow and leaves only: each lands on whatever stands still under it, lies a while and goes, then falls again. One whose spot has nothing under it comes down somewhere that has (the box's floor only when none is found)."
       },
       {
        "name": "wind",

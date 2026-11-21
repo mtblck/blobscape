@@ -195,7 +195,7 @@ export class AmongCreatures implements WalkGround {
     }
     return this.ground.standsAt(x, z)
   }
-  /** Ground taken by things that stay where they are (the islands' landmark creatures), meters. */
+  /** Ground taken by things that stay where they are (the islands' guardians), meters. */
   fixed: { x: number; z: number; r: number }[] = []
   /** Sets where everyone is at a time, and where the elf stands. */
   update(residents: readonly Resident[], t: number, elf: { x: number; z: number }) {
