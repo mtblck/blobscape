@@ -4607,6 +4607,18 @@
        "readonly": true,
        "type": "Float32Array",
        "doc": "Foam on each cell as last laid by `set`, 0 to 1 (`WaterDoc.foam`); all 0 where the scene has none."
+      },
+      {
+       "name": "spray",
+       "readonly": true,
+       "type": "Actor | null",
+       "doc": "Spray thrown up where the water strikes something hard enough (with `WaterDoc.foam`): droplets on one still\nbone, placed for the moment by `show` (hand it to the stage beside the surface and `reshape` it too). It stays\nblobs when the scene is drawn as blocks. None when the scene has no foam."
+      },
+      {
+       "name": "bursts",
+       "readonly": true,
+       "type": "Burst[]",
+       "doc": "Every burst of spray in the loop: where, when, which way away from what it struck, and how hard (0 to 1)."
       }
      ],
      "methods": [
@@ -4636,6 +4648,43 @@
          "code": "show(t: number, eye: ArrayLike<number>, options?: { mirror?: MirrorImage | null; lights?: readonly PointLight[] }): void"
         }
        ]
+      }
+     ]
+    },
+    {
+     "name": "Burst",
+     "kind": "interface",
+     "doc": "A burst of spray: thrown at `at` seconds into the loop from (x, z), away from what was struck along (ox, oz).",
+     "props": [
+      {
+       "name": "x",
+       "type": "number",
+       "doc": "Where it was thrown from, on the water: x."
+      },
+      {
+       "name": "z",
+       "type": "number",
+       "doc": "Where it was thrown from, on the water: z."
+      },
+      {
+       "name": "at",
+       "type": "number",
+       "doc": "Seconds into the loop."
+      },
+      {
+       "name": "ox",
+       "type": "number",
+       "doc": "The way out from what was struck, a unit pair: x."
+      },
+      {
+       "name": "oz",
+       "type": "number",
+       "doc": "The way out from what was struck, a unit pair: z."
+      },
+      {
+       "name": "strength",
+       "type": "number",
+       "doc": "How hard, 0 to 1: how high its droplets go."
       }
      ]
     }

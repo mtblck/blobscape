@@ -180,7 +180,7 @@ test('a swell comes in as long straight crests across the water, not rings', () 
   assert.ok(across < along * 0.25, `and a crest runs straight across it (${(across * 1000).toFixed(2)} against ${(along * 1000).toFixed(2)} mm)`)
 })
 
-test('foam gathers where a swell strikes a post, fades, joins up over the loop, and is drawn white', () => {
+test('foam gathers where a swell strikes a post, fades, joins up over the loop, and is drawn white; the post throws spray', () => {
   const d = pond()
   d.air = undefined
   d.moves = []
@@ -221,8 +221,16 @@ test('foam gathers where a swell strikes a post, fades, joins up over the loop, 
     return blobs.color[best * 3] + blobs.color[best * 3 + 1] + blobs.color[best * 3 + 2]
   }
   assert.ok(near(0.12, 0) > near(-0.4, 0.2) + 0.3, 'foam is drawn white')
+  // the post throws spray on its biggest waves: droplets above the water near it, the same a loop later
+  assert.ok(w.bursts.some((b) => Math.hypot(b.x - 0.2, b.z) < 0.15), `spray by the post (${w.bursts.length} bursts)`)
+  const spray = w.spray!, burst = w.bursts.find((b) => Math.hypot(b.x - 0.2, b.z) < 0.15)!
+  const drops = (t: number) => { w.show(t, [0, 3, 3]); const up: number[] = []; for (let k = 0; k < spray.blobs.count; k++) if (spray.blobs.opacity[k] > 0) up.push(spray.blobs.center[k * 3 + 1]); return up }
+  const flying = drops(burst.at + 0.1)
+  assert.ok(flying.length > 0 && flying.every((y) => y > plan.level), `droplets in the air (${flying.length})`)
+  assert.deepEqual(drops(burst.at + 0.1 + scene.loop), flying)
+  assert.ok(spray.soft, 'spray stays blobs among blocks')
   // with no foam asked for, none
   d.water.foam = undefined
   const plain = new SceneWater(compileScene(d), { fps: 12, warm: 0 })
-  assert.ok(plain.foam.every((f) => f === 0))
+  assert.ok(plain.foam.every((f) => f === 0) && plain.spray === null)
 })

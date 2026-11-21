@@ -287,7 +287,7 @@ export function PixelDiorama() {
     const from = stage.time
     // a scene's water is drawn by blobs of its own, in the same world: they move with the water, not with a bone
     const pond = scene.of.water?.()
-    stage.setActor(scene.built, undefined, pond ? [pond.surface] : [])
+    stage.setActor(scene.built, undefined, pond ? (pond.spray ? [pond.surface, pond.spray] : [pond.surface]) : [])
     seen.current = null
     // the surface as it stands at the stage's time, for the eye as it stands: after a pose, a turn of the view or a new picture in the mirror
     wet.current = pond && (() => {
@@ -295,6 +295,7 @@ export function PixelDiorama() {
       const eye = [o.target[0] + o.distance * Math.sin(a) * Math.cos(e), o.target[1] + o.distance * Math.sin(e), o.target[2] + o.distance * Math.cos(a) * Math.cos(e)]
       pond.show(stage.time, eye, { mirror: seen.current })
       stage.reshape(pond.surface)
+      if (pond.spray) stage.reshape(pond.spray)
     })
     // it mirrors what stands round it: the scene drawn once more as its mirror image (a second sort and a small draw, so only with WebGPU)
     stage.setMirror(pond && mirrored ? { plane: levelPlane(pond.plan.level), lift: pond.plan.cell * 0.75, seen: (image) => { seen.current = image; wet.current?.() } } : undefined)

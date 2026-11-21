@@ -1,6 +1,8 @@
 import type { PointLight } from './engine.ts'
 import type { MirrorImage } from './reflect.ts'
-import { Skeleton, axisAngle, mulQ } from './rig.ts'
+import { Blobs } from '../splat-core/blobs.ts'
+import type { Actor } from './engine.ts'
+import { Skeleton, axisAngle, emptySkin, mulQ, setWeights } from './rig.ts'
 import type { CompiledScene, WaterPlan } from './sceneDoc.ts'
 import { WATER_TICK, Water, crossing, makeSurface, shadeSurface, shapeSurface, type WaterSurface } from './water.ts'
 
@@ -38,6 +40,14 @@ export class SceneWater {
   readonly foam: Float32Array
   /** The kept moments' foam, a byte a cell, when the scene has foam. */
   private readonly foamFrames: Uint8Array | null
+  /**
+   * Spray thrown up where the water strikes something hard enough (with `WaterDoc.foam`): droplets on one still
+   * bone, placed for the moment by `show` (hand it to the stage beside the surface and `reshape` it too). It stays
+   * blobs when the scene is drawn as blocks. None when the scene has no foam.
+   */
+  readonly spray: Actor | null
+  /** Every burst of spray in the loop: where, when, which way away from what it struck, and how hard (0 to 1). */
+  readonly bursts: Burst[] = []
   private shown = NaN
 
   /** Works one loop of the scene's water out. `fps` moments a second are kept (24), after `warm` loops run to fill the pond with rings (2). */
@@ -60,6 +70,7 @@ export class SceneWater {
     this.foam = new Float32Array(nx * nz)
     const froth = plan.foam > 0 ? new Froth(water, plan, scene.loop, this.foam) : undefined
     this.foamFrames = froth ? new Uint8Array(this.count * nx * nz) : null
+    this.spray = froth ? sprayActor(plan) : null
     let next = 0
     for (let run = 0; run <= warm; run++) {
       next = 0
@@ -85,7 +96,7 @@ export class SceneWater {
         const until = ((k + 1) / ticks) * scene.loop
         for (; next < plan.drops.length && plan.drops[next].at < until; next++) water.splash(plan.drops[next].x, plan.drops[next].z, plan.splash.r, plan.splash.depth)
         water.step(WATER_TICK)
-        if (froth) froth.tick()
+        if (froth) froth.tick(run === warm ? t : null, this.bursts)
       }
     }
     this.set(0)
@@ -141,7 +152,90 @@ export class SceneWater {
     shapeSurface(this.surface, this.water, p.ripple)
     shadeSurface(this.surface, { body: p.body, sky: p.sky, horizon: p.horizon, clear: p.clear, steep: p.ripple, deep: p.deep, mirror }, eye, lights)
     if (this.foamFrames) whiten(this.surface, this.foam)
+    if (this.spray) throwSpray(this.spray, this.bursts, t, this.loop, p.level)
   }
+}
+
+/** A burst of spray: thrown at `at` seconds into the loop from (x, z), away from what was struck along (ox, oz). */
+export interface Burst {
+  /** Where it was thrown from, on the water: x. */
+  x: number
+  /** Where it was thrown from, on the water: z. */
+  z: number
+  /** Seconds into the loop. */
+  at: number
+  /** The way out from what was struck, a unit pair: x. */
+  ox: number
+  /** The way out from what was struck, a unit pair: z. */
+  oz: number
+  /** How hard, 0 to 1: how high its droplets go. */
+  strength: number
+}
+
+/**
+ * A strike throws spray when it is at least `SPRAY_SHARE` of the hardest that stretch of wall takes in a loop (so each
+ * post and rock throws on its own biggest waves, a post in the lee of the rock too), and that hardest is at least
+ * `SPRAY_LEAST`: in the units foam gathers by, the surge past `FOAM_FROM` times how open the water is.
+ */
+const SPRAY_SHARE = 0.85, SPRAY_LEAST = 0.1
+/** The strike at which spray is thrown hardest. */
+const SPRAY_STRONG = 0.8
+/** Seconds before the same stretch of wall throws spray again, and how many cells a stretch is. */
+const SPRAY_GAP = 0.6, SPRAY_CELLS = 3
+/** Droplets in a burst, and the most droplets drawn at once. */
+const SPRAY_DROPS = 6, SPRAY_POOL = 240
+/** How fast the strongest burst throws its droplets up, and how fast things fall, in scene units (about a third of a meter each). */
+const SPRAY_UP = 0.32, SPRAY_FALL = 1.6
+/** A droplet's size, in scene units, at its biggest. */
+const SPRAY_SIZE = 0.007
+/** Spray's color, sRGB: white with a little of the sea in it. */
+const SPRAY_COLOR = [0.9, 0.95, 0.98]
+
+/** The pool of droplets, all hidden at the start, on one still bone at the water's middle. */
+function sprayActor(plan: WaterPlan): Actor {
+  const blobs = new Blobs(SPRAY_POOL)
+  const mid: [number, number, number] = [plan.x0 + (plan.nx * plan.cell) / 2, plan.level, plan.z0 + (plan.nz * plan.cell) / 2]
+  for (let k = 0; k < SPRAY_POOL; k++) blobs.push({ center: mid, scale: [1e-5, 1e-5, 1e-5], quat: [0, 0, 0, 1], color: SPRAY_COLOR as [number, number, number], opacity: 0 })
+  const skin = emptySkin(blobs.count)
+  for (let k = 0; k < blobs.count; k++) setWeights(skin, k, [[0, 1]])
+  return { blobs, skin, skeleton: new Skeleton([{ name: 'spray', parent: -1, head: mid }]), soft: true }
+}
+
+/** A share 0 to 1 from a whole number, the same every time. */
+const hashOf = (n: number) => ((Math.imul(n ^ (n >>> 15), 2246822507) >>> 0) % 10007) / 10007
+
+/**
+ * Places every droplet in the air `t` seconds into the loop: each burst's droplets leave the point struck upward and
+ * away from the wall, each its own speed and way by a hash of its number, fall under their weight and are gone when
+ * they come back down to the water, shrinking as they fall. A burst near the end of the loop goes on into its start,
+ * so the loop joins. Droplets past the pool are left out.
+ */
+function throwSpray(spray: Actor, bursts: Burst[], t: number, loop: number, level: number) {
+  const { center, scale, opacity } = spray.blobs
+  let n = 0
+  const life = (2 * SPRAY_UP) / SPRAY_FALL
+  for (let b = 0; b < bursts.length && n < SPRAY_POOL; b++) {
+    const burst = bursts[b], age = (((t - burst.at) % loop) + loop) % loop
+    if (age > life) continue
+    for (let d = 0; d < SPRAY_DROPS && n < SPRAY_POOL; d++) {
+      const seed = b * 131 + d * 17
+      const up = SPRAY_UP * burst.strength * (0.45 + 0.55 * hashOf(seed))
+      const fall = (2 * up) / SPRAY_FALL
+      if (age > fall) continue
+      // out from the wall, spread a fan about it
+      const turn = (hashOf(seed + 5) - 0.5) * 2.2, out = up * (0.25 + 0.45 * hashOf(seed + 9))
+      const c = Math.cos(turn), s = Math.sin(turn)
+      const wx = burst.ox * c - burst.oz * s, wz = burst.ox * s + burst.oz * c
+      center[n * 3] = burst.x + wx * out * age
+      center[n * 3 + 1] = level + up * age - 0.5 * SPRAY_FALL * age * age
+      center[n * 3 + 2] = burst.z + wz * out * age
+      const r = SPRAY_SIZE * (0.5 + 0.5 * hashOf(seed + 3)) * (1 - 0.6 * (age / fall))
+      scale[n * 3] = r; scale[n * 3 + 1] = r; scale[n * 3 + 2] = r
+      opacity[n] = 0.95
+      n++
+    }
+  }
+  for (; n < SPRAY_POOL; n++) { opacity[n] = 0; scale[n * 3] = scale[n * 3 + 1] = scale[n * 3 + 2] = 1e-5 }
 }
 
 /** Foam's color, in sRGB: a white a shade cool, so the scene's own light gives it its tone. */
@@ -175,6 +269,12 @@ class Froth {
   private readonly gain: number
   private readonly from: number
   private readonly keep = Math.exp(-WATER_TICK / FOAM_LIFE)
+  /** Each shore cell's way out from what it lies beside (x, z, a unit pair), and the last time its stretch of wall threw spray. */
+  private readonly out: Float32Array
+  private readonly thrown = new Map<number, number>()
+  /** The hardest strike each shore cell took in the loops run so far. */
+  private readonly peak: Float32Array
+  private readonly pace: number
 
   constructor(water: Water, plan: WaterPlan, loop: number, foam: Float32Array) {
     this.water = water
@@ -184,7 +284,7 @@ class Froth {
     // the dry cells something stands in (not those past the edge of the sea, where there is nothing to strike)
     const wall = new Uint8Array(nx * nz)
     for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) if (!wet[j * nx + i]) wall[j * nx + i] = plan.stands(x0 + (i + 0.5) * cell, z0 + (j + 0.5) * cell) ? 1 : 0
-    const shore: number[] = [], open: number[] = []
+    const shore: number[] = [], open: number[] = [], outs: number[] = []
     for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
       const k = j * nx + i
       if (!wet[k]) continue
@@ -197,23 +297,46 @@ class Froth {
         all++; if (wet[q * nx + p]) w++
       }
       shore.push(k); open.push((w / all) ** 3)
+      let ox = 0, oz = 0
+      for (let b = -1; b <= 1; b++) for (let a = -1; a <= 1; a++) {
+        const p = i + a, q = j + b
+        if (p >= 0 && q >= 0 && p < nx && q < nz && wall[q * nx + p]) { ox -= a; oz -= b }
+      }
+      const l = Math.hypot(ox, oz) || 1
+      outs.push(ox / l, oz / l)
     }
     this.shore = Int32Array.from(shore)
     this.open = Float32Array.from(open)
+    this.out = Float32Array.from(outs)
+    this.peak = new Float32Array(shore.length)
     // the swells' own speed up and down; with none, what a centimeter's ripple a second would be
     let pace = 0
     for (const s of plan.swells) pace += (TAU * s.times * s.height) / loop
     if (!pace) pace = 0.01
+    this.pace = pace
     this.gain = (plan.foam * FOAM_GAIN * WATER_TICK) / pace
     this.from = FOAM_FROM * pace
   }
 
-  tick() {
-    const { foam, next, shore, open, gain, from, keep } = this
-    const { wet, v } = this.water, { nx, nz } = this.water.spec
+  /** Steps the foam a tick; with the time `t` (the kept loop), bursts of spray thrown this tick go into `bursts`. */
+  tick(t: number | null, bursts: Burst[]) {
+    const { foam, next, shore, open, gain, from, keep, pace } = this
+    const { wet, v } = this.water, { nx, nz, x0, z0, cell } = this.water.spec
     for (let s = 0; s < shore.length; s++) {
       const k = shore[s], hit = Math.abs(v[k]) - from
-      if (hit > 0) foam[k] = Math.min(1.5, foam[k] + hit * gain * open[s])
+      if (hit <= 0) continue
+      foam[k] = Math.min(1.5, foam[k] + hit * gain * open[s])
+      // a hard surge up the wall throws spray, once a stretch of wall in a while
+      const strike = (hit / pace) * open[s]
+      if (v[k] <= 0) continue
+      if (t === null) { if (strike > this.peak[s]) this.peak[s] = strike; continue }
+      const peak = this.peak[s]
+      if (peak < SPRAY_LEAST || strike < SPRAY_SHARE * peak) continue
+      const i = k % nx, j = (k - i) / nx, spot = Math.floor(j / SPRAY_CELLS) * nx + Math.floor(i / SPRAY_CELLS)
+      const last = this.thrown.get(spot)
+      if (last !== undefined && t - last < SPRAY_GAP) continue
+      this.thrown.set(spot, t)
+      bursts.push({ x: x0 + (i + 0.5) * cell, z: z0 + (j + 0.5) * cell, at: t, ox: this.out[s * 2], oz: this.out[s * 2 + 1], strength: 0.45 + 0.55 * Math.min(1, peak / SPRAY_STRONG) })
     }
     for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
       const k = j * nx + i

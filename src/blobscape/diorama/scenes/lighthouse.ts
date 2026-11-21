@@ -289,6 +289,8 @@ export const LIGHTHOUSE: SceneDoc = {
     swells: [
       { from: 208, height: 0.006, times: 2 },
       { from: 238, height: 0.003, times: 3, phase: 0.3 },
+      // a low cross swell from the east, so the jetty in the rock's lee takes waves on its posts too
+      { from: 120, height: 0.002, times: 2 },
     ],
     foam: 1,
        floats: [{ bone: 'boat', at: [BOAT[0], 0, BOAT[2]], size: 0.2 }, { bone: 'buoy', at: [BUOY[0], 0, BUOY[2]], size: 0.06 }],
