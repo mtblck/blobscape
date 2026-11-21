@@ -27,7 +27,7 @@ import { unpack } from './creator/pack.ts'
 import { href } from './routes.ts'
 import { Stick } from './Stick.tsx'
 import { steer, type Input } from './pond/wade.ts'
-import { SCALE, type IslandWalk } from './islands/walk.ts'
+import { SCALE, keepAbove, type IslandWalk } from './islands/walk.ts'
 import { colorsOf } from './creator/cut.ts'
 import { joinPalettes } from '../splat-engine/project.ts'
 
@@ -352,7 +352,7 @@ export function Islands() {
         eye = eye ? eye.map((v, j) => v + (m[j] - v) * k) : m
         // which island is underfoot, for its finer cut
         if (ground?.islandAt) { const j = ground.islandAt(m[0], m[2]); if (j !== nearNow.current) { nearNow.current = j; setNear(j) } }
-        stage.orbit = { ...inMeters(o), target: [eye[0], eye[1], eye[2]] }
+        stage.orbit = keepAbove({ ...inMeters(o), target: [eye[0], eye[1], eye[2]] as [number, number, number] }, (x, z) => walker.ground.groundAt(x, z))
       } else if (d.swing && rocking.current) stage.orbit = inMeters(swung(orbitNow.current, d.swing, d.loop, t))
     }, stage.time)
   }, [stage, ready, pieces, walker, calm, grown, clouds, living, among])

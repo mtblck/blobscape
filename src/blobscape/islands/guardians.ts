@@ -23,9 +23,9 @@ export const GUARDIANS: Record<string, GuardianKind> = { meadow: 'fox', pinewood
 /** The cell guardians are cut on, meters: their own cubes, finer than the island's, so their detail shows. */
 export const GUARDIAN_CELL = 0.11
 /** How far round its middle each guardian needs clear ground, meters. */
-export const BODY: Record<GuardianKind, number> = { fox: 1.6, deer: 1.5, cactus: 1.7 }
+export const BODY: Record<GuardianKind, number> = { fox: 1.6, deer: 2.3, cactus: 1.7 }
 /** How fast each walks, meters a second, and how long it rests at each stop, seconds. */
-const PACE: Record<GuardianKind, number> = { fox: 1.8, deer: 1.2, cactus: 0.9 }
+const PACE: Record<GuardianKind, number> = { fox: 1.8, deer: 1.7, cactus: 0.9 }
 const REST: Record<GuardianKind, number> = { fox: 4, deer: 6, cactus: 12 }
 /** How far from its home a guardian wanders, meters, and how many stops its loop has. */
 const ROAM = 26, STOPS = 6
@@ -45,9 +45,9 @@ const smoothstep = (v: number) => { const u = Math.max(0, Math.min(1, v)); retur
 
 // --- The fox
 
-const FOX_TAILS = 7
+const FOX_TAILS = 3
 
-/** The fox: about four meters to the top of its head, a coat of warm gold with white markings that sweep along its sides, and seven tails fanned out behind. */
+/** The fox: about four meters to the top of its head, a coat of warm gold with white markings that sweep along its sides, and three great tails fanned out behind (seven blended into one mass; Matt, 2026-11-21). */
 function foxSpec(): SculptSpec {
   const gold = hex('#d98a3d'), deep = hex('#a85a26'), cream = hex('#f6ead2'), white = hex('#fbf8f0'), dark = hex('#3a2a24')
   const bones: Bone[] = [
@@ -62,10 +62,10 @@ function foxSpec(): SculptSpec {
     if (Math.abs(n[0]) > 0.35 && p[1] > 2.1 && p[1] < 3.4) {
       const along = (p[2] + 1.6) / 3.4
       const wave = 2.75 + 0.32 * Math.sin(along * 7.5) - 0.25 * along
-      if (Math.abs(p[1] - wave) < 0.07 + 0.05 * Math.sin(along * 15) ** 2) return true
-      if (Math.abs(p[1] - (wave - 0.38)) < 0.045 && Math.sin(along * 9) > 0.1) return true
+      if (Math.abs(p[1] - wave) < 0.13 + 0.07 * Math.sin(along * 15) ** 2) return true
+      if (Math.abs(p[1] - (wave - 0.45)) < 0.09 && Math.sin(along * 9) > -0.1) return true
     }
-    return n[2] > 0.5 && p[1] > 3.95 && p[1] < 4.25 && Math.abs(p[0]) < 0.07 && p[2] > 2.9
+    return n[2] > 0.5 && p[1] > 3.95 && p[1] < 4.25 && Math.abs(p[0]) < 0.12 && p[2] > 2.9
   }
   const coat = (p: Vec3, n: Vec3): Vec3 => {
     if (marked(p, n)) return white
@@ -86,37 +86,49 @@ function foxSpec(): SculptSpec {
   ]
   for (const x of [1, -1]) {
     const at = (p: Vec3): Vec3 => [p[0] * x, p[1], p[2]]
-    const eye = at([0.3, 4.03, 3.05])
+    const eye = at([0.3, 4.03, 3.02])
     parts.push(
       // tall ears, dark at the tips, pale within
       { shape: flatten(cone(at([0.3, 4.25, 2.55]), at([0.55, 5.25, 2.5]), 0.36, 0.05), 0.45, 2.55), color: (p, n) => (p[1] > 4.95 ? dark : n[2] > 0.3 ? cream : coat(p, n)), bones: ['head'] },
       { shape: ellipsoid(at([0.42, 3.8, 2.7]), [0.25, 0.25, 0.32]), color: white, bones: ['head'] },
-      // amber eyes, a little glow of their own, a dark slit
-      { shape: flatten(ellipsoid(eye, [0.1, 0.075, 0.1]), 0.7, eye[2]), color: (p) => (Math.abs(p[0] - eye[0]) < 0.025 ? dark : hex('#f6c23e')), bones: ['head'], group: 'eyes', glow: true },
+      // glowing golden eyes, big enough to hold a few cubes
+      { shape: ellipsoid(eye, [0.17, 0.13, 0.16]), color: hex('#ffd23f'), bones: ['head'], group: 'eyes', glow: true },
     )
   }
-  // legs: shoulder or thigh on the body, then a long lower leg to a dark paw
-  for (const [leg, side, front] of [['fl', 1, true], ['fr', -1, true], ['bl', 1, false], ['br', -1, false]] as const) {
-    const x = side * (front ? 0.55 : 0.6), z = front ? 1.35 : -1.35
-    const hip: Vec3 = [x, 2.3, z], knee: Vec3 = [x, 1.15, z + (front ? 0.05 : -0.35)], foot: Vec3 = [x, 0, z + (front ? 0.12 : -0.15)]
-    bones.push({ name: `${leg}Upper`, parent: front ? 1 : 0, head: hip, tail: knee }, { name: `${leg}Lower`, parent: bones.length, head: knee, tail: foot })
+  // legs. A front leg is an upper and a lower leg to a dark paw. A hind leg is a fox's: the thigh runs forward and
+  // down to the knee, the shin back and down to the hock, which points back, and the foot down to the paw (two
+  // bones bent the wrong way; Matt, 2026-11-21)
+  for (const [leg, side] of [['fl', 1], ['fr', -1]] as const) {
+    const x = side * 0.55, z = 1.35
+    const hip: Vec3 = [x, 2.3, z], knee: Vec3 = [x, 1.15, z + 0.05], foot: Vec3 = [x, 0, z + 0.12]
+    bones.push({ name: `${leg}Upper`, parent: 1, head: hip, tail: knee }, { name: `${leg}Lower`, parent: bones.length, head: knee, tail: foot })
     parts.push(
-      { shape: smooth(0.2, ellipsoid([x * 1.05, 2.3, z], [0.4, 0.6, 0.5]), cone(hip, knee, 0.33, 0.22), cone(knee, add(foot, [0, 0.15, 0]), 0.2, 0.17)), color: (p, n) => (p[1] < 0.9 ? dark : coat(p, n)), bones: [front ? 'chest' : 'hips', `${leg}Upper`, `${leg}Lower`], blend: 0.3 },
+      { shape: smooth(0.2, ellipsoid([x * 1.05, 2.3, z], [0.4, 0.6, 0.5]), cone(hip, knee, 0.33, 0.22), cone(knee, add(foot, [0, 0.15, 0]), 0.2, 0.17)), color: (p, n) => (p[1] < 0.9 ? dark : coat(p, n)), bones: ['chest', `${leg}Upper`, `${leg}Lower`], blend: 0.3 },
       { shape: ellipsoid(add(foot, [0, 0.14, 0.12]), [0.24, 0.16, 0.32]), color: dark, bones: [`${leg}Lower`] },
+    )
+  }
+  for (const [leg, side] of [['bl', 1], ['br', -1]] as const) {
+    const x = side * 0.62, z = -1.35
+    const hip: Vec3 = [x, 2.45, z], knee: Vec3 = [x, 1.5, z + 0.45], hock: Vec3 = [x, 0.72, z - 0.35], foot: Vec3 = [x, 0, z - 0.2]
+    const b0 = bones.length
+    bones.push({ name: `${leg}Upper`, parent: 0, head: hip, tail: knee }, { name: `${leg}Lower`, parent: b0, head: knee, tail: hock }, { name: `${leg}Foot`, parent: b0 + 1, head: hock, tail: foot })
+    parts.push(
+      { shape: smooth(0.25, ellipsoid([x * 1.02, 2.15, z + 0.1], [0.45, 0.75, 0.62]), cone(hip, knee, 0.42, 0.24), cone(knee, hock, 0.22, 0.15), cone(hock, add(foot, [0, 0.15, 0]), 0.15, 0.15)), color: (p, n) => (p[1] < 0.75 ? dark : coat(p, n)), bones: ['hips', `${leg}Upper`, `${leg}Lower`, `${leg}Foot`], blend: 0.3 },
+      { shape: ellipsoid(add(foot, [0, 0.14, 0.12]), [0.24, 0.16, 0.32]), color: dark, bones: [`${leg}Foot`] },
     )
   }
   // the tails: each from the base of the spine, fanned out and up, full in the middle and tipped white
   const base: Vec3 = [0, 2.85, -2.0]
   for (let k = 0; k < FOX_TAILS; k++) {
-    const a = ((k / (FOX_TAILS - 1)) - 0.5) * 2.2, s = Math.sin(a), c = Math.cos(a)
+    const a = ((k / (FOX_TAILS - 1)) - 0.5) * 2.0, s = Math.sin(a), c = Math.cos(a)
     const p1 = add(base, [s * 1.0, 0.9 + 0.3 * c, -0.9 * c]), p2 = add(p1, [s * 1.1, 0.8 + 0.2 * c, -0.6 * c]), p3 = add(p2, [s * 0.9, 0.35, 0.2 * c])
     const b0 = bones.length
     bones.push({ name: `tail${k}a`, parent: 0, head: base, tail: p1 }, { name: `tail${k}b`, parent: b0, head: p1, tail: p2 }, { name: `tail${k}c`, parent: b0 + 1, head: p2, tail: p3 })
     const tip = p3
     parts.push({
-      shape: smooth(0.3, cone(base, p1, 0.2, 0.5), cone(p1, p2, 0.5, 0.48), cone(p2, p3, 0.48, 0.12)),
+      shape: smooth(0.3, cone(base, p1, 0.22, 0.55), cone(p1, p2, 0.55, 0.52), cone(p2, p3, 0.52, 0.12)),
       color: (p) => { const d = Math.hypot(p[0] - tip[0], p[1] - tip[1], p[2] - tip[2]); return d < 0.75 ? white : d < 1 ? mix(white, gold, (d - 0.75) / 0.25) : gold },
-      bones: ['hips', `tail${k}a`, `tail${k}b`, `tail${k}c`], group: `tail${k % 2}`, blend: 0.45,
+      bones: ['hips', `tail${k}a`, `tail${k}b`, `tail${k}c`], group: `tail${k}`, blend: 0.45,
     })
   }
   return { bones, parts, blend: 0.4, skirt: 0.15, light: { ambient: 0.6, shadow: 0.45 } }
@@ -238,7 +250,31 @@ function cactusSpec(): SculptSpec {
   return { bones, parts, blend: 0.3, skirt: 0.1, light: { ambient: 0.62, shadow: 0.45 } }
 }
 
-const SPECS: Record<GuardianKind, () => SculptSpec> = { fox: foxSpec, deer: deerSpec, cactus: cactusSpec }
+/** How much bigger than drawn each guardian is built (the deer stood lost among the pines; Matt, 2026-11-21). */
+const GROWN: Record<GuardianKind, number> = { fox: 1, deer: 1.6, cactus: 1 }
+
+/** A spec `s` times bigger about the ground under it: bones, shapes and paint alike, so it is cut on the same cubes. */
+function grown(spec: SculptSpec, s: number): SculptSpec {
+  if (s === 1) return spec
+  const up = (v: Vec3): Vec3 => [v[0] * s, v[1] * s, v[2] * s], down = (v: Vec3): Vec3 => [v[0] / s, v[1] / s, v[2] / s]
+  return {
+    ...spec,
+    blend: spec.blend * s,
+    skirt: spec.skirt === undefined ? undefined : spec.skirt * s,
+    bones: spec.bones.map((b) => ({ ...b, head: up(b.head), tail: b.tail && up(b.tail) })),
+    parts: spec.parts.map((p) => {
+      const sh = p.shape, color = p.color
+      return {
+        ...p,
+        blend: p.blend === undefined ? undefined : p.blend * s,
+        shape: { ...sh, sdf: (x: number, y: number, z: number) => sh.sdf(x / s, y / s, z / s) * s, min: up(sh.min), max: up(sh.max), pieceAt: sh.pieceAt && ((q: Vec3) => sh.pieceAt!(down(q))) },
+        color: typeof color === 'function' ? (q: Vec3, n: Vec3) => color(down(q), n) : color,
+      }
+    }),
+  }
+}
+
+const SPECS: Record<GuardianKind, () => SculptSpec> = { fox: foxSpec, deer: () => grown(deerSpec(), GROWN.deer), cactus: cactusSpec }
 
 /** A guardian cut on `cell` (meters), standing at the origin facing +z. */
 export function makeGuardian(kind: GuardianKind, cell = GUARDIAN_CELL): Sculpted {
@@ -343,7 +379,7 @@ export function guardianAt(gd: Guardian, t: number) {
 }
 
 /** How far along its stride a guardian's legs are for a distance walked: a stride is this many meters. */
-const STRIDE: Record<GuardianKind, number> = { fox: 3.2, deer: 3, cactus: 1.8 }
+const STRIDE: Record<GuardianKind, number> = { fox: 3.2, deer: 4.8, cactus: 1.8 }
 
 /** Poses a guardian at a time, standing it on the ground at (x, z). */
 export function poseGuardian(gd: Guardian, sk: Skeleton, t: number, ground: (x: number, z: number) => number) {
@@ -351,6 +387,7 @@ export function poseGuardian(gd: Guardian, sk: Skeleton, t: number, ground: (x: 
   sk.reset()
   const ph = (w.walked / STRIDE[gd.kind]) * TAU
   const turn = axisAngle(Y, w.yaw)
+  const fox = gd.kind === 'fox'
   if (gd.kind === 'cactus') {
     // resting it sits on the ground with its legs folded away and its eye shut; awake it stands on six legs
     const up = w.awake
@@ -373,26 +410,33 @@ export function poseGuardian(gd: Guardian, sk: Skeleton, t: number, ground: (x: 
     sk.setRotation(sk.index('armR'), axisAngle(Z, 0.08 * Math.sin(ph + 1) * w.stepping))
     sk.setRotation(0, turn)
   } else {
-    const fox = gd.kind === 'fox'
     // a walk: diagonal pairs swing together, lifting at the knee as they come forward
     for (const [leg, off] of [['fl', 0], ['br', 0], ['fr', Math.PI], ['bl', Math.PI]] as const) {
       const swing = Math.sin(ph + off) * w.stepping, lift = Math.max(0, -Math.cos(ph + off)) * w.stepping
       const front = leg[0] === 'f'
       sk.setRotation(sk.index(`${leg}Upper`), axisAngle(X, (front ? 0.3 : 0.28) * swing - (front ? 0.15 : -0.1) * lift))
-      sk.setRotation(sk.index(`${leg}Lower`), axisAngle(X, front ? 0.9 * lift : -0.6 * lift))
+      if (fox && !front) {
+        // a fox's hind leg: as it lifts the knee folds forward (the shin swings back) and the hock folds the paw up under it
+        sk.setRotation(sk.index(`${leg}Lower`), axisAngle(X, 0.45 * lift))
+        sk.setRotation(sk.index(`${leg}Foot`), axisAngle(X, -0.85 * lift))
+      } else sk.setRotation(sk.index(`${leg}Lower`), axisAngle(X, front ? 0.9 * lift : -0.6 * lift))
     }
     // breathing, a bob with the stride, and the head looking about while it rests
     const bob = Math.abs(Math.sin(ph)) * 0.08 * w.stepping
     sk.offset[1] = bob + Math.sin((t * TAU) / 5) * 0.03
     const look = Math.sin((t * TAU) / 13) * 0.5 * (1 - w.stepping), nod = Math.sin((t * TAU) / 9) * 0.08
-    sk.setRotation(sk.index('neck'), axisAngle(Y, look * 0.5))
-    sk.setRotation(sk.index('head'), mulQ(axisAngle(Y, look * 0.5), axisAngle(X, nod)))
+    // walking, the head bobs twice a stride, down as each front foot lands (Matt, 2026-11-21)
+    const step = Math.cos(2 * ph) * w.stepping
+    sk.setRotation(sk.index('neck'), mulQ(axisAngle(Y, look * 0.5), axisAngle(X, 0.07 * step)))
+    sk.setRotation(sk.index('head'), mulQ(axisAngle(Y, look * 0.5), axisAngle(X, nod - 0.05 * step)))
     if (fox) {
-      // the tails sway in a slow wave, each a little behind the one beside it
+      // the tails sway in a wave that runs out along each to its tip, each a little behind the one beside it, and
+      // flick with the stride as it walks
       for (let k = 0; k < FOX_TAILS; k++) {
-        const wave = (t * TAU) / 3.2 + k * 0.7
-        for (const [part, amt] of [['a', 0.12], ['b', 0.2], ['c', 0.28]] as const) {
-          sk.setRotation(sk.index(`tail${k}${part}`), mulQ(axisAngle(Y, amt * Math.sin(wave)), axisAngle(X, amt * 0.4 * Math.cos(wave))))
+        const wave = (t * TAU) / 2.6 + k * 1.3
+        for (const [part, amt, lag] of [['a', 0.22, 0], ['b', 0.34, 0.6], ['c', 0.45, 1.2]] as const) {
+          const flick = 0.12 * Math.sin(ph + k + lag) * w.stepping
+          sk.setRotation(sk.index(`tail${k}${part}`), mulQ(axisAngle(Y, amt * Math.sin(wave - lag) + flick), axisAngle(X, amt * 0.5 * Math.cos(wave - lag))))
         }
       }
     }

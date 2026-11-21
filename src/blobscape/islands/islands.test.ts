@@ -13,7 +13,7 @@ import { BIOMES, MEADOW } from './biomes.ts'
 import { MAX_SEED, census, fromPath, inside, makeIsland, planIsland } from './island.ts'
 import { MATERIALS, SOLID, colorsOf, dressed, family, leaning, letsThrough, material, opaque, paintOf } from './materials.ts'
 import { ROOM } from './things.ts'
-import { IslandWalk, SCALE as WALK_SCALE, passes } from './walk.ts'
+import { IslandWalk, SCALE as WALK_SCALE, passes, keepAbove, CAMERA_CLEAR } from './walk.ts'
 import { GAP, WORLD_ISLANDS, WorldGround, deckAt, planWorld, worldStart } from './world.ts'
 
 const SEEDS = [1, 2, 3, 7, 42, 77, 500, 4242, 31337, 90210, 123456, MAX_SEED]
@@ -385,4 +385,25 @@ test('each island has its guardian, walking a loop its body fits along, never th
       assert.ok(low > -0.5, `the ${kind} at ${t.toFixed(1)} s has a bone ${(-low).toFixed(2)} m under the ground`)
     }
   }
+})
+
+test('a walking view stays above the ground, and can look up from low by the elf', () => {
+  // a hill rising behind the elf: ground at 0 here, climbing toward +z
+  const ground = (_x: number, z: number) => Math.max(0, z - 2)
+  const placed = (o: { target: [number, number, number]; distance: number; azimuth: number; elevation: number }) => {
+    const az = (o.azimuth * Math.PI) / 180, el = (o.elevation * Math.PI) / 180
+    return [o.target[0] + o.distance * Math.sin(az) * Math.cos(el), o.target[1] + o.distance * Math.sin(el), o.target[2] + o.distance * Math.cos(az) * Math.cos(el)]
+  }
+  for (const elevation of [30, 5, -10, -40, -80]) {
+    for (const azimuth of [0, 90, 180]) {
+      const o = keepAbove({ target: [0, 1, 0] as [number, number, number], distance: 9, azimuth, elevation }, ground)
+      const c = placed(o)
+      assert.ok(c[1] >= ground(c[0], c[2]) + CAMERA_CLEAR - 1e-6 || o.distance <= 0.8 + 1e-9, `${azimuth} ${elevation}: under the ground`)
+      // a view turned below level ends up looking up at the elf
+      if (elevation < 0) assert.ok(c[1] < 1, `${azimuth} ${elevation}: looks up`)
+    }
+  }
+  // over open ground the view is left alone
+  const high = { target: [0, 1, 0] as [number, number, number], distance: 9, azimuth: 180, elevation: 30 }
+  assert.deepEqual(keepAbove(high, () => 0), high)
 })

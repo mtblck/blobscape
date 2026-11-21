@@ -221,3 +221,30 @@ export class IslandWalk {
     this.walking.pose(this.walker, this.turned, dt, waving, this.ground.groundAt)
   }
 }
+
+/** How far above the ground a walking view's camera stays, meters. */
+export const CAMERA_CLEAR = 0.5
+/** The nearest a walking view's camera comes to what it looks at, meters. */
+const CAMERA_NEAREST = 0.8
+
+/**
+ * A walking view kept out of the ground (Matt, 2026-11-21: it flipped through the ground and could not look up):
+ * where the camera of orbit `o` (meters) would be under the ground, or the ground rises between it and what it looks
+ * at, it comes in along its own line toward the target until it is clear, so turning the view down past level brings
+ * it low by the elf, looking up, instead of underneath.
+ */
+export function keepAbove<O extends { target: [number, number, number]; distance: number; azimuth: number; elevation: number }>(o: O, groundAt: (x: number, z: number) => number, clear = CAMERA_CLEAR): O {
+  const az = (o.azimuth * Math.PI) / 180, el = (Math.max(-89, Math.min(89, o.elevation)) * Math.PI) / 180
+  const way = [Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)]
+  const under = (d: number) => {
+    const x = o.target[0] + way[0] * d, y = o.target[1] + way[1] * d, z = o.target[2] + way[2] * d
+    return y < groundAt(x, z) + clear
+  }
+  // the nearest point along the line from the target outward that is under the ground stops the camera there
+  const STEPS = 24
+  for (let k = 1; k <= STEPS; k++) {
+    const d = (o.distance * k) / STEPS
+    if (d > CAMERA_NEAREST && under(d)) return { ...o, distance: Math.max(CAMERA_NEAREST, (o.distance * (k - 1)) / STEPS) }
+  }
+  return o
+}
