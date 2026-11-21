@@ -22,7 +22,7 @@ export const GAP = 1.6
 /** How far into each island a bridge's deck runs past its edge, in the islands' units, so the two grounds meet. */
 const INTO = 0.25
 /** Half a bridge's width, in the islands' units: room for the elf between the rails. */
-export const BRIDGE_HALF = 0.12
+export const BRIDGE_HALF = 0.25
 /** How far a bridge's middle sags, as a share of its length. */
 const SAG = 0.035
 /** How far a plank is from the next, its half length along the bridge and its thickness, in the islands' units. */

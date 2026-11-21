@@ -309,7 +309,6 @@ export class Stage {
     this.world.cleanCuts = this.clean
     if (this.edits.length) this.world.setEdits(this.edits)
     this.scene.add(this.world)
-    this.hidden.clear()
     if (this.painter) this.paintOver()
     this.block()
   }
@@ -330,26 +329,8 @@ export class Stage {
     this.invalidate()
   }
 
-  /** Whether soft actors are drawn as blobs among the blocks. */
-  private softShown = false
-  /** Which actors are cleared out of the world, so it draws only the soft ones. */
-  private hidden = new Set<Actor>()
-  /** Clears an actor's blobs out of the world (they are still posed, but draw nothing), or puts them back. */
-  private hideIn(actor: Actor, hide: boolean) {
-    const world = this.world
-    if (!world || hide === this.hidden.has(actor)) return
-    if (hide) {
-      this.hidden.add(actor)
-      const o = actor.blobs.opacity, own = o.slice(0, actor.blobs.count)
-      o.fill(0, 0, actor.blobs.count)
-      world.recolor(actor)
-      o.set(own)
-    } else {
-      this.hidden.delete(actor)
-      if (actor === this.actor && this.painter) this.paintOver()
-      else world.recolor(actor)
-    }
-  }
+  /** The soft actors (`Actor.soft`), a world of their own while the scene is drawn as blocks. */
+  private soft?: SplatWorld
 
   /** How many cubes and faces are on show while the scene is drawn as blocks. */
   get blockCount() { return this.blocks ? { blocks: this.blocks.blocks, faces: this.blocks.faces } : undefined }
@@ -357,11 +338,18 @@ export class Stage {
   /** Makes the cubes for the actors on show (again), or puts them away. */
   private block() {
     if (this.blocks) { this.scene.remove(this.blocks); this.blocks.dispose(); this.blocks = undefined }
+    if (this.soft) { this.scene.remove(this.soft); this.soft.dispose(); this.soft = undefined }
     const all = this.actor ? [this.actor, ...this.extras] : []
-    // with soft actors among them, the world stays drawn for those alone: the rest are cleared out of it (and put back)
-    this.softShown = !!this.blockLook && all.some((a) => a.soft)
-    if (this.world) for (const a of all) if (!a.soft) this.hideIn(a, this.softShown)
     if (this.blockLook && this.actor) {
+      // soft actors are a small world of their own, drawn among the cubes, so the scene's own world is not drawn at all
+      const soft = all.filter((a) => a.soft)
+      if (soft.length) {
+        this.soft = new SplatWorld(soft, { mode: this.mode, lights: this.opts.lights, sort: this.sort })
+        this.soft.setFog(...this.fog)
+        this.soft.setMarks(this.marks)
+        if (this.opts.lights) this.soft.setLights(this.lit.lights, this.lit.ambient)
+        this.scene.add(this.soft)
+      }
       this.blocks = new BlockView(all.filter((a) => !a.soft), this.blockLook)
       this.blocks.setLights(this.lit.lights, this.lit.ambient, this.blockLook.ambient)
       this.scene.add(this.blocks)
@@ -383,7 +371,7 @@ export class Stage {
   /** Sends the painted colors to the GPU, then puts the actor's own back on the CPU (as `highlight` does). */
   private paintOver() {
     const { actor, world, painter } = this
-    if (!actor || !world || this.hidden.has(actor)) return
+    if (!actor || !world) return
     const c = actor.blobs.color, o = actor.blobs.opacity, n = actor.blobs.count
     if (painter) {
       const own = c.slice(0, n * 3), solid = o.slice(0, n)
@@ -576,6 +564,7 @@ export class Stage {
   setFog(color: [number, number, number], near: number, far: number) {
     this.fog = [color, near, far]
     this.world?.setFog(color, near, far)
+    this.soft?.setFog(color, near, far)
     this.invalidate()
   }
 
@@ -698,6 +687,7 @@ export class Stage {
     const cel = this.opts.lights ? this.celLook : undefined
     world.cel = !!cel
     world.setMarks(cel || this.neonLook || this.glassLook || this.washLook ? { kind: 'flat' } : this.marks)
+    this.soft?.setMarks(this.marks)
     if (!this.opts.lights) return
     this.light()
   }
@@ -775,6 +765,7 @@ export class Stage {
   setLights(lights: Light[], ambient: number | readonly [number, number, number] = 1) {
     this.lit = { lights, ambient }
     this.blocks?.setLights(lights, ambient, this.blockLook?.ambient)
+    if (this.soft && this.opts.lights) this.soft.setLights(lights, ambient)
     this.light()
     this.invalidate()
   }
@@ -811,7 +802,8 @@ export class Stage {
   setShow(s: Show) {
     this.show = s
     if (this.baking) return
-    if (this.world) this.world.visible = s !== 'bones' && !(this.blocks && !this.pixel && !this.softShown)
+    if (this.world) this.world.visible = s !== 'bones' && !(this.blocks && !this.pixel)
+    if (this.soft) this.soft.visible = s !== 'bones' && !this.pixel
     if (this.blocks) this.blocks.visible = s !== 'bones' && !this.pixel
     if (this.rig) { this.rig.visible = s !== 'blobs'; this.rig.onTop = s === 'both'; this.rig.update() }
     this.invalidate()
@@ -1176,6 +1168,7 @@ export class Stage {
     cancelAnimationFrame(this.raf)
     this.world?.dispose()
     this.blocks?.dispose()
+    this.soft?.dispose()
     this.rig?.dispose()
     this.lines?.dispose()
     this.neon?.dispose()

@@ -9,18 +9,25 @@ import { hugged, unlit } from '../../splat-engine/voxel.ts'
  * and takes seconds to cut, which would hold the page still. The same biome, seed and count plan the same world here
  * as on the page. Each piece is sent as it is cut (the islands in order, then the bridges), then `done`.
  */
-export interface IslandJob { id: number; biome: string; seed: number; count: number; spacing: number; /** No light baked in, for a look that lights it itself (blocks). */ plain?: boolean }
+export interface IslandJob {
+  id: number; biome: string; seed: number; count: number; spacing: number
+  /** No light baked in, for a look that lights it itself (blocks). */
+  plain?: boolean
+  /** Which pieces this worker cuts (islands first, then bridges); left out, all of them. Big islands are cut a worker each. */
+  only?: number[]
+}
 
 /** One piece of a world as it comes back: `index` counts the islands first, then the bridges. */
 export interface IslandCut { id: number; index?: number; cut?: import('../creator/pack.ts').PackedCut; done?: true; error?: string }
 
 self.onmessage = (ev: MessageEvent<IslandJob>) => {
-  const { id, biome, seed, count, spacing, plain } = ev.data
+  const { id, biome, seed, count, spacing, plain, only } = ev.data
   const post = (m: IslandCut, moved: Transferable[] = []) => (self as unknown as Worker).postMessage(m, moved)
   try {
     const world = planWorld(biome, seed, count)
     const docs = [...world.islands.map((i) => i.doc), ...world.bridges.map((b) => b.doc)]
     docs.forEach((doc, index) => {
+      if (only && !only.includes(index)) return
       const scene = described('island', doc, doc.name)
       // baked light: discs fitted to the shapes' outer edges, as Pixel Diorama cuts, so edges are straight and lines sit on them
       const cut = pack(plain ? unlit(() => scene.make(spacing)) : hugged(() => scene.make(spacing)))

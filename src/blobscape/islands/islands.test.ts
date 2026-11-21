@@ -9,7 +9,7 @@ import { wornLand } from '../../splat-engine/erode.ts'
 import { reviewScene } from '../diorama/review.ts'
 import { describedProject } from '../creator/described.ts'
 import { BIOMES, MEADOW } from './biomes.ts'
-import { MAX_SEED, census, fromPath, inside, islandDoc, makeIsland, planIsland } from './island.ts'
+import { MAX_SEED, census, fromPath, inside, makeIsland, planIsland } from './island.ts'
 import { MATERIALS, SOLID, colorsOf, dressed, family, leaning, letsThrough, material, opaque, paintOf } from './materials.ts'
 import { ROOM } from './things.ts'
 import { IslandWalk, SCALE as WALK_SCALE, passes } from './walk.ts'
@@ -109,7 +109,7 @@ test('things crowd into the kinds of place that like them', () => {
     const plan = planIsland(MEADOW, seed), grove = plan.patches.find((p) => p.name === 'oak grove')!
     for (const t of plan.things) if (t.name === 'oak') { all++; if (Math.hypot(t.at[0] - grove.at[0], t.at[2] - grove.at[1]) < grove.r) near++ }
     for (let k = 0; k < 400; k++) {
-      const x = (k % 20) / 20 * 14.8 - 7.4, z = Math.floor(k / 20) / 20 * 14.8 - 7.4
+      const x = (k % 20) / 20 * 29.6 - 14.8, z = Math.floor(k / 20) / 20 * 29.6 - 14.8
       if (inside(plan.lobes, x, z) > 0) { tries++; if (Math.hypot(x - grove.at[0], z - grove.at[1]) < grove.r) cover++ }
     }
   }
@@ -151,16 +151,18 @@ test('an island lets no light through its ground, rock or stones, seen from abov
   }
 })
 
-test('every thing on an island is marked as a prop, so Scene Creator takes it apart', () => {
+test('every thing on an island that has a bone is marked as a prop, so Scene Creator takes it apart', () => {
   const { plan, doc } = makeIsland('meadow', 7)
   const picks = markedPicks(doc)
-  assert.equal(doc.bones!.length, picks.length + plan.clouds.length + plan.things.filter((t) => t.kind === 'tree' || t.kind === 'pine').length)
-  assert.equal(picks.length, plan.things.length + plan.drifters.length)
+  // things past the bone budget stand on the island's own bone; the first ones placed (the landmarks first) keep theirs
+  const marked = doc.bones!.filter((b) => b.prop)
+  assert.equal(picks.length, marked.length)
+  assert.ok(picks.length >= MAX_PROPS && picks.length < plan.things.length + plan.drifters.length, `${picks.length} props of ${plan.things.length} things`)
+  for (const name of ['Ring of standing stones 1', 'Great oak 1', 'Granite tor 1']) if (plan.things.slice(0, 2).some((t) => name.startsWith(t.name[0].toUpperCase() + t.name.slice(1)))) assert.ok(marked.some((b) => b.prop === name), name)
+  assert.ok(doc.bones!.length + doc.air!.specks!.reduce((a, s) => a + s.count, 0) < 255)
   const project = describedProject(doc)
   // Scene Creator takes at most MAX_PROPS of them as props
   assert.equal(project.props.length, Math.min(picks.length, MAX_PROPS))
-  // the land keeps the ground, the rock under it and the clouds
-  assert.equal(islandDoc(plan).parts.filter((p) => !p.bone).length, 2)
 })
 
 test('an island passes the checks a scene written by hand passes', () => {
@@ -224,7 +226,7 @@ test('a world is a chain of islands apart in the sky, each a sound description, 
       if (j === k) return
       for (let n = 0; n < 64; n++) {
         const t = (n / 64) * Math.PI * 2
-        for (let r = 0; r < 16; r += 0.05) {
+        for (let r = 0; r < 32; r += 0.05) {
           const x = Math.cos(t) * r, z = Math.sin(t) * r
           if (inside(a.plan.lobes, x, z) < 0) break
           assert.ok(inside(b.plan.lobes, x + a.at[0] - b.at[0], z + a.at[2] - b.at[2]) < -GAP * 0.4, `${biome} ${seed}: island ${j} reaches island ${k}`)

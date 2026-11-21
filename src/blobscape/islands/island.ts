@@ -20,18 +20,24 @@ export const MAX_SEED = 999999
 export const LOOP = 12
 /**
  * How much bigger across an island is than the first ones (Matt, 2026-11-20: two or three times bigger, so there is
- * room for creatures and somewhere to go). Things keep their size; there are more of them.
+ * room for creatures and somewhere to go; then twice that again, toward a place the size of a game's level). Things
+ * keep their size; there are more of them (`THICK`).
  */
-export const GROW = 2.2
-/** Half the block of land an island's outline is cut from: about fifteen units across, seventy meters beside the elf. */
+export const GROW = 4.4
+/** Half the block of land an island's outline is cut from: about thirty units across, a hundred and fifty meters beside the elf. */
 const HALF = 3.35 * GROW
 /** How deep the turf and earth are before the rock under them. */
 const SLAB = 0.34
 /** How wide the trodden path is, to each side of its middle. */
-const PATH = 0.08
+const PATH = 0.14
 /** Room left along each side of the path for someone walking it, past its trodden width: no thing stands in the way. */
 const WALKER = 0.08
-/** The bones an island's things may take: with the clouds, the drifting rocks and the specks, under the 255 a byte names. */
+/** How thickly things stand, beside the first islands: the island's ground grows by GROW², its things by this share of it. */
+const THICK = 0.3
+/**
+ * The bones an island's things may take: with the clouds, the drifting rocks and the specks, under the 255 a byte
+ * names. Things past it are set on the island's own bone: they stand still and are not props.
+ */
 const BONE_BUDGET = 190
 /** Specks in an island's air at most, of each kind: each is a bone, and bones and specks together must fit in a byte. */
 const SPECKS_EACH = 20
@@ -96,7 +102,6 @@ export function fromPath(path: Vec3[], x: number, z: number): number {
 const between = (range: [number, number], u: number) => range[0] + (range[1] - range[0]) * u
 const whole = (range: [number, number], u: number) => range[0] + Math.floor(u * (range[1] - range[0] + 1))
 /** Bones a thing takes: a tree's crown sways on a second. */
-const bonesOf = (kind: Thing['kind']) => (kind === 'tree' || kind === 'pine' ? 2 : 1)
 
 /**
  * Plans island `seed` of a biome. `gates` are the angles (radians, x = cos, z = sin) at which its path comes in and
@@ -117,10 +122,11 @@ export function planIsland(biome: Biome, seed: number, gates?: [number, number])
 
   // hills, each inside the outline
   const peaks: LandSpec['peaks'] = []
-  const hills = Math.round(whole(biome.land.hills, rnd()) * GROW)
+  // a scene description takes 16 peaks at most: on the biggest islands each is a little wider instead
+  const hills = Math.min(16, Math.round(whole(biome.land.hills, rnd()) * GROW))
   for (let i = 0; i < hills; i++) {
     const a = rnd() * Math.PI * 2, d = Math.sqrt(rnd()) * 0.75 * reach(lobes, a)
-    peaks.push({ at: [r3(Math.cos(a) * d), r3(Math.sin(a) * d)], h: r3(between(biome.land.height, rnd())), r: r3((0.8 + 0.8 * rnd()) * Math.sqrt(GROW)) })
+    peaks.push({ at: [r3(Math.cos(a) * d), r3(Math.sin(a) * d)], h: r3(between(biome.land.height, rnd())), r: r3((0.8 + 0.8 * rnd()) * Math.sqrt(GROW) * (GROW > 3 ? 1.2 : 1)) })
   }
   const land: IslandPlan['land'] = { at: [0, 0, 0], half: [HALF, HALF], base: SLAB, peaks, noise: biome.land.noise, drops: biome.land.drops, slump: biome.land.slump, seed: 1 + (hashOf(seed, 1) % 9999) }
   if (biome.land.beds) land.beds = biome.land.beds
@@ -148,12 +154,10 @@ export function planIsland(biome: Biome, seed: number, gates?: [number, number])
   // what stands on it: each thing the best of some tries, by room from the others, the height and place it likes, and luck
   const things: Thing[] = []
   let path: Vec3[] = []
-  let bones = 0
   const place = (p: Population, apart = 0) => {
-    const n = Math.round(whole(p.count, rnd()) * (p.count[1] > 1 ? GROW * GROW : 1))
+    const n = Math.round(whole(p.count, rnd()) * (p.count[1] > 1 ? GROW * GROW * THICK : 1))
     for (let k = 0; k < n; k++) {
       const size = r3(between(p.size, rnd()) * BIGGER[p.kind]), room = ROOM[p.kind] * size, own = hashOf(seed, 5000 + salt++)
-      if (bones + bonesOf(p.kind) > BONE_BUDGET) return
       let best: { x: number; z: number; score: number } | undefined
       for (let tries = 0; tries < 50; tries++) {
         const a = rnd() * Math.PI * 2, d = between(p.zone, Math.sqrt(rnd())) * reach(lobes, a), x = Math.cos(a) * d, z = Math.sin(a) * d
@@ -171,7 +175,6 @@ export function planIsland(biome: Biome, seed: number, gates?: [number, number])
       const made: Record<string, string> = {}
       Object.keys(p.made).forEach((use, j) => { made[use] = pickOf(p.made[use], own, j) })
       things.push({ kind: p.kind, name: p.name, plural: p.plural, at: [r3(best.x), r3(ground.at(best.x, best.z)), r3(best.z)], size, seed: own, made })
-      bones += bonesOf(p.kind)
     }
   }
   // two landmarks, different ones, far apart
@@ -267,17 +270,23 @@ export function islandScene(plan: IslandPlan): { doc: SceneDoc; solid: number[] 
 
   // the underside: rock hanging under each lobe, widest just under the turf and coming to a point, joined and roughened
   const hanging: ShapeDoc[] = plan.lobes.map((l, i): ShapeDoc => {
-    const deep = l.r * (1.0 + 0.45 * chance(seed, 200 + i))
+    // on the biggest islands shallower than wide (the rock under them was most of the cut, and seldom seen), but not so
+    // shallow that its slope is seen nearly edge on, where a skin of discs lets light through
+    const deep = Math.min(l.r * (1.0 + 0.45 * chance(seed, 200 + i)), Math.max(4, l.r * 0.85) + 0.8 * chance(seed, 200 + i))
     return { kind: 'cylinder', at: [l.at[0], r3(-0.12 - deep), l.at[1]], height: r3(deep), r: 0.04, rTop: r3(l.r * 0.96) }
   })
   parts.push({ shape: { kind: 'rough', shape: { kind: 'join', blend: 'smooth', by: 0.1, shapes: hanging }, by: 0.06, scale: 0.4 }, ...dressed(rock, seed), ink: { kind: 'cracks', amount: 0.25 } })
 
   // what stands on it
   const counts = new Map<string, number>()
+  let thingBones = 0
   plan.things.forEach((t, i) => {
     const n = (counts.get(t.name) ?? 0) + 1
     counts.set(t.name, n)
-    const piece = makeThing(t, i, n)
+    let piece = makeThing(t, i, n)
+    // past the budget a thing stands on the island's own bone: still, and not a prop
+    if (thingBones + piece.bones.length > BONE_BUDGET) piece = { ...piece, bones: [], moves: [], parts: piece.parts.map(({ bone: _, ...part }) => part) }
+    thingBones += piece.bones.length
     solid.push(...piece.solid.map((k) => parts.length + k))
     bones.push(...piece.bones); parts.push(...piece.parts); moves.push(...piece.moves)
   })

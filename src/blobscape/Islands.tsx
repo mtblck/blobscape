@@ -72,7 +72,8 @@ export function Islands() {
 
   const [biomeId, setBiomeId] = useState(() => biomeOf(params().get('biome')).id)
   const [seed, setSeed] = useState(() => { const n = Math.floor(Number(params().get('seed'))); return n >= 1 && n <= MAX_SEED ? n : typeof window === 'undefined' ? 1 : 1 + Math.floor(Math.random() * MAX_SEED) })
-  const [detail, setDetail] = useState<string>(() => detailAsked(DETAIL, labelNames)?.id ?? (coarse ? 'chunky' : 'medium'))
+  // Chunky at first everywhere: an island is about a hundred and fifty meters across, and finer takes many seconds to cut
+  const [detail, setDetail] = useState<string>(() => detailAsked(DETAIL, labelNames)?.id ?? 'chunky')
   // how the island is drawn: built from blocks (Matt, 2026-11-20: the style to drive these islands), as pixel art, or as the blobs themselves
   const [style, setStyle] = useState<'blocks' | 'pixel' | 'blobs'>(() => { const s = params().get('style'); return s === 'pixel' || s === 'blobs' ? s : 'blocks' })
   const pixels = style === 'pixel', blocky = style === 'blocks'
@@ -115,26 +116,35 @@ export function Islands() {
   const cutAt = DETAIL.find((d) => d.id === detail)!.spacing * (blocky ? blockSize : 1)
   const [made, setMade] = useState<{ built: Built; pieces: Built[]; of: typeof scene; scenes: typeof scenes; world: typeof world; detail: string; plain: boolean; spacing: number }>()
   const ready = made?.of === scene && made.detail === detail && made.plain === blocky && made.spacing === cutAt ? made : undefined
-  const worker = useRef<Worker>(undefined)
-  useEffect(() => () => worker.current?.terminate(), [])
+  // a worker an island (each takes seconds), the bridges with the first; kept between cuts while nothing is stopped
+  const workers = useRef<Worker[]>([])
+  useEffect(() => () => workers.current.forEach((w) => w.terminate()), [])
   useEffect(() => {
     let done = false
     // a moment's wait, so dragging a slider asks for one cut, not one a step
     const timer = setTimeout(() => {
-      const w = (worker.current ??= new Worker(new URL('./islands/cut.worker.ts', import.meta.url), { type: 'module' }))
+      const lanes = Math.max(1, Math.min(world.islands.length, (navigator.hardwareConcurrency || 2) - 1))
+      const all = world.islands.length + world.bridges.length
       const id = Math.random(), pieces: Built[] = []
-      w.onmessage = (ev: MessageEvent<IslandCut>) => {
-        if (ev.data.id !== id) return
-        if (ev.data.cut) pieces[ev.data.index!] = unpack(ev.data.cut)
-        else if (ev.data.done) { done = true; setMade({ built: pieces[0], pieces, of: scene, scenes, world, detail, plain: blocky, spacing: cutAt }) }
-        else setFailed(`The island could not be cut: ${ev.data.error}`)
+      let got = 0
+      for (let k = 0; k < lanes; k++) {
+        const w = (workers.current[k] ??= new Worker(new URL('./islands/cut.worker.ts', import.meta.url), { type: 'module' }))
+        // islands dealt round the workers; the bridges, which are quick, go to the first
+        const only = [...Array(all).keys()].filter((i) => (i < world.islands.length ? i % lanes === k : k === 0))
+        w.onmessage = (ev: MessageEvent<IslandCut>) => {
+          if (ev.data.id !== id) return
+          if (ev.data.cut) {
+            pieces[ev.data.index!] = unpack(ev.data.cut)
+            if (++got === all) { done = true; setMade({ built: pieces[0], pieces, of: scene, scenes, world, detail, plain: blocky, spacing: cutAt }) }
+          } else if (ev.data.error) setFailed(`The island could not be cut: ${ev.data.error}`)
+        }
+        w.postMessage({ id, biome: biomeId, seed, count, spacing: cutAt, plain: blocky, only } satisfies IslandJob)
       }
-      w.postMessage({ id, biome: biomeId, seed, count, spacing: cutAt, plain: blocky } satisfies IslandJob)
     }, 150)
     return () => {
       clearTimeout(timer)
       // a cut still going is for something no longer asked for: stop it rather than wait for it
-      if (!done && worker.current) { worker.current.terminate(); worker.current = undefined }
+      if (!done) { workers.current.forEach((w) => w.terminate()); workers.current = [] }
     }
   }, [scene, scenes, world, biomeId, seed, count, detail, blocky, cutAt])
 
@@ -144,7 +154,7 @@ export function Islands() {
     const unit = (h: string) => [1, 3, 5].map((k) => parseInt(h.slice(k, k + 2), 16) / 255)
     return ready.world.islands.map((isl, j) => {
       const piece = ready.pieces[j], ramp = material(biomeOf(isl.biome).ground.top).ramp.map(unit)
-      return grassActor(growGrass({ blobs: piece.blobs, joints: piece.skin.joints }, { cell: ready.spacing, ramp, blades: (coarse ? 5000 : 12000) * (j ? 0.5 : 1), seed: isl.seed }))
+      return grassActor(growGrass({ blobs: piece.blobs, joints: piece.skin.joints }, { cell: ready.spacing, ramp, blades: (coarse ? 10000 : 20000) * (j ? 0.5 : 1), seed: isl.seed }))
     })
   }, [ready, blocky, grass, coarse])
 
