@@ -290,7 +290,8 @@ export const LIGHTHOUSE: SceneDoc = {
       { from: 208, height: 0.006, times: 2 },
       { from: 238, height: 0.003, times: 3, phase: 0.3 },
     ],
-    floats: [{ bone: 'boat', at: [BOAT[0], 0, BOAT[2]], size: 0.2 }, { bone: 'buoy', at: [BUOY[0], 0, BUOY[2]], size: 0.06 }],
+    foam: 1,
+       floats: [{ bone: 'boat', at: [BOAT[0], 0, BOAT[2]], size: 0.2 }, { bone: 'buoy', at: [BUOY[0], 0, BUOY[2]], size: 0.06 }],
   },
   // the lamp's two beams: a pool of warm light on each side of the tower, sweeping over the sea and the rock with the lens
   // and the same two beams where they cross the gallery: each stands just past the railing and a little above it, so

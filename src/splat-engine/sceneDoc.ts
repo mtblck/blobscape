@@ -167,6 +167,12 @@ export interface WaterDoc {
    * surface is drawn (`ripple`). A boat, a buoy, a lily pad. Its own moves still apply under it.
    */
   floats?: { bone: string; at: Vec3; size: number }[]
+  /**
+   * Foam where the water strikes what stands in it (a post, a rock, a bank): it gathers where the surge against a
+   * wall runs up fast, spreads a little and fades over a second or two, and the surface is drawn white under it.
+   * `foam` is how readily it gathers, 0 (none, when left out) to 4; 1 suits swells against posts.
+   */
+  foam?: number
 }
 
 /** A scene's air: haze, mist, shafts of light and specks. */
@@ -1180,6 +1186,7 @@ export function checkScene(doc: unknown): string[] {
           vec(f.at, `${at}.at`); num(f.size, `${at}.size`, 0.01, 1)
         })
       }
+      opt(w.foam, 'water.foam', 0, 4)
     }
   }
   if (doc.air !== undefined) {
@@ -1494,6 +1501,8 @@ export interface WaterPlan {
   horizon: Vec3
   /** Whether there is water at a point: the still ground there lies under the level. It measures the ground each time, so ask once a cell. */
   wet(x: number, z: number): boolean
+  /** Whether something stands out of the water at a dry point (a rock, a bank, a post), rather than there being no ground at all (past the edge of a scene's sea). Measured each time, as `wet` is. */
+  stands(x: number, z: number): boolean
   /** Every raindrop that lands on the water in one loop: where, and how many seconds into the loop. */
   drops: { x: number; z: number; at: number }[]
   /** What moves through the surface: a ball of radius `r` round the rest point `at`, riding the bone at index `bone`, moving water `draft` deep where it crosses. */
@@ -1502,6 +1511,8 @@ export interface WaterPlan {
   swells: { from: number; height: number; times: number; phase: number }[]
   /** What rides the water: the bone at index `bone`, sitting on it at `at`, tipped by its slope across `size`. */
   floats: { bone: number; at: Vec3; size: number }[]
+  /** How readily foam gathers where the water strikes something standing in it: 0 for none. */
+  foam: number
 }
 
 // --- What hangs in the air
@@ -1617,7 +1628,7 @@ function planSpecks(air: AirDoc | undefined, loop: number, ground: (x: number, z
 }
 
 /** A scene's water with its defaults filled in, and every raindrop that lands on it in a loop. */
-function planWater(w: WaterDoc, box: { x0: number; x1: number; z0: number; z1: number }, doc: SceneDoc, specks: Speck[], bones: Bone[], wet: (x: number, z: number) => boolean): WaterPlan {
+function planWater(w: WaterDoc, box: { x0: number; x1: number; z0: number; z1: number }, doc: SceneDoc, specks: Speck[], bones: Bone[], wet: (x: number, z: number) => boolean, stands: (x: number, z: number) => boolean): WaterPlan {
   const cell = w.cell ?? WATER_CELL
   const lin = (h: string) => unit(h).map(linear) as Vec3
   const body = lin(w.color)
@@ -1640,10 +1651,11 @@ function planWater(w: WaterDoc, box: { x0: number; x1: number; z0: number; z1: n
     level: w.level, x0: box.x0, z0: box.z0, nx: Math.max(1, Math.ceil((box.x1 - box.x0) / cell)), nz: Math.max(1, Math.ceil((box.z1 - box.z0) / cell)), cell,
     speed: w.speed ?? 0.32, damping: w.damping ?? 0.6, ripple: w.ripple ?? 4, deep: w.deep ?? 0.05, clear: w.clear ?? 0.5,
     splash: w.splash ?? { r: cell * 1.5, depth: cell * 0.2 },
-    body, sky, horizon, wet, drops,
+    body, sky, horizon, wet, stands, drops,
     bodies: (w.bodies ?? []).map((b) => ({ bone: bones.findIndex((k) => k.name === b.bone), at: b.at, r: b.r, draft: b.draft ?? b.r * 0.1 })),
     swells: (w.swells ?? []).map((v) => ({ from: v.from, height: v.height, times: v.times, phase: v.phase ?? 0 })),
     floats: (w.floats ?? []).map((f) => ({ bone: bones.findIndex((k) => k.name === f.bone), at: f.at, size: f.size })),
+    foam: w.foam ?? 0,
   }
 }
 
@@ -1793,17 +1805,16 @@ export function compileScene(doc: SceneDoc, { puffs = true }: { puffs?: boolean 
   const ground = lands || pond ? solidShapes(0.02).still : []
   const pondBox = pond && { x0: Math.min(pond.from[0], pond.to[0]), x1: Math.max(pond.from[0], pond.to[0]), z0: Math.min(pond.from[1], pond.to[1]), z1: Math.max(pond.from[1], pond.to[1]) }
   /** Whether there is water at (x, z): inside the box, with a bed of still ground under the level to hold it (looked for from just over the surface, so a roof overhead is not in the way). */
-  const wetAt = (x: number, z: number) => {
-    if (!pond || !pondBox || x < pondBox.x0 || x > pondBox.x1 || z < pondBox.z0 || z > pondBox.z1) return false
-    const bed = groundUnder(ground, x, z, pond.level + 3 * (pond.cell ?? WATER_CELL), -SMALL_REACH * 2)
-    return bed > -SMALL_REACH * 2 + 1e-6 && bed < pond.level - WATER_LEAST
-  }
+  const bedAt = (x: number, z: number) => !pond || !pondBox || x < pondBox.x0 || x > pondBox.x1 || z < pondBox.z0 || z > pondBox.z1 ? -Infinity
+    : groundUnder(ground, x, z, pond.level + (pond.cell ?? WATER_CELL), -SMALL_REACH * 2)
+  const wetAt = (x: number, z: number) => { const bed = bedAt(x, z); return !!pond && bed > -SMALL_REACH * 2 + 1e-6 && bed < pond.level - WATER_LEAST }
+  const standsAt = (x: number, z: number) => !!pond && bedAt(x, z) >= pond.level - WATER_LEAST
   const specks = planSpecks(doc.air, doc.loop, (x, z, top, bottom) => {
     const g = groundUnder(ground, x, z, top, bottom)
     // nothing between the sky and the water there: the water is what it lands on
     return pond && g < pond.level && wetAt(x, z) ? pond.level : g
   }, pond?.level)
-  const water = pond && pondBox ? planWater(pond, pondBox, doc, specks, bones, wetAt) : undefined
+  const water = pond && pondBox ? planWater(pond, pondBox, doc, specks, bones, wetAt, standsAt) : undefined
   const banks = doc.air?.mist ?? []
   banks.forEach((m, mi) => { for (let k = 0; k < BANK_BONES; k++) bones.push({ name: `~mist${mi}-${k}`, parent: 0, head: m.at }) })
   for (const p of specks) { p.index = bones.length; bones.push({ name: p.bone, parent: 0, head: p.at }) }

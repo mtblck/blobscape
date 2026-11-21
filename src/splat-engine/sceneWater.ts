@@ -34,6 +34,10 @@ export class SceneWater {
   readonly count: number
   /** The kept moments: each cell's height in steps of `STEP`, a moment after another. */
   private readonly frames: Int16Array
+  /** Foam on each cell as last laid by `set`, 0 to 1 (`WaterDoc.foam`); all 0 where the scene has none. */
+  readonly foam: Float32Array
+  /** The kept moments' foam, a byte a cell, when the scene has foam. */
+  private readonly foamFrames: Uint8Array | null
   private shown = NaN
 
   /** Works one loop of the scene's water out. `fps` moments a second are kept (24), after `warm` loops run to fill the pond with rings (2). */
@@ -53,6 +57,9 @@ export class SceneWater {
     const sk = plan.bodies.length ? new Skeleton(scene.bones) : undefined
     const at = [0, 0, 0]
     const swells = plan.swells.length ? new Swells(water, plan, scene.loop) : undefined
+    this.foam = new Float32Array(nx * nz)
+    const froth = plan.foam > 0 ? new Froth(water, plan, scene.loop, this.foam) : undefined
+    this.foamFrames = froth ? new Uint8Array(this.count * nx * nz) : null
     let next = 0
     for (let run = 0; run <= warm; run++) {
       next = 0
@@ -61,6 +68,8 @@ export class SceneWater {
         if (run === warm && k % every === 0) {
           const f = this.frames, o = (k / every) * nx * nz, h = water.h
           for (let c = 0; c < h.length; c++) f[o + c] = Math.max(-32767, Math.min(32767, Math.round(h[c] / STEP)))
+          const ff = this.foamFrames, foam = this.foam
+          if (ff) for (let c = 0; c < foam.length; c++) ff[o + c] = Math.round(Math.min(1, foam[c]) * 255)
         }
         if (sk) {
           scene.pose(sk, t)
@@ -76,6 +85,7 @@ export class SceneWater {
         const until = ((k + 1) / ticks) * scene.loop
         for (; next < plan.drops.length && plan.drops[next].at < until; next++) water.splash(plan.drops[next].x, plan.drops[next].z, plan.splash.r, plan.splash.depth)
         water.step(WATER_TICK)
+        if (froth) froth.tick()
       }
     }
     this.set(0)
@@ -115,6 +125,8 @@ export class SceneWater {
     const n = this.water.h.length, a = Math.floor(u) % this.count, b = (a + 1) % this.count, w = u - Math.floor(u)
     const h = this.water.h, f = this.frames
     for (let k = 0; k < n; k++) h[k] = (f[a * n + k] * (1 - w) + f[b * n + k] * w) * STEP
+    const ff = this.foamFrames, foam = this.foam
+    if (ff) for (let k = 0; k < n; k++) foam[k] = (ff[a * n + k] * (1 - w) + ff[b * n + k] * w) / 255
     this.water.version++
   }
 
@@ -128,6 +140,111 @@ export class SceneWater {
     this.set(t)
     shapeSurface(this.surface, this.water, p.ripple)
     shadeSurface(this.surface, { body: p.body, sky: p.sky, horizon: p.horizon, clear: p.clear, steep: p.ripple, deep: p.deep, mirror }, eye, lights)
+    if (this.foamFrames) whiten(this.surface, this.foam)
+  }
+}
+
+/** Foam's color, in sRGB: a white a shade cool, so the scene's own light gives it its tone. */
+const FOAM_COLOR = [0.93, 0.96, 0.98]
+/** Seconds foam takes to fade to about a third. */
+const FOAM_LIFE = 1.2
+/** The share of the way to the mean of its wet neighbors foam goes a tick: how fast it spreads off the wall. */
+const FOAM_SPREAD = 0.12
+/** The water's speed up or down against a wall, as a share of the swells' own, under which no foam gathers. */
+const FOAM_FROM = 0.08
+/** Foam gathered a second by water moving one swell speed past `FOAM_FROM` beside something standing alone, at `foam` 1. */
+const FOAM_GAIN = 16
+/** How many cells round a cell beside a wall are looked at to see how much it stands in open water. */
+const FOAM_LOOK = 3
+
+/**
+ * Foam where the water strikes something standing in it (`WaterDoc.foam`). The cells beside a dry cell inside the
+ * water (a post, the rock, a bank; not the grid's open edge) gather it while the water there runs up faster than
+ * `FOAM_FROM` of the swells' speed, as a surge thrown up a wall does; every tick it spreads a little toward its wet
+ * neighbors and fades. Run once a tick with the water, through the warm loops as well, so the loop joins.
+ */
+class Froth {
+  private readonly water: Water
+  private readonly foam: Float32Array
+  private readonly next: Float32Array
+  /** The cells beside a wall. */
+  private readonly shore: Int32Array
+  /** How much each of those stands in open water (the share of water round it, cubed): a post more than a long bank. */
+  private readonly open: Float32Array
+  /** Foam gathered a tick per unit of upward speed past the threshold, and the threshold, in the water's own units. */
+  private readonly gain: number
+  private readonly from: number
+  private readonly keep = Math.exp(-WATER_TICK / FOAM_LIFE)
+
+  constructor(water: Water, plan: WaterPlan, loop: number, foam: Float32Array) {
+    this.water = water
+    this.foam = foam
+    this.next = new Float32Array(foam.length)
+    const { nx, nz, x0, z0, cell } = plan, wet = water.wet
+    // the dry cells something stands in (not those past the edge of the sea, where there is nothing to strike)
+    const wall = new Uint8Array(nx * nz)
+    for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) if (!wet[j * nx + i]) wall[j * nx + i] = plan.stands(x0 + (i + 0.5) * cell, z0 + (j + 0.5) * cell) ? 1 : 0
+    const shore: number[] = [], open: number[] = []
+    for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+      const k = j * nx + i
+      if (!wet[k]) continue
+      if (!((i > 0 && wall[k - 1]) || (i < nx - 1 && wall[k + 1]) || (j > 0 && wall[k - nx]) || (j < nz - 1 && wall[k + nx]))) continue
+      // how much water lies round it: a post standing alone in the sea is cut through by the whole sea's motion
+      let all = 0, w = 0
+      for (let b = -FOAM_LOOK; b <= FOAM_LOOK; b++) for (let a = -FOAM_LOOK; a <= FOAM_LOOK; a++) {
+        const p = i + a, q = j + b
+        if (p < 0 || q < 0 || p >= nx || q >= nz) continue
+        all++; if (wet[q * nx + p]) w++
+      }
+      shore.push(k); open.push((w / all) ** 3)
+    }
+    this.shore = Int32Array.from(shore)
+    this.open = Float32Array.from(open)
+    // the swells' own speed up and down; with none, what a centimeter's ripple a second would be
+    let pace = 0
+    for (const s of plan.swells) pace += (TAU * s.times * s.height) / loop
+    if (!pace) pace = 0.01
+    this.gain = (plan.foam * FOAM_GAIN * WATER_TICK) / pace
+    this.from = FOAM_FROM * pace
+  }
+
+  tick() {
+    const { foam, next, shore, open, gain, from, keep } = this
+    const { wet, v } = this.water, { nx, nz } = this.water.spec
+    for (let s = 0; s < shore.length; s++) {
+      const k = shore[s], hit = Math.abs(v[k]) - from
+      if (hit > 0) foam[k] = Math.min(1.5, foam[k] + hit * gain * open[s])
+    }
+    for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+      const k = j * nx + i
+      if (!wet[k]) { next[k] = 0; continue }
+      let sum = 0, n = 0
+      if (i > 0 && wet[k - 1]) { sum += foam[k - 1]; n++ }
+      if (i < nx - 1 && wet[k + 1]) { sum += foam[k + 1]; n++ }
+      if (j > 0 && wet[k - nx]) { sum += foam[k - nx]; n++ }
+      if (j < nz - 1 && wet[k + nx]) { sum += foam[k + nx]; n++ }
+      const f = n ? foam[k] + FOAM_SPREAD * (sum / n - foam[k]) : foam[k]
+      next[k] = f * keep
+    }
+    foam.set(next)
+  }
+}
+
+/**
+ * Draws foam on the surface: each blob is taken toward white by the foam on its cells (blended as its height is),
+ * by a share of its own (a hash of its index) so foam lies in lace and clumps rather than an even sheet, and made
+ * as solid as its foam.
+ */
+function whiten(s: WaterSurface, foam: Float32Array) {
+  const { blobs, taps, shares } = s, { color, opacity } = blobs, n = shares.length / 4
+  for (let k = 0; k < n; k++) {
+    let f = 0
+    for (let q = 0; q < 4; q++) { const c = taps[k * 8 + q]; if (c >= 0) f += foam[c] * shares[k * 4 + q] }
+    if (f < 0.02) continue
+    const lace = 0.4 + 1.2 * (((Math.imul(k, 2654435761) >>> 0) % 1000) / 1000)
+    const a = Math.min(1, f * lace)
+    for (let c = 0; c < 3; c++) color[k * 3 + c] += (FOAM_COLOR[c] - color[k * 3 + c]) * a
+    opacity[k] = Math.max(opacity[k], a)
   }
 }
 

@@ -179,3 +179,50 @@ test('a swell comes in as long straight crests across the water, not rings', () 
   assert.ok(along > 0.002, `the water rises and falls along the swell (${(along * 1000).toFixed(2)} mm)`)
   assert.ok(across < along * 0.25, `and a crest runs straight across it (${(across * 1000).toFixed(2)} against ${(along * 1000).toFixed(2)} mm)`)
 })
+
+test('foam gathers where a swell strikes a post, fades, joins up over the loop, and is drawn white', () => {
+  const d = pond()
+  d.air = undefined
+  d.moves = []
+  d.bones = []
+  d.parts = [
+    { shape: { kind: 'cut', shape: { kind: 'box', at: [0, -0.2, 0], half: [1, 0.2, 1] }, hole: { kind: 'box', at: [0, 0, 0], half: [0.8, 0.15, 0.5] } }, paint: '#3f7a45' },
+    { shape: { kind: 'cylinder', at: [0.2, -0.2, 0], height: 0.4, r: 0.05 }, paint: '#101018' },
+    // a deck on the post, well over the water: the water still runs under it
+    { shape: { kind: 'box', at: [0.2, 0.12, 0], half: [0.2, 0.015, 0.2] }, paint: '#101018' },
+  ]
+  d.water = { level: -0.05, from: [-0.8, -0.5], to: [0.8, 0.5], color: '#2c6470', cell: 0.04, speed: 0.3, damping: 0.1, swells: [{ from: -90, height: 0.006, times: 2 }], foam: 1 }
+  assert.deepEqual(checkScene(d), [])
+  const scene = compileScene(d), plan = scene.water!
+  assert.ok(plan.wet(0.35, 0.1) && !plan.wet(0.2, 0), 'water under the deck, none in the post')
+  assert.ok(plan.stands(0.2, 0) && !plan.stands(0.2, 0.2) && !plan.stands(0.9, 0), 'the post stands out of the water; open water and past the box do not')
+  const w = new SceneWater(scene, { fps: 12, warm: 1 })
+  const foamAt = (x: number, z: number) => w.foam[w.water.index(x, z)]
+  let byPost = 0, open = 0
+  for (let t = 0; t < scene.loop; t += 0.25) {
+    w.set(t)
+    byPost = Math.max(byPost, foamAt(0.2 - 0.08, 0), foamAt(0.2 + 0.08, 0), foamAt(0.2, 0.08), foamAt(0.2, -0.08))
+    open = Math.max(open, foamAt(-0.4, 0.2))
+  }
+  assert.ok(byPost > 0.3, `foam beside the post (${byPost.toFixed(2)})`)
+  assert.ok(open < 0.02, `none out in open water (${open.toFixed(3)})`)
+  // the end of the loop leads back into its start
+  w.set(scene.loop - 1e-3); const end = Float32Array.from(w.foam); w.set(0)
+  let jump = 0
+  for (let k = 0; k < end.length; k++) jump = Math.max(jump, Math.abs(end[k] - w.foam[k]))
+  assert.ok(jump < 0.05, `the foam joins up (${jump.toFixed(3)})`)
+  // drawn: the surface is whiter where the foam is thickest
+  let at = 0, most = 0
+  for (let t = 0; t < scene.loop; t += 0.25) { w.set(t); const f = foamAt(0.12, 0); if (f > most) { most = f; at = t } }
+  w.show(at, [0, 3, 3])
+  const { blobs } = w.surface, near = (x: number, z: number) => {
+    let best = 0, gap = Infinity
+    for (let k = 0; k < blobs.count; k++) { const g = Math.hypot(w.surface.at[k * 2] - x, w.surface.at[k * 2 + 1] - z); if (g < gap) { gap = g; best = k } }
+    return blobs.color[best * 3] + blobs.color[best * 3 + 1] + blobs.color[best * 3 + 2]
+  }
+  assert.ok(near(0.12, 0) > near(-0.4, 0.2) + 0.3, 'foam is drawn white')
+  // with no foam asked for, none
+  d.water.foam = undefined
+  const plain = new SceneWater(compileScene(d), { fps: 12, warm: 0 })
+  assert.ok(plain.foam.every((f) => f === 0))
+})
