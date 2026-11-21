@@ -48,6 +48,6 @@ export function sideFor(kind: 'png' | 'mp4', asked: number): number {
 }
 
 /** A file name for an export: the page, the scene, the style when it is not pixel art, and what it is. */
-export function exportName(scene: string, style: string, what: 'loop' | 'frame' | 'path', ext: 'png' | 'mp4', page = 'pixel-diorama'): string {
+export function exportName(scene: string, style: string, what: 'loop' | 'frame' | 'path', ext: 'png' | 'mp4', page = 'diorama'): string {
   return `${page}-${scene}${style === 'pixel' ? '' : `-${style}`}${what === 'frame' ? '' : `-${what}`}.${ext}`
 }

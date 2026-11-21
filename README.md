@@ -31,9 +31,9 @@
 </p>
 
 <p align="center">
-  <a href="https://blobscape.dev/experiments/pixel-diorama/"><img src=".github/readme/hero.webp" alt="Five Diorama scenes drawn as pixel art from Gaussian splats: a lighthouse on a small island at night, a red dragon over a lava pool, an owl in a wizard hat beside a cauldron, snowy floating islands with a waterfall, and a scarecrow in a pumpkin patch under a full moon" width="880" /></a>
+  <a href="https://blobscape.dev/experiments/diorama/"><img src=".github/readme/hero.webp" alt="Five Diorama scenes drawn as pixel art from Gaussian splats: a lighthouse on a small island at night, a red dragon over a lava pool, an owl in a wizard hat beside a cauldron, snowy floating islands with a waterfall, and a scarecrow in a pumpkin patch under a full moon" width="880" /></a>
 </p>
-<p align="center"><sub>Every one of these is real 3D, made of blobs and drawn live as pixel art. <a href="https://blobscape.dev/experiments/pixel-diorama/">Turn them in Diorama</a>.</sub></p>
+<p align="center"><sub>Every one of these is real 3D, made of blobs and drawn live as pixel art. <a href="https://blobscape.dev/experiments/diorama/">Turn them in Diorama</a>.</sub></p>
 
 ## What is a Gaussian splat?
 
@@ -84,8 +84,8 @@ Files stay in your browser.
       Creatures made of blobs, moving on bones. Take one away as a rigged .glb or a sprite sheet.
     </td>
     <td width="33%" valign="top">
-      <a href="https://blobscape.dev/experiments/pixel-diorama/"><img src="public/covers/pixel-diorama.webp" alt="A pixel-art lighthouse on a small island at night" /></a><br />
-      <a href="https://blobscape.dev/experiments/pixel-diorama/"><b>Diorama</b></a><br />
+      <a href="https://blobscape.dev/experiments/diorama/"><img src="public/covers/pixel-diorama.webp" alt="A pixel-art lighthouse on a small island at night" /></a><br />
+      <a href="https://blobscape.dev/experiments/diorama/"><b>Diorama</b></a><br />
       Scenes built from shapes and drawn as moving pixel art. Turn them, or switch the pixels off.
     </td>
     <td width="33%" valign="top">

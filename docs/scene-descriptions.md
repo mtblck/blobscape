@@ -134,7 +134,7 @@ Give Claude the type and one existing scene, then say what you want:
 Then:
 
 1. Run `checkScene` on what comes back. If it lists mistakes, paste the list back and ask for a fix. The messages say where each one is.
-2. Add it to `DIORAMAS` in `src/blobscape/diorama/scenes.ts` with `described(id, DOC, 'what is in the picture')` and open `/experiments/pixel-diorama/?scene=<id>`.
+2. Add it to `DIORAMAS` in `src/blobscape/diorama/scenes.ts` with `described(id, DOC, 'what is in the picture')` and open `/experiments/diorama/?scene=<id>`.
 3. Look, then ask for changes in words: "the hut is too small", "more snow", "warmer palette". Small changes are small edits.
 
 Asking for several different takes at once and picking the best works better than polishing the first.

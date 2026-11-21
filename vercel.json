@@ -58,6 +58,16 @@
       "permanent": true
     },
     {
+      "source": "/experiments/pixel-diorama",
+      "destination": "/experiments/diorama/",
+      "permanent": true
+    },
+    {
+      "source": "/experiments/pixel-diorama/:path*",
+      "destination": "/experiments/diorama/",
+      "permanent": true
+    },
+    {
       "source": "/tools/fit-a-picture/:path*",
       "destination": "/experiments/fit-a-picture/",
       "permanent": true

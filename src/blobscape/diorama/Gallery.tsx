@@ -28,7 +28,7 @@ export function Gallery({ ids, testId }: { ids: readonly string[]; testId?: stri
       {loops.map((l) => (
         <li key={l.id} className="relative flex flex-col gap-2 rounded-2xl border border-rule bg-paper p-2.5 transition-colors hover:border-ink-faint">
           <Loop id={l.id} />
-          <a href={`/experiments/pixel-diorama/${l.id === LOOPS[0].id ? '' : `?scene=${l.id}`}`} className={`${NAME} px-1`}>{l.label}</a>
+          <a href={`/experiments/diorama/${l.id === LOOPS[0].id ? '' : `?scene=${l.id}`}`} className={`${NAME} px-1`}>{l.label}</a>
         </li>
       ))}
     </ul>

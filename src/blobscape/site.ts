@@ -107,7 +107,7 @@ export const EXPERIMENTS = [
   {
     id: 'diorama',
     title: 'Diorama',
-    url: '/experiments/pixel-diorama/',
+    url: '/experiments/diorama/',
     cover: '/covers/pixel-diorama.webp',
     tags: ['pixel', 'tool'],
     needs: 'WebGPU or WebGL 2',

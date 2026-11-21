@@ -217,6 +217,8 @@ export function parsePath(pathname: string): Route | null {
   if (m.length === 2 && m[0] === 'experiments' && m[1] === 'day-and-night') return { page: 'daynight' }
   if (m.length === 2 && m[0] === 'experiments' && m[1] === 'seasonal-bouquets') return { page: 'bouquet' }
   if (m.length === 2 && m[0] === 'experiments' && m[1] === 'biome-islands') return { page: 'islands' }
+  if (m.length === 2 && m[0] === 'experiments' && m[1] === 'diorama') return { page: 'diorama' }
+  // Diorama's address while it was Pixel Diorama (Vercel redirects it too)
   if (m.length === 2 && m[0] === 'experiments' && m[1] === 'pixel-diorama') return { page: 'diorama' }
   if (m.length === 2 && m[0] === 'experiments' && m[1] === 'scan-studio') return { page: 'scan' }
   if (m.length === 2 && m[0] === 'experiments' && m[1] === 'dungeon-run') return { page: 'dungeon' }
@@ -254,7 +256,7 @@ export function href(r: Route): string {
   if (r.page === 'daynight') return '/experiments/day-and-night/'
   if (r.page === 'bouquet') return '/experiments/seasonal-bouquets/'
   if (r.page === 'islands') return '/experiments/biome-islands/'
-  if (r.page === 'diorama') return '/experiments/pixel-diorama/'
+  if (r.page === 'diorama') return '/experiments/diorama/'
   if (r.page === 'scan') return '/experiments/scan-studio/'
   if (r.page === 'dungeon') return '/experiments/dungeon-run/'
   if (r.page === 'experiments') return '/experiments/'

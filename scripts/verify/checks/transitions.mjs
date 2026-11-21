@@ -7,7 +7,7 @@ export default [
     entries: ['src/blobscape/PixelDiorama.tsx', 'src/blobscape/diorama/transitionOverlay.ts', 'src/splat-core/transition.ts'],
     async run({ shots, join, fails, ok, open }) {
       for (const kind of ['wipe', 'cut']) {
-        const d = await open(`/experiments/pixel-diorama/?offscreen=1&scene=campfire&detail=chunky&transition=${kind}`, { viewport: { width: 1280, height: 900 } })
+        const d = await open(`/experiments/diorama/?offscreen=1&scene=campfire&detail=chunky&transition=${kind}`, { viewport: { width: 1280, height: 900 } })
         const p = d.page
         await p.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).catch(() => {})
         await p.evaluate(async () => { const s = window.__diorama.stage; window.__stageKept = s; await s.frame(0.5); await s.frame(0.6) })

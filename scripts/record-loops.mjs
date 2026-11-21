@@ -68,7 +68,7 @@ async function record(id) {
   const ctx = await browser.newContext({ viewport: VIEW, deviceScaleFactor: 1 })
   const page = await ctx.newPage()
   page.on('pageerror', (e) => console.error(`${id}: ${e.message}`))
-  await page.goto(`${base}/experiments/pixel-diorama/?offscreen=1&scene=${id}`)
+  await page.goto(`${base}/experiments/diorama/?offscreen=1&scene=${id}`)
   // ready once the scene is cut (no loading mark) and the art has a size; then hold still a moment for late effects
   const ready = () => page.waitForFunction(async () => { const d = window.__diorama; if (!d || document.querySelector('[data-testid=diorama-loading]')) return false; await d.stage.frame(0); return !!d.stage.artSize }, null, { timeout: 300000, polling: 1000 })
   await ready()

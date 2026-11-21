@@ -62,7 +62,7 @@ if (!review.problems.length) say(review.warnings.length ? 'Sound, with things to
 const out = flag('--shots')
 if (out !== undefined && doc && f) {
   const { serveDist, launch, dist } = await import('./verify/lib.mjs')
-  if (!existsSync(join(dist, 'experiments', 'pixel-diorama', 'index.html'))) { console.error('No built site to draw with: run `npm run build` first.'); process.exit(2) }
+  if (!existsSync(join(dist, 'experiments', 'diorama', 'index.html'))) { console.error('No built site to draw with: run `npm run build` first.'); process.exit(2) }
   const folder = resolve(out || 'scene-shots')
   mkdirSync(folder, { recursive: true })
   // the page is handed a copy, kept out of the way of the file itself
@@ -74,7 +74,7 @@ if (out !== undefined && doc && f) {
   const browser = await launch()
   try {
     const page = await (await browser.newContext({ deviceScaleFactor: 1, viewport: { width: 1280, height: 900 } })).newPage()
-    await page.goto(`${served.base}/experiments/pixel-diorama/?offscreen=1`)
+    await page.goto(`${served.base}/experiments/diorama/?offscreen=1`)
     await page.waitForFunction(() => window.__diorama, null, { timeout: 180000 })
     await page.getByTestId('diorama-model').setInputFiles(json)
     await page.waitForFunction(() => /^(Opened|Could not)/.test(document.querySelector('[data-testid=diorama-model-note]')?.textContent ?? ''), null, { timeout: 60000 })
