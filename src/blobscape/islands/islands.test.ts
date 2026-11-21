@@ -313,3 +313,44 @@ test('falling leaves come down on the island, never at rest in the open air past
   }
   assert.equal(low.filter((y) => y < 0.02).length, 0)
 })
+
+test('creatures live on every island, picked by its biome, and walk loops that stay on their island and clear of things', async () => {
+  const { LIVES, LEAST, AmongCreatures, makeResident, poseResident, residentAt, settle } = await import('./creatures.ts')
+  const bodies = new Map<string, ReturnType<typeof makeResident>>()
+  const built = (r: { id: string; seed: number }) => {
+    const key = `${r.id}:${r.seed}`
+    if (!bodies.has(key)) bodies.set(key, makeResident({ ...r, size: 1, island: 0, home: [0, 0], plan: { legs: [], period: 1 }, offset: 0, height: 1 }))
+    return bodies.get(key)!
+  }
+  for (const [biome, seed] of [['meadow', 37], ['pinewood', 5], ['mesa', 11]] as const) {
+    const w = planWorld(biome, seed), g = new WorldGround(w, DETAIL[1].spacing)
+    const rs = settle(w, g.islands, built)
+    assert.deepEqual(rs.map((r) => [r.id, r.home]), settle(w, g.islands, built).map((r) => [r.id, r.home]), 'the same world gives the same creatures')
+    w.islands.forEach((isl, j) => {
+      const mine = rs.filter((r) => r.island === j)
+      assert.ok(mine.length >= LEAST, `${biome} ${seed}, island ${j}: ${mine.length} creatures`)
+      for (const r of mine) assert.ok(LIVES[isl.biome].some((k) => k.id === r.id), `${r.id} doesn't live in a ${isl.biome}`)
+    })
+    for (const r of rs) {
+      const isl = g.islands[r.island]
+      assert.ok(r.plan.legs.length >= 2, `${r.id} on island ${r.island} has ${r.plan.legs.length} stops`)
+      for (let t = 0; t < r.plan.period; t += 0.25) {
+        const at = residentAt(r, t)
+        assert.ok(isl.insideAt(at.x, at.z) > 0.5 && isl.standsAt(at.x, at.z), `${biome} ${seed}: the ${r.id} walks off its island or into something at ${t.toFixed(2)} s`)
+      }
+      // posed, its lowest point is near the ground under it
+      const body = built(r), sk = body.skeleton
+      poseResident(r, sk, 1.3, g.groundAt)
+      let low = Infinity
+      for (let b = 0; b < sk.count; b++) low = Math.min(low, sk.posedHead[b * 3 + 1])
+      const at = residentAt(r, 1.3)
+      assert.ok(low > g.groundAt(at.x, at.z) - 0.3, `${r.id}: a bone ${(g.groundAt(at.x, at.z) - low).toFixed(2)} m under the ground`)
+    }
+    // the elf can't walk into a creature, but can always step away from one
+    const among = new AmongCreatures(g), r = rs[0], at = residentAt(r, 0)
+    among.update(rs, 0, { x: at.x + 2, z: at.z })
+    assert.equal(among.standsAt(at.x, at.z), false)
+    among.update(rs, 0, { x: at.x + 0.1, z: at.z })
+    assert.equal(among.standsAt(at.x + 0.25, at.z), g.standsAt(at.x + 0.25, at.z))
+  }
+})

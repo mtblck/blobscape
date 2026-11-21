@@ -17,6 +17,7 @@ import { download } from './files.ts'
 import { BIOMES, biomeOf } from './islands/biomes.ts'
 import { MAX_SEED, census } from './islands/island.ts'
 import { WORLD_ISLANDS, placeIsland, planWorld, poseBridge, type WorldGround, type WorldPlan } from './islands/world.ts'
+import type { AmongCreatures, Resident } from './islands/creatures.ts'
 import { material } from './islands/materials.ts'
 import { grassActor, growGrass } from './islands/grass.ts'
 import { cloudActor, poseClouds } from './islands/clouds.ts'
@@ -52,7 +53,7 @@ function overview(world: WorldPlan, first: Orbit): Orbit {
 }
 
 declare global {
-  interface Window { __islands?: { stage: CreatureStage; blobs: () => number; bones: () => number; things: () => string[]; name: () => string; walk: () => IslandWalk | undefined } }
+  interface Window { __islands?: { stage: CreatureStage; blobs: () => number; bones: () => number; things: () => string[]; name: () => string; walk: () => IslandWalk | undefined; creatures: () => { id: string; at: number[] }[] } }
 }
 
 /**
@@ -84,6 +85,7 @@ export function Islands() {
   const [count, setCount] = useState(() => (params().get('islands') === '1' ? 1 : WORLD_ISLANDS))
   // grass as blobs among the blocks (Matt, 2026-11-20: a finer texture beside the cubes, for dense vegetation)
   const [grass, setGrass] = useState(() => params().get('grass') !== '0')
+  const [creatures, setCreatures] = useState(() => params().get('creatures') !== '0')
   // and how its blades are drawn: soft blobs, or gouache dabs (Brush and Ink's marks)
   const [grassAs, setGrassAs] = useState<'blobs' | 'gouache'>(() => (params().get('grassas') === 'gouache' ? 'gouache' : 'blobs'))
 
@@ -210,26 +212,55 @@ export function Islands() {
   const rocking = useRef(rock && !calm)
   rocking.current = rock && !calm
   const dressed = useRef<typeof scene | undefined>(undefined)
-  // the elf, made once an island is cut (it takes a moment, so the waiting mark shows first) and again for a new island
-  const [walk, setWalk] = useState<{ walk: IslandWalk; of: NonNullable<typeof made> }>()
-  const walker = walking && walk && walk.of === ready ? walk.walk : undefined
+  // the creatures that live there, made once a world is cut (several an island, picked by its biome; islands/creatures.ts),
+  // with the world's ground they walk on. The ground is asked of the shapes, not the cut, so one spacing serves every
+  // detail and a finer cut keeps everyone where they stand.
+  const [life, setLife] = useState<{ of: NonNullable<typeof made>; ground: WorldGround; residents: Resident[]; bodies: Built[]; pose: typeof import('./islands/creatures.ts').poseResident }>()
+  const lifeNow = life && life.of === ready ? life : undefined
+  const living = creatures ? lifeNow : undefined
   useEffect(() => {
-    if (!walking || !ready || walk?.of === ready) return
+    if (!ready || life?.of === ready) return
     let gone = false
-    // the ground is asked of the shapes, not the cut, so one spacing serves every detail and a finer cut keeps the elf where it stands
-    const spacing = DETAIL[0].spacing
     const timer = setTimeout(() => {
-      Promise.all([import('./islands/walk.ts'), import('./islands/world.ts')]).then(([{ IslandWalk }, { WorldGround, worldStart }]) => {
+      Promise.all([import('./islands/world.ts'), import('./islands/creatures.ts')]).then(([{ WorldGround }, { another, makeResident, poseResident, settle }]) => {
         if (gone) return
-        const ground = new WorldGround(ready.world, spacing)
-        const w = new IslandWalk(ground, worldStart(ready.world, ground), { blobs: coarse ? 10000 : 16000 })
-        // the view starts behind the elf, looking the way it faces
-        setOrbit((o) => ({ ...o, ...BEHIND, azimuth: w.walker.heading * DEG + 180 }))
-        setWalk({ walk: w, of: ready })
+        const ground = new WorldGround(ready.world, DETAIL[0].spacing)
+        // each kind of body is built once; the others of its kind share its blobs on skeletons of their own
+        const made = new Map<string, Built>()
+        const bodyOf = (r: { id: string; seed: number }) => {
+          const key = `${r.id}:${r.seed}`
+          if (!made.has(key)) made.set(key, makeResident({ ...r, size: 1, island: 0, home: [0, 0], plan: { legs: [], period: 1 }, offset: 0, height: 1 }))
+          return made.get(key)!
+        }
+        const residents = settle(ready.world, ground.islands, bodyOf)
+        const used = new Set<Built>()
+        const bodies = residents.map((r) => { const b = bodyOf(r); if (used.has(b)) return another(b); used.add(b); return b })
+        setLife({ of: ready, ground, residents, bodies, pose: poseResident })
       })
     }, 30)
     return () => { gone = true; clearTimeout(timer) }
-  }, [walking, ready, walk, coarse])
+  }, [ready, life])
+
+  // the elf, made once the creatures are (it takes a moment, so the waiting mark shows first) and again for a new island
+  const [walk, setWalk] = useState<{ walk: IslandWalk; of: NonNullable<typeof made>; among: AmongCreatures }>()
+  const walker = walking && walk && walk.of === ready ? walk.walk : undefined
+  const among = walker ? walk!.among : undefined
+  useEffect(() => {
+    if (!walking || !ready || walk?.of === ready || !lifeNow) return
+    let gone = false
+    const timer = setTimeout(() => {
+      Promise.all([import('./islands/walk.ts'), import('./islands/world.ts'), import('./islands/creatures.ts')]).then(([{ IslandWalk }, { worldStart }, { AmongCreatures }]) => {
+        if (gone) return
+        // the elf walks round the creatures, not through them
+        const ground = new AmongCreatures(lifeNow.ground)
+        const w = new IslandWalk(ground, worldStart(ready.world, lifeNow.ground), { blobs: coarse ? 10000 : 16000 })
+        // the view starts behind the elf, looking the way it faces
+        setOrbit((o) => ({ ...o, ...BEHIND, azimuth: w.walker.heading * DEG + 180 }))
+        setWalk({ walk: w, of: ready, among: ground })
+      })
+    }, 30)
+    return () => { gone = true; clearTimeout(timer) }
+  }, [walking, ready, walk, coarse, lifeNow])
 
   // keys and the thumb stick both steer the elf by the picture: up is away from you, whichever way it faces
   const keys = useRef(new Set<string>())
@@ -273,7 +304,8 @@ export function Islands() {
     if (!stage || !ready) return
     const d = ready.of, { scenes: all, world: wd } = ready
     const others = pieces.slice(1)
-    stage.setActor(pieces[0], undefined, [...others, ...grown, ...clouds, ...(walker ? [walker.elf] : [])])
+    const residents = living?.residents ?? [], bodies = living?.bodies ?? []
+    stage.setActor(pieces[0], undefined, [...others, ...grown, ...clouds, ...bodies, ...(walker ? [walker.elf] : [])])
     const ground = walker?.ground as WorldGround | undefined
     // a new island brings its own starting view; a new detail keeps the view it had
     const start = overview(wd, d.views[0].orbit)
@@ -291,8 +323,11 @@ export function Islands() {
       }
       grown.forEach((g, j) => placeIsland(wd.islands[j], g.skeleton))
       clouds.forEach((c, j) => { poseClouds(wd.islands[j].plan, c.skeleton, calm ? 0 : t, d.loop); placeIsland(wd.islands[j], c.skeleton) })
+      // the creatures walk their loops on the world's own clock, so where each is depends on the time alone
+      residents.forEach((r, j) => living!.pose(r, bodies[j].skeleton, t, living!.ground.groundAt, calm))
       stage.setLights(d.lights(t, stage.backend === 'webgpu'), 1)
       if (walker) {
+        among?.update(residents, calm ? 0 : t, walker.walker)
         const dt = Math.max(0, Math.min(0.1, t - last))
         last = t
         // the stick steers by the view as it stands: up on it is away from the camera
@@ -307,7 +342,7 @@ export function Islands() {
         stage.orbit = { ...inMeters(o), target: [eye[0], eye[1], eye[2]] }
       } else if (d.swing && rocking.current) stage.orbit = inMeters(swung(orbitNow.current, d.swing, d.loop, t))
     }, stage.time)
-  }, [stage, ready, pieces, walker, calm, grown, clouds])
+  }, [stage, ready, pieces, walker, calm, grown, clouds, living, among])
   // walking needs the clock to run, whether or not the island's own moves do
   useEffect(() => { if (stage) stage.playing = playing || !!walker }, [stage, playing, walker])
   useEffect(() => { if (stage) { if (!walkNow.current) stage.orbit = inMeters(orbit); stage.invalidate() } }, [stage, orbit, rock])
@@ -317,17 +352,19 @@ export function Islands() {
   const shownAll = made?.scenes ?? scenes
   // the elf is made with its colors baked in: the island's palette gains the ones it lacks, and the other islands' theirs
   const elfColors = useMemo(() => (walker ? colorsOf(walker.elf) : undefined), [walker])
+  const lifeColors = useMemo(() => (pixels ? [...new Set(living?.bodies.map((b) => b.blobs))].map((blobs) => colorsOf({ blobs }, 4)) : undefined), [pixels, living])
   const look = useMemo<PixelLook | undefined>(() => {
     if (!pixels) return undefined
     const hex = (cs: readonly (readonly number[])[]) => cs.map((c) => `#${c.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`)
     const lists = [...new Set(shownAll.map((s) => s.palette))].map((p) => hex(p.colors))
     if (elfColors) lists.push(elfColors)
+    if (lifeColors) lists.push(...lifeColors)
     const colors = lists.length > 1 ? joinPalettes(lists) : shown.palette.colors
     return { palette: colors, dither: shown.finish.dither, outline: darkest(colors), glow: shown.finish.glow, edges: 1, parts: true, sky: shown.sky, steady: STEADY,
       // Pixel Diorama's finish: calmer pixels, flat surfaces, lines only across things, hard discs where things meet, a shine
       // on lit forms. No rim: it goes by a fixed view, and here the view turns with the walker.
       tidy: true, calm: true, flat: true, across: true, solid: true, shine: true, selout: true, fine: true, own: true, surface: true, snap: true }
-  }, [pixels, shown, shownAll, elfColors])
+  }, [pixels, shown, shownAll, elfColors, lifeColors])
   useEffect(() => { stage?.setPixels(look, 2) }, [stage, look])
   // blocks: cubes a whole number of the cut's cells across, lit from the starting view's left; only an island cut with no light of its own
   const blockSpacing = ready?.plain ? ready.spacing : undefined
@@ -344,16 +381,16 @@ export function Islands() {
   useEffect(() => {
     const url = new URL(location.href)
     const put = (k: string, v: string | undefined) => { if (v) url.searchParams.set(k, v); else url.searchParams.delete(k) }
-    put('biome', BIOMES.length > 1 ? biomeId : undefined); put('seed', String(seed)); put('style', blocky ? undefined : style); put('block', blocky && blockSize !== BLOCK_START.size ? String(blockSize) : undefined); put('rock', rock ? undefined : '0'); put('grass', grass ? undefined : '0'); put('grassas', blocky && grass && grassAs !== 'blobs' ? grassAs : undefined); put('walk', walking ? '1' : undefined); put('islands', count === 1 ? '1' : undefined)
+    put('biome', BIOMES.length > 1 ? biomeId : undefined); put('seed', String(seed)); put('style', blocky ? undefined : style); put('block', blocky && blockSize !== BLOCK_START.size ? String(blockSize) : undefined); put('rock', rock ? undefined : '0'); put('grass', grass ? undefined : '0'); put('grassas', blocky && grass && grassAs !== 'blobs' ? grassAs : undefined); put('walk', walking ? '1' : undefined); put('islands', count === 1 ? '1' : undefined); put('creatures', creatures ? undefined : '0')
     history.replaceState(history.state, '', url)
-  }, [biomeId, seed, style, blocky, blockSize, rock, walking, count, grass, grassAs])
+  }, [biomeId, seed, style, blocky, blockSize, rock, walking, count, grass, grassAs, creatures])
 
   // For verify: the stage and the island, without clicking
   useEffect(() => {
     if (!stage || !ready) return
-    window.__islands = { stage, blobs: () => stage.blobCount, bones: () => ready.built.skeleton.count, things: () => lines.map((l) => l.words), name: () => island.plan.name, walk: () => walkNow.current }
+    window.__islands = { stage, blobs: () => stage.blobCount, bones: () => ready.built.skeleton.count, things: () => lines.map((l) => l.words), name: () => island.plan.name, walk: () => walkNow.current, creatures: () => living?.residents.map((r, j) => ({ id: r.id, at: [...living.bodies[j].skeleton.posedHead.subarray(0, 3)] })) ?? [] }
     return () => { delete window.__islands }
-  }, [stage, ready, lines, island])
+  }, [stage, ready, lines, island, living])
 
   const drag = useRef<OrbitDrag | null>(null)
   const pointers = useRef(new Map<number, { x: number; y: number }>())
@@ -438,6 +475,7 @@ export function Islands() {
           <span><span className="text-ink" data-testid="islands-name">{names.length === 1 ? island.plan.name : `${island.plan.name} and ${names.length - 1} more`}</span></span>
           {walker && <span data-testid="islands-walked">walked <WalkedMeters walk={walker} /></span>}
           <span>{ready && <><span className="tabular-nums text-ink">{things}</span> things, <span className="tabular-nums text-ink" data-testid="islands-blobs">{pieces.reduce((a, p) => a + p.blobs.count, 0).toLocaleString()}</span> blobs{finerWaits && ', the island underfoot coming finer'}</>}</span>
+          {living && <span data-testid="islands-creatures"><span className="tabular-nums text-ink">{living.residents.length}</span> creatures</span>}
         </>}
         tabsLabel="Options"
         tabs={[
@@ -505,6 +543,7 @@ export function Islands() {
                   </div>
                 </Field>
                 <div className="grid gap-3">
+                  <Toggle label="Creatures" checked={creatures} onChange={setCreatures} />
                   <Toggle label="Rock the view" checked={rock} onChange={setRock} />
                   <div><Button small onClick={() => setPlaying((p) => !p)}>{playing ? 'Hold still' : 'Let it move'}</Button></div>
                 </div>
