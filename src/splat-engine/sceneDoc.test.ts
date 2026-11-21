@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { PASS_EDGE, checkScene, compileScene, duringAt, passed, sprouted, type SceneDoc } from './sceneDoc.ts'
+import { PASS_EDGE, checkScene, compileScene, dulled, duringAt, hasLamps, isLit, litFor, passed, sprouted, type SceneDoc } from './sceneDoc.ts'
 import { buildVoxels } from './voxel.ts'
 import { PUFFS } from './poke.ts'
 import { Skeleton } from './rig.ts'
@@ -322,4 +322,53 @@ test('a description can ask for art-pixel effects, and they come out as the pixe
   wrong.look = { bands: 3, heat: 1.5, cycle: [{ colors: ['#3f7a45'], times: 0.5 }] } as SceneDoc['look']
   const errs = checkScene(wrong)
   for (const at of [/^look\.bands:/, /^look\.heat:/, /^look\.cycle\[0\]\.colors:/, /^look\.cycle\[0\]\.times:/]) assert.ok(errs.some((e) => at.test(e)), `${at} in ${errs.join('; ')}`)
+})
+
+test('lamps wait for the dark: by day a light is out, its glass is dull and no longer glows, its flame is gone', () => {
+  const d = sound()
+  assert.equal(hasLamps(d), false)
+  assert.equal(litFor(d, false), d, 'nothing in it goes by the time, so it comes back as it is')
+  // the glowing part becomes a lamp's glass, with a flame on it, embers over it, a sun, and a light for each
+  d.parts[2] = { ...d.parts[2], lit: 'dark' }
+  d.parts.push({ shape: { kind: 'sphere', at: [0.3, 0.6, 0], r: 0.02 }, paint: '#ffd166', glow: true, lit: 'dark', unlit: 'gone' })
+  d.parts.push({ shape: { kind: 'sphere', at: [0, 2, -1], r: 0.2 }, paint: '#ffd166', glow: true, lit: 'day', unlit: 'gone' })
+  d.parts.push({ shape: { kind: 'box', at: [0.6, 0.3, 0], half: [0.05, 0.05, 0.02] }, paint: { kind: 'bands', axis: 'y', size: 0.05, colors: ['#ffd166', '#f4f1e4'] }, glow: true, lit: 'dark', unlit: '#101018' })
+  d.lights = [{ at: [0.3, 0.6, 0], color: '#ffd166', strength: 2, range: 1, lit: 'dark' }, { at: [0, 1, 0], color: '#f4f1e4', strength: 1, range: 1, lit: 'always' }]
+  d.air = { specks: [{ kind: 'embers', count: 4, from: [0.2, 0.6, -0.1], to: [0.4, 1, 0.1], colors: ['#ffd166'], lit: 'dark' }, { kind: 'dust', count: 4, from: [-1, 0, -1], to: [1, 1, 1], colors: ['#f4f1e4'] }] }
+  assert.deepEqual(checkScene(d), [])
+  assert.equal(hasLamps(d), true)
+  const n = d.parts.length
+
+  const day = litFor(d, false)
+  assert.deepEqual(checkScene(day), [])
+  assert.equal(day.parts.length, n - 1, 'only the flame is gone by day; the sun is up')
+  const glass = day.parts[2]
+  assert.ok(!glass.glow && !glass.lit && glass.paint === dulled('#ffd166'), 'the glass is a dull shade of itself and takes light like anything else')
+  assert.ok(day.palette.includes(dulled('#ffd166')) && day.palette.includes('#101018'))
+  assert.equal(day.parts[n - 2].paint, '#101018', 'a part with its own unlit color takes it whole')
+  assert.deepEqual(day.lights!.map((l) => l.strength), [0, 1], 'the lamp is out and keeps its place; what always shines does')
+  assert.deepEqual(day.air!.specks!.map((k) => k.kind), ['dust'])
+  assert.equal(d.parts.length, n, 'the description itself is untouched')
+
+  const dark = litFor(d, true)
+  assert.deepEqual(checkScene(dark), [])
+  assert.equal(dark.parts.length, n - 1, 'only the sun is gone in the dark')
+  assert.ok(dark.parts[2].glow && dark.lights![0].strength === 2 && dark.air!.specks!.length === 2)
+
+  // a cave or a dungeon is never day: its lamps stay lit, but the sun still keeps its hours
+  const cave = litFor({ ...d, lamps: 'always' }, false)
+  assert.ok(cave.parts[2].glow && cave.lights![0].strength === 2)
+  assert.equal(litFor(d, false, 'always').lights![0].strength, 2, 'and whoever sets a scene down can say so too')
+  assert.ok(isLit('dark', false, 'always') && !isLit('day', true, 'always') && isLit(undefined, false))
+
+  // a dull shade is darker and nearer gray
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(dulled('#ffd166').slice(i, i + 2), 16))
+  assert.ok(r < 255 && Math.max(r, g, b) - Math.min(r, g, b) < 0xff - 0x66)
+
+  const wrong = sound()
+  wrong.parts[1] = { ...wrong.parts[1], lit: 'dark' }
+  wrong.parts[2] = { ...wrong.parts[2], unlit: 'gone' }
+  wrong.lights = [{ at: [0, 1, 0], color: '#f4f1e4', strength: 1, range: 1, lit: 'night' as 'dark' }]
+  const errs = checkScene({ ...wrong, lamps: 'never' as 'always' })
+  for (const at of [/^parts\[1\]\.lit:/, /^parts\[2\]\.unlit:/, /^lights\[0\]\.lit:/, /^lamps:/]) assert.ok(errs.some((e) => at.test(e)), `${at} in ${errs.join('; ')}`)
 })

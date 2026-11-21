@@ -63,9 +63,10 @@ export interface DrawnSubject {
 /**
  * One drawn look on a stage, with its settings: the marks, outlines, ASCII and cel shading of Brush and Ink, shared
  * with Pixel Diorama's Style tab. `look` undefined puts them all away (the page draws some other way, as pixel art).
- * Gives back the look's controls, each a section for a tab, and the color to put behind the transparent canvas.
+ * Gives back the look's controls, each a section for a tab, the color to put behind the transparent canvas, and
+ * `dark`: whether the look's time of day is night, where it has one (blocks), for the page to light the subject's lamps by.
  */
-export function useDrawnLook(stage: CreatureStage | undefined, look: Look | undefined, on: DrawnSubject): { controls: ReactNode; ground: string | undefined; forget: () => void } {
+export function useDrawnLook(stage: CreatureStage | undefined, look: Look | undefined, on: DrawnSubject): { controls: ReactNode; ground: string | undefined; dark: boolean | undefined; forget: () => void } {
   const [cel, setCel] = useState<CelChoice>(() => {
     const q = params(), n = (k: string, d: number) => (q.get(k) !== null && Number.isFinite(Number(q.get(k))) ? Number(q.get(k)) : d)
     return { ...CEL_START, backdrop: '', turn: n('turn', CEL_START.turn), height: n('height', CEL_START.height), tones: q.get('tones') === '3' ? 3 : 2, shadows: q.get('shadows') !== '0', smooth: n('smooth', CEL_START.smooth), fills: Math.max(0, Math.min(4, Math.round(n('fills', CEL_START.fills)))) }
@@ -327,5 +328,6 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
         )}
     </>
   )
-  return { controls, ground, forget: () => setCopied('') }
+  // a time of day says whether it is dark, which is what a scene's lamps go by; anything else leaves them as the scene was made
+  return { controls, ground, dark: blocky && blockBehind.time ? blockBehind.id === 'night' : undefined, forget: () => setCopied('') }
 }

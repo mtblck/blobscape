@@ -139,7 +139,7 @@ export const WINDOW: SceneDoc = {
     { shape: { kind: 'box', at: [-0.502, 0.409, 0.836], half: [0.132, 0.013, 0.097] }, paint: { kind: 'split', axis: 'x', at: -0.502, below: '#e8d8b0', above: '#ffe9a0' }, noShadow: true },
     { shape: { kind: 'box', at: [-0.502, 0.414, 0.836], half: [0.011, 0.018, 0.097] }, paint: '#a83838', noShadow: true },
     { shape: { kind: 'cylinder', at: [-0.273, 0.396, 0.748], height: 0.114, r: 0.026 }, paint: '#e8d8b0', noShadow: true },
-    { shape: { kind: 'cone', from: [-0.273, 0.51, 0.748], to: [-0.273, 0.616, 0.748], r: 0.028, rTo: 0.005 }, paint: '#ffc83c', bone: 'flame', glow: true, noShadow: true },
+    { shape: { kind: 'cone', from: [-0.273, 0.51, 0.748], to: [-0.273, 0.616, 0.748], r: 0.028, rTo: 0.005 }, paint: '#ffc83c', bone: 'flame', glow: true, lit: 'dark', unlit: 'gone', noShadow: true },
     { shape: { kind: 'cylinder', at: [-0.44, 0.0, 1.232], height: 0.229, r: 0.123 }, paint: { kind: 'faces', top: '#a83838', side: { kind: 'bands', axis: 'y', size: 0.05, colors: ['#684028', '#38221a'] } } },
     { shape: { kind: 'box', at: [0.177, 0.031, 0.643], half: [0.114, 0.031, 0.075], round: 0.007 }, paint: { kind: 'faces', top: '#28788c', side: { kind: 'split', axis: 'z', at: 0.704, below: '#28788c', above: '#e8d8b0' } }, noShadow: true },
     { shape: { kind: 'box', at: [0.157, 0.092, 0.67], half: [0.097, 0.031, 0.088], round: 0.007 }, paint: { kind: 'faces', top: '#a83838', side: { kind: 'split', axis: 'z', at: 0.704, below: '#a83838', above: '#e8d8b0' } }, noShadow: true },
@@ -297,9 +297,9 @@ export const WINDOW: SceneDoc = {
     { kind: 'drift', bone: 'mote39', by: [-0.033, -1.374, 1.11], times: 2, grow: [1.1, 0.5], phase: 0.927 },
   ],
   lights: [
-    { at: [-0.484, 0.616, 0.396], color: '#c8327c', strength: 1.8, range: 1.584 },
-    { at: [0.484, 0.616, 0.396], color: '#f89428', strength: 1.8, range: 1.584 },
-    { at: [0.0, 1.54, 0.44], color: '#ffc83c', strength: 1.4, range: 1.584 },
-    { at: [-0.273, 0.66, 0.748], color: '#ffc83c', strength: 1.5, range: 0.88, flicker: { by: 0.2, times: 9 }, shadows: true },
+    { at: [-0.484, 0.616, 0.396], color: '#c8327c', strength: 1.8, range: 1.584, lit: 'always' },
+    { at: [0.484, 0.616, 0.396], color: '#f89428', strength: 1.8, range: 1.584, lit: 'always' },
+    { at: [0.0, 1.54, 0.44], color: '#ffc83c', strength: 1.4, range: 1.584, lit: 'always' },
+    { at: [-0.273, 0.66, 0.748], color: '#ffc83c', strength: 1.5, range: 0.88, lit: 'dark', flicker: { by: 0.2, times: 9 }, shadows: true },
   ],
 }

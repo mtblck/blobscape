@@ -17,7 +17,7 @@ import { href } from './routes.ts'
 import type { CreatureStage } from './creature/stage.ts'
 import { TAB_SECTIONS, ViewPopup, Workbench } from '../shared/Workbench.tsx'
 import { DETAIL, PALETTES } from './diorama/scene.ts'
-import { DIORAMAS, described, type Diorama } from './diorama/scenes.ts'
+import { DIORAMAS, described, sceneOf, type Diorama } from './diorama/scenes.ts'
 import { SceneDetails, kilobytes, type SceneFacts } from './diorama/SceneDetails.tsx'
 import type { Skeleton } from '../splat-engine/rig.ts'
 import { Pokes } from '../splat-engine/poke.ts'
@@ -99,7 +99,10 @@ export function PixelDiorama() {
   const [modelNote, setModelNote] = useState('')
   const modelInput = useRef<HTMLInputElement>(null)
   const scenes = model ? [...DIORAMAS, model] : DIORAMAS
-  const diorama = scenes.find((d) => d.id === which) ?? DIORAMAS[0]
+  const picked0 = scenes.find((d) => d.id === which) ?? DIORAMAS[0]
+  /** Whether the style's time of day is night, where it has one: the scene's lamps and lit windows go by it (`Diorama.timed`). */
+  const [dark, setDark] = useState<boolean>()
+  const diorama = dark === undefined ? picked0 : picked0.timed?.(dark) ?? picked0
   /** The scene whose palette, finish and view are set. */
   const dressed = useRef(which)
   /** The scene picker: the modal of every scene's card. */
@@ -193,7 +196,7 @@ export function PixelDiorama() {
   const [made, setScene] = useState<{ built: Built; of: Diorama; detail: string; paint: string; plain: boolean }>()
   // Painting in steps happens as a scene is cut, in the palette picked. While another scene is being cut the controls
   // are still the old one's, so the new one is cut with its own palette and its own choice, which it then brings along.
-  const settled = !made || made.of === diorama
+  const settled = !made || sceneOf(made.of) === sceneOf(diorama)
   const paintId = settled ? palette : 'own'
   const stepColors = (settled ? steps : diorama.finish.steps) ? (paintId === 'own' ? diorama.palette.colors : PALETTES.find((p) => p.id === paintId)?.colors ?? []) : []
   const paint = stepColors.length ? paintId : ''
@@ -323,6 +326,7 @@ export function PixelDiorama() {
   // (`LIT_MAX`), so only what gives its own light reaches the pixel pass's glow
   const pixelCel = useMemo<CelLook | undefined>(() => (pixels && shaded && !touring ? { from: shown.sun ? [...shown.sun] as [number, number, number] : undefined, tones: 2, smooth: PIXEL_SMOOTH, line: 0, ...shadedLight(shown.shade ?? 0.5) } : undefined), [pixels, shaded, touring, shown.sun, shown.shade])
   const drawing = useDrawnLook(stage, touring ? undefined : drawnStyle, { pixelCel, actor: scene?.built, water: !!scene?.of.water, spacing: DETAIL.find((d) => d.id === scene?.detail)?.spacing, plain: !!scene?.plain, azimuth: shown.views[0].orbit.azimuth, offscreen, light: coarse, loop: shown.loop, sky: shown.finish.sky ? [styleSky[0], styleSky[1]] : undefined })
+  useEffect(() => setDark(drawing.dark), [drawing.dark])
   // the walk-through's fourth step is about the four samples, so it draws them whatever the switch says
   const sampling = touring?.id === 'samples'
   const drawnLook = useMemo(() => (asPixels ? (sampling ? { ...look, fine: true } : look) : undefined), [asPixels, sampling, look])

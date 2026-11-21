@@ -320,6 +320,23 @@ export function markedPicks(doc: SceneDoc): PropPick[] {
   return (doc.bones ?? []).filter((b) => b.prop).map((b) => ({ name: b.prop!, bones: [b.name] }))
 }
 
+/**
+ * What in a scene stands outside every prop it marks, each as `where: what`: a part on a bone that is no prop's, a
+ * light no prop's box holds. A scene is built from components (each thing a prop of its own, which Scene Creator's
+ * library then offers), so a new scene leaves only its land outside them: the parts on no bone.
+ */
+export function outsideProps(doc: SceneDoc): string[] {
+  const byName = new Map((doc.bones ?? []).map((b) => [b.name, b]))
+  const inProp = (name: string) => { for (let b = byName.get(name); b; b = b.parent ? byName.get(b.parent) : undefined) if (b.prop) return true; return false }
+  const out: string[] = []
+  const loose = new Set<string>()
+  for (const p of doc.parts) if (p.bone && !inProp(p.bone)) loose.add(p.bone)
+  for (const b of loose) out.push(`bones: '${b}' carries parts but is in no prop (mark it, or the bone it rides on, with prop)`)
+  const { land } = splitScene(doc, markedPicks(doc))
+  for (const l of land.doc.lights ?? []) out.push(`lights: the light at [${l.at.join(', ')}] is in no prop (stand it inside the lamp it belongs to)`)
+  return out
+}
+
 /** The scene with only these parts, the bones they ride (and those bones' parents), and the moves on those bones. */
 function keepOnly(doc: SceneDoc, parts: number[]): SceneDoc {
   const ps = parts.map((i) => doc.parts[i])

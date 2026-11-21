@@ -3585,6 +3585,12 @@
        "doc": "The baked sun: `from` points toward it. `ramp` (0–1, 0.7 when left out) turns shade toward cool violet and full\nsun toward warm yellow, as a painter's ramp does; `crevice` (0.5) darkens corners and cracks; `wear` (0.5)\nlightens sharp outer edges. 0 turns any of them off. `bounce` (off unless set) lets surfaces throw their color onto\nwhat faces them, as a red wall warms the floor beside it; it costs build time, so use it where it shows."
       },
       {
+       "name": "lamps",
+       "optional": true,
+       "type": "\"dark\" | \"always\"",
+       "doc": "Its lamps as a whole: 'always' keeps everything that says `lit: 'dark'` shining at any time of day, as in a cave or\na dungeon, where it is never day. Left out, each goes by its own `lit`."
+      },
+      {
        "name": "palette",
        "type": "string[]",
        "doc": "The colors the picture is drawn in, 2 to 32."
@@ -3871,6 +3877,12 @@
      "type": "\"dust\" | \"embers\" | \"rain\" | \"snow\" | \"leaves\" | \"fireflies\" | \"bubbles\""
     },
     {
+     "name": "LitWhen",
+     "kind": "type",
+     "doc": "When a lamp is lit: only when it is 'dark', only by 'day' (a sun), or 'always' (magic, lava, a crystal). A light, a\nglowing part or a swarm of glowing specks says it with `lit`; `litFor` is what puts out the ones whose time it is not.",
+     "type": "\"dark\" | \"day\" | \"always\""
+    },
+    {
      "name": "SpeckDoc",
      "kind": "interface",
      "doc": "One swarm of specks: dust, embers, rain, snow, leaves, fireflies or bubbles.",
@@ -3911,6 +3923,12 @@
        "optional": true,
        "type": "boolean",
        "doc": "Whether they give off light; left out, embers and fireflies do."
+      },
+      {
+       "name": "lit",
+       "optional": true,
+       "type": "LitWhen",
+       "doc": "When they are there, for specks that belong to a lamp or a time (a fire's embers, fireflies): gone for the rest. Left out, always."
       },
       {
        "name": "land",
@@ -3981,6 +3999,18 @@
        "optional": true,
        "type": "boolean",
        "doc": "Gives off light and takes none: lamps, fire, stars, anything that must stay bright."
+      },
+      {
+       "name": "lit",
+       "optional": true,
+       "type": "LitWhen",
+       "doc": "When it is lit, for a part that is a lamp or part of one (a lantern's panes, a lit window, a flame, a star, the\nsun): 'dark', 'day' or 'always'. For the rest of the time it is as `unlit` says. Left out, it never changes: right\nfor anything that only keeps its own color (a flower, a bird, foam), wrong for a lamp."
+      },
+      {
+       "name": "unlit",
+       "optional": true,
+       "type": "string",
+       "doc": "What is there while it is not lit: a color (the part in that paint, taking light and shade like any other), or\n'gone' for something with nothing left behind (a flame, a star, the sun). Left out, a dull shade of its own paint."
       },
       {
        "name": "noShadow",
@@ -4064,6 +4094,12 @@
        "name": "color",
        "type": "string",
        "doc": "Its color."
+      },
+      {
+       "name": "lit",
+       "optional": true,
+       "type": "LitWhen",
+       "doc": "When it shines: 'dark' (a lamp, a candle, a lit window, a campfire), 'day' or 'always' (magic, lava, a crystal,\nanything in a cave or a dungeon). Every light should say; left out, it always shines."
       },
       {
        "name": "strength",
@@ -4403,6 +4439,58 @@
      "signatures": [
       {
        "code": "lightsAt(lights: readonly LightDoc[], u: number): PointLight[]"
+      }
+     ]
+    },
+    {
+     "name": "UNLIT_LIGHT",
+     "kind": "const",
+     "doc": "How much of its lightness and of its color a lamp keeps while it is not lit, where its part names no `unlit` color.",
+     "type": "0.62"
+    },
+    {
+     "name": "UNLIT_COLOR",
+     "kind": "const",
+     "doc": "How much of its lightness and of its color a lamp keeps while it is not lit, where its part names no `unlit` color.",
+     "type": "0.3"
+    },
+    {
+     "name": "dulled",
+     "kind": "function",
+     "doc": "A color as a lamp of it looks while it is not lit: darker and nearly gray, as glass with nothing behind it.",
+     "signatures": [
+      {
+       "code": "dulled(color: string): string"
+      }
+     ]
+    },
+    {
+     "name": "isLit",
+     "kind": "function",
+     "doc": "Whether something lit `when` is lit: by day or in the dark, with the scene's `lamps` deciding for those that wait for the dark.",
+     "signatures": [
+      {
+       "code": "isLit(when: LitWhen | undefined, dark: boolean, lamps?: \"dark\" | \"always\"): boolean"
+      }
+     ]
+    },
+    {
+     "name": "hasLamps",
+     "kind": "function",
+     "doc": "Whether anything in a description is lit only some of the time, so that the time of day changes it.",
+     "signatures": [
+      {
+       "code": "hasLamps(doc: SceneDoc): boolean"
+      }
+     ]
+    },
+    {
+     "name": "litFor",
+     "kind": "function",
+     "doc": "A description as it stands by day (`dark` false) or in the dark: every light, glowing part and swarm of specks whose\n`lit` says it is not lit now is put out. A light shines at strength 0 (it keeps its place in the list, which baked\nlamp shadows and props' picks go by); a part stops glowing and takes its `unlit` color, or a dull shade of its own\npaint (`dulled`), or is left out where it is `unlit: 'gone'`; specks are left out. `lamps` (the scene's own where\nleft out) set to 'always' keeps everything that waits for the dark lit. Colors it adds join the palette while there\nis room. A description nothing changes in comes back as it is, so a caller can tell there is nothing to cut again.",
+     "signatures": [
+      {
+       "code": "litFor(doc: SceneDoc, dark: boolean, lamps?: \"dark\" | \"always\"): SceneDoc"
       }
      ]
     }
