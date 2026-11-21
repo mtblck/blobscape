@@ -1,11 +1,12 @@
 import type { PointLight } from './engine.ts'
 import type { MirrorImage } from './reflect.ts'
-import { Skeleton } from './rig.ts'
+import { Skeleton, axisAngle, mulQ } from './rig.ts'
 import type { CompiledScene, WaterPlan } from './sceneDoc.ts'
 import { WATER_TICK, Water, crossing, makeSurface, shadeSurface, shapeSurface, type WaterSurface } from './water.ts'
 
 /** The step heights are kept in: a hundredth of a millimeter where a unit is a meter, and room for a third of a unit either way. */
 const STEP = 1e-5
+const TAU = Math.PI * 2
 
 /**
  * The water of a scene written as data (`SceneDoc.water`), played as the scene plays: from the time alone.
@@ -50,7 +51,7 @@ export class SceneWater {
     this.count = ticks / every
     this.frames = new Int16Array(this.count * nx * nz)
     const sk = plan.bodies.length ? new Skeleton(scene.bones) : undefined
-    const at = [0, 0, 0]
+    const at = [0, 0, 0], maker = [0, 0, 0]
     let next = 0
     for (let run = 0; run <= warm; run++) {
       next = 0
@@ -70,12 +71,45 @@ export class SceneWater {
             water.body(`body${i}`, cut, b.draft * sk.scale[b.bone])
           })
         }
+        // each wave maker dips in and lifts out: a ball from just touching the level down to half under, so the disc
+        // it presses aside opens and closes once a dip and sends out a ring
+        plan.waves.forEach((v, i) => {
+          const dip = 0.5 - 0.5 * Math.cos(((t / scene.loop) * v.times + v.phase) * TAU)
+          maker[0] = v.at[0]; maker[1] = level + v.r * (1 - dip); maker[2] = v.at[1]
+          water.body(`wave${i}`, crossing(maker, maker, v.r, level), v.depth)
+        })
         const until = ((k + 1) / ticks) * scene.loop
         for (; next < plan.drops.length && plan.drops[next].at < until; next++) water.splash(plan.drops[next].x, plan.drops[next].z, plan.splash.r, plan.splash.depth)
         water.step(WATER_TICK)
       }
     }
     this.set(0)
+  }
+
+  /**
+   * Stands each float of the scene (`WaterDoc.floats`) on the water as it is `t` seconds into the loop: its bone rises
+   * and falls with the surface at its point and tips with the slope across its size, steepened as the surface is
+   * drawn, on top of the pose the scene gave it. Call it after the scene's pose; it updates the skeleton.
+   */
+  ride(sk: Skeleton, t: number) {
+    const floats = this.plan.floats
+    if (!floats.length) return
+    this.set(t)
+    const w = this.water, steep = this.plan.ripple
+    for (const f of floats) {
+      if (f.bone < 0) continue
+      const [x, , z] = f.at, d = f.size
+      const sx = ((w.heightAt(x + d, z) - w.heightAt(x - d, z)) / (2 * d)) * steep
+      const sz = ((w.heightAt(x, z + d) - w.heightAt(x, z - d)) / (2 * d)) * steep
+      sk.offset[f.bone * 3 + 1] += w.heightAt(x, z) * steep
+      // up turned onto the surface's normal (−sx, 1, −sz): about up × normal, by the angle between them
+      const ax = -sz, az = sx, s2 = Math.hypot(ax, az)
+      if (s2 > 1e-9) {
+        const tip = axisAngle([ax / s2, 0, az / s2], Math.atan(s2))
+        sk.setRotation(f.bone, mulQ(tip, sk.rotation.subarray(f.bone * 4, f.bone * 4 + 4)))
+      }
+    }
+    sk.update()
   }
 
   /** Lays the water as it stands `t` seconds into the loop back on the pond (`water.h`), blended between the two kept moments round it. */

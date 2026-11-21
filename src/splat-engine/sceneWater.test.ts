@@ -115,3 +115,46 @@ test('what swims through the surface moves the water, and `show` shapes and colo
   assert.ok(tilted >= 0)
   assert.throws(() => new SceneWater(compileScene({ ...pond(), water: undefined })), /no water/)
 })
+
+/** The pond with no rain or bodies, a wave maker at one side and a boat floating at rest on the other. */
+const swell = (): SceneDoc => {
+  const d = pond()
+  d.air = undefined
+  d.moves = []
+  d.bones = [{ name: 'boat', at: [0.3, -0.05, 0] }]
+  d.parts = [d.parts[0], { shape: { kind: 'ball', at: [0.3, -0.05, 0], r: [0.08, 0.03, 0.04] }, paint: '#f4f1e4', bone: 'boat' }]
+  d.water = { level: -0.05, from: [-0.9, -0.9], to: [0.9, 0.9], color: '#2c6470', cell: 0.04, damping: 0.2,
+    waves: [{ at: [-0.4, 0], r: 0.08, depth: 0.01, times: 3 }], floats: [{ bone: 'boat', at: [0.3, -0.05, 0], size: 0.08 }] }
+  return d
+}
+
+test('checkScene points at mistakes in wave makers and floats', () => {
+  assert.deepEqual(checkScene(swell()), [])
+  const bad = swell()
+  bad.water = { ...bad.water!, waves: [{ at: [0, 0], r: 0, depth: 1, times: 0.5 }], floats: [{ bone: 'nobody', at: [0, 0, 0], size: 0 }] }
+  const errs = checkScene(bad).join('\n')
+  for (const at of ['water.waves[0].r', 'water.waves[0].depth', 'water.waves[0].times', 'water.floats[0].bone', 'water.floats[0].size']) assert.ok(errs.includes(`${at}:`), `${at} in:\n${errs}`)
+})
+
+test('a wave maker sends waves across the water, and a float rises, falls and tips as they pass under it', () => {
+  const scene = compileScene(swell())
+  assert.ok(scene.water!.wet(0.3, 0), 'a float is no ground: the water runs under it')
+  const pondWater = new SceneWater(scene, { fps: 12, warm: 1 })
+  const sk = new Skeleton(scene.bones), boat = scene.bones.findIndex((b) => b.name === 'boat')
+  let lo = Infinity, hi = -Infinity, tipped = 0
+  for (let t = 0; t < scene.loop; t += 0.25) {
+    scene.pose(sk, t)
+    pondWater.ride(sk, t)
+    const y = sk.offset[boat * 3 + 1], q = sk.rotation.subarray(boat * 4, boat * 4 + 4)
+    lo = Math.min(lo, y); hi = Math.max(hi, y)
+    tipped = Math.max(tipped, 2 * Math.acos(Math.min(1, Math.abs(q[3]))))
+    for (const v of sk.offset) assert.ok(Number.isFinite(v))
+  }
+  assert.ok(hi - lo > 0.002, `the boat rises and falls (${((hi - lo) * 1000).toFixed(1)} mm)`)
+  assert.ok(tipped > 0.01 && tipped < 0.6, `and tips, but does not capsize (${tipped.toFixed(3)} rad)`)
+  // the same moment rides the same way, whatever was shown before
+  scene.pose(sk, 1); pondWater.ride(sk, 1)
+  const once = sk.offset[boat * 3 + 1]
+  scene.pose(sk, 4); pondWater.ride(sk, 4); scene.pose(sk, 1); pondWater.ride(sk, 1)
+  assert.equal(sk.offset[boat * 3 + 1], once)
+})

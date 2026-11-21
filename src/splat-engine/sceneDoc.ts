@@ -152,6 +152,19 @@ export interface WaterDoc {
    * moves the whole depth.
    */
   bodies?: { bone: string; at: Vec3; r: number; draft?: number }[]
+  /**
+   * What makes waves, at most six, drawn by nothing: a float at `at` [x, z] that dips into the water and lifts out
+   * again `times` per loop, starting `phase` (0 to 1) of the way through, a ball of radius `r` moving water `depth`
+   * deep where it crosses. Each dip sends a ring of small waves across the water, as a swell coming in from the sea:
+   * put them out where the water reaches the scene's edge.
+   */
+  waves?: { at: [number, number]; r: number; depth: number; times: number; phase?: number }[]
+  /**
+   * What rides the water, at most twelve: the bone `bone` rises and falls with the surface at the point `at` (where
+   * it sits on the water at rest) and tips with the surface's slope across `size` (half its length), steepened as the
+   * surface is drawn (`ripple`). A boat, a buoy, a lily pad. Its own moves still apply under it.
+   */
+  floats?: { bone: string; at: Vec3; size: number }[]
 }
 
 /** A scene's air: haze, mist, shafts of light and specks. */
@@ -1148,6 +1161,25 @@ export function checkScene(doc: unknown): string[] {
           vec(b.at, `${at}.at`); num(b.r, `${at}.r`, 0.005, 0.5); opt(b.draft, `${at}.draft`, 0, 0.5)
         })
       }
+      if (w.waves !== undefined) {
+        if (!Array.isArray(w.waves) || w.waves.length > 6) bad('water.waves', 'must be a list of at most 6')
+        else w.waves.forEach((v: unknown, i: number) => {
+          const at = `water.waves[${i}]`
+          if (!obj(v)) { bad(at, 'must be an object'); return }
+          if (!Array.isArray(v.at) || v.at.length !== 2) bad(`${at}.at`, 'must be [x, z]')
+          else { num(v.at[0], `${at}.at[0]`, -REACH, REACH); num(v.at[1], `${at}.at[1]`, -REACH, REACH) }
+          num(v.r, `${at}.r`, 0.01, 0.5); num(v.depth, `${at}.depth`, 0.001, 0.2); whole(v.times, `${at}.times`); opt(v.phase, `${at}.phase`, -1, 1)
+        })
+      }
+      if (w.floats !== undefined) {
+        if (!Array.isArray(w.floats) || w.floats.length > 12) bad('water.floats', 'must be a list of at most 12')
+        else w.floats.forEach((f: unknown, i: number) => {
+          const at = `water.floats[${i}]`
+          if (!obj(f)) { bad(at, 'must be an object'); return }
+          if (typeof f.bone !== 'string' || !names.has(f.bone)) bad(`${at}.bone`, `${show(f.bone)} is not a bone of this scene`)
+          vec(f.at, `${at}.at`); num(f.size, `${at}.size`, 0.01, 1)
+        })
+      }
     }
   }
   if (doc.air !== undefined) {
@@ -1466,6 +1498,10 @@ export interface WaterPlan {
   drops: { x: number; z: number; at: number }[]
   /** What moves through the surface: a ball of radius `r` round the rest point `at`, riding the bone at index `bone`, moving water `draft` deep where it crosses. */
   bodies: { bone: number; at: Vec3; r: number; draft: number }[]
+  /** What makes waves: a float at [x, z] of radius `r` that dips in and lifts out `times` per loop from `phase`, moving water `depth` deep. */
+  waves: { at: [number, number]; r: number; depth: number; times: number; phase: number }[]
+  /** What rides the water: the bone at index `bone`, sitting on it at `at`, tipped by its slope across `size`. */
+  floats: { bone: number; at: Vec3; size: number }[]
 }
 
 // --- What hangs in the air
@@ -1606,6 +1642,8 @@ function planWater(w: WaterDoc, box: { x0: number; x1: number; z0: number; z1: n
     splash: w.splash ?? { r: cell * 1.5, depth: cell * 0.2 },
     body, sky, horizon, wet, drops,
     bodies: (w.bodies ?? []).map((b) => ({ bone: bones.findIndex((k) => k.name === b.bone), at: b.at, r: b.r, draft: b.draft ?? b.r * 0.1 })),
+    waves: (w.waves ?? []).map((v) => ({ at: v.at, r: v.r, depth: v.depth, times: v.times, phase: v.phase ?? 0 })),
+    floats: (w.floats ?? []).map((f) => ({ bone: bones.findIndex((k) => k.name === f.bone), at: f.at, size: f.size })),
   }
 }
 
@@ -1737,6 +1775,8 @@ export function compileScene(doc: SceneDoc, { puffs = true }: { puffs?: boolean 
   // what weather lands on: parts that stay put (on no bone, or one that only sways), in order, a drift over those before it
   const moved = new Set<string>()
   for (const m of moves) if (m.kind !== 'sway') moved.add(m.bone)
+  // what floats rides the water, so it is no ground under it
+  for (const f of doc.water?.floats ?? []) moved.add(f.bone)
   for (const b of doc.bones ?? []) if (b.parent && moved.has(b.parent)) moved.add(b.name)
   const solidShapes = (thin: number) => {
     const out: Shape[] = [], still: Shape[] = []

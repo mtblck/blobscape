@@ -64,9 +64,10 @@ const towerPaint = (k = 1): PaintDoc => (k > 4 ? brick(WHITE) : { kind: 'split',
 const parts: PartDoc[] = []
 const bones: SceneDoc['bones'] = [{ name: 'lamp', at: [tx, LAMP_Y, tz] }, { name: 'boat', at: BOAT }]
 
-// the sea: a round slab with a ripple on top, pale where it breaks on the rock, lighter in the shallows
+// the sea bed: a round slab under the water (`water` below), pale where it breaks on the rock, lighter in the shallows;
+// the sea itself is real water over it, whose waves the boat and the buoy ride
 parts.push({
-  shape: { kind: 'rough', by: 0.02, scale: 1, shape: { kind: 'cylinder', at: [0, -0.26, 0], height: 0.24, r: SEA } },
+  shape: { kind: 'rough', by: 0.02, scale: 1, shape: { kind: 'cylinder', at: [0, -0.32, 0], height: 0.24, r: SEA } },
   paint: {
     kind: 'faces', up: 0.5,
     top: { kind: 'near', shape: ROCK, within: 0.035, at: 0, near: c(0.74, 0.86, 0.9), far: { kind: 'near', shape: ROCK, within: 0.1, at: 0, near: { kind: 'patches', size: 0.125, colors: [c(0.2, 0.42, 0.66), c(0.3, 0.52, 0.74)] }, far: { kind: 'waves', size: 0.157, colors: [c(0.1, 0.22, 0.45), c(0.3, 0.52, 0.74), c(0.14, 0.3, 0.55)] } } },
@@ -250,10 +251,6 @@ const turn = (rad: number) => r3((rad / TAU) % 1)
 const moves: MoveDoc[] = [
   // the lamp turns twice a loop
   { kind: 'spin', bone: 'lamp', axis: 'y', times: 2 },
-  // the boat rides the swell: up and down, rolling and pitching a little out of step
-  { kind: 'sway', bone: 'boat', axis: 'z', degrees: deg(0.1), times: 4, phase: turn(1) },
-  { kind: 'sway', bone: 'boat', axis: 'x', degrees: deg(0.07), times: 3 },
-  { kind: 'bob', bone: 'boat', by: [0, 0.014, 0], times: 4 },
   ...GULLS.flatMap((g, i): MoveDoc[] => [
     { kind: 'spin', bone: `gull${i}`, axis: 'y', times: g.way, phase: turn(g.phase) },
     { kind: 'bob', bone: `gull${i}`, by: [0, 0.05, 0], times: 3, phase: turn(g.phase) },
@@ -264,10 +261,6 @@ const moves: MoveDoc[] = [
   ...CLOUDS.map((_, i): MoveDoc => ({ kind: 'bob', bone: `cloud${i}`, by: [0.22, 0, 0], times: 1, phase: turn(i * 2.4) })),
   // the pines spring back from the wind, each a little out of step
   ...TREES.map((_, i): MoveDoc => ({ kind: 'sway', bone: `tree${i}`, axis: 'z', degrees: -deg(0.035), times: 5, phase: turn(i * 1.7) })),
-  // the buoy nods and rides the swell
-  { kind: 'sway', bone: 'buoy', axis: 'z', degrees: deg(0.22), times: 5 },
-  { kind: 'sway', bone: 'buoy', axis: 'x', degrees: deg(0.15), times: 4, phase: turn(0.8) },
-  { kind: 'bob', bone: 'buoy', by: [0, 0.012, 0], times: 4, phase: turn(2) },
   // each puff rises from the chimney, drifts downwind and swells, then starts again
   ...[0, 1, 2].map((i): MoveDoc => ({ kind: 'drift', bone: `smoke${i}`, by: [0.22, 0.3, 0], times: 4, grow: [0.5, 1.4], phase: r3(i / 3) })),
   // each patch of foam lives a third of a loop, starting at its own moment
@@ -289,6 +282,17 @@ export const LIGHTHOUSE: SceneDoc = {
   bones,
   parts,
   moves,
+  // the sea is real water: three swells come in from out past the rock, a ring of small waves every few seconds from
+  // each, and the waves cross, bounce off the rock and rock the boat and the buoy as they pass under them
+  water: {
+    level: 0, from: [-SEA, -SEA], to: [SEA, SEA], color: '#1a3a6e', clear: 0.35, cell: 0.022, speed: 0.34, damping: 0.18, ripple: 6, deep: 0.08,
+    waves: [
+      { at: [-1.2, -0.55], r: 0.12, depth: 0.015, times: 5 },
+      { at: [1.25, 0.15], r: 0.12, depth: 0.015, times: 4, phase: 0.4 },
+      { at: [0.55, 1.25], r: 0.12, depth: 0.015, times: 6, phase: 0.7 },
+    ],
+    floats: [{ bone: 'boat', at: [BOAT[0], 0, BOAT[2]], size: 0.2 }, { bone: 'buoy', at: [BUOY[0], 0, BUOY[2]], size: 0.06 }],
+  },
   // the lamp's two beams: a pool of warm light on each side of the tower, sweeping over the sea and the rock with the lens
   // and the same two beams where they cross the gallery: each stands just past the railing and a little above it, so
   // the stretch of rail, floor and cap the beam passes over is lit on the faces a viewer sees (cubes too, whose faces

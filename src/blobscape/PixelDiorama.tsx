@@ -314,6 +314,8 @@ export function PixelDiorama() {
     }
     stage.setPoser((sk: Skeleton, t: number) => {
       d.pose(sk, t)
+      // what floats rides the water as it stands at this moment: a boat or a buoy rocks on the waves that pass
+      pond?.ride(sk, t)
       // an export is the scene's own loop: no pokes, and the view as it stood when it began
       if (!held.current) pokes.current?.apply(sk, performance.now() / 1000)
       stage.setLights(castBy(d.lights(t, stage.backend === 'webgpu'), glowGain(glowNow.current, d.finish.glow)), d.ambientAt?.(t) ?? d.ambient ?? 1)

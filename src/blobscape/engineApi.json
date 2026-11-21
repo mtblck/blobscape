@@ -3787,6 +3787,18 @@
        "optional": true,
        "type": "{ bone: string; at: Vec3; r: number; draft?: number }[]",
        "doc": "What swims or floats through the surface, at most twelve: a ball of radius `r` round the point `at`, riding\n`bone`. Where it breaks the surface it pushes aside the water it takes the place of, so a back that rises\nleaves a ring and one that moves along leaves a wake. `draft` is how deep the water it moves is where it\ncrosses: a tenth of `r` when left out, which suits a fish whose back just shows; a post standing on the bed\nmoves the whole depth."
+      },
+      {
+       "name": "waves",
+       "optional": true,
+       "type": "{ at: [number, number]; r: number; depth: number; times: number; phase?: number }[]",
+       "doc": "What makes waves, at most six, drawn by nothing: a float at `at` [x, z] that dips into the water and lifts out\nagain `times` per loop, starting `phase` (0 to 1) of the way through, a ball of radius `r` moving water `depth`\ndeep where it crosses. Each dip sends a ring of small waves across the water, as a swell coming in from the sea:\nput them out where the water reaches the scene's edge."
+      },
+      {
+       "name": "floats",
+       "optional": true,
+       "type": "{ bone: string; at: Vec3; size: number }[]",
+       "doc": "What rides the water, at most twelve: the bone `bone` rises and falls with the surface at the point `at` (where\nit sits on the water at rest) and tips with the surface's slope across `size` (half its length), steepened as the\nsurface is drawn (`ripple`). A boat, a buoy, a lily pad. Its own moves still apply under it."
       }
      ]
     },
@@ -4362,6 +4374,16 @@
        "name": "bodies",
        "type": "{ bone: number; at: Vec3; r: number; draft: number }[]",
        "doc": "What moves through the surface: a ball of radius `r` round the rest point `at`, riding the bone at index `bone`, moving water `draft` deep where it crosses."
+      },
+      {
+       "name": "waves",
+       "type": "{ at: [number, number]; r: number; depth: number; times: number; phase: number }[]",
+       "doc": "What makes waves: a float at [x, z] of radius `r` that dips in and lifts out `times` per loop from `phase`, moving water `depth` deep."
+      },
+      {
+       "name": "floats",
+       "type": "{ bone: number; at: Vec3; size: number }[]",
+       "doc": "What rides the water: the bone at index `bone`, sitting on it at `at`, tipped by its slope across `size`."
       }
      ],
      "methods": [
@@ -4562,6 +4584,15 @@
       }
      ],
      "methods": [
+      {
+       "name": "ride",
+       "doc": "Stands each float of the scene (`WaterDoc.floats`) on the water as it is `t` seconds into the loop: its bone rises\nand falls with the surface at its point and tips with the slope across its size, steepened as the surface is\ndrawn, on top of the pose the scene gave it. Call it after the scene's pose; it updates the skeleton.",
+       "signatures": [
+        {
+         "code": "ride(sk: Skeleton, t: number): void"
+        }
+       ]
+      },
       {
        "name": "set",
        "doc": "Lays the water as it stands `t` seconds into the loop back on the pond (`water.h`), blended between the two kept moments round it.",
