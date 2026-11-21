@@ -120,7 +120,8 @@ export function Islands() {
   // the size of a block: a block is one cell of the cut, so the same cubes come from a few times fewer blobs. Every
   // island is cut at Chunky; a finer detail is cut for the island underfoot alone, after (`finer`), since at Fine one
   // island is some 850,000 blobs and close to a minute's cut, and the whole world at it never arrived on a phone
-  const cutAt = DETAIL.find((d) => d.id === detail)!.spacing * (blocky ? blockSize : 1)
+  // in Blocks the block size alone says how fine the island is cut (Matt, 2026-11-21: Detail changed nothing there)
+  const cutAt = blocky ? DETAIL[0].spacing * blockSize : DETAIL.find((d) => d.id === detail)!.spacing
   const baseAt = DETAIL[0].spacing * (blocky ? Math.max(2, blockSize) : 1)
   const [made, setMade] = useState<{ built: Built; pieces: Built[]; of: typeof scene; scenes: typeof scenes; world: typeof world; plain: boolean; spacing: number }>()
   const ready = made?.of === scene && made.plain === blocky && made.spacing === baseAt ? made : undefined
@@ -575,12 +576,14 @@ export function Islands() {
                     </div>
                   </Field>
                 )}
-                {blocky && <Slider label="Block size" value={blockSize} min={BLOCK_SIZES.min} max={BLOCK_SIZES.max} step={1} onChange={setBlockSize} format={(v) => `${v}×`} hint="How big a block is, in steps of the detail. The island is cut again at that size." />}
-                <Field label="Detail">
-                  <div className="flex flex-wrap gap-1.5">
-                    {DETAIL.map((d) => <Chip key={d.id} active={detail === d.id} onClick={() => { setDetail(d.id); writeDetail(d.id) }}>{d.label}</Chip>)}
-                  </div>
-                </Field>
+                {blocky && <Slider label="Block size" value={blockSize} min={BLOCK_SIZES.min} max={BLOCK_SIZES.max} step={1} onChange={setBlockSize} format={(v) => `${v}×`} hint="How big a block is. The island is cut again at that size." />}
+                {!blocky && (
+                  <Field label="Detail">
+                    <div className="flex flex-wrap gap-1.5">
+                      {DETAIL.map((d) => <Chip key={d.id} active={detail === d.id} onClick={() => { setDetail(d.id); writeDetail(d.id) }}>{d.label}</Chip>)}
+                    </div>
+                  </Field>
+                )}
                 <div className="grid gap-3">
                   <Toggle label="Creatures" checked={creatures} onChange={setCreatures} />
                   <Toggle label="Rock the view" checked={rock} onChange={setRock} />
