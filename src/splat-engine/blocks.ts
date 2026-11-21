@@ -35,6 +35,8 @@ export interface BlockLook {
    * they have more definition, 2026-11-21).
    */
   flow?: 'blocks' | 'blobs'
+  /** How weather laid over a scene (an actor with `weather`: clouds, rain, snow) is drawn: as cubes too, or left the blobs it is among the cubes (default 'blobs'). */
+  weather?: 'blocks' | 'blobs'
   /** How many times higher than it stands a ripple is drawn as blocks (default `FLOW_SWELL`); 0 keeps the tops level, so only their color moves. */
   swell?: number
 }

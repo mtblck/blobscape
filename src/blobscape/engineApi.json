@@ -105,6 +105,12 @@
        "doc": "A surface that moves by itself and is sent up again with `reshape` (a pond's): while the stage draws blocks it is columns that follow it, or stays blobs, as the look's `flow` says."
       },
       {
+       "name": "weather",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Weather laid over a scene (its clouds, rain, snow): while the stage draws blocks it is cubes too, or stays blobs among them, as the look's `weather` says."
+      },
+      {
        "name": "blockCell",
        "optional": true,
        "type": "number",
@@ -785,6 +791,12 @@
        "optional": true,
        "type": "boolean",
        "doc": "A surface that moves by itself and is sent up again with `reshape` (a pond's): while the stage draws blocks it is columns that follow it, or stays blobs, as the look's `flow` says."
+      },
+      {
+       "name": "weather",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Weather laid over a scene (its clouds, rain, snow): while the stage draws blocks it is cubes too, or stays blobs among them, as the look's `weather` says."
       },
       {
        "name": "blockCell",
@@ -3937,6 +3949,12 @@
        "doc": "A speck's radius; left out, a size that suits the kind."
       },
       {
+       "name": "long",
+       "optional": true,
+       "type": "number",
+       "doc": "Rain only: half a streak's length (0.07 when left out)."
+      },
+      {
        "name": "glow",
        "optional": true,
        "type": "boolean",
@@ -4238,6 +4256,11 @@
        "optional": true,
        "type": "WaterPlan",
        "doc": "The scene's water, if it has any, with its defaults filled in: what `SceneWater` plays."
+      },
+      {
+       "name": "landed",
+       "type": "WaterDrop[]",
+       "doc": "Raindrops of this scene's that come down on water over one loop (where it, or the `water` it was compiled with,\nhas some): where, when, and the share of its swarm before its speck (0 to 1), so a sky that shows only some of a\nswarm (skyRecipes.ts `showWeather`) knows which of them are falling. Another scene's water can take them."
       }
      ],
      "methods": [
@@ -4285,6 +4308,33 @@
          "code": "ground(x: number, z: number, top: number, bottom: number): number"
         }
        ]
+      }
+     ]
+    },
+    {
+     "name": "WaterDrop",
+     "kind": "interface",
+     "doc": "A raindrop coming down on water: where, when in the loop, and the share of its swarm before its speck.",
+     "props": [
+      {
+       "name": "x",
+       "type": "number",
+       "doc": "Where it comes down, across."
+      },
+      {
+       "name": "z",
+       "type": "number",
+       "doc": "Where it comes down, along."
+      },
+      {
+       "name": "at",
+       "type": "number",
+       "doc": "When, in seconds into the loop."
+      },
+      {
+       "name": "share",
+       "type": "number",
+       "doc": "The share of its swarm before its speck, 0 to 1."
       }
      ]
     },
@@ -4370,7 +4420,7 @@
       },
       {
        "name": "drops",
-       "type": "{ x: number; z: number; at: number }[]",
+       "type": "WaterDrop[]",
        "doc": "Every raindrop that lands on the water in one loop: where, and how many seconds into the loop."
       },
       {
@@ -4461,7 +4511,7 @@
      "doc": "`ground` is the ground what falls lands on, in place of the description's own parts: weather laid over another scene (skyRecipes.ts) lands on that scene's.",
      "signatures": [
       {
-       "code": "compileScene(given: SceneDoc, options?: { puffs?: boolean; ground?: (x: number, z: number, top: number, bottom: number) => number }): CompiledScene"
+       "code": "compileScene(given: SceneDoc, options?: { puffs?: boolean; ground?: (x: number, z: number, top: number, bottom: number) => number; water?: number }): CompiledScene"
       }
      ]
     },
@@ -4574,9 +4624,23 @@
        "readonly": true,
        "type": "number",
        "doc": "How many moments of the loop are kept."
+      },
+      {
+       "name": "rain",
+       "type": "number",
+       "doc": "How much of the rain from outside the scene (`addRain`) is falling: the share of its swarm out, 0 to 1."
       }
      ],
      "methods": [
+      {
+       "name": "addRain",
+       "doc": "Rain from outside the scene (weather laid over it) on the pond, in bands of its swarm: `bands` are the shares of\nthe swarm where each ends (ascending, the last 1), and `rain` (0 to 1, the share of the swarm out) then says how\nmuch of each band falls. Each band's rings are worked out on their own, through the same loops: the wave\nequation is linear, so the pond with them is the pond without plus their rings. Costs a run of the loop a band.",
+       "signatures": [
+        {
+         "code": "addRain(drops: readonly WaterDrop[], bands: readonly number[]): void"
+        }
+       ]
+      },
       {
        "name": "set",
        "doc": "Lays the water as it stands `t` seconds into the loop back on the pond (`water.h`), blended between the two kept moments round it.",
@@ -9307,6 +9371,15 @@
        ]
       },
       {
+       "name": "setFog",
+       "doc": "Distance fog toward `color` (linear) from `near` to `far` in front of the camera, as `SplatWorld.setFog` (`far` 0 is none).",
+       "signatures": [
+        {
+         "code": "setFog(color: readonly [number, number, number], near: number, far: number): void"
+        }
+       ]
+      },
+      {
        "name": "setLights",
        "doc": "The stage's lights and ambient light, as `SplatWorld.setLights` takes them; `tint` multiplies the ambient (a night's light).",
        "signatures": [
@@ -9415,6 +9488,12 @@
        "optional": true,
        "type": "\"blobs\" | \"blocks\"",
        "doc": "How a surface that moves by itself is drawn (a source with `flows`: a pond): 'blocks', as columns of cubes whose\ntops rise and fall with it in steps, or 'blobs', left as the blobs it is among the cubes (default 'blobs': Matt found\nthey have more definition, 2026-11-21)."
+      },
+      {
+       "name": "weather",
+       "optional": true,
+       "type": "\"blobs\" | \"blocks\"",
+       "doc": "How weather laid over a scene (an actor with `weather`: clouds, rain, snow) is drawn: as cubes too, or left the blobs it is among the cubes (default 'blobs')."
       },
       {
        "name": "swell",

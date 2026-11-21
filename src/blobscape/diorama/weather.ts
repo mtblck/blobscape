@@ -2,7 +2,7 @@ import type { Rgb } from '../../splat-core/pixel.ts'
 import type { Actor } from '../../splat-engine/engine.ts'
 import { joinPalettes } from '../../splat-engine/project.ts'
 import { compileScene, type CompiledScene } from '../../splat-engine/sceneDoc.ts'
-import { FLASH_SKY, WEATHER_COLORS, hazeUnder, isClear, lightUnder, lightningAt, showWeather, skyUnder, weatherBones, weatherDocs, type SkyState, type WeatherBones } from '../../splat-engine/skyRecipes.ts'
+import { FLASH_SKY, WEATHERS, WEATHER_COLORS, hazeUnder, isClear, lightUnder, lightningAt, showWeather, skyUnder, weatherBones, weatherDocs, type SkyState, type WeatherBones } from '../../splat-engine/skyRecipes.ts'
 import { buildVoxels } from '../../splat-engine/voxel.ts'
 import { ownClouds } from '../../splat-engine/heavens.ts'
 import { under } from '../timeOfDay.ts'
@@ -18,7 +18,10 @@ import type { Diorama } from './scenes.ts'
  * The grids the weather is cut on, whatever the scene's detail, so a drop and a flake are the same on every scene:
  * fine for what falls (a drop is fattened to its grid, and should stay a thin streak), coarse for the clouds.
  */
-const FALL_SPACING = 0.017, CLOUD_SPACING = 0.034
+const FALL_SPACING = 0.01, CLOUD_SPACING = 0.034
+
+/** Where each recipe's rain ends in the swarm, so the pond's rings for the rain of a recipe are worked out whole. */
+const RAIN_BANDS = [...new Set([...WEATHERS.map((w) => w.rain ?? 0).filter((r) => r > 0), 1])].sort((a, b) => a - b)
 
 interface Layer { c: CompiledScene; actor: Actor; bones: WeatherBones }
 
@@ -37,14 +40,17 @@ export class SceneWeather {
     // a scene that asks for clouds of its own colors has every cloud in them, so the few it has and a storm's many match
     const docs = weatherDocs(d.views[0].orbit, d.loop, { colors: clouds?.colors, glow: clouds?.glow })
     const ground = d.ground ?? ((_x: number, _z: number, _top: number, bottom: number) => bottom)
+    // a scene with water of its own: rain that comes down on it rings it, as the scene's own rain does
+    const pond = d.water?.()
     const layer = (doc: typeof docs.rain, spacing: number): Layer => {
-      const c = compileScene(doc, { puffs: false, ground })
+      const c = compileScene(doc, { puffs: false, ground, water: pond?.plan.level })
       const actor = buildVoxels(c.spec(spacing)) as Actor
-      // drawn as blocks, rain, snow and clouds stay blobs among the cubes
-      actor.soft = true
+      // drawn as blocks, rain, snow and clouds are cubes too or stay blobs among them, as the look asks
+      actor.weather = true
       return { c, actor, bones: weatherBones(c.bones.map((b) => b.name)) }
     }
     this.layers = { clouds: layer(docs.clouds, CLOUD_SPACING), rain: layer(docs.rain, FALL_SPACING), snow: layer(docs.snow, FALL_SPACING) }
+    if (pond) pond.addRain(this.layers.rain.c.landed, RAIN_BANDS)
     this.actors = [this.layers.clouds.actor, this.layers.rain.actor, this.layers.snow.actor]
   }
 

@@ -10,7 +10,7 @@ test('weather is made for any scene, and a sky shows its share of it', () => {
   for (const id of ['campfire', 'meadow']) {
     const d = scene(id), w = new SceneWeather(d)
     assert.equal(w.actors.length, 3)
-    assert.ok(w.actors.every((a) => a.soft && a.blobs.count > 0), id)
+    assert.ok(w.actors.every((a) => a.weather && a.blobs.count > 0), id)
     const [clouds, rain, snow] = w.actors.map((a) => a.skeleton)
     const out = (sk: typeof rain) => sk.size.reduce((n, v) => n + (v > 0 ? 1 : 0), 0)
     // clear: nothing shows but each layer's land bone

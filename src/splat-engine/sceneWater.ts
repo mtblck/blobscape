@@ -1,7 +1,7 @@
 import type { PointLight } from './engine.ts'
 import type { MirrorImage } from './reflect.ts'
 import { Skeleton } from './rig.ts'
-import type { CompiledScene, WaterPlan } from './sceneDoc.ts'
+import type { CompiledScene, WaterDrop, WaterPlan } from './sceneDoc.ts'
 import { WATER_TICK, Water, crossing, makeSurface, shadeSurface, shapeSurface, type WaterSurface } from './water.ts'
 
 /** The step heights are kept in: a hundredth of a millimeter where a unit is a meter, and room for a third of a unit either way. */
@@ -41,24 +41,37 @@ export class SceneWater {
     if (!plan) throw new Error(`SceneWater: the scene "${scene.name}" has no water`)
     this.plan = plan
     this.loop = scene.loop
+    this.scene = scene
+    this.warm = warm
     const { x0, z0, nx, nz, cell, level, speed, damping } = plan
     const water = this.water = new Water({ x0, z0, nx, nz, cell, level, speed, damping, wet: plan.wet })
     this.surface = makeSurface(water, { per: 2 })
     // the loop in whole ticks, and a moment kept every `every` of them
-    const every = Math.max(1, Math.round(1 / (fps * WATER_TICK)))
-    const ticks = Math.max(every, Math.round(scene.loop / WATER_TICK / every) * every)
-    this.count = ticks / every
-    this.frames = new Int16Array(this.count * nx * nz)
-    const sk = plan.bodies.length ? new Skeleton(scene.bones) : undefined
+    this.every = Math.max(1, Math.round(1 / (fps * WATER_TICK)))
+    this.ticks = Math.max(this.every, Math.round(scene.loop / WATER_TICK / this.every) * this.every)
+    this.count = this.ticks / this.every
+    this.frames = this.run(water, plan.drops, true)
+    this.set(0)
+  }
+
+  private readonly scene: CompiledScene
+  private readonly warm: number
+  private readonly every: number
+  private readonly ticks: number
+
+  /** Runs `water` through the loop `warm` times and once more, kept: with `drops` splashing and, where `bodies`, what swims pushing through. */
+  private run(water: Water, drops: readonly WaterDrop[], bodies: boolean): Int16Array {
+    const { plan, scene, every, ticks } = this, { nx, nz, level } = plan
+    const frames = new Int16Array(this.count * nx * nz)
+    const sk = bodies && plan.bodies.length ? new Skeleton(scene.bones) : undefined
     const at = [0, 0, 0]
-    let next = 0
-    for (let run = 0; run <= warm; run++) {
-      next = 0
+    for (let run = 0; run <= this.warm; run++) {
+      let next = 0
       for (let k = 0; k < ticks; k++) {
         const t = (k / ticks) * scene.loop
-        if (run === warm && k % every === 0) {
-          const f = this.frames, o = (k / every) * nx * nz, h = water.h
-          for (let c = 0; c < h.length; c++) f[o + c] = Math.max(-32767, Math.min(32767, Math.round(h[c] / STEP)))
+        if (run === this.warm && k % every === 0) {
+          const o = (k / every) * nx * nz, h = water.h
+          for (let c = 0; c < h.length; c++) frames[o + c] = Math.max(-32767, Math.min(32767, Math.round(h[c] / STEP)))
         }
         if (sk) {
           scene.pose(sk, t)
@@ -71,21 +84,54 @@ export class SceneWater {
           })
         }
         const until = ((k + 1) / ticks) * scene.loop
-        for (; next < plan.drops.length && plan.drops[next].at < until; next++) water.splash(plan.drops[next].x, plan.drops[next].z, plan.splash.r, plan.splash.depth)
+        for (; next < drops.length && drops[next].at < until; next++) water.splash(drops[next].x, drops[next].z, plan.splash.r, plan.splash.depth)
         water.step(WATER_TICK)
       }
     }
-    this.set(0)
+    return frames
   }
+
+  /**
+   * Rain from outside the scene (weather laid over it) on the pond, in bands of its swarm: `bands` are the shares of
+   * the swarm where each ends (ascending, the last 1), and `rain` (0 to 1, the share of the swarm out) then says how
+   * much of each band falls. Each band's rings are worked out on their own, through the same loops: the wave
+   * equation is linear, so the pond with them is the pond without plus their rings. Costs a run of the loop a band.
+   */
+  addRain(drops: readonly WaterDrop[], bands: readonly number[]) {
+    if (this.rained) return
+    this.rained = true
+    const { x0, z0, nx, nz, cell, level, speed, damping } = this.plan
+    let from = 0
+    for (const to of bands) {
+      const mine = drops.filter((d) => d.share >= from - 1e-9 && d.share < to - 1e-9)
+      if (mine.length) this.bands.push({ from, to, frames: this.run(new Water({ x0, z0, nx, nz, cell, level, speed, damping, wet: this.plan.wet }), mine, false) })
+      from = to
+    }
+    this.shown = NaN
+  }
+
+  private readonly bands: { from: number; to: number; frames: Int16Array }[] = []
+  /** How much of the rain from outside the scene (`addRain`) is falling: the share of its swarm out, 0 to 1. */
+  rain = 0
+  private shownRain = NaN
+  private rained = false
 
   /** Lays the water as it stands `t` seconds into the loop back on the pond (`water.h`), blended between the two kept moments round it. */
   set(t: number) {
     const u = ((((t / this.loop) % 1) + 1) % 1) * this.count
-    if (u === this.shown) return
+    if (u === this.shown && this.rain === this.shownRain) return
     this.shown = u
+    this.shownRain = this.rain
     const n = this.water.h.length, a = Math.floor(u) % this.count, b = (a + 1) % this.count, w = u - Math.floor(u)
     const h = this.water.h, f = this.frames
     for (let k = 0; k < n; k++) h[k] = (f[a * n + k] * (1 - w) + f[b * n + k] * w) * STEP
+    for (const band of this.bands) {
+      // a band falls as its share of the swarm comes out
+      const on = Math.min(1, Math.max(0, (this.rain - band.from) / (band.to - band.from)))
+      if (on <= 0) continue
+      const g = band.frames
+      for (let k = 0; k < n; k++) h[k] += (g[a * n + k] * (1 - w) + g[b * n + k] * w) * STEP * on
+    }
     this.water.version++
   }
 

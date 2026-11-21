@@ -58,6 +58,8 @@ export interface Actor {
   soft?: boolean
   /** A surface that moves by itself and is sent up again with `reshape` (a pond's): while the stage draws blocks it is columns that follow it, or stays blobs, as the look's `flow` says. */
   flows?: boolean
+  /** Weather laid over a scene (its clouds, rain, snow): while the stage draws blocks it is cubes too, or stays blobs among them, as the look's `weather` says. */
+  weather?: boolean
   /** The side of its cubes while the stage draws blocks (`setBlocks`), where it was cut on a grid of its own; left out, the look's `cell`. */
   blockCell?: number
 }
@@ -348,7 +350,7 @@ export class Stage {
     const all = this.actor ? [this.actor, ...this.extras] : []
     if (this.blockLook && this.actor) {
       // soft actors are a small world of their own, drawn among the cubes, so the scene's own world is not drawn at all
-      const soft = all.filter((a) => a.soft || (a.flows && this.blockLook!.flow !== 'blocks'))
+      const soft = all.filter((a) => a.soft || (a.flows && this.blockLook!.flow !== 'blocks') || (a.weather && this.blockLook!.weather !== 'blocks'))
       if (soft.length) {
         this.soft = new SplatWorld(soft, { mode: this.mode, lights: this.opts.lights, sort: this.sort })
         this.soft.setFog(...this.fog)
@@ -358,6 +360,7 @@ export class Stage {
       }
       this.blocks = new BlockView(all.filter((a) => !soft.includes(a)), this.blockLook)
       this.blocks.setLights(this.lit.lights, this.lit.ambient, this.blockLook.ambient)
+      this.blocks.setFog(...this.fog)
       this.scene.add(this.blocks)
     }
     this.setShow(this.show)
@@ -574,6 +577,7 @@ export class Stage {
     this.fog = [color, near, far]
     this.world?.setFog(color, near, far)
     this.soft?.setFog(color, near, far)
+    this.blocks?.setFog(color, near, far)
     this.invalidate()
   }
 

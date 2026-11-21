@@ -210,7 +210,7 @@ export function skyUnder(c: readonly number[], s: SkyState, flash = 0): Rgb {
 export function hazeUnder(s: SkyState, distance: number): { from: number; to: number } | undefined {
   if (s.haze <= 0) return undefined
   const r = distance * 0.45, k = (1 - s.haze) ** 2
-  return { from: r * mix(-1.2, 0.5, k), to: r * mix(4.5, 40, k) }
+  return { from: r * mix(-1.2, 0.5, k), to: r * mix(2.6, 40, k) }
 }
 
 // --- What falls and what floats: descriptions of their own
@@ -237,6 +237,8 @@ export function falling(kind: 'rain' | 'snow', camera: View, count = kind === 'r
   const [x, y, z] = camera.target, r = Math.max(0.8, camera.distance * 0.45)
   return {
     kind, count, colors: kind === 'rain' ? RAIN_COLORS : SNOW_COLORS, land: true,
+    // fine streaks of rain and small flakes, in proportion to the view rather than the scene's own specks
+    ...(kind === 'rain' ? { size: 0.003, long: round(Math.max(0.03, camera.distance * 0.011)) } : { size: round(Math.max(0.006, camera.distance * 0.0025)) }),
     from: [round(x - r), round(y - 1), round(z - r)], to: [round(x + r), cloudBase(camera), round(z + r)],
     wind: kind === 'rain' ? [0.15, 0.05] : undefined,
   }

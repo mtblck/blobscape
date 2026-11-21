@@ -27,6 +27,8 @@ const THIN = 0.012
 const [tx, tz] = [0.05, -0.05]
 const LAMP_Y = 1.4
 const SEA = 1.42
+/** The sea's surface. */
+const SEA_LEVEL = -0.01
 const GULLS = [
   { r: 0.62, y: 1.72, phase: 0, way: 1 },
   { r: 0.95, y: 1.5, phase: 2.2, way: -1 },
@@ -61,9 +63,10 @@ const towerPaint = (k = 1): PaintDoc => (k > 4 ? brick(WHITE) : { kind: 'split',
 const parts: PartDoc[] = []
 const bones: SceneDoc['bones'] = [{ name: 'lamp', at: [tx, LAMP_Y, tz] }, { name: 'boat', at: BOAT }]
 
-// the sea: a round slab with a ripple on top, pale where it breaks on the rock, lighter in the shallows
+// the sea bed under the real sea (`water`): a round slab with a ripple on top, pale where it breaks on the rock,
+// lighter in the shallows, laid a little under the water so the bed shows through it as the swell's colors
 parts.push({
-  shape: { kind: 'rough', by: 0.02, scale: 1, shape: { kind: 'cylinder', at: [0, -0.26, 0], height: 0.24, r: SEA } },
+  shape: { kind: 'rough', by: 0.02, scale: 1, shape: { kind: 'cylinder', at: [0, -0.3, 0], height: 0.24, r: SEA } },
   paint: {
     kind: 'faces', up: 0.5,
     top: { kind: 'near', shape: ROCK, within: 0.035, at: 0, near: c(0.74, 0.86, 0.9), far: { kind: 'near', shape: ROCK, within: 0.1, at: 0, near: { kind: 'patches', size: 0.125, colors: [c(0.2, 0.42, 0.66), c(0.3, 0.52, 0.74)] }, far: { kind: 'waves', size: 0.157, colors: [c(0.1, 0.22, 0.45), c(0.3, 0.52, 0.74), c(0.14, 0.3, 0.55)] } } },
@@ -262,6 +265,14 @@ export const LIGHTHOUSE: SceneDoc = {
   bones,
   parts,
   moves,
+  // the sea is real water: rain that comes down on it rings it, and the boat and the buoy push it aside as they ride
+  water: {
+    level: SEA_LEVEL, from: [-SEA, -SEA], to: [SEA, SEA], color: '#1c3c78', clear: 0.25, cell: 0.028, speed: 0.34, damping: 0.55, ripple: 5, deep: 0.05, splash: { r: 0.05, depth: 0.012 },
+    bodies: [
+      { bone: 'buoy', at: [BUOY[0], 0.03, BUOY[2]], r: 0.06, draft: 0.008 },
+      { bone: 'boat', at: [BOAT[0], BOAT[1], BOAT[2]], r: 0.1, draft: 0.01 },
+    ],
+  },
   // a few dusk-lit clouds, and the night's moon and stars, from the shared recipes
   heavens: {
     moon: { at: [-1.95, 2.15, -1.0], r: 0.17, colors: [MOON, c(0.8, 0.84, 0.9)] },

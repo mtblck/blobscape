@@ -228,6 +228,8 @@ export interface SpeckDoc {
   colors: string[]
   /** A speck's radius; left out, a size that suits the kind. */
   size?: number
+  /** Rain only: half a streak's length (0.07 when left out). */
+  long?: number
   /** Whether they give off light; left out, embers and fireflies do. */
   glow?: boolean
   /** When they are there, for specks that belong to a lamp or a time (a fire's embers, fireflies): gone for the rest. Left out, always. */
@@ -1197,6 +1199,7 @@ export function checkScene(doc: unknown): string[] {
         if (m.land !== undefined && typeof m.land !== 'boolean') bad(`${at}.land`, 'must be true or false')
         if (m.land && !falls) bad(`${at}.land`, 'only rain, snow and leaves land')
         if (m.wind !== undefined) { vec(m.wind, `${at}.wind`, -2, 2, 2); if (!falls) bad(`${at}.wind`, 'only rain, snow and leaves are blown') }
+        if (m.long !== undefined) { opt(m.long, `${at}.long`, 0.01, 0.3); if (m.kind !== 'rain') bad(`${at}.long`, 'only rain falls as streaks') }
       })
       if (specks > MAX_SPECKS) bad('air.specks', `hold ${specks} specks between them; the most is ${MAX_SPECKS}`)
     }
@@ -1477,6 +1480,24 @@ export interface CompiledScene {
   ground(x: number, z: number, top: number, bottom: number): number
   /** The scene's water, if it has any, with its defaults filled in: what `SceneWater` plays. */
   water?: WaterPlan
+  /**
+   * Raindrops of this scene's that come down on water over one loop (where it, or the `water` it was compiled with,
+   * has some): where, when, and the share of its swarm before its speck (0 to 1), so a sky that shows only some of a
+   * swarm (skyRecipes.ts `showWeather`) knows which of them are falling. Another scene's water can take them.
+   */
+  landed: WaterDrop[]
+}
+
+/** A raindrop coming down on water: where, when in the loop, and the share of its swarm before its speck. */
+export interface WaterDrop {
+  /** Where it comes down, across. */
+  x: number
+  /** Where it comes down, along. */
+  z: number
+  /** When, in seconds into the loop. */
+  at: number
+  /** The share of its swarm before its speck, 0 to 1. */
+  share: number
 }
 
 /** A scene's water made ready (`CompiledScene.water`): its grid, its look, the rain that lands on it over one loop and what swims through it. */
@@ -1514,7 +1535,7 @@ export interface WaterPlan {
   /** Whether there is water at a point: the still ground there lies under the level. It measures the ground each time, so ask once a cell. */
   wet(x: number, z: number): boolean
   /** Every raindrop that lands on the water in one loop: where, and how many seconds into the loop. */
-  drops: { x: number; z: number; at: number }[]
+  drops: WaterDrop[]
   /** What moves through the surface: a ball of radius `r` round the rest point `at`, riding the bone at index `bone`, moving water `draft` deep where it crosses. */
   bodies: { bone: number; at: Vec3; r: number; draft: number }[]
 }
@@ -1527,6 +1548,8 @@ interface Speck {
   bone: string
   /** Its bone's place in the skeleton, set once the bones are listed. */
   index: number
+  /** Which swarm of the scene's it is in. */
+  swarm: number
   at: Vec3
   travel: number
   /** Whole times a loop it repeats its path (falls, rises), wanders or blinks. */
@@ -1586,9 +1609,9 @@ function planSpecks(air: AirDoc | undefined, loop: number, ground: (x: number, z
       const seconds = (land ? LANDING_SECONDS[sw.kind as Falling] : SPECK_SECONDS[sw.kind]) * (0.7 + 0.6 * r(4))
       const times = Math.max(1, Math.round(loop / seconds))
       const wander: Speck['wander'] = [1 + Math.floor(r(5) * 2), 1 + Math.floor(r(6) * 2), 1 + Math.floor(r(7) * 2), Math.max(1, Math.round(loop / (2 + 3 * r(8))))]
-      const shape: ShapeDoc = sw.kind === 'rain' ? { kind: 'ball', at, r: [size, 0.07, size] } : sw.kind === 'leaves' ? { kind: 'ball', at, r: [size, size * 0.3, size * 0.65] } : { kind: 'sphere', at, r: size }
+      const shape: ShapeDoc = sw.kind === 'rain' ? { kind: 'ball', at, r: [size, sw.long ?? 0.07, size] } : sw.kind === 'leaves' ? { kind: 'ball', at, r: [size, size * 0.3, size * 0.65] } : { kind: 'sphere', at, r: size }
       const p: Speck = {
-        kind: sw.kind, bone: `~speck${out.length}`, index: -1, at, travel: hi[1] - lo[1], times, wander,
+        kind: sw.kind, bone: `~speck${out.length}`, index: -1, swarm: si, at, travel: hi[1] - lo[1], times, wander,
         phase: [r(9), r(10), r(11), r(12), r(13)], shape, color: sw.colors[Math.floor(r(14) * sw.colors.length)], glow, land, wind,
       }
       if (land) {
@@ -1631,6 +1654,28 @@ function planSpecks(air: AirDoc | undefined, loop: number, ground: (x: number, z
   return out
 }
 
+/** Every raindrop that comes down on water over a loop, in the order they land. */
+function wetDrops(specks: readonly Speck[], loop: number): WaterDrop[] {
+  const drops: WaterDrop[] = []
+  const share = fallShare('rain')
+  // a speck's place in its swarm, as `showWeather` counts it
+  const swarm = new Map<number, number>()
+  for (const p of specks) swarm.set(p.swarm, (swarm.get(p.swarm) ?? 0) + 1)
+  const seen = new Map<number, number>()
+  for (const p of specks) {
+    const n0 = seen.get(p.swarm) ?? 0
+    seen.set(p.swarm, n0 + 1)
+    if (!p.falls) continue
+    p.falls.forEach((f, n) => {
+      if (!f.wet) return
+      // the drop is down when this fall's life reaches the share spent falling
+      const u = ((((n + share - p.phase[0]) / p.times) % 1) + 1) % 1
+      drops.push({ x: p.at[0] + f.dx + p.wind[0], z: p.at[2] + f.dz + p.wind[1], at: u * loop, share: n0 / swarm.get(p.swarm)! })
+    })
+  }
+  return drops.sort((a, b) => a.at - b.at)
+}
+
 /** A scene's water with its defaults filled in, and every raindrop that lands on it in a loop. */
 function planWater(w: WaterDoc, box: { x0: number; x1: number; z0: number; z1: number }, doc: SceneDoc, specks: Speck[], bones: Bone[], wet: (x: number, z: number) => boolean): WaterPlan {
   const cell = w.cell ?? WATER_CELL
@@ -1639,18 +1684,7 @@ function planWater(w: WaterDoc, box: { x0: number; x1: number; z0: number; z1: n
   // with no sky named, a pale and a paler step of its own color: an overcast sky seen in dark water
   const skies = w.sky ?? doc.sky
   const sky = skies ? lin(skies[0]) : body.map((c) => Math.min(1, c * 2.5 + 0.08)) as Vec3, horizon = skies ? lin(skies[1]) : body.map((c) => Math.min(1, c * 4 + 0.2)) as Vec3
-  const drops: WaterPlan['drops'] = []
-  const share = fallShare('rain')
-  for (const p of specks) {
-    if (!p.falls) continue
-    p.falls.forEach((f, n) => {
-      if (!f.wet) return
-      // the drop is down when this fall's life reaches the share spent falling
-      const u = ((((n + share - p.phase[0]) / p.times) % 1) + 1) % 1
-      drops.push({ x: p.at[0] + f.dx + p.wind[0], z: p.at[2] + f.dz + p.wind[1], at: u * doc.loop })
-    })
-  }
-  drops.sort((a, b) => a.at - b.at)
+  const drops = wetDrops(specks, doc.loop)
   return {
     level: w.level, x0: box.x0, z0: box.z0, nx: Math.max(1, Math.ceil((box.x1 - box.x0) / cell)), nz: Math.max(1, Math.ceil((box.z1 - box.z0) / cell)), cell,
     speed: w.speed ?? 0.32, damping: w.damping ?? 0.6, ripple: w.ripple ?? 4, deep: w.deep ?? 0.05, clear: w.clear ?? 0.5,
@@ -1778,7 +1812,13 @@ export function passed(life: number, phase: number): [number, number] {
 /** A sound description (see `checkScene`) made ready to build and play. Throws on an unsound one. */
 /** `puffs` keeps hidden bones for a tap's puff of sparkles (`poke.ts`); a creature taken from a scene goes without. */
 /** `ground` is the ground what falls lands on, in place of the description's own parts: weather laid over another scene (skyRecipes.ts) lands on that scene's. */
-export function compileScene(given: SceneDoc, { puffs = true, ground: under }: { puffs?: boolean; ground?: (x: number, z: number, top: number, bottom: number) => number } = {}): CompiledScene {
+export function compileScene(given: SceneDoc, { puffs = true, ground: under, water: level }: {
+  puffs?: boolean
+  /** What falls lands on instead of this scene's own ground: another scene's (`CompiledScene.ground`), for weather laid over it. */
+  ground?: (x: number, z: number, top: number, bottom: number) => number
+  /** The height of that scene's water, so drops `ground` brings down on it are counted in `landed`. */
+  water?: number
+} = {}): CompiledScene {
   const errs = checkScene(given)
   if (errs.length) throw new Error(`Scene "${String((given as { name?: unknown })?.name)}" has ${errs.length} mistake${errs.length > 1 ? 's' : ''}: ${errs.slice(0, 5).join('; ')}`)
   // the shared moon, sun and stars are parts like any other from here on
@@ -1819,7 +1859,7 @@ export function compileScene(given: SceneDoc, { puffs = true, ground: under }: {
     // nothing between the sky and the water there: the water is what it lands on
     return pond && g < pond.level && wetAt(x, z) ? pond.level : g
   }
-  const specks = planSpecks(doc.air, doc.loop, under ?? groundAt, pond?.level)
+  const specks = planSpecks(doc.air, doc.loop, under ?? groundAt, under ? level : pond?.level)
   const water = pond && pondBox ? planWater(pond, pondBox, doc, specks, bones, wetAt) : undefined
   const banks = doc.air?.mist ?? []
   banks.forEach((m, mi) => { for (let k = 0; k < BANK_BONES; k++) bones.push({ name: `~mist${mi}-${k}`, parent: 0, head: m.at }) })
@@ -1930,6 +1970,7 @@ export function compileScene(given: SceneDoc, { puffs = true, ground: under }: {
     haze: haze ? { color: unit(haze.color).map(linear) as Vec3, from: haze.from ?? 0, to: haze.to ?? 4 } : undefined,
     ground: groundAt,
     water,
+    landed: water?.drops ?? wetDrops(specks, doc.loop),
     lights: (t) => lightsAt(lights, t / doc.loop),
   }
 }
