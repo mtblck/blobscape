@@ -227,39 +227,52 @@ export const WEATHER_COLORS = [...CLOUD_COLORS, ...RAIN_COLORS, ...SNOW_COLORS]
 
 type View = SceneDoc['camera']
 
-/** Rain or snow over the middle of a view, falling onto whatever stands there: one swarm, for any scene. */
+/** How high over the view's target the clouds float, as a share of the view's distance: near the top of the picture as the view starts. */
+export const CLOUD_HEIGHT = 0.3
+/** The height of the clouds' flat undersides for a view: what falls starts there, so rain comes down from under the clouds. */
+export const cloudBase = (camera: View) => round(camera.target[1] + Math.max(0.9, camera.distance * CLOUD_HEIGHT))
+
+/** Rain or snow over the middle of a view, falling from the clouds' height onto whatever stands there: one swarm, for any scene. */
 export function falling(kind: 'rain' | 'snow', camera: View, count = kind === 'rain' ? RAIN_MOST : SNOW_MOST): SpeckDoc {
   const [x, y, z] = camera.target, r = Math.max(0.8, camera.distance * 0.45)
   return {
     kind, count, colors: kind === 'rain' ? RAIN_COLORS : SNOW_COLORS, land: true,
-    from: [round(x - r), round(y - 1), round(z - r)], to: [round(x + r), round(y + 1.6), round(z + r)],
+    from: [round(x - r), round(y - 1), round(z - r)], to: [round(x + r), cloudBase(camera), round(z + r)],
     wind: kind === 'rain' ? [0.15, 0.05] : undefined,
   }
 }
 
-/** Where cloud `i` floats for a view: behind the scene and to its sides as the view starts, the first few well apart. */
+/**
+ * Where each cloud floats over a scene, across the view and away from the eye, in shares of the scene's half width:
+ * over the scene itself, not only behind it (Matt, 2026-11-21: rain comes down from under clouds). The first few are
+ * well apart, for a sky with only some of them out; together they roof the scene.
+ */
+const CLOUD_SPOTS: [number, number][] = [[0.55, 0.5], [-0.65, 0.15], [-0.05, 1.05], [0.1, -0.2], [0.95, -0.1], [-0.95, 0.9], [-0.5, -0.55], [0.6, -0.65]]
+
+/** Where cloud `i` floats for a view: its flat underside at `cloudBase`, over the scene. */
 export function cloudAt(i: number, camera: View): Vec3 {
-  const d = camera.distance, [x, y, z] = camera.target
-  // spread from the middle outward, so a few clouds are not all on one side
-  const side = [0.55, -0.6, 0.05, -0.2, 0.85, -0.95, 0.3, -0.4][i % CLOUDS]
-  const a = ((camera.azimuth + 180 + side * 85) * Math.PI) / 180
-  const out = d * (0.42 + 0.2 * hash(i + 1, 3, 1)), up = d * (0.2 + 0.11 * hash(i + 1, 3, 2))
-  return [round(x + Math.sin(a) * out), round(y + up), round(z + Math.cos(a) * out)]
+  const [x, , z] = camera.target, r = Math.max(0.8, camera.distance * 0.45)
+  const [across, away] = CLOUD_SPOTS[i % CLOUDS]
+  const a = (camera.azimuth * Math.PI) / 180
+  // across the view is (cos a, -sin a), away from the eye (-sin a, -cos a)
+  const dx = across * Math.cos(a) - away * Math.sin(a), dz = -across * Math.sin(a) - away * Math.cos(a)
+  return [round(x + dx * r), round(cloudBase(camera) + 0.02 * camera.distance * hash(i + 1, 3, 2)), round(z + dz * r)]
 }
 
 function cloudPart(i: number, camera: View): PartDoc {
-  const p = cloudAt(i, camera), s = (camera.distance / 3.7) * (0.8 + 0.5 * hash(i + 1, 3, 3))
-  // heaped, flat underneath, long across the view
-  const a = ((camera.azimuth + 90) * Math.PI) / 180, ax = Math.cos(a - Math.PI / 2), az = -Math.sin(a - Math.PI / 2)
-  const along = (k: number, h: number): Vec3 => [round(p[0] + ax * k * s), round(p[1] + h * s), round(p[2] + az * k * s)]
+  const p = cloudAt(i, camera), s = (camera.distance / 3.7) * (1 + 0.4 * hash(i + 1, 3, 3))
+  // heaped, flat underneath, wide enough that together they roof the scene
+  const a = (camera.azimuth * Math.PI) / 180, ax = Math.cos(a), az = -Math.sin(a)
+  const at = (k: number, back: number, h: number): Vec3 => [round(p[0] + (ax * k + az * back) * s), round(p[1] + h * s), round(p[2] + (az * k - ax * back) * s)]
   return {
     shape: { kind: 'join', shapes: [
-      { kind: 'ball', at: p, r: [round(0.3 * s), round(0.1 * s), round(0.3 * s)] },
-      { kind: 'sphere', at: along(-0.14, 0.07), r: round(0.13 * s) },
-      { kind: 'sphere', at: along(0.1, 0.09), r: round(0.15 * s) },
-      { kind: 'sphere', at: along(0.27, 0.03), r: round(0.09 * s) },
+      { kind: 'ball', at: at(0, 0, 0.06), r: [round(0.46 * s), round(0.09 * s), round(0.46 * s)] },
+      { kind: 'sphere', at: at(-0.2, 0.05, 0.12), r: round(0.15 * s) },
+      { kind: 'sphere', at: at(0.08, -0.08, 0.15), r: round(0.18 * s) },
+      { kind: 'sphere', at: at(0.28, 0.1, 0.1), r: round(0.12 * s) },
+      { kind: 'sphere', at: at(0, 0.24, 0.1), r: round(0.13 * s) },
     ] },
-    paint: { kind: 'split', axis: 'y', at: round(p[1] + 0.02 * s), below: CLOUD_COLORS[2], above: { kind: 'split', axis: 'y', at: round(p[1] + 0.1 * s), below: CLOUD_COLORS[1], above: CLOUD_COLORS[0] } },
+    paint: { kind: 'split', axis: 'y', at: round(p[1] + 0.07 * s), below: CLOUD_COLORS[2], above: { kind: 'split', axis: 'y', at: round(p[1] + 0.16 * s), below: CLOUD_COLORS[1], above: CLOUD_COLORS[0] } },
     bone: `cloud${i}`, noShadow: true, bare: true,
   }
 }

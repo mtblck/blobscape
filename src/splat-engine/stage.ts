@@ -1058,6 +1058,8 @@ export class Stage {
     else this.swing?.reset()
     this.morph(this.poser ? undefined : this.clip, t)
     this.world.markPosed()
+    // soft actors drawn among the cubes are posed by the page too (rain and snow, drifting clouds)
+    this.soft?.markPosed()
     if (this.rig?.visible) this.rig.update()
     this.invalidate()
   }
