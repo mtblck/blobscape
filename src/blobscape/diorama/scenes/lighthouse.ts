@@ -282,14 +282,13 @@ export const LIGHTHOUSE: SceneDoc = {
   bones,
   parts,
   moves,
-  // the sea is real water: three swells come in from out past the rock, a ring of small waves every few seconds from
-  // each, and the waves cross, bounce off the rock and rock the boat and the buoy as they pass under them
+  // the sea is real water: two slow swells come in from out past the rock, a long low wave every six seconds from
+  // each, and the waves cross, bounce off the rock and gently rock the boat and the buoy as they pass under them
   water: {
-    level: 0, from: [-SEA, -SEA], to: [SEA, SEA], color: '#1a3a6e', clear: 0.35, cell: 0.022, speed: 0.34, damping: 0.18, ripple: 6, deep: 0.08,
+    level: 0, from: [-SEA, -SEA], to: [SEA, SEA], color: '#1a3a6e', clear: 0.35, cell: 0.022, speed: 0.12, damping: 0.25, ripple: 6, deep: 0.08,
     waves: [
-      { at: [-1.2, -0.55], r: 0.12, depth: 0.015, times: 5 },
-      { at: [1.25, 0.15], r: 0.12, depth: 0.015, times: 4, phase: 0.4 },
-      { at: [0.55, 1.25], r: 0.12, depth: 0.015, times: 6, phase: 0.7 },
+      { at: [-1.2, -0.55], r: 0.4, depth: 0.012, times: 2 },
+      { at: [1.25, 0.15], r: 0.4, depth: 0.012, times: 2, phase: 0.4 },
     ],
     floats: [{ bone: 'boat', at: [BOAT[0], 0, BOAT[2]], size: 0.2 }, { bone: 'buoy', at: [BUOY[0], 0, BUOY[2]], size: 0.06 }],
   },
