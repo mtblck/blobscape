@@ -346,7 +346,7 @@ export class Stage {
     const all = this.actor ? [this.actor, ...this.extras] : []
     if (this.blockLook && this.actor) {
       // soft actors are a small world of their own, drawn among the cubes, so the scene's own world is not drawn at all
-      const soft = all.filter((a) => a.soft || (a.flows && this.blockLook!.flow === 'blobs'))
+      const soft = all.filter((a) => a.soft || (a.flows && this.blockLook!.flow !== 'blocks'))
       if (soft.length) {
         this.soft = new SplatWorld(soft, { mode: this.mode, lights: this.opts.lights, sort: this.sort })
         this.soft.setFog(...this.fog)

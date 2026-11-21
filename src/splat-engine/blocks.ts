@@ -31,7 +31,8 @@ export interface BlockLook {
   least?: number
   /**
    * How a surface that moves by itself is drawn (a source with `flows`: a pond): 'blocks', as columns of cubes whose
-   * tops rise and fall with it in steps, or 'blobs', left as the blobs it is among the cubes (default 'blocks').
+   * tops rise and fall with it in steps, or 'blobs', left as the blobs it is among the cubes (default 'blobs': Matt found
+   * they have more definition, 2026-11-21).
    */
   flow?: 'blocks' | 'blobs'
   /** How many times higher than it stands a ripple is drawn as blocks (default `FLOW_SWELL`); 0 keeps the tops level, so only their color moves. */

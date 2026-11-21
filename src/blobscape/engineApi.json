@@ -9277,7 +9277,7 @@
        "name": "flow",
        "optional": true,
        "type": "\"blobs\" | \"blocks\"",
-       "doc": "How a surface that moves by itself is drawn (a source with `flows`: a pond): 'blocks', as columns of cubes whose\ntops rise and fall with it in steps, or 'blobs', left as the blobs it is among the cubes (default 'blocks')."
+       "doc": "How a surface that moves by itself is drawn (a source with `flows`: a pond): 'blocks', as columns of cubes whose\ntops rise and fall with it in steps, or 'blobs', left as the blobs it is among the cubes (default 'blobs': Matt found\nthey have more definition, 2026-11-21)."
       },
       {
        "name": "swell",

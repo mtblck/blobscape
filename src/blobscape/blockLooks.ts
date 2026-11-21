@@ -24,7 +24,7 @@ export interface BlockChoice {
   /** How many times higher than it stands a ripple is drawn as blocks. */
   swell: number
 }
-export const BLOCK_START: BlockChoice = { size: 2, turn: -50, height: 50, shadows: true, corners: 0.5, vary: 0.35, edge: 0.3, backdrop: '', water: 'blocks', swell: FLOW_SWELL }
+export const BLOCK_START: BlockChoice = { size: 2, turn: -50, height: 50, shadows: true, corners: 0.5, vary: 0.35, edge: 0.3, backdrop: '', water: 'blobs', swell: FLOW_SWELL }
 /** The most a ripple's height is multiplied by. */
 export const SWELL_MOST = 16
 /** The sizes on offer, in cells of the subject's grid. */

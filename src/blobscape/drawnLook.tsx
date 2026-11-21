@@ -76,8 +76,8 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   // blocks: `?block=` is the size, in cells of the subject's grid; a phone starts a size up, for fewer cubes
   const [block, setBlock] = useState<BlockChoice>(() => {
     const v = Number(params().get('block')), swell = Number(params().get('swell'))
-    // water as blocks or as blobs (`?water=blobs`), and how high its ripples stand as blocks (`?swell=`)
-    return { ...BLOCK_START, water: params().get('water') === 'blobs' ? 'blobs' : 'blocks', swell: params().get('swell') !== null && Number.isFinite(swell) ? Math.max(0, Math.min(SWELL_MOST, swell)) : BLOCK_START.swell, size: Number.isFinite(v) && v >= BLOCK_SIZES.min && v <= BLOCK_SIZES.max ? Math.round(v) : BLOCK_START.size + (on.light ? 1 : 0) }
+    // water as blobs or as blocks (`?water=blocks`), and how high its ripples stand as blocks (`?swell=`)
+    return { ...BLOCK_START, water: params().get('water') === 'blocks' ? 'blocks' : 'blobs', swell: params().get('swell') !== null && Number.isFinite(swell) ? Math.max(0, Math.min(SWELL_MOST, swell)) : BLOCK_START.swell, size: Number.isFinite(v) && v >= BLOCK_SIZES.min && v <= BLOCK_SIZES.max ? Math.round(v) : BLOCK_START.size + (on.light ? 1 : 0) }
   })
   const [size, setSize] = useState(1)
   // outlines: on for the two pen looks and cel shading unless the visitor says otherwise
@@ -195,8 +195,8 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
             {on.water && (
               <Field label="Water ripples">
                 <div className="flex flex-wrap gap-1.5" data-testid="block-water">
-                  <Chip active={block.water === 'blocks'} onClick={() => setBlock((c) => ({ ...c, water: 'blocks' }))}>As blocks</Chip>
                   <Chip active={block.water === 'blobs'} onClick={() => setBlock((c) => ({ ...c, water: 'blobs' }))}>As blobs</Chip>
+                  <Chip active={block.water === 'blocks'} onClick={() => setBlock((c) => ({ ...c, water: 'blocks' }))}>As blocks</Chip>
                 </div>
                 <p className="mt-1.5 text-xs text-ink-faint">{block.water === 'blocks' ? 'The water is columns of blocks: each rises and falls in quarter steps of a block as the ripples pass.' : 'The water stays soft blobs among the cubes, as in the other styles.'}</p>
               </Field>
