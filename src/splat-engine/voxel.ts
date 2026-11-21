@@ -908,6 +908,17 @@ export function unlit<T>(make: () => T): T {
   try { return make() } finally { plain = was }
 }
 
+let region: { min: Vec3; max: Vec3 } | undefined
+/**
+ * Runs `make` with every `buildVoxels` inside it cutting only the grid points within a box (in the spec's own units,
+ * the rest pose): a finer cut of the ground round one place of a scene too big to cut fine whole.
+ */
+export function within<T>(box: { min: Vec3; max: Vec3 }, make: () => T): T {
+  const was = region
+  region = box
+  try { return make() } finally { region = was }
+}
+
 let bands = 0
 /**
  * Runs `make` with every `buildVoxels` inside it lighting each blob as one texel in `n` flat bands: the sun's share that
@@ -1075,9 +1086,10 @@ export function buildVoxels(spec: VoxelSpec): Built {
     const reach = Math.max(SHUT_REACH[SHUT_REACH.length - 1], s * 1.5) + s
     const cover = part.bare || part.glow ? undefined : spec.cover
     const near = crevice > 0 || part.grime || cover?.kind === 'moss' ? casters.filter((c) => [0, 1, 2].every((i) => c.min[i] <= max[i] + reach && c.max[i] >= min[i] - reach)) : []
-    const i0 = Math.floor(min[0] / s), i1 = Math.ceil(max[0] / s)
-    const j0 = Math.floor(min[1] / s), j1 = Math.ceil(max[1] / s)
-    const k0 = Math.floor(min[2] / s), k1 = Math.ceil(max[2] / s)
+    // within a region (`within`), only the grid points inside it
+    const lo = (a: number) => Math.max(Math.floor(min[a] / s), region ? Math.ceil(region.min[a] / s) : -Infinity)
+    const hi = (a: number) => Math.min(Math.ceil(max[a] / s), region ? Math.floor(region.max[a] / s) : Infinity)
+    const i0 = lo(0), i1 = hi(0), j0 = lo(1), j1 = hi(1), k0 = lo(2), k1 = hi(2)
     // only a part at least eight cells thick each way can be painted broadly: a thinner one could miss every coarse cell
     const broad = spec.focus !== undefined && [0, 1, 2].every((i) => max[i] - min[i] >= s * 8)
     const cell = (x: number, y: number, z: number) => {
@@ -1215,7 +1227,9 @@ export function buildVoxels(spec: VoxelSpec): Built {
   cutCount = blobs.count
   // loose blobs come last, each counted as a part of its own after the shapes
   for (const [k, b] of (spec.loose ?? []).entries()) {
-    blobs.push({ center: b.center, scale: b.scale, quat: [0, 0, 0, 1], color: b.color, opacity: Math.min(b.opacity, LOOSE_MAX) })
+    // a region keeps every loose blob, so they stay in step with their bones, but shows only those inside it
+    const out = region && [0, 1, 2].some((a) => b.center[a] < region!.min[a] || b.center[a] > region!.max[a])
+    blobs.push({ center: b.center, scale: b.scale, quat: [0, 0, 0, 1], color: b.color, opacity: out ? 0 : Math.min(b.opacity, LOOSE_MAX) })
     parts.push(spec.parts.length + k)
   }
   const looseBone = (spec.loose ?? []).map((b) => skeleton.index(b.bone))

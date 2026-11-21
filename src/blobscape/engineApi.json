@@ -5205,6 +5205,16 @@
      ]
     },
     {
+     "name": "within",
+     "kind": "function",
+     "doc": "Runs `make` with every `buildVoxels` inside it cutting only the grid points within a box (in the spec's own units,\nthe rest pose): a finer cut of the ground round one place of a scene too big to cut fine whole.",
+     "signatures": [
+      {
+       "code": "within<T>(box: { min: Vec3; max: Vec3 }, make: () => T): T"
+      }
+     ]
+    },
+    {
      "name": "banded",
      "kind": "function",
      "doc": "Runs `make` with every `buildVoxels` inside it lighting each blob as one texel in `n` flat bands: the sun's share that\nreaches a blob (its facing times its cast shadow) is moved onto the nearest of `n` steps from none to full before its\ncolor is worked out, so light and shade fall in whole blobs, crisp along the surface, while each blob keeps its own\npaint (bricks, planks, ripples). The ambient share is left as it is. 0 or 1 leaves the light smooth.",

@@ -28,6 +28,7 @@ import { href } from './routes.ts'
 import { Stick } from './Stick.tsx'
 import { steer, type Input } from './pond/wade.ts'
 import { SCALE, keepAbove, type IslandWalk } from './islands/walk.ts'
+import { PATCH_LIFT, inHole, patchFor, patchOf, type Patch } from './islands/patch.ts'
 import { colorsOf } from './creator/cut.ts'
 import { joinPalettes } from '../splat-engine/project.ts'
 
@@ -120,7 +121,7 @@ export function Islands() {
   // island is cut at Chunky; a finer detail is cut for the island underfoot alone, after (`finer`), since at Fine one
   // island is some 850,000 blobs and close to a minute's cut, and the whole world at it never arrived on a phone
   const cutAt = DETAIL.find((d) => d.id === detail)!.spacing * (blocky ? blockSize : 1)
-  const baseAt = DETAIL[0].spacing * (blocky ? blockSize : 1)
+  const baseAt = DETAIL[0].spacing * (blocky ? Math.max(2, blockSize) : 1)
   const [made, setMade] = useState<{ built: Built; pieces: Built[]; of: typeof scene; scenes: typeof scenes; world: typeof world; plain: boolean; spacing: number }>()
   const ready = made?.of === scene && made.plain === blocky && made.spacing === baseAt ? made : undefined
   // a worker an island (each takes seconds), the bridges with the first; kept between cuts while nothing is stopped
@@ -155,19 +156,23 @@ export function Islands() {
     }
   }, [scene, scenes, world, biomeId, seed, count, blocky, baseAt])
 
-  // the island underfoot (the first while nobody walks), and its finer cut when a finer detail is asked for: kept for
-  // the last two islands cut finer, so walking back and forth across a bridge doesn't cut again
+  // the island underfoot (the first while nobody walks), and a finer cut of the ground round the elf there (or round
+  // the middle of the view) when a finer detail or 1× blocks is asked for: cut whole, an island at 1× was close to
+  // 800,000 blobs and over half a minute (islands/patch.ts). The last few patches are kept, so walking back finds them.
   const [near, setNear] = useState(0)
+  const [focus, setFocus] = useState<[number, number]>([0, 0])
   const finerCuts = useRef<{ of?: typeof made; kept: { key: string; piece: Built }[] }>({ kept: [] })
-  const [finer, setFiner] = useState<{ of: NonNullable<typeof made>; index: number; spacing: number; piece: Built }>()
+  const [finer, setFiner] = useState<{ of: NonNullable<typeof made>; index: number; spacing: number; patch: Patch; piece: Built }>()
   const fineWorker = useRef<Worker | undefined>(undefined)
   useEffect(() => () => fineWorker.current?.terminate(), [])
+  const fineWanted = !!ready && cutAt !== ready.spacing
   useEffect(() => {
     if (!ready || cutAt === ready.spacing) return
-    const index = Math.min(near, ready.world.islands.length - 1), key = `${index}:${cutAt}`
+    const index = Math.min(near, ready.world.islands.length - 1), patch = patchOf(focus, ready.spacing, cutAt)
+    const key = `${index}:${cutAt}:${patch.at.join(',')}`
     if (finerCuts.current.of !== ready) finerCuts.current = { of: ready, kept: [] }
     const kept = finerCuts.current.kept.find((k) => k.key === key)
-    if (kept) { setFiner({ of: ready, index, spacing: cutAt, piece: kept.piece }); return }
+    if (kept) { setFiner({ of: ready, index, spacing: cutAt, patch, piece: kept.piece }); return }
     let done = false
     const timer = setTimeout(() => {
       const w = (fineWorker.current ??= new Worker(new URL('./islands/cut.worker.ts', import.meta.url), { type: 'module' }))
@@ -176,33 +181,49 @@ export function Islands() {
         if (ev.data.id !== id || !ev.data.cut) return
         done = true
         const piece = unpack(ev.data.cut)
-        finerCuts.current.kept = [{ key, piece }, ...finerCuts.current.kept].slice(0, 2)
-        setFiner({ of: ready, index, spacing: cutAt, piece })
+        finerCuts.current.kept = [{ key, piece }, ...finerCuts.current.kept].slice(0, 4)
+        setFiner({ of: ready, index, spacing: cutAt, patch, piece })
       }
-      w.postMessage({ id, biome: biomeId, seed, count, spacing: cutAt, plain: blocky, only: [index] } satisfies IslandJob)
+      w.postMessage({ id, biome: biomeId, seed, count, spacing: cutAt, plain: blocky, only: [index], region: patch.region } satisfies IslandJob)
     }, 300)
     return () => { clearTimeout(timer); if (!done) { fineWorker.current?.terminate(); fineWorker.current = undefined } }
-  }, [ready, near, cutAt, biomeId, seed, count, blocky])
-  // what is drawn: every island at Chunky, but the one underfoot finer once it is cut; blocks a cut's own cells across
+  }, [ready, near, focus, cutAt, biomeId, seed, count, blocky])
+  // what is drawn: every island at Chunky (2× in blocks at the least), the one underfoot with a hole where its patch is,
+  // and the patch, cut finer, in the hole; blocks a cut's own cells across
+  const fine = ready && finer?.of === ready && finer.spacing === cutAt ? finer : undefined
   const pieces = useMemo(() => {
     if (!ready) return []
-    const fine = finer?.of === ready && finer.spacing === cutAt ? finer : undefined
-    return ready.pieces.map((p, j): Built & { blockCell?: number } => (fine && j === fine.index ? { ...fine.piece, blockCell: blocky ? fine.spacing : undefined } : p))
-  }, [ready, finer, cutAt, blocky])
-  const finerWaits = !!ready && cutAt !== ready.spacing && !(finer?.of === ready && finer.spacing === cutAt && finer.index === Math.min(near, ready.world.islands.length - 1))
+    return ready.pieces.map((p, j): Built => {
+      if (!fine || j !== fine.index) return p
+      const blobs = p.blobs.clone(), c = blobs.center
+      for (let i = 0; i < blobs.count; i++) if (inHole(fine.patch, ready.spacing, c[i * 3], c[i * 3 + 2])) blobs.opacity[i] = 0
+      return { ...p, blobs }
+    })
+  }, [ready, fine])
+  const patchPiece = useMemo(() => (fine ? { ...fine.piece, blockCell: blocky ? fine.spacing : undefined } : undefined), [fine, blocky])
+  const finerWaits = fineWanted && !(fine && fine.index === Math.min(near, ready!.world.islands.length - 1) && fine.patch.at.join() === focus.join())
 
   // the grass on each island's turf, grown from its cut: thick on the island underfoot, thinner on the others
   const grown = useMemo(() => {
     if (!ready || !blocky || !grass) return []
     const unit = (h: string) => [1, 3, 5].map((k) => parseInt(h.slice(k, k + 2), 16) / 255)
     return ready.world.islands.map((isl, j) => {
-      const piece = pieces[j] as Built & { blockCell?: number }, b = biomeOf(isl.biome), ramp = material(b.ground.top).ramp.map(unit)
+      const piece = pieces[j], b = biomeOf(isl.biome), ramp = material(b.ground.top).ramp.map(unit)
       const flowers = { kinds: b.wildflowers.map((id) => material(id).ramp.map(unit)), bunches: (coarse ? 220 : 340) * (j ? 0.4 : 1) }
-      return grassActor(growGrass({ blobs: piece.blobs, joints: piece.skin.joints }, { cell: piece.blockCell ?? ready.spacing, ramp, blades: (coarse ? 24000 : 40000) * (j ? 0.4 : 1), seed: isl.seed, flowers }))
-    })
-  }, [ready, pieces, blocky, grass, coarse])
+      const grow = (from: Built & { blockCell?: number }, share: number) => ({ island: j, actor: grassActor(growGrass({ blobs: from.blobs, joints: from.skin.joints }, { cell: from.blockCell ?? ready.spacing, ramp, blades: (coarse ? 24000 : 40000) * share, seed: isl.seed, flowers: { ...flowers, bunches: flowers.bunches * share } })) })
+      // the finer patch grows its own, as thick for its ground as the island's
+      return [grow(piece, j ? 0.4 : 1), ...(patchPiece && fine?.index === j ? [grow(patchPiece, 0.25)] : [])]
+    }).flat()
+  }, [ready, pieces, patchPiece, fine, blocky, grass, coarse])
 
   const nearNow = useRef(near)
+  const focusNow = useRef(focus)
+  // looking about, the patch is round the middle of the view; walking, round the elf (in the poser)
+  useEffect(() => {
+    if (walking) return
+    const on = world.islands[0].at, f = patchFor(focusNow.current, orbit.target[0] - on[0], orbit.target[2] - on[2])
+    if (f.join() !== focusNow.current.join()) { focusNow.current = f; setFocus(f) }
+  }, [walking, orbit, world])
   // leaving the walk, the first island is the one looked at again
   useEffect(() => { if (!walking) { nearNow.current = 0; setNear(0) } }, [walking])
   // in blocks the clouds are soft blobs of their own, light and wispy among the cubes (Matt, 2026-11-21)
@@ -315,7 +336,7 @@ export function Islands() {
     const d = ready.of, { scenes: all, world: wd } = ready
     const others = pieces.slice(1)
     const residents = living?.residents ?? [], bodies = living?.bodies ?? [], bigs = living?.bigs ?? []
-    stage.setActor(pieces[0], undefined, [...others, ...grown, ...clouds, ...bodies, ...bigs, ...(walker ? [walker.elf] : [])])
+    stage.setActor(pieces[0], undefined, [...others, ...(patchPiece ? [patchPiece] : []), ...grown.map((g) => g.actor), ...clouds, ...bodies, ...bigs, ...(walker ? [walker.elf] : [])])
     const ground = walker?.ground as WorldGround | undefined
     // a new island brings its own starting view; a new detail keeps the view it had
     const start = overview(wd, d.views[0].orbit)
@@ -331,7 +352,9 @@ export function Islands() {
         if (j < wd.islands.length) { all[j].pose(s, calm ? 0 : t); placeIsland(wd.islands[j], s) }
         else poseBridge(wd.bridges[j - wd.islands.length], s)
       }
-      grown.forEach((g, j) => placeIsland(wd.islands[j], g.skeleton))
+      // the finer patch sways with its island, lifted a hair so its tops win where they meet the coarse cut's
+      if (patchPiece && fine) { const s = patchPiece.skeleton; all[fine.index].pose(s, calm ? 0 : t); placeIsland(wd.islands[fine.index], s); s.place[1] += PATCH_LIFT; s.update() }
+      grown.forEach((g) => placeIsland(wd.islands[g.island], g.actor.skeleton))
       clouds.forEach((c, j) => { poseClouds(wd.islands[j].plan, c.skeleton, calm ? 0 : t, d.loop); placeIsland(wd.islands[j], c.skeleton) })
       // the creatures walk their loops on the world's own clock, so where each is depends on the time alone
       residents.forEach((r, j) => living!.pose(r, bodies[j].skeleton, t, living!.ground.groundAt, calm))
@@ -352,10 +375,13 @@ export function Islands() {
         eye = eye ? eye.map((v, j) => v + (m[j] - v) * k) : m
         // which island is underfoot, for its finer cut
         if (ground?.islandAt) { const j = ground.islandAt(m[0], m[2]); if (j !== nearNow.current) { nearNow.current = j; setNear(j) } }
+        // and where on it, for the finer patch round the elf
+        const on = wd.islands[nearNow.current].at, f = patchFor(focusNow.current, m[0] / SCALE - on[0], m[2] / SCALE - on[2])
+        if (f.join() !== focusNow.current.join()) { focusNow.current = f; setFocus(f) }
         stage.orbit = keepAbove({ ...inMeters(o), target: [eye[0], eye[1], eye[2]] as [number, number, number] }, (x, z) => walker.ground.groundAt(x, z))
       } else if (d.swing && rocking.current) stage.orbit = inMeters(swung(orbitNow.current, d.swing, d.loop, t))
     }, stage.time)
-  }, [stage, ready, pieces, walker, calm, grown, clouds, living, among])
+  }, [stage, ready, pieces, patchPiece, fine, walker, calm, grown, clouds, living, among])
   // walking needs the clock to run, whether or not the island's own moves do
   useEffect(() => { if (stage) stage.playing = playing || !!walker }, [stage, playing, walker])
   useEffect(() => { if (stage) { if (!walkNow.current) stage.orbit = inMeters(orbit); stage.invalidate() } }, [stage, orbit, rock])
