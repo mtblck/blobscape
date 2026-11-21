@@ -3799,6 +3799,12 @@
        "optional": true,
        "type": "{ bone: string; at: Vec3; size: number }[]",
        "doc": "What rides the water, at most twelve: the bone `bone` rises and falls with the surface at the point `at` (where\nit sits on the water at rest) and tips with the surface's slope across `size` (half its length), steepened as the\nsurface is drawn (`ripple`). A boat, a buoy, a lily pad. Its own moves still apply under it."
+      },
+      {
+       "name": "foam",
+       "optional": true,
+       "type": "number",
+       "doc": "Foam where the water strikes what stands in it (a post, a rock, a bank): it gathers where the surge against a\nwall runs up fast, spreads a little and fades over a second or two, and the surface is drawn white under it.\n`foam` is how readily it gathers, 0 (none, when left out) to 4; 1 suits swells against posts."
       }
      ]
     },
@@ -4384,6 +4390,11 @@
        "name": "floats",
        "type": "{ bone: number; at: Vec3; size: number }[]",
        "doc": "What rides the water: the bone at index `bone`, sitting on it at `at`, tipped by its slope across `size`."
+      },
+      {
+       "name": "foam",
+       "type": "number",
+       "doc": "How readily foam gathers where the water strikes something standing in it: 0 for none."
       }
      ],
      "methods": [
@@ -4393,6 +4404,15 @@
        "signatures": [
         {
          "code": "wet(x: number, z: number): boolean"
+        }
+       ]
+      },
+      {
+       "name": "stands",
+       "doc": "Whether something stands out of the water at a dry point (a rock, a bank, a post), rather than there being no ground at all (past the edge of a scene's sea). Measured each time, as `wet` is.",
+       "signatures": [
+        {
+         "code": "stands(x: number, z: number): boolean"
         }
        ]
       }
@@ -4581,6 +4601,12 @@
        "readonly": true,
        "type": "number",
        "doc": "How many moments of the loop are kept."
+      },
+      {
+       "name": "foam",
+       "readonly": true,
+       "type": "Float32Array",
+       "doc": "Foam on each cell as last laid by `set`, 0 to 1 (`WaterDoc.foam`); all 0 where the scene has none."
       }
      ],
      "methods": [
