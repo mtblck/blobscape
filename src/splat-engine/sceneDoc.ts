@@ -1469,6 +1469,13 @@ export interface CompiledScene {
   empty(built: { partOf: ArrayLike<number> }): number[]
   /** Poses the bones for `t` seconds. */
   pose(sk: Skeleton, t: number): void
+  /**
+   * After `pose` (before the bones are worked out): blows what falls (rain, snow, leaves) by a wind that may change
+   * from moment to moment, `wind` ([x, z]) being how far sideways it carries a thing for each unit it falls. Each is
+   * moved upwind by that over the fall it has still to come, so it still lands where it was planned to (and rings the
+   * water, and lies, there), and rain's streaks lean along it. Snow and leaves are carried `DRIFT` times further.
+   */
+  blow(sk: Skeleton, t: number, wind: readonly [number, number]): void
   /** The scene's live lights at a time, in seconds. */
   lights(t: number): PointLight[]
   /** Distance haze, if the scene asks for it: the color (linear) and where it starts and would be total, in units past the view's target. */
@@ -1570,6 +1577,9 @@ interface Speck {
    */
   falls?: { dx: number; dz: number; travel: number; wet: boolean }[]
 }
+
+/** How much further than rain the wind carries snow and leaves over the same fall: they fall slowly. */
+export const DRIFT = 1.8
 
 const SPECK_SIZE: Record<SpeckKind, number> = { dust: 0.01, embers: 0.014, rain: 0.008, snow: 0.014, leaves: 0.022, fireflies: 0.018, bubbles: 0.02 }
 /** Seconds one fall or rise takes, about: the rest of a swarm's speed comes from that. A speck that lands lies a while too. */
@@ -1926,6 +1936,25 @@ export function compileScene(given: SceneDoc, { puffs = true, ground: under, wat
       const seen = new Set<number>()
       for (let i = 0; i < built.partOf.length; i++) seen.add(built.partOf[i])
       return doc.parts.map((_, i) => i).filter((i) => !seen.has(i))
+    },
+    blow(sk, t, wind) {
+      if (!wind[0] && !wind[1]) return
+      const u = t / doc.loop
+      for (const p of specks) {
+        if (p.kind !== 'rain' && p.kind !== 'snow' && p.kind !== 'leaves') continue
+        const life = (((u * p.times + p.phase[0]) % 1) + 1) % 1
+        const f = p.land ? fallAt(p.kind, life) : { drop: life }
+        const fall = p.falls?.[(((Math.floor(u * p.times + p.phase[0]) % p.times) + p.times) % p.times)]
+        const travel = fall?.travel ?? p.travel, k = p.kind === 'rain' ? 1 : DRIFT
+        const b = p.index, left = travel * (1 - f.drop) * k
+        sk.offset[b * 3] -= wind[0] * left
+        sk.offset[b * 3 + 2] -= wind[1] * left
+        if (p.kind === 'rain') {
+          const w = Math.hypot(wind[0], wind[1])
+          // turning the streak's upright toward the wind tips its bottom downwind, as far as it is carried a unit of fall
+          sk.setRotation(b, mulQ(axisAngle([-wind[1] / w, 0, wind[0] / w], -Math.atan(w)), sk.rotation.subarray(b * 4, b * 4 + 4)))
+        }
+      }
     },
     pose(sk, t) {
       sk.reset()

@@ -2,7 +2,7 @@ import type { Rgb } from '../../splat-core/pixel.ts'
 import type { Actor } from '../../splat-engine/engine.ts'
 import { joinPalettes } from '../../splat-engine/project.ts'
 import { compileScene, type CompiledScene } from '../../splat-engine/sceneDoc.ts'
-import { FLASH_SKY, WEATHERS, cloudBase, WEATHER_COLORS, hazeUnder, isClear, lightUnder, lightningAt, showWeather, skyUnder, weatherBones, weatherDocs, type SkyState, type WeatherBones } from '../../splat-engine/skyRecipes.ts'
+import { FLASH_SKY, WEATHERS, WIND_WAY, cloudBase, windAt, WEATHER_COLORS, hazeUnder, isClear, lightUnder, lightningAt, showWeather, skyUnder, weatherBones, weatherDocs, type SkyState, type WeatherBones } from '../../splat-engine/skyRecipes.ts'
 import { buildVoxels } from '../../splat-engine/voxel.ts'
 import { makeSnowCover, pileSnow, warmthOf, type SnowCover } from '../../splat-engine/snowCover.ts'
 import { ownClouds } from '../../splat-engine/heavens.ts'
@@ -23,9 +23,6 @@ const FALL_SPACING = 0.01, CLOUD_SPACING = 0.034
 
 /** Where each recipe's rain ends in the swarm, so the pond's rings for the rain of a recipe are worked out whole. */
 const RAIN_BANDS = [...new Set([...WEATHERS.map((w) => w.rain ?? 0).filter((r) => r > 0), 1])].sort((a, b) => a - b)
-
-/** Where the weather's wind blows, x and z: the way its rain leans (`weatherDocs`). */
-const WIND_WAY = [0.15, 0.05] as const
 
 /** The snow lying is laid at least this far apart, and about this many blobs across the stretch it lies on. */
 const COVER_SPACING = 0.012, COVER_ACROSS = 75
@@ -90,6 +87,8 @@ export class SceneWeather {
     for (const [l, falls, clouds] of [[this.layers.clouds, 0, Math.max(s.clouds, this.own)], [this.layers.rain, s.rain, 0], [this.layers.snow, s.snow, 0]] as const) {
       const sk = l.actor.skeleton
       l.c.pose(sk, t)
+      // what falls is blown by the wind of the moment, still landing where it was planned to
+      if (falls) l.c.blow(sk, t, windAt(s, t, l.c.loop))
       showWeather(sk.size, l.bones, falls, clouds)
       sk.update()
     }

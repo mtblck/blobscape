@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { Skeleton } from './rig.ts'
 import { checkScene, compileScene } from './sceneDoc.ts'
-import { BOLT_SECONDS, CLEAR, CLOUDS, CLOUD_COVERS, RAIN_MOST, SNOW_MOST, SkyEase, WEATHERS, falling, gloomy, hazeUnder, isClear, lightUnder, lightningAt, mixSky, shareOut, showWeather, skyState, skyUnder, weatherBones, weatherDocs } from './skyRecipes.ts'
+import { BOLT_SECONDS, CLEAR, CLOUDS, CLOUD_COVERS, RAIN_MOST, SNOW_MOST, SkyEase, WEATHERS, falling, gloomy, hazeUnder, isClear, lightUnder, lightningAt, mixSky, windAt, shareOut, showWeather, skyState, skyUnder, weatherBones, weatherDocs } from './skyRecipes.ts'
 
 const VIEW = { target: [0, 0.5, 0] as [number, number, number], distance: 3.4, azimuth: 30, elevation: 14 }
 
@@ -117,8 +117,16 @@ test('a sky shows its share of the drops and clouds, the rest hidden', () => {
   assert.deepEqual([...size], [1, 1, 1, 0, 1, 1, 0, 0])
 })
 
-test('rain roughens water a level at a time: rain one, heavy rain two, a thunderstorm three', () => {
-  assert.deepEqual(['rain', 'heavy-rain', 'thunderstorm'].map((w) => skyState(w as 'rain').waves), [1, 2, 3])
-  assert.equal(skyState('snow').waves, 0)
-  assert.equal(mixSky(skyState('rain'), skyState('thunderstorm'), 0.5).waves, 2)
+test('wind comes with weather a level at a time, may be asked for harder, and blows in gusts that loop', () => {
+  assert.deepEqual(['rain', 'heavy-rain', 'thunderstorm'].map((w) => skyState(w as 'rain').wind), [1, 2, 3])
+  assert.equal(skyState('rain', undefined, 'gale').wind, 3, 'harder wind can be asked for')
+  assert.equal(skyState('thunderstorm', undefined, 'breeze').wind, 3, 'but no softer than the weather brings')
+  assert.ok(!isClear(skyState(undefined, undefined, 'windy')))
+  assert.equal(mixSky(skyState('rain'), skyState('thunderstorm'), 0.5).wind, 2)
+  assert.deepEqual(windAt(CLEAR, 1, 12), [0, 0])
+  const gale = skyState(undefined, undefined, 'gale'), breeze = skyState(undefined, undefined, 'breeze')
+  const len = (w: number[]) => Math.hypot(w[0], w[1])
+  assert.ok(len(windAt(gale, 1, 12)) > len(windAt(breeze, 1, 12)) * 3)
+  const a = windAt(gale, 0, 12), b = windAt(gale, 12, 12)
+  assert.ok(Math.abs(a[0] - b[0]) < 1e-9 && Math.abs(a[1] - b[1]) < 1e-9, 'its gusts join up at the loop')
 })

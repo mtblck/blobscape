@@ -58,6 +58,8 @@ export interface Diorama {
   /** Cuts the scene. With `steps` (a palette), it is painted in steps of that palette as it is cut. */
   make(spacing: number, steps?: Rgb[]): Built
   pose(sk: Skeleton, t: number): void
+  /** After `pose`: blows the scene's own rain, snow and leaves by a wind of the moment (`CompiledScene.blow`), where it has any. */
+  blow?(sk: Skeleton, t: number, wind: readonly [number, number]): void
   /** Its live lights `t` seconds in. `shadows` says whether one that can cast shadows should (the page asks only where the GPU works them out). */
   lights(t: number, shadows?: boolean): PointLight[]
   /** How much of its painted color everything keeps before its lights are added: 1 where left out, less for a scene lit mostly live. */
@@ -182,6 +184,7 @@ export function described(id: string, doc: SceneDoc, about: string): Diorama {
       return built
     },
     pose: c.pose,
+    blow: c.blow,
     lights: c.lights,
     haze: c.haze,
     ground: c.ground,

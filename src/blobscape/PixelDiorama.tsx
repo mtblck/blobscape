@@ -35,7 +35,7 @@ import { GLITCH_START, glitchLook, type GlitchChoice } from './glitchLooks.ts'
 import { GlitchControls } from './diorama/GlitchControls.tsx'
 import { useDrawnLook, useHeld, wantsPlain } from './drawnLook.tsx'
 import { TIMES, timeAsked, timeOf, type TimeId } from './timeOfDay.ts'
-import { CLOUD_COVERS, SkyEase, WEATHERS, cloudsAsked, gloomy, isClear, skyState, weatherAsked, type CloudId, type WeatherId } from '../splat-engine/skyRecipes.ts'
+import { CLOUD_COVERS, SkyEase, WEATHERS, WINDS, cloudsAsked, gloomy, isClear, skyState, weatherAsked, windAsked, windAt, type CloudId, type WeatherId, type WindId } from '../splat-engine/skyRecipes.ts'
 import { SceneWeather, paletteUnder, underSky } from './diorama/weather.ts'
 import { pileStep } from '../splat-engine/snowCover.ts'
 import { heavenBones, ownClouds, showHeavens } from '../splat-engine/heavens.ts'
@@ -118,6 +118,8 @@ export function PixelDiorama() {
    */
   const [weather, setWeather] = useState<WeatherId | undefined>(() => weatherAsked(new URLSearchParams(location.search).get('weather')))
   const [clouds, setClouds] = useState<CloudId | undefined>(() => cloudsAsked(new URLSearchParams(location.search).get('clouds')))
+  /** The wind (`?wind=gale`): weather brings at least its own; it slants what falls and raises waves on water. */
+  const [wind, setWind] = useState<WindId | undefined>(() => windAsked(new URLSearchParams(location.search).get('wind')))
   // a storm by day is dark enough that lamps waiting for the dark come on: the one thing weather cuts the scene again for
   const diorama = time ? picked0.timed?.(time, gloomy(weather) && !timeOf(time).dark ? 'always' : undefined) ?? picked0 : picked0
   /** The scene whose palette, finish and view are set. */
@@ -221,7 +223,7 @@ export function PixelDiorama() {
   const skyEase = useRef(new SkyEase())
   const skyClock = useRef<() => number>(() => Infinity)
   /** Whether weather has been asked for yet: until then nothing of it is made or drawn. */
-  const [weathered, setWeathered] = useState(() => !isClear(skyState(weather, clouds)))
+  const [weathered, setWeathered] = useState(() => !isClear(skyState(weather, clouds, wind)))
   const skies = useRef(new WeakMap<Diorama, Diorama>())
   /** How deep the snow lying is, 0 to 1, and the wall clock it was last moved on by. */
   const pile = useRef(0)
@@ -293,7 +295,7 @@ export function PixelDiorama() {
   }, [offscreen, webgl])
 
   // the scene's own palette first, then the shared ones
-  const palettes = useMemo(() => [{ id: 'own', ...shown.palette, colors: paletteUnder(shown.palette.colors, shown.sky, skyState(weather, clouds)) }, ...PALETTES.slice(1)], [shown, weather, clouds])
+  const palettes = useMemo(() => [{ id: 'own', ...shown.palette, colors: paletteUnder(shown.palette.colors, shown.sky, skyState(weather, clouds, wind)) }, ...PALETTES.slice(1)], [shown, weather, clouds, wind])
   const picked = palettes.find((p) => p.id === palette) ?? palettes[0]
   const colors = picked.colors
   /** How it's made: which step of the walk-through is showing, or none. */
@@ -369,7 +371,9 @@ export function PixelDiorama() {
         if (fall.pile(pile.current)) stage.reshape(fall.cover)
       }
       // the weather's rain on the scene's water (its rings as the share of the swarm that falls) and its wind's waves
-      if (pond) { pond.rain = now.rain; pond.waves = now.waves }
+      if (pond) { pond.rain = now.rain; pond.waves = now.wind }
+      // the scene's own rain, snow and leaves are blown by the same wind
+      if (now.wind > 0) d.blow?.(sk, t, windAt(now, t, d.loop))
       showHeavens(sk.size, heavens, Math.max(now.clouds, own))
       // an export is the scene's own loop: no pokes, and the view as it stood when it began
       if (!held.current) pokes.current?.apply(sk, performance.now() / 1000)
@@ -476,7 +480,7 @@ export function PixelDiorama() {
   // a new weather or cloud cover: the sky eases to it over a few seconds, with the scene left as it is cut
   const skyBegun = useRef(false)
   useEffect(() => {
-    const to = skyState(weather, clouds)
+    const to = skyState(weather, clouds, wind)
     if (!isClear(to)) setWeathered(true)
     const now = skyClock.current()
     // the weather a page opens with is there at once
@@ -493,7 +497,7 @@ export function PixelDiorama() {
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [stage, weather, clouds, weathered])
+  }, [stage, weather, clouds, wind, weathered])
   // the art's size follows the view's; read it now and then for the caption (it's text, not every frame)
   useEffect(() => {
     if (!stage) return
@@ -586,8 +590,9 @@ export function PixelDiorama() {
   useWheelZoom(canvas, setOrbit)
   const pick = (id: string) => { setView(id); setOrbit((shown.views.find((v) => v.id === id) ?? shown.views[0]).orbit) }
   /** Another weather or cloud cover, or none. The address names them too. */
-  const pickSky = (key: 'weather' | 'clouds', id: string | undefined) => {
+  const pickSky = (key: 'weather' | 'clouds' | 'wind', id: string | undefined) => {
     if (key === 'weather') setWeather(id as WeatherId | undefined)
+    else if (key === 'wind') setWind(id as WindId | undefined)
     else setClouds(id as CloudId | undefined)
     const url = new URL(location.href)
     if (id) url.searchParams.set(key, id)
@@ -863,6 +868,13 @@ export function PixelDiorama() {
                     {CLOUD_COVERS.map((c) => <Chip key={c.id} active={clouds === c.id} onClick={() => pickSky('clouds', c.id)}>{c.label}</Chip>)}
                   </div>
                   <p className="mt-1.5 text-xs text-ink-faint">{weather ? 'Weather brings its own clouds, light and haze; more cloud can be asked for here. ' : ''}The same recipes for every scene and every style, laid over the scene: the sky eases from one to the next without the scene being made again.{weather === 'thunderstorm' ? (calm ? ' Lightning is left out, as your device asks for less motion.' : ' Lightning flashes every few seconds.') : ''}</p>
+                </Field>
+                <Field label="Wind">
+                  <div className="flex flex-wrap gap-1.5" data-testid="diorama-wind">
+                    <Chip active={!wind} onClick={() => pickSky('wind', undefined)}>{weather ? 'As the weather' : 'Calm'}</Chip>
+                    {WINDS.slice(1).map((w) => <Chip key={w.id} active={wind === w.id} onClick={() => pickSky('wind', w.id)}>{w.label}</Chip>)}
+                  </div>
+                  <p className="mt-1.5 text-xs text-ink-faint">Wind blows rain, snow and falling leaves at a slant, in gusts, and raises waves on a scene's water. {weather ? 'Weather brings its own wind (rain a breeze, heavy rain and heavy snow a wind, a thunderstorm a gale); more can be asked for here.' : ''}</p>
                 </Field>
                 <Field label="Changing scenes">
                   <div className="flex flex-wrap gap-1.5" data-testid="diorama-transitions">
