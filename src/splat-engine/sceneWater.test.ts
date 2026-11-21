@@ -132,3 +132,19 @@ test('rain from outside a scene rings its water by bands of its swarm, on top of
   const some = off(heights(0.4)), all = off(heights(1))
   assert.ok(some > 0 && all > some, `${some} then ${all}`)
 })
+
+test('wind raises waves by levels, worked out a slice at a time as at once, and the loop still joins', async () => {
+  const scene = compileScene(pond())
+  const w = new SceneWater(scene, { warm: 1 }), v = new SceneWater(scene, { warm: 1 })
+  const rough = (s: SceneWater, waves: number, t = 2.5) => { s.waves = waves; s.set(t); return Float32Array.from(s.water.h) }
+  const calm = rough(w, 0)
+  w.addWind([1, 0.3])
+  await v.prepare([], [], [1, 0.3], 1)
+  assert.deepEqual(rough(w, 0), calm, 'no wind: the water as it was')
+  const off = (h: Float32Array) => Math.sqrt(h.reduce((s, x, k) => s + (x - calm[k]) ** 2, 0) / h.length)
+  const one = off(rough(w, 1)), three = off(rough(w, 3))
+  assert.ok(one > 0 && Math.abs(three / one - 3) < 0.01, `${one} then ${three}`)
+  assert.deepEqual(rough(v, 2), rough(w, 2), 'in slices or at once, the same water')
+  const start = rough(w, 3, 0), end = rough(w, 3, scene.loop - 1e-6)
+  assert.ok(start.every((x, k) => Math.abs(x - end[k]) < 1e-4))
+})

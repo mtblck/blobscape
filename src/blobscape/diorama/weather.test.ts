@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { CLEAR, RAIN_MOST, lightningAt, skyState } from '../../splat-engine/skyRecipes.ts'
 import { DIORAMAS } from './scenes.ts'
+import { pileStep } from '../../splat-engine/snowCover.ts'
 import { SceneWeather, paletteUnder, underSky } from './weather.ts'
 
 const scene = (id: string) => DIORAMAS.find((d) => d.id === id)!
@@ -9,8 +10,8 @@ const scene = (id: string) => DIORAMAS.find((d) => d.id === id)!
 test('weather is made for any scene, and a sky shows its share of it', () => {
   for (const id of ['campfire', 'meadow']) {
     const d = scene(id), w = new SceneWeather(d)
-    assert.equal(w.actors.length, 3)
-    assert.ok(w.actors.every((a) => a.weather && a.blobs.count > 0), id)
+    assert.ok(w.actors.length >= 3)
+    assert.ok(w.actors.slice(0, 3).every((a) => a.weather && a.blobs.count > 0), id)
     const [clouds, rain, snow] = w.actors.map((a) => a.skeleton)
     const out = (sk: typeof rain) => sk.size.reduce((n, v) => n + (v > 0 ? 1 : 0), 0)
     // clear: nothing shows but each layer's land bone
@@ -47,4 +48,24 @@ test('a palette under a sky holds the sky, the weather and the scene, in at most
   const p = paletteUnder(d.palette.colors, d.sky, skyState('heavy-snow'))
   assert.ok(p.length <= 32 && p.length >= d.palette.colors.length)
   assert.ok(p.some((c) => c[0] > 215 && c[1] > 215 && c[2] > 215), 'snow has a white to snap to')
+})
+
+test('snow lies where it lands, builds up while it falls and melts after', () => {
+  const d = scene('cabin'), w = new SceneWeather(d), c = w.cover
+  assert.equal(w.actors[3], c)
+  assert.ok(c.blobs.count > 500, `${c.blobs.count} places for snow`)
+  const shown = () => { let n = 0; for (let k = 0; k < c.blobs.count; k++) if (c.blobs.scale[k * 3] > 0) n++; return n }
+  w.pile(0)
+  assert.equal(shown(), 0)
+  let depth = 0
+  const counts: number[] = []
+  for (let s = 0; s < 6; s++) { for (let k = 0; k < 40; k++) depth = pileStep(depth, 1, 0.25); w.pile(depth); counts.push(shown()) }
+  assert.ok(counts.every((n, i) => i === 0 || n >= counts[i - 1]) && counts[0] > 0 && counts[0] < c.blobs.count * 0.6, counts.join(' '))
+  assert.equal(pileStep(1, 1, 10), 1)
+  assert.ok(pileStep(0.5, 0.4, 10) < pileStep(0.5, 1, 10), 'heavier snow builds faster')
+  assert.ok(pileStep(0.5, 0, 10) < 0.5, 'it melts when none falls')
+  w.pile(1)
+  assert.equal(shown(), c.blobs.count)
+  // flat on the ground it fell to, never under it
+  for (let k = 0; k < c.blobs.count; k++) if (c.blobs.center[k * 3 + 1] < c.at[k * 3 + 1] - 1e-6 || c.normal[k * 3 + 1] < 0.55) assert.fail(`blob ${k}`)
 })

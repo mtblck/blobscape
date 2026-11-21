@@ -37,6 +37,7 @@ import { useDrawnLook, useHeld, wantsPlain } from './drawnLook.tsx'
 import { TIMES, timeAsked, timeOf, type TimeId } from './timeOfDay.ts'
 import { CLOUD_COVERS, SkyEase, WEATHERS, cloudsAsked, gloomy, isClear, skyState, weatherAsked, type CloudId, type WeatherId } from '../splat-engine/skyRecipes.ts'
 import { SceneWeather, paletteUnder, underSky } from './diorama/weather.ts'
+import { pileStep } from '../splat-engine/snowCover.ts'
 import { heavenBones, ownClouds, showHeavens } from '../splat-engine/heavens.ts'
 import { download } from './files.ts'
 import { blocksToMesh } from '../splat-engine/blockMesh.ts'
@@ -222,6 +223,11 @@ export function PixelDiorama() {
   /** Whether weather has been asked for yet: until then nothing of it is made or drawn. */
   const [weathered, setWeathered] = useState(() => !isClear(skyState(weather, clouds)))
   const skies = useRef(new WeakMap<Diorama, Diorama>())
+  /** How deep the snow lying is, 0 to 1, and the wall clock it was last moved on by. */
+  const pile = useRef(0)
+  const pileClock = useRef(0)
+  /** Off screen, how deep snow lies while it falls (`?pile=`, all of it unless asked). */
+  const [pileAsked] = useState(() => { const v = Number(new URLSearchParams(location.search).get('pile') ?? 1); return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 1 })
   const falls = useRef(new WeakMap<Diorama, SceneWeather>())
   /** A scene as it stands under the sky of the moment. */
   const dress = useCallback((d: Diorama) => {
@@ -354,8 +360,16 @@ export function PixelDiorama() {
       d.pose(sk, t)
       const now = skyEase.current.at(skyClock.current())
       fall?.pose(t, now)
-      // the weather's rain on the scene's water: its rings as the share of the swarm that falls
-      if (pond) pond.rain = now.rain
+      // snow lying builds up while snow falls and melts after, by the wall clock: no loop of the scene knows how long
+      // it has been snowing. An export holds it as it stands; off screen it is all there at once (or none)
+      if (fall) {
+        const wall = performance.now() / 1000, dt = Math.min(0.25, Math.max(0, wall - pileClock.current))
+        pileClock.current = wall
+        if (!held.current) pile.current = offscreen ? (now.snow > 0.01 ? pileAsked : 0) : pileStep(pile.current, now.snow, dt)
+        if (fall.pile(pile.current)) stage.reshape(fall.cover)
+      }
+      // the weather's rain on the scene's water (its rings as the share of the swarm that falls) and its wind's waves
+      if (pond) { pond.rain = now.rain; pond.waves = now.waves }
       showHeavens(sk.size, heavens, Math.max(now.clouds, own))
       // an export is the scene's own loop: no pokes, and the view as it stood when it began
       if (!held.current) pokes.current?.apply(sk, performance.now() / 1000)
@@ -369,7 +383,7 @@ export function PixelDiorama() {
       else if (held.current) stage.orbit = held.current
       wet.current?.()
     }, from)
-  }, [stage, scene, calm, rock, mirrored, dress])
+  }, [stage, scene, calm, rock, mirrored, dress, offscreen, pileAsked])
   // one of Brush and Ink's looks in place of pixel art: marks, outlines, characters or cel tones, with their own settings
   // a scene whose sky turns as it plays hands the styles each moment's sky too (their backdrop, cel shading's night,
   // the glass's window and the watercolor's wash), not only the one it opens with

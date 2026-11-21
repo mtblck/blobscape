@@ -116,3 +116,9 @@ test('a sky shows its share of the drops and clouds, the rest hidden', () => {
   showWeather(size, weatherBones(names), 0.5, 1)
   assert.deepEqual([...size], [1, 1, 1, 0, 1, 1, 0, 0])
 })
+
+test('rain roughens water a level at a time: rain one, heavy rain two, a thunderstorm three', () => {
+  assert.deepEqual(['rain', 'heavy-rain', 'thunderstorm'].map((w) => skyState(w as 'rain').waves), [1, 2, 3])
+  assert.equal(skyState('snow').waves, 0)
+  assert.equal(mixSky(skyState('rain'), skyState('thunderstorm'), 0.5).waves, 2)
+})

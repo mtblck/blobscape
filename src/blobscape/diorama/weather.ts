@@ -2,8 +2,9 @@ import type { Rgb } from '../../splat-core/pixel.ts'
 import type { Actor } from '../../splat-engine/engine.ts'
 import { joinPalettes } from '../../splat-engine/project.ts'
 import { compileScene, type CompiledScene } from '../../splat-engine/sceneDoc.ts'
-import { FLASH_SKY, WEATHERS, WEATHER_COLORS, hazeUnder, isClear, lightUnder, lightningAt, showWeather, skyUnder, weatherBones, weatherDocs, type SkyState, type WeatherBones } from '../../splat-engine/skyRecipes.ts'
+import { FLASH_SKY, WEATHERS, cloudBase, WEATHER_COLORS, hazeUnder, isClear, lightUnder, lightningAt, showWeather, skyUnder, weatherBones, weatherDocs, type SkyState, type WeatherBones } from '../../splat-engine/skyRecipes.ts'
 import { buildVoxels } from '../../splat-engine/voxel.ts'
+import { makeSnowCover, pileSnow, warmthOf, type SnowCover } from '../../splat-engine/snowCover.ts'
 import { ownClouds } from '../../splat-engine/heavens.ts'
 import { under } from '../timeOfDay.ts'
 import type { Diorama } from './scenes.ts'
@@ -23,12 +24,24 @@ const FALL_SPACING = 0.01, CLOUD_SPACING = 0.034
 /** Where each recipe's rain ends in the swarm, so the pond's rings for the rain of a recipe are worked out whole. */
 const RAIN_BANDS = [...new Set([...WEATHERS.map((w) => w.rain ?? 0).filter((r) => r > 0), 1])].sort((a, b) => a - b)
 
+/** Where the weather's wind blows, x and z: the way its rain leans (`weatherDocs`). */
+const WIND_WAY = [0.15, 0.05] as const
+
+/** The snow lying is laid at least this far apart, and about this many blobs across the stretch it lies on. */
+const COVER_SPACING = 0.012, COVER_ACROSS = 75
+/** The least change in the depth of snow lying that is sent up again: it builds slowly, so a few times a second is enough. */
+const PILE_STEP = 0.004
+
 interface Layer { c: CompiledScene; actor: Actor; bones: WeatherBones }
 
 /** The rain, snow and clouds for one scene: made once (it finds where every drop lands), then posed by time and sky. */
 export class SceneWeather {
-  /** The clouds, the rain, then the snow: drawn in the scene's world as `extras`. */
+  /** The clouds, the rain, the snow, then the snow lying: drawn in the scene's world as `extras`. */
   readonly actors: Actor[]
+  /** Resolves once the water's rain and wind are worked out (at once for a scene with no water). */
+  readonly ready: Promise<void>
+  /** The snow lying on the scene, which builds up while snow falls (`pile`). */
+  readonly cover: SnowCover
   private readonly layers: { clouds: Layer; rain: Layer; snow: Layer }
 
   /** The share of the clouds the scene's own sky has out, whatever the weather. */
@@ -50,8 +63,26 @@ export class SceneWeather {
       return { c, actor, bones: weatherBones(c.bones.map((b) => b.name)) }
     }
     this.layers = { clouds: layer(docs.clouds, CLOUD_SPACING), rain: layer(docs.rain, FALL_SPACING), snow: layer(docs.snow, FALL_SPACING) }
-    if (pond) pond.addRain(this.layers.rain.c.landed, RAIN_BANDS)
-    this.actors = [this.layers.clouds.actor, this.layers.rain.actor, this.layers.snow.actor]
+    // the wind that comes with the weather roughens the water too, along the way the rain leans
+    // (worked out a slice at a time, so the page carries on meanwhile)
+    this.ready = pond ? pond.prepare(this.layers.rain.c.landed, RAIN_BANDS, WIND_WAY) : Promise.resolve()
+    // snow lies wherever it lands, over the same stretch it falls on
+    const view = d.views[0].orbit, [tx, ty, tz] = view.target, radius = Math.max(0.8, view.distance * 0.45)
+    this.cover = makeSnowCover(ground, {
+      x: tx, z: tz, radius, top: cloudBase(view), bottom: ty - view.distance, spacing: Math.max(COVER_SPACING, radius / COVER_ACROSS), sun: d.sun,
+      dry: pond && ((x, y, z) => y <= pond.plan.level + 1e-3 && pond.plan.wet(x, z)),
+      // a fire melts the snow round it as it lands
+      warm: warmthOf(d.lights(0)),
+    })
+    // (a scene that gives no ground to land on has none)
+    this.actors = [this.layers.clouds.actor, this.layers.rain.actor, this.layers.snow.actor, ...(this.cover.blobs.count ? [this.cover as Actor] : [])]
+  }
+
+  /** Sets how deep the snow lying is, 0 to 1. Returns whether it changed by enough to send up again (`Stage.reshape(cover)`). */
+  pile(depth: number): boolean {
+    const was = this.cover.depth
+    if (Math.abs(depth - (Number.isNaN(was) ? -1 : was)) < PILE_STEP && depth !== 0 && depth !== 1) return false
+    return pileSnow(this.cover, depth)
   }
 
   /** Poses both for `t` seconds under a sky. */

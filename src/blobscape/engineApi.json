@@ -111,6 +111,12 @@
        "doc": "Weather laid over a scene (its clouds, rain, snow): while the stage draws blocks it is cubes too, or stays blobs among them, as the look's `weather` says."
       },
       {
+       "name": "lies",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Lies on the scene's surfaces (snow lying): while the stage draws blocks it is raised half a cube, onto the cubes' tops, which stand up to a cube over the surface the blobs lie on."
+      },
+      {
        "name": "blockCell",
        "optional": true,
        "type": "number",
@@ -797,6 +803,12 @@
        "optional": true,
        "type": "boolean",
        "doc": "Weather laid over a scene (its clouds, rain, snow): while the stage draws blocks it is cubes too, or stays blobs among them, as the look's `weather` says."
+      },
+      {
+       "name": "lies",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Lies on the scene's surfaces (snow lying): see the stage's `Actor.lies`."
       },
       {
        "name": "blockCell",
@@ -4586,6 +4598,12 @@
    "doc": "",
    "entries": [
     {
+     "name": "WAVE_LEVEL",
+     "kind": "const",
+     "doc": "How high one level of wind waves stands (the root mean square of the height), as a share of the scene's rain splash depth.",
+     "type": "0.12"
+    },
+    {
      "name": "SceneWater",
      "kind": "class",
      "doc": "The water of a scene written as data (`SceneDoc.water`), played as the scene plays: from the time alone.\n\nA scene repeats, and can be shown at any moment of its loop in any order (paused, stepped frame by frame to record\nit), so its water can't be stepped along with the clock. Instead one whole loop of it is worked out here, once:\nthe pond (water.ts, the wave equation on a grid) is run through the loop with every raindrop of the scene's rain\nsplashing where and when it lands and every body the scene names pushing its own volume aside as its bone carries\nit through the surface. It is run through a few loops first, so that the rings still crossing the pond when the\nloop starts are the ones the end of the loop leaves, and the last run is kept as heights at `fps` moments a\nsecond. `show` then lays the heights for a time back on the pond and shapes and colors the surface's blobs.\n\nNothing is drawn or keyed by hand: change the rain, the banks or a fish's path and the rings follow.",
@@ -4626,6 +4644,11 @@
        "doc": "How many moments of the loop are kept."
       },
       {
+       "name": "waves",
+       "type": "number",
+       "doc": "How rough the wind makes the water, in levels (`addWind`): 0 for none."
+      },
+      {
        "name": "rain",
        "type": "number",
        "doc": "How much of the rain from outside the scene (`addRain`) is falling: the share of its swarm out, 0 to 1."
@@ -4638,6 +4661,24 @@
        "signatures": [
         {
          "code": "addRain(drops: readonly WaterDrop[], bands: readonly number[]): void"
+        }
+       ]
+      },
+      {
+       "name": "prepare",
+       "doc": "`addRain` and `addWind` worked out a little at a time, `budget` milliseconds a slice with the page let go between\n(they cost about a second, which froze the page when weather was first picked). Each band of rain and the wind\njoin the water as each is done. Resolves when all are.",
+       "signatures": [
+        {
+         "code": "prepare(drops: readonly WaterDrop[], bands: readonly number[], way: readonly [number, number], budget?: number): Promise<void>"
+        }
+       ]
+      },
+      {
+       "name": "addWind",
+       "doc": "Waves the wind raises, worked out once (`way`: where it blows to, x and z), at the height of one level of\n`waves`. Wind that presses on the water in long rolls running its way, a few at a time and gusting, each\nrepeating a whole number of times a loop and moving at the water's own speed, so they build into waves the pond\ncarries (and its banks throw back) and the loop still joins. Linear, as rain's rings are: `waves` levels of it is\n`waves` times the field. Costs a run of the loop.",
+       "signatures": [
+        {
+         "code": "addWind(way?: readonly [number, number]): void"
         }
        ]
       },
@@ -11663,6 +11704,15 @@
        "signatures": [
         {
          "code": "body(id: string, at: Crossing | null, draft?: number): void"
+        }
+       ]
+      },
+      {
+       "name": "press",
+       "doc": "Presses on the surface for `dt` seconds with `push`, an upward pull a cell (meters a second a second; one a cell\nof the grid, wet or not): what wind does to water. Its mean over the wet cells is taken off first, so the water\nis pushed about, never made or lost.",
+       "signatures": [
+        {
+         "code": "press(push: ArrayLike<number>, dt: number): void"
         }
        ]
       },

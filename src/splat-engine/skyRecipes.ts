@@ -36,10 +36,12 @@ export interface SkyState {
   haze: number
   /** How strong the lightning is, 0 for none. */
   lightning: number
+  /** How rough a scene's water runs under the wind that comes with it, in levels from 0 (the scene's own) to `WAVES_MOST`. */
+  waves: number
 }
 
 /** The sky left as the scene has it. */
-export const CLEAR: SkyState = { rain: 0, snow: 0, clouds: 0, light: [1, 1, 1], gray: 0, dark: 0, haze: 0, lightning: 0 }
+export const CLEAR: SkyState = { rain: 0, snow: 0, clouds: 0, light: [1, 1, 1], gray: 0, dark: 0, haze: 0, lightning: 0, waves: 0 }
 
 export interface CloudCover {
   id: CloudId
@@ -71,15 +73,17 @@ export interface WeatherRecipe {
   /** How much darker again it draws the sky. */
   dark?: number
   lightning?: number
+  /** How many levels rougher it makes a scene's water (Matt, 2026-11-21: rain one, heavy rain two, a thunderstorm three). */
+  waves?: number
   /** Whether it is gloomy enough by day that lamps waiting for the dark come on. */
   gloom?: boolean
 }
 
 /** The numbers are mine, not Matt's yet. */
 export const WEATHERS: WeatherRecipe[] = [
-  { id: 'rain', label: 'Rain', clouds: 'cloudy', rain: 0.4, haze: 0.2 },
-  { id: 'heavy-rain', label: 'Heavy rain', clouds: 'overcast', rain: 1, haze: 0.35, light: [0.92, 0.92, 0.94], dark: 0.1, gloom: true },
-  { id: 'thunderstorm', label: 'Thunderstorm', clouds: 'overcast', rain: 1, haze: 0.35, light: [0.8, 0.82, 0.9], dark: 0.3, lightning: 1, gloom: true },
+  { id: 'rain', label: 'Rain', clouds: 'cloudy', rain: 0.4, haze: 0.2, waves: 1 },
+  { id: 'heavy-rain', label: 'Heavy rain', clouds: 'overcast', rain: 1, haze: 0.35, light: [0.92, 0.92, 0.94], dark: 0.1, waves: 2, gloom: true },
+  { id: 'thunderstorm', label: 'Thunderstorm', clouds: 'overcast', rain: 1, haze: 0.35, light: [0.8, 0.82, 0.9], dark: 0.3, lightning: 1, waves: 3, gloom: true },
   { id: 'snow', label: 'Snow', clouds: 'cloudy', snow: 0.4, haze: 0.25 },
   { id: 'heavy-snow', label: 'Heavy snow', clouds: 'overcast', snow: 1, haze: 0.5, light: [1.08, 1.08, 1.08] },
   { id: 'fog', label: 'Fog', clouds: 'cloudy', haze: 1, light: [0.95, 0.95, 0.96] },
@@ -101,7 +105,7 @@ export function skyState(weather?: WeatherId, clouds?: CloudId): SkyState {
   return {
     rain: w?.rain ?? 0, snow: w?.snow ?? 0, clouds: c?.clouds ?? 0,
     light: [wl[0] * cl[0], wl[1] * cl[1], wl[2] * cl[2]],
-    gray: c?.gray ?? 0, dark: Math.min(1, (c?.dark ?? 0) + (w?.dark ?? 0)), haze: w?.haze ?? 0, lightning: w?.lightning ?? 0,
+    gray: c?.gray ?? 0, dark: Math.min(1, (c?.dark ?? 0) + (w?.dark ?? 0)), haze: w?.haze ?? 0, lightning: w?.lightning ?? 0, waves: w?.waves ?? 0,
   }
 }
 
@@ -109,7 +113,7 @@ export function skyState(weather?: WeatherId, clouds?: CloudId): SkyState {
 export const gloomy = (weather?: WeatherId) => !!WEATHERS.find((k) => k.id === weather)?.gloom
 
 /** Whether a sky is the scene's own, with nothing laid over it. */
-export const isClear = (s: SkyState) => !s.rain && !s.snow && !s.clouds && !s.gray && !s.dark && !s.haze && !s.lightning && s.light.every((v) => v === 1)
+export const isClear = (s: SkyState) => !s.rain && !s.snow && !s.clouds && !s.gray && !s.dark && !s.haze && !s.lightning && !s.waves && s.light.every((v) => v === 1)
 
 const mix = (a: number, b: number, k: number) => a + (b - a) * k
 
@@ -120,9 +124,12 @@ export function mixSky(a: SkyState, b: SkyState, k: number): SkyState {
   return {
     rain: mix(a.rain, b.rain, k), snow: mix(a.snow, b.snow, k), clouds: mix(a.clouds, b.clouds, k),
     light: [mix(a.light[0], b.light[0], k), mix(a.light[1], b.light[1], k), mix(a.light[2], b.light[2], k)],
-    gray: mix(a.gray, b.gray, k), dark: mix(a.dark, b.dark, k), haze: mix(a.haze, b.haze, k), lightning: mix(a.lightning, b.lightning, k),
+    gray: mix(a.gray, b.gray, k), dark: mix(a.dark, b.dark, k), haze: mix(a.haze, b.haze, k), lightning: mix(a.lightning, b.lightning, k), waves: mix(a.waves, b.waves, k),
   }
 }
+
+/** The roughest a scene's water runs under weather, in levels (`SkyState.waves`). */
+export const WAVES_MOST = 3
 
 /** Seconds a change of weather takes. */
 export const SKY_EASE = 3
