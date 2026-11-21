@@ -83,7 +83,7 @@ export function Islands() {
   const [blockSize, setBlockSize] = useState(() => { const v = Math.round(Number(params().get('block'))); return v >= BLOCK_SIZES.min && v <= BLOCK_SIZES.max ? v : BLOCK_START.size })
   const [orbit, setOrbit] = useState<Orbit>({ target: [0, 0, 0], distance: 12.5, azimuth: 24, elevation: 20 })
   const [walking, setWalking] = useState(() => params().get('walk') === '1')
-  const [count, setCount] = useState(() => (params().get('islands') === '1' ? 1 : WORLD_ISLANDS))
+  const [count, setCount] = useState(() => (params().get('islands') === String(WORLD_ISLANDS) ? WORLD_ISLANDS : 1))
   // grass as blobs among the blocks (Matt, 2026-11-20: a finer texture beside the cubes, for dense vegetation)
   const [grass, setGrass] = useState(() => params().get('grass') !== '0')
   const [creatures, setCreatures] = useState(() => params().get('creatures') !== '0')
@@ -394,7 +394,7 @@ export function Islands() {
   useEffect(() => {
     const url = new URL(location.href)
     const put = (k: string, v: string | undefined) => { if (v) url.searchParams.set(k, v); else url.searchParams.delete(k) }
-    put('biome', BIOMES.length > 1 ? biomeId : undefined); put('seed', String(seed)); put('style', blocky ? undefined : style); put('block', blocky && blockSize !== BLOCK_START.size ? String(blockSize) : undefined); put('rock', rock ? undefined : '0'); put('grass', grass ? undefined : '0'); put('grassas', blocky && grass && grassAs !== 'blobs' ? grassAs : undefined); put('walk', walking ? '1' : undefined); put('islands', count === 1 ? '1' : undefined); put('creatures', creatures ? undefined : '0')
+    put('biome', BIOMES.length > 1 ? biomeId : undefined); put('seed', String(seed)); put('style', blocky ? undefined : style); put('block', blocky && blockSize !== BLOCK_START.size ? String(blockSize) : undefined); put('rock', rock ? undefined : '0'); put('grass', grass ? undefined : '0'); put('grassas', blocky && grass && grassAs !== 'blobs' ? grassAs : undefined); put('walk', walking ? '1' : undefined); put('islands', count === 1 ? undefined : String(WORLD_ISLANDS)); put('creatures', creatures ? undefined : '0')
     history.replaceState(history.state, '', url)
   }, [biomeId, seed, style, blocky, blockSize, rock, walking, count, grass, grassAs, creatures])
 
