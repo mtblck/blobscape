@@ -37,6 +37,7 @@ import { MeshFileError, openGlb, readMeshGlb, readMeshGlbParts, readObj, type Me
 import { fileIdOf, isPart, partId, sceneLayout, sceneProject } from './creator/sceneModel.ts'
 import { landFromScan, scanGround, scanProject } from './creator/scanLand.ts'
 import { stillActor } from './scan/studio.ts'
+import { hasLamps } from '../splat-engine/sceneDoc.ts'
 import { ImportError, readSplatFile } from '../splat-core/importer.ts'
 import { isMeshGlb, rigFromModel } from './modelRig.ts'
 import { meshBounds } from '../splat-engine/meshShape.ts'
@@ -44,13 +45,13 @@ import { readSkinnedGlb } from '../splat-engine/skinnedModel.ts'
 import { budget, clock, lampAdded, lampLights, lampRemoved, lit, liveSky, liveSkyColors, rgbOf, shadeNow, sunNow } from './creator/lighting.ts'
 import { castBy, glowGain } from './diorama/glow.ts'
 import { STYLES, isPixelStyle, styleAsked, styleWords, type Style } from './diorama/styles.ts'
-import { useDrawnLook, wantsPlain } from './drawnLook.tsx'
+import { useDrawnLook, useHeld, wantsPlain } from './drawnLook.tsx'
 import { GLITCH_START, glitchLook, type GlitchChoice } from './glitchLooks.ts'
 import { GlitchControls } from './diorama/GlitchControls.tsx'
 import { useExport } from './diorama/useExport.tsx'
 import { MAX_STOPS, pathAt, pathSeconds } from './cameraPath.ts'
 import { PIXEL_RATES, PIXEL_SIZES, paletteChoices, pixelLook, pixelStart, type PixelChoice } from './creator/styling.ts'
-import { arrowWay, begin, copied, did, moved, onGround, redo, redrawn, removed, sized, stepFor, stilled, turned, undo, wrapTurn, type History } from './creator/arrange.ts'
+import { arrowWay, begin, copied, did, lamped, moved, onGround, redo, redrawn, removed, sized, stepFor, stilled, turned, undo, wrapTurn, type History } from './creator/arrange.ts'
 
 /**
  * Scene Creator (epic #329): Pixel Diorama's scenes taken apart into a land and props to arrange. The workspace
@@ -308,7 +309,7 @@ export function SceneCreator() {
         // a model of your own goes to the cutter with its job; whether the page has it is part of what it is cut as
         const known = isModel(p.prop) ? modelOf(p.prop) : undefined
         const model = known && modelJob(known)
-        return { key: JSON.stringify([p.prop, p.turn, p.size, project.loop, project.land, steps, propLight, plain, !!model]), thing: JSON.stringify(p.prop), plain, job: (spacing) => ({ kind: 'prop', project, i, spacing, plain, model }) }
+        return { key: JSON.stringify([p.prop, p.turn, p.size, p.lit, project.loop, project.land, steps, propLight, plain, !!model]), thing: JSON.stringify(p.prop), plain, job: (spacing) => ({ kind: 'prop', project, i, spacing, plain, model }) }
       }),
     ]
   }, [opened, project, cp, plain, modelsVersion])
@@ -385,6 +386,10 @@ export function SceneCreator() {
   const ready = chosen.every((c) => c)
   const done = ready && pieces.every((pc) => cuts.current.has(`${detail}|${pc.key}`))
   const signature = ready ? chosen.map((c) => c!.id).join(',') : ''
+  // the style the view is drawn in lags the one picked until every piece on show is cut for it (with or without baked
+  // light), so the picture keeps its own style meanwhile and the bare blobs never show between the two
+  const styleNow = useHeld(style, chosen.every((c) => c && c.plain === plain))
+  const pixelsNow = isPixelStyle(styleNow), glitchingNow = styleNow === 'glitch'
   const built = useMemo<Built[] | undefined>(() => (ready ? chosen.map((c) => unpack(c!.packed)) : undefined),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [signature])
@@ -473,15 +478,15 @@ export function SceneCreator() {
   const palette = useMemo(() => (creatureColors ? joinPalettes([shown.palette.map(hexOf), creatureColors.split(',')]) : shown.palette), [shown.palette, creatureColors])
   const palettes = useMemo(() => paletteChoices(palette), [palette])
   const look = useMemo<PixelLook>(() => pixelLook({ ...px, sky: px.sky || skyForced }, palettes, skyColors, glow), [px, skyForced, palettes, skyColors, glow])
-  useEffect(() => { stage?.setPixels(pixels ? look : undefined, px.size) }, [stage, pixels, look, px.size])
+  useEffect(() => { stage?.setPixels(pixelsNow ? look : undefined, px.size) }, [stage, pixelsNow, look, px.size])
   // pixel art can move in held steps; the other styles move every frame
-  useEffect(() => { if (stage) { stage.step = pixels && px.rate ? 1 / px.rate : 0; stage.invalidate() } }, [stage, pixels, px.rate])
+  useEffect(() => { if (stage) { stage.step = pixelsNow && px.rate ? 1 / px.rate : 0; stage.invalidate() } }, [stage, pixelsNow, px.rate])
   // the glitch's bursts come in steps of the scene's own clock, a whole number of steps a loop, so an export joins up
-  useEffect(() => { stage?.setGlitch(glitching ? glitchLook(glitch, shown.loop, calm && !offscreen) : undefined) }, [stage, glitching, glitch, shown.loop, calm, offscreen])
+  useEffect(() => { stage?.setGlitch(glitchingNow ? glitchLook(glitch, shown.loop, calm && !offscreen) : undefined) }, [stage, glitchingNow, glitch, shown.loop, calm, offscreen])
   // on a phone the styles that fill the whole screen are drawn at one and a half device pixels to a CSS pixel, as Pixel Diorama does
-  useEffect(() => { stage?.setSharpness(coarse && !pixels ? 1.5 : 2) }, [stage, coarse, pixels])
+  useEffect(() => { stage?.setSharpness(coarse && !pixelsNow ? 1.5 : 2) }, [stage, coarse, pixelsNow])
   // one of Brush and Ink's looks in place of pixel art. Cel shading's and stained glass's flat fills are gathered on the land
-  const drawing = useDrawnLook(stage, drawnStyle, {
+  const drawing = useDrawnLook(stage, pixelsNow ? undefined : styleNow, {
     actor: built?.[0], spacing: DETAIL.find((d) => d.id === detail)?.spacing, plain: !!chosen[0]?.plain, azimuth: shown.orbit.azimuth, offscreen, light: coarse, loop: shown.loop,
     sky: px.sky || skyForced ? [skyColors[0], skyColors[1]] : undefined,
   })
@@ -1423,10 +1428,20 @@ export function SceneCreator() {
                         </div>
                       </div>
                       {lightNow?.live ? (
+                        <>
                         <div {...lightGesture}>
                           <Slider label="Time of day" value={lightNow.live.hour} min={0} max={24} step={0.25} format={clock} onChange={(v) => draftLight({ live: { hour: v } })}
                             hint={stage?.backend === 'webgpu' ? 'The sun and moon cross the sky and their shadows move as you drag.' : 'The sun and moon cross the sky as you drag. This browser draws without shadows from them.'} />
                         </div>
+                        <Field label="Lamps and fires">
+                          <div className="flex flex-wrap gap-1.5" data-testid="creator-lamps-lit">
+                            {(['dark', 'always'] as const).map((v) => (
+                              <Chip key={v} active={(lightNow.lit ?? cp?.land.prop.doc.lamps ?? 'dark') === v} onClick={() => setLight({ lit: v }, v === 'always' ? 'Lamps and fires are always lit.' : 'Lamps and fires are lit when it is dark.')}>{v === 'dark' ? 'When dark' : 'Always lit'}</Chip>
+                            ))}
+                          </div>
+                          <p className="mt-1.5 text-xs text-ink-faint">Lamps, candles, lit windows and campfires come on as it grows dark and go out by day. Magic, lava and crystals always glow. A prop can have its own setting (Arrange).</p>
+                        </Field>
+                        </>
                       ) : (
                         <>
                           <div {...lightGesture}>
@@ -1593,6 +1608,16 @@ export function SceneCreator() {
                       <Slider label="Lift" value={Math.round(pickedLift * 100) / 100} min={0} max={LIFT_MOST} step={0.01} format={(v) => (v ? `${fmt(v)} up` : 'On the ground')} onChange={(v) => setPreview({ i: picked, at: { ...pickedAt, at: standAt(picked, pickedAt.at[0], pickedAt.at[2], v) } })} />
                     </div>
                     <Toggle label="Plays its own moves" checked={!project.props[picked].still} onChange={(on) => edit(stilled(project, picked, !on), `${nameOfProp(picked)} ${on ? 'moves again' : 'holds still'}.`)} />
+                    {cp?.props[picked] && hasLamps(cp.props[picked].prop.doc) && (
+                      <Field label="Its lamps and fires">
+                        <div className="flex flex-wrap gap-1.5" data-testid="creator-prop-lit">
+                          {([[undefined, 'As the scene'], ['dark', 'When dark'], ['always', 'Always lit']] as const).map(([v, label]) => (
+                            <Chip key={label} active={project.props[picked].lit === v} onClick={() => edit(lamped(project, picked, v), `${nameOfProp(picked)}: its lamps are ${v === 'always' ? 'always lit' : v === 'dark' ? 'lit when it is dark' : 'lit as the scene says'}.`)}>{label}</Chip>
+                          ))}
+                        </div>
+                        <p className="mt-1.5 text-xs text-ink-faint">{project.light?.live ? 'Lit when the time of day is dark, unless set to always.' : 'They follow the time of day once the sun is live, by the hour (Light).'}</p>
+                      </Field>
+                    )}
                     <div className="flex flex-wrap gap-2">
                       <button type="button" onClick={() => copyProp(picked)} data-testid="creator-copy" className="min-h-10 cursor-pointer rounded-full border border-rule bg-paper px-4 text-sm font-semibold hover:border-ink-faint">Copy</button>
                       <button type="button" onClick={() => deleteProp(picked)} data-testid="creator-delete" className="min-h-10 cursor-pointer rounded-full border border-rule bg-paper px-4 text-sm font-semibold hover:border-ink-faint">Delete</button>

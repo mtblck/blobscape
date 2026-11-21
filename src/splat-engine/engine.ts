@@ -31,7 +31,7 @@ import { LIFT, MAX_MARCH, OCC_SCALE, REACH, SHADOW_CELLS, SHADOW_DENSITY, SPREAD
 import { linearToSrgb, srgbToLinear } from '../splat-core/color.ts'
 import { surfaceRanks } from '../splat-core/pixel.ts'
 import { viewColor } from '../splat-core/sh.ts'
-import { DOT_R, DOT_STEP, FLAT_CUT, INK, MARK_CUT, MARK_KINDS, MARK_LIFT, MARK_LONG, MARK_MOST, MARK_SOLID, MARK_WIDE, PAPER, SHADE_FROM, SHADE_FULL, WASH_LEAST, WASH_MOST, type MarkLook } from '../splat-core/marks.ts'
+import { DAB, DOT_R, DOT_STEP, FLAT_CUT, GOUACHE, OIL, INK, MARK_CUT, MARK_END, MARK_KINDS, MARK_LIFT, MARK_LONG, MARK_MOST, MARK_SOLID, MARK_WIDE, PAPER, SHADE_FROM, SHADE_FULL, WASH_LEAST, WASH_MOST, type MarkLook } from '../splat-core/marks.ts'
 
 /**
  * Blobscape's splat engine: one mesh that draws every blob of every object in a
@@ -2062,17 +2062,29 @@ function markOf(M: Marks, uv: N, seed: N, rgb: N) {
   const k = M.size.clamp(0.2, MARK_MOST).toVar()
   const u = uv.x, v = uv.y
   const s = streak(v.div(k), seed, 5).toVar()
-  const long = k.mul(MARK_LONG).mul(s.mul(0.3).add(0.78)), wide = k.mul(MARK_WIDE)
+  // gouache in short square dabs, oil in long narrow strokes (`DAB`)
+  const isGouache = M.kind.lessThan(1.5), isOil = M.kind.greaterThan(1.5).and(M.kind.lessThan(2.5))
+  const pick = (i: 0 | 1 | 2) => select(isGouache, float(DAB.gouache[i]), select(isOil, float(DAB.oil[i]), float(DAB.pen[i])))
+  const long = k.mul(MARK_LONG).mul(s.mul(pick(1)).add(pick(0))).min(MARK_END).toVar(), wide = k.mul(MARK_WIDE).mul(pick(2)).toVar()
   const d = pow(abs(u).div(long), 4).add(pow(abs(v).div(wide), 4))
   const cover = float(1).sub(smoothstep(0.8, 1, d)).toVar()
-  const own = seed.sub(0.5).mul(0.12).add(1).toVar()
   const color = vec3(0).toVar()
   const dark = float(1).sub(sqrt(max(dot(rgb, vec3(0.2126, 0.7152, 0.0722)), 0)).min(1)).toVar()
   If(M.kind.lessThan(1.5), () => {
-    color.assign(rgb.mul(own.mul(s.mul(0.12).add(0.94))))
+    // gouache: matte and flat with a little chalk in it, the dab breaking up toward its ends as a dry brush does
+    const shade = seed.sub(0.5).mul(GOUACHE.own).add(1).mul(s.mul(GOUACHE.streak).add(1 - GOUACHE.streak / 2)).mul(1 - GOUACHE.chalk)
+    color.assign(rgb.mul(shade).add(GOUACHE.chalk))
+    const dry = smoothstep(GOUACHE.dry, 1, abs(u).div(long))
+    const gaps = smoothstep(0.36, 0.46, streak(v.div(k), seed.add(0.71), 14))
+    cover.assign(cover.mul(float(1).sub(dry.mul(float(1).sub(gaps)))))
   }).ElseIf(M.kind.lessThan(2.5), () => {
+    // oil: deep ridges lit along their crests, a bead at the stroke's edges, richer color that leans warm or cool by the stroke
     const ridge = streak(v.div(k), seed.add(0.37), 9).toVar()
-    color.assign(rgb.mul(own.mul(ridge.mul(0.4).add(0.8))).add(smoothstep(0.62, 0.9, ridge).mul(0.1)))
+    const bead = smoothstep(0.55, 0.85, abs(v).div(wide))
+    const shade = seed.sub(0.5).mul(OIL.own).add(1).mul(ridge.mul(OIL.ridge[1]).add(OIL.ridge[0])).mul(bead.mul(OIL.bead).add(1))
+    const l = dot(rgb, vec3(0.2126, 0.7152, 0.0722)), lean = seed.sub(0.5).mul(OIL.lean)
+    const rich = max(mix(vec3(l), rgb, OIL.rich), vec3(0)).mul(vec3(lean.add(1), 1, float(1).sub(lean)))
+    color.assign(rich.mul(shade).add(smoothstep(0.66, 0.9, ridge).mul(OIL.shine)))
   }).ElseIf(M.kind.lessThan(3.5), () => {
     const wash = mix(M.paper, rgb, dark.mul(WASH_MOST - WASH_LEAST).add(WASH_LEAST))
     const reach = max(float(1).sub(pow(abs(u).div(k.mul(MARK_LONG * 0.95)), 2)), 0).toVar()

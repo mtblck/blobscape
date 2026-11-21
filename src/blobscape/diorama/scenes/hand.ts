@@ -262,7 +262,7 @@ export const HAND: SceneDoc = {
     { kind: 'pulse', bone: 'fly9', size: [0.2, 1.4], times: 4, phase: 0.69 },
   ],
   lights: [
-    { at: [0, 1.9, 0.7], color: '#3fc4d8', strength: 2.2, range: 1.4, flicker: { by: 0.15, times: 5 } },
-    { at: [0, 1.2, 1.0], color: '#3fc4d8', strength: 0.9, range: 1.2 },
+    { at: [0, 1.9, 0.7], color: '#3fc4d8', strength: 2.2, range: 1.4, lit: 'always', flicker: { by: 0.15, times: 5 } },
+    { at: [0, 1.2, 1.0], color: '#3fc4d8', strength: 0.9, range: 1.2, lit: 'always' },
   ],
 }

@@ -3,7 +3,8 @@ import type { Orbit } from '../splat-core/orbit.ts'
 import { oklab } from '../splat-core/pixel.ts'
 import type { PointLight } from './engine.ts'
 import { Skeleton, axisAngle, mulQ, rotate, type Bone } from './rig.ts'
-import { checkScene, compileScene, type CompiledScene, type LightDoc, type MoveDoc, type SceneDoc } from './sceneDoc.ts'
+import { daylight } from './daylight.ts'
+import { checkScene, compileScene, litFor, type CompiledScene, type LightDoc, type MoveDoc, type SceneDoc } from './sceneDoc.ts'
 import { MAX_LAMPS, type Lamp, type Shape, type VoxelPart, type VoxelSpec } from './voxel.ts'
 
 /**
@@ -43,6 +44,11 @@ export interface Placed extends Placement {
   prop: PropRef
   /** Holds still: its own moves are not played. */
   still?: boolean
+  /**
+   * Its lamps, where the project has a time of day: 'always' keeps them lit by day, 'dark' has them wait for the dark
+   * whatever the project or the land says. Left out, it goes by the project's `light.lit`, then the land's own `lamps`.
+   */
+  lit?: 'dark' | 'always'
 }
 
 /** A scene made of a land and props: what Scene Creator edits and saves. */
@@ -77,6 +83,12 @@ export interface ProjectLight {
   sky?: [string, string]
   /** The sun live, at this hour of the day (0 to 24). */
   live?: { hour: number }
+  /**
+   * Every prop's lamps under a live sun: 'always' keeps them lit by day (a cave, a dungeon), 'dark' has them wait for
+   * the dark. Left out, the land's own `lamps` says (a cave's land keeps what is set down in it lit). A prop's own
+   * `lit` comes first.
+   */
+  lit?: 'dark' | 'always'
   /** Lamps the visitor set down, at most `MAX_PROJECT_LAMPS`. */
   lamps?: LightDoc[]
   /** How strongly glowing things light what is round them and shine in the picture, as Pixel Diorama's Glow (0 to 4): the land's own when left out. */
@@ -104,8 +116,20 @@ export function sunOf(from: Vec3 = [0.45, 0.8, 0.4]): { turn: number; height: nu
   return { turn: Math.round(Math.atan2(from[0], from[2]) * RAD), height: Math.round(Math.asin(Math.max(-1, Math.min(1, from[1] / len))) * RAD) }
 }
 
-/** What of a project's light the cut depends on: the lamps, the glow and a live sun's hour change nothing that is cut. */
-export const cutLight = (l: ProjectLight | undefined) => (l ? { sun: l.sun, shade: l.shade, sky: l.sky, live: !!l.live, haze: l.haze, weather: l.weather } : undefined)
+/** How dark the hour must have grown (`daylight`'s `dark`) for lamps that wait for the dark to be lit. */
+export const DARK_FROM = 0.5
+
+/**
+ * Whether it is dark in a project: by its live sun's hour. With no live sun there is no time of day, and everything is
+ * lit as its description has it (undefined).
+ */
+export const projectDark = (l: ProjectLight | undefined): boolean | undefined => (l?.live ? daylight(l.live.hour).dark > DARK_FROM : undefined)
+
+/**
+ * What of a project's light the cut depends on: the lamps, the glow and a live sun's hour change nothing that is cut,
+ * except that the hour says whether it is dark, which lights or puts out every prop's own lamps (`litFor`).
+ */
+export const cutLight = (l: ProjectLight | undefined) => (l ? { sun: l.sun, shade: l.shade, sky: l.sky, live: !!l.live, haze: l.haze, weather: l.weather, dark: projectDark(l), lit: l.lit } : undefined)
 
 /**
  * The land's description under a project's light: its sun, shade and sky, unlit for a live sun, with haze and weather
@@ -320,6 +344,23 @@ export function markedPicks(doc: SceneDoc): PropPick[] {
   return (doc.bones ?? []).filter((b) => b.prop).map((b) => ({ name: b.prop!, bones: [b.name] }))
 }
 
+/**
+ * What in a scene stands outside every prop it marks, each as `where: what`: a part on a bone that is no prop's, a
+ * light no prop's box holds. A scene is built from components (each thing a prop of its own, which Scene Creator's
+ * library then offers), so a new scene leaves only its land outside them: the parts on no bone.
+ */
+export function outsideProps(doc: SceneDoc): string[] {
+  const byName = new Map((doc.bones ?? []).map((b) => [b.name, b]))
+  const inProp = (name: string) => { for (let b = byName.get(name); b; b = b.parent ? byName.get(b.parent) : undefined) if (b.prop) return true; return false }
+  const out: string[] = []
+  const loose = new Set<string>()
+  for (const p of doc.parts) if (p.bone && !inProp(p.bone)) loose.add(p.bone)
+  for (const b of loose) out.push(`bones: '${b}' carries parts but is in no prop (mark it, or the bone it rides on, with prop)`)
+  const { land } = splitScene(doc, markedPicks(doc))
+  for (const l of land.doc.lights ?? []) out.push(`lights: the light at [${l.at.join(', ')}] is in no prop (stand it inside the lamp it belongs to)`)
+  return out
+}
+
 /** The scene with only these parts, the bones they ride (and those bones' parents), and the moves on those bones. */
 function keepOnly(doc: SceneDoc, parts: number[]): SceneDoc {
   const ps = parts.map((i) => doc.parts[i])
@@ -370,7 +411,8 @@ export function splitScene(doc: SceneDoc, picks: PropPick[]): { land: PropDoc; p
       }
     }
     const foot = pick.foot ?? [(box.lo[0] + box.hi[0]) / 2, box.lo[1], (box.lo[2] + box.hi[2]) / 2]
-    const { air: _air, water: _water, cover: _cover, focus: _focus, ...rest } = own
+    // a prop's lamps wait for the dark wherever it is set down, even one taken from a cave whose lamps always burn
+    const { air: _air, water: _water, cover: _cover, focus: _focus, lamps: _lamps, ...rest } = own
     return { name: pick.name, foot, doc: { ...rest, name: pick.name, lights } }
   })
   const left = doc.parts.map((_, i) => i).filter((i) => !taken.has(i))
@@ -438,6 +480,7 @@ export function checkProject(x: unknown, known: (id: string) => boolean): string
       if (typeof p.turn !== 'number' || !Number.isFinite(p.turn)) bad(`${at}.turn`, 'must be degrees')
       if (typeof p.size !== 'number' || !(p.size >= SIZE_RANGE[0] && p.size <= SIZE_RANGE[1])) bad(`${at}.size`, `must be ${SIZE_RANGE[0]} to ${SIZE_RANGE[1]}`)
       if (p.still !== undefined && typeof p.still !== 'boolean') bad(`${at}.still`, 'must be true or false')
+      if (p.lit !== undefined && p.lit !== 'dark' && p.lit !== 'always') bad(`${at}.lit`, "must be 'dark' or 'always'")
     })
   }
   if (x.camera !== undefined) {
@@ -457,6 +500,7 @@ function checkLight(l: unknown, bad: (at: string, what: string) => void) {
   num(l.shade, 'light.shade', 0, 1)
   if (l.sky !== undefined && !(Array.isArray(l.sky) && l.sky.length === 2 && l.sky.every((c) => typeof c === 'string' && HEX.test(c)))) bad('light.sky', 'must be two colors like "#88aadd"')
   if (l.live !== undefined) { if (!isObj(l.live)) bad('light.live', 'must be { hour }'); else num(l.live.hour, 'light.live.hour', 0, 24) }
+  if (l.lit !== undefined && l.lit !== 'dark' && l.lit !== 'always') bad('light.lit', "must be 'dark' or 'always'")
   num(l.glow, 'light.glow', 0, 4)
   num(l.haze, 'light.haze', 0, 16)
   if (l.weather !== undefined && !['rain', 'snow', 'leaves'].includes(l.weather as string)) bad('light.weather', 'must be rain, snow or leaves')
@@ -502,10 +546,13 @@ export function compileProject(project: SceneProject, find: (id: string) => Prop
     return p
   }
   const landProp = get(project.land, 'land')
-  const land = { prop: landProp, c: compileScene(refit(litLand(landProp.doc, project.light), project.loop)) }
+  // under a live sun the hour says which lamps are lit: a prop's own setting first, then the project's, then the land's
+  const dark = projectDark(project.light), lamps = project.light?.lit ?? landProp.doc.lamps
+  const timed = (doc: SceneDoc, own?: 'dark' | 'always') => (dark === undefined ? doc : litFor(doc, dark, own ?? lamps))
+  const land = { prop: landProp, c: compileScene(refit(litLand(timed(landProp.doc), project.light), project.loop)) }
   const props = project.props.map((placed, i) => {
     const prop = get(placed.prop, `props[${i}]`)
-    const c = compileScene(refit(prop.doc, project.loop), { puffs: false })
+    const c = compileScene(refit(timed(prop.doc, placed.lit), project.loop), { puffs: false })
     return { prop, c, placed, poser: new PlacedPoser(c, prop.foot, placed, placed.still) }
   })
   return { name: project.name, loop: project.loop, land, props, palette: joinPalettes([land.prop.doc.palette, ...props.map((p) => p.prop.doc.palette)]), camera: project.camera ?? land.prop.doc.camera }

@@ -10,6 +10,7 @@ export const CAVE: SceneDoc = {
   name: 'Crystal cave',
   loop: 12,
   light: { from: [0.2, 0.7, 0.8], ambient: 0.55, shadow: 0.55 },
+  lamps: 'always',
   palette: [
     '#070a16', '#0e1630', '#18264a', '#243a66', '#33558a', '#4a78aa', '#6fa0c8', '#a0c8e0',
     '#d4ecf4', '#f4fbff', '#1e1a30', '#2e2a44', '#45405c', '#615a78', '#8a84a0', '#2a1640',
@@ -52,7 +53,7 @@ export const CAVE: SceneDoc = {
     { shape: { kind: 'crystal', at: [1.15, 0, 0.45], dir: [-0.3, 1, 0.2], length: 0.36, r: 0.07, chips: 3, seed: 1 }, paint: '#8a84a0' },
     // a lantern left on a stone, and drops falling from a stalactite into the pool
     { shape: { kind: 'rough', shape: { kind: 'ball', at: [0.65, 0.07, 0.6], r: [0.14, 0.08, 0.12] }, by: 0.015, scale: 0.08 }, paint: '#45405c' },
-    { shape: { kind: 'lathe', at: [0.65, 0.14, 0.6], profile: [[0.04, 0], [0.045, 0.02], [0.04, 0.11], [0.02, 0.14], [0.01, 0.16]] }, paint: '#ffe2a0', glow: true },
+    { shape: { kind: 'lathe', at: [0.65, 0.14, 0.6], profile: [[0.04, 0], [0.045, 0.02], [0.04, 0.11], [0.02, 0.14], [0.01, 0.16]] }, paint: '#ffe2a0', glow: true, lit: 'dark' },
     { shape: { kind: 'sphere', at: [-0.62, 1.05, 0.1], r: 0.018 }, paint: '#d4ecf4', bone: 'drop0', glow: true, noShadow: true },
     { shape: { kind: 'sphere', at: [-0.62, 1.05, 0.1], r: 0.018 }, paint: '#d4ecf4', bone: 'drop1', glow: true, noShadow: true },
   ],
@@ -62,8 +63,8 @@ export const CAVE: SceneDoc = {
     { kind: 'drift', bone: 'drop1', by: [0, -1.05, 0], times: 4, phase: 0.5 },
   ],
   lights: [
-    { at: [0.75, 0.5, 0], color: '#c070d0', strength: 2.6, range: 1.6, flicker: { by: 0.15, times: 3 } },
-    { at: [0.65, 0.3, 0.62], color: '#f2b25a', strength: 1.4, range: 1.1, flicker: { by: 0.2, times: 8 }, shadows: true },
-    { at: [-0.15, 0.25, -0.15], color: '#6fa0c8', strength: 1.2, range: 1.0 },
+    { at: [0.75, 0.5, 0], color: '#c070d0', strength: 2.6, range: 1.6, lit: 'always', flicker: { by: 0.15, times: 3 } },
+    { at: [0.65, 0.3, 0.62], color: '#f2b25a', strength: 1.4, range: 1.1, lit: 'dark', flicker: { by: 0.2, times: 8 }, shadows: true },
+    { at: [-0.15, 0.25, -0.15], color: '#6fa0c8', strength: 1.2, range: 1.0, lit: 'always' },
   ],
 }

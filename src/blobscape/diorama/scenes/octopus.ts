@@ -156,7 +156,7 @@ export const OCTOPUS: SceneDoc = {
     { shape: { kind: 'cone', from: [1.323, 0.62, -0.458], to: [1.44, 0.78, -0.419], r: 0.046, rTo: 0.026 }, paint: { kind: 'faces', top: { kind: 'bands', axis: 'y', size: 0.08, colors: ['#7a348c', '#b05cc0', '#7a348c', '#4a1f5c'] }, side: { kind: 'bands', axis: 'y', size: 0.08, colors: ['#7a348c', '#4a1f5c'] }, under: { kind: 'speckle', size: 0.05, colors: ['#f0b8c8', '#b8607c', '#f0b8c8'] } }, bone: 'arm7e', noShadow: true },
     { shape: { kind: 'cone', from: [0.776, 2.86, 0.078], to: [0.776, 2.8, 0.078], r: 0.012 }, paint: '#3a4048', bone: 'lantern', noShadow: true },
     { shape: { kind: 'cylinder', at: [0.776, 2.74, 0.078], height: 0.05, r: 0.03, rTop: 0.09 }, paint: '#3a4048', bone: 'lantern', noShadow: true },
-    { shape: { kind: 'cylinder', at: [0.776, 2.54, 0.078], height: 0.2, r: 0.075 }, paint: '#ffd24a', bone: 'lantern', glow: true, noShadow: true },
+    { shape: { kind: 'cylinder', at: [0.776, 2.54, 0.078], height: 0.2, r: 0.075 }, paint: '#ffd24a', bone: 'lantern', glow: true, lit: 'dark', noShadow: true },
     { shape: { kind: 'cylinder', at: [0.776, 2.49, 0.078], height: 0.05, r: 0.09 }, paint: '#3a4048', bone: 'lantern', noShadow: true },
     { shape: { kind: 'cone', from: [0.856, 2.54, 0.078], to: [0.856, 2.74, 0.078], r: 0.012 }, paint: '#3a4048', bone: 'lantern', noShadow: true },
     { shape: { kind: 'cone', from: [0.776, 2.54, 0.158], to: [0.776, 2.74, 0.158], r: 0.012 }, paint: '#3a4048', bone: 'lantern', noShadow: true },
@@ -273,7 +273,7 @@ export const OCTOPUS: SceneDoc = {
     { kind: 'drift', bone: 'rain8', by: [-0.5, -3.4, 0], times: 6, grow: [1, 1], phase: 0.485 },
   ],
   lights: [
-    { at: [0.776, 2.61, 0.078], color: '#ffd24a', strength: 2.4, range: 2.2, flicker: { by: 0.25, times: 7 }, shadows: true },
-    { at: [-1.4, 2.8, 1.2], color: '#7fb4b8', strength: 1.6, range: 4, flicker: { by: 0.8, times: 5 } },
+    { at: [0.776, 2.61, 0.078], color: '#ffd24a', strength: 2.4, range: 2.2, lit: 'dark', flicker: { by: 0.25, times: 7 }, shadows: true },
+    { at: [-1.4, 2.8, 1.2], color: '#7fb4b8', strength: 1.6, range: 4, lit: 'always', flicker: { by: 0.8, times: 5 } },
   ],
 }

@@ -25,7 +25,7 @@ export const RUIN: SceneDoc = {
     haze: { color: '#5a3c5a', from: 1.5, to: 8 },
     specks: [
       { kind: 'dust', count: 40, from: [-1.4, 0.2, -1], to: [1.4, 1.6, 1.2], colors: ['#ffd08a', '#f0a070'], glow: true },
-      { kind: 'fireflies', count: 8, from: [-1.2, 0.2, 0.2], to: [1.2, 0.9, 1.5], colors: ['#fff2c8'] },
+      { kind: 'fireflies', lit: 'night', count: 8, from: [-1.2, 0.2, 0.2], to: [1.2, 0.9, 1.5], colors: ['#fff2c8'] },
     ],
   },
   bones: [
@@ -58,7 +58,7 @@ export const RUIN: SceneDoc = {
     // a lantern on a post by the steps
     { shape: { kind: 'cylinder', at: [-0.62, 0, 0.12], height: 0.62, r: 0.022 }, paint: '#2a2a30' },
     { shape: { kind: 'box', at: [-0.62, 0.47, 0.12], half: [0.05, 0.065, 0.05] }, paint: '#2a2a30', bone: 'lantern' },
-    { shape: { kind: 'sphere', at: [-0.62, 0.47, 0.12], r: 0.04 }, paint: '#ffd08a', bone: 'flame', glow: true },
+    { shape: { kind: 'sphere', at: [-0.62, 0.47, 0.12], r: 0.04 }, paint: '#ffd08a', bone: 'flame', glow: true, lit: 'dark', unlit: 'gone' },
     // a few stones and leaves on the ground
     { shape: { kind: 'rough', shape: { kind: 'ball', at: [0.7, 0.04, 1.1], r: [0.09, 0.06, 0.08] }, by: 0.015, scale: 0.08 }, paint: '#8e8790' },
     { shape: { kind: 'rough', shape: { kind: 'ball', at: [-0.95, 0.04, 1.0], r: [0.07, 0.05, 0.08] }, by: 0.015, scale: 0.08 }, paint: '#67626a' },
@@ -71,6 +71,6 @@ export const RUIN: SceneDoc = {
     { kind: 'pulse', bone: 'flame', size: [0.85, 1.1], times: 9 },
   ],
   lights: [
-    { at: [-0.62, 0.47, 0.2], color: '#ffd08a', strength: 1.6, range: 1.3, flicker: { by: 0.2, times: 9 }, shadows: true },
+    { at: [-0.62, 0.47, 0.2], color: '#ffd08a', strength: 1.6, range: 1.3, lit: 'dark', flicker: { by: 0.2, times: 9 }, shadows: true },
   ],
 }

@@ -1,4 +1,4 @@
-import type { MoveDoc, PaintDoc, PartDoc, SceneDoc, ShapeDoc } from '../../../splat-engine/sceneDoc.ts'
+import type { LightDoc, MoveDoc, PaintDoc, PartDoc, SceneDoc, ShapeDoc } from '../../../splat-engine/sceneDoc.ts'
 
 /**
  * A lighthouse and its keeper's cottage on a rock in the sea at dusk: a turning lamp, pines that lean in the wind, a
@@ -101,7 +101,7 @@ parts.push({
   shape: { kind: 'join', shapes: Array.from({ length: 10 }, (_, i): ShapeDoc => { const a = (i / 10) * TAU; return { kind: 'box', at: [r3(tx + Math.cos(a) * 0.2), r3((1.3 + railY) / 2), r3(tz + Math.sin(a) * 0.2)], half: [0.011, r3((railY - 1.3) / 2), 0.011] } }) },
   paint: c(0.62, 0.6, 0.68), noShadow: true,
 })
-parts.push({ shape: { kind: 'cylinder', at: [tx, 1.3, tz], height: 0.2, r: 0.11 }, paint: LAMP, glow: true })
+parts.push({ shape: { kind: 'cylinder', at: [tx, 1.3, tz], height: 0.2, r: 0.11 }, paint: LAMP, glow: true, lit: 'dark' })
 // glazing bars round the lamp room
 parts.push({
   shape: { kind: 'join', shapes: Array.from({ length: 6 }, (_, i): ShapeDoc => { const a = (i / 6) * TAU + 0.3; return { kind: 'box', at: [r3(tx + Math.cos(a) * 0.115), 1.4, r3(tz + Math.sin(a) * 0.115)], half: [0.011, 0.1, 0.011] } }) },
@@ -115,10 +115,10 @@ parts.push({ shape: { kind: 'box', at: [r3(tx + 0.125), 0.32, r3(tz + 0.155)], h
 parts.push({ shape: { kind: 'box', at: [r3(tx + 0.135), 0.3, r3(tz + 0.165)], half: [0.05, 0.09, 0.05] }, paint: { kind: 'bands', axis: 'x', size: 0.03, colors: [c(0.42, 0.27, 0.18), c(0.34, 0.21, 0.15)] } })
 for (const [y, out, r] of [[0.72, 0.105, 0.035], [1.05, 0.09, 0.03]]) {
   parts.push({ shape: { kind: 'box', at: [r3(tx + out), y, r3(tz + out + 0.02)], half: [r3(r + THIN), r3(r + 0.015 + THIN), r] }, paint: DARK })
-  parts.push({ shape: { kind: 'box', at: [r3(tx + out + 0.012), y, r3(tz + out + 0.032)], half: [r, r3(r + 0.015), r] }, paint: LAMP, glow: true })
+  parts.push({ shape: { kind: 'box', at: [r3(tx + out + 0.012), y, r3(tz + out + 0.032)], half: [r, r3(r + 0.015), r] }, paint: LAMP, glow: true, lit: 'dark', unlit: '#a9c3d4' })
 }
 // the lens: a bright bar through the lamp room, turning with the lamp (its two beams are the scene's lights)
-parts.push({ shape: { kind: 'box', at: [tx, LAMP_Y, tz], half: [0.17, 0.035, 0.035] }, paint: c(1, 1, 0.85), bone: 'lamp', glow: true })
+parts.push({ shape: { kind: 'box', at: [tx, LAMP_Y, tz], half: [0.17, 0.035, 0.035] }, paint: c(1, 1, 0.85), bone: 'lamp', glow: true, lit: 'dark', unlit: 'gone' })
 
 // the keeper's cottage: plastered walls, a tiled roof, a chimney, a door and a lit window
 const [cx, cz] = COTTAGE
@@ -131,7 +131,7 @@ parts.push({
 })
 parts.push({ shape: { kind: 'box', at: [r3(cx - 0.07), r3(WALL_TOP + 0.13), cz], half: [0.03, 0.07, 0.03] }, paint: { kind: 'split', axis: 'y', at: r3(WALL_TOP + 0.17), below: c(0.52, 0.42, 0.4), above: c(0.3, 0.27, 0.31) } })
 parts.push({ shape: { kind: 'box', at: [r3(cx + 0.06), r3(CY + 0.14), r3(cz + 0.105)], half: [r3(0.042 + THIN), r3(0.04 + THIN), 0.02] }, paint: DARK })
-parts.push({ shape: { kind: 'box', at: [r3(cx + 0.06), r3(CY + 0.14), r3(cz + 0.115)], half: [0.042, 0.04, 0.02] }, paint: LAMP, glow: true })
+parts.push({ shape: { kind: 'box', at: [r3(cx + 0.06), r3(CY + 0.14), r3(cz + 0.115)], half: [0.042, 0.04, 0.02] }, paint: LAMP, glow: true, lit: 'dark', unlit: '#a9c3d4' })
 parts.push({ shape: { kind: 'box', at: [r3(cx - 0.07), r3(CY + 0.11), r3(cz + 0.11)], half: [0.035, 0.075, 0.02] }, paint: c(0.25, 0.42, 0.5) })
 
 // pines on bones of their own that lean a little downwind and sway, and bushes
@@ -173,7 +173,7 @@ const posts: ShapeDoc[] = []
 for (const z of [0.5, 0.72, 0.92]) for (const side of [-1, 1]) posts.push({ kind: 'cylinder', at: [r3(J.x + side * 0.075), -0.05, z], height: r3(J.y + (z > 0.9 ? 0.09 : 0.03) + 0.05), r: 0.018 })
 parts.push({ shape: { kind: 'join', shapes: posts }, paint: { kind: 'split', axis: 'y', at: 0.03, below: c(0.2, 0.26, 0.24), above: c(0.42, 0.3, 0.21) } })
 parts.push({ shape: { kind: 'box', at: [r3(J.x + 0.075), r3(J.y + 0.2), 0.92], half: [0.011, 0.11, 0.011] }, paint: DARK, noShadow: true })
-parts.push({ shape: { kind: 'sphere', at: [r3(J.x + 0.075), r3(J.y + 0.33), 0.92], r: 0.03 }, paint: c(1, 0.8, 0.4), glow: true })
+parts.push({ shape: { kind: 'sphere', at: [r3(J.x + 0.075), r3(J.y + 0.33), 0.92], r: 0.03 }, paint: c(1, 0.8, 0.4), glow: true, lit: 'dark' })
 
 // a little boat with a sail and a lantern
 const [bx, by, bz] = BOAT
@@ -184,7 +184,7 @@ parts.push({
 })
 parts.push({ shape: { kind: 'box', at: [bx, r3(by + 0.24), bz], half: [THIN, 0.2, THIN] }, paint: c(0.35, 0.24, 0.18), bone: 'boat', noShadow: true })
 parts.push({ shape: { kind: 'box', at: [r3(bx + 0.085), r3(by + 0.27), bz], half: [0.075, 0.13, THIN] }, paint: { kind: 'bands', axis: 'y', size: 0.045, colors: [c(0.84, 0.78, 0.66), c(0.96, 0.92, 0.8)] }, bone: 'boat', noShadow: true })
-parts.push({ shape: { kind: 'sphere', at: [r3(bx - 0.2), r3(by + 0.12), bz], r: 0.03 }, paint: c(1, 0.8, 0.4), bone: 'boat', glow: true })
+parts.push({ shape: { kind: 'sphere', at: [r3(bx - 0.2), r3(by + 0.12), bz], r: 0.03 }, paint: c(1, 0.8, 0.4), bone: 'boat', glow: true, lit: 'dark' })
 
 // a buoy that nods in the swell
 const [ux, , uz] = BUOY
@@ -195,7 +195,7 @@ parts.push({
   paint: { kind: 'split', axis: 'y', at: 0.045, below: buoyWhite, above: { kind: 'split', axis: 'y', at: 0.1, below: c(0.78, 0.22, 0.22), above: buoyWhite } },
   bone: 'buoy', noShadow: true,
 })
-parts.push({ shape: { kind: 'sphere', at: [ux, 0.2, uz], r: 0.024 }, paint: c(1, 0.5, 0.35), bone: 'buoy', glow: true })
+parts.push({ shape: { kind: 'sphere', at: [ux, 0.2, uz], r: 0.024 }, paint: c(1, 0.5, 0.35), bone: 'buoy', glow: true, lit: 'dark' })
 
 // smoke from the chimney: puffs that rise, drift downwind and swell
 for (let i = 0; i < 3; i++) {
@@ -232,11 +232,11 @@ parts.push({
   shape: { kind: 'sphere', at: MOON_AT, r: 0.17 },
   // craters: round marks on the face, as deep columns through the moon so only their outline on the face counts
   paint: { kind: 'near', shape: { kind: 'join', shapes: [[0.05, 0.04, 0.06], [-0.07, -0.05, 0.05], [0.02, -0.09, 0.04]].map(([a, b, r]): ShapeDoc => ({ kind: 'ball', at: [r3(MOON_AT[0] + a), r3(MOON_AT[1] + b), MOON_AT[2]], r: [r, r, 0.4] })) }, within: 0, near: c(0.8, 0.84, 0.9), far: MOON },
-  glow: true,
+  glow: true, lit: 'night', unlit: 'gone',
 })
 const STARS: V3[] = [[-0.6, 2.6, -1.6], [0.2, 2.75, -1.6], [1.3, 2.55, -1.6], [-1.6, 1.7, -1.3], [1.6, 1.9, -1.5], [0.6, 2.05, -1.7], [-0.2, 2.2, -1.7], [1.05, 2.9, -1.4], [-1.0, 2.9, -1.5], [-1.65, 2.5, -0.6], [1.7, 2.6, -0.5], [-1.2, 2.2, -1.6], [0.9, 1.6, -1.7], [-0.9, 1.5, -1.7], [1.7, 1.3, -1.2], [-1.7, 1.1, -0.9], [0.4, 3.0, -1.2], [-0.3, 1.7, -1.75]]
 // one part each: a join's box would span the whole sky, and the builder walks every cell of it
-STARS.forEach((p, i) => parts.push({ shape: { kind: 'sphere', at: p, r: 0.016 }, paint: hash(i, 2) > 0.6 ? c(0.8, 0.88, 0.9) : c(1, 1, 0.9), glow: true }))
+STARS.forEach((p, i) => parts.push({ shape: { kind: 'sphere', at: p, r: 0.016 }, paint: hash(i, 2) > 0.6 ? c(0.8, 0.88, 0.9) : c(1, 1, 0.9), glow: true, lit: 'night', unlit: 'gone' }))
 
 // foam: thin streaks that swell and fade as they drift
 FOAMS.forEach((f, i) => {
@@ -290,5 +290,11 @@ export const LIGHTHOUSE: SceneDoc = {
   parts,
   moves,
   // the lamp's two beams: a pool of warm light on each side of the tower, sweeping over the sea and the rock with the lens
-  lights: [0, 0.5].map((phase) => ({ at: [tx, 0.3, tz], color: '#ffe9ab', strength: 3.2, range: 0.55, circle: { r: 1, times: 2, phase } })),
+  // and the same two beams where they cross the gallery: each stands just past the railing and a little above it, so
+  // the stretch of rail, floor and cap the beam passes over is lit on the faces a viewer sees (cubes too, whose faces
+  // only take light they are turned to) and falls dark again behind it
+  lights: [
+    ...[0, 0.5].map((phase): LightDoc => ({ at: [tx, 0.3, tz], color: '#ffe9ab', strength: 3.2, range: 0.55, lit: 'dark', circle: { r: 1, times: 2, phase } })),
+    ...[0, 0.5].map((phase): LightDoc => ({ at: [tx, r3(LAMP_Y + 0.07), tz], color: '#ffe9ab', strength: 3, range: 0.2, lit: 'dark', circle: { r: 0.3, times: 2, phase } })),
+  ],
 }

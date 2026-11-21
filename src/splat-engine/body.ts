@@ -68,6 +68,8 @@ export interface Built extends Creature {
   seen?: Uint8Array
   /** How much of its own light each blob gives, a byte a blob (the engine's `Actor.glow`): 255 for a voxel scene's `glow` parts; left out, nothing glows. */
   glow?: Uint8Array
+  /** Blobs of a face laid over another part (voxel.ts `laid`: a pane on its frame), a byte a blob: drawn as blocks, a cell takes their color before the color of what they lie on. */
+  laid?: Uint8Array
 }
 
 const LIGHT: Vec3 = norm([-0.45, 0.75, 0.5])

@@ -97,7 +97,7 @@ export const WINDMILL: SceneDoc = {
     { shape: { kind: 'join', shapes: [{ kind: 'ball', at: [-1.1, 2.5, -1.4], r: [0.4, 0.1, 0.16] }, { kind: 'sphere', at: [-1.24, 2.58, -1.4], r: 0.15 }, { kind: 'sphere', at: [-1.0, 2.6, -1.4], r: 0.18 }, { kind: 'sphere', at: [-0.82, 2.54, -1.4], r: 0.1 }] }, paint: { kind: 'split', axis: 'y', at: 2.53, below: '#bdbac4', above: '#fbf7ea' }, bone: 'cloud0', glow: true },
     { shape: { kind: 'join', shapes: [{ kind: 'ball', at: [1.0, 2.9, -1.6], r: [0.4, 0.1, 0.16] }, { kind: 'sphere', at: [0.86, 2.98, -1.6], r: 0.15 }, { kind: 'sphere', at: [1.1, 3.0, -1.6], r: 0.18 }, { kind: 'sphere', at: [1.28, 2.94, -1.6], r: 0.1 }] }, paint: { kind: 'split', axis: 'y', at: 2.93, below: '#bdbac4', above: '#fbf7ea' }, bone: 'cloud1', glow: true },
     { shape: { kind: 'join', shapes: [{ kind: 'ball', at: [0.1, 2.2, -1.9], r: [0.4, 0.1, 0.16] }, { kind: 'sphere', at: [-0.04, 2.28, -1.9], r: 0.15 }, { kind: 'sphere', at: [0.2, 2.3, -1.9], r: 0.18 }, { kind: 'sphere', at: [0.38, 2.24, -1.9], r: 0.1 }] }, paint: { kind: 'split', axis: 'y', at: 2.23, below: '#bdbac4', above: '#fbf7ea' }, bone: 'cloud2', glow: true },
-    { shape: { kind: 'sphere', at: [1.7, 3.0, -1.7], r: 0.24 }, paint: '#ffd84a', glow: true },
+    { shape: { kind: 'sphere', at: [1.7, 3.0, -1.7], r: 0.24 }, paint: '#ffd84a', glow: true, lit: 'day', unlit: 'gone' },
     { shape: { kind: 'ball', at: [0.65, 2.0, -0.25], r: [0.02, 0.02, 0.07] }, paint: '#22202b', bone: 'bird0', glow: true },
     { shape: { kind: 'box', at: [0.72, 2.0, -0.25], half: [0.07, 0.012, 0.035] }, paint: '#22202b', bone: 'bird0L', glow: true },
     { shape: { kind: 'box', at: [0.58, 2.0, -0.25], half: [0.07, 0.012, 0.035] }, paint: '#22202b', bone: 'bird0R', glow: true },

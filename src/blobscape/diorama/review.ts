@@ -1,6 +1,7 @@
 import { checkScene, compileScene, type SceneDoc } from '../../splat-engine/sceneDoc.ts'
 import { MAX_MUD, MIN_VALUE_RANGE, loopSnaps, partClashes, valuesOf } from '../../splat-engine/sceneChecks.ts'
 import { buildVoxels } from '../../splat-engine/voxel.ts'
+import { outsideProps } from '../../splat-engine/project.ts'
 import { DETAIL } from './scene.ts'
 
 /**
@@ -69,6 +70,10 @@ export function reviewScene(doc: unknown, spacing: number = DETAIL[0].spacing): 
   if (l0.some((l, i) => [...l.position, ...l.color].some((x, j) => Math.abs(x - [...l1[i].position, ...l1[i].color][j]) > 1e-6))) problems.push('lights: a light is not where it started when the loop comes round')
   if (built.blobs.count > MOST_BLOBS) warnings.push(`size: ${built.blobs.count.toLocaleString('en-US')} blobs at the coarsest detail (the site's scenes stay under ${MOST_BLOBS.toLocaleString('en-US')}). Open ground or water only spends blobs: make the subject fill the scene, or give it a focus`)
   if (seconds > 20) warnings.push(`build: took ${seconds.toFixed(0)} s. Mark small parts noShadow, and keep far-apart shapes in separate parts rather than one join`)
+  // what the site's own new scenes must have (rules 13 and 14 of the guide), as advice for one from outside
+  ;(scene.lights ?? []).forEach((l, i) => { if (!l.lit) warnings.push(`lights[${i}].lit: say when it shines: 'dark' for a lamp, a candle, a lit window or a campfire, 'always' for magic, lava or a crystal, 'night' for moonlight, 'day' for a sun. Give the lamp's glowing parts the same lit, and unlit: 'gone' to a flame`) })
+  if ((scene.lights ?? []).some((l) => l.lit === 'dark') && !scene.parts.some((p) => p.lit === 'dark')) warnings.push("parts: a light waits for the dark but no glowing part does. Give the lamp's glass, pane or flame lit: 'dark' too, or it glows by day with its light out")
+  for (const o of outsideProps(scene)) warnings.push(o)
   if (!scene.bones?.length) warnings.push('bones: nothing moves. Give the things people would poke (trees, creatures, lamps) a bone and a small move')
   return {
     problems, warnings,

@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 import { STYLES, styleAsked, styleWords } from './styles.ts'
 import { LOOKS } from '../brushLooks.ts'
 import { CEL } from '../celLooks.ts'
-import { BLOCKS, BLOCK_GROUNDS, BLOCK_SPAN, BLOCK_START, BLOCK_TIMES, blockBack, blockLook, gridOf } from '../blockLooks.ts'
+import { BLOCKS, BLOCK_GROUNDS, BLOCK_SPAN, BLOCK_START, blockBack, blockLook, gridOf } from '../blockLooks.ts'
+import { TIMES, paletteAt, timeAsked, timeOf, under } from '../timeOfDay.ts'
 import { WASH, WASH_PAPERS, WASH_START, washLook } from '../washLooks.ts'
 import { GLASS, glassLook, GLASS_START } from '../glassLooks.ts'
 import { GLITCH, GLITCH_START, glitchLook } from '../glitchLooks.ts'
@@ -81,17 +82,32 @@ test('blocks are whole cells of the grid a scene was cut on, or a share of a sub
   assert.equal(blockLook({ ...BLOCK_START, size: 99 }, 1).cell, 8)
 })
 
-test('a Blocks backdrop is a time of day with its light, or a plain color in day\'s light', () => {
+test('a Blocks backdrop is the subject\'s own sky or a plain color, and the time of day is the page\'s', () => {
   const sky = { back: 'linear-gradient(#000, #111)', night: 1 }
-  // nothing chosen: the subject's own sky where it has one, else the afternoon
-  assert.deepEqual([blockBack('', sky).id, blockBack('').id, blockBack('scene').id], ['scene', 'afternoon', 'afternoon'])
-  assert.equal(blockBack('', sky).time, false, 'the scene\'s own sky goes with the backgrounds')
+  // nothing chosen: the subject's own sky where it has one, else daylight
+  assert.deepEqual([blockBack('', sky).id, blockBack('').id, blockBack('scene').id], ['scene', 'day', 'day'])
   assert.ok(blockBack('', sky).light![0] < 0.5, 'a dark sky of its own is a night\'s light')
-  assert.equal(blockBack('afternoon', sky).light, undefined)
-  for (const t of BLOCK_TIMES) { const b = blockBack(t.id, sky); assert.ok(b.time && b.back === t.back) }
-  assert.ok(blockBack('night').light![2] > blockBack('night').light![0], 'night is dim and blue')
-  assert.ok(blockBack('morning').light![0] > blockBack('morning').light![2], 'morning is warm')
-  for (const g of BLOCK_GROUNDS) { const b = blockBack(g.id, sky); assert.ok(!b.time && b.light === undefined && b.back === g.back) }
-  const ids = [...BLOCK_TIMES, ...BLOCK_GROUNDS].map((x) => x.id)
+  assert.equal(blockBack('', sky, true).light, undefined, 'a time of day the page set already dims the stage')
+  for (const g of BLOCK_GROUNDS) { const b = blockBack(g.id, sky); assert.ok(b.light === undefined && b.back === g.back) }
+  const ids = BLOCK_GROUNDS.map((x) => x.id)
   assert.equal(new Set([...ids, 'scene']).size, ids.length + 1)
+})
+
+test('a time of day brings a sky, a light and a palette that holds the scene\'s colors under it', () => {
+  assert.deepEqual(TIMES.map((t) => t.id), ['morning', 'afternoon', 'night'])
+  assert.deepEqual(TIMES.map((t) => t.dark), [false, false, true])
+  assert.equal(timeAsked('night'), 'night')
+  assert.equal(timeAsked('noon'), undefined)
+  const night = timeOf('night'), morning = timeOf('morning')
+  assert.ok(night.light[2] > night.light[0] && night.light[0] < 0.5, 'night is dim and blue')
+  assert.ok(morning.light[0] > morning.light[2], 'morning is warm')
+  assert.deepEqual(under([200, 200, 200], [1, 1, 1]), [200, 200, 200])
+  const dim = under([200, 200, 200], night.light)
+  assert.ok(dim[0] < dim[2] && dim[2] < 200)
+  // the night's palette holds the dimmed color, the sky's, and still the bright one a lamp lights
+  const own: [number, number, number][] = [[200, 200, 200], [40, 120, 40], [255, 220, 90]]
+  const at = paletteAt(own, night)
+  const has = (c: readonly number[]) => at.some((p) => Math.abs(p[0] - c[0]) + Math.abs(p[1] - c[1]) + Math.abs(p[2] - c[2]) < 12)
+  assert.ok(has(dim) && has([255, 220, 90]) && has([13, 18, 40]) && at.length <= 32)
+  assert.ok(paletteAt(own, timeOf('afternoon')).length >= own.length)
 })

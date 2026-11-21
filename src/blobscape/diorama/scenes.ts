@@ -3,7 +3,8 @@ import type { PixelLook, Rgb } from '../../splat-core/pixel.ts'
 import type { Built } from '../../splat-engine/body.ts'
 import type { PointLight } from '../../splat-engine/engine.ts'
 import type { Skeleton } from '../../splat-engine/rig.ts'
-import { compileScene, type SceneDoc } from '../../splat-engine/sceneDoc.ts'
+import { compileScene, litFor, type SceneDoc } from '../../splat-engine/sceneDoc.ts'
+import { paletteAt, timeOf, type TimeId } from '../timeOfDay.ts'
 import { SceneWater } from '../../splat-engine/sceneWater.ts'
 import { DEFAULT_LIGHT, buildVoxels } from '../../splat-engine/voxel.ts'
 import * as meadow from '../fourways/meadow/build.ts'
@@ -59,7 +60,7 @@ export interface Diorama {
   /** Its live lights `t` seconds in. `shadows` says whether one that can cast shadows should (the page asks only where the GPU works them out). */
   lights(t: number, shadows?: boolean): PointLight[]
   /** How much of its painted color everything keeps before its lights are added: 1 where left out, less for a scene lit mostly live. */
-  ambient?: number
+  ambient?: number | readonly [number, number, number]
   /** The same, for a scene whose light changes as it plays (day turning to night): a share or a color, `t` seconds in. It is used in place of `ambient`. */
   ambientAt?: (t: number) => number | [number, number, number]
   /** The sky `t` seconds in, top and bottom, for a scene whose sky changes as it plays: used in place of `sky`, with its reach. */
@@ -87,22 +88,51 @@ export interface Diorama {
    * moment), then kept. The page draws its `surface` with the scene and shows it for each moment.
    */
   water?: () => SceneWater
+  /**
+   * The scene at a time of day, where a page sets one (timeOfDay.ts): under that time's sky and light, in a palette
+   * that has its colors as that light leaves them, with its lamps, lit windows and fires lit only in the dark (those
+   * the description says wait for it) and its sun only by day. Every style draws it. Left out for a scene that is not
+   * a description alone.
+   */
+  timed?: (time: TimeId) => Diorama
+  /** For a scene `timed` made: the scene it is a time of day of. */
+  of?: Diorama
+  /** For a scene `timed` made: which time of day it is. */
+  at?: TimeId
 }
+
+/** A described scene with some of it replaced, at every time of day (`make` is called when the list is put together, so `described` is defined by then). */
+function withOver(make: () => Diorama, over: Partial<Diorama>): Diorama {
+  const d = make()
+  const out: Diorama = { ...d, ...over }
+  const kept = new Map<Diorama, Diorama>()
+  if (d.timed) out.timed = (time) => {
+    const t = d.timed!(time)
+    let k = kept.get(t)
+    if (!k) kept.set(t, (k = { ...t, ...over, timed: out.timed, of: out }))
+    return k
+  }
+  return out
+}
+
+/** The scene a page picked, whatever time of day of it is showing. */
+export const sceneOf = (d: Diorama): Diorama => d.of ?? d
 
 /** The name of the palette chosen for a scene, on its chip. */
 const OWN_PALETTE = 'Made for it'
 
 /** The lighthouse, the first scene, keeps its own five views and does not rock. */
-const LIGHTHOUSE: Diorama = {
-  ...described('lighthouse', LIGHTHOUSE_DOC, 'A lighthouse and a cottage on a rock in the sea at dusk, with a turning lamp, pines, a jetty, a small boat, gulls and clouds'),
-  views: [
+const LIGHTHOUSE: Diorama = withOver(
+  () => described('lighthouse', LIGHTHOUSE_DOC, 'A lighthouse and a cottage on a rock in the sea at dusk, with a turning lamp, pines, a jetty, a small boat, gulls and clouds'),
+  { views: [
     { id: 'shore', label: 'From the shore', orbit: { target: [0.05, 0.84, 0.05], distance: 3.7, azimuth: 28, elevation: 10 } },
     { id: 'above', label: 'From above', orbit: { target: [0, 0.6, 0], distance: 5.2, azimuth: 40, elevation: 38 } },
     { id: 'lamp', label: 'The lamp', orbit: { target: [0.05, 1.35, -0.05], distance: 2.0, azimuth: 20, elevation: 6 } },
     { id: 'cottage', label: 'The cottage', orbit: { target: [-0.3, 0.4, 0.15], distance: 2.0, azimuth: 10, elevation: 14 } },
     { id: 'boat', label: 'The boat', orbit: { target: [0.82, 0.2, 0.65], distance: 2.0, azimuth: 55, elevation: 16 } },
   ],
-}
+  },
+)
 
 const night = (palette: Rgb[]): [Rgb, Rgb] => {
   const dark = [...palette].sort((a, b) => a[0] + a[1] + a[2] - (b[0] + b[1] + b[2]))
@@ -115,7 +145,8 @@ const night = (palette: Rgb[]): [Rgb, Rgb] => {
 export function described(id: string, doc: SceneDoc, about: string): Diorama {
   const c = compileScene(doc)
   let pond: SceneWater | undefined
-  return {
+  const times = new Map<TimeId, Diorama>()
+  const self: Diorama = {
     id,
     label: c.name,
     about,
@@ -147,7 +178,23 @@ export function described(id: string, doc: SceneDoc, about: string): Diorama {
     lights: c.lights,
     haze: c.haze,
     water: c.water ? () => (pond ??= new SceneWater(c)) : undefined,
+    timed: (when) => {
+      let d = times.get(when)
+      if (!d) {
+        const time = timeOf(when)
+        // the time changes the sky, the light and what is lit, never what the scene is: its description and size stay its own
+        const lit = litFor(doc, time.dark)
+        // at night what glows only to keep its own color (a cloud, a flower, a gull: no `lit`) takes the night's light like the rest
+        const parts = time.dark ? lit.parts.map((p) => (p.glow && !p.lit ? { ...p, glow: undefined, laid: true } : p)) : lit.parts
+        const at: SceneDoc = { ...lit, parts, sky: time.sky, skyReach: undefined }
+        const t = described(id, at, about)
+        d = { ...t, doc, bytes: self.bytes, ambient: time.light, palette: { label: OWN_PALETTE, colors: paletteAt(t.palette.colors, time) }, timed: self.timed, of: self, at: when }
+        times.set(when, d)
+      }
+      return d
+    },
   }
+  return self
 }
 
 /**
@@ -186,7 +233,7 @@ const FOX_MEADOW: Diorama = {
 const SKY_FISHING: Diorama = (() => {
   const d = described('fishing', FISHING, 'A boy on the edge of a floating island casts his fishing line into a cloud, feels two tugs, and hauls up the moon, flinging it over his head into the sky as the sun sinks and the day turns to a starry night; then he casts again and pulls up the sun, and the day comes back')
   const base = d.pose
-  return { ...d, pose: (sk, t) => poseFishing(sk, t, base), lights: (t) => lightsAt(t), ambientAt, skyAt }
+  return { ...d, pose: (sk, t) => poseFishing(sk, t, base), lights: (t) => lightsAt(t), ambientAt, skyAt, timed: undefined }
 })()
 
 export const DIORAMAS: Diorama[] = [
