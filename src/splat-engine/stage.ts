@@ -52,6 +52,8 @@ export interface Actor {
   morphs?: Morph[]
   /** How much of its own light each blob gives, a byte a blob (255 all of it): a flame, a lit window. It only matters under live lights. */
   glow?: Uint8Array
+  /** Stays blobs while the stage draws blocks (`setBlocks`): grass and the like, drawn among the cubes. It makes no cubes. */
+  soft?: boolean
 }
 
 /** What the view shows: the blobs, the bones that move them, or both (bones on top). */
@@ -307,6 +309,7 @@ export class Stage {
     this.world.cleanCuts = this.clean
     if (this.edits.length) this.world.setEdits(this.edits)
     this.scene.add(this.world)
+    this.hidden.clear()
     if (this.painter) this.paintOver()
     this.block()
   }
@@ -327,14 +330,39 @@ export class Stage {
     this.invalidate()
   }
 
+  /** Whether soft actors are drawn as blobs among the blocks. */
+  private softShown = false
+  /** Which actors are cleared out of the world, so it draws only the soft ones. */
+  private hidden = new Set<Actor>()
+  /** Clears an actor's blobs out of the world (they are still posed, but draw nothing), or puts them back. */
+  private hideIn(actor: Actor, hide: boolean) {
+    const world = this.world
+    if (!world || hide === this.hidden.has(actor)) return
+    if (hide) {
+      this.hidden.add(actor)
+      const o = actor.blobs.opacity, own = o.slice(0, actor.blobs.count)
+      o.fill(0, 0, actor.blobs.count)
+      world.recolor(actor)
+      o.set(own)
+    } else {
+      this.hidden.delete(actor)
+      if (actor === this.actor && this.painter) this.paintOver()
+      else world.recolor(actor)
+    }
+  }
+
   /** How many cubes and faces are on show while the scene is drawn as blocks. */
   get blockCount() { return this.blocks ? { blocks: this.blocks.blocks, faces: this.blocks.faces } : undefined }
 
   /** Makes the cubes for the actors on show (again), or puts them away. */
   private block() {
     if (this.blocks) { this.scene.remove(this.blocks); this.blocks.dispose(); this.blocks = undefined }
+    const all = this.actor ? [this.actor, ...this.extras] : []
+    // with soft actors among them, the world stays drawn for those alone: the rest are cleared out of it (and put back)
+    this.softShown = !!this.blockLook && all.some((a) => a.soft)
+    if (this.world) for (const a of all) if (!a.soft) this.hideIn(a, this.softShown)
     if (this.blockLook && this.actor) {
-      this.blocks = new BlockView([this.actor, ...this.extras], this.blockLook)
+      this.blocks = new BlockView(all.filter((a) => !a.soft), this.blockLook)
       this.blocks.setLights(this.lit.lights, this.lit.ambient, this.blockLook.ambient)
       this.scene.add(this.blocks)
     }
@@ -355,7 +383,7 @@ export class Stage {
   /** Sends the painted colors to the GPU, then puts the actor's own back on the CPU (as `highlight` does). */
   private paintOver() {
     const { actor, world, painter } = this
-    if (!actor || !world) return
+    if (!actor || !world || this.hidden.has(actor)) return
     const c = actor.blobs.color, o = actor.blobs.opacity, n = actor.blobs.count
     if (painter) {
       const own = c.slice(0, n * 3), solid = o.slice(0, n)
@@ -783,7 +811,7 @@ export class Stage {
   setShow(s: Show) {
     this.show = s
     if (this.baking) return
-    if (this.world) this.world.visible = s !== 'bones' && !(this.blocks && !this.pixel)
+    if (this.world) this.world.visible = s !== 'bones' && !(this.blocks && !this.pixel && !this.softShown)
     if (this.blocks) this.blocks.visible = s !== 'bones' && !this.pixel
     if (this.rig) { this.rig.visible = s !== 'blobs'; this.rig.onTop = s === 'both'; this.rig.update() }
     this.invalidate()

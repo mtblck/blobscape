@@ -109,7 +109,7 @@ test('things crowd into the kinds of place that like them', () => {
     const plan = planIsland(MEADOW, seed), grove = plan.patches.find((p) => p.name === 'oak grove')!
     for (const t of plan.things) if (t.name === 'oak') { all++; if (Math.hypot(t.at[0] - grove.at[0], t.at[2] - grove.at[1]) < grove.r) near++ }
     for (let k = 0; k < 400; k++) {
-      const x = (k % 20) / 20 * 6.6 - 3.3, z = Math.floor(k / 20) / 20 * 6.6 - 3.3
+      const x = (k % 20) / 20 * 14.8 - 7.4, z = Math.floor(k / 20) / 20 * 14.8 - 7.4
       if (inside(plan.lobes, x, z) > 0) { tries++; if (Math.hypot(x - grove.at[0], z - grove.at[1]) < grove.r) cover++ }
     }
   }

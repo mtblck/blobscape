@@ -1,10 +1,10 @@
 import type { Vec3 } from '../../splat-core/blobs.ts'
 import { wornLand, type LandSpec } from '../../splat-engine/erode.ts'
-import type { BoneDoc, MoveDoc, PartDoc, SceneDoc, ShapeDoc } from '../../splat-engine/sceneDoc.ts'
+import type { BoneDoc, MoveDoc, PaintDoc, PartDoc, SceneDoc, ShapeDoc } from '../../splat-engine/sceneDoc.ts'
 import { joinPalettes } from '../../splat-engine/project.ts'
 import { biomeOf, type Biome, type Population } from './biomes.ts'
-import { SOLID, chance, colorsOf, dressed, hashOf, material, paintOf, pickOf } from './materials.ts'
-import { ROOM, makeThing, r3, type Thing } from './things.ts'
+import { SOLID, chance, colorsOf, dressed, hashOf, material, paintOf, pickOf, type Material } from './materials.ts'
+import { BIGGER, ROOM, makeThing, r3, type Thing } from './things.ts'
 
 /**
  * A floating island from a biome recipe and a seed. `planIsland` decides everything (the island's outline, its
@@ -152,7 +152,7 @@ export function planIsland(biome: Biome, seed: number, gates?: [number, number])
   const place = (p: Population, apart = 0) => {
     const n = Math.round(whole(p.count, rnd()) * (p.count[1] > 1 ? GROW * GROW : 1))
     for (let k = 0; k < n; k++) {
-      const size = r3(between(p.size, rnd())), room = ROOM[p.kind] * size, own = hashOf(seed, 5000 + salt++)
+      const size = r3(between(p.size, rnd()) * BIGGER[p.kind]), room = ROOM[p.kind] * size, own = hashOf(seed, 5000 + salt++)
       if (bones + bonesOf(p.kind) > BONE_BUDGET) return
       let best: { x: number; z: number; score: number } | undefined
       for (let tries = 0; tries < 50; tries++) {
@@ -235,6 +235,18 @@ export function islandDoc(plan: IslandPlan): SceneDoc {
  * A plan written out as a scene description, with which of its parts are opaque bodies (by index in `parts`): the
  * ground, the rock under it, every stone and stump. Those must let no light through from any side.
  */
+/**
+ * The turf on an island's top: one main grass over most of it, and the rest in clumps (Matt, 2026-11-20: three or more
+ * colors of ground block everywhere read as noise; a biome has one general grass, with other grasses, dirt and stone in
+ * places). The patches pattern hands out its colors by the height of a smooth noise, whose middle is far commoner than
+ * its ends, so the main grass takes the four middle shares (about three quarters), the darker and lighter grass the
+ * shares beside them, and bare earth and stone the rare ends, which come out as clumps a few meters across.
+ */
+export function coverOf(turf: Material, soil: Material, rock: Material, seed: number): PaintDoc {
+  const main = turf.ramp[1], size = r3(0.5 * (0.85 + 0.3 * chance(seed, 13)))
+  return { kind: 'patches', size, colors: [soil.ramp[2], turf.ramp[0], main, main, main, main, turf.ramp[2], rock.ramp[2]] }
+}
+
 export function islandScene(plan: IslandPlan): { doc: SceneDoc; solid: number[] } {
   const biome = biomeOf(plan.biome), seed = plan.seed
   const bones: BoneDoc[] = [], parts: PartDoc[] = [], moves: MoveDoc[] = [], solid: number[] = [0, 1]
@@ -248,10 +260,9 @@ export function islandScene(plan: IslandPlan): { doc: SceneDoc; solid: number[] 
     paint: {
       kind: 'faces', up: 0.55,
       // the path is trodden earth, found at the ground's own height wherever the hills take it
-      top: { kind: 'near', shape: { kind: 'sweep', path: plan.path, r: 0.02 }, within: PATH, at: 0, near: paintOf(material(biome.ground.path), seed, 0.6), far: paintOf(turf, seed) },
+      top: { kind: 'near', shape: { kind: 'sweep', path: plan.path, r: 0.02 }, within: PATH, at: 0, near: paintOf(material(biome.ground.path), seed, 0.6), far: coverOf(turf, soil, rock, seed) },
       side: paintOf(soil, seed),
     },
-    ink: turf.ink,
   })
 
   // the underside: rock hanging under each lobe, widest just under the turf and coming to a point, joined and roughened

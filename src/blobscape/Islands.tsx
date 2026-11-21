@@ -18,6 +18,7 @@ import { BIOMES, biomeOf } from './islands/biomes.ts'
 import { MAX_SEED, census } from './islands/island.ts'
 import { WORLD_ISLANDS, placeIsland, planWorld, poseBridge, type WorldPlan } from './islands/world.ts'
 import { material } from './islands/materials.ts'
+import { grassActor, growGrass } from './islands/grass.ts'
 import type { IslandCut, IslandJob } from './islands/cut.worker.ts'
 import { unpack } from './creator/pack.ts'
 import { href } from './routes.ts'
@@ -79,6 +80,8 @@ export function Islands() {
   const [orbit, setOrbit] = useState<Orbit>({ target: [0, 0, 0], distance: 12.5, azimuth: 24, elevation: 20 })
   const [walking, setWalking] = useState(() => params().get('walk') === '1')
   const [count, setCount] = useState(() => (params().get('islands') === '1' ? 1 : WORLD_ISLANDS))
+  // grass as blobs among the blocks (Matt, 2026-11-20: a finer texture beside the cubes, for dense vegetation)
+  const [grass, setGrass] = useState(() => params().get('grass') !== '0')
 
   // the world: its islands and bridges planned from the first island, each a description, then the scenes Pixel
   // Diorama's own code makes of them
@@ -132,6 +135,16 @@ export function Islands() {
       if (!done && worker.current) { worker.current.terminate(); worker.current = undefined }
     }
   }, [scene, scenes, world, biomeId, seed, count, detail, blocky, cutAt])
+
+  // the grass on each island's turf, grown from its cut: thick on the island underfoot, thinner on the others
+  const grown = useMemo(() => {
+    if (!ready || !blocky || !grass) return []
+    const unit = (h: string) => [1, 3, 5].map((k) => parseInt(h.slice(k, k + 2), 16) / 255)
+    return ready.world.islands.map((isl, j) => {
+      const piece = ready.pieces[j], ramp = material(biomeOf(isl.biome).ground.top).ramp.map(unit)
+      return grassActor(growGrass({ blobs: piece.blobs, joints: piece.skin.joints }, { cell: ready.spacing, ramp, blades: (coarse ? 5000 : 12000) * (j ? 0.5 : 1), seed: isl.seed }))
+    })
+  }, [ready, blocky, grass, coarse])
 
   const orbitNow = useRef(orbit)
   orbitNow.current = orbit
@@ -200,7 +213,7 @@ export function Islands() {
     if (!stage || !ready) return
     const d = ready.of, { pieces, scenes: all, world: wd } = ready
     const others = pieces.slice(1)
-    stage.setActor(ready.built, undefined, walker ? [...others, walker.elf] : others)
+    stage.setActor(ready.built, undefined, [...others, ...grown, ...(walker ? [walker.elf] : [])])
     // a new island brings its own starting view; a new detail keeps the view it had
     const start = overview(wd, d.views[0].orbit)
     if (dressed.current !== d) { dressed.current = d; if (!walker) { setOrbit(start); orbitNow.current = start } }
@@ -215,6 +228,7 @@ export function Islands() {
         if (j < wd.islands.length) { all[j].pose(s, calm ? 0 : t); placeIsland(wd.islands[j], s) }
         else poseBridge(wd.bridges[j - wd.islands.length], s)
       }
+      grown.forEach((g, j) => placeIsland(wd.islands[j], g.skeleton))
       stage.setLights(d.lights(t, stage.backend === 'webgpu'), 1)
       if (walker) {
         const dt = Math.max(0, Math.min(0.1, t - last))
@@ -229,7 +243,7 @@ export function Islands() {
         stage.orbit = { ...inMeters(o), target: [eye[0], eye[1], eye[2]] }
       } else if (d.swing && rocking.current) stage.orbit = inMeters(swung(orbitNow.current, d.swing, d.loop, t))
     }, stage.time)
-  }, [stage, ready, walker, calm])
+  }, [stage, ready, walker, calm, grown])
   // walking needs the clock to run, whether or not the island's own moves do
   useEffect(() => { if (stage) stage.playing = playing || !!walker }, [stage, playing, walker])
   useEffect(() => { if (stage) { if (!walkNow.current) stage.orbit = inMeters(orbit); stage.invalidate() } }, [stage, orbit, rock])
@@ -263,9 +277,9 @@ export function Islands() {
   useEffect(() => {
     const url = new URL(location.href)
     const put = (k: string, v: string | undefined) => { if (v) url.searchParams.set(k, v); else url.searchParams.delete(k) }
-    put('biome', BIOMES.length > 1 ? biomeId : undefined); put('seed', String(seed)); put('style', blocky ? undefined : style); put('block', blocky && blockSize !== BLOCK_START.size ? String(blockSize) : undefined); put('rock', rock ? undefined : '0'); put('walk', walking ? '1' : undefined); put('islands', count === 1 ? '1' : undefined)
+    put('biome', BIOMES.length > 1 ? biomeId : undefined); put('seed', String(seed)); put('style', blocky ? undefined : style); put('block', blocky && blockSize !== BLOCK_START.size ? String(blockSize) : undefined); put('rock', rock ? undefined : '0'); put('grass', grass ? undefined : '0'); put('walk', walking ? '1' : undefined); put('islands', count === 1 ? '1' : undefined)
     history.replaceState(history.state, '', url)
-  }, [biomeId, seed, style, blocky, blockSize, rock, walking, count])
+  }, [biomeId, seed, style, blocky, blockSize, rock, walking, count, grass])
 
   // For verify: the stage and the island, without clicking
   useEffect(() => {
@@ -408,6 +422,7 @@ export function Islands() {
                     <Chip active={style === 'blobs'} onClick={() => setStyle('blobs')}>Blobs</Chip>
                   </div>
                 </Field>
+                {blocky && <Toggle label="Grass among the blocks" checked={grass} onChange={setGrass} />}
                 {blocky && <Slider label="Block size" value={blockSize} min={BLOCK_SIZES.min} max={BLOCK_SIZES.max} step={1} onChange={setBlockSize} format={(v) => `${v}×`} hint="How big a block is, in steps of the detail. The island is cut again at that size." />}
                 <Field label="Detail">
                   <div className="flex flex-wrap gap-1.5">

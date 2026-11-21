@@ -85,6 +85,12 @@
        "optional": true,
        "type": "Uint8Array<ArrayBufferLike>",
        "doc": "How much of its own light each blob gives, a byte a blob (255 all of it): a flame, a lit window. It only matters under live lights."
+      },
+      {
+       "name": "soft",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Stays blobs while the stage draws blocks (`setBlocks`): grass and the like, drawn among the cubes. It makes no cubes."
       }
      ]
     },
@@ -749,6 +755,12 @@
        "optional": true,
        "type": "Morph[]",
        "doc": "Blend shapes (morph.ts), set with `SplatWorld.setMorphWeights`: on WebGPU a pass before the deform reshapes the blobs; on WebGL the CPU does and uploads them."
+      },
+      {
+       "name": "soft",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Stays blobs while the stage draws blocks (`Stage.setBlocks`): grass, flowers and the like, too fine to be cubes,\ndrawn among them and hidden by them where they stand in front. It makes no cubes."
       }
      ]
     },
