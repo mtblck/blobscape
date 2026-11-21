@@ -9,7 +9,7 @@ import { DRAGON } from './scenes/dragon.ts'
 import { HAND } from './scenes/hand.ts'
 import { REEF } from './scenes/reef.ts'
 import { WINDMILL } from './scenes/windmill.ts'
-import { checkScene } from '../../splat-engine/sceneDoc.ts'
+import { checkScene, isLit, litFor } from '../../splat-engine/sceneDoc.ts'
 import { MAX_PALETTE_SIZE } from '../../splat-core/pixel.ts'
 import { MAX_MUD, MIN_VALUE_RANGE, loopSnaps, partClashes, valuesOf } from '../../splat-engine/sceneChecks.ts'
 
@@ -49,5 +49,25 @@ test('every scene builds at every detail with all of its parts, reads in graysca
     for (let i = 0; i < a.length; i++) assert.ok(Math.abs(a[i] - sk.matrix[i]) < 1e-4, `${d.id}: matrix ${i}`)
     assert.ok(d.palette.colors.length <= MAX_PALETTE_SIZE && d.views.length > 0, d.id)
     assert.equal(d.lights(0).length, d.lights(3).length)
+  }
+})
+
+test('every light in every scene says when it shines, and a scene is sound by day and in the dark', () => {
+  for (const d of DIORAMAS) {
+    if (!d.doc) continue
+    const doc = d.doc
+    ;(doc.lights ?? []).forEach((l, i) => assert.ok(l.lit, `${d.id}: lights[${i}] must say when it shines: lit 'dark' (a lamp, a candle, a window, a fire), 'day' or 'always' (docs/scene-descriptions.md, rule 14)`))
+    // a lamp that goes out by day has something that stops glowing with it: its glass, its flame, its pane
+    if ((doc.lights ?? []).some((l) => l.lit === 'dark')) assert.ok(doc.parts.some((p) => p.lit === 'dark'), `${d.id}: a light waits for the dark but no glowing part does: give the lamp's glowing parts lit 'dark' too`)
+    for (const dark of [false, true]) {
+      const at = litFor(doc, dark)
+      assert.deepEqual(checkScene(at), [], `${d.id} ${dark ? 'in the dark' : 'by day'}`)
+      // nothing that should be out still glows or shines
+      for (const p of at.parts) assert.ok(!p.lit || isLit(p.lit, dark, doc.lamps), `${d.id}: a part is lit out of its time`)
+      at.lights?.forEach((l) => assert.ok(isLit(l.lit, dark, doc.lamps) || l.strength === 0))
+      assert.equal(at.lights?.length, doc.lights?.length, `${d.id}: lights keep their places`)
+    }
+    const timed = d.timed?.(false)
+    if (timed) { assert.equal(timed.id, d.id); assert.equal(timed.timed?.(false), timed, `${d.id}: a time of day is cut once`) }
   }
 })

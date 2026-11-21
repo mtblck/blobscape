@@ -1,6 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { MAX_PROJECT_LAMPS, checkProject, compileProject, cutLight, litLand, sunFrom, sunOf } from '../../splat-engine/project.ts'
+import { MAX_PROJECT_LAMPS, checkProject, compileProject, cutLight, litLand, projectDark, splitScene, sunFrom, sunOf } from '../../splat-engine/project.ts'
+import { lamped } from './arrange.ts'
+import { CAVE } from '../diorama/scenes/cave.ts'
 import { compileScene } from '../../splat-engine/sceneDoc.ts'
 import { budget, clock, hexOf, lampAdded, lampChanged, lampLights, lampRemoved, liveSky, liveSkyColors, lit, sunNow } from './lighting.ts'
 import { LIBRARY, libraryProp, openScene } from './library.ts'
@@ -76,4 +78,38 @@ test('lamps shine live, the live sun follows the hour, and the budget counts bot
   assert.ok(b.live[0] >= 2 && b.live[1] === 16)
   assert.equal(b.baked[1], 4)
   assert.deepEqual(sunNow(compileProject(p, libraryProp), undefined), sunOf(libraryProp('windmill-hill')!.doc.light?.from))
+})
+
+test('under a live sun the hour lights the lamps: out by day, lit in the dark, unless a prop or the project says always', () => {
+  const p = openScene('lighthouse')!
+  const tower = p.props.findIndex((x) => x.prop === 'lighthouse')
+  assert.ok(tower >= 0)
+  const shining = (project: typeof p, i = tower) => compileProject(project, libraryProp).props[i].poser.lights(0).some((l) => Math.max(...l.color) > 0)
+  // no live sun, no time of day: everything is lit as it was made
+  assert.equal(projectDark(p.light), undefined)
+  assert.ok(shining(p))
+  const noon = lit(p, { live: { hour: 12 } }), night = lit(p, { live: { hour: 23 } })
+  assert.equal(projectDark(noon.light), false)
+  assert.equal(projectDark(night.light), true)
+  assert.ok(!shining(noon) && shining(night))
+  // the lamp room no longer glows at noon, and the moon and stars have left the land
+  const glowing = (project: typeof p) => { const c = compileProject(project, libraryProp); return [c.land.c, ...c.props.map((x) => x.c)].reduce((n, x) => n + x.spec(0.08).parts.filter((q) => q.glow).length, 0) }
+  assert.ok(glowing(noon) < glowing(night))
+  // crossing dusk is a new cut; an hour within the day is not
+  assert.notDeepEqual(cutLight(noon.light), cutLight(night.light))
+  assert.deepEqual(cutLight(noon.light), cutLight(lit(p, { live: { hour: 13 } }).light))
+  // always, for one prop or for all; and a prop that waits for the dark where all are always lit
+  assert.ok(shining(lamped(noon, tower, 'always')))
+  const all = lit(noon, { lit: 'always' })
+  assert.ok(shining(all) && !shining(lamped(all, tower, 'dark')))
+  assert.deepEqual(checkProject(lamped(all, tower, 'dark'), known), [])
+  assert.ok(checkProject({ ...noon, light: { ...noon.light, lit: 'never' } }, known).some((e) => e.startsWith('light.lit')))
+})
+
+test('a prop taken from a cave waits for the dark elsewhere, though the cave itself keeps its lamps lit', () => {
+  assert.equal(CAVE.lamps, 'always')
+  const doc = { ...CAVE, bones: [...(CAVE.bones ?? []), { name: 'candle', at: [0.65, 0.14, 0.6] as [number, number, number], prop: 'Candle' }], parts: CAVE.parts.map((q) => (q.lit === 'dark' ? { ...q, bone: 'candle' } : q)) }
+  const { land, props } = splitScene(doc, [{ name: 'Candle', bones: ['candle'] }])
+  assert.equal(props[0].doc.lamps, undefined)
+  assert.equal(land.doc.lamps, 'always')
 })

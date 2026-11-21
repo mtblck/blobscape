@@ -253,7 +253,7 @@ export const REEF: SceneDoc = {
     { kind: 'drift', bone: 'bub7', by: [-0.068, 2.156, 0], times: 2, grow: [0.5, 1.4], phase: 0.128 },
   ],
   lights: [
-    { at: [0, 1.75, 0], color: '#c890f0', strength: 2.0, range: 1.8, flicker: { by: 0.2, times: 4 } },
-    { at: [0, 0.9, 0.4], color: '#8fd0f0', strength: 1.2, range: 2.0 },
+    { at: [0, 1.75, 0], color: '#c890f0', strength: 2.0, range: 1.8, lit: 'always', flicker: { by: 0.2, times: 4 } },
+    { at: [0, 0.9, 0.4], color: '#8fd0f0', strength: 1.2, range: 2.0, lit: 'always' },
   ],
 }

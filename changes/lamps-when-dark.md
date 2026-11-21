@@ -1,0 +1,1 @@
+Lamps, lit windows, candles and campfires in a scene now know when to be lit. In the Blocks style, pick Morning or Afternoon and they go out (a lamp's glass turns dull, flames, stars and the moon are gone, the sun is up); pick Night and they come on. Magic, lava and crystals always glow, and a cave keeps its candles lit whatever the hour.

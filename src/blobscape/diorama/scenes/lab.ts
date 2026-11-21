@@ -154,7 +154,7 @@ export const LAB: SceneDoc = {
     { shape: { kind: 'sphere', at: [0.41, 0.14, 1.15], r: 0.024 }, paint: '#e8e4dc', bone: 'tail', noShadow: true },
     { shape: { kind: 'cone', from: [-0.45, 2.2, 0.5], to: [-0.45, 1.75, 0.5], r: 0.01 }, paint: '#100c20', bone: 'lamp', noShadow: true },
     { shape: { kind: 'cylinder', at: [-0.45, 1.6, 0.5], height: 0.15, r: 0.17, rTop: 0.04 }, paint: { kind: 'faces', top: '#4a5064', side: '#8088a0', under: '#ffe08c' }, bone: 'lamp', noShadow: true },
-    { shape: { kind: 'sphere', at: [-0.45, 1.58, 0.5], r: 0.05 }, paint: '#ffe08c', bone: 'lamp', glow: true, noShadow: true },
+    { shape: { kind: 'sphere', at: [-0.45, 1.58, 0.5], r: 0.05 }, paint: '#ffe08c', bone: 'lamp', glow: true, lit: 'dark', noShadow: true },
     { shape: { kind: 'join', shapes: [{ kind: 'ball', at: [1.15, 2.0, -0.9], r: [0.15, 0.15, 0.03] }, { kind: 'cone', from: [1.15, 2.0, -0.9], to: [1.337, 2.0, -0.9], r: 0.022 }, { kind: 'cone', from: [1.15, 2.0, -0.9], to: [1.283, 2.133, -0.9], r: 0.022 }, { kind: 'cone', from: [1.15, 2.0, -0.9], to: [1.15, 2.188, -0.9], r: 0.022 }, { kind: 'cone', from: [1.15, 2.0, -0.9], to: [1.017, 2.133, -0.9], r: 0.022 }, { kind: 'cone', from: [1.15, 2.0, -0.9], to: [0.962, 2.0, -0.9], r: 0.022 }, { kind: 'cone', from: [1.15, 2.0, -0.9], to: [1.017, 1.867, -0.9], r: 0.022 }, { kind: 'cone', from: [1.15, 2.0, -0.9], to: [1.15, 1.812, -0.9], r: 0.022 }, { kind: 'cone', from: [1.15, 2.0, -0.9], to: [1.283, 1.867, -0.9], r: 0.022 }] }, paint: '#8088a0', bone: 'cog0', noShadow: true },
     { shape: { kind: 'join', shapes: [{ kind: 'ball', at: [0.93, 1.86, -0.9], r: [0.09, 0.09, 0.03] }, { kind: 'cone', from: [0.93, 1.86, -0.9], to: [1.042, 1.86, -0.9], r: 0.022 }, { kind: 'cone', from: [0.93, 1.86, -0.9], to: [1.01, 1.94, -0.9], r: 0.022 }, { kind: 'cone', from: [0.93, 1.86, -0.9], to: [0.93, 1.973, -0.9], r: 0.022 }, { kind: 'cone', from: [0.93, 1.86, -0.9], to: [0.85, 1.94, -0.9], r: 0.022 }, { kind: 'cone', from: [0.93, 1.86, -0.9], to: [0.818, 1.86, -0.9], r: 0.022 }, { kind: 'cone', from: [0.93, 1.86, -0.9], to: [0.85, 1.78, -0.9], r: 0.022 }, { kind: 'cone', from: [0.93, 1.86, -0.9], to: [0.93, 1.748, -0.9], r: 0.022 }, { kind: 'cone', from: [0.93, 1.86, -0.9], to: [1.01, 1.78, -0.9], r: 0.022 }] }, paint: '#b46414', bone: 'cog1', noShadow: true },
     { shape: { kind: 'join', shapes: [{ kind: 'box', at: [-0.4, 0.008, 1.2], half: [0.07, 0.008, 0.09] }, { kind: 'box', at: [0.6, 0.008, 1.35], half: [0.08, 0.008, 0.06] }, { kind: 'box', at: [-0.2, 0.008, 0.75], half: [0.06, 0.008, 0.08] }] }, paint: '#e8e4dc', noShadow: true },
@@ -213,9 +213,9 @@ export const LAB: SceneDoc = {
     { kind: 'pulse', bone: 'mote7', size: [0.3, 1.2], times: 4, phase: 0.029 },
   ],
   lights: [
-    { at: [0, 1.0, 0.3], color: '#28a0b4', strength: 1.8, range: 1.5, flicker: { by: 0.1, times: 3 } },
-    { at: [-0.85, 0.8, 0.55], color: '#d03c90', strength: 1.4, range: 1.1 },
-    { at: [0.85, 0.8, 0.55], color: '#d03c90', strength: 1.4, range: 1.1 },
-    { at: [-0.45, 1.5, 0.5], color: '#f0a028', strength: 1.6, range: 1.6, flicker: { by: 0.1, times: 5 }, shadows: true },
+    { at: [0, 1.0, 0.3], color: '#28a0b4', strength: 1.8, range: 1.5, lit: 'always', flicker: { by: 0.1, times: 3 } },
+    { at: [-0.85, 0.8, 0.55], color: '#d03c90', strength: 1.4, range: 1.1, lit: 'always' },
+    { at: [0.85, 0.8, 0.55], color: '#d03c90', strength: 1.4, range: 1.1, lit: 'always' },
+    { at: [-0.45, 1.5, 0.5], color: '#f0a028', strength: 1.6, range: 1.6, lit: 'dark', flicker: { by: 0.1, times: 5 }, shadows: true },
   ],
 }

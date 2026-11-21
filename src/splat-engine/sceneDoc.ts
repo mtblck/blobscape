@@ -1,5 +1,6 @@
 import type { Vec3 } from '../splat-core/blobs.ts'
 import type { Orbit } from '../splat-core/orbit.ts'
+import { fromOklab, toOklab } from '../splat-core/color.ts'
 import { MAX_PALETTE_SIZE, darkest, heatPace, type PixelLook, type Rgb } from '../splat-core/pixel.ts'
 import type { PointLight } from './engine.ts'
 import { axisAngle, mulQ, type Bone, type Skeleton } from './rig.ts'
@@ -34,6 +35,11 @@ export interface SceneDoc {
    * what faces them, as a red wall warms the floor beside it; it costs build time, so use it where it shows.
    */
   light?: { from?: Vec3; ambient?: number; shadow?: number; ramp?: number; crevice?: number; wear?: number; bounce?: number }
+  /**
+   * Its lamps as a whole: 'always' keeps everything that says `lit: 'dark'` shining at any time of day, as in a cave or
+   * a dungeon, where it is never day. Left out, each goes by its own `lit`.
+   */
+  lamps?: 'dark' | 'always'
   /** The colors the picture is drawn in, 2 to 32. */
   palette: string[]
   /** The sky behind, top and bottom. Left out, the background is clear. */
@@ -192,6 +198,14 @@ export interface ShaftDoc {
  */
 export type SpeckKind = 'dust' | 'embers' | 'rain' | 'snow' | 'leaves' | 'fireflies' | 'bubbles'
 
+/**
+ * When something is lit: a lamp only when it is 'dark' (unless whoever sets the scene says its lamps always burn),
+ * what belongs to the night itself only at 'night' (the moon, stars, fireflies: no setting brings them out by day),
+ * a sun only by 'day', or 'always' (magic, lava, a crystal). A light, a glowing part or a swarm of glowing specks says
+ * it with `lit`; `litFor` is what puts out the ones whose time it is not.
+ */
+export type LitWhen = 'dark' | 'night' | 'day' | 'always'
+
 /** One swarm of specks: dust, embers, rain, snow, leaves, fireflies or bubbles. */
 export interface SpeckDoc {
   /** What they are, which sets how they move. */
@@ -208,6 +222,8 @@ export interface SpeckDoc {
   size?: number
   /** Whether they give off light; left out, embers and fireflies do. */
   glow?: boolean
+  /** When they are there, for specks that belong to a lamp or a time (a fire's embers, fireflies): gone for the rest. Left out, always. */
+  lit?: LitWhen
   /** Rain, snow and leaves only: each lands on whatever stands still under it, lies a while and goes, then falls again. One whose spot has nothing under it comes down somewhere that has (the box's floor only when none is found). */
   land?: boolean
   /** Rain, snow and leaves only: how far the wind carries each sideways over its whole fall, [x, z]; rain slants along it. */
@@ -240,6 +256,17 @@ export interface PartDoc {
   bone?: string
   /** Gives off light and takes none: lamps, fire, stars, anything that must stay bright. */
   glow?: boolean
+  /**
+   * When it is lit, for a part that is a lamp or part of one (a lantern's panes, a lit window, a flame, a star, the
+   * sun): 'dark', 'night', 'day' or 'always'. For the rest of the time it is as `unlit` says. Left out, it never changes: right
+   * for anything that only keeps its own color (a flower, a bird, foam), wrong for a lamp.
+   */
+  lit?: LitWhen
+  /**
+   * What is there while it is not lit: a color (the part in that paint, taking light and shade like any other), or
+   * 'gone' for something with nothing left behind (a flame, a star, the sun). Left out, a dull shade of its own paint.
+   */
+  unlit?: string
   /** Casts no shadow: thin things in the air. */
   noShadow?: boolean
   /** A color that gathers in its corners and cracks, as moss or soot does. */
@@ -469,6 +496,11 @@ export interface LightDoc {
   at: Vec3
   /** Its color. */
   color: string
+  /**
+   * When it shines: 'dark' (a lamp, a candle, a lit window, a campfire), 'night' (moonlight), 'day' or 'always'
+   * (magic, lava, a crystal). Every light should say; left out, it always shines.
+   */
+  lit?: LitWhen
   /** 1 is a torch; 3 lights dark ground brightly. */
   strength: number
   /** How far it reaches. */
@@ -496,6 +528,7 @@ export interface LightDoc {
 // --- Checking
 
 const HEX = /^#[0-9a-f]{6}$/i
+const LIT_WHENS: LitWhen[] = ['dark', 'night', 'day', 'always']
 const AXES = ['x', 'y', 'z']
 const SMALL_REACH = 4
 const MAX_PARTS = 240
@@ -625,6 +658,7 @@ export function checkScene(doc: unknown): string[] {
     if (!Array.isArray(v) || v.length !== n) { bad(at, `must be ${n} numbers`); return false }
     return v.map((c, i) => num(c, `${at}[${i}]`, min, max)).every(Boolean)
   }
+  const litWhen = (v: unknown, at: string) => { if (v !== undefined && !LIT_WHENS.includes(v as LitWhen)) bad(at, `must be one of ${LIT_WHENS.map((k) => `'${k}'`).join(', ')}`) }
   const hex = (v: unknown, at: string) => { if (typeof v !== 'string' || !HEX.test(v)) bad(at, "must be a color like '#a37a52'") }
   const hexes = (v: unknown, at: string, min: number, max: number) => {
     if (!Array.isArray(v) || v.length < min || v.length > max) { bad(at, `must be ${min} to ${max} colors`); return }
@@ -664,6 +698,7 @@ export function checkScene(doc: unknown): string[] {
     }
   }
   hexes(doc.palette, 'palette', 2, MAX_PALETTE_SIZE)
+  if (doc.lamps !== undefined && doc.lamps !== 'dark' && doc.lamps !== 'always') bad('lamps', "must be 'dark' or 'always'")
   if (doc.sky !== undefined) hexes(doc.sky, 'sky', 2, 2)
   opt(doc.skyReach, 'skyReach', 0.05, 1)
   opt(doc.disc, 'disc', 0.4, 1)
@@ -979,6 +1014,11 @@ export function checkScene(doc: unknown): string[] {
     if (piecesIn(p.paint) && !hasPieces(p.shape)) bad(`${at}.paint`, `pieces paints a shape made of pieces only (${PIECED.join(', ')})`)
     if (p.bone !== undefined) bone(p.bone, `${at}.bone`)
     for (const k of ['glow', 'noShadow', 'bare', 'touches']) if (p[k] !== undefined && typeof p[k] !== 'boolean') bad(`${at}.${k}`, 'must be true or false')
+    litWhen(p.lit, `${at}.lit`)
+    if (p.unlit !== undefined) {
+      if (p.lit === undefined) bad(`${at}.unlit`, 'is for a part that says when it is lit (lit)')
+      if (p.unlit !== 'gone') hex(p.unlit, `${at}.unlit`)
+    } else if (p.lit !== undefined && p.glow !== true) bad(`${at}.lit`, "a part that does not glow needs unlit: 'gone' (it is there only while lit)")
     if (p.grime !== undefined) hex(p.grime, `${at}.grime`)
     opt(p.strokes, `${at}.strokes`, 0, 1)
     if (p.glass !== undefined) {
@@ -1052,6 +1092,7 @@ export function checkScene(doc: unknown): string[] {
         else { num(l.flicker.by, `${at}.flicker.by`, 0, 1); whole(l.flicker.times, `${at}.flicker.times`) }
       }
       if (l.shadows !== undefined && typeof l.shadows !== 'boolean') bad(`${at}.shadows`, 'must be true or false')
+      litWhen(l.lit, `${at}.lit`)
       during(l.during, `${at}.during`)
       if (l.clear !== undefined) num(l.clear, `${at}.clear`, 0.01, 1)
       if (l.circle !== undefined) {
@@ -1137,6 +1178,7 @@ export function checkScene(doc: unknown): string[] {
         hexes(m.colors, `${at}.colors`, 1, 4)
         opt(m.size, `${at}.size`, 0.003, 0.1)
         if (m.glow !== undefined && typeof m.glow !== 'boolean') bad(`${at}.glow`, 'must be true or false')
+        litWhen(m.lit, `${at}.lit`)
         const falls = m.kind === 'rain' || m.kind === 'snow' || m.kind === 'leaves'
         if (m.land !== undefined && typeof m.land !== 'boolean') bad(`${at}.land`, 'must be true or false')
         if (m.land && !falls) bad(`${at}.land`, 'only rain, snow and leaves land')
@@ -1838,4 +1880,71 @@ export function lightsAt(lights: readonly LightDoc[], u: number): PointLight[] {
     const a = l.circle ? (u * l.circle.times + (l.circle.phase ?? 0)) * TAU : 0, r = l.circle?.r ?? 0
     return { position: [l.at[0] + Math.cos(a) * r, l.at[1], l.at[2] - Math.sin(a) * r], color: [linear(c[0]) * k, linear(c[1]) * k, linear(c[2]) * k], range: l.range }
   })
+}
+
+// --- Lamps that come on when it is dark
+
+/** How much of its lightness and of its color a lamp keeps while it is not lit, where its part names no `unlit` color. */
+export const UNLIT_LIGHT = 0.62, UNLIT_COLOR = 0.3
+
+/** A color as a lamp of it looks while it is not lit: darker and nearly gray, as glass with nothing behind it. */
+export function dulled(color: string): string {
+  const [l, a, b] = toOklab(unit(color))
+  return '#' + fromOklab([l * UNLIT_LIGHT, a * UNLIT_COLOR, b * UNLIT_COLOR]).map((v) => Math.round(v * 255).toString(16).padStart(2, '0')).join('')
+}
+
+/** Whether something lit `when` is lit: by day or in the dark, with the scene's `lamps` deciding for those that wait for the dark. */
+export function isLit(when: LitWhen | undefined, dark: boolean, lamps?: 'dark' | 'always'): boolean {
+  return when === undefined || when === 'always' || (when === 'dark' ? dark || lamps === 'always' : when === 'night' ? dark : !dark)
+}
+
+/** Whether anything in a description is lit only some of the time, so that the time of day changes it. */
+export function hasLamps(doc: SceneDoc): boolean {
+  const some = (w: LitWhen | undefined) => w !== undefined && w !== 'always'
+  return doc.parts.some((p) => some(p.lit)) || (doc.lights ?? []).some((l) => some(l.lit)) || (doc.air?.specks ?? []).some((k) => some(k.lit))
+}
+
+const repaint = (p: PaintDoc, f: (c: string) => string): PaintDoc => {
+  if (typeof p === 'string') return f(p)
+  const out: Record<string, unknown> = { ...p }
+  for (const [k, v] of Object.entries(p)) {
+    if (k === 'kind' || k === 'shape') continue
+    if (typeof v === 'string' && HEX.test(v)) out[k] = f(v)
+    else if (Array.isArray(v) && v.every((c) => typeof c === 'string')) out[k] = v.map(f)
+    else if (v && typeof v === 'object' && !Array.isArray(v)) out[k] = 'kind' in v ? repaint(v as PaintDoc, f) : Object.fromEntries(Object.entries(v).map(([n, c]) => [n, f(c as string)]))
+  }
+  return out as PaintDoc
+}
+
+/**
+ * A description as it stands by day (`dark` false) or in the dark: every light, glowing part and swarm of specks whose
+ * `lit` says it is not lit now is put out. A light shines at strength 0 (it keeps its place in the list, which baked
+ * lamp shadows and props' picks go by); a part stops glowing and takes its `unlit` color, or a dull shade of its own
+ * paint (`dulled`), or is left out where it is `unlit: 'gone'`; specks are left out. `lamps` (the scene's own where
+ * left out) set to 'always' keeps everything that waits for the dark lit. Colors it adds join the palette while there
+ * is room. A description nothing changes in comes back as it is, so a caller can tell there is nothing to cut again.
+ */
+export function litFor(doc: SceneDoc, dark: boolean, lamps: 'dark' | 'always' | undefined = doc.lamps): SceneDoc {
+  const on = (w: LitWhen | undefined) => isLit(w, dark, lamps)
+  if (doc.parts.every((p) => on(p.lit)) && (doc.lights ?? []).every((l) => on(l.lit)) && (doc.air?.specks ?? []).every((k) => on(k.lit))) return doc
+  const added = new Set<string>()
+  const dull = (c: string) => { const d = dulled(c); added.add(d); return d }
+  const parts: PartDoc[] = []
+  for (const p of doc.parts) {
+    if (on(p.lit)) parts.push(p)
+    else if (p.unlit !== 'gone') {
+      const { glow: _glow, lit: _lit, unlit, ...rest } = p
+      if (unlit) added.add(unlit)
+      parts.push({ ...rest, paint: unlit ?? repaint(p.paint, dull) })
+    }
+  }
+  const palette = [...doc.palette]
+  for (const c of added) if (palette.length < MAX_PALETTE_SIZE && !palette.includes(c)) palette.push(c)
+  return {
+    ...doc,
+    palette,
+    parts,
+    lights: doc.lights?.map((l) => (on(l.lit) ? l : { ...l, strength: 0 })),
+    air: doc.air && { ...doc.air, specks: doc.air.specks?.filter((k) => on(k.lit)) },
+  }
 }

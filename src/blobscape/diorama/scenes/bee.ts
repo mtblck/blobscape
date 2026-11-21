@@ -316,6 +316,6 @@ export const BEE: SceneDoc = {
     { kind: 'pulse', bone: 'mote9', size: [0.3, 1.3], times: 4, phase: 0.69 },
   ],
   lights: [
-    { at: [0.62, 0.95, 0.4], color: '#ffe58a', strength: 0.9, range: 0.7, flicker: { by: 0.1, times: 5 } },
+    { at: [0.62, 0.95, 0.4], color: '#ffe58a', strength: 0.9, range: 0.7, lit: 'always', flicker: { by: 0.1, times: 5 } },
   ],
 }

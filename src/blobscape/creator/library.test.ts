@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
 import { checkScene, compileScene, type SceneDoc } from '../../splat-engine/sceneDoc.ts'
-import { markedPicks, splitScene } from '../../splat-engine/project.ts'
+import { markedPicks, outsideProps, splitScene } from '../../splat-engine/project.ts'
 import { DIORAMAS } from '../diorama/scenes.ts'
 import { WINDMILL } from '../diorama/scenes/windmill.ts'
 import { buildVoxels } from '../../splat-engine/voxel.ts'
@@ -51,6 +51,30 @@ test('every new scene marks its props, so Scene Creator splits it with nothing p
     // and its props are in the library, where the tests above cut each one and ask for its card
     assert.ok(LIBRARY.some((e) => e.from === d.id), `${d.id}: its props are not in the library`)
   }
+})
+
+/**
+ * The scenes written before a scene had to be built from components (Matt, 2026-11-21). Every scene after them is
+ * nothing but its land and its props: no part on a bone outside a prop, no light outside one, and every prop in the
+ * library, so Scene Creator offers each thing in it and nothing exists only as part of a whole scene.
+ */
+const BEFORE_COMPONENTS = [...BEFORE_MARKS]
+
+test('every new scene is built from components: its land and props that are each in the library, with nothing loose', () => {
+  for (const d of DIORAMAS) {
+    if (BEFORE_COMPONENTS.includes(d.id)) continue
+    assert.ok(d.doc, `${d.id}: a new scene is a description`)
+    assert.deepEqual(outsideProps(d.doc), [], `${d.id}: build it from props (docs/scene-descriptions.md, rule 13)`)
+    for (const pick of markedPicks(d.doc)) assert.ok(LIBRARY.some((e) => e.id === `${d.id}-${pick.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`), `${d.id}: its prop ${pick.name} is not in the library`)
+  }
+})
+
+test('what stands outside a scene\'s props is named: bones with parts that no prop holds, and lights', () => {
+  const doc: SceneDoc = { ...WINDMILL, bones: (WINDMILL.bones ?? []).map((b) => (b.name === 'sails' ? { ...b, prop: 'Sails' } : b)), lights: [{ at: [9, 9, 9], color: '#ffffff', strength: 1, range: 1, lit: 'dark' }] }
+  const out = outsideProps(doc)
+  assert.ok(out.some((o) => o.includes("'duck'")), out.join('; '))
+  assert.ok(!out.some((o) => o.includes("'sails'")))
+  assert.ok(out.some((o) => o.startsWith('lights:')))
 })
 
 test('a scene that marks its props comes apart by them: each a sound prop that cuts and stands, the rest its land', () => {

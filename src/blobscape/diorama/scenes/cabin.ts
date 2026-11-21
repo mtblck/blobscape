@@ -49,7 +49,7 @@ export const CABIN: SceneDoc = {
     { shape: { kind: 'box', at: [0.42, 0.82, -0.42], half: [0.07, 0.28, 0.07] }, paint: { kind: 'bricks', size: [0.06, 0.035], colors: ['#5a5a6e', '#8a8aa0'], line: '#22304e' } },
     { shape: { kind: 'box', at: [-0.14, 0.22, 0.03], half: [0.1, 0.22, 0.02] }, paint: { kind: 'bands', axis: 'x', size: 0.04, colors: ['#4a2e22', '#2a1a18'] } },
     { shape: { kind: 'box', at: [0.27, 0.34, 0.03], half: [0.13, 0.11, 0.015] }, paint: '#2a1a18' },
-    { shape: { kind: 'box', at: [0.27, 0.34, 0.035], half: [0.1, 0.085, 0.012] }, paint: '#ffb840', glow: true, bare: true },
+    { shape: { kind: 'box', at: [0.27, 0.34, 0.035], half: [0.1, 0.085, 0.012] }, paint: '#ffb840', glow: true, lit: 'dark', unlit: '#28303c', bare: true },
     // a woodpile against the west wall, rocks, three pines and a fence
     { shape: { kind: 'join', shapes: [
       { kind: 'cone', from: [-0.42, 0.05, -0.5], to: [-0.42, 0.05, -0.1], r: 0.045 },
@@ -79,7 +79,7 @@ export const CABIN: SceneDoc = {
     { shape: { kind: 'fence', path: [[0.05, 0, 1.08], [0.7, 0, 1.05], [1.4, 0, 0.8]], bay: 0.3, height: 0.24, post: 0.03, rails: 2, lean: 0.25, sag: 0.3, seed: 6 }, paint: { kind: 'pieces', colors: ['#6e4630', '#4a2e22', '#94643e'] } },
     // a lantern on a post by the path
     { shape: { kind: 'cylinder', at: [-0.42, 0, 0.42], height: 0.3, r: 0.018 }, paint: '#2a1a18' },
-    { shape: { kind: 'lathe', at: [-0.42, 0.3, 0.42], profile: [[0.035, 0], [0.04, 0.02], [0.035, 0.08], [0.015, 0.1], [0.008, 0.12]] }, paint: '#ffe0a0', glow: true },
+    { shape: { kind: 'lathe', at: [-0.42, 0.3, 0.42], profile: [[0.035, 0], [0.04, 0.02], [0.035, 0.08], [0.015, 0.1], [0.008, 0.12]] }, paint: '#ffe0a0', glow: true, lit: 'dark' },
     // the snow: drifts over all of it, a path trodden from the door to the gate
     { shape: { kind: 'drift', at: [0, 0, 0], half: [1.5, 1.3], depth: 0.035, wind: [1, 0.3], pile: 0.18, reach: 3, path: [[-0.14, 0, 0.05], [-0.25, 0, 0.55], [-0.16, 0, 1.08], [-0.1, 0, 1.35]], pathWidth: 0.24, seed: 2 }, paint: { kind: 'patches', size: 0.2, colors: ['#f4f8ff', '#d4e0f0'] }, bare: true },
     // frost across the window, growing a branch at a time and melting back
@@ -102,7 +102,7 @@ export const CABIN: SceneDoc = {
     { kind: 'drift', bone: 'smoke3', by: [0.45, 0.7, 0.1], times: 2, grow: [0.5, 1.8], phase: 0.75 },
   ],
   lights: [
-    { at: [0.27, 0.34, 0.25], color: '#ffb840', strength: 1.6, range: 1.0, flicker: { by: 0.08, times: 4 } },
-    { at: [-0.42, 0.36, 0.48], color: '#ffe0a0', strength: 1.3, range: 0.9, flicker: { by: 0.15, times: 6 }, shadows: true },
+    { at: [0.27, 0.34, 0.25], color: '#ffb840', strength: 1.6, range: 1.0, lit: 'dark', flicker: { by: 0.08, times: 4 } },
+    { at: [-0.42, 0.36, 0.48], color: '#ffe0a0', strength: 1.3, range: 0.9, lit: 'dark', flicker: { by: 0.15, times: 6 }, shadows: true },
   ],
 }

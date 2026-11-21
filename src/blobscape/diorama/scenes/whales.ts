@@ -204,7 +204,7 @@ export const WHALES: SceneDoc = {
     { kind: 'bob', bone: 'rock3', by: [0, 0.06, 0], times: 2, phase: 0.75 },
   ],
   lights: [
-    { at: [1.9, 2.9, 0.2], color: '#ffd98a', strength: 2.4, range: 4, flicker: { by: 0.08, times: 3 } },
-    { at: [-1.6, 0.3, 1.2], color: '#6fd0d0', strength: 1.3, range: 4 },
+    { at: [1.9, 2.9, 0.2], color: '#ffd98a', strength: 2.4, range: 4, lit: 'always', flicker: { by: 0.08, times: 3 } },
+    { at: [-1.6, 0.3, 1.2], color: '#6fd0d0', strength: 1.3, range: 4, lit: 'always' },
   ],
 }

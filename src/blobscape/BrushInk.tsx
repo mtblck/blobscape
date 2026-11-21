@@ -41,15 +41,21 @@ interface Subject {
   orbit: Orbit
   /** A scan: its marks are laid softly, one over another (`MarkLook.soft`). */
   soft?: boolean
+  /** It has lamps that go by the time of day. */
+  timed?: boolean
   /** `plain` leaves the baked light out of what is built (`unlit`), for a look that lights it live. */
-  make(detail: Detail, plain: boolean): { actor: Actor; pose?: (sk: Skeleton, t: number) => void; lights?: (t: number) => PointLight[]; ambient?: Parameters<CreatureStage['setLights']>[1]; clip?: ReturnType<typeof recordClip> }
+  /** `dark` is the look's time of day, where it has one: a scene's lamps go by it. */
+  make(detail: Detail, plain: boolean, dark?: boolean): { actor: Actor; pose?: (sk: Skeleton, t: number) => void; lights?: (t: number) => PointLight[]; ambient?: Parameters<CreatureStage['setLights']>[1]; clip?: ReturnType<typeof recordClip> }
 }
 
 function scene(id: string, label: string): Subject {
   const d = DIORAMAS.find((x) => x.id === id) ?? DIORAMAS[0]
   return {
-    id, label, about: d.about, from: 'a scene written as data', orbit: d.views[0].orbit,
-    make: (detail, plain) => ({ actor: plain ? unlit(() => d.make(DETAIL[detail].spacing)) : d.make(DETAIL[detail].spacing), pose: d.pose, lights: d.lights, ambient: d.ambient }),
+    id, label, about: d.about, from: 'a scene written as data', orbit: d.views[0].orbit, timed: !!d.timed,
+    make: (detail, plain, dark) => {
+      const at = dark === undefined ? d : d.timed?.(dark) ?? d
+      return { actor: plain ? unlit(() => at.make(DETAIL[detail].spacing)) : at.make(DETAIL[detail].spacing), pose: at.pose, lights: at.lights, ambient: at.ambient }
+    },
   }
 }
 
@@ -104,6 +110,8 @@ export function BrushInk() {
   const sub = SUBJECTS.find((s) => s.id === subject)!
   const [orbit, setOrbit] = useState<Orbit>(sub.orbit)
   const [built, setBuilt] = useState<{ id: string; plain: boolean; count: number; actor: Actor }>()
+  /** Whether the look's time of day is night, where it has one. */
+  const [dark, setDark] = useState<boolean>()
 
   useEffect(() => {
     let live: CreatureStage | undefined, gone = false
@@ -126,7 +134,7 @@ export function BrushInk() {
     setBuilt(undefined)
     const s = SUBJECTS.find((x) => x.id === subject)!
     const t = setTimeout(() => {
-      const made = s.make(detail, plain)
+      const made = s.make(detail, plain, dark)
       stage.setActor(made.actor, made.clip)
       if (made.pose) stage.setPoser((sk, time) => { made.pose!(sk, time); stage.setLights(made.lights?.(time) ?? [], made.ambient ?? 1) })
       else stage.setLights([], 1)
@@ -136,9 +144,10 @@ export function BrushInk() {
       setBuilt({ id: s.id, plain, count: made.actor.blobs.count, actor: made.actor })
     }, 30)
     return () => clearTimeout(t)
-  }, [stage, subject, detail, plain])
+  }, [stage, subject, detail, plain, dark])
 
   const drawing = useDrawnLook(stage, look, { actor: built?.id === subject ? built.actor : undefined, plain: !!built?.plain, azimuth: sub.orbit.azimuth, soft: sub.soft, offscreen })
+  useEffect(() => setDark(sub.timed ? drawing.dark : undefined), [drawing.dark, sub.timed])
   useEffect(() => { drawing.forget() }, [subject]) // eslint-disable-line react-hooks/exhaustive-deps
   const ascii = look === 'ascii'
   useEffect(() => { if (stage) stage.playing = playing }, [stage, playing])

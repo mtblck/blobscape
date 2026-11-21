@@ -3,7 +3,7 @@ import type { PixelLook, Rgb } from '../../splat-core/pixel.ts'
 import type { Built } from '../../splat-engine/body.ts'
 import type { PointLight } from '../../splat-engine/engine.ts'
 import type { Skeleton } from '../../splat-engine/rig.ts'
-import { compileScene, type SceneDoc } from '../../splat-engine/sceneDoc.ts'
+import { compileScene, hasLamps, litFor, type SceneDoc } from '../../splat-engine/sceneDoc.ts'
 import { SceneWater } from '../../splat-engine/sceneWater.ts'
 import { DEFAULT_LIGHT, buildVoxels } from '../../splat-engine/voxel.ts'
 import * as meadow from '../fourways/meadow/build.ts'
@@ -87,22 +87,49 @@ export interface Diorama {
    * moment), then kept. The page draws its `surface` with the scene and shows it for each moment.
    */
   water?: () => SceneWater
+  /**
+   * The scene at a time of day, where a page sets one: its lamps, lit windows and fires lit only in the dark (those the
+   * description says wait for it), its sun only by day. The scene itself where nothing in it changes. Left out for a
+   * scene that is not a description alone.
+   */
+  timed?: (dark: boolean) => Diorama
+  /** For a scene `timed` made: the scene it is a time of day of. */
+  of?: Diorama
 }
+
+/** A described scene with some of it replaced, at every time of day (`make` is called when the list is put together, so `described` is defined by then). */
+function withOver(make: () => Diorama, over: Partial<Diorama>): Diorama {
+  const d = make()
+  const out: Diorama = { ...d, ...over }
+  const kept = new Map<Diorama, Diorama>()
+  if (d.timed) out.timed = (dark) => {
+    const t = d.timed!(dark)
+    if (t === d) return out
+    let k = kept.get(t)
+    if (!k) kept.set(t, (k = { ...t, ...over, timed: out.timed, of: out }))
+    return k
+  }
+  return out
+}
+
+/** The scene a page picked, whatever time of day of it is showing. */
+export const sceneOf = (d: Diorama): Diorama => d.of ?? d
 
 /** The name of the palette chosen for a scene, on its chip. */
 const OWN_PALETTE = 'Made for it'
 
 /** The lighthouse, the first scene, keeps its own five views and does not rock. */
-const LIGHTHOUSE: Diorama = {
-  ...described('lighthouse', LIGHTHOUSE_DOC, 'A lighthouse and a cottage on a rock in the sea at dusk, with a turning lamp, pines, a jetty, a small boat, gulls and clouds'),
-  views: [
+const LIGHTHOUSE: Diorama = withOver(
+  () => described('lighthouse', LIGHTHOUSE_DOC, 'A lighthouse and a cottage on a rock in the sea at dusk, with a turning lamp, pines, a jetty, a small boat, gulls and clouds'),
+  { views: [
     { id: 'shore', label: 'From the shore', orbit: { target: [0.05, 0.84, 0.05], distance: 3.7, azimuth: 28, elevation: 10 } },
     { id: 'above', label: 'From above', orbit: { target: [0, 0.6, 0], distance: 5.2, azimuth: 40, elevation: 38 } },
     { id: 'lamp', label: 'The lamp', orbit: { target: [0.05, 1.35, -0.05], distance: 2.0, azimuth: 20, elevation: 6 } },
     { id: 'cottage', label: 'The cottage', orbit: { target: [-0.3, 0.4, 0.15], distance: 2.0, azimuth: 10, elevation: 14 } },
     { id: 'boat', label: 'The boat', orbit: { target: [0.82, 0.2, 0.65], distance: 2.0, azimuth: 55, elevation: 16 } },
   ],
-}
+  },
+)
 
 const night = (palette: Rgb[]): [Rgb, Rgb] => {
   const dark = [...palette].sort((a, b) => a[0] + a[1] + a[2] - (b[0] + b[1] + b[2]))
@@ -115,7 +142,8 @@ const night = (palette: Rgb[]): [Rgb, Rgb] => {
 export function described(id: string, doc: SceneDoc, about: string): Diorama {
   const c = compileScene(doc)
   let pond: SceneWater | undefined
-  return {
+  const times = new Map<boolean, Diorama>()
+  const self: Diorama = {
     id,
     label: c.name,
     about,
@@ -147,7 +175,20 @@ export function described(id: string, doc: SceneDoc, about: string): Diorama {
     lights: c.lights,
     haze: c.haze,
     water: c.water ? () => (pond ??= new SceneWater(c)) : undefined,
+    timed: hasLamps(doc)
+      ? (dark) => {
+          let d = times.get(dark)
+          if (!d) {
+            const at = litFor(doc, dark)
+            // the time changes what is lit, never what the scene is: its description, size and palette stay its own
+            d = at === doc ? self : { ...described(id, at, about), doc, bytes: self.bytes, palette: self.palette, timed: self.timed, of: self }
+            times.set(dark, d)
+          }
+          return d
+        }
+      : undefined,
   }
+  return self
 }
 
 /**
@@ -186,7 +227,7 @@ const FOX_MEADOW: Diorama = {
 const SKY_FISHING: Diorama = (() => {
   const d = described('fishing', FISHING, 'A boy on the edge of a floating island casts his fishing line into a cloud, feels two tugs, and hauls up the moon, flinging it over his head into the sky as the sun sinks and the day turns to a starry night; then he casts again and pulls up the sun, and the day comes back')
   const base = d.pose
-  return { ...d, pose: (sk, t) => poseFishing(sk, t, base), lights: (t) => lightsAt(t), ambientAt, skyAt }
+  return { ...d, pose: (sk, t) => poseFishing(sk, t, base), lights: (t) => lightsAt(t), ambientAt, skyAt, timed: undefined }
 })()
 
 export const DIORAMAS: Diorama[] = [
