@@ -62,7 +62,7 @@ test('cloud cover puts the stars out first, then the moon and sun', () => {
   }
   assert.deepEqual(shown(0), { stars: 10, moon: 1, sun: 1 })
   // the scene's own few clouds leave its sky as it is
-  assert.equal(ownClouds(SCENE), 0.375)
+  assert.equal(ownClouds(SCENE), 0.1875)
   const own = shown(ownClouds(SCENE))
   assert.ok(own.stars >= 7 && own.moon === 1 && own.sun === 1)
   const cloudy = shown(0.75)

@@ -120,7 +120,8 @@ test('a sky shows its share of the drops and clouds, the rest hidden', () => {
 test('wind comes with weather a level at a time, may be asked for harder, and blows in gusts that loop', () => {
   assert.deepEqual(['rain', 'heavy-rain', 'thunderstorm'].map((w) => skyState(w as 'rain').wind), [1, 2, 3])
   assert.equal(skyState('rain', undefined, 'gale').wind, 3, 'harder wind can be asked for')
-  assert.equal(skyState('thunderstorm', undefined, 'breeze').wind, 3, 'but no softer than the weather brings')
+  assert.equal(skyState('thunderstorm', undefined, 'breeze').wind, 1, 'or softer')
+  assert.equal(skyState('thunderstorm', undefined, 'calm').wind, 0, 'or none')
   assert.ok(!isClear(skyState(undefined, undefined, 'windy')))
   assert.equal(mixSky(skyState('rain'), skyState('thunderstorm'), 0.5).wind, 2)
   assert.deepEqual(windAt(CLEAR, 1, 12), [0, 0])

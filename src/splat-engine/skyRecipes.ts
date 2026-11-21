@@ -56,8 +56,8 @@ export interface CloudCover {
 
 /** The numbers are mine, not Matt's yet. */
 export const CLOUD_COVERS: CloudCover[] = [
-  { id: 'partly', label: 'Partly cloudy', clouds: 0.375, light: [0.97, 0.97, 0.98], gray: 0.1, dark: 0 },
-  { id: 'cloudy', label: 'Cloudy', clouds: 0.75, light: [0.86, 0.88, 0.92], gray: 0.55, dark: 0.08 },
+  { id: 'partly', label: 'Partly cloudy', clouds: 0.1875, light: [0.97, 0.97, 0.98], gray: 0.1, dark: 0 },
+  { id: 'cloudy', label: 'Cloudy', clouds: 0.5, light: [0.86, 0.88, 0.92], gray: 0.55, dark: 0.08 },
   { id: 'overcast', label: 'Heavy clouds', clouds: 1, light: [0.74, 0.77, 0.84], gray: 0.9, dark: 0.22 },
 ]
 
@@ -94,14 +94,15 @@ export const weatherAsked = (q: string | null | undefined): WeatherId | undefine
 export const cloudsAsked = (q: string | null | undefined): CloudId | undefined => CLOUD_COVERS.find((c) => c.id === q)?.id
 
 /**
- * The sky for a weather and a cloud cover, either left out. Weather brings at least its own clouds; more cloud than
- * that may be asked for, less may not.
+ * The sky for a weather, a cloud cover and a wind, any left out. Weather brings at least its own clouds; more cloud
+ * than that may be asked for, less may not. It brings its own wind too, which any wind asked for replaces.
  */
 export function skyState(weather?: WeatherId, clouds?: CloudId, wind?: WindId): SkyState {
   const w = WEATHERS.find((k) => k.id === weather)
   const asked = CLOUD_COVERS.findIndex((c) => c.id === clouds), least = w ? CLOUD_COVERS.findIndex((c) => c.id === w.clouds) : -1
   const c = CLOUD_COVERS[Math.max(asked, least)]
-  const blow = Math.max(w?.wind ?? 0, WINDS.findIndex((k) => k.id === wind))
+  // a wind asked for is the wind, calm included; left out, the weather's own
+  const blow = wind ? WINDS.findIndex((k) => k.id === wind) : w?.wind ?? 0
   if (!w && !c && blow <= 0) return CLEAR
   const wl = w?.light ?? [1, 1, 1], cl = c?.light ?? [1, 1, 1]
   return {
@@ -133,7 +134,7 @@ export function mixSky(a: SkyState, b: SkyState, k: number): SkyState {
 /** How hard the wind blows: a level each, calm first. `slant` is how far sideways it carries rain for each unit it falls. */
 export const WINDS: { id: WindId; label: string; slant: number }[] = [
   { id: 'calm', label: 'Calm', slant: 0 },
-  { id: 'breeze', label: 'Breeze', slant: 0.18 },
+  { id: 'breeze', label: 'Breeze', slant: 0.06 },
   { id: 'windy', label: 'Windy', slant: 0.5 },
   { id: 'gale', label: 'Gale', slant: 1 },
 ]
@@ -250,7 +251,7 @@ export function hazeUnder(s: SkyState, distance: number): { from: number; to: nu
 /** The most drops of rain and flakes of snow: each is a bone, and a blob names its bones in a byte. */
 export const RAIN_MOST = 230, SNOW_MOST = 230
 /** How many clouds there are at full cover. */
-export const CLOUDS = 8
+export const CLOUDS = 16
 
 const RAIN_COLORS = ['#9fb4d0', '#c4d4e8'], SNOW_COLORS = ['#ffffff', '#e6eef8']
 const CLOUD_COLORS = ['#f4f6f8', '#d9dfe8', '#b3bccb']
@@ -281,7 +282,16 @@ export function falling(kind: 'rain' | 'snow', camera: View, count = kind === 'r
  * over the scene itself, not only behind it (Matt, 2026-11-21: rain comes down from under clouds). The first few are
  * well apart, for a sky with only some of them out; together they roof the scene.
  */
-const CLOUD_SPOTS: [number, number][] = [[0.55, 0.5], [-0.65, 0.15], [-0.05, 1.05], [0.1, -0.2], [0.95, -0.1], [-0.95, 0.9], [-0.5, -0.55], [0.6, -0.65]]
+const CLOUD_SPOTS: [number, number][] = [
+  // partly cloudy: three, well apart
+  [0.6, 0.5], [-0.7, 0.2], [0.0, 1.2],
+  // cloudy: five more
+  [0.1, -0.25], [1.0, -0.1], [-1.0, 0.95], [-0.5, -0.6], [0.65, -0.7],
+  // heavy clouds: the rest, bigger, filling the gaps until little sky shows
+  [1.2, 0.9], [-1.25, -0.25], [0.45, 1.55], [-0.5, 1.6], [1.35, 1.6], [-1.45, 1.45], [0.0, 0.45], [0.0, -1.05],
+]
+/** Clouds from this one on are the heavy cover's, drawn bigger. */
+const CLOUD_FILL = 8
 
 /** Where cloud `i` floats for a view: its flat underside at `cloudBase`, over the scene. */
 export function cloudAt(i: number, camera: View): Vec3 {
@@ -298,7 +308,7 @@ export interface CloudLook { colors?: readonly [string, string, string]; glow?: 
 
 function cloudPart(i: number, camera: View, look: CloudLook = {}): PartDoc {
   const [under, middle, top] = look.colors ?? [CLOUD_COLORS[2], CLOUD_COLORS[1], CLOUD_COLORS[0]]
-  const p = cloudAt(i, camera), s = (camera.distance / 3.7) * (1 + 0.4 * hash(i + 1, 3, 3))
+  const p = cloudAt(i, camera), s = (camera.distance / 3.7) * (1 + 0.4 * hash(i + 1, 3, 3)) * (i >= CLOUD_FILL ? 1.5 : 1)
   // heaped, flat underneath, wide enough that together they roof the scene
   const a = (camera.azimuth * Math.PI) / 180, ax = Math.cos(a), az = -Math.sin(a)
   const at = (k: number, back: number, h: number): Vec3 => [round(p[0] + (ax * k + az * back) * s), round(p[1] + h * s), round(p[2] + (az * k - ax * back) * s)]
@@ -334,7 +344,8 @@ export function weatherDocs(camera: View, loop: number, look: CloudLook = {}): {
   // a description must hold a part: this one is never shown
   const none = { bones: [{ name: HIDDEN, at: camera.target }] as BoneDoc[], parts: [{ shape: { kind: 'sphere', at: camera.target, r: 0.02 }, paint: SNOW_COLORS[0], bone: HIDDEN, noShadow: true, bare: true }] as PartDoc[] }
   return {
-    clouds: { ...base, name: 'Clouds', palette: [...(look.colors ?? CLOUD_COLORS)], bones, parts, moves },
+    // the heavy cover reaches past a small scene's room, roofing the view
+    clouds: { ...base, big: true, name: 'Clouds', palette: [...(look.colors ?? CLOUD_COLORS)], bones, parts, moves },
     rain: { ...base, ...none, name: 'Rain', palette: RAIN_COLORS, air: { specks: [falling('rain', camera)] } },
     snow: { ...base, ...none, name: 'Snow', palette: SNOW_COLORS, air: { specks: [falling('snow', camera)] } },
   }

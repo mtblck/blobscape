@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { CLEAR, RAIN_MOST, lightningAt, skyState } from '../../splat-engine/skyRecipes.ts'
+import { CLEAR, CLOUDS, RAIN_MOST, lightningAt, skyState } from '../../splat-engine/skyRecipes.ts'
 import { DIORAMAS } from './scenes.ts'
 import { pileStep } from '../../splat-engine/snowCover.ts'
 import { SceneWeather, paletteUnder, underSky } from './weather.ts'
@@ -22,7 +22,16 @@ test('weather is made for any scene, and a sky shows its share of it', () => {
     w.pose(1, skyState('heavy-rain'))
     assert.ok(some > 20 && out(rain) > some * 1.8 && out(rain) <= RAIN_MOST + 1, `${id}: ${some} then ${out(rain)} drops`)
     assert.equal(out(snow), 1)
-    assert.equal(out(clouds), 9)
+    assert.equal(out(clouds), CLOUDS + 1)
+    if (id !== 'campfire') continue
+    // the clouds gray with the sky they are in, and come back to their own colors under a clear one
+    const color = w.actors[0].blobs.color, own = color.slice(0, 30)
+    const spread = (c: Float32Array) => { let m = 0; for (let k = 0; k < 30; k += 3) m += Math.max(c[k], c[k + 1], c[k + 2]) - Math.min(c[k], c[k + 1], c[k + 2]); return m }
+    assert.ok(w.shade(skyState(undefined, 'overcast')))
+    assert.ok(spread(color) <= spread(own) && color.slice(0, 30).some((v, k) => Math.abs(v - own[k]) > 0.02), 'overcast clouds are grayer')
+    assert.equal(w.shade(skyState(undefined, 'overcast')), false)
+    w.shade(CLEAR)
+    assert.ok(color.slice(0, 30).every((v, k) => Math.abs(v - own[k]) < 0.01))
   }
 })
 

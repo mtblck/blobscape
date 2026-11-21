@@ -35,6 +35,7 @@ interface Layer { c: CompiledScene; actor: Actor; bones: WeatherBones }
 export class SceneWeather {
   /** The clouds, the rain, the snow, then the snow lying: drawn in the scene's world as `extras`. */
   readonly actors: Actor[]
+  private readonly square: { at: readonly [number, number]; half: number }
   /** Resolves once the water's rain and wind are worked out (at once for a scene with no water). */
   readonly ready: Promise<void>
   /** The snow lying on the scene, which builds up while snow falls (`pile`). */
@@ -43,6 +44,9 @@ export class SceneWeather {
 
   /** The share of the clouds the scene's own sky has out, whatever the weather. */
   private readonly own: number
+  /** The clouds' own colors, and the gray and dark they were last shaded for (`shade`). */
+  private readonly cloudColors: Float32Array
+  private shaded = [-1, -1]
 
   constructor(d: Diorama) {
     const clouds = d.heavens?.clouds
@@ -60,11 +64,15 @@ export class SceneWeather {
       return { c, actor, bones: weatherBones(c.bones.map((b) => b.name)) }
     }
     this.layers = { clouds: layer(docs.clouds, CLOUD_SPACING), rain: layer(docs.rain, FALL_SPACING), snow: layer(docs.snow, FALL_SPACING) }
+    const cb = this.layers.clouds.actor.blobs
+    this.cloudColors = cb.color.slice(0, cb.count * 3)
     // the wind that comes with the weather roughens the water too, along the way the rain leans
     // (worked out a slice at a time, so the page carries on meanwhile)
     this.ready = pond ? pond.prepare(this.layers.rain.c.landed, RAIN_BANDS, WIND_WAY) : Promise.resolve()
     // snow lies wherever it lands, over the same stretch it falls on
     const view = d.views[0].orbit, [tx, ty, tz] = view.target, radius = Math.max(0.8, view.distance * 0.45)
+    // the square rain and snow fall over (`falling`): blown out of it, they come in at its other side
+    this.square = { at: [tx, tz], half: radius }
     this.cover = makeSnowCover(ground, {
       x: tx, z: tz, radius, top: cloudBase(view), bottom: ty - view.distance, spacing: Math.max(COVER_SPACING, radius / COVER_ACROSS), sun: d.sun,
       dry: pond && ((x, y, z) => y <= pond.plan.level + 1e-3 && pond.plan.wet(x, z)),
@@ -82,13 +90,29 @@ export class SceneWeather {
     return pileSnow(this.cover, depth)
   }
 
+  /**
+   * Turns the clouds as gray and dark as the sky they are in (`skyUnder`'s gray), so a heavy cover reads as cloud, not
+   * as a sky of a scene's own dusk-blue clouds. Returns whether they changed by enough to send up again
+   * (`Stage.reshape(actors[0])`).
+   */
+  shade(s: SkyState): boolean {
+    if (Math.abs(s.gray - this.shaded[0]) < 0.01 && Math.abs(s.dark - this.shaded[1]) < 0.01) return false
+    this.shaded = [s.gray, s.dark]
+    const to = this.layers.clouds.actor.blobs.color, from = this.cloudColors
+    for (let k = 0; k < from.length; k += 3) {
+      const g = skyUnder([from[k] * 255, from[k + 1] * 255, from[k + 2] * 255], { ...s, lightning: 0 })
+      for (let c = 0; c < 3; c++) to[k + c] = g[c] / 255
+    }
+    return true
+  }
+
   /** Poses both for `t` seconds under a sky. */
   pose(t: number, s: SkyState) {
     for (const [l, falls, clouds] of [[this.layers.clouds, 0, Math.max(s.clouds, this.own)], [this.layers.rain, s.rain, 0], [this.layers.snow, s.snow, 0]] as const) {
       const sk = l.actor.skeleton
       l.c.pose(sk, t)
       // what falls is blown by the wind of the moment, still landing where it was planned to
-      if (falls) l.c.blow(sk, t, windAt(s, t, l.c.loop))
+      if (falls) l.c.blow(sk, t, windAt(s, t, l.c.loop), this.square)
       showWeather(sk.size, l.bones, falls, clouds)
       sk.update()
     }

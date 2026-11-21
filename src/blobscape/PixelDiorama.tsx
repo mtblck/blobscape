@@ -369,6 +369,8 @@ export function PixelDiorama() {
         pileClock.current = wall
         if (!held.current) pile.current = offscreen ? (now.snow > 0.01 ? pileAsked : 0) : pileStep(pile.current, now.snow, dt)
         if (fall.pile(pile.current)) stage.reshape(fall.cover)
+        // the clouds gray with the sky they are in
+        if (fall.shade(now)) stage.reshape(fall.actors[0])
       }
       // the weather's rain on the scene's water (its rings as the share of the swarm that falls) and its wind's waves
       if (pond) { pond.rain = now.rain; pond.waves = now.wind }
@@ -591,12 +593,16 @@ export function PixelDiorama() {
   const pick = (id: string) => { setView(id); setOrbit((shown.views.find((v) => v.id === id) ?? shown.views[0]).orbit) }
   /** Another weather or cloud cover, or none. The address names them too. */
   const pickSky = (key: 'weather' | 'clouds' | 'wind', id: string | undefined) => {
-    if (key === 'weather') setWeather(id as WeatherId | undefined)
-    else if (key === 'wind') setWind(id as WindId | undefined)
-    else setClouds(id as CloudId | undefined)
     const url = new URL(location.href)
-    if (id) url.searchParams.set(key, id)
-    else url.searchParams.delete(key)
+    const put = (k: string, v: string | undefined) => { if (v) url.searchParams.set(k, v); else url.searchParams.delete(k) }
+    // weather and cloud cover are one choice: a weather brings its own clouds and wind, a cover is clouds alone
+    if (key === 'wind') { setWind(id as WindId | undefined); put('wind', id) }
+    else {
+      setWeather(key === 'weather' ? (id as WeatherId | undefined) : undefined)
+      setClouds(key === 'clouds' ? (id as CloudId | undefined) : undefined)
+      setWind(undefined)
+      put('weather', key === 'weather' ? id : undefined); put('clouds', key === 'clouds' ? id : undefined); put('wind', undefined)
+    }
     history.replaceState(history.state, '', url)
   }
   /** Another time of day, or the scene as it is written. The address names it too. */
@@ -858,23 +864,17 @@ export function PixelDiorama() {
                 </Field>
                 <Field label="Weather">
                   <div className="flex flex-wrap gap-1.5" data-testid="diorama-weather">
-                    <Chip active={!weather} onClick={() => pickSky('weather', undefined)}>Scene's own</Chip>
+                    <Chip active={!weather && !clouds} onClick={() => pickSky('weather', undefined)}>No weather</Chip>
+                    {CLOUD_COVERS.map((c) => <Chip key={c.id} active={!weather && clouds === c.id} onClick={() => pickSky('clouds', c.id)}>{c.label}</Chip>)}
                     {WEATHERS.map((w) => <Chip key={w.id} active={weather === w.id} onClick={() => pickSky('weather', w.id)}>{w.label}</Chip>)}
                   </div>
-                </Field>
-                <Field label="Clouds">
-                  <div className="flex flex-wrap gap-1.5" data-testid="diorama-clouds">
-                    <Chip active={!clouds} onClick={() => pickSky('clouds', undefined)}>Scene's own</Chip>
-                    {CLOUD_COVERS.map((c) => <Chip key={c.id} active={clouds === c.id} onClick={() => pickSky('clouds', c.id)}>{c.label}</Chip>)}
-                  </div>
-                  <p className="mt-1.5 text-xs text-ink-faint">{weather ? 'Weather brings its own clouds, light and haze; more cloud can be asked for here. ' : ''}The same recipes for every scene and every style, laid over the scene: the sky eases from one to the next without the scene being made again.{weather === 'thunderstorm' ? (calm ? ' Lightning is left out, as your device asks for less motion.' : ' Lightning flashes every few seconds.') : ''}</p>
+                  <p className="mt-1.5 text-xs text-ink-faint">Each weather comes with its own clouds, light, haze and wind. The same recipes for every scene and every style, laid over the scene: the sky eases from one to the next without the scene being made again.{weather === 'thunderstorm' ? (calm ? ' Lightning is left out, as your device asks for less motion.' : ' Lightning flashes every few seconds.') : ''}</p>
                 </Field>
                 <Field label="Wind">
                   <div className="flex flex-wrap gap-1.5" data-testid="diorama-wind">
-                    <Chip active={!wind} onClick={() => pickSky('wind', undefined)}>{weather ? 'As the weather' : 'Calm'}</Chip>
-                    {WINDS.slice(1).map((w) => <Chip key={w.id} active={wind === w.id} onClick={() => pickSky('wind', w.id)}>{w.label}</Chip>)}
+                    {WINDS.map((w, i) => <Chip key={w.id} active={wind ? wind === w.id : (WEATHERS.find((k) => k.id === weather)?.wind ?? 0) === i} onClick={() => pickSky('wind', w.id)}>{i ? w.label : 'No wind'}</Chip>)}
                   </div>
-                  <p className="mt-1.5 text-xs text-ink-faint">Wind blows rain, snow and falling leaves at a slant, in gusts, and raises waves on a scene's water. {weather ? 'Weather brings its own wind (rain a breeze, heavy rain and heavy snow a wind, a thunderstorm a gale); more can be asked for here.' : ''}</p>
+                  <p className="mt-1.5 text-xs text-ink-faint">Wind blows rain, snow and falling leaves at a slant, in gusts, and raises waves on a scene's water. Picking a weather brings its own wind back.</p>
                 </Field>
                 <Field label="Changing scenes">
                   <div className="flex flex-wrap gap-1.5" data-testid="diorama-transitions">

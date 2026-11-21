@@ -4305,10 +4305,10 @@
       },
       {
        "name": "blow",
-       "doc": "After `pose` (before the bones are worked out): blows what falls (rain, snow, leaves) by a wind that may change\nfrom moment to moment, `wind` ([x, z]) being how far sideways it carries a thing for each unit it falls. Each is\nmoved upwind by that over the fall it has still to come, so it still lands where it was planned to (and rings the\nwater, and lies, there), and rain's streaks lean along it. Snow and leaves are carried `DRIFT` times further.",
+       "doc": "After `pose` (before the bones are worked out): blows what falls (rain, snow, leaves) by a wind that may change\nfrom moment to moment, `wind` ([x, z]) being how far sideways it carries a thing for each unit it falls. Each is\nmoved upwind by that over the fall it has still to come, so it still lands where it was planned to (and rings the\nwater, and lies, there), and rain's streaks lean along it. Snow and leaves are carried `DRIFT` times further.\nWith `wrap` (the square a swarm falls over, its middle and half width), a speck blown out of the square comes in\nat its other side, so the slanting rain still fills it at every height (one that has landed is always inside).",
        "signatures": [
         {
-         "code": "blow(sk: Skeleton, t: number, wind: readonly [number, number]): void"
+         "code": "blow(sk: Skeleton, t: number, wind: readonly [number, number], wrap?: { at: readonly [number, number]; half: number }): void"
         }
        ]
       },

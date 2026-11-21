@@ -1474,8 +1474,10 @@ export interface CompiledScene {
    * from moment to moment, `wind` ([x, z]) being how far sideways it carries a thing for each unit it falls. Each is
    * moved upwind by that over the fall it has still to come, so it still lands where it was planned to (and rings the
    * water, and lies, there), and rain's streaks lean along it. Snow and leaves are carried `DRIFT` times further.
+   * With `wrap` (the square a swarm falls over, its middle and half width), a speck blown out of the square comes in
+   * at its other side, so the slanting rain still fills it at every height (one that has landed is always inside).
    */
-  blow(sk: Skeleton, t: number, wind: readonly [number, number]): void
+  blow(sk: Skeleton, t: number, wind: readonly [number, number], wrap?: { at: readonly [number, number]; half: number }): void
   /** The scene's live lights at a time, in seconds. */
   lights(t: number): PointLight[]
   /** Distance haze, if the scene asks for it: the color (linear) and where it starts and would be total, in units past the view's target. */
@@ -1937,7 +1939,7 @@ export function compileScene(given: SceneDoc, { puffs = true, ground: under, wat
       for (let i = 0; i < built.partOf.length; i++) seen.add(built.partOf[i])
       return doc.parts.map((_, i) => i).filter((i) => !seen.has(i))
     },
-    blow(sk, t, wind) {
+    blow(sk, t, wind, wrap) {
       if (!wind[0] && !wind[1]) return
       const u = t / doc.loop
       for (const p of specks) {
@@ -1949,10 +1951,15 @@ export function compileScene(given: SceneDoc, { puffs = true, ground: under, wat
         const b = p.index, left = travel * (1 - f.drop) * k
         sk.offset[b * 3] -= wind[0] * left
         sk.offset[b * 3 + 2] -= wind[1] * left
+        if (wrap) for (const [c, k] of [[0, 0], [2, 1]] as const) {
+          const x = sk.bones[b].head[c] + sk.offset[b * 3 + c] - wrap.at[k], span = 2 * wrap.half
+          const into = ((((x + wrap.half) % span) + span) % span) - wrap.half
+          sk.offset[b * 3 + c] += into - x
+        }
         if (p.kind === 'rain') {
           const w = Math.hypot(wind[0], wind[1])
-          // turning the streak's upright toward the wind tips its bottom downwind, as far as it is carried a unit of fall
-          sk.setRotation(b, mulQ(axisAngle([-wind[1] / w, 0, wind[0] / w], -Math.atan(w)), sk.rotation.subarray(b * 4, b * 4 + 4)))
+          // its top leans upwind, where it came from, as far as it is carried a unit of fall
+          sk.setRotation(b, mulQ(axisAngle([-wind[1] / w, 0, wind[0] / w], Math.atan(w)), sk.rotation.subarray(b * 4, b * 4 + 4)))
         }
       }
     },
