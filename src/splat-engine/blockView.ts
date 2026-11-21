@@ -1,6 +1,6 @@
 import { BufferAttribute, BufferGeometry, DynamicDrawUsage, Group, Mesh, NoBlending, NodeMaterial, QuadMesh, RenderTarget, Vector3, Vector4, type Camera, type Object3D, type WebGPURenderer } from 'three/webgpu'
 import * as TSLTyped from 'three/tsl'
-import { buildBlocks, flowMesh, planFlow, shapeFlow, type BlockLook, type BlockSource, type FlowMesh, type FlowPlan } from './blocks.ts'
+import { buildBlocks, flowMesh, lampSight, lampsOf, planFlow, shapeFlow, type BlockLook, type BlockPiece, type BlockSource, type FlowMesh, type FlowPlan, type SolidCells } from './blocks.ts'
 import type { Light } from './engine.ts'
 
 // As in engine.ts: the shader builders use TSL untyped.
@@ -35,7 +35,12 @@ export class BlockView extends Group {
   faces: number
   private readonly material = new NodeMaterial()
   private readonly liquid = new NodeMaterial()
-  private readonly pieces: { mesh: Mesh; actor: number; bone: number }[] = []
+  private readonly pieces: { mesh: Mesh; actor: number; bone: number; built?: BlockPiece }[] = []
+  /** Which of the first four lights cast block shadows (lamps that stay put, by the first actor's `seen`), and where each stood when its shadows were last worked out. */
+  private readonly casts: boolean[]
+  private readonly baked: (string | undefined)[] = [undefined, undefined, undefined, undefined]
+  private readonly shadowed = uniform(new Vector4(0, 0, 0, 0))
+  private readonly solid?: SolidCells
   private readonly flows: { mesh: Mesh; actor: number; plan: FlowPlan; shape: FlowMesh }[] = []
   private readonly pos = uniformArray(Array.from({ length: BLOCK_LIGHTS }, () => new Vector4(0, 0, 0, 1)), 'vec4')
   private readonly col = uniformArray(Array.from({ length: BLOCK_LIGHTS }, () => new Vector4()), 'vec4')
@@ -59,6 +64,8 @@ export class BlockView extends Group {
     this.quad = new QuadMesh(this.out)
     this.edge.value = look.edge ?? 0.3
     const built = buildBlocks(actors, look)
+    this.casts = look.shadows === false ? [false, false, false, false] : lampsOf(actors[0]?.seen)
+    this.solid = built.solids[0]
     this.blocks = built.blocks
     this.faces = built.faces
     for (const p of built.pieces) {
@@ -67,6 +74,7 @@ export class BlockView extends Group {
       g.setAttribute('normal', new BufferAttribute(p.normals, 3))
       g.setAttribute('paint', new BufferAttribute(p.colors, 3))
       g.setAttribute('blockLight', new BufferAttribute(p.light, 3))
+      g.setAttribute('lampSeen', new BufferAttribute(new Float32Array((p.positions.length / 3) * 4).fill(1), 4))
       g.setAttribute('uv', new BufferAttribute(p.uvs, 2))
       g.setIndex(new BufferAttribute(p.indices, 1))
       const mesh = new Mesh(g, this.material)
@@ -74,7 +82,7 @@ export class BlockView extends Group {
       // a bone can carry its cubes anywhere, so the rest pose's bounds say nothing
       mesh.frustumCulled = false
       this.add(mesh)
-      this.pieces.push({ mesh, actor: p.actor, bone: p.bone })
+      this.pieces.push({ mesh, actor: p.actor, bone: p.bone, built: p })
     }
     actors.forEach((a, actor) => {
       if (!a.flows) return
@@ -116,6 +124,8 @@ export class BlockView extends Group {
     return Fn(() => {
       const wash = liquid ? attribute('wash', 'vec4') : undefined
       const paint = wash ? wash.xyz : attribute('paint', 'vec3'), light = attribute('blockLight', 'vec3')
+      // how much of each of the first four lights this face sees, where that light casts block shadows
+      const sees = liquid ? undefined : attribute('lampSeen', 'vec4')
       const n = normalWorld, world = positionWorld
       const sum = vec3(this.ambient).mul(light.x).toVar()
       TSL.Loop(this.lightCount, ({ i }: { i: N }) => {
@@ -127,7 +137,12 @@ export class BlockView extends Group {
         // as the engine's lights: a quarter strength at `range`, gone by twice it
         const fade = max(float(1).sub(d2.div(r2.mul(4))), 0)
         const fall = select(sun, float(1), fade.mul(fade).div(float(1).add(d2.div(r2))))
-        const facing = max(dot(n, to.mul(TSL.inverseSqrt(max(d2, 1e-6)))), 0).mul(1 - LAMP_WRAP).add(LAMP_WRAP)
+        const toward = max(dot(n, to.mul(TSL.inverseSqrt(max(d2, 1e-6)))), 0)
+        // a lamp that casts shadows lights only the faces that see it; any other wraps a little round, having none
+        const k = TSL.int(i)
+        const casts = select(k.equal(0), this.shadowed.x, select(k.equal(1), this.shadowed.y, select(k.equal(2), this.shadowed.z, select(k.equal(3), this.shadowed.w, float(0)))))
+        const seen = sees ? select(k.equal(0), sees.x, select(k.equal(1), sees.y, select(k.equal(2), sees.z, select(k.equal(3), sees.w, float(1))))) : float(1)
+        const facing = TSL.mix(toward.mul(1 - LAMP_WRAP).add(LAMP_WRAP), toward.mul(seen), casts)
         sum.addAssign(C.xyz.mul(fall.mul(facing)))
       })
       const lit = max(sum.mul(light.y), vec3(light.z))
@@ -152,6 +167,23 @@ export class BlockView extends Group {
         ;(this.pos.array[k] as Vector4).set(d[0] / len, d[1] / len, d[2] / len, -1)
       } else (this.pos.array[k] as Vector4).set(l?.position[0] ?? 0, l?.position[1] ?? 0, l?.position[2] ?? 0, l ? Math.max(1e-3, l.range) : 1)
       ;(this.col.array[k] as Vector4).set(l?.color[0] ?? 0, l?.color[1] ?? 0, l?.color[2] ?? 0, 0)
+    }
+    // block shadows from the lamps that stay put: worked out again only when one has moved
+    for (let k = 0; k < 4; k++) {
+      const l = lights[k], on = this.casts[k] && !!l && !('direction' in l)
+      this.shadowed.value.setComponent(k, on ? 1 : 0)
+      if (!on || !this.solid) continue
+      const p = (l as { position: readonly [number, number, number]; range: number })
+      const key = `${p.position.map((v) => v.toFixed(3)).join(',')},${p.range.toFixed(2)}`
+      if (this.baked[k] === key) continue
+      this.baked[k] = key
+      for (const piece of this.pieces) {
+        if (piece.actor !== 0 || !piece.built) continue
+        const sight = lampSight(piece.built, this.solid, p.position, p.range)
+        const a = piece.mesh.geometry.getAttribute('lampSeen') as BufferAttribute
+        for (let f = 0; f < sight.length; f++) for (let c = 0; c < 4; c++) (a.array as Float32Array)[(f * 4 + c) * 4 + k] = sight[f]
+        a.needsUpdate = true
+      }
     }
   }
 

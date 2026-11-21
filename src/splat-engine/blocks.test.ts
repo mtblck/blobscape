@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { Blobs } from '../splat-core/blobs.ts'
-import { BLOCK_FROM, BLOCK_SHADE, FLOW_DROP, FLOW_MOST, FLOW_STEPS, FLOW_SWELL, SPECK_SIZE, blockHash, buildBlocks, faceLight, faceTone, flowMesh, flowStep, planFlow, shapeFlow, type BlockSource } from './blocks.ts'
+import { BLOCK_FROM, BLOCK_SHADE, FLOW_DROP, FLOW_MOST, FLOW_STEPS, FLOW_SWELL, SPECK_SIZE, blockHash, buildBlocks, faceLight, faceTone, faceSeesLamp, flowMesh, flowStep, lampSight, lampsOf, planFlow, shapeFlow, type BlockSource } from './blocks.ts'
 import { emptySkin } from './rig.ts'
 
 type Rgb = [number, number, number]
@@ -279,5 +279,41 @@ test('a column\'s faces look outward: each triangle turns the way its normal poi
     const v = mesh.indices[t]
     const dot = n[0] * mesh.normals[v * 3] + n[1] * mesh.normals[v * 3 + 1] + n[2] * mesh.normals[v * 3 + 2]
     assert.ok(dot > 0, `triangle ${t / 3}`)
+  }
+})
+
+test('a lamp that stays put is known by the blobs that see less than all of it', () => {
+  assert.deepEqual(lampsOf(undefined), [false, false, false, false])
+  assert.deepEqual(lampsOf(Uint8Array.from([255, 255, 255, 255, 255, 40, 255, 255])), [false, true, false, false])
+})
+
+test('a lamp lights the faces turned to it with nothing between, and no others', () => {
+  // a lamp in the middle of a hollow: a roof over it, a floor under it, a post further down, and a wall off to one side
+  const list = [blob(0, 0.2, 0), blob(0, -0.2, 0), blob(0, -0.4, 0), blob(0.5, 0, 0)]
+  const built = buildBlocks([source(list)], plain), solid = built.solids[0], lamp: [number, number, number] = [0, 0, 0]
+  // the roof: its underside sees the lamp, its top is turned away
+  assert.equal(faceSeesLamp(solid, 0, 2, 0, 3, lamp), true)
+  assert.equal(faceSeesLamp(solid, 0, 2, 0, 2, lamp), false)
+  // the post under the floor: its side faces are turned to the lamp's height but the floor is in the way... its top too
+  assert.equal(faceSeesLamp(solid, 0, -4, 0, 2, lamp), false)
+  // the wall to the side: the face toward the lamp is lit, the far one is not
+  assert.equal(faceSeesLamp(solid, 5, 0, 0, 1, lamp), true)
+  assert.equal(faceSeesLamp(solid, 5, 0, 0, 0, lamp), false)
+  // something past the wall is in its shadow
+  const more = buildBlocks([source([...list, blob(0.8, 0, 0)])], plain)
+  assert.equal(faceSeesLamp(more.solids[0], 8, 0, 0, 1, lamp), false)
+  // a lamp inside a solid cell still shines out of it
+  const housed = buildBlocks([source([blob(0, 0, 0), blob(0.4, 0, 0)])], plain)
+  assert.equal(faceSeesLamp(housed.solids[0], 4, 0, 0, 1, lamp), true)
+})
+
+test('lampSight gives a number a face, and leaves faces beyond the lamp\'s light alone', () => {
+  const built = buildBlocks([source([blob(0, 0.2, 0), blob(5, 0, 0)])], plain)
+  const piece = built.pieces[0], sight = lampSight(piece, built.solids[0], [0, 0, 0], 0.5)
+  assert.equal(sight.length, piece.faceCells.length / 4)
+  for (let f = 0; f < sight.length; f++) {
+    const [x, y, , face] = piece.faceCells.subarray(f * 4, f * 4 + 4)
+    if (x === 50) assert.equal(sight[f], 1)
+    else assert.equal(sight[f], y === 2 && face === 3 ? 1 : 0)
   }
 })

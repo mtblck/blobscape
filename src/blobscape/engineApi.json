@@ -9356,6 +9356,12 @@
        "doc": "How much of its own light each blob gives, a byte a blob (`Actor.glow`)."
       },
       {
+       "name": "seen",
+       "optional": true,
+       "type": "Uint8Array<ArrayBufferLike>",
+       "doc": "How much of each of the first four lights each blob sees, four bytes a blob (`Actor.seen`): a light some blob sees less than all of is a lamp that stays put, and casts block shadows (`lampSight`)."
+      },
+      {
        "name": "flows",
        "optional": true,
        "type": "boolean",
@@ -9418,8 +9424,24 @@
        "name": "indices",
        "type": "Uint32Array",
        "doc": "Three corners a triangle."
+      },
+      {
+       "name": "faceCells",
+       "type": "Int32Array",
+       "doc": "Each face's cell and which of the six faces it is, four whole numbers a face in the order of the corners; the face is -1 for a loose speck."
+      },
+      {
+       "name": "side",
+       "type": "number",
+       "doc": "The side of its cubes."
       }
      ]
+    },
+    {
+     "name": "SolidCells",
+     "kind": "type",
+     "doc": "What is solid in a source's rest pose, a cell at a time, and the box that holds it all.",
+     "type": "(x: number, y: number, z: number) => boolean & { lo?: number[]; hi?: number[] }"
     },
     {
      "name": "blockHash",
@@ -9467,7 +9489,37 @@
      "doc": "The sources as blocks: a mesh for each bone that carries any (see `BlockLook`). A cell two bones' blobs share goes\nto the bone with more of them, so no two cubes ever stand in one place; faces between two cubes on one bone are\nleft out. Shadows and corners are worked out within each source, never from one to another.",
      "signatures": [
       {
-       "code": "buildBlocks(sources: readonly BlockSource[], look: BlockLook): { pieces: BlockPiece[]; blocks: number; faces: number }"
+       "code": "buildBlocks(sources: readonly BlockSource[], look: BlockLook): { pieces: BlockPiece[]; blocks: number; faces: number; solids: SolidCells[] }"
+      }
+     ]
+    },
+    {
+     "name": "lampsOf",
+     "kind": "function",
+     "doc": "Which of the first four lights are lamps that stay put, by a source's `seen`: those some blob of it sees less than all of.",
+     "signatures": [
+      {
+       "code": "lampsOf(seen: Uint8Array<ArrayBufferLike> | undefined): boolean[]"
+      }
+     ]
+    },
+    {
+     "name": "faceSeesLamp",
+     "kind": "function",
+     "doc": "Whether a lamp at `at` (in cells) lights the face `face` of the cell at x, y, z: not when the face is turned away\nfrom it, and not when a walk from just outside the face toward the lamp, half a cell at a time, meets a solid cell\nbefore it is within a cell of the lamp. The lamp's own cell never counts, since a lamp sits inside its housing.",
+     "signatures": [
+      {
+       "code": "faceSeesLamp(solid: SolidCells, x: number, y: number, z: number, face: number, at: readonly [number, number, number]): boolean"
+      }
+     ]
+    },
+    {
+     "name": "lampSight",
+     "kind": "function",
+     "doc": "How much of a lamp each of a piece's faces sees, 1 or 0 a face (`faceSeesLamp`), for a lamp at `at` in the rest\npose's own units with a reach of `range`: faces further than twice its reach are left lit, since its light is gone\nthere anyway, and so are loose specks.",
+     "signatures": [
+      {
+       "code": "lampSight(piece: BlockPiece, solid: SolidCells, at: readonly [number, number, number], range: number): Float32Array"
       }
      ]
     },

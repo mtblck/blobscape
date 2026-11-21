@@ -67,6 +67,8 @@ export interface BlockSource {
   skeleton: { bones: readonly { name: string }[] }
   /** How much of its own light each blob gives, a byte a blob (`Actor.glow`). */
   glow?: Uint8Array
+  /** How much of each of the first four lights each blob sees, four bytes a blob (`Actor.seen`): a light some blob sees less than all of is a lamp that stays put, and casts block shadows (`lampSight`). */
+  seen?: Uint8Array
   /** A surface that moves by itself (a pond): its blobs are sent up again as they change, and its cubes are columns that follow them (`planFlow`). */
   flows?: boolean
   /** The side of this source's blocks, where it was cut on a grid of its own (a finer cut of the place underfoot); left out, the look's `cell`. */
@@ -93,7 +95,14 @@ export interface BlockPiece {
   uvs: Float32Array
   /** Three corners a triangle. */
   indices: Uint32Array
+  /** Each face's cell and which of the six faces it is, four whole numbers a face in the order of the corners; the face is -1 for a loose speck. */
+  faceCells: Int32Array
+  /** The side of its cubes. */
+  side: number
 }
+
+/** What is solid in a source's rest pose, a cell at a time, and the box that holds it all. */
+export type SolidCells = ((x: number, y: number, z: number) => boolean) & { lo?: number[]; hi?: number[] }
 
 /** A cell's place as one number: three signed whole numbers of up to 17 bits (so it stays exact in a double). */
 const SPAN = 1 << 17, HALF = SPAN / 2
@@ -199,7 +208,7 @@ export function faceLit(solid: (x: number, y: number, z: number) => boolean, x: 
  * to the bone with more of them, so no two cubes ever stand in one place; faces between two cubes on one bone are
  * left out. Shadows and corners are worked out within each source, never from one to another.
  */
-export function buildBlocks(sources: readonly BlockSource[], look: BlockLook): { pieces: BlockPiece[]; blocks: number; faces: number } {
+export function buildBlocks(sources: readonly BlockSource[], look: BlockLook): { pieces: BlockPiece[]; blocks: number; faces: number; solids: SolidCells[] } {
   const least = look.least ?? 0.3, from = look.from ?? BLOCK_FROM
   const shade = look.shade ?? BLOCK_SHADE, corners = (look.corners ?? 0.5) * CORNER_MOST, vary = (look.vary ?? 0.35) * VARY_MOST
   const sun = faceLight(from)
@@ -281,7 +290,7 @@ export function buildBlocks(sources: readonly BlockSource[], look: BlockLook): {
   const count = owner.length
   const cells = Int32Array.from(where)
   // what is solid, a source at a time: each source has its own rest pose and may be stood anywhere, so one never shades another
-  const solids = sources.map((_, a) => solidGrid(cells, count, (k) => owner[k] === a && !loose[k] && glows[k] < GLOW_CLEAR) as ((x: number, y: number, z: number) => boolean) & { lo?: number[]; hi?: number[] })
+  const solids = sources.map((_, a) => solidGrid(cells, count, (k) => owner[k] === a && !loose[k] && glows[k] < GLOW_CLEAR) as SolidCells)
 
   // which faces show, cell by cell, and how many each piece gets
   const open = new Uint8Array(count)
@@ -305,7 +314,7 @@ export function buildBlocks(sources: readonly BlockSource[], look: BlockLook): {
   for (const p of pieceOf.values()) {
     const nv = p.faces * 4
     const positions = new Float32Array(nv * 3), normals = new Float32Array(nv * 3), colors = new Float32Array(nv * 3), light = new Float32Array(nv * 3), uvs = new Float32Array(nv * 2)
-    const indices = new Uint32Array(p.faces * 6)
+    const indices = new Uint32Array(p.faces * 6), faceCells = new Int32Array(p.faces * 4)
     let v = 0, t = 0
     const solid = solids[p.actor], lo = solid.lo ?? [0, 0, 0], hi = solid.hi ?? [0, 0, 0]
     for (const k of p.cells) {
@@ -317,6 +326,7 @@ export function buildBlocks(sources: readonly BlockSource[], look: BlockLook): {
         const { n, u, v: w } = FACES[f]
         const lit = speck || look.shadows === false || sun[f] <= 0 ? 1 : faceLit(solid, x, y, z, f, from, lo, hi) ? 1 : 0
         const tone = faceTone(f, lit, shade, sun)
+        faceCells.set([x, y, z, speck ? -1 : f], v)
         const shut = [0, 0, 0, 0]
         for (let c = 0; c < 4; c++) {
           const [a, b] = CORNERS[c]
@@ -343,9 +353,55 @@ export function buildBlocks(sources: readonly BlockSource[], look: BlockLook): {
         t += 6
       }
     }
-    pieces.push({ actor: p.actor, bone: p.bone, blocks: p.cells.length, positions, normals, colors, light, uvs, indices })
+    pieces.push({ actor: p.actor, bone: p.bone, blocks: p.cells.length, positions, normals, colors, light, uvs, indices, faceCells, side: sources[p.actor].blockCell ?? look.cell })
   }
-  return { pieces, blocks: count, faces }
+  return { pieces, blocks: count, faces, solids }
+}
+
+/** Which of the first four lights are lamps that stay put, by a source's `seen`: those some blob of it sees less than all of. */
+export function lampsOf(seen: Uint8Array | undefined): boolean[] {
+  const casts = [false, false, false, false]
+  if (seen) for (let i = 0; i < seen.length; i++) if (seen[i] < 255) casts[i & 3] = true
+  return casts
+}
+
+/**
+ * Whether a lamp at `at` (in cells) lights the face `face` of the cell at x, y, z: not when the face is turned away
+ * from it, and not when a walk from just outside the face toward the lamp, half a cell at a time, meets a solid cell
+ * before it is within a cell of the lamp. The lamp's own cell never counts, since a lamp sits inside its housing.
+ */
+export function faceSeesLamp(solid: SolidCells, x: number, y: number, z: number, face: number, at: readonly [number, number, number]): boolean {
+  const n = FACES[face].n
+  let px = x + n[0] * 0.56, py = y + n[1] * 0.56, pz = z + n[2] * 0.56
+  let dx = at[0] - px, dy = at[1] - py, dz = at[2] - pz
+  if (dx * n[0] + dy * n[1] + dz * n[2] <= 0) return false
+  const dist = Math.hypot(dx, dy, dz), steps = Math.floor((dist - 1) * 2)
+  dx /= dist * 2; dy /= dist * 2; dz /= dist * 2
+  const lx = Math.round(at[0]), ly = Math.round(at[1]), lz = Math.round(at[2])
+  for (let step = 0; step < steps; step++) {
+    px += dx; py += dy; pz += dz
+    const cx = Math.round(px), cy = Math.round(py), cz = Math.round(pz)
+    if (cx === x && cy === y && cz === z) continue
+    if (cx === lx && cy === ly && cz === lz) return true
+    if (solid(cx, cy, cz)) return false
+  }
+  return true
+}
+
+/**
+ * How much of a lamp each of a piece's faces sees, 1 or 0 a face (`faceSeesLamp`), for a lamp at `at` in the rest
+ * pose's own units with a reach of `range`: faces further than twice its reach are left lit, since its light is gone
+ * there anyway, and so are loose specks.
+ */
+export function lampSight(piece: BlockPiece, solid: SolidCells, at: readonly [number, number, number], range: number): Float32Array {
+  const n = piece.faceCells.length / 4, out = new Float32Array(n).fill(1)
+  const c: [number, number, number] = [at[0] / piece.side, at[1] / piece.side, at[2] / piece.side], far = (range * 2) / piece.side
+  for (let i = 0; i < n; i++) {
+    const x = piece.faceCells[i * 4], y = piece.faceCells[i * 4 + 1], z = piece.faceCells[i * 4 + 2], f = piece.faceCells[i * 4 + 3]
+    if (f < 0 || Math.hypot(x - c[0], y - c[1], z - c[2]) > far + 1) continue
+    out[i] = faceSeesLamp(solid, x, y, z, f, c) ? 1 : 0
+  }
+  return out
 }
 
 /** A ripple's height as blocks is snapped to this many steps a block. */
