@@ -282,13 +282,13 @@ export const LIGHTHOUSE: SceneDoc = {
   bones,
   parts,
   moves,
-  // the sea is real water: two slow swells come in from out past the rock, a long low wave every six seconds from
-  // each, and the waves cross, bounce off the rock and gently rock the boat and the buoy as they pass under them
+  // the sea is real water: long low swells roll in from the open sea behind the rock toward the shore the view is on,
+  // bend round the rock and gently rock the boat and the buoy as they pass under them
   water: {
-    level: 0, from: [-SEA, -SEA], to: [SEA, SEA], color: '#1a3a6e', clear: 0.35, cell: 0.022, speed: 0.12, damping: 0.25, ripple: 6, deep: 0.08,
-    waves: [
-      { at: [-1.2, -0.55], r: 0.4, depth: 0.012, times: 2 },
-      { at: [1.25, 0.15], r: 0.4, depth: 0.012, times: 2, phase: 0.4 },
+    level: 0, from: [-SEA, -SEA], to: [SEA, SEA], color: '#1a3a6e', clear: 0.35, cell: 0.022, speed: 0.12, damping: 0.1, ripple: 6, deep: 0.08,
+    swells: [
+      { from: 208, height: 0.006, times: 2 },
+      { from: 238, height: 0.003, times: 3, phase: 0.3 },
     ],
     floats: [{ bone: 'boat', at: [BOAT[0], 0, BOAT[2]], size: 0.2 }, { bone: 'buoy', at: [BUOY[0], 0, BUOY[2]], size: 0.06 }],
   },

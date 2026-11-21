@@ -3789,10 +3789,10 @@
        "doc": "What swims or floats through the surface, at most twelve: a ball of radius `r` round the point `at`, riding\n`bone`. Where it breaks the surface it pushes aside the water it takes the place of, so a back that rises\nleaves a ring and one that moves along leaves a wake. `draft` is how deep the water it moves is where it\ncrosses: a tenth of `r` when left out, which suits a fish whose back just shows; a post standing on the bed\nmoves the whole depth."
       },
       {
-       "name": "waves",
+       "name": "swells",
        "optional": true,
-       "type": "{ at: [number, number]; r: number; depth: number; times: number; phase?: number }[]",
-       "doc": "What makes waves, at most six, drawn by nothing: a float at `at` [x, z] that dips into the water and lifts out\nagain `times` per loop, starting `phase` (0 to 1) of the way through, a ball of radius `r` moving water `depth`\ndeep where it crosses. Each dip sends a ring of small waves across the water, as a swell coming in from the sea:\nput them out where the water reaches the scene's edge."
+       "type": "{ from: number; height: number; times: number; phase?: number }[]",
+       "doc": "Swells rolling in from the open sea, at most four, made by nothing in the scene: each is a long straight wave\ntrain coming from the way `from` (degrees round the upright, measured as the camera's azimuth is: 0 from +z, 90\nfrom +x), `height` meters from crest to rest, `times` crests a loop, starting `phase` (0 to 1) of the way through.\nThe water nearest that side is held to the swells as they would come in from beyond the scene, so they roll in\nstraight across the whole width of the water, bend round what stands in it, and what comes back out to that side\nruns off rather than bouncing. Few, long and low is the sea: crests come `speed` × loop / `times` apart."
       },
       {
        "name": "floats",
@@ -4376,9 +4376,9 @@
        "doc": "What moves through the surface: a ball of radius `r` round the rest point `at`, riding the bone at index `bone`, moving water `draft` deep where it crosses."
       },
       {
-       "name": "waves",
-       "type": "{ at: [number, number]; r: number; depth: number; times: number; phase: number }[]",
-       "doc": "What makes waves: a float at [x, z] of radius `r` that dips in and lifts out `times` per loop from `phase`, moving water `depth` deep."
+       "name": "swells",
+       "type": "{ from: number; height: number; times: number; phase: number }[]",
+       "doc": "Swells coming in from the open sea: from the way `from` (degrees, as the camera's azimuth), `height` high, `times` crests a loop from `phase`."
       },
       {
        "name": "floats",
@@ -11636,6 +11636,15 @@
        "signatures": [
         {
          "code": "splash(x: number, z: number, r: number, depth: number): void"
+        }
+       ]
+      },
+      {
+       "name": "relax",
+       "doc": "Pulls the water toward a given surface where `weight` says, a share a call (0 leaves a cell alone, 1 sets it): each\ncell's height toward `h` and its speed upward toward `v`. Called once a tick along a stretch of open water, with\nthe surface as waves coming in from beyond it would make it, this brings those waves in across the whole stretch\nand lets what comes back out run off instead of bouncing (a relaxation zone, as a wave tank's paddle and beach).",
+       "signatures": [
+        {
+         "code": "relax(weight: Float32Array, h: Float32Array, v: Float32Array): void"
         }
        ]
       },

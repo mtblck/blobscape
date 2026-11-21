@@ -116,7 +116,7 @@ test('what swims through the surface moves the water, and `show` shapes and colo
   assert.throws(() => new SceneWater(compileScene({ ...pond(), water: undefined })), /no water/)
 })
 
-/** The pond with no rain or bodies, a wave maker at one side and a boat floating at rest on the other. */
+/** The pond with no rain or bodies, a swell coming in from one side and a boat floating at rest. */
 const swell = (): SceneDoc => {
   const d = pond()
   d.air = undefined
@@ -124,19 +124,19 @@ const swell = (): SceneDoc => {
   d.bones = [{ name: 'boat', at: [0.3, -0.05, 0] }]
   d.parts = [d.parts[0], { shape: { kind: 'ball', at: [0.3, -0.05, 0], r: [0.08, 0.03, 0.04] }, paint: '#f4f1e4', bone: 'boat' }]
   d.water = { level: -0.05, from: [-0.9, -0.9], to: [0.9, 0.9], color: '#2c6470', cell: 0.04, damping: 0.2,
-    waves: [{ at: [-0.4, 0], r: 0.08, depth: 0.01, times: 3 }], floats: [{ bone: 'boat', at: [0.3, -0.05, 0], size: 0.08 }] }
+    swells: [{ from: -90, height: 0.006, times: 3 }], floats: [{ bone: 'boat', at: [0.3, -0.05, 0], size: 0.08 }] }
   return d
 }
 
-test('checkScene points at mistakes in wave makers and floats', () => {
+test('checkScene points at mistakes in swells and floats', () => {
   assert.deepEqual(checkScene(swell()), [])
   const bad = swell()
-  bad.water = { ...bad.water!, waves: [{ at: [0, 0], r: 0, depth: 1, times: 0.5 }], floats: [{ bone: 'nobody', at: [0, 0, 0], size: 0 }] }
+  bad.water = { ...bad.water!, swells: [{ from: 'west' as unknown as number, height: 1, times: 0.5 }], floats: [{ bone: 'nobody', at: [0, 0, 0], size: 0 }] }
   const errs = checkScene(bad).join('\n')
-  for (const at of ['water.waves[0].r', 'water.waves[0].depth', 'water.waves[0].times', 'water.floats[0].bone', 'water.floats[0].size']) assert.ok(errs.includes(`${at}:`), `${at} in:\n${errs}`)
+  for (const at of ['water.swells[0].from', 'water.swells[0].height', 'water.swells[0].times', 'water.floats[0].bone', 'water.floats[0].size']) assert.ok(errs.includes(`${at}:`), `${at} in:\n${errs}`)
 })
 
-test('a wave maker sends waves across the water, and a float rises, falls and tips as they pass under it', () => {
+test('a swell rolls in across the water, and a float rises, falls and tips as it passes under it', () => {
   const scene = compileScene(swell())
   assert.ok(scene.water!.wet(0.3, 0), 'a float is no ground: the water runs under it')
   const pondWater = new SceneWater(scene, { fps: 12, warm: 1 })
@@ -157,4 +157,25 @@ test('a wave maker sends waves across the water, and a float rises, falls and ti
   const once = sk.offset[boat * 3 + 1]
   scene.pose(sk, 4); pondWater.ride(sk, 4); scene.pose(sk, 1); pondWater.ride(sk, 1)
   assert.equal(sk.offset[boat * 3 + 1], once)
+})
+
+test('a swell comes in as long straight crests across the water, not rings', () => {
+  const d = pond()
+  d.air = undefined
+  d.moves = []
+  d.parts = [{ shape: { kind: 'cut', shape: { kind: 'box', at: [0, -0.2, 0], half: [1, 0.2, 1] }, hole: { kind: 'box', at: [0, 0, 0], half: [0.8, 0.15, 0.5] } }, paint: '#3f7a45' }]
+  d.bones = []
+  d.water = { level: -0.05, from: [-0.8, -0.5], to: [0.8, 0.5], color: '#2c6470', cell: 0.04, speed: 0.3, damping: 0.1, swells: [{ from: -90, height: 0.006, times: 2 }] }
+  assert.deepEqual(checkScene(d), [])
+  const w = new SceneWater(compileScene(d), { fps: 12, warm: 1 })
+  let across = 0, along = 0
+  for (let t = 0; t < 6; t += 0.5) {
+    w.set(t)
+    const at = (x: number, z: number) => w.water.heightAt(x, z)
+    // along the swell's way the surface rises and falls; across it, a crest is the same height all the way along
+    along = Math.max(along, Math.abs(at(0, 0) - at(0.4, 0)))
+    across = Math.max(across, Math.abs(at(0.2, -0.3) - at(0.2, 0.3)))
+  }
+  assert.ok(along > 0.002, `the water rises and falls along the swell (${(along * 1000).toFixed(2)} mm)`)
+  assert.ok(across < along * 0.25, `and a crest runs straight across it (${(across * 1000).toFixed(2)} against ${(along * 1000).toFixed(2)} mm)`)
 })

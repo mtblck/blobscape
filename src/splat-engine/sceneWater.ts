@@ -51,7 +51,8 @@ export class SceneWater {
     this.count = ticks / every
     this.frames = new Int16Array(this.count * nx * nz)
     const sk = plan.bodies.length ? new Skeleton(scene.bones) : undefined
-    const at = [0, 0, 0], maker = [0, 0, 0]
+    const at = [0, 0, 0]
+    const swells = plan.swells.length ? new Swells(water, plan, scene.loop) : undefined
     let next = 0
     for (let run = 0; run <= warm; run++) {
       next = 0
@@ -71,13 +72,7 @@ export class SceneWater {
             water.body(`body${i}`, cut, b.draft * sk.scale[b.bone])
           })
         }
-        // each wave maker dips in and lifts out: a ball from just touching the level down to half under, so the disc
-        // it presses aside opens and closes once a dip and sends out a ring
-        plan.waves.forEach((v, i) => {
-          const dip = 0.5 - 0.5 * Math.cos(((t / scene.loop) * v.times + v.phase) * TAU)
-          maker[0] = v.at[0]; maker[1] = level + v.r * (1 - dip); maker[2] = v.at[1]
-          water.body(`wave${i}`, crossing(maker, maker, v.r, level), v.depth)
-        })
+        if (swells) swells.at(t)
         const until = ((k + 1) / ticks) * scene.loop
         for (; next < plan.drops.length && plan.drops[next].at < until; next++) water.splash(plan.drops[next].x, plan.drops[next].z, plan.splash.r, plan.splash.depth)
         water.step(WATER_TICK)
@@ -133,5 +128,68 @@ export class SceneWater {
     this.set(t)
     shapeSurface(this.surface, this.water, p.ripple)
     shadeSurface(this.surface, { body: p.body, sky: p.sky, horizon: p.horizon, clear: p.clear, steep: p.ripple, deep: p.deep, mirror }, eye, lights)
+  }
+}
+
+/** How much of the open water's width, along each swell's way, is held to the swells: a wavelength, between these shares. */
+const ZONE_LEAST = 0.12, ZONE_MOST = 0.3
+/** The share a tick the water at the outer edge of the held stretch is pulled to the swells (less further in). */
+const ZONE_PULL = 0.2
+
+/**
+ * Swells coming in from the open sea (`WaterDoc.swells`). Along the side of the water each comes from, a stretch about
+ * a wavelength deep is held, a tick at a time, to the surface the swells would make as long straight waves arriving
+ * from beyond the scene (all of them added together), pulled hardest at the outer edge and not at all at the inner.
+ * The waves then roll on into the rest of the water by the wave equation alone, round the rock and anything standing
+ * in it, and what comes back out to that side is held down there instead of bouncing back in.
+ */
+class Swells {
+  private readonly weight: Float32Array
+  private readonly h: Float32Array
+  private readonly v: Float32Array
+  /** Per swell: its way (x, z), the cells' distance along it, its wave number, its pace (radians a second), height and start. */
+  private readonly trains: { along: Float32Array; k: number; w: number; a: number; phase: number }[]
+
+  private readonly water: Water
+
+  constructor(water: Water, plan: WaterPlan, loop: number) {
+    this.water = water
+    const { nx, nz, x0, z0, cell, speed } = plan
+    const n = nx * nz
+    this.weight = new Float32Array(n); this.h = new Float32Array(n); this.v = new Float32Array(n)
+    this.trains = plan.swells.map((s) => {
+      const a = (s.from * Math.PI) / 180, dx = -Math.sin(a), dz = -Math.cos(a)
+      const along = new Float32Array(n)
+      let least = Infinity, most = -Infinity
+      for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+        const d = (x0 + (i + 0.5) * cell) * dx + (z0 + (j + 0.5) * cell) * dz
+        along[j * nx + i] = d
+        if (water.wet[j * nx + i]) { least = Math.min(least, d); most = Math.max(most, d) }
+      }
+      const w = (TAU * s.times) / loop, length = (speed * loop) / s.times
+      const zone = Math.min(ZONE_MOST * (most - least), Math.max(ZONE_LEAST * (most - least), length))
+      for (let k = 0; k < n; k++) {
+        along[k] -= least
+        const u = along[k] / zone
+        if (u < 1) this.weight[k] = Math.max(this.weight[k], ZONE_PULL * (1 - u) * (1 - u))
+      }
+      return { along, k: w / speed, w, a: s.height, phase: s.phase * TAU }
+    })
+  }
+
+  /** Holds the stretches to the swells as they stand `t` seconds into the loop. Call it once a tick, before the step. */
+  at(t: number) {
+    const { weight, h, v, trains } = this
+    for (let c = 0; c < weight.length; c++) {
+      if (!weight[c]) continue
+      let hh = 0, vv = 0
+      for (const s of trains) {
+        const q = s.k * s.along[c] - s.w * t + s.phase
+        hh += s.a * Math.sin(q)
+        vv -= s.a * s.w * Math.cos(q)
+      }
+      h[c] = hh; v[c] = vv
+    }
+    this.water.relax(weight, h, v)
   }
 }

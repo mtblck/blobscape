@@ -1,1 +1,1 @@
-The lighthouse's sea is real water now: slow, gentle swells roll in from the open sea, cross and bounce off the rock, and the boat and the buoy rise, fall and rock as the waves pass under them.
+The lighthouse's sea is real water now: long, low swells roll in from the open sea in straight lines, bend round the rock, and the boat and the buoy gently rise, fall and rock as they pass under them.
