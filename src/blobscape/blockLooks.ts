@@ -48,11 +48,12 @@ export const BLOCK_GROUNDS: { id: string; label: string; back: string }[] = [
 export interface BlockBack { id: string; time: boolean; back: string; light?: readonly [number, number, number] }
 /**
  * The backdrop for a choice. `sky` is the subject's own sky as CSS and how much it is a night's (`nightOf`), where it
- * has one: it is the first time of day on offer, and what an empty choice means.
+ * has one: it goes with the plain colors (Matt, 2026-11-21: a time of day overrides whatever time the scene has), keeps a
+ * night's light under a dark sky, and is what an empty choice means.
  */
 export function blockBack(choice: string, sky?: { back: string; night: number }): BlockBack {
   const id = choice || (sky ? 'scene' : 'afternoon')
-  if (id === 'scene' && sky) return { id, time: true, back: sky.back, light: sky.night ? nightLight(sky.night) : undefined }
+  if (id === 'scene' && sky) return { id, time: false, back: sky.back, light: sky.night ? nightLight(sky.night) : undefined }
   const ground = BLOCK_GROUNDS.find((g) => g.id === id)
   if (ground) return { id, time: false, back: ground.back }
   const t = BLOCK_TIMES.find((x) => x.id === id) ?? BLOCK_TIMES[1]

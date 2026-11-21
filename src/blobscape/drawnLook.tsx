@@ -208,18 +208,18 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
             )}
             <Field label="Backdrop">
               <div className="flex flex-wrap gap-1.5" data-testid="block-backdrop">
-                <Chip active={blockBehind.time} onClick={() => setBlock((c) => (blockBehind.time ? c : { ...c, backdrop: '' }))}>Time of day</Chip>
-                <Chip active={!blockBehind.time} onClick={() => setBlock((c) => (blockBehind.time ? { ...c, backdrop: BLOCK_GROUNDS[0].id, height: BLOCK_START.height } : c))}>Plain color</Chip>
+                <Chip active={blockBehind.time} onClick={() => setBlock((c) => (blockBehind.time ? c : { ...c, backdrop: BLOCK_TIMES[1].id, height: BLOCK_TIMES[1].height }))}>Time of day</Chip>
+                <Chip active={!blockBehind.time} onClick={() => setBlock((c) => (blockBehind.time ? { ...c, backdrop: skyBack ? 'scene' : BLOCK_GROUNDS[0].id, height: BLOCK_START.height } : c))}>Background</Chip>
               </div>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {blockBehind.time
-                  ? <>
+                  ? BLOCK_TIMES.map((t) => <Chip key={t.id} active={blockBehind.id === t.id} onClick={() => setBlock((c) => ({ ...c, backdrop: t.id, height: t.height }))}>{t.label}</Chip>)
+                  : <>
                       {skyBack && <Chip active={blockBehind.id === 'scene'} onClick={() => setBlock((c) => ({ ...c, backdrop: 'scene' }))}>Scene's own</Chip>}
-                      {BLOCK_TIMES.map((t) => <Chip key={t.id} active={blockBehind.id === t.id} onClick={() => setBlock((c) => ({ ...c, backdrop: t.id, height: t.height }))}>{t.label}</Chip>)}
-                    </>
-                  : BLOCK_GROUNDS.map((g) => <Chip key={g.id} active={blockBehind.id === g.id} onClick={() => setBlock((c) => ({ ...c, backdrop: g.id }))}>{g.label}</Chip>)}
+                      {BLOCK_GROUNDS.map((g) => <Chip key={g.id} active={blockBehind.id === g.id} onClick={() => setBlock((c) => ({ ...c, backdrop: g.id }))}>{g.label}</Chip>)}
+                    </>}
               </div>
-              <p className="mt-1.5 text-xs text-ink-faint">{blockBehind.time ? 'A time of day brings its own sky and light: a low warm sun in the morning, moonlight at night.' : 'A plain color behind, always in day\'s light.'}</p>
+              <p className="mt-1.5 text-xs text-ink-faint">{blockBehind.time ? 'A time of day brings its own sky and light, in place of the scene\'s: a low warm sun in the morning, moonlight at night.' : blockBehind.id === 'scene' ? 'The scene\'s own sky, and its own light.' : 'A plain color behind, always in day\'s light.'}</p>
             </Field>
           </div>
         )}

@@ -85,6 +85,7 @@ test('a Blocks backdrop is a time of day with its light, or a plain color in day
   const sky = { back: 'linear-gradient(#000, #111)', night: 1 }
   // nothing chosen: the subject's own sky where it has one, else the afternoon
   assert.deepEqual([blockBack('', sky).id, blockBack('').id, blockBack('scene').id], ['scene', 'afternoon', 'afternoon'])
+  assert.equal(blockBack('', sky).time, false, 'the scene\'s own sky goes with the backgrounds')
   assert.ok(blockBack('', sky).light![0] < 0.5, 'a dark sky of its own is a night\'s light')
   assert.equal(blockBack('afternoon', sky).light, undefined)
   for (const t of BLOCK_TIMES) { const b = blockBack(t.id, sky); assert.ok(b.time && b.back === t.back) }
