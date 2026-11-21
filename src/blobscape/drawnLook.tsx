@@ -11,6 +11,7 @@ import { GLASS, GLASS_FILLS, GLASS_GROUND, GLASS_START, glassLook, type GlassCho
 import { WASH, WASH_PAPERS, WASH_START, washGround, washLook, type WashChoice } from './washLooks.ts'
 import { BLOCKS, BLOCK_GROUNDS, BLOCK_SIZES, BLOCK_START, SWELL_MOST, blockBack, blockLook, gridOf, type BlockChoice } from './blockLooks.ts'
 import type { TimeOfDay } from './timeOfDay.ts'
+import { choiceEntries, choiceFrom, type Entry } from './diorama/shareLink.ts'
 import { BACKDROPS, CEL, CEL_START, FILL_REACH, celLook, nightLight, nightOf, type CelChoice } from './celLooks.ts'
 
 /** Every drawn look a page can offer: the marks, ASCII, cel shading, neon, stained glass, watercolor, and the plain blobs. */
@@ -33,6 +34,10 @@ const CHAR_SETS: { id: GlyphSet; label: string; about: string }[] = [
 export const PIXEL_FILLS = 3
 
 const params = () => new URLSearchParams(typeof location === 'undefined' ? '' : location.search)
+/** The pen and ASCII settings that are not part of a look's own choice, as they start. */
+const INK_START = { size: 1, pen: 1.5, paper: PAPERS[0].id, letter: 12, own: true, strokes: true, strands: true, weight: 1 }
+/** The address settings the looks read in short form (`?block=`, `?turn=` …): a shared link writes them in full instead. */
+const SHORT_KEYS = ['turn', 'height', 'tones', 'shadows', 'smooth', 'fills', 'block', 'swell', 'water', 'falls', 'backdrop']
 const lum = (c: readonly number[]) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
 
 /** What a page tells the looks about what is on its stage. */
@@ -74,37 +79,39 @@ export interface DrawnSubject {
  * with Diorama's Style tab. `look` undefined puts them all away (the page draws some other way, as pixel art).
  * Gives back the look's controls, each a section for a tab, and the color to put behind the transparent canvas.
  */
-export function useDrawnLook(stage: CreatureStage | undefined, look: Look | undefined, on: DrawnSubject): { controls: ReactNode; ground: string | undefined; forget: () => void } {
+export function useDrawnLook(stage: CreatureStage | undefined, look: Look | undefined, on: DrawnSubject): { controls: ReactNode; ground: string | undefined; forget: () => void; share: () => Entry[] } {
+  // a shared link gives each setting in full (`cel.turn=`, `block.size=` …), over the short forms read below
   const [cel, setCel] = useState<CelChoice>(() => {
     const q = params(), n = (k: string, d: number) => (q.get(k) !== null && Number.isFinite(Number(q.get(k))) ? Number(q.get(k)) : d)
-    return { ...CEL_START, backdrop: '', turn: n('turn', CEL_START.turn), height: n('height', CEL_START.height), tones: q.get('tones') === '3' ? 3 : 2, shadows: q.get('shadows') !== '0', smooth: n('smooth', CEL_START.smooth), fills: Math.max(0, Math.min(4, Math.round(n('fills', CEL_START.fills)))) }
+    return { ...CEL_START, backdrop: '', turn: n('turn', CEL_START.turn), height: n('height', CEL_START.height), tones: q.get('tones') === '3' ? 3 : 2, shadows: q.get('shadows') !== '0', smooth: n('smooth', CEL_START.smooth), fills: Math.max(0, Math.min(4, Math.round(n('fills', CEL_START.fills)))), ...choiceFrom('cel', CEL_START, q) }
   })
-  const [neon, setNeon] = useState<NeonChoice>(NEON_START)
-  const [glass, setGlass] = useState<GlassChoice>(GLASS_START)
-  const [wash, setWash] = useState<WashChoice>(WASH_START)
+  const [neon, setNeon] = useState<NeonChoice>(() => ({ ...NEON_START, ...choiceFrom('neon', NEON_START, params()) }))
+  const [glass, setGlass] = useState<GlassChoice>(() => ({ ...GLASS_START, ...choiceFrom('glass', GLASS_START, params()) }))
+  const [wash, setWash] = useState<WashChoice>(() => ({ ...WASH_START, ...choiceFrom('wash', WASH_START, params()) }))
   // blocks: `?block=` is the size, in cells of the subject's grid; a phone starts a size up, for fewer cubes
   const [block, setBlock] = useState<BlockChoice>(() => {
     const v = Number(params().get('block')), swell = Number(params().get('swell'))
     // water and weather as blobs or as blocks (`?water=blocks`, `?falls=blocks`), and how high its ripples stand as blocks (`?swell=`)
     const back = params().get('backdrop') ?? ''
     // the subject's own sky or a plain color to stand in (`?backdrop=`)
-    return { ...BLOCK_START, height: on.time?.height ?? BLOCK_START.height, backdrop: back === 'scene' || BLOCK_GROUNDS.some((g) => g.id === back) ? back : '', water: params().get('water') === 'blocks' ? 'blocks' : 'blobs', weather: params().get('falls') === 'blocks' ? 'blocks' : 'blobs', swell: params().get('swell') !== null && Number.isFinite(swell) ? Math.max(0, Math.min(SWELL_MOST, swell)) : BLOCK_START.swell, size: Number.isFinite(v) && v >= BLOCK_SIZES.min && v <= BLOCK_SIZES.max ? Math.round(v) : BLOCK_START.size + (on.light ? 1 : 0) }
+    return { ...BLOCK_START, height: on.time?.height ?? BLOCK_START.height, backdrop: back === 'scene' || BLOCK_GROUNDS.some((g) => g.id === back) ? back : '', water: params().get('water') === 'blocks' ? 'blocks' : 'blobs', weather: params().get('falls') === 'blocks' ? 'blocks' : 'blobs', swell: params().get('swell') !== null && Number.isFinite(swell) ? Math.max(0, Math.min(SWELL_MOST, swell)) : BLOCK_START.swell, size: Number.isFinite(v) && v >= BLOCK_SIZES.min && v <= BLOCK_SIZES.max ? Math.round(v) : BLOCK_START.size + (on.light ? 1 : 0), ...choiceFrom('block', BLOCK_START, params()) }
   })
   // a time of day stands the blocks' sun at its own height; the slider moves it from there
   const timeId = on.time?.id, timeHeight = on.time?.height
   const [sunFor, setSunFor] = useState(timeId)
   if (sunFor !== timeId) { setSunFor(timeId); setBlock((c) => ({ ...c, height: timeHeight ?? BLOCK_START.height })) }
-  const [size, setSize] = useState(1)
+  const [inkAsked] = useState(() => { const c = { ...INK_START, ...choiceFrom('ink', INK_START, params()) }; return PAPERS.some((p) => p.id === c.paper) ? c : { ...c, paper: INK_START.paper } })
+  const [size, setSize] = useState(inkAsked.size)
   // outlines: on for the two pen looks and cel shading unless the visitor says otherwise
   const [outlined, setOutlined] = useState<boolean | null>(() => (params().get('outline') === '1' ? true : params().get('outline') === '0' ? false : null))
-  const [pen, setPen] = useState(1.5)
-  const [paper, setPaper] = useState(PAPERS[0].id)
+  const [pen, setPen] = useState(inkAsked.pen)
+  const [paper, setPaper] = useState(inkAsked.paper)
   // ASCII: how tall a character is, whether each takes the color of what it stands for, and strokes along edges
-  const [letter, setLetter] = useState(12)
-  const [own, setOwn] = useState(true)
-  const [strokes, setStrokes] = useState(true)
-  const [strands, setStrands] = useState(true)
-  const [weight, setWeight] = useState(1)
+  const [letter, setLetter] = useState(inkAsked.letter)
+  const [own, setOwn] = useState(inkAsked.own)
+  const [strokes, setStrokes] = useState(inkAsked.strokes)
+  const [strands, setStrands] = useState(inkAsked.strands)
+  const [weight, setWeight] = useState(inkAsked.weight)
   // which characters: ASCII, braille or blocks (`?chars=`)
   const [chars, setChars] = useState<GlyphSet>(() => (CHAR_SETS.find((c) => c.id === params().get('chars'))?.id ?? 'ascii'))
   const [copied, setCopied] = useState('')
@@ -346,7 +353,21 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
         )}
     </>
   )
-  return { controls, ground, forget: () => setCopied('') }
+  /** This look's settings as a shared link gives them: the ones changed from how it starts, and none of another look's. */
+  const share = (): Entry[] => {
+    const out: Entry[] = SHORT_KEYS.map((k) => [k, undefined] as const)
+    const ink = { size, pen, paper, letter, own, strokes, strands, weight }
+    out.push(...choiceEntries('cel', cel, look === 'cel' ? { ...CEL_START, backdrop: '' } : cel))
+    out.push(...choiceEntries('neon', neon, look === 'neon' ? NEON_START : neon))
+    out.push(...choiceEntries('glass', glass, look === 'glass' ? GLASS_START : glass))
+    out.push(...choiceEntries('wash', wash, look === 'watercolor' ? WASH_START : wash))
+    out.push(...choiceEntries('block', block, look === 'blocks' ? { ...BLOCK_START, height: on.time?.height ?? BLOCK_START.height, size: BLOCK_START.size + (on.light ? 1 : 0) } : block))
+    const inked = !!look && look !== 'cel' && look !== 'blocks' && look !== 'neon' && look !== 'glass' && look !== 'watercolor'
+    out.push(...choiceEntries('ink', ink, inked ? INK_START : ink))
+    out.push(['outline', look && outlined !== null ? (outlined ? '1' : '0') : undefined], ['chars', look === 'ascii' && chars !== 'ascii' ? chars : undefined])
+    return out
+  }
+  return { controls, ground, forget: () => setCopied(''), share }
 }
 
 /**

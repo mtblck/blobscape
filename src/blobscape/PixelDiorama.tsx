@@ -33,6 +33,8 @@ import { srgbToLinear } from '../splat-core/color.ts'
 import { STYLES, isPixelStyle, styleAsked, styleWords, type Style } from './diorama/styles.ts'
 import { GLITCH_START, glitchLook, type GlitchChoice } from './glitchLooks.ts'
 import { GlitchControls } from './diorama/GlitchControls.tsx'
+import { ShareDialog } from './diorama/ShareDialog.tsx'
+import { choiceEntries, choiceFrom, linkWith, orbitFrom, orbitText, short, type Entry } from './diorama/shareLink.ts'
 import { useDrawnLook, useHeld, wantsPlain } from './drawnLook.tsx'
 import { TIMES, timeAsked, timeOf, type TimeId } from './timeOfDay.ts'
 import { CLOUD_COVERS, SkyEase, WEATHERS, WINDS, cloudsAsked, gloomy, isClear, skyState, weatherAsked, windAsked, windAt, type CloudId, type WeatherId, type WindId } from '../splat-engine/skyRecipes.ts'
@@ -132,7 +134,7 @@ export function PixelDiorama() {
   const [chosen, setChosen] = useState<string | undefined>(() => detailAsked(DETAIL, labelNames)?.id)
   /** How the scene is drawn: as pixel art, or as one of Brush and Ink's looks. `?style=oil` opens on that one. */
   const [style, setStyle] = useState<Style>(() => styleAsked(new URLSearchParams(location.search).get('style')))
-  const [glitch, setGlitch] = useState<GlitchChoice>(GLITCH_START)
+  const [glitch, setGlitch] = useState<GlitchChoice>(() => ({ ...GLITCH_START, ...choiceFrom('glitch', GLITCH_START, new URLSearchParams(location.search)) }))
   /**
    * Light worked out a pixel at a time (`?shade=1`): pixel art made from a picture cel shading lit, so light and shade
    * fall in bands that follow each form, not blob by blob as the baked light does.
@@ -143,20 +145,26 @@ export function PixelDiorama() {
   // Finest by default (Matt, 2026-11-20); a phone starts pixel art at Fine (Matt found the dragon slow at Finest on his,
   // 2026-11-20) and keeps Chunky for the styles that draw the whole screen several times
   const detail = chosen ?? (coarse ? (isPixelStyle(style) ? DETAIL[2].id : DETAIL[0].id) : DETAIL[3].id)
-  const [palette, setPalette] = useState('own')
+  // pixel art's own settings as a shared link gives them (`pixel.dither=` …), over the scene's own
+  const pixelStart = { palette: 'own', dither: diorama.finish.dither, outline: diorama.finish.outline, edges: diorama.finish.edges, sky: diorama.finish.sky, motion: 0 }
+  const [pixelAsked] = useState(() => {
+    const c = { ...pixelStart, ...choiceFrom('pixel', pixelStart, new URLSearchParams(location.search)) }
+    return { ...c, palette: PALETTES.some((p) => p.id === c.palette) ? c.palette : 'own', motion: RATES.includes(c.motion) ? c.motion : 0, dither: Math.max(0, Math.min(1, c.dither)) }
+  })
+  const [palette, setPalette] = useState(pixelAsked.palette)
   const [baseSize, setSize] = useState(() => Number(new URLSearchParams(location.search).get('px')) || 2)
   // light in bands a blob at a time (`banded`): how many bands, 0 for smooth light; `?texel=0|2|3`
   // discs along a shape's outer edges fitted to the edge (`hugged`), so edges are straight and lines sit on them; `?hug=0`
   const [hug] = useState(() => new URLSearchParams(location.search).get('hug') !== '0')
   const [texel, setTexel] = useState(() => { const t = new URLSearchParams(location.search).get('texel'); return t === null ? 0 : Number(t) || 0 })
-  const [dither, setDither] = useState(diorama.finish.dither)
+  const [dither, setDither] = useState(pixelAsked.dither)
   const [glow, setGlow] = useState(() => { const q = new URLSearchParams(location.search).get('glow'), v = q === null ? NaN : Number(q); return Number.isFinite(v) ? Math.min(4, Math.max(0, v)) : diorama.finish.glow })
   /** Glow as the poser reads it: it scales the light the scene's lamps and fires cast, as well as the shine round bright pixels. */
   const glowNow = useRef(glow)
   glowNow.current = glow
-  const [outline, setOutline] = useState(diorama.finish.outline)
-  const [edges, setEdges] = useState(diorama.finish.edges)
-  const [sky, setSky] = useState(diorama.finish.sky)
+  const [outline, setOutline] = useState(pixelAsked.outline)
+  const [edges, setEdges] = useState(pixelAsked.edges)
+  const [sky, setSky] = useState(pixelAsked.sky)
   const [steady] = useState(() => new URLSearchParams(location.search).get('steady') !== '0')
   // a scene's own gentle rocking of the view: every pixel of a still thing changes as the view turns, so it can be held
   const [rock, setRock] = useState(() => new URLSearchParams(location.search).get('rock') !== '0')
@@ -181,15 +189,19 @@ export function PixelDiorama() {
   const [own, setOwn] = useState(() => new URLSearchParams(location.search).get('own') !== '0')
   /** Painted in steps of the palette as the scene is cut: the scene's own choice unless the address says. */
   const [steps, setSteps] = useState(() => { const q = new URLSearchParams(location.search).get('steps'); return q === null ? diorama.finish.steps : q !== '0' })
-  const [rate, setRate] = useState(0)
+  const [rate, setRate] = useState(pixelAsked.motion)
   const [exact, setExact] = useState(() => new URLSearchParams(location.search).get('sort') === 'radix')
   const [parts, setParts] = useState(() => new URLSearchParams(location.search).get('parts') !== '0')
   // lines only where things meet, never through a thing's own paint (`PixelLook.across`; Matt saw stray lines in the grass, 2026-11-20); `?across=0`
   const [across] = useState(() => new URLSearchParams(location.search).get('across') !== '0')
   // pixel art: blobs drawn as hard discs, so no color from behind bleeds in where a thing's edge fades (`?solid=0`)
   const [solid] = useState(() => new URLSearchParams(location.search).get('solid') !== '0')
-  const [view, setView] = useState(diorama.views[0].id)
-  const [orbit, setOrbit] = useState<Orbit>(diorama.views[0].orbit)
+  // the view as a shared link gives it: one of the scene's views, turned and zoomed from there (`?view=`, `?orbit=`)
+  const [view, setView] = useState(() => diorama.views.find((v) => v.id === new URLSearchParams(location.search).get('view'))?.id ?? diorama.views[0].id)
+  const [orbit, setOrbit] = useState<Orbit>(() => {
+    const o = orbitFrom(new URLSearchParams(location.search).get('orbit'))
+    return o ? { ...o, target: [...o.target] } : (diorama.views.find((v) => v.id === view) ?? diorama.views[0]).orbit
+  })
   const [art, setArt] = useState<{ width: number; height: number }>()
   /** The 3D model export: blocks on the scene's grid (and how many grid cells a block is) or a smooth surface. */
   const [modelShape, setModelShape] = useState<'blocks' | 'smooth'>('blocks')
@@ -516,6 +528,34 @@ export function PixelDiorama() {
   // back costs a little, so it is measured every few seconds, not every frame, and not while the tab is hidden
   const [png, setPng] = useState<{ bytes: number; used: number }>()
   const [details, setDetails] = useState(false)
+  /** The link the Share dialog offers, made as it opens: every setting changed from how the page starts. */
+  const [sharing, setSharing] = useState<string>()
+  const shareLink = () => {
+    const f = shown.finish, px = isPixelStyle(style), first = shown.views[0]
+    const at = shown.views.find((v) => v.id === view) ?? first
+    const pixel = { palette, dither, outline, edges, sky, motion: rate }
+    const e: Entry[] = [
+      ...choiceEntries('pixel', pixel, px ? { palette: 'own', dither: f.dither, outline: f.outline, edges: f.edges, sky: f.sky, motion: 0 } : pixel),
+      ...choiceEntries('glitch', glitch, style === 'glitch' ? GLITCH_START : glitch),
+      ['px', px && baseSize !== 2 ? String(baseSize) : undefined],
+      ['texel', px && texel ? String(texel) : undefined],
+      ['shade', px && shaded ? '1' : undefined],
+      ['bands', px && bands !== (f.bands ?? 2) ? String(bands) : undefined],
+      ['heat', px && heat !== (f.heat ?? 0) ? String(heat) : undefined],
+      ['selout', px && !selout ? '0' : undefined],
+      ['cycle', px && !cycling ? '0' : undefined],
+      ['own', px && !own ? '0' : undefined],
+      ['parts', px && !parts ? '0' : undefined],
+      ['steps', px && steps !== f.steps ? (steps ? '1' : '0') : undefined],
+      ['glow', short(glow) !== short(f.glow) ? short(glow) : undefined],
+      ['sort', exact ? 'radix' : undefined],
+      ['rock', rock ? undefined : '0'],
+      ['view', at.id !== first.id ? at.id : undefined],
+      ['orbit', orbitText(orbit) !== orbitText(at.orbit) ? orbitText(orbit) : undefined],
+      ...drawing.share(),
+    ]
+    setSharing(linkWith(location.href, e))
+  }
   useEffect(() => {
     setPng(undefined)
     if (!stage || !scene || !pixels) return
@@ -767,6 +807,7 @@ export function PixelDiorama() {
         </p>
       </header>
       {facts && <SceneDetails open={details} onClose={() => setDetails(false)} facts={facts} />}
+      <ShareDialog link={sharing} title={`${shown.label} on Blobscape`} note={model ? 'A model you opened stays on your device, so the link opens the first scene with these settings.' : undefined} onClose={() => setSharing(undefined)} />
       <Workbench
         viewLabel="The scene"
         fullTools={
@@ -775,6 +816,7 @@ export function PixelDiorama() {
             <div className="grid gap-2">
               <div className="flex flex-wrap items-center gap-1.5">
                 <Button small disabled={cantExport} onClick={record} data-testid="diorama-full-record">{exportLabel}</Button>
+                <Button small onClick={shareLink} data-testid="diorama-full-share">Share</Button>
                 <Button small disabled={cantExport} onClick={save}>{saving ? 'Saving…' : 'Save this frame'}</Button>
               </div>
               <p role="status" className="text-xs text-ink-faint empty:hidden">{exportNote}</p>
@@ -990,6 +1032,7 @@ export function PixelDiorama() {
                 <div className="grid gap-2">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <Button small disabled={cantExport} onClick={record} data-testid="diorama-record">{exportLabel}</Button>
+                  <Button small onClick={shareLink} data-testid="diorama-share-open">Share</Button>
                   <Button small disabled={cantExport} onClick={save}>{saving ? 'Saving…' : 'Save this frame'}</Button>
                 </div>
                 <p role="status" className="text-xs text-ink-faint empty:-mt-2">{exportNote}</p>
