@@ -88,7 +88,8 @@ test('a scene file comes apart again: the scene, and each creature with its own 
 test('any other rigged file is not a scene; too many bones are refused', () => {
   const fox = makeActor(sp('fox'), { at: [0, 0, 0], height: 1 })
   assert.equal(splitScene({ name: 'fox', ...fox.body, clips: [] }), null)
-  const many = Array.from({ length: 8 }, () => makeActor(sp('dragon'), { at: [0, 0, 0], height: 1 }))
+  // the same dragon eight times over: only its bones are counted before the file is refused
+  const many = new Array(8).fill(makeActor(sp('dragon'), { at: [0, 0, 0], height: 1 }))
   assert.ok(sceneBones(many) > MAX_FILE_BONES)
   assert.throws(() => sceneRig(new Blobs(), many, () => 0), /255 bones/)
 })

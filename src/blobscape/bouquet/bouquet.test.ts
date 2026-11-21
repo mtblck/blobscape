@@ -95,9 +95,9 @@ test('every flower grows: its head has blobs, all finite, and no bigger than a b
       const b = m.blobs
       assert.ok(b.count > 8, `${f.id} ${v.name}: ${b.count} blobs`)
       for (let i = 0; i < b.count * 3; i++) {
-        assert.ok(Number.isFinite(b.center[i]) && Math.abs(b.center[i]) < 4, `${f.id}: a blob at ${b.center[i]}`)
-        assert.ok(Number.isFinite(b.scale[i]) && b.scale[i] >= 0, `${f.id}: a blob of size ${b.scale[i]}`)
-        assert.ok(b.color[i] >= 0 && b.color[i] <= 1, `${f.id}: a color of ${b.color[i]}`)
+        if (!(Number.isFinite(b.center[i]) && Math.abs(b.center[i]) < 4)) assert.fail(`${f.id}: a blob at ${b.center[i]}`)
+        if (!(Number.isFinite(b.scale[i]) && b.scale[i] >= 0)) assert.fail(`${f.id}: a blob of size ${b.scale[i]}`)
+        if (!(b.color[i] >= 0 && b.color[i] <= 1)) assert.fail(`${f.id}: a color of ${b.color[i]}`)
       }
     }
   }

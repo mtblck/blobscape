@@ -1,0 +1,49 @@
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { DIORAMAS } from './scenes.ts'
+import { DETAIL } from './scene.ts'
+import { LIGHTHOUSE } from './scenes/lighthouse.ts'
+import { MAX_PALETTE_SIZE } from '../../splat-core/pixel.ts'
+import { MAX_MUD, MIN_VALUE_RANGE, loopSnaps, partClashes, valuesOf } from '../../splat-engine/sceneChecks.ts'
+
+/**
+ * Cutting every scene at every detail takes minutes, and tests in one file run one after another, so the scenes are
+ * dealt out over this many test files (scenes.build<n>.test.ts), which the runner starts side by side. Every scene is
+ * in exactly one share, whatever the list grows to.
+ */
+export const SHARES = 4
+
+/** The test for one share of the scenes, counted from 1. */
+export function buildShare(share: number) {
+  test(`every scene builds at every detail with all of its parts, reads in grayscale, and loops without a snap (${share} of ${SHARES})`, () => {
+    for (const d of DIORAMAS.filter((_, i) => i % SHARES === share - 1)) {
+      let last = 0, first: ReturnType<typeof d.make> | undefined
+      for (const level of DETAIL) {
+        const b = d.make(level.spacing)
+        assert.ok(b.blobs.count > last && b.blobs.count < 240000, `${d.id} ${level.id}: ${b.blobs.count}`)
+        assert.equal(new Set(b.partOf).size, b.partOf.reduce((m, p) => Math.max(m, p), 0) + 1, `${d.id} ${level.id}: a part caught no grid cell`)
+        last = b.blobs.count
+        first ??= b
+      }
+      const built = first!
+      const { skeleton: sk, blobs } = built
+      // it still reads in grayscale, and nothing seen snaps from place to place
+      const v = valuesOf(blobs)
+      assert.ok(v.light - v.dark >= MIN_VALUE_RANGE, `${d.id}: values ${v.dark.toFixed(2)} to ${v.light.toFixed(2)} read as one tone`)
+      assert.ok(v.mud <= MAX_MUD, `${d.id}: ${Math.round(v.mud * 100)}% gray mud`)
+      assert.deepEqual(loopSnaps(sk, d.pose, d.loop), [], `${d.id}: snaps`)
+      // and no part turns or swings through another (the lighthouse is cut on a finer grid)
+      const clashes = partClashes(built, d.pose, d.loop, DETAIL[0].spacing * (d.id === 'lighthouse' ? LIGHTHOUSE.grid! : 1))
+        .filter((c) => !d.touching?.includes(c.part) && !d.touching?.includes(c.into))
+      assert.deepEqual(clashes, [], `${d.id}: parts pass through each other`)
+      const [l0, l1] = [d.lights(0.9), d.lights(0.9 + d.loop)]
+      assert.ok(l0.every((l, i) => [...l.position, ...l.color].every((x, j) => Math.abs(x - [...l1[i].position, ...l1[i].color][j]) < 1e-6)), `${d.id}: lights loop`)
+      d.pose(sk, 0.9)
+      const a = Float32Array.from(sk.matrix)
+      d.pose(sk, 0.9 + d.loop)
+      for (let i = 0; i < a.length; i++) assert.ok(Math.abs(a[i] - sk.matrix[i]) < 1e-4, `${d.id}: matrix ${i}`)
+      assert.ok(d.palette.colors.length <= MAX_PALETTE_SIZE && d.views.length > 0, d.id)
+      assert.equal(d.lights(0).length, d.lights(3).length)
+    }
+  })
+}
