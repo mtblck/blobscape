@@ -82,6 +82,8 @@ export function Islands() {
   const [count, setCount] = useState(() => (params().get('islands') === '1' ? 1 : WORLD_ISLANDS))
   // grass as blobs among the blocks (Matt, 2026-11-20: a finer texture beside the cubes, for dense vegetation)
   const [grass, setGrass] = useState(() => params().get('grass') !== '0')
+  // and how its blades are drawn: soft blobs, or gouache dabs (Brush and Ink's marks)
+  const [grassAs, setGrassAs] = useState<'blobs' | 'gouache'>(() => (params().get('grassas') === 'gouache' ? 'gouache' : 'blobs'))
 
   // the world: its islands and bridges planned from the first island, each a description, then the scenes Pixel
   // Diorama's own code makes of them
@@ -273,13 +275,16 @@ export function Islands() {
     stage.setBlocks(blocky && blockSpacing ? blockLook({ ...BLOCK_START, size: 1 }, blockSpacing, blockAzimuth) : undefined)
   }, [stage, blocky, blockSpacing, blockAzimuth])
 
+  // the grass is the only thing the world draws while blocks are on, so marks there fall on it alone
+  useEffect(() => { stage?.setMarks(blocky && grass && grassAs === 'gouache' ? { kind: 'gouache' } : undefined) }, [stage, blocky, grass, grassAs, ready])
+
   // the address always names the island on show, so it can be sent to someone
   useEffect(() => {
     const url = new URL(location.href)
     const put = (k: string, v: string | undefined) => { if (v) url.searchParams.set(k, v); else url.searchParams.delete(k) }
-    put('biome', BIOMES.length > 1 ? biomeId : undefined); put('seed', String(seed)); put('style', blocky ? undefined : style); put('block', blocky && blockSize !== BLOCK_START.size ? String(blockSize) : undefined); put('rock', rock ? undefined : '0'); put('grass', grass ? undefined : '0'); put('walk', walking ? '1' : undefined); put('islands', count === 1 ? '1' : undefined)
+    put('biome', BIOMES.length > 1 ? biomeId : undefined); put('seed', String(seed)); put('style', blocky ? undefined : style); put('block', blocky && blockSize !== BLOCK_START.size ? String(blockSize) : undefined); put('rock', rock ? undefined : '0'); put('grass', grass ? undefined : '0'); put('grassas', blocky && grass && grassAs !== 'blobs' ? grassAs : undefined); put('walk', walking ? '1' : undefined); put('islands', count === 1 ? '1' : undefined)
     history.replaceState(history.state, '', url)
-  }, [biomeId, seed, style, blocky, blockSize, rock, walking, count, grass])
+  }, [biomeId, seed, style, blocky, blockSize, rock, walking, count, grass, grassAs])
 
   // For verify: the stage and the island, without clicking
   useEffect(() => {
@@ -423,6 +428,14 @@ export function Islands() {
                   </div>
                 </Field>
                 {blocky && <Toggle label="Grass among the blocks" checked={grass} onChange={setGrass} />}
+                {blocky && grass && (
+                  <Field label="Grass drawn as">
+                    <div className="flex flex-wrap gap-1.5">
+                      <Chip active={grassAs === 'blobs'} onClick={() => setGrassAs('blobs')}>Blobs</Chip>
+                      <Chip active={grassAs === 'gouache'} onClick={() => setGrassAs('gouache')}>Gouache</Chip>
+                    </div>
+                  </Field>
+                )}
                 {blocky && <Slider label="Block size" value={blockSize} min={BLOCK_SIZES.min} max={BLOCK_SIZES.max} step={1} onChange={setBlockSize} format={(v) => `${v}×`} hint="How big a block is, in steps of the detail. The island is cut again at that size." />}
                 <Field label="Detail">
                   <div className="flex flex-wrap gap-1.5">
