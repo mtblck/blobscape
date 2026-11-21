@@ -17,9 +17,9 @@ import type { WorldPlan } from './world.ts'
 /** Who lives in a biome, and how big each is set down, as a share of the size it is made (each is made to its own scale). */
 export interface Kind { id: string; size: number }
 export const LIVES: Record<string, Kind[]> = {
-  meadow: [{ id: 'fox', size: 0.35 }, { id: 'frog', size: 1 }, { id: 'minimalist-fox', size: 0.35 }],
-  pinewood: [{ id: 'owl', size: 0.28 }, { id: 'fox', size: 0.35 }, { id: 'monster', size: 0.9 }],
-  mesa: [{ id: 'crocodile', size: 0.6 }, { id: 'monster', size: 0.9 }],
+  meadow: [{ id: 'fox', size: 0.55 }, { id: 'frog', size: 1.6 }, { id: 'minimalist-fox', size: 0.55 }],
+  pinewood: [{ id: 'owl', size: 0.45 }, { id: 'fox', size: 0.55 }, { id: 'monster', size: 1.4 }],
+  mesa: [{ id: 'crocodile', size: 0.95 }, { id: 'monster', size: 1.4 }],
 }
 
 /** How many live on an island, at least and at most: an island is about a hundred and fifty meters across. */
@@ -195,7 +195,7 @@ export class AmongCreatures implements WalkGround {
     }
     return this.ground.standsAt(x, z)
   }
-  /** Ground taken by things that stay where they are (the islands' landmark creatures), meters. */
+  /** Ground taken by things that stay where they are (the islands' guardians), meters. */
   fixed: { x: number; z: number; r: number }[] = []
   /** Sets where everyone is at a time, and where the elf stands. */
   update(residents: readonly Resident[], t: number, elf: { x: number; z: number }) {

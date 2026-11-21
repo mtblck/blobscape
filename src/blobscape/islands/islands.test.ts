@@ -13,7 +13,7 @@ import { BIOMES, MEADOW } from './biomes.ts'
 import { MAX_SEED, census, fromPath, inside, makeIsland, planIsland } from './island.ts'
 import { MATERIALS, SOLID, colorsOf, dressed, family, leaning, letsThrough, material, opaque, paintOf } from './materials.ts'
 import { ROOM } from './things.ts'
-import { IslandWalk, SCALE as WALK_SCALE, passes } from './walk.ts'
+import { IslandWalk, SCALE as WALK_SCALE, passes, keepAbove, CAMERA_CLEAR } from './walk.ts'
 import { GAP, WORLD_ISLANDS, WorldGround, deckAt, planWorld, worldStart } from './world.ts'
 
 const SEEDS = [1, 2, 3, 7, 42, 77, 500, 4242, 31337, 90210, 123456, MAX_SEED]
@@ -355,30 +355,55 @@ test('creatures live on every island, picked by its biome, and walk loops that s
   }
 })
 
-test('each island has its landmark creature, standing on open ground, the same number of pieces at every moment', async () => {
-  const { LANDMARKS, ROOM, landmarkActor, piecesAt, placeLandmarks, poseLandmark } = await import('./landmark.ts')
+test('each island has its guardian, walking a loop its body fits along, never through a trunk', async () => {
+  const { BODY, GUARDIANS, guardianAt, makeGuardian, placeGuardians, poseGuardian } = await import('./guardians.ts')
   for (const [biome, seed] of [['meadow', 37], ['pinewood', 5], ['mesa', 11]] as const) {
     const w = planWorld(biome, seed), g = new WorldGround(w, DETAIL[0].spacing)
-    const ms = placeLandmarks(w, g.islands)
-    assert.equal(ms.length, w.islands.length)
-    assert.deepEqual(ms, placeLandmarks(w, g.islands), 'the same world gives the same places')
-    for (const m of ms) {
-      const isl = g.islands[m.island]
-      assert.equal(m.kind, LANDMARKS[w.islands[m.island].biome])
-      assert.ok(isl.standsAt(m.at[0], m.at[2]) && isl.insideAt(m.at[0], m.at[2]) > ROOM[m.kind] * 0.6, `${biome} ${seed}: the ${m.kind} stands off open ground`)
+    const gs = placeGuardians(w, g.islands)
+    assert.equal(gs.length, w.islands.length)
+    assert.deepEqual(gs, placeGuardians(w, g.islands), 'the same world gives the same guardians')
+    for (const gd of gs) {
+      const isl = g.islands[gd.island]
+      assert.equal(gd.kind, GUARDIANS[w.islands[gd.island].biome])
+      for (let t = 0; t < gd.period; t += 0.5) {
+        const at = guardianAt(gd, t)
+        assert.ok(isl.standsAt(at.x, at.z) && isl.insideAt(at.x, at.z) > BODY[gd.kind], `${biome} ${seed}: the ${gd.kind} stands somewhere it can't at ${t} s`)
+      }
     }
   }
-  for (const kind of ['grazer', 'stag', 'serpent'] as const) {
-    const a = landmarkActor(kind), n = a.rest.length
-    let low = Infinity, high = -Infinity
-    for (let t = 0; t < 30; t += 0.7) {
-      const ps = piecesAt(kind, t)
-      assert.equal(ps.length, n, `${kind} keeps its pieces`)
-      for (const p of ps) { assert.ok(p.at.every(Number.isFinite)); if (kind !== 'serpent') low = Math.min(low, p.at[1] - p.size[1]); high = Math.max(high, p.at[1]) }
-      poseLandmark({ kind, island: 0, at: [0, 0, 0], yaw: 0, seed: 1 }, a.rest, a.skeleton, t)
-      for (let k = 0; k < ps.length; k++) assert.ok(Math.abs(a.skeleton.posedHead[(k + 1) * 3 + 1] - ps[k].at[1]) < 1e-3, `${kind} piece ${k} posed where it is`)
+  for (const kind of ['fox', 'deer', 'cactus'] as const) {
+    const b = makeGuardian(kind, 0.2), sk = b.skeleton
+    let high = -Infinity
+    for (let i = 0; i < b.blobs.count; i++) high = Math.max(high, b.blobs.center[i * 3 + 1])
+    assert.ok(high > 4.5, `the ${kind} stands ${high.toFixed(1)} m: a guardian`)
+    // walking and resting, its feet stay near the ground and nothing goes far under it
+    const gd = { kind, island: 0, legs: [{ from: [0, 0] as [number, number], to: [10, 0] as [number, number], yaw0: 0, yaw1: Math.PI / 2, start: 0, turn: 2, go: 8, rest: 6 }], period: 16, offset: 0 }
+    for (let t = 0; t < 16; t += 0.7) {
+      poseGuardian(gd, sk, t, () => 0)
+      let low = Infinity
+      for (let k = 0; k < sk.count; k++) if (sk.size[k] > 0.1) low = Math.min(low, sk.posedHead[k * 3 + 1])
+      assert.ok(low > -0.5, `the ${kind} at ${t.toFixed(1)} s has a bone ${(-low).toFixed(2)} m under the ground`)
     }
-    if (kind !== 'serpent') assert.ok(low > -0.3 && low < 0.4, `${kind}'s feet at ${low.toFixed(2)}`)
-    assert.ok(high > 5, `${kind} stands ${high.toFixed(1)} m: a landmark`)
   }
+})
+
+test('a walking view stays above the ground, and can look up from low by the elf', () => {
+  // a hill rising behind the elf: ground at 0 here, climbing toward +z
+  const ground = (_x: number, z: number) => Math.max(0, z - 2)
+  const placed = (o: { target: [number, number, number]; distance: number; azimuth: number; elevation: number }) => {
+    const az = (o.azimuth * Math.PI) / 180, el = (o.elevation * Math.PI) / 180
+    return [o.target[0] + o.distance * Math.sin(az) * Math.cos(el), o.target[1] + o.distance * Math.sin(el), o.target[2] + o.distance * Math.cos(az) * Math.cos(el)]
+  }
+  for (const elevation of [30, 5, -10, -40, -80]) {
+    for (const azimuth of [0, 90, 180]) {
+      const o = keepAbove({ target: [0, 1, 0] as [number, number, number], distance: 9, azimuth, elevation }, ground)
+      const c = placed(o)
+      assert.ok(c[1] >= ground(c[0], c[2]) + CAMERA_CLEAR - 1e-6 || o.distance <= 0.8 + 1e-9, `${azimuth} ${elevation}: under the ground`)
+      // a view turned below level ends up looking up at the elf
+      if (elevation < 0) assert.ok(c[1] < 1, `${azimuth} ${elevation}: looks up`)
+    }
+  }
+  // over open ground the view is left alone
+  const high = { target: [0, 1, 0] as [number, number, number], distance: 9, azimuth: 180, elevation: 30 }
+  assert.deepEqual(keepAbove(high, () => 0), high)
 })
