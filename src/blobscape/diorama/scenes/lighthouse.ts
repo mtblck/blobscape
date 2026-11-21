@@ -1,4 +1,4 @@
-import type { MoveDoc, PaintDoc, PartDoc, SceneDoc, ShapeDoc } from '../../../splat-engine/sceneDoc.ts'
+import type { LightDoc, MoveDoc, PaintDoc, PartDoc, SceneDoc, ShapeDoc } from '../../../splat-engine/sceneDoc.ts'
 
 /**
  * A lighthouse and its keeper's cottage on a rock in the sea at dusk: a turning lamp, pines that lean in the wind, a
@@ -290,5 +290,11 @@ export const LIGHTHOUSE: SceneDoc = {
   parts,
   moves,
   // the lamp's two beams: a pool of warm light on each side of the tower, sweeping over the sea and the rock with the lens
-  lights: [0, 0.5].map((phase) => ({ at: [tx, 0.3, tz], color: '#ffe9ab', strength: 3.2, range: 0.55, lit: 'dark', circle: { r: 1, times: 2, phase } })),
+  // and the same two beams where they cross the gallery: each stands just past the railing and a little above it, so
+  // the stretch of rail, floor and cap the beam passes over is lit on the faces a viewer sees (cubes too, whose faces
+  // only take light they are turned to) and falls dark again behind it
+  lights: [
+    ...[0, 0.5].map((phase): LightDoc => ({ at: [tx, 0.3, tz], color: '#ffe9ab', strength: 3.2, range: 0.55, lit: 'dark', circle: { r: 1, times: 2, phase } })),
+    ...[0, 0.5].map((phase): LightDoc => ({ at: [tx, r3(LAMP_Y + 0.07), tz], color: '#ffe9ab', strength: 3, range: 0.2, lit: 'dark', circle: { r: 0.3, times: 2, phase } })),
+  ],
 }
