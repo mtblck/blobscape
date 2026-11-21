@@ -1424,6 +1424,11 @@ export interface CompiledScene {
   lights(t: number): PointLight[]
   /** Distance haze, if the scene asks for it: the color (linear) and where it starts and would be total, in units past the view's target. */
   haze?: { color: Vec3; from: number; to: number }
+  /**
+   * The height of what stays put under (x, z), looking down from `top`, or `bottom` where nothing is: its still parts,
+   * or its water's surface where that is what lies open to the sky. What falls from outside the scene lands on it.
+   */
+  ground(x: number, z: number, top: number, bottom: number): number
   /** The scene's water, if it has any, with its defaults filled in: what `SceneWater` plays. */
   water?: WaterPlan
 }
@@ -1726,7 +1731,8 @@ export function passed(life: number, phase: number): [number, number] {
 
 /** A sound description (see `checkScene`) made ready to build and play. Throws on an unsound one. */
 /** `puffs` keeps hidden bones for a tap's puff of sparkles (`poke.ts`); a creature taken from a scene goes without. */
-export function compileScene(doc: SceneDoc, { puffs = true }: { puffs?: boolean } = {}): CompiledScene {
+/** `ground` is the ground what falls lands on, in place of the description's own parts: weather laid over another scene (skyRecipes.ts) lands on that scene's. */
+export function compileScene(doc: SceneDoc, { puffs = true, ground: under }: { puffs?: boolean; ground?: (x: number, z: number, top: number, bottom: number) => number } = {}): CompiledScene {
   const errs = checkScene(doc)
   if (errs.length) throw new Error(`Scene "${String((doc as { name?: unknown })?.name)}" has ${errs.length} mistake${errs.length > 1 ? 's' : ''}: ${errs.slice(0, 5).join('; ')}`)
   const bones: Bone[] = [{ name: 'land', parent: -1, head: [0, 0, 0] }]
@@ -1750,7 +1756,9 @@ export function compileScene(doc: SceneDoc, { puffs = true }: { puffs?: boolean 
   // what hangs in the air rides bones of its own, after the scene's: a bone for each speck, a few for each bank of mist
   const lands = (doc.air?.specks ?? []).some((m) => m.land)
   const pond = doc.water
-  const ground = lands || pond ? solidShapes(0.02).still : []
+  let stood: Shape[] | undefined
+  const standing = () => (stood ??= solidShapes(0.02).still)
+  const ground = (lands && !under) || pond ? standing() : []
   const pondBox = pond && { x0: Math.min(pond.from[0], pond.to[0]), x1: Math.max(pond.from[0], pond.to[0]), z0: Math.min(pond.from[1], pond.to[1]), z1: Math.max(pond.from[1], pond.to[1]) }
   /** Whether there is water at (x, z): inside the box, with a bed of still ground under the level to hold it (looked for from just over the surface, so a roof overhead is not in the way). */
   const wetAt = (x: number, z: number) => {
@@ -1758,11 +1766,12 @@ export function compileScene(doc: SceneDoc, { puffs = true }: { puffs?: boolean 
     const bed = groundUnder(ground, x, z, pond.level + 3 * (pond.cell ?? WATER_CELL), -SMALL_REACH * 2)
     return bed > -SMALL_REACH * 2 + 1e-6 && bed < pond.level - WATER_LEAST
   }
-  const specks = planSpecks(doc.air, doc.loop, (x, z, top, bottom) => {
-    const g = groundUnder(ground, x, z, top, bottom)
+  const groundAt = (x: number, z: number, top: number, bottom: number) => {
+    const g = groundUnder(standing(), x, z, top, bottom)
     // nothing between the sky and the water there: the water is what it lands on
     return pond && g < pond.level && wetAt(x, z) ? pond.level : g
-  }, pond?.level)
+  }
+  const specks = planSpecks(doc.air, doc.loop, under ?? groundAt, pond?.level)
   const water = pond && pondBox ? planWater(pond, pondBox, doc, specks, bones, wetAt) : undefined
   const banks = doc.air?.mist ?? []
   banks.forEach((m, mi) => { for (let k = 0; k < BANK_BONES; k++) bones.push({ name: `~mist${mi}-${k}`, parent: 0, head: m.at }) })
@@ -1871,6 +1880,7 @@ export function compileScene(doc: SceneDoc, { puffs = true }: { puffs?: boolean 
       sk.update()
     },
     haze: haze ? { color: unit(haze.color).map(linear) as Vec3, from: haze.from ?? 0, to: haze.to ?? 4 } : undefined,
+    ground: groundAt,
     water,
     lights: (t) => lightsAt(lights, t / doc.loop),
   }

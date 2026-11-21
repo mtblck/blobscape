@@ -4270,6 +4270,15 @@
          "code": "lights(t: number): PointLight[]"
         }
        ]
+      },
+      {
+       "name": "ground",
+       "doc": "The height of what stays put under (x, z), looking down from `top`, or `bottom` where nothing is: its still parts,\nor its water's surface where that is what lies open to the sky. What falls from outside the scene lands on it.",
+       "signatures": [
+        {
+         "code": "ground(x: number, z: number, top: number, bottom: number): number"
+        }
+       ]
       }
      ]
     },
@@ -4443,10 +4452,10 @@
     {
      "name": "compileScene",
      "kind": "function",
-     "doc": "`puffs` keeps hidden bones for a tap's puff of sparkles (`poke.ts`); a creature taken from a scene goes without.",
+     "doc": "`ground` is the ground what falls lands on, in place of the description's own parts: weather laid over another scene (skyRecipes.ts) lands on that scene's.",
      "signatures": [
       {
-       "code": "compileScene(doc: SceneDoc, options?: { puffs?: boolean }): CompiledScene"
+       "code": "compileScene(doc: SceneDoc, options?: { puffs?: boolean; ground?: (x: number, z: number, top: number, bottom: number) => number }): CompiledScene"
       }
      ]
     },
