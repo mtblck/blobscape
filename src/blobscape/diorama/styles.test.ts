@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { STYLES, styleAsked, styleWords } from './styles.ts'
 import { LOOKS } from '../brushLooks.ts'
 import { CEL } from '../celLooks.ts'
-import { BLOCKS, BLOCK_SPAN, BLOCK_START, blockLook, gridOf } from '../blockLooks.ts'
+import { BLOCKS, BLOCK_GROUNDS, BLOCK_SPAN, BLOCK_START, BLOCK_TIMES, blockBack, blockLook, gridOf } from '../blockLooks.ts'
 import { WASH, WASH_PAPERS, WASH_START, washLook } from '../washLooks.ts'
 import { GLASS, glassLook, GLASS_START } from '../glassLooks.ts'
 import { GLITCH, GLITCH_START, glitchLook } from '../glitchLooks.ts'
@@ -79,4 +79,18 @@ test('blocks are whole cells of the grid a scene was cut on, or a share of a sub
   const straight = blockLook({ ...BLOCK_START, turn: 0, height: 0 }, 0.02, 90).from!
   assert.ok(Math.abs(straight[0] - 1) < 1e-9 && Math.abs(straight[2]) < 1e-9)
   assert.equal(blockLook({ ...BLOCK_START, size: 99 }, 1).cell, 8)
+})
+
+test('a Blocks backdrop is a time of day with its light, or a plain color in day\'s light', () => {
+  const sky = { back: 'linear-gradient(#000, #111)', night: 1 }
+  // nothing chosen: the subject's own sky where it has one, else the afternoon
+  assert.deepEqual([blockBack('', sky).id, blockBack('').id, blockBack('scene').id], ['scene', 'afternoon', 'afternoon'])
+  assert.ok(blockBack('', sky).light![0] < 0.5, 'a dark sky of its own is a night\'s light')
+  assert.equal(blockBack('afternoon', sky).light, undefined)
+  for (const t of BLOCK_TIMES) { const b = blockBack(t.id, sky); assert.ok(b.time && b.back === t.back) }
+  assert.ok(blockBack('night').light![2] > blockBack('night').light![0], 'night is dim and blue')
+  assert.ok(blockBack('morning').light![0] > blockBack('morning').light![2], 'morning is warm')
+  for (const g of BLOCK_GROUNDS) { const b = blockBack(g.id, sky); assert.ok(!b.time && b.light === undefined && b.back === g.back) }
+  const ids = [...BLOCK_TIMES, ...BLOCK_GROUNDS].map((x) => x.id)
+  assert.equal(new Set([...ids, 'scene']).size, ids.length + 1)
 })
