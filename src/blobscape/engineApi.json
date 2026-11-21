@@ -4040,6 +4040,22 @@
      ]
     },
     {
+     "name": "MoveAxis",
+     "kind": "type",
+     "doc": "An axis a bone turns about: 'x', 'y' or 'z', or any way as [x, y, z] (a prop set down turned writes one).",
+     "type": "\"x\" | \"y\" | \"z\" | Vec3"
+    },
+    {
+     "name": "moveAxis",
+     "kind": "function",
+     "doc": "The way an axis points, of length 1.",
+     "signatures": [
+      {
+       "code": "moveAxis(a: MoveAxis): Vec3"
+      }
+     ]
+    },
+    {
      "name": "PartDoc",
      "kind": "interface",
      "doc": "One part of a scene: a shape, its paint and the bone that carries it.",
@@ -4125,6 +4141,12 @@
        "optional": true,
        "type": "number",
        "doc": "Dabs that follow the form: 0 to 1, how far each cell is drawn as a stroke along the level line round the shape. Shows as brushwork in the Blobs view."
+      },
+      {
+       "name": "placed",
+       "optional": true,
+       "type": "{ foot: Vec3; at: Vec3; turn: number; size: number }",
+       "doc": "Where the prop this part belongs to was set down, when the part was written somewhere else: its shape and paint\nare as written, moved from `foot` to `at`, turned `turn` degrees about the upright (counterclockwise seen from\nabove) and sized `size` times. A scene made of library props (compose.ts) writes it; nobody needs to by hand."
       }
      ]
     },
@@ -4150,7 +4172,7 @@
      "name": "MoveDoc",
      "kind": "type",
      "doc": "Every move repeats a whole number of `times` in the loop (or in its `during`), so the scene loops.",
-     "type": "{ kind: \"spin\"; bone: string; axis: \"x\" | \"y\" | \"z\"; times: number; phase?: number; during?: During } | { kind: \"sway\"; bone: string; axis: \"x\" | \"y\" | \"z\"; degrees: number; times: number; phase?: number; during?: During } | { kind: \"bob\"; bone: string; by: Vec3; times: number; phase?: number; during?: During } | { kind: \"drift\"; bone: string; by: Vec3; times: number; grow?: [number, number]; phase?: number; during?: During } | { kind: \"pulse\"; bone: string; size: [number, number]; times: number; phase?: number; during?: During } | { kind: \"sprout\"; bone: string; times: number; phase?: number; during?: During; rise?: number; fall?: number } | { kind: \"pass\"; bone: string; by: Vec3; times: number; phase?: number; during?: During } | { kind: \"dissolve\"; bone: string; times: number; by?: number; phase?: number; during?: During; rise?: number; fall?: number }"
+     "type": "{ kind: \"spin\"; bone: string; axis: MoveAxis; times: number; phase?: number; during?: During } | { kind: \"sway\"; bone: string; axis: MoveAxis; degrees: number; times: number; phase?: number; during?: During } | { kind: \"bob\"; bone: string; by: Vec3; times: number; phase?: number; during?: During } | { kind: \"drift\"; bone: string; by: Vec3; times: number; grow?: [number, number]; phase?: number; during?: During } | { kind: \"pulse\"; bone: string; size: [number, number]; times: number; phase?: number; during?: During } | { kind: \"sprout\"; bone: string; times: number; phase?: number; during?: During; rise?: number; fall?: number } | { kind: \"pass\"; bone: string; by: Vec3; times: number; phase?: number; during?: During } | { kind: \"dissolve\"; bone: string; times: number; by?: number; phase?: number; during?: During; rise?: number; fall?: number }"
     },
     {
      "name": "LightDoc",
