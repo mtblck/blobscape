@@ -333,7 +333,7 @@ export function PixelDiorama() {
     // the shared moon, sun and stars, which cloud cover puts out
     const heavens = heavenBones(scene.built.skeleton.bones.map((b) => b.name))
     const own = ownClouds(scene.of)
-    stage.setActor(scene.built, undefined, [...(pond ? [pond.surface] : []), ...(fall?.actors ?? [])])
+    stage.setActor(scene.built, undefined, [...(pond ? [pond.surface] : []), ...(pond?.spray ? [pond.spray] : []), ...(fall?.actors ?? [])])
     seen.current = null
     // the surface as it stands at the stage's time, for the eye as it stands: after a pose, a turn of the view or a new picture in the mirror
     wet.current = pond && (() => {
@@ -341,6 +341,7 @@ export function PixelDiorama() {
       const eye = [o.target[0] + o.distance * Math.sin(a) * Math.cos(e), o.target[1] + o.distance * Math.sin(e), o.target[2] + o.distance * Math.cos(a) * Math.cos(e)]
       pond.show(stage.time, eye, { mirror: seen.current })
       stage.reshape(pond.surface)
+      if (pond.spray) stage.reshape(pond.spray)
     })
     // it mirrors what stands round it: the scene drawn once more as its mirror image (a second sort and a small draw, so only with WebGPU)
     stage.setMirror(pond && mirrored ? { plane: levelPlane(pond.plan.level), lift: pond.plan.cell * 0.75, seen: (image) => { seen.current = image; wet.current?.() } } : undefined)
@@ -377,6 +378,8 @@ export function PixelDiorama() {
       // the scene's own rain, snow and leaves are blown by the same wind
       if (now.wind > 0) d.blow?.(sk, t, windAt(now, t, d.loop))
       showHeavens(sk.size, heavens, Math.max(now.clouds, own))
+      // what floats rides the water as it stands at this moment: a boat or a buoy rocks on the waves that pass
+      pond?.ride(sk, t)
       // an export is the scene's own loop: no pokes, and the view as it stood when it began
       if (!held.current) pokes.current?.apply(sk, performance.now() / 1000)
       stage.setLights(castBy(d.lights(t, stage.backend === 'webgpu'), glowGain(glowNow.current, d.finish.glow)), d.ambientAt?.(t) ?? d.ambient ?? 1)

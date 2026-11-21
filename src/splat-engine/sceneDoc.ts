@@ -160,6 +160,27 @@ export interface WaterDoc {
    * moves the whole depth.
    */
   bodies?: { bone: string; at: Vec3; r: number; draft?: number }[]
+  /**
+   * Swells rolling in from the open sea, at most four, made by nothing in the scene: each is a long straight wave
+   * train coming from the way `from` (degrees round the upright, measured as the camera's azimuth is: 0 from +z, 90
+   * from +x), `height` meters from crest to rest, `times` crests a loop, starting `phase` (0 to 1) of the way through.
+   * The water nearest that side is held to the swells as they would come in from beyond the scene, so they roll in
+   * straight across the whole width of the water, bend round what stands in it, and what comes back out to that side
+   * runs off rather than bouncing. Few, long and low is the sea: crests come `speed` × loop / `times` apart.
+   */
+  swells?: { from: number; height: number; times: number; phase?: number }[]
+  /**
+   * What rides the water, at most twelve: the bone `bone` rises and falls with the surface at the point `at` (where
+   * it sits on the water at rest) and tips with the surface's slope across `size` (half its length), steepened as the
+   * surface is drawn (`ripple`). A boat, a buoy, a lily pad. Its own moves still apply under it.
+   */
+  floats?: { bone: string; at: Vec3; size: number }[]
+  /**
+   * Foam where the water strikes what stands in it (a post, a rock, a bank): it gathers where the surge against a
+   * wall runs up fast, spreads a little and fades over a second or two, and the surface is drawn white under it.
+   * `foam` is how readily it gathers, 0 (none, when left out) to 4; 1 suits swells against posts.
+   */
+  foam?: number
 }
 
 /** A scene's air: haze, mist, shafts of light and specks. */
@@ -1158,6 +1179,24 @@ export function checkScene(doc: unknown): string[] {
           vec(b.at, `${at}.at`); num(b.r, `${at}.r`, 0.005, 0.5); opt(b.draft, `${at}.draft`, 0, 0.5)
         })
       }
+      if (w.swells !== undefined) {
+        if (!Array.isArray(w.swells) || w.swells.length > 4) bad('water.swells', 'must be a list of at most 4')
+        else w.swells.forEach((v: unknown, i: number) => {
+          const at = `water.swells[${i}]`
+          if (!obj(v)) { bad(at, 'must be an object'); return }
+          num(v.from, `${at}.from`, -360, 360); num(v.height, `${at}.height`, 0.0005, 0.1); whole(v.times, `${at}.times`); opt(v.phase, `${at}.phase`, -1, 1)
+        })
+      }
+      if (w.floats !== undefined) {
+        if (!Array.isArray(w.floats) || w.floats.length > 12) bad('water.floats', 'must be a list of at most 12')
+        else w.floats.forEach((f: unknown, i: number) => {
+          const at = `water.floats[${i}]`
+          if (!obj(f)) { bad(at, 'must be an object'); return }
+          if (typeof f.bone !== 'string' || !names.has(f.bone)) bad(`${at}.bone`, `${show(f.bone)} is not a bone of this scene`)
+          vec(f.at, `${at}.at`); num(f.size, `${at}.size`, 0.01, 1)
+        })
+      }
+      opt(w.foam, 'water.foam', 0, 4)
     }
   }
   if (doc.air !== undefined) {
@@ -1543,10 +1582,18 @@ export interface WaterPlan {
   horizon: Vec3
   /** Whether there is water at a point: the still ground there lies under the level. It measures the ground each time, so ask once a cell. */
   wet(x: number, z: number): boolean
+  /** Whether something stands out of the water at a dry point (a rock, a bank, a post), rather than there being no ground at all (past the edge of a scene's sea). Measured each time, as `wet` is. */
+  stands(x: number, z: number): boolean
   /** Every raindrop that lands on the water in one loop: where, and how many seconds into the loop. */
   drops: WaterDrop[]
   /** What moves through the surface: a ball of radius `r` round the rest point `at`, riding the bone at index `bone`, moving water `draft` deep where it crosses. */
   bodies: { bone: number; at: Vec3; r: number; draft: number }[]
+  /** Swells coming in from the open sea: from the way `from` (degrees, as the camera's azimuth), `height` high, `times` crests a loop from `phase`. */
+  swells: { from: number; height: number; times: number; phase: number }[]
+  /** What rides the water: the bone at index `bone`, sitting on it at `at`, tipped by its slope across `size`. */
+  floats: { bone: number; at: Vec3; size: number }[]
+  /** How readily foam gathers where the water strikes something standing in it: 0 for none. */
+  foam: number
 }
 
 // --- What hangs in the air
@@ -1689,7 +1736,7 @@ function wetDrops(specks: readonly Speck[], loop: number): WaterDrop[] {
 }
 
 /** A scene's water with its defaults filled in, and every raindrop that lands on it in a loop. */
-function planWater(w: WaterDoc, box: { x0: number; x1: number; z0: number; z1: number }, doc: SceneDoc, specks: Speck[], bones: Bone[], wet: (x: number, z: number) => boolean): WaterPlan {
+function planWater(w: WaterDoc, box: { x0: number; x1: number; z0: number; z1: number }, doc: SceneDoc, specks: Speck[], bones: Bone[], wet: (x: number, z: number) => boolean, stands: (x: number, z: number) => boolean): WaterPlan {
   const cell = w.cell ?? WATER_CELL
   const lin = (h: string) => unit(h).map(linear) as Vec3
   const body = lin(w.color)
@@ -1701,8 +1748,11 @@ function planWater(w: WaterDoc, box: { x0: number; x1: number; z0: number; z1: n
     level: w.level, x0: box.x0, z0: box.z0, nx: Math.max(1, Math.ceil((box.x1 - box.x0) / cell)), nz: Math.max(1, Math.ceil((box.z1 - box.z0) / cell)), cell,
     speed: w.speed ?? 0.32, damping: w.damping ?? 0.6, ripple: w.ripple ?? 4, deep: w.deep ?? 0.05, clear: w.clear ?? 0.5,
     splash: w.splash ?? { r: cell * 1.5, depth: cell * 0.2 },
-    body, sky, horizon, wet, drops,
+    body, sky, horizon, wet, stands, drops,
     bodies: (w.bodies ?? []).map((b) => ({ bone: bones.findIndex((k) => k.name === b.bone), at: b.at, r: b.r, draft: b.draft ?? b.r * 0.1 })),
+    swells: (w.swells ?? []).map((v) => ({ from: v.from, height: v.height, times: v.times, phase: v.phase ?? 0 })),
+    floats: (w.floats ?? []).map((f) => ({ bone: bones.findIndex((k) => k.name === f.bone), at: f.at, size: f.size })),
+    foam: w.foam ?? 0,
   }
 }
 
@@ -1843,6 +1893,8 @@ export function compileScene(given: SceneDoc, { puffs = true, ground: under, wat
   // what weather lands on: parts that stay put (on no bone, or one that only sways), in order, a drift over those before it
   const moved = new Set<string>()
   for (const m of moves) if (m.kind !== 'sway') moved.add(m.bone)
+  // what floats rides the water, so it is no ground under it
+  for (const f of doc.water?.floats ?? []) moved.add(f.bone)
   for (const b of doc.bones ?? []) if (b.parent && moved.has(b.parent)) moved.add(b.name)
   const solidShapes = (thin: number) => {
     const out: Shape[] = [], still: Shape[] = []
@@ -1861,18 +1913,17 @@ export function compileScene(given: SceneDoc, { puffs = true, ground: under, wat
   const ground = (lands && !under) || pond ? standing() : []
   const pondBox = pond && { x0: Math.min(pond.from[0], pond.to[0]), x1: Math.max(pond.from[0], pond.to[0]), z0: Math.min(pond.from[1], pond.to[1]), z1: Math.max(pond.from[1], pond.to[1]) }
   /** Whether there is water at (x, z): inside the box, with a bed of still ground under the level to hold it (looked for from just over the surface, so a roof overhead is not in the way). */
-  const wetAt = (x: number, z: number) => {
-    if (!pond || !pondBox || x < pondBox.x0 || x > pondBox.x1 || z < pondBox.z0 || z > pondBox.z1) return false
-    const bed = groundUnder(ground, x, z, pond.level + 3 * (pond.cell ?? WATER_CELL), -SMALL_REACH * 2)
-    return bed > -SMALL_REACH * 2 + 1e-6 && bed < pond.level - WATER_LEAST
-  }
+  const bedAt = (x: number, z: number) => !pond || !pondBox || x < pondBox.x0 || x > pondBox.x1 || z < pondBox.z0 || z > pondBox.z1 ? -Infinity
+    : groundUnder(ground, x, z, pond.level + (pond.cell ?? WATER_CELL), -SMALL_REACH * 2)
+  const wetAt = (x: number, z: number) => { const bed = bedAt(x, z); return !!pond && bed > -SMALL_REACH * 2 + 1e-6 && bed < pond.level - WATER_LEAST }
+  const standsAt = (x: number, z: number) => !!pond && bedAt(x, z) >= pond.level - WATER_LEAST
   const groundAt = (x: number, z: number, top: number, bottom: number) => {
     const g = groundUnder(standing(), x, z, top, bottom)
     // nothing between the sky and the water there: the water is what it lands on
     return pond && g < pond.level && wetAt(x, z) ? pond.level : g
   }
   const specks = planSpecks(doc.air, doc.loop, under ?? groundAt, under ? level : pond?.level)
-  const water = pond && pondBox ? planWater(pond, pondBox, doc, specks, bones, wetAt) : undefined
+  const water = pond && pondBox ? planWater(pond, pondBox, doc, specks, bones, wetAt, standsAt) : undefined
   const banks = doc.air?.mist ?? []
   banks.forEach((m, mi) => { for (let k = 0; k < BANK_BONES; k++) bones.push({ name: `~mist${mi}-${k}`, parent: 0, head: m.at }) })
   for (const p of specks) { p.index = bones.length; bones.push({ name: p.bone, parent: 0, head: p.at }) }

@@ -421,7 +421,7 @@ export function splitScene(given: SceneDoc, picks: PropPick[]): { land: PropDoc;
   const left = doc.parts.map((_, i) => i).filter((i) => !taken.has(i))
   const ground = keepOnly(doc, left)
   const bonesLeft = new Set((ground.bones ?? []).map((b) => b.name))
-  const water = doc.water && { ...doc.water, bodies: doc.water.bodies?.filter((b) => bonesLeft.has(b.bone)) }
+  const water = doc.water && { ...doc.water, bodies: doc.water.bodies?.filter((b) => bonesLeft.has(b.bone)), floats: doc.water.floats?.filter((f) => bonesLeft.has(f.bone)) }
   const land: PropDoc = { name: doc.name, foot: [0, 0, 0], doc: { ...ground, lights: (doc.lights ?? []).filter((_, i) => lightsLeft.has(i)), water } }
   const project: SceneProject = {
     kind: 'blobscape-project', version: 1, name: doc.name, loop: doc.loop,

@@ -316,6 +316,24 @@ export class Water {
     this.version++
   }
 
+  /**
+   * Pulls the water toward a given surface where `weight` says, a share a call (0 leaves a cell alone, 1 sets it): each
+   * cell's height toward `h` and its speed upward toward `v`. Called once a tick along a stretch of open water, with
+   * the surface as waves coming in from beyond it would make it, this brings those waves in across the whole stretch
+   * and lets what comes back out run off instead of bouncing (a relaxation zone, as a wave tank's paddle and beach).
+   */
+  relax(weight: Float32Array, h: Float32Array, v: Float32Array) {
+    const { wet } = this
+    for (let k = 0; k < weight.length; k++) {
+      const w = weight[k]
+      if (!w || !wet[k]) continue
+      this.h[k] += w * (h[k] - this.h[k])
+      this.v[k] += w * (v[k] - this.v[k])
+    }
+    this.moving = true
+    this.version++
+  }
+
   /** Moves the water on by `dt` seconds, in whole ticks (what is left of a frame is carried to the next). */
   step(dt: number) {
     this.carry += dt

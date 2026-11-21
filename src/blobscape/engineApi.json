@@ -3817,6 +3817,24 @@
        "optional": true,
        "type": "{ bone: string; at: Vec3; r: number; draft?: number }[]",
        "doc": "What swims or floats through the surface, at most twelve: a ball of radius `r` round the point `at`, riding\n`bone`. Where it breaks the surface it pushes aside the water it takes the place of, so a back that rises\nleaves a ring and one that moves along leaves a wake. `draft` is how deep the water it moves is where it\ncrosses: a tenth of `r` when left out, which suits a fish whose back just shows; a post standing on the bed\nmoves the whole depth."
+      },
+      {
+       "name": "swells",
+       "optional": true,
+       "type": "{ from: number; height: number; times: number; phase?: number }[]",
+       "doc": "Swells rolling in from the open sea, at most four, made by nothing in the scene: each is a long straight wave\ntrain coming from the way `from` (degrees round the upright, measured as the camera's azimuth is: 0 from +z, 90\nfrom +x), `height` meters from crest to rest, `times` crests a loop, starting `phase` (0 to 1) of the way through.\nThe water nearest that side is held to the swells as they would come in from beyond the scene, so they roll in\nstraight across the whole width of the water, bend round what stands in it, and what comes back out to that side\nruns off rather than bouncing. Few, long and low is the sea: crests come `speed` × loop / `times` apart."
+      },
+      {
+       "name": "floats",
+       "optional": true,
+       "type": "{ bone: string; at: Vec3; size: number }[]",
+       "doc": "What rides the water, at most twelve: the bone `bone` rises and falls with the surface at the point `at` (where\nit sits on the water at rest) and tips with the surface's slope across `size` (half its length), steepened as the\nsurface is drawn (`ripple`). A boat, a buoy, a lily pad. Its own moves still apply under it."
+      },
+      {
+       "name": "foam",
+       "optional": true,
+       "type": "number",
+       "doc": "Foam where the water strikes what stands in it (a post, a rock, a bank): it gathers where the surge against a\nwall runs up fast, spreads a little and fades over a second or two, and the surface is drawn white under it.\n`foam` is how readily it gathers, 0 (none, when left out) to 4; 1 suits swells against posts."
       }
      ]
     },
@@ -4448,6 +4466,21 @@
        "name": "bodies",
        "type": "{ bone: number; at: Vec3; r: number; draft: number }[]",
        "doc": "What moves through the surface: a ball of radius `r` round the rest point `at`, riding the bone at index `bone`, moving water `draft` deep where it crosses."
+      },
+      {
+       "name": "swells",
+       "type": "{ from: number; height: number; times: number; phase: number }[]",
+       "doc": "Swells coming in from the open sea: from the way `from` (degrees, as the camera's azimuth), `height` high, `times` crests a loop from `phase`."
+      },
+      {
+       "name": "floats",
+       "type": "{ bone: number; at: Vec3; size: number }[]",
+       "doc": "What rides the water: the bone at index `bone`, sitting on it at `at`, tipped by its slope across `size`."
+      },
+      {
+       "name": "foam",
+       "type": "number",
+       "doc": "How readily foam gathers where the water strikes something standing in it: 0 for none."
       }
      ],
      "methods": [
@@ -4457,6 +4490,15 @@
        "signatures": [
         {
          "code": "wet(x: number, z: number): boolean"
+        }
+       ]
+      },
+      {
+       "name": "stands",
+       "doc": "Whether something stands out of the water at a dry point (a rock, a bank, a post), rather than there being no ground at all (past the edge of a scene's sea). Measured each time, as `wet` is.",
+       "signatures": [
+        {
+         "code": "stands(x: number, z: number): boolean"
         }
        ]
       }
@@ -4659,6 +4701,24 @@
        "doc": "How many moments of the loop are kept."
       },
       {
+       "name": "foam",
+       "readonly": true,
+       "type": "Float32Array",
+       "doc": "Foam on each cell as last laid by `set`, 0 to 1 (`WaterDoc.foam`); all 0 where the scene has none."
+      },
+      {
+       "name": "spray",
+       "readonly": true,
+       "type": "Actor | null",
+       "doc": "Spray thrown up where the water strikes something hard enough (with `WaterDoc.foam`): droplets on one still\nbone, placed for the moment by `show` (hand it to the stage beside the surface and `reshape` it too). It stays\nblobs when the scene is drawn as blocks. None when the scene has no foam."
+      },
+      {
+       "name": "bursts",
+       "readonly": true,
+       "type": "Burst[]",
+       "doc": "Every burst of spray in the loop: where, when, which way away from what it struck, and how hard (0 to 1)."
+      },
+      {
        "name": "waves",
        "type": "number",
        "doc": "How rough the wind makes the water, in levels (`addWind`): 0 for none."
@@ -4670,6 +4730,15 @@
       }
      ],
      "methods": [
+      {
+       "name": "ride",
+       "doc": "Stands each float of the scene (`WaterDoc.floats`) on the water as it is `t` seconds into the loop: its bone rises\nand falls with the surface at its point and tips with the slope across its size, steepened as the surface is\ndrawn, on top of the pose the scene gave it. Call it after the scene's pose; it updates the skeleton.",
+       "signatures": [
+        {
+         "code": "ride(sk: Skeleton, t: number): void"
+        }
+       ]
+      },
       {
        "name": "addRain",
        "doc": "Rain from outside the scene (weather laid over it) on the pond, in bands of its swarm: `bands` are the shares of\nthe swarm where each ends (ascending, the last 1), and `rain` (0 to 1, the share of the swarm out) then says how\nmuch of each band falls. Each band's rings are worked out on their own, through the same loops: the wave\nequation is linear, so the pond with them is the pond without plus their rings. Costs a run of the loop a band.",
@@ -4714,6 +4783,43 @@
          "code": "show(t: number, eye: ArrayLike<number>, options?: { mirror?: MirrorImage | null; lights?: readonly PointLight[] }): void"
         }
        ]
+      }
+     ]
+    },
+    {
+     "name": "Burst",
+     "kind": "interface",
+     "doc": "A burst of spray: thrown at `at` seconds into the loop from (x, z), away from what was struck along (ox, oz).",
+     "props": [
+      {
+       "name": "x",
+       "type": "number",
+       "doc": "Where it was thrown from, on the water: x."
+      },
+      {
+       "name": "z",
+       "type": "number",
+       "doc": "Where it was thrown from, on the water: z."
+      },
+      {
+       "name": "at",
+       "type": "number",
+       "doc": "Seconds into the loop."
+      },
+      {
+       "name": "ox",
+       "type": "number",
+       "doc": "The way out from what was struck, a unit pair: x."
+      },
+      {
+       "name": "oz",
+       "type": "number",
+       "doc": "The way out from what was struck, a unit pair: z."
+      },
+      {
+       "name": "strength",
+       "type": "number",
+       "doc": "How hard, 0 to 1: how high its droplets go."
       }
      ]
     }
@@ -11764,6 +11870,15 @@
        "signatures": [
         {
          "code": "splash(x: number, z: number, r: number, depth: number): void"
+        }
+       ]
+      },
+      {
+       "name": "relax",
+       "doc": "Pulls the water toward a given surface where `weight` says, a share a call (0 leaves a cell alone, 1 sets it): each\ncell's height toward `h` and its speed upward toward `v`. Called once a tick along a stretch of open water, with\nthe surface as waves coming in from beyond it would make it, this brings those waves in across the whole stretch\nand lets what comes back out run off instead of bouncing (a relaxation zone, as a wave tank's paddle and beach).",
+       "signatures": [
+        {
+         "code": "relax(weight: Float32Array, h: Float32Array, v: Float32Array): void"
         }
        ]
       },
