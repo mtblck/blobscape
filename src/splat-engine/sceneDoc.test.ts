@@ -360,6 +360,8 @@ test('lamps wait for the dark: by day a light is out, its glass is dull and no l
   assert.ok(cave.parts[2].glow && cave.lights![0].strength === 2)
   assert.equal(litFor(d, false, 'always').lights![0].strength, 2, 'and whoever sets a scene down can say so too')
   assert.ok(isLit('dark', false, 'always') && !isLit('day', true, 'always') && isLit(undefined, false))
+  // the moon and stars are the night's own: no setting brings them out by day
+  assert.ok(!isLit('night', false, 'always') && isLit('night', true))
 
   // a dull shade is darker and nearer gray
   const [r, g, b] = [1, 3, 5].map((i) => parseInt(dulled('#ffd166').slice(i, i + 2), 16))
@@ -368,7 +370,7 @@ test('lamps wait for the dark: by day a light is out, its glass is dull and no l
   const wrong = sound()
   wrong.parts[1] = { ...wrong.parts[1], lit: 'dark' }
   wrong.parts[2] = { ...wrong.parts[2], unlit: 'gone' }
-  wrong.lights = [{ at: [0, 1, 0], color: '#f4f1e4', strength: 1, range: 1, lit: 'night' as 'dark' }]
+  wrong.lights = [{ at: [0, 1, 0], color: '#f4f1e4', strength: 1, range: 1, lit: 'dusk' as 'dark' }]
   const errs = checkScene({ ...wrong, lamps: 'never' as 'always' })
   for (const at of [/^parts\[1\]\.lit:/, /^parts\[2\]\.unlit:/, /^lights\[0\]\.lit:/, /^lamps:/]) assert.ok(errs.some((e) => at.test(e)), `${at} in ${errs.join('; ')}`)
 })

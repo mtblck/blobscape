@@ -25,7 +25,7 @@ export const RUIN: SceneDoc = {
     haze: { color: '#5a3c5a', from: 1.5, to: 8 },
     specks: [
       { kind: 'dust', count: 40, from: [-1.4, 0.2, -1], to: [1.4, 1.6, 1.2], colors: ['#ffd08a', '#f0a070'], glow: true },
-      { kind: 'fireflies', lit: 'dark', count: 8, from: [-1.2, 0.2, 0.2], to: [1.2, 0.9, 1.5], colors: ['#fff2c8'] },
+      { kind: 'fireflies', lit: 'night', count: 8, from: [-1.2, 0.2, 0.2], to: [1.2, 0.9, 1.5], colors: ['#fff2c8'] },
     ],
   },
   bones: [

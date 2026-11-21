@@ -199,10 +199,12 @@ export interface ShaftDoc {
 export type SpeckKind = 'dust' | 'embers' | 'rain' | 'snow' | 'leaves' | 'fireflies' | 'bubbles'
 
 /**
- * When a lamp is lit: only when it is 'dark', only by 'day' (a sun), or 'always' (magic, lava, a crystal). A light, a
- * glowing part or a swarm of glowing specks says it with `lit`; `litFor` is what puts out the ones whose time it is not.
+ * When something is lit: a lamp only when it is 'dark' (unless whoever sets the scene says its lamps always burn),
+ * what belongs to the night itself only at 'night' (the moon, stars, fireflies: no setting brings them out by day),
+ * a sun only by 'day', or 'always' (magic, lava, a crystal). A light, a glowing part or a swarm of glowing specks says
+ * it with `lit`; `litFor` is what puts out the ones whose time it is not.
  */
-export type LitWhen = 'dark' | 'day' | 'always'
+export type LitWhen = 'dark' | 'night' | 'day' | 'always'
 
 /** One swarm of specks: dust, embers, rain, snow, leaves, fireflies or bubbles. */
 export interface SpeckDoc {
@@ -256,7 +258,7 @@ export interface PartDoc {
   glow?: boolean
   /**
    * When it is lit, for a part that is a lamp or part of one (a lantern's panes, a lit window, a flame, a star, the
-   * sun): 'dark', 'day' or 'always'. For the rest of the time it is as `unlit` says. Left out, it never changes: right
+   * sun): 'dark', 'night', 'day' or 'always'. For the rest of the time it is as `unlit` says. Left out, it never changes: right
    * for anything that only keeps its own color (a flower, a bird, foam), wrong for a lamp.
    */
   lit?: LitWhen
@@ -495,8 +497,8 @@ export interface LightDoc {
   /** Its color. */
   color: string
   /**
-   * When it shines: 'dark' (a lamp, a candle, a lit window, a campfire), 'day' or 'always' (magic, lava, a crystal,
-   * anything in a cave or a dungeon). Every light should say; left out, it always shines.
+   * When it shines: 'dark' (a lamp, a candle, a lit window, a campfire), 'night' (moonlight), 'day' or 'always'
+   * (magic, lava, a crystal). Every light should say; left out, it always shines.
    */
   lit?: LitWhen
   /** 1 is a torch; 3 lights dark ground brightly. */
@@ -526,7 +528,7 @@ export interface LightDoc {
 // --- Checking
 
 const HEX = /^#[0-9a-f]{6}$/i
-const LIT_WHENS: LitWhen[] = ['dark', 'day', 'always']
+const LIT_WHENS: LitWhen[] = ['dark', 'night', 'day', 'always']
 const AXES = ['x', 'y', 'z']
 const SMALL_REACH = 4
 const MAX_PARTS = 240
@@ -1893,7 +1895,7 @@ export function dulled(color: string): string {
 
 /** Whether something lit `when` is lit: by day or in the dark, with the scene's `lamps` deciding for those that wait for the dark. */
 export function isLit(when: LitWhen | undefined, dark: boolean, lamps?: 'dark' | 'always'): boolean {
-  return when === undefined || when === 'always' || (when === 'dark' ? dark || lamps === 'always' : !dark)
+  return when === undefined || when === 'always' || (when === 'dark' ? dark || lamps === 'always' : when === 'night' ? dark : !dark)
 }
 
 /** Whether anything in a description is lit only some of the time, so that the time of day changes it. */

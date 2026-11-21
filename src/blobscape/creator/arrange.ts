@@ -29,6 +29,9 @@ export const sized = (p: SceneProject, i: number, size: number): SceneProject =>
 /** Prop `i` holding still, or playing its own moves again. */
 export const stilled = (p: SceneProject, i: number, still: boolean): SceneProject => withProp(p, i, { still: still || undefined })
 
+/** Prop `i`'s lamps: always lit, waiting for the dark, or (nothing) as the scene they stand in says. */
+export const lamped = (p: SceneProject, i: number, lit: 'dark' | 'always' | undefined): SceneProject => withProp(p, i, { lit })
+
 /** Prop `i` gone. */
 export const removed = (p: SceneProject, i: number): SceneProject => ({ ...p, props: p.props.filter((_, k) => k !== i) })
 

@@ -3879,8 +3879,8 @@
     {
      "name": "LitWhen",
      "kind": "type",
-     "doc": "When a lamp is lit: only when it is 'dark', only by 'day' (a sun), or 'always' (magic, lava, a crystal). A light, a\nglowing part or a swarm of glowing specks says it with `lit`; `litFor` is what puts out the ones whose time it is not.",
-     "type": "\"dark\" | \"day\" | \"always\""
+     "doc": "When something is lit: a lamp only when it is 'dark' (unless whoever sets the scene says its lamps always burn),\nwhat belongs to the night itself only at 'night' (the moon, stars, fireflies: no setting brings them out by day),\na sun only by 'day', or 'always' (magic, lava, a crystal). A light, a glowing part or a swarm of glowing specks says\nit with `lit`; `litFor` is what puts out the ones whose time it is not.",
+     "type": "\"dark\" | \"night\" | \"day\" | \"always\""
     },
     {
      "name": "SpeckDoc",
@@ -4004,7 +4004,7 @@
        "name": "lit",
        "optional": true,
        "type": "LitWhen",
-       "doc": "When it is lit, for a part that is a lamp or part of one (a lantern's panes, a lit window, a flame, a star, the\nsun): 'dark', 'day' or 'always'. For the rest of the time it is as `unlit` says. Left out, it never changes: right\nfor anything that only keeps its own color (a flower, a bird, foam), wrong for a lamp."
+       "doc": "When it is lit, for a part that is a lamp or part of one (a lantern's panes, a lit window, a flame, a star, the\nsun): 'dark', 'night', 'day' or 'always'. For the rest of the time it is as `unlit` says. Left out, it never changes: right\nfor anything that only keeps its own color (a flower, a bird, foam), wrong for a lamp."
       },
       {
        "name": "unlit",
@@ -4099,7 +4099,7 @@
        "name": "lit",
        "optional": true,
        "type": "LitWhen",
-       "doc": "When it shines: 'dark' (a lamp, a candle, a lit window, a campfire), 'day' or 'always' (magic, lava, a crystal,\nanything in a cave or a dungeon). Every light should say; left out, it always shines."
+       "doc": "When it shines: 'dark' (a lamp, a candle, a lit window, a campfire), 'night' (moonlight), 'day' or 'always'\n(magic, lava, a crystal). Every light should say; left out, it always shines."
       },
       {
        "name": "strength",

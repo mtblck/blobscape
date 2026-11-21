@@ -232,11 +232,11 @@ parts.push({
   shape: { kind: 'sphere', at: MOON_AT, r: 0.17 },
   // craters: round marks on the face, as deep columns through the moon so only their outline on the face counts
   paint: { kind: 'near', shape: { kind: 'join', shapes: [[0.05, 0.04, 0.06], [-0.07, -0.05, 0.05], [0.02, -0.09, 0.04]].map(([a, b, r]): ShapeDoc => ({ kind: 'ball', at: [r3(MOON_AT[0] + a), r3(MOON_AT[1] + b), MOON_AT[2]], r: [r, r, 0.4] })) }, within: 0, near: c(0.8, 0.84, 0.9), far: MOON },
-  glow: true, lit: 'dark', unlit: 'gone',
+  glow: true, lit: 'night', unlit: 'gone',
 })
 const STARS: V3[] = [[-0.6, 2.6, -1.6], [0.2, 2.75, -1.6], [1.3, 2.55, -1.6], [-1.6, 1.7, -1.3], [1.6, 1.9, -1.5], [0.6, 2.05, -1.7], [-0.2, 2.2, -1.7], [1.05, 2.9, -1.4], [-1.0, 2.9, -1.5], [-1.65, 2.5, -0.6], [1.7, 2.6, -0.5], [-1.2, 2.2, -1.6], [0.9, 1.6, -1.7], [-0.9, 1.5, -1.7], [1.7, 1.3, -1.2], [-1.7, 1.1, -0.9], [0.4, 3.0, -1.2], [-0.3, 1.7, -1.75]]
 // one part each: a join's box would span the whole sky, and the builder walks every cell of it
-STARS.forEach((p, i) => parts.push({ shape: { kind: 'sphere', at: p, r: 0.016 }, paint: hash(i, 2) > 0.6 ? c(0.8, 0.88, 0.9) : c(1, 1, 0.9), glow: true, lit: 'dark', unlit: 'gone' }))
+STARS.forEach((p, i) => parts.push({ shape: { kind: 'sphere', at: p, r: 0.016 }, paint: hash(i, 2) > 0.6 ? c(0.8, 0.88, 0.9) : c(1, 1, 0.9), glow: true, lit: 'night', unlit: 'gone' }))
 
 // foam: thin streaks that swell and fade as they drift
 FOAMS.forEach((f, i) => {
