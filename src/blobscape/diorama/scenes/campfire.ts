@@ -18,6 +18,11 @@ export const CAMPFIRE: SceneDoc = {
   // glow in rings, heat over the fire, and the flame's three colors cycling four times a second
   look: { dither: 0.5, glow: 1.75, outline: true, edges: true, bands: 2, heat: 1, cycle: [{ colors: ['#d9541e', '#f59a2a', '#ffd166'], times: 48 }] },
   camera: { target: [0, 1.0, 0], distance: 5.2, azimuth: 18, elevation: 13 },
+  // the night's moon and stars, from the shared recipes
+  heavens: {
+    moon: { at: [-1.5, 2.7, -1.7], r: 0.2, colors: ['#f4f1e4', '#c2c0cc'] },
+    stars: { count: 12, from: [-2.0, 2.0, -1.9], to: [1.9, 3.3, -0.7], size: 0.018, colors: ['#f4f1e4', '#f4f1e4', '#c2c0cc'] },
+  },
   air: { haze: { color: '#141c36', from: 1, to: 7 }, specks: [{ kind: 'embers', lit: 'dark', count: 30, from: [-0.05, 0.25, 0.1], to: [0.25, 1.8, 0.4], colors: ['#f59a2a', '#ffd166', '#d9541e'] }] },
   bones: [
     { name: 'flame', at: [0.1, 0.05, 0.25] },
@@ -104,19 +109,6 @@ export const CAMPFIRE: SceneDoc = {
     { shape: { kind: 'sphere', at: [0.4, 0.9, -0.9], r: 0.016 }, paint: '#fff3b0', bone: 'fly4', glow: true, lit: 'night', unlit: 'gone' },
     { shape: { kind: 'sphere', at: [-0.2, 0.35, 1.2], r: 0.016 }, paint: '#fff3b0', bone: 'fly5', glow: true, lit: 'night', unlit: 'gone' },
     { shape: { kind: 'sphere', at: [0.6, 0.3, 0.45], r: 0.016 }, paint: '#fff3b0', bone: 'fly6', glow: true, lit: 'night', unlit: 'gone' },
-    { shape: { kind: 'sphere', at: [-1.5, 2.7, -1.7], r: 0.2 }, paint: { kind: 'patches', size: 0.1, colors: ['#f4f1e4', '#f4f1e4', '#c2c0cc'] }, glow: true, lit: 'night', unlit: 'gone' },
-    { shape: { kind: 'sphere', at: [-0.6, 2.9, -1.8], r: 0.018 }, paint: '#c2c0cc', glow: true, lit: 'night', unlit: 'gone' },
-    { shape: { kind: 'sphere', at: [0.3, 3.1, -1.8], r: 0.018 }, paint: '#f4f1e4', glow: true, lit: 'night', unlit: 'gone' },
-    { shape: { kind: 'sphere', at: [1.3, 2.8, -1.7], r: 0.018 }, paint: '#f4f1e4', glow: true, lit: 'night', unlit: 'gone' },
-    { shape: { kind: 'sphere', at: [1.8, 2.2, -1.4], r: 0.018 }, paint: '#c2c0cc', glow: true, lit: 'night', unlit: 'gone' },
-    { shape: { kind: 'sphere', at: [0.8, 2.4, -1.9], r: 0.018 }, paint: '#f4f1e4', glow: true, lit: 'night', unlit: 'gone' },
-    { shape: { kind: 'sphere', at: [-0.1, 2.5, -1.9], r: 0.018 }, paint: '#f4f1e4', glow: true, lit: 'night', unlit: 'gone' },
-    { shape: { kind: 'sphere', at: [-1.9, 2.0, -1.2], r: 0.018 }, paint: '#c2c0cc', glow: true, lit: 'night', unlit: 'gone' },
-    { shape: { kind: 'sphere', at: [1.0, 3.3, -1.5], r: 0.018 }, paint: '#f4f1e4', glow: true, lit: 'night', unlit: 'gone' },
-    { shape: { kind: 'sphere', at: [-1.0, 3.3, -1.6], r: 0.018 }, paint: '#f4f1e4', glow: true, lit: 'night', unlit: 'gone' },
-    { shape: { kind: 'sphere', at: [1.9, 3.0, -0.8], r: 0.018 }, paint: '#c2c0cc', glow: true, lit: 'night', unlit: 'gone' },
-    { shape: { kind: 'sphere', at: [-2.0, 2.9, -0.7], r: 0.018 }, paint: '#f4f1e4', glow: true, lit: 'night', unlit: 'gone' },
-    { shape: { kind: 'sphere', at: [0.5, 2.0, -1.9], r: 0.018 }, paint: '#f4f1e4', glow: true, lit: 'night', unlit: 'gone' },
   ],
   moves: [
     { kind: 'pulse', bone: 'flame', size: [0.82, 1.12], times: 9 },

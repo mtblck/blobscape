@@ -14,8 +14,6 @@ type V3 = [number, number, number]
 const c = (r: number, g: number, b: number) => '#' + [r, g, b].map((v) => Math.round(Math.min(1, v) * 255).toString(16).padStart(2, '0')).join('')
 const cv = (v: Rgb) => c(...v)
 const shade = (v: Rgb, k: number) => c(v[0] * k, v[1] * k, v[2] * k)
-/** A repeatable number in 0..1 for a pair of whole numbers: which star is blue. */
-const hash = (a: number, b: number) => { const v = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return v - Math.floor(v) }
 const TAU = Math.PI * 2
 const r3 = (v: number) => Math.round(v * 1000) / 1000
 
@@ -29,12 +27,13 @@ const THIN = 0.012
 const [tx, tz] = [0.05, -0.05]
 const LAMP_Y = 1.4
 const SEA = 1.42
+/** The sea's surface. */
+const SEA_LEVEL = -0.01
 const GULLS = [
   { r: 0.62, y: 1.72, phase: 0, way: 1 },
   { r: 0.95, y: 1.5, phase: 2.2, way: -1 },
   { r: 0.7, y: 1.85, phase: 4.1, way: 1 },
 ]
-const CLOUDS: V3[] = [[-0.9, 1.9, -0.85], [0.95, 1.95, -1.0]]
 const FOAMS: V3[] = [[-0.9, 0, 0.85], [0.3, 0, 1.15], [1.15, 0, -0.35], [-0.45, 0, -1.1], [-1.15, 0, -0.2], [0.75, 0, 0.25]]
 const BOAT: V3 = [0.95, 0.03, 0.62]
 const BUOY: V3 = [-0.7, 0, 1.0]
@@ -64,9 +63,10 @@ const towerPaint = (k = 1): PaintDoc => (k > 4 ? brick(WHITE) : { kind: 'split',
 const parts: PartDoc[] = []
 const bones: SceneDoc['bones'] = [{ name: 'lamp', at: [tx, LAMP_Y, tz] }, { name: 'boat', at: BOAT }]
 
-// the sea: a round slab with a ripple on top, pale where it breaks on the rock, lighter in the shallows
+// the sea bed under the real sea (`water`): a round slab with a ripple on top, pale where it breaks on the rock,
+// lighter in the shallows, laid a little under the water so the bed shows through it as the swell's colors
 parts.push({
-  shape: { kind: 'rough', by: 0.02, scale: 1, shape: { kind: 'cylinder', at: [0, -0.26, 0], height: 0.24, r: SEA } },
+  shape: { kind: 'rough', by: 0.02, scale: 1, shape: { kind: 'cylinder', at: [0, -0.3, 0], height: 0.24, r: SEA } },
   paint: {
     kind: 'faces', up: 0.5,
     top: { kind: 'near', shape: ROCK, within: 0.035, at: 0, near: c(0.74, 0.86, 0.9), far: { kind: 'near', shape: ROCK, within: 0.1, at: 0, near: { kind: 'patches', size: 0.125, colors: [c(0.2, 0.42, 0.66), c(0.3, 0.52, 0.74)] }, far: { kind: 'waves', size: 0.157, colors: [c(0.1, 0.22, 0.45), c(0.3, 0.52, 0.74), c(0.14, 0.3, 0.55)] } } },
@@ -213,30 +213,7 @@ GULLS.forEach((g, i) => {
   parts.push({ shape: { kind: 'box', at: [r3(at[0] - 0.07), at[1], at[2]], half: [0.07, THIN, 0.035] }, paint: { kind: 'split', axis: 'x', at: r3(at[0] - 0.115), below: tip, above: GULL }, bone: `gull${i}R`, glow: true })
 })
 
-// clouds, the moon (with a few craters) and stars
-CLOUDS.forEach((p, i) => {
-  bones.push({ name: `cloud${i}`, at: p })
-  parts.push({
-    shape: { kind: 'join', shapes: [
-      { kind: 'ball', at: p, r: [0.34, 0.1, 0.16] },
-      { kind: 'sphere', at: [r3(p[0] - 0.12), r3(p[1] + 0.07), p[2]], r: 0.13 },
-      { kind: 'sphere', at: [r3(p[0] + 0.1), r3(p[1] + 0.09), p[2]], r: 0.15 },
-      { kind: 'sphere', at: [r3(p[0] + 0.26), r3(p[1] + 0.03), p[2]], r: 0.09 },
-    ] },
-    paint: { kind: 'split', axis: 'y', at: r3(p[1] + 0.02), below: c(0.44, 0.64, 0.85), above: { kind: 'split', axis: 'y', at: r3(p[1] + 0.1), below: c(0.81, 0.9, 0.91), above: c(0.88, 0.9, 0.89) } },
-    bone: `cloud${i}`, glow: true,
-  })
-})
-const MOON_AT: V3 = [-1.95, 2.15, -1.0]
-parts.push({
-  shape: { kind: 'sphere', at: MOON_AT, r: 0.17 },
-  // craters: round marks on the face, as deep columns through the moon so only their outline on the face counts
-  paint: { kind: 'near', shape: { kind: 'join', shapes: [[0.05, 0.04, 0.06], [-0.07, -0.05, 0.05], [0.02, -0.09, 0.04]].map(([a, b, r]): ShapeDoc => ({ kind: 'ball', at: [r3(MOON_AT[0] + a), r3(MOON_AT[1] + b), MOON_AT[2]], r: [r, r, 0.4] })) }, within: 0, near: c(0.8, 0.84, 0.9), far: MOON },
-  glow: true, lit: 'night', unlit: 'gone',
-})
-const STARS: V3[] = [[-0.6, 2.6, -1.6], [0.2, 2.75, -1.6], [1.3, 2.55, -1.6], [-1.6, 1.7, -1.3], [1.6, 1.9, -1.5], [0.6, 2.05, -1.7], [-0.2, 2.2, -1.7], [1.05, 2.9, -1.4], [-1.0, 2.9, -1.5], [-1.65, 2.5, -0.6], [1.7, 2.6, -0.5], [-1.2, 2.2, -1.6], [0.9, 1.6, -1.7], [-0.9, 1.5, -1.7], [1.7, 1.3, -1.2], [-1.7, 1.1, -0.9], [0.4, 3.0, -1.2], [-0.3, 1.7, -1.75]]
-// one part each: a join's box would span the whole sky, and the builder walks every cell of it
-STARS.forEach((p, i) => parts.push({ shape: { kind: 'sphere', at: p, r: 0.016 }, paint: hash(i, 2) > 0.6 ? c(0.8, 0.88, 0.9) : c(1, 1, 0.9), glow: true, lit: 'night', unlit: 'gone' }))
+// the moon, the stars and the clouds are the shared recipes' (`heavens` below)
 
 // foam: thin streaks that swell and fade as they drift
 FOAMS.forEach((f, i) => {
@@ -261,7 +238,6 @@ const moves: MoveDoc[] = [
     { kind: 'sway', bone: `gull${i}L`, axis: 'z', degrees: deg(0.6), times: 24, phase: turn(g.phase * 3) },
     { kind: 'sway', bone: `gull${i}R`, axis: 'z', degrees: -deg(0.6), times: 24, phase: turn(g.phase * 3) },
   ]),
-  ...CLOUDS.map((_, i): MoveDoc => ({ kind: 'bob', bone: `cloud${i}`, by: [0.22, 0, 0], times: 1, phase: turn(i * 2.4) })),
   // the pines spring back from the wind, each a little out of step
   ...TREES.map((_, i): MoveDoc => ({ kind: 'sway', bone: `tree${i}`, axis: 'z', degrees: -deg(0.035), times: 5, phase: turn(i * 1.7) })),
   // the buoy nods and rides the swell
@@ -289,6 +265,20 @@ export const LIGHTHOUSE: SceneDoc = {
   bones,
   parts,
   moves,
+  // the sea is real water: rain that comes down on it rings it, and the boat and the buoy push it aside as they ride
+  water: {
+    level: SEA_LEVEL, from: [-SEA, -SEA], to: [SEA, SEA], color: '#1c3c78', clear: 0.25, cell: 0.028, speed: 0.34, damping: 0.55, ripple: 5, deep: 0.05, splash: { r: 0.05, depth: 0.012 },
+    bodies: [
+      { bone: 'buoy', at: [BUOY[0], 0.03, BUOY[2]], r: 0.06, draft: 0.008 },
+      { bone: 'boat', at: [BOAT[0], BOAT[1], BOAT[2]], r: 0.1, draft: 0.01 },
+    ],
+  },
+  // a few dusk-lit clouds, and the night's moon and stars, from the shared recipes
+  heavens: {
+    moon: { at: [-1.95, 2.15, -1.0], r: 0.17, colors: [MOON, c(0.8, 0.84, 0.9)] },
+    stars: { count: 18, from: [-1.7, 1.1, -1.75], to: [1.7, 3.0, -0.5], size: 0.016, colors: [c(1, 1, 0.9), c(0.8, 0.88, 0.9)] },
+    clouds: { cover: 'partly', colors: [c(0.44, 0.64, 0.85), c(0.81, 0.9, 0.91), c(0.88, 0.9, 0.89)], glow: true },
+  },
   // the lamp's two beams: a pool of warm light on each side of the tower, sweeping over the sea and the rock with the lens
   // and the same two beams where they cross the gallery: each stands just past the railing and a little above it, so
   // the stretch of rail, floor and cap the beam passes over is lit on the faces a viewer sees (cubes too, whose faces

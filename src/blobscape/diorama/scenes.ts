@@ -4,6 +4,7 @@ import type { Built } from '../../splat-engine/body.ts'
 import type { PointLight } from '../../splat-engine/engine.ts'
 import type { Skeleton } from '../../splat-engine/rig.ts'
 import { compileScene, litFor, type SceneDoc } from '../../splat-engine/sceneDoc.ts'
+import type { HeavensDoc } from '../../splat-engine/heavens.ts'
 import { paletteAt, timeOf, type TimeId } from '../timeOfDay.ts'
 import { SceneWater } from '../../splat-engine/sceneWater.ts'
 import { DEFAULT_LIGHT, buildVoxels } from '../../splat-engine/voxel.ts'
@@ -57,6 +58,8 @@ export interface Diorama {
   /** Cuts the scene. With `steps` (a palette), it is painted in steps of that palette as it is cut. */
   make(spacing: number, steps?: Rgb[]): Built
   pose(sk: Skeleton, t: number): void
+  /** After `pose`: blows the scene's own rain, snow and leaves by a wind of the moment (`CompiledScene.blow`), where it has any. */
+  blow?(sk: Skeleton, t: number, wind: readonly [number, number]): void
   /** Its live lights `t` seconds in. `shadows` says whether one that can cast shadows should (the page asks only where the GPU works them out). */
   lights(t: number, shadows?: boolean): PointLight[]
   /** How much of its painted color everything keeps before its lights are added: 1 where left out, less for a scene lit mostly live. */
@@ -69,6 +72,12 @@ export interface Diorama {
   shadowDensity?: number
   /** Distance haze: its color (linear) and where it starts and would be total, in units past the view's target. */
   haze?: { color: [number, number, number]; from: number; to: number }
+  /** The same, for a scene whose air changes (weather laid over it, diorama/weather.ts), seen from `distance`: used in place of `haze`. */
+  hazeAt?: (distance: number) => { color: [number, number, number]; from: number; to: number } | undefined
+  /** Its moon, sun, stars and own clouds from the shared recipes (splat-engine/heavens.ts): the clouds are drawn with the weather's (diorama/weather.ts). */
+  heavens?: HeavensDoc
+  /** The height of what stays put under (x, z), looking down from `top` (`bottom` where nothing is): what weather laid over the scene lands on. */
+  ground?: (x: number, z: number, top: number, bottom: number) => number
   /** Parts (by their place in the list) that meet others by design: the check for parts passing through each other lets them. */
   touching?: number[]
   /** How big its description is, in bytes, written out as JSON: only for a scene that is data alone. */
@@ -94,7 +103,7 @@ export interface Diorama {
    * the description says wait for it) and its sun only by day. Every style draws it. Left out for a scene that is not
    * a description alone.
    */
-  timed?: (time: TimeId) => Diorama
+  timed?: (time: TimeId, lamps?: 'always') => Diorama
   /** For a scene `timed` made: the scene it is a time of day of. */
   of?: Diorama
   /** For a scene `timed` made: which time of day it is. */
@@ -106,8 +115,8 @@ function withOver(make: () => Diorama, over: Partial<Diorama>): Diorama {
   const d = make()
   const out: Diorama = { ...d, ...over }
   const kept = new Map<Diorama, Diorama>()
-  if (d.timed) out.timed = (time) => {
-    const t = d.timed!(time)
+  if (d.timed) out.timed = (time, lamps) => {
+    const t = d.timed!(time, lamps)
     let k = kept.get(t)
     if (!k) kept.set(t, (k = { ...t, ...over, timed: out.timed, of: out }))
     return k
@@ -145,7 +154,7 @@ const night = (palette: Rgb[]): [Rgb, Rgb] => {
 export function described(id: string, doc: SceneDoc, about: string): Diorama {
   const c = compileScene(doc)
   let pond: SceneWater | undefined
-  const times = new Map<TimeId, Diorama>()
+  const times = new Map<string, Diorama>()
   const self: Diorama = {
     id,
     label: c.name,
@@ -175,21 +184,29 @@ export function described(id: string, doc: SceneDoc, about: string): Diorama {
       return built
     },
     pose: c.pose,
+    blow: c.blow,
     lights: c.lights,
     haze: c.haze,
+    ground: c.ground,
+    heavens: doc.heavens,
     water: c.water ? () => (pond ??= new SceneWater(c)) : undefined,
-    timed: (when) => {
-      let d = times.get(when)
+    // `lamps` 'always' is a day too gloomy for lamps to stay out (a storm, skyRecipes.ts `gloomy`): what waits for the dark is lit
+    timed: (when, lamps) => {
+      const key = `${when}|${lamps ?? ''}`
+      let d = times.get(key)
       if (!d) {
         const time = timeOf(when)
         // the time changes the sky, the light and what is lit, never what the scene is: its description and size stay its own
-        const lit = litFor(doc, time.dark)
+        const lit = litFor(doc, time.dark, lamps ?? doc.lamps)
         // at night what glows only to keep its own color (a cloud, a flower, a gull: no `lit`) takes the night's light like the rest
         const parts = time.dark ? lit.parts.map((p) => (p.glow && !p.lit ? { ...p, glow: undefined, laid: true } : p)) : lit.parts
         const at: SceneDoc = { ...lit, parts, sky: time.sky, skyReach: undefined }
         const t = described(id, at, about)
-        d = { ...t, doc, bytes: self.bytes, ambient: time.light, palette: { label: OWN_PALETTE, colors: paletteAt(t.palette.colors, time) }, timed: self.timed, of: self, at: when }
-        times.set(when, d)
+        // its clouds keep their own color by night only as the scene was written; set at night they take the night's light
+        const clouds = doc.heavens?.clouds
+        const heavens = doc.heavens && { ...doc.heavens, clouds: clouds && { ...clouds, glow: clouds.glow && !time.dark } }
+        d = { ...t, doc, heavens, bytes: self.bytes, ambient: time.light, palette: { label: OWN_PALETTE, colors: paletteAt(t.palette.colors, time) }, timed: self.timed, of: self, at: when }
+        times.set(key, d)
       }
       return d
     },

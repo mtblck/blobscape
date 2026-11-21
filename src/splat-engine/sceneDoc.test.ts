@@ -375,3 +375,23 @@ test('lamps wait for the dark: by day a light is out, its glass is dull and no l
   const errs = checkScene({ ...wrong, lamps: 'never' as 'always' })
   for (const at of [/^parts\[1\]\.lit:/, /^parts\[2\]\.unlit:/, /^lights\[0\]\.lit:/, /^lamps:/]) assert.ok(errs.some((e) => at.test(e)), `${at} in ${errs.join('; ')}`)
 })
+
+test('wind blows what falls sideways over the fall still to come, so it lands where it was planned to', () => {
+  const doc: SceneDoc = { name: 'Blown', loop: 4, palette: ['#557744', '#ffffff'], camera: { target: [0, 0.5, 0], distance: 4, azimuth: 0, elevation: 20 }, bones: [{ name: 'x', at: [0, 0, 0] }], parts: [{ shape: { kind: 'box', at: [0, -0.05, 0], half: [1, 0.05, 1] }, paint: '#557744' }], air: { specks: [{ kind: 'rain', count: 30, from: [-0.5, 0, -0.5], to: [0.5, 2, 0.5], colors: ['#ffffff'], land: true }] } }
+  const c = compileScene(doc)
+  const still = new Skeleton(c.bones), blown = new Skeleton(c.bones)
+  let moved = 0, landed = 0
+  for (let t = 0; t < 4; t += 0.05) {
+    c.pose(still, t); c.pose(blown, t); c.blow(blown, t, [0.5, 0])
+    for (let b = 0; b < c.bones.length; b++) {
+      if (!c.bones[b].name.startsWith('~speck')) continue
+      const dx = blown.offset[b * 3] - still.offset[b * 3]
+      // upwind (−x) by half the height still to fall, nothing once down
+      if (dx > 1e-9) assert.fail(`${c.bones[b].name} blown the wrong way`)
+      if (dx < -1e-3) moved++
+      // lying where it came down: not moved at all
+      else if (dx === 0 && still.size[b] > 0) landed++
+    }
+  }
+  assert.ok(moved > 100 && landed > 10, `${moved} blown, ${landed} landed where planned`)
+})

@@ -1,4 +1,4 @@
-import { BufferAttribute, BufferGeometry, DynamicDrawUsage, Group, Mesh, NoBlending, NodeMaterial, QuadMesh, RenderTarget, Vector3, Vector4, type Camera, type Object3D, type WebGPURenderer } from 'three/webgpu'
+import { BufferAttribute, BufferGeometry, DynamicDrawUsage, Group, Mesh, NoBlending, NodeMaterial, QuadMesh, RenderTarget, Vector2, Vector3, Vector4, type Camera, type Object3D, type WebGPURenderer } from 'three/webgpu'
 import * as TSLTyped from 'three/tsl'
 import { buildBlocks, flowMesh, lampSight, lampsOf, planFlow, shapeFlow, type BlockLook, type BlockPiece, type BlockSource, type FlowMesh, type FlowPlan, type SolidCells } from './blocks.ts'
 import type { Light } from './engine.ts'
@@ -6,7 +6,7 @@ import type { Light } from './engine.ts'
 // As in engine.ts: the shader builders use TSL untyped.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const TSL = TSLTyped as unknown as Record<string, any>
-const { Fn, attribute, clamp, dot, float, max, min, normalWorld, positionWorld, select, smoothstep, texture, uniform, uniformArray, uv, vec3, vec4 } = TSL
+const { Fn, attribute, clamp, dot, float, max, min, normalWorld, positionView, positionWorld, select, smoothstep, texture, uniform, uniformArray, uv, vec3, vec4 } = TSL
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type N = any
 
@@ -47,6 +47,8 @@ export class BlockView extends Group {
   private readonly ambient = uniform(new Vector3(1, 1, 1))
   private readonly lightCount = uniform(0, 'int')
   private readonly edge = uniform(0.3)
+  private readonly fogColor = uniform(new Vector3(0, 0, 0))
+  private readonly fogRange = uniform(new Vector2(0, 0))
   private readonly picture = new RenderTarget(1, 1, { samples: 4 })
   private readonly out = new NodeMaterial()
   private readonly quad: QuadMesh
@@ -151,8 +153,18 @@ export class BlockView extends Group {
       const d = min(min(at.x, float(1).sub(at.x)), min(at.y, float(1).sub(at.y)))
       const w = max(TSL.fwidth(at.x), TSL.fwidth(at.y)).toVar()
       const line = float(1).sub(smoothstep(float(EDGE_WIDTH).sub(w.mul(0.5)), float(EDGE_WIDTH).add(w.mul(0.5)), d)).mul(clamp(float(EDGE_WIDTH * 4).div(max(w, 1e-5)), 0, 1))
-      return vec4(paint.mul(lit).mul(float(1).sub(line.mul(this.edge))), wash ? wash.w : 1)
+      const rgb = paint.mul(lit).mul(float(1).sub(line.mul(this.edge)))
+      // distance fog as the blobs have it (engine.ts `fogged`), by depth in front of the camera
+      const span = max(this.fogRange.y.sub(this.fogRange.x), 0.0001)
+      const f = select(this.fogRange.y.greaterThan(0), positionView.z.negate().sub(this.fogRange.x).div(span).clamp(0, 1), float(0))
+      return vec4(TSL.mix(rgb, vec3(this.fogColor), f), wash ? wash.w : 1)
     })()
+  }
+
+  /** Distance fog toward `color` (linear) from `near` to `far` in front of the camera, as `SplatWorld.setFog` (`far` 0 is none). */
+  setFog(color: readonly [number, number, number], near: number, far: number) {
+    this.fogColor.value.set(color[0], color[1], color[2])
+    this.fogRange.value.set(near, far)
   }
 
   /** The stage's lights and ambient light, as `SplatWorld.setLights` takes them; `tint` multiplies the ambient (a night's light). */

@@ -58,6 +58,10 @@ export interface Actor {
   soft?: boolean
   /** A surface that moves by itself and is sent up again with `reshape` (a pond's): while the stage draws blocks it is columns that follow it, or stays blobs, as the look's `flow` says. */
   flows?: boolean
+  /** Weather laid over a scene (its clouds, rain, snow): while the stage draws blocks it is cubes too, or stays blobs among them, as the look's `weather` says. */
+  weather?: boolean
+  /** Lies on the scene's surfaces (snow lying): while the stage draws blocks it is raised half a cube, onto the cubes' tops, which stand up to a cube over the surface the blobs lie on. */
+  lies?: boolean
   /** The side of its cubes while the stage draws blocks (`setBlocks`), where it was cut on a grid of its own; left out, the look's `cell`. */
   blockCell?: number
 }
@@ -330,8 +334,12 @@ export class Stage {
    * comes before every other look.
    */
   setBlocks(look?: BlockLook) {
+    const was = this.blockLook
     this.blockLook = look
-    this.block()
+    // a look that differs only in its ambient tint (a night's light following the sky as weather comes and lightning
+    // flashes) keeps the cubes: making them again took a second each time, so a thunderstorm hitched at every flash
+    if (look && was && this.blocks && sameBut(look, was, 'ambient')) this.blocks.setLights(this.lit.lights, this.lit.ambient, look.ambient)
+    else this.block()
     this.invalidate()
   }
 
@@ -346,9 +354,13 @@ export class Stage {
     if (this.blocks) { this.scene.remove(this.blocks); this.blocks.dispose(); this.blocks = undefined }
     if (this.soft) { this.scene.remove(this.soft); this.soft.dispose(); this.soft = undefined }
     const all = this.actor ? [this.actor, ...this.extras] : []
+    for (const a of all) if (a.lies) {
+      a.skeleton.place[1] = this.blockLook ? this.blockLook.cell * 0.5 : 0
+      a.skeleton.update()
+    }
     if (this.blockLook && this.actor) {
       // soft actors are a small world of their own, drawn among the cubes, so the scene's own world is not drawn at all
-      const soft = all.filter((a) => a.soft || (a.flows && this.blockLook!.flow !== 'blocks'))
+      const soft = all.filter((a) => a.soft || (a.flows && this.blockLook!.flow !== 'blocks') || (a.weather && this.blockLook!.weather !== 'blocks'))
       if (soft.length) {
         this.soft = new SplatWorld(soft, { mode: this.mode, lights: this.opts.lights, sort: this.sort })
         this.soft.setFog(...this.fog)
@@ -358,6 +370,7 @@ export class Stage {
       }
       this.blocks = new BlockView(all.filter((a) => !soft.includes(a)), this.blockLook)
       this.blocks.setLights(this.lit.lights, this.lit.ambient, this.blockLook.ambient)
+      this.blocks.setFog(...this.fog)
       this.scene.add(this.blocks)
     }
     this.setShow(this.show)
@@ -574,6 +587,7 @@ export class Stage {
     this.fog = [color, near, far]
     this.world?.setFog(color, near, far)
     this.soft?.setFog(color, near, far)
+    this.blocks?.setFog(color, near, far)
     this.invalidate()
   }
 
@@ -1058,6 +1072,8 @@ export class Stage {
     else this.swing?.reset()
     this.morph(this.poser ? undefined : this.clip, t)
     this.world.markPosed()
+    // soft actors drawn among the cubes are posed by the page too (rain and snow, drifting clouds)
+    this.soft?.markPosed()
     if (this.rig?.visible) this.rig.update()
     this.invalidate()
   }
@@ -1195,3 +1211,15 @@ export class Stage {
 
 /** The name the site's pages use. */
 export { Stage as CreatureStage }
+
+/** Whether two plain objects hold the same values but for `key` (arrays compared by their items). */
+function sameBut<T extends object>(a: T, b: T, key: keyof T): boolean {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)] as (keyof T)[])
+  for (const k of keys) {
+    if (k === key) continue
+    const x = a[k] as unknown, y = b[k] as unknown
+    if (Array.isArray(x) && Array.isArray(y)) { if (x.length !== y.length || x.some((v, i) => v !== y[i])) return false }
+    else if (x !== y) return false
+  }
+  return true
+}

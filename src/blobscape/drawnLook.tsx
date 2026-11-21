@@ -55,6 +55,8 @@ export interface DrawnSubject {
   loop?: number
   /** It has water that moves (an extra actor with `flows`): blocks offer it as blocks or as blobs. */
   water?: boolean
+  /** It has weather laid over it (clouds, rain, snow): blocks offer it as blocks or as blobs. */
+  weather?: boolean
   /** Frames are drawn only when asked for, so one must not depend on the one before. */
   offscreen: boolean
   /**
@@ -83,10 +85,10 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   // blocks: `?block=` is the size, in cells of the subject's grid; a phone starts a size up, for fewer cubes
   const [block, setBlock] = useState<BlockChoice>(() => {
     const v = Number(params().get('block')), swell = Number(params().get('swell'))
-    // water as blobs or as blocks (`?water=blocks`), and how high its ripples stand as blocks (`?swell=`)
+    // water and weather as blobs or as blocks (`?water=blocks`, `?falls=blocks`), and how high its ripples stand as blocks (`?swell=`)
     const back = params().get('backdrop') ?? ''
     // the subject's own sky or a plain color to stand in (`?backdrop=`)
-    return { ...BLOCK_START, height: on.time?.height ?? BLOCK_START.height, backdrop: back === 'scene' || BLOCK_GROUNDS.some((g) => g.id === back) ? back : '', water: params().get('water') === 'blocks' ? 'blocks' : 'blobs', swell: params().get('swell') !== null && Number.isFinite(swell) ? Math.max(0, Math.min(SWELL_MOST, swell)) : BLOCK_START.swell, size: Number.isFinite(v) && v >= BLOCK_SIZES.min && v <= BLOCK_SIZES.max ? Math.round(v) : BLOCK_START.size + (on.light ? 1 : 0) }
+    return { ...BLOCK_START, height: on.time?.height ?? BLOCK_START.height, backdrop: back === 'scene' || BLOCK_GROUNDS.some((g) => g.id === back) ? back : '', water: params().get('water') === 'blocks' ? 'blocks' : 'blobs', weather: params().get('falls') === 'blocks' ? 'blocks' : 'blobs', swell: params().get('swell') !== null && Number.isFinite(swell) ? Math.max(0, Math.min(SWELL_MOST, swell)) : BLOCK_START.swell, size: Number.isFinite(v) && v >= BLOCK_SIZES.min && v <= BLOCK_SIZES.max ? Math.round(v) : BLOCK_START.size + (on.light ? 1 : 0) }
   })
   // a time of day stands the blocks' sun at its own height; the slider moves it from there
   const timeId = on.time?.id, timeHeight = on.time?.height
@@ -218,6 +220,15 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
                   <Chip active={block.water === 'blocks'} onClick={() => setBlock((c) => ({ ...c, water: 'blocks' }))}>As blocks</Chip>
                 </div>
                 <p className="mt-1.5 text-xs text-ink-faint">{block.water === 'blocks' ? 'The water is columns of blocks: each rises and falls in quarter steps of a block as the ripples pass.' : 'The water stays soft blobs among the cubes, as in the other styles.'}</p>
+              </Field>
+            )}
+            {on.weather && (
+              <Field label="Weather drawn as">
+                <div className="flex flex-wrap gap-1.5" data-testid="block-weather">
+                  <Chip active={block.weather === 'blobs'} onClick={() => setBlock((c) => ({ ...c, weather: 'blobs' }))}>Soft blobs</Chip>
+                  <Chip active={block.weather === 'blocks'} onClick={() => setBlock((c) => ({ ...c, weather: 'blocks' }))}>Blocks</Chip>
+                </div>
+                <p className="mt-1.5 text-xs text-ink-faint">{block.weather === 'blocks' ? 'Clouds, rain and snow are cubes too: clouds in blocks of the scene\'s size, every drop and flake a small cube.' : 'Clouds, rain and snow stay soft blobs among the cubes, as in the other styles.'}</p>
               </Field>
             )}
             {on.water && block.water === 'blocks' && (

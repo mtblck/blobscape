@@ -21,10 +21,12 @@ export interface BlockChoice {
   backdrop: string
   /** A subject's water: columns of blocks that rise and fall, or the blobs it is among the cubes. */
   water: 'blocks' | 'blobs'
+  /** Weather over the subject (clouds, rain, snow): cubes as the scene is, or the soft blobs it is in the other styles. */
+  weather: 'blocks' | 'blobs'
   /** How many times higher than it stands a ripple is drawn as blocks. */
   swell: number
 }
-export const BLOCK_START: BlockChoice = { size: 2, turn: -50, height: 50, shadows: true, corners: 0.5, vary: 0.35, edge: 0.3, backdrop: '', water: 'blobs', swell: FLOW_SWELL }
+export const BLOCK_START: BlockChoice = { size: 2, turn: -50, height: 50, shadows: true, corners: 0.5, vary: 0.35, edge: 0.3, backdrop: '', water: 'blobs', weather: 'blobs', swell: FLOW_SWELL }
 /**
  * What to stand in front of when it is not the subject's own sky: daylight, or a plain color. The time of day is the
  * scene's own setting (timeOfDay.ts), not this look's: it reaches here as the subject's sky and the stage's light.
@@ -70,5 +72,5 @@ export function gridOf(spacing: number | undefined, centers: ArrayLike<number>, 
 
 /** The look for the stage: `grid` is one cell's side, `azimuth` the starting view's turn, `ambient` a night's light. */
 export function blockLook(c: BlockChoice, grid: number, azimuth = 0, ambient?: readonly [number, number, number]): BlockLook {
-  return { cell: grid * Math.max(BLOCK_SIZES.min, Math.min(BLOCK_SIZES.max, c.size)), from: lightFrom(c.turn + azimuth, c.height), shadows: c.shadows, corners: c.corners, vary: c.vary, edge: c.edge, ambient, flow: c.water, swell: c.swell }
+  return { cell: grid * Math.max(BLOCK_SIZES.min, Math.min(BLOCK_SIZES.max, c.size)), from: lightFrom(c.turn + azimuth, c.height), shadows: c.shadows, corners: c.corners, vary: c.vary, edge: c.edge, ambient, flow: c.water, weather: c.weather, swell: c.swell }
 }
