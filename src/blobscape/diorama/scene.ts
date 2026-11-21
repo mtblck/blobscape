@@ -2,7 +2,7 @@ import type { Rgb } from '../../splat-core/pixel.ts'
 import { PALETTES as SPRITE_PALETTES } from '../../splat-to-sprite/palettes.ts'
 
 /**
- * What Pixel Diorama's scenes share: the detail levels (the grid each is cut on) and the palettes the page offers.
+ * What Diorama's scenes share: the detail levels (the grid each is cut on) and the palettes the page offers.
  * The scenes themselves are descriptions in `scenes/` (the lighthouse too, since issue #333).
  */
 

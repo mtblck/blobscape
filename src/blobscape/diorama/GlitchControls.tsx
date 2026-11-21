@@ -2,7 +2,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import { Button, Chip, Field, Slider, Toggle } from '../../shared/ui.tsx'
 import { GLITCH_AMOUNTS, GLITCH_PACE_CHOICES, type GlitchChoice } from '../glitchLooks.ts'
 
-/** Tech glitch's settings, for the Style tab of Pixel Diorama and Scene Creator. */
+/** Tech glitch's settings, for the Style tab of Diorama and Scene Creator. */
 export function GlitchControls({ glitch, setGlitch, calm }: { glitch: GlitchChoice; setGlitch: Dispatch<SetStateAction<GlitchChoice>>; calm: boolean }) {
   return (
     <div className="space-y-4" data-testid="diorama-glitch">

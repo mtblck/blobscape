@@ -2,7 +2,7 @@ import type { Vec3 } from '../../splat-core/blobs.ts'
 import type { PartDoc, SceneDoc } from '../../splat-engine/sceneDoc.ts'
 
 /**
- * The pond's place, written as a scene description like Pixel Diorama's: a ruined arcade on a terrace, steps down
+ * The pond's place, written as a scene description like Diorama's: a ruined arcade on a terrace, steps down
  * into a shallow pond, a shrine wall with a niche of candles at the water's edge, a broken column standing in the
  * water, banks with a tree and ferns. It is written at the descriptions' own size (a scene about 4 across) and
  * stood in the world `SCALE` times larger, so the elf, at its own size, is small beside the arches.

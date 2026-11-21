@@ -1,2 +1,2 @@
-- Pixel Diorama, Brush and Ink and Scene Creator: a new Blocks style builds the scene from cubes on a grid, each block one flat color and each face one tone, with the shadows blocks cast on each other and the scene's own lamps shining on them. A Block size slider goes from fine to chunky.
+- Diorama, Brush and Ink and Scene Creator: a new Blocks style builds the scene from cubes on a grid, each block one flat color and each face one tone, with the shadows blocks cast on each other and the scene's own lamps shining on them. A Block size slider goes from fine to chunky.
 - Engine: `Stage.setBlocks(look)` draws any actor as blocks (`buildBlocks`, `BlockView`).

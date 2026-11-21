@@ -6,7 +6,7 @@ import { buildVoxels } from '../../splat-engine/voxel.ts'
 import { described, type Diorama } from './scenes.ts'
 
 /**
- * A model someone opens (issue #164) as a Pixel Diorama scene: the mesh fitted to stand on a round plinth, turning
+ * A model someone opens (issue #164) as a Diorama scene: the mesh fitted to stand on a round plinth, turning
  * once a loop, cut through `meshShape` like any described part, painted from its own colors and texture, in a
  * palette picked from those colors at a few levels of light. Pure apart from what the page hands it.
  */

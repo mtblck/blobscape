@@ -1,6 +1,6 @@
 // The engine experiments, each on its own page.
 
-// the Pixel Diorama scenes written as descriptions, each checked as one part
+// the Diorama scenes written as descriptions, each checked as one part
 const SCENES = [['bee', 'Forest bee'], ['campfire', 'Campfire'], ['croc', 'Garden crocodile'], ['dragon', 'Lava dragon'], ['grove', 'Lantern grove'], ['hand', 'Stone hand'], ['harvest', 'Pumpkin watch'], ['hut', 'Heron hut'], ['isles', 'Sky islands'], ['lab', 'Sprout lab'], ['meadow', 'Fox and wisp'], ['octopus', 'Storm octopus'], ['owl', 'Owl and cauldron'], ['reef', 'Jellyfish reef'], ['snail', 'Snail house'], ['spider', 'Lantern spider'], ['window', 'Sunrise window'], ['windmill', 'Windmill']]
 
 export default [
@@ -261,7 +261,7 @@ export default [
   {
     name: 'diorama',
     core: true,
-    about: 'Pixel Diorama on WebGPU and WebGL: pixel art in palette, the GPU pass matches its CPU twin, motion, steady pixels, layout',
+    about: 'Diorama on WebGPU and WebGL: pixel art in palette, the GPU pass matches its CPU twin, motion, steady pixels, layout',
     entries: ['src/blobscape/PixelDiorama.tsx'],
     async run({ shots, join, fails, ok, open, tabClick, axe }) {
       for (const q of ['', '&webgl=1']) {
@@ -443,7 +443,7 @@ export default [
   },
   {
     name: 'diorama-water',
-    about: 'Pixel Diorama, the koi pond on WebGPU and WebGL: the water moves with the rain, a moment drawn twice is the same, and the loop joins',
+    about: 'Diorama, the koi pond on WebGPU and WebGL: the water moves with the rain, a moment drawn twice is the same, and the loop joins',
     entries: ['src/blobscape/PixelDiorama.tsx'],
     files: ['src/splat-engine/sceneWater.ts', 'src/splat-engine/water.ts', 'src/splat-engine/mirror.ts', 'src/blobscape/diorama/scenes/koi.ts'],
     async run({ shots, join, fails, ok, open }) {
@@ -492,7 +492,7 @@ export default [
   },
   {
     name: 'diorama-glow',
-    about: 'Pixel Diorama: Glow turns up the light a fire casts on what stands round it, not only the shine round bright pixels',
+    about: 'Diorama: Glow turns up the light a fire casts on what stands round it, not only the shine round bright pixels',
     entries: ['src/blobscape/PixelDiorama.tsx'],
     async run({ fails, ok, open, tabClick }) {
       const d = await open('/experiments/pixel-diorama/?offscreen=1&scene=campfire', { viewport: { width: 1280, height: 900 } })
@@ -523,7 +523,7 @@ export default [
   },
   {
     name: 'diorama-model',
-    about: 'Pixel Diorama: Save as a 3D model writes a rigged .glb of blocks (or a smooth surface) with the loop as an animation',
+    about: 'Diorama: Save as a 3D model writes a rigged .glb of blocks (or a smooth surface) with the loop as an animation',
     entries: ['src/blobscape/PixelDiorama.tsx', 'src/splat-engine/blockMesh.ts'],
     async run({ fails, ok, open, tabClick }) {
       const d = await open('/experiments/pixel-diorama/?offscreen=1&scene=campfire&detail=chunky', { viewport: { width: 1280, height: 900 } })
@@ -545,7 +545,7 @@ export default [
   },
   {
     name: 'diorama-picker',
-    about: "Pixel Diorama: details dialog, How it's made, picking a scene swaps the palette on arrival, the scene picker (search, keys, previous and next, a phone), opening a description",
+    about: "Diorama: details dialog, How it's made, picking a scene swaps the palette on arrival, the scene picker (search, keys, previous and next, a phone), opening a description",
     entries: ['src/blobscape/PixelDiorama.tsx'],
     files: ['public/loops/'],
     async run({ shots, join, fails, ok, open, tabClick, axe }) {

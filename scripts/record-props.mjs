@@ -5,7 +5,7 @@
  *   npm run props -- --all        every entry
  *   npm run props -- lighthouse duck creature-fox
  *
- * Needs the built site (`npm run build`). A prop or land is handed to Pixel Diorama as a scene description, as
+ * Needs the built site (`npm run build`). A prop or land is handed to Diorama as a scene description, as
  * `npm run scene -- --shots` does, framed on its own box, and its pixel art is shrunk to the card keeping only the colors it was drawn in (some tens of kB each).
  * A creature is drawn on Splat Creatures and its view shrunk to the same card size.
  */

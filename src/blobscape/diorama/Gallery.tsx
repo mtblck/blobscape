@@ -20,7 +20,7 @@ export function Loop({ id }: { id: string }) {
 
 const NAME = 'font-display text-lg text-ink no-underline after:absolute after:inset-0 after:rounded-2xl hover:text-accent focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-accent'
 
-/** Some scenes as recorded loops, each a link to Pixel Diorama with that scene (the engine page). `ids` picks them, in that order. */
+/** Some scenes as recorded loops, each a link to Diorama with that scene (the engine page). `ids` picks them, in that order. */
 export function Gallery({ ids, testId }: { ids: readonly string[]; testId?: string }) {
   const loops = ids.map((id) => LOOPS.find((l) => l.id === id)!).filter(Boolean)
   return (

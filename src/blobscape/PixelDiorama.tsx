@@ -75,7 +75,7 @@ const swung = (orbit: Orbit, swing: number, loop: number, t: number): Orbit => (
 
 
 /**
- * Pixel Diorama: a small scene written as shapes in code, cut into a grid of
+ * Diorama: a small scene written as shapes in code, cut into a grid of
  * solid blobs (splat-engine/voxel.ts), moved by bones, and drawn as pixel art
  * by the engine's pixel mode (splat-engine/pixelPass.ts): the scene rendered
  * small, snapped to a palette, and scaled up in whole pixels.
@@ -757,9 +757,9 @@ export function PixelDiorama() {
 
   return (
     <div className="pb-4">
-      <Crumbs here="Pixel Diorama" parent={{ label: 'Experiments', href: href({ page: 'experiments' }) }} />
+      <Crumbs here="Diorama" parent={{ label: 'Experiments', href: href({ page: 'experiments' }) }} />
       <header className="flex flex-wrap items-end justify-between gap-x-8 gap-y-2 pt-4 pb-6">
-        <h1 ref={h1} tabIndex={-1} className="font-display text-4xl outline-none sm:text-5xl">Pixel Diorama</h1>
+        <h1 ref={h1} tabIndex={-1} className="font-display text-4xl outline-none sm:text-5xl">Diorama</h1>
         <p className="max-w-xl text-lg text-ink-muted">
           Small scenes made of blobs and drawn as pixel art while they move. Each one is real 3D, so you can turn it,
           and every frame is cut down to a few colors on a coarse grid of pixels. Pick a scene, change the palette and

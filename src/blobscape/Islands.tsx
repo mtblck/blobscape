@@ -62,7 +62,7 @@ declare global {
 
 /**
  * Biome Islands, its first step: one floating island made from a biome recipe and a seed. The island is an ordinary
- * scene description (islands/island.ts), so it is cut, posed and drawn as a Pixel Diorama scene is.
+ * scene description (islands/island.ts), so it is cut, posed and drawn as a Diorama scene is.
  */
 export function Islands() {
   const h1 = useFocusHeading()
@@ -404,7 +404,7 @@ export function Islands() {
     if (lifeColors) lists.push(...lifeColors)
     const colors = lists.length > 1 ? joinPalettes(lists) : shown.palette.colors
     return { palette: colors, dither: shown.finish.dither, outline: darkest(colors), glow: shown.finish.glow, edges: 1, parts: true, sky: shown.sky, steady: STEADY,
-      // Pixel Diorama's finish: calmer pixels, flat surfaces, lines only across things, hard discs where things meet, a shine
+      // Diorama's finish: calmer pixels, flat surfaces, lines only across things, hard discs where things meet, a shine
       // on lit forms. No rim: it goes by a fixed view, and here the view turns with the walker.
       tidy: true, calm: true, flat: true, across: true, solid: true, shine: true, selout: true, fine: true, own: true, surface: true, snap: true }
   }, [pixels, shown, shownAll, elfColors, lifeColors])
@@ -555,7 +555,7 @@ export function Islands() {
                 </div>
                 <p className="text-xs text-ink-faint">
                   The saved file opens in <a href={href({ page: 'creator' })} className="underline decoration-rule underline-offset-2 hover:text-accent">Scene Creator</a> (Scene, Open a file), where its first 40 trees and stones are props you can move, and
-                  in <a href={href({ page: 'diorama' })} className="underline decoration-rule underline-offset-2 hover:text-accent">Pixel Diorama</a>.
+                  in <a href={href({ page: 'diorama' })} className="underline decoration-rule underline-offset-2 hover:text-accent">Diorama</a>.
                 </p>
               </div>
             ),
@@ -646,7 +646,7 @@ export function Islands() {
             ground, rock and stones from above, beside and below and fails if more than one part in fifty shows what lies behind.
           </p>
           <p>
-            The result is an ordinary scene description, the same kind every <a href={href({ page: 'diorama' })} className="underline decoration-rule underline-offset-2 hover:text-accent">Pixel Diorama</a> scene
+            The result is an ordinary scene description, the same kind every <a href={href({ page: 'diorama' })} className="underline decoration-rule underline-offset-2 hover:text-accent">Diorama</a> scene
             is written as, with every thing on it marked as a prop. Blobscape's own splat engine cuts it into blobs and draws it here on {backend}.
             The idea of worlds made from biome recipes comes from Silicon Jungle's Ink Studio.
           </p>

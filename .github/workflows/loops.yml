@@ -1,6 +1,6 @@
 name: Loops
 
-# Records the Pixel Diorama gallery's loops (public/loops/) again and opens a pull request
+# Records the Diorama gallery's loops (public/loops/) again and opens a pull request
 # with them, a scene a job, so every scene is recorded at once.
 #
 # It runs by itself only for brand new scenes: when a push to main leaves a scene in the
@@ -164,7 +164,7 @@ jobs:
           git config user.email 105079242+mtblck@users.noreply.github.com
           git checkout -b "$branch"
           git add public/loops
-          git commit -m "Pixel Diorama: record the gallery's loops again ($names)"
+          git commit -m "Diorama: record the gallery's loops again ($names)"
           git push origin "$branch"
           body="Recorded again by the Loops workflow ([run $GITHUB_RUN_ID]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)), from main at ${GITHUB_SHA:0:7}: $names.
 
@@ -172,7 +172,7 @@ jobs:
           [ "$RECORDED" = success ] || body="$body
 
           Some scenes did not record (asked for: $SCENES); theirs are left as they were. See the run."
-          if ! gh pr create --base main --head "$branch" --title "Pixel Diorama: new gallery loops ($names)" --body "$body"; then
+          if ! gh pr create --base main --head "$branch" --title "Diorama: new gallery loops ($names)" --body "$body"; then
             echo "The loops are on the branch \`$branch\`, but the pull request could not be opened. Tick \"Allow GitHub Actions to create and approve pull requests\" in Settings, Actions, General, or open it by hand." >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi

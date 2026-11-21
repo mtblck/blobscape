@@ -9,7 +9,7 @@ import { OWL } from '../diorama/scenes/owl.ts'
 import { REEF } from '../diorama/scenes/reef.ts'
 
 /**
- * Creatures taken straight from the Pixel Diorama scenes (splat-engine/zoo/fromScene.ts):
+ * Creatures taken straight from the Diorama scenes (splat-engine/zoo/fromScene.ts):
  * the garden crocodile, the reef's jellyfish and the owl in its wizard hat, each with
  * a move of its own, the scene's own motion as its standing move, and the page's Still.
  */
@@ -117,7 +117,7 @@ function owlWalk(sk: Skeleton, t: number) {
 export const SCENE_CREATURES: Species[] = [
   {
     id: 'crocodile', name: 'crocodile',
-    blurb: 'The garden crocodile from Pixel Diorama, with flowers down its back and a small bird riding along, cut as it is in the scene and given legs that walk.',
+    blurb: 'The garden crocodile from Diorama, with flowers down its back and a small bird riding along, cut as it is in the scene and given legs that walk.',
     detail: DETAIL, start: 40000, looks: LOOKS,
     make: (count) => croc.cut(count),
     moves: [
@@ -128,7 +128,7 @@ export const SCENE_CREATURES: Species[] = [
   },
   {
     id: 'jellyfish', name: 'jellyfish',
-    blurb: 'The jellyfish from the reef scene of Pixel Diorama: a glowing bell with a ring of lights and eight trailing arms of three bones each.',
+    blurb: 'The jellyfish from the reef scene of Diorama: a glowing bell with a ring of lights and eight trailing arms of three bones each.',
     detail: DETAIL, start: 15000, looks: LOOKS,
     make: (count) => jelly.cut(count),
     moves: [
@@ -139,7 +139,7 @@ export const SCENE_CREATURES: Species[] = [
   },
   {
     id: 'owl', name: 'owl',
-    blurb: 'The great owl in a starry wizard hat from Pixel Diorama, off its stump: it waddles, or stands and looks round as it does in the scene.',
+    blurb: 'The great owl in a starry wizard hat from Diorama, off its stump: it waddles, or stands and looks round as it does in the scene.',
     detail: DETAIL, start: 40000, looks: LOOKS,
     make: (count) => owl.cut(count),
     moves: [

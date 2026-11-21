@@ -2,7 +2,7 @@ import { ArrayBufferTarget, Muxer } from 'mp4-muxer'
 import type { Frame } from '../../splat-core/pixel.ts'
 
 /**
- * A recorded loop as an MP4 for posting (Pixel Diorama's Export the loop): every art pixel becomes a `scale` × `scale`
+ * A recorded loop as an MP4 for posting (Diorama's Export the loop): every art pixel becomes a `scale` × `scale`
  * block (scale is even, so H.264's half-size color lines up with the blocks and edges stay crisp), encoded with the
  * browser's own H.264 (WebCodecs) at a high bitrate and packed with mp4-muxer. Browser only.
  */

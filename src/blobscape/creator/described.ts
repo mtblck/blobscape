@@ -1,5 +1,5 @@
 /**
- * A scene description from outside (#379): a .json file Pixel Diorama would open, opened in Scene Creator as a
+ * A scene description from outside (#379): a .json file Diorama would open, opened in Scene Creator as a
  * project. The things it marks with `prop` become props; a description with no marks offers the bones at the top of
  * its tree that carry parts, those on one spot together; everything else is the land. Pure, tested.
  */

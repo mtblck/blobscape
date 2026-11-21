@@ -65,7 +65,7 @@ export interface SceneProject {
   props: Placed[]
   /** Where the view starts; the land's own camera when left out. */
   camera?: Orbit
-  /** How it is drawn: a style's id (Pixel Diorama's `STYLES`) and its settings, kept as the page gives them. */
+  /** How it is drawn: a style's id (Diorama's `STYLES`) and its settings, kept as the page gives them. */
   style?: { id: string; settings?: Record<string, unknown> }
   /** The light, sky and air, where they differ from the land's own. */
   light?: ProjectLight
@@ -93,7 +93,7 @@ export interface ProjectLight {
   lit?: 'dark' | 'always'
   /** Lamps the visitor set down, at most `MAX_PROJECT_LAMPS`. */
   lamps?: LightDoc[]
-  /** How strongly glowing things light what is round them and shine in the picture, as Pixel Diorama's Glow (0 to 4): the land's own when left out. */
+  /** How strongly glowing things light what is round them and shine in the picture, as Diorama's Glow (0 to 4): the land's own when left out. */
   glow?: number
   /** Far things fade into the sky's lower color, total this far past the view's target; 0 is clear air. */
   haze?: number

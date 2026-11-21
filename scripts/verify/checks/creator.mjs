@@ -575,7 +575,7 @@ export default [
       await f.page.getByTestId('creator-file').setInputFiles({ name: 'broken.blobscape.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ ...parsed, loop: 1 })) })
       const said = await f.page.getByTestId('creator-file-problems').innerText().catch(() => '')
       steps.push(['broken file says where', /loop: must be/.test(said) && (await props(f.page)) === 10])
-      // a scene description, as Pixel Diorama opens, comes in as a project of its two marked props (#379)
+      // a scene description, as Diorama opens, comes in as a project of its two marked props (#379)
       await f.page.getByTestId('creator-file').setInputFiles({ name: 'two-posts.json', mimeType: 'application/json', buffer: Buffer.from(TWO_POSTS) })
       steps.push(['a description opens as a project', await opened(f.page, 2) && await f.page.evaluate(() => window.__creator.props().map((p) => typeof p.prop === 'string' ? p.prop : p.prop.name).join()) === 'Post,Lamp'])
       // a model of a whole scene: each thing at the top of its tree a prop, the open sheet covered in blobs (#380)

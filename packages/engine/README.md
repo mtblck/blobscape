@@ -2,7 +2,7 @@
 
 Animated Gaussian splats for three.js: creatures on bones, scenes written as data, and pixel art drawn from them. It draws through three.js's WebGPU renderer, which falls back to WebGL 2 where a browser has no WebGPU.
 
-It is the engine behind [blobscape.dev](https://blobscape.dev/engine/): Splat Creatures, Forest Walk, Dungeon Run, Pixel Diorama and the rest. Use it for splats that move and are made in code. For splats captured from photos (rooms, streets, big scans), use [Spark](https://sparkjs.dev); the two trade rigged `.glb` files.
+It is the engine behind [blobscape.dev](https://blobscape.dev/engine/): Splat Creatures, Forest Walk, Dungeon Run, Diorama and the rest. Use it for splats that move and are made in code. For splats captured from photos (rooms, streets, big scans), use [Spark](https://sparkjs.dev); the two trade rigged `.glb` files.
 
 > Version 0.x: the API will change between minor versions.
 

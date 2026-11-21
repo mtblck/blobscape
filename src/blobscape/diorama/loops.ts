@@ -1,6 +1,6 @@
 /**
- * The recorded loops of the Pixel Diorama scenes (public/loops/), shown as a
- * gallery under Pixel Diorama and on the engine page. Kept apart from
+ * The recorded loops of the Diorama scenes (public/loops/), shown as a
+ * gallery under Diorama and on the engine page. Kept apart from
  * scenes.ts so a page that only shows the loops doesn't load every scene;
  * loops.test.ts holds the two lists in step.
  *

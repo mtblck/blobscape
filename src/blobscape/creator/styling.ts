@@ -24,7 +24,7 @@ export interface PixelChoice {
   sky: boolean
 }
 
-/** Pixel sizes and paces on offer, as Pixel Diorama has them. */
+/** Pixel sizes and paces on offer, as Diorama has them. */
 export const PIXEL_SIZES = [2, 3, 4, 6]
 export const PIXEL_RATES = [0, 12, 8]
 

@@ -1,7 +1,7 @@
 import type { Frame } from '../../splat-core/pixel.ts'
 
 /**
- * How it's made: Pixel Diorama's walk through its own steps, from a list of shapes to the finished pixels. Each step
+ * How it's made: Diorama's walk through its own steps, from a list of shapes to the finished pixels. Each step
  * shows the live scene a different way; what a step says and how the scene is drawn for it are here, pure and tested.
  */
 

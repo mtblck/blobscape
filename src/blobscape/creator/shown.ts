@@ -53,12 +53,12 @@ const WHOLE_WHY: Record<string, string> = {
 }
 const NOT_YET = 'This scene has no props picked out of it yet, so it opens whole.'
 
-/** The scenes Start from offers: every Pixel Diorama scene, split where the library can. */
+/** The scenes Start from offers: every Diorama scene, split where the library can. */
 export const START_SCENES = DIORAMAS
 /** The lands Start from offers bare. */
 export const START_LANDS = LIBRARY.filter((e) => e.kind === 'land')
 
-/** A scene opened by its Pixel Diorama id: split into a land and props where the library has picks for it. */
+/** A scene opened by its Diorama id: split into a land and props where the library has picks for it. */
 export function openingScene(id: string): Opened | undefined {
   if (!DIORAMAS.some((d) => d.id === id)) return undefined
   const project = SPLIT_SCENES.includes(id) ? openScene(id) : undefined
@@ -114,7 +114,7 @@ export function shownOf(o: Opened): Shown {
   }
   const project = o.project
   const cp = compileProject(project, libraryProp)
-  // the land as Pixel Diorama would show it, for its sky and its finish
+  // the land as Diorama would show it, for its sky and its finish
   const look = described('creator', litLand(cp.land.prop.doc, project.light), cp.land.prop.name)
   return {
     key: JSON.stringify(project),

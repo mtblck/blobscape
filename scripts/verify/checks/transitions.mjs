@@ -1,9 +1,9 @@
-// Screen transitions on Pixel Diorama: the old scene's last picture gives way to the next.
+// Screen transitions on Diorama: the old scene's last picture gives way to the next.
 
 export default [
   {
     name: 'diorama-transition',
-    about: 'Pixel Diorama: changing scenes with a wipe lays the old picture over the new scene and wipes it away left to right; a cut lays nothing',
+    about: 'Diorama: changing scenes with a wipe lays the old picture over the new scene and wipes it away left to right; a cut lays nothing',
     entries: ['src/blobscape/PixelDiorama.tsx', 'src/blobscape/diorama/transitionOverlay.ts', 'src/splat-core/transition.ts'],
     async run({ shots, join, fails, ok, open }) {
       for (const kind of ['wipe', 'cut']) {

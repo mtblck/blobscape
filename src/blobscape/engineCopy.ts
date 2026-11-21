@@ -31,7 +31,7 @@ export const DEMOS = [
     label: 'A pixel scene',
     title: 'Pixel art that is still 3D',
     body: 'The same blobs, drawn small, snapped to a palette and scaled up in whole pixels, with outlines, glow and live lights. Drag to turn it: the pixels hold steady while the view moves.',
-    link: { label: 'Open Pixel Diorama', href: '/experiments/pixel-diorama/' },
+    link: { label: 'Open Diorama', href: '/experiments/pixel-diorama/' },
     about: 'A great owl in a wizard hat watching a cauldron of glowing potion, drawn as moving pixel art',
   },
 ] as const
@@ -41,8 +41,8 @@ export type DemoId = (typeof DEMOS)[number]['id']
 /** The strip of recorded pixel scenes under the demos (loops from diorama/loops.ts). */
 export const PIXEL_STRIP = {
   title: 'Pixel scenes, written as data',
-  body: 'Each of these is a short description of shapes, paints, bones and moves, cut into blobs and drawn as pixel art by the engine. These loops were recorded from Pixel Diorama, where every one of them plays live.',
-  link: { label: 'See all of them in Pixel Diorama', href: '/experiments/pixel-diorama/' },
+  body: 'Each of these is a short description of shapes, paints, bones and moves, cut into blobs and drawn as pixel art by the engine. These loops were recorded from Diorama, where every one of them plays live.',
+  link: { label: 'See all of them in Diorama', href: '/experiments/pixel-diorama/' },
 } as const
 
 /** The creature element: one script and one tag on any page. The code is what the page shows and what a visitor copies. */

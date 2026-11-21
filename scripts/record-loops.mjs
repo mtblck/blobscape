@@ -1,5 +1,5 @@
 /**
- * Records each Pixel Diorama scene's loop as pixel art, one art pixel per
+ * Records each Diorama scene's loop as pixel art, one art pixel per
  * image pixel, from the production build in headless Chromium. The frames
  * are the engine's own art (`stage.pixelFrames().art`), stepped through
  * `stage.frame(t)`, so a loop is the same every run and joins up end to end.

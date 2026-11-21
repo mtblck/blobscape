@@ -41,7 +41,7 @@ const CAMPFIRE: Record<PanelId, Words> = {
     realTime: 'Yes, after a wait while the scene is cut. Each frame moves, lights and sorts every blob.',
     moves: 'Anything on a bone, from the description alone.',
     light: 'Moonlight and its shadows are painted in as the scene is cut. The fire and the lantern are live lights on every blob; the fire’s shadows are worked out once at the cut, so they flicker with it but do not follow what moves.',
-    keep: 'The description, a few kilobytes of plain data that can be edited by hand and cut again. The engine can save the result as a rigged splat file (.glb) with its bones and moves, and the scene it came from plays in Pixel Diorama.',
+    keep: 'The description, a few kilobytes of plain data that can be edited by hand and cut again. The engine can save the result as a rigged splat file (.glb) with its bones and moves, and the scene it came from plays in Diorama.',
     limit: 'The cut takes seconds, not milliseconds, and the picture is as fine as its grid: a thing smaller than a cell is a blob or two.',
   },
 }
@@ -76,7 +76,7 @@ const FOX: Record<PanelId, Words> = {
     realTime: 'Yes, after a wait while the fox and the scene are made. Each frame moves, lights and sorts every blob.',
     moves: 'Everything on a bone: the trot bends the skin and the fur with it, and the grass leans in the wind.',
     light: 'The wisp is a live light on every blob. With WebGPU it casts shadows through a grid of what is in the way, worked out again each frame, so the fox’s and the stone’s shadows go round with it; with WebGL 2 the light is live and casts none. Moonlight is painted in as each thing is made: every blade of grass takes it by how it faces the moon, how deep it stands among the others and whether the stone is in the way, but the fox casts no moon shadow.',
-    keep: 'One actor with its bones and moves, which the engine can save as a rigged splat file (.glb). The fox is the one from Splat Creatures, where it also bakes to sprite sheets, and the whole scene plays in Pixel Diorama.',
+    keep: 'One actor with its bones and moves, which the engine can save as a rigged splat file (.glb). The fox is the one from Splat Creatures, where it also bakes to sprite sheets, and the whole scene plays in Diorama.',
     limit: 'The shadow grid is coarse beside a mesh’s shadow map, so shadows are soft and a thin thing casts little. Making the fox takes seconds, and it draws a little slower than the meshes do.',
   },
 }

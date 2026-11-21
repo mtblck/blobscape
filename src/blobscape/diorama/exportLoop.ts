@@ -1,5 +1,5 @@
 /**
- * Exporting a scene's loop from Pixel Diorama's Export tab, in any style: the numbers behind it. A scene is posed from
+ * Exporting a scene's loop from Diorama's Export tab, in any style: the numbers behind it. A scene is posed from
  * the time alone and repeats every `loop` seconds, so an export steps through exactly one loop, a frame at a time,
  * however long each frame takes to draw. The last frame is one step short of the loop's end, so played round and
  * round the file joins up with no frame shown twice.

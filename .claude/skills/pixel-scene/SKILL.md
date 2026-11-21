@@ -1,6 +1,6 @@
 ---
 name: pixel-scene
-description: Write or change a Pixel Diorama scene (a SceneDoc description) from a sentence, check it without the site, look at it as pixel art, and add it to the site. Use when asked for a new pixel scene, a change to one, or why one looks wrong.
+description: Write or change a Diorama scene (a SceneDoc description) from a sentence, check it without the site, look at it as pixel art, and add it to the site. Use when asked for a new pixel scene, a change to one, or why one looks wrong.
 ---
 
 # Writing a pixel scene
@@ -36,7 +36,7 @@ Work in a scratch folder (`scratch/` is git-ignored), on a `.json` file. The che
    - Between `front` and `later`, did what should move, move?
 6. **Fix one thing at a time** and run both again. Small changes are small edits. When stuck on the look, write three different takes on the weak part and keep the best.
 
-The same file opens on the site itself: Pixel Diorama, Scene tab, Open a file. There it plays, the view orbits, and How it's made steps through how it was cut. That is the way to show it to a person before it is in the site.
+The same file opens on the site itself: Diorama, Scene tab, Open a file. There it plays, the view orbits, and How it's made steps through how it was cut. That is the way to show it to a person before it is in the site.
 
 ## Adding it to the site
 

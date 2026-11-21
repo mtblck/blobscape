@@ -202,7 +202,7 @@ export function sharesAt(spacing: number) {
 
 const foxes = new WeakMap<Skeleton, Pick<Meadow, 'fox' | 'foxFrom' | 'swayFrom'>>()
 /**
- * Poses a meadow given only its skeleton, as Pixel Diorama does: the fox's own bones are read back out of it once
+ * Poses a meadow given only its skeleton, as Diorama does: the fox's own bones are read back out of it once
  * (the ones named `fox/…`) and kept.
  */
 export function poseMeadowBones(sk: Skeleton, t: number) {

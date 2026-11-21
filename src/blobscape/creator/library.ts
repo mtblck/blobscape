@@ -18,7 +18,7 @@ import { KIT } from './kit.ts'
 import { isModel, modelOf } from './models.ts'
 
 /**
- * Scene Creator's library (issue #334): props lifted out of Pixel Diorama's scenes, the lands they stood on and a few
+ * Scene Creator's library (issue #334): props lifted out of Diorama's scenes, the lands they stood on and a few
  * more, and every creature. The list is plain facts for the page and its search; a prop's description is cut out of
  * its scene only when asked for (`libraryProp`), once, because splitting a scene looks at every part.
  */

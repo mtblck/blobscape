@@ -6,7 +6,7 @@ import { withoutClouds } from './island.ts'
 import { hugged, unlit, within } from '../../splat-engine/voxel.ts'
 
 /**
- * Cuts a world of islands off the page's thread: an island is about three times the ground of a Pixel Diorama scene
+ * Cuts a world of islands off the page's thread: an island is about three times the ground of a Diorama scene
  * and takes seconds to cut, which would hold the page still. The same biome, seed and count plan the same world here
  * as on the page. Each piece is sent as it is cut (the islands in order, then the bridges), then `done`.
  */
@@ -32,7 +32,7 @@ self.onmessage = (ev: MessageEvent<IslandJob>) => {
     docs.forEach((doc, index) => {
       if (only && !only.includes(index)) return
       const scene = described('island', plain && index < world.islands.length ? withoutClouds(doc) : doc, doc.name)
-      // baked light: discs fitted to the shapes' outer edges, as Pixel Diorama cuts, so edges are straight and lines sit on them
+      // baked light: discs fitted to the shapes' outer edges, as Diorama cuts, so edges are straight and lines sit on them
       const make = () => (plain ? unlit(() => scene.make(spacing)) : hugged(() => scene.make(spacing)))
       const cut = pack(region ? within(region, make) : make())
       post({ id, index, cut }, movable(cut))

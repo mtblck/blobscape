@@ -38,7 +38,7 @@ import { FISHING } from './scenes/fishing.ts'
 import { LIGHTHOUSE as LIGHTHOUSE_DOC } from './scenes/lighthouse.ts'
 import { ambientAt, lightsAt, poseFishing, skyAt } from './fishing.ts'
 
-/** A scene Pixel Diorama can show: how to build it, move it and light it, and how it asks to be drawn. */
+/** A scene Diorama can show: how to build it, move it and light it, and how it asks to be drawn. */
 export interface Diorama {
   id: string
   label: string

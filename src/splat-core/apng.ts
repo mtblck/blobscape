@@ -1,5 +1,5 @@
 /**
- * A tiny animated PNG writer, for saving a scene's loop from the page (Pixel Diorama's Record loop). APNG is lossless,
+ * A tiny animated PNG writer, for saving a scene's loop from the page (Diorama's Record loop). APNG is lossless,
  * plays as an ordinary image in every current browser, and ffmpeg reads it, so a recording can become the gallery's
  * WebP. Every frame is stored whole (no regions), 8-bit RGBA, rows unfiltered; deflate is passed in so the page can
  * use CompressionStream and tests can use node:zlib.

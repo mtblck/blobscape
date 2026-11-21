@@ -52,7 +52,7 @@ export interface ExportOn {
 interface Step { t: number; orbit?: Orbit }
 
 /**
- * Saving what a page draws, shared by Pixel Diorama and Scene Creator: a frame as a PNG, one whole loop as an MP4 or
+ * Saving what a page draws, shared by Diorama and Scene Creator: a frame as a PNG, one whole loop as an MP4 or
  * an animated PNG stepped a frame at a time from the time so it joins up, or a flight along a camera path. Pixel art
  * saves the art itself; the other styles save the view's own picture. `held` is the view an export holds: a page's
  * poser and its view effect leave `stage.orbit` alone while it is set.
