@@ -5,8 +5,11 @@
  *   npm run scene -- my-scene.json --shots out/    then draw it as pixel art (needs `npm run build` first)
  *   npm run scene -- --example campfire            print one of the site's scenes as JSON, to start from
  *   npm run scene -- --list                        the site's scenes
+ *   npm run scene -- --props                       the library's props and lands, by id, for a scene made from props
  *
- * The file is JSON, or a .ts/.mjs module (its default export, or its first export that is a scene). It ends with a
+ * The file is JSON, or a .ts/.mjs module (its default export, or its first export that is a scene). It may be a scene
+ * made from props instead (a Scene Creator project, `.blobscape.json`, or a module exporting one or a `SceneBuilder`):
+ * it is made into its description first (`composeScene`, docs/scenes-from-props.md). It ends with a
  * status of 1 when there is anything that must be fixed, so it can gate a loop: write, check, fix, look.
  * How to write a scene: docs/scene-descriptions.md.
  */
@@ -36,6 +39,12 @@ if (args.includes('--list') || args.includes('--example')) {
   process.exit(0)
 }
 
+if (args.includes('--props')) {
+  const { LIBRARY } = await import('../src/blobscape/creator/library.ts')
+  for (const e of LIBRARY.filter((x) => x.kind !== 'creature')) say(`${e.kind.padEnd(5)} ${e.id.padEnd(28)} ${e.about}`)
+  process.exit(0)
+}
+
 if (!file) {
   console.error('Which scene? npm run scene -- <file.json> [--shots <folder>] | --example <id> | --list')
   process.exit(2)
@@ -43,16 +52,33 @@ if (!file) {
 
 const { readScene, reviewScene } = await import('../src/blobscape/diorama/review.ts')
 const path = resolve(file)
-let doc, problems = []
+let doc, problems = [], composedFrom = false
+/** A scene made from props, from a project or a builder, made into its description. */
+async function composed(x) {
+  const { composeScene } = await import('../src/splat-engine/compose.ts')
+  const { checkProject } = await import('../src/splat-engine/project.ts')
+  const { LIBRARY, libraryProp } = await import('../src/blobscape/creator/library.ts')
+  const project = typeof x.project === 'function' ? x.project() : x
+  const errs = checkProject(project, (id) => LIBRARY.some((e) => e.id === id))
+  if (errs.length) return { problems: errs }
+  composedFrom = true
+  try { return { doc: composeScene(project, libraryProp), problems: [] } } catch (e) { return { problems: [`project: ${e.message}`] } }
+}
+const isProject = (v) => v && typeof v === 'object' && (v.kind === 'blobscape-project' || typeof v.project === 'function')
 if (/\.json$/i.test(path)) {
-  ({ doc, problems } = readScene(readFileSync(path, 'utf8')))
+  const text = readFileSync(path, 'utf8')
+  let parsed
+  try { parsed = JSON.parse(text) } catch { /* readScene says why */ }
+  ;({ doc, problems } = isProject(parsed) ? await composed(parsed) : readScene(text))
 } else {
   const mod = await import(pathToFileURL(path).href)
-  doc = mod.default ?? Object.values(mod).find((v) => v && typeof v === 'object' && Array.isArray(v.parts))
-  if (!doc) problems = ['file: no scene found in its exports']
+  const found = mod.default ?? Object.values(mod).find((v) => isProject(v) || (v && typeof v === 'object' && Array.isArray(v.parts)))
+  if (isProject(found)) ({ doc, problems } = await composed(found))
+  else doc = found
+  if (!doc && !problems.length) problems = ['file: no scene found in its exports']
 }
 
-const review = doc ? reviewScene(doc) : { problems, warnings: [] }
+const review = doc ? reviewScene(doc, undefined, { composed: composedFrom }) : { problems, warnings: [] }
 const f = review.facts
 if (f) say(`${f.name}: ${f.parts} parts, ${f.bones} bones, ${f.blobs.toLocaleString('en-US')} blobs at the coarsest detail, ${f.colors} colors, a ${f.loop} s loop; values ${f.dark.toFixed(2)} to ${f.light.toFixed(2)}, ${Math.round(f.mud * 100)}% gray; cut in ${f.seconds.toFixed(1)} s`)
 for (const p of review.problems) say(`fix   ${p}`)
