@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Orbit } from '../splat-core/view.ts'
 import type { Vec3 } from '../splat-core/blobs.ts'
 import type { PixelLook } from '../splat-core/pixel.ts'
@@ -17,7 +17,7 @@ import { DETAIL } from './diorama/scene.ts'
 import { ScenePicker } from './diorama/ScenePicker.tsx'
 import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitDrag } from './Viewport.tsx'
 import { ModeBar, useWorkspaceScreen, panelId, tabId, type Mode } from './sandbox/modes.tsx'
-import type { CutJob } from './creator/cut.ts'
+import type { CutFinish, CutJob } from './creator/cut.ts'
 import { unpack, type PackedCut } from './creator/pack.ts'
 import { START_LANDS, START_SCENES, nameFor, slug, openingAsked, openingLand, openingScene, queryFor, shownOf, type Opened } from './creator/shown.ts'
 import { isDescription, readDescribed } from './creator/described.ts'
@@ -42,15 +42,21 @@ import { ImportError, readSplatFile } from '../splat-core/importer.ts'
 import { isMeshGlb, rigFromModel } from './modelRig.ts'
 import { meshBounds } from '../splat-engine/meshShape.ts'
 import { readSkinnedGlb } from '../splat-engine/skinnedModel.ts'
-import { budget, clock, lampAdded, lampLights, lampRemoved, lit, liveSky, liveSkyColors, rgbOf, shadeNow, sunNow } from './creator/lighting.ts'
+import { budget, clock, lampAdded, lampLights, lampRemoved, lit, liveSky, liveSkyColors, overheadPicked, rgbOf, shadeNow, sunNow, timeIn, weatherPicked, windPicked } from './creator/lighting.ts'
 import { castBy, glowGain } from './diorama/glow.ts'
 import { STYLES, isPixelStyle, styleAsked, styleWords, type Style } from './diorama/styles.ts'
-import { useDrawnLook, useHeld, wantsPlain } from './drawnLook.tsx'
+import { useDrawnLook, useHeld } from './drawnLook.tsx'
 import { GLITCH_START, glitchLook, type GlitchChoice } from './glitchLooks.ts'
-import { GlitchControls } from './diorama/GlitchControls.tsx'
 import { useExport } from './diorama/useExport.tsx'
+import { CLOUD_COVERS, SkyEase, WEATHERS, WINDS, hazeUnder, isClear, lightUnder, lightningAt, skyState, skyUnder, windAt, type CloudId, type SkyState, type WeatherId } from '../splat-engine/skyRecipes.ts'
+import { SceneWeather, paletteUnder } from './diorama/weather.ts'
+import { heavenBones, ownClouds, showHeavens } from '../splat-engine/heavens.ts'
+import { pileStep } from '../splat-engine/snowCover.ts'
+import { TIMES } from './timeOfDay.ts'
 import { MAX_STOPS, pathAt, pathSeconds } from './cameraPath.ts'
-import { PIXEL_RATES, PIXEL_SIZES, paletteChoices, pixelLook, pixelStart, type PixelChoice } from './creator/styling.ts'
+import { paletteChoices } from './creator/styling.ts'
+import { cutAsk, pixelCelLook, pixelFlags, pixelFrom, pixelLookOf, pixelStart, type PixelSettings } from './styleSettings.ts'
+import { FinishControls, StyleControls } from './StyleControls.tsx'
 import { arrowWay, begin, copied, did, lamped, moved, onGround, redo, redrawn, removed, sized, stepFor, stilled, turned, undo, wrapTurn, type History } from './creator/arrange.ts'
 
 /**
@@ -232,11 +238,19 @@ export function SceneCreator() {
   const [style, setStyleState] = useState<Style>(() => styleAsked(typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('style')))
   const pixels = isPixelStyle(style)
   const glitching = style === 'glitch'
-  const drawnStyle = pixels ? undefined : style
-  // cel shading, neon and stained glass light the blobs themselves, so every piece is cut with no light baked in
-  const plain = wantsPlain(drawnStyle)
-  const [px, setPx] = useState<PixelChoice>(() => pixelStart(shown.finish))
+  // pixel art's settings and the finish, shared with Diorama (styleSettings.ts)
+  const [px, setPx] = useState<PixelSettings>(() => pixelStart(shown.finish))
+  const setPixel = useCallback((change: Partial<PixelSettings>) => setPx((c) => ({ ...c, ...change })), [])
   const [glitch, setGlitch] = useState<GlitchChoice>(GLITCH_START)
+  /** Pixel art's switches only the address turns off (`?steady=0`, `?calm=0`, …), as on Diorama. */
+  const [flags] = useState(() => pixelFlags(typeof location === 'undefined' ? undefined : new URLSearchParams(location.search)))
+  // what the style asks of the cut: no light baked in (cel shading, neon, stained glass, blocks, or pixel art shaded a
+  // pixel at a time), paint in steps of the palette picked, light in bands; the palette is the project's own, before
+  // any creature's colors join it, since those come from the cuts
+  const stepPalette = (paletteChoices(shown.palette).find((p) => p.id === px.palette) ?? { colors: shown.palette }).colors
+  const ask = cutAsk({ style, glitch, pixel: px }, stepPalette)
+  const plain = ask.plain
+  const finishKey = JSON.stringify([ask.steps, ask.texel])
   const work = useRef<HTMLDivElement>(null)
   const canvas = useRef<HTMLCanvasElement>(null)
   useWorkspaceScreen(work)
@@ -294,8 +308,10 @@ export function SceneCreator() {
   // The pieces and what each is cut under. A prop's cut doesn't change as it moves (its light comes from the way it
   // faces, not where it stands), so its place is left out: a moved or copied prop needs no cut of its own.
   const pieces = useMemo<Piece[]>(() => {
-    if (opened.kind === 'whole' || !project || !cp) return [{ key: JSON.stringify([`whole:${opened.kind === 'whole' ? opened.scene : ''}`, plain]), thing: 'whole', plain, job: (spacing) => ({ kind: 'whole', scene: opened.kind === 'whole' ? opened.scene : '', spacing, plain }) }]
-    const steps = cp.land.c.steps ? cp.palette : null
+    const finish = JSON.parse(finishKey) as [CutFinish['steps'], number]
+    const fin: CutFinish = { steps: finish[0], texel: finish[1] }
+    if (opened.kind === 'whole' || !project || !cp) return [{ key: JSON.stringify([`whole:${opened.kind === 'whole' ? opened.scene : ''}`, plain, finishKey]), thing: 'whole', plain, job: (spacing) => ({ kind: 'whole', scene: opened.kind === 'whole' ? opened.scene : '', spacing, plain, finish: fin }) }]
+    const steps = finishKey
     const light = cutLight(project.light)
     const land = JSON.stringify([project.land, project.loop, steps, light, plain])
     // haze and weather go into the land's air alone (a prop is cut with none), so they cut the land again and no prop:
@@ -304,15 +320,15 @@ export function SceneCreator() {
     const landModel = typeof project.land === 'string' && isModel(project.land) ? modelOf(project.land) : undefined
     const landJob = landModel && modelJob(landModel)
     return [
-      { key: JSON.stringify([land, !!landJob]), thing: 'land', plain, job: (spacing) => ({ kind: 'land', project, spacing, plain, model: landJob }) },
+      { key: JSON.stringify([land, !!landJob]), thing: 'land', plain, job: (spacing) => ({ kind: 'land', project, spacing, plain, model: landJob, finish: fin }) },
       ...project.props.map((p, i): Piece => {
         // a model of your own goes to the cutter with its job; whether the page has it is part of what it is cut as
         const known = isModel(p.prop) ? modelOf(p.prop) : undefined
         const model = known && modelJob(known)
-        return { key: JSON.stringify([p.prop, p.turn, p.size, p.lit, project.loop, project.land, steps, propLight, plain, !!model]), thing: JSON.stringify(p.prop), plain, job: (spacing) => ({ kind: 'prop', project, i, spacing, plain, model }) }
+        return { key: JSON.stringify([p.prop, p.turn, p.size, p.lit, project.loop, project.land, steps, propLight, plain, !!model]), thing: JSON.stringify(p.prop), plain, job: (spacing) => ({ kind: 'prop', project, i, spacing, plain, model, finish: fin }) }
       }),
     ]
-  }, [opened, project, cp, plain, modelsVersion])
+  }, [opened, project, cp, plain, finishKey, modelsVersion])
 
   // cuts kept by detail and key, for as long as the page is open, and the worker that makes them
   const cuts = useRef(new Map<string, Cut>())
@@ -388,16 +404,58 @@ export function SceneCreator() {
   const signature = ready ? chosen.map((c) => c!.id).join(',') : ''
   // the style the view is drawn in lags the one picked until every piece on show is cut for it (with or without baked
   // light), so the picture keeps its own style meanwhile and the bare blobs never show between the two
-  const styleNow = useHeld(style, chosen.every((c) => c && c.plain === plain))
+  const cutReady = chosen.every((c) => c && c.plain === plain)
+  const styleNow = useHeld(style, cutReady)
+  const shadedNow = useHeld(px.shade, cutReady)
   const pixelsNow = isPixelStyle(styleNow), glitchingNow = styleNow === 'glitch'
   const built = useMemo<Built[] | undefined>(() => (ready ? chosen.map((c) => unpack(c!.packed)) : undefined),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [signature])
 
+  // --- weather ---------------------------------------------------------------
+
+  // The shared weather (splat-engine/skyRecipes.ts, as on Diorama): a weather or cloud cover and a wind kept in the
+  // project's light, laid over the scene as actors of their own, with the sky easing from one to the next. Nothing
+  // is cut again for it.
+  const recipe = lightNow?.recipe
+  const skyTo = useMemo(() => skyState(recipe?.weather, recipe?.weather ? undefined : recipe?.clouds, recipe?.wind), [recipe?.weather, recipe?.clouds, recipe?.wind])
+  const overhead = recipe?.overhead ?? true
+  /** Whether weather has been asked for yet: until then nothing of it is made or drawn. */
+  const [weathered, setWeathered] = useState(false)
+  useEffect(() => { if (!isClear(skyTo)) setWeathered(true) }, [skyTo])
+  const skyEase = useRef(new SkyEase())
+  /** The wall clock the sky eases by: none off screen and in an export, so it is there at once. */
+  const skyClock = useRef<() => number>(() => Infinity)
+  // a scene whose land has clouds of its own draws them as the weather's, whatever the weather
+  const ownSky = !!cp?.land.prop.doc.heavens?.clouds
+  // the rain, snow and clouds, made for where everything stands: made again a moment after a prop is moved
+  const fallKey = project && (weathered || ownSky) ? JSON.stringify([project.land, project.props.map((p) => [p.prop, p.at, p.turn, p.size]), project.loop, overhead]) : ''
+  const falls = useRef(new Map<string, SceneWeather>())
+  const [fall, setFall] = useState<SceneWeather>()
+  useEffect(() => {
+    if (!fallKey) { setFall(undefined); return }
+    const kept = falls.current.get(fallKey)
+    if (kept) { setFall(kept); return }
+    const scene = shown.weatherScene
+    const id = setTimeout(() => {
+      try {
+        const w = new SceneWeather(scene(), { overhead })
+        falls.current.set(fallKey, w)
+        setFall(w)
+      } catch (e) { console.warn(e) }
+    }, 250)
+    return () => clearTimeout(id)
+    // `fallKey` stands for the scene and the clouds
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fallKey])
+  /** How deep the snow lying is, 0 to 1, and the wall clock it was last moved on by. */
+  const pile = useRef(0)
+  const pileClock = useRef(0)
+
   // --- posing ---------------------------------------------------------------
 
   // what the poser reads each frame, kept current without rebuilding the stage
-  const live = useRef({ shown, chosen, project, preview, light: lightNow, posers: new Map<string, PlacedPoser>(), morphs: new Map<number, PlacedMorphs>() })
+  const live = useRef({ shown, chosen, project, preview, light: lightNow, posers: new Map<string, PlacedPoser>(), morphs: new Map<number, PlacedMorphs>(), sky: undefined as ((t: number, s: SkyState) => void) | undefined })
   live.current = { ...live.current, shown, chosen, project, preview, light: lightNow }
   /** Where prop `i` stands now: mid-gesture where it is going, else where the project says. */
   const placementOf = (i: number): Placement | undefined => (preview?.i === i ? preview.at : project?.props[i])
@@ -408,11 +466,32 @@ export function SceneCreator() {
     if (!stage || !built) return
     const [land, ...props] = built
     const from = stage.time
-    stage.setActor(land, undefined, props)
+    stage.setActor(land, undefined, [...props, ...(fall?.actors ?? [])])
+    // the land's moon, sun and stars, which cloud cover puts out
+    const heavens = heavenBones(land.skeleton.bones.map((b) => b.name))
+    const own = fall ? ownClouds(live.current.shown.weatherScene()) : 0
     posing.current = { pieces: built, pose: (t) => poseAll(land.skeleton, t) }
     const poseAll = (sk: Skeleton, t: number) => {
       const L = live.current
       L.shown.poseLand(sk, t)
+      // the sky of the moment, its wind and its lightning
+      const now = skyEase.current.at(skyClock.current())
+      const gust = now.wind > 0 ? windAt(now, t, L.shown.loop) : undefined
+      if (gust) L.shown.blowLand?.(sk, t, gust)
+      const flash = now.lightning > 0 && !(calm && !offscreen) ? lightningAt(t, L.shown.loop) : 0
+      const under = lightUnder(now, flash)
+      const dim = (a: number | readonly [number, number, number]): [number, number, number] => { const b = typeof a === 'number' ? [a, a, a] : a; return [b[0] * under[0], b[1] * under[1], b[2] * under[2]] }
+      if (fall) {
+        fall.pose(t, now)
+        // snow lying builds while snow falls and melts after, by the wall clock; an export holds it, off screen it is all there
+        const wall = performance.now() / 1000, dt = Math.min(0.25, Math.max(0, wall - pileClock.current))
+        pileClock.current = wall
+        if (!exporting.held.current) pile.current = offscreen ? (now.snow > 0.01 ? 1 : 0) : pileStep(pile.current, now.snow, dt)
+        if (fall.pile(pile.current)) stage.reshape(fall.cover)
+        if (fall.shade(now)) stage.reshape(fall.actors[0])
+        showHeavens(sk.size, heavens, Math.max(now.clouds, own))
+      }
+      L.sky?.(t, { ...now, lightning: flash })
       const cpNow = L.shown.cp
       if (cpNow && L.project) {
         props.forEach((b, i) => {
@@ -430,7 +509,7 @@ export function SceneCreator() {
             poser = new PlacedPoser(own ?? p.c, p.prop.foot, cut.at, placed.still)
             L.posers.set(key, poser)
           }
-          poser.pose(b.skeleton, t)
+          poser.pose(b.skeleton, t, undefined, gust)
           // a model's blend shapes, as its clip weighs them, reshape its blobs, which go up again only when they change
           const m = isModel(placed.prop) && !placed.still ? modelOf(placed.prop) : undefined
           if (m?.kind === 'splats' && m.morphs && m.rest.count + 1 === b.blobs.count) {
@@ -452,15 +531,15 @@ export function SceneCreator() {
         if (l?.live) {
           // the sun, the moon and the sky's own light at the hour, the sun casting shadows where the device draws them
           const sky = liveSky(l.live.hour, stage.backend === 'webgpu')
-          stage.setLights([...sky.lights, ...lights], sky.ambient)
-        } else stage.setLights(lights, 1)
+          stage.setLights([...sky.lights, ...lights], dim(sky.ambient))
+        } else stage.setLights(lights, dim(1))
       } else {
         props.forEach((b, i) => L.shown.poseProp(i, b.skeleton, t))
-        stage.setLights(L.shown.lights(t, stage.backend === 'webgpu'), L.shown.ambient)
+        stage.setLights(L.shown.lights(t, stage.backend === 'webgpu'), dim(L.shown.ambient))
       }
     }
     stage.setPoser(poseAll, from)
-  }, [stage, built])
+  }, [stage, built, fall])
   useEffect(() => { stage?.invalidate() }, [stage, project, preview])
 
   // a live sun paints the sky behind at its hour
@@ -470,15 +549,34 @@ export function SceneCreator() {
     const [top, low] = liveSkyColors(liveSky(liveHour, false).sky)
     return [rgbOf(top), rgbOf(low)]
   }, [liveHour, shown.sky])
-  // a sky the Light mode set (its colors, or a live sun's) is always behind; otherwise Style's switch says
-  const skyForced = liveHour !== undefined || !!lightNow?.sky
+  // under weather the sky grays and darkens: the backdrop and the palette go by the sky asked for, and pixel art's sky
+  // follows the sky of the moment as it eases and flashes (`live.sky`)
+  const skyShown = useMemo<NonNullable<PixelLook['sky']>>(() => (weathered ? [skyUnder(skyColors[0], skyTo), skyUnder(skyColors[1], skyTo), ...skyColors.slice(2)] as unknown as NonNullable<PixelLook['sky']> : skyColors), [weathered, skyColors, skyTo])
+  // a sky the Light mode set (its colors, or a live sun's), or weather, is always behind; otherwise Style's switch says
+  const skyForced = liveHour !== undefined || !!lightNow?.sky || weathered
   const glow = lightNow?.glow ?? shown.finish.glow
   // the scene's palette, with the colors of any creature in it, which its description can't bring
   const creatureColors = chosen.flatMap((c) => c?.packed.colors ?? []).join(',')
   const palette = useMemo(() => (creatureColors ? joinPalettes([shown.palette.map(hexOf), creatureColors.split(',')]) : shown.palette), [shown.palette, creatureColors])
-  const palettes = useMemo(() => paletteChoices(palette), [palette])
-  const look = useMemo<PixelLook>(() => pixelLook({ ...px, sky: px.sky || skyForced }, palettes, skyColors, glow), [px, skyForced, palettes, skyColors, glow])
-  useEffect(() => { stage?.setPixels(pixelsNow ? look : undefined, px.size) }, [stage, pixelsNow, look, px.size])
+  const palettes = useMemo(() => paletteChoices(weathered ? paletteUnder(palette, skyColors, skyTo) : palette), [palette, weathered, skyColors, skyTo])
+  const colors = (palettes.find((p) => p.id === px.palette) ?? palettes[0]).colors
+  const look = useMemo<PixelLook>(() => pixelLookOf({ ...px, glow }, { colors, sky: skyShown, skyForced, finish: shown.finish, sun: shown.sun, start: shown.orbit, loop: shown.loop }, flags),
+    [px, glow, colors, skyShown, skyForced, shown, flags])
+  // the exact (radix) sort: the stage rebuilds its world, keeping the moment
+  useEffect(() => { stage?.setSort(px.exact ? 'radix' : 'bins') }, [stage, px.exact])
+  // pixel art shaded a pixel at a time: cel shading in the small picture, lit by the land's sun
+  const pixelCel = useMemo(() => (pixelsNow && shadedNow ? pixelCelLook(shown.sun, shown.shade ?? 0.5) : undefined), [pixelsNow, shadedNow, shown.sun, shown.shade])
+  useEffect(() => {
+    stage?.setPixels(pixelsNow ? look : undefined, px.size)
+    // under weather the pixel pass takes each moment's sky, set again only when it has changed
+    let last = ''
+    live.current.sky = stage && pixelsNow && look.sky && weathered ? (_t, now) => {
+      const top = skyUnder(skyColors[0], now, now.lightning), low = skyUnder(skyColors[1], now, now.lightning), key = `${top}|${low}`
+      if (key === last) return
+      last = key
+      stage.setPixels({ ...look, sky: [top, low, look.sky![2]] as NonNullable<PixelLook['sky']> }, px.size)
+    } : undefined
+  }, [stage, pixelsNow, look, px.size, weathered, skyColors])
   // pixel art can move in held steps; the other styles move every frame
   useEffect(() => { if (stage) { stage.step = pixelsNow && px.rate ? 1 / px.rate : 0; stage.invalidate() } }, [stage, pixelsNow, px.rate])
   // the glitch's bursts come in steps of the scene's own clock, a whole number of steps a loop, so an export joins up
@@ -487,8 +585,8 @@ export function SceneCreator() {
   useEffect(() => { stage?.setSharpness(coarse && !pixelsNow ? 1.5 : 2) }, [stage, coarse, pixelsNow])
   // one of Brush and Ink's looks in place of pixel art. Cel shading's and stained glass's flat fills are gathered on the land
   const drawing = useDrawnLook(stage, pixelsNow ? undefined : styleNow, {
-    actor: built?.[0], spacing: DETAIL.find((d) => d.id === detail)?.spacing, plain: !!chosen[0]?.plain, azimuth: shown.orbit.azimuth, offscreen, light: coarse, loop: shown.loop,
-    sky: px.sky || skyForced ? [skyColors[0], skyColors[1]] : undefined,
+    pixelCel, actor: built?.[0], spacing: DETAIL.find((d) => d.id === detail)?.spacing, plain: !!chosen[0]?.plain, azimuth: shown.orbit.azimuth, offscreen, light: coarse, loop: shown.loop,
+    sky: px.sky || skyForced ? [skyShown[0], skyShown[1]] : undefined,
   })
   const drawStyle = (id: Style) => {
     setStyleState(id)
@@ -502,6 +600,7 @@ export function SceneCreator() {
   // --- export ----------------------------------------------------------------
 
   const exporting = useExport({ stage, canvas, pixels, style, page: 'scene-creator', name: nameFor(opened), loop: shown.loop, orbit })
+  skyClock.current = () => (offscreen || exporting.held.current ? Infinity : performance.now() / 1000)
   // --- kept in this browser (#340) ------------------------------------------
 
   // the shelf: undefined while it opens, null where this browser keeps nothing
@@ -541,7 +640,7 @@ export function SceneCreator() {
     const id = STYLES.find((x) => x.id === st?.id)?.id
     if (id && id !== style) drawStyle(id)
     const settings = (st?.settings ?? {}) as { pixel?: unknown; glitch?: unknown }
-    setPx(mergedLike(pixelStart(shownOf(o).finish), settings.pixel))
+    setPx(pixelFrom(pixelStart(shownOf(o).finish), settings.pixel))
     setGlitch(mergedLike(GLITCH_START, settings.glitch))
   }
   /** Opens a kept scene: its project, its view, its style and settings. */
@@ -792,11 +891,38 @@ export function SceneCreator() {
     // while an export runs it holds the view; what is turned meanwhile shows afterwards
     if (!stage || exporting.held.current) return
     stage.orbit = orbit
-    // haze is measured from the view's target, so it stays put on the scene as the view moves in and out
-    const h = shown.haze
-    stage.setFog(h?.color ?? [0, 0, 0], h ? orbit.distance + h.from : 0, h ? orbit.distance + h.to : 0)
+    fog.current()
     stage.invalidate()
   }, [stage, orbit, shown.haze, exporting.recording === null])
+  /** Sets the haze for the scene, the view and the sky of the moment: measured from the view's target, so it stays put on the scene as the view moves in and out. */
+  const fog = useRef(() => {})
+  fog.current = () => {
+    if (!stage) return
+    const w = weathered ? hazeUnder(skyEase.current.at(skyClock.current()), orbit.distance) : undefined
+    // weather's haze is the color of the sky low down, so what is far fades into it
+    const low = w && skyUnder(skyColors[1], skyEase.current.at(skyClock.current())).map((v) => (v / 255 <= 0.04045 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4)) as [number, number, number] | undefined
+    const own = shown.haze
+    const h = w ? { color: low!, from: Math.min(w.from, own?.from ?? Infinity), to: Math.min(w.to, own?.to ?? Infinity) } : own
+    stage.setFog(h?.color ?? [0, 0, 0], h ? orbit.distance + h.from : 0, h ? orbit.distance + h.to : 0)
+  }
+  // a new weather or cloud cover: the sky eases to it over a few seconds, the scene left as it is cut
+  const skyBegun = useRef(false)
+  useEffect(() => {
+    // the weather a scene opens with is there at once
+    skyEase.current.set(skyTo, skyBegun.current ? skyClock.current() : Infinity)
+    skyBegun.current = true
+    if (!stage) return
+    let raf = 0
+    const tick = () => {
+      fog.current()
+      // a paused scene is posed again for the sky of the moment; a playing one poses itself
+      if (stage.playing) stage.invalidate()
+      else stage.seek(stage.time)
+      if (skyEase.current.moving(skyClock.current())) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [stage, skyTo])
   useEffect(() => { stage?.invalidate() }, [stage, lightNow])
   useWheelZoom(canvas, setOrbit)
 
@@ -1015,6 +1141,11 @@ export function SceneCreator() {
     edit(next, words)
   }
   const lamps = lightNow?.lamps ?? []
+  /** A shared weather or cloud cover, or none; one the project had cut into its land's air (old rain or snow) gives way to it. */
+  const pickWeather = (kind: 'weather' | 'clouds', id: WeatherId | CloudId | undefined) => {
+    const words = id ? `${[...CLOUD_COVERS, ...WEATHERS].find((x) => x.id === id)!.label}.` : 'No weather.'
+    setLight({ recipe: weatherPicked(recipe, kind, id), ...(lightNow?.weather && lightNow.weather !== 'leaves' ? { weather: undefined } : {}) }, words)
+  }
   const lampsNow = (i: number, change: Partial<NonNullable<ProjectLight['lamps']>[number]>) => lamps.map((l, k) => (k === i ? { ...l, ...change } : l))
   const addLamp = () => {
     if (!project) return
@@ -1420,6 +1551,12 @@ export function SceneCreator() {
                   const lamp = lampPicked !== undefined ? lamps[lampPicked] : undefined
                   return (
                     <div className="space-y-4" data-testid="creator-light">
+                      <Field label="Time of day">
+                        <div className="flex flex-wrap gap-1.5" data-testid="creator-time">
+                          {TIMES.map((t) => <Chip key={t.id} active={timeIn(lightNow) === t.id} onClick={() => setLight({ live: { hour: t.hour } }, `${t.label}: the sun shines live at ${clock(t.hour)}.`)}>{t.label}</Chip>)}
+                        </div>
+                        <p className="mt-1.5 text-xs text-ink-faint">Sets the sun live at that hour, with its sky and light. Lamps, lit windows and fires wait for the dark. Move the Time of day slider below to fine tune it.</p>
+                      </Field>
                       <div>
                         <h3 className="mb-2 text-sm font-semibold">Sun</h3>
                         <div className="flex flex-wrap gap-2" role="group" aria-label="Sun">
@@ -1491,8 +1628,28 @@ export function SceneCreator() {
                         <div {...lightGesture}>
                           <Slider label="Haze" value={lightNow?.haze ?? (cp.land.c.haze ? Math.round(cp.land.c.haze.to) : 0)} min={0} max={12} step={0.5} format={(v) => (v ? `${v.toFixed(1)} away` : 'clear')} onChange={(v) => draftLight({ haze: v })} hint="Far things fade into the sky; lower is thicker." />
                         </div>
-                        <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Weather">
-                          {([undefined, 'rain', 'snow', 'leaves'] as const).map((w) => <Chip key={w ?? 'none'} active={lightNow?.weather === w} onClick={() => setLight({ weather: w }, w ? `${w[0].toUpperCase()}${w.slice(1)} falling.` : 'Nothing falling.')}>{w ? `${w[0].toUpperCase()}${w.slice(1)}` : 'None'}</Chip>)}
+                        <div className="mt-3 grid gap-1.5">
+                          <Toggle label="Falling leaves" checked={lightNow?.weather === 'leaves'} onChange={(on) => setLight({ weather: on ? 'leaves' : undefined }, on ? 'Leaves falling.' : 'No leaves falling.')} />
+                          {(lightNow?.weather === 'rain' || lightNow?.weather === 'snow') && <p className="text-xs text-ink-faint">This scene was kept with its own {lightNow.weather} cut in. Picking a weather below takes its place.</p>}
+                        </div>
+                      </div>
+                      <div>
+                        <h3 className="mb-2 text-sm font-semibold">Weather</h3>
+                        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Weather" data-testid="creator-weather">
+                          <Chip active={!recipe?.weather && !recipe?.clouds} onClick={() => pickWeather('weather', undefined)}>No weather</Chip>
+                          {CLOUD_COVERS.map((c) => <Chip key={c.id} active={!recipe?.weather && recipe?.clouds === c.id} onClick={() => pickWeather('clouds', c.id)}>{c.label}</Chip>)}
+                          {WEATHERS.map((w) => <Chip key={w.id} active={recipe?.weather === w.id} onClick={() => pickWeather('weather', w.id)}>{w.label}</Chip>)}
+                        </div>
+                        <p className="mt-1.5 text-xs text-ink-faint">The same weather recipes as Diorama: each brings its own clouds, light, haze and wind, laid over the scene with no cut, and the sky eases from one to the next.{recipe?.weather === 'thunderstorm' ? (calm ? ' Lightning is left out, as your device asks for less motion.' : ' Lightning flashes every few seconds.') : ''}</p>
+                        <Field label="Wind">
+                          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Wind" data-testid="creator-wind">
+                            {WINDS.map((w, i) => <Chip key={w.id} active={recipe?.wind ? recipe.wind === w.id : (WEATHERS.find((k) => k.id === recipe?.weather)?.wind ?? 0) === i} onClick={() => setLight({ recipe: windPicked(recipe, w.id) }, i ? `${w.label}.` : 'No wind.')}>{i ? w.label : 'No wind'}</Chip>)}
+                          </div>
+                          <p className="mt-1.5 text-xs text-ink-faint">Blows rain, snow and falling leaves at a slant, in gusts, and sways trees and stalks. Picking a weather brings its own wind back.</p>
+                        </Field>
+                        <div className="mt-3 grid gap-1.5">
+                          <Toggle label="Clouds over the scene" checked={overhead} onChange={(on) => setLight({ recipe: overheadPicked(recipe, on) }, on ? 'Clouds over the scene.' : 'Clouds left out.')} />
+                          <p className="text-xs text-ink-faint">{overhead ? 'The clouds float over the scene and rain and snow fall from under them.' : 'The clouds are left out: the sky still grays and darkens, and rain and snow fall in from over the top of the picture.'}</p>
                         </div>
                       </div>
                     </div>
@@ -1500,48 +1657,12 @@ export function SceneCreator() {
                 })()}
                 {m.id === 'style' && (
                   <div className="stack-controls space-y-5" data-testid="creator-style">
-                    <Field label="Drawn as">
-                      <div className="flex flex-wrap gap-1.5" data-testid="creator-styles">
-                        {STYLES.map((l) => <Chip key={l.id} active={style === l.id} onClick={() => drawStyle(l.id)}>{l.label}</Chip>)}
-                      </div>
-                      <p className="mt-1.5 text-xs text-ink-faint">{STYLES.find((l) => l.id === style)?.note}{plain ? ' The scene is cut again with no light baked in, since this look lights it itself.' : ''}</p>
-                    </Field>
-                    {drawing.controls}
-                    {glitching && <GlitchControls glitch={glitch} setGlitch={setGlitch} calm={calm} />}
-                    {pixels && (() => {
-                      const pal = palettes.find((p) => p.id === px.palette) ?? palettes[0]
-                      return (
-                        <>
-                          <Field label="Palette">
-                            <div className="flex flex-wrap gap-1.5" data-testid="creator-palettes">
-                              {palettes.map((p) => <Chip key={p.id} active={pal.id === p.id} onClick={() => setPx((c) => ({ ...c, palette: p.id }))}>{p.label}</Chip>)}
-                            </div>
-                            <div aria-hidden className="mt-3 flex h-3 overflow-hidden rounded ring-1 ring-rule">
-                              {pal.colors.length ? pal.colors.map((c, i) => <span key={i} className="flex-1" style={{ background: `rgb(${c[0]} ${c[1]} ${c[2]})` }} />) : <span className="flex-1 bg-paper-sunk" />}
-                            </div>
-                            <p className="mt-1.5 text-xs text-ink-faint">{!pal.colors.length ? 'No palette: every pixel keeps the color the scene gives it.' : pal.id === 'own' ? `${pal.colors.length} colors from the land and every prop on it. Every pixel snaps to the closest one.` : `${pal.note ?? `A shared palette of ${pal.colors.length} colors.`} Every pixel snaps to the closest one.`}</p>
-                          </Field>
-                          <Field label="Pixel size">
-                            <div className="flex flex-wrap gap-1.5">
-                              {PIXEL_SIZES.map((n) => <Chip key={n} active={px.size === n} onClick={() => setPx((c) => ({ ...c, size: n }))}>{`${n}×`}</Chip>)}
-                            </div>
-                          </Field>
-                          <Field label="Motion">
-                            <div className="flex flex-wrap gap-1.5">
-                              {PIXEL_RATES.map((n) => <Chip key={n} active={px.rate === n} onClick={() => setPx((c) => ({ ...c, rate: n }))}>{n ? `${n} a second` : 'Smooth'}</Chip>)}
-                            </div>
-                          </Field>
-                          <Slider label="Dither" value={px.dither} min={0} max={1} step={0.05} onChange={(v) => setPx((c) => ({ ...c, dither: v }))} format={(v) => `${Math.round(v * 100)}%`} hint={pal.colors.length ? 'Checkers two palette colors to fake the ones between.' : 'Needs a palette: Full color has none to mix.'} />
-                          <div className="grid gap-3">
-                            <Toggle label="Outline the scene" checked={px.outline} onChange={(v) => setPx((c) => ({ ...c, outline: v }))} />
-                            <Toggle label="Lines where colors meet" checked={px.edges} onChange={(v) => setPx((c) => ({ ...c, edges: v }))} />
-                            <Toggle label="Lines between parts" checked={px.parts} onChange={(v) => setPx((c) => ({ ...c, parts: v }))} />
-                            <Toggle label="Sky behind" checked={px.sky || skyForced} disabled={skyForced} onChange={(v) => setPx((c) => ({ ...c, sky: v }))} />
-                            {skyForced && <p className="text-xs text-ink-faint">The sky set in Light mode is always behind.</p>}
-                          </div>
-                        </>
-                      )
-                    })()}
+                    <StyleControls style={style} onStyle={drawStyle} pixel={px} setPixel={setPixel} glitch={glitch} setGlitch={setGlitch} palettes={palettes} calm={calm} prefix="creator"
+                      ownNote={(n) => `${n} colors from the land and every prop on it.`} drawn={drawing.controls}
+                      more={plain && !pixels ? 'The scene is cut again with no light baked in, since this look lights it itself.' : undefined} />
+                    <h3 className="text-sm font-semibold">Finish</h3>
+                    <FinishControls style={style} pixel={px} setPixel={setPixel} finish={shown.finish} colors={colors.length} calm={calm} glow={false} rocks={false}
+                      skyForced={skyForced ? 'The sky set in Light mode is always behind.' : undefined} />
                   </div>
                 )}
                 {m.id === 'export' && (

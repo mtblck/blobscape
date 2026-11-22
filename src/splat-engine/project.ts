@@ -5,7 +5,7 @@ import type { PointLight } from './engine.ts'
 import { Skeleton, mulQ, type Bone } from './rig.ts'
 import { daylight } from './daylight.ts'
 import { checkScene, compileScene, litFor, type CompiledScene, type LightDoc, type MoveDoc, type SceneDoc, type SpeckDoc } from './sceneDoc.ts'
-import { falling } from './skyRecipes.ts'
+import { CLOUD_COVERS, WEATHERS, WINDS, falling, type CloudId, type WeatherId, type WindId } from './skyRecipes.ts'
 import { withHeavens } from './heavens.ts'
 import { placedPart, placer, type Placement, type Placer } from './place.ts'
 import { MAX_LAMPS, type Lamp, type VoxelSpec } from './voxel.ts'
@@ -98,6 +98,23 @@ export interface ProjectLight {
   haze?: number
   /** Rain, snow or leaves falling over the land and lying where they land. */
   weather?: 'rain' | 'snow' | 'leaves'
+  /**
+   * A shared weather or cloud cover laid over the scene (skyRecipes.ts: the same recipes every Diorama scene takes),
+   * a wind in place of the weather's own, and whether its clouds float over the scene. Nothing is cut again for it.
+   */
+  recipe?: ProjectWeather
+}
+
+/** A project's shared weather (`ProjectLight.recipe`). */
+export interface ProjectWeather {
+  /** A weather, which brings its own clouds and wind. */
+  weather?: WeatherId
+  /** A cloud cover alone, where there is no weather. */
+  clouds?: CloudId
+  /** A wind in place of the weather's own. */
+  wind?: WindId
+  /** Whether the clouds float over the scene (left out, they do); without them rain and snow fall in from over the top of the picture. */
+  overhead?: boolean
 }
 
 /** Most lamps a project may add of its own. */
@@ -233,11 +250,22 @@ export class PlacedPoser {
     this.later = (pl as Partial<Placed>).phase && loop ? (pl as Placed).phase! * loop : 0
   }
 
-  /** Writes the prop's pose for `t` seconds into `sk`. Doesn't call `sk.update()`. */
-  pose(sk: Skeleton, time: number, into?: ArrayLike<number>) {
+  /**
+   * Writes the prop's pose for `t` seconds into `sk`. Doesn't call `sk.update()`. With `wind` (how far it carries a
+   * unit of fall, along the ground, as `windAt` gives it) a description's falling specks and swaying stalks are blown,
+   * the way turned into the prop's own.
+   */
+  pose(sk: Skeleton, time: number, into?: ArrayLike<number>, wind?: readonly [number, number]) {
     const own = this.own, t = this.t
     if (this.still) own.reset()
-    else this.c.pose(own, time + this.later)
+    else {
+      this.c.pose(own, time + this.later)
+      const c = this.c as Partial<CompiledScene>
+      if (wind && (wind[0] || wind[1]) && c.blow) {
+        const w = t.backDir([wind[0], 0, wind[1]])
+        c.blow(own, time + this.later, [w[0], w[2]])
+      }
+    }
     for (let i = 0; i < own.count; i++) {
       const j = into ? into[i] : i
       if (j < 0) continue
@@ -457,6 +485,15 @@ function checkLight(l: unknown, bad: (at: string, what: string) => void) {
   num(l.glow, 'light.glow', 0, 4)
   num(l.haze, 'light.haze', 0, 16)
   if (l.weather !== undefined && !['rain', 'snow', 'leaves'].includes(l.weather as string)) bad('light.weather', 'must be rain, snow or leaves')
+  if (l.recipe !== undefined) {
+    const r = l.recipe
+    if (!isObj(r)) bad('light.recipe', 'must be { weather, clouds, wind, overhead }')
+    else {
+      const one = (v: unknown, at: string, ids: { id: string }[]) => { if (v !== undefined && !ids.some((x) => x.id === v)) bad(at, `must be one of ${ids.map((x) => x.id).join(', ')}`) }
+      one(r.weather, 'light.recipe.weather', WEATHERS); one(r.clouds, 'light.recipe.clouds', CLOUD_COVERS); one(r.wind, 'light.recipe.wind', WINDS)
+      if (r.overhead !== undefined && typeof r.overhead !== 'boolean') bad('light.recipe.overhead', 'must be true or false')
+    }
+  }
   if (l.lamps !== undefined) {
     if (!Array.isArray(l.lamps) || l.lamps.length > MAX_PROJECT_LAMPS) bad('light.lamps', `must be a list of at most ${MAX_PROJECT_LAMPS}`)
     else l.lamps.forEach((m, i) => {
@@ -542,15 +579,15 @@ const dist = (a: Rgb, b: Rgb) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2
 
 const stepsFor = (cp: CompiledProject) => (cp.land.c.steps ? cp.palette : undefined)
 
-/** The land's cut on a grid of `spacing`. */
-export function landSpec(cp: CompiledProject, spacing: number): VoxelSpec {
-  return cp.land.c.spec(spacing, stepsFor(cp))
+/** The land's cut on a grid of `spacing`, painted in `steps` of a palette where given (the land's own choice when left out). */
+export function landSpec(cp: CompiledProject, spacing: number, steps: Rgb[] | undefined = stepsFor(cp)): VoxelSpec {
+  return cp.land.c.spec(spacing, steps)
 }
 
 /** Prop `i`'s cut on its own, where it is placed, under the land's sky: an actor of its own while editing. */
-export function propSpec(cp: CompiledProject, i: number, spacing: number, setting: Setting = settingOf(landSpec(cp, spacing))): VoxelSpec {
+export function propSpec(cp: CompiledProject, i: number, spacing: number, setting: Setting = settingOf(landSpec(cp, spacing)), steps: Rgb[] | undefined = stepsFor(cp)): VoxelSpec {
   const p = cp.props[i]
-  return placedSpec(p.c, p.prop.foot, p.placed, spacing, setting, { steps: stepsFor(cp) })
+  return placedSpec(p.c, p.prop.foot, p.placed, spacing, setting, { steps })
 }
 
 /**

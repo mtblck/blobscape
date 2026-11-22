@@ -1,9 +1,9 @@
-import { DEFAULT_LIGHT, bakedColor, buildVoxels, unlit, type VoxelLight } from '../../splat-engine/voxel.ts'
+import { DEFAULT_LIGHT, bakedColor, banded, buildVoxels, hugged, unlit, type VoxelLight } from '../../splat-engine/voxel.ts'
 import { compileProject, landSpec, propSpec, settingOf, type CompiledProject, type SceneProject } from '../../splat-engine/project.ts'
 import type { Built } from '../../splat-engine/body.ts'
 import { Skeleton, mulQ, rotate } from '../../splat-engine/rig.ts'
 import type { Vec3 } from '../../splat-core/blobs.ts'
-import { oklab } from '../../splat-core/pixel.ts'
+import { oklab, type Rgb } from '../../splat-core/pixel.ts'
 import { DIORAMAS } from '../diorama/scenes.ts'
 import { isModel, rawTexture, type ModelJob } from './models.ts'
 import { meshColor, meshShape } from '../../splat-engine/meshShape.ts'
@@ -19,10 +19,17 @@ import type { Species } from '../../splat-engine/zoo/species.ts'
  * project's land or one of its props, on a grid of `spacing`. `plain` cuts it with no light baked in, for the styles that
  * light the blobs themselves (cel shading, neon, stained glass).
  */
-export type CutJob =
+export type CutJob = (
   | { kind: 'whole'; scene: string; spacing: number; plain?: boolean }
   | { kind: 'land'; project: SceneProject; spacing: number; plain?: boolean; model?: ModelJob }
   | { kind: 'prop'; project: SceneProject; i: number; spacing: number; plain?: boolean; model?: ModelJob }
+) & { finish?: CutFinish }
+
+/**
+ * Pixel art's finish that is cut in (styleSettings.ts `cutAsk`, as Diorama cuts it): paint in `steps` of a palette,
+ * light in `texel` bands a blob. A description's edges are fitted (`hugged`) always, as on Diorama.
+ */
+export interface CutFinish { steps?: Rgb[]; texel?: number }
 
 // one project is compiled once and kept while the jobs that follow ask for its pieces
 let kept: { key: string; cp: CompiledProject } | undefined
@@ -34,6 +41,11 @@ const compiled = (project: SceneProject): CompiledProject => {
 
 /** Cuts what a job asks for. */
 export function cut(job: CutJob): Built {
+  const texel = job.finish?.texel ?? 0
+  return texel > 1 ? banded(texel, () => cutOne(job)) : cutOne(job)
+}
+
+function cutOne(job: CutJob): Built {
   // a model scattered over a mesh is lit here by the land's sun, unless the style lights it itself
   if (job.kind === 'prop' && job.model?.kind === 'splats' && job.model.scattered && isModel(job.project.props[job.i].prop)) {
     const placed = job.project.props[job.i]
@@ -43,11 +55,11 @@ export function cut(job: CutJob): Built {
   }
   // a scan for a land (#381) is drawn as captured, its light its own; one the page no longer has is a speck
   if (job.kind === 'land' && typeof job.project.land === 'string' && isModel(job.project.land)) return job.model?.kind === 'splats' ? unpack(copied(job.model.rest)) : speck()
-  if (job.plain) return unlit(() => cut({ ...job, plain: false }))
+  if (job.plain) return unlit(() => cutOne({ ...job, plain: false }))
   if (job.kind === 'whole') {
     const d = DIORAMAS.find((x) => x.id === job.scene)
     if (!d) throw new Error(`no scene called "${job.scene}"`)
-    return d.make(job.spacing)
+    return hugged(() => d.make(job.spacing, job.finish?.steps?.length ? job.finish.steps : undefined))
   }
   if (job.kind === 'prop') {
     const placed = job.project.props[job.i]
@@ -58,9 +70,11 @@ export function cut(job: CutJob): Built {
     if (isModel(placed.prop)) return withShadow(placedBuilt(job.model?.kind === 'splats' ? unpack(copied(job.model.rest)) : speck(), placed), placed.at)
   }
   const cp = compiled(job.project)
-  const land = landSpec(cp, job.spacing)
-  if (job.kind === 'land') return buildVoxels(land)
-  return withShadow(buildVoxels(propSpec(cp, job.i, job.spacing, settingOf(land))), cp.props[job.i].placed.at)
+  // painted in steps of the palette picked, or the land's own choice where the finish says nothing
+  const steps = job.finish?.steps ? (job.finish.steps.length ? job.finish.steps : undefined) : undefined
+  const land = job.finish?.steps ? landSpec(cp, job.spacing, steps) : landSpec(cp, job.spacing)
+  if (job.kind === 'land') return hugged(() => buildVoxels(land))
+  return withShadow(hugged(() => buildVoxels(job.finish?.steps ? propSpec(cp, job.i, job.spacing, settingOf(land), steps) : propSpec(cp, job.i, job.spacing, settingOf(land)))), cp.props[job.i].placed.at)
 }
 
 /** How dark the stand-in shadow is, and how wide, as a share of the prop's own width. */
