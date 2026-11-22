@@ -19,7 +19,7 @@ import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitD
 import { ModeBar, useWorkspaceScreen, panelId, tabId, type Mode } from './sandbox/modes.tsx'
 import type { CutFinish, CutJob } from './creator/cut.ts'
 import { unpack, type PackedCut } from './creator/pack.ts'
-import { START_LANDS, START_SCENES, nameFor, slug, openingAsked, openingLand, openingScene, queryFor, shownOf, type Opened } from './creator/shown.ts'
+import { START_LANDS, START_SCENES, nameFor, slug, openingAsked, openingLand, openingScene, queryFor, shownOf, type Opened, type Shown } from './creator/shown.ts'
 import { isDescription, readDescribed } from './creator/described.ts'
 import { AUTOSAVE_MS, FILE_END, type ModelFile, cleanName, copyName, fileName, fileText, mergedLike, newId, openShelf, readFile, renamed, type SavedScene, type Shelf } from './creator/store.ts'
 import { download } from './files.ts'
@@ -471,13 +471,26 @@ export function SceneCreator() {
     const heavens = heavenBones(land.skeleton.bones.map((b) => b.name))
     const own = fall ? ownClouds(live.current.shown.weatherScene()) : 0
     posing.current = { pieces: built, pose: (t) => poseAll(land.skeleton, t) }
+    // the land on show may be a cut made for an older light while the new one is cut (falling leaves add bones): it is
+    // posed by the description only once they match, and holds its last pose until then
+    const fitted = new WeakMap<Shown, boolean>()
+    const fits = (s: Shown) => {
+      let ok = fitted.get(s)
+      if (ok === undefined) {
+        const names = s.landBones, bones = land.skeleton.bones
+        ok = !names || (names.length === bones.length && names.every((n, i) => n === bones[i].name))
+        fitted.set(s, ok)
+      }
+      return ok
+    }
     const poseAll = (sk: Skeleton, t: number) => {
       const L = live.current
-      L.shown.poseLand(sk, t)
+      const landFits = fits(L.shown)
+      if (landFits) L.shown.poseLand(sk, t)
       // the sky of the moment, its wind and its lightning
       const now = skyEase.current.at(skyClock.current())
       const gust = now.wind > 0 ? windAt(now, t, L.shown.loop) : undefined
-      if (gust) L.shown.blowLand?.(sk, t, gust)
+      if (gust && landFits) L.shown.blowLand?.(sk, t, gust)
       const flash = now.lightning > 0 && !(calm && !offscreen) ? lightningAt(t, L.shown.loop) : 0
       const under = lightUnder(now, flash)
       const dim = (a: number | readonly [number, number, number]): [number, number, number] => { const b = typeof a === 'number' ? [a, a, a] : a; return [b[0] * under[0], b[1] * under[1], b[2] * under[2]] }

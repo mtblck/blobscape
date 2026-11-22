@@ -33,6 +33,8 @@ export interface Shown {
   ambient: number | readonly [number, number, number]
   /** Poses the land (or the whole scene). */
   poseLand(sk: Skeleton, t: number): void
+  /** The bones `poseLand` poses, by name, where known: a land cut for an older light (other specks) must not be posed by it. */
+  landBones?: readonly string[]
   /** After `poseLand`: blows the land's own rain, snow, leaves and swaying stalks by a wind of the moment, where it has any. */
   blowLand?(sk: Skeleton, t: number, wind: readonly [number, number]): void
   /** Poses prop `i`, cut apart, on its own skeleton. */
@@ -149,6 +151,7 @@ export function shownOf(o: Opened): Shown {
     lights: (t) => projectLights(cp, t),
     ambient: 1,
     poseLand: (sk, t) => cp.land.c.pose(sk, t),
+    landBones: cp.land.c.bones.map((b) => b.name),
     blowLand: (sk, t, wind) => cp.land.c.blow(sk, t, wind),
     poseProp: (i, sk, t) => poseApart(cp, i, sk, t),
     items: [{ name: nameOf(project.land), kind: 'land' }, ...project.props.map((p): Item => ({ name: nameOf(p.prop), kind: 'prop' }))],
