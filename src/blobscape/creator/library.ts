@@ -3,15 +3,13 @@ import type { Skeleton } from '../../splat-engine/rig.ts'
 import type { Species } from '../../splat-engine/zoo/species.ts'
 import { markedPicks, splitScene, type PropDoc, type PropPick, type PropRef, type SceneProject } from '../../splat-engine/project.ts'
 import { HENGE } from '../diorama/scenes/henge.ts'
-import { LIGHTHOUSE } from '../diorama/scenes/lighthouse.ts'
 import { TURKEY } from '../diorama/scenes/turkey.ts'
-import { WINDMILL } from '../diorama/scenes/windmill.ts'
 import { ISLES } from '../diorama/scenes/isles.ts'
 import { CANYON } from '../diorama/scenes/canyon.ts'
 import { MEADOW } from '../fourways/meadow/doc.ts'
 import { CREATURES } from '../creature/fromScenes.ts'
 import { DIORAMAS } from '../diorama/scenes.ts'
-import { HENGE_PICKS, LIGHTHOUSE_PICKS, TURKEY_PICKS, WINDMILL_PICKS, WITCH_IN_SPARKS_PICKS } from './picks.ts'
+import { HENGE_PICKS, TURKEY_PICKS, WITCH_IN_SPARKS_PICKS } from './picks.ts'
 import { PLAIN_ROCK, PLAIN_TURF } from './lands.ts'
 import { KIT } from './kit.ts'
 import { isModel, modelOf } from './models.ts'
@@ -65,33 +63,6 @@ interface Source {
 }
 
 const SOURCES: Source[] = [
-  {
-    from: 'lighthouse', doc: LIGHTHOUSE, picks: LIGHTHOUSE_PICKS,
-    props: [
-      { id: 'lighthouse', tags: ['building', 'lamp'], pick: 'Lighthouse', about: 'A red and white lighthouse with a turning lamp that sweeps two beams of light round it', group: 'buildings' },
-      { id: 'keepers-cottage', tags: ['building', 'lamp'], pick: "Keeper's cottage", about: 'A white cottage with a red tiled roof, a lit window and smoke rising from its chimney', group: 'buildings' },
-      { id: 'tall-pine', tags: ['tree', 'evergreen'], pick: 'Tall pine', about: 'A tall pine that sways in the wind' },
-      { id: 'pine', tags: ['tree', 'evergreen'], pick: 'Pine', about: 'A pine that sways in the wind' },
-      { id: 'small-pine', tags: ['tree', 'evergreen'], pick: 'Small pine', about: 'A small pine that sways in the wind' },
-      { id: 'jetty', tags: ['building', 'lamp'], pick: 'Jetty', about: 'A wooden jetty on posts with a lantern at its end', group: 'buildings' },
-      { id: 'sailing-boat', tags: ['boat', 'lamp', 'floats'], pick: 'Sailing boat', about: 'A small sailing boat with a lantern, rocking on the swell' },
-      { id: 'buoy', tags: ['lamp', 'floats'], pick: 'Buoy', about: 'A red and white buoy with a light on top, nodding in the swell' },
-    ],
-    land: { id: 'lighthouse-rock', tags: ['grassy', 'sea', 'night'], name: 'Lighthouse rock', about: 'A grassy rock in a round of sea at dusk, with rocks, bushes, flowers, gulls, clouds, the moon and stars' },
-  },
-  {
-    from: 'windmill', doc: WINDMILL, picks: WINDMILL_PICKS,
-    props: [
-      { id: 'windmill', tags: ['building', 'farm'], pick: 'Windmill', about: 'A windmill whose sails turn', group: 'buildings' },
-      { id: 'apple-tree', tags: ['tree', 'leafy', 'farm'], pick: 'Apple tree', about: 'An apple tree' },
-      { id: 'big-apple-tree', tags: ['tree', 'leafy', 'farm'], pick: 'Big apple tree', about: 'A big apple tree' },
-      { id: 'small-apple-tree', tags: ['tree', 'leafy', 'farm'], pick: 'Small apple tree', about: 'A small apple tree' },
-      { id: 'duck', tags: ['animal', 'floats'], pick: 'Duck', about: 'A duck', group: 'living' },
-      { id: 'haystack', tags: ['farm'], pick: 'Haystack', about: 'A haystack' },
-      { id: 'sheep', tags: ['animal', 'farm'], pick: 'Sheep', about: 'A grazing sheep', group: 'living' },
-    ],
-    land: { id: 'windmill-hill', tags: ['grassy', 'farm', 'pond'], name: 'Windmill hill', about: 'The green hill the windmill stands on, with its path and fields' },
-  },
   {
     from: 'turkey', doc: TURKEY, picks: TURKEY_PICKS,
     props: [

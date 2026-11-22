@@ -7,20 +7,6 @@ import type { PropPick } from '../../splat-engine/project.ts'
  * split into its land and props cuts as it did whole.
  */
 
-/** The windmill (scenes/windmill.ts): the mill with its sails, the three trees, the duck, two haystacks and three sheep. */
-export const WINDMILL_PICKS: PropPick[] = [
-  { name: 'Windmill', parts: [3, 4, 5, 6, 7, 8, 9, 10, 11], bones: ['sails'] },
-  { name: 'Apple tree', bones: ['tree0'] },
-  { name: 'Big apple tree', bones: ['tree1'] },
-  { name: 'Small apple tree', bones: ['tree2'] },
-  { name: 'Duck', bones: ['duck'] },
-  { name: 'Haystack', parts: [30] },
-  { name: 'Second haystack', parts: [31] },
-  { name: 'Sheep', parts: [32, 33], bones: ['sheep0'] },
-  { name: 'Second sheep', parts: [35, 36], bones: ['sheep1'] },
-  { name: 'Third sheep', parts: [38, 39], bones: ['sheep2'] },
-]
-
 /**
  * Turkey Run (scenes/turkey.ts): the giant turkey and the cook, each with the dust its feet kick up, and from along
  * the road the billboard, the mailbox, the haystack and two trees, which stand still instead of going by.
@@ -52,14 +38,3 @@ export const WITCH_IN_SPARKS_PICKS: PropPick[] = [
   { name: 'White witch, coming and going', bones: ['wiz', ...SPARKS], lights: [1, 2] },
 ]
 
-/** The lighthouse (scenes/lighthouse.ts): the tower with its turning lamp and beams, the cottage, three pines, the jetty, the boat and the buoy. Gulls, clouds and foam stay with the sea. */
-export const LIGHTHOUSE_PICKS: PropPick[] = [
-  { name: 'Lighthouse', parts: [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23], bones: ['lamp'] },
-  { name: "Keeper's cottage", parts: [25, 26, 27, 28, 29, 30], bones: ['smoke0', 'smoke1', 'smoke2'] },
-  { name: 'Tall pine', bones: ['tree0'] },
-  { name: 'Pine', bones: ['tree1'] },
-  { name: 'Small pine', bones: ['tree2'] },
-  { name: 'Jetty', parts: [46, 47, 48, 49] },
-  { name: 'Sailing boat', bones: ['boat'] },
-  { name: 'Buoy', bones: ['buoy'] },
-]

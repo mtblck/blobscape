@@ -3,6 +3,8 @@ import { KOI_POND } from '../diorama/scenes/koi.ts'
 import { BAMBOO, CHERRY, CRACKED_STONE, IRIS_LEAVES, LILY_PAD, LILY_PAD_FLOWER, MOSSY_STONE, PINK_IRIS, SNOW_LANTERN, STEPPING_POST, STONE_SLAB, TALL_LANTERN, WHITE_IRIS, type MadeProp } from './garden.ts'
 
 import { CAVE_MADE } from './cave.ts'
+import { FARM_MADE } from './farm.ts'
+import { LIGHTHOUSE_MADE } from './lighthouse.ts'
 
 export type { MadeProp } from './garden.ts'
 
@@ -27,6 +29,8 @@ export const MADE: MadeProp[] = [
   { id: 'stepping-post', tags: ['rock'], kind: 'prop', about: 'A round stone post to step across water on', prop: STEPPING_POST },
   { id: 'stone-slab', tags: ['rock'], kind: 'prop', about: 'A low round slab of speckled stone', prop: STONE_SLAB },
   ...CAVE_MADE,
+  ...LIGHTHOUSE_MADE,
+  ...FARM_MADE,
 ]
 
 const BY_ID = new Map(MADE.map((m) => [m.id, m]))

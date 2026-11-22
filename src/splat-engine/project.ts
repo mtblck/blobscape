@@ -33,6 +33,12 @@ export interface PropDoc {
   foot: Vec3
   /** What it is and how it behaves, from the fixed list (tags.ts): search finds it by them and the shared recipes act on them. */
   tags?: Tag[]
+  /**
+   * How it meets a land's water, where it is set down in one (`WaterDoc` floats and bodies, naming its own bones):
+   * `rides` bob and tip on the surface (a boat, a buoy), `wakes` push the water aside as they move through it (a duck,
+   * a fish). Left out on dry land; set down in water, they join the land's water.
+   */
+  water?: { rides?: { bone: string; at: Vec3; size: number }[]; wakes?: { bone: string; at: Vec3; r: number; draft?: number }[] }
 }
 
 export type { Placement, Placer } from './place.ts'
@@ -436,7 +442,11 @@ export function splitScene(given: SceneDoc, picks: PropPick[]): { land: PropDoc;
     const foot = pick.foot ?? [(box.lo[0] + box.hi[0]) / 2, box.lo[1], (box.lo[2] + box.hi[2]) / 2]
     // a prop's lamps wait for the dark wherever it is set down, even one taken from a cave whose lamps always burn
     const { air: _air, water: _water, lava: _lava, cover: _cover, focus: _focus, lamps: _lamps, ...rest } = own
-    return { name: pick.name, foot, doc: { ...rest, name: pick.name, lights }, ...(pick.tags ? { tags: [...pick.tags] } : {}) }
+    // what rode the scene's water or pushed through it on this prop's bones goes with it
+    const mine = new Set((own.bones ?? []).map((b) => b.name))
+    const rides = doc.water?.floats?.filter((f) => mine.has(f.bone)) ?? [], wakes = doc.water?.bodies?.filter((b) => mine.has(b.bone)) ?? []
+    const water = rides.length || wakes.length ? { water: { ...(rides.length ? { rides } : {}), ...(wakes.length ? { wakes } : {}) } } : {}
+    return { name: pick.name, foot, doc: { ...rest, name: pick.name, lights }, ...(pick.tags ? { tags: [...pick.tags] } : {}), ...water }
   })
   const left = doc.parts.map((_, i) => i).filter((i) => !taken.has(i))
   const ground = keepOnly(doc, left)
@@ -479,6 +489,7 @@ function checkProp(v: unknown, at: string, known: (id: string) => boolean, bad: 
   if (typeof v.name !== 'string' || !v.name) bad(`${at}.name`, 'must be a name')
   if (!isVec(v.foot)) bad(`${at}.foot`, 'must be [x, y, z]')
   checkTags(v.tags, `${at}.tags`, bad)
+  if (v.water !== undefined && (!isObj(v.water) || (v.water.rides !== undefined && !Array.isArray(v.water.rides)) || (v.water.wakes !== undefined && !Array.isArray(v.water.wakes)))) bad(`${at}.water`, "must be { rides, wakes }")
   for (const e of checkScene(v.doc)) bad(`${at}.doc.${e}`, '')
 }
 

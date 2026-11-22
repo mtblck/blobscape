@@ -78,17 +78,17 @@ test('every new scene is built from components: its land and props that are each
 })
 
 test('what stands outside a scene\'s props is named: bones with parts that no prop holds, and lights', () => {
-  const doc: SceneDoc = { ...WINDMILL, bones: (WINDMILL.bones ?? []).map((b) => (b.name === 'sails' ? { ...b, prop: 'Sails' } : b)), lights: [{ at: [9, 9, 9], color: '#ffffff', strength: 1, range: 1, lit: 'dark' }] }
+  const doc: SceneDoc = { ...WINDMILL, bones: (WINDMILL.bones ?? []).map((b) => (b.name === 'windmill0/sails' ? { ...b, prop: 'Sails' } : b)), lights: [{ at: [9, 9, 9], color: '#ffffff', strength: 1, range: 1, lit: 'dark' }] }
   const out = outsideProps(doc)
-  assert.ok(out.some((o) => o.includes("'duck'")), out.join('; '))
-  assert.ok(!out.some((o) => o.includes("'sails'")))
+  assert.ok(out.some((o) => o.includes("'duck4/duck'")), out.join('; '))
+  assert.ok(!out.some((o) => o.includes("'windmill0/sails'")))
   assert.ok(out.some((o) => o.startsWith('lights:')))
 })
 
 test('a scene that marks its props comes apart by them: each a sound prop that cuts and stands, the rest its land', () => {
   const doc: SceneDoc = {
     ...WINDMILL,
-    bones: (WINDMILL.bones ?? []).map((b) => (b.name === 'sails' ? { ...b, prop: 'Sails' } : b.name === 'duck' ? { ...b, prop: 'Duck' } : b)),
+    bones: (WINDMILL.bones ?? []).map((b) => (b.name === 'windmill0/sails' ? { ...b, prop: 'Sails' } : b.name === 'duck4/duck' ? { ...b, prop: 'Duck' } : b)),
   }
   assert.deepEqual(checkScene(doc), [])
   const picks = markedPicks(doc)
@@ -110,8 +110,8 @@ test('a prop mark must be a name, used once, and not on a bone riding on another
   const bones = (WINDMILL.bones ?? []).map((b) => ({ ...b }))
   const at = (name: string) => bones.findIndex((b) => b.name === name)
   const marked = (edit: (b: typeof bones) => void) => { const copy = bones.map((b) => ({ ...b })); edit(copy); return checkScene({ ...WINDMILL, bones: copy }) }
-  assert.match(marked((b) => { b[at('duck')].prop = '' }).join(), /prop: must be a name/)
-  assert.match(marked((b) => { b[at('duck')].prop = 'Duck'; b[at('sails')].prop = 'Duck' }).join(), /names two props/)
+  assert.match(marked((b) => { b[at('duck4/duck')].prop = '' }).join(), /prop: must be a name/)
+  assert.match(marked((b) => { b[at('duck4/duck')].prop = 'Duck'; b[at('windmill0/sails')].prop = 'Duck' }).join(), /names two props/)
   const child = bones.findIndex((b) => b.parent)
   assert.ok(child > 0, 'the windmill has a bone that rides on another')
   assert.match(marked((b) => { b[at(b[child].parent!)].prop = 'Parent'; b[child].prop = 'Child' }).join(), /is a prop already/)

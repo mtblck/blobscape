@@ -39,14 +39,14 @@ test('what is not a scene is turned away with where it went wrong', () => {
 
 test('sails that turn through the tower are named, unless the part says it touches', () => {
   const mill = copy(WINDMILL)
-  const sails = mill.parts.findIndex((p) => p.bone === 'sails')
+  const sails = mill.parts.findIndex((p) => p.bone === 'windmill0/sails')
   assert.ok(sails >= 0)
   // a long bar on the sails' bone, standing clear above the tower at rest and sweeping down through it as it turns
-  const hub = mill.bones!.find((b) => b.name === 'sails')!.at
-  mill.parts.push({ shape: { kind: 'cone', from: [hub[0], hub[1] + 0.2, hub[2] - 0.1], to: [hub[0], hub[1] + 1.3, hub[2] - 0.1], r: 0.05 }, paint: mill.palette[0], bone: 'sails' })
+  const hub = mill.bones!.find((b) => b.name === 'windmill0/sails')!.at
+  mill.parts.push({ shape: { kind: 'cone', from: [hub[0], hub[1] + 0.2, hub[2] - 0.1], to: [hub[0], hub[1] + 1.3, hub[2] - 0.1], r: 0.05 }, paint: mill.palette[0], bone: 'windmill0/sails' })
   const at = mill.parts.length - 1
   const r = reviewScene(mill)
-  assert.ok(r.problems.some((p) => p.startsWith(`parts[${at}] (cone on bone 'sails'): passes through parts[`)), r.problems.join('\n'))
+  assert.ok(r.problems.some((p) => p.startsWith(`parts[${at}] (cone on bone 'windmill0/sails'): passes through parts[`)), r.problems.join('\n'))
   mill.parts[at].touches = true
   assert.deepEqual(reviewScene(mill).problems.filter((p) => p.includes('passes through')), [])
 })
