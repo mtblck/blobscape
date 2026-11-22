@@ -16,6 +16,7 @@ import { HENGE_PICKS, LAVA_DRAGON_PICKS, LIGHTHOUSE_PICKS, TURKEY_PICKS, WINDMIL
 import { PLAIN_ROCK, PLAIN_TURF } from './lands.ts'
 import { KIT } from './kit.ts'
 import { isModel, modelOf } from './models.ts'
+import { MADE, madeProp } from '../props/index.ts'
 
 /**
  * Scene Creator's library (issue #334): props lifted out of Diorama's scenes, the lands they stood on and a few
@@ -34,7 +35,7 @@ export interface LibraryEntry {
   /** A sentence for its card and for search. */
   about: string
   kind: LibraryKind
-  /** Where it comes from: a scene's id, or 'creatures', or 'plain' for the lands made to start from. */
+  /** Where it comes from: a scene's id, or 'creatures', or 'plain' for the lands made to start from, or 'made' for a piece written on its own (props/). */
   from: string
   /** Its card picture, under the site's root (`npm run props` records them). */
   picture: string
@@ -147,7 +148,8 @@ const slug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').re
  * each prop is `<scene>-<its name>` in the library.
  */
 for (const d of DIORAMAS) {
-  if (!d.doc || WHOLE_SCENES.includes(d.id) || SOURCES.some((s) => s.from === d.id)) continue
+  // a scene made from props names the library's own pieces: there is nothing to lift out of it
+  if (!d.doc || d.project || WHOLE_SCENES.includes(d.id) || SOURCES.some((s) => s.from === d.id)) continue
   const picks = markedPicks(d.doc)
   if (picks.length) SOURCES.push({ from: d.id, doc: d.doc, picks, props: picks.map((p) => ({ id: `${d.id}-${slug(p.name)}`, pick: p.name, about: `${p.name}, from ${d.label}` })) })
 }
@@ -179,9 +181,11 @@ const LOOK_BY_ID = new Map(CREATURE_LOOKS.map((x) => [x.id, x]))
 
 /** Every entry: props, then lands, then creatures. */
 export const LIBRARY: LibraryEntry[] = [
+  ...MADE.filter((m) => m.kind === 'prop').map((m): LibraryEntry => ({ id: m.id, name: m.prop.name, about: m.about, kind: 'prop', from: 'made', picture: picture(m.id), group: m.group ?? 'small' })),
   ...SOURCES.flatMap((s) => s.props.map((p): LibraryEntry => ({ id: p.id, name: p.pick, about: p.about, kind: 'prop', from: s.from, picture: picture(p.id), group: p.group ?? 'small' }))),
   ...SOURCES.filter((s) => s.land).map((s): LibraryEntry => ({ id: s.land!.id, name: s.land!.name, about: s.land!.about, kind: 'land', from: s.from, picture: picture(s.land!.id), group: 'lands' })),
   ...WHOLE_LANDS.map((l): LibraryEntry => ({ id: l.id, name: l.name, about: l.about, kind: 'land', from: l.from, picture: picture(l.id), group: 'lands' })),
+  ...MADE.filter((m) => m.kind === 'land').map((m): LibraryEntry => ({ id: m.id, name: m.prop.name, about: m.about, kind: 'land', from: 'made', picture: picture(m.id), group: 'lands' })),
   ...CREATURE_LOOKS.map(({ id, name, species: c }): LibraryEntry => ({ id, name, about: c.blurb, kind: 'creature', from: 'creatures', picture: picture(id), group: 'living' })),
 ]
 
@@ -195,6 +199,8 @@ export function libraryProp(id: string): PropDoc | undefined {
   const creature = libraryCreature(id)
   if (creature) return creatureProp(id, LOOK_BY_ID.get(id)!.name)
   if (isModel(id)) return creatureProp(id, modelOf(id)?.name ?? 'Your model')
+  const made = madeProp(id)
+  if (made) return made
   const whole = WHOLE_LANDS.find((l) => l.id === id)
   if (whole) return { name: whole.name, foot: [0, 0, 0], doc: whole.doc }
   for (const s of SOURCES) {
@@ -262,7 +268,7 @@ export function creatureMove(id: string, loop: number): { pose: (sk: Skeleton, t
 }
 
 /** The scenes Scene Creator opens split into a land and props: those the library has picks for. */
-export const SPLIT_SCENES: readonly string[] = [...new Set(SOURCES.map((s) => s.from))].filter((id) => id !== 'kit')
+export const SPLIT_SCENES: readonly string[] = [...new Set([...SOURCES.map((s) => s.from), ...DIORAMAS.filter((d) => d.project).map((d) => d.id)])].filter((id) => id !== 'kit')
 
 /**
  * A scene opened as a project: its land and every prop its first set of picks lifts out, each standing where it stood.
@@ -271,6 +277,9 @@ export const SPLIT_SCENES: readonly string[] = [...new Set(SOURCES.map((s) => s.
  * opens whole.
  */
 export function openScene(sceneId: string): SceneProject | undefined {
+  // a scene made from props opens as the very list it is made from
+  const made = DIORAMAS.find((d) => d.id === sceneId)?.project
+  if (made) return structuredClone(made)
   const s = SOURCES.find((x) => x.from === sceneId)
   if (!s) return undefined
   let done = split.get(s)

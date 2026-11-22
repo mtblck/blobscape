@@ -2,12 +2,13 @@ import type { Quat, Vec3 } from '../splat-core/blobs.ts'
 import type { Orbit } from '../splat-core/orbit.ts'
 import { oklab } from '../splat-core/pixel.ts'
 import type { PointLight } from './engine.ts'
-import { Skeleton, axisAngle, mulQ, rotate, type Bone } from './rig.ts'
+import { Skeleton, mulQ, type Bone } from './rig.ts'
 import { daylight } from './daylight.ts'
 import { checkScene, compileScene, litFor, type CompiledScene, type LightDoc, type MoveDoc, type SceneDoc, type SpeckDoc } from './sceneDoc.ts'
 import { falling } from './skyRecipes.ts'
 import { withHeavens } from './heavens.ts'
-import { MAX_LAMPS, type Lamp, type Shape, type VoxelPart, type VoxelSpec } from './voxel.ts'
+import { placedPart, placer, type Placement, type Placer } from './place.ts'
+import { MAX_LAMPS, type Lamp, type VoxelSpec } from './voxel.ts'
 
 /**
  * Scenes made of props (Scene Creator, docs/scene-editor-plan.md). A **prop** is a scene description that holds one
@@ -31,12 +32,8 @@ export interface PropDoc {
   foot: Vec3
 }
 
-/** Where a prop is set down: its foot goes to `at`, turned `turn` degrees about the upright (counterclockwise seen from above), `size` times as big. */
-export interface Placement {
-  at: Vec3
-  turn: number
-  size: number
-}
+export type { Placement, Placer } from './place.ts'
+export { placer } from './place.ts'
 
 /** A library prop by its id, or a prop written out in full (an imported one). */
 export type PropRef = string | PropDoc
@@ -46,6 +43,8 @@ export interface Placed extends Placement {
   prop: PropRef
   /** Holds still: its own moves are not played. */
   still?: boolean
+  /** Its moves run this share of the loop later (0 to 1), so two of one prop side by side don't sway as one. */
+  phase?: number
   /**
    * Its lamps, where the project has a time of day: 'always' keeps them lit by day, 'dark' has them wait for the dark
    * whatever the project or the land says. Left out, it goes by the project's `light.lit`, then the land's own `lamps`.
@@ -181,63 +180,10 @@ const MAX_COLORS = 32
 /** The least and most a prop may be sized. */
 export const SIZE_RANGE: [number, number] = [0.1, 10]
 
-const DEG = Math.PI / 180
 const conj = (q: ArrayLike<number>): Quat => [-q[0], -q[1], -q[2], q[3]]
-const add = (a: ArrayLike<number>, b: ArrayLike<number>): Vec3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
-const sub = (a: ArrayLike<number>, b: ArrayLike<number>): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
 const scale = (a: ArrayLike<number>, s: number): Vec3 => [a[0] * s, a[1] * s, a[2] * s]
 
 // --- placing ---------------------------------------------------------------
-
-/** A placement worked out: the turn as a quaternion and the point maps both ways. */
-export interface Placer {
-  /** The turn. */
-  q: Quat
-  /** How big. */
-  size: number
-  /** A point of the prop's description to where it now stands. */
-  point(p: ArrayLike<number>): Vec3
-  /** Back: a point where it stands to the description's. */
-  back(p: ArrayLike<number>): Vec3
-  /** A direction of the description to the way it now points. */
-  dir(v: ArrayLike<number>): Vec3
-  /** Back: a direction to the description's. */
-  backDir(v: ArrayLike<number>): Vec3
-  /** Whether it changes nothing. */
-  same: boolean
-}
-
-export function placer(foot: ArrayLike<number>, pl: Placement): Placer {
-  const q = axisAngle([0, 1, 0], pl.turn * DEG), qi = conj(q), s = pl.size
-  const same = pl.turn % 360 === 0 && s === 1 && pl.at[0] === foot[0] && pl.at[1] === foot[1] && pl.at[2] === foot[2]
-  return {
-    q, size: s, same,
-    point: (p) => (same ? [p[0], p[1], p[2]] : add(pl.at, scale(rotate(q, sub(p, foot)), s))),
-    back: (p) => (same ? [p[0], p[1], p[2]] : add(foot, scale(rotate(qi, sub(p, pl.at)), 1 / s))),
-    dir: (v) => (same ? [v[0], v[1], v[2]] : rotate(q, v)),
-    backDir: (v) => (same ? [v[0], v[1], v[2]] : rotate(qi, v)),
-  }
-}
-
-/** A shape where the placement puts it: distances are exact, since a turn and an even scale keep them (times the size). */
-function placedShape(sh: Shape, t: Placer): Shape {
-  if (t.same) return sh
-  const s = t.size
-  // the box: all eight corners where they land
-  const lo: Vec3 = [Infinity, Infinity, Infinity], hi: Vec3 = [-Infinity, -Infinity, -Infinity]
-  for (let k = 0; k < 8; k++) {
-    const c = t.point([k & 1 ? sh.max[0] : sh.min[0], k & 2 ? sh.max[1] : sh.min[1], k & 4 ? sh.max[2] : sh.min[2]])
-    for (let i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], c[i]); hi[i] = Math.max(hi[i], c[i]) }
-  }
-  const out: Shape = { sdf: (x, y, z) => { const p = t.back([x, y, z]); return s * sh.sdf(p[0], p[1], p[2]) }, min: lo, max: hi }
-  if (sh.pieceAt) { const at = sh.pieceAt; out.pieceAt = (p) => at(t.back(p)) }
-  return out
-}
-
-function placedPart(part: VoxelPart, t: Placer, bone: string): VoxelPart {
-  const color = typeof part.color === 'function' && !t.same ? ((f) => (p: Vec3, n: Vec3) => f(t.back(p), t.backDir(n)))(part.color) : part.color
-  return { ...part, shape: placedShape(part.shape, t), color, bone }
-}
 
 /** What a prop is cut with that comes from where it stands, not from itself: the scene's sun, cover, camera and sky. */
 export type Setting = Pick<VoxelSpec, 'light' | 'cover' | 'eye' | 'sky'>
@@ -275,6 +221,7 @@ export class PlacedPoser {
   private readonly own: Skeleton
   private readonly t: Placer
   private readonly still: boolean
+  private readonly later: number
   /** The prop's compiled description, or anything else with bones that poses itself (a creature). */
   readonly c: Posable
   constructor(c: Posable, foot: Vec3, pl: Placement, still = false) {
@@ -282,13 +229,15 @@ export class PlacedPoser {
     this.still = still
     this.own = new Skeleton(c.bones)
     this.t = placer(foot, pl)
+    const loop = (c as Partial<Pick<CompiledScene, 'loop'>>).loop
+    this.later = (pl as Partial<Placed>).phase && loop ? (pl as Placed).phase! * loop : 0
   }
 
   /** Writes the prop's pose for `t` seconds into `sk`. Doesn't call `sk.update()`. */
   pose(sk: Skeleton, time: number, into?: ArrayLike<number>) {
     const own = this.own, t = this.t
     if (this.still) own.reset()
-    else this.c.pose(own, time)
+    else this.c.pose(own, time + this.later)
     for (let i = 0; i < own.count; i++) {
       const j = into ? into[i] : i
       if (j < 0) continue
@@ -303,7 +252,7 @@ export class PlacedPoser {
   /** The prop's live lights `t` seconds in, where it stands. */
   lights(time: number): PointLight[] {
     if (this.still) time = 0
-    return this.c.lights(time).map((l) => ({ ...l, position: this.t.point(l.position), range: l.range * this.t.size }))
+    return this.c.lights(time + this.later).map((l) => ({ ...l, position: this.t.point(l.position), range: l.range * this.t.size }))
   }
 }
 
@@ -483,6 +432,7 @@ export function checkProject(x: unknown, known: (id: string) => boolean): string
       if (typeof p.turn !== 'number' || !Number.isFinite(p.turn)) bad(`${at}.turn`, 'must be degrees')
       if (typeof p.size !== 'number' || !(p.size >= SIZE_RANGE[0] && p.size <= SIZE_RANGE[1])) bad(`${at}.size`, `must be ${SIZE_RANGE[0]} to ${SIZE_RANGE[1]}`)
       if (p.still !== undefined && typeof p.still !== 'boolean') bad(`${at}.still`, 'must be true or false')
+      if (p.phase !== undefined && !(typeof p.phase === 'number' && p.phase >= 0 && p.phase <= 1)) bad(`${at}.phase`, 'must be a number from 0 to 1')
       if (p.lit !== undefined && p.lit !== 'dark' && p.lit !== 'always') bad(`${at}.lit`, "must be 'dark' or 'always'")
     })
   }

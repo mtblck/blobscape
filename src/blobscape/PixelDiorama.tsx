@@ -116,10 +116,18 @@ export function PixelDiorama() {
    * every scene takes the same way (Matt, 2026-11-21; splat-engine/skyRecipes.ts). They are laid over the scene, so it
    * is not cut again for them, and the sky eases from one to the next.
    */
-  const [weather, setWeather] = useState<WeatherId | undefined>(() => weatherAsked(new URLSearchParams(location.search).get('weather')))
+  const [weatherPick, setWeather] = useState<WeatherId | 'none' | undefined>(() => { const q = new URLSearchParams(location.search).get('weather'); return q === 'none' ? 'none' : weatherAsked(q) })
   const [clouds, setClouds] = useState<CloudId | undefined>(() => cloudsAsked(new URLSearchParams(location.search).get('clouds')))
+  // a scene may start under a shared weather of its own (the koi pond's light rain) until another, or none, is picked
+  const weather: WeatherId | undefined = weatherPick === 'none' ? undefined : weatherPick ?? (clouds ? undefined : picked0.weather)
   /** The wind (`?wind=gale`): weather brings at least its own; it slants what falls and raises waves on water. */
   const [wind, setWind] = useState<WindId | undefined>(() => windAsked(new URLSearchParams(location.search).get('wind')))
+  /**
+   * Whether the weather's clouds float over the scene (`?overhead=0` leaves them out, and rain and snow fall in from
+   * over the top of the picture): a scene may start without them, as the koi pond does (Matt, 2026-11-21).
+   */
+  const [overheadPick, setOverhead] = useState<boolean | undefined>(() => { const q = new URLSearchParams(location.search).get('overhead'); return q === '0' ? false : q === '1' ? true : undefined })
+  const overhead = overheadPick ?? picked0.overhead ?? true
   // a storm by day is dark enough that lamps waiting for the dark come on: the one thing weather cuts the scene again for
   const diorama = time ? picked0.timed?.(time, gloomy(weather) && !timeOf(time).dark ? 'always' : undefined) ?? picked0 : picked0
   /** The scene whose palette, finish and view are set. */
@@ -230,7 +238,7 @@ export function PixelDiorama() {
   const pileClock = useRef(0)
   /** Off screen, how deep snow lies while it falls (`?pile=`, all of it unless asked). */
   const [pileAsked] = useState(() => { const v = Number(new URLSearchParams(location.search).get('pile') ?? 1); return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 1 })
-  const falls = useRef(new WeakMap<Diorama, SceneWeather>())
+  const falls = useRef(new WeakMap<Diorama, Map<boolean, SceneWeather>>())
   /** A scene as it stands under the sky of the moment. */
   const dress = useCallback((d: Diorama) => {
     if (!weathered) return d
@@ -327,8 +335,10 @@ export function PixelDiorama() {
     let fall: SceneWeather | undefined
     if (weathered || scene.of.heavens?.clouds) {
       const of = scene.of
-      fall = falls.current.get(of)
-      if (!fall) falls.current.set(of, (fall = new SceneWeather(of)))
+      let made = falls.current.get(of)
+      if (!made) falls.current.set(of, (made = new Map()))
+      fall = made.get(overhead)
+      if (!fall) made.set(overhead, (fall = new SceneWeather(of, { overhead })))
     }
     // the shared moon, sun and stars, which cloud cover puts out
     const heavens = heavenBones(scene.built.skeleton.bones.map((b) => b.name))
@@ -392,7 +402,7 @@ export function PixelDiorama() {
       else if (held.current) stage.orbit = held.current
       wet.current?.()
     }, from)
-  }, [stage, scene, calm, rock, mirrored, dress, offscreen, pileAsked])
+  }, [stage, scene, calm, rock, mirrored, dress, offscreen, pileAsked, overhead])
   // one of Brush and Ink's looks in place of pixel art: marks, outlines, characters or cel tones, with their own settings
   // a scene whose sky turns as it plays hands the styles each moment's sky too (their backdrop, cel shading's night,
   // the glass's window and the watercolor's wash), not only the one it opens with
@@ -601,11 +611,20 @@ export function PixelDiorama() {
     // weather and cloud cover are one choice: a weather brings its own clouds and wind, a cover is clouds alone
     if (key === 'wind') { setWind(id as WindId | undefined); put('wind', id) }
     else {
-      setWeather(key === 'weather' ? (id as WeatherId | undefined) : undefined)
+      setWeather(key === 'weather' ? (id as WeatherId | undefined) ?? 'none' : 'none')
       setClouds(key === 'clouds' ? (id as CloudId | undefined) : undefined)
       setWind(undefined)
-      put('weather', key === 'weather' ? id : undefined); put('clouds', key === 'clouds' ? id : undefined); put('wind', undefined)
+      // no weather on a scene that starts under one of its own is said in the address too
+      put('weather', key === 'weather' ? id ?? (picked0.weather ? 'none' : undefined) : undefined); put('clouds', key === 'clouds' ? id : undefined); put('wind', undefined)
     }
+    history.replaceState(history.state, '', url)
+  }
+  /** Clouds over the scene, or left out. The address says so where it isn't the scene's own way. */
+  const pickOverhead = (on: boolean) => {
+    setOverhead(on)
+    const url = new URL(location.href)
+    if (on === (picked0.overhead ?? true)) url.searchParams.delete('overhead')
+    else url.searchParams.set('overhead', on ? '1' : '0')
     history.replaceState(history.state, '', url)
   }
   /** Another time of day, or the scene as it is written. The address names it too. */
@@ -877,8 +896,12 @@ export function PixelDiorama() {
                   <div className="flex flex-wrap gap-1.5" data-testid="diorama-wind">
                     {WINDS.map((w, i) => <Chip key={w.id} active={wind ? wind === w.id : (WEATHERS.find((k) => k.id === weather)?.wind ?? 0) === i} onClick={() => pickSky('wind', w.id)}>{i ? w.label : 'No wind'}</Chip>)}
                   </div>
-                  <p className="mt-1.5 text-xs text-ink-faint">Wind blows rain, snow and falling leaves at a slant, in gusts, and raises waves on a scene's water. Picking a weather brings its own wind back.</p>
+                  <p className="mt-1.5 text-xs text-ink-faint">Wind blows rain, snow and falling leaves at a slant, in gusts, sways trees and stalks, and raises waves on a scene's water. Picking a weather brings its own wind back.</p>
                 </Field>
+                <div className="grid gap-1.5">
+                  <Toggle label="Clouds over the scene" checked={overhead} onChange={pickOverhead} />
+                  <p className="text-xs text-ink-faint">{overhead ? 'The clouds float over the scene and rain and snow fall from under them.' : 'The clouds are left out: the sky still grays and darkens, and rain and snow fall in from over the top of the picture.'}</p>
+                </div>
                 <Field label="Changing scenes">
                   <div className="flex flex-wrap gap-1.5" data-testid="diorama-transitions">
                     <Chip active={transition === 'cut'} onClick={() => pickTransition('cut')}>Cut</Chip>

@@ -14,6 +14,7 @@ import { RISES, cluster, columns, crystal, drips, flowstone, geode, icicles } fr
 import { drift, fallAt, fallShare, frost, groundUnder, type Falling } from './weather.ts'
 import { MOST_STARS, withHeavens, type HeavensDoc } from './heavens.ts'
 import { CLOUD_COVERS } from './skyRecipes.ts'
+import { placedShape, placer } from './place.ts'
 
 /**
  * A pixel-art scene written as data: no code, so it can be typed by hand, kept
@@ -277,6 +278,16 @@ export interface BoneDoc {
   prop?: string
 }
 
+/** An axis a bone turns about: 'x', 'y' or 'z', or any way as [x, y, z] (a prop set down turned writes one). */
+export type MoveAxis = 'x' | 'y' | 'z' | Vec3
+
+/** The way an axis points, of length 1. */
+export function moveAxis(a: MoveAxis): Vec3 {
+  if (typeof a === 'string') return a === 'x' ? [1, 0, 0] : a === 'y' ? [0, 1, 0] : [0, 0, 1]
+  const l = Math.hypot(a[0], a[1], a[2])
+  return [a[0] / l, a[1] / l, a[2] / l]
+}
+
 /** One part of a scene: a shape, its paint and the bone that carries it. */
 export interface PartDoc {
   /** Its shape. */
@@ -327,6 +338,12 @@ export interface PartDoc {
   glass?: { see?: number; mirror?: number; top?: boolean }
   /** Dabs that follow the form: 0 to 1, how far each cell is drawn as a stroke along the level line round the shape. Shows as brushwork in the Blobs view. */
   strokes?: number
+  /**
+   * Where the prop this part belongs to was set down, when the part was written somewhere else: its shape and paint
+   * are as written, moved from `foot` to `at`, turned `turn` degrees about the upright (counterclockwise seen from
+   * above) and sized `size` times. A scene made of library props (compose.ts) writes it; nobody needs to by hand.
+   */
+  placed?: { foot: Vec3; at: Vec3; turn: number; size: number }
 }
 
 /**
@@ -497,9 +514,12 @@ export type During = [number, number]
 /** Every move repeats a whole number of `times` in the loop (or in its `during`), so the scene loops. */
 export type MoveDoc =
   /** Turns right round, `times` per loop (negative turns the other way). */
-  | { kind: 'spin'; bone: string; axis: 'x' | 'y' | 'z'; times: number; phase?: number; during?: During }
-  /** Rocks to and fro by `degrees`. */
-  | { kind: 'sway'; bone: string; axis: 'x' | 'y' | 'z'; degrees: number; times: number; phase?: number; during?: During }
+  | { kind: 'spin'; bone: string; axis: MoveAxis; times: number; phase?: number; during?: During }
+  /**
+   * Rocks to and fro by `degrees`. With `wind`, a thing the wind moves (a tree, a stalk, a flower): in a gale it leans
+   * that many degrees downwind and swings wider, less in a lighter wind, gusting with it (`CompiledScene.blow`).
+   */
+  | { kind: 'sway'; bone: string; axis: MoveAxis; degrees: number; times: number; phase?: number; during?: During; wind?: number }
   /** Slides to and fro by `by`. */
   | { kind: 'bob'; bone: string; by: Vec3; times: number; phase?: number; during?: During }
   /** Is born, travels `by`, and fades away, over and over: smoke, sparks, bubbles, foam. `grow` is its size at birth and at the end. */
@@ -702,6 +722,10 @@ export function checkScene(doc: unknown): string[] {
     v.forEach((c, i) => hex(c, `${at}[${i}]`))
   }
   const axis = (v: unknown, at: string) => { if (!AXES.includes(v as string)) bad(at, "must be 'x', 'y' or 'z'") }
+  const turnAxis = (v: unknown, at: string) => {
+    if (Array.isArray(v)) { vec(v, at, -1, 1); if (v.length === 3 && Math.hypot(Number(v[0]), Number(v[1]), Number(v[2])) < 0.5) bad(at, 'must point some way: [x, y, z] about 1 long') }
+    else axis(v, at)
+  }
   /** Each point of a path a little way from the one before, along the ground: a repeated point makes a piece with no length. */
   const apart = (path: unknown[], at: string) => {
     for (let i = 1; i < path.length; i++) {
@@ -1058,6 +1082,10 @@ export function checkScene(doc: unknown): string[] {
     } else if (p.lit !== undefined && p.glow !== true) bad(`${at}.lit`, "a part that does not glow needs unlit: 'gone' (it is there only while lit)")
     if (p.grime !== undefined) hex(p.grime, `${at}.grime`)
     opt(p.strokes, `${at}.strokes`, 0, 1)
+    if (p.placed !== undefined) {
+      if (!obj(p.placed)) bad(`${at}.placed`, 'must be an object')
+      else { vec(p.placed.foot, `${at}.placed.foot`); vec(p.placed.at, `${at}.placed.at`); num(p.placed.turn, `${at}.placed.turn`, -360, 360); num(p.placed.size, `${at}.placed.size`, 0.1, 10) }
+    }
     if (p.glass !== undefined) {
       if (!obj(p.glass)) bad(`${at}.glass`, 'must be an object')
       else {
@@ -1091,8 +1119,8 @@ export function checkScene(doc: unknown): string[] {
       opt(m.phase, `${at}.phase`, -1, 1)
       during(m.during, `${at}.during`)
       switch (m.kind) {
-        case 'spin': axis(m.axis, `${at}.axis`); break
-        case 'sway': axis(m.axis, `${at}.axis`); num(m.degrees, `${at}.degrees`, -180, 180); break
+        case 'spin': turnAxis(m.axis, `${at}.axis`); break
+        case 'sway': turnAxis(m.axis, `${at}.axis`); num(m.degrees, `${at}.degrees`, -180, 180); if (m.wind !== undefined) num(m.wind, `${at}.wind`, 0, 45); break
         case 'bob': vec(m.by, `${at}.by`); break
         case 'drift':
           vec(m.by, `${at}.by`)
@@ -1302,7 +1330,6 @@ function valueNoise(x: number, z: number): number {
 
 /** A smooth wobble, about -1..1. */
 const wobble = (x: number, y: number, z: number) => (Math.sin(x * 7.3 + z * 3.1 + y * 1.7) + Math.sin(z * 8.7 - x * 2.3 + y * 5.1) + Math.sin((x + z) * 13.1 + y * 9.7) * 0.5) / 2.5
-const AXIS: Record<string, Vec3> = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] }
 const IDX: Record<string, number> = { x: 0, y: 1, z: 2 }
 
 /** A shape for the builder. Nothing is made thinner than `thin`, so it catches the grid at any detail. */
@@ -1515,6 +1542,8 @@ export interface CompiledScene {
    * water, and lies, there), and rain's streaks lean along it. Snow and leaves are carried `DRIFT` times further.
    * With `wrap` (the square a swarm falls over, its middle and half width), a speck blown out of the square comes in
    * at its other side, so the slanting rain still fills it at every height (one that has landed is always inside).
+   * Sways with `wind` lean downwind and swing wider by the root of how far the wind carries (a breeze a quarter of a
+   * gale), so they gust with it.
    */
   blow(sk: Skeleton, t: number, wind: readonly [number, number], wrap?: { at: readonly [number, number]; half: number }): void
   /** The scene's live lights at a time, in seconds. */
@@ -1629,6 +1658,8 @@ interface Speck {
 
 /** How much further than rain the wind carries snow and leaves over the same fall: they fall slowly. */
 export const DRIFT = 1.8
+/** How much wider a sway with `wind` swings, as a share of how far it leans. */
+export const FLUTTER = 0.35
 
 const SPECK_SIZE: Record<SpeckKind, number> = { dust: 0.01, embers: 0.014, rain: 0.008, snow: 0.014, leaves: 0.022, fireflies: 0.018, bubbles: 0.02 }
 /** Seconds one fall or rise takes, about: the rest of a swarm's speed comes from that. A speck that lands lies a while too. */
@@ -1889,6 +1920,7 @@ export function compileScene(given: SceneDoc, { puffs = true, ground: under, wat
   for (const b of doc.bones ?? []) bones.push({ name: b.name, parent: b.parent ? bones.findIndex((k) => k.name === b.parent) : 0, head: b.at })
   const palette = doc.palette.map(rgb)
   const moves = doc.moves ?? []
+  const windy = moves.filter((m): m is Extract<MoveDoc, { kind: 'sway' }> => m.kind === 'sway' && !!m.wind)
   const lights = doc.lights ?? []
   // what weather lands on: parts that stay put (on no bone, or one that only sways), in order, a drift over those before it
   const moved = new Set<string>()
@@ -1896,10 +1928,13 @@ export function compileScene(given: SceneDoc, { puffs = true, ground: under, wat
   // what floats rides the water, so it is no ground under it
   for (const f of doc.water?.floats ?? []) moved.add(f.bone)
   for (const b of doc.bones ?? []) if (b.parent && moved.has(b.parent)) moved.add(b.name)
+  // a part written somewhere else and set down here (PartDoc.placed): its shape and paint are read where it was written
+  const placers = doc.parts.map((p) => (p.placed ? placer(p.placed.foot, p.placed) : undefined))
   const solidShapes = (thin: number) => {
     const out: Shape[] = [], still: Shape[] = []
-    for (const p of doc.parts) {
-      const sh = toShape(p.shape, thin, (x, z) => groundUnder(still, x, z, 4, -1))
+    for (const [i, p] of doc.parts.entries()) {
+      const t = placers[i]
+      const sh = t ? placedShape(toShape(p.shape, thin / t.size), t) : toShape(p.shape, thin, (x, z) => groundUnder(still, x, z, 4, -1))
       out.push(sh)
       if (!p.glow && !(p.bone && moved.has(p.bone))) still.push(sh)
     }
@@ -1960,9 +1995,10 @@ export function compileScene(given: SceneDoc, { puffs = true, ground: under, wat
       const thin = spacing * 0.75
       const shapes = solidShapes(thin).out
       const parts: VoxelPart[] = doc.parts.map((p, i) => {
-        const shape = shapes[i]
+        const shape = shapes[i], t = placers[i]
+        const paint = toPaint(p.paint, spacing / (t?.size ?? 1), 'letterAt' in shape ? (shape.letterAt as (p: Vec3, n: Vec3) => string | undefined) : undefined, shape.pieceAt)
         return {
-        shape, color: toPaint(p.paint, spacing, 'letterAt' in shape ? (shape.letterAt as (p: Vec3, n: Vec3) => string | undefined) : undefined, shape.pieceAt), bone: p.bone ?? 'land', glow: p.glow, laid: p.laid, noShadow: p.noShadow,
+        shape, color: t && typeof paint === 'function' ? (q: Vec3, n: Vec3) => paint(t.back(q), t.backDir(n)) : paint, bone: p.bone ?? 'land', glow: p.glow, laid: p.laid, noShadow: p.noShadow,
         grime: p.grime === undefined ? undefined : unit(p.grime), bare: p.bare,
         glass: p.glass, strokes: p.strokes,
         ink: p.ink && { kind: p.ink.kind, amount: p.ink.amount, color: p.ink.color === undefined ? undefined : unit(p.ink.color) },
@@ -2013,6 +2049,14 @@ export function compileScene(given: SceneDoc, { puffs = true, ground: under, wat
           sk.setRotation(b, mulQ(axisAngle([-wind[1] / w, 0, wind[0] / w], Math.atan(w)), sk.rotation.subarray(b * 4, b * 4 + 4)))
         }
       }
+      if (!windy.length) return
+      const w = Math.hypot(wind[0], wind[1]), push = Math.sqrt(w), down: Vec3 = [wind[1] / w, 0, -wind[0] / w]
+      for (const m of windy) {
+        const b = sk.index(m.bone), at = duringAt(u, m.during) * m.times + (m.phase ?? 0), most = (m.wind ?? 0) * push * (Math.PI / 180)
+        // leans its top downwind (up turned toward the way the wind goes), and swings wider about its own axis, twice as quick
+        const flutter = axisAngle(moveAxis(m.axis), Math.sin(at * 2 * TAU) * most * FLUTTER)
+        sk.setRotation(b, mulQ(axisAngle(down, most), mulQ(sk.rotation.subarray(b * 4, b * 4 + 4), flutter)))
+      }
     },
     pose(sk, t) {
       sk.reset()
@@ -2020,7 +2064,7 @@ export function compileScene(given: SceneDoc, { puffs = true, ground: under, wat
       for (const m of moves) {
         const b = sk.index(m.bone), at = duringAt(u, m.during) * m.times + (m.phase ?? 0)
         if (m.kind === 'spin' || m.kind === 'sway') {
-          const turn = axisAngle(AXIS[m.axis], m.kind === 'spin' ? at * TAU : Math.sin(at * TAU) * m.degrees * (Math.PI / 180))
+          const turn = axisAngle(moveAxis(m.axis), m.kind === 'spin' ? at * TAU : Math.sin(at * TAU) * m.degrees * (Math.PI / 180))
           // moves on one bone add up, in the order they are written
           sk.setRotation(b, mulQ(sk.rotation.subarray(b * 4, b * 4 + 4), turn))
         } else if (m.kind === 'bob') {
