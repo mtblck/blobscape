@@ -302,7 +302,7 @@ export function PixelDiorama() {
       if (pond.spray) stage.reshape(pond.spray)
     })
     // it mirrors what stands round it: the scene drawn once more as its mirror image (a second sort and a small draw, so only with WebGPU)
-    stage.setMirror(pond && mirrored ? { plane: levelPlane(pond.plan.level), lift: pond.plan.cell * 0.75, seen: (image) => { seen.current = image; wet.current?.() } } : undefined)
+    stage.setMirror(pond && mirrored && !pond.plan.lava ? { plane: levelPlane(pond.plan.level), lift: pond.plan.cell * 0.75, seen: (image) => { seen.current = image; wet.current?.() } } : undefined)
     pokes.current = new Pokes(scene.built.skeleton)
     // lights move with the bones (the lamp's beam with its lens, the fire's glow with its flames), so both are set from the same time
     const d = dress(scene.of)

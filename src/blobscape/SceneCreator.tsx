@@ -503,7 +503,7 @@ export function SceneCreator() {
       stage.reshape(pond.surface)
       if (pond.spray) stage.reshape(pond.spray)
     })
-    stage.setMirror(pond && mirrored ? { plane: levelPlane(pond.plan.level), lift: pond.plan.cell * 0.75, seen: (image) => { seen = image; wet?.() } } : undefined)
+    stage.setMirror(pond && mirrored && !pond.plan.lava ? { plane: levelPlane(pond.plan.level), lift: pond.plan.cell * 0.75, seen: (image) => { seen = image; wet?.() } } : undefined)
     // the land's moon, sun and stars, which cloud cover puts out
     const heavens = heavenBones(land.skeleton.bones.map((b) => b.name))
     const own = fall ? ownClouds(live.current.shown.weatherScene()) : 0

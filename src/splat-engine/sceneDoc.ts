@@ -13,6 +13,7 @@ import { MAX_DROPS, arch, butte, hoodoo, land, mud, pebbles } from './erode.ts'
 import { RISES, cluster, columns, crystal, drips, flowstone, geode, icicles } from './forms.ts'
 import { drift, fallAt, fallShare, frost, groundUnder, type Falling } from './weather.ts'
 import { MOST_STARS, withHeavens, type HeavensDoc } from './heavens.ts'
+import type { LavaPlan } from './lava.ts'
 import { CLOUD_COVERS, WIND_MOST, gustRun, windLevelOf } from './skyRecipes.ts'
 import { placedShape, placer } from './place.ts'
 import { checkTags, type Tag } from './tags.ts'
@@ -114,6 +115,8 @@ export interface SceneDoc {
   focus?: { at: Vec3; r: number }
   /** A pond whose surface ripples where rain lands on it and where things move through it. */
   water?: WaterDoc
+  /** A pool of molten rock that turns over, cools to a crust that cracks into plates, and bubbles (lava.ts): a shared recipe, as water is. A scene has water or lava, not both. */
+  lava?: LavaDoc
   /**
    * The moon, the sun, the stars and how cloudy the sky is, from the shared recipes (heavens.ts): say where and how
    * many, and every scene's moon looks the same, cloud cover puts them out, and time of day brings the right ones. A
@@ -186,6 +189,48 @@ export interface WaterDoc {
    */
   foam?: number
 }
+
+/**
+ * Lava that moves (lava.ts): molten rock wherever the still ground inside the box `from` to `to` lies under `level`,
+ * found as water is (dig the pool with a `cut`). Its surface is the water's height field run slow and thick, and over
+ * it a field of heat: rock wells up hot at `vents` and spreads out over the surface, cooling as it goes from white-hot
+ * through orange and red to a dark crust, which breaks into plates with glowing cracks between them, piles up along
+ * the bank and where two vents' spreads meet, and is broken open by bubbles. One whole loop is worked out when the
+ * scene is made, as the water's is, and it glows by itself. Give the scene a light over it for what it lights.
+ */
+export interface LavaDoc {
+  /** The height its surface stands at. */
+  level: number
+  /** One corner of the ground looked over for lava, [x, z]. */
+  from: [number, number]
+  /** The opposite corner. */
+  to: [number, number]
+  /** Its colors from cold to hot: crust, dull red, orange, white-hot. A dark crust and a red, orange and pale yellow glow when left out. */
+  colors?: [string, string, string, string]
+  /** A cell of its grid: 0.012 to 0.1, 0.022 when left out. */
+  cell?: number
+  /** Seconds for the surface to lose two thirds of its heat: 0.5 to 20, 3 when left out. Shorter, and the crust closes in nearer the vents. */
+  cool?: number
+  /** How fast the surface moves out from a vent's edge, units a second: 0.005 to 0.5, 0.06 when left out. */
+  flow?: number
+  /** How big the crust's plates are, units across: 0.02 to 1, 0.1 when left out. */
+  plate?: number
+  /** Where hot rock wells up, at most six: round `at` ([x, z]), `r` across (half; a fifth of the pool's narrower side when left out), wandering `wander` round that spot (0) `times` a loop (1) from `phase`. One in the middle when left out. */
+  vents?: { at: [number, number]; r?: number; wander?: number; times?: number; phase?: number }[]
+  /** How many bubbles burst a loop: 0 to 60, 8 when left out. */
+  bubbles?: number
+  /** How wide a bubble is (half): 0.01 to 0.3, three cells when left out. */
+  pop?: number
+  /** How fast a swell travels, units a second: 0.05 to 2, 0.12 when left out. */
+  speed?: number
+  /** The share of its motion the surface loses a second, 0.05 to 0.95: 0.9 when left out. */
+  damping?: number
+  /** How many times steeper than it is the surface is drawn: 1 to 12, 3 when left out. */
+  ripple?: number
+}
+
+/** The colors of lava when a scene names none: crust, dull red, orange, white-hot. */
+export const LAVA_COLORS: [string, string, string, string] = ['#2b181c', '#8f1a1c', '#ff8a1e', '#fff3a8']
 
 /** A scene's air: haze, mist, shafts of light and specks. */
 export interface AirDoc {
@@ -1204,6 +1249,33 @@ export function checkScene(doc: unknown): string[] {
       num(c.amount, 'cover.amount', 0, 1)
     }
   }
+  if (doc.lava !== undefined) {
+    const l = doc.lava
+    if (!obj(l)) bad('lava', 'must be an object')
+    else {
+      if (doc.water !== undefined) bad('lava', 'a scene has water or lava, not both')
+      num(l.level, 'lava.level', -REACH, REACH)
+      const cell = opt(l.cell, 'lava.cell', 0.012, 0.1) ? (l.cell as number | undefined) ?? WATER_CELL : WATER_CELL
+      if (vec(l.from, 'lava.from', -REACH, REACH, 2) && vec(l.to, 'lava.to', -REACH, REACH, 2)) {
+        const [a, b] = [l.from as number[], l.to as number[]], nx = Math.abs(b[0] - a[0]) / cell, nz = Math.abs(b[1] - a[1]) / cell
+        if (nx < 4 || nz < 4) bad('lava.to', 'must be at least four cells from lava.from each way')
+        else if (nx * nz > MAX_WATER_CELLS) bad('lava.cell', `makes a grid of ${Math.round(nx * nz)} cells; the most is ${MAX_WATER_CELLS}, so make the box smaller or the cell bigger`)
+      }
+      if (l.colors !== undefined) hexes(l.colors, 'lava.colors', 4, 4)
+      opt(l.cool, 'lava.cool', 0.5, 20); opt(l.flow, 'lava.flow', 0.005, 0.5); opt(l.plate, 'lava.plate', 0.02, 1)
+      opt(l.bubbles, 'lava.bubbles', 0, 60); opt(l.pop, 'lava.pop', 0.01, 0.3)
+      opt(l.speed, 'lava.speed', 0.05, 2); opt(l.damping, 'lava.damping', 0.05, 0.95); opt(l.ripple, 'lava.ripple', 1, 12)
+      if (l.vents !== undefined) {
+        if (!Array.isArray(l.vents) || l.vents.length < 1 || l.vents.length > 6) bad('lava.vents', 'must be a list of one to six')
+        else l.vents.forEach((v: unknown, i: number) => {
+          const at = `lava.vents[${i}]`
+          if (!obj(v)) { bad(at, 'must be an object'); return }
+          vec(v.at, `${at}.at`, -REACH, REACH, 2); opt(v.r, `${at}.r`, 0.01, 2); opt(v.wander, `${at}.wander`, 0, 2); opt(v.phase, `${at}.phase`, -1, 1)
+          if (v.times !== undefined) whole(v.times, `${at}.times`)
+        })
+      }
+    }
+  }
   if (doc.water !== undefined) {
     const w = doc.water
     if (!obj(w)) bad('water', 'must be an object')
@@ -1652,6 +1724,8 @@ export interface WaterPlan {
   floats: { bone: number; at: Vec3; size: number }[]
   /** How readily foam gathers where the water strikes something standing in it: 0 for none. */
   foam: number
+  /** Where the pool is molten rock (`SceneDoc.lava`): how it turns over, cools and bubbles. */
+  lava?: LavaPlan
 }
 
 // --- What hangs in the air
@@ -1823,6 +1897,24 @@ function planWater(w: WaterDoc, box: { x0: number; x1: number; z0: number; z1: n
   }
 }
 
+/** Lava as the water it is planned as: its pool, its grid and its height field, slow and thick. */
+function lavaPond(l: LavaDoc): WaterDoc {
+  const cell = l.cell ?? WATER_CELL
+  return { level: l.level, from: l.from, to: l.to, color: (l.colors ?? LAVA_COLORS)[0], cell, clear: 1, speed: l.speed ?? 0.12, damping: l.damping ?? 0.9, ripple: l.ripple ?? 3, splash: { r: l.pop ?? cell * 3, depth: cell * 0.6 } }
+}
+
+/** How a scene's lava turns over, cools and bubbles, over the box `box`. */
+function planLava(l: LavaDoc, box: { x0: number; x1: number; z0: number; z1: number }): LavaPlan {
+  const cell = l.cell ?? WATER_CELL
+  const narrow = Math.min(box.x1 - box.x0, box.z1 - box.z0)
+  const vents = l.vents ?? [{ at: [(box.x0 + box.x1) / 2, (box.z0 + box.z1) / 2] as [number, number] }]
+  return {
+    cool: l.cool ?? 3, flow: l.flow ?? 0.06, plate: l.plate ?? 0.1, bubbles: l.bubbles ?? 8, pop: l.pop ?? cell * 3,
+    vents: vents.map((v) => ({ x: v.at[0], z: v.at[1], r: v.r ?? narrow / 5, wander: v.wander ?? 0, times: v.times ?? 1, phase: v.phase ?? 0 })),
+    ramp: (l.colors ?? LAVA_COLORS).map(unit) as LavaPlan['ramp'],
+  }
+}
+
 /** Poses one speck's bone for `u`, the share of the loop gone by. */
 function poseSpeck(sk: Skeleton, p: Speck, u: number) {
   const b = p.index
@@ -1982,7 +2074,8 @@ export function compileScene(given: SceneDoc, { puffs = true, ground: under, wat
   }
   // what hangs in the air rides bones of its own, after the scene's: a bone for each speck, a few for each bank of mist
   const lands = (doc.air?.specks ?? []).some((m) => m.land)
-  const pond = doc.water
+  // lava lies in its pool as water does, on the same grid and the same height field: it is planned as water, with its heat beside
+  const pond = doc.water ?? (doc.lava && lavaPond(doc.lava))
   let stood: Shape[] | undefined
   const standing = () => (stood ??= solidShapes(0.02).still)
   const ground = (lands && !under) || pond ? standing() : []
@@ -1999,6 +2092,7 @@ export function compileScene(given: SceneDoc, { puffs = true, ground: under, wat
   }
   const specks = planSpecks(doc.air, doc.loop, under ?? groundAt, under ? level : pond?.level)
   const water = pond && pondBox ? planWater(pond, pondBox, doc, specks, bones, wetAt, standsAt) : undefined
+  if (water && doc.lava) water.lava = planLava(doc.lava, pondBox!)
   const banks = doc.air?.mist ?? []
   banks.forEach((m, mi) => { for (let k = 0; k < BANK_BONES; k++) bones.push({ name: `~mist${mi}-${k}`, parent: 0, head: m.at }) })
   for (const p of specks) { p.index = bones.length; bones.push({ name: p.bone, parent: 0, head: p.at }) }

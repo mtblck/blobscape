@@ -4,14 +4,13 @@ import { DIORAMAS } from './scenes.ts'
 import { LIGHTHOUSE } from './scenes/lighthouse.ts'
 import { CAMPFIRE } from './scenes/campfire.ts'
 import { BEE } from './scenes/bee.ts'
-import { DRAGON } from './scenes/dragon.ts'
 import { HAND } from './scenes/hand.ts'
 import { REEF } from './scenes/reef.ts'
 import { WINDMILL } from './scenes/windmill.ts'
 import { checkScene, isLit, litFor } from '../../splat-engine/sceneDoc.ts'
 
 test('the described scenes are sound, and are data alone', () => {
-  for (const doc of [BEE, CAMPFIRE, DRAGON, HAND, REEF, WINDMILL, LIGHTHOUSE]) {
+  for (const doc of [BEE, CAMPFIRE, HAND, REEF, WINDMILL, LIGHTHOUSE]) {
     assert.deepEqual(checkScene(doc), [], doc.name)
     // nothing but what a .json file could hold
     assert.deepEqual(JSON.parse(JSON.stringify(doc)), doc, doc.name)

@@ -11,7 +11,7 @@ import { DEFAULT_LIGHT, buildVoxels } from '../../splat-engine/voxel.ts'
 import * as meadow from '../fourways/meadow/build.ts'
 import { CAMPFIRE } from './scenes/campfire.ts'
 import { BEE } from './scenes/bee.ts'
-import { DRAGON } from './scenes/dragon.ts'
+import { DRAGON_PROJECT } from '../props/cave.ts'
 import { HAND } from './scenes/hand.ts'
 import { ISLES } from './scenes/isles.ts'
 import { OCTOPUS } from './scenes/octopus.ts'
@@ -276,7 +276,7 @@ const SKY_FISHING: Diorama = (() => {
 export const DIORAMAS: Diorama[] = [
   LIGHTHOUSE,
   described('campfire', CAMPFIRE, 'A camp in a clearing among pines at night, with a flickering fire throwing sparks, a tent, a lantern, fireflies and the moon'),
-  described('dragon', DRAGON, 'A red dragon bent over a glowing pool of lava in a dark cave, its claws on the rim, its neck swaying, its head turning, its jaw opening and its wings shifting, with embers rising'),
+  described('dragon', composeScene(DRAGON_PROJECT, madeProp), 'A red dragon bent over a pool of lava in a dark cave, its claws on the rim, its neck swaying, its head turning, its jaw opening and its wings shifting; the lava wells up, crusts over into glowing plates and bubbles, and embers rise', { project: DRAGON_PROJECT }),
   described('bee', BEE, 'A giant bee hovering at a pink flower in a forest clearing, with fluttering pale wings, little bees, butterflies, mushrooms, ferns and drifting pollen'),
   described('hand', HAND, 'A giant sandstone hand rising from a desert ruin at dusk, holding a glowing blue crystal that turns and bobs, with slowly curling fingers, broken columns, cacti and drifting fireflies'),
   described('reef', REEF, 'A giant jellyfish beating slowly over a coral reef, trailing swaying arms, with branching corals, seaweed, circling fish and rising bubbles'),
