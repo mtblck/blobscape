@@ -2,18 +2,18 @@ import type { PropDoc, SceneProject } from '../../splat-engine/project.ts'
 import type { MadeProp } from './garden.ts'
 
 /**
- * The lantern grove (Diorama's grove scene) as a land and props (docs/scenes-from-props.md): the snow under its aurora
- * is the land, and the birches hung with paper lamps and the sleeping fox are library props set down on it, each where it
- * stood in the scene. Its falling snow is the shared snow now (Diorama.weather), not its own.
+ * The lantern grove (Diorama's grove scene) as a land and props (docs/scenes-from-props.md): the snow is the land, and the birches hung with paper lamps and the sleeping fox are library props set down on it, each where it
+ * stood in the scene. Its falling snow is the shared snow now (Diorama.weather), and its aurora the shared sky effect (Diorama.skyEffect,
+ * splat-engine/skyEffects.ts), not its own.
  * Data only, as a scene description is: see docs/scene-descriptions.md.
  */
 
-/** A round of snow at night with drifts, stones and a frozen puddle, under ribbons of green light. */
+/** A round of snow at night with drifts, stones and a frozen puddle. */
 export const AURORA_SNOW: PropDoc = {
-  name: 'Snow under the aurora',
+  name: 'Snow at night',
   foot: [0, 0, 0],
   doc: {
-    name: 'Snow under the aurora',
+    name: 'Snow at night',
     loop: 12,
     light: { from: [-0.35, 1, 0.6], ambient: 0.5, shadow: 0.45 },
     palette: [
@@ -27,11 +27,6 @@ export const AURORA_SNOW: PropDoc = {
     camera: { target: [0, 1.4, 0], distance: 6.4, azimuth: 14, elevation: 7, swing: 14 },
     air: { haze: { color: '#0c1224', from: 0.5, to: 7 }, mist: [{ at: [0, 0.06, 0.2], half: [1.8, 0.06, 1.2], color: '#34487c', thick: 0.4 }], specks: [] },
     cover: { kind: 'snow', color: '#e4f0f8', amount: 0.3 },
-    bones: [
-      { name: 'sky0', at: [0, 3.35, -1.5] },
-      { name: 'sky1', at: [0, 3, -1.7] },
-      { name: 'sky2', at: [0, 3.65, -1.3] },
-    ],
     parts: [
       { shape: { kind: 'rough', shape: { kind: 'cylinder', at: [0, -0.26, 0], height: 0.26, r: 1.75 }, by: 0.04, scale: 0.4 }, paint: { kind: 'faces', top: { kind: 'patches', size: 0.25, colors: ['#a8c0dc', '#e4f0f8', '#a8c0dc', '#6c88b8'] }, side: { kind: 'bands', axis: 'y', size: 0.07, colors: ['#34487c', '#1c2848', '#0c1224'] } } },
       { shape: { kind: 'ball', at: [-0.9, 0, 0.9], r: [0.4, 0.12, 0.3] }, paint: { kind: 'faces', top: '#e4f0f8', side: '#a8c0dc' }, noShadow: true },
@@ -43,20 +38,6 @@ export const AURORA_SNOW: PropDoc = {
       { shape: { kind: 'join', shapes: [{ kind: 'cylinder', at: [1.45, 0.09, -0.8], height: 0.216, r: 0.204, rTop: 0.03 }, { kind: 'cylinder', at: [1.45, 0.246, -0.8], height: 0.216, r: 0.156, rTop: 0.03 }, { kind: 'cylinder', at: [1.45, 0.402, -0.8], height: 0.216, r: 0.108, rTop: 0.03 }] }, paint: { kind: 'faces', top: '#e4f0f8', side: { kind: 'speckle', size: 0.05, colors: ['#246054', '#143c34', '#246054', '#a8c0dc'] }, under: '#143c34' } },
       { shape: { kind: 'join', shapes: [{ kind: 'cylinder', at: [-0.35, 0.068, 1.25], height: 0.162, r: 0.153, rTop: 0.023 }, { kind: 'cylinder', at: [-0.35, 0.185, 1.25], height: 0.162, r: 0.117, rTop: 0.023 }, { kind: 'cylinder', at: [-0.35, 0.302, 1.25], height: 0.162, r: 0.081, rTop: 0.023 }] }, paint: { kind: 'faces', top: '#e4f0f8', side: { kind: 'speckle', size: 0.05, colors: ['#246054', '#143c34', '#246054', '#a8c0dc'] }, under: '#143c34' } },
       { shape: { kind: 'join', shapes: [{ kind: 'ball', at: [-1.3, 0.012, 1.05], r: [0.035, 0.012, 0.028] }, { kind: 'ball', at: [-1.1, 0.012, 1.02], r: [0.035, 0.012, 0.028] }, { kind: 'ball', at: [-0.9, 0.012, 0.91], r: [0.035, 0.012, 0.028] }, { kind: 'ball', at: [-0.7, 0.012, 0.88], r: [0.035, 0.012, 0.028] }, { kind: 'ball', at: [-0.5, 0.012, 0.77], r: [0.035, 0.012, 0.028] }, { kind: 'ball', at: [-0.3, 0.012, 0.74], r: [0.035, 0.012, 0.028] }, { kind: 'ball', at: [-0.1, 0.012, 0.63], r: [0.035, 0.012, 0.028] }, { kind: 'ball', at: [0.1, 0.012, 0.6], r: [0.035, 0.012, 0.028] }] }, paint: '#6c88b8', noShadow: true },
-      { shape: { kind: 'join', shapes: [{ kind: 'cone', from: [-1.9, 3.35, -1.5], to: [-1.48, 3.475, -1.5], r: 0.035 }, { kind: 'cone', from: [-1.48, 3.475, -1.5], to: [-1.06, 3.506, -1.5], r: 0.035 }, { kind: 'cone', from: [-1.06, 3.506, -1.5], to: [-0.64, 3.418, -1.5], r: 0.035 }, { kind: 'cone', from: [-0.64, 3.418, -1.5], to: [-0.22, 3.279, -1.5], r: 0.035 }, { kind: 'cone', from: [-0.22, 3.279, -1.5], to: [0.2, 3.194, -1.5], r: 0.035 }, { kind: 'cone', from: [0.2, 3.194, -1.5], to: [0.62, 3.226, -1.5], r: 0.035 }, { kind: 'cone', from: [0.62, 3.226, -1.5], to: [1.04, 3.353, -1.5], r: 0.035 }, { kind: 'cone', from: [1.04, 3.353, -1.5], to: [1.46, 3.477, -1.5], r: 0.035 }, { kind: 'cone', from: [1.46, 3.477, -1.5], to: [1.88, 3.505, -1.5], r: 0.035 }] }, paint: '#38d8a0', bone: 'sky0', glow: true, lit: 'night', unlit: 'gone', noShadow: true },
-      { shape: { kind: 'join', shapes: [{ kind: 'cone', from: [-1.9, 3.154, -1.7], to: [-1.48, 3.129, -1.7], r: 0.035 }, { kind: 'cone', from: [-1.48, 3.129, -1.7], to: [-1.06, 3.007, -1.7], r: 0.035 }, { kind: 'cone', from: [-1.06, 3.007, -1.7], to: [-0.64, 2.879, -1.7], r: 0.035 }, { kind: 'cone', from: [-0.64, 2.879, -1.7], to: [-0.22, 2.843, -1.7], r: 0.035 }, { kind: 'cone', from: [-0.22, 2.843, -1.7], to: [0.2, 2.926, -1.7], r: 0.035 }, { kind: 'cone', from: [0.2, 2.926, -1.7], to: [0.62, 3.065, -1.7], r: 0.035 }, { kind: 'cone', from: [0.62, 3.065, -1.7], to: [1.04, 3.155, -1.7], r: 0.035 }, { kind: 'cone', from: [1.04, 3.155, -1.7], to: [1.46, 3.128, -1.7], r: 0.035 }, { kind: 'cone', from: [1.46, 3.128, -1.7], to: [1.88, 3.004, -1.7], r: 0.035 }] }, paint: '#2cb890', bone: 'sky1', glow: true, lit: 'night', unlit: 'gone', noShadow: true },
-      { shape: { kind: 'join', shapes: [{ kind: 'cone', from: [-1.9, 3.732, -1.3], to: [-1.48, 3.594, -1.3], r: 0.035 }, { kind: 'cone', from: [-1.48, 3.594, -1.3], to: [-1.06, 3.498, -1.3], r: 0.035 }, { kind: 'cone', from: [-1.06, 3.498, -1.3], to: [-0.64, 3.517, -1.3], r: 0.035 }, { kind: 'cone', from: [-0.64, 3.517, -1.3], to: [-0.22, 3.637, -1.3], r: 0.035 }, { kind: 'cone', from: [-0.22, 3.637, -1.3], to: [0.2, 3.767, -1.3], r: 0.035 }, { kind: 'cone', from: [0.2, 3.767, -1.3], to: [0.62, 3.808, -1.3], r: 0.035 }, { kind: 'cone', from: [0.62, 3.808, -1.3], to: [1.04, 3.73, -1.3], r: 0.035 }, { kind: 'cone', from: [1.04, 3.73, -1.3], to: [1.46, 3.591, -1.3], r: 0.035 }, { kind: 'cone', from: [1.46, 3.591, -1.3], to: [1.88, 3.497, -1.3], r: 0.035 }] }, paint: '#38d8a0', bone: 'sky2', glow: true, lit: 'night', unlit: 'gone', noShadow: true },
-    ],
-    moves: [
-      { kind: 'sway', bone: 'sky0', axis: 'z', degrees: 3, times: 1, phase: 0 },
-      { kind: 'bob', bone: 'sky0', by: [0.12, 0.06, 0], times: 2, phase: 0 },
-      { kind: 'sway', bone: 'sky1', axis: 'z', degrees: 3, times: 1, phase: 0.3 },
-      { kind: 'bob', bone: 'sky1', by: [0.12, 0.06, 0], times: 2, phase: 0.3 },
-      { kind: 'sway', bone: 'sky2', axis: 'z', degrees: 3, times: 1, phase: 0.6 },
-      { kind: 'bob', bone: 'sky2', by: [0.12, 0.06, 0], times: 2, phase: 0.6 },
-    ],
-    lights: [
-      { at: [0, 3, -0.8], color: '#38d8a0', strength: 1, range: 2.6, lit: 'night' },
     ],
   },
 }
@@ -319,7 +300,7 @@ export const SLEEPING_FOX: PropDoc = {
 
 /** The pieces above as the library lists them. */
 export const GROVE_MADE: MadeProp[] = [
-  { id: 'aurora-snow', tags: ['snowy', 'night'], kind: 'land', about: 'A round of snow at night with drifts, stones and a frozen puddle, under ribbons of green light', prop: AURORA_SNOW },
+  { id: 'aurora-snow', tags: ['snowy', 'night'], kind: 'land', about: 'A round of snow at night with drifts, stones and a frozen puddle', prop: AURORA_SNOW },
   { id: 'lantern-birch', tags: ['tree', 'lamp', 'magic', 'snowy'], kind: 'prop', about: 'A snowy birch with a face lit from inside like a lantern, hung with two paper lamps, swaying', prop: LANTERN_BIRCH },
   { id: 'lantern-birch-short', tags: ['tree', 'lamp', 'magic', 'snowy'], kind: 'prop', about: 'A shorter snowy birch with a face lit from inside like a lantern, hung with two paper lamps, swaying', prop: LANTERN_BIRCH_SHORT },
   { id: 'lantern-birch-mid', tags: ['tree', 'lamp', 'magic', 'snowy'], kind: 'prop', about: 'A snowy birch of middle height with a face lit from inside like a lantern, hung with two paper lamps, swaying', prop: LANTERN_BIRCH_MID },

@@ -4,7 +4,7 @@ import type { Orbit } from '../splat-core/view.ts'
 import { Magnifier, TourStrip } from './diorama/HowItsMade.tsx'
 import { TOUR, clay, kept } from './diorama/tour.ts'
 import type { CelLook } from '../splat-core/cel.ts'
-import { countColors, darkest, type PixelLook } from '../splat-core/pixel.ts'
+import { countColors, darkest, type PixelLook, type Rgb } from '../splat-core/pixel.ts'
 import type { Built } from '../splat-engine/body.ts'
 import { LoadingMark } from '../shared/BlobLoader.tsx'
 import { castBy, glowGain } from './diorama/glow.ts'
@@ -37,6 +37,10 @@ import { useDrawnLook, useHeld, wantsPlain } from './drawnLook.tsx'
 import { TIMES, timeAsked, timeOf, type TimeId } from './timeOfDay.ts'
 import { CLOUD_COVERS, SkyEase, WEATHERS, WINDS, cloudsAsked, gloomy, isClear, skyState, weatherAsked, windAsked, windAt, type CloudId, type WeatherId, type WindId } from '../splat-engine/skyRecipes.ts'
 import { SceneWeather, paletteUnder, underSky } from './diorama/weather.ts'
+import { SceneSkyEffect } from './diorama/skyEffect.ts'
+import { SKY_EFFECTS, effectColors, effectOut, skyEffectAsked, type SkyEffectId } from '../splat-engine/skyEffects.ts'
+import { joinPalettes } from '../splat-engine/project.ts'
+import { nightOf } from './celLooks.ts'
 import { pileStep } from '../splat-engine/snowCover.ts'
 import { heavenBones, ownClouds, showHeavens } from '../splat-engine/heavens.ts'
 import { download } from './files.ts'
@@ -114,6 +118,13 @@ export function PixelDiorama() {
    */
   const [overheadPick, setOverhead] = useState<boolean | undefined>(() => { const q = new URLSearchParams(location.search).get('overhead'); return q === '0' ? false : q === '1' ? true : undefined })
   const overhead = overheadPick ?? picked0.overhead ?? true
+  /**
+   * The sky effect behind the scene (`?sky=meteors`, `?sky=none`): an aurora or a meteor shower, recipes every scene
+   * takes the same way (Matt, 2026-11-22; splat-engine/skyEffects.ts). Out only at night under a clear enough sky, and
+   * never in space. A scene may start with one of its own (the lantern grove's aurora) until another, or none, is picked.
+   */
+  const [skyPick, setSkyPick] = useState<SkyEffectId | 'none' | undefined>(() => { const q = new URLSearchParams(location.search).get('sky'); return q === 'none' ? 'none' : skyEffectAsked(q) })
+  const skyEffect: SkyEffectId | undefined = picked0.space || skyPick === 'none' ? undefined : skyPick ?? picked0.skyEffect
   // a storm by day is dark enough that lamps waiting for the dark come on: the one thing weather cuts the scene again for
   const diorama = time ? picked0.timed?.(time, gloomy(weather) && !timeOf(time).dark ? 'always' : undefined) ?? picked0 : picked0
   /** The scene whose palette, finish and view are set. */
@@ -193,6 +204,7 @@ export function PixelDiorama() {
   /** Off screen, how deep snow lies while it falls (`?pile=`, all of it unless asked). */
   const [pileAsked] = useState(() => { const v = Number(new URLSearchParams(location.search).get('pile') ?? 1); return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 1 })
   const falls = useRef(new WeakMap<Diorama, Map<boolean, SceneWeather>>())
+  const effects = useRef(new WeakMap<Diorama, Map<SkyEffectId, SceneSkyEffect>>())
   /** A scene as it stands under the sky of the moment. */
   const dress = useCallback((d: Diorama) => {
     if (!weathered) return d
@@ -264,7 +276,7 @@ export function PixelDiorama() {
   }, [offscreen, webgl])
 
   // the scene's own palette first, then the shared ones
-  const palettes = useMemo(() => [{ id: 'own', ...shown.palette, colors: paletteUnder(shown.palette.colors, shown.sky, skyState(weather, clouds, wind)) }, ...PALETTES.slice(1)], [shown, weather, clouds, wind])
+  const palettes = useMemo(() => [{ id: 'own', ...shown.palette, colors: withEffect(paletteUnder(shown.palette.colors, shown.sky, skyState(weather, clouds, wind)), skyEffect) }, ...PALETTES.slice(1)], [shown, weather, clouds, wind, skyEffect])
   const picked = palettes.find((p) => p.id === palette) ?? palettes[0]
   const colors = picked.colors
   /** How it's made: which step of the walk-through is showing, or none. */
@@ -298,10 +310,18 @@ export function PixelDiorama() {
       fall = made.get(overhead)
       if (!fall) made.set(overhead, (fall = new SceneWeather(of, { overhead })))
     }
+    // the sky effect behind it (an aurora, a meteor shower): an actor of its own, made once a scene and effect
+    let effect: SceneSkyEffect | undefined
+    if (skyEffect) {
+      let made = effects.current.get(scene.of)
+      if (!made) effects.current.set(scene.of, (made = new Map()))
+      effect = made.get(skyEffect)
+      if (!effect) made.set(skyEffect, (effect = new SceneSkyEffect(scene.of, skyEffect)))
+    }
     // the shared moon, sun and stars, which cloud cover puts out
     const heavens = heavenBones(scene.built.skeleton.bones.map((b) => b.name))
     const own = ownClouds(scene.of)
-    stage.setActor(scene.built, undefined, [...(pond ? [pond.surface] : []), ...(pond?.spray ? [pond.spray] : []), ...(fall?.actors ?? [])])
+    stage.setActor(scene.built, undefined, [...(pond ? [pond.surface] : []), ...(pond?.spray ? [pond.spray] : []), ...(fall?.actors ?? []), ...(effect ? [effect.actor] : [])])
     seen.current = null
     // the surface as it stands at the stage's time, for the eye as it stands: after a pose, a turn of the view or a new picture in the mirror
     wet.current = pond && (() => {
@@ -345,13 +365,16 @@ export function PixelDiorama() {
       // carry on from where the wind left them)
       d.blow?.(sk, t, windAt(now, t, d.loop), undefined, now.wind)
       showHeavens(sk.size, heavens, Math.max(now.clouds, own))
+      // the sky effect is out at night under a clear enough sky, and goes with the stars as cloud comes over
+      const out = effect ? effectOut(nightOf(d.skyAt?.(t) ?? [d.sky[0], d.sky[1]]), Math.max(now.clouds, own)) : 0
+      effect?.pose(t, out)
       // the wind's turns and the sky's sizes come after the scene's pose worked the bones out
       sk.update()
       // what floats rides the water as it stands at this moment: a boat or a buoy rocks on the waves that pass
       pond?.ride(sk, t)
       // an export is the scene's own loop: no pokes, and the view as it stood when it began
       if (!held.current) pokes.current?.apply(sk, performance.now() / 1000)
-      stage.setLights(castBy(d.lights(t, stage.backend === 'webgpu'), glowGain(glowNow.current, d.finish.glow)), d.ambientAt?.(t) ?? d.ambient ?? 1)
+      stage.setLights(castBy([...d.lights(t, stage.backend === 'webgpu'), ...(effect?.lights(out) ?? [])], glowGain(glowNow.current, d.finish.glow)), d.ambientAt?.(t) ?? d.ambient ?? 1)
       // a scene whose sky turns as it plays (day to night) hands the pixel pass each moment's sky
       skyNow.current?.(d, t)
       // a scene that asks for it rocks the view gently as it plays, about wherever the view has been turned to;
@@ -361,7 +384,7 @@ export function PixelDiorama() {
       else if (held.current) stage.orbit = held.current
       wet.current?.()
     }, from)
-  }, [stage, scene, calm, rock, mirrored, dress, offscreen, pileAsked, overhead])
+  }, [stage, scene, calm, rock, mirrored, dress, offscreen, pileAsked, overhead, skyEffect])
   // one of Brush and Ink's looks in place of pixel art: marks, outlines, characters or cel tones, with their own settings
   // a scene whose sky turns as it plays hands the styles each moment's sky too (their backdrop, cel shading's night,
   // the glass's window and the watercolor's wash), not only the one it opens with
@@ -576,6 +599,14 @@ export function PixelDiorama() {
       // no weather on a scene that starts under one of its own is said in the address too
       put('weather', key === 'weather' ? id ?? (picked0.weather ? 'none' : undefined) : undefined); put('clouds', key === 'clouds' ? id : undefined); put('wind', undefined)
     }
+    history.replaceState(history.state, '', url)
+  }
+  /** Another sky effect, or none. The address names it where it isn't the scene's own. */
+  const pickEffect = (id: SkyEffectId | undefined) => {
+    setSkyPick(id ?? 'none')
+    const url = new URL(location.href)
+    if (id === picked0.skyEffect) url.searchParams.delete('sky')
+    else url.searchParams.set('sky', id ?? 'none')
     history.replaceState(history.state, '', url)
   }
   /** Clouds over the scene, or left out. The address says so where it isn't the scene's own way. */
@@ -837,7 +868,7 @@ export function PixelDiorama() {
                     </Button>
                   </div>
                 </div>
-                {picked0.space ? <p className="text-sm text-ink-muted" data-testid="diorama-space">Out in space there is no time of day or weather: the scene keeps its own sky, stars and far sun.</p> : <>
+                {picked0.space ? <p className="text-sm text-ink-muted" data-testid="diorama-space">Out in space there is no time of day, weather or sky effect: the scene keeps its own sky, stars and far sun.</p> : <>
                 <Field label="Time of day">
                   <div className="flex flex-wrap gap-1.5" data-testid="diorama-time">
                     <Chip active={!time || !picked0.timed} onClick={() => setTimeOfDay(undefined)}>Scene's own</Chip>
@@ -858,6 +889,13 @@ export function PixelDiorama() {
                     {WINDS.map((w, i) => <Chip key={w.id} active={wind ? wind === w.id : (WEATHERS.find((k) => k.id === weather)?.wind ?? 0) === i} onClick={() => pickSky('wind', w.id)}>{i ? w.label : 'No wind'}</Chip>)}
                   </div>
                   <p className="mt-1.5 text-xs text-ink-faint">Wind blows rain, snow and falling leaves at a slant, in gusts, sways trees and stalks, and raises waves on a scene's water. Picking a weather brings its own wind back.</p>
+                </Field>
+                <Field label="Sky effect">
+                  <div className="flex flex-wrap gap-1.5" data-testid="diorama-sky-effect">
+                    <Chip active={!skyEffect} onClick={() => pickEffect(undefined)}>None</Chip>
+                    {SKY_EFFECTS.map((e) => <Chip key={e.id} active={skyEffect === e.id} onClick={() => pickEffect(e.id)}>{e.label}</Chip>)}
+                  </div>
+                  <p className="mt-1.5 text-xs text-ink-faint">{(SKY_EFFECTS.find((e) => e.id === skyEffect)?.about ?? 'Something happening in the sky behind the scene.') + ' The same recipes for every scene, out only at night and under a clear enough sky.'}</p>
                 </Field>
                 <div className="grid gap-1.5">
                   <Toggle label="Clouds over the scene" checked={overhead} onChange={pickOverhead} />
@@ -1012,4 +1050,11 @@ function LostView({ detail }: { detail: string }) {
       </div>
     </div>
   )
+}
+
+/** A scene's own palette with a sky effect's colors joined in, so pixel art can draw the effect in them. */
+function withEffect(colors: readonly Rgb[], id: SkyEffectId | undefined): Rgb[] {
+  if (!id) return [...colors]
+  const hex = (c: readonly number[]) => '#' + c.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')
+  return joinPalettes([colors.map(hex), [...effectColors(id)]])
 }
