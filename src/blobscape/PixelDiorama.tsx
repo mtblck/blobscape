@@ -200,6 +200,7 @@ export function PixelDiorama() {
   /** How deep the snow lying is, 0 to 1, and the wall clock it was last moved on by. */
   const pile = useRef(0)
   const pileClock = useRef(0)
+  const fireClock = useRef(0)
   /** Off screen, how deep snow lies while it falls (`?pile=`, all of it unless asked). */
   const [pileAsked] = useState(() => { const v = Number(new URLSearchParams(location.search).get('pile') ?? 1); return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 1 })
   const falls = useRef(new WeakMap<Diorama, Map<boolean, SceneWeather>>())
@@ -361,7 +362,13 @@ export function PixelDiorama() {
       // an export is the scene's own loop: no pokes, and the view as it stood when it began
       if (!held.current) pokes.current?.apply(sk, performance.now() / 1000)
       // each fire as it stands at this moment, and its light as bright as it burns
-      if (flames) { flames.show(t, eyeOf(stage.orbit)); stage.reshape(flames.actor) }
+      // (wind leans it and blows it out, rain damps it and puts it out: by the wall clock, as snow lies; all at once off screen and in an export)
+      if (flames) {
+        const wall = performance.now() / 1000, dt = Math.min(0.25, Math.max(0, wall - fireClock.current))
+        fireClock.current = wall
+        flames.under(skyEase.current.target, offscreen || held.current ? Infinity : dt)
+        flames.show(t, eyeOf(stage.orbit)); stage.reshape(flames.actor)
+      }
       const lit = d.lights(t, stage.backend === 'webgpu')
       stage.setLights(castBy(flames ? flames.shine(lit, t) : lit, glowGain(glowNow.current, d.finish.glow)), d.ambientAt?.(t) ?? d.ambient ?? 1)
       // a scene whose sky turns as it plays (day to night) hands the pixel pass each moment's sky

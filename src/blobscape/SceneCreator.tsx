@@ -439,6 +439,7 @@ export function SceneCreator() {
   const [weathered, setWeathered] = useState(false)
   useEffect(() => { if (!isClear(skyTo)) setWeathered(true) }, [skyTo])
   const skyEase = useRef(new SkyEase())
+  const fireClock = useRef(0)
   /** The wall clock the sky eases by: none off screen and in an export, so it is there at once. */
   const skyClock = useRef<() => number>(() => Infinity)
   // a scene whose land has clouds of its own draws them as the weather's, whatever the weather
@@ -615,6 +616,9 @@ export function SceneCreator() {
       if (pond) { pond.rain = now.rain; pond.waves = now.wind }
       wet?.()
       if (flames) {
+        const wall = performance.now() / 1000, dt = Math.min(0.25, Math.max(0, wall - fireClock.current))
+        fireClock.current = wall
+        flames.under(skyEase.current.target, Number.isFinite(skyClock.current()) ? dt : Infinity)
         const o = stage.orbit, a = (o.azimuth * Math.PI) / 180, e = (o.elevation * Math.PI) / 180
         flames.show(t, [o.target[0] + o.distance * Math.sin(a) * Math.cos(e), o.target[1] + o.distance * Math.sin(e), o.target[2] + o.distance * Math.cos(a) * Math.cos(e)])
         stage.reshape(flames.actor)

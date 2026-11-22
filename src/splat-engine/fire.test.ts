@@ -1,7 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { FIRE_CELLS, FIRE_TICK, FIRE_FLAMES, Fire, fireColor, powerAt, runFire, type FireColors, type FireShape } from './fire.ts'
-import { SceneFire, fireShape } from './sceneFire.ts'
+import { DIE, FUEL_EMBERS, FUEL_LOW, SceneFire, burningAt, fireShape, fuelUnder, smokeAt } from './sceneFire.ts'
+import { skyState } from './skyRecipes.ts'
 import { checkScene, compileScene, litFor, type SceneDoc } from './sceneDoc.ts'
 
 // one short loop of a campfire serves every test here: playing it is the heavy part
@@ -110,8 +111,9 @@ test('a scene\'s fire is blobs of its own that glow, and its light burns as it d
   const c = compileScene(litFor(DOC, false), { puffs: false })
   assert.deepEqual(fireShape(c.fires[0]), SHAPE)
   const fire = new SceneFire(c)
-  assert.equal(fire.actor.blobs.count, kept.count)
-  assert.ok(fire.actor.soft && fire.actor.glow!.every((g) => g === 255))
+  // every tracer three times over (the ways of burning it changes between), then its embers; all glow but the smoke
+  assert.ok(fire.actor.blobs.count > kept.count * 3)
+  assert.ok(fire.actor.soft && fire.actor.glow!.subarray(0, FIRE_FLAMES).every((g) => g === 255) && fire.actor.glow!.some((g) => g === 0))
   fire.show(1.3, [0.6, 0.4, 3])
   const { center, opacity, color, scale } = fire.actor.blobs
   let shown = 0, bright = 0
@@ -133,4 +135,49 @@ test('a scene\'s fire is blobs of its own that glow, and its light burns as it d
   const lit = fire.shine(lights, 1.3)
   assert.ok(Math.abs(lit[1].color[0] / was - powerAt(kept, 1.3)) < 1e-6)
   assert.equal(lit[0].color[0], 0)
+})
+
+test('weather takes a fire\'s fuel: light rain and snow leave it, rain and heavy snow halve it, heavy rain, a thunderstorm and a gale put it out', () => {
+  const under = (weather: string, wind?: number) => fuelUnder({ ...skyState(weather as never), ...(wind === undefined ? {} : { wind }) })
+  assert.equal(under(undefined as never), 1); assert.equal(under('light-rain'), 1); assert.equal(under('snow'), 1)
+  assert.ok(Math.abs(under('rain') - FUEL_LOW) < 1e-9); assert.ok(Math.abs(under('heavy-snow') - FUEL_LOW) < 1e-9)
+  assert.equal(under('heavy-rain'), 0); assert.equal(under('thunderstorm'), 0)
+  assert.equal(under(undefined as never, 1), 1); assert.equal(under(undefined as never, 2), 1); assert.equal(under(undefined as never, 3), 0)
+  // the ways of burning always add up to the whole fire, and a fire that is out is its embers
+  for (const f of [1, 0.8, 0.5, 0.4, 0.36, 0.2, 0]) assert.ok(Math.abs(burningAt(f).reduce((n, b) => n + b.share, 0) - 1) < 1e-9, `at ${f}`)
+  assert.deepEqual(burningAt(0), [{ fuel: FUEL_EMBERS, share: 1 }])
+  assert.equal(smokeAt(1), 0); assert.equal(smokeAt(FUEL_LOW), 1); assert.ok(smokeAt(0) > 0.2 && smokeAt(0) < 1)
+})
+
+test('a fire in heavy rain dies down to embers and smoke, its light with it, and catches again when it clears', () => {
+  const c = compileScene(litFor(DOC, false), { puffs: false })
+  const fire = new SceneFire(c), { opacity, center } = fire.actor.blobs
+  const alight = () => { let n = 0; for (let i = 0; i < fire.actor.blobs.count; i++) if (opacity[i] && fire.actor.glow![i] && center[i * 3 + 1] > 0.02 + 0.11 * 0.5) n++; return n }
+  const smoking = () => { let n = 0; for (let i = 0; i < fire.actor.blobs.count; i++) if (opacity[i] && !fire.actor.glow![i]) n++; return n }
+  const light = () => fire.shine(c.lights(1.3), 1.3)[1].color[0]
+  fire.under(skyState(), 0); fire.show(1.3)
+  const full = alight(), bright = light()
+  assert.ok(full > FIRE_FLAMES / 4 && smoking() === 0)
+  // told of the storm, it is no different a moment later and well down half way through its dying
+  const storm = skyState('thunderstorm')
+  fire.under(storm, 0.01); fire.show(1.3)
+  assert.ok(alight() > full * 0.8)
+  // loops it has not played are played a little a call, and it burns as it did meanwhile: tell it until it has gone out
+  let told = 0
+  while (fire.fuel[0] > 0 && told++ < 20000) fire.under(storm, 0.05)
+  assert.equal(fire.fuel[0], 0)
+  assert.ok(told * 0.05 >= DIE * 0.99, 'it went out quicker than a fire dies')
+  for (let k = 0; k < 40; k++) fire.under(storm, 0.05)
+  fire.show(1.3)
+  assert.ok(alight() < full * 0.05, `${alight()} still alight of ${full}`)
+  assert.ok(smoking() > 5, 'no smoke off the embers')
+  assert.ok(light() < bright * 0.15 && light() > 0, `its light ${light().toFixed(3)} of ${bright.toFixed(3)}`)
+  // the storm over, it catches again
+  for (let k = 0; k < 200; k++) fire.under(skyState(), 0.05)
+  fire.show(1.3)
+  assert.equal(fire.fuel[0], 1)
+  assert.ok(alight() > full * 0.9 && smoking() === 0)
+  // off screen it is there at once
+  fire.under(storm, Infinity)
+  assert.equal(fire.fuel[0], 0)
 })

@@ -1,4 +1,5 @@
 import type { Vec3 } from '../splat-core/blobs.ts'
+import { gustAt } from './skyRecipes.ts'
 
 /**
  * Fire that burns (a scene's `fires`, sceneDoc.ts): a shared recipe, as the water and the lava are. Nothing here is a
@@ -31,9 +32,17 @@ export interface FireShape {
   sparks: number
   /** Another fire of the same shape burns differently with another seed. */
   seed: number
-  /** A steady wind across the fire, in bed radii a second along x and z. */
+  /**
+   * A wind across the fire, in bed radii a second along x and z. It blows in the weather's own gusts (`gustAt`), a
+   * whole number of times a loop, and the fire is given more room downwind to be blown into.
+   */
   wind?: readonly [number, number]
+  /** How much of its fuel burns, 1 when left out: wet wood burns low (0.5), a fire going out lower still. */
+  fuel?: number
 }
+
+/** Extra cells of room downwind for each bed radius a second of wind, and the most. */
+const DOWNWIND = 3.5, DOWNWIND_MOST = 12
 
 /** Seconds a tick of the fire. */
 export const FIRE_TICK = 1 / 30
@@ -52,6 +61,10 @@ const ROUNDS = 14
 export const FIRE_FLAMES = 520
 /** Tracers that are sparks, after the flame's in a kept loop. */
 export const FIRE_SPARKS = 16
+/** Tracers that are smoke, after the sparks in a kept loop: carried by the same gas, whether or not it is hot enough to glow. */
+export const FIRE_SMOKE = 28
+/** Seconds a puff of smoke lasts, and how fast it rises by itself in still gas, in cells a second. */
+const SMOKE_LIFE = 2.6, SMOKE_RISE = 1.6
 /** Heat under which a flame tracer has gone out. */
 const OUT = 0.07
 /** Seconds a spark lasts at most. */
@@ -101,10 +114,17 @@ export class Fire {
   readonly shape: FireShape
   /** Seconds a loop: the fuel flares a whole number of times in it. */
   readonly loop: number
+  /** Where the bed's middle is on the grid, in cells along x and along z (the grid reaches further downwind). */
+  readonly midX: number
+  /** @internal */
+  readonly midZ: number
 
   constructor(shape: FireShape, loop: number) {
     this.shape = shape; this.loop = loop
-    this.nx = this.nz = FIRE_CELLS * 5 + 1
+    const base = FIRE_CELLS * 5 + 1, wx = shape.wind?.[0] ?? 0, wz = shape.wind?.[1] ?? 0
+    const more = (w: number) => Math.min(DOWNWIND_MOST, Math.ceil(Math.abs(w) * DOWNWIND))
+    this.nx = base + more(wx); this.nz = base + more(wz)
+    this.midX = (base - 1) / 2 + (wx < 0 ? more(wx) : 0); this.midZ = (base - 1) / 2 + (wz < 0 ? more(wz) : 0)
     this.ny = Math.max(14, Math.min(40, Math.ceil(shape.tall * FIRE_CELLS * 1.7)))
     const n = this.nx * this.ny * this.nz
     this.u = new Float32Array(n); this.v = new Float32Array(n); this.w = new Float32Array(n); this.heat = new Float32Array(n)
@@ -149,12 +169,12 @@ export class Fire {
   /** Moves the fire on a tick; `t` is the time into the loop, which says how hard each spot burns. */
   tick(t: number) {
     const { nx, ny, nz, u, v, w, heat, shape } = this
-    const dt = FIRE_TICK * shape.quick, sy = nx * nz, sz = nx, mid = (nx - 1) / 2
+    const dt = FIRE_TICK * shape.quick, sy = nx * nz, sz = nx, mx = this.midX, mz = this.midZ, fuel = shape.fuel ?? 1
     // fuel burns on the bed: the two lowest layers over each spot are heated toward how hard it burns
     for (const s of this.spots) {
-      const burn = this.burning(s, t), r = s.r
-      for (let k = Math.max(0, Math.floor(mid + s.z - r)); k <= Math.min(nz - 1, Math.ceil(mid + s.z + r)); k++) for (let i = Math.max(0, Math.floor(mid + s.x - r)); i <= Math.min(nx - 1, Math.ceil(mid + s.x + r)); i++) {
-        const dx = i - mid - s.x, dz = k - mid - s.z, near = 1 - (dx * dx + dz * dz) / (r * r)
+      const burn = this.burning(s, t) * fuel, r = s.r
+      for (let k = Math.max(0, Math.floor(mz + s.z - r)); k <= Math.min(nz - 1, Math.ceil(mz + s.z + r)); k++) for (let i = Math.max(0, Math.floor(mx + s.x - r)); i <= Math.min(nx - 1, Math.ceil(mx + s.x + r)); i++) {
+        const dx = i - mx - s.x, dz = k - mz - s.z, near = 1 - (dx * dx + dz * dz) / (r * r)
         if (near <= 0) continue
         for (let j = 0; j < 2; j++) {
           const o = i + nx * (k + nz * j), to = burn * near * (j ? 0.8 : 1)
@@ -163,10 +183,10 @@ export class Fire {
       }
     }
     // heat lifts; a wind pushes the air that is not in the flame along with it
-    const wind = shape.wind
+    const wind = shape.wind, gust = wind ? gustAt(t / this.loop) * FIRE_CELLS : 0
     for (let o = 0; o < heat.length; o++) {
       w[o] += BUOYANCY * heat[o] * dt
-      if (wind) { const k = Math.min(1, 2.5 * dt); u[o] += (wind[0] * FIRE_CELLS - u[o]) * k; v[o] += (wind[1] * FIRE_CELLS - v[o]) * k }
+      if (wind) { const k = Math.min(1, 2.5 * dt); u[o] += (wind[0] * gust - u[o]) * k; v[o] += (wind[1] * gust - v[o]) * k }
     }
     this.swirl(dt)
     // everything is carried along by the flow, looked up where it came from
@@ -258,11 +278,13 @@ export interface FireLoop {
   size: Float32Array
   /** How strongly the whole fire burns at each moment, beside its mean over the loop (about 0.6 to 1.5): what its light flickers by. */
   power: Float32Array
+  /** That mean itself, to set one fire's light beside another's: a fire burning low gives less. */
+  mean: number
 }
 
 /** The tracers of a fire, let go and carried as the fire is stepped. */
 class Tracers {
-  readonly count = FIRE_FLAMES + FIRE_SPARKS
+  readonly count = FIRE_FLAMES + FIRE_SPARKS + FIRE_SMOKE
   readonly place = new Float32Array(this.count * 3)
   readonly speed = new Float32Array(this.count * 3)
   readonly heat = new Float32Array(this.count)
@@ -281,9 +303,9 @@ class Tracers {
     this.every = new Float32Array(this.count); this.from = new Float32Array(this.count); this.births = new Int32Array(this.count)
     for (let i = 0; i < this.count; i++) {
       // each is let go a whole number of times a loop, so the loop's end meets its start
-      const spark = i >= FIRE_FLAMES
-      const wanted = spark ? (shape.sparks * loop) / FIRE_SPARKS : (loop * shape.quick) / ((0.55 + 0.5 * hash(shape.seed + 3, i)) * (shape.tall / TALL_REF))
-      const n = Math.max(spark ? 0 : 1, Math.floor(wanted + hash(shape.seed + 5, i)))
+      const spark = i >= FIRE_FLAMES, smoke = i >= FIRE_FLAMES + FIRE_SPARKS
+      const wanted = smoke ? (loop * shape.quick) / SMOKE_LIFE : spark ? (shape.sparks * loop) / FIRE_SPARKS : (loop * shape.quick) / ((0.55 + 0.5 * hash(shape.seed + 3, i)) * (shape.tall / TALL_REF))
+      const n = Math.max(spark && !smoke ? 0 : 1, smoke ? Math.round(wanted) : Math.floor(wanted + hash(shape.seed + 5, i)))
       this.births[i] = n
       this.every[i] = n ? loop / n : Infinity
       this.from[i] = hash(shape.seed + 7, i)
@@ -292,12 +314,12 @@ class Tracers {
 
   /** Moves every tracer on a tick that ends `t` seconds from the start of the first loop (so `t` runs past the loop's length). */
   tick(t: number) {
-    const { fire, place, speed, heat, size } = this, { shape, nx } = fire
-    const dt = FIRE_TICK * shape.quick, mid = (nx - 1) / 2, flow = [0, 0, 0]
+    const { fire, place, speed, heat, size } = this, { shape } = fire
+    const dt = FIRE_TICK * shape.quick, mx = fire.midX, mz = fire.midZ, flow = [0, 0, 0]
     for (let i = 0; i < this.count; i++) {
       const n = this.births[i]
       if (!n) { size[i] = 0; continue }
-      const spark = i >= FIRE_FLAMES
+      const spark = i >= FIRE_FLAMES, smoke = i >= FIRE_FLAMES + FIRE_SPARKS
       const born = Math.floor(t / this.every[i] - this.from[i])
       if (born > this.life[i] || this.life[i] < 0) {
         this.life[i] = Math.max(born, 0)
@@ -305,7 +327,7 @@ class Tracers {
         // let go on the bed over one of the spots, by a hash of which birth of the loop this is
         const which = ((born % n) + n) % n, s = fire.spots[Math.floor(hash(shape.seed + 11 + which, i) * fire.spots.length)]
         const turn = hash(shape.seed + 13 + which, i) * TAU, far = Math.sqrt(hash(shape.seed + 17 + which, i)) * s.r * (spark ? 0.6 : 1.05)
-        place[i * 3] = mid + s.x + Math.cos(turn) * far; place[i * 3 + 1] = 0.3 + hash(shape.seed + 19 + which, i) * (spark ? 2 : 1.2); place[i * 3 + 2] = mid + s.z + Math.sin(turn) * far
+        place[i * 3] = mx + s.x + Math.cos(turn) * far; place[i * 3 + 1] = 0.3 + hash(shape.seed + 19 + which, i) * (spark ? 2 : 1.2); place[i * 3 + 2] = mz + s.z + Math.sin(turn) * far
         speed[i * 3] = speed[i * 3 + 1] = speed[i * 3 + 2] = 0
         this.out[i] = 0
         heat[i] = 1
@@ -313,7 +335,16 @@ class Tracers {
       if (this.out[i]) { size[i] = 0; continue }
       const age = t - (this.life[i] + this.from[i]) * this.every[i]
       const x = place[i * 3], y = place[i * 3 + 1], z = place[i * 3 + 2]
-      if (!spark) {
+      if (smoke) {
+        // smoke goes where the gas goes, rising a little by itself, and spreads and thins until it is gone
+        const life = this.every[i]
+        fire.flowAt(x, y, z, flow)
+        place[i * 3] = x + flow[0] * dt; place[i * 3 + 1] = y + (flow[1] + SMOKE_RISE) * dt; place[i * 3 + 2] = z + flow[2] * dt
+        speed[i * 3] = flow[0]; speed[i * 3 + 1] = flow[1] + SMOKE_RISE; speed[i * 3 + 2] = flow[2]
+        const gone = Math.min(1, age / life)
+        heat[i] = fire.heatAt(x, y, z)
+        size[i] = Math.min(1, age / 0.25) * (0.5 + gone) * (1 - gone * gone)
+      } else if (!spark) {
         // carried by the gas (a midpoint step), as hot as the gas where it is
         fire.flowAt(x, y, z, flow)
         fire.flowAt(x + flow[0] * dt * 0.5, y + flow[1] * dt * 0.5, z + flow[2] * dt * 0.5, flow)
@@ -354,10 +385,16 @@ const WARM = 2, LAP = 2
  * kept moment is followed by the first as closely as by the one the fire itself went on to.
  */
 export function runFire(shape: FireShape, loop: number): FireLoop {
+  const run = playFire(shape, loop)
+  for (;;) { const step = run.next(); if (step.done) return step.value }
+}
+
+/** `runFire` a kept moment at a time, for a page that must keep drawing meanwhile: step it until it is done, which hands back the loop. */
+export function* playFire(shape: FireShape, loop: number): Generator<undefined, FireLoop> {
   const fire = new Fire(shape, loop), tracers = new Tracers(fire)
   const frames = Math.max(2, Math.round(loop * FIRE_FPS)), count = tracers.count, lap = Math.min(LAP, loop / 3)
-  const kept: FireLoop = { loop, frames, count, place: new Float32Array(frames * count * 3), heat: new Float32Array(frames * count), size: new Float32Array(frames * count), power: new Float32Array(frames) }
-  const mid = (fire.nx - 1) / 2
+  const kept: FireLoop = { loop, frames, count, place: new Float32Array(frames * count * 3), heat: new Float32Array(frames * count), size: new Float32Array(frames * count), power: new Float32Array(frames), mean: 0 }
+  const mx = fire.midX, mz = fire.midZ
   // it burns from cold for a while first, on the last seconds of the loop before, so the first kept moment is a fire well alight
   let ticks = 0
   const until = (seconds: number) => { while ((ticks + 1) * FIRE_TICK <= seconds + 1e-9) { ticks++; const t = ticks * FIRE_TICK - WARM; fire.tick(((t % loop) + loop) % loop); tracers.tick(t + loop) } }
@@ -369,7 +406,7 @@ export function runFire(shape: FireShape, loop: number): FireLoop {
     // the first pass writes the loop; the run past its end is mixed over its start
     let power = 0
     for (let i = 0; i < count; i++) {
-      const o = into * count + i, x = (tracers.place[i * 3] - mid) / FIRE_CELLS, y = tracers.place[i * 3 + 1] / FIRE_CELLS, z = (tracers.place[i * 3 + 2] - mid) / FIRE_CELLS
+      const o = into * count + i, x = (tracers.place[i * 3] - mx) / FIRE_CELLS, y = tracers.place[i * 3 + 1] / FIRE_CELLS, z = (tracers.place[i * 3 + 2] - mz) / FIRE_CELLS
       const size = tracers.size[i], heat = tracers.heat[i]
       if (i < FIRE_FLAMES) power += size * size * heat
       if (f < frames) { kept.place[o * 3] = x; kept.place[o * 3 + 1] = y; kept.place[o * 3 + 2] = z; kept.heat[o] = heat; kept.size[o] = size; continue }
@@ -380,10 +417,12 @@ export function runFire(shape: FireShape, loop: number): FireLoop {
       kept.size[o] += (size - was) * mix
     }
     kept.power[into] = f < frames ? power : kept.power[into] + (power - kept.power[into]) * mix
+    yield
   }
   let mean = 0
   for (let f = 0; f < frames; f++) mean += kept.power[f] / frames
   for (let f = 0; f < frames; f++) kept.power[f] = mean > 0 ? kept.power[f] / mean : 1
+  kept.mean = mean
   return kept
 }
 

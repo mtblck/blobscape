@@ -5142,6 +5142,130 @@
    "doc": "",
    "entries": [
     {
+     "name": "FireWeather",
+     "kind": "type",
+     "doc": "What of the sky a fire answers to (a `SkyState` has them): how much rain and snow fall, 0 to 1, and the wind's level.",
+     "type": "Pick<SkyState, \"rain\" | \"snow\" | \"wind\">"
+    },
+    {
+     "name": "FUEL_LOW",
+     "kind": "const",
+     "doc": "How much of its fuel a fire burns when it burns low, on its way out, and as embers with the flames gone (`FireShape.fuel`; 1 with nothing against it).",
+     "type": "0.5"
+    },
+    {
+     "name": "FUEL_DYING",
+     "kind": "const",
+     "doc": "How much of its fuel a fire burns when it burns low, on its way out, and as embers with the flames gone (`FireShape.fuel`; 1 with nothing against it).",
+     "type": "0.36"
+    },
+    {
+     "name": "FUEL_EMBERS",
+     "kind": "const",
+     "doc": "How much of its fuel a fire burns when it burns low, on its way out, and as embers with the flames gone (`FireShape.fuel`; 1 with nothing against it).",
+     "type": "0.15"
+    },
+    {
+     "name": "RAIN_FINE",
+     "kind": "const",
+     "doc": "The rain (a share of all there can be) a fire still burns well in, burns low in, and is put out by: light rain, rain, and anything heavier.",
+     "type": "0.15"
+    },
+    {
+     "name": "RAIN_LOW",
+     "kind": "const",
+     "doc": "The rain (a share of all there can be) a fire still burns well in, burns low in, and is put out by: light rain, rain, and anything heavier.",
+     "type": "0.4"
+    },
+    {
+     "name": "RAIN_OUT",
+     "kind": "const",
+     "doc": "The rain (a share of all there can be) a fire still burns well in, burns low in, and is put out by: light rain, rain, and anything heavier.",
+     "type": "0.7"
+    },
+    {
+     "name": "SNOW_FINE",
+     "kind": "const",
+     "doc": "The snow a fire burns well in; in the heaviest it burns low.",
+     "type": "0.4"
+    },
+    {
+     "name": "WIND_FINE",
+     "kind": "const",
+     "doc": "The wind's level a fire still burns in, and the level that blows it out (a gale).",
+     "type": "2"
+    },
+    {
+     "name": "WIND_OUT",
+     "kind": "const",
+     "doc": "The wind's level a fire still burns in, and the level that blows it out (a gale).",
+     "type": "2.8"
+    },
+    {
+     "name": "FIRE_WIND",
+     "kind": "const",
+     "doc": "How fast the wind crosses a fire at each of its levels, in bed radii a second.",
+     "type": "number[]"
+    },
+    {
+     "name": "DIE",
+     "kind": "const",
+     "doc": "Seconds a fire takes to die down from full to out, and to catch again, and to change from one way of burning to another.",
+     "type": "3.5"
+    },
+    {
+     "name": "CATCH",
+     "kind": "const",
+     "doc": "Seconds a fire takes to die down from full to out, and to catch again, and to change from one way of burning to another.",
+     "type": "3"
+    },
+    {
+     "name": "CHANGE",
+     "kind": "const",
+     "doc": "Seconds a fire takes to die down from full to out, and to catch again, and to change from one way of burning to another.",
+     "type": "1"
+    },
+    {
+     "name": "fuelUnder",
+     "kind": "function",
+     "doc": "How much of its fuel a fire burns under a sky (Matt, 2026-11-22): all of it in light rain and in snow, half in rain\nand in heavy snow, none in heavy rain or a thunderstorm, and none in a gale, which blows it out.",
+     "signatures": [
+      {
+       "code": "fuelUnder(sky: FireWeather): number"
+      }
+     ]
+    },
+    {
+     "name": "burningAt",
+     "kind": "function",
+     "doc": "The ways of burning that make up a fire burning `fuel` of its fuel, each with its share: the two it lies between of\nburning well, burning low, dying and embers. A fire that is out is its embers, which still warm the air over them.",
+     "signatures": [
+      {
+       "code": "burningAt(fuel: number): { fuel: number; share: number }[]"
+      }
+     ]
+    },
+    {
+     "name": "smokeAt",
+     "kind": "function",
+     "doc": "How much smoke a fire burning `fuel` of its fuel gives, 0 to 1: none burning well, the most burning low, a wisp off its embers.",
+     "signatures": [
+      {
+       "code": "smokeAt(fuel: number): number"
+      }
+     ]
+    },
+    {
+     "name": "shapeUnder",
+     "kind": "function",
+     "doc": "A planned fire's shape under a wind of a level (a whole one) burning a share of its fuel: a harder wind throws more sparks.",
+     "signatures": [
+      {
+       "code": "shapeUnder(base: FireShape, level: number, fuel: number): FireShape"
+      }
+     ]
+    },
+    {
      "name": "fireShape",
      "kind": "function",
      "doc": "What decides how a planned fire burns, wherever it is.",
@@ -5183,10 +5307,25 @@
        "name": "kept",
        "readonly": true,
        "type": "FireLoop[]",
-       "doc": "One kept loop a fire."
+       "doc": "One kept loop a fire, burning in still air with nothing against it."
+      },
+      {
+       "name": "fuel",
+       "readonly": true,
+       "type": "number[]",
+       "doc": "How much of its fuel each fire burns just now, 1 with nothing against it and 0 when it is out (`under` moves it)."
       }
      ],
      "methods": [
+      {
+       "name": "under",
+       "doc": "Sets the fires under a sky, `seconds` after the last time it was told (Infinity, or the first time: at once).\nRain and wind take the fuel they burn (`fuelUnder`) and a fire dies down over `DIE` seconds, to nothing when it is\nput out, and catches again over `CATCH`; the wind's level picks a loop played in that wind, so the flame is\nreally blown over, in the weather's own gusts. A loop not played yet is played a little each call and the fire\nburns as it did until it is there. Call it before `show`; never called, the fires burn in still air.",
+       "signatures": [
+        {
+         "code": "under(sky: FireWeather, seconds: number): void"
+        }
+       ]
+      },
       {
        "name": "show",
        "doc": "Puts every tracer where it is `t` seconds into the loop: between the two kept moments either side, a blob as hot\nas its gas, drawn longer along the way it is moving, as a lick of flame is, in the color of all the hot gas seen\nthrough it from `eye` (with no eye, of its own heat).",
@@ -12470,7 +12609,13 @@
        "name": "wind",
        "optional": true,
        "type": "readonly [number, number]",
-       "doc": "A steady wind across the fire, in bed radii a second along x and z."
+       "doc": "A wind across the fire, in bed radii a second along x and z. It blows in the weather's own gusts (`gustAt`), a\nwhole number of times a loop, and the fire is given more room downwind to be blown into."
+      },
+      {
+       "name": "fuel",
+       "optional": true,
+       "type": "number",
+       "doc": "How much of its fuel burns, 1 when left out: wet wood burns low (0.5), a fire going out lower still."
       }
      ]
     },
@@ -12497,6 +12642,12 @@
      "kind": "const",
      "doc": "Tracers that are sparks, after the flame's in a kept loop.",
      "type": "16"
+    },
+    {
+     "name": "FIRE_SMOKE",
+     "kind": "const",
+     "doc": "Tracers that are smoke, after the sparks in a kept loop: carried by the same gas, whether or not it is hot enough to glow.",
+     "type": "28"
     },
     {
      "name": "FIRE_FPS",
@@ -12567,6 +12718,12 @@
        "readonly": true,
        "type": "number",
        "doc": "Seconds a loop: the fuel flares a whole number of times in it."
+      },
+      {
+       "name": "midX",
+       "readonly": true,
+       "type": "number",
+       "doc": "Where the bed's middle is on the grid, in cells along x and along z (the grid reaches further downwind)."
       }
      ],
      "methods": [
@@ -12656,6 +12813,11 @@
        "name": "power",
        "type": "Float32Array",
        "doc": "How strongly the whole fire burns at each moment, beside its mean over the loop (about 0.6 to 1.5): what its light flickers by."
+      },
+      {
+       "name": "mean",
+       "type": "number",
+       "doc": "That mean itself, to set one fire's light beside another's: a fire burning low gives less."
       }
      ]
     },
@@ -12666,6 +12828,16 @@
      "signatures": [
       {
        "code": "runFire(shape: FireShape, loop: number): FireLoop"
+      }
+     ]
+    },
+    {
+     "name": "playFire",
+     "kind": "function",
+     "doc": "`runFire` a kept moment at a time, for a page that must keep drawing meanwhile: step it until it is done, which hands back the loop.",
+     "signatures": [
+      {
+       "code": "playFire(shape: FireShape, loop: number): Generator<undefined, FireLoop>"
       }
      ]
     },
