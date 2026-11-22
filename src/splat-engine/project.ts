@@ -203,7 +203,7 @@ export const leafy = (prop: { tags?: readonly string[] } | undefined) => tagged(
  */
 export function leafFall(prop: PropDoc): { from: Vec3; to: Vec3; size: number } | undefined {
   if (!leafy(prop)) return
-  const shapes = compileScene({ ...prop.doc, lights: [], air: undefined, water: undefined }, { puffs: false }).spec(0.08).parts.map((p) => p.shape)
+  const shapes = compileScene({ ...prop.doc, lights: [], air: undefined, water: undefined, lava: undefined }, { puffs: false }).spec(0.08).parts.map((p) => p.shape)
   if (!shapes.length) return
   const lo: Vec3 = [Infinity, Infinity, Infinity], hi: Vec3 = [-Infinity, -Infinity, -Infinity]
   for (const sh of shapes) for (let i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], sh.min[i]); hi[i] = Math.max(hi[i], sh.max[i]) }
@@ -398,7 +398,7 @@ function keepOnly(doc: SceneDoc, parts: number[]): SceneDoc {
 
 /** A coarse look at where a description's parts are: the box round all of them. */
 export function boxOf(doc: SceneDoc): { lo: Vec3; hi: Vec3 } {
-  const spec = compileScene({ ...doc, lights: [], air: undefined, water: undefined }, { puffs: false }).spec(0.08)
+  const spec = compileScene({ ...doc, lights: [], air: undefined, water: undefined, lava: undefined }, { puffs: false }).spec(0.08)
   const lo: Vec3 = [Infinity, Infinity, Infinity], hi: Vec3 = [-Infinity, -Infinity, -Infinity]
   for (const p of spec.parts) for (let i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], p.shape.min[i]); hi[i] = Math.max(hi[i], p.shape.max[i]) }
   return { lo, hi }
@@ -435,7 +435,7 @@ export function splitScene(given: SceneDoc, picks: PropPick[]): { land: PropDoc;
     }
     const foot = pick.foot ?? [(box.lo[0] + box.hi[0]) / 2, box.lo[1], (box.lo[2] + box.hi[2]) / 2]
     // a prop's lamps wait for the dark wherever it is set down, even one taken from a cave whose lamps always burn
-    const { air: _air, water: _water, cover: _cover, focus: _focus, lamps: _lamps, ...rest } = own
+    const { air: _air, water: _water, lava: _lava, cover: _cover, focus: _focus, lamps: _lamps, ...rest } = own
     return { name: pick.name, foot, doc: { ...rest, name: pick.name, lights }, ...(pick.tags ? { tags: [...pick.tags] } : {}) }
   })
   const left = doc.parts.map((_, i) => i).filter((i) => !taken.has(i))

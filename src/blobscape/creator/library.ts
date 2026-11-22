@@ -2,7 +2,6 @@ import type { SceneDoc } from '../../splat-engine/sceneDoc.ts'
 import type { Skeleton } from '../../splat-engine/rig.ts'
 import type { Species } from '../../splat-engine/zoo/species.ts'
 import { markedPicks, splitScene, type PropDoc, type PropPick, type PropRef, type SceneProject } from '../../splat-engine/project.ts'
-import { DRAGON } from '../diorama/scenes/dragon.ts'
 import { HENGE } from '../diorama/scenes/henge.ts'
 import { LIGHTHOUSE } from '../diorama/scenes/lighthouse.ts'
 import { TURKEY } from '../diorama/scenes/turkey.ts'
@@ -12,7 +11,7 @@ import { CANYON } from '../diorama/scenes/canyon.ts'
 import { MEADOW } from '../fourways/meadow/doc.ts'
 import { CREATURES } from '../creature/fromScenes.ts'
 import { DIORAMAS } from '../diorama/scenes.ts'
-import { HENGE_PICKS, LAVA_DRAGON_PICKS, LIGHTHOUSE_PICKS, TURKEY_PICKS, WINDMILL_PICKS, WITCH_IN_SPARKS_PICKS } from './picks.ts'
+import { HENGE_PICKS, LIGHTHOUSE_PICKS, TURKEY_PICKS, WINDMILL_PICKS, WITCH_IN_SPARKS_PICKS } from './picks.ts'
 import { PLAIN_ROCK, PLAIN_TURF } from './lands.ts'
 import { KIT } from './kit.ts'
 import { isModel, modelOf } from './models.ts'
@@ -116,10 +115,6 @@ const SOURCES: Source[] = [
   {
     from: 'henge', doc: HENGE, picks: WITCH_IN_SPARKS_PICKS,
     props: [{ id: 'white-witch-sparks', tags: ['person', 'magic'], pick: 'White witch, coming and going', about: 'The white witch arriving in a burst of sparks, waving her wand with two flashes, and leaving again', group: 'living' }],
-  },
-  {
-    from: 'dragon', doc: DRAGON, picks: LAVA_DRAGON_PICKS,
-    props: [{ id: 'lava-dragon', tags: ['animal', 'magic'], pick: 'Lava dragon', about: 'A red dragon with spread wings, swaying its neck and opening its jaw', group: 'living' }],
   },
   {
     // kit pieces, made by rules rather than lifted from a scene (an idea from Silicon Jungle's Ink Studio)

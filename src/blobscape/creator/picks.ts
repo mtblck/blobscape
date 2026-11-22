@@ -52,11 +52,6 @@ export const WITCH_IN_SPARKS_PICKS: PropPick[] = [
   { name: 'White witch, coming and going', bones: ['wiz', ...SPARKS], lights: [1, 2] },
 ]
 
-/** The lava dragon (scenes/dragon.ts): its body, wings and swaying neck; the pool's glow stays in the cave. Its body is sunk into the cave floor, so its foot is set at the floor. */
-export const LAVA_DRAGON_PICKS: PropPick[] = [
-  { name: 'Lava dragon', parts: Array.from({ length: 22 }, (_, i) => 27 + i), bones: ['lining', 'wingL', 'wingR', 'neck0'], lights: [], foot: [0, 0, -0.6] },
-]
-
 /** The lighthouse (scenes/lighthouse.ts): the tower with its turning lamp and beams, the cottage, three pines, the jetty, the boat and the buoy. Gulls, clouds and foam stay with the sea. */
 export const LIGHTHOUSE_PICKS: PropPick[] = [
   { name: 'Lighthouse', parts: [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23], bones: ['lamp'] },
