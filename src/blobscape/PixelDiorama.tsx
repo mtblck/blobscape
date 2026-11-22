@@ -31,6 +31,7 @@ import { banded, hugged, unlit } from '../splat-engine/voxel.ts'
 import { isPixelStyle, styleAsked, styleWords, type Style } from './diorama/styles.ts'
 import { GLITCH_START, glitchLook, type GlitchChoice } from './glitchLooks.ts'
 import { StyleControls, FinishControls } from './StyleControls.tsx'
+import { drawnStart, type DrawnSettings } from './styles/catalog.ts'
 import { detailStart, pixelCelLook, pixelFlags, pixelFor, pixelLookOf, pixelSizeAt, pixelStart, pixelZoomAsked, type PixelSettings } from './styleSettings.ts'
 import { useStyleOnStage } from './useStyleOnStage.ts'
 import { useDrawnLook, useHeld, wantsPlain } from './drawnLook.tsx'
@@ -127,6 +128,8 @@ export function PixelDiorama() {
   /** How the scene is drawn: as pixel art, or as one of Brush and Ink's looks. `?style=oil` opens on that one. */
   const [style, setStyle] = useState<Style>(() => styleAsked(new URLSearchParams(location.search).get('style')))
   const [glitch, setGlitch] = useState<GlitchChoice>(GLITCH_START)
+  // every other style's settings (styles/catalog.ts): the page holds them, as it holds pixel art's
+  const drawnKept = useState<DrawnSettings>(() => drawnStart(new URLSearchParams(location.search), { coarse }))
   /**
    * Light worked out a pixel at a time (`?shade=1`): pixel art made from a picture cel shading lit, so light and shade
    * fall in bands that follow each form, not blob by blob as the baked light does.
@@ -368,7 +371,7 @@ export function PixelDiorama() {
   // in the scene's own share of light in shade, a little cool, and all of it held under the baked light's brightest
   // (`LIT_MAX`), so only what gives its own light reaches the pixel pass's glow
   const pixelCel = useMemo<CelLook | undefined>(() => (pixels && shadedNow && !touring ? pixelCelLook(shown.sun, shown.shade ?? 0.5) : undefined), [pixels, shadedNow, touring, shown.sun, shown.shade])
-  const drawing = useDrawnLook(stage, touring ? undefined : drawnStyle, { pixelCel, actor: onStage?.built, water: !!onStage?.of.water, weather: weathered || !!onStage?.of.heavens?.clouds, spacing: DETAIL.find((d) => d.id === onStage?.detail)?.spacing, plain: !!onStage?.plain, time: timeNow, azimuth: shown.views[0].orbit.azimuth, offscreen, light: coarse, loop: shown.loop, sky: shown.finish.sky || weathered ? [styleSky[0], styleSky[1]] : undefined })
+  const drawing = useDrawnLook(stage, touring ? undefined : drawnStyle, { pixelCel, actor: onStage?.built, water: !!onStage?.of.water, weather: weathered || !!onStage?.of.heavens?.clouds, spacing: DETAIL.find((d) => d.id === onStage?.detail)?.spacing, plain: !!onStage?.plain, time: timeNow, azimuth: shown.views[0].orbit.azimuth, offscreen, light: coarse, loop: shown.loop, sky: shown.finish.sky || weathered ? [styleSky[0], styleSky[1]] : undefined }, drawnKept)
   // the walk-through's fourth step is about the four samples, so it draws them whatever the switch says
   const sampling = touring?.id === 'samples'
   const drawnLook = useMemo(() => (asPixels ? (sampling ? { ...look, fine: true } : look) : undefined), [asPixels, sampling, look])

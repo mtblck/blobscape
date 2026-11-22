@@ -60,6 +60,7 @@ import { paletteChoices } from './creator/styling.ts'
 import { cutAsk, detailStart, pixelCelLook, pixelFlags, pixelFor, pixelFrom, pixelLookOf, pixelSizeAt, pixelStart, pixelZoomAsked, type PixelSettings } from './styleSettings.ts'
 import { useStyleOnStage } from './useStyleOnStage.ts'
 import { FinishControls, StyleControls } from './StyleControls.tsx'
+import { drawnFrom, drawnStart, keysOf, type DrawnSettings } from './styles/catalog.ts'
 import { arrowWay, begin, copied, did, lamped, moved, onGround, redo, redrawn, removed, sized, stepFor, stilled, turned, undo, wrapTurn, type History } from './creator/arrange.ts'
 
 /**
@@ -248,6 +249,9 @@ export function SceneCreator() {
   const [px, setPx] = useState<PixelSettings>(() => pixelStart(shown.finish, typeof location === 'undefined' ? undefined : new URLSearchParams(location.search)))
   const setPixel = useCallback((change: Partial<PixelSettings>) => setPx((c) => ({ ...c, ...change })), [])
   const [glitch, setGlitch] = useState<GlitchChoice>(GLITCH_START)
+  // every other style's settings (styles/catalog.ts), held here so a kept scene and a link carry them
+  const drawnKept = useState<DrawnSettings>(() => drawnStart(typeof location === 'undefined' ? undefined : new URLSearchParams(location.search), { coarse }))
+  const [drawn, setDrawn] = drawnKept
   /** Pixel art's switches only the address turns off (`?steady=0`, `?calm=0`, …), as on Diorama. */
   const [flags] = useState(() => pixelFlags(typeof location === 'undefined' ? undefined : new URLSearchParams(location.search)))
   // what the style asks of the cut: no light baked in (cel shading, neon, stained glass, blocks, or pixel art shaded a
@@ -641,7 +645,7 @@ export function SceneCreator() {
   const drawing = useDrawnLook(stage, pixelsNow ? undefined : styleNow, {
     pixelCel, actor: built?.[0], spacing: DETAIL.find((d) => d.id === detail)?.spacing, plain: !!chosen[0]?.plain, azimuth: shown.orbit.azimuth, offscreen, light: coarse, loop: shown.loop,
     sky: px.sky || skyForced ? [skyShown[0], skyShown[1]] : undefined,
-  })
+  }, drawnKept)
   const drawStyle = (id: Style) => {
     setStyleState(id)
     const url = new URL(location.href)
@@ -666,8 +670,8 @@ export function SceneCreator() {
   const savedId = opened.kind === 'project' && 'saved' in opened.from ? opened.from.saved : undefined
   /** The open project as it is kept: with the view, the style and pixel art's settings. */
   const keeping = useMemo<SceneProject | undefined>(() => project && {
-    ...project, camera: orbit, style: { id: style, settings: { pixel: px, ...(glitching ? { glitch } : {}) } },
-  }, [project, orbit, style, px, glitch, glitching])
+    ...project, camera: orbit, style: { id: style, settings: { pixel: px, ...(glitching ? { glitch } : {}), ...Object.fromEntries(keysOf(style).filter((k) => k !== 'pixel' && k !== 'glitch').map((k) => [k, drawn[k as keyof DrawnSettings]])) } },
+  }, [project, orbit, style, px, glitch, glitching, drawn])
   // what was kept last (so opening a scene doesn't count as a change) and each scene's picture
   const keptText = useRef('')
   const pictures = useRef(new Map<string, string>())
@@ -696,6 +700,7 @@ export function SceneCreator() {
     const settings = (st?.settings ?? {}) as { pixel?: unknown; glitch?: unknown }
     setPx(pixelFrom(pixelStart(shownOf(o).finish), settings.pixel))
     setGlitch(mergedLike(GLITCH_START, settings.glitch))
+    setDrawn(drawnFrom(drawnStart(undefined, { coarse }), settings))
   }
   /** Opens a kept scene: its project, its view, its style and settings. */
   const openSaved = (r: SavedScene) => {
