@@ -61,6 +61,8 @@ export interface DrawnSubject {
    * sun of its own stands it at the time's height.
    */
   time?: TimeOfDay
+  /** The page has a backdrop of its own behind the canvas: cel shading takes the shade and line of this one of its backdrops and offers no choice of them. */
+  backdrop?: string
   /** With no look (the page draws pixel art): cel shading's light for the picture the pixel art is made from, shaded a pixel at a time, with the subject's colors gathered into flat fills. */
   pixelCel?: CelLook
 }
@@ -93,7 +95,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   // the night's, and both tones are dimmed and cooled (`nightLight`), so the scene's lamps and lit windows stand out
   const skyDark = sky ? nightOf(sky) : 0
   const skyBack = sky ? { id: 'scene', label: "Scene's sky", back: `linear-gradient(${css(sky[0].map((v) => v / 255))}, ${css(sky[1].map((v) => v / 255))})`, like: skyDark > 0.5 ? 'night' : 'sky' } : undefined
-  const backId = cel.backdrop || (skyBack ? 'scene' : CEL_START.backdrop)
+  const backId = on.backdrop ?? (cel.backdrop || (skyBack ? 'scene' : CEL_START.backdrop))
   const inScene = backId === 'scene' && !!skyBack
   const celBase = inScene ? skyBack.like : backId
   const night = inScene ? skyDark : 0
@@ -167,7 +169,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
     <>
         {look === 'cel' && (
           <div className="space-y-4" data-testid="brush-cel">
-            <SettingsControls def={CEL_DEF} value={cel} onChange={change('cel')} on={shows} choices={{ backdrop: { options: [...(skyBack ? [skyBack] : []), ...BACKDROPS], active: backId } }} />
+            <SettingsControls def={CEL_DEF} value={cel} onChange={change('cel')} on={shows} skip={on.backdrop ? ['backdrop'] : undefined} choices={{ backdrop: { options: [...(skyBack ? [skyBack] : []), ...BACKDROPS], active: backId } }} />
           </div>
         )}
         {blocky && (

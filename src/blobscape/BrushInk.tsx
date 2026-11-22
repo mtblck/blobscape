@@ -14,7 +14,9 @@ import type { Actor, CreatureStage } from './creature/stage.ts'
 import { DETAIL } from './diorama/scene.ts'
 import { DIORAMAS } from './diorama/scenes.ts'
 import { ALL_LOOKS, useDrawnLook, useHeld, wantsPlain, type Look } from './drawnLook.tsx'
-import { TIMES, timeAsked, timeOf, type TimeId } from './timeOfDay.ts'
+import { timeOf, type TimeId } from './timeOfDay.ts'
+import { sceneStart } from './styles/catalog.ts'
+import { TimeControls } from './styles/SceneControls.tsx'
 import { unlit } from '../splat-engine/voxel.ts'
 import { href } from './routes.ts'
 import { sampleScan } from './scan/sample.ts'
@@ -113,7 +115,9 @@ export function BrushInk() {
   const [orbit, setOrbit] = useState<Orbit>(sub.orbit)
   const [built, setBuilt] = useState<{ id: string; plain: boolean; time: TimeId | undefined; sky?: readonly [readonly number[], readonly number[]]; count: number; actor: Actor }>()
   /** The time of day a scene is set in (`?time=night`), or none for the scene as it is written. */
-  const [time, setTime] = useState<TimeId | undefined>(() => timeAsked(params().get('time')))
+  const [sceneSet, setSceneSet] = useState(() => sceneStart(params()))
+  const time = sceneSet.time || undefined
+  const setTime = (id: TimeId | undefined) => setSceneSet((c) => ({ ...c, time: id ?? '' }))
   const timeFor = sub.timed ? time : undefined
 
   useEffect(() => {
@@ -260,15 +264,7 @@ export function BrushInk() {
                   </div>
                   <p className="mt-1.5 text-xs text-ink-faint">More blobs make finer marks and take longer to cut.</p>
                 </Field>
-                {sub.timed && (
-                  <Field label="Time of day">
-                    <div className="flex flex-wrap gap-1.5" data-testid="brush-time">
-                      <Chip active={!time} onClick={() => setTime(undefined)}>Scene's own</Chip>
-                      {TIMES.map((t) => <Chip key={t.id} active={time === t.id} onClick={() => setTime(t.id)}>{t.label}</Chip>)}
-                    </div>
-                    <p className="mt-1.5 text-xs text-ink-faint">{time ? 'The scene under this time\'s sky and light, in every look. Its lamps and fires wait for the dark.' : 'The scene as it was written. Pick a time to set it in a morning, an afternoon or a night.'}</p>
-                  </Field>
-                )}
+                {sub.timed && <TimeControls time={time} onPick={setTime} each="look" prefix="brush" />}
                 <div className="flex flex-wrap gap-1.5">
                   <Button small onClick={() => setPlaying((p) => !p)}>{playing ? 'Stop' : 'Play'}</Button>
                   <Button small onClick={() => setOrbit(sub.orbit)}>Reset the view</Button>

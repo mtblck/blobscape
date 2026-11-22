@@ -14,7 +14,8 @@ import type { CreatureStage } from './creature/stage.ts'
 import { TAB_SECTIONS, Workbench } from '../shared/Workbench.tsx'
 import { about, extent, keepOnly } from './scan/clean.ts'
 import { sampleScan } from './scan/sample.ts'
-import { GROUND, LOOKS, PAPERS, SCREEN, css, isMark, type LookId } from './brushLooks.ts'
+import { LOOKS, type LookId } from './brushLooks.ts'
+import { useDrawnLook } from './drawnLook.tsx'
 import { ColliderOverlay, ColliderPanel } from './scan/Colliders.tsx'
 import { ColliderFileError, guessColliders, pickCollider, placed, readColliderGlb, writeColliderGlb, type Collider } from '../splat-engine/colliders.ts'
 import { trimEdits, DEFAULT_CLEAN, LIGHTS, UNTURNED, autoOrient, cleaner, finish, finishing, lightsFor, preview, stillActor, tip, working, type Clean, type LightId, type Orient } from './scan/studio.ts'
@@ -279,12 +280,9 @@ export function ScanStudio() {
     stage.setEdits(trim && !showCut ? trimEdits(applied) : [])
   }, [stage, trim, showCut, applied])
 
-  // the two pen looks get their outlines, as on Brush and Ink
-  useEffect(() => {
-    stage?.setMarks(isMark(drawnAs) ? { kind: drawnAs, soft: true } : undefined)
-    stage?.setGlyphs(drawnAs === 'ascii' ? {} : undefined)
-    stage?.setOutline(drawnAs === 'ink' || drawnAs === 'hatch' || drawnAs === 'stipple' ? {} : undefined)
-  }, [stage, drawnAs])
+  // the looks are Brush and Ink's own, with their settings, set on the stage by the shared hook; a scan's thick,
+  // overlapping blobs take their marks softly
+  const looked = useDrawnLook(stage, drawnAs, { plain: false, azimuth: 0, soft: true, offscreen })
 
   // For verify: the stage and the counts, without clicking
   useEffect(() => {
@@ -323,7 +321,7 @@ export function ScanStudio() {
             onDrop={(ev) => { ev.preventDefault(); setDragOver(false); const f = ev.dataTransfer.files[0]; if (f) void openFile(f) }}
           >
               {/* what the drawn looks stand on: paper for the pen, a dark ground for paint */}
-              {drawnAs !== 'blobs' && <div aria-hidden className="absolute inset-0" style={{ background: drawnAs === 'ascii' ? css(SCREEN) : drawnAs === 'ink' || drawnAs === 'hatch' || drawnAs === 'stipple' ? css(PAPERS[0].paper) : GROUND }} />}
+              {looked.ground && <div aria-hidden className="absolute inset-0" style={{ background: looked.ground }} />}
               <canvas
                 ref={canvas}
                 role="application"
@@ -442,6 +440,7 @@ export function ScanStudio() {
                   </div>
                   <p className="mt-1.5 text-xs text-ink-faint">{drawnAs === 'blobs' ? 'Or as brush marks, pen strokes or characters. Only the view changes: the file keeps its blobs.' : `${LOOKS.find((l) => l.id === drawnAs)!.note} Only the view changes: the file keeps its blobs.`}</p>
                 </Field>
+                {drawnAs !== 'blobs' && looked.controls}
                 {light !== 'scanned' && <>
                   <Slider label="Light from" value={angle} min={0} max={359} step={1} onChange={setAngle} format={(v) => `${v}°`} />
                   <Slider label="Room light" value={ambient} min={0} max={1} step={0.01} onChange={setAmbient} format={(v) => `${Math.round(v * 100)}%`} hint="How bright it is away from the light." />

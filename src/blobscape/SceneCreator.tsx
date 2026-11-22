@@ -48,7 +48,7 @@ import { STYLES, isPixelStyle, styleAsked, styleWords, type Style } from './dior
 import { useDrawnLook, useHeld } from './drawnLook.tsx'
 import { GLITCH_START, glitchLook, type GlitchChoice } from './glitchLooks.ts'
 import { useExport } from './diorama/useExport.tsx'
-import { CLOUD_COVERS, SkyEase, WEATHERS, WINDS, hazeUnder, isClear, lightUnder, lightningAt, skyState, skyUnder, windAt, type CloudId, type SkyState, type WeatherId } from '../splat-engine/skyRecipes.ts'
+import { CLOUD_COVERS, SkyEase, WEATHERS, WINDS, hazeUnder, isClear, lightUnder, lightningAt, skyState, skyUnder, windAt, type CloudId, type SkyState, type WeatherId, type WindId } from '../splat-engine/skyRecipes.ts'
 import { SceneWeather, paletteUnder } from './diorama/weather.ts'
 import type { SceneWater } from '../splat-engine/sceneWater.ts'
 import { levelPlane, type MirrorImage } from '../splat-engine/reflect.ts'
@@ -60,6 +60,7 @@ import { paletteChoices } from './creator/styling.ts'
 import { cutAsk, detailStart, pixelCelLook, pixelFlags, pixelFor, pixelFrom, pixelLookOf, pixelSizeAt, pixelStart, pixelZoomAsked, type PixelSettings } from './styleSettings.ts'
 import { useStyleOnStage } from './useStyleOnStage.ts'
 import { FinishControls, StyleControls } from './StyleControls.tsx'
+import { WeatherControls } from './styles/SceneControls.tsx'
 import { drawnFrom, drawnStart, keysOf, type DrawnSettings } from './styles/catalog.ts'
 import { arrowWay, begin, copied, did, lamped, moved, onGround, redo, redrawn, removed, sized, stepFor, stilled, turned, undo, wrapTurn, type History } from './creator/arrange.ts'
 
@@ -1693,22 +1694,10 @@ export function SceneCreator() {
                         </div>
                       </div>
                       <div>
-                        <h3 className="mb-2 text-sm font-semibold">Weather</h3>
-                        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Weather" data-testid="creator-weather">
-                          <Chip active={!recipe?.weather && !recipe?.clouds} onClick={() => pickWeather('weather', undefined)}>No weather</Chip>
-                          {CLOUD_COVERS.map((c) => <Chip key={c.id} active={!recipe?.weather && recipe?.clouds === c.id} onClick={() => pickWeather('clouds', c.id)}>{c.label}</Chip>)}
-                          {WEATHERS.map((w) => <Chip key={w.id} active={recipe?.weather === w.id} onClick={() => pickWeather('weather', w.id)}>{w.label}</Chip>)}
-                        </div>
-                        <p className="mt-1.5 text-xs text-ink-faint">The same weather recipes as Diorama: each brings its own clouds, light, haze and wind, laid over the scene with no cut, and the sky eases from one to the next.{recipe?.weather === 'thunderstorm' ? (calm ? ' Lightning is left out, as your device asks for less motion.' : ' Lightning flashes every few seconds.') : ''}</p>
-                        <Field label="Wind">
-                          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Wind" data-testid="creator-wind">
-                            {WINDS.map((w, i) => <Chip key={w.id} active={recipe?.wind ? recipe.wind === w.id : (WEATHERS.find((k) => k.id === recipe?.weather)?.wind ?? 0) === i} onClick={() => setLight({ recipe: windPicked(recipe, w.id) }, i ? `${w.label}.` : 'No wind.')}>{i ? w.label : 'No wind'}</Chip>)}
-                          </div>
-                          <p className="mt-1.5 text-xs text-ink-faint">Blows rain, snow and falling leaves at a slant, in gusts, and sways trees and stalks. Picking a weather brings its own wind back.</p>
-                        </Field>
-                        <div className="mt-3 grid gap-1.5">
-                          <Toggle label="Clouds over the scene" checked={overhead} onChange={(on) => setLight({ recipe: overheadPicked(recipe, on) }, on ? 'Clouds over the scene.' : 'Clouds left out.')} />
-                          <p className="text-xs text-ink-faint">{overhead ? 'The clouds float over the scene and rain and snow fall from under them.' : 'The clouds are left out: the sky still grays and darkens, and rain and snow fall in from over the top of the picture.'}</p>
+                        <div className="grid gap-4">
+                          <WeatherControls weather={recipe?.weather} clouds={recipe?.weather ? undefined : recipe?.clouds} wind={recipe?.wind} overhead={overhead} calm={calm} prefix="creator" headed
+                            onPick={(key, id) => (key === 'wind' ? setLight({ recipe: windPicked(recipe, id as WindId) }, id && id !== WINDS[0].id ? `${WINDS.find((w) => w.id === id)!.label}.` : 'No wind.') : pickWeather(key, id as WeatherId | CloudId | undefined))}
+                            onOverhead={(on) => setLight({ recipe: overheadPicked(recipe, on) }, on ? 'Clouds over the scene.' : 'Clouds left out.')} />
                         </div>
                       </div>
                     </div>

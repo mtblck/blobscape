@@ -30,13 +30,22 @@ import { WASH_PAPERS, WASH_START, type WashChoice } from '../washLooks.ts'
 export type Unit = 'percent' | 'px' | 'deg' | 'times' | 'count'
 
 /** What a setting's `when` is told about the page: the style on show and what the subject has. */
-export interface Shows { style: Style; water?: boolean; weather?: boolean; cycle?: boolean }
+export interface Shows { style: Style; water?: boolean; weather?: boolean; cycle?: boolean; /** How many colors the palette on show has (0 is full color). */ colors?: number; /** The scene's own heat haze, in art pixels. */ heat?: number }
+
+/** Where on a page a setting is laid: a style whose settings are spread over two tabs says which (pixel art's Style and Finish; `switches` is the Finish tab's run of switches). */
+export type Tab = 'style' | 'finish' | 'switches'
 
 interface Base<V> {
   key: keyof V & string
   label: string
   /** A line under the control. */
-  hint?: string
+  hint?: string | ((on: Shows) => string)
+  /** Which tab it is laid in, where a style has more than one; with none it is in the address and kept settings only. */
+  tab?: Tab
+  /** Why it can't be set just now (no palette to step through), shown in its hint's place with the control held. */
+  held?: (on: Shows) => string | undefined
+  /** Drawn as another kind of control than it is kept as: a number as a switch, two switches as one choice. */
+  draw?: Drawn<V>
   /** Its name in the address (`?block=3`). */
   address?: string
   /** Whether it is shown, by the style's own settings and the page; a hidden setting keeps its value. */
@@ -45,12 +54,16 @@ interface Base<V> {
   /** An experiment's own try: the name of the one page that shows it, until it is folded in by taking this off. */
   trial?: string
 }
+/** How a setting is drawn when not as its own kind: what the control shows for the settings as they are, and what a press changes. */
+export type Drawn<V> =
+  | { kind: 'toggle'; at: (v: V) => boolean; set: (to: boolean, on: Shows) => Partial<V> }
+  | { kind: 'choice'; options: readonly { id: string; label: string }[]; at: (v: V) => string; set: (id: string) => Partial<V> }
 /** A slider. */
 export interface RangeSetting<V> extends Base<V> { kind: 'range'; min: number; max: number; step: number; unit: Unit; /** What 0 reads as ("None"). */ zero?: string; /** Held to whole steps. */ whole?: boolean }
 /** One of a few, as chips. `open` choices are the page's to list (a scene's palettes): any id is kept. */
 export interface ChoiceSetting<V> extends Base<V> { kind: 'choice'; options: readonly { id: string | number; label: string; about?: string }[]; open?: boolean }
 /** A switch. One that starts `null` follows its style (`auto`) until the visitor says. `on` is the address's word for it when not 1. */
-export interface ToggleSetting<V> extends Base<V> { kind: 'toggle'; about?: string | ((style: Style) => string); auto?: (style: Style) => boolean; on?: string }
+export interface ToggleSetting<V> extends Base<V> { kind: 'toggle'; about?: string | ((style: Style, on: Shows) => string); auto?: (style: Style) => boolean; on?: string }
 /** A whole number a button moves on, for another run of something random. */
 export interface SeedSetting<V> extends Base<V> { kind: 'seed' }
 export type Setting<V> = RangeSetting<V> | ChoiceSetting<V> | ToggleSetting<V> | SeedSetting<V>
@@ -112,6 +125,10 @@ export interface PixelSettings {
 /** Pixel sizes and paces on offer. */
 export const PIXEL_SIZES = [2, 3, 4, 6]
 export const PIXEL_RATES = [0, 12, 8]
+/** How many steps of sun Light in bands gives (`banded`): three, none, half and full, kept the paint's texture best. */
+export const TEXEL_BANDS = 3
+
+const pixelArt = (_v: unknown, on: Shows) => on.style === 'pixel' || on.style === 'glitch'
 
 const PEN_LOOKS: readonly Style[] = ['ink', 'hatch', 'stipple']
 const turn = <V extends { turn: number }>(): RangeSetting<V> => ({ key: 'turn' as keyof V & string, kind: 'range', label: 'Light from', min: -180, max: 180, step: 5, unit: 'deg', hint: 'Round the subject, from where the view starts: 0° is from the front, 90° from the right. The shadows go with it.' })
@@ -119,30 +136,31 @@ const height = <V extends { height: number }>(): RangeSetting<V> => ({ key: 'hei
 
 /**
  * Pixel art. Where a scene has a finish of its own it starts these (`pixelStart` in styleSettings.ts); this start is
- * a scene with none. The page lays these controls out itself (`StyleControls.tsx`), since the palette's strip and the
- * outline's three chips are each more than one setting.
+ * a scene with none. Its controls are spread over two tabs (`tab`), and a few are drawn as another kind than they are
+ * kept as (`draw`): the outline's two switches are one choice of three, and the bands and the haze are switches.
  */
 export const PIXEL: StyleDef<PixelSettings> = {
   id: 'pixel', styles: ['pixel', 'glitch'],
   start: { palette: 'own', size: 2, rate: 0, dither: 0.5, glow: 1, outline: true, own: true, lines: true, sky: true, heat: 0, bands: 2, selout: true, cycle: true, steps: false, texel: 0, shade: false, rock: true, exact: false },
   settings: [
-    { key: 'palette', kind: 'choice', label: 'Palette', options: [{ id: 'own', label: 'Scene’s own' }], open: true },
-    { key: 'size', kind: 'choice', label: 'Pixel size', address: 'px', options: PIXEL_SIZES.map((n) => ({ id: n, label: `${n}×` })) },
-    { key: 'rate', kind: 'choice', label: 'Motion', options: PIXEL_RATES.map((n) => ({ id: n, label: n ? `${n} a second` : 'Smooth' })) },
-    { key: 'dither', kind: 'range', label: 'Dither', min: 0, max: 1, step: 0.05, unit: 'percent' },
-    { key: 'glow', kind: 'range', label: 'Glow', address: 'glow', min: 0, max: 4, step: 0.25, unit: 'times', zero: 'off' },
-    { key: 'steps', kind: 'toggle', label: 'Paint in steps of the palette', address: 'steps' },
-    { key: 'texel', kind: 'range', label: 'Light in bands', address: 'texel', min: 0, max: 8, step: 1, unit: 'count', whole: true },
-    { key: 'shade', kind: 'toggle', label: 'Shade each pixel', address: 'shade' },
-    { key: 'outline', kind: 'toggle', label: 'Outline' },
+    { key: 'palette', kind: 'choice', label: 'Palette', tab: 'style', options: [{ id: 'own', label: 'Scene’s own' }], open: true },
+    { key: 'size', kind: 'choice', label: 'Pixel size', tab: 'style', address: 'px', options: PIXEL_SIZES.map((n) => ({ id: n, label: `${n}×` })) },
+    { key: 'rate', kind: 'choice', label: 'Motion', tab: 'style', options: PIXEL_RATES.map((n) => ({ id: n, label: n ? `${n} a second` : 'Smooth' })) },
+    { key: 'dither', kind: 'range', label: 'Dither', tab: 'finish', when: pixelArt, min: 0, max: 1, step: 0.05, unit: 'percent', hint: (on) => (on.colors ? 'Checkers two palette colors to fake the ones between, where a pixel artist would: in the sky and the light round glowing things. Surfaces stay flat.' : 'Needs a palette: Full color has none to mix.') },
+    // neon and stained glass put the scene's lights by (neon has a Glow of its own), so this one would do nothing there
+    { key: 'glow', kind: 'range', label: 'Glow', tab: 'finish', address: 'glow', when: (_v, on) => on.style !== 'neon' && on.style !== 'glass', min: 0, max: 4, step: 0.25, unit: 'times', zero: 'off', hint: (on) => (pixelArt(0, on) ? 'How strongly lamps, fires and other glowing things light what is round them, and how far bright pixels shine into the ones beside them.' : 'How strongly lamps, fires and other glowing things light what is round them.') },
+    { key: 'steps', kind: 'toggle', label: 'Paint in steps of the palette', tab: 'switches', address: 'steps', when: pixelArt, held: (on) => (on.colors ? undefined : 'Needs a palette: Full color has no steps.'), about: 'Cuts the scene again with every blob in one palette color, a step of its own paint from shade to sun, so shade falls in flat bands.' },
+    { key: 'texel', kind: 'range', label: 'Light in bands', tab: 'switches', address: 'texel', when: pixelArt, min: 0, max: 8, step: 1, unit: 'count', whole: true, draw: { kind: 'toggle', at: (v) => v.texel > 1, set: (to) => ({ texel: to ? TEXEL_BANDS : 0 }) }, hint: 'Lights each blob as one block in a few flat steps of sun and shade, so light falls in crisp bands along the surface and each thing keeps its own paint. Cuts the scene again.' },
+    { key: 'shade', kind: 'toggle', label: 'Shade each pixel', tab: 'switches', address: 'shade', when: pixelArt, about: 'Works the light out a pixel at a time from the scene\'s sun and lamps, so light and shade fall in bands that follow each shape. Cuts the scene again.' },
+    { key: 'outline', kind: 'toggle', label: 'Outline', tab: 'switches', when: pixelArt, draw: { kind: 'choice', options: [{ id: 'none', label: 'None' }, { id: 'one', label: 'One color' }, { id: 'own', label: 'Each thing’s own' }], at: (v) => (!v.outline ? 'none' : v.own ? 'own' : 'one'), set: (id) => (id === 'none' ? { outline: false } : { outline: true, own: id === 'own' }) } },
     { key: 'own', kind: 'toggle', label: 'Outline in each thing’s own color', address: 'own' },
-    { key: 'lines', kind: 'toggle', label: 'Lines inside the scene', address: 'parts' },
-    { key: 'sky', kind: 'toggle', label: 'Sky behind' },
-    { key: 'heat', kind: 'range', label: 'Heat haze over glowing things', address: 'heat', min: 0, max: 3, step: 1, unit: 'px', whole: true },
+    { key: 'lines', kind: 'toggle', label: 'Lines inside the scene', tab: 'switches', address: 'parts', when: pixelArt },
+    { key: 'sky', kind: 'toggle', label: 'Sky behind', tab: 'switches', when: pixelArt },
+    { key: 'heat', kind: 'range', label: 'Heat haze over glowing things', tab: 'switches', address: 'heat', when: pixelArt, min: 0, max: 3, step: 1, unit: 'px', whole: true, draw: { kind: 'toggle', at: (v) => v.heat > 0, set: (to, on) => ({ heat: to ? on.heat || 1 : 0 }) } },
     { key: 'bands', kind: 'range', label: 'Glow in rings', address: 'bands', min: 0, max: 2, step: 1, unit: 'count', whole: true },
     { key: 'selout', kind: 'toggle', label: 'Softer outline on lit sides', address: 'selout' },
-    { key: 'cycle', kind: 'toggle', label: 'Color cycling', address: 'cycle', when: (_v, on) => !!on.cycle },
-    { key: 'rock', kind: 'toggle', label: 'Rock the view', address: 'rock' },
+    { key: 'cycle', kind: 'toggle', label: 'Color cycling', tab: 'switches', address: 'cycle', when: (v, on) => pixelArt(v, on) && !!on.cycle },
+    { key: 'rock', kind: 'toggle', label: 'Rock the view', tab: 'switches', address: 'rock' },
     { key: 'exact', kind: 'toggle', label: 'Exact sort', address: 'sort', on: 'radix' },
   ],
 }
@@ -373,8 +391,8 @@ export function valueWords<V>(s: RangeSetting<V>, v: number): string {
   return `${v}`
 }
 
-/** The settings a page shows for a style: those whose `when` holds, and no other page's trials. */
-export function shownSettings<V>(def: StyleDef<V>, value: V, on: Shows, page?: string): Setting<V>[] {
-  return def.settings.filter((s) => (!s.trial || s.trial === page) && (!s.when || s.when(value, on)))
+/** The settings a page shows for a style (in one of its tabs, where it has them): those whose `when` holds, and no other page's trials. */
+export function shownSettings<V>(def: StyleDef<V>, value: V, on: Shows, page?: string, tab?: Tab): Setting<V>[] {
+  return def.settings.filter((s) => s.tab === tab && (!s.trial || s.trial === page) && (!s.when || s.when(value, on)))
 }
 

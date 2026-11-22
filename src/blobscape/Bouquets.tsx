@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Orbit } from '../splat-core/view.ts'
-import type { MarkLook } from '../splat-core/marks.ts'
 import { LoadingMark } from '../shared/BlobLoader.tsx'
 import { Button, Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
 import { TAB_SECTIONS, Workbench } from '../shared/Workbench.tsx'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
 import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitDrag } from './Viewport.tsx'
-import { PAPERS, css } from './brushLooks.ts'
-import { BACKDROPS as CEL_BACKDROPS, CEL_START, celLook } from './celLooks.ts'
+import { useDrawnLook } from './drawnLook.tsx'
+import { drawnStart } from './styles/catalog.ts'
 import { ROLE_NOTES, SHAPES, SIZES, inWords, type Shape, type Size } from './bouquet/arrange.ts'
 import { DETAILS, fallen, makeBouquet, poseBouquet, setShedding, shedOne, type Bouquet } from './bouquet/bouquet.ts'
 import { PALETTES, SEASONS, seasonOn, type Role, type Season } from './bouquet/flowers.ts'
@@ -18,6 +17,8 @@ import type { CreatureStage } from './creature/stage.ts'
 import { href } from './routes.ts'
 
 /** How the bouquet is drawn: soft blobs, or one of the painted looks or cel shading from Brush and Ink. */
+/** Cel shading's light comes from the front left of the view the bouquet starts in: its turn is measured from here. */
+const CEL_TURN = 24
 const LOOKS: { id: 'blobs' | 'gouache' | 'oil' | 'ink' | 'cel'; label: string }[] = [{ id: 'blobs', label: 'Soft' }, { id: 'gouache', label: 'Gouache' }, { id: 'oil', label: 'Oil' }, { id: 'ink', label: 'Ink and wash' }, { id: 'cel', label: 'Cel shading' }]
 /** What stands behind the table. */
 const BACKDROPS: { id: string; label: string; color?: string; dark: boolean }[] = [
@@ -129,11 +130,11 @@ export function Bouquets() {
     return () => clearInterval(id)
   }, [stage, bouquet])
 
-  const sheet = PAPERS[0]
   const dark = BACKDROPS.find((b) => b.id === backdrop)!.dark
-  const marks = useMemo<MarkLook | undefined>(() => (look === 'blobs' || look === 'cel' ? undefined : { kind: look, size: 1, ink: sheet.ink, paper: sheet.paper }), [look, sheet])
-  useEffect(() => { stage?.setMarks(marks) }, [stage, marks, bouquet])
-  useEffect(() => { stage?.setOutline(look === 'ink' ? { width: 1.5, ink: sheet.ink } : undefined) }, [stage, look, sheet, bouquet])
+  // the looks are Brush and Ink's own, set on the stage by the shared hook; this page's own values are its starts:
+  // colors as painted (no flat fills) and the page's backdrop, whose darkness picks cel shading's shade and line
+  const drawnKept = useState(() => { const d = drawnStart(params()); return { ...d, cel: { ...d.cel, fills: 0 } } })
+  const looked = useDrawnLook(stage, look, { actor: bouquet, plain: look === 'cel', azimuth: CEL_TURN, offscreen, backdrop: dark ? 'night' : 'cream' }, drawnKept)
 
   // the address always names the bouquet on show, so it can be sent to someone
   useEffect(() => {
@@ -154,14 +155,10 @@ export function Bouquets() {
 
   const drag = useRef<OrbitDrag | null>(null)
   const pointers = useRef(new Map<number, { x: number; y: number }>())
-  // the cel's light comes from the front left of the view the bouquet starts in; its shade and line suit the backdrop
-  const cel = useMemo(() => (look === 'cel' ? { ...celLook({ ...CEL_START, turn: CEL_START.turn + 24 }), shade: CEL_BACKDROPS[dark ? 3 : 1].shade, ink: CEL_BACKDROPS[dark ? 3 : 1].ink } : undefined), [look, dark])
-  useEffect(() => { stage?.setCel(cel) }, [stage, cel, bouquet])
-
   useWheelZoom(canvas, setOrbit)
   const another = () => setSeed(1 + Math.floor(Math.random() * MAX_SEED))
   const back = BACKDROPS.find((b) => b.id === backdrop)!
-  const ground = look === 'ink' ? css(sheet.paper) : back.color
+  const ground = look === 'ink' ? looked.ground ?? back.color : back.color
   const onDark = look === 'ink' ? false : back.dark
   const waiting = !failed && (!drawn || !bouquet)
   const left = bouquet ? bouquet.falling.length - down : 0
@@ -298,6 +295,7 @@ export function Bouquets() {
                   </div>
                   <p className="mt-1.5 text-xs text-ink-faint">The painted looks and cel shading are the ones from <a href={href({ page: 'brush' })} className="underline decoration-rule underline-offset-2 hover:text-accent">Brush and Ink</a>.</p>
                 </Field>
+                {look !== 'blobs' && looked.controls}
                 <Field label="Detail">
                   <div className="flex flex-wrap gap-1.5">
                     {DETAILS.map((d) => <Chip key={d.id} active={detail === d.id} onClick={() => { setDetail(d.id); writeDetail(d.id) }}>{d.label}</Chip>)}
