@@ -100,11 +100,14 @@ export function PixelDiorama() {
    * is not cut again for them, and the sky eases from one to the next.
    */
   const [weatherPick, setWeather] = useState<WeatherId | 'none' | undefined>(() => { const q = new URLSearchParams(location.search).get('weather'); return q === 'none' ? 'none' : weatherAsked(q) })
-  const [clouds, setClouds] = useState<CloudId | undefined>(() => cloudsAsked(new URLSearchParams(location.search).get('clouds')))
+  const [cloudsPick, setClouds] = useState<CloudId | undefined>(() => cloudsAsked(new URLSearchParams(location.search).get('clouds')))
+  // out in space (the space whales) there is no weather: what was picked waits for the next scene that has a sky
+  const clouds = picked0.space ? undefined : cloudsPick
   // a scene may start under a shared weather of its own (the koi pond's light rain) until another, or none, is picked
-  const weather: WeatherId | undefined = weatherPick === 'none' ? undefined : weatherPick ?? (clouds ? undefined : picked0.weather)
+  const weather: WeatherId | undefined = picked0.space || weatherPick === 'none' ? undefined : weatherPick ?? (clouds ? undefined : picked0.weather)
   /** The wind (`?wind=gale`): weather brings at least its own; it slants what falls and raises waves on water. */
-  const [wind, setWind] = useState<WindId | undefined>(() => windAsked(new URLSearchParams(location.search).get('wind')))
+  const [windPick, setWind] = useState<WindId | undefined>(() => windAsked(new URLSearchParams(location.search).get('wind')))
+  const wind = picked0.space ? undefined : windPick
   /**
    * Whether the weather's clouds float over the scene (`?overhead=0` leaves them out, and rain and snow fall in from
    * over the top of the picture): a scene may start without them, as the koi pond does (Matt, 2026-11-21).
@@ -834,6 +837,7 @@ export function PixelDiorama() {
                     </Button>
                   </div>
                 </div>
+                {picked0.space ? <p className="text-sm text-ink-muted" data-testid="diorama-space">Out in space there is no time of day or weather: the scene keeps its own sky, stars and far sun.</p> : <>
                 <Field label="Time of day">
                   <div className="flex flex-wrap gap-1.5" data-testid="diorama-time">
                     <Chip active={!time || !picked0.timed} onClick={() => setTimeOfDay(undefined)}>Scene's own</Chip>
@@ -859,6 +863,7 @@ export function PixelDiorama() {
                   <Toggle label="Clouds over the scene" checked={overhead} onChange={pickOverhead} />
                   <p className="text-xs text-ink-faint">{overhead ? 'The clouds float over the scene and rain and snow fall from under them.' : 'The clouds are left out: the sky still grays and darkens, and rain and snow fall in from over the top of the picture.'}</p>
                 </div>
+                </>}
                 <Field label="Changing scenes">
                   <div className="flex flex-wrap gap-1.5" data-testid="diorama-transitions">
                     <Chip active={transition === 'cut'} onClick={() => pickTransition('cut')}>Cut</Chip>

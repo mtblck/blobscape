@@ -41,6 +41,7 @@ export const TAGS = [
   { id: 'sea', sort: 'land', means: 'Stands in the sea' },
   { id: 'pond', sort: 'land', means: 'Has a pond or a pool' },
   { id: 'night', sort: 'land', means: 'Written as a night scene' },
+  { id: 'space', sort: 'land', means: 'Out in space: no ground, and no time of day or weather' },
   // how a prop behaves, which the shared recipes act on
   { id: 'leafy', sort: 'quality', means: 'Drops leaves: under falling leaves it lets them fall from under its crown' },
   { id: 'evergreen', sort: 'quality', means: 'Keeps its needles or leaves: falling leaves pass it by' },

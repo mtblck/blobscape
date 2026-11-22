@@ -42,7 +42,7 @@ test('library props in an opened scene are named by their id, others written out
 })
 
 test('scenes the library cannot split open whole and say why', () => {
-  for (const id of ['meadow', 'fishing', 'whales']) {
+  for (const id of ['meadow', 'fishing']) {
     const o = openingScene(id)!
     assert.equal(o.kind, 'whole', id)
     const s = shownOf(o)

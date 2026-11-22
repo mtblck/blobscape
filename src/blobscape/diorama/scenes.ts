@@ -31,12 +31,12 @@ import { CAVE, CAVE_PROJECT } from './scenes/cave.ts'
 import { CANYON, CANYON_PROJECT } from './scenes/canyon.ts'
 import { CABIN, CABIN_PROJECT } from './scenes/cabin.ts'
 import { KOI_PROJECT } from './scenes/koi.ts'
-import { madeProp } from '../props/index.ts'
+import { madeProp, madeTags } from '../props/index.ts'
 import { composeScene } from '../../splat-engine/compose.ts'
 import type { SceneProject } from '../../splat-engine/project.ts'
 import type { WeatherId } from '../../splat-engine/skyRecipes.ts'
 import { HENGE, HENGE_PROJECT } from './scenes/henge.ts'
-import { WHALES } from './scenes/whales.ts'
+import { WHALES, WHALES_PROJECT } from './scenes/whales.ts'
 import { TURKEY, TURKEY_PROJECT } from './scenes/turkey.ts'
 import { FISHING } from './scenes/fishing.ts'
 import { LIGHTHOUSE as LIGHTHOUSE_DOC, LIGHTHOUSE_PROJECT } from './scenes/lighthouse.ts'
@@ -60,6 +60,11 @@ export interface Diorama {
    * and stars) is out until a night is picked, while its lamps stay lit as written.
    */
   byDay?: boolean
+  /**
+   * True for a scene out in space (its land tagged `space`; the space whales, Matt 2026-11-22): it keeps its own sky,
+   * so Diorama offers it no time of day and no weather.
+   */
+  space?: boolean
   /** For the view's label: what is in the picture. */
   about: string
   /** Seconds before it repeats. */
@@ -174,8 +179,10 @@ export function described(id: string, doc: SceneDoc, about: string, more: Pick<D
   const c = compileScene(more.byDay ? litFor(doc, false, 'always') : doc)
   let pond: SceneWater | undefined
   const times = new Map<string, Diorama>()
+  const space = !!(more.project ? (typeof more.project.land === 'string' ? madeTags(more.project.land) : more.project.land.doc.tags) : doc.tags)?.includes('space')
   const self: Diorama = {
     ...more,
+    space,
     id,
     label: c.name,
     about,
@@ -231,6 +238,8 @@ export function described(id: string, doc: SceneDoc, about: string, more: Pick<D
       return d
     },
   }
+  // out in space there is no morning or night to set it in
+  if (space) self.timed = undefined
   return self
 }
 
@@ -297,7 +306,7 @@ export const DIORAMAS: Diorama[] = [
   described('canyon', CANYON, 'A desert canyon at sunset worn by water, with banded cliffs and ledges, scree, a mesa, hoodoos, a natural arch, a dry stream bed of pebbles and cracked mud, saguaros, a gnarled tree, a ram skull with curled horns, old ribs, a fossil shell and a circling hawk', { project: CANYON_PROJECT }),
   described('cabin', CABIN, 'A log cabin snowed in on a winter night: snow falling and settling where it lands, drifts piled deep downwind of the cabin, rocks and fence, a path trodden to the gate, frost growing across the lit window, chimney smoke, a woodpile and a lantern', { project: CABIN_PROJECT, weather: 'snow', overhead: false }),
   described('koi', composeScene(KOI_PROJECT, madeProp), 'A koi pond in a moss garden on a rainy day: raindrops ring the water where they land, the rings cross and bounce off the banks and stepping stones, koi circle under the surface and leave wakes, and a tall stone lantern and a low snow-viewing lantern glow under a cherry tree in full bloom that sheds its petals, with bamboo, irises and lily pads', { project: KOI_PROJECT, weather: 'light-rain', overhead: false, byDay: true }),
-  described('whales', WHALES, 'A pod of whales swimming through space, a mother and two calves with stars on their backs, their tails and flippers beating slowly, past a ringed planet and its moon, banks of nebula, a far sun, tumbling rocks and stardust streaming by'),
+  described('whales', WHALES, 'A pod of whales swimming through space, a mother and two calves with stars on their backs, their tails and flippers beating slowly, past a ringed planet and its moon, banks of nebula, a far sun, tumbling rocks and stardust streaming by', { project: WHALES_PROJECT }),
   described('turkey', TURKEY, 'A giant turkey chasing a cook in an apron and chef’s hat down a country road in the fall, past a rail fence, trees in fall color, pumpkins, a mailbox and a billboard, with dust at their heels, loose feathers and falling leaves', { project: TURKEY_PROJECT }),
   described('henge', HENGE, 'A ring of standing stones at night where a magic circle flares to life, sparks gather into a witch in a white robe and a tall white hat, who draws a wand, waves it once and vanishes in a shower of sparks', { project: HENGE_PROJECT }),
   FOX_MEADOW,
