@@ -1,0 +1,3 @@
+- Scene Creator: the shared weather, cloud cover and wind from Diorama, with the clouds over the scene or left out, and Morning, Afternoon and Night chips that set the live sun's hour in Light mode.
+- Scene Creator: every Diorama finish setting (paint in steps of the palette, light in bands, shade each pixel, outlines in each thing's own color, heat haze, color cycling), from one set of style settings both pages now share.
+- Scene Creator: falling leaves come down from under each leafy tree's crown and move with the tree, instead of falling from the sky.

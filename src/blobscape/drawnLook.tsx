@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { lightsItself } from './diorama/styles.ts'
 import type { MarkLook } from '../splat-core/marks.ts'
 import type { GlyphLook, GlyphSet } from '../splat-core/glyphs.ts'
 import { gatherColors, type CelLook } from '../splat-core/cel.ts'
@@ -17,7 +18,7 @@ import { BACKDROPS, CEL, CEL_START, FILL_REACH, celLook, nightLight, nightOf, ty
 export type Look = LookId | typeof CEL.id | typeof BLOCKS.id | typeof NEON.id | typeof GLASS.id | typeof WASH.id
 export const ALL_LOOKS: { id: Look; label: string; note: string }[] = [...LOOKS.slice(0, -1), CEL, BLOCKS, NEON, GLASS, WASH, LOOKS[LOOKS.length - 1]]
 /** The looks that light the blobs themselves, and so want them built with no light baked in (`unlit`). */
-export const wantsPlain = (look: Look | undefined) => look === 'cel' || look === 'neon' || look === 'glass' || look === 'blocks'
+export const wantsPlain = (look: Look | undefined) => lightsItself(look)
 
 /** On the dark screen characters are thin lines of light and read fainter than their share of ink, so tones are raised by this. */
 const SCREEN_GAIN = 1.5

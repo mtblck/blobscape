@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { composeScene } from './compose.ts'
-import { PlacedPoser, placer, type PropDoc, type SceneProject } from './project.ts'
+import { PlacedPoser, compileProject, placer, type PropDoc, type SceneProject } from './project.ts'
 import { checkScene, compileScene, type SceneDoc } from './sceneDoc.ts'
 import { buildVoxels } from './voxel.ts'
 import { Skeleton } from './rig.ts'
@@ -95,4 +95,29 @@ test("a prop set down to keep its lamps lit always has them so, whatever the tim
   const doc = composeScene(project([{ prop: 'post', at: [0, 0, 0], turn: 0, size: 1, lit: 'always' }]), find)
   assert.equal(doc.lights![0].lit, 'always')
   assert.throws(() => composeScene(project([{ prop: 'gate', at: [0, 0, 0], turn: 0, size: 1 }]), find), /gate/)
+})
+
+test('falling leaves come down from under a leafy prop\'s crown, never from the sky, and not from a post', () => {
+  const TREE: PropDoc = {
+    name: 'Apple tree', foot: [0, 0, 0],
+    doc: {
+      name: 'Apple tree', loop: 12, palette: ['#604020', '#4a8a3c'], camera: { target: [0, 0.5, 0], distance: 2, azimuth: 0, elevation: 10 },
+      parts: [{ shape: { kind: 'cylinder', at: [0, 0.25, 0], height: 0.5, r: 0.05 }, paint: '#604020' }, { shape: { kind: 'sphere', at: [0, 0.8, 0], r: 0.3 }, paint: '#4a8a3c' }],
+    },
+  }
+  const look = (id: string) => (id === 'tree' ? TREE : find(id))
+  const p: SceneProject = { ...project([{ prop: 'tree', at: [0.5, 0, 0.2], turn: 90, size: 1 }, { prop: 'post', at: [-0.5, 0, 0], turn: 0, size: 1 }]), light: { weather: 'leaves' } }
+  const doc = composeScene(p, look)
+  assert.deepEqual(checkScene(doc), [])
+  const leaves = (doc.air?.specks ?? []).filter((s) => s.kind === 'leaves')
+  assert.equal(leaves.length, 1)
+  const [l] = leaves
+  // under the crown where the tree stands (the crown starts at 0.5), down to its foot
+  assert.ok(l.to[1] <= 0.55 && l.to[1] > 0.4 && l.from[1] === 0, JSON.stringify(l))
+  for (const a of [0, 2]) assert.ok(l.from[a] < [0.5, 0, 0.2][a] && l.to[a] > [0.5, 0, 0.2][a])
+  // in Scene Creator the tree drops them itself, so they move with it; the land drops none
+  const cp = compileProject(p, look)
+  assert.ok(cp.props[0].c.bones.some((b) => b.name.startsWith('~')))
+  assert.ok(!cp.props[1].c.bones.some((b) => b.name.startsWith('~')))
+  assert.ok(!cp.land.c.bones.some((b) => b.name.startsWith('~speck')))
 })

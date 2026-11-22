@@ -415,7 +415,7 @@ export default [
   {
     name: 'scene-creator-style',
     about: 'Scene Creator, Style and Export: oil, then cel shading (cut again with no light baked in), then pixel art in another palette each change the picture; a frame saves as a PNG, the scene as a rigged .glb the engine reads, and a two-stop camera path as an animated PNG of every frame',
-    entries: ['src/blobscape/SceneCreator.tsx', 'src/blobscape/creator/styling.ts', 'src/blobscape/diorama/useExport.tsx', 'src/blobscape/creator/cut.ts', 'src/blobscape/creator/engineFile.ts'],
+    entries: ['src/blobscape/SceneCreator.tsx', 'src/blobscape/creator/styling.ts', 'src/blobscape/styleSettings.ts', 'src/blobscape/StyleControls.tsx', 'src/blobscape/diorama/useExport.tsx', 'src/blobscape/creator/cut.ts', 'src/blobscape/creator/engineFile.ts'],
     async run({ shots, join, fails, ok, open, axe }) {
       const c = await open('/scene-creator/?offscreen=1&detail=chunky&mode=style', { viewport: { width: 1280, height: 900 } })
       const p = c.page

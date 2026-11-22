@@ -2,7 +2,9 @@ import type { Vec3 } from '../../splat-core/blobs.ts'
 import type { Light, PointLight } from '../../splat-engine/engine.ts'
 import { MAX_LIGHTS } from '../../splat-engine/engine.ts'
 import { daylight, skyLights, type Daylight } from '../../splat-engine/daylight.ts'
-import { MAX_PROJECT_LAMPS, sunOf, type CompiledProject, type ProjectLight, type SceneProject } from '../../splat-engine/project.ts'
+import { MAX_PROJECT_LAMPS, sunOf, type CompiledProject, type ProjectLight, type ProjectWeather, type SceneProject } from '../../splat-engine/project.ts'
+import type { CloudId, WeatherId, WindId } from '../../splat-engine/skyRecipes.ts'
+import { TIMES, type TimeId } from '../timeOfDay.ts'
 import { lightsAt, type LightDoc } from '../../splat-engine/sceneDoc.ts'
 import { MAX_LAMPS } from '../../splat-engine/voxel.ts'
 
@@ -89,3 +91,22 @@ export function budget(cp: CompiledProject, l: ProjectLight | undefined): { live
 }
 
 const round = (v: number) => Math.round(v * 1e4) / 1e4
+
+/** A shared weather picked (or none, `id` left out): a weather brings its own clouds and wind, a cover is clouds alone. */
+export function weatherPicked(r: ProjectWeather | undefined, kind: 'weather' | 'clouds', id: WeatherId | CloudId | undefined): ProjectWeather | undefined {
+  return tidy({ overhead: r?.overhead, ...(kind === 'weather' ? { weather: id as WeatherId | undefined } : { clouds: id as CloudId | undefined }) })
+}
+
+/** A wind picked, in place of the weather's own. */
+export const windPicked = (r: ProjectWeather | undefined, id: WindId): ProjectWeather | undefined => tidy({ ...r, wind: id })
+
+/** The clouds over the scene, or left out (over it is the default, so it is not kept). */
+export const overheadPicked = (r: ProjectWeather | undefined, on: boolean): ProjectWeather | undefined => tidy({ ...r, overhead: on ? undefined : false })
+
+/** The time of day (Morning, Afternoon, Night) a project's live sun stands at, if it stands at one's hour. */
+export const timeIn = (l: ProjectLight | undefined): TimeId | undefined => (l?.live ? TIMES.find((t) => t.hour === l.live!.hour)?.id : undefined)
+
+function tidy(r: ProjectWeather): ProjectWeather | undefined {
+  const out = Object.fromEntries(Object.entries(r).filter(([, v]) => v !== undefined)) as ProjectWeather
+  return Object.keys(out).length ? out : undefined
+}

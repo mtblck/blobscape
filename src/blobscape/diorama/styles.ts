@@ -30,3 +30,6 @@ export function styleWords(style: Style): string {
 
 /** Whether a style is drawn as pixel art underneath (pixel mode, its palette and finish): pixel art itself and tech glitch. */
 export const isPixelStyle = (style: Style): style is 'pixel' | 'glitch' => style === 'pixel' || style === 'glitch'
+
+/** Whether a style lights the scene itself, so the scene is cut with no light baked in: cel shading, neon, stained glass and blocks. */
+export const lightsItself = (style: Style | undefined): boolean => style === 'cel' || style === 'neon' || style === 'glass' || style === 'blocks'

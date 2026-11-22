@@ -4,7 +4,7 @@ import { MAX_PROJECT_LAMPS, checkProject, compileProject, cutLight, litLand, pro
 import { lamped } from './arrange.ts'
 import { CAVE } from '../diorama/scenes/cave.ts'
 import { compileScene } from '../../splat-engine/sceneDoc.ts'
-import { budget, clock, hexOf, lampAdded, lampChanged, lampLights, lampRemoved, liveSky, liveSkyColors, lit, sunNow } from './lighting.ts'
+import { budget, clock, hexOf, lampAdded, lampChanged, lampLights, lampRemoved, liveSky, liveSkyColors, lit, overheadPicked, sunNow, timeIn, weatherPicked, windPicked } from './lighting.ts'
 import { LIBRARY, libraryProp, openScene } from './library.ts'
 
 const windmill = () => openScene('windmill')!
@@ -112,4 +112,24 @@ test('a prop taken from a cave waits for the dark elsewhere, though the cave its
   const { land, props } = splitScene(doc, [{ name: 'Candle', bones: ['candle'] }])
   assert.equal(props[0].doc.lamps, undefined)
   assert.equal(land.doc.lamps, 'always')
+})
+
+test('the shared weather is one choice with the cloud cover, and a wind or the clouds can be changed on their own', () => {
+  const storm = weatherPicked(undefined, 'weather', 'thunderstorm')
+  assert.deepEqual(storm, { weather: 'thunderstorm' })
+  const gale = windPicked(storm, 'gale')
+  assert.deepEqual(gale, { weather: 'thunderstorm', wind: 'gale' })
+  // a cover in place of the weather clears the weather and the wind asked for, and keeps the clouds left out
+  const bare = overheadPicked(gale, false)
+  assert.deepEqual(weatherPicked(bare, 'clouds', 'cloudy'), { overhead: false, clouds: 'cloudy' })
+  // clouds over the scene is the default, so it is not kept, and nothing left is none
+  assert.equal(overheadPicked({ overhead: false }, true), undefined)
+  assert.equal(weatherPicked(undefined, 'weather', undefined), undefined)
+})
+
+test('a time of day is a live sun at its hour', () => {
+  assert.equal(timeIn({ live: { hour: 22 } }), 'night')
+  assert.equal(timeIn({ live: { hour: 8 } }), 'morning')
+  assert.equal(timeIn({ live: { hour: 9 } }), undefined)
+  assert.equal(timeIn({ shade: 0.4 }), undefined)
 })

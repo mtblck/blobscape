@@ -21,13 +21,15 @@ export interface TimeOfDay {
   height: number
   /** Whether lamps that wait for the dark are lit. */
   dark: boolean
+  /** The hour a live sun stands at for it (Scene Creator's Light mode sets its clock to this). */
+  hour: number
 }
 
-/** The colors, lights and heights are mine, not Matt's yet. */
+/** The colors, lights, heights and hours are mine, not Matt's yet. */
 export const TIMES: TimeOfDay[] = [
-  { id: 'morning', label: 'Morning', sky: ['#9cc4e4', '#f9c58d'], light: [1, 0.86, 0.68], height: 20, dark: false },
-  { id: 'afternoon', label: 'Afternoon', sky: ['#6fb1e6', '#cfe6f4'], light: [1, 1, 1], height: 55, dark: false },
-  { id: 'night', label: 'Night', sky: ['#0d1228', '#27325a'], light: MOONLIGHT, height: 40, dark: true },
+  { id: 'morning', label: 'Morning', sky: ['#9cc4e4', '#f9c58d'], light: [1, 0.86, 0.68], height: 20, dark: false, hour: 8 },
+  { id: 'afternoon', label: 'Afternoon', sky: ['#6fb1e6', '#cfe6f4'], light: [1, 1, 1], height: 55, dark: false, hour: 15 },
+  { id: 'night', label: 'Night', sky: ['#0d1228', '#27325a'], light: MOONLIGHT, height: 40, dark: true, hour: 22 },
 ]
 
 /** The time asked for by name (`?time=night`), or none: the scene as it is written. */

@@ -185,6 +185,18 @@ test('a source cut on a grid of its own makes cubes that size', () => {
   assert.ok(Math.abs(Math.min(...xs) + 0.025) < 1e-6 && Math.abs(Math.max(...xs) - 0.075) < 1e-6)
 })
 
+test('a wide disc, as a scene cut broadly out of focus has, fills the cells it covers along its own plane', () => {
+  // every other grid point, each disc twice the size: on blocks a cell of the fine grid there would be gaps between them
+  const wide = (x: number, z: number) => ({ ...blob(x, 0, z), scale: [0.11, 0.11, 0.01] as Rgb, quat: [Math.SQRT1_2, 0, 0, Math.SQRT1_2] as [number, number, number, number] })
+  const b = buildBlocks([source([wide(0, 0), wide(0.2, 0), wide(0, 0.2), wide(0.2, 0.2)])], { ...plain, cell: 0.1 })
+  // lying flat (its plane turned onto x and z), the four fill the five by five cells between and round them, and none above
+  assert.equal(b.blocks, 25)
+  const ys = new Set(b.pieces.flatMap((p) => Array.from({ length: p.positions.length / 3 }, (_, i) => Math.round(p.positions[i * 3 + 1] * 100))))
+  assert.deepEqual([...ys].sort((a, c) => a - c), [-5, 5])
+  // a disc of the fine grid's own size stays one cube
+  assert.equal(buildBlocks([source([blob(0, 0, 0)])], { ...plain, cell: 0.1 }).blocks, 1)
+})
+
 /** A flat sheet of blobs over x and z, `n` a side and `gap` apart, at height `y`: a pond's surface. */
 function sheet(n: number, gap: number, y: number, r = gap * 0.6): Blobs {
   const blobs = new Blobs()

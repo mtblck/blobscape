@@ -1,7 +1,8 @@
 import type { SceneDoc } from '../../../splat-engine/sceneDoc.ts'
 
 /**
- * A windmill on a farm by day: sails turning, sheep, a duck on a pond, wheat, birds.
+ * A windmill on a farm by day: sails turning, sheep, a duck on a pond, wheat, birds. The wind turns the sails faster,
+ * sways the trees and, from windy, shakes leaves loose; the pond is real water the duck leaves a wake in.
  * Data only (it would read the same as a .json file): see docs/scene-descriptions.md.
  */
 export const WINDMILL: SceneDoc = {
@@ -18,19 +19,36 @@ export const WINDMILL: SceneDoc = {
   look: { dither: 0.5, glow: 0.5, outline: true, edges: true, steps: true },
   camera: { target: [0, 1.05, 0], distance: 5.4, azimuth: -16, elevation: 12 },
   focus: { at: [-0.25, 0.7, -0.25], r: 1.3 },
-  air: { haze: { color: '#9fd0ee', from: 2, to: 14 }, specks: [{ kind: 'dust', count: 20, from: [-1.5, 0.2, -1.0], to: [1.5, 1.2, 1.2], colors: ['#f3d977', '#fbf7ea'] }] },
+  // a few clouds and the sun, from the shared recipes: a storm's clouds are the same kind, so none are left white over it
+  heavens: {
+    sun: { at: [1.75, 2.35, -1.9], r: 0.24, color: '#ffd84a' },
+    clouds: { cover: 'partly', colors: ['#bdbac4', '#ebe8e2', '#fbf7ea'], glow: true },
+  },
+  air: {
+    haze: { color: '#9fd0ee', from: 2, to: 14 },
+    specks: [
+      { kind: 'dust', count: 20, from: [-1.5, 0.2, -1.0], to: [1.5, 1.2, 1.2], colors: ['#f3d977', '#fbf7ea'] },
+      // leaves the wind shakes from each tree's crown
+      { kind: 'leaves', count: 10, size: 0.018, from: [0.98, 0.5, -0.97], to: [1.42, 0.9, -0.53], colors: ['#4a8a3c', '#76b04a', '#a8d05e'], land: true, shaken: true },
+      { kind: 'leaves', count: 12, size: 0.018, from: [-1.5, 0.6, -1.05], to: [-1.0, 1.05, -0.55], colors: ['#4a8a3c', '#76b04a', '#a8d05e'], land: true, shaken: true },
+      { kind: 'leaves', count: 8, size: 0.018, from: [0.27, 0.45, -1.43], to: [0.63, 0.75, -1.07], colors: ['#4a8a3c', '#76b04a', '#a8d05e'], land: true, shaken: true },
+    ],
+  },
+  // the pond is a hollow in the land with a bed of mud; the duck floats on it and pushes a wake as it paddles round
+  water: {
+    level: -0.015, from: [-1.36, -0.16], to: [-0.64, 0.56], color: '#2e62a8', clear: 0.45, cell: 0.018, ripple: 5, deep: 0.05,
+    bodies: [{ bone: 'duck', at: [-1.0, 0.0, 0.2], r: 0.05, draft: 0.008 }],
+    floats: [{ bone: 'duck', at: [-1.0, -0.015, 0.2], size: 0.07 }],
+  },
   bones: [
     { name: 'sails', at: [-0.25, 1.02, 0.16999999999999998] },
     { name: 'tree0', at: [1.2, 0, -0.75] },
     { name: 'tree1', at: [-1.25, 0, -0.8] },
     { name: 'tree2', at: [0.45, 0, -1.25] },
-    { name: 'duck', at: [-1.0, 0.05, 0.2] },
+    { name: 'duck', at: [-1.0, -0.005, 0.2] },
     { name: 'sheep0', at: [-0.75, 0.16, -0.3] },
     { name: 'sheep1', at: [-1.2, 0.16, -0.1] },
     { name: 'sheep2', at: [0.65, 0.16, -0.55] },
-    { name: 'cloud0', at: [-1.1, 2.5, -1.4] },
-    { name: 'cloud1', at: [1.0, 2.9, -1.6] },
-    { name: 'cloud2', at: [0.1, 2.2, -1.9] },
     { name: 'bird0', at: [-0.25, 2.0, -0.25] },
     { name: 'bird0L', at: [0.65, 2.0, -0.25], parent: 'bird0' },
     { name: 'bird0R', at: [0.65, 2.0, -0.25], parent: 'bird0' },
@@ -39,7 +57,7 @@ export const WINDMILL: SceneDoc = {
     { name: 'bird1R', at: [0.95, 2.35, -0.25], parent: 'bird1' },
   ],
   parts: [
-    { shape: { kind: 'rough', shape: { kind: 'cylinder', at: [0, -0.3, 0], height: 0.3, r: 1.8 }, by: 0.03, scale: 0.7 }, paint: { kind: 'faces', top: { kind: 'patches', size: 0.4, colors: ['#4a8a3c', '#76b04a', '#76b04a', '#a8d05e'] }, side: { kind: 'bands', axis: 'y', size: 0.07, colors: ['#8a6242', '#5e4230', '#b98d60'] } } },
+    { shape: { kind: 'cut', shape: { kind: 'rough', shape: { kind: 'cylinder', at: [0, -0.3, 0], height: 0.3, r: 1.8 }, by: 0.03, scale: 0.7 }, hole: { kind: 'cylinder', at: [-1.0, -0.07, 0.2], height: 0.12, r: 0.35 } }, paint: { kind: 'faces', top: { kind: 'patches', size: 0.4, colors: ['#4a8a3c', '#76b04a', '#76b04a', '#a8d05e'] }, side: { kind: 'bands', axis: 'y', size: 0.07, colors: ['#8a6242', '#5e4230', '#b98d60'] } } },
     { shape: { kind: 'rough', shape: { kind: 'box', at: [0.95, 0.05, 0.45], half: [0.5, 0.07, 0.5], round: 0.03 }, by: 0.015, scale: 0.08 }, paint: { kind: 'faces', top: { kind: 'bands', axis: 'x', size: 0.07, colors: ['#e0b648', '#f3d977', '#b88a2e'] }, side: { kind: 'bands', axis: 'x', size: 0.07, colors: ['#b88a2e', '#e0b648'] } } },
     { shape: { kind: 'box', at: [-0.25, 0.0, 0.75], half: [0.11, 0.022, 0.7] }, paint: { kind: 'speckle', size: 0.05, colors: ['#b98d60', '#b98d60', '#8a6242', '#ebe8e2'] } },
     { shape: { kind: 'cylinder', at: [-0.25, 0, -0.25], height: 1.15, r: 0.37, rTop: 0.25 }, paint: { kind: 'split', axis: 'y', at: 0.16, below: { kind: 'bricks', size: [0.16, 0.08], colors: ['#8b8894', '#5a5863'], line: '#22202b' }, above: { kind: 'bricks', size: [0.16, 0.075], colors: ['#fbf7ea', '#fbf7ea', '#ebe8e2'], line: '#bdbac4' } } },
@@ -65,10 +83,10 @@ export const WINDMILL: SceneDoc = {
     { shape: { kind: 'rough', shape: { kind: 'join', shapes: [{ kind: 'sphere', at: [-1.25, 0.828, -0.8], r: 0.345 }, { kind: 'sphere', at: [-1.043, 0.69, -0.708], r: 0.23 }, { kind: 'sphere', at: [-1.446, 0.713, -0.858], r: 0.241 }] }, by: 0.03, scale: 0.12 }, paint: { kind: 'faces', top: { kind: 'speckle', size: 0.06, colors: ['#76b04a', '#76b04a', '#a8d05e', '#c4483a'] }, side: { kind: 'speckle', size: 0.06, colors: ['#4a8a3c', '#4a8a3c', '#2f5d34', '#c4483a'] }, under: '#2f5d34' }, bone: 'tree1' },
     { shape: { kind: 'cylinder', at: [0.45, 0, -1.25], height: 0.44, r: 0.05, rTop: 0.035 }, paint: { kind: 'bands', axis: 'y', size: 0.07, colors: ['#5e4230', '#3b2a20'] }, bone: 'tree2' },
     { shape: { kind: 'rough', shape: { kind: 'join', shapes: [{ kind: 'sphere', at: [0.45, 0.576, -1.25], r: 0.24 }, { kind: 'sphere', at: [0.594, 0.48, -1.186], r: 0.16 }, { kind: 'sphere', at: [0.314, 0.496, -1.29], r: 0.168 }] }, by: 0.03, scale: 0.12 }, paint: { kind: 'faces', top: { kind: 'speckle', size: 0.06, colors: ['#76b04a', '#76b04a', '#a8d05e', '#c4483a'] }, side: { kind: 'speckle', size: 0.06, colors: ['#4a8a3c', '#4a8a3c', '#2f5d34', '#c4483a'] }, under: '#2f5d34' }, bone: 'tree2' },
-    { shape: { kind: 'cylinder', at: [-1.0, -0.02, 0.2], height: 0.05, r: 0.36 }, paint: { kind: 'faces', top: { kind: 'patches', size: 0.12, colors: ['#3b6fb5', '#5fa8e0', '#3b6fb5', '#9fd0ee'] }, side: '#8b8894' } },
+    { shape: { kind: 'cylinder', at: [-1.0, -0.13, 0.2], height: 0.06, r: 0.36 }, paint: { kind: 'patches', size: 0.08, colors: ['#5e4230', '#3b2a20', '#5a5863'] } },
     { shape: { kind: 'rough', shape: { kind: 'ring', at: [-1.0, 0.02, 0.2], r: 0.37, tube: 0.035 }, by: 0.012, scale: 0.06 }, paint: { kind: 'speckle', size: 0.07, colors: ['#8b8894', '#bdbac4', '#5a5863'] } },
-    { shape: { kind: 'join', shapes: [{ kind: 'ball', at: [-1.0, 0.065, 0.2], r: [0.065, 0.04, 0.045] }, { kind: 'sphere', at: [-0.95, 0.115, 0.2], r: 0.03 }] }, paint: '#fbf7ea', bone: 'duck', noShadow: true },
-    { shape: { kind: 'cone', from: [-0.925, 0.11, 0.2], to: [-0.895, 0.105, 0.2], r: 0.014 }, paint: '#ffd84a', bone: 'duck', noShadow: true },
+    { shape: { kind: 'join', shapes: [{ kind: 'ball', at: [-1.0, 0.01, 0.2], r: [0.065, 0.04, 0.045] }, { kind: 'sphere', at: [-0.95, 0.06, 0.2], r: 0.03 }] }, paint: '#fbf7ea', bone: 'duck', noShadow: true },
+    { shape: { kind: 'cone', from: [-0.925, 0.055, 0.2], to: [-0.895, 0.05, 0.2], r: 0.014 }, paint: '#ffd84a', bone: 'duck', noShadow: true },
     { shape: { kind: 'box', at: [0.35, 0.09, 0.85], half: [0.13, 0.09, 0.09], round: 0.04 }, paint: { kind: 'bands', axis: 'x', size: 0.045, colors: ['#e0b648', '#b88a2e', '#f3d977'] } },
     { shape: { kind: 'box', at: [0.2, 0.09, 1.1], half: [0.13, 0.09, 0.09], round: 0.04 }, paint: { kind: 'bands', axis: 'x', size: 0.045, colors: ['#e0b648', '#b88a2e', '#f3d977'] } },
     { shape: { kind: 'rough', shape: { kind: 'ball', at: [-0.85, 0.17, -0.3], r: [0.13, 0.095, 0.09] }, by: 0.015, scale: 0.05 }, paint: { kind: 'faces', top: '#fbf7ea', side: '#fbf7ea', under: '#bdbac4' } },
@@ -94,10 +112,6 @@ export const WINDMILL: SceneDoc = {
     { shape: { kind: 'sphere', at: [-0.05, 0.03, 0.75], r: 0.022 }, paint: '#fbf7ea', glow: true },
     { shape: { kind: 'sphere', at: [-0.5, 0.03, 1.05], r: 0.022 }, paint: '#e58fa8', glow: true },
     { shape: { kind: 'sphere', at: [0.75, 0.03, 1.2], r: 0.022 }, paint: '#ffd84a', glow: true },
-    { shape: { kind: 'join', shapes: [{ kind: 'ball', at: [-1.1, 2.5, -1.4], r: [0.4, 0.1, 0.16] }, { kind: 'sphere', at: [-1.24, 2.58, -1.4], r: 0.15 }, { kind: 'sphere', at: [-1.0, 2.6, -1.4], r: 0.18 }, { kind: 'sphere', at: [-0.82, 2.54, -1.4], r: 0.1 }] }, paint: { kind: 'split', axis: 'y', at: 2.53, below: '#bdbac4', above: '#fbf7ea' }, bone: 'cloud0', glow: true },
-    { shape: { kind: 'join', shapes: [{ kind: 'ball', at: [1.0, 2.9, -1.6], r: [0.4, 0.1, 0.16] }, { kind: 'sphere', at: [0.86, 2.98, -1.6], r: 0.15 }, { kind: 'sphere', at: [1.1, 3.0, -1.6], r: 0.18 }, { kind: 'sphere', at: [1.28, 2.94, -1.6], r: 0.1 }] }, paint: { kind: 'split', axis: 'y', at: 2.93, below: '#bdbac4', above: '#fbf7ea' }, bone: 'cloud1', glow: true },
-    { shape: { kind: 'join', shapes: [{ kind: 'ball', at: [0.1, 2.2, -1.9], r: [0.4, 0.1, 0.16] }, { kind: 'sphere', at: [-0.04, 2.28, -1.9], r: 0.15 }, { kind: 'sphere', at: [0.2, 2.3, -1.9], r: 0.18 }, { kind: 'sphere', at: [0.38, 2.24, -1.9], r: 0.1 }] }, paint: { kind: 'split', axis: 'y', at: 2.23, below: '#bdbac4', above: '#fbf7ea' }, bone: 'cloud2', glow: true },
-    { shape: { kind: 'sphere', at: [1.7, 3.0, -1.7], r: 0.24 }, paint: '#ffd84a', glow: true, lit: 'day', unlit: 'gone' },
     { shape: { kind: 'ball', at: [0.65, 2.0, -0.25], r: [0.02, 0.02, 0.07] }, paint: '#22202b', bone: 'bird0', glow: true },
     { shape: { kind: 'box', at: [0.72, 2.0, -0.25], half: [0.07, 0.012, 0.035] }, paint: '#22202b', bone: 'bird0L', glow: true },
     { shape: { kind: 'box', at: [0.58, 2.0, -0.25], half: [0.07, 0.012, 0.035] }, paint: '#22202b', bone: 'bird0R', glow: true },
@@ -106,19 +120,16 @@ export const WINDMILL: SceneDoc = {
     { shape: { kind: 'box', at: [0.88, 2.35, -0.25], half: [0.07, 0.012, 0.035] }, paint: '#22202b', bone: 'bird1R', glow: true },
   ],
   moves: [
-    { kind: 'spin', bone: 'sails', axis: 'z', times: -2 },
-    { kind: 'sway', bone: 'tree0', axis: 'z', degrees: 2, times: 3, phase: 0.0 },
-    { kind: 'sway', bone: 'tree1', axis: 'z', degrees: 2, times: 4, phase: 0.2 },
-    { kind: 'sway', bone: 'tree2', axis: 'z', degrees: 2, times: 5, phase: 0.4 },
+    // once a loop in a calm, seven times in a gale
+    { kind: 'spin', bone: 'sails', axis: 'z', times: -1, wind: -7 },
+    { kind: 'sway', bone: 'tree0', axis: 'z', degrees: 2, times: 3, phase: 0.0, wind: 4 },
+    { kind: 'sway', bone: 'tree1', axis: 'z', degrees: 2, times: 4, phase: 0.2, wind: 4 },
+    { kind: 'sway', bone: 'tree2', axis: 'z', degrees: 2, times: 5, phase: 0.4, wind: 4 },
     { kind: 'spin', bone: 'duck', axis: 'y', times: 1 },
     { kind: 'bob', bone: 'duck', by: [0.12, 0, 0.08], times: 1 },
-    { kind: 'bob', bone: 'duck', by: [0, 0.008, 0], times: 6 },
     { kind: 'sway', bone: 'sheep0', axis: 'z', degrees: 14, times: 2, phase: 0.0 },
     { kind: 'sway', bone: 'sheep1', axis: 'z', degrees: 14, times: 3, phase: 0.3 },
     { kind: 'sway', bone: 'sheep2', axis: 'z', degrees: 14, times: 4, phase: 0.6 },
-    { kind: 'bob', bone: 'cloud0', by: [0.25, 0, 0], times: 1, phase: 0.0 },
-    { kind: 'bob', bone: 'cloud1', by: [0.25, 0, 0], times: 1, phase: 0.37 },
-    { kind: 'bob', bone: 'cloud2', by: [0.25, 0, 0], times: 1, phase: 0.74 },
     { kind: 'spin', bone: 'bird0', axis: 'y', times: 1, phase: 0.0 },
     { kind: 'sway', bone: 'bird0L', axis: 'z', degrees: 35, times: 24 },
     { kind: 'sway', bone: 'bird0R', axis: 'z', degrees: -35, times: 24 },

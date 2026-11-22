@@ -1,7 +1,7 @@
 import type { Vec3 } from '../splat-core/blobs.ts'
 import { placer, type Placer } from './place.ts'
-import { joinPalettes, litLand, refit, type Placed, type PropDoc, type PropRef, type SceneProject } from './project.ts'
-import { moveAxis, type BoneDoc, type LightDoc, type MoveAxis, type MoveDoc, type PartDoc, type SceneDoc } from './sceneDoc.ts'
+import { AUTUMN, LEAVES_EACH, joinPalettes, leafFall, litLand, refit, type Placed, type PropDoc, type PropRef, type SceneProject } from './project.ts'
+import { moveAxis, type SpeckDoc, type BoneDoc, type LightDoc, type MoveAxis, type MoveDoc, type PartDoc, type SceneDoc } from './sceneDoc.ts'
 
 /**
  * A scene written as a land and props set down on it (a `SceneProject`, the same thing Scene Creator saves) made into
@@ -27,6 +27,8 @@ export function composeScene(project: SceneProject, find: (id: string) => PropDo
   const moves: MoveDoc[] = [...(ground.moves ?? [])]
   const lights: LightDoc[] = [...(ground.lights ?? [])]
   const palettes = [ground.palette]
+  // falling leaves come down from under each leafy prop's crown, onto whatever is under it
+  const leaves: SpeckDoc[] = []
   project.props.forEach((placed, i) => {
     const prop = get(placed.prop, `props[${i}]`)
     const doc = refit(prop.doc, project.loop)
@@ -35,6 +37,13 @@ export function composeScene(project: SceneProject, find: (id: string) => PropDo
     // a speck's bone keeps its ~ first, which is how it is told apart
     const name = (b: string) => (b.startsWith('~') ? `~${prefix}${b.slice(1)}` : prefix + b)
     const t = placer(prop.foot, placed)
+    const fall = project.light?.weather === 'leaves' ? leafFall(prop) : undefined
+    if (fall) {
+      const corners = [0, 1, 2, 3].map((k) => t.point([k & 1 ? fall.to[0] : fall.from[0], fall.to[1], k & 2 ? fall.to[2] : fall.from[2]]))
+      const lo = [0, 2].map((a) => Math.min(...corners.map((c) => c[a]))), hi = [0, 2].map((a) => Math.max(...corners.map((c) => c[a])))
+      const bottom = t.point(fall.from)[1]
+      leaves.push({ kind: 'leaves', count: LEAVES_EACH, colors: AUTUMN, size: fall.size * placed.size, land: true, from: [lo[0], bottom, lo[1]], to: [hi[0], corners[0][1], hi[1]] })
+    }
     const at = t.same ? undefined : { foot: [...prop.foot] as Vec3, at: [...placed.at] as Vec3, turn: placed.turn, size: placed.size }
     for (const b of doc.bones ?? []) bones.push({ name: name(b.name), at: t.point(b.at), ...(b.parent ? { parent: name(b.parent) } : {}) })
     for (const p of doc.parts) {
@@ -62,6 +71,7 @@ export function composeScene(project: SceneProject, find: (id: string) => PropDo
     parts,
     moves,
     lights,
+    ...(leaves.length ? { air: { ...ground.air, specks: [...(ground.air?.specks ?? []), ...leaves.slice(0, Math.max(0, Math.floor((300 - (ground.air?.specks ?? []).reduce((n, x) => n + x.count, 0)) / LEAVES_EACH)))] } } : {}),
   }
 }
 

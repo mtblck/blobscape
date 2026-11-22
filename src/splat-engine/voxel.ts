@@ -1100,10 +1100,20 @@ export function buildVoxels(spec: VoxelSpec): Built {
       // out of focus, only every other grid point, in a shell two cells deep
       const wide = broad && Math.hypot(x - spec.focus!.at[0], y - spec.focus!.at[1], z - spec.focus!.at[2]) > spec.focus!.r
       if (wide && ((Math.round(x / s) | Math.round(y / s) | Math.round(z / s)) & 1)) return
-      if (d > 0 || d <= -s * (spec.trueShell ? 4 : 1) * (wide ? 2 : 1)) return
+      const depth = s * (wide ? 2 : 1)
+      // a shape's distance may change faster than one for one (a land's heights): looked at twice as deep, and kept by its true depth
+      if (d > 0 || d <= -depth * (spec.trueShell ? 4 : 2)) return
       if (same.some((q) => boxDistance(q, x, y, z) === 0 && q.sdf(x, y, z) < buried)) return
       const xa = sdf(x + e, y, z), xb = sdf(x - e, y, z), ya = sdf(x, y + e, z), yb = sdf(x, y - e, z), za = sdf(x, y, z + e), zb = sdf(x, y, z - e)
       const g: Vec3 = [xa - xb, ya - yb, za - zb]
+      // otherwise the cell under a surface that crosses its layer of the grid steeply was left out with the one over it,
+      // a hole a cell across straight through a hillside (Matt saw them in Blocks at 1×)
+      if (!spec.trueShell && d <= -depth) {
+        // only the outermost: the next cell out, the way the surface faces most, is outside the shape
+        const a = Math.abs(g[0]) >= Math.abs(g[1]) && Math.abs(g[0]) >= Math.abs(g[2]) ? 0 : Math.abs(g[1]) >= Math.abs(g[2]) ? 1 : 2
+        const out = Math.sign(g[a]) * depth
+        if (sdf(x + (a === 0 ? out : 0), y + (a === 1 ? out : 0), z + (a === 2 ? out : 0)) <= 0) return
+      }
       // the distance in world units, from how fast the shape's distance changes here. Only a distance that changes
       // faster than one for one is corrected: down the middle of a thin sheet (a wing's skin) it seems hardly to
       // change at all, the two faces pulling opposite ways, and read as deep the sheet's middle cells were left out,

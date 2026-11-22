@@ -13,7 +13,7 @@ import { MAX_DROPS, arch, butte, hoodoo, land, mud, pebbles } from './erode.ts'
 import { RISES, cluster, columns, crystal, drips, flowstone, geode, icicles } from './forms.ts'
 import { drift, fallAt, fallShare, frost, groundUnder, type Falling } from './weather.ts'
 import { MOST_STARS, withHeavens, type HeavensDoc } from './heavens.ts'
-import { CLOUD_COVERS } from './skyRecipes.ts'
+import { CLOUD_COVERS, WIND_MOST, gustRun, windLevelOf } from './skyRecipes.ts'
 import { placedShape, placer } from './place.ts'
 
 /**
@@ -260,6 +260,11 @@ export interface SpeckDoc {
   land?: boolean
   /** Rain, snow and leaves only: how far the wind carries each sideways over its whole fall, [x, z]; rain slants along it. */
   wind?: [number, number]
+  /**
+   * Leaves only: shaken loose by the wind, so none fall in a calm or a breeze. Windy, some come down, straight down,
+   * and land; in a gale all of them, carried away downwind before they can lie (`CompiledScene.blow`).
+   */
+  shaken?: boolean
 }
 
 /** One bone of a scene: something for parts to ride on and moves to turn. */
@@ -513,8 +518,12 @@ export type During = [number, number]
 
 /** Every move repeats a whole number of `times` in the loop (or in its `during`), so the scene loops. */
 export type MoveDoc =
-  /** Turns right round, `times` per loop (negative turns the other way). */
-  | { kind: 'spin'; bone: string; axis: MoveAxis; times: number; phase?: number; during?: During }
+  /**
+   * Turns right round, `times` per loop (negative turns the other way). With `wind`, a thing the wind turns (a mill's
+   * sails): `times` in a calm, `wind` times a loop in a gale and evenly between by the wind's level, a little quicker
+   * in each gust (`CompiledScene.blow`). `wind` less `times` a whole number of times `WIND_MOST`, so it loops at each level.
+   */
+  | { kind: 'spin'; bone: string; axis: MoveAxis; times: number; phase?: number; during?: During; wind?: number }
   /**
    * Rocks to and fro by `degrees`. With `wind`, a thing the wind moves (a tree, a stalk, a flower): in a gale it leans
    * that many degrees downwind and swings wider, less in a lighter wind, gusting with it (`CompiledScene.blow`).
@@ -1119,7 +1128,10 @@ export function checkScene(doc: unknown): string[] {
       opt(m.phase, `${at}.phase`, -1, 1)
       during(m.during, `${at}.during`)
       switch (m.kind) {
-        case 'spin': turnAxis(m.axis, `${at}.axis`); break
+        case 'spin':
+          turnAxis(m.axis, `${at}.axis`)
+          if (m.wind !== undefined && num(m.wind, `${at}.wind`, -24, 24) && typeof m.times === 'number' && !Number.isInteger(((m.wind as number) - m.times) / WIND_MOST)) bad(`${at}.wind`, `less times must be a whole number of ${WIND_MOST}s, so the sails loop at every level of wind`)
+          break
         case 'sway': turnAxis(m.axis, `${at}.axis`); num(m.degrees, `${at}.degrees`, -180, 180); if (m.wind !== undefined) num(m.wind, `${at}.wind`, 0, 45); break
         case 'bob': vec(m.by, `${at}.by`); break
         case 'drift':
@@ -1267,6 +1279,7 @@ export function checkScene(doc: unknown): string[] {
         if (m.land && !falls) bad(`${at}.land`, 'only rain, snow and leaves land')
         if (m.wind !== undefined) { vec(m.wind, `${at}.wind`, -2, 2, 2); if (!falls) bad(`${at}.wind`, 'only rain, snow and leaves are blown') }
         if (m.long !== undefined) { opt(m.long, `${at}.long`, 0.01, 0.3); if (m.kind !== 'rain') bad(`${at}.long`, 'only rain falls as streaks') }
+        if (m.shaken !== undefined) { if (typeof m.shaken !== 'boolean') bad(`${at}.shaken`, 'must be true or false'); else if (m.shaken && m.kind !== 'leaves') bad(`${at}.shaken`, 'only leaves are shaken loose') }
       })
       if (specks > MAX_SPECKS) bad('air.specks', `hold ${specks} specks between them; the most is ${MAX_SPECKS}`)
     }
@@ -1543,9 +1556,12 @@ export interface CompiledScene {
    * With `wrap` (the square a swarm falls over, its middle and half width), a speck blown out of the square comes in
    * at its other side, so the slanting rain still fills it at every height (one that has landed is always inside).
    * Sways with `wind` lean downwind and swing wider by the root of how far the wind carries (a breeze a quarter of a
-   * gale), so they gust with it.
+   * gale), so they gust with it, and flutter quicker as the wind rises. Spins with `wind` turn quicker by its level,
+   * carried on from where they had got to as the level changes, so call it every frame, in a calm too (a wind of
+   * [0, 0]). Leaves the wind shakes loose (`SpeckDoc.shaken`) fall only here. `level` is the wind's level
+   * (`SkyState.wind`); left out, it is told from how far the wind carries.
    */
-  blow(sk: Skeleton, t: number, wind: readonly [number, number], wrap?: { at: readonly [number, number]; half: number }): void
+  blow(sk: Skeleton, t: number, wind: readonly [number, number], wrap?: { at: readonly [number, number]; half: number }, level?: number): void
   /** The scene's live lights at a time, in seconds. */
   lights(t: number): PointLight[]
   /** Distance haze, if the scene asks for it: the color (linear) and where it starts and would be total, in units past the view's target. */
@@ -1654,12 +1670,18 @@ interface Speck {
    * starts ([x, z]), how far it falls, and whether it lands on the scene's water.
    */
   falls?: { dx: number; dz: number; travel: number; wet: boolean }[]
+  /** A leaf the wind shakes loose (`SpeckDoc.shaken`), and where in its swarm it starts to fall as the wind rises, 0 to 1. */
+  shaken?: number
 }
 
 /** How much further than rain the wind carries snow and leaves over the same fall: they fall slowly. */
 export const DRIFT = 1.8
 /** How much wider a sway with `wind` swings, as a share of how far it leans. */
 export const FLUTTER = 0.35
+/** How many times its own beat a sway with `wind` flutters in a breeze, a wind and a gale: quicker as it rises. */
+export const FLUTTER_BEATS = [2, 3, 4]
+/** How much further than a falling leaf drifts a gale carries a leaf it shakes loose: off and away. */
+export const SHAKEN_AWAY = 2
 
 const SPECK_SIZE: Record<SpeckKind, number> = { dust: 0.01, embers: 0.014, rain: 0.008, snow: 0.014, leaves: 0.022, fireflies: 0.018, bubbles: 0.02 }
 /** Seconds one fall or rise takes, about: the rest of a swarm's speed comes from that. A speck that lands lies a while too. */
@@ -1703,6 +1725,7 @@ function planSpecks(air: AirDoc | undefined, loop: number, ground: (x: number, z
       const p: Speck = {
         kind: sw.kind, bone: `~speck${out.length}`, index: -1, swarm: si, at, travel: hi[1] - lo[1], times, wander,
         phase: [r(9), r(10), r(11), r(12), r(13)], shape, color: sw.colors[Math.floor(r(14) * sw.colors.length)], glow, land, wind,
+        shaken: sw.shaken && sw.kind === 'leaves' ? r(15) : undefined,
       }
       if (land) {
         // it falls to whatever is under where it comes down, resting on it
@@ -1808,7 +1831,8 @@ function poseSpeck(sk: Skeleton, p: Speck, u: number) {
       sk.setRotation(b, mulQ(yaw, rock))
     }
     sk.offset[b * 3] += dx; sk.offset[b * 3 + 1] += dy; sk.offset[b * 3 + 2] += dz
-    sk.size[b] *= size
+    // a leaf the wind shakes loose waits on its tree until a wind blows (`blow`)
+    sk.size[b] *= p.shaken === undefined ? size : 0
     return
   }
   switch (p.kind) {
@@ -1921,6 +1945,9 @@ export function compileScene(given: SceneDoc, { puffs = true, ground: under, wat
   const palette = doc.palette.map(rgb)
   const moves = doc.moves ?? []
   const windy = moves.filter((m): m is Extract<MoveDoc, { kind: 'sway' }> => m.kind === 'sway' && !!m.wind)
+  // spins the wind turns, each with where it has got to: its turns over the plain spin's, the rate it was turning at and when
+  const turned = moves.filter((m): m is Extract<MoveDoc, { kind: 'spin' }> => m.kind === 'spin' && m.wind !== undefined)
+    .map((m) => ({ m, off: 0, rate: 0, run: 0, u: Number.NaN }))
   const lights = doc.lights ?? []
   // what weather lands on: parts that stay put (on no bone, or one that only sways), in order, a drift over those before it
   const moved = new Set<string>()
@@ -2026,11 +2053,39 @@ export function compileScene(given: SceneDoc, { puffs = true, ground: under, wat
       for (let i = 0; i < built.partOf.length; i++) seen.add(built.partOf[i])
       return doc.parts.map((_, i) => i).filter((i) => !seen.has(i))
     },
-    blow(sk, t, wind, wrap) {
-      if (!wind[0] && !wind[1]) return
-      const u = t / doc.loop
+    blow(sk, t, wind, wrap, given) {
+      const u = t / doc.loop, carry = Math.hypot(wind[0], wind[1])
+      const level = Math.min(WIND_MOST, Math.max(0, given ?? windLevelOf(carry)))
+      for (const s of turned) {
+        // the turns over the plain spin's go up evenly by level; a gust hurries them (`gustRun` loops); a change of level
+        // or a jump back in time carries on from where they were rather than jumping
+        const rate = ((s.m.wind! - s.m.times) * level) / WIND_MOST, run = gustRun(u)
+        if (!Number.isNaN(s.u)) {
+          if (u < s.u) s.off += s.rate * (s.run - run)
+          s.off += (s.rate - rate) * run
+        }
+        s.rate = rate; s.run = run; s.u = u
+        const extra = ((rate * run + s.off) % 1) * TAU, b = sk.index(s.m.bone)
+        sk.setRotation(b, mulQ(sk.rotation.subarray(b * 4, b * 4 + 4), axisAngle(moveAxis(s.m.axis), extra)))
+      }
+      // leaves shaken loose: none in a breeze, half of them windy, all in a gale, and a gale carries them off before they lie
+      const loose = Math.min(1, Math.max(0, (level - 1) / 2)), away = Math.min(1, Math.max(0, level - 2))
+      for (const p of specks) {
+        if (p.shaken === undefined) continue
+        const life = (((u * p.times + p.phase[0]) % 1) + 1) % 1, f = fallAt('leaves', life), b = p.index
+        // eased in by its place in the swarm as the wind rises, so none pops out mid-fall
+        const shown = smoothstep(p.shaken * 0.85, p.shaken * 0.85 + 0.15, loose)
+        sk.size[b] = f.size * shown * (f.lying ? 1 - away : 1)
+        if (!shown || !carry) continue
+        // straight down in a wind that only shakes them; a gale takes them downwind, quicker the further they fall
+        const off = p.travel * DRIFT * SHAKEN_AWAY * away * f.drop ** 1.5
+        sk.offset[b * 3] += wind[0] * off
+        sk.offset[b * 3 + 2] += wind[1] * off
+      }
+      if (!carry) return
       for (const p of specks) {
         if (p.kind !== 'rain' && p.kind !== 'snow' && p.kind !== 'leaves') continue
+        if (p.shaken !== undefined) continue
         const life = (((u * p.times + p.phase[0]) % 1) + 1) % 1
         const f = p.land ? fallAt(p.kind, life) : { drop: life }
         const fall = p.falls?.[(((Math.floor(u * p.times + p.phase[0]) % p.times) + p.times) % p.times)]
@@ -2053,8 +2108,11 @@ export function compileScene(given: SceneDoc, { puffs = true, ground: under, wat
       const w = Math.hypot(wind[0], wind[1]), push = Math.sqrt(w), down: Vec3 = [wind[1] / w, 0, -wind[0] / w]
       for (const m of windy) {
         const b = sk.index(m.bone), at = duringAt(u, m.during) * m.times + (m.phase ?? 0), most = (m.wind ?? 0) * push * (Math.PI / 180)
-        // leans its top downwind (up turned toward the way the wind goes), and swings wider about its own axis, twice as quick
-        const flutter = axisAngle(moveAxis(m.axis), Math.sin(at * 2 * TAU) * most * FLUTTER)
+        // leans its top downwind (up turned toward the way the wind goes), and swings wider about its own axis, quicker as the
+        // wind rises: twice its own beat in a breeze, `FLUTTER_BEATS` by level, one beat passed to the next as it changes
+        const lv = Math.min(FLUTTER_BEATS.length - 1, Math.max(0, level - 1)), lo = Math.floor(lv), k = lv - lo, hi = Math.min(FLUTTER_BEATS.length - 1, lo + 1)
+        const swing = (1 - k) * Math.sin(at * FLUTTER_BEATS[lo] * TAU) + k * Math.sin(at * FLUTTER_BEATS[hi] * TAU)
+        const flutter = axisAngle(moveAxis(m.axis), swing * most * FLUTTER)
         sk.setRotation(b, mulQ(axisAngle(down, most), mulQ(sk.rotation.subarray(b * 4, b * 4 + 4), flutter)))
       }
     },
