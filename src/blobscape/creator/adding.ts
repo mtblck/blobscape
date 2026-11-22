@@ -15,9 +15,9 @@ import { GROUPS, LIBRARY, type LibraryEntry, type LibraryGroup } from './library
 /** The cards Props mode offers: props, lands, and Splat Creatures' creatures (filed with the living props). */
 export const CARDS: LibraryEntry[] = LIBRARY
 
-/** The cards a search finds, in their groups and the groups' order; a group with nothing found is left out. */
+/** The cards a search finds (by name, then by what they are about or are tagged: "tree" finds every tree), in their groups and the groups' order; a group with nothing found is left out. */
 export function cardsFound(query: string, cards: readonly LibraryEntry[] = CARDS): { id: LibraryGroup; name: string; cards: LibraryEntry[] }[] {
-  const found = matching(cards.map((e) => ({ ...e, label: e.name })), query)
+  const found = matching(cards.map((e) => ({ ...e, label: e.name, about: `${e.about} ${e.tags.join(' ')}` })), query)
   return GROUPS.map((g) => ({ ...g, cards: found.filter((e) => e.group === g.id) })).filter((g) => g.cards.length)
 }
 

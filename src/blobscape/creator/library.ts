@@ -17,6 +17,7 @@ import { PLAIN_ROCK, PLAIN_TURF } from './lands.ts'
 import { KIT } from './kit.ts'
 import { isModel, modelOf } from './models.ts'
 import { MADE, madeProp } from '../props/index.ts'
+import type { Tag } from '../../splat-engine/tags.ts'
 
 /**
  * Scene Creator's library (issue #334): props lifted out of Diorama's scenes, the lands they stood on and a few
@@ -41,6 +42,8 @@ export interface LibraryEntry {
   picture: string
   /** Which of Props mode's groups it is in. */
   group: LibraryGroup
+  /** What it is and how it behaves (splat-engine/tags.ts): search finds it by these, and they go with its description. */
+  tags: Tag[]
 }
 
 /** Props mode's groups, in its order: what a card is filed under. */
@@ -58,82 +61,82 @@ interface Source {
   from: string
   doc: SceneDoc
   picks: PropPick[]
-  props: { id: string; pick: string; about: string; group?: LibraryGroup }[]
-  land?: { id: string; name: string; about: string }
+  props: { id: string; tags?: Tag[]; pick: string; about: string; group?: LibraryGroup }[]
+  land?: { id: string; tags: Tag[]; name: string; about: string }
 }
 
 const SOURCES: Source[] = [
   {
     from: 'lighthouse', doc: LIGHTHOUSE, picks: LIGHTHOUSE_PICKS,
     props: [
-      { id: 'lighthouse', pick: 'Lighthouse', about: 'A red and white lighthouse with a turning lamp that sweeps two beams of light round it', group: 'buildings' },
-      { id: 'keepers-cottage', pick: "Keeper's cottage", about: 'A white cottage with a red tiled roof, a lit window and smoke rising from its chimney', group: 'buildings' },
-      { id: 'tall-pine', pick: 'Tall pine', about: 'A tall pine that sways in the wind' },
-      { id: 'pine', pick: 'Pine', about: 'A pine that sways in the wind' },
-      { id: 'small-pine', pick: 'Small pine', about: 'A small pine that sways in the wind' },
-      { id: 'jetty', pick: 'Jetty', about: 'A wooden jetty on posts with a lantern at its end', group: 'buildings' },
-      { id: 'sailing-boat', pick: 'Sailing boat', about: 'A small sailing boat with a lantern, rocking on the swell' },
-      { id: 'buoy', pick: 'Buoy', about: 'A red and white buoy with a light on top, nodding in the swell' },
+      { id: 'lighthouse', tags: ['building', 'lamp'], pick: 'Lighthouse', about: 'A red and white lighthouse with a turning lamp that sweeps two beams of light round it', group: 'buildings' },
+      { id: 'keepers-cottage', tags: ['building', 'lamp'], pick: "Keeper's cottage", about: 'A white cottage with a red tiled roof, a lit window and smoke rising from its chimney', group: 'buildings' },
+      { id: 'tall-pine', tags: ['tree', 'evergreen'], pick: 'Tall pine', about: 'A tall pine that sways in the wind' },
+      { id: 'pine', tags: ['tree', 'evergreen'], pick: 'Pine', about: 'A pine that sways in the wind' },
+      { id: 'small-pine', tags: ['tree', 'evergreen'], pick: 'Small pine', about: 'A small pine that sways in the wind' },
+      { id: 'jetty', tags: ['building', 'lamp'], pick: 'Jetty', about: 'A wooden jetty on posts with a lantern at its end', group: 'buildings' },
+      { id: 'sailing-boat', tags: ['boat', 'lamp', 'floats'], pick: 'Sailing boat', about: 'A small sailing boat with a lantern, rocking on the swell' },
+      { id: 'buoy', tags: ['lamp', 'floats'], pick: 'Buoy', about: 'A red and white buoy with a light on top, nodding in the swell' },
     ],
-    land: { id: 'lighthouse-rock', name: 'Lighthouse rock', about: 'A grassy rock in a round of sea at dusk, with rocks, bushes, flowers, gulls, clouds, the moon and stars' },
+    land: { id: 'lighthouse-rock', tags: ['grassy', 'sea', 'night'], name: 'Lighthouse rock', about: 'A grassy rock in a round of sea at dusk, with rocks, bushes, flowers, gulls, clouds, the moon and stars' },
   },
   {
     from: 'windmill', doc: WINDMILL, picks: WINDMILL_PICKS,
     props: [
-      { id: 'windmill', pick: 'Windmill', about: 'A windmill whose sails turn', group: 'buildings' },
-      { id: 'apple-tree', pick: 'Apple tree', about: 'An apple tree' },
-      { id: 'big-apple-tree', pick: 'Big apple tree', about: 'A big apple tree' },
-      { id: 'small-apple-tree', pick: 'Small apple tree', about: 'A small apple tree' },
-      { id: 'duck', pick: 'Duck', about: 'A duck', group: 'living' },
-      { id: 'haystack', pick: 'Haystack', about: 'A haystack' },
-      { id: 'sheep', pick: 'Sheep', about: 'A grazing sheep', group: 'living' },
+      { id: 'windmill', tags: ['building', 'farm'], pick: 'Windmill', about: 'A windmill whose sails turn', group: 'buildings' },
+      { id: 'apple-tree', tags: ['tree', 'leafy', 'farm'], pick: 'Apple tree', about: 'An apple tree' },
+      { id: 'big-apple-tree', tags: ['tree', 'leafy', 'farm'], pick: 'Big apple tree', about: 'A big apple tree' },
+      { id: 'small-apple-tree', tags: ['tree', 'leafy', 'farm'], pick: 'Small apple tree', about: 'A small apple tree' },
+      { id: 'duck', tags: ['animal', 'floats'], pick: 'Duck', about: 'A duck', group: 'living' },
+      { id: 'haystack', tags: ['farm'], pick: 'Haystack', about: 'A haystack' },
+      { id: 'sheep', tags: ['animal', 'farm'], pick: 'Sheep', about: 'A grazing sheep', group: 'living' },
     ],
-    land: { id: 'windmill-hill', name: 'Windmill hill', about: 'The green hill the windmill stands on, with its path and fields' },
+    land: { id: 'windmill-hill', tags: ['grassy', 'farm', 'pond'], name: 'Windmill hill', about: 'The green hill the windmill stands on, with its path and fields' },
   },
   {
     from: 'turkey', doc: TURKEY, picks: TURKEY_PICKS,
     props: [
-      { id: 'giant-turkey', pick: 'Giant turkey', about: 'A giant turkey running, kicking up dust and losing feathers', group: 'living' },
-      { id: 'cook', pick: 'Cook', about: 'A cook in an apron running for her life', group: 'living' },
-      { id: 'billboard', pick: 'Billboard', about: 'A roadside billboard on two posts', group: 'buildings' },
-      { id: 'mailbox', pick: 'Mailbox', about: 'A mailbox on a post' },
-      { id: 'roadside-haystack', pick: 'Roadside haystack', about: 'A tall haystack' },
-      { id: 'roadside-tree', pick: 'Roadside tree', about: 'A roadside tree' },
-      { id: 'second-roadside-tree', pick: 'Second roadside tree', about: 'Another roadside tree' },
+      { id: 'giant-turkey', tags: ['animal'], pick: 'Giant turkey', about: 'A giant turkey running, kicking up dust and losing feathers', group: 'living' },
+      { id: 'cook', tags: ['person'], pick: 'Cook', about: 'A cook in an apron running for her life', group: 'living' },
+      { id: 'billboard', tags: ['sign'], pick: 'Billboard', about: 'A roadside billboard on two posts', group: 'buildings' },
+      { id: 'mailbox', tags: ['thing'], pick: 'Mailbox', about: 'A mailbox on a post' },
+      { id: 'roadside-haystack', tags: ['farm'], pick: 'Roadside haystack', about: 'A tall haystack' },
+      { id: 'roadside-tree', tags: ['tree', 'leafy'], pick: 'Roadside tree', about: 'A roadside tree' },
+      { id: 'second-roadside-tree', tags: ['tree', 'leafy'], pick: 'Second roadside tree', about: 'Another roadside tree' },
     ],
   },
   {
     from: 'henge', doc: HENGE, picks: HENGE_PICKS,
     props: [
-      { id: 'white-witch', pick: 'White witch', about: 'A witch in a white robe and hat, holding a wand', group: 'living' },
-      { id: 'magic-circle', pick: 'Magic circle', about: 'A glowing circle of rings and a star turning on the ground, giving off blue light' },
+      { id: 'white-witch', tags: ['person', 'magic'], pick: 'White witch', about: 'A witch in a white robe and hat, holding a wand', group: 'living' },
+      { id: 'magic-circle', tags: ['magic', 'rock'], pick: 'Magic circle', about: 'A glowing circle of rings and a star turning on the ground, giving off blue light' },
     ],
-    land: { id: 'henge-turf', name: 'Henge turf', about: 'A ring of standing stones on dark turf under the stars' },
+    land: { id: 'henge-turf', tags: ['grassy', 'night'], name: 'Henge turf', about: 'A ring of standing stones on dark turf under the stars' },
   },
   {
     from: 'henge', doc: HENGE, picks: WITCH_IN_SPARKS_PICKS,
-    props: [{ id: 'white-witch-sparks', pick: 'White witch, coming and going', about: 'The white witch arriving in a burst of sparks, waving her wand with two flashes, and leaving again', group: 'living' }],
+    props: [{ id: 'white-witch-sparks', tags: ['person', 'magic'], pick: 'White witch, coming and going', about: 'The white witch arriving in a burst of sparks, waving her wand with two flashes, and leaving again', group: 'living' }],
   },
   {
     from: 'dragon', doc: DRAGON, picks: LAVA_DRAGON_PICKS,
-    props: [{ id: 'lava-dragon', pick: 'Lava dragon', about: 'A red dragon with spread wings, swaying its neck and opening its jaw', group: 'living' }],
+    props: [{ id: 'lava-dragon', tags: ['animal', 'magic'], pick: 'Lava dragon', about: 'A red dragon with spread wings, swaying its neck and opening its jaw', group: 'living' }],
   },
   {
     // kit pieces, made by rules rather than lifted from a scene (an idea from Silicon Jungle's Ink Studio)
     from: 'kit', doc: KIT, picks: markedPicks(KIT),
     props: [
-      { id: 'kit-brick-wall', pick: 'Brick wall', about: 'A straight length of red brick wall, a meter long', group: 'buildings' },
-      { id: 'kit-ruined-wall', pick: 'Ruined wall', about: 'A stone wall fallen in places, its stones lying at its feet', group: 'buildings' },
-      { id: 'kit-fence', pick: 'Wooden fence', about: 'A leaning wooden fence of three bays with two rails', group: 'buildings' },
-      { id: 'kit-steps', pick: 'Stone steps', about: 'Four worn stone steps', group: 'buildings' },
-      { id: 'kit-arch', pick: 'Stone arch', about: 'A single round arch of coursed stone', group: 'buildings' },
-      { id: 'kit-columns', pick: 'Stone columns', about: 'A cluster of six-sided stone columns rising in steps', group: 'buildings' },
-      { id: 'kit-oak', pick: 'Oak tree', about: 'A small oak whose crown sways' },
-      { id: 'kit-cactus', pick: 'Cactus', about: 'A ribbed cactus with two arms' },
-      { id: 'kit-crystals', pick: 'Crystal cluster', about: 'A cluster of violet crystals' },
-      { id: 'kit-boulder', pick: 'Boulder', about: 'A rough gray boulder, half sunk' },
-      { id: 'kit-stump', pick: 'Tree stump', about: 'A tree stump, pale where it was cut' },
-      { id: 'kit-bush', pick: 'Round bush', about: 'A round green bush' },
+      { id: 'kit-brick-wall', tags: ['wall'], pick: 'Brick wall', about: 'A straight length of red brick wall, a meter long', group: 'buildings' },
+      { id: 'kit-ruined-wall', tags: ['wall', 'rock'], pick: 'Ruined wall', about: 'A stone wall fallen in places, its stones lying at its feet', group: 'buildings' },
+      { id: 'kit-fence', tags: ['wall', 'farm'], pick: 'Wooden fence', about: 'A leaning wooden fence of three bays with two rails', group: 'buildings' },
+      { id: 'kit-steps', tags: ['rock'], pick: 'Stone steps', about: 'Four worn stone steps', group: 'buildings' },
+      { id: 'kit-arch', tags: ['building', 'rock'], pick: 'Stone arch', about: 'A single round arch of coursed stone', group: 'buildings' },
+      { id: 'kit-columns', tags: ['building', 'rock'], pick: 'Stone columns', about: 'A cluster of six-sided stone columns rising in steps', group: 'buildings' },
+      { id: 'kit-oak', tags: ['tree', 'leafy'], pick: 'Oak tree', about: 'A small oak whose crown sways' },
+      { id: 'kit-cactus', tags: ['plant'], pick: 'Cactus', about: 'A ribbed cactus with two arms' },
+      { id: 'kit-crystals', tags: ['crystal'], pick: 'Crystal cluster', about: 'A cluster of violet crystals' },
+      { id: 'kit-boulder', tags: ['rock'], pick: 'Boulder', about: 'A rough gray boulder, half sunk' },
+      { id: 'kit-stump', tags: ['tree'], pick: 'Tree stump', about: 'A tree stump, pale where it was cut' },
+      { id: 'kit-bush', tags: ['plant', 'leafy'], pick: 'Round bush', about: 'A round green bush' },
     ],
   },
 ]
@@ -151,16 +154,16 @@ for (const d of DIORAMAS) {
   // a scene made from props names the library's own pieces: there is nothing to lift out of it
   if (!d.doc || d.project || WHOLE_SCENES.includes(d.id) || SOURCES.some((s) => s.from === d.id)) continue
   const picks = markedPicks(d.doc)
-  if (picks.length) SOURCES.push({ from: d.id, doc: d.doc, picks, props: picks.map((p) => ({ id: `${d.id}-${slug(p.name)}`, pick: p.name, about: `${p.name}, from ${d.label}` })) })
+  if (picks.length) SOURCES.push({ from: d.id, doc: d.doc, picks, props: picks.map((p) => ({ id: `${d.id}-${slug(p.name)}`, tags: p.tags, pick: p.name, about: `${p.name}, from ${d.label}` })) })
 }
 
 /** Lands taken whole: scenes whose ground is the point, and the plain ones to start from. */
-const WHOLE_LANDS: { id: string; name: string; about: string; from: string; doc: SceneDoc }[] = [
-  { id: 'sky-islands', name: 'Sky islands', about: 'Snowy islands of rock adrift in a night sky, joined by rope bridges', from: 'isles', doc: ISLES },
-  { id: 'canyon-floor', name: 'Canyon floor', about: 'A desert canyon of banded rock, buttes and an arch', from: 'canyon', doc: CANYON },
-  { id: 'meadow', name: 'Meadow', about: 'A round of night meadow with a standing stone', from: 'meadow', doc: MEADOW },
-  { id: 'plain-turf', name: 'Round of turf', about: 'A plain round of grass on earth, level, to build on', from: 'plain', doc: PLAIN_TURF },
-  { id: 'plain-rock', name: 'Low rock', about: 'A plain low rock with moss on top, to build on', from: 'plain', doc: PLAIN_ROCK },
+const WHOLE_LANDS: { id: string; tags: Tag[]; name: string; about: string; from: string; doc: SceneDoc }[] = [
+  { id: 'sky-islands', tags: ['snowy', 'rocky', 'night'], name: 'Sky islands', about: 'Snowy islands of rock adrift in a night sky, joined by rope bridges', from: 'isles', doc: ISLES },
+  { id: 'canyon-floor', tags: ['sandy', 'rocky'], name: 'Canyon floor', about: 'A desert canyon of banded rock, buttes and an arch', from: 'canyon', doc: CANYON },
+  { id: 'meadow', tags: ['grassy', 'night'], name: 'Meadow', about: 'A round of night meadow with a standing stone', from: 'meadow', doc: MEADOW },
+  { id: 'plain-turf', tags: ['grassy'], name: 'Round of turf', about: 'A plain round of grass on earth, level, to build on', from: 'plain', doc: PLAIN_TURF },
+  { id: 'plain-rock', tags: ['rocky'], name: 'Low rock', about: 'A plain low rock with moss on top, to build on', from: 'plain', doc: PLAIN_ROCK },
 ]
 
 const picture = (id: string) => `/props/${id}.png`
@@ -179,15 +182,25 @@ export const CREATURE_LOOKS: { id: string; name: string; species: Species; look:
   })))
 const LOOK_BY_ID = new Map(CREATURE_LOOKS.map((x) => [x.id, x]))
 
+/** What each creature is, by its species id; any other is an animal. */
+const CREATURE_TAGS: Record<string, Tag[]> = { elf: ['person'], dragon: ['animal', 'magic'] }
+
 /** Every entry: props, then lands, then creatures. */
 export const LIBRARY: LibraryEntry[] = [
-  ...MADE.filter((m) => m.kind === 'prop').map((m): LibraryEntry => ({ id: m.id, name: m.prop.name, about: m.about, kind: 'prop', from: 'made', picture: picture(m.id), group: m.group ?? 'small' })),
-  ...SOURCES.flatMap((s) => s.props.map((p): LibraryEntry => ({ id: p.id, name: p.pick, about: p.about, kind: 'prop', from: s.from, picture: picture(p.id), group: p.group ?? 'small' }))),
-  ...SOURCES.filter((s) => s.land).map((s): LibraryEntry => ({ id: s.land!.id, name: s.land!.name, about: s.land!.about, kind: 'land', from: s.from, picture: picture(s.land!.id), group: 'lands' })),
-  ...WHOLE_LANDS.map((l): LibraryEntry => ({ id: l.id, name: l.name, about: l.about, kind: 'land', from: l.from, picture: picture(l.id), group: 'lands' })),
-  ...MADE.filter((m) => m.kind === 'land').map((m): LibraryEntry => ({ id: m.id, name: m.prop.name, about: m.about, kind: 'land', from: 'made', picture: picture(m.id), group: 'lands' })),
-  ...CREATURE_LOOKS.map(({ id, name, species: c }): LibraryEntry => ({ id, name, about: c.blurb, kind: 'creature', from: 'creatures', picture: picture(id), group: 'living' })),
+  ...MADE.filter((m) => m.kind === 'prop').map((m): LibraryEntry => ({ id: m.id, name: m.prop.name, about: m.about, kind: 'prop', from: 'made', picture: picture(m.id), group: m.group ?? 'small', tags: m.tags })),
+  ...SOURCES.flatMap((s) => s.props.map((p): LibraryEntry => ({ id: p.id, name: p.pick, about: p.about, kind: 'prop', from: s.from, picture: picture(p.id), group: p.group ?? 'small', tags: p.tags ?? [] }))),
+  ...SOURCES.filter((s) => s.land).map((s): LibraryEntry => ({ id: s.land!.id, name: s.land!.name, about: s.land!.about, kind: 'land', from: s.from, picture: picture(s.land!.id), group: 'lands', tags: s.land!.tags })),
+  ...WHOLE_LANDS.map((l): LibraryEntry => ({ id: l.id, name: l.name, about: l.about, kind: 'land', from: l.from, picture: picture(l.id), group: 'lands', tags: l.tags })),
+  ...MADE.filter((m) => m.kind === 'land').map((m): LibraryEntry => ({ id: m.id, name: m.prop.name, about: m.about, kind: 'land', from: 'made', picture: picture(m.id), group: 'lands', tags: m.tags })),
+  ...CREATURE_LOOKS.map(({ id, name, species: c }): LibraryEntry => ({ id, name, about: c.blurb, kind: 'creature', from: 'creatures', picture: picture(id), group: 'living', tags: CREATURE_TAGS[c.id] ?? ['animal'] })),
 ]
+
+const TAGS_BY_ID = new Map(LIBRARY.map((e) => [e.id, e.tags]))
+/** A library prop or land's description with the entry's tags on it, so they go with it into a project. */
+const withTags = (id: string, p: PropDoc | undefined): PropDoc | undefined => {
+  const tags = TAGS_BY_ID.get(id)
+  return p && tags?.length ? { ...p, tags: [...tags] } : p
+}
 
 const split = new Map<Source, ReturnType<typeof splitScene>>()
 
@@ -196,6 +209,10 @@ const split = new Map<Source, ReturnType<typeof splitScene>>()
  * it gets a stand-in (`creatureProp`) so a project holds it as it holds any prop, and is built and posed its own way.
  */
 export function libraryProp(id: string): PropDoc | undefined {
+  return withTags(id, untagged(id))
+}
+
+function untagged(id: string): PropDoc | undefined {
   const creature = libraryCreature(id)
   if (creature) return creatureProp(id, LOOK_BY_ID.get(id)!.name)
   if (isModel(id)) return creatureProp(id, modelOf(id)?.name ?? 'Your model')

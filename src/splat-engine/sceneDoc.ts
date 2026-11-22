@@ -15,6 +15,7 @@ import { drift, fallAt, fallShare, frost, groundUnder, type Falling } from './we
 import { MOST_STARS, withHeavens, type HeavensDoc } from './heavens.ts'
 import { CLOUD_COVERS, WIND_MOST, gustRun, windLevelOf } from './skyRecipes.ts'
 import { placedShape, placer } from './place.ts'
+import { checkTags, type Tag } from './tags.ts'
 
 /**
  * A pixel-art scene written as data: no code, so it can be typed by hand, kept
@@ -43,6 +44,8 @@ export interface SceneDoc {
    * a dungeon, where it is never day. Left out, each goes by its own `lit`.
    */
   lamps?: 'dark' | 'always'
+  /** What its land is, from the fixed list (tags.ts: grassy, rocky, sandy, snowy, sea, pond, night): Scene Creator's search finds the land by these. */
+  tags?: Tag[]
   /** The colors the picture is drawn in, 2 to 32. */
   palette: string[]
   /** The sky behind, top and bottom. Left out, the background is clear. */
@@ -281,6 +284,11 @@ export interface BoneDoc {
    * hand. Not on a bone under another marked one.
    */
   prop?: string
+  /**
+   * With `prop`, what the prop is and how it behaves, from the fixed list (tags.ts): kinds such as tree, rock or lamp
+   * for search, and qualities the shared recipes act on (leafy, evergreen, floats).
+   */
+  tags?: Tag[]
 }
 
 /** An axis a bone turns about: 'x', 'y' or 'z', or any way as [x, y, z] (a prop set down turned writes one). */
@@ -769,6 +777,7 @@ export function checkScene(doc: unknown): string[] {
   }
   hexes(doc.palette, 'palette', 2, MAX_PALETTE_SIZE)
   if (doc.lamps !== undefined && doc.lamps !== 'dark' && doc.lamps !== 'always') bad('lamps', "must be 'dark' or 'always'")
+  checkTags(doc.tags, 'tags', bad)
   if (doc.sky !== undefined) hexes(doc.sky, 'sky', 2, 2)
   opt(doc.skyReach, 'skyReach', 0.05, 1)
   opt(doc.disc, 'disc', 0.4, 1)
@@ -817,6 +826,10 @@ export function checkScene(doc: unknown): string[] {
         else if (propNames.has(b.prop)) bad(`${at}.prop`, `'${b.prop}' names two props`)
         else propNames.add(b.prop)
         if (typeof b.parent === 'string' && marked.has(b.parent)) bad(`${at}.prop`, `rides on '${b.parent}', which is a prop already: mark one or the other`)
+      }
+      if (b.tags !== undefined) {
+        if (b.prop === undefined) bad(`${at}.tags`, 'only a bone marked as a prop takes tags')
+        checkTags(b.tags, `${at}.tags`, bad)
       }
       if (typeof b.name === 'string') {
         names.add(b.name)

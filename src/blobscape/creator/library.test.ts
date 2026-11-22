@@ -9,6 +9,7 @@ import { WINDMILL } from '../diorama/scenes/windmill.ts'
 import { buildVoxels } from '../../splat-engine/voxel.ts'
 import { loopSnaps } from '../../splat-engine/sceneChecks.ts'
 import { LIBRARY, libraryCreature, libraryProp } from './library.ts'
+import { isTag } from '../../splat-engine/tags.ts'
 
 const CHUNKY = 0.042
 
@@ -114,4 +115,14 @@ test('a prop mark must be a name, used once, and not on a bone riding on another
   const child = bones.findIndex((b) => b.parent)
   assert.ok(child > 0, 'the windmill has a bone that rides on another')
   assert.match(marked((b) => { b[at(b[child].parent!)].prop = 'Parent'; b[child].prop = 'Child' }).join(), /is a prop already/)
+})
+
+test('every library entry is tagged from the fixed list, and a prop takes its tags into a project', () => {
+  for (const e of LIBRARY) {
+    assert.ok(e.tags.length, `${e.id} has no tags`)
+    for (const t of e.tags) assert.ok(isTag(t), `${e.id}: '${t}' is not a tag`)
+    assert.equal(new Set(e.tags).size, e.tags.length, `${e.id} has a tag twice`)
+  }
+  for (const e of LIBRARY.filter((x) => x.kind === 'land' || x.kind === 'prop').slice(0, 6)) assert.deepEqual(libraryProp(e.id)?.tags, e.tags, e.id)
+  assert.ok(LIBRARY.find((e) => e.id === 'creature-elf')?.tags.includes('person'))
 })

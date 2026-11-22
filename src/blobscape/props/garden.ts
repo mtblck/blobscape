@@ -1,4 +1,5 @@
 import type { PropDoc } from '../../splat-engine/project.ts'
+import type { Tag } from '../../splat-engine/tags.ts'
 import type { LightDoc, MoveDoc, PartDoc, SceneDoc } from '../../splat-engine/sceneDoc.ts'
 import type { LibraryGroup } from '../creator/library.ts'
 
@@ -19,6 +20,8 @@ export interface MadeProp {
   kind: 'prop' | 'land'
   /** Which of Props mode's groups its card is in (props only). */
   group?: LibraryGroup
+  /** What it is and how it behaves (splat-engine/tags.ts). */
+  tags: Tag[]
   prop: PropDoc
 }
 

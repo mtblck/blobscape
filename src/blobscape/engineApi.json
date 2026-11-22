@@ -3627,6 +3627,12 @@
        "doc": "Its lamps as a whole: 'always' keeps everything that says `lit: 'dark'` shining at any time of day, as in a cave or\na dungeon, where it is never day. Left out, each goes by its own `lit`."
       },
       {
+       "name": "tags",
+       "optional": true,
+       "type": "(\"tree\" | \"crystal\" | \"night\" | \"plant\" | \"flower\" | \"rock\" | \"building\" | \"wall\" | \"lamp\" | \"farm\" | \"thing\" | \"sign\" | \"boat\" | \"animal\" | \"person\" | \"magic\" | \"grassy\" | \"rocky\" | \"sandy\" | \"snowy\" | \"sea\" | \"pond\" | \"leafy\" | \"evergreen\" | \"floats\")[]",
+       "doc": "What its land is, from the fixed list (tags.ts: grassy, rocky, sandy, snowy, sea, pond, night): Scene Creator's search finds the land by these."
+      },
+      {
        "name": "palette",
        "type": "string[]",
        "doc": "The colors the picture is drawn in, 2 to 32."
@@ -4042,6 +4048,12 @@
        "optional": true,
        "type": "string",
        "doc": "Marks a thing of its own (a mill, a tree, a sheep): its name as a prop in Scene Creator. The parts on this bone and\non the bones under it are the prop, and the scene comes apart into props by these marks with nothing picked by\nhand. Not on a bone under another marked one."
+      },
+      {
+       "name": "tags",
+       "optional": true,
+       "type": "(\"tree\" | \"crystal\" | \"night\" | \"plant\" | \"flower\" | \"rock\" | \"building\" | \"wall\" | \"lamp\" | \"farm\" | \"thing\" | \"sign\" | \"boat\" | \"animal\" | \"person\" | \"magic\" | \"grassy\" | \"rocky\" | \"sandy\" | \"snowy\" | \"sea\" | \"pond\" | \"leafy\" | \"evergreen\" | \"floats\")[]",
+       "doc": "With `prop`, what the prop is and how it behaves, from the fixed list (tags.ts): kinds such as tree, rock or lamp\nfor search, and qualities the shared recipes act on (leafy, evergreen, floats)."
       }
      ]
     },
