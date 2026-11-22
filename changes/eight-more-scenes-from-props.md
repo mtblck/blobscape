@@ -2,3 +2,4 @@
 - Diorama: the weather's clouds are cut to about the same number of blobs on every scene (a far view's clouds took over 200,000, enough to crash a phone), and turning Clouds over the scene off no longer fails on scenes seen from further away.
 - Watercolor: a scene or subject with no sky of its own gets a pale wash behind it instead of bare paper.
 - Diorama: when a device runs out of graphics memory and the browser stops drawing, the view says so and offers to start again a detail lower, instead of staying blank.
+- Diorama: Turkey Run and the henge are rebuilt from props too: the country road with everything going by is a land, the turkey and the cook run on it, and the magic circle and the witch come and go on the henge's turf as props of their own (also in the library).

@@ -35,9 +35,9 @@ import { madeProp } from '../props/index.ts'
 import { composeScene } from '../../splat-engine/compose.ts'
 import type { SceneProject } from '../../splat-engine/project.ts'
 import type { WeatherId } from '../../splat-engine/skyRecipes.ts'
-import { HENGE } from './scenes/henge.ts'
+import { HENGE, HENGE_PROJECT } from './scenes/henge.ts'
 import { WHALES } from './scenes/whales.ts'
-import { TURKEY } from './scenes/turkey.ts'
+import { TURKEY, TURKEY_PROJECT } from './scenes/turkey.ts'
 import { FISHING } from './scenes/fishing.ts'
 import { LIGHTHOUSE as LIGHTHOUSE_DOC, LIGHTHOUSE_PROJECT } from './scenes/lighthouse.ts'
 import { ambientAt, lightsAt, poseFishing, skyAt } from './fishing.ts'
@@ -298,8 +298,8 @@ export const DIORAMAS: Diorama[] = [
   described('cabin', CABIN, 'A log cabin snowed in on a winter night: snow falling and settling where it lands, drifts piled deep downwind of the cabin, rocks and fence, a path trodden to the gate, frost growing across the lit window, chimney smoke, a woodpile and a lantern', { project: CABIN_PROJECT, weather: 'snow', overhead: false }),
   described('koi', composeScene(KOI_PROJECT, madeProp), 'A koi pond in a moss garden on a rainy day: raindrops ring the water where they land, the rings cross and bounce off the banks and stepping stones, koi circle under the surface and leave wakes, and a tall stone lantern and a low snow-viewing lantern glow under a cherry tree in full bloom that sheds its petals, with bamboo, irises and lily pads', { project: KOI_PROJECT, weather: 'light-rain', overhead: false, byDay: true }),
   described('whales', WHALES, 'A pod of whales swimming through space, a mother and two calves with stars on their backs, their tails and flippers beating slowly, past a ringed planet and its moon, banks of nebula, a far sun, tumbling rocks and stardust streaming by'),
-  described('turkey', TURKEY, 'A giant turkey chasing a cook in an apron and chef’s hat down a country road in the fall, past a rail fence, trees in fall color, pumpkins, a mailbox and a billboard, with dust at their heels, loose feathers and falling leaves'),
-  described('henge', HENGE, 'A ring of standing stones at night where a magic circle flares to life, sparks gather into a witch in a white robe and a tall white hat, who draws a wand, waves it once and vanishes in a shower of sparks'),
+  described('turkey', TURKEY, 'A giant turkey chasing a cook in an apron and chef’s hat down a country road in the fall, past a rail fence, trees in fall color, pumpkins, a mailbox and a billboard, with dust at their heels, loose feathers and falling leaves', { project: TURKEY_PROJECT }),
+  described('henge', HENGE, 'A ring of standing stones at night where a magic circle flares to life, sparks gather into a witch in a white robe and a tall white hat, who draws a wand, waves it once and vanishes in a shower of sparks', { project: HENGE_PROJECT }),
   FOX_MEADOW,
   SKY_FISHING,
 ]
