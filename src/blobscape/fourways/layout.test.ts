@@ -13,7 +13,7 @@ test('the hand-written camp gives the same count of specks every frame, and join
 
 test('the hand-written camp and the description are the same camp: one loop, one fire, the pines in the same places', () => {
   assert.equal(SCENE.loop, LOOP)
-  const pines = (DOC.bones ?? []).filter((b) => b.name.startsWith('pine'))
+  const pines = (DOC.bones ?? []).filter((b) => b.name.startsWith('camp-pine'))
   assert.equal(pines.length, PINES.length)
   pines.forEach((b, i) => assert.deepEqual([b.at[0], b.at[2]], PINES[i].at))
   // the fire flickers the same in both, so the four pictures brighten together
