@@ -57,7 +57,8 @@ test('a skin pushed in and out keeps its holes to the sharpest creases when its 
     }
     return miss
   }
-  // read raw, the bumps' steep sides leave holes (22 of 400 here); in true distance, a few at the sharpest creases
+  // in true distance, a few at the sharpest creases; read raw, the bumps' steep sides left holes (22 of 400) until the
+  // cutter looked a layer deeper where the distance changes faster than one for one (2 now)
   const raw = holes(false), fixed = holes(true)
-  assert.ok(fixed * 3 < raw && fixed < 10, `${fixed} holes, ${raw} read raw`)
+  assert.ok(fixed < 10 && raw < 10, `${fixed} holes, ${raw} read raw`)
 })

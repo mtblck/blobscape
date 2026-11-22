@@ -278,11 +278,12 @@ export function buildBlocks(sources: readonly BlockSource[], look: BlockLook): {
         put(i, bone, cx, cy, cz)
         const ra = blobs.scale[i * 3] * DISC_REACH, rb = blobs.scale[i * 3 + 1] * DISC_REACH
         if (specks || Math.max(ra, rb) < cell * SPREAD_FROM) continue
-        const [u, v] = discAxes(blobs.quat, i), na = Math.min(SPREAD_MOST, Math.floor(ra / cell)), nb = Math.min(SPREAD_MOST, Math.floor(rb / cell))
+        // in half cells, so a disc turned across the grid misses no cell of its square
+        const [u, v] = discAxes(blobs.quat, i), na = 2 * Math.min(SPREAD_MOST, Math.floor(ra / cell)), nb = 2 * Math.min(SPREAD_MOST, Math.floor(rb / cell))
         for (let a = -na; a <= na; a++) for (let b = -nb; b <= nb; b++) {
           // the square it stands for, so four of them on every other grid point leave no hole between them
           if (a || b) {
-            const da = a * cell, db = b * cell
+            const da = a * cell * 0.5, db = b * cell * 0.5
             put(i, bone, cx + u[0] * da + v[0] * db, cy + u[1] * da + v[1] * db, cz + u[2] * da + v[2] * db)
           }
         }
