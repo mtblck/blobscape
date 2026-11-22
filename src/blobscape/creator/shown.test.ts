@@ -36,12 +36,13 @@ test('library props in an opened scene are named by their id, others written out
   assert.ok(o.kind === 'project')
   assert.equal(o.project.land, 'windmill-hill')
   assert.equal(o.project.props[0].prop, 'windmill')
-  // the second haystack is not a library entry of its own
-  assert.ok(o.project.props.some((p) => typeof p.prop !== 'string'))
+  // the second haystack is the first set down again
+  const ids = o.project.props.map((p) => p.prop)
+  assert.ok(ids.some((id, i) => ids.indexOf(id) !== i))
 })
 
 test('scenes the library cannot split open whole and say why', () => {
-  for (const id of ['meadow', 'fishing', 'cave']) {
+  for (const id of ['meadow', 'fishing']) {
     const o = openingScene(id)!
     assert.equal(o.kind, 'whole', id)
     const s = shownOf(o)

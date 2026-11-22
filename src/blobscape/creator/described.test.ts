@@ -6,7 +6,7 @@ import { describedProject, isDescription, named, picksFor, readDescribed } from 
 
 test('a description that marks its props is split by its marks', () => {
   // the campfire with its flame marked: only that becomes a prop, sparks and all left to the land
-  const doc = { ...CAMPFIRE, bones: CAMPFIRE.bones!.map((b) => b.name === 'flame' ? { ...b, prop: 'Fire' } : b) }
+  const doc = { ...CAMPFIRE, bones: CAMPFIRE.bones!.map((b) => b.name === 'campfire0/flame' ? { ...b, prop: 'Fire' } : b) }
   const p = describedProject(doc)
   assert.deepEqual(p.props.map((x) => typeof x.prop === 'string' ? x.prop : x.prop.name), ['Fire'])
   assert.deepEqual(checkProject(p, () => false), [])
@@ -17,8 +17,8 @@ test('an unmarked description offers its top-level bones, those on one spot as o
   const picks = picksFor(CAMPFIRE)
   assert.ok(picks.length > 0)
   // the fire's flame, core and sparks stand on one spot: one prop
-  const fire = picks.find((p) => p.bones!.includes('flame'))!
-  assert.ok(fire.bones!.includes('core') && fire.bones!.includes('spark0'))
+  const fire = picks.find((p) => p.bones!.includes('campfire0/flame'))!
+  assert.ok(fire.bones!.includes('campfire0/core') && fire.bones!.includes('campfire0/spark0'))
   const p = describedProject(CAMPFIRE)
   assert.equal(p.props.length, picks.length)
   assert.deepEqual(checkProject(p, () => false), [])

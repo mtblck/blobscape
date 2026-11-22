@@ -87,6 +87,15 @@ test('snow lies where it lands, builds up while it falls and melts after', () =>
   for (let k = 0; k < c.blobs.count; k++) if (c.blobs.center[k * 3 + 1] < c.at[k * 3 + 1] - 1e-6 || c.normal[k * 3 + 1] < 0.55) assert.fail(`blob ${k}`)
 })
 
+test('a scene with nothing still for snow to lie on never asks for its cover to be sent up', () => {
+  // the sky islands all drift, so nothing stays put under the snow: the cover is empty and is not one of the actors
+  // on the stage, and sending it up there threw in the poser, which froze the page (Matt, 2026-11-22)
+  const w = new SceneWeather(scene('isles'), { overhead: false })
+  assert.equal(w.cover.blobs.count, 0)
+  assert.ok(!w.actors.includes(w.cover as never))
+  for (const depth of [0, 0.01, 0.5, 1]) assert.equal(w.pile(depth), false)
+})
+
 test('the koi pond is a day: its moon and stars come out only at night, and its weather starts over the picture', () => {
   const koi = scene('koi')
   const sky = (doc: ReturnType<typeof litFor>) => doc.parts.filter((p) => p.bone === '~moon' || p.bone?.startsWith('~star')).length

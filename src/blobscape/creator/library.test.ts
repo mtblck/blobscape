@@ -8,7 +8,8 @@ import { DIORAMAS } from '../diorama/scenes.ts'
 import { WINDMILL } from '../diorama/scenes/windmill.ts'
 import { buildVoxels } from '../../splat-engine/voxel.ts'
 import { loopSnaps } from '../../splat-engine/sceneChecks.ts'
-import { LIBRARY, libraryCreature, libraryProp } from './library.ts'
+import { LIBRARY, libraryCreature, libraryProp, openScene } from './library.ts'
+import { isTag } from '../../splat-engine/tags.ts'
 
 const CHUNKY = 0.042
 
@@ -77,17 +78,17 @@ test('every new scene is built from components: its land and props that are each
 })
 
 test('what stands outside a scene\'s props is named: bones with parts that no prop holds, and lights', () => {
-  const doc: SceneDoc = { ...WINDMILL, bones: (WINDMILL.bones ?? []).map((b) => (b.name === 'sails' ? { ...b, prop: 'Sails' } : b)), lights: [{ at: [9, 9, 9], color: '#ffffff', strength: 1, range: 1, lit: 'dark' }] }
+  const doc: SceneDoc = { ...WINDMILL, bones: (WINDMILL.bones ?? []).map((b) => (b.name === 'windmill0/sails' ? { ...b, prop: 'Sails' } : b)), lights: [{ at: [9, 9, 9], color: '#ffffff', strength: 1, range: 1, lit: 'dark' }] }
   const out = outsideProps(doc)
-  assert.ok(out.some((o) => o.includes("'duck'")), out.join('; '))
-  assert.ok(!out.some((o) => o.includes("'sails'")))
+  assert.ok(out.some((o) => o.includes("'duck4/duck'")), out.join('; '))
+  assert.ok(!out.some((o) => o.includes("'windmill0/sails'")))
   assert.ok(out.some((o) => o.startsWith('lights:')))
 })
 
 test('a scene that marks its props comes apart by them: each a sound prop that cuts and stands, the rest its land', () => {
   const doc: SceneDoc = {
     ...WINDMILL,
-    bones: (WINDMILL.bones ?? []).map((b) => (b.name === 'sails' ? { ...b, prop: 'Sails' } : b.name === 'duck' ? { ...b, prop: 'Duck' } : b)),
+    bones: (WINDMILL.bones ?? []).map((b) => (b.name === 'windmill0/sails' ? { ...b, prop: 'Sails' } : b.name === 'duck4/duck' ? { ...b, prop: 'Duck' } : b)),
   }
   assert.deepEqual(checkScene(doc), [])
   const picks = markedPicks(doc)
@@ -109,9 +110,29 @@ test('a prop mark must be a name, used once, and not on a bone riding on another
   const bones = (WINDMILL.bones ?? []).map((b) => ({ ...b }))
   const at = (name: string) => bones.findIndex((b) => b.name === name)
   const marked = (edit: (b: typeof bones) => void) => { const copy = bones.map((b) => ({ ...b })); edit(copy); return checkScene({ ...WINDMILL, bones: copy }) }
-  assert.match(marked((b) => { b[at('duck')].prop = '' }).join(), /prop: must be a name/)
-  assert.match(marked((b) => { b[at('duck')].prop = 'Duck'; b[at('sails')].prop = 'Duck' }).join(), /names two props/)
+  assert.match(marked((b) => { b[at('duck4/duck')].prop = '' }).join(), /prop: must be a name/)
+  assert.match(marked((b) => { b[at('duck4/duck')].prop = 'Duck'; b[at('windmill0/sails')].prop = 'Duck' }).join(), /names two props/)
   const child = bones.findIndex((b) => b.parent)
   assert.ok(child > 0, 'the windmill has a bone that rides on another')
   assert.match(marked((b) => { b[at(b[child].parent!)].prop = 'Parent'; b[child].prop = 'Child' }).join(), /is a prop already/)
+})
+
+test('every library entry is tagged from the fixed list, and a prop takes its tags into a project', () => {
+  for (const e of LIBRARY) {
+    assert.ok(e.tags.length, `${e.id} has no tags`)
+    for (const t of e.tags) assert.ok(isTag(t), `${e.id}: '${t}' is not a tag`)
+    assert.equal(new Set(e.tags).size, e.tags.length, `${e.id} has a tag twice`)
+  }
+  for (const e of LIBRARY.filter((x) => x.kind === 'land' || x.kind === 'prop').slice(0, 6)) assert.deepEqual(libraryProp(e.id)?.tags, e.tags, e.id)
+  assert.ok(LIBRARY.find((e) => e.id === 'creature-elf')?.tags.includes('person'))
+})
+
+test('a scene made from props opens in Scene Creator under the weather it starts under on Diorama', () => {
+  for (const d of DIORAMAS) {
+    if (!d.project || !d.weather) continue
+    const recipe = openScene(d.id)?.light?.recipe
+    assert.equal(recipe?.weather, d.weather, d.id)
+    assert.equal(recipe?.overhead ?? true, d.overhead ?? true, d.id)
+  }
+  assert.equal(openScene('isles')?.light?.recipe?.weather, 'snow')
 })

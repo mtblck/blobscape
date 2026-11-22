@@ -1,0 +1,2 @@
+- Diorama: the dragon's lava is real now. It wells up white-hot, spreads and crusts over into dark plates with glowing cracks, piles up along the rim and bubbles, where it used to be painted. The cave is rebuilt as a land and props (the dragon, stalagmites and rocks), which Scene Creator offers on their own.
+- Engine: a shared lava recipe for scene descriptions (`lava`), worked out on the water's height field with a field of heat over it.

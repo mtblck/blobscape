@@ -99,7 +99,7 @@ test("a prop set down to keep its lamps lit always has them so, whatever the tim
 
 test('falling leaves come down from under a leafy prop\'s crown, never from the sky, and not from a post', () => {
   const TREE: PropDoc = {
-    name: 'Apple tree', foot: [0, 0, 0],
+    name: 'Apple tree', foot: [0, 0, 0], tags: ['tree', 'leafy'],
     doc: {
       name: 'Apple tree', loop: 12, palette: ['#604020', '#4a8a3c'], camera: { target: [0, 0.5, 0], distance: 2, azimuth: 0, elevation: 10 },
       parts: [{ shape: { kind: 'cylinder', at: [0, 0.25, 0], height: 0.5, r: 0.05 }, paint: '#604020' }, { shape: { kind: 'sphere', at: [0, 0.8, 0], r: 0.3 }, paint: '#4a8a3c' }],

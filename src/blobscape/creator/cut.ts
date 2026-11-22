@@ -11,6 +11,7 @@ import { unpack, type PackedCut } from './pack.ts'
 import { Blobs } from '../../splat-core/blobs.ts'
 import { creatureLook, isCreature, libraryCreature, libraryProp } from './library.ts'
 import { placer, type Placement } from '../../splat-engine/project.ts'
+import { tagged } from '../../splat-engine/tags.ts'
 import { DETAIL } from '../diorama/scene.ts'
 import type { Species } from '../../splat-engine/zoo/species.ts'
 
@@ -76,8 +77,8 @@ function cutOne(job: CutJob): Built {
   if (job.kind === 'land') return hugged(() => buildVoxels(land))
   const cut = hugged(() => buildVoxels(job.finish?.steps ? propSpec(cp, job.i, job.spacing, settingOf(land), steps) : propSpec(cp, job.i, job.spacing, settingOf(land))))
   const foot = cp.props[job.i].placed.at
-  // a thing afloat on the land's water (the windmill's duck) casts no shadow on it: the dark disc lay on the surface
-  return afloat(cp.land.prop.doc.water, foot) ? cut : withShadow(cut, foot)
+  // a thing afloat (tagged so, or standing on the land's water, as the windmill's duck) casts no shadow: the dark disc lay on the surface
+  return tagged(cp.props[job.i].prop, 'floats') || afloat(cp.land.prop.doc.water ?? cp.land.prop.doc.lava, foot) ? cut : withShadow(cut, foot)
 }
 
 /** Whether a foot stands in the land's water: inside its box and no higher than a little over its level. */

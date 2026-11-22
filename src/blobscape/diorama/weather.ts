@@ -20,6 +20,11 @@ import type { Diorama } from './scenes.ts'
  * fine for what falls (a drop is fattened to its grid, and should stay a thin streak), coarse for the clouds.
  */
 const FALL_SPACING = 0.01, CLOUD_SPACING = 0.034
+/**
+ * The clouds are laid out by the view, so they are cut coarser for a far view: at one spacing a far view's clouds took
+ * over 200,000 blobs, enough to bring a phone down. From `CLOUD_VIEW` out, they are about the same count however far.
+ */
+const CLOUD_VIEW = 3.7
 
 /** Where each recipe's rain ends in the swarm, so the pond's rings for the rain of a recipe are worked out whole. */
 const RAIN_BANDS = [...new Set([...WEATHERS.map((w) => w.rain ?? 0).filter((r) => r > 0), 1])].sort((a, b) => a - b)
@@ -68,7 +73,7 @@ export class SceneWeather {
       actor.weather = true
       return { c, actor, bones: weatherBones(c.bones.map((b) => b.name)) }
     }
-    this.layers = { clouds: layer(docs.clouds, CLOUD_SPACING), rain: layer(docs.rain, FALL_SPACING), snow: layer(docs.snow, FALL_SPACING) }
+    this.layers = { clouds: layer(docs.clouds, CLOUD_SPACING * Math.max(1, view0.distance / CLOUD_VIEW)), rain: layer(docs.rain, FALL_SPACING), snow: layer(docs.snow, FALL_SPACING) }
     const cb = this.layers.clouds.actor.blobs
     this.cloudColors = cb.color.slice(0, cb.count * 3)
     // the wind that comes with the weather roughens the water too, along the way the rain leans
@@ -90,6 +95,9 @@ export class SceneWeather {
 
   /** Sets how deep the snow lying is, 0 to 1. Returns whether it changed by enough to send up again (`Stage.reshape(cover)`). */
   pile(depth: number): boolean {
+    // a scene with nothing still to lie on (the sky islands all drift) has no cover on the stage to send up: handing
+    // the stage one froze the isles a moment after they loaded (Matt, 2026-11-22)
+    if (!this.cover.blobs.count) return false
     const was = this.cover.depth
     if (Math.abs(depth - (Number.isNaN(was) ? -1 : was)) < PILE_STEP && depth !== 0 && depth !== 1) return false
     return pileSnow(this.cover, depth)

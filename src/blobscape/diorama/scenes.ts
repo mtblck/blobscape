@@ -9,37 +9,37 @@ import { paletteAt, timeOf, type TimeId } from '../timeOfDay.ts'
 import { SceneWater } from '../../splat-engine/sceneWater.ts'
 import { DEFAULT_LIGHT, buildVoxels } from '../../splat-engine/voxel.ts'
 import * as meadow from '../fourways/meadow/build.ts'
-import { CAMPFIRE } from './scenes/campfire.ts'
-import { BEE } from './scenes/bee.ts'
-import { DRAGON } from './scenes/dragon.ts'
-import { HAND } from './scenes/hand.ts'
-import { ISLES } from './scenes/isles.ts'
-import { OCTOPUS } from './scenes/octopus.ts'
-import { OWL } from './scenes/owl.ts'
-import { REEF } from './scenes/reef.ts'
-import { CROC } from './scenes/croc.ts'
-import { GROVE } from './scenes/grove.ts'
-import { HARVEST } from './scenes/harvest.ts'
-import { LAB } from './scenes/lab.ts'
-import { HUT } from './scenes/hut.ts'
-import { SNAIL } from './scenes/snail.ts'
-import { SPIDER } from './scenes/spider.ts'
-import { WINDOW } from './scenes/window.ts'
-import { WINDMILL } from './scenes/windmill.ts'
-import { RUIN } from './scenes/ruin.ts'
-import { CAVE } from './scenes/cave.ts'
-import { CANYON } from './scenes/canyon.ts'
-import { CABIN } from './scenes/cabin.ts'
+import { CAMPFIRE, CAMPFIRE_PROJECT } from './scenes/campfire.ts'
+import { BEE, BEE_PROJECT } from './scenes/bee.ts'
+import { DRAGON_PROJECT } from '../props/cave.ts'
+import { HAND, HAND_PROJECT } from './scenes/hand.ts'
+import { ISLES, ISLES_PROJECT } from './scenes/isles.ts'
+import { OCTOPUS, OCTOPUS_PROJECT } from './scenes/octopus.ts'
+import { OWL, OWL_PROJECT } from './scenes/owl.ts'
+import { REEF, REEF_PROJECT } from './scenes/reef.ts'
+import { CROC, CROC_PROJECT } from './scenes/croc.ts'
+import { GROVE, GROVE_PROJECT } from './scenes/grove.ts'
+import { HARVEST, HARVEST_PROJECT } from './scenes/harvest.ts'
+import { LAB, LAB_PROJECT } from './scenes/lab.ts'
+import { HUT, HUT_PROJECT } from './scenes/hut.ts'
+import { SNAIL, SNAIL_PROJECT } from './scenes/snail.ts'
+import { SPIDER, SPIDER_PROJECT } from './scenes/spider.ts'
+import { WINDOW, WINDOW_PROJECT } from './scenes/window.ts'
+import { WINDMILL, WINDMILL_PROJECT } from './scenes/windmill.ts'
+import { RUIN, RUIN_PROJECT } from './scenes/ruin.ts'
+import { CAVE, CAVE_PROJECT } from './scenes/cave.ts'
+import { CANYON, CANYON_PROJECT } from './scenes/canyon.ts'
+import { CABIN, CABIN_PROJECT } from './scenes/cabin.ts'
 import { KOI_PROJECT } from './scenes/koi.ts'
-import { madeProp } from '../props/index.ts'
+import { madeProp, madeTags } from '../props/index.ts'
 import { composeScene } from '../../splat-engine/compose.ts'
 import type { SceneProject } from '../../splat-engine/project.ts'
 import type { WeatherId } from '../../splat-engine/skyRecipes.ts'
-import { HENGE } from './scenes/henge.ts'
-import { WHALES } from './scenes/whales.ts'
-import { TURKEY } from './scenes/turkey.ts'
+import { HENGE, HENGE_PROJECT } from './scenes/henge.ts'
+import { WHALES, WHALES_PROJECT } from './scenes/whales.ts'
+import { TURKEY, TURKEY_PROJECT } from './scenes/turkey.ts'
 import { FISHING } from './scenes/fishing.ts'
-import { LIGHTHOUSE as LIGHTHOUSE_DOC } from './scenes/lighthouse.ts'
+import { LIGHTHOUSE as LIGHTHOUSE_DOC, LIGHTHOUSE_PROJECT } from './scenes/lighthouse.ts'
 import { ambientAt, lightsAt, poseFishing, skyAt } from './fishing.ts'
 
 /** A scene Diorama can show: how to build it, move it and light it, and how it asks to be drawn. */
@@ -60,6 +60,11 @@ export interface Diorama {
    * and stars) is out until a night is picked, while its lamps stay lit as written.
    */
   byDay?: boolean
+  /**
+   * True for a scene out in space (its land tagged `space`; the space whales, Matt 2026-11-22): it keeps its own sky,
+   * so Diorama offers it no time of day and no weather.
+   */
+  space?: boolean
   /** For the view's label: what is in the picture. */
   about: string
   /** Seconds before it repeats. */
@@ -150,7 +155,7 @@ const OWN_PALETTE = 'Made for it'
 
 /** The lighthouse, the first scene, keeps its own five views and does not rock. */
 const LIGHTHOUSE: Diorama = withOver(
-  () => described('lighthouse', LIGHTHOUSE_DOC, 'A lighthouse and a cottage on a rock in the sea at dusk, with a turning lamp, pines, a jetty, a small boat, gulls and clouds'),
+  () => described('lighthouse', LIGHTHOUSE_DOC, 'A lighthouse and a cottage on a rock in the sea at dusk, with a turning lamp, pines, a jetty, a small boat, gulls and clouds', { project: LIGHTHOUSE_PROJECT }),
   { views: [
     { id: 'shore', label: 'From the shore', orbit: { target: [0.05, 0.84, 0.05], distance: 3.7, azimuth: 28, elevation: 10 } },
     { id: 'above', label: 'From above', orbit: { target: [0, 0.6, 0], distance: 5.2, azimuth: 40, elevation: 38 } },
@@ -174,8 +179,10 @@ export function described(id: string, doc: SceneDoc, about: string, more: Pick<D
   const c = compileScene(more.byDay ? litFor(doc, false, 'always') : doc)
   let pond: SceneWater | undefined
   const times = new Map<string, Diorama>()
+  const space = !!(more.project ? (typeof more.project.land === 'string' ? madeTags(more.project.land) : more.project.land.doc.tags) : doc.tags)?.includes('space')
   const self: Diorama = {
     ...more,
+    space,
     id,
     label: c.name,
     about,
@@ -231,6 +238,8 @@ export function described(id: string, doc: SceneDoc, about: string, more: Pick<D
       return d
     },
   }
+  // out in space there is no morning or night to set it in
+  if (space) self.timed = undefined
   return self
 }
 
@@ -275,31 +284,31 @@ const SKY_FISHING: Diorama = (() => {
 
 export const DIORAMAS: Diorama[] = [
   LIGHTHOUSE,
-  described('campfire', CAMPFIRE, 'A camp in a clearing among pines at night, with a flickering fire throwing sparks, a tent, a lantern, fireflies and the moon'),
-  described('dragon', DRAGON, 'A red dragon bent over a glowing pool of lava in a dark cave, its claws on the rim, its neck swaying, its head turning, its jaw opening and its wings shifting, with embers rising'),
-  described('bee', BEE, 'A giant bee hovering at a pink flower in a forest clearing, with fluttering pale wings, little bees, butterflies, mushrooms, ferns and drifting pollen'),
-  described('hand', HAND, 'A giant sandstone hand rising from a desert ruin at dusk, holding a glowing blue crystal that turns and bobs, with slowly curling fingers, broken columns, cacti and drifting fireflies'),
-  described('reef', REEF, 'A giant jellyfish beating slowly over a coral reef, trailing swaying arms, with branching corals, seaweed, circling fish and rising bubbles'),
-  described('octopus', OCTOPUS, 'A purple octopus riding a bell buoy through a storm at night, holding up a glowing lantern in one arm while its other arms curl and the bell swings, in falling rain'),
-  described('owl', OWL, 'A great owl in a starry wizard hat perched on a stump, turning its head to watch a cauldron of glowing pink potion that stirs itself over a fire, among candles, bottles, books and mushrooms'),
-  described('isles', ISLES, 'Snowy islands of rock adrift in a night sky, joined by rope bridges: a cabin with lit windows and a smoking chimney among pines, a frozen waterfall, a crown of glowing ice crystals, a beacon, and falling snow'),
-  described('harvest', HARVEST, 'A pumpkin patch under a huge moon, kept by a scarecrow with a carved pumpkin head and a lantern, with crows on its arm, a wind pump turning behind, corn and drifting leaves.'),
-  described('lab', LAB, 'A laboratory at night where sprouts grow in three tall jars of glowing liquid, with rising bubbles, a steaming flask, blinking dials, a swaying lamp and a cat keeping watch.'),
-  described('croc', CROC, 'A crocodile basking on a sandbar in a sunny pond, yawning, with flowers growing along its back, a small bird riding on it and butterflies overhead.'),
-  described('grove', GROVE, 'A grove of birches in the snow at night, their faces lit from inside like lanterns, with paper lamps on the branches, a fox asleep below and ribbons of light in the sky.'),
-  described('hut', HUT, 'A fishing hut on stilts over a mangrove lagoon at dawn, with a lantern, drying nets, a rowing boat, and a heron in the shallows.'),
-  described('window', WINDOW, 'A round stained glass window with turning rings of panes, in the last wall of a ruined library at sunrise, with shelves, piles of books and a tree grown over the wall.'),
-  described('spider', SPIDER, 'A wind-up brass spider with a lantern for a body, on its web between two bare trees, with moths circling the light.'),
-  described('snail', SNAIL, 'A giant snail whose shell is a little house, with lit windows, a smoking chimney, a deck with a flag and a swinging lantern, inching through a wood of tall glowing mushrooms with ferns and fireflies'),
-  described('windmill', WINDMILL, 'A windmill on a farm by day, with turning sails, sheep, a duck on a pond, a wheat field, trees, clouds and birds'),
-  described('ruin', RUIN, 'A ruined chapel at dusk in autumn: an arcade of pointed arches broken along its top, brick walls fallen in places with their bricks at their feet, worn steps, a leaning fence, a maple and a lantern'),
-  described('cave', CAVE, 'An ice cave cut open at night, with icicles along its broken roof, stalactites joining stalagmites, flowstone, basalt columns stepping into a still pool, a geode broken open and glowing crystals, one growing as you watch'),
-  described('canyon', CANYON, 'A desert canyon at sunset worn by water, with banded cliffs and ledges, scree, a mesa, hoodoos, a natural arch, a dry stream bed of pebbles and cracked mud, saguaros, a gnarled tree, a ram skull with curled horns, old ribs, a fossil shell and a circling hawk'),
-  described('cabin', CABIN, 'A log cabin snowed in on a winter night: snow falling and settling where it lands, drifts piled deep downwind of the cabin, rocks and fence, a path trodden to the gate, frost growing across the lit window, chimney smoke, a woodpile and a lantern'),
+  described('campfire', CAMPFIRE, 'A camp in a clearing among pines at night, with a flickering fire throwing sparks, a tent, a lantern, fireflies and the moon', { project: CAMPFIRE_PROJECT }),
+  described('dragon', composeScene(DRAGON_PROJECT, madeProp), 'A red dragon bent over a pool of lava in a dark cave, its claws on the rim, its neck swaying, its head turning, its jaw opening and its wings shifting; the lava wells up, crusts over into glowing plates and bubbles, and embers rise', { project: DRAGON_PROJECT }),
+  described('bee', BEE, 'A giant bee hovering at a pink flower in a forest clearing, with fluttering pale wings, little bees, butterflies, mushrooms, ferns and drifting pollen', { project: BEE_PROJECT }),
+  described('hand', HAND, 'A giant sandstone hand rising from a desert ruin at dusk, holding a glowing blue crystal that turns and bobs, with slowly curling fingers, broken columns, cacti and drifting fireflies', { project: HAND_PROJECT }),
+  described('reef', REEF, 'A giant jellyfish beating slowly over a coral reef, trailing swaying arms, with branching corals, seaweed, circling fish and rising bubbles', { project: REEF_PROJECT }),
+  described('octopus', OCTOPUS, 'A purple octopus riding a bell buoy through a storm at night, holding up a glowing lantern in one arm while its other arms curl and the bell swings, in falling rain', { project: OCTOPUS_PROJECT, weather: 'thunderstorm' }),
+  described('owl', OWL, 'A great owl in a starry wizard hat perched on a stump, turning its head to watch a cauldron of glowing pink potion that stirs itself over a fire, among candles, bottles, books and mushrooms', { project: OWL_PROJECT }),
+  described('isles', ISLES, 'Snowy islands of rock adrift in a night sky, joined by rope bridges: a cabin with lit windows and a smoking chimney among pines, a frozen waterfall, a crown of glowing ice crystals, a beacon, and falling snow', { project: ISLES_PROJECT, weather: 'snow', overhead: false }),
+  described('harvest', HARVEST, 'A pumpkin patch under a huge moon, kept by a scarecrow with a carved pumpkin head and a lantern, with crows on its arm, a wind pump turning behind, corn and drifting leaves.', { project: HARVEST_PROJECT }),
+  described('lab', LAB, 'A laboratory at night where sprouts grow in three tall jars of glowing liquid, with rising bubbles, a steaming flask, blinking dials, a swaying lamp and a cat keeping watch.', { project: LAB_PROJECT }),
+  described('croc', CROC, 'A crocodile basking on a sandbar in a sunny pond, yawning, with flowers growing along its back, a small bird riding on it and butterflies overhead.', { project: CROC_PROJECT }),
+  described('grove', GROVE, 'A grove of birches in the snow at night, their faces lit from inside like lanterns, with paper lamps on the branches, a fox asleep below and ribbons of light in the sky.', { project: GROVE_PROJECT, weather: 'snow', overhead: false }),
+  described('hut', HUT, 'A fishing hut on stilts over a mangrove lagoon at dawn, with a lantern, drying nets, a rowing boat, and a heron in the shallows.', { project: HUT_PROJECT }),
+  described('window', WINDOW, 'A round stained glass window with turning rings of panes, in the last wall of a ruined library at sunrise, with shelves, piles of books and a tree grown over the wall.', { project: WINDOW_PROJECT }),
+  described('spider', SPIDER, 'A wind-up brass spider with a lantern for a body, on its web between two bare trees, with moths circling the light.', { project: SPIDER_PROJECT }),
+  described('snail', SNAIL, 'A giant snail whose shell is a little house, with lit windows, a smoking chimney, a deck with a flag and a swinging lantern, inching through a wood of tall glowing mushrooms with ferns and fireflies', { project: SNAIL_PROJECT }),
+  described('windmill', WINDMILL, 'A windmill on a farm by day, with turning sails, sheep, a duck on a pond, a wheat field, trees, clouds and birds', { project: WINDMILL_PROJECT }),
+  described('ruin', RUIN, 'A ruined chapel at dusk in autumn: an arcade of pointed arches broken along its top, brick walls fallen in places with their bricks at their feet, worn steps, a leaning fence, a maple and a lantern', { project: RUIN_PROJECT }),
+  described('cave', CAVE, 'An ice cave cut open at night, with icicles along its broken roof, stalactites joining stalagmites, flowstone, basalt columns stepping into a still pool, a geode broken open and glowing crystals, one growing as you watch', { project: CAVE_PROJECT }),
+  described('canyon', CANYON, 'A desert canyon at sunset worn by water, with banded cliffs and ledges, scree, a mesa, hoodoos, a natural arch, a dry stream bed of pebbles and cracked mud, saguaros, a gnarled tree, a ram skull with curled horns, old ribs, a fossil shell and a circling hawk', { project: CANYON_PROJECT }),
+  described('cabin', CABIN, 'A log cabin snowed in on a winter night: snow falling and settling where it lands, drifts piled deep downwind of the cabin, rocks and fence, a path trodden to the gate, frost growing across the lit window, chimney smoke, a woodpile and a lantern', { project: CABIN_PROJECT, weather: 'snow', overhead: false }),
   described('koi', composeScene(KOI_PROJECT, madeProp), 'A koi pond in a moss garden on a rainy day: raindrops ring the water where they land, the rings cross and bounce off the banks and stepping stones, koi circle under the surface and leave wakes, and a tall stone lantern and a low snow-viewing lantern glow under a cherry tree in full bloom that sheds its petals, with bamboo, irises and lily pads', { project: KOI_PROJECT, weather: 'light-rain', overhead: false, byDay: true }),
-  described('whales', WHALES, 'A pod of whales swimming through space, a mother and two calves with stars on their backs, their tails and flippers beating slowly, past a ringed planet and its moon, banks of nebula, a far sun, tumbling rocks and stardust streaming by'),
-  described('turkey', TURKEY, 'A giant turkey chasing a cook in an apron and chef’s hat down a country road in the fall, past a rail fence, trees in fall color, pumpkins, a mailbox and a billboard, with dust at their heels, loose feathers and falling leaves'),
-  described('henge', HENGE, 'A ring of standing stones at night where a magic circle flares to life, sparks gather into a witch in a white robe and a tall white hat, who draws a wand, waves it once and vanishes in a shower of sparks'),
+  described('whales', WHALES, 'A pod of whales swimming through space, a mother and two calves with stars on their backs, their tails and flippers beating slowly, past a ringed planet and its moon, banks of nebula, a far sun, tumbling rocks and stardust streaming by', { project: WHALES_PROJECT }),
+  described('turkey', TURKEY, 'A giant turkey chasing a cook in an apron and chef’s hat down a country road in the fall, past a rail fence, trees in fall color, pumpkins, a mailbox and a billboard, with dust at their heels, loose feathers and falling leaves', { project: TURKEY_PROJECT }),
+  described('henge', HENGE, 'A ring of standing stones at night where a magic circle flares to life, sparks gather into a witch in a white robe and a tall white hat, who draws a wand, waves it once and vanishes in a shower of sparks', { project: HENGE_PROJECT }),
   FOX_MEADOW,
   SKY_FISHING,
 ]

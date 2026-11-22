@@ -3627,6 +3627,12 @@
        "doc": "Its lamps as a whole: 'always' keeps everything that says `lit: 'dark'` shining at any time of day, as in a cave or\na dungeon, where it is never day. Left out, each goes by its own `lit`."
       },
       {
+       "name": "tags",
+       "optional": true,
+       "type": "(\"tree\" | \"crystal\" | \"night\" | \"plant\" | \"flower\" | \"rock\" | \"building\" | \"wall\" | \"lamp\" | \"farm\" | \"thing\" | \"sign\" | \"boat\" | \"animal\" | \"person\" | \"magic\" | \"grassy\" | \"rocky\" | \"sandy\" | \"snowy\" | \"sea\" | \"pond\" | \"space\" | \"leafy\" | \"evergreen\" | \"floats\")[]",
+       "doc": "What its land is, from the fixed list (tags.ts: grassy, rocky, sandy, snowy, sea, pond, night): Scene Creator's search finds the land by these."
+      },
+      {
        "name": "palette",
        "type": "string[]",
        "doc": "The colors the picture is drawn in, 2 to 32."
@@ -3730,6 +3736,12 @@
        "optional": true,
        "type": "WaterDoc",
        "doc": "A pond whose surface ripples where rain lands on it and where things move through it."
+      },
+      {
+       "name": "lava",
+       "optional": true,
+       "type": "LavaDoc",
+       "doc": "A pool of molten rock that turns over, cools to a crust that cracks into plates, and bubbles (lava.ts): a shared recipe, as water is. A scene has water or lava, not both."
       },
       {
        "name": "heavens",
@@ -3837,6 +3849,100 @@
        "doc": "Foam where the water strikes what stands in it (a post, a rock, a bank): it gathers where the surge against a\nwall runs up fast, spreads a little and fades over a second or two, and the surface is drawn white under it.\n`foam` is how readily it gathers, 0 (none, when left out) to 4; 1 suits swells against posts."
       }
      ]
+    },
+    {
+     "name": "LavaDoc",
+     "kind": "interface",
+     "doc": "Lava that moves (lava.ts): molten rock wherever the still ground inside the box `from` to `to` lies under `level`,\nfound as water is (dig the pool with a `cut`). Its surface is the water's height field run slow and thick, and over\nit a field of heat: rock wells up hot at `vents` and spreads out over the surface, cooling as it goes from white-hot\nthrough orange and red to a dark crust, which breaks into plates with glowing cracks between them, piles up along\nthe bank and where two vents' spreads meet, and is broken open by bubbles. One whole loop is worked out when the\nscene is made, as the water's is, and it glows by itself. Give the scene a light over it for what it lights.",
+     "props": [
+      {
+       "name": "level",
+       "type": "number",
+       "doc": "The height its surface stands at."
+      },
+      {
+       "name": "from",
+       "type": "[number, number]",
+       "doc": "One corner of the ground looked over for lava, [x, z]."
+      },
+      {
+       "name": "to",
+       "type": "[number, number]",
+       "doc": "The opposite corner."
+      },
+      {
+       "name": "colors",
+       "optional": true,
+       "type": "[string, string, string, string]",
+       "doc": "Its colors from cold to hot: crust, dull red, orange, white-hot. A dark crust and a red, orange and pale yellow glow when left out."
+      },
+      {
+       "name": "cell",
+       "optional": true,
+       "type": "number",
+       "doc": "A cell of its grid: 0.012 to 0.1, 0.022 when left out."
+      },
+      {
+       "name": "cool",
+       "optional": true,
+       "type": "number",
+       "doc": "Seconds for the surface to lose two thirds of its heat: 0.5 to 20, 3 when left out. Shorter, and the crust closes in nearer the vents."
+      },
+      {
+       "name": "flow",
+       "optional": true,
+       "type": "number",
+       "doc": "How fast the surface moves out from a vent's edge, units a second: 0.005 to 0.5, 0.06 when left out."
+      },
+      {
+       "name": "plate",
+       "optional": true,
+       "type": "number",
+       "doc": "How big the crust's plates are, units across: 0.02 to 1, 0.1 when left out."
+      },
+      {
+       "name": "vents",
+       "optional": true,
+       "type": "{ at: [number, number]; r?: number; wander?: number; times?: number; phase?: number }[]",
+       "doc": "Where hot rock wells up, at most six: round `at` ([x, z]), `r` across (half; a fifth of the pool's narrower side when left out), wandering `wander` round that spot (0) `times` a loop (1) from `phase`. One in the middle when left out."
+      },
+      {
+       "name": "bubbles",
+       "optional": true,
+       "type": "number",
+       "doc": "How many bubbles burst a loop: 0 to 60, 8 when left out."
+      },
+      {
+       "name": "pop",
+       "optional": true,
+       "type": "number",
+       "doc": "How wide a bubble is (half): 0.01 to 0.3, three cells when left out."
+      },
+      {
+       "name": "speed",
+       "optional": true,
+       "type": "number",
+       "doc": "How fast a swell travels, units a second: 0.05 to 2, 0.12 when left out."
+      },
+      {
+       "name": "damping",
+       "optional": true,
+       "type": "number",
+       "doc": "The share of its motion the surface loses a second, 0.05 to 0.95: 0.9 when left out."
+      },
+      {
+       "name": "ripple",
+       "optional": true,
+       "type": "number",
+       "doc": "How many times steeper than it is the surface is drawn: 1 to 12, 3 when left out."
+      }
+     ]
+    },
+    {
+     "name": "LAVA_COLORS",
+     "kind": "const",
+     "doc": "The colors of lava when a scene names none: crust, dull red, orange, white-hot.",
+     "type": "[string, string, string, string]"
     },
     {
      "name": "AirDoc",
@@ -4042,6 +4148,12 @@
        "optional": true,
        "type": "string",
        "doc": "Marks a thing of its own (a mill, a tree, a sheep): its name as a prop in Scene Creator. The parts on this bone and\non the bones under it are the prop, and the scene comes apart into props by these marks with nothing picked by\nhand. Not on a bone under another marked one."
+      },
+      {
+       "name": "tags",
+       "optional": true,
+       "type": "(\"tree\" | \"crystal\" | \"night\" | \"plant\" | \"flower\" | \"rock\" | \"building\" | \"wall\" | \"lamp\" | \"farm\" | \"thing\" | \"sign\" | \"boat\" | \"animal\" | \"person\" | \"magic\" | \"grassy\" | \"rocky\" | \"sandy\" | \"snowy\" | \"sea\" | \"pond\" | \"space\" | \"leafy\" | \"evergreen\" | \"floats\")[]",
+       "doc": "With `prop`, what the prop is and how it behaves, from the fixed list (tags.ts): kinds such as tree, rock or lamp\nfor search, and qualities the shared recipes act on (leafy, evergreen, floats)."
       }
      ]
     },
@@ -4509,6 +4621,12 @@
        "name": "foam",
        "type": "number",
        "doc": "How readily foam gathers where the water strikes something standing in it: 0 for none."
+      },
+      {
+       "name": "lava",
+       "optional": true,
+       "type": "LavaPlan",
+       "doc": "Where the pool is molten rock (`SceneDoc.lava`): how it turns over, cools and bubbles."
       }
      ],
      "methods": [
@@ -4765,6 +4883,18 @@
        "doc": "Every burst of spray in the loop: where, when, which way away from what it struck, and how hard (0 to 1)."
       },
       {
+       "name": "lava",
+       "readonly": true,
+       "type": "LavaHeat | null",
+       "doc": "The heat over the pool where the scene's water is lava (`WaterPlan.lava`), as it stands after the loop was worked out."
+      },
+      {
+       "name": "glowNow",
+       "readonly": true,
+       "type": "Float32Array<ArrayBufferLike> | null",
+       "doc": "Each cell's glow as last laid by `set`, 0 to 1, where it is lava."
+      },
+      {
        "name": "waves",
        "type": "number",
        "doc": "How rough the wind makes the water, in levels (`addWind`): 0 for none."
@@ -4829,6 +4959,16 @@
          "code": "show(t: number, eye: ArrayLike<number>, options?: { mirror?: MirrorImage | null; lights?: readonly PointLight[] }): void"
         }
        ]
+      }
+     ]
+    },
+    {
+     "name": "shadeLava",
+     "kind": "function",
+     "doc": "Colors each blob of a lava surface by the glow of the cell it lies in (`lavaColor`), solid.",
+     "signatures": [
+      {
+       "code": "shadeLava(s: WaterSurface, glow: Float32Array, ramp: [Vec3, Vec3, Vec3, Vec3]): void"
       }
      ]
     },

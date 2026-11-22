@@ -5,6 +5,7 @@ import type { Actor } from './engine.ts'
 import { Skeleton, axisAngle, emptySkin, mulQ, setWeights } from './rig.ts'
 import type { CompiledScene, WaterDrop, WaterPlan } from './sceneDoc.ts'
 import { WATER_TICK, Water, crossing, makeSurface, shadeSurface, shapeSurface, type WaterSurface } from './water.ts'
+import { LavaHeat, lavaColor } from './lava.ts'
 
 /** How many rolls of wind press on the water. */
 const WIND_ROLLS = 5
@@ -80,12 +81,25 @@ export class SceneWater {
     this.foam = new Float32Array(nx * nz)
     this.foamFrames = plan.foam > 0 ? new Uint8Array(this.count * nx * nz) : null
     this.spray = this.foamFrames ? sprayActor(plan) : null
+    if (plan.lava) {
+      // lava glows by itself, and is never mirrored or see-through
+      this.lava = new LavaHeat({ nx, nz, x0, z0, cell, wet: water.wet }, plan.lava, scene.loop)
+      this.glowFrames = new Uint8Array(this.count * nx * nz)
+      this.glowNow = new Float32Array(nx * nz)
+      this.surface.glow = new Uint8Array(this.surface.blobs.count).fill(255)
+    }
     this.frames = this.run(water, plan.drops, true)
     this.set(0)
   }
 
   private readonly scene: CompiledScene
   private readonly warm: number
+  /** The heat over the pool where the scene's water is lava (`WaterPlan.lava`), as it stands after the loop was worked out. */
+  readonly lava: LavaHeat | null = null
+  /** The kept moments' glow, a byte a cell, where it is lava: two loops run back to back and blended across the loop, so the end joins the start exactly. */
+  private readonly glowFrames: Uint8Array | null = null
+  /** Each cell's glow as last laid by `set`, 0 to 1, where it is lava. */
+  readonly glowNow: Float32Array | null = null
   private readonly every: number
   private readonly ticks: number
 
@@ -108,10 +122,19 @@ export class SceneWater {
     // the scene's own water (not a band of rain or the wind laid over it) has its swells, foam and spray
     const swells = bodies && plan.swells.length ? new Swells(water, plan, scene.loop) : undefined
     const froth = bodies && this.foamFrames ? new Froth(water, plan, scene.loop, this.foam) : undefined
-    for (let run = 0; run <= warm; run++) {
+    // lava's heat runs one loop more than the heights, kept too, so the two kept loops can be blended into one that joins
+    const lava = bodies ? this.lava : null, gf = lava && this.glowFrames, other = gf && new Uint8Array(gf.length)
+    const dt = every * WATER_TICK, cells = nx * nz
+    for (let run = 0; run <= warm + (lava ? 1 : 0); run++) {
       let next = 0
+      lava?.rewind()
       for (let k = 0; k < ticks; k++) {
         const t = (k / ticks) * scene.loop
+        if (lava && k % every === 0) {
+          lava.step(dt, t, (b) => water.splash(b.x, b.z, b.r, plan.splash.depth))
+          if (run >= warm) lava.glow(run === warm ? gf! : other!, (k / every) * cells)
+        }
+        if (run > warm) { water.step(WATER_TICK); yield; continue }
         if (run === warm && k % every === 0) {
           const o = (k / every) * nx * nz, h = water.h
           for (let c = 0; c < h.length; c++) frames[o + c] = Math.max(-32767, Math.min(32767, Math.round(h[c] / STEP)))
@@ -135,6 +158,13 @@ export class SceneWater {
         water.step(WATER_TICK)
         if (froth) froth.tick(run === warm ? t : null, this.bursts)
         yield
+      }
+    }
+    if (gf && other) {
+      // the loop after the kept one starts where the kept one ends: fading from it to the kept one across the loop joins the end to the start
+      for (let m = 0; m < this.count; m++) {
+        const s = m / this.count, o = m * cells
+        for (let c = 0; c < cells; c++) gf[o + c] = Math.round(other[o + c] * (1 - s) + gf[o + c] * s)
       }
     }
     return frames
@@ -288,6 +318,8 @@ export class SceneWater {
     for (let k = 0; k < n; k++) h[k] = (f[a * n + k] * (1 - w) + f[b * n + k] * w) * STEP
     const ff = this.foamFrames, foam = this.foam
     if (ff) for (let k = 0; k < n; k++) foam[k] = (ff[a * n + k] * (1 - w) + ff[b * n + k] * w) / 255
+    const gf = this.glowFrames, glow = this.glowNow
+    if (gf && glow) for (let k = 0; k < n; k++) glow[k] = (gf[a * n + k] * (1 - w) + gf[b * n + k] * w) / 255
     for (const band of this.bands) {
       // a band falls as its share of the swarm comes out
       const on = Math.min(1, Math.max(0, (this.rain - band.from) / (band.to - band.from)))
@@ -311,9 +343,22 @@ export class SceneWater {
     const p = this.plan
     this.set(t)
     shapeSurface(this.surface, this.water, p.ripple)
+    if (p.lava && this.glowNow) { shadeLava(this.surface, this.glowNow, p.lava.ramp); return }
     shadeSurface(this.surface, { body: p.body, sky: p.sky, horizon: p.horizon, clear: p.clear, steep: p.ripple, deep: p.deep, mirror }, eye, lights)
     if (this.foamFrames) whiten(this.surface, this.foam)
     if (this.spray) throwSpray(this.spray, this.bursts, t, this.loop, p.level)
+  }
+}
+
+/** Colors each blob of a lava surface by the glow of the cell it lies in (`lavaColor`), solid. */
+export function shadeLava(s: WaterSurface, glow: Float32Array, ramp: Parameters<typeof lavaColor>[1]) {
+  const { color, opacity } = s.blobs, out = [0, 0, 0]
+  for (let k = 0; k < s.home.length; k++) {
+    // a little grain a blob, so the crust is not one flat color
+    const g = glow[s.home[k]] + (hash(k) - 0.5) * 0.06
+    lavaColor(g, ramp, out)
+    color[k * 3] = out[0]; color[k * 3 + 1] = out[1]; color[k * 3 + 2] = out[2]
+    opacity[k] = 1
   }
 }
 

@@ -4,9 +4,9 @@ import { axisAngle, type Skeleton } from '../../splat-engine/rig.ts'
 import { sceneCreature } from '../../splat-engine/zoo/fromScene.ts'
 import type { Species } from '../../splat-engine/zoo/species.ts'
 import { ZOO } from '../../splat-engine/zoo/index.ts'
-import { CROC } from '../diorama/scenes/croc.ts'
-import { OWL } from '../diorama/scenes/owl.ts'
-import { REEF } from '../diorama/scenes/reef.ts'
+import { GARDEN_CROCODILE } from '../props/croc.ts'
+import { WIZARD_OWL } from '../props/owl.ts'
+import { GIANT_JELLYFISH } from '../props/reef.ts'
 
 /**
  * Creatures taken straight from the Diorama scenes (splat-engine/zoo/fromScene.ts):
@@ -21,10 +21,10 @@ const LOOKS = [{ id: 'scene', label: 'As in the scene' }]
 // --- The crocodile. In the scene it basks facing +x with its legs as part of the body: here each leg has a bone.
 const HIPS: [string, Vec3][] = [['legA', [0.38, 0.24, 0.24]], ['legB', [0.38, 0.24, -0.24]], ['legC', [-0.55, 0.24, 0.24]], ['legD', [-0.55, 0.24, -0.24]]]
 const croc = sceneCreature({
-  doc: CROC,
+  doc: GARDEN_CROCODILE.doc,
   keep: /^(croc|torso|tail\d|head|jaw|bloom\d+|bird)$/,
   bones: HIPS.map(([name, at]) => ({ name, at, parent: 'croc' })),
-  hang: { 5: 'legA', 6: 'legB', 7: 'legC', 8: 'legD' },
+  hang: { 3: 'legA', 4: 'legB', 5: 'legC', 6: 'legD' },
   turn: 1,
   shift: [0, 0, 0.1],
 })
@@ -54,8 +54,8 @@ function crocWalk(sk: Skeleton, t: number) {
 }
 
 // --- The jellyfish, from the reef: its bell and eight arms of three bones each.
-const jelly = sceneCreature({ doc: REEF, keep: /^(jelly|t\d[abc])$/, turn: 0, shift: [0, -0.84, 0] })
-const ARMS = (REEF.bones ?? []).filter((b) => /^t\da$/.test(b.name)).map((b) => {
+const jelly = sceneCreature({ doc: GIANT_JELLYFISH.doc, keep: /^(jelly|t\d[abc])$/, turn: 0, shift: [0, -0.84, 0] })
+const ARMS = (GIANT_JELLYFISH.doc.bones ?? []).filter((b) => /^t\da$/.test(b.name)).map((b) => {
   // the level axis each arm swings about, so all eight close in and open out together
   const l = Math.hypot(b.at[0], b.at[2]) || 1
   return { id: b.name.slice(0, 2), axis: [-b.at[2] / l, 0, b.at[0] / l] as Vec3 }
@@ -80,7 +80,7 @@ function jellySwim(sk: Skeleton, t: number) {
 
 // --- The owl. It perches in the scene; here its toes get a bone a side, so it can waddle.
 const owl = sceneCreature({
-  doc: OWL,
+  doc: WIZARD_OWL.doc,
   keep: /^(body|bodyin|wing[LR]|head)$/,
   bones: [
     // the lining of the body follows the body

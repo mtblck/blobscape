@@ -7,6 +7,7 @@ import { daylight } from './daylight.ts'
 import { checkScene, compileScene, litFor, type CompiledScene, type LightDoc, type MoveDoc, type SceneDoc, type SpeckDoc } from './sceneDoc.ts'
 import { CLOUD_COVERS, WEATHERS, WINDS, falling, type CloudId, type WeatherId, type WindId } from './skyRecipes.ts'
 import { withHeavens } from './heavens.ts'
+import { checkTags, tagged, type Tag } from './tags.ts'
 import { placedPart, placer, type Placement, type Placer } from './place.ts'
 import { MAX_LAMPS, type Lamp, type VoxelSpec } from './voxel.ts'
 
@@ -30,6 +31,14 @@ export interface PropDoc {
   doc: SceneDoc
   /** The point it stands on, in the description's own coordinates: what a placement moves, and what it turns about. */
   foot: Vec3
+  /** What it is and how it behaves, from the fixed list (tags.ts): search finds it by them and the shared recipes act on them. */
+  tags?: Tag[]
+  /**
+   * How it meets a land's water, where it is set down in one (`WaterDoc` floats and bodies, naming its own bones):
+   * `rides` bob and tip on the surface (a boat, a buoy), `wakes` push the water aside as they move through it (a duck,
+   * a fish). Left out on dry land; set down in water, they join the land's water.
+   */
+  water?: { rides?: { bone: string; at: Vec3; size: number }[]; wakes?: { bone: string; at: Vec3; r: number; draft?: number }[] }
 }
 
 export type { Placement, Placer } from './place.ts'
@@ -188,22 +197,19 @@ function weatherOf(kind: 'rain' | 'snow', camera: Orbit): SpeckDoc {
   return falling(kind, camera, WEATHER_COUNT[kind])
 }
 
-/** A prop that drops leaves, by its name: broadleaf trees and bushes, not pines, palms, cacti or bare trees. */
-const LEAFY = /tree|oak|cherry|maple|birch|willow|apple|bush|hedge|shrub/i
-const NOT_LEAFY = /pine|fir\b|spruce|palm|cactus|bare|dead|stump|bamboo/i
 /** Falling leaves' colors, and how many come down under one tree. */
 export const AUTUMN = ['#c8642a', '#e0a030', '#a83c20']
 export const LEAVES_EACH = 12
-/** Whether a prop of this name drops leaves. */
-export const leafy = (name: string) => LEAFY.test(name) && !NOT_LEAFY.test(name)
+/** Whether a prop drops leaves: tagged `leafy` (tags.ts) and not `evergreen`. */
+export const leafy = (prop: { tags?: readonly string[] } | undefined) => tagged(prop, 'leafy') && !tagged(prop, 'evergreen')
 
 /**
  * Where a leafy prop's leaves fall, in its own frame: under its crown (the top half of it, drawn in a little), from the
  * crown's underside down to its foot, so they come from the tree and not from the sky (Matt, 2026-11-22).
  */
 export function leafFall(prop: PropDoc): { from: Vec3; to: Vec3; size: number } | undefined {
-  if (!leafy(prop.name)) return
-  const shapes = compileScene({ ...prop.doc, lights: [], air: undefined, water: undefined }, { puffs: false }).spec(0.08).parts.map((p) => p.shape)
+  if (!leafy(prop)) return
+  const shapes = compileScene({ ...prop.doc, lights: [], air: undefined, water: undefined, lava: undefined }, { puffs: false }).spec(0.08).parts.map((p) => p.shape)
   if (!shapes.length) return
   const lo: Vec3 = [Infinity, Infinity, Infinity], hi: Vec3 = [-Infinity, -Infinity, -Infinity]
   for (const sh of shapes) for (let i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], sh.min[i]); hi[i] = Math.max(hi[i], sh.max[i]) }
@@ -344,6 +350,8 @@ export interface PropPick {
   drop?: ('during' | 'pass')[]
   /** The scene's lights it takes, by their place in its list; left out, those its box holds. */
   lights?: number[]
+  /** Its tags (tags.ts), which go with the prop. */
+  tags?: Tag[]
 }
 
 /** The part indices a pick takes from a scene. */
@@ -360,7 +368,7 @@ export function pickedParts(doc: SceneDoc, pick: PropPick): number[] {
 
 /** The picks a description marks itself: one prop for each bone with a `prop` name, taking what rides on it. */
 export function markedPicks(doc: SceneDoc): PropPick[] {
-  return (doc.bones ?? []).filter((b) => b.prop).map((b) => ({ name: b.prop!, bones: [b.name] }))
+  return (doc.bones ?? []).filter((b) => b.prop).map((b) => ({ name: b.prop!, bones: [b.name], ...(b.tags ? { tags: [...b.tags] } : {}) }))
 }
 
 /**
@@ -396,7 +404,7 @@ function keepOnly(doc: SceneDoc, parts: number[]): SceneDoc {
 
 /** A coarse look at where a description's parts are: the box round all of them. */
 export function boxOf(doc: SceneDoc): { lo: Vec3; hi: Vec3 } {
-  const spec = compileScene({ ...doc, lights: [], air: undefined, water: undefined }, { puffs: false }).spec(0.08)
+  const spec = compileScene({ ...doc, lights: [], air: undefined, water: undefined, lava: undefined }, { puffs: false }).spec(0.08)
   const lo: Vec3 = [Infinity, Infinity, Infinity], hi: Vec3 = [-Infinity, -Infinity, -Infinity]
   for (const p of spec.parts) for (let i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], p.shape.min[i]); hi[i] = Math.max(hi[i], p.shape.max[i]) }
   return { lo, hi }
@@ -433,8 +441,12 @@ export function splitScene(given: SceneDoc, picks: PropPick[]): { land: PropDoc;
     }
     const foot = pick.foot ?? [(box.lo[0] + box.hi[0]) / 2, box.lo[1], (box.lo[2] + box.hi[2]) / 2]
     // a prop's lamps wait for the dark wherever it is set down, even one taken from a cave whose lamps always burn
-    const { air: _air, water: _water, cover: _cover, focus: _focus, lamps: _lamps, ...rest } = own
-    return { name: pick.name, foot, doc: { ...rest, name: pick.name, lights } }
+    const { air: _air, water: _water, lava: _lava, cover: _cover, focus: _focus, lamps: _lamps, ...rest } = own
+    // what rode the scene's water or pushed through it on this prop's bones goes with it
+    const mine = new Set((own.bones ?? []).map((b) => b.name))
+    const rides = doc.water?.floats?.filter((f) => mine.has(f.bone)) ?? [], wakes = doc.water?.bodies?.filter((b) => mine.has(b.bone)) ?? []
+    const water = rides.length || wakes.length ? { water: { ...(rides.length ? { rides } : {}), ...(wakes.length ? { wakes } : {}) } } : {}
+    return { name: pick.name, foot, doc: { ...rest, name: pick.name, lights }, ...(pick.tags ? { tags: [...pick.tags] } : {}), ...water }
   })
   const left = doc.parts.map((_, i) => i).filter((i) => !taken.has(i))
   const ground = keepOnly(doc, left)
@@ -442,7 +454,7 @@ export function splitScene(given: SceneDoc, picks: PropPick[]): { land: PropDoc;
   const water = doc.water && { ...doc.water, bodies: doc.water.bodies?.filter((b) => bonesLeft.has(b.bone)), floats: doc.water.floats?.filter((f) => bonesLeft.has(f.bone)) }
   // the scene's own clouds are the weather's, drawn over the land: kept on it (its moon, sun and stars are parts by now)
   const clouds = given.heavens?.clouds
-  const land: PropDoc = { name: doc.name, foot: [0, 0, 0], doc: { ...ground, lights: (doc.lights ?? []).filter((_, i) => lightsLeft.has(i)), water, ...(clouds ? { heavens: { clouds } } : {}) } }
+  const land: PropDoc = { name: doc.name, foot: [0, 0, 0], doc: { ...ground, lights: (doc.lights ?? []).filter((_, i) => lightsLeft.has(i)), water, ...(clouds ? { heavens: { clouds } } : {}) }, ...(doc.tags ? { tags: [...doc.tags] } : {}) }
   const project: SceneProject = {
     kind: 'blobscape-project', version: 1, name: doc.name, loop: doc.loop,
     land, props: props.map((p) => ({ prop: p, at: [...p.foot], turn: 0, size: 1 })), camera: { ...doc.camera },
@@ -476,6 +488,8 @@ function checkProp(v: unknown, at: string, known: (id: string) => boolean, bad: 
   if (!isObj(v)) return bad(at, 'must be a library id or a prop written out')
   if (typeof v.name !== 'string' || !v.name) bad(`${at}.name`, 'must be a name')
   if (!isVec(v.foot)) bad(`${at}.foot`, 'must be [x, y, z]')
+  checkTags(v.tags, `${at}.tags`, bad)
+  if (v.water !== undefined && (!isObj(v.water) || (v.water.rides !== undefined && !Array.isArray(v.water.rides)) || (v.water.wakes !== undefined && !Array.isArray(v.water.wakes)))) bad(`${at}.water`, "must be { rides, wakes }")
   for (const e of checkScene(v.doc)) bad(`${at}.doc.${e}`, '')
 }
 

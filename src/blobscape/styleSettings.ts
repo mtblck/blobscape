@@ -6,6 +6,7 @@ import type { Orbit } from '../splat-core/view.ts'
 import type { Diorama } from './diorama/scenes.ts'
 import { isPixelStyle, lightsItself, type Style } from './diorama/styles.ts'
 import { GLITCH_START, type GlitchChoice } from './glitchLooks.ts'
+import { zoomStep } from './diorama/zoom.ts'
 
 /**
  * One layer of style settings that Diorama and Scene Creator both draw with (Matt, 2026-11-21: any new setting made
@@ -63,6 +64,22 @@ export const PIXEL_SIZES = [2, 3, 4, 6]
 export const PIXEL_RATES = [0, 12, 8]
 /** How many steps of sun Light in bands gives (`banded`): three, none, half and full, kept the paint's texture best. */
 export const TEXEL_BANDS = 3
+
+/**
+ * The detail a page starts a style at, as a place in the detail levels (Chunky, Medium, Fine, Finest), until the
+ * visitor picks one: Finest (Matt, 2026-11-20); a phone starts pixel art at Fine (he found the dragon slow at Finest
+ * on his) and at Chunky the styles that draw the whole screen several times a frame.
+ */
+export const detailStart = (style: Style, coarse: boolean): number => (coarse ? (isPixelStyle(style) ? 2 : 0) : 3)
+
+/** Whether zooming in on pixel art grows its pixels (`?pixelzoom=0` turns it off). */
+export const pixelZoomAsked = (q: URLSearchParams = new URLSearchParams()): boolean => q.get('pixelzoom') !== '0'
+
+/**
+ * Device pixels to an art pixel for a view `now` from its target, in a scene that starts `start` from it: zooming in
+ * grows the pixels a whole step at a time, not the blobs (diorama/zoom.ts), so edges stay pixel edges.
+ */
+export const pixelSizeAt = (s: PixelSettings, start: number, now: number, zoom = true): number => (zoom ? s.size * zoomStep(start, now) : s.size)
 
 /** What a scene's finish is: the settings it asks for. */
 export type Finish = Diorama['finish']

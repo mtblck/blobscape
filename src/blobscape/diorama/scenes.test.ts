@@ -4,14 +4,13 @@ import { DIORAMAS } from './scenes.ts'
 import { LIGHTHOUSE } from './scenes/lighthouse.ts'
 import { CAMPFIRE } from './scenes/campfire.ts'
 import { BEE } from './scenes/bee.ts'
-import { DRAGON } from './scenes/dragon.ts'
 import { HAND } from './scenes/hand.ts'
 import { REEF } from './scenes/reef.ts'
 import { WINDMILL } from './scenes/windmill.ts'
 import { checkScene, isLit, litFor } from '../../splat-engine/sceneDoc.ts'
 
 test('the described scenes are sound, and are data alone', () => {
-  for (const doc of [BEE, CAMPFIRE, DRAGON, HAND, REEF, WINDMILL, LIGHTHOUSE]) {
+  for (const doc of [BEE, CAMPFIRE, HAND, REEF, WINDMILL, LIGHTHOUSE]) {
     assert.deepEqual(checkScene(doc), [], doc.name)
     // nothing but what a .json file could hold
     assert.deepEqual(JSON.parse(JSON.stringify(doc)), doc, doc.name)
@@ -56,4 +55,11 @@ test('the koi pond is made from props: the library pieces, its own rain gone, an
   // both lanterns still wait for the dark, and light the pond once it comes
   assert.equal(koi.doc!.lights!.length, 2)
   for (const l of koi.doc!.lights!) assert.equal(l.lit, 'dark')
+})
+
+test('a scene out in space (its land tagged space) keeps its own sky: no time of day to set it in, and no weather', () => {
+  const space = DIORAMAS.filter((d) => d.space)
+  assert.deepEqual(space.map((d) => d.id), ['whales'])
+  for (const d of space) { assert.equal(d.timed, undefined); assert.equal(d.weather, undefined) }
+  assert.ok(DIORAMAS.find((d) => d.id === 'windmill')!.timed)
 })

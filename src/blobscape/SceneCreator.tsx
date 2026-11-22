@@ -57,7 +57,8 @@ import { pileStep } from '../splat-engine/snowCover.ts'
 import { TIMES } from './timeOfDay.ts'
 import { MAX_STOPS, pathAt, pathSeconds } from './cameraPath.ts'
 import { paletteChoices } from './creator/styling.ts'
-import { cutAsk, pixelCelLook, pixelFlags, pixelFrom, pixelLookOf, pixelStart, type PixelSettings } from './styleSettings.ts'
+import { cutAsk, detailStart, pixelCelLook, pixelFlags, pixelFor, pixelFrom, pixelLookOf, pixelSizeAt, pixelStart, pixelZoomAsked, type PixelSettings } from './styleSettings.ts'
+import { useStyleOnStage } from './useStyleOnStage.ts'
 import { FinishControls, StyleControls } from './StyleControls.tsx'
 import { arrowWay, begin, copied, did, lamped, moved, onGround, redo, redrawn, removed, sized, stepFor, stilled, turned, undo, wrapTurn, type History } from './creator/arrange.ts'
 
@@ -221,7 +222,8 @@ export function SceneCreator() {
   const shown = useMemo(() => shownOf(opened.kind === 'project' && project ? { ...opened, project } : opened), [opened, project])
   const cp = shown.cp
   // a phone starts on Chunky, as Diorama starts it a step lighter
-  const [detail, setDetail] = useState<string>(() => detailAsked(DETAIL, labelNames)?.id ?? (coarse ? DETAIL[0].id : DETAIL[2].id))
+  // the detail the visitor picked, if any: until then each style starts at the detail it does on every page (`detailStart`)
+  const [detailChosen, setDetail] = useState<string | undefined>(() => detailAsked(DETAIL, labelNames)?.id)
   const [orbit, setOrbit] = useState<Orbit>(shown.orbit)
   const [stage, setStage] = useState<CreatureStage>()
   const [failed, setFailed] = useState('')
@@ -241,7 +243,9 @@ export function SceneCreator() {
   const pixels = isPixelStyle(style)
   const glitching = style === 'glitch'
   // pixel art's settings and the finish, shared with Diorama (styleSettings.ts)
-  const [px, setPx] = useState<PixelSettings>(() => pixelStart(shown.finish))
+  // the detail each style starts at is the same on every page (styleSettings.ts)
+  const detail = detailChosen ?? DETAIL[detailStart(style, coarse)].id
+  const [px, setPx] = useState<PixelSettings>(() => pixelStart(shown.finish, typeof location === 'undefined' ? undefined : new URLSearchParams(location.search)))
   const setPixel = useCallback((change: Partial<PixelSettings>) => setPx((c) => ({ ...c, ...change })), [])
   const [glitch, setGlitch] = useState<GlitchChoice>(GLITCH_START)
   /** Pixel art's switches only the address turns off (`?steady=0`, `?calm=0`, …), as on Diorama. */
@@ -277,7 +281,8 @@ export function SceneCreator() {
     setPicked(undefined)
     setPreview(undefined)
     setOrbit(shownOf(o).orbit)
-    setPx(pixelStart(shownOf(o).finish))
+    // a new scene's own finish over the settings the visitor has, as on Diorama
+    setPx((c) => pixelFor(c, shownOf(o).finish))
     const url = new URL(location.href)
     url.searchParams.delete('scene'); url.searchParams.delete('land'); url.searchParams.delete('project')
     const [k, v] = queryFor(o)
@@ -328,7 +333,7 @@ export function SceneCreator() {
         const known = isModel(p.prop) ? modelOf(p.prop) : undefined
         const model = known && modelJob(known)
         // a leafy prop drops leaves of its own when the weather is falling leaves
-        const leaves = light?.weather === 'leaves' && !!cp.props[i] && leafy(cp.props[i].prop.name)
+        const leaves = light?.weather === 'leaves' && !!cp.props[i] && leafy(cp.props[i].prop)
         return { key: JSON.stringify([p.prop, p.turn, p.size, p.lit, project.loop, project.land, steps, propLight, plain, !!model, leaves]), thing: JSON.stringify(p.prop), plain, job: (spacing) => ({ kind: 'prop', project, i, spacing, plain, model, finish: fin }) }
       }),
     ]
@@ -503,7 +508,7 @@ export function SceneCreator() {
       stage.reshape(pond.surface)
       if (pond.spray) stage.reshape(pond.spray)
     })
-    stage.setMirror(pond && mirrored ? { plane: levelPlane(pond.plan.level), lift: pond.plan.cell * 0.75, seen: (image) => { seen = image; wet?.() } } : undefined)
+    stage.setMirror(pond && mirrored && !pond.plan.lava ? { plane: levelPlane(pond.plan.level), lift: pond.plan.cell * 0.75, seen: (image) => { seen = image; wet?.() } } : undefined)
     // the land's moon, sun and stars, which cloud cover puts out
     const heavens = heavenBones(land.skeleton.bones.map((b) => b.name))
     const own = fall ? ownClouds(live.current.shown.weatherScene()) : 0
@@ -619,27 +624,19 @@ export function SceneCreator() {
   const colors = (palettes.find((p) => p.id === px.palette) ?? palettes[0]).colors
   const look = useMemo<PixelLook>(() => pixelLookOf({ ...px, glow }, { colors, sky: skyShown, skyForced, finish: shown.finish, sun: shown.sun, start: shown.orbit, loop: shown.loop }, flags),
     [px, glow, colors, skyShown, skyForced, shown, flags])
-  // the exact (radix) sort: the stage rebuilds its world, keeping the moment
-  useEffect(() => { stage?.setSort(px.exact ? 'radix' : 'bins') }, [stage, px.exact])
   // pixel art shaded a pixel at a time: cel shading in the small picture, lit by the land's sun
   const pixelCel = useMemo(() => (pixelsNow && shadedNow ? pixelCelLook(shown.sun, shown.shade ?? 0.5) : undefined), [pixelsNow, shadedNow, shown.sun, shown.shade])
-  useEffect(() => {
-    stage?.setPixels(pixelsNow ? look : undefined, px.size)
-    // under weather the pixel pass takes each moment's sky, set again only when it has changed
-    let last = ''
-    live.current.sky = stage && pixelsNow && look.sky && weathered ? (_t, now) => {
-      const top = skyUnder(skyColors[0], now, now.lightning), low = skyUnder(skyColors[1], now, now.lightning), key = `${top}|${low}`
-      if (key === last) return
-      last = key
-      stage.setPixels({ ...look, sky: [top, low, look.sky![2]] as NonNullable<PixelLook['sky']> }, px.size)
-    } : undefined
-  }, [stage, pixelsNow, look, px.size, weathered, skyColors])
-  // pixel art can move in held steps; the other styles move every frame
-  useEffect(() => { if (stage) { stage.step = pixelsNow && px.rate ? 1 / px.rate : 0; stage.invalidate() } }, [stage, pixelsNow, px.rate])
+  // zooming in on pixel art grows its pixels, not the blobs, as on Diorama (`?pixelzoom=0` turns it off)
+  const [pixelZoom] = useState(() => pixelZoomAsked(typeof location === 'undefined' ? undefined : new URLSearchParams(location.search)))
+  const size = pixelSizeAt(px, shown.orbit.distance, orbit.distance, pixelZoom)
   // the glitch's bursts come in steps of the scene's own clock, a whole number of steps a loop, so an export joins up
-  useEffect(() => { stage?.setGlitch(glitchingNow ? glitchLook(glitch, shown.loop, calm && !offscreen) : undefined) }, [stage, glitchingNow, glitch, shown.loop, calm, offscreen])
-  // on a phone the styles that fill the whole screen are drawn at one and a half device pixels to a CSS pixel, as Diorama does
-  useEffect(() => { stage?.setSharpness(coarse && !pixelsNow ? 1.5 : 2) }, [stage, coarse, pixelsNow])
+  const glitchNow = useMemo(() => (glitchingNow ? glitchLook(glitch, shown.loop, calm && !offscreen) : undefined), [glitchingNow, glitch, shown.loop, calm, offscreen])
+  // the style goes onto the stage in one place, shared with Diorama (useStyleOnStage.ts)
+  const skyOf = useStyleOnStage(stage, { pixels: pixelsNow, look, size, rate: px.rate, exact: px.exact, glitch: glitchNow, coarse })
+  useEffect(() => {
+    // under weather the pixel pass takes each moment's sky, set again only when it has changed
+    live.current.sky = stage && pixelsNow && look.sky && weathered ? (_t, now) => skyOf(skyUnder(skyColors[0], now, now.lightning), skyUnder(skyColors[1], now, now.lightning)) : undefined
+  }, [stage, pixelsNow, look, skyOf, weathered, skyColors])
   // one of Brush and Ink's looks in place of pixel art. Cel shading's and stained glass's flat fills are gathered on the land
   const drawing = useDrawnLook(stage, pixelsNow ? undefined : styleNow, {
     pixelCel, actor: built?.[0], spacing: DETAIL.find((d) => d.id === detail)?.spacing, plain: !!chosen[0]?.plain, azimuth: shown.orbit.azimuth, offscreen, light: coarse, loop: shown.loop,

@@ -28,11 +28,11 @@ import type { Texture } from '../splat-engine/meshShape.ts'
 import { decodeTexture } from './modelRig.ts'
 import { detailAsked, labelNames, writeDetail } from '../shared/detail.ts'
 import { banded, hugged, unlit } from '../splat-engine/voxel.ts'
-import { zoomStep } from './diorama/zoom.ts'
 import { isPixelStyle, styleAsked, styleWords, type Style } from './diorama/styles.ts'
 import { GLITCH_START, glitchLook, type GlitchChoice } from './glitchLooks.ts'
 import { StyleControls, FinishControls } from './StyleControls.tsx'
-import { PIXEL_RATES, PIXEL_SIZES, pixelCelLook, pixelFlags, pixelFor, pixelLookOf, pixelStart, type PixelSettings } from './styleSettings.ts'
+import { PIXEL_RATES, PIXEL_SIZES, detailStart, pixelCelLook, pixelFlags, pixelFor, pixelLookOf, pixelSizeAt, pixelStart, pixelZoomAsked, type PixelSettings } from './styleSettings.ts'
+import { useStyleOnStage } from './useStyleOnStage.ts'
 import { ShareDialog } from './diorama/ShareDialog.tsx'
 import { choiceEntries, choiceFrom, linkWith, orbitFrom, orbitText, type Entry } from './diorama/shareLink.ts'
 import { useDrawnLook, useHeld, wantsPlain } from './drawnLook.tsx'
@@ -102,11 +102,14 @@ export function PixelDiorama() {
    * is not cut again for them, and the sky eases from one to the next.
    */
   const [weatherPick, setWeather] = useState<WeatherId | 'none' | undefined>(() => { const q = new URLSearchParams(location.search).get('weather'); return q === 'none' ? 'none' : weatherAsked(q) })
-  const [clouds, setClouds] = useState<CloudId | undefined>(() => cloudsAsked(new URLSearchParams(location.search).get('clouds')))
+  const [cloudsPick, setClouds] = useState<CloudId | undefined>(() => cloudsAsked(new URLSearchParams(location.search).get('clouds')))
+  // out in space (the space whales) there is no weather: what was picked waits for the next scene that has a sky
+  const clouds = picked0.space ? undefined : cloudsPick
   // a scene may start under a shared weather of its own (the koi pond's light rain) until another, or none, is picked
-  const weather: WeatherId | undefined = weatherPick === 'none' ? undefined : weatherPick ?? (clouds ? undefined : picked0.weather)
+  const weather: WeatherId | undefined = picked0.space || weatherPick === 'none' ? undefined : weatherPick ?? (clouds ? undefined : picked0.weather)
   /** The wind (`?wind=gale`): weather brings at least its own; it slants what falls and raises waves on water. */
-  const [wind, setWind] = useState<WindId | undefined>(() => windAsked(new URLSearchParams(location.search).get('wind')))
+  const [windPick, setWind] = useState<WindId | undefined>(() => windAsked(new URLSearchParams(location.search).get('wind')))
+  const wind = picked0.space ? undefined : windPick
   /**
    * Whether the weather's clouds float over the scene (`?overhead=0` leaves them out, and rain and snow fall in from
    * over the top of the picture): a scene may start without them, as the koi pond does (Matt, 2026-11-21).
@@ -147,14 +150,13 @@ export function PixelDiorama() {
     }
   })
   const setPixel = useCallback((change: Partial<PixelSettings>) => setFin((f) => ({ ...f, ...change })), [])
-  const { palette, size: baseSize, texel, glow, outline, rock, steps, rate, exact, shade: shaded } = fin
+  const { palette, texel, glow, outline, rock, steps, rate, exact, shade: shaded } = fin
   /** Switches only the address turns off (`?steady=0`, `?calm=0`, …). */
   const [flags] = useState(() => pixelFlags(new URLSearchParams(location.search)))
   // cel shading lights the blobs itself, so its scene is cut with no light baked in; so does pixel art shaded a pixel at a time
   const plain = isPixelStyle(style) ? shaded : wantsPlain(style)
-  // Finest by default (Matt, 2026-11-20); a phone starts pixel art at Fine (Matt found the dragon slow at Finest on his,
-  // 2026-11-20) and keeps Chunky for the styles that draw the whole screen several times
-  const detail = chosen ?? (coarse ? (isPixelStyle(style) ? DETAIL[2].id : DETAIL[0].id) : DETAIL[3].id)
+  // the detail each style starts at is the same on every page (styleSettings.ts `detailStart`)
+  const detail = chosen ?? DETAIL[detailStart(style, coarse)].id
   // discs along a shape's outer edges fitted to the edge (`hugged`), so edges are straight and lines sit on them; `?hug=0`
   const [hug] = useState(() => new URLSearchParams(location.search).get('hug') !== '0')
   /** Glow as the poser reads it: it scales the light the scene's lamps and fires cast, as well as the shine round bright pixels. */
@@ -256,6 +258,8 @@ export function PixelDiorama() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detail, diorama, paint, plain, texel, hug])
 
+  /** Whether the browser took the GPU back (out of memory, or the GPU restarted): nothing more is drawn until a reload. */
+  const [lost, setLost] = useState(false)
   useEffect(() => {
     let live: CreatureStage | undefined, gone = false
     import('./creature/stage.ts')
@@ -265,6 +269,11 @@ export function PixelDiorama() {
         live = s
         s.onFirstFrame = () => setDrawn(true)
         s.setFloor(0)
+        // a phone can run out of graphics memory on a big scene in a style that draws the screen several times (Matt
+        // saw the snail go white in watercolor at Finest, 2026-11-22): the browser takes the GPU back and nothing more
+        // is drawn, so the view says so and offers a lighter detail, rather than staying blank
+        const lose = s.renderer.onDeviceLost.bind(s.renderer)
+        s.renderer.onDeviceLost = (info) => { lose(info); if (!gone) setLost(true) }
         setStage(s)
       }, (e: unknown) => { console.warn(e); setFailed('This browser could not start WebGPU or WebGL 2, which the scene needs.') })
     return () => { gone = true; live?.dispose() }
@@ -285,9 +294,6 @@ export function PixelDiorama() {
   // a step of the walk-through says how the scene is drawn, whatever the switch says
   const asPixels = touring ? touring.pixels : pixels
   const look = useMemo<PixelLook>(() => pixelLookOf(fin, { colors, sky: shown.sky, skyForced: !!shown.at || weathered, finish: shown.finish, sun: shown.sun, start: shown.views[0].orbit, loop: shown.loop }, flags), [fin, colors, shown, weathered, flags])
-
-  // the exact (radix) sort: the stage rebuilds its world, keeping the moment and the poser
-  useEffect(() => { stage?.setSort(exact ? 'radix' : 'bins') }, [stage, exact])
 
   // a new level of detail keeps the moment it was showing
   useEffect(() => {
@@ -319,7 +325,7 @@ export function PixelDiorama() {
       if (pond.spray) stage.reshape(pond.spray)
     })
     // it mirrors what stands round it: the scene drawn once more as its mirror image (a second sort and a small draw, so only with WebGPU)
-    stage.setMirror(pond && mirrored ? { plane: levelPlane(pond.plan.level), lift: pond.plan.cell * 0.75, seen: (image) => { seen.current = image; wet.current?.() } } : undefined)
+    stage.setMirror(pond && mirrored && !pond.plan.lava ? { plane: levelPlane(pond.plan.level), lift: pond.plan.cell * 0.75, seen: (image) => { seen.current = image; wet.current?.() } } : undefined)
     pokes.current = new Pokes(scene.built.skeleton)
     // lights move with the bones (the lamp's beam with its lens, the fire's glow with its flames), so both are set from the same time
     const d = dress(scene.of)
@@ -383,17 +389,17 @@ export function PixelDiorama() {
   // the walk-through's fourth step is about the four samples, so it draws them whatever the switch says
   const sampling = touring?.id === 'samples'
   const drawnLook = useMemo(() => (asPixels ? (sampling ? { ...look, fine: true } : look) : undefined), [asPixels, sampling, look])
-  // on a phone the styles that fill the whole screen (pixel art fills a small frame) are drawn at one and a half device
-  // pixels to a CSS pixel, not two: every pass has near half the pixels to fill, and the marks are no finer than that
-  useEffect(() => { stage?.setSharpness(coarse && !asPixels ? 1.5 : 2) }, [stage, coarse, asPixels])
   // zooming in on pixel art makes the pixels bigger, a whole step at a time, rather than the blobs: a blob stays about
   // one art pixel however close the view comes, so edges stay pixel edges and lines stay on what they outline
   // (Matt saw scalloped edges and lines standing off their things when zoomed in, 2026-11-20); `?pixelzoom=0` turns it off
-  const [pixelZoom] = useState(() => new URLSearchParams(location.search).get('pixelzoom') !== '0')
-  const size = pixelZoom ? baseSize * zoomStep(shown.views[0].orbit.distance, orbit.distance) : baseSize
+  const [pixelZoom] = useState(() => pixelZoomAsked(new URLSearchParams(location.search)))
+  const size = pixelSizeAt(fin, shown.views[0].orbit.distance, orbit.distance, pixelZoom)
+  // the glitch's bursts come in steps of the scene's own clock, a whole number of steps a loop, so an export joins up
+  const glitchNow = useMemo(() => (glitching && !touring ? glitchLook(glitch, shown.loop, calm && !offscreen) : undefined), [glitching, touring, glitch, shown.loop, calm, offscreen])
+  // the style goes onto the stage in one place, shared with Scene Creator (useStyleOnStage.ts)
+  const skyOf = useStyleOnStage(stage, { pixels: !!drawnLook, look: drawnLook ?? look, size, rate, exact, glitch: glitchNow, coarse })
   useEffect(() => {
     if (!stage) return
-    stage.setPixels(drawnLook, size)
     // set again only when the sky has changed, so a paused scene is not drawn over and over
     let last = ''
     let now = false
@@ -402,7 +408,7 @@ export function PixelDiorama() {
       const [top, low] = d.skyAt(t), key = `${d.id}|${top}|${low}`
       if (key === last) return
       last = key
-      if (drawnLook?.sky) stage.setPixels({ ...drawnLook, sky: [top, low, drawnLook.sky[2]] }, size)
+      if (drawnLook?.sky) skyOf(top, low)
       else if (!drawnLook) {
         // another style: the page's own state, and at once while posing, so the color behind the canvas is the
         // moment's when the frame drawn next is painted over it (an export reads it straight after the draw)
@@ -414,7 +420,7 @@ export function PixelDiorama() {
     const d = posed.current
     if (d) skyNow.current(d, stage.time)
     now = true
-  }, [stage, drawnLook, size])
+  }, [stage, drawnLook, skyOf])
   useEffect(() => {
     if (!stage) return
     const keep = touring?.keep ?? 1
@@ -422,9 +428,6 @@ export function PixelDiorama() {
     stage.tint(touring?.clay ? (c, i) => [...clay(c), kept(i, keep) ? 1 : 0] : undefined)
   }, [stage, touring])
   useEffect(() => { if (stage) stage.playing = playing }, [stage, playing])
-  // the glitch's bursts come in steps of the scene's own clock, a whole number of steps a loop, so an export joins up
-  useEffect(() => { stage?.setGlitch(glitching && !touring ? glitchLook(glitch, shown.loop, calm && !offscreen) : undefined) }, [stage, glitching, touring, glitch, shown.loop, calm, offscreen])
-  useEffect(() => { if (stage) { stage.step = pixels && rate ? 1 / rate : 0; stage.invalidate() } }, [stage, pixels, rate])
   const orbitNow = useRef(orbit)
   /** A scene's water: shapes and colors its surface for the moment and the view, and the last picture of what it mirrors. */
   const wet = useRef<(() => void) | undefined>(undefined)
@@ -834,6 +837,7 @@ export function PixelDiorama() {
               {loading && <LoadingMark testid="diorama-loading" />}
               <p role="status" className="sr-only">{loading ? loadingLabel : ''}</p>
               {failed && <div role="alert" className="absolute inset-4 grid place-items-center text-center text-sm text-ink">{failed}</div>}
+              {lost && !failed && <LostView detail={detail} />}
               {touring?.id === 'samples' && stage && scene && <Magnifier stage={stage} />}
               <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => pick(view)} />
               {!sampling && <p aria-hidden className="pointer-events-none absolute right-14 bottom-2 rounded bg-paper/80 px-1.5 py-0.5 text-xs text-ink-muted">{coarse ? 'drag to orbit · pinch to zoom' : 'drag to orbit · scroll to zoom'}</p>}
@@ -862,6 +866,7 @@ export function PixelDiorama() {
                     </Button>
                   </div>
                 </div>
+                {picked0.space ? <p className="text-sm text-ink-muted" data-testid="diorama-space">Out in space there is no time of day or weather: the scene keeps its own sky, stars and far sun.</p> : <>
                 <Field label="Time of day">
                   <div className="flex flex-wrap gap-1.5" data-testid="diorama-time">
                     <Chip active={!time || !picked0.timed} onClick={() => setTimeOfDay(undefined)}>Scene's own</Chip>
@@ -887,6 +892,7 @@ export function PixelDiorama() {
                   <Toggle label="Clouds over the scene" checked={overhead} onChange={pickOverhead} />
                   <p className="text-xs text-ink-faint">{overhead ? 'The clouds float over the scene and rain and snow fall from under them.' : 'The clouds are left out: the sky still grays and darkens, and rain and snow fall in from over the top of the picture.'}</p>
                 </div>
+                </>}
                 <Field label="Changing scenes">
                   <div className="flex flex-wrap gap-1.5" data-testid="diorama-transitions">
                     <Chip active={transition === 'cut'} onClick={() => pickTransition('cut')}>Cut</Chip>
@@ -1016,6 +1022,24 @@ export function PixelDiorama() {
           </p>
         </div>
       </section>
+    </div>
+  )
+}
+
+/**
+ * Over the view once the browser has taken the GPU back: says so and starts the page again a step lighter (the
+ * address keeps everything else), since a lost GPU device can't be drawn to again.
+ */
+function LostView({ detail }: { detail: string }) {
+  const at = DETAIL.findIndex((d) => d.id === detail)
+  const lighter = at > 0 ? DETAIL[at - 1] : undefined
+  const again = (id?: string) => { if (id) writeDetail(id); location.reload() }
+  return (
+    <div role="alert" className="absolute inset-0 grid place-items-center bg-paper/90 p-4 text-center text-sm text-ink">
+      <div className="max-w-xs space-y-3">
+        <p>The browser stopped drawing the scene. This happens when a device runs out of graphics memory{lighter ? ' at this detail' : ''}.</p>
+        <Button primary className="mx-auto" onClick={() => again(lighter?.id)}>{lighter ? `Start again at ${lighter.label}` : 'Start again'}</Button>
+      </div>
     </div>
   )
 }

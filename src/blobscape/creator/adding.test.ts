@@ -19,7 +19,7 @@ test('cards: props, lands and creatures, every one in a group, found by name or 
   const turkey = cardsFound('turkey')
   assert.equal(turkey.length, 1)
   assert.equal(turkey[0].cards[0].id, 'giant-turkey')
-  assert.ok(cardsFound('pine').flatMap((g) => g.cards).every((c) => c.group === 'small'))
+  assert.ok(cardsFound('pine').flatMap((g) => g.cards).every((c) => c.group === 'small' || c.group === 'lands'))
   assert.deepEqual(cardsFound('zzzz'), [])
 })
 
@@ -59,4 +59,12 @@ test('room: props, blobs and bones counted, and a plain line when a prop will no
   assert.match(whyNot('Duck', { ...now, props: [MAX_PROPS, MAX_PROPS] }, after)!, /40 props/)
   assert.match(whyNot('Duck', { ...now, blobs: [5000, 5000] }, after)!, /blobs/)
   assert.match(whyNot('Duck', now, { ...after, bones: [300, 255] })!, /bones/)
+})
+
+test('a search finds cards by their tags too: "tree" finds trees not named so, "floats" what floats', () => {
+  const ids = (q: string) => cardsFound(q).flatMap((g) => g.cards.map((c) => c.id))
+  const trees = ids('tree')
+  for (const e of CARDS.filter((c) => c.tags.includes('tree'))) assert.ok(trees.includes(e.id), e.id)
+  const floats = ids('floats')
+  assert.ok(floats.length && floats.every((id) => CARDS.find((c) => c.id === id)!.tags.includes('floats') || /float/i.test(CARDS.find((c) => c.id === id)!.about)))
 })
