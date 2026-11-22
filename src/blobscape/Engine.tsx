@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Orbit } from '../splat-core/view.ts'
-import { STEADY, darkest, type PixelLook } from '../splat-core/pixel.ts'
+import { pixelLookOf, pixelStart } from './styleSettings.ts'
 import { recordClip } from '../splat-engine/glb.ts'
 import type { Skeleton } from '../splat-engine/rig.ts'
 import { ZOO } from '../splat-engine/zoo/index.ts'
@@ -135,7 +135,8 @@ function PixelDemo(props: DemoProps) {
         const d = OWL
         const built = d.make(DETAIL[media('(pointer: coarse)') ? 0 : 1].spacing)
         const colors = d.palette.colors
-        const look: PixelLook = { palette: colors, dither: d.finish.dither, outline: d.finish.outline ? darkest(colors) : null, glow: d.finish.glow, edges: d.finish.edges ? 1 : 0, parts: true, sky: d.finish.sky ? d.sky : undefined, steady: STEADY }
+        // pixel art as every page draws it (styleSettings.ts), in the scene's own finish
+        const look = pixelLookOf(pixelStart(d.finish), { colors, sky: d.sky, finish: d.finish, sun: d.sun, start: d.views[0].orbit, loop: d.loop })
         stage.setFloor(0)
         stage.setActor(built)
         stage.setPoser((sk: Skeleton, t: number) => { d.pose(sk, t); stage.setLights(d.lights(t), 1) })
