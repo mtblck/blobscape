@@ -19,6 +19,11 @@ export const WINDMILL: SceneDoc = {
   look: { dither: 0.5, glow: 0.5, outline: true, edges: true, steps: true },
   camera: { target: [0, 1.05, 0], distance: 5.4, azimuth: -16, elevation: 12 },
   focus: { at: [-0.25, 0.7, -0.25], r: 1.3 },
+  // a few clouds and the sun, from the shared recipes: a storm's clouds are the same kind, so none are left white over it
+  heavens: {
+    sun: { at: [1.75, 2.35, -1.9], r: 0.24, color: '#ffd84a' },
+    clouds: { cover: 'partly', colors: ['#bdbac4', '#ebe8e2', '#fbf7ea'], glow: true },
+  },
   air: {
     haze: { color: '#9fd0ee', from: 2, to: 14 },
     specks: [
@@ -44,9 +49,6 @@ export const WINDMILL: SceneDoc = {
     { name: 'sheep0', at: [-0.75, 0.16, -0.3] },
     { name: 'sheep1', at: [-1.2, 0.16, -0.1] },
     { name: 'sheep2', at: [0.65, 0.16, -0.55] },
-    { name: 'cloud0', at: [-1.1, 2.5, -1.4] },
-    { name: 'cloud1', at: [1.0, 2.9, -1.6] },
-    { name: 'cloud2', at: [0.1, 2.2, -1.9] },
     { name: 'bird0', at: [-0.25, 2.0, -0.25] },
     { name: 'bird0L', at: [0.65, 2.0, -0.25], parent: 'bird0' },
     { name: 'bird0R', at: [0.65, 2.0, -0.25], parent: 'bird0' },
@@ -110,10 +112,6 @@ export const WINDMILL: SceneDoc = {
     { shape: { kind: 'sphere', at: [-0.05, 0.03, 0.75], r: 0.022 }, paint: '#fbf7ea', glow: true },
     { shape: { kind: 'sphere', at: [-0.5, 0.03, 1.05], r: 0.022 }, paint: '#e58fa8', glow: true },
     { shape: { kind: 'sphere', at: [0.75, 0.03, 1.2], r: 0.022 }, paint: '#ffd84a', glow: true },
-    { shape: { kind: 'join', shapes: [{ kind: 'ball', at: [-1.1, 2.5, -1.4], r: [0.4, 0.1, 0.16] }, { kind: 'sphere', at: [-1.24, 2.58, -1.4], r: 0.15 }, { kind: 'sphere', at: [-1.0, 2.6, -1.4], r: 0.18 }, { kind: 'sphere', at: [-0.82, 2.54, -1.4], r: 0.1 }] }, paint: { kind: 'split', axis: 'y', at: 2.53, below: '#bdbac4', above: '#fbf7ea' }, bone: 'cloud0', glow: true },
-    { shape: { kind: 'join', shapes: [{ kind: 'ball', at: [1.0, 2.9, -1.6], r: [0.4, 0.1, 0.16] }, { kind: 'sphere', at: [0.86, 2.98, -1.6], r: 0.15 }, { kind: 'sphere', at: [1.1, 3.0, -1.6], r: 0.18 }, { kind: 'sphere', at: [1.28, 2.94, -1.6], r: 0.1 }] }, paint: { kind: 'split', axis: 'y', at: 2.93, below: '#bdbac4', above: '#fbf7ea' }, bone: 'cloud1', glow: true },
-    { shape: { kind: 'join', shapes: [{ kind: 'ball', at: [0.1, 2.2, -1.9], r: [0.4, 0.1, 0.16] }, { kind: 'sphere', at: [-0.04, 2.28, -1.9], r: 0.15 }, { kind: 'sphere', at: [0.2, 2.3, -1.9], r: 0.18 }, { kind: 'sphere', at: [0.38, 2.24, -1.9], r: 0.1 }] }, paint: { kind: 'split', axis: 'y', at: 2.23, below: '#bdbac4', above: '#fbf7ea' }, bone: 'cloud2', glow: true },
-    { shape: { kind: 'sphere', at: [1.7, 3.0, -1.7], r: 0.24 }, paint: '#ffd84a', glow: true, lit: 'day', unlit: 'gone' },
     { shape: { kind: 'ball', at: [0.65, 2.0, -0.25], r: [0.02, 0.02, 0.07] }, paint: '#22202b', bone: 'bird0', glow: true },
     { shape: { kind: 'box', at: [0.72, 2.0, -0.25], half: [0.07, 0.012, 0.035] }, paint: '#22202b', bone: 'bird0L', glow: true },
     { shape: { kind: 'box', at: [0.58, 2.0, -0.25], half: [0.07, 0.012, 0.035] }, paint: '#22202b', bone: 'bird0R', glow: true },
@@ -132,9 +130,6 @@ export const WINDMILL: SceneDoc = {
     { kind: 'sway', bone: 'sheep0', axis: 'z', degrees: 14, times: 2, phase: 0.0 },
     { kind: 'sway', bone: 'sheep1', axis: 'z', degrees: 14, times: 3, phase: 0.3 },
     { kind: 'sway', bone: 'sheep2', axis: 'z', degrees: 14, times: 4, phase: 0.6 },
-    { kind: 'bob', bone: 'cloud0', by: [0.25, 0, 0], times: 1, phase: 0.0 },
-    { kind: 'bob', bone: 'cloud1', by: [0.25, 0, 0], times: 1, phase: 0.37 },
-    { kind: 'bob', bone: 'cloud2', by: [0.25, 0, 0], times: 1, phase: 0.74 },
     { kind: 'spin', bone: 'bird0', axis: 'y', times: 1, phase: 0.0 },
     { kind: 'sway', bone: 'bird0L', axis: 'z', degrees: 35, times: 24 },
     { kind: 'sway', bone: 'bird0R', axis: 'z', degrees: -35, times: 24 },

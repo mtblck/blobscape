@@ -335,6 +335,8 @@ export function PixelDiorama() {
       // carry on from where the wind left them)
       d.blow?.(sk, t, windAt(now, t, d.loop), undefined, now.wind)
       showHeavens(sk.size, heavens, Math.max(now.clouds, own))
+      // the wind's turns and the sky's sizes come after the scene's pose worked the bones out
+      sk.update()
       // what floats rides the water as it stands at this moment: a boat or a buoy rocks on the waves that pass
       pond?.ride(sk, t)
       // an export is the scene's own loop: no pokes, and the view as it stood when it began

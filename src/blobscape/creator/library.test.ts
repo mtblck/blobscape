@@ -1,3 +1,4 @@
+import { withHeavens } from '../../splat-engine/heavens.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
@@ -100,7 +101,8 @@ test('a scene that marks its props comes apart by them: each a sound prop that c
     assert.ok(built.blobs.count > 10, p.name)
     assert.deepEqual(loopSnaps(built.skeleton, c.pose, c.loop), [], `${p.name}: snaps`)
   }
-  assert.equal(land.doc.parts.length + props.reduce((n, p) => n + p.doc.parts.length, 0), doc.parts.length)
+  // the shared sun is written out as a part of the land
+  assert.equal(land.doc.parts.length + props.reduce((n, p) => n + p.doc.parts.length, 0), withHeavens(doc).parts.length)
 })
 
 test('a prop mark must be a name, used once, and not on a bone riding on another prop', () => {

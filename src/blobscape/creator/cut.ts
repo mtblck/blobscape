@@ -74,8 +74,21 @@ function cutOne(job: CutJob): Built {
   const steps = job.finish?.steps ? (job.finish.steps.length ? job.finish.steps : undefined) : undefined
   const land = job.finish?.steps ? landSpec(cp, job.spacing, steps) : landSpec(cp, job.spacing)
   if (job.kind === 'land') return hugged(() => buildVoxels(land))
-  return withShadow(hugged(() => buildVoxels(job.finish?.steps ? propSpec(cp, job.i, job.spacing, settingOf(land), steps) : propSpec(cp, job.i, job.spacing, settingOf(land)))), cp.props[job.i].placed.at)
+  const cut = hugged(() => buildVoxels(job.finish?.steps ? propSpec(cp, job.i, job.spacing, settingOf(land), steps) : propSpec(cp, job.i, job.spacing, settingOf(land))))
+  const foot = cp.props[job.i].placed.at
+  // a thing afloat on the land's water (the windmill's duck) casts no shadow on it: the dark disc lay on the surface
+  return afloat(cp.land.prop.doc.water, foot) ? cut : withShadow(cut, foot)
 }
+
+/** Whether a foot stands in the land's water: inside its box and no higher than a little over its level. */
+export function afloat(water: { level: number; from: [number, number]; to: [number, number] } | undefined, foot: ArrayLike<number>): boolean {
+  if (!water) return false
+  const [x0, x1] = [Math.min(water.from[0], water.to[0]), Math.max(water.from[0], water.to[0])]
+  const [z0, z1] = [Math.min(water.from[1], water.to[1]), Math.max(water.from[1], water.to[1])]
+  return foot[0] >= x0 && foot[0] <= x1 && foot[2] >= z0 && foot[2] <= z1 && foot[1] <= water.level + AFLOAT
+}
+/** How far over the water's level a foot may stand and still be afloat. */
+const AFLOAT = 0.03
 
 /** How dark the stand-in shadow is, and how wide, as a share of the prop's own width. */
 const SHADOW = { color: [0.03, 0.03, 0.05] as [number, number, number], opacity: 0.78, wide: 0.42 }

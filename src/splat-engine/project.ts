@@ -400,7 +400,9 @@ export function splitScene(given: SceneDoc, picks: PropPick[]): { land: PropDoc;
   const ground = keepOnly(doc, left)
   const bonesLeft = new Set((ground.bones ?? []).map((b) => b.name))
   const water = doc.water && { ...doc.water, bodies: doc.water.bodies?.filter((b) => bonesLeft.has(b.bone)), floats: doc.water.floats?.filter((f) => bonesLeft.has(f.bone)) }
-  const land: PropDoc = { name: doc.name, foot: [0, 0, 0], doc: { ...ground, lights: (doc.lights ?? []).filter((_, i) => lightsLeft.has(i)), water } }
+  // the scene's own clouds are the weather's, drawn over the land: kept on it (its moon, sun and stars are parts by now)
+  const clouds = given.heavens?.clouds
+  const land: PropDoc = { name: doc.name, foot: [0, 0, 0], doc: { ...ground, lights: (doc.lights ?? []).filter((_, i) => lightsLeft.has(i)), water, ...(clouds ? { heavens: { clouds } } : {}) } }
   const project: SceneProject = {
     kind: 'blobscape-project', version: 1, name: doc.name, loop: doc.loop,
     land, props: props.map((p) => ({ prop: p, at: [...p.foot], turn: 0, size: 1 })), camera: { ...doc.camera },

@@ -541,6 +541,8 @@ export function SceneCreator() {
         if (fall.shade(now)) stage.reshape(fall.actors[0])
         showHeavens(sk.size, heavens, Math.max(now.clouds, own))
       }
+      // the wind's turns and the sky's sizes come after the land's pose worked its bones out
+      if (landFits) sk.update()
       L.sky?.(t, { ...now, lightning: flash })
       const cpNow = L.shown.cp
       if (cpNow && L.project) {
