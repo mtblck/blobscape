@@ -9,20 +9,20 @@ import { paletteAt, timeOf, type TimeId } from '../timeOfDay.ts'
 import { SceneWater } from '../../splat-engine/sceneWater.ts'
 import { DEFAULT_LIGHT, buildVoxels } from '../../splat-engine/voxel.ts'
 import * as meadow from '../fourways/meadow/build.ts'
-import { CAMPFIRE } from './scenes/campfire.ts'
-import { BEE } from './scenes/bee.ts'
+import { CAMPFIRE, CAMPFIRE_PROJECT } from './scenes/campfire.ts'
+import { BEE, BEE_PROJECT } from './scenes/bee.ts'
 import { DRAGON_PROJECT } from '../props/cave.ts'
-import { HAND } from './scenes/hand.ts'
+import { HAND, HAND_PROJECT } from './scenes/hand.ts'
 import { ISLES } from './scenes/isles.ts'
 import { OCTOPUS } from './scenes/octopus.ts'
-import { OWL } from './scenes/owl.ts'
+import { OWL, OWL_PROJECT } from './scenes/owl.ts'
 import { REEF } from './scenes/reef.ts'
 import { CROC } from './scenes/croc.ts'
 import { GROVE } from './scenes/grove.ts'
 import { HARVEST } from './scenes/harvest.ts'
 import { LAB } from './scenes/lab.ts'
 import { HUT } from './scenes/hut.ts'
-import { SNAIL } from './scenes/snail.ts'
+import { SNAIL, SNAIL_PROJECT } from './scenes/snail.ts'
 import { SPIDER } from './scenes/spider.ts'
 import { WINDOW } from './scenes/window.ts'
 import { WINDMILL, WINDMILL_PROJECT } from './scenes/windmill.ts'
@@ -275,13 +275,13 @@ const SKY_FISHING: Diorama = (() => {
 
 export const DIORAMAS: Diorama[] = [
   LIGHTHOUSE,
-  described('campfire', CAMPFIRE, 'A camp in a clearing among pines at night, with a flickering fire throwing sparks, a tent, a lantern, fireflies and the moon'),
+  described('campfire', CAMPFIRE, 'A camp in a clearing among pines at night, with a flickering fire throwing sparks, a tent, a lantern, fireflies and the moon', { project: CAMPFIRE_PROJECT }),
   described('dragon', composeScene(DRAGON_PROJECT, madeProp), 'A red dragon bent over a pool of lava in a dark cave, its claws on the rim, its neck swaying, its head turning, its jaw opening and its wings shifting; the lava wells up, crusts over into glowing plates and bubbles, and embers rise', { project: DRAGON_PROJECT }),
-  described('bee', BEE, 'A giant bee hovering at a pink flower in a forest clearing, with fluttering pale wings, little bees, butterflies, mushrooms, ferns and drifting pollen'),
-  described('hand', HAND, 'A giant sandstone hand rising from a desert ruin at dusk, holding a glowing blue crystal that turns and bobs, with slowly curling fingers, broken columns, cacti and drifting fireflies'),
+  described('bee', BEE, 'A giant bee hovering at a pink flower in a forest clearing, with fluttering pale wings, little bees, butterflies, mushrooms, ferns and drifting pollen', { project: BEE_PROJECT }),
+  described('hand', HAND, 'A giant sandstone hand rising from a desert ruin at dusk, holding a glowing blue crystal that turns and bobs, with slowly curling fingers, broken columns, cacti and drifting fireflies', { project: HAND_PROJECT }),
   described('reef', REEF, 'A giant jellyfish beating slowly over a coral reef, trailing swaying arms, with branching corals, seaweed, circling fish and rising bubbles'),
   described('octopus', OCTOPUS, 'A purple octopus riding a bell buoy through a storm at night, holding up a glowing lantern in one arm while its other arms curl and the bell swings, in falling rain'),
-  described('owl', OWL, 'A great owl in a starry wizard hat perched on a stump, turning its head to watch a cauldron of glowing pink potion that stirs itself over a fire, among candles, bottles, books and mushrooms'),
+  described('owl', OWL, 'A great owl in a starry wizard hat perched on a stump, turning its head to watch a cauldron of glowing pink potion that stirs itself over a fire, among candles, bottles, books and mushrooms', { project: OWL_PROJECT }),
   described('isles', ISLES, 'Snowy islands of rock adrift in a night sky, joined by rope bridges: a cabin with lit windows and a smoking chimney among pines, a frozen waterfall, a crown of glowing ice crystals, a beacon, and falling snow'),
   described('harvest', HARVEST, 'A pumpkin patch under a huge moon, kept by a scarecrow with a carved pumpkin head and a lantern, with crows on its arm, a wind pump turning behind, corn and drifting leaves.'),
   described('lab', LAB, 'A laboratory at night where sprouts grow in three tall jars of glowing liquid, with rising bubbles, a steaming flask, blinking dials, a swaying lamp and a cat keeping watch.'),
@@ -290,7 +290,7 @@ export const DIORAMAS: Diorama[] = [
   described('hut', HUT, 'A fishing hut on stilts over a mangrove lagoon at dawn, with a lantern, drying nets, a rowing boat, and a heron in the shallows.'),
   described('window', WINDOW, 'A round stained glass window with turning rings of panes, in the last wall of a ruined library at sunrise, with shelves, piles of books and a tree grown over the wall.'),
   described('spider', SPIDER, 'A wind-up brass spider with a lantern for a body, on its web between two bare trees, with moths circling the light.'),
-  described('snail', SNAIL, 'A giant snail whose shell is a little house, with lit windows, a smoking chimney, a deck with a flag and a swinging lantern, inching through a wood of tall glowing mushrooms with ferns and fireflies'),
+  described('snail', SNAIL, 'A giant snail whose shell is a little house, with lit windows, a smoking chimney, a deck with a flag and a swinging lantern, inching through a wood of tall glowing mushrooms with ferns and fireflies', { project: SNAIL_PROJECT }),
   described('windmill', WINDMILL, 'A windmill on a farm by day, with turning sails, sheep, a duck on a pond, a wheat field, trees, clouds and birds', { project: WINDMILL_PROJECT }),
   described('ruin', RUIN, 'A ruined chapel at dusk in autumn: an arcade of pointed arches broken along its top, brick walls fallen in places with their bricks at their feet, worn steps, a leaning fence, a maple and a lantern'),
   described('cave', CAVE, 'An ice cave cut open at night, with icicles along its broken roof, stalactites joining stalagmites, flowstone, basalt columns stepping into a still pool, a geode broken open and glowing crystals, one growing as you watch'),

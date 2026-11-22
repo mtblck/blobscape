@@ -19,7 +19,7 @@ test('cards: props, lands and creatures, every one in a group, found by name or 
   const turkey = cardsFound('turkey')
   assert.equal(turkey.length, 1)
   assert.equal(turkey[0].cards[0].id, 'giant-turkey')
-  assert.ok(cardsFound('pine').flatMap((g) => g.cards).every((c) => c.group === 'small'))
+  assert.ok(cardsFound('pine').flatMap((g) => g.cards).every((c) => c.group === 'small' || c.group === 'lands'))
   assert.deepEqual(cardsFound('zzzz'), [])
 })
 
