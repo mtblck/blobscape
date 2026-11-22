@@ -1,7 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { STEADY } from '../splat-core/pixel.ts'
-import { cutAsk, pixelCelLook, pixelFlags, pixelFor, pixelFrom, pixelLookOf, pixelStart, styleStart, type Finish } from './styleSettings.ts'
+import { readFileSync } from 'node:fs'
+import { cutAsk, detailStart, pixelSizeAt, pixelZoomAsked, pixelCelLook, pixelFlags, pixelFor, pixelFrom, pixelLookOf, pixelStart, styleStart, type Finish } from './styleSettings.ts'
 
 const FINISH: Finish = { dither: 0.5, glow: 1.5, outline: true, edges: true, sky: true, steps: false, bands: 1, heat: 2 }
 const own: [number, number, number][] = [[10, 20, 30], [200, 210, 220]]
@@ -84,4 +85,43 @@ test('shading each pixel lights by the scene’s sun in two tones', () => {
   assert.deepEqual(c.from, [0, 1, 0])
   assert.ok(c.shade![2] > c.shade![0])
   assert.equal(pixelCelLook(undefined).from, undefined)
+})
+
+test('every page starts a style at the same detail and grows pixels the same way on zooming in', () => {
+  // Finest, but a phone starts pixel art at Fine and the whole-screen styles at Chunky
+  assert.equal(detailStart('pixel', false), 3)
+  assert.equal(detailStart('cel', false), 3)
+  assert.equal(detailStart('pixel', true), 2)
+  assert.equal(detailStart('glitch', true), 2)
+  assert.equal(detailStart('cel', true), 0)
+  const s = pixelStart(FINISH)
+  assert.equal(pixelSizeAt(s, 6, 6), 2)
+  assert.equal(pixelSizeAt(s, 6, 3), 4)
+  assert.equal(pixelSizeAt(s, 6, 12), 2)
+  assert.equal(pixelSizeAt(s, 6, 3, false), 2)
+  assert.equal(pixelZoomAsked(new URLSearchParams('pixelzoom=0')), false)
+  assert.equal(pixelZoomAsked(), true)
+})
+
+test('Diorama and Scene Creator put a style on the stage only through the shared hook', () => {
+  // Matt, 2026-11-22: a style is drawn the same wherever it is used. A page that sets these on its stage itself
+  // has a copy of the wiring that can fall behind, which is how Scene Creator missed Diorama's pixel updates
+  for (const page of ['PixelDiorama.tsx', 'SceneCreator.tsx']) {
+    const text = readFileSync(new URL(`./${page}`, import.meta.url), 'utf8')
+    assert.ok(text.includes('useStyleOnStage('), `${page} uses the hook`)
+    for (const call of ['.setPixels(', '.setGlitch(', '.setSharpness(', '.setSort(']) if (text.includes(call)) assert.fail(`${page} calls ${call} itself`)
+    for (const own of ['zoomStep(', 'DETAIL[2].id', 'DETAIL[3].id']) if (text.includes(own)) assert.fail(`${page} has its own ${own}`)
+  }
+  // the other pages that draw pixel art: none sets a pixel look on its stage by a wiring of its own, and the two that
+  // show a scene as Diorama would (Biome Islands, the engine page) take the look from the one definition
+  for (const page of ['Islands.tsx', 'FourWays.tsx', 'lessons/PixelArt.tsx']) {
+    const text = readFileSync(new URL(`./${page}`, import.meta.url), 'utf8')
+    assert.ok(text.includes('useStyleOnStage('), `${page} uses the hook`)
+    if (text.includes('.setPixels(')) assert.fail(`${page} calls .setPixels( itself`)
+  }
+  for (const page of ['Islands.tsx', 'Engine.tsx']) {
+    const text = readFileSync(new URL(`./${page}`, import.meta.url), 'utf8')
+    assert.ok(text.includes('pixelLookOf('), `${page} takes its pixel look from styleSettings.ts`)
+    if (text.includes('STEADY')) assert.fail(`${page} builds a pixel look of its own`)
+  }
 })

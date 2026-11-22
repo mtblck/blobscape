@@ -11,6 +11,7 @@ import { LESSON_GOALS } from '../routes.ts'
 import { ZoomBar } from '../Viewport.tsx'
 import { useGoals } from '../progress.ts'
 import { StageView } from '../build/StageView.tsx'
+import { useStyleOnStage } from '../useStyleOnStage.ts'
 import { SCENE_SPACING } from '../build/scene.ts'
 import { FEW, PALETTES, PIXELS_START, PIXEL_SCENE, RATES, SIZES, SMALL, STILL, changed, colorsIn, lookFor, pixelCode, type PixelOptions } from '../build/pixels.ts'
 
@@ -48,8 +49,7 @@ export function PixelArt() {
   }, [stage, built, rock])
 
   const look = useMemo(() => lookFor(SCENE.look, opts), [opts])
-  useEffect(() => { stage?.setPixels(opts.pixels ? look : undefined, opts.size) }, [stage, opts.pixels, opts.size, look])
-  useEffect(() => { if (stage) { stage.step = opts.rate ? 1 / opts.rate : 0; stage.invalidate() } }, [stage, opts.rate])
+  useStyleOnStage(stage, { pixels: opts.pixels, look, size: opts.size, rate: opts.rate })
 
   // the picture, looked at twice a second: its size, its colors, and how much of it changed while nothing but the light did
   const [seen, setSeen] = useState<Seen>()

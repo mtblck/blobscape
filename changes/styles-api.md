@@ -1,0 +1,1 @@
+Every style's settings now come from one catalog, so the controls for cel shading, blocks, neon, stained glass, watercolor, ASCII, the brush looks and tech glitch are the same on Diorama, Scene Creator and Brush and Ink, and a scene kept in Scene Creator remembers them.

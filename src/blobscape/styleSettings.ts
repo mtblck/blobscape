@@ -6,6 +6,10 @@ import type { Orbit } from '../splat-core/view.ts'
 import type { Diorama } from './diorama/scenes.ts'
 import { isPixelStyle, lightsItself, type Style } from './diorama/styles.ts'
 import { GLITCH_START, type GlitchChoice } from './glitchLooks.ts'
+import { zoomStep } from './diorama/zoom.ts'
+import { PIXEL, PIXEL_RATES, PIXEL_SIZES, TEXEL_BANDS, fromAddress, type PixelSettings } from './styles/catalog.ts'
+
+export { PIXEL_RATES, PIXEL_SIZES, TEXEL_BANDS, type PixelSettings }
 
 /**
  * One layer of style settings that Diorama and Scene Creator both draw with (Matt, 2026-11-21: any new setting made
@@ -14,43 +18,6 @@ import { GLITCH_START, type GlitchChoice } from './glitchLooks.ts'
  * the controls are `StyleControls.tsx`.
  */
 
-/** Pixel art's settings, as the Style and Finish controls set them. */
-export interface PixelSettings {
-  /** The palette's id: 'own' is the scene's, else one of the shared ones. */
-  palette: string
-  /** Each art pixel this many device pixels across. */
-  size: number
-  /** Frames a second the scene moves at; 0 is every frame the screen shows. */
-  rate: number
-  dither: number
-  /** How strongly glowing things light what is round them and shine into the pixels beside them. */
-  glow: number
-  /** A line round the scene, and whether it takes a darker tone of each thing it goes round. */
-  outline: boolean
-  own: boolean
-  /** Lines inside the scene: where things meet (and, where the scene asks, where colors jump). */
-  lines: boolean
-  sky: boolean
-  /** Heat haze over glowing things, in art pixels; 0 is none. */
-  heat: number
-  /** Glow in flat rings. */
-  bands: number
-  /** A softer outline on lit sides. */
-  selout: boolean
-  /** Color cycling, where the scene has one. */
-  cycle: boolean
-  /** Painted in steps of the palette as the scene is cut. */
-  steps: boolean
-  /** Light in this many bands a blob, as the scene is cut; 0 is smooth light. */
-  texel: number
-  /** Light worked out a pixel at a time (cel shading in the small picture), with the scene cut unlit. */
-  shade: boolean
-  /** The scene's own gentle rocking of the view. */
-  rock: boolean
-  /** The exact (radix) sort. */
-  exact: boolean
-}
-
 /** Everything about how a scene is drawn. */
 export interface StyleSettings {
   style: Style
@@ -58,45 +25,32 @@ export interface StyleSettings {
   pixel: PixelSettings
 }
 
-/** Pixel sizes and paces on offer. */
-export const PIXEL_SIZES = [2, 3, 4, 6]
-export const PIXEL_RATES = [0, 12, 8]
-/** How many steps of sun Light in bands gives (`banded`): three, none, half and full, kept the paint's texture best. */
-export const TEXEL_BANDS = 3
+
+/**
+ * The detail a page starts a style at, as a place in the detail levels (Chunky, Medium, Fine, Finest), until the
+ * visitor picks one: Finest (Matt, 2026-11-20); a phone starts pixel art at Fine (he found the dragon slow at Finest
+ * on his) and at Chunky the styles that draw the whole screen several times a frame.
+ */
+export const detailStart = (style: Style, coarse: boolean): number => (coarse ? (isPixelStyle(style) ? 2 : 0) : 3)
+
+/** Whether zooming in on pixel art grows its pixels (`?pixelzoom=0` turns it off). */
+export const pixelZoomAsked = (q: URLSearchParams = new URLSearchParams()): boolean => q.get('pixelzoom') !== '0'
+
+/**
+ * Device pixels to an art pixel for a view `now` from its target, in a scene that starts `start` from it: zooming in
+ * grows the pixels a whole step at a time, not the blobs (diorama/zoom.ts), so edges stay pixel edges.
+ */
+export const pixelSizeAt = (s: PixelSettings, start: number, now: number, zoom = true): number => (zoom ? s.size * zoomStep(start, now) : s.size)
 
 /** What a scene's finish is: the settings it asks for. */
 export type Finish = Diorama['finish']
 
-/** A number the address asks for, held to whole numbers from 0 to `most`, or `own` where it asks nothing. */
-function whole(q: URLSearchParams, key: string, most: number, own: number): number {
-  const s = q.get(key), v = s === null ? NaN : Number(s)
-  return Number.isInteger(v) ? Math.min(most, Math.max(0, v)) : own
-}
-
-/** Pixel art as a scene's finish starts it, with what the address asks (`?px=`, `?glow=`, `?texel=`, `?steps=`, `?shade=1`, …). */
+/** Pixel art as a scene's finish starts it, with what the address asks (`?px=`, `?glow=`, `?texel=`, `?steps=`, `?shade=1`, …): the catalog reads it. */
 export function pixelStart(finish: Finish, q: URLSearchParams = new URLSearchParams()): PixelSettings {
-  const glowQ = q.get('glow'), glow = glowQ === null ? NaN : Number(glowQ)
-  const steps = q.get('steps'), texel = Number(q.get('texel'))
-  return {
-    palette: 'own',
-    size: PIXEL_SIZES.includes(Number(q.get('px'))) ? Number(q.get('px')) : 2,
-    rate: 0,
-    dither: finish.dither,
-    glow: Number.isFinite(glow) ? Math.min(4, Math.max(0, glow)) : finish.glow,
-    outline: finish.outline,
-    own: q.get('own') !== '0',
-    lines: q.get('parts') !== '0',
-    sky: finish.sky,
-    heat: whole(q, 'heat', 3, finish.heat ?? 0),
-    bands: whole(q, 'bands', 2, finish.bands ?? 2),
-    selout: whole(q, 'selout', 1, 1) > 0,
-    cycle: q.get('cycle') !== '0',
-    steps: steps === null ? finish.steps : steps !== '0',
-    texel: texel > 1 ? Math.round(texel) : 0,
-    shade: q.get('shade') === '1',
-    rock: q.get('rock') !== '0',
-    exact: q.get('sort') === 'radix',
-  }
+  const own: PixelSettings = { ...PIXEL.start, dither: finish.dither, glow: finish.glow, outline: finish.outline, sky: finish.sky, heat: finish.heat ?? 0, bands: finish.bands ?? 2, steps: finish.steps }
+  const s = fromAddress(PIXEL, own, q)
+  // one band is smooth light
+  return { ...s, texel: s.texel > 1 ? s.texel : 0 }
 }
 
 /** The settings start: pixel art, with the scene's own finish. */

@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Orbit } from '../splat-core/view.ts'
-import { STEADY, darkest, type PixelLook } from '../splat-core/pixel.ts'
+import type { PixelLook } from '../splat-core/pixel.ts'
+import { pixelLookOf, pixelStart } from './styleSettings.ts'
+import { useStyleOnStage } from './useStyleOnStage.ts'
+import { BLOCKS_DEF } from './styles/catalog.ts'
 import type { Built } from '../splat-engine/body.ts'
 import type { Skeleton } from '../splat-engine/rig.ts'
 import { LoadingMark } from '../shared/BlobLoader.tsx'
@@ -64,6 +67,9 @@ declare global {
  * Biome Islands, its first step: one floating island made from a biome recipe and a seed. The island is an ordinary
  * scene description (islands/island.ts), so it is cut, posed and drawn as a Diorama scene is.
  */
+/** Stands in for the pixel look while another style is on (the stage is given none then). */
+const NO_LOOK: PixelLook = { palette: [], dither: 0, outline: null, glow: 0 }
+
 export function Islands() {
   const h1 = useFocusHeading()
   const canvas = useRef<HTMLCanvasElement>(null)
@@ -403,18 +409,17 @@ export function Islands() {
     if (elfColors) lists.push(elfColors)
     if (lifeColors) lists.push(...lifeColors)
     const colors = lists.length > 1 ? joinPalettes(lists) : shown.palette.colors
-    return { palette: colors, dither: shown.finish.dither, outline: darkest(colors), glow: shown.finish.glow, edges: 1, parts: true, sky: shown.sky, steady: STEADY,
-      // Diorama's finish: calmer pixels, flat surfaces, lines only across things, hard discs where things meet, a shine
-      // on lit forms. No rim: it goes by a fixed view, and here the view turns with the walker.
-      tidy: true, calm: true, flat: true, across: true, solid: true, shine: true, selout: true, fine: true, own: true, surface: true, snap: true }
+    // pixel art as every page draws it (styleSettings.ts), with an outline and the sky always on. No sun is handed
+    // over, so there is no lit rim: it goes by a fixed view, and here the view turns with the walker.
+    return pixelLookOf({ ...pixelStart(shown.finish), outline: true }, { colors, sky: shown.sky, skyForced: true, finish: { ...shown.finish, edges: true }, loop: shown.loop })
   }, [pixels, shown, shownAll, elfColors, lifeColors])
-  useEffect(() => { stage?.setPixels(look, 2) }, [stage, look])
+  useStyleOnStage(stage, { pixels, look: look ?? NO_LOOK, size: 2 })
   // blocks: cubes a whole number of the cut's cells across, lit from the starting view's left; only an island cut with no light of its own
   const blockSpacing = ready?.plain ? ready.spacing : undefined
   const blockAzimuth = shown.views[0].orbit.azimuth
   useEffect(() => {
     if (!stage) return
-    stage.setBlocks(blocky && blockSpacing ? blockLook({ ...BLOCK_START, size: 1 }, blockSpacing, blockAzimuth) : undefined)
+    stage.setBlocks(blocky && blockSpacing ? blockLook({ ...BLOCKS_DEF.start, size: 1 }, blockSpacing, blockAzimuth) : undefined)
   }, [stage, blocky, blockSpacing, blockAzimuth])
 
   // the grass is the only thing the world draws while blocks are on, so marks there fall on it alone

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { STAGE_FOV, type Orbit } from '../splat-core/orbit.ts'
 import { STEADY, countColors, darkest, type PixelLook } from '../splat-core/pixel.ts'
+import { useStyleOnStage } from './useStyleOnStage.ts'
 import type { Built } from '../splat-engine/body.ts'
 import type { Skeleton } from '../splat-engine/rig.ts'
 import { LoadingMark } from '../shared/BlobLoader.tsx'
@@ -163,7 +164,7 @@ export function FourWays() {
       stage.setLights(built.scene.lights(t, fireNow.current, cast), built.scene.ambient)
     }, clock.current.t)
   }, [stage, built])
-  useEffect(() => { stage?.setPixels(look, scale / ratio) }, [stage, look, scale, ratio])
+  useStyleOnStage(stage, { pixels: true, look, size: scale / ratio })
   // Blobscape draws only while its picture is on show: hidden, the page's clock runs on for the others, and the stage
   // takes that time up again when it comes back
   const blobscapeShown = only === 'all' || only === 'blobscape'

@@ -48,7 +48,7 @@ import { STYLES, isPixelStyle, styleAsked, styleWords, type Style } from './dior
 import { useDrawnLook, useHeld } from './drawnLook.tsx'
 import { GLITCH_START, glitchLook, type GlitchChoice } from './glitchLooks.ts'
 import { useExport } from './diorama/useExport.tsx'
-import { CLOUD_COVERS, SkyEase, WEATHERS, WINDS, hazeUnder, isClear, lightUnder, lightningAt, skyState, skyUnder, windAt, type CloudId, type SkyState, type WeatherId } from '../splat-engine/skyRecipes.ts'
+import { CLOUD_COVERS, SkyEase, WEATHERS, WINDS, hazeUnder, isClear, lightUnder, lightningAt, skyState, skyUnder, windAt, type CloudId, type SkyState, type WeatherId, type WindId } from '../splat-engine/skyRecipes.ts'
 import { SceneWeather, paletteUnder } from './diorama/weather.ts'
 import type { SceneWater } from '../splat-engine/sceneWater.ts'
 import { levelPlane, type MirrorImage } from '../splat-engine/reflect.ts'
@@ -57,8 +57,11 @@ import { pileStep } from '../splat-engine/snowCover.ts'
 import { TIMES } from './timeOfDay.ts'
 import { MAX_STOPS, pathAt, pathSeconds } from './cameraPath.ts'
 import { paletteChoices } from './creator/styling.ts'
-import { cutAsk, pixelCelLook, pixelFlags, pixelFrom, pixelLookOf, pixelStart, type PixelSettings } from './styleSettings.ts'
+import { cutAsk, detailStart, pixelCelLook, pixelFlags, pixelFor, pixelFrom, pixelLookOf, pixelSizeAt, pixelStart, pixelZoomAsked, type PixelSettings } from './styleSettings.ts'
+import { useStyleOnStage } from './useStyleOnStage.ts'
 import { FinishControls, StyleControls } from './StyleControls.tsx'
+import { WeatherControls } from './styles/SceneControls.tsx'
+import { drawnFrom, drawnStart, keysOf, type DrawnSettings } from './styles/catalog.ts'
 import { arrowWay, begin, copied, did, lamped, moved, onGround, redo, redrawn, removed, sized, stepFor, stilled, turned, undo, wrapTurn, type History } from './creator/arrange.ts'
 
 /**
@@ -221,7 +224,8 @@ export function SceneCreator() {
   const shown = useMemo(() => shownOf(opened.kind === 'project' && project ? { ...opened, project } : opened), [opened, project])
   const cp = shown.cp
   // a phone starts on Chunky, as Diorama starts it a step lighter
-  const [detail, setDetail] = useState<string>(() => detailAsked(DETAIL, labelNames)?.id ?? (coarse ? DETAIL[0].id : DETAIL[2].id))
+  // the detail the visitor picked, if any: until then each style starts at the detail it does on every page (`detailStart`)
+  const [detailChosen, setDetail] = useState<string | undefined>(() => detailAsked(DETAIL, labelNames)?.id)
   const [orbit, setOrbit] = useState<Orbit>(shown.orbit)
   const [stage, setStage] = useState<CreatureStage>()
   const [failed, setFailed] = useState('')
@@ -241,9 +245,14 @@ export function SceneCreator() {
   const pixels = isPixelStyle(style)
   const glitching = style === 'glitch'
   // pixel art's settings and the finish, shared with Diorama (styleSettings.ts)
-  const [px, setPx] = useState<PixelSettings>(() => pixelStart(shown.finish))
+  // the detail each style starts at is the same on every page (styleSettings.ts)
+  const detail = detailChosen ?? DETAIL[detailStart(style, coarse)].id
+  const [px, setPx] = useState<PixelSettings>(() => pixelStart(shown.finish, typeof location === 'undefined' ? undefined : new URLSearchParams(location.search)))
   const setPixel = useCallback((change: Partial<PixelSettings>) => setPx((c) => ({ ...c, ...change })), [])
   const [glitch, setGlitch] = useState<GlitchChoice>(GLITCH_START)
+  // every other style's settings (styles/catalog.ts), held here so a kept scene and a link carry them
+  const drawnKept = useState<DrawnSettings>(() => drawnStart(typeof location === 'undefined' ? undefined : new URLSearchParams(location.search), { coarse }))
+  const [drawn, setDrawn] = drawnKept
   /** Pixel art's switches only the address turns off (`?steady=0`, `?calm=0`, …), as on Diorama. */
   const [flags] = useState(() => pixelFlags(typeof location === 'undefined' ? undefined : new URLSearchParams(location.search)))
   // what the style asks of the cut: no light baked in (cel shading, neon, stained glass, blocks, or pixel art shaded a
@@ -277,7 +286,8 @@ export function SceneCreator() {
     setPicked(undefined)
     setPreview(undefined)
     setOrbit(shownOf(o).orbit)
-    setPx(pixelStart(shownOf(o).finish))
+    // a new scene's own finish over the settings the visitor has, as on Diorama
+    setPx((c) => pixelFor(c, shownOf(o).finish))
     const url = new URL(location.href)
     url.searchParams.delete('scene'); url.searchParams.delete('land'); url.searchParams.delete('project')
     const [k, v] = queryFor(o)
@@ -619,32 +629,24 @@ export function SceneCreator() {
   const colors = (palettes.find((p) => p.id === px.palette) ?? palettes[0]).colors
   const look = useMemo<PixelLook>(() => pixelLookOf({ ...px, glow }, { colors, sky: skyShown, skyForced, finish: shown.finish, sun: shown.sun, start: shown.orbit, loop: shown.loop }, flags),
     [px, glow, colors, skyShown, skyForced, shown, flags])
-  // the exact (radix) sort: the stage rebuilds its world, keeping the moment
-  useEffect(() => { stage?.setSort(px.exact ? 'radix' : 'bins') }, [stage, px.exact])
   // pixel art shaded a pixel at a time: cel shading in the small picture, lit by the land's sun
   const pixelCel = useMemo(() => (pixelsNow && shadedNow ? pixelCelLook(shown.sun, shown.shade ?? 0.5) : undefined), [pixelsNow, shadedNow, shown.sun, shown.shade])
-  useEffect(() => {
-    stage?.setPixels(pixelsNow ? look : undefined, px.size)
-    // under weather the pixel pass takes each moment's sky, set again only when it has changed
-    let last = ''
-    live.current.sky = stage && pixelsNow && look.sky && weathered ? (_t, now) => {
-      const top = skyUnder(skyColors[0], now, now.lightning), low = skyUnder(skyColors[1], now, now.lightning), key = `${top}|${low}`
-      if (key === last) return
-      last = key
-      stage.setPixels({ ...look, sky: [top, low, look.sky![2]] as NonNullable<PixelLook['sky']> }, px.size)
-    } : undefined
-  }, [stage, pixelsNow, look, px.size, weathered, skyColors])
-  // pixel art can move in held steps; the other styles move every frame
-  useEffect(() => { if (stage) { stage.step = pixelsNow && px.rate ? 1 / px.rate : 0; stage.invalidate() } }, [stage, pixelsNow, px.rate])
+  // zooming in on pixel art grows its pixels, not the blobs, as on Diorama (`?pixelzoom=0` turns it off)
+  const [pixelZoom] = useState(() => pixelZoomAsked(typeof location === 'undefined' ? undefined : new URLSearchParams(location.search)))
+  const size = pixelSizeAt(px, shown.orbit.distance, orbit.distance, pixelZoom)
   // the glitch's bursts come in steps of the scene's own clock, a whole number of steps a loop, so an export joins up
-  useEffect(() => { stage?.setGlitch(glitchingNow ? glitchLook(glitch, shown.loop, calm && !offscreen) : undefined) }, [stage, glitchingNow, glitch, shown.loop, calm, offscreen])
-  // on a phone the styles that fill the whole screen are drawn at one and a half device pixels to a CSS pixel, as Diorama does
-  useEffect(() => { stage?.setSharpness(coarse && !pixelsNow ? 1.5 : 2) }, [stage, coarse, pixelsNow])
+  const glitchNow = useMemo(() => (glitchingNow ? glitchLook(glitch, shown.loop, calm && !offscreen) : undefined), [glitchingNow, glitch, shown.loop, calm, offscreen])
+  // the style goes onto the stage in one place, shared with Diorama (useStyleOnStage.ts)
+  const skyOf = useStyleOnStage(stage, { pixels: pixelsNow, look, size, rate: px.rate, exact: px.exact, glitch: glitchNow, coarse })
+  useEffect(() => {
+    // under weather the pixel pass takes each moment's sky, set again only when it has changed
+    live.current.sky = stage && pixelsNow && look.sky && weathered ? (_t, now) => skyOf(skyUnder(skyColors[0], now, now.lightning), skyUnder(skyColors[1], now, now.lightning)) : undefined
+  }, [stage, pixelsNow, look, skyOf, weathered, skyColors])
   // one of Brush and Ink's looks in place of pixel art. Cel shading's and stained glass's flat fills are gathered on the land
   const drawing = useDrawnLook(stage, pixelsNow ? undefined : styleNow, {
     pixelCel, actor: built?.[0], spacing: DETAIL.find((d) => d.id === detail)?.spacing, plain: !!chosen[0]?.plain, azimuth: shown.orbit.azimuth, offscreen, light: coarse, loop: shown.loop,
     sky: px.sky || skyForced ? [skyShown[0], skyShown[1]] : undefined,
-  })
+  }, drawnKept)
   const drawStyle = (id: Style) => {
     setStyleState(id)
     const url = new URL(location.href)
@@ -669,8 +671,8 @@ export function SceneCreator() {
   const savedId = opened.kind === 'project' && 'saved' in opened.from ? opened.from.saved : undefined
   /** The open project as it is kept: with the view, the style and pixel art's settings. */
   const keeping = useMemo<SceneProject | undefined>(() => project && {
-    ...project, camera: orbit, style: { id: style, settings: { pixel: px, ...(glitching ? { glitch } : {}) } },
-  }, [project, orbit, style, px, glitch, glitching])
+    ...project, camera: orbit, style: { id: style, settings: { pixel: px, ...(glitching ? { glitch } : {}), ...Object.fromEntries(keysOf(style).filter((k) => k !== 'pixel' && k !== 'glitch').map((k) => [k, drawn[k as keyof DrawnSettings]])) } },
+  }, [project, orbit, style, px, glitch, glitching, drawn])
   // what was kept last (so opening a scene doesn't count as a change) and each scene's picture
   const keptText = useRef('')
   const pictures = useRef(new Map<string, string>())
@@ -699,6 +701,7 @@ export function SceneCreator() {
     const settings = (st?.settings ?? {}) as { pixel?: unknown; glitch?: unknown }
     setPx(pixelFrom(pixelStart(shownOf(o).finish), settings.pixel))
     setGlitch(mergedLike(GLITCH_START, settings.glitch))
+    setDrawn(drawnFrom(drawnStart(undefined, { coarse }), settings))
   }
   /** Opens a kept scene: its project, its view, its style and settings. */
   const openSaved = (r: SavedScene) => {
@@ -1691,22 +1694,10 @@ export function SceneCreator() {
                         </div>
                       </div>
                       <div>
-                        <h3 className="mb-2 text-sm font-semibold">Weather</h3>
-                        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Weather" data-testid="creator-weather">
-                          <Chip active={!recipe?.weather && !recipe?.clouds} onClick={() => pickWeather('weather', undefined)}>No weather</Chip>
-                          {CLOUD_COVERS.map((c) => <Chip key={c.id} active={!recipe?.weather && recipe?.clouds === c.id} onClick={() => pickWeather('clouds', c.id)}>{c.label}</Chip>)}
-                          {WEATHERS.map((w) => <Chip key={w.id} active={recipe?.weather === w.id} onClick={() => pickWeather('weather', w.id)}>{w.label}</Chip>)}
-                        </div>
-                        <p className="mt-1.5 text-xs text-ink-faint">The same weather recipes as Diorama: each brings its own clouds, light, haze and wind, laid over the scene with no cut, and the sky eases from one to the next.{recipe?.weather === 'thunderstorm' ? (calm ? ' Lightning is left out, as your device asks for less motion.' : ' Lightning flashes every few seconds.') : ''}</p>
-                        <Field label="Wind">
-                          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Wind" data-testid="creator-wind">
-                            {WINDS.map((w, i) => <Chip key={w.id} active={recipe?.wind ? recipe.wind === w.id : (WEATHERS.find((k) => k.id === recipe?.weather)?.wind ?? 0) === i} onClick={() => setLight({ recipe: windPicked(recipe, w.id) }, i ? `${w.label}.` : 'No wind.')}>{i ? w.label : 'No wind'}</Chip>)}
-                          </div>
-                          <p className="mt-1.5 text-xs text-ink-faint">Blows rain, snow and falling leaves at a slant, in gusts, and sways trees and stalks. Picking a weather brings its own wind back.</p>
-                        </Field>
-                        <div className="mt-3 grid gap-1.5">
-                          <Toggle label="Clouds over the scene" checked={overhead} onChange={(on) => setLight({ recipe: overheadPicked(recipe, on) }, on ? 'Clouds over the scene.' : 'Clouds left out.')} />
-                          <p className="text-xs text-ink-faint">{overhead ? 'The clouds float over the scene and rain and snow fall from under them.' : 'The clouds are left out: the sky still grays and darkens, and rain and snow fall in from over the top of the picture.'}</p>
+                        <div className="grid gap-4">
+                          <WeatherControls weather={recipe?.weather} clouds={recipe?.weather ? undefined : recipe?.clouds} wind={recipe?.wind} overhead={overhead} calm={calm} prefix="creator" headed
+                            onPick={(key, id) => (key === 'wind' ? setLight({ recipe: windPicked(recipe, id as WindId) }, id && id !== WINDS[0].id ? `${WINDS.find((w) => w.id === id)!.label}.` : 'No wind.') : pickWeather(key, id as WeatherId | CloudId | undefined))}
+                            onOverhead={(on) => setLight({ recipe: overheadPicked(recipe, on) }, on ? 'Clouds over the scene.' : 'Clouds left out.')} />
                         </div>
                       </div>
                     </div>

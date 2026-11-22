@@ -10,7 +10,7 @@ import { LoadingMark } from '../shared/BlobLoader.tsx'
 import { castBy, glowGain } from './diorama/glow.ts'
 import { ScenePicker } from './diorama/ScenePicker.tsx'
 import { stepped } from './diorama/pick.ts'
-import { Button, Chip, Field, Toggle } from '../shared/ui.tsx'
+import { Button, Chip, Field } from '../shared/ui.tsx'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
 import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitDrag } from './Viewport.tsx'
 import { href } from './routes.ts'
@@ -26,16 +26,18 @@ import type { SceneWater } from '../splat-engine/sceneWater.ts'
 import { toPng, useExport } from './diorama/useExport.tsx'
 import type { Texture } from '../splat-engine/meshShape.ts'
 import { decodeTexture } from './modelRig.ts'
-import { detailAsked, labelNames, writeDetail } from '../shared/detail.ts'
+import { writeDetail } from '../shared/detail.ts'
 import { banded, hugged, unlit } from '../splat-engine/voxel.ts'
-import { zoomStep } from './diorama/zoom.ts'
 import { isPixelStyle, styleAsked, styleWords, type Style } from './diorama/styles.ts'
 import { GLITCH_START, glitchLook, type GlitchChoice } from './glitchLooks.ts'
 import { StyleControls, FinishControls } from './StyleControls.tsx'
-import { pixelCelLook, pixelFlags, pixelFor, pixelLookOf, pixelStart, type PixelSettings } from './styleSettings.ts'
+import { TimeControls, WeatherControls } from './styles/SceneControls.tsx'
+import { drawnStart, sceneStart, type DrawnSettings, type SceneSettings } from './styles/catalog.ts'
+import { detailStart, pixelCelLook, pixelFlags, pixelFor, pixelLookOf, pixelSizeAt, pixelStart, pixelZoomAsked, type PixelSettings } from './styleSettings.ts'
+import { useStyleOnStage } from './useStyleOnStage.ts'
 import { useDrawnLook, useHeld, wantsPlain } from './drawnLook.tsx'
-import { TIMES, timeAsked, timeOf, type TimeId } from './timeOfDay.ts'
-import { CLOUD_COVERS, SkyEase, WEATHERS, WINDS, cloudsAsked, gloomy, isClear, skyState, weatherAsked, windAsked, windAt, type CloudId, type WeatherId, type WindId } from '../splat-engine/skyRecipes.ts'
+import { timeOf, type TimeId } from './timeOfDay.ts'
+import { SkyEase, gloomy, isClear, skyState, windAt, type CloudId, type WeatherId, type WindId } from '../splat-engine/skyRecipes.ts'
 import { SceneWeather, paletteUnder, underSky } from './diorama/weather.ts'
 import { SceneSkyEffect } from './diorama/skyEffect.ts'
 import { SKY_EFFECTS, effectColors, effectOut, skyEffectAsked, type SkyEffectId } from '../splat-engine/skyEffects.ts'
@@ -97,26 +99,31 @@ export function PixelDiorama() {
    * scene, which every style respects (Matt, 2026-11-21). It brings its sky and light, and the scene's lamps, lit
    * windows and fires go by it (`Diorama.timed`).
    */
-  const [time, setTime] = useState<TimeId | undefined>(() => timeAsked(new URLSearchParams(location.search).get('time')))
+  const [sceneSet, setSceneSet] = useState<SceneSettings>(() => sceneStart(new URLSearchParams(location.search)))
+  const time = sceneSet.time || undefined
+  const setTime = (id: TimeId | undefined) => setSceneSet((c) => ({ ...c, time: id ?? '' }))
   /**
    * The weather and the cloud cover laid over the scene (`?weather=thunderstorm`, `?clouds=cloudy`), or none: recipes
    * every scene takes the same way (Matt, 2026-11-21; splat-engine/skyRecipes.ts). They are laid over the scene, so it
    * is not cut again for them, and the sky eases from one to the next.
    */
-  const [weatherPick, setWeather] = useState<WeatherId | 'none' | undefined>(() => { const q = new URLSearchParams(location.search).get('weather'); return q === 'none' ? 'none' : weatherAsked(q) })
-  const [cloudsPick, setClouds] = useState<CloudId | undefined>(() => cloudsAsked(new URLSearchParams(location.search).get('clouds')))
+  const weatherPick = sceneSet.weather || undefined, cloudsPick = sceneSet.clouds || undefined
+  const setWeather = (id: WeatherId | 'none' | undefined) => setSceneSet((c) => ({ ...c, weather: id ?? '' }))
+  const setClouds = (id: CloudId | undefined) => setSceneSet((c) => ({ ...c, clouds: id ?? '' }))
   // out in space (the space whales) there is no weather: what was picked waits for the next scene that has a sky
   const clouds = picked0.space ? undefined : cloudsPick
   // a scene may start under a shared weather of its own (the koi pond's light rain) until another, or none, is picked
   const weather: WeatherId | undefined = picked0.space || weatherPick === 'none' ? undefined : weatherPick ?? (clouds ? undefined : picked0.weather)
   /** The wind (`?wind=gale`): weather brings at least its own; it slants what falls and raises waves on water. */
-  const [windPick, setWind] = useState<WindId | undefined>(() => windAsked(new URLSearchParams(location.search).get('wind')))
+  const windPick = sceneSet.wind || undefined
+  const setWind = (id: WindId | undefined) => setSceneSet((c) => ({ ...c, wind: id ?? '' }))
   const wind = picked0.space ? undefined : windPick
   /**
    * Whether the weather's clouds float over the scene (`?overhead=0` leaves them out, and rain and snow fall in from
    * over the top of the picture): a scene may start without them, as the koi pond does (Matt, 2026-11-21).
    */
-  const [overheadPick, setOverhead] = useState<boolean | undefined>(() => { const q = new URLSearchParams(location.search).get('overhead'); return q === '0' ? false : q === '1' ? true : undefined })
+  const overheadPick = sceneSet.overhead ?? undefined
+  const setOverhead = (on: boolean) => setSceneSet((c) => ({ ...c, overhead: on }))
   const overhead = overheadPick ?? picked0.overhead ?? true
   /**
    * The sky effect behind the scene (`?sky=meteors`, `?sky=none`): an aurora or a meteor shower, recipes every scene
@@ -134,10 +141,13 @@ export function PixelDiorama() {
   const [playing, setPlaying] = useState(!calm)
   // a phone starts a step lighter, and a step lighter again for the styles that draw the scene several times a frame
   // (outlines, ASCII, cel shading), as Brush and Ink does; once the visitor picks a detail it is theirs for every style
-  const [chosen, setChosen] = useState<string | undefined>(() => detailAsked(DETAIL, labelNames)?.id)
+  const chosen = sceneSet.detail || undefined
+  const setChosen = (id: string) => setSceneSet((c) => ({ ...c, detail: id }))
   /** How the scene is drawn: as pixel art, or as one of Brush and Ink's looks. `?style=oil` opens on that one. */
   const [style, setStyle] = useState<Style>(() => styleAsked(new URLSearchParams(location.search).get('style')))
   const [glitch, setGlitch] = useState<GlitchChoice>(GLITCH_START)
+  // every other style's settings (styles/catalog.ts): the page holds them, as it holds pixel art's
+  const drawnKept = useState<DrawnSettings>(() => drawnStart(new URLSearchParams(location.search), { coarse }))
   /**
    * Light worked out a pixel at a time (`?shade=1`): pixel art made from a picture cel shading lit, so light and shade
    * fall in bands that follow each form, not blob by blob as the baked light does.
@@ -148,14 +158,13 @@ export function PixelDiorama() {
    */
   const [fin, setFin] = useState<PixelSettings>(() => pixelStart(diorama.finish, new URLSearchParams(location.search)))
   const setPixel = useCallback((change: Partial<PixelSettings>) => setFin((f) => ({ ...f, ...change })), [])
-  const { palette, size: baseSize, texel, glow, outline, rock, steps, rate, exact, shade: shaded } = fin
+  const { palette, texel, glow, outline, rock, steps, rate, exact, shade: shaded } = fin
   /** Switches only the address turns off (`?steady=0`, `?calm=0`, …). */
   const [flags] = useState(() => pixelFlags(new URLSearchParams(location.search)))
   // cel shading lights the blobs itself, so its scene is cut with no light baked in; so does pixel art shaded a pixel at a time
   const plain = isPixelStyle(style) ? shaded : wantsPlain(style)
-  // Finest by default (Matt, 2026-11-20); a phone starts pixel art at Fine (Matt found the dragon slow at Finest on his,
-  // 2026-11-20) and keeps Chunky for the styles that draw the whole screen several times
-  const detail = chosen ?? (coarse ? (isPixelStyle(style) ? DETAIL[2].id : DETAIL[0].id) : DETAIL[3].id)
+  // the detail each style starts at is the same on every page (styleSettings.ts `detailStart`)
+  const detail = chosen ?? DETAIL[detailStart(style, coarse)].id
   // discs along a shape's outer edges fitted to the edge (`hugged`), so edges are straight and lines sit on them; `?hug=0`
   const [hug] = useState(() => new URLSearchParams(location.search).get('hug') !== '0')
   /** Glow as the poser reads it: it scales the light the scene's lamps and fires cast, as well as the shine round bright pixels. */
@@ -170,10 +179,8 @@ export function PixelDiorama() {
   const [glbNote, setGlbNote] = useState('')
   const [modelBusy, setModelBusy] = useState(false)
   /** How one scene gives way to the next (`splat-core/transition.ts`), or a plain cut; never under reduced motion. */
-  const [transition, setTransition] = useState<TransitionKind | 'cut'>(() => {
-    const q = new URLSearchParams(location.search).get('transition')
-    return q === 'cut' ? 'cut' : TRANSITIONS.find((t) => t.id === q)?.id ?? TRANSITIONS[0].id
-  })
+  const transition = sceneSet.transition
+  const setTransition = (id: TransitionKind | 'cut') => setSceneSet((c) => ({ ...c, transition: id }))
   const changing = useRef<{ stop: () => void; sheet: HTMLCanvasElement; got: boolean } | null>(null)
   const overlayCanvas = useRef<HTMLCanvasElement>(null)
   const overlayOf = useRef<TransitionOverlay | null>(null)
@@ -291,9 +298,6 @@ export function PixelDiorama() {
   const asPixels = touring ? touring.pixels : pixels
   const look = useMemo<PixelLook>(() => pixelLookOf(fin, { colors, sky: shown.sky, skyForced: !!shown.at || weathered, finish: shown.finish, sun: shown.sun, start: shown.views[0].orbit, loop: shown.loop }, flags), [fin, colors, shown, weathered, flags])
 
-  // the exact (radix) sort: the stage rebuilds its world, keeping the moment and the poser
-  useEffect(() => { stage?.setSort(exact ? 'radix' : 'bins') }, [stage, exact])
-
   // a new level of detail keeps the moment it was showing
   useEffect(() => {
     if (!stage || !scene) return
@@ -395,21 +399,21 @@ export function PixelDiorama() {
   // in the scene's own share of light in shade, a little cool, and all of it held under the baked light's brightest
   // (`LIT_MAX`), so only what gives its own light reaches the pixel pass's glow
   const pixelCel = useMemo<CelLook | undefined>(() => (pixels && shadedNow && !touring ? pixelCelLook(shown.sun, shown.shade ?? 0.5) : undefined), [pixels, shadedNow, touring, shown.sun, shown.shade])
-  const drawing = useDrawnLook(stage, touring ? undefined : drawnStyle, { pixelCel, actor: onStage?.built, water: !!onStage?.of.water, weather: weathered || !!onStage?.of.heavens?.clouds, spacing: DETAIL.find((d) => d.id === onStage?.detail)?.spacing, plain: !!onStage?.plain, time: timeNow, azimuth: shown.views[0].orbit.azimuth, offscreen, light: coarse, loop: shown.loop, sky: shown.finish.sky || weathered ? [styleSky[0], styleSky[1]] : undefined })
+  const drawing = useDrawnLook(stage, touring ? undefined : drawnStyle, { pixelCel, actor: onStage?.built, water: !!onStage?.of.water, weather: weathered || !!onStage?.of.heavens?.clouds, spacing: DETAIL.find((d) => d.id === onStage?.detail)?.spacing, plain: !!onStage?.plain, time: timeNow, azimuth: shown.views[0].orbit.azimuth, offscreen, light: coarse, loop: shown.loop, sky: shown.finish.sky || weathered ? [styleSky[0], styleSky[1]] : undefined }, drawnKept)
   // the walk-through's fourth step is about the four samples, so it draws them whatever the switch says
   const sampling = touring?.id === 'samples'
   const drawnLook = useMemo(() => (asPixels ? (sampling ? { ...look, fine: true } : look) : undefined), [asPixels, sampling, look])
-  // on a phone the styles that fill the whole screen (pixel art fills a small frame) are drawn at one and a half device
-  // pixels to a CSS pixel, not two: every pass has near half the pixels to fill, and the marks are no finer than that
-  useEffect(() => { stage?.setSharpness(coarse && !asPixels ? 1.5 : 2) }, [stage, coarse, asPixels])
   // zooming in on pixel art makes the pixels bigger, a whole step at a time, rather than the blobs: a blob stays about
   // one art pixel however close the view comes, so edges stay pixel edges and lines stay on what they outline
   // (Matt saw scalloped edges and lines standing off their things when zoomed in, 2026-11-20); `?pixelzoom=0` turns it off
-  const [pixelZoom] = useState(() => new URLSearchParams(location.search).get('pixelzoom') !== '0')
-  const size = pixelZoom ? baseSize * zoomStep(shown.views[0].orbit.distance, orbit.distance) : baseSize
+  const [pixelZoom] = useState(() => pixelZoomAsked(new URLSearchParams(location.search)))
+  const size = pixelSizeAt(fin, shown.views[0].orbit.distance, orbit.distance, pixelZoom)
+  // the glitch's bursts come in steps of the scene's own clock, a whole number of steps a loop, so an export joins up
+  const glitchNow = useMemo(() => (glitching && !touring ? glitchLook(glitch, shown.loop, calm && !offscreen) : undefined), [glitching, touring, glitch, shown.loop, calm, offscreen])
+  // the style goes onto the stage in one place, shared with Scene Creator (useStyleOnStage.ts)
+  const skyOf = useStyleOnStage(stage, { pixels: !!drawnLook, look: drawnLook ?? look, size, rate, exact, glitch: glitchNow, coarse })
   useEffect(() => {
     if (!stage) return
-    stage.setPixels(drawnLook, size)
     // set again only when the sky has changed, so a paused scene is not drawn over and over
     let last = ''
     let now = false
@@ -418,7 +422,7 @@ export function PixelDiorama() {
       const [top, low] = d.skyAt(t), key = `${d.id}|${top}|${low}`
       if (key === last) return
       last = key
-      if (drawnLook?.sky) stage.setPixels({ ...drawnLook, sky: [top, low, drawnLook.sky[2]] }, size)
+      if (drawnLook?.sky) skyOf(top, low)
       else if (!drawnLook) {
         // another style: the page's own state, and at once while posing, so the color behind the canvas is the
         // moment's when the frame drawn next is painted over it (an export reads it straight after the draw)
@@ -430,7 +434,7 @@ export function PixelDiorama() {
     const d = posed.current
     if (d) skyNow.current(d, stage.time)
     now = true
-  }, [stage, drawnLook, size])
+  }, [stage, drawnLook, skyOf])
   useEffect(() => {
     if (!stage) return
     const keep = touring?.keep ?? 1
@@ -438,9 +442,6 @@ export function PixelDiorama() {
     stage.tint(touring?.clay ? (c, i) => [...clay(c), kept(i, keep) ? 1 : 0] : undefined)
   }, [stage, touring])
   useEffect(() => { if (stage) stage.playing = playing }, [stage, playing])
-  // the glitch's bursts come in steps of the scene's own clock, a whole number of steps a loop, so an export joins up
-  useEffect(() => { stage?.setGlitch(glitching && !touring ? glitchLook(glitch, shown.loop, calm && !offscreen) : undefined) }, [stage, glitching, touring, glitch, shown.loop, calm, offscreen])
-  useEffect(() => { if (stage) { stage.step = pixels && rate ? 1 / rate : 0; stage.invalidate() } }, [stage, pixels, rate])
   const orbitNow = useRef(orbit)
   /** A scene's water: shapes and colors its surface for the moment and the view, and the last picture of what it mirrors. */
   const wet = useRef<(() => void) | undefined>(undefined)
@@ -869,27 +870,8 @@ export function PixelDiorama() {
                   </div>
                 </div>
                 {picked0.space ? <p className="text-sm text-ink-muted" data-testid="diorama-space">Out in space there is no time of day, weather or sky effect: the scene keeps its own sky, stars and far sun.</p> : <>
-                <Field label="Time of day">
-                  <div className="flex flex-wrap gap-1.5" data-testid="diorama-time">
-                    <Chip active={!time || !picked0.timed} onClick={() => setTimeOfDay(undefined)}>Scene's own</Chip>
-                    {picked0.timed && TIMES.map((t) => <Chip key={t.id} active={time === t.id} onClick={() => setTimeOfDay(t.id)}>{t.label}</Chip>)}
-                  </div>
-                  <p className="mt-1.5 text-xs text-ink-faint">{!picked0.timed ? 'This scene keeps its own time of day.' : time ? 'The scene under this time\'s sky and light, in every style. Its lamps, lit windows and fires wait for the dark.' : 'The scene as it was written, with everything lit. Pick a time to set it in a morning, an afternoon or a night, in every style.'}</p>
-                </Field>
-                <Field label="Weather">
-                  <div className="flex flex-wrap gap-1.5" data-testid="diorama-weather">
-                    <Chip active={!weather && !clouds} onClick={() => pickSky('weather', undefined)}>No weather</Chip>
-                    {CLOUD_COVERS.map((c) => <Chip key={c.id} active={!weather && clouds === c.id} onClick={() => pickSky('clouds', c.id)}>{c.label}</Chip>)}
-                    {WEATHERS.map((w) => <Chip key={w.id} active={weather === w.id} onClick={() => pickSky('weather', w.id)}>{w.label}</Chip>)}
-                  </div>
-                  <p className="mt-1.5 text-xs text-ink-faint">Each weather comes with its own clouds, light, haze and wind. The same recipes for every scene and every style, laid over the scene: the sky eases from one to the next without the scene being made again.{weather === 'thunderstorm' ? (calm ? ' Lightning is left out, as your device asks for less motion.' : ' Lightning flashes every few seconds.') : ''}</p>
-                </Field>
-                <Field label="Wind">
-                  <div className="flex flex-wrap gap-1.5" data-testid="diorama-wind">
-                    {WINDS.map((w, i) => <Chip key={w.id} active={wind ? wind === w.id : (WEATHERS.find((k) => k.id === weather)?.wind ?? 0) === i} onClick={() => pickSky('wind', w.id)}>{i ? w.label : 'No wind'}</Chip>)}
-                  </div>
-                  <p className="mt-1.5 text-xs text-ink-faint">Wind blows rain, snow and falling leaves at a slant, in gusts, sways trees and stalks, and raises waves on a scene's water. Picking a weather brings its own wind back.</p>
-                </Field>
+                <TimeControls time={time} onPick={setTimeOfDay} timed={!!picked0.timed} prefix="diorama" />
+                <WeatherControls weather={weather} clouds={clouds} wind={wind} overhead={overhead} onPick={pickSky} onOverhead={pickOverhead} calm={calm} prefix="diorama" />
                 <Field label="Sky effect">
                   <div className="flex flex-wrap gap-1.5" data-testid="diorama-sky-effect">
                     <Chip active={!skyEffect} onClick={() => pickEffect(undefined)}>None</Chip>
@@ -897,10 +879,6 @@ export function PixelDiorama() {
                   </div>
                   <p className="mt-1.5 text-xs text-ink-faint">{(SKY_EFFECTS.find((e) => e.id === skyEffect)?.about ?? 'Something happening in the sky behind the scene.') + ' The same recipes for every scene, out only at night and under a clear enough sky.'}</p>
                 </Field>
-                <div className="grid gap-1.5">
-                  <Toggle label="Clouds over the scene" checked={overhead} onChange={pickOverhead} />
-                  <p className="text-xs text-ink-faint">{overhead ? 'The clouds float over the scene and rain and snow fall from under them.' : 'The clouds are left out: the sky still grays and darkens, and rain and snow fall in from over the top of the picture.'}</p>
-                </div>
                 </>}
                 <Field label="Changing scenes">
                   <div className="flex flex-wrap gap-1.5" data-testid="diorama-transitions">
