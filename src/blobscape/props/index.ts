@@ -3,6 +3,14 @@ import { KOI_POND } from '../diorama/scenes/koi.ts'
 import { BAMBOO, CHERRY, CRACKED_STONE, IRIS_LEAVES, LILY_PAD, LILY_PAD_FLOWER, MOSSY_STONE, PINK_IRIS, SNOW_LANTERN, STEPPING_POST, STONE_SLAB, TALL_LANTERN, WHITE_IRIS, type MadeProp } from './garden.ts'
 
 import { CAVE_MADE } from './cave.ts'
+import { CAVE_ICE_MADE } from './cave-ice.ts'
+import { CANYON_MADE } from './canyon.ts'
+import { CABIN_MADE } from './cabin.ts'
+import { ISLES_MADE } from './isles.ts'
+import { HARVEST_MADE } from './harvest.ts'
+import { RUIN_MADE } from './ruin.ts'
+import { HUT_MADE } from './hut.ts'
+import { GROVE_MADE } from './grove.ts'
 import { LAB_MADE } from './lab.ts'
 import { WINDOW_MADE } from './window.ts'
 import { SPIDER_MADE } from './spider.ts'
@@ -40,6 +48,14 @@ export const MADE: MadeProp[] = [
   { id: 'stepping-post', tags: ['rock'], kind: 'prop', about: 'A round stone post to step across water on', prop: STEPPING_POST },
   { id: 'stone-slab', tags: ['rock'], kind: 'prop', about: 'A low round slab of speckled stone', prop: STONE_SLAB },
   ...CAVE_MADE,
+  ...CAVE_ICE_MADE,
+  ...CANYON_MADE,
+  ...CABIN_MADE,
+  ...ISLES_MADE,
+  ...HARVEST_MADE,
+  ...RUIN_MADE,
+  ...HUT_MADE,
+  ...GROVE_MADE,
   ...LAB_MADE,
   ...WINDOW_MADE,
   ...SPIDER_MADE,

@@ -20,8 +20,14 @@ const paperOf = (id: string) => WASH_PAPERS.find((p) => p.id === id) ?? WASH_PAP
 /** The color to put behind the canvas before the paper is drawn. */
 export const washGround = (c: WashChoice) => css(paperOf(c.paper).paper)
 
-/** The look for the stage; `sky` is the subject's own, top and bottom (sRGB 0–255), where it has one. */
+/**
+ * The wash behind a subject with no sky of its own, top and bottom (sRGB 0–1): a pale blue going warm toward the
+ * ground, so the paper still has a painted sky on it (Matt, 2026-11-22: bare paper read as no background at all).
+ */
+export const WASH_SKY: readonly [readonly [number, number, number], readonly [number, number, number]] = [[0.64, 0.76, 0.87], [0.93, 0.89, 0.8]]
+
+/** The look for the stage; `sky` is the subject's own, top and bottom (sRGB 0–255), or `WASH_SKY` where it has none. */
 export function washLook(c: WashChoice, sky?: readonly [readonly number[], readonly number[]]): WashLook {
   const one = (v: readonly number[]) => [v[0] / 255, v[1] / 255, v[2] / 255] as const
-  return { bleed: c.bleed, pool: c.pool, grain: c.grain, strength: c.strength, pencil: c.pencil, paper: paperOf(c.paper).paper, sky: sky ? [one(sky[0]), one(sky[1])] : undefined }
+  return { bleed: c.bleed, pool: c.pool, grain: c.grain, strength: c.strength, pencil: c.pencil, paper: paperOf(c.paper).paper, sky: sky ? [one(sky[0]), one(sky[1])] : WASH_SKY }
 }

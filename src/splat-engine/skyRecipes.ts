@@ -379,8 +379,9 @@ export function weatherDocs(camera: View, loop: number, look: CloudLook = {}, to
   return {
     // the heavy cover reaches past a small scene's room, roofing the view
     clouds: { ...base, big: true, name: 'Clouds', palette: [...(look.colors ?? CLOUD_COLORS)], bones, parts, moves },
-    rain: { ...base, ...none, name: 'Rain', palette: RAIN_COLORS, air: { specks: [falling('rain', camera, RAIN_MOST, top)] } },
-    snow: { ...base, ...none, name: 'Snow', palette: SNOW_COLORS, air: { specks: [falling('snow', camera, SNOW_MOST, top)] } },
+    // (with the clouds left out, a far view's rain starts above a small scene's room)
+    rain: { ...base, ...none, big: true, name: 'Rain', palette: RAIN_COLORS, air: { specks: [falling('rain', camera, RAIN_MOST, top)] } },
+    snow: { ...base, ...none, big: true, name: 'Snow', palette: SNOW_COLORS, air: { specks: [falling('snow', camera, SNOW_MOST, top)] } },
   }
 }
 
