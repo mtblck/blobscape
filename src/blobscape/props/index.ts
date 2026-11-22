@@ -3,6 +3,12 @@ import { KOI_POND } from '../diorama/scenes/koi.ts'
 import { BAMBOO, CHERRY, CRACKED_STONE, IRIS_LEAVES, LILY_PAD, LILY_PAD_FLOWER, MOSSY_STONE, PINK_IRIS, SNOW_LANTERN, STEPPING_POST, STONE_SLAB, TALL_LANTERN, WHITE_IRIS, type MadeProp } from './garden.ts'
 
 import { CAVE_MADE } from './cave.ts'
+import { LAB_MADE } from './lab.ts'
+import { WINDOW_MADE } from './window.ts'
+import { SPIDER_MADE } from './spider.ts'
+import { OCTOPUS_MADE } from './octopus.ts'
+import { CROC_MADE } from './croc.ts'
+import { REEF_MADE } from './reef.ts'
 import { SNAIL_MADE } from './snail.ts'
 import { OWL_MADE } from './owl.ts'
 import { HAND_MADE } from './hand.ts'
@@ -34,6 +40,12 @@ export const MADE: MadeProp[] = [
   { id: 'stepping-post', tags: ['rock'], kind: 'prop', about: 'A round stone post to step across water on', prop: STEPPING_POST },
   { id: 'stone-slab', tags: ['rock'], kind: 'prop', about: 'A low round slab of speckled stone', prop: STONE_SLAB },
   ...CAVE_MADE,
+  ...LAB_MADE,
+  ...WINDOW_MADE,
+  ...SPIDER_MADE,
+  ...OCTOPUS_MADE,
+  ...CROC_MADE,
+  ...REEF_MADE,
   ...SNAIL_MADE,
   ...OWL_MADE,
   ...HAND_MADE,

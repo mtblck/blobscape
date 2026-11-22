@@ -1,0 +1,441 @@
+import type { PropDoc, SceneProject } from '../../splat-engine/project.ts'
+import type { MadeProp } from './garden.ts'
+
+/**
+ * The sprout lab (Diorama's lab scene) as a land and props (docs/scenes-from-props.md): the brick corner with its
+ * shelves of jars is the land, and the sprout jars, the dial box, the burner, the cat and the lamp are library props
+ * set down on it, each where it stood in the scene.
+ * Data only, as a scene description is: see docs/scene-descriptions.md.
+ */
+
+/** A brick laboratory corner at night, with shelves of glowing jars, a round window, cogs and a tank. */
+export const NIGHT_LAB: PropDoc = {
+  name: 'Night laboratory',
+  foot: [0, 0, 0],
+  doc: {
+    name: 'Night laboratory',
+    loop: 12,
+    light: { from: [-0.3, 1, 0.7], ambient: 0.62, shadow: 0.5 },
+    palette: [
+      '#100c20', '#201a3c', '#342c5c', '#544c88', '#3c3850', '#6c6888', '#3a241c', '#5c3c2c',
+      '#886040', '#4a5064', '#8088a0', '#c4cce0', '#7c1c58', '#d03c90', '#ff88c4', '#14586c',
+      '#28a0b4', '#7ce4ec', '#b46414', '#f0a028', '#ffe08c', '#2c6c3c', '#58b858', '#b8f088',
+      '#2c2c34', '#e8e4dc',
+    ],
+    look: { dither: 0.5, glow: 1.2, outline: true, edges: true },
+    camera: { target: [0, 1.05, 0], distance: 5.6, azimuth: 12, elevation: 12, swing: 12 },
+    air: { haze: { color: '#100c20', from: 0.5, to: 6 }, shafts: [{ from: [-0.45, 2.1, 0.5], to: [-0.3, 0, 0.8], r: 0.3, color: '#ffe08c', strength: 0.5 }], specks: [{ kind: 'dust', count: 35, from: [-0.9, 0.3, 0.1], to: [0.1, 2, 1], colors: ['#ffe08c', '#e8e4dc'], glow: true }] },
+    bones: [
+      { name: 'cog0', at: [1.15, 2, -0.9] },
+      { name: 'cog1', at: [0.93, 1.86, -0.9] },
+      { name: 'mote0', at: [-0.278, 1.616, 0.201] },
+      { name: 'mote1', at: [-1.198, 1.231, 0.58] },
+      { name: 'mote2', at: [-0.337, 1.115, 0.384] },
+      { name: 'mote3', at: [-0.288, 1.053, 1.129] },
+      { name: 'mote4', at: [0.772, 1.726, 1.103] },
+      { name: 'mote5', at: [-0.758, 1.061, 0.485] },
+      { name: 'mote6', at: [0.939, 1.169, 0.583] },
+      { name: 'mote7', at: [1.029, 1.901, 0.447] },
+    ],
+    parts: [
+      { shape: { kind: 'cylinder', at: [0, -0.26, 0], height: 0.26, r: 1.8 }, paint: { kind: 'faces', top: { kind: 'bricks', size: [0.3, 0.3], colors: ['#6c6888', '#6c6888', '#3c3850'], line: '#201a3c' }, side: { kind: 'bands', axis: 'y', size: 0.07, colors: ['#342c5c', '#201a3c', '#100c20'] } } },
+      { shape: { kind: 'box', at: [0, 1.1, -1.35], half: [0.75, 1.1, 0.07] }, paint: { kind: 'bricks', size: [0.26, 0.12], colors: ['#342c5c', '#342c5c', '#544c88', '#201a3c'], line: '#100c20' } },
+      { shape: { kind: 'box', at: [-1.15, 1.1, -1], half: [0.42, 1.1, 0.07] }, paint: { kind: 'bricks', size: [0.26, 0.12], colors: ['#342c5c', '#342c5c', '#544c88', '#201a3c'], line: '#100c20' } },
+      { shape: { kind: 'box', at: [1.15, 1.1, -1], half: [0.42, 1.1, 0.07] }, paint: { kind: 'bricks', size: [0.26, 0.12], colors: ['#342c5c', '#342c5c', '#544c88', '#201a3c'], line: '#100c20' } },
+      { shape: { kind: 'box', at: [0, 2.24, -1.33], half: [0.8, 0.05, 0.1] }, paint: '#3a241c' },
+      { shape: { kind: 'ball', at: [0, 1.65, -1.3], r: [0.34, 0.34, 0.05] }, paint: '#100c20' },
+      { shape: { kind: 'ball', at: [0.06, 1.68, -1.27], r: [0.2, 0.2, 0.03] }, paint: '#ffe08c', glow: true, noShadow: true },
+      { shape: { kind: 'join', shapes: [{ kind: 'cone', from: [-0.34, 1.65, -1.25], to: [0.34, 1.65, -1.25], r: 0.018 }, { kind: 'cone', from: [0, 1.31, -1.25], to: [0, 1.99, -1.25], r: 0.018 }] }, paint: '#4a5064', noShadow: true },
+      { shape: { kind: 'box', at: [-1.15, 0.95, -0.88], half: [0.36, 0.02, 0.08] }, paint: '#5c3c2c' },
+      { shape: { kind: 'join', shapes: [{ kind: 'cylinder', at: [-1.42, 0.97, -0.86], height: 0.125, r: 0.04 }, { kind: 'cylinder', at: [-1.42, 1.095, -0.86], height: 0.04, r: 0.016 }] }, paint: { kind: 'split', axis: 'y', at: 1.058, below: '#d03c90', above: '#c4cce0' }, glow: true, noShadow: true },
+      { shape: { kind: 'join', shapes: [{ kind: 'cylinder', at: [-1.24, 0.97, -0.86], height: 0.106, r: 0.04 }, { kind: 'cylinder', at: [-1.24, 1.076, -0.86], height: 0.04, r: 0.016 }] }, paint: { kind: 'split', axis: 'y', at: 1.045, below: '#28a0b4', above: '#c4cce0' }, glow: false, noShadow: true },
+      { shape: { kind: 'join', shapes: [{ kind: 'cylinder', at: [-1.06, 0.97, -0.86], height: 0.147, r: 0.04 }, { kind: 'cylinder', at: [-1.06, 1.117, -0.86], height: 0.04, r: 0.016 }] }, paint: { kind: 'split', axis: 'y', at: 1.073, below: '#f0a028', above: '#c4cce0' }, glow: false, noShadow: true },
+      { shape: { kind: 'join', shapes: [{ kind: 'cylinder', at: [-0.88, 0.97, -0.86], height: 0.12, r: 0.04 }, { kind: 'cylinder', at: [-0.88, 1.09, -0.86], height: 0.04, r: 0.016 }] }, paint: { kind: 'split', axis: 'y', at: 1.054, below: '#58b858', above: '#c4cce0' }, glow: true, noShadow: true },
+      { shape: { kind: 'box', at: [-1.15, 1.5, -0.88], half: [0.36, 0.02, 0.08] }, paint: '#5c3c2c' },
+      { shape: { kind: 'join', shapes: [{ kind: 'cylinder', at: [-1.42, 1.52, -0.86], height: 0.136, r: 0.04 }, { kind: 'cylinder', at: [-1.42, 1.656, -0.86], height: 0.04, r: 0.016 }] }, paint: { kind: 'split', axis: 'y', at: 1.615, below: '#d03c90', above: '#c4cce0' }, glow: false, noShadow: true },
+      { shape: { kind: 'join', shapes: [{ kind: 'cylinder', at: [-1.24, 1.52, -0.86], height: 0.14, r: 0.04 }, { kind: 'cylinder', at: [-1.24, 1.66, -0.86], height: 0.04, r: 0.016 }] }, paint: { kind: 'split', axis: 'y', at: 1.618, below: '#28a0b4', above: '#c4cce0' }, glow: false, noShadow: true },
+      { shape: { kind: 'join', shapes: [{ kind: 'cylinder', at: [-1.06, 1.52, -0.86], height: 0.1, r: 0.04 }, { kind: 'cylinder', at: [-1.06, 1.62, -0.86], height: 0.04, r: 0.016 }] }, paint: { kind: 'split', axis: 'y', at: 1.59, below: '#f0a028', above: '#c4cce0' }, glow: true, noShadow: true },
+      { shape: { kind: 'join', shapes: [{ kind: 'cylinder', at: [-0.88, 1.52, -0.86], height: 0.146, r: 0.04 }, { kind: 'cylinder', at: [-0.88, 1.666, -0.86], height: 0.04, r: 0.016 }] }, paint: { kind: 'split', axis: 'y', at: 1.622, below: '#58b858', above: '#c4cce0' }, glow: false, noShadow: true },
+      { shape: { kind: 'box', at: [1.15, 0.95, -0.88], half: [0.36, 0.02, 0.08] }, paint: '#5c3c2c' },
+      { shape: { kind: 'join', shapes: [{ kind: 'cylinder', at: [0.88, 0.97, -0.86], height: 0.121, r: 0.04 }, { kind: 'cylinder', at: [0.88, 1.091, -0.86], height: 0.04, r: 0.016 }] }, paint: { kind: 'split', axis: 'y', at: 1.055, below: '#d03c90', above: '#c4cce0' }, glow: false, noShadow: true },
+      { shape: { kind: 'join', shapes: [{ kind: 'cylinder', at: [1.06, 0.97, -0.86], height: 0.145, r: 0.04 }, { kind: 'cylinder', at: [1.06, 1.115, -0.86], height: 0.04, r: 0.016 }] }, paint: { kind: 'split', axis: 'y', at: 1.072, below: '#28a0b4', above: '#c4cce0' }, glow: true, noShadow: true },
+      { shape: { kind: 'join', shapes: [{ kind: 'cylinder', at: [1.24, 0.97, -0.86], height: 0.11, r: 0.04 }, { kind: 'cylinder', at: [1.24, 1.08, -0.86], height: 0.04, r: 0.016 }] }, paint: { kind: 'split', axis: 'y', at: 1.047, below: '#f0a028', above: '#c4cce0' }, glow: false, noShadow: true },
+      { shape: { kind: 'join', shapes: [{ kind: 'cylinder', at: [1.42, 0.97, -0.86], height: 0.108, r: 0.04 }, { kind: 'cylinder', at: [1.42, 1.078, -0.86], height: 0.04, r: 0.016 }] }, paint: { kind: 'split', axis: 'y', at: 1.045, below: '#58b858', above: '#c4cce0' }, glow: false, noShadow: true },
+      { shape: { kind: 'box', at: [1.15, 1.5, -0.88], half: [0.36, 0.02, 0.08] }, paint: '#5c3c2c' },
+      { shape: { kind: 'join', shapes: [{ kind: 'cylinder', at: [0.88, 1.52, -0.86], height: 0.114, r: 0.04 }, { kind: 'cylinder', at: [0.88, 1.634, -0.86], height: 0.04, r: 0.016 }] }, paint: { kind: 'split', axis: 'y', at: 1.6, below: '#d03c90', above: '#c4cce0' }, glow: true, noShadow: true },
+      { shape: { kind: 'join', shapes: [{ kind: 'cylinder', at: [1.06, 1.52, -0.86], height: 0.113, r: 0.04 }, { kind: 'cylinder', at: [1.06, 1.633, -0.86], height: 0.04, r: 0.016 }] }, paint: { kind: 'split', axis: 'y', at: 1.599, below: '#28a0b4', above: '#c4cce0' }, glow: false, noShadow: true },
+      { shape: { kind: 'join', shapes: [{ kind: 'cylinder', at: [1.24, 1.52, -0.86], height: 0.13, r: 0.04 }, { kind: 'cylinder', at: [1.24, 1.65, -0.86], height: 0.04, r: 0.016 }] }, paint: { kind: 'split', axis: 'y', at: 1.611, below: '#f0a028', above: '#c4cce0' }, glow: false, noShadow: true },
+      { shape: { kind: 'join', shapes: [{ kind: 'cylinder', at: [1.42, 1.52, -0.86], height: 0.139, r: 0.04 }, { kind: 'cylinder', at: [1.42, 1.659, -0.86], height: 0.04, r: 0.016 }] }, paint: { kind: 'split', axis: 'y', at: 1.617, below: '#58b858', above: '#c4cce0' }, glow: true, noShadow: true },
+      { shape: { kind: 'join', shapes: [{ kind: 'cone', from: [-1.5, 0.35, -0.9], to: [-0.75, 0.35, -1.24], r: 0.035 }, { kind: 'cone', from: [-0.75, 0.35, -1.24], to: [0.75, 0.35, -1.24], r: 0.035 }, { kind: 'cone', from: [0.75, 0.35, -1.24], to: [1.5, 0.35, -0.9], r: 0.035 }, { kind: 'cone', from: [-0.6, 0.35, -1.24], to: [-0.6, 1.2, -1.24], r: 0.028 }, { kind: 'cone', from: [0.6, 0.35, -1.24], to: [0.6, 1.2, -1.24], r: 0.028 }] }, paint: { kind: 'bands', axis: 'x', size: 0.2, colors: ['#8088a0', '#8088a0', '#4a5064', '#c4cce0'] } },
+      { shape: { kind: 'join', shapes: [{ kind: 'cone', from: [-0.85, 1.28, 0.1], to: [-0.8, 1.6, -0.5], r: 0.02 }, { kind: 'cone', from: [-0.8, 1.6, -0.5], to: [-0.6, 1.2, -1.2], r: 0.02 }, { kind: 'cone', from: [0.85, 1.28, 0.1], to: [0.8, 1.6, -0.5], r: 0.02 }, { kind: 'cone', from: [0.8, 1.6, -0.5], to: [0.6, 1.2, -1.2], r: 0.02 }] }, paint: '#3a241c', noShadow: true },
+      { shape: { kind: 'join', shapes: [{ kind: 'ball', at: [1.15, 2, -0.9], r: [0.15, 0.15, 0.03] }, { kind: 'cone', from: [1.15, 2, -0.9], to: [1.337, 2, -0.9], r: 0.022 }, { kind: 'cone', from: [1.15, 2, -0.9], to: [1.283, 2.133, -0.9], r: 0.022 }, { kind: 'cone', from: [1.15, 2, -0.9], to: [1.15, 2.188, -0.9], r: 0.022 }, { kind: 'cone', from: [1.15, 2, -0.9], to: [1.017, 2.133, -0.9], r: 0.022 }, { kind: 'cone', from: [1.15, 2, -0.9], to: [0.962, 2, -0.9], r: 0.022 }, { kind: 'cone', from: [1.15, 2, -0.9], to: [1.017, 1.867, -0.9], r: 0.022 }, { kind: 'cone', from: [1.15, 2, -0.9], to: [1.15, 1.812, -0.9], r: 0.022 }, { kind: 'cone', from: [1.15, 2, -0.9], to: [1.283, 1.867, -0.9], r: 0.022 }] }, paint: '#8088a0', bone: 'cog0', noShadow: true },
+      { shape: { kind: 'join', shapes: [{ kind: 'ball', at: [0.93, 1.86, -0.9], r: [0.09, 0.09, 0.03] }, { kind: 'cone', from: [0.93, 1.86, -0.9], to: [1.042, 1.86, -0.9], r: 0.022 }, { kind: 'cone', from: [0.93, 1.86, -0.9], to: [1.01, 1.94, -0.9], r: 0.022 }, { kind: 'cone', from: [0.93, 1.86, -0.9], to: [0.93, 1.973, -0.9], r: 0.022 }, { kind: 'cone', from: [0.93, 1.86, -0.9], to: [0.85, 1.94, -0.9], r: 0.022 }, { kind: 'cone', from: [0.93, 1.86, -0.9], to: [0.818, 1.86, -0.9], r: 0.022 }, { kind: 'cone', from: [0.93, 1.86, -0.9], to: [0.85, 1.78, -0.9], r: 0.022 }, { kind: 'cone', from: [0.93, 1.86, -0.9], to: [0.93, 1.748, -0.9], r: 0.022 }, { kind: 'cone', from: [0.93, 1.86, -0.9], to: [1.01, 1.78, -0.9], r: 0.022 }] }, paint: '#b46414', bone: 'cog1', noShadow: true },
+      { shape: { kind: 'join', shapes: [{ kind: 'box', at: [-0.4, 0.008, 1.2], half: [0.07, 0.008, 0.09] }, { kind: 'box', at: [0.6, 0.008, 1.35], half: [0.08, 0.008, 0.06] }, { kind: 'box', at: [-0.2, 0.008, 0.75], half: [0.06, 0.008, 0.08] }] }, paint: '#e8e4dc', noShadow: true },
+      { shape: { kind: 'sphere', at: [-0.278, 1.616, 0.201], r: 0.014 }, paint: '#ffe08c', bone: 'mote0', glow: true, noShadow: true },
+      { shape: { kind: 'sphere', at: [-1.198, 1.231, 0.58], r: 0.014 }, paint: '#ffe08c', bone: 'mote1', glow: true, noShadow: true },
+      { shape: { kind: 'sphere', at: [-0.337, 1.115, 0.384], r: 0.014 }, paint: '#ffe08c', bone: 'mote2', glow: true, noShadow: true },
+      { shape: { kind: 'sphere', at: [-0.288, 1.053, 1.129], r: 0.014 }, paint: '#ffe08c', bone: 'mote3', glow: true, noShadow: true },
+      { shape: { kind: 'sphere', at: [0.772, 1.726, 1.103], r: 0.014 }, paint: '#ffe08c', bone: 'mote4', glow: true, noShadow: true },
+      { shape: { kind: 'sphere', at: [-0.758, 1.061, 0.485], r: 0.014 }, paint: '#ffe08c', bone: 'mote5', glow: true, noShadow: true },
+      { shape: { kind: 'sphere', at: [0.939, 1.169, 0.583], r: 0.014 }, paint: '#ffe08c', bone: 'mote6', glow: true, noShadow: true },
+      { shape: { kind: 'sphere', at: [1.029, 1.901, 0.447], r: 0.014 }, paint: '#ffe08c', bone: 'mote7', glow: true, noShadow: true },
+    ],
+    moves: [
+      { kind: 'spin', bone: 'cog0', axis: 'z', times: 2 },
+      { kind: 'spin', bone: 'cog1', axis: 'z', times: -3 },
+      { kind: 'bob', bone: 'mote0', by: [0.059, 0.12, 0.06], times: 1, phase: 0.627 },
+      { kind: 'pulse', bone: 'mote0', size: [0.3, 1.2], times: 3, phase: 0.804 },
+      { kind: 'bob', bone: 'mote1', by: [-0.037, 0.12, 0.06], times: 2, phase: 0.278 },
+      { kind: 'pulse', bone: 'mote1', size: [0.3, 1.2], times: 4, phase: 0.018 },
+      { kind: 'bob', bone: 'mote2', by: [-0.014, 0.12, 0.06], times: 3, phase: 0.597 },
+      { kind: 'pulse', bone: 'mote2', size: [0.3, 1.2], times: 5, phase: 0.903 },
+      { kind: 'bob', bone: 'mote3', by: [0.056, 0.12, 0.06], times: 1, phase: 0.125 },
+      { kind: 'pulse', bone: 'mote3', size: [0.3, 1.2], times: 3, phase: 0.03 },
+      { kind: 'bob', bone: 'mote4', by: [-0.03, 0.12, 0.06], times: 2, phase: 0.883 },
+      { kind: 'pulse', bone: 'mote4', size: [0.3, 1.2], times: 4, phase: 0.524 },
+      { kind: 'bob', bone: 'mote5', by: [-0.034, 0.12, 0.06], times: 3, phase: 0.276 },
+      { kind: 'pulse', bone: 'mote5', size: [0.3, 1.2], times: 5, phase: 0.224 },
+      { kind: 'bob', bone: 'mote6', by: [0.097, 0.12, 0.06], times: 1, phase: 0.018 },
+      { kind: 'pulse', bone: 'mote6', size: [0.3, 1.2], times: 3, phase: 0.255 },
+      { kind: 'bob', bone: 'mote7', by: [-0.015, 0.12, 0.06], times: 2, phase: 0.945 },
+      { kind: 'pulse', bone: 'mote7', size: [0.3, 1.2], times: 4, phase: 0.029 },
+    ],
+  },
+}
+
+/** A sprout growing in a jar of glowing pink liquid, bubbles rising round it. */
+export const SPROUT_JAR: PropDoc = {
+  name: 'Sprout jar',
+  foot: [-0.85, 0, 0.1],
+  doc: {
+    name: 'Sprout jar',
+    loop: 12,
+    light: { from: [-0.3, 1, 0.7], ambient: 0.62, shadow: 0.5 },
+    palette: [
+      '#100c20', '#201a3c', '#342c5c', '#544c88', '#3c3850', '#6c6888', '#3a241c', '#5c3c2c',
+      '#886040', '#4a5064', '#8088a0', '#c4cce0', '#7c1c58', '#d03c90', '#ff88c4', '#14586c',
+      '#28a0b4', '#7ce4ec', '#b46414', '#f0a028', '#ffe08c', '#2c6c3c', '#58b858', '#b8f088',
+      '#2c2c34', '#e8e4dc',
+    ],
+    look: { dither: 0.5, glow: 1.2, outline: true, edges: true },
+    camera: { target: [0, 1.05, 0], distance: 5.6, azimuth: 12, elevation: 12, swing: 12 },
+    bones: [
+      { name: 'sprout0', at: [-0.85, 0.4, 0.1] },
+      { name: 'bub0_0', at: [-0.98, 0.42, 0.178] },
+      { name: 'bub0_1', at: [-0.85, 0.42, 0.178] },
+      { name: 'bub0_2', at: [-0.72, 0.42, 0.178] },
+    ],
+    parts: [
+      { shape: { kind: 'join', shapes: [{ kind: 'cylinder', at: [-0.85, 0, 0.1], height: 0.3, r: 0.299, rTop: 0.273 }, { kind: 'cylinder', at: [-0.85, 0.3, 0.1], height: 0.05, r: 0.312 }] }, paint: { kind: 'faces', top: '#c4cce0', side: { kind: 'bands', axis: 'y', size: 0.06, colors: ['#8088a0', '#4a5064', '#8088a0'] }, under: '#4a5064' } },
+      { shape: { kind: 'cut', shape: { kind: 'cylinder', at: [-0.85, 0.35, 0.1], height: 0.8, r: 0.26 }, hole: { kind: 'join', shapes: [{ kind: 'cylinder', at: [-0.85, 0.3, 0.1], height: 0.9, r: 0.22 }, { kind: 'box', at: [-0.85, 0.7, 0.36], half: [0.31, 0.5, 0.26] }] } }, paint: { kind: 'bands', axis: 'y', size: 0.16, colors: ['#7c1c58', '#d03c90', '#d03c90', '#d03c90', '#d03c90'] }, glow: true, noShadow: true },
+      { shape: { kind: 'cylinder', at: [-0.85, 0.35, 0.1], height: 0.05, r: 0.23 }, paint: '#7c1c58', noShadow: true },
+      { shape: { kind: 'join', shapes: [{ kind: 'cone', from: [-0.622, 0.35, 0.225], to: [-0.622, 1.15, 0.225], r: 0.014 }, { kind: 'cone', from: [-1.078, 0.35, 0.225], to: [-1.078, 1.15, 0.225], r: 0.014 }] }, paint: '#c4cce0', noShadow: true },
+      { shape: { kind: 'join', shapes: [{ kind: 'cylinder', at: [-0.85, 1.15, 0.1], height: 0.06, r: 0.299 }, { kind: 'cylinder', at: [-0.85, 1.21, 0.1], height: 0.07, r: 0.182, rTop: 0.13 }, { kind: 'cylinder', at: [-0.85, 1.28, 0.1], height: 0.04, r: 0.065 }] }, paint: { kind: 'faces', top: '#c4cce0', side: '#8088a0', under: '#4a5064' } },
+      { shape: { kind: 'join', shapes: [{ kind: 'cone', from: [-0.85, 0.4, 0.1], to: [-0.82, 0.688, 0.1], r: 0.022, rTo: 0.018 }, { kind: 'cone', from: [-0.82, 0.688, 0.1], to: [-0.87, 0.976, 0.1], r: 0.018, rTo: 0.012 }] }, paint: '#2c6c3c', bone: 'sprout0', noShadow: true },
+      { shape: { kind: 'ball', at: [-0.98, 0.728, 0.13], r: [0.088, 0.036, 0.057] }, paint: '#58b858', bone: 'sprout0', glow: true, noShadow: true },
+      { shape: { kind: 'ball', at: [-0.733, 0.826, 0.13], r: [0.08, 0.033, 0.051] }, paint: '#58b858', bone: 'sprout0', glow: false, noShadow: true },
+      { shape: { kind: 'ball', at: [-0.941, 0.93, 0.13], r: [0.062, 0.025, 0.04] }, paint: '#58b858', bone: 'sprout0', glow: true, noShadow: true },
+      { shape: { kind: 'ball', at: [-0.772, 1.016, 0.13], r: [0.053, 0.022, 0.034] }, paint: '#58b858', bone: 'sprout0', glow: false, noShadow: true },
+      { shape: { kind: 'sphere', at: [-0.87, 1.006, 0.1], r: 0.052 }, paint: '#f0a028', bone: 'sprout0', glow: true, noShadow: true },
+      { shape: { kind: 'join', shapes: [{ kind: 'cone', from: [-0.85, 0.4, 0.1], to: [-0.75, 0.37, 0.14], r: 0.016, rTo: 0.006 }, { kind: 'cone', from: [-0.85, 0.4, 0.1], to: [-0.94, 0.37, 0.15], r: 0.016, rTo: 0.006 }, { kind: 'cone', from: [-0.85, 0.4, 0.1], to: [-0.83, 0.37, 0.2], r: 0.016, rTo: 0.006 }] }, paint: '#2c6c3c', bone: 'sprout0', noShadow: true },
+      { shape: { kind: 'sphere', at: [-0.98, 0.42, 0.178], r: 0.022 }, paint: '#ff88c4', bone: 'bub0_0', glow: true, noShadow: true },
+      { shape: { kind: 'sphere', at: [-0.85, 0.42, 0.178], r: 0.022 }, paint: '#ff88c4', bone: 'bub0_1', glow: true, noShadow: true },
+      { shape: { kind: 'sphere', at: [-0.72, 0.42, 0.178], r: 0.022 }, paint: '#ff88c4', bone: 'bub0_2', glow: true, noShadow: true },
+    ],
+    moves: [
+      { kind: 'sway', bone: 'sprout0', axis: 'z', degrees: 5, times: 2, phase: 0 },
+      { kind: 'drift', bone: 'bub0_0', by: [-0.03, 0.68, 0], times: 2, grow: [0.6, 1.3], phase: 0.187 },
+      { kind: 'drift', bone: 'bub0_1', by: [0, 0.68, 0], times: 3, grow: [0.6, 1.3], phase: 0.69 },
+      { kind: 'drift', bone: 'bub0_2', by: [0.03, 0.68, 0], times: 4, grow: [0.6, 1.3], phase: 0.306 },
+    ],
+    lights: [
+      { at: [-0.85, 0.8, 0.55], color: '#d03c90', strength: 1.4, range: 1.1, lit: 'always' },
+    ],
+  },
+}
+
+/** A sprout growing in a tall jar of glowing blue liquid, bubbles rising round it. */
+export const TALL_SPROUT_JAR: PropDoc = {
+  name: 'Tall sprout jar',
+  foot: [0, 0, -0.25],
+  doc: {
+    name: 'Tall sprout jar',
+    loop: 12,
+    light: { from: [-0.3, 1, 0.7], ambient: 0.62, shadow: 0.5 },
+    palette: [
+      '#100c20', '#201a3c', '#342c5c', '#544c88', '#3c3850', '#6c6888', '#3a241c', '#5c3c2c',
+      '#886040', '#4a5064', '#8088a0', '#c4cce0', '#7c1c58', '#d03c90', '#ff88c4', '#14586c',
+      '#28a0b4', '#7ce4ec', '#b46414', '#f0a028', '#ffe08c', '#2c6c3c', '#58b858', '#b8f088',
+      '#2c2c34', '#e8e4dc',
+    ],
+    look: { dither: 0.5, glow: 1.2, outline: true, edges: true },
+    camera: { target: [0, 1.05, 0], distance: 5.6, azimuth: 12, elevation: 12, swing: 12 },
+    bones: [
+      { name: 'sprout1', at: [0, 0.4, -0.25] },
+      { name: 'bub1_0', at: [-0.17, 0.42, -0.148] },
+      { name: 'bub1_1', at: [0, 0.42, -0.148] },
+      { name: 'bub1_2', at: [0.17, 0.42, -0.148] },
+    ],
+    parts: [
+      { shape: { kind: 'join', shapes: [{ kind: 'cylinder', at: [0, 0, -0.25], height: 0.3, r: 0.391, rTop: 0.357 }, { kind: 'cylinder', at: [0, 0.3, -0.25], height: 0.05, r: 0.408 }] }, paint: { kind: 'faces', top: '#c4cce0', side: { kind: 'bands', axis: 'y', size: 0.06, colors: ['#8088a0', '#4a5064', '#8088a0'] }, under: '#4a5064' } },
+      { shape: { kind: 'cut', shape: { kind: 'cylinder', at: [0, 0.35, -0.25], height: 1.15, r: 0.34 }, hole: { kind: 'join', shapes: [{ kind: 'cylinder', at: [0, 0.3, -0.25], height: 1.25, r: 0.3 }, { kind: 'box', at: [0, 0.875, 0.09], half: [0.39, 0.675, 0.34] }] } }, paint: { kind: 'bands', axis: 'y', size: 0.23, colors: ['#14586c', '#28a0b4', '#28a0b4', '#28a0b4', '#28a0b4'] }, glow: true, noShadow: true },
+      { shape: { kind: 'cylinder', at: [0, 0.35, -0.25], height: 0.05, r: 0.31 }, paint: '#14586c', noShadow: true },
+      { shape: { kind: 'join', shapes: [{ kind: 'cone', from: [0.298, 0.35, -0.087], to: [0.298, 1.5, -0.087], r: 0.014 }, { kind: 'cone', from: [-0.298, 0.35, -0.087], to: [-0.298, 1.5, -0.087], r: 0.014 }] }, paint: '#c4cce0', noShadow: true },
+      { shape: { kind: 'join', shapes: [{ kind: 'cylinder', at: [0, 1.5, -0.25], height: 0.06, r: 0.391 }, { kind: 'cylinder', at: [0, 1.56, -0.25], height: 0.07, r: 0.238, rTop: 0.17 }, { kind: 'cylinder', at: [0, 1.63, -0.25], height: 0.04, r: 0.085 }] }, paint: { kind: 'faces', top: '#c4cce0', side: '#8088a0', under: '#4a5064' } },
+      { shape: { kind: 'join', shapes: [{ kind: 'cone', from: [0, 0.4, -0.25], to: [0.03, 0.86, -0.25], r: 0.022, rTo: 0.018 }, { kind: 'cone', from: [0.03, 0.86, -0.25], to: [-0.02, 1.32, -0.25], r: 0.018, rTo: 0.012 }] }, paint: '#2c6c3c', bone: 'sprout1', noShadow: true },
+      { shape: { kind: 'ball', at: [-0.17, 0.924, -0.22], r: [0.116, 0.048, 0.075] }, paint: '#58b858', bone: 'sprout1', glow: true, noShadow: true },
+      { shape: { kind: 'ball', at: [0.153, 1.08, -0.22], r: [0.104, 0.043, 0.067] }, paint: '#58b858', bone: 'sprout1', glow: false, noShadow: true },
+      { shape: { kind: 'ball', at: [-0.119, 1.246, -0.22], r: [0.081, 0.033, 0.052] }, paint: '#58b858', bone: 'sprout1', glow: true, noShadow: true },
+      { shape: { kind: 'ball', at: [0.102, 1.384, -0.22], r: [0.069, 0.029, 0.045] }, paint: '#58b858', bone: 'sprout1', glow: false, noShadow: true },
+      { shape: { kind: 'sphere', at: [-0.02, 1.35, -0.25], r: 0.068 }, paint: '#ff88c4', bone: 'sprout1', glow: true, noShadow: true },
+      { shape: { kind: 'join', shapes: [{ kind: 'cone', from: [0, 0.4, -0.25], to: [0.1, 0.37, -0.21], r: 0.016, rTo: 0.006 }, { kind: 'cone', from: [0, 0.4, -0.25], to: [-0.09, 0.37, -0.2], r: 0.016, rTo: 0.006 }, { kind: 'cone', from: [0, 0.4, -0.25], to: [0.02, 0.37, -0.15], r: 0.016, rTo: 0.006 }] }, paint: '#2c6c3c', bone: 'sprout1', noShadow: true },
+      { shape: { kind: 'sphere', at: [-0.17, 0.42, -0.148], r: 0.022 }, paint: '#7ce4ec', bone: 'bub1_0', glow: true, noShadow: true },
+      { shape: { kind: 'sphere', at: [0, 0.42, -0.148], r: 0.022 }, paint: '#7ce4ec', bone: 'bub1_1', glow: true, noShadow: true },
+      { shape: { kind: 'sphere', at: [0.17, 0.42, -0.148], r: 0.022 }, paint: '#7ce4ec', bone: 'bub1_2', glow: true, noShadow: true },
+    ],
+    moves: [
+      { kind: 'sway', bone: 'sprout1', axis: 'z', degrees: 5, times: 3, phase: 0.3 },
+      { kind: 'drift', bone: 'bub1_0', by: [-0.03, 1.03, 0], times: 2, grow: [0.6, 1.3], phase: 0.381 },
+      { kind: 'drift', bone: 'bub1_1', by: [0, 1.03, 0], times: 3, grow: [0.6, 1.3], phase: 0.266 },
+      { kind: 'drift', bone: 'bub1_2', by: [0.03, 1.03, 0], times: 4, grow: [0.6, 1.3], phase: 0.338 },
+    ],
+    lights: [
+      { at: [0, 1, 0.3], color: '#28a0b4', strength: 1.8, range: 1.5, lit: 'always', flicker: { by: 0.1, times: 3 } },
+    ],
+  },
+}
+
+/** A short sprout in an open jar of glowing pink liquid, bubbles rising round it. */
+export const SHORT_SPROUT_JAR: PropDoc = {
+  name: 'Short sprout jar',
+  foot: [0.85, 0, 0.1],
+  doc: {
+    name: 'Short sprout jar',
+    loop: 12,
+    light: { from: [-0.3, 1, 0.7], ambient: 0.62, shadow: 0.5 },
+    palette: [
+      '#100c20', '#201a3c', '#342c5c', '#544c88', '#3c3850', '#6c6888', '#3a241c', '#5c3c2c',
+      '#886040', '#4a5064', '#8088a0', '#c4cce0', '#7c1c58', '#d03c90', '#ff88c4', '#14586c',
+      '#28a0b4', '#7ce4ec', '#b46414', '#f0a028', '#ffe08c', '#2c6c3c', '#58b858', '#b8f088',
+      '#2c2c34', '#e8e4dc',
+    ],
+    look: { dither: 0.5, glow: 1.2, outline: true, edges: true },
+    camera: { target: [0, 1.05, 0], distance: 5.6, azimuth: 12, elevation: 12, swing: 12 },
+    bones: [
+      { name: 'sprout2', at: [0.85, 0.4, 0.1] },
+      { name: 'bub2_0', at: [0.72, 0.42, 0.178] },
+      { name: 'bub2_1', at: [0.85, 0.42, 0.178] },
+      { name: 'bub2_2', at: [0.98, 0.42, 0.178] },
+    ],
+    parts: [
+      { shape: { kind: 'join', shapes: [{ kind: 'cylinder', at: [0.85, 0, 0.1], height: 0.3, r: 0.299, rTop: 0.273 }, { kind: 'cylinder', at: [0.85, 0.3, 0.1], height: 0.05, r: 0.312 }] }, paint: { kind: 'faces', top: '#c4cce0', side: { kind: 'bands', axis: 'y', size: 0.06, colors: ['#8088a0', '#4a5064', '#8088a0'] }, under: '#4a5064' } },
+      { shape: { kind: 'cut', shape: { kind: 'cylinder', at: [0.85, 0.35, 0.1], height: 0.8, r: 0.26 }, hole: { kind: 'join', shapes: [{ kind: 'cylinder', at: [0.85, 0.3, 0.1], height: 0.9, r: 0.22 }, { kind: 'box', at: [0.85, 0.7, 0.36], half: [0.31, 0.5, 0.26] }] } }, paint: { kind: 'bands', axis: 'y', size: 0.16, colors: ['#7c1c58', '#d03c90', '#d03c90', '#d03c90', '#d03c90'] }, glow: true, noShadow: true },
+      { shape: { kind: 'cylinder', at: [0.85, 0.35, 0.1], height: 0.05, r: 0.23 }, paint: '#7c1c58', noShadow: true },
+      { shape: { kind: 'join', shapes: [{ kind: 'cone', from: [1.078, 0.35, 0.225], to: [1.078, 1.15, 0.225], r: 0.014 }, { kind: 'cone', from: [0.622, 0.35, 0.225], to: [0.622, 1.15, 0.225], r: 0.014 }] }, paint: '#c4cce0', noShadow: true },
+      { shape: { kind: 'join', shapes: [{ kind: 'cylinder', at: [0.85, 1.15, 0.1], height: 0.06, r: 0.299 }, { kind: 'cylinder', at: [0.85, 1.21, 0.1], height: 0.07, r: 0.182, rTop: 0.13 }, { kind: 'cylinder', at: [0.85, 1.28, 0.1], height: 0.04, r: 0.065 }] }, paint: { kind: 'faces', top: '#c4cce0', side: '#8088a0', under: '#4a5064' } },
+      { shape: { kind: 'join', shapes: [{ kind: 'cone', from: [0.85, 0.4, 0.1], to: [0.88, 0.64, 0.1], r: 0.022, rTo: 0.018 }, { kind: 'cone', from: [0.88, 0.64, 0.1], to: [0.83, 0.88, 0.1], r: 0.018, rTo: 0.012 }] }, paint: '#2c6c3c', bone: 'sprout2', noShadow: true },
+      { shape: { kind: 'ball', at: [0.72, 0.674, 0.13], r: [0.088, 0.036, 0.057] }, paint: '#58b858', bone: 'sprout2', glow: true, noShadow: true },
+      { shape: { kind: 'ball', at: [0.967, 0.756, 0.13], r: [0.08, 0.033, 0.051] }, paint: '#58b858', bone: 'sprout2', glow: false, noShadow: true },
+      { shape: { kind: 'ball', at: [0.759, 0.842, 0.13], r: [0.062, 0.025, 0.04] }, paint: '#58b858', bone: 'sprout2', glow: true, noShadow: true },
+      { shape: { kind: 'ball', at: [0.928, 0.914, 0.13], r: [0.053, 0.022, 0.034] }, paint: '#58b858', bone: 'sprout2', glow: false, noShadow: true },
+      { shape: { kind: 'sphere', at: [0.83, 0.91, 0.1], r: 0.052 }, paint: '#f0a028', bone: 'sprout2', glow: true, noShadow: true },
+      { shape: { kind: 'join', shapes: [{ kind: 'cone', from: [0.85, 0.4, 0.1], to: [0.95, 0.37, 0.14], r: 0.016, rTo: 0.006 }, { kind: 'cone', from: [0.85, 0.4, 0.1], to: [0.76, 0.37, 0.15], r: 0.016, rTo: 0.006 }, { kind: 'cone', from: [0.85, 0.4, 0.1], to: [0.87, 0.37, 0.2], r: 0.016, rTo: 0.006 }] }, paint: '#2c6c3c', bone: 'sprout2', noShadow: true },
+      { shape: { kind: 'sphere', at: [0.72, 0.42, 0.178], r: 0.022 }, paint: '#ff88c4', bone: 'bub2_0', glow: true, noShadow: true },
+      { shape: { kind: 'sphere', at: [0.85, 0.42, 0.178], r: 0.022 }, paint: '#ff88c4', bone: 'bub2_1', glow: true, noShadow: true },
+      { shape: { kind: 'sphere', at: [0.98, 0.42, 0.178], r: 0.022 }, paint: '#ff88c4', bone: 'bub2_2', glow: true, noShadow: true },
+    ],
+    moves: [
+      { kind: 'sway', bone: 'sprout2', axis: 'z', degrees: 5, times: 2, phase: 0.6 },
+      { kind: 'drift', bone: 'bub2_0', by: [-0.03, 0.68, 0], times: 2, grow: [0.6, 1.3], phase: 0.153 },
+      { kind: 'drift', bone: 'bub2_1', by: [0, 0.68, 0], times: 3, grow: [0.6, 1.3], phase: 0.349 },
+      { kind: 'drift', bone: 'bub2_2', by: [0.03, 0.68, 0], times: 4, grow: [0.6, 1.3], phase: 0.827 },
+    ],
+    lights: [
+      { at: [0.85, 0.8, 0.55], color: '#d03c90', strength: 1.4, range: 1.1, lit: 'always' },
+    ],
+  },
+}
+
+/** A box of blinking lights with a dial whose needle swings. */
+export const DIAL_BOX: PropDoc = {
+  name: 'Dial box',
+  foot: [-1.05, 0, 0.995],
+  doc: {
+    name: 'Dial box',
+    loop: 12,
+    light: { from: [-0.3, 1, 0.7], ambient: 0.62, shadow: 0.5 },
+    palette: [
+      '#100c20', '#201a3c', '#342c5c', '#544c88', '#3c3850', '#6c6888', '#3a241c', '#5c3c2c',
+      '#886040', '#4a5064', '#8088a0', '#c4cce0', '#7c1c58', '#d03c90', '#ff88c4', '#14586c',
+      '#28a0b4', '#7ce4ec', '#b46414', '#f0a028', '#ffe08c', '#2c6c3c', '#58b858', '#b8f088',
+      '#2c2c34', '#e8e4dc',
+    ],
+    look: { dither: 0.5, glow: 1.2, outline: true, edges: true },
+    camera: { target: [0, 1.05, 0], distance: 5.6, azimuth: 12, elevation: 12, swing: 12 },
+    bones: [
+      { name: 'led0', at: [-1.22, 0.52, 1.03] },
+      { name: 'led1', at: [-1.105, 0.52, 1.03] },
+      { name: 'led2', at: [-0.99, 0.52, 1.03] },
+      { name: 'led3', at: [-0.875, 0.52, 1.03] },
+      { name: 'needle', at: [-1.15, 0.3, 1.14] },
+    ],
+    parts: [
+      { shape: { kind: 'box', at: [-1.05, 0.22, 0.95], half: [0.26, 0.22, 0.16], round: 0.02 }, paint: { kind: 'faces', top: '#8088a0', side: { kind: 'bands', axis: 'y', size: 0.11, colors: ['#4a5064', '#8088a0'] }, under: '#4a5064' } },
+      { shape: { kind: 'box', at: [-1.05, 0.5, 0.91], half: [0.26, 0.07, 0.11], round: 0.02 }, paint: '#4a5064' },
+      { shape: { kind: 'sphere', at: [-1.22, 0.52, 1.03], r: 0.03 }, paint: '#d03c90', bone: 'led0', glow: true, noShadow: true },
+      { shape: { kind: 'sphere', at: [-1.105, 0.52, 1.03], r: 0.03 }, paint: '#f0a028', bone: 'led1', glow: true, noShadow: true },
+      { shape: { kind: 'sphere', at: [-0.99, 0.52, 1.03], r: 0.03 }, paint: '#28a0b4', bone: 'led2', glow: true, noShadow: true },
+      { shape: { kind: 'sphere', at: [-0.875, 0.52, 1.03], r: 0.03 }, paint: '#58b858', bone: 'led3', glow: true, noShadow: true },
+      { shape: { kind: 'ball', at: [-1.15, 0.3, 1.115], r: [0.07, 0.07, 0.02] }, paint: '#e8e4dc', noShadow: true },
+      { shape: { kind: 'cone', from: [-1.15, 0.3, 1.14], to: [-1.15, 0.36, 1.14], r: 0.012 }, paint: '#d03c90', bone: 'needle', noShadow: true },
+      { shape: { kind: 'join', shapes: [{ kind: 'box', at: [-0.95, 0.24, 1.115], half: [0.07, 0.012, 0.012] }, { kind: 'box', at: [-0.95, 0.31, 1.115], half: [0.07, 0.012, 0.012] }, { kind: 'box', at: [-0.95, 0.38, 1.115], half: [0.07, 0.012, 0.012] }] }, paint: '#100c20', noShadow: true },
+    ],
+    moves: [
+      { kind: 'pulse', bone: 'led0', size: [0.4, 1.2], times: 3, phase: 0 },
+      { kind: 'pulse', bone: 'led1', size: [0.4, 1.2], times: 5, phase: 0.27 },
+      { kind: 'pulse', bone: 'led2', size: [0.4, 1.2], times: 7, phase: 0.54 },
+      { kind: 'pulse', bone: 'led3', size: [0.4, 1.2], times: 9, phase: 0.81 },
+      { kind: 'sway', bone: 'needle', axis: 'z', degrees: 40, times: 5 },
+    ],
+  },
+}
+
+/** A flask steaming over a lit burner. */
+export const BURNER_AND_FLASK: PropDoc = {
+  name: 'Burner and flask',
+  foot: [1.05, 0, 0.89],
+  doc: {
+    name: 'Burner and flask',
+    loop: 12,
+    light: { from: [-0.3, 1, 0.7], ambient: 0.62, shadow: 0.5 },
+    palette: [
+      '#100c20', '#201a3c', '#342c5c', '#544c88', '#3c3850', '#6c6888', '#3a241c', '#5c3c2c',
+      '#886040', '#4a5064', '#8088a0', '#c4cce0', '#7c1c58', '#d03c90', '#ff88c4', '#14586c',
+      '#28a0b4', '#7ce4ec', '#b46414', '#f0a028', '#ffe08c', '#2c6c3c', '#58b858', '#b8f088',
+      '#2c2c34', '#e8e4dc',
+    ],
+    look: { dither: 0.5, glow: 1.2, outline: true, edges: true },
+    camera: { target: [0, 1.05, 0], distance: 5.6, azimuth: 12, elevation: 12, swing: 12 },
+    bones: [
+      { name: 'flame', at: [1.05, 0.33, 0.9] },
+      { name: 'steam0', at: [1.05, 0.9, 0.9] },
+      { name: 'steam1', at: [1.05, 0.9, 0.9] },
+      { name: 'steam2', at: [1.05, 0.9, 0.9] },
+    ],
+    parts: [
+      { shape: { kind: 'box', at: [1.05, 0.14, 0.9], half: [0.24, 0.14, 0.18], round: 0.02 }, paint: { kind: 'faces', top: '#886040', side: { kind: 'bands', axis: 'x', size: 0.09, colors: ['#5c3c2c', '#3a241c'] }, under: '#3a241c' } },
+      { shape: { kind: 'cylinder', at: [1.05, 0.28, 0.9], height: 0.05, r: 0.07 }, paint: '#4a5064' },
+      { shape: { kind: 'cone', from: [1.05, 0.34, 0.9], to: [1.05, 0.44, 0.9], r: 0.035, rTo: 0.008 }, paint: '#f0a028', bone: 'flame', glow: true, noShadow: true },
+      { shape: { kind: 'join', shapes: [{ kind: 'cone', from: [1.17, 0.28, 1], to: [1.122, 0.5, 0.96], r: 0.012 }, { kind: 'cone', from: [0.93, 0.28, 1], to: [0.978, 0.5, 0.96], r: 0.012 }, { kind: 'cone', from: [1.05, 0.28, 0.76], to: [1.05, 0.5, 0.816], r: 0.012 }] }, paint: '#4a5064', noShadow: true },
+      { shape: { kind: 'join', shapes: [{ kind: 'sphere', at: [1.05, 0.62, 0.9], r: 0.13 }, { kind: 'cylinder', at: [1.05, 0.72, 0.9], height: 0.16, r: 0.04 }] }, paint: { kind: 'split', axis: 'y', at: 0.64, below: '#f0a028', above: '#c4cce0' }, glow: true, noShadow: true },
+      { shape: { kind: 'sphere', at: [1.05, 0.9, 0.9], r: 0.035 }, paint: '#c4cce0', bone: 'steam0', noShadow: true },
+      { shape: { kind: 'sphere', at: [1.05, 0.9, 0.9], r: 0.035 }, paint: '#c4cce0', bone: 'steam1', noShadow: true },
+      { shape: { kind: 'sphere', at: [1.05, 0.9, 0.9], r: 0.035 }, paint: '#c4cce0', bone: 'steam2', noShadow: true },
+      { shape: { kind: 'join', shapes: [{ kind: 'box', at: [1.17, 0.3, 1], half: [0.06, 0.02, 0.05] }, { kind: 'box', at: [1.18, 0.34, 1], half: [0.05, 0.02, 0.045] }] }, paint: { kind: 'bands', axis: 'y', size: 0.04, colors: ['#7c1c58', '#14586c'] }, noShadow: true },
+    ],
+    moves: [
+      { kind: 'pulse', bone: 'flame', size: [0.8, 1.2], times: 11 },
+      { kind: 'sway', bone: 'flame', axis: 'z', degrees: 8, times: 7 },
+      { kind: 'drift', bone: 'steam0', by: [-0.12, 0.55, -0.05], times: 2, grow: [0.5, 1.6], phase: 0 },
+      { kind: 'drift', bone: 'steam1', by: [0, 0.55, -0.05], times: 2, grow: [0.5, 1.6], phase: 0.333 },
+      { kind: 'drift', bone: 'steam2', by: [0.12, 0.55, -0.05], times: 2, grow: [0.5, 1.6], phase: 0.667 },
+    ],
+  },
+}
+
+/** A cat lying curled, its head turning and its tail flicking. */
+export const LAB_CAT: PropDoc = {
+  name: 'Lab cat',
+  foot: [0.2235, -0.022, 1.06],
+  doc: {
+    name: 'Lab cat',
+    loop: 12,
+    light: { from: [-0.3, 1, 0.7], ambient: 0.62, shadow: 0.5 },
+    palette: [
+      '#100c20', '#201a3c', '#342c5c', '#544c88', '#3c3850', '#6c6888', '#3a241c', '#5c3c2c',
+      '#886040', '#4a5064', '#8088a0', '#c4cce0', '#7c1c58', '#d03c90', '#ff88c4', '#14586c',
+      '#28a0b4', '#7ce4ec', '#b46414', '#f0a028', '#ffe08c', '#2c6c3c', '#58b858', '#b8f088',
+      '#2c2c34', '#e8e4dc',
+    ],
+    look: { dither: 0.5, glow: 1.2, outline: true, edges: true },
+    camera: { target: [0, 1.05, 0], distance: 5.6, azimuth: 12, elevation: 12, swing: 12 },
+    bones: [
+      { name: 'cathead', at: [0.1, 0.27, 1.05] },
+      { name: 'tail', at: [0.2, 0.04, 1.07] },
+    ],
+    parts: [
+      { shape: { kind: 'join', shapes: [{ kind: 'ball', at: [0.1, 0.13, 1.05], r: [0.12, 0.15, 0.11] }, { kind: 'ball', at: [0.1, 0.05, 1.09], r: [0.13, 0.06, 0.12] }] }, paint: { kind: 'bands', axis: 'y', size: 0.05, colors: ['#886040', '#886040', '#b46414'] } },
+      { shape: { kind: 'join', shapes: [{ kind: 'sphere', at: [0.1, 0.33, 1.06], r: 0.095 }, { kind: 'cone', from: [0.04, 0.39, 1.05], to: [0.025, 0.47, 1.05], r: 0.03, rTo: 0.006 }, { kind: 'cone', from: [0.16, 0.39, 1.05], to: [0.175, 0.47, 1.05], r: 0.03, rTo: 0.006 }] }, paint: '#886040', bone: 'cathead', noShadow: true },
+      { shape: { kind: 'join', shapes: [{ kind: 'sphere', at: [0.06, 0.34, 0.97], r: 0.02 }, { kind: 'sphere', at: [0.14, 0.34, 0.97], r: 0.02 }] }, paint: '#f0a028', bone: 'cathead', glow: true, noShadow: true },
+      { shape: { kind: 'join', shapes: [{ kind: 'cone', from: [0.2, 0.04, 1.07], to: [0.34, 0.04, 1.13], r: 0.03, rTo: 0.026 }, { kind: 'cone', from: [0.34, 0.04, 1.13], to: [0.4, 0.12, 1.15], r: 0.026, rTo: 0.02 }] }, paint: { kind: 'bands', axis: 'x', size: 0.05, colors: ['#886040', '#b46414'] }, bone: 'tail', noShadow: true },
+      { shape: { kind: 'sphere', at: [0.41, 0.14, 1.15], r: 0.024 }, paint: '#e8e4dc', bone: 'tail', noShadow: true },
+    ],
+    moves: [
+      { kind: 'sway', bone: 'cathead', axis: 'y', degrees: 18, times: 2 },
+      { kind: 'sway', bone: 'tail', axis: 'y', degrees: 22, times: 3 },
+    ],
+  },
+}
+
+/** A hanging lamp that sways a little. */
+export const HANGING_LAMP: PropDoc = {
+  name: 'Hanging lamp',
+  foot: [-0.45, 1.508, 0.5],
+  doc: {
+    name: 'Hanging lamp',
+    loop: 12,
+    light: { from: [-0.3, 1, 0.7], ambient: 0.62, shadow: 0.5 },
+    palette: [
+      '#100c20', '#201a3c', '#342c5c', '#544c88', '#3c3850', '#6c6888', '#3a241c', '#5c3c2c',
+      '#886040', '#4a5064', '#8088a0', '#c4cce0', '#7c1c58', '#d03c90', '#ff88c4', '#14586c',
+      '#28a0b4', '#7ce4ec', '#b46414', '#f0a028', '#ffe08c', '#2c6c3c', '#58b858', '#b8f088',
+      '#2c2c34', '#e8e4dc',
+    ],
+    look: { dither: 0.5, glow: 1.2, outline: true, edges: true },
+    camera: { target: [0, 1.05, 0], distance: 5.6, azimuth: 12, elevation: 12, swing: 12 },
+    bones: [
+      { name: 'lamp', at: [-0.45, 2.2, 0.5] },
+    ],
+    parts: [
+      { shape: { kind: 'cone', from: [-0.45, 2.2, 0.5], to: [-0.45, 1.75, 0.5], r: 0.01 }, paint: '#100c20', bone: 'lamp', noShadow: true },
+      { shape: { kind: 'cylinder', at: [-0.45, 1.6, 0.5], height: 0.15, r: 0.17, rTop: 0.04 }, paint: { kind: 'faces', top: '#4a5064', side: '#8088a0', under: '#ffe08c' }, bone: 'lamp', noShadow: true },
+      { shape: { kind: 'sphere', at: [-0.45, 1.58, 0.5], r: 0.05 }, paint: '#ffe08c', bone: 'lamp', glow: true, lit: 'dark', noShadow: true },
+    ],
+    moves: [
+      { kind: 'sway', bone: 'lamp', axis: 'z', degrees: 5, times: 2 },
+    ],
+    lights: [
+      { at: [-0.45, 1.5, 0.5], color: '#f0a028', strength: 1.6, range: 1.6, lit: 'dark', flicker: { by: 0.1, times: 5 }, shadows: true },
+    ],
+  },
+}
+
+/** The pieces above as the library lists them. */
+export const LAB_MADE: MadeProp[] = [
+  { id: 'night-lab', tags: ['building', 'night'], kind: 'land', about: 'A brick laboratory corner at night, with shelves of glowing jars, a round window, cogs and a tank', prop: NIGHT_LAB },
+  { id: 'sprout-jar', tags: ['plant', 'magic', 'lamp'], kind: 'prop', about: 'A sprout growing in a jar of glowing pink liquid, bubbles rising round it', prop: SPROUT_JAR },
+  { id: 'tall-sprout-jar', tags: ['plant', 'magic', 'lamp'], kind: 'prop', about: 'A sprout growing in a tall jar of glowing blue liquid, bubbles rising round it', prop: TALL_SPROUT_JAR },
+  { id: 'short-sprout-jar', tags: ['plant', 'magic', 'lamp'], kind: 'prop', about: 'A short sprout in an open jar of glowing pink liquid, bubbles rising round it', prop: SHORT_SPROUT_JAR },
+  { id: 'dial-box', tags: ['thing'], kind: 'prop', about: 'A box of blinking lights with a dial whose needle swings', prop: DIAL_BOX },
+  { id: 'burner-and-flask', tags: ['thing'], kind: 'prop', about: 'A flask steaming over a lit burner', prop: BURNER_AND_FLASK },
+  { id: 'lab-cat', tags: ['animal'], kind: 'prop', group: 'living', about: 'A cat lying curled, its head turning and its tail flicking', prop: LAB_CAT },
+  { id: 'hanging-lamp', tags: ['lamp'], kind: 'prop', about: 'A hanging lamp that sways a little', prop: HANGING_LAMP },
+]
+
+/** Sprout lab as a land and the props set down on it: what Diorama draws and what Scene Creator opens. */
+export const LAB_PROJECT: SceneProject = {
+  kind: 'blobscape-project',
+  version: 1,
+  name: 'Sprout lab',
+  loop: 12,
+  land: 'night-lab',
+  props: [
+    { prop: 'sprout-jar', at: [-0.85, 0, 0.1], turn: 0, size: 1 },
+    { prop: 'tall-sprout-jar', at: [0, 0, -0.25], turn: 0, size: 1 },
+    { prop: 'short-sprout-jar', at: [0.85, 0, 0.1], turn: 0, size: 1 },
+    { prop: 'dial-box', at: [-1.05, 0, 0.995], turn: 0, size: 1 },
+    { prop: 'burner-and-flask', at: [1.05, 0, 0.89], turn: 0, size: 1 },
+    { prop: 'lab-cat', at: [0.2235, -0.022, 1.06], turn: 0, size: 1 },
+    { prop: 'hanging-lamp', at: [-0.45, 1.508, 0.5], turn: 0, size: 1 },
+  ],
+}
