@@ -215,7 +215,7 @@ export function faceLit(solid: (x: number, y: number, z: number) => boolean, x: 
 }
 
 /** How far a blob's disc fills, in its own scale: as far as voxel.ts's solid reach. */
-export const DISC_REACH = 1.18
+const DISC_REACH = 1.18
 /** How far past a cell a blob's disc must reach to fill the cells round its own (a fine disc reaches at most 0.9). */
 const SPREAD_FROM = 1.25
 /** The most cells a wide blob fills each way from its middle. */
