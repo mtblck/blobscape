@@ -10,7 +10,7 @@ import { LoadingMark } from '../shared/BlobLoader.tsx'
 import { castBy, glowGain } from './diorama/glow.ts'
 import { ScenePicker } from './diorama/ScenePicker.tsx'
 import { stepped } from './diorama/pick.ts'
-import { Button, Chip, Field, Toggle } from '../shared/ui.tsx'
+import { Button, Chip, Field } from '../shared/ui.tsx'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
 import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitDrag } from './Viewport.tsx'
 import { href } from './routes.ts'
@@ -31,14 +31,15 @@ import { banded, hugged, unlit } from '../splat-engine/voxel.ts'
 import { isPixelStyle, styleAsked, styleWords, type Style } from './diorama/styles.ts'
 import { GLITCH_START, glitchLook, type GlitchChoice } from './glitchLooks.ts'
 import { StyleControls, FinishControls } from './StyleControls.tsx'
+import { TimeControls, WeatherControls } from './styles/SceneControls.tsx'
 import { CATALOG, GLITCH_DEF, drawnFrom, drawnStart, keysOf, sceneStart, settingsFrom, type DrawnSettings, type SceneSettings } from './styles/catalog.ts'
 import { PIXEL_RATES, PIXEL_SIZES, detailStart, pixelCelLook, pixelFlags, pixelFor, pixelLookOf, pixelSizeAt, pixelStart, pixelZoomAsked, type PixelSettings } from './styleSettings.ts'
 import { useStyleOnStage } from './useStyleOnStage.ts'
 import { ShareDialog } from './diorama/ShareDialog.tsx'
 import { choiceEntries, choiceFrom, linkWith, orbitFrom, orbitText, type Entry } from './diorama/shareLink.ts'
 import { useDrawnLook, useHeld, wantsPlain } from './drawnLook.tsx'
-import { TIMES, timeOf, type TimeId } from './timeOfDay.ts'
-import { CLOUD_COVERS, SkyEase, WEATHERS, WINDS, gloomy, isClear, skyState, windAt, type CloudId, type WeatherId, type WindId } from '../splat-engine/skyRecipes.ts'
+import { timeOf, type TimeId } from './timeOfDay.ts'
+import { SkyEase, gloomy, isClear, skyState, windAt, type CloudId, type WeatherId, type WindId } from '../splat-engine/skyRecipes.ts'
 import { SceneWeather, paletteUnder, underSky } from './diorama/weather.ts'
 import { pileStep } from '../splat-engine/snowCover.ts'
 import { heavenBones, ownClouds, showHeavens } from '../splat-engine/heavens.ts'
@@ -886,31 +887,8 @@ export function PixelDiorama() {
                   </div>
                 </div>
                 {picked0.space ? <p className="text-sm text-ink-muted" data-testid="diorama-space">Out in space there is no time of day or weather: the scene keeps its own sky, stars and far sun.</p> : <>
-                <Field label="Time of day">
-                  <div className="flex flex-wrap gap-1.5" data-testid="diorama-time">
-                    <Chip active={!time || !picked0.timed} onClick={() => setTimeOfDay(undefined)}>Scene's own</Chip>
-                    {picked0.timed && TIMES.map((t) => <Chip key={t.id} active={time === t.id} onClick={() => setTimeOfDay(t.id)}>{t.label}</Chip>)}
-                  </div>
-                  <p className="mt-1.5 text-xs text-ink-faint">{!picked0.timed ? 'This scene keeps its own time of day.' : time ? 'The scene under this time\'s sky and light, in every style. Its lamps, lit windows and fires wait for the dark.' : 'The scene as it was written, with everything lit. Pick a time to set it in a morning, an afternoon or a night, in every style.'}</p>
-                </Field>
-                <Field label="Weather">
-                  <div className="flex flex-wrap gap-1.5" data-testid="diorama-weather">
-                    <Chip active={!weather && !clouds} onClick={() => pickSky('weather', undefined)}>No weather</Chip>
-                    {CLOUD_COVERS.map((c) => <Chip key={c.id} active={!weather && clouds === c.id} onClick={() => pickSky('clouds', c.id)}>{c.label}</Chip>)}
-                    {WEATHERS.map((w) => <Chip key={w.id} active={weather === w.id} onClick={() => pickSky('weather', w.id)}>{w.label}</Chip>)}
-                  </div>
-                  <p className="mt-1.5 text-xs text-ink-faint">Each weather comes with its own clouds, light, haze and wind. The same recipes for every scene and every style, laid over the scene: the sky eases from one to the next without the scene being made again.{weather === 'thunderstorm' ? (calm ? ' Lightning is left out, as your device asks for less motion.' : ' Lightning flashes every few seconds.') : ''}</p>
-                </Field>
-                <Field label="Wind">
-                  <div className="flex flex-wrap gap-1.5" data-testid="diorama-wind">
-                    {WINDS.map((w, i) => <Chip key={w.id} active={wind ? wind === w.id : (WEATHERS.find((k) => k.id === weather)?.wind ?? 0) === i} onClick={() => pickSky('wind', w.id)}>{i ? w.label : 'No wind'}</Chip>)}
-                  </div>
-                  <p className="mt-1.5 text-xs text-ink-faint">Wind blows rain, snow and falling leaves at a slant, in gusts, sways trees and stalks, and raises waves on a scene's water. Picking a weather brings its own wind back.</p>
-                </Field>
-                <div className="grid gap-1.5">
-                  <Toggle label="Clouds over the scene" checked={overhead} onChange={pickOverhead} />
-                  <p className="text-xs text-ink-faint">{overhead ? 'The clouds float over the scene and rain and snow fall from under them.' : 'The clouds are left out: the sky still grays and darkens, and rain and snow fall in from over the top of the picture.'}</p>
-                </div>
+                <TimeControls time={time} onPick={setTimeOfDay} timed={!!picked0.timed} prefix="diorama" />
+                <WeatherControls weather={weather} clouds={clouds} wind={wind} overhead={overhead} onPick={pickSky} onOverhead={pickOverhead} calm={calm} prefix="diorama" />
                 </>}
                 <Field label="Changing scenes">
                   <div className="flex flex-wrap gap-1.5" data-testid="diorama-transitions">
