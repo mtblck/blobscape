@@ -155,9 +155,22 @@ export function windAt(s: SkyState, t: number, loop: number): [number, number] {
   if (s.wind <= 0) return [0, 0]
   const lo = Math.min(WIND_MOST - 1, Math.floor(s.wind)), k = s.wind - lo
   const slant = WINDS[lo].slant + (WINDS[lo + 1].slant - WINDS[lo].slant) * k
-  const u = t / loop
-  const gust = 1 + 0.22 * Math.sin(u * 3 * Math.PI * 2) + 0.12 * Math.sin(u * 7 * Math.PI * 2 + 1.3)
+  const gust = gustAt(t / loop)
   return [WIND_WAY[0] * slant * gust, WIND_WAY[1] * slant * gust]
+}
+
+/** How hard the wind blows at `u` of the loop as a share of its level's own: gusts a whole number of times a loop. */
+export const gustAt = (u: number) => 1 + 0.22 * Math.sin(u * 3 * Math.PI * 2) + 0.12 * Math.sin(u * 7 * Math.PI * 2 + 1.3)
+/** `gustAt` summed from the loop's start to `u` (loops), so a thing the wind turns turns a little quicker in each gust and still joins the loop: u at 0 and 1 differ by 1 exactly. */
+export const gustRun = (u: number) => u - (0.22 / (3 * Math.PI * 2)) * (Math.cos(u * 3 * Math.PI * 2) - 1) - (0.12 / (7 * Math.PI * 2)) * (Math.cos(u * 7 * Math.PI * 2 + 1.3) - Math.cos(1.3))
+
+/** The level of wind (`SkyState.wind`, 0 to `WIND_MOST`) that carries as far as `carry` does a unit of fall, gusts taken as the level's own. */
+export function windLevelOf(carry: number): number {
+  for (let l = 0; l < WIND_MOST; l++) {
+    const a = WINDS[l].slant, b = WINDS[l + 1].slant
+    if (carry <= b) return l + Math.max(0, carry - a) / (b - a)
+  }
+  return WIND_MOST
 }
 
 /** Seconds a change of weather takes. */

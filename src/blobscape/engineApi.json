@@ -4007,6 +4007,12 @@
        "optional": true,
        "type": "[number, number]",
        "doc": "Rain, snow and leaves only: how far the wind carries each sideways over its whole fall, [x, z]; rain slants along it."
+      },
+      {
+       "name": "shaken",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Leaves only: shaken loose by the wind, so none fall in a calm or a breeze. Windy, some come down, straight down,\nand land; in a gale all of them, carried away downwind before they can lie (`CompiledScene.blow`)."
       }
      ]
     },
@@ -4172,7 +4178,7 @@
      "name": "MoveDoc",
      "kind": "type",
      "doc": "Every move repeats a whole number of `times` in the loop (or in its `during`), so the scene loops.",
-     "type": "{ kind: \"spin\"; bone: string; axis: MoveAxis; times: number; phase?: number; during?: During } | { kind: \"sway\"; bone: string; axis: MoveAxis; degrees: number; times: number; phase?: number; during?: During; wind?: number } | { kind: \"bob\"; bone: string; by: Vec3; times: number; phase?: number; during?: During } | { kind: \"drift\"; bone: string; by: Vec3; times: number; grow?: [number, number]; phase?: number; during?: During } | { kind: \"pulse\"; bone: string; size: [number, number]; times: number; phase?: number; during?: During } | { kind: \"sprout\"; bone: string; times: number; phase?: number; during?: During; rise?: number; fall?: number } | { kind: \"pass\"; bone: string; by: Vec3; times: number; phase?: number; during?: During } | { kind: \"dissolve\"; bone: string; times: number; by?: number; phase?: number; during?: During; rise?: number; fall?: number }"
+     "type": "{ kind: \"spin\"; bone: string; axis: MoveAxis; times: number; phase?: number; during?: During; wind?: number } | { kind: \"sway\"; bone: string; axis: MoveAxis; degrees: number; times: number; phase?: number; during?: During; wind?: number } | { kind: \"bob\"; bone: string; by: Vec3; times: number; phase?: number; during?: During } | { kind: \"drift\"; bone: string; by: Vec3; times: number; grow?: [number, number]; phase?: number; during?: During } | { kind: \"pulse\"; bone: string; size: [number, number]; times: number; phase?: number; during?: During } | { kind: \"sprout\"; bone: string; times: number; phase?: number; during?: During; rise?: number; fall?: number } | { kind: \"pass\"; bone: string; by: Vec3; times: number; phase?: number; during?: During } | { kind: \"dissolve\"; bone: string; times: number; by?: number; phase?: number; during?: During; rise?: number; fall?: number }"
     },
     {
      "name": "LightDoc",
@@ -4345,10 +4351,10 @@
       },
       {
        "name": "blow",
-       "doc": "After `pose` (before the bones are worked out): blows what falls (rain, snow, leaves) by a wind that may change\nfrom moment to moment, `wind` ([x, z]) being how far sideways it carries a thing for each unit it falls. Each is\nmoved upwind by that over the fall it has still to come, so it still lands where it was planned to (and rings the\nwater, and lies, there), and rain's streaks lean along it. Snow and leaves are carried `DRIFT` times further.\nWith `wrap` (the square a swarm falls over, its middle and half width), a speck blown out of the square comes in\nat its other side, so the slanting rain still fills it at every height (one that has landed is always inside).\nSways with `wind` lean downwind and swing wider by the root of how far the wind carries (a breeze a quarter of a\ngale), so they gust with it.",
+       "doc": "After `pose` (before the bones are worked out): blows what falls (rain, snow, leaves) by a wind that may change\nfrom moment to moment, `wind` ([x, z]) being how far sideways it carries a thing for each unit it falls. Each is\nmoved upwind by that over the fall it has still to come, so it still lands where it was planned to (and rings the\nwater, and lies, there), and rain's streaks lean along it. Snow and leaves are carried `DRIFT` times further.\nWith `wrap` (the square a swarm falls over, its middle and half width), a speck blown out of the square comes in\nat its other side, so the slanting rain still fills it at every height (one that has landed is always inside).\nSways with `wind` lean downwind and swing wider by the root of how far the wind carries (a breeze a quarter of a\ngale), so they gust with it, and flutter quicker as the wind rises. Spins with `wind` turn quicker by its level,\ncarried on from where they had got to as the level changes, so call it every frame, in a calm too (a wind of\n[0, 0]). Leaves the wind shakes loose (`SpeckDoc.shaken`) fall only here. `level` is the wind's level\n(`SkyState.wind`); left out, it is told from how far the wind carries.",
        "signatures": [
         {
-         "code": "blow(sk: Skeleton, t: number, wind: readonly [number, number], wrap?: { at: readonly [number, number]; half: number }): void"
+         "code": "blow(sk: Skeleton, t: number, wind: readonly [number, number], wrap?: { at: readonly [number, number]; half: number }, level?: number): void"
         }
        ]
       },
@@ -4537,6 +4543,18 @@
      "kind": "const",
      "doc": "How much wider a sway with `wind` swings, as a share of how far it leans.",
      "type": "0.35"
+    },
+    {
+     "name": "FLUTTER_BEATS",
+     "kind": "const",
+     "doc": "How many times its own beat a sway with `wind` flutters in a breeze, a wind and a gale: quicker as it rises.",
+     "type": "number[]"
+    },
+    {
+     "name": "SHAKEN_AWAY",
+     "kind": "const",
+     "doc": "How much further than a falling leaf drifts a gale carries a leaf it shakes loose: off and away.",
+     "type": "2"
     },
     {
      "name": "sprouted",

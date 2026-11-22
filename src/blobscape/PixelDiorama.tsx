@@ -331,8 +331,9 @@ export function PixelDiorama() {
       }
       // the weather's rain on the scene's water (its rings as the share of the swarm that falls) and its wind's waves
       if (pond) { pond.rain = now.rain; pond.waves = now.wind }
-      // the scene's own rain, snow and leaves are blown by the same wind
-      if (now.wind > 0) d.blow?.(sk, t, windAt(now, t, d.loop))
+      // the scene's own rain, snow and leaves are blown by the same wind, and its sails turn by it (in a calm too, so they
+      // carry on from where the wind left them)
+      d.blow?.(sk, t, windAt(now, t, d.loop), undefined, now.wind)
       showHeavens(sk.size, heavens, Math.max(now.clouds, own))
       // what floats rides the water as it stands at this moment: a boat or a buoy rocks on the waves that pass
       pond?.ride(sk, t)

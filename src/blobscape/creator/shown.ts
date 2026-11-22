@@ -36,7 +36,7 @@ export interface Shown {
   /** The bones `poseLand` poses, by name, where known: a land cut for an older light (other specks) must not be posed by it. */
   landBones?: readonly string[]
   /** After `poseLand`: blows the land's own rain, snow, leaves and swaying stalks by a wind of the moment, where it has any. */
-  blowLand?(sk: Skeleton, t: number, wind: readonly [number, number]): void
+  blowLand?(sk: Skeleton, t: number, wind: readonly [number, number], level?: number): void
   /** Poses prop `i`, cut apart, on its own skeleton. */
   poseProp(i: number, sk: Skeleton, t: number): void
   /** The land first, then each prop. */
@@ -124,7 +124,7 @@ export function shownOf(o: Opened): Shown {
       lights: (t, shadows) => d.lights(t, shadows),
       ambient: d.ambient ?? 1,
       poseLand: (sk, t) => d.pose(sk, t),
-      blowLand: d.blow,
+      blowLand: d.blow && ((sk, t, wind, level) => d.blow!(sk, t, wind, undefined, level)),
       poseProp: () => {},
       items: [{ name: d.label, kind: 'scene' }],
       jobs: (spacing) => [{ kind: 'whole', scene: d.id, spacing }],
@@ -152,7 +152,7 @@ export function shownOf(o: Opened): Shown {
     ambient: 1,
     poseLand: (sk, t) => cp.land.c.pose(sk, t),
     landBones: cp.land.c.bones.map((b) => b.name),
-    blowLand: (sk, t, wind) => cp.land.c.blow(sk, t, wind),
+    blowLand: (sk, t, wind, level) => cp.land.c.blow(sk, t, wind, undefined, level),
     poseProp: (i, sk, t) => poseApart(cp, i, sk, t),
     items: [{ name: nameOf(project.land), kind: 'land' }, ...project.props.map((p): Item => ({ name: nameOf(p.prop), kind: 'prop' }))],
     jobs: (spacing) => [{ kind: 'land', project, spacing }, ...project.props.map((_, i): CutJob => ({ kind: 'prop', project, i, spacing }))],

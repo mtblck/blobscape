@@ -490,7 +490,9 @@ export function SceneCreator() {
       // the sky of the moment, its wind and its lightning
       const now = skyEase.current.at(skyClock.current())
       const gust = now.wind > 0 ? windAt(now, t, L.shown.loop) : undefined
-      if (gust && landFits) L.shown.blowLand?.(sk, t, gust)
+      // in a calm too: sails the wind turns carry on from where it left them, and leaves it shakes loose stay on the tree
+      const level = now.wind
+      if (landFits) L.shown.blowLand?.(sk, t, gust ?? [0, 0], level)
       const flash = now.lightning > 0 && !(calm && !offscreen) ? lightningAt(t, L.shown.loop) : 0
       const under = lightUnder(now, flash)
       const dim = (a: number | readonly [number, number, number]): [number, number, number] => { const b = typeof a === 'number' ? [a, a, a] : a; return [b[0] * under[0], b[1] * under[1], b[2] * under[2]] }
@@ -522,7 +524,7 @@ export function SceneCreator() {
             poser = new PlacedPoser(own ?? p.c, p.prop.foot, cut.at, placed.still)
             L.posers.set(key, poser)
           }
-          poser.pose(b.skeleton, t, undefined, gust)
+          poser.pose(b.skeleton, t, undefined, gust, level)
           // a model's blend shapes, as its clip weighs them, reshape its blobs, which go up again only when they change
           const m = isModel(placed.prop) && !placed.still ? modelOf(placed.prop) : undefined
           if (m?.kind === 'splats' && m.morphs && m.rest.count + 1 === b.blobs.count) {

@@ -255,15 +255,16 @@ export class PlacedPoser {
    * unit of fall, along the ground, as `windAt` gives it) a description's falling specks and swaying stalks are blown,
    * the way turned into the prop's own.
    */
-  pose(sk: Skeleton, time: number, into?: ArrayLike<number>, wind?: readonly [number, number]) {
+  pose(sk: Skeleton, time: number, into?: ArrayLike<number>, wind?: readonly [number, number], level?: number) {
     const own = this.own, t = this.t
     if (this.still) own.reset()
     else {
       this.c.pose(own, time + this.later)
       const c = this.c as Partial<CompiledScene>
-      if (wind && (wind[0] || wind[1]) && c.blow) {
-        const w = t.backDir([wind[0], 0, wind[1]])
-        c.blow(own, time + this.later, [w[0], w[2]])
+      // in a calm too: sails the wind turns carry on from where it left them, and leaves it shakes loose stay on the tree
+      if (c.blow) {
+        const w = wind ? t.backDir([wind[0], 0, wind[1]]) : [0, 0, 0]
+        c.blow(own, time + this.later, [w[0], w[2]], undefined, level ?? (wind ? undefined : 0))
       }
     }
     for (let i = 0; i < own.count; i++) {
