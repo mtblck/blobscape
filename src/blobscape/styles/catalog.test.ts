@@ -113,3 +113,39 @@ test('the scene\'s settings start as the scene is written, and the address sets 
   assert.deepEqual(sceneStart(new URLSearchParams('time=teatime&weather=frogs&detail=huge')), SCENE.start)
   assert.deepEqual(settingsFrom(SCENE, SCENE.start, JSON.parse(JSON.stringify(s))), s)
 })
+
+test('pixel art\'s controls are laid out by the catalog: every setting a visitor sets has a tab, and what is drawn as another kind reads and writes soundly', () => {
+  const on = { style: 'pixel' as const, colors: 16, cycle: true, heat: 2 }
+  const shownIn = (tab: 'style' | 'finish' | 'switches') => shownSettings(PIXEL, PIXEL.start, on, undefined, tab).map((s) => s.key)
+  assert.deepEqual(shownIn('style'), ['palette', 'size', 'rate'])
+  assert.deepEqual(shownIn('finish'), ['dither', 'glow'])
+  assert.deepEqual(shownIn('switches'), ['steps', 'texel', 'shade', 'outline', 'lines', 'sky', 'heat', 'cycle', 'rock'])
+  // another style keeps only what is not pixel art's own, and neon has a glow of its own
+  assert.deepEqual(shownSettings(PIXEL, PIXEL.start, { style: 'oil' }, undefined, 'finish').map((s) => s.key), ['glow'])
+  assert.deepEqual(shownSettings(PIXEL, PIXEL.start, { style: 'neon' }, undefined, 'finish').map((s) => s.key), [])
+  assert.deepEqual(shownSettings(PIXEL, PIXEL.start, { style: 'oil' }, undefined, 'switches').map((s) => s.key), ['rock'])
+  const by = (key: string) => PIXEL.settings.find((s) => s.key === key)!
+  const outline = by('outline').draw!, bands = by('texel').draw!, heat = by('heat').draw!
+  assert.ok(outline.kind === 'choice' && bands.kind === 'toggle' && heat.kind === 'toggle')
+  for (const o of outline.options) assert.equal(outline.at({ ...PIXEL.start, ...outline.set(o.id) }), o.id)
+  assert.equal(bands.at({ ...PIXEL.start, ...bands.set(true, on) }), true)
+  assert.equal(bands.at({ ...PIXEL.start, ...bands.set(false, on) }), false)
+  assert.deepEqual(heat.set(true, on), { heat: 2 })
+  assert.deepEqual(heat.set(true, { style: 'pixel' }), { heat: 1 })
+  // full color has no palette to step through
+  assert.ok(by('steps').held!({ style: 'pixel', colors: 0 }))
+  assert.equal(by('steps').held!(on), undefined)
+  const page = readFileSync(new URL('../StyleControls.tsx', import.meta.url), 'utf8')
+  for (const own of ['<Slider ', '<Toggle ']) assert.ok(!page.includes(own), `StyleControls.tsx lays out ${own} by hand`)
+})
+
+test('every page with brush looks, a time of day or weather draws them through the shared pieces', () => {
+  const read = (f: string) => readFileSync(new URL(f, import.meta.url), 'utf8')
+  for (const page of ['../ScanStudio.tsx', '../Bouquets.tsx', '../BrushInk.tsx']) {
+    const text = read(page)
+    assert.ok(text.includes('useDrawnLook('), `${page} does not use the shared looks`)
+    for (const own of ['.setMarks(', '.setOutline(', '.setCel(', '.setGlyphs(']) assert.ok(!text.includes(own), `${page} calls ${own} itself`)
+  }
+  for (const page of ['../PixelDiorama.tsx', '../SceneCreator.tsx']) assert.ok(read(page).includes('<WeatherControls '), `${page} lays out its own weather`)
+  for (const page of ['../PixelDiorama.tsx', '../BrushInk.tsx']) assert.ok(read(page).includes('<TimeControls '), `${page} lays out its own time of day`)
+})

@@ -7,9 +7,9 @@ import type { Diorama } from './diorama/scenes.ts'
 import { isPixelStyle, lightsItself, type Style } from './diorama/styles.ts'
 import { GLITCH_START, type GlitchChoice } from './glitchLooks.ts'
 import { zoomStep } from './diorama/zoom.ts'
-import { PIXEL, PIXEL_RATES, PIXEL_SIZES, fromAddress, type PixelSettings } from './styles/catalog.ts'
+import { PIXEL, PIXEL_RATES, PIXEL_SIZES, TEXEL_BANDS, fromAddress, type PixelSettings } from './styles/catalog.ts'
 
-export { PIXEL_RATES, PIXEL_SIZES, type PixelSettings }
+export { PIXEL_RATES, PIXEL_SIZES, TEXEL_BANDS, type PixelSettings }
 
 /**
  * One layer of style settings that Diorama and Scene Creator both draw with (Matt, 2026-11-21: any new setting made
@@ -25,8 +25,6 @@ export interface StyleSettings {
   pixel: PixelSettings
 }
 
-/** How many steps of sun Light in bands gives (`banded`): three, none, half and full, kept the paint's texture best. */
-export const TEXEL_BANDS = 3
 
 /**
  * The detail a page starts a style at, as a place in the detail levels (Chunky, Medium, Fine, Finest), until the
