@@ -100,11 +100,14 @@ export function PixelDiorama() {
    * is not cut again for them, and the sky eases from one to the next.
    */
   const [weatherPick, setWeather] = useState<WeatherId | 'none' | undefined>(() => { const q = new URLSearchParams(location.search).get('weather'); return q === 'none' ? 'none' : weatherAsked(q) })
-  const [clouds, setClouds] = useState<CloudId | undefined>(() => cloudsAsked(new URLSearchParams(location.search).get('clouds')))
+  const [cloudsPick, setClouds] = useState<CloudId | undefined>(() => cloudsAsked(new URLSearchParams(location.search).get('clouds')))
+  // out in space (the space whales) there is no weather: what was picked waits for the next scene that has a sky
+  const clouds = picked0.space ? undefined : cloudsPick
   // a scene may start under a shared weather of its own (the koi pond's light rain) until another, or none, is picked
-  const weather: WeatherId | undefined = weatherPick === 'none' ? undefined : weatherPick ?? (clouds ? undefined : picked0.weather)
+  const weather: WeatherId | undefined = picked0.space || weatherPick === 'none' ? undefined : weatherPick ?? (clouds ? undefined : picked0.weather)
   /** The wind (`?wind=gale`): weather brings at least its own; it slants what falls and raises waves on water. */
-  const [wind, setWind] = useState<WindId | undefined>(() => windAsked(new URLSearchParams(location.search).get('wind')))
+  const [windPick, setWind] = useState<WindId | undefined>(() => windAsked(new URLSearchParams(location.search).get('wind')))
+  const wind = picked0.space ? undefined : windPick
   /**
    * Whether the weather's clouds float over the scene (`?overhead=0` leaves them out, and rain and snow fall in from
    * over the top of the picture): a scene may start without them, as the koi pond does (Matt, 2026-11-21).
@@ -239,6 +242,8 @@ export function PixelDiorama() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detail, diorama, paint, plain, texel, hug])
 
+  /** Whether the browser took the GPU back (out of memory, or the GPU restarted): nothing more is drawn until a reload. */
+  const [lost, setLost] = useState(false)
   useEffect(() => {
     let live: CreatureStage | undefined, gone = false
     import('./creature/stage.ts')
@@ -248,6 +253,11 @@ export function PixelDiorama() {
         live = s
         s.onFirstFrame = () => setDrawn(true)
         s.setFloor(0)
+        // a phone can run out of graphics memory on a big scene in a style that draws the screen several times (Matt
+        // saw the snail go white in watercolor at Finest, 2026-11-22): the browser takes the GPU back and nothing more
+        // is drawn, so the view says so and offers a lighter detail, rather than staying blank
+        const lose = s.renderer.onDeviceLost.bind(s.renderer)
+        s.renderer.onDeviceLost = (info) => { lose(info); if (!gone) setLost(true) }
         setStage(s)
       }, (e: unknown) => { console.warn(e); setFailed('This browser could not start WebGPU or WebGL 2, which the scene needs.') })
     return () => { gone = true; live?.dispose() }
@@ -798,6 +808,7 @@ export function PixelDiorama() {
               {loading && <LoadingMark testid="diorama-loading" />}
               <p role="status" className="sr-only">{loading ? loadingLabel : ''}</p>
               {failed && <div role="alert" className="absolute inset-4 grid place-items-center text-center text-sm text-ink">{failed}</div>}
+              {lost && !failed && <LostView detail={detail} />}
               {touring?.id === 'samples' && stage && scene && <Magnifier stage={stage} />}
               <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => pick(view)} />
               {!sampling && <p aria-hidden className="pointer-events-none absolute right-14 bottom-2 rounded bg-paper/80 px-1.5 py-0.5 text-xs text-ink-muted">{coarse ? 'drag to orbit · pinch to zoom' : 'drag to orbit · scroll to zoom'}</p>}
@@ -826,6 +837,7 @@ export function PixelDiorama() {
                     </Button>
                   </div>
                 </div>
+                {picked0.space ? <p className="text-sm text-ink-muted" data-testid="diorama-space">Out in space there is no time of day or weather: the scene keeps its own sky, stars and far sun.</p> : <>
                 <Field label="Time of day">
                   <div className="flex flex-wrap gap-1.5" data-testid="diorama-time">
                     <Chip active={!time || !picked0.timed} onClick={() => setTimeOfDay(undefined)}>Scene's own</Chip>
@@ -851,6 +863,7 @@ export function PixelDiorama() {
                   <Toggle label="Clouds over the scene" checked={overhead} onChange={pickOverhead} />
                   <p className="text-xs text-ink-faint">{overhead ? 'The clouds float over the scene and rain and snow fall from under them.' : 'The clouds are left out: the sky still grays and darkens, and rain and snow fall in from over the top of the picture.'}</p>
                 </div>
+                </>}
                 <Field label="Changing scenes">
                   <div className="flex flex-wrap gap-1.5" data-testid="diorama-transitions">
                     <Chip active={transition === 'cut'} onClick={() => pickTransition('cut')}>Cut</Chip>
@@ -979,6 +992,24 @@ export function PixelDiorama() {
           </p>
         </div>
       </section>
+    </div>
+  )
+}
+
+/**
+ * Over the view once the browser has taken the GPU back: says so and starts the page again a step lighter (the
+ * address keeps everything else), since a lost GPU device can't be drawn to again.
+ */
+function LostView({ detail }: { detail: string }) {
+  const at = DETAIL.findIndex((d) => d.id === detail)
+  const lighter = at > 0 ? DETAIL[at - 1] : undefined
+  const again = (id?: string) => { if (id) writeDetail(id); location.reload() }
+  return (
+    <div role="alert" className="absolute inset-0 grid place-items-center bg-paper/90 p-4 text-center text-sm text-ink">
+      <div className="max-w-xs space-y-3">
+        <p>The browser stopped drawing the scene. This happens when a device runs out of graphics memory{lighter ? ' at this detail' : ''}.</p>
+        <Button primary className="mx-auto" onClick={() => again(lighter?.id)}>{lighter ? `Start again at ${lighter.label}` : 'Start again'}</Button>
+      </div>
     </div>
   )
 }

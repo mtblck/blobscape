@@ -3629,7 +3629,7 @@
       {
        "name": "tags",
        "optional": true,
-       "type": "(\"tree\" | \"crystal\" | \"night\" | \"plant\" | \"flower\" | \"rock\" | \"building\" | \"wall\" | \"lamp\" | \"farm\" | \"thing\" | \"sign\" | \"boat\" | \"animal\" | \"person\" | \"magic\" | \"grassy\" | \"rocky\" | \"sandy\" | \"snowy\" | \"sea\" | \"pond\" | \"leafy\" | \"evergreen\" | \"floats\")[]",
+       "type": "(\"tree\" | \"crystal\" | \"night\" | \"plant\" | \"flower\" | \"rock\" | \"building\" | \"wall\" | \"lamp\" | \"farm\" | \"thing\" | \"sign\" | \"boat\" | \"animal\" | \"person\" | \"magic\" | \"grassy\" | \"rocky\" | \"sandy\" | \"snowy\" | \"sea\" | \"pond\" | \"space\" | \"leafy\" | \"evergreen\" | \"floats\")[]",
        "doc": "What its land is, from the fixed list (tags.ts: grassy, rocky, sandy, snowy, sea, pond, night): Scene Creator's search finds the land by these."
       },
       {
@@ -4152,7 +4152,7 @@
       {
        "name": "tags",
        "optional": true,
-       "type": "(\"tree\" | \"crystal\" | \"night\" | \"plant\" | \"flower\" | \"rock\" | \"building\" | \"wall\" | \"lamp\" | \"farm\" | \"thing\" | \"sign\" | \"boat\" | \"animal\" | \"person\" | \"magic\" | \"grassy\" | \"rocky\" | \"sandy\" | \"snowy\" | \"sea\" | \"pond\" | \"leafy\" | \"evergreen\" | \"floats\")[]",
+       "type": "(\"tree\" | \"crystal\" | \"night\" | \"plant\" | \"flower\" | \"rock\" | \"building\" | \"wall\" | \"lamp\" | \"farm\" | \"thing\" | \"sign\" | \"boat\" | \"animal\" | \"person\" | \"magic\" | \"grassy\" | \"rocky\" | \"sandy\" | \"snowy\" | \"sea\" | \"pond\" | \"space\" | \"leafy\" | \"evergreen\" | \"floats\")[]",
        "doc": "With `prop`, what the prop is and how it behaves, from the fixed list (tags.ts): kinds such as tree, rock or lamp\nfor search, and qualities the shared recipes act on (leafy, evergreen, floats)."
       }
      ]

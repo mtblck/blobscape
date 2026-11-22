@@ -159,8 +159,8 @@ export const FISHING: SceneDoc = {
   parts,
   moves: [
     { kind: 'bob', bone: 'isle', by: [0, 0.03, 0], times: 3 },
-    { kind: 'sway', bone: 'crown', axis: 'z', degrees: 2.5, times: 6 },
-    { kind: 'sway', bone: 'lantern', axis: 'z', degrees: 7, times: 9, phase: 0.2 },
+    { kind: 'sway', bone: 'crown', axis: 'z', degrees: 2.5, times: 6, wind: 4 },
+    { kind: 'sway', bone: 'lantern', axis: 'z', degrees: 7, times: 9, phase: 0.2, wind: 10 },
     { kind: 'spin', bone: 'rays', axis: 'z', times: 2 },
     { kind: 'bob', bone: 'chip0', by: [0, 0.05, 0], times: 4, phase: 0.3 },
     { kind: 'bob', bone: 'chip1', by: [0, 0.04, 0], times: 5, phase: 0.7 },

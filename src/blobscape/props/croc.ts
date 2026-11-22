@@ -243,12 +243,12 @@ export const POND_REEDS: PropDoc = {
       { shape: { kind: 'join', shapes: [{ kind: 'cone', from: [1.197, -0.02, -0.81], to: [1.227, 0.545, -0.81], r: 0.016, rTo: 0.008 }, { kind: 'cone', from: [1.3, -0.02, -0.888], to: [1.33, 0.724, -0.888], r: 0.016, rTo: 0.008 }, { kind: 'cone', from: [1.256, -0.02, -0.897], to: [1.286, 0.551, -0.897], r: 0.016, rTo: 0.008 }, { kind: 'cone', from: [1.319, -0.02, -0.816], to: [1.349, 0.421, -0.816], r: 0.016, rTo: 0.008 }] }, paint: '#7cc45c', bone: 'reed5', noShadow: true },
     ],
     moves: [
-      { kind: 'sway', bone: 'reed0', axis: 'z', degrees: 5, times: 2, phase: 0.81 },
-      { kind: 'sway', bone: 'reed1', axis: 'x', degrees: 5, times: 3, phase: 0.893 },
-      { kind: 'sway', bone: 'reed2', axis: 'z', degrees: 5, times: 2, phase: 0.696 },
-      { kind: 'sway', bone: 'reed3', axis: 'x', degrees: 5, times: 3, phase: 0.681 },
-      { kind: 'sway', bone: 'reed4', axis: 'z', degrees: 5, times: 2, phase: 0.634 },
-      { kind: 'sway', bone: 'reed5', axis: 'x', degrees: 5, times: 3, phase: 0.502 },
+      { kind: 'sway', bone: 'reed0', axis: 'z', degrees: 5, times: 2, phase: 0.81, wind: 10 },
+      { kind: 'sway', bone: 'reed1', axis: 'x', degrees: 5, times: 3, phase: 0.893, wind: 10 },
+      { kind: 'sway', bone: 'reed2', axis: 'z', degrees: 5, times: 2, phase: 0.696, wind: 10 },
+      { kind: 'sway', bone: 'reed3', axis: 'x', degrees: 5, times: 3, phase: 0.681, wind: 10 },
+      { kind: 'sway', bone: 'reed4', axis: 'z', degrees: 5, times: 2, phase: 0.634, wind: 10 },
+      { kind: 'sway', bone: 'reed5', axis: 'x', degrees: 5, times: 3, phase: 0.502, wind: 10 },
     ],
   },
 }

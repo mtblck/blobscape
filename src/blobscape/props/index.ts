@@ -3,6 +3,19 @@ import { KOI_POND } from '../diorama/scenes/koi.ts'
 import { BAMBOO, CHERRY, CRACKED_STONE, IRIS_LEAVES, LILY_PAD, LILY_PAD_FLOWER, MOSSY_STONE, PINK_IRIS, SNOW_LANTERN, STEPPING_POST, STONE_SLAB, TALL_LANTERN, WHITE_IRIS, type MadeProp } from './garden.ts'
 
 import { CAVE_MADE } from './cave.ts'
+import { WHALES_MADE } from './whales.ts'
+import { HENGE_MADE } from './henge.ts'
+import { TURKEY_MADE } from './turkey.ts'
+import { ROADSIDE_MADE } from './roadside.ts'
+import { HENGE_STILL_MADE } from './henge-still.ts'
+import { CAVE_ICE_MADE } from './cave-ice.ts'
+import { CANYON_MADE } from './canyon.ts'
+import { CABIN_MADE } from './cabin.ts'
+import { ISLES_MADE } from './isles.ts'
+import { HARVEST_MADE } from './harvest.ts'
+import { RUIN_MADE } from './ruin.ts'
+import { HUT_MADE } from './hut.ts'
+import { GROVE_MADE } from './grove.ts'
 import { LAB_MADE } from './lab.ts'
 import { WINDOW_MADE } from './window.ts'
 import { SPIDER_MADE } from './spider.ts'
@@ -40,6 +53,19 @@ export const MADE: MadeProp[] = [
   { id: 'stepping-post', tags: ['rock'], kind: 'prop', about: 'A round stone post to step across water on', prop: STEPPING_POST },
   { id: 'stone-slab', tags: ['rock'], kind: 'prop', about: 'A low round slab of speckled stone', prop: STONE_SLAB },
   ...CAVE_MADE,
+  ...WHALES_MADE,
+  ...HENGE_MADE,
+  ...HENGE_STILL_MADE,
+  ...TURKEY_MADE,
+  ...ROADSIDE_MADE,
+  ...CAVE_ICE_MADE,
+  ...CANYON_MADE,
+  ...CABIN_MADE,
+  ...ISLES_MADE,
+  ...HARVEST_MADE,
+  ...RUIN_MADE,
+  ...HUT_MADE,
+  ...GROVE_MADE,
   ...LAB_MADE,
   ...WINDOW_MADE,
   ...SPIDER_MADE,
@@ -56,6 +82,9 @@ export const MADE: MadeProp[] = [
 ]
 
 const BY_ID = new Map(MADE.map((m) => [m.id, m]))
+
+/** A prop's or land's tags, by its id. */
+export const madeTags = (id: string): readonly string[] | undefined => BY_ID.get(id)?.tags
 
 /** A prop or land written on its own, by its id. */
 export const madeProp = (id: string): PropDoc | undefined => BY_ID.get(id)?.prop

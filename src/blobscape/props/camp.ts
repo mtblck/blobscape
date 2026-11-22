@@ -262,7 +262,7 @@ export const CAMP_PINE: PropDoc = {
       { shape: { kind: 'join', shapes: [{ kind: 'cylinder', at: [-1.25, 0.33, -0.85], height: 0.405, r: 0.405, rTop: 0.081 }, { kind: 'cylinder', at: [-1.25, 0.615, -0.85], height: 0.405, r: 0.323, rTop: 0.065 }, { kind: 'cylinder', at: [-1.25, 0.9, -0.85], height: 0.405, r: 0.24, rTop: 0.048 }, { kind: 'cylinder', at: [-1.25, 1.185, -0.85], height: 0.405, r: 0.158, rTop: 0.032 }] }, paint: { kind: 'faces', top: { kind: 'speckle', size: 0.05, colors: ['#2c5a38', '#2c5a38', '#4a8048'] }, side: '#1b3a2a', under: '#10241c' }, bone: 'pine0' },
     ],
     moves: [
-      { kind: 'sway', bone: 'pine0', axis: 'z', degrees: 1.6, times: 3, phase: 0 },
+      { kind: 'sway', bone: 'pine0', axis: 'z', degrees: 1.6, times: 3, phase: 0, wind: 3 },
     ],
   },
 }

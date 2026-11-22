@@ -265,7 +265,7 @@ export const TALL_PINE: PropDoc = {
       { shape: { kind: 'join', shapes: [{ kind: 'cone', from: [-0.615, 0.3, -0.2], to: [-0.611, 0.44, -0.2], r: 0.15, rTo: 0.05 }, { kind: 'cone', from: [-0.612, 0.41, -0.2], to: [-0.608, 0.55, -0.2], r: 0.115, rTo: 0.035 }, { kind: 'cone', from: [-0.609, 0.525, -0.2], to: [-0.605, 0.65, -0.2], r: 0.08, rTo: 0.01 }] }, paint: { kind: 'faces', up: 0.45, top: { kind: 'speckle', size: 0.022, colors: ['#387345', '#4d8c4d'] }, side: '#245238', under: '#143329' }, bone: 'tree0' },
     ],
     moves: [
-      { kind: 'sway', bone: 'tree0', axis: 'z', degrees: -2.005, times: 5, phase: 0 },
+      { kind: 'sway', bone: 'tree0', axis: 'z', degrees: -2.005, times: 5, phase: 0, wind: 3 },
     ],
   },
 }
@@ -297,7 +297,7 @@ export const PINE: PropDoc = {
       { shape: { kind: 'join', shapes: [{ kind: 'cone', from: [0.463, 0.24, -0.4], to: [0.466, 0.358, -0.4], r: 0.126, rTo: 0.042 }, { kind: 'cone', from: [0.465, 0.332, -0.4], to: [0.469, 0.45, -0.4], r: 0.097, rTo: 0.029 }, { kind: 'cone', from: [0.468, 0.429, -0.4], to: [0.472, 0.534, -0.4], r: 0.067, rTo: 0.01 }] }, paint: { kind: 'faces', up: 0.45, top: { kind: 'speckle', size: 0.022, colors: ['#387345', '#4d8c4d'] }, side: '#245238', under: '#143329' }, bone: 'tree1' },
     ],
     moves: [
-      { kind: 'sway', bone: 'tree1', axis: 'z', degrees: -2.005, times: 5, phase: 0.271 },
+      { kind: 'sway', bone: 'tree1', axis: 'z', degrees: -2.005, times: 5, phase: 0.271, wind: 3 },
     ],
   },
 }
@@ -329,7 +329,7 @@ export const SMALL_PINE: PropDoc = {
       { shape: { kind: 'join', shapes: [{ kind: 'cone', from: [-0.74, 0.138, 0.02], to: [-0.737, 0.239, 0.02], r: 0.108, rTo: 0.036 }, { kind: 'cone', from: [-0.738, 0.217, 0.02], to: [-0.735, 0.318, 0.02], r: 0.083, rTo: 0.025 }, { kind: 'cone', from: [-0.735, 0.3, 0.02], to: [-0.733, 0.39, 0.02], r: 0.058, rTo: 0.01 }] }, paint: { kind: 'faces', up: 0.45, top: { kind: 'speckle', size: 0.022, colors: ['#387345', '#4d8c4d'] }, side: '#245238', under: '#143329' }, bone: 'tree2' },
     ],
     moves: [
-      { kind: 'sway', bone: 'tree2', axis: 'z', degrees: -2.005, times: 5, phase: 0.541 },
+      { kind: 'sway', bone: 'tree2', axis: 'z', degrees: -2.005, times: 5, phase: 0.541, wind: 3 },
     ],
   },
 }

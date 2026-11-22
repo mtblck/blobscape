@@ -2,14 +2,11 @@ import type { SceneDoc } from '../../splat-engine/sceneDoc.ts'
 import type { Skeleton } from '../../splat-engine/rig.ts'
 import type { Species } from '../../splat-engine/zoo/species.ts'
 import { markedPicks, splitScene, type PropDoc, type PropPick, type PropRef, type SceneProject } from '../../splat-engine/project.ts'
-import { HENGE } from '../diorama/scenes/henge.ts'
-import { TURKEY } from '../diorama/scenes/turkey.ts'
 import { ISLES } from '../diorama/scenes/isles.ts'
 import { CANYON } from '../diorama/scenes/canyon.ts'
 import { MEADOW } from '../fourways/meadow/doc.ts'
 import { CREATURES } from '../creature/fromScenes.ts'
 import { DIORAMAS } from '../diorama/scenes.ts'
-import { HENGE_PICKS, TURKEY_PICKS, WITCH_IN_SPARKS_PICKS } from './picks.ts'
 import { PLAIN_ROCK, PLAIN_TURF } from './lands.ts'
 import { KIT } from './kit.ts'
 import { isModel, modelOf } from './models.ts'
@@ -63,30 +60,6 @@ interface Source {
 }
 
 const SOURCES: Source[] = [
-  {
-    from: 'turkey', doc: TURKEY, picks: TURKEY_PICKS,
-    props: [
-      { id: 'giant-turkey', tags: ['animal'], pick: 'Giant turkey', about: 'A giant turkey running, kicking up dust and losing feathers', group: 'living' },
-      { id: 'cook', tags: ['person'], pick: 'Cook', about: 'A cook in an apron running for her life', group: 'living' },
-      { id: 'billboard', tags: ['sign'], pick: 'Billboard', about: 'A roadside billboard on two posts', group: 'buildings' },
-      { id: 'mailbox', tags: ['thing'], pick: 'Mailbox', about: 'A mailbox on a post' },
-      { id: 'roadside-haystack', tags: ['farm'], pick: 'Roadside haystack', about: 'A tall haystack' },
-      { id: 'roadside-tree', tags: ['tree', 'leafy'], pick: 'Roadside tree', about: 'A roadside tree' },
-      { id: 'second-roadside-tree', tags: ['tree', 'leafy'], pick: 'Second roadside tree', about: 'Another roadside tree' },
-    ],
-  },
-  {
-    from: 'henge', doc: HENGE, picks: HENGE_PICKS,
-    props: [
-      { id: 'white-witch', tags: ['person', 'magic'], pick: 'White witch', about: 'A witch in a white robe and hat, holding a wand', group: 'living' },
-      { id: 'magic-circle', tags: ['magic', 'rock'], pick: 'Magic circle', about: 'A glowing circle of rings and a star turning on the ground, giving off blue light' },
-    ],
-    land: { id: 'henge-turf', tags: ['grassy', 'night'], name: 'Henge turf', about: 'A ring of standing stones on dark turf under the stars' },
-  },
-  {
-    from: 'henge', doc: HENGE, picks: WITCH_IN_SPARKS_PICKS,
-    props: [{ id: 'white-witch-sparks', tags: ['person', 'magic'], pick: 'White witch, coming and going', about: 'The white witch arriving in a burst of sparks, waving her wand with two flashes, and leaving again', group: 'living' }],
-  },
   {
     // kit pieces, made by rules rather than lifted from a scene (an idea from Silicon Jungle's Ink Studio)
     from: 'kit', doc: KIT, picks: markedPicks(KIT),
