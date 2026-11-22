@@ -74,6 +74,13 @@ test('snow lies where it lands, builds up while it falls and melts after', () =>
   assert.equal(pileStep(1, 1, 10), 1)
   assert.ok(pileStep(0.5, 0.4, 10) < pileStep(0.5, 1, 10), 'heavier snow builds faster')
   assert.ok(pileStep(0.5, 0, 10) < 0.5, 'it melts when none falls')
+  // light snow lays far slower than heavy, and only dusts
+  let light = 0, heavy = 0
+  for (let k = 0; k < 600; k++) { light = pileStep(light, 0.4, 0.25); heavy = pileStep(heavy, 1, 0.25) }
+  assert.equal(heavy, 1)
+  assert.ok(light < 0.6 + 1e-9 && light > 0.5, `light snow lays ${light} in 150 s`)
+  assert.ok(pileStep(0, 0.4, 30) < pileStep(0, 1, 30) / 5, 'light snow builds about a sixth as fast')
+  assert.ok(pileStep(1, 0.4, 10) < 1, 'a deep cover settles back under light snow')
   w.pile(1)
   assert.equal(shown(), c.blobs.count)
   // flat on the ground it fell to, never under it

@@ -4,3 +4,4 @@
 - Diorama: the koi pond has a moon and stars when its time of day is Night.
 - Diorama: a Clouds over the scene switch on the Scene tab; off, the weather's clouds are left out and rain and snow fall in from above the picture (the koi pond starts with it off).
 - Diorama: bamboo, irises and trees lean and toss harder as the wind rises.
+- Diorama: light snow piles up far more slowly and only dusts the ground; heavy snow still covers everything.
