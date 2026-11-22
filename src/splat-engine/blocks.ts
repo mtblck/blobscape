@@ -214,6 +214,22 @@ export function faceLit(solid: (x: number, y: number, z: number) => boolean, x: 
   return true
 }
 
+/** How far a blob's disc fills, in its own scale: as far as voxel.ts's solid reach. */
+export const DISC_REACH = 1.18
+/** How far past a cell a blob's disc must reach to fill the cells round its own (a fine disc reaches at most 0.9). */
+const SPREAD_FROM = 1.25
+/** The most cells a wide blob fills each way from its middle. */
+const SPREAD_MOST = 3
+
+/** A blob's two widest axes (its first and second), from its facing. */
+function discAxes(q: Float32Array, i: number): [[number, number, number], [number, number, number]] {
+  const x = q[i * 4], y = q[i * 4 + 1], z = q[i * 4 + 2], w = q[i * 4 + 3]
+  return [
+    [1 - 2 * (y * y + z * z), 2 * (x * y + w * z), 2 * (x * z - w * y)],
+    [2 * (x * y - w * z), 1 - 2 * (x * x + z * z), 2 * (y * z + w * x)],
+  ]
+}
+
 /**
  * The sources as blocks: a mesh for each bone that carries any (see `BlockLook`). A cell two bones' blobs share goes
  * to the bone with more of them, so no two cubes ever stand in one place; faces between two cubes on one bone are
@@ -238,26 +254,45 @@ export function buildBlocks(sources: readonly BlockSource[], look: BlockLook): {
       const own = sources[a].blockCell ?? look.cell, cell = specks ? own * SPECK_SIZE : own
       const at = new Map<number, number>()
       const first = where.length / 3
-      const cellOf = new Int32Array(blobs.count).fill(-1), boneAt = new Uint8Array(blobs.count)
+      // a blob in each cell it fills: the cell of its middle, and where its disc reaches a cell or more across (a part
+      // cut broadly out of focus, `VoxelSpec.focus`, has every other grid point with discs twice the size) the cells it
+      // covers along its own plane too, or blocks a cell of the fine grid show the gaps between them
+      const entBlob: number[] = [], entCell: number[] = [], boneAt = new Uint8Array(blobs.count)
       const counts: number[] = []
+      const put = (i: number, bone: number, px: number, py: number, pz: number) => {
+        const x = Math.round(px / cell), y = Math.round(py / cell), z = Math.round(pz / cell)
+        const key = specks ? speckKey(x, y, z, bone) : keyOf(x, y, z)
+        let k = at.get(key)
+        if (k === undefined) { k = where.length / 3 - first; at.set(key, k); where.push(x, y, z); counts.push(0) }
+        // once a cell for each blob
+        for (let e = entBlob.length - 1; e >= 0 && entBlob[e] === i; e--) if (entCell[e] === k) return
+        entBlob.push(i); entCell.push(k)
+        counts[k]++
+      }
       for (let i = 0; i < blobs.count; i++) {
         if (blobs.opacity[i] < least) continue
         const bone = boneOf(skin, i)
         if ((skeleton.bones[bone]?.name.startsWith('~') ?? false) !== specks) continue
-        const x = Math.round(blobs.center[i * 3] / cell), y = Math.round(blobs.center[i * 3 + 1] / cell), z = Math.round(blobs.center[i * 3 + 2] / cell)
-        const key = specks ? speckKey(x, y, z, bone) : keyOf(x, y, z)
-        let k = at.get(key)
-        if (k === undefined) { k = where.length / 3 - first; at.set(key, k); where.push(x, y, z); counts.push(0) }
-        cellOf[i] = k
         boneAt[i] = bone
-        counts[k]++
+        const cx = blobs.center[i * 3], cy = blobs.center[i * 3 + 1], cz = blobs.center[i * 3 + 2]
+        put(i, bone, cx, cy, cz)
+        const ra = blobs.scale[i * 3] * DISC_REACH, rb = blobs.scale[i * 3 + 1] * DISC_REACH
+        if (specks || Math.max(ra, rb) < cell * SPREAD_FROM) continue
+        const [u, v] = discAxes(blobs.quat, i), na = Math.min(SPREAD_MOST, Math.floor(ra / cell)), nb = Math.min(SPREAD_MOST, Math.floor(rb / cell))
+        for (let a = -na; a <= na; a++) for (let b = -nb; b <= nb; b++) {
+          // the square it stands for, so four of them on every other grid point leave no hole between them
+          if (a || b) {
+            const da = a * cell, db = b * cell
+            put(i, bone, cx + u[0] * da + v[0] * db, cy + u[1] * da + v[1] * db, cz + u[2] * da + v[2] * db)
+          }
+        }
       }
       const n = counts.length
       // each cell's blobs, side by side
       const start = new Int32Array(n + 1)
       for (let k = 0; k < n; k++) start[k + 1] = start[k] + counts[k]
       const fill = start.slice(0, n), list = new Int32Array(start[n])
-      for (let i = 0; i < blobs.count; i++) if (cellOf[i] >= 0) list[fill[cellOf[i]]++] = i
+      for (let e = 0; e < entBlob.length; e++) list[fill[entCell[e]]++] = entBlob[e]
       const tally = new Map<number, number>()
       for (let k = 0; k < n; k++) {
         // the bone most of its blobs ride
