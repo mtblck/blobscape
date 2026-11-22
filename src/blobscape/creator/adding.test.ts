@@ -60,3 +60,11 @@ test('room: props, blobs and bones counted, and a plain line when a prop will no
   assert.match(whyNot('Duck', { ...now, blobs: [5000, 5000] }, after)!, /blobs/)
   assert.match(whyNot('Duck', now, { ...after, bones: [300, 255] })!, /bones/)
 })
+
+test('a search finds cards by their tags too: "tree" finds trees not named so, "floats" what floats', () => {
+  const ids = (q: string) => cardsFound(q).flatMap((g) => g.cards.map((c) => c.id))
+  const trees = ids('tree')
+  for (const e of CARDS.filter((c) => c.tags.includes('tree'))) assert.ok(trees.includes(e.id), e.id)
+  const floats = ids('floats')
+  assert.ok(floats.length && floats.every((id) => CARDS.find((c) => c.id === id)!.tags.includes('floats') || /float/i.test(CARDS.find((c) => c.id === id)!.about)))
+})

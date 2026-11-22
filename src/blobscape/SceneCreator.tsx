@@ -328,7 +328,7 @@ export function SceneCreator() {
         const known = isModel(p.prop) ? modelOf(p.prop) : undefined
         const model = known && modelJob(known)
         // a leafy prop drops leaves of its own when the weather is falling leaves
-        const leaves = light?.weather === 'leaves' && !!cp.props[i] && leafy(cp.props[i].prop.name)
+        const leaves = light?.weather === 'leaves' && !!cp.props[i] && leafy(cp.props[i].prop)
         return { key: JSON.stringify([p.prop, p.turn, p.size, p.lit, project.loop, project.land, steps, propLight, plain, !!model, leaves]), thing: JSON.stringify(p.prop), plain, job: (spacing) => ({ kind: 'prop', project, i, spacing, plain, model, finish: fin }) }
       }),
     ]
