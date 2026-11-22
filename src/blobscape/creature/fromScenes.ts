@@ -5,7 +5,7 @@ import { sceneCreature } from '../../splat-engine/zoo/fromScene.ts'
 import type { Species } from '../../splat-engine/zoo/species.ts'
 import { ZOO } from '../../splat-engine/zoo/index.ts'
 import { CROC } from '../diorama/scenes/croc.ts'
-import { OWL } from '../diorama/scenes/owl.ts'
+import { WIZARD_OWL } from '../props/owl.ts'
 import { REEF } from '../diorama/scenes/reef.ts'
 
 /**
@@ -80,7 +80,7 @@ function jellySwim(sk: Skeleton, t: number) {
 
 // --- The owl. It perches in the scene; here its toes get a bone a side, so it can waddle.
 const owl = sceneCreature({
-  doc: OWL,
+  doc: WIZARD_OWL.doc,
   keep: /^(body|bodyin|wing[LR]|head)$/,
   bones: [
     // the lining of the body follows the body
