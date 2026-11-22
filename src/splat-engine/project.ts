@@ -2,12 +2,13 @@ import type { Quat, Vec3 } from '../splat-core/blobs.ts'
 import type { Orbit } from '../splat-core/orbit.ts'
 import { oklab } from '../splat-core/pixel.ts'
 import type { PointLight } from './engine.ts'
-import { Skeleton, axisAngle, mulQ, rotate, type Bone } from './rig.ts'
+import { Skeleton, mulQ, type Bone } from './rig.ts'
 import { daylight } from './daylight.ts'
 import { checkScene, compileScene, litFor, type CompiledScene, type LightDoc, type MoveDoc, type SceneDoc, type SpeckDoc } from './sceneDoc.ts'
-import { falling } from './skyRecipes.ts'
+import { CLOUD_COVERS, WEATHERS, WINDS, falling, type CloudId, type WeatherId, type WindId } from './skyRecipes.ts'
 import { withHeavens } from './heavens.ts'
-import { MAX_LAMPS, type Lamp, type Shape, type VoxelPart, type VoxelSpec } from './voxel.ts'
+import { placedPart, placer, type Placement, type Placer } from './place.ts'
+import { MAX_LAMPS, type Lamp, type VoxelSpec } from './voxel.ts'
 
 /**
  * Scenes made of props (Scene Creator, docs/scene-editor-plan.md). A **prop** is a scene description that holds one
@@ -31,12 +32,8 @@ export interface PropDoc {
   foot: Vec3
 }
 
-/** Where a prop is set down: its foot goes to `at`, turned `turn` degrees about the upright (counterclockwise seen from above), `size` times as big. */
-export interface Placement {
-  at: Vec3
-  turn: number
-  size: number
-}
+export type { Placement, Placer } from './place.ts'
+export { placer } from './place.ts'
 
 /** A library prop by its id, or a prop written out in full (an imported one). */
 export type PropRef = string | PropDoc
@@ -46,6 +43,8 @@ export interface Placed extends Placement {
   prop: PropRef
   /** Holds still: its own moves are not played. */
   still?: boolean
+  /** Its moves run this share of the loop later (0 to 1), so two of one prop side by side don't sway as one. */
+  phase?: number
   /**
    * Its lamps, where the project has a time of day: 'always' keeps them lit by day, 'dark' has them wait for the dark
    * whatever the project or the land says. Left out, it goes by the project's `light.lit`, then the land's own `lamps`.
@@ -97,8 +96,25 @@ export interface ProjectLight {
   glow?: number
   /** Far things fade into the sky's lower color, total this far past the view's target; 0 is clear air. */
   haze?: number
-  /** Rain, snow or leaves falling over the land and lying where they land. */
+  /** Rain or snow falling over the land and lying where it lands, or leaves falling from the leafy props' crowns. */
   weather?: 'rain' | 'snow' | 'leaves'
+  /**
+   * A shared weather or cloud cover laid over the scene (skyRecipes.ts: the same recipes every Diorama scene takes),
+   * a wind in place of the weather's own, and whether its clouds float over the scene. Nothing is cut again for it.
+   */
+  recipe?: ProjectWeather
+}
+
+/** A project's shared weather (`ProjectLight.recipe`). */
+export interface ProjectWeather {
+  /** A weather, which brings its own clouds and wind. */
+  weather?: WeatherId
+  /** A cloud cover alone, where there is no weather. */
+  clouds?: CloudId
+  /** A wind in place of the weather's own. */
+  wind?: WindId
+  /** Whether the clouds float over the scene (left out, they do); without them rain and snow fall in from over the top of the picture. */
+  overhead?: boolean
 }
 
 /** Most lamps a project may add of its own. */
@@ -148,7 +164,10 @@ export function litLand(doc: SceneDoc, l: ProjectLight | undefined): SceneDoc {
   const sky = l.sky ?? doc.sky
   const air = { ...doc.air }
   if (l.haze !== undefined) air.haze = l.haze > 0 ? { color: sky?.[1] ?? '#c8d0dc', from: 0, to: l.haze } : undefined
-  if (l.weather) {
+  if (l.weather === 'leaves') {
+    // leaves fall from the trees (`withLeaves`), not from the sky: in place of any falling leaves the land has of its own
+    air.specks = (air.specks ?? []).filter((x) => x.kind !== 'leaves' || x.shaken)
+  } else if (l.weather) {
     // in place of any weather the land has, within the 300 specks a scene may hold
     const kept = (air.specks ?? []).filter((x) => x.kind !== 'rain' && x.kind !== 'snow' && x.kind !== 'leaves').slice(0, 7)
     const left = 300 - kept.reduce((n, x) => n + x.count, 0)
@@ -165,9 +184,46 @@ const WEATHER_COUNT = { rain: 140, snow: 120, leaves: 40 }
  * A swarm of rain, snow or leaves over the view's middle, falling onto whatever stands there. Rain and snow are the
  * shared recipe's (skyRecipes.ts `falling`), so a change to rain there is a change here.
  */
-function weatherOf(kind: NonNullable<ProjectLight['weather']>, camera: Orbit): SpeckDoc {
-  if (kind !== 'leaves') return falling(kind, camera, WEATHER_COUNT[kind])
-  return { ...falling('snow', camera, WEATHER_COUNT.leaves), kind, colors: ['#c8642a', '#e0a030', '#a83c20'] }
+function weatherOf(kind: 'rain' | 'snow', camera: Orbit): SpeckDoc {
+  return falling(kind, camera, WEATHER_COUNT[kind])
+}
+
+/** A prop that drops leaves, by its name: broadleaf trees and bushes, not pines, palms, cacti or bare trees. */
+const LEAFY = /tree|oak|cherry|maple|birch|willow|apple|bush|hedge|shrub/i
+const NOT_LEAFY = /pine|fir\b|spruce|palm|cactus|bare|dead|stump|bamboo/i
+/** Falling leaves' colors, and how many come down under one tree. */
+export const AUTUMN = ['#c8642a', '#e0a030', '#a83c20']
+export const LEAVES_EACH = 12
+/** Whether a prop of this name drops leaves. */
+export const leafy = (name: string) => LEAFY.test(name) && !NOT_LEAFY.test(name)
+
+/**
+ * Where a leafy prop's leaves fall, in its own frame: under its crown (the top half of it, drawn in a little), from the
+ * crown's underside down to its foot, so they come from the tree and not from the sky (Matt, 2026-11-22).
+ */
+export function leafFall(prop: PropDoc): { from: Vec3; to: Vec3; size: number } | undefined {
+  if (!leafy(prop.name)) return
+  const shapes = compileScene({ ...prop.doc, lights: [], air: undefined, water: undefined }, { puffs: false }).spec(0.08).parts.map((p) => p.shape)
+  if (!shapes.length) return
+  const lo: Vec3 = [Infinity, Infinity, Infinity], hi: Vec3 = [-Infinity, -Infinity, -Infinity]
+  for (const sh of shapes) for (let i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], sh.min[i]); hi[i] = Math.max(hi[i], sh.max[i]) }
+  const h = hi[1] - lo[1], wide = Math.max(hi[0] - lo[0], hi[2] - lo[2])
+  if (!(h > 0)) return
+  // the crown's underside: the lowest of the parts nearly as wide as the whole (a trunk is not)
+  let under = hi[1]
+  for (const sh of shapes) if (Math.max(sh.max[0] - sh.min[0], sh.max[2] - sh.min[2]) >= wide * 0.6) under = Math.min(under, sh.min[1])
+  if (under <= lo[1] + h * 0.15) under = lo[1] + h * 0.5
+  const mid = [(lo[0] + hi[0]) / 2, (lo[2] + hi[2]) / 2], half = [(hi[0] - lo[0]) * 0.35, (hi[2] - lo[2]) * 0.35]
+  const r = (v: number) => Math.round(v * 1e4) / 1e4
+  return { from: [r(mid[0] - half[0]), r(prop.foot[1]), r(mid[1] - half[1])], to: [r(mid[0] + half[0]), r(under), r(mid[1] + half[1])], size: r(Math.max(0.008, h * 0.018)) }
+}
+
+/** A leafy prop's leaves as a swarm of its own, falling from its crown to its foot, for a project whose weather is leaves. */
+export function withLeaves(prop: PropDoc, weather: ProjectLight['weather']): PropDoc {
+  const fall = weather === 'leaves' ? leafFall(prop) : undefined
+  if (!fall) return prop
+  const swarm: SpeckDoc = { kind: 'leaves', count: LEAVES_EACH, colors: AUTUMN, ...fall }
+  return { ...prop, doc: { ...prop.doc, air: { ...prop.doc.air, specks: [...(prop.doc.air?.specks ?? []), swarm] } } }
 }
 
 /** Most props in one project: each is an actor of its own while editing, and frames slow down as they are added (#330). */
@@ -181,63 +237,10 @@ const MAX_COLORS = 32
 /** The least and most a prop may be sized. */
 export const SIZE_RANGE: [number, number] = [0.1, 10]
 
-const DEG = Math.PI / 180
 const conj = (q: ArrayLike<number>): Quat => [-q[0], -q[1], -q[2], q[3]]
-const add = (a: ArrayLike<number>, b: ArrayLike<number>): Vec3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
-const sub = (a: ArrayLike<number>, b: ArrayLike<number>): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
 const scale = (a: ArrayLike<number>, s: number): Vec3 => [a[0] * s, a[1] * s, a[2] * s]
 
 // --- placing ---------------------------------------------------------------
-
-/** A placement worked out: the turn as a quaternion and the point maps both ways. */
-export interface Placer {
-  /** The turn. */
-  q: Quat
-  /** How big. */
-  size: number
-  /** A point of the prop's description to where it now stands. */
-  point(p: ArrayLike<number>): Vec3
-  /** Back: a point where it stands to the description's. */
-  back(p: ArrayLike<number>): Vec3
-  /** A direction of the description to the way it now points. */
-  dir(v: ArrayLike<number>): Vec3
-  /** Back: a direction to the description's. */
-  backDir(v: ArrayLike<number>): Vec3
-  /** Whether it changes nothing. */
-  same: boolean
-}
-
-export function placer(foot: ArrayLike<number>, pl: Placement): Placer {
-  const q = axisAngle([0, 1, 0], pl.turn * DEG), qi = conj(q), s = pl.size
-  const same = pl.turn % 360 === 0 && s === 1 && pl.at[0] === foot[0] && pl.at[1] === foot[1] && pl.at[2] === foot[2]
-  return {
-    q, size: s, same,
-    point: (p) => (same ? [p[0], p[1], p[2]] : add(pl.at, scale(rotate(q, sub(p, foot)), s))),
-    back: (p) => (same ? [p[0], p[1], p[2]] : add(foot, scale(rotate(qi, sub(p, pl.at)), 1 / s))),
-    dir: (v) => (same ? [v[0], v[1], v[2]] : rotate(q, v)),
-    backDir: (v) => (same ? [v[0], v[1], v[2]] : rotate(qi, v)),
-  }
-}
-
-/** A shape where the placement puts it: distances are exact, since a turn and an even scale keep them (times the size). */
-function placedShape(sh: Shape, t: Placer): Shape {
-  if (t.same) return sh
-  const s = t.size
-  // the box: all eight corners where they land
-  const lo: Vec3 = [Infinity, Infinity, Infinity], hi: Vec3 = [-Infinity, -Infinity, -Infinity]
-  for (let k = 0; k < 8; k++) {
-    const c = t.point([k & 1 ? sh.max[0] : sh.min[0], k & 2 ? sh.max[1] : sh.min[1], k & 4 ? sh.max[2] : sh.min[2]])
-    for (let i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], c[i]); hi[i] = Math.max(hi[i], c[i]) }
-  }
-  const out: Shape = { sdf: (x, y, z) => { const p = t.back([x, y, z]); return s * sh.sdf(p[0], p[1], p[2]) }, min: lo, max: hi }
-  if (sh.pieceAt) { const at = sh.pieceAt; out.pieceAt = (p) => at(t.back(p)) }
-  return out
-}
-
-function placedPart(part: VoxelPart, t: Placer, bone: string): VoxelPart {
-  const color = typeof part.color === 'function' && !t.same ? ((f) => (p: Vec3, n: Vec3) => f(t.back(p), t.backDir(n)))(part.color) : part.color
-  return { ...part, shape: placedShape(part.shape, t), color, bone }
-}
 
 /** What a prop is cut with that comes from where it stands, not from itself: the scene's sun, cover, camera and sky. */
 export type Setting = Pick<VoxelSpec, 'light' | 'cover' | 'eye' | 'sky'>
@@ -275,6 +278,7 @@ export class PlacedPoser {
   private readonly own: Skeleton
   private readonly t: Placer
   private readonly still: boolean
+  private readonly later: number
   /** The prop's compiled description, or anything else with bones that poses itself (a creature). */
   readonly c: Posable
   constructor(c: Posable, foot: Vec3, pl: Placement, still = false) {
@@ -282,13 +286,27 @@ export class PlacedPoser {
     this.still = still
     this.own = new Skeleton(c.bones)
     this.t = placer(foot, pl)
+    const loop = (c as Partial<Pick<CompiledScene, 'loop'>>).loop
+    this.later = (pl as Partial<Placed>).phase && loop ? (pl as Placed).phase! * loop : 0
   }
 
-  /** Writes the prop's pose for `t` seconds into `sk`. Doesn't call `sk.update()`. */
-  pose(sk: Skeleton, time: number, into?: ArrayLike<number>) {
+  /**
+   * Writes the prop's pose for `t` seconds into `sk`. Doesn't call `sk.update()`. With `wind` (how far it carries a
+   * unit of fall, along the ground, as `windAt` gives it) a description's falling specks and swaying stalks are blown,
+   * the way turned into the prop's own.
+   */
+  pose(sk: Skeleton, time: number, into?: ArrayLike<number>, wind?: readonly [number, number], level?: number) {
     const own = this.own, t = this.t
     if (this.still) own.reset()
-    else this.c.pose(own, time)
+    else {
+      this.c.pose(own, time + this.later)
+      const c = this.c as Partial<CompiledScene>
+      // in a calm too: sails the wind turns carry on from where it left them, and leaves it shakes loose stay on the tree
+      if (c.blow) {
+        const w = wind ? t.backDir([wind[0], 0, wind[1]]) : [0, 0, 0]
+        c.blow(own, time + this.later, [w[0], w[2]], undefined, level ?? (wind ? undefined : 0))
+      }
+    }
     for (let i = 0; i < own.count; i++) {
       const j = into ? into[i] : i
       if (j < 0) continue
@@ -303,7 +321,7 @@ export class PlacedPoser {
   /** The prop's live lights `t` seconds in, where it stands. */
   lights(time: number): PointLight[] {
     if (this.still) time = 0
-    return this.c.lights(time).map((l) => ({ ...l, position: this.t.point(l.position), range: l.range * this.t.size }))
+    return this.c.lights(time + this.later).map((l) => ({ ...l, position: this.t.point(l.position), range: l.range * this.t.size }))
   }
 }
 
@@ -422,7 +440,9 @@ export function splitScene(given: SceneDoc, picks: PropPick[]): { land: PropDoc;
   const ground = keepOnly(doc, left)
   const bonesLeft = new Set((ground.bones ?? []).map((b) => b.name))
   const water = doc.water && { ...doc.water, bodies: doc.water.bodies?.filter((b) => bonesLeft.has(b.bone)), floats: doc.water.floats?.filter((f) => bonesLeft.has(f.bone)) }
-  const land: PropDoc = { name: doc.name, foot: [0, 0, 0], doc: { ...ground, lights: (doc.lights ?? []).filter((_, i) => lightsLeft.has(i)), water } }
+  // the scene's own clouds are the weather's, drawn over the land: kept on it (its moon, sun and stars are parts by now)
+  const clouds = given.heavens?.clouds
+  const land: PropDoc = { name: doc.name, foot: [0, 0, 0], doc: { ...ground, lights: (doc.lights ?? []).filter((_, i) => lightsLeft.has(i)), water, ...(clouds ? { heavens: { clouds } } : {}) } }
   const project: SceneProject = {
     kind: 'blobscape-project', version: 1, name: doc.name, loop: doc.loop,
     land, props: props.map((p) => ({ prop: p, at: [...p.foot], turn: 0, size: 1 })), camera: { ...doc.camera },
@@ -483,6 +503,7 @@ export function checkProject(x: unknown, known: (id: string) => boolean): string
       if (typeof p.turn !== 'number' || !Number.isFinite(p.turn)) bad(`${at}.turn`, 'must be degrees')
       if (typeof p.size !== 'number' || !(p.size >= SIZE_RANGE[0] && p.size <= SIZE_RANGE[1])) bad(`${at}.size`, `must be ${SIZE_RANGE[0]} to ${SIZE_RANGE[1]}`)
       if (p.still !== undefined && typeof p.still !== 'boolean') bad(`${at}.still`, 'must be true or false')
+      if (p.phase !== undefined && !(typeof p.phase === 'number' && p.phase >= 0 && p.phase <= 1)) bad(`${at}.phase`, 'must be a number from 0 to 1')
       if (p.lit !== undefined && p.lit !== 'dark' && p.lit !== 'always') bad(`${at}.lit`, "must be 'dark' or 'always'")
     })
   }
@@ -507,6 +528,15 @@ function checkLight(l: unknown, bad: (at: string, what: string) => void) {
   num(l.glow, 'light.glow', 0, 4)
   num(l.haze, 'light.haze', 0, 16)
   if (l.weather !== undefined && !['rain', 'snow', 'leaves'].includes(l.weather as string)) bad('light.weather', 'must be rain, snow or leaves')
+  if (l.recipe !== undefined) {
+    const r = l.recipe
+    if (!isObj(r)) bad('light.recipe', 'must be { weather, clouds, wind, overhead }')
+    else {
+      const one = (v: unknown, at: string, ids: { id: string }[]) => { if (v !== undefined && !ids.some((x) => x.id === v)) bad(at, `must be one of ${ids.map((x) => x.id).join(', ')}`) }
+      one(r.weather, 'light.recipe.weather', WEATHERS); one(r.clouds, 'light.recipe.clouds', CLOUD_COVERS); one(r.wind, 'light.recipe.wind', WINDS)
+      if (r.overhead !== undefined && typeof r.overhead !== 'boolean') bad('light.recipe.overhead', 'must be true or false')
+    }
+  }
   if (l.lamps !== undefined) {
     if (!Array.isArray(l.lamps) || l.lamps.length > MAX_PROJECT_LAMPS) bad('light.lamps', `must be a list of at most ${MAX_PROJECT_LAMPS}`)
     else l.lamps.forEach((m, i) => {
@@ -554,7 +584,8 @@ export function compileProject(project: SceneProject, find: (id: string) => Prop
   const timed = (doc: SceneDoc, own?: 'dark' | 'always') => (dark === undefined ? doc : litFor(doc, dark, own ?? lamps))
   const land = { prop: landProp, c: compileScene(refit(litLand(timed(landProp.doc), project.light), project.loop)) }
   const props = project.props.map((placed, i) => {
-    const prop = get(placed.prop, `props[${i}]`)
+    // a leafy prop drops its own leaves when the weather is falling leaves
+    const prop = withLeaves(get(placed.prop, `props[${i}]`), project.light?.weather)
     const c = compileScene(refit(timed(prop.doc, placed.lit), project.loop), { puffs: false })
     return { prop, c, placed, poser: new PlacedPoser(c, prop.foot, placed, placed.still) }
   })
@@ -592,15 +623,15 @@ const dist = (a: Rgb, b: Rgb) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2
 
 const stepsFor = (cp: CompiledProject) => (cp.land.c.steps ? cp.palette : undefined)
 
-/** The land's cut on a grid of `spacing`. */
-export function landSpec(cp: CompiledProject, spacing: number): VoxelSpec {
-  return cp.land.c.spec(spacing, stepsFor(cp))
+/** The land's cut on a grid of `spacing`, painted in `steps` of a palette where given (the land's own choice when left out). */
+export function landSpec(cp: CompiledProject, spacing: number, steps: Rgb[] | undefined = stepsFor(cp)): VoxelSpec {
+  return cp.land.c.spec(spacing, steps)
 }
 
 /** Prop `i`'s cut on its own, where it is placed, under the land's sky: an actor of its own while editing. */
-export function propSpec(cp: CompiledProject, i: number, spacing: number, setting: Setting = settingOf(landSpec(cp, spacing))): VoxelSpec {
+export function propSpec(cp: CompiledProject, i: number, spacing: number, setting: Setting = settingOf(landSpec(cp, spacing)), steps: Rgb[] | undefined = stepsFor(cp)): VoxelSpec {
   const p = cp.props[i]
-  return placedSpec(p.c, p.prop.foot, p.placed, spacing, setting, { steps: stepsFor(cp) })
+  return placedSpec(p.c, p.prop.foot, p.placed, spacing, setting, { steps })
 }
 
 /**

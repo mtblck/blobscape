@@ -1,5 +1,6 @@
 import type { Vec3 } from '../splat-core/blobs.ts'
 import type { Rgb } from '../splat-core/pixel.ts'
+import { STAGE_FOV } from '../splat-core/orbit.ts'
 import { hash } from './built.ts'
 import type { BoneDoc, MoveDoc, PartDoc, SceneDoc, SpeckDoc } from './sceneDoc.ts'
 
@@ -15,7 +16,7 @@ import type { BoneDoc, MoveDoc, PartDoc, SceneDoc, SpeckDoc } from './sceneDoc.t
  * numbers, eased by `SkyEase`, and the scene is never cut again for it.
  */
 
-export type WeatherId = 'rain' | 'heavy-rain' | 'thunderstorm' | 'snow' | 'heavy-snow' | 'fog'
+export type WeatherId = 'light-rain' | 'rain' | 'heavy-rain' | 'thunderstorm' | 'snow' | 'heavy-snow' | 'fog'
 export type CloudId = 'partly' | 'cloudy' | 'overcast'
 export type WindId = 'calm' | 'breeze' | 'windy' | 'gale'
 
@@ -82,6 +83,8 @@ export interface WeatherRecipe {
 
 /** The numbers are mine, not Matt's yet. */
 export const WEATHERS: WeatherRecipe[] = [
+  // a drizzle with no wind of its own, so still water shows each drop's ring (the koi pond starts in it)
+  { id: 'light-rain', label: 'Light rain', clouds: 'cloudy', rain: 0.15, haze: 0.12 },
   { id: 'rain', label: 'Rain', clouds: 'cloudy', rain: 0.4, haze: 0.2, wind: 1 },
   { id: 'heavy-rain', label: 'Heavy rain', clouds: 'overcast', rain: 1, haze: 0.35, light: [0.92, 0.92, 0.94], dark: 0.1, wind: 2, gloom: true },
   { id: 'thunderstorm', label: 'Thunderstorm', clouds: 'overcast', rain: 1, haze: 0.35, light: [0.8, 0.82, 0.9], dark: 0.3, lightning: 1, wind: 3, gloom: true },
@@ -152,9 +155,22 @@ export function windAt(s: SkyState, t: number, loop: number): [number, number] {
   if (s.wind <= 0) return [0, 0]
   const lo = Math.min(WIND_MOST - 1, Math.floor(s.wind)), k = s.wind - lo
   const slant = WINDS[lo].slant + (WINDS[lo + 1].slant - WINDS[lo].slant) * k
-  const u = t / loop
-  const gust = 1 + 0.22 * Math.sin(u * 3 * Math.PI * 2) + 0.12 * Math.sin(u * 7 * Math.PI * 2 + 1.3)
+  const gust = gustAt(t / loop)
   return [WIND_WAY[0] * slant * gust, WIND_WAY[1] * slant * gust]
+}
+
+/** How hard the wind blows at `u` of the loop as a share of its level's own: gusts a whole number of times a loop. */
+export const gustAt = (u: number) => 1 + 0.22 * Math.sin(u * 3 * Math.PI * 2) + 0.12 * Math.sin(u * 7 * Math.PI * 2 + 1.3)
+/** `gustAt` summed from the loop's start to `u` (loops), so a thing the wind turns turns a little quicker in each gust and still joins the loop: u at 0 and 1 differ by 1 exactly. */
+export const gustRun = (u: number) => u - (0.22 / (3 * Math.PI * 2)) * (Math.cos(u * 3 * Math.PI * 2) - 1) - (0.12 / (7 * Math.PI * 2)) * (Math.cos(u * 7 * Math.PI * 2 + 1.3) - Math.cos(1.3))
+
+/** The level of wind (`SkyState.wind`, 0 to `WIND_MOST`) that carries as far as `carry` does a unit of fall, gusts taken as the level's own. */
+export function windLevelOf(carry: number): number {
+  for (let l = 0; l < WIND_MOST; l++) {
+    const a = WINDS[l].slant, b = WINDS[l + 1].slant
+    if (carry <= b) return l + Math.max(0, carry - a) / (b - a)
+  }
+  return WIND_MOST
 }
 
 /** Seconds a change of weather takes. */
@@ -265,14 +281,30 @@ export const CLOUD_HEIGHT = 0.3
 /** The height of the clouds' flat undersides for a view: what falls starts there, so rain comes down from under the clouds. */
 export const cloudBase = (camera: View) => round(camera.target[1] + Math.max(0.9, camera.distance * CLOUD_HEIGHT))
 
-/** Rain or snow over the middle of a view, falling from the clouds' height onto whatever stands there: one swarm, for any scene. */
-export function falling(kind: 'rain' | 'snow', camera: View, count = kind === 'rain' ? RAIN_MOST : SNOW_MOST): SpeckDoc {
-  const [x, y, z] = camera.target, r = Math.max(0.8, camera.distance * 0.45)
+/** How far round the view's target rain and snow fall: half the side of their square. */
+export const fallReach = (camera: View) => Math.max(0.8, camera.distance * 0.45)
+
+/**
+ * The height rain and snow start from with the clouds left out (Matt, 2026-11-21: clouds close over a small scene
+ * looked strange, the koi pond's nearly touching its tree and bamboo): over the top of the picture as the view
+ * starts, wherever in their square they come down, so they fall in from above the frame.
+ */
+export function aboveView(camera: View): number {
+  const d = camera.distance, e = (camera.elevation * Math.PI) / 180, up = (STAGE_FOV / 2) * (Math.PI / 180) - e
+  const eye = camera.target[1] + d * Math.sin(e), out = d * Math.cos(e), reach = fallReach(camera) * Math.SQRT2
+  // the top of the picture rises away from the eye when the view looks down less than half its height, and falls otherwise
+  const along = up > 0 ? out + reach : Math.max(0, out - reach)
+  return round(Math.max(cloudBase(camera), eye + along * Math.tan(up) + 0.08 * d))
+}
+
+/** Rain or snow over the middle of a view, falling from the clouds' height (or `top`) onto whatever stands there: one swarm, for any scene. */
+export function falling(kind: 'rain' | 'snow', camera: View, count = kind === 'rain' ? RAIN_MOST : SNOW_MOST, top = cloudBase(camera)): SpeckDoc {
+  const [x, y, z] = camera.target, r = fallReach(camera)
   return {
     kind, count, colors: kind === 'rain' ? RAIN_COLORS : SNOW_COLORS, land: true,
     // fine streaks of rain and small flakes, in proportion to the view rather than the scene's own specks
     ...(kind === 'rain' ? { size: 0.003, long: round(Math.max(0.03, camera.distance * 0.011)) } : { size: round(Math.max(0.006, camera.distance * 0.0025)) }),
-    from: [round(x - r), round(y - 1), round(z - r)], to: [round(x + r), cloudBase(camera), round(z + r)],
+    from: [round(x - r), round(y - 1), round(z - r)], to: [round(x + r), top, round(z + r)],
     // no wind of its own: the sky's wind of the moment blows it (`CompiledScene.blow`)
   }
 }
@@ -327,10 +359,11 @@ function cloudPart(i: number, camera: View, look: CloudLook = {}): PartDoc {
 
 /**
  * The weather for a view, as three descriptions laid over any scene: the clouds, the rain and the snow. Each holds
- * the most there can be; `poseWeather` shows the share a sky asks for. Compile them with the scene's `ground`, so what
+ * the most there can be; `poseWeather` shows the share a sky asks for. Rain and snow start at `top` (the clouds'
+ * undersides, or `aboveView` for a sky with its clouds left out). Compile them with the scene's `ground`, so what
  * falls lands on the scene.
  */
-export function weatherDocs(camera: View, loop: number, look: CloudLook = {}): { clouds: SceneDoc; rain: SceneDoc; snow: SceneDoc } {
+export function weatherDocs(camera: View, loop: number, look: CloudLook = {}, top = cloudBase(camera)): { clouds: SceneDoc; rain: SceneDoc; snow: SceneDoc } {
   const view = { target: camera.target, distance: camera.distance, azimuth: camera.azimuth, elevation: camera.elevation }
   const bones: BoneDoc[] = [], parts: PartDoc[] = [], moves: MoveDoc[] = []
   for (let i = 0; i < CLOUDS; i++) {
@@ -346,8 +379,8 @@ export function weatherDocs(camera: View, loop: number, look: CloudLook = {}): {
   return {
     // the heavy cover reaches past a small scene's room, roofing the view
     clouds: { ...base, big: true, name: 'Clouds', palette: [...(look.colors ?? CLOUD_COLORS)], bones, parts, moves },
-    rain: { ...base, ...none, name: 'Rain', palette: RAIN_COLORS, air: { specks: [falling('rain', camera)] } },
-    snow: { ...base, ...none, name: 'Snow', palette: SNOW_COLORS, air: { specks: [falling('snow', camera)] } },
+    rain: { ...base, ...none, name: 'Rain', palette: RAIN_COLORS, air: { specks: [falling('rain', camera, RAIN_MOST, top)] } },
+    snow: { ...base, ...none, name: 'Snow', palette: SNOW_COLORS, air: { specks: [falling('snow', camera, SNOW_MOST, top)] } },
   }
 }
 

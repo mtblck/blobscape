@@ -142,8 +142,19 @@ export const PILE_SECONDS = 45
 /** How many seconds snow takes to melt away once none falls. */
 export const MELT_SECONDS = 90
 
-/** The depth after `dt` seconds more of `snow` (the share of the swarm falling, 0 to 1): it builds as it falls, by how much falls, and melts when none does. */
+/**
+ * The most a snowfall of `snow` (0 to 1) lays: heavy snow covers everything, a lighter fall only dusts
+ * (Matt, 2026-11-21: light snow covered too quickly).
+ */
+export const pileMost = (snow: number) => Math.min(1, snow * 1.5)
+
+/**
+ * The depth after `dt` seconds more of `snow` (the share of the swarm falling, 0 to 1): it builds by the square of
+ * how much falls, so light snow (0.4) lays about a sixth as fast as heavy, up to `pileMost`; above that, and when
+ * none falls, it melts.
+ */
 export function pileStep(depth: number, snow: number, dt: number): number {
-  const next = snow > 0.01 ? depth + (snow * dt) / PILE_SECONDS : depth - dt / MELT_SECONDS
+  const most = snow > 0.01 ? pileMost(snow) : 0
+  const next = depth < most ? Math.min(most, depth + (snow * snow * dt) / PILE_SECONDS) : Math.max(most, depth - dt / MELT_SECONDS)
   return Math.max(0, Math.min(1, next))
 }

@@ -395,3 +395,100 @@ test('wind blows what falls sideways over the fall still to come, so it lands wh
   }
   assert.ok(moved > 100 && landed > 10, `${moved} blown, ${landed} landed where planned`)
 })
+
+test('a sway the wind moves leans downwind and swings wider as the wind rises; one without `wind` does not', () => {
+  const doc: SceneDoc = {
+    name: 'Reeds', loop: 6, palette: ['#203020', '#80a060'], camera: { target: [0, 0.3, 0], distance: 2, azimuth: 0, elevation: 10 },
+    bones: [{ name: 'reed', at: [0, 0, 0] }, { name: 'post', at: [0.4, 0, 0] }],
+    parts: [{ shape: { kind: 'box', at: [0, 0.3, 0], half: [0.02, 0.3, 0.02] }, paint: '#80a060', bone: 'reed' }, { shape: { kind: 'box', at: [0.4, 0.3, 0], half: [0.02, 0.3, 0.02] }, paint: '#203020', bone: 'post' }],
+    moves: [{ kind: 'sway', bone: 'reed', axis: 'z', degrees: 2, times: 2, wind: 10 }, { kind: 'sway', bone: 'post', axis: 'z', degrees: 2, times: 2 }],
+  }
+  assert.deepEqual(checkScene(doc), [])
+  assert.ok(checkScene({ ...doc, moves: [{ ...doc.moves![0], wind: 90 } as never] }).some((e) => /moves\[0\]\.wind/.test(e)))
+  const c = compileScene(doc, { puffs: false })
+  // how far the top of each stands along +x (downwind), at one moment, in calm, a breeze and a gale blowing toward +x
+  const top = (wind: number) => {
+    const sk = new Skeleton(c.bones)
+    c.pose(sk, 1.1)
+    if (wind) c.blow(sk, 1.1, [wind, 0])
+    sk.update()
+    return ['reed', 'post'].map((n) => {
+      const b = sk.index(n), m = sk.matrix.subarray(b * 16, b * 16 + 16)
+      return m[4] // the bone's up axis, x part
+    })
+  }
+  const [calm, breeze, gale] = [0, 0.06, 1].map(top)
+  assert.ok(breeze[0] > calm[0] + 0.01 && gale[0] > breeze[0] + 0.05, `reed ${calm[0]} ${breeze[0]} ${gale[0]}`)
+  assert.ok(Math.abs(gale[1] - calm[1]) < 1e-6, 'the post stays as it was')
+})
+
+test('sails the wind turns go round quicker by its level, loop at each, and carry on from where they were as it changes', () => {
+  const doc: SceneDoc = {
+    name: 'Mill', loop: 6, palette: ['#203020', '#e0e0e0'], camera: { target: [0, 0.5, 0], distance: 3, azimuth: 0, elevation: 10 },
+    bones: [{ name: 'sails', at: [0, 0.5, 0] }],
+    parts: [{ shape: { kind: 'box', at: [0, 0.5, 0], half: [0.4, 0.03, 0.02] }, paint: '#e0e0e0', bone: 'sails' }],
+    moves: [{ kind: 'spin', bone: 'sails', axis: 'z', times: 1, wind: 7 }],
+  }
+  assert.deepEqual(checkScene(doc), [])
+  // 8 less 1 is not a whole number of levels: it would not loop at a breeze
+  assert.ok(checkScene({ ...doc, moves: [{ ...doc.moves![0], wind: 8 } as never] }).some((e) => /moves\[0\]\.wind/.test(e)))
+  // a turn between -π and π
+  const wrapped = (d: number) => d - 2 * Math.PI * Math.round(d / (2 * Math.PI))
+  const angle = (sk: Skeleton) => { const b = sk.index('sails'), q = sk.rotation.subarray(b * 4, b * 4 + 4); return Math.atan2(q[2], q[3]) * 2 }
+  const turns = (level: number) => {
+    const c = compileScene(doc, { puffs: false }), sk = new Skeleton(c.bones)
+    // counted by small steps, a whole loop
+    let total = 0, last = 0
+    for (let k = 0; k <= 600; k++) {
+      const t = (k / 600) * 6
+      c.pose(sk, t); c.blow(sk, t, [level / 3, 0], undefined, level)
+      const a = angle(sk)
+      if (k) total += wrapped(a - last)
+      last = a
+    }
+    return total / (2 * Math.PI)
+  }
+  for (const [level, want] of [[0, 1], [1, 3], [2, 5], [3, 7]]) assert.ok(Math.abs(turns(level) - want) < 0.01, `level ${level}: ${turns(level)} turns`)
+  // the wind dropping from a gale to a calm mid-turn: no jump between one frame and the next
+  const c = compileScene(doc, { puffs: false }), sk = new Skeleton(c.bones)
+  let last = 0
+  for (let k = 0; k < 400; k++) {
+    const t = k * 0.01, level = Math.max(0, 3 - k * 0.02)
+    c.pose(sk, t); c.blow(sk, t, [level / 3, 0], undefined, level)
+    const a = angle(sk), step = Math.abs(wrapped(a - last))
+    if (k && step > 0.12) assert.fail(`jumped ${step} at ${t}`)
+    last = a
+  }
+})
+
+test('leaves the wind shakes loose stay on the tree in a calm and a breeze, fall straight down when windy, and blow away in a gale', () => {
+  const doc: SceneDoc = {
+    name: 'Tree', loop: 12, palette: ['#203020', '#80a060'], camera: { target: [0, 0.5, 0], distance: 3, azimuth: 0, elevation: 10 },
+    bones: [{ name: 'x', at: [0, 0, 0] }], parts: [{ shape: { kind: 'box', at: [0, -0.05, 0], half: [3, 0.05, 3] }, paint: '#203020' }],
+    air: { specks: [{ kind: 'leaves', count: 40, from: [-0.3, 0.6, -0.3], to: [0.3, 1, 0.3], colors: ['#80a060'], land: true, shaken: true }] },
+  }
+  assert.deepEqual(checkScene(doc), [])
+  assert.ok(checkScene({ ...doc, air: { specks: [{ ...doc.air!.specks![0], kind: 'snow' }] } }).some((e) => /shaken/.test(e)))
+  const c = compileScene(doc, { puffs: false })
+  const leaves = c.bones.map((b, i) => (b.name.startsWith('~speck') ? i : -1)).filter((i) => i >= 0)
+  const look = (level: number) => {
+    const sk = new Skeleton(c.bones), still = new Skeleton(c.bones)
+    const seen = new Set<number>()
+    let shown = 0, aside = 0
+    for (let t = 0; t < 12; t += 0.25) {
+      c.pose(sk, t); c.pose(still, t); c.blow(sk, t, [level / 3, 0], undefined, level)
+      for (const b of leaves) {
+        if (sk.size[b] < 0.05) continue
+        shown++; seen.add(b)
+        aside = Math.max(aside, sk.offset[b * 3] - still.offset[b * 3])
+      }
+    }
+    return { shown, aside, leaves: seen.size }
+  }
+  const [calm, breeze, windy, gale] = [0, 1, 2, 3].map(look)
+  assert.equal(calm.shown, 0); assert.equal(breeze.shown, 0)
+  // about half of them windy, all in a gale
+  assert.ok(windy.leaves > 10 && windy.leaves < 30 && gale.leaves === 40, `${windy.leaves} windy, ${gale.leaves} in a gale`)
+  // windy, nothing carries them aside; a gale carries them a meter and more downwind
+  assert.ok(windy.aside < 1e-9 && gale.aside > 1, `${windy.aside} windy, ${gale.aside} in a gale`)
+})

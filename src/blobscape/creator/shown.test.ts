@@ -1,8 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { cut } from './cut.ts'
+import { afloat, cut } from './cut.ts'
+import { compileProject } from '../../splat-engine/project.ts'
+import { libraryProp } from './library.ts'
 import { movable, pack, unpack } from './pack.ts'
 import { openingAsked, openingLand, openingScene, queryFor, shownOf } from './shown.ts'
+import { LIBRARY } from './library.ts'
 import { DETAIL } from '../diorama/scene.ts'
 import { Skeleton } from '../../splat-engine/rig.ts'
 
@@ -38,7 +41,7 @@ test('library props in an opened scene are named by their id, others written out
 })
 
 test('scenes the library cannot split open whole and say why', () => {
-  for (const id of ['meadow', 'fishing', 'koi']) {
+  for (const id of ['meadow', 'fishing', 'cave']) {
     const o = openingScene(id)!
     assert.equal(o.kind, 'whole', id)
     const s = shownOf(o)
@@ -46,6 +49,17 @@ test('scenes the library cannot split open whole and say why', () => {
     assert.equal(s.items.length, 1)
   }
   assert.match(shownOf(openingScene('meadow')!).note!, /code/)
+})
+
+test('a scene made from props opens as the very pieces it is made of, every one a library entry', () => {
+  const o = openingScene('koi')!
+  assert.ok(o.kind === 'project')
+  assert.equal(o.project.land, 'koi-pond')
+  assert.ok(o.project.props.length > 20)
+  for (const p of o.project.props) assert.ok(typeof p.prop === 'string' && LIBRARY.some((e) => e.id === p.prop), String(p.prop))
+  const s = shownOf(o)
+  assert.equal(s.items[0].name, 'Koi pond')
+  assert.ok(s.items.some((i) => i.name === 'Tall stone lantern'))
 })
 
 test('a bare land opens with nothing on it', () => {
@@ -80,4 +94,17 @@ test('a plain cut has no light baked in, for the styles that light the blobs the
   assert.notEqual(mean(plain), mean(lit))
   // the flag is put back: a lit cut after a plain one is lit
   assert.deepEqual([...cut(job).blobs.color.slice(0, 30)], [...lit.blobs.color.slice(0, 30)])
+})
+
+test('the windmill\'s duck floats on the pond, so it gets no stand-in shadow there; the sheep do', () => {
+  const o = openingScene('windmill')!
+  assert.equal(o.kind, 'project')
+  if (o.kind !== 'project') return
+  const cp = compileProject(o.project, libraryProp)
+  const water = cp.land.prop.doc.water
+  assert.ok(water)
+  const names = shownOf(o).items.slice(1).map((i) => i.name)
+  const at = (name: string) => cp.props[names.indexOf(name)].placed.at
+  assert.ok(afloat(water, at('Duck')))
+  assert.ok(!afloat(water, at('Sheep')))
 })

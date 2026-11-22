@@ -1,3 +1,4 @@
+import { withHeavens } from '../../splat-engine/heavens.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
@@ -45,7 +46,8 @@ const BEFORE_MARKS = ['lighthouse', 'campfire', 'dragon', 'bee', 'hand', 'reef',
 
 test('every new scene marks its props, so Scene Creator splits it with nothing picked by hand', () => {
   for (const d of DIORAMAS) {
-    if (BEFORE_MARKS.includes(d.id)) continue
+    // a scene made from props (docs/scenes-from-props.md) is held to more by the next test
+    if (BEFORE_MARKS.includes(d.id) || d.project) continue
     assert.ok(d.doc, `${d.id}: a new scene is a description`)
     assert.ok(markedPicks(d.doc).length > 0, `${d.id}: mark each thing in it with a bone's \`prop\` (docs/scene-descriptions.md)`)
     // and its props are in the library, where the tests above cut each one and ask for its card
@@ -62,6 +64,11 @@ const BEFORE_COMPONENTS = [...BEFORE_MARKS]
 
 test('every new scene is built from components: its land and props that are each in the library, with nothing loose', () => {
   for (const d of DIORAMAS) {
+    if (d.project) {
+      // made from props: it names the library's own pieces, so it holds nothing of its own to be loose
+      for (const ref of [d.project.land, ...d.project.props.map((p) => p.prop)]) assert.ok(typeof ref === 'string' && LIBRARY.some((e) => e.id === ref), `${d.id}: ${typeof ref === 'string' ? ref : ref.name} is not in the library`)
+      continue
+    }
     if (BEFORE_COMPONENTS.includes(d.id)) continue
     assert.ok(d.doc, `${d.id}: a new scene is a description`)
     assert.deepEqual(outsideProps(d.doc), [], `${d.id}: build it from props (docs/scene-descriptions.md, rule 13)`)
@@ -94,7 +101,8 @@ test('a scene that marks its props comes apart by them: each a sound prop that c
     assert.ok(built.blobs.count > 10, p.name)
     assert.deepEqual(loopSnaps(built.skeleton, c.pose, c.loop), [], `${p.name}: snaps`)
   }
-  assert.equal(land.doc.parts.length + props.reduce((n, p) => n + p.doc.parts.length, 0), doc.parts.length)
+  // the shared sun is written out as a part of the land
+  assert.equal(land.doc.parts.length + props.reduce((n, p) => n + p.doc.parts.length, 0), withHeavens(doc).parts.length)
 })
 
 test('a prop mark must be a name, used once, and not on a bone riding on another prop', () => {

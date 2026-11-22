@@ -2,7 +2,7 @@ import type { Rgb } from '../../splat-core/pixel.ts'
 import type { Actor } from '../../splat-engine/engine.ts'
 import { joinPalettes } from '../../splat-engine/project.ts'
 import { compileScene, type CompiledScene } from '../../splat-engine/sceneDoc.ts'
-import { FLASH_SKY, WEATHERS, WIND_WAY, cloudBase, windAt, WEATHER_COLORS, hazeUnder, isClear, lightUnder, lightningAt, showWeather, skyUnder, weatherBones, weatherDocs, type SkyState, type WeatherBones } from '../../splat-engine/skyRecipes.ts'
+import { FLASH_SKY, WEATHERS, WIND_WAY, aboveView, cloudBase, windAt, WEATHER_COLORS, hazeUnder, isClear, lightUnder, lightningAt, showWeather, skyUnder, weatherBones, weatherDocs, type SkyState, type WeatherBones } from '../../splat-engine/skyRecipes.ts'
 import { buildVoxels } from '../../splat-engine/voxel.ts'
 import { makeSnowCover, pileSnow, warmthOf, type SnowCover } from '../../splat-engine/snowCover.ts'
 import { ownClouds } from '../../splat-engine/heavens.ts'
@@ -48,11 +48,16 @@ export class SceneWeather {
   private readonly cloudColors: Float32Array
   private shaded = [-1, -1]
 
-  constructor(d: Diorama) {
+  /** Whether the clouds are drawn over the scene; without them rain and snow come in from over the top of the picture. */
+  readonly overhead: boolean
+
+  constructor(d: Diorama, { overhead = true }: { overhead?: boolean } = {}) {
     const clouds = d.heavens?.clouds
     this.own = ownClouds(d)
+    this.overhead = overhead
+    const view0 = d.views[0].orbit, top = overhead ? cloudBase(view0) : aboveView(view0)
     // a scene that asks for clouds of its own colors has every cloud in them, so the few it has and a storm's many match
-    const docs = weatherDocs(d.views[0].orbit, d.loop, { colors: clouds?.colors, glow: clouds?.glow })
+    const docs = weatherDocs(view0, d.loop, { colors: clouds?.colors, glow: clouds?.glow }, top)
     const ground = d.ground ?? ((_x: number, _z: number, _top: number, bottom: number) => bottom)
     // a scene with water of its own: rain that comes down on it rings it, as the scene's own rain does
     const pond = d.water?.()
@@ -74,7 +79,7 @@ export class SceneWeather {
     // the square rain and snow fall over (`falling`): blown out of it, they come in at its other side
     this.square = { at: [tx, tz], half: radius }
     this.cover = makeSnowCover(ground, {
-      x: tx, z: tz, radius, top: cloudBase(view), bottom: ty - view.distance, spacing: Math.max(COVER_SPACING, radius / COVER_ACROSS), sun: d.sun,
+      x: tx, z: tz, radius, top, bottom: ty - view.distance, spacing: Math.max(COVER_SPACING, radius / COVER_ACROSS), sun: d.sun,
       dry: pond && ((x, y, z) => y <= pond.plan.level + 1e-3 && pond.plan.wet(x, z)),
       // a fire melts the snow round it as it lands
       warm: warmthOf(d.lights(0)),
@@ -108,7 +113,7 @@ export class SceneWeather {
 
   /** Poses both for `t` seconds under a sky. */
   pose(t: number, s: SkyState) {
-    for (const [l, falls, clouds] of [[this.layers.clouds, 0, Math.max(s.clouds, this.own)], [this.layers.rain, s.rain, 0], [this.layers.snow, s.snow, 0]] as const) {
+    for (const [l, falls, clouds] of [[this.layers.clouds, 0, this.overhead ? Math.max(s.clouds, this.own) : 0], [this.layers.rain, s.rain, 0], [this.layers.snow, s.snow, 0]] as const) {
       const sk = l.actor.skeleton
       l.c.pose(sk, t)
       // what falls is blown by the wind of the moment, still landing where it was planned to

@@ -453,3 +453,15 @@ test('discs along an outer edge are fitted to it: on a round table top none reac
   assert.equal(past(fitted), 0)
   assert.ok(moved > 0 && moved < fitted.count, `${moved} of ${fitted.count}`)
 })
+
+test('a hillside whose distance changes faster than one for one keeps a cell in every column', () => {
+  // a land's heights overstate the distance: crossing a layer of the grid, the cell under it and the one over it both missed the shell
+  const s = 0.05, over = 1.6
+  const hill = { sdf: (x: number, y: number) => (y - 0.37 * x - 0.013) * over, min: [-1, -1, -1] as [number, number, number], max: [1, 1, 1] as [number, number, number] }
+  const { blobs } = buildVoxels({ bones: [ROOT], parts: [{ shape: hill, color: [1, 1, 1], bone: 'root' }], spacing: s })
+  const columns = new Set<string>()
+  for (let i = 0; i < blobs.count; i++) columns.add(`${Math.round(blobs.center[i * 3] / s)},${Math.round(blobs.center[i * 3 + 2] / s)}`)
+  for (let x = -18; x <= 18; x++) for (let z = -18; z <= 18; z++) if (!columns.has(`${x},${z}`)) assert.fail(`no cell over ${x}, ${z}`)
+  // and only the outermost: no column two cells deep where one would do
+  assert.ok(blobs.count < 41 * 41 * 1.5, `${blobs.count} cells`)
+})

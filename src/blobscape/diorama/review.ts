@@ -45,7 +45,8 @@ export function readScene(text: string): { doc?: SceneDoc; problems: string[] } 
  * that caught no blobs, values that read as one tone, gray mud, anything that snaps as it loops, and parts that pass
  * through each other as it plays.
  */
-export function reviewScene(doc: unknown, spacing: number = DETAIL[0].spacing): Review {
+/** With `composed`, the description was made from props (compose.ts), which are their own components already. */
+export function reviewScene(doc: unknown, spacing: number = DETAIL[0].spacing, { composed = false }: { composed?: boolean } = {}): Review {
   let problems: string[]
   try { problems = checkScene(doc) } catch (e) { return { problems: [`file: could not be checked (${e instanceof Error ? e.message : String(e)})`], warnings: [] } }
   if (problems.length) return { problems, warnings: [] }
@@ -73,7 +74,7 @@ export function reviewScene(doc: unknown, spacing: number = DETAIL[0].spacing): 
   // what the site's own new scenes must have (rules 13 and 14 of the guide), as advice for one from outside
   ;(scene.lights ?? []).forEach((l, i) => { if (!l.lit) warnings.push(`lights[${i}].lit: say when it shines: 'dark' for a lamp, a candle, a lit window or a campfire, 'always' for magic, lava or a crystal, 'night' for moonlight, 'day' for a sun. Give the lamp's glowing parts the same lit, and unlit: 'gone' to a flame`) })
   if ((scene.lights ?? []).some((l) => l.lit === 'dark') && !scene.parts.some((p) => p.lit === 'dark')) warnings.push("parts: a light waits for the dark but no glowing part does. Give the lamp's glass, pane or flame lit: 'dark' too, or it glows by day with its light out")
-  for (const o of outsideProps(scene)) warnings.push(o)
+  if (!composed) for (const o of outsideProps(scene)) warnings.push(o)
   if (!scene.bones?.length) warnings.push('bones: nothing moves. Give the things people would poke (trees, creatures, lamps) a bone and a small move')
   return {
     problems, warnings,

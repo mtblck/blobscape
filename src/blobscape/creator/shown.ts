@@ -2,6 +2,7 @@ import type { Rgb } from '../../splat-core/pixel.ts'
 import type { Orbit } from '../../splat-core/view.ts'
 import type { PointLight } from '../../splat-engine/engine.ts'
 import type { Skeleton } from '../../splat-engine/rig.ts'
+import { composeScene } from '../../splat-engine/compose.ts'
 import { compileProject, litLand, poseApart, projectLights, type CompiledProject, type SceneProject } from '../../splat-engine/project.ts'
 import { DIORAMAS, described, type Diorama } from '../diorama/scenes.ts'
 import type { CutJob } from './cut.ts'
@@ -32,6 +33,10 @@ export interface Shown {
   ambient: number | readonly [number, number, number]
   /** Poses the land (or the whole scene). */
   poseLand(sk: Skeleton, t: number): void
+  /** The bones `poseLand` poses, by name, where known: a land cut for an older light (other specks) must not be posed by it. */
+  landBones?: readonly string[]
+  /** After `poseLand`: blows the land's own rain, snow, leaves and swaying stalks by a wind of the moment, where it has any. */
+  blowLand?(sk: Skeleton, t: number, wind: readonly [number, number], level?: number): void
   /** Poses prop `i`, cut apart, on its own skeleton. */
   poseProp(i: number, sk: Skeleton, t: number): void
   /** The land first, then each prop. */
@@ -44,6 +49,20 @@ export interface Shown {
   haze?: Diorama['haze']
   /** The project compiled, when what is open is one. */
   cp?: CompiledProject
+  /** The way toward the baked sun and the share of light in shade, for pixel art's lit rim and Shade each pixel. */
+  sun?: readonly [number, number, number]
+  shade?: number
+  /**
+   * The whole of it as one Diorama scene, for the shared weather (`SceneWeather`): where rain and snow land, its own
+   * clouds, its view and loop; and the land's water (`Diorama.water`), which the page draws over the land. Made when first asked.
+   */
+  weatherScene(): Diorama
+}
+
+/** A scene, made once. */
+const once = (make: () => Diorama): (() => Diorama) => {
+  let d: Diorama | undefined
+  return () => (d ??= make())
 }
 
 /** Scenes that cannot be split, and why: said in the page. */
@@ -105,11 +124,15 @@ export function shownOf(o: Opened): Shown {
       lights: (t, shadows) => d.lights(t, shadows),
       ambient: d.ambient ?? 1,
       poseLand: (sk, t) => d.pose(sk, t),
+      blowLand: d.blow && ((sk, t, wind, level) => d.blow!(sk, t, wind, undefined, level)),
       poseProp: () => {},
       items: [{ name: d.label, kind: 'scene' }],
       jobs: (spacing) => [{ kind: 'whole', scene: d.id, spacing }],
       note: WHOLE_WHY[d.id] ?? NOT_YET,
       haze: d.haze,
+      sun: d.sun,
+      shade: d.shade,
+      weatherScene: once(() => d),
     }
   }
   const project = o.project
@@ -128,10 +151,18 @@ export function shownOf(o: Opened): Shown {
     lights: (t) => projectLights(cp, t),
     ambient: 1,
     poseLand: (sk, t) => cp.land.c.pose(sk, t),
+    landBones: cp.land.c.bones.map((b) => b.name),
+    blowLand: (sk, t, wind, level) => cp.land.c.blow(sk, t, wind, undefined, level),
     poseProp: (i, sk, t) => poseApart(cp, i, sk, t),
     items: [{ name: nameOf(project.land), kind: 'land' }, ...project.props.map((p): Item => ({ name: nameOf(p.prop), kind: 'prop' }))],
     jobs: (spacing) => [{ kind: 'land', project, spacing }, ...project.props.map((_, i): CutJob => ({ kind: 'prop', project, i, spacing }))],
     haze: cp.land.c.haze,
     cp,
+    sun: look.sun,
+    shade: look.shade,
+    // the land and every prop where it stands, so rain and snow land on roofs and treetops; the land alone if that fails
+    weatherScene: once(() => {
+      try { return described('creator', composeScene({ ...project, light: undefined }, libraryProp), project.name) } catch (e) { console.warn(e); return look }
+    }),
   }
 }

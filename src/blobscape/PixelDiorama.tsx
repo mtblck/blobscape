@@ -4,13 +4,13 @@ import type { Orbit } from '../splat-core/view.ts'
 import { Magnifier, TourStrip } from './diorama/HowItsMade.tsx'
 import { TOUR, clay, kept } from './diorama/tour.ts'
 import type { CelLook } from '../splat-core/cel.ts'
-import { STEADY, countColors, darkest, heatPace, screenWay, type PixelLook } from '../splat-core/pixel.ts'
+import { countColors, darkest, type PixelLook } from '../splat-core/pixel.ts'
 import type { Built } from '../splat-engine/body.ts'
 import { LoadingMark } from '../shared/BlobLoader.tsx'
 import { castBy, glowGain } from './diorama/glow.ts'
 import { ScenePicker } from './diorama/ScenePicker.tsx'
 import { stepped } from './diorama/pick.ts'
-import { Button, Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
+import { Button, Chip, Field, Toggle } from '../shared/ui.tsx'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
 import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitDrag } from './Viewport.tsx'
 import { href } from './routes.ts'
@@ -27,14 +27,14 @@ import { toPng, useExport } from './diorama/useExport.tsx'
 import type { Texture } from '../splat-engine/meshShape.ts'
 import { decodeTexture } from './modelRig.ts'
 import { detailAsked, labelNames, writeDetail } from '../shared/detail.ts'
-import { LIT_MAX, banded, hugged, unlit } from '../splat-engine/voxel.ts'
+import { banded, hugged, unlit } from '../splat-engine/voxel.ts'
 import { zoomStep } from './diorama/zoom.ts'
-import { srgbToLinear } from '../splat-core/color.ts'
-import { STYLES, isPixelStyle, styleAsked, styleWords, type Style } from './diorama/styles.ts'
+import { isPixelStyle, styleAsked, styleWords, type Style } from './diorama/styles.ts'
 import { GLITCH_START, glitchLook, type GlitchChoice } from './glitchLooks.ts'
-import { GlitchControls } from './diorama/GlitchControls.tsx'
+import { StyleControls, FinishControls } from './StyleControls.tsx'
+import { PIXEL_RATES, PIXEL_SIZES, pixelCelLook, pixelFlags, pixelFor, pixelLookOf, pixelStart, type PixelSettings } from './styleSettings.ts'
 import { ShareDialog } from './diorama/ShareDialog.tsx'
-import { choiceEntries, choiceFrom, linkWith, orbitFrom, orbitText, short, type Entry } from './diorama/shareLink.ts'
+import { choiceEntries, choiceFrom, linkWith, orbitFrom, orbitText, type Entry } from './diorama/shareLink.ts'
 import { useDrawnLook, useHeld, wantsPlain } from './drawnLook.tsx'
 import { TIMES, timeAsked, timeOf, type TimeId } from './timeOfDay.ts'
 import { CLOUD_COVERS, SkyEase, WEATHERS, WINDS, cloudsAsked, gloomy, isClear, skyState, weatherAsked, windAsked, windAt, type CloudId, type WeatherId, type WindId } from '../splat-engine/skyRecipes.ts'
@@ -51,23 +51,6 @@ import { blobsToMesh } from '../splat-engine/mesh.ts'
 import { recordClip, writeRiggedMeshGlb } from '../splat-engine/glb.ts'
 import { Skeleton as Bones } from '../splat-engine/rig.ts'
 
-const SIZES = [2, 3, 4, 6]
-/** How many steps of sun Light in bands gives (`banded`): three, none, half and full, kept the paint's texture best. */
-const TEXEL_BANDS = 3
-/** Frames a second the scene moves at: 0 is every frame the screen shows. */
-const RATES = [0, 12, 8]
-/** The Finish tab's outline choice: none, one color round the scene, or a darker tone of each thing it goes round. */
-/** How far cel shading's light is smoothed over a surface for pixel art shaded a pixel at a time, in the small picture's pixels (two to an art pixel with four samples). */
-const PIXEL_SMOOTH = 3
-
-/** Cel shading's tones for a scene whose baked shade keeps `share` of the light: shade that much of full light, a touch cool, and full light at `LIT_MAX`. */
-function shadedLight(share: number): { shade: [number, number, number]; ambient: [number, number, number] } {
-  // the shade is sRGB and the ambient linear, as `CelLook` takes them
-  const s = Math.min(0.9, share / LIT_MAX), top = srgbToLinear(LIT_MAX)
-  return { shade: [s * 0.96, s * 0.96, Math.min(1, s * 1.12)], ambient: [top, top, top] }
-}
-
-const OUTLINES = [['none', 'None'], ['one', 'One color'], ['own', 'Each thing\u2019s own']] as const
 declare global {
   interface Window { __diorama?: { stage: CreatureStage; blobs: () => number; bones: () => number; look: () => PixelLook; style: Style; water: () => SceneWater | undefined; mirrored: boolean; finish: (set: { bands?: number; heat?: number; selout?: boolean; exact?: boolean }) => void } }
 }
@@ -118,10 +101,18 @@ export function PixelDiorama() {
    * every scene takes the same way (Matt, 2026-11-21; splat-engine/skyRecipes.ts). They are laid over the scene, so it
    * is not cut again for them, and the sky eases from one to the next.
    */
-  const [weather, setWeather] = useState<WeatherId | undefined>(() => weatherAsked(new URLSearchParams(location.search).get('weather')))
+  const [weatherPick, setWeather] = useState<WeatherId | 'none' | undefined>(() => { const q = new URLSearchParams(location.search).get('weather'); return q === 'none' ? 'none' : weatherAsked(q) })
   const [clouds, setClouds] = useState<CloudId | undefined>(() => cloudsAsked(new URLSearchParams(location.search).get('clouds')))
+  // a scene may start under a shared weather of its own (the koi pond's light rain) until another, or none, is picked
+  const weather: WeatherId | undefined = weatherPick === 'none' ? undefined : weatherPick ?? (clouds ? undefined : picked0.weather)
   /** The wind (`?wind=gale`): weather brings at least its own; it slants what falls and raises waves on water. */
   const [wind, setWind] = useState<WindId | undefined>(() => windAsked(new URLSearchParams(location.search).get('wind')))
+  /**
+   * Whether the weather's clouds float over the scene (`?overhead=0` leaves them out, and rain and snow fall in from
+   * over the top of the picture): a scene may start without them, as the koi pond does (Matt, 2026-11-21).
+   */
+  const [overheadPick, setOverhead] = useState<boolean | undefined>(() => { const q = new URLSearchParams(location.search).get('overhead'); return q === '0' ? false : q === '1' ? true : undefined })
+  const overhead = overheadPick ?? picked0.overhead ?? true
   // a storm by day is dark enough that lamps waiting for the dark come on: the one thing weather cuts the scene again for
   const diorama = time ? picked0.timed?.(time, gloomy(weather) && !timeOf(time).dark ? 'always' : undefined) ?? picked0 : picked0
   /** The scene whose palette, finish and view are set. */
@@ -139,63 +130,36 @@ export function PixelDiorama() {
    * Light worked out a pixel at a time (`?shade=1`): pixel art made from a picture cel shading lit, so light and shade
    * fall in bands that follow each form, not blob by blob as the baked light does.
    */
-  const [shaded, setShaded] = useState(() => new URLSearchParams(location.search).get('shade') === '1')
+  /**
+   * Pixel art's settings and the finish (styleSettings.ts, shared with Scene Creator): the scene's own finish unless
+   * the address says (`?px=`, `?glow=`, `?texel=`, `?shade=1`, `?steps=`, `?heat=`, …).
+   */
+  const [fin, setFin] = useState<PixelSettings>(() => {
+    // a shared link gives every setting in full (`pixel.dither=` …), over the short keys `pixelStart` reads
+    const q = new URLSearchParams(location.search), start = pixelStart(diorama.finish, q), c = { ...start, ...choiceFrom('pixel', start, q) }
+    return {
+      ...c,
+      palette: c.palette === 'own' || PALETTES.some((p) => p.id === c.palette) ? c.palette : 'own',
+      size: PIXEL_SIZES.includes(c.size) ? c.size : start.size,
+      rate: PIXEL_RATES.includes(c.rate) ? c.rate : start.rate,
+      dither: Math.max(0, Math.min(1, c.dither)),
+      glow: Math.max(0, Math.min(4, c.glow)),
+    }
+  })
+  const setPixel = useCallback((change: Partial<PixelSettings>) => setFin((f) => ({ ...f, ...change })), [])
+  const { palette, size: baseSize, texel, glow, outline, rock, steps, rate, exact, shade: shaded } = fin
+  /** Switches only the address turns off (`?steady=0`, `?calm=0`, …). */
+  const [flags] = useState(() => pixelFlags(new URLSearchParams(location.search)))
   // cel shading lights the blobs itself, so its scene is cut with no light baked in; so does pixel art shaded a pixel at a time
   const plain = isPixelStyle(style) ? shaded : wantsPlain(style)
   // Finest by default (Matt, 2026-11-20); a phone starts pixel art at Fine (Matt found the dragon slow at Finest on his,
   // 2026-11-20) and keeps Chunky for the styles that draw the whole screen several times
   const detail = chosen ?? (coarse ? (isPixelStyle(style) ? DETAIL[2].id : DETAIL[0].id) : DETAIL[3].id)
-  // pixel art's own settings as a shared link gives them (`pixel.dither=` …), over the scene's own
-  const pixelStart = { palette: 'own', dither: diorama.finish.dither, outline: diorama.finish.outline, edges: diorama.finish.edges, sky: diorama.finish.sky, motion: 0 }
-  const [pixelAsked] = useState(() => {
-    const c = { ...pixelStart, ...choiceFrom('pixel', pixelStart, new URLSearchParams(location.search)) }
-    return { ...c, palette: PALETTES.some((p) => p.id === c.palette) ? c.palette : 'own', motion: RATES.includes(c.motion) ? c.motion : 0, dither: Math.max(0, Math.min(1, c.dither)) }
-  })
-  const [palette, setPalette] = useState(pixelAsked.palette)
-  const [baseSize, setSize] = useState(() => Number(new URLSearchParams(location.search).get('px')) || 2)
-  // light in bands a blob at a time (`banded`): how many bands, 0 for smooth light; `?texel=0|2|3`
   // discs along a shape's outer edges fitted to the edge (`hugged`), so edges are straight and lines sit on them; `?hug=0`
   const [hug] = useState(() => new URLSearchParams(location.search).get('hug') !== '0')
-  const [texel, setTexel] = useState(() => { const t = new URLSearchParams(location.search).get('texel'); return t === null ? 0 : Number(t) || 0 })
-  const [dither, setDither] = useState(pixelAsked.dither)
-  const [glow, setGlow] = useState(() => { const q = new URLSearchParams(location.search).get('glow'), v = q === null ? NaN : Number(q); return Number.isFinite(v) ? Math.min(4, Math.max(0, v)) : diorama.finish.glow })
   /** Glow as the poser reads it: it scales the light the scene's lamps and fires cast, as well as the shine round bright pixels. */
   const glowNow = useRef(glow)
   glowNow.current = glow
-  const [outline, setOutline] = useState(pixelAsked.outline)
-  const [edges, setEdges] = useState(pixelAsked.edges)
-  const [sky, setSky] = useState(pixelAsked.sky)
-  const [steady] = useState(() => new URLSearchParams(location.search).get('steady') !== '0')
-  // a scene's own gentle rocking of the view: every pixel of a still thing changes as the view turns, so it can be held
-  const [rock, setRock] = useState(() => new URLSearchParams(location.search).get('rock') !== '0')
-  const [tidy] = useState(() => new URLSearchParams(location.search).get('tidy') !== '0')
-  /** Calmer pixels (`PixelLook.calm`): flat patches and clean outlines, in place of the lone-pixel cleanup. `?calm=0` starts it off. */
-  const [calmer] = useState(() => new URLSearchParams(location.search).get('calm') !== '0')
-  /** Flat surfaces, dither only on the sky and glows (`PixelLook.flat`): no switch, `?flat=0` turns it off. */
-  const [flat] = useState(() => new URLSearchParams(location.search).get('flat') !== '0')
-  /** Deliberate light: a rim toward the scene's sun and a highlight on each lit form's peak (`PixelLook.rim`, `shine`); `?rim=0`, `?shine=0`. */
-  const [rimmed] = useState(() => new URLSearchParams(location.search).get('rim') !== '0')
-  const [shine] = useState(() => new URLSearchParams(location.search).get('shine') !== '0')
-  // dither that stays on things as they move, not on the screen (`PixelLook.surface`); `?surface=0` starts it off
-  const [surface] = useState(() => new URLSearchParams(location.search).get('surface') !== '0')
-  // art-pixel effects (after Ink Studio's): glow in rings, heat haze, softer outlines on lit sides, color cycling. The
-  // scene's own choice unless the address says (`?bands=0|1|2`, `?heat=0..3`, `?selout=0|1`, `?cycle=0`)
-  const asked = (key: string, most: number, own: number) => { const q = new URLSearchParams(location.search).get(key), v = q === null ? NaN : Number(q); return Number.isInteger(v) ? Math.min(most, Math.max(0, v)) : own }
-  const [bands, setBands] = useState(() => asked('bands', 2, diorama.finish.bands ?? 2))
-  const [heat, setHeat] = useState(() => asked('heat', 3, diorama.finish.heat ?? 0))
-  const [selout, setSelout] = useState(() => asked('selout', 1, 1) > 0)
-  const [cycling, setCycling] = useState(() => new URLSearchParams(location.search).get('cycle') !== '0')
-  const [fine] = useState(() => new URLSearchParams(location.search).get('fine') !== '0')
-  const [own, setOwn] = useState(() => new URLSearchParams(location.search).get('own') !== '0')
-  /** Painted in steps of the palette as the scene is cut: the scene's own choice unless the address says. */
-  const [steps, setSteps] = useState(() => { const q = new URLSearchParams(location.search).get('steps'); return q === null ? diorama.finish.steps : q !== '0' })
-  const [rate, setRate] = useState(pixelAsked.motion)
-  const [exact, setExact] = useState(() => new URLSearchParams(location.search).get('sort') === 'radix')
-  const [parts, setParts] = useState(() => new URLSearchParams(location.search).get('parts') !== '0')
-  // lines only where things meet, never through a thing's own paint (`PixelLook.across`; Matt saw stray lines in the grass, 2026-11-20); `?across=0`
-  const [across] = useState(() => new URLSearchParams(location.search).get('across') !== '0')
-  // pixel art: blobs drawn as hard discs, so no color from behind bleeds in where a thing's edge fades (`?solid=0`)
-  const [solid] = useState(() => new URLSearchParams(location.search).get('solid') !== '0')
   // the view as a shared link gives it: one of the scene's views, turned and zoomed from there (`?view=`, `?orbit=`)
   const [view, setView] = useState(() => diorama.views.find((v) => v.id === new URLSearchParams(location.search).get('view'))?.id ?? diorama.views[0].id)
   const [orbit, setOrbit] = useState<Orbit>(() => {
@@ -242,7 +206,7 @@ export function PixelDiorama() {
   const pileClock = useRef(0)
   /** Off screen, how deep snow lies while it falls (`?pile=`, all of it unless asked). */
   const [pileAsked] = useState(() => { const v = Number(new URLSearchParams(location.search).get('pile') ?? 1); return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 1 })
-  const falls = useRef(new WeakMap<Diorama, SceneWeather>())
+  const falls = useRef(new WeakMap<Diorama, Map<boolean, SceneWeather>>())
   /** A scene as it stands under the sky of the moment. */
   const dress = useCallback((d: Diorama) => {
     if (!weathered) return d
@@ -277,7 +241,7 @@ export function PixelDiorama() {
     let raf = requestAnimationFrame(() => {
       raf = requestAnimationFrame(() => {
         t = setTimeout(() => {
-          if (!settled) { setPalette('own'); setSteps(diorama.finish.steps) }
+          if (!settled) setPixel({ palette: 'own', steps: diorama.finish.steps })
           // a scene with water works one loop of its ripples out here too, while the waiting mark shows
           diorama.water?.()
           const make = () => diorama.make(spacing, stepColors.length ? stepColors : undefined)
@@ -320,10 +284,7 @@ export function PixelDiorama() {
   const closeTour = () => { setTour(null); setStyle(styleBefore.current); requestAnimationFrame(() => tourOpener.current?.focus()) }
   // a step of the walk-through says how the scene is drawn, whatever the switch says
   const asPixels = touring ? touring.pixels : pixels
-  const look = useMemo<PixelLook>(() => ({ palette: colors, dither, outline: outline ? (colors.length ? darkest(colors) : [11, 16, 38]) : null, glow, edges: edges ? 1 : 0, parts, across, solid, sky: sky || shown.at || weathered ? shown.sky : undefined, steady: steady ? STEADY : 0, tidy, calm: calmer, flat, fine, shine,
-    // the rim goes by the scene's starting view, so it holds still while the view rocks
-    rim: rimmed && shown.sun ? screenWay(shown.sun, shown.views[0].orbit.azimuth, shown.views[0].orbit.elevation) : undefined, own, surface, snap: true,
-    bands, heat: heat ? { pixels: heat, pace: heatPace(shown.loop) } : undefined, selout, cycle: cycling ? shown.finish.cycle : undefined }), [weathered, colors, dither, outline, glow, edges, parts, across, solid, sky, shown, steady, tidy, calmer, flat, fine, shine, rimmed, own, surface, bands, heat, selout, cycling])
+  const look = useMemo<PixelLook>(() => pixelLookOf(fin, { colors, sky: shown.sky, skyForced: !!shown.at || weathered, finish: shown.finish, sun: shown.sun, start: shown.views[0].orbit, loop: shown.loop }, flags), [fin, colors, shown, weathered, flags])
 
   // the exact (radix) sort: the stage rebuilds its world, keeping the moment and the poser
   useEffect(() => { stage?.setSort(exact ? 'radix' : 'bins') }, [stage, exact])
@@ -339,8 +300,10 @@ export function PixelDiorama() {
     let fall: SceneWeather | undefined
     if (weathered || scene.of.heavens?.clouds) {
       const of = scene.of
-      fall = falls.current.get(of)
-      if (!fall) falls.current.set(of, (fall = new SceneWeather(of)))
+      let made = falls.current.get(of)
+      if (!made) falls.current.set(of, (made = new Map()))
+      fall = made.get(overhead)
+      if (!fall) made.set(overhead, (fall = new SceneWeather(of, { overhead })))
     }
     // the shared moon, sun and stars, which cloud cover puts out
     const heavens = heavenBones(scene.built.skeleton.bones.map((b) => b.name))
@@ -365,9 +328,7 @@ export function PixelDiorama() {
     // a new scene brings its own palette, finish and view, now that it is the one in the view
     if (dressed.current !== d.id) {
       dressed.current = d.id
-      setPalette('own')
-      setDither(d.finish.dither); setGlow(d.finish.glow); setOutline(d.finish.outline); setEdges(d.finish.edges); setSky(d.finish.sky)
-      setBands(d.finish.bands ?? 2); setHeat(d.finish.heat ?? 0)
+      setFin((f) => pixelFor(f, d.finish))
       setView(d.views[0].id); setOrbit(d.views[0].orbit)
       arrive.current()
     }
@@ -387,9 +348,12 @@ export function PixelDiorama() {
       }
       // the weather's rain on the scene's water (its rings as the share of the swarm that falls) and its wind's waves
       if (pond) { pond.rain = now.rain; pond.waves = now.wind }
-      // the scene's own rain, snow and leaves are blown by the same wind
-      if (now.wind > 0) d.blow?.(sk, t, windAt(now, t, d.loop))
+      // the scene's own rain, snow and leaves are blown by the same wind, and its sails turn by it (in a calm too, so they
+      // carry on from where the wind left them)
+      d.blow?.(sk, t, windAt(now, t, d.loop), undefined, now.wind)
       showHeavens(sk.size, heavens, Math.max(now.clouds, own))
+      // the wind's turns and the sky's sizes come after the scene's pose worked the bones out
+      sk.update()
       // what floats rides the water as it stands at this moment: a boat or a buoy rocks on the waves that pass
       pond?.ride(sk, t)
       // an export is the scene's own loop: no pokes, and the view as it stood when it began
@@ -404,7 +368,7 @@ export function PixelDiorama() {
       else if (held.current) stage.orbit = held.current
       wet.current?.()
     }, from)
-  }, [stage, scene, calm, rock, mirrored, dress, offscreen, pileAsked])
+  }, [stage, scene, calm, rock, mirrored, dress, offscreen, pileAsked, overhead])
   // one of Brush and Ink's looks in place of pixel art: marks, outlines, characters or cel tones, with their own settings
   // a scene whose sky turns as it plays hands the styles each moment's sky too (their backdrop, cel shading's night,
   // the glass's window and the watercolor's wash), not only the one it opens with
@@ -414,7 +378,7 @@ export function PixelDiorama() {
   // white, which turns dark paint gray; the pixel pass's own highlights do that job)
   // in the scene's own share of light in shade, a little cool, and all of it held under the baked light's brightest
   // (`LIT_MAX`), so only what gives its own light reaches the pixel pass's glow
-  const pixelCel = useMemo<CelLook | undefined>(() => (pixels && shadedNow && !touring ? { from: shown.sun ? [...shown.sun] as [number, number, number] : undefined, tones: 2, smooth: PIXEL_SMOOTH, line: 0, ...shadedLight(shown.shade ?? 0.5) } : undefined), [pixels, shadedNow, touring, shown.sun, shown.shade])
+  const pixelCel = useMemo<CelLook | undefined>(() => (pixels && shadedNow && !touring ? pixelCelLook(shown.sun, shown.shade ?? 0.5) : undefined), [pixels, shadedNow, touring, shown.sun, shown.shade])
   const drawing = useDrawnLook(stage, touring ? undefined : drawnStyle, { pixelCel, actor: onStage?.built, water: !!onStage?.of.water, weather: weathered || !!onStage?.of.heavens?.clouds, spacing: DETAIL.find((d) => d.id === onStage?.detail)?.spacing, plain: !!onStage?.plain, time: timeNow, azimuth: shown.views[0].orbit.azimuth, offscreen, light: coarse, loop: shown.loop, sky: shown.finish.sky || weathered ? [styleSky[0], styleSky[1]] : undefined })
   // the walk-through's fourth step is about the four samples, so it draws them whatever the switch says
   const sampling = touring?.id === 'samples'
@@ -531,25 +495,14 @@ export function PixelDiorama() {
   /** The link the Share dialog offers, made as it opens: every setting changed from how the page starts. */
   const [sharing, setSharing] = useState<string>()
   const shareLink = () => {
-    const f = shown.finish, px = isPixelStyle(style), first = shown.views[0]
-    const at = shown.views.find((v) => v.id === view) ?? first
-    const pixel = { palette, dither, outline, edges, sky, motion: rate }
+    const px = isPixelStyle(style), first = shown.views[0], at = shown.views.find((v) => v.id === view) ?? first
+    // pixel art's settings as the scene starts them; with another style only glow, rocking and the exact sort still count
+    const start = pixelStart(shown.finish)
     const e: Entry[] = [
-      ...choiceEntries('pixel', pixel, px ? { palette: 'own', dither: f.dither, outline: f.outline, edges: f.edges, sky: f.sky, motion: 0 } : pixel),
+      // the short keys `pixelStart` reads: the link gives them in full instead
+      ...['px', 'glow', 'own', 'parts', 'heat', 'bands', 'selout', 'cycle', 'steps', 'texel', 'shade', 'rock', 'sort'].map((k) => [k, undefined] as const),
+      ...choiceEntries('pixel', fin, px ? start : { ...fin, glow: start.glow, rock: start.rock, exact: start.exact }),
       ...choiceEntries('glitch', glitch, style === 'glitch' ? GLITCH_START : glitch),
-      ['px', px && baseSize !== 2 ? String(baseSize) : undefined],
-      ['texel', px && texel ? String(texel) : undefined],
-      ['shade', px && shaded ? '1' : undefined],
-      ['bands', px && bands !== (f.bands ?? 2) ? String(bands) : undefined],
-      ['heat', px && heat !== (f.heat ?? 0) ? String(heat) : undefined],
-      ['selout', px && !selout ? '0' : undefined],
-      ['cycle', px && !cycling ? '0' : undefined],
-      ['own', px && !own ? '0' : undefined],
-      ['parts', px && !parts ? '0' : undefined],
-      ['steps', px && steps !== f.steps ? (steps ? '1' : '0') : undefined],
-      ['glow', short(glow) !== short(f.glow) ? short(glow) : undefined],
-      ['sort', exact ? 'radix' : undefined],
-      ['rock', rock ? undefined : '0'],
       ['view', at.id !== first.id ? at.id : undefined],
       ['orbit', orbitText(orbit) !== orbitText(at.orbit) ? orbitText(orbit) : undefined],
       ...drawing.share(),
@@ -588,7 +541,7 @@ export function PixelDiorama() {
     if (!stage || !scene) return
     window.__diorama = { stage, blobs: () => stage.blobCount, bones: () => scene.built.skeleton.count, look: () => look, style, water: () => scene.of.water?.(), mirrored,
       // what the Finish tab no longer shows, for verify: the art-pixel effects and the exact sort
-      finish: ({ bands: b, heat: hz, selout: so, exact: ex }) => { if (b !== undefined) setBands(b); if (hz !== undefined) setHeat(hz); if (so !== undefined) setSelout(so); if (ex !== undefined) setExact(ex) } }
+      finish: ({ bands: b, heat: hz, selout: so, exact: ex }) => setFin((f) => ({ ...f, ...(b !== undefined && { bands: b }), ...(hz !== undefined && { heat: hz }), ...(so !== undefined && { selout: so }), ...(ex !== undefined && { exact: ex }) })) }
     return () => { delete window.__diorama }
   }, [stage, scene, look, style, mirrored])
 
@@ -641,11 +594,20 @@ export function PixelDiorama() {
     // weather and cloud cover are one choice: a weather brings its own clouds and wind, a cover is clouds alone
     if (key === 'wind') { setWind(id as WindId | undefined); put('wind', id) }
     else {
-      setWeather(key === 'weather' ? (id as WeatherId | undefined) : undefined)
+      setWeather(key === 'weather' ? (id as WeatherId | undefined) ?? 'none' : 'none')
       setClouds(key === 'clouds' ? (id as CloudId | undefined) : undefined)
       setWind(undefined)
-      put('weather', key === 'weather' ? id : undefined); put('clouds', key === 'clouds' ? id : undefined); put('wind', undefined)
+      // no weather on a scene that starts under one of its own is said in the address too
+      put('weather', key === 'weather' ? id ?? (picked0.weather ? 'none' : undefined) : undefined); put('clouds', key === 'clouds' ? id : undefined); put('wind', undefined)
     }
+    history.replaceState(history.state, '', url)
+  }
+  /** Clouds over the scene, or left out. The address says so where it isn't the scene's own way. */
+  const pickOverhead = (on: boolean) => {
+    setOverhead(on)
+    const url = new URL(location.href)
+    if (on === (picked0.overhead ?? true)) url.searchParams.delete('overhead')
+    else url.searchParams.set('overhead', on ? '1' : '0')
     history.replaceState(history.state, '', url)
   }
   /** Another time of day, or the scene as it is written. The address names it too. */
@@ -876,7 +838,7 @@ export function PixelDiorama() {
               <ZoomBar orbit={orbit} setOrbit={setOrbit} onReset={() => pick(view)} />
               {!sampling && <p aria-hidden className="pointer-events-none absolute right-14 bottom-2 rounded bg-paper/80 px-1.5 py-0.5 text-xs text-ink-muted">{coarse ? 'drag to orbit · pinch to zoom' : 'drag to orbit · scroll to zoom'}</p>}
         </>}
-        status={tour !== null && made ? <TourStrip step={tour} facts={{ parts: made.of.parts ?? new Set(made.built.partOf).size, descriptionBytes: made.of.bytes, blobs: made.built.blobs.count, colors: colors.length, steps: made.paint !== '', lines: !outline ? 'none' : own ? 'own' : 'one' }} onStep={setTour} onClose={closeTour} /> : <>
+        status={tour !== null && made ? <TourStrip step={tour} facts={{ parts: made.of.parts ?? new Set(made.built.partOf).size, descriptionBytes: made.of.bytes, blobs: made.built.blobs.count, colors: colors.length, steps: made.paint !== '', lines: !outline ? 'none' : fin.own ? 'own' : 'one' }} onStep={setTour} onClose={closeTour} /> : <>
               <span>{scene ? <><span className="tabular-nums text-ink" data-testid="diorama-blobs">{scene.built.blobs.count.toLocaleString()}</span> blobs<span data-testid="diorama-art">{pixels && art ? <>, drawn at <span className="tabular-nums text-ink">{art.width} × {art.height}</span>{png ? <>, <span className="tabular-nums text-ink" data-testid="diorama-png-size">{kilobytes(png.bytes)}</span> a frame</> : ''}</> : `, drawn ${styleWords(style)}`}</span>.</> : loadingLabel}</span>
               <span className="flex gap-x-4">
               {scene && <button type="button" ref={tourOpener} onClick={openTour} data-testid="diorama-tour-open" className="cursor-pointer text-ink underline decoration-rule underline-offset-2 hover:text-accent">How it's made</button>}
@@ -919,8 +881,12 @@ export function PixelDiorama() {
                   <div className="flex flex-wrap gap-1.5" data-testid="diorama-wind">
                     {WINDS.map((w, i) => <Chip key={w.id} active={wind ? wind === w.id : (WEATHERS.find((k) => k.id === weather)?.wind ?? 0) === i} onClick={() => pickSky('wind', w.id)}>{i ? w.label : 'No wind'}</Chip>)}
                   </div>
-                  <p className="mt-1.5 text-xs text-ink-faint">Wind blows rain, snow and falling leaves at a slant, in gusts, and raises waves on a scene's water. Picking a weather brings its own wind back.</p>
+                  <p className="mt-1.5 text-xs text-ink-faint">Wind blows rain, snow and falling leaves at a slant, in gusts, sways trees and stalks, and raises waves on a scene's water. Picking a weather brings its own wind back.</p>
                 </Field>
+                <div className="grid gap-1.5">
+                  <Toggle label="Clouds over the scene" checked={overhead} onChange={pickOverhead} />
+                  <p className="text-xs text-ink-faint">{overhead ? 'The clouds float over the scene and rain and snow fall from under them.' : 'The clouds are left out: the sky still grays and darkens, and rain and snow fall in from over the top of the picture.'}</p>
+                </div>
                 <Field label="Changing scenes">
                   <div className="flex flex-wrap gap-1.5" data-testid="diorama-transitions">
                     <Chip active={transition === 'cut'} onClick={() => pickTransition('cut')}>Cut</Chip>
@@ -959,68 +925,15 @@ export function PixelDiorama() {
           {
             id: 'style', label: 'Style', content: (
               <div className={TAB_SECTIONS}>
-                <Field label="Drawn as">
-                  <div className="flex flex-wrap gap-1.5" data-testid="diorama-styles">
-                    {STYLES.map((l) => <Chip key={l.id} active={style === l.id} onClick={() => draw(l.id)}>{l.label}</Chip>)}
-                  </div>
-                  <p className="mt-1.5 text-xs text-ink-faint">{STYLES.find((l) => l.id === style)?.note}</p>
-                </Field>
-                {drawing.controls}
-                {glitching && <GlitchControls glitch={glitch} setGlitch={setGlitch} calm={calm} />}
-                {pixels && <Field label="Palette">
-                  <div className="flex flex-wrap gap-1.5">
-                    {palettes.map((p) => <Chip key={p.id} active={palette === p.id} onClick={() => setPalette(p.id)}>{p.label}</Chip>)}
-                  </div>
-                  <div data-testid="palette-strip" aria-hidden className="mt-5 flex h-3 overflow-hidden rounded ring-1 ring-rule">
-                    {colors.length ? colors.map((c, i) => <span key={i} className="flex-1" style={{ background: `rgb(${c[0]} ${c[1]} ${c[2]})` }} />) : <span className="flex-1 bg-paper-sunk" />}
-                  </div>
-                  <p className="mt-2 text-xs text-ink-faint">
-                    {!colors.length ? 'No palette: every pixel keeps the color the scene gives it, in as many colors as it takes.'
-                      : palette === 'own' ? `The ${colors.length} colors chosen for this scene. Every pixel snaps to the closest one.`
-                        : `${('note' in picked && picked.note) || `A borrowed palette of ${colors.length} colors.`} Every pixel snaps to the closest one.`}
-                  </p>
-                </Field>}
-                {pixels && <Field label="Pixel size">
-                  <div className="flex flex-wrap gap-1.5">
-                    {SIZES.map((n) => <Chip key={n} active={baseSize === n} onClick={() => setSize(n)}>{n}×</Chip>)}
-                  </div>
-                </Field>}
-                {pixels && <Field label="Motion">
-                  <div className="flex flex-wrap gap-1.5">
-                    {RATES.map((n) => <Chip key={n} active={rate === n} onClick={() => setRate(n)}>{n ? `${n} a second` : 'Smooth'}</Chip>)}
-                  </div>
-                </Field>}
+                <StyleControls style={style} onStyle={draw} pixel={fin} setPixel={setPixel} glitch={glitch} setGlitch={setGlitch} palettes={palettes} calm={calm} prefix="diorama"
+                  ownNote={(n) => `The ${n} colors chosen for this scene.`} drawn={drawing.controls} />
               </div>
             ),
           },
           {
             id: 'finish', label: 'Finish', content: (
               <div className={TAB_SECTIONS}>
-                {pixels && <Slider label="Dither" value={dither} min={0} max={1} step={0.05} onChange={setDither} format={(v) => `${Math.round(v * 100)}%`} hint={colors.length ? 'Checkers two palette colors to fake the ones between, where a pixel artist would: in the sky and the light round glowing things. Surfaces stay flat.' : 'Needs a palette: Full color has none to mix.'} />}
-                {/* neon and stained glass put the scene's lights by (neon has a Glow of its own in the Style tab), so this one would do nothing there */}
-                {style !== 'neon' && style !== 'glass' && <Slider label="Glow" value={glow} min={0} max={4} step={0.25} onChange={setGlow} format={(v) => (v ? `${v.toFixed(2)}×` : 'off')} hint={pixels ? 'How strongly lamps, fires and other glowing things light what is round them, and how far bright pixels shine into the ones beside them.' : 'How strongly lamps, fires and other glowing things light what is round them.'} />}
-                <div className="grid gap-3">
-                {!pixels && <p className="text-xs text-ink-faint">Dither, outlines and the sky belong to the Pixel art style. Pick it in the Style tab to change them.</p>}
-                {pixels && <>
-                <Toggle label="Paint in steps of the palette" checked={steps} onChange={setSteps} disabled={!colors.length} />
-                <p className="text-xs text-ink-faint">{colors.length ? 'Cuts the scene again with every blob in one palette color, a step of its own paint from shade to sun, so shade falls in flat bands.' : 'Needs a palette: Full color has no steps.'}</p>
-                <Toggle label="Light in bands" checked={texel > 1} onChange={(on) => setTexel(on ? TEXEL_BANDS : 0)} />
-                <p className="text-xs text-ink-faint">Lights each blob as one block in a few flat steps of sun and shade, so light falls in crisp bands along the surface and each thing keeps its own paint. Cuts the scene again.</p>
-                <Toggle label="Shade each pixel" checked={shaded} onChange={setShaded} />
-                <p className="text-xs text-ink-faint">Works the light out a pixel at a time from the scene's sun and lamps, so light and shade fall in bands that follow each shape. Cuts the scene again.</p>
-                <Field label="Outline">
-                  <div className="flex flex-wrap gap-1.5">
-                    {OUTLINES.map(([id, name]) => <Chip key={id} active={(!outline ? 'none' : own ? 'own' : 'one') === id} onClick={() => { setOutline(id !== 'none'); if (id !== 'none') setOwn(id === 'own') }}>{name}</Chip>)}
-                  </div>
-                </Field>
-                <Toggle label="Lines inside the scene" checked={edges || parts} onChange={(on) => { setParts(on); setEdges(on && shown.finish.edges) }} />
-                <Toggle label="Sky behind" checked={sky} onChange={setSky} />
-                <Toggle label="Heat haze over glowing things" checked={heat > 0} onChange={(on) => setHeat(on ? shown.finish.heat || 1 : 0)} />
-                {shown.finish.cycle && <Toggle label="Color cycling" checked={cycling} onChange={setCycling} />}
-                <p className="text-xs text-ink-faint">Every pixel is settled from four samples, holds its color while the light wavers, and lies in flat patches with clean outlines, with dither kept for the sky and glows: after Silicon Jungle's Ink Studio, as are the glow's rings, the haze{shown.finish.cycle ? ', the cycling' : ''} and the softer outline on lit sides.</p>
-                </>}
-                <Toggle label="Rock the view" checked={rock} onChange={setRock} disabled={calm} />
-                </div>
+                <FinishControls style={style} pixel={fin} setPixel={setPixel} finish={shown.finish} colors={colors.length} calm={calm} />
               </div>
             ),
           },

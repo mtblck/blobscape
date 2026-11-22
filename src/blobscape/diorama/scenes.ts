@@ -30,7 +30,11 @@ import { RUIN } from './scenes/ruin.ts'
 import { CAVE } from './scenes/cave.ts'
 import { CANYON } from './scenes/canyon.ts'
 import { CABIN } from './scenes/cabin.ts'
-import { KOI } from './scenes/koi.ts'
+import { KOI_PROJECT } from './scenes/koi.ts'
+import { madeProp } from '../props/index.ts'
+import { composeScene } from '../../splat-engine/compose.ts'
+import type { SceneProject } from '../../splat-engine/project.ts'
+import type { WeatherId } from '../../splat-engine/skyRecipes.ts'
 import { HENGE } from './scenes/henge.ts'
 import { WHALES } from './scenes/whales.ts'
 import { TURKEY } from './scenes/turkey.ts'
@@ -42,6 +46,20 @@ import { ambientAt, lightsAt, poseFishing, skyAt } from './fishing.ts'
 export interface Diorama {
   id: string
   label: string
+  /**
+   * The land and library props it is made of, for a scene written that way (docs/scenes-from-props.md): its
+   * description is made from them (`composeScene`), and Scene Creator opens it as these pieces.
+   */
+  project?: SceneProject
+  /** The shared weather it starts under (skyRecipes.ts `WEATHERS`), where it has one: the koi pond's light rain. */
+  weather?: WeatherId
+  /** False where the weather's clouds start left out, its rain and snow falling in from over the picture (the koi pond's tree and bamboo stand nearly into them). */
+  overhead?: boolean
+  /**
+   * True where the scene as written is a day (the koi pond's gray afternoon): what waits for the night (its shared moon
+   * and stars) is out until a night is picked, while its lamps stay lit as written.
+   */
+  byDay?: boolean
   /** For the view's label: what is in the picture. */
   about: string
   /** Seconds before it repeats. */
@@ -58,8 +76,8 @@ export interface Diorama {
   /** Cuts the scene. With `steps` (a palette), it is painted in steps of that palette as it is cut. */
   make(spacing: number, steps?: Rgb[]): Built
   pose(sk: Skeleton, t: number): void
-  /** After `pose`: blows the scene's own rain, snow and leaves by a wind of the moment (`CompiledScene.blow`), where it has any. */
-  blow?(sk: Skeleton, t: number, wind: readonly [number, number]): void
+  /** After `pose`: blows the scene's own rain, snow and leaves and turns its sails by a wind of the moment, `level` its level (`CompiledScene.blow`), where it has any. */
+  blow?(sk: Skeleton, t: number, wind: readonly [number, number], wrap?: { at: readonly [number, number]; half: number }, level?: number): void
   /** Its live lights `t` seconds in. `shadows` says whether one that can cast shadows should (the page asks only where the GPU works them out). */
   lights(t: number, shadows?: boolean): PointLight[]
   /** How much of its painted color everything keeps before its lights are added: 1 where left out, less for a scene lit mostly live. */
@@ -151,11 +169,13 @@ const night = (palette: Rgb[]): [Rgb, Rgb] => {
 /** A scene written as a description (splat-engine/sceneDoc.ts), made ready for the page. */
 /** What the page calls the palette a scene was made with. */
 
-export function described(id: string, doc: SceneDoc, about: string): Diorama {
-  const c = compileScene(doc)
+export function described(id: string, doc: SceneDoc, about: string, more: Pick<Diorama, 'project' | 'weather' | 'overhead' | 'byDay'> = {}): Diorama {
+  // a scene written as a day keeps its lamps as written but has no moon or stars out ('always' never lights the night's)
+  const c = compileScene(more.byDay ? litFor(doc, false, 'always') : doc)
   let pond: SceneWater | undefined
   const times = new Map<string, Diorama>()
   const self: Diorama = {
+    ...more,
     id,
     label: c.name,
     about,
@@ -201,7 +221,7 @@ export function described(id: string, doc: SceneDoc, about: string): Diorama {
         // at night what glows only to keep its own color (a cloud, a flower, a gull: no `lit`) takes the night's light like the rest
         const parts = time.dark ? lit.parts.map((p) => (p.glow && !p.lit ? { ...p, glow: undefined, laid: true } : p)) : lit.parts
         const at: SceneDoc = { ...lit, parts, sky: time.sky, skyReach: undefined }
-        const t = described(id, at, about)
+        const t = described(id, at, about, { ...more, byDay: undefined })
         // its clouds keep their own color by night only as the scene was written; set at night they take the night's light
         const clouds = doc.heavens?.clouds
         const heavens = doc.heavens && { ...doc.heavens, clouds: clouds && { ...clouds, glow: clouds.glow && !time.dark } }
@@ -276,7 +296,7 @@ export const DIORAMAS: Diorama[] = [
   described('cave', CAVE, 'An ice cave cut open at night, with icicles along its broken roof, stalactites joining stalagmites, flowstone, basalt columns stepping into a still pool, a geode broken open and glowing crystals, one growing as you watch'),
   described('canyon', CANYON, 'A desert canyon at sunset worn by water, with banded cliffs and ledges, scree, a mesa, hoodoos, a natural arch, a dry stream bed of pebbles and cracked mud, saguaros, a gnarled tree, a ram skull with curled horns, old ribs, a fossil shell and a circling hawk'),
   described('cabin', CABIN, 'A log cabin snowed in on a winter night: snow falling and settling where it lands, drifts piled deep downwind of the cabin, rocks and fence, a path trodden to the gate, frost growing across the lit window, chimney smoke, a woodpile and a lantern'),
-  described('koi', KOI, 'A koi pond in a moss garden on a rainy day: raindrops ring the water where they land, the rings cross and bounce off the banks and stepping stones, koi circle under the surface and leave wakes, and a tall stone lantern and a low snow-viewing lantern glow under a cherry tree in full bloom that sheds its petals, with bamboo, irises and lily pads'),
+  described('koi', composeScene(KOI_PROJECT, madeProp), 'A koi pond in a moss garden on a rainy day: raindrops ring the water where they land, the rings cross and bounce off the banks and stepping stones, koi circle under the surface and leave wakes, and a tall stone lantern and a low snow-viewing lantern glow under a cherry tree in full bloom that sheds its petals, with bamboo, irises and lily pads', { project: KOI_PROJECT, weather: 'light-rain', overhead: false, byDay: true }),
   described('whales', WHALES, 'A pod of whales swimming through space, a mother and two calves with stars on their backs, their tails and flippers beating slowly, past a ringed planet and its moon, banks of nebula, a far sun, tumbling rocks and stardust streaming by'),
   described('turkey', TURKEY, 'A giant turkey chasing a cook in an apron and chef’s hat down a country road in the fall, past a rail fence, trees in fall color, pumpkins, a mailbox and a billboard, with dust at their heels, loose feathers and falling leaves'),
   described('henge', HENGE, 'A ring of standing stones at night where a magic circle flares to life, sparks gather into a witch in a white robe and a tall white hat, who draws a wand, waves it once and vanishes in a shower of sparks'),
