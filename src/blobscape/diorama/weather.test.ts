@@ -83,8 +83,8 @@ test('snow lies where it lands, builds up while it falls and melts after', () =>
 test('the koi pond is a day: its moon and stars come out only at night, and its weather starts over the picture', () => {
   const koi = scene('koi')
   const sky = (doc: ReturnType<typeof litFor>) => doc.parts.filter((p) => p.bone === '~moon' || p.bone?.startsWith('~star')).length
-  assert.equal(sky(litFor(koi.doc, false, 'always')), 0)
-  assert.ok(sky(litFor(koi.doc, true)) > 20, 'moon and stars at night')
+  assert.equal(sky(litFor(koi.doc!, false, 'always')), 0)
+  assert.ok(sky(litFor(koi.doc!, true)) > 20, 'moon and stars at night')
   assert.equal(koi.overhead, false)
   const w = new SceneWeather(koi, { overhead: false })
   assert.equal(w.overhead, false)
