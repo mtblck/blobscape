@@ -26,16 +26,17 @@ import type { SceneWater } from '../splat-engine/sceneWater.ts'
 import { toPng, useExport } from './diorama/useExport.tsx'
 import type { Texture } from '../splat-engine/meshShape.ts'
 import { decodeTexture } from './modelRig.ts'
-import { detailAsked, labelNames, writeDetail } from '../shared/detail.ts'
+import { writeDetail } from '../shared/detail.ts'
 import { banded, hugged, unlit } from '../splat-engine/voxel.ts'
 import { isPixelStyle, styleAsked, styleWords, type Style } from './diorama/styles.ts'
 import { GLITCH_START, glitchLook, type GlitchChoice } from './glitchLooks.ts'
 import { StyleControls, FinishControls } from './StyleControls.tsx'
+import { drawnStart, sceneStart, type DrawnSettings, type SceneSettings } from './styles/catalog.ts'
 import { detailStart, pixelCelLook, pixelFlags, pixelFor, pixelLookOf, pixelSizeAt, pixelStart, pixelZoomAsked, type PixelSettings } from './styleSettings.ts'
 import { useStyleOnStage } from './useStyleOnStage.ts'
 import { useDrawnLook, useHeld, wantsPlain } from './drawnLook.tsx'
-import { TIMES, timeAsked, timeOf, type TimeId } from './timeOfDay.ts'
-import { CLOUD_COVERS, SkyEase, WEATHERS, WINDS, cloudsAsked, gloomy, isClear, skyState, weatherAsked, windAsked, windAt, type CloudId, type WeatherId, type WindId } from '../splat-engine/skyRecipes.ts'
+import { TIMES, timeOf, type TimeId } from './timeOfDay.ts'
+import { CLOUD_COVERS, SkyEase, WEATHERS, WINDS, gloomy, isClear, skyState, windAt, type CloudId, type WeatherId, type WindId } from '../splat-engine/skyRecipes.ts'
 import { SceneWeather, paletteUnder, underSky } from './diorama/weather.ts'
 import { pileStep } from '../splat-engine/snowCover.ts'
 import { heavenBones, ownClouds, showHeavens } from '../splat-engine/heavens.ts'
@@ -93,26 +94,31 @@ export function PixelDiorama() {
    * scene, which every style respects (Matt, 2026-11-21). It brings its sky and light, and the scene's lamps, lit
    * windows and fires go by it (`Diorama.timed`).
    */
-  const [time, setTime] = useState<TimeId | undefined>(() => timeAsked(new URLSearchParams(location.search).get('time')))
+  const [sceneSet, setSceneSet] = useState<SceneSettings>(() => sceneStart(new URLSearchParams(location.search)))
+  const time = sceneSet.time || undefined
+  const setTime = (id: TimeId | undefined) => setSceneSet((c) => ({ ...c, time: id ?? '' }))
   /**
    * The weather and the cloud cover laid over the scene (`?weather=thunderstorm`, `?clouds=cloudy`), or none: recipes
    * every scene takes the same way (Matt, 2026-11-21; splat-engine/skyRecipes.ts). They are laid over the scene, so it
    * is not cut again for them, and the sky eases from one to the next.
    */
-  const [weatherPick, setWeather] = useState<WeatherId | 'none' | undefined>(() => { const q = new URLSearchParams(location.search).get('weather'); return q === 'none' ? 'none' : weatherAsked(q) })
-  const [cloudsPick, setClouds] = useState<CloudId | undefined>(() => cloudsAsked(new URLSearchParams(location.search).get('clouds')))
+  const weatherPick = sceneSet.weather || undefined, cloudsPick = sceneSet.clouds || undefined
+  const setWeather = (id: WeatherId | 'none' | undefined) => setSceneSet((c) => ({ ...c, weather: id ?? '' }))
+  const setClouds = (id: CloudId | undefined) => setSceneSet((c) => ({ ...c, clouds: id ?? '' }))
   // out in space (the space whales) there is no weather: what was picked waits for the next scene that has a sky
   const clouds = picked0.space ? undefined : cloudsPick
   // a scene may start under a shared weather of its own (the koi pond's light rain) until another, or none, is picked
   const weather: WeatherId | undefined = picked0.space || weatherPick === 'none' ? undefined : weatherPick ?? (clouds ? undefined : picked0.weather)
   /** The wind (`?wind=gale`): weather brings at least its own; it slants what falls and raises waves on water. */
-  const [windPick, setWind] = useState<WindId | undefined>(() => windAsked(new URLSearchParams(location.search).get('wind')))
+  const windPick = sceneSet.wind || undefined
+  const setWind = (id: WindId | undefined) => setSceneSet((c) => ({ ...c, wind: id ?? '' }))
   const wind = picked0.space ? undefined : windPick
   /**
    * Whether the weather's clouds float over the scene (`?overhead=0` leaves them out, and rain and snow fall in from
    * over the top of the picture): a scene may start without them, as the koi pond does (Matt, 2026-11-21).
    */
-  const [overheadPick, setOverhead] = useState<boolean | undefined>(() => { const q = new URLSearchParams(location.search).get('overhead'); return q === '0' ? false : q === '1' ? true : undefined })
+  const overheadPick = sceneSet.overhead ?? undefined
+  const setOverhead = (on: boolean) => setSceneSet((c) => ({ ...c, overhead: on }))
   const overhead = overheadPick ?? picked0.overhead ?? true
   // a storm by day is dark enough that lamps waiting for the dark come on: the one thing weather cuts the scene again for
   const diorama = time ? picked0.timed?.(time, gloomy(weather) && !timeOf(time).dark ? 'always' : undefined) ?? picked0 : picked0
@@ -123,10 +129,13 @@ export function PixelDiorama() {
   const [playing, setPlaying] = useState(!calm)
   // a phone starts a step lighter, and a step lighter again for the styles that draw the scene several times a frame
   // (outlines, ASCII, cel shading), as Brush and Ink does; once the visitor picks a detail it is theirs for every style
-  const [chosen, setChosen] = useState<string | undefined>(() => detailAsked(DETAIL, labelNames)?.id)
+  const chosen = sceneSet.detail || undefined
+  const setChosen = (id: string) => setSceneSet((c) => ({ ...c, detail: id }))
   /** How the scene is drawn: as pixel art, or as one of Brush and Ink's looks. `?style=oil` opens on that one. */
   const [style, setStyle] = useState<Style>(() => styleAsked(new URLSearchParams(location.search).get('style')))
   const [glitch, setGlitch] = useState<GlitchChoice>(GLITCH_START)
+  // every other style's settings (styles/catalog.ts): the page holds them, as it holds pixel art's
+  const drawnKept = useState<DrawnSettings>(() => drawnStart(new URLSearchParams(location.search), { coarse }))
   /**
    * Light worked out a pixel at a time (`?shade=1`): pixel art made from a picture cel shading lit, so light and shade
    * fall in bands that follow each form, not blob by blob as the baked light does.
@@ -158,10 +167,8 @@ export function PixelDiorama() {
   const [glbNote, setGlbNote] = useState('')
   const [modelBusy, setModelBusy] = useState(false)
   /** How one scene gives way to the next (`splat-core/transition.ts`), or a plain cut; never under reduced motion. */
-  const [transition, setTransition] = useState<TransitionKind | 'cut'>(() => {
-    const q = new URLSearchParams(location.search).get('transition')
-    return q === 'cut' ? 'cut' : TRANSITIONS.find((t) => t.id === q)?.id ?? TRANSITIONS[0].id
-  })
+  const transition = sceneSet.transition
+  const setTransition = (id: TransitionKind | 'cut') => setSceneSet((c) => ({ ...c, transition: id }))
   const changing = useRef<{ stop: () => void; sheet: HTMLCanvasElement; got: boolean } | null>(null)
   const overlayCanvas = useRef<HTMLCanvasElement>(null)
   const overlayOf = useRef<TransitionOverlay | null>(null)
@@ -368,7 +375,7 @@ export function PixelDiorama() {
   // in the scene's own share of light in shade, a little cool, and all of it held under the baked light's brightest
   // (`LIT_MAX`), so only what gives its own light reaches the pixel pass's glow
   const pixelCel = useMemo<CelLook | undefined>(() => (pixels && shadedNow && !touring ? pixelCelLook(shown.sun, shown.shade ?? 0.5) : undefined), [pixels, shadedNow, touring, shown.sun, shown.shade])
-  const drawing = useDrawnLook(stage, touring ? undefined : drawnStyle, { pixelCel, actor: onStage?.built, water: !!onStage?.of.water, weather: weathered || !!onStage?.of.heavens?.clouds, spacing: DETAIL.find((d) => d.id === onStage?.detail)?.spacing, plain: !!onStage?.plain, time: timeNow, azimuth: shown.views[0].orbit.azimuth, offscreen, light: coarse, loop: shown.loop, sky: shown.finish.sky || weathered ? [styleSky[0], styleSky[1]] : undefined })
+  const drawing = useDrawnLook(stage, touring ? undefined : drawnStyle, { pixelCel, actor: onStage?.built, water: !!onStage?.of.water, weather: weathered || !!onStage?.of.heavens?.clouds, spacing: DETAIL.find((d) => d.id === onStage?.detail)?.spacing, plain: !!onStage?.plain, time: timeNow, azimuth: shown.views[0].orbit.azimuth, offscreen, light: coarse, loop: shown.loop, sky: shown.finish.sky || weathered ? [styleSky[0], styleSky[1]] : undefined }, drawnKept)
   // the walk-through's fourth step is about the four samples, so it draws them whatever the switch says
   const sampling = touring?.id === 'samples'
   const drawnLook = useMemo(() => (asPixels ? (sampling ? { ...look, fine: true } : look) : undefined), [asPixels, sampling, look])

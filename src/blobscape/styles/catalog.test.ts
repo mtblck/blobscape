@@ -1,0 +1,115 @@
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { STYLES } from '../diorama/styles.ts'
+import { ASCII, BLOCKS_DEF, CATALOG, CEL_DEF, MARKS, PIXEL, SCENE, drawnFrom, drawnStart, fromAddress, keysOf, sceneStart, settingsFrom, shownSettings, valueWords, type RangeSetting, type Setting, type StyleDef } from './catalog.ts'
+
+const defs = [...Object.values(CATALOG), SCENE] as unknown as StyleDef<Record<string, unknown>>[]
+
+test('every style has its settings in the catalog, and the catalog names no style that does not exist', () => {
+  for (const s of STYLES) assert.ok(keysOf(s.id).length, `${s.id} has no settings in the catalog`)
+  assert.deepEqual(keysOf('glitch'), ['pixel', 'glitch'])
+  for (const d of defs) for (const id of d.styles) assert.ok(STYLES.some((s) => s.id === id), `${d.id} names ${id}`)
+})
+
+test('every setting is one of its style\'s values, starts sound, and no value is left without a setting', () => {
+  for (const d of defs) {
+    const keys = d.settings.map((s) => s.key)
+    assert.deepEqual([...keys].sort(), Object.keys(d.start).sort(), `${d.id}: settings and start differ`)
+    assert.equal(new Set(keys).size, keys.length, `${d.id}: a setting twice`)
+    for (const s of d.settings as Setting<Record<string, unknown>>[]) {
+      const v = d.start[s.key]
+      if (s.kind === 'range') assert.ok(typeof v === 'number' && v >= s.min && v <= s.max && s.step > 0, `${d.id}.${s.key} starts outside its range`)
+      else if (s.kind === 'choice') assert.ok(s.open || v === '' || s.options.some((o) => o.id === v), `${d.id}.${s.key} starts on no choice`)
+      else if (s.kind === 'toggle') assert.ok(typeof v === 'boolean' || (v === null && !!s.auto), `${d.id}.${s.key} is no switch`)
+      else assert.ok(Number.isInteger(v))
+      assert.ok(s.label.length > 0)
+    }
+  }
+})
+
+test('no two settings a style reads share a name in the address', () => {
+  for (const s of STYLES) {
+    const names = keysOf(s.id).flatMap((k) => (CATALOG[k].settings as readonly Setting<never>[]).map((x) => x.address).filter(Boolean))
+    assert.equal(new Set(names).size, names.length, `${s.id}: ${names.join()}`)
+  }
+})
+
+test('the address sets what it names and nothing unsound', () => {
+  const q = (text: string) => new URLSearchParams(text)
+  const b = fromAddress(BLOCKS_DEF, BLOCKS_DEF.start, q('block=5&water=blocks&falls=blocks&swell=99&backdrop=slate'))
+  assert.deepEqual([b.size, b.water, b.weather, b.swell, b.backdrop], [5, 'blocks', 'blocks', 16, 'slate'])
+  assert.deepEqual(fromAddress(BLOCKS_DEF, BLOCKS_DEF.start, q('block=many&water=soup&backdrop=mars')), BLOCKS_DEF.start)
+  const c = fromAddress(CEL_DEF, CEL_DEF.start, q('tones=3&shadows=0&fills=2.6&turn=37&outline=0'))
+  assert.deepEqual([c.tones, c.shadows, c.fills, c.turn, c.outline], [3, false, 3, 37, false])
+  assert.equal(fromAddress(MARKS, MARKS.start, q('outline=1')).outline, true)
+  assert.equal(fromAddress(MARKS, MARKS.start, q('')).outline, null)
+  assert.equal(fromAddress(ASCII, ASCII.start, q('chars=braille')).chars, 'braille')
+  assert.equal(fromAddress(PIXEL, PIXEL.start, q('sort=radix')).exact, true)
+  assert.equal(fromAddress(PIXEL, { ...PIXEL.start, exact: true }, q('sort=count')).exact, false)
+  assert.equal(fromAddress(PIXEL, PIXEL.start, q('px=4')).size, 4)
+  assert.equal(fromAddress(PIXEL, PIXEL.start, q('px=5')).size, 2)
+})
+
+test('a phone starts blocks a size up, unless the address says', () => {
+  assert.equal(drawnStart(undefined, { coarse: true }).blocks.size, BLOCKS_DEF.start.size + 1)
+  assert.equal(drawnStart(new URLSearchParams('block=1'), { coarse: true }).blocks.size, 1)
+})
+
+test('kept settings come back whole, and anything unsound in them is left as it starts', () => {
+  const start = drawnStart()
+  const mine = { ...start, cel: { ...start.cel, tones: 3 as const, turn: 90, outline: false }, blocks: { ...start.blocks, size: 4, backdrop: 'cream' }, marks: { ...start.marks, outline: true, paper: 'blue' }, neon: { ...start.neon, set: 'ice' } }
+  assert.deepEqual(drawnFrom(start, JSON.parse(JSON.stringify(mine))), mine)
+  const bad = drawnFrom(start, { cel: { tones: 7, turn: 'left', height: 400, shadows: 'yes' }, blocks: { size: 300, water: 'soup' }, marks: 4, glass: { pane: null } })
+  assert.equal(bad.cel.tones, start.cel.tones)
+  assert.equal(bad.cel.turn, start.cel.turn)
+  assert.equal(bad.cel.height, 85)
+  assert.equal(bad.cel.shadows, start.cel.shadows)
+  assert.equal(bad.blocks.size, 8)
+  assert.equal(bad.blocks.water, start.blocks.water)
+  assert.deepEqual(bad.marks, start.marks)
+  assert.deepEqual(bad.glass, start.glass)
+  assert.deepEqual(drawnFrom(start, undefined), start)
+  assert.equal(settingsFrom(PIXEL, PIXEL.start, { palette: 'ember' }).palette, 'ember')
+})
+
+test('a setting shows only when its style and subject call for it, and a trial only on its own page', () => {
+  const keys = <V>(d: StyleDef<V>, v: V, on: Parameters<typeof shownSettings>[2], page?: string) => shownSettings(d, v, on, page).map((s) => s.key)
+  assert.ok(!keys(BLOCKS_DEF, BLOCKS_DEF.start, { style: 'blocks' }).includes('water'))
+  assert.ok(keys(BLOCKS_DEF, BLOCKS_DEF.start, { style: 'blocks', water: true }).includes('water'))
+  assert.ok(!keys(BLOCKS_DEF, BLOCKS_DEF.start, { style: 'blocks', water: true }).includes('swell'))
+  assert.ok(keys(BLOCKS_DEF, { ...BLOCKS_DEF.start, water: 'blocks' as const }, { style: 'blocks', water: true }).includes('swell'))
+  assert.deepEqual(keys(MARKS, MARKS.start, { style: 'oil' }), ['size', 'outline'])
+  assert.deepEqual(keys(MARKS, MARKS.start, { style: 'ink' }), ['size', 'outline', 'pen', 'paper'])
+  assert.deepEqual(keys(MARKS, MARKS.start, { style: 'blobs' }), ['outline'])
+  assert.ok(!keys(ASCII, { ...ASCII.start, chars: 'braille' as const }, { style: 'ascii' }).includes('strokes'))
+  const tried: StyleDef<{ a: number }> = { id: 't', styles: ['oil'], start: { a: 1 }, settings: [{ key: 'a', kind: 'range', label: 'A', min: 0, max: 2, step: 1, unit: 'count', trial: 'Biome Islands' }] }
+  assert.deepEqual(keys(tried, tried.start, { style: 'oil' }), [])
+  assert.deepEqual(keys(tried, tried.start, { style: 'oil' }, 'Biome Islands'), ['a'])
+})
+
+test('values read as their sliders show them', () => {
+  const r = (unit: RangeSetting<{ a: number }>['unit'], zero?: string): RangeSetting<{ a: number }> => ({ key: 'a', kind: 'range', label: 'A', min: 0, max: 9, step: 1, unit, zero })
+  assert.equal(valueWords(r('percent'), 0.35), '35%')
+  assert.equal(valueWords(r('px'), 1.5), '1.5 px')
+  assert.equal(valueWords(r('deg'), -50), '-50°')
+  assert.equal(valueWords(r('times'), 2), '2×')
+  assert.equal(valueWords(r('percent', 'None'), 0), 'None')
+})
+
+test('the looks keep no settings of their own: useDrawnLook takes them from the catalog', () => {
+  const src = readFileSync(new URL('../drawnLook.tsx', import.meta.url), 'utf8')
+  assert.ok(src.includes('drawnStart('))
+  for (const own of ['useState<CelChoice>', 'useState<NeonChoice>', 'useState<GlassChoice>', 'useState<WashChoice>', 'useState<BlockChoice>', '<Slider ']) assert.ok(!src.includes(own), `drawnLook.tsx has ${own}`)
+  for (const page of ['../PixelDiorama.tsx', '../SceneCreator.tsx']) assert.ok(readFileSync(new URL(page, import.meta.url), 'utf8').includes('drawnKept)'), `${page} does not hold the drawn settings`)
+})
+
+test('the scene\'s settings start as the scene is written, and the address sets them', () => {
+  assert.deepEqual(sceneStart(), SCENE.start)
+  const s = sceneStart(new URLSearchParams('time=night&weather=thunderstorm&wind=gale&overhead=0&transition=cut&detail=fine'))
+  assert.deepEqual(s, { time: 'night', weather: 'thunderstorm', clouds: '', wind: 'gale', overhead: false, transition: 'cut', detail: 'fine' })
+  assert.equal(sceneStart(new URLSearchParams('weather=none')).weather, 'none')
+  assert.equal(sceneStart(new URLSearchParams('clouds=cloudy')).clouds, 'cloudy')
+  assert.deepEqual(sceneStart(new URLSearchParams('time=teatime&weather=frogs&detail=huge')), SCENE.start)
+  assert.deepEqual(settingsFrom(SCENE, SCENE.start, JSON.parse(JSON.stringify(s))), s)
+})
