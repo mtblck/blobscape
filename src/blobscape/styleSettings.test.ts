@@ -112,4 +112,16 @@ test('Diorama and Scene Creator put a style on the stage only through the shared
     for (const call of ['.setPixels(', '.setGlitch(', '.setSharpness(', '.setSort(']) if (text.includes(call)) assert.fail(`${page} calls ${call} itself`)
     for (const own of ['zoomStep(', 'DETAIL[2].id', 'DETAIL[3].id']) if (text.includes(own)) assert.fail(`${page} has its own ${own}`)
   }
+  // the other pages that draw pixel art: none sets a pixel look on its stage by a wiring of its own, and the two that
+  // show a scene as Diorama would (Biome Islands, the engine page) take the look from the one definition
+  for (const page of ['Islands.tsx', 'FourWays.tsx', 'lessons/PixelArt.tsx']) {
+    const text = readFileSync(new URL(`./${page}`, import.meta.url), 'utf8')
+    assert.ok(text.includes('useStyleOnStage('), `${page} uses the hook`)
+    if (text.includes('.setPixels(')) assert.fail(`${page} calls .setPixels( itself`)
+  }
+  for (const page of ['Islands.tsx', 'Engine.tsx']) {
+    const text = readFileSync(new URL(`./${page}`, import.meta.url), 'utf8')
+    assert.ok(text.includes('pixelLookOf('), `${page} takes its pixel look from styleSettings.ts`)
+    if (text.includes('STEADY')) assert.fail(`${page} builds a pixel look of its own`)
+  }
 })

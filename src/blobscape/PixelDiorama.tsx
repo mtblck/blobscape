@@ -26,18 +26,19 @@ import type { SceneWater } from '../splat-engine/sceneWater.ts'
 import { toPng, useExport } from './diorama/useExport.tsx'
 import type { Texture } from '../splat-engine/meshShape.ts'
 import { decodeTexture } from './modelRig.ts'
-import { detailAsked, labelNames, writeDetail } from '../shared/detail.ts'
+import { writeDetail } from '../shared/detail.ts'
 import { banded, hugged, unlit } from '../splat-engine/voxel.ts'
 import { isPixelStyle, styleAsked, styleWords, type Style } from './diorama/styles.ts'
 import { GLITCH_START, glitchLook, type GlitchChoice } from './glitchLooks.ts'
 import { StyleControls, FinishControls } from './StyleControls.tsx'
+import { CATALOG, GLITCH_DEF, drawnFrom, drawnStart, keysOf, sceneStart, settingsFrom, type DrawnSettings, type SceneSettings } from './styles/catalog.ts'
 import { PIXEL_RATES, PIXEL_SIZES, detailStart, pixelCelLook, pixelFlags, pixelFor, pixelLookOf, pixelSizeAt, pixelStart, pixelZoomAsked, type PixelSettings } from './styleSettings.ts'
 import { useStyleOnStage } from './useStyleOnStage.ts'
 import { ShareDialog } from './diorama/ShareDialog.tsx'
 import { choiceEntries, choiceFrom, linkWith, orbitFrom, orbitText, type Entry } from './diorama/shareLink.ts'
 import { useDrawnLook, useHeld, wantsPlain } from './drawnLook.tsx'
-import { TIMES, timeAsked, timeOf, type TimeId } from './timeOfDay.ts'
-import { CLOUD_COVERS, SkyEase, WEATHERS, WINDS, cloudsAsked, gloomy, isClear, skyState, weatherAsked, windAsked, windAt, type CloudId, type WeatherId, type WindId } from '../splat-engine/skyRecipes.ts'
+import { TIMES, timeOf, type TimeId } from './timeOfDay.ts'
+import { CLOUD_COVERS, SkyEase, WEATHERS, WINDS, gloomy, isClear, skyState, windAt, type CloudId, type WeatherId, type WindId } from '../splat-engine/skyRecipes.ts'
 import { SceneWeather, paletteUnder, underSky } from './diorama/weather.ts'
 import { pileStep } from '../splat-engine/snowCover.ts'
 import { heavenBones, ownClouds, showHeavens } from '../splat-engine/heavens.ts'
@@ -68,6 +69,10 @@ const swung = (orbit: Orbit, swing: number, loop: number, t: number): Orbit => (
 /** What one blob holds: a center, three sizes, a facing, a color and an opacity, each number four bytes. */
 const BLOB_BYTES = (3 + 3 + 4 + 3 + 1) * 4
 
+/** The drawn looks' settings, each under its catalog name in a shared link (`cel.turn=`, `blocks.size=` …). */
+const DRAWN_KEYS = ['marks', 'ascii', 'cel', 'blocks', 'neon', 'glass', 'watercolor'] as const satisfies readonly (keyof DrawnSettings)[]
+/** Every short address the catalog reads (`?px=`, `?block=`, `?tones=` …), which a shared link drops for the full forms. */
+const SHORT_KEYS = [...new Set(Object.values(CATALOG).flatMap((d) => (d.settings as readonly { address?: string }[]).flatMap((x) => (x.address ? [x.address] : []))))]
 
 export function PixelDiorama() {
   const h1 = useFocusHeading()
@@ -95,26 +100,31 @@ export function PixelDiorama() {
    * scene, which every style respects (Matt, 2026-11-21). It brings its sky and light, and the scene's lamps, lit
    * windows and fires go by it (`Diorama.timed`).
    */
-  const [time, setTime] = useState<TimeId | undefined>(() => timeAsked(new URLSearchParams(location.search).get('time')))
+  const [sceneSet, setSceneSet] = useState<SceneSettings>(() => sceneStart(new URLSearchParams(location.search)))
+  const time = sceneSet.time || undefined
+  const setTime = (id: TimeId | undefined) => setSceneSet((c) => ({ ...c, time: id ?? '' }))
   /**
    * The weather and the cloud cover laid over the scene (`?weather=thunderstorm`, `?clouds=cloudy`), or none: recipes
    * every scene takes the same way (Matt, 2026-11-21; splat-engine/skyRecipes.ts). They are laid over the scene, so it
    * is not cut again for them, and the sky eases from one to the next.
    */
-  const [weatherPick, setWeather] = useState<WeatherId | 'none' | undefined>(() => { const q = new URLSearchParams(location.search).get('weather'); return q === 'none' ? 'none' : weatherAsked(q) })
-  const [cloudsPick, setClouds] = useState<CloudId | undefined>(() => cloudsAsked(new URLSearchParams(location.search).get('clouds')))
+  const weatherPick = sceneSet.weather || undefined, cloudsPick = sceneSet.clouds || undefined
+  const setWeather = (id: WeatherId | 'none' | undefined) => setSceneSet((c) => ({ ...c, weather: id ?? '' }))
+  const setClouds = (id: CloudId | undefined) => setSceneSet((c) => ({ ...c, clouds: id ?? '' }))
   // out in space (the space whales) there is no weather: what was picked waits for the next scene that has a sky
   const clouds = picked0.space ? undefined : cloudsPick
   // a scene may start under a shared weather of its own (the koi pond's light rain) until another, or none, is picked
   const weather: WeatherId | undefined = picked0.space || weatherPick === 'none' ? undefined : weatherPick ?? (clouds ? undefined : picked0.weather)
   /** The wind (`?wind=gale`): weather brings at least its own; it slants what falls and raises waves on water. */
-  const [windPick, setWind] = useState<WindId | undefined>(() => windAsked(new URLSearchParams(location.search).get('wind')))
+  const windPick = sceneSet.wind || undefined
+  const setWind = (id: WindId | undefined) => setSceneSet((c) => ({ ...c, wind: id ?? '' }))
   const wind = picked0.space ? undefined : windPick
   /**
    * Whether the weather's clouds float over the scene (`?overhead=0` leaves them out, and rain and snow fall in from
    * over the top of the picture): a scene may start without them, as the koi pond does (Matt, 2026-11-21).
    */
-  const [overheadPick, setOverhead] = useState<boolean | undefined>(() => { const q = new URLSearchParams(location.search).get('overhead'); return q === '0' ? false : q === '1' ? true : undefined })
+  const overheadPick = sceneSet.overhead ?? undefined
+  const setOverhead = (on: boolean) => setSceneSet((c) => ({ ...c, overhead: on }))
   const overhead = overheadPick ?? picked0.overhead ?? true
   // a storm by day is dark enough that lamps waiting for the dark come on: the one thing weather cuts the scene again for
   const diorama = time ? picked0.timed?.(time, gloomy(weather) && !timeOf(time).dark ? 'always' : undefined) ?? picked0 : picked0
@@ -125,10 +135,17 @@ export function PixelDiorama() {
   const [playing, setPlaying] = useState(!calm)
   // a phone starts a step lighter, and a step lighter again for the styles that draw the scene several times a frame
   // (outlines, ASCII, cel shading), as Brush and Ink does; once the visitor picks a detail it is theirs for every style
-  const [chosen, setChosen] = useState<string | undefined>(() => detailAsked(DETAIL, labelNames)?.id)
+  const chosen = sceneSet.detail || undefined
+  const setChosen = (id: string) => setSceneSet((c) => ({ ...c, detail: id }))
   /** How the scene is drawn: as pixel art, or as one of Brush and Ink's looks. `?style=oil` opens on that one. */
   const [style, setStyle] = useState<Style>(() => styleAsked(new URLSearchParams(location.search).get('style')))
-  const [glitch, setGlitch] = useState<GlitchChoice>(() => ({ ...GLITCH_START, ...choiceFrom('glitch', GLITCH_START, new URLSearchParams(location.search)) }))
+  // a shared link gives each style's settings in full (`glitch.strength=`, `cel.turn=`, `blocks.size=` …), read through the catalog
+  const [glitch, setGlitch] = useState<GlitchChoice>(() => settingsFrom(GLITCH_DEF, GLITCH_START, choiceFrom('glitch', GLITCH_START, new URLSearchParams(location.search))))
+  // every other style's settings (styles/catalog.ts): the page holds them, as it holds pixel art's
+  const drawnKept = useState<DrawnSettings>(() => {
+    const q = new URLSearchParams(location.search), start = drawnStart(q, { coarse })
+    return drawnFrom(start, Object.fromEntries(DRAWN_KEYS.map((k) => [k, choiceFrom(k, start[k], q)])))
+  })
   /**
    * Light worked out a pixel at a time (`?shade=1`): pixel art made from a picture cel shading lit, so light and shade
    * fall in bands that follow each form, not blob by blob as the baked light does.
@@ -175,10 +192,8 @@ export function PixelDiorama() {
   const [glbNote, setGlbNote] = useState('')
   const [modelBusy, setModelBusy] = useState(false)
   /** How one scene gives way to the next (`splat-core/transition.ts`), or a plain cut; never under reduced motion. */
-  const [transition, setTransition] = useState<TransitionKind | 'cut'>(() => {
-    const q = new URLSearchParams(location.search).get('transition')
-    return q === 'cut' ? 'cut' : TRANSITIONS.find((t) => t.id === q)?.id ?? TRANSITIONS[0].id
-  })
+  const transition = sceneSet.transition
+  const setTransition = (id: TransitionKind | 'cut') => setSceneSet((c) => ({ ...c, transition: id }))
   const changing = useRef<{ stop: () => void; sheet: HTMLCanvasElement; got: boolean } | null>(null)
   const overlayCanvas = useRef<HTMLCanvasElement>(null)
   const overlayOf = useRef<TransitionOverlay | null>(null)
@@ -385,7 +400,7 @@ export function PixelDiorama() {
   // in the scene's own share of light in shade, a little cool, and all of it held under the baked light's brightest
   // (`LIT_MAX`), so only what gives its own light reaches the pixel pass's glow
   const pixelCel = useMemo<CelLook | undefined>(() => (pixels && shadedNow && !touring ? pixelCelLook(shown.sun, shown.shade ?? 0.5) : undefined), [pixels, shadedNow, touring, shown.sun, shown.shade])
-  const drawing = useDrawnLook(stage, touring ? undefined : drawnStyle, { pixelCel, actor: onStage?.built, water: !!onStage?.of.water, weather: weathered || !!onStage?.of.heavens?.clouds, spacing: DETAIL.find((d) => d.id === onStage?.detail)?.spacing, plain: !!onStage?.plain, time: timeNow, azimuth: shown.views[0].orbit.azimuth, offscreen, light: coarse, loop: shown.loop, sky: shown.finish.sky || weathered ? [styleSky[0], styleSky[1]] : undefined })
+  const drawing = useDrawnLook(stage, touring ? undefined : drawnStyle, { pixelCel, actor: onStage?.built, water: !!onStage?.of.water, weather: weathered || !!onStage?.of.heavens?.clouds, spacing: DETAIL.find((d) => d.id === onStage?.detail)?.spacing, plain: !!onStage?.plain, time: timeNow, azimuth: shown.views[0].orbit.azimuth, offscreen, light: coarse, loop: shown.loop, sky: shown.finish.sky || weathered ? [styleSky[0], styleSky[1]] : undefined }, drawnKept)
   // the walk-through's fourth step is about the four samples, so it draws them whatever the switch says
   const sampling = touring?.id === 'samples'
   const drawnLook = useMemo(() => (asPixels ? (sampling ? { ...look, fine: true } : look) : undefined), [asPixels, sampling, look])
@@ -501,14 +516,18 @@ export function PixelDiorama() {
     const px = isPixelStyle(style), first = shown.views[0], at = shown.views.find((v) => v.id === view) ?? first
     // pixel art's settings as the scene starts them; with another style only glow, rocking and the exact sort still count
     const start = pixelStart(shown.finish)
+    // each drawn look's settings as a bare address starts them; the blocks' sun stands at the time of day's height
+    const bare = drawnStart(new URLSearchParams(), { coarse }), drawn = drawnKept[0], used = keysOf(style)
+    bare.blocks = { ...bare.blocks, height: timeNow?.height ?? bare.blocks.height }
     const e: Entry[] = [
-      // the short keys `pixelStart` reads: the link gives them in full instead
-      ...['px', 'glow', 'own', 'parts', 'heat', 'bands', 'selout', 'cycle', 'steps', 'texel', 'shade', 'rock', 'sort'].map((k) => [k, undefined] as const),
+      // the short forms the catalog reads (`?px=`, `?block=`, `?tones=` …): the link gives every setting in full instead
+      ...SHORT_KEYS.map((k) => [k, undefined] as const),
       ...choiceEntries('pixel', fin, px ? start : { ...fin, glow: start.glow, rock: start.rock, exact: start.exact }),
       ...choiceEntries('glitch', glitch, style === 'glitch' ? GLITCH_START : glitch),
+      // only the drawn look on show: another's settings would only lengthen the link
+      ...DRAWN_KEYS.flatMap((k) => choiceEntries(k, drawn[k], used.includes(k) ? bare[k] : drawn[k])),
       ['view', at.id !== first.id ? at.id : undefined],
       ['orbit', orbitText(orbit) !== orbitText(at.orbit) ? orbitText(orbit) : undefined],
-      ...drawing.share(),
     ]
     setSharing(linkWith(location.href, e))
   }

@@ -5,7 +5,7 @@
  */
 
 /** A settings object of plain fields, as every look's choice is (`CelChoice`, `BlockChoice`, `GlitchChoice` …). */
-export type Plain<T> = { [K in keyof T]: number | string | boolean }
+export type Plain<T> = { [K in keyof T]: number | string | boolean | null }
 
 /** One address setting: a value, or undefined to leave it out. */
 export type Entry = readonly [key: string, value: string | undefined]
@@ -13,14 +13,14 @@ export type Entry = readonly [key: string, value: string | undefined]
 /** A number as short as it can be written and still read back the same to four significant figures. */
 export const short = (v: number) => String(Number(v.toPrecision(4)))
 
-const write = (v: number | string | boolean) => (typeof v === 'boolean' ? (v ? '1' : '0') : typeof v === 'number' ? short(v) : v)
+const write = (v: number | string | boolean | null) => (v === null ? undefined : typeof v === 'boolean' ? (v ? '1' : '0') : typeof v === 'number' ? short(v) : v)
 
 /**
  * The fields of `now` that differ from `start`, as `prefix.field` entries; the fields that don't are left out
  * (undefined), so a link drops a setting the visitor has put back.
  */
 export function choiceEntries<T extends Plain<T>>(prefix: string, now: T, start: T): Entry[] {
-  const a = now as Record<string, number | string | boolean>, b = start as Record<string, number | string | boolean>
+  const a = now as Record<string, number | string | boolean | null>, b = start as Record<string, number | string | boolean | null>
   return Object.keys(b).map((k) => {
     const v = a[k], w = b[k], same = typeof v === 'number' && typeof w === 'number' ? short(v) === short(w) : v === w
     return [`${prefix}.${k}`, same || v === undefined ? undefined : write(v)] as const
@@ -36,8 +36,10 @@ export function choiceFrom<T extends Plain<T>>(prefix: string, start: T, q: URLS
   for (const k of Object.keys(start)) {
     const s = q.get(`${prefix}.${k}`)
     if (s === null) continue
-    const kind = typeof (start as Record<string, unknown>)[k]
-    if (kind === 'number') { const n = Number(s); if (s.trim() !== '' && Number.isFinite(n)) out[k] = n }
+    const was = (start as Record<string, unknown>)[k], kind = typeof was
+    // a field that starts as null ("the look's own way") takes a switch
+    if (was === null) { if (s === '1' || s === '0') out[k] = s === '1' }
+    else if (kind === 'number') { const n = Number(s); if (s.trim() !== '' && Number.isFinite(n)) out[k] = n }
     else if (kind === 'boolean') { if (s === '1' || s === '0') out[k] = s === '1' }
     else if (s !== '') out[k] = s
   }

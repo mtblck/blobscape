@@ -34,3 +34,13 @@ test('each site gets the link whole', () => {
     assert.ok([...u.searchParams.values()].includes(link), s.id)
   }
 })
+
+test('a field that starts as null (the look’s own way) is written only once it is set, and read back as a switch', () => {
+  const start = { outline: null as boolean | null, size: 1 }
+  assert.deepEqual(choiceEntries('marks', start, start), [['marks.outline', undefined], ['marks.size', undefined]])
+  const e = choiceEntries('marks', { outline: false, size: 1 }, start)
+  assert.deepEqual(e[0], ['marks.outline', '0'])
+  const q = new URLSearchParams(linkWith('https://x.test/', e).split('?')[1])
+  assert.deepEqual(choiceFrom('marks', start, q), { outline: false })
+  assert.deepEqual(choiceFrom('marks', start, new URLSearchParams('marks.outline=maybe')), {})
+})
