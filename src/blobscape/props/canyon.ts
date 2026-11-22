@@ -200,7 +200,7 @@ export const DESERT_TREE: PropDoc = {
       { shape: { kind: 'tree', at: [-0.45, 0.05, 0.75], height: 0.22, crown: [0.32, 0.18, 0.28], r: 0.045, points: 110, leaves: 0.045, only: 'leaves', seed: 4 }, paint: { kind: 'speckle', size: 0.04, colors: ['#8aa04a', '#5e7e3a', '#3e5a30'] }, bone: 'tree', noShadow: true },
     ],
     moves: [
-      { kind: 'sway', bone: 'tree', axis: 'x', degrees: 1.2, times: 2 },
+      { kind: 'sway', bone: 'tree', axis: 'x', degrees: 1.2, times: 2, wind: 4 },
     ],
   },
 }

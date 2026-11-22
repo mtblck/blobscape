@@ -122,6 +122,9 @@ export const ROADSIDE_TREE: PropDoc = {
       { shape: { kind: 'join', shapes: [{ kind: 'sphere', at: [-1.45, 0.828, -0.82], r: 0.345 }, { kind: 'sphere', at: [-1.68, 0.69, -0.78], r: 0.23 }, { kind: 'sphere', at: [-1.208, 0.713, -0.84], r: 0.2415 }, { kind: 'sphere', at: [-1.4, 1.092, -0.82], r: 0.23 }] }, paint: { kind: 'patches', size: 0.14, colors: ['#e0662a', '#b8401f', '#f39a3c', '#7a2a1a'] }, bone: 'by8', noShadow: true },
       { shape: { kind: 'ball', at: [-1.45, 0.012, -0.82], r: [0.345, 0.008, 0.12] }, paint: '#5e3b22', bone: 'by8', noShadow: true, bare: true },
     ],
+    moves: [
+      { kind: 'sway', bone: 'by8', axis: 'z', degrees: 1.5, times: 2, wind: 4 },
+    ],
   },
 }
 
@@ -149,6 +152,9 @@ export const SECOND_ROADSIDE_TREE: PropDoc = {
       { shape: { kind: 'cylinder', at: [-0.62, 0, -0.8], height: 0.5225, r: 0.06, rTop: 0.04 }, paint: { kind: 'bands', axis: 'y', size: 0.08, colors: ['#5e3b22', '#3e2617'] }, bone: 'by9', noShadow: true },
       { shape: { kind: 'join', shapes: [{ kind: 'sphere', at: [-0.62, 0.684, -0.8], r: 0.285 }, { kind: 'sphere', at: [-0.81, 0.57, -0.76], r: 0.19 }, { kind: 'sphere', at: [-0.42, 0.589, -0.82], r: 0.1995 }, { kind: 'sphere', at: [-0.57, 0.903, -0.8], r: 0.19 }] }, paint: { kind: 'patches', size: 0.14, colors: ['#dcae4a', '#b8892e', '#f39a3c', '#f1d57a'] }, bone: 'by9', noShadow: true },
       { shape: { kind: 'ball', at: [-0.62, 0.012, -0.8], r: [0.285, 0.008, 0.12] }, paint: '#5e3b22', bone: 'by9', noShadow: true, bare: true },
+    ],
+    moves: [
+      { kind: 'sway', bone: 'by9', axis: 'z', degrees: 1.5, times: 2, wind: 4 },
     ],
   },
 }

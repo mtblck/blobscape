@@ -120,8 +120,8 @@ export const AUTUMN_MAPLE: PropDoc = {
       { shape: { kind: 'grow', style: 'tree', at: [1.15, 0, -0.35], seed: 21, size: 0.62, r: 0.07, depth: 4, tips: 0.11, only: 'tips' }, paint: { kind: 'speckle', size: 0.045, colors: ['#e0602a', '#b23a1c', '#f29a3a', '#7a2418'] }, bone: 'crown', noShadow: true },
     ],
     moves: [
-      { kind: 'sway', bone: 'maple', axis: 'z', degrees: 1.5, times: 2 },
-      { kind: 'sway', bone: 'crown', axis: 'x', degrees: 2.5, times: 3, phase: 0.2 },
+      { kind: 'sway', bone: 'maple', axis: 'z', degrees: 1.5, times: 2, wind: 2 },
+      { kind: 'sway', bone: 'crown', axis: 'x', degrees: 2.5, times: 3, phase: 0.2, wind: 4 },
     ],
   },
 }

@@ -439,10 +439,10 @@ export const WALL_TREE: PropDoc = {
       { shape: { kind: 'rough', shape: { kind: 'ball', at: [1.276, 3.08, -0.44], r: [0.37, 0.264, 0.352] }, by: 0.044, scale: 0.194 }, paint: { kind: 'faces', top: { kind: 'speckle', size: 0.07, colors: ['#3a7c5c', '#72b47c', '#3a7c5c', '#c8327c'] }, side: { kind: 'speckle', size: 0.07, colors: ['#225044', '#3a7c5c', '#225044', '#14302c'] }, under: '#14302c' }, bone: 'crown3' },
     ],
     moves: [
-      { kind: 'sway', bone: 'crown0', axis: 'z', degrees: 3, times: 2, phase: 0 },
-      { kind: 'sway', bone: 'crown1', axis: 'z', degrees: 3, times: 3, phase: 0.23 },
-      { kind: 'sway', bone: 'crown2', axis: 'z', degrees: 3, times: 2, phase: 0.46 },
-      { kind: 'sway', bone: 'crown3', axis: 'z', degrees: 3, times: 3, phase: 0.69 },
+      { kind: 'sway', bone: 'crown0', axis: 'z', degrees: 3, times: 2, phase: 0, wind: 4 },
+      { kind: 'sway', bone: 'crown1', axis: 'z', degrees: 3, times: 3, phase: 0.23, wind: 4 },
+      { kind: 'sway', bone: 'crown2', axis: 'z', degrees: 3, times: 2, phase: 0.46, wind: 4 },
+      { kind: 'sway', bone: 'crown3', axis: 'z', degrees: 3, times: 3, phase: 0.69, wind: 4 },
     ],
   },
 }
@@ -482,12 +482,12 @@ export const LIBRARY_FERNS: PropDoc = {
       { shape: { kind: 'join', shapes: [{ kind: 'cone', from: [1.146, 0, 0.254], to: [1.196, 0.267, 0.085], r: 0.025, rTo: 0.007 }, { kind: 'cone', from: [1.146, 0, 0.254], to: [1.322, 0.316, 0.25], r: 0.025, rTo: 0.007 }, { kind: 'cone', from: [1.146, 0, 0.254], to: [1.205, 0.198, 0.42], r: 0.025, rTo: 0.007 }, { kind: 'cone', from: [1.146, 0, 0.254], to: [1.006, 0.336, 0.362], r: 0.025, rTo: 0.007 }, { kind: 'cone', from: [1.146, 0, 0.254], to: [1.001, 0.219, 0.155], r: 0.025, rTo: 0.007 }] }, paint: '#72b47c', bone: 'fern5', noShadow: true },
     ],
     moves: [
-      { kind: 'sway', bone: 'fern0', axis: 'z', degrees: 6, times: 2, phase: 0.938 },
-      { kind: 'sway', bone: 'fern1', axis: 'x', degrees: 6, times: 3, phase: 0.627 },
-      { kind: 'sway', bone: 'fern2', axis: 'z', degrees: 6, times: 2, phase: 0.278 },
-      { kind: 'sway', bone: 'fern3', axis: 'x', degrees: 6, times: 3, phase: 0.278 },
-      { kind: 'sway', bone: 'fern4', axis: 'z', degrees: 6, times: 2, phase: 0.582 },
-      { kind: 'sway', bone: 'fern5', axis: 'x', degrees: 6, times: 3, phase: 0.597 },
+      { kind: 'sway', bone: 'fern0', axis: 'z', degrees: 6, times: 2, phase: 0.938, wind: 8 },
+      { kind: 'sway', bone: 'fern1', axis: 'x', degrees: 6, times: 3, phase: 0.627, wind: 8 },
+      { kind: 'sway', bone: 'fern2', axis: 'z', degrees: 6, times: 2, phase: 0.278, wind: 8 },
+      { kind: 'sway', bone: 'fern3', axis: 'x', degrees: 6, times: 3, phase: 0.278, wind: 8 },
+      { kind: 'sway', bone: 'fern4', axis: 'z', degrees: 6, times: 2, phase: 0.582, wind: 8 },
+      { kind: 'sway', bone: 'fern5', axis: 'x', degrees: 6, times: 3, phase: 0.597, wind: 8 },
     ],
   },
 }

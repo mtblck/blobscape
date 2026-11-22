@@ -403,9 +403,9 @@ export const MANGROVE: PropDoc = {
       { shape: { kind: 'rough', shape: { kind: 'ball', at: [-0.98, 1.45, -0.95], r: [0.3, 0.186, 0.3] }, by: 0.04, scale: 0.2 }, paint: { kind: 'faces', top: { kind: 'speckle', size: 0.07, colors: ['#3c7c3c', '#7cb050', '#3c7c3c', '#22502c'] }, side: { kind: 'speckle', size: 0.07, colors: ['#22502c', '#3c7c3c', '#22502c', '#14301e'] }, under: '#14301e' }, bone: 'crown02' },
     ],
     moves: [
-      { kind: 'sway', bone: 'crown00', axis: 'z', degrees: 2.5, times: 2, phase: 0 },
-      { kind: 'sway', bone: 'crown01', axis: 'z', degrees: 2.5, times: 3, phase: 0.2 },
-      { kind: 'sway', bone: 'crown02', axis: 'z', degrees: 2.5, times: 2, phase: 0.4 },
+      { kind: 'sway', bone: 'crown00', axis: 'z', degrees: 2.5, times: 2, phase: 0, wind: 4 },
+      { kind: 'sway', bone: 'crown01', axis: 'z', degrees: 2.5, times: 3, phase: 0.2, wind: 4 },
+      { kind: 'sway', bone: 'crown02', axis: 'z', degrees: 2.5, times: 2, phase: 0.4, wind: 4 },
     ],
   },
 }
@@ -440,9 +440,9 @@ export const MANGROVE_WIDE: PropDoc = {
       { shape: { kind: 'rough', shape: { kind: 'ball', at: [1.57, 1.2, -1], r: [0.3, 0.186, 0.3] }, by: 0.04, scale: 0.2 }, paint: { kind: 'faces', top: { kind: 'speckle', size: 0.07, colors: ['#3c7c3c', '#7cb050', '#3c7c3c', '#22502c'] }, side: { kind: 'speckle', size: 0.07, colors: ['#22502c', '#3c7c3c', '#22502c', '#14301e'] }, under: '#14301e' }, bone: 'crown12' },
     ],
     moves: [
-      { kind: 'sway', bone: 'crown10', axis: 'z', degrees: 2.5, times: 2, phase: 0.3 },
-      { kind: 'sway', bone: 'crown11', axis: 'z', degrees: 2.5, times: 3, phase: 0.5 },
-      { kind: 'sway', bone: 'crown12', axis: 'z', degrees: 2.5, times: 2, phase: 0.7 },
+      { kind: 'sway', bone: 'crown10', axis: 'z', degrees: 2.5, times: 2, phase: 0.3, wind: 4 },
+      { kind: 'sway', bone: 'crown11', axis: 'z', degrees: 2.5, times: 3, phase: 0.5, wind: 4 },
+      { kind: 'sway', bone: 'crown12', axis: 'z', degrees: 2.5, times: 2, phase: 0.7, wind: 4 },
     ],
   },
 }
@@ -502,14 +502,14 @@ export const LAGOON_REEDS: PropDoc = {
       { shape: { kind: 'join', shapes: [{ kind: 'cone', from: [1.599, 0, -0.405], to: [1.629, 0.386, -0.405], r: 0.014, rTo: 0.008 }, { kind: 'cone', from: [1.451, 0, -0.428], to: [1.481, 0.608, -0.428], r: 0.014, rTo: 0.008 }, { kind: 'cone', from: [1.537, 0, -0.354], to: [1.567, 0.379, -0.354], r: 0.014, rTo: 0.008 }, { kind: 'cone', from: [1.442, 0, -0.451], to: [1.472, 0.645, -0.451], r: 0.014, rTo: 0.008 }] }, paint: '#7cb050', bone: 'reed7', noShadow: true },
     ],
     moves: [
-      { kind: 'sway', bone: 'reed0', axis: 'z', degrees: 5, times: 2, phase: 0.938 },
-      { kind: 'sway', bone: 'reed1', axis: 'x', degrees: 5, times: 3, phase: 0.627 },
-      { kind: 'sway', bone: 'reed2', axis: 'z', degrees: 5, times: 2, phase: 0.278 },
-      { kind: 'sway', bone: 'reed3', axis: 'x', degrees: 5, times: 3, phase: 0.278 },
-      { kind: 'sway', bone: 'reed4', axis: 'z', degrees: 5, times: 2, phase: 0.582 },
-      { kind: 'sway', bone: 'reed5', axis: 'x', degrees: 5, times: 3, phase: 0.597 },
-      { kind: 'sway', bone: 'reed6', axis: 'z', degrees: 5, times: 2, phase: 0.804 },
-      { kind: 'sway', bone: 'reed7', axis: 'x', degrees: 5, times: 3, phase: 0.125 },
+      { kind: 'sway', bone: 'reed0', axis: 'z', degrees: 5, times: 2, phase: 0.938, wind: 10 },
+      { kind: 'sway', bone: 'reed1', axis: 'x', degrees: 5, times: 3, phase: 0.627, wind: 10 },
+      { kind: 'sway', bone: 'reed2', axis: 'z', degrees: 5, times: 2, phase: 0.278, wind: 10 },
+      { kind: 'sway', bone: 'reed3', axis: 'x', degrees: 5, times: 3, phase: 0.278, wind: 10 },
+      { kind: 'sway', bone: 'reed4', axis: 'z', degrees: 5, times: 2, phase: 0.582, wind: 10 },
+      { kind: 'sway', bone: 'reed5', axis: 'x', degrees: 5, times: 3, phase: 0.597, wind: 10 },
+      { kind: 'sway', bone: 'reed6', axis: 'z', degrees: 5, times: 2, phase: 0.804, wind: 10 },
+      { kind: 'sway', bone: 'reed7', axis: 'x', degrees: 5, times: 3, phase: 0.125, wind: 10 },
     ],
   },
 }

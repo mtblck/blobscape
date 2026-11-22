@@ -134,8 +134,14 @@ export const SNOWY_FIR: PropDoc = {
     skyReach: 0.8,
     look: { dither: 0.5, glow: 1.4, outline: true, edges: true },
     camera: { target: [0, 0.32, 0.05], distance: 5, azimuth: 22, elevation: 22, swing: 8 },
+    bones: [
+      { name: 'fir', at: [-1.05, 0, -0.45] },
+    ],
     parts: [
-      { shape: { kind: 'join', shapes: [{ kind: 'cylinder', at: [-1.05, 0, -0.45], height: 0.12, r: 0.035 }, { kind: 'cylinder', at: [-1.05, 0.1, -0.45], height: 0.4, r: 0.24, rTop: 0.1 }, { kind: 'cylinder', at: [-1.05, 0.34, -0.45], height: 0.34, r: 0.18, rTop: 0.05 }, { kind: 'cylinder', at: [-1.05, 0.56, -0.45], height: 0.3, r: 0.12, rTop: 0.01 }] }, paint: { kind: 'faces', top: '#2c5a44', side: { kind: 'patches', size: 0.08, colors: ['#1a3c30', '#0e2620'] } } },
+      { shape: { kind: 'join', shapes: [{ kind: 'cylinder', at: [-1.05, 0, -0.45], height: 0.12, r: 0.035 }, { kind: 'cylinder', at: [-1.05, 0.1, -0.45], height: 0.4, r: 0.24, rTop: 0.1 }, { kind: 'cylinder', at: [-1.05, 0.34, -0.45], height: 0.34, r: 0.18, rTop: 0.05 }, { kind: 'cylinder', at: [-1.05, 0.56, -0.45], height: 0.3, r: 0.12, rTop: 0.01 }] }, paint: { kind: 'faces', top: '#2c5a44', side: { kind: 'patches', size: 0.08, colors: ['#1a3c30', '#0e2620'] } }, bone: 'fir' },
+    ],
+    moves: [
+      { kind: 'sway', bone: 'fir', axis: 'z', degrees: 1, times: 2, wind: 3 },
     ],
   },
 }
@@ -157,8 +163,14 @@ export const SNOWY_FIR_2: PropDoc = {
     skyReach: 0.8,
     look: { dither: 0.5, glow: 1.4, outline: true, edges: true },
     camera: { target: [0, 0.32, 0.05], distance: 5, azimuth: 22, elevation: 22, swing: 8 },
+    bones: [
+      { name: 'fir', at: [1.1, 0, -0.55] },
+    ],
     parts: [
-      { shape: { kind: 'join', shapes: [{ kind: 'cylinder', at: [1.1, 0, -0.55], height: 0.1, r: 0.03 }, { kind: 'cylinder', at: [1.1, 0.08, -0.55], height: 0.34, r: 0.2, rTop: 0.08 }, { kind: 'cylinder', at: [1.1, 0.28, -0.55], height: 0.3, r: 0.15, rTop: 0.04 }, { kind: 'cylinder', at: [1.1, 0.48, -0.55], height: 0.26, r: 0.1, rTop: 0.01 }] }, paint: { kind: 'faces', top: '#2c5a44', side: { kind: 'patches', size: 0.08, colors: ['#1a3c30', '#0e2620'] } } },
+      { shape: { kind: 'join', shapes: [{ kind: 'cylinder', at: [1.1, 0, -0.55], height: 0.1, r: 0.03 }, { kind: 'cylinder', at: [1.1, 0.08, -0.55], height: 0.34, r: 0.2, rTop: 0.08 }, { kind: 'cylinder', at: [1.1, 0.28, -0.55], height: 0.3, r: 0.15, rTop: 0.04 }, { kind: 'cylinder', at: [1.1, 0.48, -0.55], height: 0.26, r: 0.1, rTop: 0.01 }] }, paint: { kind: 'faces', top: '#2c5a44', side: { kind: 'patches', size: 0.08, colors: ['#1a3c30', '#0e2620'] } }, bone: 'fir' },
+    ],
+    moves: [
+      { kind: 'sway', bone: 'fir', axis: 'z', degrees: 1, times: 2, wind: 3 },
     ],
   },
 }
@@ -180,8 +192,14 @@ export const SNOWY_FIR_3: PropDoc = {
     skyReach: 0.8,
     look: { dither: 0.5, glow: 1.4, outline: true, edges: true },
     camera: { target: [0, 0.32, 0.05], distance: 5, azimuth: 22, elevation: 22, swing: 8 },
+    bones: [
+      { name: 'fir', at: [-0.75, 0, -0.95] },
+    ],
     parts: [
-      { shape: { kind: 'join', shapes: [{ kind: 'cylinder', at: [-0.75, 0, -0.95], height: 0.1, r: 0.03 }, { kind: 'cylinder', at: [-0.75, 0.08, -0.95], height: 0.3, r: 0.17, rTop: 0.06 }, { kind: 'cylinder', at: [-0.75, 0.26, -0.95], height: 0.26, r: 0.12, rTop: 0.01 }] }, paint: { kind: 'faces', top: '#2c5a44', side: { kind: 'patches', size: 0.08, colors: ['#1a3c30', '#0e2620'] } } },
+      { shape: { kind: 'join', shapes: [{ kind: 'cylinder', at: [-0.75, 0, -0.95], height: 0.1, r: 0.03 }, { kind: 'cylinder', at: [-0.75, 0.08, -0.95], height: 0.3, r: 0.17, rTop: 0.06 }, { kind: 'cylinder', at: [-0.75, 0.26, -0.95], height: 0.26, r: 0.12, rTop: 0.01 }] }, paint: { kind: 'faces', top: '#2c5a44', side: { kind: 'patches', size: 0.08, colors: ['#1a3c30', '#0e2620'] } }, bone: 'fir' },
+    ],
+    moves: [
+      { kind: 'sway', bone: 'fir', axis: 'z', degrees: 1, times: 2, wind: 3 },
     ],
   },
 }

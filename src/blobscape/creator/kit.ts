@@ -74,6 +74,6 @@ export const KIT: SceneDoc = {
     { shape: { kind: 'rough', shape: { kind: 'ball', at: p(11, 0, 0.2, 0), r: [0.3, 0.22, 0.28] }, by: 0.05, scale: 0.25 }, paint: { kind: 'speckle', size: 0.045, colors: ['#466434', '#6c8a40', '#2c4428', '#9aae52'] }, bone: 'bush' },
   ],
   moves: [
-    { kind: 'sway', bone: 'oakCrown', axis: 'x', degrees: 1.5, times: 2 },
+    { kind: 'sway', bone: 'oakCrown', axis: 'x', degrees: 1.5, times: 2, wind: 4 },
   ],
 }

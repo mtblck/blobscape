@@ -268,7 +268,7 @@ export const GLOWING_FLOWER: PropDoc = {
       { shape: { kind: 'ball', at: [0.62, 0.661, 0.4], r: [0.122, 0.082, 0.122] }, paint: { kind: 'speckle', size: 0.04, colors: ['#f7c341', '#ffe58a', '#e09a26'] }, glow: true, bone: 'bloom' },
     ],
     moves: [
-      { kind: 'sway', bone: 'bloom', axis: 'z', degrees: 3, times: 2 },
+      { kind: 'sway', bone: 'bloom', axis: 'z', degrees: 3, times: 2, wind: 8 },
       { kind: 'sway', bone: 'bloom', axis: 'x', degrees: 2, times: 3, phase: 0.3 },
     ],
   },

@@ -4,3 +4,4 @@
 - Diorama: when a device runs out of graphics memory and the browser stops drawing, the view says so and offers to start again a detail lower, instead of staying blank.
 - Diorama: Turkey Run and the henge are rebuilt from props too: the country road with everything going by is a land, the turkey and the cook run on it, and the magic circle and the witch come and go on the henge's turf as props of their own (also in the library).
 - Diorama: the space whales are rebuilt from props in deep space (the great whale, two calves, the ringed planet and tumbling rocks are in the library), and a scene out in space offers no time of day or weather.
+- Diorama and Scene Creator: every outdoor tree, pine, fern, reed, corn stalk, flower and hanging paper lamp now leans and flutters in the wind (seaweed under the sea, sprouts in their jars, cacti and mushrooms stay still).

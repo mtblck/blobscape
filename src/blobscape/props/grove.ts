@@ -100,9 +100,9 @@ export const LANTERN_BIRCH: PropDoc = {
       { shape: { kind: 'cylinder', at: [0.64, 2.509, -0.12], height: 0.02, r: 0.035 }, paint: '#2c2c3c', bone: 'lamp1', noShadow: true },
     ],
     moves: [
-      { kind: 'sway', bone: 'tree0', axis: 'z', degrees: 1.4, times: 2, phase: 0 },
-      { kind: 'sway', bone: 'lamp0', axis: 'z', degrees: 9, times: 2, phase: 0 },
-      { kind: 'sway', bone: 'lamp1', axis: 'z', degrees: 9, times: 3, phase: 0.17 },
+      { kind: 'sway', bone: 'tree0', axis: 'z', degrees: 1.4, times: 2, phase: 0, wind: 3 },
+      { kind: 'sway', bone: 'lamp0', axis: 'z', degrees: 9, times: 2, phase: 0, wind: 10 },
+      { kind: 'sway', bone: 'lamp1', axis: 'z', degrees: 9, times: 3, phase: 0.17, wind: 10 },
     ],
     lights: [
       { at: [-0.1, 1.05, 0.5], color: '#ff9c28', strength: 1.8, range: 1.8, lit: 'dark', flicker: { by: 0.15, times: 5 } },
@@ -149,9 +149,9 @@ export const LANTERN_BIRCH_SHORT: PropDoc = {
       { shape: { kind: 'cylinder', at: [-0.698, 1.766, 0.33], height: 0.02, r: 0.035 }, paint: '#2c2c3c', bone: 'lamp3', noShadow: true },
     ],
     moves: [
-      { kind: 'sway', bone: 'tree1', axis: 'z', degrees: 1.4, times: 3, phase: 0.21 },
-      { kind: 'sway', bone: 'lamp2', axis: 'z', degrees: 9, times: 2, phase: 0.34 },
-      { kind: 'sway', bone: 'lamp3', axis: 'z', degrees: 9, times: 3, phase: 0.51 },
+      { kind: 'sway', bone: 'tree1', axis: 'z', degrees: 1.4, times: 3, phase: 0.21, wind: 3 },
+      { kind: 'sway', bone: 'lamp2', axis: 'z', degrees: 9, times: 2, phase: 0.34, wind: 10 },
+      { kind: 'sway', bone: 'lamp3', axis: 'z', degrees: 9, times: 3, phase: 0.51, wind: 10 },
     ],
     lights: [
       { at: [-1.15, 0.8, 0.7], color: '#ff9c28', strength: 1.4, range: 1.3, lit: 'dark', flicker: { by: 0.15, times: 7 } },
@@ -198,9 +198,9 @@ export const LANTERN_BIRCH_MID: PropDoc = {
       { shape: { kind: 'cylinder', at: [1.655, 1.833, 0.03], height: 0.02, r: 0.035 }, paint: '#2c2c3c', bone: 'lamp5', noShadow: true },
     ],
     moves: [
-      { kind: 'sway', bone: 'tree2', axis: 'z', degrees: 1.4, times: 2, phase: 0.42 },
-      { kind: 'sway', bone: 'lamp4', axis: 'z', degrees: 9, times: 2, phase: 0.68 },
-      { kind: 'sway', bone: 'lamp5', axis: 'z', degrees: 9, times: 3, phase: 0.85 },
+      { kind: 'sway', bone: 'tree2', axis: 'z', degrees: 1.4, times: 2, phase: 0.42, wind: 3 },
+      { kind: 'sway', bone: 'lamp4', axis: 'z', degrees: 9, times: 2, phase: 0.68, wind: 10 },
+      { kind: 'sway', bone: 'lamp5', axis: 'z', degrees: 9, times: 3, phase: 0.85, wind: 10 },
     ],
     lights: [
       { at: [1.1, 0.85, 0.5], color: '#ff9c28', strength: 1.4, range: 1.3, lit: 'dark', flicker: { by: 0.15, times: 6 } },
@@ -244,9 +244,9 @@ export const SNOWY_BIRCH: PropDoc = {
       { shape: { kind: 'cylinder', at: [1.195, 1.491, -0.97], height: 0.02, r: 0.035 }, paint: '#2c2c3c', bone: 'lamp7', noShadow: true },
     ],
     moves: [
-      { kind: 'sway', bone: 'tree3', axis: 'z', degrees: 1.4, times: 3, phase: 0.63 },
-      { kind: 'sway', bone: 'lamp6', axis: 'z', degrees: 9, times: 2, phase: 0.02 },
-      { kind: 'sway', bone: 'lamp7', axis: 'z', degrees: 9, times: 3, phase: 0.19 },
+      { kind: 'sway', bone: 'tree3', axis: 'z', degrees: 1.4, times: 3, phase: 0.63, wind: 3 },
+      { kind: 'sway', bone: 'lamp6', axis: 'z', degrees: 9, times: 2, phase: 0.02, wind: 10 },
+      { kind: 'sway', bone: 'lamp7', axis: 'z', degrees: 9, times: 3, phase: 0.19, wind: 10 },
     ],
   },
 }
@@ -279,7 +279,7 @@ export const SNOWY_BIRCH_TALL: PropDoc = {
       { shape: { kind: 'ball', at: [-0.91, 2.02, -1.05], r: [0.075, 0.04, 0.075] }, paint: '#e4f0f8', bone: 'tree4', noShadow: true },
     ],
     moves: [
-      { kind: 'sway', bone: 'tree4', axis: 'z', degrees: 1.4, times: 2, phase: 0.84 },
+      { kind: 'sway', bone: 'tree4', axis: 'z', degrees: 1.4, times: 2, phase: 0.84, wind: 3 },
     ],
   },
 }
