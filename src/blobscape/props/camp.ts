@@ -24,7 +24,7 @@ export const PINE_CLEARING: PropDoc = {
       '#7b2f45', '#b9485a', '#e8dcc0', '#f4f1e4',
     ],
     sky: ['#0a0f1e', '#1f2d55'],
-    look: { dither: 0.5, glow: 1.75, outline: true, edges: true, bands: 2, heat: 1, cycle: [{ colors: ['#d9541e', '#f59a2a', '#ffd166'], times: 48 }] },
+    look: { dither: 0.5, glow: 1.75, outline: true, edges: true, bands: 2, heat: 1 },
     camera: { target: [0, 1, 0], distance: 5.2, azimuth: 18, elevation: 13 },
     air: { haze: { color: '#141c36', from: 1, to: 7 }, specks: [{ kind: 'embers', lit: 'dark', count: 30, from: [-0.05, 0.25, 0.1], to: [0.25, 1.8, 0.4], colors: ['#f59a2a', '#ffd166', '#d9541e'] }] },
     bones: [
@@ -76,7 +76,7 @@ export const PINE_CLEARING: PropDoc = {
   },
 }
 
-/** A ring of stones round a log fire that flickers and throws sparks, lit when it is dark. */
+/** A ring of stones round a log fire that burns and throws sparks, lit when it is dark. */
 export const CAMPFIRE_FIRE: PropDoc = {
   name: 'Campfire',
   foot: [0.1, -0.0564, 0.25],
@@ -91,8 +91,34 @@ export const CAMPFIRE_FIRE: PropDoc = {
       '#7b2f45', '#b9485a', '#e8dcc0', '#f4f1e4',
     ],
     sky: ['#0a0f1e', '#1f2d55'],
-    look: { dither: 0.5, glow: 1.75, outline: true, edges: true, bands: 2, heat: 1, cycle: [{ colors: ['#d9541e', '#f59a2a', '#ffd166'], times: 48 }] },
+    look: { dither: 0.5, glow: 1.75, outline: true, edges: true, bands: 2, heat: 1 },
     camera: { target: [0, 1, 0], distance: 5.2, azimuth: 18, elevation: 13 },
+    parts: [
+      { shape: { kind: 'cylinder', at: [0.1, -0.03, 0.25], height: 0.055, r: 0.5 }, paint: { kind: 'speckle', size: 0.05, colors: ['#6e4a2e', '#4a3020', '#9a6d43'] } },
+      { shape: { kind: 'rough', shape: { kind: 'join', shapes: [{ kind: 'sphere', at: [0.32, 0.03, 0.25], r: 0.065 }, { kind: 'sphere', at: [0.269, 0.03, 0.391], r: 0.055 }, { kind: 'sphere', at: [0.138, 0.03, 0.467], r: 0.065 }, { kind: 'sphere', at: [-0.01, 0.03, 0.441], r: 0.055 }, { kind: 'sphere', at: [-0.107, 0.03, 0.325], r: 0.065 }, { kind: 'sphere', at: [-0.107, 0.03, 0.175], r: 0.055 }, { kind: 'sphere', at: [-0.01, 0.03, 0.059], r: 0.065 }, { kind: 'sphere', at: [0.138, 0.03, 0.033], r: 0.055 }, { kind: 'sphere', at: [0.269, 0.03, 0.109], r: 0.065 }] }, by: 0.012, scale: 0.12 }, paint: { kind: 'faces', top: '#8a8898', side: '#5d5c6c', under: '#3a3a48' } },
+      { shape: { kind: 'cone', from: [-0.05, 0.03, 0.2], to: [0.24, 0.1, 0.3], r: 0.032 }, paint: { kind: 'speckle', size: 0.04, colors: ['#4a3020', '#2a1c16', '#d9541e'] } },
+      { shape: { kind: 'cone', from: [0.22, 0.03, 0.14], to: [0.02, 0.1, 0.34], r: 0.032 }, paint: { kind: 'speckle', size: 0.04, colors: ['#4a3020', '#2a1c16', '#d9541e'] } },
+      { shape: { kind: 'cone', from: [0.1, 0.03, 0.4], to: [0.1, 0.11, 0.12], r: 0.032 }, paint: { kind: 'speckle', size: 0.04, colors: ['#4a3020', '#2a1c16', '#d9541e'] } },
+    ],
+    // the fire itself is simulated (fire.ts): hot gas rising off the bed of logs, with the sparks it throws
+    fires: [{ at: [0.1, 0.09, 0.26], r: 0.105, height: 0.42, sparks: 1.5, lit: 'dark' }],
+    lights: [
+      { at: [0.1, 0.3, 0.25], color: '#f59a2a', strength: 3, range: 0.9, lit: 'dark', flicker: { by: 0.25, times: 11 }, fire: 0 },
+    ],
+  },
+}
+
+/**
+ * The campfire with a flame made of shapes that pulse and sway, as it was before fires were simulated. One Scene, Four
+ * Ways draws this one: its shader and its three.js panels are typed out by hand from these shapes, and Spark's panel
+ * draws the blobs cut from them.
+ */
+export const CAMPFIRE_SHAPED: PropDoc = {
+  ...CAMPFIRE_FIRE,
+  doc: {
+    ...CAMPFIRE_FIRE.doc,
+    fires: undefined,
+    lights: CAMPFIRE_FIRE.doc.lights?.map(({ fire: _fire, ...l }) => l),
     bones: [
       { name: 'flame', at: [0.1, 0.05, 0.25] },
       { name: 'core', at: [0.1, 0.05, 0.25] },
@@ -104,11 +130,7 @@ export const CAMPFIRE_FIRE: PropDoc = {
       { name: 'spark5', at: [0.1, 0.4, 0.25] },
     ],
     parts: [
-      { shape: { kind: 'cylinder', at: [0.1, -0.03, 0.25], height: 0.055, r: 0.5 }, paint: { kind: 'speckle', size: 0.05, colors: ['#6e4a2e', '#4a3020', '#9a6d43'] } },
-      { shape: { kind: 'rough', shape: { kind: 'join', shapes: [{ kind: 'sphere', at: [0.32, 0.03, 0.25], r: 0.065 }, { kind: 'sphere', at: [0.269, 0.03, 0.391], r: 0.055 }, { kind: 'sphere', at: [0.138, 0.03, 0.467], r: 0.065 }, { kind: 'sphere', at: [-0.01, 0.03, 0.441], r: 0.055 }, { kind: 'sphere', at: [-0.107, 0.03, 0.325], r: 0.065 }, { kind: 'sphere', at: [-0.107, 0.03, 0.175], r: 0.055 }, { kind: 'sphere', at: [-0.01, 0.03, 0.059], r: 0.065 }, { kind: 'sphere', at: [0.138, 0.03, 0.033], r: 0.055 }, { kind: 'sphere', at: [0.269, 0.03, 0.109], r: 0.065 }] }, by: 0.012, scale: 0.12 }, paint: { kind: 'faces', top: '#8a8898', side: '#5d5c6c', under: '#3a3a48' } },
-      { shape: { kind: 'cone', from: [-0.05, 0.03, 0.2], to: [0.24, 0.1, 0.3], r: 0.032 }, paint: { kind: 'speckle', size: 0.04, colors: ['#4a3020', '#2a1c16', '#d9541e'] } },
-      { shape: { kind: 'cone', from: [0.22, 0.03, 0.14], to: [0.02, 0.1, 0.34], r: 0.032 }, paint: { kind: 'speckle', size: 0.04, colors: ['#4a3020', '#2a1c16', '#d9541e'] } },
-      { shape: { kind: 'cone', from: [0.1, 0.03, 0.4], to: [0.1, 0.11, 0.12], r: 0.032 }, paint: { kind: 'speckle', size: 0.04, colors: ['#4a3020', '#2a1c16', '#d9541e'] } },
+      ...CAMPFIRE_FIRE.doc.parts,
       { shape: { kind: 'cone', from: [0.1, 0.1, 0.25], to: [0.1, 0.5, 0.25], r: 0.11, rTo: 0.01 }, paint: { kind: 'split', axis: 'y', at: 0.27, below: '#f59a2a', above: '#d9541e' }, bone: 'flame', glow: true, lit: 'dark', unlit: 'gone' },
       { shape: { kind: 'cone', from: [0.1, 0.09, 0.28], to: [0.12, 0.32, 0.28], r: 0.065, rTo: 0.01 }, paint: { kind: 'split', axis: 'y', at: 0.2, below: '#fff3b0', above: '#ffd166' }, bone: 'core', glow: true, lit: 'dark', unlit: 'gone' },
       { shape: { kind: 'sphere', at: [0.1, 0.4, 0.25], r: 0.018 }, paint: '#f59a2a', bone: 'spark0', glow: true, lit: 'dark', unlit: 'gone' },
@@ -130,9 +152,6 @@ export const CAMPFIRE_FIRE: PropDoc = {
       { kind: 'drift', bone: 'spark4', by: [0.2, 0.85, 0.12], times: 3, grow: [1.2, 0.5], phase: 0.667 },
       { kind: 'drift', bone: 'spark5', by: [-0.18, 0.95, -0.1], times: 4, grow: [1.2, 0.5], phase: 0.833 },
     ],
-    lights: [
-      { at: [0.1, 0.3, 0.25], color: '#f59a2a', strength: 3, range: 0.9, lit: 'dark', flicker: { by: 0.25, times: 11 } },
-    ],
   },
 }
 
@@ -151,7 +170,7 @@ export const TENT: PropDoc = {
       '#7b2f45', '#b9485a', '#e8dcc0', '#f4f1e4',
     ],
     sky: ['#0a0f1e', '#1f2d55'],
-    look: { dither: 0.5, glow: 1.75, outline: true, edges: true, bands: 2, heat: 1, cycle: [{ colors: ['#d9541e', '#f59a2a', '#ffd166'], times: 48 }] },
+    look: { dither: 0.5, glow: 1.75, outline: true, edges: true, bands: 2, heat: 1 },
     camera: { target: [0, 1, 0], distance: 5.2, azimuth: 18, elevation: 13 },
     parts: [
       { shape: { kind: 'cut', shape: { kind: 'roof', at: [-0.8, 0, -0.15], half: [0.42, 0.36], height: 0.52 }, hole: { kind: 'roof', at: [-0.55, -0.02, -0.15], half: [0.3, 0.25], height: 0.38 } }, paint: { kind: 'split', axis: 'x', at: -0.4, below: { kind: 'bands', axis: 'x', size: 0.14, colors: ['#b9485a', '#7b2f45'] }, above: '#141c36' } },
@@ -179,7 +198,7 @@ export const CAMP_LANTERN: PropDoc = {
       '#7b2f45', '#b9485a', '#e8dcc0', '#f4f1e4',
     ],
     sky: ['#0a0f1e', '#1f2d55'],
-    look: { dither: 0.5, glow: 1.75, outline: true, edges: true, bands: 2, heat: 1, cycle: [{ colors: ['#d9541e', '#f59a2a', '#ffd166'], times: 48 }] },
+    look: { dither: 0.5, glow: 1.75, outline: true, edges: true, bands: 2, heat: 1 },
     camera: { target: [0, 1, 0], distance: 5.2, azimuth: 18, elevation: 13 },
     parts: [
       { shape: { kind: 'cone', from: [-0.3, 0, -0.55], to: [-0.3, 0.42, -0.55], r: 0.016 }, paint: '#4a3020' },
@@ -204,7 +223,7 @@ export const PACK: PropDoc = {
       '#7b2f45', '#b9485a', '#e8dcc0', '#f4f1e4',
     ],
     sky: ['#0a0f1e', '#1f2d55'],
-    look: { dither: 0.5, glow: 1.75, outline: true, edges: true, bands: 2, heat: 1, cycle: [{ colors: ['#d9541e', '#f59a2a', '#ffd166'], times: 48 }] },
+    look: { dither: 0.5, glow: 1.75, outline: true, edges: true, bands: 2, heat: 1 },
     camera: { target: [0, 1, 0], distance: 5.2, azimuth: 18, elevation: 13 },
     parts: [
       { shape: { kind: 'box', at: [-0.38, 0.1, 0.42], half: [0.08, 0.1, 0.06], round: 0.03 }, paint: { kind: 'split', axis: 'y', at: 0.13, below: '#2f477d', above: '#4a6fae' } },
@@ -228,7 +247,7 @@ export const LOG_SEAT: PropDoc = {
       '#7b2f45', '#b9485a', '#e8dcc0', '#f4f1e4',
     ],
     sky: ['#0a0f1e', '#1f2d55'],
-    look: { dither: 0.5, glow: 1.75, outline: true, edges: true, bands: 2, heat: 1, cycle: [{ colors: ['#d9541e', '#f59a2a', '#ffd166'], times: 48 }] },
+    look: { dither: 0.5, glow: 1.75, outline: true, edges: true, bands: 2, heat: 1 },
     camera: { target: [0, 1, 0], distance: 5.2, azimuth: 18, elevation: 13 },
     parts: [
       { shape: { kind: 'cone', from: [0.55, 0.075, 0.78], to: [1.02, 0.075, 0.55], r: 0.075 }, paint: { kind: 'faces', top: { kind: 'bands', axis: 'x', size: 0.05, colors: ['#6e4a2e', '#4a3020'] }, side: '#4a3020', under: '#2a1c16' } },
@@ -252,7 +271,7 @@ export const CAMP_PINE: PropDoc = {
       '#7b2f45', '#b9485a', '#e8dcc0', '#f4f1e4',
     ],
     sky: ['#0a0f1e', '#1f2d55'],
-    look: { dither: 0.5, glow: 1.75, outline: true, edges: true, bands: 2, heat: 1, cycle: [{ colors: ['#d9541e', '#f59a2a', '#ffd166'], times: 48 }] },
+    look: { dither: 0.5, glow: 1.75, outline: true, edges: true, bands: 2, heat: 1 },
     camera: { target: [0, 1, 0], distance: 5.2, azimuth: 18, elevation: 13 },
     bones: [
       { name: 'pine0', at: [-1.25, 0, -0.85] },
@@ -282,7 +301,7 @@ export const FIREFLIES: PropDoc = {
       '#7b2f45', '#b9485a', '#e8dcc0', '#f4f1e4',
     ],
     sky: ['#0a0f1e', '#1f2d55'],
-    look: { dither: 0.5, glow: 1.75, outline: true, edges: true, bands: 2, heat: 1, cycle: [{ colors: ['#d9541e', '#f59a2a', '#ffd166'], times: 48 }] },
+    look: { dither: 0.5, glow: 1.75, outline: true, edges: true, bands: 2, heat: 1 },
     camera: { target: [0, 1, 0], distance: 5.2, azimuth: 18, elevation: 13 },
     bones: [
       { name: 'fly0', at: [-0.5, 0.5, 0.9] },

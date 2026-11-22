@@ -1,0 +1,2 @@
+- Diorama and Scene Creator: the campfire's flame is now a simulated fire. Hot gas rises off the logs, draws air in at its foot, flickers and throws sparks, and the firelight follows how hard it burns. Fire is a shared recipe any scene or prop can use.
+- Engine: `fires` in a scene description, played by `SceneFire`, with the simulation itself as `Fire` and `runFire`.

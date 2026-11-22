@@ -28,7 +28,7 @@
   {
    "id": "simulation",
    "title": "Simulation",
-   "doc": "The solvers under cloth, under sand, snow and goo, and under the ripples of a pond, for when you want to step them yourself."
+   "doc": "The solvers under cloth, under sand, snow and goo, under the ripples of a pond and under a fire, for when you want to step them yourself."
   },
   {
    "id": "extras",
@@ -3744,6 +3744,12 @@
        "doc": "A pool of molten rock that turns over, cools to a crust that cracks into plates, and bubbles (lava.ts): a shared recipe, as water is. A scene has water or lava, not both."
       },
       {
+       "name": "fires",
+       "optional": true,
+       "type": "FireDoc[]",
+       "doc": "Fires that burn (fire.ts): hot gas rising off a bed of fuel, worked out as the water's ripples are: a shared recipe. At most `MAX_FIRES`."
+      },
+      {
        "name": "heavens",
        "optional": true,
        "type": "HeavensDoc",
@@ -4293,6 +4299,65 @@
      "type": "{ kind: \"spin\"; bone: string; axis: MoveAxis; times: number; phase?: number; during?: During; wind?: number } | { kind: \"sway\"; bone: string; axis: MoveAxis; degrees: number; times: number; phase?: number; during?: During; wind?: number } | { kind: \"bob\"; bone: string; by: Vec3; times: number; phase?: number; during?: During } | { kind: \"drift\"; bone: string; by: Vec3; times: number; grow?: [number, number]; phase?: number; during?: During } | { kind: \"pulse\"; bone: string; size: [number, number]; times: number; phase?: number; during?: During } | { kind: \"sprout\"; bone: string; times: number; phase?: number; during?: During; rise?: number; fall?: number } | { kind: \"pass\"; bone: string; by: Vec3; times: number; phase?: number; during?: During } | { kind: \"dissolve\"; bone: string; times: number; by?: number; phase?: number; during?: During; rise?: number; fall?: number }"
     },
     {
+     "name": "FireDoc",
+     "kind": "interface",
+     "doc": "A fire that burns (fire.ts): fuel burning on a round bed heats the air over it, which rises, draws air in from the\nsides and cools as it goes, and the flames are that hot gas. Their shape and height are not drawn: they follow from\nthe bed and from `height`, which says how long the gas holds its heat. Model the logs, the hearth or the wick as\nparts; the fire is laid over them. Its light is one of the scene's `lights` that names it (`LightDoc.fire`).",
+     "props": [
+      {
+       "name": "at",
+       "type": "Vec3",
+       "doc": "The middle of the bed the fuel burns on (the top of the logs, a torch's head)."
+      },
+      {
+       "name": "r",
+       "type": "number",
+       "doc": "How far out from there the bed burns."
+      },
+      {
+       "name": "height",
+       "optional": true,
+       "type": "number",
+       "doc": "About how tall the flames stand; 3.6 times `r` where left out."
+      },
+      {
+       "name": "colors",
+       "optional": true,
+       "type": "[string, string, string, string]",
+       "doc": "Its colors from its coolest gas to its hottest (deep orange, orange, yellow, white-hot where left out); palette colors, so pixel art can show them."
+      },
+      {
+       "name": "sparks",
+       "optional": true,
+       "type": "number",
+       "doc": "Sparks thrown a second; 1.5 where left out, 0 for none."
+      },
+      {
+       "name": "lit",
+       "optional": true,
+       "type": "LitWhen",
+       "doc": "When it burns: 'dark' for a campfire or a torch that is lit when it gets dark, 'always' for one that never goes out. Left out, it always burns."
+      },
+      {
+       "name": "seed",
+       "optional": true,
+       "type": "number",
+       "doc": "Another fire of the same size burns differently with another seed."
+      }
+     ]
+    },
+    {
+     "name": "FIRE_COLORS",
+     "kind": "const",
+     "doc": "The colors of a fire when a scene names none: deep orange, orange, yellow, white-hot.",
+     "type": "[string, string, string, string]"
+    },
+    {
+     "name": "MAX_FIRES",
+     "kind": "const",
+     "doc": "The most fires a scene can have.",
+     "type": "4"
+    },
+    {
      "name": "LightDoc",
      "kind": "interface",
      "doc": "A point light in a scene.",
@@ -4328,6 +4393,12 @@
        "optional": true,
        "type": "{ by: number; times: number }",
        "doc": "Flickers by this share of its strength, `times` per loop."
+      },
+      {
+       "name": "fire",
+       "optional": true,
+       "type": "number",
+       "doc": "It is the light of the scene's fire of this number (its place in `fires`): where the fire is played (`SceneFire`),\nthe light's strength follows how hard the fire burns from moment to moment, in place of `flicker`, which is what a\npage that does not play the fire falls back on."
       },
       {
        "name": "circle",
@@ -4426,6 +4497,11 @@
        "optional": true,
        "type": "WaterPlan",
        "doc": "The scene's water, if it has any, with its defaults filled in: what `SceneWater` plays."
+      },
+      {
+       "name": "fires",
+       "type": "FirePlan[]",
+       "doc": "The scene's fires, with their defaults filled in: what `SceneFire` plays."
       },
       {
        "name": "landed",
@@ -4651,6 +4727,48 @@
      ]
     },
     {
+     "name": "FirePlan",
+     "kind": "interface",
+     "doc": "A scene's fire as compiled (`CompiledScene.fires`).",
+     "props": [
+      {
+       "name": "at",
+       "type": "Vec3",
+       "doc": "The middle of the bed of fuel."
+      },
+      {
+       "name": "r",
+       "type": "number",
+       "doc": "The bed's radius."
+      },
+      {
+       "name": "height",
+       "type": "number",
+       "doc": "How tall the flames stand."
+      },
+      {
+       "name": "colors",
+       "type": "[Vec3, Vec3, Vec3, Vec3]",
+       "doc": "Its colors from coolest to hottest, 0 to 1 as blobs hold them (sRGB)."
+      },
+      {
+       "name": "sparks",
+       "type": "number",
+       "doc": "Sparks thrown a second."
+      },
+      {
+       "name": "seed",
+       "type": "number",
+       "doc": "What tells it from another fire of the same size."
+      },
+      {
+       "name": "lights",
+       "type": "{ index: number; flicker?: { by: number; times: number } }[]",
+       "doc": "The scene's lights that are this fire's (their places among `lights`), each with the flicker it falls back on, which the fire's own burning takes the place of."
+      }
+     ]
+    },
+    {
      "name": "DRIFT",
      "kind": "const",
      "doc": "How much further than rain the wind carries snow and leaves over the same fall: they fall slowly.",
@@ -4747,6 +4865,12 @@
        "code": "compileScene(given: SceneDoc, options?: { puffs?: boolean; ground?: (x: number, z: number, top: number, bottom: number) => number; water?: number }): CompiledScene"
       }
      ]
+    },
+    {
+     "name": "flickerAt",
+     "kind": "const",
+     "doc": "How bright a flickering light is `u` of the way through the loop, beside its own strength: two flickers out of step, so it doesn't beat like a clock, but still loops.",
+     "type": "(f: { by: number; times: number } | undefined, u: number) => number"
     },
     {
      "name": "lightsAt",
@@ -5006,6 +5130,80 @@
        "name": "strength",
        "type": "number",
        "doc": "How hard, 0 to 1: how high its droplets go."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "sceneFire",
+   "title": "Fire in a scene written as data",
+   "group": "scenes",
+   "doc": "",
+   "entries": [
+    {
+     "name": "fireShape",
+     "kind": "function",
+     "doc": "What decides how a planned fire burns, wherever it is.",
+     "signatures": [
+      {
+       "code": "fireShape(f: FirePlan): FireShape"
+      }
+     ]
+    },
+    {
+     "name": "SceneFire",
+     "kind": "class",
+     "doc": "The fires of a scene written as data (`SceneDoc.fires`), played as the scene plays: from the time alone.\n\nA scene repeats and can be shown at any moment of its loop in any order, so its fires can't be stepped along with\nthe clock. One whole loop of each is worked out here, once (`runFire`), and `show(t)` puts every tracer where the\nloop has it at that moment. The tracers are blobs of an actor of their own beside the scene's (`actor`: glowing,\nand `soft`, so they stay blobs among a Blocks scene's cubes), which the page hands the stage with the scene and\nsends up again after each `show`. `shine` makes each fire's light as bright as the fire burns at that moment.",
+     "ctor": [
+      {
+       "code": "new SceneFire(scene: Pick<CompiledScene, \"fires\" | \"loop\">)"
+      }
+     ],
+     "props": [
+      {
+       "name": "actor",
+       "readonly": true,
+       "type": "Actor",
+       "doc": "Every fire's tracers as blobs on one still bone: hand it to the stage beside the scene."
+      },
+      {
+       "name": "plans",
+       "readonly": true,
+       "type": "readonly FirePlan[]",
+       "doc": "The fires it plays."
+      },
+      {
+       "name": "loop",
+       "readonly": true,
+       "type": "number",
+       "doc": "Seconds the scene's loop lasts."
+      },
+      {
+       "name": "kept",
+       "readonly": true,
+       "type": "FireLoop[]",
+       "doc": "One kept loop a fire."
+      }
+     ],
+     "methods": [
+      {
+       "name": "show",
+       "doc": "Puts every tracer where it is `t` seconds into the loop: between the two kept moments either side, a blob as hot\nas its gas, drawn longer along the way it is moving, as a lick of flame is, in the color of all the hot gas seen\nthrough it from `eye` (with no eye, of its own heat).",
+       "signatures": [
+        {
+         "code": "show(t: number, eye?: ArrayLike<number>): void"
+        }
+       ]
+      },
+      {
+       "name": "shine",
+       "doc": "The scene's lights with each fire's own as bright as the fire burns `t` seconds into the loop: its strength times\nthe fire's power at that moment beside its mean, in place of the flicker it was written with.",
+       "signatures": [
+        {
+         "code": "shine(lights: PointLight[], t: number): PointLight[]"
+        }
+       ]
       }
      ]
     }
@@ -12232,6 +12430,268 @@
      "signatures": [
       {
        "code": "shadeSurface(s: WaterSurface, look: WaterLook, eye: ArrayLike<number>, lights?: readonly PointLight[]): void"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "fire",
+   "title": "Fire that burns",
+   "group": "simulation",
+   "doc": "Fire that burns (a scene's `fires`, sceneDoc.ts): a shared recipe, as the water and the lava are. Nothing here is a\nflame shape that is scaled and swayed: it is hot gas rising through air, worked out on a small grid over the bed.\n\n- Fuel burns at `spots` on the bed (each waxing and waning a whole number of times a loop, as logs catch and die\n  back), which heats the air there.\n- Hot air is lighter, so it is pushed up (`BUOYANCY` times its heat), and the air it leaves behind is replaced from\n  the sides: the flow is kept free of sources and sinks each tick (`project`), which is what draws air in low down,\n  necks the plume above the bed and rolls its edges over into the licks and curls a flame has. Small swirls are kept\n  from being smoothed away by the grid (`SWIRL`, vorticity confinement).\n- The gas loses heat as it goes (`COOL` seconds to fall to a third, quicker while it is hottest), so a flame ends\n  where its gas has cooled: its height is not set anywhere, it follows from how fast the gas rises and cools.\n- What is drawn are tracers: points let go on the bed at hashed places and times and carried by the flow, each as\n  hot as the gas where it is, gone once that has cooled. Sparks are tracers with weight of their own: they are\n  thrown up with the gas, leave the flame and drift on, cooling.\n\nLengths are in bed radii and the bed's middle is the origin, so one run serves a fire of any size at any place.\nEverything is a function of the shape and the time, stepped at a fixed rate (`FIRE_TICK`), so the same shape gives\nthe same fire. `runFire` plays it through a scene's loop once and keeps it, as `SceneWater` keeps a pond's ripples.",
+   "entries": [
+    {
+     "name": "FireShape",
+     "kind": "interface",
+     "doc": "What decides how a fire burns, with nothing about where it is or how big: `runFire` gives the same loop for the same shape.",
+     "props": [
+      {
+       "name": "tall",
+       "type": "number",
+       "doc": "How tall the flames are meant to stand, in bed radii (it sets how much room the gas is given and how fast it cools)."
+      },
+      {
+       "name": "quick",
+       "type": "number",
+       "doc": "How fast it burns beside a campfire a tenth of a unit across: a bigger fire is slower, as the square root of its size."
+      },
+      {
+       "name": "sparks",
+       "type": "number",
+       "doc": "Sparks thrown a second."
+      },
+      {
+       "name": "seed",
+       "type": "number",
+       "doc": "Another fire of the same shape burns differently with another seed."
+      },
+      {
+       "name": "wind",
+       "optional": true,
+       "type": "readonly [number, number]",
+       "doc": "A steady wind across the fire, in bed radii a second along x and z."
+      }
+     ]
+    },
+    {
+     "name": "FIRE_TICK",
+     "kind": "const",
+     "doc": "Seconds a tick of the fire.",
+     "type": "number"
+    },
+    {
+     "name": "FIRE_CELLS",
+     "kind": "const",
+     "doc": "Grid cells to a bed radius.",
+     "type": "3"
+    },
+    {
+     "name": "FIRE_FLAMES",
+     "kind": "const",
+     "doc": "Tracers that make up the flame.",
+     "type": "520"
+    },
+    {
+     "name": "FIRE_SPARKS",
+     "kind": "const",
+     "doc": "Tracers that are sparks, after the flame's in a kept loop.",
+     "type": "16"
+    },
+    {
+     "name": "FIRE_FPS",
+     "kind": "const",
+     "doc": "Moments a second the loop is kept at.",
+     "type": "24"
+    },
+    {
+     "name": "Fire",
+     "kind": "class",
+     "doc": "The gas over one bed: its flow and its heat on a grid, stepped by `tick`.",
+     "ctor": [
+      {
+       "code": "new Fire(shape: FireShape, loop: number)"
+      }
+     ],
+     "props": [
+      {
+       "name": "nx",
+       "readonly": true,
+       "type": "number",
+       "doc": "Cells across, along x."
+      },
+      {
+       "name": "ny",
+       "readonly": true,
+       "type": "number",
+       "doc": "Cells up."
+      },
+      {
+       "name": "nz",
+       "readonly": true,
+       "type": "number",
+       "doc": "Cells across, along z."
+      },
+      {
+       "name": "u",
+       "readonly": true,
+       "type": "Float32Array",
+       "doc": "The flow along x, cells a second, a value a cell: x, then z, then up."
+      },
+      {
+       "name": "v",
+       "readonly": true,
+       "type": "Float32Array",
+       "doc": "The flow along z, cells a second."
+      },
+      {
+       "name": "w",
+       "readonly": true,
+       "type": "Float32Array",
+       "doc": "The flow upward, cells a second."
+      },
+      {
+       "name": "heat",
+       "readonly": true,
+       "type": "Float32Array",
+       "doc": "The heat, 0 to about 1."
+      },
+      {
+       "name": "shape",
+       "readonly": true,
+       "type": "FireShape",
+       "doc": "The shape it was made for."
+      },
+      {
+       "name": "loop",
+       "readonly": true,
+       "type": "number",
+       "doc": "Seconds a loop: the fuel flares a whole number of times in it."
+      }
+     ],
+     "methods": [
+      {
+       "name": "burning",
+       "doc": "How hard a spot burns `t` seconds into the loop, 0 to 1: it flares and dies back, never quite out.",
+       "signatures": [
+        {
+         "code": "burning(s: Spot, t: number): number"
+        }
+       ]
+      },
+      {
+       "name": "sample",
+       "doc": "A field read between its cells at (x, y, z) in cells; `edge` is what lies past the sides and the top (the floor repeats its lowest cells).",
+       "signatures": [
+        {
+         "code": "sample(f: Float32Array, x: number, y: number, z: number, hold: boolean): number"
+        }
+       ]
+      },
+      {
+       "name": "flowAt",
+       "doc": "The flow at a point, in cells a second.",
+       "signatures": [
+        {
+         "code": "flowAt(x: number, y: number, z: number, out: number[] | Float32Array<ArrayBufferLike>): void"
+        }
+       ]
+      },
+      {
+       "name": "heatAt",
+       "doc": "The heat at a point (none outside the grid).",
+       "signatures": [
+        {
+         "code": "heatAt(x: number, y: number, z: number): number"
+        }
+       ]
+      },
+      {
+       "name": "tick",
+       "doc": "Moves the fire on a tick; `t` is the time into the loop, which says how hard each spot burns.",
+       "signatures": [
+        {
+         "code": "tick(t: number): void"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "FireLoop",
+     "kind": "interface",
+     "doc": "One loop of a fire, kept: where each tracer is, how hot and how big, at `FIRE_FPS` moments a second. Places are in\nbed radii from the bed's middle (x, up, z). A tracer that is out has size 0.",
+     "props": [
+      {
+       "name": "loop",
+       "type": "number",
+       "doc": "Seconds a loop."
+      },
+      {
+       "name": "frames",
+       "type": "number",
+       "doc": "Moments kept."
+      },
+      {
+       "name": "count",
+       "type": "number",
+       "doc": "Flame tracers first (`FIRE_FLAMES`), then sparks (`FIRE_SPARKS`)."
+      },
+      {
+       "name": "place",
+       "type": "Float32Array",
+       "doc": "Three numbers a tracer a moment: x, up, z."
+      },
+      {
+       "name": "heat",
+       "type": "Float32Array",
+       "doc": "Heat, 0 to 1, a tracer a moment."
+      },
+      {
+       "name": "size",
+       "type": "Float32Array",
+       "doc": "Size as a share of a tracer's biggest, a tracer a moment."
+      },
+      {
+       "name": "power",
+       "type": "Float32Array",
+       "doc": "How strongly the whole fire burns at each moment, beside its mean over the loop (about 0.6 to 1.5): what its light flickers by."
+      }
+     ]
+    },
+    {
+     "name": "runFire",
+     "kind": "function",
+     "doc": "A fire played through a loop of `loop` seconds and kept. The same fuel flares and the same tracers are let go each\nloop, but the gas never repeats itself exactly, so the fire is run on past the loop's end for `LAP` seconds and\nthose moments are mixed into the loop's first ones, from all of the later run at the very start to none: the last\nkept moment is followed by the first as closely as by the one the fire itself went on to.",
+     "signatures": [
+      {
+       "code": "runFire(shape: FireShape, loop: number): FireLoop"
+      }
+     ]
+    },
+    {
+     "name": "powerAt",
+     "kind": "function",
+     "doc": "How strongly a kept fire burns `t` seconds into its loop, beside its mean (smoothed over a few moments, as an eye and a lit wall take it).",
+     "signatures": [
+      {
+       "code": "powerAt(kept: FireLoop, t: number): number"
+      }
+     ]
+    },
+    {
+     "name": "FireColors",
+     "kind": "type",
+     "doc": "A fire's colors from its coolest to its hottest, 0 to 1 as blobs hold them (sRGB): deep red, orange, yellow, white-hot.",
+     "type": "readonly [Vec3, Vec3, Vec3, Vec3]"
+    },
+    {
+     "name": "fireColor",
+     "kind": "function",
+     "doc": "The color of gas at `heat`, along the fire's four colors.",
+     "signatures": [
+      {
+       "code": "fireColor(heat: number, colors: FireColors, out: number[] | Float32Array<ArrayBufferLike>, at?: number): void"
       }
      ]
     }

@@ -51,6 +51,7 @@ import { useExport } from './diorama/useExport.tsx'
 import { CLOUD_COVERS, SkyEase, WEATHERS, WINDS, hazeUnder, isClear, lightUnder, lightningAt, skyState, skyUnder, windAt, type CloudId, type SkyState, type WeatherId, type WindId } from '../splat-engine/skyRecipes.ts'
 import { SceneWeather, paletteUnder } from './diorama/weather.ts'
 import type { SceneWater } from '../splat-engine/sceneWater.ts'
+import { SceneFire } from '../splat-engine/sceneFire.ts'
 import { levelPlane, type MirrorImage } from '../splat-engine/reflect.ts'
 import { heavenBones, ownClouds, showHeavens } from '../splat-engine/heavens.ts'
 import { pileStep } from '../splat-engine/snowCover.ts'
@@ -483,6 +484,15 @@ export function SceneCreator() {
     // `waterKey` stands for the scene
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [waterKey])
+  // the fires burning in the scene (fire.ts, as Diorama plays them): the land's, and each prop's where it has been set
+  // down, turned and sized. One loop of each is played once and kept; a prop being dragged takes its fire along when let go
+  const flames = useMemo(() => {
+    if (!cp) return undefined
+    try {
+      const fires = [...cp.land.c.fires, ...cp.props.flatMap((p) => { const t = placer(p.prop.foot, p.placed); return p.c.fires.map((f) => ({ ...f, at: t.point(f.at), r: f.r * t.size, height: f.height * t.size })) })].map((f) => ({ ...f, lights: [] }))
+      return fires.length ? new SceneFire({ fires, loop: cp.loop }) : undefined
+    } catch (e) { console.warn(e); return undefined }
+  }, [cp])
   // it mirrors what stands round it only with WebGPU, as on Diorama (a second sort and a small draw)
   const mirrored = stage?.backend === 'webgpu' && new URLSearchParams(location.search).get('mirror') !== '0'
   /** How deep the snow lying is, 0 to 1, and the wall clock it was last moved on by. */
@@ -503,7 +513,7 @@ export function SceneCreator() {
     if (!stage || !built) return
     const [land, ...props] = built
     const from = stage.time
-    stage.setActor(land, undefined, [...props, ...(pond ? [pond.surface] : []), ...(pond?.spray ? [pond.spray] : []), ...(fall?.actors ?? [])])
+    stage.setActor(land, undefined, [...props, ...(pond ? [pond.surface] : []), ...(pond?.spray ? [pond.spray] : []), ...(flames ? [flames.actor] : []), ...(fall?.actors ?? [])])
     // the water as it stands at the stage's time, for the eye as it stands: after a pose, or a new picture in the mirror
     let seen: MirrorImage | null = null
     const wet = pond && (() => {
@@ -604,9 +614,14 @@ export function SceneCreator() {
       // the weather's rain rings the water and its wind roughens it
       if (pond) { pond.rain = now.rain; pond.waves = now.wind }
       wet?.()
+      if (flames) {
+        const o = stage.orbit, a = (o.azimuth * Math.PI) / 180, e = (o.elevation * Math.PI) / 180
+        flames.show(t, [o.target[0] + o.distance * Math.sin(a) * Math.cos(e), o.target[1] + o.distance * Math.sin(e), o.target[2] + o.distance * Math.cos(a) * Math.cos(e)])
+        stage.reshape(flames.actor)
+      }
     }
     stage.setPoser(poseAll, from)
-  }, [stage, built, fall, pond, mirrored])
+  }, [stage, built, fall, pond, flames, mirrored])
   useEffect(() => { stage?.invalidate() }, [stage, project, preview])
 
   // a live sun paints the sky behind at its hour
