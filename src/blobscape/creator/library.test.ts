@@ -8,7 +8,7 @@ import { DIORAMAS } from '../diorama/scenes.ts'
 import { WINDMILL } from '../diorama/scenes/windmill.ts'
 import { buildVoxels } from '../../splat-engine/voxel.ts'
 import { loopSnaps } from '../../splat-engine/sceneChecks.ts'
-import { LIBRARY, libraryCreature, libraryProp } from './library.ts'
+import { LIBRARY, libraryCreature, libraryProp, openScene } from './library.ts'
 import { isTag } from '../../splat-engine/tags.ts'
 
 const CHUNKY = 0.042
@@ -125,4 +125,14 @@ test('every library entry is tagged from the fixed list, and a prop takes its ta
   }
   for (const e of LIBRARY.filter((x) => x.kind === 'land' || x.kind === 'prop').slice(0, 6)) assert.deepEqual(libraryProp(e.id)?.tags, e.tags, e.id)
   assert.ok(LIBRARY.find((e) => e.id === 'creature-elf')?.tags.includes('person'))
+})
+
+test('a scene made from props opens in Scene Creator under the weather it starts under on Diorama', () => {
+  for (const d of DIORAMAS) {
+    if (!d.project || !d.weather) continue
+    const recipe = openScene(d.id)?.light?.recipe
+    assert.equal(recipe?.weather, d.weather, d.id)
+    assert.equal(recipe?.overhead ?? true, d.overhead ?? true, d.id)
+  }
+  assert.equal(openScene('isles')?.light?.recipe?.weather, 'snow')
 })
