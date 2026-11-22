@@ -28,11 +28,11 @@ import type { Texture } from '../splat-engine/meshShape.ts'
 import { decodeTexture } from './modelRig.ts'
 import { detailAsked, labelNames, writeDetail } from '../shared/detail.ts'
 import { banded, hugged, unlit } from '../splat-engine/voxel.ts'
-import { zoomStep } from './diorama/zoom.ts'
 import { isPixelStyle, styleAsked, styleWords, type Style } from './diorama/styles.ts'
 import { GLITCH_START, glitchLook, type GlitchChoice } from './glitchLooks.ts'
 import { StyleControls, FinishControls } from './StyleControls.tsx'
-import { pixelCelLook, pixelFlags, pixelFor, pixelLookOf, pixelStart, type PixelSettings } from './styleSettings.ts'
+import { detailStart, pixelCelLook, pixelFlags, pixelFor, pixelLookOf, pixelSizeAt, pixelStart, pixelZoomAsked, type PixelSettings } from './styleSettings.ts'
+import { useStyleOnStage } from './useStyleOnStage.ts'
 import { useDrawnLook, useHeld, wantsPlain } from './drawnLook.tsx'
 import { TIMES, timeAsked, timeOf, type TimeId } from './timeOfDay.ts'
 import { CLOUD_COVERS, SkyEase, WEATHERS, WINDS, cloudsAsked, gloomy, isClear, skyState, weatherAsked, windAsked, windAt, type CloudId, type WeatherId, type WindId } from '../splat-engine/skyRecipes.ts'
@@ -137,14 +137,13 @@ export function PixelDiorama() {
    */
   const [fin, setFin] = useState<PixelSettings>(() => pixelStart(diorama.finish, new URLSearchParams(location.search)))
   const setPixel = useCallback((change: Partial<PixelSettings>) => setFin((f) => ({ ...f, ...change })), [])
-  const { palette, size: baseSize, texel, glow, outline, rock, steps, rate, exact, shade: shaded } = fin
+  const { palette, texel, glow, outline, rock, steps, rate, exact, shade: shaded } = fin
   /** Switches only the address turns off (`?steady=0`, `?calm=0`, …). */
   const [flags] = useState(() => pixelFlags(new URLSearchParams(location.search)))
   // cel shading lights the blobs itself, so its scene is cut with no light baked in; so does pixel art shaded a pixel at a time
   const plain = isPixelStyle(style) ? shaded : wantsPlain(style)
-  // Finest by default (Matt, 2026-11-20); a phone starts pixel art at Fine (Matt found the dragon slow at Finest on his,
-  // 2026-11-20) and keeps Chunky for the styles that draw the whole screen several times
-  const detail = chosen ?? (coarse ? (isPixelStyle(style) ? DETAIL[2].id : DETAIL[0].id) : DETAIL[3].id)
+  // the detail each style starts at is the same on every page (styleSettings.ts `detailStart`)
+  const detail = chosen ?? DETAIL[detailStart(style, coarse)].id
   // discs along a shape's outer edges fitted to the edge (`hugged`), so edges are straight and lines sit on them; `?hug=0`
   const [hug] = useState(() => new URLSearchParams(location.search).get('hug') !== '0')
   /** Glow as the poser reads it: it scales the light the scene's lamps and fires cast, as well as the shine round bright pixels. */
@@ -279,9 +278,6 @@ export function PixelDiorama() {
   const asPixels = touring ? touring.pixels : pixels
   const look = useMemo<PixelLook>(() => pixelLookOf(fin, { colors, sky: shown.sky, skyForced: !!shown.at || weathered, finish: shown.finish, sun: shown.sun, start: shown.views[0].orbit, loop: shown.loop }, flags), [fin, colors, shown, weathered, flags])
 
-  // the exact (radix) sort: the stage rebuilds its world, keeping the moment and the poser
-  useEffect(() => { stage?.setSort(exact ? 'radix' : 'bins') }, [stage, exact])
-
   // a new level of detail keeps the moment it was showing
   useEffect(() => {
     if (!stage || !scene) return
@@ -376,17 +372,17 @@ export function PixelDiorama() {
   // the walk-through's fourth step is about the four samples, so it draws them whatever the switch says
   const sampling = touring?.id === 'samples'
   const drawnLook = useMemo(() => (asPixels ? (sampling ? { ...look, fine: true } : look) : undefined), [asPixels, sampling, look])
-  // on a phone the styles that fill the whole screen (pixel art fills a small frame) are drawn at one and a half device
-  // pixels to a CSS pixel, not two: every pass has near half the pixels to fill, and the marks are no finer than that
-  useEffect(() => { stage?.setSharpness(coarse && !asPixels ? 1.5 : 2) }, [stage, coarse, asPixels])
   // zooming in on pixel art makes the pixels bigger, a whole step at a time, rather than the blobs: a blob stays about
   // one art pixel however close the view comes, so edges stay pixel edges and lines stay on what they outline
   // (Matt saw scalloped edges and lines standing off their things when zoomed in, 2026-11-20); `?pixelzoom=0` turns it off
-  const [pixelZoom] = useState(() => new URLSearchParams(location.search).get('pixelzoom') !== '0')
-  const size = pixelZoom ? baseSize * zoomStep(shown.views[0].orbit.distance, orbit.distance) : baseSize
+  const [pixelZoom] = useState(() => pixelZoomAsked(new URLSearchParams(location.search)))
+  const size = pixelSizeAt(fin, shown.views[0].orbit.distance, orbit.distance, pixelZoom)
+  // the glitch's bursts come in steps of the scene's own clock, a whole number of steps a loop, so an export joins up
+  const glitchNow = useMemo(() => (glitching && !touring ? glitchLook(glitch, shown.loop, calm && !offscreen) : undefined), [glitching, touring, glitch, shown.loop, calm, offscreen])
+  // the style goes onto the stage in one place, shared with Scene Creator (useStyleOnStage.ts)
+  const skyOf = useStyleOnStage(stage, { pixels: !!drawnLook, look: drawnLook ?? look, size, rate, exact, glitch: glitchNow, coarse })
   useEffect(() => {
     if (!stage) return
-    stage.setPixels(drawnLook, size)
     // set again only when the sky has changed, so a paused scene is not drawn over and over
     let last = ''
     let now = false
@@ -395,7 +391,7 @@ export function PixelDiorama() {
       const [top, low] = d.skyAt(t), key = `${d.id}|${top}|${low}`
       if (key === last) return
       last = key
-      if (drawnLook?.sky) stage.setPixels({ ...drawnLook, sky: [top, low, drawnLook.sky[2]] }, size)
+      if (drawnLook?.sky) skyOf(top, low)
       else if (!drawnLook) {
         // another style: the page's own state, and at once while posing, so the color behind the canvas is the
         // moment's when the frame drawn next is painted over it (an export reads it straight after the draw)
@@ -407,7 +403,7 @@ export function PixelDiorama() {
     const d = posed.current
     if (d) skyNow.current(d, stage.time)
     now = true
-  }, [stage, drawnLook, size])
+  }, [stage, drawnLook, skyOf])
   useEffect(() => {
     if (!stage) return
     const keep = touring?.keep ?? 1
@@ -415,9 +411,6 @@ export function PixelDiorama() {
     stage.tint(touring?.clay ? (c, i) => [...clay(c), kept(i, keep) ? 1 : 0] : undefined)
   }, [stage, touring])
   useEffect(() => { if (stage) stage.playing = playing }, [stage, playing])
-  // the glitch's bursts come in steps of the scene's own clock, a whole number of steps a loop, so an export joins up
-  useEffect(() => { stage?.setGlitch(glitching && !touring ? glitchLook(glitch, shown.loop, calm && !offscreen) : undefined) }, [stage, glitching, touring, glitch, shown.loop, calm, offscreen])
-  useEffect(() => { if (stage) { stage.step = pixels && rate ? 1 / rate : 0; stage.invalidate() } }, [stage, pixels, rate])
   const orbitNow = useRef(orbit)
   /** A scene's water: shapes and colors its surface for the moment and the view, and the last picture of what it mirrors. */
   const wet = useRef<(() => void) | undefined>(undefined)

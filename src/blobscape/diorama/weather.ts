@@ -95,6 +95,9 @@ export class SceneWeather {
 
   /** Sets how deep the snow lying is, 0 to 1. Returns whether it changed by enough to send up again (`Stage.reshape(cover)`). */
   pile(depth: number): boolean {
+    // a scene with nothing still to lie on (the sky islands all drift) has no cover on the stage to send up: handing
+    // the stage one froze the isles a moment after they loaded (Matt, 2026-11-22)
+    if (!this.cover.blobs.count) return false
     const was = this.cover.depth
     if (Math.abs(depth - (Number.isNaN(was) ? -1 : was)) < PILE_STEP && depth !== 0 && depth !== 1) return false
     return pileSnow(this.cover, depth)

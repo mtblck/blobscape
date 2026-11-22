@@ -234,8 +234,13 @@ export const SPLIT_SCENES: readonly string[] = [...new Set([...SOURCES.map((s) =
  */
 export function openScene(sceneId: string): SceneProject | undefined {
   // a scene made from props opens as the very list it is made from
-  const made = DIORAMAS.find((d) => d.id === sceneId)?.project
-  if (made) return structuredClone(made)
+  const d = DIORAMAS.find((x) => x.id === sceneId), made = d?.project
+  if (made) {
+    const project = structuredClone(made)
+    // under the weather it starts under on Diorama (the sky islands' snow), unless the list says its own
+    if (d.weather && !project.light?.recipe) project.light = { ...project.light, recipe: { weather: d.weather, ...(d.overhead === false ? { overhead: false } : {}) } }
+    return project
+  }
   const s = SOURCES.find((x) => x.from === sceneId)
   if (!s) return undefined
   let done = split.get(s)
