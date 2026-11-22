@@ -50,6 +50,8 @@ import { GLITCH_START, glitchLook, type GlitchChoice } from './glitchLooks.ts'
 import { useExport } from './diorama/useExport.tsx'
 import { CLOUD_COVERS, SkyEase, WEATHERS, WINDS, hazeUnder, isClear, lightUnder, lightningAt, skyState, skyUnder, windAt, type CloudId, type SkyState, type WeatherId } from '../splat-engine/skyRecipes.ts'
 import { SceneWeather, paletteUnder } from './diorama/weather.ts'
+import type { SceneWater } from '../splat-engine/sceneWater.ts'
+import { levelPlane, type MirrorImage } from '../splat-engine/reflect.ts'
 import { heavenBones, ownClouds, showHeavens } from '../splat-engine/heavens.ts'
 import { pileStep } from '../splat-engine/snowCover.ts'
 import { TIMES } from './timeOfDay.ts'
@@ -448,6 +450,29 @@ export function SceneCreator() {
     // `fallKey` stands for the scene and the clouds
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fallKey])
+  // the land's water (a pond, a sea), played through the loop once for where everything stands, as Diorama plays it:
+  // made again a moment after a prop is moved, since what stands in it changes what lands on it
+  const waterKey = project && cp?.land.prop.doc.water ? JSON.stringify([project.land, project.props.map((p) => [p.prop, p.at, p.turn, p.size]), project.loop]) : ''
+  const ponds = useRef(new Map<string, SceneWater>())
+  const [pond, setPond] = useState<SceneWater>()
+  useEffect(() => {
+    if (!waterKey) { setPond(undefined); return }
+    const kept = ponds.current.get(waterKey)
+    if (kept) { setPond(kept); return }
+    const scene = shown.weatherScene
+    const id = setTimeout(() => {
+      try {
+        const w = scene().water?.()
+        if (w) ponds.current.set(waterKey, w)
+        setPond(w)
+      } catch (e) { console.warn(e) }
+    }, 250)
+    return () => clearTimeout(id)
+    // `waterKey` stands for the scene
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waterKey])
+  // it mirrors what stands round it only with WebGPU, as on Diorama (a second sort and a small draw)
+  const mirrored = stage?.backend === 'webgpu' && new URLSearchParams(location.search).get('mirror') !== '0'
   /** How deep the snow lying is, 0 to 1, and the wall clock it was last moved on by. */
   const pile = useRef(0)
   const pileClock = useRef(0)
@@ -466,7 +491,17 @@ export function SceneCreator() {
     if (!stage || !built) return
     const [land, ...props] = built
     const from = stage.time
-    stage.setActor(land, undefined, [...props, ...(fall?.actors ?? [])])
+    stage.setActor(land, undefined, [...props, ...(pond ? [pond.surface] : []), ...(pond?.spray ? [pond.spray] : []), ...(fall?.actors ?? [])])
+    // the water as it stands at the stage's time, for the eye as it stands: after a pose, or a new picture in the mirror
+    let seen: MirrorImage | null = null
+    const wet = pond && (() => {
+      const o = stage.orbit, a = (o.azimuth * Math.PI) / 180, e = (o.elevation * Math.PI) / 180
+      const eye = [o.target[0] + o.distance * Math.sin(a) * Math.cos(e), o.target[1] + o.distance * Math.sin(e), o.target[2] + o.distance * Math.cos(a) * Math.cos(e)]
+      pond.show(stage.time, eye, { mirror: seen })
+      stage.reshape(pond.surface)
+      if (pond.spray) stage.reshape(pond.spray)
+    })
+    stage.setMirror(pond && mirrored ? { plane: levelPlane(pond.plan.level), lift: pond.plan.cell * 0.75, seen: (image) => { seen = image; wet?.() } } : undefined)
     // the land's moon, sun and stars, which cloud cover puts out
     const heavens = heavenBones(land.skeleton.bones.map((b) => b.name))
     const own = fall ? ownClouds(live.current.shown.weatherScene()) : 0
@@ -552,9 +587,12 @@ export function SceneCreator() {
         props.forEach((b, i) => L.shown.poseProp(i, b.skeleton, t))
         stage.setLights(L.shown.lights(t, stage.backend === 'webgpu'), dim(L.shown.ambient))
       }
+      // the weather's rain rings the water and its wind roughens it
+      if (pond) { pond.rain = now.rain; pond.waves = now.wind }
+      wet?.()
     }
     stage.setPoser(poseAll, from)
-  }, [stage, built, fall])
+  }, [stage, built, fall, pond, mirrored])
   useEffect(() => { stage?.invalidate() }, [stage, project, preview])
 
   // a live sun paints the sky behind at its hour

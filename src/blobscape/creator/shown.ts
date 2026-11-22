@@ -54,15 +54,15 @@ export interface Shown {
   shade?: number
   /**
    * The whole of it as one Diorama scene, for the shared weather (`SceneWeather`): where rain and snow land, its own
-   * clouds, its view and loop. Made when first asked. Its water is left out: Scene Creator draws none.
+   * clouds, its view and loop; and the land's water (`Diorama.water`), which the page draws over the land. Made when first asked.
    */
   weatherScene(): Diorama
 }
 
-/** A scene with its water left out, made once. */
+/** A scene, made once. */
 const once = (make: () => Diorama): (() => Diorama) => {
   let d: Diorama | undefined
-  return () => (d ??= { ...make(), water: undefined })
+  return () => (d ??= make())
 }
 
 /** Scenes that cannot be split, and why: said in the page. */
