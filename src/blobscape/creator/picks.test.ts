@@ -1,15 +1,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { WINDMILL } from '../diorama/scenes/windmill.ts'
 import { TURKEY } from '../diorama/scenes/turkey.ts'
 import { checkScene, compileScene, type SceneDoc } from '../../splat-engine/sceneDoc.ts'
 import { buildVoxels } from '../../splat-engine/voxel.ts'
 import { checkProject, compileProject, mergedSpec, pickedParts, propSpec, landSpec, splitScene, type PropPick } from '../../splat-engine/project.ts'
-import { LIGHTHOUSE_PICKS, TURKEY_PICKS, WINDMILL_PICKS } from './picks.ts'
-import { LIGHTHOUSE } from '../diorama/scenes/lighthouse.ts'
+import { TURKEY_PICKS } from './picks.ts'
 
 const CHUNKY = 0.042
-const scenes: [string, SceneDoc, PropPick[]][] = [['windmill', WINDMILL, WINDMILL_PICKS], ['turkey', TURKEY, TURKEY_PICKS], ['lighthouse', LIGHTHOUSE, LIGHTHOUSE_PICKS]]
+const scenes: [string, SceneDoc, PropPick[]][] = [['turkey', TURKEY, TURKEY_PICKS]]
 
 for (const [id, doc, picks] of scenes) {
   test(`${id}: every pick takes parts no other pick takes`, () => {

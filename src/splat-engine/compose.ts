@@ -27,6 +27,8 @@ export function composeScene(project: SceneProject, find: (id: string) => PropDo
   const moves: MoveDoc[] = [...(ground.moves ?? [])]
   const lights: LightDoc[] = [...(ground.lights ?? [])]
   const palettes = [ground.palette]
+  // what rides the land's water or pushes through it, from the props set down in it
+  const floats = [...(ground.water?.floats ?? [])], bodies = [...(ground.water?.bodies ?? [])]
   // falling leaves come down from under each leafy prop's crown, onto whatever is under it
   const leaves: SpeckDoc[] = []
   project.props.forEach((placed, i) => {
@@ -50,6 +52,10 @@ export function composeScene(project: SceneProject, find: (id: string) => PropDo
       if (p.placed) throw new Error(`${project.name}: ${prop.name} is made of placed parts itself, which cannot be set down again`)
       parts.push({ ...p, ...(p.bone ? { bone: name(p.bone) } : {}), ...(at ? { placed: at } : {}), ...(lampsAlways(placed) && p.lit === 'dark' ? { lit: 'always' as const } : {}) })
     }
+    if (ground.water && prop.water) {
+      for (const f of prop.water.rides ?? []) floats.push({ bone: name(f.bone), at: t.point(f.at), size: f.size * t.size })
+      for (const b of prop.water.wakes ?? []) bodies.push({ bone: name(b.bone), at: t.point(b.at), r: b.r * t.size, ...(b.draft !== undefined ? { draft: b.draft * t.size } : {}) })
+    }
     if (!placed.still) for (const m of doc.moves ?? []) moves.push(placedMove({ ...m, bone: name(m.bone) }, t, placed.phase ?? 0))
     for (const l of doc.lights ?? []) {
       lights.push({
@@ -71,6 +77,7 @@ export function composeScene(project: SceneProject, find: (id: string) => PropDo
     parts,
     moves,
     lights,
+    ...(ground.water ? { water: { ...ground.water, floats: floats.slice(0, 12), bodies: bodies.slice(0, 12) } } : {}),
     ...(leaves.length ? { air: { ...ground.air, specks: [...(ground.air?.specks ?? []), ...leaves.slice(0, Math.max(0, Math.floor((300 - (ground.air?.specks ?? []).reduce((n, x) => n + x.count, 0)) / LEAVES_EACH)))] } } : {}),
   }
 }

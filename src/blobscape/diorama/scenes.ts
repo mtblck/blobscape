@@ -25,7 +25,7 @@ import { HUT } from './scenes/hut.ts'
 import { SNAIL } from './scenes/snail.ts'
 import { SPIDER } from './scenes/spider.ts'
 import { WINDOW } from './scenes/window.ts'
-import { WINDMILL } from './scenes/windmill.ts'
+import { WINDMILL, WINDMILL_PROJECT } from './scenes/windmill.ts'
 import { RUIN } from './scenes/ruin.ts'
 import { CAVE } from './scenes/cave.ts'
 import { CANYON } from './scenes/canyon.ts'
@@ -39,7 +39,7 @@ import { HENGE } from './scenes/henge.ts'
 import { WHALES } from './scenes/whales.ts'
 import { TURKEY } from './scenes/turkey.ts'
 import { FISHING } from './scenes/fishing.ts'
-import { LIGHTHOUSE as LIGHTHOUSE_DOC } from './scenes/lighthouse.ts'
+import { LIGHTHOUSE as LIGHTHOUSE_DOC, LIGHTHOUSE_PROJECT } from './scenes/lighthouse.ts'
 import { ambientAt, lightsAt, poseFishing, skyAt } from './fishing.ts'
 
 /** A scene Diorama can show: how to build it, move it and light it, and how it asks to be drawn. */
@@ -150,7 +150,7 @@ const OWN_PALETTE = 'Made for it'
 
 /** The lighthouse, the first scene, keeps its own five views and does not rock. */
 const LIGHTHOUSE: Diorama = withOver(
-  () => described('lighthouse', LIGHTHOUSE_DOC, 'A lighthouse and a cottage on a rock in the sea at dusk, with a turning lamp, pines, a jetty, a small boat, gulls and clouds'),
+  () => described('lighthouse', LIGHTHOUSE_DOC, 'A lighthouse and a cottage on a rock in the sea at dusk, with a turning lamp, pines, a jetty, a small boat, gulls and clouds', { project: LIGHTHOUSE_PROJECT }),
   { views: [
     { id: 'shore', label: 'From the shore', orbit: { target: [0.05, 0.84, 0.05], distance: 3.7, azimuth: 28, elevation: 10 } },
     { id: 'above', label: 'From above', orbit: { target: [0, 0.6, 0], distance: 5.2, azimuth: 40, elevation: 38 } },
@@ -291,7 +291,7 @@ export const DIORAMAS: Diorama[] = [
   described('window', WINDOW, 'A round stained glass window with turning rings of panes, in the last wall of a ruined library at sunrise, with shelves, piles of books and a tree grown over the wall.'),
   described('spider', SPIDER, 'A wind-up brass spider with a lantern for a body, on its web between two bare trees, with moths circling the light.'),
   described('snail', SNAIL, 'A giant snail whose shell is a little house, with lit windows, a smoking chimney, a deck with a flag and a swinging lantern, inching through a wood of tall glowing mushrooms with ferns and fireflies'),
-  described('windmill', WINDMILL, 'A windmill on a farm by day, with turning sails, sheep, a duck on a pond, a wheat field, trees, clouds and birds'),
+  described('windmill', WINDMILL, 'A windmill on a farm by day, with turning sails, sheep, a duck on a pond, a wheat field, trees, clouds and birds', { project: WINDMILL_PROJECT }),
   described('ruin', RUIN, 'A ruined chapel at dusk in autumn: an arcade of pointed arches broken along its top, brick walls fallen in places with their bricks at their feet, worn steps, a leaning fence, a maple and a lantern'),
   described('cave', CAVE, 'An ice cave cut open at night, with icicles along its broken roof, stalactites joining stalagmites, flowstone, basalt columns stepping into a still pool, a geode broken open and glowing crystals, one growing as you watch'),
   described('canyon', CANYON, 'A desert canyon at sunset worn by water, with banded cliffs and ledges, scree, a mesa, hoodoos, a natural arch, a dry stream bed of pebbles and cracked mud, saguaros, a gnarled tree, a ram skull with curled horns, old ribs, a fossil shell and a circling hawk'),
