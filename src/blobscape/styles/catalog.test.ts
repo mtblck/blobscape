@@ -2,9 +2,9 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { STYLES } from '../diorama/styles.ts'
-import { ASCII, BLOCKS_DEF, CATALOG, CEL_DEF, MARKS, PIXEL, drawnFrom, drawnStart, fromAddress, keysOf, settingsFrom, shownSettings, valueWords, type RangeSetting, type Setting, type StyleDef } from './catalog.ts'
+import { ASCII, BLOCKS_DEF, CATALOG, CEL_DEF, MARKS, PIXEL, SCENE, drawnFrom, drawnStart, fromAddress, keysOf, sceneStart, settingsFrom, shownSettings, valueWords, type RangeSetting, type Setting, type StyleDef } from './catalog.ts'
 
-const defs = Object.values(CATALOG) as unknown as StyleDef<Record<string, unknown>>[]
+const defs = [...Object.values(CATALOG), SCENE] as unknown as StyleDef<Record<string, unknown>>[]
 
 test('every style has its settings in the catalog, and the catalog names no style that does not exist', () => {
   for (const s of STYLES) assert.ok(keysOf(s.id).length, `${s.id} has no settings in the catalog`)
@@ -102,4 +102,14 @@ test('the looks keep no settings of their own: useDrawnLook takes them from the 
   assert.ok(src.includes('drawnStart('))
   for (const own of ['useState<CelChoice>', 'useState<NeonChoice>', 'useState<GlassChoice>', 'useState<WashChoice>', 'useState<BlockChoice>', '<Slider ']) assert.ok(!src.includes(own), `drawnLook.tsx has ${own}`)
   for (const page of ['../PixelDiorama.tsx', '../SceneCreator.tsx']) assert.ok(readFileSync(new URL(page, import.meta.url), 'utf8').includes('drawnKept)'), `${page} does not hold the drawn settings`)
+})
+
+test('the scene\'s settings start as the scene is written, and the address sets them', () => {
+  assert.deepEqual(sceneStart(), SCENE.start)
+  const s = sceneStart(new URLSearchParams('time=night&weather=thunderstorm&wind=gale&overhead=0&transition=cut&detail=fine'))
+  assert.deepEqual(s, { time: 'night', weather: 'thunderstorm', clouds: '', wind: 'gale', overhead: false, transition: 'cut', detail: 'fine' })
+  assert.equal(sceneStart(new URLSearchParams('weather=none')).weather, 'none')
+  assert.equal(sceneStart(new URLSearchParams('clouds=cloudy')).clouds, 'cloudy')
+  assert.deepEqual(sceneStart(new URLSearchParams('time=teatime&weather=frogs&detail=huge')), SCENE.start)
+  assert.deepEqual(settingsFrom(SCENE, SCENE.start, JSON.parse(JSON.stringify(s))), s)
 })

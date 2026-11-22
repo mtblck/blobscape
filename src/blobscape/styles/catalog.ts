@@ -1,5 +1,9 @@
 import type { GlyphSet } from '../../splat-core/glyphs.ts'
 import type { Style } from '../diorama/styles.ts'
+import { DETAIL } from '../diorama/scene.ts'
+import { TIMES, type TimeId } from '../timeOfDay.ts'
+import { TRANSITIONS, type TransitionKind } from '../../splat-core/transition.ts'
+import { CLOUD_COVERS, WEATHERS, WINDS, type CloudId, type WeatherId, type WindId } from '../../splat-engine/skyRecipes.ts'
 import { BLOCK_GROUNDS, BLOCK_SIZES, BLOCK_START, SWELL_MOST, type BlockChoice } from '../blockLooks.ts'
 import { PAPERS } from '../brushLooks.ts'
 import { BACKDROPS, CEL_START } from '../celLooks.ts'
@@ -258,6 +262,31 @@ export const WASH_DEF: StyleDef<WashChoice> = {
   ],
 }
 
+/**
+ * The scene's own settings, which every style respects: '' is the scene as it is written (its own weather, its own
+ * time), and a detail of '' is the one its style starts at (`detailStart`). Weather and cloud cover are one choice on
+ * the page (a weather brings its own clouds), kept as two so a cover can be told from a weather.
+ */
+export interface SceneSettings { time: TimeId | ''; weather: WeatherId | 'none' | ''; clouds: CloudId | ''; wind: WindId | ''; /** Clouds floating over the scene; null is the scene's own way. */ overhead: boolean | null; transition: TransitionKind | 'cut'; detail: string }
+
+const OWN = { id: '', label: 'Scene’s own' }
+export const SCENE: StyleDef<SceneSettings> = {
+  id: 'scene', styles: [],
+  start: { time: '', weather: '', clouds: '', wind: '', overhead: null, transition: TRANSITIONS[0].id, detail: '' },
+  settings: [
+    { key: 'time', kind: 'choice', label: 'Time of day', address: 'time', options: [OWN, ...TIMES] },
+    { key: 'weather', kind: 'choice', label: 'Weather', address: 'weather', options: [OWN, { id: 'none', label: 'No weather' }, ...WEATHERS] },
+    { key: 'clouds', kind: 'choice', label: 'Clouds', address: 'clouds', options: [{ id: '', label: 'None' }, ...CLOUD_COVERS] },
+    { key: 'wind', kind: 'choice', label: 'Wind', address: 'wind', options: [{ id: '', label: 'The weather’s own' }, ...WINDS.map((w, i) => ({ id: w.id, label: i ? w.label : 'No wind' }))] },
+    { key: 'overhead', kind: 'toggle', label: 'Clouds over the scene', address: 'overhead', auto: () => true },
+    { key: 'transition', kind: 'choice', label: 'Changing scenes', address: 'transition', options: [...TRANSITIONS.map((t) => ({ id: t.id, label: t.name })), { id: 'cut', label: 'Cut' }] },
+    { key: 'detail', kind: 'choice', label: 'Detail', address: 'detail', options: [{ id: '', label: 'The style’s own' }, ...DETAIL] },
+  ],
+}
+
+/** The scene's settings as they start, with what the address asks (`?time=night`, `?weather=snow`, `?wind=gale`, `?transition=cut`, `?detail=fine`). */
+export const sceneStart = (q: URLSearchParams = new URLSearchParams()): SceneSettings => fromAddress(SCENE, SCENE.start, q)
+
 /** Every style's settings, by the name they are kept under. */
 export const CATALOG = { pixel: PIXEL, glitch: GLITCH_DEF, marks: MARKS, ascii: ASCII, cel: CEL_DEF, blocks: BLOCKS_DEF, neon: NEON_DEF, glass: GLASS_DEF, watercolor: WASH_DEF } as const
 export type StyleKey = keyof typeof CATALOG
@@ -266,8 +295,8 @@ export type StyleKey = keyof typeof CATALOG
 export interface StylesValue { pixel: PixelSettings; glitch: GlitchChoice; marks: MarkSettings; ascii: AsciiSettings; cel: CelSettings; blocks: BlockChoice; neon: NeonChoice; glass: GlassChoice; watercolor: WashChoice }
 /** The settings of the looks `useDrawnLook` draws: every style but pixel art and its glitch. */
 export type DrawnSettings = Omit<StylesValue, 'pixel' | 'glitch'>
-/** How a scene is drawn: the style, and every style's settings (so going to another style and back loses nothing). */
-export interface StyleValue { style: Style; styles: StylesValue }
+/** How a scene is drawn: the style, every style's settings (so going to another style and back loses nothing), and the scene's own. */
+export interface StyleValue { style: Style; styles: StylesValue; scene: SceneSettings }
 
 /** The settings a style uses, in the order they are laid on: tech glitch is pixel art's and its own. */
 export const keysOf = (style: Style): StyleKey[] => (Object.keys(CATALOG) as StyleKey[]).filter((k) => (CATALOG[k].styles as readonly Style[]).includes(style))
