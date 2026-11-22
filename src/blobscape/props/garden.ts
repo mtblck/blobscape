@@ -101,7 +101,7 @@ export const CHERRY = made('Cherry tree in bloom', 1.15, [
       { shape: { kind: 'cylinder', at: [0.04, 0.006, 0.216], height: 0.012, r: 0.017 }, paint: '#e08ca6', noShadow: true, bare: true },
 ], {
   bones: [{ name: 'cherry', at: [0, 0, 0] }, { name: 'crown', at: [-0.08, 0.85, 0.2], parent: 'cherry' }],
-  moves: [{ kind: 'sway', bone: 'cherry', axis: 'z', degrees: 1, times: 2 }, { kind: 'sway', bone: 'crown', axis: 'x', degrees: 1.6, times: 3, phase: 0.2 }],
+  moves: [{ kind: 'sway', bone: 'cherry', axis: 'z', degrees: 1, times: 2, wind: 2 }, { kind: 'sway', bone: 'crown', axis: 'x', degrees: 1.6, times: 3, phase: 0.2, wind: 4 }],
 })
 
 /** One stalk of bamboo with four leaves, swaying. Set several down turned and sized apart for a grove. */
@@ -113,10 +113,10 @@ export const BAMBOO = made('Bamboo', 1.36, [
       { shape: { kind: 'cone', from: [0, 1.207, 0], to: [-0.007, 1.208, 0.292], r: 0.03, rTo: 0.008 }, paint: '#86ac5a', bone: 'stalk', noShadow: true },
 ], {
   bones: [{ name: 'stalk', at: [0, 0, 0] }],
-  moves: [{ kind: 'sway', bone: 'stalk', axis: 'z', degrees: 2, times: 2 }],
+  moves: [{ kind: 'sway', bone: 'stalk', axis: 'z', degrees: 2, times: 2, wind: 10 }],
 })
 
-const IRIS_STEM = { bones: [{ name: 'stem', at: [0, 0, 0] as [number, number, number] }], moves: [{ kind: 'sway' as const, bone: 'stem', axis: 'x' as const, degrees: 3, times: 3 }] }
+const IRIS_STEM = { bones: [{ name: 'stem', at: [0, 0, 0] as [number, number, number] }], moves: [{ kind: 'sway' as const, bone: 'stem', axis: 'x' as const, degrees: 3, times: 3, wind: 8 }] }
 
 /** A pink iris in flower over its leaves. */
 export const PINK_IRIS = made('Pink iris', 0.4, [

@@ -515,8 +515,11 @@ export type During = [number, number]
 export type MoveDoc =
   /** Turns right round, `times` per loop (negative turns the other way). */
   | { kind: 'spin'; bone: string; axis: MoveAxis; times: number; phase?: number; during?: During }
-  /** Rocks to and fro by `degrees`. */
-  | { kind: 'sway'; bone: string; axis: MoveAxis; degrees: number; times: number; phase?: number; during?: During }
+  /**
+   * Rocks to and fro by `degrees`. With `wind`, a thing the wind moves (a tree, a stalk, a flower): in a gale it leans
+   * that many degrees downwind and swings wider, less in a lighter wind, gusting with it (`CompiledScene.blow`).
+   */
+  | { kind: 'sway'; bone: string; axis: MoveAxis; degrees: number; times: number; phase?: number; during?: During; wind?: number }
   /** Slides to and fro by `by`. */
   | { kind: 'bob'; bone: string; by: Vec3; times: number; phase?: number; during?: During }
   /** Is born, travels `by`, and fades away, over and over: smoke, sparks, bubbles, foam. `grow` is its size at birth and at the end. */
@@ -1117,7 +1120,7 @@ export function checkScene(doc: unknown): string[] {
       during(m.during, `${at}.during`)
       switch (m.kind) {
         case 'spin': turnAxis(m.axis, `${at}.axis`); break
-        case 'sway': turnAxis(m.axis, `${at}.axis`); num(m.degrees, `${at}.degrees`, -180, 180); break
+        case 'sway': turnAxis(m.axis, `${at}.axis`); num(m.degrees, `${at}.degrees`, -180, 180); if (m.wind !== undefined) num(m.wind, `${at}.wind`, 0, 45); break
         case 'bob': vec(m.by, `${at}.by`); break
         case 'drift':
           vec(m.by, `${at}.by`)
@@ -1539,6 +1542,8 @@ export interface CompiledScene {
    * water, and lies, there), and rain's streaks lean along it. Snow and leaves are carried `DRIFT` times further.
    * With `wrap` (the square a swarm falls over, its middle and half width), a speck blown out of the square comes in
    * at its other side, so the slanting rain still fills it at every height (one that has landed is always inside).
+   * Sways with `wind` lean downwind and swing wider by the root of how far the wind carries (a breeze a quarter of a
+   * gale), so they gust with it.
    */
   blow(sk: Skeleton, t: number, wind: readonly [number, number], wrap?: { at: readonly [number, number]; half: number }): void
   /** The scene's live lights at a time, in seconds. */
@@ -1653,6 +1658,8 @@ interface Speck {
 
 /** How much further than rain the wind carries snow and leaves over the same fall: they fall slowly. */
 export const DRIFT = 1.8
+/** How much wider a sway with `wind` swings, as a share of how far it leans. */
+export const FLUTTER = 0.35
 
 const SPECK_SIZE: Record<SpeckKind, number> = { dust: 0.01, embers: 0.014, rain: 0.008, snow: 0.014, leaves: 0.022, fireflies: 0.018, bubbles: 0.02 }
 /** Seconds one fall or rise takes, about: the rest of a swarm's speed comes from that. A speck that lands lies a while too. */
@@ -1913,6 +1920,7 @@ export function compileScene(given: SceneDoc, { puffs = true, ground: under, wat
   for (const b of doc.bones ?? []) bones.push({ name: b.name, parent: b.parent ? bones.findIndex((k) => k.name === b.parent) : 0, head: b.at })
   const palette = doc.palette.map(rgb)
   const moves = doc.moves ?? []
+  const windy = moves.filter((m): m is Extract<MoveDoc, { kind: 'sway' }> => m.kind === 'sway' && !!m.wind)
   const lights = doc.lights ?? []
   // what weather lands on: parts that stay put (on no bone, or one that only sways), in order, a drift over those before it
   const moved = new Set<string>()
@@ -2040,6 +2048,14 @@ export function compileScene(given: SceneDoc, { puffs = true, ground: under, wat
           // its top leans upwind, where it came from, as far as it is carried a unit of fall
           sk.setRotation(b, mulQ(axisAngle([-wind[1] / w, 0, wind[0] / w], Math.atan(w)), sk.rotation.subarray(b * 4, b * 4 + 4)))
         }
+      }
+      if (!windy.length) return
+      const w = Math.hypot(wind[0], wind[1]), push = Math.sqrt(w), down: Vec3 = [wind[1] / w, 0, -wind[0] / w]
+      for (const m of windy) {
+        const b = sk.index(m.bone), at = duringAt(u, m.during) * m.times + (m.phase ?? 0), most = (m.wind ?? 0) * push * (Math.PI / 180)
+        // leans its top downwind (up turned toward the way the wind goes), and swings wider about its own axis, twice as quick
+        const flutter = axisAngle(moveAxis(m.axis), Math.sin(at * 2 * TAU) * most * FLUTTER)
+        sk.setRotation(b, mulQ(axisAngle(down, most), mulQ(sk.rotation.subarray(b * 4, b * 4 + 4), flutter)))
       }
     },
     pose(sk, t) {

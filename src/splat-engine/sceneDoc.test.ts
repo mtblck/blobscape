@@ -395,3 +395,29 @@ test('wind blows what falls sideways over the fall still to come, so it lands wh
   }
   assert.ok(moved > 100 && landed > 10, `${moved} blown, ${landed} landed where planned`)
 })
+
+test('a sway the wind moves leans downwind and swings wider as the wind rises; one without `wind` does not', () => {
+  const doc: SceneDoc = {
+    name: 'Reeds', loop: 6, palette: ['#203020', '#80a060'], camera: { target: [0, 0.3, 0], distance: 2, azimuth: 0, elevation: 10 },
+    bones: [{ name: 'reed', at: [0, 0, 0] }, { name: 'post', at: [0.4, 0, 0] }],
+    parts: [{ shape: { kind: 'box', at: [0, 0.3, 0], half: [0.02, 0.3, 0.02] }, paint: '#80a060', bone: 'reed' }, { shape: { kind: 'box', at: [0.4, 0.3, 0], half: [0.02, 0.3, 0.02] }, paint: '#203020', bone: 'post' }],
+    moves: [{ kind: 'sway', bone: 'reed', axis: 'z', degrees: 2, times: 2, wind: 10 }, { kind: 'sway', bone: 'post', axis: 'z', degrees: 2, times: 2 }],
+  }
+  assert.deepEqual(checkScene(doc), [])
+  assert.ok(checkScene({ ...doc, moves: [{ ...doc.moves![0], wind: 90 } as never] }).some((e) => /moves\[0\]\.wind/.test(e)))
+  const c = compileScene(doc, { puffs: false })
+  // how far the top of each stands along +x (downwind), at one moment, in calm, a breeze and a gale blowing toward +x
+  const top = (wind: number) => {
+    const sk = new Skeleton(c.bones)
+    c.pose(sk, 1.1)
+    if (wind) c.blow(sk, 1.1, [wind, 0])
+    sk.update()
+    return ['reed', 'post'].map((n) => {
+      const b = sk.index(n), m = sk.matrix.subarray(b * 16, b * 16 + 16)
+      return m[4] // the bone's up axis, x part
+    })
+  }
+  const [calm, breeze, gale] = [0, 0.06, 1].map(top)
+  assert.ok(breeze[0] > calm[0] + 0.01 && gale[0] > breeze[0] + 0.05, `reed ${calm[0]} ${breeze[0]} ${gale[0]}`)
+  assert.ok(Math.abs(gale[1] - calm[1]) < 1e-6, 'the post stays as it was')
+})

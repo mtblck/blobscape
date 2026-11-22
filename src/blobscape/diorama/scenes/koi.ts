@@ -28,6 +28,11 @@ export const KOI_POND: PropDoc = {
     sky: ['#5a6c7e', '#b6c2c6'],
     look: { dither: 0.5, glow: 1.2, outline: true, edges: true },
     camera: { target: [0, 0.36, 0.1], distance: 3.65, azimuth: 14, elevation: 21, swing: 8 },
+    // the shared moon and stars, out only at night (Diorama's koi pond is a day as written: `byDay`), in the pond's own pale colors
+    heavens: {
+      moon: { at: [-0.19, 1.32, -1.29], r: 0.085, colors: ['#f0e8d6', '#bcc4c2'] },
+      stars: { count: 26, from: [-1.9, 0.95, -1.7], to: [1.9, 1.55, -1.2], size: 0.012, colors: ['#fff0c4', '#f0e8d6', '#bcc4c2'] },
+    },
     air: { haze: { color: '#8a9ca8', from: 1.5, to: 10 }, specks: [{ kind: 'leaves', count: 14, size: 0.012, from: [0.2, 0, -1.3], to: [1.5, 1.2, 0.2], colors: ['#f6c2d0', '#e08ca6', '#f0e8d6'], land: true, wind: [-0.25, 0.1] }] },
     water: {
       level: -0.045, from: [-1.3, -0.72], to: [1.3, 1.1], color: '#184650', sky: ['#8a9ca8', '#b6c2c6'], clear: 0.25, speed: 0.3, damping: 0.6, cell: 0.018, ripple: 6, deep: 0.05, splash: { r: 0.07, depth: 0.02 },

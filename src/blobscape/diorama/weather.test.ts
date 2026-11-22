@@ -4,6 +4,7 @@ import { CLEAR, CLOUDS, RAIN_MOST, lightningAt, skyState } from '../../splat-eng
 import { DIORAMAS } from './scenes.ts'
 import { pileStep } from '../../splat-engine/snowCover.ts'
 import { SceneWeather, paletteUnder, underSky } from './weather.ts'
+import { litFor } from '../../splat-engine/sceneDoc.ts'
 
 const scene = (id: string) => DIORAMAS.find((d) => d.id === id)!
 
@@ -77,4 +78,14 @@ test('snow lies where it lands, builds up while it falls and melts after', () =>
   assert.equal(shown(), c.blobs.count)
   // flat on the ground it fell to, never under it
   for (let k = 0; k < c.blobs.count; k++) if (c.blobs.center[k * 3 + 1] < c.at[k * 3 + 1] - 1e-6 || c.normal[k * 3 + 1] < 0.55) assert.fail(`blob ${k}`)
+})
+
+test('the koi pond is a day: its moon and stars come out only at night, and its weather starts over the picture', () => {
+  const koi = scene('koi')
+  const sky = (doc: ReturnType<typeof litFor>) => doc.parts.filter((p) => p.bone === '~moon' || p.bone?.startsWith('~star')).length
+  assert.equal(sky(litFor(koi.doc, false, 'always')), 0)
+  assert.ok(sky(litFor(koi.doc, true)) > 20, 'moon and stars at night')
+  assert.equal(koi.overhead, false)
+  const w = new SceneWeather(koi, { overhead: false })
+  assert.equal(w.overhead, false)
 })

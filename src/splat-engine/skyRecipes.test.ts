@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { Skeleton } from './rig.ts'
 import { checkScene, compileScene } from './sceneDoc.ts'
-import { BOLT_SECONDS, CLEAR, CLOUDS, CLOUD_COVERS, RAIN_MOST, SNOW_MOST, SkyEase, WEATHERS, falling, gloomy, hazeUnder, isClear, lightUnder, lightningAt, mixSky, windAt, shareOut, showWeather, skyState, skyUnder, weatherBones, weatherDocs } from './skyRecipes.ts'
+import { BOLT_SECONDS, CLEAR, CLOUDS, CLOUD_COVERS, RAIN_MOST, SNOW_MOST, SkyEase, WEATHERS, aboveView, cloudBase, falling, gloomy, hazeUnder, isClear, lightUnder, lightningAt, mixSky, windAt, shareOut, showWeather, skyState, skyUnder, weatherBones, weatherDocs } from './skyRecipes.ts'
 
 const VIEW = { target: [0, 0.5, 0] as [number, number, number], distance: 3.4, azimuth: 30, elevation: 14 }
 
@@ -130,4 +130,22 @@ test('wind comes with weather a level at a time, may be asked for harder, and bl
   assert.ok(len(windAt(gale, 1, 12)) > len(windAt(breeze, 1, 12)) * 3)
   const a = windAt(gale, 0, 12), b = windAt(gale, 12, 12)
   assert.ok(Math.abs(a[0] - b[0]) < 1e-9 && Math.abs(a[1] - b[1]) < 1e-9, 'its gusts join up at the loop')
+})
+
+test('with the clouds left out, what falls starts above the top of the picture', () => {
+  for (const camera of [
+    { target: [0, 0.3, 0] as [number, number, number], distance: 2.6, azimuth: 0, elevation: 18 },
+    { target: [0, 0.5, 0] as [number, number, number], distance: 4, azimuth: 30, elevation: 35 },
+    { target: [0, 0.2, 0] as [number, number, number], distance: 1.8, azimuth: -20, elevation: 5 },
+  ]) {
+    const top = aboveView(camera), base = cloudBase(camera)
+    assert.ok(top >= base, `${top} under the clouds' base ${base}`)
+    // the picture's top edge, straight ahead over the target, is under where it starts
+    const e = (camera.elevation * Math.PI) / 180, half = (20 * Math.PI) / 180
+    const eye = camera.target[1] + camera.distance * Math.sin(e)
+    const edge = eye + camera.distance * Math.cos(e) * Math.tan(half - e)
+    assert.ok(top > edge, `${top} in the picture (top edge ${edge})`)
+    const { rain } = weatherDocs(camera, 6, {}, top)
+    assert.deepEqual(checkScene(rain), [])
+  }
 })
