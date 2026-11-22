@@ -4,7 +4,7 @@ import type { Vec3 } from '../splat-core/blobs.ts'
 import type { PixelLook } from '../splat-core/pixel.ts'
 import type { Built } from '../splat-engine/body.ts'
 import { pickActors } from '../splat-engine/pick.ts'
-import { MAX_PROJECT_LAMPS, PlacedPoser, SIZE_RANGE, compileProject, cutLight, joinPalettes, placer, type Placement, type Posable, type ProjectLight, type SceneProject } from '../splat-engine/project.ts'
+import { MAX_PROJECT_LAMPS, PlacedPoser, SIZE_RANGE, compileProject, cutLight, joinPalettes, leafy, placer, type Placement, type Posable, type ProjectLight, type SceneProject } from '../splat-engine/project.ts'
 import type { Light, PointLight } from '../splat-engine/engine.ts'
 import type { Bone, Skeleton } from '../splat-engine/rig.ts'
 import type { Shape } from '../splat-engine/voxel.ts'
@@ -327,7 +327,9 @@ export function SceneCreator() {
         // a model of your own goes to the cutter with its job; whether the page has it is part of what it is cut as
         const known = isModel(p.prop) ? modelOf(p.prop) : undefined
         const model = known && modelJob(known)
-        return { key: JSON.stringify([p.prop, p.turn, p.size, p.lit, project.loop, project.land, steps, propLight, plain, !!model]), thing: JSON.stringify(p.prop), plain, job: (spacing) => ({ kind: 'prop', project, i, spacing, plain, model, finish: fin }) }
+        // a leafy prop drops leaves of its own when the weather is falling leaves
+        const leaves = light?.weather === 'leaves' && !!cp.props[i] && leafy(cp.props[i].prop.name)
+        return { key: JSON.stringify([p.prop, p.turn, p.size, p.lit, project.loop, project.land, steps, propLight, plain, !!model, leaves]), thing: JSON.stringify(p.prop), plain, job: (spacing) => ({ kind: 'prop', project, i, spacing, plain, model, finish: fin }) }
       }),
     ]
   }, [opened, project, cp, plain, finishKey, modelsVersion])

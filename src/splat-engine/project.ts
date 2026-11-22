@@ -96,7 +96,7 @@ export interface ProjectLight {
   glow?: number
   /** Far things fade into the sky's lower color, total this far past the view's target; 0 is clear air. */
   haze?: number
-  /** Rain, snow or leaves falling over the land and lying where they land. */
+  /** Rain or snow falling over the land and lying where it lands, or leaves falling from the leafy props' crowns. */
   weather?: 'rain' | 'snow' | 'leaves'
   /**
    * A shared weather or cloud cover laid over the scene (skyRecipes.ts: the same recipes every Diorama scene takes),
@@ -164,7 +164,10 @@ export function litLand(doc: SceneDoc, l: ProjectLight | undefined): SceneDoc {
   const sky = l.sky ?? doc.sky
   const air = { ...doc.air }
   if (l.haze !== undefined) air.haze = l.haze > 0 ? { color: sky?.[1] ?? '#c8d0dc', from: 0, to: l.haze } : undefined
-  if (l.weather) {
+  if (l.weather === 'leaves') {
+    // leaves fall from the trees (`withLeaves`), not from the sky: in place of any falling leaves the land has of its own
+    air.specks = (air.specks ?? []).filter((x) => x.kind !== 'leaves' || x.shaken)
+  } else if (l.weather) {
     // in place of any weather the land has, within the 300 specks a scene may hold
     const kept = (air.specks ?? []).filter((x) => x.kind !== 'rain' && x.kind !== 'snow' && x.kind !== 'leaves').slice(0, 7)
     const left = 300 - kept.reduce((n, x) => n + x.count, 0)
@@ -181,9 +184,46 @@ const WEATHER_COUNT = { rain: 140, snow: 120, leaves: 40 }
  * A swarm of rain, snow or leaves over the view's middle, falling onto whatever stands there. Rain and snow are the
  * shared recipe's (skyRecipes.ts `falling`), so a change to rain there is a change here.
  */
-function weatherOf(kind: NonNullable<ProjectLight['weather']>, camera: Orbit): SpeckDoc {
-  if (kind !== 'leaves') return falling(kind, camera, WEATHER_COUNT[kind])
-  return { ...falling('snow', camera, WEATHER_COUNT.leaves), kind, colors: ['#c8642a', '#e0a030', '#a83c20'] }
+function weatherOf(kind: 'rain' | 'snow', camera: Orbit): SpeckDoc {
+  return falling(kind, camera, WEATHER_COUNT[kind])
+}
+
+/** A prop that drops leaves, by its name: broadleaf trees and bushes, not pines, palms, cacti or bare trees. */
+const LEAFY = /tree|oak|cherry|maple|birch|willow|apple|bush|hedge|shrub/i
+const NOT_LEAFY = /pine|fir\b|spruce|palm|cactus|bare|dead|stump|bamboo/i
+/** Falling leaves' colors, and how many come down under one tree. */
+export const AUTUMN = ['#c8642a', '#e0a030', '#a83c20']
+export const LEAVES_EACH = 12
+/** Whether a prop of this name drops leaves. */
+export const leafy = (name: string) => LEAFY.test(name) && !NOT_LEAFY.test(name)
+
+/**
+ * Where a leafy prop's leaves fall, in its own frame: under its crown (the top half of it, drawn in a little), from the
+ * crown's underside down to its foot, so they come from the tree and not from the sky (Matt, 2026-11-22).
+ */
+export function leafFall(prop: PropDoc): { from: Vec3; to: Vec3; size: number } | undefined {
+  if (!leafy(prop.name)) return
+  const shapes = compileScene({ ...prop.doc, lights: [], air: undefined, water: undefined }, { puffs: false }).spec(0.08).parts.map((p) => p.shape)
+  if (!shapes.length) return
+  const lo: Vec3 = [Infinity, Infinity, Infinity], hi: Vec3 = [-Infinity, -Infinity, -Infinity]
+  for (const sh of shapes) for (let i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], sh.min[i]); hi[i] = Math.max(hi[i], sh.max[i]) }
+  const h = hi[1] - lo[1], wide = Math.max(hi[0] - lo[0], hi[2] - lo[2])
+  if (!(h > 0)) return
+  // the crown's underside: the lowest of the parts nearly as wide as the whole (a trunk is not)
+  let under = hi[1]
+  for (const sh of shapes) if (Math.max(sh.max[0] - sh.min[0], sh.max[2] - sh.min[2]) >= wide * 0.6) under = Math.min(under, sh.min[1])
+  if (under <= lo[1] + h * 0.15) under = lo[1] + h * 0.5
+  const mid = [(lo[0] + hi[0]) / 2, (lo[2] + hi[2]) / 2], half = [(hi[0] - lo[0]) * 0.35, (hi[2] - lo[2]) * 0.35]
+  const r = (v: number) => Math.round(v * 1e4) / 1e4
+  return { from: [r(mid[0] - half[0]), r(prop.foot[1]), r(mid[1] - half[1])], to: [r(mid[0] + half[0]), r(under), r(mid[1] + half[1])], size: r(Math.max(0.008, h * 0.018)) }
+}
+
+/** A leafy prop's leaves as a swarm of its own, falling from its crown to its foot, for a project whose weather is leaves. */
+export function withLeaves(prop: PropDoc, weather: ProjectLight['weather']): PropDoc {
+  const fall = weather === 'leaves' ? leafFall(prop) : undefined
+  if (!fall) return prop
+  const swarm: SpeckDoc = { kind: 'leaves', count: LEAVES_EACH, colors: AUTUMN, ...fall }
+  return { ...prop, doc: { ...prop.doc, air: { ...prop.doc.air, specks: [...(prop.doc.air?.specks ?? []), swarm] } } }
 }
 
 /** Most props in one project: each is an actor of its own while editing, and frames slow down as they are added (#330). */
@@ -544,7 +584,8 @@ export function compileProject(project: SceneProject, find: (id: string) => Prop
   const timed = (doc: SceneDoc, own?: 'dark' | 'always') => (dark === undefined ? doc : litFor(doc, dark, own ?? lamps))
   const land = { prop: landProp, c: compileScene(refit(litLand(timed(landProp.doc), project.light), project.loop)) }
   const props = project.props.map((placed, i) => {
-    const prop = get(placed.prop, `props[${i}]`)
+    // a leafy prop drops its own leaves when the weather is falling leaves
+    const prop = withLeaves(get(placed.prop, `props[${i}]`), project.light?.weather)
     const c = compileScene(refit(timed(prop.doc, placed.lit), project.loop), { puffs: false })
     return { prop, c, placed, poser: new PlacedPoser(c, prop.foot, placed, placed.still) }
   })
