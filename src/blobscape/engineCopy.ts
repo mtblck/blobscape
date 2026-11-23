@@ -69,6 +69,9 @@ export const FEATURES = [
   { title: 'Made, not captured', body: 'Creatures and scenes are written as shapes and cut into blobs, with sun and shadows baked in. A whole scene can be plain data, with no code.' },
   { title: 'Live lights', body: 'Up to sixteen point lights shade the baked colors by distance and facing: torches, a turning lamp, a spell in flight.' },
   { title: 'Pixel mode', body: 'Draws the scene small and turns it into pixel art: palette, dither, outlines, glow and pixels that stay put as the camera swings. Sprite sheets come from the same pass.' },
+  { title: 'More looks than pixels', body: 'The same scene can be drawn as gouache, oil, ink, hatching or stipple, cel shaded, in neon, as stained glass, in watercolor, as blocks or as characters. Each is one call on the stage.' },
+  { title: 'Water, lava and fire', body: 'A pond ripples under rain and round whatever wades in it, lava wells up and crusts over, and a fire is hot gas rising off its bed. Each is simulated once for a scene\'s loop, then played from the time alone.' },
+  { title: 'Weather every scene shares', body: 'Rain, snow, fog, clouds, wind and thunderstorms are recipes of numbers laid over any scene and eased from one to the next. Lamps wait for the dark, and snow piles up where it lands.' },
   { title: 'Files that travel', body: 'A rigged, animated splat saves as one .glb, written to the glTF splat extension plus ordinary skins and animation. three.js opens it as a still splat; with our reader it moves.' },
 ] as const
 

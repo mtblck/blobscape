@@ -20,10 +20,32 @@ import type { Vec3 } from '../splat-core/blobs.ts'
  */
 
 /** A vent where hot rock wells up: round (x, z), `r` across (half), wandering `wander` round that spot `times` a loop from `phase`. */
-export interface LavaVent { x: number; z: number; r: number; wander: number; times: number; phase: number }
+export interface LavaVent {
+  /** Its middle, along x. */
+  x: number
+  /** Its middle, along z. */
+  z: number
+  /** Half its width. */
+  r: number
+  /** How far it wanders from its middle. */
+  wander: number
+  /** How many times a loop it goes round. */
+  times: number
+  /** Where in its round it starts, 0 to 1. */
+  phase: number
+}
 
 /** A bubble bursting at (x, z), `at` seconds into the loop, `r` across (half). */
-export interface LavaBubble { x: number; z: number; at: number; r: number }
+export interface LavaBubble {
+  /** Where it bursts, along x. */
+  x: number
+  /** Where it bursts, along z. */
+  z: number
+  /** When it bursts, seconds into the loop. */
+  at: number
+  /** Half its width. */
+  r: number
+}
 
 /** A scene's lava as compiled (`WaterPlan.lava`). */
 export interface LavaPlan {
@@ -33,16 +55,31 @@ export interface LavaPlan {
   flow: number
   /** How big the crust's plates are, units across. */
   plate: number
+  /** Where hot rock wells up. */
   vents: LavaVent[]
   /** How many bubbles burst a loop, and how wide one is (half). Where they burst is drawn from the wet cells (`planBubbles`). */
   bubbles: number
+  /** Half the width of a bubble. */
   pop: number
   /** The colors from cold to hot, 0 to 1 as blobs hold them (sRGB): crust, dull red, orange, white-hot. */
   ramp: [Vec3, Vec3, Vec3, Vec3]
 }
 
 /** The grid the lava lies on: the pool's own (water.ts `WaterSpec` and its wet cells). */
-export interface LavaGrid { nx: number; nz: number; x0: number; z0: number; cell: number; wet: Uint8Array }
+export interface LavaGrid {
+  /** Cells along x. */
+  nx: number
+  /** Cells along z. */
+  nz: number
+  /** Where the grid starts, along x. */
+  x0: number
+  /** Where the grid starts, along z. */
+  z0: number
+  /** A cell's side. */
+  cell: number
+  /** 1 for each cell that holds lava, row by row. */
+  wet: Uint8Array
+}
 
 /** A number from 0 to 1 for a whole number, the same everywhere. */
 export function lavaHash(i: number): number {
@@ -129,9 +166,11 @@ export class LavaHeat {
   readonly heat: Float32Array
   /** Where each cell's rock first came up, x then z, for the crust's plates. */
   readonly ox: Float32Array
+  /** Where each cell's rock first came up, along z. */
   readonly oz: Float32Array
   /** The surface's way of moving at each cell as last worked out, units a second. */
   readonly u: Float32Array
+  /** The surface's speed along z at each cell, units a second. */
   readonly w: Float32Array
   private readonly heat2: Float32Array
   private readonly ox2: Float32Array
@@ -140,7 +179,9 @@ export class LavaHeat {
   /** Every bubble that bursts in the loop, in order. */
   readonly bubbles: LavaBubble[]
 
+  /** The grid it lies on. */
   readonly grid: LavaGrid
+  /** The plan it runs. */
   readonly plan: LavaPlan
   /** Seconds before it all repeats: the scene's loop. */
   readonly loop: number

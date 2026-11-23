@@ -1,0 +1,2 @@
+- Engine: the weather, cloud and wind recipes, the shared sky (moon, sun, stars), snow that lies, lava, tags, and scenes made of a land and props (`composeScene`, `splitScene`, `compileProject`) are now part of the package, where before they could only be used on this site.
+- Engine docs: new guide sections on the other looks, on water, lava and fire in a scene, on lamps, weather and the shared sky, and on scenes from a land and props, and the reference lists the new parts. The engine page says what the engine now does.

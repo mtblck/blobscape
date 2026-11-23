@@ -20,18 +20,25 @@ const GROW = 0.3
 /** How deep the layer is at depth 1, in blob sizes. */
 const DEEPEST = 0.9
 
+/** A layer of snow lying on a scene: an actor of flat white blobs, with what `pileSnow` needs to deepen it. */
 export interface SnowCover {
+  /** The layer's blobs, one a spot snow can lie on. */
   blobs: Blobs
+  /** Every blob on the one still bone. */
   skin: ReturnType<typeof emptySkin>
+  /** One still bone. */
   skeleton: Skeleton
   /** Drawn as blobs while the stage draws blocks, beside the weather. */
   soft: true
+  /** It is weather, which the Blocks look draws as cubes or leaves as blobs. */
   weather: true
+  /** It lies on things: among blocks it is raised onto the cubes' tops. */
   lies: true
   /** When each blob comes, 0 to 1: at depth `rank · (1 − GROW)` it starts to grow. */
   rank: Float32Array
   /** Where each blob lies on the surface, x y z, and the surface's normal there. */
   at: Float32Array
+  /** The surface's normal under each blob, x y z. */
   normal: Float32Array
   /** Each blob's full radius. */
   size: Float32Array
