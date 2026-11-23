@@ -26,7 +26,7 @@ export const PINE_CLEARING: PropDoc = {
     sky: ['#0a0f1e', '#1f2d55'],
     look: { dither: 0.5, glow: 1.75, outline: true, edges: true, bands: 2, heat: 1 },
     camera: { target: [0, 1, 0], distance: 5.2, azimuth: 18, elevation: 13 },
-    air: { haze: { color: '#141c36', from: 1, to: 7 }, specks: [{ kind: 'embers', lit: 'dark', count: 30, from: [-0.05, 0.25, 0.1], to: [0.25, 1.8, 0.4], colors: ['#f59a2a', '#ffd166', '#d9541e'] }] },
+    air: { haze: { color: '#141c36', from: 1, to: 7 } },
     bones: [
       { name: '~moon', at: [-1.5, 2.7, -1.7] },
       { name: '~star0', at: [-0.5619, 2.4177, -1.3045] },
@@ -100,8 +100,9 @@ export const CAMPFIRE_FIRE: PropDoc = {
       { shape: { kind: 'cone', from: [0.22, 0.03, 0.14], to: [0.02, 0.1, 0.34], r: 0.032 }, paint: { kind: 'speckle', size: 0.04, colors: ['#4a3020', '#2a1c16', '#d9541e'] } },
       { shape: { kind: 'cone', from: [0.1, 0.03, 0.4], to: [0.1, 0.11, 0.12], r: 0.032 }, paint: { kind: 'speckle', size: 0.04, colors: ['#4a3020', '#2a1c16', '#d9541e'] } },
     ],
-    // the fire itself is simulated (fire.ts): hot gas rising off the bed of logs, with the sparks it throws
-    fires: [{ at: [0.1, 0.09, 0.26], r: 0.105, height: 0.42, sparks: 1.5, lit: 'dark' }],
+    // the fire itself is simulated (fire.ts): hot gas rising off the bed of logs, with the sparks it throws. Every spark over
+    // this camp is the fire's own, so none rises once it is out (the land had a swarm of embers, which rose on over a dead fire)
+    fires: [{ at: [0.1, 0.09, 0.26], r: 0.105, height: 0.42, sparks: 2.5, lit: 'dark' }],
     lights: [
       { at: [0.1, 0.3, 0.25], color: '#f59a2a', strength: 3, range: 0.9, lit: 'dark', flicker: { by: 0.25, times: 11 }, fire: 0 },
     ],
