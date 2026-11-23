@@ -72,6 +72,16 @@ export function SettingsControls<V>({ def, value, onChange, on, page, tab, choic
         } else if (s.kind === 'toggle') {
           const about = typeof s.about === 'function' ? s.about(on.style, on) : s.about
           control = switched(s.label, (v[s.key] as boolean | null) ?? !!s.auto?.(on.style), (to) => set(s.key, to), about)
+        } else if (s.kind === 'text') {
+          const id = `setting-${s.key}`
+          control = (
+            <div data-testid={s.testid}>
+              <label htmlFor={id} className="mb-1.5 block text-sm text-ink-muted">{s.label}</label>
+              <input id={id} type="text" value={v[s.key] as string} maxLength={s.most} spellCheck={false} onChange={(ev) => set(s.key, ev.target.value)}
+                className="w-full rounded-lg border border-rule bg-paper px-3 py-2 text-sm text-ink transition-colors hover:border-ink-faint focus:border-accent" />
+              {hint && <Note>{hint}</Note>}
+            </div>
+          )
         } else {
           control = (
             <div>

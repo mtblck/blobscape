@@ -89,7 +89,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   const pen = look === 'cel' ? cel.pen : mk.pen
   const paper = look === 'ascii' ? asc.paper : mk.paper
   // ASCII: how tall a character is, whether each takes the color of what it stands for, and strokes along edges
-  const { letter, own, strokes, strands, weight, chars } = asc
+  const { letter, own, strokes, strands, weight, chars, words } = asc
   const [copied, setCopied] = useState('')
   const { actor, plain, azimuth, soft, offscreen, sky, light, loop, spacing } = on
   // the subject's own sky is the first backdrop where it has one. Under a dark sky it is night: the shade and line are
@@ -107,7 +107,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   const ascii = look === 'ascii'
   // off screen a frame is drawn only when asked for, and must not depend on the one before (`?steady=` says otherwise, for the checks)
   const held = useMemo(() => { const v = params().get('steady'); return v !== null && v !== '' && Number.isFinite(+v) ? +v : offscreen ? 0 : undefined }, [offscreen])
-  const glyphs = useMemo<GlyphLook | undefined>(() => (ascii ? { size: letter, ink: own ? undefined : sheet.ink, light: !own && lum(sheet.paper) > lum(sheet.ink), edges: strokes, strands, gain: weight * (own ? SCREEN_GAIN : 1), steady: held, set: chars } : undefined), [ascii, letter, own, sheet, strokes, strands, weight, held, chars])
+  const glyphs = useMemo<GlyphLook | undefined>(() => (ascii ? { size: letter, ink: own ? undefined : sheet.ink, light: !own && lum(sheet.paper) > lum(sheet.ink), edges: strokes, strands, gain: weight * (own ? SCREEN_GAIN : 1), steady: held, set: chars, words } : undefined), [ascii, letter, own, sheet, strokes, strands, weight, held, chars, words])
   useEffect(() => { stage?.setGlyphs(glyphs) }, [stage, glyphs])
   useEffect(() => { setCopied('') }, [look])
   const lit = look === 'neon'

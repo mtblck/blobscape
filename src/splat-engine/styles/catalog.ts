@@ -114,8 +114,15 @@ export interface SeedSetting<V> extends Base<V> {
   /** What says it is a seed. */
   kind: 'seed'
 }
-/** A setting of a style: a slider, a choice, a switch or a seed. */
-export type StyleSetting<V> = RangeSetting<V> | ChoiceSetting<V> | ToggleSetting<V> | SeedSetting<V>
+/** A line of text the visitor types (the words a picture is written in). */
+export interface TextSetting<V> extends Base<V> {
+  /** What says it is text. */
+  kind: 'text'
+  /** The most characters it keeps. */
+  most: number
+}
+/** A setting of a style: a slider, a choice, a switch, a seed or a line of text. */
+export type StyleSetting<V> = RangeSetting<V> | ChoiceSetting<V> | ToggleSetting<V> | SeedSetting<V> | TextSetting<V>
 
 /** One style's settings (or those of a few styles that share them, as the brush marks do). */
 export interface StyleDef<V> {
@@ -144,8 +151,10 @@ export interface MarkSettings {
 }
 /** The settings of the picture drawn as characters. */
 export interface AsciiSettings {
-  /** Which characters: ASCII, braille or blocks. */
+  /** Which characters: ASCII, braille, blocks, box drawing, words or a typewriter's. */
   chars: GlyphSet
+  /** The text the picture is written in, drawn as words. */
+  words: string
   /** A character's height, in CSS pixels. */
   letter: number
   /** How heavy the characters are drawn. */
@@ -291,16 +300,23 @@ export const MARKS: StyleDef<MarkSettings> = {
   ],
 }
 
+/** What a picture drawn as words says until the visitor writes something else. */
+export const WORDS_START = 'Every blob a letter. '
+
 /** The settings of the picture drawn as characters. */
 export const ASCII: StyleDef<AsciiSettings> = {
   id: 'ascii', styles: ['ascii'],
-  start: { chars: 'ascii', letter: 12, weight: 1, strokes: true, strands: true, own: true, paper: PAPERS[0].id },
+  start: { chars: 'ascii', letter: 12, weight: 1, strokes: true, strands: true, own: true, paper: PAPERS[0].id, words: WORDS_START },
   settings: [
     { key: 'chars', kind: 'choice', label: 'Characters', address: 'chars', testid: 'brush-chars', options: [
       { id: 'ascii', label: 'ASCII', about: 'Letters and signs by how much there is to show, and strokes along edges.' },
       { id: 'braille', label: 'Braille', about: 'Eight dots a cell, each on where its eighth of the cell is heavy enough, so shapes come out finer than a character. Idea from Silicon Jungle\'s Ink Studio.' },
-      { id: 'blocks', label: 'Blocks', about: 'Quarter blocks where a cell is half one thing and half another, and the shades ░ ▒ ▓ where it is even. Idea from Silicon Jungle\'s Ink Studio.' },
+      { id: 'blocks', label: 'Quarter blocks', about: 'Quarter blocks where a cell is half one thing and half another, and the shades ░ ▒ ▓ where it is even. Idea from Silicon Jungle\'s Ink Studio.' },
+      { id: 'lines', label: 'Box drawing', about: 'Only the edges, in the box-drawing characters ─ │ ┌ ┼ that join from cell to cell, with a dot where there is something to show.' },
+      { id: 'words', label: 'Words', about: 'Your words, written over and over through the picture, each letter as bright as what it stands on.' },
+      { id: 'typed', label: 'Typewriter', about: 'Keys struck once, or twice over one another for the darkest places, each strike a little out of line and the ribbon worn unevenly.' },
     ] },
+    { key: 'words', kind: 'text', label: 'Words', address: 'words', most: 120, testid: 'brush-words', when: (v) => v.chars === 'words', hint: 'Letters, digits and , ! ? \' ; ( ) " in capitals. Anything else is a space.' },
     { key: 'letter', kind: 'range', label: 'Character size', min: 8, max: 24, step: 2, unit: 'px', hint: 'How tall a character is. Smaller ones show more of the picture; bigger ones are easier to read.' },
     { key: 'weight', kind: 'range', label: 'Weight', min: 0.5, max: 2, step: 0.1, unit: 'percent', hint: 'Over 100% every cell takes a heavier character than its tone asks for, which suits a dim scene.' },
     { key: 'strokes', kind: 'toggle', label: 'Strokes along edges', testid: 'brush-strokes', when: (v) => v.chars === 'ascii', about: 'Where an edge runs through a cell it gets | _ / or \\ by the way the edge runs, in place of a character for its tone.' },
@@ -497,6 +513,7 @@ export function fromAddress<V>(def: StyleDef<V>, start: V, q: URLSearchParams): 
     if (s.kind === 'range') { const v = asked === '' ? NaN : Number(asked); if (Number.isFinite(v)) out[s.key] = held(s, v) }
     else if (s.kind === 'choice') { const o = s.options.find((x) => String(x.id) === asked); if (o) out[s.key] = o.id }
     else if (s.kind === 'toggle') { if (s.on) out[s.key] = asked === s.on; else if (asked === '1') out[s.key] = true; else if (asked === '0') out[s.key] = false }
+    else if (s.kind === 'text') { if (asked.trim()) out[s.key] = asked.slice(0, s.most) }
   }
   return out as V
 }
@@ -509,6 +526,7 @@ export function settingsFrom<V>(def: StyleDef<V>, start: V, kept: unknown): V {
     const g = got[s.key]
     if (s.kind === 'range' || s.kind === 'seed') { if (typeof g === 'number' && Number.isFinite(g)) out[s.key] = s.kind === 'range' ? held(s, g) : Math.max(0, Math.round(g)) }
     else if (s.kind === 'choice') { if (s.open ? typeof g === 'string' : s.options.some((o) => o.id === g) || (g === '' && (start as Record<string, unknown>)[s.key] === '')) out[s.key] = g }
+    else if (s.kind === 'text') { if (typeof g === 'string') out[s.key] = g.slice(0, s.most) }
     else if (typeof g === 'boolean' || (g === null && (def.start as Record<string, unknown>)[s.key] === null)) out[s.key] = g
   }
   return out as V
