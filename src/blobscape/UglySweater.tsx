@@ -3,8 +3,9 @@ import type { Orbit } from '../splat-core/view.ts'
 import type { PointLight } from '../splat-engine/engine.ts'
 import type { Skeleton } from '../splat-engine/rig.ts'
 import type { SceneFire } from '../splat-engine/sceneFire.ts'
+import { heavenBones } from '../splat-engine/heavens.ts'
 import { LoadingMark } from '../shared/BlobLoader.tsx'
-import { Button, Chip, Field } from '../shared/ui.tsx'
+import { Button, Chip, Field, Toggle } from '../shared/ui.tsx'
 import { detailAsked, labelNames, writeDetail } from '../shared/detail.ts'
 import { TAB_SECTIONS, Workbench } from '../shared/Workbench.tsx'
 import { Crumbs, useFocusHeading } from './Shell.tsx'
@@ -85,6 +86,10 @@ export function UglySweater() {
   const [built, setBuilt] = useState<{ id: string; count: number; actor: Actor }>()
   // the page holds the look's settings, so the address can keep them
   const settings = useState<DrawnSettings>(() => drawnStart(params(), { coarse }))
+  // the scenes' moon and stars, which knit into stray dots over the chart (Matt, 2026-11-23: off unless asked for)
+  const [sky, setSky] = useState(() => params().get('sky') === '1')
+  const skyNow = useRef(sky)
+  useEffect(() => { skyNow.current = sky; stage?.invalidate() }, [stage, sky])
   const knit = settings[0].knit
 
   useEffect(() => {
@@ -111,8 +116,12 @@ export function UglySweater() {
       // a fire (the fireplace's) is its own soft actor beside the scene, placed each moment as it burns in still air
       const fire = made.fire
       stage.setActor(made.actor, undefined, fire ? [fire.actor] : [])
+      const heavens = heavenBones(made.actor.skeleton.bones.map((b) => b.name))
+      const overhead = [...heavens.moon, ...heavens.sun, ...heavens.stars]
       if (made.pose) stage.setPoser((sk, time) => {
         made.pose!(sk, time)
+        // the sizes come after the scene's pose worked the bones out
+        if (!skyNow.current && overhead.length) { for (const b of overhead) sk.size[b] = 0; sk.update() }
         if (fire) { fire.show(time, eyeOf(stage.orbit)); stage.reshape(fire.actor) }
         const lit = made.lights?.(time) ?? []
         stage.setLights(fire ? fire.shine(lit, time) : lit, made.ambient ?? 1)
@@ -140,8 +149,9 @@ export function UglySweater() {
     q.set('pattern', knit.pattern)
     q.set('stitch', String(knit.stitch))
     q.set('snow', knit.snow ? '1' : '0')
+    if (sky) q.set('sky', '1'); else q.delete('sky')
     history.replaceState(history.state, '', `${location.pathname}?${q}`)
-  }, [subject, knit.sweater, knit.pattern, knit.stitch, knit.snow])
+  }, [subject, knit.sweater, knit.pattern, knit.stitch, knit.snow, sky])
 
   // For verify: the stage, without clicking
   useEffect(() => {
@@ -221,6 +231,10 @@ export function UglySweater() {
                   </div>
                   <p className="mt-1.5 text-xs text-ink-faint">{sub.about}. Each is a scene in Diorama too, made of props from Scene Creator's library.</p>
                 </Field>
+                <div data-testid="sweater-sky">
+                  <Toggle label="Moon and stars" checked={sky} onChange={setSky} />
+                  <p className="mt-1.5 text-xs text-ink-faint">The scenes' own night sky. Off, the sweater's pattern is the only thing behind them.</p>
+                </div>
                 <Field label="Detail">
                   <div className="flex flex-wrap gap-1.5" data-testid="sweater-detail">
                     {DETAILS.map((d, i) => <Chip key={d.id} active={detail === i} onClick={() => { setDetail(i as Detail); writeDetail(d.id) }}>{d.label}</Chip>)}
