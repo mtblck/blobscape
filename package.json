@@ -1,6 +1,6 @@
 {
   "name": "blobscape",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "scripts": {
     "dev": "vite",
     "build": "npm run hosting:check && tsc && vite build && node scripts/build-element.mjs && npm run prerender",

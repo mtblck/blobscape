@@ -30,6 +30,25 @@ const CHANGES = 'https://github.com/mtblck/blobscape/blob/main/CHANGELOG.md'
 
 export const POSTS: Post[] = [
   {
+    id: 'release-0-6-0',
+    date: '2026-11-23',
+    version: '0.6.0',
+    title: 'Styles, weather and time of day in the engine',
+    summary: 'The engine package now carries what this site draws its styles and weather from: every style\'s settings as data, the rain, snow and clouds laid over a scene, and the times of day.',
+    search: 'Blobscape 0.6.0: the engine package gains the style catalog, SceneWeather and the times of day, with a Styles part in the docs.',
+    image: { src: '/news/diorama-styles.webp', alt: 'The same lighthouse on its island at night drawn three ways side by side: as glowing neon tubes on black, as a stained glass window with dark lead lines, and as a watercolor on paper.' },
+    body: [
+      'Version 0.6.0 is a release for people building with [the engine](/engine/). Nothing on the site looks different: what changed is where things live. The styles, the weather and the times of day that [Diorama](/experiments/diorama/) and [Scene Creator](/scene-creator/) use were written for this site alone, and now they ship in `@blobscape/engine`.',
+      '## Styles as data',
+      'Every style (pixel art, the brush looks, cel shading, blocks, neon, stained glass, watercolor, tech glitch) has its settings written once, as data: each one\'s name, limits, choices and where it starts. Your page can draw its controls from that list, read them from an address, and turn them into what the stage takes with one function a look.',
+      '## Weather and time of day for any scene',
+      '`SceneWeather` is the rain, snow, clouds and lying snow for one scene, made once and then posed by the time and the sky of the moment, so a storm comes on without cutting the scene again. The times of day (morning, afternoon, night) come with their skies, their light and whether lamps are lit.',
+      '## In the docs',
+      'The [engine docs](/engine/docs/) have a new Styles part in the reference and a guide section, Styles as data, with code to start from.',
+      `The full list is in the [changelog](${CHANGES}).`,
+    ],
+  },
+  {
     id: 'release-0-5-0',
     date: '2026-11-23',
     version: '0.5.0',
