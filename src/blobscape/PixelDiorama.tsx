@@ -69,6 +69,9 @@ const swung = (orbit: Orbit, swing: number, loop: number, t: number): Orbit => (
 const BLOB_BYTES = (3 + 3 + 4 + 3 + 1) * 4
 
 
+/** Where the eye is for a view. */
+const eyeOf = (o: Orbit): [number, number, number] => { const a = (o.azimuth * Math.PI) / 180, e = (o.elevation * Math.PI) / 180; return [o.target[0] + o.distance * Math.sin(a) * Math.cos(e), o.target[1] + o.distance * Math.sin(e), o.target[2] + o.distance * Math.cos(a) * Math.cos(e)] }
+
 export function PixelDiorama() {
   const h1 = useFocusHeading()
   const canvas = useRef<HTMLCanvasElement>(null)
@@ -197,6 +200,7 @@ export function PixelDiorama() {
   /** How deep the snow lying is, 0 to 1, and the wall clock it was last moved on by. */
   const pile = useRef(0)
   const pileClock = useRef(0)
+  const fireClock = useRef(0)
   /** Off screen, how deep snow lies while it falls (`?pile=`, all of it unless asked). */
   const [pileAsked] = useState(() => { const v = Number(new URLSearchParams(location.search).get('pile') ?? 1); return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 1 })
   const falls = useRef(new WeakMap<Diorama, Map<boolean, SceneWeather>>())
@@ -237,6 +241,8 @@ export function PixelDiorama() {
           if (!settled) setPixel({ palette: 'own', steps: diorama.finish.steps })
           // a scene with water works one loop of its ripples out here too, while the waiting mark shows
           diorama.water?.()
+          // and one with a fire burning, one loop of that
+          diorama.fire?.()
           const make = () => diorama.make(spacing, stepColors.length ? stepColors : undefined)
           const lit = () => (texel > 1 ? banded(texel, make) : make())
           const cut = () => (hug ? hugged(lit) : lit())
@@ -292,6 +298,8 @@ export function PixelDiorama() {
     const from = stage.time
     // a scene's water is drawn by blobs of its own, in the same world: they move with the water, not with a bone
     const pond = scene.of.water?.()
+    // a scene's fires are blobs of their own too: hot gas carried up off each bed, kept as one loop
+    const flames = scene.of.fire?.()
     // rain, snow and clouds are actors of their own beside the scene's, made once a scene and shown by the sky's numbers
     // (a scene with clouds of its own has them drawn this way too, whatever the weather)
     let fall: SceneWeather | undefined
@@ -305,13 +313,11 @@ export function PixelDiorama() {
     // the shared moon, sun and stars, which cloud cover puts out
     const heavens = heavenBones(scene.built.skeleton.bones.map((b) => b.name))
     const own = ownClouds(scene.of)
-    stage.setActor(scene.built, undefined, [...(pond ? [pond.surface] : []), ...(pond?.spray ? [pond.spray] : []), ...(fall?.actors ?? [])])
+    stage.setActor(scene.built, undefined, [...(pond ? [pond.surface] : []), ...(pond?.spray ? [pond.spray] : []), ...(flames ? [flames.actor] : []), ...(fall?.actors ?? [])])
     seen.current = null
     // the surface as it stands at the stage's time, for the eye as it stands: after a pose, a turn of the view or a new picture in the mirror
     wet.current = pond && (() => {
-      const o = stage.orbit, a = (o.azimuth * Math.PI) / 180, e = (o.elevation * Math.PI) / 180
-      const eye = [o.target[0] + o.distance * Math.sin(a) * Math.cos(e), o.target[1] + o.distance * Math.sin(e), o.target[2] + o.distance * Math.cos(a) * Math.cos(e)]
-      pond.show(stage.time, eye, { mirror: seen.current })
+      pond.show(stage.time, eyeOf(stage.orbit), { mirror: seen.current })
       stage.reshape(pond.surface)
       if (pond.spray) stage.reshape(pond.spray)
     })
@@ -355,7 +361,16 @@ export function PixelDiorama() {
       pond?.ride(sk, t)
       // an export is the scene's own loop: no pokes, and the view as it stood when it began
       if (!held.current) pokes.current?.apply(sk, performance.now() / 1000)
-      stage.setLights(castBy(d.lights(t, stage.backend === 'webgpu'), glowGain(glowNow.current, d.finish.glow)), d.ambientAt?.(t) ?? d.ambient ?? 1)
+      // each fire as it stands at this moment, and its light as bright as it burns
+      // (wind leans it and blows it out, rain damps it and puts it out: by the wall clock, as snow lies; all at once off screen and in an export)
+      if (flames) {
+        const wall = performance.now() / 1000, dt = Math.min(0.25, Math.max(0, wall - fireClock.current))
+        fireClock.current = wall
+        flames.under(skyEase.current.target, offscreen || held.current ? Infinity : dt)
+        flames.show(t, eyeOf(stage.orbit)); stage.reshape(flames.actor)
+      }
+      const lit = d.lights(t, stage.backend === 'webgpu')
+      stage.setLights(castBy(flames ? flames.shine(lit, t) : lit, glowGain(glowNow.current, d.finish.glow)), d.ambientAt?.(t) ?? d.ambient ?? 1)
       // a scene whose sky turns as it plays (day to night) hands the pixel pass each moment's sky
       skyNow.current?.(d, t)
       // a scene that asks for it rocks the view gently as it plays, about wherever the view has been turned to;

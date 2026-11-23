@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { checkProject, compileProject } from '../../splat-engine/project.ts'
-import { CAMPFIRE } from '../diorama/scenes/campfire.ts'
+import { CAMPFIRE_WITH_SHAPES as CAMPFIRE } from '../diorama/scenes/campfire.ts'
 import { describedProject, isDescription, named, picksFor, readDescribed } from './described.ts'
 
 test('a description that marks its props is split by its marks', () => {

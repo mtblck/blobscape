@@ -412,6 +412,13 @@ export function boxOf(doc: SceneDoc): { lo: Vec3; hi: Vec3 } {
 
 const inBox = (p: Vec3, b: { lo: Vec3; hi: Vec3 }, pad: number) => p.every((v, i) => v >= b.lo[i] - pad && v <= b.hi[i] + pad)
 
+/** A light whose fire is now at another place in the list (`fires` are the old places kept, in their new order), or no longer with it. */
+function refired(l: LightDoc, fires: readonly number[]): LightDoc {
+  if (l.fire === undefined) return l
+  const { fire, ...rest } = l, at = fires.indexOf(fire)
+  return at < 0 ? rest : { ...rest, fire: at }
+}
+
 /**
  * Lifts props out of a scene description and leaves what is left as its land. A light goes with the first prop whose
  * box holds it (a lantern's flame), else stays with the land. A prop takes the scene's palette, light, look and loop
@@ -422,6 +429,7 @@ export function splitScene(given: SceneDoc, picks: PropPick[]): { land: PropDoc;
   const doc = withHeavens(given)
   const taken = new Set<number>()
   const lightsLeft = new Set((doc.lights ?? []).map((_, i) => i))
+  const firesLeft = new Set((doc.fires ?? []).map((_, i) => i))
   const props: PropDoc[] = picks.map((pick) => {
     const idx = pickedParts(doc, pick).filter((i) => !taken.has(i))
     if (!idx.length) throw new Error(`${pick.name}: picks no parts`)
@@ -431,11 +439,15 @@ export function splitScene(given: SceneDoc, picks: PropPick[]): { land: PropDoc;
     const own = { ...kept, moves: kept.moves?.filter((m) => !(drop.has('during') && m.during) && !(drop.has('pass') && m.kind === 'pass')) }
     const box = boxOf(own)
     const pad = 0.05 * Math.max(box.hi[0] - box.lo[0], box.hi[1] - box.lo[1], box.hi[2] - box.lo[2])
+    // a fire burning within the prop goes with it, and a light that names one keeps naming it, by its new place
+    const fires = [...firesLeft].filter((i) => inBox(doc.fires![i].at, box, pad))
+    fires.forEach((i) => firesLeft.delete(i))
     const lights: LightDoc[] = []
     for (const i of [...lightsLeft]) {
       const l = doc.lights![i]
       if (pick.lights ? pick.lights.includes(i) : inBox(l.at, box, pad)) {
-        if (drop.has('during') && l.during) { const { during: _d, ...always } = l; lights.push(always) } else lights.push(l)
+        const { during: _d, ...always } = l
+        lights.push(refired(drop.has('during') && l.during ? always : l, fires))
         lightsLeft.delete(i)
       }
     }
@@ -446,7 +458,7 @@ export function splitScene(given: SceneDoc, picks: PropPick[]): { land: PropDoc;
     const mine = new Set((own.bones ?? []).map((b) => b.name))
     const rides = doc.water?.floats?.filter((f) => mine.has(f.bone)) ?? [], wakes = doc.water?.bodies?.filter((b) => mine.has(b.bone)) ?? []
     const water = rides.length || wakes.length ? { water: { ...(rides.length ? { rides } : {}), ...(wakes.length ? { wakes } : {}) } } : {}
-    return { name: pick.name, foot, doc: { ...rest, name: pick.name, lights }, ...(pick.tags ? { tags: [...pick.tags] } : {}), ...water }
+    return { name: pick.name, foot, doc: { ...rest, name: pick.name, lights, ...(doc.fires ? { fires: fires.length ? fires.map((i) => doc.fires![i]) : undefined } : {}) }, ...(pick.tags ? { tags: [...pick.tags] } : {}), ...water }
   })
   const left = doc.parts.map((_, i) => i).filter((i) => !taken.has(i))
   const ground = keepOnly(doc, left)
@@ -454,7 +466,7 @@ export function splitScene(given: SceneDoc, picks: PropPick[]): { land: PropDoc;
   const water = doc.water && { ...doc.water, bodies: doc.water.bodies?.filter((b) => bonesLeft.has(b.bone)), floats: doc.water.floats?.filter((f) => bonesLeft.has(f.bone)) }
   // the scene's own clouds are the weather's, drawn over the land: kept on it (its moon, sun and stars are parts by now)
   const clouds = given.heavens?.clouds
-  const land: PropDoc = { name: doc.name, foot: [0, 0, 0], doc: { ...ground, lights: (doc.lights ?? []).filter((_, i) => lightsLeft.has(i)), water, ...(clouds ? { heavens: { clouds } } : {}) }, ...(doc.tags ? { tags: [...doc.tags] } : {}) }
+  const land: PropDoc = { name: doc.name, foot: [0, 0, 0], doc: { ...ground, lights: (doc.lights ?? []).filter((_, i) => lightsLeft.has(i)).map((l) => refired(l, [...firesLeft])), ...(doc.fires ? { fires: firesLeft.size ? [...firesLeft].map((i) => doc.fires![i]) : undefined } : {}), water, ...(clouds ? { heavens: { clouds } } : {}) }, ...(doc.tags ? { tags: [...doc.tags] } : {}) }
   const project: SceneProject = {
     kind: 'blobscape-project', version: 1, name: doc.name, loop: doc.loop,
     land, props: props.map((p) => ({ prop: p, at: [...p.foot], turn: 0, size: 1 })), camera: { ...doc.camera },

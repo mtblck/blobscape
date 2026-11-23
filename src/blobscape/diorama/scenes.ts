@@ -7,6 +7,7 @@ import { compileScene, litFor, type SceneDoc } from '../../splat-engine/sceneDoc
 import type { HeavensDoc } from '../../splat-engine/heavens.ts'
 import { paletteAt, timeOf, type TimeId } from '../timeOfDay.ts'
 import { SceneWater } from '../../splat-engine/sceneWater.ts'
+import { SceneFire } from '../../splat-engine/sceneFire.ts'
 import { DEFAULT_LIGHT, buildVoxels } from '../../splat-engine/voxel.ts'
 import * as meadow from '../fourways/meadow/build.ts'
 import { CAMPFIRE, CAMPFIRE_PROJECT } from './scenes/campfire.ts'
@@ -121,6 +122,11 @@ export interface Diorama {
    */
   water?: () => SceneWater
   /**
+   * Its fires, for a scene that has some burning: one loop of each worked out the first time it is asked for, then
+   * kept. The page draws its `actor` with the scene, shows it for each moment and has it `shine` on the scene's lights.
+   */
+  fire?: () => SceneFire
+  /**
    * The scene at a time of day, where a page sets one (timeOfDay.ts): under that time's sky and light, in a palette
    * that has its colors as that light leaves them, with its lamps, lit windows and fires lit only in the dark (those
    * the description says wait for it) and its sun only by day. Every style draws it. Left out for a scene that is not
@@ -178,6 +184,7 @@ export function described(id: string, doc: SceneDoc, about: string, more: Pick<D
   // a scene written as a day keeps its lamps as written but has no moon or stars out ('always' never lights the night's)
   const c = compileScene(more.byDay ? litFor(doc, false, 'always') : doc)
   let pond: SceneWater | undefined
+  let flames: SceneFire | undefined
   const times = new Map<string, Diorama>()
   const space = !!(more.project ? (typeof more.project.land === 'string' ? madeTags(more.project.land) : more.project.land.doc.tags) : doc.tags)?.includes('space')
   const self: Diorama = {
@@ -217,6 +224,7 @@ export function described(id: string, doc: SceneDoc, about: string, more: Pick<D
     ground: c.ground,
     heavens: doc.heavens,
     water: c.water ? () => (pond ??= new SceneWater(c)) : undefined,
+    fire: c.fires.length ? () => (flames ??= new SceneFire(c)) : undefined,
     // `lamps` 'always' is a day too gloomy for lamps to stay out (a storm, skyRecipes.ts `gloomy`): what waits for the dark is lit
     timed: (when, lamps) => {
       const key = `${when}|${lamps ?? ''}`

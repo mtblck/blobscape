@@ -1,6 +1,6 @@
 import type { PointLight } from '../../splat-engine/engine.ts'
 import { compileScene, type SceneDoc } from '../../splat-engine/sceneDoc.ts'
-import { CAMPFIRE } from '../diorama/scenes/campfire.ts'
+import { CAMPFIRE_WITH_SHAPES as CAMPFIRE } from '../diorama/scenes/campfire.ts'
 
 /**
  * The scene all four panels draw: Diorama's campfire, with the fire's light reaching further and casting shadows, so there is more for a live light to do. The Blobscape and

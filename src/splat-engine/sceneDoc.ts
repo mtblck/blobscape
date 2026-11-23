@@ -117,6 +117,8 @@ export interface SceneDoc {
   water?: WaterDoc
   /** A pool of molten rock that turns over, cools to a crust that cracks into plates, and bubbles (lava.ts): a shared recipe, as water is. A scene has water or lava, not both. */
   lava?: LavaDoc
+  /** Fires that burn (fire.ts): hot gas rising off a bed of fuel, worked out as the water's ripples are: a shared recipe. At most `MAX_FIRES`. */
+  fires?: FireDoc[]
   /**
    * The moon, the sun, the stars and how cloudy the sky is, from the shared recipes (heavens.ts): say where and how
    * many, and every scene's moon looks the same, cloud cover puts them out, and time of day brings the right ones. A
@@ -609,6 +611,34 @@ export type MoveDoc =
    */
   | { kind: 'dissolve'; bone: string; times: number; by?: number; phase?: number; during?: During; rise?: number; fall?: number }
 
+/**
+ * A fire that burns (fire.ts): fuel burning on a round bed heats the air over it, which rises, draws air in from the
+ * sides and cools as it goes, and the flames are that hot gas. Their shape and height are not drawn: they follow from
+ * the bed and from `height`, which says how long the gas holds its heat. Model the logs, the hearth or the wick as
+ * parts; the fire is laid over them. Its light is one of the scene's `lights` that names it (`LightDoc.fire`).
+ */
+export interface FireDoc {
+  /** The middle of the bed the fuel burns on (the top of the logs, a torch's head). */
+  at: Vec3
+  /** How far out from there the bed burns. */
+  r: number
+  /** About how tall the flames stand; 3.6 times `r` where left out. */
+  height?: number
+  /** Its colors from its coolest gas to its hottest (deep orange, orange, yellow, white-hot where left out); palette colors, so pixel art can show them. */
+  colors?: [string, string, string, string]
+  /** Sparks thrown a second; 1.5 where left out, 0 for none. */
+  sparks?: number
+  /** When it burns: 'dark' for a campfire or a torch that is lit when it gets dark, 'always' for one that never goes out. Left out, it always burns. */
+  lit?: LitWhen
+  /** Another fire of the same size burns differently with another seed. */
+  seed?: number
+}
+
+/** The colors of a fire when a scene names none: deep orange, orange, yellow, white-hot. */
+export const FIRE_COLORS: [string, string, string, string] = ['#d9541e', '#f59a2a', '#ffd166', '#fff3b0']
+/** The most fires a scene can have. */
+export const MAX_FIRES = 4
+
 /** A point light in a scene. */
 export interface LightDoc {
   /** Where it is. */
@@ -626,6 +656,12 @@ export interface LightDoc {
   range: number
   /** Flickers by this share of its strength, `times` per loop. */
   flicker?: { by: number; times: number }
+  /**
+   * It is the light of the scene's fire of this number (its place in `fires`): where the fire is played (`SceneFire`),
+   * the light's strength follows how hard the fire burns from moment to moment, in place of `flicker`, which is what a
+   * page that does not play the fire falls back on.
+   */
+  fire?: number
   /** Goes round a circle of this radius about `at`, `times` per loop, starting `phase` (0 to 1) of the way round. */
   circle?: { r: number; times: number; phase?: number }
   /**
@@ -1230,6 +1266,7 @@ export function checkScene(doc: unknown): string[] {
       litWhen(l.lit, `${at}.lit`)
       during(l.during, `${at}.during`)
       if (l.clear !== undefined) num(l.clear, `${at}.clear`, 0.01, 1)
+      if (l.fire !== undefined && (typeof l.fire !== 'number' || !Number.isInteger(l.fire) || l.fire < 0 || !Array.isArray(doc.fires) || l.fire >= doc.fires.length)) bad(`${at}.fire`, 'must be the number of one of the scene\'s fires (0 is the first)')
       if (l.circle !== undefined) {
         if (!obj(l.circle)) bad(`${at}.circle`, 'must be an object')
         else { num(l.circle.r, `${at}.circle.r`, 0, REACH); whole(l.circle.times, `${at}.circle.times`); opt(l.circle.phase, `${at}.circle.phase`, -1, 1) }
@@ -1275,6 +1312,19 @@ export function checkScene(doc: unknown): string[] {
         })
       }
     }
+  }
+  if (doc.fires !== undefined) {
+    if (!Array.isArray(doc.fires) || doc.fires.length > MAX_FIRES) bad('fires', `must be a list of at most ${MAX_FIRES}`)
+    else doc.fires.forEach((f: unknown, i: number) => {
+      const at = `fires[${i}]`
+      if (!obj(f)) { bad(at, 'must be an object'); return }
+      vec(f.at, `${at}.at`)
+      if (num(f.r, `${at}.r`, 0.02, 2)) opt(f.height, `${at}.height`, f.r as number, Math.min(REACH, (f.r as number) * 12))
+      if (f.colors !== undefined) hexes(f.colors, `${at}.colors`, 4, 4)
+      opt(f.sparks, `${at}.sparks`, 0, 8)
+      litWhen(f.lit, `${at}.lit`)
+      if (f.seed !== undefined && (typeof f.seed !== 'number' || !Number.isInteger(f.seed) || f.seed < 0 || f.seed > 9999)) bad(`${at}.seed`, 'must be a whole number from 0 to 9999')
+    })
   }
   if (doc.water !== undefined) {
     const w = doc.water
@@ -1658,6 +1708,8 @@ export interface CompiledScene {
   ground(x: number, z: number, top: number, bottom: number): number
   /** The scene's water, if it has any, with its defaults filled in: what `SceneWater` plays. */
   water?: WaterPlan
+  /** The scene's fires, with their defaults filled in: what `SceneFire` plays. */
+  fires: FirePlan[]
   /**
    * Raindrops of this scene's that come down on water over one loop (where it, or the `water` it was compiled with,
    * has some): where, when, and the share of its swarm before its speck (0 to 1), so a sky that shows only some of a
@@ -1726,6 +1778,24 @@ export interface WaterPlan {
   foam: number
   /** Where the pool is molten rock (`SceneDoc.lava`): how it turns over, cools and bubbles. */
   lava?: LavaPlan
+}
+
+/** A scene's fire as compiled (`CompiledScene.fires`). */
+export interface FirePlan {
+  /** The middle of the bed of fuel. */
+  at: Vec3
+  /** The bed's radius. */
+  r: number
+  /** How tall the flames stand. */
+  height: number
+  /** Its colors from coolest to hottest, 0 to 1 as blobs hold them (sRGB). */
+  colors: [Vec3, Vec3, Vec3, Vec3]
+  /** Sparks thrown a second. */
+  sparks: number
+  /** What tells it from another fire of the same size. */
+  seed: number
+  /** The scene's lights that are this fire's (their places among `lights`), each with the flicker it falls back on, which the fire's own burning takes the place of. */
+  lights: { index: number; flicker?: { by: number; times: number } }[]
 }
 
 // --- What hangs in the air
@@ -2110,6 +2180,11 @@ export function compileScene(given: SceneDoc, { puffs = true, ground: under, wat
     swing: doc.camera.swing ?? 0,
     palette,
     bones,
+    fires: (doc.fires ?? []).map((f, i) => ({
+      at: f.at, r: f.r, height: f.height ?? f.r * 3.6, sparks: f.sparks ?? 1.5, seed: f.seed ?? i + 1,
+      colors: (f.colors ?? FIRE_COLORS).map((c) => unit(c)) as FirePlan['colors'],
+      lights: lights.flatMap((l, index) => (l.fire === i ? [{ index, ...(l.flicker ? { flicker: l.flicker } : {}) }] : [])),
+    })),
     look: {
       palette,
       dither: doc.look?.dither ?? 0.1,
@@ -2271,13 +2346,15 @@ export function compileScene(given: SceneDoc, { puffs = true, ground: under, wat
   }
 }
 
+/** How bright a flickering light is `u` of the way through the loop, beside its own strength: two flickers out of step, so it doesn't beat like a clock, but still loops. */
+export const flickerAt = (f: { by: number; times: number } | undefined, u: number): number => (f ? 1 + f.by * (0.6 * Math.sin(u * f.times * TAU) + 0.4 * Math.sin(u * f.times * 3 * TAU + 1.3)) : 1)
+
 /** Described lights as they shine `u` of the way through the loop (0 to 1): flickering, going round, coming and going. */
 export function lightsAt(lights: readonly LightDoc[], u: number): PointLight[] {
   return lights.map((l) => {
     const c = unit(l.color)
-    // two flickers out of step, so it doesn't beat like a clock, but still loops
     const on = l.during ? sprouted(duringAt(u, l.during) % 1, 0.2, 0.2) : 1
-    const k = on * l.strength * (l.flicker ? 1 + l.flicker.by * (0.6 * Math.sin(u * l.flicker.times * TAU) + 0.4 * Math.sin(u * l.flicker.times * 3 * TAU + 1.3)) : 1)
+    const k = on * l.strength * flickerAt(l.flicker, u)
     const a = l.circle ? (u * l.circle.times + (l.circle.phase ?? 0)) * TAU : 0, r = l.circle?.r ?? 0
     return { position: [l.at[0] + Math.cos(a) * r, l.at[1], l.at[2] - Math.sin(a) * r], color: [linear(c[0]) * k, linear(c[1]) * k, linear(c[2]) * k], range: l.range }
   })
@@ -2329,7 +2406,9 @@ export function litFor(given: SceneDoc, dark: boolean, lamps: 'dark' | 'always' 
   // the shared moon and stars wait for the night, and the sun for the day, as parts written out do
   const doc = withHeavens(given)
   const on = (w: LitWhen | undefined) => isLit(w, dark, lamps)
-  if (doc.parts.every((p) => on(p.lit)) && (doc.lights ?? []).every((l) => on(l.lit)) && (doc.air?.specks ?? []).every((k) => on(k.lit))) return doc
+  if (doc.parts.every((p) => on(p.lit)) && (doc.lights ?? []).every((l) => on(l.lit)) && (doc.air?.specks ?? []).every((k) => on(k.lit)) && (doc.fires ?? []).every((f) => on(f.lit))) return doc
+  // a fire that is out is not there, and the lights that name the ones still burning follow them to their new places in the list
+  const burning = (doc.fires ?? []).map((f) => on(f.lit)), moved = burning.map((_, i) => burning.slice(0, i).filter(Boolean).length)
   const added = new Set<string>()
   const dull = (c: string) => { const d = dulled(c); added.add(d); return d }
   const parts: PartDoc[] = []
@@ -2348,7 +2427,8 @@ export function litFor(given: SceneDoc, dark: boolean, lamps: 'dark' | 'always' 
     ...doc,
     palette,
     parts,
-    lights: doc.lights?.map((l) => (on(l.lit) ? l : { ...l, strength: 0 })),
+    lights: doc.lights?.map((l) => { const { fire, ...rest } = l; const lit = on(l.lit) ? rest : { ...rest, strength: 0 }; return fire !== undefined && burning[fire] ? { ...lit, fire: moved[fire] } : lit }),
+    ...(doc.fires ? { fires: doc.fires.filter((_, i) => burning[i]) } : {}),
     air: doc.air && { ...doc.air, specks: doc.air.specks?.filter((k) => on(k.lit)) },
   }
 }
