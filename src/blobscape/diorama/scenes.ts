@@ -32,7 +32,7 @@ import { CAVE, CAVE_PROJECT } from './scenes/cave.ts'
 import { CANYON, CANYON_PROJECT } from './scenes/canyon.ts'
 import { CABIN, CABIN_PROJECT } from './scenes/cabin.ts'
 import { KOI_PROJECT } from './scenes/koi.ts'
-import { FIREPLACE_PROJECT, ORNAMENT_PROJECT, PRESENTS_PROJECT, SLEIGH_PROJECT, SNOWFLAKE_PROJECT, TREE_PROJECT } from '../props/christmas.ts'
+import { FIREPLACE_PROJECT, ORNAMENT_PROJECT, PRESENTS_PROJECT, SANTA_PROJECT, SLEIGH_PROJECT, SNOWFLAKE_PROJECT, SNOWMAN_PROJECT, TREE_PROJECT } from '../props/christmas.ts'
 import { madeProp, madeTags } from '../props/index.ts'
 import { composeScene } from '../../splat-engine/compose.ts'
 import type { SceneProject } from '../../splat-engine/project.ts'
@@ -329,6 +329,8 @@ export const DIORAMAS: Diorama[] = [
   described('sleigh', composeScene(SLEIGH_PROJECT, madeProp), 'A red sleigh with a sack of presents on a snowy knoll at night, two reindeer in harness before it nodding and pawing the snow, the leader\'s red nose glowing', { project: SLEIGH_PROJECT }),
   described('snowflake', composeScene(SNOWFLAKE_PROJECT, madeProp), 'A big six-armed snowflake turning slowly in the air over a snowy knoll at night, as snow falls', { project: SNOWFLAKE_PROJECT, weather: 'snow' }),
   described('fireplace', composeScene(FIREPLACE_PROJECT, madeProp), 'A brick fireplace in a cozy room, its fire crackling under a mantel hung with three stockings, candles at either end, a garland and a wreath above', { project: FIREPLACE_PROJECT }),
+  described('snowman', composeScene(SNOWMAN_PROJECT, madeProp), 'A big snowman on a snowy knoll at night in a black top hat with a red band, a carrot nose and a striped scarf, waving a stick arm as snow falls', { project: SNOWMAN_PROJECT, weather: 'snow' }),
+  described('santa', composeScene(SANTA_PROJECT, madeProp), 'Santa standing at ease on a snowy knoll at night in his red coat, belt and boots, breathing slowly and looking about, the bobble on his hat nodding', { project: SANTA_PROJECT }),
   FOX_MEADOW,
   SKY_FISHING,
 ]

@@ -59,6 +59,8 @@ const SUBJECTS: Subject[] = [
   scene('sleigh', 'Sleigh and reindeer'),
   scene('snowflake', 'Snowflake'),
   scene('fireplace', 'Fireplace'),
+  scene('snowman', 'Snowman'),
+  scene('santa', 'Santa'),
 
 ]
 

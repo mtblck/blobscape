@@ -15,7 +15,7 @@ const PALETTE = [
   '#0b1020', '#16203a', '#26365c', '#3f5a94', '#0e3b22', '#16602f', '#22863f', '#4fb35a',
   '#3d2414', '#6b3e1e', '#a8703a', '#6e1019', '#a81822', '#d42a33', '#f0606a', '#b9801c',
   '#e8b530', '#ffe27a', '#8fa6c4', '#c4d3e6', '#eef3f8', '#ffffff', '#1f5fa8', '#3b8fd6',
-  '#8ac6f0', '#f4ecdb', '#3a3f4a', '#6c7482', '#c9925a',
+  '#8ac6f0', '#f4ecdb', '#3a3f4a', '#6c7482', '#c9925a', '#e8731f', '#f2c29b',
 ]
 const SKY: [string, string] = ['#0b1020', '#26365c']
 const LIGHT: SceneDoc['light'] = { from: [0.35, 1, 0.55], ambient: 0.62, shadow: 0.45 }
@@ -342,6 +342,82 @@ export const FIREPLACE = made('Fireplace with stockings', 1.75, [
   ],
 })
 
+// ---- the snowman ----
+
+const COAL = '#0b1020'
+/** A big snowman of three balls in a black top hat with a red band, a carrot nose, coal eyes and buttons, a striped scarf and stick arms, one of them waving. */
+export const SNOWMAN = made('Snowman', 1.8, [
+  { shape: { kind: 'sphere', at: [0, 0.38, 0], r: 0.42 }, paint: '#ffffff' },
+  { shape: { kind: 'sphere', at: [0, 0.96, 0], r: 0.3 }, paint: '#ffffff' },
+  ...[0.3, 0.52, 0.86, 1.02].map((y): PartDoc => ({ shape: { kind: 'sphere', at: [0, y, +(Math.sqrt(Math.max(0, (y < 0.7 ? 0.42 : 0.3) ** 2 - (y - (y < 0.7 ? 0.38 : 0.96)) ** 2)) + 0.005).toFixed(3)], r: 0.035 }, paint: COAL, noShadow: true })),
+  // the scarf round the neck and its end hanging down the front
+  { shape: { kind: 'ring', at: [0, 1.22, 0], r: 0.17, tube: 0.055 }, paint: { kind: 'bands', axis: 'x', size: 0.06, colors: ['#d42a33', '#f4ecdb'] } },
+  { shape: { kind: 'box', at: [0.11, 1.06, 0.24], half: [0.055, 0.15, 0.03], round: 0.02 }, paint: { kind: 'bands', axis: 'y', size: 0.06, colors: ['#d42a33', '#f4ecdb'] }, noShadow: true },
+  // a stick arm held out to the side, and one that waves
+  { shape: { kind: 'join', shapes: [{ kind: 'sweep', path: [[-0.26, 1.0, 0], [-0.5, 1.1, 0.02], [-0.72, 1.24, 0.04]], r: 0.022, rTo: 0.012 }, { kind: 'cone', from: [-0.6, 1.16, 0.03], to: [-0.68, 1.06, 0.06], r: 0.012, rTo: 0.006 }] }, paint: '#6b3e1e', noShadow: true },
+  { shape: { kind: 'join', shapes: [{ kind: 'sweep', path: [[0.26, 1.02, 0], [0.48, 1.18, 0.02], [0.64, 1.4, 0.04]], r: 0.022, rTo: 0.012 }, { kind: 'cone', from: [0.56, 1.28, 0.03], to: [0.68, 1.3, 0.06], r: 0.012, rTo: 0.006 }] }, paint: '#6b3e1e', bone: 'wave', noShadow: true },
+  // the head, and what rides on it
+  { shape: { kind: 'sphere', at: [0, 1.42, 0], r: 0.21 }, paint: '#ffffff', bone: 'head' },
+  ...[-0.075, 0.075].map((x): PartDoc => ({ shape: { kind: 'sphere', at: [x, 1.48, 0.185], r: 0.028 }, paint: COAL, bone: 'head', noShadow: true })),
+  ...[-0.09, -0.045, 0, 0.045, 0.09].map((x): PartDoc => ({ shape: { kind: 'sphere', at: [x, +(1.34 + Math.abs(x) * 0.5).toFixed(3), +(Math.sqrt(0.21 ** 2 - x * x - (1.34 + Math.abs(x) * 0.5 - 1.42) ** 2) - 0.005).toFixed(3)], r: 0.018 }, paint: COAL, bone: 'head', noShadow: true })),
+  { shape: { kind: 'cone', from: [0, 1.42, 0.18], to: [0.02, 1.4, 0.4], r: 0.04, rTo: 0.008 }, paint: '#e8731f', bone: 'head', noShadow: true },
+  { shape: { kind: 'cylinder', at: [0, 1.57, 0], height: 0.03, r: 0.27 }, paint: COAL, bone: 'head' },
+  { shape: { kind: 'cylinder', at: [0, 1.6, 0], height: 0.3, r: 0.165, rTop: 0.175 }, paint: { kind: 'split', axis: 'y', at: 1.66, below: '#d42a33', above: COAL }, bone: 'head' },
+  { shape: { kind: 'join', shapes: [{ kind: 'sphere', at: [0.12, 1.65, 0.12], r: 0.03 }, { kind: 'cone', from: [0.12, 1.65, 0.12], to: [0.17, 1.72, 0.1], r: 0.02, rTo: 0.008 }] }, paint: '#16602f', bone: 'head', noShadow: true },
+], {
+  bones: [{ name: 'head', at: [0, 1.24, 0] }, { name: 'wave', at: [0.26, 1.02, 0] }],
+  moves: [
+    { kind: 'sway', bone: 'head', axis: 'z', degrees: 5, times: 2 },
+    { kind: 'sway', bone: 'wave', axis: 'z', degrees: 18, times: 4 },
+  ],
+})
+
+// ---- Santa ----
+
+const SANTA_RED = '#d42a33', TRIM = '#ffffff', SKIN = '#f2c29b'
+/** Santa standing at ease: red coat with white trim and a black belt, boots, mittens, a white beard and a hat with a bobble; he breathes, looks about and his hat's tip nods. */
+export const SANTA = made('Santa', 1.75, [
+  // boots and legs
+  ...[-0.13, 0.13].flatMap((x): PartDoc[] => [
+    { shape: { kind: 'box', at: [x, 0.07, 0.04], half: [0.08, 0.07, 0.13], round: 0.04 }, paint: COAL },
+    { shape: { kind: 'cylinder', at: [x, 0.12, 0], height: 0.34, r: 0.085, rTop: 0.095 }, paint: { kind: 'split', axis: 'y', at: 0.2, below: COAL, above: SANTA_RED } },
+  ]),
+  // the coat: a round body with its hem, the white edge down the front, the belt and its buckle
+  { shape: { kind: 'ball', at: [0, 0.8, 0], r: [0.34, 0.38, 0.3] }, paint: SANTA_RED, bone: 'body' },
+  { shape: { kind: 'ring', at: [0, 0.47, 0], r: 0.27, tube: 0.06 }, paint: TRIM, bone: 'body' },
+  { shape: { kind: 'box', at: [0, 0.8, 0.27], half: [0.05, 0.3, 0.04], round: 0.02 }, paint: TRIM, bone: 'body', noShadow: true },
+  { shape: { kind: 'cylinder', at: [0, 0.66, 0], height: 0.08, r: 0.345 }, paint: COAL, bone: 'body' },
+  { shape: { kind: 'box', at: [0, 0.7, 0.34], half: [0.07, 0.05, 0.02] }, paint: GOLD, bone: 'body', noShadow: true },
+  // arms hanging easy, white cuffs and black mittens
+  ...[-1, 1].flatMap((side): PartDoc[] => [
+    { shape: { kind: 'sweep', path: [[side * 0.28, 1.02, 0], [side * 0.4, 0.86, 0.02], [side * 0.42, 0.68, 0.06]], r: 0.08, rTo: 0.07 }, paint: SANTA_RED, bone: 'body' },
+    { shape: { kind: 'ring', at: [side * 0.42, 0.64, 0.06], r: 0.065, tube: 0.035 }, paint: TRIM, bone: 'body', noShadow: true },
+    { shape: { kind: 'sphere', at: [side * 0.42, 0.56, 0.07], r: 0.07 }, paint: COAL, bone: 'body', noShadow: true },
+  ]),
+  // the head: face, beard and mustache, nose and eyes, the hat with its trim and bobble
+  { shape: { kind: 'sphere', at: [0, 1.25, 0.02], r: 0.15 }, paint: SKIN, bone: 'head' },
+  { shape: { kind: 'ball', at: [0, 1.1, 0.1], r: [0.17, 0.19, 0.12] }, paint: TRIM, bone: 'head' },
+  ...[-1, 1].map((side): PartDoc => ({ shape: { kind: 'ball', at: [side * 0.055, 1.2, 0.165], r: [0.065, 0.03, 0.03] }, paint: TRIM, bone: 'head', noShadow: true })),
+  { shape: { kind: 'sphere', at: [0, 1.24, 0.17], r: 0.032 }, paint: '#f0606a', bone: 'head', noShadow: true },
+  ...[-0.055, 0.055].map((x): PartDoc => ({ shape: { kind: 'sphere', at: [x, 1.3, 0.14], r: 0.02 }, paint: COAL, bone: 'head', noShadow: true })),
+  { shape: { kind: 'ring', at: [0, 1.39, 0], r: 0.145, tube: 0.04 }, paint: TRIM, bone: 'head' },
+  { shape: { kind: 'cone', from: [0, 1.39, 0], to: [0, 1.58, -0.02], r: 0.155, rTo: 0.06 }, paint: SANTA_RED, bone: 'head' },
+  { shape: { kind: 'cone', from: [0, 1.55, -0.02], to: [0.14, 1.6, -0.04], r: 0.06, rTo: 0.025 }, paint: SANTA_RED, bone: 'tip' },
+  { shape: { kind: 'sphere', at: [0.16, 1.6, -0.04], r: 0.05 }, paint: TRIM, bone: 'tip', noShadow: true },
+], {
+  bones: [
+    { name: 'body', at: [0, 0.45, 0] },
+    { name: 'head', at: [0, 1.08, 0], parent: 'body' },
+    { name: 'tip', at: [0, 1.55, -0.02], parent: 'head' },
+  ],
+  moves: [
+    { kind: 'pulse', bone: 'body', size: [1, 1.025], times: 4 },
+    { kind: 'sway', bone: 'head', axis: 'y', degrees: 14, times: 1 },
+    { kind: 'sway', bone: 'head', axis: 'z', degrees: 3, times: 2, phase: 0.25 },
+    { kind: 'sway', bone: 'tip', axis: 'z', degrees: 12, times: 4, wind: 15 },
+  ],
+})
+
 /** The Christmas pieces the library lists. */
 export const CHRISTMAS_MADE: MadeProp[] = [
   { id: 'snowy-knoll', tags: ['snowy', 'night'], kind: 'land', about: 'A low round knoll under snow on a winter night, with the moon and stars over it', prop: SNOWY_KNOLL },
@@ -354,6 +430,8 @@ export const CHRISTMAS_MADE: MadeProp[] = [
   { id: 'sleigh', tags: ['thing'], kind: 'prop', about: 'A red sleigh on curling gold runners with a sack of presents, its reins running forward', prop: SLEIGH },
   { id: 'reindeer', tags: ['animal'], kind: 'prop', about: 'A reindeer in a red harness with a gold bell, nodding and pawing the snow', prop: REINDEER },
   { id: 'red-nosed-reindeer', tags: ['animal', 'lamp'], kind: 'prop', about: 'A reindeer in a red harness whose red nose glows', prop: RED_NOSED_REINDEER },
+  { id: 'snowman', tags: ['thing'], kind: 'prop', about: 'A big snowman in a black top hat with a red band, a carrot nose, a striped scarf and a waving stick arm', prop: SNOWMAN },
+  { id: 'santa', tags: ['person'], kind: 'prop', about: 'Santa standing at ease in his red coat, belt and boots, with a white beard and a hat whose bobble nods', prop: SANTA },
   { id: 'cozy-room', tags: ['indoor', 'night'], kind: 'land', about: 'A cozy room: a plank floor, a striped green wall and a rug', prop: HEARTH_ROOM },
   { id: 'fireplace', tags: ['building', 'lamp'], kind: 'prop', about: 'A brick fireplace with a crackling fire, three stockings hung from the mantel, candles, a garland and a wreath', prop: FIREPLACE },
 ]
@@ -384,3 +462,7 @@ export const SLEIGH_PROJECT = project('Sleigh and reindeer', [
 ])
 /** The fireplace in the cozy room. */
 export const FIREPLACE_PROJECT = project('Fireplace with stockings', [{ prop: 'fireplace', at: [0, 0, -0.7], turn: 0, size: 1 }], 'cozy-room')
+/** The snowman on the knoll. */
+export const SNOWMAN_PROJECT = project('Snowman', [{ prop: 'snowman', at: [0, 0, 0], turn: 0, size: 0.86 }])
+/** Santa on the knoll. */
+export const SANTA_PROJECT = project('Santa', [{ prop: 'santa', at: [0, 0, 0.1], turn: 0, size: 1 }])
