@@ -1,1 +1,0 @@
-Diorama: scenes are picked from a Select a Scene window with every scene's card, a search box and arrow-key picking, with previous and next buttons beside it; the long list in the Scene tab and the cards section down the page are gone.

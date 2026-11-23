@@ -1,1 +1,0 @@
-- Seasonal Bouquets: the snowman's top hat is solid in the Soft look, where the head and the far side of its band showed through it.

@@ -1,1 +1,0 @@
-Diorama's sky islands no longer freeze a moment after loading, and Scene Creator now draws every style exactly as Diorama does: the same starting detail, pixels that grow as you zoom in, and scenes opening under their own weather.

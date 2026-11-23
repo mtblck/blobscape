@@ -1,2 +1,0 @@
-- Diorama: a Tech glitch style, pixel art with bursts of scanline jitter, color split and broken blocks that pop in and out in sudden steps, and still join up in an exported loop.
-- Engine: `Stage.setGlitch` lays the same glitch over pixel mode, with `glitchArt` as its CPU twin.

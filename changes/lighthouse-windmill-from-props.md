@@ -1,1 +1,0 @@
-- Diorama: the lighthouse and the windmill are rebuilt as a land and props from the Scene Creator library (the lighthouse, keeper's cottage, jetty, pines, boat and buoy; the windmill, apple trees, haystacks, sheep and duck), so a fix to a prop reaches every scene that sets it down. The boat, buoy and duck still ride the water.
