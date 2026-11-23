@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Orbit } from '../splat-core/view.ts'
 import { recordClip } from '../splat-engine/glb.ts'
 import type { PointLight } from '../splat-engine/engine.ts'
@@ -14,10 +14,6 @@ import type { Actor, CreatureStage } from './creature/stage.ts'
 import { DETAIL } from './diorama/scene.ts'
 import { DIORAMAS } from './diorama/scenes.ts'
 import { ALL_LOOKS, useDrawnLook, useHeld, wantsPlain, type Look } from './drawnLook.tsx'
-
-/** The looks this page offers (Matt, 2026-11-23: the painted and drawn ones). The rest are Diorama's Style tab's; an address naming one still draws it, for old links and verify. */
-const PAGE_LOOKS: readonly Look[] = ['gouache', 'oil', 'ink', 'hatch', 'stipple', 'watercolor']
-const OFFERED = PAGE_LOOKS.map((id) => ALL_LOOKS.find((l) => l.id === id)!)
 import { timeOf, type TimeId } from './timeOfDay.ts'
 import { sceneStart } from './styles/catalog.ts'
 import { TimeControls } from './styles/SceneControls.tsx'
@@ -26,9 +22,28 @@ import { href } from './routes.ts'
 import { sampleScan } from './scan/sample.ts'
 import { DEFAULT_CLEAN, UNTURNED, autoOrient, cleanMasks, finish, stillActor, working } from './scan/studio.ts'
 
+/** What verify drives a drawn page through, without clicking. */
+export interface DrawnHook { stage: CreatureStage; blobs: () => number; subject: string; look: string; plain: boolean; text: () => Promise<string | undefined>; setLook: (look: Look) => void }
 declare global {
-  interface Window { __brush?: { stage: CreatureStage; blobs: () => number; subject: string; look: string; plain: boolean; text: () => Promise<string | undefined>; setLook: (look: Look) => void } }
+  interface Window { __brush?: DrawnHook; __text?: DrawnHook }
 }
+
+/** What makes one page of drawn looks what it is: the same subjects and view, its own looks and words. */
+export interface DrawnPageDef {
+  /** The page's name, as its heading and crumb. */
+  title: string
+  /** The line under the heading. */
+  intro: string
+  /** The looks it offers, in order; with one, there is no choice of look. An address naming another still draws it. */
+  looks: readonly Look[]
+  /** What verify finds it under. */
+  hook: '__brush' | '__text'
+  /** The section under the view. */
+  how: ReactNode
+}
+
+/** The looks Brush and Ink offers (Matt, 2026-11-23: the painted and drawn ones). The rest are Diorama's Style tab's; an address naming one still draws it, for old links and verify. */
+const BRUSH_LOOKS: readonly Look[] = ['gouache', 'oil', 'ink', 'hatch', 'stipple', 'watercolor']
 
 /** What is on show: how to build it, and how it moves. */
 /**
@@ -101,6 +116,14 @@ const media = (q: string) => typeof window !== 'undefined' && window.matchMedia(
  * dot. The marks are turned and stretched by their blobs, so the painting holds still as the view turns.
  */
 export function BrushInk() {
+  return <DrawnPage def={{ title: 'Brush and Ink', intro: BRUSH_INTRO, looks: BRUSH_LOOKS, hook: '__brush', how: <BrushHow /> }} />
+}
+
+const BRUSH_INTRO = 'The same blobs, painted as brush marks, washes and pen strokes in place of soft dots. Every mark belongs to one blob and takes its shape and direction from it, so the painting holds still as you turn it. Drag the view and watch the strokes stay put.'
+
+/** A page of the same subjects drawn in a few of the drawn looks: Brush and Ink, Text Mode. */
+export function DrawnPage({ def }: { def: DrawnPageDef }) {
+  const offered = useMemo(() => def.looks.map((id) => ALL_LOOKS.find((l) => l.id === id)!), [def.looks])
   const h1 = useFocusHeading()
   const canvas = useRef<HTMLCanvasElement>(null)
   const [stage, setStage] = useState<CreatureStage>()
@@ -112,7 +135,7 @@ export function BrushInk() {
   const [playing, setPlaying] = useState(!calm)
   const [subject, setSubject] = useState(() => SUBJECTS.find((s) => s.id === params().get('subject'))?.id ?? SUBJECTS[0].id)
   const [detail, setDetail] = useState<Detail>(() => { const asked = detailAsked(DETAILS, labelNames); return asked ? (DETAILS.indexOf(asked) as Detail) : coarse ? 0 : 1 })
-  const [look, setLook] = useState<Look>(() => ALL_LOOKS.find((l) => l.id === params().get('look'))?.id ?? 'gouache')
+  const [look, setLook] = useState<Look>(() => ALL_LOOKS.find((l) => l.id === params().get('look'))?.id ?? def.looks[0])
   // cel shading lights the blobs itself, so its subjects are built with no light baked in
   const plain = wantsPlain(look)
   const sub = SUBJECTS.find((s) => s.id === subject)!
@@ -178,9 +201,9 @@ export function BrushInk() {
   // For verify: the stage, without clicking
   useEffect(() => {
     if (!stage || !built) return
-    window.__brush = { stage, blobs: () => stage.blobCount, subject: built.id, look, plain: built.plain, text: () => stage.glyphText(), setLook }
-    return () => { delete window.__brush }
-  }, [stage, built, look])
+    window[def.hook] = { stage, blobs: () => stage.blobCount, subject: built.id, look, plain: built.plain, text: () => stage.glyphText(), setLook }
+    return () => { delete window[def.hook] }
+  }, [stage, built, look, def.hook])
 
   const drag = useRef<OrbitDrag | null>(null)
   const pointers = useRef(new Map<number, { x: number; y: number }>())
@@ -191,13 +214,10 @@ export function BrushInk() {
 
   return (
     <div className="pb-4">
-      <Crumbs here="Brush and Ink" parent={{ label: 'Experiments', href: href({ page: 'experiments' }) }} />
+      <Crumbs here={def.title} parent={{ label: 'Experiments', href: href({ page: 'experiments' }) }} />
       <header className="flex flex-wrap items-end justify-between gap-x-8 gap-y-2 pt-4 pb-6">
-        <h1 ref={h1} tabIndex={-1} className="font-display text-4xl outline-none sm:text-5xl">Brush and Ink</h1>
-        <p className="max-w-xl text-lg text-ink-muted">
-          The same blobs, painted as brush marks, washes and pen strokes in place of soft dots. Every mark belongs to one blob and takes its
-          shape and direction from it, so the painting holds still as you turn it. Drag the view and watch the strokes stay put.
-        </p>
+        <h1 ref={h1} tabIndex={-1} className="font-display text-4xl outline-none sm:text-5xl">{def.title}</h1>
+        <p className="max-w-xl text-lg text-ink-muted">{def.intro}</p>
       </header>
       <Workbench
         viewLabel="The picture"
@@ -243,12 +263,14 @@ export function BrushInk() {
           {
             id: 'look', label: 'Look', content: (
               <div className={TAB_SECTIONS}>
-                <Field label="Drawn as">
-                  <div className="flex flex-wrap gap-1.5" data-testid="brush-looks">
-                    {OFFERED.map((l) => <Chip key={l.id} active={look === l.id} onClick={() => setLook(l.id)}>{l.label}</Chip>)}
-                  </div>
-                  <p className="mt-1.5 text-xs text-ink-faint">{lookNow.note}</p>
-                </Field>
+                {offered.length > 1 && (
+                  <Field label="Drawn as">
+                    <div className="flex flex-wrap gap-1.5" data-testid="brush-looks">
+                      {offered.map((l) => <Chip key={l.id} active={look === l.id} onClick={() => setLook(l.id)}>{l.label}</Chip>)}
+                    </div>
+                    <p className="mt-1.5 text-xs text-ink-faint">{lookNow.note}</p>
+                  </Field>
+                )}
                 {drawing.controls}
               </div>
             ),
@@ -279,36 +301,42 @@ export function BrushInk() {
         ]}
       />
 
-      <section aria-labelledby="how-title" className="mt-14 border-t border-rule pt-10 lg:grid lg:grid-cols-12 lg:gap-x-5 lg:pt-14">
-        <div className="lg:col-span-5">
-          <p className="text-sm text-ink-faint">Why it holds still</p>
-          <h2 id="how-title" className="mt-1 max-w-[16ch] font-display text-4xl leading-[1.05] text-balance sm:text-5xl">A mark for every blob</h2>
-        </div>
-        <div className="mt-8 max-w-[36em] space-y-4 text-lg leading-relaxed text-ink-muted lg:col-span-7 lg:mt-0 lg:text-xl">
-          <p>
-            A paint filter laid over a finished picture works on the screen: its brush strokes sit where the pixels are, so when the
-            view moves, the strokes slide across the things they are meant to be painted on, and flicker.
-          </p>
-          <p>
-            Here nothing is laid over the picture. Each blob is already an ellipse on the screen, with a long way and a short way, and
-            it is drawn as one mark fitted to that ellipse: a dab with bristle streaks along its length, or a pen stroke down its
-            middle. The streaks come from the blob's own number, so every mark is a little different and none of them changes from one
-            frame to the next. Turn the view and each mark turns with its blob.
-          </p>
-          <p>
-            It is the same idea as the steady pixels in <a href={href({ page: 'diorama' })} className="underline decoration-rule underline-offset-2 hover:text-accent">Diorama</a>, for
-            a different look, and it needs nothing but blobs, so it works on a scan as well as on a made scene. Marks are opaque, like
-            paint, and drawn from the back to the front, so near things cover far ones. Hatching gets denser as a blob gets darker,
-            which is how a pen makes a tone.
-          </p>
-          <p>
-            Watercolor is the exception. Washes run into each other, so it can't be a mark a blob: the picture is softened and laid
-            on paper as see-through paint, which only darkens, gathers in the paper's tooth and pools where a wash ends. The
-            lightest places are left as bare paper, as a painter leaves the white, and the paper's grain stays put on the screen
-            while the paint moves over it.
-          </p>
-        </div>
-      </section>
+      {def.how}
     </div>
+  )
+}
+
+function BrushHow() {
+  return (
+        <section aria-labelledby="how-title" className="mt-14 border-t border-rule pt-10 lg:grid lg:grid-cols-12 lg:gap-x-5 lg:pt-14">
+          <div className="lg:col-span-5">
+            <p className="text-sm text-ink-faint">Why it holds still</p>
+            <h2 id="how-title" className="mt-1 max-w-[16ch] font-display text-4xl leading-[1.05] text-balance sm:text-5xl">A mark for every blob</h2>
+          </div>
+          <div className="mt-8 max-w-[36em] space-y-4 text-lg leading-relaxed text-ink-muted lg:col-span-7 lg:mt-0 lg:text-xl">
+            <p>
+              A paint filter laid over a finished picture works on the screen: its brush strokes sit where the pixels are, so when the
+              view moves, the strokes slide across the things they are meant to be painted on, and flicker.
+            </p>
+            <p>
+              Here nothing is laid over the picture. Each blob is already an ellipse on the screen, with a long way and a short way, and
+              it is drawn as one mark fitted to that ellipse: a dab with bristle streaks along its length, or a pen stroke down its
+              middle. The streaks come from the blob's own number, so every mark is a little different and none of them changes from one
+              frame to the next. Turn the view and each mark turns with its blob.
+            </p>
+            <p>
+              It is the same idea as the steady pixels in <a href={href({ page: 'diorama' })} className="underline decoration-rule underline-offset-2 hover:text-accent">Diorama</a>, for
+              a different look, and it needs nothing but blobs, so it works on a scan as well as on a made scene. Marks are opaque, like
+              paint, and drawn from the back to the front, so near things cover far ones. Hatching gets denser as a blob gets darker,
+              which is how a pen makes a tone.
+            </p>
+            <p>
+              Watercolor is the exception. Washes run into each other, so it can't be a mark a blob: the picture is softened and laid
+              on paper as see-through paint, which only darkens, gathers in the paper's tooth and pools where a wash ends. The
+              lightest places are left as bare paper, as a painter leaves the white, and the paper's grain stays put on the screen
+              while the paint moves over it.
+            </p>
+          </div>
+        </section>
   )
 }

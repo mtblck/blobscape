@@ -34,14 +34,62 @@ const FONT: Record<string, string[]> = {
   '_': ['......', '......', '......', '######', '......', '......', '......', '......'],
   '/': ['.....#', '....#.', '....#.', '...#..', '..#...', '.#....', '.#....', '#.....'],
   '\\': ['#.....', '.#....', '.#....', '..#...', '...#..', '....#.', '....#.', '.....#'],
+  // letters, digits and signs, for words and the typewriter (`EXTRA`); `8` is the ramp's
+  'A': ['.###..', '#...#.', '#...#.', '#####.', '#...#.', '#...#.', '#...#.', '......'],
+  'B': ['####..', '#...#.', '#...#.', '####..', '#...#.', '#...#.', '####..', '......'],
+  'C': ['.###..', '#...#.', '#.....', '#.....', '#.....', '#...#.', '.###..', '......'],
+  'D': ['####..', '#...#.', '#...#.', '#...#.', '#...#.', '#...#.', '####..', '......'],
+  'E': ['#####.', '#.....', '#.....', '####..', '#.....', '#.....', '#####.', '......'],
+  'F': ['#####.', '#.....', '#.....', '####..', '#.....', '#.....', '#.....', '......'],
+  'G': ['.###..', '#...#.', '#.....', '#.###.', '#...#.', '#...#.', '.####.', '......'],
+  'H': ['#...#.', '#...#.', '#...#.', '#####.', '#...#.', '#...#.', '#...#.', '......'],
+  'I': ['.###..', '..#...', '..#...', '..#...', '..#...', '..#...', '.###..', '......'],
+  'J': ['..###.', '...#..', '...#..', '...#..', '...#..', '#..#..', '.##...', '......'],
+  'K': ['#...#.', '#..#..', '#.#...', '##....', '#.#...', '#..#..', '#...#.', '......'],
+  'L': ['#.....', '#.....', '#.....', '#.....', '#.....', '#.....', '#####.', '......'],
+  'M': ['#...#.', '##.##.', '#.#.#.', '#.#.#.', '#...#.', '#...#.', '#...#.', '......'],
+  'N': ['#...#.', '##..#.', '#.#.#.', '#..##.', '#...#.', '#...#.', '#...#.', '......'],
+  'O': ['.###..', '#...#.', '#...#.', '#...#.', '#...#.', '#...#.', '.###..', '......'],
+  'P': ['####..', '#...#.', '#...#.', '####..', '#.....', '#.....', '#.....', '......'],
+  'Q': ['.###..', '#...#.', '#...#.', '#...#.', '#.#.#.', '#..#..', '.##.#.', '......'],
+  'R': ['####..', '#...#.', '#...#.', '####..', '#.#...', '#..#..', '#...#.', '......'],
+  'S': ['.####.', '#.....', '#.....', '.###..', '....#.', '....#.', '####..', '......'],
+  'T': ['#####.', '..#...', '..#...', '..#...', '..#...', '..#...', '..#...', '......'],
+  'U': ['#...#.', '#...#.', '#...#.', '#...#.', '#...#.', '#...#.', '.###..', '......'],
+  'V': ['#...#.', '#...#.', '#...#.', '#...#.', '#...#.', '.#.#..', '..#...', '......'],
+  'W': ['#...#.', '#...#.', '#...#.', '#.#.#.', '#.#.#.', '#.#.#.', '.#.#..', '......'],
+  'X': ['#...#.', '#...#.', '.#.#..', '..#...', '.#.#..', '#...#.', '#...#.', '......'],
+  'Y': ['#...#.', '#...#.', '.#.#..', '..#...', '..#...', '..#...', '..#...', '......'],
+  'Z': ['#####.', '....#.', '...#..', '..#...', '.#....', '#.....', '#####.', '......'],
+  '0': ['.###..', '#...#.', '#..##.', '#.#.#.', '##..#.', '#...#.', '.###..', '......'],
+  '1': ['..#...', '.##...', '..#...', '..#...', '..#...', '..#...', '.###..', '......'],
+  '2': ['.###..', '#...#.', '....#.', '...#..', '..#...', '.#....', '#####.', '......'],
+  '3': ['####..', '....#.', '....#.', '.###..', '....#.', '....#.', '####..', '......'],
+  '4': ['...#..', '..##..', '.#.#..', '#..#..', '#####.', '...#..', '...#..', '......'],
+  '5': ['#####.', '#.....', '####..', '....#.', '....#.', '#...#.', '.###..', '......'],
+  '6': ['..##..', '.#....', '#.....', '####..', '#...#.', '#...#.', '.###..', '......'],
+  '7': ['#####.', '....#.', '...#..', '..#...', '.#....', '.#....', '.#....', '......'],
+  '9': ['.###..', '#...#.', '#...#.', '.####.', '....#.', '...#..', '.##...', '......'],
+  ',': ['......', '......', '......', '......', '......', '..#...', '.#....', '......'],
+  '!': ['..#...', '..#...', '..#...', '..#...', '..#...', '......', '..#...', '......'],
+  '?': ['.###..', '#...#.', '....#.', '...#..', '..#...', '......', '..#...', '......'],
+  "'": ['..#...', '..#...', '.#....', '......', '......', '......', '......', '......'],
+  ';': ['......', '......', '..#...', '......', '......', '..#...', '.#....', '......'],
+  '(': ['...#..', '..#...', '.#....', '.#....', '.#....', '..#...', '...#..', '......'],
+  ')': ['.#....', '..#...', '...#..', '...#..', '...#..', '..#...', '.#....', '......'],
+  '"': ['.#.#..', '.#.#..', '......', '......', '......', '......', '......', '......'],
+  'o': ['......', '......', '.###..', '#...#.', '#...#.', '#...#.', '.###..', '......'],
+  'x': ['......', '......', '#...#.', '.#.#..', '..#...', '.#.#..', '#...#.', '......'],
 }
 
 /** The characters that show tone, from none to the most ink. */
 export const RAMP = ' .:-=+*%8#@'
 /** The characters that show an edge: upright, level (drawn as a dash the width of the cell), rising and falling. */
 export const STROKES = '|_/\\'
+/** Letters, digits and signs after the ramp and the strokes, for words and the typewriter. */
+export const EXTRA = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ012345679,!?\';()"ox'
 /** Every character, in the order the engine numbers them. */
-export const GLYPHS = RAMP + STROKES
+export const GLYPHS = RAMP + STROKES + EXTRA
 /** Where the strokes start in `GLYPHS`. */
 export const STROKE_FROM = RAMP.length
 
@@ -85,12 +133,19 @@ export interface GlyphLook {
    * Which characters (default 'ascii'): 'braille' draws each cell as the braille character whose eight dots are on
    * where that eighth of the cell is heavy enough, and 'blocks' as the quarter blocks (▘ ▚ ▙ and so on) or, where a
    * cell is even, one of the shades ░ ▒ ▓. Both show shapes within a cell, so `edges` and `strands` are not used.
+   * 'lines' draws only the edges, in box-drawing characters (─ │ ┌ ┼ and so on) that join from cell to cell, with a
+   * dot for tone; 'words' writes `words` over and over through the picture, each letter as bright as its cell; and
+   * 'typed' is a typewriter's: keys struck once or twice over one another by tone, each strike a little out of line.
    */
   set?: GlyphSet
+  /** The text 'words' writes, in capitals (letters, digits and `EXTRA`'s signs; anything else is a space). */
+  words?: string
 }
 
 /** The kinds of characters a picture can be drawn in (`GlyphLook.set`). */
-export type GlyphSet = 'ascii' | 'braille' | 'blocks'
+export type GlyphSet = 'ascii' | 'braille' | 'blocks' | 'lines' | 'words' | 'typed'
+/** Every set, in the order the engine numbers them. */
+export const GLYPH_SETS: readonly GlyphSet[] = ['ascii', 'braille', 'blocks', 'lines', 'words', 'typed']
 
 /** The default `GlyphLook.steady`. */
 export const STICK = 0.06
@@ -339,8 +394,156 @@ export function shapeCell(rgb: ArrayLike<number>, cover: number, parts: ArrayLik
   return { glyph, color: lifted(rgb, cover, look.light ? 0.6 - 0.45 * top : 0.55 + 0.45 * top, ink) }
 }
 
-/** Whether a character of a set has ink at a pixel of its 6 × 8 cell (`x` from the left, `y` from the top): what the engine draws. */
-export function setBit(set: GlyphSet, glyph: number, x: number, y: number): boolean {
+// ---- box drawing ('lines')
+
+/** A lines cell's arms, as bits: up 1, right 2, down 4, left 8. 16 and 17 are a small and a big dot for tone. */
+export const BOX = ' ╵╶└╷│┌├╴┘─┴┐┤┬┼'
+/** The dots, light then heavy, numbered after the box characters. */
+export const BOX_DOTS = '·•'
+/** Where a lines cell's arms meet, in font pixels from its top left: they run to the cell's sides from here, so arms in a row join up. */
+export const BOX_MID: readonly [number, number] = [2, 3]
+/** A lines cell's tone under this gets no dot, and from `BOX_DOT_BIG` the big one. */
+export const BOX_DOT = 0.4
+/** See `BOX_DOT`. */
+export const BOX_DOT_BIG = 0.75
+/**
+ * Where a lines cell's four corners are read, as shares of the cell from its middle: above left, above right, below
+ * left, below right. They are the cell's own corners, which its neighbors read too, so an arm out of one cell always
+ * meets one into the next.
+ */
+export const CORNERS: readonly [number, number][] = [[-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5]]
+
+/** Two of a lines cell's corners are on two sides of a line where the picture ends, one thing stands in front of another or two parts meet (not by tone: the lines are a drawing of the shapes). */
+export function apart(a: Probe, b: Probe): boolean {
+  if (a.shown !== b.shown) return true
+  return a.shown && (a.part !== b.part || Math.abs(a.depth - b.depth) > Math.min(a.depth, b.depth) * EDGE_DEPTH)
+}
+
+/**
+ * A lines cell from its four corners (`CORNERS`, as probes) and its tone: an arm runs between each pair of
+ * neighboring corners that are `apart`, so the arms trace the edges as box-drawing characters; with no arm, a dot by
+ * tone, kept (like a ramp character) unless the tone is clearly past the step.
+ */
+export function boxFor(c: readonly Probe[], tone: number, before = -1, steady = STICK): number {
+  const arms = (apart(c[0], c[1]) ? 1 : 0) | (apart(c[1], c[3]) ? 2 : 0) | (apart(c[2], c[3]) ? 4 : 0) | (apart(c[0], c[2]) ? 8 : 0)
+  if (arms) return arms
+  const held = steady > 0 && (before === 0 || before >= 16) ? steady : 0
+  const lo = before >= 16 ? BOX_DOT - held : BOX_DOT + held, hi = before === 17 ? BOX_DOT_BIG - held : BOX_DOT_BIG + held
+  return tone < lo ? 0 : tone < hi ? 16 : 17
+}
+
+// ---- words
+
+/** A words cell under this tone is left blank, so the words keep to the subject. */
+export const WORD_FROM = 0.06
+/** A words cell's glyph carries how bright it is in steps of this, over its character's number: four steps, 0 the faintest. */
+export const WORD_STEP = 64
+/** The brightness of each step, as the share of full. */
+export const WORD_LEVELS: readonly number[] = [0.3, 0.5, 0.75, 1]
+
+/** The words as numbers in `GLYPHS`, a character after another: capitals, and a space for anything the font lacks. */
+export function wordGlyphs(words: string): number[] {
+  // a space between one time through and the next, unless the words end in one
+  const text = /\s$/.test(words) || !words ? words || ' ' : `${words} `
+  const out = [...text.toUpperCase()].map((ch) => { const g = GLYPHS.indexOf(ch); return ch === ' ' || g < 0 ? 0 : g })
+  return out.length ? out : [0]
+}
+
+/**
+ * A words cell: the letter of the words that falls on it when they are written along every row from the top left
+ * without a break (column `x` and row `y` of a grid `columns` wide), as bright as its tone, or blank under `WORD_FROM`.
+ */
+export function wordFor(text: readonly number[], x: number, y: number, columns: number, tone: number): number {
+  if (tone < WORD_FROM) return 0
+  const g = text[(y * columns + x) % text.length]
+  if (!g) return 0
+  const step = Math.min(WORD_LEVELS.length - 1, Math.floor(tone * WORD_LEVELS.length))
+  return g + WORD_STEP * step
+}
+
+// ---- typewriter ('typed')
+
+/** What a typist can strike in one cell: one key, or two over one another. */
+const STRIKES: readonly string[] = [' ', '.', ':', '-', '=', '+', 'o', 'x', 'O', 'X', 'ox', 'OX', 'MW', '#', '@', '#@']
+const strikeInk = (k: string) => {
+  let n = 0
+  for (let y = 0; y < CELL_H; y++) for (let x = 0; x < CELL_W; x++) if ([...k].some((ch) => FONT[ch][y][x] === '#')) n++
+  return n
+}
+/** The typewriter's ramp, light to dark: each entry's keys as numbers in `GLYPHS` (the second -1 for one strike). */
+export const TYPED: readonly [number, number][] = [...STRIKES].sort((a, b) => strikeInk(a) - strikeInk(b)).map((k) => [GLYPHS.indexOf(k[0]), k.length > 1 ? GLYPHS.indexOf(k[1]) : -1])
+const TYPED_TOP = strikeInk(STRIKES.reduce((a, b) => (strikeInk(b) > strikeInk(a) ? b : a)))
+/** How much ink each entry of `TYPED` lays down, as a share of the heaviest. */
+export const TYPED_INK: readonly number[] = [...STRIKES].sort((a, b) => strikeInk(a) - strikeInk(b)).map((k) => strikeInk(k) / TYPED_TOP)
+
+/** The `TYPED` entry for a tone: the one whose ink is nearest, unless the one before is no more than `steady` further off. */
+export function typedFor(tone: number, before = -1, steady = STICK): number {
+  let best = 0
+  for (let i = 1; i < TYPED_INK.length; i++) if (Math.abs(TYPED_INK[i] - tone) < Math.abs(TYPED_INK[best] - tone)) best = i
+  if (before >= 0 && before < TYPED_INK.length && steady > 0 && Math.abs(TYPED_INK[before] - tone) <= Math.abs(TYPED_INK[best] - tone) + steady) return before
+  return best
+}
+
+/** A number 0–1 from whole numbers, the same on the GPU: every step stays a whole number under 2²⁴, which a float holds exactly. */
+export function typeHash(x: number, y: number, k: number): number {
+  const a = (((x * 73 + y * 151 + k * 29) % 1021) + 1021) % 1021
+  return ((a * 397 + k * 7) % 1021) / 1021
+}
+/** How often a strike lands a font pixel to the right, and a pixel low, of where it should; and how often a pixel of ink is missing. */
+export const TYPE_SLIP: readonly [number, number, number] = [0.2, 0.15, 0.12]
+/** The faintest a cell's strike comes out, as a share of full: the ribbon is worn unevenly. */
+export const TYPE_FAINT = 0.65
+
+/** How far the strike `k` (0 or 1) in the cell at column `cx`, row `cy` is off line, in font pixels: right, down. */
+export function typeSlip(cx: number, cy: number, k: number): [number, number] {
+  return [typeHash(cx, cy, 1 + 2 * k) < (k ? 0.5 : TYPE_SLIP[0]) ? 1 : 0, typeHash(cx, cy, 2 + 2 * k) < TYPE_SLIP[1] ? 1 : 0]
+}
+/** How strongly the cell at column `cx`, row `cy` is inked, `TYPE_FAINT`–1. */
+export const typeInk = (cx: number, cy: number) => TYPE_FAINT + (1 - TYPE_FAINT) * typeHash(cx, cy, 9)
+
+/** Whether a typed cell has ink at a pixel of its cell: either strike, each off line by `typeSlip`, less the pixels the ribbon missed. */
+export function typedBit(entry: number, cx: number, cy: number, x: number, y: number): boolean {
+  if (typeHash(cx * CELL_W + x, cy * CELL_H + y, 5) < TYPE_SLIP[2]) return false
+  const keys = TYPED[entry] ?? [0, -1]
+  for (let k = 0; k < 2; k++) {
+    if (keys[k] < 0) continue
+    const [dx, dy] = typeSlip(cx, cy, k)
+    if (x - dx >= 0 && y - dy >= 0 && glyphBit(keys[k], x - dx, y - dy)) return true
+  }
+  return false
+}
+
+/**
+ * One cell in lines, words or the typewriter, the rest as for `glyphCell`: `corners` are the lines cell's four probes,
+ * `at` its column and row and the grid's width for words, `text` the words as `wordGlyphs`.
+ */
+export function textCell(rgb: ArrayLike<number>, cover: number, look: GlyphLook, at: { x: number; y: number; columns: number }, corners?: readonly Probe[], text?: readonly number[], before = -1, ink?: ArrayLike<number>): GlyphCell {
+  const tone = toneOf(rgb, cover, look), steady = look.steady ?? STICK
+  if (look.set === 'lines') {
+    const glyph = corners ? boxFor(corners, tone, before, steady) : 0
+    const level = glyph > 0 && glyph < 16 ? (look.light ? 0.2 : 1) : look.light ? 0.6 - 0.45 * tone : 0.55 + 0.45 * tone
+    return { glyph, color: lifted(rgb, cover, level, ink) }
+  }
+  if (look.set === 'words') {
+    const glyph = wordFor(text ?? wordGlyphs(look.words ?? ''), at.x, at.y, at.columns, tone)
+    const level = WORD_LEVELS[Math.floor(glyph / WORD_STEP)]
+    return { glyph, color: lifted(rgb, cover, look.light ? 0.6 - 0.45 * level : level, ink) }
+  }
+  const glyph = typedFor(tone, before, steady)
+  return { glyph, color: lifted(rgb, cover, look.light ? 0.6 - 0.45 * tone : 0.55 + 0.45 * tone, ink) }
+}
+
+/** Whether a character of a set has ink at a pixel of its 6 × 8 cell (`x` from the left, `y` from the top): what the engine draws. The typewriter's also needs the cell's column and row (`cx`, `cy`). */
+export function setBit(set: GlyphSet, glyph: number, x: number, y: number, cx = 0, cy = 0): boolean {
+  if (set === 'lines') {
+    const [mx, my] = BOX_MID
+    if (glyph === 16) return x === mx && y === my
+    if (glyph === 17) return (x === mx || x === mx + 1) && (y === my || y === my + 1)
+    const arm = (bit: number) => (glyph & bit) !== 0
+    return (x === mx && ((arm(1) && y <= my) || (arm(4) && y >= my))) || (y === my && ((arm(8) && x <= mx) || (arm(2) && x >= mx)))
+  }
+  if (set === 'words') return glyphBit(glyph % WORD_STEP, x, y)
+  if (set === 'typed') return typedBit(glyph, cx, cy, x, y)
   if (set === 'braille') {
     const c = DOT_X.indexOf(x), r = DOT_Y.indexOf(y)
     return c >= 0 && r >= 0 && ((glyph >> dotBit(c, r)) & 1) === 1
@@ -358,6 +561,13 @@ export function setBit(set: GlyphSet, glyph: number, x: number, y: number): bool
 export function charOf(set: GlyphSet, glyph: number): string {
   if (set === 'braille') return glyph ? String.fromCharCode(0x2800 + glyph) : ' '
   if (set === 'blocks') return glyph >= 16 ? SHADES[glyph - 16] ?? ' ' : QUADS[glyph] ?? ' '
+  if (set === 'lines') return glyph >= 16 ? BOX_DOTS[glyph - 16] ?? ' ' : BOX[glyph] ?? ' '
+  if (set === 'words') return GLYPHS[glyph % WORD_STEP] ?? ' '
+  if (set === 'typed') {
+    // a typed page as text keeps the key struck last, which is the one on top
+    const [a, b] = TYPED[glyph] ?? [0, -1]
+    return GLYPHS[b >= 0 ? b : a] ?? ' '
+  }
   return GLYPHS[glyph] ?? ' '
 }
 
