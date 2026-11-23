@@ -1,6 +1,6 @@
 import { drawsTo, markDrawn } from '../splat-core/drawn.ts'
 import * as THREE from 'three/webgpu'
-import { STAGE_FOV, placeCamera, type Orbit } from '../splat-core/orbit.ts'
+import { STAGE_FOV, placeCamera, snapAnchor, type Orbit, type SnapAnchor } from '../splat-core/orbit.ts'
 import { readbackToSrgb } from '../splat-core/color.ts'
 import { MAX_LIGHTS, SplatWorld, type Light } from './engine.ts'
 import { SHADOW_DENSITY } from './shadow.ts'
@@ -885,6 +885,15 @@ export class Stage {
   get artSize() { return this.pixel && this.pixel.width > 1 ? { width: this.pixel.width, height: this.pixel.height } : undefined }
 
   /** Device pixels per art pixel: whole, so every art pixel is the same size on screen. */
+  /** Where pixel art is held on the art's grid, and the view it was set for (`snapAnchor`). */
+  private snapAt?: SnapAnchor
+
+  /** Where pixel art is held on the art's grid (`PixelPass.anchor`): `snapAnchor` in orbit.ts says where and why. */
+  private anchorSnap(pass: PixelPass) {
+    this.snapAt = snapAnchor(this.snapAt, this.orbit)
+    pass.anchor.fromArray(this.snapAt.at)
+  }
+
   private get pixelScale() { return Math.max(1, Math.round(this.pixelSize * this.renderer.getPixelRatio())) }
 
   private draw() {
@@ -958,6 +967,7 @@ export class Stage {
     this.pixel.setGlitch(this.glitchNow)
     this.pixel.setTime(this.time)
     this.pixel.drawScene = this.cel && this.celLook && this.opts.lights ? this.celInPixels : undefined
+    this.anchorSnap(this.pixel)
     if (this.target) {
       this.pixel.setSize(Math.ceil(this.target.width / scale), Math.ceil(this.target.height / scale))
       this.pixel.render(this.renderer, this.scene, this.camera)

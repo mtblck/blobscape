@@ -1388,6 +1388,33 @@
        "code": "orbitLens(o: Orbit, width: number, height: number): Lens"
       }
      ]
+    },
+    {
+     "name": "SnapAnchor",
+     "kind": "interface",
+     "doc": "The world point pixel art is held on the art's grid at, and the turn, height and distance of the view it was set for.",
+     "props": [
+      {
+       "name": "at",
+       "type": "[number, number, number]",
+       "doc": "The world point held on the grid."
+      },
+      {
+       "name": "view",
+       "type": "string",
+       "doc": "The view's turn, height and distance when it was set, as one key."
+      }
+     ]
+    },
+    {
+     "name": "snapAnchor",
+     "kind": "function",
+     "doc": "Where pixel art's `snap` holds the picture on the art's grid, for the view `o`, given where it was last (`kept`).\nWhile the view turns or zooms about its target, the target is the one point that stays put on the screen, so the\nanchor is the target and the picture never jumps: a point off it (the world's origin, at first) crosses half an art\npixel now and then, and the whole scene jumped a pixel at once as a Diorama scene rocked (Matt saw it, 2026-11-23).\nWhile only the target moves (a pan, a camera that follows) the anchor stays where it was in the world, so the scene\nstill moves by whole pixels.",
+     "signatures": [
+      {
+       "code": "snapAnchor(kept: SnapAnchor | undefined, o: Orbit): SnapAnchor"
+      }
+     ]
     }
    ]
   },
@@ -10345,6 +10372,12 @@
        "readonly": true,
        "type": "number",
        "doc": "The art's height, in art pixels."
+      },
+      {
+       "name": "anchor",
+       "readonly": true,
+       "type": "Vector3",
+       "doc": "The world point `snap` lands on the art's grid: the point the view turns about (the stage sets its orbit's target).\nIt must stay put on the screen as the view turns, or its place crosses half an art pixel now and then and the\nwhole picture jumps a pixel at once (Matt saw it as a Diorama scene rocked, 2026-11-23, snapped at the world's origin)."
       }
      ],
      "methods": [
@@ -10562,7 +10595,7 @@
        "name": "snap",
        "optional": true,
        "type": "boolean",
-       "doc": "Holds the picture on the art's grid: the world's origin always lands on a whole art pixel, so when the view slides\n(a pan, a zoom, a camera that follows) the scene moves by whole pixels instead of smearing across them. The live\npass only (`snapShift`). After Ink Studio's camera snap, which does it for a flat view; here it holds for a\nperspective view at the origin's depth."
+       "doc": "Holds the picture on the art's grid: one world point (`PixelPass.anchor`, where `snapAnchor` in orbit.ts puts it)\nalways lands on a whole art pixel, so when the view slides (a pan, a camera that follows) the scene moves by whole\npixels instead of smearing across them, and while it turns about its target nothing jumps. The live pass only\n(`snapShift`). After Ink Studio's camera snap, which does it for a flat view; here it holds for a perspective view\nat the anchor's depth."
       },
       {
        "name": "bands",
