@@ -7,6 +7,10 @@ makes the tag and the GitHub release (see docs/releasing.md).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-23
+
+- Engine: the style catalog (`CATALOG`, `STYLES`, each look's settings, defaults and `celLook`, `blockLook`, `neonLook`, `glassLook`, `washLook`, `glitchLook`), `SceneWeather` (rain, snow, clouds and lying snow for any scene) and the times of day (`TIMES`, `paletteAt`) are now in `@blobscape/engine`, with a Styles part in the docs and a "Styles as data" guide. The site reads them from the engine.
+
 ## [0.5.0] - 2026-11-23
 
 - Engine: the weather, cloud and wind recipes, the shared sky (moon, sun, stars), snow that lies, lava, tags, and scenes made of a land and props (`composeScene`, `splitScene`, `compileProject`) are now part of the package, where before they could only be used on this site.
@@ -281,7 +285,8 @@ Our own renderer for animated splats, built on three.js with WebGPU and a WebGL 
 
 Some pixel-scene ideas come from Silicon Jungle's play kits (ideas, not code). The code is MIT licensed.
 
-[Unreleased]: https://github.com/mtblck/blobscape/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/mtblck/blobscape/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/mtblck/blobscape/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/mtblck/blobscape/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/mtblck/blobscape/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/mtblck/blobscape/compare/v0.2.0...v0.3.0
