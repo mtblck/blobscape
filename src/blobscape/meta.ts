@@ -69,7 +69,7 @@ const SEARCH: Partial<Record<Route['page'], string>> = {
   bouquet: 'A florist that never makes the same bouquet twice: pick a season and it grows every flower petal by petal out of Gaussian splats and stands them in a vase.',
   daynight: 'A cabin in a forest clearing made of Gaussian splats, lit live through a whole day. Drag the time and the sun follows its real path for the place and season.',
   fourways: 'One pixel-art scene drawn four ways at the same moment: a hand-written shader, three.js meshes, Spark splats and Blobscape, on one clock, camera and light.',
-  text: 'Gaussian splats drawn as text: ASCII, braille, blocks, box drawing, your own words or a typewriter, read off the 3D picture as it turns.',
+  text: 'Gaussian splats drawn as text: ASCII, braille, quarter blocks, box drawing, your own words or a typewriter, read off the 3D picture as it turns.',
   brush: 'Gaussian splats painted as brush marks and pen strokes: gouache, oil, ink and wash, hatching, stipple and watercolor. The strokes hold still as you turn it.',
   flow: 'Gaussian splats that flow: every blob is a particle of sand, snow or goo in a small material point simulation. Pour it, drop things in it, or let a column go.',
   clockwork: "A watch movement made of Gaussian splats, keeping the real time. Every wheel turns by a real watch's ratios: slow it down to see one tick of the escapement.",

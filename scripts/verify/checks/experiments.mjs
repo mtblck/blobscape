@@ -883,7 +883,7 @@ export default [
         if (!(strokes > unfurred + 20)) fails.push(`brush and ink on ${backend}: ASCII strokes along fur: ${strokes} strokes with them, ${unfurred} without`)
         else ok(`brush and ink on ${backend}: ASCII draws the fox's fur as strokes the way it runs (${strokes} strokes, ${unfurred} without them)`)
         // braille and blocks: the same grid in their own characters, a frame drawn twice the same
-        for (const [label, set, only] of [['Braille', 'braille', /^[\u2800-\u28ff\s]*$/], ['Blocks', 'blocks', /^[ ▘▝▀▖▌▞▛▗▚▐▜▄▙▟█░▒▓\n]*$/]]) {
+        for (const [label, set, only] of [['Braille', 'braille', /^[\u2800-\u28ff\s]*$/], ['Quarter blocks', 'blocks', /^[ ▘▝▀▖▌▞▛▗▚▐▜▄▙▟█░▒▓\n]*$/]]) {
           await tabClick(k.page.getByTestId('brush-chars').getByRole('button', { name: label, exact: true }))
           const a = await read(k.page), b = await read(k.page)
           const t = (await k.page.evaluate(() => window.__brush.text())) ?? ''

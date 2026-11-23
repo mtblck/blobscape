@@ -310,7 +310,7 @@ export const ASCII: StyleDef<AsciiSettings> = {
     { key: 'chars', kind: 'choice', label: 'Characters', address: 'chars', testid: 'brush-chars', options: [
       { id: 'ascii', label: 'ASCII', about: 'Letters and signs by how much there is to show, and strokes along edges.' },
       { id: 'braille', label: 'Braille', about: 'Eight dots a cell, each on where its eighth of the cell is heavy enough, so shapes come out finer than a character. Idea from Silicon Jungle\'s Ink Studio.' },
-      { id: 'blocks', label: 'Blocks', about: 'Quarter blocks where a cell is half one thing and half another, and the shades ░ ▒ ▓ where it is even. Idea from Silicon Jungle\'s Ink Studio.' },
+      { id: 'blocks', label: 'Quarter blocks', about: 'Quarter blocks where a cell is half one thing and half another, and the shades ░ ▒ ▓ where it is even. Idea from Silicon Jungle\'s Ink Studio.' },
       { id: 'lines', label: 'Box drawing', about: 'Only the edges, in the box-drawing characters ─ │ ┌ ┼ that join from cell to cell, with a dot where there is something to show.' },
       { id: 'words', label: 'Words', about: 'Your words, written over and over through the picture, each letter as bright as what it stands on.' },
       { id: 'typed', label: 'Typewriter', about: 'Keys struck once, or twice over one another for the darkest places, each strike a little out of line and the ribbon worn unevenly.' },

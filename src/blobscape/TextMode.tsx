@@ -10,7 +10,7 @@ export function TextMode() {
     <DrawnPage
       def={{
         title: 'Text Mode',
-        intro: 'The same blobs, read off as text: a grid of characters over the view, each picked by what lies under it. Pick ASCII, braille, blocks, box drawing, your own words or a typewriter, turn the view, and copy the picture as plain text.',
+        intro: 'The same blobs, read off as text: a grid of characters over the view, each picked by what lies under it. Pick ASCII, braille, quarter blocks, box drawing, your own words or a typewriter, turn the view, and copy the picture as plain text.',
         looks: ['ascii'],
         hook: '__text',
         how: <TextHow />,
@@ -35,7 +35,7 @@ function TextHow() {
         </p>
         <p>
           ASCII picks the character whose ink matches the cell, and gives an edge a stroke along it: | _ / or \. A cell full of
-          fur or grass gets a stroke the way the strands run. Braille and blocks split a cell into eighths or quarters, so shapes
+          fur or grass gets a stroke the way the strands run. Braille and quarter blocks split a cell into eighths or quarters, so shapes
           come out finer than a whole character.
         </p>
         <p>
