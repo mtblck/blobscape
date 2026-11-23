@@ -32,7 +32,7 @@ import { CAVE, CAVE_PROJECT } from './scenes/cave.ts'
 import { CANYON, CANYON_PROJECT } from './scenes/canyon.ts'
 import { CABIN, CABIN_PROJECT } from './scenes/cabin.ts'
 import { KOI_PROJECT } from './scenes/koi.ts'
-import { ORNAMENT_PROJECT, PRESENTS_PROJECT, TREE_PROJECT } from '../props/christmas.ts'
+import { FIREPLACE_PROJECT, ORNAMENT_PROJECT, PRESENTS_PROJECT, SLEIGH_PROJECT, SNOWFLAKE_PROJECT, TREE_PROJECT } from '../props/christmas.ts'
 import { madeProp, madeTags } from '../props/index.ts'
 import { composeScene } from '../../splat-engine/compose.ts'
 import type { SceneProject } from '../../splat-engine/project.ts'
@@ -63,10 +63,12 @@ export interface Diorama {
    */
   byDay?: boolean
   /**
-   * True for a scene out in space (its land tagged `space`; the space whales, Matt 2026-11-22): it keeps its own sky,
-   * so Diorama offers it no time of day and no weather.
+   * True for a scene out in space (its land tagged `space`; the space whales, Matt 2026-11-22) or inside a room (tagged
+   * `indoor`; the fireplace): it keeps its own sky or has none, so Diorama offers it no time of day and no weather.
    */
   space?: boolean
+  /** True for a scene inside a room (its land tagged `indoor`), so the page can say why there is no weather. */
+  indoor?: boolean
   /** For the view's label: what is in the picture. */
   about: string
   /** Seconds before it repeats. */
@@ -187,10 +189,13 @@ export function described(id: string, doc: SceneDoc, about: string, more: Pick<D
   let pond: SceneWater | undefined
   let flames: SceneFire | undefined
   const times = new Map<string, Diorama>()
-  const space = !!(more.project ? (typeof more.project.land === 'string' ? madeTags(more.project.land) : more.project.land.doc.tags) : doc.tags)?.includes('space')
+  const landTags = more.project ? (typeof more.project.land === 'string' ? madeTags(more.project.land) : more.project.land.doc.tags) : doc.tags
+  const indoor = !!landTags?.includes('indoor')
+  const space = indoor || !!landTags?.includes('space')
   const self: Diorama = {
     ...more,
     space,
+    indoor,
     id,
     label: c.name,
     about,
@@ -247,7 +252,7 @@ export function described(id: string, doc: SceneDoc, about: string, more: Pick<D
       return d
     },
   }
-  // out in space there is no morning or night to set it in
+  // out in space or inside a room there is no morning or night to set it in
   if (space) self.timed = undefined
   return self
 }
@@ -321,6 +326,9 @@ export const DIORAMAS: Diorama[] = [
   described('christmas-tree', composeScene(TREE_PROJECT, madeProp), 'A Christmas tree on a snowy knoll at night, hung with garlands and baubles, its lights twinkling in turn under a gold star', { project: TREE_PROJECT }),
   described('ornament', composeScene(ORNAMENT_PROJECT, madeProp), 'A big striped Christmas ornament swinging gently from a candy cane hook on a snowy knoll at night', { project: ORNAMENT_PROJECT }),
   described('presents', composeScene(PRESENTS_PROJECT, madeProp), 'A Christmas tree on a snowy knoll with wrapped presents round its foot, red, green and blue with ribbons and bows, as snow falls', { project: PRESENTS_PROJECT, weather: 'snow' }),
+  described('sleigh', composeScene(SLEIGH_PROJECT, madeProp), 'A red sleigh with a sack of presents on a snowy knoll at night, two reindeer in harness before it nodding and pawing the snow, the leader\'s red nose glowing', { project: SLEIGH_PROJECT }),
+  described('snowflake', composeScene(SNOWFLAKE_PROJECT, madeProp), 'A big six-armed snowflake turning slowly in the air over a snowy knoll at night, as snow falls', { project: SNOWFLAKE_PROJECT, weather: 'snow' }),
+  described('fireplace', composeScene(FIREPLACE_PROJECT, madeProp), 'A brick fireplace in a cozy room, its fire crackling under a mantel hung with three stockings, candles at either end, a garland and a wreath above', { project: FIREPLACE_PROJECT }),
   FOX_MEADOW,
   SKY_FISHING,
 ]

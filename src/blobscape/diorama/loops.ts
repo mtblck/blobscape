@@ -40,6 +40,9 @@ export const LOOPS: readonly { id: string; label: string }[] = [
   { id: 'christmas-tree', label: 'Christmas tree' },
   { id: 'ornament', label: 'Christmas ornament' },
   { id: 'presents', label: 'Presents under the tree' },
+  { id: 'sleigh', label: 'Sleigh and reindeer' },
+  { id: 'snowflake', label: 'Snowflake' },
+  { id: 'fireplace', label: 'Fireplace with stockings' },
   { id: 'meadow', label: 'Fox and wisp' },
   { id: 'fishing', label: 'Fishing for the moon' },
 ]

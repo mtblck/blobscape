@@ -57,9 +57,10 @@ test('the koi pond is made from props: the library pieces, its own rain gone, an
   for (const l of koi.doc!.lights!) assert.equal(l.lit, 'dark')
 })
 
-test('a scene out in space (its land tagged space) keeps its own sky: no time of day to set it in, and no weather', () => {
+test('a scene out in space or inside a room (its land tagged space or indoor) keeps its own sky: no time of day to set it in, and no weather', () => {
   const space = DIORAMAS.filter((d) => d.space)
-  assert.deepEqual(space.map((d) => d.id), ['whales'])
+  assert.deepEqual(space.map((d) => d.id), ['whales', 'fireplace'])
+  assert.deepEqual(space.filter((d) => d.indoor).map((d) => d.id), ['fireplace'])
   for (const d of space) { assert.equal(d.timed, undefined); assert.equal(d.weather, undefined) }
   assert.ok(DIORAMAS.find((d) => d.id === 'windmill')!.timed)
 })

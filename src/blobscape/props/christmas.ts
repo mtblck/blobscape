@@ -15,14 +15,14 @@ const PALETTE = [
   '#0b1020', '#16203a', '#26365c', '#3f5a94', '#0e3b22', '#16602f', '#22863f', '#4fb35a',
   '#3d2414', '#6b3e1e', '#a8703a', '#6e1019', '#a81822', '#d42a33', '#f0606a', '#b9801c',
   '#e8b530', '#ffe27a', '#8fa6c4', '#c4d3e6', '#eef3f8', '#ffffff', '#1f5fa8', '#3b8fd6',
-  '#8ac6f0', '#f4ecdb', '#3a3f4a', '#6c7482',
+  '#8ac6f0', '#f4ecdb', '#3a3f4a', '#6c7482', '#c9925a',
 ]
 const SKY: [string, string] = ['#0b1020', '#26365c']
 const LIGHT: SceneDoc['light'] = { from: [0.35, 1, 0.55], ambient: 0.62, shadow: 0.45 }
 const LOOK: SceneDoc['look'] = { dither: 0.5, glow: 1.4, outline: true, edges: true }
 
 /** A prop standing on the origin, framed for its card by how tall it is. */
-function made(name: string, tall: number, parts: PartDoc[], more: { bones?: SceneDoc['bones']; moves?: MoveDoc[]; lights?: LightDoc[] } = {}): PropDoc {
+function made(name: string, tall: number, parts: PartDoc[], more: { bones?: SceneDoc['bones']; moves?: MoveDoc[]; lights?: LightDoc[]; fires?: SceneDoc['fires'] } = {}): PropDoc {
   return {
     name,
     foot: [0, 0, 0],
@@ -166,6 +166,182 @@ export const GREEN_PRESENT = present('Green present', [0.13, 0.21, 0.13], { kind
 /** A wide blue present with a cream ribbon. */
 export const BLUE_PRESENT = present('Blue present', [0.24, 0.1, 0.16], { kind: 'speckle', size: 0.05, colors: ['#3b8fd6', '#3b8fd6', '#1f5fa8'] }, '#f4ecdb')
 
+// ---- the snowflake ----
+
+type V3 = [number, number, number]
+const r3 = (v: number[]): V3 => [+v[0].toFixed(3), +v[1].toFixed(3), +v[2].toFixed(3)]
+/** A way in the flake's plane (x right, y up), `deg` round from straight up. */
+const way = (deg: number): V3 => [Math.sin((deg * Math.PI) / 180), Math.cos((deg * Math.PI) / 180), 0]
+const along = (from: V3, d: V3, by: number): V3 => r3([from[0] + d[0] * by, from[1] + d[1] * by, from[2] + d[2] * by])
+const FLAKE_AT: V3 = [0, 0.98, 0]
+const FLAKE_R = 0.68
+/** One arm of the flake, `deg` round from straight up: a spar with two pairs of branches and a point. */
+function flakeArm(deg: number): PartDoc['shape'] {
+  const d = way(deg), tip = along(FLAKE_AT, d, FLAKE_R)
+  const branch = (at: number, length: number) => [-60, 60].map((turn) => {
+    const from = along(FLAKE_AT, d, FLAKE_R * at)
+    return { kind: 'cone' as const, from, to: along(from, way(deg + turn), length), r: 0.03, rTo: 0.014 }
+  })
+  return {
+    kind: 'join',
+    shapes: [
+      { kind: 'cone', from: FLAKE_AT, to: tip, r: 0.042, rTo: 0.02 },
+      ...branch(0.42, 0.2), ...branch(0.68, 0.13),
+      { kind: 'ball', at: tip, r: [0.045, 0.045, 0.022] },
+    ],
+  }
+}
+/** A big six-armed snowflake turning slowly in the air over a drift of snow, a pale blue gem at its heart. */
+export const SNOWFLAKE = made('Snowflake', 1.7, [
+  ...[0, 60, 120, 180, 240, 300].map((deg): PartDoc => ({ shape: flakeArm(deg), paint: '#eef3f8', bone: 'flake' })),
+  // a ring joining the arms near the middle, and the gem
+  { shape: { kind: 'join', shapes: [0, 60, 120, 180, 240, 300].map((deg) => ({ kind: 'cone' as const, from: along(FLAKE_AT, way(deg), 0.17), to: along(FLAKE_AT, way(deg + 60), 0.17), r: 0.026 })) }, paint: '#c4d3e6', bone: 'flake' },
+  { shape: { kind: 'ball', at: FLAKE_AT, r: [0.1, 0.1, 0.045] }, paint: '#8ac6f0', bone: 'flake' },
+  // a little drift of snow under it, so it has somewhere to stand when it is set down elsewhere
+  { shape: { kind: 'ball', at: [0, 0, 0], r: [0.34, 0.07, 0.24] }, paint: '#ffffff', noShadow: true },
+], {
+  bones: [{ name: 'flake', at: FLAKE_AT }],
+  moves: [
+    { kind: 'spin', bone: 'flake', axis: 'z', times: 1 },
+    { kind: 'bob', bone: 'flake', by: [0, 0.05, 0], times: 2 },
+  ],
+})
+
+// ---- the sleigh and reindeer ----
+
+const GOLD = '#e8b530'
+/** A red sleigh on gold runners curling up at the front, its back seat high, a sack of presents in it; reins run forward to where the reindeer stand. Faces +x. */
+export const SLEIGH = made('Sleigh', 0.75, [
+  // runners, curled up at the front, and the struts that hold the body on them
+  ...[-0.19, 0.19].map((z): PartDoc => ({ shape: { kind: 'sweep', path: [[-0.5, 0.03, z], [0.32, 0.03, z], [0.48, 0.08, z], [0.54, 0.2, z], [0.48, 0.28, z], [0.42, 0.24, z]], r: 0.02 }, paint: GOLD })),
+  ...[-0.19, 0.19].flatMap((z): PartDoc[] => [-0.32, 0.18].map((x) => ({ shape: { kind: 'cylinder', at: [x, 0.04, z], height: 0.12, r: 0.016 }, paint: GOLD, noShadow: true }))),
+  // the body: a low box, a swept front and a high back
+  { shape: { kind: 'box', at: [-0.06, 0.28, 0], half: [0.36, 0.11, 0.2], round: 0.04 }, paint: '#d42a33' },
+  { shape: { kind: 'box', at: [0.26, 0.35, 0], half: [0.07, 0.15, 0.2], round: 0.06 }, paint: '#d42a33' },
+  { shape: { kind: 'box', at: [-0.38, 0.42, 0], half: [0.06, 0.25, 0.2], round: 0.05 }, paint: '#a81822' },
+  // gold trim along the side and round the top of the front
+  ...[-0.205, 0.205].map((z): PartDoc => ({ shape: { kind: 'sweep', path: [[-0.4, 0.3, z], [0.22, 0.3, z], [0.3, 0.42, z], [0.3, 0.48, z]], r: 0.014 }, paint: GOLD, noShadow: true })),
+  // a cushion on the seat
+  { shape: { kind: 'box', at: [-0.22, 0.41, 0], half: [0.12, 0.025, 0.18], round: 0.02 }, paint: '#16602f', noShadow: true },
+  // the sack and what sticks out of it
+  { shape: { kind: 'ball', at: [0.02, 0.5, 0], r: [0.17, 0.16, 0.15] }, paint: { kind: 'speckle', size: 0.04, colors: ['#a8703a', '#a8703a', '#6b3e1e'] } },
+  { shape: { kind: 'box', at: [-0.04, 0.68, 0.02], half: [0.06, 0.05, 0.06], round: 0.01 }, paint: '#22863f', noShadow: true },
+  { shape: { kind: 'box', at: [0.08, 0.69, -0.03], half: [0.05, 0.06, 0.05], round: 0.01 }, paint: '#3b8fd6', noShadow: true },
+  { shape: { kind: 'sphere', at: [0.03, 0.75, 0.05], r: 0.035 }, paint: GOLD, noShadow: true },
+  // the reins, out to the reindeer
+  ...[-0.13, 0.13].map((z): PartDoc => ({ shape: { kind: 'sweep', path: [[0.3, 0.46, z * 0.5], [0.7, 0.4, z], [1.2, 0.38, z], [1.65, 0.38, z]], r: 0.008 }, paint: '#6e1019', noShadow: true })),
+])
+
+/** A reindeer standing facing +x, a red harness with a gold bell, branching antlers; it nods and paws the snow. `nose` is its nose's color, and a red one glows. */
+function reindeer(name: string, nose: string, glows: boolean, phase: number): PropDoc {
+  const BROWN = '#6b3e1e', LIGHT_BROWN = '#a8703a', DARK = '#3d2414'
+  const leg = (x: number, z: number, bone?: string): PartDoc[] => [
+    { shape: { kind: 'cylinder', at: [x, 0.03, z], height: 0.26, r: 0.022, rTop: 0.028 }, paint: BROWN, ...(bone ? { bone } : {}) },
+    { shape: { kind: 'cylinder', at: [x, 0, z], height: 0.04, r: 0.025 }, paint: DARK, ...(bone ? { bone } : {}) },
+  ]
+  return made(name, 0.8, [
+    { shape: { kind: 'ball', at: [0, 0.36, 0], r: [0.21, 0.11, 0.1] }, paint: { kind: 'split', axis: 'y', at: 0.3, below: LIGHT_BROWN, above: BROWN } },
+    ...leg(-0.13, 0.05), ...leg(-0.13, -0.05), ...leg(0.12, -0.05), ...leg(0.12, 0.05, 'paw'),
+    { shape: { kind: 'sphere', at: [-0.21, 0.42, 0], r: 0.04 }, paint: '#f4ecdb', noShadow: true },
+    // the harness and its bell
+    { shape: { kind: 'box', at: [0.03, 0.36, 0], half: [0.03, 0.12, 0.108], round: 0.01 }, paint: '#d42a33', noShadow: true },
+    { shape: { kind: 'sphere', at: [0.03, 0.23, 0.06], r: 0.025 }, paint: GOLD, noShadow: true },
+    // the neck, and the head on a bone of its own
+    { shape: { kind: 'cone', from: [0.13, 0.4, 0], to: [0.23, 0.56, 0], r: 0.065, rTo: 0.045 }, paint: BROWN },
+    { shape: { kind: 'ball', at: [0.27, 0.59, 0], r: [0.08, 0.06, 0.055] }, paint: BROWN, bone: 'head' },
+    { shape: { kind: 'ball', at: [0.35, 0.565, 0], r: [0.055, 0.04, 0.04] }, paint: LIGHT_BROWN, bone: 'head' },
+    { shape: { kind: 'sphere', at: [0.405, 0.57, 0], r: glows ? 0.03 : 0.022 }, paint: nose, bone: 'head', noShadow: true, ...(glows ? { glow: true, lit: 'always' as const } : {}) },
+    ...[-0.045, 0.045].map((z): PartDoc => ({ shape: { kind: 'sphere', at: [0.3, 0.615, z], r: 0.012 }, paint: '#0b1020', bone: 'head', noShadow: true })),
+    ...[-0.05, 0.05].map((z): PartDoc => ({ shape: { kind: 'cone', from: [0.24, 0.62, z], to: [0.2, 0.66, z * 2.2], r: 0.02, rTo: 0.006 }, paint: BROWN, bone: 'head', noShadow: true })),
+    ...[-0.03, 0.03].map((z, i): PartDoc => ({ shape: { kind: 'antler', at: [0.25, 0.64, z], dir: [-0.25, 1, z * 10], length: 0.2, r: 0.013, tines: 3, seed: 3 + i }, paint: '#e8d4a8', bone: 'head', noShadow: true })),
+  ], {
+    bones: [{ name: 'head', at: [0.22, 0.56, 0] }, { name: 'paw', at: [0.12, 0.29, 0.05] }],
+    moves: [
+      { kind: 'sway', bone: 'head', axis: 'z', degrees: 7, times: 3, phase },
+      { kind: 'sway', bone: 'paw', axis: 'z', degrees: 22, times: 4, phase: phase + 0.25 },
+    ],
+    ...(glows ? { lights: [{ at: [0.46, 0.57, 0], color: '#f0606a', strength: 0.8, range: 0.5, lit: 'always' as const, flicker: { by: 0.2, times: 4 } }] } : {}),
+  })
+}
+/** A reindeer in a red harness. */
+export const REINDEER = reindeer('Reindeer', '#3d2414', false, 0)
+/** A reindeer whose red nose glows. */
+export const RED_NOSED_REINDEER = reindeer('Red-nosed reindeer', '#d42a33', true, 0.4)
+
+// ---- the fireplace and the room it stands in ----
+
+/** A cozy room: a plank floor, a striped wall behind and a rug, lit by what is in it. */
+export const HEARTH_ROOM: PropDoc = {
+  name: 'Cozy room',
+  foot: [0, 0, 0],
+  doc: {
+    name: 'Cozy room',
+    loop: 12,
+    tags: ['indoor', 'night'],
+    // a room is never day: what waits for the dark burns at every hour here, and waits again set down outdoors
+    lamps: 'always',
+    light: { from: [0.3, 1, 0.7], ambient: 0.5, shadow: 0.4 },
+    palette: PALETTE,
+    sky: ['#3d2414', '#0b1020'],
+    look: LOOK,
+    camera: { target: [0, 0.82, 0], distance: 4.3, azimuth: 14, elevation: 10, swing: 6 },
+    parts: [
+      { shape: { kind: 'box', at: [0, -0.06, 0], half: [1.4, 0.06, 1.05] }, paint: { kind: 'faces', top: { kind: 'bands', axis: 'x', size: 0.16, colors: ['#6b3e1e', '#a8703a', '#6b3e1e', '#3d2414'] }, side: '#3d2414' } },
+      { shape: { kind: 'box', at: [0, 1.05, -0.99], half: [1.4, 1.05, 0.06] }, paint: { kind: 'bands', axis: 'x', size: 0.14, colors: ['#16602f', '#0e3b22'] } },
+      { shape: { kind: 'box', at: [0, 0.07, -0.92], half: [1.4, 0.07, 0.02] }, paint: '#3d2414', noShadow: true },
+      { shape: { kind: 'ball', at: [0, 0, 0.42], r: [0.78, 0.014, 0.38] }, paint: { kind: 'bands', axis: 'x', size: 0.1, colors: ['#a81822', '#e8b530', '#a81822', '#6e1019'] }, noShadow: true },
+    ],
+  },
+}
+
+const STOCKINGS: [number, string | PartDoc['paint']][] = [
+  [-0.44, '#d42a33'], [0, { kind: 'bands', axis: 'y', size: 0.05, colors: ['#22863f', '#f4ecdb'] }], [0.44, '#a81822'],
+]
+const CANDLES = [-0.6, 0.6]
+/** A brick fireplace with a fire that burns when it is dark (always, in a room), three stockings hung from the mantel, candles, a garland and a wreath above. */
+export const FIREPLACE = made('Fireplace with stockings', 1.75, [
+  // the chimney breast with the fire's opening cut in, its sooty back, and the breast going up above the mantel
+  { shape: { kind: 'cut', shape: { kind: 'box', at: [0, 0.56, 0], half: [0.62, 0.56, 0.22] }, hole: { kind: 'box', at: [0, 0.3, 0.14], half: [0.3, 0.3, 0.2] } }, paint: { kind: 'bricks', size: [0.2, 0.1], colors: ['#c9925a'], line: '#a8703a' } },
+  { shape: { kind: 'box', at: [0, 0.3, -0.05], half: [0.3, 0.3, 0.02] }, paint: '#0b1020', noShadow: true },
+  { shape: { kind: 'box', at: [0, 1.45, -0.02], half: [0.48, 0.32, 0.18] }, paint: { kind: 'bricks', size: [0.2, 0.1], colors: ['#c9925a'], line: '#a8703a' } },
+  // the hearth stone and the mantel shelf
+  { shape: { kind: 'box', at: [0, 0.03, 0.3], half: [0.72, 0.03, 0.13] }, paint: '#6c7482' },
+  { shape: { kind: 'box', at: [0, 1.15, 0.05], half: [0.74, 0.04, 0.27], round: 0.01 }, paint: '#6b3e1e' },
+  // logs across each other
+  { shape: { kind: 'cone', from: [-0.22, 0.06, 0.02], to: [0.2, 0.06, 0.1], r: 0.05, rTo: 0.045 }, paint: { kind: 'bands', axis: 'x', size: 0.05, colors: ['#6b3e1e', '#3d2414'] } },
+  { shape: { kind: 'cone', from: [-0.14, 0.13, 0.12], to: [0.18, 0.12, -0.02], r: 0.045, rTo: 0.04 }, paint: { kind: 'bands', axis: 'x', size: 0.05, colors: ['#3d2414', '#6b3e1e'] } },
+  // a garland along the mantel's front with red berries
+  { shape: { kind: 'sweep', path: [[-0.72, 1.2, 0.3], [-0.36, 1.2, 0.31], [0, 1.2, 0.31], [0.36, 1.2, 0.31], [0.72, 1.2, 0.3]], r: 0.04 }, paint: { kind: 'speckle', size: 0.03, colors: ['#16602f', '#22863f', '#0e3b22'] }, noShadow: true },
+  ...[-0.6, -0.3, 0.15, 0.45].map((x): PartDoc => ({ shape: { kind: 'sphere', at: [x, 1.23, 0.35], r: 0.022 }, paint: '#d42a33', noShadow: true })),
+  // the stockings: a hook, a white cuff, a leg and a foot turned toward the fire's side
+  ...STOCKINGS.flatMap(([x, paint], i): PartDoc[] => [
+    { shape: { kind: 'sphere', at: [x, 1.1, 0.33], r: 0.018 }, paint: GOLD, bone: `sock${i}`, noShadow: true },
+    { shape: { kind: 'box', at: [x, 1.03, 0.34], half: [0.07, 0.045, 0.04], round: 0.02 }, paint: '#ffffff', bone: `sock${i}`, noShadow: true },
+    { shape: { kind: 'sweep', path: [[x, 0.97, 0.34], [x, 0.84, 0.34], [x + 0.02, 0.78, 0.34], [x + 0.11, 0.76, 0.34]], r: 0.052 }, paint, bone: `sock${i}`, noShadow: true },
+  ]),
+  // candles at each end of the mantel and a wreath above
+  ...CANDLES.flatMap((x, i): PartDoc[] => [
+    { shape: { kind: 'cylinder', at: [x, 1.19, 0.05], height: 0.16, r: 0.03 }, paint: '#f4ecdb' },
+    { shape: { kind: 'ball', at: [x, 1.39, 0.05], r: [0.018, 0.035, 0.018] }, paint: '#ffe27a', bone: `flame${i}`, glow: true, lit: 'dark', unlit: 'gone', noShadow: true },
+  ]),
+  { shape: { kind: 'join', shapes: Array.from({ length: 12 }, (_, i) => ({ kind: 'sphere' as const, at: along([0, 1.47, 0.18], way(i * 30), 0.15), r: 0.055 })) }, paint: { kind: 'speckle', size: 0.03, colors: ['#16602f', '#22863f', '#0e3b22'] } },
+  { shape: { kind: 'join', shapes: [{ kind: 'ball', at: [-0.05, 1.31, 0.23], r: [0.05, 0.03, 0.02] }, { kind: 'ball', at: [0.05, 1.31, 0.23], r: [0.05, 0.03, 0.02] }, { kind: 'sphere', at: [0, 1.31, 0.24], r: 0.022 }] }, paint: '#d42a33', noShadow: true },
+], {
+  bones: [
+    ...STOCKINGS.map(([x], i) => ({ name: `sock${i}`, at: [x, 1.12, 0.33] as V3 })),
+    ...CANDLES.map((x, i) => ({ name: `flame${i}`, at: [x, 1.36, 0.05] as V3 })),
+  ],
+  moves: [
+    ...STOCKINGS.map((_, i): MoveDoc => ({ kind: 'sway', bone: `sock${i}`, axis: 'z', degrees: 3, times: 2, phase: i * 0.3 })),
+    ...CANDLES.map((_, i): MoveDoc => ({ kind: 'pulse', bone: `flame${i}`, size: [0.85, 1.12], times: 12 + i, phase: i * 0.4 })),
+  ],
+  fires: [{ at: [0, 0.14, 0.06], r: 0.13, height: 0.42, sparks: 1.2, lit: 'dark' }],
+  lights: [
+    { at: [0, 0.38, 0.4], color: '#f59a2a', strength: 2.6, range: 1.8, lit: 'dark', flicker: { by: 0.25, times: 11 }, fire: 0 },
+    { at: [0, 1.5, 0.35], color: '#ffe27a', strength: 0.6, range: 1.0, lit: 'dark' },
+  ],
+})
+
 /** The Christmas pieces the library lists. */
 export const CHRISTMAS_MADE: MadeProp[] = [
   { id: 'snowy-knoll', tags: ['snowy', 'night'], kind: 'land', about: 'A low round knoll under snow on a winter night, with the moon and stars over it', prop: SNOWY_KNOLL },
@@ -174,9 +350,15 @@ export const CHRISTMAS_MADE: MadeProp[] = [
   { id: 'red-present', tags: ['thing'], kind: 'prop', about: 'A red present with a gold ribbon and bow', prop: RED_PRESENT },
   { id: 'green-present', tags: ['thing'], kind: 'prop', about: 'A tall striped green present with a red ribbon and bow', prop: GREEN_PRESENT },
   { id: 'blue-present', tags: ['thing'], kind: 'prop', about: 'A wide blue present with a cream ribbon and bow', prop: BLUE_PRESENT },
+  { id: 'snowflake', tags: ['thing'], kind: 'prop', about: 'A big six-armed snowflake turning slowly in the air', prop: SNOWFLAKE },
+  { id: 'sleigh', tags: ['thing'], kind: 'prop', about: 'A red sleigh on curling gold runners with a sack of presents, its reins running forward', prop: SLEIGH },
+  { id: 'reindeer', tags: ['animal'], kind: 'prop', about: 'A reindeer in a red harness with a gold bell, nodding and pawing the snow', prop: REINDEER },
+  { id: 'red-nosed-reindeer', tags: ['animal', 'lamp'], kind: 'prop', about: 'A reindeer in a red harness whose red nose glows', prop: RED_NOSED_REINDEER },
+  { id: 'cozy-room', tags: ['indoor', 'night'], kind: 'land', about: 'A cozy room: a plank floor, a striped green wall and a rug', prop: HEARTH_ROOM },
+  { id: 'fireplace', tags: ['building', 'lamp'], kind: 'prop', about: 'A brick fireplace with a crackling fire, three stockings hung from the mantel, candles, a garland and a wreath', prop: FIREPLACE },
 ]
 
-const project = (name: string, props: SceneProject['props']): SceneProject => ({ kind: 'blobscape-project', version: 1, name, loop: 12, land: 'snowy-knoll', props })
+const project = (name: string, props: SceneProject['props'], land = 'snowy-knoll'): SceneProject => ({ kind: 'blobscape-project', version: 1, name, loop: 12, land, props })
 
 /** The tree alone on the knoll. */
 export const TREE_PROJECT = project('Christmas tree', [{ prop: 'christmas-tree', at: [0, 0, 0], turn: 0, size: 1 }])
@@ -192,3 +374,13 @@ export const PRESENTS_PROJECT = project('Presents under the tree', [
   { prop: 'green-present', at: [-0.82, 0, 0.1], turn: 30, size: 0.7 },
   { prop: 'blue-present', at: [-0.32, 0, 0.78], turn: -25, size: 0.6 },
 ])
+/** The snowflake over the knoll. */
+export const SNOWFLAKE_PROJECT = project('Snowflake', [{ prop: 'snowflake', at: [0, 0, 0], turn: 0, size: 1 }])
+/** The sleigh with two reindeer, the red-nosed one leading. */
+export const SLEIGH_PROJECT = project('Sleigh and reindeer', [
+  { prop: 'sleigh', at: [-0.62, 0, 0.05], turn: 0, size: 1 },
+  { prop: 'reindeer', at: [0.24, 0, 0.05], turn: 0, size: 1 },
+  { prop: 'red-nosed-reindeer', at: [0.72, 0, 0.05], turn: 0, size: 1 },
+])
+/** The fireplace in the cozy room. */
+export const FIREPLACE_PROJECT = project('Fireplace with stockings', [{ prop: 'fireplace', at: [0, 0, -0.7], turn: 0, size: 1 }], 'cozy-room')

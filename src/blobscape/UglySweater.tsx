@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Orbit } from '../splat-core/view.ts'
 import type { PointLight } from '../splat-engine/engine.ts'
 import type { Skeleton } from '../splat-engine/rig.ts'
+import type { SceneFire } from '../splat-engine/sceneFire.ts'
 import { LoadingMark } from '../shared/BlobLoader.tsx'
 import { Button, Chip, Field } from '../shared/ui.tsx'
 import { detailAsked, labelNames, writeDetail } from '../shared/detail.ts'
@@ -34,15 +35,18 @@ interface Subject {
   about: string
   orbit: Orbit
   /** Knitting lights nothing, so a scene is built with no light baked in (`unlit`). */
-  make(detail: Detail): { actor: Actor; pose?: (sk: Skeleton, t: number) => void; lights?: (t: number) => PointLight[]; ambient?: Parameters<CreatureStage['setLights']>[1] }
+  make(detail: Detail): { actor: Actor; pose?: (sk: Skeleton, t: number) => void; lights?: (t: number) => PointLight[]; ambient?: Parameters<CreatureStage['setLights']>[1]; fire?: SceneFire }
 }
+
+/** Where the camera stands for an orbit, for a fire seen through its own hot gas. */
+const eyeOf = (o: Orbit): [number, number, number] => { const a = (o.azimuth * Math.PI) / 180, e = (o.elevation * Math.PI) / 180; return [o.target[0] + o.distance * Math.sin(a) * Math.cos(e), o.target[1] + o.distance * Math.sin(e), o.target[2] + o.distance * Math.cos(a) * Math.cos(e)] }
 
 function scene(id: string, label: string): Subject {
   const d = DIORAMAS.find((x) => x.id === id) ?? DIORAMAS[0]
   const o = d.views[0].orbit
   return {
     id, label, about: d.about, orbit: { ...o, distance: o.distance * NEARER },
-    make: (detail) => ({ actor: unlit(() => d.make(DETAIL[detail].spacing)), pose: d.pose, lights: d.lights, ambient: d.ambient }),
+    make: (detail) => ({ actor: unlit(() => d.make(DETAIL[detail].spacing)), pose: d.pose, lights: d.lights, ambient: d.ambient, fire: d.fire?.() }),
   }
 }
 
@@ -51,6 +55,10 @@ const SUBJECTS: Subject[] = [
   scene('presents', 'Presents under the tree'),
   scene('christmas-tree', 'Christmas tree'),
   scene('ornament', 'Ornament'),
+  scene('sleigh', 'Sleigh and reindeer'),
+  scene('snowflake', 'Snowflake'),
+  scene('fireplace', 'Fireplace'),
+
 ]
 
 const params = () => new URLSearchParams(typeof location === 'undefined' ? '' : location.search)
@@ -100,8 +108,15 @@ export function UglySweater() {
     const s = SUBJECTS.find((x) => x.id === subject)!
     const t = setTimeout(() => {
       const made = s.make(detail)
-      stage.setActor(made.actor)
-      if (made.pose) stage.setPoser((sk, time) => { made.pose!(sk, time); stage.setLights(made.lights?.(time) ?? [], made.ambient ?? 1) })
+      // a fire (the fireplace's) is its own soft actor beside the scene, placed each moment as it burns in still air
+      const fire = made.fire
+      stage.setActor(made.actor, undefined, fire ? [fire.actor] : [])
+      if (made.pose) stage.setPoser((sk, time) => {
+        made.pose!(sk, time)
+        if (fire) { fire.show(time, eyeOf(stage.orbit)); stage.reshape(fire.actor) }
+        const lit = made.lights?.(time) ?? []
+        stage.setLights(fire ? fire.shine(lit, time) : lit, made.ambient ?? 1)
+      })
       else stage.setLights([], 1)
       // the view stays where it is when only the detail changed
       setOrbit((o) => (kept.current === s.id ? o : s.orbit))
