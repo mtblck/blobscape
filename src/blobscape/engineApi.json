@@ -26,6 +26,11 @@
    "doc": "Drawing a stage as pixel art, as brush and ink marks, as characters, cel shaded, in neon, as stained glass, in watercolor, as blocks or glitching, and baking a creature into a sprite sheet."
   },
   {
+   "id": "styles",
+   "title": "Styles",
+   "doc": "The looks as one catalog: each style's settings with their limits, names and where they start, the value a page holds for them, and the look each makes for the stage. The same definitions every page of this site draws from."
+  },
+  {
    "id": "simulation",
    "title": "Simulation",
    "doc": "The solvers under cloth, under sand, snow and goo, under the ripples of a pond, under lava and under a fire, for when you want to step them yourself."
@@ -6766,6 +6771,230 @@
    ]
   },
   {
+   "id": "sceneWeather",
+   "title": "Weather over a scene",
+   "group": "scenes",
+   "doc": "Weather laid over a scene (skyRecipes.ts has the recipes): the rain, snow and clouds as actors of their own beside\nthe scene's, shown by the numbers of a sky that may be on its way from one weather to another. The scene itself is\nnever cut again for the weather.",
+   "entries": [
+    {
+     "name": "WeatherScene",
+     "kind": "interface",
+     "doc": "What the weather needs to know of the scene it is laid over.",
+     "props": [
+      {
+       "name": "loop",
+       "type": "number",
+       "doc": "Seconds before the scene repeats: the weather's loop too."
+      },
+      {
+       "name": "view",
+       "type": "Orbit & { swing?: number }",
+       "doc": "The view the scene starts from: the clouds are laid out over it, and rain and snow fall over what it shows."
+      },
+      {
+       "name": "heavens",
+       "optional": true,
+       "type": "HeavensDoc",
+       "doc": "The scene's own sky (`SceneDoc.heavens`): its clouds' colors, and how many are out whatever the weather."
+      },
+      {
+       "name": "ground",
+       "optional": true,
+       "type": "(x: number, z: number, top: number, bottom: number) => number",
+       "doc": "Where something falling comes to rest (`CompiledScene.ground`). Left out, nothing lands and no snow lies."
+      },
+      {
+       "name": "water",
+       "optional": true,
+       "type": "SceneWater",
+       "doc": "The scene's water, which rain rings and wind roughens."
+      },
+      {
+       "name": "sun",
+       "optional": true,
+       "type": "readonly [number, number, number]",
+       "doc": "The way to the scene's sun, which shades snow lying on faces turned from it."
+      },
+      {
+       "name": "lights",
+       "optional": true,
+       "type": "readonly { position: readonly number[]; color: readonly number[]; range: number }[]",
+       "doc": "The scene's lights as it starts: snow melts round a warm one."
+      }
+     ]
+    },
+    {
+     "name": "SceneWeather",
+     "kind": "class",
+     "doc": "The rain, snow and clouds for one scene: made once (it finds where every drop lands), then posed by time and sky.",
+     "ctor": [
+      {
+       "code": "new SceneWeather(d: WeatherScene, options?: { overhead?: boolean })"
+      }
+     ],
+     "props": [
+      {
+       "name": "actors",
+       "readonly": true,
+       "type": "Actor[]",
+       "doc": "The clouds, the rain, the snow, then the snow lying: drawn in the scene's world as `extras`."
+      },
+      {
+       "name": "ready",
+       "readonly": true,
+       "type": "Promise<void>",
+       "doc": "Resolves once the water's rain and wind are worked out (at once for a scene with no water)."
+      },
+      {
+       "name": "cover",
+       "readonly": true,
+       "type": "SnowCover",
+       "doc": "The snow lying on the scene, which builds up while snow falls (`pile`)."
+      },
+      {
+       "name": "overhead",
+       "readonly": true,
+       "type": "boolean",
+       "doc": "Whether the clouds are drawn over the scene; without them rain and snow come in from over the top of the picture."
+      }
+     ],
+     "methods": [
+      {
+       "name": "pile",
+       "doc": "Sets how deep the snow lying is, 0 to 1. Returns whether it changed by enough to send up again (`Stage.reshape(cover)`).",
+       "signatures": [
+        {
+         "code": "pile(depth: number): boolean"
+        }
+       ]
+      },
+      {
+       "name": "shade",
+       "doc": "Turns the clouds as gray and dark as the sky they are in (`skyUnder`'s gray), so a heavy cover reads as cloud, not\nas a sky of a scene's own dusk-blue clouds. Returns whether they changed by enough to send up again\n(`Stage.reshape(actors[0])`).",
+       "signatures": [
+        {
+         "code": "shade(s: SkyState): boolean"
+        }
+       ]
+      },
+      {
+       "name": "pose",
+       "doc": "Poses both for `t` seconds under a sky.",
+       "signatures": [
+        {
+         "code": "pose(t: number, s: SkyState): void"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "paletteUnder",
+     "kind": "function",
+     "doc": "A palette for a scene under a sky: its colors as that light leaves them and the sky's own first, then the weather's\n(cloud, rain, snow) and its own as they were, joined down to what a palette holds. Pixel art snaps to it.",
+     "signatures": [
+      {
+       "code": "paletteUnder(colors: readonly Rgb[], sky: readonly (number | readonly number[] | undefined)[], s: SkyState): Rgb[]"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "timeOfDay",
+   "title": "Times of day",
+   "group": "scenes",
+   "doc": "",
+   "entries": [
+    {
+     "name": "TimeId",
+     "kind": "type",
+     "doc": "A time of `TIMES`.",
+     "type": "\"morning\" | \"afternoon\" | \"night\""
+    },
+    {
+     "name": "TimeOfDay",
+     "kind": "interface",
+     "doc": "A time of day: its sky, its light, and whether it is dark.",
+     "props": [
+      {
+       "name": "id",
+       "type": "TimeId",
+       "doc": "The word an address or a saved scene holds."
+      },
+      {
+       "name": "label",
+       "type": "string",
+       "doc": "Its name as a page shows it."
+      },
+      {
+       "name": "sky",
+       "type": "[string, string]",
+       "doc": "The sky, top and bottom, as a description writes one."
+      },
+      {
+       "name": "light",
+       "type": "readonly [number, number, number]",
+       "doc": "What multiplies everything but the scene's own lamps and what glows (linear)."
+      },
+      {
+       "name": "height",
+       "type": "number",
+       "doc": "How high the sun or moon stands, in degrees, for a look that lights the scene itself."
+      },
+      {
+       "name": "dark",
+       "type": "boolean",
+       "doc": "Whether lamps that wait for the dark are lit."
+      },
+      {
+       "name": "hour",
+       "type": "number",
+       "doc": "The hour a live sun stands at for it (Scene Creator's Light mode sets its clock to this)."
+      }
+     ]
+    },
+    {
+     "name": "TIMES",
+     "kind": "const",
+     "doc": "The times of day a scene can be set in.",
+     "type": "TimeOfDay[]"
+    },
+    {
+     "name": "timeAsked",
+     "kind": "const",
+     "doc": "The time asked for by name (`?time=night`), or none: the scene as it is written.",
+     "type": "(q: string | null | undefined) => TimeId | undefined"
+    },
+    {
+     "name": "timeOf",
+     "kind": "const",
+     "doc": "The time with an id.",
+     "type": "(id: TimeId) => TimeOfDay"
+    },
+    {
+     "name": "under",
+     "kind": "function",
+     "doc": "A color (sRGB 0–255) as it looks under a light.",
+     "signatures": [
+      {
+       "code": "under(c: readonly number[], light: readonly number[]): Rgb"
+      }
+     ]
+    },
+    {
+     "name": "paletteAt",
+     "kind": "function",
+     "doc": "A palette for a scene at a time of day: its own colors as the time's light leaves them, the sky's two, then its own\nas they were (what its lamps light and what glows keep those), joined down to what a palette holds. Pixel art snaps\nto it, so a scene made for the day has its night's colors to snap to.",
+     "signatures": [
+      {
+       "code": "paletteAt(colors: readonly Rgb[], time: TimeOfDay): Rgb[]"
+      }
+     ]
+    }
+   ]
+  },
+  {
    "id": "heavens",
    "title": "The shared sky: moon, sun, stars and clouds",
    "group": "scenes",
@@ -13037,6 +13266,1476 @@
        "code": "asepriteJson(image: string, plan: SheetPlan, size: number): { frames: object[]; meta: { app: string; version: string; image: string; format: string; size: { w: number; h: number }; scale: string; frameTags: object[] } }"
       }
      ]
+    }
+   ]
+  },
+  {
+   "id": "styles-styles",
+   "title": "The styles",
+   "group": "styles",
+   "doc": "",
+   "entries": [
+    {
+     "name": "Style",
+     "kind": "type",
+     "doc": "How a scene is drawn: as pixel art (plain or glitching), or as one of Brush and Ink's looks.",
+     "type": "typeof PIXEL.id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof LOOKS[number][\"id\"]"
+    },
+    {
+     "name": "STYLES",
+     "kind": "const",
+     "doc": "Pixel art first, then tech glitch (pixel art too), then the looks in Brush and Ink's own order (the plain blobs last).",
+     "type": "{ id: Style; label: string; note: string }[]"
+    },
+    {
+     "name": "styleAsked",
+     "kind": "const",
+     "doc": "The style an address asks for (`?style=oil`), or pixel art.",
+     "type": "(asked: string | null) => Style"
+    },
+    {
+     "name": "styleWords",
+     "kind": "function",
+     "doc": "A style as the end of \"drawn …\", for the line under the view and the view's own label.",
+     "signatures": [
+      {
+       "code": "styleWords(style: Style): string"
+      }
+     ]
+    },
+    {
+     "name": "isPixelStyle",
+     "kind": "const",
+     "doc": "Whether a style is drawn as pixel art underneath (pixel mode, its palette and finish): pixel art itself and tech glitch.",
+     "type": "(style: Style) => style is \"pixel\" | \"glitch\""
+    },
+    {
+     "name": "lightsItself",
+     "kind": "const",
+     "doc": "Whether a style lights the scene itself, so the scene is cut with no light baked in: cel shading, neon, stained glass and blocks.",
+     "type": "(style: Style | undefined) => boolean"
+    }
+   ]
+  },
+  {
+   "id": "styles-catalog",
+   "title": "The catalog: every style's settings",
+   "group": "styles",
+   "doc": "The styles API (Matt, 2026-11-22: no page uses a version of a style all its own). Two things, both data:\n\n- the catalog (`CATALOG`): every style's settings written once, each with its kind, its choices or range, where it\n  starts and its name in the address. Controls are drawn from it (`SettingsControls.tsx`), the address is read by it\n  (`fromAddress`) and kept settings are checked against it (`settingsFrom`), so a setting added here is on every\n  page that offers the style, in its links and in its saved scenes.\n- the value (`StyleValue`): which style, and each style's settings, which a page holds, a saved scene keeps and a\n  link carries.\n\nAn experiment tries a setting of its own by adding it to the style here marked `trial` with the experiment's name:\nonly that page shows it. Folding it in is taking the mark off. Pure, so it is tested.",
+   "entries": [
+    {
+     "name": "Unit",
+     "kind": "type",
+     "doc": "How a number reads beside its slider.",
+     "type": "\"percent\" | \"px\" | \"deg\" | \"times\" | \"count\""
+    },
+    {
+     "name": "Shows",
+     "kind": "interface",
+     "doc": "What a setting's `when` is told about the page: the style on show and what the subject has.",
+     "props": [
+      {
+       "name": "style",
+       "type": "Style",
+       "doc": "The style on show."
+      },
+      {
+       "name": "water",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Whether the subject has water."
+      },
+      {
+       "name": "weather",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Whether weather is out over the subject."
+      },
+      {
+       "name": "cycle",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Whether the scene has a color cycle."
+      },
+      {
+       "name": "colors",
+       "optional": true,
+       "type": "number",
+       "doc": "How many colors the palette on show has (0 is full color)."
+      },
+      {
+       "name": "heat",
+       "optional": true,
+       "type": "number",
+       "doc": "The scene's own heat haze, in art pixels."
+      }
+     ]
+    },
+    {
+     "name": "Tab",
+     "kind": "type",
+     "doc": "Where on a page a setting is laid: a style whose settings are spread over two tabs says which (pixel art's Style and Finish; `switches` is the Finish tab's run of switches).",
+     "type": "\"style\" | \"finish\" | \"switches\""
+    },
+    {
+     "name": "Drawn",
+     "kind": "type",
+     "doc": "How a setting is drawn when not as its own kind: what the control shows for the settings as they are, and what a press changes.",
+     "generics": "<V>",
+     "type": "{ kind: \"toggle\"; at: (v: V) => boolean; set: (to: boolean, on: Shows) => Partial<V> } | { kind: \"choice\"; options: readonly { id: string; label: string }[]; at: (v: V) => string; set: (id: string) => Partial<V> }"
+    },
+    {
+     "name": "RangeSetting",
+     "kind": "interface",
+     "doc": "A slider.",
+     "generics": "<V>",
+     "extends": [
+      "Base<V>"
+     ],
+     "props": [
+      {
+       "name": "kind",
+       "type": "\"range\"",
+       "doc": "What says it is a slider."
+      },
+      {
+       "name": "min",
+       "type": "number",
+       "doc": "The least it goes to."
+      },
+      {
+       "name": "max",
+       "type": "number",
+       "doc": "The most it goes to."
+      },
+      {
+       "name": "step",
+       "type": "number",
+       "doc": "How far one step of the slider moves it."
+      },
+      {
+       "name": "unit",
+       "type": "Unit",
+       "doc": "How its number reads beside the slider."
+      },
+      {
+       "name": "zero",
+       "optional": true,
+       "type": "string",
+       "doc": "What 0 reads as (\"None\")."
+      },
+      {
+       "name": "whole",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Held to whole steps."
+      }
+     ]
+    },
+    {
+     "name": "ChoiceSetting",
+     "kind": "interface",
+     "doc": "One of a few, as chips. `open` choices are the page's to list (a scene's palettes): any id is kept.",
+     "generics": "<V>",
+     "extends": [
+      "Base<V>"
+     ],
+     "props": [
+      {
+       "name": "kind",
+       "type": "\"choice\"",
+       "doc": "What says it is a choice."
+      },
+      {
+       "name": "options",
+       "type": "readonly { id: string | number; label: string; about?: string }[]",
+       "doc": "What can be picked: each one's kept value, its name, and a line about it."
+      },
+      {
+       "name": "open",
+       "optional": true,
+       "type": "boolean",
+       "doc": "The page lists the choices itself (a scene's palettes), so any id is kept."
+      }
+     ]
+    },
+    {
+     "name": "ToggleSetting",
+     "kind": "interface",
+     "doc": "A switch. One that starts `null` follows its style (`auto`) until the visitor says. `on` is the address's word for it when not 1.",
+     "generics": "<V>",
+     "extends": [
+      "Base<V>"
+     ],
+     "props": [
+      {
+       "name": "kind",
+       "type": "\"toggle\"",
+       "doc": "What says it is a switch."
+      },
+      {
+       "name": "about",
+       "optional": true,
+       "type": "string | ((style: Style, on: Shows) => string)",
+       "doc": "A line beside the switch."
+      },
+      {
+       "name": "auto",
+       "optional": true,
+       "type": "(style: Style) => boolean",
+       "doc": "What a switch that starts `null` does for a style until the visitor says."
+      },
+      {
+       "name": "on",
+       "optional": true,
+       "type": "string",
+       "doc": "The address's word for on, when it is not 1."
+      }
+     ]
+    },
+    {
+     "name": "SeedSetting",
+     "kind": "interface",
+     "doc": "A whole number a button moves on, for another run of something random.",
+     "generics": "<V>",
+     "extends": [
+      "Base<V>"
+     ],
+     "props": [
+      {
+       "name": "kind",
+       "type": "\"seed\"",
+       "doc": "What says it is a seed."
+      }
+     ]
+    },
+    {
+     "name": "StyleSetting",
+     "kind": "type",
+     "doc": "A setting of a style: a slider, a choice, a switch or a seed.",
+     "generics": "<V>",
+     "type": "RangeSetting<V> | ChoiceSetting<V> | ToggleSetting<V> | SeedSetting<V>"
+    },
+    {
+     "name": "StyleDef",
+     "kind": "interface",
+     "doc": "One style's settings (or those of a few styles that share them, as the brush marks do).",
+     "generics": "<V>",
+     "props": [
+      {
+       "name": "id",
+       "type": "string",
+       "doc": "The name its settings are kept under."
+      },
+      {
+       "name": "styles",
+       "type": "readonly Style[]",
+       "doc": "The styles that use these settings."
+      },
+      {
+       "name": "start",
+       "type": "V",
+       "doc": "Where every setting starts."
+      },
+      {
+       "name": "settings",
+       "type": "readonly StyleSetting<V>[]",
+       "doc": "The settings, in the order a page lays them out."
+      }
+     ]
+    },
+    {
+     "name": "MarkSettings",
+     "kind": "interface",
+     "doc": "The brush marks (gouache, oil, ink and wash, hatching, stipple) and the plain blobs, which can take the pen's outline too.",
+     "props": [
+      {
+       "name": "size",
+       "type": "number",
+       "doc": "How big a mark is beside its blob."
+      },
+      {
+       "name": "outline",
+       "type": "boolean | null",
+       "doc": "Whether a pen outlines things; null is on for the pen looks and off for paint."
+      },
+      {
+       "name": "pen",
+       "type": "number",
+       "doc": "The pen's width, in CSS pixels."
+      },
+      {
+       "name": "paper",
+       "type": "string",
+       "doc": "The paper and ink, an id of `PAPERS`."
+      }
+     ]
+    },
+    {
+     "name": "AsciiSettings",
+     "kind": "interface",
+     "doc": "The settings of the picture drawn as characters.",
+     "props": [
+      {
+       "name": "chars",
+       "type": "GlyphSet",
+       "doc": "Which characters: ASCII, braille or blocks."
+      },
+      {
+       "name": "letter",
+       "type": "number",
+       "doc": "A character's height, in CSS pixels."
+      },
+      {
+       "name": "weight",
+       "type": "number",
+       "doc": "How heavy the characters are drawn."
+      },
+      {
+       "name": "strokes",
+       "type": "boolean",
+       "doc": "Whether edges are drawn as strokes (| _ / \\\\)."
+      },
+      {
+       "name": "strands",
+       "type": "boolean",
+       "doc": "Whether fur and grass are drawn as strokes along the way they lie."
+      },
+      {
+       "name": "own",
+       "type": "boolean",
+       "doc": "Whether each character takes the color of what it shows."
+      },
+      {
+       "name": "paper",
+       "type": "string",
+       "doc": "The ground and ink, an id of `PAPERS`."
+      }
+     ]
+    },
+    {
+     "name": "CelSettings",
+     "kind": "interface",
+     "doc": "Cel shading's settings.",
+     "props": [
+      {
+       "name": "turn",
+       "type": "number",
+       "doc": "Where the light is, in degrees round the subject from the starting view."
+      },
+      {
+       "name": "height",
+       "type": "number",
+       "doc": "How high the light stands, in degrees."
+      },
+      {
+       "name": "tones",
+       "type": "2 | 3",
+       "doc": "How many tones the light is cut into."
+      },
+      {
+       "name": "shadows",
+       "type": "boolean",
+       "doc": "Whether things cast shadows."
+      },
+      {
+       "name": "smooth",
+       "type": "number",
+       "doc": "How far the light is smoothed over a surface before it is cut, in pixels."
+      },
+      {
+       "name": "fills",
+       "type": "number",
+       "doc": "How many flat colors each part's own are gathered into; 0 leaves them as painted."
+      },
+      {
+       "name": "backdrop",
+       "type": "string",
+       "doc": "What stands behind, an id of `BACKDROPS`; '' is the subject's own sky where it has one."
+      },
+      {
+       "name": "outline",
+       "type": "boolean",
+       "doc": "Whether an even line is drawn round things."
+      },
+      {
+       "name": "pen",
+       "type": "number",
+       "doc": "The line's width, in CSS pixels."
+      }
+     ]
+    },
+    {
+     "name": "PixelSettings",
+     "kind": "interface",
+     "doc": "Pixel art's settings, as the Style and Finish controls set them.",
+     "props": [
+      {
+       "name": "palette",
+       "type": "string",
+       "doc": "The palette's id: 'own' is the scene's, else one of the shared ones."
+      },
+      {
+       "name": "size",
+       "type": "number",
+       "doc": "Each art pixel this many device pixels across."
+      },
+      {
+       "name": "rate",
+       "type": "number",
+       "doc": "Frames a second the scene moves at; 0 is every frame the screen shows."
+      },
+      {
+       "name": "dither",
+       "type": "number",
+       "doc": "How much dither, 0 to 1."
+      },
+      {
+       "name": "glow",
+       "type": "number",
+       "doc": "How strongly glowing things light what is round them and shine into the pixels beside them."
+      },
+      {
+       "name": "outline",
+       "type": "boolean",
+       "doc": "A line round the scene, and whether it takes a darker tone of each thing it goes round."
+      },
+      {
+       "name": "own",
+       "type": "boolean",
+       "doc": "Whether the outline takes a darker tone of each thing it goes round."
+      },
+      {
+       "name": "lines",
+       "type": "boolean",
+       "doc": "Lines inside the scene: where things meet (and, where the scene asks, where colors jump)."
+      },
+      {
+       "name": "sky",
+       "type": "boolean",
+       "doc": "Whether the scene's sky is drawn behind it."
+      },
+      {
+       "name": "heat",
+       "type": "number",
+       "doc": "Heat haze over glowing things, in art pixels; 0 is none."
+      },
+      {
+       "name": "bands",
+       "type": "number",
+       "doc": "Glow in flat rings."
+      },
+      {
+       "name": "selout",
+       "type": "boolean",
+       "doc": "A softer outline on lit sides."
+      },
+      {
+       "name": "cycle",
+       "type": "boolean",
+       "doc": "Color cycling, where the scene has one."
+      },
+      {
+       "name": "steps",
+       "type": "boolean",
+       "doc": "Painted in steps of the palette as the scene is cut."
+      },
+      {
+       "name": "texel",
+       "type": "number",
+       "doc": "Light in this many bands a blob, as the scene is cut; 0 is smooth light."
+      },
+      {
+       "name": "shade",
+       "type": "boolean",
+       "doc": "Light worked out a pixel at a time (cel shading in the small picture), with the scene cut unlit."
+      },
+      {
+       "name": "rock",
+       "type": "boolean",
+       "doc": "The scene's own gentle rocking of the view."
+      },
+      {
+       "name": "exact",
+       "type": "boolean",
+       "doc": "The exact (radix) sort."
+      }
+     ]
+    },
+    {
+     "name": "PIXEL_SIZES",
+     "kind": "const",
+     "doc": "The pixel sizes on offer.",
+     "type": "number[]"
+    },
+    {
+     "name": "PIXEL_RATES",
+     "kind": "const",
+     "doc": "The paces on offer, in frames a second; 0 is smooth.",
+     "type": "number[]"
+    },
+    {
+     "name": "TEXEL_BANDS",
+     "kind": "const",
+     "doc": "How many steps of sun Light in bands gives (`banded`): three, none, half and full, kept the paint's texture best.",
+     "type": "3"
+    },
+    {
+     "name": "PIXEL",
+     "kind": "const",
+     "doc": "Pixel art. Where a scene has a finish of its own it starts these (`pixelStart` in styleSettings.ts); this start is\na scene with none. Its controls are spread over two tabs (`tab`), and a few are drawn as another kind than they are\nkept as (`draw`): the outline's two switches are one choice of three, and the bands and the haze are switches.",
+     "type": "StyleDef<PixelSettings>"
+    },
+    {
+     "name": "GLITCH_DEF",
+     "kind": "const",
+     "doc": "Tech glitch: pixel art with bursts laid on, so it has pixel art's settings and these.",
+     "type": "StyleDef<GlitchChoice>"
+    },
+    {
+     "name": "MARKS",
+     "kind": "const",
+     "doc": "The settings the brush marks and the plain blobs share: mark size, outline, pen and paper.",
+     "type": "StyleDef<MarkSettings>"
+    },
+    {
+     "name": "ASCII",
+     "kind": "const",
+     "doc": "The settings of the picture drawn as characters.",
+     "type": "StyleDef<AsciiSettings>"
+    },
+    {
+     "name": "CEL_DEF",
+     "kind": "const",
+     "doc": "Cel shading's settings.",
+     "type": "StyleDef<CelSettings>"
+    },
+    {
+     "name": "BLOCKS_DEF",
+     "kind": "const",
+     "doc": "The settings of the Blocks style.",
+     "type": "StyleDef<BlockChoice>"
+    },
+    {
+     "name": "NEON_DEF",
+     "kind": "const",
+     "doc": "Neon's settings.",
+     "type": "StyleDef<NeonChoice>"
+    },
+    {
+     "name": "GLASS_DEF",
+     "kind": "const",
+     "doc": "Stained glass's settings.",
+     "type": "StyleDef<GlassChoice>"
+    },
+    {
+     "name": "WASH_DEF",
+     "kind": "const",
+     "doc": "Watercolor's settings.",
+     "type": "StyleDef<WashChoice>"
+    },
+    {
+     "name": "SceneSettings",
+     "kind": "interface",
+     "doc": "The scene's own settings, which every style respects: '' is the scene as it is written (its own weather, its own\ntime), and a detail of '' is the one its style starts at (`detailStart`). Weather and cloud cover are one choice on\nthe page (a weather brings its own clouds), kept as two so a cover can be told from a weather.",
+     "props": [
+      {
+       "name": "time",
+       "type": "\"\" | TimeId",
+       "doc": "The time of day; '' is the scene as written."
+      },
+      {
+       "name": "weather",
+       "type": "\"\" | WeatherId | \"none\"",
+       "doc": "The weather; '' is the scene's own, 'none' turns a scene's own off."
+      },
+      {
+       "name": "clouds",
+       "type": "\"\" | CloudId",
+       "doc": "The cloud cover; '' is the scene's own."
+      },
+      {
+       "name": "wind",
+       "type": "\"\" | WindId",
+       "doc": "The wind; '' is what the weather brings."
+      },
+      {
+       "name": "overhead",
+       "type": "boolean | null",
+       "doc": "Clouds floating over the scene; null is the scene's own way."
+      },
+      {
+       "name": "transition",
+       "type": "\"cut\" | TransitionKind",
+       "doc": "How one scene gives way to the next; 'cut' is at once."
+      },
+      {
+       "name": "detail",
+       "type": "string",
+       "doc": "The detail the scene is cut at, an id of `SCENE_DETAIL`; '' is the one its style starts at."
+      }
+     ]
+    },
+    {
+     "name": "SCENE",
+     "kind": "const",
+     "doc": "The scene's own settings, written as a style's are so the same code reads, keeps and draws them.",
+     "type": "StyleDef<SceneSettings>"
+    },
+    {
+     "name": "sceneStart",
+     "kind": "const",
+     "doc": "The scene's settings as they start, with what the address asks (`?time=night`, `?weather=snow`, `?wind=gale`, `?transition=cut`, `?detail=fine`).",
+     "type": "(q?: URLSearchParams) => SceneSettings"
+    },
+    {
+     "name": "CATALOG",
+     "kind": "const",
+     "doc": "Every style's settings, by the name they are kept under.",
+     "type": "{ pixel: StyleDef<PixelSettings>; glitch: StyleDef<GlitchChoice>; marks: StyleDef<MarkSettings>; ascii: StyleDef<AsciiSettings>; cel: StyleDef<CelSettings>; blocks: StyleDef<BlockChoice>; neon: StyleDef<NeonChoice>; glass: StyleDef<GlassChoice>; watercolor: StyleDef<WashChoice> }"
+    },
+    {
+     "name": "StyleKey",
+     "kind": "type",
+     "doc": "A name settings are kept under: a key of `CATALOG`.",
+     "type": "keyof typeof CATALOG"
+    },
+    {
+     "name": "StylesValue",
+     "kind": "interface",
+     "doc": "Each style's settings: what a page holds beside which style is on show.",
+     "props": [
+      {
+       "name": "pixel",
+       "type": "PixelSettings",
+       "doc": "Pixel art's."
+      },
+      {
+       "name": "glitch",
+       "type": "GlitchChoice",
+       "doc": "Tech glitch's, on top of pixel art's."
+      },
+      {
+       "name": "marks",
+       "type": "MarkSettings",
+       "doc": "The brush marks' and the plain blobs'."
+      },
+      {
+       "name": "ascii",
+       "type": "AsciiSettings",
+       "doc": "The characters'."
+      },
+      {
+       "name": "cel",
+       "type": "CelSettings",
+       "doc": "Cel shading's."
+      },
+      {
+       "name": "blocks",
+       "type": "BlockChoice",
+       "doc": "The Blocks style's."
+      },
+      {
+       "name": "neon",
+       "type": "NeonChoice",
+       "doc": "Neon's."
+      },
+      {
+       "name": "glass",
+       "type": "GlassChoice",
+       "doc": "Stained glass's."
+      },
+      {
+       "name": "watercolor",
+       "type": "WashChoice",
+       "doc": "Watercolor's."
+      }
+     ]
+    },
+    {
+     "name": "DrawnSettings",
+     "kind": "type",
+     "doc": "The settings of the looks `useDrawnLook` draws: every style but pixel art and its glitch.",
+     "type": "Omit<StylesValue, \"pixel\" | \"glitch\">"
+    },
+    {
+     "name": "StyleValue",
+     "kind": "interface",
+     "doc": "How a scene is drawn: the style, every style's settings (so going to another style and back loses nothing), and the scene's own.",
+     "props": [
+      {
+       "name": "style",
+       "type": "Style",
+       "doc": "The style on show."
+      },
+      {
+       "name": "styles",
+       "type": "StylesValue",
+       "doc": "Every style's settings."
+      },
+      {
+       "name": "scene",
+       "type": "SceneSettings",
+       "doc": "The scene's own settings."
+      }
+     ]
+    },
+    {
+     "name": "keysOf",
+     "kind": "const",
+     "doc": "The settings a style uses, in the order they are laid on: tech glitch is pixel art's and its own.",
+     "type": "(style: Style) => StyleKey[]"
+    },
+    {
+     "name": "fromAddress",
+     "kind": "function",
+     "doc": "A style's settings as the address asks for them, over `start`: only settings with an `address`, and only sound values.",
+     "signatures": [
+      {
+       "code": "fromAddress<V>(def: StyleDef<V>, start: V, q: URLSearchParams): V"
+      }
+     ]
+    },
+    {
+     "name": "settingsFrom",
+     "kind": "function",
+     "doc": "Settings that were kept (a saved scene, a link) read back over `start`: each one kept only where the catalog finds it sound.",
+     "signatures": [
+      {
+       "code": "settingsFrom<V>(def: StyleDef<V>, start: V, kept: unknown): V"
+      }
+     ]
+    },
+    {
+     "name": "StartFor",
+     "kind": "interface",
+     "doc": "What a page tells the start about itself.",
+     "props": [
+      {
+       "name": "coarse",
+       "optional": true,
+       "type": "boolean",
+       "doc": "A phone or tablet: blocks start a size up, for fewer cubes."
+      }
+     ]
+    },
+    {
+     "name": "drawnStart",
+     "kind": "function",
+     "doc": "The drawn looks' settings as they start, with what the address asks (`?block=`, `?tones=3`, `?chars=braille`, `?outline=0`, …).",
+     "signatures": [
+      {
+       "code": "drawnStart(q?: URLSearchParams, on?: StartFor): DrawnSettings"
+      }
+     ]
+    },
+    {
+     "name": "drawnFrom",
+     "kind": "function",
+     "doc": "Kept drawn settings read back over a start: `kept` is an object by style (`{ cel: {…}, blocks: {…} }`), any of it missing or unsound left as it starts.",
+     "signatures": [
+      {
+       "code": "drawnFrom(start: DrawnSettings, kept: unknown): DrawnSettings"
+      }
+     ]
+    },
+    {
+     "name": "valueWords",
+     "kind": "function",
+     "doc": "A setting's value as words, as its slider shows it.",
+     "signatures": [
+      {
+       "code": "valueWords<V>(s: RangeSetting<V>, v: number): string"
+      }
+     ]
+    },
+    {
+     "name": "shownSettings",
+     "kind": "function",
+     "doc": "The settings a page shows for a style (in one of its tabs, where it has them): those whose `when` holds, and no other page's trials.",
+     "signatures": [
+      {
+       "code": "shownSettings<V>(def: StyleDef<V>, value: V, on: Shows, page?: string, tab?: Tab): StyleSetting<V>[]"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "styles-detail",
+   "title": "Detail levels",
+   "group": "styles",
+   "doc": "",
+   "entries": [
+    {
+     "name": "SCENE_DETAIL",
+     "kind": "const",
+     "doc": "The detail levels a scene written as data is cut at: the grid's spacing for each, coarsest first.",
+     "type": "readonly [{ id: \"chunky\"; label: \"Chunky\"; spacing: 0.042 }, { id: \"medium\"; label: \"Medium\"; spacing: 0.03 }, { id: \"fine\"; label: \"Fine\"; spacing: 0.022 }, { id: \"finest\"; label: \"Finest\"; spacing: 0.017 }]"
+    }
+   ]
+  },
+  {
+   "id": "styles-brushLooks",
+   "title": "Brush and ink, as settings",
+   "group": "styles",
+   "doc": "",
+   "entries": [
+    {
+     "name": "LookId",
+     "kind": "type",
+     "doc": "How the blobs are drawn: as they are, or as one of the marks.",
+     "type": "\"blobs\" | \"ascii\" | MarkKind"
+    },
+    {
+     "name": "isMark",
+     "kind": "const",
+     "doc": "Whether a look is one of the marks drawn blob by blob.",
+     "type": "(id: LookId) => id is MarkKind"
+    },
+    {
+     "name": "LOOKS",
+     "kind": "const",
+     "doc": "The drawn looks a page offers, each with its name and a line about it; the plain blobs last.",
+     "type": "{ id: LookId; label: string; note: string }[]"
+    },
+    {
+     "name": "PAPERS",
+     "kind": "const",
+     "doc": "Paper and pen for the drawn looks.",
+     "type": "{ id: string; label: string; paper: readonly [number, number, number]; ink: readonly [number, number, number] }[]"
+    },
+    {
+     "name": "GROUND",
+     "kind": "const",
+     "doc": "What the painted looks stand on: a dark, warm ground, as a primed board.",
+     "type": "\"#26221f\""
+    },
+    {
+     "name": "SCREEN",
+     "kind": "const",
+     "doc": "What the characters stand on, by default: near black, as a terminal.",
+     "type": "readonly [number, number, number]"
+    }
+   ]
+  },
+  {
+   "id": "styles-celLooks",
+   "title": "Cel shading, as settings",
+   "group": "styles",
+   "doc": "",
+   "entries": [
+    {
+     "name": "CEL",
+     "kind": "const",
+     "doc": "The chip beside the drawn looks (brushLooks.ts).",
+     "type": "{ id: \"cel\"; label: string; note: string }"
+    },
+    {
+     "name": "BACKDROPS",
+     "kind": "const",
+     "doc": "What the cel stands on, and the shade and line that go with it.",
+     "type": "{ id: string; label: string; back: string; shade: readonly [number, number, number]; ink: readonly [number, number, number] }[]"
+    },
+    {
+     "name": "lightFrom",
+     "kind": "function",
+     "doc": "The way to a light `turn` degrees round the upright (0 is from +z, 90 from +x, as a view's azimuth) and `height` degrees up.",
+     "signatures": [
+      {
+       "code": "lightFrom(turn: number, height: number): [number, number, number]"
+      }
+     ]
+    },
+    {
+     "name": "CelChoice",
+     "kind": "interface",
+     "doc": "What the page's controls make.",
+     "props": [
+      {
+       "name": "turn",
+       "type": "number",
+       "doc": "Where the light is, in degrees round the subject from the starting view."
+      },
+      {
+       "name": "height",
+       "type": "number",
+       "doc": "How high the light stands, in degrees."
+      },
+      {
+       "name": "tones",
+       "type": "2 | 3",
+       "doc": "How many tones the light is cut into."
+      },
+      {
+       "name": "shadows",
+       "type": "boolean",
+       "doc": "Whether things cast shadows."
+      },
+      {
+       "name": "smooth",
+       "type": "number",
+       "doc": "How far the light is smoothed over a surface before it is cut, in pixels."
+      },
+      {
+       "name": "line",
+       "type": "number",
+       "doc": "The outline's width, in CSS pixels; 0 is none."
+      },
+      {
+       "name": "backdrop",
+       "type": "string",
+       "doc": "What stands behind, an id of `BACKDROPS`."
+      },
+      {
+       "name": "fills",
+       "type": "number",
+       "doc": "How many colors each part's own are gathered into (`gatherColors`); 0 leaves them as painted."
+      }
+     ]
+    },
+    {
+     "name": "CEL_START",
+     "kind": "const",
+     "doc": "Where cel shading's settings start.",
+     "type": "CelChoice"
+    },
+    {
+     "name": "celLook",
+     "kind": "function",
+     "doc": "The look for the stage.",
+     "signatures": [
+      {
+       "code": "celLook(c: CelChoice): CelLook"
+      }
+     ]
+    },
+    {
+     "name": "FILL_REACH",
+     "kind": "const",
+     "doc": "Flat fills take out speckle finer than this many of a typical blob's size; an eye or an apple a few blobs across stays.",
+     "type": "2.2"
+    },
+    {
+     "name": "NIGHT_SKY",
+     "kind": "const",
+     "doc": "A sky this dark or darker (the mean lightness of its top and bottom, sRGB 0–1) is night, and one this light or lighter is day.",
+     "type": "0.18"
+    },
+    {
+     "name": "DAY_SKY",
+     "kind": "const",
+     "doc": "See `NIGHT_SKY`.",
+     "type": "0.42"
+    },
+    {
+     "name": "MOONLIGHT",
+     "kind": "const",
+     "doc": "What a night's light multiplies every tone by (linear): dim and blue, as moonlight is painted.",
+     "type": "readonly [number, number, number]"
+    },
+    {
+     "name": "nightOf",
+     "kind": "function",
+     "doc": "How much a sky (top and bottom, sRGB 0–255) is a night's: 0 by day, 1 at night, between at dusk.",
+     "signatures": [
+      {
+       "code": "nightOf(sky: readonly [readonly number[], readonly number[]]): number"
+      }
+     ]
+    },
+    {
+     "name": "nightLight",
+     "kind": "function",
+     "doc": "What cel shading's tones are multiplied by under a sky that much a night's (`CelLook.ambient`): nothing by day, `MOONLIGHT` at night.",
+     "signatures": [
+      {
+       "code": "nightLight(night: number): [number, number, number]"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "styles-blockLooks",
+   "title": "Blocks, as settings",
+   "group": "styles",
+   "doc": "",
+   "entries": [
+    {
+     "name": "BLOCKS",
+     "kind": "const",
+     "doc": "The chip beside the drawn looks (brushLooks.ts).",
+     "type": "{ id: \"blocks\"; label: string; note: string }"
+    },
+    {
+     "name": "BlockChoice",
+     "kind": "interface",
+     "doc": "What the page's controls make.",
+     "props": [
+      {
+       "name": "size",
+       "type": "number",
+       "doc": "A block's side, in cells of the grid the subject was cut on."
+      },
+      {
+       "name": "turn",
+       "type": "number",
+       "doc": "Where the light is, in degrees round the subject from the starting view."
+      },
+      {
+       "name": "height",
+       "type": "number",
+       "doc": "How high the light stands, in degrees."
+      },
+      {
+       "name": "shadows",
+       "type": "boolean",
+       "doc": "Whether blocks cast shadows on each other."
+      },
+      {
+       "name": "corners",
+       "type": "number",
+       "doc": "How dark the corners where blocks meet are, 0 to 1."
+      },
+      {
+       "name": "vary",
+       "type": "number",
+       "doc": "How much a block's color differs from the next, 0 to 1."
+      },
+      {
+       "name": "edge",
+       "type": "number",
+       "doc": "How strong the line round each face is, 0 to 1."
+      },
+      {
+       "name": "backdrop",
+       "type": "string",
+       "doc": "What stands behind: 'scene' for the subject's own sky, or a plain color (`BLOCK_GROUNDS`); '' is the subject's own sky where it has one, else daylight."
+      },
+      {
+       "name": "water",
+       "type": "\"blobs\" | \"blocks\"",
+       "doc": "A subject's water: columns of blocks that rise and fall, or the blobs it is among the cubes."
+      },
+      {
+       "name": "weather",
+       "type": "\"blobs\" | \"blocks\"",
+       "doc": "Weather over the subject (clouds, rain, snow): cubes as the scene is, or the soft blobs it is in the other styles."
+      },
+      {
+       "name": "swell",
+       "type": "number",
+       "doc": "How many times higher than it stands a ripple is drawn as blocks."
+      }
+     ]
+    },
+    {
+     "name": "BLOCK_START",
+     "kind": "const",
+     "doc": "Where the Blocks style's settings start.",
+     "type": "BlockChoice"
+    },
+    {
+     "name": "BLOCK_GROUNDS",
+     "kind": "const",
+     "doc": "What to stand in front of when it is not the subject's own sky: daylight, or a plain color. The time of day is the\nscene's own setting (timeOfDay.ts), not this look's: it reaches here as the subject's sky and the stage's light.",
+     "type": "{ id: string; label: string; back: string }[]"
+    },
+    {
+     "name": "BlockBack",
+     "kind": "interface",
+     "doc": "What a choice of backdrop comes to: what goes behind the canvas and what light it gives (none is day's).",
+     "props": [
+      {
+       "name": "id",
+       "type": "string",
+       "doc": "Which backdrop it is."
+      },
+      {
+       "name": "back",
+       "type": "string",
+       "doc": "What goes behind the canvas, as CSS."
+      },
+      {
+       "name": "light",
+       "optional": true,
+       "type": "readonly [number, number, number]",
+       "doc": "The light it gives; day's when left out."
+      }
+     ]
+    },
+    {
+     "name": "blockBack",
+     "kind": "function",
+     "doc": "The backdrop for a choice. `sky` is the subject's own sky as CSS and how much it is a night's (`nightOf`), where it\nhas one: it is what an empty choice means, and under a dark one the light is a night's, unless the page has set a\ntime of day (`timed`), whose light is already the stage's.",
+     "signatures": [
+      {
+       "code": "blockBack(choice: string, sky?: { back: string; night: number }, timed?: boolean): BlockBack"
+      }
+     ]
+    },
+    {
+     "name": "SWELL_MOST",
+     "kind": "const",
+     "doc": "The most a ripple's height is multiplied by.",
+     "type": "16"
+    },
+    {
+     "name": "BLOCK_SIZES",
+     "kind": "const",
+     "doc": "The sizes on offer, in cells of the subject's grid.",
+     "type": "{ min: number; max: number }"
+    },
+    {
+     "name": "BLOCK_SPAN",
+     "kind": "const",
+     "doc": "A subject cut on no grid gets blocks as if its longest side were this many cells.",
+     "type": "96"
+    },
+    {
+     "name": "gridOf",
+     "kind": "function",
+     "doc": "The side of one cell for a subject: the grid it was cut on, or a share of its longest side.",
+     "signatures": [
+      {
+       "code": "gridOf(spacing: number | undefined, centers: ArrayLike<number>, count: number): number"
+      }
+     ]
+    },
+    {
+     "name": "blockLook",
+     "kind": "function",
+     "doc": "The look for the stage: `grid` is one cell's side, `azimuth` the starting view's turn, `ambient` a night's light.",
+     "signatures": [
+      {
+       "code": "blockLook(c: BlockChoice, grid: number, azimuth?: number, ambient?: readonly [number, number, number]): BlockLook"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "styles-neonLooks",
+   "title": "Neon, as settings",
+   "group": "styles",
+   "doc": "",
+   "entries": [
+    {
+     "name": "NEON",
+     "kind": "const",
+     "doc": "The chip beside the drawn looks (brushLooks.ts).",
+     "type": "{ id: \"neon\"; label: string; note: string }"
+    },
+    {
+     "name": "NEON_GROUND",
+     "kind": "const",
+     "doc": "What neon stands on: near black, a little violet, as a night street.",
+     "type": "\"#06050b\""
+    },
+    {
+     "name": "NEON_SETS",
+     "kind": "const",
+     "doc": "The tubes' colors: each thing's own at full strength, or a set dealt out part by part (sRGB 0–1).",
+     "type": "{ id: string; label: string; colors?: readonly (readonly [number, number, number])[] }[]"
+    },
+    {
+     "name": "NEON_PACES",
+     "kind": "const",
+     "doc": "How fast the light runs: the seconds a pulse takes to come round again, about (0 holds it still).",
+     "type": "{ id: string; label: string; period: number }[]"
+    },
+    {
+     "name": "NeonChoice",
+     "kind": "interface",
+     "doc": "What the page's controls make.",
+     "props": [
+      {
+       "name": "line",
+       "type": "number",
+       "doc": "A tube's width, in CSS pixels."
+      },
+      {
+       "name": "glow",
+       "type": "number",
+       "doc": "How strongly the tubes' light spreads."
+      },
+      {
+       "name": "body",
+       "type": "number",
+       "doc": "How much of its own color a body keeps in the dark, 0 to 1."
+      },
+      {
+       "name": "set",
+       "type": "string",
+       "doc": "The tubes' colors, an id of `NEON_SETS`."
+      },
+      {
+       "name": "pace",
+       "type": "string",
+       "doc": "How fast the light runs, an id of `NEON_PACES`."
+      }
+     ]
+    },
+    {
+     "name": "NEON_START",
+     "kind": "const",
+     "doc": "Where neon's settings start.",
+     "type": "NeonChoice"
+    },
+    {
+     "name": "periodIn",
+     "kind": "function",
+     "doc": "The period nearest `about` seconds that goes a whole number of times into a loop of `loop` seconds, so a recorded\nloop joins up; `about` itself where nothing loops.",
+     "signatures": [
+      {
+       "code": "periodIn(about: number, loop?: number): number"
+      }
+     ]
+    },
+    {
+     "name": "neonLook",
+     "kind": "function",
+     "doc": "The look for the stage. Under reduced motion the light holds still.",
+     "signatures": [
+      {
+       "code": "neonLook(c: NeonChoice, loop?: number, still?: boolean): NeonLook"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "styles-glassLooks",
+   "title": "Stained glass, as settings",
+   "group": "styles",
+   "doc": "",
+   "entries": [
+    {
+     "name": "GLASS",
+     "kind": "const",
+     "doc": "The chip beside the drawn looks (brushLooks.ts).",
+     "type": "{ id: \"glass\"; label: string; note: string }"
+    },
+    {
+     "name": "GLASS_GROUND",
+     "kind": "const",
+     "doc": "What shows before the window is drawn: the lead's own color.",
+     "type": "\"#121010\""
+    },
+    {
+     "name": "GLASS_FILLS",
+     "kind": "const",
+     "doc": "How many flat colors each part's own are gathered into (`gatherColors`) before it is glazed.",
+     "type": "2"
+    },
+    {
+     "name": "GlassChoice",
+     "kind": "interface",
+     "doc": "What the page's controls make.",
+     "props": [
+      {
+       "name": "pane",
+       "type": "number",
+       "doc": "A pane's size, as a share of the whole scene."
+      },
+      {
+       "name": "lead",
+       "type": "number",
+       "doc": "The lead's width, in CSS pixels."
+      },
+      {
+       "name": "shine",
+       "type": "number",
+       "doc": "How strong the light behind the window is, 0 to 1."
+      },
+      {
+       "name": "vary",
+       "type": "number",
+       "doc": "How much one pane's glass differs from the next, 0 to 1."
+      }
+     ]
+    },
+    {
+     "name": "GLASS_START",
+     "kind": "const",
+     "doc": "Where stained glass's settings start.",
+     "type": "GlassChoice"
+    },
+    {
+     "name": "glassLook",
+     "kind": "function",
+     "doc": "The look for the stage; `sky` is the subject's own, top and bottom (sRGB 0–255), where it has one.",
+     "signatures": [
+      {
+       "code": "glassLook(c: GlassChoice, sky?: readonly [readonly number[], readonly number[]]): GlassLook"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "styles-washLooks",
+   "title": "Watercolor, as settings",
+   "group": "styles",
+   "doc": "",
+   "entries": [
+    {
+     "name": "WASH",
+     "kind": "const",
+     "doc": "The chip beside the drawn looks (brushLooks.ts).",
+     "type": "{ id: \"watercolor\"; label: string; note: string }"
+    },
+    {
+     "name": "WASH_PAPERS",
+     "kind": "const",
+     "doc": "The papers a wash can be laid on (sRGB 0–1). All light: paint only darkens what is under it.",
+     "type": "{ id: string; label: string; paper: readonly [number, number, number] }[]"
+    },
+    {
+     "name": "WashChoice",
+     "kind": "interface",
+     "doc": "What the page's controls make.",
+     "props": [
+      {
+       "name": "bleed",
+       "type": "number",
+       "doc": "How far a wash's edge wanders over the paper, in CSS pixels."
+      },
+      {
+       "name": "pool",
+       "type": "number",
+       "doc": "How much darker paint gathers where a wash ends, 0 to 1."
+      },
+      {
+       "name": "grain",
+       "type": "number",
+       "doc": "How much the paper's tooth shows, 0 to 1."
+      },
+      {
+       "name": "strength",
+       "type": "number",
+       "doc": "How much paint is laid on, 0 to 1."
+      },
+      {
+       "name": "pencil",
+       "type": "number",
+       "doc": "How strong the pencil line is, 0 for none."
+      },
+      {
+       "name": "paper",
+       "type": "string",
+       "doc": "The paper, an id of `WASH_PAPERS`."
+      }
+     ]
+    },
+    {
+     "name": "WASH_START",
+     "kind": "const",
+     "doc": "Where watercolor's settings start.",
+     "type": "WashChoice"
+    },
+    {
+     "name": "washGround",
+     "kind": "const",
+     "doc": "The color to put behind the canvas before the paper is drawn.",
+     "type": "(c: WashChoice) => string"
+    },
+    {
+     "name": "WASH_SKY_COLORS",
+     "kind": "const",
+     "doc": "The wash behind a subject with no sky of its own, top and bottom (sRGB 0–1): a pale blue going warm toward the\nground, so the paper still has a painted sky on it (Matt, 2026-11-22: bare paper read as no background at all).",
+     "type": "readonly [readonly [number, number, number], readonly [number, number, number]]"
+    },
+    {
+     "name": "washLook",
+     "kind": "function",
+     "doc": "The look for the stage; `sky` is the subject's own, top and bottom (sRGB 0–255), or `WASH_SKY_COLORS` where it has none.",
+     "signatures": [
+      {
+       "code": "washLook(c: WashChoice, sky?: readonly [readonly number[], readonly number[]]): WashLook"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "styles-glitchLooks",
+   "title": "Tech glitch, as settings",
+   "group": "styles",
+   "doc": "",
+   "entries": [
+    {
+     "name": "GLITCH",
+     "kind": "const",
+     "doc": "The chip in the Style tab, after pixel art: it is pixel art with bursts of corruption laid on.",
+     "type": "{ id: \"glitch\"; label: string; note: string }"
+    },
+    {
+     "name": "GlitchChoice",
+     "kind": "interface",
+     "doc": "What the page's controls make.",
+     "props": [
+      {
+       "name": "amount",
+       "type": "number",
+       "doc": "How often bursts come, 0 to 1."
+      },
+      {
+       "name": "strength",
+       "type": "number",
+       "doc": "How hard a burst breaks the picture, 0 to 1."
+      },
+      {
+       "name": "jitter",
+       "type": "boolean",
+       "doc": "Whether bands of rows slide sideways."
+      },
+      {
+       "name": "split",
+       "type": "boolean",
+       "doc": "Whether red and blue are read to either side."
+      },
+      {
+       "name": "blocks",
+       "type": "boolean",
+       "doc": "Whether blocks are taken from elsewhere in the picture."
+      },
+      {
+       "name": "pace",
+       "type": "number",
+       "doc": "Steps a second."
+      },
+      {
+       "name": "seed",
+       "type": "number",
+       "doc": "Which run of bursts."
+      }
+     ]
+    },
+    {
+     "name": "GLITCH_START",
+     "kind": "const",
+     "doc": "Where tech glitch's settings start.",
+     "type": "GlitchChoice"
+    },
+    {
+     "name": "GLITCH_AMOUNTS",
+     "kind": "const",
+     "doc": "How often bursts come, by name.",
+     "type": "{ id: string; label: string; amount: number }[]"
+    },
+    {
+     "name": "GLITCH_PACE_CHOICES",
+     "kind": "const",
+     "doc": "The steps a second the page offers.",
+     "type": "readonly [8, 12, 20]"
+    },
+    {
+     "name": "glitchLook",
+     "kind": "const",
+     "doc": "The look for the stage. A scene's loop keeps it joined up; under reduced motion it never bursts.",
+     "type": "(c: GlitchChoice, loop?: number, still?: boolean) => GlitchLook"
     }
    ]
   },

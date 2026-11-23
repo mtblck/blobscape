@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { STYLES } from '../diorama/styles.ts'
-import { ASCII, BLOCKS_DEF, CATALOG, CEL_DEF, MARKS, PIXEL, SCENE, drawnFrom, drawnStart, fromAddress, keysOf, sceneStart, settingsFrom, shownSettings, valueWords, type RangeSetting, type Setting, type StyleDef } from './catalog.ts'
+import { ASCII, BLOCKS_DEF, CATALOG, CEL_DEF, MARKS, PIXEL, SCENE, drawnFrom, drawnStart, fromAddress, keysOf, sceneStart, settingsFrom, shownSettings, valueWords, type RangeSetting, type StyleSetting, type StyleDef } from './catalog.ts'
 
 const defs = [...Object.values(CATALOG), SCENE] as unknown as StyleDef<Record<string, unknown>>[]
 
@@ -17,7 +17,7 @@ test('every setting is one of its style\'s values, starts sound, and no value is
     const keys = d.settings.map((s) => s.key)
     assert.deepEqual([...keys].sort(), Object.keys(d.start).sort(), `${d.id}: settings and start differ`)
     assert.equal(new Set(keys).size, keys.length, `${d.id}: a setting twice`)
-    for (const s of d.settings as Setting<Record<string, unknown>>[]) {
+    for (const s of d.settings as StyleSetting<Record<string, unknown>>[]) {
       const v = d.start[s.key]
       if (s.kind === 'range') assert.ok(typeof v === 'number' && v >= s.min && v <= s.max && s.step > 0, `${d.id}.${s.key} starts outside its range`)
       else if (s.kind === 'choice') assert.ok(s.open || v === '' || s.options.some((o) => o.id === v), `${d.id}.${s.key} starts on no choice`)
@@ -30,7 +30,7 @@ test('every setting is one of its style\'s values, starts sound, and no value is
 
 test('no two settings a style reads share a name in the address', () => {
   for (const s of STYLES) {
-    const names = keysOf(s.id).flatMap((k) => (CATALOG[k].settings as readonly Setting<never>[]).map((x) => x.address).filter(Boolean))
+    const names = keysOf(s.id).flatMap((k) => (CATALOG[k].settings as readonly StyleSetting<never>[]).map((x) => x.address).filter(Boolean))
     assert.equal(new Set(names).size, names.length, `${s.id}: ${names.join()}`)
   }
 })
