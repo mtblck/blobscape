@@ -5,15 +5,16 @@ import { BLOCKS } from './blockLooks.ts'
 import { NEON } from './neonLooks.ts'
 import { GLASS } from './glassLooks.ts'
 import { WASH } from './washLooks.ts'
+import { KNIT } from './knitLooks.ts'
 import { GLITCH } from './glitchLooks.ts'
 
 const PIXEL = { id: 'pixel' as const, label: 'Pixel art', note: 'Drawn small, snapped to a palette and scaled up in whole pixels.' }
 
 /** How a scene is drawn: as pixel art (plain or glitching), or as one of Brush and Ink's looks. */
-export type Style = typeof PIXEL.id | typeof GLITCH.id | typeof CEL.id | typeof BLOCKS.id | typeof NEON.id | typeof GLASS.id | typeof WASH.id | (typeof LOOKS)[number]['id']
+export type Style = typeof PIXEL.id | typeof GLITCH.id | typeof CEL.id | typeof BLOCKS.id | typeof NEON.id | typeof GLASS.id | typeof WASH.id | typeof KNIT.id | (typeof LOOKS)[number]['id']
 
 /** Pixel art first, then tech glitch (pixel art too), then the looks in Brush and Ink's own order (the plain blobs last). */
-export const STYLES: { id: Style; label: string; note: string }[] = [PIXEL, GLITCH, ...LOOKS.slice(0, -1), CEL, BLOCKS, NEON, GLASS, WASH, LOOKS[LOOKS.length - 1]]
+export const STYLES: { id: Style; label: string; note: string }[] = [PIXEL, GLITCH, ...LOOKS.slice(0, -1), CEL, BLOCKS, NEON, GLASS, WASH, KNIT, LOOKS[LOOKS.length - 1]]
 
 /** The style an address asks for (`?style=oil`), or pixel art. */
 export const styleAsked = (asked: string | null): Style => STYLES.find((s) => s.id === asked)?.id ?? 'pixel'
@@ -25,11 +26,12 @@ export function styleWords(style: Style): string {
   if (style === 'blobs') return 'as blobs'
   if (style === 'blocks') return 'as blocks'
   if (style === 'ascii') return 'as a grid of characters'
+  if (style === 'knit') return 'as knitting'
   return `in ${STYLES.find((s) => s.id === style)!.label.toLowerCase()}`
 }
 
 /** Whether a style is drawn as pixel art underneath (pixel mode, its palette and finish): pixel art itself and tech glitch. */
 export const isPixelStyle = (style: Style): style is 'pixel' | 'glitch' => style === 'pixel' || style === 'glitch'
 
-/** Whether a style lights the scene itself, so the scene is cut with no light baked in: cel shading, neon, stained glass and blocks. */
-export const lightsItself = (style: Style | undefined): boolean => style === 'cel' || style === 'neon' || style === 'glass' || style === 'blocks'
+/** Whether a style lights the scene itself, so the scene is cut with no light baked in: cel shading, neon, stained glass, blocks and knitting (which wants each thing in its own flat colors). */
+export const lightsItself = (style: Style | undefined): boolean => style === 'cel' || style === 'neon' || style === 'glass' || style === 'blocks' || style === 'knit'

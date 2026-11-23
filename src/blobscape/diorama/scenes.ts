@@ -32,6 +32,7 @@ import { CAVE, CAVE_PROJECT } from './scenes/cave.ts'
 import { CANYON, CANYON_PROJECT } from './scenes/canyon.ts'
 import { CABIN, CABIN_PROJECT } from './scenes/cabin.ts'
 import { KOI_PROJECT } from './scenes/koi.ts'
+import { ORNAMENT_PROJECT, PRESENTS_PROJECT, TREE_PROJECT } from '../props/christmas.ts'
 import { madeProp, madeTags } from '../props/index.ts'
 import { composeScene } from '../../splat-engine/compose.ts'
 import type { SceneProject } from '../../splat-engine/project.ts'
@@ -317,6 +318,9 @@ export const DIORAMAS: Diorama[] = [
   described('whales', WHALES, 'A pod of whales swimming through space, a mother and two calves with stars on their backs, their tails and flippers beating slowly, past a ringed planet and its moon, banks of nebula, a far sun, tumbling rocks and stardust streaming by', { project: WHALES_PROJECT }),
   described('turkey', TURKEY, 'A giant turkey chasing a cook in an apron and chef’s hat down a country road in the fall, past a rail fence, trees in fall color, pumpkins, a mailbox and a billboard, with dust at their heels, loose feathers and falling leaves', { project: TURKEY_PROJECT }),
   described('henge', HENGE, 'A ring of standing stones at night where a magic circle flares to life, sparks gather into a witch in a white robe and a tall white hat, who draws a wand, waves it once and vanishes in a shower of sparks', { project: HENGE_PROJECT }),
+  described('christmas-tree', composeScene(TREE_PROJECT, madeProp), 'A Christmas tree on a snowy knoll at night, hung with garlands and baubles, its lights twinkling in turn under a gold star', { project: TREE_PROJECT }),
+  described('ornament', composeScene(ORNAMENT_PROJECT, madeProp), 'A big striped Christmas ornament swinging gently from a candy cane hook on a snowy knoll at night', { project: ORNAMENT_PROJECT }),
+  described('presents', composeScene(PRESENTS_PROJECT, madeProp), 'A Christmas tree on a snowy knoll with wrapped presents round its foot, red, green and blue with ribbons and bows, as snow falls', { project: PRESENTS_PROJECT, weather: 'snow' }),
   FOX_MEADOW,
   SKY_FISHING,
 ]

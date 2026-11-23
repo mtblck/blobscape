@@ -10,15 +10,16 @@ import { GROUND, LOOKS, PAPERS, SCREEN, css, isMark, type LookId } from './brush
 import { NEON, NEON_GROUND, neonLook } from './neonLooks.ts'
 import { GLASS, GLASS_FILLS, GLASS_GROUND, glassLook } from './glassLooks.ts'
 import { WASH, washGround, washLook } from './washLooks.ts'
+import { KNIT, knitGround, knitLook } from './knitLooks.ts'
 import { BLOCKS, BLOCK_GROUNDS, blockBack, blockLook, gridOf } from './blockLooks.ts'
 import type { TimeOfDay } from './timeOfDay.ts'
-import { ASCII, BLOCKS_DEF, CEL_DEF, GLASS_DEF, MARKS, NEON_DEF, WASH_DEF, drawnStart, type DrawnSettings, type Shows } from './styles/catalog.ts'
+import { ASCII, BLOCKS_DEF, CEL_DEF, GLASS_DEF, KNIT_DEF, MARKS, NEON_DEF, WASH_DEF, drawnStart, type DrawnSettings, type Shows } from './styles/catalog.ts'
 import { SettingsControls } from './styles/SettingsControls.tsx'
 import { BACKDROPS, CEL, CEL_START, FILL_REACH, celLook, nightLight, nightOf } from './celLooks.ts'
 
 /** Every drawn look a page can offer: the marks, ASCII, cel shading, neon, stained glass, watercolor, and the plain blobs. */
-export type Look = LookId | typeof CEL.id | typeof BLOCKS.id | typeof NEON.id | typeof GLASS.id | typeof WASH.id
-export const ALL_LOOKS: { id: Look; label: string; note: string }[] = [...LOOKS.slice(0, -1), CEL, BLOCKS, NEON, GLASS, WASH, LOOKS[LOOKS.length - 1]]
+export type Look = LookId | typeof CEL.id | typeof BLOCKS.id | typeof NEON.id | typeof GLASS.id | typeof WASH.id | typeof KNIT.id
+export const ALL_LOOKS: { id: Look; label: string; note: string }[] = [...LOOKS.slice(0, -1), CEL, BLOCKS, NEON, GLASS, WASH, KNIT, LOOKS[LOOKS.length - 1]]
 /** The looks that light the blobs themselves, and so want them built with no light baked in (`unlit`). */
 export const wantsPlain = (look: Look | undefined) => lightsItself(look)
 
@@ -76,7 +77,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   // the settings are the page's to hold (so its saved scenes and links keep them) or, where it holds none, this hook's
   const mine = useState<DrawnSettings>(() => drawnStart(params(), { coarse: on.light }))
   const [drawn, setDrawn] = kept ?? mine
-  const { cel, neon, glass, watercolor: wash, blocks: block, marks: mk, ascii: asc } = drawn
+  const { cel, neon, glass, watercolor: wash, blocks: block, marks: mk, ascii: asc, knit } = drawn
   const change = <K extends keyof DrawnSettings>(key: K) => (c: Partial<DrawnSettings[K]>) => setDrawn((d) => ({ ...d, [key]: { ...d[key], ...c } }))
   // a time of day stands the blocks' sun at its own height; the slider moves it from there
   const timeId = on.time?.id, timeHeight = on.time?.height
@@ -101,7 +102,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   const night = inScene ? skyDark : 0
 
   const sheet = PAPERS.find((p) => p.id === paper)!
-  const marks = useMemo<MarkLook | undefined>(() => (look && look !== 'cel' && look !== 'blocks' && look !== 'neon' && look !== 'glass' && look !== 'watercolor' && isMark(look) ? { kind: look, size, ink: sheet.ink, paper: sheet.paper, soft } : undefined), [look, size, sheet, soft])
+  const marks = useMemo<MarkLook | undefined>(() => (look && look !== 'cel' && look !== 'blocks' && look !== 'neon' && look !== 'glass' && look !== 'watercolor' && look !== 'knit' && isMark(look) ? { kind: look, size, ink: sheet.ink, paper: sheet.paper, soft } : undefined), [look, size, sheet, soft])
   useEffect(() => { stage?.setMarks(marks) }, [stage, marks, actor])
   const ascii = look === 'ascii'
   // off screen a frame is drawn only when asked for, and must not depend on the one before (`?steady=` says otherwise, for the checks)
@@ -122,6 +123,8 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   const painted = look === 'watercolor'
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { stage?.setWash(painted ? washLook(wash, sky) : undefined) }, [stage, painted, wash, skyKey])
+  const knitted = look === 'knit'
+  useEffect(() => { stage?.setKnit(knitted ? knitLook(knit, held) : undefined) }, [stage, knitted, knit, held])
   const blocky = look === 'blocks'
   const blocksUp = useRef(false)
   // blocks stand in front of the subject's own sky, where it has one (a night's light under a dark one, unless the
@@ -142,7 +145,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
     return () => clearTimeout(id)
   }, [stage, blocky, actor, plain, block, spacing, azimuth, blockTint])
   useEffect(() => () => stage?.setBlocks(), [stage])
-  const outline = !!look && !ascii && !lit && !glazed && !painted && !blocky && (outlined ?? (look === 'ink' || look === 'hatch' || look === 'stipple' || look === 'cel'))
+  const outline = !!look && !ascii && !lit && !glazed && !painted && !knitted && !blocky && (outlined ?? (look === 'ink' || look === 'hatch' || look === 'stipple' || look === 'cel'))
   const { pixelCel } = on
   useEffect(() => { stage?.setCel(!look && pixelCel ? { ...pixelCel, ...(light ? { shadowSize: 1024, shadowEvery: offscreen ? 1 : 2 } : {}) } : look === 'cel' ? { ...celLook({ ...cel, backdrop: celBase, turn: cel.turn + azimuth, line: outline ? pen : 0 }), ambient: timeId ? undefined : nightLight(night), ...(light ? { shadowSize: 1024, shadowEvery: offscreen ? 1 : 2 } : {}) } : undefined) }, [stage, look, cel, celBase, night, timeId, outline, pen, azimuth, light, offscreen, pixelCel])
   // flat fills: each part's colors gathered into a few, shown in place of the blobs' own (which stay as they were)
@@ -162,7 +165,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   // paint covers its ground, so a subject with a sky of its own stands in front of that
   const isPaint = look === 'gouache' || look === 'oil'
   const backdrop = BACKDROPS.find((b) => b.id === celBase) ?? BACKDROPS[0]
-  const ground = !look || look === 'blobs' ? undefined : look === 'cel' ? (inScene ? skyBack.back : backdrop.back) : blocky ? blockBehind.back : lit ? NEON_GROUND : glazed ? GLASS_GROUND : painted ? washGround(wash) : ascii ? css(own ? SCREEN : sheet.paper) : drawnOn ? css(sheet.paper) : skyBack && isPaint ? skyBack.back : GROUND
+  const ground = !look || look === 'blobs' ? undefined : look === 'cel' ? (inScene ? skyBack.back : backdrop.back) : blocky ? blockBehind.back : lit ? NEON_GROUND : glazed ? GLASS_GROUND : painted ? washGround(wash) : knitted ? knitGround(knit) : ascii ? css(own ? SCREEN : sheet.paper) : drawnOn ? css(sheet.paper) : skyBack && isPaint ? skyBack.back : GROUND
 
   const shows: Shows = { style: look ?? 'blobs', water: on.water, weather: on.weather }
   const controls = !look ? null : (
@@ -192,7 +195,12 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
             <SettingsControls def={WASH_DEF} value={wash} onChange={change('watercolor')} on={shows} />
           </div>
         )}
-        {look !== 'cel' && !blocky && !lit && !glazed && !painted && !ascii && <SettingsControls def={MARKS} value={mk} onChange={change('marks')} on={shows} />}
+        {knitted && (
+          <div className="space-y-4" data-testid="brush-knit">
+            <SettingsControls def={KNIT_DEF} value={knit} onChange={change('knit')} on={shows} />
+          </div>
+        )}
+        {look !== 'cel' && !blocky && !lit && !glazed && !painted && !knitted && !ascii && <SettingsControls def={MARKS} value={mk} onChange={change('marks')} on={shows} />}
         {ascii && <SettingsControls def={ASCII} value={asc} onChange={change('ascii')} on={shows} />}
         {ascii && (
           <div>

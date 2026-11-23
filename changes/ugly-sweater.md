@@ -1,0 +1,1 @@
+Ugly Sweater (not listed yet): Christmas scenes knitted into an ugly Christmas sweater, a grid of yarn stitches fixed on the screen with bands of stars, zigzags, trees and reindeer round the picture. Knitting is also a style in Diorama and Scene Creator, and three Christmas scenes (a tree, an ornament, presents under the tree) join Diorama.
