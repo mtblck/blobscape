@@ -6,7 +6,7 @@ It is the engine behind [blobscape.dev](https://blobscape.dev/engine/): Splat Cr
 
 > Version 0.x: the API will change between minor versions.
 
-Guides: the [Build with the engine](https://blobscape.dev/lessons/first-creature/) lessons (a creature on bones, a scene written as data, pixel art). Every export: the [docs](https://blobscape.dev/engine/docs/).
+Guides: the [Build with the engine](https://blobscape.dev/lessons/first-creature/) lessons (a creature on bones, a scene written as data, pixel art), and the sections below. Every export: the [docs](https://blobscape.dev/engine/docs/).
 
 ## Install
 
@@ -84,7 +84,7 @@ stage.setPoser((sk, t) => { set(sk, 'tail', X, 0.4 * Math.sin(t * 3)); sk.update
 ```ts
 import { Stage, compileScene, buildVoxels, type SceneDoc } from '@blobscape/engine'
 
-const doc: SceneDoc = { /* see docs/scene-descriptions.md */ }
+const doc: SceneDoc = { /* how to write one: github.com/mtblck/blobscape/blob/main/docs/scene-descriptions.md */ }
 const scene = compileScene(doc)              // checks it, then makes bones, poses and lights
 const stage = await Stage.start(canvas, { lights: true })
 stage.setActor(buildVoxels(scene.spec(0.02)))
@@ -92,6 +92,92 @@ stage.setPoser((sk, t) => { scene.pose(sk, t); stage.setLights(scene.lights(t)) 
 stage.orbit = scene.orbit
 stage.setPixels(scene.look, 4)               // palette, dither, outlines, four screen pixels to one
 ```
+
+## Other looks
+
+Pixel art is one look of several. Each is a call on the stage, and turning one off is the same call with nothing.
+
+```ts
+stage.setMarks({ kind: 'gouache' })          // or 'oil', 'ink', 'hatch', 'stipple'
+stage.setOutline({})                         // a pen line round things and between parts
+stage.setMarks(); stage.setOutline()         // back to soft blobs
+```
+
+`setCel` (cel shading, on a stage started with `lights`), `setNeon`, `setGlass` (stained glass), `setWash` (watercolor), `setBlocks` (cubes on a grid), `setGlyphs` (the picture as characters) and `setGlitch` (bursts of broken signal over pixel art) each take their own look: see [Pixels and sprites](https://blobscape.dev/engine/docs/#part-pixels) in the reference. A look that lights the picture itself (cel shading, neon, stained glass, blocks) wants the scene cut with no light baked in: wrap the cut in `unlit(() => buildVoxels(...))`.
+
+## Water, lava and fire in a scene
+
+A description's `water`, `lava` and `fires` are simulated, not drawn by hand: one whole loop of each is worked out once and then shown for any moment, so a scene still plays from the time alone. Each is an actor of its own beside the scene's.
+
+```ts
+import { SceneWater, SceneFire } from '@blobscape/engine'
+
+const pond = scene.water ? new SceneWater(scene) : undefined          // `water` or `lava` in the description
+const flames = scene.fires.length ? new SceneFire(scene) : undefined  // `fires`
+const extras = [...(pond ? [pond.surface] : []), ...(flames ? [flames.actor] : [])]
+stage.setActor(buildVoxels(scene.spec(0.02)), undefined, extras)
+
+const eye = [0, 1.5, 4]                      // where the camera is: reflections and glints are worked out for it
+stage.setPoser((sk, t) => {
+  scene.pose(sk, t)
+  pond?.ride(sk, t)                          // boats and buoys rock on the water
+  pond?.show(t, eye)
+  if (pond) stage.reshape(pond.surface)
+  flames?.show(t, eye)
+  if (flames) stage.reshape(flames.actor)
+  const lights = scene.lights(t)
+  stage.setLights(flames ? flames.shine(lights, t) : lights)   // a fire's light is as bright as it burns
+})
+```
+
+`Water`, `LavaHeat` and `Fire` are the solvers underneath, for stepping them yourself.
+
+## Lamps, weather and the shared sky
+
+A light, a glowing part or a swarm of specks says when it is lit (`lit: 'dark'`, `'night'`, `'day'` or `'always'`), and `litFor(doc, dark)` gives the description as it stands by day or in the dark, to compile like any other. A description's `heavens` asks for the shared moon, sun, stars and clouds in place of drawing its own.
+
+Weather is numbers, the same for every scene. `skyState` turns a weather, a cloud cover and a wind into a `SkyState`; `SkyEase` mixes from one to the next, so a storm comes on without cutting the scene again.
+
+```ts
+import { skyState, SkyEase, lightUnder, windAt, lightningAt } from '@blobscape/engine'
+
+const sky = new SkyEase()
+sky.set(skyState('thunderstorm'), performance.now() / 1000)
+
+stage.setPoser((sk, t) => {
+  const now = sky.at(performance.now() / 1000)
+  scene.pose(sk, t)
+  scene.blow(sk, t, windAt(now, t, scene.loop))        // what falls slants, what sways leans
+  sk.update()
+  const flash = now.lightning * lightningAt(t, scene.loop)
+  stage.setLights(scene.lights(t), lightUnder(now, flash))
+})
+```
+
+The rain, snow and clouds themselves are three small descriptions from `weatherDocs(view, loop)`: compile each with the scene's own `ground` so drops land on it, add them as extras, and `showWeather` shows the share of them a sky asks for. `skyUnder` and `hazeUnder` give the sky's colors and the haze, `makeSnowCover` and `pileSnow` the snow that lies. `WEATHERS`, `CLOUD_COVERS` and `WINDS` list what there is.
+
+## A scene from a land and props
+
+A scene can be put together instead of written whole: a `SceneProject` names a land and props and says where each stands, and `composeScene` makes one ordinary description of it. Fix a prop and every scene that sets it down has the fix.
+
+```ts
+import { composeScene, splitScene, markedPicks, compileScene, type SceneProject } from '@blobscape/engine'
+
+// any description whose bones are marked `prop: 'Name'` splits into its land and its props
+const { land, props } = splitScene(doc, markedPicks(doc))
+const lantern = props[0]
+
+const project: SceneProject = {
+  kind: 'blobscape-project', version: 1, name: 'Two lanterns', loop: doc.loop, land,
+  props: [
+    { prop: lantern, at: [-0.6, 0, 0], turn: 0, size: 1 },
+    { prop: lantern, at: [0.6, 0, 0.2], turn: 90, size: 0.8, phase: 0.5 },
+  ],
+}
+const both = compileScene(composeScene(project, () => undefined))
+```
+
+Props and lands carry `tags` from one fixed list (`TAGS`): what a thing is, for search, and how it behaves, which the shared recipes act on (a `leafy` prop drops leaves, one that `floats` rides the water). `compileProject` compiles a project apart, a piece at a time, which is what an editor wants.
 
 ## Files
 

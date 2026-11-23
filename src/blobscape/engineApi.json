@@ -18,7 +18,7 @@
   {
    "id": "scenes",
    "title": "Shapes and scenes",
-   "doc": "Scenes written as data and the shapes they are cut from: buildings, rock, plants, worn land and weather, and the sun, moon and sky that light them through a day."
+   "doc": "Scenes written as data and the shapes they are cut from: buildings, rock, plants, worn land and weather, scenes put together from a land and props, the weather, clouds and wind every scene shares, and the sun, moon and sky that light them through a day."
   },
   {
    "id": "pixels",
@@ -28,7 +28,7 @@
   {
    "id": "simulation",
    "title": "Simulation",
-   "doc": "The solvers under cloth, under sand, snow and goo, under the ripples of a pond and under a fire, for when you want to step them yourself."
+   "doc": "The solvers under cloth, under sand, snow and goo, under the ripples of a pond, under lava and under a fire, for when you want to step them yourself."
   },
   {
    "id": "extras",
@@ -4937,6 +4937,849 @@
    ]
   },
   {
+   "id": "project",
+   "title": "Scenes made of a land and props",
+   "group": "scenes",
+   "doc": "Scenes made of props (Scene Creator, docs/scene-editor-plan.md). A **prop** is a scene description that holds one\nthing (a windmill, a sheep, a witch) standing where it stood in the scene it came from, and the point it stands on.\nA **project** is a land (a prop that everything stands on, which keeps the scene's sky, air and water) and props set\ndown on it, each moved, turned about the upright and sized.\n\nA placed prop is cut where it is put, so its baked sun and shade are right for the way it faces, and its moves are\nturned with it. Two ways to cut a project: apart (the land and each prop on their own, so moving one recuts only it:\nwhat an editor wants) and merged (one grid for all, so props cast their baked shadows on the land and cull what they\nstand in: what an export wants). Both are posed and lit by the same functions here.",
+   "entries": [
+    {
+     "name": "PropDoc",
+     "kind": "interface",
+     "doc": "A thing that can be set down in a scene.",
+     "props": [
+      {
+       "name": "name",
+       "type": "string",
+       "doc": "What it is called in a list."
+      },
+      {
+       "name": "doc",
+       "type": "SceneDoc",
+       "doc": "Its description: only its own parts, bones, moves and lights, where they stood in the scene it came from."
+      },
+      {
+       "name": "foot",
+       "type": "Vec3",
+       "doc": "The point it stands on, in the description's own coordinates: what a placement moves, and what it turns about."
+      },
+      {
+       "name": "tags",
+       "optional": true,
+       "type": "(\"tree\" | \"crystal\" | \"night\" | \"plant\" | \"flower\" | \"rock\" | \"building\" | \"wall\" | \"lamp\" | \"farm\" | \"thing\" | \"sign\" | \"boat\" | \"animal\" | \"person\" | \"magic\" | \"grassy\" | \"rocky\" | \"sandy\" | \"snowy\" | \"sea\" | \"pond\" | \"space\" | \"leafy\" | \"evergreen\" | \"floats\")[]",
+       "doc": "What it is and how it behaves, from the fixed list (tags.ts): search finds it by them and the shared recipes act on them."
+      },
+      {
+       "name": "water",
+       "optional": true,
+       "type": "{ rides?: { bone: string; at: Vec3; size: number }[]; wakes?: { bone: string; at: Vec3; r: number; draft?: number }[] }",
+       "doc": "How it meets a land's water, where it is set down in one (`WaterDoc` floats and bodies, naming its own bones):\n`rides` bob and tip on the surface (a boat, a buoy), `wakes` push the water aside as they move through it (a duck,\na fish). Left out on dry land; set down in water, they join the land's water."
+      }
+     ]
+    },
+    {
+     "name": "PropRef",
+     "kind": "type",
+     "doc": "A library prop by its id, or a prop written out in full (an imported one).",
+     "type": "string | PropDoc"
+    },
+    {
+     "name": "Placed",
+     "kind": "interface",
+     "doc": "One prop set down in a project.",
+     "extends": [
+      "Placement"
+     ],
+     "props": [
+      {
+       "name": "prop",
+       "type": "PropRef",
+       "doc": "Which prop it is."
+      },
+      {
+       "name": "still",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Holds still: its own moves are not played."
+      },
+      {
+       "name": "phase",
+       "optional": true,
+       "type": "number",
+       "doc": "Its moves run this share of the loop later (0 to 1), so two of one prop side by side don't sway as one."
+      },
+      {
+       "name": "lit",
+       "optional": true,
+       "type": "\"dark\" | \"always\"",
+       "doc": "Its lamps, where the project has a time of day: 'always' keeps them lit by day, 'dark' has them wait for the dark\nwhatever the project or the land says. Left out, it goes by the project's `light.lit`, then the land's own `lamps`."
+      }
+     ]
+    },
+    {
+     "name": "SceneProject",
+     "kind": "interface",
+     "doc": "A scene made of a land and props: what Scene Creator edits and saves.",
+     "props": [
+      {
+       "name": "kind",
+       "type": "\"blobscape-project\"",
+       "doc": "What says a file is a project."
+      },
+      {
+       "name": "version",
+       "type": "1",
+       "doc": "The format's version."
+      },
+      {
+       "name": "name",
+       "type": "string",
+       "doc": "The scene's name."
+      },
+      {
+       "name": "loop",
+       "type": "number",
+       "doc": "Seconds before everything repeats: every prop's moves are fitted to it."
+      },
+      {
+       "name": "land",
+       "type": "PropRef",
+       "doc": "What everything stands on. It is never moved."
+      },
+      {
+       "name": "props",
+       "type": "Placed[]",
+       "doc": "The props set down on the land."
+      },
+      {
+       "name": "camera",
+       "optional": true,
+       "type": "Orbit",
+       "doc": "Where the view starts; the land's own camera when left out."
+      },
+      {
+       "name": "style",
+       "optional": true,
+       "type": "{ id: string; settings?: Record<string, unknown> }",
+       "doc": "How it is drawn: a style's id (Diorama's `STYLES`) and its settings, kept as the page gives them."
+      },
+      {
+       "name": "light",
+       "optional": true,
+       "type": "ProjectLight",
+       "doc": "The light, sky and air, where they differ from the land's own."
+      }
+     ]
+    },
+    {
+     "name": "ProjectLight",
+     "kind": "interface",
+     "doc": "A project's light, each left out where the land's own stands. The sun is baked into the cut (so a change cuts again)\nunless it is `live`: then everything is cut unlit and the sun, the moon and the sky's own light shine live at the\nhour (`daylight`), with shadows where the device draws them. Lamps are always live, so they move without a cut.",
+     "props": [
+      {
+       "name": "sun",
+       "optional": true,
+       "type": "{ turn: number; height: number }",
+       "doc": "The baked sun: `turn` degrees round from +z (counterclockwise seen from above, as props turn) and `height` degrees up."
+      },
+      {
+       "name": "shade",
+       "optional": true,
+       "type": "number",
+       "doc": "How much light reaches what the sun doesn't: 0 to 1."
+      },
+      {
+       "name": "sky",
+       "optional": true,
+       "type": "[string, string]",
+       "doc": "The sky behind, top and bottom."
+      },
+      {
+       "name": "live",
+       "optional": true,
+       "type": "{ hour: number }",
+       "doc": "The sun live, at this hour of the day (0 to 24)."
+      },
+      {
+       "name": "lit",
+       "optional": true,
+       "type": "\"dark\" | \"always\"",
+       "doc": "Every prop's lamps under a live sun: 'always' keeps them lit by day (a cave, a dungeon), 'dark' has them wait for\nthe dark. Left out, the land's own `lamps` says (a cave's land keeps what is set down in it lit). A prop's own\n`lit` comes first."
+      },
+      {
+       "name": "lamps",
+       "optional": true,
+       "type": "LightDoc[]",
+       "doc": "Lamps the visitor set down, at most `MAX_PROJECT_LAMPS`."
+      },
+      {
+       "name": "glow",
+       "optional": true,
+       "type": "number",
+       "doc": "How strongly glowing things light what is round them and shine in the picture, as Diorama's Glow (0 to 4): the land's own when left out."
+      },
+      {
+       "name": "haze",
+       "optional": true,
+       "type": "number",
+       "doc": "Far things fade into the sky's lower color, total this far past the view's target; 0 is clear air."
+      },
+      {
+       "name": "weather",
+       "optional": true,
+       "type": "\"snow\" | \"leaves\" | \"rain\"",
+       "doc": "Rain or snow falling over the land and lying where it lands, or leaves falling from the leafy props' crowns."
+      },
+      {
+       "name": "recipe",
+       "optional": true,
+       "type": "ProjectWeather",
+       "doc": "A shared weather or cloud cover laid over the scene (skyRecipes.ts: the same recipes every Diorama scene takes),\na wind in place of the weather's own, and whether its clouds float over the scene. Nothing is cut again for it."
+      }
+     ]
+    },
+    {
+     "name": "ProjectWeather",
+     "kind": "interface",
+     "doc": "A project's shared weather (`ProjectLight.recipe`).",
+     "props": [
+      {
+       "name": "weather",
+       "optional": true,
+       "type": "WeatherId",
+       "doc": "A weather, which brings its own clouds and wind."
+      },
+      {
+       "name": "clouds",
+       "optional": true,
+       "type": "CloudId",
+       "doc": "A cloud cover alone, where there is no weather."
+      },
+      {
+       "name": "wind",
+       "optional": true,
+       "type": "WindId",
+       "doc": "A wind in place of the weather's own."
+      },
+      {
+       "name": "overhead",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Whether the clouds float over the scene (left out, they do); without them rain and snow fall in from over the top of the picture."
+      }
+     ]
+    },
+    {
+     "name": "MAX_PROJECT_LAMPS",
+     "kind": "const",
+     "doc": "Most lamps a project may add of its own.",
+     "type": "8"
+    },
+    {
+     "name": "sunFrom",
+     "kind": "const",
+     "doc": "The way toward a sun `turn` degrees round from +z and `height` degrees up.",
+     "type": "(turn: number, height: number) => Vec3"
+    },
+    {
+     "name": "sunOf",
+     "kind": "function",
+     "doc": "A description's sun as a turn and a height, the default `light.from` when it has none.",
+     "signatures": [
+      {
+       "code": "sunOf(from?: Vec3): { turn: number; height: number }"
+      }
+     ]
+    },
+    {
+     "name": "DARK_FROM",
+     "kind": "const",
+     "doc": "How dark the hour must have grown (`daylight`'s `dark`) for lamps that wait for the dark to be lit.",
+     "type": "0.5"
+    },
+    {
+     "name": "projectDark",
+     "kind": "const",
+     "doc": "Whether it is dark in a project: by its live sun's hour. With no live sun there is no time of day, and everything is\nlit as its description has it (undefined).",
+     "type": "(l: ProjectLight | undefined) => boolean | undefined"
+    },
+    {
+     "name": "cutLight",
+     "kind": "const",
+     "doc": "What of a project's light the cut depends on: the lamps, the glow and a live sun's hour change nothing that is cut,\nexcept that the hour says whether it is dark, which lights or puts out every prop's own lamps (`litFor`).",
+     "type": "(l: ProjectLight | undefined) => { sun: { turn: number; height: number } | undefined; shade: number | undefined; sky: [string, string] | undefined; live: boolean; haze: number | undefined; weather: \"leaves\" | \"rain\" | \"snow\" | undefined; dark: boolean | undefined; lit: \"always\" | \"dark\" | undefined } | undefined"
+    },
+    {
+     "name": "litLand",
+     "kind": "function",
+     "doc": "The land's description under a project's light: its sun, shade and sky, unlit for a live sun, with haze and weather\nin its air. Props are cut under the land's light, so they follow it.",
+     "signatures": [
+      {
+       "code": "litLand(doc: SceneDoc, l: ProjectLight | undefined): SceneDoc"
+      }
+     ]
+    },
+    {
+     "name": "AUTUMN",
+     "kind": "const",
+     "doc": "Falling leaves' colors.",
+     "type": "string[]"
+    },
+    {
+     "name": "LEAVES_EACH",
+     "kind": "const",
+     "doc": "How many leaves come down under one tree.",
+     "type": "12"
+    },
+    {
+     "name": "leafy",
+     "kind": "const",
+     "doc": "Whether a prop drops leaves: tagged `leafy` (tags.ts) and not `evergreen`.",
+     "type": "(prop: { tags?: readonly string[] } | undefined) => boolean"
+    },
+    {
+     "name": "leafFall",
+     "kind": "function",
+     "doc": "Where a leafy prop's leaves fall, in its own frame: under its crown (the top half of it, drawn in a little), from the\ncrown's underside down to its foot, so they come from the tree and not from the sky (Matt, 2026-11-22).",
+     "signatures": [
+      {
+       "code": "leafFall(prop: PropDoc): { from: Vec3; to: Vec3; size: number } | undefined"
+      }
+     ]
+    },
+    {
+     "name": "withLeaves",
+     "kind": "function",
+     "doc": "A leafy prop's leaves as a swarm of its own, falling from its crown to its foot, for a project whose weather is leaves.",
+     "signatures": [
+      {
+       "code": "withLeaves(prop: PropDoc, weather: \"snow\" | \"leaves\" | \"rain\" | undefined): PropDoc"
+      }
+     ]
+    },
+    {
+     "name": "MAX_PROPS",
+     "kind": "const",
+     "doc": "Most props in one project: each is an actor of its own while editing, and frames slow down as they are added (#330).",
+     "type": "40"
+    },
+    {
+     "name": "MAX_PROJECT_BONES",
+     "kind": "const",
+     "doc": "Most bones in a merged project: a blob names its bones in a byte.",
+     "type": "255"
+    },
+    {
+     "name": "MAX_PROJECT_BYTES",
+     "kind": "const",
+     "doc": "Most bytes in a project file.",
+     "type": "2000000"
+    },
+    {
+     "name": "SIZE_RANGE",
+     "kind": "const",
+     "doc": "The least and most a prop may be sized.",
+     "type": "[number, number]"
+    },
+    {
+     "name": "Setting",
+     "kind": "type",
+     "doc": "What a prop is cut with that comes from where it stands, not from itself: the scene's sun, cover, camera and sky.",
+     "type": "Pick<VoxelSpec, \"light\" | \"cover\" | \"eye\" | \"sky\">"
+    },
+    {
+     "name": "settingOf",
+     "kind": "const",
+     "doc": "The setting of a land: what its props are cut under.",
+     "type": "(spec: VoxelSpec) => Setting"
+    },
+    {
+     "name": "placedSpec",
+     "kind": "function",
+     "doc": "A prop's cut where it is placed, for a detail of `spacing` in the scene's units (times its description's `grid`). Its bones are named `prefix` + their\nown name (its root bone included). `steps` is the palette to paint in steps of, when the scene asks for that.",
+     "signatures": [
+      {
+       "code": "placedSpec(c: CompiledScene, foot: Vec3, pl: Placement, spacing: number, setting: Setting, options?: { prefix?: string; steps?: Rgb[] }): VoxelSpec"
+      }
+     ]
+    },
+    {
+     "name": "Posable",
+     "kind": "type",
+     "doc": "What `PlacedPoser` plays: bones as they stand where they were written, a pose for a time, and live lights.",
+     "type": "Pick<CompiledScene, \"bones\" | \"pose\" | \"lights\">"
+    },
+    {
+     "name": "PlacedPoser",
+     "kind": "class",
+     "doc": "Poses a placed prop: its description's own pose, played on a skeleton of its own as it was written, then turned as\nthe prop was (each bone's turn as R q R⁻¹, each slide by R and the size), so a sail that spun about z spins about the\nmill's turned axle. `into` says which bone of the target each of the prop's bones is; left out, the same index.",
+     "ctor": [
+      {
+       "code": "new PlacedPoser(c: Posable, foot: Vec3, pl: Placement, still?: boolean)"
+      }
+     ],
+     "props": [
+      {
+       "name": "c",
+       "readonly": true,
+       "type": "Posable",
+       "doc": "The prop's compiled description, or anything else with bones that poses itself (a creature)."
+      }
+     ],
+     "methods": [
+      {
+       "name": "pose",
+       "doc": "Writes the prop's pose for `t` seconds into `sk`. Doesn't call `sk.update()`. With `wind` (how far it carries a\nunit of fall, along the ground, as `windAt` gives it) a description's falling specks and swaying stalks are blown,\nthe way turned into the prop's own.",
+       "signatures": [
+        {
+         "code": "pose(sk: Skeleton, time: number, into?: ArrayLike<number>, wind?: readonly [number, number], level?: number): void"
+        }
+       ]
+      },
+      {
+       "name": "lights",
+       "doc": "The prop's live lights `t` seconds in, where it stands.",
+       "signatures": [
+        {
+         "code": "lights(time: number): PointLight[]"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "PropPick",
+     "kind": "interface",
+     "doc": "Which of a scene's parts make one prop: parts by their place in its list, and every part on the named bones or the bones under them.",
+     "props": [
+      {
+       "name": "name",
+       "type": "string",
+       "doc": "What it is called."
+      },
+      {
+       "name": "parts",
+       "optional": true,
+       "type": "number[]",
+       "doc": "Parts by their place in the scene's list."
+      },
+      {
+       "name": "bones",
+       "optional": true,
+       "type": "string[]",
+       "doc": "Bones whose parts (and their children's) come along."
+      },
+      {
+       "name": "foot",
+       "optional": true,
+       "type": "Vec3",
+       "doc": "The point it stands on; the middle of the bottom of its box when left out."
+      },
+      {
+       "name": "drop",
+       "optional": true,
+       "type": "(\"pass\" | \"during\")[]",
+       "doc": "Moves and lights it leaves behind: `during` drops whatever happens only in part of the loop (a witch who appears\nand goes stands there instead), `pass` drops going by (a billboard Turkey Run slides past stands still)."
+      },
+      {
+       "name": "lights",
+       "optional": true,
+       "type": "number[]",
+       "doc": "The scene's lights it takes, by their place in its list; left out, those its box holds."
+      },
+      {
+       "name": "tags",
+       "optional": true,
+       "type": "(\"tree\" | \"crystal\" | \"night\" | \"plant\" | \"flower\" | \"rock\" | \"building\" | \"wall\" | \"lamp\" | \"farm\" | \"thing\" | \"sign\" | \"boat\" | \"animal\" | \"person\" | \"magic\" | \"grassy\" | \"rocky\" | \"sandy\" | \"snowy\" | \"sea\" | \"pond\" | \"space\" | \"leafy\" | \"evergreen\" | \"floats\")[]",
+       "doc": "Its tags (tags.ts), which go with the prop."
+      }
+     ]
+    },
+    {
+     "name": "pickedParts",
+     "kind": "function",
+     "doc": "The part indices a pick takes from a scene.",
+     "signatures": [
+      {
+       "code": "pickedParts(doc: SceneDoc, pick: PropPick): number[]"
+      }
+     ]
+    },
+    {
+     "name": "markedPicks",
+     "kind": "function",
+     "doc": "The picks a description marks itself: one prop for each bone with a `prop` name, taking what rides on it.",
+     "signatures": [
+      {
+       "code": "markedPicks(doc: SceneDoc): PropPick[]"
+      }
+     ]
+    },
+    {
+     "name": "outsideProps",
+     "kind": "function",
+     "doc": "What in a scene stands outside every prop it marks, each as `where: what`: a part on a bone that is no prop's, a\nlight no prop's box holds. A scene is built from components (each thing a prop of its own, which Scene Creator's\nlibrary then offers), so a new scene leaves only its land outside them: the parts on no bone.",
+     "signatures": [
+      {
+       "code": "outsideProps(doc: SceneDoc): string[]"
+      }
+     ]
+    },
+    {
+     "name": "boxOf",
+     "kind": "function",
+     "doc": "A coarse look at where a description's parts are: the box round all of them.",
+     "signatures": [
+      {
+       "code": "boxOf(doc: SceneDoc): { lo: Vec3; hi: Vec3 }"
+      }
+     ]
+    },
+    {
+     "name": "splitScene",
+     "kind": "function",
+     "doc": "Lifts props out of a scene description and leaves what is left as its land. A light goes with the first prop whose\nbox holds it (a lantern's flame), else stays with the land. A prop takes the scene's palette, light, look and loop\nbut none of its air, water, cover or focus: those belong to the land.",
+     "signatures": [
+      {
+       "code": "splitScene(given: SceneDoc, picks: PropPick[]): { land: PropDoc; props: PropDoc[]; project: SceneProject }"
+      }
+     ]
+    },
+    {
+     "name": "refit",
+     "kind": "function",
+     "doc": "A description fitted to a loop of `loop` seconds: every move and light keeps as near its own pace as a whole number\nof times in the new loop allows (never none), so a prop from a 16 s scene still joins up in a 12 s one.",
+     "signatures": [
+      {
+       "code": "refit(doc: SceneDoc, loop: number): SceneDoc"
+      }
+     ]
+    },
+    {
+     "name": "checkProject",
+     "kind": "function",
+     "doc": "What is wrong with a project, as `where: what`, or nothing. `known` says whether a library id exists. Reads\nanything, so a file from outside can be handed straight to it.",
+     "signatures": [
+      {
+       "code": "checkProject(x: unknown, known: (id: string) => boolean): string[]"
+      }
+     ]
+    },
+    {
+     "name": "readProject",
+     "kind": "function",
+     "doc": "A project file's text read and checked: the project, or what is wrong with it.",
+     "signatures": [
+      {
+       "code": "readProject(text: string, known: (id: string) => boolean): { project?: SceneProject; problems: string[] }"
+      }
+     ]
+    },
+    {
+     "name": "CompiledProject",
+     "kind": "interface",
+     "doc": "A project compiled apart: the land and each prop a scene of its own, with what poses each where it stands.",
+     "props": [
+      {
+       "name": "name",
+       "type": "string",
+       "doc": "The project's name."
+      },
+      {
+       "name": "loop",
+       "type": "number",
+       "doc": "Seconds before everything repeats."
+      },
+      {
+       "name": "land",
+       "type": "{ prop: PropDoc; c: CompiledScene }",
+       "doc": "The land, compiled."
+      },
+      {
+       "name": "props",
+       "type": "{ prop: PropDoc; c: CompiledScene; placed: Placed; poser: PlacedPoser }[]",
+       "doc": "Each prop, compiled, with its placement and the poser that plays its moves where it stands."
+      },
+      {
+       "name": "palette",
+       "type": "Rgb[]",
+       "doc": "The palette for pixel art: the land's colors, then each prop's that the land lacks, joined down to 32."
+      },
+      {
+       "name": "camera",
+       "type": "Orbit",
+       "doc": "Where the view starts."
+      }
+     ]
+    },
+    {
+     "name": "compileProject",
+     "kind": "function",
+     "doc": "Compiles a project apart, the land and each prop on their own, which is what an editor wants: moving one prop\ncuts only it again. `find` gives a library prop by its id. `composeScene` is the other way, one scene for all.",
+     "signatures": [
+      {
+       "code": "compileProject(project: SceneProject, find: (id: string) => PropDoc | undefined): CompiledProject"
+      }
+     ]
+    },
+    {
+     "name": "joinPalettes",
+     "kind": "function",
+     "doc": "One palette for colors from several scenes: the first list's colors first, then the others' that are not already\nthere, and while there are more than 32 the two closest are joined (the first scene's color kept where one is).",
+     "signatures": [
+      {
+       "code": "joinPalettes(lists: string[][]): Rgb[]"
+      }
+     ]
+    },
+    {
+     "name": "landSpec",
+     "kind": "function",
+     "doc": "The land's cut on a grid of `spacing`, painted in `steps` of a palette where given (the land's own choice when left out).",
+     "signatures": [
+      {
+       "code": "landSpec(cp: CompiledProject, spacing: number, steps?: Rgb[]): VoxelSpec"
+      }
+     ]
+    },
+    {
+     "name": "propSpec",
+     "kind": "function",
+     "doc": "Prop `i`'s cut on its own, where it is placed, under the land's sky: an actor of its own while editing.",
+     "signatures": [
+      {
+       "code": "propSpec(cp: CompiledProject, i: number, spacing: number, setting?: Setting, steps?: Rgb[]): VoxelSpec"
+      }
+     ]
+    },
+    {
+     "name": "mergedSpec",
+     "kind": "function",
+     "doc": "The whole project on one grid: the land's bones first (as its own pose expects), then each prop's under them as\n`<i>/<name>`, its root folded into the land's, so what stands still culls and shades what it stands on just as one\nscene would. With it, `mergedBones` maps each prop's bones into this skeleton.",
+     "signatures": [
+      {
+       "code": "mergedSpec(cp: CompiledProject, spacing: number): { spec: VoxelSpec; into: number[][] }"
+      }
+     ]
+    },
+    {
+     "name": "poseMerged",
+     "kind": "function",
+     "doc": "Poses a merged project's one skeleton for `t` seconds: the land, then every prop on its own bones.",
+     "signatures": [
+      {
+       "code": "poseMerged(cp: CompiledProject, into: number[][], sk: Skeleton, t: number): void"
+      }
+     ]
+    },
+    {
+     "name": "poseApart",
+     "kind": "function",
+     "doc": "Poses one prop's own skeleton, cut apart, for `t` seconds. Its place (`Skeleton.place`) is left as it is.",
+     "signatures": [
+      {
+       "code": "poseApart(cp: CompiledProject, i: number, sk: Skeleton, t: number): void"
+      }
+     ]
+    },
+    {
+     "name": "projectLights",
+     "kind": "function",
+     "doc": "Every live light of the project `t` seconds in: the land's, then each prop's, in the order a merged cut's baked lamps follow.",
+     "signatures": [
+      {
+       "code": "projectLights(cp: CompiledProject, t: number): PointLight[]"
+      }
+     ]
+    },
+    {
+     "name": "Placement",
+     "kind": "interface",
+     "doc": "Where a thing is set down: its foot goes to `at`, turned `turn` degrees about the upright (counterclockwise seen from above), `size` times as big.",
+     "props": [
+      {
+       "name": "at",
+       "type": "Vec3",
+       "doc": "Where its foot stands."
+      },
+      {
+       "name": "turn",
+       "type": "number",
+       "doc": "Degrees it is turned about the upright."
+      },
+      {
+       "name": "size",
+       "type": "number",
+       "doc": "How many times its own size it is."
+      }
+     ]
+    },
+    {
+     "name": "Placer",
+     "kind": "interface",
+     "doc": "A placement worked out: the turn as a quaternion and the point maps both ways.",
+     "props": [
+      {
+       "name": "q",
+       "type": "Quat",
+       "doc": "The turn."
+      },
+      {
+       "name": "size",
+       "type": "number",
+       "doc": "How big."
+      },
+      {
+       "name": "same",
+       "type": "boolean",
+       "doc": "Whether it changes nothing."
+      }
+     ],
+     "methods": [
+      {
+       "name": "point",
+       "doc": "A point of the prop's description to where it now stands.",
+       "signatures": [
+        {
+         "code": "point(p: ArrayLike<number>): Vec3"
+        }
+       ]
+      },
+      {
+       "name": "back",
+       "doc": "Back: a point where it stands to the description's.",
+       "signatures": [
+        {
+         "code": "back(p: ArrayLike<number>): Vec3"
+        }
+       ]
+      },
+      {
+       "name": "dir",
+       "doc": "A direction of the description to the way it now points.",
+       "signatures": [
+        {
+         "code": "dir(v: ArrayLike<number>): Vec3"
+        }
+       ]
+      },
+      {
+       "name": "backDir",
+       "doc": "Back: a direction to the description's.",
+       "signatures": [
+        {
+         "code": "backDir(v: ArrayLike<number>): Vec3"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "placer",
+     "kind": "function",
+     "doc": "Works a placement out for a thing whose foot is at `foot` in its own description.",
+     "signatures": [
+      {
+       "code": "placer(foot: ArrayLike<number>, pl: Placement): Placer"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "compose",
+   "title": "A project as one scene",
+   "group": "scenes",
+   "doc": "",
+   "entries": [
+    {
+     "name": "composeScene",
+     "kind": "function",
+     "doc": "A scene written as a land and props set down on it (a `SceneProject`, the same thing Scene Creator saves) made into\none ordinary description, so Diorama, every style, the weather and the water draw it as they draw any scene.\n\nThe props are named, not copied: a scene that sets down the library's stone lantern gets the lantern as the library\nhas it today, so a change to a prop (its light, its sway) reaches every scene that uses it (Matt, 2026-11-21).\n\nThe land comes as it is (its sky, air, water, light, look and camera are the scene's). Each prop's parts keep their\nshapes and paint as written and say where they were set down (`PartDoc.placed`); its bones, moves and lights are\nmoved, turned and sized here, and its bones renamed `<prop><i>/<bone>` so two of one prop never share a name.",
+     "signatures": [
+      {
+       "code": "composeScene(project: SceneProject, find: (id: string) => PropDoc | undefined): SceneDoc"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "tags",
+   "title": "Tags on props and lands",
+   "group": "scenes",
+   "doc": "Tags for props and lands (Matt, 2026-11-22): words from one fixed list, so a search finds a thing by what it is and\nthe shared recipes act on what it is like, rather than guessing from its name. A tag outside the list is a mistake\nthe scene checker names, not a word that quietly does nothing.\n\nThree sorts: a `kind` says what a prop is (search finds it by that), a `land` tag what a land is, and a `quality`\nsays how it behaves, which a recipe acts on.",
+   "entries": [
+    {
+     "name": "TagSort",
+     "kind": "type",
+     "doc": "What sort of tag it is: what a prop is, what a land is, or how a thing behaves.",
+     "type": "\"kind\" | \"land\" | \"quality\""
+    },
+    {
+     "name": "TagInfo",
+     "kind": "interface",
+     "doc": "One tag of the list.",
+     "props": [
+      {
+       "name": "id",
+       "type": "string",
+       "doc": "The word a description writes."
+      },
+      {
+       "name": "sort",
+       "type": "TagSort",
+       "doc": "Which sort it is."
+      },
+      {
+       "name": "means",
+       "type": "string",
+       "doc": "What it means, and for a quality what acts on it."
+      }
+     ]
+    },
+    {
+     "name": "TAGS",
+     "kind": "const",
+     "doc": "Every tag there is, each with what it means. A description may use no other word.",
+     "type": "readonly [{ id: \"tree\"; sort: \"kind\"; means: \"A tree, a trunk with a crown, or what is left of one\" }, { id: \"plant\"; sort: \"kind\"; means: \"A bush, stalk, leaves or a cactus\" }, { id: \"flower\"; sort: \"kind\"; means: \"In flower\" }, { id: \"rock\"; sort: \"kind\"; means: \"Stone: a boulder, slab, post, steps or stonework\" }, { id: \"crystal\"; sort: \"kind\"; means: \"Crystals\" }, { id: \"building\"; sort: \"kind\"; means: \"A building or a large built thing: a mill, a cottage, a jetty, an arch\" }, { id: \"wall\"; sort: \"kind\"; means: \"A wall or a fence\" }, { id: \"lamp\"; sort: \"kind\"; means: \"Gives light: a lantern, a lighthouse, a lamp on a buoy\" }, { id: \"farm\"; sort: \"kind\"; means: \"Of a farm: a haystack, a windmill, sheep, fields\" }, { id: \"thing\"; sort: \"kind\"; means: \"A small made thing: a mailbox\" }, { id: \"sign\"; sort: \"kind\"; means: \"A sign or a billboard\" }, { id: \"boat\"; sort: \"kind\"; means: \"A boat\" }, { id: \"animal\"; sort: \"kind\"; means: \"An animal, a bird, a fish or a dragon\" }, { id: \"person\"; sort: \"kind\"; means: \"A person: the cook, the witch, the elf\" }, { id: \"magic\"; sort: \"kind\"; means: \"Magic: a witch, a spell circle, a dragon\" }, { id: \"grassy\"; sort: \"land\"; means: \"Mostly grass\" }, { id: \"rocky\"; sort: \"land\"; means: \"Mostly bare rock\" }, { id: \"sandy\"; sort: \"land\"; means: \"Sand or desert\" }, { id: \"snowy\"; sort: \"land\"; means: \"Under snow\" }, { id: \"sea\"; sort: \"land\"; means: \"Stands in the sea\" }, { id: \"pond\"; sort: \"land\"; means: \"Has a pond or a pool\" }, { id: \"night\"; sort: \"land\"; means: \"Written as a night scene\" }, { id: \"space\"; sort: \"land\"; means: \"Out in space: no ground, and no time of day or weather\" }, { id: \"leafy\"; sort: \"quality\"; means: \"Drops leaves: under falling leaves it lets them fall from under its crown\" }, { id: \"evergreen\"; sort: \"quality\"; means: \"Keeps its needles or leaves: falling leaves pass it by\" }, { id: \"floats\"; sort: \"quality\"; means: \"Sits on water: no stand-in shadow is laid under it\" }]"
+    },
+    {
+     "name": "Tag",
+     "kind": "type",
+     "doc": "A word of `TAGS`.",
+     "type": "typeof TAGS[number][\"id\"]"
+    },
+    {
+     "name": "isTag",
+     "kind": "const",
+     "doc": "Whether a value is a word of `TAGS`.",
+     "type": "(v: unknown) => v is Tag"
+    },
+    {
+     "name": "tagInfo",
+     "kind": "const",
+     "doc": "What a tag is, or undefined for a word that is not one.",
+     "type": "(id: string) => TagInfo | undefined"
+    },
+    {
+     "name": "tagged",
+     "kind": "const",
+     "doc": "Whether a thing has a tag.",
+     "type": "(thing: { tags?: readonly string[] } | undefined, tag: Tag) => boolean"
+    },
+    {
+     "name": "checkTags",
+     "kind": "function",
+     "doc": "Checks a list of tags, naming each fault as `where: what`.",
+     "signatures": [
+      {
+       "code": "checkTags(v: unknown, at: string, bad: (at: string, what: string) => void): void"
+      }
+     ]
+    }
+   ]
+  },
+  {
    "id": "sceneWater",
    "title": "Water in a scene written as data",
    "group": "scenes",
@@ -5343,6 +6186,863 @@
          "code": "shine(lights: PointLight[], t: number): PointLight[]"
         }
        ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "skyRecipes",
+   "title": "Weather, clouds and wind as recipes",
+   "group": "scenes",
+   "doc": "Weather and cloud cover as recipes (Matt, 2026-11-21: reusable recipes applied to every scene the same way, so a\nchange to rain changes rain everywhere, and a thunderstorm on the campfire is one switch). Pure and tested.\n\nA recipe is a few numbers (`SkyState`): how much rain and snow falls, how much of the sky is cloud, what the light\nis multiplied by, how gray and dark the sky turns, how thick the air is, and whether lightning flashes. Nothing in\nit knows a scene. What is drawn is laid over a scene, never cut into it: the rain, snow and clouds are three small\ndescriptions of their own (`weatherDocs`), compiled against the scene's ground so drops land on it, and the light,\nsky and haze are numbers a page hands the stage each frame. So going from one weather to another is a change of\nnumbers, eased by `SkyEase`, and the scene is never cut again for it.",
+   "entries": [
+    {
+     "name": "WeatherId",
+     "kind": "type",
+     "doc": "A weather of `WEATHERS`.",
+     "type": "\"light-rain\" | \"rain\" | \"heavy-rain\" | \"thunderstorm\" | \"snow\" | \"heavy-snow\" | \"fog\""
+    },
+    {
+     "name": "CloudId",
+     "kind": "type",
+     "doc": "A cloud cover of `CLOUD_COVERS`.",
+     "type": "\"partly\" | \"cloudy\" | \"overcast\""
+    },
+    {
+     "name": "WindId",
+     "kind": "type",
+     "doc": "A wind of `WINDS`.",
+     "type": "\"calm\" | \"breeze\" | \"windy\" | \"gale\""
+    },
+    {
+     "name": "SkyState",
+     "kind": "interface",
+     "doc": "What the sky is doing, as numbers that can be mixed.",
+     "props": [
+      {
+       "name": "rain",
+       "type": "number",
+       "doc": "How much of the rain falls, 0 to 1 (a share of `RAIN_MOST` drops)."
+      },
+      {
+       "name": "snow",
+       "type": "number",
+       "doc": "How much of the snow falls, 0 to 1 (a share of `SNOW_MOST` flakes)."
+      },
+      {
+       "name": "clouds",
+       "type": "number",
+       "doc": "How much of the sky is cloud, 0 to 1 (a share of `CLOUDS` clouds)."
+      },
+      {
+       "name": "light",
+       "type": "Vec3",
+       "doc": "What multiplies everything but the scene's own lamps and what glows (linear)."
+      },
+      {
+       "name": "gray",
+       "type": "number",
+       "doc": "How far the sky's colors turn to an overcast gray, 0 to 1."
+      },
+      {
+       "name": "dark",
+       "type": "number",
+       "doc": "How much darker the sky is drawn, 0 to 1."
+      },
+      {
+       "name": "haze",
+       "type": "number",
+       "doc": "How thick the air is, 0 (the scene's own) to 1 (fog)."
+      },
+      {
+       "name": "lightning",
+       "type": "number",
+       "doc": "How strong the lightning is, 0 for none."
+      },
+      {
+       "name": "wind",
+       "type": "number",
+       "doc": "How hard the wind blows, in levels from 0 (calm: the scene's own) to `WIND_MOST`: it slants what falls and raises waves on water."
+      }
+     ]
+    },
+    {
+     "name": "CLEAR",
+     "kind": "const",
+     "doc": "The sky left as the scene has it.",
+     "type": "SkyState"
+    },
+    {
+     "name": "CloudCover",
+     "kind": "interface",
+     "doc": "A cloud cover: how much of the sky is cloud and what that does to the light and the sky's colors.",
+     "props": [
+      {
+       "name": "id",
+       "type": "CloudId",
+       "doc": "The word an address or a saved scene holds."
+      },
+      {
+       "name": "label",
+       "type": "string",
+       "doc": "Its name as a page shows it."
+      },
+      {
+       "name": "clouds",
+       "type": "number",
+       "doc": "The share of the clouds that are out."
+      },
+      {
+       "name": "light",
+       "type": "Vec3",
+       "doc": "What it multiplies the light by (linear)."
+      },
+      {
+       "name": "gray",
+       "type": "number",
+       "doc": "How far it turns the sky's colors to gray, 0 to 1."
+      },
+      {
+       "name": "dark",
+       "type": "number",
+       "doc": "How much darker it draws the sky, 0 to 1."
+      }
+     ]
+    },
+    {
+     "name": "CLOUD_COVERS",
+     "kind": "const",
+     "doc": "The cloud covers, from a few clouds to a sky full of them.",
+     "type": "CloudCover[]"
+    },
+    {
+     "name": "WeatherRecipe",
+     "kind": "interface",
+     "doc": "A weather as numbers: what falls, how thick the air is, the light, the lightning and the wind it comes with.",
+     "props": [
+      {
+       "name": "id",
+       "type": "WeatherId",
+       "doc": "The word an address or a saved scene holds."
+      },
+      {
+       "name": "label",
+       "type": "string",
+       "doc": "Its name as a page shows it."
+      },
+      {
+       "name": "clouds",
+       "type": "CloudId",
+       "doc": "The least cloud it comes with: rain does not fall from a clear sky."
+      },
+      {
+       "name": "rain",
+       "optional": true,
+       "type": "number",
+       "doc": "How much of the rain falls, 0 to 1."
+      },
+      {
+       "name": "snow",
+       "optional": true,
+       "type": "number",
+       "doc": "How much of the snow falls, 0 to 1."
+      },
+      {
+       "name": "haze",
+       "type": "number",
+       "doc": "How thick it makes the air, 0 to 1 (fog)."
+      },
+      {
+       "name": "light",
+       "optional": true,
+       "type": "Vec3",
+       "doc": "What it multiplies the light by, on top of its clouds'."
+      },
+      {
+       "name": "dark",
+       "optional": true,
+       "type": "number",
+       "doc": "How much darker again it draws the sky."
+      },
+      {
+       "name": "lightning",
+       "optional": true,
+       "type": "number",
+       "doc": "How strong its lightning is; none when left out."
+      },
+      {
+       "name": "wind",
+       "optional": true,
+       "type": "number",
+       "doc": "The least wind it comes with, a level of `WINDS` (Matt, 2026-11-21: water a level rougher under rain, two under heavy rain, three in a thunderstorm)."
+      },
+      {
+       "name": "gloom",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Whether it is gloomy enough by day that lamps waiting for the dark come on."
+      }
+     ]
+    },
+    {
+     "name": "WEATHERS",
+     "kind": "const",
+     "doc": "The weathers every scene shares: change one here and it changes in every scene.",
+     "type": "WeatherRecipe[]"
+    },
+    {
+     "name": "weatherAsked",
+     "kind": "const",
+     "doc": "The weather a word names (from an address, say), or undefined when it names none.",
+     "type": "(q: string | null | undefined) => WeatherId | undefined"
+    },
+    {
+     "name": "cloudsAsked",
+     "kind": "const",
+     "doc": "The cloud cover a word names, or undefined when it names none.",
+     "type": "(q: string | null | undefined) => CloudId | undefined"
+    },
+    {
+     "name": "skyState",
+     "kind": "function",
+     "doc": "The sky for a weather, a cloud cover and a wind, any left out. Weather brings at least its own clouds; more cloud\nthan that may be asked for, less may not. It brings its own wind too, which any wind asked for replaces.",
+     "signatures": [
+      {
+       "code": "skyState(weather?: WeatherId, clouds?: CloudId, wind?: WindId): SkyState"
+      }
+     ]
+    },
+    {
+     "name": "gloomy",
+     "kind": "const",
+     "doc": "Whether lamps that wait for the dark come on under this weather though it is day.",
+     "type": "(weather?: WeatherId) => boolean"
+    },
+    {
+     "name": "isClear",
+     "kind": "const",
+     "doc": "Whether a sky is the scene's own, with nothing laid over it.",
+     "type": "(s: SkyState) => boolean"
+    },
+    {
+     "name": "mixSky",
+     "kind": "function",
+     "doc": "A sky `k` of the way from one to another.",
+     "signatures": [
+      {
+       "code": "mixSky(a: SkyState, b: SkyState, k: number): SkyState"
+      }
+     ]
+    },
+    {
+     "name": "WINDS",
+     "kind": "const",
+     "doc": "How hard the wind blows: a level each, calm first. `slant` is how far sideways it carries rain for each unit it falls.",
+     "type": "{ id: WindId; label: string; slant: number }[]"
+    },
+    {
+     "name": "WIND_MOST",
+     "kind": "const",
+     "doc": "The hardest wind, a level (`SkyState.wind`).",
+     "type": "number"
+    },
+    {
+     "name": "windAsked",
+     "kind": "const",
+     "doc": "The wind a word names, or undefined when it names none.",
+     "type": "(q: string | null | undefined) => WindId | undefined"
+    },
+    {
+     "name": "WIND_WAY",
+     "kind": "const",
+     "doc": "Where the wind blows, x and z (one long), the same in every scene.",
+     "type": "readonly [number, number]"
+    },
+    {
+     "name": "windAt",
+     "kind": "function",
+     "doc": "The wind at `t` seconds into a loop of `loop`, for a sky: how far sideways it carries rain a unit of fall, [x, z].\nIts level's slant (between levels, between their slants), in gusts a whole number of times a loop so a loop joins.",
+     "signatures": [
+      {
+       "code": "windAt(s: SkyState, t: number, loop: number): [number, number]"
+      }
+     ]
+    },
+    {
+     "name": "gustAt",
+     "kind": "const",
+     "doc": "How hard the wind blows at `u` of the loop as a share of its level's own: gusts a whole number of times a loop.",
+     "type": "(u: number) => number"
+    },
+    {
+     "name": "gustRun",
+     "kind": "const",
+     "doc": "`gustAt` summed from the loop's start to `u` (loops), so a thing the wind turns turns a little quicker in each gust and still joins the loop: u at 0 and 1 differ by 1 exactly.",
+     "type": "(u: number) => number"
+    },
+    {
+     "name": "windLevelOf",
+     "kind": "function",
+     "doc": "The level of wind (`SkyState.wind`, 0 to `WIND_MOST`) that carries as far as `carry` does a unit of fall, gusts taken as the level's own.",
+     "signatures": [
+      {
+       "code": "windLevelOf(carry: number): number"
+      }
+     ]
+    },
+    {
+     "name": "SKY_EASE",
+     "kind": "const",
+     "doc": "Seconds a change of weather takes.",
+     "type": "3"
+    },
+    {
+     "name": "SkyEase",
+     "kind": "class",
+     "doc": "The sky on its way from what it was to what was asked for: `set` a new one at a time (seconds on any clock) and\n`at` gives the sky for a later time, there after `SKY_EASE` seconds. A change made while another is under way\nstarts from wherever the sky had got to.",
+     "ctor": [
+      {
+       "code": "new SkyEase(seconds?: number)"
+      }
+     ],
+     "props": [
+      {
+       "name": "seconds",
+       "readonly": true,
+       "type": "number",
+       "doc": "Seconds a change takes."
+      },
+      {
+       "name": "target",
+       "readonly": true,
+       "type": "SkyState",
+       "doc": "The sky asked for."
+      }
+     ],
+     "methods": [
+      {
+       "name": "set",
+       "doc": "`now` of Infinity puts the sky there at once.",
+       "signatures": [
+        {
+         "code": "set(to: SkyState, now: number): void"
+        }
+       ]
+      },
+      {
+       "name": "moving",
+       "doc": "Whether it is still changing at `now`.",
+       "signatures": [
+        {
+         "code": "moving(now: number): boolean"
+        }
+       ]
+      },
+      {
+       "name": "at",
+       "doc": "The sky at `now`: a mix of the sky it left and the one asked for.",
+       "signatures": [
+        {
+         "code": "at(now: number): SkyState"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "BOLT_EVERY",
+     "kind": "const",
+     "doc": "Seconds between bolts, about.",
+     "type": "6"
+    },
+    {
+     "name": "BOLT_SECONDS",
+     "kind": "const",
+     "doc": "Seconds one bolt's light lasts.",
+     "type": "0.75"
+    },
+    {
+     "name": "lightningAt",
+     "kind": "function",
+     "doc": "How bright lightning is `t` seconds into a loop of `loop`, 0 to 1: a bolt about every `BOLT_EVERY` seconds, each\nat its own moment by a hash, as a flash, a dip and a second flash that dies away. At most two flashes a bolt, so\nnever more than three a second. The same in every loop, so a loop joins.",
+     "signatures": [
+      {
+       "code": "lightningAt(t: number, loop: number): number"
+      }
+     ]
+    },
+    {
+     "name": "FLASH_LIGHT",
+     "kind": "const",
+     "doc": "How much a full flash adds to the light, a channel: bluish white.",
+     "type": "Vec3"
+    },
+    {
+     "name": "FLASH_SKY",
+     "kind": "const",
+     "doc": "The sky at the top of a flash (sRGB 0 to 255).",
+     "type": "Rgb"
+    },
+    {
+     "name": "lightUnder",
+     "kind": "function",
+     "doc": "The light under a sky, with `flash` (0 to 1) of a bolt in it.",
+     "signatures": [
+      {
+       "code": "lightUnder(s: SkyState, flash?: number): Vec3"
+      }
+     ]
+    },
+    {
+     "name": "skyUnder",
+     "kind": "function",
+     "doc": "A sky color (sRGB 0 to 255) under a sky: turned toward an overcast gray, darkened, and lit by a flash.",
+     "signatures": [
+      {
+       "code": "skyUnder(c: readonly number[], s: SkyState, flash?: number): Rgb"
+      }
+     ]
+    },
+    {
+     "name": "hazeUnder",
+     "kind": "function",
+     "doc": "The haze a sky lays on a scene seen from `distance`, in units past the view's target as a scene's own haze is\n(`from` where it starts, `to` where it would be total), or none where the sky brings none. Thin for rain, a wall for fog.",
+     "signatures": [
+      {
+       "code": "hazeUnder(s: SkyState, distance: number): { from: number; to: number } | undefined"
+      }
+     ]
+    },
+    {
+     "name": "RAIN_MOST",
+     "kind": "const",
+     "doc": "The most drops of rain and flakes of snow: each is a bone, and a blob names its bones in a byte.",
+     "type": "230"
+    },
+    {
+     "name": "SNOW_MOST",
+     "kind": "const",
+     "doc": "The most drops of rain and flakes of snow: each is a bone, and a blob names its bones in a byte.",
+     "type": "230"
+    },
+    {
+     "name": "CLOUDS",
+     "kind": "const",
+     "doc": "How many clouds there are at full cover.",
+     "type": "16"
+    },
+    {
+     "name": "WEATHER_COLORS",
+     "kind": "const",
+     "doc": "The colors weather brings: a palette that pixel art snaps to needs them.",
+     "type": "string[]"
+    },
+    {
+     "name": "CLOUD_HEIGHT",
+     "kind": "const",
+     "doc": "How high over the view's target the clouds float, as a share of the view's distance: near the top of the picture as the view starts.",
+     "type": "0.3"
+    },
+    {
+     "name": "cloudBase",
+     "kind": "const",
+     "doc": "The height of the clouds' flat undersides for a view: what falls starts there, so rain comes down from under the clouds.",
+     "type": "(camera: View) => number"
+    },
+    {
+     "name": "fallReach",
+     "kind": "const",
+     "doc": "How far round the view's target rain and snow fall: half the side of their square.",
+     "type": "(camera: View) => number"
+    },
+    {
+     "name": "aboveView",
+     "kind": "function",
+     "doc": "The height rain and snow start from with the clouds left out (Matt, 2026-11-21: clouds close over a small scene\nlooked strange, the koi pond's nearly touching its tree and bamboo): over the top of the picture as the view\nstarts, wherever in their square they come down, so they fall in from above the frame.",
+     "signatures": [
+      {
+       "code": "aboveView(camera: Orbit & { swing?: number }): number"
+      }
+     ]
+    },
+    {
+     "name": "falling",
+     "kind": "function",
+     "doc": "Rain or snow over the middle of a view, falling from the clouds' height (or `top`) onto whatever stands there: one swarm, for any scene.",
+     "signatures": [
+      {
+       "code": "falling(kind: \"snow\" | \"rain\", camera: Orbit & { swing?: number }, count?: number, top?: number): SpeckDoc"
+      }
+     ]
+    },
+    {
+     "name": "cloudAt",
+     "kind": "function",
+     "doc": "Where cloud `i` floats for a view: its flat underside at `cloudBase`, over the scene.",
+     "signatures": [
+      {
+       "code": "cloudAt(i: number, camera: Orbit & { swing?: number }): Vec3"
+      }
+     ]
+    },
+    {
+     "name": "CloudLook",
+     "kind": "interface",
+     "doc": "How a sky's clouds look: their colors from underneath up, and whether they glow to keep them. The recipe's own when left out.",
+     "props": [
+      {
+       "name": "colors",
+       "optional": true,
+       "type": "readonly [string, string, string]",
+       "doc": "The clouds' colors from underneath up."
+      },
+      {
+       "name": "glow",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Whether they glow, which keeps them their own color at night."
+      }
+     ]
+    },
+    {
+     "name": "weatherDocs",
+     "kind": "function",
+     "doc": "The weather for a view, as three descriptions laid over any scene: the clouds, the rain and the snow. Each holds\nthe most there can be; `poseWeather` shows the share a sky asks for. Rain and snow start at `top` (the clouds'\nundersides, or `aboveView` for a sky with its clouds left out). Compile them with the scene's `ground`, so what\nfalls lands on the scene.",
+     "signatures": [
+      {
+       "code": "weatherDocs(camera: Orbit & { swing?: number }, loop: number, look?: CloudLook, top?: number): { clouds: SceneDoc; rain: SceneDoc; snow: SceneDoc }"
+      }
+     ]
+    },
+    {
+     "name": "shareOut",
+     "kind": "const",
+     "doc": "How much of thing `i` of `n` is out when `share` of them are: all of the first ones, none of the last, one in between.",
+     "type": "(i: number, n: number, share: number) => number"
+    },
+    {
+     "name": "WeatherBones",
+     "kind": "interface",
+     "doc": "The bones of a compiled weather description that a sky shows more or fewer of.",
+     "props": [
+      {
+       "name": "clouds",
+       "type": "number[]",
+       "doc": "The clouds' bones, in the order they come out."
+      },
+      {
+       "name": "specks",
+       "type": "number[]",
+       "doc": "The bones of the drops or flakes, in the order they start to fall."
+      },
+      {
+       "name": "hidden",
+       "type": "number[]",
+       "doc": "Bones that are never shown."
+      }
+     ]
+    },
+    {
+     "name": "weatherBones",
+     "kind": "function",
+     "doc": "Finds a compiled weather description's bones by their names.",
+     "signatures": [
+      {
+       "code": "weatherBones(names: readonly string[]): WeatherBones"
+      }
+     ]
+    },
+    {
+     "name": "showWeather",
+     "kind": "function",
+     "doc": "After a weather description's own pose (before the bones are worked out): shows `falls` of its drops or flakes and\n`clouds` of its clouds, by size, so a sky on its way from one weather to another has its rain thin out or come on\na drop at a time.",
+     "signatures": [
+      {
+       "code": "showWeather(size: Float32Array, bones: WeatherBones, falls: number, clouds: number): void"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "heavens",
+   "title": "The shared sky: moon, sun, stars and clouds",
+   "group": "scenes",
+   "doc": "",
+   "entries": [
+    {
+     "name": "HeavensDoc",
+     "kind": "interface",
+     "doc": "The sun, the moon, the stars and a scene's own clouds as shared recipes (Matt, 2026-11-21: scenes use a reusable\nsun, moon and clouds unless one calls for something of its own, an eclipse, a red sun, three moons). A description\nsays where its moon hangs and how big, how many stars and where, and how cloudy its sky is; what they look like is\nwritten here once. Pure and tested.\n\nThe moon, sun and stars are cut into the scene (`withHeavens`, which `compileScene`, `litFor` and `splitScene` call\nfirst), each on a bone of its own named with a `~` (`~moon`, `~sun`, `~star<n>`), so cloud cover can put them out by\nsize without the scene being cut again (`showHeavens`), and Blocks draws them as small cubes. They wait for their\ntime like any part: the moon and stars are `lit: 'night'`, the sun `lit: 'day'`. The clouds are not cut into the\nscene: they are the weather's own clouds (skyRecipes.ts), drawn over the scene in the colors the scene asks for, so\na scene's few clouds and a storm's many are one kind of cloud.",
+     "props": [
+      {
+       "name": "moon",
+       "optional": true,
+       "type": "{ at: Vec3; r: number; colors?: [string, string] }",
+       "doc": "The moon: its middle and radius; `colors` its face and its craters."
+      },
+      {
+       "name": "sun",
+       "optional": true,
+       "type": "{ at: Vec3; r: number; color?: string }",
+       "doc": "The sun: its middle and radius, and its color."
+      },
+      {
+       "name": "stars",
+       "optional": true,
+       "type": "{ count: number; from?: Vec3; to?: Vec3; size?: number; colors?: string[] }",
+       "doc": "Stars (at most `MOST_STARS`), scattered by a hash through the box `from` to `to`, or through the sky behind the\nview's target when it is left out, never on the moon; `size` is a star's radius, `colors` taken in turn by a hash."
+      },
+      {
+       "name": "clouds",
+       "optional": true,
+       "type": "{ cover: CloudId; colors?: [string, string, string]; glow?: boolean }",
+       "doc": "How cloudy the sky is as the scene stands, and the clouds' colors from underneath up; `glow` keeps them their own color at night."
+      }
+     ]
+    },
+    {
+     "name": "MOST_STARS",
+     "kind": "const",
+     "doc": "The most stars a scene's sky may ask for.",
+     "type": "40"
+    },
+    {
+     "name": "MOON_COLORS",
+     "kind": "const",
+     "doc": "The moon's own colors, its face and its craters, where a scene gives none.",
+     "type": "[string, string]"
+    },
+    {
+     "name": "SUN_COLOR",
+     "kind": "const",
+     "doc": "The sun's own color.",
+     "type": "\"#fff0b8\""
+    },
+    {
+     "name": "STAR_COLORS",
+     "kind": "const",
+     "doc": "The stars' own colors.",
+     "type": "string[]"
+    },
+    {
+     "name": "starAt",
+     "kind": "function",
+     "doc": "Where star `i` of a scene's stars stands: in their box, or in the sky behind the view's target; off the moon.",
+     "signatures": [
+      {
+       "code": "starAt(doc: Pick<SceneDoc, \"camera\" | \"heavens\">, i: number): Vec3"
+      }
+     ]
+    },
+    {
+     "name": "withHeavens",
+     "kind": "function",
+     "doc": "A scene's moon, sun and stars as parts on bones of their own, after everything else; its clouds are left to the weather.",
+     "signatures": [
+      {
+       "code": "withHeavens(doc: SceneDoc): SceneDoc"
+      }
+     ]
+    },
+    {
+     "name": "ownClouds",
+     "kind": "const",
+     "doc": "The share of the weather's clouds a scene's own sky has out.",
+     "type": "(doc: Pick<SceneDoc, \"heavens\">) => number"
+    },
+    {
+     "name": "HeavenBones",
+     "kind": "interface",
+     "doc": "The bones of a compiled scene that cloud cover puts out.",
+     "props": [
+      {
+       "name": "moon",
+       "type": "number[]",
+       "doc": "The moon's bone, if the scene has one."
+      },
+      {
+       "name": "sun",
+       "type": "number[]",
+       "doc": "The sun's bone, if the scene has one."
+      },
+      {
+       "name": "stars",
+       "type": "number[]",
+       "doc": "The stars' bones, in the order cloud puts them out."
+      }
+     ]
+    },
+    {
+     "name": "heavenBones",
+     "kind": "function",
+     "doc": "Finds a compiled scene's moon, sun and stars by their bones' names.",
+     "signatures": [
+      {
+       "code": "heavenBones(names: readonly string[]): HeavenBones"
+      }
+     ]
+    },
+    {
+     "name": "STARS_GO",
+     "kind": "const",
+     "doc": "The cover at which stars start to go, and at which the last is gone; the moon and sun go between `BODIES_GO` and 1.",
+     "type": "[number, number]"
+    },
+    {
+     "name": "BODIES_GO",
+     "kind": "const",
+     "doc": "The cover at which the moon and sun start to go; they are gone at 1.",
+     "type": "0.8"
+    },
+    {
+     "name": "showHeavens",
+     "kind": "function",
+     "doc": "After a scene's own pose: with `cover` of the sky cloud (0 to 1), puts out the stars one at a time (all of them by a\ncloudy sky) and the moon and sun under heavy cloud, by size, so a sky clouding over puts them out as it comes.",
+     "signatures": [
+      {
+       "code": "showHeavens(size: Float32Array, bones: HeavenBones, cover: number): void"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "snowCover",
+   "title": "Snow that lies",
+   "group": "scenes",
+   "doc": "Snow that lies and builds up (Matt, 2026-11-21: snow and heavy snow should pile up over time and cover the ground).\n\nA layer of flat white blobs laid once over whatever stays put under a stretch of sky, found the way falling snow\nfinds where it lands (`ground`, a scene's `CompiledScene.ground`): the tops of the land, roofs, walls and rocks, on\nfaces no steeper than `STEEPEST`. Every blob has its turn to come (`rank`): flat, open ground first and in clumps\n(value noise over a few cells), so snow starts as patches that spread and join. `pileSnow(cover, depth)` sets the\nlayer for a depth from 0 (none) to 1 (all of it lying, a little deeper than a blob is thick): a blob whose turn has\ncome grows from nothing, and the whole layer rises as it deepens. How deep it is, is the page's: snow builds up\nover the time it falls (`pileStep`), which no scene's loop knows.",
+   "entries": [
+    {
+     "name": "STEEPEST",
+     "kind": "const",
+     "doc": "The steepest face snow lies on: the up part of its normal.",
+     "type": "0.55"
+    },
+    {
+     "name": "SnowCover",
+     "kind": "interface",
+     "doc": "A layer of snow lying on a scene: an actor of flat white blobs, with what `pileSnow` needs to deepen it.",
+     "props": [
+      {
+       "name": "blobs",
+       "type": "Blobs",
+       "doc": "The layer's blobs, one a spot snow can lie on."
+      },
+      {
+       "name": "skin",
+       "type": "Skin",
+       "doc": "Every blob on the one still bone."
+      },
+      {
+       "name": "skeleton",
+       "type": "Skeleton",
+       "doc": "One still bone."
+      },
+      {
+       "name": "soft",
+       "type": "true",
+       "doc": "Drawn as blobs while the stage draws blocks, beside the weather."
+      },
+      {
+       "name": "weather",
+       "type": "true",
+       "doc": "It is weather, which the Blocks look draws as cubes or leaves as blobs."
+      },
+      {
+       "name": "lies",
+       "type": "true",
+       "doc": "It lies on things: among blocks it is raised onto the cubes' tops."
+      },
+      {
+       "name": "rank",
+       "type": "Float32Array",
+       "doc": "When each blob comes, 0 to 1: at depth `rank · (1 − GROW)` it starts to grow."
+      },
+      {
+       "name": "at",
+       "type": "Float32Array",
+       "doc": "Where each blob lies on the surface, x y z, and the surface's normal there."
+      },
+      {
+       "name": "normal",
+       "type": "Float32Array",
+       "doc": "The surface's normal under each blob, x y z."
+      },
+      {
+       "name": "size",
+       "type": "Float32Array",
+       "doc": "Each blob's full radius."
+      },
+      {
+       "name": "depth",
+       "type": "number",
+       "doc": "The depth the layer was last set for."
+      }
+     ]
+    },
+    {
+     "name": "makeSnowCover",
+     "kind": "function",
+     "doc": "Lays the layer over a disc of `radius` round (`x`, `z`) at `spacing` between blobs. `ground(x, z, top, bottom)` is\nwhere something falling from `top` comes to rest (`bottom` where it meets nothing); `dry(x, y, z)` leaves out a\nspot (water: snow falling on it melts). `sun` (toward the light) shades faces turned away a little blue.",
+     "signatures": [
+      {
+       "code": "makeSnowCover(ground: (x: number, z: number, top: number, bottom: number) => number, options: { x: number; z: number; radius: number; top: number; bottom: number; spacing: number; sun?: readonly number[]; dry?: (x: number, y: number, z: number) => boolean; warm?: readonly { at: readonly number[]; reach: number }[] }): SnowCover"
+      }
+     ]
+    },
+    {
+     "name": "pileSnow",
+     "kind": "function",
+     "doc": "Sets the layer for a depth from 0 to 1. Returns whether anything changed (then hand it to `Stage.reshape`).",
+     "signatures": [
+      {
+       "code": "pileSnow(cover: SnowCover, depth: number): boolean"
+      }
+     ]
+    },
+    {
+     "name": "MELT_SHARE",
+     "kind": "const",
+     "doc": "How far round a light snow melts, as a share of its range at a strength of one: a campfire clears the ground round it, a lamp its own cap.",
+     "type": "0.3"
+    },
+    {
+     "name": "warmthOf",
+     "kind": "function",
+     "doc": "The places a scene's lights keep clear of snow: warm ones only (more red than blue), by how strong they are.",
+     "signatures": [
+      {
+       "code": "warmthOf(lights: readonly { position: readonly number[]; color: readonly number[]; range: number }[]): { at: readonly number[]; reach: number }[]"
+      }
+     ]
+    },
+    {
+     "name": "PILE_SECONDS",
+     "kind": "const",
+     "doc": "How fast the snow lying builds up: a whole cover in about this many seconds of heavy snow.",
+     "type": "45"
+    },
+    {
+     "name": "MELT_SECONDS",
+     "kind": "const",
+     "doc": "How many seconds snow takes to melt away once none falls.",
+     "type": "90"
+    },
+    {
+     "name": "pileMost",
+     "kind": "const",
+     "doc": "The most a snowfall of `snow` (0 to 1) lays: heavy snow covers everything, a lighter fall only dusts\n(Matt, 2026-11-21: light snow covered too quickly).",
+     "type": "(snow: number) => number"
+    },
+    {
+     "name": "pileStep",
+     "kind": "function",
+     "doc": "The depth after `dt` seconds more of `snow` (the share of the swarm falling, 0 to 1): it builds by the square of\nhow much falls, so light snow (0.4) lays about a sixth as fast as heavy, up to `pileMost`; above that, and when\nnone falls, it melts.",
+     "signatures": [
+      {
+       "code": "pileStep(depth: number, snow: number, dt: number): number"
       }
      ]
     }
@@ -12569,6 +14269,330 @@
      "signatures": [
       {
        "code": "shadeSurface(s: WaterSurface, look: WaterLook, eye: ArrayLike<number>, lights?: readonly PointLight[]): void"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "lava",
+   "title": "Lava that flows",
+   "group": "simulation",
+   "doc": "Lava that moves (a scene's `lava`, sceneDoc.ts): a shared recipe, as the water is. The pool's surface is the\nwater's own height field (water.ts), run slow and thick, so a bursting bubble sends out a sluggish swell that dies\nwithin a few hands' breadth. Over it lies a field of heat, carried by the way molten rock turns over in a pool:\n\n- hot rock wells up at `vents` (each wandering slowly round its spot, a whole number of times a loop) and spreads\n  out over the surface from there, meeting the spread from the next vent along lines where the crust piles up;\n- the surface loses heat as it goes (`cool` seconds to fall to a third), so it dims from white-hot through orange\n  and red to a dark crust the farther it has traveled;\n- the crust is carried as plates: every cell remembers where its rock came from (`ox`, `oz`, moved along with the\n  heat), and a cellular pattern laid on those first places draws the cracks between plates, which glow faintly\n  while the crust is thin and stretch as the plates are pulled apart;\n- bubbles of gas break through at hashed places and times: each leaves a crater in the height field and a patch\n  of fresh hot rock.\n\nEverything is a function of the plan and the time, stepped at a fixed rate, so the same plan gives the same\nlava. `SceneWater` runs it through the loop with the heights and keeps a glow a cell per moment.",
+   "entries": [
+    {
+     "name": "LavaVent",
+     "kind": "interface",
+     "doc": "A vent where hot rock wells up: round (x, z), `r` across (half), wandering `wander` round that spot `times` a loop from `phase`.",
+     "props": [
+      {
+       "name": "x",
+       "type": "number",
+       "doc": "Its middle, along x."
+      },
+      {
+       "name": "z",
+       "type": "number",
+       "doc": "Its middle, along z."
+      },
+      {
+       "name": "r",
+       "type": "number",
+       "doc": "Half its width."
+      },
+      {
+       "name": "wander",
+       "type": "number",
+       "doc": "How far it wanders from its middle."
+      },
+      {
+       "name": "times",
+       "type": "number",
+       "doc": "How many times a loop it goes round."
+      },
+      {
+       "name": "phase",
+       "type": "number",
+       "doc": "Where in its round it starts, 0 to 1."
+      }
+     ]
+    },
+    {
+     "name": "LavaBubble",
+     "kind": "interface",
+     "doc": "A bubble bursting at (x, z), `at` seconds into the loop, `r` across (half).",
+     "props": [
+      {
+       "name": "x",
+       "type": "number",
+       "doc": "Where it bursts, along x."
+      },
+      {
+       "name": "z",
+       "type": "number",
+       "doc": "Where it bursts, along z."
+      },
+      {
+       "name": "at",
+       "type": "number",
+       "doc": "When it bursts, seconds into the loop."
+      },
+      {
+       "name": "r",
+       "type": "number",
+       "doc": "Half its width."
+      }
+     ]
+    },
+    {
+     "name": "LavaPlan",
+     "kind": "interface",
+     "doc": "A scene's lava as compiled (`WaterPlan.lava`).",
+     "props": [
+      {
+       "name": "cool",
+       "type": "number",
+       "doc": "Seconds for the surface to lose two thirds of its heat."
+      },
+      {
+       "name": "flow",
+       "type": "number",
+       "doc": "How fast the surface moves out from a vent's edge, units a second."
+      },
+      {
+       "name": "plate",
+       "type": "number",
+       "doc": "How big the crust's plates are, units across."
+      },
+      {
+       "name": "vents",
+       "type": "LavaVent[]",
+       "doc": "Where hot rock wells up."
+      },
+      {
+       "name": "bubbles",
+       "type": "number",
+       "doc": "How many bubbles burst a loop, and how wide one is (half). Where they burst is drawn from the wet cells (`planBubbles`)."
+      },
+      {
+       "name": "pop",
+       "type": "number",
+       "doc": "Half the width of a bubble."
+      },
+      {
+       "name": "ramp",
+       "type": "[Vec3, Vec3, Vec3, Vec3]",
+       "doc": "The colors from cold to hot, 0 to 1 as blobs hold them (sRGB): crust, dull red, orange, white-hot."
+      }
+     ]
+    },
+    {
+     "name": "LavaGrid",
+     "kind": "interface",
+     "doc": "The grid the lava lies on: the pool's own (water.ts `WaterSpec` and its wet cells).",
+     "props": [
+      {
+       "name": "nx",
+       "type": "number",
+       "doc": "Cells along x."
+      },
+      {
+       "name": "nz",
+       "type": "number",
+       "doc": "Cells along z."
+      },
+      {
+       "name": "x0",
+       "type": "number",
+       "doc": "Where the grid starts, along x."
+      },
+      {
+       "name": "z0",
+       "type": "number",
+       "doc": "Where the grid starts, along z."
+      },
+      {
+       "name": "cell",
+       "type": "number",
+       "doc": "A cell's side."
+      },
+      {
+       "name": "wet",
+       "type": "Uint8Array",
+       "doc": "1 for each cell that holds lava, row by row."
+      }
+     ]
+    },
+    {
+     "name": "lavaHash",
+     "kind": "function",
+     "doc": "A number from 0 to 1 for a whole number, the same everywhere.",
+     "signatures": [
+      {
+       "code": "lavaHash(i: number): number"
+      }
+     ]
+    },
+    {
+     "name": "ventAt",
+     "kind": "function",
+     "doc": "Where a vent stands `t` seconds into a loop of `loop`.",
+     "signatures": [
+      {
+       "code": "ventAt(v: LavaVent, t: number, loop: number): [number, number]"
+      }
+     ]
+    },
+    {
+     "name": "crackAt",
+     "kind": "function",
+     "doc": "How near (x, z) lies to a crack between the crust's plates, 0 (in a plate) to 1 (on the crack): the plates are the\ncells nearest each of a jittered grid of points `plate` apart (as stained glass's panes), and a crack runs where\nthe nearest two are nearly as near.",
+     "signatures": [
+      {
+       "code": "crackAt(x: number, z: number, plate: number): number"
+      }
+     ]
+    },
+    {
+     "name": "glowOf",
+     "kind": "function",
+     "doc": "How brightly a cell glows, 0 (cold crust) to 1 (white-hot), from its heat (0 to 1) and how near it lies to a crack\nbetween plates (0 to 1): fresh rock glows as it is, and a crack in the crust glows dull red, brighter where the\ncrust round it is still thin.",
+     "signatures": [
+      {
+       "code": "glowOf(heat: number, crack: number): number"
+      }
+     ]
+    },
+    {
+     "name": "lavaColor",
+     "kind": "function",
+     "doc": "The color of lava glowing `g` (0 to 1) along the ramp (sRGB, as blobs hold colors): crust to 0.3, dull red to 0.62, orange to 1, white-hot at 1.",
+     "signatures": [
+      {
+       "code": "lavaColor(g: number, ramp: [Vec3, Vec3, Vec3, Vec3], out?: number[]): number[]"
+      }
+     ]
+    },
+    {
+     "name": "planBubbles",
+     "kind": "function",
+     "doc": "Every bubble that bursts in one loop of `loop` seconds, `count` of them at wet places of the grid, from `seed`.",
+     "signatures": [
+      {
+       "code": "planBubbles(grid: LavaGrid, loop: number, count: number, r: number, seed?: number): LavaBubble[]"
+      }
+     ]
+    },
+    {
+     "name": "LavaHeat",
+     "kind": "class",
+     "doc": "The heat over a lava pool and where each cell's rock first came up: stepped by `step`, read by `glow`. The pure\nhalf of the lava, worked on typed arrays, so Node tests run it as the page does.",
+     "ctor": [
+      {
+       "code": "new LavaHeat(grid: LavaGrid, plan: LavaPlan, loop: number)"
+      }
+     ],
+     "props": [
+      {
+       "name": "heat",
+       "readonly": true,
+       "type": "Float32Array",
+       "doc": "Each cell's heat, 0 (cold) to 1 (just welled up)."
+      },
+      {
+       "name": "ox",
+       "readonly": true,
+       "type": "Float32Array",
+       "doc": "Where each cell's rock first came up, x then z, for the crust's plates."
+      },
+      {
+       "name": "oz",
+       "readonly": true,
+       "type": "Float32Array",
+       "doc": "Where each cell's rock first came up, along z."
+      },
+      {
+       "name": "u",
+       "readonly": true,
+       "type": "Float32Array",
+       "doc": "The surface's way of moving at each cell as last worked out, units a second."
+      },
+      {
+       "name": "w",
+       "readonly": true,
+       "type": "Float32Array",
+       "doc": "The surface's speed along z at each cell, units a second."
+      },
+      {
+       "name": "bubbles",
+       "readonly": true,
+       "type": "LavaBubble[]",
+       "doc": "Every bubble that bursts in the loop, in order."
+      },
+      {
+       "name": "grid",
+       "readonly": true,
+       "type": "LavaGrid",
+       "doc": "The grid it lies on."
+      },
+      {
+       "name": "plan",
+       "readonly": true,
+       "type": "LavaPlan",
+       "doc": "The plan it runs."
+      },
+      {
+       "name": "loop",
+       "readonly": true,
+       "type": "number",
+       "doc": "Seconds before it all repeats: the scene's loop."
+      }
+     ],
+     "methods": [
+      {
+       "name": "flowAt",
+       "doc": "The way the surface moves at `t`: out from every vent (as fast as `flow` at its edge, fading past it), and never\ninto the bank, so the crust piles up along the shore and where two vents' spreads meet.",
+       "signatures": [
+        {
+         "code": "flowAt(t: number): void"
+        }
+       ]
+      },
+      {
+       "name": "step",
+       "doc": "Moves the lava on `dt` seconds to `t + dt`: the surface carries its heat and its first places along (each cell\ntakes what was upstream of it), it cools, the vents fill with fresh rock, and every bubble due bursts (`burst` is\ntold, to mark the height field). Bubbles are taken in loop order; call `rewind` when the loop starts again.",
+       "signatures": [
+        {
+         "code": "step(dt: number, t: number, burst?: (b: LavaBubble) => void): void"
+        }
+       ]
+      },
+      {
+       "name": "rewind",
+       "doc": "Starts the loop's bubbles again from the first: call as each run through the loop starts.",
+       "signatures": [
+        {
+         "code": "rewind(): void"
+        }
+       ]
+      },
+      {
+       "name": "glow",
+       "doc": "How brightly each cell glows now (`glowOf` its heat and its crack), into `out` from offset `at`: 0 to 1 in a float array, 0 to 255 in bytes; 0 on dry cells.",
+       "signatures": [
+        {
+         "code": "glow(out: Float32Array<ArrayBufferLike> | Uint8Array<ArrayBufferLike>, at?: number): void"
+        }
+       ]
+      },
+      {
+       "name": "meanGlow",
+       "doc": "The mean glow over the wet cells, 0 to 1: how much light the pool gives off now.",
+       "signatures": [
+        {
+         "code": "meanGlow(): number"
+        }
+       ]
       }
      ]
     }
