@@ -154,7 +154,41 @@ stage.setPoser((sk, t) => {
 })
 ```
 
-The rain, snow and clouds themselves are three small descriptions from `weatherDocs(view, loop)`: compile each with the scene's own `ground` so drops land on it, add them as extras, and `showWeather` shows the share of them a sky asks for. `skyUnder` and `hazeUnder` give the sky's colors and the haze, `makeSnowCover` and `pileSnow` the snow that lies. `WEATHERS`, `CLOUD_COVERS` and `WINDS` list what there is.
+`SceneWeather` is the rain, snow, clouds and lying snow for one scene, made once and then posed by the time and the sky of the moment:
+
+```ts
+import { SceneWeather, timeOf, litFor } from '@blobscape/engine'
+
+const weather = new SceneWeather({ loop: scene.loop, view: scene.orbit, ground: scene.ground })
+stage.setActor(buildVoxels(scene.spec(0.02)), undefined, weather.actors)
+// in the poser, after the scene's own pose:
+//   weather.pose(t, now)
+//   if (weather.shade(now)) stage.reshape(weather.actors[0])     // clouds as gray as the sky
+
+const night = timeOf('night')                // a time of day: its sky, its light, whether lamps are lit
+const byNight = compileScene(litFor({ ...doc, sky: night.sky }, night.dark))
+stage.setLights(byNight.lights(0), night.light)
+```
+
+Underneath are `weatherDocs` and `showWeather` (the three small descriptions and the share of them a sky shows), `skyUnder` and `hazeUnder` (the sky's colors and the haze), `makeSnowCover` and `pileSnow` (the snow that lies), and `paletteUnder` and `paletteAt` (a pixel palette under a sky or a time of day). `WEATHERS`, `CLOUD_COVERS`, `WINDS` and `TIMES` list what there is.
+
+## Styles as data
+
+Every style's settings are written once, as data: `CATALOG` holds each one's name, limits, choices and where it starts, so a page can draw its controls from the list, read them from an address and keep them, and every page draws a style the same way. `STYLES` lists the styles; each look has a function from its settings to what the stage takes.
+
+```ts
+import { STYLES, CATALOG, drawnStart, shownSettings, lightsItself, celLook, neonLook, washLook } from '@blobscape/engine'
+
+const settings = drawnStart(new URLSearchParams(location.search))    // every look as it starts, with what the address asks
+for (const s of shownSettings(CATALOG.neon, settings.neon, { style: 'neon' })) console.log(s.label, s.kind)   // what to draw controls for
+
+stage.setNeon(neonLook(settings.neon, scene.loop))                   // its light runs a whole number of times a loop
+stage.setNeon(); stage.setWash(washLook(settings.watercolor))
+lightsItself('cel')                          // true: cut the scene with `unlit` first, on a stage started with `lights`
+const cel = settings.cel
+stage.setCel(celLook({ ...cel, line: cel.outline ? cel.pen : 0 }))
+console.log(STYLES.map((s) => s.label))                              // every style there is
+```
 
 ## A scene from a land and props
 
