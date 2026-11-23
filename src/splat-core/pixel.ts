@@ -442,10 +442,11 @@ export interface PixelLook {
    */
   surface?: boolean
   /**
-   * Holds the picture on the art's grid: the world's origin always lands on a whole art pixel, so when the view slides
-   * (a pan, a zoom, a camera that follows) the scene moves by whole pixels instead of smearing across them. The live
-   * pass only (`snapShift`). After Ink Studio's camera snap, which does it for a flat view; here it holds for a
-   * perspective view at the origin's depth.
+   * Holds the picture on the art's grid: one world point (`PixelPass.anchor`, where `snapAnchor` in orbit.ts puts it)
+   * always lands on a whole art pixel, so when the view slides (a pan, a camera that follows) the scene moves by whole
+   * pixels instead of smearing across them, and while it turns about its target nothing jumps. The live pass only
+   * (`snapShift`). After Ink Studio's camera snap, which does it for a flat view; here it holds for a perspective view
+   * at the anchor's depth.
    */
   snap?: boolean
   /**
