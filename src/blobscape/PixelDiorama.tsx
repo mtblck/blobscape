@@ -884,7 +884,7 @@ export function PixelDiorama() {
                     </Button>
                   </div>
                 </div>
-                {picked0.space ? <p className="text-sm text-ink-muted" data-testid="diorama-space">Out in space there is no time of day, weather or sky effect: the scene keeps its own sky, stars and far sun.</p> : <>
+                {picked0.space ? <p className="text-sm text-ink-muted" data-testid="diorama-space">{picked0.indoor ? 'Inside a room there is no time of day, weather or sky effect: the scene keeps its own light.' : 'Out in space there is no time of day, weather or sky effect: the scene keeps its own sky, stars and far sun.'}</p> : <>
                 <TimeControls time={time} onPick={setTimeOfDay} timed={!!picked0.timed} prefix="diorama" />
                 <WeatherControls weather={weather} clouds={clouds} wind={wind} overhead={overhead} onPick={pickSky} onOverhead={pickOverhead} calm={calm} prefix="diorama" />
                 <Field label="Sky effect">

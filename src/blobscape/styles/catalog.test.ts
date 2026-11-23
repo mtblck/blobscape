@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { STYLES } from '../diorama/styles.ts'
-import { ASCII, BLOCKS_DEF, CATALOG, CEL_DEF, MARKS, PIXEL, SCENE, drawnFrom, drawnStart, fromAddress, keysOf, sceneStart, settingsFrom, shownSettings, valueWords, type RangeSetting, type Setting, type StyleDef } from './catalog.ts'
+import { ASCII, BLOCKS_DEF, CATALOG, CEL_DEF, MARKS, PIXEL, SCENE, drawnFrom, drawnStart, fromAddress, keysOf, sceneStart, settingsFrom, shownSettings, valueWords, type RangeSetting, type StyleSetting, type StyleDef } from './catalog.ts'
 
 const defs = [...Object.values(CATALOG), SCENE] as unknown as StyleDef<Record<string, unknown>>[]
 
@@ -17,11 +17,12 @@ test('every setting is one of its style\'s values, starts sound, and no value is
     const keys = d.settings.map((s) => s.key)
     assert.deepEqual([...keys].sort(), Object.keys(d.start).sort(), `${d.id}: settings and start differ`)
     assert.equal(new Set(keys).size, keys.length, `${d.id}: a setting twice`)
-    for (const s of d.settings as Setting<Record<string, unknown>>[]) {
+    for (const s of d.settings as StyleSetting<Record<string, unknown>>[]) {
       const v = d.start[s.key]
       if (s.kind === 'range') assert.ok(typeof v === 'number' && v >= s.min && v <= s.max && s.step > 0, `${d.id}.${s.key} starts outside its range`)
       else if (s.kind === 'choice') assert.ok(s.open || v === '' || s.options.some((o) => o.id === v), `${d.id}.${s.key} starts on no choice`)
       else if (s.kind === 'toggle') assert.ok(typeof v === 'boolean' || (v === null && !!s.auto), `${d.id}.${s.key} is no switch`)
+      else if (s.kind === 'text') assert.ok(typeof v === 'string' && v.length <= s.most, `${d.id}.${s.key} is no text`)
       else assert.ok(Number.isInteger(v))
       assert.ok(s.label.length > 0)
     }
@@ -30,13 +31,18 @@ test('every setting is one of its style\'s values, starts sound, and no value is
 
 test('no two settings a style reads share a name in the address', () => {
   for (const s of STYLES) {
-    const names = keysOf(s.id).flatMap((k) => (CATALOG[k].settings as readonly Setting<never>[]).map((x) => x.address).filter(Boolean))
+    const names = keysOf(s.id).flatMap((k) => (CATALOG[k].settings as readonly StyleSetting<never>[]).map((x) => x.address).filter(Boolean))
     assert.equal(new Set(names).size, names.length, `${s.id}: ${names.join()}`)
   }
 })
 
 test('the address sets what it names and nothing unsound', () => {
   const q = (text: string) => new URLSearchParams(text)
+  // text: kept as typed, cut to its length, and a blank one ignored
+  assert.equal(fromAddress(ASCII, ASCII.start, q('chars=words&words=Hello there')).words, 'Hello there')
+  assert.equal(fromAddress(ASCII, ASCII.start, q(`words=${'x'.repeat(500)}`)).words.length, 120)
+  assert.equal(fromAddress(ASCII, ASCII.start, q('words=%20%20')).words, ASCII.start.words)
+  assert.equal(fromAddress(ASCII, ASCII.start, q('chars=typed')).chars, 'typed')
   const b = fromAddress(BLOCKS_DEF, BLOCKS_DEF.start, q('block=5&water=blocks&falls=blocks&swell=99&backdrop=slate'))
   assert.deepEqual([b.size, b.water, b.weather, b.swell, b.backdrop], [5, 'blocks', 'blocks', 16, 'slate'])
   assert.deepEqual(fromAddress(BLOCKS_DEF, BLOCKS_DEF.start, q('block=many&water=soup&backdrop=mars')), BLOCKS_DEF.start)

@@ -30,11 +30,14 @@ export interface HeavensDoc {
   clouds?: { cover: CloudId; colors?: [string, string, string]; glow?: boolean }
 }
 
+/** The most stars a scene's sky may ask for. */
 export const MOST_STARS = 40
 
-/** The recipes' own colors. */
+/** The moon's own colors, its face and its craters, where a scene gives none. */
 export const MOON_COLORS: [string, string] = ['#f5f7ff', '#ccd6e6']
+/** The sun's own color. */
 export const SUN_COLOR = '#fff0b8'
+/** The stars' own colors. */
 export const STAR_COLORS = ['#ffffe6', '#cce0e6']
 
 const round = (v: number) => Math.round(v * 1e4) / 1e4
@@ -100,7 +103,15 @@ export function withHeavens(doc: SceneDoc): SceneDoc {
 export const ownClouds = (doc: Pick<SceneDoc, 'heavens'>) => CLOUD_COVERS.find((c) => c.id === doc.heavens?.clouds?.cover)?.clouds ?? 0
 
 /** The bones of a compiled scene that cloud cover puts out. */
-export interface HeavenBones { moon: number[]; sun: number[]; stars: number[] }
+export interface HeavenBones {
+  /** The moon's bone, if the scene has one. */
+  moon: number[]
+  /** The sun's bone, if the scene has one. */
+  sun: number[]
+  /** The stars' bones, in the order cloud puts them out. */
+  stars: number[]
+}
+/** Finds a compiled scene's moon, sun and stars by their bones' names. */
 export function heavenBones(names: readonly string[]): HeavenBones {
   const pick = (f: (n: string) => boolean) => names.map((n, i) => (f(n) ? i : -1)).filter((i) => i >= 0)
   return { moon: pick((n) => n === '~moon'), sun: pick((n) => n === '~sun'), stars: pick((n) => n.startsWith('~star')) }
@@ -108,6 +119,7 @@ export function heavenBones(names: readonly string[]): HeavenBones {
 
 /** The cover at which stars start to go, and at which the last is gone; the moon and sun go between `BODIES_GO` and 1. */
 export const STARS_GO: [number, number] = [0.3, 0.8]
+/** The cover at which the moon and sun start to go; they are gone at 1. */
 export const BODIES_GO = 0.8
 
 /**

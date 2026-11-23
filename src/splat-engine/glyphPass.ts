@@ -1,7 +1,7 @@
 import { DataTexture, LinearFilter, NearestFilter, NoBlending, NodeMaterial, QuadMesh, RedFormat, RenderTarget, UnsignedByteType, Vector2, Vector3, type Camera, type Object3D, type WebGPURenderer } from 'three/webgpu'
 import * as TSLTyped from 'three/tsl'
 import { SplatDepth } from './depth.ts'
-import { BLOCK_SPLIT, CELL_H, CELL_W, DOT_STEP, DOT_X, DOT_Y, EDGE_COVER, EDGE_DEPTH, EDGE_TONE, GLYPHS, LIFT_MOST, PROBE, RAMP_INK, STICK, STRAND, STRAND_HOLD, STRAND_KEEP, STROKE_FROM, dotBit, glyphAtlas, type GlyphLook, type GlyphSet } from '../splat-core/glyphs.ts'
+import { BLOCK_SPLIT, BOX_DOT, BOX_DOT_BIG, BOX_MID, CELL_H, CELL_W, CORNERS, DOT_STEP, DOT_X, DOT_Y, EDGE_COVER, EDGE_DEPTH, EDGE_TONE, GLYPHS, GLYPH_SETS, LIFT_MOST, PROBE, RAMP_INK, STICK, STRAND, STRAND_HOLD, STRAND_KEEP, STROKE_FROM, TYPED, TYPED_INK, TYPE_FAINT, TYPE_SLIP, WORD_FROM, WORD_LEVELS, WORD_STEP, dotBit, glyphAtlas, wordGlyphs, type GlyphLook } from '../splat-core/glyphs.ts'
 
 // As in engine.ts: the shader builders use TSL untyped.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -32,7 +32,8 @@ const QUAD_TAPS: [number, number][][] = Array.from({ length: 4 }, (_, i) => {
 })
 /** The even blocks (`EVEN` in glyphs.ts): their numbers and tones. */
 const EVEN: [number, number][] = [[0, 0], [16, 0.25], [17, 0.5], [18, 0.75], [15, 1]]
-const SETS: GlyphSet[] = ['ascii', 'braille', 'blocks']
+/** The most characters of words the pass holds. */
+const WORDS_MOST = 256
 
 /**
  * The picture as characters (splat-core/glyphs.ts is the CPU twin: change one, change both). The frame is drawn three
@@ -73,8 +74,11 @@ export class GlyphPass {
   private readonly edges = uniform(1)
   private readonly sticky = uniform(0)
   private readonly gain = uniform(1)
-  /** Which characters: 0 ASCII, 1 braille, 2 blocks (`SETS`). */
+  /** Which characters, by their place in `GLYPH_SETS`: 0 ASCII, 1 braille, 2 blocks, 3 lines, 4 words, 5 typed. */
   private readonly set = uniform(0)
+  /** The words, a character a byte (`wordGlyphs`), and how many. */
+  private readonly words = new DataTexture(new Uint8Array(WORDS_MOST), WORDS_MOST, 1, RedFormat, UnsignedByteType)
+  private readonly wordCount = uniform(1)
   private steady = STICK
 
   constructor() {
@@ -82,6 +86,8 @@ export class GlyphPass {
     this.font = new DataTexture(data, width, height, RedFormat, UnsignedByteType)
     this.font.minFilter = this.font.magFilter = NearestFilter
     this.font.needsUpdate = true
+    this.words.minFilter = this.words.magFilter = NearestFilter
+    this.words.needsUpdate = true
     for (const [m, f] of [[this.decide, this.decideCells()], [this.show, this.draw()]] as const) {
       m.fragmentNode = f
       m.blending = NoBlending
@@ -100,7 +106,14 @@ export class GlyphPass {
     this.edges.value = look.edges === false ? 0 : 1
     this.gain.value = look.gain ?? 1
     this.steady = look.steady ?? STICK
-    const set = Math.max(0, SETS.indexOf(look.set ?? 'ascii'))
+    const set = Math.max(0, GLYPH_SETS.indexOf(look.set ?? 'ascii'))
+    if (set === 4) {
+      const text = wordGlyphs(look.words ?? '').slice(0, WORDS_MOST)
+      const bytes = this.words.image.data as Uint8Array
+      bytes.fill(0).set(text)
+      this.words.needsUpdate = true
+      this.wordCount.value = text.length
+    }
     // a cell's number means something else in another set
     if (set !== this.set.value) this.kept = false
     this.set.value = set
@@ -308,16 +321,57 @@ export class GlyphPass {
         holds.assign(holds.and(select(wasOn, t.greaterThanEqual(middle.sub(this.sticky)), t.lessThanEqual(middle.add(this.sticky)))))
       })
       const blocks = select(hi.sub(lo).lessThan(BLOCK_SPLIT), evenGlyph, select(holds, was, split))
-      const shaped = this.set.greaterThan(0.5).toVar()
+      const shaped = this.set.greaterThan(0.5).and(this.set.lessThan(2.5)).toVar()
       glyph.assign(select(shaped, select(this.set.lessThan(1.5), braille, blocks), glyph))
+
+      // lines (`boxFor`): an arm between each two neighboring corners on two sides of a line, else a dot by tone
+      const corner = CORNERS.map(([x, y]) => probe([x, y]))
+      const apart = (a: ReturnType<typeof probe>, b: ReturnType<typeof probe>) => a.shown.notEqual(b.shown)
+        .or(a.shown.and(abs(a.part.sub(b.part)).greaterThan(0.001).or(abs(a.depth.sub(b.depth)).greaterThan(min(a.depth, b.depth).mul(EDGE_DEPTH)))))
+      const arms = select(apart(corner[0], corner[1]), float(1), float(0)).add(select(apart(corner[1], corner[3]), float(2), float(0)))
+        .add(select(apart(corner[2], corner[3]), float(4), float(0))).add(select(apart(corner[0], corner[2]), float(8), float(0))).toVar()
+      const dotHeld = select(kept.and(was.lessThan(0.5).or(was.greaterThan(15.5))), this.sticky, float(0))
+      const dotLo = select(was.greaterThan(15.5), float(BOX_DOT).sub(dotHeld), float(BOX_DOT).add(dotHeld))
+      const dotHi = select(abs(was.sub(17)).lessThan(0.5), float(BOX_DOT_BIG).sub(dotHeld), float(BOX_DOT_BIG).add(dotHeld))
+      const box = select(arms.greaterThan(0.5), arms, select(tone.lessThan(dotLo), float(0), select(tone.lessThan(dotHi), float(16), float(17)))).toVar()
+      const isLines = abs(this.set.sub(3)).lessThan(0.5).toVar()
+      glyph.assign(select(isLines, box, glyph))
+
+      // words (`wordFor`): the letter that falls on the cell, written along every row without a break, and how bright
+      const at = mod(cell.y.mul(this.cells.x).add(cell.x), this.wordCount)
+      const letter = floor(texture(this.words, vec2(at.add(0.5).div(WORDS_MOST), 0.5)).r.mul(255).add(0.5))
+      const step = min(floor(tone.mul(WORD_LEVELS.length)), float(WORD_LEVELS.length - 1)).toVar()
+      const word = select(tone.lessThan(WORD_FROM).or(letter.lessThan(0.5)), float(0), letter.add(step.mul(WORD_STEP))).toVar()
+      const isWords = abs(this.set.sub(4)).lessThan(0.5).toVar()
+      glyph.assign(select(isWords, word, glyph))
+      const wordLevel = float(WORD_LEVELS[0]).toVar()
+      for (let i = 1; i < WORD_LEVELS.length; i++) wordLevel.assign(select(step.greaterThan(i - 0.5), float(WORD_LEVELS[i]), wordLevel))
+
+      // the typewriter (`typedFor`): the strikes whose ink is nearest, or the cell's own when no more than `sticky` further off
+      const typedBest = float(0).toVar(), typedOff = abs(tone.sub(TYPED_INK[0])).toVar()
+      for (let i = 1; i < TYPED_INK.length; i++) {
+        const d = abs(tone.sub(TYPED_INK[i]))
+        const nearer = d.lessThan(typedOff)
+        typedBest.assign(select(nearer, float(i), typedBest))
+        typedOff.assign(select(nearer, d, typedOff))
+      }
+      const wasTyped = float(-1).toVar()
+      for (let i = 0; i < TYPED_INK.length; i++) wasTyped.assign(select(abs(was.sub(i)).lessThan(0.5), float(TYPED_INK[i]), wasTyped))
+      const keepTyped = kept.and(wasTyped.greaterThanEqual(0)).and(abs(wasTyped.sub(tone)).lessThanEqual(typedOff.add(this.sticky)))
+      const isTyped = abs(this.set.sub(5)).lessThan(0.5).toVar()
+      glyph.assign(select(isTyped, select(keepTyped, was, typedBest), glyph))
 
       // its own color, brought up to full strength but no more than `LIFT_MOST` times
       const top = max(max(mean.r, mean.g), max(mean.b, max(cover.div(LIFT_MOST), 1e-4)))
       const lightOn = this.light.greaterThan(0.5)
       const partTop = select(this.set.lessThan(1.5), dotTop, hi)
-      const level = select(shaped, select(lightOn, float(0.6).sub(partTop.mul(0.45)), partTop.mul(0.45).add(0.55)),
+      const boxLine = isLines.and(glyph.greaterThan(0.5)).and(glyph.lessThan(15.5))
+      const level = select(isWords, select(lightOn, float(0.6).sub(wordLevel.mul(0.45)), wordLevel),
+        select(boxLine, select(lightOn, float(0.2), float(1)),
+        select(isLines.or(isTyped), select(lightOn, float(0.6).sub(tone.mul(0.45)), tone.mul(0.45).add(0.55)),
+        select(shaped, select(lightOn, float(0.6).sub(partTop.mul(0.45)), partTop.mul(0.45).add(0.55)),
         select(stranded, select(lightOn, float(0.6).sub(tone.mul(0.45)), tone.mul(0.55).add(0.45)),
-          select(stroked, select(lightOn, float(0.2), float(1)), select(lightOn, float(0.6).sub(tone.mul(0.45)), tone.mul(0.45).add(0.55)))))
+          select(stroked, select(lightOn, float(0.2), float(1)), select(lightOn, float(0.6).sub(tone.mul(0.45)), tone.mul(0.45).add(0.55))))))))
       const own = mean.rgb.div(top).mul(level)
       const color = select(this.inked.greaterThan(0.5), this.ink, own)
       // kept as the root of linear, which a byte holds evenly from dark to light
@@ -354,8 +408,49 @@ export class GlyphPass {
         select(abs(glyph.sub(17)).lessThan(0.5), f(mod(ix.add(iy), 2).lessThan(0.5)),
           select(abs(glyph.sub(18)).lessThan(0.5), f(ex.add(ey).lessThan(1.5)),
             mod(floor(glyph.div(quarter.exp2()).add(0.001)), 2))))
-      const drawn = select(this.set.lessThan(0.5), f(ascii), select(this.set.lessThan(1.5), f(braille), blocks))
-      const on = f(drawn.greaterThan(0.5)).toVar()
+      // lines (`setBit`): arms from the middle to the sides, or a dot
+      const [mx, my] = BOX_MID
+      const atMx = abs(ix.sub(mx)).lessThan(0.5), atMy = abs(iy.sub(my)).lessThan(0.5)
+      const armOn = (bit: number) => mod(floor(glyph.div(2 ** bit).add(0.001)), 2).greaterThan(0.5)
+      const lineArms = atMx.and(armOn(0).and(iy.lessThanEqual(my)).or(armOn(2).and(iy.greaterThanEqual(my))))
+        .or(atMy.and(armOn(3).and(ix.lessThanEqual(mx)).or(armOn(1).and(ix.greaterThanEqual(mx)))))
+      const bigDot = ix.greaterThanEqual(mx - 0.5).and(ix.lessThanEqual(mx + 1.5)).and(iy.greaterThanEqual(my - 0.5)).and(iy.lessThanEqual(my + 1.5))
+      const lines = select(abs(glyph.sub(16)).lessThan(0.5), f(atMx.and(atMy)), select(abs(glyph.sub(17)).lessThan(0.5), f(bigDot), f(lineArms.and(glyph.lessThan(15.5)))))
+      // words: the letter, under how bright it is
+      const letterOf = mod(glyph, WORD_STEP)
+      const fontAt = (g: N, x: N, y: N) => texture(font, vec2(g.mul(CELL_W).add(x).add(0.5).div(GLYPHS.length * CELL_W), y.add(0.5).div(CELL_H))).r
+      const words = f(fontAt(letterOf, ix, iy).greaterThan(0.5))
+      // the typewriter (`typedBit`): either strike off line by its slip, less the pixels the ribbon missed
+      const hash = (x: N, y: N, k: number) => {
+        const a = mod(x.mul(73).add(y.mul(151)).add(k * 29), 1021)
+        return mod(a.mul(397).add(k * 7), 1021).div(1021)
+      }
+      const keyOf = (k: 0 | 1) => {
+        const n = float(TYPED[0][k]).toVar()
+        for (let i = 1; i < TYPED.length; i++) n.assign(select(abs(glyph.sub(i)).lessThan(0.5), float(TYPED[i][k]), n))
+        return n
+      }
+      const strike = (k: 0 | 1) => {
+        const key = keyOf(k)
+        const dx = select(hash(cell.x, cell.y, 1 + 2 * k).lessThan(k ? 0.5 : TYPE_SLIP[0]), float(1), float(0))
+        const dy = select(hash(cell.x, cell.y, 2 + 2 * k).lessThan(TYPE_SLIP[1]), float(1), float(0))
+        const x = ix.sub(dx), y = iy.sub(dy)
+        return key.greaterThanEqual(0).and(x.greaterThanEqual(0)).and(y.greaterThanEqual(0)).and(fontAt(max(key, 0), max(x, 0), max(y, 0)).greaterThan(0.5))
+      }
+      const missed = hash(cell.x.mul(CELL_W).add(ix), cell.y.mul(CELL_H).add(iy), 5).lessThan(TYPE_SLIP[2])
+      const typed = f(strike(0).or(strike(1)).and(missed.not()))
+      const ribbon = float(TYPE_FAINT).add(hash(cell.x, cell.y, 9).mul(1 - TYPE_FAINT))
+      const drawn = select(this.set.lessThan(0.5), f(ascii), select(this.set.lessThan(1.5), f(braille), select(this.set.lessThan(2.5), blocks,
+        select(this.set.lessThan(3.5), lines, select(this.set.lessThan(4.5), words, typed)))))
+      // on paper a word's brightness is how much ink it lays down, and a typed cell's how worn the ribbon was there
+      const levelOf = (s: N) => {
+        const v = float(WORD_LEVELS[0]).toVar()
+        for (let i = 1; i < WORD_LEVELS.length; i++) v.assign(select(s.greaterThan(i - 0.5), float(WORD_LEVELS[i]), v))
+        return v
+      }
+      const strength = select(abs(this.set.sub(5)).lessThan(0.5), ribbon,
+        select(abs(this.set.sub(4)).lessThan(0.5).and(this.inked.greaterThan(0.5)), levelOf(floor(glyph.div(WORD_STEP))), float(1)))
+      const on = f(drawn.greaterThan(0.5)).mul(strength).toVar()
       // linear and premultiplied, as the blobs' own draw gives
       return vec4(g.rgb.mul(g.rgb).mul(on), on)
     })()
@@ -369,6 +464,7 @@ export class GlyphPass {
     this.depth.dispose()
     for (const g of this.grids) g.dispose()
     this.font.dispose()
+    this.words.dispose()
     this.decide.dispose()
     this.show.dispose()
   }

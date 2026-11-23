@@ -1,0 +1,2 @@
+- Diorama: in pixel art, a scene that rocks no longer jumps a pixel to one side now and then.
+- Engine: pixel art is held on the art's grid at the point the view turns about (`snapAnchor`), not the world's origin, so turning or zooming never shifts the whole picture by a pixel.

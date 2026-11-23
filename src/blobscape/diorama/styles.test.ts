@@ -5,7 +5,7 @@ import { LOOKS } from '../brushLooks.ts'
 import { CEL } from '../celLooks.ts'
 import { BLOCKS, BLOCK_GROUNDS, BLOCK_SPAN, BLOCK_START, blockBack, blockLook, gridOf } from '../blockLooks.ts'
 import { TIMES, paletteAt, timeAsked, timeOf, under } from '../timeOfDay.ts'
-import { WASH, WASH_PAPERS, WASH_SKY, WASH_START, washLook } from '../washLooks.ts'
+import { WASH, WASH_PAPERS, WASH_SKY_COLORS as WASH_SKY, WASH_START, washLook } from '../washLooks.ts'
 import { GLASS, glassLook, GLASS_START } from '../glassLooks.ts'
 import { GLITCH, GLITCH_START, glitchLook } from '../glitchLooks.ts'
 import { NEON, NEON_PACES, neonLook, NEON_START, periodIn } from '../neonLooks.ts'
@@ -15,7 +15,7 @@ test('pixel art comes first, then every look Brush and Ink offers, each once', (
   const ids = STYLES.map((s) => s.id)
   assert.equal(new Set(ids).size, ids.length)
   for (const l of [...LOOKS, GLITCH, CEL, BLOCKS, NEON, GLASS, WASH]) assert.ok(ids.includes(l.id), `${l.id} is offered`)
-  assert.equal(ids.length, LOOKS.length + 7)
+  assert.equal(ids.length, LOOKS.length + 8)
   assert.equal(STYLES[1].id, 'glitch')
 })
 

@@ -1,1 +1,0 @@
-Diorama: cel shading now follows the scene's own light. Lamps, fires and the lighthouse's turning beam light what they reach as one more tone, lit windows and flames stay bright, and a scene under a dark sky is drawn in a night's light in front of its own sky.

@@ -820,8 +820,11 @@ export default [
       }, t)
       const differ = (a, b, by = 40) => { let n = 0; for (let i = 0; i < a.length; i += 4) if (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]) + Math.abs(a[i + 3] - b[i + 3]) > by) n++; return n / (a.length / 4) }
       const solid = (a) => { let n = 0; for (let i = 3; i < a.length; i += 4) if (a[i] > 128) n++; return n / (a.length / 4) }
+      // the page offers only the painted looks; the others are still drawn when asked for, as an old link does
+      const OFFERED = ['gouache', 'oil', 'ink', 'hatch', 'stipple', 'watercolor']
       const pick = async (page, name, look) => {
-        await tabClick(page.getByTestId('brush-looks').getByRole('button', { name, exact: true }))
+        if (OFFERED.includes(look)) await tabClick(page.getByTestId('brush-looks').getByRole('button', { name, exact: true }))
+        else await page.evaluate((look) => window.__brush.setLook(look), look)
         await page.waitForFunction((look) => window.__brush?.look === look, look, { timeout: 10000 }).catch(() => {})
       }
       const pictures = {}
@@ -880,7 +883,7 @@ export default [
         if (!(strokes > unfurred + 20)) fails.push(`brush and ink on ${backend}: ASCII strokes along fur: ${strokes} strokes with them, ${unfurred} without`)
         else ok(`brush and ink on ${backend}: ASCII draws the fox's fur as strokes the way it runs (${strokes} strokes, ${unfurred} without them)`)
         // braille and blocks: the same grid in their own characters, a frame drawn twice the same
-        for (const [label, set, only] of [['Braille', 'braille', /^[\u2800-\u28ff\s]*$/], ['Blocks', 'blocks', /^[ ▘▝▀▖▌▞▛▗▚▐▜▄▙▟█░▒▓\n]*$/]]) {
+        for (const [label, set, only] of [['Braille', 'braille', /^[\u2800-\u28ff\s]*$/], ['Quarter blocks', 'blocks', /^[ ▘▝▀▖▌▞▛▗▚▐▜▄▙▟█░▒▓\n]*$/]]) {
           await tabClick(k.page.getByTestId('brush-chars').getByRole('button', { name: label, exact: true }))
           const a = await read(k.page), b = await read(k.page)
           const t = (await k.page.evaluate(() => window.__brush.text())) ?? ''

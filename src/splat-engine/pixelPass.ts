@@ -277,14 +277,20 @@ export class PixelPass {
 
   private readonly kept4 = [new Matrix4(), new Matrix4()]
   private readonly origin = new Vector3()
+  /**
+   * The world point `snap` lands on the art's grid: the point the view turns about (the stage sets its orbit's target).
+   * It must stay put on the screen as the view turns, or its place crosses half an art pixel now and then and the
+   * whole picture jumps a pixel at once (Matt saw it as a Diorama scene rocked, 2026-11-23, snapped at the world's origin).
+   */
+  readonly anchor = new Vector3()
 
   /**
-   * `snap`: shifts the camera's picture by under an art pixel so the world's origin lands on the art's grid, and gives
+   * `snap`: shifts the camera's picture by under an art pixel so `anchor` lands on the art's grid, and gives
    * back what puts it as it was. A shift of the projection's third column moves every point on the screen alike.
    */
   private snapCamera(camera: Camera) {
     camera.updateMatrixWorld()
-    const p = this.origin.set(0, 0, 0).applyMatrix4(camera.matrixWorldInverse).applyMatrix4(camera.projectionMatrix)
+    const p = this.origin.copy(this.anchor).applyMatrix4(camera.matrixWorldInverse).applyMatrix4(camera.projectionMatrix)
     if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) return undefined
     const dx = snapShift(p.x, this.small.width), dy = snapShift(p.y, this.small.height)
     const [proj, inv] = this.kept4

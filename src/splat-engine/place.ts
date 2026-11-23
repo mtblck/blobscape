@@ -10,8 +10,11 @@ import type { Shape, VoxelPart } from './voxel.ts'
 
 /** Where a thing is set down: its foot goes to `at`, turned `turn` degrees about the upright (counterclockwise seen from above), `size` times as big. */
 export interface Placement {
+  /** Where its foot stands. */
   at: Vec3
+  /** Degrees it is turned about the upright. */
   turn: number
+  /** How many times its own size it is. */
   size: number
 }
 
@@ -39,6 +42,7 @@ const add = (a: ArrayLike<number>, b: ArrayLike<number>): Vec3 => [a[0] + b[0], 
 const sub = (a: ArrayLike<number>, b: ArrayLike<number>): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
 const scale = (a: ArrayLike<number>, s: number): Vec3 => [a[0] * s, a[1] * s, a[2] * s]
 
+/** Works a placement out for a thing whose foot is at `foot` in its own description. */
 export function placer(foot: ArrayLike<number>, pl: Placement): Placer {
   const q = axisAngle([0, 1, 0], pl.turn * DEG), qi = conj(q), s = pl.size
   const same = pl.turn % 360 === 0 && s === 1 && pl.at[0] === foot[0] && pl.at[1] === foot[1] && pl.at[2] === foot[2]

@@ -1,2 +1,0 @@
-- Diorama: the lighthouse is now written as a scene description like the others, so a tap on its island throws sparkles too. It looks almost the same; a few textures (the sea's waves, the rock's layers) are drawn a little differently.
-- Engine: scene descriptions can ask for a finer grid (`grid`), paint by nearness to a shape (`near`), paint open water (`waves`), say how level a face must be to count as a top (`faces.up`), and start a circling light partway round (`circle.phase`).

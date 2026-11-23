@@ -49,6 +49,7 @@ export type PropRef = string | PropDoc
 
 /** One prop set down in a project. */
 export interface Placed extends Placement {
+  /** Which prop it is. */
   prop: PropRef
   /** Holds still: its own moves are not played. */
   still?: boolean
@@ -63,13 +64,17 @@ export interface Placed extends Placement {
 
 /** A scene made of a land and props: what Scene Creator edits and saves. */
 export interface SceneProject {
+  /** What says a file is a project. */
   kind: 'blobscape-project'
+  /** The format's version. */
   version: 1
+  /** The scene's name. */
   name: string
   /** Seconds before everything repeats: every prop's moves are fitted to it. */
   loop: number
   /** What everything stands on. It is never moved. */
   land: PropRef
+  /** The props set down on the land. */
   props: Placed[]
   /** Where the view starts; the land's own camera when left out. */
   camera?: Orbit
@@ -197,8 +202,9 @@ function weatherOf(kind: 'rain' | 'snow', camera: Orbit): SpeckDoc {
   return falling(kind, camera, WEATHER_COUNT[kind])
 }
 
-/** Falling leaves' colors, and how many come down under one tree. */
+/** Falling leaves' colors. */
 export const AUTUMN = ['#c8642a', '#e0a030', '#a83c20']
+/** How many leaves come down under one tree. */
 export const LEAVES_EACH = 12
 /** Whether a prop drops leaves: tagged `leafy` (tags.ts) and not `evergreen`. */
 export const leafy = (prop: { tags?: readonly string[] } | undefined) => tagged(prop, 'leafy') && !tagged(prop, 'evergreen')
@@ -588,16 +594,26 @@ export function readProject(text: string, known: (id: string) => boolean): { pro
 type Rgb = [number, number, number]
 
 /** A project made ready: every prop found and fitted to the loop, compiled once. */
+/** A project compiled apart: the land and each prop a scene of its own, with what poses each where it stands. */
 export interface CompiledProject {
+  /** The project's name. */
   name: string
+  /** Seconds before everything repeats. */
   loop: number
+  /** The land, compiled. */
   land: { prop: PropDoc; c: CompiledScene }
+  /** Each prop, compiled, with its placement and the poser that plays its moves where it stands. */
   props: { prop: PropDoc; c: CompiledScene; placed: Placed; poser: PlacedPoser }[]
   /** The palette for pixel art: the land's colors, then each prop's that the land lacks, joined down to 32. */
   palette: Rgb[]
+  /** Where the view starts. */
   camera: Orbit
 }
 
+/**
+ * Compiles a project apart, the land and each prop on their own, which is what an editor wants: moving one prop
+ * cuts only it again. `find` gives a library prop by its id. `composeScene` is the other way, one scene for all.
+ */
 export function compileProject(project: SceneProject, find: (id: string) => PropDoc | undefined): CompiledProject {
   const get = (ref: PropRef, at: string): PropDoc => {
     const p = typeof ref === 'string' ? find(ref) : ref
