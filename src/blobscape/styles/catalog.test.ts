@@ -22,6 +22,7 @@ test('every setting is one of its style\'s values, starts sound, and no value is
       if (s.kind === 'range') assert.ok(typeof v === 'number' && v >= s.min && v <= s.max && s.step > 0, `${d.id}.${s.key} starts outside its range`)
       else if (s.kind === 'choice') assert.ok(s.open || v === '' || s.options.some((o) => o.id === v), `${d.id}.${s.key} starts on no choice`)
       else if (s.kind === 'toggle') assert.ok(typeof v === 'boolean' || (v === null && !!s.auto), `${d.id}.${s.key} is no switch`)
+      else if (s.kind === 'text') assert.ok(typeof v === 'string' && v.length <= s.most, `${d.id}.${s.key} is no text`)
       else assert.ok(Number.isInteger(v))
       assert.ok(s.label.length > 0)
     }
@@ -37,6 +38,11 @@ test('no two settings a style reads share a name in the address', () => {
 
 test('the address sets what it names and nothing unsound', () => {
   const q = (text: string) => new URLSearchParams(text)
+  // text: kept as typed, cut to its length, and a blank one ignored
+  assert.equal(fromAddress(ASCII, ASCII.start, q('chars=words&words=Hello there')).words, 'Hello there')
+  assert.equal(fromAddress(ASCII, ASCII.start, q(`words=${'x'.repeat(500)}`)).words.length, 120)
+  assert.equal(fromAddress(ASCII, ASCII.start, q('words=%20%20')).words, ASCII.start.words)
+  assert.equal(fromAddress(ASCII, ASCII.start, q('chars=typed')).chars, 'typed')
   const b = fromAddress(BLOCKS_DEF, BLOCKS_DEF.start, q('block=5&water=blocks&falls=blocks&swell=99&backdrop=slate'))
   assert.deepEqual([b.size, b.water, b.weather, b.swell, b.backdrop], [5, 'blocks', 'blocks', 16, 'slate'])
   assert.deepEqual(fromAddress(BLOCKS_DEF, BLOCKS_DEF.start, q('block=many&water=soup&backdrop=mars')), BLOCKS_DEF.start)

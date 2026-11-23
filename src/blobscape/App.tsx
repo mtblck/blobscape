@@ -37,6 +37,7 @@ import { ShapeShifter } from './ShapeShifter.tsx'
 import { WadingPond } from './WadingPond.tsx'
 import { SandSnowGoo } from './SandSnowGoo.tsx'
 import { BrushInk } from './BrushInk.tsx'
+import { TextMode } from './TextMode.tsx'
 import { FourWays } from './FourWays.tsx'
 import { DayNight } from './DayNight.tsx'
 import { Bouquets } from './Bouquets.tsx'
@@ -73,7 +74,7 @@ export function App({ route: at }: { route?: Route } = {}) {
       <SiteHeader here={route.page === 'notfound' ? undefined : href(route)} wide={route.page === 'sandbox' || route.page === 'creator'} />
       {/* Keyed by page, so each one mounts fresh: its own view, its own state */}
       <main id="main" key={key} className={route.page === 'sandbox' || route.page === 'creator' ? 'w-full flex-1' : 'mx-auto w-full max-w-7xl flex-1 px-4 pb-16'}>
-        {route.page === 'sandbox' ? <Sandbox /> : route.page === 'creator' ? <SceneCreator /> : route.page === 'creature' ? <Creature /> : route.page === 'forest' ? <ForestWalk /> : route.page === 'pond' ? <WadingPond /> : route.page === 'clockwork' ? <Clockwork /> : route.page === 'shift' ? <ShapeShifter /> : route.page === 'flow' ? <SandSnowGoo /> : route.page === 'brush' ? <BrushInk /> : route.page === 'fourways' ? <FourWays /> : route.page === 'daynight' ? <DayNight /> : route.page === 'bouquet' ? <Bouquets /> : route.page === 'islands' ? <Islands /> : route.page === 'diorama' ? <PixelDiorama /> : route.page === 'scan' ? <ScanStudio /> : route.page === 'dungeon' ? <DungeonRun /> : Lesson ? <Lesson /> : route.page === 'lessons' ? <LessonList /> : route.page === 'experiments' ? <Experiments /> : route.page === 'engine' ? <Engine /> : route.page === 'spec' ? <Spec /> : route.page === 'api' ? <EngineApi /> : route.page === 'contact' ? <Contact /> : route.page === 'news' ? <WhatsNew /> : route.page === 'post' ? <PostPage id={route.id} /> : route.page === 'notfound' ? <NotFound /> : <Landing />}
+        {route.page === 'sandbox' ? <Sandbox /> : route.page === 'creator' ? <SceneCreator /> : route.page === 'creature' ? <Creature /> : route.page === 'forest' ? <ForestWalk /> : route.page === 'pond' ? <WadingPond /> : route.page === 'clockwork' ? <Clockwork /> : route.page === 'shift' ? <ShapeShifter /> : route.page === 'flow' ? <SandSnowGoo /> : route.page === 'brush' ? <BrushInk /> : route.page === 'text' ? <TextMode /> : route.page === 'fourways' ? <FourWays /> : route.page === 'daynight' ? <DayNight /> : route.page === 'bouquet' ? <Bouquets /> : route.page === 'islands' ? <Islands /> : route.page === 'diorama' ? <PixelDiorama /> : route.page === 'scan' ? <ScanStudio /> : route.page === 'dungeon' ? <DungeonRun /> : Lesson ? <Lesson /> : route.page === 'lessons' ? <LessonList /> : route.page === 'experiments' ? <Experiments /> : route.page === 'engine' ? <Engine /> : route.page === 'spec' ? <Spec /> : route.page === 'api' ? <EngineApi /> : route.page === 'contact' ? <Contact /> : route.page === 'news' ? <WhatsNew /> : route.page === 'post' ? <PostPage id={route.id} /> : route.page === 'notfound' ? <NotFound /> : <Landing />}
       </main>
       <Footer />
       <Toaster />

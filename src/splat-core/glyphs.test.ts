@@ -79,7 +79,7 @@ test('an edge through a cell gets the stroke that runs along it', () => {
   assert.equal(s((x, y) => x - y > 0), '\\')
   assert.equal(s(() => true), '')
   assert.equal(s(() => false), '')
-  assert.equal(STROKES.length, GLYPHS.length - STROKE_FROM)
+  assert.equal(GLYPHS.slice(STROKE_FROM, STROKE_FROM + STROKES.length), STROKES)
 })
 
 test('parts, depth and tone each make an edge between two shown probes; small differences do not', () => {
@@ -233,4 +233,86 @@ test('a braille or blocks cell takes its color from its heaviest part', async ()
   const dim = shapeCell([0.2, 0.1, 0.05], 1, [0.1, 0.1, 0.1, 0.1], { set: 'blocks' }), bright = shapeCell([0.2, 0.1, 0.05], 1, [1, 0, 0, 0], { set: 'blocks' })
   assert.ok(bright.color[0] > dim.color[0])
   assert.deepEqual(shapeCell([0.2, 0.1, 0.05], 1, new Array(8).fill(1), { set: 'braille' }, -1, [0.1, 0.2, 0.3]).color, [0.1, 0.2, 0.3])
+})
+
+test('letters and signs for words and the typewriter: every one drawn, inside 5 × 7, and numbered after the ramp and strokes', async () => {
+  const { EXTRA } = await import('./glyphs.ts')
+  assert.equal(GLYPHS.slice(0, RAMP.length + STROKES.length), RAMP + STROKES)
+  for (const ch of EXTRA) {
+    const g = GLYPHS.indexOf(ch)
+    let ink = 0
+    for (let y = 0; y < CELL_H; y++) for (let x = 0; x < CELL_W; x++) if (glyphBit(g, x, y)) {
+      ink++
+      assert.ok(x < CELL_W - 1 && y < CELL_H - 1, `${ch} reaches the clear column or row`)
+    }
+    assert.ok(ink > 0, `${ch} has ink`)
+  }
+  assert.equal(new Set(GLYPHS).size, GLYPHS.length)
+})
+
+test('box drawing: an arm between each two corners on two sides of a line, joined from cell to cell, and a dot for tone', async () => {
+  const { boxFor, setBit, charOf, BOX_DOT, BOX_DOT_BIG } = await import('./glyphs.ts')
+  // corners above left, above right, below left, below right
+  const left = [on, off, on, off], top = [on, on, off, off], corner = [on, off, off, off]
+  assert.equal(charOf('lines', boxFor(left, 0.5)), '│')
+  assert.equal(charOf('lines', boxFor(top, 0.5)), '─')
+  assert.equal(charOf('lines', boxFor(corner, 0.5)), '┘')
+  assert.equal(charOf('lines', boxFor([on, on, on, { ...on, part: 2 }], 0.5)), '┌')
+  // by tone alone no line: a dot, the big one for more
+  const flat = [on, on, on, { ...on, tone: 0.9 }]
+  assert.equal(boxFor(flat, BOX_DOT - 0.1), 0)
+  assert.equal(boxFor(flat, (BOX_DOT + BOX_DOT_BIG) / 2), 16)
+  assert.equal(boxFor(flat, BOX_DOT_BIG + 0.1), 17)
+  // a dot holds just past its step
+  assert.equal(boxFor(flat, BOX_DOT - 0.02, 16), 16)
+  assert.equal(boxFor(flat, BOX_DOT - 0.02, -1, 0), 0)
+  // a level line reaches both sides of its cell and an upright one the top and bottom, so neighbors join
+  const level = 2 | 8, upright = 1 | 4
+  assert.ok(setBit('lines', level, 0, 3) && setBit('lines', level, CELL_W - 1, 3))
+  assert.ok(setBit('lines', upright, 2, 0) && setBit('lines', upright, 2, CELL_H - 1))
+  assert.ok(!setBit('lines', 2, 0, 3) && setBit('lines', 2, CELL_W - 1, 3))
+})
+
+test('words: written along every row without a break, as bright as their cells, blank where there is nothing', async () => {
+  const { wordGlyphs, wordFor, charOf, glyphText, WORD_FROM, WORD_STEP, textCell } = await import('./glyphs.ts')
+  const text = wordGlyphs('Fox!')
+  assert.equal(text.map((g) => GLYPHS[g]).join(''), 'FOX! ')
+  assert.deepEqual(wordGlyphs('a~b ').map((g) => GLYPHS[g]), ['A', ' ', 'B', ' '])
+  // a grid 6 wide: the second row carries on from the first
+  const row = (y: number) => [0, 1, 2, 3, 4].map((x) => charOf('words', wordFor(text, x, y, 5, 1))).join('')
+  assert.equal(row(0) + row(1), 'FOX! FOX! ')
+  assert.equal(wordFor(text, 0, 0, 5, WORD_FROM / 2), 0)
+  assert.ok(wordFor(text, 0, 0, 5, 0.2) < wordFor(text, 0, 0, 5, 0.9))
+  assert.equal(wordFor(text, 0, 0, 5, 0.9) % WORD_STEP, wordFor(text, 0, 0, 5, 0.2) % WORD_STEP)
+  assert.equal(glyphText([wordFor(text, 0, 0, 2, 0.9), wordFor(text, 1, 0, 2, 0.3)], 2, 'words'), 'FO')
+  const dim = textCell([0.05, 0.05, 0.05], 1, { set: 'words', words: 'fox' }, { x: 0, y: 0, columns: 4 })
+  const bright = textCell([0.8, 0.8, 0.8], 1, { set: 'words', words: 'fox' }, { x: 0, y: 0, columns: 4 })
+  assert.equal(charOf('words', dim.glyph), 'F')
+  assert.ok(Math.max(...dim.color) < Math.max(...bright.color))
+})
+
+test('typewriter: strikes from none to the heaviest, held near a step, each a little out of line and the same every time', async () => {
+  const { TYPED, TYPED_INK, typedFor, typedBit, typeHash, typeSlip, typeInk, charOf, TYPE_FAINT } = await import('./glyphs.ts')
+  assert.equal(TYPED_INK[0], 0)
+  assert.equal(TYPED_INK[TYPED_INK.length - 1], 1)
+  for (let i = 1; i < TYPED_INK.length; i++) assert.ok(TYPED_INK[i] >= TYPED_INK[i - 1])
+  assert.equal(TYPED.length, TYPED_INK.length)
+  assert.ok(TYPED.some(([, b]) => b >= 0), 'some keys are struck over one another')
+  let last = 0
+  for (let t = 0; t <= 1; t += 0.05) { const e = typedFor(t); assert.ok(TYPED_INK[e] >= TYPED_INK[last] - 1e-9); last = e }
+  assert.equal(typedFor(0), 0)
+  const mid = typedFor(0.5)
+  assert.equal(typedFor(0.5 + 0.02, mid), mid)
+  // the hash is 0–1, whole-number arithmetic, and the same for the same cell
+  for (let i = 0; i < 200; i++) { const h = typeHash(i * 7, i * 3, i % 10); assert.ok(h >= 0 && h < 1) }
+  assert.equal(typeHash(5, 9, 2), typeHash(5, 9, 2))
+  let slipped = 0
+  for (let x = 0; x < 100; x++) { const [dx, dy] = typeSlip(x, 3, 0); slipped += dx + dy; assert.ok(dx >= 0 && dx <= 1 && dy >= 0 && dy <= 1) }
+  assert.ok(slipped > 5 && slipped < 60, `${slipped} slips in 100 cells`)
+  for (let x = 0; x < 50; x++) { const k = typeInk(x, 1); assert.ok(k >= TYPE_FAINT && k <= 1) }
+  // a struck cell has ink, a blank one none, and a heavy one more than a light one
+  const ink = (e: number) => { let n = 0; for (let y = 0; y < CELL_H; y++) for (let x = 0; x < CELL_W; x++) if (typedBit(e, 4, 4, x, y)) n++; return n }
+  assert.equal(ink(0), 0)
+  assert.ok(ink(TYPED.length - 1) > ink(1))
+  assert.equal(charOf('typed', 0), ' ')
 })

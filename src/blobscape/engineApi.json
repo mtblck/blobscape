@@ -10876,7 +10876,13 @@
        "name": "set",
        "optional": true,
        "type": "GlyphSet",
-       "doc": "Which characters (default 'ascii'): 'braille' draws each cell as the braille character whose eight dots are on\nwhere that eighth of the cell is heavy enough, and 'blocks' as the quarter blocks (▘ ▚ ▙ and so on) or, where a\ncell is even, one of the shades ░ ▒ ▓. Both show shapes within a cell, so `edges` and `strands` are not used."
+       "doc": "Which characters (default 'ascii'): 'braille' draws each cell as the braille character whose eight dots are on\nwhere that eighth of the cell is heavy enough, and 'blocks' as the quarter blocks (▘ ▚ ▙ and so on) or, where a\ncell is even, one of the shades ░ ▒ ▓. Both show shapes within a cell, so `edges` and `strands` are not used.\n'lines' draws only the edges, in box-drawing characters (─ │ ┌ ┼ and so on) that join from cell to cell, with a\ndot for tone; 'words' writes `words` over and over through the picture, each letter as bright as its cell; and\n'typed' is a typewriter's: keys struck once or twice over one another by tone, each strike a little out of line."
+      },
+      {
+       "name": "words",
+       "optional": true,
+       "type": "string",
+       "doc": "The text 'words' writes, in capitals (letters, digits and `EXTRA`'s signs; anything else is a space)."
       }
      ]
     },
@@ -10884,7 +10890,7 @@
      "name": "GlyphSet",
      "kind": "type",
      "doc": "The kinds of characters a picture can be drawn in (`GlyphLook.set`).",
-     "type": "\"ascii\" | \"braille\" | \"blocks\""
+     "type": "\"ascii\" | \"braille\" | \"blocks\" | \"lines\" | \"words\" | \"typed\""
     },
     {
      "name": "toneOf",
@@ -11015,10 +11021,10 @@
     {
      "name": "setBit",
      "kind": "function",
-     "doc": "Whether a character of a set has ink at a pixel of its 6 × 8 cell (`x` from the left, `y` from the top): what the engine draws.",
+     "doc": "Whether a character of a set has ink at a pixel of its 6 × 8 cell (`x` from the left, `y` from the top): what the engine draws. The typewriter's also needs the cell's column and row (`cx`, `cy`).",
      "signatures": [
       {
-       "code": "setBit(set: GlyphSet, glyph: number, x: number, y: number): boolean"
+       "code": "setBit(set: GlyphSet, glyph: number, x: number, y: number, cx?: number, cy?: number): boolean"
       }
      ]
     },
@@ -13510,11 +13516,32 @@
      ]
     },
     {
+     "name": "TextSetting",
+     "kind": "interface",
+     "doc": "A line of text the visitor types (the words a picture is written in).",
+     "generics": "<V>",
+     "extends": [
+      "Base<V>"
+     ],
+     "props": [
+      {
+       "name": "kind",
+       "type": "\"text\"",
+       "doc": "What says it is text."
+      },
+      {
+       "name": "most",
+       "type": "number",
+       "doc": "The most characters it keeps."
+      }
+     ]
+    },
+    {
      "name": "StyleSetting",
      "kind": "type",
-     "doc": "A setting of a style: a slider, a choice, a switch or a seed.",
+     "doc": "A setting of a style: a slider, a choice, a switch, a seed or a line of text.",
      "generics": "<V>",
-     "type": "RangeSetting<V> | ChoiceSetting<V> | ToggleSetting<V> | SeedSetting<V>"
+     "type": "RangeSetting<V> | ChoiceSetting<V> | ToggleSetting<V> | SeedSetting<V> | TextSetting<V>"
     },
     {
      "name": "StyleDef",
@@ -13579,7 +13606,12 @@
       {
        "name": "chars",
        "type": "GlyphSet",
-       "doc": "Which characters: ASCII, braille or blocks."
+       "doc": "Which characters: ASCII, braille, blocks, box drawing, words or a typewriter's."
+      },
+      {
+       "name": "words",
+       "type": "string",
+       "doc": "The text the picture is written in, drawn as words."
       },
       {
        "name": "letter",
@@ -13797,6 +13829,12 @@
      "kind": "const",
      "doc": "The settings the brush marks and the plain blobs share: mark size, outline, pen and paper.",
      "type": "StyleDef<MarkSettings>"
+    },
+    {
+     "name": "WORDS_START",
+     "kind": "const",
+     "doc": "What a picture drawn as words says until the visitor writes something else.",
+     "type": "\"Every blob a letter. \""
     },
     {
      "name": "ASCII",
