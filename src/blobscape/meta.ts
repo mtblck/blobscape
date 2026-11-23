@@ -69,7 +69,7 @@ const SEARCH: Partial<Record<Route['page'], string>> = {
   bouquet: 'A florist that never makes the same bouquet twice: pick a season and it grows every flower petal by petal out of Gaussian splats and stands them in a vase.',
   daynight: 'A cabin in a forest clearing made of Gaussian splats, lit live through a whole day. Drag the time and the sun follows its real path for the place and season.',
   fourways: 'One pixel-art scene drawn four ways at the same moment: a hand-written shader, three.js meshes, Spark splats and Blobscape, on one clock, camera and light.',
-  brush: 'Gaussian splats drawn as brush marks and pen strokes: gouache, oil, ink and wash, hatching, ASCII and cel shading. The strokes hold still as you turn the scene.',
+  brush: 'Gaussian splats painted as brush marks and pen strokes: gouache, oil, ink and wash, hatching, stipple and watercolor. The strokes hold still as you turn it.',
   flow: 'Gaussian splats that flow: every blob is a particle of sand, snow or goo in a small material point simulation. Pour it, drop things in it, or let a column go.',
   clockwork: "A watch movement made of Gaussian splats, keeping the real time. Every wheel turns by a real watch's ratios: slow it down to see one tick of the escapement.",
   sandbox: 'Spray, select, recolor and blow up Gaussian splats, paint grass and fur, add creatures that walk about, or open your own capture. Nothing is uploaded.',
@@ -118,7 +118,7 @@ function wordsFor(route: Route): Omit<PageMeta, 'search'> {
     case 'fourways':
       return { path, title: `One Scene, Four Ways · ${SITE.name}`, description: 'One pixel-art scene (a fox in tall grass under a circling light, or a campfire) drawn four ways at the same moment: a shader written with no engine, three.js meshes, Spark splats and Blobscape. One clock, one camera and one light slider drive all four, with the same palette and dither, so you can see what each is made of, what moves, what the light can do and what a frame costs.' }
     case 'brush':
-      return { path, title: `Brush and Ink · ${SITE.name}`, description: 'Gaussian splats drawn as brush marks and pen strokes in place of soft dots: gouache, oil, ink and wash, hatching, ASCII characters, and cel shading with live light. Every mark belongs to one blob and takes its shape and direction from it, so a scene, a creature or a scan reads as a painting from any side and the strokes hold still as you turn it.' }
+      return { path, title: `Brush and Ink · ${SITE.name}`, description: 'Gaussian splats painted as brush marks and pen strokes in place of soft dots: gouache, oil, ink and wash, hatching, stipple and watercolor. Every mark belongs to one blob and takes its shape and direction from it, so a scene, a creature or a scan reads as a painting from any side and the strokes hold still as you turn it.' }
     case 'flow':
       return { path, title: `Sand, Snow and Goo · ${SITE.name}`, description: 'Gaussian splats that flow: every blob is a particle of sand, snow or goo in a small material point simulation (MLS-MPM). Pour it onto a block, steps or into a bowl, drop a ball, cube or rock into a pile of it, or let a column go: sand heaps at its friction angle, snow breaks into clumps and packs, goo spreads. Each material has its own settings, and all three can run side by side.' }
     case 'clockwork':

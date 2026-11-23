@@ -14,6 +14,10 @@ import type { Actor, CreatureStage } from './creature/stage.ts'
 import { DETAIL } from './diorama/scene.ts'
 import { DIORAMAS } from './diorama/scenes.ts'
 import { ALL_LOOKS, useDrawnLook, useHeld, wantsPlain, type Look } from './drawnLook.tsx'
+
+/** The looks this page offers (Matt, 2026-11-23: the painted and drawn ones). The rest are Diorama's Style tab's; an address naming one still draws it, for old links and verify. */
+const PAGE_LOOKS: readonly Look[] = ['gouache', 'oil', 'ink', 'hatch', 'stipple', 'watercolor']
+const OFFERED = PAGE_LOOKS.map((id) => ALL_LOOKS.find((l) => l.id === id)!)
 import { timeOf, type TimeId } from './timeOfDay.ts'
 import { sceneStart } from './styles/catalog.ts'
 import { TimeControls } from './styles/SceneControls.tsx'
@@ -23,7 +27,7 @@ import { sampleScan } from './scan/sample.ts'
 import { DEFAULT_CLEAN, UNTURNED, autoOrient, cleanMasks, finish, stillActor, working } from './scan/studio.ts'
 
 declare global {
-  interface Window { __brush?: { stage: CreatureStage; blobs: () => number; subject: string; look: string; plain: boolean; text: () => Promise<string | undefined> } }
+  interface Window { __brush?: { stage: CreatureStage; blobs: () => number; subject: string; look: string; plain: boolean; text: () => Promise<string | undefined>; setLook: (look: Look) => void } }
 }
 
 /** What is on show: how to build it, and how it moves. */
@@ -174,7 +178,7 @@ export function BrushInk() {
   // For verify: the stage, without clicking
   useEffect(() => {
     if (!stage || !built) return
-    window.__brush = { stage, blobs: () => stage.blobCount, subject: built.id, look, plain: built.plain, text: () => stage.glyphText() }
+    window.__brush = { stage, blobs: () => stage.blobCount, subject: built.id, look, plain: built.plain, text: () => stage.glyphText(), setLook }
     return () => { delete window.__brush }
   }, [stage, built, look])
 
@@ -191,7 +195,7 @@ export function BrushInk() {
       <header className="flex flex-wrap items-end justify-between gap-x-8 gap-y-2 pt-4 pb-6">
         <h1 ref={h1} tabIndex={-1} className="font-display text-4xl outline-none sm:text-5xl">Brush and Ink</h1>
         <p className="max-w-xl text-lg text-ink-muted">
-          The same blobs, drawn as brush marks, pen strokes, plain characters or flat cel tones in place of soft dots. Every mark belongs to one blob and takes its
+          The same blobs, painted as brush marks, washes and pen strokes in place of soft dots. Every mark belongs to one blob and takes its
           shape and direction from it, so the painting holds still as you turn it. Drag the view and watch the strokes stay put.
         </p>
       </header>
@@ -241,7 +245,7 @@ export function BrushInk() {
               <div className={TAB_SECTIONS}>
                 <Field label="Drawn as">
                   <div className="flex flex-wrap gap-1.5" data-testid="brush-looks">
-                    {ALL_LOOKS.map((l) => <Chip key={l.id} active={look === l.id} onClick={() => setLook(l.id)}>{l.label}</Chip>)}
+                    {OFFERED.map((l) => <Chip key={l.id} active={look === l.id} onClick={() => setLook(l.id)}>{l.label}</Chip>)}
                   </div>
                   <p className="mt-1.5 text-xs text-ink-faint">{lookNow.note}</p>
                 </Field>
@@ -298,18 +302,10 @@ export function BrushInk() {
             which is how a pen makes a tone.
           </p>
           <p>
-            ASCII is the odd one out. Characters only read standing upright in rows, so they can't turn with the blobs: the view is
-            cut into a grid of cells that stays put on the screen, and each cell gets the character whose ink matches how much there
-            is to show in it. Where an edge runs through a cell (the picture ends, one thing stands in front of another, two parts
-            meet) it gets a stroke along the edge, and a cell full of fur or grass gets a stroke the way the strands run. A cell keeps its character until another is clearly a better fit, so the text
-            doesn't flicker as the view turns, and Copy as text gives you the picture in plain characters.
-          </p>
-          <p>
-            Cel shading is about the light. A cel is painted in flat colors with the light cut into two or three tones, and the
-            tones have clean edges. So the subject is built again with no light in its colors, each blob is drawn flat, and the
-            light is worked out live: how each blob faces it, and what stands in its way, seen from where the light is. That
-            light is smoothed a little over the surface it lies on and then cut, which is what gives a shadow one clean edge
-            instead of an edge of dots. Turn the light and the shadows of the sails go round the mill.
+            Watercolor is the exception. Washes run into each other, so it can't be a mark a blob: the picture is softened and laid
+            on paper as see-through paint, which only darkens, gathers in the paper's tooth and pools where a wash ends. The
+            lightest places are left as bare paper, as a painter leaves the white, and the paper's grain stays put on the screen
+            while the paint moves over it.
           </p>
         </div>
       </section>
