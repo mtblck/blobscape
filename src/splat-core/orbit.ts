@@ -51,3 +51,24 @@ export function orbitLens(o: Orbit, width: number, height: number): Lens {
   return lensOf(cam, width, height)
 }
 
+
+/** The world point pixel art is held on the art's grid at, and the turn, height and distance of the view it was set for. */
+export interface SnapAnchor {
+  /** The world point held on the grid. */
+  at: [number, number, number]
+  /** The view's turn, height and distance when it was set, as one key. */
+  view: string
+}
+
+/**
+ * Where pixel art's `snap` holds the picture on the art's grid, for the view `o`, given where it was last (`kept`).
+ * While the view turns or zooms about its target, the target is the one point that stays put on the screen, so the
+ * anchor is the target and the picture never jumps: a point off it (the world's origin, at first) crosses half an art
+ * pixel now and then, and the whole scene jumped a pixel at once as a Diorama scene rocked (Matt saw it, 2026-11-23).
+ * While only the target moves (a pan, a camera that follows) the anchor stays where it was in the world, so the scene
+ * still moves by whole pixels.
+ */
+export function snapAnchor(kept: SnapAnchor | undefined, o: Orbit): SnapAnchor {
+  const view = `${o.azimuth}|${o.elevation}|${o.distance}`
+  return kept && kept.view === view ? kept : { at: [o.target[0], o.target[1], o.target[2]], view }
+}
