@@ -11,6 +11,7 @@ import { GLASS_START, type GlassChoice } from './glassLooks.ts'
 import { GLITCH_AMOUNTS, GLITCH_PACE_CHOICES, GLITCH_START, type GlitchChoice } from './glitchLooks.ts'
 import { NEON_PACES, NEON_SETS, NEON_START, type NeonChoice } from './neonLooks.ts'
 import { WASH_PAPERS, WASH_START, type WashChoice } from './washLooks.ts'
+import { KNIT_PATTERNS, KNIT_START, KNIT_SWEATERS, type KnitChoice } from './knitLooks.ts'
 
 /**
  * The styles API (Matt, 2026-11-22: no page uses a version of a style all its own). Two things, both data:
@@ -255,8 +256,8 @@ export const PIXEL: StyleDef<PixelSettings> = {
     { key: 'size', kind: 'choice', label: 'Pixel size', tab: 'style', address: 'px', options: PIXEL_SIZES.map((n) => ({ id: n, label: `${n}×` })) },
     { key: 'rate', kind: 'choice', label: 'Motion', tab: 'style', options: PIXEL_RATES.map((n) => ({ id: n, label: n ? `${n} a second` : 'Smooth' })) },
     { key: 'dither', kind: 'range', label: 'Dither', tab: 'finish', when: pixelArt, min: 0, max: 1, step: 0.05, unit: 'percent', hint: (on) => (on.colors ? 'Checkers two palette colors to fake the ones between, where a pixel artist would: in the sky and the light round glowing things. Surfaces stay flat.' : 'Needs a palette: Full color has none to mix.') },
-    // neon and stained glass put the scene's lights by (neon has a Glow of its own), so this one would do nothing there
-    { key: 'glow', kind: 'range', label: 'Glow', tab: 'finish', address: 'glow', when: (_v, on) => on.style !== 'neon' && on.style !== 'glass', min: 0, max: 4, step: 0.25, unit: 'times', zero: 'off', hint: (on) => (pixelArt(0, on) ? 'How strongly lamps, fires and other glowing things light what is round them, and how far bright pixels shine into the ones beside them.' : 'How strongly lamps, fires and other glowing things light what is round them.') },
+    // neon, stained glass and knitting put the scene's lights by (neon has a Glow of its own), so this one would do nothing there
+    { key: 'glow', kind: 'range', label: 'Glow', tab: 'finish', address: 'glow', when: (_v, on) => on.style !== 'neon' && on.style !== 'glass' && on.style !== 'knit', min: 0, max: 4, step: 0.25, unit: 'times', zero: 'off', hint: (on) => (pixelArt(0, on) ? 'How strongly lamps, fires and other glowing things light what is round them, and how far bright pixels shine into the ones beside them.' : 'How strongly lamps, fires and other glowing things light what is round them.') },
     { key: 'steps', kind: 'toggle', label: 'Paint in steps of the palette', tab: 'switches', address: 'steps', when: pixelArt, held: (on) => (on.colors ? undefined : 'Needs a palette: Full color has no steps.'), about: 'Cuts the scene again with every blob in one palette color, a step of its own paint from shade to sun, so shade falls in flat bands.' },
     { key: 'texel', kind: 'range', label: 'Light in bands', tab: 'switches', address: 'texel', when: pixelArt, min: 0, max: 8, step: 1, unit: 'count', whole: true, draw: { kind: 'toggle', at: (v) => v.texel > 1, set: (to) => ({ texel: to ? TEXEL_BANDS : 0 }) }, hint: 'Lights each blob as one block in a few flat steps of sun and shade, so light falls in crisp bands along the surface and each thing keeps its own paint. Cuts the scene again.' },
     { key: 'shade', kind: 'toggle', label: 'Shade each pixel', tab: 'switches', address: 'shade', when: pixelArt, about: 'Works the light out a pixel at a time from the scene\'s sun and lamps, so light and shade fall in bands that follow each shape. Cuts the scene again.' },
@@ -402,6 +403,17 @@ export const WASH_DEF: StyleDef<WashChoice> = {
   ],
 }
 
+/** Knitting's settings. */
+export const KNIT_DEF: StyleDef<KnitChoice> = {
+  id: 'knit', styles: ['knit'], start: KNIT_START,
+  settings: [
+    { key: 'sweater', kind: 'choice', label: 'Sweater', address: 'sweater', testid: 'knit-sweater', options: KNIT_SWEATERS.map((s) => ({ id: s.id, label: s.label, about: 'The yarn the sweater is knitted in. The picture and the pattern take the other yarns in its basket.' })) },
+    { key: 'pattern', kind: 'choice', label: 'Pattern', address: 'pattern', testid: 'knit-pattern', options: KNIT_PATTERNS.map((p) => ({ id: p.id, label: p.label, about: 'Bands knitted in above and below the picture. A band too tall for the view is left out, so smaller stitches show more of them.' })) },
+    { key: 'stitch', kind: 'range', label: 'Stitch size', address: 'stitch', min: 5, max: 20, step: 1, unit: 'px', whole: true, hint: 'How wide a stitch is. Smaller stitches show more of the picture and more of the pattern; bigger ones show the yarn.' },
+    { key: 'snow', kind: 'toggle', label: 'Snow dots', address: 'snow', about: 'Single stitches of the pattern\'s yarn scattered evenly over the plain part of the sweater.' },
+  ],
+}
+
 /**
  * The scene's own settings, which every style respects: '' is the scene as it is written (its own weather, its own
  * time), and a detail of '' is the one its style starts at (`detailStart`). Weather and cloud cover are one choice on
@@ -444,7 +456,7 @@ export const SCENE: StyleDef<SceneSettings> = {
 export const sceneStart = (q: URLSearchParams = new URLSearchParams()): SceneSettings => fromAddress(SCENE, SCENE.start, q)
 
 /** Every style's settings, by the name they are kept under. */
-export const CATALOG = { pixel: PIXEL, glitch: GLITCH_DEF, marks: MARKS, ascii: ASCII, cel: CEL_DEF, blocks: BLOCKS_DEF, neon: NEON_DEF, glass: GLASS_DEF, watercolor: WASH_DEF } as const
+export const CATALOG = { pixel: PIXEL, glitch: GLITCH_DEF, marks: MARKS, ascii: ASCII, cel: CEL_DEF, blocks: BLOCKS_DEF, neon: NEON_DEF, glass: GLASS_DEF, watercolor: WASH_DEF, knit: KNIT_DEF } as const
 /** A name settings are kept under: a key of `CATALOG`. */
 export type StyleKey = keyof typeof CATALOG
 
@@ -468,6 +480,8 @@ export interface StylesValue {
   glass: GlassChoice
   /** Watercolor's. */
   watercolor: WashChoice
+  /** Knitting's. */
+  knit: KnitChoice
 }
 /** The settings of the looks `useDrawnLook` draws: every style but pixel art and its glitch. */
 export type DrawnSettings = Omit<StylesValue, 'pixel' | 'glitch'>
@@ -520,7 +534,7 @@ export function settingsFrom<V>(def: StyleDef<V>, start: V, kept: unknown): V {
 
 /** What a page tells the start about itself. */
 export interface StartFor {
-  /** A phone or tablet: blocks start a size up, for fewer cubes. */
+  /** A phone or tablet: blocks start a size up, for fewer cubes, and knitting two pixels a stitch finer, so its bands fit a small view. */
   coarse?: boolean
 }
 
@@ -534,6 +548,7 @@ export function drawnStart(q: URLSearchParams = new URLSearchParams(), on: Start
     neon: fromAddress(NEON_DEF, NEON_DEF.start, q),
     glass: fromAddress(GLASS_DEF, GLASS_DEF.start, q),
     watercolor: fromAddress(WASH_DEF, WASH_DEF.start, q),
+    knit: fromAddress(KNIT_DEF, on.coarse ? { ...KNIT_DEF.start, stitch: KNIT_DEF.start.stitch - 2 } : KNIT_DEF.start, q),
   }
 }
 
@@ -548,6 +563,7 @@ export function drawnFrom(start: DrawnSettings, kept: unknown): DrawnSettings {
     neon: settingsFrom(NEON_DEF, start.neon, got.neon),
     glass: settingsFrom(GLASS_DEF, start.glass, got.glass),
     watercolor: settingsFrom(WASH_DEF, start.watercolor, got.watercolor),
+    knit: settingsFrom(KNIT_DEF, start.knit, got.knit),
   }
 }
 

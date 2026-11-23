@@ -15,7 +15,7 @@ test('pixel art comes first, then every look Brush and Ink offers, each once', (
   const ids = STYLES.map((s) => s.id)
   assert.equal(new Set(ids).size, ids.length)
   for (const l of [...LOOKS, GLITCH, CEL, BLOCKS, NEON, GLASS, WASH]) assert.ok(ids.includes(l.id), `${l.id} is offered`)
-  assert.equal(ids.length, LOOKS.length + 7)
+  assert.equal(ids.length, LOOKS.length + 8)
   assert.equal(STYLES[1].id, 'glitch')
 })
 

@@ -26,6 +26,8 @@ import { NEON_EMIT, type NeonLook } from '../splat-core/neon.ts'
 import { GlassPass } from './glassPass.ts'
 import type { GlassLook } from '../splat-core/glass.ts'
 import { WashPass } from './washPass.ts'
+import { KnitPass } from './knitPass.ts'
+import { stitchSize, type KnitLook } from '../splat-core/knit.ts'
 import type { WashLook } from '../splat-core/wash.ts'
 import { GlyphPass } from './glyphPass.ts'
 import { glyphScale, glyphText, type GlyphLook } from '../splat-core/glyphs.ts'
@@ -289,6 +291,7 @@ export class Stage {
     this.extras = extras
     this.pixel?.reset()
     this.glyphs?.forget()
+    this.knit?.forget()
     if (this.world) { this.scene.remove(this.world); this.world.dispose() }
     if (this.rig) { this.scene.remove(this.rig); this.rig.dispose() }
     // the engine reshapes the blobs for the morphs (on the GPU where it can), so the blobs handed in stay as built
@@ -685,6 +688,24 @@ export class Stage {
     this.invalidate()
   }
 
+  private knit?: KnitPass
+  private knitLook?: KnitLook
+  /**
+   * Knitting (splat-core/knit.ts): the picture as a sweater, a grid of stitches fixed on the screen, each a V of
+   * yarn in the look's yarn nearest what it shows, with the sweater's own pattern of bands and snow dots knitted
+   * round the subject. The knitting covers the canvas. Every blob is drawn flat in its own color while it is on, with
+   * the stage's lights put by, so it suits blobs in flat colors with no light baked into them. Leave the look out to
+   * stop. Kept for the next actor too. Not in pixel mode; ASCII, cel shading, neon, stained glass and watercolor
+   * come first if set, and outlines and the lens wait.
+   */
+  setKnit(look?: KnitLook) {
+    this.knitLook = look
+    if (!look) { this.knit?.dispose(); this.knit = undefined }
+    else this.knit ??= new KnitPass()
+    this.dress()
+    this.invalidate()
+  }
+
   private glass?: GlassPass
   private glassLook?: GlassLook
   /**
@@ -709,7 +730,7 @@ export class Stage {
     if (!world) return
     const cel = this.opts.lights ? this.celLook : undefined
     world.cel = !!cel
-    world.setMarks(cel || this.neonLook || this.glassLook || this.washLook ? { kind: 'flat' } : this.marks)
+    world.setMarks(cel || this.neonLook || this.glassLook || this.washLook || this.knitLook ? { kind: 'flat' } : this.marks)
     this.soft?.setMarks(this.marks)
     if (!this.opts.lights) return
     this.light()
@@ -725,7 +746,7 @@ export class Stage {
     if (!world || !this.opts.lights) return
     const cel = this.celLook
     world.glowGain = this.emits
-    if (!cel && (this.neonLook || this.glassLook)) world.setLights([], 1)
+    if (!cel && (this.neonLook || this.glassLook || (this.knitLook && !this.washLook))) world.setLights([], 1)
     else if (cel) world.setLights([{ direction: [...(cel.from ?? CEL_FROM)] as [number, number, number], color: [1, 1, 1] }, ...this.lit.lights.slice(0, MAX_LIGHTS - 1).map((l) => ({ ...l, shadow: false }))], 1)
     else world.setLights(this.lit.lights, this.lit.ambient)
   }
@@ -917,6 +938,13 @@ export class Stage {
       this.wash.setSize(x, y)
       this.wash.setLook(this.washLook, this.renderer.getPixelRatio())
       this.wash.render(this.renderer, this.scene, this.camera)
+      return
+    }
+    if (!this.pixel && this.knit && this.knitLook) {
+      const { x, y } = this.target ? { x: this.target.width, y: this.target.height } : this.renderer.getDrawingBufferSize(this.buffer)
+      this.knit.setLook(this.knitLook)
+      this.knit.setSize(x, y, stitchSize(this.knitLook.size ?? 9, this.renderer.getPixelRatio()))
+      this.knit.render(this.renderer, this.scene, this.camera)
       return
     }
     if (!this.pixel && this.lines) {
@@ -1209,6 +1237,7 @@ export class Stage {
     this.neon?.dispose()
     this.glass?.dispose()
     this.wash?.dispose()
+    this.knit?.dispose()
     this.glyphs?.dispose()
     this.lens?.dispose()
     this.cel?.dispose()

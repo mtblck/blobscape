@@ -23,7 +23,7 @@
   {
    "id": "pixels",
    "title": "Pixels and sprites",
-   "doc": "Drawing a stage as pixel art, as brush and ink marks, as characters, cel shaded, in neon, as stained glass, in watercolor, as blocks or glitching, and baking a creature into a sprite sheet."
+   "doc": "Drawing a stage as pixel art, as brush and ink marks, as characters, cel shaded, in neon, as stained glass, in watercolor, knitted, as blocks or glitching, and baking a creature into a sprite sheet."
   },
   {
    "id": "styles",
@@ -530,6 +530,15 @@
        "signatures": [
         {
          "code": "setWash(look?: WashLook): void"
+        }
+       ]
+      },
+      {
+       "name": "setKnit",
+       "doc": "Knitting (splat-core/knit.ts): the picture as a sweater, a grid of stitches fixed on the screen, each a V of\nyarn in the look's yarn nearest what it shows, with the sweater's own pattern of bands and snow dots knitted\nround the subject. The knitting covers the canvas. Every blob is drawn flat in its own color while it is on, with\nthe stage's lights put by, so it suits blobs in flat colors with no light baked into them. Leave the look out to\nstop. Kept for the next actor too. Not in pixel mode; ASCII, cel shading, neon, stained glass and watercolor\ncome first if set, and outlines and the lens wait.",
+       "signatures": [
+        {
+         "code": "setKnit(look?: KnitLook): void"
         }
        ]
       },
@@ -3661,7 +3670,7 @@
       {
        "name": "tags",
        "optional": true,
-       "type": "(\"tree\" | \"crystal\" | \"night\" | \"plant\" | \"flower\" | \"rock\" | \"building\" | \"wall\" | \"lamp\" | \"farm\" | \"thing\" | \"sign\" | \"boat\" | \"animal\" | \"person\" | \"magic\" | \"grassy\" | \"rocky\" | \"sandy\" | \"snowy\" | \"sea\" | \"pond\" | \"space\" | \"leafy\" | \"evergreen\" | \"floats\")[]",
+       "type": "(\"tree\" | \"crystal\" | \"night\" | \"plant\" | \"flower\" | \"rock\" | \"building\" | \"wall\" | \"lamp\" | \"farm\" | \"thing\" | \"sign\" | \"boat\" | \"animal\" | \"person\" | \"magic\" | \"grassy\" | \"rocky\" | \"sandy\" | \"snowy\" | \"sea\" | \"pond\" | \"space\" | \"indoor\" | \"leafy\" | \"evergreen\" | \"floats\")[]",
        "doc": "What its land is, from the fixed list (tags.ts: grassy, rocky, sandy, snowy, sea, pond, night): Scene Creator's search finds the land by these."
       },
       {
@@ -4190,7 +4199,7 @@
       {
        "name": "tags",
        "optional": true,
-       "type": "(\"tree\" | \"crystal\" | \"night\" | \"plant\" | \"flower\" | \"rock\" | \"building\" | \"wall\" | \"lamp\" | \"farm\" | \"thing\" | \"sign\" | \"boat\" | \"animal\" | \"person\" | \"magic\" | \"grassy\" | \"rocky\" | \"sandy\" | \"snowy\" | \"sea\" | \"pond\" | \"space\" | \"leafy\" | \"evergreen\" | \"floats\")[]",
+       "type": "(\"tree\" | \"crystal\" | \"night\" | \"plant\" | \"flower\" | \"rock\" | \"building\" | \"wall\" | \"lamp\" | \"farm\" | \"thing\" | \"sign\" | \"boat\" | \"animal\" | \"person\" | \"magic\" | \"grassy\" | \"rocky\" | \"sandy\" | \"snowy\" | \"sea\" | \"pond\" | \"space\" | \"indoor\" | \"leafy\" | \"evergreen\" | \"floats\")[]",
        "doc": "With `prop`, what the prop is and how it behaves, from the fixed list (tags.ts): kinds such as tree, rock or lamp\nfor search, and qualities the shared recipes act on (leafy, evergreen, floats)."
       }
      ]
@@ -4997,7 +5006,7 @@
       {
        "name": "tags",
        "optional": true,
-       "type": "(\"tree\" | \"crystal\" | \"night\" | \"plant\" | \"flower\" | \"rock\" | \"building\" | \"wall\" | \"lamp\" | \"farm\" | \"thing\" | \"sign\" | \"boat\" | \"animal\" | \"person\" | \"magic\" | \"grassy\" | \"rocky\" | \"sandy\" | \"snowy\" | \"sea\" | \"pond\" | \"space\" | \"leafy\" | \"evergreen\" | \"floats\")[]",
+       "type": "(\"tree\" | \"crystal\" | \"night\" | \"plant\" | \"flower\" | \"rock\" | \"building\" | \"wall\" | \"lamp\" | \"farm\" | \"thing\" | \"sign\" | \"boat\" | \"animal\" | \"person\" | \"magic\" | \"grassy\" | \"rocky\" | \"sandy\" | \"snowy\" | \"sea\" | \"pond\" | \"space\" | \"indoor\" | \"leafy\" | \"evergreen\" | \"floats\")[]",
        "doc": "What it is and how it behaves, from the fixed list (tags.ts): search finds it by them and the shared recipes act on them."
       },
       {
@@ -5421,7 +5430,7 @@
       {
        "name": "tags",
        "optional": true,
-       "type": "(\"tree\" | \"crystal\" | \"night\" | \"plant\" | \"flower\" | \"rock\" | \"building\" | \"wall\" | \"lamp\" | \"farm\" | \"thing\" | \"sign\" | \"boat\" | \"animal\" | \"person\" | \"magic\" | \"grassy\" | \"rocky\" | \"sandy\" | \"snowy\" | \"sea\" | \"pond\" | \"space\" | \"leafy\" | \"evergreen\" | \"floats\")[]",
+       "type": "(\"tree\" | \"crystal\" | \"night\" | \"plant\" | \"flower\" | \"rock\" | \"building\" | \"wall\" | \"lamp\" | \"farm\" | \"thing\" | \"sign\" | \"boat\" | \"animal\" | \"person\" | \"magic\" | \"grassy\" | \"rocky\" | \"sandy\" | \"snowy\" | \"sea\" | \"pond\" | \"space\" | \"indoor\" | \"leafy\" | \"evergreen\" | \"floats\")[]",
        "doc": "Its tags (tags.ts), which go with the prop."
       }
      ]
@@ -5773,7 +5782,7 @@
      "name": "TAGS",
      "kind": "const",
      "doc": "Every tag there is, each with what it means. A description may use no other word.",
-     "type": "readonly [{ id: \"tree\"; sort: \"kind\"; means: \"A tree, a trunk with a crown, or what is left of one\" }, { id: \"plant\"; sort: \"kind\"; means: \"A bush, stalk, leaves or a cactus\" }, { id: \"flower\"; sort: \"kind\"; means: \"In flower\" }, { id: \"rock\"; sort: \"kind\"; means: \"Stone: a boulder, slab, post, steps or stonework\" }, { id: \"crystal\"; sort: \"kind\"; means: \"Crystals\" }, { id: \"building\"; sort: \"kind\"; means: \"A building or a large built thing: a mill, a cottage, a jetty, an arch\" }, { id: \"wall\"; sort: \"kind\"; means: \"A wall or a fence\" }, { id: \"lamp\"; sort: \"kind\"; means: \"Gives light: a lantern, a lighthouse, a lamp on a buoy\" }, { id: \"farm\"; sort: \"kind\"; means: \"Of a farm: a haystack, a windmill, sheep, fields\" }, { id: \"thing\"; sort: \"kind\"; means: \"A small made thing: a mailbox\" }, { id: \"sign\"; sort: \"kind\"; means: \"A sign or a billboard\" }, { id: \"boat\"; sort: \"kind\"; means: \"A boat\" }, { id: \"animal\"; sort: \"kind\"; means: \"An animal, a bird, a fish or a dragon\" }, { id: \"person\"; sort: \"kind\"; means: \"A person: the cook, the witch, the elf\" }, { id: \"magic\"; sort: \"kind\"; means: \"Magic: a witch, a spell circle, a dragon\" }, { id: \"grassy\"; sort: \"land\"; means: \"Mostly grass\" }, { id: \"rocky\"; sort: \"land\"; means: \"Mostly bare rock\" }, { id: \"sandy\"; sort: \"land\"; means: \"Sand or desert\" }, { id: \"snowy\"; sort: \"land\"; means: \"Under snow\" }, { id: \"sea\"; sort: \"land\"; means: \"Stands in the sea\" }, { id: \"pond\"; sort: \"land\"; means: \"Has a pond or a pool\" }, { id: \"night\"; sort: \"land\"; means: \"Written as a night scene\" }, { id: \"space\"; sort: \"land\"; means: \"Out in space: no ground, and no time of day or weather\" }, { id: \"leafy\"; sort: \"quality\"; means: \"Drops leaves: under falling leaves it lets them fall from under its crown\" }, { id: \"evergreen\"; sort: \"quality\"; means: \"Keeps its needles or leaves: falling leaves pass it by\" }, { id: \"floats\"; sort: \"quality\"; means: \"Sits on water: no stand-in shadow is laid under it\" }]"
+     "type": "readonly [{ id: \"tree\"; sort: \"kind\"; means: \"A tree, a trunk with a crown, or what is left of one\" }, { id: \"plant\"; sort: \"kind\"; means: \"A bush, stalk, leaves or a cactus\" }, { id: \"flower\"; sort: \"kind\"; means: \"In flower\" }, { id: \"rock\"; sort: \"kind\"; means: \"Stone: a boulder, slab, post, steps or stonework\" }, { id: \"crystal\"; sort: \"kind\"; means: \"Crystals\" }, { id: \"building\"; sort: \"kind\"; means: \"A building or a large built thing: a mill, a cottage, a jetty, an arch\" }, { id: \"wall\"; sort: \"kind\"; means: \"A wall or a fence\" }, { id: \"lamp\"; sort: \"kind\"; means: \"Gives light: a lantern, a lighthouse, a lamp on a buoy\" }, { id: \"farm\"; sort: \"kind\"; means: \"Of a farm: a haystack, a windmill, sheep, fields\" }, { id: \"thing\"; sort: \"kind\"; means: \"A small made thing: a mailbox\" }, { id: \"sign\"; sort: \"kind\"; means: \"A sign or a billboard\" }, { id: \"boat\"; sort: \"kind\"; means: \"A boat\" }, { id: \"animal\"; sort: \"kind\"; means: \"An animal, a bird, a fish or a dragon\" }, { id: \"person\"; sort: \"kind\"; means: \"A person: the cook, the witch, the elf\" }, { id: \"magic\"; sort: \"kind\"; means: \"Magic: a witch, a spell circle, a dragon\" }, { id: \"grassy\"; sort: \"land\"; means: \"Mostly grass\" }, { id: \"rocky\"; sort: \"land\"; means: \"Mostly bare rock\" }, { id: \"sandy\"; sort: \"land\"; means: \"Sand or desert\" }, { id: \"snowy\"; sort: \"land\"; means: \"Under snow\" }, { id: \"sea\"; sort: \"land\"; means: \"Stands in the sea\" }, { id: \"pond\"; sort: \"land\"; means: \"Has a pond or a pool\" }, { id: \"night\"; sort: \"land\"; means: \"Written as a night scene\" }, { id: \"space\"; sort: \"land\"; means: \"Out in space: no ground, and no time of day or weather\" }, { id: \"indoor\"; sort: \"land\"; means: \"Inside a room: no sky, so no time of day or weather\" }, { id: \"leafy\"; sort: \"quality\"; means: \"Drops leaves: under falling leaves it lets them fall from under its crown\" }, { id: \"evergreen\"; sort: \"quality\"; means: \"Keeps its needles or leaves: falling leaves pass it by\" }, { id: \"floats\"; sort: \"quality\"; means: \"Sits on water: no stand-in shadow is laid under it\" }]"
     },
     {
      "name": "Tag",
@@ -13025,6 +13034,302 @@
    ]
   },
   {
+   "id": "knitPass",
+   "title": "Knitting",
+   "group": "pixels",
+   "doc": "",
+   "entries": [
+    {
+     "name": "KnitPass",
+     "kind": "class",
+     "doc": "The picture as knitting (splat-core/knit.ts is the CPU twin: change one, change both). The frame is drawn once,\nevery blob flat in its own color. One small pass decides every stitch of the grid (the yarn nearest what the\npicture shows there, or the sweater's own pattern where it shows nothing; kept in a target a stitch a pixel,\nbeside the one from the frame before so a stitch can keep its yarn), and a second draws each stitch as a V of\nyarn. The knitting covers the canvas.\n\nThe world should be drawing flat marks with no light of its own (`Stage.setKnit` sets both).",
+     "ctor": [
+      {
+       "code": "new KnitPass()"
+      }
+     ],
+     "props": [
+      {
+       "name": "picture",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
+       "doc": "The picture: every blob flat in its own color."
+      },
+      {
+       "name": "grid",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
+       "doc": "The grid of the frame just drawn: a pixel a stitch, the yarn's number in red."
+      }
+     ],
+     "methods": [
+      {
+       "name": "setLook",
+       "doc": "The look.",
+       "signatures": [
+        {
+         "code": "setLook(look: KnitLook): void"
+        }
+       ]
+      },
+      {
+       "name": "setSize",
+       "doc": "Sizes the pass for a picture in device pixels, with stitches `width` by `height` of them.",
+       "signatures": [
+        {
+         "code": "setSize(width: number, height: number, stitch: { width: number; height: number }): void"
+        }
+       ]
+      },
+      {
+       "name": "forget",
+       "doc": "Forgets the frame before: for when what is being drawn is swapped for something else.",
+       "signatures": [
+        {
+         "code": "forget(): void"
+        }
+       ]
+      },
+      {
+       "name": "render",
+       "doc": "Draws the scene as knitting into the renderer's current target, or onto the screen when it has none.",
+       "signatures": [
+        {
+         "code": "render(renderer: WebGPURenderer, scene: Object3D, camera: Camera): void"
+        }
+       ]
+      },
+      {
+       "name": "dispose",
+       "doc": "Frees its targets.",
+       "signatures": [
+        {
+         "code": "dispose(): void"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "knit",
+   "title": "Knitting: the arithmetic",
+   "group": "pixels",
+   "doc": "",
+   "entries": [
+    {
+     "name": "KnitLook",
+     "kind": "interface",
+     "doc": "How a stage draws knitting (`Stage.setKnit`).",
+     "props": [
+      {
+       "name": "size",
+       "optional": true,
+       "type": "number",
+       "doc": "A stitch's width, in CSS pixels (9)."
+      },
+      {
+       "name": "yarns",
+       "type": "readonly Rgb3[]",
+       "doc": "The yarns (sRGB 0–1), at most `KNIT_YARNS`: the first is the sweater's body, the second the pattern's main yarn, the third its second. The picture is knitted in every yarn but the body's."
+      },
+      {
+       "name": "bands",
+       "optional": true,
+       "type": "readonly string[]",
+       "doc": "The pattern round the picture: the bands from the edge inward, each an id of `MOTIFS`. Left out or empty, none."
+      },
+      {
+       "name": "snow",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Small dots of the pattern's yarn over the plain field between the bands."
+      },
+      {
+       "name": "steady",
+       "optional": true,
+       "type": "number",
+       "doc": "How much nearer another yarn must be (OKLab) before a stitch of the picture changes yarn; 0 decides each frame afresh (`KNIT_STEADY`)."
+      }
+     ]
+    },
+    {
+     "name": "KNIT_YARNS",
+     "kind": "const",
+     "doc": "The most yarns a look can have.",
+     "type": "10"
+    },
+    {
+     "name": "STITCH_TALL",
+     "kind": "const",
+     "doc": "A stitch is this many times as tall as wide: knitting is wider than it is tall.",
+     "type": "0.8"
+    },
+    {
+     "name": "KNIT_COVER",
+     "kind": "const",
+     "doc": "A stitch belongs to the picture when this much of it is covered.",
+     "type": "0.5"
+    },
+    {
+     "name": "KNIT_STEADY",
+     "kind": "const",
+     "doc": "A stitch of the picture keeps its yarn unless another is this much nearer (OKLab distance).",
+     "type": "0.035"
+    },
+    {
+     "name": "KNIT_LIGHT",
+     "kind": "const",
+     "doc": "How much lightness counts beside hue when a yarn is picked for a color: a red thing in shade takes the dark red yarn before a brown one as light as it.",
+     "type": "0.5"
+    },
+    {
+     "name": "BAND_SHARE",
+     "kind": "const",
+     "doc": "The bands at the top take up to this share of the rows, and those at the bottom as much.",
+     "type": "0.3"
+    },
+    {
+     "name": "SNOW_STEP",
+     "kind": "const",
+     "doc": "Snow dots stand this many stitches apart, each row of them half a step aside from the last.",
+     "type": "4"
+    },
+    {
+     "name": "PICTURE_MARK",
+     "kind": "const",
+     "doc": "Added to a stitch's yarn number in the grid when it shows the picture, so the next frame can tell.",
+     "type": "32"
+    },
+    {
+     "name": "LEG_TOP",
+     "kind": "const",
+     "doc": "Where a V's two legs run, in a stitch's own square (x across, y down, both 0 to 1): from `LEG_TOP` out at the side to `LEG_TIP` near the middle, which lies a quarter of a stitch into the row below.",
+     "type": "readonly [number, number]"
+    },
+    {
+     "name": "LEG_TIP",
+     "kind": "const",
+     "doc": "Where a V's leg ends, near the middle and a quarter of a stitch into the row below (see `LEG_TOP`).",
+     "type": "readonly [number, number]"
+    },
+    {
+     "name": "YARN_HALF",
+     "kind": "const",
+     "doc": "Half a strand's width, as a share of the stitch's.",
+     "type": "0.2"
+    },
+    {
+     "name": "GAP_SHADE",
+     "kind": "const",
+     "doc": "How dark the gap between strands is beside the yarn.",
+     "type": "0.42"
+    },
+    {
+     "name": "YARN_ROUND",
+     "kind": "const",
+     "doc": "How much darker a strand is at its edges than along its middle.",
+     "type": "0.4"
+    },
+    {
+     "name": "YARN_VARY",
+     "kind": "const",
+     "doc": "How much one stitch's yarn is lighter or darker than the next's.",
+     "type": "0.07"
+    },
+    {
+     "name": "stitchAt",
+     "kind": "function",
+     "doc": "What is at a point of a stitch (x across, y down, 0 to 1): `above` when it is the tip of the stitch above, which\nlies over this one, and `shade`, what the yarn's color is multiplied by there (a strand is lighter along its\nmiddle; between strands is the dark of the gap, in the stitch's own yarn).",
+     "signatures": [
+      {
+       "code": "stitchAt(x: number, y: number): { above: boolean; shade: number }"
+      }
+     ]
+    },
+    {
+     "name": "stitchHash",
+     "kind": "function",
+     "doc": "A number from 0 to 1 for a stitch, as the shader makes it.",
+     "signatures": [
+      {
+       "code": "stitchHash(col: number, row: number): number"
+      }
+     ]
+    },
+    {
+     "name": "yarnFor",
+     "kind": "function",
+     "doc": "The yarn nearest a color (sRGB 0–1) in OKLab with lightness counted `KNIT_LIGHT`, never the body's (yarn 0): its number, and how far off it is. `was` is the yarn the stitch had, kept unless another is `steady` nearer.",
+     "signatures": [
+      {
+       "code": "yarnFor(color: readonly number[], yarns: readonly Rgb3[], was?: number, steady?: number): { yarn: number; off: number }"
+      }
+     ]
+    },
+    {
+     "name": "Motif",
+     "kind": "interface",
+     "doc": "A small picture knitted over and over along a band: rows of stitches, `.` the body, `x` the pattern's main yarn, `o` its second. Every row is one repeat wide.",
+     "props": [
+      {
+       "name": "id",
+       "type": "string",
+       "doc": "Its name in a look's `bands`."
+      },
+      {
+       "name": "rows",
+       "type": "readonly string[]",
+       "doc": "The rows, top first."
+      },
+      {
+       "name": "upright",
+       "optional": true,
+       "type": "boolean",
+       "doc": "It stands on the ground (a tree, a reindeer), so the bottom bands don't turn it over."
+      }
+     ]
+    },
+    {
+     "name": "MOTIFS",
+     "kind": "const",
+     "doc": "The motifs a band can be.",
+     "type": "readonly Motif[]"
+    },
+    {
+     "name": "knitChart",
+     "kind": "function",
+     "doc": "The sweater's own pattern for a grid of stitches: a yarn number a stitch (0 the body, 1 and 2 the pattern's),\nrows from the top. The bands are laid from the top edge inward, each with a plain row after it, for as long as\nthey fit in `BAND_SHARE` of the rows (one too tall is left out), and again from the bottom edge up, turned over\nunless they stand upright. Every motif is laid so that the middle of the grid is the middle of a repeat, so the\npattern is the same on both sides. Snow dots fill the field between.",
+     "signatures": [
+      {
+       "code": "knitChart(cols: number, rows: number, look: Pick<KnitLook, \"bands\" | \"snow\">): Uint8Array"
+      }
+     ]
+    },
+    {
+     "name": "stitchSize",
+     "kind": "function",
+     "doc": "How many device pixels a stitch is wide and tall: whole, so every stitch is the same size.",
+     "signatures": [
+      {
+       "code": "stitchSize(size: number, ratio: number): { width: number; height: number }"
+      }
+     ]
+    },
+    {
+     "name": "knitCell",
+     "kind": "function",
+     "doc": "One stitch decided: `cover` is how much of it the picture covers and `color` what it shows there (sRGB 0–1,\nstraight), `beside` whether a stitch next to it (left, right, above or below) shows the picture, `chart` the\nsweater's own yarn there and `was` the grid's number for it the frame before (-1 for none). The picture wins;\na stitch right beside it is plain body, so the pattern never runs into the picture. Gives the grid's number:\nthe yarn, plus `PICTURE_MARK` for a stitch of the picture.",
+     "signatures": [
+      {
+       "code": "knitCell(cover: number, color: readonly number[], beside: boolean, chart: number, yarns: readonly Rgb3[], was?: number, steady?: number): number"
+      }
+     ]
+    }
+   ]
+  },
+  {
    "id": "bakeSheet",
    "title": "Baking sprite sheets",
    "group": "pixels",
@@ -13318,7 +13623,7 @@
      "name": "Style",
      "kind": "type",
      "doc": "How a scene is drawn: as pixel art (plain or glitching), or as one of Brush and Ink's looks.",
-     "type": "typeof PIXEL.id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof LOOKS[number][\"id\"]"
+     "type": "typeof PIXEL.id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof LOOKS[number][\"id\"]"
     },
     {
      "name": "STYLES",
@@ -13351,7 +13656,7 @@
     {
      "name": "lightsItself",
      "kind": "const",
-     "doc": "Whether a style lights the scene itself, so the scene is cut with no light baked in: cel shading, neon, stained glass and blocks.",
+     "doc": "Whether a style lights the scene itself, so the scene is cut with no light baked in: cel shading, neon, stained glass, blocks and knitting (which wants each thing in its own flat colors).",
      "type": "(style: Style | undefined) => boolean"
     }
    ]
@@ -13906,6 +14211,12 @@
      "type": "StyleDef<WashChoice>"
     },
     {
+     "name": "KNIT_DEF",
+     "kind": "const",
+     "doc": "Knitting's settings.",
+     "type": "StyleDef<KnitChoice>"
+    },
+    {
      "name": "SceneSettings",
      "kind": "interface",
      "doc": "The scene's own settings, which every style respects: '' is the scene as it is written (its own weather, its own\ntime), and a detail of '' is the one its style starts at (`detailStart`). Weather and cloud cover are one choice on\nthe page (a weather brings its own clouds), kept as two so a cover can be told from a weather.",
@@ -13963,7 +14274,7 @@
      "name": "CATALOG",
      "kind": "const",
      "doc": "Every style's settings, by the name they are kept under.",
-     "type": "{ pixel: StyleDef<PixelSettings>; glitch: StyleDef<GlitchChoice>; marks: StyleDef<MarkSettings>; ascii: StyleDef<AsciiSettings>; cel: StyleDef<CelSettings>; blocks: StyleDef<BlockChoice>; neon: StyleDef<NeonChoice>; glass: StyleDef<GlassChoice>; watercolor: StyleDef<WashChoice> }"
+     "type": "{ pixel: StyleDef<PixelSettings>; glitch: StyleDef<GlitchChoice>; marks: StyleDef<MarkSettings>; ascii: StyleDef<AsciiSettings>; cel: StyleDef<CelSettings>; blocks: StyleDef<BlockChoice>; neon: StyleDef<NeonChoice>; glass: StyleDef<GlassChoice>; watercolor: StyleDef<WashChoice>; knit: StyleDef<KnitChoice> }"
     },
     {
      "name": "StyleKey",
@@ -14020,6 +14331,11 @@
        "name": "watercolor",
        "type": "WashChoice",
        "doc": "Watercolor's."
+      },
+      {
+       "name": "knit",
+       "type": "KnitChoice",
+       "doc": "Knitting's."
       }
      ]
     },
@@ -14086,7 +14402,7 @@
        "name": "coarse",
        "optional": true,
        "type": "boolean",
-       "doc": "A phone or tablet: blocks start a size up, for fewer cubes."
+       "doc": "A phone or tablet: blocks start a size up, for fewer cubes, and knitting two pixels a stitch finer, so its bands fit a small view."
       }
      ]
     },
@@ -14725,6 +15041,81 @@
      "signatures": [
       {
        "code": "washLook(c: WashChoice, sky?: readonly [readonly number[], readonly number[]]): WashLook"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "styles-knitLooks",
+   "title": "Knitting, as settings",
+   "group": "styles",
+   "doc": "",
+   "entries": [
+    {
+     "name": "KNIT",
+     "kind": "const",
+     "doc": "The chip beside the drawn looks (brushLooks.ts).",
+     "type": "{ id: \"knit\"; label: string; note: string }"
+    },
+    {
+     "name": "KNIT_SWEATERS",
+     "kind": "const",
+     "doc": "The sweaters: each one's yarns (sRGB 0–1), the body's first, then the pattern's main yarn and its second, then the rest the picture is knitted in.",
+     "type": "{ id: string; label: string; yarns: readonly (readonly [number, number, number])[] }[]"
+    },
+    {
+     "name": "KNIT_PATTERNS",
+     "kind": "const",
+     "doc": "The patterns: each one's bands from the edge inward, ids of `MOTIFS` in knit.ts. A band too tall for the picture is left out.",
+     "type": "{ id: string; label: string; bands: readonly string[] }[]"
+    },
+    {
+     "name": "KnitChoice",
+     "kind": "interface",
+     "doc": "What the page's controls make.",
+     "props": [
+      {
+       "name": "sweater",
+       "type": "string",
+       "doc": "The sweater, an id of `KNIT_SWEATERS`."
+      },
+      {
+       "name": "pattern",
+       "type": "string",
+       "doc": "The pattern, an id of `KNIT_PATTERNS`."
+      },
+      {
+       "name": "stitch",
+       "type": "number",
+       "doc": "A stitch's width, in CSS pixels."
+      },
+      {
+       "name": "snow",
+       "type": "boolean",
+       "doc": "Snow dots over the plain field."
+      }
+     ]
+    },
+    {
+     "name": "KNIT_START",
+     "kind": "const",
+     "doc": "Where knitting's settings start.",
+     "type": "KnitChoice"
+    },
+    {
+     "name": "knitGround",
+     "kind": "const",
+     "doc": "The color to put behind the canvas before the knitting is drawn: the sweater's body.",
+     "type": "(c: KnitChoice) => string"
+    },
+    {
+     "name": "knitLook",
+     "kind": "function",
+     "doc": "The look for the stage; `steady` 0 decides every frame afresh (for a frame drawn only when asked for).",
+     "signatures": [
+      {
+       "code": "knitLook(c: KnitChoice, steady?: number): KnitLook"
       }
      ]
     }
