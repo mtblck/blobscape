@@ -5258,7 +5258,7 @@
     {
      "name": "shapeUnder",
      "kind": "function",
-     "doc": "A planned fire's shape under a wind of a level (a whole one) burning a share of its fuel: a harder wind throws more sparks.",
+     "doc": "A planned fire's shape under a wind of a level (a whole one) burning a share of its fuel: a harder wind throws more sparks, a lower fire fewer.",
      "signatures": [
       {
        "code": "shapeUnder(base: FireShape, level: number, fuel: number): FireShape"

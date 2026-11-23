@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { FIRE_CELLS, FIRE_TICK, FIRE_FLAMES, Fire, fireColor, powerAt, runFire, type FireColors, type FireShape } from './fire.ts'
-import { DIE, FUEL_EMBERS, FUEL_LOW, SceneFire, burningAt, fireShape, fuelUnder, smokeAt } from './sceneFire.ts'
+import { DIE, FUEL_EMBERS, FUEL_LOW, SceneFire, burningAt, fireShape, fuelUnder, shapeUnder, smokeAt } from './sceneFire.ts'
 import { skyState } from './skyRecipes.ts'
 import { checkScene, compileScene, litFor, type SceneDoc } from './sceneDoc.ts'
 
@@ -146,6 +146,7 @@ test('weather takes a fire\'s fuel: light rain and snow leave it, rain and heavy
   // the ways of burning always add up to the whole fire, and a fire that is out is its embers
   for (const f of [1, 0.8, 0.5, 0.4, 0.36, 0.2, 0]) assert.ok(Math.abs(burningAt(f).reduce((n, b) => n + b.share, 0) - 1) < 1e-9, `at ${f}`)
   assert.deepEqual(burningAt(0), [{ fuel: FUEL_EMBERS, share: 1 }])
+  assert.equal(shapeUnder(SHAPE, 3, FUEL_EMBERS).sparks, 0); assert.ok(shapeUnder(SHAPE, 2, 1).sparks > SHAPE.sparks)
   assert.equal(smokeAt(1), 0); assert.equal(smokeAt(FUEL_LOW), 1); assert.ok(smokeAt(0) > 0.2 && smokeAt(0) < 1)
 })
 
@@ -171,6 +172,11 @@ test('a fire in heavy rain dies down to embers and smoke, its light with it, and
   fire.show(1.3)
   assert.ok(alight() < full * 0.05, `${alight()} still alight of ${full}`)
   assert.ok(smoking() > 5, 'no smoke off the embers')
+  // and it throws no sparks: nothing that glows is in the air over it
+  let sparks = 0
+  for (const t of [0.4, 1.3, 2.2, 3.1]) { fire.show(t); for (let i = 0; i < fire.actor.blobs.count; i++) if (opacity[i] && fire.actor.glow![i] && center[i * 3 + 1] > 0.02 + 0.11 * 1.2) sparks++ }
+  assert.equal(sparks, 0, 'a fire that is out still throws sparks')
+  fire.show(1.3)
   assert.ok(light() < bright * 0.15 && light() > 0, `its light ${light().toFixed(3)} of ${bright.toFixed(3)}`)
   // the storm over, it catches again
   for (let k = 0; k < 200; k++) fire.under(skyState(), 0.05)

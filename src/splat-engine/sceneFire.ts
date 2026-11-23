@@ -101,10 +101,13 @@ export function smokeAt(fuel: number): number {
   return fuel >= 1 ? 0 : fuel >= FUEL_LOW ? (1 - fuel) / (1 - FUEL_LOW) : 0.45 + 0.55 * (fuel / FUEL_LOW)
 }
 
-/** A planned fire's shape under a wind of a level (a whole one) burning a share of its fuel: a harder wind throws more sparks. */
+/** A planned fire's shape under a wind of a level (a whole one) burning a share of its fuel: a harder wind throws more sparks, a lower fire fewer. */
 export function shapeUnder(base: FireShape, level: number, fuel: number): FireShape {
   const blow = FIRE_WIND[Math.min(FIRE_WIND.length - 1, Math.max(0, level))]
-  return { ...base, ...(blow ? { sparks: Math.round(base.sparks * (1 + 0.6 * level) * 10) / 10, wind: [Math.round(WIND_WAY[0] * blow * 100) / 100, Math.round(WIND_WAY[1] * blow * 100) / 100] as const } : {}), ...(fuel < 1 ? { fuel } : {}) }
+  // sparks are thrown by the flames: fewer from a fire burning low, none from one that is only embers
+  const thrown = fuel >= 1 ? 1 : fuel <= FUEL_EMBERS ? 0 : fuel <= FUEL_DYING ? 0.15 : 0.5
+  const sparks = Math.round(base.sparks * (1 + 0.6 * level) * thrown * 10) / 10
+  return { ...base, ...(sparks !== base.sparks ? { sparks } : {}), ...(blow ? { wind: [Math.round(WIND_WAY[0] * blow * 100) / 100, Math.round(WIND_WAY[1] * blow * 100) / 100] as const } : {}), ...(fuel < 1 ? { fuel } : {}) }
 }
 
 /** One way of burning on show: its kept loop and how much of the fire it is, 0 to 1. */
