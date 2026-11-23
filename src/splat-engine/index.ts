@@ -47,6 +47,8 @@ export * from './mpm.ts'
 export * from './solids.ts'
 export * from './water.ts'
 export * from './sceneWater.ts'
+export * from './fire.ts'
+export * from './sceneFire.ts'
 
 // what's drawn
 export * from './pixelPass.ts'

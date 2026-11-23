@@ -1,7 +1,7 @@
 import type { Vec3 } from '../splat-core/blobs.ts'
 import { placer, type Placer } from './place.ts'
 import { AUTUMN, LEAVES_EACH, joinPalettes, leafFall, litLand, refit, type Placed, type PropDoc, type PropRef, type SceneProject } from './project.ts'
-import { moveAxis, type SpeckDoc, type BoneDoc, type LightDoc, type MoveAxis, type MoveDoc, type PartDoc, type SceneDoc } from './sceneDoc.ts'
+import { MAX_FIRES, moveAxis, type SpeckDoc, type BoneDoc, type FireDoc, type LightDoc, type MoveAxis, type MoveDoc, type PartDoc, type SceneDoc } from './sceneDoc.ts'
 
 /**
  * A scene written as a land and props set down on it (a `SceneProject`, the same thing Scene Creator saves) made into
@@ -26,6 +26,7 @@ export function composeScene(project: SceneProject, find: (id: string) => PropDo
   const parts: PartDoc[] = [...ground.parts]
   const moves: MoveDoc[] = [...(ground.moves ?? [])]
   const lights: LightDoc[] = [...(ground.lights ?? [])]
+  const fires: FireDoc[] = [...(ground.fires ?? [])]
   const palettes = [ground.palette]
   // what rides the land's water or pushes through it, from the props set down in it
   const floats = [...(ground.water?.floats ?? [])], bodies = [...(ground.water?.bodies ?? [])]
@@ -57,9 +58,14 @@ export function composeScene(project: SceneProject, find: (id: string) => PropDo
       for (const b of prop.water.wakes ?? []) bodies.push({ bone: name(b.bone), at: t.point(b.at), r: b.r * t.size, ...(b.draft !== undefined ? { draft: b.draft * t.size } : {}) })
     }
     if (!placed.still) for (const m of doc.moves ?? []) moves.push(placedMove({ ...m, bone: name(m.bone) }, t, placed.phase ?? 0))
+    // its fires come with it, as far as the scene has room, and its lights that name them follow them to their places in the scene's list
+    const firesFrom = fires.length
+    for (const f of doc.fires ?? []) fires.push({ ...f, at: t.point(f.at), r: f.r * t.size, ...(f.height !== undefined ? { height: f.height * t.size } : {}), ...(lampsAlways(placed) && f.lit === 'dark' ? { lit: 'always' as const } : {}) })
     for (const l of doc.lights ?? []) {
+      const { fire, ...light } = l
       lights.push({
-        ...l, at: t.point(l.at), range: l.range * t.size,
+        ...light, at: t.point(l.at), range: l.range * t.size,
+        ...(fire !== undefined && firesFrom + fire < MAX_FIRES ? { fire: firesFrom + fire } : {}),
         ...(l.clear !== undefined ? { clear: l.clear * t.size } : {}),
         ...(l.circle ? { circle: { ...l.circle, r: l.circle.r * t.size } } : {}),
         ...(lampsAlways(placed) && l.lit === 'dark' ? { lit: 'always' as const } : {}),
@@ -77,6 +83,7 @@ export function composeScene(project: SceneProject, find: (id: string) => PropDo
     parts,
     moves,
     lights,
+    ...(fires.length ? { fires: fires.slice(0, MAX_FIRES) } : {}),
     ...(ground.water ? { water: { ...ground.water, floats: floats.slice(0, 12), bodies: bodies.slice(0, 12) } } : {}),
     ...(leaves.length ? { air: { ...ground.air, specks: [...(ground.air?.specks ?? []), ...leaves.slice(0, Math.max(0, Math.floor((300 - (ground.air?.specks ?? []).reduce((n, x) => n + x.count, 0)) / LEAVES_EACH)))] } } : {}),
   }
