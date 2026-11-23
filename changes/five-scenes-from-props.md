@@ -1,1 +1,0 @@
-- Diorama: the campfire, forest bee, stone hand, owl and cauldron, and snail house are rebuilt as a land and props from the Scene Creator library (the fire, tent, lantern, pines, bees, butterflies, the stone hand, columns, cacti, cauldron, owl, candles, the snail house, glowing mushrooms and more), so a fix to a prop reaches every scene that sets it down.

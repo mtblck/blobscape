@@ -1,1 +1,0 @@
-Diorama: changing scenes plays a screen transition (dither, cross-fade, through black, iris, diamond iris, wipe, clock, blinds, checkerboard, tile flood or blocks, or a plain cut), picked under Changing scenes on the Scene tab; an idea from Silicon Jungle's Ink Studio.

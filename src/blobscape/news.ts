@@ -30,6 +30,30 @@ const CHANGES = 'https://github.com/mtblck/blobscape/blob/main/CHANGELOG.md'
 
 export const POSTS: Post[] = [
   {
+    id: 'release-0-5-0',
+    date: '2026-11-23',
+    version: '0.5.0',
+    title: 'Weather, fire and scenes built from props',
+    summary: 'Every Diorama scene now has weather, wind and a time of day, drawn from recipes all scenes share. Fire and lava are simulated, a new Blocks style builds scenes from cubes, every scene is rebuilt from library props, and the engine package gains all of it.',
+    search: 'Blobscape 0.5.0: shared weather, wind and time of day for every scene, simulated fire and lava, a Blocks style, and scenes built from library props.',
+    image: { src: '/news/weather-and-fire.webp', alt: 'The lighthouse on its island drawn as pixel art in a thunderstorm: dark clouds overhead, slanting rain, and its lamps and windows lit.' },
+    body: [
+      'Version 0.5.0 gathers five days of work on [Diorama](/experiments/diorama/) and [Scene Creator](/scene-creator/). Its theme is recipes: things worked out once and shared by every scene, so a change to rain is a change to rain everywhere.',
+      '## Weather, wind and time of day',
+      'Every scene has a Weather choice (clouds, rain, a thunderstorm with lightning, snow, fog) and a Wind choice from a breeze to a gale. Drops and flakes land on the scene itself, rain rings a pond, wind slants what falls and raises waves, trees lean and flutter, and snow piles up while it falls and melts after. Changing the weather eases the sky from one to the next without making the scene again. [See the lighthouse in a thunderstorm](/experiments/diorama/?scene=lighthouse&weather=thunderstorm).',
+      'A scene also has a time of day. Lamps, lit windows, candles and campfires know when to be lit: by day they go out, at night they come on under a shared moon and stars, which clouds put out one by one.',
+      '## Fire and lava that are simulated',
+      'The campfire\'s flame is hot gas rising off the logs, drawing air in at its foot and throwing sparks. Wind blows it over, rain damps it to smoke, and a storm puts it out down to embers until the weather eases. The dragon\'s lava wells up white-hot, spreads and crusts over into dark plates with glowing cracks. The lighthouse\'s sea and the windmill\'s pond are real water now, with swells, foam, spray and a duck\'s wake.',
+      '## A style made of blocks',
+      'Blocks builds a scene from cubes on a grid, each one flat color, with the shadows the blocks cast on each other and the scene\'s lamps shining on them. Water ripples among the cubes. Pixel art itself reads more hand-drawn: flat patches, cleaner lines and outlines, and light that falls in bands if you want it.',
+      '## Scenes built from props',
+      'Every Diorama scene but two is now a land with props from the Scene Creator library set down on it: the lighthouse, the windmill, the campfire, the koi pond\'s lanterns and all the rest. A fix to a prop reaches every scene that uses it, and each scene opens in Scene Creator as its pieces. Props carry tags, so searching "tree" finds every tree. Scene Creator has the same weather, wind and style settings as Diorama, can copy a link that holds a whole scene, and can save a scene for the engine as one rigged .glb.',
+      '## In the engine',
+      'The package, `@blobscape/engine`, gains the weather, cloud and wind recipes, the shared sky, snow that lies, fire, lava, tags, scenes made of a land and props, and the Blocks look. The [docs](/engine/docs/) have new guide sections for each.',
+      `The full list is in the [changelog](${CHANGES}).`,
+    ],
+  },
+  {
     id: 'scene-creator',
     date: '2026-11-19',
     title: 'Scene Creator: make your own pixel diorama',
