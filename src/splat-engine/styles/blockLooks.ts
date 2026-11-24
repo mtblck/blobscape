@@ -31,7 +31,7 @@ export interface BlockChoice {
   swell: number
 }
 /** Where the Blocks style's settings start. */
-export const BLOCK_START: BlockChoice = { size: 2, turn: -50, height: 50, shadows: true, corners: 0.5, vary: 0.35, edge: 0.3, backdrop: '', water: 'blobs', weather: 'blobs', swell: FLOW_SWELL }
+export const BLOCK_START: BlockChoice = { size: 1, turn: -50, height: 50, shadows: true, corners: 0.5, vary: 0.35, edge: 0.3, backdrop: '', water: 'blobs', weather: 'blobs', swell: FLOW_SWELL }
 /**
  * What to stand in front of when it is not the subject's own sky: daylight, or a plain color. The time of day is the
  * scene's own setting (timeOfDay.ts), not this look's: it reaches here as the subject's sky and the stage's light.

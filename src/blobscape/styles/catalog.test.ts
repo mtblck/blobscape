@@ -58,6 +58,7 @@ test('the address sets what it names and nothing unsound', () => {
 })
 
 test('a phone starts blocks a size up, unless the address says', () => {
+  assert.equal(drawnStart().blocks.size, 1, 'blocks start at the grid the scene was cut on')
   assert.equal(drawnStart(undefined, { coarse: true }).blocks.size, BLOCKS_DEF.start.size + 1)
   assert.equal(drawnStart(new URLSearchParams('block=1'), { coarse: true }).blocks.size, 1)
 })
