@@ -1,0 +1,2 @@
+- Diorama and Scene Creator: Blocks is now the first style in the Style tab and the one a scene opens in. Pixel art is the second chip, and a link with `?style=pixel` opens it.
+- Engine: `DEFAULT_STYLE` names the style a page starts in (blocks), and `styleAsked` falls back to it.

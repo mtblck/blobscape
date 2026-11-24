@@ -22,7 +22,7 @@ test('a scene’s finish starts pixel art, and the address overrides it', () => 
   assert.deepEqual([q.size, q.glow, q.texel, q.shade, q.steps, q.heat, q.own, q.lines, q.exact, q.rock], [4, 4, 3, true, true, 3, false, false, true, false])
   // a pixel size the page doesn't offer is the smallest
   assert.equal(pixelStart(FINISH, new URLSearchParams('px=5')).size, 2)
-  assert.equal(styleStart(FINISH).style, 'pixel')
+  assert.equal(styleStart(FINISH).style, 'blocks')
 })
 
 test('a new scene brings its own finish and keeps the visitor’s other choices', () => {
@@ -68,8 +68,9 @@ test('the pixel look follows the settings and the scene', () => {
 })
 
 test('only a style that lights the scene itself, or shading each pixel, cuts it unlit', () => {
-  const s = styleStart(FINISH)
+  const s = { ...styleStart(FINISH), style: 'pixel' as const }
   assert.deepEqual(cutAsk(s, own), { plain: false, steps: [], texel: 0 })
+  assert.equal(cutAsk(styleStart(FINISH), own).plain, true)
   assert.equal(cutAsk({ ...s, style: 'cel' }, own).plain, true)
   assert.equal(cutAsk({ ...s, style: 'oil' }, own).plain, false)
   assert.equal(cutAsk({ ...s, pixel: { ...s.pixel, shade: true } }, own).plain, true)

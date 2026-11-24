@@ -1,4 +1,4 @@
-/** Diorama's Style tab (Matt asked, 2026-11-19): pixel art first, tech glitch on top of it, then every look Brush and Ink offers. */
+/** Diorama's Style tab (Matt asked, 2026-11-19, and for blocks first and as the style a page starts in, 2026-11-24): blocks, pixel art, tech glitch on top of it, then every look Brush and Ink offers. */
 import { LOOKS } from './brushLooks.ts'
 import { CEL } from './celLooks.ts'
 import { BLOCKS } from './blockLooks.ts'
@@ -13,11 +13,14 @@ const PIXEL = { id: 'pixel' as const, label: 'Pixel art', note: 'Drawn small, sn
 /** How a scene is drawn: as pixel art (plain or glitching), or as one of Brush and Ink's looks. */
 export type Style = typeof PIXEL.id | typeof GLITCH.id | typeof CEL.id | typeof BLOCKS.id | typeof NEON.id | typeof GLASS.id | typeof WASH.id | typeof KNIT.id | (typeof LOOKS)[number]['id']
 
-/** Pixel art first, then tech glitch (pixel art too), then the looks in Brush and Ink's own order (the plain blobs last). */
-export const STYLES: { id: Style; label: string; note: string }[] = [PIXEL, GLITCH, ...LOOKS.slice(0, -1), CEL, BLOCKS, NEON, GLASS, WASH, KNIT, LOOKS[LOOKS.length - 1]]
+/** Blocks first, then pixel art and tech glitch (pixel art too), then the looks in Brush and Ink's own order (the plain blobs last). */
+export const STYLES: { id: Style; label: string; note: string }[] = [BLOCKS, PIXEL, GLITCH, ...LOOKS.slice(0, -1), CEL, NEON, GLASS, WASH, KNIT, LOOKS[LOOKS.length - 1]]
 
-/** The style an address asks for (`?style=oil`), or pixel art. */
-export const styleAsked = (asked: string | null): Style => STYLES.find((s) => s.id === asked)?.id ?? 'pixel'
+/** The style a page starts in, and the one a plain address means: blocks. Every other style is named in the address (`?style=pixel`). */
+export const DEFAULT_STYLE: Style = BLOCKS.id
+
+/** The style an address asks for (`?style=oil`), or the default. */
+export const styleAsked = (asked: string | null): Style => STYLES.find((s) => s.id === asked)?.id ?? DEFAULT_STYLE
 
 /** A style as the end of "drawn …", for the line under the view and the view's own label. */
 export function styleWords(style: Style): string {

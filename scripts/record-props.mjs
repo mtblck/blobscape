@@ -73,7 +73,7 @@ try {
         const doc = e.kind === 'land' ? prop.doc : framed(prop)
         const json = join(tmp, `${e.id}.json`)
         writeFileSync(json, JSON.stringify(doc))
-        await page.goto(`${served.base}/experiments/diorama/?offscreen=1`)
+        await page.goto(`${served.base}/experiments/diorama/?offscreen=1&style=pixel`)
         await page.waitForFunction(() => window.__diorama, null, { timeout: 180000 })
         await page.getByTestId('diorama-model').setInputFiles(json)
         await page.waitForFunction(() => /^(Opened|Could not)/.test(document.querySelector('[data-testid=diorama-model-note]')?.textContent ?? ''), null, { timeout: 120000 })
