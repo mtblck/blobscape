@@ -4,7 +4,7 @@ import { LIT_MAX } from '../splat-engine/voxel.ts'
 import { STEADY, darkest, heatPace, screenWay, type PixelLook, type Rgb } from '../splat-core/pixel.ts'
 import type { Orbit } from '../splat-core/view.ts'
 import type { Diorama } from './diorama/scenes.ts'
-import { isPixelStyle, lightsItself, type Style } from './diorama/styles.ts'
+import { DEFAULT_STYLE, isPixelStyle, lightsItself, type Style } from './diorama/styles.ts'
 import { GLITCH_START, type GlitchChoice } from './glitchLooks.ts'
 import { zoomStep } from './diorama/zoom.ts'
 import { PIXEL, PIXEL_RATES, PIXEL_SIZES, TEXEL_BANDS, fromAddress, type PixelSettings } from './styles/catalog.ts'
@@ -53,8 +53,8 @@ export function pixelStart(finish: Finish, q: URLSearchParams = new URLSearchPar
   return { ...s, texel: s.texel > 1 ? s.texel : 0 }
 }
 
-/** The settings start: pixel art, with the scene's own finish. */
-export const styleStart = (finish: Finish, q?: URLSearchParams): StyleSettings => ({ style: 'pixel', glitch: GLITCH_START, pixel: pixelStart(finish, q) })
+/** The settings start: the style every page starts in, with the scene's own finish for pixel art. */
+export const styleStart = (finish: Finish, q?: URLSearchParams): StyleSettings => ({ style: DEFAULT_STYLE, glitch: GLITCH_START, pixel: pixelStart(finish, q) })
 
 /** A new scene's own finish over the settings the visitor has: its palette, dither, glow, outline, sky and art-pixel effects. */
 export const pixelFor = (s: PixelSettings, finish: Finish): PixelSettings => ({

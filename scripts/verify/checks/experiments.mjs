@@ -265,7 +265,7 @@ export default [
     entries: ['src/blobscape/PixelDiorama.tsx'],
     async run({ shots, join, fails, ok, open, tabClick, axe }) {
       for (const q of ['', '&webgl=1']) {
-        const d = await open(`/experiments/diorama/?offscreen=1${q}`, { viewport: { width: 1280, height: 900 } })
+        const d = await open(`/experiments/diorama/?offscreen=1&style=pixel${q}`, { viewport: { width: 1280, height: 900 } })
         await d.page.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).catch(() => {})
         const shot = (t) => d.page.evaluate(async (t) => {
           const { stage, look } = window.__diorama
@@ -448,7 +448,7 @@ export default [
     files: ['src/splat-engine/sceneWater.ts', 'src/splat-engine/water.ts', 'src/splat-engine/mirror.ts', 'src/blobscape/diorama/scenes/koi.ts'],
     async run({ shots, join, fails, ok, open }) {
       for (const q of ['', '&webgl=1']) {
-        const d = await open(`/experiments/diorama/?offscreen=1&scene=koi${q}`, { viewport: { width: 1280, height: 900 } })
+        const d = await open(`/experiments/diorama/?offscreen=1&style=pixel&scene=koi${q}`, { viewport: { width: 1280, height: 900 } })
         // an off-screen scene draws nothing until it is asked for a frame, so ask until its art is there
         const ready = () => d.page.waitForFunction(async () => {
           const s = window.__diorama
@@ -495,7 +495,7 @@ export default [
     about: 'Diorama: Glow turns up the light a fire casts on what stands round it, not only the shine round bright pixels',
     entries: ['src/blobscape/PixelDiorama.tsx'],
     async run({ fails, ok, open, tabClick }) {
-      const d = await open('/experiments/diorama/?offscreen=1&scene=campfire', { viewport: { width: 1280, height: 900 } })
+      const d = await open('/experiments/diorama/?offscreen=1&style=pixel&scene=campfire', { viewport: { width: 1280, height: 900 } })
       await d.page.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).catch(() => {})
       // the scene as it is drawn small, before the pixel pass adds any shine of its own: how bright its solid pixels are
       const lit = () => d.page.evaluate(async () => {
@@ -526,7 +526,7 @@ export default [
     about: 'Diorama: Save as a 3D model writes a rigged .glb of blocks (or a smooth surface) with the loop as an animation',
     entries: ['src/blobscape/PixelDiorama.tsx', 'src/splat-engine/blockMesh.ts'],
     async run({ fails, ok, open, tabClick }) {
-      const d = await open('/experiments/diorama/?offscreen=1&scene=campfire&detail=chunky', { viewport: { width: 1280, height: 900 } })
+      const d = await open('/experiments/diorama/?offscreen=1&style=pixel&scene=campfire&detail=chunky', { viewport: { width: 1280, height: 900 } })
       await d.page.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).catch(() => {})
       await d.page.evaluate(async () => { await window.__diorama.stage.frame(0.5) })
       for (const shape of ['Blocks', 'Smooth']) {
@@ -549,7 +549,7 @@ export default [
     entries: ['src/blobscape/PixelDiorama.tsx'],
     files: ['public/loops/'],
     async run({ shots, join, fails, ok, open, tabClick, axe }) {
-      const d = await open('/experiments/diorama/?offscreen=1&scene=campfire', { viewport: { width: 1280, height: 900 } })
+      const d = await open('/experiments/diorama/?offscreen=1&style=pixel&scene=campfire', { viewport: { width: 1280, height: 900 } })
       await d.page.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).catch(() => {})
       // the details panel: one short line under the view, and Full details opens a dialog with the scene's numbers that Escape closes
       {
@@ -707,7 +707,7 @@ export default [
       async run({ shots, join, fails, ok, open, wants }) {
         for (const [id, name] of scenes) {
           if (!wants(id)) continue
-          const d = await open(`/experiments/diorama/?offscreen=1&scene=${id}`, { viewport: { width: 1280, height: 900 } })
+          const d = await open(`/experiments/diorama/?offscreen=1&style=pixel&scene=${id}`, { viewport: { width: 1280, height: 900 } })
           const label = `blobscape pixel diorama ${id}`
           if (!await d.page.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).then(() => true, () => false)) {
             fails.push(`${label}: the scene never started`)

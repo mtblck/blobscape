@@ -44,7 +44,7 @@ import { meshBounds } from '../splat-engine/meshShape.ts'
 import { readSkinnedGlb } from '../splat-engine/skinnedModel.ts'
 import { budget, clock, lampAdded, lampLights, lampRemoved, lit, liveSky, liveSkyColors, overheadPicked, rgbOf, shadeNow, sunNow, timeIn, weatherPicked, windPicked } from './creator/lighting.ts'
 import { castBy, glowGain } from './diorama/glow.ts'
-import { STYLES, isPixelStyle, styleAsked, styleWords, type Style } from './diorama/styles.ts'
+import { DEFAULT_STYLE, STYLES, isPixelStyle, styleAsked, styleWords, type Style } from './diorama/styles.ts'
 import { useDrawnLook, useHeld } from './drawnLook.tsx'
 import { GLITCH_START, glitchLook, type GlitchChoice } from './glitchLooks.ts'
 import { useExport } from './diorama/useExport.tsx'
@@ -669,7 +669,7 @@ export function SceneCreator() {
   const drawStyle = (id: Style) => {
     setStyleState(id)
     const url = new URL(location.href)
-    if (id === 'pixel') url.searchParams.delete('style')
+    if (id === DEFAULT_STYLE) url.searchParams.delete('style')
     else url.searchParams.set('style', id)
     history.replaceState(history.state, '', url.pathname + url.search + url.hash)
     say(`Drawn as ${STYLES.find((x) => x.id === id)!.label.toLowerCase()}.`)

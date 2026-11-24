@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { STYLES, styleAsked, styleWords } from './styles.ts'
+import { DEFAULT_STYLE, STYLES, styleAsked, styleWords } from './styles.ts'
 import { LOOKS } from '../brushLooks.ts'
 import { CEL } from '../celLooks.ts'
 import { BLOCKS, BLOCK_GROUNDS, BLOCK_SPAN, BLOCK_START, blockBack, blockLook, gridOf } from '../blockLooks.ts'
@@ -10,24 +10,27 @@ import { GLASS, glassLook, GLASS_START } from '../glassLooks.ts'
 import { GLITCH, GLITCH_START, glitchLook } from '../glitchLooks.ts'
 import { NEON, NEON_PACES, neonLook, NEON_START, periodIn } from '../neonLooks.ts'
 
-test('pixel art comes first, then every look Brush and Ink offers, each once', () => {
-  assert.equal(STYLES[0].id, 'pixel')
+test('blocks come first and are the default, then pixel art and every look Brush and Ink offers, each once', () => {
+  assert.equal(STYLES[0].id, 'blocks')
+  assert.equal(STYLES[0].id, DEFAULT_STYLE)
+  assert.equal(STYLES[1].id, 'pixel')
   const ids = STYLES.map((s) => s.id)
   assert.equal(new Set(ids).size, ids.length)
   for (const l of [...LOOKS, GLITCH, CEL, BLOCKS, NEON, GLASS, WASH]) assert.ok(ids.includes(l.id), `${l.id} is offered`)
   assert.equal(ids.length, LOOKS.length + 8)
-  assert.equal(STYLES[1].id, 'glitch')
+  assert.equal(STYLES[2].id, 'glitch')
 })
 
-test('an address picks a style, and anything else is pixel art', () => {
+test('an address picks a style, and anything else is the default, blocks', () => {
   assert.equal(styleAsked('oil'), 'oil')
   assert.equal(styleAsked('cel'), 'cel')
   assert.equal(styleAsked('neon'), 'neon')
   assert.equal(styleAsked('ascii'), 'ascii')
-  assert.equal(styleAsked(null), 'pixel')
+  assert.equal(styleAsked(null), 'blocks')
+  assert.equal(styleAsked('pixel'), 'pixel')
   assert.equal(styleAsked('glass'), 'glass')
   assert.equal(styleAsked('watercolor'), 'watercolor')
-  assert.equal(styleAsked('woodcut'), 'pixel')
+  assert.equal(styleAsked('woodcut'), 'blocks')
 })
 
 test('every style has a note and words for the line under the view', () => {
