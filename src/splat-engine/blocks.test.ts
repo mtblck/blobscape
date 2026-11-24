@@ -151,6 +151,24 @@ test('specks are small cubes of their own that cast no shadow and are no corner'
   }
 })
 
+test('a loose body, a moon, is filled with small cubes and not a grid of dots', () => {
+  // a face of blobs a block apart, as a scene's moon is cut, on a loose bone
+  const list = [blob(0, -1, 0)]
+  for (let x = 0; x < 5; x++) for (let y = 0; y < 5; y++) list.push(blob(x * 0.1, y * 0.1, 0))
+  const b = buildBlocks([source(list, [0, ...list.slice(1).map(() => 1)], ['root', '~moon'])], plain)
+  const moon = b.pieces.find((p) => p.bone === 1)!
+  // every small cell across the face holds a cube: one face toward +z for each
+  const side = 0.1 * SPECK_SIZE, seen = new Set<string>()
+  for (let v = 0; v < moon.normals.length / 3; v += 4) {
+    if (moon.normals[v * 3 + 2] !== 1) continue
+    seen.add(`${Math.round((moon.positions[v * 3] + moon.positions[v * 3 + 6]) / 2 / side)},${Math.round((moon.positions[v * 3 + 1] + moon.positions[v * 3 + 7]) / 2 / side)}`)
+  }
+  for (let x = 0; x <= 10; x++) for (let y = 0; y <= 10; y++) if (!seen.has(`${x},${y}`)) assert.fail(`no cube at ${x}, ${y}`)
+  // and a row of specks is still one small cube each
+  const row = buildBlocks([source([blob(0, -1, 0), blob(0, 0, 0), blob(0.1, 0, 0), blob(0.2, 0, 0)], [0, 1, 1, 1], ['root', '~rain'])], plain)
+  assert.equal(row.pieces.find((p) => p.bone === 1)!.positions.length / 12, 18)
+})
+
 test('a block that gives its own light says so and casts no shadow', () => {
   const b = buildBlocks([source([blob(0, 0, 0), blob(0, 0.1, 0)], [0, 1], ['root', 'lamp'], [0, 255])], { ...plain, from: [0, 1, 0] })
   const ground = b.pieces.find((p) => p.bone === 0)!, lamp = b.pieces.find((p) => p.bone === 1)!
