@@ -18,10 +18,10 @@ test('blocks come first and are the default, then pixel art and every look Brush
   assert.equal(new Set(ids).size, ids.length)
   for (const l of [...LOOKS, GLITCH, CEL, BLOCKS, NEON, GLASS, WASH]) assert.ok(ids.includes(l.id), `${l.id} is offered`)
   assert.equal(ids.length, LOOKS.length + 8)
-  assert.equal(STYLES[1].id, 'glitch')
+  assert.equal(STYLES[2].id, 'glitch')
 })
 
-test('an address picks a style, and anything else is pixel art', () => {
+test('an address picks a style, and anything else is the default, blocks', () => {
   assert.equal(styleAsked('oil'), 'oil')
   assert.equal(styleAsked('cel'), 'cel')
   assert.equal(styleAsked('neon'), 'neon')

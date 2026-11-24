@@ -68,8 +68,9 @@ test('the pixel look follows the settings and the scene', () => {
 })
 
 test('only a style that lights the scene itself, or shading each pixel, cuts it unlit', () => {
-  const s = styleStart(FINISH)
+  const s = { ...styleStart(FINISH), style: 'pixel' as const }
   assert.deepEqual(cutAsk(s, own), { plain: false, steps: [], texel: 0 })
+  assert.equal(cutAsk(styleStart(FINISH), own).plain, true)
   assert.equal(cutAsk({ ...s, style: 'cel' }, own).plain, true)
   assert.equal(cutAsk({ ...s, style: 'oil' }, own).plain, false)
   assert.equal(cutAsk({ ...s, pixel: { ...s.pixel, shade: true } }, own).plain, true)
