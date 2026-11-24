@@ -27,6 +27,21 @@ test('snapAnchor: a rocking view never shifts the art grid, where snapping at th
   assert.equal(fromAnchor.size, 1)
 })
 
+test('snapAnchor: a rocking view holds still on art an odd number of pixels across too', () => {
+  // the target is drawn at the very middle, halfway between two pixel edges there: it must always go the same way
+  const view: Orbit = { target: [0.05, 0.84, 0.05], distance: 3.7, azimuth: 28, elevation: 10 }
+  for (const [w, h] of [[321, 241], [320, 241], [321, 240], [187, 141]]) {
+    const shifts = new Set<string>()
+    let kept: SnapAnchor | undefined
+    for (let i = 0; i < 240; i++) {
+      const o = { ...view, azimuth: view.azimuth + Math.sin((i / 240) * Math.PI * 2) * 6, elevation: 10 + Math.cos((i / 240) * Math.PI * 2) * 2 }
+      kept = snapAnchor(kept, o)
+      shifts.add(shiftFor(o, kept.at, w, h))
+    }
+    assert.equal(shifts.size, 1, `${w} × ${h}: ${[...shifts].join(' ; ')}`)
+  }
+})
+
 test('snapAnchor: a pan keeps the anchor where it was in the world; a turn or zoom moves it to the target', () => {
   const o: Orbit = { target: [1, 2, 3], distance: 4, azimuth: 10, elevation: 5 }
   const a = snapAnchor(undefined, o)

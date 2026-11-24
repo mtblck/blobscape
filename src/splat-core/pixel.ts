@@ -579,12 +579,18 @@ export function surfaceRanks(blobs: { count: number; center: ArrayLike<number>; 
 
 /**
  * For `snap`: how far to shift the picture, in normalized device units, so a point drawn at `ndc` lands on the edge of
- * a whole art pixel in a picture `size` art pixels across that axis.
+ * a whole art pixel in a picture `size` art pixels across that axis. A point halfway between two edges always goes to
+ * the lower one (`SNAP_TIE`): the point a view turns about is drawn at the picture's very middle, which in a picture
+ * an odd number of pixels across is exactly halfway, and there the rounding went either way with each frame's last
+ * bits, so the whole picture shook by a pixel as a scene rocked (Matt saw it on every Diorama scene, 2026-11-24).
  */
 export function snapShift(ndc: number, size: number): number {
   const px = (ndc * 0.5 + 0.5) * size
-  return ((Math.round(px) - px) * 2) / size
+  return ((Math.round(px - SNAP_TIE) - px) * 2) / size
 }
+
+/** How far past halfway, in art pixels, `snapShift` still takes a point to the lower edge: far over rounding noise. */
+export const SNAP_TIE = 1e-4
 
 /** A good `steady` for a moving scene: under the gap between neighboring palette colors, so shapes still move freely. */
 export const STEADY = 0.04
