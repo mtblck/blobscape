@@ -6,7 +6,8 @@ import { compileScene, type CompiledScene } from './sceneDoc.ts'
 import type { SceneWater } from './sceneWater.ts'
 import { FLASH_SKY, WEATHERS, WIND_WAY, aboveView, cloudBase, windAt, WEATHER_COLORS, isClear, showWeather, skyUnder, weatherBones, weatherDocs, type SkyState, type WeatherBones } from './skyRecipes.ts'
 import { buildVoxels } from './voxel.ts'
-import { makeSnowCover, pileSnow, warmthOf, type SnowCover } from './snowCover.ts'
+import { followSnow, makeSnowCover, pileSnow, warmthOf, type Lying, type SnowCover } from './snowCover.ts'
+import type { Bone, Skeleton } from './rig.ts'
 import { ownClouds, type HeavensDoc } from './heavens.ts'
 import { under } from './timeOfDay.ts'
 
@@ -26,6 +27,13 @@ export interface WeatherScene {
   heavens?: HeavensDoc
   /** Where something falling comes to rest (`CompiledScene.ground`). Left out, nothing lands and no snow lies. */
   ground?: (x: number, z: number, top: number, bottom: number) => number
+  /**
+   * Where snow lies, on moving things too, with the bone that carries it (`CompiledScene.lying`), and the scene's
+   * bones it numbers: snow lying then rides what it lies on (`SceneWeather.follow`). Left out, it lies on `ground` only.
+   */
+  lying?: (x: number, z: number, top: number, bottom: number) => Lying
+  /** The scene's bones, which `lying`'s bone numbers index. */
+  bones?: readonly Bone[]
   /** The scene's water, which rain rings and wind roughens. */
   water?: SceneWater
   /** The way to the scene's sun, which shades snow lying on faces turned from it. */
@@ -102,7 +110,10 @@ export class SceneWeather {
     const view = d.view, [tx, ty, tz] = view.target, radius = Math.max(0.8, view.distance * 0.45)
     // the square rain and snow fall over (`falling`): blown out of it, they come in at its other side
     this.square = { at: [tx, tz], half: radius }
-    this.cover = makeSnowCover(ground, {
+    // on what moves too, riding the bone it lies on, where the scene says which that is
+    const carried = d.lying && d.bones ? d.lying : undefined
+    this.cover = makeSnowCover(carried ?? ground, {
+      bones: carried && d.bones,
       x: tx, z: tz, radius, top, bottom: ty - view.distance, spacing: Math.max(COVER_SPACING, radius / COVER_ACROSS), sun: d.sun,
       dry: pond && ((x, y, z) => y <= pond.plan.level + 1e-3 && pond.plan.wet(x, z)),
       // a fire melts the snow round it as it lands
@@ -110,6 +121,14 @@ export class SceneWeather {
     })
     // (a scene that gives no ground to land on has none)
     this.actors = [this.layers.clouds.actor, this.layers.rain.actor, this.layers.snow.actor, ...(this.cover.blobs.count ? [this.cover as Actor] : [])]
+  }
+
+  /**
+   * Hands the snow lying the scene's pose, so it stays on what it lies on: call it once the scene's skeleton `sk` is
+   * posed and updated for the frame (after the wind, the water's rocking and pokes).
+   */
+  follow(sk: Skeleton) {
+    if (this.cover.blobs.count) followSnow(this.cover, sk)
   }
 
   /** Sets how deep the snow lying is, 0 to 1. Returns whether it changed by enough to send up again (`Stage.reshape(cover)`). */

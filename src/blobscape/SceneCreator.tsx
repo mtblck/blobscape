@@ -6,7 +6,7 @@ import type { Built } from '../splat-engine/body.ts'
 import { pickActors } from '../splat-engine/pick.ts'
 import { MAX_PROJECT_LAMPS, PlacedPoser, SIZE_RANGE, compileProject, cutLight, joinPalettes, leafy, placer, type Placement, type Posable, type ProjectLight, type SceneProject } from '../splat-engine/project.ts'
 import type { Light, PointLight } from '../splat-engine/engine.ts'
-import type { Bone, Skeleton } from '../splat-engine/rig.ts'
+import { Skeleton, type Bone } from '../splat-engine/rig.ts'
 import type { Shape } from '../splat-engine/voxel.ts'
 import { LoadingMark } from '../shared/BlobLoader.tsx'
 import { Button, Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
@@ -541,6 +541,8 @@ export function SceneCreator() {
       }
       return ok
     }
+    /** The whole scene's skeleton the snow lying follows, posed beside the pieces. */
+    let carrier: { of: ReturnType<Shown['weatherScene']>; sk: Skeleton } | undefined
     const poseAll = (sk: Skeleton, t: number) => {
       const L = live.current
       const landFits = fits(L.shown)
@@ -563,6 +565,16 @@ export function SceneCreator() {
         if (fall.pile(pile.current)) stage.reshape(fall.cover)
         if (fall.shade(now)) stage.reshape(fall.actors[0])
         showHeavens(sk.size, heavens, Math.max(now.clouds, own))
+        // snow lying rides what it lies on: the weather was laid over the whole scene as one description, so that is
+        // posed beside the pieces (its own wind, as the pieces get it) and the snow follows its bones
+        const whole = L.shown.weatherScene()
+        if (whole.bones) {
+          if (carrier?.of !== whole) carrier = { of: whole, sk: new Skeleton(whole.bones.map((b) => ({ ...b }))) }
+          whole.pose(carrier.sk, t)
+          whole.blow?.(carrier.sk, t, gust ?? [0, 0], undefined, level)
+          carrier.sk.update()
+          fall.follow(carrier.sk)
+        }
       }
       // the wind's turns and the sky's sizes come after the land's pose worked its bones out
       if (landFits) sk.update()
