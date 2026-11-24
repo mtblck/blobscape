@@ -5,6 +5,7 @@ import { DIORAMAS } from './scenes.ts'
 import { pileStep } from '../../splat-engine/snowCover.ts'
 import { SceneWeather, paletteUnder, underSky } from './weather.ts'
 import { litFor } from '../../splat-engine/sceneDoc.ts'
+import { Skeleton } from '../../splat-engine/rig.ts'
 
 const scene = (id: string) => DIORAMAS.find((d) => d.id === id)!
 
@@ -87,13 +88,27 @@ test('snow lies where it lands, builds up while it falls and melts after', () =>
   for (let k = 0; k < c.blobs.count; k++) if (c.blobs.center[k * 3 + 1] < c.at[k * 3 + 1] - 1e-6 || c.normal[k * 3 + 1] < 0.55) assert.fail(`blob ${k}`)
 })
 
-test('a scene with nothing still for snow to lie on never asks for its cover to be sent up', () => {
-  // the sky islands all drift, so nothing stays put under the snow: the cover is empty and is not one of the actors
-  // on the stage, and sending it up there threw in the poser, which froze the page (Matt, 2026-11-22)
-  const w = new SceneWeather(scene('isles'), { overhead: false })
-  assert.equal(w.cover.blobs.count, 0)
-  assert.ok(!w.actors.includes(w.cover as never))
-  for (const depth of [0, 0.01, 0.5, 1]) assert.equal(w.pile(depth), false)
+test('snow lying rides what it lies on: the sky islands drift and carry their snow with them', () => {
+  // the islands all drift, so nothing stays put under the snow: it lies on the islands and goes where each goes
+  // (it was once left out, and an empty cover sent up froze the page, Matt, 2026-11-22; Matt asked for snow that stays on what moves, 2026-11-24)
+  const d = scene('isles'), w = new SceneWeather(d, { overhead: false }), c = w.cover
+  assert.ok(c.blobs.count > 100 && w.actors.includes(c as never), `${c.blobs.count} places for snow`)
+  const carried = new Set<number>()
+  for (let k = 0; k < c.blobs.count; k++) carried.add(c.skin.joints[k * 4])
+  assert.ok([...carried].some((b) => b > 0), 'some snow is on a bone that moves')
+  const sk = new Skeleton(d.bones!.map((b) => ({ ...b })))
+  w.pile(1)
+  for (const t of [0, d.loop * 0.37]) {
+    d.pose(sk, t); sk.update(); w.follow(sk)
+    for (let k = 0; k < c.blobs.count; k += 7) {
+      const b = c.skin.joints[k * 4], m = sk.matrix, n = c.skeleton.matrix, p = c.blobs.center
+      for (let r = 0; r < 3; r++) {
+        const want = m[b * 16 + r] * p[k * 3] + m[b * 16 + 4 + r] * p[k * 3 + 1] + m[b * 16 + 8 + r] * p[k * 3 + 2] + m[b * 16 + 12 + r]
+        const got = n[b * 16 + r] * p[k * 3] + n[b * 16 + 4 + r] * p[k * 3 + 1] + n[b * 16 + 8 + r] * p[k * 3 + 2] + n[b * 16 + 12 + r]
+        if (Math.abs(want - got) > 1e-4) assert.fail(`blob ${k} on bone ${b} at ${t} s`)
+      }
+    }
+  }
 })
 
 test('the koi pond is a day: its moon and stars come out only at night, and its weather starts over the picture', () => {

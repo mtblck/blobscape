@@ -1706,6 +1706,12 @@ export interface CompiledScene {
    * or its water's surface where that is what lies open to the sky. What falls from outside the scene lands on it.
    */
   ground(x: number, z: number, top: number, bottom: number): number
+  /**
+   * Where snow lies under (x, z): as `ground`, but on whatever takes light, moving or not (a swaying crown, a turning
+   * sail, a boat on the water, a walker), with the index of the bone that carries it (0 for the land or the water), so
+   * the snow lying there can ride that bone (snowCover.ts `followSnow`). In the rest pose.
+   */
+  lying(x: number, z: number, top: number, bottom: number): { y: number; bone: number }
   /** The scene's water, if it has any, with its defaults filled in: what `SceneWater` plays. */
   water?: WaterPlan
   /** The scene's fires, with their defaults filled in: what `SceneFire` plays. */
@@ -2127,6 +2133,9 @@ export function compileScene(given: SceneDoc, { puffs = true, ground: under, wat
   // what weather lands on: parts that stay put (on no bone, or one that only sways), in order, a drift over those before it
   const moved = new Set<string>()
   for (const m of moves) if (m.kind !== 'sway') moved.add(m.bone)
+  // what swells and fades (smoke puffs, rings on water) takes no snow lying, though it is solid
+  const swelling = new Set<string>()
+  for (const m of moves) if (m.kind === 'pulse' || (m.kind === 'drift' && m.grow)) swelling.add(m.bone)
   // what floats rides the water, so it is no ground under it
   for (const f of doc.water?.floats ?? []) moved.add(f.bone)
   for (const b of doc.bones ?? []) if (b.parent && moved.has(b.parent)) moved.add(b.name)
@@ -2134,20 +2143,23 @@ export function compileScene(given: SceneDoc, { puffs = true, ground: under, wat
   const placers = doc.parts.map((p) => (p.placed ? placer(p.placed.foot, p.placed) : undefined))
   const solidShapes = (thin: number) => {
     const out: Shape[] = [], still: Shape[] = []
+    // what snow can lie on: every part that is solid and takes light, still or moving, with the bone that carries it
+    const lie: Shape[] = [], lieBone: number[] = []
     for (const [i, p] of doc.parts.entries()) {
       const t = placers[i]
       const sh = t ? placedShape(toShape(p.shape, thin / t.size), t) : toShape(p.shape, thin, (x, z) => groundUnder(still, x, z, 4, -1))
       out.push(sh)
       if (!p.glow && !(p.bone && moved.has(p.bone))) still.push(sh)
+      if (!p.glow && !p.bone?.startsWith('~') && !(p.bone && swelling.has(p.bone))) { lie.push(sh); lieBone.push(p.bone ? bones.findIndex((b) => b.name === p.bone) : 0) }
     }
-    return { out, still }
+    return { out, still, lie, lieBone }
   }
   // what hangs in the air rides bones of its own, after the scene's: a bone for each speck, a few for each bank of mist
   const lands = (doc.air?.specks ?? []).some((m) => m.land)
   // lava lies in its pool as water does, on the same grid and the same height field: it is planned as water, with its heat beside
   const pond = doc.water ?? (doc.lava && lavaPond(doc.lava))
-  let stood: Shape[] | undefined
-  const standing = () => (stood ??= solidShapes(0.02).still)
+  let solid: ReturnType<typeof solidShapes> | undefined
+  const standing = () => (solid ??= solidShapes(0.02)).still
   const ground = (lands && !under) || pond ? standing() : []
   const pondBox = pond && { x0: Math.min(pond.from[0], pond.to[0]), x1: Math.max(pond.from[0], pond.to[0]), z0: Math.min(pond.from[1], pond.to[1]), z1: Math.max(pond.from[1], pond.to[1]) }
   /** Whether there is water at (x, z): inside the box, with a bed of still ground under the level to hold it (looked for from just over the surface, so a roof overhead is not in the way). */
@@ -2159,6 +2171,21 @@ export function compileScene(given: SceneDoc, { puffs = true, ground: under, wat
     const g = groundUnder(standing(), x, z, top, bottom)
     // nothing between the sky and the water there: the water is what it lands on
     return pond && g < pond.level && wetAt(x, z) ? pond.level : g
+  }
+  /** Like `groundAt`, but over moving parts too, and with the bone that carries what is met (0 for the land or water). */
+  const lyingAt = (x: number, z: number, top: number, bottom: number) => {
+    const { lie, lieBone } = (solid ??= solidShapes(0.02))
+    const y = groundUnder(lie, x, z, top, bottom)
+    if (!(y > bottom)) return { y, bone: 0 }
+    if (pond && y < pond.level && wetAt(x, z)) return { y: pond.level, bone: 0 }
+    // the part met is the one nearest the point it was met at
+    let best = Infinity, bone = 0
+    for (const [k, sh] of lie.entries()) {
+      if (x < sh.min[0] || x > sh.max[0] || z < sh.min[2] || z > sh.max[2] || y < sh.min[1] - 0.01 || y > sh.max[1] + 0.01) continue
+      const d = sh.sdf(x, y, z)
+      if (d < best) { best = d; bone = lieBone[k] }
+    }
+    return { y, bone: Math.max(0, bone) }
   }
   const specks = planSpecks(doc.air, doc.loop, under ?? groundAt, under ? level : pond?.level)
   const water = pond && pondBox ? planWater(pond, pondBox, doc, specks, bones, wetAt, standsAt) : undefined
@@ -2340,6 +2367,7 @@ export function compileScene(given: SceneDoc, { puffs = true, ground: under, wat
     },
     haze: haze ? { color: unit(haze.color).map(linear) as Vec3, from: haze.from ?? 0, to: haze.to ?? 4 } : undefined,
     ground: groundAt,
+    lying: lyingAt,
     water,
     landed: water?.drops ?? wetDrops(specks, doc.loop),
     lights: (t) => lightsAt(lights, t / doc.loop),

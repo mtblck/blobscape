@@ -4604,6 +4604,15 @@
          "code": "ground(x: number, z: number, top: number, bottom: number): number"
         }
        ]
+      },
+      {
+       "name": "lying",
+       "doc": "Where snow lies under (x, z): as `ground`, but on whatever takes light, moving or not (a swaying crown, a turning\nsail, a boat on the water, a walker), with the index of the bone that carries it (0 for the land or the water), so\nthe snow lying there can ride that bone (snowCover.ts `followSnow`). In the rest pose.",
+       "signatures": [
+        {
+         "code": "lying(x: number, z: number, top: number, bottom: number): { y: number; bone: number }"
+        }
+       ]
       }
      ]
     },
@@ -6840,6 +6849,18 @@
        "doc": "Where something falling comes to rest (`CompiledScene.ground`). Left out, nothing lands and no snow lies."
       },
       {
+       "name": "lying",
+       "optional": true,
+       "type": "(x: number, z: number, top: number, bottom: number) => Lying",
+       "doc": "Where snow lies, on moving things too, with the bone that carries it (`CompiledScene.lying`), and the scene's\nbones it numbers: snow lying then rides what it lies on (`SceneWeather.follow`). Left out, it lies on `ground` only."
+      },
+      {
+       "name": "bones",
+       "optional": true,
+       "type": "readonly Bone[]",
+       "doc": "The scene's bones, which `lying`'s bone numbers index."
+      },
+      {
        "name": "water",
        "optional": true,
        "type": "SceneWater",
@@ -6895,6 +6916,15 @@
       }
      ],
      "methods": [
+      {
+       "name": "follow",
+       "doc": "Hands the snow lying the scene's pose, so it stays on what it lies on: call it once the scene's skeleton `sk` is\nposed and updated for the frame (after the wind, the water's rocking and pokes).",
+       "signatures": [
+        {
+         "code": "follow(sk: Skeleton): void"
+        }
+       ]
+      },
       {
        "name": "pile",
        "doc": "Sets how deep the snow lying is, 0 to 1. Returns whether it changed by enough to send up again (`Stage.reshape(cover)`).",
@@ -7177,7 +7207,7 @@
    "id": "snowCover",
    "title": "Snow that lies",
    "group": "scenes",
-   "doc": "Snow that lies and builds up (Matt, 2026-11-21: snow and heavy snow should pile up over time and cover the ground).\n\nA layer of flat white blobs laid once over whatever stays put under a stretch of sky, found the way falling snow\nfinds where it lands (`ground`, a scene's `CompiledScene.ground`): the tops of the land, roofs, walls and rocks, on\nfaces no steeper than `STEEPEST`. Every blob has its turn to come (`rank`): flat, open ground first and in clumps\n(value noise over a few cells), so snow starts as patches that spread and join. `pileSnow(cover, depth)` sets the\nlayer for a depth from 0 (none) to 1 (all of it lying, a little deeper than a blob is thick): a blob whose turn has\ncome grows from nothing, and the whole layer rises as it deepens. How deep it is, is the page's: snow builds up\nover the time it falls (`pileStep`), which no scene's loop knows.",
+   "doc": "Snow that lies and builds up (Matt, 2026-11-21: snow and heavy snow should pile up over time and cover the ground).\n\nA layer of flat white blobs laid once over whatever stays put under a stretch of sky, found the way falling snow\nfinds where it lands (`ground`, a scene's `CompiledScene.ground`): the tops of the land, roofs, walls and rocks, on\nfaces no steeper than `STEEPEST`. Every blob has its turn to come (`rank`): flat, open ground first and in clumps\n(value noise over a few cells), so snow starts as patches that spread and join. `pileSnow(cover, depth)` sets the\nlayer for a depth from 0 (none) to 1 (all of it lying, a little deeper than a blob is thick): a blob whose turn has\ncome grows from nothing, and the whole layer rises as it deepens. How deep it is, is the page's: snow builds up\nover the time it falls (`pileStep`), which no scene's loop knows.\n\nSnow stays on what it lies on (Matt, 2026-11-24): given a scene's bones and a ground that says which bone carries\neach spot (`CompiledScene.lying`), every blob rides its bone, so snow on a swaying crown, a turning sail, a boat on\nthe waves or anything that walks goes with it. `followSnow` hands the layer each frame's pose; snow on a thing turned\npast `SLIDE_FROM` from upright slides off it (shrinks onto its bone) and settles again as it comes back up.",
    "entries": [
     {
      "name": "STEEPEST",
@@ -7203,7 +7233,7 @@
       {
        "name": "skeleton",
        "type": "Skeleton",
-       "doc": "One still bone."
+       "doc": "The scene's bones (one still bone when it gave none), posed by `followSnow`."
       },
       {
        "name": "soft",
@@ -7244,8 +7274,20 @@
        "name": "depth",
        "type": "number",
        "doc": "The depth the layer was last set for."
+      },
+      {
+       "name": "follows",
+       "optional": true,
+       "type": "{ from: Skeleton; index: Int16Array }",
+       "doc": "For each bone of the layer, its index in the skeleton `followSnow` was last given (-1: none), and that skeleton."
       }
      ]
+    },
+    {
+     "name": "Lying",
+     "kind": "type",
+     "doc": "Where a spot of snow lies: the height, and the bone of the scene's that carries it.",
+     "type": "unknown"
     },
     {
      "name": "makeSnowCover",
@@ -7253,7 +7295,7 @@
      "doc": "Lays the layer over a disc of `radius` round (`x`, `z`) at `spacing` between blobs. `ground(x, z, top, bottom)` is\nwhere something falling from `top` comes to rest (`bottom` where it meets nothing); `dry(x, y, z)` leaves out a\nspot (water: snow falling on it melts). `sun` (toward the light) shades faces turned away a little blue.",
      "signatures": [
       {
-       "code": "makeSnowCover(ground: (x: number, z: number, top: number, bottom: number) => number, options: { x: number; z: number; radius: number; top: number; bottom: number; spacing: number; sun?: readonly number[]; dry?: (x: number, y: number, z: number) => boolean; warm?: readonly { at: readonly number[]; reach: number }[] }): SnowCover"
+       "code": "makeSnowCover(ground: (x: number, z: number, top: number, bottom: number) => number | Lying, options: { x: number; z: number; radius: number; top: number; bottom: number; spacing: number; bones?: readonly Bone[]; sun?: readonly number[]; dry?: (x: number, y: number, z: number) => boolean; warm?: readonly { at: readonly number[]; reach: number }[] }): SnowCover"
       }
      ]
     },
@@ -7264,6 +7306,22 @@
      "signatures": [
       {
        "code": "pileSnow(cover: SnowCover, depth: number): boolean"
+      }
+     ]
+    },
+    {
+     "name": "SLIDE_FROM",
+     "kind": "const",
+     "doc": "Snow slides off a thing turned so its up is no more than this far up (the y of its turned up): gone by level, whole from here.",
+     "type": "0.4"
+    },
+    {
+     "name": "followSnow",
+     "kind": "function",
+     "doc": "Poses the layer as the scene's skeleton `sk` stands (posed and updated: call it after everything that moves the\nscene's bones). Each of the layer's bones takes the skin of the scene's bone of its name, so snow rides what it lies\non; on a bone turned past `SLIDE_FROM` its snow shrinks onto the bone's head. Bones the scene lacks stay at rest.",
+     "signatures": [
+      {
+       "code": "followSnow(cover: SnowCover, sk: Skeleton): void"
       }
      ]
     },

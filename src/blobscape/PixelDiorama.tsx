@@ -361,6 +361,8 @@ export function PixelDiorama() {
       pond?.ride(sk, t)
       // an export is the scene's own loop: no pokes, and the view as it stood when it began
       if (!held.current) pokes.current?.apply(sk, performance.now() / 1000)
+      // snow lying rides what it lies on: a swaying crown, a turning sail, a boat on the waves
+      fall?.follow(sk)
       // each fire as it stands at this moment, and its light as bright as it burns
       // (wind leans it and blows it out, rain damps it and puts it out: by the wall clock, as snow lies; all at once off screen and in an export)
       if (flames) {
