@@ -28,7 +28,7 @@ import type { Texture } from '../splat-engine/meshShape.ts'
 import { decodeTexture } from './modelRig.ts'
 import { writeDetail } from '../shared/detail.ts'
 import { banded, hugged, unlit } from '../splat-engine/voxel.ts'
-import { isPixelStyle, styleAsked, styleWords, type Style } from './diorama/styles.ts'
+import { DEFAULT_STYLE, isPixelStyle, styleAsked, styleWords, type Style } from './diorama/styles.ts'
 import { GLITCH_START, glitchLook, type GlitchChoice } from './glitchLooks.ts'
 import { StyleControls, FinishControls } from './StyleControls.tsx'
 import { TimeControls, WeatherControls } from './styles/SceneControls.tsx'
@@ -615,7 +615,7 @@ export function PixelDiorama() {
     setStyle(id)
     setNote('')
     const url = new URL(location.href)
-    if (id === 'pixel') url.searchParams.delete('style')
+    if (id === DEFAULT_STYLE) url.searchParams.delete('style')
     else url.searchParams.set('style', id)
     history.replaceState(history.state, '', url)
   }

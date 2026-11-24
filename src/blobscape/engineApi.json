@@ -13628,13 +13628,19 @@
     {
      "name": "STYLES",
      "kind": "const",
-     "doc": "Pixel art first, then tech glitch (pixel art too), then the looks in Brush and Ink's own order (the plain blobs last).",
+     "doc": "Blocks first, then pixel art and tech glitch (pixel art too), then the looks in Brush and Ink's own order (the plain blobs last).",
      "type": "{ id: Style; label: string; note: string }[]"
+    },
+    {
+     "name": "DEFAULT_STYLE",
+     "kind": "const",
+     "doc": "The style a page starts in, and the one a plain address means: blocks. Every other style is named in the address (`?style=pixel`).",
+     "type": "Style"
     },
     {
      "name": "styleAsked",
      "kind": "const",
-     "doc": "The style an address asks for (`?style=oil`), or pixel art.",
+     "doc": "The style an address asks for (`?style=oil`), or the default.",
      "type": "(asked: string | null) => Style"
     },
     {

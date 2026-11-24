@@ -100,7 +100,7 @@ if (out !== undefined && doc && f) {
   const browser = await launch()
   try {
     const page = await (await browser.newContext({ deviceScaleFactor: 1, viewport: { width: 1280, height: 900 } })).newPage()
-    await page.goto(`${served.base}/experiments/diorama/?offscreen=1`)
+    await page.goto(`${served.base}/experiments/diorama/?offscreen=1&style=pixel`)
     await page.waitForFunction(() => window.__diorama, null, { timeout: 180000 })
     await page.getByTestId('diorama-model').setInputFiles(json)
     await page.waitForFunction(() => /^(Opened|Could not)/.test(document.querySelector('[data-testid=diorama-model-note]')?.textContent ?? ''), null, { timeout: 60000 })

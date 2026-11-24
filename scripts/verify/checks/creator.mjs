@@ -118,7 +118,7 @@ export default [
     about: 'Scene Creator: the windmill opens split into its hill and ten props, cut in a worker and drawn; a scene that cannot be split opens whole and says why; a bare land opens alone; listed for search',
     entries: ['src/blobscape/SceneCreator.tsx'],
     async run({ shots, join, fails, ok, open, axe }) {
-      const c = await open('/scene-creator/?offscreen=1', { viewport: { width: 1280, height: 900 } })
+      const c = await open('/scene-creator/?offscreen=1&style=pixel', { viewport: { width: 1280, height: 900 } })
       const ready = () => c.page.waitForFunction(() => window.__creator?.ready(), null, { timeout: 180000 }).then(() => true, () => false)
       // how much of the picture is scene, not sky: the windmill's greens and the mill's grays
       const drawn = () => c.page.evaluate(async () => {
@@ -147,7 +147,7 @@ export default [
       }
       // a scene drawn by code opens whole and says so
       {
-        const m = await open('/scene-creator/?offscreen=1&scene=meadow', { viewport: { width: 1280, height: 900 } })
+        const m = await open('/scene-creator/?offscreen=1&style=pixel&scene=meadow', { viewport: { width: 1280, height: 900 } })
         const up = await m.page.waitForFunction(() => window.__creator?.ready(), null, { timeout: 180000 }).then(() => true, () => false)
         const items = await m.page.evaluate(() => window.__creator?.items() ?? [])
         const note = await m.page.getByTestId('creator-whole-note').innerText().catch(() => '')
@@ -170,7 +170,7 @@ export default [
     about: 'Scene Creator, Arrange: a prop picked by a tap and from the list, moved by a drag and by the arrow keys, turned by its handle and by brackets, copied and deleted, and each undone',
     entries: ['src/blobscape/SceneCreator.tsx', 'src/blobscape/creator/arrange.ts'],
     async run({ shots, join, fails, ok, open, axe }) {
-      const c = await open('/scene-creator/?offscreen=1&detail=chunky', { viewport: { width: 1280, height: 900 } })
+      const c = await open('/scene-creator/?offscreen=1&style=pixel&detail=chunky', { viewport: { width: 1280, height: 900 } })
       const p = c.page
       const up = await p.waitForFunction(() => window.__creator?.ready(), null, { timeout: 180000 }).then(() => true, () => false)
       if (!up) { fails.push('blobscape scene creator arrange: the windmill never opened'); return }
@@ -243,7 +243,7 @@ export default [
     about: 'Scene Creator, Props: the giant turkey found by search and added to the windmill hill, another prop dragged onto the view, the land swapped under them, a pack of kit pieces set down; the counts and the picture follow, and undo takes each back',
     entries: ['src/blobscape/SceneCreator.tsx', 'src/blobscape/creator/adding.ts', 'src/blobscape/creator/library.ts', 'src/blobscape/creator/packs.ts', 'src/blobscape/creator/kit.ts'],
     async run({ shots, join, fails, ok, open, axe }) {
-      const c = await open('/scene-creator/?offscreen=1&detail=chunky&mode=props', { viewport: { width: 1280, height: 900 } })
+      const c = await open('/scene-creator/?offscreen=1&style=pixel&detail=chunky&mode=props', { viewport: { width: 1280, height: 900 } })
       const p = c.page
       const ready = () => p.waitForFunction(() => window.__creator?.ready(), null, { timeout: 180000 }).then(() => true, () => false)
       if (!(await ready())) { fails.push('blobscape scene creator props: the windmill never opened'); return }
@@ -358,7 +358,7 @@ export default [
     async run({ shots, join, fails, ok, open, axe }) {
       for (const webgl of [false, true]) {
         const tag = webgl ? 'WebGL' : 'WebGPU'
-        const c = await open(`/scene-creator/?offscreen=1&detail=chunky&mode=light${webgl ? '&webgl=1' : ''}`, { viewport: { width: 1280, height: 900 } })
+        const c = await open(`/scene-creator/?offscreen=1&style=pixel&detail=chunky&mode=light${webgl ? '&webgl=1' : ''}`, { viewport: { width: 1280, height: 900 } })
         const p = c.page
         const ready = () => p.waitForFunction(() => window.__creator?.ready(), null, { timeout: 180000 }).then(() => true, () => false)
         if (!(await ready())) { fails.push(`blobscape scene creator light (${tag}): the windmill never opened`); continue }
@@ -417,7 +417,7 @@ export default [
     about: 'Scene Creator, Style and Export: oil, then cel shading (cut again with no light baked in), then pixel art in another palette each change the picture; a frame saves as a PNG, the scene as a rigged .glb the engine reads, and a two-stop camera path as an animated PNG of every frame',
     entries: ['src/blobscape/SceneCreator.tsx', 'src/blobscape/creator/styling.ts', 'src/blobscape/styleSettings.ts', 'src/blobscape/StyleControls.tsx', 'src/blobscape/diorama/useExport.tsx', 'src/blobscape/creator/cut.ts', 'src/blobscape/creator/engineFile.ts'],
     async run({ shots, join, fails, ok, open, axe }) {
-      const c = await open('/scene-creator/?offscreen=1&detail=chunky&mode=style', { viewport: { width: 1280, height: 900 } })
+      const c = await open('/scene-creator/?offscreen=1&style=pixel&detail=chunky&mode=style', { viewport: { width: 1280, height: 900 } })
       const p = c.page
       const ready = () => p.waitForFunction(() => window.__creator?.ready(), null, { timeout: 180000 }).then(() => true, () => false)
       if (!(await ready())) { fails.push('blobscape scene creator style: the windmill never opened'); return }
@@ -494,7 +494,7 @@ export default [
       const fs = await import('node:fs')
       const outside = []
       const watch = (page) => page.on('request', (r) => { if (!/^(http:\/\/(localhost|127\.0\.0\.1)|data:|blob:)/.test(r.url())) outside.push(r.url()) })
-      const at = '/scene-creator/?offscreen=1&detail=chunky'
+      const at = '/scene-creator/?offscreen=1&style=pixel&detail=chunky'
       const c = await open(at, { viewport: { width: 1280, height: 900 } })
       const p = c.page
       watch(p)
@@ -608,7 +608,7 @@ export default [
         Object.defineProperty(document, 'modelContext', { configurable: true, value: { registerTool(t, o) { tools.set(t.name, t); o?.signal?.addEventListener('abort', () => tools.delete(t.name)); return Promise.resolve() } } })
       })
       // in-app, so the stand-in stays (as the header's link goes, with the stage drawing off screen as verify needs)
-      await p.evaluate(() => { history.pushState(null, '', '/scene-creator/?offscreen=1'); window.dispatchEvent(new Event('blobscape:navigate')) })
+      await p.evaluate(() => { history.pushState(null, '', '/scene-creator/?offscreen=1&style=pixel'); window.dispatchEvent(new Event('blobscape:navigate')) })
       const up = await p.waitForFunction(() => window.__tools?.has('describe_scene'), null, { timeout: 60000 }).then(() => true, () => false)
       const call = (name, input = {}) => p.evaluate(([n, i]) => window.__tools.get(n).execute(i), [name, input])
       const steps = []
