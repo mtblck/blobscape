@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { FIRE_CELLS, FIRE_TICK, FIRE_FLAMES, Fire, fireColor, powerAt, runFire, type FireColors, type FireShape } from './fire.ts'
-import { DIE, FUEL_EMBERS, FUEL_LOW, SceneFire, burningAt, fireShape, fuelUnder, shapeUnder, smokeAt } from './sceneFire.ts'
+import { CATCH, DIE, FUEL_EMBERS, FUEL_LOW, SceneFire, burningAt, fireShape, fuelUnder, shapeUnder, smokeAt } from './sceneFire.ts'
 import { skyState } from './skyRecipes.ts'
 import { checkScene, compileScene, litFor, type SceneDoc } from './sceneDoc.ts'
 
@@ -179,9 +179,13 @@ test('a fire in heavy rain dies down to embers and smoke, its light with it, and
   fire.show(1.3)
   assert.ok(light() < bright * 0.15 && light() > 0, `its light ${light().toFixed(3)} of ${bright.toFixed(3)}`)
   // the storm over, it catches again
-  for (let k = 0; k < 200; k++) fire.under(skyState(), 0.05)
-  fire.show(1.3)
+  // (loops are played a few milliseconds a call, so on a slow machine it takes more calls: tell it until it has caught)
+  let clear = 0
+  while (fire.fuel[0] < 1 && clear++ < 20000) fire.under(skyState(), 0.05)
   assert.equal(fire.fuel[0], 1)
+  assert.ok(clear * 0.05 >= CATCH * 0.99, 'it caught quicker than a fire catches')
+  for (let k = 0; k < 40; k++) fire.under(skyState(), 0.05)
+  fire.show(1.3)
   assert.ok(alight() > full * 0.9 && smoking() === 0)
   // off screen it is there at once
   fire.under(storm, Infinity)
