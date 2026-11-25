@@ -2,9 +2,9 @@
 import { INK, PAPER, type MarkKind } from '../../splat-core/marks.ts'
 
 /** How the blobs are drawn: as they are, or as one of the marks. */
-export type LookId = 'blobs' | 'ascii' | MarkKind
+export type LookId = 'blobs' | 'ascii' | 'boxart' | MarkKind
 /** Whether a look is one of the marks drawn blob by blob. */
-export const isMark = (id: LookId): id is MarkKind => id !== 'blobs' && id !== 'ascii'
+export const isMark = (id: LookId): id is MarkKind => id !== 'blobs' && id !== 'ascii' && id !== 'boxart'
 /** The drawn looks a page offers, each with its name and a line about it; the plain blobs last. */
 export const LOOKS: { id: LookId; label: string; note: string }[] = [
   { id: 'gouache', label: 'Gouache', note: 'Flat, opaque dabs with the streaks of a dry brush.' },
@@ -12,7 +12,8 @@ export const LOOKS: { id: LookId; label: string; note: string }[] = [
   { id: 'ink', label: 'Ink and wash', note: 'A thin wash of each color that leaves the paper showing in the light, pen strokes only in the shade, and a pen outline round everything.' },
   { id: 'hatch', label: 'Hatching', note: 'Pen lines on bare paper, drawn closer where it is darker.' },
   { id: 'stipple', label: 'Stipple', note: 'Pen dots on bare paper, more of them and bigger where it is darker. Idea from Silicon Jungle\'s Ink Studio.' },
-  { id: 'ascii', label: 'ASCII', note: 'A grid of characters: heavier ones where there is more to show, and strokes along the edges.' },
+  { id: 'ascii', label: 'Text', note: 'A grid of characters: ASCII, braille, your own words or a typewriter\'s, heavier where there is more to show.' },
+  { id: 'boxart', label: 'Box Art', note: 'A grid of box-drawing characters along the edges, or quarter blocks and shades.' },
   { id: 'blobs', label: 'Blobs', note: 'The soft dots underneath, as every other page draws them.' },
 ]
 

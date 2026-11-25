@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { STYLES, styleAsked, styleWords } from './styles.ts'
+import { DEFAULT_STYLE, STYLES, styleAsked, styleWords } from './styles.ts'
 import { LOOKS } from '../brushLooks.ts'
 import { CEL } from '../celLooks.ts'
 import { BLOCKS, BLOCK_GROUNDS, BLOCK_SPAN, BLOCK_START, blockBack, blockLook, gridOf } from '../blockLooks.ts'
@@ -10,24 +10,34 @@ import { GLASS, glassLook, GLASS_START } from '../glassLooks.ts'
 import { GLITCH, GLITCH_START, glitchLook } from '../glitchLooks.ts'
 import { NEON, NEON_PACES, neonLook, NEON_START, periodIn } from '../neonLooks.ts'
 
-test('pixel art comes first, then every look Brush and Ink offers, each once', () => {
-  assert.equal(STYLES[0].id, 'pixel')
+test('blocks come first and are the default, then pixel art and every look Brush and Ink offers, each once', () => {
+  assert.equal(STYLES[0].id, 'blocks')
+  assert.equal(STYLES[0].id, DEFAULT_STYLE)
+  assert.equal(STYLES[1].id, 'pixel')
   const ids = STYLES.map((s) => s.id)
   assert.equal(new Set(ids).size, ids.length)
   for (const l of [...LOOKS, GLITCH, CEL, BLOCKS, NEON, GLASS, WASH]) assert.ok(ids.includes(l.id), `${l.id} is offered`)
   assert.equal(ids.length, LOOKS.length + 8)
-  assert.equal(STYLES[1].id, 'glitch')
+  assert.equal(STYLES[2].id, 'glitch')
 })
 
-test('an address picks a style, and anything else is pixel art', () => {
+test('an address picks a style, and anything else is the default, blocks', () => {
   assert.equal(styleAsked('oil'), 'oil')
   assert.equal(styleAsked('cel'), 'cel')
   assert.equal(styleAsked('neon'), 'neon')
   assert.equal(styleAsked('ascii'), 'ascii')
-  assert.equal(styleAsked(null), 'pixel')
+  assert.equal(styleAsked(null), 'blocks')
+  assert.equal(styleAsked('pixel'), 'pixel')
   assert.equal(styleAsked('glass'), 'glass')
   assert.equal(styleAsked('watercolor'), 'watercolor')
-  assert.equal(styleAsked('woodcut'), 'pixel')
+  assert.equal(styleAsked('woodcut'), 'blocks')
+  // Text is still `ascii` (and `text`); its old box sets are Box Art's now
+  assert.equal(styleAsked('text'), 'ascii')
+  assert.equal(styleAsked('boxart'), 'boxart')
+  assert.equal(styleAsked('ascii', 'lines'), 'boxart')
+  assert.equal(styleAsked('ascii', 'blocks'), 'boxart')
+  assert.equal(styleAsked('ascii', 'braille'), 'ascii')
+  assert.equal(styleAsked('oil', 'lines'), 'oil')
 })
 
 test('every style has a note and words for the line under the view', () => {
@@ -58,6 +68,8 @@ test('stained glass takes a scene\'s own sky for the window round it', () => {
 test('watercolor is laid on a light paper, with a scene\'s own sky behind or a pale one', () => {
   for (const p of WASH_PAPERS) assert.ok(Math.min(...p.paper) > 0.8, p.id)
   assert.deepEqual(washLook(WASH_START).sky, WASH_SKY)
+  assert.equal(washLook(WASH_START).border, true, 'the paper border is there unless turned off')
+  assert.equal(washLook({ ...WASH_START, border: false }).border, false)
   assert.deepEqual(washLook(WASH_START, [[255, 255, 255], [0, 0, 0]]).sky, [[1, 1, 1], [0, 0, 0]])
   assert.equal(styleWords('watercolor'), 'in watercolor')
 })

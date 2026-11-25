@@ -1,5 +1,6 @@
 import type { Blobs } from '../splat-core/blobs.ts'
 import { srgbToLinear } from '../splat-core/color.ts'
+import { paletteSnap } from '../splat-core/paints.ts'
 import type { Skin } from './rig.ts'
 
 /**
@@ -39,6 +40,8 @@ export interface BlockLook {
   weather?: 'blocks' | 'blobs'
   /** How many times higher than it stands a ripple is drawn as blocks (default `FLOW_SWELL`); 0 keeps the tops level, so only their color moves. */
   swell?: number
+  /** Paints every block takes its color from (sRGB 0–255): a cell's commonest color is snapped to the nearest in OKLab before light falls on it (`paletteSnap`). Left out, blocks keep their own colors. Water columns and soft actors keep theirs. */
+  palette?: readonly (readonly [number, number, number])[]
 }
 
 /** The default way to the light. */
@@ -220,6 +223,13 @@ const DISC_REACH = 1.18
 const SPREAD_FROM = 1.25
 /** The most cells a wide blob fills each way from its middle. */
 const SPREAD_MOST = 3
+/**
+ * A loose thing this many blocks across or more, two ways, is a body with a surface (a moon, a sun), not a speck: its
+ * blobs stand a block apart and each made one small cube, so it was drawn as a grid of dots with the sky showing
+ * between them (Matt saw the campfire's moon as a scratchy disc, 2026-11-24). Each of its blobs fills the small cells
+ * its disc covers.
+ */
+const BODY_FROM = 1.5
 
 /** A blob's two widest axes (its first and second), from its facing. */
 function discAxes(q: Float32Array, i: number): [[number, number, number], [number, number, number]] {
@@ -239,6 +249,7 @@ export function buildBlocks(sources: readonly BlockSource[], look: BlockLook): {
   const least = look.least ?? 0.3, from = look.from ?? BLOCK_FROM
   const shade = look.shade ?? BLOCK_SHADE, corners = (look.corners ?? 0.5) * CORNER_MOST, vary = (look.vary ?? 0.35) * VARY_MOST
   const sun = faceLight(from)
+  const snap = paletteSnap(look.palette as [number, number, number][] | undefined)
 
   // every cell, over all the sources: where it is, whose it is, its color and its own light
   const where: number[] = [], owner: number[] = [], bones: number[] = [], loose: number[] = [], paint: number[] = [], glows: number[] = []
@@ -269,6 +280,20 @@ export function buildBlocks(sources: readonly BlockSource[], look: BlockLook): {
         entBlob.push(i); entCell.push(k)
         counts[k]++
       }
+      // the loose bones that carry a body: their blobs' box is over `BODY_FROM` blocks across in two ways or more
+      const body = new Set<number>()
+      if (specks) {
+        const box = new Map<number, number[]>()
+        for (let i = 0; i < blobs.count; i++) {
+          if (blobs.opacity[i] < least) continue
+          const bone = boneOf(skin, i)
+          if (!skeleton.bones[bone]?.name.startsWith('~')) continue
+          let b = box.get(bone)
+          if (!b) box.set(bone, b = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity])
+          for (let c = 0; c < 3; c++) { const v = blobs.center[i * 3 + c]; if (v < b[c]) b[c] = v; if (v > b[c + 3]) b[c + 3] = v }
+        }
+        for (const [bone, b] of box) if ([b[3] - b[0], b[4] - b[1], b[5] - b[2]].sort((p, q) => q - p)[1] >= own * BODY_FROM) body.add(bone)
+      }
       for (let i = 0; i < blobs.count; i++) {
         if (blobs.opacity[i] < least) continue
         const bone = boneOf(skin, i)
@@ -277,9 +302,12 @@ export function buildBlocks(sources: readonly BlockSource[], look: BlockLook): {
         const cx = blobs.center[i * 3], cy = blobs.center[i * 3 + 1], cz = blobs.center[i * 3 + 2]
         put(i, bone, cx, cy, cz)
         const ra = blobs.scale[i * 3] * DISC_REACH, rb = blobs.scale[i * 3 + 1] * DISC_REACH
-        if (specks || Math.max(ra, rb) < cell * SPREAD_FROM) continue
-        // in half cells, so a disc turned across the grid misses no cell of its square
-        const [u, v] = discAxes(blobs.quat, i), na = 2 * Math.min(SPREAD_MOST, Math.floor(ra / cell)), nb = 2 * Math.min(SPREAD_MOST, Math.floor(rb / cell))
+        const whole = specks && body.has(bone)
+        if (specks ? !whole : Math.max(ra, rb) < cell * SPREAD_FROM) continue
+        // in half cells, so a disc turned across the grid misses no cell of its square; a body's disc fills every
+        // small cell it touches, since its blobs stand further apart than those cells are wide
+        const reach = (r: number) => 2 * Math.min(SPREAD_MOST, whole ? Math.ceil(r / cell) : Math.floor(r / cell))
+        const [u, v] = discAxes(blobs.quat, i), na = reach(ra), nb = reach(rb)
         for (let a = -na; a <= na; a++) for (let b = -nb; b <= nb; b++) {
           // the square it stands for, so four of them on every other grid point leave no hole between them
           if (a || b) {
@@ -325,7 +353,8 @@ export function buildBlocks(sources: readonly BlockSource[], look: BlockLook): {
           had++
         }
         owner.push(a); bones.push(bone); loose.push(specks ? 1 : 0)
-        paint.push(srgbToLinear(r / had), srgbToLinear(g / had), srgbToLinear(b / had))
+        const [pr, pg, pb] = snap ? snap(r / had, g / had, b / had) : [r / had, g / had, b / had]
+        paint.push(srgbToLinear(pr), srgbToLinear(pg), srgbToLinear(pb))
         glows.push(own / had)
       }
       // which cells are one bone's, for leaving out the faces between them

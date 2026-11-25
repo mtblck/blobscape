@@ -6,7 +6,7 @@ import type { Built } from '../splat-engine/body.ts'
 import { pickActors } from '../splat-engine/pick.ts'
 import { MAX_PROJECT_LAMPS, PlacedPoser, SIZE_RANGE, compileProject, cutLight, joinPalettes, leafy, placer, type Placement, type Posable, type ProjectLight, type SceneProject } from '../splat-engine/project.ts'
 import type { Light, PointLight } from '../splat-engine/engine.ts'
-import type { Bone, Skeleton } from '../splat-engine/rig.ts'
+import { Skeleton, type Bone } from '../splat-engine/rig.ts'
 import type { Shape } from '../splat-engine/voxel.ts'
 import { LoadingMark } from '../shared/BlobLoader.tsx'
 import { Button, Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
@@ -44,7 +44,7 @@ import { meshBounds } from '../splat-engine/meshShape.ts'
 import { readSkinnedGlb } from '../splat-engine/skinnedModel.ts'
 import { budget, clock, lampAdded, lampLights, lampRemoved, lit, liveSky, liveSkyColors, overheadPicked, rgbOf, shadeNow, sunNow, timeIn, weatherPicked, windPicked } from './creator/lighting.ts'
 import { castBy, glowGain } from './diorama/glow.ts'
-import { STYLES, isPixelStyle, styleAsked, styleWords, type Style } from './diorama/styles.ts'
+import { DEFAULT_STYLE, STYLES, isPixelStyle, styleAsked, styleWords, type Style } from './diorama/styles.ts'
 import { useDrawnLook, useHeld } from './drawnLook.tsx'
 import { GLITCH_START, glitchLook, type GlitchChoice } from './glitchLooks.ts'
 import { useExport } from './diorama/useExport.tsx'
@@ -242,7 +242,7 @@ export function SceneCreator() {
   const [lampPicked, setLampPicked] = useState<number>()
   // how the scene is drawn (`?style=`), and pixel art's own settings
   const calm = useMemo(() => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches, [])
-  const [style, setStyleState] = useState<Style>(() => styleAsked(typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('style')))
+  const [style, setStyleState] = useState<Style>(() => { const q = new URLSearchParams(typeof location === 'undefined' ? '' : location.search); return styleAsked(q.get('style'), q.get('chars')) })
   const pixels = isPixelStyle(style)
   const glitching = style === 'glitch'
   // pixel art's settings and the finish, shared with Diorama (styleSettings.ts)
@@ -466,7 +466,7 @@ export function SceneCreator() {
   }, [fallKey])
   // the land's water (a pond, a sea), played through the loop once for where everything stands, as Diorama plays it:
   // made again a moment after a prop is moved, since what stands in it changes what lands on it
-  const waterKey = project && cp?.land.prop.doc.water ? JSON.stringify([project.land, project.props.map((p) => [p.prop, p.at, p.turn, p.size]), project.loop]) : ''
+  const waterKey = project && (cp?.land.prop.doc.water || cp?.props.some((p) => p.prop.doc.potion)) ? JSON.stringify([project.land, project.props.map((p) => [p.prop, p.at, p.turn, p.size]), project.loop]) : ''
   const ponds = useRef(new Map<string, SceneWater>())
   const [pond, setPond] = useState<SceneWater>()
   useEffect(() => {
@@ -524,7 +524,7 @@ export function SceneCreator() {
       stage.reshape(pond.surface)
       if (pond.spray) stage.reshape(pond.spray)
     })
-    stage.setMirror(pond && mirrored && !pond.plan.lava ? { plane: levelPlane(pond.plan.level), lift: pond.plan.cell * 0.75, seen: (image) => { seen = image; wet?.() } } : undefined)
+    stage.setMirror(pond && mirrored && !pond.plan.lava && !pond.plan.potion ? { plane: levelPlane(pond.plan.level), lift: pond.plan.cell * 0.75, seen: (image) => { seen = image; wet?.() } } : undefined)
     // the land's moon, sun and stars, which cloud cover puts out
     const heavens = heavenBones(land.skeleton.bones.map((b) => b.name))
     const own = fall ? ownClouds(live.current.shown.weatherScene()) : 0
@@ -541,6 +541,8 @@ export function SceneCreator() {
       }
       return ok
     }
+    /** The whole scene's skeleton the snow lying follows, posed beside the pieces. */
+    let carrier: { of: ReturnType<Shown['weatherScene']>; sk: Skeleton } | undefined
     const poseAll = (sk: Skeleton, t: number) => {
       const L = live.current
       const landFits = fits(L.shown)
@@ -563,6 +565,16 @@ export function SceneCreator() {
         if (fall.pile(pile.current)) stage.reshape(fall.cover)
         if (fall.shade(now)) stage.reshape(fall.actors[0])
         showHeavens(sk.size, heavens, Math.max(now.clouds, own))
+        // snow lying rides what it lies on: the weather was laid over the whole scene as one description, so that is
+        // posed beside the pieces (its own wind, as the pieces get it) and the snow follows its bones
+        const whole = L.shown.weatherScene()
+        if (whole.bones) {
+          if (carrier?.of !== whole) carrier = { of: whole, sk: new Skeleton(whole.bones.map((b) => ({ ...b }))) }
+          whole.pose(carrier.sk, t)
+          whole.blow?.(carrier.sk, t, gust ?? [0, 0], undefined, level)
+          carrier.sk.update()
+          fall.follow(carrier.sk)
+        }
       }
       // the wind's turns and the sky's sizes come after the land's pose worked its bones out
       if (landFits) sk.update()
@@ -663,13 +675,13 @@ export function SceneCreator() {
   }, [stage, pixelsNow, look, skyOf, weathered, skyColors])
   // one of Brush and Ink's looks in place of pixel art. Cel shading's and stained glass's flat fills are gathered on the land
   const drawing = useDrawnLook(stage, pixelsNow ? undefined : styleNow, {
-    pixelCel, actor: built?.[0], spacing: DETAIL.find((d) => d.id === detail)?.spacing, plain: !!chosen[0]?.plain, azimuth: shown.orbit.azimuth, offscreen, light: coarse, loop: shown.loop,
+    pixelCel, palette, actor: built?.[0], spacing: DETAIL.find((d) => d.id === detail)?.spacing, plain: !!chosen[0]?.plain, azimuth: shown.orbit.azimuth, offscreen, light: coarse, loop: shown.loop,
     sky: px.sky || skyForced ? [skyShown[0], skyShown[1]] : undefined,
   }, drawnKept)
   const drawStyle = (id: Style) => {
     setStyleState(id)
     const url = new URL(location.href)
-    if (id === 'pixel') url.searchParams.delete('style')
+    if (id === DEFAULT_STYLE) url.searchParams.delete('style')
     else url.searchParams.set('style', id)
     history.replaceState(history.state, '', url.pathname + url.search + url.hash)
     say(`Drawn as ${STYLES.find((x) => x.id === id)!.label.toLowerCase()}.`)
@@ -715,9 +727,10 @@ export function SceneCreator() {
     open(o)
     pictureFor.current = undefined
     const st = p.style
-    const id = STYLES.find((x) => x.id === st?.id)?.id
+    const settings = (st?.settings ?? {}) as { pixel?: unknown; glitch?: unknown; ascii?: { chars?: string } }
+    // a scene kept in Text's box drawing or quarter blocks opens in Box Art, their own style since 2026-11-25
+    const id = st?.id && STYLES.some((x) => x.id === st.id) ? styleAsked(st.id, settings.ascii?.chars) : undefined
     if (id && id !== style) drawStyle(id)
-    const settings = (st?.settings ?? {}) as { pixel?: unknown; glitch?: unknown }
     setPx(pixelFrom(pixelStart(shownOf(o).finish), settings.pixel))
     setGlitch(mergedLike(GLITCH_START, settings.glitch))
     setDrawn(drawnFrom(drawnStart(undefined, { coarse }), settings))

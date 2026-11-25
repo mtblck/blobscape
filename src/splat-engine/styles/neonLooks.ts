@@ -35,9 +35,11 @@ export interface NeonChoice {
   set: string
   /** How fast the light runs, an id of `NEON_PACES`. */
   pace: string
+  /** The palette the scene is painted from before it is drawn: 'none' keeps its own colors, 'own' is the scene's, else a shared one. */
+  palette: string
 }
 /** Where neon's settings start. */
-export const NEON_START: NeonChoice = { line: 2, glow: 1, body: 0.05, set: 'own', pace: 'steady' }
+export const NEON_START: NeonChoice = { line: 2, glow: 1, body: 0.05, set: 'own', pace: 'steady', palette: 'none' }
 
 /**
  * The period nearest `about` seconds that goes a whole number of times into a loop of `loop` seconds, so a recorded

@@ -1,0 +1,1 @@
+The owl's cauldron now brews a real potion: a new shared potion recipe stirs it round, marbles its two colors into spirals, and swells bubbles into domes that pop, send rings across it and leave froth. Any scene or prop can have one in its own colors.

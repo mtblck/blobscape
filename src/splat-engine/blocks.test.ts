@@ -50,6 +50,19 @@ test('a block takes the commonest color among its blobs, not their mix, and fain
   assert.ok(c[0] > 0.5 && c[1] < 0.05 && c[2] < 0.05, `${[...c.slice(0, 3)]}`)
 })
 
+test('with a palette a block is painted its nearest color, chosen from the commonest of its blobs before snapping', () => {
+  const red: Rgb = [0.8, 0.1, 0.1], white: Rgb = [0.9, 0.9, 0.9]
+  const list = [blob(0, 0, 0, red), blob(0.01, 0, 0, red), blob(0, 0.01, 0, white)]
+  const palette = [[20, 20, 30], [230, 60, 50], [240, 240, 230]] as const
+  const c = buildBlocks([source(list)], { ...plain, palette }).pieces[0].colors
+  // the red block takes the palette's red, linear
+  const lin = (v: number) => ((v / 255) <= 0.04045 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4)
+  for (let j = 0; j < 3; j++) assert.ok(Math.abs(c[j] - lin(palette[1][j])) < 1e-4, `${[...c.slice(0, 3)]}`)
+  // and full color leaves it as it was
+  const own = buildBlocks([source(list)], plain).pieces[0].colors
+  assert.ok(Math.abs(own[0] - lin(0.8 * 255)) < 1e-3)
+})
+
 test('a pane laid on its frame, or a lamp, gives its cell its color though the frame has more blobs there', () => {
   const frame: Rgb = [0.1, 0.1, 0.15], pane: Rgb = [0.66, 0.76, 0.83]
   const list = [blob(0, 0, 0, frame), blob(0.01, 0, 0, frame), blob(0.02, 0, 0, frame), blob(0, 0.01, 0, pane)]
@@ -149,6 +162,24 @@ test('specks are small cubes of their own that cast no shadow and are no corner'
     assert.equal(ground.light[v * 3 + 1], 1)
     if (ground.normals[v * 3 + 1] === 1) assert.ok(ground.light[v * 3] > 0.9)
   }
+})
+
+test('a loose body, a moon, is filled with small cubes and not a grid of dots', () => {
+  // a face of blobs a block apart, as a scene's moon is cut, on a loose bone
+  const list = [blob(0, -1, 0)]
+  for (let x = 0; x < 5; x++) for (let y = 0; y < 5; y++) list.push(blob(x * 0.1, y * 0.1, 0))
+  const b = buildBlocks([source(list, [0, ...list.slice(1).map(() => 1)], ['root', '~moon'])], plain)
+  const moon = b.pieces.find((p) => p.bone === 1)!
+  // every small cell across the face holds a cube: one face toward +z for each
+  const side = 0.1 * SPECK_SIZE, seen = new Set<string>()
+  for (let v = 0; v < moon.normals.length / 3; v += 4) {
+    if (moon.normals[v * 3 + 2] !== 1) continue
+    seen.add(`${Math.round((moon.positions[v * 3] + moon.positions[v * 3 + 6]) / 2 / side)},${Math.round((moon.positions[v * 3 + 1] + moon.positions[v * 3 + 7]) / 2 / side)}`)
+  }
+  for (let x = 0; x <= 10; x++) for (let y = 0; y <= 10; y++) if (!seen.has(`${x},${y}`)) assert.fail(`no cube at ${x}, ${y}`)
+  // and a row of specks is still one small cube each
+  const row = buildBlocks([source([blob(0, -1, 0), blob(0, 0, 0), blob(0.1, 0, 0), blob(0.2, 0, 0)], [0, 1, 1, 1], ['root', '~rain'])], plain)
+  assert.equal(row.pieces.find((p) => p.bone === 1)!.positions.length / 12, 18)
 })
 
 test('a block that gives its own light says so and casts no shadow', () => {

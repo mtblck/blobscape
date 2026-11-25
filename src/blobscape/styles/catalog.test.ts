@@ -57,9 +57,10 @@ test('the address sets what it names and nothing unsound', () => {
   assert.equal(fromAddress(PIXEL, PIXEL.start, q('px=5')).size, 2)
 })
 
-test('a phone starts blocks a size up, unless the address says', () => {
-  assert.equal(drawnStart(undefined, { coarse: true }).blocks.size, BLOCKS_DEF.start.size + 1)
-  assert.equal(drawnStart(new URLSearchParams('block=1'), { coarse: true }).blocks.size, 1)
+test('blocks start at 1× on every device, unless the address says', () => {
+  assert.equal(drawnStart().blocks.size, 1, 'blocks start at the grid the scene was cut on')
+  assert.equal(drawnStart(undefined, { coarse: true }).blocks.size, 1, 'a phone starts at 1× too')
+  assert.equal(drawnStart(new URLSearchParams('block=3'), { coarse: true }).blocks.size, 3)
 })
 
 test('kept settings come back whole, and anything unsound in them is left as it starts', () => {
@@ -85,9 +86,12 @@ test('a setting shows only when its style and subject call for it, and a trial o
   assert.ok(keys(BLOCKS_DEF, BLOCKS_DEF.start, { style: 'blocks', water: true }).includes('water'))
   assert.ok(!keys(BLOCKS_DEF, BLOCKS_DEF.start, { style: 'blocks', water: true }).includes('swell'))
   assert.ok(keys(BLOCKS_DEF, { ...BLOCKS_DEF.start, water: 'blocks' as const }, { style: 'blocks', water: true }).includes('swell'))
-  assert.deepEqual(keys(MARKS, MARKS.start, { style: 'oil' }), ['size', 'outline'])
-  assert.deepEqual(keys(MARKS, MARKS.start, { style: 'ink' }), ['size', 'outline', 'pen', 'paper'])
-  assert.deepEqual(keys(MARKS, MARKS.start, { style: 'blobs' }), ['outline'])
+  assert.deepEqual(keys(MARKS, MARKS.start, { style: 'oil' }), ['palette', 'size', 'outline'])
+  assert.deepEqual(keys(MARKS, MARKS.start, { style: 'ink' }), ['palette', 'size', 'outline', 'pen', 'paper'])
+  assert.deepEqual(keys(MARKS, MARKS.start, { style: 'blobs' }), ['palette', 'outline'])
+  // hatching and stipple draw ink on paper, so they have no palette
+  assert.ok(!keys(MARKS, MARKS.start, { style: 'hatch' }).includes('palette'))
+  assert.ok(!keys(ASCII, { ...ASCII.start, own: false }, { style: 'ascii' }).includes('palette'))
   assert.ok(!keys(ASCII, { ...ASCII.start, chars: 'braille' as const }, { style: 'ascii' }).includes('strokes'))
   const tried: StyleDef<{ a: number }> = { id: 't', styles: ['oil'], start: { a: 1 }, settings: [{ key: 'a', kind: 'range', label: 'A', min: 0, max: 2, step: 1, unit: 'count', trial: 'Biome Islands' }] }
   assert.deepEqual(keys(tried, tried.start, { style: 'oil' }), [])
@@ -154,4 +158,33 @@ test('every page with brush looks, a time of day or weather draws them through t
   }
   for (const page of ['../PixelDiorama.tsx', '../SceneCreator.tsx']) assert.ok(read(page).includes('<WeatherControls '), `${page} lays out its own weather`)
   for (const page of ['../PixelDiorama.tsx', '../BrushInk.tsx']) assert.ok(read(page).includes('<TimeControls '), `${page} lays out its own time of day`)
+})
+
+test('every drawn style but knitting paints from a palette named in the address, and starts in full color', async () => {
+  const { ASCII, BOX_ART, BLOCKS_DEF, CEL_DEF, GLASS_DEF, MARKS, NEON_DEF, WASH_DEF, KNIT_DEF, fromAddress } = await import('./catalog.ts')
+  const q = new URLSearchParams('palette=pico8')
+  for (const def of [MARKS, ASCII, BOX_ART, CEL_DEF, BLOCKS_DEF, NEON_DEF, GLASS_DEF, WASH_DEF] as StyleDef<{ palette: string }>[]) {
+    assert.equal(def.start.palette, 'none', def.id)
+    assert.equal(fromAddress(def, def.start, q).palette, 'pico8', def.id)
+    assert.equal(fromAddress(def, def.start, new URLSearchParams('palette=<b>')).palette, 'none', `${def.id} keeps only an id`)
+  }
+  assert.ok(!KNIT_DEF.settings.some((s) => (s.key as string) === 'palette'), 'knitting picks from its own yarns')
+})
+
+test('Text and Box Art split the characters between them, and a scene kept in Text\'s old box sets opens in Box Art', async () => {
+  const { ASCII, BOX_ART } = await import('./catalog.ts')
+  const sets = (def: StyleDef<{ chars: string }>) => (def.settings.find((s) => s.key === 'chars') as unknown as { options: { id: string }[] }).options.map((o) => o.id)
+  assert.deepEqual(sets(ASCII as StyleDef<{ chars: string }>), ['ascii', 'braille', 'words', 'typed'])
+  assert.deepEqual(sets(BOX_ART as StyleDef<{ chars: string }>), ['lines', 'blocks'])
+  // an old address (`?style=ascii&chars=lines`) gives Box Art its set and leaves Text on its own
+  const old = drawnStart(new URLSearchParams('chars=blocks'))
+  assert.equal(old.boxart.chars, 'blocks')
+  assert.equal(old.ascii.chars, 'ascii')
+  // kept before the split: Text's settings in a box set become Box Art's
+  const kept = drawnFrom(drawnStart(), { ascii: { chars: 'lines', letter: 16, own: false } })
+  assert.equal(kept.boxart.chars, 'lines')
+  assert.equal(kept.boxart.letter, 16)
+  assert.equal(kept.boxart.own, false)
+  assert.equal(kept.ascii.chars, 'ascii', 'Text falls back to ASCII')
+  assert.equal(drawnFrom(drawnStart(), { ascii: { chars: 'braille' } }).boxart.chars, 'lines', 'a Text set leaves Box Art as it starts')
 })

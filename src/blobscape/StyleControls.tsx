@@ -7,6 +7,7 @@ import type { GlitchChoice } from './glitchLooks.ts'
 import type { Finish, PixelSettings } from './styleSettings.ts'
 import { PIXEL } from './styles/catalog.ts'
 import { SettingsControls } from './styles/SettingsControls.tsx'
+import { PaletteStrip } from './styles/PaletteStrip.tsx'
 
 /**
  * The Style and Finish controls Diorama and Scene Creator share (`styleSettings.ts` holds what they set), so a setting
@@ -50,16 +51,9 @@ export function StyleControls({ style, onStyle, pixel, setPixel, glitch, setGlit
       {style === 'glitch' && <GlitchControls glitch={glitch} setGlitch={setGlitch} calm={calm} />}
       {pixels && <SettingsControls def={PIXEL} value={pixel} onChange={setPixel} on={{ style }} tab="style" choices={{ palette: {
         options: palettes, active: picked.id, testid: `${prefix}-palettes`,
-        under: <>
-          <div data-testid="palette-strip" aria-hidden className="mt-5 flex h-3 overflow-hidden rounded ring-1 ring-rule">
-            {colors.length ? colors.map((c, i) => <span key={i} className="flex-1" style={{ background: `rgb(${c[0]} ${c[1]} ${c[2]})` }} />) : <span className="flex-1 bg-paper-sunk" />}
-          </div>
-          <p className="mt-2 text-xs text-ink-faint">
-            {!colors.length ? 'No palette: every pixel keeps the color the scene gives it, in as many colors as it takes.'
-              : picked.id === 'own' ? `${ownNote(colors.length)} Every pixel snaps to the closest one.`
-                : `${picked.note ?? `A borrowed palette of ${colors.length} colors.`} Every pixel snaps to the closest one.`}
-          </p>
-        </>,
+        under: <PaletteStrip colors={colors} note={!colors.length ? 'No palette: every pixel keeps the color the scene gives it, in as many colors as it takes.'
+          : picked.id === 'own' ? `${ownNote(colors.length)} Every pixel snaps to the closest one.`
+            : `${picked.note ?? `A borrowed palette of ${colors.length} colors.`} Every pixel snaps to the closest one.`} />,
       } }} />}
     </>
   )

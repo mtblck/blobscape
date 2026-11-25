@@ -4,7 +4,7 @@ import { LIT_MAX } from '../splat-engine/voxel.ts'
 import { STEADY, darkest, heatPace, screenWay, type PixelLook, type Rgb } from '../splat-core/pixel.ts'
 import type { Orbit } from '../splat-core/view.ts'
 import type { Diorama } from './diorama/scenes.ts'
-import { isPixelStyle, lightsItself, type Style } from './diorama/styles.ts'
+import { DEFAULT_STYLE, isPixelStyle, lightsItself, type Style } from './diorama/styles.ts'
 import { GLITCH_START, type GlitchChoice } from './glitchLooks.ts'
 import { zoomStep } from './diorama/zoom.ts'
 import { PIXEL, PIXEL_RATES, PIXEL_SIZES, TEXEL_BANDS, fromAddress, type PixelSettings } from './styles/catalog.ts'
@@ -29,9 +29,11 @@ export interface StyleSettings {
 /**
  * The detail a page starts a style at, as a place in the detail levels (Chunky, Medium, Fine, Finest), until the
  * visitor picks one: Finest (Matt, 2026-11-20); a phone starts pixel art at Fine (he found the dragon slow at Finest
- * on his) and at Chunky the styles that draw the whole screen several times a frame.
+ * on his) and at Chunky the styles that draw the whole screen several times a frame. Plain blobs start at Finest on a
+ * phone too (Matt, 2026-11-25).
  */
-export const detailStart = (style: Style, coarse: boolean): number => (coarse ? (isPixelStyle(style) ? 2 : 0) : 3)
+export const detailStart = (style: Style, coarse: boolean): number =>
+  (coarse ? (style === 'blobs' ? 3 : isPixelStyle(style) ? 2 : 0) : 3)
 
 /** Whether zooming in on pixel art grows its pixels (`?pixelzoom=0` turns it off). */
 export const pixelZoomAsked = (q: URLSearchParams = new URLSearchParams()): boolean => q.get('pixelzoom') !== '0'
@@ -53,8 +55,8 @@ export function pixelStart(finish: Finish, q: URLSearchParams = new URLSearchPar
   return { ...s, texel: s.texel > 1 ? s.texel : 0 }
 }
 
-/** The settings start: pixel art, with the scene's own finish. */
-export const styleStart = (finish: Finish, q?: URLSearchParams): StyleSettings => ({ style: 'pixel', glitch: GLITCH_START, pixel: pixelStart(finish, q) })
+/** The settings start: the style every page starts in, with the scene's own finish for pixel art. */
+export const styleStart = (finish: Finish, q?: URLSearchParams): StyleSettings => ({ style: DEFAULT_STYLE, glitch: GLITCH_START, pixel: pixelStart(finish, q) })
 
 /** A new scene's own finish over the settings the visitor has: its palette, dither, glow, outline, sky and art-pixel effects. */
 export const pixelFor = (s: PixelSettings, finish: Finish): PixelSettings => ({

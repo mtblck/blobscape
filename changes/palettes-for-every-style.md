@@ -1,0 +1,1 @@
+Every drawn style but the knitted one can now paint a scene from any of pixel art's palettes (the Palette choice in its settings, or `?palette=`). Watercolor now paints strong bright colors, such as pure orange, rather than leaving them as bare paper.

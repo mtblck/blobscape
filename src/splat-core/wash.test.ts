@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { WASH_PAPER, density, kept, pigment, washed } from './wash.ts'
+import { WASH_PAPER, density, kept, pigment, washed, whiteness } from './wash.ts'
 
 test('paint only takes light away from the paper, and more of it takes more', () => {
   const paper = [...WASH_PAPER], blue = [0.2, 0.4, 0.8]
@@ -32,4 +32,10 @@ test('paint pools at a wash\'s edge, gathers in the grain, and there is none off
   assert.equal(density(1, 0.5, 0.9, 0, { grain: 0 }), density(1, 0.5, 0.1, 0, { grain: 0 }))
   assert.ok(density(1, 0.9, 0.5, 0) > density(1, 0.1, 0.5, 0))
   assert.ok(Math.abs(density(1, 0.5, 0.5, 0) - 0.7) < 1e-9)
+})
+
+test('a strong color is painted however bright its brightest channel; only near white is left as paper', () => {
+  assert.equal(kept(whiteness([1, 0.37, 0])), 1)
+  assert.equal(kept(whiteness([1, 1, 0])), 1)
+  assert.equal(kept(whiteness([0.95, 0.95, 0.95])), 0)
 })

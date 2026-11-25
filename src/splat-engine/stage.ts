@@ -341,7 +341,7 @@ export class Stage {
     this.blockLook = look
     // a look that differs only in its ambient tint (a night's light following the sky as weather comes and lightning
     // flashes) keeps the cubes: making them again took a second each time, so a thunderstorm hitched at every flash
-    if (look && was && this.blocks && sameBut(look, was, 'ambient')) this.blocks.setLights(this.lit.lights, this.lit.ambient, look.ambient)
+    if (look && was && this.blocks && !this.blockDue && sameBut(look, was, 'ambient')) this.blocks.setLights(this.lit.lights, this.lit.ambient, look.ambient)
     else this.block()
     this.invalidate()
   }
@@ -352,8 +352,26 @@ export class Stage {
   /** How many cubes and faces are on show while the scene is drawn as blocks. */
   get blockCount() { return this.blocks ? { blocks: this.blocks.blocks, faces: this.blocks.faces } : undefined }
 
-  /** Makes the cubes for the actors on show (again), or puts them away. */
+  /** Whether the cubes have to be made again before the next frame is drawn. */
+  private blockDue = false
+
+  /**
+   * The cubes are due: they are made at the next draw (`makeBlocks`), not here. A new actor and the look that goes
+   * with it reach the stage in the same task (a page sets the actor, then its look with the new scene's cell), and
+   * making them twice cost a scene switch a whole build of every cube.
+   */
   private block() {
+    this.blockDue = true
+    // snow lying is raised onto the cubes' tops, and the pose comes before the draw, so this part is not put off
+    for (const a of this.actor ? [this.actor, ...this.extras] : []) if (a.lies) {
+      a.skeleton.place[1] = this.blockLook ? this.blockLook.cell * 0.5 : 0
+      a.skeleton.update()
+    }
+  }
+
+  /** Makes the cubes for the actors on show (again), or puts them away. */
+  private makeBlocks() {
+    this.blockDue = false
     if (this.blocks) { this.scene.remove(this.blocks); this.blocks.dispose(); this.blocks = undefined }
     if (this.soft) { this.scene.remove(this.soft); this.soft.dispose(); this.soft = undefined }
     const all = this.actor ? [this.actor, ...this.extras] : []
@@ -897,6 +915,8 @@ export class Stage {
   private get pixelScale() { return Math.max(1, Math.round(this.pixelSize * this.renderer.getPixelRatio())) }
 
   private draw() {
+    // the cubes for the actors and look as they now stand, where either changed since the last frame
+    if (this.blockDue) this.makeBlocks()
     if (!this.pixel && this.blocks) {
       const { x, y } = this.target ? { x: this.target.width, y: this.target.height } : this.renderer.getDrawingBufferSize(this.buffer)
       this.blocks.render(this.renderer, this.scene, this.camera, x, y)

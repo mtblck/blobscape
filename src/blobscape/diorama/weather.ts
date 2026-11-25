@@ -7,7 +7,7 @@ export { paletteUnder } from '../../splat-engine/sceneWeather.ts'
 /** The engine's `SceneWeather` for a Diorama scene: its rain, snow and clouds, made once and posed by time and sky. */
 export class SceneWeather extends Weather {
   constructor(d: Diorama, options: { overhead?: boolean } = {}) {
-    super({ loop: d.loop, view: d.views[0].orbit, heavens: d.heavens, ground: d.ground, water: d.water?.(), sun: d.sun, lights: d.lights(0) }, options)
+    super({ loop: d.loop, view: d.views[0].orbit, heavens: d.heavens, ground: d.ground, lying: d.lying, bones: d.bones, water: d.water?.(), sun: d.sun, lights: d.lights(0) }, options)
   }
 }
 

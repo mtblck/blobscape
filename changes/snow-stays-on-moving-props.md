@@ -1,0 +1,2 @@
+- Diorama and Scene Creator: snow lying stays on what it lies on, riding a swaying tree, a turning sail, a rocking boat or the drifting sky islands, and slides off anything turned over.
+- Engine: `SceneWeather.follow` keeps snow lying on the scene's moving parts (`CompiledScene.lying`, `followSnow`).

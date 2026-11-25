@@ -64,6 +64,8 @@ export class WashPass {
   private readonly skyTop = uniform(new Vector3(1, 1, 1))
   private readonly skyBottom = uniform(new Vector3(1, 1, 1))
   private readonly skied = uniform(0)
+  /** 1 while the wash behind stops short of the paper's edge, 0 while it runs to it. */
+  private readonly bordered = uniform(1)
 
   constructor() {
     const quad = (fragment: N) => {
@@ -98,6 +100,7 @@ export class WashPass {
     this.paper.value.set(...lin(look.paper ?? WASH_PAPER))
     this.lead.value.set(...lin(WASH_PENCIL))
     this.skied.value = look.sky ? 1 : 0
+    this.bordered.value = look.border === false ? 0 : 1
     if (look.sky) { this.skyTop.value.set(...lin(look.sky[0])); this.skyBottom.value.set(...lin(look.sky[1])) }
   }
 
@@ -188,16 +191,18 @@ export class WashPass {
       const edge = clamp(length(color.sub(around)).mul(POOL_COLOR).mul(w.a).add(abs(s.a.sub(w.a)).mul(POOL_COVER)), 0, 1).mul(cover)
       const gray = dot(color, vec3(0.2126, 0.7152, 0.0722))
       const paint = clamp(color.sub(gray).mul(WASH_RICH).add(gray), 0.02, 1)
-      const top = max(color.r, max(color.g, color.b))
+      // halfway between its brightest and darkest channels (`whiteness`), so a strong orange is painted, not left as paper
+      const top = max(color.r, max(color.g, color.b)).add(min(color.r, min(color.g, color.b))).mul(0.5)
       const keep = smoothstep(0, 1, clamp(float(WASH_WHITE[0]).sub(top).div(WASH_WHITE[0] - WASH_WHITE[1]), 0, 1))
       const lay = (cov: N, edged: N) => cov.mul(this.strength).mul(water.sub(0.5).mul(2 * WASH_UNEVEN).add(1)).mul(tooth.sub(0.5).mul(this.grain).add(1)).mul(edged.mul(this.pool).add(1))
       const amount = lay(cover.mul(keep), edge).toVar()
 
-      // the wash behind: the sky's colors, stopping short of the paper's edge along an uneven line
+      // the wash behind: the sky's colors, stopping short of the paper's edge along an uneven line (unless the look has no border)
       const inFrom = min(min(st.x, float(1).sub(st.x)).mul(this.res.x.div(this.res.y)), min(st.y, float(1).sub(st.y)))
       const margin = float(WASH_MARGIN).mul(noise(cell.div(48).add(41.7)).add(noise(cell.div(13).add(8.8)).mul(0.35)).add(0.4))
-      const behind = smoothstep(margin, margin.add(0.012), inFrom).mul(this.skied).toVar()
-      const rim = smoothstep(margin.add(0.03), margin, inFrom).mul(behind)
+      // with no border the wash covers the whole sheet and has no edge of its own to pool at
+      const behind = mix(float(1), smoothstep(margin, margin.add(0.012), inFrom), this.bordered).mul(this.skied).toVar()
+      const rim = smoothstep(margin.add(0.03), margin, inFrom).mul(behind).mul(this.bordered)
       const skyPaint = clamp(mix(this.skyTop, this.skyBottom, st.y), 0.02, 1)
       const skyAmount = lay(behind.mul(float(1).sub(cover)).mul(WASH_SKY), rim)
 

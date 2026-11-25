@@ -2,7 +2,7 @@ import type { Orbit } from '../../splat-core/view.ts'
 import type { PixelLook, Rgb } from '../../splat-core/pixel.ts'
 import type { Built } from '../../splat-engine/body.ts'
 import type { PointLight } from '../../splat-engine/engine.ts'
-import type { Skeleton } from '../../splat-engine/rig.ts'
+import type { Bone, Skeleton } from '../../splat-engine/rig.ts'
 import { compileScene, litFor, type SceneDoc } from '../../splat-engine/sceneDoc.ts'
 import type { HeavensDoc } from '../../splat-engine/heavens.ts'
 import { paletteAt, timeOf, type TimeId } from '../timeOfDay.ts'
@@ -111,6 +111,10 @@ export interface Diorama {
   heavens?: HeavensDoc
   /** The height of what stays put under (x, z), looking down from `top` (`bottom` where nothing is): what weather laid over the scene lands on. */
   ground?: (x: number, z: number, top: number, bottom: number) => number
+  /** Where snow lies, on moving things too, with the bone that carries it (`CompiledScene.lying`): snow lying rides it. */
+  lying?: (x: number, z: number, top: number, bottom: number) => { y: number; bone: number }
+  /** The scene's bones as compiled, which `lying` numbers. */
+  bones?: readonly Bone[]
   /** Parts (by their place in the list) that meet others by design: the check for parts passing through each other lets them. */
   touching?: number[]
   /** How big its description is, in bytes, written out as JSON: only for a scene that is data alone. */
@@ -234,6 +238,8 @@ export function described(id: string, doc: SceneDoc, about: string, more: Pick<D
     lights: c.lights,
     haze: c.haze,
     ground: c.ground,
+    lying: c.lying,
+    bones: c.bones,
     heavens: doc.heavens,
     water: c.water ? () => (pond ??= new SceneWater(c)) : undefined,
     fire: c.fires.length ? () => (flames ??= new SceneFire(c)) : undefined,

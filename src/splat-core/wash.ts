@@ -21,6 +21,8 @@ export interface WashLook {
   paper?: readonly [number, number, number]
   /** A wash behind the subject, top and bottom (sRGB 0–1), laid short of the paper's edge. Left out, the paper is bare. */
   sky?: readonly [readonly [number, number, number], readonly [number, number, number]]
+  /** Whether the wash behind stops short of the paper's edge, leaving a border of bare paper (true). False lays it to the edge. */
+  border?: boolean
 }
 
 /** The paper (sRGB 0–1): a warm white. */
@@ -56,7 +58,13 @@ export function pigment(rgb: readonly number[]): [number, number, number] {
   return [one(rgb[0]), one(rgb[1]), one(rgb[2])]
 }
 
-/** How much of a color is painted at all: nothing for the lightest (bare paper stands for it), all of it for the rest. `top` is its brightest channel. */
+/**
+ * How near white a color (linear) is, for `kept`: halfway between its brightest and darkest channels. Its brightest
+ * alone took a strong orange or yellow (a palette's, say) for white and left it bare paper.
+ */
+export const whiteness = (rgb: readonly number[]): number => (Math.max(rgb[0], rgb[1], rgb[2]) + Math.min(rgb[0], rgb[1], rgb[2])) / 2
+
+/** How much of a color is painted at all: nothing for the lightest (bare paper stands for it), all of it for the rest. `top` is its `whiteness`. */
 export function kept(top: number): number {
   const t = Math.min(1, Math.max(0, (WASH_WHITE[0] - top) / (WASH_WHITE[0] - WASH_WHITE[1])))
   return t * t * (3 - 2 * t)

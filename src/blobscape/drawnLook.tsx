@@ -13,11 +13,15 @@ import { WASH, washGround, washLook } from './washLooks.ts'
 import { KNIT, knitGround, knitLook } from './knitLooks.ts'
 import { BLOCKS, BLOCK_GROUNDS, blockBack, blockLook, gridOf } from './blockLooks.ts'
 import type { TimeOfDay } from './timeOfDay.ts'
-import { ASCII, BLOCKS_DEF, CEL_DEF, GLASS_DEF, KNIT_DEF, MARKS, NEON_DEF, WASH_DEF, drawnStart, type DrawnSettings, type Shows } from './styles/catalog.ts'
+import { ASCII, BLOCKS_DEF, BOX_ART, CEL_DEF, GLASS_DEF, KNIT_DEF, MARKS, NEON_DEF, WASH_DEF, drawnStart, type DrawnSettings, type Shows } from './styles/catalog.ts'
 import { SettingsControls } from './styles/SettingsControls.tsx'
+import { PaletteStrip } from './styles/PaletteStrip.tsx'
+import { PALETTES } from './diorama/scene.ts'
+import { paletteSnap } from '../splat-core/paints.ts'
+import type { Rgb } from '../splat-core/pixel.ts'
 import { BACKDROPS, CEL, CEL_START, FILL_REACH, celLook, nightLight, nightOf } from './celLooks.ts'
 
-/** Every drawn look a page can offer: the marks, ASCII, cel shading, neon, stained glass, watercolor, and the plain blobs. */
+/** Every drawn look a page can offer: the marks, Text, Box Art, cel shading, neon, stained glass, watercolor, and the plain blobs. */
 export type Look = LookId | typeof CEL.id | typeof BLOCKS.id | typeof NEON.id | typeof GLASS.id | typeof WASH.id | typeof KNIT.id
 export const ALL_LOOKS: { id: Look; label: string; note: string }[] = [...LOOKS.slice(0, -1), CEL, BLOCKS, NEON, GLASS, WASH, KNIT, LOOKS[LOOKS.length - 1]]
 /** The looks that light the blobs themselves, and so want them built with no light baked in (`unlit`). */
@@ -28,6 +32,11 @@ const SCREEN_GAIN = 1.5
 
 /** How many flat colors each part's own are gathered into for pixel art shaded a pixel at a time: the palette's ramps do the rest. */
 export const PIXEL_FILLS = 3
+
+/** The palettes blocks and cel shading paint from: Full color first (their own colors), then the subject's, then the shared ones pixel art offers. */
+export function paintChoices(own: readonly Rgb[] | undefined): { id: string; label: string; colors: readonly Rgb[]; note?: string }[] {
+  return [{ id: 'none', label: 'Full color', colors: [] }, ...(own?.length ? [{ id: 'own', label: 'Scene’s own', colors: own }] : []), ...PALETTES.filter((p) => p.id !== 'none')]
+}
 
 const params = () => new URLSearchParams(typeof location === 'undefined' ? '' : location.search)
 const lum = (c: readonly number[]) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
@@ -64,6 +73,8 @@ export interface DrawnSubject {
   time?: TimeOfDay
   /** The page has a backdrop of its own behind the canvas: cel shading takes the shade and line of this one of its backdrops and offers no choice of them. */
   backdrop?: string
+  /** The subject's own palette (its paints, not dimmed for a time of day or weather), offered as Scene's own to the looks that paint from a palette. */
+  palette?: readonly Rgb[]
   /** With no look (the page draws pixel art): cel shading's light for the picture the pixel art is made from, shaded a pixel at a time, with the subject's colors gathered into flat fills. */
   pixelCel?: CelLook
 }
@@ -77,7 +88,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   // the settings are the page's to hold (so its saved scenes and links keep them) or, where it holds none, this hook's
   const mine = useState<DrawnSettings>(() => drawnStart(params(), { coarse: on.light }))
   const [drawn, setDrawn] = kept ?? mine
-  const { cel, neon, glass, watercolor: wash, blocks: block, marks: mk, ascii: asc, knit } = drawn
+  const { cel, neon, glass, watercolor: wash, blocks: block, marks: mk, ascii: asc, boxart: box, knit } = drawn
   const change = <K extends keyof DrawnSettings>(key: K) => (c: Partial<DrawnSettings[K]>) => setDrawn((d) => ({ ...d, [key]: { ...d[key], ...c } }))
   // a time of day stands the blocks' sun at its own height; the slider moves it from there
   const timeId = on.time?.id, timeHeight = on.time?.height
@@ -87,11 +98,27 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   // outlines: on for the two pen looks and cel shading unless the visitor says otherwise
   const outlined = look === 'cel' ? cel.outline : mk.outline
   const pen = look === 'cel' ? cel.pen : mk.pen
-  const paper = look === 'ascii' ? asc.paper : mk.paper
-  // ASCII: how tall a character is, whether each takes the color of what it stands for, and strokes along edges
-  const { letter, own, strokes, strands, weight, chars, words } = asc
+  // Text and Box Art draw the same grid of characters: Box Art's sets have no strokes, strands or words
+  const boxed = look === 'boxart'
+  const ascii = look === 'ascii' || boxed
+  const chosen = boxed ? { ...box, strokes: false, strands: false, words: '' } : asc
+  const paper = ascii ? chosen.paper : mk.paper
+  // the characters: how tall one is, whether each takes the color of what it stands for, and strokes along edges
+  const { letter, own, strokes, strands, weight, chars, words } = chosen
   const [copied, setCopied] = useState('')
   const { actor, plain, azimuth, soft, offscreen, sky, light, loop, spacing } = on
+  // blocks and cel shading paint the subject from a palette before they light it (Full color keeps its own paint)
+  const ownKey = on.palette ? on.palette.flat().join() : ''
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const paints = useMemo(() => paintChoices(on.palette), [ownKey])
+  const paintsFor = (id: string) => paints.find((p) => p.id === id) ?? paints[0]
+  const blockPaints = paintsFor(block.palette), celPaints = paintsFor(cel.palette)
+  const markPaints = paintsFor(mk.palette), asciiPaints = paintsFor(chosen.palette), neonPaints = paintsFor(neon.palette), glassPaints = paintsFor(glass.palette), washPaints = paintsFor(wash.palette)
+  // the palette the look on show paints from (blocks paint their cubes themselves; knitting has its yarns; hatching and
+  // stipple draw ink on paper, and ASCII and neon their own inks unless they take things' own colors)
+  const lookPaints = look === 'cel' ? celPaints : look === 'glass' ? glassPaints : look === 'watercolor' ? washPaints
+    : look === 'neon' ? (neon.set === 'own' ? neonPaints : undefined) : ascii ? (own ? asciiPaints : undefined)
+      : look === 'gouache' || look === 'oil' || look === 'ink' || look === 'blobs' ? markPaints : undefined
   // the subject's own sky is the first backdrop where it has one. Under a dark sky it is night: the shade and line are
   // the night's, and both tones are dimmed and cooled (`nightLight`), so the scene's lamps and lit windows stand out
   const skyDark = sky ? nightOf(sky) : 0
@@ -104,7 +131,6 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   const sheet = PAPERS.find((p) => p.id === paper)!
   const marks = useMemo<MarkLook | undefined>(() => (look && look !== 'cel' && look !== 'blocks' && look !== 'neon' && look !== 'glass' && look !== 'watercolor' && look !== 'knit' && isMark(look) ? { kind: look, size, ink: sheet.ink, paper: sheet.paper, soft } : undefined), [look, size, sheet, soft])
   useEffect(() => { stage?.setMarks(marks) }, [stage, marks, actor])
-  const ascii = look === 'ascii'
   // off screen a frame is drawn only when asked for, and must not depend on the one before (`?steady=` says otherwise, for the checks)
   const held = useMemo(() => { const v = params().get('steady'); return v !== null && v !== '' && Number.isFinite(+v) ? +v : offscreen ? 0 : undefined }, [offscreen])
   const glyphs = useMemo<GlyphLook | undefined>(() => (ascii ? { size: letter, ink: own ? undefined : sheet.ink, light: !own && lum(sheet.paper) > lum(sheet.ink), edges: strokes, strands, gain: weight * (own ? SCREEN_GAIN : 1), steady: held, set: chars, words } : undefined), [ascii, letter, own, sheet, strokes, strands, weight, held, chars, words])
@@ -138,27 +164,34 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
     // while the subject is cut again the cubes on show stay: the stage makes them again for the next actor itself
     if (!actor || !plain) return
     const b = actor.blobs
-    const set = () => { blocksUp.current = true; stage.setBlocks(blockLook(block, gridOf(spacing, b.center, b.count), azimuth, blockTint)) }
+    const set = () => { blocksUp.current = true; stage.setBlocks(blockLook(block, gridOf(spacing, b.center, b.count), azimuth, blockTint, blockPaints.colors)) }
     // the first cubes go up at once, so no frame shows the bare blobs under them; a slider's changes wait a moment
     if (!blocksUp.current) { set(); return }
     const id = setTimeout(set, 120)
     return () => clearTimeout(id)
-  }, [stage, blocky, actor, plain, block, spacing, azimuth, blockTint])
+  }, [stage, blocky, actor, plain, block, spacing, azimuth, blockTint, blockPaints])
   useEffect(() => () => stage?.setBlocks(), [stage])
   const outline = !!look && !ascii && !lit && !glazed && !painted && !knitted && !blocky && (outlined ?? (look === 'ink' || look === 'hatch' || look === 'stipple' || look === 'cel'))
   const { pixelCel } = on
   useEffect(() => { stage?.setCel(!look && pixelCel ? { ...pixelCel, ...(light ? { shadowSize: 1024, shadowEvery: offscreen ? 1 : 2 } : {}) } : look === 'cel' ? { ...celLook({ ...cel, backdrop: celBase, turn: cel.turn + azimuth, line: outline ? pen : 0 }), ambient: timeId ? undefined : nightLight(night), ...(light ? { shadowSize: 1024, shadowEvery: offscreen ? 1 : 2 } : {}) } : undefined) }, [stage, look, cel, celBase, night, timeId, outline, pen, azimuth, light, offscreen, pixelCel])
-  // flat fills: each part's colors gathered into a few, shown in place of the blobs' own (which stay as they were)
+  // flat fills: each part's colors gathered into a few, shown in place of the blobs' own (which stay as they were);
+  // then the look paints them from its palette, if it has one
+  const paintSnap = lookPaints?.colors.length ? lookPaints.colors : undefined
   useEffect(() => {
     // stained glass wants them too: lead runs wherever the color changes, so a mottled surface would be all lead
     const fills = look === 'cel' ? cel.fills : look === 'glass' ? GLASS_FILLS : !look && pixelCel ? PIXEL_FILLS : 0
-    if (!stage || !actor || !fills || !plain) return
-    // speckle is anything finer than about two blobs across, by a typical blob's middle size (a strand of fur's width, not its length)
-    const b = actor.blobs, sizes = Float32Array.from({ length: Math.min(b.count, 2000) }, (_, k) => { const i = Math.floor((k * b.count) / Math.min(b.count, 2000)); return [b.scale[i * 3], b.scale[i * 3 + 1], b.scale[i * 3 + 2]].sort((x, y) => x - y)[1] }).sort()
-    const flat = gatherColors(b.color.subarray(0, b.count * 3), actor.partOf, fills, { at: b.center, reach: (sizes[sizes.length >> 1] || 0) * FILL_REACH })
-    stage.tint((_own, i) => [flat[i * 3], flat[i * 3 + 1], flat[i * 3 + 2]])
+    const snap = paletteSnap(paintSnap as Rgb[] | undefined)
+    if (!stage || !actor || (fills ? !plain : !snap)) return
+    const b = actor.blobs
+    let flat: ArrayLike<number> = b.color
+    if (fills) {
+      // speckle is anything finer than about two blobs across, by a typical blob's middle size (a strand of fur's width, not its length)
+      const sizes = Float32Array.from({ length: Math.min(b.count, 2000) }, (_, k) => { const i = Math.floor((k * b.count) / Math.min(b.count, 2000)); return [b.scale[i * 3], b.scale[i * 3 + 1], b.scale[i * 3 + 2]].sort((x, y) => x - y)[1] }).sort()
+      flat = gatherColors(b.color.subarray(0, b.count * 3), actor.partOf, fills, { at: b.center, reach: (sizes[sizes.length >> 1] || 0) * FILL_REACH })
+    }
+    stage.tint(snap ? (_own, i) => snap(flat[i * 3], flat[i * 3 + 1], flat[i * 3 + 2]) : (_own, i) => [flat[i * 3], flat[i * 3 + 1], flat[i * 3 + 2]])
     return () => stage.tint()
-  }, [stage, actor, plain, look, cel.fills, !!pixelCel])
+  }, [stage, actor, plain, look, cel.fills, !!pixelCel, paintSnap])
   useEffect(() => { stage?.setOutline(outline && look !== 'cel' ? { width: pen, ink: look === 'ink' || look === 'hatch' || look === 'stipple' ? sheet.ink : undefined } : undefined) }, [stage, outline, pen, look, sheet])
 
   const drawnOn = look === 'ink' || look === 'hatch' || look === 'stipple'
@@ -167,32 +200,37 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   const backdrop = BACKDROPS.find((b) => b.id === celBase) ?? BACKDROPS[0]
   const ground = !look || look === 'blobs' ? undefined : look === 'cel' ? (inScene ? skyBack.back : backdrop.back) : blocky ? blockBehind.back : lit ? NEON_GROUND : glazed ? GLASS_GROUND : painted ? washGround(wash) : knitted ? knitGround(knit) : ascii ? css(own ? SCREEN : sheet.paper) : drawnOn ? css(sheet.paper) : skyBack && isPaint ? skyBack.back : GROUND
 
+  const paintControl = (picked: (typeof paints)[number], does: string) => ({
+    options: paints, active: picked.id, testid: 'drawn-palettes',
+    under: <PaletteStrip colors={picked.colors} note={!picked.colors.length ? 'No palette: everything keeps its own paint.'
+      : `${picked.id === 'own' ? `The ${picked.colors.length} colors chosen for this scene.` : picked.note ?? `A borrowed palette of ${picked.colors.length} colors.`} ${does}`} />,
+  })
   const shows: Shows = { style: look ?? 'blobs', water: on.water, weather: on.weather }
   const controls = !look ? null : (
     <>
         {look === 'cel' && (
           <div className="space-y-4" data-testid="brush-cel">
-            <SettingsControls def={CEL_DEF} value={cel} onChange={change('cel')} on={shows} skip={on.backdrop ? ['backdrop'] : undefined} choices={{ backdrop: { options: [...(skyBack ? [skyBack] : []), ...BACKDROPS], active: backId } }} />
+            <SettingsControls def={CEL_DEF} value={cel} onChange={change('cel')} on={shows} skip={on.backdrop ? ['backdrop'] : undefined} choices={{ backdrop: { options: [...(skyBack ? [skyBack] : []), ...BACKDROPS], active: backId }, palette: paintControl(celPaints, 'Each color is painted the closest one, then lit and cut into tones, so shade is a darker step of a palette color.') }} />
           </div>
         )}
         {blocky && (
           <div className="space-y-4" data-testid="brush-blocks">
-            <SettingsControls def={BLOCKS_DEF} value={block} onChange={change('blocks')} on={shows} choices={{ backdrop: { options: [...(skyBack ? [{ id: 'scene', label: timeId ? 'Sky' : "Scene's own" }] : []), ...BLOCK_GROUNDS], active: blockBehind.id } }} />
+            <SettingsControls def={BLOCKS_DEF} value={block} onChange={change('blocks')} on={shows} choices={{ backdrop: { options: [...(skyBack ? [{ id: 'scene', label: timeId ? 'Sky' : "Scene's own" }] : []), ...BLOCK_GROUNDS], active: blockBehind.id }, palette: paintControl(blockPaints, 'Every block is painted the closest one, then lit, so its faces are lighter and darker steps of a palette color.') }} />
           </div>
         )}
         {lit && (
           <div className="space-y-4" data-testid="brush-neon">
-            <SettingsControls def={NEON_DEF} value={neon} onChange={change('neon')} on={shows} />
+            <SettingsControls def={NEON_DEF} value={neon} onChange={change('neon')} on={shows} choices={{ palette: paintControl(neonPaints, 'Each thing is painted the closest one, so its tube and its body take that color.') }} />
           </div>
         )}
         {glazed && (
           <div className="space-y-4" data-testid="brush-glass">
-            <SettingsControls def={GLASS_DEF} value={glass} onChange={change('glass')} on={shows} />
+            <SettingsControls def={GLASS_DEF} value={glass} onChange={change('glass')} on={shows} choices={{ palette: paintControl(glassPaints, 'Each color is painted the closest one before it is cut into panes, so the glass is that color made richer and lit from behind.') }} />
           </div>
         )}
         {painted && (
           <div className="space-y-4" data-testid="brush-wash">
-            <SettingsControls def={WASH_DEF} value={wash} onChange={change('watercolor')} on={shows} />
+            <SettingsControls def={WASH_DEF} value={wash} onChange={change('watercolor')} on={shows} choices={{ palette: paintControl(washPaints, 'Each color is painted the closest one, then laid on the paper as a see-through wash, so washes over one another mix.') }} />
           </div>
         )}
         {knitted && (
@@ -200,8 +238,9 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
             <SettingsControls def={KNIT_DEF} value={knit} onChange={change('knit')} on={shows} />
           </div>
         )}
-        {look !== 'cel' && !blocky && !lit && !glazed && !painted && !knitted && !ascii && <SettingsControls def={MARKS} value={mk} onChange={change('marks')} on={shows} />}
-        {ascii && <SettingsControls def={ASCII} value={asc} onChange={change('ascii')} on={shows} />}
+        {look !== 'cel' && !blocky && !lit && !glazed && !painted && !knitted && !ascii && <SettingsControls def={MARKS} value={mk} onChange={change('marks')} on={shows} choices={{ palette: paintControl(markPaints, 'Each blob is painted the closest one, light and shade as the scene was lit, so shade falls in steps of the palette.') }} />}
+        {ascii && !boxed && <SettingsControls def={ASCII} value={asc} onChange={change('ascii')} on={shows} choices={{ palette: paintControl(asciiPaints, 'Each character takes the closest one to the color of what it stands for.') }} />}
+        {boxed && <SettingsControls def={BOX_ART} value={box} onChange={change('boxart')} on={shows} choices={{ palette: paintControl(asciiPaints, 'Each character takes the closest one to the color of what it stands for.') }} />}
         {ascii && (
           <div>
             <Button small onClick={() => {

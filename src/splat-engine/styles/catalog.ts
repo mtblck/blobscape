@@ -148,10 +148,12 @@ export interface MarkSettings {
   pen: number
   /** The paper and ink, an id of `PAPERS`. */
   paper: string
+  /** The palette the scene is painted from before it is drawn: 'none' keeps its own colors, 'own' is the scene's, else a shared one. */
+  palette: string
 }
 /** The settings of the picture drawn as characters. */
 export interface AsciiSettings {
-  /** Which characters: ASCII, braille, blocks, box drawing, words or a typewriter's. */
+  /** Which characters: ASCII, braille, words or a typewriter's (Box Art's sets are its own style). */
   chars: GlyphSet
   /** The text the picture is written in, drawn as words. */
   words: string
@@ -167,6 +169,23 @@ export interface AsciiSettings {
   own: boolean
   /** The ground and ink, an id of `PAPERS`. */
   paper: string
+  /** The palette the scene is painted from before it is drawn: 'none' keeps its own colors, 'own' is the scene's, else a shared one. */
+  palette: string
+}
+/** The settings of the picture drawn as Box Art: the box-drawing and block characters, apart from Text (Matt, 2026-11-25). */
+export interface BoxArtSettings {
+  /** Which characters: box drawing ('lines') or quarter blocks and shades ('blocks'). */
+  chars: 'lines' | 'blocks'
+  /** A character's height, in CSS pixels. */
+  letter: number
+  /** How heavy the characters are drawn. */
+  weight: number
+  /** Whether each character takes the color of what it shows. */
+  own: boolean
+  /** The ground and ink, an id of `PAPERS`. */
+  paper: string
+  /** The palette the scene is painted from before it is drawn: 'none' keeps its own colors, 'own' is the scene's, else a shared one. */
+  palette: string
 }
 /** Cel shading's settings. */
 export interface CelSettings {
@@ -188,6 +207,8 @@ export interface CelSettings {
   outline: boolean
   /** The line's width, in CSS pixels. */
   pen: number
+  /** The palette the scene is painted from before it is lit: 'none' keeps its own colors, 'own' is the scene's, else a shared one. */
+  palette: string
 }
 
 /** Pixel art's settings, as the Style and Finish controls set them. */
@@ -291,8 +312,9 @@ export const GLITCH_DEF: StyleDef<GlitchChoice> = {
 /** The settings the brush marks and the plain blobs share: mark size, outline, pen and paper. */
 export const MARKS: StyleDef<MarkSettings> = {
   id: 'marks', styles: ['gouache', 'oil', 'ink', 'hatch', 'stipple', 'blobs'],
-  start: { size: 1, outline: null, pen: 1.5, paper: PAPERS[0].id },
+  start: { size: 1, outline: null, pen: 1.5, paper: PAPERS[0].id, palette: 'none' },
   settings: [
+    { key: 'palette', kind: 'choice', label: 'Palette', address: 'palette', testid: 'drawn-palettes', options: [{ id: 'none', label: 'Full color' }], open: true, when: (_v, on) => on.style !== 'hatch' && on.style !== 'stipple' },
     { key: 'size', kind: 'range', label: 'Mark size', min: 0.5, max: 1.3, step: 0.05, unit: 'percent', when: (_v, on) => on.style !== 'blobs', hint: 'Smaller marks leave gaps between them; bigger ones overlap more.' },
     { key: 'outline', kind: 'toggle', label: 'Outlines', address: 'outline', testid: 'brush-outline', auto: (style) => PEN_LOOKS.includes(style), about: 'A pen line round the subject, where one thing stands in front of another, and between its parts. Heavier against dark things, and it lifts off here and there against light ones.' },
     { key: 'pen', kind: 'range', label: 'Pen width', min: 0.75, max: 3, step: 0.25, unit: 'px', when: (v, on) => v.outline ?? PEN_LOOKS.includes(on.style) },
@@ -306,13 +328,11 @@ export const WORDS_START = 'Every blob a letter. '
 /** The settings of the picture drawn as characters. */
 export const ASCII: StyleDef<AsciiSettings> = {
   id: 'ascii', styles: ['ascii'],
-  start: { chars: 'ascii', letter: 12, weight: 1, strokes: true, strands: true, own: true, paper: PAPERS[0].id, words: WORDS_START },
+  start: { chars: 'ascii', letter: 12, weight: 1, strokes: true, strands: true, own: true, paper: PAPERS[0].id, words: WORDS_START, palette: 'none' },
   settings: [
     { key: 'chars', kind: 'choice', label: 'Characters', address: 'chars', testid: 'brush-chars', options: [
       { id: 'ascii', label: 'ASCII', about: 'Letters and signs by how much there is to show, and strokes along edges.' },
       { id: 'braille', label: 'Braille', about: 'Eight dots a cell, each on where its eighth of the cell is heavy enough, so shapes come out finer than a character. Idea from Silicon Jungle\'s Ink Studio.' },
-      { id: 'blocks', label: 'Quarter blocks', about: 'Quarter blocks where a cell is half one thing and half another, and the shades ░ ▒ ▓ where it is even. Idea from Silicon Jungle\'s Ink Studio.' },
-      { id: 'lines', label: 'Box drawing', about: 'Only the edges, in the box-drawing characters ─ │ ┌ ┼ that join from cell to cell, with a dot where there is something to show.' },
       { id: 'words', label: 'Words', about: 'Your words, written over and over through the picture, each letter as bright as what it stands on.' },
       { id: 'typed', label: 'Typewriter', about: 'Keys struck once, or twice over one another for the darkest places, each strike a little out of line and the ribbon worn unevenly.' },
     ] },
@@ -323,19 +343,42 @@ export const ASCII: StyleDef<AsciiSettings> = {
     { key: 'strands', kind: 'toggle', label: 'Strokes along fur and grass', testid: 'brush-strands', when: (v) => v.chars === 'ascii', about: 'A cell that is mostly long thin blobs, such as strands of fur or blades of grass, gets the stroke nearest the way they run.' },
     { key: 'own', kind: 'toggle', label: 'Their own colors', testid: 'brush-own', about: 'Each character takes the color of what it stands for, on a dark screen. Off, they are one ink on paper.' },
     { key: 'paper', kind: 'choice', label: 'Paper', options: PAPERS, when: (v) => !v.own },
+    { key: 'palette', kind: 'choice', label: 'Palette', address: 'palette', testid: 'drawn-palettes', options: [{ id: 'none', label: 'Full color' }], open: true, when: (v) => v.own },
+
+  ],
+}
+
+/** Box Art's sets of characters, which Text drew until 2026-11-25: `?style=ascii&chars=lines` is Box Art now. */
+export const BOX_SETS: readonly string[] = ['lines', 'blocks']
+
+/** The settings of the picture drawn as Box Art (Matt, 2026-11-25: box drawing and quarter blocks, out of Text). */
+export const BOX_ART: StyleDef<BoxArtSettings> = {
+  id: 'boxart', styles: ['boxart'],
+  start: { chars: 'lines', letter: 12, weight: 1, own: true, paper: PAPERS[0].id, palette: 'none' },
+  settings: [
+    { key: 'chars', kind: 'choice', label: 'Characters', address: 'chars', testid: 'brush-chars', options: [
+      { id: 'lines', label: 'Box drawing', about: 'Only the edges, in the box-drawing characters ─ │ ┌ ┼ that join from cell to cell, with a dot where there is something to show.' },
+      { id: 'blocks', label: 'Quarter blocks', about: 'Quarter blocks where a cell is half one thing and half another, and the shades ░ ▒ ▓ where it is even. Idea from Silicon Jungle\'s Ink Studio.' },
+    ] },
+    { key: 'letter', kind: 'range', label: 'Character size', min: 8, max: 24, step: 2, unit: 'px', hint: 'How tall a character is. Smaller ones show more of the picture; bigger ones are easier to read.' },
+    { key: 'weight', kind: 'range', label: 'Weight', min: 0.5, max: 2, step: 0.1, unit: 'percent', hint: 'Over 100% every cell takes a heavier character than its tone asks for, which suits a dim scene.' },
+    { key: 'own', kind: 'toggle', label: 'Their own colors', testid: 'brush-own', about: 'Each character takes the color of what it stands for, on a dark screen. Off, they are one ink on paper.' },
+    { key: 'paper', kind: 'choice', label: 'Paper', options: PAPERS, when: (v) => !v.own },
+    { key: 'palette', kind: 'choice', label: 'Palette', address: 'palette', testid: 'drawn-palettes', options: [{ id: 'none', label: 'Full color' }], open: true, when: (v) => v.own },
   ],
 }
 
 /** Cel shading's settings. */
 export const CEL_DEF: StyleDef<CelSettings> = {
   id: 'cel', styles: ['cel'],
-  start: { turn: CEL_START.turn, height: CEL_START.height, tones: CEL_START.tones, shadows: CEL_START.shadows, smooth: CEL_START.smooth, fills: CEL_START.fills, backdrop: '', outline: true, pen: CEL_START.line },
+  start: { turn: CEL_START.turn, height: CEL_START.height, tones: CEL_START.tones, shadows: CEL_START.shadows, smooth: CEL_START.smooth, fills: CEL_START.fills, backdrop: '', outline: true, pen: CEL_START.line, palette: 'none' },
   settings: [
     { ...turn<CelSettings>(), address: 'turn' },
     { ...height<CelSettings>(), address: 'height' },
     { key: 'tones', kind: 'choice', label: 'Tones', address: 'tones', options: [{ id: 2, label: 'Light and shade' }, { id: 3, label: 'Three tones' }] },
     { key: 'shadows', kind: 'toggle', label: 'Cast shadows', address: 'shadows' },
     { key: 'smooth', kind: 'range', label: 'Shadow shapes', address: 'smooth', min: 1, max: 12, step: 0.5, unit: 'px', hint: 'How far the light is smoothed over a surface before it is cut into tones: more gives rounder, simpler shapes.' },
+    { key: 'palette', kind: 'choice', label: 'Palette', address: 'palette', testid: 'drawn-palettes', options: [{ id: 'none', label: 'Full color' }], open: true },
     { key: 'fills', kind: 'range', label: 'Colors in each part', address: 'fills', min: 0, max: 4, step: 1, unit: 'count', zero: 'As painted', whole: true, hint: 'Each part\'s colors gathered into a few flat ones, so a mottled surface becomes areas of one color and a stripe stays a stripe.' },
     { key: 'backdrop', kind: 'choice', label: 'Backdrop', options: [{ id: 'scene', label: 'Scene\'s sky' }, ...BACKDROPS] },
     { key: 'outline', kind: 'toggle', label: 'Outlines', address: 'outline', testid: 'brush-outline', about: 'An even line round the subject, where one thing stands in front of another, and between its parts.' },
@@ -348,6 +391,7 @@ export const BLOCKS_DEF: StyleDef<BlockChoice> = {
   id: 'blocks', styles: ['blocks'], start: BLOCK_START,
   settings: [
     { key: 'size', kind: 'range', label: 'Block size', address: 'block', min: BLOCK_SIZES.min, max: BLOCK_SIZES.max, step: 1, unit: 'times', whole: true, hint: 'How big a block is beside the grid the scene was cut on. Bigger blocks suit a big scene; a small creature loses its face.' },
+    { key: 'palette', kind: 'choice', label: 'Palette', address: 'palette', testid: 'drawn-palettes', options: [{ id: 'none', label: 'Full color' }], open: true },
     turn<BlockChoice>(),
     height<BlockChoice>(),
     { key: 'shadows', kind: 'toggle', label: 'Cast shadows' },
@@ -372,6 +416,7 @@ export const NEON_DEF: StyleDef<NeonChoice> = {
   id: 'neon', styles: ['neon'], start: NEON_START,
   settings: [
     { key: 'set', kind: 'choice', label: 'Colors', options: NEON_SETS.map((s) => ({ id: s.id, label: s.label, about: 'Their own gives each tube the color of the thing it goes round, at full strength. The others deal a set of colors out part by part.' })) },
+    { key: 'palette', kind: 'choice', label: 'Palette', address: 'palette', testid: 'drawn-palettes', options: [{ id: 'none', label: 'Full color' }], open: true, when: (v) => v.set === 'own' },
     { key: 'pace', kind: 'choice', label: 'Light runs', options: NEON_PACES },
     { key: 'line', kind: 'range', label: 'Tube width', min: 1, max: 5, step: 0.5, unit: 'px' },
     { key: 'glow', kind: 'range', label: 'Glow', min: 0, max: 2, step: 0.1, unit: 'percent', hint: 'How far the tubes\' light spills round them and onto the bodies beside them.' },
@@ -383,6 +428,7 @@ export const NEON_DEF: StyleDef<NeonChoice> = {
 export const GLASS_DEF: StyleDef<GlassChoice> = {
   id: 'glass', styles: ['glass'], start: GLASS_START,
   settings: [
+    { key: 'palette', kind: 'choice', label: 'Palette', address: 'palette', testid: 'drawn-palettes', options: [{ id: 'none', label: 'Full color' }], open: true },
     { key: 'pane', kind: 'range', label: 'Pane size', min: 0.03, max: 0.15, step: 0.01, unit: 'percent', hint: 'How big a pane is beside the whole scene. Panes are fixed in the scene, so they stay on their surfaces as the view turns.' },
     { key: 'lead', kind: 'range', label: 'Lead width', min: 1, max: 5, step: 0.5, unit: 'px' },
     { key: 'shine', kind: 'range', label: 'Light behind', min: 0, max: 1, step: 0.05, unit: 'percent', hint: 'How much brighter the window is where the light stands behind it than at its corners.' },
@@ -394,12 +440,14 @@ export const GLASS_DEF: StyleDef<GlassChoice> = {
 export const WASH_DEF: StyleDef<WashChoice> = {
   id: 'watercolor', styles: ['watercolor'], start: WASH_START,
   settings: [
+    { key: 'palette', kind: 'choice', label: 'Palette', address: 'palette', testid: 'drawn-palettes', options: [{ id: 'none', label: 'Full color' }], open: true },
     { key: 'bleed', kind: 'range', label: 'Edges run', min: 0, max: 14, step: 1, unit: 'px', hint: 'How far a wash\'s edge wanders over the paper.' },
     { key: 'pool', kind: 'range', label: 'Dark edges', min: 0, max: 1, step: 0.05, unit: 'percent', hint: 'Paint pools where a wash ends or its color changes, and dries darker there.' },
     { key: 'grain', kind: 'range', label: 'Paper grain', min: 0, max: 1, step: 0.05, unit: 'percent' },
     { key: 'strength', kind: 'range', label: 'Paint strength', min: 0.3, max: 1, step: 0.05, unit: 'percent', hint: 'Lower is paler, with more of the paper showing through.' },
     { key: 'pencil', kind: 'range', label: 'Pencil', min: 0, max: 1, step: 0.05, unit: 'percent', zero: 'None', hint: 'A pencil line under the paint, round each thing and between its parts.' },
     { key: 'paper', kind: 'choice', label: 'Paper', options: WASH_PAPERS },
+    { key: 'border', kind: 'toggle', label: 'Paper border', address: 'border', about: 'Leaves a border of bare paper round the painting. Off, the wash behind the subject runs to the edge.' },
   ],
 }
 
@@ -456,7 +504,7 @@ export const SCENE: StyleDef<SceneSettings> = {
 export const sceneStart = (q: URLSearchParams = new URLSearchParams()): SceneSettings => fromAddress(SCENE, SCENE.start, q)
 
 /** Every style's settings, by the name they are kept under. */
-export const CATALOG = { pixel: PIXEL, glitch: GLITCH_DEF, marks: MARKS, ascii: ASCII, cel: CEL_DEF, blocks: BLOCKS_DEF, neon: NEON_DEF, glass: GLASS_DEF, watercolor: WASH_DEF, knit: KNIT_DEF } as const
+export const CATALOG = { pixel: PIXEL, glitch: GLITCH_DEF, marks: MARKS, ascii: ASCII, boxart: BOX_ART, cel: CEL_DEF, blocks: BLOCKS_DEF, neon: NEON_DEF, glass: GLASS_DEF, watercolor: WASH_DEF, knit: KNIT_DEF } as const
 /** A name settings are kept under: a key of `CATALOG`. */
 export type StyleKey = keyof typeof CATALOG
 
@@ -470,6 +518,8 @@ export interface StylesValue {
   marks: MarkSettings
   /** The characters'. */
   ascii: AsciiSettings
+  /** Box Art's. */
+  boxart: BoxArtSettings
   /** Cel shading's. */
   cel: CelSettings
   /** The Blocks style's. */
@@ -511,7 +561,7 @@ export function fromAddress<V>(def: StyleDef<V>, start: V, q: URLSearchParams): 
     const asked = s.address ? q.get(s.address) : null
     if (asked === null) continue
     if (s.kind === 'range') { const v = asked === '' ? NaN : Number(asked); if (Number.isFinite(v)) out[s.key] = held(s, v) }
-    else if (s.kind === 'choice') { const o = s.options.find((x) => String(x.id) === asked); if (o) out[s.key] = o.id }
+    else if (s.kind === 'choice') { const o = s.options.find((x) => String(x.id) === asked); if (o) out[s.key] = o.id; else if (s.open && /^[a-z0-9-]{1,32}$/.test(asked)) out[s.key] = asked }
     else if (s.kind === 'toggle') { if (s.on) out[s.key] = asked === s.on; else if (asked === '1') out[s.key] = true; else if (asked === '0') out[s.key] = false }
     else if (s.kind === 'text') { if (asked.trim()) out[s.key] = asked.slice(0, s.most) }
   }
@@ -534,7 +584,7 @@ export function settingsFrom<V>(def: StyleDef<V>, start: V, kept: unknown): V {
 
 /** What a page tells the start about itself. */
 export interface StartFor {
-  /** A phone or tablet: blocks start a size up, for fewer cubes, and knitting two pixels a stitch finer, so its bands fit a small view. */
+  /** A phone or tablet: knitting starts two pixels a stitch finer, so its bands fit a small view. */
   coarse?: boolean
 }
 
@@ -543,13 +593,21 @@ export function drawnStart(q: URLSearchParams = new URLSearchParams(), on: Start
   return {
     marks: fromAddress(MARKS, MARKS.start, q),
     ascii: fromAddress(ASCII, ASCII.start, q),
+    boxart: fromAddress(BOX_ART, BOX_ART.start, q),
     cel: fromAddress(CEL_DEF, CEL_DEF.start, q),
-    blocks: fromAddress(BLOCKS_DEF, { ...BLOCKS_DEF.start, size: BLOCKS_DEF.start.size + (on.coarse ? 1 : 0) }, q),
+    blocks: fromAddress(BLOCKS_DEF, BLOCKS_DEF.start, q),
     neon: fromAddress(NEON_DEF, NEON_DEF.start, q),
     glass: fromAddress(GLASS_DEF, GLASS_DEF.start, q),
     watercolor: fromAddress(WASH_DEF, WASH_DEF.start, q),
     knit: fromAddress(KNIT_DEF, on.coarse ? { ...KNIT_DEF.start, stitch: KNIT_DEF.start.stitch - 2 } : KNIT_DEF.start, q),
   }
+}
+
+/** Box Art's kept settings, or, from a scene kept before it was its own style, Text's when they were drawn in its characters. */
+function boxArtKept(got: Record<string, unknown>): unknown {
+  if (got.boxart) return got.boxart
+  const old = got.ascii as { chars?: unknown } | undefined
+  return old && BOX_SETS.includes(old.chars as string) ? old : undefined
 }
 
 /** Kept drawn settings read back over a start: `kept` is an object by style (`{ cel: {…}, blocks: {…} }`), any of it missing or unsound left as it starts. */
@@ -558,6 +616,7 @@ export function drawnFrom(start: DrawnSettings, kept: unknown): DrawnSettings {
   return {
     marks: settingsFrom(MARKS, start.marks, got.marks),
     ascii: settingsFrom(ASCII, start.ascii, got.ascii),
+    boxart: settingsFrom(BOX_ART, start.boxart, boxArtKept(got)),
     cel: settingsFrom(CEL_DEF, start.cel, got.cel),
     blocks: settingsFrom(BLOCKS_DEF, start.blocks, got.blocks),
     neon: settingsFrom(NEON_DEF, start.neon, got.neon),

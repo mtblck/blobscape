@@ -14,6 +14,7 @@ import { RISES, cluster, columns, crystal, drips, flowstone, geode, icicles } fr
 import { drift, fallAt, fallShare, frost, groundUnder, type Falling } from './weather.ts'
 import { MOST_STARS, withHeavens, type HeavensDoc } from './heavens.ts'
 import type { LavaPlan } from './lava.ts'
+import type { PotionPlan } from './potion.ts'
 import { CLOUD_COVERS, WIND_MOST, gustRun, windLevelOf } from './skyRecipes.ts'
 import { placedShape, placer } from './place.ts'
 import { checkTags, type Tag } from './tags.ts'
@@ -117,6 +118,8 @@ export interface SceneDoc {
   water?: WaterDoc
   /** A pool of molten rock that turns over, cools to a crust that cracks into plates, and bubbles (lava.ts): a shared recipe, as water is. A scene has water or lava, not both. */
   lava?: LavaDoc
+  /** A round pool of potion that is stirred, marbles its colors and bubbles up and pops (potion.ts): a shared recipe, as water and lava are. A scene has one pool: water, lava or a potion. A prop may carry one (a cauldron's); it comes with it when set down where the land has none. */
+  potion?: PotionDoc
   /** Fires that burn (fire.ts): hot gas rising off a bed of fuel, worked out as the water's ripples are: a shared recipe. At most `MAX_FIRES`. */
   fires?: FireDoc[]
   /**
@@ -230,6 +233,52 @@ export interface LavaDoc {
   /** How many times steeper than it is the surface is drawn: 1 to 12, 3 when left out. */
   ripple?: number
 }
+
+/**
+ * A potion that brews (potion.ts): a round pool of liquid round `at` ([x, z]) out to `r`, at `level`, wherever the
+ * still ground there lies under the level (dig the pot with a `cut`). Its surface is the water's height field, a
+ * little thicker; it is stirred round, which draws its second color out through its own in spirals, small eddies
+ * wander in it, and bubbles swell up into domes and pop, sending rings out and leaving froth that the stir carries
+ * off. One whole loop is worked out when the scene is made, as the water's is. It glows unless told not to: give the
+ * scene a light over it for what it lights.
+ */
+export interface PotionDoc {
+  /** The pool's middle, [x, z]. */
+  at: [number, number]
+  /** The pool's radius: 0.05 to 3. */
+  r: number
+  /** The height its surface stands at. */
+  level: number
+  /** Its colors: deep (in its hollows), its own, its second (marbled through it), froth. A glowing pink when left out. */
+  colors?: [string, string, string, string]
+  /** How brightly it glows, 0 (lit like anything else) to 1: 0.85 when left out. */
+  glow?: number
+  /** A cell of its grid: 0.012 to 0.1, 0.022 when left out. */
+  cell?: number
+  /** How many times a loop it is stirred round, a whole number from −6 to 6 (under 0 the other way): 1 when left out. */
+  stir?: number
+  /** How many small eddies wander in it: 0 to 6, 3 when left out. */
+  eddies?: number
+  /** How many bubbles pop a loop: 0 to 80, 18 when left out. */
+  bubbles?: number
+  /** How wide a bubble is (half): 0.01 to 0.3, three cells when left out. */
+  pop?: number
+  /** Seconds a bubble swells before it pops: 0.1 to 3, 0.7 when left out. */
+  rise?: number
+  /** How high a bubble's dome stands, as a share of its half width: 0 to 1.5, 0.5 when left out. */
+  dome?: number
+  /** Seconds froth takes to fade to a third: 0.1 to 10, 1.2 when left out. */
+  froth?: number
+  /** How fast a ring travels, units a second: 0.05 to 2, 0.22 when left out. */
+  speed?: number
+  /** The share of its motion the surface loses a second, 0.05 to 0.95: 0.7 when left out. */
+  damping?: number
+  /** How many times steeper than it is the surface is drawn: 1 to 12, 3 when left out. */
+  ripple?: number
+}
+
+/** The colors of a potion when a scene names none: deep, its own, its second, froth. */
+export const POTION_COLORS: [string, string, string, string] = ['#6a1050', '#c0208a', '#ff5ac0', '#ffb0e0']
 
 /** The colors of lava when a scene names none: crust, dull red, orange, white-hot. */
 export const LAVA_COLORS: [string, string, string, string] = ['#2b181c', '#8f1a1c', '#ff8a1e', '#fff3a8']
@@ -637,7 +686,7 @@ export interface FireDoc {
 /** The colors of a fire when a scene names none: deep orange, orange, yellow, white-hot. */
 export const FIRE_COLORS: [string, string, string, string] = ['#d9541e', '#f59a2a', '#ffd166', '#fff3b0']
 /** The most fires a scene can have. */
-export const MAX_FIRES = 4
+export const MAX_FIRES = 10
 
 /** A point light in a scene. */
 export interface LightDoc {
@@ -1313,6 +1362,27 @@ export function checkScene(doc: unknown): string[] {
       }
     }
   }
+  if (doc.potion !== undefined) {
+    const l = doc.potion
+    if (!obj(l)) bad('potion', 'must be an object')
+    else {
+      if (doc.water !== undefined || doc.lava !== undefined) bad('potion', 'a scene has one pool: water, lava or a potion')
+      num(l.level, 'potion.level', -REACH, REACH)
+      vec(l.at, 'potion.at', -REACH, REACH, 2)
+      const cell = opt(l.cell, 'potion.cell', 0.012, 0.1) ? (l.cell as number | undefined) ?? WATER_CELL : WATER_CELL
+      if (num(l.r, 'potion.r', 0.05, 3)) {
+        const n = (2 * (l.r as number)) / cell
+        if (n < 4) bad('potion.r', 'must be at least two cells')
+        else if (n * n > MAX_WATER_CELLS) bad('potion.cell', `makes a grid of ${Math.round(n * n)} cells; the most is ${MAX_WATER_CELLS}, so make the pool smaller or the cell bigger`)
+      }
+      if (l.colors !== undefined) hexes(l.colors, 'potion.colors', 4, 4)
+      opt(l.glow, 'potion.glow', 0, 1); opt(l.eddies, 'potion.eddies', 0, 6); opt(l.bubbles, 'potion.bubbles', 0, 80)
+      opt(l.pop, 'potion.pop', 0.01, 0.3); opt(l.rise, 'potion.rise', 0.1, 3); opt(l.dome, 'potion.dome', 0, 1.5); opt(l.froth, 'potion.froth', 0.1, 10)
+      opt(l.speed, 'potion.speed', 0.05, 2); opt(l.damping, 'potion.damping', 0.05, 0.95); opt(l.ripple, 'potion.ripple', 1, 12)
+      if (l.stir !== undefined && (!Number.isInteger(l.stir) || (l.stir as number) < -6 || (l.stir as number) > 6)) bad('potion.stir', 'must be a whole number from -6 to 6')
+      if (l.eddies !== undefined && !Number.isInteger(l.eddies)) bad('potion.eddies', 'must be a whole number')
+    }
+  }
   if (doc.fires !== undefined) {
     if (!Array.isArray(doc.fires) || doc.fires.length > MAX_FIRES) bad('fires', `must be a list of at most ${MAX_FIRES}`)
     else doc.fires.forEach((f: unknown, i: number) => {
@@ -1706,6 +1776,12 @@ export interface CompiledScene {
    * or its water's surface where that is what lies open to the sky. What falls from outside the scene lands on it.
    */
   ground(x: number, z: number, top: number, bottom: number): number
+  /**
+   * Where snow lies under (x, z): as `ground`, but on whatever takes light, moving or not (a swaying crown, a turning
+   * sail, a boat on the water, a walker), with the index of the bone that carries it (0 for the land or the water), so
+   * the snow lying there can ride that bone (snowCover.ts `followSnow`). In the rest pose.
+   */
+  lying(x: number, z: number, top: number, bottom: number): { y: number; bone: number }
   /** The scene's water, if it has any, with its defaults filled in: what `SceneWater` plays. */
   water?: WaterPlan
   /** The scene's fires, with their defaults filled in: what `SceneFire` plays. */
@@ -1778,6 +1854,8 @@ export interface WaterPlan {
   foam: number
   /** Where the pool is molten rock (`SceneDoc.lava`): how it turns over, cools and bubbles. */
   lava?: LavaPlan
+  /** Where the pool is a potion (`SceneDoc.potion`): how it is stirred, marbles and bubbles. */
+  potion?: PotionPlan
 }
 
 /** A scene's fire as compiled (`CompiledScene.fires`). */
@@ -1890,9 +1968,13 @@ function planSpecks(air: AirDoc | undefined, loop: number, ground: (x: number, z
         const rest = sw.kind === 'leaves' ? size * 0.3 : sw.kind === 'rain' ? 0 : size * 0.6
         // where nothing stands under it (past an island's edge), it comes down somewhere that has ground, so it never
         // lies on the open air at the box's floor; the floor is kept only when no try finds ground
+        // rain lies nowhere, so a drop past the edge falls on out of the box: brought onto the ground, every drop of a
+        // weather over a small round of sea came down on it, and in a wind the sky over its downwind side was left bare
+        // (Matt saw a gap in the storm octopus's rain, 2026-11-25)
+        const tries = sw.kind === 'rain' ? 0 : LAND_TRIES
         const groundAt = (x: number, z: number) => ground(x, z, hi[1], lo[1])
         let g = groundAt(at[0] + wind[0] + sx, at[2] + wind[1] + sz)
-        for (let t = 0; t < LAND_TRIES && g <= lo[1] + 1e-6; t++) {
+        for (let t = 0; t < tries && g <= lo[1] + 1e-6; t++) {
           const x = across(0, 40 + t * 2) - wind[0], z = across(2, 41 + t * 2) - wind[1], h = groundAt(x + wind[0] + sx, z + wind[1] + sz)
           if (h > lo[1] + 1e-6) { at[0] = x; at[2] = z; g = h }
         }
@@ -1901,7 +1983,7 @@ function planSpecks(air: AirDoc | undefined, loop: number, ground: (x: number, z
         if (sw.kind === 'rain') {
           p.falls = Array.from({ length: times }, (_, n) => {
             let x = at[0] + wind[0], z = at[2] + wind[1], floor = g
-            for (let t = 0; n && t <= LAND_TRIES; t++) {
+            for (let t = 0; n && t <= tries; t++) {
               x = lo[0] + (hi[0] - lo[0]) * hash(si + 1, j + 1, 20 + n * 2 + t * 977)
               z = lo[2] + (hi[2] - lo[2]) * hash(si + 1, j + 1, 21 + n * 2 + t * 977)
               floor = ground(x, z, hi[1], lo[1])
@@ -1971,6 +2053,26 @@ function planWater(w: WaterDoc, box: { x0: number; x1: number; z0: number; z1: n
 function lavaPond(l: LavaDoc): WaterDoc {
   const cell = l.cell ?? WATER_CELL
   return { level: l.level, from: l.from, to: l.to, color: (l.colors ?? LAVA_COLORS)[0], cell, clear: 1, speed: l.speed ?? 0.12, damping: l.damping ?? 0.9, ripple: l.ripple ?? 3, splash: { r: l.pop ?? cell * 3, depth: cell * 0.6 } }
+}
+
+/** A potion as the water it is planned as: its pool (the square round its circle), its grid and its height field, a little thick. */
+function potionPond(l: PotionDoc): WaterDoc {
+  const cell = l.cell ?? WATER_CELL, pad = cell * 0.5
+  const pop = l.pop ?? cell * 3
+  return {
+    level: l.level, from: [l.at[0] - l.r - pad, l.at[1] - l.r - pad], to: [l.at[0] + l.r + pad, l.at[1] + l.r + pad], color: (l.colors ?? POTION_COLORS)[1], cell, clear: 1,
+    speed: l.speed ?? 0.22, damping: l.damping ?? 0.7, ripple: l.ripple ?? 3, splash: { r: pop * 1.2, depth: pop * (l.dome ?? 0.5) * 0.8 },
+  }
+}
+
+/** How a scene's potion is stirred, marbles and bubbles. */
+function planPotion(l: PotionDoc): PotionPlan {
+  const cell = l.cell ?? WATER_CELL, pop = l.pop ?? cell * 3, stir = l.stir ?? 1
+  const eddies = Array.from({ length: l.eddies ?? 3 }, (_, i) => ({ out: 0.35 + 0.3 * ((i * 0.618) % 1), times: (stir < 0 ? -1 : 1) * (1 + (i % 2)), phase: (i * 0.37) % 1, spin: (i % 2 ? -1 : 1) as 1 | -1 }))
+  return {
+    x: l.at[0], z: l.at[1], r: l.r, stir, eddies, bubbles: l.bubbles ?? 18, pop, rise: l.rise ?? 0.7, dome: pop * (l.dome ?? 0.5), fizzLife: l.froth ?? 1.2,
+    ramp: (l.colors ?? POTION_COLORS).map(unit) as PotionPlan['ramp'], glow: l.glow ?? 0.85,
+  }
 }
 
 /** How a scene's lava turns over, cools and bubbles, over the box `box`. */
@@ -2127,6 +2229,9 @@ export function compileScene(given: SceneDoc, { puffs = true, ground: under, wat
   // what weather lands on: parts that stay put (on no bone, or one that only sways), in order, a drift over those before it
   const moved = new Set<string>()
   for (const m of moves) if (m.kind !== 'sway') moved.add(m.bone)
+  // what swells and fades (smoke puffs, rings on water) takes no snow lying, though it is solid
+  const swelling = new Set<string>()
+  for (const m of moves) if (m.kind === 'pulse' || (m.kind === 'drift' && m.grow)) swelling.add(m.bone)
   // what floats rides the water, so it is no ground under it
   for (const f of doc.water?.floats ?? []) moved.add(f.bone)
   for (const b of doc.bones ?? []) if (b.parent && moved.has(b.parent)) moved.add(b.name)
@@ -2134,24 +2239,29 @@ export function compileScene(given: SceneDoc, { puffs = true, ground: under, wat
   const placers = doc.parts.map((p) => (p.placed ? placer(p.placed.foot, p.placed) : undefined))
   const solidShapes = (thin: number) => {
     const out: Shape[] = [], still: Shape[] = []
+    // what snow can lie on: every part that is solid and takes light, still or moving, with the bone that carries it
+    const lie: Shape[] = [], lieBone: number[] = []
     for (const [i, p] of doc.parts.entries()) {
       const t = placers[i]
       const sh = t ? placedShape(toShape(p.shape, thin / t.size), t) : toShape(p.shape, thin, (x, z) => groundUnder(still, x, z, 4, -1))
       out.push(sh)
       if (!p.glow && !(p.bone && moved.has(p.bone))) still.push(sh)
+      if (!p.glow && !p.bone?.startsWith('~') && !(p.bone && swelling.has(p.bone))) { lie.push(sh); lieBone.push(p.bone ? bones.findIndex((b) => b.name === p.bone) : 0) }
     }
-    return { out, still }
+    return { out, still, lie, lieBone }
   }
   // what hangs in the air rides bones of its own, after the scene's: a bone for each speck, a few for each bank of mist
   const lands = (doc.air?.specks ?? []).some((m) => m.land)
   // lava lies in its pool as water does, on the same grid and the same height field: it is planned as water, with its heat beside
-  const pond = doc.water ?? (doc.lava && lavaPond(doc.lava))
-  let stood: Shape[] | undefined
-  const standing = () => (stood ??= solidShapes(0.02).still)
+  const pond = doc.water ?? (doc.lava && lavaPond(doc.lava)) ?? (doc.potion && potionPond(doc.potion))
+  let solid: ReturnType<typeof solidShapes> | undefined
+  const standing = () => (solid ??= solidShapes(0.02)).still
   const ground = (lands && !under) || pond ? standing() : []
   const pondBox = pond && { x0: Math.min(pond.from[0], pond.to[0]), x1: Math.max(pond.from[0], pond.to[0]), z0: Math.min(pond.from[1], pond.to[1]), z1: Math.max(pond.from[1], pond.to[1]) }
   /** Whether there is water at (x, z): inside the box, with a bed of still ground under the level to hold it (looked for from just over the surface, so a roof overhead is not in the way). */
-  const bedAt = (x: number, z: number) => !pond || !pondBox || x < pondBox.x0 || x > pondBox.x1 || z < pondBox.z0 || z > pondBox.z1 ? -Infinity
+  // a potion's pool is round: past its rim there is none, whatever lies under the level there
+  const outside = (x: number, z: number) => !!doc.potion && !doc.water && !doc.lava && Math.hypot(x - doc.potion.at[0], z - doc.potion.at[1]) > doc.potion.r
+  const bedAt = (x: number, z: number) => !pond || !pondBox || x < pondBox.x0 || x > pondBox.x1 || z < pondBox.z0 || z > pondBox.z1 || outside(x, z) ? -Infinity
     : groundUnder(ground, x, z, pond.level + (pond.cell ?? WATER_CELL), -SMALL_REACH * 2)
   const wetAt = (x: number, z: number) => { const bed = bedAt(x, z); return !!pond && bed > -SMALL_REACH * 2 + 1e-6 && bed < pond.level - WATER_LEAST }
   const standsAt = (x: number, z: number) => !!pond && bedAt(x, z) >= pond.level - WATER_LEAST
@@ -2160,9 +2270,25 @@ export function compileScene(given: SceneDoc, { puffs = true, ground: under, wat
     // nothing between the sky and the water there: the water is what it lands on
     return pond && g < pond.level && wetAt(x, z) ? pond.level : g
   }
+  /** Like `groundAt`, but over moving parts too, and with the bone that carries what is met (0 for the land or water). */
+  const lyingAt = (x: number, z: number, top: number, bottom: number) => {
+    const { lie, lieBone } = (solid ??= solidShapes(0.02))
+    const y = groundUnder(lie, x, z, top, bottom)
+    if (!(y > bottom)) return { y, bone: 0 }
+    if (pond && y < pond.level && wetAt(x, z)) return { y: pond.level, bone: 0 }
+    // the part met is the one nearest the point it was met at
+    let best = Infinity, bone = 0
+    for (const [k, sh] of lie.entries()) {
+      if (x < sh.min[0] || x > sh.max[0] || z < sh.min[2] || z > sh.max[2] || y < sh.min[1] - 0.01 || y > sh.max[1] + 0.01) continue
+      const d = sh.sdf(x, y, z)
+      if (d < best) { best = d; bone = lieBone[k] }
+    }
+    return { y, bone: Math.max(0, bone) }
+  }
   const specks = planSpecks(doc.air, doc.loop, under ?? groundAt, under ? level : pond?.level)
   const water = pond && pondBox ? planWater(pond, pondBox, doc, specks, bones, wetAt, standsAt) : undefined
   if (water && doc.lava) water.lava = planLava(doc.lava, pondBox!)
+  else if (water && doc.potion && !doc.water) water.potion = planPotion(doc.potion)
   const banks = doc.air?.mist ?? []
   banks.forEach((m, mi) => { for (let k = 0; k < BANK_BONES; k++) bones.push({ name: `~mist${mi}-${k}`, parent: 0, head: m.at }) })
   for (const p of specks) { p.index = bones.length; bones.push({ name: p.bone, parent: 0, head: p.at }) }
@@ -2340,6 +2466,7 @@ export function compileScene(given: SceneDoc, { puffs = true, ground: under, wat
     },
     haze: haze ? { color: unit(haze.color).map(linear) as Vec3, from: haze.from ?? 0, to: haze.to ?? 4 } : undefined,
     ground: groundAt,
+    lying: lyingAt,
     water,
     landed: water?.drops ?? wetDrops(specks, doc.loop),
     lights: (t) => lightsAt(lights, t / doc.loop),
