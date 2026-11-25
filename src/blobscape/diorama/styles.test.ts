@@ -9,6 +9,7 @@ import { WASH, WASH_PAPERS, WASH_SKY_COLORS as WASH_SKY, WASH_START, washLook } 
 import { GLASS, glassLook, GLASS_START } from '../glassLooks.ts'
 import { GLITCH, GLITCH_START, glitchLook } from '../glitchLooks.ts'
 import { HALFTONE } from '../halftoneLooks.ts'
+import { FILTERS } from '../../splat-engine/styles/filterLooks.ts'
 import { NEON, NEON_PACES, neonLook, NEON_START, periodIn } from '../neonLooks.ts'
 import { ANAGLYPH, ANAGLYPH_START, anaglyphLook } from '../anaglyphLooks.ts'
 import { ANAGLYPH_BACK } from '../../splat-core/anaglyph.ts'
@@ -19,8 +20,8 @@ test('blocks come first and are the default, then pixel art and every look Brush
   assert.equal(STYLES[1].id, 'pixel')
   const ids = STYLES.map((s) => s.id)
   assert.equal(new Set(ids).size, ids.length)
-  for (const l of [...LOOKS, GLITCH, CEL, BLOCKS, NEON, GLASS, WASH, ANAGLYPH, HALFTONE]) assert.ok(ids.includes(l.id), `${l.id} is offered`)
-  assert.equal(ids.length, LOOKS.length + 10)
+  for (const l of [...LOOKS, GLITCH, CEL, BLOCKS, NEON, GLASS, WASH, ANAGLYPH, HALFTONE, ...FILTERS]) assert.ok(ids.includes(l.id), `${l.id} is offered`)
+  assert.equal(ids.length, LOOKS.length + 10 + FILTERS.length)
   assert.equal(STYLES[2].id, 'glitch')
 })
 
@@ -47,7 +48,7 @@ test('an address picks a style, and anything else is the default, blocks', () =>
 test('every style has a note and words for the line under the view', () => {
   for (const s of STYLES) {
     assert.ok(s.note.length > 10, s.id)
-    assert.match(styleWords(s.id), /^(as|in) \S/, s.id)
+    assert.match(styleWords(s.id), /^(as|in|through|on) \S/, s.id)
   }
   assert.equal(styleWords('ink'), 'in ink and wash')
 })

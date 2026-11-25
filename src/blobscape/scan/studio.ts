@@ -1,6 +1,7 @@
 import { Blobs, type Quat, type Vec3 } from '../../splat-core/blobs.ts'
 import { turnSH } from '../../splat-core/sh.ts'
-import type { PointLight } from '../../splat-engine/engine.ts'
+import type { Light, PointLight } from '../../splat-engine/engine.ts'
+import { daylight, skyLights } from '../../splat-engine/daylight.ts'
 import { Skeleton, emptySkin } from '../../splat-engine/rig.ts'
 import type { ShapeEdit } from '../../splat-engine/edit.ts'
 import { both, coreBox, extent, faintMask, findFloor, floaterMask, floorMask, hugeMask, keepOnly, kept, leveling, mulQ, rotate, type Mask } from './clean.ts'
@@ -195,10 +196,11 @@ export function finish(b: Blobs, mask: Mask | undefined): Blobs {
   return out
 }
 
-export type LightId = 'scanned' | 'lamp' | 'daylight' | 'candle' | 'duo'
+export type LightId = 'scanned' | 'sky' | 'lamp' | 'daylight' | 'candle' | 'duo'
 
 export const LIGHTS: { id: LightId; label: string; ambient: number; note: string }[] = [
   { id: 'scanned', label: 'As scanned', ambient: 1, note: 'The colors the phone saw, light and shade baked in.' },
+  { id: 'sky', label: 'Sun and moon', ambient: 1, note: 'The sun or the moon at the hour you pick, and the sky\'s own light: the same sky as Day and Night.' },
   { id: 'lamp', label: 'Lamp', ambient: 0.22, note: 'A warm lamp above and to one side.' },
   { id: 'daylight', label: 'Daylight', ambient: 0.5, note: 'Cool light from high up.' },
   { id: 'candle', label: 'Candle', ambient: 0.14, note: 'A low orange flame close by.' },
@@ -216,7 +218,7 @@ export function lightsFor(id: LightId, angle: number, lo: Vec3, hi: Vec3): Point
   const a = (angle * Math.PI) / 180
   const at = (out: number, up: number, turn = 0): [number, number, number] => [c[0] + Math.cos(a + turn) * out * r, c[1] + up * r, c[2] + Math.sin(a + turn) * out * r]
   switch (id) {
-    case 'scanned': return []
+    case 'scanned': case 'sky': return []
     case 'lamp': return [{ position: at(1.2, 1.0), color: [5, 3.4, 1.9], range: 1.3 * r }]
     case 'daylight': return [{ position: at(0.9, 2.2), color: [2.4, 2.6, 3.1], range: 2.2 * r }]
     case 'candle': return [{ position: at(0.95, -0.2), color: [5, 2.2, 0.6], range: 0.9 * r }]
@@ -224,6 +226,21 @@ export function lightsFor(id: LightId, angle: number, lo: Vec3, hi: Vec3): Point
       { position: at(1.2, 0.6), color: [4.2, 0.6, 2.6], range: 1.1 * r },
       { position: at(1.2, 0.6, Math.PI), color: [0.5, 2.6, 4.2], range: 1.1 * r },
     ]
+  }
+}
+
+/**
+ * A preset's lights and the light from round about: the sky's (`daylight` at `hour`, turned by `angle` about the
+ * upright, its light from round about times `ambient`) or a preset's lamps over a plain `ambient`.
+ */
+export function lightingFor(id: LightId, angle: number, lo: Vec3, hi: Vec3, ambient: number, hour: number): { lights: Light[]; ambient: number | Vec3 } {
+  if (id !== 'sky') return { lights: lightsFor(id, angle, lo, hi), ambient }
+  const sky = skyLights(daylight(hour))
+  const a = (angle * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a)
+  const turned = (v: Vec3): Vec3 => [v[0] * c - v[2] * s, v[1], v[0] * s + v[2] * c]
+  return {
+    lights: sky.lights.map((l) => ({ ...l, direction: turned(l.direction) })),
+    ambient: [sky.ambient[0] * ambient, sky.ambient[1] * ambient, sky.ambient[2] * ambient],
   }
 }
 

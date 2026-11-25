@@ -1140,8 +1140,8 @@ export default [
   },
   {
     name: 'scan-studio',
-    about: 'Scan Studio: the sample is leveled and cleaned, cut blobs show red, a lamp relights, .ply round trip, hand-off to the sandbox',
-    entries: ['src/blobscape/ScanStudio.tsx', 'src/blobscape/handoff.ts'],
+    about: 'Scan Studio: the sample is leveled and cleaned, cut blobs show red, a lamp relights, the scanned light is taken out and the sun lights it, .ply round trip, hand-off to the sandbox',
+    entries: ['src/blobscape/ScanStudio.tsx', 'src/blobscape/handoff.ts', 'src/blobscape/scan/delight.worker.ts'],
     async run({ shots, join, fails, ok, open, tabClick, axe }) {
       const k = await open('/experiments/scan-studio/?offscreen=1', { viewport: { width: 1280, height: 900 } })
       await k.page.waitForFunction(() => window.__scan?.kept() > 0, null, { timeout: 90000 }).catch(() => {})
@@ -1177,6 +1177,14 @@ export default [
       const c = await look()
       if (!(b.red > 50000 && Math.abs(c.sum - a.sum) > a.sum * 0.03)) fails.push(`blobscape scan: cut/lamp ${JSON.stringify({ red: b.red, before: a.sum, lamp: c.sum })}`)
       else ok(`blobscape scan: cut blobs show red (${b.red} pixels) and the lamp relights the mug (brightness ${Math.round((100 * c.sum) / a.sum)}%)`)
+      // picking a light takes the scanned light out (#463), in a worker; then the shared sun and moon light the paint
+      const said = await k.page.waitForFunction(() => { const t = document.querySelector('[data-testid=scan-delight]')?.textContent ?? ''; return /^It was lit/.test(t) && t }, null, { timeout: 60000 }).then((h) => h.jsonValue(), () => '')
+      const paint = await look()
+      await tabClick(k.page.getByRole('button', { name: 'Sun and moon' }))
+      const sky = await look()
+      if (!(said && Math.abs(paint.sum - c.sum) > c.sum * 0.01 && Math.abs(sky.sum - paint.sum) > paint.sum * 0.02)) fails.push(`blobscape scan: taking the light out ${JSON.stringify({ said, lamp: c.sum, paint: paint.sum, sky: sky.sum })}`)
+      else ok(`blobscape scan: the scanned light is taken out ("${said}") and the sun lights the paint (brightness ${Math.round((100 * sky.sum) / paint.sum)}% of the lamp's)`)
+      await tabClick(k.page.getByRole('button', { name: 'Lamp' }))
       await k.page.screenshot({ path: join(shots, 'blobscape-scan.png') })
       await axe(k.page, 'blobscape scan')
       const [dl] = await Promise.all([k.page.waitForEvent('download'), k.page.getByRole('button', { name: 'Download .ply' }).click()])
@@ -1828,6 +1836,41 @@ export default [
       }
       if (sizes.size !== 1) fails.push(`layout: the columns differ between experiments (${[...sizes].join(', ')})`)
       else if (!bad) ok(`layout: all ${PAGES.length} experiments have their tabs beside a preview of the same size (${[...sizes][0]}), which stays in sight on a phone`)
+    },
+  },
+  {
+    name: 'snow-globe',
+    about: 'Snow Globe: the snow stays inside the glass, a shake lifts it off the ground and it settles again',
+    entries: ['src/blobscape/SnowGlobe.tsx'],
+    async run({ fails, ok, open }) {
+      const g = await open('/experiments/snow-globe/?offscreen=1&scene=snowman&detail=light', { viewport: { width: 1280, height: 900 } })
+      await g.page.waitForFunction(() => window.__globe, null, { timeout: 120000 }).catch(() => {})
+      const got = await g.page.evaluate(async () => {
+        if (!window.__globe) return null
+        const { stage, snow, globe, shake } = window.__globe
+        const inside = () => {
+          let worst = 0
+          for (let i = 0; i < snow.count; i++) {
+            const d = Math.hypot(snow.pos[i * 3] - globe.center[0], snow.pos[i * 3 + 1] - globe.center[1], snow.pos[i * 3 + 2] - globe.center[2])
+            worst = Math.max(worst, d / globe.radius)
+          }
+          return worst
+        }
+        let t = stage.time
+        // the snow is stepped on its own and the view drawn once a run: drawing every step took most of a quarter hour in software
+        const run = async (seconds) => { for (let k = 0; k < seconds * 10; k++) snow.step(0.1); t += seconds; await stage.frame(t) }
+        await run(30)
+        const rested = snow.settled / snow.count
+        shake(1)
+        await run(1.5)
+        const shaken = snow.settled / snow.count, worst = inside()
+        await run(40)
+        return { rested, shaken, settled: snow.settled / snow.count, worst }
+      })
+      if (!got) fails.push('snow globe: the page never started (no window.__globe)')
+      else if (!(got.worst <= 1 && got.shaken < got.rested * 0.5 && got.settled > 0.9)) fails.push(`snow globe: ${JSON.stringify(got)}`)
+      else ok(`snow globe: a shake lifts the snow (${Math.round(got.rested * 100)}% lying before, ${Math.round(got.shaken * 100)}% after) and it settles again (${Math.round(got.settled * 100)}%), never past the glass`)
+      await g.ctx.close()
     },
   },
   {

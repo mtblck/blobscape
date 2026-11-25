@@ -14,6 +14,7 @@ import { WASH_PAPERS, WASH_START, type WashChoice } from './washLooks.ts'
 import { HALFTONE_PAPERS, HALFTONE_SETS, HALFTONE_START, type HalftoneChoice } from './halftoneLooks.ts'
 import { KNIT_PATTERNS, KNIT_START, KNIT_SWEATERS, type KnitChoice } from './knitLooks.ts'
 import { ANAGLYPH_MIX_CHOICES, ANAGLYPH_START, type AnaglyphChoice } from './anaglyphLooks.ts'
+import { BLUEPRINT_PAPERS, BLUEPRINT_START, CLAY_RATES, CLAY_START, CRT_START, CUTOUT_START, MOSAIC_GROUTS, MOSAIC_START, THERMAL_RAMPS, THERMAL_START, type BlueprintChoice, type ClayChoice, type CrtChoice, type CutoutChoice, type MosaicChoice, type ThermalChoice } from './filterLooks.ts'
 
 /**
  * The styles API (Matt, 2026-11-22: no page uses a version of a style all its own). Two things, both data:
@@ -467,6 +468,94 @@ export const HALFTONE_DEF: StyleDef<HalftoneChoice> = {
   ],
 }
 
+const PALETTE = { key: 'palette', kind: 'choice', label: 'Palette', address: 'palette', testid: 'drawn-palettes', options: [{ id: 'none', label: 'Full color' }], open: true } as const
+
+/** Claymation's settings. */
+export const CLAY_DEF: StyleDef<ClayChoice> = {
+  id: 'clay', styles: ['clay'], start: CLAY_START,
+  settings: [
+    { ...PALETTE },
+    { key: 'fps', kind: 'choice', label: 'Stop motion', address: 'stopmotion', options: CLAY_RATES },
+    { key: 'prints', kind: 'range', label: 'Thumbprints', address: 'prints', min: 0, max: 1, step: 0.05, unit: 'percent', zero: 'None', hint: 'How deep the thumbprints pressed into the clay are.' },
+    { key: 'size', kind: 'range', label: 'Thumbprint size', min: 0.02, max: 0.12, step: 0.01, unit: 'percent', hint: 'How big a thumbprint is beside the whole scene.' },
+    { key: 'smooth', kind: 'range', label: 'Smooth clay', min: 0, max: 1, step: 0.05, unit: 'percent', hint: 'How much each thing’s own colors are worked together, as clay smoothed by hand.' },
+    { key: 'sheen', kind: 'range', label: 'Sheen', min: 0, max: 1, step: 0.05, unit: 'percent', zero: 'Matte', hint: 'How much the clay shines where it faces the light.' },
+    { key: 'boil', kind: 'range', label: 'Boil', min: 0, max: 1, step: 0.05, unit: 'percent', zero: 'None', hint: 'How much the thumbprints shift from one frame to the next, as an animator’s hands leave them.' },
+  ],
+}
+
+/** The blueprint's settings. */
+export const BLUEPRINT_DEF: StyleDef<BlueprintChoice> = {
+  id: 'blueprint', styles: ['blueprint'], start: BLUEPRINT_START,
+  settings: [
+    { key: 'paper', kind: 'choice', label: 'Paper', address: 'paper', options: BLUEPRINT_PAPERS, when: (v) => v.palette === 'none' },
+    { ...PALETTE },
+    { key: 'line', kind: 'range', label: 'Line width', min: 0.5, max: 4, step: 0.5, unit: 'px', hint: 'How wide the outlines are.' },
+    { key: 'inner', kind: 'range', label: 'Lines between parts', min: 0, max: 1, step: 0.05, unit: 'percent', zero: 'None', hint: 'How strong the lines are where one part of a thing meets another.' },
+    { key: 'grid', kind: 'range', label: 'Grid', address: 'grid', min: 0, max: 40, step: 2, unit: 'px', zero: 'None', whole: true, hint: 'How far apart the grid’s lines are.' },
+    { key: 'fill', kind: 'range', label: 'Fill', min: 0, max: 1, step: 0.05, unit: 'percent', zero: 'None', hint: 'How much the subject is washed in the line color.' },
+    { key: 'dims', kind: 'toggle', label: 'Dimension lines', address: 'dims', about: 'Draws dimension lines across the scene’s width and height, with arrowheads and marks.' },
+  ],
+}
+
+/** The thermal camera's settings. */
+export const THERMAL_DEF: StyleDef<ThermalChoice> = {
+  id: 'thermal', styles: ['thermal'], start: THERMAL_START,
+  settings: [
+    { key: 'colors', kind: 'choice', label: 'Heat colors', address: 'heat', options: THERMAL_RAMPS, when: (v) => v.palette === 'none' },
+    { ...PALETTE },
+    { key: 'hot', kind: 'range', label: 'Hot things', min: 0, max: 1.5, step: 0.05, unit: 'percent', hint: 'How hot what gives its own light runs: fires, lamps, lit windows, a dragon’s breath.' },
+    { key: 'spread', kind: 'range', label: 'Heat spread', min: 0, max: 48, step: 2, unit: 'px', zero: 'None', whole: true, hint: 'How far heat reaches round what is hot.' },
+    { key: 'warm', kind: 'range', label: 'Sunlit warmth', min: 0, max: 1, step: 0.05, unit: 'percent', hint: 'How much warmer lit things are than things in shade.' },
+    { key: 'noise', kind: 'range', label: 'Sensor grain', min: 0, max: 1, step: 0.05, unit: 'percent', zero: 'None', hint: 'The camera sensor’s grain.' },
+  ],
+}
+
+/** Paper cutout's settings. */
+export const CUTOUT_DEF: StyleDef<CutoutChoice> = {
+  id: 'cutout', styles: ['cutout'], start: CUTOUT_START,
+  settings: [
+    { ...PALETTE },
+    { key: 'fills', kind: 'range', label: 'Colors in each part', min: 1, max: 3, step: 1, unit: 'count', whole: true, hint: 'How many sheets of colored paper each part is cut from.' },
+    { key: 'shadow', kind: 'range', label: 'Shadow length', address: 'shadow', min: 0, max: 20, step: 1, unit: 'px', zero: 'None', whole: true, hint: 'How far each layer stands off the one behind it, by the shadow it casts.' },
+    { key: 'soft', kind: 'range', label: 'Soft shadows', min: 0, max: 1, step: 0.05, unit: 'percent', hint: 'How soft the shadows’ edges are.' },
+    { key: 'light', kind: 'range', label: 'Light from', min: 0, max: 360, step: 15, unit: 'deg', hint: 'Where the light comes from across the picture: 90° is from above.' },
+    { key: 'edge', kind: 'range', label: 'Cut edges', min: 0, max: 3, step: 0.5, unit: 'px', zero: 'None', hint: 'The pale edge of the paper on the side toward the light.' },
+    { key: 'ragged', kind: 'range', label: 'Ragged edges', min: 0, max: 1, step: 0.05, unit: 'percent', zero: 'Clean', hint: 'How much the cut edges wander, as scissors do.' },
+    { key: 'grain', kind: 'range', label: 'Paper grain', min: 0, max: 1, step: 0.05, unit: 'percent', zero: 'None', hint: 'The paper’s fibers.' },
+    { key: 'sky', kind: 'toggle', label: 'Sky behind', address: 'cardsky', about: 'Cuts the scene’s sky as the card behind it. Off, a plain card.' },
+  ],
+}
+
+/** The mosaic's settings. */
+export const MOSAIC_DEF: StyleDef<MosaicChoice> = {
+  id: 'mosaic', styles: ['mosaic'], start: MOSAIC_START,
+  settings: [
+    { ...PALETTE },
+    { key: 'tile', kind: 'range', label: 'Tile size', address: 'tile', min: 4, max: 24, step: 1, unit: 'px', whole: true, hint: 'How big a tile is. Smaller tiles show more.' },
+    { key: 'grout', kind: 'range', label: 'Grout width', min: 0, max: 4, step: 0.5, unit: 'px', zero: 'None', hint: 'How wide the grout between tiles is.' },
+    { key: 'groutColor', kind: 'choice', label: 'Grout', options: MOSAIC_GROUTS },
+    { key: 'vary', kind: 'range', label: 'Tiles vary', min: 0, max: 1, step: 0.05, unit: 'percent', zero: 'None', hint: 'How much each tile’s color differs from the next.' },
+    { key: 'bevel', kind: 'range', label: 'Tile edges', min: 0, max: 1, step: 0.05, unit: 'percent', zero: 'Flat', hint: 'How much each tile’s edges catch light and shade.' },
+    { key: 'brick', kind: 'toggle', label: 'Rows like bricks', address: 'brick', about: 'Sets each row half a tile along from the last.' },
+    { key: 'sky', kind: 'toggle', label: 'Sky in tiles', address: 'tilesky', about: 'Sets the scene’s sky behind it in tiles. Off, plain stone tiles.' },
+  ],
+}
+
+/** CRT / VHS's settings. */
+export const CRT_DEF: StyleDef<CrtChoice> = {
+  id: 'crt', styles: ['crt'], start: CRT_START,
+  settings: [
+    { ...PALETTE },
+    { key: 'scan', kind: 'range', label: 'Scanlines', address: 'scan', min: 0, max: 1, step: 0.05, unit: 'percent', zero: 'None', hint: 'How dark the gaps between the screen’s lines are.' },
+    { key: 'every', kind: 'range', label: 'Line height', min: 2, max: 8, step: 0.5, unit: 'px', hint: 'How tall each line of the screen is.' },
+    { key: 'bleed', kind: 'range', label: 'Color bleed', min: 0, max: 1, step: 0.05, unit: 'percent', zero: 'None', hint: 'How far color smears to the right of where it belongs, as on tape.' },
+    { key: 'wobble', kind: 'range', label: 'Tracking wobble', min: 0, max: 1, step: 0.05, unit: 'percent', zero: 'None', hint: 'How much the rows wander and a tracking band rolls up the screen.' },
+    { key: 'noise', kind: 'range', label: 'Tape noise', min: 0, max: 1, step: 0.05, unit: 'percent', zero: 'None', hint: 'Snow on the picture.' },
+    { key: 'curve', kind: 'range', label: 'Screen curve', min: 0, max: 1, step: 0.05, unit: 'percent', zero: 'Flat', hint: 'How much the glass bulges, with darker corners.' },
+  ],
+}
+
 /** Knitting's settings. */
 export const KNIT_DEF: StyleDef<KnitChoice> = {
   id: 'knit', styles: ['knit'], start: KNIT_START,
@@ -531,7 +620,7 @@ export const SCENE: StyleDef<SceneSettings> = {
 export const sceneStart = (q: URLSearchParams = new URLSearchParams()): SceneSettings => fromAddress(SCENE, SCENE.start, q)
 
 /** Every style's settings, by the name they are kept under. */
-export const CATALOG = { pixel: PIXEL, glitch: GLITCH_DEF, marks: MARKS, ascii: ASCII, boxart: BOX_ART, cel: CEL_DEF, blocks: BLOCKS_DEF, neon: NEON_DEF, glass: GLASS_DEF, watercolor: WASH_DEF, knit: KNIT_DEF, anaglyph: ANAGLYPH_DEF, halftone: HALFTONE_DEF } as const
+export const CATALOG = { pixel: PIXEL, glitch: GLITCH_DEF, marks: MARKS, ascii: ASCII, boxart: BOX_ART, cel: CEL_DEF, blocks: BLOCKS_DEF, neon: NEON_DEF, glass: GLASS_DEF, watercolor: WASH_DEF, knit: KNIT_DEF, anaglyph: ANAGLYPH_DEF, halftone: HALFTONE_DEF, clay: CLAY_DEF, blueprint: BLUEPRINT_DEF, thermal: THERMAL_DEF, cutout: CUTOUT_DEF, mosaic: MOSAIC_DEF, crt: CRT_DEF } as const
 /** A name settings are kept under: a key of `CATALOG`. */
 export type StyleKey = keyof typeof CATALOG
 
@@ -563,6 +652,18 @@ export interface StylesValue {
   knit: KnitChoice
   /** 3D glasses'. */
   anaglyph: AnaglyphChoice
+  /** Claymation's. */
+  clay: ClayChoice
+  /** The blueprint's. */
+  blueprint: BlueprintChoice
+  /** The thermal camera's. */
+  thermal: ThermalChoice
+  /** Paper cutout's. */
+  cutout: CutoutChoice
+  /** The mosaic's. */
+  mosaic: MosaicChoice
+  /** CRT / VHS's. */
+  crt: CrtChoice
 }
 /** The settings of the looks `useDrawnLook` draws: every style but pixel art and its glitch. */
 export type DrawnSettings = Omit<StylesValue, 'pixel' | 'glitch'>
@@ -633,6 +734,12 @@ export function drawnStart(q: URLSearchParams = new URLSearchParams(), on: Start
     halftone: fromAddress(HALFTONE_DEF, HALFTONE_DEF.start, q),
     knit: fromAddress(KNIT_DEF, on.coarse ? { ...KNIT_DEF.start, stitch: KNIT_DEF.start.stitch - 2 } : KNIT_DEF.start, q),
     anaglyph: fromAddress(ANAGLYPH_DEF, ANAGLYPH_DEF.start, q),
+    clay: fromAddress(CLAY_DEF, CLAY_DEF.start, q),
+    blueprint: fromAddress(BLUEPRINT_DEF, BLUEPRINT_DEF.start, q),
+    thermal: fromAddress(THERMAL_DEF, THERMAL_DEF.start, q),
+    cutout: fromAddress(CUTOUT_DEF, CUTOUT_DEF.start, q),
+    mosaic: fromAddress(MOSAIC_DEF, MOSAIC_DEF.start, q),
+    crt: fromAddress(CRT_DEF, CRT_DEF.start, q),
   }
 }
 
@@ -658,6 +765,12 @@ export function drawnFrom(start: DrawnSettings, kept: unknown): DrawnSettings {
     halftone: settingsFrom(HALFTONE_DEF, start.halftone, got.halftone),
     knit: settingsFrom(KNIT_DEF, start.knit, got.knit),
     anaglyph: settingsFrom(ANAGLYPH_DEF, start.anaglyph, got.anaglyph),
+    clay: settingsFrom(CLAY_DEF, start.clay, got.clay),
+    blueprint: settingsFrom(BLUEPRINT_DEF, start.blueprint, got.blueprint),
+    thermal: settingsFrom(THERMAL_DEF, start.thermal, got.thermal),
+    cutout: settingsFrom(CUTOUT_DEF, start.cutout, got.cutout),
+    mosaic: settingsFrom(MOSAIC_DEF, start.mosaic, got.mosaic),
+    crt: settingsFrom(CRT_DEF, start.crt, got.crt),
   }
 }
 
