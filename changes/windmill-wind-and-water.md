@@ -1,1 +1,0 @@
-The windmill's pond is real water now, with the duck leaving a wake, and the wind turns its sails faster, sways its trees quicker and shakes leaves loose: half fall straight down when windy, and a gale carries them all away. Its clouds and sun are the shared sky's now, so a storm covers them, and Scene Creator draws a scene's water and own clouds too.

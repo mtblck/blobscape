@@ -2,8 +2,8 @@ import type { PropDoc, SceneProject } from '../../splat-engine/project.ts'
 import type { MadeProp } from './garden.ts'
 
 /**
- * The storm octopus (Diorama's octopus scene) as a land and props (docs/scenes-from-props.md): the night sea with its
- * waves and foam is the land, and the octopus on its bell buoy is a library prop set down on it, where it stood. Its
+ * The storm octopus (Diorama's octopus scene) as a land and props (docs/scenes-from-props.md): the night sea is the land, its
+ * waves and foam the shared water's (sceneWater.ts), and the octopus on its bell buoy is a library prop set down on it, where it stood. Its
  * rain and lightning are the shared thunderstorm now (Diorama.weather), not its own.
  * Data only, as a scene description is: see docs/scene-descriptions.md.
  */
@@ -25,43 +25,11 @@ export const STORMY_SEA: PropDoc = {
     skyReach: 0.6,
     look: { dither: 0.5, glow: 1.2, outline: true, edges: true },
     camera: { target: [0, 1.3, 0], distance: 5.7, azimuth: 18, elevation: 8, swing: 14 },
+    // the sea is the shared water (sceneWater.ts): long swells roll in, the storm's own wind and rain rough it up, and foam gathers where it strikes the buoy
+    water: { level: 0, from: [-1.55, -1.55], to: [1.55, 1.55], color: '#12283c', clear: 0.3, cell: 0.022, speed: 0.14, damping: 0.12, ripple: 6, deep: 0.08, swells: [{ from: 200, height: 0.007, times: 2 }, { from: 245, height: 0.004, times: 3, phase: 0.4 }], foam: 2, bodies: [], floats: [] },
     air: { haze: { color: '#0b1424', from: 0.5, to: 6 }, mist: [{ at: [0, 0.12, 0], half: [1.5, 0.1, 1.2], color: '#2f6a7c', thick: 0.5 }], specks: [] },
-    bones: [
-      { name: 'wave0', at: [1.317, -0.05, 0.481] },
-      { name: 'wave1', at: [0.504, -0.05, 0.874] },
-      { name: 'wave2', at: [-0.253, -0.05, 1.429] },
-      { name: 'wave3', at: [-0.778, -0.05, 0.652] },
-      { name: 'wave4', at: [-1.262, -0.05, -0.001] },
-      { name: 'wave5', at: [-0.851, -0.05, -0.716] },
-      { name: 'wave6', at: [-0.195, -0.05, -1.111] },
-      { name: 'wave7', at: [0.508, -0.05, -0.878] },
-      { name: 'wave8', at: [1.214, -0.05, -0.44] },
-      { name: 'foam', at: [0, 0, 0] },
-    ],
     parts: [
-      { shape: { kind: 'rough', shape: { kind: 'cylinder', at: [0, -0.32, 0], height: 0.3, r: 1.55 }, by: 0.05, scale: 0.35 }, paint: { kind: 'faces', top: { kind: 'patches', size: 0.22, colors: ['#12283c', '#1c4258', '#12283c', '#0b1424', '#2f6a7c'] }, side: { kind: 'bands', axis: 'y', size: 0.06, colors: ['#0b1424', '#12283c', '#05070f'] } } },
-      { shape: { kind: 'cone', from: [1.421, -0.02, 0.198], to: [1.214, -0.02, 0.764], r: 0.05, rTo: 0.03 }, paint: { kind: 'faces', top: '#d8ecec', side: '#2f6a7c' }, bone: 'wave0', noShadow: true },
-      { shape: { kind: 'cone', from: [0.712, -0.02, 0.754], to: [0.295, -0.02, 0.995], r: 0.05, rTo: 0.03 }, paint: { kind: 'faces', top: '#d8ecec', side: '#2f6a7c' }, bone: 'wave1', noShadow: true },
-      { shape: { kind: 'cone', from: [0.112, -0.02, 1.494], to: [-0.619, -0.02, 1.364], r: 0.05, rTo: 0.03 }, paint: { kind: 'faces', top: '#d8ecec', side: '#2f6a7c' }, bone: 'wave2', noShadow: true },
-      { shape: { kind: 'cone', from: [-0.596, -0.02, 0.87], to: [-0.961, -0.02, 0.434], r: 0.05, rTo: 0.03 }, paint: { kind: 'faces', top: '#d8ecec', side: '#2f6a7c' }, bone: 'wave3', noShadow: true },
-      { shape: { kind: 'cone', from: [-1.262, -0.02, 0.333], to: [-1.262, -0.02, -0.336], r: 0.05, rTo: 0.03 }, paint: { kind: 'faces', top: '#d8ecec', side: '#2f6a7c' }, bone: 'wave4', noShadow: true },
-      { shape: { kind: 'cone', from: [-1.074, -0.02, -0.45], to: [-0.628, -0.02, -0.981], r: 0.05, rTo: 0.03 }, paint: { kind: 'faces', top: '#d8ecec', side: '#2f6a7c' }, bone: 'wave5', noShadow: true },
-      { shape: { kind: 'cone', from: [-0.412, -0.02, -1.072], to: [0.023, -0.02, -1.149], r: 0.05, rTo: 0.03 }, paint: { kind: 'faces', top: '#d8ecec', side: '#2f6a7c' }, bone: 'wave6', noShadow: true },
-      { shape: { kind: 'cone', from: [0.19, -0.02, -1.062], to: [0.826, -0.02, -0.694], r: 0.05, rTo: 0.03 }, paint: { kind: 'faces', top: '#d8ecec', side: '#2f6a7c' }, bone: 'wave7', noShadow: true },
-      { shape: { kind: 'cone', from: [1.115, -0.02, -0.711], to: [1.312, -0.02, -0.169], r: 0.05, rTo: 0.03 }, paint: { kind: 'faces', top: '#d8ecec', side: '#2f6a7c' }, bone: 'wave8', noShadow: true },
-      { shape: { kind: 'ring', at: [0, 0, 0], r: 0.74, tube: 0.04 }, paint: { kind: 'bands', axis: 'x', size: 0.1, colors: ['#d8ecec', '#7fb4b8'] }, bone: 'foam', noShadow: true, touches: true },
-    ],
-    moves: [
-      { kind: 'bob', bone: 'wave0', by: [0, 0.07, 0], times: 2, phase: 0.187 },
-      { kind: 'bob', bone: 'wave1', by: [0, 0.07, 0], times: 3, phase: 0.69 },
-      { kind: 'bob', bone: 'wave2', by: [0, 0.07, 0], times: 2, phase: 0.306 },
-      { kind: 'bob', bone: 'wave3', by: [0, 0.07, 0], times: 3, phase: 0.381 },
-      { kind: 'bob', bone: 'wave4', by: [0, 0.07, 0], times: 2, phase: 0.266 },
-      { kind: 'bob', bone: 'wave5', by: [0, 0.07, 0], times: 3, phase: 0.338 },
-      { kind: 'bob', bone: 'wave6', by: [0, 0.07, 0], times: 2, phase: 0.153 },
-      { kind: 'bob', bone: 'wave7', by: [0, 0.07, 0], times: 3, phase: 0.349 },
-      { kind: 'bob', bone: 'wave8', by: [0, 0.07, 0], times: 2, phase: 0.827 },
-      { kind: 'pulse', bone: 'foam', size: [0.96, 1.1], times: 2 },
+      { shape: { kind: 'rough', shape: { kind: 'cylinder', at: [0, -0.5, 0], height: 0.3, r: 1.55 }, by: 0.05, scale: 0.35 }, paint: { kind: 'faces', top: { kind: 'patches', size: 0.22, colors: ['#12283c', '#1c4258', '#12283c', '#0b1424', '#2f6a7c'] }, side: { kind: 'bands', axis: 'y', size: 0.06, colors: ['#0b1424', '#12283c', '#05070f'] } } },
     ],
   },
 }
@@ -70,6 +38,8 @@ export const STORMY_SEA: PropDoc = {
 export const STORM_OCTOPUS: PropDoc = {
   name: 'Storm octopus',
   foot: [0.1235, -0.12, 0.146],
+  // the buoy rides whatever water it is set down in (a wake at its own foot rocked it once a loop, so it has none)
+  water: { rides: [{ bone: 'buoy', at: [0, 0, 0], size: 0.6 }] },
   doc: {
     name: 'Storm octopus',
     loop: 12,

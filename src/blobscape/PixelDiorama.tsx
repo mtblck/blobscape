@@ -28,7 +28,7 @@ import type { Texture } from '../splat-engine/meshShape.ts'
 import { decodeTexture } from './modelRig.ts'
 import { writeDetail } from '../shared/detail.ts'
 import { banded, hugged, unlit } from '../splat-engine/voxel.ts'
-import { isPixelStyle, styleAsked, styleWords, type Style } from './diorama/styles.ts'
+import { DEFAULT_STYLE, isPixelStyle, styleAsked, styleWords, type Style } from './diorama/styles.ts'
 import { GLITCH_START, glitchLook, type GlitchChoice } from './glitchLooks.ts'
 import { StyleControls, FinishControls } from './StyleControls.tsx'
 import { TimeControls, WeatherControls } from './styles/SceneControls.tsx'
@@ -71,9 +71,12 @@ const swung = (orbit: Orbit, swing: number, loop: number, t: number): Orbit => (
 const BLOB_BYTES = (3 + 3 + 4 + 3 + 1) * 4
 
 /** The drawn looks' settings, each under its catalog name in a shared link (`cel.turn=`, `blocks.size=` …). */
-const DRAWN_KEYS = ['marks', 'ascii', 'cel', 'blocks', 'neon', 'glass', 'watercolor'] as const satisfies readonly (keyof DrawnSettings)[]
+const DRAWN_KEYS = (Object.keys(CATALOG) as (keyof typeof CATALOG)[]).filter((k): k is keyof DrawnSettings => k !== 'pixel' && k !== 'glitch')
 /** Every short address the catalog reads (`?px=`, `?block=`, `?tones=` …), which a shared link drops for the full forms. */
 const SHORT_KEYS = [...new Set(Object.values(CATALOG).flatMap((d) => (d.settings as readonly { address?: string }[]).flatMap((x) => (x.address ? [x.address] : []))))]
+
+/** Where the eye is for a view. */
+const eyeOf = (o: Orbit): [number, number, number] => { const a = (o.azimuth * Math.PI) / 180, e = (o.elevation * Math.PI) / 180; return [o.target[0] + o.distance * Math.sin(a) * Math.cos(e), o.target[1] + o.distance * Math.sin(e), o.target[2] + o.distance * Math.cos(a) * Math.cos(e)] }
 
 export function PixelDiorama() {
   const h1 = useFocusHeading()
@@ -139,7 +142,7 @@ export function PixelDiorama() {
   const chosen = sceneSet.detail || undefined
   const setChosen = (id: string) => setSceneSet((c) => ({ ...c, detail: id }))
   /** How the scene is drawn: as pixel art, or as one of Brush and Ink's looks. `?style=oil` opens on that one. */
-  const [style, setStyle] = useState<Style>(() => styleAsked(new URLSearchParams(location.search).get('style')))
+  const [style, setStyle] = useState<Style>(() => { const q = new URLSearchParams(location.search); return styleAsked(q.get('style'), q.get('chars')) })
   // a shared link gives each style's settings in full (`glitch.strength=`, `cel.turn=`, `blocks.size=` …), read through the catalog
   const [glitch, setGlitch] = useState<GlitchChoice>(() => settingsFrom(GLITCH_DEF, GLITCH_START, choiceFrom('glitch', GLITCH_START, new URLSearchParams(location.search))))
   // every other style's settings (styles/catalog.ts): the page holds them, as it holds pixel art's
@@ -222,6 +225,7 @@ export function PixelDiorama() {
   /** How deep the snow lying is, 0 to 1, and the wall clock it was last moved on by. */
   const pile = useRef(0)
   const pileClock = useRef(0)
+  const fireClock = useRef(0)
   /** Off screen, how deep snow lies while it falls (`?pile=`, all of it unless asked). */
   const [pileAsked] = useState(() => { const v = Number(new URLSearchParams(location.search).get('pile') ?? 1); return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 1 })
   const falls = useRef(new WeakMap<Diorama, Map<boolean, SceneWeather>>())
@@ -262,6 +266,8 @@ export function PixelDiorama() {
           if (!settled) setPixel({ palette: 'own', steps: diorama.finish.steps })
           // a scene with water works one loop of its ripples out here too, while the waiting mark shows
           diorama.water?.()
+          // and one with a fire burning, one loop of that
+          diorama.fire?.()
           const make = () => diorama.make(spacing, stepColors.length ? stepColors : undefined)
           const lit = () => (texel > 1 ? banded(texel, make) : make())
           const cut = () => (hug ? hugged(lit) : lit())
@@ -317,6 +323,8 @@ export function PixelDiorama() {
     const from = stage.time
     // a scene's water is drawn by blobs of its own, in the same world: they move with the water, not with a bone
     const pond = scene.of.water?.()
+    // a scene's fires are blobs of their own too: hot gas carried up off each bed, kept as one loop
+    const flames = scene.of.fire?.()
     // rain, snow and clouds are actors of their own beside the scene's, made once a scene and shown by the sky's numbers
     // (a scene with clouds of its own has them drawn this way too, whatever the weather)
     let fall: SceneWeather | undefined
@@ -330,18 +338,16 @@ export function PixelDiorama() {
     // the shared moon, sun and stars, which cloud cover puts out
     const heavens = heavenBones(scene.built.skeleton.bones.map((b) => b.name))
     const own = ownClouds(scene.of)
-    stage.setActor(scene.built, undefined, [...(pond ? [pond.surface] : []), ...(pond?.spray ? [pond.spray] : []), ...(fall?.actors ?? [])])
+    stage.setActor(scene.built, undefined, [...(pond ? [pond.surface] : []), ...(pond?.spray ? [pond.spray] : []), ...(flames ? [flames.actor] : []), ...(fall?.actors ?? [])])
     seen.current = null
     // the surface as it stands at the stage's time, for the eye as it stands: after a pose, a turn of the view or a new picture in the mirror
     wet.current = pond && (() => {
-      const o = stage.orbit, a = (o.azimuth * Math.PI) / 180, e = (o.elevation * Math.PI) / 180
-      const eye = [o.target[0] + o.distance * Math.sin(a) * Math.cos(e), o.target[1] + o.distance * Math.sin(e), o.target[2] + o.distance * Math.cos(a) * Math.cos(e)]
-      pond.show(stage.time, eye, { mirror: seen.current })
+      pond.show(stage.time, eyeOf(stage.orbit), { mirror: seen.current })
       stage.reshape(pond.surface)
       if (pond.spray) stage.reshape(pond.spray)
     })
     // it mirrors what stands round it: the scene drawn once more as its mirror image (a second sort and a small draw, so only with WebGPU)
-    stage.setMirror(pond && mirrored && !pond.plan.lava ? { plane: levelPlane(pond.plan.level), lift: pond.plan.cell * 0.75, seen: (image) => { seen.current = image; wet.current?.() } } : undefined)
+    stage.setMirror(pond && mirrored && !pond.plan.lava && !pond.plan.potion ? { plane: levelPlane(pond.plan.level), lift: pond.plan.cell * 0.75, seen: (image) => { seen.current = image; wet.current?.() } } : undefined)
     pokes.current = new Pokes(scene.built.skeleton)
     // lights move with the bones (the lamp's beam with its lens, the fire's glow with its flames), so both are set from the same time
     const d = dress(scene.of)
@@ -380,7 +386,18 @@ export function PixelDiorama() {
       pond?.ride(sk, t)
       // an export is the scene's own loop: no pokes, and the view as it stood when it began
       if (!held.current) pokes.current?.apply(sk, performance.now() / 1000)
-      stage.setLights(castBy(d.lights(t, stage.backend === 'webgpu'), glowGain(glowNow.current, d.finish.glow)), d.ambientAt?.(t) ?? d.ambient ?? 1)
+      // snow lying rides what it lies on: a swaying crown, a turning sail, a boat on the waves
+      fall?.follow(sk)
+      // each fire as it stands at this moment, and its light as bright as it burns
+      // (wind leans it and blows it out, rain damps it and puts it out: by the wall clock, as snow lies; all at once off screen and in an export)
+      if (flames) {
+        const wall = performance.now() / 1000, dt = Math.min(0.25, Math.max(0, wall - fireClock.current))
+        fireClock.current = wall
+        flames.under(skyEase.current.target, offscreen || held.current ? Infinity : dt)
+        flames.show(t, eyeOf(stage.orbit)); stage.reshape(flames.actor)
+      }
+      const lit = d.lights(t, stage.backend === 'webgpu')
+      stage.setLights(castBy(flames ? flames.shine(lit, t) : lit, glowGain(glowNow.current, d.finish.glow)), d.ambientAt?.(t) ?? d.ambient ?? 1)
       // a scene whose sky turns as it plays (day to night) hands the pixel pass each moment's sky
       skyNow.current?.(d, t)
       // a scene that asks for it rocks the view gently as it plays, about wherever the view has been turned to;
@@ -401,7 +418,7 @@ export function PixelDiorama() {
   // in the scene's own share of light in shade, a little cool, and all of it held under the baked light's brightest
   // (`LIT_MAX`), so only what gives its own light reaches the pixel pass's glow
   const pixelCel = useMemo<CelLook | undefined>(() => (pixels && shadedNow && !touring ? pixelCelLook(shown.sun, shown.shade ?? 0.5) : undefined), [pixels, shadedNow, touring, shown.sun, shown.shade])
-  const drawing = useDrawnLook(stage, touring ? undefined : drawnStyle, { pixelCel, actor: onStage?.built, water: !!onStage?.of.water, weather: weathered || !!onStage?.of.heavens?.clouds, spacing: DETAIL.find((d) => d.id === onStage?.detail)?.spacing, plain: !!onStage?.plain, time: timeNow, azimuth: shown.views[0].orbit.azimuth, offscreen, light: coarse, loop: shown.loop, sky: shown.finish.sky || weathered ? [styleSky[0], styleSky[1]] : undefined }, drawnKept)
+  const drawing = useDrawnLook(stage, touring ? undefined : drawnStyle, { pixelCel, palette: (shown.of ?? shown).palette.colors, actor: onStage?.built, water: !!onStage?.of.water, weather: weathered || !!onStage?.of.heavens?.clouds, spacing: DETAIL.find((d) => d.id === onStage?.detail)?.spacing, plain: !!onStage?.plain, time: timeNow, azimuth: shown.views[0].orbit.azimuth, offscreen, light: coarse, loop: shown.loop, sky: shown.finish.sky || weathered ? [styleSky[0], styleSky[1]] : undefined }, drawnKept)
   // the walk-through's fourth step is about the four samples, so it draws them whatever the switch says
   const sampling = touring?.id === 'samples'
   const drawnLook = useMemo(() => (asPixels ? (sampling ? { ...look, fine: true } : look) : undefined), [asPixels, sampling, look])
@@ -646,7 +663,7 @@ export function PixelDiorama() {
     setStyle(id)
     setNote('')
     const url = new URL(location.href)
-    if (id === 'pixel') url.searchParams.delete('style')
+    if (id === DEFAULT_STYLE) url.searchParams.delete('style')
     else url.searchParams.set('style', id)
     history.replaceState(history.state, '', url)
   }
@@ -886,7 +903,7 @@ export function PixelDiorama() {
                     </Button>
                   </div>
                 </div>
-                {picked0.space ? <p className="text-sm text-ink-muted" data-testid="diorama-space">Out in space there is no time of day or weather: the scene keeps its own sky, stars and far sun.</p> : <>
+                {picked0.space ? <p className="text-sm text-ink-muted" data-testid="diorama-space">{picked0.indoor ? 'Inside a room there is no time of day or weather: the scene keeps its own light.' : 'Out in space there is no time of day or weather: the scene keeps its own sky, stars and far sun.'}</p> : <>
                 <TimeControls time={time} onPick={setTimeOfDay} timed={!!picked0.timed} prefix="diorama" />
                 <WeatherControls weather={weather} clouds={clouds} wind={wind} overhead={overhead} onPick={pickSky} onOverhead={pickOverhead} calm={calm} prefix="diorama" />
                 </>}

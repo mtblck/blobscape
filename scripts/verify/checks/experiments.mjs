@@ -265,7 +265,7 @@ export default [
     entries: ['src/blobscape/PixelDiorama.tsx'],
     async run({ shots, join, fails, ok, open, tabClick, axe }) {
       for (const q of ['', '&webgl=1']) {
-        const d = await open(`/experiments/diorama/?offscreen=1${q}`, { viewport: { width: 1280, height: 900 } })
+        const d = await open(`/experiments/diorama/?offscreen=1&style=pixel${q}`, { viewport: { width: 1280, height: 900 } })
         await d.page.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).catch(() => {})
         const shot = (t) => d.page.evaluate(async (t) => {
           const { stage, look } = window.__diorama
@@ -448,7 +448,7 @@ export default [
     files: ['src/splat-engine/sceneWater.ts', 'src/splat-engine/water.ts', 'src/splat-engine/mirror.ts', 'src/blobscape/diorama/scenes/koi.ts'],
     async run({ shots, join, fails, ok, open }) {
       for (const q of ['', '&webgl=1']) {
-        const d = await open(`/experiments/diorama/?offscreen=1&scene=koi${q}`, { viewport: { width: 1280, height: 900 } })
+        const d = await open(`/experiments/diorama/?offscreen=1&style=pixel&scene=koi${q}`, { viewport: { width: 1280, height: 900 } })
         // an off-screen scene draws nothing until it is asked for a frame, so ask until its art is there
         const ready = () => d.page.waitForFunction(async () => {
           const s = window.__diorama
@@ -495,7 +495,7 @@ export default [
     about: 'Diorama: Glow turns up the light a fire casts on what stands round it, not only the shine round bright pixels',
     entries: ['src/blobscape/PixelDiorama.tsx'],
     async run({ fails, ok, open, tabClick }) {
-      const d = await open('/experiments/diorama/?offscreen=1&scene=campfire', { viewport: { width: 1280, height: 900 } })
+      const d = await open('/experiments/diorama/?offscreen=1&style=pixel&scene=campfire', { viewport: { width: 1280, height: 900 } })
       await d.page.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).catch(() => {})
       // the scene as it is drawn small, before the pixel pass adds any shine of its own: how bright its solid pixels are
       const lit = () => d.page.evaluate(async () => {
@@ -526,7 +526,7 @@ export default [
     about: 'Diorama: Save as a 3D model writes a rigged .glb of blocks (or a smooth surface) with the loop as an animation',
     entries: ['src/blobscape/PixelDiorama.tsx', 'src/splat-engine/blockMesh.ts'],
     async run({ fails, ok, open, tabClick }) {
-      const d = await open('/experiments/diorama/?offscreen=1&scene=campfire&detail=chunky', { viewport: { width: 1280, height: 900 } })
+      const d = await open('/experiments/diorama/?offscreen=1&style=pixel&scene=campfire&detail=chunky', { viewport: { width: 1280, height: 900 } })
       await d.page.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).catch(() => {})
       await d.page.evaluate(async () => { await window.__diorama.stage.frame(0.5) })
       for (const shape of ['Blocks', 'Smooth']) {
@@ -549,7 +549,7 @@ export default [
     entries: ['src/blobscape/PixelDiorama.tsx'],
     files: ['public/loops/'],
     async run({ shots, join, fails, ok, open, tabClick, axe }) {
-      const d = await open('/experiments/diorama/?offscreen=1&scene=campfire', { viewport: { width: 1280, height: 900 } })
+      const d = await open('/experiments/diorama/?offscreen=1&style=pixel&scene=campfire', { viewport: { width: 1280, height: 900 } })
       await d.page.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).catch(() => {})
       // the details panel: one short line under the view, and Full details opens a dialog with the scene's numbers that Escape closes
       {
@@ -707,7 +707,7 @@ export default [
       async run({ shots, join, fails, ok, open, wants }) {
         for (const [id, name] of scenes) {
           if (!wants(id)) continue
-          const d = await open(`/experiments/diorama/?offscreen=1&scene=${id}`, { viewport: { width: 1280, height: 900 } })
+          const d = await open(`/experiments/diorama/?offscreen=1&style=pixel&scene=${id}`, { viewport: { width: 1280, height: 900 } })
           const label = `blobscape pixel diorama ${id}`
           if (!await d.page.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).then(() => true, () => false)) {
             fails.push(`${label}: the scene never started`)
@@ -820,8 +820,11 @@ export default [
       }, t)
       const differ = (a, b, by = 40) => { let n = 0; for (let i = 0; i < a.length; i += 4) if (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]) + Math.abs(a[i + 3] - b[i + 3]) > by) n++; return n / (a.length / 4) }
       const solid = (a) => { let n = 0; for (let i = 3; i < a.length; i += 4) if (a[i] > 128) n++; return n / (a.length / 4) }
+      // the page offers only the painted looks; the others are still drawn when asked for, as an old link does
+      const OFFERED = ['gouache', 'oil', 'ink', 'hatch', 'stipple', 'watercolor']
       const pick = async (page, name, look) => {
-        await tabClick(page.getByTestId('brush-looks').getByRole('button', { name, exact: true }))
+        if (OFFERED.includes(look)) await tabClick(page.getByTestId('brush-looks').getByRole('button', { name, exact: true }))
+        else await page.evaluate((look) => window.__brush.setLook(look), look)
         await page.waitForFunction((look) => window.__brush?.look === look, look, { timeout: 10000 }).catch(() => {})
       }
       const pictures = {}
@@ -861,7 +864,7 @@ export default [
         await pick(k.page, 'Blobs', 'blobs')
         const blobs = await read(k.page)
         // ASCII: a grid of characters on a dark screen, the same picture when drawn twice, and the same grid as text
-        await pick(k.page, 'ASCII', 'ascii')
+        await pick(k.page, 'Text', 'ascii')
         const ascii = await read(k.page), asciiAgain = await read(k.page)
         const text = (await k.page.evaluate(() => window.__brush.text())) ?? ''
         const screen = await k.page.getByTestId('brush-ground').evaluate((e) => getComputedStyle(e).backgroundColor)
@@ -879,8 +882,9 @@ export default [
         const unfurred = (plainText.match(/[|_/\\]/g) ?? []).length
         if (!(strokes > unfurred + 20)) fails.push(`brush and ink on ${backend}: ASCII strokes along fur: ${strokes} strokes with them, ${unfurred} without`)
         else ok(`brush and ink on ${backend}: ASCII draws the fox's fur as strokes the way it runs (${strokes} strokes, ${unfurred} without them)`)
-        // braille and blocks: the same grid in their own characters, a frame drawn twice the same
-        for (const [label, set, only] of [['Braille', 'braille', /^[\u2800-\u28ff\s]*$/], ['Blocks', 'blocks', /^[ ▘▝▀▖▌▞▛▗▚▐▜▄▙▟█░▒▓\n]*$/]]) {
+        // braille (Text) and quarter blocks (Box Art): the same grid in their own characters, a frame drawn twice the same
+        for (const [label, set, only, look] of [['Braille', 'braille', /^[\u2800-\u28ff\s]*$/, 'ascii'], ['Quarter blocks', 'blocks', /^[ ▘▝▀▖▌▞▛▗▚▐▜▄▙▟█░▒▓\n]*$/, 'boxart']]) {
+          if (look === 'boxart') await pick(k.page, 'Box Art', 'boxart')
           await tabClick(k.page.getByTestId('brush-chars').getByRole('button', { name: label, exact: true }))
           const a = await read(k.page), b = await read(k.page)
           const t = (await k.page.evaluate(() => window.__brush.text())) ?? ''
@@ -889,6 +893,7 @@ export default [
           else ok(`brush and ink on ${backend}: ${set} draws the fox as ${n} characters of its own, the same when drawn twice`)
           if (backend === 'webgpu') await k.page.screenshot({ path: join(shots, `blobscape-brush-${set}.png`) })
         }
+        await pick(k.page, 'Text', 'ascii')
         await tabClick(k.page.getByTestId('brush-chars').getByRole('button', { name: 'ASCII', exact: true }))
         await pick(k.page, 'Blobs', 'blobs')
         // cel shading: the fox is cut again without its baked light, lit live and cut into tones

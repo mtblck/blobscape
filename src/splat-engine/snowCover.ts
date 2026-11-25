@@ -1,5 +1,5 @@
 import { Blobs, quatFacing } from '../splat-core/blobs.ts'
-import { Skeleton, emptySkin } from './rig.ts'
+import { Skeleton, emptySkin, type Bone } from './rig.ts'
 
 /**
  * Snow that lies and builds up (Matt, 2026-11-21: snow and heavy snow should pile up over time and cover the ground).
@@ -11,6 +11,11 @@ import { Skeleton, emptySkin } from './rig.ts'
  * layer for a depth from 0 (none) to 1 (all of it lying, a little deeper than a blob is thick): a blob whose turn has
  * come grows from nothing, and the whole layer rises as it deepens. How deep it is, is the page's: snow builds up
  * over the time it falls (`pileStep`), which no scene's loop knows.
+ *
+ * Snow stays on what it lies on (Matt, 2026-11-24): given a scene's bones and a ground that says which bone carries
+ * each spot (`CompiledScene.lying`), every blob rides its bone, so snow on a swaying crown, a turning sail, a boat on
+ * the waves or anything that walks goes with it. `followSnow` hands the layer each frame's pose; snow on a thing turned
+ * past `SLIDE_FROM` from upright slides off it (shrinks onto its bone) and settles again as it comes back up.
  */
 
 /** The steepest face snow lies on: the up part of its normal. */
@@ -20,24 +25,36 @@ const GROW = 0.3
 /** How deep the layer is at depth 1, in blob sizes. */
 const DEEPEST = 0.9
 
+/** A layer of snow lying on a scene: an actor of flat white blobs, with what `pileSnow` needs to deepen it. */
 export interface SnowCover {
+  /** The layer's blobs, one a spot snow can lie on. */
   blobs: Blobs
+  /** Every blob on the one still bone. */
   skin: ReturnType<typeof emptySkin>
+  /** The scene's bones (one still bone when it gave none), posed by `followSnow`. */
   skeleton: Skeleton
   /** Drawn as blobs while the stage draws blocks, beside the weather. */
   soft: true
+  /** It is weather, which the Blocks look draws as cubes or leaves as blobs. */
   weather: true
+  /** It lies on things: among blocks it is raised onto the cubes' tops. */
   lies: true
   /** When each blob comes, 0 to 1: at depth `rank · (1 − GROW)` it starts to grow. */
   rank: Float32Array
   /** Where each blob lies on the surface, x y z, and the surface's normal there. */
   at: Float32Array
+  /** The surface's normal under each blob, x y z. */
   normal: Float32Array
   /** Each blob's full radius. */
   size: Float32Array
   /** The depth the layer was last set for. */
   depth: number
+  /** For each bone of the layer, its index in the skeleton `followSnow` was last given (-1: none), and that skeleton. */
+  follows?: { from: Skeleton; index: Int16Array }
 }
+
+/** Where a spot of snow lies: the height, and the bone of the scene's that carries it. */
+export type Lying = { y: number; bone: number }
 
 /** A number from 0 to 1 for two whole numbers, the same everywhere. */
 function hash2(i: number, j: number): number {
@@ -61,24 +78,27 @@ function valueNoise(x: number, z: number): number {
  * spot (water: snow falling on it melts). `sun` (toward the light) shades faces turned away a little blue.
  */
 export function makeSnowCover(
-  ground: (x: number, z: number, top: number, bottom: number) => number,
-  { x, z, radius, top, bottom, spacing, sun = [0.4, 0.8, 0.4], dry, warm = [] }: {
+  ground: (x: number, z: number, top: number, bottom: number) => number | Lying,
+  { x, z, radius, top, bottom, spacing, sun = [0.4, 0.8, 0.4], dry, warm = [], bones }: {
     x: number; z: number; radius: number; top: number; bottom: number; spacing: number
+    /** The scene's bones, which `ground`'s bone numbers index: each blob is carried by the bone under it. */
+    bones?: readonly Bone[]
     sun?: readonly number[]; dry?: (x: number, y: number, z: number) => boolean
     /** Fires and lamps: snow does not lie within `reach` of one (it melts as it lands). */
     warm?: readonly { at: readonly number[]; reach: number }[]
   },
 ): SnowCover {
   const blobs = new Blobs(1024)
-  const rank: number[] = [], at: number[] = [], normal: number[] = [], size: number[] = []
+  const rank: number[] = [], at: number[] = [], normal: number[] = [], size: number[] = [], carrier: number[] = []
   const sl = Math.hypot(sun[0], sun[1], sun[2]) || 1
   const n = Math.ceil(radius / spacing), clump = spacing * 7, r = spacing * 1.05
-  const height = (px: number, pz: number) => ground(px, pz, top, bottom)
+  const lyingAt = (px: number, pz: number): Lying => { const g = ground(px, pz, top, bottom); return typeof g === 'number' ? { y: g, bone: 0 } : g }
+  const height = (px: number, pz: number) => lyingAt(px, pz).y
   for (let j = -n; j <= n; j++) for (let i = -n; i <= n; i++) {
     // a little off the grid, so the layer has no rows
     const px = x + (i + (hash2(i, j) - 0.5) * 0.6) * spacing, pz = z + (j + (hash2(j + 7, i) - 0.5) * 0.6) * spacing
     if (Math.hypot(px - x, pz - z) > radius) continue
-    const y = height(px, pz)
+    const { y, bone } = lyingAt(px, pz)
     if (!(y > bottom + 1e-6) || dry?.(px, y, pz)) continue
     if (warm.some((w) => Math.hypot(px - w.at[0], y - w.at[1], pz - w.at[2]) < w.reach)) continue
     // the face's slope from the ground round it; a step bigger than a blob is an edge, where snow does not lie flat
@@ -91,6 +111,7 @@ export function makeSnowCover(
     const facing: [number, number, number] = [nx / nl, up, nz / nl]
     // flat ground first, in clumps that spread and join
     const flat = (up - STEEPEST) / (1 - STEEPEST)
+    carrier.push(bones && bone > 0 && bone < bones.length ? bone : 0)
     rank.push(Math.min(0.999, 0.55 * valueNoise(px / clump, pz / clump) + 0.25 * (1 - flat) + 0.2 * hash2(i + 101, j - 33)))
     at.push(px, y, pz)
     normal.push(...facing)
@@ -101,9 +122,10 @@ export function makeSnowCover(
     const b = 0.8 + 0.2 * lit
     blobs.push({ center: [px, y, pz], scale: [0, 0, 0], quat: quatFacing(facing), color: [0.9 * b, 0.93 * b, Math.min(1, 1.0 * b + 0.02)], opacity: 0.95 })
   }
-  const skeleton = new Skeleton([{ name: 'snow', parent: -1, head: [x, 0, z] }])
+  // the scene's own bones, all roots: each takes its pose whole from the scene's (`followSnow`)
+  const skeleton = new Skeleton(bones?.length ? bones.map((b) => ({ name: b.name, parent: -1, head: [...b.head] as [number, number, number] })) : [{ name: 'snow', parent: -1, head: [x, 0, z] }])
   const skin = emptySkin(blobs.count)
-  for (let k = 0; k < blobs.count; k++) skin.weights[k * 4] = 1
+  for (let k = 0; k < blobs.count; k++) { skin.joints[k * 4] = carrier[k]; skin.weights[k * 4] = 1 }
   const cover: SnowCover = {
     blobs, skin, skeleton, soft: true, weather: true, lies: true,
     rank: Float32Array.from(rank), at: Float32Array.from(at), normal: Float32Array.from(normal), size: Float32Array.from(size), depth: NaN,
@@ -127,6 +149,46 @@ export function pileSnow(cover: SnowCover, depth: number): boolean {
     blobs.scale[k * 3] = s; blobs.scale[k * 3 + 1] = s; blobs.scale[k * 3 + 2] = thick
   }
   return true
+}
+
+/** Snow slides off a thing turned so its up is no more than this far up (the y of its turned up): gone by level, whole from here. */
+export const SLIDE_FROM = 0.4
+
+/**
+ * Poses the layer as the scene's skeleton `sk` stands (posed and updated: call it after everything that moves the
+ * scene's bones). Each of the layer's bones takes the skin of the scene's bone of its name, so snow rides what it lies
+ * on; on a bone turned past `SLIDE_FROM` its snow shrinks onto the bone's head. Bones the scene lacks stay at rest.
+ */
+export function followSnow(cover: SnowCover, sk: Skeleton): void {
+  const own = cover.skeleton, n = own.count
+  if (cover.follows?.from !== sk) {
+    const index = new Int16Array(n).fill(-1)
+    const byName = new Map(sk.bones.map((b, i) => [b.name, i]))
+    for (let i = 0; i < n; i++) index[i] = byName.get(own.bones[i].name) ?? -1
+    cover.follows = { from: sk, index }
+  }
+  const { index } = cover.follows
+  for (let i = 0; i < n; i++) {
+    const j = index[i]
+    if (j < 0) continue
+    const m = own.matrix.subarray(i * 16, i * 16 + 16)
+    m.set(sk.matrix.subarray(j * 16, j * 16 + 16))
+    own.quat.set(sk.quat.subarray(j * 4, j * 4 + 4), i * 4)
+    own.posedHead.set(sk.posedHead.subarray(j * 3, j * 3 + 3), i * 3)
+    // the layer's own place on top (among blocks it is raised onto the cubes' tops)
+    for (let r = 0; r < 3; r++) { m[12 + r] += own.place[r]; own.posedHead[i * 3 + r] += own.place[r] }
+    // how far up its up still points: snow slides off a thing turned over
+    const qx = own.quat[i * 4], qz = own.quat[i * 4 + 2]
+    const up = 1 - 2 * (qx * qx + qz * qz)
+    const keep = Math.max(0, Math.min(1, up / SLIDE_FROM))
+    own.scale[i] = sk.scale[j] * keep
+    if (keep < 1) {
+      // shrunk about the posed head: M' = T(h) · keep · T(−h) · M
+      const h = own.posedHead.subarray(i * 3, i * 3 + 3)
+      for (let c = 0; c < 12; c++) if (c % 4 !== 3) m[c] *= keep
+      for (let r = 0; r < 3; r++) m[12 + r] = h[r] + keep * (m[12 + r] - h[r])
+    }
+  }
 }
 
 /** How far round a light snow melts, as a share of its range at a strength of one: a campfire clears the ground round it, a lamp its own cap. */

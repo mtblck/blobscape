@@ -49,6 +49,7 @@ export type PropRef = string | PropDoc
 
 /** One prop set down in a project. */
 export interface Placed extends Placement {
+  /** Which prop it is. */
   prop: PropRef
   /** Holds still: its own moves are not played. */
   still?: boolean
@@ -63,13 +64,17 @@ export interface Placed extends Placement {
 
 /** A scene made of a land and props: what Scene Creator edits and saves. */
 export interface SceneProject {
+  /** What says a file is a project. */
   kind: 'blobscape-project'
+  /** The format's version. */
   version: 1
+  /** The scene's name. */
   name: string
   /** Seconds before everything repeats: every prop's moves are fitted to it. */
   loop: number
   /** What everything stands on. It is never moved. */
   land: PropRef
+  /** The props set down on the land. */
   props: Placed[]
   /** Where the view starts; the land's own camera when left out. */
   camera?: Orbit
@@ -197,8 +202,9 @@ function weatherOf(kind: 'rain' | 'snow', camera: Orbit): SpeckDoc {
   return falling(kind, camera, WEATHER_COUNT[kind])
 }
 
-/** Falling leaves' colors, and how many come down under one tree. */
+/** Falling leaves' colors. */
 export const AUTUMN = ['#c8642a', '#e0a030', '#a83c20']
+/** How many leaves come down under one tree. */
 export const LEAVES_EACH = 12
 /** Whether a prop drops leaves: tagged `leafy` (tags.ts) and not `evergreen`. */
 export const leafy = (prop: { tags?: readonly string[] } | undefined) => tagged(prop, 'leafy') && !tagged(prop, 'evergreen')
@@ -209,7 +215,7 @@ export const leafy = (prop: { tags?: readonly string[] } | undefined) => tagged(
  */
 export function leafFall(prop: PropDoc): { from: Vec3; to: Vec3; size: number } | undefined {
   if (!leafy(prop)) return
-  const shapes = compileScene({ ...prop.doc, lights: [], air: undefined, water: undefined, lava: undefined }, { puffs: false }).spec(0.08).parts.map((p) => p.shape)
+  const shapes = compileScene({ ...prop.doc, lights: [], air: undefined, water: undefined, lava: undefined, potion: undefined }, { puffs: false }).spec(0.08).parts.map((p) => p.shape)
   if (!shapes.length) return
   const lo: Vec3 = [Infinity, Infinity, Infinity], hi: Vec3 = [-Infinity, -Infinity, -Infinity]
   for (const sh of shapes) for (let i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], sh.min[i]); hi[i] = Math.max(hi[i], sh.max[i]) }
@@ -404,13 +410,20 @@ function keepOnly(doc: SceneDoc, parts: number[]): SceneDoc {
 
 /** A coarse look at where a description's parts are: the box round all of them. */
 export function boxOf(doc: SceneDoc): { lo: Vec3; hi: Vec3 } {
-  const spec = compileScene({ ...doc, lights: [], air: undefined, water: undefined, lava: undefined }, { puffs: false }).spec(0.08)
+  const spec = compileScene({ ...doc, lights: [], air: undefined, water: undefined, lava: undefined, potion: undefined }, { puffs: false }).spec(0.08)
   const lo: Vec3 = [Infinity, Infinity, Infinity], hi: Vec3 = [-Infinity, -Infinity, -Infinity]
   for (const p of spec.parts) for (let i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], p.shape.min[i]); hi[i] = Math.max(hi[i], p.shape.max[i]) }
   return { lo, hi }
 }
 
 const inBox = (p: Vec3, b: { lo: Vec3; hi: Vec3 }, pad: number) => p.every((v, i) => v >= b.lo[i] - pad && v <= b.hi[i] + pad)
+
+/** A light whose fire is now at another place in the list (`fires` are the old places kept, in their new order), or no longer with it. */
+function refired(l: LightDoc, fires: readonly number[]): LightDoc {
+  if (l.fire === undefined) return l
+  const { fire, ...rest } = l, at = fires.indexOf(fire)
+  return at < 0 ? rest : { ...rest, fire: at }
+}
 
 /**
  * Lifts props out of a scene description and leaves what is left as its land. A light goes with the first prop whose
@@ -422,6 +435,7 @@ export function splitScene(given: SceneDoc, picks: PropPick[]): { land: PropDoc;
   const doc = withHeavens(given)
   const taken = new Set<number>()
   const lightsLeft = new Set((doc.lights ?? []).map((_, i) => i))
+  const firesLeft = new Set((doc.fires ?? []).map((_, i) => i))
   const props: PropDoc[] = picks.map((pick) => {
     const idx = pickedParts(doc, pick).filter((i) => !taken.has(i))
     if (!idx.length) throw new Error(`${pick.name}: picks no parts`)
@@ -431,22 +445,26 @@ export function splitScene(given: SceneDoc, picks: PropPick[]): { land: PropDoc;
     const own = { ...kept, moves: kept.moves?.filter((m) => !(drop.has('during') && m.during) && !(drop.has('pass') && m.kind === 'pass')) }
     const box = boxOf(own)
     const pad = 0.05 * Math.max(box.hi[0] - box.lo[0], box.hi[1] - box.lo[1], box.hi[2] - box.lo[2])
+    // a fire burning within the prop goes with it, and a light that names one keeps naming it, by its new place
+    const fires = [...firesLeft].filter((i) => inBox(doc.fires![i].at, box, pad))
+    fires.forEach((i) => firesLeft.delete(i))
     const lights: LightDoc[] = []
     for (const i of [...lightsLeft]) {
       const l = doc.lights![i]
       if (pick.lights ? pick.lights.includes(i) : inBox(l.at, box, pad)) {
-        if (drop.has('during') && l.during) { const { during: _d, ...always } = l; lights.push(always) } else lights.push(l)
+        const { during: _d, ...always } = l
+        lights.push(refired(drop.has('during') && l.during ? always : l, fires))
         lightsLeft.delete(i)
       }
     }
     const foot = pick.foot ?? [(box.lo[0] + box.hi[0]) / 2, box.lo[1], (box.lo[2] + box.hi[2]) / 2]
     // a prop's lamps wait for the dark wherever it is set down, even one taken from a cave whose lamps always burn
-    const { air: _air, water: _water, lava: _lava, cover: _cover, focus: _focus, lamps: _lamps, ...rest } = own
+    const { air: _air, water: _water, lava: _lava, potion: _potion, cover: _cover, focus: _focus, lamps: _lamps, ...rest } = own
     // what rode the scene's water or pushed through it on this prop's bones goes with it
     const mine = new Set((own.bones ?? []).map((b) => b.name))
     const rides = doc.water?.floats?.filter((f) => mine.has(f.bone)) ?? [], wakes = doc.water?.bodies?.filter((b) => mine.has(b.bone)) ?? []
     const water = rides.length || wakes.length ? { water: { ...(rides.length ? { rides } : {}), ...(wakes.length ? { wakes } : {}) } } : {}
-    return { name: pick.name, foot, doc: { ...rest, name: pick.name, lights }, ...(pick.tags ? { tags: [...pick.tags] } : {}), ...water }
+    return { name: pick.name, foot, doc: { ...rest, name: pick.name, lights, ...(doc.fires ? { fires: fires.length ? fires.map((i) => doc.fires![i]) : undefined } : {}) }, ...(pick.tags ? { tags: [...pick.tags] } : {}), ...water }
   })
   const left = doc.parts.map((_, i) => i).filter((i) => !taken.has(i))
   const ground = keepOnly(doc, left)
@@ -454,7 +472,7 @@ export function splitScene(given: SceneDoc, picks: PropPick[]): { land: PropDoc;
   const water = doc.water && { ...doc.water, bodies: doc.water.bodies?.filter((b) => bonesLeft.has(b.bone)), floats: doc.water.floats?.filter((f) => bonesLeft.has(f.bone)) }
   // the scene's own clouds are the weather's, drawn over the land: kept on it (its moon, sun and stars are parts by now)
   const clouds = given.heavens?.clouds
-  const land: PropDoc = { name: doc.name, foot: [0, 0, 0], doc: { ...ground, lights: (doc.lights ?? []).filter((_, i) => lightsLeft.has(i)), water, ...(clouds ? { heavens: { clouds } } : {}) }, ...(doc.tags ? { tags: [...doc.tags] } : {}) }
+  const land: PropDoc = { name: doc.name, foot: [0, 0, 0], doc: { ...ground, lights: (doc.lights ?? []).filter((_, i) => lightsLeft.has(i)).map((l) => refired(l, [...firesLeft])), ...(doc.fires ? { fires: firesLeft.size ? [...firesLeft].map((i) => doc.fires![i]) : undefined } : {}), water, ...(clouds ? { heavens: { clouds } } : {}) }, ...(doc.tags ? { tags: [...doc.tags] } : {}) }
   const project: SceneProject = {
     kind: 'blobscape-project', version: 1, name: doc.name, loop: doc.loop,
     land, props: props.map((p) => ({ prop: p, at: [...p.foot], turn: 0, size: 1 })), camera: { ...doc.camera },
@@ -576,16 +594,26 @@ export function readProject(text: string, known: (id: string) => boolean): { pro
 type Rgb = [number, number, number]
 
 /** A project made ready: every prop found and fitted to the loop, compiled once. */
+/** A project compiled apart: the land and each prop a scene of its own, with what poses each where it stands. */
 export interface CompiledProject {
+  /** The project's name. */
   name: string
+  /** Seconds before everything repeats. */
   loop: number
+  /** The land, compiled. */
   land: { prop: PropDoc; c: CompiledScene }
+  /** Each prop, compiled, with its placement and the poser that plays its moves where it stands. */
   props: { prop: PropDoc; c: CompiledScene; placed: Placed; poser: PlacedPoser }[]
   /** The palette for pixel art: the land's colors, then each prop's that the land lacks, joined down to 32. */
   palette: Rgb[]
+  /** Where the view starts. */
   camera: Orbit
 }
 
+/**
+ * Compiles a project apart, the land and each prop on their own, which is what an editor wants: moving one prop
+ * cuts only it again. `find` gives a library prop by its id. `composeScene` is the other way, one scene for all.
+ */
 export function compileProject(project: SceneProject, find: (id: string) => PropDoc | undefined): CompiledProject {
   const get = (ref: PropRef, at: string): PropDoc => {
     const p = typeof ref === 'string' ? find(ref) : ref

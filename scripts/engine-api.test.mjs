@@ -36,7 +36,7 @@ test('the docs page reads the package README as its guide, and no two anchors on
   const { guideSections } = await import('../src/blobscape/api/guide.ts')
   const { groupId, sectionId } = await import('../src/blobscape/api/types.ts')
   const guide = guideSections(readFileSync(new URL('../packages/engine/README.md', import.meta.url), 'utf8'))
-  assert.deepEqual(guide.map((g) => g.id), ['install', 'a-creature-on-a-canvas', 'on-any-page-with-one-tag', 'your-own-creature', 'a-scene-written-as-data-in-pixel-art', 'files'])
+  assert.deepEqual(guide.map((g) => g.id), ['install', 'a-creature-on-a-canvas', 'on-any-page-with-one-tag', 'your-own-creature', 'a-scene-written-as-data-in-pixel-art', 'other-looks', 'water-lava-and-fire-in-a-scene', 'lamps-weather-and-the-shared-sky', 'styles-as-data', 'a-scene-from-a-land-and-props', 'files'])
   assert.match(guide[0].html, /npm install @blobscape\/engine three/)
   assert.ok(guide.every((g) => !g.html.includes('href="https://blobscape.dev')), 'links to this site are paths')
   const api = JSON.parse(readFileSync(new URL('../src/blobscape/engineApi.json', import.meta.url), 'utf8'))

@@ -1,1 +1,0 @@
-Diorama: a new scene, Fishing for the moon. A boy on a floating island casts his line into a cloud and hauls up the moon, then the sun, and the sky turns from day to night and back as each is flung up.

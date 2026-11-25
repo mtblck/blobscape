@@ -188,7 +188,8 @@ export class WashPass {
       const edge = clamp(length(color.sub(around)).mul(POOL_COLOR).mul(w.a).add(abs(s.a.sub(w.a)).mul(POOL_COVER)), 0, 1).mul(cover)
       const gray = dot(color, vec3(0.2126, 0.7152, 0.0722))
       const paint = clamp(color.sub(gray).mul(WASH_RICH).add(gray), 0.02, 1)
-      const top = max(color.r, max(color.g, color.b))
+      // halfway between its brightest and darkest channels (`whiteness`), so a strong orange is painted, not left as paper
+      const top = max(color.r, max(color.g, color.b)).add(min(color.r, min(color.g, color.b))).mul(0.5)
       const keep = smoothstep(0, 1, clamp(float(WASH_WHITE[0]).sub(top).div(WASH_WHITE[0] - WASH_WHITE[1]), 0, 1))
       const lay = (cov: N, edged: N) => cov.mul(this.strength).mul(water.sub(0.5).mul(2 * WASH_UNEVEN).add(1)).mul(tooth.sub(0.5).mul(this.grain).add(1)).mul(edged.mul(this.pool).add(1))
       const amount = lay(cover.mul(keep), edge).toVar()

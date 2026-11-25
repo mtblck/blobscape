@@ -79,7 +79,7 @@ export const EXPERIMENTS = [
     tags: ['watch', 'tool'],
     needs: 'WebGPU or WebGL 2',
     published: '2026-11-18',
-    updated: '2026-11-19',
+    updated: '2026-11-23',
     body: 'A windmill, a fox and a scanned mug drawn as brush marks or pen strokes in place of soft dots. Every mark belongs to one blob, so the painting holds still as you turn it.',
   },
   {
@@ -112,7 +112,7 @@ export const EXPERIMENTS = [
     tags: ['pixel', 'tool'],
     needs: 'WebGPU or WebGL 2',
     published: '2026-11-15',
-    updated: '2026-11-21',
+    updated: '2026-11-22',
     body: 'A lighthouse, a dragon over lava, a bee in a forest and more, built from shapes and drawn as moving pixel art, blocks, neon, stained glass, watercolor or ink. It is real 3D underneath, so you can turn it, change the time of day, or draw it as the plain blobs it is made of.',
   },
   {

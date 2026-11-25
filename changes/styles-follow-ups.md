@@ -1,1 +1,0 @@
-Scan Studio and Seasonal Bouquets now have each look's own settings under Drawn as (mark size, outlines, pen width, paper, cel shading's light and tones), the same ones as Brush and Ink. Diorama and Scene Creator share one set of weather, wind and cloud controls, and pixel art's Style and Finish controls are drawn from the styles catalog.

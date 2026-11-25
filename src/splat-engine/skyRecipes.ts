@@ -16,8 +16,11 @@ import type { BoneDoc, MoveDoc, PartDoc, SceneDoc, SpeckDoc } from './sceneDoc.t
  * numbers, eased by `SkyEase`, and the scene is never cut again for it.
  */
 
+/** A weather of `WEATHERS`. */
 export type WeatherId = 'light-rain' | 'rain' | 'heavy-rain' | 'thunderstorm' | 'snow' | 'heavy-snow' | 'fog'
+/** A cloud cover of `CLOUD_COVERS`. */
 export type CloudId = 'partly' | 'cloudy' | 'overcast'
+/** A wind of `WINDS`. */
 export type WindId = 'calm' | 'breeze' | 'windy' | 'gale'
 
 /** What the sky is doing, as numbers that can be mixed. */
@@ -45,35 +48,48 @@ export interface SkyState {
 /** The sky left as the scene has it. */
 export const CLEAR: SkyState = { rain: 0, snow: 0, clouds: 0, light: [1, 1, 1], gray: 0, dark: 0, haze: 0, lightning: 0, wind: 0 }
 
+/** A cloud cover: how much of the sky is cloud and what that does to the light and the sky's colors. */
 export interface CloudCover {
+  /** The word an address or a saved scene holds. */
   id: CloudId
+  /** Its name as a page shows it. */
   label: string
   /** The share of the clouds that are out. */
   clouds: number
+  /** What it multiplies the light by (linear). */
   light: Vec3
+  /** How far it turns the sky's colors to gray, 0 to 1. */
   gray: number
+  /** How much darker it draws the sky, 0 to 1. */
   dark: number
 }
 
-/** The numbers are mine, not Matt's yet. */
+/** The cloud covers, from a few clouds to a sky full of them. */
 export const CLOUD_COVERS: CloudCover[] = [
   { id: 'partly', label: 'Partly cloudy', clouds: 0.1875, light: [0.97, 0.97, 0.98], gray: 0.1, dark: 0 },
   { id: 'cloudy', label: 'Cloudy', clouds: 0.5, light: [0.86, 0.88, 0.92], gray: 0.55, dark: 0.08 },
   { id: 'overcast', label: 'Heavy clouds', clouds: 1, light: [0.74, 0.77, 0.84], gray: 0.9, dark: 0.22 },
 ]
 
+/** A weather as numbers: what falls, how thick the air is, the light, the lightning and the wind it comes with. */
 export interface WeatherRecipe {
+  /** The word an address or a saved scene holds. */
   id: WeatherId
+  /** Its name as a page shows it. */
   label: string
   /** The least cloud it comes with: rain does not fall from a clear sky. */
   clouds: CloudId
+  /** How much of the rain falls, 0 to 1. */
   rain?: number
+  /** How much of the snow falls, 0 to 1. */
   snow?: number
+  /** How thick it makes the air, 0 to 1 (fog). */
   haze: number
   /** What it multiplies the light by, on top of its clouds'. */
   light?: Vec3
   /** How much darker again it draws the sky. */
   dark?: number
+  /** How strong its lightning is; none when left out. */
   lightning?: number
   /** The least wind it comes with, a level of `WINDS` (Matt, 2026-11-21: water a level rougher under rain, two under heavy rain, three in a thunderstorm). */
   wind?: number
@@ -81,7 +97,7 @@ export interface WeatherRecipe {
   gloom?: boolean
 }
 
-/** The numbers are mine, not Matt's yet. */
+/** The weathers every scene shares: change one here and it changes in every scene. */
 export const WEATHERS: WeatherRecipe[] = [
   // a drizzle with no wind of its own, so still water shows each drop's ring (the koi pond starts in it)
   { id: 'light-rain', label: 'Light rain', clouds: 'cloudy', rain: 0.15, haze: 0.12 },
@@ -93,7 +109,9 @@ export const WEATHERS: WeatherRecipe[] = [
   { id: 'fog', label: 'Fog', clouds: 'cloudy', haze: 1, light: [0.95, 0.95, 0.96] },
 ]
 
+/** The weather a word names (from an address, say), or undefined when it names none. */
 export const weatherAsked = (q: string | null | undefined): WeatherId | undefined => WEATHERS.find((w) => w.id === q)?.id
+/** The cloud cover a word names, or undefined when it names none. */
 export const cloudsAsked = (q: string | null | undefined): CloudId | undefined => CLOUD_COVERS.find((c) => c.id === q)?.id
 
 /**
@@ -143,6 +161,7 @@ export const WINDS: { id: WindId; label: string; slant: number }[] = [
 ]
 /** The hardest wind, a level (`SkyState.wind`). */
 export const WIND_MOST = WINDS.length - 1
+/** The wind a word names, or undefined when it names none. */
 export const windAsked = (q: string | null | undefined): WindId | undefined => WINDS.find((w) => w.id === q)?.id
 /** Where the wind blows, x and z (one long), the same in every scene. */
 export const WIND_WAY: readonly [number, number] = [0.949, 0.316]
@@ -185,6 +204,7 @@ export class SkyEase {
   private from: SkyState = CLEAR
   private to: SkyState = CLEAR
   private since = -Infinity
+  /** Seconds a change takes. */
   readonly seconds: number
   constructor(seconds = SKY_EASE) { this.seconds = seconds }
   /** The sky asked for. */
@@ -197,6 +217,7 @@ export class SkyEase {
   }
   /** Whether it is still changing at `now`. */
   moving(now: number) { return Number.isFinite(this.since) && now - this.since < this.seconds }
+  /** The sky at `now`: a mix of the sky it left and the one asked for. */
   at(now: number): SkyState {
     if (!Number.isFinite(this.since)) return this.to
     const k = this.seconds > 0 ? Math.min(1, Math.max(0, (now - this.since) / this.seconds)) : 1
@@ -297,6 +318,9 @@ export function aboveView(camera: View): number {
   return round(Math.max(cloudBase(camera), eye + along * Math.tan(up) + 0.08 * d))
 }
 
+/** The lowest the box rain and snow fall through reaches: scenes stand on about 0, and a small scene's air ends at -4. */
+const FALL_FLOOR = -3
+
 /** Rain or snow over the middle of a view, falling from the clouds' height (or `top`) onto whatever stands there: one swarm, for any scene. */
 export function falling(kind: 'rain' | 'snow', camera: View, count = kind === 'rain' ? RAIN_MOST : SNOW_MOST, top = cloudBase(camera)): SpeckDoc {
   const [x, y, z] = camera.target, r = fallReach(camera)
@@ -304,7 +328,10 @@ export function falling(kind: 'rain' | 'snow', camera: View, count = kind === 'r
     kind, count, colors: kind === 'rain' ? RAIN_COLORS : SNOW_COLORS, land: true,
     // fine streaks of rain and small flakes, in proportion to the view rather than the scene's own specks
     ...(kind === 'rain' ? { size: 0.003, long: round(Math.max(0.03, camera.distance * 0.011)) } : { size: round(Math.max(0.006, camera.distance * 0.0025)) }),
-    from: [round(x - r), round(y - 1), round(z - r)], to: [round(x + r), top, round(z + r)],
+    // down as far below the view's middle as the eye is from it (as the snow lying is laid), so a view aimed high
+    // over a scene (the storm octopus, 1.3 over its sea) still has its rain reach the ground and the water under it;
+    // no lower than `FALL_FLOOR`, inside the reach of a small scene's air (Scene Creator lays it in a land's)
+    from: [round(x - r), round(Math.min(y - 1, Math.max(FALL_FLOOR, y - camera.distance))), round(z - r)], to: [round(x + r), top, round(z + r)],
     // no wind of its own: the sky's wind of the moment blows it (`CompiledScene.blow`)
   }
 }
@@ -336,7 +363,12 @@ export function cloudAt(i: number, camera: View): Vec3 {
 }
 
 /** How a sky's clouds look: their colors from underneath up, and whether they glow to keep them. The recipe's own when left out. */
-export interface CloudLook { colors?: readonly [string, string, string]; glow?: boolean }
+export interface CloudLook {
+  /** The clouds' colors from underneath up. */
+  colors?: readonly [string, string, string]
+  /** Whether they glow, which keeps them their own color at night. */
+  glow?: boolean
+}
 
 function cloudPart(i: number, camera: View, look: CloudLook = {}): PartDoc {
   const [under, middle, top] = look.colors ?? [CLOUD_COLORS[2], CLOUD_COLORS[1], CLOUD_COLORS[0]]
@@ -391,7 +423,15 @@ const HIDDEN = 'hidden'
 export const shareOut = (i: number, n: number, share: number) => Math.min(1, Math.max(0, share * n - i))
 
 /** The bones of a compiled weather description that a sky shows more or fewer of. */
-export interface WeatherBones { clouds: number[]; specks: number[]; hidden: number[] }
+export interface WeatherBones {
+  /** The clouds' bones, in the order they come out. */
+  clouds: number[]
+  /** The bones of the drops or flakes, in the order they start to fall. */
+  specks: number[]
+  /** Bones that are never shown. */
+  hidden: number[]
+}
+/** Finds a compiled weather description's bones by their names. */
 export function weatherBones(names: readonly string[]): WeatherBones {
   const pick = (start: string) => names.map((n, i) => (n.startsWith(start) ? i : -1)).filter((i) => i >= 0)
   return { clouds: pick('cloud'), specks: pick('~speck'), hidden: pick(HIDDEN) }

@@ -48,6 +48,8 @@ const FOLLOW = 5
 const DEG = 180 / Math.PI
 /** The smallest block size on the islands. */
 const ISLAND_BLOCK_LEAST = 2
+/** Where an island's Block size starts: its least, since the shared style now starts at 1×, which a whole island at once can't hold on a phone. */
+const ISLAND_BLOCK_START = Math.max(ISLAND_BLOCK_LEAST, BLOCK_START.size)
 /** Shift held, or the stick pushed this far, walks rather than runs: a share of a run's speed. */
 const WALKING = 0.38
 
@@ -90,7 +92,7 @@ export function Islands() {
   const [style, setStyle] = useState<'blocks' | 'pixel' | 'blobs'>(() => { const s = params().get('style'); return s === 'pixel' || s === 'blobs' ? s : 'blocks' })
   const pixels = style === 'pixel', blocky = style === 'blocks'
   // 2× at the smallest here: a whole island at 1× is some 800,000 cubes, which hung loading on Matt's phone (he chose this, 2026-11-21)
-  const [blockSize, setBlockSize] = useState(() => { const v = Math.round(Number(params().get('block'))); return v >= ISLAND_BLOCK_LEAST && v <= BLOCK_SIZES.max ? v : BLOCK_START.size })
+  const [blockSize, setBlockSize] = useState(() => { const v = Math.round(Number(params().get('block'))); return v >= ISLAND_BLOCK_LEAST && v <= BLOCK_SIZES.max ? v : ISLAND_BLOCK_START })
   const [orbit, setOrbit] = useState<Orbit>({ target: [0, 0, 0], distance: 12.5, azimuth: 24, elevation: 20 })
   const [walking, setWalking] = useState(() => params().get('walk') === '1')
   const [count, setCount] = useState(() => (params().get('islands') === String(WORLD_ISLANDS) ? WORLD_ISLANDS : 1))
@@ -429,7 +431,7 @@ export function Islands() {
   useEffect(() => {
     const url = new URL(location.href)
     const put = (k: string, v: string | undefined) => { if (v) url.searchParams.set(k, v); else url.searchParams.delete(k) }
-    put('biome', BIOMES.length > 1 ? biomeId : undefined); put('seed', String(seed)); put('style', blocky ? undefined : style); put('block', blocky && blockSize !== BLOCK_START.size ? String(blockSize) : undefined); put('rock', rock ? undefined : '0'); put('grass', grass ? undefined : '0'); put('grassas', blocky && grass && grassAs !== 'blobs' ? grassAs : undefined); put('walk', walking ? '1' : undefined); put('islands', count === 1 ? undefined : String(WORLD_ISLANDS)); put('creatures', creatures ? undefined : '0')
+    put('biome', BIOMES.length > 1 ? biomeId : undefined); put('seed', String(seed)); put('style', blocky ? undefined : style); put('block', blocky && blockSize !== ISLAND_BLOCK_START ? String(blockSize) : undefined); put('rock', rock ? undefined : '0'); put('grass', grass ? undefined : '0'); put('grassas', blocky && grass && grassAs !== 'blobs' ? grassAs : undefined); put('walk', walking ? '1' : undefined); put('islands', count === 1 ? undefined : String(WORLD_ISLANDS)); put('creatures', creatures ? undefined : '0')
     history.replaceState(history.state, '', url)
   }, [biomeId, seed, style, blocky, blockSize, rock, walking, count, grass, grassAs, creatures])
 

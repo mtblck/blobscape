@@ -1,1 +1,0 @@
-Scene Creator is in the menu in the sandbox's place: make your own pixel diorama from a scene or a bare land and props cut out of our scenes, light it, pick a style and export the loop. The sandbox moved, unchanged, to the experiments.
