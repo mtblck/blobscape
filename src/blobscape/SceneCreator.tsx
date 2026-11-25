@@ -44,7 +44,7 @@ import { meshBounds } from '../splat-engine/meshShape.ts'
 import { readSkinnedGlb } from '../splat-engine/skinnedModel.ts'
 import { budget, clock, lampAdded, lampLights, lampRemoved, lit, liveSky, liveSkyColors, overheadPicked, rgbOf, shadeNow, sunNow, timeIn, weatherPicked, windPicked } from './creator/lighting.ts'
 import { castBy, glowGain } from './diorama/glow.ts'
-import { DEFAULT_STYLE, STYLES, isPixelStyle, styleAsked, styleWords, type Style } from './diorama/styles.ts'
+import { DEFAULT_STYLE, PICKED_STYLES, STYLES, isPixelStyle, styleAsked, styleWords, type Style } from './diorama/styles.ts'
 import { useDrawnLook, useHeld } from './drawnLook.tsx'
 import { GLITCH_START, glitchLook, type GlitchChoice } from './glitchLooks.ts'
 import { useExport } from './diorama/useExport.tsx'
@@ -1384,8 +1384,8 @@ export function SceneCreator() {
       setLight(change, 'Light changed.')
       return `Light changed${ask.sun || ask.hour !== undefined || ask.weather !== undefined || ask.haze !== undefined ? '; the scene is cut again in a moment' : ''}.`
     },
-    styles: () => STYLES.map((x) => x.id),
-    setStyle: (id) => { const st = STYLES.find((x) => x.id === id); if (!st) return `Not done: there is no style "${id}".`; drawStyle(st.id); return `Drawn as ${st.label.toLowerCase()} now.` },
+    styles: () => PICKED_STYLES.map((x) => x.id),
+    setStyle: (id) => { const st = PICKED_STYLES.find((x) => x.id === id); if (!st) return `Not done: there is no style "${id}".`; drawStyle(st.id); return `Drawn as ${st.label.toLowerCase()} now.` },
     undo: () => { if (!hist?.past.length) return 'Nothing to take back.'; doUndo(); return 'Took back the last change.' },
   }
   // registered once, always reaching this render's page
