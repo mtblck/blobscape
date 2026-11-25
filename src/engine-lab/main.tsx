@@ -46,6 +46,7 @@ const initial: LabOptions = {
   cut: params.get('cut') === 'clean' ? 'clean' : params.get('cut') === 'rough' ? 'rough' : undefined,
   sh: params.get('sh') === '1',
   radix: params.get('sort') === 'radix',
+  exact: params.get('shape') === 'exact',
   offscreen: params.get('offscreen') === '1',
 }
 const COUNTS = [20000, 100000, 200000, 500000]
@@ -87,7 +88,7 @@ function App() {
     let live: Lab | undefined, gone = false
     setLab(undefined)
     setError(undefined)
-    const q = new URLSearchParams({ which: opts.which, n: String(opts.count), walk: opts.walk ? '1' : '0', mode: opts.mode, webgl: opts.webgl ? '1' : '0', herd: String(opts.herd), lod: opts.lod ? '1' : '0', edits: opts.edits ? '1' : '0', sh: opts.sh ? '1' : '0', sort: opts.radix ? 'radix' : 'bins', ...(opts.offscreen ? { offscreen: '1' } : {}) })
+    const q = new URLSearchParams({ which: opts.which, n: String(opts.count), walk: opts.walk ? '1' : '0', mode: opts.mode, webgl: opts.webgl ? '1' : '0', herd: String(opts.herd), lod: opts.lod ? '1' : '0', edits: opts.edits ? '1' : '0', sh: opts.sh ? '1' : '0', sort: opts.radix ? 'radix' : 'bins', ...(opts.exact ? { shape: 'exact' } : {}), ...(opts.offscreen ? { offscreen: '1' } : {}) })
     history.replaceState(null, '', `?${q}`)
     startLab(canvas.current!, opts).then((l) => {
       if (gone) { l.dispose(); return }
@@ -214,7 +215,7 @@ function App() {
           <section aria-labelledby="steps-title" className="flex flex-col gap-2">
             <h2 id="steps-title" className="text-lg font-semibold text-ink">Each step</h2>
             <p className="text-sm text-ink-muted">
-              Milliseconds per step of a walking frame, each waited for on its own (median of 20).
+              Milliseconds per step of a walking frame (median of 20): read off the GPU's own clock where the browser offers one (marked GPU clock), else each waited for on its own.
               Move, project and sort run on the GPU with WebGPU; with WebGL each blob is moved as it's drawn, and the CPU moves centers and sorts.
             </p>
             <div className="overflow-x-auto">
@@ -223,7 +224,7 @@ function App() {
               <tbody>
                 {steps.map((r, i) => (
                   <tr key={i} className="border-t border-rule">
-                    <td className="py-1 pr-3">{NAMES[r.which as Which] ?? r.which} · {r.backend}</td>
+                    <td className="py-1 pr-3">{NAMES[r.which as Which] ?? r.which} · {r.backend}{r.gpuClock ? ' · GPU clock' : ''}</td>
                     <td className="pr-3">{r.blobs.toLocaleString()}</td>
                     <td className="pr-3">{r.backend === 'webgpu' && r.which === 'engine' ? r.deform.toFixed(1) : '–'}</td>
                     <td className="pr-3">{r.backend === 'webgpu' && r.which === 'engine' ? r.project.toFixed(1) : '–'}</td>

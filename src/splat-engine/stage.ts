@@ -100,6 +100,24 @@ export interface StageOptions {
   webgl?: boolean
   /** Builds each world so cuts (`setEdits`) have a clean edge, tested per pixel (`setCleanCuts` turns it off and on). */
   cleanCuts?: boolean
+  /** Builds each world to draw blobs in their true shape on screen (`EngineOptions.exactShapes`; `setExactShapes` turns it off and on). */
+  exactShapes?: boolean
+  /**
+   * Asks the GPU to time its own work, so `gpuTimes` can say how long a frame takes on the GPU alone. Where the
+   * browser offers no timer (WebGL without `EXT_disjoint_timer_query_webgl2`, WebGPU without `timestamp-query`) it
+   * does nothing. Off by default: each pass then writes two timestamps.
+   */
+  timer?: boolean
+}
+
+/** How long the GPU spent on one frame, in milliseconds (`Stage.gpuTimes`). */
+export interface GpuTimes {
+  /** Compute passes: posing, projecting, sorting, lighting. WebGL has none, so 0 there. */
+  compute: number
+  /** Render passes: drawing the blobs and every pass after them (pixel art, outlines, the lens). */
+  render: number
+  /** The CPU's share: posing and handing the frame to the GPU (on WebGL, sorting too). The two overlap, so a frame takes about the larger of this and the GPU's. */
+  cpu: number
 }
 
 /**
@@ -241,7 +259,7 @@ export class Stage {
   /** Starts a stage on a canvas: makes the renderer (WebGPU, or WebGL 2 where there is none) and begins drawing. */
   static async start(display: HTMLCanvasElement, opts: StageOptions = {}) {
     const canvas = opts.offscreen ? document.createElement('canvas') : display
-    const renderer = await startRenderer({ canvas, antialias: false, alpha: true, forceWebGL: !!opts.webgl }, (r) => {
+    const renderer = await startRenderer({ canvas, antialias: false, alpha: true, forceWebGL: !!opts.webgl, trackTimestamp: !!opts.timer }, (r) => {
       r.setPixelRatio(Math.min(2, window.devicePixelRatio || 1))
       r.setClearColor(0x000000, 0)
     })
@@ -314,12 +332,13 @@ export class Stage {
   }
 
   private build(actor: Actor) {
-    this.world = new SplatWorld([actor, ...this.extras], { mode: this.mode, lights: this.opts.lights, sort: this.sort, cleanCuts: this.opts.cleanCuts, shadowDensity: this.opts.shadowDensity })
+    this.world = new SplatWorld([actor, ...this.extras], { mode: this.mode, lights: this.opts.lights, sort: this.sort, cleanCuts: this.opts.cleanCuts, exactShapes: this.opts.exactShapes, shadowDensity: this.opts.shadowDensity })
     this.world.glowGain = this.emits
     this.world.lightEase = this.lightEase
     this.world.setFog(...this.fog)
     this.dress()
     this.world.cleanCuts = this.clean
+    this.world.exactShapes = this.exact
     if (this.edits.length) this.world.setEdits(this.edits)
     this.scene.add(this.world)
     if (this.painter) this.paintOver()
@@ -621,6 +640,14 @@ export class Stage {
   setEdits(edits: readonly ShapeEdit[]) {
     this.edits = edits.filter((e) => e.op === 'cut' || this.opts.lights).map((e) => ({ ...e }))
     this.world?.setEdits(this.edits)
+    this.invalidate()
+  }
+
+  private exact = true
+  /** On a stage made with `exactShapes`: whether blobs are drawn in their true shape (the default) or flattened from their middles. */
+  setExactShapes(on: boolean) {
+    this.exact = on
+    if (this.world) this.world.exactShapes = on
     this.invalidate()
   }
 
@@ -1171,6 +1198,33 @@ export class Stage {
     // reading one pixel back can't finish before the frames do
     else b.gl?.readPixels(0, 0, 1, 1, b.gl.RGBA, b.gl.UNSIGNED_BYTE, new Uint8Array(4))
     return (performance.now() - t0) / frames
+  }
+
+  /** Whether `gpuTimes` can answer: the stage was started with `timer` and the browser lets the GPU time its work. */
+  get timesGpu(): boolean {
+    const b = this.renderer.backend as unknown as { trackTimestamp?: boolean; disjoint?: unknown; isWebGPUBackend?: boolean }
+    return !!b.trackTimestamp && (!!b.isWebGPUBackend || !!b.disjoint)
+  }
+
+  /**
+   * Poses and draws the frame as it stands `frames` times over and asks the GPU how long it spent: per frame, in
+   * milliseconds. Unlike `timed`, the GPU's own clock, so the browser's late and wandering report of work done does
+   * not come into it, and the time is split between compute and drawing. Null where the stage can't time the GPU
+   * (`timesGpu`): start it with `timer` and use `timed` as the fallback.
+   */
+  async gpuTimes(frames = 8): Promise<GpuTimes | null> {
+    if (!this.timesGpu) return null
+    // what the live loop drew before now is not this measure
+    await Promise.all([this.renderer.resolveTimestampsAsync('compute'), this.renderer.resolveTimestampsAsync('render')])
+    const t0 = performance.now()
+    for (let k = 0; k < frames; k++) {
+      this.pose()
+      this.resize()
+      this.draw()
+    }
+    const cpu = (performance.now() - t0) / frames
+    const [compute, render] = await Promise.all([this.renderer.resolveTimestampsAsync('compute'), this.renderer.resolveTimestampsAsync('render')])
+    return { compute: (compute ?? 0) / frames, render: (render ?? 0) / frames, cpu }
   }
 
   /** Offscreen only: draws the frame `t` seconds into the clip and copies it to the page. */

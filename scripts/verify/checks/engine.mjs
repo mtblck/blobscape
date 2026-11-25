@@ -342,6 +342,32 @@ export default [
           if (so.missing || so.outOfOrder || so.unsettled) fails.push(`engine lab: GPU sort ${JSON.stringify(so)}`)
           else ok(`engine lab: GPU sort draws every blob once, farthest first, and blobs at one depth in index order (at most ${so.biggest} at one depth)`)
         }
+        // off screen: close up, most of the herd is out of view; those blobs are left out of the sort and the draw,
+        // the rest are sorted as before (WebGPU's order is read back; WebGL's draw count is what it kept), and the
+        // picture is the same as with every blob sorted and drawn
+        {
+          const cu = await page.evaluate(async (webgl) => {
+            const l = window.__lab, was = l.orbit, cv = document.querySelector('canvas')
+            const grab = () => cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+            l.orbit = { ...was, distance: 1.2 }
+            await l.frame(0.3)
+            const so = webgl ? { culled: l.world.count - l.world.geometry.instanceCount } : await l.world.checkSort(l.renderer)
+            const culled = grab()
+            l.world.cull = false
+            await l.frame(0.3)
+            const all = grab()
+            l.world.cull = true
+            l.orbit = was
+            let differ = 0, drawn = 0
+            for (let i = 0; i < all.length; i += 4) {
+              if (all[i + 3]) drawn++
+              if (all[i] !== culled[i] || all[i + 1] !== culled[i + 1] || all[i + 2] !== culled[i + 2] || all[i + 3] !== culled[i + 3]) differ++
+            }
+            return { so, drawn, differ }
+          }, webgl)
+          if (cu.so.missing || cu.so.outOfOrder || cu.so.unsettled || cu.so.culled < 2000 || cu.drawn < 1000 || cu.differ) fails.push(`engine lab ${label}: off-screen blobs ${JSON.stringify(cu)}`)
+          else ok(`engine lab ${label}: close up, ${cu.so.culled} blobs off screen are left out of the sort and the draw${webgl ? '' : ', the rest in order'}, the picture unchanged`)
+        }
         // the full radix sort (opt in, `sort: 'radix'`): every blob once, farthest first, ties in index order, and it draws
         {
           const e = await open(`/engine-lab/?which=engine&n=12000&walk=1&herd=2&offscreen=1&sort=radix${webgl ? '&webgl=1' : ''}`, { viewport: { width: 800, height: 800 } })

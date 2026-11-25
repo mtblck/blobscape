@@ -53,6 +53,8 @@ export interface LabOptions {
   sh?: boolean
   /** The full radix sort (ours only) in place of the counting sort over depth bins. */
   radix?: boolean
+  /** Draw blobs in their true shape on screen (`?shape=exact`, `EngineOptions.exactShapes`). */
+  exact?: boolean
   /**
    * Draw into an off-screen target and copy each frame to the page with the
    * CPU. Only for headless test browsers, whose software WebGPU can render but
@@ -151,12 +153,14 @@ export interface StepTimes {
   /** CPU (WebGL): moving centers for the sort, and sorting. */
   cpuSkin: number
   cpuSort: number
+  /** Whether the GPU steps were read off the GPU's own clock (timestamp queries); else wall time, each step waited for. */
+  gpuClock: boolean
 }
 
 export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promise<Lab> {
   if (o.which === 'spark') return (await import('./sparkLab.ts')).startSparkLab(display, o)
   const canvas = o.offscreen ? document.createElement('canvas') : display
-  const renderer = await startRenderer({ canvas, antialias: false, alpha: true, forceWebGL: o.webgl }, (r) => {
+  const renderer = await startRenderer({ canvas, antialias: false, alpha: true, forceWebGL: o.webgl, trackTimestamp: true }, (r) => {
     r.setPixelRatio(Math.min(2, window.devicePixelRatio || 1))
     r.setClearColor(0x000000, 0)
   })
@@ -187,7 +191,7 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
   let mode = o.mode
   if (o.which === 'engine') {
     if (o.sh) for (const f of foxes) giveSheen(f.blobs)
-    world = new SplatWorld(foxes, { mode, paint: o.edits, sort: o.radix ? 'radix' : 'bins', cleanCuts: !!o.cut })
+    world = new SplatWorld(foxes, { mode, paint: o.edits, sort: o.radix ? 'radix' : 'bins', cleanCuts: !!o.cut, exactShapes: !!o.exact })
     if (o.lod) world.autoDetail = DETAIL
     if (o.edits) world.setEdits(DEMO_EDITS)
     if (o.cut) { world.cleanCuts = o.cut === 'clean'; world.setEdits(HALF_CUT) }
@@ -278,7 +282,7 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
   raf = requestAnimationFrame(tick)
 
   return {
-    info: `${o.which === 'three' ? 'three.js (standing still: it has no bones)' : 'ours'} · ${backend} · ${blobs.toLocaleString()} blobs${world?.autoDetail ? ' · fewer when small' : ''}${o.edits ? ' · cut and painted' : ''}${o.sh ? ' · color by angle' : ''}${o.radix ? ' · radix sort' : ''}`,
+    info: `${o.which === 'three' ? 'three.js (standing still: it has no bones)' : 'ours'} · ${backend} · ${blobs.toLocaleString()} blobs${world?.autoDetail ? ' · fewer when small' : ''}${o.edits ? ' · cut and painted' : ''}${o.sh ? ' · color by angle' : ''}${o.radix ? ' · radix sort' : ''}${o.exact ? ' · exact shapes' : ''}`,
     world,
     renderer,
     get orbit() { return orbit },
@@ -349,6 +353,7 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
     },
     async profile(frames) {
       const rows: number[][] = []
+      const gpuClock = backend === 'webgpu' && !!(renderer.backend as unknown as { trackTimestamp?: boolean }).trackTimestamp
       busy++
       try {
         for (let i = 0; i < frames + 2; i++) {
@@ -357,14 +362,18 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
           const t: number[] = [performance.now()]
           const mark = async () => { await settle(renderer); t.push(performance.now()) }
           if (world && backend === 'webgpu') {
+            // with the GPU's own clock, each step is what its passes took there; else the wall time to wait for it
+            const g: number[] = []
+            const clock = async (type: 'compute' | 'render') => { await mark(); if (gpuClock) g.push((await renderer.resolveTimestampsAsync(type)) ?? 0) }
+            if (gpuClock) await Promise.all([renderer.resolveTimestampsAsync('compute'), renderer.resolveTimestampsAsync('render')])
             const st = world.stages(renderer as never, camera)
-            st.deform(); await mark()
-            st.project(); await mark()
-            st.order(); await mark()
+            st.deform(); await clock('compute')
+            st.project(); await clock('compute')
+            st.order(); await clock('compute')
             world.hold = true
-            try { renderer.render(scene, camera); await mark() } finally { world.hold = false }
+            try { renderer.render(scene, camera); await clock('render') } finally { world.hold = false }
             world.markPosed() // the held frame skipped the bookkeeping; redo it next frame
-            if (i >= 2) rows.push([t[1] - t[0], t[2] - t[1], t[3] - t[2], t[4] - t[3], 0, 0])
+            if (i >= 2) rows.push(gpuClock ? [g[0], g[1], g[2], g[3], 0, 0] : [t[1] - t[0], t[2] - t[1], t[3] - t[2], t[4] - t[3], 0, 0])
           } else {
             renderer.render(scene, camera); await mark()
             const cs = world?.cpuSkinMs ?? 0, co = world?.cpuSortMs ?? 0
@@ -375,7 +384,7 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
         busy--
       }
       const med = (k: number) => [...rows.map((r) => r[k])].sort((a, b) => a - b)[Math.floor(rows.length / 2)] ?? 0
-      return { which: o.which, backend, blobs, deform: med(0), project: med(1), order: med(2), draw: med(3), cpuSkin: med(4), cpuSort: med(5) }
+      return { which: o.which, backend, blobs, deform: med(0), project: med(1), order: med(2), draw: med(3), cpuSkin: med(4), cpuSort: med(5), gpuClock }
     },
     dispose() {
       stopped = true
